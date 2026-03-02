@@ -29,3 +29,9 @@ export interface BaseResponse {
 
   [key: string]: unknown
 }
+
+export interface ResultPayload {
+  requestId: string
+  success: boolean
+  error?: string
+}

@@ -1,0 +1,75 @@
+name: CI
+
+# 推送到 main 分支時觸發
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  # 後端：Style 檢查 + 測試
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout 原始碼
+        uses: actions/checkout@v4
+
+      - name: 安裝 Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: 安裝後端依賴
+        run: cd backend && bun install
+
+      - name: Backend Style 檢查
+        run: cd backend && bun run style
+
+      - name: Backend 測試
+        run: cd backend && bun run test
+
+  # 前端：Style 檢查 + 測試
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout 原始碼
+        uses: actions/checkout@v4
+
+      - name: 安裝 Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: 安裝前端依賴
+        run: cd frontend && bun install
+
+      - name: Frontend Style 檢查
+        run: cd frontend && bun run style
+
+      - name: Frontend 測試
+        run: cd frontend && bun run test:run
+
+  # Build：等前後端都通過才執行
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+
+    steps:
+      - name: Checkout 原始碼
+        uses: actions/checkout@v4
+
+      - name: 安裝 Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: 安裝前端依賴
+        run: cd frontend && bun install
+
+      - name: 安裝後端依賴
+        run: cd backend && bun install
+
+      - name: Build 前端
+        run: cd frontend && bun run build
+
+      - name: Compile linux-x64（驗證 release build 流程）
+        run: TARGET=bun-linux-x64 bun scripts/compile.ts

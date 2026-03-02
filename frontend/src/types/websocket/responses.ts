@@ -7,58 +7,38 @@ import type {SubAgentNote} from '@/types'
 import type {CommandNote} from '@/types'
 import type {AnchorPosition} from '@/types'
 import type {McpServerConfig} from '../mcpServer'
+import type {ResultPayload} from './index'
 
 export interface ConnectionReadyPayload {
     socketId: string
 }
 
-export interface PodCreatedPayload {
-    requestId: string
-    success: boolean
+export interface PodCreatedPayload extends ResultPayload {
     pod?: Pod
-    error?: string
 }
 
-export interface PodListResultPayload {
-    requestId: string
-    success: boolean
+export interface PodListResultPayload extends ResultPayload {
     pods?: Pod[]
-    error?: string
 }
 
-export interface PodMovedPayload {
-    requestId: string
-    success: boolean
+export interface PodMovedPayload extends ResultPayload {
     pod?: Pod
-    error?: string
 }
 
-export interface PodRenamedPayload {
-    requestId: string
-    success: boolean
+export interface PodRenamedPayload extends ResultPayload {
     pod?: Pod
-    error?: string
 }
 
-export interface PodModelSetPayload {
-    requestId: string
-    success: boolean
+export interface PodModelSetPayload extends ResultPayload {
     pod?: Pod
-    error?: string
 }
 
-export interface PodScheduleSetPayload {
-    requestId: string
-    success: boolean
+export interface PodScheduleSetPayload extends ResultPayload {
     pod?: Pod
-    error?: string
 }
 
-export interface PodDeletedPayload {
-    requestId: string
-    success: boolean
+export interface PodDeletedPayload extends ResultPayload {
     podId?: string
-    error?: string
     deletedNoteIds?: {
         note?: string[]
         skillNote?: string[]
@@ -135,11 +115,8 @@ export interface PersistedMessage {
     }>
 }
 
-export interface PodChatHistoryResultPayload {
-    requestId: string
-    success: boolean
+export interface PodChatHistoryResultPayload extends ResultPayload {
     messages?: PersistedMessage[]
-    error?: string
 }
 
 export interface OutputStyleCreatedPayload {
@@ -163,16 +140,11 @@ export interface OutputStyleReadResultPayload {
     error?: string
 }
 
-export interface NoteCreatedPayload {
-    requestId: string
-    success: boolean
+export interface NoteCreatedPayload extends ResultPayload {
     note?: OutputStyleNote
-    error?: string
 }
 
-export interface ConnectionCreatedPayload {
-    requestId: string
-    success: boolean
+export interface ConnectionCreatedPayload extends ResultPayload {
     connection?: {
         id: string
         sourcePodId?: string
@@ -184,12 +156,9 @@ export interface ConnectionCreatedPayload {
         connectionStatus?: 'idle' | 'active' | 'queued' | 'waiting' | 'ai-deciding' | 'ai-approved' | 'ai-rejected' | 'ai-error'
         decideReason?: string | null
     }
-    error?: string
 }
 
-export interface ConnectionListResultPayload {
-    requestId: string
-    success: boolean
+export interface ConnectionListResultPayload extends ResultPayload {
     connections?: Array<{
         id: string
         sourcePodId?: string
@@ -201,14 +170,10 @@ export interface ConnectionListResultPayload {
         connectionStatus?: 'idle' | 'active' | 'queued' | 'waiting' | 'ai-deciding' | 'ai-approved' | 'ai-rejected' | 'ai-error'
         decideReason?: string | null
     }>
-    error?: string
 }
 
-export interface ConnectionDeletedPayload {
-    requestId: string
-    success: boolean
+export interface ConnectionDeletedPayload extends ResultPayload {
     connectionId?: string
-    error?: string
 }
 
 export interface WorkflowAutoTriggeredPayload {
@@ -219,12 +184,9 @@ export interface WorkflowAutoTriggeredPayload {
     isSummarized: boolean
 }
 
-export interface WorkflowCompletePayload {
-    requestId: string
+export interface WorkflowCompletePayload extends ResultPayload {
     connectionId: string
     targetPodId: string
-    success: boolean
-    error?: string
     triggerMode?: 'auto' | 'ai-decide' | 'direct'
 }
 
@@ -235,12 +197,9 @@ export interface WorkflowGetDownstreamPodsResultPayload {
     error?: string
 }
 
-export interface WorkflowClearResultPayload {
-    requestId: string
-    success: boolean
+export interface WorkflowClearResultPayload extends ResultPayload {
     clearedPodIds?: string[]
     clearedPodNames?: string[]
-    error?: string
 }
 
 export interface PasteError {
@@ -249,9 +208,7 @@ export interface PasteError {
     error: string
 }
 
-export interface CanvasPasteResultPayload {
-    requestId: string
-    success: boolean
+export interface CanvasPasteResultPayload extends ResultPayload {
     createdPods: Pod[]
     createdOutputStyleNotes: OutputStyleNote[]
     createdSkillNotes: SkillNote[]
@@ -270,14 +227,10 @@ export interface CanvasPasteResultPayload {
     }>
     podIdMapping: Record<string, string>
     errors: PasteError[]
-    error?: string
 }
 
-export interface RepositoryCreatedPayload {
-    requestId: string
-    success: boolean
+export interface RepositoryCreatedPayload extends ResultPayload {
     repository?: Repository
-    error?: string
 }
 
 export interface RepositoryGitCloneProgressPayload {
@@ -297,11 +250,8 @@ export interface PodMessagesClearedPayload {
     podId: string
 }
 
-export interface PodAutoClearSetPayload {
-    requestId: string
-    success: boolean
+export interface PodAutoClearSetPayload extends ResultPayload {
     pod?: Pod
-    error?: string
 }
 
 export interface WorkflowAutoClearedPayload {
@@ -352,11 +302,8 @@ export interface CommandReadResultPayload {
     error?: string
 }
 
-export interface CommandNoteCreatedPayload {
-    requestId: string
-    success: boolean
+export interface CommandNoteCreatedPayload extends ResultPayload {
     note?: CommandNote
-    error?: string
 }
 
 export interface ScheduleFiredPayload {
@@ -368,34 +315,22 @@ export interface HeartbeatPingPayload {
     timestamp: number
 }
 
-export interface RepositoryCheckGitResultPayload {
-    requestId: string
-    success: boolean
+export interface RepositoryCheckGitResultPayload extends ResultPayload {
     isGit: boolean
-    error?: string
 }
 
-export interface RepositoryWorktreeCreatedPayload {
-    requestId: string
-    success: boolean
+export interface RepositoryWorktreeCreatedPayload extends ResultPayload {
     repository?: Repository
-    error?: string
 }
 
-export interface RepositoryLocalBranchesResultPayload {
-    requestId: string
-    success: boolean
+export interface RepositoryLocalBranchesResultPayload extends ResultPayload {
     branches?: string[]
     currentBranch?: string
     worktreeBranches?: string[]
-    error?: string
 }
 
-export interface RepositoryDirtyCheckResultPayload {
-    requestId: string
-    success: boolean
+export interface RepositoryDirtyCheckResultPayload extends ResultPayload {
     isDirty?: boolean
-    error?: string
 }
 
 export interface RepositoryCheckoutBranchProgressPayload {
@@ -405,20 +340,14 @@ export interface RepositoryCheckoutBranchProgressPayload {
     branchName: string
 }
 
-export interface RepositoryBranchCheckedOutPayload {
-    requestId: string
-    success: boolean
+export interface RepositoryBranchCheckedOutPayload extends ResultPayload {
     repositoryId?: string
     branchName?: string
     action?: 'switched' | 'fetched' | 'created'
-    error?: string
 }
 
-export interface RepositoryBranchDeletedPayload {
-    requestId: string
-    success: boolean
+export interface RepositoryBranchDeletedPayload extends ResultPayload {
     branchName?: string
-    error?: string
 }
 
 export interface RepositoryPullLatestProgressPayload {
@@ -427,11 +356,8 @@ export interface RepositoryPullLatestProgressPayload {
     message: string
 }
 
-export interface RepositoryPullLatestResultPayload {
-    requestId: string
-    success: boolean
+export interface RepositoryPullLatestResultPayload extends ResultPayload {
     repositoryId?: string
-    error?: string
 }
 
 export interface GroupCreatedPayload {
@@ -448,19 +374,13 @@ export interface GroupListResultPayload {
     error?: string
 }
 
-export interface GroupDeletedPayload {
-    requestId: string
-    success: boolean
+export interface GroupDeletedPayload extends ResultPayload {
     groupId?: string
-    error?: string
 }
 
-export interface MovedToGroupPayload {
-    requestId: string
-    success: boolean
+export interface MovedToGroupPayload extends ResultPayload {
     itemId?: string
     groupId?: string | null
-    error?: string
 }
 
 export interface SkillImportedPayload {
@@ -573,54 +493,33 @@ export interface CursorLeftPayload {
     connectionId: string
 }
 
-export interface PodDirectoryOpenedPayload {
-    requestId: string
-    success: boolean
+export interface PodDirectoryOpenedPayload extends ResultPayload {
     path?: string
-    error?: string
 }
 
 // Slack
-export interface SlackAppCreatedPayload {
-    requestId: string
-    success: boolean
+export interface SlackAppCreatedPayload extends ResultPayload {
     slackApp?: SlackApp
-    error?: string
 }
 
-export interface SlackAppDeletedPayload {
-    requestId: string
-    success: boolean
+export interface SlackAppDeletedPayload extends ResultPayload {
     slackAppId?: string
-    error?: string
 }
 
-export interface SlackAppListResultPayload {
-    requestId: string
-    success: boolean
+export interface SlackAppListResultPayload extends ResultPayload {
     slackApps?: SlackApp[]
-    error?: string
 }
 
-export interface SlackAppGetResultPayload {
-    requestId: string
-    success: boolean
+export interface SlackAppGetResultPayload extends ResultPayload {
     slackApp?: SlackApp
-    error?: string
 }
 
-export interface SlackAppChannelsResultPayload {
-    requestId: string
-    success: boolean
+export interface SlackAppChannelsResultPayload extends ResultPayload {
     channels?: SlackChannel[]
-    error?: string
 }
 
-export interface SlackAppChannelsRefreshedPayload {
-    requestId: string
-    success: boolean
+export interface SlackAppChannelsRefreshedPayload extends ResultPayload {
     channels?: SlackChannel[]
-    error?: string
 }
 
 export interface SlackConnectionStatusChangedPayload {
@@ -646,18 +545,12 @@ export interface SlackMessageQueuedPayload {
     text: string
 }
 
-export interface PodSlackBoundPayload {
-    requestId: string
+export interface PodSlackBoundPayload extends ResultPayload {
     canvasId: string
-    success: boolean
     pod?: Pod
-    error?: string
 }
 
-export interface PodSlackUnboundPayload {
-    requestId: string
+export interface PodSlackUnboundPayload extends ResultPayload {
     canvasId: string
-    success: boolean
     pod?: Pod
-    error?: string
 }
