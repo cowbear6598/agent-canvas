@@ -1,6 +1,6 @@
 import path from 'path';
 import {v4 as uuidv4} from 'uuid';
-import {type Options, type Query, query} from '@anthropic-ai/claude-agent-sdk';
+import {type Options, type Query, query, tool, createSdkMcpServer} from '@anthropic-ai/claude-agent-sdk';
 import type {SDKMessage, SDKSystemMessage, SDKAssistantMessage, SDKResultMessage, SDKUserMessage as SDKUserMessageType} from '@anthropic-ai/claude-agent-sdk';
 import {podStore} from '../podStore.js';
 import {mcpServerStore} from '../mcpServerStore.js';
@@ -17,6 +17,8 @@ import {
     type SDKUserMessage,
 } from './messageBuilder.js';
 import type {StreamCallback} from './types.js';
+import {z} from 'zod';
+import {slackConnectionManager} from '../slack/slackConnectionManager.js';
 
 export type {StreamEvent, StreamCallback} from './types.js';
 
@@ -364,6 +366,49 @@ export class ClaudeService {
         return createUserMessageStream(contentArray, sessionId);
     }
 
+    private buildSlackToolOptions(pod: Pod, queryOptions: Options): void {
+        if (!pod.slackBinding) return;
+
+        const {slackAppId, slackChannelId} = pod.slackBinding;
+
+        const slackReplyTool = tool(
+            'slack_reply',
+            '回覆 Slack 頻道訊息。當需要在 Slack 中回覆用戶時使用此工具。',
+            {
+                text: z.string().min(1).max(4000).describe('要發送到 Slack 頻道的訊息內容（1-4000 字元）'),
+                thread_ts: z.string().regex(/^\d+\.\d+$/).optional().describe('要回覆的對話串時間戳（選填，格式：timestamp.thread_timestamp）'),
+            },
+            async (params: {text: string; thread_ts?: string}) => {
+                const result = await slackConnectionManager.sendMessage(
+                    slackAppId,
+                    slackChannelId,
+                    params.text,
+                    params.thread_ts
+                );
+
+                if (!result.success) {
+                    return {success: false, error: result.error};
+                }
+                return {success: true};
+            }
+        );
+
+        const slackMcpServer = createSdkMcpServer({
+            name: 'slack-reply',
+            tools: [slackReplyTool],
+        });
+
+        queryOptions.mcpServers = {
+            ...queryOptions.mcpServers,
+            'slack-reply': slackMcpServer,
+        } as Options['mcpServers'];
+
+        queryOptions.allowedTools = [
+            ...(queryOptions.allowedTools ?? []),
+            'mcp__slack-reply__slack_reply',
+        ];
+    }
+
     private async buildQueryOptions(
         pod: Pod,
         cwd: string
@@ -391,6 +436,8 @@ export class ClaudeService {
             }
             queryOptions.mcpServers = mcpServers as Options['mcpServers'];
         }
+
+        this.buildSlackToolOptions(pod, queryOptions);
 
         if (pod.claudeSessionId) {
             queryOptions.resume = pod.claudeSessionId;
