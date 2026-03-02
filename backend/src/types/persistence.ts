@@ -1,6 +1,7 @@
 import type { PodStatus, ModelType } from './pod.js';
 import type { AnchorPosition, ConnectionStatus } from './connection.js';
 import type { PersistedScheduleConfig } from './schedule.js';
+import type { PodSlackBinding } from './slack.js';
 
 export interface PersistedToolUseInfo {
   toolUseId: string;
@@ -55,6 +56,7 @@ export interface PersistedPod {
   commandId?: string | null;
   autoClear?: boolean;
   schedule?: PersistedScheduleConfig;
+  slackBinding?: PodSlackBinding;
 }
 
 /**

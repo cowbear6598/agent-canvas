@@ -1,7 +1,7 @@
 import {v4 as uuidv4} from 'uuid';
 import {WebSocketResponseEvents} from '../schemas';
 import {Pod, PodStatus, CreatePodRequest, Result, ok, err, ScheduleConfig} from '../types';
-import type {PersistedPod} from '../types';
+import type {PersistedPod, PodSlackBinding} from '../types';
 
 type PodUpdates = Partial<Omit<Pod, 'schedule'>> & { schedule?: ScheduleConfig | null };
 import {podPersistenceService} from './persistence/podPersistence.js';
@@ -310,6 +310,38 @@ class PodStore {
         return this.findByPredicate(canvasId, (pod) => pod.repositoryId === repositoryId);
     }
 
+    setSlackBinding(canvasId: string, podId: string, binding: PodSlackBinding | null): void {
+        const pod = this.getById(canvasId, podId);
+        if (!pod) {
+            return;
+        }
+
+        if (binding === null) {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const {slackBinding: _, ...rest} = pod;
+            const pods = this.getCanvasPods(canvasId);
+            pods.set(podId, rest as Pod);
+            this.persistPodAsync(canvasId, rest as Pod);
+            return;
+        }
+
+        this.modifyPod(canvasId, podId, {slackBinding: binding});
+    }
+
+    findBySlackApp(slackAppId: string): Array<{canvasId: string; pod: Pod}> {
+        const result: Array<{canvasId: string; pod: Pod}> = [];
+
+        for (const [canvasId, pods] of this.podsByCanvas.entries()) {
+            for (const pod of pods.values()) {
+                if (pod.slackBinding?.slackAppId === slackAppId) {
+                    result.push({canvasId, pod});
+                }
+            }
+        }
+
+        return result;
+    }
+
     setScheduleLastTriggeredAt(canvasId: string, podId: string, date: Date): void {
         const pod = this.getById(canvasId, podId);
         if (!pod || !pod.schedule) {
@@ -408,6 +440,10 @@ class PodStore {
                     ? new Date(persistedPod.schedule.lastTriggeredAt)
                     : null,
             };
+        }
+
+        if (persistedPod.slackBinding) {
+            pod.slackBinding = persistedPod.slackBinding;
         }
 
         return pod;

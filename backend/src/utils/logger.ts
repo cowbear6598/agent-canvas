@@ -33,7 +33,8 @@ export type LogCategory =
   | 'Canvas'
   | 'Workspace'
   | 'WebSocket'
-  | 'McpServer';
+  | 'McpServer'
+  | 'Slack';
 
 /**
  * Category 顏色映射表
@@ -58,6 +59,7 @@ const CATEGORY_COLORS: Record<LogCategory, string> = {
   OutputStyle: ANSI_COLORS.YELLOW,
   AutoClear: ANSI_COLORS.YELLOW,
   Schedule: ANSI_COLORS.YELLOW,
+  Slack: ANSI_COLORS.BLUE,
 };
 
 /**
