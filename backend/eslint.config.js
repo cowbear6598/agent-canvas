@@ -33,6 +33,7 @@ export default [
         Blob: 'readonly',
         Headers: 'readonly',
         URLPattern: 'readonly',
+        fetch: 'readonly',
       },
     },
     plugins: {

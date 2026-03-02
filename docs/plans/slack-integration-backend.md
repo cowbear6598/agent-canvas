@@ -197,7 +197,7 @@ backend/src/
 
 ### 6.1 SlackAppStore（`backend/src/services/slack/slackAppStore.ts`）
 
-- [ ] 建立 `SlackAppStore` 類別
+- [x] 建立 `SlackAppStore` 類別
   - 內部資料結構：`Map<string, SlackApp>`（key = slackApp.id）
   - `create(name, botToken, appToken)` 方法：
     - 產生 UUID
@@ -218,7 +218,7 @@ backend/src/
 
 ### 6.2 SlackConnectionManager（`backend/src/services/slack/slackConnectionManager.ts`）
 
-- [ ] 建立 `SlackConnectionManager` 類別
+- [x] 建立 `SlackConnectionManager` 類別
   - 內部資料結構：
     - `boltApps`: `Map<string, App>`（key = slackApp.id，Bolt App 實例）
     - `healthCheckInterval`: NodeJS.Timeout | null
@@ -300,7 +300,7 @@ backend/src/
 
 ### 6.4 SlackMessageQueue（`backend/src/services/slack/slackMessageQueue.ts`）
 
-- [ ] 建立 `SlackMessageQueue` 類別
+- [x] 建立 `SlackMessageQueue` 類別
   - 內部資料結構：`Map<string, SlackQueueMessage[]>`（key = podId）
   - 常數 `MAX_QUEUE_SIZE = 10`
   - `enqueue(podId, message)` 方法：
@@ -319,7 +319,7 @@ backend/src/
 
 ### 6.5 SlackMcpToolProvider（`backend/src/services/slack/slackMcpToolProvider.ts`）
 
-- [ ] 建立 `SlackMcpToolProvider` 類別
+- [x] 建立 `SlackMcpToolProvider` 類別
   - `SLACK_REPLY_MCP_SERVER_ID` 常數：`'__slack_reply__'`（固定 ID，用於辨識）
   - `createSlackReplyMcpConfig(slackAppId, channelId)` 方法：
     - 回傳一個 MCP Server 設定（stdio 類型），配置為一個簡單的 Bun script
@@ -340,7 +340,7 @@ backend/src/
   - `getScriptPath()` 方法：
     - 回傳 `slack_reply` MCP script 的絕對路徑
   - 匯出 singleton `slackMcpToolProvider`
-- [ ] 建立 `backend/src/services/slack/slack-reply-mcp-server.ts`（MCP Server script）
+- [x] 建立 `backend/src/services/slack/slack-reply-mcp-server.ts`（MCP Server script）
   - 這是一個獨立執行的 Bun script，作為 MCP Server 使用
   - 使用 stdin/stdout 溝通（MCP stdio 協議）
   - 提供單一 tool：`slack_reply`
@@ -609,11 +609,11 @@ Payload:
 
 ### 9.5 PodStore 載入/儲存 slackBinding
 
-- [ ] 修改 `backend/src/services/podStore.ts`
+- [x] 修改 `backend/src/services/podStore.ts`
   - `deserializePod()` 方法：從 persistedPod 讀取 `slackBinding`，若存在則設定到 Pod 上
   - `create()` 方法：新 Pod 不需要 slackBinding（預設沒有）
   - 持久化時 `slackBinding` 會自動跟著 Pod 物件一起序列化（現有 `persistPodAsync` 已會序列化整個 Pod 物件）
-- [ ] 新增 `setSlackBinding(canvasId, podId, binding: PodSlackBinding | null)` 方法到 PodStore
+- [x] 新增 `setSlackBinding(canvasId, podId, binding: PodSlackBinding | null)` 方法到 PodStore
   - 使用現有 `modifyPod` 機制更新
 
 ### 9.6 伺服器啟動 / 關閉
@@ -683,33 +683,33 @@ Payload:
 - [x] 4. 在 `backend/src/schemas/events.ts` 新增 Slack 相關事件常數
   - `WebSocketRequestEvents`：`SLACK_APP_CREATE`, `SLACK_APP_DELETE`, `SLACK_APP_LIST`, `SLACK_APP_GET`, `SLACK_APP_CHANNELS`, `SLACK_APP_CHANNELS_REFRESH`, `POD_BIND_SLACK`, `POD_UNBIND_SLACK`
   - `WebSocketResponseEvents`：`SLACK_APP_CREATED`, `SLACK_APP_DELETED`, `SLACK_APP_LIST_RESULT`, `SLACK_APP_GET_RESULT`, `SLACK_APP_CHANNELS_RESULT`, `SLACK_APP_CHANNELS_REFRESHED`, `POD_SLACK_BOUND`, `POD_SLACK_UNBOUND`, `SLACK_CONNECTION_STATUS_CHANGED`, `SLACK_MESSAGE_RECEIVED`, `SLACK_MESSAGE_QUEUED`
-- [ ] 5. 建立 `backend/src/services/slack/slackMessageQueue.ts`
+- [x] 5. 建立 `backend/src/services/slack/slackMessageQueue.ts`
   - 實作 `SlackMessageQueue` 類別（純記憶體佇列，無外部依賴）
-- [ ] 6. 建立 `backend/src/services/slack/slackAppStore.ts`
+- [x] 6. 建立 `backend/src/services/slack/slackAppStore.ts`
   - 實作 `SlackAppStore` 類別（CRUD + 持久化）
   - 使用 `WriteQueue` 和 `persistenceService`
-- [ ] 7. 修改 `backend/src/services/podStore.ts`
+- [x] 7. 修改 `backend/src/services/podStore.ts`
   - `deserializePod()`：讀取 `slackBinding` 欄位
   - 新增 `setSlackBinding()` 方法
   - 新增 `findBySlackApp(slackAppId)` 方法（全域搜尋）
 
 ### Phase 2：單元測試（Phase 1 完成後）
 
-- [ ] 8. 撰寫 `backend/tests/unit/slackAppStore.test.ts`
-- [ ] 9. 撰寫 `backend/tests/unit/slackMessageQueue.test.ts`
+- [x] 8. 撰寫 `backend/tests/unit/slackAppStore.test.ts`
+- [x] 9. 撰寫 `backend/tests/unit/slackMessageQueue.test.ts`
 
 ### Phase 3：Slack 連線層（需要安裝 `@slack/bolt`）
 
 - [x] 10. 安裝 `@slack/bolt` 依賴
   - 執行 `cd backend && bun add @slack/bolt`
-- [ ] 11. 建立 `backend/src/services/slack/slackConnectionManager.ts`
+- [x] 11. 建立 `backend/src/services/slack/slackConnectionManager.ts`
   - 實作 Bolt App 建立、Socket Mode 連線、斷開、健康檢查、重連
-- [ ] 12. 建立 `backend/src/services/slack/slack-reply-mcp-server.ts`
+- [x] 12. 建立 `backend/src/services/slack/slack-reply-mcp-server.ts`
   - 實作 MCP stdio server script（raw JSON-RPC）
   - 提供 `slack_reply` tool
-- [ ] 13. 建立 `backend/src/services/slack/slackMcpToolProvider.ts`
+- [x] 13. 建立 `backend/src/services/slack/slackMcpToolProvider.ts`
   - 實作 MCP 配置生成
-- [ ] 14. 撰寫 `backend/tests/unit/slackConnectionManager.test.ts`
+- [x] 14. 撰寫 `backend/tests/unit/slackConnectionManager.test.ts`
   - mock `@slack/bolt` 的 App 類別
 
 ### Phase 4：事件處理層
