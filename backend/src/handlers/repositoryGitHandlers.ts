@@ -81,6 +81,10 @@ function validateRepoUrl(repoUrl: string): Result<void> {
     return { success: false, error: 'Repository URL 格式不正確' };
   }
 
+  if (isHttpsUrl && repoUrl.includes('@')) {
+    return { success: false, error: 'HTTPS URL 不允許包含認證資訊' };
+  }
+
   return ok();
 }
 
@@ -129,11 +133,19 @@ function validateNotWorktree(
 }
 
 function normalizeRepoName(rawName: string): string {
-  const withoutGit = rawName.replace(/\.git$/, '');
-  if (!withoutGit.match(/^[a-zA-Z0-9_-]+$/)) {
-    return withoutGit.replace(/[^a-zA-Z0-9_-]/g, '-');
+  let repoName = rawName
+    .replace(/\.git$/, '')
+    .replace(/[^\w.-]/g, '-');
+
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(repoName)) {
+    repoName = repoName.replace(/^[^a-zA-Z0-9]+/, '');
   }
-  return withoutGit;
+
+  if (!repoName || repoName.length === 0) {
+    repoName = 'unnamed-repo';
+  }
+
+  return repoName;
 }
 
 function parseSshRepoName(url: string): string {

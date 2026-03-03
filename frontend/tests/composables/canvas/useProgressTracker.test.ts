@@ -34,6 +34,7 @@ interface TestTask {
   name: string
   progress: number
   status: 'processing' | 'completed' | 'failed'
+  message: string
 }
 
 interface TestProgressPayload {
@@ -60,6 +61,7 @@ function createTestTracker() {
       name: `task-${payload.requestId}`,
       progress: 0,
       status: 'processing',
+      message: '',
     }),
     updateTask: (task, payload) => {
       task.progress = payload.progress
@@ -114,6 +116,7 @@ describe('useProgressTracker', () => {
         name: 'repo-1',
         progress: 0,
         status: 'processing',
+        message: '',
       }
 
       addTask('req-1', task)
@@ -125,8 +128,8 @@ describe('useProgressTracker', () => {
     it('可以同時新增多個任務', () => {
       const { tasks, addTask } = createTestTracker()
 
-      addTask('req-1', { requestId: 'req-1', name: 'task-1', progress: 0, status: 'processing' })
-      addTask('req-2', { requestId: 'req-2', name: 'task-2', progress: 0, status: 'processing' })
+      addTask('req-1', { requestId: 'req-1', name: 'task-1', progress: 0, status: 'processing', message: '' })
+      addTask('req-2', { requestId: 'req-2', name: 'task-2', progress: 0, status: 'processing', message: '' })
 
       expect(tasks.value.size).toBe(2)
     })
@@ -136,8 +139,8 @@ describe('useProgressTracker', () => {
     it('移除指定任務後 Map 中不應包含該任務', () => {
       const { tasks, addTask, removeTask } = createTestTracker()
 
-      addTask('req-1', { requestId: 'req-1', name: 'task-1', progress: 0, status: 'processing' })
-      addTask('req-2', { requestId: 'req-2', name: 'task-2', progress: 0, status: 'processing' })
+      addTask('req-1', { requestId: 'req-1', name: 'task-1', progress: 0, status: 'processing', message: '' })
+      addTask('req-2', { requestId: 'req-2', name: 'task-2', progress: 0, status: 'processing', message: '' })
 
       removeTask('req-1')
 
@@ -156,7 +159,7 @@ describe('useProgressTracker', () => {
     it('應將 tasks 轉換為 ProgressTask 格式', () => {
       const { addTask, progressTasks } = createTestTracker()
 
-      addTask('req-1', { requestId: 'req-1', name: 'task-1', progress: 50, status: 'processing' })
+      addTask('req-1', { requestId: 'req-1', name: 'task-1', progress: 50, status: 'processing', message: '' })
 
       const progressTask = progressTasks.value.get('req-1')
       expect(progressTask).toBeDefined()
@@ -169,7 +172,7 @@ describe('useProgressTracker', () => {
     it('tasks 更新後 progressTasks 應自動重新計算', () => {
       const { tasks, addTask, progressTasks } = createTestTracker()
 
-      addTask('req-1', { requestId: 'req-1', name: 'task-1', progress: 0, status: 'processing' })
+      addTask('req-1', { requestId: 'req-1', name: 'task-1', progress: 0, status: 'processing', message: '' })
       expect(progressTasks.value.size).toBe(1)
 
       const task = tasks.value.get('req-1')!
@@ -186,7 +189,7 @@ describe('useProgressTracker', () => {
       const { tasks, addTask } = createTestTracker()
       await nextTick()
 
-      addTask('req-1', { requestId: 'req-1', name: 'task-1', progress: 0, status: 'processing' })
+      addTask('req-1', { requestId: 'req-1', name: 'task-1', progress: 0, status: 'processing', message: '' })
 
       simulateEvent(TEST_PROGRESS_EVENT, { requestId: 'req-1', progress: 60 })
 
@@ -240,7 +243,7 @@ describe('useProgressTracker', () => {
       const { tasks, addTask } = createTestTracker()
       await nextTick()
 
-      addTask('req-1', { requestId: 'req-1', name: 'task-1', progress: 100, status: 'completed' })
+      addTask('req-1', { requestId: 'req-1', name: 'task-1', progress: 100, status: 'completed', message: '' })
 
       simulateEvent(TEST_PROGRESS_EVENT, { requestId: 'req-1', progress: 50 })
 
@@ -256,7 +259,7 @@ describe('useProgressTracker', () => {
       const { tasks, addTask } = createTestTracker()
       await nextTick()
 
-      addTask('req-1', { requestId: 'req-1', name: 'task-1', progress: 0, status: 'processing' })
+      addTask('req-1', { requestId: 'req-1', name: 'task-1', progress: 0, status: 'processing', message: '' })
 
       simulateEvent(TEST_RESULT_EVENT, { requestId: 'req-1', success: true })
       await nextTick()
@@ -272,7 +275,7 @@ describe('useProgressTracker', () => {
       const { tasks, addTask } = createTestTracker()
       await nextTick()
 
-      addTask('req-1', { requestId: 'req-1', name: 'task-1', progress: 0, status: 'processing' })
+      addTask('req-1', { requestId: 'req-1', name: 'task-1', progress: 0, status: 'processing', message: '' })
 
       simulateEvent(TEST_RESULT_EVENT, { requestId: 'req-1', success: false })
       await nextTick()
@@ -287,7 +290,7 @@ describe('useProgressTracker', () => {
       const { tasks, addTask } = createTestTracker()
       await nextTick()
 
-      addTask('req-1', { requestId: 'req-1', name: 'task-1', progress: 0, status: 'processing' })
+      addTask('req-1', { requestId: 'req-1', name: 'task-1', progress: 0, status: 'processing', message: '' })
 
       simulateEvent(TEST_RESULT_EVENT, { requestId: 'non-existent', success: true })
       await nextTick()
@@ -302,7 +305,7 @@ describe('useProgressTracker', () => {
       const { tasks, addTask } = createTestTracker()
       await nextTick()
 
-      addTask('req-1', { requestId: 'req-1', name: 'task-1', progress: 0, status: 'processing' })
+      addTask('req-1', { requestId: 'req-1', name: 'task-1', progress: 0, status: 'processing', message: '' })
 
       simulateEvent(TEST_RESULT_EVENT, { requestId: 'req-1', success: true })
       await nextTick()
@@ -322,7 +325,7 @@ describe('useProgressTracker', () => {
       const { tasks, addTask } = createTestTracker()
       await nextTick()
 
-      addTask('req-1', { requestId: 'req-1', name: 'task-1', progress: 0, status: 'processing' })
+      addTask('req-1', { requestId: 'req-1', name: 'task-1', progress: 0, status: 'processing', message: '' })
 
       simulateEvent(TEST_RESULT_EVENT, { requestId: 'req-1', success: false })
       await nextTick()
@@ -362,7 +365,7 @@ describe('useProgressTracker', () => {
       })
       await nextTick()
 
-      addTask('req-1', { requestId: 'req-1', name: 'task-1', progress: 0, status: 'processing' })
+      addTask('req-1', { requestId: 'req-1', name: 'task-1', progress: 0, status: 'processing', message: '' })
 
       vi.advanceTimersByTime(60_000)
 
@@ -390,7 +393,7 @@ describe('useProgressTracker', () => {
         }),
       })
 
-      addTask('req-1', { requestId: 'req-1', name: 'task-1', progress: 0, status: 'processing' })
+      addTask('req-1', { requestId: 'req-1', name: 'task-1', progress: 0, status: 'processing', message: '' })
 
       const task = tasks.value.get('req-1')!
       task.status = 'completed'
@@ -421,12 +424,66 @@ describe('useProgressTracker', () => {
         }),
       })
 
-      addTask('req-1', { requestId: 'req-1', name: 'task-1', progress: 0, status: 'processing' })
+      addTask('req-1', { requestId: 'req-1', name: 'task-1', progress: 0, status: 'processing', message: '' })
       removeTask('req-1')
 
       vi.advanceTimersByTime(60_000)
 
       expect(onTimeout).not.toHaveBeenCalled()
+    })
+
+    it('不傳入 onTimeout 時，逾時應將任務狀態設為 failed', async () => {
+      const { tasks, addTask } = useProgressTracker<TestTask, TestProgressPayload, TestResultPayload>({
+        progressEvent: TEST_PROGRESS_EVENT,
+        resultEvent: TEST_RESULT_EVENT,
+        getRequestId: (payload) => payload.requestId,
+        createTask: () => null,
+        updateTask: () => {},
+        isProcessingStatus: (task) => task.status === 'processing',
+        onResult: () => {},
+        toProgressTask: (task) => ({
+          requestId: task.requestId,
+          title: task.name,
+          progress: task.progress,
+          message: '',
+          status: task.status === 'processing' ? 'processing' : task.status,
+        }),
+      })
+
+      addTask('req-1', { requestId: 'req-1', name: 'task-1', progress: 0, status: 'processing', message: '' })
+
+      vi.advanceTimersByTime(60_000)
+
+      expect(tasks.value.get('req-1')?.status).toBe('failed')
+    })
+
+    it('不傳入 onTimeout 時，逾時後應觸發 scheduleRemove（任務在 2 秒後被移除）', async () => {
+      const { tasks, addTask } = useProgressTracker<TestTask, TestProgressPayload, TestResultPayload>({
+        progressEvent: TEST_PROGRESS_EVENT,
+        resultEvent: TEST_RESULT_EVENT,
+        getRequestId: (payload) => payload.requestId,
+        createTask: () => null,
+        updateTask: () => {},
+        isProcessingStatus: (task) => task.status === 'processing',
+        onResult: () => {},
+        toProgressTask: (task) => ({
+          requestId: task.requestId,
+          title: task.name,
+          progress: task.progress,
+          message: '',
+          status: task.status === 'processing' ? 'processing' : task.status,
+        }),
+      })
+
+      addTask('req-1', { requestId: 'req-1', name: 'task-1', progress: 0, status: 'processing', message: '' })
+
+      vi.advanceTimersByTime(60_000)
+      expect(tasks.value.has('req-1')).toBe(true)
+
+      vi.advanceTimersByTime(2_000)
+      await nextTick()
+
+      expect(tasks.value.has('req-1')).toBe(false)
     })
   })
 
@@ -513,8 +570,8 @@ describe('useProgressTracker', () => {
       })
       await nextTick()
 
-      addTask('req-1', { requestId: 'req-1', name: 'task-1', progress: 0, status: 'processing' })
-      addTask('req-2', { requestId: 'req-2', name: 'task-2', progress: 0, status: 'processing' })
+      addTask('req-1', { requestId: 'req-1', name: 'task-1', progress: 0, status: 'processing', message: '' })
+      addTask('req-2', { requestId: 'req-2', name: 'task-2', progress: 0, status: 'processing', message: '' })
 
       cleanupListeners()
 

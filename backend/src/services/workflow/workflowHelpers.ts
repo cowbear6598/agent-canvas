@@ -52,8 +52,12 @@ export function formatMergedSummaries(
     return result;
 }
 
+function escapeXmlTags(content: string): string {
+    return content.replace(/<\/?source-summary>/gi, '&lt;source-summary&gt;');
+}
+
 export function buildTransferMessage(content: string): string {
-    const isolatedContent = `<source-summary>\n${content}\n</source-summary>`;
+    const isolatedContent = `<source-summary>\n${escapeXmlTags(content)}\n</source-summary>`;
     return `以下是從另一個 POD 傳遞過來的內容,請根據這些資訊繼續處理:
 
 ${isolatedContent}`;

@@ -238,21 +238,29 @@ const handleSkillDeleted = createUnifiedHandler<BasePayload & { skillId: string;
 
 type RepositoryItem = { id: string; name: string; parentRepoId?: string; branchName?: string }
 
+function isValidStringField(value: unknown): boolean {
+  return typeof value === 'string' && value.trim() !== ''
+}
+
+function validateIdAndName(id: unknown, name: unknown, context: string): boolean {
+  if (!isValidStringField(id)) {
+    console.error(`[Security] 無效的 ${context}.id:`, id)
+    return false
+  }
+
+  if (!isValidStringField(name)) {
+    console.error(`[Security] 無效的 ${context}.name:`, name)
+    return false
+  }
+
+  return true
+}
+
 const validateRepositoryItem = (repository: RepositoryItem): boolean => {
-  const { id, name } = repository
+  if (!validateIdAndName(repository.id, repository.name, 'repository')) return false
 
-  if (!id || typeof id !== 'string' || id.trim() === '') {
-    console.error('[Security] 無效的 repository.id:', id)
-    return false
-  }
-
-  if (!name || typeof name !== 'string' || name.trim() === '') {
-    console.error('[Security] 無效的 repository.name:', name)
-    return false
-  }
-
-  if (/<script|javascript:|on\w+=/i.test(name)) {
-    console.error('[Security] 潛在惡意的 repository.name:', name)
+  if (/<script|javascript:|on\w+=/i.test(repository.name)) {
+    console.error('[Security] 潛在惡意的 repository.name:', repository.name)
     return false
   }
 
@@ -369,19 +377,7 @@ const handleCommandNoteDeleted = createUnifiedHandler<BasePayload & { noteId: st
 )
 
 const validateMcpServer = (mcpServer: McpServer): boolean => {
-  const { id, name } = mcpServer
-
-  if (!id || typeof id !== 'string' || id.trim() === '') {
-    console.error('[Security] 無效的 mcpServer.id:', id)
-    return false
-  }
-
-  if (!name || typeof name !== 'string' || name.trim() === '') {
-    console.error('[Security] 無效的 mcpServer.name:', name)
-    return false
-  }
-
-  return true
+  return validateIdAndName(mcpServer.id, mcpServer.name, 'mcpServer')
 }
 
 const handleMcpServerCreated = createUnifiedHandler<BasePayload & { mcpServer?: McpServer; canvasId: string }>(

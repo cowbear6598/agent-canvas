@@ -59,20 +59,24 @@ export function processToolUseEvent(
     });
 }
 
+function findToolInSubMessages(subMessages: PersistedSubMessage[], toolUseId: string): PersistedToolUseInfo | undefined {
+    for (const sub of subMessages) {
+        const tool = sub.toolUse?.find(t => t.toolUseId === toolUseId);
+        if (tool) return tool;
+    }
+    return undefined;
+}
+
 export function processToolResultEvent(
     toolUseId: string,
     output: string,
     state: SubMessageState
 ): void {
-    for (const sub of state.subMessages) {
-        if (sub.toolUse) {
-            const tool = sub.toolUse.find(t => t.toolUseId === toolUseId);
-            if (tool) {
-                tool.output = output;
-                break;
-            }
-        }
+    const persistedTool = findToolInSubMessages(state.subMessages, toolUseId);
+    if (persistedTool) {
+        persistedTool.output = output;
     }
+
     const currentTool = state.currentSubToolUse.find(t => t.toolUseId === toolUseId);
     if (currentTool) {
         currentTool.output = output;

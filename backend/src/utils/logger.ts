@@ -117,7 +117,9 @@ function sanitizeSensitiveInfo(str: string): string {
     .replace(/https:\/\/oauth2:[^@\s]+@[^\s/]+/g, 'https://oauth2:***@[REDACTED]')
     .replace(/https:\/\/[^@\s]+@([^\s/]+)/g, 'https://***@$1')
     .replace(/ghp_[a-zA-Z0-9]{36}/g, 'ghp_***')
-    .replace(/glpat-[a-zA-Z0-9_-]{20}/g, 'glpat-***');
+    .replace(/glpat-[a-zA-Z0-9_-]{20}/g, 'glpat-***')
+    .replace(/xox[bpas]-[a-zA-Z0-9-]+/g, 'xox***')
+    .replace(/xapp-[a-zA-Z0-9-]+/g, 'xapp***');
 }
 
 /**

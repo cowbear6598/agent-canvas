@@ -14,6 +14,8 @@ import type {
 
 type NoteWithIndexSignature = { boundToPodId: string | null; [key: string]: unknown }
 
+type AnyNote = CopiedOutputStyleNote | CopiedSkillNote | CopiedRepositoryNote | CopiedSubAgentNote | CopiedCommandNote
+
 type StoreWithNotes<TNote extends NoteWithIndexSignature = NoteWithIndexSignature> = {
   notes: TNote[]
 }
@@ -151,6 +153,18 @@ export function collectSelectedPods(
   return copiedPods
 }
 
+function collectNoteFromElement(
+  element: SelectableElement,
+  noteCollectorMap: Record<string, { collector: (id: string) => AnyNote | null; array: AnyNote[] }>
+): void {
+  const collectorInfo = noteCollectorMap[element.type as keyof typeof noteCollectorMap]
+  if (!collectorInfo) return
+  const note = collectorInfo.collector(element.id)
+  if (note) {
+    collectorInfo.array.push(note)
+  }
+}
+
 export function collectSelectedNotes(
   selectedElements: SelectableElement[],
   selectedPodIds: Set<string>,
@@ -177,7 +191,6 @@ export function collectSelectedNotes(
   }
 
   type OrigPos = { x: number; y: number } | null
-  type AnyNote = CopiedOutputStyleNote | CopiedSkillNote | CopiedRepositoryNote | CopiedSubAgentNote | CopiedCommandNote
 
   interface NoteStoreConfig {
     key: string
@@ -268,13 +281,7 @@ export function collectSelectedNotes(
   ) as Record<string, { collector: (id: string) => AnyNote | null; array: AnyNote[] }>
 
   for (const element of selectedElements) {
-    const collectorInfo = noteCollectorMap[element.type as keyof typeof noteCollectorMap]
-    if (collectorInfo) {
-      const note = collectorInfo.collector(element.id)
-      if (note) {
-        collectorInfo.array.push(note)
-      }
-    }
+    collectNoteFromElement(element, noteCollectorMap)
   }
 
   return {

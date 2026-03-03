@@ -1726,4 +1726,45 @@ describe('chatMessageActions', () => {
       expect(updated![0]!.subMessages).toBeUndefined()
     })
   })
+
+  describe('addRemoteUserMessage', () => {
+    it('遠端使用者訊息應被加入 messagesByPodId', () => {
+      const chatStore = useChatStore()
+      const podStore = usePodStore()
+      const pod = createMockPod({ id: 'pod-1', output: [] })
+      podStore.pods = [pod]
+
+      chatStore.addRemoteUserMessage('pod-1', 'remote-msg-1', 'Hello from remote', '2024-01-01T00:00:00Z')
+
+      const messages = chatStore.messagesByPodId.get('pod-1')
+      expect(messages).toHaveLength(1)
+      expect(messages![0]).toMatchObject({
+        role: 'user',
+        content: 'Hello from remote',
+      })
+    })
+
+    it('應使用傳入的 messageId 和 timestamp', () => {
+      const chatStore = useChatStore()
+      const podStore = usePodStore()
+      const pod = createMockPod({ id: 'pod-1', output: [] })
+      podStore.pods = [pod]
+
+      chatStore.addRemoteUserMessage('pod-1', 'specific-id', 'Content', '2024-06-15T12:00:00Z')
+
+      const messages = chatStore.messagesByPodId.get('pod-1')
+      expect(messages![0]!.id).toBe('specific-id')
+      expect(messages![0]!.timestamp).toBe('2024-06-15T12:00:00Z')
+    })
+
+    it('Pod 不存在時應不崩潰', () => {
+      const chatStore = useChatStore()
+
+      expect(() => {
+        chatStore.addRemoteUserMessage('non-existent', 'msg-1', 'Hello', '2024-01-01T00:00:00Z')
+      }).not.toThrow()
+
+      expect(chatStore.messagesByPodId.has('non-existent')).toBe(false)
+    })
+  })
 })

@@ -31,6 +31,18 @@ export function updateBoundingBox(
   bounds.maxY = Math.max(bounds.maxY, y + height)
 }
 
+type UnboundNoteEntry = { noteList: { x: number; y: number }[]; getBoundKey: (n: { x: number; y: number }) => string | null }
+
+function updateBoundsForUnboundNotes(bounds: BoundingBox, noteStoreConfigs: UnboundNoteEntry[]): void {
+  for (const { noteList, getBoundKey } of noteStoreConfigs) {
+    for (const note of noteList) {
+      if (getBoundKey(note) === null) {
+        updateBoundingBox(bounds, note.x, note.y, NOTE_WIDTH, NOTE_HEIGHT)
+      }
+    }
+  }
+}
+
 export function calculateBoundingBox<
   TO extends { x: number; y: number },
   TS extends { x: number; y: number },
@@ -65,8 +77,6 @@ export function calculateBoundingBox<
     updateBoundingBox(bounds, pod.x, pod.y, POD_WIDTH, POD_HEIGHT)
   }
 
-  type UnboundNoteEntry = { noteList: { x: number; y: number }[]; getBoundKey: (n: { x: number; y: number }) => string | null }
-
   const noteStoreConfigs: UnboundNoteEntry[] = [
     { noteList: notes.outputStyleNotes as { x: number; y: number }[], getBoundKey: getBoundKeys.outputStyleNote as (n: { x: number; y: number }) => string | null },
     { noteList: notes.skillNotes as { x: number; y: number }[], getBoundKey: getBoundKeys.skillNote as (n: { x: number; y: number }) => string | null },
@@ -75,13 +85,7 @@ export function calculateBoundingBox<
     { noteList: notes.commandNotes as { x: number; y: number }[], getBoundKey: getBoundKeys.commandNote as (n: { x: number; y: number }) => string | null },
   ]
 
-  for (const { noteList, getBoundKey } of noteStoreConfigs) {
-    for (const note of noteList) {
-      if (getBoundKey(note) === null) {
-        updateBoundingBox(bounds, note.x, note.y, NOTE_WIDTH, NOTE_HEIGHT)
-      }
-    }
-  }
+  updateBoundsForUnboundNotes(bounds, noteStoreConfigs)
 
   return bounds
 }

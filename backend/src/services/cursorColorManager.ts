@@ -49,6 +49,18 @@ class CursorColorManager {
     return [redChannel, greenChannel, Math.min(255, blueChannel + deficit)];
   }
 
+  // 浮點精度安全檢查：Math.floor/ceil 仍可能因浮點誤差導致總和超出範圍
+  private correctPrecision(r: number, g: number, b: number): [number, number, number] {
+    const newSum = r + g + b;
+    if (newSum > MAX_COLOR_BRIGHTNESS_SUM) {
+      return this.fixOverflow(r, g, b, newSum - MAX_COLOR_BRIGHTNESS_SUM);
+    }
+    if (newSum < MIN_COLOR_BRIGHTNESS_SUM) {
+      return this.fixDeficit(r, g, b, MIN_COLOR_BRIGHTNESS_SUM - newSum);
+    }
+    return [r, g, b];
+  }
+
   private clampColor(hex: string): string {
     let redChannel = parseInt(hex.slice(1, 3), 16);
     let greenChannel = parseInt(hex.slice(3, 5), 16);
@@ -58,19 +70,14 @@ class CursorColorManager {
     if (sum === 0) return FALLBACK_NEUTRAL_COLOR;
     if (sum >= MIN_COLOR_BRIGHTNESS_SUM && sum <= MAX_COLOR_BRIGHTNESS_SUM) return hex;
 
-    const factor = sum > MAX_COLOR_BRIGHTNESS_SUM ? MAX_COLOR_BRIGHTNESS_SUM / sum : MIN_COLOR_BRIGHTNESS_SUM / sum;
-    const round = sum > MAX_COLOR_BRIGHTNESS_SUM ? Math.floor : Math.ceil;
+    const isOverflow = sum > MAX_COLOR_BRIGHTNESS_SUM;
+    const factor = isOverflow ? MAX_COLOR_BRIGHTNESS_SUM / sum : MIN_COLOR_BRIGHTNESS_SUM / sum;
+    const round = isOverflow ? Math.floor : Math.ceil;
     let clampedRed = Math.min(255, round(redChannel * factor));
     let clampedGreen = Math.min(255, round(greenChannel * factor));
     let clampedBlue = Math.min(255, round(blueChannel * factor));
 
-    // 浮點精度安全檢查：Math.floor/ceil 仍可能因浮點誤差導致總和超出範圍
-    const newSum = clampedRed + clampedGreen + clampedBlue;
-    if (newSum > MAX_COLOR_BRIGHTNESS_SUM) {
-      [clampedRed, clampedGreen, clampedBlue] = this.fixOverflow(clampedRed, clampedGreen, clampedBlue, newSum - MAX_COLOR_BRIGHTNESS_SUM);
-    } else if (newSum < MIN_COLOR_BRIGHTNESS_SUM) {
-      [clampedRed, clampedGreen, clampedBlue] = this.fixDeficit(clampedRed, clampedGreen, clampedBlue, MIN_COLOR_BRIGHTNESS_SUM - newSum);
-    }
+    [clampedRed, clampedGreen, clampedBlue] = this.correctPrecision(clampedRed, clampedGreen, clampedBlue);
 
     return `#${this.toHexChannel(clampedRed)}${this.toHexChannel(clampedGreen)}${this.toHexChannel(clampedBlue)}`;
   }

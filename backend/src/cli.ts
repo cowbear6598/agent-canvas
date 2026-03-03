@@ -15,14 +15,9 @@ const MAX_LOG_READ_BYTES = 1 * 1024 * 1024;
 export const VALID_CONFIG_KEYS = ['GITHUB_TOKEN', 'GITLAB_TOKEN', 'GITLAB_URL'];
 
 export function getLocalIp(): string | null {
-	const interfaces = os.networkInterfaces();
-	for (const iface of Object.values(interfaces)) {
-		if (!iface) continue;
-		for (const info of iface) {
-			if (info.family === 'IPv4' && !info.internal) return info.address;
-		}
-	}
-	return null;
+	const allInterfaces = Object.values(os.networkInterfaces()).flatMap(iface => iface ?? []);
+	const ipv4External = allInterfaces.find(info => info.family === 'IPv4' && !info.internal);
+	return ipv4External?.address ?? null;
 }
 
 const HELP_TEXT = `Claude Canvas - AI Agent 畫布工具

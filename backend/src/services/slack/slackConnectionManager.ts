@@ -160,8 +160,8 @@ class SlackConnectionManager {
 
             return ok(undefined);
         } catch (error) {
-            logger.error('Slack', 'Error', `發送訊息至頻道 ${channelId} 失敗`, error);
-            return err(`發送訊息失敗：${getErrorMessage(error)}`);
+            logger.error('Slack', 'Error', `發送訊息至頻道 ${channelId} 失敗：${getErrorMessage(error)}`);
+            return err('發送訊息失敗');
         }
     }
 

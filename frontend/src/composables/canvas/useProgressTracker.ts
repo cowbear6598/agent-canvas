@@ -69,7 +69,7 @@ export interface ProgressTrackerReturn<TTask> {
   cleanupListeners: () => void
 }
 
-export function useProgressTracker<TTask, TProgressPayload, TResultPayload>(
+export function useProgressTracker<TTask extends TimeoutTask, TProgressPayload, TResultPayload>(
   options: ProgressTrackerOptions<TTask, TProgressPayload, TResultPayload>
 ): ProgressTrackerReturn<TTask> {
   const {
@@ -85,11 +85,10 @@ export function useProgressTracker<TTask, TProgressPayload, TResultPayload>(
   } = options
 
   const onTimeout = options.onTimeout ?? ((task: TTask, helpers: ProgressTaskHelpers): void => {
-    const timeoutTask = task as unknown as TimeoutTask
-    timeoutTask.status = 'failed'
-    timeoutTask.message = '操作逾時，請重試'
+    task.status = 'failed'
+    task.message = '操作逾時，請重試'
     onTimeoutExtra?.(task)
-    helpers.scheduleRemove(timeoutTask.requestId, PROGRESS_REMOVE_DELAY_ON_ERROR_MS)
+    helpers.scheduleRemove(task.requestId, PROGRESS_REMOVE_DELAY_ON_ERROR_MS)
   })
 
   const tasks = ref<Map<string, TTask>>(new Map()) as Ref<Map<string, TTask>>

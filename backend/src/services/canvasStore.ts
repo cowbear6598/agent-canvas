@@ -9,6 +9,10 @@ import {fsOperation} from '../utils/operationHelpers.js';
 import {fileExists} from './shared/fileResourceHelpers.js';
 import {safeJsonParse} from '../utils/safeJsonParse.js';
 
+function isFulfilledCanvas(r: PromiseSettledResult<Canvas | null>): r is PromiseFulfilledResult<Canvas> {
+    return r.status === 'fulfilled' && r.value !== null;
+}
+
 class CanvasStore {
     private canvases: Map<string, Canvas> = new Map();
     private activeCanvasMap: Map<string, string> = new Map();
@@ -320,15 +324,7 @@ class CanvasStore {
 
             const loadPromises = directories.map((dir) => this.loadSingleCanvas(dir.name));
             const results = await Promise.allSettled(loadPromises);
-
-            const canvases: Canvas[] = [];
-            for (const result of results) {
-                if (result.status === 'fulfilled' && result.value !== null) {
-                    canvases.push(result.value);
-                }
-            }
-
-            return canvases;
+            return results.filter(isFulfilledCanvas).map(r => r.value);
         }, '載入 Canvas 列表失敗');
 
         if (!loadResult.success) {

@@ -10,7 +10,7 @@ import {createNotePositionActions} from './notePositionActions'
 import {createResourceCRUDActions} from './createResourceCRUDActions'
 import type {CRUDEventsConfig, CRUDPayloadConfig} from './createResourceCRUDActions'
 import type {ToastCategory} from '@/composables/useToast'
-import {capitalize} from '@/lib/utils'
+import {capitalizeFirstLetter} from '@/lib/utils'
 
 const STORE_TO_CATEGORY_MAP: Record<string, string> = {
     'skill': 'Skill',
@@ -492,7 +492,7 @@ function buildCRUDActions<TItem>(config: NoteStoreConfig<TItem>): Record<string,
 
     const crudConfig = config.crudConfig as NoteCRUDConfig<{ id: string; name: string }>
     const methodPrefix = crudConfig.methodPrefix
-    const capitalizedMethodPrefix = capitalize(methodPrefix)
+    const capitalizeFirstLetterdMethodPrefix = capitalizeFirstLetter(methodPrefix)
 
     const crud = createResourceCRUDActions(
         crudConfig.resourceType,
@@ -544,10 +544,10 @@ function buildCRUDActions<TItem>(config: NoteStoreConfig<TItem>): Record<string,
     }
 
     return {
-        [`create${capitalizedMethodPrefix}`]: createAction,
-        [`update${capitalizedMethodPrefix}`]: updateAction,
-        [`read${capitalizedMethodPrefix}`]: readAction,
-        [`delete${capitalizedMethodPrefix}`]: deleteAction,
-        [`load${capitalizedMethodPrefix}s`]: loadAllAction,
+        [`create${capitalizeFirstLetterdMethodPrefix}`]: createAction,
+        [`update${capitalizeFirstLetterdMethodPrefix}`]: updateAction,
+        [`read${capitalizeFirstLetterdMethodPrefix}`]: readAction,
+        [`delete${capitalizeFirstLetterdMethodPrefix}`]: deleteAction,
+        [`load${capitalizeFirstLetterdMethodPrefix}s`]: loadAllAction,
     }
 }

@@ -284,6 +284,22 @@ describe('SlackConnectionManager', () => {
 
             expect(result.success).toBe(false);
         });
+
+        it('API 呼叫失敗時錯誤訊息不洩漏 Slack API 內部錯誤', async () => {
+            const slackApp = createMockSlackApp();
+            await manager.connect(slackApp);
+
+            getLastAppInstance().client.chat.postMessage.mockRejectedValueOnce(new Error('invalid_auth: token_expired'));
+
+            const result = await manager.sendMessage(slackApp.id, 'C001', '訊息');
+
+            expect(result.success).toBe(false);
+            if (!result.success) {
+                expect(result.error).toBe('發送訊息失敗');
+                expect(result.error).not.toContain('invalid_auth');
+                expect(result.error).not.toContain('token_expired');
+            }
+        });
     });
 
     describe('destroyAll', () => {

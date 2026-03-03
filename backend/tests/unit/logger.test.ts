@@ -282,5 +282,27 @@ describe('Logger 顏色輸出', () => {
       expect(stackTrace).toContain('https://***@github.com');
       expect(stackTrace).not.toContain('mytoken123');
     });
+
+    it('Slack Bot Token（xoxb-）遮罩正常運作', async () => {
+      const logger = await getLogger();
+      const fakeToken = `xoxb-${'0'.repeat(13)}-${'0'.repeat(13)}-${'a'.repeat(16)}`;
+      const error = new Error(`token=${fakeToken}`);
+      logger.error('Slack', 'Error', 'Slack 連線失敗', error);
+
+      const stackTrace = consoleErrorCalls[1];
+      expect(stackTrace).toContain('xox***');
+      expect(stackTrace).not.toContain(fakeToken);
+    });
+
+    it('Slack App Token（xapp-）遮罩正常運作', async () => {
+      const logger = await getLogger();
+      const fakeAppToken = `xapp-1-${'A'.repeat(7)}-${'0'.repeat(12)}-${'b'.repeat(6)}`;
+      const error = new Error(`appToken=${fakeAppToken}`);
+      logger.error('Slack', 'Error', 'Slack 連線失敗', error);
+
+      const stackTrace = consoleErrorCalls[1];
+      expect(stackTrace).toContain('xapp***');
+      expect(stackTrace).not.toContain(fakeAppToken);
+    });
   });
 });

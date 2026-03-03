@@ -7,8 +7,12 @@ describe('路徑驗證工具', () => {
       expect(sanitizePathSegment('test123')).toBe('test123');
     });
 
-    it('使用basename萃取檔名但仍需符合規則', () => {
-      expect(sanitizePathSegment('test-path')).toBe('test-path');
+    it('使用basename萃取檔名，path/to/file 應萃取出 file', () => {
+      expect(sanitizePathSegment('path/to/file')).toBe('file');
+    });
+
+    it('空字串應拋出錯誤', () => {
+      expect(() => sanitizePathSegment('')).toThrow('名稱格式不正確，只能包含英文、數字、dash');
     });
 
     it('拋出錯誤當路徑包含不允許的字元', () => {
