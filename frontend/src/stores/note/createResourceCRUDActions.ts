@@ -4,7 +4,6 @@ import { requireActiveCanvas } from '@/utils/canvasGuard'
 import { useToast } from '@/composables/useToast'
 import type { WebSocketRequestEvents, WebSocketResponseEvents } from '@/types/websocket'
 import type { ToastCategory } from '@/composables/useToast'
-import { handleNullResponse } from './noteStoreHelpers'
 
 export function defaultReplaceItemInList<TItem extends { id: string }>(
   items: TItem[],
@@ -116,10 +115,10 @@ export function createResourceCRUDActions<
         })
       )
 
-      if (toastCategory) {
-        const nullResult = handleNullResponse(response, showErrorToast, toastCategory, '建立失敗', `建立 ${resourceType} 失敗`)
-        if (nullResult) return nullResult
-      } else if (!response) {
+      if (!response) {
+        if (toastCategory) {
+          showErrorToast(toastCategory, '建立失敗', `建立 ${resourceType} 失敗`)
+        }
         return { success: false, error: `建立 ${resourceType} 失敗` }
       }
 
@@ -160,10 +159,10 @@ export function createResourceCRUDActions<
         })
       )
 
-      if (toastCategory) {
-        const nullResult = handleNullResponse(response, showErrorToast, toastCategory, '更新失敗', `更新 ${resourceType} 失敗`)
-        if (nullResult) return nullResult
-      } else if (!response) {
+      if (!response) {
+        if (toastCategory) {
+          showErrorToast(toastCategory, '更新失敗', `更新 ${resourceType} 失敗`)
+        }
         return { success: false, error: `更新 ${resourceType} 失敗` }
       }
 

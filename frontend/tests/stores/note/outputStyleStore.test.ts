@@ -432,7 +432,7 @@ describe('outputStyleStore 自訂 actions', () => {
         await store.loadGroups()
 
         expect(store.groups).toEqual(originalGroups)
-        expect(mockShowErrorToast).toHaveBeenCalledWith('OutputStyle', '載入群組失敗', undefined)
+        expect(mockShowErrorToast).toHaveBeenCalledWith('OutputStyle', '載入群組失敗')
       })
 
       it('回應有值但無 groups 欄位時不應更新 groups', async () => {
@@ -505,7 +505,7 @@ describe('outputStyleStore 自訂 actions', () => {
           success: false,
           error: '建立群組失敗',
         })
-        expect(mockShowErrorToast).toHaveBeenCalledWith('OutputStyle', '建立群組失敗', undefined)
+        expect(mockShowErrorToast).toHaveBeenCalledWith('OutputStyle', '建立群組失敗')
       })
     })
 
@@ -564,7 +564,7 @@ describe('outputStyleStore 自訂 actions', () => {
           success: false,
           error: '刪除群組失敗',
         })
-        expect(mockShowErrorToast).toHaveBeenCalledWith('OutputStyle', '刪除群組失敗', undefined)
+        expect(mockShowErrorToast).toHaveBeenCalledWith('OutputStyle', '刪除群組失敗')
       })
     })
 
@@ -652,7 +652,7 @@ describe('outputStyleStore 自訂 actions', () => {
           success: false,
           error: '移動失敗',
         })
-        expect(mockShowErrorToast).toHaveBeenCalledWith('OutputStyle', '移動失敗', undefined)
+        expect(mockShowErrorToast).toHaveBeenCalledWith('OutputStyle', '移動失敗')
       })
     })
   })

@@ -117,7 +117,7 @@ describe('createGroupCRUDActions', () => {
 
       await actions.loadGroups.call(ctx)
 
-      expect(mockShowErrorToast).toHaveBeenCalledWith('Command', '載入群組失敗', undefined)
+      expect(mockShowErrorToast).toHaveBeenCalledWith('Command', '載入群組失敗')
       expect(ctx.groups).toHaveLength(0)
     })
   })
@@ -172,7 +172,7 @@ describe('createGroupCRUDActions', () => {
 
       const result = await actions.createGroup.call(ctx, 'New Group')
 
-      expect(mockShowErrorToast).toHaveBeenCalledWith('Command', '建立群組失敗', undefined)
+      expect(mockShowErrorToast).toHaveBeenCalledWith('Command', '建立群組失敗')
       expect(result).toEqual({ success: false, error: '建立群組失敗' })
     })
 
@@ -263,7 +263,7 @@ describe('createGroupCRUDActions', () => {
 
       const result = await actions.deleteGroup.call(ctx, 'group-1')
 
-      expect(mockShowErrorToast).toHaveBeenCalledWith('Command', '刪除群組失敗', undefined)
+      expect(mockShowErrorToast).toHaveBeenCalledWith('Command', '刪除群組失敗')
       expect(result).toEqual({ success: false, error: '刪除群組失敗' })
     })
 
@@ -367,7 +367,7 @@ describe('createGroupCRUDActions', () => {
 
       const result = await actions.moveItemToGroup.call(ctx, 'item-1', 'group-1')
 
-      expect(mockShowErrorToast).toHaveBeenCalledWith('Command', '移動失敗', undefined)
+      expect(mockShowErrorToast).toHaveBeenCalledWith('Command', '移動失敗')
       expect(result).toEqual({ success: false, error: '移動失敗' })
     })
 

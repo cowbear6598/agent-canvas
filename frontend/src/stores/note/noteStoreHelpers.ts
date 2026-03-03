@@ -2,16 +2,15 @@ import type { ToastCategory } from '@/composables/useToast'
 
 type ShowErrorToast = (category: ToastCategory, action: string, reason?: string) => string
 
-export function handleNullResponse(
-  response: unknown,
+export function isNullResponse<T>(
+  response: T | null | undefined,
   showErrorToast: ShowErrorToast,
   category: ToastCategory,
   action: string,
-  errorMessage?: string
-): { success: false; error: string } | null {
+): response is null | undefined {
   if (!response) {
-    showErrorToast(category, action, errorMessage)
-    return { success: false, error: errorMessage ?? action }
+    showErrorToast(category, action)
+    return true
   }
-  return null
+  return false
 }

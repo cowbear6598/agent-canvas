@@ -18,12 +18,14 @@ vi.mock('@/services/websocket', async () => {
 })
 
 // Mock useToast
-const mockShowSuccessToast = vi.fn()
-const mockShowErrorToast = vi.fn()
+const { mockShowSuccessToast, mockShowErrorToast } = vi.hoisted(() => ({
+  mockShowSuccessToast: vi.fn(),
+  mockShowErrorToast: vi.fn(),
+}))
 vi.mock('@/composables/useToast', () => ({
   useToast: () => ({
-    showSuccessToast: (...args: unknown[]) => mockShowSuccessToast(...args),
-    showErrorToast: (...args: unknown[]) => mockShowErrorToast(...args),
+    showSuccessToast: mockShowSuccessToast,
+    showErrorToast: mockShowErrorToast,
   }),
 }))
 
@@ -114,7 +116,7 @@ describe('repositoryStore', () => {
 
       const result = await store.createRepository('Test Repo')
 
-      expect(mockShowErrorToast).toHaveBeenCalledWith('Repository', '建立失敗', '建立資料夾失敗')
+      expect(mockShowErrorToast).toHaveBeenCalledWith('Repository', '建立失敗')
       expect(result.success).toBe(false)
       expect(result.error).toBe('建立資料夾失敗')
     })
@@ -337,7 +339,7 @@ describe('repositoryStore', () => {
 
       const result = await store.createWorktree('repo-1', 'branch', { x: 200, y: 200 })
 
-      expect(mockShowErrorToast).toHaveBeenCalledWith('Repository', 'Worktree 建立失敗', '建立 Worktree 失敗')
+      expect(mockShowErrorToast).toHaveBeenCalledWith('Repository', 'Worktree 建立失敗')
       expect(result.success).toBe(false)
       expect(result.error).toBe('建立 Worktree 失敗')
     })
@@ -606,7 +608,7 @@ describe('repositoryStore', () => {
 
       const result = await store.deleteBranch('repo-1', 'feature-1')
 
-      expect(mockShowErrorToast).toHaveBeenCalledWith('Git', '刪除分支失敗', undefined)
+      expect(mockShowErrorToast).toHaveBeenCalledWith('Git', '刪除分支失敗')
       expect(result).toEqual({
         success: false,
         error: '刪除分支失敗',

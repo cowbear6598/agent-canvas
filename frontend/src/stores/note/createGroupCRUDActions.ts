@@ -3,7 +3,7 @@ import { createWebSocketRequest } from '@/services/websocket'
 import { useToast } from '@/composables/useToast'
 import { getActiveCanvasIdOrWarn } from '@/utils/canvasGuard'
 import type { ToastCategory } from '@/composables/useToast'
-import { handleNullResponse } from './noteStoreHelpers'
+import { isNullResponse } from './noteStoreHelpers'
 import { WebSocketRequestEvents, WebSocketResponseEvents } from '@/services/websocket'
 import type {
   GroupListPayload,
@@ -61,11 +61,10 @@ export function createGroupCRUDActions(config: GroupCRUDConfig): GroupCRUDAction
         })
       )
 
-      const nullResult = handleNullResponse(response, showErrorToast, config.toastCategory, '載入群組失敗')
-      if (nullResult) return
+      if (isNullResponse(response, showErrorToast, config.toastCategory, '載入群組失敗')) return
 
-      if (response!.groups) {
-        this.groups = response!.groups
+      if (response.groups) {
+        this.groups = response.groups
       }
     },
 
@@ -91,18 +90,17 @@ export function createGroupCRUDActions(config: GroupCRUDConfig): GroupCRUDAction
         })
       )
 
-      const nullResult = handleNullResponse(response, showErrorToast, config.toastCategory, '建立群組失敗')
-      if (nullResult) return nullResult
+      if (isNullResponse(response, showErrorToast, config.toastCategory, '建立群組失敗')) return { success: false, error: '建立群組失敗' }
 
-      if (response!.group) {
-        this.addGroupFromEvent(response!.group)
+      if (response.group) {
+        this.addGroupFromEvent(response.group)
         showSuccessToast(config.toastCategory, '建立群組成功', name)
       }
 
       return {
-        success: response!.success,
-        group: response!.group as Group,
-        error: response!.error
+        success: response.success,
+        group: response.group as Group,
+        error: response.error
       }
     },
 
@@ -127,17 +125,16 @@ export function createGroupCRUDActions(config: GroupCRUDConfig): GroupCRUDAction
         })
       )
 
-      const nullResult = handleNullResponse(response, showErrorToast, config.toastCategory, '刪除群組失敗')
-      if (nullResult) return nullResult
+      if (isNullResponse(response, showErrorToast, config.toastCategory, '刪除群組失敗')) return { success: false, error: '刪除群組失敗' }
 
-      if (response!.success && response!.groupId) {
-        this.removeGroupFromEvent(response!.groupId)
+      if (response.success && response.groupId) {
+        this.removeGroupFromEvent(response.groupId)
         showSuccessToast(config.toastCategory, '刪除群組成功')
       }
 
       return {
-        success: response!.success,
-        error: response!.error
+        success: response.success,
+        error: response.error
       }
     },
 
@@ -163,17 +160,16 @@ export function createGroupCRUDActions(config: GroupCRUDConfig): GroupCRUDAction
         })
       )
 
-      const nullResult = handleNullResponse(response, showErrorToast, config.toastCategory, '移動失敗')
-      if (nullResult) return nullResult
+      if (isNullResponse(response, showErrorToast, config.toastCategory, '移動失敗')) return { success: false, error: '移動失敗' }
 
-      if (response!.success && response!.itemId) {
-        this.updateItemGroupId(response!.itemId, response!.groupId ?? null)
+      if (response.success && response.itemId) {
+        this.updateItemGroupId(response.itemId, response.groupId ?? null)
         showSuccessToast(config.toastCategory, '移動成功')
       }
 
       return {
-        success: response!.success,
-        error: response!.error
+        success: response.success,
+        error: response.error
       }
     },
   }

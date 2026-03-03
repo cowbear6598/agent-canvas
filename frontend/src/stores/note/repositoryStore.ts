@@ -6,7 +6,7 @@ import { useWebSocketErrorHandler } from '@/composables/useWebSocketErrorHandler
 import { requireActiveCanvas } from '@/utils/canvasGuard'
 import { useToast } from '@/composables/useToast'
 import { generateRequestId } from '@/services/utils'
-import { handleNullResponse } from './noteStoreHelpers'
+import { isNullResponse } from './noteStoreHelpers'
 import type {
   RepositoryCreatePayload,
   RepositoryCreatedPayload,
@@ -67,18 +67,17 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
         })
       )
 
-      const nullResult = handleNullResponse(response, showErrorToast, 'Repository', '建立失敗', '建立資料夾失敗')
-      if (nullResult) return nullResult
+      if (isNullResponse(response, showErrorToast, 'Repository', '建立失敗')) return { success: false, error: '建立資料夾失敗' }
 
-      if (!response!.repository) {
-        const error = response!.error || '建立資料夾失敗'
+      if (!response.repository) {
+        const error = response.error || '建立資料夾失敗'
         showErrorToast('Repository', '建立失敗', error)
         return { success: false, error }
       }
 
-      this.availableItems.push(response!.repository)
+      this.availableItems.push(response.repository)
       showSuccessToast('Repository', '建立成功', name)
-      return { success: true, repository: response!.repository }
+      return { success: true, repository: response.repository }
     },
 
     async deleteRepository(this: NoteStoreContext<Repository>, repositoryId: string): Promise<void> {
@@ -130,20 +129,19 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
         })
       )
 
-      const nullResult = handleNullResponse(response, showErrorToast, 'Repository', 'Worktree 建立失敗', '建立 Worktree 失敗')
-      if (nullResult) return nullResult
+      if (isNullResponse(response, showErrorToast, 'Repository', 'Worktree 建立失敗')) return { success: false, error: '建立 Worktree 失敗' }
 
-      if (!response!.success) {
-        const error = response!.error || '建立 Worktree 失敗'
+      if (!response.success) {
+        const error = response.error || '建立 Worktree 失敗'
         showErrorToast('Repository', 'Worktree 建立失敗', error)
         return { success: false, error }
       }
 
-      if (response!.repository) {
-        this.availableItems.push(response!.repository)
+      if (response.repository) {
+        this.availableItems.push(response.repository)
 
         await this.createNote(
-          response!.repository.id,
+          response.repository.id,
           sourceNotePosition.x + 150,
           sourceNotePosition.y + 80
         )
@@ -167,15 +165,14 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
         })
       )
 
-      const nullResult = handleNullResponse(response, showErrorToast, 'Git', '取得分支列表失敗')
-      if (nullResult) return nullResult
+      if (isNullResponse(response, showErrorToast, 'Git', '取得分支列表失敗')) return { success: false, error: '取得分支列表失敗' }
 
       return {
-        success: response!.success,
-        branches: response!.branches,
-        currentBranch: response!.currentBranch,
-        worktreeBranches: response!.worktreeBranches,
-        error: response!.error
+        success: response.success,
+        branches: response.branches,
+        currentBranch: response.currentBranch,
+        worktreeBranches: response.worktreeBranches,
+        error: response.error
       }
     },
 
@@ -193,13 +190,12 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
         })
       )
 
-      const nullResult = handleNullResponse(response, showErrorToast, 'Git', '檢查修改狀態失敗')
-      if (nullResult) return nullResult
+      if (isNullResponse(response, showErrorToast, 'Git', '檢查修改狀態失敗')) return { success: false, error: '檢查修改狀態失敗' }
 
       return {
-        success: response!.success,
-        isDirty: response!.isDirty,
-        error: response!.error
+        success: response.success,
+        isDirty: response.isDirty,
+        error: response.error
       }
     },
 
@@ -237,19 +233,18 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
         })
       )
 
-      const nullResult = handleNullResponse(response, showErrorToast, 'Git', '刪除分支失敗')
-      if (nullResult) return nullResult
+      if (isNullResponse(response, showErrorToast, 'Git', '刪除分支失敗')) return { success: false, error: '刪除分支失敗' }
 
-      if (response!.success) {
+      if (response.success) {
         showSuccessToast('Git', '刪除分支成功', branchName)
-      } else if (response!.error) {
-        showErrorToast('Git', '刪除分支失敗', response!.error)
+      } else if (response.error) {
+        showErrorToast('Git', '刪除分支失敗', response.error)
       }
 
       return {
-        success: response!.success,
-        branchName: response!.branchName,
-        error: response!.error
+        success: response.success,
+        branchName: response.branchName,
+        error: response.error
       }
     },
 
