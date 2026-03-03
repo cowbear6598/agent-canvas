@@ -35,7 +35,7 @@ function handleCanvasResult<T, R extends { requestId: string; success: boolean }
     return false;
   }
 
-  const successResponse = onSuccess(result.data!);
+  const successResponse = onSuccess(result.data);
   if (emitToAll) {
     socketService.emitToAll(event, successResponse);
   } else {

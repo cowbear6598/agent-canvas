@@ -55,11 +55,11 @@ export async function handleSlackAppCreate(
 
     const result = slackAppStore.create(name, botToken, appToken);
     if (!result.success) {
-        emitError(connectionId, WebSocketResponseEvents.SLACK_APP_CREATED, result.error ?? '建立 Slack App 失敗', requestId, undefined, 'INTERNAL_ERROR');
+        emitError(connectionId, WebSocketResponseEvents.SLACK_APP_CREATED, result.error, requestId, undefined, 'INTERNAL_ERROR');
         return;
     }
 
-    const app = result.data!;
+    const app = result.data;
 
     logger.log('Slack', 'Create', `建立 Slack App「${app.name}」`);
 

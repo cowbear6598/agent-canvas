@@ -63,11 +63,11 @@ export const usePodStore = defineStore('pod', {
         podCount: (state): number => state.pods.length,
 
         getPodById: (state) => (id: string): Pod | undefined => {
-            return state.pods.find((p) => p.id === id)
+            return state.pods.find((pod) => pod.id === id)
         },
 
         getNextPodName: (state) => (): string => {
-            const existingNames = new Set(state.pods.map(p => p.name))
+            const existingNames = new Set(state.pods.map(pod => pod.name))
             let i = 1
             while (existingNames.has(`Pod ${i}`)) {
                 i++
@@ -302,7 +302,6 @@ export const usePodStore = defineStore('pod', {
         },
 
         showTypeMenu(position: Position): void {
-            // 選單剛被關閉時（同一次滑鼠操作），不重新打開
             if (Date.now() - this.typeMenuClosedAt < TYPE_MENU_COOLDOWN_MS) return
 
             this.typeMenu = {

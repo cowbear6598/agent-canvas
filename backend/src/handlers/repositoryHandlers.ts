@@ -126,7 +126,7 @@ export const handlePodBindRepository = withCanvasId<PodBindRepositoryPayload>(
       emitError(
         connectionId,
         WebSocketResponseEvents.POD_REPOSITORY_BOUND,
-        validateResult.error!,
+        validateResult.error,
         requestId,
         undefined,
         'NOT_FOUND'
@@ -137,7 +137,7 @@ export const handlePodBindRepository = withCanvasId<PodBindRepositoryPayload>(
     const oldRepositoryId = pod.repositoryId;
 
     podStore.setRepositoryId(canvasId, podId, repositoryId);
-    podStore.setClaudeSessionId(canvasId, podId, '');
+    podStore.resetClaudeSession(canvasId, podId);
 
     await repositorySyncService.syncRepositoryResources(repositoryId);
 
@@ -173,7 +173,7 @@ export const handlePodUnbindRepository = withCanvasId<PodUnbindRepositoryPayload
     const oldRepositoryId = pod.repositoryId;
 
     podStore.setRepositoryId(canvasId, podId, null);
-    podStore.setClaudeSessionId(canvasId, podId, '');
+    podStore.resetClaudeSession(canvasId, podId);
 
     if (oldRepositoryId) {
       const repositoryPath = repositoryService.getRepositoryPath(oldRepositoryId);

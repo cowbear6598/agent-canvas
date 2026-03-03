@@ -69,6 +69,18 @@ export async function deleteResourceDirFromPath(basePath: string, subDir: string
     await fs.rm(dir, {recursive: true, force: true});
 }
 
+export async function findValidatedSrcPath(
+    service: { findFilePath: (id: string) => Promise<string | null> },
+    id: string,
+    validateFn: (id: string) => boolean,
+    resourceName: string
+): Promise<string> {
+    if (!validateFn(id)) throw new Error(`無效的 ${resourceName} 格式`);
+    const srcPath = await service.findFilePath(id);
+    if (!srcPath) throw new Error(`找不到 ${resourceName}: ${id}`);
+    return srcPath;
+}
+
 export function parseFrontmatterDescription(content: string): string {
     const frontmatterRegex = /^---\s*\n([\s\S]*?)\n---/;
     const match = content.match(frontmatterRegex);

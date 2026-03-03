@@ -13,6 +13,7 @@ vi.mock('../../src/services/podStore.js', () => ({
   podStore: {
     getById: vi.fn(),
     setClaudeSessionId: vi.fn(),
+    resetClaudeSession: vi.fn(),
   },
 }));
 

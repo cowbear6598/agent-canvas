@@ -203,123 +203,112 @@ export function createPastedConnections(
   return createdConnections;
 }
 
-type OutputStyleNoteItem = { boundToOriginalPodId: string | null; outputStyleId: string; name: string; x: number; y: number; originalPosition: { x: number; y: number } | null };
-type SkillNoteItem = { boundToOriginalPodId: string | null; skillId: string; name: string; x: number; y: number; originalPosition: { x: number; y: number } | null };
-type RepositoryNoteItem = { boundToOriginalPodId: string | null; repositoryId: string; name: string; x: number; y: number; originalPosition: { x: number; y: number } | null };
-type SubAgentNoteItem = { boundToOriginalPodId: string | null; subAgentId: string; name: string; x: number; y: number; originalPosition: { x: number; y: number } | null };
-type CommandNoteItem = { boundToOriginalPodId: string | null; commandId: string; name: string; x: number; y: number; originalPosition: { x: number; y: number } | null };
+type NoteItemBase = { boundToOriginalPodId: string | null; name: string; x: number; y: number; originalPosition: { x: number; y: number } | null };
+type OutputStyleNoteItem = NoteItemBase & { outputStyleId: string };
+type SkillNoteItem = NoteItemBase & { skillId: string };
+type RepositoryNoteItem = NoteItemBase & { repositoryId: string };
+type SubAgentNoteItem = NoteItemBase & { subAgentId: string };
+type CommandNoteItem = NoteItemBase & { commandId: string };
 
-export function createPastedOutputStyleNotes(
-  canvasId: string,
-  noteItems: OutputStyleNoteItem[],
-  podIdMapping: Record<string, string>
-): { notes: OutputStyleNote[]; errors: PasteError[] } {
-  return createPastedNotes<OutputStyleNoteItem, OutputStyleNote>(
-    canvasId,
-    noteItems,
-    noteStore,
-    podIdMapping,
-    'outputStyleNote',
-    (item) => item.outputStyleId,
-    (item, boundToPodId) => ({
+type NotePasteConfig<TNoteItem extends NoteItemBase, TNote extends { id: string; name: string; x: number; y: number; boundToPodId: string | null; originalPosition: { x: number; y: number } | null }> = {
+  store: NoteStoreType<TNote>;
+  type: PasteError['type'];
+  getId: (item: TNoteItem) => string;
+  createParams: (item: TNoteItem, boundToPodId: string | null) => NoteCreateParams<TNote>;
+};
+
+const NOTE_PASTE_CONFIGS = {
+  outputStyle: {
+    store: noteStore,
+    type: 'outputStyleNote',
+    getId: (item: OutputStyleNoteItem): string => item.outputStyleId,
+    createParams: (item: OutputStyleNoteItem, boundToPodId: string | null): NoteCreateParams<OutputStyleNote> => ({
       outputStyleId: item.outputStyleId,
       name: item.name,
       x: item.x,
       y: item.y,
       boundToPodId,
       originalPosition: item.originalPosition,
-    })
-  );
-}
-
-export function createPastedSkillNotes(
-  canvasId: string,
-  noteItems: SkillNoteItem[],
-  podIdMapping: Record<string, string>
-): { notes: SkillNote[]; errors: PasteError[] } {
-  return createPastedNotes<SkillNoteItem, SkillNote>(
-    canvasId,
-    noteItems,
-    skillNoteStore,
-    podIdMapping,
-    'skillNote',
-    (item) => item.skillId,
-    (item, boundToPodId) => ({
+    }),
+  } satisfies NotePasteConfig<OutputStyleNoteItem, OutputStyleNote>,
+  skill: {
+    store: skillNoteStore,
+    type: 'skillNote',
+    getId: (item: SkillNoteItem): string => item.skillId,
+    createParams: (item: SkillNoteItem, boundToPodId: string | null): NoteCreateParams<SkillNote> => ({
       skillId: item.skillId,
       name: item.name,
       x: item.x,
       y: item.y,
       boundToPodId,
       originalPosition: item.originalPosition,
-    })
-  );
-}
-
-export function createPastedRepositoryNotes(
-  canvasId: string,
-  noteItems: RepositoryNoteItem[],
-  podIdMapping: Record<string, string>
-): { notes: RepositoryNote[]; errors: PasteError[] } {
-  return createPastedNotes<RepositoryNoteItem, RepositoryNote>(
-    canvasId,
-    noteItems,
-    repositoryNoteStore,
-    podIdMapping,
-    'repositoryNote',
-    (item) => item.repositoryId,
-    (item, boundToPodId) => ({
+    }),
+  } satisfies NotePasteConfig<SkillNoteItem, SkillNote>,
+  repository: {
+    store: repositoryNoteStore,
+    type: 'repositoryNote',
+    getId: (item: RepositoryNoteItem): string => item.repositoryId,
+    createParams: (item: RepositoryNoteItem, boundToPodId: string | null): NoteCreateParams<RepositoryNote> => ({
       repositoryId: item.repositoryId,
       name: item.name,
       x: item.x,
       y: item.y,
       boundToPodId,
       originalPosition: item.originalPosition,
-    })
-  );
-}
-
-export function createPastedSubAgentNotes(
-  canvasId: string,
-  noteItems: SubAgentNoteItem[],
-  podIdMapping: Record<string, string>
-): { notes: SubAgentNote[]; errors: PasteError[] } {
-  return createPastedNotes<SubAgentNoteItem, SubAgentNote>(
-    canvasId,
-    noteItems,
-    subAgentNoteStore,
-    podIdMapping,
-    'subAgentNote',
-    (item) => item.subAgentId,
-    (item, boundToPodId) => ({
+    }),
+  } satisfies NotePasteConfig<RepositoryNoteItem, RepositoryNote>,
+  subAgent: {
+    store: subAgentNoteStore,
+    type: 'subAgentNote',
+    getId: (item: SubAgentNoteItem): string => item.subAgentId,
+    createParams: (item: SubAgentNoteItem, boundToPodId: string | null): NoteCreateParams<SubAgentNote> => ({
       subAgentId: item.subAgentId,
       name: item.name,
       x: item.x,
       y: item.y,
       boundToPodId,
       originalPosition: item.originalPosition,
-    })
-  );
-}
-
-export function createPastedCommandNotes(
-  canvasId: string,
-  noteItems: CommandNoteItem[],
-  podIdMapping: Record<string, string>
-): { notes: CommandNote[]; errors: PasteError[] } {
-  return createPastedNotes<CommandNoteItem, CommandNote>(
-    canvasId,
-    noteItems,
-    commandNoteStore,
-    podIdMapping,
-    'commandNote',
-    (item) => item.commandId,
-    (item, boundToPodId) => ({
+    }),
+  } satisfies NotePasteConfig<SubAgentNoteItem, SubAgentNote>,
+  command: {
+    store: commandNoteStore,
+    type: 'commandNote',
+    getId: (item: CommandNoteItem): string => item.commandId,
+    createParams: (item: CommandNoteItem, boundToPodId: string | null): NoteCreateParams<CommandNote> => ({
       commandId: item.commandId,
       name: item.name,
       x: item.x,
       y: item.y,
       boundToPodId,
       originalPosition: item.originalPosition,
-    })
-  );
+    }),
+  } satisfies NotePasteConfig<CommandNoteItem, CommandNote>,
+} as const;
+
+export type NotePasteType = keyof typeof NOTE_PASTE_CONFIGS;
+
+type NoteItemForType<K extends NotePasteType> =
+  K extends 'outputStyle' ? OutputStyleNoteItem :
+  K extends 'skill' ? SkillNoteItem :
+  K extends 'repository' ? RepositoryNoteItem :
+  K extends 'subAgent' ? SubAgentNoteItem :
+  K extends 'command' ? CommandNoteItem :
+  never;
+
+type NoteForType<K extends NotePasteType> =
+  K extends 'outputStyle' ? OutputStyleNote :
+  K extends 'skill' ? SkillNote :
+  K extends 'repository' ? RepositoryNote :
+  K extends 'subAgent' ? SubAgentNote :
+  K extends 'command' ? CommandNote :
+  never;
+
+export function createPastedNotesByType<K extends NotePasteType>(
+  type: K,
+  canvasId: string,
+  noteItems: NoteItemForType<K>[],
+  podIdMapping: Record<string, string>
+): { notes: NoteForType<K>[]; errors: PasteError[] } {
+  const config = NOTE_PASTE_CONFIGS[type] as unknown as NotePasteConfig<NoteItemForType<K>, NoteForType<K>>;
+  return createPastedNotes(canvasId, noteItems, config.store, podIdMapping, config.type, config.getId, config.createParams);
 }

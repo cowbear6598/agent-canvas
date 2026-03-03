@@ -126,42 +126,53 @@ class WebSocketClient {
     logger.error('[WebSocket] 連線錯誤:', event)
   }
 
+  private handleAckMessage(message: WebSocketAckMessage): void {
+    const callback = this.ackCallbacks.get(message.ackId)
+    if (!callback) return
+
+    this.ackCallbacks.delete(message.ackId)
+    callback(message.payload)
+  }
+
+  private invokeListener(callback: EventHandler, message: WebSocketMessage): void {
+    if (message.ackId) {
+      const ack = (response?: unknown): void => {
+        const ackMessage: WebSocketAckMessage = {
+          type: 'ack',
+          ackId: message.ackId!,
+          payload: response
+        }
+        this.socket?.send(JSON.stringify(ackMessage))
+      }
+      ;(callback as EventCallbackWithAck<unknown>)(message.payload, ack)
+    } else {
+      ;(callback as EventCallback<unknown>)(message.payload)
+    }
+  }
+
+  private dispatchToListeners(message: WebSocketMessage): void {
+    const listeners = this.eventListeners.get(message.type)
+    if (!listeners) return
+
+    listeners.forEach(callback => {
+      try {
+        this.invokeListener(callback, message)
+      } catch (error) {
+        logger.error('[WebSocket] 監聽器執行錯誤:', error)
+      }
+    })
+  }
+
   private handleMessage(event: MessageEvent): void {
     try {
       const message = JSON.parse(event.data) as WebSocketMessage
 
       if (message.type === 'ack') {
-        const ackMessage = message as WebSocketAckMessage
-        const callback = this.ackCallbacks.get(ackMessage.ackId)
-        if (callback) {
-          this.ackCallbacks.delete(ackMessage.ackId)
-          callback(ackMessage.payload)
-        }
+        this.handleAckMessage(message as WebSocketAckMessage)
         return
       }
 
-      const listeners = this.eventListeners.get(message.type)
-      if (listeners) {
-        listeners.forEach(callback => {
-          try {
-            if (message.ackId) {
-              const ack = (response?: unknown): void => {
-                const ackMessage: WebSocketAckMessage = {
-                  type: 'ack',
-                  ackId: message.ackId!,
-                  payload: response
-                }
-                this.socket?.send(JSON.stringify(ackMessage))
-              }
-              ;(callback as EventCallbackWithAck<unknown>)(message.payload, ack)
-            } else {
-              ;(callback as EventCallback<unknown>)(message.payload)
-            }
-          } catch (error) {
-            logger.error('[WebSocket] 監聽器執行錯誤:', error)
-          }
-        })
-      }
+      this.dispatchToListeners(message)
     } catch (error) {
       logger.error('[WebSocket] 訊息解析錯誤:', error)
     }

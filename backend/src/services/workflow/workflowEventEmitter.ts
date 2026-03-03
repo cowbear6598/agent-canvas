@@ -18,15 +18,16 @@ import type {
 } from '../../types/index.js';
 
 class WorkflowEventEmitter {
-  emitWorkflowComplete(
-    canvasId: string,
-    connectionId: string,
-    _sourcePodId: string,
-    targetPodId: string,
-    success: boolean,
-    error?: string,
-    triggerMode?: 'auto' | 'ai-decide' | 'direct'
-  ): void {
+  emitWorkflowComplete(params: {
+    canvasId: string;
+    connectionId: string;
+    sourcePodId: string;
+    targetPodId: string;
+    success: boolean;
+    error?: string;
+    triggerMode: string;
+  }): void {
+    const { canvasId, connectionId, targetPodId, success, error, triggerMode } = params;
     const payload = {
       canvasId,
       requestId: uuidv4(),
@@ -83,40 +84,27 @@ class WorkflowEventEmitter {
     socketService.emitToCanvas(canvasId, WebSocketResponseEvents.WORKFLOW_AI_DECIDE_PENDING, payload);
   }
 
-  emitAiDecideResult(
-    canvasId: string,
-    connectionId: string,
-    sourcePodId: string,
-    targetPodId: string,
-    shouldTrigger: boolean,
-    reason: string
-  ): void {
-    const payload: WorkflowAiDecideResultPayload = {
-      canvasId,
-      connectionId,
-      sourcePodId,
-      targetPodId,
-      shouldTrigger,
-      reason,
-    };
-    socketService.emitToCanvas(canvasId, WebSocketResponseEvents.WORKFLOW_AI_DECIDE_RESULT, payload);
+  emitAiDecideResult(params: {
+    canvasId: string;
+    connectionId: string;
+    sourcePodId: string;
+    targetPodId: string;
+    shouldTrigger: boolean;
+    reason: string;
+  }): void {
+    const payload: WorkflowAiDecideResultPayload = { ...params };
+    socketService.emitToCanvas(params.canvasId, WebSocketResponseEvents.WORKFLOW_AI_DECIDE_RESULT, payload);
   }
 
-  emitAiDecideError(
-    canvasId: string,
-    connectionId: string,
-    sourcePodId: string,
-    targetPodId: string,
-    error: string
-  ): void {
-    const payload: WorkflowAiDecideErrorPayload = {
-      canvasId,
-      connectionId,
-      sourcePodId,
-      targetPodId,
-      error,
-    };
-    socketService.emitToCanvas(canvasId, WebSocketResponseEvents.WORKFLOW_AI_DECIDE_ERROR, payload);
+  emitAiDecideError(params: {
+    canvasId: string;
+    connectionId: string;
+    sourcePodId: string;
+    targetPodId: string;
+    error: string;
+  }): void {
+    const payload: WorkflowAiDecideErrorPayload = { ...params };
+    socketService.emitToCanvas(params.canvasId, WebSocketResponseEvents.WORKFLOW_AI_DECIDE_ERROR, payload);
   }
 
   emitAiDecideClear(canvasId: string, connectionIds: string[]): void {

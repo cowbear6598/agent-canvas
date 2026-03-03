@@ -46,7 +46,6 @@ const handleClose = (): void => {
 
 const handleKeydown = (event: KeyboardEvent): void => {
   if (event.key === 'Escape') {
-    // 如果有 reka-ui Dialog 開啟中，讓 Dialog 自己處理 ESC
     const openDialog = document.querySelector('[data-state="open"][role="dialog"]')
     if (openDialog) {
       return

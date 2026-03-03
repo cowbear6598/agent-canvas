@@ -4,23 +4,23 @@ import { GroupType } from '../../types';
 import { emitError } from '../../utils/websocketResponse.js';
 import { socketService } from '../../services/socketService.js';
 
-interface MoveToGroupConfig {
+interface MoveToGroupConfig<TIdField extends string = string> {
   service: {
     exists: (id: string) => Promise<boolean>;
     setGroupId: (id: string, groupId: string | null) => Promise<void>;
   };
   resourceName: string;
-  idField: string;
+  idField: TIdField;
   groupType: GroupType;
   events: {
     moved: WebSocketResponseEvents;
   };
 }
 
-export function createMoveToGroupHandler(config: MoveToGroupConfig) {
-  return async (connectionId: string, payload: Record<string, unknown>, requestId: string): Promise<void> => {
-    const resourceId = payload[config.idField] as string;
-    const groupId = payload.groupId as string | null;
+export function createMoveToGroupHandler<TIdField extends string>(config: MoveToGroupConfig<TIdField>) {
+  return async (connectionId: string, payload: Record<TIdField, string> & { groupId: string | null }, requestId: string): Promise<void> => {
+    const resourceId = payload[config.idField];
+    const groupId = payload.groupId;
 
     const resourceExists = await config.service.exists(resourceId);
     if (!resourceExists) {

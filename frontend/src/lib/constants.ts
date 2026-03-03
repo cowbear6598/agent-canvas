@@ -15,6 +15,8 @@ export const OUTPUT_LINES_PREVIEW_COUNT = 4
 export const DEFAULT_POD_ROTATION_RANGE = 2
 export const MAX_POD_NAME_LENGTH = 50
 
+export const MOUSE_BUTTON = { LEFT: 0, MIDDLE: 1, RIGHT: 2 } as const
+
 export const GRID_SIZE = 20
 
 export const POD_WIDTH = 224

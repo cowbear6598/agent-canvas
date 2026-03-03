@@ -108,7 +108,6 @@ export function createConnectionActions(store: ChatStoreInstance): {
         stopHeartbeatCheck()
         resetConnectionState()
 
-        // 連線中斷時清除所有 Pod 的 typing 狀態，避免 UI 卡住
         store.isTypingByPodId.clear()
 
         const {toast} = useToast()

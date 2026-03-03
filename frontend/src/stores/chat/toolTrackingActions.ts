@@ -2,6 +2,7 @@ import type {Message, ToolUseInfo, ToolUseStatus} from '@/types/chat'
 import type {PodChatToolResultPayload, PodChatToolUsePayload} from '@/types/websocket'
 import type {ChatStoreInstance} from './chatStore'
 import {appendToolUseToLastSub, updateSubMessagesToolUseResult} from './subMessageHelpers'
+import {getMessages, findMessageIndex} from './chatStoreHelpers'
 
 export function createToolTrackingActions(store: ChatStoreInstance): {
     handleChatToolUse: (payload: PodChatToolUsePayload) => void
@@ -11,16 +12,16 @@ export function createToolTrackingActions(store: ChatStoreInstance): {
     updateToolUseResult: (podId: string, messages: Message[], messageIndex: number, toolUseId: string, output: string) => void
 } {
     const createMessageWithToolUse = (podId: string, messageId: string, toolUseId: string, toolName: string, input: Record<string, unknown>): void => {
-        const messages = store.messagesByPodId.get(podId) || []
+        const messages = getMessages(store, podId)
 
-        const existingMessage = messages.find(m => m.id === messageId)
+        const existingMessage = messages.find(message => message.id === messageId)
         if (existingMessage?.toolUse?.some(t => t.toolUseId === toolUseId)) return
 
         const toolUseInfo: ToolUseInfo = {
             toolUseId,
             toolName,
             input,
-            status: 'running' as ToolUseStatus
+            status: 'running'
         }
 
         const newMessage: Message = {
@@ -51,7 +52,7 @@ export function createToolTrackingActions(store: ChatStoreInstance): {
 
         const toolUse = message.toolUse || []
         const toolIndex = toolUse.findIndex(t => t.toolUseId === toolUseId)
-        const toolUseInfo: ToolUseInfo = {toolUseId, toolName, input, status: 'running' as ToolUseStatus}
+        const toolUseInfo: ToolUseInfo = {toolUseId, toolName, input, status: 'running'}
         const updatedToolUse = toolIndex === -1 ? [...toolUse, toolUseInfo] : toolUse
 
         updatedMessages[messageIndex] = {
@@ -68,8 +69,8 @@ export function createToolTrackingActions(store: ChatStoreInstance): {
 
     const handleChatToolUse = (payload: PodChatToolUsePayload): void => {
         const {podId, messageId, toolUseId, toolName, input} = payload
-        const messages = store.messagesByPodId.get(podId) || []
-        const messageIndex = messages.findIndex(m => m.id === messageId)
+        const messages = getMessages(store, podId)
+        const messageIndex = findMessageIndex(messages, messageId)
 
         if (messageIndex === -1) {
             createMessageWithToolUse(podId, messageId, toolUseId, toolName, input)
@@ -97,26 +98,28 @@ export function createToolTrackingActions(store: ChatStoreInstance): {
                 : tool
         )
 
-        updatedMessages[messageIndex] = {
+        const updatedMessage: Message = {
             ...message,
             toolUse: updatedToolUse
         }
 
         if (message.subMessages) {
-            updatedMessages[messageIndex].subMessages = updateSubMessagesToolUseResult(
+            updatedMessage.subMessages = updateSubMessagesToolUseResult(
                 message.subMessages,
                 toolUseId,
                 output
             )
         }
 
+        updatedMessages[messageIndex] = updatedMessage
+
         store.messagesByPodId.set(podId, updatedMessages)
     }
 
     const handleChatToolResult = (payload: PodChatToolResultPayload): void => {
         const {podId, messageId, toolUseId, output} = payload
-        const messages = store.messagesByPodId.get(podId) || []
-        const messageIndex = messages.findIndex(m => m.id === messageId)
+        const messages = getMessages(store, podId)
+        const messageIndex = findMessageIndex(messages, messageId)
 
         if (messageIndex === -1) return
 

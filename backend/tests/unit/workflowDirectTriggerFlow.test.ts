@@ -468,9 +468,15 @@ describe('Direct Trigger Flow', () => {
             }, true);
 
             expect(workflowEventEmitter.emitWorkflowComplete).toHaveBeenCalledTimes(1);
-            expect(workflowEventEmitter.emitWorkflowComplete).toHaveBeenCalledWith(
-                canvasId, 'conn-A-D', sourcePodId, targetPodId, true, undefined, 'direct'
-            );
+            expect(workflowEventEmitter.emitWorkflowComplete).toHaveBeenCalledWith({
+                canvasId,
+                connectionId: 'conn-A-D',
+                sourcePodId,
+                targetPodId,
+                success: true,
+                error: undefined,
+                triggerMode: 'direct',
+            });
             expect(updateStatusSpy).toHaveBeenCalledWith(canvasId, 'conn-A-D', 'idle');
             expect(updateStatusSpy).not.toHaveBeenCalledWith(canvasId, 'conn-B-D', 'idle');
         });

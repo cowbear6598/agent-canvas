@@ -26,7 +26,6 @@ class SummaryPromptBuilder {
   }
 
   buildUserPrompt(context: SummaryPromptContext): string {
-    // 優先級：targetPodCommand > targetPodOutputStyle > 預設摘要
     const { sourcePodName, targetPodName, targetPodCommand, targetPodOutputStyle, conversationHistory } = context;
 
     if (targetPodCommand && targetPodCommand.trim()) {

@@ -367,7 +367,7 @@ const getRepositoryBranchName = (repositoryId: string): string | undefined => {
 }
 
 const handleRepositoryContextMenu = (data: { noteId: string; event: MouseEvent }): void => {
-  const note = repositoryStore.typedNotes.find(n => n.id === data.noteId)
+  const note = repositoryStore.typedNotes.find(note => note.id === data.noteId)
   if (!note) return
 
   const repository = repositoryStore.typedAvailableItems.find(r => r.id === note.repositoryId)
@@ -388,7 +388,7 @@ const handleRepositoryContextMenuClose = (): void => {
 }
 
 const handleConnectionContextMenu = (data: { connectionId: string; event: MouseEvent }): void => {
-  const connection = connectionStore.connections.find(c => c.id === data.connectionId)
+  const connection = connectionStore.connections.find(connection => connection.id === data.connectionId)
   if (!connection) return
 
   connectionContextMenu.value = {
@@ -538,7 +538,6 @@ const handleDeleteConfirm = async (): Promise<void> => {
 
   if (result && typeof result === 'object' && !result.success) {
     console.error('刪除失敗:', result.error)
-    // 保持 modal 開啟讓使用者知道失敗
     return
   }
 
@@ -630,9 +629,9 @@ const handleRepositoryCreated = (repository: { id: string; name: string }): void
 type EditableNoteType = 'outputStyle' | 'subAgent' | 'command'
 
 const editableNoteResourceIdGetters: Record<EditableNoteType, (noteId: string) => string | undefined> = {
-  outputStyle: (noteId) => outputStyleStore.typedNotes.find(n => n.id === noteId)?.outputStyleId,
-  subAgent: (noteId) => subAgentStore.typedNotes.find(n => n.id === noteId)?.subAgentId,
-  command: (noteId) => commandStore.typedNotes.find(n => n.id === noteId)?.commandId,
+  outputStyle: (noteId) => outputStyleStore.typedNotes.find(note => note.id === noteId)?.outputStyleId,
+  subAgent: (noteId) => subAgentStore.typedNotes.find(note => note.id === noteId)?.subAgentId,
+  command: (noteId) => commandStore.typedNotes.find(note => note.id === noteId)?.commandId,
 }
 
 const handleOpenMcpServerModal = (mode: 'create' | 'edit', mcpServerId?: string): void => {
@@ -672,7 +671,7 @@ const handleMcpServerModalSubmit = async (payload: { name: string; config: McpSe
 }
 
 const handleMcpServerDoubleClick = async (noteId: string): Promise<void> => {
-  const note = mcpServerStore.typedNotes.find(n => n.id === noteId)
+  const note = mcpServerStore.typedNotes.find(note => note.id === noteId)
   if (!note) return
 
   const mcpServerId = note.mcpServerId

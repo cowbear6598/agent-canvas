@@ -30,19 +30,6 @@ export function emitError(
 
 export { getErrorMessage } from './errorHelpers.js';
 
-export function sendSuccessResponse<T>(
-	connectionId: string,
-	event: WebSocketResponseEvents,
-	requestId: string,
-	data: T
-): void {
-	socketService.emitToConnection(connectionId, event, {
-		requestId,
-		success: true,
-		...data,
-	});
-}
-
 export function sendErrorResponse(
 	connectionId: string,
 	requestId: string,

@@ -621,7 +621,7 @@ describe('commandStore', () => {
       await store.loadGroups()
 
       expect(store.groups).toHaveLength(0)
-      expect(mockShowErrorToast).toHaveBeenCalledWith('Command', '載入群組失敗')
+      expect(mockShowErrorToast).toHaveBeenCalledWith('Command', '載入群組失敗', undefined)
     })
   })
 
@@ -690,7 +690,7 @@ describe('commandStore', () => {
         error: '建立群組失敗',
       })
       expect(store.groups).toHaveLength(0)
-      expect(mockShowErrorToast).toHaveBeenCalledWith('Command', '建立群組失敗')
+      expect(mockShowErrorToast).toHaveBeenCalledWith('Command', '建立群組失敗', undefined)
     })
   })
 
@@ -757,7 +757,7 @@ describe('commandStore', () => {
         success: false,
         error: '刪除群組失敗',
       })
-      expect(mockShowErrorToast).toHaveBeenCalledWith('Command', '刪除群組失敗')
+      expect(mockShowErrorToast).toHaveBeenCalledWith('Command', '刪除群組失敗', undefined)
     })
   })
 
@@ -863,7 +863,7 @@ describe('commandStore', () => {
         success: false,
         error: '移動失敗',
       })
-      expect(mockShowErrorToast).toHaveBeenCalledWith('Command', '移動失敗')
+      expect(mockShowErrorToast).toHaveBeenCalledWith('Command', '移動失敗', undefined)
     })
 
     it('回應 success: false 時應回傳對應 error', async () => {

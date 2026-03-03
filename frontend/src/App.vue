@@ -84,7 +84,7 @@ const loadCanvasData = async (): Promise<void> => {
 
   connectionStore.setupWorkflowListeners()
 
-  const podIds = podStore.pods.map(p => p.id)
+  const podIds = podStore.pods.map(pod => pod.id)
   if (podIds.length > 0) {
     await chatStore.loadAllPodsHistory(podIds)
     syncHistoryToPodOutput()
@@ -140,7 +140,7 @@ const handleScheduleFired = async (payload: ScheduleFiredPayload): Promise<void>
     podStore.triggerScheduleFiredAnimation(payload.podId)
 
     const command = pod.commandId
-      ? commandStore.typedAvailableItems.find(c => c.id === pod.commandId)
+      ? commandStore.typedAvailableItems.find(command => command.id === pod.commandId)
       : null
     const displayMessage = command ? `/${command.name} ` : ''
 

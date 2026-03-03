@@ -5,7 +5,7 @@ import { emitError } from '../../utils/websocketResponse.js';
 import { logger } from '../../utils/logger.js';
 import { withCanvasId } from '../../utils/handlerHelpers.js';
 
-interface NoteHandlerConfig<TNote extends BaseNote> {
+interface NoteHandlerConfig<TNote extends BaseNote, TForeignKey extends string> {
   noteStore: GenericNoteStore<TNote, keyof TNote>;
   events: {
     created: WebSocketResponseEvents;
@@ -13,23 +13,25 @@ interface NoteHandlerConfig<TNote extends BaseNote> {
     updated: WebSocketResponseEvents;
     deleted: WebSocketResponseEvents;
   };
-  foreignKeyField: string;
+  foreignKeyField: TForeignKey;
   entityName: string;
   logOperations?: boolean;
   validateBeforeCreate?: (foreignKeyValue: string) => Promise<boolean>;
 }
 
-export interface CreateNotePayload {
+export interface CreateNoteBasePayload {
   name: string;
   x: number;
   y: number;
   boundToPodId?: string | null;
   originalPosition?: { x: number; y: number } | null;
-  [key: string]: unknown;
 }
 
+export type CreateNotePayload<TForeignKey extends string = string> = CreateNoteBasePayload & Record<TForeignKey, string>;
+
 export interface ListNotePayload {
-  [key: string]: unknown;
+  canvasId: string;
+  requestId: string;
 }
 
 export interface UpdateNotePayload {
@@ -51,21 +53,21 @@ interface BaseNoteResponse {
 }
 
 
-export function createNoteHandlers<TNote extends BaseNote>(
-  config: NoteHandlerConfig<TNote>
+export function createNoteHandlers<TNote extends BaseNote, TForeignKey extends string>(
+  config: NoteHandlerConfig<TNote, TForeignKey>
 ): {
-  handleNoteCreate: (connectionId: string, payload: CreateNotePayload, requestId: string) => Promise<void>;
+  handleNoteCreate: (connectionId: string, payload: CreateNotePayload<TForeignKey>, requestId: string) => Promise<void>;
   handleNoteList: (connectionId: string, payload: ListNotePayload, requestId: string) => Promise<void>;
   handleNoteUpdate: (connectionId: string, payload: UpdateNotePayload, requestId: string) => Promise<void>;
   handleNoteDelete: (connectionId: string, payload: DeleteNotePayload, requestId: string) => Promise<void>;
 } {
   const { noteStore, events, foreignKeyField, entityName } = config;
 
-  const handleNoteCreate = withCanvasId<CreateNotePayload>(
+  const handleNoteCreate = withCanvasId<CreateNotePayload<TForeignKey>>(
     events.created,
-    async (connectionId: string, canvasId: string, payload: CreateNotePayload, requestId: string): Promise<void> => {
-      const { name, x, y, boundToPodId, originalPosition, ...rest } = payload;
-      const foreignKeyValue = rest[foreignKeyField] as string;
+    async (connectionId: string, canvasId: string, payload: CreateNotePayload<TForeignKey>, requestId: string): Promise<void> => {
+      const { name, x, y, boundToPodId, originalPosition } = payload;
+      const foreignKeyValue = payload[foreignKeyField];
 
       if (config.validateBeforeCreate) {
         const isValid = await config.validateBeforeCreate(foreignKeyValue);
@@ -142,7 +144,7 @@ export function createNoteHandlers<TNote extends BaseNote>(
         return;
       }
 
-      const updates: Record<string, unknown> = {};
+      const updates: Partial<Pick<UpdateNotePayload, 'x' | 'y' | 'boundToPodId' | 'originalPosition'>> = {};
       if (x !== undefined) updates.x = x;
       if (y !== undefined) updates.y = y;
       if (boundToPodId !== undefined) updates.boundToPodId = boundToPodId;

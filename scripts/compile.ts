@@ -25,7 +25,6 @@ function isSupportedTarget(value: string): value is SupportedTarget {
 function getOutfile(target: string | undefined): string {
 	if (!target) return path.join(DIST_DIR, 'claude-canvas');
 
-	// target 格式：bun-darwin-arm64 → claude-canvas-darwin-arm64
 	const suffix = target.replace(/^bun-/, '');
 	return path.join(DIST_DIR, `claude-canvas-${suffix}`);
 }
@@ -85,7 +84,6 @@ async function compile(): Promise<void> {
 		process.exit(1);
 	}
 
-	// 檢查 frontend/dist/index.html 是否存在
 	const indexHtmlPath = path.join(FRONTEND_DIST, 'index.html');
 	if (!fs.existsSync(indexHtmlPath)) {
 		console.error('錯誤：frontend/dist/index.html 不存在，請先執行 bun run build:frontend');
@@ -103,7 +101,6 @@ async function compile(): Promise<void> {
 	console.log(`前端靜態檔案目錄：${FRONTEND_DIST}`);
 	console.log(`輸出：${outfile}`);
 
-	// 掃描所有前端檔案並生成 VFS 模組
 	const allFiles = scanFiles(FRONTEND_DIST);
 	const vfsContent = generateVFS(allFiles);
 	fs.writeFileSync(VFS_FILE, vfsContent, 'utf-8');

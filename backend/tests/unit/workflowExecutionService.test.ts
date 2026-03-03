@@ -136,14 +136,14 @@ function createAiDecideProcessImpl(mockPipeline: any, mockAiDecideStrategy: Trig
         result.reason
       );
 
-      workflowEventEmitter.emitAiDecideResult(
+      workflowEventEmitter.emitAiDecideResult({
         canvasId,
-        result.connectionId,
+        connectionId: result.connectionId,
         sourcePodId,
-        connection.targetPodId,
-        result.shouldTrigger,
-        result.reason
-      );
+        targetPodId: connection.targetPodId,
+        shouldTrigger: result.shouldTrigger,
+        reason: result.reason,
+      });
 
       if (result.shouldTrigger) {
         const { isMultiInput } = workflowStateService.checkMultiInputScenario(canvasId, connection.targetPodId);
@@ -179,13 +179,13 @@ function createAiDecideProcessImpl(mockPipeline: any, mockAiDecideStrategy: Trig
         `錯誤：${errorResult.error}`
       );
 
-      workflowEventEmitter.emitAiDecideError(
+      workflowEventEmitter.emitAiDecideError({
         canvasId,
-        errorResult.connectionId,
+        connectionId: errorResult.connectionId,
         sourcePodId,
-        connection.targetPodId,
-        `錯誤：${errorResult.error}`
-      );
+        targetPodId: connection.targetPodId,
+        error: `錯誤：${errorResult.error}`,
+      });
     }
   };
 }
@@ -356,14 +356,14 @@ describe('WorkflowExecutionService', () => {
         'approved',
         '上游結果與下游需求相關'
       );
-      expect(workflowEventEmitter.emitAiDecideResult).toHaveBeenCalledWith(
+      expect(workflowEventEmitter.emitAiDecideResult).toHaveBeenCalledWith({
         canvasId,
-        'conn-ai-1',
+        connectionId: 'conn-ai-1',
         sourcePodId,
-        'target-pod-2',
-        true,
-        '上游結果與下游需求相關'
-      );
+        targetPodId: 'target-pod-2',
+        shouldTrigger: true,
+        reason: '上游結果與下游需求相關',
+      });
       expect(summaryService.generateSummaryForTarget).toHaveBeenCalled();
     });
   });
@@ -391,14 +391,14 @@ describe('WorkflowExecutionService', () => {
         'rejected',
         '上游產出與下游任務無關'
       );
-      expect(workflowEventEmitter.emitAiDecideResult).toHaveBeenCalledWith(
+      expect(workflowEventEmitter.emitAiDecideResult).toHaveBeenCalledWith({
         canvasId,
-        'conn-ai-1',
+        connectionId: 'conn-ai-1',
         sourcePodId,
-        'target-pod-2',
-        false,
-        '上游產出與下游任務無關'
-      );
+        targetPodId: 'target-pod-2',
+        shouldTrigger: false,
+        reason: '上游產出與下游任務無關',
+      });
       expect(summaryService.generateSummaryForTarget).not.toHaveBeenCalled();
     });
   });
@@ -604,13 +604,13 @@ describe('WorkflowExecutionService', () => {
         'error',
         '錯誤：AI decision failed'
       );
-      expect(workflowEventEmitter.emitAiDecideError).toHaveBeenCalledWith(
+      expect(workflowEventEmitter.emitAiDecideError).toHaveBeenCalledWith({
         canvasId,
-        'conn-ai-1',
+        connectionId: 'conn-ai-1',
         sourcePodId,
-        'target-pod-2',
-        '錯誤：AI decision failed'
-      );
+        targetPodId: 'target-pod-2',
+        error: '錯誤：AI decision failed',
+      });
     });
   });
 

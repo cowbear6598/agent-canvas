@@ -1,6 +1,9 @@
 import type {Pod, Command, Connection} from '../../types/index.js';
+import type {WorkflowQueuedPayload} from '../../types/responses/workflow.js';
 import {connectionStore} from '../connectionStore.js';
+import {workflowEventEmitter} from './workflowEventEmitter.js';
 import {logger} from '../../utils/logger.js';
+import type {CompletionContext, QueuedContext} from './types.js';
 
 export function getMultiInputGroupConnections(
     canvasId: string,
@@ -52,6 +55,51 @@ export function buildTransferMessage(content: string): string {
 ---
 ${content}
 ---`;
+}
+
+export function formatConnLog(
+    connId: string,
+    sourceName: string | undefined,
+    sourcePodId: string,
+    targetName: string | undefined,
+    targetPodId: string
+): string {
+    return `連線 ${connId}（「${sourceName ?? sourcePodId}」→「${targetName ?? targetPodId}」）`;
+}
+
+export function completeMultiInputConnections(
+    context: CompletionContext,
+    success: boolean,
+    error?: string
+): void {
+    forEachMultiInputGroupConnection(context.canvasId, context.targetPodId, (conn) => {
+        workflowEventEmitter.emitWorkflowComplete({
+            canvasId: context.canvasId,
+            connectionId: conn.id,
+            sourcePodId: conn.sourcePodId,
+            targetPodId: context.targetPodId,
+            success,
+            error,
+            triggerMode: context.triggerMode,
+        });
+        connectionStore.updateConnectionStatus(context.canvasId, conn.id, 'idle');
+    });
+}
+
+export function buildQueuedPayload(
+    context: QueuedContext,
+    connectionId: string,
+    sourcePodId: string
+): WorkflowQueuedPayload {
+    return {
+        canvasId: context.canvasId,
+        targetPodId: context.targetPodId,
+        connectionId,
+        sourcePodId,
+        position: context.position,
+        queueSize: context.queueSize,
+        triggerMode: context.triggerMode,
+    };
 }
 
 export function buildMessageWithCommand(

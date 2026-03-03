@@ -26,6 +26,8 @@ import { socketService } from '../services/socketService.js';
 import { gitService } from '../services/workspace/gitService.js';
 import { emitSuccess, emitError } from '../utils/websocketResponse.js';
 import { logger } from '../utils/logger.js';
+import type { Result } from '../types';
+import { ok } from '../types';
 import { validateRepositoryExists, getValidatedGitRepository } from '../utils/validators.js';
 import { throttle } from '../utils/throttle.js';
 import { directoryExists } from '../services/shared/fileResourceHelpers.js';
@@ -34,6 +36,8 @@ import { config } from '../config';
 import path from 'path';
 
 const pullingRepositories = new Set<string>();
+
+const MAX_REPO_URL_LENGTH = 500;
 
 async function validateRepositoryIsGit(
   connectionId: string,
@@ -44,12 +48,12 @@ async function validateRepositoryIsGit(
   const result = await getValidatedGitRepository(repositoryId);
 
   if (!result.success) {
-    const errorCode = result.error!.includes('找不到') ? 'NOT_FOUND' : 'INVALID_STATE';
-    emitError(connectionId, responseEvent, result.error!, requestId, undefined, errorCode);
+    const errorCode = result.error.includes('找不到') ? 'NOT_FOUND' : 'INVALID_STATE';
+    emitError(connectionId, responseEvent, result.error, requestId, undefined, errorCode);
     return null;
   }
 
-  return result.data!.repositoryPath;
+  return result.data.repositoryPath;
 }
 
 function withValidatedGitRepository<T extends { repositoryId: string }>(
@@ -63,24 +67,19 @@ function withValidatedGitRepository<T extends { repositoryId: string }>(
   };
 }
 
-/**
- * 驗證 Git Repository URL 格式
- * @param repoUrl Repository URL
- * @returns 驗證結果
- */
-function validateRepoUrl(repoUrl: string): { valid: boolean; error?: string } {
-  if (repoUrl.length > 500) {
-    return { valid: false, error: 'Repository URL 長度超過限制' };
+function validateRepoUrl(repoUrl: string): Result<void> {
+  if (repoUrl.length > MAX_REPO_URL_LENGTH) {
+    return { success: false, error: 'Repository URL 長度超過限制' };
   }
 
   const isHttpsUrl = /^https:\/\/[^\s]+$/.test(repoUrl);
   const isSshUrl = /^git@[^\s:]+:[^\s]+$/.test(repoUrl);
 
   if (!isHttpsUrl && !isSshUrl) {
-    return { valid: false, error: 'Repository URL 格式不正確' };
+    return { success: false, error: 'Repository URL 格式不正確' };
   }
 
-  return { valid: true };
+  return ok();
 }
 
 
@@ -163,7 +162,7 @@ async function executeAndValidateClone(
   if (!cloneResult.success) {
     throttledEmit.cancel();
     await repositoryService.delete(repoName);
-    return { success: false, error: cloneResult.error! };
+    return { success: false, error: cloneResult.error };
   }
 
   throttledEmit.flush();
@@ -188,11 +187,11 @@ export async function handleRepositoryGitClone(
   const { repoUrl, branch } = payload;
 
   const validation = validateRepoUrl(repoUrl);
-  if (!validation.valid) {
+  if (!validation.success) {
     emitError(
       connectionId,
       WebSocketResponseEvents.REPOSITORY_GIT_CLONE_RESULT,
-      validation.error!,
+      validation.error,
       requestId,
       undefined,
       'INVALID_INPUT'
@@ -266,7 +265,7 @@ export async function handleRepositoryCheckGit(
     emitError(
       connectionId,
       WebSocketResponseEvents.REPOSITORY_CHECK_GIT_RESULT,
-      validateResult.error!,
+      validateResult.error,
       requestId,
       undefined,
       'NOT_FOUND'
@@ -274,14 +273,14 @@ export async function handleRepositoryCheckGit(
     return;
   }
 
-  const repositoryPath = validateResult.data!;
+  const repositoryPath = validateResult.data;
   const result = await gitService.isGitRepository(repositoryPath);
 
   if (!result.success) {
     emitError(
       connectionId,
       WebSocketResponseEvents.REPOSITORY_CHECK_GIT_RESULT,
-      result.error!,
+      result.error,
       requestId,
       undefined,
       'INTERNAL_ERROR'
@@ -308,7 +307,7 @@ async function validateWorktreePrerequisites(
   worktreeName: string
 ): Promise<WorktreeValidationError> {
   const hasCommitsResult = await gitService.hasCommits(repositoryPath);
-  if (!hasCommitsResult.data) {
+  if (!hasCommitsResult.success || !hasCommitsResult.data) {
     return { error: 'Repository 沒有任何 commit，無法建立 Worktree', errorCode: 'INVALID_STATE' };
   }
 
@@ -327,7 +326,7 @@ async function validateWorktreePrerequisites(
 
   const branchExistsResult = await gitService.branchExists(repositoryPath, worktreeName);
   if (!branchExistsResult.success) {
-    return { error: branchExistsResult.error!, errorCode: 'INTERNAL_ERROR' };
+    return { error: branchExistsResult.error, errorCode: 'INTERNAL_ERROR' };
   }
 
   if (branchExistsResult.data) {
@@ -347,12 +346,12 @@ export async function handleRepositoryWorktreeCreate(
 
   const validateResult = await getValidatedGitRepository(repositoryId);
   if (!validateResult.success) {
-    const errorCode = validateResult.error!.includes('找不到') ? 'NOT_FOUND' : 'INVALID_STATE';
-    emitError(connectionId, responseEvent, validateResult.error!, requestId, undefined, errorCode);
+    const errorCode = validateResult.error.includes('找不到') ? 'NOT_FOUND' : 'INVALID_STATE';
+    emitError(connectionId, responseEvent, validateResult.error, requestId, undefined, errorCode);
     return;
   }
 
-  const repositoryPath = validateResult.data!.repositoryPath;
+  const repositoryPath = validateResult.data.repositoryPath;
 
   const prerequisiteError = await validateWorktreePrerequisites(repositoryPath, repositoryId, worktreeName);
   if (prerequisiteError) {
@@ -404,7 +403,7 @@ export const handleRepositoryGetLocalBranches = withValidatedGitRepository<Repos
       emitError(
         connectionId,
         WebSocketResponseEvents.REPOSITORY_LOCAL_BRANCHES_RESULT,
-        branchesResult.error!,
+        branchesResult.error,
         requestId,
         undefined,
         'INTERNAL_ERROR'
@@ -415,9 +414,9 @@ export const handleRepositoryGetLocalBranches = withValidatedGitRepository<Repos
     const response: RepositoryLocalBranchesResultPayload = {
       requestId,
       success: true,
-      branches: branchesResult.data!.branches,
-      currentBranch: branchesResult.data!.current,
-      worktreeBranches: branchesResult.data!.worktreeBranches,
+      branches: branchesResult.data.branches,
+      currentBranch: branchesResult.data.current,
+      worktreeBranches: branchesResult.data.worktreeBranches,
     };
 
     emitSuccess(connectionId, WebSocketResponseEvents.REPOSITORY_LOCAL_BRANCHES_RESULT, response);
@@ -435,7 +434,7 @@ export const handleRepositoryCheckDirty = withValidatedGitRepository<RepositoryC
       emitError(
         connectionId,
         WebSocketResponseEvents.REPOSITORY_DIRTY_CHECK_RESULT,
-        dirtyResult.error!,
+        dirtyResult.error,
         requestId,
         undefined,
         'INTERNAL_ERROR'
@@ -496,7 +495,7 @@ export const handleRepositoryCheckoutBranch = withValidatedGitRepository<Reposit
       emitError(
         connectionId,
         WebSocketResponseEvents.REPOSITORY_BRANCH_CHECKED_OUT,
-        checkoutResult.error!,
+        checkoutResult.error,
         requestId,
         undefined,
         'INTERNAL_ERROR'
@@ -545,7 +544,7 @@ export const handleRepositoryDeleteBranch = withValidatedGitRepository<Repositor
       emitError(
         connectionId,
         WebSocketResponseEvents.REPOSITORY_BRANCH_DELETED,
-        deleteResult.error!,
+        deleteResult.error,
         requestId,
         undefined,
         'INTERNAL_ERROR'
@@ -614,7 +613,7 @@ export const handleRepositoryPullLatest = withValidatedGitRepository<RepositoryP
         emitError(
           connectionId,
           WebSocketResponseEvents.REPOSITORY_PULL_LATEST_RESULT,
-          pullResult.error!,
+          pullResult.error,
           requestId,
           undefined,
           'INTERNAL_ERROR'

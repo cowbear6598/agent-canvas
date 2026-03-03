@@ -17,14 +17,14 @@ export async function getValidatedGitRepository(
 ): Promise<Result<{ repositoryPath: string; isGit: boolean }>> {
   const validateResult = await validateRepositoryExists(repositoryId);
   if (!validateResult.success) {
-    return err(validateResult.error!);
+    return err(validateResult.error);
   }
 
-  const repositoryPath = validateResult.data!;
+  const repositoryPath = validateResult.data;
   const isGitResult = await gitService.isGitRepository(repositoryPath);
 
   if (!isGitResult.success) {
-    return err(isGitResult.error!);
+    return err(isGitResult.error);
   }
 
   if (!isGitResult.data) {

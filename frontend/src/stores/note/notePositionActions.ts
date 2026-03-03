@@ -21,14 +21,14 @@ export function createNotePositionActions<TItem>(config: NoteStoreConfig<TItem>)
 } {
     return {
         updateNotePositionLocal(this: NotePositionStore, noteId: string, x: number, y: number): void {
-            const note = this.notes.find(n => n.id === noteId)
+            const note = this.notes.find(note => note.id === noteId)
             if (!note) return
             note.x = x
             note.y = y
         },
 
         async updateNotePosition(this: NotePositionStore, noteId: string, x: number, y: number): Promise<void> {
-            const note = this.notes.find(n => n.id === noteId)
+            const note = this.notes.find(note => note.id === noteId)
             if (!note) return
 
             const originalX = note.x
@@ -60,7 +60,7 @@ export function createNotePositionActions<TItem>(config: NoteStoreConfig<TItem>)
             }
 
             if (response.note) {
-                const index = this.notes.findIndex(n => n.id === noteId)
+                const index = this.notes.findIndex(note => note.id === noteId)
                 if (index !== -1) {
                     this.notes[index] = response.note as NoteItem
                 }

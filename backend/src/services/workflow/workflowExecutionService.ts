@@ -153,25 +153,18 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     );
   }
 
-  private setConnectionsToActive(
-    canvasId: string,
-    connectionId: string,
-    targetPodId: string,
-    triggerMode: TriggerMode,
-    participatingConnectionIds: string[]
-  ): void {
-    if (triggerMode === 'auto' || triggerMode === 'ai-decide') {
-      forEachMultiInputGroupConnection(canvasId, targetPodId, (conn) => {
-        const stillExists = connectionStore.getById(canvasId, conn.id);
-        if (!stillExists) {
-          logger.warn('Workflow', 'Warn', `Connection ${conn.id} 已不存在，跳過 active 狀態設定`);
-          return;
-        }
-        connectionStore.updateConnectionStatus(canvasId, conn.id, 'active');
-      });
-      return;
-    }
+  private activateMultiInputConnections(canvasId: string, targetPodId: string): void {
+    forEachMultiInputGroupConnection(canvasId, targetPodId, (conn) => {
+      const stillExists = connectionStore.getById(canvasId, conn.id);
+      if (!stillExists) {
+        logger.warn('Workflow', 'Warn', `Connection ${conn.id} 已不存在，跳過 active 狀態設定`);
+        return;
+      }
+      connectionStore.updateConnectionStatus(canvasId, conn.id, 'active');
+    });
+  }
 
+  private activateParticipatingConnections(canvasId: string, participatingConnectionIds: string[]): void {
     for (const id of participatingConnectionIds) {
       const stillExists = connectionStore.getById(canvasId, id);
       if (!stillExists) {
@@ -180,6 +173,20 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
       }
       connectionStore.updateConnectionStatus(canvasId, id, 'active');
     }
+  }
+
+  private setConnectionsToActive(
+    canvasId: string,
+    connectionId: string,
+    targetPodId: string,
+    triggerMode: TriggerMode,
+    participatingConnectionIds: string[]
+  ): void {
+    if (triggerMode === 'auto' || triggerMode === 'ai-decide') {
+      this.activateMultiInputConnections(canvasId, targetPodId);
+      return;
+    }
+    this.activateParticipatingConnections(canvasId, participatingConnectionIds);
   }
 
   private scheduleNextInQueue(canvasId: string, targetPodId: string): void {
@@ -223,7 +230,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     await messageStore.addMessage(canvasId, targetPodId, 'user', messageToSend);
 
     await executeStreamingChat(
-      { canvasId, podId: targetPodId, message: messageToSend, supportAbort: false },
+      { canvasId, podId: targetPodId, message: messageToSend, abortable: false },
       {
         onComplete: async () => {
           strategy.onComplete(

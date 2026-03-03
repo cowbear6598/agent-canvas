@@ -32,14 +32,12 @@ class CursorColorManager {
     return n.toString(16).padStart(2, '0');
   }
 
-  /** 修正 RGB 加總超出上界 */
   private fixOverflow(redChannel: number, greenChannel: number, blueChannel: number, overflow: number): [number, number, number] {
     if (redChannel >= greenChannel && redChannel >= blueChannel) return [Math.max(0, redChannel - overflow), greenChannel, blueChannel];
     if (greenChannel >= redChannel && greenChannel >= blueChannel) return [redChannel, Math.max(0, greenChannel - overflow), blueChannel];
     return [redChannel, greenChannel, Math.max(0, blueChannel - overflow)];
   }
 
-  /** 修正 RGB 加總低於下界 */
   private fixDeficit(redChannel: number, greenChannel: number, blueChannel: number, deficit: number): [number, number, number] {
     if (redChannel <= greenChannel && redChannel <= blueChannel) return [Math.min(255, redChannel + deficit), greenChannel, blueChannel];
     if (greenChannel <= redChannel && greenChannel <= blueChannel) return [redChannel, Math.min(255, greenChannel + deficit), blueChannel];
@@ -72,7 +70,6 @@ class CursorColorManager {
     return `#${this.toHexChannel(clampedRed)}${this.toHexChannel(clampedGreen)}${this.toHexChannel(clampedBlue)}`;
   }
 
-  /** 顏色用盡時以 connectionId hash 產生 fallback 顏色 */
   private hashColor(connectionId: string): string {
     let hash = 0;
     for (let i = 0; i < connectionId.length; i++) {

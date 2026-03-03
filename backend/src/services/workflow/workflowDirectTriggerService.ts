@@ -18,7 +18,7 @@ import {directTriggerStore} from '../directTriggerStore.js';
 import {workflowStateService} from './workflowStateService.js';
 import {workflowEventEmitter} from './workflowEventEmitter.js';
 import {logger} from '../../utils/logger.js';
-import {formatMergedSummaries} from './workflowHelpers.js';
+import {formatMergedSummaries, buildQueuedPayload} from './workflowHelpers.js';
 import {connectionStore} from '../connectionStore.js';
 import {MERGED_CONTENT_PREVIEW_MAX_LENGTH} from './constants.js';
 
@@ -195,10 +195,15 @@ class WorkflowDirectTriggerService implements TriggerStrategy {
         );
 
         for (const conn of connections) {
-            workflowEventEmitter.emitWorkflowComplete(
-                context.canvasId, conn.id, conn.sourcePodId,
-                context.targetPodId, success, error, context.triggerMode
-            );
+            workflowEventEmitter.emitWorkflowComplete({
+                canvasId: context.canvasId,
+                connectionId: conn.id,
+                sourcePodId: conn.sourcePodId,
+                targetPodId: context.targetPodId,
+                success,
+                error,
+                triggerMode: context.triggerMode,
+            });
             connectionStore.updateConnectionStatus(context.canvasId, conn.id, 'idle');
         }
     }
@@ -215,15 +220,10 @@ class WorkflowDirectTriggerService implements TriggerStrategy {
 
         for (const conn of connections) {
             connectionStore.updateConnectionStatus(context.canvasId, conn.id, 'queued');
-            workflowEventEmitter.emitWorkflowQueued(context.canvasId, {
-                canvasId: context.canvasId,
-                targetPodId: context.targetPodId,
-                connectionId: conn.id,
-                sourcePodId: conn.sourcePodId,
-                position: context.position,
-                queueSize: context.queueSize,
-                triggerMode: context.triggerMode,
-            });
+            workflowEventEmitter.emitWorkflowQueued(
+                context.canvasId,
+                buildQueuedPayload(context, conn.id, conn.sourcePodId)
+            );
         }
     }
 

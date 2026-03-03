@@ -345,7 +345,7 @@ describe('subAgentStore', () => {
 
       expect(store.groups).toHaveLength(1)
       expect(store.groups[0]?.id).toBe('existing-group')
-      expect(mockShowErrorToast).toHaveBeenCalledWith('SubAgent', '載入群組失敗')
+      expect(mockShowErrorToast).toHaveBeenCalledWith('SubAgent', '載入群組失敗', undefined)
     })
   })
 
@@ -402,7 +402,7 @@ describe('subAgentStore', () => {
 
       expect(result.success).toBe(false)
       expect(result.error).toBe('建立群組失敗')
-      expect(mockShowErrorToast).toHaveBeenCalledWith('SubAgent', '建立群組失敗')
+      expect(mockShowErrorToast).toHaveBeenCalledWith('SubAgent', '建立群組失敗', undefined)
     })
 
     it('回應 success: false 時應回傳對應結果', async () => {
@@ -491,7 +491,7 @@ describe('subAgentStore', () => {
 
       expect(result.success).toBe(false)
       expect(result.error).toBe('刪除群組失敗')
-      expect(mockShowErrorToast).toHaveBeenCalledWith('SubAgent', '刪除群組失敗')
+      expect(mockShowErrorToast).toHaveBeenCalledWith('SubAgent', '刪除群組失敗', undefined)
     })
 
     it('回應 success: false 時應回傳對應結果', async () => {
@@ -613,7 +613,7 @@ describe('subAgentStore', () => {
 
       expect(result.success).toBe(false)
       expect(result.error).toBe('移動失敗')
-      expect(mockShowErrorToast).toHaveBeenCalledWith('SubAgent', '移動失敗')
+      expect(mockShowErrorToast).toHaveBeenCalledWith('SubAgent', '移動失敗', undefined)
     })
 
     it('回應 success: false 時應回傳對應結果', async () => {

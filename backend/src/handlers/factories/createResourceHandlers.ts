@@ -14,9 +14,7 @@ interface ResourceService<T = { id: string; name: string }> {
   delete(id: string): Promise<void>;
 }
 
-export interface DeleteResourcePayload {
-  [key: string]: unknown;
-}
+export type DeleteResourcePayload<TIdField extends string = string> = Record<TIdField, string>;
 
 interface DeleteHandlerConfig {
   deleted: WebSocketResponseEvents;
@@ -25,7 +23,7 @@ interface DeleteHandlerConfig {
   idFieldName?: string;
 }
 
-interface ResourceHandlerConfig<T = { id: string; name: string }> {
+interface ResourceHandlerConfig<T = { id: string; name: string }, TIdField extends string = string> {
   service: ResourceService<T>;
   events: {
     listResult: WebSocketResponseEvents;
@@ -37,7 +35,7 @@ interface ResourceHandlerConfig<T = { id: string; name: string }> {
   resourceName: LogCategory;
   responseKey: string;
   listResponseKey: string;
-  idField: string;
+  idField: TIdField;
 }
 
 export interface CreateResourcePayload {
@@ -45,14 +43,11 @@ export interface CreateResourcePayload {
   content: string;
 }
 
-export interface UpdateResourcePayload {
+export type UpdateResourcePayload<TIdField extends string = string> = Record<TIdField, string> & {
   content: string;
-  [key: string]: unknown;
-}
+};
 
-export interface ReadResourcePayload {
-  [key: string]: unknown;
-}
+export type ReadResourcePayload<TIdField extends string = string> = Record<TIdField, string>;
 
 interface BaseResponse {
   requestId: string;
@@ -79,14 +74,14 @@ export function createListHandler<T>(config: {
   };
 }
 
-export function createDeleteHandler(config: {
+export function createDeleteHandler<TIdField extends string>(config: {
   service: { exists(id: string): Promise<boolean>; delete(id: string): Promise<void> };
   resourceName: LogCategory;
-  idField: string;
+  idField: TIdField;
   deleteConfig: DeleteHandlerConfig;
-}): (connectionId: string, payload: DeleteResourcePayload, requestId: string) => Promise<void> {
-  return async function (connectionId: string, payload: DeleteResourcePayload, requestId: string): Promise<void> {
-    const resourceId = payload[config.idField] as string;
+}): (connectionId: string, payload: DeleteResourcePayload<TIdField>, requestId: string) => Promise<void> {
+  return async function (connectionId: string, payload: DeleteResourcePayload<TIdField>, requestId: string): Promise<void> {
+    const resourceId = payload[config.idField];
     const deleteConfig = config.deleteConfig;
 
     await handleResourceDelete({
@@ -104,12 +99,14 @@ export function createDeleteHandler(config: {
   };
 }
 
-export function createResourceHandlers<T extends { id: string; name: string }>(config: ResourceHandlerConfig<T>): {
+export function createResourceHandlers<T extends { id: string; name: string }, TIdField extends string>(
+  config: ResourceHandlerConfig<T, TIdField>
+): {
   handleList: (connectionId: string, payload: unknown, requestId: string) => Promise<void>;
   handleCreate: (connectionId: string, payload: CreateResourcePayload, requestId: string) => Promise<void>;
-  handleUpdate: (connectionId: string, payload: UpdateResourcePayload, requestId: string) => Promise<void>;
-  handleRead: (connectionId: string, payload: ReadResourcePayload, requestId: string) => Promise<void>;
-  handleDelete: (connectionId: string, payload: DeleteResourcePayload, requestId: string) => Promise<void>;
+  handleUpdate: (connectionId: string, payload: UpdateResourcePayload<TIdField>, requestId: string) => Promise<void>;
+  handleRead: (connectionId: string, payload: ReadResourcePayload<TIdField>, requestId: string) => Promise<void>;
+  handleDelete: (connectionId: string, payload: DeleteResourcePayload<TIdField>, requestId: string) => Promise<void>;
 } {
   const { service, events, resourceName, responseKey, listResponseKey, idField } = config;
 
@@ -154,11 +151,11 @@ export function createResourceHandlers<T extends { id: string; name: string }>(c
 
   async function handleUpdate(
     connectionId: string,
-    payload: UpdateResourcePayload,
+    payload: UpdateResourcePayload<TIdField>,
     requestId: string
   ): Promise<void> {
-    const { content, ...rest } = payload;
-    const resourceId = rest[idField] as string;
+    const resourceId = payload[idField];
+    const { content } = payload;
 
     const exists = await service.exists(resourceId);
     if (!exists) {
@@ -191,10 +188,10 @@ export function createResourceHandlers<T extends { id: string; name: string }>(c
 
   async function handleRead(
     connectionId: string,
-    payload: ReadResourcePayload,
+    payload: ReadResourcePayload<TIdField>,
     requestId: string
   ): Promise<void> {
-    const resourceId = payload[idField] as string;
+    const resourceId = payload[idField];
 
     const content = await service.getContent(resourceId);
     if (!content) {
@@ -224,7 +221,7 @@ export function createResourceHandlers<T extends { id: string; name: string }>(c
 
   async function handleDelete(
     connectionId: string,
-    payload: DeleteResourcePayload,
+    payload: DeleteResourcePayload<TIdField>,
     requestId: string
   ): Promise<void> {
     if (!events.deleted) {

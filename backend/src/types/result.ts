@@ -1,13 +1,11 @@
-export interface Result<T> {
-  success: boolean;
-  data?: T;
-  error?: string;
+export type Result<T = void> =
+  | { success: true; data: T }
+  | { success: false; error: string };
+
+export function ok<T = void>(data?: T): Result<T> {
+  return { success: true, data: data as T };
 }
 
-export function ok<T>(data: T): Result<T> {
-  return { success: true, data };
-}
-
-export function err<T>(error: string): Result<T> {
+export function err<T = void>(error: string): Result<T> {
   return { success: false, error };
 }

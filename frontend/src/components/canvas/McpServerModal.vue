@@ -64,9 +64,7 @@ const validateHttpConfig = (config: Record<string, unknown>): string | null => {
   const isHttpMode = typeof config.type === 'string' && typeof config.url === 'string'
   if (!isHttpMode) return null
 
-  try {
-    new URL(config.url as string)
-  } catch {
+  if (!URL.canParse(config.url as string)) {
     return 'url 欄位格式不正確'
   }
 

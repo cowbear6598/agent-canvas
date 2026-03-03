@@ -1,5 +1,4 @@
 import {generateRequestId} from '@/services/utils'
-import {abortSafetyTimers} from './abortSafetyTimers'
 import {usePodStore} from '../pod/podStore'
 import type {Message, SubMessage, ToolUseInfo, ToolUseStatus} from '@/types/chat'
 import type {
@@ -18,6 +17,7 @@ import type {ChatStoreInstance} from './chatStore'
 import {updateAssistantSubMessages} from './subMessageHelpers'
 import {createToolTrackingActions} from './toolTrackingActions'
 import {createMessageCompletionActions} from './messageCompletionActions'
+import {getMessages, findMessageIndex, setTyping} from './chatStoreHelpers'
 
 function collectToolUseFromSubMessages(subMessages: PersistedMessage['subMessages']): ToolUseInfo[] {
     if (!subMessages) return []
@@ -34,7 +34,7 @@ function collectToolUseFromSubMessages(subMessages: PersistedMessage['subMessage
 
 async function appendUserOutputToPod(podId: string, content: string): Promise<void> {
     const podStore = usePodStore()
-    const pod = podStore.pods.find(p => p.id === podId)
+    const pod = podStore.pods.find(pod => pod.id === podId)
     if (!pod) return
 
     const truncatedContent = `> ${truncateContent(content, CONTENT_PREVIEW_LENGTH)}`
@@ -88,23 +88,11 @@ export interface ChatMessageActions {
 
 export function createMessageActions(store: ChatStoreInstance): ChatMessageActions {
     const toolTrackingActions = createToolTrackingActions(store)
-    const messageCompletionActions = createMessageCompletionActions(store)
-
-    const setTyping = (podId: string, isTyping: boolean): void => {
-        store.isTypingByPodId.set(podId, isTyping)
-
-        if (!isTyping) {
-            const timer = abortSafetyTimers.get(podId)
-            if (timer) {
-                clearTimeout(timer)
-                abortSafetyTimers.delete(podId)
-            }
-        }
-    }
+    const messageCompletionActions = createMessageCompletionActions(store, (podId, isTyping) => setTyping(store, podId, isTyping))
 
     const addUserMessage = async (podId: string, content: string): Promise<void> => {
         const podStore = usePodStore()
-        const pod = podStore.pods.find(p => p.id === podId)
+        const pod = podStore.pods.find(pod => pod.id === podId)
         if (!pod) return
 
         const userMessage: Message = {
@@ -114,7 +102,7 @@ export function createMessageActions(store: ChatStoreInstance): ChatMessageActio
             timestamp: new Date().toISOString()
         }
 
-        const messages = store.messagesByPodId.get(podId) || []
+        const messages = getMessages(store, podId)
         store.messagesByPodId.set(podId, [...messages, userMessage])
 
         await appendUserOutputToPod(podId, content)
@@ -122,8 +110,8 @@ export function createMessageActions(store: ChatStoreInstance): ChatMessageActio
 
     const handleChatMessage = (payload: PodChatMessagePayload): void => {
         const {podId, messageId, content, isPartial, role} = payload
-        const messages = store.messagesByPodId.get(podId) || []
-        const messageIndex = messages.findIndex(m => m.id === messageId)
+        const messages = getMessages(store, podId)
+        const messageIndex = findMessageIndex(messages, messageId)
 
         const lastLength = store.accumulatedLengthByMessageId.get(messageId) || 0
         const delta = content.slice(lastLength)
@@ -138,7 +126,7 @@ export function createMessageActions(store: ChatStoreInstance): ChatMessageActio
     }
 
     const addNewChatMessage = async (podId: string, messageId: string, content: string, isPartial: boolean, role?: 'user' | 'assistant', delta?: string): Promise<void> => {
-        const messages = store.messagesByPodId.get(podId) || []
+        const messages = getMessages(store, podId)
         const effectiveRole = role ?? 'assistant'
 
         const baseMessage: Message = {
@@ -159,10 +147,9 @@ export function createMessageActions(store: ChatStoreInstance): ChatMessageActio
         store.currentStreamingMessageId = messageId
 
         if (isPartial) {
-            setTyping(podId, true)
+            setTyping(store, podId, true)
         }
 
-        // 防禦性更新：當收到 user role 訊息時更新 mini screen
         if (effectiveRole === 'user') {
             await appendUserOutputToPod(podId, content)
         }
@@ -187,7 +174,7 @@ export function createMessageActions(store: ChatStoreInstance): ChatMessageActio
         store.messagesByPodId.set(podId, updatedMessages)
 
         if (isPartial) {
-            setTyping(podId, true)
+            setTyping(store, podId, true)
         }
     }
 
@@ -204,7 +191,6 @@ export function createMessageActions(store: ChatStoreInstance): ChatMessageActio
 
         const allToolUse = collectToolUseFromSubMessages(persistedMessage.subMessages)
 
-        // 保留多個 subMessages 的分段結構，但把所有 toolUse 集中到第一個
         // 確保歷史載入後 tool 標籤位置與即時串流一致
         return {
             subMessages: persistedMessage.subMessages.map((sub, index) => ({
@@ -258,6 +244,8 @@ export function createMessageActions(store: ChatStoreInstance): ChatMessageActio
         store.autoClearAnimationPodId = payload.sourcePodId
     }
 
+    const boundSetTyping = (podId: string, isTyping: boolean): void => setTyping(store, podId, isTyping)
+
     return {
         addUserMessage,
         handleChatMessage,
@@ -267,7 +255,7 @@ export function createMessageActions(store: ChatStoreInstance): ChatMessageActio
         ...messageCompletionActions,
         convertPersistedToMessage,
         setPodMessages,
-        setTyping,
+        setTyping: boundSetTyping,
         clearMessagesByPodIds,
         handleMessagesClearedEvent,
         handleWorkflowAutoCleared

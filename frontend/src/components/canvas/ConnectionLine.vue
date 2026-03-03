@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, watch } from 'vue'
+import { computed, ref, onMounted, nextTick, watch } from 'vue'
 import type { Connection, ConnectionStatus, TriggerMode } from '@/types/connection'
 import type { Pod } from '@/types/pod'
 import { useConnectionStore } from '@/stores/connectionStore'
@@ -33,8 +33,8 @@ const { calculatePathData, calculateMultipleArrowPositions } = useConnectionPath
 const { getAnchorPositions } = useAnchorDetection()
 
 const pathData = computed(() => {
-  const sourcePod = props.pods.find(p => p.id === props.connection.sourcePodId)
-  const targetPod = props.pods.find(p => p.id === props.connection.targetPodId)
+  const sourcePod = props.pods.find(pod => pod.id === props.connection.sourcePodId)
+  const targetPod = props.pods.find(pod => pod.id === props.connection.targetPodId)
 
   if (!sourcePod || !targetPod) {
     return { path: '', midPoint: { x: 0, y: 0 }, angle: 0 }
@@ -132,8 +132,8 @@ const tooltipText = computed(() => {
 })
 
 const arrowPositions = computed(() => {
-  const sourcePod = props.pods.find(p => p.id === props.connection.sourcePodId)
-  const targetPod = props.pods.find(p => p.id === props.connection.targetPodId)
+  const sourcePod = props.pods.find(pod => pod.id === props.connection.sourcePodId)
+  const targetPod = props.pods.find(pod => pod.id === props.connection.targetPodId)
 
   if (!sourcePod || !targetPod) {
     return []
@@ -204,11 +204,7 @@ const calculateXMarkerPositions = (): void => {
   xMarkerPositions.value = positions
 }
 
-watch([pathData, useXMarker], () => {
-  setTimeout(() => {
-    calculateXMarkerPositions()
-  }, 0)
-})
+watch([pathData, useXMarker], () => nextTick(calculateXMarkerPositions))
 
 onMounted(() => {
   calculateXMarkerPositions()

@@ -16,7 +16,7 @@ export function createSubMessageState(): SubMessageState {
     };
 }
 
-export function createSubMessageAccumulator(messageId: string, state: SubMessageState) {
+export function createSubMessageAccumulator(messageId: string, state: SubMessageState): () => void {
     return (): void => {
         if (state.currentSubContent || state.currentSubToolUse.length > 0) {
             state.subMessages.push({

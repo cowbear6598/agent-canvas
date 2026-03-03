@@ -199,14 +199,14 @@ describe('WorkflowAiDecideTriggerService', () => {
         '相關任務'
       );
 
-      expect(workflowEventEmitter.emitAiDecideResult).toHaveBeenCalledWith(
+      expect(workflowEventEmitter.emitAiDecideResult).toHaveBeenCalledWith({
         canvasId,
-        'conn-ai-1',
+        connectionId: 'conn-ai-1',
         sourcePodId,
         targetPodId,
-        true,
-        '相關任務'
-      );
+        shouldTrigger: true,
+        reason: '相關任務',
+      });
 
       expect(workflowPipeline.execute).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -252,14 +252,14 @@ describe('WorkflowAiDecideTriggerService', () => {
         '不相關'
       );
 
-      expect(workflowEventEmitter.emitAiDecideResult).toHaveBeenCalledWith(
+      expect(workflowEventEmitter.emitAiDecideResult).toHaveBeenCalledWith({
         canvasId,
-        'conn-ai-1',
+        connectionId: 'conn-ai-1',
         sourcePodId,
         targetPodId,
-        false,
-        '不相關'
-      );
+        shouldTrigger: false,
+        reason: '不相關',
+      });
 
       expect(workflowPipeline.execute).not.toHaveBeenCalled();
 
@@ -291,13 +291,13 @@ describe('WorkflowAiDecideTriggerService', () => {
         'AI 判斷服務發生錯誤'
       );
 
-      expect(workflowEventEmitter.emitAiDecideError).toHaveBeenCalledWith(
+      expect(workflowEventEmitter.emitAiDecideError).toHaveBeenCalledWith({
         canvasId,
-        'conn-ai-1',
+        connectionId: 'conn-ai-1',
         sourcePodId,
         targetPodId,
-        'AI 判斷服務發生錯誤'
-      );
+        error: 'AI 判斷服務發生錯誤',
+      });
 
       expect(workflowPipeline.execute).not.toHaveBeenCalled();
 
@@ -324,13 +324,13 @@ describe('WorkflowAiDecideTriggerService', () => {
         '錯誤：網路錯誤'
       );
 
-      expect(workflowEventEmitter.emitAiDecideError).toHaveBeenCalledWith(
+      expect(workflowEventEmitter.emitAiDecideError).toHaveBeenCalledWith({
         canvasId,
-        'conn-ai-1',
+        connectionId: 'conn-ai-1',
         sourcePodId,
         targetPodId,
-        '錯誤：網路錯誤'
-      );
+        error: '錯誤：網路錯誤',
+      });
 
       expect(workflowPipeline.execute).not.toHaveBeenCalled();
     });
@@ -496,13 +496,13 @@ describe('WorkflowAiDecideTriggerService', () => {
         'error',
         'AI 判斷服務發生錯誤'
       );
-      expect(workflowEventEmitter.emitAiDecideError).toHaveBeenCalledWith(
+      expect(workflowEventEmitter.emitAiDecideError).toHaveBeenCalledWith({
         canvasId,
-        'conn-ai-3',
+        connectionId: 'conn-ai-3',
         sourcePodId,
-        'target-pod-3',
-        'AI 判斷服務發生錯誤'
-      );
+        targetPodId: 'target-pod-3',
+        error: 'AI 判斷服務發生錯誤',
+      });
     });
   });
 
@@ -564,15 +564,15 @@ describe('WorkflowAiDecideTriggerService', () => {
         pipelineError
       );
 
-      expect(workflowEventEmitter.emitWorkflowComplete).toHaveBeenCalledWith(
+      expect(workflowEventEmitter.emitWorkflowComplete).toHaveBeenCalledWith({
         canvasId,
-        'conn-ai-1',
+        connectionId: 'conn-ai-1',
         sourcePodId,
         targetPodId,
-        false,
-        'Pipeline 執行失敗',
-        'ai-decide'
-      );
+        success: false,
+        error: 'Pipeline 執行失敗',
+        triggerMode: 'ai-decide',
+      });
     });
   });
 

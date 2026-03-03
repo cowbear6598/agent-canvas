@@ -47,7 +47,6 @@ function updatePackageVersions(newVersion: string): void {
   }
 }
 
-// 從 CHANGELOG.md 中擷取指定版本的內容
 function extractChangelogSection(version: string): string {
   const content = readFileSync(CHANGELOG_PATH, "utf-8")
   const lines = content.split("\n")

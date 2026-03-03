@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { useCanvasContext } from './useCanvasContext'
 import { useDragHandler } from '@/composables/useDragHandler'
+import { MOUSE_BUTTON } from '@/lib/constants'
 
 const MIN_PAN_DISTANCE = 3
 
@@ -24,7 +25,7 @@ export function useCanvasPan(options?: CanvasPanOptions): {
   let panStartEvent: MouseEvent | null = null
 
   const { isDragging: isPanning, startDrag } = useDragHandler({
-    button: 2,
+    button: MOUSE_BUTTON.RIGHT,
     onMove: (e: MouseEvent): void => {
       const dx = e.clientX - startX
       const dy = e.clientY - startY
@@ -50,7 +51,7 @@ export function useCanvasPan(options?: CanvasPanOptions): {
   })
 
   const startPan = (e: MouseEvent): void => {
-    if (e.button !== 2) return
+    if (e.button !== MOUSE_BUTTON.RIGHT) return
 
     const target = e.target as HTMLElement
 

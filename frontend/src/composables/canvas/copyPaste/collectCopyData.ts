@@ -115,7 +115,7 @@ export function createUnboundNoteCollector<T>(
   mapFn: (note: NoteWithIndexSignature) => T
 ): (noteId: string) => T | null {
   return (noteId: string): T | null => {
-    const note = store.notes.find(n => n.id === noteId)
+    const note = store.notes.find(note => note.id === noteId)
     if (!note || note.boundToPodId !== null) return null
     return mapFn(note)
   }
@@ -129,7 +129,7 @@ export function collectSelectedPods(
 
   for (const element of selectedElements) {
     if (element.type === 'pod') {
-      const pod = pods.find(p => p.id === element.id)
+      const pod = pods.find(pod => pod.id === element.id)
       if (pod) {
         copiedPods.push({
           id: pod.id,

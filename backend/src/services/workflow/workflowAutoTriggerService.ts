@@ -13,7 +13,7 @@ import { podStore } from '../podStore.js';
 import { messageStore } from '../messageStore.js';
 import { connectionStore } from '../connectionStore.js';
 import { workflowEventEmitter } from './workflowEventEmitter.js';
-import { forEachMultiInputGroupConnection } from './workflowHelpers.js';
+import { forEachMultiInputGroupConnection, completeMultiInputConnections, buildQueuedPayload } from './workflowHelpers.js';
 import { logger } from '../../utils/logger.js';
 
 interface Pipeline {
@@ -96,48 +96,21 @@ class WorkflowAutoTriggerService implements TriggerStrategy {
   }
 
   onComplete(context: CompletionContext, success: boolean, error?: string): void {
-    forEachMultiInputGroupConnection(context.canvasId, context.targetPodId, (conn) => {
-      workflowEventEmitter.emitWorkflowComplete(
-        context.canvasId,
-        conn.id,
-        conn.sourcePodId,
-        context.targetPodId,
-        success,
-        error,
-        context.triggerMode
-      );
-      connectionStore.updateConnectionStatus(context.canvasId, conn.id, 'idle');
-    });
+    completeMultiInputConnections(context, success, error);
   }
 
   onError(context: CompletionContext, errorMessage: string): void {
-    forEachMultiInputGroupConnection(context.canvasId, context.targetPodId, (conn) => {
-      workflowEventEmitter.emitWorkflowComplete(
-        context.canvasId,
-        conn.id,
-        conn.sourcePodId,
-        context.targetPodId,
-        false,
-        errorMessage,
-        context.triggerMode
-      );
-      connectionStore.updateConnectionStatus(context.canvasId, conn.id, 'idle');
-    });
+    completeMultiInputConnections(context, false, errorMessage);
   }
 
   onQueued(context: QueuedContext): void {
     forEachMultiInputGroupConnection(context.canvasId, context.targetPodId, (conn) => {
       connectionStore.updateConnectionStatus(context.canvasId, conn.id, 'queued');
     });
-    workflowEventEmitter.emitWorkflowQueued(context.canvasId, {
-      canvasId: context.canvasId,
-      targetPodId: context.targetPodId,
-      connectionId: context.connectionId,
-      sourcePodId: context.sourcePodId,
-      position: context.position,
-      queueSize: context.queueSize,
-      triggerMode: context.triggerMode,
-    });
+    workflowEventEmitter.emitWorkflowQueued(
+      context.canvasId,
+      buildQueuedPayload(context, context.connectionId, context.sourcePodId)
+    );
   }
 
   onQueueProcessed(context: QueueProcessedContext): void {

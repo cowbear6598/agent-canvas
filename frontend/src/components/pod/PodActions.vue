@@ -50,6 +50,8 @@ const emit = defineEmits<{
 
 const chatStore = useChatStore()
 
+const TOGGLE_DEBOUNCE_GUARD_MS = 5000
+
 const longPressTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 const isLongPress = ref(false)
 const isToggling = ref(false)
@@ -108,7 +110,7 @@ const handleEraserMouseDown = (e: MouseEvent): void => {
     emit('toggle-auto-clear')
     setTimeout(() => {
       isToggling.value = false
-    }, 5000)
+    }, TOGGLE_DEBOUNCE_GUARD_MS)
   }, LONG_PRESS_DURATION)
 }
 

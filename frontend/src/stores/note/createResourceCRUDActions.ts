@@ -4,6 +4,7 @@ import { requireActiveCanvas } from '@/utils/canvasGuard'
 import { useToast } from '@/composables/useToast'
 import type { WebSocketRequestEvents, WebSocketResponseEvents } from '@/types/websocket'
 import type { ToastCategory } from '@/composables/useToast'
+import { handleNullResponse } from './noteStoreHelpers'
 
 export function defaultReplaceItemInList<TItem extends { id: string }>(
   items: TItem[],
@@ -48,7 +49,6 @@ export interface CRUDPayloadConfig<
   TUpdateInput = string,
   TReadResult extends { id: string; name: string } = { id: string; name: string; content: string }
 > {
-  // 若不提供，預設使用 { name, content: input }（適用於 TCreateInput = string 的情況）
   getCreatePayload?: (name: string, input: TCreateInput) => Record<string, unknown>
   getUpdatePayload: (itemId: string, input: TUpdateInput) => Record<string, unknown>
   getReadPayload: (itemId: string) => Record<string, unknown>
@@ -116,10 +116,10 @@ export function createResourceCRUDActions<
         })
       )
 
-      if (!response) {
-        if (toastCategory) {
-          showErrorToast(toastCategory, '建立失敗', `建立 ${resourceType} 失敗`)
-        }
+      if (toastCategory) {
+        const nullResult = handleNullResponse(response, showErrorToast, toastCategory, '建立失敗', `建立 ${resourceType} 失敗`)
+        if (nullResult) return nullResult
+      } else if (!response) {
         return { success: false, error: `建立 ${resourceType} 失敗` }
       }
 
@@ -160,10 +160,10 @@ export function createResourceCRUDActions<
         })
       )
 
-      if (!response) {
-        if (toastCategory) {
-          showErrorToast(toastCategory, '更新失敗', `更新 ${resourceType} 失敗`)
-        }
+      if (toastCategory) {
+        const nullResult = handleNullResponse(response, showErrorToast, toastCategory, '更新失敗', `更新 ${resourceType} 失敗`)
+        if (nullResult) return nullResult
+      } else if (!response) {
         return { success: false, error: `更新 ${resourceType} 失敗` }
       }
 

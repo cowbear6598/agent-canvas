@@ -73,7 +73,7 @@ class PodManifestService {
                     await fs.rmdir(dir);
                 }
             } catch {
-                // 忽略
+                // 目錄刪除失敗不影響主流程
             }
         }
 

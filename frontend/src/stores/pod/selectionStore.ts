@@ -2,20 +2,62 @@ import {defineStore} from 'pinia'
 import type {SelectableElement, SelectionState} from '@/types'
 import {POD_WIDTH, POD_HEIGHT, NOTE_WIDTH, NOTE_HEIGHT} from '@/lib/constants'
 
-function isNoteInSelectionBox(
-    noteX: number,
-    noteY: number,
-    minX: number,
-    maxX: number,
-    minY: number,
-    maxY: number
-): boolean {
-    const noteMinX = noteX
-    const noteMaxX = noteX + NOTE_WIDTH
-    const noteMinY = noteY
-    const noteMaxY = noteY + NOTE_HEIGHT
+type NoteItem = {id: string; x: number; y: number; boundToPodId: string | null}
+type NoteType =
+    | 'outputStyleNote'
+    | 'skillNote'
+    | 'repositoryNote'
+    | 'subAgentNote'
+    | 'commandNote'
+    | 'mcpServerNote'
 
-    return !(noteMaxX < minX || noteMinX > maxX || noteMaxY < minY || noteMinY > maxY)
+type SelectionBox = {minX: number; maxX: number; minY: number; maxY: number}
+
+function findPodsInSelectionBox(
+    pods: Array<{id: string; x: number; y: number}>,
+    box: SelectionBox
+): SelectableElement[] {
+    return pods
+        .filter(pod => {
+            const podMaxX = pod.x + POD_WIDTH
+            const podMaxY = pod.y + POD_HEIGHT
+            return !(podMaxX < box.minX || pod.x > box.maxX || podMaxY < box.minY || pod.y > box.maxY)
+        })
+        .map(pod => ({type: 'pod' as const, id: pod.id}))
+}
+
+function findNotesInSelectionBox(
+    noteGroups: Array<{notes: NoteItem[]; type: NoteType}>,
+    box: SelectionBox
+): SelectableElement[] {
+    return noteGroups.flatMap(({notes, type}) =>
+        notes
+            .filter(note => {
+                if (note.boundToPodId) return false
+                const noteMaxX = note.x + NOTE_WIDTH
+                const noteMaxY = note.y + NOTE_HEIGHT
+                return !(noteMaxX < box.minX || note.x > box.maxX || noteMaxY < box.minY || note.y > box.maxY)
+            })
+            .map(note => ({type, id: note.id}))
+    )
+}
+
+function applyCtrlModeToggle(
+    initialElements: SelectableElement[],
+    newElements: SelectableElement[]
+): SelectableElement[] {
+    const result = [...initialElements]
+
+    for (const element of newElements) {
+        const index = result.findIndex(el => el.type === element.type && el.id === element.id)
+        if (index !== -1) {
+            result.splice(index, 1)
+        } else {
+            result.push(element)
+        }
+    }
+
+    return result
 }
 
 export const useSelectionStore = defineStore('selection', {
@@ -180,71 +222,38 @@ export const useSelectionStore = defineStore('selection', {
             }
         },
         calculateSelectedElements(
-            pods: Array<{ id: string; x: number; y: number }>,
-            outputStyleNotes: Array<{ id: string; x: number; y: number; boundToPodId: string | null }>,
-            skillNotes: Array<{ id: string; x: number; y: number; boundToPodId: string | null }>,
-            repositoryNotes: Array<{ id: string; x: number; y: number; boundToPodId: string | null }> = [],
-            subAgentNotes: Array<{ id: string; x: number; y: number; boundToPodId: string | null }> = [],
-            commandNotes: Array<{ id: string; x: number; y: number; boundToPodId: string | null }> = []
+            pods: Array<{id: string; x: number; y: number}>,
+            outputStyleNotes: NoteItem[],
+            skillNotes: NoteItem[],
+            repositoryNotes: NoteItem[] = [],
+            subAgentNotes: NoteItem[] = [],
+            commandNotes: NoteItem[] = []
         ): void {
             if (!this.box) return
 
-            const box = this.box
-            const minX = Math.min(box.startX, box.endX)
-            const maxX = Math.max(box.startX, box.endX)
-            const minY = Math.min(box.startY, box.endY)
-            const maxY = Math.max(box.startY, box.endY)
-
-            const selected: SelectableElement[] = []
-
-            for (const pod of pods) {
-                const podMinX = pod.x
-                const podMaxX = pod.x + POD_WIDTH
-                const podMinY = pod.y
-                const podMaxY = pod.y + POD_HEIGHT
-
-                const hasIntersection = !(podMaxX < minX || podMinX > maxX || podMaxY < minY || podMinY > maxY)
-
-                if (hasIntersection) {
-                    selected.push({type: 'pod', id: pod.id})
-                }
+            const box: SelectionBox = {
+                minX: Math.min(this.box.startX, this.box.endX),
+                maxX: Math.max(this.box.startX, this.box.endX),
+                minY: Math.min(this.box.startY, this.box.endY),
+                maxY: Math.max(this.box.startY, this.box.endY),
             }
 
-            const noteTypes = [
-                {notes: outputStyleNotes, type: 'outputStyleNote' as const},
-                {notes: skillNotes, type: 'skillNote' as const},
-                {notes: repositoryNotes, type: 'repositoryNote' as const},
-                {notes: subAgentNotes, type: 'subAgentNote' as const},
-                {notes: commandNotes, type: 'commandNote' as const}
+            const noteGroups: Array<{notes: NoteItem[]; type: NoteType}> = [
+                {notes: outputStyleNotes, type: 'outputStyleNote'},
+                {notes: skillNotes, type: 'skillNote'},
+                {notes: repositoryNotes, type: 'repositoryNote'},
+                {notes: subAgentNotes, type: 'subAgentNote'},
+                {notes: commandNotes, type: 'commandNote'},
             ]
-            for (const {notes, type} of noteTypes) {
-                for (const note of notes) {
-                    if (note.boundToPodId) continue
-                    if (isNoteInSelectionBox(note.x, note.y, minX, maxX, minY, maxY)) {
-                        selected.push({type, id: note.id})
-                    }
-                }
-            }
 
-            if (this.isCtrlMode) {
-                const result = [...this.initialSelectedElements]
+            const selected = [
+                ...findPodsInSelectionBox(pods, box),
+                ...findNotesInSelectionBox(noteGroups, box),
+            ]
 
-                for (const element of selected) {
-                    const index = result.findIndex(
-                        el => el.type === element.type && el.id === element.id
-                    )
-
-                    if (index !== -1) {
-                        result.splice(index, 1)
-                    } else {
-                        result.push(element)
-                    }
-                }
-
-                this.selectedElements = result
-            } else {
-                this.selectedElements = selected
-            }
+            this.selectedElements = this.isCtrlMode
+                ? applyCtrlModeToggle(this.initialSelectedElements, selected)
+                : selected
         },
     },
 })

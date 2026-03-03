@@ -3,6 +3,7 @@ import { jsonResponse, requireCanvas, resolvePod } from './apiHelpers.js';
 import { createPodWithWorkspace, deletePodWithCleanup } from '../services/podService.js';
 import { logger } from '../utils/logger.js';
 import type { ModelType } from '../types/pod.js';
+import { HTTP_STATUS } from '../constants.js';
 
 const VALID_MODELS: ModelType[] = ['opus', 'sonnet', 'haiku'];
 
@@ -62,7 +63,7 @@ export function handleListPods(_req: Request, params: Record<string, string>): R
 	if (error) return error;
 
 	const pods = podStore.getAll(canvas.id);
-	return jsonResponse({ pods }, 200);
+	return jsonResponse({ pods }, HTTP_STATUS.OK);
 }
 
 export async function handleCreatePod(req: Request, params: Record<string, string>): Promise<Response> {
@@ -71,7 +72,7 @@ export async function handleCreatePod(req: Request, params: Record<string, strin
 	try {
 		body = await req.json();
 	} catch {
-		return jsonResponse({ error: '無效的請求格式' }, 400);
+		return jsonResponse({ error: '無效的請求格式' }, HTTP_STATUS.BAD_REQUEST);
 	}
 
 	const { canvas, error } = requireCanvas(params.id);
@@ -79,11 +80,11 @@ export async function handleCreatePod(req: Request, params: Record<string, strin
 
 	const validated = validateCreatePodBody(body as Record<string, unknown>);
 	if ('error' in validated) {
-		return jsonResponse({ error: validated.error }, 400);
+		return jsonResponse({ error: validated.error }, HTTP_STATUS.BAD_REQUEST);
 	}
 
 	if (podStore.hasName(canvas.id, validated.name)) {
-		return jsonResponse({ error: '同一 Canvas 下已存在相同名稱的 Pod' }, 409);
+		return jsonResponse({ error: '同一 Canvas 下已存在相同名稱的 Pod' }, HTTP_STATUS.CONFLICT);
 	}
 
 	const result = await createPodWithWorkspace(
@@ -100,10 +101,10 @@ export async function handleCreatePod(req: Request, params: Record<string, strin
 
 	if (!result.success) {
 		logger.error('Pod', 'Error', '建立 Pod 失敗', result.error);
-		return jsonResponse({ error: '建立 Pod 時發生內部錯誤' }, 500);
+		return jsonResponse({ error: '建立 Pod 時發生內部錯誤' }, HTTP_STATUS.INTERNAL_ERROR);
 	}
 
-	return jsonResponse({ pod: result.data!.pod }, 201);
+	return jsonResponse({ pod: result.data.pod }, HTTP_STATUS.CREATED);
 }
 
 export async function handleDeletePod(_req: Request, params: Record<string, string>): Promise<Response> {
@@ -112,14 +113,14 @@ export async function handleDeletePod(_req: Request, params: Record<string, stri
 
 	const pod = resolvePod(canvas.id, decodeURIComponent(params.podId));
 	if (!pod) {
-		return jsonResponse({ error: '找不到 Pod' }, 404);
+		return jsonResponse({ error: '找不到 Pod' }, HTTP_STATUS.NOT_FOUND);
 	}
 
 	const result = await deletePodWithCleanup(canvas.id, pod.id, 'system');
 	if (!result.success) {
 		logger.error('Pod', 'Error', '刪除 Pod 失敗', result.error);
-		return jsonResponse({ error: '刪除 Pod 時發生錯誤' }, 500);
+		return jsonResponse({ error: '刪除 Pod 時發生錯誤' }, HTTP_STATUS.INTERNAL_ERROR);
 	}
 
-	return jsonResponse({ success: true }, 200);
+	return jsonResponse({ success: true }, HTTP_STATUS.OK);
 }

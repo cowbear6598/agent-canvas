@@ -21,6 +21,36 @@ export function appendToolUseToLastSub(subMessages: SubMessage[], toolUseInfo: T
     return updated
 }
 
+function appendNewSubMessage(subMessages: SubMessage[], messageId: string, delta: string, isPartial: boolean): SubMessage[] {
+    const newSubMessage: SubMessage = {
+        id: `${messageId}-sub-${subMessages.length}`,
+        content: delta,
+        isPartial
+    }
+    return [...subMessages, newSubMessage]
+}
+
+function updateLastSubMessage(subMessages: SubMessage[], content: string, isPartial: boolean): SubMessage[] {
+    const updatedSubMessages = [...subMessages]
+    const lastSubIndex = updatedSubMessages.length - 1
+    if (lastSubIndex < 0) return updatedSubMessages
+
+    const sumOfPreviousContents = updatedSubMessages
+        .slice(0, lastSubIndex)
+        .reduce((sum, sub) => sum + sub.content.length, 0)
+    const lastSubContent = content.slice(sumOfPreviousContents)
+
+    const lastSub = updatedSubMessages[lastSubIndex]
+    if (!lastSub) return updatedSubMessages
+
+    updatedSubMessages[lastSubIndex] = {
+        ...lastSub,
+        content: lastSubContent,
+        isPartial
+    }
+    return updatedSubMessages
+}
+
 export function updateSubMessageContent(
     subMessages: SubMessage[],
     existingMessage: Message,
@@ -28,35 +58,11 @@ export function updateSubMessageContent(
     isPartial: boolean,
     content: string
 ): SubMessage[] {
-    const updatedSubMessages = [...subMessages]
-
     if (existingMessage.expectingNewBlock) {
-        const newSubMessage: SubMessage = {
-            id: `${existingMessage.id}-sub-${updatedSubMessages.length}`,
-            content: delta,
-            isPartial
-        }
-        updatedSubMessages.push(newSubMessage)
-    } else {
-        const lastSubIndex = updatedSubMessages.length - 1
-        if (lastSubIndex >= 0) {
-            const sumOfPreviousContents = updatedSubMessages
-                .slice(0, lastSubIndex)
-                .reduce((sum, sub) => sum + sub.content.length, 0)
-            const lastSubContent = content.slice(sumOfPreviousContents)
-
-            const lastSub = updatedSubMessages[lastSubIndex]
-            if (lastSub) {
-                updatedSubMessages[lastSubIndex] = {
-                    ...lastSub,
-                    content: lastSubContent,
-                    isPartial
-                }
-            }
-        }
+        return appendNewSubMessage(subMessages, existingMessage.id, delta, isPartial)
     }
 
-    return updatedSubMessages
+    return updateLastSubMessage(subMessages, content, isPartial)
 }
 
 export function updateAssistantSubMessages(

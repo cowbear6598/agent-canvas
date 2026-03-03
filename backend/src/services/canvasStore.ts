@@ -89,7 +89,7 @@ class CanvasStore {
     async create(name: string): Promise<Result<Canvas>> {
         const validationResult = this.validateCanvasName(name);
         if (!validationResult.success) {
-            return err(validationResult.error!);
+            return err(validationResult.error);
         }
 
         const id = uuidv4();
@@ -106,7 +106,7 @@ class CanvasStore {
 
         const persistResult = await this.persistCanvas(canvas);
         if (!persistResult.success) {
-            return err(persistResult.error!);
+            return err(persistResult.error);
         }
 
         this.canvases.set(id, canvas);
@@ -141,7 +141,7 @@ class CanvasStore {
 
         const validationResult = this.validateCanvasName(trimmedName);
         if (!validationResult.success) {
-            return err(validationResult.error!);
+            return err(validationResult.error);
         }
 
         const oldPath = config.getCanvasPath(canvas.name);
@@ -149,12 +149,12 @@ class CanvasStore {
 
         const oldPathValidation = this.validateCanvasPath(oldPath);
         if (!oldPathValidation.success) {
-            return err(oldPathValidation.error!);
+            return err(oldPathValidation.error);
         }
 
         const newPathValidation = this.validateCanvasPath(newPath);
         if (!newPathValidation.success) {
-            return err(newPathValidation.error!);
+            return err(newPathValidation.error);
         }
 
         const targetExistsResult = await fsOperation(
@@ -180,7 +180,7 @@ class CanvasStore {
         }, `重新命名 Canvas 失敗: ${id}`);
 
         if (!renameResult.success) {
-            return err(renameResult.error!);
+            return err(renameResult.error);
         }
 
         const oldName = canvas.name;
@@ -201,7 +201,7 @@ class CanvasStore {
 
         const pathValidation = this.validateCanvasPath(canvasPath);
         if (!pathValidation.success) {
-            return err(pathValidation.error!);
+            return err(pathValidation.error);
         }
 
         const deleteResult = await fsOperation(
@@ -212,7 +212,7 @@ class CanvasStore {
         );
 
         if (!deleteResult.success) {
-            return err(deleteResult.error!);
+            return err(deleteResult.error);
         }
 
         this.canvases.delete(id);
@@ -253,7 +253,7 @@ class CanvasStore {
         }, '重新排序 Canvas 失敗');
 
         if (!reorderResult.success) {
-            return err(reorderResult.error!);
+            return err(reorderResult.error);
         }
 
         logger.log('Canvas', 'Reorder', `已重新排序 ${canvasIds.length} 個畫布`);
@@ -277,7 +277,7 @@ class CanvasStore {
             return null;
         }
 
-        const persistedCanvas = safeJsonParse<PersistedCanvas>(readResult.data!);
+        const persistedCanvas = safeJsonParse<PersistedCanvas>(readResult.data);
 
         if (!persistedCanvas) {
             logger.error('Canvas', 'Load', `解析 ${dirName} 的 canvas.json 失敗`);
@@ -316,8 +316,12 @@ class CanvasStore {
             return canvases;
         }, '載入 Canvas 列表失敗');
 
-        if (!loadResult.success || !loadResult.data) {
-            return err(loadResult.error || '載入 Canvas 列表失敗');
+        if (!loadResult.success) {
+            return err(loadResult.error);
+        }
+
+        if (!loadResult.data) {
+            return err('載入 Canvas 列表失敗');
         }
 
         this.canvases.clear();

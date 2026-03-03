@@ -470,7 +470,7 @@ const handleConfirmClear = async (): Promise<void> => {
   const downstreamAiDecideConnectionIds: string[] = []
   response.clearedPodIds.forEach(podId => {
     const connections = connectionStore.getAiDecideConnectionsBySourcePodId(podId)
-    downstreamAiDecideConnectionIds.push(...connections.map(c => c.id))
+    downstreamAiDecideConnectionIds.push(...connections.map(connection => connection.id))
   })
 
   if (downstreamAiDecideConnectionIds.length > 0) {

@@ -160,7 +160,7 @@ class ScheduleService {
       await messageStore.addMessage(canvasId, podId, 'user', '');
 
       await executeStreamingChat(
-        { canvasId, podId, message: '', supportAbort: false },
+        { canvasId, podId, message: '', abortable: false },
         {
           onComplete: async (canvasId, podId) => {
             fireAndForget(

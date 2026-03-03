@@ -203,8 +203,6 @@ async function handleStart(flags: Record<string, string | boolean>): Promise<voi
 	fs.mkdirSync(LOG_DIR, { recursive: true });
 	const logFd = fs.openSync(LOG_FILE, 'a');
 
-	// compile 模式下，可執行檔本身就是入口，不需要 script 路徑
-	// 非 compile 模式下（bun cli.ts），需要 script 路徑
 	const isCompiled = !process.argv[1] || process.argv[1].includes('$bunfs');
 	const spawnArgs = isCompiled
 		? [process.execPath, '--daemon', '--port', String(port)]

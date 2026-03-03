@@ -46,7 +46,7 @@ class StartupService {
       if (!defaultCanvasResult.success) {
         return err(`建立預設 Canvas 失敗: ${defaultCanvasResult.error}`);
       }
-      canvases.push(defaultCanvasResult.data!);
+      canvases.push(defaultCanvasResult.data);
     }
 
     for (const canvas of canvases) {

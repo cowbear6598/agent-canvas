@@ -32,11 +32,16 @@ type AssistantTextBlock = {type: 'text'; text: string};
 type AssistantToolUseBlock = {type: 'tool_use'; id: string; name: string; input: Record<string, unknown>};
 type AssistantContentBlock = AssistantTextBlock | AssistantToolUseBlock;
 
+interface ActiveToolEntry {
+    toolName: string;
+    input: Record<string, unknown>;
+}
+
 interface QueryState {
     sessionId: string | null;
     fullContent: string;
     toolUseInfo: ToolUseInfo | null;
-    activeTools: Map<string, {toolName: string; input: Record<string, unknown>}>;
+    activeTools: Map<string, ActiveToolEntry>;
 }
 
 type UserToolResultBlock = {
@@ -146,6 +151,21 @@ export class ClaudeService {
         });
     }
 
+    private processContentBlock(
+        block: AssistantContentBlock,
+        state: QueryState,
+        onStream: StreamCallback
+    ): void {
+        if (block.type === 'text' && block.text) {
+            this.processTextBlock(block, state, onStream);
+            return;
+        }
+
+        if (block.type === 'tool_use') {
+            this.processToolUseBlock(block, state, onStream);
+        }
+    }
+
     private handleAssistantMessage(
         sdkMessage: SDKAssistantMessage,
         state: QueryState,
@@ -155,24 +175,14 @@ export class ClaudeService {
         if (!assistantMessage.content) return;
 
         for (const block of assistantMessage.content as AssistantContentBlock[]) {
-            if (block.type === 'text' && block.text) {
-                this.processTextBlock(block, state, onStream);
-                continue;
-            }
-
-            if (block.type === 'tool_use') {
-                this.processToolUseBlock(block, state, onStream);
-            }
+            this.processContentBlock(block, state, onStream);
         }
     }
 
     private isToolResultBlock(block: unknown): block is UserToolResultBlock {
-        return (
-            typeof block === 'object' &&
-            block !== null &&
-            (block as Record<string, unknown>).type === 'tool_result' &&
-            'tool_use_id' in (block as Record<string, unknown>)
-        );
+        if (typeof block !== 'object' || block === null) return false;
+        const record = block as Record<string, unknown>;
+        return record.type === 'tool_result' && 'tool_use_id' in record;
     }
 
     private handleToolResultBlock(
@@ -260,9 +270,8 @@ export class ClaudeService {
         if (!outputText) return;
 
         const toolUseId = sdkMessage.tool_use_id;
-        const hasKnownTool = toolUseId && state.activeTools.has(toolUseId);
 
-        if (hasKnownTool && toolUseId) {
+        if (toolUseId && state.activeTools.has(toolUseId)) {
             this.updateExistingToolProgress(state, toolUseId, outputText, onStream);
             return;
         }
@@ -323,7 +332,7 @@ export class ClaudeService {
                 'Update',
                 `[ClaudeService] Pod ${pod.name} Session 恢復失敗，清除 Session ID 並重試`
             );
-            podStore.setClaudeSessionId(canvasId, podId, '');
+            podStore.resetClaudeSession(canvasId, podId);
             return retryFn();
         }
 
@@ -396,6 +405,26 @@ export class ClaudeService {
         ];
     }
 
+    private async applyOutputStyle(pod: Pod, queryOptions: Options): Promise<void> {
+        if (!pod.outputStyleId) return;
+
+        const styleContent = await outputStyleService.getContent(pod.outputStyleId);
+        if (styleContent) {
+            queryOptions.systemPrompt = styleContent;
+        }
+    }
+
+    private applyMcpServers(pod: Pod, queryOptions: Options): void {
+        if (!pod.mcpServerIds?.length) return;
+
+        const servers = mcpServerStore.getByIds(pod.mcpServerIds);
+        const mcpServers: NonNullable<Options['mcpServers']> = {};
+        for (const server of servers) {
+            mcpServers[server.name] = server.config;
+        }
+        queryOptions.mcpServers = mcpServers;
+    }
+
     private async buildQueryOptions(
         pod: Pod,
         cwd: string
@@ -408,22 +437,8 @@ export class ClaudeService {
             abortController,
         };
 
-        if (pod.outputStyleId) {
-            const styleContent = await outputStyleService.getContent(pod.outputStyleId);
-            if (styleContent) {
-                queryOptions.systemPrompt = styleContent;
-            }
-        }
-
-        if (pod.mcpServerIds?.length > 0) {
-            const servers = mcpServerStore.getByIds(pod.mcpServerIds);
-            const mcpServers: Record<string, unknown> = {};
-            for (const server of servers) {
-                mcpServers[server.name] = server.config;
-            }
-            queryOptions.mcpServers = mcpServers as Options['mcpServers'];
-        }
-
+        await this.applyOutputStyle(pod, queryOptions);
+        this.applyMcpServers(pod, queryOptions);
         this.buildSlackToolOptions(pod, queryOptions);
 
         if (pod.claudeSessionId) {
@@ -441,7 +456,6 @@ export class ClaudeService {
             return false;
         }
 
-        // 只呼叫 abort()，不呼叫 close()
         // close() 會直接殺掉底層 CLI 進程，導致 for await 靜默結束而非拋出 AbortError
         // 這會使 catch 區塊無法被觸發，前端收不到 POD_CHAT_ABORTED 事件
         entry.abortController.abort();

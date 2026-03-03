@@ -192,9 +192,9 @@ export const useChatStore = defineStore('chat', {
             const podStore = usePodStore()
             const commandStore = useCommandStore()
 
-            const pod = podStore.pods.find(p => p.id === podId)
+            const pod = podStore.pods.find(pod => pod.id === podId)
             const command = pod?.commandId
-                ? commandStore.typedAvailableItems.find(c => c.id === pod.commandId)
+                ? commandStore.typedAvailableItems.find(command => command.id === pod.commandId)
                 : null
 
             const hasContentBlocks = contentBlocks && contentBlocks.length > 0
@@ -243,7 +243,6 @@ export const useChatStore = defineStore('chat', {
 
         async abortChat(podId: string): Promise<void> {
             if (!this.isConnected) {
-                // 未連線時直接重設狀態，避免卡在 chatting
                 this.setTyping(podId, false)
                 return
             }
@@ -257,13 +256,11 @@ export const useChatStore = defineStore('chat', {
                 podId
             })
 
-            // 清除舊的安全超時（新的 abort 請求覆蓋舊的）
             const existingTimer = abortSafetyTimers.get(podId)
             if (existingTimer) {
                 clearTimeout(existingTimer)
             }
 
-            // 安全超時：若 10 秒後仍在 typing，強制重設避免卡死
             const timer = setTimeout(() => {
                 abortSafetyTimers.delete(podId)
                 if (this.isTypingByPodId.get(podId)) {

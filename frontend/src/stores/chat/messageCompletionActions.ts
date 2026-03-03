@@ -4,7 +4,7 @@ import {RESPONSE_PREVIEW_LENGTH} from '@/lib/constants'
 import {truncateContent} from './chatUtils'
 import type {ChatStoreInstance} from './chatStore'
 import {finalizeSubMessages, finalizeToolUse, updateMainMessageState} from './subMessageHelpers'
-import {abortSafetyTimers} from './abortSafetyTimers'
+import {getMessages, findMessageIndex} from './chatStoreHelpers'
 
 function extractSubMessageLines(subMessages: SubMessage[] | undefined): string[] {
     if (!subMessages || subMessages.length === 0) return []
@@ -13,33 +13,24 @@ function extractSubMessageLines(subMessages: SubMessage[] | undefined): string[]
         .map(sub => truncateContent(sub.content, RESPONSE_PREVIEW_LENGTH))
 }
 
-export function createMessageCompletionActions(store: ChatStoreInstance): {
+export function createMessageCompletionActions(
+    store: ChatStoreInstance,
+    setTyping: (podId: string, isTyping: boolean) => void
+): {
     handleChatComplete: (payload: PodChatCompletePayload) => void
     handleChatAborted: (payload: PodChatAbortedPayload) => void
     finalizeStreaming: (podId: string, messageId: string) => void
     completeMessage: (podId: string, messages: Message[], messageIndex: number, fullContent: string, messageId: string) => void
     updatePodOutput: (podId: string) => Promise<void>
 } {
-    const setTyping = (podId: string, isTyping: boolean): void => {
-        store.isTypingByPodId.set(podId, isTyping)
-
-        if (!isTyping) {
-            const timer = abortSafetyTimers.get(podId)
-            if (timer) {
-                clearTimeout(timer)
-                abortSafetyTimers.delete(podId)
-            }
-        }
-    }
-
     const updatePodOutput = async (podId: string): Promise<void> => {
         const {usePodStore} = await import('../pod/podStore')
         const podStore = usePodStore()
-        const pod = podStore.pods.find(p => p.id === podId)
+        const pod = podStore.pods.find(pod => pod.id === podId)
 
         if (!pod) return
 
-        const messages = store.messagesByPodId.get(podId) || []
+        const messages = getMessages(store, podId)
         const outputLines: string[] = []
 
         for (const message of messages) {
@@ -92,8 +83,8 @@ export function createMessageCompletionActions(store: ChatStoreInstance): {
 
     const handleChatComplete = (payload: PodChatCompletePayload): void => {
         const {podId, messageId, fullContent} = payload
-        const messages = store.messagesByPodId.get(podId) || []
-        const messageIndex = messages.findIndex(m => m.id === messageId)
+        const messages = getMessages(store, podId)
+        const messageIndex = findMessageIndex(messages, messageId)
 
         store.accumulatedLengthByMessageId.delete(messageId)
 
@@ -110,8 +101,8 @@ export function createMessageCompletionActions(store: ChatStoreInstance): {
 
         store.accumulatedLengthByMessageId.delete(messageId)
 
-        const messages = store.messagesByPodId.get(podId) || []
-        const messageIndex = messages.findIndex(m => m.id === messageId)
+        const messages = getMessages(store, podId)
+        const messageIndex = findMessageIndex(messages, messageId)
 
         if (messageIndex !== -1) {
             completeMessage(podId, messages, messageIndex, messages[messageIndex]!.content, messageId)

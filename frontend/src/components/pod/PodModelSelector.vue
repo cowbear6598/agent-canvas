@@ -11,6 +11,10 @@ const emit = defineEmits<{
   'update:model': [model: ModelType]
 }>()
 
+const HOVER_DEBOUNCE_MS = 150
+const COLLAPSE_ANIMATION_MS = 300
+const SELECT_FEEDBACK_DELAY_MS = 400
+
 const isHovered = ref(false)
 const isAnimating = ref(false)
 const isCollapsing = ref(false)
@@ -44,7 +48,7 @@ const handleMouseLeave = (): void => {
   hoverTimeoutId.value = window.setTimeout(() => {
     isHovered.value = false
     hoverTimeoutId.value = null
-  }, 150)
+  }, HOVER_DEBOUNCE_MS)
 }
 
 const selectModel = (model: ModelType): void => {
@@ -55,7 +59,7 @@ const selectModel = (model: ModelType): void => {
     setTimeout(() => {
       isHovered.value = false
       isCollapsing.value = false
-    }, 300)
+    }, COLLAPSE_ANIMATION_MS)
     return
   }
 
@@ -70,8 +74,8 @@ const selectModel = (model: ModelType): void => {
       isHovered.value = false
       isCollapsing.value = false
       isAnimating.value = false
-    }, 300)
-  }, 400)
+    }, COLLAPSE_ANIMATION_MS)
+  }, SELECT_FEEDBACK_DELAY_MS)
 }
 </script>
 

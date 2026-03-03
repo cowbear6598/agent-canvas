@@ -19,7 +19,7 @@ class PersistenceService {
     );
 
     if (!readResult.success) {
-      return err(readResult.error ?? `讀取檔案失敗: ${filePath}`);
+      return err(readResult.error);
     }
 
     try {
@@ -47,7 +47,7 @@ class PersistenceService {
     const dirResult = await this.ensureDirectory(directory);
 
     if (!dirResult.success) {
-      return err(dirResult.error!);
+      return err(dirResult.error);
     }
 
     return fsOperation(async () => {

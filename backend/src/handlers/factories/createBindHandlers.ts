@@ -8,11 +8,11 @@ import {validatePod, withCanvasId, emitPodUpdated} from '../../utils/handlerHelp
 /**
  * 資源綁定處理器的配置介面
  */
-export interface BindResourceConfig<TService> {
+export interface BindResourceConfig<TService, TIdField extends string = string> {
     /** 資源名稱（用於日誌和錯誤訊息） */
     resourceName: string;
     /** 資源 ID 欄位名稱 */
-    idField: string;
+    idField: TIdField;
     /** 是否為多重綁定（true: 陣列模式如 skillIds, false: 單一值模式如 commandId） */
     isMultiBind: boolean;
     /** 資源服務實例 */
@@ -57,14 +57,14 @@ function isResourceAlreadyBound(
 /**
  * 建立資源綁定處理器
  */
-export function createBindHandler<TService extends {exists: (id: string) => Promise<boolean>}>(
-    config: BindResourceConfig<TService>
-): ReturnType<typeof withCanvasId<{podId: string; [key: string]: string}>> {
-    return withCanvasId<{podId: string; [key: string]: string}>(
+export function createBindHandler<TService extends {exists: (id: string) => Promise<boolean>}, TIdField extends string>(
+    config: BindResourceConfig<TService, TIdField>
+): ReturnType<typeof withCanvasId<{podId: string} & Record<TIdField, string>>> {
+    return withCanvasId<{podId: string} & Record<TIdField, string>>(
         config.events.bound,
-        async (connectionId: string, canvasId: string, payload: {podId: string; [key: string]: string}, requestId: string): Promise<void> => {
+        async (connectionId: string, canvasId: string, payload: {podId: string} & Record<TIdField, string>, requestId: string): Promise<void> => {
             const {podId} = payload;
-            const resourceId = payload[config.idField] as string;
+            const resourceId = payload[config.idField];
 
             const pod = validatePod(connectionId, podId, config.events.bound, requestId);
             if (!pod) {
@@ -123,8 +123,8 @@ export function createBindHandler<TService extends {exists: (id: string) => Prom
 /**
  * 建立資源解綁處理器（僅用於單一綁定模式，如 Command）
  */
-export function createUnbindHandler<TService>(
-    config: BindResourceConfig<TService>
+export function createUnbindHandler<TService, TIdField extends string>(
+    config: BindResourceConfig<TService, TIdField>
 ): ReturnType<typeof withCanvasId<{podId: string}>> {
     if (config.isMultiBind) {
         throw new Error('解綁處理器僅限單一綁定模式使用');

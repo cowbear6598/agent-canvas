@@ -203,7 +203,7 @@ export function createNoteStore<TItem, TNote extends BaseNote, TCustomActions ex
 
             canDeleteDraggedNote: (state) => {
                 if (state.draggedNoteId === null) return false
-                const note = state.notes.find(n => n.id === state.draggedNoteId)
+                const note = state.notes.find(note => note.id === state.draggedNoteId)
                 return note?.boundToPodId === null
             },
 
@@ -402,21 +402,21 @@ export function createNoteStore<TItem, TNote extends BaseNote, TCustomActions ex
             },
 
             addNoteFromEvent(note: TNote): void {
-                const exists = this.notes.some(n => n.id === note.id)
+                const exists = this.notes.some(existingNote => existingNote.id === note.id)
                 if (!exists) {
                     this.notes.push(note as unknown as NoteItem)
                 }
             },
 
             updateNoteFromEvent(note: TNote): void {
-                const index = this.notes.findIndex(n => n.id === note.id)
+                const index = this.notes.findIndex(existingNote => existingNote.id === note.id)
                 if (index !== -1) {
                     this.notes.splice(index, 1, note as unknown as NoteItem)
                 }
             },
 
             removeNoteFromEvent(noteId: string): void {
-                this.notes = this.notes.filter(n => n.id !== noteId)
+                this.notes = this.notes.filter(note => note.id !== noteId)
             },
 
             addItemFromEvent(item: TItem): void {

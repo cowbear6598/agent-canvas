@@ -10,6 +10,7 @@ import {WebSocketResponseEvents} from '../../schemas/events.js';
 
 const MAX_RECONNECT_ATTEMPTS = 10;
 const HEALTH_CHECK_INTERVAL_MS = 30000;
+const SLACK_CHANNEL_LIST_PAGE_SIZE = 200;
 
 class SlackConnectionManager {
     private boltApps: Map<string, App> = new Map();
@@ -99,7 +100,7 @@ class SlackConnectionManager {
                 const result = await app.client.conversations.list({
                     types: 'public_channel,private_channel',
                     cursor,
-                    limit: 200,
+                    limit: SLACK_CHANNEL_LIST_PAGE_SIZE,
                 });
 
                 const filteredChannels = (result.channels ?? [])

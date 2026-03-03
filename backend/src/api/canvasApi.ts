@@ -4,6 +4,7 @@ import { cursorColorManager } from '../services/cursorColorManager.js';
 import { WebSocketResponseEvents } from '../schemas/index.js';
 import { toCanvasDto } from '../utils/canvasDto.js';
 import { jsonResponse, requireCanvas } from './apiHelpers.js';
+import { HTTP_STATUS } from '../constants.js';
 
 export async function handleDeleteCanvas(_req: Request, params: Record<string, string>): Promise<Response> {
 	const { canvas, error } = requireCanvas(params.id);
@@ -13,13 +14,13 @@ export async function handleDeleteCanvas(_req: Request, params: Record<string, s
 
 	const result = await canvasStore.delete(canvasId);
 	if (!result.success) {
-		return jsonResponse({ error: '刪除 Canvas 時發生錯誤' }, 500);
+		return jsonResponse({ error: '刪除 Canvas 時發生錯誤' }, HTTP_STATUS.INTERNAL_ERROR);
 	}
 
 	cursorColorManager.removeCanvas(canvasId);
 	socketService.emitToAll(WebSocketResponseEvents.CANVAS_DELETED, { requestId: 'system', success: true, canvasId });
 
-	return jsonResponse({ success: true }, 200);
+	return jsonResponse({ success: true }, HTTP_STATUS.OK);
 }
 
 function isValidCreateCanvasBody(body: unknown): body is { name: string } {
@@ -33,7 +34,7 @@ function isValidCreateCanvasBody(body: unknown): body is { name: string } {
 
 export function handleListCanvases(_req: Request, _params: Record<string, string>): Response {
 	const canvases = canvasStore.list();
-	return jsonResponse({ canvases: canvases.map(toCanvasDto) }, 200);
+	return jsonResponse({ canvases: canvases.map(toCanvasDto) }, HTTP_STATUS.OK);
 }
 
 export async function handleCreateCanvas(req: Request, _params: Record<string, string>): Promise<Response> {
@@ -42,11 +43,11 @@ export async function handleCreateCanvas(req: Request, _params: Record<string, s
 	try {
 		body = await req.json();
 	} catch {
-		return jsonResponse({ error: '無效的請求格式' }, 400);
+		return jsonResponse({ error: '無效的請求格式' }, HTTP_STATUS.BAD_REQUEST);
 	}
 
 	if (!isValidCreateCanvasBody(body)) {
-		return jsonResponse({ error: 'Canvas 名稱不能為空' }, 400);
+		return jsonResponse({ error: 'Canvas 名稱不能為空' }, HTTP_STATUS.BAD_REQUEST);
 	}
 
 	const name = body.name;
@@ -54,12 +55,12 @@ export async function handleCreateCanvas(req: Request, _params: Record<string, s
 	const result = await canvasStore.create(name);
 
 	if (!result.success) {
-		return jsonResponse({ error: result.error }, 400);
+		return jsonResponse({ error: result.error }, HTTP_STATUS.BAD_REQUEST);
 	}
 
-	const canvasDto = toCanvasDto(result.data!);
+	const canvasDto = toCanvasDto(result.data);
 
 	socketService.emitToAll(WebSocketResponseEvents.CANVAS_CREATED, { requestId: 'system', success: true, canvas: canvasDto });
 
-	return jsonResponse({ canvas: canvasDto }, 201);
+	return jsonResponse({ canvas: canvasDto }, HTTP_STATUS.CREATED);
 }

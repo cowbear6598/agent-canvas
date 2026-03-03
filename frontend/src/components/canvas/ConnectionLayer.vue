@@ -12,7 +12,6 @@ const draggingPathData = computed(() => {
 
   const { startPoint, currentPoint } = connectionStore.draggingConnection
 
-  // 拖拽預覽線使用直線，不用貝茲曲線
   return `M ${startPoint.x} ${startPoint.y} L ${currentPoint.x} ${currentPoint.y}`
 })
 

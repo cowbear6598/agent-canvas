@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useViewportStore } from '@/stores/pod'
 import { useCanvasPan, useCanvasZoom, useBoxSelect } from '@/composables/canvas'
-import { GRID_SIZE } from '@/lib/constants'
+import { GRID_SIZE, MOUSE_BUTTON } from '@/lib/constants'
 
 const viewportStore = useViewportStore()
 
@@ -37,12 +37,12 @@ const handleContextMenu = (e: MouseEvent): void => {
 }
 
 const handleMouseDown = (e: MouseEvent): void => {
-  if (e.button === 2) {
+  if (e.button === MOUSE_BUTTON.RIGHT) {
     startPan(e)
     return
   }
 
-  if (e.button === 0) {
+  if (e.button === MOUSE_BUTTON.LEFT) {
     startBoxSelect(e)
   }
 }

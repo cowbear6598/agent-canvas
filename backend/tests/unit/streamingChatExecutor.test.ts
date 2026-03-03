@@ -119,7 +119,7 @@ describe('executeStreamingChat', () => {
                 canvasId,
                 podId,
                 message,
-                supportAbort: false,
+                abortable: false,
             });
 
             // 驗證 emitToCanvas 被呼叫兩次（兩個 text event）
@@ -171,7 +171,7 @@ describe('executeStreamingChat', () => {
                 canvasId,
                 podId,
                 message,
-                supportAbort: false,
+                abortable: false,
             });
 
             // 驗證 tool_use event
@@ -200,7 +200,7 @@ describe('executeStreamingChat', () => {
                 canvasId,
                 podId,
                 message,
-                supportAbort: false,
+                abortable: false,
             });
 
             // 驗證 tool_result event
@@ -228,7 +228,7 @@ describe('executeStreamingChat', () => {
                 canvasId,
                 podId,
                 message,
-                supportAbort: false,
+                abortable: false,
             });
 
             // 驗證 complete event
@@ -256,7 +256,7 @@ describe('executeStreamingChat', () => {
                 canvasId,
                 podId,
                 message,
-                supportAbort: false,
+                abortable: false,
             });
 
             // 驗證 upsertMessage 被呼叫 4 次
@@ -275,7 +275,7 @@ describe('executeStreamingChat', () => {
                 canvasId,
                 podId,
                 message,
-                supportAbort: false,
+                abortable: false,
             });
 
             // 驗證 logger.error 被呼叫
@@ -302,7 +302,7 @@ describe('executeStreamingChat', () => {
                 canvasId,
                 podId,
                 message,
-                supportAbort: false,
+                abortable: false,
             });
 
             // 驗證 upsertMessage 被呼叫（streaming 中 + 最終）
@@ -328,7 +328,7 @@ describe('executeStreamingChat', () => {
                     canvasId,
                     podId,
                     message,
-                    supportAbort: false,
+                    abortable: false,
                 },
                 {
                     onComplete,
@@ -348,7 +348,7 @@ describe('executeStreamingChat', () => {
                 canvasId,
                 podId,
                 message,
-                supportAbort: false,
+                abortable: false,
             });
 
             // 驗證 upsertMessage 未被呼叫
@@ -363,7 +363,7 @@ describe('executeStreamingChat', () => {
     });
 
     describe('AbortError 處理', () => {
-        it('AbortError + supportAbort=true 時正確處理', async () => {
+        it('AbortError + abortable=true 時正確處理', async () => {
             mockSendMessageWithAbort([
                 {type: 'text', content: 'Hello'},
             ]);
@@ -375,7 +375,7 @@ describe('executeStreamingChat', () => {
                     canvasId,
                     podId,
                     message,
-                    supportAbort: true,
+                    abortable: true,
                 },
                 {
                     onAborted,
@@ -399,7 +399,7 @@ describe('executeStreamingChat', () => {
             expect(onAborted).toHaveBeenCalledWith(canvasId, podId, expect.any(String));
         });
 
-        it('AbortError + supportAbort=false 時 re-throw', async () => {
+        it('AbortError + abortable=false 時 re-throw', async () => {
             mockSendMessageWithAbort();
 
             const onAborted = vi.fn(() => {});
@@ -411,7 +411,7 @@ describe('executeStreamingChat', () => {
                         canvasId,
                         podId,
                         message,
-                        supportAbort: false,
+                        abortable: false,
                     },
                     {
                         onAborted,
@@ -443,7 +443,7 @@ describe('executeStreamingChat', () => {
                     canvasId,
                     podId,
                     message,
-                    supportAbort: true,
+                    abortable: true,
                 },
                 {
                     onAborted,
@@ -470,7 +470,7 @@ describe('executeStreamingChat', () => {
                         canvasId,
                         podId,
                         message,
-                        supportAbort: false,
+                        abortable: false,
                     },
                     {
                         onError,

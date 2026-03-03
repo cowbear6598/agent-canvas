@@ -314,7 +314,7 @@ describe('SlackEventService', () => {
             await slackEventService.injectSlackMessage(canvasId, podId, message);
 
             expect(executeStreamingChat).toHaveBeenCalledWith(
-                expect.objectContaining({canvasId, podId, supportAbort: false}),
+                expect.objectContaining({canvasId, podId, abortable: false}),
                 expect.objectContaining({onComplete: expect.any(Function)})
             );
         });

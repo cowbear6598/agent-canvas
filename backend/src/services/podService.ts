@@ -12,6 +12,7 @@ import { WebSocketResponseEvents } from '../schemas/index.js';
 import type { PodDeletedPayload } from '../types/index.js';
 import type { CreatePodRequest } from '../types/api.js';
 import type { Result } from '../types/index.js';
+import { ok } from '../types/index.js';
 import type { Pod } from '../types/pod.js';
 import { logger } from '../utils/logger.js';
 import { slackMessageQueue } from './slack/slackMessageQueue.js';
@@ -42,6 +43,32 @@ export function deleteAllPodNotes(canvasId: string, podId: string): PodDeletedPa
     return result;
 }
 
+async function cleanupSlackBinding(podId: string, hasSlackBinding: boolean): Promise<void> {
+    if (!hasSlackBinding) {
+        return;
+    }
+    slackMessageQueue.clear(podId);
+}
+
+async function cleanupRepositoryResources(repositoryId: string | null | undefined, podId: string): Promise<void> {
+    if (!repositoryId) {
+        return;
+    }
+    const repositoryPath = repositoryService.getRepositoryPath(repositoryId);
+    await podManifestService.deleteManagedFiles(repositoryPath, podId);
+}
+
+async function syncRepositoryAfterDelete(repositoryId: string | null | undefined): Promise<void> {
+    if (!repositoryId) {
+        return;
+    }
+    try {
+        await repositorySyncService.syncRepositoryResources(repositoryId);
+    } catch (error) {
+        logger.error('Pod', 'Delete', `刪除 Pod 後無法同步 repository ${repositoryId}`, error);
+    }
+}
+
 export async function deletePodWithCleanup(canvasId: string, podId: string, requestId: string): Promise<Result<void>> {
     const pod = podStore.getById(canvasId, podId);
     if (!pod) {
@@ -58,43 +85,30 @@ export async function deletePodWithCleanup(canvasId: string, podId: string, requ
     const deletedNoteIdsPayload = deleteAllPodNotes(canvasId, podId);
     connectionStore.deleteByPodId(canvasId, podId);
 
-    if (pod.slackBinding) {
-        slackMessageQueue.clear(podId);
-    }
-
-    const repositoryId = pod.repositoryId;
-
-    if (repositoryId) {
-        const repositoryPath = repositoryService.getRepositoryPath(repositoryId);
-        await podManifestService.deleteManagedFiles(repositoryPath, podId);
-    }
+    await cleanupSlackBinding(podId, !!pod.slackBinding);
+    await cleanupRepositoryResources(pod.repositoryId, podId);
 
     const deleted = podStore.delete(canvasId, podId);
     if (!deleted) {
         return { success: false, error: '刪除 Pod 時發生錯誤' };
     }
 
-    if (repositoryId) {
-        try {
-            await repositorySyncService.syncRepositoryResources(repositoryId);
-        } catch (error) {
-            logger.error('Pod', 'Delete', `刪除 Pod 後無法同步 repository ${repositoryId}`, error);
-        }
-    }
+    await syncRepositoryAfterDelete(pod.repositoryId);
 
+    const hasDeletedNotes = !!deletedNoteIdsPayload && Object.keys(deletedNoteIdsPayload).length > 0;
     const response: PodDeletedPayload = {
         requestId,
         canvasId,
         success: true,
         podId,
-        ...(deletedNoteIdsPayload && Object.keys(deletedNoteIdsPayload).length > 0 && { deletedNoteIds: deletedNoteIdsPayload }),
+        ...(hasDeletedNotes && { deletedNoteIds: deletedNoteIdsPayload }),
     };
 
     socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_DELETED, response);
 
     logger.log('Pod', 'Delete', `已刪除 Pod「${pod.name}」`);
 
-    return { success: true };
+    return ok();
 }
 
 export async function createPodWithWorkspace(

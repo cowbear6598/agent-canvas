@@ -55,6 +55,21 @@ function applyCommandPrefix(
   return {text: `${prefix}${text}`, prefixApplied: true};
 }
 
+function convertBlockToContent(
+  block: ContentBlock,
+  prefix: string,
+  prefixApplied: boolean
+): {content: ClaudeMessageContent | null; prefixApplied: boolean} {
+  if (block.type === 'text') {
+    const {text, prefixApplied: applied} = applyCommandPrefix(block.text, prefix, prefixApplied);
+    return {content: processTextBlock(text), prefixApplied: applied};
+  }
+  if (block.type === 'image') {
+    return {content: processImageBlock(block), prefixApplied};
+  }
+  return {content: null, prefixApplied};
+}
+
 export function buildClaudeContentBlocks(
   message: ContentBlock[],
   commandId: string | null
@@ -64,23 +79,15 @@ export function buildClaudeContentBlocks(
   const contentArray: ClaudeMessageContent[] = [];
 
   for (const block of message) {
-    if (block.type === 'text') {
-      const {text, prefixApplied: applied} = applyCommandPrefix(block.text, prefix, prefixApplied);
-      prefixApplied = applied;
-      const result = processTextBlock(text);
-      if (result) {
-        contentArray.push(result);
-      }
-    } else if (block.type === 'image') {
-      contentArray.push(processImageBlock(block));
+    const {content, prefixApplied: applied} = convertBlockToContent(block, prefix, prefixApplied);
+    prefixApplied = applied;
+    if (content) {
+      contentArray.push(content);
     }
   }
 
   if (contentArray.length === 0) {
-    contentArray.push({
-      type: 'text',
-      text: '請開始執行',
-    });
+    contentArray.push({type: 'text', text: '請開始執行'});
   }
 
   return contentArray;

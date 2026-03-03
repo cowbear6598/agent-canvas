@@ -180,11 +180,11 @@ export function calculatePastePositions(
     subAgentNotes,
     commandNotes
   }, {
-    outputStyleNote: n => n.boundToPodId,
-    skillNote: n => n.boundToPodId,
-    repositoryNote: n => n.boundToOriginalPodId,
-    subAgentNote: n => n.boundToPodId,
-    commandNote: n => n.boundToOriginalPodId
+    outputStyleNote: note => note.boundToPodId,
+    skillNote: note => note.boundToPodId,
+    repositoryNote: note => note.boundToOriginalPodId,
+    subAgentNote: note => note.boundToPodId,
+    commandNote: note => note.boundToOriginalPodId
   })
 
   const offset = calculateOffsets(boundingBox, targetPosition)
@@ -194,7 +194,7 @@ export function calculatePastePositions(
   const newOutputStyleNotes = transformNotes(
     outputStyleNotes,
     offset,
-    n => n.boundToPodId,
+    note => note.boundToPodId,
     (note, position) => ({
       outputStyleId: note.outputStyleId,
       name: note.name,
@@ -208,7 +208,7 @@ export function calculatePastePositions(
   const newSkillNotes = transformNotes(
     skillNotes,
     offset,
-    n => n.boundToPodId,
+    note => note.boundToPodId,
     (note, position) => ({
       skillId: note.skillId,
       name: note.name,
@@ -222,7 +222,7 @@ export function calculatePastePositions(
   const newRepositoryNotes = transformNotes(
     repositoryNotes,
     offset,
-    n => n.boundToOriginalPodId,
+    note => note.boundToOriginalPodId,
     (note, position) => ({
       repositoryId: note.repositoryId,
       name: note.name,
@@ -236,7 +236,7 @@ export function calculatePastePositions(
   const newSubAgentNotes = transformNotes(
     subAgentNotes,
     offset,
-    n => n.boundToPodId,
+    note => note.boundToPodId,
     (note, position) => ({
       subAgentId: note.subAgentId,
       name: note.name,
@@ -250,7 +250,7 @@ export function calculatePastePositions(
   const newCommandNotes = transformNotes(
     commandNotes,
     offset,
-    n => n.boundToOriginalPodId,
+    note => note.boundToOriginalPodId,
     (note, position) => ({
       commandId: note.commandId,
       name: note.name,

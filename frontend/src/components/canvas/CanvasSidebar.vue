@@ -242,7 +242,7 @@ const handleRename = async (canvasId: string): Promise<void> => {
 }
 
 const handleDelete = (canvasId: string): void => {
-  const canvas = canvasStore.canvases.find(c => c.id === canvasId)
+  const canvas = canvasStore.canvases.find(canvas => canvas.id === canvasId)
   if (!canvas) return
 
   deleteTargetId.value = canvasId

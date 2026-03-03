@@ -28,7 +28,7 @@ export function createNoteBindingActions<TItem>(config: NoteStoreConfig<TItem>):
 } {
     return {
         async bindToPod(this: NoteBindingStore, noteId: string, podId: string): Promise<void> {
-            const note = this.notes.find(n => n.id === noteId)
+            const note = this.notes.find(note => note.id === noteId)
             if (!note) return
 
             if (config.relationship === 'one-to-one') {

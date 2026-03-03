@@ -100,7 +100,7 @@ class SlackEventService {
         logger.log('Slack', 'Complete', `[SlackEventService] 注入 Slack 訊息至 Pod「${podName}」`);
 
         await executeStreamingChat(
-            {canvasId, podId, message: formattedText, supportAbort: false},
+            {canvasId, podId, message: formattedText, abortable: false},
             {
                 onComplete: async (completedCanvasId, completedPodId) => {
                     await this.processNextQueueMessage(completedCanvasId, completedPodId);

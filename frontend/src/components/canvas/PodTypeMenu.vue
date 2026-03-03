@@ -61,8 +61,6 @@ const handleOutsideMouseDown = (e: MouseEvent): void => {
   if (menuEl && !menuEl.contains(e.target as Node)) {
     podStore.hideTypeMenu()
 
-    // 左鍵：阻止事件傳播，防止觸發畫布的框選等操作
-    // 右鍵：不阻止，讓事件穿透到畫布以啟動拖曳平移
     if (e.button !== 2) {
       e.stopPropagation()
     }

@@ -2,8 +2,7 @@ const MAX_ERROR_LENGTH = 200
 
 const SENSITIVE_PATTERNS = [
   /[A-Za-z]:\\[\w\\.-]+/g,
-  // eslint-disable-next-line no-useless-escape
-  /\/[\w\/.-]+/g,
+  /\/[\w/.-]+/g,
   /[\w.-]+@[\w.-]+\.\w+/g,
   /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g,
   /[a-zA-Z0-9_-]{20,}/g,

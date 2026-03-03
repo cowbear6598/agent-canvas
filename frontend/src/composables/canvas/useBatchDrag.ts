@@ -1,5 +1,6 @@
 import { useCanvasContext } from './useCanvasContext'
 import { useDragHandler } from '@/composables/useDragHandler'
+import { MOUSE_BUTTON } from '@/lib/constants'
 
 type NoteStore = {
   notes: { id?: string; x: number; y: number; boundToPodId?: string | null }[]
@@ -21,6 +22,7 @@ interface BatchDragStores {
   repositoryStore: NoteStore
   subAgentStore: NoteStore
   commandStore: NoteStore
+  mcpServerStore: NoteStore
 }
 
 interface MovedElementSets {
@@ -30,49 +32,56 @@ interface MovedElementSets {
   movedRepositoryNoteIds: Set<string>
   movedSubAgentNoteIds: Set<string>
   movedCommandNoteIds: Set<string>
+  movedMcpServerNoteIds: Set<string>
 }
 
 function createStoreConfigMap(
   stores: BatchDragStores,
   movedSets: MovedElementSets
 ): Record<string, StoreConfigEntry> {
-  const { podStore, outputStyleStore, skillStore, repositoryStore, subAgentStore, commandStore } = stores
-  const { movedPodIds, movedOutputStyleNoteIds, movedSkillNoteIds, movedRepositoryNoteIds, movedSubAgentNoteIds, movedCommandNoteIds } = movedSets
+  const { podStore, outputStyleStore, skillStore, repositoryStore, subAgentStore, commandStore, mcpServerStore } = stores
+  const { movedPodIds, movedOutputStyleNoteIds, movedSkillNoteIds, movedRepositoryNoteIds, movedSubAgentNoteIds, movedCommandNoteIds, movedMcpServerNoteIds } = movedSets
   return {
     pod: {
       movedSet: movedPodIds,
       moveItem: (id: string, x: number, y: number) => podStore.movePod(id, x, y),
-      getItem: (id: string) => podStore.pods.find(p => p.id === id),
+      getItem: (id: string) => podStore.pods.find(pod => pod.id === id),
       isPod: true
     },
     outputStyleNote: {
       movedSet: movedOutputStyleNoteIds,
       moveItem: (id: string, x: number, y: number) => outputStyleStore.updateNotePositionLocal(id, x, y),
-      getItem: (id: string) => outputStyleStore.notes.find(n => n.id === id),
+      getItem: (id: string) => outputStyleStore.notes.find(note => note.id === id),
       isPod: false
     },
     skillNote: {
       movedSet: movedSkillNoteIds,
       moveItem: (id: string, x: number, y: number) => skillStore.updateNotePositionLocal(id, x, y),
-      getItem: (id: string) => skillStore.notes.find(n => n.id === id),
+      getItem: (id: string) => skillStore.notes.find(note => note.id === id),
       isPod: false
     },
     repositoryNote: {
       movedSet: movedRepositoryNoteIds,
       moveItem: (id: string, x: number, y: number) => repositoryStore.updateNotePositionLocal(id, x, y),
-      getItem: (id: string) => repositoryStore.notes.find(n => n.id === id),
+      getItem: (id: string) => repositoryStore.notes.find(note => note.id === id),
       isPod: false
     },
     subAgentNote: {
       movedSet: movedSubAgentNoteIds,
       moveItem: (id: string, x: number, y: number) => subAgentStore.updateNotePositionLocal(id, x, y),
-      getItem: (id: string) => subAgentStore.notes.find(n => n.id === id),
+      getItem: (id: string) => subAgentStore.notes.find(note => note.id === id),
       isPod: false
     },
     commandNote: {
       movedSet: movedCommandNoteIds,
       moveItem: (id: string, x: number, y: number) => commandStore.updateNotePositionLocal(id, x, y),
-      getItem: (id: string) => commandStore.notes.find(n => n.id === id),
+      getItem: (id: string) => commandStore.notes.find(note => note.id === id),
+      isPod: false
+    },
+    mcpServerNote: {
+      movedSet: movedMcpServerNoteIds,
+      moveItem: (id: string, x: number, y: number) => mcpServerStore.updateNotePositionLocal(id, x, y),
+      getItem: (id: string) => mcpServerStore.notes.find(note => note.id === id),
       isPod: false
     }
   }
@@ -83,7 +92,7 @@ export function useBatchDrag(): {
   startBatchDrag: (e: MouseEvent) => boolean
   isElementSelected: (type: 'pod' | 'outputStyleNote' | 'skillNote' | 'repositoryNote' | 'subAgentNote' | 'commandNote' | 'mcpServerNote', id: string) => boolean
 } {
-  const { podStore, viewportStore, selectionStore, outputStyleStore, skillStore, repositoryStore, subAgentStore, commandStore } = useCanvasContext()
+  const { podStore, viewportStore, selectionStore, outputStyleStore, skillStore, repositoryStore, subAgentStore, commandStore, mcpServerStore } = useCanvasContext()
 
   const dragState = {
     startX: 0,
@@ -94,6 +103,7 @@ export function useBatchDrag(): {
     movedRepositoryNotes: new Set<string>(),
     movedSubAgentNotes: new Set<string>(),
     movedCommandNotes: new Set<string>(),
+    movedMcpServerNotes: new Set<string>(),
   }
 
   const clearDragState = (): void => {
@@ -103,6 +113,7 @@ export function useBatchDrag(): {
     dragState.movedRepositoryNotes.clear()
     dragState.movedSubAgentNotes.clear()
     dragState.movedCommandNotes.clear()
+    dragState.movedMcpServerNotes.clear()
   }
 
   const noteMovedSets: { set: Set<string>; store: NoteStore }[] = [
@@ -111,6 +122,7 @@ export function useBatchDrag(): {
     { set: dragState.movedRepositoryNotes, store: repositoryStore },
     { set: dragState.movedSubAgentNotes, store: subAgentStore },
     { set: dragState.movedCommandNotes, store: commandStore },
+    { set: dragState.movedMcpServerNotes, store: mcpServerStore },
   ]
 
   const { isDragging: isBatchDragging, startDrag } = useDragHandler({
@@ -129,7 +141,7 @@ export function useBatchDrag(): {
   })
 
   const startBatchDrag = (e: MouseEvent): boolean => {
-    if (e.button !== 0) return false
+    if (e.button !== MOUSE_BUTTON.LEFT) return false
 
     if (!selectionStore.hasSelection) return false
 
@@ -156,7 +168,7 @@ export function useBatchDrag(): {
 
   const moveSelectedElements = (dx: number, dy: number): void => {
     const storeConfigMap = createStoreConfigMap(
-      { podStore, outputStyleStore, skillStore, repositoryStore, subAgentStore, commandStore },
+      { podStore, outputStyleStore, skillStore, repositoryStore, subAgentStore, commandStore, mcpServerStore },
       {
         movedPodIds: dragState.movedPods,
         movedOutputStyleNoteIds: dragState.movedOutputStyleNotes,
@@ -164,6 +176,7 @@ export function useBatchDrag(): {
         movedRepositoryNoteIds: dragState.movedRepositoryNotes,
         movedSubAgentNoteIds: dragState.movedSubAgentNotes,
         movedCommandNoteIds: dragState.movedCommandNotes,
+        movedMcpServerNoteIds: dragState.movedMcpServerNotes,
       }
     )
 
@@ -190,7 +203,7 @@ export function useBatchDrag(): {
     }
   ): Promise<void> => {
     for (const noteId of movedNoteIds) {
-      const note = store.notes.find(n => n.id === noteId)
+      const note = store.notes.find(note => note.id === noteId)
       if (note) {
         await store.updateNotePosition(noteId, note.x, note.y)
       }

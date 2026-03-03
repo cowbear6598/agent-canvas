@@ -9,11 +9,7 @@ import {logger} from '../utils/logger.js';
 import {withCanvasId} from '../utils/handlerHelpers.js';
 import {
     createPastedPods,
-    createPastedOutputStyleNotes,
-    createPastedSkillNotes,
-    createPastedRepositoryNotes,
-    createPastedSubAgentNotes,
-    createPastedCommandNotes,
+    createPastedNotesByType,
     createPastedConnections,
 } from './paste/pasteHelpers.js';
 import {podStore} from '../services/podStore.js';
@@ -28,23 +24,23 @@ export const handleCanvasPaste = withCanvasId<CanvasPastePayload>(
 
         const createdPods = await createPastedPods(canvasId, pods, podIdMapping, errors);
 
-        const outputStyleNotesResult = createPastedOutputStyleNotes(canvasId, outputStyleNotes, podIdMapping);
+        const outputStyleNotesResult = createPastedNotesByType('outputStyle', canvasId, outputStyleNotes, podIdMapping);
         const createdOutputStyleNotes = outputStyleNotesResult.notes;
         errors.push(...outputStyleNotesResult.errors);
 
-        const skillNotesResult = createPastedSkillNotes(canvasId, skillNotes, podIdMapping);
+        const skillNotesResult = createPastedNotesByType('skill', canvasId, skillNotes, podIdMapping);
         const createdSkillNotes = skillNotesResult.notes;
         errors.push(...skillNotesResult.errors);
 
-        const repositoryNotesResult = createPastedRepositoryNotes(canvasId, repositoryNotes, podIdMapping);
+        const repositoryNotesResult = createPastedNotesByType('repository', canvasId, repositoryNotes, podIdMapping);
         const createdRepositoryNotes = repositoryNotesResult.notes;
         errors.push(...repositoryNotesResult.errors);
 
-        const subAgentNotesResult = createPastedSubAgentNotes(canvasId, subAgentNotes, podIdMapping);
+        const subAgentNotesResult = createPastedNotesByType('subAgent', canvasId, subAgentNotes, podIdMapping);
         const createdSubAgentNotes = subAgentNotesResult.notes;
         errors.push(...subAgentNotesResult.errors);
 
-        const commandNotesResult = createPastedCommandNotes(canvasId, commandNotes ?? [], podIdMapping);
+        const commandNotesResult = createPastedNotesByType('command', canvasId, commandNotes ?? [], podIdMapping);
         const createdCommandNotes = commandNotesResult.notes;
         errors.push(...commandNotesResult.errors);
 

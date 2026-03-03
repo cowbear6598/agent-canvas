@@ -29,7 +29,7 @@ export interface StreamingChatExecutorOptions {
     canvasId: string;
     podId: string;
     message: string | ContentBlock[];
-    supportAbort: boolean;
+    abortable: boolean;
 }
 
 export interface StreamingChatExecutorCallbacks {
@@ -49,107 +49,107 @@ interface StreamContext {
     canvasId: string;
     podId: string;
     messageId: string;
-    accumulatedContentRef: {value: string};
+    contentBuffer: {value: string};
     subMessageState: ReturnType<typeof createSubMessageState>;
     flushCurrentSubMessage: () => void;
     persistStreamingMessage: () => void;
 }
 
+type TextStreamEvent = Extract<StreamEvent, {type: 'text'}>;
+type ToolUseStreamEvent = Extract<StreamEvent, {type: 'tool_use'}>;
+type ToolResultStreamEvent = Extract<StreamEvent, {type: 'tool_result'}>;
+type CompleteStreamEvent = Extract<StreamEvent, {type: 'complete'}>;
+type ErrorStreamEvent = Extract<StreamEvent, {type: 'error'}>;
+
+function handleTextEvent(event: TextStreamEvent, context: StreamContext): void {
+    const {canvasId, podId, messageId, contentBuffer, subMessageState, persistStreamingMessage} = context;
+
+    processTextEvent(event.content, contentBuffer, subMessageState);
+
+    const textPayload: PodChatMessagePayload = {
+        canvasId,
+        podId,
+        messageId,
+        content: contentBuffer.value,
+        isPartial: true,
+        role: 'assistant',
+    };
+    socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_CLAUDE_CHAT_MESSAGE, textPayload);
+
+    persistStreamingMessage();
+}
+
+function handleToolUseEvent(event: ToolUseStreamEvent, context: StreamContext): void {
+    const {canvasId, podId, messageId, subMessageState, flushCurrentSubMessage, persistStreamingMessage} = context;
+
+    processToolUseEvent(event.toolUseId, event.toolName, event.input, subMessageState, flushCurrentSubMessage);
+
+    const toolUsePayload: PodChatToolUsePayload = {
+        canvasId,
+        podId,
+        messageId,
+        toolUseId: event.toolUseId,
+        toolName: event.toolName,
+        input: event.input,
+    };
+    socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_CHAT_TOOL_USE, toolUsePayload);
+
+    persistStreamingMessage();
+}
+
+function handleToolResultEvent(event: ToolResultStreamEvent, context: StreamContext): void {
+    const {canvasId, podId, messageId, subMessageState, persistStreamingMessage} = context;
+
+    processToolResultEvent(event.toolUseId, event.output, subMessageState);
+
+    const toolResultPayload: PodChatToolResultPayload = {
+        canvasId,
+        podId,
+        messageId,
+        toolUseId: event.toolUseId,
+        toolName: event.toolName,
+        output: event.output,
+    };
+    socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_CHAT_TOOL_RESULT, toolResultPayload);
+
+    persistStreamingMessage();
+}
+
+function handleCompleteEvent(_event: CompleteStreamEvent, context: StreamContext): void {
+    const {canvasId, podId, messageId, contentBuffer, flushCurrentSubMessage} = context;
+
+    flushCurrentSubMessage();
+
+    const completePayload: PodChatCompletePayload = {
+        canvasId,
+        podId,
+        messageId,
+        fullContent: contentBuffer.value,
+    };
+    socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_CHAT_COMPLETE, completePayload);
+}
+
+function handleErrorEvent(_event: ErrorStreamEvent, context: StreamContext): void {
+    const {canvasId, podId} = context;
+    logger.error('Chat', 'Error', `Pod ${podStore.getById(canvasId, podId)?.name ?? podId} streaming 過程發生錯誤`);
+}
+
+type StreamEventHandlerMap = {
+    [K in StreamEvent['type']]: (event: Extract<StreamEvent, {type: K}>, context: StreamContext) => void;
+};
+
+const streamEventHandlers: StreamEventHandlerMap = {
+    text: handleTextEvent,
+    tool_use: handleToolUseEvent,
+    tool_result: handleToolResultEvent,
+    complete: handleCompleteEvent,
+    error: handleErrorEvent,
+};
+
 function createStreamingCallback(context: StreamContext): (event: StreamEvent) => void {
-    const {canvasId, podId, messageId, accumulatedContentRef, subMessageState, flushCurrentSubMessage, persistStreamingMessage} = context;
     return (event: StreamEvent) => {
-        switch (event.type) {
-            case 'text': {
-                processTextEvent(event.content, accumulatedContentRef, subMessageState);
-
-                const textPayload: PodChatMessagePayload = {
-                    canvasId,
-                    podId,
-                    messageId,
-                    content: accumulatedContentRef.value,
-                    isPartial: true,
-                    role: 'assistant',
-                };
-                socketService.emitToCanvas(
-                    canvasId,
-                    WebSocketResponseEvents.POD_CLAUDE_CHAT_MESSAGE,
-                    textPayload
-                );
-
-                persistStreamingMessage();
-                break;
-            }
-
-            case 'tool_use': {
-                processToolUseEvent(
-                    event.toolUseId,
-                    event.toolName,
-                    event.input,
-                    subMessageState,
-                    flushCurrentSubMessage
-                );
-
-                const toolUsePayload: PodChatToolUsePayload = {
-                    canvasId,
-                    podId,
-                    messageId,
-                    toolUseId: event.toolUseId,
-                    toolName: event.toolName,
-                    input: event.input,
-                };
-                socketService.emitToCanvas(
-                    canvasId,
-                    WebSocketResponseEvents.POD_CHAT_TOOL_USE,
-                    toolUsePayload
-                );
-
-                persistStreamingMessage();
-                break;
-            }
-
-            case 'tool_result': {
-                processToolResultEvent(event.toolUseId, event.output, subMessageState);
-
-                const toolResultPayload: PodChatToolResultPayload = {
-                    canvasId,
-                    podId,
-                    messageId,
-                    toolUseId: event.toolUseId,
-                    toolName: event.toolName,
-                    output: event.output,
-                };
-                socketService.emitToCanvas(
-                    canvasId,
-                    WebSocketResponseEvents.POD_CHAT_TOOL_RESULT,
-                    toolResultPayload
-                );
-
-                persistStreamingMessage();
-                break;
-            }
-
-            case 'complete': {
-                flushCurrentSubMessage();
-
-                const completePayload: PodChatCompletePayload = {
-                    canvasId,
-                    podId,
-                    messageId,
-                    fullContent: accumulatedContentRef.value,
-                };
-                socketService.emitToCanvas(
-                    canvasId,
-                    WebSocketResponseEvents.POD_CHAT_COMPLETE,
-                    completePayload
-                );
-                break;
-            }
-
-            case 'error': {
-                logger.error('Chat', 'Error', `Pod ${podStore.getById(canvasId, podId)?.name ?? podId} streaming 過程發生錯誤`);
-                break;
-            }
-        }
+        const handler = streamEventHandlers[event.type] as (event: StreamEvent, context: StreamContext) => void;
+        handler(event, context);
     };
 }
 
@@ -157,11 +157,11 @@ async function handleStreamAbort(
     context: StreamContext,
     callbacks?: StreamingChatExecutorCallbacks
 ): Promise<StreamingChatExecutorResult> {
-    const {canvasId, podId, messageId, accumulatedContentRef, subMessageState, flushCurrentSubMessage, persistStreamingMessage} = context;
+    const {canvasId, podId, messageId, contentBuffer, subMessageState, flushCurrentSubMessage, persistStreamingMessage} = context;
 
     flushCurrentSubMessage();
 
-    const hasAssistantContent = accumulatedContentRef.value || subMessageState.subMessages.length > 0;
+    const hasAssistantContent = contentBuffer.value || subMessageState.subMessages.length > 0;
     if (hasAssistantContent) {
         persistStreamingMessage();
         await messageStore.flushWrites(podId);
@@ -175,7 +175,7 @@ async function handleStreamAbort(
 
     return {
         messageId,
-        content: accumulatedContentRef.value,
+        content: contentBuffer.value,
         hasContent: !!hasAssistantContent,
         aborted: true,
     };
@@ -201,15 +201,15 @@ export async function executeStreamingChat(
     options: StreamingChatExecutorOptions,
     callbacks?: StreamingChatExecutorCallbacks
 ): Promise<StreamingChatExecutorResult> {
-    const {canvasId, podId, message, supportAbort} = options;
+    const {canvasId, podId, message, abortable} = options;
 
     const messageId = uuidv4();
-    const accumulatedContentRef = {value: ''};
+    const contentBuffer = {value: ''};
     const subMessageState = createSubMessageState();
     const flushCurrentSubMessage = createSubMessageAccumulator(messageId, subMessageState);
 
     const persistStreamingMessage = (): void => {
-        const persistedMsg = buildPersistedMessage(messageId, accumulatedContentRef.value, subMessageState);
+        const persistedMsg = buildPersistedMessage(messageId, contentBuffer.value, subMessageState);
         messageStore.upsertMessage(canvasId, podId, persistedMsg);
     };
 
@@ -217,7 +217,7 @@ export async function executeStreamingChat(
         canvasId,
         podId,
         messageId,
-        accumulatedContentRef,
+        contentBuffer,
         subMessageState,
         flushCurrentSubMessage,
         persistStreamingMessage,
@@ -228,7 +228,7 @@ export async function executeStreamingChat(
     try {
         await claudeService.sendMessage(podId, message, streamingCallback);
 
-        const hasAssistantContent = accumulatedContentRef.value || subMessageState.subMessages.length > 0;
+        const hasAssistantContent = contentBuffer.value || subMessageState.subMessages.length > 0;
         if (hasAssistantContent) {
             persistStreamingMessage();
         }
@@ -249,12 +249,12 @@ export async function executeStreamingChat(
 
         return {
             messageId,
-            content: accumulatedContentRef.value,
+            content: contentBuffer.value,
             hasContent: !!hasAssistantContent,
             aborted: false,
         };
     } catch (error) {
-        if (isAbortError(error) && supportAbort) {
+        if (isAbortError(error) && abortable) {
             return handleStreamAbort(streamContext, callbacks);
         }
 

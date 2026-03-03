@@ -1,5 +1,7 @@
 import type { Ref } from 'vue'
 
+const NOTE_SNAP_BACK_ANIMATION_MS = 300
+
 interface Note {
   x: number
   y: number
@@ -52,7 +54,7 @@ export function useNoteEventHandlers(options: NoteEventHandlerOptions): {
     await store.updateNotePosition(noteId, startX, startY)
     setTimeout(() => {
       store.setNoteAnimating(noteId, false)
-    }, 300)
+    }, NOTE_SNAP_BACK_ANIMATION_MS)
   }
 
   const handleDragComplete = async (data: { noteId: string; isOverTrash: boolean; startX: number; startY: number }): Promise<void> => {

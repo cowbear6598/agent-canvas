@@ -18,6 +18,7 @@ import type {
     PodOpenDirectoryPayload,
 } from '../schemas';
 import type {Pod} from '../types';
+import type {ScheduleConfig} from '../types';
 import {podStore} from '../services/podStore.js';
 import {createPodWithWorkspace, deletePodWithCleanup} from '../services/podService.js';
 import {socketService} from '../services/socketService.js';
@@ -45,7 +46,7 @@ export const handlePodCreate = withCanvasId<PodCreatePayload>(
             return;
         }
 
-        logger.log('Pod', 'Create', `已建立 Pod「${result.data!.pod.name}」`);
+        logger.log('Pod', 'Create', `已建立 Pod「${result.data.pod.name}」`);
     }
 );
 
@@ -195,7 +196,7 @@ export const handlePodSetModel = withCanvasId<PodSetModelPayload>(
 function buildScheduleUpdates(
     schedule: NonNullable<PodSetSchedulePayload['schedule']> | null,
     existingSchedule: Pod['schedule']
-): Record<string, unknown> {
+): { schedule?: ScheduleConfig | null } {
     if (schedule === null) {
         return {schedule: null};
     }

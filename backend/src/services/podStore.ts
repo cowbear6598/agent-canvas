@@ -234,6 +234,10 @@ class PodStore {
         this.modifyPod(canvasId, id, {claudeSessionId: sessionId}, true, sessionId);
     }
 
+    resetClaudeSession(canvasId: string, podId: string): void {
+        this.setClaudeSessionId(canvasId, podId, '');
+    }
+
     setOutputStyleId(canvasId: string, id: string, outputStyleId: string | null): void {
         this.modifyPod(canvasId, id, {outputStyleId});
     }
@@ -469,7 +473,7 @@ class PodStore {
             return err('載入 Pod 資料失敗');
         }
 
-        const podIds = result.data!;
+        const podIds = result.data;
         const pods = this.getCanvasPods(canvasId);
 
         for (const podId of podIds) {

@@ -183,7 +183,7 @@ const readFileAsDataURL = (file: File): Promise<string> => {
 const insertImageAtCursor = async (file: File): Promise<void> => {
   if (file.size > MAX_IMAGE_SIZE_BYTES) {
     toast({title: '圖片大小超過 5MB 限制'})
-    throw new Error('圖片大小超過限制')
+    return
   }
 
   if (!isValidImageType(file.type)) {
@@ -191,7 +191,7 @@ const insertImageAtCursor = async (file: File): Promise<void> => {
       title: '不支援的圖片格式',
       description: '僅支援 JPEG/PNG/GIF/WebP',
     })
-    throw new Error('不支援的圖片格式')
+    return
   }
 
   let result: string
@@ -199,16 +199,18 @@ const insertImageAtCursor = async (file: File): Promise<void> => {
     result = await readFileAsDataURL(file)
   } catch {
     toast({title: '圖片讀取失敗'})
-    throw new Error('圖片讀取失敗')
+    return
   }
 
   if (!/^data:image\/(jpeg|png|gif|webp);base64,/.test(result)) {
-    throw new Error('DataURL 格式無效')
+    toast({title: '圖片格式無效'})
+    return
   }
 
   const base64Data = result.split(',')[1]
   if (!base64Data) {
-    throw new Error('Base64 資料無效')
+    toast({title: '圖片資料無效'})
+    return
   }
 
   const imageAtom = createImageAtom(file.type as ImageMediaType, base64Data)
@@ -225,11 +227,7 @@ const handlePaste = async (e: ClipboardEvent): Promise<void> => {
 
   if (imageFile) {
     e.preventDefault()
-    try {
-      await insertImageAtCursor(imageFile)
-    } catch {
-      // insertImageAtCursor 內部已透過 toast 提示錯誤，此處無需額外處理
-    }
+    await insertImageAtCursor(imageFile)
     return
   }
 
@@ -268,11 +266,7 @@ const handleDrop = async (e: DragEvent): Promise<void> => {
   const fileToInsert = imageFiles[0]
   if (!fileToInsert) return
 
-  try {
-    await insertImageAtCursor(fileToInsert)
-  } catch {
-    // insertImageAtCursor 內部已透過 toast 提示錯誤，此處無需額外處理
-  }
+  await insertImageAtCursor(fileToInsert)
 }
 
 const flushTextToBlocks = (blocks: ContentBlock[], currentText: string[]): void => {
@@ -337,7 +331,6 @@ const extractTextFromBlocks = (blocks: ContentBlock[]): string => {
 const clearInput = (): void => {
   input.value = ''
   if (editableRef.value) {
-    // 顯式釋放圖片資料，避免等待 GC
     editableRef.value.querySelectorAll<HTMLElement>('[data-type="image"]').forEach(el => {
       imageDataMap.delete(el)
     })
@@ -381,7 +374,6 @@ const deleteImageAtom = (element: HTMLElement): void => {
   editableRef.value?.dispatchEvent(new Event('input', {bubbles: true}))
 }
 
-// Ctrl/Shift+Enter 保留多行輸入能力，避免誤觸送出
 const handleEnterKey = (e: KeyboardEvent): void => {
   if (e.ctrlKey || e.shiftKey) {
     e.preventDefault()
@@ -400,7 +392,6 @@ const handleEnterKey = (e: KeyboardEvent): void => {
     return
   }
   e.preventDefault()
-  // AI 回應中不允許 Enter 送出，避免誤觸暫停
   if (props.isTyping) return
   if (props.disabled) return
   handleSend()

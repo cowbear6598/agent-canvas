@@ -1,21 +1,19 @@
 import { WebSocketResponseEvents, GroupCreatePayload, GroupListPayload, GroupDeletePayload } from '../schemas';
 import { groupStore } from '../services/groupStore.js';
 import { GroupType, GROUP_TYPES } from '../types';
-import { emitError, sendSuccessResponse } from '../utils/websocketResponse.js';
+import { emitError, emitSuccess } from '../utils/websocketResponse.js';
 import { socketService } from '../services/socketService.js';
 
 export async function handleGroupCreate(connectionId: string, payload: GroupCreatePayload, requestId: string): Promise<void> {
   const { canvasId, name, type } = payload;
 
-  const groupType = type as GroupType;
-
-  const exists = await groupStore.exists(name, groupType);
+  const exists = await groupStore.exists(name, type);
   if (exists) {
     emitError(connectionId, WebSocketResponseEvents.GROUP_CREATED, 'Group 名稱已存在', requestId, undefined, 'ALREADY_EXISTS');
     return;
   }
 
-  const group = await groupStore.create(name, groupType);
+  const group = await groupStore.create(name, type);
 
   socketService.emitToCanvas(canvasId, WebSocketResponseEvents.GROUP_CREATED, {
     requestId,
@@ -27,10 +25,11 @@ export async function handleGroupCreate(connectionId: string, payload: GroupCrea
 export async function handleGroupList(connectionId: string, payload: GroupListPayload, requestId: string): Promise<void> {
   const { type } = payload;
 
-  const groupType = type as GroupType;
-  const groups = await groupStore.list(groupType);
+  const groups = await groupStore.list(type);
 
-  sendSuccessResponse(connectionId, WebSocketResponseEvents.GROUP_LIST_RESULT, requestId, {
+  emitSuccess(connectionId, WebSocketResponseEvents.GROUP_LIST_RESULT, {
+    requestId,
+    success: true,
     groups,
   });
 }

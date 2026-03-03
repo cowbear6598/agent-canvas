@@ -122,7 +122,7 @@ class WorkflowClearService {
       logger.error('AutoClear', 'Error', `[WorkflowClear] 清除 Pod ${podId} 的聊天紀錄時發生錯誤：${clearResult.error}`);
     }
 
-    podStore.setClaudeSessionId(canvasId, podId, '');
+    podStore.resetClaudeSession(canvasId, podId);
 
     const clearedConnectionIds = this.clearAiDecideConnections(canvasId, podId);
 

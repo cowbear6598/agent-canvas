@@ -64,7 +64,7 @@ export const handleChatSend = withCanvasId<ChatSendPayload>(
         );
 
         await executeStreamingChat(
-            {canvasId, podId, message, supportAbort: true},
+            {canvasId, podId, message, abortable: true},
             {
                 onComplete: async (canvasId, podId) => {
                     fireAndForget(

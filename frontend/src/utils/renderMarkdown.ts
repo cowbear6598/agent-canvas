@@ -9,10 +9,8 @@ const MARKED_OPTIONS: MarkedOptions = {
   gfm: true,
 }
 
-// 允許的 URI scheme 白名單，禁止 javascript: 和 data:
 const ALLOWED_URI_REGEXP = /^(?:(?:(?:f|ht)tps?|mailto|tel):|[^a-z]|[a-z+.-]+(?:[^a-z+.:-]|$))/i
 
-// DOMPurify 安全設定 — 嚴格白名單，不依賴預設行為
 const DOMPURIFY_CONFIG: DOMPurifyConfig = {
   ALLOWED_TAGS: [
     'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
@@ -28,7 +26,6 @@ const DOMPURIFY_CONFIG: DOMPurifyConfig = {
   ALLOWED_URI_REGEXP,
 }
 
-// 為所有連結加上安全屬性，防止開啟惡意頁面
 DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   if (node.tagName === 'A') {
     node.setAttribute('target', '_blank')
