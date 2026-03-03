@@ -97,6 +97,10 @@ interface ResourceDeleteConfig {
 	idFieldName?: string;
 }
 
+export function getPodDisplayName(canvasId: string, podId: string): string {
+	return podStore.getById(canvasId, podId)?.name ?? podId;
+}
+
 export function emitPodUpdated(canvasId: string, podId: string, requestId: string, event: WebSocketResponseEvents): void {
 	const updatedPod = podStore.getById(canvasId, podId);
 	socketService.emitToCanvas(canvasId, event, {

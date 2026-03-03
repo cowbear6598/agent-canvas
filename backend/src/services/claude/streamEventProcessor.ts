@@ -32,11 +32,11 @@ export function createSubMessageAccumulator(messageId: string, state: SubMessage
 
 export function processTextEvent(
     content: string,
-    accumulatedContentRef: {value: string},
+    accumulatedContent: string,
     state: SubMessageState
-): void {
-    accumulatedContentRef.value += content;
+): string {
     state.currentSubContent += content;
+    return accumulatedContent + content;
 }
 
 export function processToolUseEvent(

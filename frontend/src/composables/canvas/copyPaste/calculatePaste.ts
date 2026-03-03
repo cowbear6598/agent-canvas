@@ -65,22 +65,23 @@ export function calculateBoundingBox<
     updateBoundingBox(bounds, pod.x, pod.y, POD_WIDTH, POD_HEIGHT)
   }
 
-  const processUnboundNotes = <TNote extends { x: number; y: number }>(
-    noteList: TNote[],
-    getBoundKey: (n: TNote) => string | null
-  ): void => {
+  type UnboundNoteEntry = { noteList: { x: number; y: number }[]; getBoundKey: (n: { x: number; y: number }) => string | null }
+
+  const noteStoreConfigs: UnboundNoteEntry[] = [
+    { noteList: notes.outputStyleNotes as { x: number; y: number }[], getBoundKey: getBoundKeys.outputStyleNote as (n: { x: number; y: number }) => string | null },
+    { noteList: notes.skillNotes as { x: number; y: number }[], getBoundKey: getBoundKeys.skillNote as (n: { x: number; y: number }) => string | null },
+    { noteList: notes.repositoryNotes as { x: number; y: number }[], getBoundKey: getBoundKeys.repositoryNote as (n: { x: number; y: number }) => string | null },
+    { noteList: notes.subAgentNotes as { x: number; y: number }[], getBoundKey: getBoundKeys.subAgentNote as (n: { x: number; y: number }) => string | null },
+    { noteList: notes.commandNotes as { x: number; y: number }[], getBoundKey: getBoundKeys.commandNote as (n: { x: number; y: number }) => string | null },
+  ]
+
+  for (const { noteList, getBoundKey } of noteStoreConfigs) {
     for (const note of noteList) {
       if (getBoundKey(note) === null) {
         updateBoundingBox(bounds, note.x, note.y, NOTE_WIDTH, NOTE_HEIGHT)
       }
     }
   }
-
-  processUnboundNotes(notes.outputStyleNotes, getBoundKeys.outputStyleNote)
-  processUnboundNotes(notes.skillNotes, getBoundKeys.skillNote)
-  processUnboundNotes(notes.repositoryNotes, getBoundKeys.repositoryNote)
-  processUnboundNotes(notes.subAgentNotes, getBoundKeys.subAgentNote)
-  processUnboundNotes(notes.commandNotes, getBoundKeys.commandNote)
 
   return bounds
 }

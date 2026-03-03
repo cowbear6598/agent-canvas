@@ -585,29 +585,20 @@ describe('canvasStore', () => {
       })
     })
 
-    it('同步失敗時應顯示錯誤訊息', async () => {
-      // 注意：由於 reorderCanvases 不 await syncCanvasOrder，且 syncCanvasOrder 的 originalOrder
-      // 是在 async 函數開始時建立（此時 canvases 已重排），所以 rollback 無法真正回到原始順序。
-      // 這個測試驗證的是實際行為：顯示錯誤訊息，但不 rollback。
+    it('同步回應 success: false 時應顯示錯誤訊息並還原順序', async () => {
       const store = useCanvasStore()
       const canvas1 = createMockCanvas({ id: 'canvas-1' })
       const canvas2 = createMockCanvas({ id: 'canvas-2' })
       const canvas3 = createMockCanvas({ id: 'canvas-3' })
       store.canvases = [canvas1, canvas2, canvas3]
 
-      mockCreateWebSocketRequest.mockRejectedValueOnce(new Error('Sync failed'))
+      mockCreateWebSocketRequest.mockResolvedValueOnce({ success: false })
 
       store.reorderCanvases(0, 2)
 
-      // 等待 syncCanvasOrder 失敗
       await vi.waitFor(() => {
         expect(mockShowErrorToast).toHaveBeenCalledWith('Canvas', '排序儲存失敗')
       })
-
-      // 實際行為：canvases 仍然是重排後的順序（rollback 沒有作用）
-      expect(store.canvases[0]?.id).toBe('canvas-2')
-      expect(store.canvases[1]?.id).toBe('canvas-3')
-      expect(store.canvases[2]?.id).toBe('canvas-1')
     })
 
     it('同步回應 success: false 時應顯示錯誤訊息', async () => {

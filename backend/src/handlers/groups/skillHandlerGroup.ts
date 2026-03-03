@@ -16,7 +16,7 @@ import {
   handleSkillDelete,
   handleSkillImport,
 } from '../skillHandlers.js';
-import { createHandlerGroup } from './createHandlerGroup.js';
+import { createHandlerGroup, createNoteHandlerGroupEntries } from './createHandlerGroup.js';
 
 export const skillHandlerGroup = createHandlerGroup({
   name: 'skill',
@@ -27,30 +27,20 @@ export const skillHandlerGroup = createHandlerGroup({
       schema: skillListSchema,
       responseEvent: WebSocketResponseEvents.SKILL_LIST_RESULT,
     },
-    {
-      event: WebSocketRequestEvents.SKILL_NOTE_CREATE,
-      handler: skillNoteHandlers.handleNoteCreate,
-      schema: skillNoteCreateSchema,
-      responseEvent: WebSocketResponseEvents.SKILL_NOTE_CREATED,
-    },
-    {
-      event: WebSocketRequestEvents.SKILL_NOTE_LIST,
-      handler: skillNoteHandlers.handleNoteList,
-      schema: skillNoteListSchema,
-      responseEvent: WebSocketResponseEvents.SKILL_NOTE_LIST_RESULT,
-    },
-    {
-      event: WebSocketRequestEvents.SKILL_NOTE_UPDATE,
-      handler: skillNoteHandlers.handleNoteUpdate,
-      schema: skillNoteUpdateSchema,
-      responseEvent: WebSocketResponseEvents.SKILL_NOTE_UPDATED,
-    },
-    {
-      event: WebSocketRequestEvents.SKILL_NOTE_DELETE,
-      handler: skillNoteHandlers.handleNoteDelete,
-      schema: skillNoteDeleteSchema,
-      responseEvent: WebSocketResponseEvents.SKILL_NOTE_DELETED,
-    },
+    ...createNoteHandlerGroupEntries(
+      skillNoteHandlers,
+      { create: skillNoteCreateSchema, list: skillNoteListSchema, update: skillNoteUpdateSchema, delete: skillNoteDeleteSchema },
+      {
+        create: WebSocketRequestEvents.SKILL_NOTE_CREATE,
+        list: WebSocketRequestEvents.SKILL_NOTE_LIST,
+        update: WebSocketRequestEvents.SKILL_NOTE_UPDATE,
+        delete: WebSocketRequestEvents.SKILL_NOTE_DELETE,
+        created: WebSocketResponseEvents.SKILL_NOTE_CREATED,
+        listResult: WebSocketResponseEvents.SKILL_NOTE_LIST_RESULT,
+        updated: WebSocketResponseEvents.SKILL_NOTE_UPDATED,
+        deleted: WebSocketResponseEvents.SKILL_NOTE_DELETED,
+      }
+    ),
     {
       event: WebSocketRequestEvents.POD_BIND_SKILL,
       handler: handlePodBindSkill,

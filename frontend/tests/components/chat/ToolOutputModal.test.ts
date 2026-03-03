@@ -1,10 +1,11 @@
 import { describe, it, expect, vi } from 'vitest'
+import { nextTick } from 'vue'
 import { mount } from '@vue/test-utils'
 import ToolOutputModal from '@/components/chat/ToolOutputModal.vue'
 import type { ToolUseStatus } from '@/types/chat'
 
 vi.mock('@/utils/renderMarkdown', () => ({
-  renderMarkdown: (raw: string | undefined) => {
+  renderMarkdown: async (raw: string | undefined) => {
     if (!raw || raw.trim().length === 0) return ''
     return `<p>${raw}</p>`
   },
@@ -84,7 +85,7 @@ describe('ToolOutputModal', () => {
     expect(title.text()).toContain('執行結果')
   })
 
-  it('應該以 Markdown 渲染 output 內容', () => {
+  it('應該以 Markdown 渲染 output 內容', async () => {
     const wrapper = mountModal({
       open: true,
       toolName: 'Bash',
@@ -92,6 +93,9 @@ describe('ToolOutputModal', () => {
       output: 'ls -la 輸出結果',
       status: 'completed',
     })
+
+    await nextTick()
+    await nextTick()
 
     const html = wrapper.html()
     expect(html).toContain('ls -la 輸出結果')

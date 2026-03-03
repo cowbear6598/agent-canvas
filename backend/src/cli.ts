@@ -374,12 +374,14 @@ export function handleLogs(flags: Record<string, string | boolean>, logFile = LO
 	const requestedLineCount = Number(requestedLineCountStr);
 	const lines = Math.min(Number.isInteger(requestedLineCount) && requestedLineCount > 0 ? requestedLineCount : 50, MAX_LOG_LINES);
 
-	if (!fs.existsSync(logFile)) {
+	let fileSize: number;
+	try {
+		fileSize = fs.statSync(logFile).size;
+	} catch {
 		console.log('尚無日誌檔案，請先啟動服務');
 		process.exit(0);
+		return;
 	}
-
-	const fileSize = fs.statSync(logFile).size;
 	const readBytes = Math.min(fileSize, MAX_LOG_READ_BYTES);
 	const buffer = Buffer.alloc(readBytes);
 	const fd = fs.openSync(logFile, 'r');

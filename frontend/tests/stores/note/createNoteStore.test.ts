@@ -993,7 +993,7 @@ describe('createNoteStore', () => {
       expect(mockCreateWebSocketRequest).not.toHaveBeenCalled()
     })
 
-    it('拋出 Error 物件時應呼叫 showErrorToast 並帶入 error.message', async () => {
+    it('WebSocket 回傳失敗時靜默失敗，不顯示 Toast，項目保持不變', async () => {
       const canvasStore = useCanvasStore()
       canvasStore.activeCanvasId = 'canvas-1'
       const config = createTestConfig()
@@ -1001,14 +1001,15 @@ describe('createNoteStore', () => {
       const item: TestItem = { id: 'item-1', name: 'Item 1' }
       store.availableItems = [item] as unknown[]
 
-      const error = new Error('刪除時發生錯誤')
-      mockCreateWebSocketRequest.mockImplementationOnce(() => { throw error })
+      mockCreateWebSocketRequest.mockResolvedValueOnce({ success: false })
 
-      await expect(store.deleteItem('item-1')).rejects.toThrow('刪除時發生錯誤')
-      expect(mockShowErrorToast).toHaveBeenCalledWith(expect.any(String), '刪除失敗', '刪除時發生錯誤')
+      await store.deleteItem('item-1')
+
+      expect(mockShowErrorToast).not.toHaveBeenCalled()
+      expect(store.availableItems).toHaveLength(1)
     })
 
-    it('拋出非 Error 物件時應呼叫 showErrorToast 並帶入 未知錯誤', async () => {
+    it('WebSocket 回傳 null 時靜默失敗，項目保持不變', async () => {
       const canvasStore = useCanvasStore()
       canvasStore.activeCanvasId = 'canvas-1'
       const config = createTestConfig()
@@ -1016,10 +1017,12 @@ describe('createNoteStore', () => {
       const item: TestItem = { id: 'item-1', name: 'Item 1' }
       store.availableItems = [item] as unknown[]
 
-      mockCreateWebSocketRequest.mockImplementationOnce(() => { throw 'unknown' })
+      mockCreateWebSocketRequest.mockResolvedValueOnce(null)
 
-      await expect(store.deleteItem('item-1')).rejects.toBe('unknown')
-      expect(mockShowErrorToast).toHaveBeenCalledWith(expect.any(String), '刪除失敗', '未知錯誤')
+      await store.deleteItem('item-1')
+
+      expect(mockShowErrorToast).not.toHaveBeenCalled()
+      expect(store.availableItems).toHaveLength(1)
     })
   })
 

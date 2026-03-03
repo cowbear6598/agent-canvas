@@ -10,6 +10,7 @@ import {createNotePositionActions} from './notePositionActions'
 import {createResourceCRUDActions} from './createResourceCRUDActions'
 import type {CRUDEventsConfig, CRUDPayloadConfig} from './createResourceCRUDActions'
 import type {ToastCategory} from '@/composables/useToast'
+import {capitalize} from '@/lib/utils'
 
 const STORE_TO_CATEGORY_MAP: Record<string, string> = {
     'skill': 'Skill',
@@ -20,16 +21,12 @@ const STORE_TO_CATEGORY_MAP: Record<string, string> = {
     'mcpServer': 'McpServer'
 }
 
-function extractErrorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : '未知錯誤'
+function findItemById<T extends { id: string }>(items: T[], itemId: string): T | undefined {
+    return items.find(item => item.id === itemId)
 }
 
-function findItemById(items: unknown[], itemId: string): Record<string, unknown> | undefined {
-    return items.find(candidate => (candidate as Record<string, unknown>).id === itemId) as Record<string, unknown> | undefined
-}
-
-function getItemName(item: unknown): string | undefined {
-    return (item as Record<string, unknown>)?.name as string | undefined
+function getItemName<T extends { name?: string }>(item: T): string | undefined {
+    return item.name
 }
 
 interface NoteItem extends BaseNote {
@@ -103,8 +100,8 @@ function buildNoteRequest(
     canvasId: string,
     context: RebuildNotesStoreContext
 ): Promise<void> {
-    const item = findItemById(context.availableItems, itemId)
-    const itemName = getItemName(item) ?? itemId
+    const item = findItemById(context.availableItems as { id: string; name?: string }[], itemId)
+    const itemName = getItemName(item ?? {}) ?? itemId
 
     return createWebSocketRequest<BasePayload, Record<string, unknown>>({
         requestEvent: config.requestEvent,
@@ -143,8 +140,6 @@ export async function rebuildNotesFromPods(
 }
 
 interface BaseNoteState {
-    // Pinia state 不支援泛型參數，使用 unknown[] 作為型別擦除邊界。
-    // 型別安全由 getter typedAvailableItems（回傳 TItem[]）保障。
     availableItems: unknown[]
     notes: NoteItem[]
     isLoading: boolean
@@ -169,7 +164,6 @@ export interface NoteStoreContext<TItem = unknown> extends BaseNoteState {
     getNotesByPodId(podId: string): NoteItem[]
 }
 
-// 此函數的回傳型別由 TypeScript 自動推斷，手動標註會抹除泛型資訊（見 Pinia defineStore 重載限制）
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function createNoteStore<TItem, TNote extends BaseNote, TCustomActions extends object = object>(
     config: NoteStoreConfig<TItem, TCustomActions>
@@ -376,39 +370,33 @@ export function createNoteStore<TItem, TNote extends BaseNote, TCustomActions ex
 
                 const {deleteItem} = useDeleteItem()
                 const canvasId = requireActiveCanvas()
-                const {showSuccessToast, showErrorToast} = useToast()
+                const {showSuccessToast} = useToast()
 
                 const item = this.availableItems.find(candidate => getItemId(candidate as TItem) === itemId)
                 const itemName = item ? getItemName(item as TItem) : undefined
                 const category = (STORE_TO_CATEGORY_MAP[config.storeName] || 'Note') as 'Skill' | 'Repository' | 'SubAgent' | 'Command' | 'OutputStyle' | 'Note'
 
-                const removeItemFromState = (res: BaseResponse): void => {
-                    const index = this.availableItems.findIndex(i => getItemId(i as TItem) === itemId)
-                    if (index !== -1) {
-                        this.availableItems.splice(index, 1)
-                    }
-                    if (res.deletedNoteIds) {
-                        const deletedIds = res.deletedNoteIds as string[]
-                        this.notes.splice(0, this.notes.length, ...this.notes.filter(note => !deletedIds.includes(note.id)))
-                    }
-                    showSuccessToast(category, '刪除成功', itemName)
-                }
+                const response = await deleteItem<Record<string, unknown>, BaseResponse>({
+                    requestEvent: config.deleteItemEvents.request,
+                    responseEvent: config.deleteItemEvents.response,
+                    payload: {
+                        canvasId,
+                        [config.itemIdField]: itemId
+                    },
+                    errorMessage: '刪除項目失敗',
+                })
 
-                try {
-                    await deleteItem<Record<string, unknown>, BaseResponse>({
-                        requestEvent: config.deleteItemEvents.request,
-                        responseEvent: config.deleteItemEvents.response,
-                        payload: {
-                            canvasId,
-                            [config.itemIdField]: itemId
-                        },
-                        errorMessage: '刪除項目失敗',
-                        onSuccess: removeItemFromState
-                    })
-                } catch (error) {
-                    showErrorToast(category, '刪除失敗', extractErrorMessage(error))
-                    throw error
+                if (!response) return
+
+                const index = this.availableItems.findIndex(i => getItemId(i as TItem) === itemId)
+                if (index !== -1) {
+                    this.availableItems.splice(index, 1)
                 }
+                if (response.deletedNoteIds) {
+                    const deletedIds = response.deletedNoteIds as string[]
+                    this.notes.splice(0, this.notes.length, ...this.notes.filter(note => !deletedIds.includes(note.id)))
+                }
+                showSuccessToast(category, '刪除成功', itemName)
             },
 
             addNoteFromEvent(note: TNote): void {
@@ -471,9 +459,9 @@ export function createNoteStore<TItem, TNote extends BaseNote, TCustomActions ex
             },
 
             updateItemGroupId(itemId: string, groupId: string | null): void {
-                const item = this.availableItems.find(candidate => getItemId(candidate as TItem) === itemId)
+                const item = this.availableItems.find(candidate => getItemId(candidate as TItem) === itemId) as (TItem & { groupId?: string | null }) | undefined
                 if (item) {
-                    (item as Record<string, unknown>).groupId = groupId
+                    item.groupId = groupId
                 }
             },
 
@@ -483,17 +471,23 @@ export function createNoteStore<TItem, TNote extends BaseNote, TCustomActions ex
     })
 }
 
-function capitalize(str: string): string {
-    return str.charAt(0).toUpperCase() + str.slice(1)
-}
-
 type CRUDStoreContext = {
     availableItems: { id: string; name: string }[]
     deleteItem: (id: string) => Promise<void>
     loadItems: () => Promise<void>
 }
 
-function buildCRUDActions<TItem>(config: NoteStoreConfig<TItem>): Record<string, unknown> {
+type CRUDActionResult = { success: boolean; [key: string]: unknown }
+
+interface CRUDActions {
+    create: (this: CRUDStoreContext, name: string, content: string) => Promise<CRUDActionResult>
+    update: (this: CRUDStoreContext, itemId: string, content: string) => Promise<CRUDActionResult>
+    read: (this: CRUDStoreContext, itemId: string) => Promise<{ id: string; name: string; content: string } | null>
+    delete: (this: CRUDStoreContext, itemId: string) => Promise<void>
+    loadAll: (this: CRUDStoreContext) => Promise<void>
+}
+
+function buildCRUDActions<TItem>(config: NoteStoreConfig<TItem>): Record<string, CRUDActions[keyof CRUDActions]> {
     if (!config.crudConfig) return {}
 
     const crudConfig = config.crudConfig as NoteCRUDConfig<{ id: string; name: string }>
@@ -507,49 +501,53 @@ function buildCRUDActions<TItem>(config: NoteStoreConfig<TItem>): Record<string,
         crudConfig.toastCategory
     )
 
-    const actions: Record<string, unknown> = {}
-
-    actions[`create${capitalizedMethodPrefix}`] = async function(
+    const createAction = async function(
         this: CRUDStoreContext,
         name: string,
         content: string
-    ): Promise<{ success: boolean; [key: string]: unknown }> {
+    ): Promise<CRUDActionResult> {
         const result = await crud.create(this.availableItems, name, content)
         return result.success
             ? { success: true, [methodPrefix]: result.item }
             : { success: false, error: result.error }
     }
 
-    actions[`update${capitalizedMethodPrefix}`] = async function(
+    const updateAction = async function(
         this: CRUDStoreContext,
         itemId: string,
         content: string
-    ): Promise<{ success: boolean; [key: string]: unknown }> {
+    ): Promise<CRUDActionResult> {
         const result = await crud.update(this.availableItems, itemId, content)
         return result.success
             ? { success: true, [methodPrefix]: result.item }
             : { success: false, error: result.error }
     }
 
-    actions[`read${capitalizedMethodPrefix}`] = async function(
+    const readAction = async function(
         this: CRUDStoreContext,
         itemId: string
     ): Promise<{ id: string; name: string; content: string } | null> {
         return crud.read(itemId) as Promise<{ id: string; name: string; content: string } | null>
     }
 
-    actions[`delete${capitalizedMethodPrefix}`] = async function(
+    const deleteAction = async function(
         this: CRUDStoreContext,
         itemId: string
     ): Promise<void> {
         return this.deleteItem(itemId)
     }
 
-    actions[`load${capitalizedMethodPrefix}s`] = async function(
+    const loadAllAction = async function(
         this: CRUDStoreContext
     ): Promise<void> {
         return this.loadItems()
     }
 
-    return actions
+    return {
+        [`create${capitalizedMethodPrefix}`]: createAction,
+        [`update${capitalizedMethodPrefix}`]: updateAction,
+        [`read${capitalizedMethodPrefix}`]: readAction,
+        [`delete${capitalizedMethodPrefix}`]: deleteAction,
+        [`load${capitalizedMethodPrefix}s`]: loadAllAction,
+    }
 }

@@ -1,5 +1,5 @@
 import { podStore } from '../services/podStore.js';
-import { jsonResponse, requireCanvas, resolvePod } from './apiHelpers.js';
+import { jsonResponse, requireCanvas, resolvePod, requireJsonBody } from './apiHelpers.js';
 import { createPodWithWorkspace, deletePodWithCleanup } from '../services/podService.js';
 import { logger } from '../utils/logger.js';
 import type { ModelType } from '../types/pod.js';
@@ -76,10 +76,8 @@ export function handleListPods(_req: Request, params: Record<string, string>): R
 }
 
 export async function handleCreatePod(req: Request, params: Record<string, string>): Promise<Response> {
-	const contentType = req.headers.get('content-type') ?? '';
-	if (!contentType.includes('application/json')) {
-		return jsonResponse({ error: '無效的請求格式' }, HTTP_STATUS.BAD_REQUEST);
-	}
+	const jsonError = requireJsonBody(req);
+	if (jsonError) return jsonError;
 
 	const body = await req.json();
 

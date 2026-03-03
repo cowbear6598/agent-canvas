@@ -13,10 +13,10 @@ import { slackAppStore } from '../services/slack/slackAppStore.js';
 import { slackConnectionManager } from '../services/slack/slackConnectionManager.js';
 import { podStore } from '../services/podStore.js';
 import { socketService } from '../services/socketService.js';
-import { emitError, emitNotFound } from '../utils/websocketResponse.js';
+import { emitError, emitNotFound, emitSuccess } from '../utils/websocketResponse.js';
 import { logger } from '../utils/logger.js';
 import { fireAndForget } from '../utils/operationHelpers.js';
-import { emitPodUpdated, handleResultError } from '../utils/handlerHelpers.js';
+import { emitPodUpdated, handleResultError, getPodDisplayName, validatePod, withCanvasId } from '../utils/handlerHelpers.js';
 
 interface SanitizedSlackApp {
     id: string;
@@ -111,7 +111,7 @@ export async function handleSlackAppList(
     requestId: string
 ): Promise<void> {
     const apps = slackAppStore.list();
-    socketService.emitToConnection(connectionId, WebSocketResponseEvents.SLACK_APP_LIST_RESULT, {
+    emitSuccess(connectionId, WebSocketResponseEvents.SLACK_APP_LIST_RESULT, {
         requestId,
         success: true,
         slackApps: apps.map(sanitizeSlackApp),
@@ -128,7 +128,7 @@ export async function handleSlackAppGet(
     const app = getSlackAppOrEmitError(connectionId, slackAppId, WebSocketResponseEvents.SLACK_APP_GET_RESULT, requestId);
     if (!app) return;
 
-    socketService.emitToConnection(connectionId, WebSocketResponseEvents.SLACK_APP_GET_RESULT, {
+    emitSuccess(connectionId, WebSocketResponseEvents.SLACK_APP_GET_RESULT, {
         requestId,
         success: true,
         slackApp: sanitizeSlackApp(app),
@@ -145,7 +145,7 @@ export async function handleSlackAppChannels(
     const app = getSlackAppOrEmitError(connectionId, slackAppId, WebSocketResponseEvents.SLACK_APP_CHANNELS_RESULT, requestId);
     if (!app) return;
 
-    socketService.emitToConnection(connectionId, WebSocketResponseEvents.SLACK_APP_CHANNELS_RESULT, {
+    emitSuccess(connectionId, WebSocketResponseEvents.SLACK_APP_CHANNELS_RESULT, {
         requestId,
         success: true,
         slackAppId,
@@ -168,7 +168,7 @@ export async function handleSlackAppChannelsRefresh(
 
     logger.log('Slack', 'Complete', `Slack App「${app.name}」頻道已重新整理`);
 
-    socketService.emitToConnection(connectionId, WebSocketResponseEvents.SLACK_APP_CHANNELS_REFRESHED, {
+    emitSuccess(connectionId, WebSocketResponseEvents.SLACK_APP_CHANNELS_REFRESHED, {
         requestId,
         success: true,
         slackAppId,
@@ -176,64 +176,56 @@ export async function handleSlackAppChannelsRefresh(
     });
 }
 
-export async function handlePodBindSlack(
-    connectionId: string,
-    payload: PodBindSlackPayload,
-    requestId: string
-): Promise<void> {
-    const {canvasId, podId, slackAppId, slackChannelId} = payload;
+export const handlePodBindSlack = withCanvasId<PodBindSlackPayload>(
+    WebSocketResponseEvents.POD_SLACK_BOUND,
+    async (connectionId: string, canvasId: string, payload: PodBindSlackPayload, requestId: string): Promise<void> => {
+        const {podId, slackAppId, slackChannelId} = payload;
 
-    const pod = podStore.getById(canvasId, podId);
-    if (!pod) {
-        emitNotFound(connectionId, WebSocketResponseEvents.POD_SLACK_BOUND, 'Pod', podId, requestId);
-        return;
+        const pod = validatePod(connectionId, podId, WebSocketResponseEvents.POD_SLACK_BOUND, requestId);
+        if (!pod) return;
+
+        const app = slackAppStore.getById(slackAppId);
+        if (!app) {
+            emitNotFound(connectionId, WebSocketResponseEvents.POD_SLACK_BOUND, 'Slack App', slackAppId, requestId);
+            return;
+        }
+
+        if (app.connectionStatus !== 'connected') {
+            emitError(connectionId, WebSocketResponseEvents.POD_SLACK_BOUND, `Slack App「${app.name}」尚未連線`, requestId, undefined, 'NOT_CONNECTED');
+            return;
+        }
+
+        const channel = app.channels.find((ch) => ch.id === slackChannelId);
+        if (!channel) {
+            emitNotFound(connectionId, WebSocketResponseEvents.POD_SLACK_BOUND, '頻道', slackChannelId, requestId);
+            return;
+        }
+
+        podStore.setSlackBinding(canvasId, podId, {slackAppId, slackChannelId});
+
+        logger.log('Slack', 'Create', `Pod「${pod.name}」已綁定 Slack App「${app.name}」頻道「${channel.name}」`);
+
+        emitPodUpdated(canvasId, podId, requestId, WebSocketResponseEvents.POD_SLACK_BOUND);
     }
+);
 
-    const app = slackAppStore.getById(slackAppId);
-    if (!app) {
-        emitNotFound(connectionId, WebSocketResponseEvents.POD_SLACK_BOUND, 'Slack App', slackAppId, requestId);
-        return;
+export const handlePodUnbindSlack = withCanvasId<PodUnbindSlackPayload>(
+    WebSocketResponseEvents.POD_SLACK_UNBOUND,
+    async (connectionId: string, canvasId: string, payload: PodUnbindSlackPayload, requestId: string): Promise<void> => {
+        const {podId} = payload;
+
+        const pod = validatePod(connectionId, podId, WebSocketResponseEvents.POD_SLACK_UNBOUND, requestId);
+        if (!pod) return;
+
+        if (!pod.slackBinding) {
+            emitError(connectionId, WebSocketResponseEvents.POD_SLACK_UNBOUND, `Pod「${getPodDisplayName(canvasId, podId)}」尚未綁定 Slack`, requestId, undefined, 'NOT_BOUND');
+            return;
+        }
+
+        podStore.setSlackBinding(canvasId, podId, null);
+
+        logger.log('Slack', 'Delete', `Pod「${getPodDisplayName(canvasId, podId)}」已解除 Slack 綁定`);
+
+        emitPodUpdated(canvasId, podId, requestId, WebSocketResponseEvents.POD_SLACK_UNBOUND);
     }
-
-    if (app.connectionStatus !== 'connected') {
-        emitError(connectionId, WebSocketResponseEvents.POD_SLACK_BOUND, `Slack App「${app.name}」尚未連線`, requestId, undefined, 'NOT_CONNECTED');
-        return;
-    }
-
-    const channel = app.channels.find((ch) => ch.id === slackChannelId);
-    if (!channel) {
-        emitNotFound(connectionId, WebSocketResponseEvents.POD_SLACK_BOUND, '頻道', slackChannelId, requestId);
-        return;
-    }
-
-    podStore.setSlackBinding(canvasId, podId, {slackAppId, slackChannelId});
-
-    logger.log('Slack', 'Create', `Pod「${pod.name}」已綁定 Slack App「${app.name}」頻道「${channel.name}」`);
-
-    emitPodUpdated(canvasId, podId, requestId, WebSocketResponseEvents.POD_SLACK_BOUND);
-}
-
-export async function handlePodUnbindSlack(
-    connectionId: string,
-    payload: PodUnbindSlackPayload,
-    requestId: string
-): Promise<void> {
-    const {canvasId, podId} = payload;
-
-    const pod = podStore.getById(canvasId, podId);
-    if (!pod) {
-        emitNotFound(connectionId, WebSocketResponseEvents.POD_SLACK_UNBOUND, 'Pod', podId, requestId);
-        return;
-    }
-
-    if (!pod.slackBinding) {
-        emitError(connectionId, WebSocketResponseEvents.POD_SLACK_UNBOUND, `Pod「${pod.name}」尚未綁定 Slack`, requestId, undefined, 'NOT_BOUND');
-        return;
-    }
-
-    podStore.setSlackBinding(canvasId, podId, null);
-
-    logger.log('Slack', 'Delete', `Pod「${pod.name}」已解除 Slack 綁定`);
-
-    emitPodUpdated(canvasId, podId, requestId, WebSocketResponseEvents.POD_SLACK_UNBOUND);
-}
+);

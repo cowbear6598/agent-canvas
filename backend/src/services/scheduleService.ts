@@ -20,6 +20,19 @@ const SCHEDULE_TRIGGER_SECOND = 0;
 
 type ShouldFireChecker = (schedule: ScheduleConfig, now: Date) => boolean;
 
+function isScheduledTime(schedule: ScheduleConfig, now: Date): boolean {
+  return now.getHours() === schedule.hour
+    && now.getMinutes() === schedule.minute
+    && now.getSeconds() === SCHEDULE_TRIGGER_SECOND;
+}
+
+function isFirstTriggerOrNewDay(schedule: ScheduleConfig, now: Date): boolean {
+  if (!schedule.lastTriggeredAt) {
+    return true;
+  }
+  return !isSameDay(new Date(schedule.lastTriggeredAt), now);
+}
+
 const shouldFireCheckers: Record<ScheduleConfig['frequency'], ShouldFireChecker> = {
   'every-second': (schedule, now) => {
     if (!schedule.lastTriggeredAt) {
@@ -46,40 +59,20 @@ const shouldFireCheckers: Record<ScheduleConfig['frequency'], ShouldFireChecker>
   },
 
   'every-day': (schedule, now) => {
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
-    const currentSecond = now.getSeconds();
-
-    if (currentHour !== schedule.hour || currentMinute !== schedule.minute || currentSecond !== SCHEDULE_TRIGGER_SECOND) {
+    if (!isScheduledTime(schedule, now)) {
       return false;
     }
-
-    if (!schedule.lastTriggeredAt) {
-      return true;
-    }
-
-    return !isSameDay(new Date(schedule.lastTriggeredAt), now);
+    return isFirstTriggerOrNewDay(schedule, now);
   },
 
   'every-week': (schedule, now) => {
-    const currentDay = now.getDay();
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
-    const currentSecond = now.getSeconds();
-
-    if (!schedule.weekdays.includes(currentDay)) {
+    if (!schedule.weekdays.includes(now.getDay())) {
       return false;
     }
-
-    if (currentHour !== schedule.hour || currentMinute !== schedule.minute || currentSecond !== SCHEDULE_TRIGGER_SECOND) {
+    if (!isScheduledTime(schedule, now)) {
       return false;
     }
-
-    if (!schedule.lastTriggeredAt) {
-      return true;
-    }
-
-    return !isSameDay(new Date(schedule.lastTriggeredAt), now);
+    return isFirstTriggerOrNewDay(schedule, now);
   },
 };
 
@@ -156,30 +149,25 @@ class ScheduleService {
   private async sendScheduleMessage(canvasId: string, podId: string): Promise<void> {
     podStore.setStatus(canvasId, podId, 'chatting');
 
-    try {
-      await messageStore.addMessage(canvasId, podId, 'user', '');
+    await messageStore.addMessage(canvasId, podId, 'user', '');
 
-      await executeStreamingChat(
-        { canvasId, podId, message: '', abortable: false },
-        {
-          onComplete: async (canvasId, podId) => {
-            fireAndForget(
-              autoClearService.onPodComplete(canvasId, podId),
-              'Schedule',
-              'autoClear 處理失敗'
-            );
-            fireAndForget(
-              workflowExecutionService.checkAndTriggerWorkflows(canvasId, podId),
-              'Schedule',
-              'workflow 觸發失敗'
-            );
-          },
-        }
-      );
-    } catch (error) {
-      logger.error('Schedule', 'Error', `執行 Pod「${podId}」排程訊息失敗`, error);
-      throw error;
-    }
+    await executeStreamingChat(
+      { canvasId, podId, message: '', abortable: false },
+      {
+        onComplete: async (canvasId, podId) => {
+          fireAndForget(
+            autoClearService.onPodComplete(canvasId, podId),
+            'Schedule',
+            'autoClear 處理失敗'
+          );
+          fireAndForget(
+            workflowExecutionService.checkAndTriggerWorkflows(canvasId, podId),
+            'Schedule',
+            'workflow 觸發失敗'
+          );
+        },
+      }
+    );
   }
 }
 

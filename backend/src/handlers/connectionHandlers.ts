@@ -21,7 +21,7 @@ import { workflowStateService } from '../services/workflow';
 import { socketService } from '../services/socketService.js';
 import { emitSuccess, emitError, emitNotFound } from '../utils/websocketResponse.js';
 import { logger } from '../utils/logger.js';
-import { withCanvasId } from '../utils/handlerHelpers.js';
+import { withCanvasId, getPodDisplayName } from '../utils/handlerHelpers.js';
 
 function findConnectionOrEmitError(
   wsConnectionId: string,
@@ -172,9 +172,7 @@ export const handleConnectionDelete = withCanvasId<ConnectionDeletePayload>(
 
     socketService.emitToCanvas(canvasId, WebSocketResponseEvents.CONNECTION_DELETED, response);
 
-    const sourcePodName = podStore.getById(canvasId, connection.sourcePodId)?.name ?? connection.sourcePodId;
-    const targetPodName = podStore.getById(canvasId, connection.targetPodId)?.name ?? connection.targetPodId;
-    logger.log('Connection', 'Delete', `已刪除連線「${sourcePodName} → ${targetPodName}」`);
+    logger.log('Connection', 'Delete', `已刪除連線「${getPodDisplayName(canvasId, connection.sourcePodId)} → ${getPodDisplayName(canvasId, connection.targetPodId)}」`);
   }
 );
 

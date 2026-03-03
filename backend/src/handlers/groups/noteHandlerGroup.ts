@@ -6,34 +6,24 @@ import {
   noteDeleteSchema,
 } from '../../schemas';
 import { noteHandlers } from '../noteHandlers.js';
-import { createHandlerGroup } from './createHandlerGroup.js';
+import { createHandlerGroup, createNoteHandlerGroupEntries } from './createHandlerGroup.js';
 
 export const noteHandlerGroup = createHandlerGroup({
   name: 'note',
   handlers: [
-    {
-      event: WebSocketRequestEvents.NOTE_CREATE,
-      handler: noteHandlers.handleNoteCreate,
-      schema: noteCreateSchema,
-      responseEvent: WebSocketResponseEvents.NOTE_CREATED,
-    },
-    {
-      event: WebSocketRequestEvents.NOTE_LIST,
-      handler: noteHandlers.handleNoteList,
-      schema: noteListSchema,
-      responseEvent: WebSocketResponseEvents.NOTE_LIST_RESULT,
-    },
-    {
-      event: WebSocketRequestEvents.NOTE_UPDATE,
-      handler: noteHandlers.handleNoteUpdate,
-      schema: noteUpdateSchema,
-      responseEvent: WebSocketResponseEvents.NOTE_UPDATED,
-    },
-    {
-      event: WebSocketRequestEvents.NOTE_DELETE,
-      handler: noteHandlers.handleNoteDelete,
-      schema: noteDeleteSchema,
-      responseEvent: WebSocketResponseEvents.NOTE_DELETED,
-    },
+    ...createNoteHandlerGroupEntries(
+      noteHandlers,
+      { create: noteCreateSchema, list: noteListSchema, update: noteUpdateSchema, delete: noteDeleteSchema },
+      {
+        create: WebSocketRequestEvents.NOTE_CREATE,
+        list: WebSocketRequestEvents.NOTE_LIST,
+        update: WebSocketRequestEvents.NOTE_UPDATE,
+        delete: WebSocketRequestEvents.NOTE_DELETE,
+        created: WebSocketResponseEvents.NOTE_CREATED,
+        listResult: WebSocketResponseEvents.NOTE_LIST_RESULT,
+        updated: WebSocketResponseEvents.NOTE_UPDATED,
+        deleted: WebSocketResponseEvents.NOTE_DELETED,
+      }
+    ),
   ],
 });

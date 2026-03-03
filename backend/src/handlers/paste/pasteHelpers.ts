@@ -13,6 +13,7 @@ import type {
   PastePodItem,
 } from '../../schemas';
 import { podStore } from '../../services/podStore.js';
+import { getPodDisplayName } from '../../utils/handlerHelpers.js';
 import { workspaceService } from '../../services/workspace';
 import { noteStore, skillNoteStore, subAgentNoteStore, repositoryNoteStore, commandNoteStore } from '../../services/noteStores.js';
 import { connectionStore } from '../../services/connectionStore.js';
@@ -204,9 +205,7 @@ export function createPastedConnections(
 
     createdConnections.push(newConnection);
 
-    const srcName = podStore.getById(canvasId, newSourcePodId)?.name ?? newSourcePodId;
-    const tgtName = podStore.getById(canvasId, newTargetPodId)?.name ?? newTargetPodId;
-    logger.log('Paste', 'Create', `已建立連線「${srcName} → ${tgtName}」`);
+    logger.log('Paste', 'Create', `已建立連線「${getPodDisplayName(canvasId, newSourcePodId)} → ${getPodDisplayName(canvasId, newTargetPodId)}」`);
   }
 
   return createdConnections;

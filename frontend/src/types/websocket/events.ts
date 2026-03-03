@@ -254,6 +254,7 @@ export const WebSocketResponseEvents = {
   POD_SLACK_UNBOUND: 'pod:slack:unbound',
   SLACK_CONNECTION_STATUS_CHANGED: 'slack:connection:status:changed',
   SLACK_MESSAGE_RECEIVED: 'slack:message:received',
+  POD_CHAT_USER_MESSAGE: 'pod:chat:user-message',
 } as const
 
 export type WebSocketResponseEvents = typeof WebSocketResponseEvents[keyof typeof WebSocketResponseEvents]

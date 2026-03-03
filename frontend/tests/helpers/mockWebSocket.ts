@@ -53,7 +53,7 @@ export const mockWebSocketClient = {
   }),
 }
 
-export const mockCreateWebSocketRequest = vi.fn()
+export const mockCreateWebSocketRequest = vi.fn().mockResolvedValue(null)
 
 /**
  * 模擬觸發 WebSocket 事件
@@ -101,7 +101,7 @@ export function resetMockWebSocket(): void {
   mockWebSocketClient.offWithAck.mockClear()
   mockWebSocketClient.onDisconnect.mockClear()
   mockWebSocketClient.offDisconnect.mockClear()
-  mockCreateWebSocketRequest.mockClear()
+  mockCreateWebSocketRequest.mockReset().mockResolvedValue(null)
   eventListeners.clear()
   disconnectListeners.clear()
 }

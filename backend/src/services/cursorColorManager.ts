@@ -1,3 +1,4 @@
+// 避免顏色過暗（難以辨識）或過亮（白背景上不可見）
 const MIN_COLOR_BRIGHTNESS_SUM = 150
 const MAX_COLOR_BRIGHTNESS_SUM = 450
 const FALLBACK_NEUTRAL_COLOR = '#555555'
@@ -19,13 +20,17 @@ class CursorColorManager {
   private canvasColors: Map<string, Map<string, string>> = new Map();
   private canvasAvailable: Map<string, Set<string>> = new Map();
 
-  private ensureCanvas(canvasId: string): void {
+  private ensureCanvas(canvasId: string): { colors: Map<string, string>; available: Set<string> } {
     if (!this.canvasColors.has(canvasId)) {
       this.canvasColors.set(canvasId, new Map());
     }
     if (!this.canvasAvailable.has(canvasId)) {
       this.canvasAvailable.set(canvasId, new Set(PREDEFINED_COLORS));
     }
+    return {
+      colors: this.canvasColors.get(canvasId)!,
+      available: this.canvasAvailable.get(canvasId)!,
+    };
   }
 
   private toHexChannel(n: number): string {
@@ -70,13 +75,16 @@ class CursorColorManager {
     return `#${this.toHexChannel(clampedRed)}${this.toHexChannel(clampedGreen)}${this.toHexChannel(clampedBlue)}`;
   }
 
-  private hashColor(connectionId: string): string {
+  /**
+   * 以 djb2 hash 演算法將連線 ID 映射為顏色，確保相同 ID 始終得到相同顏色。
+   * hash 可為負數，但 bitwise AND 保證各 channel 皆在 [0, 255]。
+   */
+  private computeDjb2Hash(connectionId: string): string {
     let hash = 0;
     for (let i = 0; i < connectionId.length; i++) {
       hash = (hash << 5) - hash + connectionId.charCodeAt(i);
       hash |= 0;
     }
-    // hash 可為負數，但 bitwise AND 保證各 channel 皆在 [0, 255]
     const redChannel = (hash & 0xff0000) >> 16;
     const greenChannel = (hash & 0x00ff00) >> 8;
     const blueChannel = hash & 0x0000ff;
@@ -85,25 +93,22 @@ class CursorColorManager {
   }
 
   assignColor(canvasId: string, connectionId: string): string {
-    this.ensureCanvas(canvasId);
-
-    const colors = this.canvasColors.get(canvasId)!;
-    const available = this.canvasAvailable.get(canvasId)!;
+    const { colors, available } = this.ensureCanvas(canvasId);
 
     if (colors.has(connectionId)) {
       return colors.get(connectionId)!;
     }
 
     if (available.size === 0) {
-      const fallback = this.hashColor(connectionId);
+      const fallback = this.computeDjb2Hash(connectionId);
       colors.set(connectionId, fallback);
       return fallback;
     }
 
-    const color = available.values().next().value as string;
-    available.delete(color);
-    colors.set(connectionId, color);
-    return color;
+    const [firstAvailableColor] = available;
+    available.delete(firstAvailableColor);
+    colors.set(connectionId, firstAvailableColor);
+    return firstAvailableColor;
   }
 
   releaseColor(canvasId: string, connectionId: string): void {

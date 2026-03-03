@@ -37,6 +37,10 @@ interface RepositoryStoreCustomActions {
   isWorktree(repositoryId: string): boolean
 }
 
+function toFailure(error: string): { success: false; error: string } {
+  return { success: false, error }
+}
+
 function createRepositoryCustomActions(): RepositoryStoreCustomActions {
   return {
     async createRepository(this: NoteStoreContext<Repository>, name: string): Promise<{ success: boolean; repository?: { id: string; name: string }; error?: string }> {
@@ -52,7 +56,7 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
         { errorCategory: 'Repository', errorAction: '建立失敗', errorMessage: '建立資料夾失敗' }
       )
 
-      if (!result.success) return { success: false, error: result.error }
+      if (!result.success) return toFailure(result.error)
 
       if (!result.data.repository) {
         const error = result.data.error || '建立資料夾失敗'
@@ -108,7 +112,7 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
         { errorCategory: 'Repository', errorAction: 'Worktree 建立失敗', errorMessage: '建立 Worktree 失敗' }
       )
 
-      if (!result.success) return { success: false, error: result.error }
+      if (!result.success) return toFailure(result.error)
 
       if (!result.data.success) {
         const error = result.data.error || '建立 Worktree 失敗'
@@ -142,7 +146,7 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
         { errorCategory: 'Git', errorAction: '取得分支列表失敗', errorMessage: '取得分支列表失敗' }
       )
 
-      if (!result.success) return { success: false, error: result.error }
+      if (!result.success) return toFailure(result.error)
 
       return {
         success: result.data.success,
@@ -165,7 +169,7 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
         { errorCategory: 'Git', errorAction: '檢查修改狀態失敗', errorMessage: '檢查修改狀態失敗' }
       )
 
-      if (!result.success) return { success: false, error: result.error }
+      if (!result.success) return toFailure(result.error)
 
       return {
         success: result.data.success,
@@ -205,7 +209,7 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
         { errorCategory: 'Git', errorAction: '刪除分支失敗', errorMessage: '刪除分支失敗' }
       )
 
-      if (!result.success) return { success: false, error: result.error }
+      if (!result.success) return toFailure(result.error)
 
       if (result.data.success) {
         showSuccessToast('Git', '刪除分支成功', branchName)

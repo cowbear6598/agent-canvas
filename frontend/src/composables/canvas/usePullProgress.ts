@@ -4,7 +4,7 @@ import type { RepositoryPullLatestProgressPayload, RepositoryPullLatestResultPay
 import { useCanvasContext } from '@/composables/canvas/useCanvasContext'
 import { useProgressTracker, handleProgressError } from '@/composables/canvas/useProgressTracker'
 import type { ProgressTask } from '@/components/canvas/ProgressNote.vue'
-import { PROGRESS_REMOVE_DELAY_MS, PROGRESS_REMOVE_DELAY_ON_ERROR_MS } from '@/lib/constants'
+import { PROGRESS_REMOVE_DELAY_MS } from '@/lib/constants'
 
 export type PullStatus = 'pulling' | 'completed' | 'failed'
 
@@ -71,12 +71,8 @@ export function usePullProgress(): UsePullProgressReturn {
       }
     },
 
-    onTimeout: (task, helpers) => {
+    onTimeoutExtra: (task) => {
       task.timedOut = true
-      task.status = 'failed'
-      task.message = '操作逾時，請重試'
-
-      helpers.scheduleRemove(task.requestId, PROGRESS_REMOVE_DELAY_ON_ERROR_MS)
     },
 
     toProgressTask: (task) => ({

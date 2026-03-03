@@ -281,20 +281,13 @@ export const useCanvasStore = defineStore('canvas', {
       const canvasIds = this.canvases.map(canvas => canvas.id)
       const {showErrorToast} = useToast()
 
-      try {
-        const response = await createWebSocketRequest<CanvasReorderPayload, CanvasReorderedPayload>({
-          requestEvent: WebSocketRequestEvents.CANVAS_REORDER,
-          responseEvent: WebSocketResponseEvents.CANVAS_REORDERED,
-          payload: {
-            canvasIds,
-          }
-        })
+      const response = await createWebSocketRequest<CanvasReorderPayload, CanvasReorderedPayload>({
+        requestEvent: WebSocketRequestEvents.CANVAS_REORDER,
+        responseEvent: WebSocketResponseEvents.CANVAS_REORDERED,
+        payload: { canvasIds }
+      })
 
-        if (!response.success) {
-          showErrorToast('Canvas', '排序儲存失敗')
-          this.canvases = originalOrder
-        }
-      } catch {
+      if (!response.success) {
         showErrorToast('Canvas', '排序儲存失敗')
         this.canvases = originalOrder
       }

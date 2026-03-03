@@ -24,7 +24,7 @@ import {
   handleCommandDelete,
   handleCommandMoveToGroup,
 } from '../commandHandlers.js';
-import { createHandlerGroup } from './createHandlerGroup.js';
+import { createHandlerGroup, createNoteHandlerGroupEntries } from './createHandlerGroup.js';
 
 export const commandHandlerGroup = createHandlerGroup({
   name: 'command',
@@ -53,30 +53,20 @@ export const commandHandlerGroup = createHandlerGroup({
       schema: commandReadSchema,
       responseEvent: WebSocketResponseEvents.COMMAND_READ_RESULT,
     },
-    {
-      event: WebSocketRequestEvents.COMMAND_NOTE_CREATE,
-      handler: commandNoteHandlers.handleNoteCreate,
-      schema: commandNoteCreateSchema,
-      responseEvent: WebSocketResponseEvents.COMMAND_NOTE_CREATED,
-    },
-    {
-      event: WebSocketRequestEvents.COMMAND_NOTE_LIST,
-      handler: commandNoteHandlers.handleNoteList,
-      schema: commandNoteListSchema,
-      responseEvent: WebSocketResponseEvents.COMMAND_NOTE_LIST_RESULT,
-    },
-    {
-      event: WebSocketRequestEvents.COMMAND_NOTE_UPDATE,
-      handler: commandNoteHandlers.handleNoteUpdate,
-      schema: commandNoteUpdateSchema,
-      responseEvent: WebSocketResponseEvents.COMMAND_NOTE_UPDATED,
-    },
-    {
-      event: WebSocketRequestEvents.COMMAND_NOTE_DELETE,
-      handler: commandNoteHandlers.handleNoteDelete,
-      schema: commandNoteDeleteSchema,
-      responseEvent: WebSocketResponseEvents.COMMAND_NOTE_DELETED,
-    },
+    ...createNoteHandlerGroupEntries(
+      commandNoteHandlers,
+      { create: commandNoteCreateSchema, list: commandNoteListSchema, update: commandNoteUpdateSchema, delete: commandNoteDeleteSchema },
+      {
+        create: WebSocketRequestEvents.COMMAND_NOTE_CREATE,
+        list: WebSocketRequestEvents.COMMAND_NOTE_LIST,
+        update: WebSocketRequestEvents.COMMAND_NOTE_UPDATE,
+        delete: WebSocketRequestEvents.COMMAND_NOTE_DELETE,
+        created: WebSocketResponseEvents.COMMAND_NOTE_CREATED,
+        listResult: WebSocketResponseEvents.COMMAND_NOTE_LIST_RESULT,
+        updated: WebSocketResponseEvents.COMMAND_NOTE_UPDATED,
+        deleted: WebSocketResponseEvents.COMMAND_NOTE_DELETED,
+      }
+    ),
     {
       event: WebSocketRequestEvents.POD_BIND_COMMAND,
       handler: handlePodBindCommand,

@@ -18,33 +18,27 @@ export function useWebSocketErrorHandler(): {
     })
   }
 
-  const wrapWebSocketRequest = async <T>(
-    promise: Promise<T>
-  ): Promise<T | null> => {
-    try {
-      return await promise
-    } catch (error) {
+  const wrapWebSocketRequest = <T>(promise: Promise<T>): Promise<T | null> => {
+    return promise.catch((error) => {
       console.error('[WebSocket] 請求失敗:', error)
       return null
-    }
+    })
   }
 
-  const withErrorToast = async <T>(
+  const withErrorToast = <T>(
     promise: Promise<T>,
     category: ToastCategory,
     action: string,
     options?: { rethrow?: boolean }
   ): Promise<T | null> => {
-    try {
-      return await promise
-    } catch (error) {
+    return promise.catch((error) => {
       const message = sanitizeErrorForUser(error)
       showErrorToast(category, action, message)
       if (options?.rethrow) {
         throw new Error(message)
       }
       return null
-    }
+    })
   }
 
   return {

@@ -54,8 +54,6 @@ interface BaseResponse {
   success: true;
 }
 
-// [key: string]: unknown — computed property key 的 TypeScript 限制，
-// 無法用字面量型別約束。response 物件僅用於序列化傳送，不再讀取。
 type DynamicResponse = BaseResponse & { [key: string]: unknown };
 
 export function createListHandler<T>(config: {

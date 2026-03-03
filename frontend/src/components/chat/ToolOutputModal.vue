@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watchEffect } from 'vue'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { renderMarkdown } from '@/utils/renderMarkdown'
 import type { ToolUseStatus } from '@/types/chat'
@@ -32,10 +32,17 @@ const hasOutput = computed(() => {
   return true
 })
 
-const renderedOutput = computed(() => {
-  if (!props.output) return ''
-  if (typeof props.output === 'string') return renderMarkdown(props.output)
-  return renderMarkdown('```json\n' + JSON.stringify(props.output, null, 2) + '\n```')
+const renderedOutput = ref('')
+
+watchEffect(async () => {
+  if (!props.output) {
+    renderedOutput.value = ''
+    return
+  }
+  const raw = typeof props.output === 'string'
+    ? props.output
+    : '```json\n' + JSON.stringify(props.output, null, 2) + '\n```'
+  renderedOutput.value = await renderMarkdown(raw)
 })
 </script>
 

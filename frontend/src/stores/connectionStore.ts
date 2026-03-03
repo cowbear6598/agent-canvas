@@ -225,8 +225,6 @@ export const useConnectionStore = defineStore('connection', {
             return this.connections.find(connection => connection.id === connectionId)
         },
 
-        // Pinia 的 action handler 型別需要統一以 unknown 接收，再由各 handler 自行轉型，
-        // 因為 websocketClient.on/off 的 handler 簽章要求型別一致
         getWorkflowEventMap(): Array<[string, (payload: unknown) => void]> {
             return [
                 [WebSocketResponseEvents.WORKFLOW_AUTO_TRIGGERED, castHandler(this.handleWorkflowAutoTriggered)],

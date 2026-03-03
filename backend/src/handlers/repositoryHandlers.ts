@@ -24,7 +24,7 @@ import { clearPodMessages } from './repository/repositoryBindHelpers.js';
 import { logger, type LogCategory, type LogAction } from '../utils/logger.js';
 import { createNoteHandlers } from './factories/createNoteHandlers.js';
 import { createListHandler } from './factories/createResourceHandlers.js';
-import { validatePod, handleResourceDelete, withCanvasId, emitPodUpdated, handleResultError } from '../utils/handlerHelpers.js';
+import { validatePod, handleResourceDelete, withCanvasId, emitPodUpdated, handleResultError, getPodDisplayName } from '../utils/handlerHelpers.js';
 import { validateRepositoryExists } from '../utils/validators.js';
 
 export const repositoryNoteHandlers = createNoteHandlers({
@@ -140,10 +140,36 @@ export const handlePodBindRepository = withCanvasId<PodBindRepositoryPayload>(
 
     emitPodUpdated(canvasId, podId, requestId, WebSocketResponseEvents.POD_REPOSITORY_BOUND);
 
-    const podName = podStore.getById(canvasId, podId)?.name ?? podId;
-    logger.log('Repository', 'Bind', `已將 Repository「${repositoryId}」綁定至 Pod「${podName}」`);
+    logger.log('Repository', 'Bind', `已將 Repository「${repositoryId}」綁定至 Pod「${getPodDisplayName(canvasId, podId)}」`);
   }
 );
+
+import type { Pod } from '../types/index.js';
+
+function buildSkillCopyOperations(pod: Pod): Promise<unknown>[] {
+  return pod.skillIds.map(skillId =>
+    skillService.copySkillToPod(skillId, pod.id, pod.workspacePath)
+  );
+}
+
+function buildSubAgentCopyOperations(pod: Pod): Promise<unknown>[] {
+  return pod.subAgentIds.map(subAgentId =>
+    subAgentService.copySubAgentToPod(subAgentId, pod.id, pod.workspacePath)
+  );
+}
+
+function buildCommandCopyOperations(pod: Pod): Promise<unknown>[] {
+  if (!pod.commandId) return [];
+  return [commandService.copyCommandToPod(pod.commandId, pod.id, pod.workspacePath)];
+}
+
+function buildCopyOperations(pod: Pod): Promise<unknown>[] {
+  return [
+    ...buildSkillCopyOperations(pod),
+    ...buildSubAgentCopyOperations(pod),
+    ...buildCommandCopyOperations(pod),
+  ];
+}
 
 export const handlePodUnbindRepository = withCanvasId<PodUnbindRepositoryPayload>(
   WebSocketResponseEvents.POD_REPOSITORY_UNBOUND,
@@ -166,27 +192,11 @@ export const handlePodUnbindRepository = withCanvasId<PodUnbindRepositoryPayload
       await repositorySyncService.syncRepositoryResources(oldRepositoryId);
     }
 
-    const copyOperations = [
-      ...pod.skillIds.map(skillId =>
-        skillService.copySkillToPod(skillId, podId, pod.workspacePath)
-          .then(() => ({ type: 'skill', id: skillId }))
-      ),
-      ...pod.subAgentIds.map(subAgentId =>
-        subAgentService.copySubAgentToPod(subAgentId, podId, pod.workspacePath)
-          .then(() => ({ type: 'subagent', id: subAgentId }))
-      ),
-      ...(pod.commandId ? [
-        commandService.copyCommandToPod(pod.commandId, podId, pod.workspacePath)
-          .then(() => ({ type: 'command', id: pod.commandId }))
-      ] : []),
-    ];
-
-    const results = await Promise.allSettled(copyOperations);
+    const results = await Promise.allSettled(buildCopyOperations(pod));
 
     results.forEach((result) => {
       if (result.status === 'rejected') {
-        const podName = podStore.getById(canvasId, podId)?.name ?? podId;
-        logger.error('Repository', 'Unbind', `複製資源至 Pod「${podName}」失敗`, result.reason);
+        logger.error('Repository', 'Unbind', `複製資源至 Pod「${getPodDisplayName(canvasId, podId)}」失敗`, result.reason);
       }
     });
 
@@ -194,8 +204,7 @@ export const handlePodUnbindRepository = withCanvasId<PodUnbindRepositoryPayload
 
     emitPodUpdated(canvasId, podId, requestId, WebSocketResponseEvents.POD_REPOSITORY_UNBOUND);
 
-    const podNameForUnbind = podStore.getById(canvasId, podId)?.name ?? podId;
-    logger.log('Repository', 'Unbind', `已解除 Pod「${podNameForUnbind}」的 Repository 綁定`);
+    logger.log('Repository', 'Unbind', `已解除 Pod「${getPodDisplayName(canvasId, podId)}」的 Repository 綁定`);
   }
 );
 

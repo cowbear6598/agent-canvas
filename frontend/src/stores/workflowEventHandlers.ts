@@ -89,14 +89,21 @@ export function createWorkflowEventHandlers(store: WorkflowHandlerStore): {
         }
     }
 
-    const handleAiDecidePending = (payload: WorkflowAiDecidePendingPayload): void => {
-        payload.connectionIds.forEach(connectionId => {
+    function updateConnectionStatuses(
+        connectionIds: string[],
+        status: ConnectionStatus,
+        decideReason?: string
+    ): void {
+        for (const connectionId of connectionIds) {
             const connection = store.findConnectionById(connectionId)
-            if (connection) {
-                connection.status = 'ai-deciding'
-                connection.decideReason = undefined
-            }
-        })
+            if (!connection) continue
+            connection.status = status
+            connection.decideReason = decideReason
+        }
+    }
+
+    const handleAiDecidePending = (payload: WorkflowAiDecidePendingPayload): void => {
+        updateConnectionStatuses(payload.connectionIds, 'ai-deciding', undefined)
     }
 
     const handleAiDecideResult = (payload: WorkflowAiDecideResultPayload): void => {
@@ -120,13 +127,7 @@ export function createWorkflowEventHandlers(store: WorkflowHandlerStore): {
     }
 
     const clearAiDecideStatusByConnectionIds = (connectionIds: string[]): void => {
-        connectionIds.forEach(connectionId => {
-            const connection = store.findConnectionById(connectionId)
-            if (connection) {
-                connection.status = 'idle'
-                connection.decideReason = undefined
-            }
-        })
+        updateConnectionStatuses(connectionIds, 'idle', undefined)
     }
 
     return {

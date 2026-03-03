@@ -37,9 +37,10 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
  * 將 Markdown 字串轉為安全的 HTML
  * 使用 marked 解析 + DOMPurify 消毒，防止 XSS 攻擊
  */
-export function renderMarkdown(raw: string | undefined): string {
+export async function renderMarkdown(raw: string | undefined): Promise<string> {
   if (!raw || raw.trim().length === 0) return ''
 
-  const html = marked.parse(raw, MARKED_OPTIONS) as unknown as string
-  return DOMPurify.sanitize(html, DOMPURIFY_CONFIG) as unknown as string
+  const parseResult = marked.parse(raw, MARKED_OPTIONS)
+  const html = typeof parseResult === 'string' ? parseResult : await parseResult
+  return DOMPurify.sanitize(html, DOMPURIFY_CONFIG) as string
 }

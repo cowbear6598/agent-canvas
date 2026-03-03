@@ -225,7 +225,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
 
     await messageStore.addMessage(canvasId, targetPodId, 'user', messageToSend);
 
-    const onWorkflowChatComplete = async (_canvasId: string, _podId: string): Promise<void> => {
+    const onWorkflowChatComplete = async (_: string, __: string): Promise<void> => {
       strategy.onComplete(
         { canvasId, connectionId, sourcePodId, targetPodId, triggerMode: strategy.mode, participatingConnectionIds },
         true
@@ -240,7 +240,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
       this.scheduleNextInQueue(canvasId, targetPodId);
     };
 
-    const onWorkflowChatError = async (_canvasId: string, _podId: string, error: Error): Promise<void> => {
+    const onWorkflowChatError = async (_: string, __: string, error: Error): Promise<void> => {
       const errorMessage = error.message;
       strategy.onError(
         { canvasId, connectionId, sourcePodId, targetPodId, triggerMode: strategy.mode, participatingConnectionIds },

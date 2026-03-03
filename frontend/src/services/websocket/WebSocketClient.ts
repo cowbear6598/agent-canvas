@@ -156,27 +156,25 @@ class WebSocketClient {
     if (!listeners) return
 
     listeners.forEach(callback => {
-      try {
-        this.invokeListener(callback, message)
-      } catch (error) {
-        logger.error('[WebSocket] 監聽器執行錯誤:', error)
-      }
+      this.invokeListener(callback, message)
     })
   }
 
   private handleMessage(event: MessageEvent): void {
+    let message: WebSocketMessage
     try {
-      const message = JSON.parse(event.data) as WebSocketMessage
-
-      if (message.type === 'ack') {
-        this.handleAckMessage(message as WebSocketAckMessage)
-        return
-      }
-
-      this.dispatchToListeners(message)
+      message = JSON.parse(event.data) as WebSocketMessage
     } catch (error) {
       logger.error('[WebSocket] 訊息解析錯誤:', error)
+      return
     }
+
+    if (message.type === 'ack') {
+      this.handleAckMessage(message as WebSocketAckMessage)
+      return
+    }
+
+    this.dispatchToListeners(message)
   }
 
   emit<T>(event: string, payload: T): void {

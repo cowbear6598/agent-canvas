@@ -1,3 +1,4 @@
+import { ref } from 'vue'
 import { websocketClient, WebSocketResponseEvents } from '@/services/websocket'
 import { tryResolvePendingRequest } from '@/services/websocket/createWebSocketRequest'
 import { usePodStore } from '@/stores/pod/podStore'
@@ -17,7 +18,7 @@ import { CONTENT_PREVIEW_LENGTH } from '@/lib/constants'
 import type { Pod, Connection, OutputStyleNote, SkillNote, RepositoryNote, SubAgentNote, CommandNote, Canvas, McpServer, McpServerNote } from '@/types'
 import type { SlackApp, SlackAppConnectionStatus, SlackChannel } from '@/types/slack'
 
-let registered = false
+const isListenerRegistered = ref(false)
 
 interface BasePayload {
   requestId?: string
@@ -564,26 +565,7 @@ const handleSlackMessageReceived = (payload: { podId: string; userName: string; 
 
 const handlePodChatUserMessage = (payload: { podId: string; messageId: string; content: string; timestamp: string }): void => {
   const chatStore = useChatStore()
-  const podStore = usePodStore()
-  const messages = chatStore.messagesByPodId.get(payload.podId) || []
-
-  const userMessage = {
-    id: payload.messageId,
-    role: 'user' as const,
-    content: payload.content,
-    timestamp: payload.timestamp
-  }
-
-  chatStore.messagesByPodId.set(payload.podId, [...messages, userMessage])
-
-  const pod = podStore.getPodById(payload.podId)
-  if (pod) {
-    const truncatedContent = `> ${truncateContent(payload.content, CONTENT_PREVIEW_LENGTH)}`
-    podStore.updatePod({
-      ...pod,
-      output: [...pod.output, truncatedContent]
-    })
-  }
+  chatStore.addRemoteUserMessage(payload.podId, payload.messageId, payload.content, payload.timestamp)
 }
 
 export const listeners = [
@@ -648,27 +630,27 @@ export const listeners = [
 ] as const
 
 export function registerUnifiedListeners(): void {
-  if (registered) return
-  registered = true
+  if (isListenerRegistered.value) return
+  isListenerRegistered.value = true
 
   for (const { event, handler } of listeners) {
     websocketClient.on(event, handler as (payload: unknown) => void)
   }
 
-  websocketClient.on('pod:chat:user-message', handlePodChatUserMessage as (payload: unknown) => void)
+  websocketClient.on(WebSocketResponseEvents.POD_CHAT_USER_MESSAGE, handlePodChatUserMessage as (payload: unknown) => void)
   websocketClient.on(WebSocketResponseEvents.SLACK_CONNECTION_STATUS_CHANGED, handleSlackConnectionStatusChanged as (payload: unknown) => void)
   websocketClient.on(WebSocketResponseEvents.SLACK_MESSAGE_RECEIVED, handleSlackMessageReceived as (payload: unknown) => void)
 }
 
 export function unregisterUnifiedListeners(): void {
-  if (!registered) return
-  registered = false
+  if (!isListenerRegistered.value) return
+  isListenerRegistered.value = false
 
   for (const { event, handler } of listeners) {
     websocketClient.off(event, handler as (payload: unknown) => void)
   }
 
-  websocketClient.off('pod:chat:user-message', handlePodChatUserMessage as (payload: unknown) => void)
+  websocketClient.off(WebSocketResponseEvents.POD_CHAT_USER_MESSAGE, handlePodChatUserMessage as (payload: unknown) => void)
   websocketClient.off(WebSocketResponseEvents.SLACK_CONNECTION_STATUS_CHANGED, handleSlackConnectionStatusChanged as (payload: unknown) => void)
   websocketClient.off(WebSocketResponseEvents.SLACK_MESSAGE_RECEIVED, handleSlackMessageReceived as (payload: unknown) => void)
 }

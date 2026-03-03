@@ -111,16 +111,12 @@ function formatErrorMessage(category: LogCategory, action: LogAction, message: s
  * @returns 清理後的字串
  */
 function sanitizeSensitiveInfo(str: string): string {
+  // 隱藏敏感的認證令牌，避免日誌洩漏
   return str
-    // GitHub Token (https://token@github.com)
     .replace(/https:\/\/[^@\s]+@github\.com/g, 'https://***@github.com')
-    // GitLab Token (https://oauth2:token@gitlab.com)
     .replace(/https:\/\/oauth2:[^@\s]+@[^\s/]+/g, 'https://oauth2:***@[REDACTED]')
-    // 通用 HTTPS Token (https://anything@domain)
     .replace(/https:\/\/[^@\s]+@([^\s/]+)/g, 'https://***@$1')
-    // GitHub Personal Access Token (ghp_xxxx)
     .replace(/ghp_[a-zA-Z0-9]{36}/g, 'ghp_***')
-    // GitLab Personal Access Token (glpat-xxxx)
     .replace(/glpat-[a-zA-Z0-9_-]{20}/g, 'glpat-***');
 }
 

@@ -4,7 +4,7 @@ import type { RepositoryCheckoutBranchProgressPayload, RepositoryBranchCheckedOu
 import { useCanvasContext } from '@/composables/canvas/useCanvasContext'
 import { useProgressTracker, handleProgressError } from '@/composables/canvas/useProgressTracker'
 import type { ProgressTask } from '@/components/canvas/ProgressNote.vue'
-import { PROGRESS_REMOVE_DELAY_MS, PROGRESS_REMOVE_DELAY_ON_ERROR_MS } from '@/lib/constants'
+import { PROGRESS_REMOVE_DELAY_MS } from '@/lib/constants'
 
 export type CheckoutStatus = 'checking-out' | 'completed' | 'failed'
 
@@ -78,13 +78,6 @@ export function useCheckoutProgress(): UseCheckoutProgressReturn {
           defaultMessage: '切換分支失敗',
         })
       }
-    },
-
-    onTimeout: (task, helpers) => {
-      task.status = 'failed'
-      task.message = '操作逾時，請重試'
-
-      helpers.scheduleRemove(task.requestId, PROGRESS_REMOVE_DELAY_ON_ERROR_MS)
     },
 
     toProgressTask: (task) => ({

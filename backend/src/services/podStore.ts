@@ -153,7 +153,6 @@ class PodStore extends CanvasMapStore<Pod> {
     }
 
     private buildSafeUpdates(updates: PodUpdates): Partial<Omit<Pod, 'schedule'>> {
-        // 透過解構排除不可覆蓋的欄位，id/workspacePath/schedule 僅用於排除，不實際使用
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const {id, workspacePath, schedule, ...safeUpdates} = updates as PodUpdates & Partial<Pod>;
         return safeUpdates;
@@ -165,7 +164,6 @@ class PodStore extends CanvasMapStore<Pod> {
         safeUpdates: Partial<Omit<Pod, 'schedule'>>
     ): Pod {
         if ('schedule' in updates && updates.schedule === null) {
-            // 透過解構將 schedule 從 Pod 中排除以實現刪除，schedule 僅用於排除，不實際使用
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const {schedule, ...restPod} = pod;
             return {...restPod, ...safeUpdates} as Pod;
@@ -328,7 +326,6 @@ class PodStore extends CanvasMapStore<Pod> {
         }
 
         if (binding === null) {
-            // 透過解構將 slackBinding 從 Pod 中排除以實現刪除，_ 僅用於排除，不實際使用
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const {slackBinding: _, ...rest} = pod;
             const pods = this.getOrCreateCanvasMap(canvasId);

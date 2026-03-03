@@ -6,6 +6,8 @@ import { connectionManager } from './connectionManager.js';
 import { roomManager } from './roomManager.js';
 import { serialize } from '../utils/messageSerializer.js';
 
+const CANVAS_ROOM_PREFIX = 'canvas:';
+
 class SocketService {
 	private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 	private heartbeatTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map();
@@ -66,7 +68,7 @@ class SocketService {
 	joinCanvasRoom(connectionId: string, canvasId: string): void {
 		this.leaveCanvasRoom(connectionId);
 
-		const roomName = `canvas:${canvasId}`;
+		const roomName = `${CANVAS_ROOM_PREFIX}${canvasId}`;
 		roomManager.join(connectionId, roomName);
 		connectionManager.setCanvasId(connectionId, canvasId);
 	}
@@ -77,7 +79,7 @@ class SocketService {
 			return;
 		}
 
-		const roomName = `canvas:${currentCanvasId}`;
+		const roomName = `${CANVAS_ROOM_PREFIX}${currentCanvasId}`;
 		roomManager.leave(connectionId, roomName);
 		connectionManager.setCanvasId(connectionId, '');
 	}
@@ -87,7 +89,7 @@ class SocketService {
 	}
 
 	emitToCanvasExcept(canvasId: string, excludeConnectionId: string, event: string, payload: unknown): void {
-		const roomName = `canvas:${canvasId}`;
+		const roomName = `${CANVAS_ROOM_PREFIX}${canvasId}`;
 		const members = roomManager.getMembers(roomName);
 
 		for (const connectionId of members) {
@@ -110,17 +112,19 @@ class SocketService {
 		}
 	}
 
+	private pingAllConnections(): void {
+		const connections = connectionManager.getAll();
+		for (const connection of connections) {
+			this.sendHeartbeatPing(connection.id);
+		}
+	}
+
 	private startHeartbeat(): void {
 		if (this.heartbeatInterval) {
 			return;
 		}
 
-		this.heartbeatInterval = setInterval(() => {
-			const connections = connectionManager.getAll();
-			for (const connection of connections) {
-				this.sendHeartbeatPing(connection.id);
-			}
-		}, this.HEARTBEAT_INTERVAL);
+		this.heartbeatInterval = setInterval(() => this.pingAllConnections(), this.HEARTBEAT_INTERVAL);
 
 		logger.log('Startup', 'Complete', '[Heartbeat] 已啟動');
 	}

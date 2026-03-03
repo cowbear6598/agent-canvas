@@ -60,6 +60,7 @@ export function createAssistantMessageShape(messageId: string, content: string, 
 
 export interface ChatMessageActions {
     addUserMessage: (podId: string, content: string) => Promise<void>
+    addRemoteUserMessage: (podId: string, messageId: string, content: string, timestamp: string) => void
     handleChatMessage: (payload: PodChatMessagePayload) => void
     addNewChatMessage: (podId: string, messageId: string, content: string, isPartial: boolean, role?: 'user' | 'assistant', delta?: string) => Promise<void>
     updateExistingChatMessage: (podId: string, messages: Message[], messageIndex: number, content: string, isPartial: boolean, delta: string) => void
@@ -103,6 +104,24 @@ export function createMessageActions(store: ChatStoreInstance): ChatMessageActio
         appendUserOutputToPod(pod, content)
     }
 
+    const addRemoteUserMessage = (podId: string, messageId: string, content: string, timestamp: string): void => {
+        const podStore = usePodStore()
+        const pod = podStore.pods.find(p => p.id === podId)
+        if (!pod) return
+
+        const userMessage: Message = {
+            id: messageId,
+            role: 'user',
+            content,
+            timestamp
+        }
+
+        const messages = getMessages(store, podId)
+        store.messagesByPodId.set(podId, [...messages, userMessage])
+
+        appendUserOutputToPod(pod, content)
+    }
+
     const handleChatMessage = (payload: PodChatMessagePayload): void => {
         const {podId, messageId, content, isPartial, role} = payload
         const messages = getMessages(store, podId)
@@ -120,10 +139,7 @@ export function createMessageActions(store: ChatStoreInstance): ChatMessageActio
         updateExistingChatMessage(podId, messages, messageIndex, content, isPartial, delta)
     }
 
-    const addNewChatMessage = async (podId: string, messageId: string, content: string, isPartial: boolean, role?: 'user' | 'assistant', delta?: string): Promise<void> => {
-        const messages = getMessages(store, podId)
-        const effectiveRole = role ?? 'assistant'
-
+    function buildNewMessage(messageId: string, effectiveRole: 'user' | 'assistant', content: string, isPartial: boolean, delta?: string): Message {
         const baseMessage: Message = {
             id: messageId,
             role: effectiveRole,
@@ -136,7 +152,21 @@ export function createMessageActions(store: ChatStoreInstance): ChatMessageActio
             ? createAssistantMessageShape(messageId, content, isPartial, delta)
             : {}
 
-        const newMessage: Message = { ...baseMessage, ...shape }
+        return { ...baseMessage, ...shape }
+    }
+
+    function updateUserPodOutput(podId: string, content: string): void {
+        const podStore = usePodStore()
+        const pod = podStore.pods.find(p => p.id === podId)
+        if (pod) {
+            appendUserOutputToPod(pod, content)
+        }
+    }
+
+    const addNewChatMessage = async (podId: string, messageId: string, content: string, isPartial: boolean, role?: 'user' | 'assistant', delta?: string): Promise<void> => {
+        const messages = getMessages(store, podId)
+        const effectiveRole = role ?? 'assistant'
+        const newMessage = buildNewMessage(messageId, effectiveRole, content, isPartial, delta)
 
         store.messagesByPodId.set(podId, [...messages, newMessage])
         store.currentStreamingMessageId = messageId
@@ -146,11 +176,7 @@ export function createMessageActions(store: ChatStoreInstance): ChatMessageActio
         }
 
         if (effectiveRole === 'user') {
-            const podStore = usePodStore()
-            const pod = podStore.pods.find(p => p.id === podId)
-            if (pod) {
-                appendUserOutputToPod(pod, content)
-            }
+            updateUserPodOutput(podId, content)
         }
     }
 
@@ -247,6 +273,7 @@ export function createMessageActions(store: ChatStoreInstance): ChatMessageActio
 
     return {
         addUserMessage,
+        addRemoteUserMessage,
         handleChatMessage,
         addNewChatMessage,
         updateExistingChatMessage,

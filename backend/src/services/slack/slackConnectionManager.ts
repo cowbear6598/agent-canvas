@@ -173,14 +173,14 @@ class SlackConnectionManager {
         this.healthCheckInterval = setInterval(async () => {
             const entries = Array.from(this.boltApps.entries());
             const results = await Promise.allSettled(
-                entries.map(async ([, app]) => {
+                entries.map(async ([_slackAppId, app]) => {
                     await app.client.auth.test();
                 })
             );
 
-            for (let i = 0; i < results.length; i++) {
-                if (results[i].status === 'rejected') {
-                    const slackAppId = entries[i][0];
+            const entriesWithResults = entries.map((entry, index) => ({ entry, result: results[index] }));
+            for (const { entry: [slackAppId], result } of entriesWithResults) {
+                if (result.status === 'rejected') {
                     logger.warn('Slack', 'Error', `Slack App ${slackAppId} 健康檢查失敗，觸發重連`);
                     this.boltApps.delete(slackAppId);
                     this.handleReconnect(slackAppId);

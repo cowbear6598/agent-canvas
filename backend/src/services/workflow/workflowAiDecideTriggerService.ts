@@ -269,6 +269,19 @@ class WorkflowAiDecideTriggerService extends LazyInitializable<AiDecideTriggerDe
     logger.log('Workflow', 'Update', `AI Decide 拒絕${formatConnLog({connId: connection.id, sourceName: sourcePod?.name, sourcePodId, targetName: targetPod?.name, targetPodId: connection.targetPodId})}：${reason}`);
   }
 
+  private shouldDeferToMultiInput(canvasId: string, targetPodId: string): boolean {
+    this.ensureInitialized();
+    const { isMultiInput } = this.deps.stateService.checkMultiInputScenario(canvasId, targetPodId);
+    return isMultiInput && this.deps.pendingTargetStore.hasPendingTarget(targetPodId);
+  }
+
+  private async handleNonMultiInputRejection(canvasId: string, targetPodId: string): Promise<void> {
+    this.ensureInitialized();
+    if (this.isLastRejectionTriggersGroupCancel(canvasId, targetPodId)) {
+      await this.deps.autoClearService.onGroupNotTriggered(canvasId, targetPodId);
+    }
+  }
+
   private async handleRejectedConnection(
     canvasId: string,
     sourcePodId: string,
@@ -281,15 +294,12 @@ class WorkflowAiDecideTriggerService extends LazyInitializable<AiDecideTriggerDe
     this.deps.connectionStore.updateConnectionStatus(canvasId, connection.id, 'ai-rejected');
     this.emitRejectionEvents(canvasId, connection, sourcePodId, reason);
 
-    const { isMultiInput } = this.deps.stateService.checkMultiInputScenario(canvasId, connection.targetPodId);
-    if (isMultiInput && this.deps.pendingTargetStore.hasPendingTarget(connection.targetPodId)) {
+    if (this.shouldDeferToMultiInput(canvasId, connection.targetPodId)) {
       await this.handleRejectedMultiInput(canvasId, sourcePodId, connection, reason);
       return;
     }
 
-    if (this.isLastRejectionTriggersGroupCancel(canvasId, connection.targetPodId)) {
-      await this.deps.autoClearService.onGroupNotTriggered(canvasId, connection.targetPodId);
-    }
+    await this.handleNonMultiInputRejection(canvasId, connection.targetPodId);
   }
 
   private isLastRejectionTriggersGroupCancel(canvasId: string, targetPodId: string): boolean {

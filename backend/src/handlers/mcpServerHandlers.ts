@@ -9,8 +9,7 @@ import {mcpServerStore} from '../services/mcpServerStore.js';
 import {mcpServerNoteStore} from '../services/noteStores.js';
 import type {McpServerConfig} from '../types/mcpServer.js';
 import {podStore} from '../services/podStore.js';
-import {socketService} from '../services/socketService.js';
-import {emitNotFound} from '../utils/websocketResponse.js';
+import {emitNotFound, emitSuccess} from '../utils/websocketResponse.js';
 import {createNoteHandlers} from './factories/createNoteHandlers.js';
 import {createBindHandler} from './factories/createBindHandlers.js';
 import {createDeleteHandler} from './factories/createResourceHandlers.js';
@@ -35,7 +34,7 @@ export async function handleMcpServerList(
     requestId: string
 ): Promise<void> {
     const servers = mcpServerStore.list();
-    socketService.emitToConnection(connectionId, WebSocketResponseEvents.MCP_SERVER_LIST_RESULT, {
+    emitSuccess(connectionId, WebSocketResponseEvents.MCP_SERVER_LIST_RESULT, {
         requestId,
         success: true,
         mcpServers: servers,
@@ -52,7 +51,7 @@ export async function handleMcpServerCreate(
 
     logger.log('McpServer', 'Create', `建立 MCP Server: ${server.id} (${server.name})`);
 
-    socketService.emitToConnection(connectionId, WebSocketResponseEvents.MCP_SERVER_CREATED, {
+    emitSuccess(connectionId, WebSocketResponseEvents.MCP_SERVER_CREATED, {
         requestId,
         success: true,
         mcpServer: server,
@@ -76,7 +75,7 @@ export async function handleMcpServerUpdate(
 
     logger.log('McpServer', 'Update', `更新 MCP Server: ${mcpServerId}`);
 
-    socketService.emitToConnection(connectionId, WebSocketResponseEvents.MCP_SERVER_UPDATED, {
+    emitSuccess(connectionId, WebSocketResponseEvents.MCP_SERVER_UPDATED, {
         requestId,
         success: true,
         mcpServer: {id: updated!.id, name: updated!.name},
@@ -96,7 +95,7 @@ export async function handleMcpServerRead(
         return;
     }
 
-    socketService.emitToConnection(connectionId, WebSocketResponseEvents.MCP_SERVER_READ_RESULT, {
+    emitSuccess(connectionId, WebSocketResponseEvents.MCP_SERVER_READ_RESULT, {
         requestId,
         success: true,
         mcpServer: {id: server.id, name: server.name, config: server.config},

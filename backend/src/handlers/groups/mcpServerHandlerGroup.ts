@@ -22,7 +22,7 @@ import {
     handlePodBindMcpServer,
     handlePodUnbindMcpServer,
 } from '../mcpServerHandlers.js';
-import {createHandlerGroup} from './createHandlerGroup.js';
+import {createHandlerGroup, createNoteHandlerGroupEntries} from './createHandlerGroup.js';
 
 export const mcpServerHandlerGroup = createHandlerGroup({
     name: 'mcpServer',
@@ -57,30 +57,20 @@ export const mcpServerHandlerGroup = createHandlerGroup({
             schema: mcpServerDeleteSchema,
             responseEvent: WebSocketResponseEvents.MCP_SERVER_DELETED,
         },
-        {
-            event: WebSocketRequestEvents.MCP_SERVER_NOTE_CREATE,
-            handler: mcpServerNoteHandlers.handleNoteCreate,
-            schema: mcpServerNoteCreateSchema,
-            responseEvent: WebSocketResponseEvents.MCP_SERVER_NOTE_CREATED,
-        },
-        {
-            event: WebSocketRequestEvents.MCP_SERVER_NOTE_LIST,
-            handler: mcpServerNoteHandlers.handleNoteList,
-            schema: mcpServerNoteListSchema,
-            responseEvent: WebSocketResponseEvents.MCP_SERVER_NOTE_LIST_RESULT,
-        },
-        {
-            event: WebSocketRequestEvents.MCP_SERVER_NOTE_UPDATE,
-            handler: mcpServerNoteHandlers.handleNoteUpdate,
-            schema: mcpServerNoteUpdateSchema,
-            responseEvent: WebSocketResponseEvents.MCP_SERVER_NOTE_UPDATED,
-        },
-        {
-            event: WebSocketRequestEvents.MCP_SERVER_NOTE_DELETE,
-            handler: mcpServerNoteHandlers.handleNoteDelete,
-            schema: mcpServerNoteDeleteSchema,
-            responseEvent: WebSocketResponseEvents.MCP_SERVER_NOTE_DELETED,
-        },
+        ...createNoteHandlerGroupEntries(
+            mcpServerNoteHandlers,
+            { create: mcpServerNoteCreateSchema, list: mcpServerNoteListSchema, update: mcpServerNoteUpdateSchema, delete: mcpServerNoteDeleteSchema },
+            {
+                create: WebSocketRequestEvents.MCP_SERVER_NOTE_CREATE,
+                list: WebSocketRequestEvents.MCP_SERVER_NOTE_LIST,
+                update: WebSocketRequestEvents.MCP_SERVER_NOTE_UPDATE,
+                delete: WebSocketRequestEvents.MCP_SERVER_NOTE_DELETE,
+                created: WebSocketResponseEvents.MCP_SERVER_NOTE_CREATED,
+                listResult: WebSocketResponseEvents.MCP_SERVER_NOTE_LIST_RESULT,
+                updated: WebSocketResponseEvents.MCP_SERVER_NOTE_UPDATED,
+                deleted: WebSocketResponseEvents.MCP_SERVER_NOTE_DELETED,
+            }
+        ),
         {
             event: WebSocketRequestEvents.POD_BIND_MCP_SERVER,
             handler: handlePodBindMcpServer,

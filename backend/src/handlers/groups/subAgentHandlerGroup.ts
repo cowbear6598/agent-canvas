@@ -22,7 +22,7 @@ import {
   handleSubAgentDelete,
   handleSubAgentMoveToGroup,
 } from '../subAgentHandlers.js';
-import { createHandlerGroup } from './createHandlerGroup.js';
+import { createHandlerGroup, createNoteHandlerGroupEntries } from './createHandlerGroup.js';
 
 export const subAgentHandlerGroup = createHandlerGroup({
   name: 'subagent',
@@ -51,30 +51,20 @@ export const subAgentHandlerGroup = createHandlerGroup({
       schema: subAgentReadSchema,
       responseEvent: WebSocketResponseEvents.SUBAGENT_READ_RESULT,
     },
-    {
-      event: WebSocketRequestEvents.SUBAGENT_NOTE_CREATE,
-      handler: subAgentNoteHandlers.handleNoteCreate,
-      schema: subAgentNoteCreateSchema,
-      responseEvent: WebSocketResponseEvents.SUBAGENT_NOTE_CREATED,
-    },
-    {
-      event: WebSocketRequestEvents.SUBAGENT_NOTE_LIST,
-      handler: subAgentNoteHandlers.handleNoteList,
-      schema: subAgentNoteListSchema,
-      responseEvent: WebSocketResponseEvents.SUBAGENT_NOTE_LIST_RESULT,
-    },
-    {
-      event: WebSocketRequestEvents.SUBAGENT_NOTE_UPDATE,
-      handler: subAgentNoteHandlers.handleNoteUpdate,
-      schema: subAgentNoteUpdateSchema,
-      responseEvent: WebSocketResponseEvents.SUBAGENT_NOTE_UPDATED,
-    },
-    {
-      event: WebSocketRequestEvents.SUBAGENT_NOTE_DELETE,
-      handler: subAgentNoteHandlers.handleNoteDelete,
-      schema: subAgentNoteDeleteSchema,
-      responseEvent: WebSocketResponseEvents.SUBAGENT_NOTE_DELETED,
-    },
+    ...createNoteHandlerGroupEntries(
+      subAgentNoteHandlers,
+      { create: subAgentNoteCreateSchema, list: subAgentNoteListSchema, update: subAgentNoteUpdateSchema, delete: subAgentNoteDeleteSchema },
+      {
+        create: WebSocketRequestEvents.SUBAGENT_NOTE_CREATE,
+        list: WebSocketRequestEvents.SUBAGENT_NOTE_LIST,
+        update: WebSocketRequestEvents.SUBAGENT_NOTE_UPDATE,
+        delete: WebSocketRequestEvents.SUBAGENT_NOTE_DELETE,
+        created: WebSocketResponseEvents.SUBAGENT_NOTE_CREATED,
+        listResult: WebSocketResponseEvents.SUBAGENT_NOTE_LIST_RESULT,
+        updated: WebSocketResponseEvents.SUBAGENT_NOTE_UPDATED,
+        deleted: WebSocketResponseEvents.SUBAGENT_NOTE_DELETED,
+      }
+    ),
     {
       event: WebSocketRequestEvents.POD_BIND_SUBAGENT,
       handler: handlePodBindSubAgent,

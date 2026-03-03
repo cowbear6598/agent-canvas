@@ -49,7 +49,7 @@ interface StreamContext {
     canvasId: string;
     podId: string;
     messageId: string;
-    contentBuffer: {value: string};
+    contentBuffer: { value: string };
     subMessageState: ReturnType<typeof createSubMessageState>;
     flushCurrentSubMessage: () => void;
     persistStreamingMessage: () => void;
@@ -64,7 +64,7 @@ type ErrorStreamEvent = Extract<StreamEvent, {type: 'error'}>;
 function handleTextEvent(event: TextStreamEvent, context: StreamContext): void {
     const {canvasId, podId, messageId, contentBuffer, subMessageState, persistStreamingMessage} = context;
 
-    processTextEvent(event.content, contentBuffer, subMessageState);
+    contentBuffer.value = processTextEvent(event.content, contentBuffer.value, subMessageState);
 
     const textPayload: PodChatMessagePayload = {
         canvasId,

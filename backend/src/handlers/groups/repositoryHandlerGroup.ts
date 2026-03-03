@@ -36,7 +36,7 @@ import {
   handleRepositoryDeleteBranch,
   handleRepositoryPullLatest,
 } from '../repositoryGitHandlers.js';
-import { createHandlerGroup } from './createHandlerGroup.js';
+import { createHandlerGroup, createNoteHandlerGroupEntries } from './createHandlerGroup.js';
 
 export const repositoryHandlerGroup = createHandlerGroup({
   name: 'repository',
@@ -53,30 +53,20 @@ export const repositoryHandlerGroup = createHandlerGroup({
       schema: repositoryCreateSchema,
       responseEvent: WebSocketResponseEvents.REPOSITORY_CREATED,
     },
-    {
-      event: WebSocketRequestEvents.REPOSITORY_NOTE_CREATE,
-      handler: repositoryNoteHandlers.handleNoteCreate,
-      schema: repositoryNoteCreateSchema,
-      responseEvent: WebSocketResponseEvents.REPOSITORY_NOTE_CREATED,
-    },
-    {
-      event: WebSocketRequestEvents.REPOSITORY_NOTE_LIST,
-      handler: repositoryNoteHandlers.handleNoteList,
-      schema: repositoryNoteListSchema,
-      responseEvent: WebSocketResponseEvents.REPOSITORY_NOTE_LIST_RESULT,
-    },
-    {
-      event: WebSocketRequestEvents.REPOSITORY_NOTE_UPDATE,
-      handler: repositoryNoteHandlers.handleNoteUpdate,
-      schema: repositoryNoteUpdateSchema,
-      responseEvent: WebSocketResponseEvents.REPOSITORY_NOTE_UPDATED,
-    },
-    {
-      event: WebSocketRequestEvents.REPOSITORY_NOTE_DELETE,
-      handler: repositoryNoteHandlers.handleNoteDelete,
-      schema: repositoryNoteDeleteSchema,
-      responseEvent: WebSocketResponseEvents.REPOSITORY_NOTE_DELETED,
-    },
+    ...createNoteHandlerGroupEntries(
+      repositoryNoteHandlers,
+      { create: repositoryNoteCreateSchema, list: repositoryNoteListSchema, update: repositoryNoteUpdateSchema, delete: repositoryNoteDeleteSchema },
+      {
+        create: WebSocketRequestEvents.REPOSITORY_NOTE_CREATE,
+        list: WebSocketRequestEvents.REPOSITORY_NOTE_LIST,
+        update: WebSocketRequestEvents.REPOSITORY_NOTE_UPDATE,
+        delete: WebSocketRequestEvents.REPOSITORY_NOTE_DELETE,
+        created: WebSocketResponseEvents.REPOSITORY_NOTE_CREATED,
+        listResult: WebSocketResponseEvents.REPOSITORY_NOTE_LIST_RESULT,
+        updated: WebSocketResponseEvents.REPOSITORY_NOTE_UPDATED,
+        deleted: WebSocketResponseEvents.REPOSITORY_NOTE_DELETED,
+      }
+    ),
     {
       event: WebSocketRequestEvents.POD_BIND_REPOSITORY,
       handler: handlePodBindRepository,

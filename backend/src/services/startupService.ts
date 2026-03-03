@@ -109,10 +109,10 @@ class StartupService {
       apps.map((app) => slackConnectionManager.connect(app))
     );
 
-    for (let i = 0; i < results.length; i++) {
-      if (results[i].status === 'rejected') {
-        const reason = (results[i] as PromiseRejectedResult).reason;
-        logger.error('Slack', 'Error', `[StartupService] Slack App「${apps[i].name}」連線恢復失敗`, reason);
+    const appsWithResults = apps.map((slackApp, index) => ({ slackApp, result: results[index] }));
+    for (const { slackApp, result } of appsWithResults) {
+      if (result.status === 'rejected') {
+        logger.error('Slack', 'Error', `[StartupService] Slack App「${slackApp.name}」連線恢復失敗`, result.reason);
       }
     }
 

@@ -41,6 +41,12 @@ export function handleProgressError<TTask extends ProgressErrorTask>(
   helpers.scheduleRemove(requestId, PROGRESS_REMOVE_DELAY_ON_ERROR_MS)
 }
 
+export interface TimeoutTask {
+  status: string
+  message: string
+  requestId: string
+}
+
 export interface ProgressTrackerOptions<TTask, TProgressPayload, TResultPayload> {
   progressEvent: string
   resultEvent: string
@@ -51,6 +57,7 @@ export interface ProgressTrackerOptions<TTask, TProgressPayload, TResultPayload>
   getRequestId: (payload: TProgressPayload | TResultPayload) => string
   isProcessingStatus: (task: TTask) => boolean
   onTimeout?: (task: TTask, helpers: ProgressTaskHelpers) => void
+  onTimeoutExtra?: (task: TTask) => void
 }
 
 export interface ProgressTrackerReturn<TTask> {
@@ -74,8 +81,16 @@ export function useProgressTracker<TTask, TProgressPayload, TResultPayload>(
     toProgressTask,
     getRequestId,
     isProcessingStatus,
-    onTimeout,
+    onTimeoutExtra,
   } = options
+
+  const onTimeout = options.onTimeout ?? ((task: TTask, helpers: ProgressTaskHelpers): void => {
+    const timeoutTask = task as unknown as TimeoutTask
+    timeoutTask.status = 'failed'
+    timeoutTask.message = '操作逾時，請重試'
+    onTimeoutExtra?.(task)
+    helpers.scheduleRemove(timeoutTask.requestId, PROGRESS_REMOVE_DELAY_ON_ERROR_MS)
+  })
 
   const tasks = ref<Map<string, TTask>>(new Map()) as Ref<Map<string, TTask>>
   const { showSuccessToast, showErrorToast } = useToast()
@@ -107,8 +122,6 @@ export function useProgressTracker<TTask, TProgressPayload, TResultPayload>(
   }
 
   const startTimeout = (requestId: string): void => {
-    if (!onTimeout) return
-
     const timer = setTimeout(() => {
       const task = tasks.value.get(requestId)
       if (!task || !isProcessingStatus(task)) return

@@ -107,9 +107,9 @@ class RepositorySyncService {
     await this.cleanOrphanManifests(repositoryPath, podResourcesMap);
     await this.writePodManifests(podResourcesMap, repositoryPath, repositoryId);
 
-    const totalCommands = [...podResourcesMap.values()].reduce((sum, r) => sum + r.commandIds.length, 0);
-    const totalSkills = [...podResourcesMap.values()].reduce((sum, r) => sum + r.skillIds.length, 0);
-    const totalSubAgents = [...podResourcesMap.values()].reduce((sum, r) => sum + r.subAgentIds.length, 0);
+    const totalCommands = [...podResourcesMap.values()].reduce((sum, podResources) => sum + podResources.commandIds.length, 0);
+    const totalSkills = [...podResourcesMap.values()].reduce((sum, podResources) => sum + podResources.skillIds.length, 0);
+    const totalSubAgents = [...podResourcesMap.values()].reduce((sum, podResources) => sum + podResources.subAgentIds.length, 0);
 
     logger.log('Repository', 'Update', `已同步 Repository ${repositoryId}：${totalCommands} 個 Command、${totalSkills} 個 Skill、${totalSubAgents} 個 SubAgent`);
   }

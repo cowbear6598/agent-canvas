@@ -249,13 +249,16 @@ class CanvasStore {
             const reorderedSet = new Set(canvasIds);
 
             const notReordered = allCanvases.filter(canvas => !reorderedSet.has(canvas.id));
-            const reordered = canvasIds.map(id => this.canvases.get(id)!);
+            const reordered = canvasIds.map(id => {
+                const canvas = this.canvases.get(id);
+                if (!canvas) throw new Error(`找不到 Canvas: ${id}`);
+                return canvas;
+            });
 
             const finalOrder = [...reordered, ...notReordered];
 
-            for (let i = 0; i < finalOrder.length; i++) {
-                const canvas = finalOrder[i];
-                canvas.sortIndex = i;
+            for (const [sortIndex, canvas] of finalOrder.entries()) {
+                canvas.sortIndex = sortIndex;
 
                 const canvasJsonPath = path.join(config.getCanvasPath(canvas.name), 'canvas.json');
                 const persistedCanvas = this.buildPersistedCanvas(canvas);

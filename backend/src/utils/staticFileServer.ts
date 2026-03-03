@@ -69,40 +69,33 @@ export function serveFromVFS(
 	return new Response('Not Found', { status: 404 });
 }
 
-async function serveFromFilesystem(request: Request): Promise<Response> {
-	const url = new URL(request.url);
-	let pathname = url.pathname;
-
-	if (pathname === '/') {
-		pathname = '/index.html';
-	}
-
-	// 防止路徑穿越攻擊
+function safeResolvePath(pathname: string): string | null {
 	const safePath = path.normalize(pathname).replace(/^(\.\.(\/|\\|$))+/, '');
 	const filePath = path.join(FRONTEND_DIST_PATH, safePath);
 	const resolvedPath = path.resolve(filePath);
 
 	if (!resolvedPath.startsWith(FRONTEND_DIST_PATH)) {
-		return new Response('Forbidden', { status: 403 });
+		return null;
 	}
 
-	const file = Bun.file(resolvedPath);
-	const exists = await file.exists();
+	return resolvedPath;
+}
 
-	if (exists) {
-		const headers = new Headers({
-			'Content-Type': getMimeType(resolvedPath),
-			'X-Content-Type-Options': 'nosniff',
-		});
+function serveWithCacheHeaders(file: ReturnType<typeof Bun.file>, pathname: string): Response {
+	const headers = new Headers({
+		'Content-Type': getMimeType(pathname),
+		'X-Content-Type-Options': 'nosniff',
+	});
 
-		// 對 /assets/ 下的檔案加上快取 header（Vite 會在檔名加 hash）
-		if (pathname.startsWith('/assets/')) {
-			headers.set('Cache-Control', 'public, max-age=31536000, immutable');
-		}
-
-		return new Response(file, { headers });
+	// Vite 會在 /assets/ 下的檔名加 hash，可安全使用長期快取
+	if (pathname.startsWith('/assets/')) {
+		headers.set('Cache-Control', 'public, max-age=31536000, immutable');
 	}
 
+	return new Response(file, { headers });
+}
+
+async function serveFallbackIndex(): Promise<Response> {
 	const indexFile = Bun.file(path.join(FRONTEND_DIST_PATH, 'index.html'));
 	const indexExists = await indexFile.exists();
 
@@ -116,4 +109,23 @@ async function serveFromFilesystem(request: Request): Promise<Response> {
 	}
 
 	return new Response('Not Found', { status: 404 });
+}
+
+async function serveFromFilesystem(request: Request): Promise<Response> {
+	const url = new URL(request.url);
+	const rawPathname = url.pathname === '/' ? '/index.html' : url.pathname;
+
+	const resolvedPath = safeResolvePath(rawPathname);
+	if (!resolvedPath) {
+		return new Response('Forbidden', { status: 403 });
+	}
+
+	const file = Bun.file(resolvedPath);
+	const exists = await file.exists();
+
+	if (exists) {
+		return serveWithCacheHeaders(file, rawPathname);
+	}
+
+	return serveFallbackIndex();
 }

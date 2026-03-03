@@ -20,10 +20,9 @@ function isTerminalPod(podId: string, sourcePodId: string, hasAutoTriggerTargets
 type BfsVisitor = (podId: string, isTerminal: boolean, autoTriggerTargets: string[]) => void;
 
 class AutoClearService {
-    findTerminalPods(canvasId: string, sourcePodId: string): Map<string, number> {
+    private buildPropagatedCounts(canvasId: string, sourcePodId: string): Map<string, number> {
         const visitedPodIds = new Set<string>();
         const pendingPodIds: string[] = [sourcePodId];
-        const terminalPods = new Map<string, number>();
         const propagatedCounts = new Map<string, number>();
 
         visitedPodIds.add(sourcePodId);
@@ -37,13 +36,21 @@ class AutoClearService {
 
             const updatedCount = propagatedCounts.get(currentPodId) ?? 1;
             const autoTriggerTargets = getAutoTriggerTargets(canvasId, currentPodId);
-            const hasAutoTriggerTargets = autoTriggerTargets.length > 0;
-
-            if (isTerminalPod(currentPodId, sourcePodId, hasAutoTriggerTargets)) {
-                terminalPods.set(currentPodId, updatedCount);
-            }
-
             this.enqueueAutoTriggerTargets(autoTriggerTargets, visitedPodIds, pendingPodIds, propagatedCounts, updatedCount);
+        }
+
+        return propagatedCounts;
+    }
+
+    findTerminalPods(canvasId: string, sourcePodId: string): Map<string, number> {
+        const propagatedCounts = this.buildPropagatedCounts(canvasId, sourcePodId);
+        const terminalPods = new Map<string, number>();
+
+        for (const [podId, count] of propagatedCounts) {
+            const autoTriggerTargets = getAutoTriggerTargets(canvasId, podId);
+            if (isTerminalPod(podId, sourcePodId, autoTriggerTargets.length > 0)) {
+                terminalPods.set(podId, count);
+            }
         }
 
         return terminalPods;
@@ -52,6 +59,21 @@ class AutoClearService {
     hasOutgoingAutoTrigger(canvasId: string, podId: string): boolean {
         const autoTriggerTargets = getAutoTriggerTargets(canvasId, podId);
         return autoTriggerTargets.length > 0;
+    }
+
+    private async handleWorkflowComplete(canvasId: string, sourcePodId: string): Promise<void> {
+        // 先同步清除追蹤，避免 await 期間重入
+        terminalPodTracker.clearTracking(sourcePodId);
+        await this.executeAutoClear(canvasId, sourcePodId);
+    }
+
+    private async handleStandaloneAutoClear(canvasId: string, podId: string): Promise<void> {
+        if (this.hasOutgoingAutoTrigger(canvasId, podId)) {
+            return;
+        }
+
+        logger.log('AutoClear', 'Complete', `執行獨立 Pod 的自動清除：${podId}`);
+        await this.executeAutoClear(canvasId, podId);
     }
 
     async onPodComplete(canvasId: string, podId: string): Promise<void> {
@@ -63,9 +85,7 @@ class AutoClearService {
         const {allComplete, sourcePodId} = terminalPodTracker.recordCompletion(podId);
 
         if (allComplete && sourcePodId) {
-            // 先同步清除追蹤，避免 await 期間重入
-            terminalPodTracker.clearTracking(sourcePodId);
-            await this.executeAutoClear(canvasId, sourcePodId);
+            await this.handleWorkflowComplete(canvasId, sourcePodId);
             return;
         }
 
@@ -73,12 +93,7 @@ class AutoClearService {
             return;
         }
 
-        if (this.hasOutgoingAutoTrigger(canvasId, podId)) {
-            return;
-        }
-
-        logger.log('AutoClear', 'Complete', `執行獨立 Pod 的自動清除：${podId}`);
-        await this.executeAutoClear(canvasId, podId);
+        await this.handleStandaloneAutoClear(canvasId, podId);
     }
 
     async onGroupNotTriggered(canvasId: string, targetPodId: string): Promise<void> {

@@ -2,8 +2,44 @@ import { z } from 'zod';
 import { createHandlerDefinition, type HandlerGroup, type HandlerDefinition } from '../registry.js';
 import type { ValidatedHandler } from '../../middleware/wsMiddleware.js';
 
-// 儲存層使用 ValidatedHandler<never> 搭配 method shorthand 讓 TypeScript 以雙變方式推導
-// 實際型別安全由 defineHandlerConfig 在建構時保證
+type NoteHandlers = {
+  handleNoteCreate: ValidatedHandler<never>;
+  handleNoteList: ValidatedHandler<never>;
+  handleNoteUpdate: ValidatedHandler<never>;
+  handleNoteDelete: ValidatedHandler<never>;
+};
+
+type NoteSchemas = {
+  create: z.ZodType;
+  list: z.ZodType;
+  update: z.ZodType;
+  delete: z.ZodType;
+};
+
+type NoteEvents = {
+  create: string;
+  list: string;
+  update: string;
+  delete: string;
+  created: string;
+  listResult: string;
+  updated: string;
+  deleted: string;
+};
+
+export function createNoteHandlerGroupEntries(
+  handlers: NoteHandlers,
+  schemas: NoteSchemas,
+  events: NoteEvents
+): HandlerConfig[] {
+  return [
+    { event: events.create, handler: handlers.handleNoteCreate as HandlerConfig['handler'], schema: schemas.create, responseEvent: events.created },
+    { event: events.list, handler: handlers.handleNoteList as HandlerConfig['handler'], schema: schemas.list, responseEvent: events.listResult },
+    { event: events.update, handler: handlers.handleNoteUpdate as HandlerConfig['handler'], schema: schemas.update, responseEvent: events.updated },
+    { event: events.delete, handler: handlers.handleNoteDelete as HandlerConfig['handler'], schema: schemas.delete, responseEvent: events.deleted },
+  ];
+}
+
 export interface HandlerConfig {
   event: string;
   handler(connectionId: string, payload: never, requestId: string): Promise<void>;

@@ -1,4 +1,7 @@
 import type {Pod, Command, Connection} from '../../types/index.js';
+
+const WORKFLOW_SOURCE_HEADING = '## Source:';
+const WORKFLOW_SECTION_SEPARATOR = '---';
 import type {WorkflowQueuedPayload} from '../../types/responses/workflow.js';
 import {connectionStore} from '../connectionStore.js';
 import {workflowEventEmitter} from './workflowEventEmitter.js';
@@ -40,7 +43,7 @@ export function formatMergedSummaries(
         const sourcePod = podLookup(sourcePodId);
         const podName = sourcePod?.name || sourcePodId;
 
-        formatted.push(`## Source: ${podName}\n${content}\n\n---`);
+        formatted.push(`${WORKFLOW_SOURCE_HEADING} ${podName}\n${content}\n\n${WORKFLOW_SECTION_SEPARATOR}`);
     }
 
     let result = formatted.join('\n\n');

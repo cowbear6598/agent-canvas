@@ -99,36 +99,60 @@ function createProgressEmitter(
   };
 }
 
-/**
- * 從 Git URL 提取並正規化 Repository 名稱
- *
- * 處理兩種主要格式：
- * 1. SSH: git@github.com:user/repo.git → user/repo
- * 2. HTTPS: https://github.com/user/repo.git → repo
- *
- * 轉換步驟：
- * 1. SSH 格式從冒號後取路徑，HTTPS 格式移除協議前綴後取最後一段
- * 2. 移除 .git 副檔名避免重複
- * 3. 將非法字元（斜線等）替換為連字號，確保可作為資料夾名稱
- */
+type ThrottledProgressEmitter = ((progress: number, message: string) => void) & {
+  cancel: () => void;
+  flush: () => void;
+};
+
+function createThrottledProgressEmitter(
+  connectionId: string,
+  requestId: string,
+  eventType: WebSocketResponseEvents
+): ThrottledProgressEmitter {
+  const emitProgress = createProgressEmitter(connectionId, requestId, eventType);
+  return throttle(emitProgress, 500) as ThrottledProgressEmitter;
+}
+
+function validateNotWorktree(
+  connectionId: string,
+  repositoryId: string,
+  responseEvent: WebSocketResponseEvents,
+  requestId: string,
+  errorMessage: string
+): boolean {
+  const metadata = repositoryService.getMetadata(repositoryId);
+  if (metadata?.parentRepoId) {
+    emitError(connectionId, responseEvent, errorMessage, requestId, undefined, 'INVALID_STATE');
+    return false;
+  }
+  return true;
+}
+
+function normalizeRepoName(rawName: string): string {
+  const withoutGit = rawName.replace(/\.git$/, '');
+  if (!withoutGit.match(/^[a-zA-Z0-9_-]+$/)) {
+    return withoutGit.replace(/[^a-zA-Z0-9_-]/g, '-');
+  }
+  return withoutGit;
+}
+
+function parseSshRepoName(url: string): string {
+  const pathPart = url.split(':')[1] || '';
+  return normalizeRepoName(pathPart);
+}
+
+function parseHttpsRepoName(url: string): string {
+  const withoutProtocol = url.replace(/^https?:\/\//, '').replace(/^git:\/\//, '');
+  const parts = withoutProtocol.split('/');
+  const lastPart = parts[parts.length - 1] || '';
+  return normalizeRepoName(lastPart);
+}
+
 function parseRepoName(repoUrl: string): string {
-  let urlPath: string;
-
   if (repoUrl.startsWith('git@')) {
-    urlPath = repoUrl.split(':')[1] || '';
-  } else {
-    urlPath = repoUrl.replace(/^https?:\/\//, '').replace(/^git:\/\//, '');
-    const parts = urlPath.split('/');
-    urlPath = parts[parts.length - 1] || '';
+    return parseSshRepoName(repoUrl);
   }
-
-  let repoName = urlPath.replace(/\.git$/, '');
-
-  if (!repoName.match(/^[a-zA-Z0-9_-]+$/)) {
-    repoName = repoName.replace(/[^a-zA-Z0-9_-]/g, '-');
-  }
-
-  return repoName;
+  return parseHttpsRepoName(repoUrl);
 }
 
 async function executeAndValidateClone(
@@ -406,20 +430,22 @@ export const handleRepositoryCheckoutBranch = withValidatedGitRepository<Reposit
   async (connectionId, payload, requestId, repositoryPath) => {
     const { repositoryId, branchName, force } = payload;
 
-    const metadata = repositoryService.getMetadata(repositoryId);
-    if (metadata?.parentRepoId) {
-      emitError(
-        connectionId,
-        WebSocketResponseEvents.REPOSITORY_BRANCH_CHECKED_OUT,
-        'Worktree 無法切換分支',
-        requestId,
-        undefined,
-        'INVALID_STATE'
-      );
-      return;
-    }
+    const isValid = validateNotWorktree(
+      connectionId,
+      repositoryId,
+      WebSocketResponseEvents.REPOSITORY_BRANCH_CHECKED_OUT,
+      requestId,
+      'Worktree 無法切換分支'
+    );
+    if (!isValid) return;
 
-    function emitCheckoutProgress(progress: number, message: string): void {
+    const throttledEmit = createThrottledProgressEmitter(
+      connectionId,
+      requestId,
+      WebSocketResponseEvents.REPOSITORY_CHECKOUT_BRANCH_PROGRESS
+    );
+
+    const emitCheckoutProgress = (progress: number, message: string): void => {
       const progressPayload: RepositoryCheckoutBranchProgressPayload = {
         requestId,
         progress,
@@ -427,9 +453,7 @@ export const handleRepositoryCheckoutBranch = withValidatedGitRepository<Reposit
         branchName,
       };
       socketService.emitToConnection(connectionId, WebSocketResponseEvents.REPOSITORY_CHECKOUT_BRANCH_PROGRESS, progressPayload);
-    }
-
-    const throttledEmit = throttle(emitCheckoutProgress, 500);
+    };
 
     emitCheckoutProgress(0, '準備切換分支...');
 
@@ -449,6 +473,7 @@ export const handleRepositoryCheckoutBranch = withValidatedGitRepository<Reposit
     const completionMessage = action === 'created' ? '分支建立完成' : '切換完成';
     emitCheckoutProgress(100, completionMessage);
 
+    const metadata = repositoryService.getMetadata(repositoryId);
     await repositoryService.registerMetadata(repositoryId, {
       ...metadata,
       currentBranch: branchName
@@ -499,18 +524,14 @@ export const handleRepositoryPullLatest = withValidatedGitRepository<RepositoryP
   async (connectionId, payload, requestId, repositoryPath) => {
     const { repositoryId } = payload;
 
-    const metadata = repositoryService.getMetadata(repositoryId);
-    if (metadata?.parentRepoId) {
-      emitError(
-        connectionId,
-        WebSocketResponseEvents.REPOSITORY_PULL_LATEST_RESULT,
-        'Worktree 無法執行 Pull',
-        requestId,
-        undefined,
-        'INVALID_STATE'
-      );
-      return;
-    }
+    const isValid = validateNotWorktree(
+      connectionId,
+      repositoryId,
+      WebSocketResponseEvents.REPOSITORY_PULL_LATEST_RESULT,
+      requestId,
+      'Worktree 無法執行 Pull'
+    );
+    if (!isValid) return;
 
     if (pullingRepositories.has(repositoryId)) {
       emitError(
@@ -532,7 +553,11 @@ export const handleRepositoryPullLatest = withValidatedGitRepository<RepositoryP
       WebSocketResponseEvents.REPOSITORY_PULL_LATEST_PROGRESS
     );
 
-    const throttledEmit = throttle(emitPullProgress, 500);
+    const throttledEmit = createThrottledProgressEmitter(
+      connectionId,
+      requestId,
+      WebSocketResponseEvents.REPOSITORY_PULL_LATEST_PROGRESS
+    );
 
     emitPullProgress(0, '準備 Pull...');
 

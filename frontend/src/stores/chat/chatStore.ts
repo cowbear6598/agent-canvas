@@ -230,6 +230,11 @@ export const useChatStore = defineStore('chat', {
             return messageActions.addUserMessage(podId, content)
         },
 
+        addRemoteUserMessage(podId: string, messageId: string, content: string, timestamp: string): void {
+            const messageActions = this.getMessageActions()
+            messageActions.addRemoteUserMessage(podId, messageId, content, timestamp)
+        },
+
         handleChatMessage(payload: PodChatMessagePayload): void {
             const messageActions = this.getMessageActions()
             messageActions.handleChatMessage(payload)

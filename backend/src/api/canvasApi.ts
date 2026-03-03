@@ -3,7 +3,7 @@ import { socketService } from '../services/socketService.js';
 import { cursorColorManager } from '../services/cursorColorManager.js';
 import { WebSocketResponseEvents } from '../schemas/index.js';
 import { toCanvasDto } from '../utils/canvasDto.js';
-import { jsonResponse, requireCanvas } from './apiHelpers.js';
+import { jsonResponse, requireCanvas, requireJsonBody } from './apiHelpers.js';
 import { HTTP_STATUS } from '../constants.js';
 
 export async function handleDeleteCanvas(_req: Request, params: Record<string, string>): Promise<Response> {
@@ -38,10 +38,8 @@ export function handleListCanvases(_req: Request, _params: Record<string, string
 }
 
 export async function handleCreateCanvas(req: Request, _params: Record<string, string>): Promise<Response> {
-	const contentType = req.headers.get('content-type') ?? '';
-	if (!contentType.includes('application/json')) {
-		return jsonResponse({ error: '無效的請求格式' }, HTTP_STATUS.BAD_REQUEST);
-	}
+	const jsonError = requireJsonBody(req);
+	if (jsonError) return jsonError;
 
 	const body = await req.json();
 
