@@ -149,12 +149,12 @@ export const handleChatHistory = withCanvasId<ChatHistoryPayload>(
         socketService.emitToConnection(connectionId, WebSocketResponseEvents.POD_CHAT_HISTORY_RESULT, {
             requestId,
             success: true,
-            messages: messages.map((msg) => ({
-                id: msg.id,
-                role: msg.role,
-                content: msg.content,
-                timestamp: msg.timestamp,
-                subMessages: msg.subMessages,
+            messages: messages.map((message) => ({
+                id: message.id,
+                role: message.role,
+                content: message.content,
+                timestamp: message.timestamp,
+                subMessages: message.subMessages,
             })),
         });
     }

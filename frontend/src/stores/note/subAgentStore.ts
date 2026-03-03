@@ -75,8 +75,6 @@ const store = createNoteStore<SubAgent, SubAgentNote>({
   createNotePayload: (item: SubAgent) => ({
     subAgentId: item.id,
   }),
-  getItemId: (item: SubAgent) => item.id,
-  getItemName: (item: SubAgent) => item.name,
   crudConfig: {
     resourceType: 'SubAgent',
     methodPrefix: 'subAgent',
@@ -107,10 +105,7 @@ const store = createNoteStore<SubAgent, SubAgentNote>({
     },
   },
   customActions: {
-    loadGroups: subAgentGroupCRUD.loadGroups,
-    createGroup: subAgentGroupCRUD.createGroup,
-    deleteGroup: subAgentGroupCRUD.deleteGroup,
-    moveItemToGroup: subAgentGroupCRUD.moveItemToGroup,
+    ...subAgentGroupCRUD,
   }
 })
 

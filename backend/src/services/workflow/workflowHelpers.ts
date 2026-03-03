@@ -50,11 +50,10 @@ export function formatMergedSummaries(
 }
 
 export function buildTransferMessage(content: string): string {
+    const isolatedContent = `<source-summary>\n${content}\n</source-summary>`;
     return `以下是從另一個 POD 傳遞過來的內容,請根據這些資訊繼續處理:
 
----
-${content}
----`;
+${isolatedContent}`;
 }
 
 export interface ConnectionLogInfo {

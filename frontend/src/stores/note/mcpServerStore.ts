@@ -99,8 +99,6 @@ const store = createNoteStore<McpServer, McpServerNote>({
   createNotePayload: (item: McpServer) => ({
     mcpServerId: item.id,
   }),
-  getItemId: (item: McpServer) => item.id,
-  getItemName: (item: McpServer) => item.name,
   customActions: {
     async createMcpServer(this: NoteStoreContext<McpServer>, name: string, config: McpServerConfig): Promise<{ success: boolean; mcpServer?: { id: string; name: string }; error?: string }> {
       const result = await mcpServerCRUD.create(this.availableItems, name, config)

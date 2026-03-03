@@ -13,7 +13,7 @@ import {createBindHandler, createUnbindHandler, type BindResourceConfig} from '.
 import {createMoveToGroupHandler} from './factories/createMoveToGroupHandler.js';
 import {GROUP_TYPES} from '../types';
 
-const commandNoteHandlers = createNoteHandlers({
+export const commandNoteHandlers = createNoteHandlers({
     noteStore: commandNoteStore,
     events: {
         created: WebSocketResponseEvents.COMMAND_NOTE_CREATED,
@@ -24,11 +24,6 @@ const commandNoteHandlers = createNoteHandlers({
     foreignKeyField: 'commandId',
     entityName: 'Command',
 });
-
-export const handleCommandNoteCreate = commandNoteHandlers.handleNoteCreate;
-export const handleCommandNoteList = commandNoteHandlers.handleNoteList;
-export const handleCommandNoteUpdate = commandNoteHandlers.handleNoteUpdate;
-export const handleCommandNoteDelete = commandNoteHandlers.handleNoteDelete;
 
 const resourceHandlers = createResourceHandlers({
     service: commandService,

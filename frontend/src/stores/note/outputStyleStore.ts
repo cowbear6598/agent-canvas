@@ -81,8 +81,6 @@ const store = createNoteStore<OutputStyleListItem, OutputStyleNote>({
   createNotePayload: (item: OutputStyleListItem) => ({
     outputStyleId: item.id,
   }),
-  getItemId: (item: OutputStyleListItem) => item.id,
-  getItemName: (item: OutputStyleListItem) => item.name,
   crudConfig: {
     resourceType: 'Output Style',
     methodPrefix: 'outputStyle',
@@ -124,10 +122,7 @@ const store = createNoteStore<OutputStyleListItem, OutputStyleNote>({
       })
     },
 
-    loadGroups: outputStyleGroupCRUD.loadGroups,
-    createGroup: outputStyleGroupCRUD.createGroup,
-    deleteGroup: outputStyleGroupCRUD.deleteGroup,
-    moveItemToGroup: outputStyleGroupCRUD.moveItemToGroup,
+    ...outputStyleGroupCRUD,
   }
 })
 

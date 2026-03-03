@@ -6,7 +6,8 @@ import {Result, ok, err} from '../types';
 import {config} from '../config';
 import {logger} from '../utils/logger.js';
 import {fsOperation} from '../utils/operationHelpers.js';
-import {fileExists, safeJsonParse} from './shared/fileResourceHelpers.js';
+import {fileExists} from './shared/fileResourceHelpers.js';
+import {safeJsonParse} from '../utils/safeJsonParse.js';
 
 class CanvasStore {
     private canvases: Map<string, Canvas> = new Map();
@@ -95,7 +96,7 @@ class CanvasStore {
         const id = uuidv4();
         const trimmedName = name.trim();
 
-        const maxSortIndex = Math.max(0, ...Array.from(this.canvases.values()).map(c => c.sortIndex));
+        const maxSortIndex = Math.max(0, ...Array.from(this.canvases.values()).map(canvas => canvas.sortIndex));
         const sortIndex = this.canvases.size === 0 ? 0 : maxSortIndex + 1;
 
         const canvas: Canvas = {
@@ -124,11 +125,28 @@ class CanvasStore {
     }
 
     getByName(name: string): Canvas | undefined {
-        return Array.from(this.canvases.values()).find(c => c.name === name);
+        return Array.from(this.canvases.values()).find(canvas => canvas.name === name);
     }
 
     getNameById(canvasId: string): string {
         return this.canvases.get(canvasId)?.name ?? canvasId;
+    }
+
+    private validateRenamePaths(canvas: Canvas, trimmedName: string): Result<{ oldPath: string; newPath: string }> {
+        const oldPath = config.getCanvasPath(canvas.name);
+        const newPath = config.getCanvasPath(trimmedName);
+
+        const oldPathValidation = this.validateCanvasPath(oldPath);
+        if (!oldPathValidation.success) {
+            return err(oldPathValidation.error);
+        }
+
+        const newPathValidation = this.validateCanvasPath(newPath);
+        if (!newPathValidation.success) {
+            return err(newPathValidation.error);
+        }
+
+        return ok({ oldPath, newPath });
     }
 
     async rename(id: string, newName: string): Promise<Result<Canvas>> {
@@ -144,18 +162,12 @@ class CanvasStore {
             return err(validationResult.error);
         }
 
-        const oldPath = config.getCanvasPath(canvas.name);
-        const newPath = config.getCanvasPath(trimmedName);
-
-        const oldPathValidation = this.validateCanvasPath(oldPath);
-        if (!oldPathValidation.success) {
-            return err(oldPathValidation.error);
+        const pathsResult = this.validateRenamePaths(canvas, trimmedName);
+        if (!pathsResult.success) {
+            return err(pathsResult.error);
         }
 
-        const newPathValidation = this.validateCanvasPath(newPath);
-        if (!newPathValidation.success) {
-            return err(newPathValidation.error);
-        }
+        const { oldPath, newPath } = pathsResult.data;
 
         const targetExistsResult = await fsOperation(
             async () => {
@@ -236,7 +248,7 @@ class CanvasStore {
             const allCanvases = Array.from(this.canvases.values()).sort((a, b) => a.sortIndex - b.sortIndex);
             const reorderedSet = new Set(canvasIds);
 
-            const notReordered = allCanvases.filter(c => !reorderedSet.has(c.id));
+            const notReordered = allCanvases.filter(canvas => !reorderedSet.has(canvas.id));
             const reordered = canvasIds.map(id => this.canvases.get(id)!);
 
             const finalOrder = [...reordered, ...notReordered];

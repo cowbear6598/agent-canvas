@@ -3,6 +3,7 @@ import path from 'path';
 import { logger } from '../../utils/logger.js';
 import { config } from '../../config/index.js';
 import { isPathWithinDirectory } from '../../utils/pathValidator.js';
+import { safeJsonParse } from '../../utils/safeJsonParse.js';
 
 export async function readFileOrNull(filePath: string): Promise<string | null> {
     if (!await fileExists(filePath)) {
@@ -25,14 +26,6 @@ export async function ensureDirectoryAndWriteFile(filePath: string, content: str
     await fs.writeFile(filePath, content, 'utf-8');
 }
 
-export function safeJsonParse<T>(data: string): T | null {
-    try {
-        return JSON.parse(data) as T;
-    } catch {
-        return null;
-    }
-}
-
 export async function readJsonFileOrDefault<T>(filePath: string): Promise<T[] | null> {
     const exists = await fileExists(filePath);
     if (!exists) {
@@ -51,7 +44,11 @@ export async function readJsonFileOrDefault<T>(filePath: string): Promise<T[] | 
 }
 
 export async function copyResourceFile(srcPath: string, destBasePath: string, subDir: string, fileName: string): Promise<void> {
-    const destPath = path.join(destBasePath, '.claude', subDir, fileName);
+    const safeFileName = path.basename(fileName);
+    const destPath = path.join(destBasePath, '.claude', subDir, safeFileName);
+    if (!isPathWithinDirectory(destPath, destBasePath)) {
+        throw new Error('目標路徑不在允許的範圍內');
+    }
     await fs.mkdir(path.dirname(destPath), {recursive: true});
     await fs.copyFile(srcPath, destPath);
 }

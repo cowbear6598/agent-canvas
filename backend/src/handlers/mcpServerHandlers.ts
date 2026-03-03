@@ -17,7 +17,7 @@ import {createDeleteHandler} from './factories/createResourceHandlers.js';
 import {withCanvasId, validatePod, emitPodUpdated} from '../utils/handlerHelpers.js';
 import {logger} from '../utils/logger.js';
 
-const mcpServerNoteHandlers = createNoteHandlers({
+export const mcpServerNoteHandlers = createNoteHandlers({
     noteStore: mcpServerNoteStore,
     events: {
         created: WebSocketResponseEvents.MCP_SERVER_NOTE_CREATED,
@@ -28,11 +28,6 @@ const mcpServerNoteHandlers = createNoteHandlers({
     foreignKeyField: 'mcpServerId',
     entityName: 'McpServer',
 });
-
-export const handleMcpServerNoteCreate = mcpServerNoteHandlers.handleNoteCreate;
-export const handleMcpServerNoteList = mcpServerNoteHandlers.handleNoteList;
-export const handleMcpServerNoteUpdate = mcpServerNoteHandlers.handleNoteUpdate;
-export const handleMcpServerNoteDelete = mcpServerNoteHandlers.handleNoteDelete;
 
 export async function handleMcpServerList(
     connectionId: string,

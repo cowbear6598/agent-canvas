@@ -24,12 +24,21 @@ function validatePodName(data: Record<string, unknown>): string | null {
 	return null;
 }
 
+function isFiniteNumber(value: unknown): value is number {
+	return typeof value === 'number' && Number.isFinite(value);
+}
+
+const COORDINATE_RANGE = { min: -100000, max: 100000 };
+
+function isInCoordinateRange(value: number): boolean {
+	return value >= COORDINATE_RANGE.min && value <= COORDINATE_RANGE.max;
+}
+
 function validatePodCoordinates(data: Record<string, unknown>): string | null {
-	if (
-		typeof data.x !== 'number' || typeof data.y !== 'number' ||
-		!Number.isFinite(data.x) || !Number.isFinite(data.y) ||
-		data.x < -100000 || data.x > 100000 || data.y < -100000 || data.y > 100000
-	) {
+	if (!isFiniteNumber(data.x) || !isFiniteNumber(data.y)) {
+		return '必須提供有效的 x 和 y 座標';
+	}
+	if (!isInCoordinateRange(data.x) || !isInCoordinateRange(data.y)) {
 		return '必須提供有效的 x 和 y 座標';
 	}
 	return null;
@@ -67,13 +76,12 @@ export function handleListPods(_req: Request, params: Record<string, string>): R
 }
 
 export async function handleCreatePod(req: Request, params: Record<string, string>): Promise<Response> {
-	let body: unknown;
-
-	try {
-		body = await req.json();
-	} catch {
+	const contentType = req.headers.get('content-type') ?? '';
+	if (!contentType.includes('application/json')) {
 		return jsonResponse({ error: '無效的請求格式' }, HTTP_STATUS.BAD_REQUEST);
 	}
+
+	const body = await req.json();
 
 	const { canvas, error } = requireCanvas(params.id);
 	if (error) return error;

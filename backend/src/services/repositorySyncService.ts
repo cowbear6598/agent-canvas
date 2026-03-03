@@ -135,12 +135,10 @@ class RepositorySyncService {
   private async cleanOrphanManifests(repositoryPath: string, activePodResourcesMap: Map<string, PodResources>): Promise<void> {
     const claudeDir = path.join(repositoryPath, '.claude');
 
-    let fileNames: string[];
-    try {
-      fileNames = await fs.readdir(claudeDir);
-    } catch {
-      return;
-    }
+    const dirExists = await fs.access(claudeDir).then(() => true).catch(() => false);
+    if (!dirExists) return;
+
+    const fileNames = await fs.readdir(claudeDir);
 
     for (const fileName of fileNames) {
       const { isOrphan, podId } = this.isOrphanManifest(fileName, activePodResourcesMap);

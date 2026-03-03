@@ -27,7 +27,7 @@ import { createListHandler } from './factories/createResourceHandlers.js';
 import { validatePod, handleResourceDelete, withCanvasId, emitPodUpdated, handleResultError } from '../utils/handlerHelpers.js';
 import { validateRepositoryExists } from '../utils/validators.js';
 
-const repositoryNoteHandlers = createNoteHandlers({
+export const repositoryNoteHandlers = createNoteHandlers({
   noteStore: repositoryNoteStore,
   events: {
     created: WebSocketResponseEvents.REPOSITORY_NOTE_CREATED,
@@ -39,11 +39,6 @@ const repositoryNoteHandlers = createNoteHandlers({
   entityName: 'Repository',
   validateBeforeCreate: (repositoryId) => repositoryService.exists(repositoryId),
 });
-
-export const handleRepositoryNoteCreate = repositoryNoteHandlers.handleNoteCreate;
-export const handleRepositoryNoteList = repositoryNoteHandlers.handleNoteList;
-export const handleRepositoryNoteUpdate = repositoryNoteHandlers.handleNoteUpdate;
-export const handleRepositoryNoteDelete = repositoryNoteHandlers.handleNoteDelete;
 
 export const handleRepositoryList = createListHandler({
   service: repositoryService,

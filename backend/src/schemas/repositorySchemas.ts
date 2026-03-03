@@ -15,7 +15,7 @@ export const repositoryListSchema = canvasRequestSchema;
 export const repositoryCreateSchema = z.object({
   requestId: requestIdSchema,
   canvasId: canvasIdSchema,
-  name: z.string().regex(/^[a-zA-Z0-9_-]+$/, 'Repository name must contain only alphanumeric characters, underscores, and hyphens'),
+  name: z.string().regex(/^[a-zA-Z0-9_-]+$/, 'Repository 名稱只能包含英文字母、數字、底線和連字號'),
 });
 
 export const repositoryNoteCreateSchema = createNoteCreateSchema({ repositoryId: repositoryIdSchema });
@@ -44,7 +44,7 @@ export const repositoryDeleteSchema = z.object({
 export const repositoryGitCloneSchema = z.object({
   requestId: requestIdSchema,
   repoUrl: z.string().min(1).refine(isValidGitUrl, {
-    message: 'Invalid Git repository URL',
+    message: '無效的 Git 儲存庫 URL',
   }),
   branch: z.string().optional(),
 });
@@ -82,7 +82,7 @@ export const repositoryCheckDirtySchema = z.object({
   repositoryId: repositoryIdSchema,
 });
 
-export const repositoryCheckoutBranchSchema = z.object({
+const branchOperationBaseSchema = z.object({
   requestId: requestIdSchema,
   canvasId: canvasIdSchema,
   repositoryId: repositoryIdSchema,
@@ -90,13 +90,8 @@ export const repositoryCheckoutBranchSchema = z.object({
   force: z.boolean().default(false),
 });
 
-export const repositoryDeleteBranchSchema = z.object({
-  requestId: requestIdSchema,
-  canvasId: canvasIdSchema,
-  repositoryId: repositoryIdSchema,
-  branchName: z.string().max(200, '分支名稱過長').regex(/^[a-zA-Z0-9_\-/]+$/, '分支名稱只能包含英文字母、數字、底線、連字號和斜線'),
-  force: z.boolean().default(false),
-});
+export const repositoryCheckoutBranchSchema = branchOperationBaseSchema;
+export const repositoryDeleteBranchSchema = branchOperationBaseSchema;
 
 export const repositoryPullLatestSchema = z.object({
   requestId: requestIdSchema,

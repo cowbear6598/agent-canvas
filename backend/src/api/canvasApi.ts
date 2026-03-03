@@ -38,21 +38,18 @@ export function handleListCanvases(_req: Request, _params: Record<string, string
 }
 
 export async function handleCreateCanvas(req: Request, _params: Record<string, string>): Promise<Response> {
-	let body: unknown;
-
-	try {
-		body = await req.json();
-	} catch {
+	const contentType = req.headers.get('content-type') ?? '';
+	if (!contentType.includes('application/json')) {
 		return jsonResponse({ error: '無效的請求格式' }, HTTP_STATUS.BAD_REQUEST);
 	}
+
+	const body = await req.json();
 
 	if (!isValidCreateCanvasBody(body)) {
 		return jsonResponse({ error: 'Canvas 名稱不能為空' }, HTTP_STATUS.BAD_REQUEST);
 	}
 
-	const name = body.name;
-
-	const result = await canvasStore.create(name);
+	const result = await canvasStore.create(body.name);
 
 	if (!result.success) {
 		return jsonResponse({ error: result.error }, HTTP_STATUS.BAD_REQUEST);

@@ -43,10 +43,7 @@ class WebSocketClient {
     const wsProtocol = this.wsUrl.replace(/^http/, 'ws')
 
     this.socket = new WebSocket(wsProtocol)
-    this.socket.onopen = this.handleOpen.bind(this)
-    this.socket.onclose = this.handleClose.bind(this)
-    this.socket.onerror = this.handleError.bind(this)
-    this.socket.onmessage = this.handleMessage.bind(this)
+    this.setupSocketHandlers(this.socket)
   }
 
   disconnect(): void {
@@ -88,15 +85,19 @@ class WebSocketClient {
     }
   }
 
+  private setupSocketHandlers(socket: WebSocket): void {
+    socket.onopen = this.handleOpen.bind(this)
+    socket.onclose = this.handleClose.bind(this)
+    socket.onerror = this.handleError.bind(this)
+    socket.onmessage = this.handleMessage.bind(this)
+  }
+
   private reconnectOnce(): void {
     this.cleanupSocket()
 
     const wsProtocol = this.wsUrl.replace(/^http/, 'ws')
     this.socket = new WebSocket(wsProtocol)
-    this.socket.onopen = this.handleOpen.bind(this)
-    this.socket.onclose = this.handleClose.bind(this)
-    this.socket.onerror = this.handleError.bind(this)
-    this.socket.onmessage = this.handleMessage.bind(this)
+    this.setupSocketHandlers(this.socket)
   }
 
   private handleOpen(): void {
@@ -194,38 +195,37 @@ class WebSocketClient {
     this.socket.send(JSON.stringify(message))
   }
 
-  on<T>(event: string, callback: EventCallback<T>): void {
+  private registerEventListener<T>(event: string, callback: EventCallback<T> | EventCallbackWithAck<T>): void {
     if (!this.eventListeners.has(event)) {
       this.eventListeners.set(event, new Set())
     }
     this.eventListeners.get(event)!.add(castToEventHandler(callback))
+  }
+
+  private unregisterEventListener<T>(event: string, callback: EventCallback<T> | EventCallbackWithAck<T>): void {
+    const listeners = this.eventListeners.get(event)
+    if (listeners) {
+      listeners.delete(castToEventHandler(callback))
+      if (listeners.size === 0) {
+        this.eventListeners.delete(event)
+      }
+    }
+  }
+
+  on<T>(event: string, callback: EventCallback<T>): void {
+    this.registerEventListener(event, callback)
   }
 
   off<T>(event: string, callback: EventCallback<T>): void {
-    const listeners = this.eventListeners.get(event)
-    if (listeners) {
-      listeners.delete(castToEventHandler(callback))
-      if (listeners.size === 0) {
-        this.eventListeners.delete(event)
-      }
-    }
+    this.unregisterEventListener(event, callback)
   }
 
   onWithAck<T>(event: string, callback: EventCallbackWithAck<T>): void {
-    if (!this.eventListeners.has(event)) {
-      this.eventListeners.set(event, new Set())
-    }
-    this.eventListeners.get(event)!.add(castToEventHandler(callback))
+    this.registerEventListener(event, callback)
   }
 
   offWithAck<T>(event: string, callback: EventCallbackWithAck<T>): void {
-    const listeners = this.eventListeners.get(event)
-    if (listeners) {
-      listeners.delete(castToEventHandler(callback))
-      if (listeners.size === 0) {
-        this.eventListeners.delete(event)
-      }
-    }
+    this.unregisterEventListener(event, callback)
   }
 
   onDisconnect(callback: (reason: string) => void): void {

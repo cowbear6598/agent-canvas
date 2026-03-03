@@ -54,6 +54,29 @@ describe('fileResourceHelpers', () => {
             await expect(copyResourceFile(srcPath, destBase, 'commands', 'missing.md')).rejects.toThrow();
         });
 
+        it('fileName 含路徑穿越時應透過 basename 截取純檔名，安全複製到允許路徑內', async () => {
+            const srcPath = path.join(tmpDir, 'source.md');
+            await fs.writeFile(srcPath, '# content');
+            const destBase = path.join(tmpDir, 'dest');
+
+            // path.basename 會將 '../../../etc/passwd' 截成 'passwd'，確保不發生路徑穿越
+            await copyResourceFile(srcPath, destBase, 'commands', '../../../etc/passwd');
+
+            const safeDestPath = path.join(destBase, '.claude', 'commands', 'passwd');
+            const content = await fs.readFile(safeDestPath, 'utf-8');
+            expect(content).toBe('# content');
+        });
+
+        it('subDir 含路徑穿越時應拋出目標路徑不在允許範圍內錯誤', async () => {
+            const srcPath = path.join(tmpDir, 'source.md');
+            await fs.writeFile(srcPath, '# content');
+            const destBase = path.join(tmpDir, 'dest');
+
+            await expect(
+                copyResourceFile(srcPath, destBase, '../../outside', 'source.md')
+            ).rejects.toThrow('目標路徑不在允許的範圍內');
+        });
+
         it('目標目錄不存在時應自動建立目錄後複製', async () => {
             const srcPath = path.join(tmpDir, 'source.md');
             await fs.writeFile(srcPath, '# 自動建立');

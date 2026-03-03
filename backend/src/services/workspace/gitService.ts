@@ -71,17 +71,8 @@ function getCheckoutError(errorMessage: string, branchName: string): string {
 }
 
 function extractDomainFromUrl(url: string): string {
-    if (url.startsWith('git@')) {
-        const match = url.match(/^git@([^:]+):/);
-        return match ? match[1] : '';
-    }
-
-    if (url.startsWith('https://') || url.startsWith('http://')) {
-        const match = url.match(/^https?:\/\/([^/]+)/);
-        return match ? match[1] : '';
-    }
-
-    return '';
+    const match = url.match(/^(?:git@|https?:\/\/)([^/:]+)/);
+    return match ? match[1] : '';
 }
 
 const sourceDetectors: Array<{ check: (url: string, domain: string) => boolean; source: GitSource }> = [
@@ -186,6 +177,10 @@ class GitService {
         options?: GitCloneOptions
     ): Promise<Result<void>> {
         const source = detectGitSource(repoUrl);
+
+        if (!isPathWithinDirectory(targetPath, config.repositoriesRoot)) {
+            return err('目標路徑不在允許的範圍內');
+        }
 
         try {
             const git = simpleGit({
@@ -374,6 +369,10 @@ class GitService {
         branchName: string,
         onProgress?: (progress: GitCloneProgress) => void
     ): Promise<Result<void>> {
+        if (!isValidBranchName(branchName)) {
+            return err('無效的分支名稱');
+        }
+
         return gitOperation(async () => {
             const git = simpleGit({
                 baseDir: workspacePath,

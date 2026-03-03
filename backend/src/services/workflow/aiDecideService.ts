@@ -38,8 +38,8 @@ class AiDecideService {
   ): AiDecideBatchResult {
     return {
       results: [],
-      errors: connections.map(conn => ({
-        connectionId: conn.id,
+      errors: connections.map(connection => ({
+        connectionId: connection.id,
         error,
       })),
     };
@@ -107,17 +107,17 @@ class AiDecideService {
     const results: AiDecideResult[] = [];
     const errors: Array<{ connectionId: string; error: string }> = [];
 
-    for (const conn of connections) {
-      const decision = decisionResults.decisions.find(d => d.connectionId === conn.id);
+    for (const connection of connections) {
+      const decision = decisionResults.decisions.find(decisionEntry => decisionEntry.connectionId === connection.id);
       if (decision) {
         results.push({
-          connectionId: conn.id,
+          connectionId: connection.id,
           shouldTrigger: decision.shouldTrigger,
           reason: decision.reason,
         });
       } else {
         errors.push({
-          connectionId: conn.id,
+          connectionId: connection.id,
           error: '此連線未獲得 AI 決策結果',
         });
       }
@@ -228,14 +228,14 @@ class AiDecideService {
   ): Promise<AiDecideTargetInfo[]> {
     const targets: AiDecideTargetInfo[] = [];
 
-    for (const conn of connections) {
-      const targetPod = podStore.getById(canvasId, conn.targetPodId);
+    for (const connection of connections) {
+      const targetPod = podStore.getById(canvasId, connection.targetPodId);
       if (!targetPod) {
-        logger.log('Workflow', 'Update', `[AiDecideService] 找不到目標 Pod ${conn.targetPodId}`);
+        logger.log('Workflow', 'Update', `[AiDecideService] 找不到目標 Pod ${connection.targetPodId}`);
         continue;
       }
 
-      targets.push(await this.resolveTargetPodResources(targetPod, conn));
+      targets.push(await this.resolveTargetPodResources(targetPod, connection));
     }
 
     return targets;

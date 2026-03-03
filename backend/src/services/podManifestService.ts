@@ -2,7 +2,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {isPathWithinDirectory} from '../utils/pathValidator.js';
 import {logger} from '../utils/logger.js';
-import {fileExists, safeJsonParse} from './shared/fileResourceHelpers.js';
+import {fileExists} from './shared/fileResourceHelpers.js';
+import {safeJsonParse} from '../utils/safeJsonParse.js';
 
 interface PodManifest {
     managedFiles: string[];
@@ -42,29 +43,27 @@ class PodManifestService {
         await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
     }
 
-    async deleteManagedFiles(repositoryPath: string, podId: string): Promise<void> {
-        const managedFiles = await this.readManifest(repositoryPath, podId);
-        const claudeDir = path.join(repositoryPath, CLAUDE_DIR);
-
-        const dirsToCheck = new Set<string>();
-
-        for (const relPath of managedFiles) {
-            const absPath = path.join(repositoryPath, relPath);
-
-            if (!isPathWithinDirectory(absPath, repositoryPath)) {
-                logger.warn('Pod', 'Delete', `偵測到不安全的路徑，跳過刪除: ${relPath}`);
-                continue;
-            }
-
-            await fs.rm(absPath, {force: true});
-
-            let dir = path.dirname(absPath);
-            while (dir !== claudeDir && isPathWithinDirectory(dir, claudeDir)) {
-                dirsToCheck.add(dir);
-                dir = path.dirname(dir);
-            }
+    private async deleteSingleManagedFile(
+        absPath: string,
+        repositoryPath: string,
+        claudeDir: string,
+        dirsToCheck: Set<string>,
+    ): Promise<void> {
+        if (!isPathWithinDirectory(absPath, repositoryPath)) {
+            logger.warn('Pod', 'Delete', `偵測到不安全的路徑，跳過刪除: ${absPath}`);
+            return;
         }
 
+        await fs.rm(absPath, {force: true});
+
+        let dir = path.dirname(absPath);
+        while (dir !== claudeDir && isPathWithinDirectory(dir, claudeDir)) {
+            dirsToCheck.add(dir);
+            dir = path.dirname(dir);
+        }
+    }
+
+    private async cleanEmptyDirectories(dirsToCheck: Set<string>): Promise<void> {
         const sortedDirs = [...dirsToCheck].sort((a, b) => b.length - a.length);
         for (const dir of sortedDirs) {
             try {
@@ -76,7 +75,19 @@ class PodManifestService {
                 // 目錄刪除失敗不影響主流程
             }
         }
+    }
 
+    async deleteManagedFiles(repositoryPath: string, podId: string): Promise<void> {
+        const managedFiles = await this.readManifest(repositoryPath, podId);
+        const claudeDir = path.join(repositoryPath, CLAUDE_DIR);
+        const dirsToCheck = new Set<string>();
+
+        for (const relPath of managedFiles) {
+            const absPath = path.join(repositoryPath, relPath);
+            await this.deleteSingleManagedFile(absPath, repositoryPath, claudeDir, dirsToCheck);
+        }
+
+        await this.cleanEmptyDirectories(dirsToCheck);
         await this.deleteManifestFile(repositoryPath, podId);
     }
 

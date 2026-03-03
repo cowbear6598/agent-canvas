@@ -51,8 +51,6 @@ const store = createNoteStore<Skill, SkillNote>({
   createNotePayload: (item: Skill) => ({
     skillId: item.id,
   }),
-  getItemId: (item: Skill) => item.id,
-  getItemName: (item: Skill) => item.name,
   customActions: {
     async deleteSkill(this: NoteStoreContext<Skill>, skillId: string): Promise<void> {
       return this.deleteItem(skillId)

@@ -3,7 +3,7 @@ import { noteStore } from '../services/noteStores.js';
 import { outputStyleService } from '../services/outputStyleService.js';
 import { createNoteHandlers } from './factories/createNoteHandlers.js';
 
-const noteHandlersImpl = createNoteHandlers({
+export const noteHandlers = createNoteHandlers({
   noteStore,
   events: {
     created: WebSocketResponseEvents.NOTE_CREATED,
@@ -16,8 +16,3 @@ const noteHandlersImpl = createNoteHandlers({
   logOperations: true,
   validateBeforeCreate: (outputStyleId) => outputStyleService.exists(outputStyleId),
 });
-
-export const handleNoteCreate = noteHandlersImpl.handleNoteCreate;
-export const handleNoteList = noteHandlersImpl.handleNoteList;
-export const handleNoteUpdate = noteHandlersImpl.handleNoteUpdate;
-export const handleNoteDelete = noteHandlersImpl.handleNoteDelete;

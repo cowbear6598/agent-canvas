@@ -59,6 +59,30 @@ function parseFlagValue(rawArgs: string[], currentIndex: number): { value: strin
 	return { value: true, skip: false };
 }
 
+function processArg(
+	rawArgs: string[],
+	i: number,
+	flags: Record<string, string | boolean>,
+	positional: string[],
+): number {
+	const arg = rawArgs[i];
+
+	if (BOOLEAN_FLAGS[arg]) {
+		flags[BOOLEAN_FLAGS[arg]] = true;
+		return i + 1;
+	}
+
+	if (arg === '-n' || arg.startsWith('--')) {
+		const key = arg === '-n' ? 'n' : arg.slice(2);
+		const { value, skip } = parseFlagValue(rawArgs, i);
+		flags[key] = value;
+		return skip ? i + 2 : i + 1;
+	}
+
+	positional.push(arg);
+	return i + 1;
+}
+
 export function parseCommand(argv: string[]): {
 	command: string | null;
 	args: string[];
@@ -70,20 +94,7 @@ export function parseCommand(argv: string[]): {
 	let i = 0;
 
 	while (i < rawArgs.length) {
-		const arg = rawArgs[i];
-
-		if (BOOLEAN_FLAGS[arg]) {
-			flags[BOOLEAN_FLAGS[arg]] = true;
-		} else if (arg === '-n' || arg.startsWith('--')) {
-			const key = arg === '-n' ? 'n' : arg.slice(2);
-			const { value, skip } = parseFlagValue(rawArgs, i);
-			flags[key] = value;
-			if (skip) i++;
-		} else {
-			positional.push(arg);
-		}
-
-		i++;
+		i = processArg(rawArgs, i, flags, positional);
 	}
 
 	return { command: positional[0] ?? null, args: positional.slice(1), flags };
@@ -253,19 +264,13 @@ function handleStop(): void {
 		process.exit(0);
 	}
 
-	try {
-		process.kill(pidData.pid, 'SIGTERM');
-	} catch (err) {
-		const error = err as NodeJS.ErrnoException;
-		if (error.code === 'ESRCH') {
-			console.log('服務未在運行中（PID 檔案已過期）');
-		} else {
-			console.error(`停止服務時發生錯誤：${error.message}`);
-		}
+	if (!isProcessAlive(pidData.pid)) {
+		console.log('服務未在運行中（PID 檔案已過期）');
 		fs.unlinkSync(PID_FILE);
 		return;
 	}
 
+	process.kill(pidData.pid, 'SIGTERM');
 	fs.unlinkSync(PID_FILE);
 	console.log('服務已停止');
 }
@@ -372,7 +377,6 @@ export function handleLogs(flags: Record<string, string | boolean>, logFile = LO
 	if (!fs.existsSync(logFile)) {
 		console.log('尚無日誌檔案，請先啟動服務');
 		process.exit(0);
-		return;
 	}
 
 	const fileSize = fs.statSync(logFile).size;

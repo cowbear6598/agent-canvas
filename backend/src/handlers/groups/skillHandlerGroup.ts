@@ -11,10 +11,7 @@ import {
 } from '../../schemas';
 import {
   handleSkillList,
-  handleSkillNoteCreate,
-  handleSkillNoteList,
-  handleSkillNoteUpdate,
-  handleSkillNoteDelete,
+  skillNoteHandlers,
   handlePodBindSkill,
   handleSkillDelete,
   handleSkillImport,
@@ -32,25 +29,25 @@ export const skillHandlerGroup = createHandlerGroup({
     },
     {
       event: WebSocketRequestEvents.SKILL_NOTE_CREATE,
-      handler: handleSkillNoteCreate,
+      handler: skillNoteHandlers.handleNoteCreate,
       schema: skillNoteCreateSchema,
       responseEvent: WebSocketResponseEvents.SKILL_NOTE_CREATED,
     },
     {
       event: WebSocketRequestEvents.SKILL_NOTE_LIST,
-      handler: handleSkillNoteList,
+      handler: skillNoteHandlers.handleNoteList,
       schema: skillNoteListSchema,
       responseEvent: WebSocketResponseEvents.SKILL_NOTE_LIST_RESULT,
     },
     {
       event: WebSocketRequestEvents.SKILL_NOTE_UPDATE,
-      handler: handleSkillNoteUpdate,
+      handler: skillNoteHandlers.handleNoteUpdate,
       schema: skillNoteUpdateSchema,
       responseEvent: WebSocketResponseEvents.SKILL_NOTE_UPDATED,
     },
     {
       event: WebSocketRequestEvents.SKILL_NOTE_DELETE,
-      handler: handleSkillNoteDelete,
+      handler: skillNoteHandlers.handleNoteDelete,
       schema: skillNoteDeleteSchema,
       responseEvent: WebSocketResponseEvents.SKILL_NOTE_DELETED,
     },

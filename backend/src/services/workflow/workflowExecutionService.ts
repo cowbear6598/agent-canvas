@@ -225,34 +225,35 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
 
     await messageStore.addMessage(canvasId, targetPodId, 'user', messageToSend);
 
+    const onWorkflowChatComplete = async (_canvasId: string, _podId: string): Promise<void> => {
+      strategy.onComplete(
+        { canvasId, connectionId, sourcePodId, targetPodId, triggerMode: strategy.mode, participatingConnectionIds },
+        true
+      );
+      await autoClearService.onPodComplete(canvasId, targetPodId);
+      // 刻意不 await：下游 workflow 觸發獨立於當前查詢完成流程
+      fireAndForget(
+        this.checkAndTriggerWorkflows(canvasId, targetPodId),
+        'Workflow',
+        `下游 workflow 觸發失敗 (pod: ${targetPodId})`
+      );
+      this.scheduleNextInQueue(canvasId, targetPodId);
+    };
+
+    const onWorkflowChatError = async (_canvasId: string, _podId: string, error: Error): Promise<void> => {
+      const errorMessage = error.message;
+      strategy.onError(
+        { canvasId, connectionId, sourcePodId, targetPodId, triggerMode: strategy.mode, participatingConnectionIds },
+        errorMessage
+      );
+      logger.error('Workflow', 'Error', 'Workflow 執行失敗', error);
+      podStore.setStatus(canvasId, targetPodId, 'idle');
+      this.scheduleNextInQueue(canvasId, targetPodId);
+    };
+
     await executeStreamingChat(
       { canvasId, podId: targetPodId, message: messageToSend, abortable: false },
-      {
-        onComplete: async () => {
-          strategy.onComplete(
-            { canvasId, connectionId, sourcePodId, targetPodId, triggerMode: strategy.mode, participatingConnectionIds },
-            true
-          );
-          await autoClearService.onPodComplete(canvasId, targetPodId);
-          // 刻意不 await：下游 workflow 觸發獨立於當前查詢完成流程
-          fireAndForget(
-            this.checkAndTriggerWorkflows(canvasId, targetPodId),
-            'Workflow',
-            `下游 workflow 觸發失敗 (pod: ${targetPodId})`
-          );
-          this.scheduleNextInQueue(canvasId, targetPodId);
-        },
-        onError: async (_canvasId, _podId, error) => {
-          const errorMessage = error.message;
-          strategy.onError(
-            { canvasId, connectionId, sourcePodId, targetPodId, triggerMode: strategy.mode, participatingConnectionIds },
-            errorMessage
-          );
-          logger.error('Workflow', 'Error', 'Workflow 執行失敗', error);
-          podStore.setStatus(canvasId, targetPodId, 'idle');
-          this.scheduleNextInQueue(canvasId, targetPodId);
-        },
-      }
+      { onComplete: onWorkflowChatComplete, onError: onWorkflowChatError }
     );
   }
 }

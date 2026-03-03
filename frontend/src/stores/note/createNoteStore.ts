@@ -75,8 +75,8 @@ export interface NoteStoreConfig<TItem, TCustomActions extends object = object> 
         moveItemToGroup: { request: string; response: string }
     }
     createNotePayload: (item: TItem, x: number, y: number) => object
-    getItemId: (item: TItem) => string
-    getItemName: (item: TItem) => string
+    getItemId?: (item: TItem) => string
+    getItemName?: (item: TItem) => string
     crudConfig?: NoteCRUDConfig<{ id: string; name: string }>
     customActions?: TCustomActions
 }
@@ -92,6 +92,39 @@ export interface RebuildNotesConfig {
 
 type RebuildNotesStoreContext = Pick<NoteStoreContext, 'notes' | 'availableItems' | 'getNotesByPodId'>
 
+function shouldCreateNote(pod: Pod, itemId: string | null | undefined, existingNotes: NoteItem[]): boolean {
+    return !!itemId && existingNotes.length === 0
+}
+
+function buildNoteRequest(
+    pod: Pod,
+    itemId: string,
+    config: RebuildNotesConfig,
+    canvasId: string,
+    context: RebuildNotesStoreContext
+): Promise<void> {
+    const item = findItemById(context.availableItems, itemId)
+    const itemName = getItemName(item) ?? itemId
+
+    return createWebSocketRequest<BasePayload, Record<string, unknown>>({
+        requestEvent: config.requestEvent,
+        responseEvent: config.responseEvent,
+        payload: {
+            canvasId,
+            [config.itemIdField]: itemId,
+            name: itemName,
+            x: pod.x,
+            y: pod.y + config.yOffset,
+            boundToPodId: pod.id,
+            originalPosition: { x: pod.x, y: pod.y + config.yOffset },
+        }
+    }).then(response => {
+        if (response.note) {
+            context.notes.push(response.note as NoteItem)
+        }
+    })
+}
+
 export async function rebuildNotesFromPods(
     context: RebuildNotesStoreContext,
     pods: Pod[],
@@ -100,38 +133,9 @@ export async function rebuildNotesFromPods(
     const canvasId = getActiveCanvasIdOrWarn(config.storeName)
     if (!canvasId) return
 
-    const promises: Promise<void>[] = []
-
-    for (const pod of pods) {
-        const itemId = pod[config.podIdField] as string | null | undefined
-        if (!itemId) continue
-
-        const existingNotes = context.getNotesByPodId(pod.id)
-        if (existingNotes.length > 0) continue
-
-        const item = findItemById(context.availableItems, itemId)
-        const itemName = getItemName(item) ?? itemId
-
-        const promise = createWebSocketRequest<BasePayload, Record<string, unknown>>({
-            requestEvent: config.requestEvent,
-            responseEvent: config.responseEvent,
-            payload: {
-                canvasId,
-                [config.itemIdField]: itemId,
-                name: itemName,
-                x: pod.x,
-                y: pod.y + config.yOffset,
-                boundToPodId: pod.id,
-                originalPosition: { x: pod.x, y: pod.y + config.yOffset },
-            }
-        }).then(response => {
-            if (response.note) {
-                context.notes.push(response.note as NoteItem)
-            }
-        })
-
-        promises.push(promise)
-    }
+    const promises = pods
+        .filter(pod => shouldCreateNote(pod, pod[config.podIdField] as string | null | undefined, context.getNotesByPodId(pod.id)))
+        .map(pod => buildNoteRequest(pod, pod[config.podIdField] as string, config, canvasId, context))
 
     if (promises.length > 0) {
         await Promise.all(promises)
@@ -170,6 +174,9 @@ export interface NoteStoreContext<TItem = unknown> extends BaseNoteState {
 export function createNoteStore<TItem, TNote extends BaseNote, TCustomActions extends object = object>(
     config: NoteStoreConfig<TItem, TCustomActions>
 ) {
+    const getItemId = config.getItemId ?? ((item: TItem): string => (item as { id: string }).id)
+    const getItemName = config.getItemName ?? ((item: TItem): string => (item as { name: string }).name)
+
     return defineStore(config.storeName, {
         state: (): BaseNoteState => ({
             availableItems: [],
@@ -230,7 +237,7 @@ export function createNoteStore<TItem, TNote extends BaseNote, TCustomActions ex
                 const groups = [...state.groups].sort((a, b) => a.name.localeCompare(b.name))
                 const rootItems = state.availableItems
                     .filter(item => !(item as Record<string, unknown>).groupId)
-                    .sort((a, b) => config.getItemName(a as TItem).localeCompare(config.getItemName(b as TItem)))
+                    .sort((a, b) => getItemName(a as TItem).localeCompare(getItemName(b as TItem)))
                 return {groups, rootItems: rootItems as TItem[]}
             },
 
@@ -301,10 +308,10 @@ export function createNoteStore<TItem, TNote extends BaseNote, TCustomActions ex
             },
 
             async createNote(itemId: string, x: number, y: number): Promise<void> {
-                const item = this.availableItems.find(candidate => config.getItemId(candidate as TItem) === itemId)
+                const item = this.availableItems.find(candidate => getItemId(candidate as TItem) === itemId)
                 if (!item) return
 
-                const itemName = config.getItemName(item as TItem)
+                const itemName = getItemName(item as TItem)
                 const canvasId = requireActiveCanvas()
 
                 const payload = {
@@ -371,12 +378,12 @@ export function createNoteStore<TItem, TNote extends BaseNote, TCustomActions ex
                 const canvasId = requireActiveCanvas()
                 const {showSuccessToast, showErrorToast} = useToast()
 
-                const item = this.availableItems.find(candidate => config.getItemId(candidate as TItem) === itemId)
-                const itemName = item ? config.getItemName(item as TItem) : undefined
+                const item = this.availableItems.find(candidate => getItemId(candidate as TItem) === itemId)
+                const itemName = item ? getItemName(item as TItem) : undefined
                 const category = (STORE_TO_CATEGORY_MAP[config.storeName] || 'Note') as 'Skill' | 'Repository' | 'SubAgent' | 'Command' | 'OutputStyle' | 'Note'
 
                 const removeItemFromState = (res: BaseResponse): void => {
-                    const index = this.availableItems.findIndex(i => config.getItemId(i as TItem) === itemId)
+                    const index = this.availableItems.findIndex(i => getItemId(i as TItem) === itemId)
                     if (index !== -1) {
                         this.availableItems.splice(index, 1)
                     }
@@ -423,21 +430,21 @@ export function createNoteStore<TItem, TNote extends BaseNote, TCustomActions ex
             },
 
             addItemFromEvent(item: TItem): void {
-                const exists = this.availableItems.some(i => config.getItemId(i as TItem) === config.getItemId(item))
+                const exists = this.availableItems.some(i => getItemId(i as TItem) === getItemId(item))
                 if (!exists) {
                     this.availableItems.push(item)
                 }
             },
 
             updateItemFromEvent(item: TItem): void {
-                const index = this.availableItems.findIndex(i => config.getItemId(i as TItem) === config.getItemId(item))
+                const index = this.availableItems.findIndex(i => getItemId(i as TItem) === getItemId(item))
                 if (index !== -1) {
                     this.availableItems.splice(index, 1, item)
                 }
             },
 
             removeItemFromEvent(itemId: string, deletedNoteIds?: string[]): void {
-                this.availableItems = this.availableItems.filter(item => config.getItemId(item as TItem) !== itemId)
+                this.availableItems = this.availableItems.filter(item => getItemId(item as TItem) !== itemId)
 
                 if (deletedNoteIds) {
                     this.notes = this.notes.filter(note => !deletedNoteIds.includes(note.id))
@@ -464,7 +471,7 @@ export function createNoteStore<TItem, TNote extends BaseNote, TCustomActions ex
             },
 
             updateItemGroupId(itemId: string, groupId: string | null): void {
-                const item = this.availableItems.find(candidate => config.getItemId(candidate as TItem) === itemId)
+                const item = this.availableItems.find(candidate => getItemId(candidate as TItem) === itemId)
                 if (item) {
                     (item as Record<string, unknown>).groupId = groupId
                 }

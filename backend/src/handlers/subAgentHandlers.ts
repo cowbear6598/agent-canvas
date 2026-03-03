@@ -14,7 +14,7 @@ import {createMoveToGroupHandler} from './factories/createMoveToGroupHandler.js'
 import {GROUP_TYPES} from '../types';
 import type {Pod} from '../types/pod.js';
 
-const subAgentNoteHandlers = createNoteHandlers({
+export const subAgentNoteHandlers = createNoteHandlers({
     noteStore: subAgentNoteStore,
     events: {
         created: WebSocketResponseEvents.SUBAGENT_NOTE_CREATED,
@@ -25,11 +25,6 @@ const subAgentNoteHandlers = createNoteHandlers({
     foreignKeyField: 'subAgentId',
     entityName: 'SubAgent',
 });
-
-export const handleSubAgentNoteCreate = subAgentNoteHandlers.handleNoteCreate;
-export const handleSubAgentNoteList = subAgentNoteHandlers.handleNoteList;
-export const handleSubAgentNoteUpdate = subAgentNoteHandlers.handleNoteUpdate;
-export const handleSubAgentNoteDelete = subAgentNoteHandlers.handleNoteDelete;
 
 const resourceHandlers = createResourceHandlers({
     service: subAgentService,

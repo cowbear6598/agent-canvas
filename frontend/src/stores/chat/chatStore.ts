@@ -18,6 +18,7 @@ import type {
     WorkflowAutoClearedPayload
 } from '@/types/websocket'
 import type {Command} from '@/types/command'
+import type {Pod} from '@/types/pod'
 import {createMessageActions} from './chatMessageActions'
 import {createConnectionActions} from './chatConnectionActions'
 import {createHistoryActions} from './chatHistoryActions'
@@ -32,13 +33,25 @@ function hasMessageContent(content: string, contentBlocks: ContentBlock[] | unde
     return (contentBlocks?.length ?? 0) > 0 || content.trim().length > 0
 }
 
-function resolveCommand(podId: string): Command | null | undefined {
-    const podStore = usePodStore()
-    const commandStore = useCommandStore()
-    const pod = podStore.pods.find(p => p.id === podId)
-    return pod?.commandId
-        ? commandStore.typedAvailableItems.find(c => c.id === pod.commandId)
-        : null
+function resolveCommandForPod(podId: string, pods: Pod[], availableCommands: Command[]): Command | null {
+    const pod = pods.find(p => p.id === podId)
+    if (!pod?.commandId) return null
+    return availableCommands.find(c => c.id === pod.commandId) ?? null
+}
+
+function buildTextPayload(content: string, command: Command | null | undefined): string {
+    return command ? `/${command.name} ${content}` : content
+}
+
+function buildBlockPayload(contentBlocks: ContentBlock[], command: Command | null | undefined): ContentBlock[] {
+    let prefixApplied = false
+    return contentBlocks.map(block => {
+        if (block.type === 'text' && command && !prefixApplied) {
+            prefixApplied = true
+            return { ...block, text: `/${command.name} ${block.text}` }
+        }
+        return block
+    })
 }
 
 function buildMessagePayload(
@@ -47,19 +60,9 @@ function buildMessagePayload(
     command: Command | null | undefined
 ): string | ContentBlock[] {
     if (!contentBlocks || contentBlocks.length === 0) {
-        return command ? `/${command.name} ${content}` : content
+        return buildTextPayload(content, command)
     }
-
-    let prefixApplied = false
-    const blocks = contentBlocks.map(block => {
-        if (block.type === 'text' && command && !prefixApplied) {
-            prefixApplied = true
-            return { ...block, text: `/${command.name} ${block.text}` }
-        }
-        return block
-    })
-
-    return blocks
+    return buildBlockPayload(contentBlocks, command)
 }
 
 export type ChatStoreInstance = ReturnType<typeof useChatStore>
@@ -204,7 +207,9 @@ export const useChatStore = defineStore('chat', {
 
             if (!hasMessageContent(content, contentBlocks)) return
 
-            const command = resolveCommand(podId)
+            const podStore = usePodStore()
+            const commandStore = useCommandStore()
+            const command = resolveCommandForPod(podId, podStore.pods, commandStore.typedAvailableItems)
             const messagePayload = buildMessagePayload(content, contentBlocks, command)
 
             const canvasId = getActiveCanvasIdOrWarn('ChatStore')

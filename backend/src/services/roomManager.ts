@@ -1,16 +1,7 @@
-/**
- * Room 管理器
- * 用於管理 WebSocket 連線的房間（群組）
- */
 class RoomManager {
-	/** roomName -> Set of connectionIds */
 	private rooms: Map<string, Set<string>> = new Map();
-	/** connectionId -> Set of roomNames */
 	private connectionRooms: Map<string, Set<string>> = new Map();
 
-	/**
-	 * 加入房間
-	 */
 	join(connectionId: string, roomName: string): void {
 		if (!this.rooms.has(roomName)) {
 			this.rooms.set(roomName, new Set());
@@ -23,9 +14,6 @@ class RoomManager {
 		this.connectionRooms.get(connectionId)!.add(roomName);
 	}
 
-	/**
-	 * 離開房間
-	 */
 	leave(connectionId: string, roomName: string): void {
 		const room = this.rooms.get(roomName);
 		if (room) {
@@ -44,9 +32,6 @@ class RoomManager {
 		}
 	}
 
-	/**
-	 * 離開所有房間
-	 */
 	leaveAll(connectionId: string): void {
 		const rooms = this.connectionRooms.get(connectionId);
 		if (rooms) {
@@ -58,9 +43,6 @@ class RoomManager {
 		}
 	}
 
-	/**
-	 * 取得房間成員
-	 */
 	getMembers(roomName: string): string[] {
 		const room = this.rooms.get(roomName);
 		return room ? Array.from(room) : [];

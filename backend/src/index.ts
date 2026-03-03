@@ -90,7 +90,7 @@ async function startServer(): Promise<void> {
 						socketService.emitToConnection(connectionId, 'error', {
 							requestId: parsedMessage.requestId,
 							success: false,
-							error: error instanceof Error ? error.message : '處理訊息時發生錯誤',
+							error: '訊息處理失敗，請稍後再試',
 							code: 'ROUTING_ERROR',
 						});
 					});

@@ -285,8 +285,6 @@ const store = createNoteStore<Repository, RepositoryNote>({
   createNotePayload: (item: Repository) => ({
     repositoryId: item.id,
   }),
-  getItemId: (item: Repository) => item.id,
-  getItemName: (item: Repository) => item.name,
   customActions: createRepositoryCustomActions(),
 })
 

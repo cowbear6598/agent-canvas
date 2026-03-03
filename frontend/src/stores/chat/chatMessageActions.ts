@@ -1,5 +1,6 @@
 import {generateRequestId} from '@/services/utils'
 import {usePodStore} from '../pod/podStore'
+import type {Pod} from '@/types/pod'
 import type {Message, SubMessage, ToolUseInfo} from '@/types/chat'
 import {isValidToolUseStatus} from '@/types/chat'
 import type {
@@ -33,11 +34,8 @@ function collectToolUseFromSubMessages(subMessages: PersistedMessage['subMessage
     )
 }
 
-async function appendUserOutputToPod(podId: string, content: string): Promise<void> {
+function appendUserOutputToPod(pod: Pod, content: string): void {
     const podStore = usePodStore()
-    const pod = podStore.pods.find(pod => pod.id === podId)
-    if (!pod) return
-
     const truncatedContent = `> ${truncateContent(content, CONTENT_PREVIEW_LENGTH)}`
     const lastOutput = pod.output[pod.output.length - 1]
     if (lastOutput === truncatedContent) return
@@ -89,7 +87,7 @@ export function createMessageActions(store: ChatStoreInstance): ChatMessageActio
 
     const addUserMessage = async (podId: string, content: string): Promise<void> => {
         const podStore = usePodStore()
-        const pod = podStore.pods.find(pod => pod.id === podId)
+        const pod = podStore.pods.find(p => p.id === podId)
         if (!pod) return
 
         const userMessage: Message = {
@@ -102,7 +100,7 @@ export function createMessageActions(store: ChatStoreInstance): ChatMessageActio
         const messages = getMessages(store, podId)
         store.messagesByPodId.set(podId, [...messages, userMessage])
 
-        await appendUserOutputToPod(podId, content)
+        appendUserOutputToPod(pod, content)
     }
 
     const handleChatMessage = (payload: PodChatMessagePayload): void => {
@@ -148,7 +146,11 @@ export function createMessageActions(store: ChatStoreInstance): ChatMessageActio
         }
 
         if (effectiveRole === 'user') {
-            await appendUserOutputToPod(podId, content)
+            const podStore = usePodStore()
+            const pod = podStore.pods.find(p => p.id === podId)
+            if (pod) {
+                appendUserOutputToPod(pod, content)
+            }
         }
     }
 

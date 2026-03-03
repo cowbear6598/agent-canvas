@@ -578,17 +578,31 @@ export class ClaudeService {
         return {success: false, content: '', error: errorMsg};
     }
 
+    private processCollectStreamMessage(
+        sdkMessage: SDKMessage,
+        fullContent: string,
+    ): {done: false; content: string} | {done: true; result: {success: boolean; content: string; error?: string}} {
+        if (sdkMessage.type === 'assistant') {
+            return {done: false, content: fullContent + this.extractTextFromAssistantMessage(sdkMessage as SDKAssistantMessage)};
+        }
+        if (sdkMessage.type !== 'result') {
+            return {done: false, content: fullContent};
+        }
+        const result = this.processResultMessage(sdkMessage as SDKResultMessage);
+        if (!result.success) {
+            return {done: true, result};
+        }
+        return {done: true, result: {success: true, content: result.content || fullContent}};
+    }
+
     private async collectTextFromStream(stream: Query): Promise<{success: boolean; content: string; error?: string}> {
         let fullContent = '';
         for await (const sdkMessage of stream) {
-            if (sdkMessage.type === 'assistant') {
-                fullContent += this.extractTextFromAssistantMessage(sdkMessage as SDKAssistantMessage);
-                continue;
+            const outcome = this.processCollectStreamMessage(sdkMessage, fullContent);
+            if (outcome.done) {
+                return outcome.result;
             }
-            if (sdkMessage.type === 'result') {
-                const result = this.processResultMessage(sdkMessage as SDKResultMessage);
-                return result.success ? {success: true, content: result.content || fullContent} : result;
-            }
+            fullContent = outcome.content;
         }
         return {success: true, content: fullContent};
     }

@@ -9,6 +9,7 @@ import {
 } from '../../src/services/workspace/gitService';
 import { ok, err } from '../../src/types';
 import { config } from '../../src/config';
+import path from 'path';
 
 describe('GitService - Git 來源偵測與認證', () => {
   describe('extractDomainFromUrl', () => {
@@ -193,6 +194,32 @@ describe('GitService - Git 來源偵測與認證', () => {
 
       expect(result).toBe('Pull 至最新版本失敗');
     });
+  });
+});
+
+describe('GitService - clone 路徑驗證', () => {
+  it('targetPath 在允許範圍外時應回傳錯誤，不執行 git clone', async () => {
+    const outsidePath = path.join('/tmp', 'outside-repo');
+    const result = await gitService.clone('https://github.com/user/repo.git', outsidePath);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('目標路徑不在允許的範圍內');
+  });
+});
+
+describe('GitService - fetchRemoteBranch 分支名驗證', () => {
+  it('無效分支名稱（含路徑穿越）應回傳錯誤', async () => {
+    const result = await gitService.fetchRemoteBranch('/fake/path', '../evil-branch');
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('無效的分支名稱');
+  });
+
+  it('含特殊字元的無效分支名稱應回傳錯誤', async () => {
+    const result = await gitService.fetchRemoteBranch('/fake/path', 'branch; rm -rf /');
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('無效的分支名稱');
   });
 });
 

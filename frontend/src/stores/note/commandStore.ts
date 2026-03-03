@@ -81,8 +81,6 @@ const store = createNoteStore<Command, CommandNote>({
   createNotePayload: (item: Command) => ({
     commandId: item.id,
   }),
-  getItemId: (item: Command) => item.id,
-  getItemName: (item: Command) => item.name,
   crudConfig: {
     resourceType: 'Command',
     methodPrefix: 'command',
@@ -124,10 +122,7 @@ const store = createNoteStore<Command, CommandNote>({
       })
     },
 
-    loadGroups: commandGroupCRUD.loadGroups,
-    createGroup: commandGroupCRUD.createGroup,
-    deleteGroup: commandGroupCRUD.deleteGroup,
-    moveItemToGroup: commandGroupCRUD.moveItemToGroup,
+    ...commandGroupCRUD,
   }
 })
 

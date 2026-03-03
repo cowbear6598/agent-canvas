@@ -12,7 +12,7 @@ import {createBindHandler} from './factories/createBindHandlers.js';
 import {createListHandler, createDeleteHandler} from './factories/createResourceHandlers.js';
 import {logger} from '../utils/logger.js';
 
-const skillNoteHandlers = createNoteHandlers({
+export const skillNoteHandlers = createNoteHandlers({
     noteStore: skillNoteStore,
     events: {
         created: WebSocketResponseEvents.SKILL_NOTE_CREATED,
@@ -23,11 +23,6 @@ const skillNoteHandlers = createNoteHandlers({
     foreignKeyField: 'skillId',
     entityName: 'Skill',
 });
-
-export const handleSkillNoteCreate = skillNoteHandlers.handleNoteCreate;
-export const handleSkillNoteList = skillNoteHandlers.handleNoteList;
-export const handleSkillNoteUpdate = skillNoteHandlers.handleNoteUpdate;
-export const handleSkillNoteDelete = skillNoteHandlers.handleNoteDelete;
 
 export const handleSkillList = createListHandler({
     service: skillService,

@@ -5,34 +5,25 @@ import {emitSuccess, emitError} from '../../utils/websocketResponse.js';
 import {logger, type LogCategory} from '../../utils/logger.js';
 import {validatePod, withCanvasId, emitPodUpdated} from '../../utils/handlerHelpers.js';
 
-/**
- * 資源綁定處理器的配置介面
- */
 export interface BindResourceConfig<TService, TIdField extends string = string> {
-    /** 資源名稱（用於日誌和錯誤訊息） */
     resourceName: string;
-    /** 資源 ID 欄位名稱 */
     idField: TIdField;
-    /** 是否為多重綁定（true: 陣列模式如 skillIds, false: 單一值模式如 commandId） */
+    /** true: 陣列模式如 skillIds，false: 單一值模式如 commandId */
     isMultiBind: boolean;
-    /** 資源服務實例 */
     service: TService;
-    /** Pod Store 的更新方法 */
     podStoreMethod: {
         bind: (canvasId: string, podId: string, resourceId: string) => void;
         unbind?: (canvasId: string, podId: string) => void;
     };
-    /** 獲取 Pod 已綁定的資源 IDs */
     getPodResourceIds: (pod: {skillIds: string[]; commandId: string | null; outputStyleId: string | null; subAgentIds: string[]; mcpServerIds: string[]}) => string[] | string | null;
-    /** 複製資源到 Pod 的方法（optional，不提供時跳過複製） */
+    /** 不提供時跳過複製 */
     copyResourceToPod?: (resourceId: string, pod: Pod) => Promise<void>;
-    /** 從路徑刪除資源的方法（用於 unbind，optional，不提供時跳過刪除） */
+    /** 不提供時跳過刪除 */
     deleteResourceFromPath?: (workspacePath: string) => Promise<void>;
-    /** 跳過衝突檢查（用於允許直接覆蓋的情境，如 OutputStyle） */
+    /** 允許直接覆蓋的情境使用，如 OutputStyle */
     skipConflictCheck?: boolean;
-    /** 跳過 repository sync（用於不需要同步的情境，如 OutputStyle） */
+    /** 不需要同步的情境使用，如 OutputStyle */
     skipRepositorySync?: boolean;
-    /** WebSocket 事件名稱 */
     events: {
         bound: WebSocketResponseEvents;
         unbound?: WebSocketResponseEvents;
@@ -130,9 +121,6 @@ async function performBind<TService, TIdField extends string>(
     logger.log(config.resourceName as LogCategory, 'Bind', `已將 ${config.resourceName.toLowerCase()}「${resourceId}」綁定到 Pod「${pod.name}」`);
 }
 
-/**
- * 建立資源綁定處理器
- */
 export function createBindHandler<TService extends {exists: (id: string) => Promise<boolean>}, TIdField extends string>(
     config: BindResourceConfig<TService, TIdField>
 ): ReturnType<typeof withCanvasId<{podId: string} & Record<TIdField, string>>> {
@@ -173,9 +161,6 @@ function assertUnbindConfig<TService, TIdField extends string>(
     }
 }
 
-/**
- * 建立資源解綁處理器（僅用於單一綁定模式，如 Command）
- */
 export function createUnbindHandler<TService, TIdField extends string>(
     config: BindResourceConfig<TService, TIdField>
 ): ReturnType<typeof withCanvasId<{podId: string}>> {
