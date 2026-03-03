@@ -255,5 +255,4 @@ export enum WebSocketResponseEvents {
   POD_SLACK_UNBOUND = 'pod:slack:unbound',
   SLACK_CONNECTION_STATUS_CHANGED = 'slack:connection:status:changed',
   SLACK_MESSAGE_RECEIVED = 'slack:message:received',
-  SLACK_MESSAGE_QUEUED = 'slack:message:queued',
 }

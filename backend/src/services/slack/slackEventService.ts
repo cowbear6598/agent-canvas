@@ -1,5 +1,15 @@
 import {v4 as uuidv4} from 'uuid';
 import type {Pod} from '../../types/index.js';
+import type {SlackMessage} from '../../types/index.js';
+import {WebSocketResponseEvents} from '../../schemas/events.js';
+import {podStore} from '../podStore.js';
+import {messageStore} from '../messageStore.js';
+import {socketService} from '../socketService.js';
+import {slackAppStore} from './slackAppStore.js';
+import {slackConnectionManager} from './slackConnectionManager.js';
+import {connectionStore} from '../connectionStore.js';
+import {executeStreamingChat} from '../claude/streamingChatExecutor.js';
+import {logger} from '../../utils/logger.js';
 
 interface AppMentionEvent {
     type: 'app_mention';
@@ -9,17 +19,16 @@ interface AppMentionEvent {
     thread_ts?: string;
     event_ts: string;
 }
-import type {SlackQueueMessage} from '../../types/index.js';
-import {WebSocketResponseEvents} from '../../schemas/events.js';
-import {podStore} from '../podStore.js';
-import {messageStore} from '../messageStore.js';
-import {socketService} from '../socketService.js';
-import {slackAppStore} from './slackAppStore.js';
-import {slackMessageQueue} from './slackMessageQueue.js';
-import {executeStreamingChat} from '../claude/streamingChatExecutor.js';
-import {logger} from '../../utils/logger.js';
+
+const BUSY_STATUSES = new Set(['chatting', 'summarizing'] as const);
+const MAX_WORKFLOW_CHAIN_SIZE = 50;
 
 class SlackEventService {
+    // 忙碌回覆冷卻時間（毫秒）
+    private static readonly BUSY_REPLY_COOLDOWN_MS = 30_000;
+    // 記錄每個頻道最後一次忙碌回覆的時間
+    private busyReplyCooldowns = new Map<string, number>();
+
     async handleAppMention(slackAppId: string, event: AppMentionEvent): Promise<void> {
         const {channel, user, text, thread_ts, event_ts} = event;
 
@@ -29,7 +38,7 @@ class SlackEventService {
 
         const userName = user ?? 'unknown';
 
-        const message: SlackQueueMessage = {
+        const message: SlackMessage = {
             id: uuidv4(),
             slackAppId,
             channelId: channel,
@@ -48,40 +57,95 @@ class SlackEventService {
             return;
         }
 
+        if (this.isSlackChannelBusy(slackAppId, channel)) {
+            if (this.shouldSendBusyReply(channel)) {
+                await slackConnectionManager.sendMessage(slackAppId, channel, '目前忙碌中，請稍後再試');
+            }
+            return;
+        }
+
         for (const {canvasId, pod} of boundPods) {
-            await this.routeMessageToPod(canvasId, pod.id, message);
+            if (BUSY_STATUSES.has(pod.status as 'chatting' | 'summarizing')) {
+                continue;
+            }
+
+            if (pod.status === 'error') {
+                podStore.setStatus(canvasId, pod.id, 'idle');
+            }
+
+            await this.injectSlackMessage(canvasId, pod.id, message);
         }
     }
 
-    async routeMessageToPod(canvasId: string, podId: string, message: SlackQueueMessage): Promise<void> {
-        const pod = podStore.getById(canvasId, podId);
-        if (!pod) {
-            logger.log('Slack', 'Error', `[SlackEventService] 找不到 Pod ${podId}，略過路由`);
-            return;
+    isSlackChannelBusy(slackAppId: string, channelId: string): boolean {
+        const allBoundPods = podStore.findBySlackApp(slackAppId);
+        const channelPods = allBoundPods.filter(({pod}) => pod.slackBinding?.slackChannelId === channelId);
+
+        for (const {canvasId, pod} of channelPods) {
+            if (BUSY_STATUSES.has(pod.status as 'chatting' | 'summarizing')) return true;
+            if (this.isWorkflowChainBusy(canvasId, pod.id)) return true;
         }
 
-        if (pod.status === 'chatting' || pod.status === 'summarizing') {
-            slackMessageQueue.enqueue(podId, message);
-            socketService.emitToCanvas(canvasId, WebSocketResponseEvents.SLACK_MESSAGE_QUEUED, {
-                canvasId,
-                podId,
-                message,
-            });
-            logger.log('Slack', 'Complete', `[SlackEventService] Pod「${pod.name}」正忙碌中，訊息已加入佇列`);
-            return;
-        }
-
-        if (pod.status === 'error') {
-            podStore.setStatus(canvasId, podId, 'idle');
-            logger.log('Slack', 'Complete', `[SlackEventService] Pod「${pod.name}」狀態為 error，已重設為 idle`);
-        }
-
-        await this.injectSlackMessage(canvasId, podId, message);
+        return false;
     }
 
-    async injectSlackMessage(canvasId: string, podId: string, message: SlackQueueMessage): Promise<void> {
-        const pod = podStore.getById(canvasId, podId);
-        const podName = pod?.name ?? podId;
+    private shouldSendBusyReply(channelId: string): boolean {
+        const lastReplyTime = this.busyReplyCooldowns.get(channelId);
+        const now = Date.now();
+        if (lastReplyTime && now - lastReplyTime < SlackEventService.BUSY_REPLY_COOLDOWN_MS) {
+            return false;
+        }
+        this.busyReplyCooldowns.set(channelId, now);
+        return true;
+    }
+
+    private getAdjacentPodIds(canvasId: string, podId: string): string[] {
+        const downstream = connectionStore.findBySourcePodId(canvasId, podId).map(c => c.targetPodId);
+        const upstream = connectionStore.findByTargetPodId(canvasId, podId).map(c => c.sourcePodId);
+        return [...downstream, ...upstream];
+    }
+
+    // BFS 雙向遍歷 Workflow 鏈，對每個非起始節點執行 predicate
+    private traverseWorkflowChain(canvasId: string, startPodId: string, predicate: (podId: string) => boolean): boolean {
+        const visited = new Set<string>([startPodId]);
+        const queue = this.getAdjacentPodIds(canvasId, startPodId).filter(id => !visited.has(id));
+        queue.forEach(id => visited.add(id));
+
+        while (queue.length > 0) {
+            if (visited.size > MAX_WORKFLOW_CHAIN_SIZE) {
+                logger.warn('Slack', 'Warn', `Workflow 鏈遍歷超過 ${MAX_WORKFLOW_CHAIN_SIZE} 個節點，中止遍歷`);
+                return false;
+            }
+
+            const currentId = queue.shift()!;
+            if (predicate(currentId)) return true;
+
+            for (const adjacentId of this.getAdjacentPodIds(canvasId, currentId)) {
+                if (!visited.has(adjacentId)) {
+                    visited.add(adjacentId);
+                    queue.push(adjacentId);
+                }
+            }
+        }
+        return false;
+    }
+
+    private isWorkflowChainBusy(canvasId: string, podId: string): boolean {
+        return this.traverseWorkflowChain(canvasId, podId, (currentId) => {
+            const pod = podStore.getById(canvasId, currentId);
+            return !!pod && BUSY_STATUSES.has(pod.status as 'chatting' | 'summarizing');
+        });
+    }
+
+    async injectSlackMessage(canvasId: string, podId: string, message: SlackMessage): Promise<void> {
+        // 二次確認 Pod 狀態，防止並發 Slack 事件穿透
+        const currentPod = podStore.getById(canvasId, podId);
+        if (currentPod && BUSY_STATUSES.has(currentPod.status as 'chatting' | 'summarizing')) {
+            logger.log('Slack', 'Complete', `Pod「${currentPod.name}」已在忙碌中，跳過注入`);
+            return;
+        }
+
+        const podName = currentPod?.name ?? podId;
 
         const formattedText = `[Slack: @${message.userName}] ${message.text}`;
 
@@ -101,21 +165,8 @@ class SlackEventService {
 
         await executeStreamingChat(
             {canvasId, podId, message: formattedText, abortable: false},
-            {
-                onComplete: async (completedCanvasId, completedPodId) => {
-                    await this.processNextQueueMessage(completedCanvasId, completedPodId);
-                },
-            }
+            {}
         );
-    }
-
-    async processNextQueueMessage(canvasId: string, podId: string): Promise<void> {
-        const nextMessage = slackMessageQueue.dequeue(podId);
-        if (!nextMessage) {
-            return;
-        }
-
-        await this.injectSlackMessage(canvasId, podId, nextMessage);
     }
 
     findBoundPods(slackAppId: string, channelId: string): Array<{canvasId: string; pod: Pod}> {

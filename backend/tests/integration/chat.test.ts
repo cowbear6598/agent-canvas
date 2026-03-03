@@ -106,6 +106,32 @@ describe('Chat 管理', () => {
       expect(errorEvent.error).toContain('找不到');
     });
 
+    it('Pod 已連接 Slack 時發送失敗並回傳 SLACK_BOUND', async () => {
+      const canvasId = await getCanvasId(client);
+      const pod = await createPod(client, { name: 'Slack Pod' });
+
+      const { podStore } = await import('../../src/services/podStore.js');
+      podStore.setSlackBinding(canvasId, pod.id, { slackAppId: 'app-1', slackChannelId: 'C123' });
+
+      const errorPromise = waitForEvent<PodErrorPayload>(
+        client,
+        WebSocketResponseEvents.POD_ERROR
+      );
+
+      client.emit(WebSocketRequestEvents.POD_CHAT_SEND, {
+        requestId: uuidv4(),
+        canvasId,
+        podId: pod.id,
+        message: 'Hello',
+      } satisfies PodChatSendPayload);
+
+      const errorEvent = await errorPromise;
+      expect(errorEvent.code).toBe('SLACK_BOUND');
+      expect(errorEvent.error).toContain('Slack');
+
+      podStore.setSlackBinding(canvasId, pod.id, null);
+    });
+
     it('Pod 總結中時發送失敗', async () => {
       const canvasId = await getCanvasId(client);
       const pod = await createPod(client, { name: 'Summarizing Pod' });

@@ -536,14 +536,6 @@ export interface SlackMessageReceivedPayload {
     text: string
 }
 
-export interface SlackMessageQueuedPayload {
-    canvasId: string
-    podId: string
-    queueSize: number
-    userName: string
-    text: string
-}
-
 export interface PodSlackBoundPayload extends ResultPayload {
     canvasId: string
     pod?: Pod

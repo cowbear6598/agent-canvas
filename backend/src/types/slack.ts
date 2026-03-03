@@ -20,7 +20,7 @@ export interface PodSlackBinding {
   slackChannelId: string;
 }
 
-export interface SlackQueueMessage {
+export interface SlackMessage {
   id: string;
   slackAppId: string;
   channelId: string;

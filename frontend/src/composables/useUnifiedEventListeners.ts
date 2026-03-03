@@ -562,11 +562,6 @@ const handleSlackMessageReceived = (payload: { podId: string; userName: string; 
   toast({ title: `Slack 訊息`, description: `來自 ${payload.userName}：${truncatedText}` })
 }
 
-const handleSlackMessageQueued = (payload: { queueSize: number }): void => {
-  const { toast } = useToast()
-  toast({ title: `Slack 訊息已排隊`, description: `目前佇列大小：${payload.queueSize}` })
-}
-
 const handlePodChatUserMessage = (payload: { podId: string; messageId: string; content: string; timestamp: string }): void => {
   const chatStore = useChatStore()
   const podStore = usePodStore()
@@ -663,7 +658,6 @@ export function registerUnifiedListeners(): void {
   websocketClient.on('pod:chat:user-message', handlePodChatUserMessage as (payload: unknown) => void)
   websocketClient.on(WebSocketResponseEvents.SLACK_CONNECTION_STATUS_CHANGED, handleSlackConnectionStatusChanged as (payload: unknown) => void)
   websocketClient.on(WebSocketResponseEvents.SLACK_MESSAGE_RECEIVED, handleSlackMessageReceived as (payload: unknown) => void)
-  websocketClient.on(WebSocketResponseEvents.SLACK_MESSAGE_QUEUED, handleSlackMessageQueued as (payload: unknown) => void)
 }
 
 export function unregisterUnifiedListeners(): void {
@@ -677,7 +671,6 @@ export function unregisterUnifiedListeners(): void {
   websocketClient.off('pod:chat:user-message', handlePodChatUserMessage as (payload: unknown) => void)
   websocketClient.off(WebSocketResponseEvents.SLACK_CONNECTION_STATUS_CHANGED, handleSlackConnectionStatusChanged as (payload: unknown) => void)
   websocketClient.off(WebSocketResponseEvents.SLACK_MESSAGE_RECEIVED, handleSlackMessageReceived as (payload: unknown) => void)
-  websocketClient.off(WebSocketResponseEvents.SLACK_MESSAGE_QUEUED, handleSlackMessageQueued as (payload: unknown) => void)
 }
 
 export const useUnifiedEventListeners = (): {

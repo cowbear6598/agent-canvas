@@ -15,7 +15,6 @@ import type { Result } from '../types/index.js';
 import { ok } from '../types/index.js';
 import type { Pod } from '../types/pod.js';
 import { logger } from '../utils/logger.js';
-import { slackMessageQueue } from './slack/slackMessageQueue.js';
 
 interface CreatePodResult {
     pod: Pod;
@@ -41,13 +40,6 @@ export function deleteAllPodNotes(canvasId: string, podId: string): PodDeletedPa
     }
 
     return result;
-}
-
-async function cleanupSlackBinding(podId: string, hasSlackBinding: boolean): Promise<void> {
-    if (!hasSlackBinding) {
-        return;
-    }
-    slackMessageQueue.clear(podId);
 }
 
 async function cleanupRepositoryResources(repositoryId: string | null | undefined, podId: string): Promise<void> {
@@ -85,7 +77,6 @@ export async function deletePodWithCleanup(canvasId: string, podId: string, requ
     const deletedNoteIdsPayload = deleteAllPodNotes(canvasId, podId);
     connectionStore.deleteByPodId(canvasId, podId);
 
-    await cleanupSlackBinding(podId, !!pod.slackBinding);
     await cleanupRepositoryResources(pod.repositoryId, podId);
 
     const deleted = podStore.delete(canvasId, podId);

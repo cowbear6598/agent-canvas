@@ -75,8 +75,8 @@ describe('useUnifiedEventListeners', () => {
 
       expect(mockWebSocketClient.on).toHaveBeenCalled()
       const callCount = mockWebSocketClient.on.mock.calls.length
-      // listeners 陣列長度加上單獨註冊的 pod:chat:user-message、slack:connection:status:changed、slack:message:received、slack:message:queued 共 4 個
-      const expectedCount = listeners.length + 4
+      // listeners 陣列長度加上單獨註冊的 pod:chat:user-message、slack:connection:status:changed、slack:message:received 共 3 個
+      const expectedCount = listeners.length + 3
       expect(callCount).toBe(expectedCount)
     })
 
@@ -99,8 +99,8 @@ describe('useUnifiedEventListeners', () => {
 
       expect(mockWebSocketClient.off).toHaveBeenCalled()
       const callCount = mockWebSocketClient.off.mock.calls.length
-      // listeners 陣列長度加上單獨取消的 pod:chat:user-message、slack:connection:status:changed、slack:message:received、slack:message:queued 共 4 個
-      const expectedCount = listeners.length + 4
+      // listeners 陣列長度加上單獨取消的 pod:chat:user-message、slack:connection:status:changed、slack:message:received 共 3 個
+      const expectedCount = listeners.length + 3
       expect(callCount).toBe(expectedCount)
     })
 
@@ -1398,24 +1398,6 @@ describe('useUnifiedEventListeners', () => {
 
       expect(sharedMockToast).toHaveBeenCalledWith(
         expect.objectContaining({ title: 'Slack 訊息' })
-      )
-    })
-
-    it('slack:message:queued 應顯示 toast 通知含佇列大小', () => {
-      const { registerUnifiedListeners } = useUnifiedEventListeners()
-
-      registerUnifiedListeners()
-
-      simulateEvent('slack:message:queued', {
-        podId: 'pod-1',
-        canvasId: 'canvas-1',
-        queueSize: 3,
-        userName: 'testUser',
-        text: '排隊中的訊息',
-      })
-
-      expect(sharedMockToast).toHaveBeenCalledWith(
-        expect.objectContaining({ title: 'Slack 訊息已排隊' })
       )
     })
 

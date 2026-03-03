@@ -11,7 +11,6 @@ import type {
 import type { SlackApp } from '../types/index.js';
 import { slackAppStore } from '../services/slack/slackAppStore.js';
 import { slackConnectionManager } from '../services/slack/slackConnectionManager.js';
-import { slackMessageQueue } from '../services/slack/slackMessageQueue.js';
 import { podStore } from '../services/podStore.js';
 import { socketService } from '../services/socketService.js';
 import { emitError } from '../utils/websocketResponse.js';
@@ -91,7 +90,6 @@ export async function handleSlackAppDelete(
     const boundPods = podStore.findBySlackApp(slackAppId);
     for (const {canvasId, pod} of boundPods) {
         podStore.setSlackBinding(canvasId, pod.id, null);
-        slackMessageQueue.clear(pod.id);
         socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_SLACK_UNBOUND, {
             canvasId,
             podId: pod.id,
@@ -240,7 +238,6 @@ export async function handlePodUnbindSlack(
     }
 
     podStore.setSlackBinding(canvasId, podId, null);
-    slackMessageQueue.clear(podId);
 
     logger.log('Slack', 'Delete', `Pod「${pod.name}」已解除 Slack 綁定`);
 

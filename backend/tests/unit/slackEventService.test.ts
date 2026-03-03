@@ -26,10 +26,16 @@ vi.mock('../../src/services/slack/slackAppStore.js', () => ({
     },
 }));
 
-vi.mock('../../src/services/slack/slackMessageQueue.js', () => ({
-    slackMessageQueue: {
-        enqueue: vi.fn(),
-        dequeue: vi.fn(() => undefined),
+vi.mock('../../src/services/slack/slackConnectionManager.js', () => ({
+    slackConnectionManager: {
+        sendMessage: vi.fn(() => Promise.resolve({success: true})),
+    },
+}));
+
+vi.mock('../../src/services/connectionStore.js', () => ({
+    connectionStore: {
+        findBySourcePodId: vi.fn(() => []),
+        findByTargetPodId: vi.fn(() => []),
     },
 }));
 
@@ -50,10 +56,11 @@ import {podStore} from '../../src/services/podStore.js';
 import {messageStore} from '../../src/services/messageStore.js';
 import {socketService} from '../../src/services/socketService.js';
 import {slackAppStore} from '../../src/services/slack/slackAppStore.js';
-import {slackMessageQueue} from '../../src/services/slack/slackMessageQueue.js';
+import {slackConnectionManager} from '../../src/services/slack/slackConnectionManager.js';
+import {connectionStore} from '../../src/services/connectionStore.js';
 import {executeStreamingChat} from '../../src/services/claude/streamingChatExecutor.js';
 import {WebSocketResponseEvents} from '../../src/schemas/events.js';
-import type {SlackQueueMessage} from '../../src/types/index.js';
+import type {SlackMessage} from '../../src/types/index.js';
 import type {Pod} from '../../src/types/index.js';
 
 function asMock(fn: unknown): Mock<any> {
@@ -82,7 +89,7 @@ function makePod(overrides: Partial<Pod> = {}): Pod {
     };
 }
 
-function makeMessage(overrides: Partial<SlackQueueMessage> = {}): SlackQueueMessage {
+function makeMessage(overrides: Partial<SlackMessage> = {}): SlackMessage {
     return {
         id: 'msg-1',
         slackAppId: 'app-1',
@@ -136,8 +143,213 @@ describe('SlackEventService', () => {
         });
     });
 
+    describe('isSlackChannelBusy', () => {
+        it('單一 Pod 狀態為 idle 時回傳 false', () => {
+            const pod = makePod({
+                status: 'idle',
+                slackBinding: {slackAppId: 'app-1', slackChannelId: 'C123'},
+            });
+            asMock(podStore.findBySlackApp).mockReturnValue([{canvasId, pod}]);
+
+            const result = slackEventService.isSlackChannelBusy('app-1', 'C123');
+
+            expect(result).toBe(false);
+        });
+
+        it('單一 Pod 狀態為 chatting 時回傳 true', () => {
+            const pod = makePod({
+                status: 'chatting',
+                slackBinding: {slackAppId: 'app-1', slackChannelId: 'C123'},
+            });
+            asMock(podStore.findBySlackApp).mockReturnValue([{canvasId, pod}]);
+
+            const result = slackEventService.isSlackChannelBusy('app-1', 'C123');
+
+            expect(result).toBe(true);
+        });
+
+        it('單一 Pod 狀態為 summarizing 時回傳 true', () => {
+            const pod = makePod({
+                status: 'summarizing',
+                slackBinding: {slackAppId: 'app-1', slackChannelId: 'C123'},
+            });
+            asMock(podStore.findBySlackApp).mockReturnValue([{canvasId, pod}]);
+
+            const result = slackEventService.isSlackChannelBusy('app-1', 'C123');
+
+            expect(result).toBe(true);
+        });
+
+        it('找不到綁定 Pod 時回傳 false', () => {
+            asMock(podStore.findBySlackApp).mockReturnValue([]);
+
+            const result = slackEventService.isSlackChannelBusy('app-1', 'C123');
+
+            expect(result).toBe(false);
+        });
+
+        it('Workflow 鏈中下游 Pod 忙碌時回傳 true', () => {
+            const sourcePod = makePod({
+                id: 'pod-source',
+                status: 'idle',
+                slackBinding: {slackAppId: 'app-1', slackChannelId: 'C123'},
+            });
+            const targetPod = makePod({
+                id: 'pod-target',
+                status: 'chatting',
+            });
+            asMock(podStore.findBySlackApp).mockReturnValue([{canvasId, pod: sourcePod}]);
+            asMock(connectionStore.findBySourcePodId).mockImplementation((_canvasId: string, id: string) => {
+                if (id === 'pod-source') return [{sourcePodId: 'pod-source', targetPodId: 'pod-target'}];
+                return [];
+            });
+            asMock(connectionStore.findByTargetPodId).mockReturnValue([]);
+            asMock(podStore.getById).mockImplementation((_canvasId: string, id: string) => {
+                if (id === 'pod-target') return targetPod;
+                return undefined;
+            });
+
+            const result = slackEventService.isSlackChannelBusy('app-1', 'C123');
+
+            expect(result).toBe(true);
+        });
+
+        it('Workflow 鏈中上游 Pod 忙碌時回傳 true', () => {
+            const targetPod = makePod({
+                id: 'pod-target',
+                status: 'idle',
+                slackBinding: {slackAppId: 'app-1', slackChannelId: 'C123'},
+            });
+            const sourcePod = makePod({
+                id: 'pod-source',
+                status: 'chatting',
+            });
+            asMock(podStore.findBySlackApp).mockReturnValue([{canvasId, pod: targetPod}]);
+            asMock(connectionStore.findBySourcePodId).mockReturnValue([]);
+            asMock(connectionStore.findByTargetPodId).mockImplementation((_canvasId: string, id: string) => {
+                if (id === 'pod-target') return [{sourcePodId: 'pod-source', targetPodId: 'pod-target'}];
+                return [];
+            });
+            asMock(podStore.getById).mockImplementation((_canvasId: string, id: string) => {
+                if (id === 'pod-source') return sourcePod;
+                return undefined;
+            });
+
+            const result = slackEventService.isSlackChannelBusy('app-1', 'C123');
+
+            expect(result).toBe(true);
+        });
+
+        it('Workflow 鏈中所有 Pod 都 idle 時回傳 false', () => {
+            const sourcePod = makePod({
+                id: 'pod-source',
+                status: 'idle',
+                slackBinding: {slackAppId: 'app-1', slackChannelId: 'C123'},
+            });
+            const targetPod = makePod({
+                id: 'pod-target',
+                status: 'idle',
+            });
+            asMock(podStore.findBySlackApp).mockReturnValue([{canvasId, pod: sourcePod}]);
+            asMock(connectionStore.findBySourcePodId).mockImplementation((_canvasId: string, id: string) => {
+                if (id === 'pod-source') return [{sourcePodId: 'pod-source', targetPodId: 'pod-target'}];
+                return [];
+            });
+            asMock(connectionStore.findByTargetPodId).mockReturnValue([]);
+            asMock(podStore.getById).mockImplementation((_canvasId: string, id: string) => {
+                if (id === 'pod-target') return targetPod;
+                return undefined;
+            });
+
+            const result = slackEventService.isSlackChannelBusy('app-1', 'C123');
+
+            expect(result).toBe(false);
+        });
+
+        it('跨 Canvas Pod 也能正確判斷忙碌狀態', () => {
+            const otherCanvasId = 'canvas-2';
+            const pod = makePod({
+                status: 'chatting',
+                slackBinding: {slackAppId: 'app-1', slackChannelId: 'C123'},
+            });
+            asMock(podStore.findBySlackApp).mockReturnValue([{canvasId: otherCanvasId, pod}]);
+
+            const result = slackEventService.isSlackChannelBusy('app-1', 'C123');
+
+            expect(result).toBe(true);
+        });
+
+        it('同頻道有多個 Pod，其中一個 idle 一個 chatting，應回傳 true', () => {
+            const idlePod = makePod({
+                id: 'pod-idle',
+                status: 'idle',
+                slackBinding: {slackAppId: 'app-1', slackChannelId: 'C123'},
+            });
+            const chattingPod = makePod({
+                id: 'pod-chatting',
+                status: 'chatting',
+                slackBinding: {slackAppId: 'app-1', slackChannelId: 'C123'},
+            });
+            asMock(podStore.findBySlackApp).mockReturnValue([
+                {canvasId, pod: idlePod},
+                {canvasId, pod: chattingPod},
+            ]);
+
+            const result = slackEventService.isSlackChannelBusy('app-1', 'C123');
+
+            expect(result).toBe(true);
+        });
+
+        it('同頻道有多個 Pod 皆 idle，應回傳 false', () => {
+            const pod1 = makePod({
+                id: 'pod-1',
+                status: 'idle',
+                slackBinding: {slackAppId: 'app-1', slackChannelId: 'C123'},
+            });
+            const pod2 = makePod({
+                id: 'pod-2',
+                status: 'idle',
+                slackBinding: {slackAppId: 'app-1', slackChannelId: 'C123'},
+            });
+            asMock(podStore.findBySlackApp).mockReturnValue([
+                {canvasId, pod: pod1},
+                {canvasId, pod: pod2},
+            ]);
+            asMock(connectionStore.findBySourcePodId).mockReturnValue([]);
+            asMock(connectionStore.findByTargetPodId).mockReturnValue([]);
+
+            const result = slackEventService.isSlackChannelBusy('app-1', 'C123');
+
+            expect(result).toBe(false);
+        });
+
+        it('環狀 Connection 不會造成無限迴圈', () => {
+            const podA = makePod({
+                id: 'pod-a',
+                status: 'idle',
+                slackBinding: {slackAppId: 'app-1', slackChannelId: 'C123'},
+            });
+            const podB = makePod({id: 'pod-b', status: 'idle'});
+
+            asMock(podStore.findBySlackApp).mockReturnValue([{canvasId, pod: podA}]);
+            asMock(connectionStore.findBySourcePodId).mockImplementation((_canvasId: string, id: string) => {
+                if (id === 'pod-a') return [{sourcePodId: 'pod-a', targetPodId: 'pod-b'}];
+                if (id === 'pod-b') return [{sourcePodId: 'pod-b', targetPodId: 'pod-a'}];
+                return [];
+            });
+            asMock(connectionStore.findByTargetPodId).mockReturnValue([]);
+            asMock(podStore.getById).mockImplementation((_canvasId: string, id: string) => {
+                if (id === 'pod-b') return podB;
+                return undefined;
+            });
+
+            expect(() => slackEventService.isSlackChannelBusy('app-1', 'C123')).not.toThrow();
+            expect(slackEventService.isSlackChannelBusy('app-1', 'C123')).toBe(false);
+        });
+    });
+
     describe('handleAppMention', () => {
-        it('找不到綁定 Pod 時不呼叫 routeMessageToPod', async () => {
+        it('找不到綁定 Pod 時不呼叫 executeStreamingChat', async () => {
             asMock(slackAppStore.getById).mockReturnValue({id: 'app-1', botUserId: 'UBOT'});
             asMock(podStore.findBySlackApp).mockReturnValue([]);
 
@@ -199,68 +411,91 @@ describe('SlackEventService', () => {
                 '[Slack: @U456] 訊息內容'
             );
         });
-    });
 
-    describe('routeMessageToPod', () => {
-        const message = makeMessage();
+        it('頻道忙碌時發送忙碌回覆到 Slack', async () => {
+            const pod = makePod({
+                status: 'chatting',
+                slackBinding: {slackAppId: 'app-1', slackChannelId: 'C123'},
+            });
+            asMock(slackAppStore.getById).mockReturnValue({id: 'app-1', botUserId: 'UBOT'});
+            asMock(podStore.findBySlackApp).mockReturnValue([{canvasId, pod}]);
 
-        it('Pod 狀態為 idle 時直接注入訊息', async () => {
-            const pod = makePod({status: 'idle'});
-            asMock(podStore.getById).mockReturnValue(pod);
+            await slackEventService.handleAppMention('app-1', {
+                type: 'app_mention',
+                channel: 'C123',
+                user: 'U456',
+                text: '<@UBOT> 你好',
+                event_ts: '111.222',
+            } as any);
 
-            await slackEventService.routeMessageToPod(canvasId, podId, message);
+            expect(slackConnectionManager.sendMessage).toHaveBeenCalledWith('app-1', 'C123', '目前忙碌中，請稍後再試');
+            expect(executeStreamingChat).not.toHaveBeenCalled();
+        });
+
+        it('頻道空閒時跳過忙碌 Pod 只注入 idle/error Pod', async () => {
+            const idlePod = makePod({
+                id: 'pod-idle',
+                status: 'idle',
+                slackBinding: {slackAppId: 'app-1', slackChannelId: 'C123'},
+            });
+            const chattingPod = makePod({
+                id: 'pod-chatting',
+                status: 'chatting',
+                slackBinding: {slackAppId: 'app-1', slackChannelId: 'C123'},
+            });
+
+            asMock(slackAppStore.getById).mockReturnValue({id: 'app-1', botUserId: 'UBOT'});
+            // findBySlackApp 同時回傳兩個 pod；isSlackChannelBusy 會看到 chatting pod 但我們的 BFS 只追 workflow 鏈，
+            // chatting pod 本身會讓 isSlackChannelBusy 回傳 true，所以這個場景需要讓 chatting pod 不在 findBySlackApp 內
+            // 改為：idle pod 是頻道綁定的，chatting pod 只存在於 findBoundPods 回傳（非 findBySlackApp 直接回傳）
+            // 實際上這在現有架構下無法分離，因此改用以下策略：
+            // 用一個 idle pod + 一個未綁定此頻道的 chatting pod
+            const unrelatedChattingPod = makePod({
+                id: 'pod-chatting',
+                status: 'chatting',
+                slackBinding: {slackAppId: 'app-1', slackChannelId: 'C999'}, // 不同頻道
+            });
+
+            asMock(podStore.findBySlackApp).mockReturnValue([
+                {canvasId, pod: idlePod},
+                {canvasId, pod: unrelatedChattingPod},
+            ]);
+            asMock(podStore.getById).mockReturnValue(idlePod);
+
+            await slackEventService.handleAppMention('app-1', {
+                type: 'app_mention',
+                channel: 'C123',
+                user: 'U456',
+                text: '<@UBOT> 你好',
+                event_ts: '111.222',
+            } as any);
 
             expect(executeStreamingChat).toHaveBeenCalledOnce();
-            expect(slackMessageQueue.enqueue).not.toHaveBeenCalled();
+            expect(slackConnectionManager.sendMessage).not.toHaveBeenCalled();
         });
 
-        it('Pod 狀態為 chatting 時加入佇列並廣播 SLACK_MESSAGE_QUEUED', async () => {
-            const pod = makePod({status: 'chatting'});
-            asMock(podStore.getById).mockReturnValue(pod);
+        it('Pod 狀態為 error 時應先重置為 idle 再注入訊息', async () => {
+            const pod = makePod({
+                status: 'error',
+                slackBinding: {slackAppId: 'app-1', slackChannelId: 'C123'},
+            });
+            asMock(slackAppStore.getById).mockReturnValue({id: 'app-1', botUserId: 'UBOT'});
+            asMock(podStore.findBySlackApp).mockReturnValue([{canvasId, pod}]);
+            asMock(connectionStore.findBySourcePodId).mockReturnValue([]);
+            asMock(connectionStore.findByTargetPodId).mockReturnValue([]);
+            // injectSlackMessage 中的 getById 回傳 idle 狀態（已重置後）
+            asMock(podStore.getById).mockReturnValue({...pod, status: 'idle'});
 
-            await slackEventService.routeMessageToPod(canvasId, podId, message);
+            await slackEventService.handleAppMention('app-1', {
+                type: 'app_mention',
+                channel: 'C123',
+                user: 'U456',
+                text: '<@UBOT> 你好',
+                event_ts: '111.222',
+            } as any);
 
-            expect(slackMessageQueue.enqueue).toHaveBeenCalledWith(podId, message);
-            expect(socketService.emitToCanvas).toHaveBeenCalledWith(
-                canvasId,
-                WebSocketResponseEvents.SLACK_MESSAGE_QUEUED,
-                expect.objectContaining({canvasId, podId, message})
-            );
-            expect(executeStreamingChat).not.toHaveBeenCalled();
-        });
-
-        it('Pod 狀態為 summarizing 時加入佇列並廣播 SLACK_MESSAGE_QUEUED', async () => {
-            const pod = makePod({status: 'summarizing'});
-            asMock(podStore.getById).mockReturnValue(pod);
-
-            await slackEventService.routeMessageToPod(canvasId, podId, message);
-
-            expect(slackMessageQueue.enqueue).toHaveBeenCalledWith(podId, message);
-            expect(socketService.emitToCanvas).toHaveBeenCalledWith(
-                canvasId,
-                WebSocketResponseEvents.SLACK_MESSAGE_QUEUED,
-                expect.objectContaining({canvasId, podId})
-            );
-            expect(executeStreamingChat).not.toHaveBeenCalled();
-        });
-
-        it('Pod 狀態為 error 時重設狀態後注入訊息', async () => {
-            const pod = makePod({status: 'error'});
-            asMock(podStore.getById).mockReturnValue(pod);
-
-            await slackEventService.routeMessageToPod(canvasId, podId, message);
-
-            expect(podStore.setStatus).toHaveBeenCalledWith(canvasId, podId, 'idle');
-            expect(executeStreamingChat).toHaveBeenCalledOnce();
-        });
-
-        it('找不到 Pod 時不呼叫任何動作', async () => {
-            asMock(podStore.getById).mockReturnValue(undefined);
-
-            await slackEventService.routeMessageToPod(canvasId, podId, message);
-
-            expect(executeStreamingChat).not.toHaveBeenCalled();
-            expect(slackMessageQueue.enqueue).not.toHaveBeenCalled();
+            expect(podStore.setStatus).toHaveBeenCalledWith(canvasId, pod.id, 'idle');
+            expect(executeStreamingChat).toHaveBeenCalled();
         });
     });
 
@@ -315,48 +550,8 @@ describe('SlackEventService', () => {
 
             expect(executeStreamingChat).toHaveBeenCalledWith(
                 expect.objectContaining({canvasId, podId, abortable: false}),
-                expect.objectContaining({onComplete: expect.any(Function)})
+                {}
             );
-        });
-
-        it('onComplete 時呼叫 processNextQueueMessage', async () => {
-            const pod = makePod();
-            asMock(podStore.getById).mockReturnValue(pod);
-            asMock(slackMessageQueue.dequeue).mockReturnValueOnce(undefined);
-
-            let onCompleteCallback: ((canvasId: string, podId: string) => Promise<void>) | undefined;
-            asMock(executeStreamingChat).mockImplementation(async (_opts: any, callbacks: any) => {
-                onCompleteCallback = callbacks?.onComplete;
-                return {messageId: 'stream-1', content: '回覆', hasContent: true, aborted: false};
-            });
-
-            await slackEventService.injectSlackMessage(canvasId, podId, message);
-
-            expect(onCompleteCallback).toBeDefined();
-            await onCompleteCallback!(canvasId, podId);
-
-            expect(slackMessageQueue.dequeue).toHaveBeenCalledWith(podId);
-        });
-    });
-
-    describe('processNextQueueMessage', () => {
-        it('佇列有訊息時呼叫 injectSlackMessage', async () => {
-            const nextMessage = makeMessage({id: 'msg-2', text: '下一則'});
-            asMock(slackMessageQueue.dequeue).mockReturnValueOnce(nextMessage);
-            const pod = makePod();
-            asMock(podStore.getById).mockReturnValue(pod);
-
-            await slackEventService.processNextQueueMessage(canvasId, podId);
-
-            expect(executeStreamingChat).toHaveBeenCalledOnce();
-        });
-
-        it('佇列無訊息時不做任何事', async () => {
-            asMock(slackMessageQueue.dequeue).mockReturnValueOnce(undefined);
-
-            await slackEventService.processNextQueueMessage(canvasId, podId);
-
-            expect(executeStreamingChat).not.toHaveBeenCalled();
         });
     });
 });

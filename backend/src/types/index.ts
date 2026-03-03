@@ -37,7 +37,7 @@ export type { Canvas, PersistedCanvas } from './canvas.js';
 export type { McpServer, McpServerConfig, StdioMcpServerConfig, HttpMcpServerConfig } from './mcpServer.js';
 export type { McpServerNote } from './mcpServerNote.js';
 
-export type { SlackApp, SlackAppConnectionStatus, SlackChannel, PodSlackBinding, SlackQueueMessage, PersistedSlackApp } from './slack.js';
+export type { SlackApp, SlackAppConnectionStatus, SlackChannel, PodSlackBinding, SlackMessage, PersistedSlackApp } from './slack.js';
 
 export type {
   CreatePodRequest,

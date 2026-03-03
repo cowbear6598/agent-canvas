@@ -33,6 +33,11 @@ export const handleChatSend = withCanvasId<ChatSendPayload>(
         const pod = validatePod(connectionId, podId, WebSocketResponseEvents.POD_ERROR, requestId);
         if (!pod) return;
 
+        if (pod.slackBinding) {
+            emitError(connectionId, WebSocketResponseEvents.POD_ERROR, `Pod「${pod.name}」已連接 Slack，無法手動發送訊息`, requestId, podId, 'SLACK_BOUND');
+            return;
+        }
+
         if (pod.status === 'chatting' || pod.status === 'summarizing') {
             emitError(
                 connectionId,
