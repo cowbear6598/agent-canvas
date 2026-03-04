@@ -50,3 +50,21 @@ export function fireAndForget(promise: Promise<unknown>, category: LogCategory, 
   });
 }
 
+export function safeExecute<T>(operation: () => T): Result<T> {
+  try {
+    return ok(operation());
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return err(message);
+  }
+}
+
+export async function safeExecuteAsync<T>(operation: () => Promise<T>): Promise<Result<T>> {
+  try {
+    return ok(await operation());
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return err(message);
+  }
+}
+

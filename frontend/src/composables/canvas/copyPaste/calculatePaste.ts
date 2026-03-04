@@ -18,6 +18,10 @@ import type {
 
 type BoundingBox = { minX: number; maxX: number; minY: number; maxY: number }
 
+function createInitialBounds(): BoundingBox {
+  return { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity }
+}
+
 export function updateBoundingBox(
   bounds: BoundingBox,
   x: number,
@@ -31,7 +35,16 @@ export function updateBoundingBox(
   bounds.maxY = Math.max(bounds.maxY, y + height)
 }
 
-type UnboundNoteEntry = { noteList: { x: number; y: number }[]; getBoundKey: (n: { x: number; y: number }) => string | null }
+type HasPosition = { x: number; y: number }
+
+type UnboundNoteEntry = { noteList: HasPosition[]; getBoundKey: (n: HasPosition) => string | null }
+
+function toUnboundNoteEntry<T extends HasPosition>(noteList: T[], getBoundKey: (n: T) => string | null): UnboundNoteEntry {
+  return {
+    noteList,
+    getBoundKey: getBoundKey as (n: HasPosition) => string | null,
+  }
+}
 
 function updateBoundsForUnboundNotes(bounds: BoundingBox, noteStoreConfigs: UnboundNoteEntry[]): void {
   for (const { noteList, getBoundKey } of noteStoreConfigs) {
@@ -42,8 +55,6 @@ function updateBoundsForUnboundNotes(bounds: BoundingBox, noteStoreConfigs: Unbo
     }
   }
 }
-
-type HasPosition = { x: number; y: number }
 
 export function calculateBoundingBox<
   TO extends HasPosition,
@@ -68,26 +79,19 @@ export function calculateBoundingBox<
     commandNote: (n: TC) => string | null
   }
 ): BoundingBox {
-  const bounds = {
-    minX: Infinity,
-    maxX: -Infinity,
-    minY: Infinity,
-    maxY: -Infinity
-  }
+  const bounds = createInitialBounds()
 
   for (const pod of pods) {
     updateBoundingBox(bounds, pod.x, pod.y, POD_WIDTH, POD_HEIGHT)
   }
 
-  const noteStoreConfigs: UnboundNoteEntry[] = [
-    { noteList: notes.outputStyleNotes as { x: number; y: number }[], getBoundKey: getBoundKeys.outputStyleNote as (n: { x: number; y: number }) => string | null },
-    { noteList: notes.skillNotes as { x: number; y: number }[], getBoundKey: getBoundKeys.skillNote as (n: { x: number; y: number }) => string | null },
-    { noteList: notes.repositoryNotes as { x: number; y: number }[], getBoundKey: getBoundKeys.repositoryNote as (n: { x: number; y: number }) => string | null },
-    { noteList: notes.subAgentNotes as { x: number; y: number }[], getBoundKey: getBoundKeys.subAgentNote as (n: { x: number; y: number }) => string | null },
-    { noteList: notes.commandNotes as { x: number; y: number }[], getBoundKey: getBoundKeys.commandNote as (n: { x: number; y: number }) => string | null },
-  ]
-
-  updateBoundsForUnboundNotes(bounds, noteStoreConfigs)
+  updateBoundsForUnboundNotes(bounds, [
+    toUnboundNoteEntry(notes.outputStyleNotes, getBoundKeys.outputStyleNote),
+    toUnboundNoteEntry(notes.skillNotes, getBoundKeys.skillNote),
+    toUnboundNoteEntry(notes.repositoryNotes, getBoundKeys.repositoryNote),
+    toUnboundNoteEntry(notes.subAgentNotes, getBoundKeys.subAgentNote),
+    toUnboundNoteEntry(notes.commandNotes, getBoundKeys.commandNote),
+  ])
 
   return bounds
 }

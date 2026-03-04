@@ -1,6 +1,6 @@
 import type { Skill, SkillNote } from '@/types'
 import { createNoteStore } from './createNoteStore'
-import type { NoteStoreContext } from './createNoteStore'
+import type { NoteStoreContext, TypedNoteStore } from './createNoteStore'
 import { WebSocketRequestEvents, WebSocketResponseEvents } from '@/services/websocket'
 import { createWebSocketRequest } from '@/services/websocket/createWebSocketRequest'
 import type { SkillImportPayload, SkillImportedPayload } from '@/types/websocket'
@@ -94,4 +94,4 @@ const store = createNoteStore<Skill, SkillNote>({
   }
 })
 
-export const useSkillStore: (() => ReturnType<typeof store> & SkillStoreCustomActions) & { $id: string } = store as (() => ReturnType<typeof store> & SkillStoreCustomActions) & { $id: string }
+export const useSkillStore = store as TypedNoteStore<typeof store, SkillStoreCustomActions>

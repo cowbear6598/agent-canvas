@@ -89,7 +89,6 @@ vi.mock('@/composables/canvas/useCanvasContext', () => ({
   },
 }))
 
-// 測試用的 Wrapper Component
 const TestComponent = defineComponent({
   setup() {
     useCopyPaste()
@@ -117,12 +116,10 @@ describe('useCopyPaste', () => {
     resetMockWebSocket()
     vi.clearAllMocks()
 
-    // 重置 domHelpers mocks
     mockIsEditingElement.mockReturnValue(false)
     mockHasTextSelection.mockReturnValue(false)
     mockIsModifierKeyPressed.mockReturnValue(true)
 
-    // 初始化 stores
     podStore = usePodStore()
     viewportStore = useViewportStore()
     selectionStore = useSelectionStore()
@@ -135,7 +132,6 @@ describe('useCopyPaste', () => {
     clipboardStore = useClipboardStore()
     canvasStore = useCanvasStore()
 
-    // 設定必要的初始狀態
     canvasStore.activeCanvasId = 'canvas-1'
 
     // Mock viewportStore.screenToCanvas
@@ -144,7 +140,6 @@ describe('useCopyPaste', () => {
       y: screenY,
     }))
 
-    // Mount component
     wrapper = mount(TestComponent)
   })
 
@@ -154,19 +149,19 @@ describe('useCopyPaste', () => {
 
   describe('複製 (handleCopy)', () => {
     it('無選中元素時不複製，回傳 false', () => {
-      // Arrange
+
       selectionStore.selectedElements = []
 
-      // Act
+
       const event = new KeyboardEvent('keydown', { key: 'c', ctrlKey: true })
       document.dispatchEvent(event)
 
-      // Assert
+
       expect(clipboardStore.isEmpty).toBe(true)
     })
 
     it('收集選中的 Pod 資料', () => {
-      // Arrange
+
       const pod1 = createMockPod({ id: 'pod-1', name: 'Pod 1', x: 100, y: 100 })
       const pod2 = createMockPod({ id: 'pod-2', name: 'Pod 2', x: 200, y: 200 })
       podStore.pods = [pod1, pod2]
@@ -177,12 +172,12 @@ describe('useCopyPaste', () => {
       ]
       selectionStore.selectedElements = selectedElements
 
-      // Act
+
       const event = new KeyboardEvent('keydown', { key: 'c', ctrlKey: true })
       Object.defineProperty(event, 'preventDefault', { value: vi.fn() })
       document.dispatchEvent(event)
 
-      // Assert
+
       const copiedData = clipboardStore.getCopiedData()
       expect(copiedData.pods).toHaveLength(2)
       expect(copiedData.pods[0]!.id).toBe('pod-1')
@@ -190,7 +185,7 @@ describe('useCopyPaste', () => {
     })
 
     it('收集選中 Pod 綁定的 OutputStyle Note', () => {
-      // Arrange
+
       const pod1 = createMockPod({ id: 'pod-1' })
       podStore.pods = [pod1]
 
@@ -204,12 +199,12 @@ describe('useCopyPaste', () => {
 
       selectionStore.selectedElements = [{ type: 'pod', id: 'pod-1' }]
 
-      // Act
+
       const event = new KeyboardEvent('keydown', { key: 'c', ctrlKey: true })
       Object.defineProperty(event, 'preventDefault', { value: vi.fn() })
       document.dispatchEvent(event)
 
-      // Assert
+
       const copiedData = clipboardStore.getCopiedData()
       expect(copiedData.outputStyleNotes).toHaveLength(1)
       expect(copiedData.outputStyleNotes[0]!.id).toBe('note-1')
@@ -217,7 +212,7 @@ describe('useCopyPaste', () => {
     })
 
     it('收集選中 Pod 綁定的 Skill Note', () => {
-      // Arrange
+
       const pod1 = createMockPod({ id: 'pod-1' })
       podStore.pods = [pod1]
 
@@ -231,19 +226,19 @@ describe('useCopyPaste', () => {
 
       selectionStore.selectedElements = [{ type: 'pod', id: 'pod-1' }]
 
-      // Act
+
       const event = new KeyboardEvent('keydown', { key: 'c', ctrlKey: true })
       Object.defineProperty(event, 'preventDefault', { value: vi.fn() })
       document.dispatchEvent(event)
 
-      // Assert
+
       const copiedData = clipboardStore.getCopiedData()
       expect(copiedData.skillNotes).toHaveLength(1)
       expect(copiedData.skillNotes[0]!.id).toBe('note-1')
     })
 
     it('收集選中 Pod 綁定的 Repository Note', () => {
-      // Arrange
+
       const pod1 = createMockPod({ id: 'pod-1' })
       podStore.pods = [pod1]
 
@@ -257,19 +252,19 @@ describe('useCopyPaste', () => {
 
       selectionStore.selectedElements = [{ type: 'pod', id: 'pod-1' }]
 
-      // Act
+
       const event = new KeyboardEvent('keydown', { key: 'c', ctrlKey: true })
       Object.defineProperty(event, 'preventDefault', { value: vi.fn() })
       document.dispatchEvent(event)
 
-      // Assert
+
       const copiedData = clipboardStore.getCopiedData()
       expect(copiedData.repositoryNotes).toHaveLength(1)
       expect(copiedData.repositoryNotes[0]!.boundToOriginalPodId).toBe('pod-1')
     })
 
     it('收集選中 Pod 綁定的 SubAgent Note', () => {
-      // Arrange
+
       const pod1 = createMockPod({ id: 'pod-1' })
       podStore.pods = [pod1]
 
@@ -283,19 +278,19 @@ describe('useCopyPaste', () => {
 
       selectionStore.selectedElements = [{ type: 'pod', id: 'pod-1' }]
 
-      // Act
+
       const event = new KeyboardEvent('keydown', { key: 'c', ctrlKey: true })
       Object.defineProperty(event, 'preventDefault', { value: vi.fn() })
       document.dispatchEvent(event)
 
-      // Assert
+
       const copiedData = clipboardStore.getCopiedData()
       expect(copiedData.subAgentNotes).toHaveLength(1)
       expect(copiedData.subAgentNotes[0]!.id).toBe('note-1')
     })
 
     it('收集選中 Pod 綁定的 Command Note', () => {
-      // Arrange
+
       const pod1 = createMockPod({ id: 'pod-1' })
       podStore.pods = [pod1]
 
@@ -309,19 +304,19 @@ describe('useCopyPaste', () => {
 
       selectionStore.selectedElements = [{ type: 'pod', id: 'pod-1' }]
 
-      // Act
+
       const event = new KeyboardEvent('keydown', { key: 'c', ctrlKey: true })
       Object.defineProperty(event, 'preventDefault', { value: vi.fn() })
       document.dispatchEvent(event)
 
-      // Assert
+
       const copiedData = clipboardStore.getCopiedData()
       expect(copiedData.commandNotes).toHaveLength(1)
       expect(copiedData.commandNotes[0]!.boundToOriginalPodId).toBe('pod-1')
     })
 
     it('收集選中的未綁定 OutputStyle Note', () => {
-      // Arrange
+
       const unboundNote = createMockNote('outputStyle', {
         id: 'note-1',
         boundToPodId: null,
@@ -332,19 +327,19 @@ describe('useCopyPaste', () => {
 
       selectionStore.selectedElements = [{ type: 'outputStyleNote', id: 'note-1' }]
 
-      // Act
+
       const event = new KeyboardEvent('keydown', { key: 'c', ctrlKey: true })
       Object.defineProperty(event, 'preventDefault', { value: vi.fn() })
       document.dispatchEvent(event)
 
-      // Assert
+
       const copiedData = clipboardStore.getCopiedData()
       expect(copiedData.outputStyleNotes).toHaveLength(1)
       expect(copiedData.outputStyleNotes[0]!.boundToPodId).toBeNull()
     })
 
     it('收集選中的未綁定 Skill Note', () => {
-      // Arrange
+
       const unboundNote = createMockNote('skill', {
         id: 'note-1',
         boundToPodId: null,
@@ -355,19 +350,19 @@ describe('useCopyPaste', () => {
 
       selectionStore.selectedElements = [{ type: 'skillNote', id: 'note-1' }]
 
-      // Act
+
       const event = new KeyboardEvent('keydown', { key: 'c', ctrlKey: true })
       Object.defineProperty(event, 'preventDefault', { value: vi.fn() })
       document.dispatchEvent(event)
 
-      // Assert
+
       const copiedData = clipboardStore.getCopiedData()
       expect(copiedData.skillNotes).toHaveLength(1)
       expect(copiedData.skillNotes[0]!.boundToPodId).toBeNull()
     })
 
     it('收集選中的未綁定 Repository Note', () => {
-      // Arrange
+
       const unboundNote = createMockNote('repository', {
         id: 'note-1',
         boundToPodId: null,
@@ -378,19 +373,19 @@ describe('useCopyPaste', () => {
 
       selectionStore.selectedElements = [{ type: 'repositoryNote', id: 'note-1' }]
 
-      // Act
+
       const event = new KeyboardEvent('keydown', { key: 'c', ctrlKey: true })
       Object.defineProperty(event, 'preventDefault', { value: vi.fn() })
       document.dispatchEvent(event)
 
-      // Assert
+
       const copiedData = clipboardStore.getCopiedData()
       expect(copiedData.repositoryNotes).toHaveLength(1)
       expect(copiedData.repositoryNotes[0]!.boundToOriginalPodId).toBeNull()
     })
 
     it('收集選中的未綁定 SubAgent Note', () => {
-      // Arrange
+
       const unboundNote = createMockNote('subAgent', {
         id: 'note-1',
         boundToPodId: null,
@@ -401,19 +396,19 @@ describe('useCopyPaste', () => {
 
       selectionStore.selectedElements = [{ type: 'subAgentNote', id: 'note-1' }]
 
-      // Act
+
       const event = new KeyboardEvent('keydown', { key: 'c', ctrlKey: true })
       Object.defineProperty(event, 'preventDefault', { value: vi.fn() })
       document.dispatchEvent(event)
 
-      // Assert
+
       const copiedData = clipboardStore.getCopiedData()
       expect(copiedData.subAgentNotes).toHaveLength(1)
       expect(copiedData.subAgentNotes[0]!.boundToPodId).toBeNull()
     })
 
     it('收集選中的未綁定 Command Note', () => {
-      // Arrange
+
       const unboundNote = createMockNote('command', {
         id: 'note-1',
         boundToPodId: null,
@@ -424,19 +419,19 @@ describe('useCopyPaste', () => {
 
       selectionStore.selectedElements = [{ type: 'commandNote', id: 'note-1' }]
 
-      // Act
+
       const event = new KeyboardEvent('keydown', { key: 'c', ctrlKey: true })
       Object.defineProperty(event, 'preventDefault', { value: vi.fn() })
       document.dispatchEvent(event)
 
-      // Assert
+
       const copiedData = clipboardStore.getCopiedData()
       expect(copiedData.commandNotes).toHaveLength(1)
       expect(copiedData.commandNotes[0]!.boundToOriginalPodId).toBeNull()
     })
 
     it('只收集兩端都在選中範圍內的 Connection', () => {
-      // Arrange
+
       const pod1 = createMockPod({ id: 'pod-1' })
       const pod2 = createMockPod({ id: 'pod-2' })
       const pod3 = createMockPod({ id: 'pod-3' })
@@ -454,18 +449,17 @@ describe('useCopyPaste', () => {
       })
       connectionStore.connections = [conn1, conn2]
 
-      // 只選中 pod-1 和 pod-2
       selectionStore.selectedElements = [
         { type: 'pod', id: 'pod-1' },
         { type: 'pod', id: 'pod-2' },
       ]
 
-      // Act
+
       const event = new KeyboardEvent('keydown', { key: 'c', ctrlKey: true })
       Object.defineProperty(event, 'preventDefault', { value: vi.fn() })
       document.dispatchEvent(event)
 
-      // Assert
+
       const copiedData = clipboardStore.getCopiedData()
       expect(copiedData.connections).toHaveLength(1)
       expect(copiedData.connections[0]!.sourcePodId).toBe('pod-1')
@@ -473,19 +467,19 @@ describe('useCopyPaste', () => {
     })
 
     it('呼叫 clipboardStore.setCopy 儲存複製資料', () => {
-      // Arrange
+
       const pod1 = createMockPod({ id: 'pod-1' })
       podStore.pods = [pod1]
       selectionStore.selectedElements = [{ type: 'pod', id: 'pod-1' }]
 
       const setCopySpy = vi.spyOn(clipboardStore, 'setCopy')
 
-      // Act
+
       const event = new KeyboardEvent('keydown', { key: 'c', ctrlKey: true })
       Object.defineProperty(event, 'preventDefault', { value: vi.fn() })
       document.dispatchEvent(event)
 
-      // Assert
+
       expect(setCopySpy).toHaveBeenCalledOnce()
       expect(setCopySpy).toHaveBeenCalledWith(
         expect.any(Array),
@@ -501,26 +495,25 @@ describe('useCopyPaste', () => {
 
   describe('貼上 (handlePaste)', () => {
     it('clipboard 為空時不貼上，回傳 false', async () => {
-      // Arrange
+
       clipboardStore.clear()
 
-      // Act
+
       const event = new KeyboardEvent('keydown', { key: 'v', ctrlKey: true })
       document.dispatchEvent(event)
 
       // 等待非同步處理
       await new Promise(resolve => setTimeout(resolve, 0))
 
-      // Assert
+
       expect(mockWrapWebSocketRequest).not.toHaveBeenCalled()
     })
 
     it('計算貼上位置（基於滑鼠座標轉換為畫布座標）', async () => {
-      // Arrange
+
       const pod1 = createMockPod({ id: 'pod-1', x: 100, y: 100 })
       clipboardStore.setCopy([pod1], [], [], [], [], [], [])
 
-      // 模擬滑鼠移動到特定位置
       const mouseMoveEvent = new MouseEvent('mousemove', {
         clientX: 500,
         clientY: 300,
@@ -539,19 +532,19 @@ describe('useCopyPaste', () => {
         createdConnections: [],
       })
 
-      // Act
+
       const event = new KeyboardEvent('keydown', { key: 'v', ctrlKey: true })
       Object.defineProperty(event, 'preventDefault', { value: vi.fn() })
       document.dispatchEvent(event)
 
       await new Promise(resolve => setTimeout(resolve, 0))
 
-      // Assert
+
       expect(viewportStore.screenToCanvas).toHaveBeenCalledWith(500, 300)
     })
 
     it('發送 CANVAS_PASTE WebSocket 請求', async () => {
-      // Arrange
+
       const pod1 = createMockPod({ id: 'pod-1', x: 100, y: 100 })
       clipboardStore.setCopy([pod1], [], [], [], [], [], [])
 
@@ -565,14 +558,14 @@ describe('useCopyPaste', () => {
         createdConnections: [],
       })
 
-      // Act
+
       const event = new KeyboardEvent('keydown', { key: 'v', ctrlKey: true })
       Object.defineProperty(event, 'preventDefault', { value: vi.fn() })
       document.dispatchEvent(event)
 
       await new Promise(resolve => setTimeout(resolve, 0))
 
-      // Assert
+
       expect(mockWrapWebSocketRequest).toHaveBeenCalledOnce()
       expect(mockCreateWebSocketRequest).toHaveBeenCalledWith({
         requestEvent: WebSocketRequestEvents.CANVAS_PASTE,
@@ -586,7 +579,7 @@ describe('useCopyPaste', () => {
     })
 
     it('成功後設定新建元素為選中狀態', async () => {
-      // Arrange
+
       const pod1 = createMockPod({ id: 'pod-1', x: 100, y: 100 })
       clipboardStore.setCopy([pod1], [], [], [], [], [], [])
 
@@ -610,21 +603,21 @@ describe('useCopyPaste', () => {
 
       const setSelectedElementsSpy = vi.spyOn(selectionStore, 'setSelectedElements')
 
-      // Act
+
       const event = new KeyboardEvent('keydown', { key: 'v', ctrlKey: true })
       Object.defineProperty(event, 'preventDefault', { value: vi.fn() })
       document.dispatchEvent(event)
 
       await new Promise(resolve => setTimeout(resolve, 0))
 
-      // Assert
+
       expect(setSelectedElementsSpy).toHaveBeenCalledWith([
         { type: 'pod', id: 'new-pod-1' },
       ])
     })
 
     it('僅選中未綁定的 Note', async () => {
-      // Arrange
+
       const boundNote = createMockNote('outputStyle', {
         id: 'note-1',
         boundToPodId: 'pod-1',
@@ -657,34 +650,34 @@ describe('useCopyPaste', () => {
 
       const setSelectedElementsSpy = vi.spyOn(selectionStore, 'setSelectedElements')
 
-      // Act
+
       const event = new KeyboardEvent('keydown', { key: 'v', ctrlKey: true })
       Object.defineProperty(event, 'preventDefault', { value: vi.fn() })
       document.dispatchEvent(event)
 
       await new Promise(resolve => setTimeout(resolve, 0))
 
-      // Assert
+
       expect(setSelectedElementsSpy).toHaveBeenCalledWith([
         { type: 'outputStyleNote', id: 'new-note-2' },
       ])
     })
 
     it('WebSocket 請求失敗時回傳 false', async () => {
-      // Arrange
+
       const pod1 = createMockPod({ id: 'pod-1', x: 100, y: 100 })
       clipboardStore.setCopy([pod1], [], [], [], [], [], [])
 
       mockWrapWebSocketRequest.mockResolvedValue(null)
 
-      // Act
+
       const event = new KeyboardEvent('keydown', { key: 'v', ctrlKey: true })
       Object.defineProperty(event, 'preventDefault', { value: vi.fn() })
       document.dispatchEvent(event)
 
       await new Promise(resolve => setTimeout(resolve, 0))
 
-      // Assert
+
       expect(mockWrapWebSocketRequest).toHaveBeenCalledOnce()
     })
   })
@@ -692,7 +685,7 @@ describe('useCopyPaste', () => {
   describe('位置計算', () => {
     describe('calculateBoundingBox', () => {
       it('計算所有 Pod 的包圍框', async () => {
-        // Arrange
+  
         const pod1 = createMockPod({ id: 'pod-1', x: 100, y: 100 })
         const pod2 = createMockPod({ id: 'pod-2', x: 300, y: 200 })
         clipboardStore.setCopy([pod1, pod2], [], [], [], [], [], [])
@@ -709,21 +702,21 @@ describe('useCopyPaste', () => {
 
         ;(viewportStore as any).screenToCanvas = vi.fn(() => ({ x: 400, y: 300 }))
 
-        // Act
+  
         const event = new KeyboardEvent('keydown', { key: 'v', ctrlKey: true })
         Object.defineProperty(event, 'preventDefault', { value: vi.fn() })
         document.dispatchEvent(event)
 
         await new Promise(resolve => setTimeout(resolve, 0))
 
-        // Assert
+  
         expect(mockCreateWebSocketRequest).toHaveBeenCalled()
         const payload = mockCreateWebSocketRequest.mock.calls[0]![0]!.payload
         expect(payload.pods).toHaveLength(2)
       })
 
       it('計算未綁定 Note 的包圍框', async () => {
-        // Arrange
+  
         const note1 = createMockNote('outputStyle', {
           id: 'note-1',
           boundToPodId: null,
@@ -744,19 +737,19 @@ describe('useCopyPaste', () => {
 
         ;(viewportStore as any).screenToCanvas = vi.fn(() => ({ x: 400, y: 300 }))
 
-        // Act
+  
         const event = new KeyboardEvent('keydown', { key: 'v', ctrlKey: true })
         Object.defineProperty(event, 'preventDefault', { value: vi.fn() })
         document.dispatchEvent(event)
 
         await new Promise(resolve => setTimeout(resolve, 0))
 
-        // Assert
+  
         expect(mockCreateWebSocketRequest).toHaveBeenCalled()
       })
 
       it('已綁定 Note 不計入包圍框', async () => {
-        // Arrange
+  
         const pod1 = createMockPod({ id: 'pod-1', x: 100, y: 100 })
         const boundNote = createMockNote('outputStyle', {
           id: 'note-1',
@@ -778,21 +771,21 @@ describe('useCopyPaste', () => {
 
         ;(viewportStore as any).screenToCanvas = vi.fn(() => ({ x: 400, y: 300 }))
 
-        // Act
+  
         const event = new KeyboardEvent('keydown', { key: 'v', ctrlKey: true })
         Object.defineProperty(event, 'preventDefault', { value: vi.fn() })
         document.dispatchEvent(event)
 
         await new Promise(resolve => setTimeout(resolve, 0))
 
-        // Assert
+  
         expect(mockCreateWebSocketRequest).toHaveBeenCalled()
       })
     })
 
     describe('calculateOffsets', () => {
       it('計算原始中心到目標位置的偏移量', async () => {
-        // Arrange
+  
         const pod1 = createMockPod({ id: 'pod-1', x: 100, y: 100 })
         clipboardStore.setCopy([pod1], [], [], [], [], [], [])
 
@@ -808,14 +801,14 @@ describe('useCopyPaste', () => {
 
         ;(viewportStore as any).screenToCanvas = vi.fn(() => ({ x: 500, y: 400 }))
 
-        // Act
+  
         const event = new KeyboardEvent('keydown', { key: 'v', ctrlKey: true })
         Object.defineProperty(event, 'preventDefault', { value: vi.fn() })
         document.dispatchEvent(event)
 
         await new Promise(resolve => setTimeout(resolve, 0))
 
-        // Assert
+  
         expect(mockCreateWebSocketRequest).toHaveBeenCalled()
         const payload = mockCreateWebSocketRequest.mock.calls[0]![0]!.payload
         expect(payload.pods[0].x).not.toBe(100)
@@ -825,7 +818,7 @@ describe('useCopyPaste', () => {
 
     describe('transformPods', () => {
       it('應用偏移量到 Pod 座標', async () => {
-        // Arrange
+  
         const pod1 = createMockPod({ id: 'pod-1', x: 100, y: 100 })
         const pod2 = createMockPod({ id: 'pod-2', x: 200, y: 200 })
         clipboardStore.setCopy([pod1, pod2], [], [], [], [], [], [])
@@ -842,14 +835,14 @@ describe('useCopyPaste', () => {
 
         ;(viewportStore as any).screenToCanvas = vi.fn(() => ({ x: 500, y: 400 }))
 
-        // Act
+  
         const event = new KeyboardEvent('keydown', { key: 'v', ctrlKey: true })
         Object.defineProperty(event, 'preventDefault', { value: vi.fn() })
         document.dispatchEvent(event)
 
         await new Promise(resolve => setTimeout(resolve, 0))
 
-        // Assert
+  
         const payload = mockCreateWebSocketRequest.mock.calls[0]![0]!.payload
         expect(payload.pods).toHaveLength(2)
         expect(payload.pods[0].originalId).toBe('pod-1')
@@ -859,7 +852,7 @@ describe('useCopyPaste', () => {
 
     describe('transformNotes', () => {
       it('未綁定 Note 應用偏移量', async () => {
-        // Arrange
+  
         const unboundNote = createMockNote('outputStyle', {
           id: 'note-1',
           boundToPodId: null,
@@ -880,21 +873,21 @@ describe('useCopyPaste', () => {
 
         ;(viewportStore as any).screenToCanvas = vi.fn(() => ({ x: 500, y: 400 }))
 
-        // Act
+  
         const event = new KeyboardEvent('keydown', { key: 'v', ctrlKey: true })
         Object.defineProperty(event, 'preventDefault', { value: vi.fn() })
         document.dispatchEvent(event)
 
         await new Promise(resolve => setTimeout(resolve, 0))
 
-        // Assert
+  
         const payload = mockCreateWebSocketRequest.mock.calls[0]![0]!.payload
         expect(payload.outputStyleNotes[0].x).not.toBe(100)
         expect(payload.outputStyleNotes[0].y).not.toBe(100)
       })
 
       it('已綁定 Note 座標設為 0', async () => {
-        // Arrange
+  
         const pod1 = createMockPod({ id: 'pod-1', x: 100, y: 100 })
         const boundNote = createMockNote('outputStyle', {
           id: 'note-1',
@@ -916,14 +909,14 @@ describe('useCopyPaste', () => {
 
         ;(viewportStore as any).screenToCanvas = vi.fn(() => ({ x: 500, y: 400 }))
 
-        // Act
+  
         const event = new KeyboardEvent('keydown', { key: 'v', ctrlKey: true })
         Object.defineProperty(event, 'preventDefault', { value: vi.fn() })
         document.dispatchEvent(event)
 
         await new Promise(resolve => setTimeout(resolve, 0))
 
-        // Assert
+  
         const payload = mockCreateWebSocketRequest.mock.calls[0]![0]!.payload
         expect(payload.outputStyleNotes[0].x).toBe(0)
         expect(payload.outputStyleNotes[0].y).toBe(0)
@@ -932,7 +925,7 @@ describe('useCopyPaste', () => {
 
     describe('transformConnections', () => {
       it('轉換 Connection 格式', async () => {
-        // Arrange
+  
         const pod1 = createMockPod({ id: 'pod-1', x: 100, y: 100 })
         const pod2 = createMockPod({ id: 'pod-2', x: 200, y: 200 })
         const conn = createMockConnection({
@@ -956,14 +949,14 @@ describe('useCopyPaste', () => {
 
         ;(viewportStore as any).screenToCanvas = vi.fn(() => ({ x: 500, y: 400 }))
 
-        // Act
+  
         const event = new KeyboardEvent('keydown', { key: 'v', ctrlKey: true })
         Object.defineProperty(event, 'preventDefault', { value: vi.fn() })
         document.dispatchEvent(event)
 
         await new Promise(resolve => setTimeout(resolve, 0))
 
-        // Assert
+  
         const payload = mockCreateWebSocketRequest.mock.calls[0]![0]!.payload
         expect(payload.connections).toHaveLength(1)
         expect(payload.connections[0].originalSourcePodId).toBe('pod-1')
@@ -976,24 +969,24 @@ describe('useCopyPaste', () => {
 
   describe('鍵盤事件', () => {
     it('Ctrl+C 觸發複製', () => {
-      // Arrange
+
       const pod1 = createMockPod({ id: 'pod-1' })
       podStore.pods = [pod1]
       selectionStore.selectedElements = [{ type: 'pod', id: 'pod-1' }]
 
       const setCopySpy = vi.spyOn(clipboardStore, 'setCopy')
 
-      // Act
+
       const event = new KeyboardEvent('keydown', { key: 'c', ctrlKey: true })
       Object.defineProperty(event, 'preventDefault', { value: vi.fn() })
       document.dispatchEvent(event)
 
-      // Assert
+
       expect(setCopySpy).toHaveBeenCalled()
     })
 
     it('Ctrl+V 觸發貼上', async () => {
-      // Arrange
+
       const pod1 = createMockPod({ id: 'pod-1', x: 100, y: 100 })
       clipboardStore.setCopy([pod1], [], [], [], [], [], [])
 
@@ -1007,19 +1000,19 @@ describe('useCopyPaste', () => {
         createdConnections: [],
       })
 
-      // Act
+
       const event = new KeyboardEvent('keydown', { key: 'v', ctrlKey: true })
       Object.defineProperty(event, 'preventDefault', { value: vi.fn() })
       document.dispatchEvent(event)
 
       await new Promise(resolve => setTimeout(resolve, 0))
 
-      // Assert
+
       expect(mockWrapWebSocketRequest).toHaveBeenCalled()
     })
 
     it('在編輯元素中不觸發複製', () => {
-      // Arrange
+
       mockIsEditingElement.mockReturnValue(true)
 
       const pod1 = createMockPod({ id: 'pod-1' })
@@ -1028,16 +1021,16 @@ describe('useCopyPaste', () => {
 
       const setCopySpy = vi.spyOn(clipboardStore, 'setCopy')
 
-      // Act
+
       const event = new KeyboardEvent('keydown', { key: 'c', ctrlKey: true })
       document.dispatchEvent(event)
 
-      // Assert
+
       expect(setCopySpy).not.toHaveBeenCalled()
     })
 
     it('在編輯元素中不觸發貼上', async () => {
-      // Arrange
+
       mockIsEditingElement.mockReturnValue(true)
 
       const pod1 = createMockPod({ id: 'pod-1', x: 100, y: 100 })
@@ -1053,18 +1046,18 @@ describe('useCopyPaste', () => {
         createdConnections: [],
       })
 
-      // Act
+
       const event = new KeyboardEvent('keydown', { key: 'v', ctrlKey: true })
       document.dispatchEvent(event)
 
       await new Promise(resolve => setTimeout(resolve, 0))
 
-      // Assert
+
       expect(mockWrapWebSocketRequest).not.toHaveBeenCalled()
     })
 
     it('有文字選取時 Ctrl+C 不觸發', () => {
-      // Arrange
+
       mockHasTextSelection.mockReturnValue(true)
 
       const pod1 = createMockPod({ id: 'pod-1' })
@@ -1073,16 +1066,16 @@ describe('useCopyPaste', () => {
 
       const setCopySpy = vi.spyOn(clipboardStore, 'setCopy')
 
-      // Act
+
       const event = new KeyboardEvent('keydown', { key: 'c', ctrlKey: true })
       document.dispatchEvent(event)
 
-      // Assert
+
       expect(setCopySpy).not.toHaveBeenCalled()
     })
 
     it('非 Ctrl/Cmd 鍵不觸發複製', () => {
-      // Arrange
+
       mockIsModifierKeyPressed.mockReturnValue(false)
 
       const pod1 = createMockPod({ id: 'pod-1' })
@@ -1091,28 +1084,28 @@ describe('useCopyPaste', () => {
 
       const setCopySpy = vi.spyOn(clipboardStore, 'setCopy')
 
-      // Act
+
       const event = new KeyboardEvent('keydown', { key: 'c' })
       document.dispatchEvent(event)
 
-      // Assert
+
       expect(setCopySpy).not.toHaveBeenCalled()
     })
 
     it('非 Ctrl/Cmd 鍵不觸發貼上', async () => {
-      // Arrange
+
       mockIsModifierKeyPressed.mockReturnValue(false)
 
       const pod1 = createMockPod({ id: 'pod-1', x: 100, y: 100 })
       clipboardStore.setCopy([pod1], [], [], [], [], [], [])
 
-      // Act
+
       const event = new KeyboardEvent('keydown', { key: 'v' })
       document.dispatchEvent(event)
 
       await new Promise(resolve => setTimeout(resolve, 0))
 
-      // Assert
+
       expect(mockWrapWebSocketRequest).not.toHaveBeenCalled()
     })
 
@@ -1120,26 +1113,26 @@ describe('useCopyPaste', () => {
 
   describe('生命週期', () => {
     it('onMounted 時註冊事件監聽器', () => {
-      // Arrange
+
       const addEventListenerSpy = vi.spyOn(document, 'addEventListener')
 
-      // Act
+
       mount(TestComponent)
 
-      // Assert
+
       expect(addEventListenerSpy).toHaveBeenCalledWith('keydown', expect.any(Function))
       expect(addEventListenerSpy).toHaveBeenCalledWith('mousemove', expect.any(Function))
     })
 
     it('onUnmounted 時移除事件監聽器', () => {
-      // Arrange
+
       const removeEventListenerSpy = vi.spyOn(document, 'removeEventListener')
       const testWrapper = mount(TestComponent)
 
-      // Act
+
       testWrapper.unmount()
 
-      // Assert
+
       expect(removeEventListenerSpy).toHaveBeenCalledWith('keydown', expect.any(Function))
       expect(removeEventListenerSpy).toHaveBeenCalledWith('mousemove', expect.any(Function))
     })

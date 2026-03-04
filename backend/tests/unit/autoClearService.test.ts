@@ -747,7 +747,6 @@ describe('AutoClearService 單元測試', () => {
       });
       vi.spyOn(autoClearService, 'executeAutoClear').mockResolvedValue();
 
-      // 初始化 tracking
       autoClearService.initializeWorkflowTracking(canvasId, podA.id);
 
       // Direct 組完成（POD D 完成一次）

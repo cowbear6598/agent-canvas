@@ -37,10 +37,12 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
     const targetPod = podStore.getById(canvasId, connection.targetPodId);
     logger.log('Workflow', 'Update', `目標 Pod "${targetPod?.name ?? connection.targetPodId}" 忙碌中，將合併的 workflow 加入佇列`);
 
+    const primarySourcePodId = Array.from(completedSummaries.keys())[0];
+
     workflowQueueService.enqueue({
       canvasId,
       connectionId: connection.id,
-      sourcePodId: Array.from(completedSummaries.keys())[0],
+      sourcePodId: primarySourcePodId,
       targetPodId: connection.targetPodId,
       summary: mergedContent,
       isSummarized: true,

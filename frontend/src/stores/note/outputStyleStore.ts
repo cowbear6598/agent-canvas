@@ -1,6 +1,6 @@
 import type { OutputStyleListItem, OutputStyleNote, Pod } from '@/types'
 import { createNoteStore, rebuildNotesFromPods } from './createNoteStore'
-import type { NoteStoreContext } from './createNoteStore'
+import type { NoteStoreContext, TypedNoteStore } from './createNoteStore'
 import { WebSocketRequestEvents, WebSocketResponseEvents } from '@/services/websocket'
 import { createGroupCRUDActions } from './createGroupCRUDActions'
 import type {
@@ -126,4 +126,4 @@ const store = createNoteStore<OutputStyleListItem, OutputStyleNote>({
   }
 })
 
-export const useOutputStyleStore: (() => ReturnType<typeof store> & OutputStyleStoreCustomActions) & { $id: string } = store as (() => ReturnType<typeof store> & OutputStyleStoreCustomActions) & { $id: string }
+export const useOutputStyleStore = store as TypedNoteStore<typeof store, OutputStyleStoreCustomActions>

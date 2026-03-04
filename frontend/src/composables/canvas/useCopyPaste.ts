@@ -53,7 +53,13 @@ export function useCopyPaste(): void {
     )
 
     const copiedPods = collectSelectedPods(selectedElements, podStore.pods)
-    const copiedNotes = collectSelectedNotes(selectedElements, selectedPodIds, outputStyleStore, skillStore, repositoryStore, subAgentStore, commandStore)
+    const copiedNotes = collectSelectedNotes(selectedElements, selectedPodIds, {
+      outputStyleStore,
+      skillStore,
+      repositoryStore,
+      subAgentStore,
+      commandStore,
+    })
     const copiedConnections = collectRelatedConnections(selectedPodIds, connectionStore.connections)
 
     clipboardStore.setCopy(
@@ -114,18 +120,20 @@ export function useCopyPaste(): void {
     return true
   }
 
+  const COPY_PASTE_HANDLERS: Record<string, (event: KeyboardEvent) => void> = {
+    c: (event) => {
+      if (hasTextSelection()) return
+      handleCopy(event)
+    },
+    v: handlePaste,
+  }
+
   const handleKeyDown = (event: KeyboardEvent): void => {
     if (!isModifierKeyPressed(event)) return
     if (isEditingElement()) return
 
-    const key = event.key.toLowerCase()
-
-    if (key === 'c') {
-      if (hasTextSelection()) return
-      handleCopy(event)
-    } else if (key === 'v') {
-      handlePaste(event)
-    }
+    const handler = COPY_PASTE_HANDLERS[event.key.toLowerCase()]
+    handler?.(event)
   }
 
   onMounted(() => {

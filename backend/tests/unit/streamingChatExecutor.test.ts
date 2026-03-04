@@ -1,6 +1,5 @@
 import type { Mock } from 'vitest';
 
-// Mock 所有依賴模組（必須在 import 之前）
 vi.mock('../../src/services/claude/claudeService.js', () => ({
     claudeService: {
         sendMessage: vi.fn(() => Promise.resolve({})),
@@ -35,7 +34,6 @@ vi.mock('../../src/utils/logger.js', () => ({
     },
 }));
 
-// 現在可以 import 被測試的模組
 import {executeStreamingChat} from '../../src/services/claude/streamingChatExecutor.js';
 import {claudeService} from '../../src/services/claude/claudeService.js';
 import {socketService} from '../../src/services/socketService.js';
@@ -102,7 +100,6 @@ describe('executeStreamingChat', () => {
         asMock(logger.log).mockClear();
         asMock(logger.error).mockClear();
 
-        // 預設 mock 行為
         asMock(claudeService.sendMessage).mockImplementation(() => Promise.resolve({}));
         asMock(messageStore.flushWrites).mockImplementation(() => Promise.resolve());
     });
@@ -122,10 +119,8 @@ describe('executeStreamingChat', () => {
                 abortable: false,
             });
 
-            // 驗證 emitToCanvas 被呼叫兩次（兩個 text event）
             expect(socketService.emitToCanvas).toHaveBeenCalledTimes(3); // 2 text + 1 complete
 
-            // 驗證第一個 text event
             expect(socketService.emitToCanvas).toHaveBeenNthCalledWith(
                 1,
                 canvasId,
@@ -140,7 +135,6 @@ describe('executeStreamingChat', () => {
                 })
             );
 
-            // 驗證第二個 text event
             expect(socketService.emitToCanvas).toHaveBeenNthCalledWith(
                 2,
                 canvasId,
@@ -155,7 +149,6 @@ describe('executeStreamingChat', () => {
                 })
             );
 
-            // 驗證 result
             expect(result.content).toBe('Hello World');
             expect(result.hasContent).toBe(true);
             expect(result.aborted).toBe(false);
@@ -174,7 +167,6 @@ describe('executeStreamingChat', () => {
                 abortable: false,
             });
 
-            // 驗證 tool_use event
             expect(socketService.emitToCanvas).toHaveBeenCalledWith(
                 canvasId,
                 WebSocketResponseEvents.POD_CHAT_TOOL_USE,
@@ -203,7 +195,6 @@ describe('executeStreamingChat', () => {
                 abortable: false,
             });
 
-            // 驗證 tool_result event
             expect(socketService.emitToCanvas).toHaveBeenCalledWith(
                 canvasId,
                 WebSocketResponseEvents.POD_CHAT_TOOL_RESULT,
@@ -231,7 +222,6 @@ describe('executeStreamingChat', () => {
                 abortable: false,
             });
 
-            // 驗證 complete event
             expect(socketService.emitToCanvas).toHaveBeenCalledWith(
                 canvasId,
                 WebSocketResponseEvents.POD_CHAT_COMPLETE,
@@ -259,8 +249,7 @@ describe('executeStreamingChat', () => {
                 abortable: false,
             });
 
-            // 驗證 upsertMessage 被呼叫 4 次
-            // 3 次 streaming 中（text, tool_use, tool_result）+ 1 次完成後最終 persist
+            // streaming 中 3 次（text, tool_use, tool_result）+ 完成後最終 persist 1 次
             expect(messageStore.upsertMessage).toHaveBeenCalledTimes(4);
         });
 
@@ -278,14 +267,12 @@ describe('executeStreamingChat', () => {
                 abortable: false,
             });
 
-            // 驗證 logger.error 被呼叫
             expect(logger.error).toHaveBeenCalledWith(
                 'Chat',
                 'Error',
                 'Pod test-pod streaming 過程發生錯誤'
             );
 
-            // 驗證函式正常完成（不 throw）
             expect(result.hasContent).toBe(true);
             expect(result.content).toBe('Hello');
         });
@@ -305,13 +292,8 @@ describe('executeStreamingChat', () => {
                 abortable: false,
             });
 
-            // 驗證 upsertMessage 被呼叫（streaming 中 + 最終）
             expect(messageStore.upsertMessage).toHaveBeenCalled();
-
-            // 驗證 flushWrites 被呼叫
             expect(messageStore.flushWrites).toHaveBeenCalledWith(podId);
-
-            // 驗證 setStatus idle 被呼叫
             expect(podStore.setStatus).toHaveBeenCalledWith(canvasId, podId, 'idle');
         });
 
@@ -335,7 +317,6 @@ describe('executeStreamingChat', () => {
                 }
             );
 
-            // 驗證 onComplete 被呼叫
             expect(onComplete).toHaveBeenCalledWith(canvasId, podId);
         });
 
@@ -351,13 +332,8 @@ describe('executeStreamingChat', () => {
                 abortable: false,
             });
 
-            // 驗證 upsertMessage 未被呼叫
             expect(messageStore.upsertMessage).not.toHaveBeenCalled();
-
-            // 驗證 flushWrites 未被呼叫
             expect(messageStore.flushWrites).not.toHaveBeenCalled();
-
-            // 驗證 setStatus idle 仍被呼叫
             expect(podStore.setStatus).toHaveBeenCalledWith(canvasId, podId, 'idle');
         });
     });
@@ -382,20 +358,11 @@ describe('executeStreamingChat', () => {
                 }
             );
 
-            // 驗證函式不 throw
             expect(result.aborted).toBe(true);
             expect(result.content).toBe('Hello');
-
-            // 驗證 setStatus idle 被呼叫
             expect(podStore.setStatus).toHaveBeenCalledWith(canvasId, podId, 'idle');
-
-            // 驗證 upsertMessage 被呼叫（persist 中斷時的內容）
             expect(messageStore.upsertMessage).toHaveBeenCalled();
-
-            // 驗證 flushWrites 被呼叫
             expect(messageStore.flushWrites).toHaveBeenCalledWith(podId);
-
-            // 驗證 onAborted 被呼叫
             expect(onAborted).toHaveBeenCalledWith(canvasId, podId, expect.any(String));
         });
 
@@ -404,7 +371,6 @@ describe('executeStreamingChat', () => {
 
             const onAborted = vi.fn(() => {});
 
-            // 驗證函式 throw AbortError
             await expect(
                 executeStreamingChat(
                     {
@@ -419,15 +385,11 @@ describe('executeStreamingChat', () => {
                 )
             ).rejects.toThrow('查詢已被中斷');
 
-            // 驗證 setStatus idle 被呼叫
             expect(podStore.setStatus).toHaveBeenCalledWith(canvasId, podId, 'idle');
-
-            // 驗證 onAborted 未被呼叫
             expect(onAborted).not.toHaveBeenCalled();
         });
 
         it('SDK AbortError 實例也正確處理', async () => {
-            // 使用真正的 AbortError 類別
             asMock(claudeService.sendMessage).mockImplementation(
                 async (...args: any[]) => {
                     const callback = args[2] as (event: any) => void;
@@ -450,7 +412,6 @@ describe('executeStreamingChat', () => {
                 }
             );
 
-            // 驗證函式正確處理 SDK AbortError
             expect(result.aborted).toBe(true);
             expect(onAborted).toHaveBeenCalled();
         });
@@ -463,7 +424,6 @@ describe('executeStreamingChat', () => {
 
             const onError = vi.fn(() => {});
 
-            // 驗證函式 throw Error
             await expect(
                 executeStreamingChat(
                     {
@@ -478,10 +438,7 @@ describe('executeStreamingChat', () => {
                 )
             ).rejects.toThrow('Claude API 錯誤');
 
-            // 驗證 setStatus idle 被呼叫
             expect(podStore.setStatus).toHaveBeenCalledWith(canvasId, podId, 'idle');
-
-            // 驗證 onError 被呼叫
             expect(onError).toHaveBeenCalledWith(
                 canvasId,
                 podId,

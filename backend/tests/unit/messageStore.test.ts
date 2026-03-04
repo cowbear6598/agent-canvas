@@ -16,20 +16,14 @@ describe('MessageStore upsertMessage', () => {
   let getCanvasDirSpy: any;
 
   beforeEach(async () => {
-    // 建立臨時測試目錄
     tempDir = join(__dirname, `temp-test-${Date.now()}`);
     await mkdir(tempDir, { recursive: true });
-
-    // Mock canvasStore.getCanvasDir 回傳測試目錄
     getCanvasDirSpy = vi.spyOn(canvasStore, 'getCanvasDir').mockReturnValue(tempDir);
-
-    // 清空記憶體中的訊息並等待之前的寫入佇列完成
     await messageStore.flushWrites(podId);
     messageStore.clearMessages(podId);
   });
 
   afterEach(async () => {
-    // 清理
     vi.restoreAllMocks();
     await rm(tempDir, { recursive: true, force: true });
   });
@@ -76,7 +70,6 @@ describe('MessageStore upsertMessage', () => {
   });
 
   it('連續快速呼叫時，寫入佇列保證順序執行不遺漏', async () => {
-    // Mock chatPersistenceService.upsertMessage 來追蹤呼叫
     const callOrder: string[] = [];
     const originalUpsert = chatPersistenceService.upsertMessage.bind(chatPersistenceService);
 
@@ -85,7 +78,6 @@ describe('MessageStore upsertMessage', () => {
       return originalUpsert(canvasDir, podId, message);
     });
 
-    // 連續快速呼叫 3 次（不 await）
     messageStore.upsertMessage(canvasId, podId, {
       id: 'msg-1',
       role: 'assistant',
@@ -107,10 +99,8 @@ describe('MessageStore upsertMessage', () => {
       timestamp: new Date().toISOString(),
     });
 
-    // 等待所有寫入完成
     await messageStore.flushWrites(podId);
 
-    // 驗證呼叫了 3 次，且順序正確
     expect(callOrder).toHaveLength(3);
     expect(callOrder[0]).toBe('First');
     expect(callOrder[1]).toBe('Second');
@@ -118,7 +108,6 @@ describe('MessageStore upsertMessage', () => {
   });
 
   it('最終一致性：最後一次呼叫的結果確實被持久化', async () => {
-    // 連續呼叫多次
     for (let i = 1; i <= 5; i++) {
       messageStore.upsertMessage(canvasId, podId, {
         id: 'msg-1',
@@ -128,10 +117,8 @@ describe('MessageStore upsertMessage', () => {
       });
     }
 
-    // 等待所有寫入完成
     await messageStore.flushWrites(podId);
 
-    // 驗證磁碟上的內容是最後一次的值
     const chatHistory = await chatPersistenceService.loadChatHistory(tempDir, podId);
     expect(chatHistory?.messages).toHaveLength(1);
     expect(chatHistory?.messages[0].id).toBe('msg-1');

@@ -1,4 +1,4 @@
-import { serialize, deserialize } from '../../src/utils/messageSerializer.js';
+import { serialize, deserialize, tryDeserialize } from '../../src/utils/messageSerializer.js';
 import type { WebSocketMessage } from '../../src/types/websocket.js';
 
 describe('messageSerializer', () => {
@@ -90,6 +90,27 @@ describe('messageSerializer', () => {
 				const input = '{"type":null,"requestId":"req-1"}';
 				expect(() => deserialize(input)).toThrow('訊息缺少必要欄位: type');
 			});
+		});
+	});
+
+	describe('tryDeserialize', () => {
+		it('合法輸入時應回傳 success result', () => {
+			const message = serialize({ type: 'test', requestId: '', payload: { foo: 'bar' } });
+			const result = tryDeserialize(message);
+			expect(result.success).toBe(true);
+			if (result.success) {
+				expect(result.data.type).toBe('test');
+			}
+		});
+
+		it('不合法 JSON 輸入時應回傳 error result', () => {
+			const result = tryDeserialize('not json');
+			expect(result.success).toBe(false);
+		});
+
+		it('缺少 type 欄位時應回傳 error result', () => {
+			const result = tryDeserialize(JSON.stringify({ data: {} }));
+			expect(result.success).toBe(false);
 		});
 	});
 });

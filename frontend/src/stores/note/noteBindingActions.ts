@@ -8,6 +8,11 @@ interface Position {
     y: number
 }
 
+export type UnbindBehavior =
+    | { mode: 'return-to-original' }
+    | { mode: 'move-to-position'; position: Position }
+    | { mode: 'stay-in-place' }
+
 interface NoteItem {
     id: string
     boundToPodId: string | null
@@ -19,13 +24,12 @@ interface NoteItem {
 interface NoteBindingStore {
     notes: NoteItem[]
     getNotesByPodId: (podId: string) => NoteItem[]
-    unbindFromPod?: (podId: string, returnToOriginal?: boolean, targetPosition?: Position) => Promise<void>
+    unbindFromPod?: (podId: string, behavior?: UnbindBehavior) => Promise<void>
 }
 
 function resolveUnbindPosition(
     note: NoteItem,
-    returnToOriginal: boolean,
-    targetPosition: Position | undefined,
+    behavior: UnbindBehavior,
     canvasId: string,
     noteId: string,
 ): Record<string, unknown> {
@@ -36,32 +40,45 @@ function resolveUnbindPosition(
         originalPosition: null,
     }
 
-    if (returnToOriginal && note.originalPosition) {
+    if (behavior.mode === 'return-to-original' && note.originalPosition) {
         base.x = note.originalPosition.x
         base.y = note.originalPosition.y
-    } else if (targetPosition) {
-        base.x = targetPosition.x
-        base.y = targetPosition.y
+    } else if (behavior.mode === 'move-to-position') {
+        base.x = behavior.position.x
+        base.y = behavior.position.y
     }
 
     return base
 }
 
+interface OneToOneBindingConfig {
+    relationship: NoteStoreConfig<unknown>['relationship']
+    unbindEvents?: NoteStoreConfig<unknown>['unbindEvents']
+}
+
+async function unbindExistingIfOneToOne(
+    store: NoteBindingStore,
+    podId: string,
+    config: OneToOneBindingConfig
+): Promise<void> {
+    if (config.relationship !== 'one-to-one') return
+
+    const existingNotes = store.getNotesByPodId(podId)
+    if (existingNotes.length === 0 || !config.unbindEvents) return
+
+    await store.unbindFromPod!(podId, { mode: 'return-to-original' })
+}
+
 export function createNoteBindingActions<TItem>(config: NoteStoreConfig<TItem>): {
     bindToPod: (this: NoteBindingStore, noteId: string, podId: string) => Promise<void>
-    unbindFromPod: (this: NoteBindingStore, podId: string, returnToOriginal?: boolean, targetPosition?: Position) => Promise<void>
+    unbindFromPod: (this: NoteBindingStore, podId: string, behavior?: UnbindBehavior) => Promise<void>
 } {
     return {
         async bindToPod(this: NoteBindingStore, noteId: string, podId: string): Promise<void> {
             const note = this.notes.find(note => note.id === noteId)
             if (!note) return
 
-            if (config.relationship === 'one-to-one') {
-                const existingNotes = this.getNotesByPodId(podId)
-                if (existingNotes.length > 0 && config.unbindEvents) {
-                    await this.unbindFromPod!(podId, true)
-                }
-            }
+            await unbindExistingIfOneToOne(this, podId, config)
 
             const originalPosition = {x: note.x, y: note.y}
 
@@ -92,7 +109,7 @@ export function createNoteBindingActions<TItem>(config: NoteStoreConfig<TItem>):
             ])
         },
 
-        async unbindFromPod(this: NoteBindingStore, podId: string, returnToOriginal: boolean = false, targetPosition?: Position): Promise<void> {
+        async unbindFromPod(this: NoteBindingStore, podId: string, behavior: UnbindBehavior = { mode: 'stay-in-place' }): Promise<void> {
             if (!config.unbindEvents || config.relationship !== 'one-to-one') return
 
             const notes = this.getNotesByPodId(podId)
@@ -101,7 +118,7 @@ export function createNoteBindingActions<TItem>(config: NoteStoreConfig<TItem>):
 
             const noteId = note.id
             const canvasId = requireActiveCanvas()
-            const updatePayload = resolveUnbindPosition(note, returnToOriginal, targetPosition, canvasId, noteId)
+            const updatePayload = resolveUnbindPosition(note, behavior, canvasId, noteId)
 
             await Promise.all([
                 createWebSocketRequest<BasePayload, BaseResponse>({

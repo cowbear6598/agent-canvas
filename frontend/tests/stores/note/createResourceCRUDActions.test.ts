@@ -143,11 +143,9 @@ describe('createResourceCRUDActions', () => {
     resetMockWebSocket()
     vi.clearAllMocks()
 
-    // 設定 activeCanvasId
     const canvasStore = useCanvasStore()
     canvasStore.activeCanvasId = 'canvas-1'
 
-    // 設定測試用的 events config
     eventsConfig = {
       create: {
         request: 'test:create' as any,
@@ -163,7 +161,6 @@ describe('createResourceCRUDActions', () => {
       },
     }
 
-    // 設定測試用的 payload config
     payloadConfig = {
       getUpdatePayload: (itemId: string, content: string) => ({
         itemId,

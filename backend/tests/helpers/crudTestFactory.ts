@@ -42,7 +42,6 @@ export function describeCRUDTests(
     { name: 'my item!', desc: '特殊字元' },
   ];
 
-  // 建立區塊
   if (config.events.create) {
     describe(`${config.resourceName} 建立`, () => {
       it('success_when_created', async () => {
@@ -87,7 +86,6 @@ export function describeCRUDTests(
     });
   }
 
-  // 列表區塊
   describe(`${config.resourceName} 列表`, () => {
     it('success_when_list_returns_all', async () => {
       const { client } = getContext();
@@ -107,7 +105,6 @@ export function describeCRUDTests(
     });
   });
 
-  // 讀取區塊
   if (config.events.read) {
     describe(`${config.resourceName} 讀取`, () => {
       it('success_when_read_returns_content', async () => {
@@ -144,7 +141,6 @@ export function describeCRUDTests(
     });
   }
 
-  // 更新區塊
   if (config.events.update) {
     describe(`${config.resourceName} 更新`, () => {
       it('success_when_updated', async () => {
@@ -178,7 +174,6 @@ export function describeCRUDTests(
     });
   }
 
-  // 刪除區塊
   describe(`${config.resourceName} 刪除`, () => {
     it('success_when_deleted', async () => {
       const { client } = getContext();

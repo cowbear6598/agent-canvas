@@ -22,13 +22,13 @@ import {formatMergedSummaries, buildQueuedPayload} from './workflowHelpers.js';
 import {connectionStore} from '../connectionStore.js';
 import {MERGED_CONTENT_PREVIEW_MAX_LENGTH} from './constants.js';
 
+// 等待 10 秒讓多個 direct 輸入合併為一次觸發，避免重複執行
+const MULTI_DIRECT_MERGE_WINDOW_MS = 10000;
+
 class WorkflowDirectTriggerService implements TriggerStrategy {
     readonly mode = 'direct' as const;
 
     private pendingResolvers: Map<string, (result: CollectSourcesResult) => void> = new Map();
-
-    // 等待 10 秒讓多個 direct 輸入合併為一次觸發，避免重複執行
-    private readonly MULTI_DIRECT_MERGE_WINDOW_MS = 10000;
 
     async decide(context: TriggerDecideContext): Promise<TriggerDecideResult[]> {
         return context.connections.map((connection) => ({
@@ -97,7 +97,7 @@ class WorkflowDirectTriggerService implements TriggerStrategy {
 
         const timer = setTimeout(() => {
             this.onTimerExpired(canvasId, targetPodId);
-        }, this.MULTI_DIRECT_MERGE_WINDOW_MS);
+        }, MULTI_DIRECT_MERGE_WINDOW_MS);
 
         directTriggerStore.setTimer(targetPodId, timer);
     }

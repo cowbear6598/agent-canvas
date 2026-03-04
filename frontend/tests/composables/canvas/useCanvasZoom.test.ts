@@ -83,7 +83,6 @@ describe('useCanvasZoom', () => {
 
       handleWheel(mockEvent)
 
-      // mouseX = 1000 - 200 = 800, mouseY = 800 - 150 = 650
       expect(zoomToSpy).toHaveBeenCalledWith(expect.any(Number), 800, 650)
     })
 
@@ -189,14 +188,11 @@ describe('useCanvasZoom', () => {
         preventDefault: vi.fn(),
       } as unknown as WheelEvent
 
-      // 第一次縮小
       handleWheel(mockEvent)
       expect(zoomToSpy).toHaveBeenCalledWith(0.9, 100, 100)
 
-      // 模擬 zoom 已更新
       viewportStore.zoom = 0.9
 
-      // 第二次縮小
       handleWheel(mockEvent)
       expect(zoomToSpy).toHaveBeenCalledWith(0.81, 100, 100)
     })
@@ -222,8 +218,6 @@ describe('useCanvasZoom', () => {
 
       handleWheel(mockEvent)
 
-      // 應使用 currentTarget 的 rect (left: 100, top: 50)
-      // mouseX = 500 - 100 = 400, mouseY = 400 - 50 = 350
       expect(zoomToSpy).toHaveBeenCalledWith(1.1, 400, 350)
     })
   })

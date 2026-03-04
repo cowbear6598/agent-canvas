@@ -29,7 +29,6 @@ vi.mock('@/composables/useToast', () => {
   }
 })
 
-// 取得 mock 函數的引用
 const { useToast } = await import('@/composables/useToast')
 const toast = useToast()
 const mockShowSuccessToast = toast.showSuccessToast as ReturnType<typeof vi.fn>
@@ -246,7 +245,6 @@ describe('commandStore', () => {
 
       const result = await store.updateCommand('cmd-999', 'content')
 
-      // updateItemsList 找不到 index，不會更新 items
       expect(store.availableItems).toHaveLength(0)
     })
   })
@@ -425,7 +423,7 @@ describe('commandStore', () => {
           commandId: 'cmd-1',
           name: 'Test Command',
           x: 100,
-          y: 100, // pod.y - 100
+          y: 100,
           boundToPodId: 'pod-1',
           originalPosition: { x: 100, y: 100 },
         },

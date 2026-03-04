@@ -1,6 +1,6 @@
 import type { McpServer, McpServerNote, McpServerConfig } from '@/types'
 import { createNoteStore } from './createNoteStore'
-import type { NoteStoreContext } from './createNoteStore'
+import type { NoteStoreContext, TypedNoteStore } from './createNoteStore'
 import { WebSocketRequestEvents, WebSocketResponseEvents } from '@/services/websocket'
 import { createResourceCRUDActions, defaultMergeItemInList } from './createResourceCRUDActions'
 import type {
@@ -20,6 +20,10 @@ interface McpServerStoreCustomActions {
 interface McpServerUpdateInput {
   name: string
   config: McpServerConfig
+}
+
+function toMcpServerResult(result: { success: boolean; item?: { id: string; name: string }; error?: string }): { success: boolean; mcpServer?: { id: string; name: string }; error?: string } {
+  return result.success ? { success: true, mcpServer: result.item } : { success: false, error: result.error }
 }
 
 const mcpServerCRUD = createResourceCRUDActions<
@@ -102,12 +106,12 @@ const store = createNoteStore<McpServer, McpServerNote>({
   customActions: {
     async createMcpServer(this: NoteStoreContext<McpServer>, name: string, config: McpServerConfig): Promise<{ success: boolean; mcpServer?: { id: string; name: string }; error?: string }> {
       const result = await mcpServerCRUD.create(this.availableItems, name, config)
-      return result.success ? { success: true, mcpServer: result.item } : { success: false, error: result.error }
+      return toMcpServerResult(result)
     },
 
     async updateMcpServer(this: NoteStoreContext<McpServer>, mcpServerId: string, name: string, config: McpServerConfig): Promise<{ success: boolean; mcpServer?: { id: string; name: string }; error?: string }> {
       const result = await mcpServerCRUD.update(this.availableItems, mcpServerId, { name, config })
-      return result.success ? { success: true, mcpServer: result.item } : { success: false, error: result.error }
+      return toMcpServerResult(result)
     },
 
     async readMcpServer(this: NoteStoreContext<McpServer>, mcpServerId: string): Promise<{ id: string; name: string; config: McpServerConfig } | null> {
@@ -124,4 +128,4 @@ const store = createNoteStore<McpServer, McpServerNote>({
   }
 })
 
-export const useMcpServerStore: (() => ReturnType<typeof store> & McpServerStoreCustomActions) & { $id: string } = store as (() => ReturnType<typeof store> & McpServerStoreCustomActions) & { $id: string }
+export const useMcpServerStore = store as TypedNoteStore<typeof store, McpServerStoreCustomActions>

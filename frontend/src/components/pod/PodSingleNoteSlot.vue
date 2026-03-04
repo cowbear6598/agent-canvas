@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import type { BaseNote, Position } from '@/types'
+import type { BaseNote } from '@/types'
+import type { UnbindBehavior } from '@/stores/note/noteBindingActions'
 import { useSlotDropTarget } from '@/composables/pod/useSlotDropTarget'
 import { useSlotEject } from '@/composables/pod/useSlotEject'
 
@@ -14,7 +15,7 @@ const props = defineProps<{
   validateDrop: (noteId: string) => boolean
   getNoteById: (id: string) => BaseNote | undefined
   setNoteAnimating: (noteId: string, animating: boolean) => void
-  unbindFromPod: (podId: string, notify: boolean, targetPosition?: Position) => Promise<void>
+  unbindFromPod: (podId: string, behavior: UnbindBehavior) => Promise<void>
   getViewportZoom: () => number
   getViewportOffset: () => { x: number; y: number }
 }>()

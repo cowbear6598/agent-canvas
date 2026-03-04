@@ -318,7 +318,7 @@ describe('mcpServerStore', () => {
       const note = createMockMcpServerNote({ id: 'note-1', boundToPodId: 'pod-1' })
       store.notes = [note]
 
-      await store.unbindFromPod('pod-1', true)
+      await store.unbindFromPod('pod-1', { mode: 'return-to-original' })
 
       // one-to-many 關係下 unbindFromPod 不會發送請求
       expect(mockCreateWebSocketRequest).not.toHaveBeenCalled()

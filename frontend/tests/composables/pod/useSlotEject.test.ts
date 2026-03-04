@@ -251,7 +251,7 @@ describe('useSlotEject', () => {
       // podCenterY = (150 - 0) / 1 = 150
       // ejectX = 300 + 30 = 330
       // ejectY = 150 + 0 = 150
-      expect(mockUnbindFromPod).toHaveBeenCalledWith('pod-1', false, { x: 330, y: 150 })
+      expect(mockUnbindFromPod).toHaveBeenCalledWith('pod-1', { mode: 'move-to-position', position: { x: 330, y: 150 } })
     })
 
     it('應計算彈出位置（rotation = 90，向下彈出）', async () => {
@@ -301,9 +301,12 @@ describe('useSlotEject', () => {
       // rotatedY = 30 * sin(π/2) + 0 * cos(π/2) ≈ 30
       // podCenterX = 300, podCenterY = 150
       // ejectX ≈ 300, ejectY ≈ 180
-      expect(mockUnbindFromPod).toHaveBeenCalledWith('pod-1', false, {
-        x: expect.closeTo(300, 0.1),
-        y: expect.closeTo(180, 0.1),
+      expect(mockUnbindFromPod).toHaveBeenCalledWith('pod-1', {
+        mode: 'move-to-position',
+        position: {
+          x: expect.closeTo(300, 0.1),
+          y: expect.closeTo(180, 0.1),
+        },
       })
     })
 
@@ -353,9 +356,12 @@ describe('useSlotEject', () => {
       // rotatedX = 30 * cos(π) - 0 * sin(π) ≈ -30
       // rotatedY = 30 * sin(π) + 0 * cos(π) ≈ 0
       // ejectX ≈ 270, ejectY ≈ 150
-      expect(mockUnbindFromPod).toHaveBeenCalledWith('pod-1', false, {
-        x: expect.closeTo(270, 0.1),
-        y: expect.closeTo(150, 0.1),
+      expect(mockUnbindFromPod).toHaveBeenCalledWith('pod-1', {
+        mode: 'move-to-position',
+        position: {
+          x: expect.closeTo(270, 0.1),
+          y: expect.closeTo(150, 0.1),
+        },
       })
     })
 
@@ -405,9 +411,12 @@ describe('useSlotEject', () => {
       // rotatedX = 30 * cos(3π/2) - 0 * sin(3π/2) ≈ 0
       // rotatedY = 30 * sin(3π/2) + 0 * cos(3π/2) ≈ -30
       // ejectX ≈ 300, ejectY ≈ 120
-      expect(mockUnbindFromPod).toHaveBeenCalledWith('pod-1', false, {
-        x: expect.closeTo(300, 0.1),
-        y: expect.closeTo(120, 0.1),
+      expect(mockUnbindFromPod).toHaveBeenCalledWith('pod-1', {
+        mode: 'move-to-position',
+        position: {
+          x: expect.closeTo(300, 0.1),
+          y: expect.closeTo(120, 0.1),
+        },
       })
     })
 
@@ -457,7 +466,7 @@ describe('useSlotEject', () => {
       // podCenterY = (300 - 0) / 2 = 150
       // ejectX = 300 + 30 = 330
       // ejectY = 150 + 0 = 150
-      expect(mockUnbindFromPod).toHaveBeenCalledWith('pod-1', false, { x: 330, y: 150 })
+      expect(mockUnbindFromPod).toHaveBeenCalledWith('pod-1', { mode: 'move-to-position', position: { x: 330, y: 150 } })
     })
 
     it('應考慮 viewport offset', async () => {
@@ -506,7 +515,7 @@ describe('useSlotEject', () => {
       // podCenterY = (200 - 50) / 1 = 150
       // ejectX = 300 + 30 = 330
       // ejectY = 150 + 0 = 150
-      expect(mockUnbindFromPod).toHaveBeenCalledWith('pod-1', false, { x: 330, y: 150 })
+      expect(mockUnbindFromPod).toHaveBeenCalledWith('pod-1', { mode: 'move-to-position', position: { x: 330, y: 150 } })
     })
 
     it('應呼叫 setNoteAnimating 和 unbindFromPod', async () => {
@@ -549,7 +558,7 @@ describe('useSlotEject', () => {
       await handleSlotClick(mockEvent, 'note-1', 'pod-1', mockOnRemoved)
 
       expect(mockSetNoteAnimating).toHaveBeenCalledWith('note-1', true)
-      expect(mockUnbindFromPod).toHaveBeenCalledWith('pod-1', false, expect.any(Object))
+      expect(mockUnbindFromPod).toHaveBeenCalledWith('pod-1', expect.objectContaining({ mode: 'move-to-position' }))
     })
 
     it('完成後應呼叫 onRemoved callback', async () => {
@@ -643,7 +652,7 @@ describe('useSlotEject', () => {
       expect(mockSetNoteAnimating).toHaveBeenCalledWith('note-1', false)
     })
 
-    it('unbindFromPod 失敗時不應阻斷流程', async () => {
+    it('unbindFromPod 失敗時應拋出錯誤', async () => {
       const mockSlotElement = document.createElement('div')
       const mockPodElement = document.createElement('div')
       mockPodElement.className = 'pod-with-notch'

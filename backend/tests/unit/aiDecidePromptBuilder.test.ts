@@ -94,17 +94,14 @@ describe('AiDecidePromptBuilder', () => {
 
       const result = aiDecidePromptBuilder.buildUserPrompt(context);
 
-      // 驗證所有 target Pod 名稱都出現
       expect(result).toContain('Review Pod');
       expect(result).toContain('Test Pod');
       expect(result).toContain('Deploy Pod');
 
-      // 驗證所有 connection IDs 都出現
       expect(result).toContain('conn-1');
       expect(result).toContain('conn-2');
       expect(result).toContain('conn-3');
 
-      // 驗證 OutputStyle 和 Command
       expect(result).toContain('You are a reviewer.');
       expect(result).toContain('Review the code.');
       expect(result).toContain('Run tests.');

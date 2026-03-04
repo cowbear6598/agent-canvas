@@ -23,24 +23,6 @@ const emit = defineEmits<{
   'dblclick': [data: { noteId: string; noteType: NoteType }]
 }>()
 
-const cssClassMap: Record<NoteType, string> = {
-  outputStyle: 'output-style-note',
-  skill: 'skill-note',
-  subAgent: 'subagent-note',
-  repository: 'repository-note',
-  command: 'command-note',
-  mcpServer: 'mcp-server-note'
-}
-
-const selectionTypeMap = {
-  outputStyle: 'outputStyleNote',
-  skill: 'skillNote',
-  subAgent: 'subAgentNote',
-  repository: 'repositoryNote',
-  command: 'commandNote',
-  mcpServer: 'mcpServerNote'
-} as const
-
 const {
   viewportStore,
   selectionStore,
@@ -54,44 +36,47 @@ const {
 } = useCanvasContext()
 const { startBatchDrag, isElementSelected } = useBatchDrag()
 
-const noteStore = computed(() => {
-  switch (props.noteType) {
-    case 'outputStyle':
-      return outputStyleStore
-    case 'skill':
-      return skillStore
-    case 'subAgent':
-      return subAgentStore
-    case 'repository':
-      return repositoryStore
-    case 'command':
-      return commandStore
-    case 'mcpServer':
-      return mcpServerStore
-    default:
-      return outputStyleStore
-  }
-})
+const NOTE_TYPE_CONFIG = {
+  outputStyle: {
+    store: outputStyleStore,
+    selectionType: 'outputStyleNote' as const,
+    cssClass: 'output-style-note',
+  },
+  skill: {
+    store: skillStore,
+    selectionType: 'skillNote' as const,
+    cssClass: 'skill-note',
+  },
+  subAgent: {
+    store: subAgentStore,
+    selectionType: 'subAgentNote' as const,
+    cssClass: 'subagent-note',
+  },
+  repository: {
+    store: repositoryStore,
+    selectionType: 'repositoryNote' as const,
+    cssClass: 'repository-note',
+  },
+  command: {
+    store: commandStore,
+    selectionType: 'commandNote' as const,
+    cssClass: 'command-note',
+  },
+  mcpServer: {
+    store: mcpServerStore,
+    selectionType: 'mcpServerNote' as const,
+    cssClass: 'mcp-server-note',
+  },
+} as const
+
+const noteStore = computed(() => NOTE_TYPE_CONFIG[props.noteType]?.store ?? outputStyleStore)
 
 const isDragging = ref(false)
 const isAnimating = computed(() => noteStore.value.isNoteAnimating(props.note.id))
+
 const isSelected = computed(() => {
-  switch (props.noteType) {
-    case 'outputStyle':
-      return selectionStore.selectedOutputStyleNoteIds.includes(props.note.id)
-    case 'skill':
-      return selectionStore.selectedSkillNoteIds.includes(props.note.id)
-    case 'subAgent':
-      return selectionStore.selectedSubAgentNoteIds.includes(props.note.id)
-    case 'repository':
-      return selectionStore.selectedRepositoryNoteIds.includes(props.note.id)
-    case 'command':
-      return selectionStore.selectedCommandNoteIds.includes(props.note.id)
-    case 'mcpServer':
-      return selectionStore.selectedMcpServerNoteIds.includes(props.note.id)
-    default:
-      return false
-  }
+  const selectionType = NOTE_TYPE_CONFIG[props.noteType].selectionType
+  return selectionStore.isElementSelected(selectionType, props.note.id)
 })
 
 const dragRef = ref<{
@@ -120,41 +105,74 @@ onUnmounted(() => {
   cleanupEventListeners()
 })
 
-// 使用 document 級別的事件監聽器而非 Vue 事件系統的原因：
-// 1. 需要追蹤全局 mousemove/mouseup 事件（不受組件邊界限制）
-// 2. 需要計算相對於 viewport 的坐標變化
-// 3. 需要在 unmount 時精確清理監聽器以防記憶體洩漏
-const handleMouseDown = (e: MouseEvent): void => {
-  connectionStore.selectConnection(null)
+const resolveStartPosition = (): { x: number; y: number } => ({
+  x: startPosition.value?.x ?? props.note.x,
+  y: startPosition.value?.y ?? props.note.y,
+})
 
-  const selectionType = selectionTypeMap[props.noteType]
+const onMouseMove = (moveEvent: MouseEvent): void => {
+  if (!dragRef.value) return
+  const dx = (moveEvent.clientX - dragRef.value.startX) / viewportStore.zoom
+  const dy = (moveEvent.clientY - dragRef.value.startY) / viewportStore.zoom
 
-  if (isCtrlOrCmdPressed(e)) {
-    selectionStore.toggleElement({ type: selectionType, id: props.note.id })
-    return
-  }
+  emit('drag-end', {
+    noteId: props.note.id,
+    x: dragRef.value.noteX + dx,
+    y: dragRef.value.noteY + dy,
+  })
+
+  emit('drag-move', {
+    noteId: props.note.id,
+    screenX: moveEvent.clientX,
+    screenY: moveEvent.clientY,
+  })
+}
+
+const onMouseUp = (): void => {
+  const { x: startX, y: startY } = resolveStartPosition()
+
+  emit('drag-complete', {
+    noteId: props.note.id,
+    isOverTrash: noteStore.value.isOverTrash,
+    startX,
+    startY,
+  })
+
+  isDragging.value = false
+  noteStore.value.setDraggedNote(null)
+  noteStore.value.setIsDraggingNote(false)
+  startPosition.value = null
+  dragRef.value = null
+  cleanupEventListeners()
+}
+
+const handleCtrlClick = (): void => {
+  const selectionType = NOTE_TYPE_CONFIG[props.noteType].selectionType
+  selectionStore.toggleElement({ type: selectionType, id: props.note.id })
+}
+
+const tryStartBatchDragOrSelect = (e: MouseEvent): boolean => {
+  const selectionType = NOTE_TYPE_CONFIG[props.noteType].selectionType
 
   if (isElementSelected(selectionType, props.note.id) && selectionStore.selectedElements.length > 1) {
-    if (startBatchDrag(e)) {
-      return
-    }
+    return startBatchDrag(e)
   }
 
   if (!isElementSelected(selectionType, props.note.id)) {
     selectionStore.setSelectedElements([{ type: selectionType, id: props.note.id }])
   }
 
+  return false
+}
+
+const startSingleDrag = (e: MouseEvent): void => {
   cleanupEventListeners()
 
   isDragging.value = true
   noteStore.value.setDraggedNote(props.note.id)
   noteStore.value.setIsDraggingNote(true)
 
-  startPosition.value = {
-    x: props.note.x,
-    y: props.note.y,
-  }
-
+  startPosition.value = { x: props.note.x, y: props.note.y }
   dragRef.value = {
     startX: e.clientX,
     startY: e.clientY,
@@ -162,48 +180,31 @@ const handleMouseDown = (e: MouseEvent): void => {
     noteY: props.note.y,
   }
 
-  const handleMouseMove = (moveEvent: MouseEvent): void => {
-    if (!dragRef.value) return
-    const dx = (moveEvent.clientX - dragRef.value.startX) / viewportStore.zoom
-    const dy = (moveEvent.clientY - dragRef.value.startY) / viewportStore.zoom
+  currentMouseMoveHandler = onMouseMove
+  currentMouseUpHandler = onMouseUp
 
-    emit('drag-end', {
-      noteId: props.note.id,
-      x: dragRef.value.noteX + dx,
-      y: dragRef.value.noteY + dy,
-    })
-
-    emit('drag-move', {
-      noteId: props.note.id,
-      screenX: moveEvent.clientX,
-      screenY: moveEvent.clientY,
-    })
-  }
-
-  const handleMouseUp = (): void => {
-    emit('drag-complete', {
-      noteId: props.note.id,
-      isOverTrash: noteStore.value.isOverTrash,
-      startX: startPosition.value?.x ?? props.note.x,
-      startY: startPosition.value?.y ?? props.note.y,
-    })
-
-    isDragging.value = false
-    noteStore.value.setDraggedNote(null)
-    noteStore.value.setIsDraggingNote(false)
-    startPosition.value = null
-    dragRef.value = null
-    cleanupEventListeners()
-  }
-
-  currentMouseMoveHandler = handleMouseMove
-  currentMouseUpHandler = handleMouseUp
-
-  document.addEventListener('mousemove', handleMouseMove)
-  document.addEventListener('mouseup', handleMouseUp)
+  document.addEventListener('mousemove', onMouseMove)
+  document.addEventListener('mouseup', onMouseUp)
 }
 
-const cssClass = computed(() => ['note-base', cssClassMap[props.noteType]])
+// 使用 document 級別的事件監聽器而非 Vue 事件系統的原因：
+// 1. 需要追蹤全局 mousemove/mouseup 事件（不受組件邊界限制）
+// 2. 需要計算相對於 viewport 的坐標變化
+// 3. 需要在 unmount 時精確清理監聽器以防記憶體洩漏
+const handleMouseDown = (e: MouseEvent): void => {
+  connectionStore.selectConnection(null)
+
+  if (isCtrlOrCmdPressed(e)) {
+    handleCtrlClick()
+    return
+  }
+
+  if (tryStartBatchDragOrSelect(e)) return
+
+  startSingleDrag(e)
+}
+
+const cssClass = computed(() => ['note-base', NOTE_TYPE_CONFIG[props.noteType].cssClass])
 
 const handleContextMenu = (e: MouseEvent): void => {
   e.preventDefault()

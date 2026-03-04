@@ -39,7 +39,6 @@ describe('技能服務安全性測試', () => {
                 'SKILL.md': '# Test Skill\n\nTest content',
             };
 
-            // 建立 101 個檔案
             for (let i = 0; i < 101; i++) {
                 files[`file${i}.txt`] = 'content';
             }
@@ -72,7 +71,6 @@ describe('技能服務安全性測試', () => {
                 'SKILL.md': new TextEncoder().encode('# Test Skill\n\nTest content'),
             };
 
-            // 建立多個檔案，總計超過 10MB
             for (let i = 0; i < 15; i++) {
                 const content = new Uint8Array(800 * 1024); // 800KB per file
                 content.fill(65 + i);

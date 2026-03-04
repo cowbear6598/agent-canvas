@@ -18,13 +18,15 @@ import { logger } from '../utils/logger.js';
 import { broadcastCursorLeft } from './cursorHandlers.js';
 import { toCanvasDto } from '../utils/canvasDto.js';
 
+type CanvasResultEmitTarget = 'broadcast-all' | 'single-connection';
+
 function handleCanvasResult<T, R extends { requestId: string; success: boolean }>(
   connectionId: string,
   result: Result<T>,
   event: WebSocketResponseEvents,
   requestId: string,
   onSuccess: (data: T) => R,
-  emitToAll: boolean = false
+  emitTarget: CanvasResultEmitTarget = 'single-connection'
 ): boolean {
   if (!result.success) {
     socketService.emitToConnection(connectionId, event, {
@@ -36,7 +38,7 @@ function handleCanvasResult<T, R extends { requestId: string; success: boolean }
   }
 
   const successResponse = onSuccess(result.data);
-  if (emitToAll) {
+  if (emitTarget === 'broadcast-all') {
     socketService.emitToAll(event, successResponse);
   } else {
     socketService.emitToConnection(connectionId, event, successResponse);
@@ -60,7 +62,7 @@ export async function handleCanvasCreate(
       success: true,
       canvas: toCanvasDto(canvas),
     }),
-    true
+    'broadcast-all'
   );
 }
 
@@ -99,7 +101,7 @@ export async function handleCanvasRename(
         name: canvas.name,
       },
     }),
-    true
+    'broadcast-all'
   );
 }
 
@@ -139,7 +141,7 @@ export async function handleCanvasDelete(
       success: true,
       canvasId: payload.canvasId,
     }),
-    true
+    'broadcast-all'
   );
 
   if (!success) return;
@@ -193,7 +195,7 @@ export async function handleCanvasReorder(
       success: true,
       canvasIds: payload.canvasIds,
     }),
-    true
+    'broadcast-all'
   );
 
   if (!success) return;

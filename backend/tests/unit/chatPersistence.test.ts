@@ -68,13 +68,11 @@ describe('ChatPersistenceService upsertMessage', () => {
   const podId = 'test-pod-1';
 
   beforeEach(async () => {
-    // 建立臨時測試目錄
     tempDir = join(__dirname, `temp-test-${Date.now()}`);
     await mkdir(tempDir, { recursive: true });
   });
 
   afterEach(async () => {
-    // 清理臨時目錄
     await rm(tempDir, { recursive: true, force: true });
   });
 
@@ -89,7 +87,6 @@ describe('ChatPersistenceService upsertMessage', () => {
     const result = await chatPersistenceService.upsertMessage(tempDir, podId, message);
     expect(result.success).toBe(true);
 
-    // 驗證檔案內容
     const filePathResult = chatPersistenceService.getChatFilePath(tempDir, podId);
     expect(filePathResult.success).toBe(true);
     const readResult = await persistenceService.readJson<ChatHistory>(filePathResult.data!);
@@ -119,7 +116,6 @@ describe('ChatPersistenceService upsertMessage', () => {
     const result = await chatPersistenceService.upsertMessage(tempDir, podId, message2);
     expect(result.success).toBe(true);
 
-    // 驗證有兩筆 messages
     const filePathResult = chatPersistenceService.getChatFilePath(tempDir, podId);
     const readResult = await persistenceService.readJson<ChatHistory>(filePathResult.data!);
     expect(readResult.data?.messages).toHaveLength(2);
@@ -147,7 +143,6 @@ describe('ChatPersistenceService upsertMessage', () => {
     const result = await chatPersistenceService.upsertMessage(tempDir, podId, message2);
     expect(result.success).toBe(true);
 
-    // 驗證仍然只有一筆，且內容已更新
     const filePathResult = chatPersistenceService.getChatFilePath(tempDir, podId);
     const readResult = await persistenceService.readJson<ChatHistory>(filePathResult.data!);
     expect(readResult.data?.messages).toHaveLength(1);
@@ -172,7 +167,6 @@ describe('ChatPersistenceService upsertMessage', () => {
     message.content = 'Content 3';
     await chatPersistenceService.upsertMessage(tempDir, podId, message);
 
-    // 驗證只有 1 筆，content 為最後一次的值
     const filePathResult = chatPersistenceService.getChatFilePath(tempDir, podId);
     const readResult = await persistenceService.readJson<ChatHistory>(filePathResult.data!);
     expect(readResult.data?.messages).toHaveLength(1);
@@ -320,7 +314,6 @@ describe('ChatPersistenceService clearChatHistory', () => {
     const result = await chatPersistenceService.clearChatHistory(tempDir, podId);
     expect(result.success).toBe(true);
 
-    // 確認歷史記錄已被清除
     const history = await chatPersistenceService.loadChatHistory(tempDir, podId);
     expect(history).toBeNull();
   });

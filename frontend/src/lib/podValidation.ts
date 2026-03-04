@@ -1,21 +1,20 @@
 import type { Pod } from '@/types'
 import { validatePodName } from '@/lib/sanitize'
 
-/**
- * 驗證 Pod 是否有效
- * @param pod Pod 物件
- * @returns 是否有效
- */
+function hasValidIdentity(pod: Pod): boolean {
+  return validatePodName(pod.name) && pod.id.trim() !== ''
+}
+
+function hasValidPosition(pod: Pod): boolean {
+  return isFinite(pod.x) && isFinite(pod.y) && isFinite(pod.rotation)
+}
+
+function hasValidOutput(pod: Pod): boolean {
+  return Array.isArray(pod.output) && pod.output.every(item => typeof item === 'string')
+}
+
 export function isValidPod(pod: Pod): boolean {
-  return (
-    validatePodName(pod.name) &&
-    Array.isArray(pod.output) &&
-    pod.output.every(item => typeof item === 'string') &&
-    pod.id.trim() !== '' &&
-    isFinite(pod.x) &&
-    isFinite(pod.y) &&
-    isFinite(pod.rotation)
-  )
+  return hasValidIdentity(pod) && hasValidPosition(pod) && hasValidOutput(pod)
 }
 
 /**

@@ -855,7 +855,7 @@ describe('repositoryStore', () => {
         success: true,
       })
 
-      await store.unbindFromPod('pod-1', true)
+      await store.unbindFromPod('pod-1', { mode: 'return-to-original' })
 
       expect(mockCreateWebSocketRequest).toHaveBeenCalledTimes(2)
       expect(mockCreateWebSocketRequest).toHaveBeenNthCalledWith(1, {

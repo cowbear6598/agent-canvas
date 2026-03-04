@@ -6,7 +6,23 @@ import { canvasStore } from './canvasStore.js';
 import { pendingTargetStore } from './pendingTargetStore.js';
 import { directTriggerStore } from './directTriggerStore.js';
 import { logger } from '../utils/logger.js';
-import { getErrorMessage } from '../utils/errorHelpers.js';
+import { safeExecuteAsync } from '../utils/operationHelpers.js';
+import { isAutoTriggerable } from './workflow/workflowHelpers.js';
+import type { Connection } from '../types/index.js';
+
+function enqueueUnvisitedTargets(
+  connections: Connection[],
+  visited: Set<string>,
+  queue: string[]
+): void {
+  for (const connection of connections) {
+    const targetPodId = connection.targetPodId;
+    if (!visited.has(targetPodId)) {
+      visited.add(targetPodId);
+      queue.push(targetPodId);
+    }
+  }
+}
 
 interface ClearResult {
   success: boolean;
@@ -30,18 +46,9 @@ class WorkflowClearService {
     while (queue.length > 0) {
       const currentId = queue.shift();
       if (!currentId) break;
-      const currentPodId = currentId;
-
-      const connections = connectionStore.findBySourcePodId(canvasId, currentPodId);
-
-      for (const connection of connections) {
-        const targetPodId = connection.targetPodId;
-
-        if (!visited.has(targetPodId)) {
-          visited.add(targetPodId);
-          queue.push(targetPodId);
-        }
-      }
+      const connections = connectionStore.findBySourcePodId(canvasId, currentId)
+        .filter(conn => isAutoTriggerable(conn.triggerMode));
+      enqueueUnvisitedTargets(connections, visited, queue);
     }
 
     return Array.from(visited);
@@ -81,16 +88,13 @@ class WorkflowClearService {
     const clearedConnectionIds: string[] = [];
 
     for (const podId of podIds) {
-      let result: ClearSinglePodResult | null;
-
-      try {
-        result = await this.clearSinglePod(canvasId, podId, canvasDir);
-      } catch (error) {
-        const errorMessage = getErrorMessage(error);
-        logger.error('AutoClear', 'Error', `[WorkflowClear] 清除 Pod ${podId} 失敗：${errorMessage}`);
+      const clearResult = await safeExecuteAsync(() => this.clearSinglePod(canvasId, podId, canvasDir));
+      if (!clearResult.success) {
+        logger.error('AutoClear', 'Error', `[WorkflowClear] 清除 Pod ${podId} 失敗：${clearResult.error}`);
         continue;
       }
 
+      const result = clearResult.data;
       if (result) {
         clearedPodNames.push(result.podName);
         clearedConnectionIds.push(...result.clearedConnectionIds);

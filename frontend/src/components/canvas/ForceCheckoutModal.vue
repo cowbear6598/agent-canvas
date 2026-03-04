@@ -8,14 +8,14 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { AlertTriangle } from 'lucide-vue-next'
+import WarningBox from '@/components/ui/WarningBox.vue'
 
 interface Props {
   open: boolean
   targetBranch: string
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
 
 const emit = defineEmits<{
   'update:open': [value: boolean]
@@ -42,17 +42,10 @@ const handleForceCheckout = (): void => {
       <DialogHeader>
         <DialogTitle>有未儲存的修改</DialogTitle>
         <DialogDescription class="space-y-3">
-          <div class="flex items-start gap-2 text-destructive">
-            <AlertTriangle class="h-5 w-5 mt-0.5 flex-shrink-0" />
-            <div>
-              <p class="font-medium">
-                目前有未 commit 的修改
-              </p>
-              <p class="mt-1">
-                切換到 <span class="font-mono">{{ targetBranch }}</span> 將會丟失所有未 commit 的修改
-              </p>
-            </div>
-          </div>
+          <WarningBox
+            title="目前有未 commit 的修改"
+            :description="`切換到 ${props.targetBranch} 將會丟失所有未 commit 的修改`"
+          />
         </DialogDescription>
       </DialogHeader>
 

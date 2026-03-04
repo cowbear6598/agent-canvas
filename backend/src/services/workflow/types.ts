@@ -154,4 +154,5 @@ export interface AiDecideMethods {
 
 export interface AutoTriggerMethods {
   processAutoTriggerConnection(canvasId: string, sourcePodId: string, connection: Connection): Promise<void>;
+  getLastAssistantMessage(sourcePodId: string): string | null;
 }

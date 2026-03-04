@@ -40,6 +40,17 @@ import path from 'path';
 const pullingRepositories = new Set<string>();
 
 const MAX_REPO_URL_LENGTH = 500;
+const SAFE_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
+
+function emitGitValidationError(
+  connectionId: string,
+  responseEvent: WebSocketResponseEvents,
+  error: string,
+  requestId: string
+): void {
+  const errorCode = error.includes('找不到') ? 'NOT_FOUND' : 'INVALID_STATE';
+  emitError(connectionId, responseEvent, error, requestId, undefined, errorCode);
+}
 
 async function validateRepositoryIsGit(
   connectionId: string,
@@ -50,8 +61,7 @@ async function validateRepositoryIsGit(
   const result = await getValidatedGitRepository(repositoryId);
 
   if (!result.success) {
-    const errorCode = result.error.includes('找不到') ? 'NOT_FOUND' : 'INVALID_STATE';
-    emitError(connectionId, responseEvent, result.error, requestId, undefined, errorCode);
+    emitGitValidationError(connectionId, responseEvent, result.error, requestId);
     return null;
   }
 
@@ -299,6 +309,10 @@ async function checkHasCommits(repositoryPath: string): Promise<WorktreeValidati
 }
 
 async function checkTargetPathSafety(repositoryId: string, worktreeName: string): Promise<WorktreeValidationError> {
+  if (!SAFE_ID_PATTERN.test(repositoryId)) {
+    return { error: '無效的 Repository ID 格式', errorCode: 'INVALID_INPUT' };
+  }
+
   const parentDirectory = repositoryService.getParentDirectory();
   const newRepositoryId = `${repositoryId}-${worktreeName}`;
   const targetPath = path.join(parentDirectory, newRepositoryId);
@@ -333,11 +347,11 @@ async function validateWorktreePrerequisites(
   repositoryId: string,
   worktreeName: string
 ): Promise<WorktreeValidationError> {
-  return (
-    (await checkHasCommits(repositoryPath)) ??
-    (await checkTargetPathSafety(repositoryId, worktreeName)) ??
-    (await checkBranchAvailability(repositoryPath, worktreeName))
-  );
+  const commitsError = await checkHasCommits(repositoryPath);
+  if (commitsError) return commitsError;
+  const pathSafetyError = await checkTargetPathSafety(repositoryId, worktreeName);
+  if (pathSafetyError) return pathSafetyError;
+  return checkBranchAvailability(repositoryPath, worktreeName);
 }
 
 export async function handleRepositoryWorktreeCreate(
@@ -350,8 +364,7 @@ export async function handleRepositoryWorktreeCreate(
 
   const validateResult = await getValidatedGitRepository(repositoryId);
   if (!validateResult.success) {
-    const errorCode = validateResult.error.includes('找不到') ? 'NOT_FOUND' : 'INVALID_STATE';
-    emitError(connectionId, responseEvent, validateResult.error, requestId, undefined, errorCode);
+    emitGitValidationError(connectionId, responseEvent, validateResult.error, requestId);
     return;
   }
 
@@ -573,6 +586,29 @@ async function withPullLock<T>(repositoryId: string, fn: () => Promise<T>): Prom
   }
 }
 
+async function executePullWithProgress(
+  connectionId: string,
+  requestId: string,
+  repositoryPath: string
+): Promise<{ gitPullResult: Awaited<ReturnType<typeof gitService.pullLatest>>; throttledEmit: ThrottledProgressEmitter; emitPullProgress: (progress: number, message: string) => void }> {
+  const emitPullProgress = createProgressEmitter(
+    connectionId,
+    requestId,
+    WebSocketResponseEvents.REPOSITORY_PULL_LATEST_PROGRESS
+  );
+
+  const throttledEmit = createThrottledProgressEmitter(
+    connectionId,
+    requestId,
+    WebSocketResponseEvents.REPOSITORY_PULL_LATEST_PROGRESS
+  );
+
+  emitPullProgress(0, '準備 Pull...');
+
+  const gitPullResult = await gitService.pullLatest(repositoryPath, (progress, message) => throttledEmit(progress, message));
+  return { gitPullResult, throttledEmit, emitPullProgress };
+}
+
 export const handleRepositoryPullLatest = withValidatedGitRepository<RepositoryPullLatestPayload>(
   WebSocketResponseEvents.REPOSITORY_PULL_LATEST_RESULT,
   async (connectionId, payload, requestId, repositoryPath) => {
@@ -587,24 +623,7 @@ export const handleRepositoryPullLatest = withValidatedGitRepository<RepositoryP
     );
     if (!isValid) return;
 
-    const lockResult = await withPullLock(repositoryId, async () => {
-      const emitPullProgress = createProgressEmitter(
-        connectionId,
-        requestId,
-        WebSocketResponseEvents.REPOSITORY_PULL_LATEST_PROGRESS
-      );
-
-      const throttledEmit = createThrottledProgressEmitter(
-        connectionId,
-        requestId,
-        WebSocketResponseEvents.REPOSITORY_PULL_LATEST_PROGRESS
-      );
-
-      emitPullProgress(0, '準備 Pull...');
-
-      const gitPullResult = await gitService.pullLatest(repositoryPath, (progress, message) => throttledEmit(progress, message));
-      return { gitPullResult, throttledEmit, emitPullProgress };
-    });
+    const lockResult = await withPullLock(repositoryId, () => executePullWithProgress(connectionId, requestId, repositoryPath));
 
     if (lockResult.locked) {
       emitError(

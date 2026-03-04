@@ -835,7 +835,7 @@ describe('createNoteStore', () => {
       })
     })
 
-    it('returnToOriginal: true 時應使用 originalPosition', async () => {
+    it('return-to-original 模式時應使用 originalPosition', async () => {
       const canvasStore = useCanvasStore()
       canvasStore.activeCanvasId = 'canvas-1'
       const config = createTestConfig({ relationship: 'one-to-one' })
@@ -849,7 +849,7 @@ describe('createNoteStore', () => {
 
       mockCreateWebSocketRequest.mockResolvedValue({})
 
-      await store.unbindFromPod('pod-1', true)
+      await store.unbindFromPod('pod-1', { mode: 'return-to-original' })
 
       expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -861,7 +861,7 @@ describe('createNoteStore', () => {
       )
     })
 
-    it('提供 targetPosition 時應使用 targetPosition', async () => {
+    it('move-to-position 模式時應使用指定位置', async () => {
       const canvasStore = useCanvasStore()
       canvasStore.activeCanvasId = 'canvas-1'
       const config = createTestConfig({ relationship: 'one-to-one' })
@@ -871,7 +871,7 @@ describe('createNoteStore', () => {
 
       mockCreateWebSocketRequest.mockResolvedValue({})
 
-      await store.unbindFromPod('pod-1', false, { x: 500, y: 600 })
+      await store.unbindFromPod('pod-1', { mode: 'move-to-position', position: { x: 500, y: 600 } })
 
       expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -907,6 +907,29 @@ describe('createNoteStore', () => {
       await store.unbindFromPod('pod-1')
 
       expect(mockCreateWebSocketRequest).not.toHaveBeenCalled()
+    })
+
+    it('stay-in-place 模式（預設）時不應包含位置資訊', async () => {
+      const canvasStore = useCanvasStore()
+      canvasStore.activeCanvasId = 'canvas-1'
+      const config = createTestConfig({ relationship: 'one-to-one' })
+      const store = createNoteStore<TestItem, TestNote>(config)()
+      const note = { ...createMockNote('skill', { id: 'note-1' }), boundToPodId: 'pod-1', testItemId: 'item-1' } as TestNote
+      store.notes = [note]
+
+      mockCreateWebSocketRequest.mockResolvedValue({})
+
+      // 不傳 behavior 時預設為 stay-in-place
+      await store.unbindFromPod('pod-1')
+
+      expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.not.objectContaining({
+            x: expect.anything(),
+            y: expect.anything(),
+          }),
+        })
+      )
     })
   })
 

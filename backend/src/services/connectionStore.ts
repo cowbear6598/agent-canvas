@@ -31,6 +31,16 @@ interface CreateConnectionData {
     triggerMode?: TriggerMode;
 }
 
+function shouldResetDecideState(oldMode: string, newMode: string): boolean {
+    return oldMode === 'ai-decide' && (newMode === 'auto' || newMode === 'direct');
+}
+
+function resetDecideState(connection: Connection): void {
+    connection.decideStatus = 'none';
+    connection.decideReason = null;
+    connection.connectionStatus = 'idle';
+}
+
 class ConnectionStore extends CanvasMapStore<Connection> {
     private readonly canvasWriter = new CanvasWriterHelper('Connection', 'ConnectionStore');
 
@@ -128,10 +138,8 @@ class ConnectionStore extends CanvasMapStore<Connection> {
                 const oldMode = connection.triggerMode;
                 connection.triggerMode = updates.triggerMode;
 
-                if (oldMode === 'ai-decide' && (updates.triggerMode === 'auto' || updates.triggerMode === 'direct')) {
-                    connection.decideStatus = 'none';
-                    connection.decideReason = null;
-                    connection.connectionStatus = 'idle';
+                if (shouldResetDecideState(oldMode, updates.triggerMode)) {
+                    resetDecideState(connection);
                 }
             }
 

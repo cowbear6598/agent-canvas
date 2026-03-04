@@ -222,7 +222,6 @@ describe('chatMessageActions', () => {
     it('應更新既有訊息的 content', () => {
       const chatStore = useChatStore()
 
-      // 建立初始訊息
       chatStore.handleChatMessage({
         podId: 'pod-1',
         messageId: 'msg-1',
@@ -230,7 +229,6 @@ describe('chatMessageActions', () => {
         isPartial: true,
       })
 
-      // 更新訊息
       chatStore.handleChatMessage({
         podId: 'pod-1',
         messageId: 'msg-1',
@@ -313,7 +311,6 @@ describe('chatMessageActions', () => {
     it('expectingNewBlock 為 true 時應建立新 subMessage', () => {
       const chatStore = useChatStore()
 
-      // 建立初始訊息
       chatStore.handleChatMessage({
         podId: 'pod-1',
         messageId: 'msg-1',
@@ -325,7 +322,6 @@ describe('chatMessageActions', () => {
       const messages = chatStore.messagesByPodId.get('pod-1')!
       messages[0]!.expectingNewBlock = true
 
-      // 更新訊息
       chatStore.handleChatMessage({
         podId: 'pod-1',
         messageId: 'msg-1',
@@ -519,7 +515,6 @@ describe('chatMessageActions', () => {
     it('訊息存在時應新增 toolUse 到陣列', () => {
       const chatStore = useChatStore()
 
-      // 先建立訊息
       chatStore.handleChatMessage({
         podId: 'pod-1',
         messageId: 'msg-1',
@@ -527,7 +522,6 @@ describe('chatMessageActions', () => {
         isPartial: true,
       })
 
-      // 新增第一個 tool
       chatStore.handleChatToolUse({
         podId: 'pod-1',
         messageId: 'msg-1',
@@ -536,7 +530,6 @@ describe('chatMessageActions', () => {
         input: { file_path: '/test.ts' },
       })
 
-      // 新增第二個 tool
       chatStore.handleChatToolUse({
         podId: 'pod-1',
         messageId: 'msg-1',
@@ -569,7 +562,6 @@ describe('chatMessageActions', () => {
         input: {},
       })
 
-      // 再次新增相同的 toolUseId
       chatStore.handleChatToolUse({
         podId: 'pod-1',
         messageId: 'msg-1',
@@ -592,7 +584,6 @@ describe('chatMessageActions', () => {
         isPartial: true,
       })
 
-      // 清除 expectingNewBlock
       const messages = chatStore.messagesByPodId.get('pod-1')!
       messages[0]!.expectingNewBlock = false
 
@@ -743,7 +734,6 @@ describe('chatMessageActions', () => {
     it('所有 tool 完成後 subMessage 的 isPartial 應設為 false', () => {
       const chatStore = useChatStore()
 
-      // 新增兩個 tool
       chatStore.handleChatToolUse({
         podId: 'pod-1',
         messageId: 'msg-1',
@@ -760,7 +750,6 @@ describe('chatMessageActions', () => {
         input: {},
       })
 
-      // 完成第一個 tool
       chatStore.handleChatToolResult({
         podId: 'pod-1',
         messageId: 'msg-1',
@@ -772,7 +761,6 @@ describe('chatMessageActions', () => {
       let messages = chatStore.messagesByPodId.get('pod-1')
       expect(messages![0]!.subMessages![0]!.isPartial).toBe(true)
 
-      // 完成第二個 tool
       chatStore.handleChatToolResult({
         podId: 'pod-1',
         messageId: 'msg-1',
@@ -1336,16 +1324,13 @@ describe('chatMessageActions', () => {
 
       const result = messageActions.convertPersistedToMessage(persistedMessage)
 
-      // 保留多個 subMessages
       expect(result.subMessages).toHaveLength(2)
       expect(result.subMessages![0]!.content).toBe('Hello')
       expect(result.subMessages![1]!.content).toBe(' World')
 
-      // toolUse 集中到第一個 subMessage
       expect(result.subMessages![0]!.toolUse).toHaveLength(1)
       expect(result.subMessages![1]!.toolUse).toBeUndefined()
 
-      // 頂層 toolUse 也有
       expect(result.toolUse).toHaveLength(1)
     })
 
@@ -1512,7 +1497,6 @@ describe('chatMessageActions', () => {
       const pod = createMockPod({ id: 'pod-1', output: [] })
       podStore.pods = [pod]
 
-      // 建立含多個 subMessages 的訊息
       const messages: Message[] = [
         {
           id: 'msg-1',

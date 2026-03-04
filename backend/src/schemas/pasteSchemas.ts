@@ -38,13 +38,13 @@ export const pasteConnectionItemSchema = z.object({
 export const canvasPasteSchema = z.object({
   requestId: requestIdSchema,
   canvasId: canvasIdSchema,
-  pods: z.array(pastePodItemSchema),
-  outputStyleNotes: z.array(pasteOutputStyleNoteItemSchema),
-  skillNotes: z.array(pasteSkillNoteItemSchema),
-  repositoryNotes: z.array(pasteRepositoryNoteItemSchema),
-  subAgentNotes: z.array(pasteSubAgentNoteItemSchema),
-  commandNotes: z.array(pasteCommandNoteItemSchema).optional(),
-  connections: z.array(pasteConnectionItemSchema).optional(),
+  pods: z.array(pastePodItemSchema).max(100),
+  outputStyleNotes: z.array(pasteOutputStyleNoteItemSchema).max(100),
+  skillNotes: z.array(pasteSkillNoteItemSchema).max(100),
+  repositoryNotes: z.array(pasteRepositoryNoteItemSchema).max(100),
+  subAgentNotes: z.array(pasteSubAgentNoteItemSchema).max(100),
+  commandNotes: z.array(pasteCommandNoteItemSchema).max(100).optional(),
+  connections: z.array(pasteConnectionItemSchema).max(200).optional(),
 });
 
 export type PastePodItem = z.infer<typeof pastePodItemSchema>;

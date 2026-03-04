@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {ref, computed, onUnmounted} from 'vue'
 import type {Pod, ModelType, Schedule} from '@/types'
+import type {UnbindBehavior} from '@/stores/note/noteBindingActions'
 import type {AnchorPosition} from '@/types/connection'
 import {useCanvasContext} from '@/composables/canvas/useCanvasContext'
 import {useAnchorDetection} from '@/composables/useAnchorDetection'
@@ -278,7 +279,7 @@ interface NoteStoreMapping {
   bindToPod: (noteId: string, podId: string) => Promise<void>
   getNoteById: (noteId: string) => NoteItem | undefined
   isItemBoundToPod?: (itemId: string, podId: string) => boolean
-  unbindFromPod?: (podId: string, returnToOriginal: boolean) => Promise<void>
+  unbindFromPod?: (podId: string, behavior: UnbindBehavior) => Promise<void>
   getItemId: (note: NoteItem) => string | undefined
   updatePodField?: (podId: string, itemId: string | null) => void
 }
@@ -287,7 +288,7 @@ const noteStoreMap: Record<NoteType, NoteStoreMapping> = {
   outputStyle: {
     bindToPod: (noteId, podId) => outputStyleStore.bindToPod(noteId, podId),
     getNoteById: (noteId) => outputStyleStore.getNoteById(noteId),
-    unbindFromPod: (podId, returnToOriginal) => outputStyleStore.unbindFromPod(podId, returnToOriginal),
+    unbindFromPod: (podId, behavior) => outputStyleStore.unbindFromPod(podId, behavior),
     getItemId: (note) => note.outputStyleId,
     updatePodField: (podId, itemId) => podStore.updatePodOutputStyle(podId, itemId)
   },
@@ -306,14 +307,14 @@ const noteStoreMap: Record<NoteType, NoteStoreMapping> = {
   repository: {
     bindToPod: (noteId, podId) => repositoryStore.bindToPod(noteId, podId),
     getNoteById: (noteId) => repositoryStore.getNoteById(noteId),
-    unbindFromPod: (podId, returnToOriginal) => repositoryStore.unbindFromPod(podId, returnToOriginal),
+    unbindFromPod: (podId, behavior) => repositoryStore.unbindFromPod(podId, behavior),
     getItemId: (note) => note.repositoryId,
     updatePodField: (podId, itemId) => podStore.updatePodRepository(podId, itemId)
   },
   command: {
     bindToPod: (noteId, podId) => commandStore.bindToPod(noteId, podId),
     getNoteById: (noteId) => commandStore.getNoteById(noteId),
-    unbindFromPod: (podId, returnToOriginal) => commandStore.unbindFromPod(podId, returnToOriginal),
+    unbindFromPod: (podId, behavior) => commandStore.unbindFromPod(podId, behavior),
     getItemId: (note) => note.commandId,
     updatePodField: (podId, itemId) => podStore.updatePodCommand(podId, itemId)
   },
@@ -362,7 +363,7 @@ const handleNoteRemove = async (noteType: NoteType): Promise<void> => {
   const mapping = noteStoreMap[noteType]
   if (!mapping.unbindFromPod) return
 
-  await mapping.unbindFromPod(props.pod.id, true)
+  await mapping.unbindFromPod(props.pod.id, { mode: 'return-to-original' })
 
   if (mapping.updatePodField) {
     mapping.updatePodField(props.pod.id, null)

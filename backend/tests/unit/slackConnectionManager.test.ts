@@ -185,7 +185,6 @@ describe('SlackConnectionManager', () => {
         it('連線失敗時更新狀態為 error', async () => {
             const slackApp = createMockSlackApp();
 
-            // 建立一個 start 會失敗的 MockApp
             function FailMockApp(this: any) {
                 this.start = vi.fn().mockRejectedValue(new Error('連線失敗'));
                 this.stop = vi.fn().mockResolvedValue(undefined);
@@ -419,11 +418,9 @@ describe('SlackConnectionManager', () => {
             const slackApp = createMockSlackApp();
             const managerAny = manager as any;
 
-            // 設定已達上限
             managerAny.reconnectAttempts.set(slackApp.id, 10);
             managerAny.handleReconnect(slackApp.id);
 
-            // 推進足夠時間，確認不會再觸發 connect
             await vi.advanceTimersByTimeAsync(60000);
             expect(App).toHaveBeenCalledTimes(0);
             expect(slackAppStore.updateStatus).toHaveBeenCalledWith(slackApp.id, 'error');

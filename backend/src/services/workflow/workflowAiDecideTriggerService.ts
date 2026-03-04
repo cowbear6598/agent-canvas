@@ -101,28 +101,24 @@ class WorkflowAiDecideTriggerService extends LazyInitializable<AiDecideTriggerDe
         connections
       );
 
-      const results: TriggerDecideResult[] = [];
+      const successResults: TriggerDecideResult[] = batchResult.results.map(result => ({
+        connectionId: result.connectionId,
+        approved: result.shouldTrigger,
+        reason: result.reason,
+        isError: false,
+      }));
 
-      for (const result of batchResult.results) {
-        results.push({
-          connectionId: result.connectionId,
-          approved: result.shouldTrigger,
-          reason: result.reason,
-          isError: false,
-        });
-      }
-
-      for (const errorResult of batchResult.errors) {
+      const errorResults: TriggerDecideResult[] = batchResult.errors.map(errorResult => {
         logger.error('Workflow', 'Error', `[AI-Decide] Connection ${errorResult.connectionId} 錯誤：${errorResult.error}`);
-        results.push({
+        return {
           connectionId: errorResult.connectionId,
           approved: false,
           reason: 'AI 判斷服務發生錯誤',
           isError: true,
-        });
-      }
+        };
+      });
 
-      return results;
+      return [...successResults, ...errorResults];
     } catch (error) {
       logger.error('Workflow', 'Error', '[AI-Decide] aiDecideService.decideConnections 失敗', error);
 

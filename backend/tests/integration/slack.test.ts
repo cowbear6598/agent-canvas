@@ -55,7 +55,6 @@ async function waitForSlackConnected(slackAppId: string, retries = 10): Promise<
     }
 }
 
-// 建立 Slack App 並等待連線就緒
 async function createSlackApp(
     client: TestWebSocketClient,
     overrides?: Partial<SlackAppCreatePayload>
@@ -83,7 +82,6 @@ async function createSlackApp(
     return response;
 }
 
-// 刪除 Slack App
 async function deleteSlackApp(
     client: TestWebSocketClient,
     slackAppId: string
@@ -367,11 +365,8 @@ describe('Slack 整合', () => {
 
     describe('Slack 自動清理', () => {
         it('Pod 刪除時自動清理 Slack 連線', async () => {
-            // 建立 Slack App
             const appResponse = await createSlackApp(client);
             const appId = appResponse.slackApp.id;
-
-            // 建立 Pod 並綁定
             const pod = await createPod(client);
             const canvasId = await getCanvasId(client);
 
@@ -388,7 +383,6 @@ describe('Slack 整合', () => {
                 }
             );
 
-            // 刪除 Pod
             const deleteResponse = await emitAndWaitResponse<{ requestId: string; canvasId: string; podId: string }, Record<string, any>>(
                 client,
                 WebSocketRequestEvents.POD_DELETE,
@@ -397,17 +391,12 @@ describe('Slack 整合', () => {
             );
 
             expect(deleteResponse.success).toBe(true);
-
-            // 清理：刪除 Slack App
             await deleteSlackApp(client, appId);
         });
 
         it('Slack App 刪除時自動解綁所有 Pod', async () => {
-            // 建立 Slack App
             const appResponse = await createSlackApp(client);
             const appId = appResponse.slackApp.id;
-
-            // 建立 Pod 並綁定
             const pod = await createPod(client);
             const canvasId = await getCanvasId(client);
 
@@ -424,11 +413,10 @@ describe('Slack 整合', () => {
                 }
             );
 
-            // 刪除 Slack App，應自動解綁 Pod
             const deleteResponse = await deleteSlackApp(client, appId);
             expect(deleteResponse.success).toBe(true);
 
-            // 確認 Pod 的 Slack 綁定已被清除（setSlackBinding(null) 會移除屬性，結果為 undefined）
+            // setSlackBinding(null) 會移除屬性，結果為 undefined
             const { podStore } = await import('../../src/services/podStore.js');
             const updatedPod = podStore.getById(canvasId, pod.id);
             expect(updatedPod?.slackBinding).toBeUndefined();

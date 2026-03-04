@@ -6,6 +6,7 @@ import {useDeleteItem} from '@/composables/useDeleteItem'
 import {useToast} from '@/composables/useToast'
 import {requireActiveCanvas, getActiveCanvasIdOrWarn} from '@/utils/canvasGuard'
 import {createNoteBindingActions} from './noteBindingActions'
+import type {UnbindBehavior} from './noteBindingActions'
 import {createNotePositionActions} from './notePositionActions'
 import {createResourceCRUDActions} from './createResourceCRUDActions'
 import type {CRUDEventsConfig, CRUDPayloadConfig} from './createResourceCRUDActions'
@@ -160,9 +161,13 @@ export interface NoteStoreContext<TItem = unknown> extends BaseNoteState {
     deleteItem(itemId: string): Promise<void>
     deleteNote(noteId: string): Promise<void>
     bindToPod(noteId: string, podId: string): Promise<void>
-    unbindFromPod(podId: string, returnToOriginal?: boolean): Promise<void>
+    unbindFromPod(podId: string, behavior?: UnbindBehavior): Promise<void>
     getNotesByPodId(podId: string): NoteItem[]
 }
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type TypedNoteStore<TStore extends (...args: any[]) => any, TCustomActions extends object> =
+  (() => ReturnType<TStore> & TCustomActions) & { $id: string }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function createNoteStore<TItem, TNote extends BaseNote, TCustomActions extends object = object>(
@@ -492,7 +497,7 @@ function buildCRUDActions<TItem>(config: NoteStoreConfig<TItem>): Record<string,
 
     const crudConfig = config.crudConfig as NoteCRUDConfig<{ id: string; name: string }>
     const methodPrefix = crudConfig.methodPrefix
-    const capitalizeFirstLetterdMethodPrefix = capitalizeFirstLetter(methodPrefix)
+    const capitalizedMethodPrefix = capitalizeFirstLetter(methodPrefix)
 
     const crud = createResourceCRUDActions(
         crudConfig.resourceType,
@@ -544,10 +549,10 @@ function buildCRUDActions<TItem>(config: NoteStoreConfig<TItem>): Record<string,
     }
 
     return {
-        [`create${capitalizeFirstLetterdMethodPrefix}`]: createAction,
-        [`update${capitalizeFirstLetterdMethodPrefix}`]: updateAction,
-        [`read${capitalizeFirstLetterdMethodPrefix}`]: readAction,
-        [`delete${capitalizeFirstLetterdMethodPrefix}`]: deleteAction,
-        [`load${capitalizeFirstLetterdMethodPrefix}s`]: loadAllAction,
+        [`create${capitalizedMethodPrefix}`]: createAction,
+        [`update${capitalizedMethodPrefix}`]: updateAction,
+        [`read${capitalizedMethodPrefix}`]: readAction,
+        [`delete${capitalizedMethodPrefix}`]: deleteAction,
+        [`load${capitalizedMethodPrefix}s`]: loadAllAction,
     }
 }

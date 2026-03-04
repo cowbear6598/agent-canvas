@@ -1,4 +1,6 @@
 import type { WebSocketMessage, WebSocketResponse } from '../types/websocket.js';
+import type { Result } from '../types/result.js';
+import { ok, err } from '../types/result.js';
 import { safeJsonParse } from './safeJsonParse.js';
 
 export function serialize(message: WebSocketMessage | WebSocketResponse): string {
@@ -39,4 +41,13 @@ export function deserialize(data: string | Buffer): WebSocketMessage {
 	const jsonString = normalizeToString(data);
 	const obj = parseJson(jsonString);
 	return validateMessageShape(obj);
+}
+
+export function tryDeserialize(data: string | Buffer): Result<WebSocketMessage> {
+	try {
+		return ok(deserialize(data));
+	} catch (error) {
+		const message = error instanceof Error ? error.message : '無效的訊息格式';
+		return err(message);
+	}
 }

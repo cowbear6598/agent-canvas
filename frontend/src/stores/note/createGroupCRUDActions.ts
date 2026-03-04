@@ -41,13 +41,19 @@ export interface GroupCRUDActions {
   moveItemToGroup(this: GroupCRUDStoreContext, itemId: string, groupId: string | null): Promise<{ success: boolean; error?: string }>
 }
 
+function requireActiveCanvasId(storeName: string): string | null {
+  const canvasId = getActiveCanvasIdOrWarn(storeName)
+  if (!canvasId) return null
+  return canvasId
+}
+
 export function createGroupCRUDActions(config: GroupCRUDConfig): GroupCRUDActions {
   const { wrapWebSocketRequest } = useWebSocketErrorHandler()
   const { showSuccessToast, showErrorToast } = useToast()
 
   return {
     async loadGroups(this: GroupCRUDStoreContext): Promise<void> {
-      const canvasId = getActiveCanvasIdOrWarn(config.storeName)
+      const canvasId = requireActiveCanvasId(config.storeName)
       if (!canvasId) return
 
       const response = await wrapWebSocketRequest(
@@ -73,10 +79,8 @@ export function createGroupCRUDActions(config: GroupCRUDConfig): GroupCRUDAction
         return { success: false, error: '群組名稱不能為空' }
       }
 
-      const canvasId = getActiveCanvasIdOrWarn(config.storeName)
-      if (!canvasId) {
-        return { success: false, error: '無作用中的畫布' }
-      }
+      const canvasId = requireActiveCanvasId(config.storeName)
+      if (!canvasId) return { success: false, error: '無作用中的畫布' }
 
       const response = await wrapWebSocketRequest(
         createWebSocketRequest<GroupCreatePayload, GroupCreatedPayload>({
@@ -109,10 +113,8 @@ export function createGroupCRUDActions(config: GroupCRUDConfig): GroupCRUDAction
         return { success: false, error: '無效的群組 ID' }
       }
 
-      const canvasId = getActiveCanvasIdOrWarn(config.storeName)
-      if (!canvasId) {
-        return { success: false, error: '無作用中的畫布' }
-      }
+      const canvasId = requireActiveCanvasId(config.storeName)
+      if (!canvasId) return { success: false, error: '無作用中的畫布' }
 
       const response = await wrapWebSocketRequest(
         createWebSocketRequest<GroupDeletePayload, GroupDeletedPayload>({
@@ -143,10 +145,8 @@ export function createGroupCRUDActions(config: GroupCRUDConfig): GroupCRUDAction
         return { success: false, error: '無效的項目 ID' }
       }
 
-      const canvasId = getActiveCanvasIdOrWarn(config.storeName)
-      if (!canvasId) {
-        return { success: false, error: '無作用中的畫布' }
-      }
+      const canvasId = requireActiveCanvasId(config.storeName)
+      if (!canvasId) return { success: false, error: '無作用中的畫布' }
 
       const response = await wrapWebSocketRequest(
         createWebSocketRequest<MoveToGroupPayload, MovedToGroupPayload>({

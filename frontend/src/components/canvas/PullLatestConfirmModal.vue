@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { AlertTriangle } from 'lucide-vue-next'
+import WarningBox from '@/components/ui/WarningBox.vue'
 
 interface Props {
   open: boolean
@@ -31,17 +31,10 @@ const emit = defineEmits<{
       <DialogHeader>
         <DialogTitle>Pull 至最新版本</DialogTitle>
         <DialogDescription class="space-y-3">
-          <div class="flex items-start gap-2 text-destructive">
-            <AlertTriangle class="h-5 w-5 mt-0.5 flex-shrink-0" />
-            <div>
-              <p class="font-medium">
-                此操作將丟棄所有本地修改
-              </p>
-              <p class="mt-1">
-                執行 git fetch + git reset --hard 將無法還原未 commit 的變更
-              </p>
-            </div>
-          </div>
+          <WarningBox
+            title="此操作將丟棄所有本地修改"
+            description="執行 git fetch + git reset --hard 將無法還原未 commit 的變更"
+          />
         </DialogDescription>
       </DialogHeader>
 

@@ -21,11 +21,9 @@ describe('useSkillImport', () => {
   let mockFileReader: FileReader
 
   beforeEach(() => {
-    // 設定 Pinia
     const pinia = setupTestPinia({ stubActions: false })
     setActivePinia(pinia)
 
-    // 清除 mock
     vi.clearAllMocks()
 
     // Mock FileReader
@@ -84,12 +82,10 @@ describe('useSkillImport', () => {
 
       const importPromise = importSkill()
 
-      // 模擬使用者取消
       mockFileInput.oncancel?.(new Event('cancel'))
 
       await importPromise
 
-      // 驗證沒有呼叫後端
       expect(importSkillSpy).not.toHaveBeenCalled()
       expect(mockShowSuccessToast).not.toHaveBeenCalled()
       expect(mockShowErrorToast).not.toHaveBeenCalled()
@@ -168,9 +164,8 @@ describe('useSkillImport', () => {
 
       // 由於我們無法可靠地測試 FileReader 和後續流程
       // 我們只驗證檔案驗證通過（沒有立即顯示錯誤）
-      await Promise.resolve() // 等待同步驗證完成
+      await Promise.resolve()
 
-      // 檔案驗證通過時，不應有驗證錯誤
       expect(mockShowErrorToast).not.toHaveBeenCalledWith(
         'Skill',
         '匯入失敗',
@@ -196,7 +191,6 @@ describe('useSkillImport', () => {
 
       await Promise.resolve()
 
-      // 不應有驗證錯誤
       expect(mockShowErrorToast).not.toHaveBeenCalledWith(
         'Skill',
         '匯入失敗',
@@ -215,7 +209,6 @@ describe('useSkillImport', () => {
 
       await Promise.resolve()
 
-      // 不應有驗證錯誤
       expect(mockShowErrorToast).not.toHaveBeenCalledWith(
         'Skill',
         '匯入失敗',
@@ -233,14 +226,12 @@ describe('useSkillImport', () => {
     it('同一 composable 實例匯入完成後可再次匯入', async () => {
       const { importSkill, isImporting } = useSkillImport()
 
-      // 第一次匯入 - 取消
       const promise1 = importSkill()
       mockFileInput.oncancel?.(new Event('cancel'))
       await promise1
 
       expect(isImporting.value).toBe(false)
 
-      // 第二次匯入 - 也取消
       const promise2 = importSkill()
       mockFileInput.oncancel?.(new Event('cancel'))
       await promise2

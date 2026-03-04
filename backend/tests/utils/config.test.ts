@@ -17,7 +17,6 @@ describe('Config - GitLab URL 驗證', () => {
     // 如果有設定，應該通過驗證
     expect(gitlabUrl).toMatch(/^https:\/\//);
 
-    // 驗證可以正確解析為 URL
     expect(() => {
       new URL(gitlabUrl);
     }).not.toThrow();

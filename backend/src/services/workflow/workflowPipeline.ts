@@ -51,7 +51,7 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
     const collectResult = await this.runCollectSourcesStage(context, strategy, summaryResult.content, summaryResult.isSummarized);
     if (!collectResult) return;
 
-    const { finalSummary, finalIsSummarized, participatingConnectionIds } = collectResult;
+    const { finalSummary, finalIsCondensedSummary, participatingConnectionIds } = collectResult;
 
     if (targetPod.status !== 'idle') {
       logger.log('Workflow', 'Pipeline', `[checkQueue] 目標 Pod 忙碌中 (${targetPod.status})，加入佇列`);
@@ -61,7 +61,7 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
         sourcePodId,
         targetPodId,
         summary: finalSummary,
-        isSummarized: finalIsSummarized,
+        isSummarized: finalIsCondensedSummary,
         triggerMode,
         participatingConnectionIds,
       });
@@ -78,7 +78,7 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
       canvasId,
       connectionId,
       summary: finalSummary,
-      isSummarized: finalIsSummarized,
+      isSummarized: finalIsCondensedSummary,
       participatingConnectionIds,
       strategy,
     });
@@ -88,8 +88,8 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
     context: PipelineContext,
     strategy: TriggerStrategy,
     summaryContent: string,
-    summaryIsSummarized: boolean
-  ): Promise<{ finalSummary: string; finalIsSummarized: boolean; participatingConnectionIds?: string[] } | null> {
+    summaryIsCondensedSummary: boolean
+  ): Promise<{ finalSummary: string; finalIsCondensedSummary: boolean; participatingConnectionIds?: string[] } | null> {
     this.ensureInitialized();
     const { canvasId, sourcePodId, connection, triggerMode } = context;
     const { targetPodId } = connection;
@@ -109,10 +109,10 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
       const { participatingConnectionIds } = collectResult;
 
       if (collectResult.mergedContent) {
-        return { finalSummary: collectResult.mergedContent, finalIsSummarized: collectResult.isSummarized ?? true, participatingConnectionIds };
+        return { finalSummary: collectResult.mergedContent, finalIsCondensedSummary: collectResult.isSummarized ?? true, participatingConnectionIds };
       }
 
-      return { finalSummary: summaryContent, finalIsSummarized: summaryIsSummarized, participatingConnectionIds };
+      return { finalSummary: summaryContent, finalIsCondensedSummary: summaryIsCondensedSummary, participatingConnectionIds };
     }
 
     const { isMultiInput, requiredSourcePodIds } = this.deps.stateService.checkMultiInputScenario(
@@ -132,7 +132,7 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
       return null;
     }
 
-    return { finalSummary: summaryContent, finalIsSummarized: summaryIsSummarized };
+    return { finalSummary: summaryContent, finalIsCondensedSummary: summaryIsCondensedSummary };
   }
 }
 

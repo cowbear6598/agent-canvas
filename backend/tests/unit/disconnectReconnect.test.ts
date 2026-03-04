@@ -1,4 +1,3 @@
-// Mock 所有依賴模組（必須在 import 之前）
 vi.mock('../../src/services/claude/claudeService.js', () => ({
     claudeService: {
         sendMessage: vi.fn(() => Promise.resolve({})),
@@ -44,22 +43,17 @@ describe('斷線重連行為', () => {
             const podId = 'pod-1';
             const connectionId = 'conn-A';
 
-            // 模擬正在執行的查詢
             let resolveQuery!: () => void;
             asMock(claudeService.sendMessage).mockImplementation(
                 () => new Promise<void>((resolve) => { resolveQuery = resolve; })
             );
 
-            // 啟動查詢
             const queryPromise = claudeService.sendMessage(podId, 'test message', vi.fn());
 
-            // 模擬斷線清理（只呼叫 cleanupSocket，不應連帶 abort 查詢）
             socketService.cleanupSocket(connectionId);
 
-            // 驗證查詢未被中斷
             expect(claudeService.abortQuery).not.toHaveBeenCalled();
 
-            // 查詢可以正常完成
             resolveQuery();
             await expect(queryPromise).resolves.toBeUndefined();
         });
@@ -69,7 +63,6 @@ describe('斷線重連行為', () => {
         it('以不同 connectionId 發送 abort 請求仍能成功中斷查詢', () => {
             const podId = 'pod-1';
 
-            // abortQuery 不依賴 connectionId，任何連線皆可呼叫
             const aborted = claudeService.abortQuery(podId);
 
             expect(claudeService.abortQuery).toHaveBeenCalledWith(podId);
@@ -80,10 +73,8 @@ describe('斷線重連行為', () => {
             const podId = 'pod-1';
             const connectionIdA = 'conn-A';
 
-            // 連線 A 斷線清理
             socketService.cleanupSocket(connectionIdA);
 
-            // 連線 B 重連後發送 abort，不需要傳遞 connectionId
             const abortedByB = claudeService.abortQuery(podId);
 
             expect(abortedByB).toBe(true);
@@ -93,7 +84,6 @@ describe('斷線重連行為', () => {
         it('多次斷線重連後 abort 仍能正常運作', () => {
             const podId = 'pod-1';
 
-            // 模擬多次斷線重連清理
             socketService.cleanupSocket('conn-1');
             socketService.cleanupSocket('conn-2');
             socketService.cleanupSocket('conn-3');

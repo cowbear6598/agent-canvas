@@ -1,8 +1,7 @@
 import {defineStore} from 'pinia'
-import type {SelectableElement, SelectionState} from '@/types'
+import type {BaseNote, SelectableElement, SelectionState} from '@/types'
 import {POD_WIDTH, POD_HEIGHT, NOTE_WIDTH, NOTE_HEIGHT} from '@/lib/constants'
 
-type NoteItem = {id: string; x: number; y: number; boundToPodId: string | null}
 type NoteType =
     | 'outputStyleNote'
     | 'skillNote'
@@ -32,18 +31,19 @@ function findPodsInSelectionBox(
         .map(pod => ({type: 'pod' as const, id: pod.id}))
 }
 
+function isNoteInBox(note: BaseNote, box: SelectionBox): boolean {
+    const noteMaxX = note.x + NOTE_WIDTH
+    const noteMaxY = note.y + NOTE_HEIGHT
+    return noteMaxX >= box.minX && note.x <= box.maxX && noteMaxY >= box.minY && note.y <= box.maxY
+}
+
 function findNotesInSelectionBox(
-    noteGroups: Array<{notes: NoteItem[]; type: NoteType}>,
+    noteGroups: Array<{notes: BaseNote[]; type: NoteType}>,
     box: SelectionBox
 ): SelectableElement[] {
     return noteGroups.flatMap(({notes, type}) =>
         notes
-            .filter(note => {
-                if (note.boundToPodId) return false
-                const noteMaxX = note.x + NOTE_WIDTH
-                const noteMaxY = note.y + NOTE_HEIGHT
-                return !(noteMaxX < box.minX || note.x > box.maxX || noteMaxY < box.minY || note.y > box.maxY)
-            })
+            .filter(note => !note.boundToPodId && isNoteInBox(note, box))
             .map(note => ({type, id: note.id}))
     )
 }
@@ -208,12 +208,12 @@ export const useSelectionStore = defineStore('selection', {
         },
         calculateSelectedElements(
             pods: Array<{id: string; x: number; y: number}>,
-            outputStyleNotes: NoteItem[],
-            skillNotes: NoteItem[],
-            repositoryNotes: NoteItem[] = [],
-            subAgentNotes: NoteItem[] = [],
-            commandNotes: NoteItem[] = [],
-            mcpServerNotes: NoteItem[] = []
+            outputStyleNotes: BaseNote[],
+            skillNotes: BaseNote[],
+            repositoryNotes: BaseNote[] = [],
+            subAgentNotes: BaseNote[] = [],
+            commandNotes: BaseNote[] = [],
+            mcpServerNotes: BaseNote[] = []
         ): void {
             if (!this.box) return
 
@@ -224,7 +224,7 @@ export const useSelectionStore = defineStore('selection', {
                 maxY: Math.max(this.box.startY, this.box.endY),
             }
 
-            const noteGroups: Array<{notes: NoteItem[]; type: NoteType}> = [
+            const noteGroups: Array<{notes: BaseNote[]; type: NoteType}> = [
                 {notes: outputStyleNotes, type: 'outputStyleNote'},
                 {notes: skillNotes, type: 'skillNote'},
                 {notes: repositoryNotes, type: 'repositoryNote'},

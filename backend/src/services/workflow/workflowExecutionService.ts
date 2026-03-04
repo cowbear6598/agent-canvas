@@ -26,7 +26,6 @@ import {
     forEachMultiInputGroupConnection,
     isAutoTriggerable,
 } from './workflowHelpers.js';
-import {workflowAutoTriggerService} from './workflowAutoTriggerService.js';
 import { LazyInitializable } from './lazyInitializable.js';
 
 interface ExecutionServiceDeps {
@@ -38,7 +37,7 @@ interface ExecutionServiceDeps {
 
 class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
   private getLastAssistantFallback(sourcePodId: string): { content: string; isSummarized: boolean } | null {
-    const fallback = workflowAutoTriggerService.getLastAssistantMessage(sourcePodId);
+    const fallback = this.deps.autoTriggerService.getLastAssistantMessage(sourcePodId);
     return fallback ? { content: fallback, isSummarized: false } : null;
   }
 
@@ -236,7 +235,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
 
     await messageStore.addMessage(canvasId, targetPodId, 'user', messageToSend);
 
-    const onWorkflowChatComplete = async (_: string, __: string): Promise<void> => {
+    const onWorkflowChatComplete = async (_canvasId: string, _podId: string): Promise<void> => {
       strategy.onComplete(
         { canvasId, connectionId, sourcePodId, targetPodId, triggerMode: strategy.mode, participatingConnectionIds },
         true
@@ -251,7 +250,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
       this.scheduleNextInQueue(canvasId, targetPodId);
     };
 
-    const onWorkflowChatError = async (_: string, __: string, error: Error): Promise<void> => {
+    const onWorkflowChatError = async (_canvasId: string, _podId: string, error: Error): Promise<void> => {
       const errorMessage = error.message;
       strategy.onError(
         { canvasId, connectionId, sourcePodId, targetPodId, triggerMode: strategy.mode, participatingConnectionIds },

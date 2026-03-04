@@ -6,6 +6,7 @@ export {
   collectSelectedNotes,
   collectRelatedConnections,
 } from './collectCopyData'
+export type { BoundNoteStores, BoundNotesByType, NoteStores } from './collectCopyData'
 
 export {
   updateBoundingBox,

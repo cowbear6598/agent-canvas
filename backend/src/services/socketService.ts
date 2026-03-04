@@ -54,8 +54,9 @@ class SocketService {
 			payload,
 		};
 
+		const serialized = serialize(response);
 		try {
-			connection.webSocket.send(serialize(response));
+			connection.webSocket.send(serialized);
 		} catch (error) {
 			logger.log('Connection', 'Error', `訊息傳送失敗，連線 ${connectionId}: ${error}`);
 		}
@@ -147,8 +148,9 @@ class SocketService {
 			ackId,
 		};
 
+		const serialized = serialize(response);
 		try {
-			connection.webSocket.send(serialize(response));
+			connection.webSocket.send(serialized);
 		} catch (error) {
 			logger.log('Connection', 'Error', `心跳傳送失敗，連線 ${connectionId}: ${error}`);
 			return;

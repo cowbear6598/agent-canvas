@@ -25,16 +25,16 @@ class PersistenceService {
 
     const data = safeJsonParse<T>(readResult.data as string);
     if (data === null) {
-      logger.error('Startup', 'Error', `[Persistence] 無效的 JSON 檔案 ${filePath}`);
+      logger.error('Startup', 'Error', `[Persistence] 無效的 JSON 檔案 ${path.basename(filePath)}`);
       const backupPath = `${filePath}.corrupted.${Date.now()}`;
       const backupResult = await fsOperation(
         () => fs.copyFile(filePath, backupPath),
         `[Persistence] 備份損壞檔案失敗`
       );
       if (backupResult.success) {
-        logger.log('Startup', 'Save', `[Persistence] 已備份損壞的檔案至 ${backupPath}`);
+        logger.log('Startup', 'Save', `偵測到損壞的 JSON，已備份：${path.basename(filePath)}`);
       }
-      return err(`JSON 檔案格式錯誤: ${filePath}`);
+      return err(`JSON 檔案格式錯誤: ${path.basename(filePath)}`);
     }
 
     return ok(data);
@@ -48,18 +48,28 @@ class PersistenceService {
       return err(dirResult.error);
     }
 
-    return fsOperation(async () => {
-      const tempPath = `${filePath}.tmp.${randomUUID()}`;
-      const jsonContent = JSON.stringify(data, null, 2);
+    const tempPath = `${filePath}.tmp.${randomUUID()}`;
+    const jsonContent = JSON.stringify(data, null, 2);
 
-      try {
-        await fs.writeFile(tempPath, jsonContent, 'utf-8');
-        await fs.rename(tempPath, filePath);
-      } catch (error) {
-        await fs.unlink(tempPath).catch(() => {});
-        throw error;
-      }
-    }, `寫入檔案失敗: ${filePath}`);
+    const writeResult = await fsOperation(
+      () => fs.writeFile(tempPath, jsonContent, 'utf-8'),
+      `寫入暫存檔失敗: ${filePath}`
+    );
+    if (!writeResult.success) {
+      await fs.unlink(tempPath).catch(() => {});
+      return err(writeResult.error);
+    }
+
+    const renameResult = await fsOperation(
+      () => fs.rename(tempPath, filePath),
+      `寫入檔案失敗: ${filePath}`
+    );
+    if (!renameResult.success) {
+      await fs.unlink(tempPath).catch(() => {});
+      return err(renameResult.error);
+    }
+
+    return ok();
   }
 
   async ensureDirectory(dirPath: string): Promise<Result<void>> {

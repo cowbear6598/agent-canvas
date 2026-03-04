@@ -224,11 +224,8 @@ describe('Logger 顏色輸出', () => {
       logger.log('Skill', 'Create', 'Skill 建立成功');
       const output = consoleLogCalls[0];
 
-      // 確認有顏色碼
       expect(output).toContain(ANSI_COLORS.GREEN);
       expect(output).toContain(ANSI_COLORS.RESET);
-
-      // 確認格式
       expect(output).toMatch(/\x1b\[32m\[Skill\]\x1b\[0m \[Create\] Skill 建立成功/);
     });
 
@@ -237,10 +234,8 @@ describe('Logger 顏色輸出', () => {
       logger.log('Pod', 'Create', '正在建立 Pod');
       const output = consoleLogCalls[0];
 
-      // 取得 [Action] 和 Message 部分
       const afterCategory = output.split(ANSI_COLORS.RESET)[1];
 
-      // 確認後面沒有其他顏色碼（除了 Category 的顏色）
       expect(afterCategory).not.toContain(ANSI_COLORS.BLUE);
       expect(afterCategory).not.toContain(ANSI_COLORS.RED);
       expect(afterCategory).not.toContain(ANSI_COLORS.GREEN);

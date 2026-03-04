@@ -88,7 +88,7 @@ class WorkflowAutoTriggerService implements TriggerStrategy {
       transferredContent: context.summary,
       isSummarized: context.isSummarized,
     };
-    workflowEventEmitter.emitWorkflowAutoTriggered(context.canvasId, context.sourcePodId, context.targetPodId, payload);
+    workflowEventEmitter.emitWorkflowAutoTriggered(context.canvasId, payload);
   }
 
   onComplete(context: CompletionContext, success: boolean, error?: string): void {

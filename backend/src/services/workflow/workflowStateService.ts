@@ -48,7 +48,7 @@ function emitMergedIfAllComplete(
     mergedContentPreview: mergedContent.substring(0, MERGED_CONTENT_PREVIEW_MAX_LENGTH),
   };
 
-  workflowEventEmitter.emitWorkflowSourcesMerged(canvasId, targetPodId, sourcePodIds, mergedPayload);
+  workflowEventEmitter.emitWorkflowSourcesMerged(canvasId, mergedPayload);
   return true;
 }
 
@@ -93,7 +93,7 @@ class WorkflowStateService {
       hasRejectedSources: rejectedSourcePodIds.length > 0,
     };
 
-    workflowEventEmitter.emitWorkflowPending(canvasId, targetPodId, pendingPayload);
+    workflowEventEmitter.emitWorkflowPending(canvasId, pendingPayload);
   }
 
   private processAffectedTarget(canvasId: string, targetPodId: string): void {

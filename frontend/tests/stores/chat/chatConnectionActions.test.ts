@@ -186,18 +186,15 @@ describe('chatConnectionActions', () => {
       vi.useFakeTimers()
       const store = useChatStore()
 
-      // 啟動心跳檢查
       await store.handleConnectionReady({ socketId: 'socket-123' })
 
-      // 模擬收到一次心跳
       const now = Date.now()
       vi.spyOn(Date, 'now').mockReturnValue(now)
       const ack = vi.fn()
       store.handleHeartbeatPing({} as unknown as HeartbeatPingPayload, ack)
 
-      // 前進 21 秒（超過 20 秒超時）
       vi.spyOn(Date, 'now').mockReturnValue(now + 21000)
-      vi.advanceTimersByTime(5000) // 觸發一次心跳檢查
+      vi.advanceTimersByTime(5000)
 
       expect(store.connectionStatus).toBe('disconnected')
       expect(mockToast).toHaveBeenCalledWith({
@@ -212,16 +209,12 @@ describe('chatConnectionActions', () => {
       vi.useFakeTimers()
       const store = useChatStore()
 
-      // 啟動心跳檢查
       await store.handleConnectionReady({ socketId: 'socket-123' })
 
-      // 確認 lastHeartbeatAt 為 null
       expect(store.lastHeartbeatAt).toBeNull()
 
-      // 前進 25 秒
       vi.advanceTimersByTime(25000)
 
-      // 仍然保持 connected
       expect(store.connectionStatus).toBe('connected')
       expect(mockToast).not.toHaveBeenCalled()
 
@@ -239,12 +232,10 @@ describe('chatConnectionActions', () => {
       const ack = vi.fn()
       store.handleHeartbeatPing({} as unknown as HeartbeatPingPayload, ack)
 
-      // 前進 4.9 秒，不應判斷超時
       vi.spyOn(Date, 'now').mockReturnValue(now + 21000)
       vi.advanceTimersByTime(4900)
       expect(store.connectionStatus).toBe('connected')
 
-      // 再前進 0.1 秒，應該判斷超時
       vi.advanceTimersByTime(100)
       expect(store.connectionStatus).toBe('disconnected')
 

@@ -308,6 +308,29 @@ describe('podStore', () => {
 
   })
 
+  describe('isValidPod 邊界案例', () => {
+    it('x 為 Infinity 時應回傳 false', () => {
+      const store = usePodStore()
+      const pod = createMockPod({ x: Infinity })
+
+      expect(store.isValidPod(pod)).toBe(false)
+    })
+
+    it('y 為 NaN 時應回傳 false', () => {
+      const store = usePodStore()
+      const pod = createMockPod({ y: NaN })
+
+      expect(store.isValidPod(pod)).toBe(false)
+    })
+
+    it('output 為 null 時應回傳 false', () => {
+      const store = usePodStore()
+      const pod = createMockPod({ output: null as any })
+
+      expect(store.isValidPod(pod)).toBe(false)
+    })
+  })
+
   describe('enrichPod', () => {
     it('缺少的欄位應填入預設值', () => {
       const store = usePodStore()

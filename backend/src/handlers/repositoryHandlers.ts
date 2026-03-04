@@ -146,28 +146,11 @@ export const handlePodBindRepository = withCanvasId<PodBindRepositoryPayload>(
 
 import type { Pod } from '../types/index.js';
 
-function buildSkillCopyOperations(pod: Pod): Promise<unknown>[] {
-  return pod.skillIds.map(skillId =>
-    skillService.copySkillToPod(skillId, pod.id, pod.workspacePath)
-  );
-}
-
-function buildSubAgentCopyOperations(pod: Pod): Promise<unknown>[] {
-  return pod.subAgentIds.map(subAgentId =>
-    subAgentService.copySubAgentToPod(subAgentId, pod.id, pod.workspacePath)
-  );
-}
-
-function buildCommandCopyOperations(pod: Pod): Promise<unknown>[] {
-  if (!pod.commandId) return [];
-  return [commandService.copyCommandToPod(pod.commandId, pod.id, pod.workspacePath)];
-}
-
 function buildCopyOperations(pod: Pod): Promise<unknown>[] {
   return [
-    ...buildSkillCopyOperations(pod),
-    ...buildSubAgentCopyOperations(pod),
-    ...buildCommandCopyOperations(pod),
+    ...pod.skillIds.map(id => skillService.copySkillToPod(id, pod.id, pod.workspacePath)),
+    ...pod.subAgentIds.map(id => subAgentService.copySubAgentToPod(id, pod.id, pod.workspacePath)),
+    ...(pod.commandId ? [commandService.copyCommandToPod(pod.commandId, pod.id, pod.workspacePath)] : []),
   ];
 }
 

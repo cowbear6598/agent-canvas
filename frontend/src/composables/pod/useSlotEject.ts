@@ -1,14 +1,12 @@
 import type { Ref } from 'vue'
 import { ref } from 'vue'
 import { DEGREES_TO_RADIANS } from '@/lib/constants'
+import type { UnbindBehavior } from '@/stores/note/noteBindingActions'
 
-interface Position {
+interface NotePosition {
+  id: string
   x: number
   y: number
-}
-
-interface NotePosition extends Position {
-  id: string
 }
 
 export interface UseSlotEjectOptions {
@@ -16,7 +14,7 @@ export interface UseSlotEjectOptions {
   podRotation: () => number
   getNoteById: (id: string) => NotePosition | undefined
   setNoteAnimating: (noteId: string, animating: boolean) => void
-  unbindFromPod: (podId: string, returnToOriginal: boolean, targetPosition?: Position) => Promise<void>
+  unbindFromPod: (podId: string, behavior: UnbindBehavior) => Promise<void>
   getViewportZoom: () => number
   getViewportOffset: () => { x: number; y: number }
 }
@@ -85,7 +83,7 @@ export function useSlotEject(options: UseSlotEjectOptions): UseSlotEjectReturn {
     isEjecting.value = true
     setNoteAnimating(boundNoteId, true)
 
-    await unbindFromPod(podId, false, { x: ejectX, y: ejectY })
+    await unbindFromPod(podId, { mode: 'move-to-position', position: { x: ejectX, y: ejectY } })
 
     onRemoved()
 

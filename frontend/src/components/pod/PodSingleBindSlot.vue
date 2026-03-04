@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import type { BaseNote, Position } from '@/types'
+import type { BaseNote } from '@/types'
+import type { UnbindBehavior } from '@/stores/note/noteBindingActions'
 import { useSlotDropTarget } from '@/composables/pod/useSlotDropTarget'
 import { useSlotEject } from '@/composables/pod/useSlotEject'
 import { useViewportStore } from '@/stores/pod'
@@ -9,7 +10,7 @@ interface SingleBindStore {
   draggedNoteId: string | null
   getNoteById: (noteId: string) => (BaseNote & { x: number; y: number; id: string }) | undefined
   setNoteAnimating: (noteId: string, animating: boolean) => void
-  unbindFromPod: (podId: string, returnToOriginal: boolean, targetPosition?: Position) => Promise<void>
+  unbindFromPod: (podId: string, behavior: UnbindBehavior) => Promise<void>
 }
 
 const props = defineProps<{
@@ -46,8 +47,8 @@ const { isEjecting, handleSlotClick: ejectSlotClick } = useSlotEject({
   podRotation: () => props.podRotation ?? 0,
   getNoteById: (id: string) => props.store.getNoteById(id),
   setNoteAnimating: (noteId: string, animating: boolean) => props.store.setNoteAnimating(noteId, animating),
-  unbindFromPod: (podId: string, notify: boolean, targetPosition?: Position) =>
-    props.store.unbindFromPod(podId, notify, targetPosition),
+  unbindFromPod: (podId: string, behavior: UnbindBehavior) =>
+    props.store.unbindFromPod(podId, behavior),
   getViewportZoom: () => viewportStore.zoom,
   getViewportOffset: () => viewportStore.offset,
 })

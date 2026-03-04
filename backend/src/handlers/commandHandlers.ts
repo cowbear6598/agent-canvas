@@ -1,7 +1,4 @@
 import {WebSocketResponseEvents} from '../schemas';
-import type {
-    CommandMoveToGroupPayload,
-} from '../schemas';
 import {commandService} from '../services/commandService.js';
 import {commandNoteStore} from '../services/noteStores.js';
 import {podStore} from '../services/podStore.js';
@@ -72,7 +69,7 @@ const commandUnbindHandler = createUnbindHandler(commandBindConfig);
 export const handlePodBindCommand = commandBindHandler;
 export const handlePodUnbindCommand = commandUnbindHandler;
 
-const commandMoveToGroupHandler = createMoveToGroupHandler({
+export const handleCommandMoveToGroup = createMoveToGroupHandler({
     service: commandService,
     resourceName: 'Command',
     idField: 'itemId',
@@ -81,11 +78,3 @@ const commandMoveToGroupHandler = createMoveToGroupHandler({
         moved: WebSocketResponseEvents.COMMAND_MOVED_TO_GROUP,
     },
 });
-
-export async function handleCommandMoveToGroup(
-    connectionId: string,
-    payload: CommandMoveToGroupPayload,
-    requestId: string
-): Promise<void> {
-    return commandMoveToGroupHandler(connectionId, payload, requestId);
-}

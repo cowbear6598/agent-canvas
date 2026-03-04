@@ -1,4 +1,4 @@
-import type { ServerWebSocket } from 'bun';
+import type { Server, ServerWebSocket } from 'bun';
 import { config } from './config/index.js';
 import { socketService } from './services/socketService.js';
 import { canvasStore } from './services/canvasStore.js';
@@ -7,12 +7,18 @@ import { registerAllHandlers } from './handlers/index.js';
 import { connectionManager } from './services/connectionManager.js';
 import { eventRouter } from './services/eventRouter.js';
 import { broadcastCursorLeft } from './handlers/cursorHandlers.js';
-import { deserialize } from './utils/messageSerializer.js';
+import { tryDeserialize } from './utils/messageSerializer.js';
 import { logger } from './utils/logger.js';
 import { WebSocketResponseEvents } from './schemas/index.js';
 import { isStaticFilesAvailable, serveStaticFile } from './utils/staticFileServer.js';
 import { handleApiRequest } from './api/apiRouter.js';
 import { slackConnectionManager } from './services/slack/slackConnectionManager.js';
+
+function handleWebSocketUpgrade(req: Request, server: Server<{ connectionId: string }>): Response | undefined {
+	const success = server.upgrade(req, { data: { connectionId: '' } });
+	if (success) return undefined;
+	return new Response('WebSocket 升級失敗', { status: 400 });
+}
 
 async function startServer(): Promise<void> {
 	const result = await startupService.initialize();
@@ -48,10 +54,7 @@ async function startServer(): Promise<void> {
 
 			const upgradeHeader = req.headers.get('upgrade');
 			if (upgradeHeader?.toLowerCase() === 'websocket') {
-				const success = server.upgrade(req, {
-					data: { connectionId: '' },
-				});
-				if (success) return undefined;
+				return handleWebSocketUpgrade(req, server);
 			}
 
 			if (enableStaticFiles) {
@@ -72,37 +75,39 @@ async function startServer(): Promise<void> {
 			message(webSocket: ServerWebSocket<{ connectionId: string }>, message: string | Buffer) {
 				const connectionId = webSocket.data.connectionId;
 
-				try {
-					const parsedMessage = deserialize(message);
-
-					if (parsedMessage.type === WebSocketResponseEvents.HEARTBEAT_PONG) {
-						socketService.handleHeartbeatPong(connectionId);
-						return;
-					}
-
-					if (parsedMessage.type === 'ack' && parsedMessage.ackId?.startsWith('heartbeat-')) {
-						socketService.handleHeartbeatPong(connectionId);
-						return;
-					}
-
-					eventRouter.route(connectionId, parsedMessage).catch((error) => {
-						logger.error('WebSocket', 'Error', `訊息路由失敗: ${error}`, error);
-						socketService.emitToConnection(connectionId, 'error', {
-							requestId: parsedMessage.requestId,
-							success: false,
-							error: '訊息處理失敗，請稍後再試',
-							code: 'ROUTING_ERROR',
-						});
-					});
-				} catch (error) {
-					logger.error('WebSocket', 'Error', `訊息解析失敗: ${error}`, error);
+				const parseResult = tryDeserialize(message);
+				if (!parseResult.success) {
+					logger.error('WebSocket', 'Error', `訊息解析失敗: ${parseResult.error}`);
 					socketService.emitToConnection(connectionId, 'error', {
 						requestId: '',
 						success: false,
 						error: '無效的訊息格式',
 						code: 'INVALID_MESSAGE',
 					});
+					return;
 				}
+
+				const parsedMessage = parseResult.data;
+
+				if (parsedMessage.type === WebSocketResponseEvents.HEARTBEAT_PONG) {
+					socketService.handleHeartbeatPong(connectionId);
+					return;
+				}
+
+				if (parsedMessage.type === 'ack' && parsedMessage.ackId?.startsWith('heartbeat-')) {
+					socketService.handleHeartbeatPong(connectionId);
+					return;
+				}
+
+				eventRouter.route(connectionId, parsedMessage).catch((error) => {
+					logger.error('WebSocket', 'Error', `訊息路由失敗: ${error}`, error);
+					socketService.emitToConnection(connectionId, 'error', {
+						requestId: parsedMessage.requestId,
+						success: false,
+						error: '訊息處理失敗，請稍後再試',
+						code: 'ROUTING_ERROR',
+					});
+				});
 			},
 			close(webSocket: ServerWebSocket<{ connectionId: string }>) {
 				const connectionId = webSocket.data.connectionId;

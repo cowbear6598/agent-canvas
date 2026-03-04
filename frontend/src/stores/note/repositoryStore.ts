@@ -1,6 +1,6 @@
 import type { Repository, RepositoryNote } from '@/types'
 import { createNoteStore } from './createNoteStore'
-import type { NoteStoreContext } from './createNoteStore'
+import type { NoteStoreContext, TypedNoteStore } from './createNoteStore'
 import { websocketClient, WebSocketRequestEvents, WebSocketResponseEvents } from '@/services/websocket'
 import { useCanvasWebSocketAction } from '@/composables/useCanvasWebSocketAction'
 import { requireActiveCanvas } from '@/utils/canvasGuard'
@@ -292,4 +292,4 @@ const store = createNoteStore<Repository, RepositoryNote>({
   customActions: createRepositoryCustomActions(),
 })
 
-export const useRepositoryStore: (() => ReturnType<typeof store> & RepositoryStoreCustomActions) & { $id: string } = store as (() => ReturnType<typeof store> & RepositoryStoreCustomActions) & { $id: string }
+export const useRepositoryStore = store as TypedNoteStore<typeof store, RepositoryStoreCustomActions>

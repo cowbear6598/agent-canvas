@@ -49,12 +49,10 @@ describe('chatHistoryActions', () => {
     resetMockWebSocket()
     vi.clearAllMocks()
 
-    // 預設設定 WebSocket 為已連線
     mockWebSocketClient.isConnected.value = true
     const chatStore = useChatStore()
     chatStore.connectionStatus = 'connected'
 
-    // 預設讓 wrapWebSocketRequest 直接回傳 payload
     mockWrapWebSocketRequest.mockImplementation(async (promise) => promise)
   })
 
@@ -145,7 +143,6 @@ describe('chatHistoryActions', () => {
       canvasStore.activeCanvasId = 'canvas-1'
       const chatStore = useChatStore()
 
-      // 設定為已 loaded
       chatStore.historyLoadingStatus.set('pod-1', 'loaded')
 
       await chatStore.loadPodChatHistory('pod-1')
@@ -158,7 +155,6 @@ describe('chatHistoryActions', () => {
       canvasStore.activeCanvasId = 'canvas-1'
       const chatStore = useChatStore()
 
-      // 設定為 loading
       chatStore.historyLoadingStatus.set('pod-1', 'loading')
 
       await chatStore.loadPodChatHistory('pod-1')
@@ -171,7 +167,6 @@ describe('chatHistoryActions', () => {
       canvasStore.activeCanvasId = 'canvas-1'
       const chatStore = useChatStore()
 
-      // 設定為未連線
       mockWebSocketClient.isConnected.value = false
       chatStore.connectionStatus = 'disconnected'
 
@@ -481,7 +476,6 @@ describe('chatHistoryActions', () => {
       canvasStore.activeCanvasId = 'canvas-1'
       const chatStore = useChatStore()
 
-      // 設定 pod-1 為已 loaded
       chatStore.historyLoadingStatus.set('pod-1', 'loaded')
 
       mockCreateWebSocketRequest.mockResolvedValue({
@@ -492,7 +486,6 @@ describe('chatHistoryActions', () => {
 
       await chatStore.loadAllPodsHistory(['pod-1', 'pod-2'])
 
-      // pod-1 不應重複載入，只載入 pod-2
       expect(mockCreateWebSocketRequest).toHaveBeenCalledTimes(1)
       expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -505,7 +498,6 @@ describe('chatHistoryActions', () => {
     it('全部 Pod 都已載入時應不發送任何請求', async () => {
       const chatStore = useChatStore()
 
-      // 設定所有 Pod 都已 loaded
       chatStore.historyLoadingStatus.set('pod-1', 'loaded')
       chatStore.historyLoadingStatus.set('pod-2', 'loaded')
 
@@ -520,7 +512,6 @@ describe('chatHistoryActions', () => {
       canvasStore.activeCanvasId = 'canvas-1'
       const chatStore = useChatStore()
 
-      // 設定 pod-1 為 loading
       chatStore.historyLoadingStatus.set('pod-1', 'loading')
 
       mockCreateWebSocketRequest.mockResolvedValue({
@@ -531,7 +522,6 @@ describe('chatHistoryActions', () => {
 
       await chatStore.loadAllPodsHistory(['pod-1', 'pod-2'])
 
-      // pod-1 不應重複載入
       expect(mockCreateWebSocketRequest).toHaveBeenCalledTimes(1)
       expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
         expect.objectContaining({

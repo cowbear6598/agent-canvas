@@ -3,6 +3,7 @@ import {
   collectBoundNotesFromStore,
   collectSelectedPods,
   collectRelatedConnections,
+  createUnboundNoteCollector,
 } from '@/composables/canvas/copyPaste/collectCopyData'
 import type { SelectableElement } from '@/types'
 
@@ -100,6 +101,37 @@ describe('collectCopyData', () => {
       const result = collectRelatedConnections(selectedPodIds, connections as any)
 
       expect(result).toHaveLength(0)
+    })
+  })
+
+  describe('createUnboundNoteCollector', () => {
+    it('note 不存在時應回傳 null', () => {
+      const store = { notes: [] }
+      const collector = createUnboundNoteCollector(store, note => note)
+
+      const result = collector('non-existent-id')
+
+      expect(result).toBeNull()
+    })
+
+    it('note 存在且未綁定時應回傳 mapFn 結果', () => {
+      const note = { id: 'note-1', boundToPodId: null, name: 'Test Note' }
+      const store = { notes: [note] }
+      const collector = createUnboundNoteCollector(store, n => ({ id: n.id, name: n.name }))
+
+      const result = collector('note-1')
+
+      expect(result).toEqual({ id: 'note-1', name: 'Test Note' })
+    })
+
+    it('note 存在但已綁定時應回傳 null', () => {
+      const note = { id: 'note-1', boundToPodId: 'pod-1', name: 'Test Note' }
+      const store = { notes: [note] }
+      const collector = createUnboundNoteCollector(store, n => n)
+
+      const result = collector('note-1')
+
+      expect(result).toBeNull()
     })
   })
 })

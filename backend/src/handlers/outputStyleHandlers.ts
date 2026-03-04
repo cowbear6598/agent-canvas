@@ -1,7 +1,4 @@
 import { WebSocketResponseEvents } from '../schemas';
-import type {
-  OutputStyleMoveToGroupPayload,
-} from '../schemas';
 import { outputStyleService } from '../services/outputStyleService.js';
 import { podStore } from '../services/podStore.js';
 import { noteStore } from '../services/noteStores.js';
@@ -60,7 +57,7 @@ const outputStyleUnbindHandler = createUnbindHandler(outputStyleBindConfig);
 export const handlePodBindOutputStyle = outputStyleBindHandler;
 export const handlePodUnbindOutputStyle = outputStyleUnbindHandler;
 
-const outputStyleMoveToGroupHandler = createMoveToGroupHandler({
+export const handleOutputStyleMoveToGroup = createMoveToGroupHandler({
   service: outputStyleService,
   resourceName: 'OutputStyle',
   idField: 'itemId',
@@ -69,11 +66,3 @@ const outputStyleMoveToGroupHandler = createMoveToGroupHandler({
     moved: WebSocketResponseEvents.OUTPUT_STYLE_MOVED_TO_GROUP,
   },
 });
-
-export async function handleOutputStyleMoveToGroup(
-  connectionId: string,
-  payload: OutputStyleMoveToGroupPayload,
-  requestId: string
-): Promise<void> {
-  return outputStyleMoveToGroupHandler(connectionId, payload, requestId);
-}

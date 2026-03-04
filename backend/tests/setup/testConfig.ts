@@ -1,6 +1,3 @@
-// 測試環境設定
-// 覆寫 config 物件，使用暫存目錄路徑
-
 import path from 'path';
 import os from 'os';
 
@@ -12,17 +9,15 @@ process.setMaxListeners(50);
 // Console Mock - 隱藏所有測試期間的 console 輸出
 // =============================================================================
 
-// Mock 所有 console 方法 - 必須在最早期就執行
+// 必須在最早期就執行
 console.log = () => {};
 console.error = () => {};
 console.warn = () => {};
 console.info = () => {};
 console.debug = () => {};
 
-// Mock logger 模組 - 必須在任何可能使用 logger 的模組載入之前執行
-// 注意：這個 mock 必須完全覆蓋 Logger 類別的所有方法
+// 必須在任何可能使用 logger 的模組載入之前執行，且必須完全覆蓋 Logger 類別的所有方法
 vi.mock('../../src/utils/logger.js', () => {
-  // 建立一個完全靜默的 Logger 類別
   class MockLogger {
     log(): void {
       // 不執行任何操作
@@ -57,7 +52,6 @@ export interface TestConfig {
   commandsPath: string;
 }
 
-// 使用暫存目錄避免影響實際資料
 const testRoot = path.join(os.tmpdir(), `test-canvas-${timestamp}`);
 
 export const testConfig: TestConfig = {
@@ -74,12 +68,10 @@ export const testConfig: TestConfig = {
   commandsPath: path.join(testRoot, 'commands'),
 };
 
-// 覆寫 config 模組的設定
 export async function overrideConfig(): Promise<void> {
   const configModule = await import('../../src/config/index.js');
   Object.assign(configModule.config, testConfig);
 
-  // 重新綁定方法使其使用新的 canvasRoot
   configModule.config.getCanvasPath = function (canvasName: string): string {
     const canvasPath = path.join(testConfig.canvasRoot, canvasName);
     const resolvedPath = path.resolve(canvasPath);
@@ -105,12 +97,10 @@ export async function overrideConfig(): Promise<void> {
   };
 }
 
-// 立即執行覆寫（在 setupFiles 階段）
-// 這確保在任何測試模組載入之前就覆寫 config
+// 在 setupFiles 階段立即覆寫，確保在任何測試模組載入之前就覆寫 config
 const configModule = await import('../../src/config/index.js');
 Object.assign(configModule.config, testConfig);
 
-// 重新綁定方法
 configModule.config.getCanvasPath = function (canvasName: string): string {
   const canvasPath = path.join(testConfig.canvasRoot, canvasName);
   const resolvedPath = path.resolve(canvasPath);

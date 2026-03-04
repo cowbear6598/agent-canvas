@@ -177,11 +177,8 @@ describe('Canvas 管理', () => {
         });
 
         it('重複名稱時重命名失敗', async () => {
-            // 建立兩個 Canvas
             await createCanvas(client, 'Canvas_One');
             const canvas2 = await createCanvas(client, 'Canvas_Two');
-
-            // 嘗試將 canvas2 重命名為 canvas1 的名稱
             const response = await emitAndWaitResponse<CanvasRenamePayload, CanvasRenamedPayload>(
                 client,
                 WebSocketRequestEvents.CANVAS_RENAME,
@@ -266,27 +263,16 @@ describe('Canvas 管理', () => {
 
     describe('Canvas 排序', () => {
         it('成功重新排序', async () => {
-            // 取得目前所有 Canvas（包括 default）
             await listCanvases(client);
-
-            // 建立 3 個 Canvas
             const canvasA = await createCanvas(client, 'Canvas A');
             const canvasB = await createCanvas(client, 'Canvas B');
             const canvasC = await createCanvas(client, 'Canvas C');
-
-            // 取得所有 Canvas ID
             const allCanvases = await listCanvases(client);
             const allIds = allCanvases.map(c => c.id);
-
-            // 將新建的 3 個 Canvas 排序為 C, A, B，其他保持原位
             const otherIds = allIds.filter(id => id !== canvasA.id && id !== canvasB.id && id !== canvasC.id);
             const newOrder = [canvasC.id, canvasA.id, canvasB.id, ...otherIds];
-
-            // 重新排序
             const reorderResponse = await reorderCanvases(client, newOrder);
             expect(reorderResponse.success).toBe(true);
-
-            // 取得列表並驗證順序
             const canvases = await listCanvases(client);
             const ids = canvases.map(c => c.id);
             expect(ids.indexOf(canvasC.id)).toBeLessThan(ids.indexOf(canvasA.id));
@@ -294,65 +280,39 @@ describe('Canvas 管理', () => {
         });
 
         it('列表回傳排序後的順序', async () => {
-            // 建立多個 Canvas
             const canvas1 = await createCanvas(client, 'Canvas 1');
             const canvas2 = await createCanvas(client, 'Canvas 2');
             const canvas3 = await createCanvas(client, 'Canvas 3');
-
-            // 取得所有 Canvas ID
             const allCanvases = await listCanvases(client);
             const allIds = allCanvases.map(c => c.id);
-
-            // 將新建的 3 個 Canvas 排序為 3, 1, 2，其他保持原位
             const otherIds = allIds.filter(id => id !== canvas1.id && id !== canvas2.id && id !== canvas3.id);
             const newOrder = [canvas3.id, canvas1.id, canvas2.id, ...otherIds];
-
-            // 重新排序
             await reorderCanvases(client, newOrder);
-
-            // 取得列表
             const canvases = await listCanvases(client);
 
-            // 驗證列表依照 sortIndex 升序排列
             for (let i = 0; i < canvases.length - 1; i++) {
                 expect(canvases[i].sortIndex).toBeLessThan(canvases[i + 1].sortIndex);
             }
         });
 
         it('新 Canvas 新增到最後', async () => {
-            // 建立 2 個 Canvas
             const canvas1 = await createCanvas(client, 'Canvas X');
             const canvas2 = await createCanvas(client, 'Canvas Y');
-
-            // 取得所有 Canvas ID 並重新排序
             const allCanvases1 = await listCanvases(client);
             const allIds1 = allCanvases1.map(c => c.id);
             const otherIds1 = allIds1.filter(id => id !== canvas1.id && id !== canvas2.id);
             await reorderCanvases(client, [canvas2.id, canvas1.id, ...otherIds1]);
-
-            // 再建立 1 個新 Canvas
             const newCanvas = await createCanvas(client, 'Canvas Z');
-
-            // 取得列表
             const canvases = await listCanvases(client);
-
-            // 找到新 Canvas
             const newCanvasInList = canvases.find(c => c.id === newCanvas.id);
             expect(newCanvasInList).toBeDefined();
-
-            // 驗證新 Canvas 的 sortIndex 為最大值
             const maxSortIndex = Math.max(...canvases.map(c => c.sortIndex));
             expect(newCanvasInList!.sortIndex).toBe(maxSortIndex);
-
-            // 驗證新 Canvas 在列表最後
             expect(canvases[canvases.length - 1].id).toBe(newCanvas.id);
         });
 
         it('無效 ID 時排序失敗', async () => {
-            // 建立 1 個 Canvas
             const canvas = await createCanvas(client, 'Valid Canvas');
-
-            // 嘗試用包含不存在 ID 的陣列排序
             const response = await emitAndWaitResponse<CanvasReorderPayload, CanvasReorderedPayload>(
                 client,
                 WebSocketRequestEvents.CANVAS_REORDER,
@@ -365,7 +325,6 @@ describe('Canvas 管理', () => {
         });
 
         it('空陣列時排序失敗', async () => {
-            // 嘗試用空陣列排序
             const response = await emitAndWaitResponse<CanvasReorderPayload, CanvasReorderedPayload>(
                 client,
                 WebSocketRequestEvents.CANVAS_REORDER,

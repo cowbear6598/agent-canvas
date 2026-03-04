@@ -1,6 +1,3 @@
-// WebSocket Client 輔助工具
-// 提供原生 WebSocket Client 連線、事件等待和請求/回應模式的輔助函數
-
 import type { WebSocketMessage, WebSocketResponse } from '../../src/types/websocket.js';
 import { serialize, deserialize } from '../../src/utils/messageSerializer.js';
 
@@ -43,15 +40,12 @@ export class TestWebSocketClient {
       try {
         const response: WebSocketResponse = deserialize(event.data) as WebSocketResponse;
 
-        // 處理連線就緒事件，設定 socket ID
         if (response.type === 'connection:ready' && response.payload) {
           this.id = (response.payload as any).socketId;
         }
 
-        // 觸發對應的事件監聽器，傳遞 payload 而不是整個 response
         const handlers = this.listeners.get(response.type);
         if (handlers) {
-          // 傳遞 payload 給監聽器（這是實際的業務資料）
           handlers.forEach((handler) => handler(response.payload));
         }
       } catch (error) {
@@ -157,22 +151,11 @@ export class TestWebSocketClient {
  * 並自動切換到預設 Canvas
  */
 export async function createSocketClient(baseUrl: string, canvasId?: string): Promise<TestWebSocketClient> {
-  // 將 http/https URL 轉換為 ws/wss URL
   const wsUrl = baseUrl.replace(/^http/, 'ws');
-
-  // 建立但不自動連線，先設置監聽器
   const socket = new TestWebSocketClient(wsUrl, false);
-
-  // 在連線之前設置監聽器
   const readyPromise = waitForEvent(socket, 'connection:ready');
-
-  // 開始連線
   socket.connect();
-
-  // 等待連線成功
   await socket.waitForOpen();
-
-  // 等待 connection:ready 事件
   await readyPromise;
 
   if (canvasId) {
@@ -221,13 +204,8 @@ export async function emitAndWaitResponse<TReq, TRes>(
   payload: TReq,
   timeout: number = 5000
 ): Promise<TRes> {
-  // 先設定監聽器
   const responsePromise = waitForEvent<TRes>(socket, responseEvent, timeout);
-
-  // 再發送請求
   socket.emit(requestEvent, payload);
-
-  // 等待回應
   return responsePromise;
 }
 /**

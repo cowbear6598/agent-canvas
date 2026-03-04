@@ -68,7 +68,6 @@ describe('複製貼上/批量操作完整流程', () => {
 
   describe('框選 -> 複製 -> 貼上', () => {
     it('應正確將框選的 Pod 和 Note 複製到 clipboardStore', () => {
-      // Arrange
       const pod1 = createMockPod({ id: 'pod-1', x: 100, y: 100 })
       const pod2 = createMockPod({ id: 'pod-2', x: 200, y: 200 })
       const outputNote = createMockNote('outputStyle', { id: 'note-1', x: 300, y: 300, boundToPodId: null })
@@ -78,7 +77,6 @@ describe('複製貼上/批量操作完整流程', () => {
       outputStyleStore.notes = [outputNote as any]
       skillStore.notes = [skillNote as any]
 
-      // 框選
       selectionStore.startSelection(0, 0)
       selectionStore.updateSelection(500, 500)
       selectionStore.calculateSelectedElements(
@@ -90,7 +88,6 @@ describe('複製貼上/批量操作完整流程', () => {
         commandStore.notes
       )
 
-      // Act: 複製
       const selectedElements = selectionStore.selectedElements
       const selectedPodIds = new Set(selectedElements.filter(el => el.type === 'pod').map(el => el.id))
       const copiedPods = podStore.pods.filter(p => selectedPodIds.has(p.id)).map(p => ({
@@ -133,7 +130,6 @@ describe('複製貼上/批量操作完整流程', () => {
 
       clipboardStore.setCopy(copiedPods, copiedOutputStyleNotes as any, copiedSkillNotes as any, [], [], [], [])
 
-      // Assert
       expect(clipboardStore.isEmpty).toBe(false)
       expect(clipboardStore.copiedPods).toHaveLength(2)
       expect(clipboardStore.copiedOutputStyleNotes).toHaveLength(1)
@@ -143,7 +139,6 @@ describe('複製貼上/批量操作完整流程', () => {
     })
 
     it('應過濾掉已綁定的 Note，只複製未綁定的 Note', () => {
-      // Arrange
       const pod = createMockPod({ id: 'pod-1', x: 100, y: 100 })
       const boundNote = createMockNote('outputStyle', { id: 'note-1', x: 150, y: 150, boundToPodId: 'pod-1' })
       const unboundNote = createMockNote('outputStyle', { id: 'note-2', x: 200, y: 200, boundToPodId: null })
@@ -151,7 +146,6 @@ describe('複製貼上/批量操作完整流程', () => {
       podStore.pods = [pod]
       outputStyleStore.notes = [boundNote as any, unboundNote as any]
 
-      // 框選全部
       selectionStore.startSelection(0, 0)
       selectionStore.updateSelection(500, 500)
       selectionStore.calculateSelectedElements(
@@ -163,7 +157,6 @@ describe('複製貼上/批量操作完整流程', () => {
         commandStore.notes
       )
 
-      // Act: 複製
       const selectedElements = selectionStore.selectedElements
       const copiedOutputStyleNotes = outputStyleStore.notes
         .filter(n => selectedElements.some(el => el.type === 'outputStyleNote' && el.id === n.id) && n.boundToPodId === null)
@@ -179,13 +172,11 @@ describe('複製貼上/批量操作完整流程', () => {
 
       clipboardStore.setCopy([], copiedOutputStyleNotes as any, [], [], [], [], [])
 
-      // Assert: 只有未綁定的 note 被複製
       expect(clipboardStore.copiedOutputStyleNotes).toHaveLength(1)
       expect(clipboardStore.copiedOutputStyleNotes[0]!.id).toBe('note-2')
     })
 
     it('應複製兩個 Pod 之間的 Connection', () => {
-      // Arrange
       const pod1 = createMockPod({ id: 'pod-1', x: 100, y: 100 })
       const pod2 = createMockPod({ id: 'pod-2', x: 200, y: 200 })
       const connection = createMockConnection({
@@ -199,7 +190,6 @@ describe('複製貼上/批量操作完整流程', () => {
       podStore.pods = [pod1, pod2]
       connectionStore.connections = [connection]
 
-      // 框選兩個 Pod
       selectionStore.startSelection(0, 0)
       selectionStore.updateSelection(500, 500)
       selectionStore.calculateSelectedElements(
@@ -211,7 +201,6 @@ describe('複製貼上/批量操作完整流程', () => {
         commandStore.notes
       )
 
-      // Act: 複製
       const selectedElements = selectionStore.selectedElements
       const selectedPodIds = new Set(selectedElements.filter(el => el.type === 'pod').map(el => el.id))
       const copiedConnections = connectionStore.connections
@@ -226,14 +215,12 @@ describe('複製貼上/批量操作完整流程', () => {
 
       clipboardStore.setCopy([], [], [], [], [], [], copiedConnections as any)
 
-      // Assert
       expect(clipboardStore.copiedConnections).toHaveLength(1)
       expect(clipboardStore.copiedConnections[0]!.sourcePodId).toBe('pod-1')
       expect(clipboardStore.copiedConnections[0]!.targetPodId).toBe('pod-2')
     })
 
     it('應在貼上後更新 selectionStore 為新建立的元素', () => {
-      // Arrange
       const pod = createMockPod({ id: 'pod-1', x: 100, y: 100 })
       const note = createMockNote('outputStyle', { id: 'note-1', x: 200, y: 200, boundToPodId: null })
 
@@ -261,14 +248,12 @@ describe('複製貼上/批量操作完整流程', () => {
         []
       )
 
-      // Act: 模擬貼上後的 selection 更新
       const newSelectedElements: SelectableElement[] = [
         { type: 'pod', id: 'new-pod-1' },
         { type: 'outputStyleNote', id: 'new-note-1' },
       ]
       selectionStore.setSelectedElements(newSelectedElements)
 
-      // Assert
       expect(selectionStore.selectedElements).toHaveLength(2)
       expect(selectionStore.selectedElements).toEqual(newSelectedElements)
       expect(selectionStore.selectedPodIds).toEqual(['new-pod-1'])
@@ -278,7 +263,6 @@ describe('複製貼上/批量操作完整流程', () => {
 
   describe('框選 -> 批量拖曳', () => {
     it('應更新所有選中 Pod 的座標', () => {
-      // Arrange
       const pod1 = createMockPod({ id: 'pod-1', x: 100, y: 100 })
       const pod2 = createMockPod({ id: 'pod-2', x: 200, y: 200 })
 
@@ -295,7 +279,6 @@ describe('複製貼上/批量操作完整流程', () => {
         commandStore.notes
       )
 
-      // Act: 批量拖曳 (移動 50, 50)
       const dx = 50
       const dy = 50
 
@@ -308,7 +291,6 @@ describe('複製貼上/批量操作完整流程', () => {
         }
       })
 
-      // Assert
       const updatedPod1 = podStore.pods.find(p => p.id === 'pod-1')
       const updatedPod2 = podStore.pods.find(p => p.id === 'pod-2')
 
@@ -319,7 +301,6 @@ describe('複製貼上/批量操作完整流程', () => {
     })
 
     it('應更新所有選中的未綁定 Note 的座標', () => {
-      // Arrange
       const note1 = createMockNote('outputStyle', { id: 'note-1', x: 100, y: 100, boundToPodId: null })
       const note2 = createMockNote('skill', { id: 'note-2', x: 200, y: 200, boundToPodId: null })
       const boundNote = createMockNote('outputStyle', { id: 'note-3', x: 300, y: 300, boundToPodId: 'pod-1' })
@@ -338,7 +319,6 @@ describe('複製貼上/批量操作完整流程', () => {
         commandStore.notes
       )
 
-      // Act: 批量拖曳 (移動 30, 40)
       const dx = 30
       const dy = 40
 
@@ -356,7 +336,6 @@ describe('複製貼上/批量操作完整流程', () => {
         }
       })
 
-      // Assert: 只有未綁定的 note 座標被更新
       const updatedNote1 = outputStyleStore.notes.find(n => n.id === 'note-1')
       const updatedNote2 = skillStore.notes.find(n => n.id === 'note-2')
       const updatedBoundNote = outputStyleStore.notes.find(n => n.id === 'note-3')
@@ -365,50 +344,41 @@ describe('複製貼上/批量操作完整流程', () => {
       expect(updatedNote1?.y).toBe(140)
       expect(updatedNote2?.x).toBe(230)
       expect(updatedNote2?.y).toBe(240)
-      expect(updatedBoundNote?.x).toBe(300) // 綁定的 note 不應被移動
+      expect(updatedBoundNote?.x).toBe(300)
       expect(updatedBoundNote?.y).toBe(300)
     })
 
     it('應在拖曳後調用 syncPodPosition 同步到後端', () => {
-      // Arrange
       const pod = createMockPod({ id: 'pod-1', x: 100, y: 100 })
       podStore.pods = [pod]
 
       selectionStore.setSelectedElements([{ type: 'pod', id: 'pod-1' }])
 
-      // Spy on syncPodPosition
       const syncSpy = vi.spyOn(podStore, 'syncPodPosition')
 
-      // Act: 移動並同步
       podStore.movePod('pod-1', 150, 150)
       podStore.syncPodPosition('pod-1')
 
-      // Assert
       expect(syncSpy).toHaveBeenCalledWith('pod-1')
     })
 
     it('應在拖曳後調用 updateNotePosition 同步 Note 到後端', async () => {
-      // Arrange
       const note = createMockNote('outputStyle', { id: 'note-1', x: 100, y: 100, boundToPodId: null })
       outputStyleStore.notes = [note as any]
 
       selectionStore.setSelectedElements([{ type: 'outputStyleNote', id: 'note-1' }])
 
-      // Spy on updateNotePosition
       const updateSpy = vi.spyOn(outputStyleStore, 'updateNotePosition')
 
-      // Act: 移動並同步
       outputStyleStore.updateNotePositionLocal('note-1', 150, 150)
       await outputStyleStore.updateNotePosition('note-1', 150, 150)
 
-      // Assert
       expect(updateSpy).toHaveBeenCalledWith('note-1', 150, 150)
     })
   })
 
   describe('框選 -> 批量刪除', () => {
     it('應刪除所有選中的 Pod', async () => {
-      // Arrange
       const pod1 = createMockPod({ id: 'pod-1', x: 100, y: 100 })
       const pod2 = createMockPod({ id: 'pod-2', x: 200, y: 200 })
       const pod3 = createMockPod({ id: 'pod-3', x: 1000, y: 1000 })
@@ -428,7 +398,6 @@ describe('複製貼上/批量操作完整流程', () => {
 
       expect(selectionStore.selectedPodIds).toHaveLength(2)
 
-      // Act: 批量刪除
       const deletePromises: Promise<void>[] = []
       selectionStore.selectedPodIds.forEach(id => {
         deletePromises.push(podStore.deletePodWithBackend(id))
@@ -436,13 +405,10 @@ describe('複製貼上/批量操作完整流程', () => {
 
       await Promise.allSettled(deletePromises)
 
-      // Assert: 雖然 deletePodWithBackend 可能不會在測試中真正移除 pod（因為 WebSocket mock），
-      // 但我們可以驗證刪除方法被調用
       expect(deletePromises).toHaveLength(2)
     })
 
     it('應刪除所有選中的 Note', async () => {
-      // Arrange
       const note1 = createMockNote('outputStyle', { id: 'note-1', x: 100, y: 100, boundToPodId: null })
       const note2 = createMockNote('skill', { id: 'note-2', x: 200, y: 200, boundToPodId: null })
       const note3 = createMockNote('outputStyle', { id: 'note-3', x: 1000, y: 1000, boundToPodId: null })
@@ -461,7 +427,6 @@ describe('複製貼上/批量操作完整流程', () => {
         commandStore.notes
       )
 
-      // Act: 批量刪除
       const deletePromises: Promise<void>[] = []
 
       selectionStore.selectedOutputStyleNoteIds.forEach(id => {
@@ -474,12 +439,10 @@ describe('複製貼上/批量操作完整流程', () => {
 
       await Promise.allSettled(deletePromises)
 
-      // Assert
       expect(deletePromises).toHaveLength(2)
     })
 
     it('應在刪除後清空 selection', () => {
-      // Arrange
       selectionStore.setSelectedElements([
         { type: 'pod', id: 'pod-1' },
         { type: 'outputStyleNote', id: 'note-1' },
@@ -487,16 +450,13 @@ describe('複製貼上/批量操作完整流程', () => {
 
       expect(selectionStore.hasSelection).toBe(true)
 
-      // Act: 清空 selection
       selectionStore.clearSelection()
 
-      // Assert
       expect(selectionStore.hasSelection).toBe(false)
       expect(selectionStore.selectedElements).toHaveLength(0)
     })
 
     it('應在刪除 Pod 時自動清理相關 Connection', () => {
-      // Arrange
       const pod1 = createMockPod({ id: 'pod-1', x: 100, y: 100 })
       const pod2 = createMockPod({ id: 'pod-2', x: 200, y: 200 })
       const connection = createMockConnection({
@@ -508,13 +468,10 @@ describe('複製貼上/批量操作完整流程', () => {
       podStore.pods = [pod1, pod2]
       connectionStore.connections = [connection]
 
-      // Spy on deleteConnectionsByPodId
       const deleteConnSpy = vi.spyOn(connectionStore, 'deleteConnectionsByPodId')
 
-      // Act: 刪除 pod-1
       podStore.removePod('pod-1')
 
-      // Assert
       expect(deleteConnSpy).toHaveBeenCalledWith('pod-1')
       expect(connectionStore.connections.filter(c => c.sourcePodId === 'pod-1' || c.targetPodId === 'pod-1')).toHaveLength(0)
     })
@@ -522,13 +479,11 @@ describe('複製貼上/批量操作完整流程', () => {
 
   describe('Ctrl 框選', () => {
     it('第一次框選應選中元素', () => {
-      // Arrange
       const pod1 = createMockPod({ id: 'pod-1', x: 100, y: 100 })
       const pod2 = createMockPod({ id: 'pod-2', x: 200, y: 200 })
 
       podStore.pods = [pod1, pod2]
 
-      // Act: 第一次框選
       selectionStore.startSelection(0, 0)
       selectionStore.updateSelection(300, 300)
       selectionStore.calculateSelectedElements(
@@ -541,21 +496,16 @@ describe('複製貼上/批量操作完整流程', () => {
       )
       selectionStore.endSelection()
 
-      // Assert
       expect(selectionStore.selectedPodIds).toEqual(['pod-1', 'pod-2'])
     })
 
     it('Ctrl 第二次框選應 toggle 反選', () => {
-      // Arrange
-      // Pod 尺寸: 224x168
-      const pod1 = createMockPod({ id: 'pod-1', x: 100, y: 100 }) // (100,100) 到 (324,268)
-      const pod2 = createMockPod({ id: 'pod-2', x: 250, y: 250 }) // (250,250) 到 (474,418)
-      const pod3 = createMockPod({ id: 'pod-3', x: 400, y: 400 }) // (400,400) 到 (624,568)
+      const pod1 = createMockPod({ id: 'pod-1', x: 100, y: 100 })
+      const pod2 = createMockPod({ id: 'pod-2', x: 250, y: 250 })
+      const pod3 = createMockPod({ id: 'pod-3', x: 400, y: 400 })
 
       podStore.pods = [pod1, pod2, pod3]
 
-      // 第一次框選 pod-1 和 pod-2
-      // 框選範圍: (0,0) 到 (350,350)
       selectionStore.startSelection(0, 0)
       selectionStore.updateSelection(350, 350)
       selectionStore.calculateSelectedElements(
@@ -570,8 +520,6 @@ describe('複製貼上/批量操作完整流程', () => {
 
       expect(selectionStore.selectedPodIds).toEqual(['pod-1', 'pod-2'])
 
-      // Act: Ctrl 第二次框選 pod-2 和 pod-3
-      // 框選範圍: (350,350) 到 (700,700) - 不包含 pod-1
       selectionStore.startSelection(350, 350, true)
       selectionStore.updateSelection(700, 700)
       selectionStore.calculateSelectedElements(
@@ -584,21 +532,17 @@ describe('複製貼上/批量操作完整流程', () => {
       )
       selectionStore.endSelection()
 
-      // Assert: pod-2 被 toggle 移除，pod-3 被加入
       expect(selectionStore.selectedPodIds).toEqual(['pod-1', 'pod-3'])
     })
 
     it('Ctrl 框選已選中的元素應移除該元素', () => {
-      // Arrange
       const pod1 = createMockPod({ id: 'pod-1', x: 100, y: 100 })
 
       podStore.pods = [pod1]
 
-      // 先選中 pod-1
       selectionStore.setSelectedElements([{ type: 'pod', id: 'pod-1' }])
       expect(selectionStore.selectedPodIds).toEqual(['pod-1'])
 
-      // Act: Ctrl 框選同一個 pod-1
       selectionStore.startSelection(0, 0, true)
       selectionStore.updateSelection(300, 300)
       selectionStore.calculateSelectedElements(
@@ -611,21 +555,17 @@ describe('複製貼上/批量操作完整流程', () => {
       )
       selectionStore.endSelection()
 
-      // Assert: pod-1 被 toggle 移除
       expect(selectionStore.selectedPodIds).toEqual([])
     })
 
     it('Ctrl 框選未選中的元素應加入該元素', () => {
-      // Arrange
       const pod1 = createMockPod({ id: 'pod-1', x: 100, y: 100 })
       const pod2 = createMockPod({ id: 'pod-2', x: 500, y: 500 })
 
       podStore.pods = [pod1, pod2]
 
-      // 先選中 pod-1
       selectionStore.setSelectedElements([{ type: 'pod', id: 'pod-1' }])
 
-      // Act: Ctrl 框選 pod-2
       selectionStore.startSelection(400, 400, true)
       selectionStore.updateSelection(600, 600)
       selectionStore.calculateSelectedElements(
@@ -638,41 +578,34 @@ describe('複製貼上/批量操作完整流程', () => {
       )
       selectionStore.endSelection()
 
-      // Assert: pod-2 被加入
       expect(selectionStore.selectedPodIds).toEqual(['pod-1', 'pod-2'])
     })
 
     it('應正確處理 Ctrl 模式的 initialSelectedElements', () => {
-      // Arrange
       const pod1 = createMockPod({ id: 'pod-1', x: 100, y: 100 })
 
       podStore.pods = [pod1]
 
       selectionStore.setSelectedElements([{ type: 'pod', id: 'pod-1' }])
 
-      // Act: 開始 Ctrl 框選
       selectionStore.startSelection(0, 0, true)
 
-      // Assert: initialSelectedElements 應保存先前的選擇
       expect(selectionStore.initialSelectedElements).toEqual([{ type: 'pod', id: 'pod-1' }])
       expect(selectionStore.isCtrlMode).toBe(true)
     })
 
     it('應在 endSelection 後重置 isCtrlMode 和 initialSelectedElements', () => {
-      // Arrange
       const pod1 = createMockPod({ id: 'pod-1', x: 100, y: 100 })
 
       podStore.pods = [pod1]
 
       selectionStore.setSelectedElements([{ type: 'pod', id: 'pod-1' }])
 
-      // Act
       selectionStore.startSelection(0, 0, true)
       expect(selectionStore.isCtrlMode).toBe(true)
 
       selectionStore.endSelection()
 
-      // Assert
       expect(selectionStore.isCtrlMode).toBe(false)
       expect(selectionStore.initialSelectedElements).toEqual([])
     })

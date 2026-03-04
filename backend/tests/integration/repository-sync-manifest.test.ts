@@ -176,7 +176,6 @@ describe('Repository Sync Manifest 整合測試', () => {
             await bindCommandToPod(pod.id, cmd1.id);
             await bindRepositoryToPod(pod.id, repo.id);
 
-            // 驗證第一個 command 在 manifest 中
             const managedFilesBefore = await readManifestFiles(repo.id, pod.id);
             expect(managedFilesBefore).toContain(`.claude/commands/${cmd1.id}.md`);
 
@@ -213,7 +212,6 @@ describe('Repository Sync Manifest 整合測試', () => {
             const repoPath = getRepoPath(repo.id);
             const commandPath = path.join(repoPath, '.claude', 'commands', `${command.id}.md`);
 
-            // 確認檔案存在
             expect(await fileExists(commandPath)).toBe(true);
 
             // 解綁 command，sync 時需要解綁 repo 才能觸發（command 解綁本身不觸發 repo sync）
@@ -364,7 +362,6 @@ describe('Repository Sync Manifest 整合測試', () => {
             await bindCommandToPod(pod.id, command.id);
             await bindRepositoryToPod(pod.id, repo.id);
 
-            // 驗證檔案被覆蓋（Pod 的 command 內容）
             expect(await fileExists(sameNamePath)).toBe(true);
             const newContent = await fs.readFile(sameNamePath, 'utf-8');
             expect(newContent).toBe('# Command Content');
@@ -392,18 +389,15 @@ describe('Repository Sync Manifest 整合測試', () => {
             const repoAPath = getRepoPath(repoA.id);
             const commandPathInA = path.join(repoAPath, '.claude', 'commands', `${command.id}.md`);
 
-            // 驗證 repo A 有 Pod 的資源和 manifest
             expect(await fileExists(commandPathInA)).toBe(true);
             expect(await fileExists(getManifestPath(repoA.id, pod.id))).toBe(true);
 
             const repoB = await createRepository(client, `manifest-s9-b-${uuidv4()}`);
             await bindRepositoryToPod(pod.id, repoB.id);
 
-            // 驗證 repo A 的 Pod 資源和 manifest 被清除
             expect(await fileExists(commandPathInA)).toBe(false);
             expect(await fileExists(getManifestPath(repoA.id, pod.id))).toBe(false);
 
-            // 驗證 repo B 有 Pod 的資源和 manifest
             const repoBPath = getRepoPath(repoB.id);
             const commandPathInB = path.join(repoBPath, '.claude', 'commands', `${command.id}.md`);
             expect(await fileExists(commandPathInB)).toBe(true);
@@ -434,18 +428,13 @@ describe('Repository Sync Manifest 整合測試', () => {
             const orphanManifest = { managedFiles: [fakeCommandRelPath] };
             await fs.writeFile(orphanManifestPath, JSON.stringify(orphanManifest, null, 2), 'utf-8');
 
-            // 確認孤兒 manifest 和對應檔案存在
             expect(await fileExists(orphanManifestPath)).toBe(true);
             expect(await fileExists(fakeCommandAbsPath)).toBe(true);
 
-            // 建立 Pod（不需要資源），綁定到該 repo（觸發 sync）
             const pod = await createPod(client);
             await bindRepositoryToPod(pod.id, repo.id);
 
-            // 驗證孤兒 manifest 對應的檔案被清除
             expect(await fileExists(fakeCommandAbsPath)).toBe(false);
-
-            // 驗證孤兒 manifest 檔案本身被清除
             expect(await fileExists(orphanManifestPath)).toBe(false);
         });
     });

@@ -1,6 +1,6 @@
 import type { Command, CommandNote, Pod } from '@/types'
 import { createNoteStore, rebuildNotesFromPods } from './createNoteStore'
-import type { NoteStoreContext } from './createNoteStore'
+import type { NoteStoreContext, TypedNoteStore } from './createNoteStore'
 import { WebSocketRequestEvents, WebSocketResponseEvents } from '@/services/websocket'
 import { createGroupCRUDActions } from './createGroupCRUDActions'
 import type {
@@ -126,4 +126,4 @@ const store = createNoteStore<Command, CommandNote>({
   }
 })
 
-export const useCommandStore: (() => ReturnType<typeof store> & CommandStoreCustomActions) & { $id: string } = store as (() => ReturnType<typeof store> & CommandStoreCustomActions) & { $id: string }
+export const useCommandStore = store as TypedNoteStore<typeof store, CommandStoreCustomActions>

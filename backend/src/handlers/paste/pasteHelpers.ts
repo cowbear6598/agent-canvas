@@ -23,7 +23,7 @@ import { logger } from '../../utils/logger.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { directoryExists } from '../../services/shared/fileResourceHelpers.js';
-import { fsOperation } from '../../utils/operationHelpers.js';
+import { fsOperation, safeExecute, safeExecuteAsync } from '../../utils/operationHelpers.js';
 
 function resolveBoundPodId(
   boundToOriginalPodId: string | null,
@@ -111,16 +111,13 @@ export async function createPastedPods(
   const createdPods: Pod[] = [];
 
   for (const podItem of pods) {
-    let result: { pod: Pod; originalId: string };
-
-    try {
-      result = await createSinglePod(canvasId, podItem);
-    } catch (error) {
-      recordError(errors, 'pod', podItem.originalId, error, '建立 Pod 失敗');
+    const createResult = await safeExecuteAsync(() => createSinglePod(canvasId, podItem));
+    if (!createResult.success) {
+      recordError(errors, 'pod', podItem.originalId, createResult.error, '建立 Pod 失敗');
       continue;
     }
 
-    const { pod, originalId } = result;
+    const { pod, originalId } = createResult.data;
     createdPods.push(pod);
     podIdMapping[originalId] = pod.id;
     logger.log('Paste', 'Create', `已建立 Pod「${pod.name}」`);
@@ -156,16 +153,14 @@ function createPastedNotes<
     const boundToPodId = resolveBoundPodId(noteItem.boundToOriginalPodId, podIdMapping);
     const params = createParams(noteItem, boundToPodId) as Parameters<typeof noteStore.create>[1];
 
-    let note: TNote;
-
-    try {
-      note = noteStore.create(canvasId, params);
-    } catch (error) {
+    const noteResult = safeExecute(() => noteStore.create(canvasId, params));
+    if (!noteResult.success) {
       const resourceId = getResourceId(noteItem);
-      recordError(errors, noteType, resourceId, error, `建立${noteType}失敗`);
+      recordError(errors, noteType, resourceId, noteResult.error, `建立${noteType}失敗`);
       continue;
     }
 
+    const note = noteResult.data;
     createdNotes.push(note);
     logger.log('Paste', 'Create', `已建立${noteType}「${note.name}」`);
   }
@@ -188,22 +183,20 @@ export function createPastedConnections(
       continue;
     }
 
-    let newConnection: Connection;
+    const connResult = safeExecute(() => connectionStore.create(canvasId, {
+      sourcePodId: newSourcePodId,
+      sourceAnchor: connItem.sourceAnchor,
+      targetPodId: newTargetPodId,
+      targetAnchor: connItem.targetAnchor,
+      triggerMode: connItem.triggerMode ?? 'auto',
+    }));
 
-    try {
-      newConnection = connectionStore.create(canvasId, {
-        sourcePodId: newSourcePodId,
-        sourceAnchor: connItem.sourceAnchor,
-        targetPodId: newTargetPodId,
-        targetAnchor: connItem.targetAnchor,
-        triggerMode: connItem.triggerMode ?? 'auto',
-      });
-    } catch (error) {
-      logger.error('Paste', 'Error', `建立連線失敗：${getErrorMessage(error)}`);
+    if (!connResult.success) {
+      logger.error('Paste', 'Error', `建立連線失敗：${connResult.error}`);
       continue;
     }
 
-    createdConnections.push(newConnection);
+    createdConnections.push(connResult.data);
 
     logger.log('Paste', 'Create', `已建立連線「${getPodDisplayName(canvasId, newSourcePodId)} → ${getPodDisplayName(canvasId, newTargetPodId)}」`);
   }

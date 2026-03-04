@@ -1,5 +1,6 @@
 import type { SubAgent, SubAgentNote } from '@/types'
 import { createNoteStore } from './createNoteStore'
+import type { TypedNoteStore } from './createNoteStore'
 import { WebSocketRequestEvents, WebSocketResponseEvents } from '@/services/websocket'
 import { createGroupCRUDActions } from './createGroupCRUDActions'
 import type {
@@ -109,4 +110,4 @@ const store = createNoteStore<SubAgent, SubAgentNote>({
   }
 })
 
-export const useSubAgentStore: (() => ReturnType<typeof store> & SubAgentStoreCustomActions) & { $id: string } = store as (() => ReturnType<typeof store> & SubAgentStoreCustomActions) & { $id: string }
+export const useSubAgentStore = store as TypedNoteStore<typeof store, SubAgentStoreCustomActions>

@@ -1,7 +1,4 @@
 import {WebSocketResponseEvents} from '../schemas';
-import type {
-    SubAgentMoveToGroupPayload,
-} from '../schemas';
 import {subAgentService} from '../services/subAgentService.js';
 import {subAgentNoteStore} from '../services/noteStores.js';
 import {podStore} from '../services/podStore.js';
@@ -74,7 +71,7 @@ const subAgentBindHandler = createBindHandler({
 
 export const handlePodBindSubAgent = subAgentBindHandler;
 
-const subAgentMoveToGroupHandler = createMoveToGroupHandler({
+export const handleSubAgentMoveToGroup = createMoveToGroupHandler({
     service: subAgentService,
     resourceName: 'SubAgent',
     idField: 'itemId',
@@ -83,11 +80,3 @@ const subAgentMoveToGroupHandler = createMoveToGroupHandler({
         moved: WebSocketResponseEvents.SUBAGENT_MOVED_TO_GROUP,
     },
 });
-
-export async function handleSubAgentMoveToGroup(
-    connectionId: string,
-    payload: SubAgentMoveToGroupPayload,
-    requestId: string
-): Promise<void> {
-    return subAgentMoveToGroupHandler(connectionId, payload, requestId);
-}

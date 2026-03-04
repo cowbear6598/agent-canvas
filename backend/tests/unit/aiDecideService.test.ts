@@ -107,7 +107,6 @@ describe('AiDecideService', () => {
     vi.spyOn(logger, 'log').mockImplementation(() => {});
     vi.spyOn(logger, 'error').mockImplementation(() => {});
 
-    // 設定 executeMcpChat 預設行為：回傳空 AsyncIterable
     vi.spyOn(claudeService, 'executeMcpChat').mockReturnValue(
       (async function* () {
         yield { type: 'result', subtype: 'success' };
@@ -388,11 +387,8 @@ describe('AiDecideService', () => {
       expect(claudeService.executeMcpChat).toHaveBeenCalledTimes(1);
       const callOptions = (claudeService.executeMcpChat as any).mock.calls[0][0];
 
-      // 驗證 prompt 包含必要資訊
       expect(callOptions.prompt).toContain('Target Pod');
       expect(callOptions.systemPrompt).toContain('Workflow 觸發判斷者');
-
-      // 驗證 OutputStyle 和 Command 被讀取
       expect(outputStyleService.getContent).toHaveBeenCalledWith('style-1');
       expect(commandService.getContent).toHaveBeenCalledWith('command-1');
     });

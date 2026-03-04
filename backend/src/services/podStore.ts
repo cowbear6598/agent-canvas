@@ -12,6 +12,11 @@ import {CanvasMapStore} from './shared/CanvasMapStore.js';
 
 type PodUpdates = Partial<Omit<Pod, 'schedule'>> & { schedule?: ScheduleConfig | null };
 
+interface ModifyPodOptions {
+    shouldPersist?: boolean;  // 預設 true
+    claudeSessionId?: string;
+}
+
 const ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 const VALID_STATUSES = ['idle', 'chatting', 'summarizing', 'error'] as const;
 
@@ -51,7 +56,7 @@ class PodStore extends CanvasMapStore<Pod> {
         });
     }
 
-    private modifyPod(canvasId: string, podId: string, updates: Partial<Pod>, persist = true, claudeSessionId?: string): Pod | undefined {
+    private modifyPod(canvasId: string, podId: string, updates: Partial<Pod>, options: ModifyPodOptions = {}): Pod | undefined {
         const pods = this.getOrCreateCanvasMap(canvasId);
         const pod = pods.get(podId);
         if (!pod) {
@@ -61,7 +66,8 @@ class PodStore extends CanvasMapStore<Pod> {
         const updatedPod = {...pod, ...updates};
         pods.set(podId, updatedPod);
 
-        if (persist) {
+        const { shouldPersist = true, claudeSessionId } = options;
+        if (shouldPersist) {
             this.persistPodAsync(canvasId, updatedPod, claudeSessionId);
         }
 
@@ -229,7 +235,7 @@ class PodStore extends CanvasMapStore<Pod> {
     }
 
     setClaudeSessionId(canvasId: string, id: string, sessionId: string): void {
-        this.modifyPod(canvasId, id, {claudeSessionId: sessionId}, true, sessionId);
+        this.modifyPod(canvasId, id, {claudeSessionId: sessionId});
     }
 
     resetClaudeSession(canvasId: string, podId: string): void {

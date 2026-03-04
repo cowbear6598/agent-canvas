@@ -20,6 +20,22 @@ type StoreWithNotes<TNote extends NoteWithIndexSignature = NoteWithIndexSignatur
   notes: TNote[]
 }
 
+export interface BoundNoteStores {
+  outputStyleStore: StoreWithNotes
+  skillStore: StoreWithNotes
+  repositoryStore: StoreWithNotes
+  subAgentStore: StoreWithNotes
+  commandStore: StoreWithNotes
+}
+
+export interface BoundNotesByType {
+  outputStyleNotes: CopiedOutputStyleNote[]
+  skillNotes: CopiedSkillNote[]
+  repositoryNotes: CopiedRepositoryNote[]
+  subAgentNotes: CopiedSubAgentNote[]
+  commandNotes: CopiedCommandNote[]
+}
+
 export function collectBoundNotesFromStore<T, TNote extends NoteWithIndexSignature>(
   podId: string,
   store: StoreWithNotes<TNote>,
@@ -30,86 +46,72 @@ export function collectBoundNotesFromStore<T, TNote extends NoteWithIndexSignatu
     .map(note => mapFn(note))
 }
 
-export function collectBoundNotes(
-  podId: string,
-  outputStyleNotes: CopiedOutputStyleNote[],
-  skillNotes: CopiedSkillNote[],
-  repositoryNotes: CopiedRepositoryNote[],
-  subAgentNotes: CopiedSubAgentNote[],
-  commandNotes: CopiedCommandNote[],
-  outputStyleStore: StoreWithNotes,
-  skillStore: StoreWithNotes,
-  repositoryStore: StoreWithNotes,
-  subAgentStore: StoreWithNotes,
-  commandStore: StoreWithNotes
-): void {
-  outputStyleNotes.push(...collectBoundNotesFromStore(
-    podId,
-    outputStyleStore,
-    (note) => ({
-      id: note.id as string,
-      outputStyleId: note.outputStyleId as string,
-      name: note.name as string,
-      x: note.x as number,
-      y: note.y as number,
-      boundToPodId: note.boundToPodId,
-      originalPosition: note.originalPosition as CopiedOutputStyleNote['originalPosition'],
-    })
-  ))
+function mapToOutputStyleNote(note: NoteWithIndexSignature): CopiedOutputStyleNote {
+  return {
+    id: note.id as string,
+    outputStyleId: note.outputStyleId as string,
+    name: note.name as string,
+    x: note.x as number,
+    y: note.y as number,
+    boundToPodId: note.boundToPodId,
+    originalPosition: note.originalPosition as CopiedOutputStyleNote['originalPosition'],
+  }
+}
 
-  skillNotes.push(...collectBoundNotesFromStore(
-    podId,
-    skillStore,
-    (note) => ({
-      id: note.id as string,
-      skillId: note.skillId as string,
-      name: note.name as string,
-      x: note.x as number,
-      y: note.y as number,
-      boundToPodId: note.boundToPodId,
-      originalPosition: note.originalPosition as CopiedSkillNote['originalPosition'],
-    })
-  ))
+function mapToSkillNote(note: NoteWithIndexSignature): CopiedSkillNote {
+  return {
+    id: note.id as string,
+    skillId: note.skillId as string,
+    name: note.name as string,
+    x: note.x as number,
+    y: note.y as number,
+    boundToPodId: note.boundToPodId,
+    originalPosition: note.originalPosition as CopiedSkillNote['originalPosition'],
+  }
+}
 
-  repositoryNotes.push(...collectBoundNotesFromStore(
-    podId,
-    repositoryStore,
-    (note) => ({
-      repositoryId: note.repositoryId as string,
-      name: note.name as string,
-      x: note.x as number,
-      y: note.y as number,
-      boundToOriginalPodId: note.boundToPodId,
-      originalPosition: note.originalPosition as CopiedRepositoryNote['originalPosition'],
-    })
-  ))
+function mapToRepositoryNote(note: NoteWithIndexSignature): CopiedRepositoryNote {
+  return {
+    repositoryId: note.repositoryId as string,
+    name: note.name as string,
+    x: note.x as number,
+    y: note.y as number,
+    boundToOriginalPodId: note.boundToPodId,
+    originalPosition: note.originalPosition as CopiedRepositoryNote['originalPosition'],
+  }
+}
 
-  subAgentNotes.push(...collectBoundNotesFromStore(
-    podId,
-    subAgentStore,
-    (note) => ({
-      id: note.id as string,
-      subAgentId: note.subAgentId as string,
-      name: note.name as string,
-      x: note.x as number,
-      y: note.y as number,
-      boundToPodId: note.boundToPodId,
-      originalPosition: note.originalPosition as CopiedSubAgentNote['originalPosition'],
-    })
-  ))
+function mapToSubAgentNote(note: NoteWithIndexSignature): CopiedSubAgentNote {
+  return {
+    id: note.id as string,
+    subAgentId: note.subAgentId as string,
+    name: note.name as string,
+    x: note.x as number,
+    y: note.y as number,
+    boundToPodId: note.boundToPodId,
+    originalPosition: note.originalPosition as CopiedSubAgentNote['originalPosition'],
+  }
+}
 
-  commandNotes.push(...collectBoundNotesFromStore(
-    podId,
-    commandStore,
-    (note) => ({
-      commandId: note.commandId as string,
-      name: note.name as string,
-      x: note.x as number,
-      y: note.y as number,
-      boundToOriginalPodId: note.boundToPodId,
-      originalPosition: note.originalPosition as CopiedCommandNote['originalPosition'],
-    })
-  ))
+function mapToCommandNote(note: NoteWithIndexSignature): CopiedCommandNote {
+  return {
+    commandId: note.commandId as string,
+    name: note.name as string,
+    x: note.x as number,
+    y: note.y as number,
+    boundToOriginalPodId: note.boundToPodId,
+    originalPosition: note.originalPosition as CopiedCommandNote['originalPosition'],
+  }
+}
+
+export function collectBoundNotes(podId: string, stores: BoundNoteStores): BoundNotesByType {
+  return {
+    outputStyleNotes: collectBoundNotesFromStore(podId, stores.outputStyleStore, mapToOutputStyleNote),
+    skillNotes: collectBoundNotesFromStore(podId, stores.skillStore, mapToSkillNote),
+    repositoryNotes: collectBoundNotesFromStore(podId, stores.repositoryStore, mapToRepositoryNote),
+    subAgentNotes: collectBoundNotesFromStore(podId, stores.subAgentStore, mapToSubAgentNote),
+    commandNotes: collectBoundNotesFromStore(podId, stores.commandStore, mapToCommandNote),
+  }
 }
 
 export function createUnboundNoteCollector<T>(
@@ -165,14 +167,18 @@ function collectNoteFromElement(
   }
 }
 
+export interface NoteStores {
+  outputStyleStore: StoreWithNotes
+  skillStore: StoreWithNotes
+  repositoryStore: StoreWithNotes
+  subAgentStore: StoreWithNotes
+  commandStore: StoreWithNotes
+}
+
 export function collectSelectedNotes(
   selectedElements: SelectableElement[],
   selectedPodIds: Set<string>,
-  outputStyleStore: StoreWithNotes,
-  skillStore: StoreWithNotes,
-  repositoryStore: StoreWithNotes,
-  subAgentStore: StoreWithNotes,
-  commandStore: StoreWithNotes
+  noteStores: NoteStores
 ): {
   outputStyleNotes: CopiedOutputStyleNote[]
   skillNotes: CopiedSkillNote[]
@@ -187,86 +193,51 @@ export function collectSelectedNotes(
   const copiedCommandNotes: CopiedCommandNote[] = []
 
   for (const podId of selectedPodIds) {
-    collectBoundNotes(podId, copiedOutputStyleNotes, copiedSkillNotes, copiedRepositoryNotes, copiedSubAgentNotes, copiedCommandNotes, outputStyleStore, skillStore, repositoryStore, subAgentStore, commandStore)
+    const boundNotes = collectBoundNotes(podId, noteStores)
+    copiedOutputStyleNotes.push(...boundNotes.outputStyleNotes)
+    copiedSkillNotes.push(...boundNotes.skillNotes)
+    copiedRepositoryNotes.push(...boundNotes.repositoryNotes)
+    copiedSubAgentNotes.push(...boundNotes.subAgentNotes)
+    copiedCommandNotes.push(...boundNotes.commandNotes)
   }
 
-  type OrigPos = { x: number; y: number } | null
-
-  interface NoteStoreConfig {
+  interface LocalNoteStoreConfig {
     key: string
     store: StoreWithNotes
     array: AnyNote[]
     mapFn: (note: NoteWithIndexSignature) => AnyNote
   }
 
-  const NOTE_STORE_CONFIGS: NoteStoreConfig[] = [
+  const NOTE_STORE_CONFIGS: LocalNoteStoreConfig[] = [
     {
       key: 'outputStyleNote',
-      store: outputStyleStore,
+      store: noteStores.outputStyleStore,
       array: copiedOutputStyleNotes as AnyNote[],
-      mapFn: (note): CopiedOutputStyleNote => ({
-        id: note.id as string,
-        outputStyleId: note.outputStyleId as string,
-        name: note.name as string,
-        x: note.x as number,
-        y: note.y as number,
-        boundToPodId: note.boundToPodId,
-        originalPosition: note.originalPosition as OrigPos,
-      }),
+      mapFn: mapToOutputStyleNote,
     },
     {
       key: 'skillNote',
-      store: skillStore,
+      store: noteStores.skillStore,
       array: copiedSkillNotes as AnyNote[],
-      mapFn: (note): CopiedSkillNote => ({
-        id: note.id as string,
-        skillId: note.skillId as string,
-        name: note.name as string,
-        x: note.x as number,
-        y: note.y as number,
-        boundToPodId: note.boundToPodId,
-        originalPosition: note.originalPosition as OrigPos,
-      }),
+      mapFn: mapToSkillNote,
     },
     {
       key: 'repositoryNote',
-      store: repositoryStore,
+      store: noteStores.repositoryStore,
       array: copiedRepositoryNotes as AnyNote[],
-      mapFn: (note): CopiedRepositoryNote => ({
-        repositoryId: note.repositoryId as string,
-        name: note.name as string,
-        x: note.x as number,
-        y: note.y as number,
-        boundToOriginalPodId: note.boundToPodId,
-        originalPosition: note.originalPosition as OrigPos,
-      }),
+      mapFn: mapToRepositoryNote,
     },
     {
       key: 'subAgentNote',
-      store: subAgentStore,
+      store: noteStores.subAgentStore,
       array: copiedSubAgentNotes as AnyNote[],
-      mapFn: (note): CopiedSubAgentNote => ({
-        id: note.id as string,
-        subAgentId: note.subAgentId as string,
-        name: note.name as string,
-        x: note.x as number,
-        y: note.y as number,
-        boundToPodId: note.boundToPodId,
-        originalPosition: note.originalPosition as OrigPos,
-      }),
+      mapFn: mapToSubAgentNote,
     },
     {
       key: 'commandNote',
-      store: commandStore,
+      store: noteStores.commandStore,
       array: copiedCommandNotes as AnyNote[],
-      mapFn: (note): CopiedCommandNote => ({
-        commandId: note.commandId as string,
-        name: note.name as string,
-        x: note.x as number,
-        y: note.y as number,
-        boundToOriginalPodId: note.boundToPodId,
-        originalPosition: note.originalPosition as OrigPos,
-      }),
+      mapFn: mapToCommandNote,
     },
   ]
 

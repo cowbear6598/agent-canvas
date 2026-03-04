@@ -124,7 +124,6 @@ describe('PendingTargetStore', () => {
             // 但因為有 rejection，hasRejection 為 true
             expect(result.hasRejection).toBe(true);
 
-            // 驗證 rejected sources
             expect(pendingTargetStore.hasAnyRejectedSource(targetPodId)).toBe(true);
         });
 
