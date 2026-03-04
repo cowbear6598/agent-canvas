@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2] - 2026-03-04
+
+### 修正
+- DisconnectOverlay 離線效果未正常觸發
+- Header 被其他使用者游標遮蓋（RemoteCursorLayer z-index 調整）
+- 複製貼上 Pod Name 應自動產生遞增編號，不應沿用原名稱
+
 ## [0.3.1] - 2026-03-04
 
 ### 修正
