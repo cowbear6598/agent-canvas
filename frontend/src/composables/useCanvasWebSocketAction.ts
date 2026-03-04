@@ -15,8 +15,10 @@ export interface CanvasWebSocketActionOptions {
   errorMessage: string
 }
 
+type CanvasPayload = { requestId: string; canvasId: string }
+
 export function useCanvasWebSocketAction(): {
-  executeAction: <TPayload extends { requestId: string }, TResponse>(
+  executeAction: <TPayload extends CanvasPayload, TResponse>(
     config: Omit<WebSocketRequestConfig<TPayload, TResponse>, 'payload'> & {
       payload: Omit<TPayload, 'requestId' | 'canvasId'>
     },
@@ -26,7 +28,7 @@ export function useCanvasWebSocketAction(): {
   const { wrapWebSocketRequest } = useWebSocketErrorHandler()
   const { showErrorToast } = useToast()
 
-  const executeAction = async <TPayload extends { requestId: string }, TResponse>(
+  const executeAction = async <TPayload extends CanvasPayload, TResponse>(
     config: Omit<WebSocketRequestConfig<TPayload, TResponse>, 'payload'> & {
       payload: Omit<TPayload, 'requestId' | 'canvasId'>
     },
@@ -37,16 +39,15 @@ export function useCanvasWebSocketAction(): {
       return { success: false, error: '沒有啟用的畫布' }
     }
 
+    const fullPayload = { ...config.payload, canvasId } as Omit<TPayload, 'requestId'>
+
     const response = await wrapWebSocketRequest(
       createWebSocketRequest<TPayload, TResponse>({
         requestEvent: config.requestEvent,
         responseEvent: config.responseEvent,
         timeout: config.timeout,
         matchResponse: config.matchResponse,
-        payload: {
-          ...config.payload,
-          canvasId,
-        } as unknown as Omit<TPayload, 'requestId'>
+        payload: fullPayload,
       })
     )
 

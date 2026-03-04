@@ -20,7 +20,6 @@ import { logger } from '../utils/logger.js';
 import { handleResultError } from '../utils/handlerHelpers.js';
 import {
   withValidatedGitRepository,
-  validateNotWorktree,
   createThrottledProgressEmitter,
 } from './repositoryGitHelpers.js';
 
@@ -141,15 +140,6 @@ export const handleRepositoryCheckoutBranch = withValidatedGitRepository<Reposit
   async (connectionId, payload, requestId, repositoryPath) => {
     const { repositoryId, branchName, force } = payload;
 
-    const isValid = validateNotWorktree(
-      connectionId,
-      repositoryId,
-      WebSocketResponseEvents.REPOSITORY_BRANCH_CHECKED_OUT,
-      requestId,
-      'Worktree 無法切換分支'
-    );
-    if (!isValid) return;
-
     const checkoutResult = await performCheckoutWithProgress({
       connectionId,
       requestId,
@@ -166,7 +156,8 @@ export const handleRepositoryCheckoutBranch = withValidatedGitRepository<Reposit
     await broadcastBranchChange(connectionId, requestId, repositoryId, branchName, checkoutResult.action);
 
     logger.log('Repository', 'Update', `已切換「${repositoryId}」的分支至「${branchName}」（${checkoutResult.action}）`);
-  }
+  },
+  { rejectWorktree: { errorMessage: 'Worktree 無法切換分支' } }
 );
 
 export const handleRepositoryDeleteBranch = withValidatedGitRepository<RepositoryDeleteBranchPayload>(

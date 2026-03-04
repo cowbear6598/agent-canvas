@@ -82,7 +82,7 @@ export async function deletePodWithCleanup(canvasId: string, podId: string, requ
 
     await syncRepositoryAfterDelete(pod.repositoryId);
 
-    const hasDeletedNotes = !!deletedNoteIdsPayload && Object.keys(deletedNoteIdsPayload).length > 0;
+    const hasDeletedNotes = deletedNoteIdsPayload !== undefined && Object.keys(deletedNoteIdsPayload).length > 0;
     const response: PodDeletedPayload = {
         requestId,
         canvasId,

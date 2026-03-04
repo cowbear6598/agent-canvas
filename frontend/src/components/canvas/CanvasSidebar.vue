@@ -1,8 +1,6 @@
 <template>
   <Transition
     name="sidebar"
-    @enter="onEnter"
-    @leave="onLeave"
   >
     <div
       v-if="open"
@@ -264,23 +262,6 @@ const handleSwitchCanvas = (canvasId: string): void => {
 
   canvasStore.switchCanvas(canvasId)
   emit('update:open', false)
-}
-
-const onEnter = (el: unknown): void => {
-  if (!(el instanceof HTMLElement)) return
-
-  el.style.transform = 'translateX(100%)'
-  el.style.transition = 'transform 0.2s ease-out'
-  requestAnimationFrame(() => {
-    el.style.transform = 'translateX(0)'
-  })
-}
-
-const onLeave = (el: unknown): void => {
-  if (!(el instanceof HTMLElement)) return
-
-  el.style.transition = 'transform 0.2s ease-out'
-  el.style.transform = 'translateX(100%)'
 }
 
 const handleClickOutside = (event: MouseEvent): void => {

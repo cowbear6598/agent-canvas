@@ -88,7 +88,7 @@ const store = createNoteStore<Skill, SkillNote>({
 
       return {
         success: false,
-        error: result?.error || '匯入失敗'
+        error: result?.error ?? '匯入失敗'
       }
     },
   }

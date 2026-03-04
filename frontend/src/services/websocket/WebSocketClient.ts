@@ -38,7 +38,7 @@ class WebSocketClient {
     const defaultUrl = isDev
       ? `http://${window.location.hostname}:${BACKEND_DEV_PORT}`
       : window.location.origin
-    this.wsUrl = url || import.meta.env.VITE_WS_URL || defaultUrl
+    this.wsUrl = url ?? import.meta.env.VITE_WS_URL ?? defaultUrl
 
     const wsProtocol = this.wsUrl.replace(/^http/, 'ws')
 
@@ -113,11 +113,7 @@ class WebSocketClient {
     this.disconnectReason.value = event.reason || `關閉代碼: ${event.code}`
 
     this.disconnectListeners.forEach(callback => {
-      try {
-        callback(this.disconnectReason.value ?? '')
-      } catch (error) {
-        logger.error('[WebSocket] 斷線監聽器錯誤:', error)
-      }
+      callback(this.disconnectReason.value ?? '')
     })
 
     this.startReconnect()

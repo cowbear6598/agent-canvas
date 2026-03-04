@@ -107,10 +107,10 @@ export function useSkillImport(): UseSkillImportReturn {
       const result = await skillStore.importSkill(file.name, fileData, file.size)
 
       if (!result.success) {
-        throw new Error(result.error || '未知錯誤')
+        throw new Error(result.error ?? '未知錯誤')
       }
 
-      const skillName = result.skill?.name || file.name
+      const skillName = result.skill?.name ?? file.name
       const toastMsg = result.isOverwrite ? '匯入成功（已覆蓋）' : '匯入成功'
       showSuccessToast('Skill', toastMsg, skillName)
     }

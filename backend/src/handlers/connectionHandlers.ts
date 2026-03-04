@@ -136,26 +136,26 @@ export const handleConnectionList = withCanvasId<ConnectionListPayload>(
 export const handleConnectionDelete = withCanvasId<ConnectionDeletePayload>(
   WebSocketResponseEvents.CONNECTION_DELETED,
   async (wsConnectionId: string, canvasId: string, payload: ConnectionDeletePayload, requestId: string): Promise<void> => {
-    const { connectionId: connId } = payload;
+    const { connectionId } = payload;
 
     const connection = findConnectionOrEmitError(
       wsConnectionId,
       canvasId,
-      connId,
+      connectionId,
       WebSocketResponseEvents.CONNECTION_DELETED,
       requestId,
     );
     if (!connection) return;
 
-    workflowStateService.handleConnectionDeletion(canvasId, connId);
+    workflowStateService.handleConnectionDeletion(canvasId, connectionId);
 
-    const deleted = connectionStore.delete(canvasId, connId);
+    const deleted = connectionStore.delete(canvasId, connectionId);
 
     if (!deleted) {
       emitError(
         wsConnectionId,
         WebSocketResponseEvents.CONNECTION_DELETED,
-        `無法從 store 刪除 connection: ${connId}`,
+        `無法從 store 刪除 connection: ${connectionId}`,
         requestId,
         undefined,
         'INTERNAL_ERROR'
@@ -167,24 +167,25 @@ export const handleConnectionDelete = withCanvasId<ConnectionDeletePayload>(
       requestId,
       canvasId,
       success: true,
-      connectionId: connId,
+      connectionId,
     };
 
     socketService.emitToCanvas(canvasId, WebSocketResponseEvents.CONNECTION_DELETED, response);
 
     logger.log('Connection', 'Delete', `已刪除連線「${getPodDisplayName(canvasId, connection.sourcePodId)} → ${getPodDisplayName(canvasId, connection.targetPodId)}」`);
+
   }
 );
 
 export const handleConnectionUpdate = withCanvasId<ConnectionUpdatePayload>(
   WebSocketResponseEvents.CONNECTION_UPDATED,
   async (wsConnectionId: string, canvasId: string, payload: ConnectionUpdatePayload, requestId: string): Promise<void> => {
-    const { connectionId: connId, triggerMode } = payload;
+    const { connectionId, triggerMode } = payload;
 
     const connection = findConnectionOrEmitError(
       wsConnectionId,
       canvasId,
-      connId,
+      connectionId,
       WebSocketResponseEvents.CONNECTION_UPDATED,
       requestId,
     );
@@ -195,13 +196,13 @@ export const handleConnectionUpdate = withCanvasId<ConnectionUpdatePayload>(
       updates.triggerMode = triggerMode;
     }
 
-    const updatedConnection = connectionStore.update(canvasId, connId, updates);
+    const updatedConnection = connectionStore.update(canvasId, connectionId, updates);
 
     if (!updatedConnection) {
       emitError(
         wsConnectionId,
         WebSocketResponseEvents.CONNECTION_UPDATED,
-        `無法更新 connection: ${connId}`,
+        `無法更新 connection: ${connectionId}`,
         requestId,
         undefined,
         'INTERNAL_ERROR'

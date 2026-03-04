@@ -5,6 +5,8 @@ import { useToast } from '@/composables/useToast'
 import type { WebSocketRequestEvents, WebSocketResponseEvents } from '@/types/websocket'
 import type { ToastCategory } from '@/composables/useToast'
 
+// TItem 可能包含比 { id, name } 更多的欄位，因此需要 as unknown as TItem 斷言。
+// 後端回傳的 newItem 結構已涵蓋所有必要欄位，類型上的差異是泛型設計的限制。
 export function defaultReplaceItemInList<TItem extends { id: string }>(
   items: TItem[],
   itemId: string,

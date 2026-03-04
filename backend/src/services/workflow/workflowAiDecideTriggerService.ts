@@ -17,7 +17,7 @@ import { workflowStateService } from './workflowStateService.js';
 import { pendingTargetStore } from '../pendingTargetStore.js';
 import { workflowPipeline } from './workflowPipeline.js';
 import { workflowMultiInputService } from './workflowMultiInputService.js';
-import { forEachMultiInputGroupConnection, formatConnLog, buildQueuedPayload, isAutoTriggerable, createMultiInputCompletionHandlers, emitQueueProcessed } from './workflowHelpers.js';
+import { forEachMultiInputGroupConnection, formatConnectionLog, buildQueuedPayload, isAutoTriggerable, createMultiInputCompletionHandlers, emitQueueProcessed } from './workflowHelpers.js';
 import { logger } from '../../utils/logger.js';
 import type { LogAction } from '../../utils/logger.js';
 import { getErrorMessage } from '../../utils/errorHelpers.js';
@@ -127,7 +127,6 @@ class WorkflowAiDecideTriggerService extends LazyInitializable<AiDecideTriggerDe
   }
 
   private setConnectionsToDeciding(canvasId: string, connections: Connection[]): void {
-    this.ensureInitialized();
     for (const connection of connections) {
       this.deps.connectionStore.updateDecideStatus(canvasId, connection.id, 'pending', null);
       this.deps.connectionStore.updateConnectionStatus(canvasId, connection.id, 'ai-deciding');
@@ -184,10 +183,9 @@ class WorkflowAiDecideTriggerService extends LazyInitializable<AiDecideTriggerDe
     message: string,
     suffix?: string
   ): void {
-    this.ensureInitialized();
     const sourcePod = this.deps.podStore.getById(canvasId, sourcePodId);
     const targetPod = this.deps.podStore.getById(canvasId, connection.targetPodId);
-    const connLog = formatConnLog({connId: connection.id, sourceName: sourcePod?.name, sourcePodId, targetName: targetPod?.name, targetPodId: connection.targetPodId});
+    const connLog = formatConnectionLog({connectionId: connection.id, sourceName: sourcePod?.name, sourcePodId, targetName: targetPod?.name, targetPodId: connection.targetPodId});
     const fullMessage = suffix ? `${message}${connLog}：${suffix}` : `${message}${connLog}`;
     logger[level]('Workflow', action, fullMessage);
   }
@@ -198,7 +196,6 @@ class WorkflowAiDecideTriggerService extends LazyInitializable<AiDecideTriggerDe
     connection: Connection,
     decideResult: TriggerDecideResult
   ): void {
-    this.ensureInitialized();
     const errorMessage = decideResult.reason ?? '未知錯誤';
     this.deps.connectionStore.updateDecideStatus(canvasId, connection.id, 'error', errorMessage);
     this.deps.connectionStore.updateConnectionStatus(canvasId, connection.id, 'ai-error');
@@ -218,7 +215,6 @@ class WorkflowAiDecideTriggerService extends LazyInitializable<AiDecideTriggerDe
     connection: Connection,
     decideResult: TriggerDecideResult
   ): void {
-    this.ensureInitialized();
     this.deps.connectionStore.updateDecideStatus(canvasId, connection.id, 'approved', decideResult.reason);
     this.deps.connectionStore.updateConnectionStatus(canvasId, connection.id, 'ai-approved');
     this.deps.eventEmitter.emitAiDecideResult({
@@ -259,7 +255,6 @@ class WorkflowAiDecideTriggerService extends LazyInitializable<AiDecideTriggerDe
     sourcePodId: string,
     reason: string
   ): void {
-    this.ensureInitialized();
     this.deps.eventEmitter.emitAiDecideResult({
       canvasId,
       connectionId: connection.id,
@@ -272,13 +267,11 @@ class WorkflowAiDecideTriggerService extends LazyInitializable<AiDecideTriggerDe
   }
 
   private shouldDeferToMultiInput(canvasId: string, targetPodId: string): boolean {
-    this.ensureInitialized();
     const { isMultiInput } = this.deps.stateService.checkMultiInputScenario(canvasId, targetPodId);
     return isMultiInput && this.deps.pendingTargetStore.hasPendingTarget(targetPodId);
   }
 
   private async handleNonMultiInputRejection(canvasId: string, targetPodId: string): Promise<void> {
-    this.ensureInitialized();
     if (this.isLastRejectionTriggersGroupCancel(canvasId, targetPodId)) {
       await this.deps.autoClearService.onGroupNotTriggered(canvasId, targetPodId);
     }
@@ -290,7 +283,6 @@ class WorkflowAiDecideTriggerService extends LazyInitializable<AiDecideTriggerDe
     connection: Connection,
     decideResult: TriggerDecideResult
   ): Promise<void> {
-    this.ensureInitialized();
     const reason = decideResult.reason ?? '';
     this.deps.connectionStore.updateDecideStatus(canvasId, connection.id, 'rejected', decideResult.reason);
     this.deps.connectionStore.updateConnectionStatus(canvasId, connection.id, 'ai-rejected');
@@ -305,7 +297,6 @@ class WorkflowAiDecideTriggerService extends LazyInitializable<AiDecideTriggerDe
   }
 
   private isLastRejectionTriggersGroupCancel(canvasId: string, targetPodId: string): boolean {
-    this.ensureInitialized();
     const incomingConnections = this.deps.connectionStore.findByTargetPodId(canvasId, targetPodId);
     const autoAiIncoming = incomingConnections.filter((c) => isAutoTriggerable(c.triggerMode));
     return autoAiIncoming.length === 1;
@@ -317,7 +308,6 @@ class WorkflowAiDecideTriggerService extends LazyInitializable<AiDecideTriggerDe
     connection: Connection,
     reason: string
   ): Promise<void> {
-    this.ensureInitialized();
     const { allSourcesResponded } = this.deps.pendingTargetStore.recordSourceRejection(connection.targetPodId, sourcePodId, reason);
     this.deps.stateService.emitPendingStatus(canvasId, connection.targetPodId);
 

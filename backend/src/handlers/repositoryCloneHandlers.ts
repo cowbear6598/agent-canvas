@@ -23,6 +23,10 @@ import {
 } from './repositoryGitHelpers.js';
 
 const MAX_REPO_URL_LENGTH = 500;
+const CLONE_PROGRESS_START_OFFSET = 10;
+const CLONE_PROGRESS_SCALE_FACTOR = 0.8;
+const CLONE_PROGRESS_NEAR_COMPLETE = 95;
+const CLONE_PROGRESS_COMPLETE = 100;
 
 function validateRepoUrl(repoUrl: string): Result<void> {
   if (repoUrl.length > MAX_REPO_URL_LENGTH) {
@@ -55,7 +59,7 @@ async function executeAndValidateClone(
   const cloneResult = await gitService.clone(repoUrl, targetPath, {
     branch,
     onProgress: (progressData) => {
-      const mappedProgress = Math.floor(10 + (progressData.progress * 0.8));
+      const mappedProgress = Math.floor(CLONE_PROGRESS_START_OFFSET + (progressData.progress * CLONE_PROGRESS_SCALE_FACTOR));
       const stageMessage = getGitStageMessage(progressData.stage);
       throttledEmit(mappedProgress, stageMessage);
     },
@@ -124,9 +128,9 @@ export async function handleRepositoryGitClone(
     return;
   }
 
-  emitCloneProgress(95, '完成中...');
+  emitCloneProgress(CLONE_PROGRESS_NEAR_COMPLETE, '完成中...');
   await registerCloneMetadata(repoName);
-  emitCloneProgress(100, 'Clone 完成!');
+  emitCloneProgress(CLONE_PROGRESS_COMPLETE, 'Clone 完成!');
 
   const response: RepositoryGitCloneResultPayload = {
     requestId,

@@ -14,7 +14,7 @@ import {workflowExecutionService} from '../services/workflow/index.js';
 import {autoClearService} from '../services/autoClear/index.js';
 import {emitError, emitSuccess} from '../utils/websocketResponse.js';
 import {logger} from '../utils/logger.js';
-import {fireAndForget} from '../utils/operationHelpers.js';
+import {createPostChatCompleteCallback} from '../utils/operationHelpers.js';
 import {validatePod, withCanvasId} from '../utils/handlerHelpers.js';
 import {executeStreamingChat} from '../services/claude/streamingChatExecutor.js';
 
@@ -51,18 +51,11 @@ function validatePodChatReady(
     return true;
 }
 
-async function onChatComplete(canvasId: string, podId: string): Promise<void> {
-    fireAndForget(
-        autoClearService.onPodComplete(canvasId, podId),
-        'AutoClear',
-        `檢查 Pod「${podId}」自動清除失敗`
-    );
-    fireAndForget(
-        workflowExecutionService.checkAndTriggerWorkflows(canvasId, podId),
-        'Workflow',
-        `檢查 Pod「${podId}」自動觸發 Workflow 失敗`
-    );
-}
+const onChatComplete = createPostChatCompleteCallback(
+    (canvasId, podId) => autoClearService.onPodComplete(canvasId, podId),
+    (canvasId, podId) => workflowExecutionService.checkAndTriggerWorkflows(canvasId, podId),
+    'AutoClear'
+);
 
 async function onChatAborted(canvasId: string, podId: string, messageId: string, podName: string): Promise<void> {
     const abortedPayload: PodChatAbortedPayload = {canvasId, podId, messageId};
@@ -103,7 +96,7 @@ export const handleChatSend = withCanvasId<ChatSendPayload>(
         await executeStreamingChat(
             {canvasId, podId, message, abortable: true},
             {
-                onComplete: (completedCanvasId, completedPodId) => onChatComplete(completedCanvasId, completedPodId),
+                onComplete: onChatComplete,
                 onAborted: (abortedCanvasId, abortedPodId, messageId) => onChatAborted(abortedCanvasId, abortedPodId, messageId, podName),
             }
         );

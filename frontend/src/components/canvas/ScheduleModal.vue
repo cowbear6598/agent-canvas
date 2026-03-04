@@ -56,7 +56,7 @@ const weekdayOptions = [
   { value: 6, label: '週日' },
 ]
 
-const isEditMode = computed(() => !!props.existingSchedule)
+const isEditMode = computed(() => props.existingSchedule !== undefined && props.existingSchedule !== null)
 
 watch(() => props.open, (newOpen) => {
   if (newOpen && props.existingSchedule) {

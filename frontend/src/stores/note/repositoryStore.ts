@@ -242,7 +242,7 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
 
     isWorktree(this: NoteStoreContext<Repository>, repositoryId: string): boolean {
       const repository = this.availableItems.find((item: Repository) => item.id === repositoryId)
-      return !!repository?.parentRepoId
+      return repository?.parentRepoId !== undefined && repository?.parentRepoId !== null && repository?.parentRepoId !== ''
     },
   }
 }

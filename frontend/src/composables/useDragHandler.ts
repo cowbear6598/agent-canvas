@@ -2,8 +2,8 @@ import { ref, onUnmounted } from 'vue'
 import type { Ref } from 'vue'
 
 interface UseDragHandlerOptions {
-    onMove: (e: MouseEvent) => void
-    onEnd: (e: MouseEvent) => void
+    onMove: (mouseEvent: MouseEvent) => void
+    onEnd: (mouseEvent: MouseEvent) => void
     button?: 0 | 1 | 2
 }
 
@@ -30,8 +30,8 @@ export function useDragHandler(options: UseDragHandlerOptions): UseDragHandlerRe
         }
     }
 
-    const startDrag = (e: MouseEvent): void => {
-        if (e.button !== triggerButton) return
+    const startDrag = (mouseEvent: MouseEvent): void => {
+        if (mouseEvent.button !== triggerButton) return
 
         cleanup()
         isDragging.value = true

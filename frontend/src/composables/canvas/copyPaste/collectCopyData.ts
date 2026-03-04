@@ -46,63 +46,39 @@ export function collectBoundNotesFromStore<T, TNote extends NoteWithIndexSignatu
     .map(note => mapFn(note))
 }
 
-function mapToOutputStyleNote(note: NoteWithIndexSignature): CopiedOutputStyleNote {
+type NoteBaseFields = { name: string; x: number; y: number; originalPosition: { x: number; y: number } | null }
+
+function extractNoteBaseFields(note: NoteWithIndexSignature): NoteBaseFields {
   return {
-    id: note.id as string,
-    outputStyleId: note.outputStyleId as string,
     name: note.name as string,
     x: note.x as number,
     y: note.y as number,
-    boundToPodId: note.boundToPodId,
-    originalPosition: note.originalPosition as CopiedOutputStyleNote['originalPosition'],
+    originalPosition: note.originalPosition as NoteBaseFields['originalPosition'],
   }
 }
 
-function mapToSkillNote(note: NoteWithIndexSignature): CopiedSkillNote {
-  return {
+function createBoundNoteMapper<T extends NoteBaseFields & { boundToPodId: string | null }>(idField: string): (note: NoteWithIndexSignature) => T {
+  return (note: NoteWithIndexSignature): T => ({
+    ...extractNoteBaseFields(note),
     id: note.id as string,
-    skillId: note.skillId as string,
-    name: note.name as string,
-    x: note.x as number,
-    y: note.y as number,
+    [idField]: note[idField] as string,
     boundToPodId: note.boundToPodId,
-    originalPosition: note.originalPosition as CopiedSkillNote['originalPosition'],
-  }
+  }) as unknown as T
 }
 
-function mapToRepositoryNote(note: NoteWithIndexSignature): CopiedRepositoryNote {
-  return {
-    repositoryId: note.repositoryId as string,
-    name: note.name as string,
-    x: note.x as number,
-    y: note.y as number,
+function createOriginalBoundNoteMapper<T extends NoteBaseFields & { boundToOriginalPodId: string | null }>(idField: string): (note: NoteWithIndexSignature) => T {
+  return (note: NoteWithIndexSignature): T => ({
+    ...extractNoteBaseFields(note),
+    [idField]: note[idField] as string,
     boundToOriginalPodId: note.boundToPodId,
-    originalPosition: note.originalPosition as CopiedRepositoryNote['originalPosition'],
-  }
+  }) as unknown as T
 }
 
-function mapToSubAgentNote(note: NoteWithIndexSignature): CopiedSubAgentNote {
-  return {
-    id: note.id as string,
-    subAgentId: note.subAgentId as string,
-    name: note.name as string,
-    x: note.x as number,
-    y: note.y as number,
-    boundToPodId: note.boundToPodId,
-    originalPosition: note.originalPosition as CopiedSubAgentNote['originalPosition'],
-  }
-}
-
-function mapToCommandNote(note: NoteWithIndexSignature): CopiedCommandNote {
-  return {
-    commandId: note.commandId as string,
-    name: note.name as string,
-    x: note.x as number,
-    y: note.y as number,
-    boundToOriginalPodId: note.boundToPodId,
-    originalPosition: note.originalPosition as CopiedCommandNote['originalPosition'],
-  }
-}
+const mapToOutputStyleNote = createBoundNoteMapper<CopiedOutputStyleNote>('outputStyleId')
+const mapToSkillNote = createBoundNoteMapper<CopiedSkillNote>('skillId')
+const mapToSubAgentNote = createBoundNoteMapper<CopiedSubAgentNote>('subAgentId')
+const mapToRepositoryNote = createOriginalBoundNoteMapper<CopiedRepositoryNote>('repositoryId')
+const mapToCommandNote = createOriginalBoundNoteMapper<CopiedCommandNote>('commandId')
 
 export function collectBoundNotes(podId: string, stores: BoundNoteStores): BoundNotesByType {
   return {
@@ -175,6 +151,40 @@ export interface NoteStores {
   commandStore: StoreWithNotes
 }
 
+interface NoteStoreConfig {
+  key: string
+  getStore: (noteStores: NoteStores) => StoreWithNotes
+  mapFn: (note: NoteWithIndexSignature) => AnyNote
+}
+
+const NOTE_STORE_CONFIGS: NoteStoreConfig[] = [
+  {
+    key: 'outputStyleNote',
+    getStore: (noteStores) => noteStores.outputStyleStore,
+    mapFn: mapToOutputStyleNote,
+  },
+  {
+    key: 'skillNote',
+    getStore: (noteStores) => noteStores.skillStore,
+    mapFn: mapToSkillNote,
+  },
+  {
+    key: 'repositoryNote',
+    getStore: (noteStores) => noteStores.repositoryStore,
+    mapFn: mapToRepositoryNote,
+  },
+  {
+    key: 'subAgentNote',
+    getStore: (noteStores) => noteStores.subAgentStore,
+    mapFn: mapToSubAgentNote,
+  },
+  {
+    key: 'commandNote',
+    getStore: (noteStores) => noteStores.commandStore,
+    mapFn: mapToCommandNote,
+  },
+]
+
 export function collectSelectedNotes(
   selectedElements: SelectableElement[],
   selectedPodIds: Set<string>,
@@ -201,52 +211,20 @@ export function collectSelectedNotes(
     copiedCommandNotes.push(...boundNotes.commandNotes)
   }
 
-  interface LocalNoteStoreConfig {
-    key: string
-    store: StoreWithNotes
-    array: AnyNote[]
-    mapFn: (note: NoteWithIndexSignature) => AnyNote
+  const arrays: Record<string, AnyNote[]> = {
+    outputStyleNote: copiedOutputStyleNotes as AnyNote[],
+    skillNote: copiedSkillNotes as AnyNote[],
+    repositoryNote: copiedRepositoryNotes as AnyNote[],
+    subAgentNote: copiedSubAgentNotes as AnyNote[],
+    commandNote: copiedCommandNotes as AnyNote[],
   }
-
-  const NOTE_STORE_CONFIGS: LocalNoteStoreConfig[] = [
-    {
-      key: 'outputStyleNote',
-      store: noteStores.outputStyleStore,
-      array: copiedOutputStyleNotes as AnyNote[],
-      mapFn: mapToOutputStyleNote,
-    },
-    {
-      key: 'skillNote',
-      store: noteStores.skillStore,
-      array: copiedSkillNotes as AnyNote[],
-      mapFn: mapToSkillNote,
-    },
-    {
-      key: 'repositoryNote',
-      store: noteStores.repositoryStore,
-      array: copiedRepositoryNotes as AnyNote[],
-      mapFn: mapToRepositoryNote,
-    },
-    {
-      key: 'subAgentNote',
-      store: noteStores.subAgentStore,
-      array: copiedSubAgentNotes as AnyNote[],
-      mapFn: mapToSubAgentNote,
-    },
-    {
-      key: 'commandNote',
-      store: noteStores.commandStore,
-      array: copiedCommandNotes as AnyNote[],
-      mapFn: mapToCommandNote,
-    },
-  ]
 
   const noteCollectorMap = Object.fromEntries(
     NOTE_STORE_CONFIGS.map(config => [
       config.key,
       {
-        collector: createUnboundNoteCollector<AnyNote>(config.store, config.mapFn),
-        array: config.array,
+        collector: createUnboundNoteCollector<AnyNote>(config.getStore(noteStores), config.mapFn),
+        array: arrays[config.key],
       },
     ])
   ) as Record<string, { collector: (id: string) => AnyNote | null; array: AnyNote[] }>

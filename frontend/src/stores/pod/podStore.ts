@@ -154,7 +154,7 @@ export const usePodStore = defineStore('pod', {
                 x: pod.x,
                 y: pod.y,
                 rotation: pod.rotation,
-                output: pod.output || [],
+                output: pod.output ?? [],
             }
         },
 
@@ -163,7 +163,7 @@ export const usePodStore = defineStore('pod', {
             const { showSuccessToast } = useToast()
 
             const pod = this.findPodById(id)
-            const podName = pod?.name || 'Pod'
+            const podName = pod?.name ?? 'Pod'
 
             const result = await executeAction<PodDeletePayload, PodDeletedPayload>(
                 {

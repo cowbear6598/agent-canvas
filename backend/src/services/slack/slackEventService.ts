@@ -23,6 +23,17 @@ interface AppMentionEvent {
 const BUSY_STATUSES = new Set(['chatting', 'summarizing'] as const);
 const MAX_WORKFLOW_CHAIN_SIZE = 50;
 
+const INJECTION_PREFIX_PATTERN = /(^|\s)(System:|Human:|Assistant:)/g;
+
+function escapeSlackInput(input: string): string {
+    return input
+        .replace(INJECTION_PREFIX_PATTERN, '$1\\$2')
+        .replace(/\[/g, '\\[')
+        .replace(/\]/g, '\\]')
+        .replace(/</g, '＜')
+        .replace(/>/g, '＞');
+}
+
 class SlackEventService {
     private static readonly BUSY_REPLY_COOLDOWN_MS = 30_000;
     private busyReplyCooldowns = new Map<string, number>();
@@ -89,8 +100,8 @@ class SlackEventService {
         const channelPods = allBoundPods.filter(({pod}) => pod.slackBinding?.slackChannelId === channelId);
 
         return channelPods.some(({canvasId, pod}) =>
-            BUSY_STATUSES.has(pod.status as 'chatting' | 'summarizing') || this.isWorkflowChainBusy(canvasId, pod.id)
-        );
+            BUSY_STATUSES.has(pod.status as 'chatting' | 'summarizing') || this.isWorkflowChainBusy(canvasId, pod.id));
+
     }
 
     private shouldSendBusyReply(channelId: string): boolean {
@@ -156,7 +167,7 @@ class SlackEventService {
     private isWorkflowChainBusy(canvasId: string, podId: string): boolean {
         return this.traverseWorkflowChain(canvasId, podId, (currentId) => {
             const pod = podStore.getById(canvasId, currentId);
-            return !!pod && BUSY_STATUSES.has(pod.status as 'chatting' | 'summarizing');
+            return pod !== undefined && BUSY_STATUSES.has(pod.status as 'chatting' | 'summarizing');
         });
     }
 
@@ -170,8 +181,8 @@ class SlackEventService {
 
         const podName = currentPod?.name ?? podId;
 
-        const escapedUserName = message.userName.replace(/\[/g, '\\[').replace(/\]/g, '\\]');
-        const escapedText = message.text.replace(/\[/g, '\\[').replace(/\]/g, '\\]');
+        const escapedUserName = escapeSlackInput(message.userName);
+        const escapedText = escapeSlackInput(message.text);
         const formattedText = `[Slack: @${escapedUserName}] ${escapedText}`;
 
         podStore.setStatus(canvasId, podId, 'chatting');

@@ -3,7 +3,7 @@ import {Result, ok, err} from '../../types';
 import {config} from '../../config';
 import {logger} from '../../utils/logger.js';
 import {isPathWithinDirectory} from '../../utils/pathValidator.js';
-import {gitOperation, gitOperationWithPath, resultOrDefault, getGitStageMessage} from '../../utils/operationHelpers.js';
+import {gitOperation, gitOperationWithPath, resultOrDefault, getGitStageMessage, maskTokenInError} from '../../utils/operationHelpers.js';
 import path from 'path';
 import fs from 'fs/promises';
 
@@ -49,19 +49,7 @@ function isValidBranchName(branchName: string): boolean {
 }
 
 function parseGitErrorMessage(error: unknown): string {
-    const message = error instanceof Error ? error.message : String(error);
-    return maskTokenInError(message);
-}
-
-function extractRawErrorMessage(error: unknown): string {
-    if (typeof error === 'string') return error;
-    if (error instanceof Error) return error.message;
-    return String(error);
-}
-
-function maskTokenInError(error: unknown): string {
-    const message = extractRawErrorMessage(error);
-    return message.replace(/https?:\/\/[^@\s]*@/g, 'https://***@');
+    return maskTokenInError(error);
 }
 
 function getPullLatestError(errorMessage: string): string {
@@ -371,7 +359,7 @@ class GitService {
         const result = await gitOperationWithPath(workspacePath, async (git) => {
             const remotes = await git.getRemotes();
 
-            if (remotes.length === 0 || !remotes.some(r => r.name === 'origin')) {
+            if (remotes.length === 0 || !remotes.some(remote => remote.name === 'origin')) {
                 return false;
             }
 

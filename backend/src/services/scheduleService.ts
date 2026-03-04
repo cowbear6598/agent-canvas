@@ -9,7 +9,7 @@ import { socketService } from './socketService.js';
 import { workflowExecutionService } from './workflow';
 import { autoClearService } from './autoClear';
 import { logger } from '../utils/logger.js';
-import { fireAndForget } from '../utils/operationHelpers.js';
+import { fireAndForget, createPostChatCompleteCallback } from '../utils/operationHelpers.js';
 import { executeStreamingChat } from './claude/streamingChatExecutor.js';
 
 const TICK_INTERVAL_MS = 1000;
@@ -20,6 +20,10 @@ const SCHEDULE_TRIGGER_SECOND = 0;
 
 type ShouldFireChecker = (schedule: ScheduleConfig, now: Date) => boolean;
 
+function isFirstTrigger(lastTriggeredAt: ScheduleConfig['lastTriggeredAt']): boolean {
+  return !lastTriggeredAt;
+}
+
 function isScheduledTime(schedule: ScheduleConfig, now: Date): boolean {
   return now.getHours() === schedule.hour
     && now.getMinutes() === schedule.minute
@@ -27,34 +31,28 @@ function isScheduledTime(schedule: ScheduleConfig, now: Date): boolean {
 }
 
 function isFirstTriggerOrNewDay(schedule: ScheduleConfig, now: Date): boolean {
-  if (!schedule.lastTriggeredAt) {
+  if (isFirstTrigger(schedule.lastTriggeredAt)) {
     return true;
   }
-  return !isSameDay(new Date(schedule.lastTriggeredAt), now);
+  return !isSameDay(new Date(schedule.lastTriggeredAt!), now);
 }
 
 const shouldFireCheckers: Record<ScheduleConfig['frequency'], ShouldFireChecker> = {
   'every-second': (schedule, now) => {
-    if (!schedule.lastTriggeredAt) {
-      return true;
-    }
-    const elapsedSeconds = (now.getTime() - schedule.lastTriggeredAt.getTime()) / MS_PER_SECOND;
+    if (isFirstTrigger(schedule.lastTriggeredAt)) return true;
+    const elapsedSeconds = (now.getTime() - schedule.lastTriggeredAt!.getTime()) / MS_PER_SECOND;
     return elapsedSeconds >= schedule.second;
   },
 
   'every-x-minute': (schedule, now) => {
-    if (!schedule.lastTriggeredAt) {
-      return true;
-    }
-    const elapsedMinutes = (now.getTime() - schedule.lastTriggeredAt.getTime()) / MS_PER_MINUTE;
+    if (isFirstTrigger(schedule.lastTriggeredAt)) return true;
+    const elapsedMinutes = (now.getTime() - schedule.lastTriggeredAt!.getTime()) / MS_PER_MINUTE;
     return elapsedMinutes >= schedule.intervalMinute;
   },
 
   'every-x-hour': (schedule, now) => {
-    if (!schedule.lastTriggeredAt) {
-      return true;
-    }
-    const elapsedHours = (now.getTime() - schedule.lastTriggeredAt.getTime()) / MS_PER_HOUR;
+    if (isFirstTrigger(schedule.lastTriggeredAt)) return true;
+    const elapsedHours = (now.getTime() - schedule.lastTriggeredAt!.getTime()) / MS_PER_HOUR;
     return elapsedHours >= schedule.intervalHour;
   },
 
@@ -151,22 +149,15 @@ class ScheduleService {
 
     await messageStore.addMessage(canvasId, podId, 'user', '');
 
+    const onScheduleChatComplete = createPostChatCompleteCallback(
+      (completedCanvasId, completedPodId) => autoClearService.onPodComplete(completedCanvasId, completedPodId),
+      (completedCanvasId, completedPodId) => workflowExecutionService.checkAndTriggerWorkflows(completedCanvasId, completedPodId),
+      'Schedule'
+    );
+
     await executeStreamingChat(
       { canvasId, podId, message: '', abortable: false },
-      {
-        onComplete: async (canvasId, podId) => {
-          fireAndForget(
-            autoClearService.onPodComplete(canvasId, podId),
-            'Schedule',
-            'autoClear 處理失敗'
-          );
-          fireAndForget(
-            workflowExecutionService.checkAndTriggerWorkflows(canvasId, podId),
-            'Schedule',
-            'workflow 觸發失敗'
-          );
-        },
-      }
+      { onComplete: onScheduleChatComplete }
     );
   }
 }

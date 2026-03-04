@@ -594,7 +594,7 @@ describe('useUnifiedEventListeners', () => {
       })
 
       expect(repositoryStore.availableItems.length).toBe(0)
-      expect(consoleErrorSpy).toHaveBeenCalledWith('[Security] 無效的 repository.id:', '')
+      expect(consoleErrorSpy).toHaveBeenCalledWith('[Security] 無效的 repository.id 格式')
       consoleErrorSpy.mockRestore()
     })
 
@@ -611,7 +611,7 @@ describe('useUnifiedEventListeners', () => {
       })
 
       expect(repositoryStore.availableItems.length).toBe(0)
-      expect(consoleErrorSpy).toHaveBeenCalledWith('[Security] 無效的 repository.name:', '')
+      expect(consoleErrorSpy).toHaveBeenCalledWith('[Security] 無效的 repository.name 格式')
       consoleErrorSpy.mockRestore()
     })
 

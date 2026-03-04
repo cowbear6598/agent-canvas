@@ -11,6 +11,7 @@ import {createNoteHandlers} from './factories/createNoteHandlers.js';
 import {createBindHandler} from './factories/createBindHandlers.js';
 import {createListHandler, createDeleteHandler} from './factories/createResourceHandlers.js';
 import {logger} from '../utils/logger.js';
+import {WebSocketError} from '../middleware/wsErrorHandler.js';
 
 export const skillNoteHandlers = createNoteHandlers({
     noteStore: skillNoteStore,
@@ -65,7 +66,13 @@ export async function handleSkillImport(
 ): Promise<void> {
     const {fileName, fileData, fileSize} = payload;
 
-    const result = await skillService.import(fileName, fileData, fileSize);
+    let result: Awaited<ReturnType<typeof skillService.import>>;
+    try {
+        result = await skillService.import(fileName, fileData, fileSize);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : '匯入 Skill 失敗';
+        throw new WebSocketError('SKILL_IMPORT_ERROR', message, requestId);
+    }
 
     logger.log('Skill', 'Create', `匯入 Skill - connectionId: ${connectionId}, 檔案名稱: ${fileName}, 檔案大小: ${fileSize}, skillId: ${result.skill.id}, 是否覆寫: ${result.isOverwrite}`);
 

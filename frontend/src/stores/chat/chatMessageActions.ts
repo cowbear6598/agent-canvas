@@ -49,7 +49,7 @@ function appendUserOutputToPod(pod: Pod, content: string): void {
 export function createAssistantMessageShape(messageId: string, content: string, isPartial: boolean, delta?: string): Partial<Message> {
     const firstSubMessage: SubMessage = {
         id: `${messageId}-sub-0`,
-        content: delta || content,
+        content: delta ?? content,
         isPartial
     }
     return {
@@ -86,11 +86,18 @@ export function createMessageActions(store: ChatStoreInstance): ChatMessageActio
     const toolTrackingActions = createToolTrackingActions(store)
     const messageCompletionActions = createMessageCompletionActions(store, (podId, isTyping) => setTyping(store, podId, isTyping))
 
-    const addUserMessage = async (podId: string, content: string): Promise<void> => {
+    function appendUserMessageToStore(podId: string, message: Message): void {
         const podStore = usePodStore()
-        const pod = podStore.pods.find(pod => pod.id === podId)
+        const pod = podStore.pods.find(p => p.id === podId)
         if (!pod) return
 
+        const messages = getMessages(store, podId)
+        store.messagesByPodId.set(podId, [...messages, message])
+
+        appendUserOutputToPod(pod, message.content)
+    }
+
+    const addUserMessage = async (podId: string, content: string): Promise<void> => {
         const userMessage: Message = {
             id: generateRequestId(),
             role: 'user',
@@ -98,17 +105,10 @@ export function createMessageActions(store: ChatStoreInstance): ChatMessageActio
             timestamp: new Date().toISOString()
         }
 
-        const messages = getMessages(store, podId)
-        store.messagesByPodId.set(podId, [...messages, userMessage])
-
-        appendUserOutputToPod(pod, content)
+        appendUserMessageToStore(podId, userMessage)
     }
 
     const addRemoteUserMessage = (podId: string, messageId: string, content: string, timestamp: string): void => {
-        const podStore = usePodStore()
-        const pod = podStore.pods.find(pod => pod.id === podId)
-        if (!pod) return
-
         const userMessage: Message = {
             id: messageId,
             role: 'user',
@@ -116,10 +116,7 @@ export function createMessageActions(store: ChatStoreInstance): ChatMessageActio
             timestamp
         }
 
-        const messages = getMessages(store, podId)
-        store.messagesByPodId.set(podId, [...messages, userMessage])
-
-        appendUserOutputToPod(pod, content)
+        appendUserMessageToStore(podId, userMessage)
     }
 
     const handleChatMessage = (payload: PodChatMessagePayload): void => {

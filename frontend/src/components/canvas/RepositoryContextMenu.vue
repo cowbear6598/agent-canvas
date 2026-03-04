@@ -110,8 +110,8 @@ const handleSwitchBranchClick = async (): Promise<void> => {
   }
 
   dataState.localBranches = result.branches
-  dataState.currentBranch = result.currentBranch || ''
-  dataState.worktreeBranches = result.worktreeBranches || []
+  dataState.currentBranch = result.currentBranch ?? ''
+  dataState.worktreeBranches = result.worktreeBranches ?? []
   modalState.showBranch = true
 }
 

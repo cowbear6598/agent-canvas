@@ -28,15 +28,29 @@ class WorkflowEventEmitter {
     triggerMode: string;
   }): void {
     const { canvasId, connectionId, targetPodId, success, error, triggerMode } = params;
-    const payload = {
+    const payload: {
+      canvasId: string;
+      requestId: string;
+      connectionId: string;
+      targetPodId: string;
+      success: boolean;
+      error?: string;
+      triggerMode?: string;
+    } = {
       canvasId,
       requestId: uuidv4(),
       connectionId,
       targetPodId,
       success,
-      ...(error && { error }),
-      ...(triggerMode && { triggerMode }),
     };
+
+    if (error) {
+      payload.error = error;
+    }
+
+    if (triggerMode) {
+      payload.triggerMode = triggerMode;
+    }
 
     socketService.emitToCanvas(canvasId, WebSocketResponseEvents.WORKFLOW_COMPLETE, payload);
   }

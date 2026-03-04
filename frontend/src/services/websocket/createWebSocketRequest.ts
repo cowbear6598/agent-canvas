@@ -76,7 +76,7 @@ export async function createWebSocketRequest<TPayload extends { requestId: strin
             websocketClient.off(responseEvent, handleResponse)
 
             if (responseWithBase.success === false) {
-                const error = responseWithBase.error || '未知錯誤'
+                const error = responseWithBase.error ?? '未知錯誤'
                 reject(new Error(error))
                 return
             }

@@ -223,15 +223,13 @@ export class ClaudeService {
         }
     }
 
-    private updateExistingToolProgress(
-        state: QueryState,
+    private processToolProgress(
         toolUseId: string,
+        toolName: string,
         outputText: string,
+        state: QueryState,
         onStream: StreamCallback
     ): void {
-        const toolInfo = state.activeTools.get(toolUseId);
-        if (!toolInfo) return;
-
         if (state.toolUseInfo?.toolUseId === toolUseId) {
             state.toolUseInfo.output = outputText;
         }
@@ -239,24 +237,7 @@ export class ClaudeService {
         onStream({
             type: 'tool_result',
             toolUseId,
-            toolName: toolInfo.toolName,
-            output: outputText,
-        });
-    }
-
-    private createNewToolProgress(
-        state: QueryState,
-        outputText: string,
-        onStream: StreamCallback
-    ): void {
-        if (!state.toolUseInfo) return;
-
-        state.toolUseInfo.output = outputText;
-
-        onStream({
-            type: 'tool_result',
-            toolUseId: state.toolUseInfo.toolUseId,
-            toolName: state.toolUseInfo.toolName,
+            toolName,
             output: outputText,
         });
     }
@@ -266,17 +247,19 @@ export class ClaudeService {
         state: QueryState,
         onStream: StreamCallback
     ): void {
-        const outputText = sdkMessage.output || sdkMessage.result;
+        const outputText = sdkMessage.output ?? sdkMessage.result;
         if (!outputText) return;
 
         const toolUseId = sdkMessage.tool_use_id;
 
         if (toolUseId && state.activeTools.has(toolUseId)) {
-            this.updateExistingToolProgress(state, toolUseId, outputText, onStream);
+            const toolInfo = state.activeTools.get(toolUseId)!;
+            this.processToolProgress(toolUseId, toolInfo.toolName, outputText, state, onStream);
             return;
         }
 
-        this.createNewToolProgress(state, outputText, onStream);
+        if (!state.toolUseInfo) return;
+        this.processToolProgress(state.toolUseInfo.toolUseId, state.toolUseInfo.toolName, outputText, state, onStream);
     }
 
     private handleResultMessage(
@@ -358,7 +341,7 @@ export class ClaudeService {
         }
 
         const contentArray = buildClaudeContentBlocks(message, commandId);
-        const sessionId = resumeSessionId || '';
+        const sessionId = resumeSessionId ?? '';
         return createUserMessageStream(contentArray, sessionId);
     }
 
@@ -593,6 +576,7 @@ export class ClaudeService {
             return {done: true, result};
         }
         return {done: true, result: {success: true, content: result.content || fullContent}};
+
     }
 
     private async collectTextFromStream(stream: Query): Promise<{success: boolean; content: string; error?: string}> {

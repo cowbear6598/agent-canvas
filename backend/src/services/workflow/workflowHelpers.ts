@@ -66,16 +66,16 @@ ${isolatedContent}`;
 }
 
 export interface ConnectionLogInfo {
-    connId: string;
+    connectionId: string;
     sourceName: string | undefined;
     sourcePodId: string;
     targetName: string | undefined;
     targetPodId: string;
 }
 
-export function formatConnLog(info: ConnectionLogInfo): string {
-    const {connId, sourceName, sourcePodId, targetName, targetPodId} = info;
-    return `連線 ${connId}（「${sourceName ?? sourcePodId}」→「${targetName ?? targetPodId}」）`;
+export function formatConnectionLog(info: ConnectionLogInfo): string {
+    const {connectionId, sourceName, sourcePodId, targetName, targetPodId} = info;
+    return `連線 ${connectionId}（「${sourceName ?? sourcePodId}」→「${targetName ?? targetPodId}」）`;
 }
 
 export function completeMultiInputConnections(

@@ -142,18 +142,13 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
   ): void {
     this.ensureInitialized();
 
-    const completedSummaries = pendingTargetStore.getCompletedSummaries(connection.targetPodId);
-    if (!completedSummaries) {
-      logger.error('Workflow', 'Error', '無法取得已完成的摘要');
-      return;
-    }
+    const merged = this.getMergedContentOrNull(canvasId, connection.targetPodId);
+    if (!merged) return;
+
+    const { completedSummaries, mergedContent } = merged;
 
     podStore.setStatus(canvasId, connection.targetPodId, 'chatting');
 
-    const mergedContent = formatMergedSummaries(
-      completedSummaries,
-      (podId) => podStore.getById(canvasId, podId)
-    );
     const mergedPreview = mergedContent.substring(0, MERGED_CONTENT_PREVIEW_MAX_LENGTH);
 
     const sourcePodIds = Array.from(completedSummaries.keys());

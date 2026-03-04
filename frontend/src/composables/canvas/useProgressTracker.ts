@@ -23,6 +23,13 @@ export interface ProgressErrorOptions {
 export interface ProgressErrorTask {
   status: string
   message: string
+  progress: number
+}
+
+export function markTaskCompleted(task: ProgressErrorTask, message: string): void {
+  task.status = 'completed'
+  task.progress = 100
+  task.message = message
 }
 
 export function handleProgressError<TTask extends ProgressErrorTask>(

@@ -33,13 +33,24 @@ export async function validateRepositoryIsGit(
   return result.data.repositoryPath;
 }
 
+export interface WithValidatedGitRepositoryOptions {
+  rejectWorktree?: { errorMessage: string };
+}
+
 export function withValidatedGitRepository<T extends { repositoryId: string }>(
   responseEvent: WebSocketResponseEvents,
-  handler: (connectionId: string, payload: T, requestId: string, repositoryPath: string) => Promise<void>
+  handler: (connectionId: string, payload: T, requestId: string, repositoryPath: string) => Promise<void>,
+  options?: WithValidatedGitRepositoryOptions
 ) {
   return async (connectionId: string, payload: T, requestId: string): Promise<void> => {
     const repositoryPath = await validateRepositoryIsGit(connectionId, payload.repositoryId, responseEvent, requestId);
     if (!repositoryPath) return;
+
+    if (options?.rejectWorktree) {
+      const isValid = validateNotWorktree(connectionId, payload.repositoryId, responseEvent, requestId, options.rejectWorktree.errorMessage);
+      if (!isValid) return;
+    }
+
     await handler(connectionId, payload, requestId, repositoryPath);
   };
 }
@@ -83,6 +94,7 @@ export function createThrottledProgressEmitter(
 }
 
 
+
 function sanitizeRepoNameChars(raw: string): string {
   const withoutGitSuffix = raw.replace(/\.git$/, '').replace(/[^\w.-]/g, '-');
   if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(withoutGitSuffix)) {
@@ -100,14 +112,14 @@ function normalizeRepoName(rawName: string): string {
 }
 
 function parseSshRepoName(url: string): string {
-  const pathPart = url.split(':')[1] || '';
+  const pathPart = url.split(':')[1] ?? '';
   return normalizeRepoName(pathPart);
 }
 
 export function parseUrlRepoName(url: string): string {
   const withoutProtocol = url.replace(/^https?:\/\//, '').replace(/^git:\/\//, '');
   const parts = withoutProtocol.split('/');
-  const lastPart = parts[parts.length - 1] || '';
+  const lastPart = parts[parts.length - 1] ?? '';
   return normalizeRepoName(lastPart);
 }
 

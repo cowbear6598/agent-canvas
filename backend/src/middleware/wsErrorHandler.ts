@@ -35,20 +35,30 @@ export function handleWebSocketError(context: WebSocketErrorContext): void {
 		requestId = requestId || error.requestId;
 		podId = podId || error.podId;
 	} else if (error instanceof Error) {
-		errorMessage = error.message;
+		logger.error('WebSocket', 'Error', `內部錯誤詳細訊息: ${error.message}`);
+		errorMessage = '伺服器內部錯誤';
 		errorCode = 'INTERNAL_ERROR';
 	} else {
 		errorMessage = '發生未知錯誤';
 		errorCode = 'UNKNOWN_ERROR';
 	}
 
-	const errorPayload = {
+	const errorPayload: {
+		requestId: string | undefined;
+		success: false;
+		error: string;
+		code: string;
+		podId?: string;
+	} = {
 		requestId,
 		success: false,
 		error: errorMessage,
 		code: errorCode,
-		...(podId && { podId }),
 	};
+
+	if (podId) {
+		errorPayload.podId = podId;
+	}
 
 	socketService.emitToConnection(connectionId, responseEvent, errorPayload);
 

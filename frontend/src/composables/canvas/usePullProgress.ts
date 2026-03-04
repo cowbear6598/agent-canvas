@@ -2,7 +2,7 @@ import { type Ref, type ComputedRef } from 'vue'
 import { WebSocketResponseEvents } from '@/types/websocket'
 import type { RepositoryPullLatestProgressPayload, RepositoryPullLatestResultPayload } from '@/types/websocket'
 import { useCanvasContext } from '@/composables/canvas/useCanvasContext'
-import { useProgressTracker, handleProgressError } from '@/composables/canvas/useProgressTracker'
+import { useProgressTracker, handleProgressError, markTaskCompleted } from '@/composables/canvas/useProgressTracker'
 import type { ProgressTask } from '@/components/canvas/ProgressNote.vue'
 import { PROGRESS_REMOVE_DELAY_MS } from '@/lib/constants'
 
@@ -53,9 +53,7 @@ export function usePullProgress(): UsePullProgressReturn {
       if (task.timedOut) return
 
       if (payload.success) {
-        task.status = 'completed'
-        task.progress = 100
-        task.message = 'Pull 完成'
+        markTaskCompleted(task, 'Pull 完成')
 
         await repositoryStore.loadRepositories()
 

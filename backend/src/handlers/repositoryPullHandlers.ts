@@ -7,7 +7,6 @@ import { logger } from '../utils/logger.js';
 import { handleResultError } from '../utils/handlerHelpers.js';
 import {
   withValidatedGitRepository,
-  validateNotWorktree,
   createProgressEmitter,
   createThrottledProgressEmitter,
   type ThrottledProgressEmitter,
@@ -15,13 +14,13 @@ import {
 
 const pullingRepositories = new Set<string>();
 
-async function withPullLock<T>(repositoryId: string, fn: () => Promise<T>): Promise<{ locked: true } | { locked: false; result: T }> {
+async function withPullLock<T>(repositoryId: string, operation: () => Promise<T>): Promise<{ locked: true } | { locked: false; result: T }> {
   if (pullingRepositories.has(repositoryId)) {
     return { locked: true };
   }
   pullingRepositories.add(repositoryId);
   try {
-    const result = await fn();
+    const result = await operation();
     return { locked: false, result };
   } finally {
     pullingRepositories.delete(repositoryId);
@@ -50,15 +49,6 @@ export const handleRepositoryPullLatest = withValidatedGitRepository<RepositoryP
   WebSocketResponseEvents.REPOSITORY_PULL_LATEST_RESULT,
   async (connectionId, payload, requestId, repositoryPath) => {
     const { repositoryId } = payload;
-
-    const isValid = validateNotWorktree(
-      connectionId,
-      repositoryId,
-      WebSocketResponseEvents.REPOSITORY_PULL_LATEST_RESULT,
-      requestId,
-      'Worktree 無法執行 Pull'
-    );
-    if (!isValid) return;
 
     const lockResult = await withPullLock(repositoryId, () => executePullWithProgress(connectionId, requestId, repositoryPath));
 
@@ -94,5 +84,6 @@ export const handleRepositoryPullLatest = withValidatedGitRepository<RepositoryP
     emitSuccess(connectionId, WebSocketResponseEvents.REPOSITORY_PULL_LATEST_RESULT, response);
 
     logger.log('Repository', 'Update', `已 Pull「${repositoryId}」的最新版本`);
-  }
+  },
+  { rejectWorktree: { errorMessage: 'Worktree 無法執行 Pull' } }
 );

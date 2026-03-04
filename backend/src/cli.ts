@@ -168,14 +168,18 @@ function getDisplayValue(key: string, value: string): string {
 	return key.endsWith('_TOKEN') ? maskToken(value) : value;
 }
 
+const SECONDS_PER_MINUTE = 60;
+const SECONDS_PER_HOUR = 3600;
+const SECONDS_PER_DAY = 86400;
+
 function formatUptime(startedAt: string): string {
 	const startMs = new Date(startedAt).getTime();
 	const nowMs = Date.now();
 	const diffSec = Math.floor((nowMs - startMs) / 1000);
 
-	const days = Math.floor(diffSec / 86400);
-	const hours = Math.floor((diffSec % 86400) / 3600);
-	const minutes = Math.floor((diffSec % 3600) / 60);
+	const days = Math.floor(diffSec / SECONDS_PER_DAY);
+	const hours = Math.floor((diffSec % SECONDS_PER_DAY) / SECONDS_PER_HOUR);
+	const minutes = Math.floor((diffSec % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE);
 
 	return `${days}d ${hours}h ${minutes}m`;
 }
@@ -395,12 +399,7 @@ export function handleLogs(flags: Record<string, string | boolean>, logFile = LO
 }
 
 async function runDaemon(flags: Record<string, string | boolean>): Promise<void> {
-	const portStr = typeof flags.port === 'string' ? flags.port : '3001';
-	const port = validatePort(portStr);
-	if (port === null) {
-		console.error(`錯誤：無效的 port 值「${portStr}」，必須是 1 到 65535 之間的整數`);
-		process.exit(1);
-	}
+	const port = resolvePort(flags);
 	process.env.PORT = String(port);
 	process.env.NODE_ENV = 'production';
 	await import('./index.js');

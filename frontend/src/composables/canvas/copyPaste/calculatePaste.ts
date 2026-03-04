@@ -148,12 +148,12 @@ export function transformNotes<
 }
 
 export function transformConnections(connections: CopiedConnection[]): PasteConnectionItem[] {
-  return connections.map(conn => ({
-    originalSourcePodId: conn.sourcePodId,
-    sourceAnchor: conn.sourceAnchor,
-    originalTargetPodId: conn.targetPodId,
-    targetAnchor: conn.targetAnchor,
-    triggerMode: conn.triggerMode,
+  return connections.map(connection => ({
+    originalSourcePodId: connection.sourcePodId,
+    sourceAnchor: connection.sourceAnchor,
+    originalTargetPodId: connection.targetPodId,
+    targetAnchor: connection.targetAnchor,
+    triggerMode: connection.triggerMode,
   }))
 }
 

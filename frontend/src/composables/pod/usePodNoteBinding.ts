@@ -68,7 +68,7 @@ const DUPLICATE_BIND_MESSAGES: Partial<Record<NoteType, string>> = {
 const isAlreadyBound = (mapping: NoteStoreMapping, note: NoteItem, podId: string): boolean => {
   if (!mapping.isItemBoundToPod) return false
   const itemId = mapping.getItemId(note)
-  return !!itemId && mapping.isItemBoundToPod(itemId, podId)
+  return itemId !== undefined && itemId !== null && mapping.isItemBoundToPod(itemId, podId)
 }
 
 export function usePodNoteBinding(

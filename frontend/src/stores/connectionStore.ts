@@ -34,6 +34,9 @@ interface RawConnection {
     decideReason?: string | null
 }
 
+type WorkflowHandlers = ReturnType<typeof createWorkflowEventHandlers>
+type WorkflowHandlerPayload<K extends keyof WorkflowHandlers> = Parameters<WorkflowHandlers[K]>[0]
+
 function castHandler<T>(handler: (payload: T) => void): (payload: unknown) => void {
     return handler as (payload: unknown) => void
 }
@@ -66,12 +69,12 @@ function shouldUpdateConnection(connection: Connection, targetPodId: string, sta
  * 並能在找到第一個執行中節點時提前返回，避免遍歷整條鏈。
  */
 function isAnyNeighborRunning(
-    neighbors: { neighborId: string; conn: Connection }[],
+    neighbors: { neighborId: string; connection: Connection }[],
     visited: Set<string>,
     queue: string[],
 ): boolean {
-    for (const { neighborId, conn } of neighbors) {
-        if (conn.status && RUNNING_CONNECTION_STATUSES.has(conn.status)) return true
+    for (const { neighborId, connection } of neighbors) {
+        if (connection.status && RUNNING_CONNECTION_STATUSES.has(connection.status)) return true
         if (!visited.has(neighborId)) {
             visited.add(neighborId)
             queue.push(neighborId)
@@ -82,7 +85,7 @@ function isAnyNeighborRunning(
 
 function processBfsNode(
     currentId: string,
-    getNeighbors: (podId: string) => { neighborId: string; conn: Connection }[],
+    getNeighbors: (podId: string) => { neighborId: string; connection: Connection }[],
     isRunningPod: (podId: string) => boolean,
     visited: Set<string>,
     queue: string[],
@@ -93,7 +96,7 @@ function processBfsNode(
 
 function runBFS(
     startId: string,
-    getNeighbors: (podId: string) => { neighborId: string; conn: Connection }[],
+    getNeighbors: (podId: string) => { neighborId: string; connection: Connection }[],
     isRunningPod: (podId: string) => boolean,
 ): boolean {
     const visited = new Set<string>([startId])
@@ -189,13 +192,13 @@ export const useConnectionStore = defineStore('connection', {
             return runBFS(
                 podId,
                 (currentId) => {
-                    const neighbors: { neighborId: string; conn: Connection }[] = []
+                    const neighbors: { neighborId: string; connection: Connection }[] = []
                     for (const connection of state.connections) {
                         if (connection.sourcePodId === currentId) {
-                            neighbors.push({ neighborId: connection.targetPodId, conn: connection })
+                            neighbors.push({ neighborId: connection.targetPodId, connection })
                         }
                         if (connection.targetPodId === currentId && connection.sourcePodId) {
-                            neighbors.push({ neighborId: connection.sourcePodId, conn: connection })
+                            neighbors.push({ neighborId: connection.sourcePodId, connection })
                         }
                     }
                     return neighbors
@@ -220,7 +223,7 @@ export const useConnectionStore = defineStore('connection', {
                 (currentId) => {
                     return state.connections
                         .filter(connection => connection.sourcePodId === currentId)
-                        .map(connection => ({ neighborId: connection.targetPodId, conn: connection }))
+                        .map(connection => ({ neighborId: connection.targetPodId, connection }))
                 },
                 (currentId) => {
                     const pod = podStore.getPodById(currentId)
@@ -302,11 +305,18 @@ export const useConnectionStore = defineStore('connection', {
 
             const { executeAction } = useCanvasWebSocketAction()
 
-            const basePayload = {
+            const basePayload: {
+                sourceAnchor: AnchorPosition
+                targetPodId: string
+                targetAnchor: AnchorPosition
+                sourcePodId?: string
+            } = {
                 sourceAnchor,
                 targetPodId,
                 targetAnchor,
-                ...(sourcePodId ? { sourcePodId } : {}),
+            }
+            if (sourcePodId) {
+                basePayload.sourcePodId = sourcePodId
             }
 
             const result = await executeAction<ConnectionCreatePayload, ConnectionCreatedPayload>(
@@ -376,7 +386,7 @@ export const useConnectionStore = defineStore('connection', {
             this.draggingConnection = null
         },
 
-        updateConnectionStatusByTargetPod(targetPodId: string, status: ConnectionStatus): void {
+        updateAutoGroupStatus(targetPodId: string, status: ConnectionStatus): void {
             this.connections.forEach(connection => {
                 if (shouldUpdateConnection(connection, targetPodId, status)) {
                     connection.status = status
@@ -384,12 +394,8 @@ export const useConnectionStore = defineStore('connection', {
             })
         },
 
-        updateAutoGroupStatus(targetPodId: string, status: ConnectionStatus): void {
-            this.connections.forEach(connection => {
-                if (shouldUpdateConnection(connection, targetPodId, status)) {
-                    connection.status = status
-                }
-            })
+        updateConnectionStatusByTargetPod(targetPodId: string, status: ConnectionStatus): void {
+            this.updateAutoGroupStatus(targetPodId, status)
         },
 
         setConnectionStatus(connectionId: string, status: ConnectionStatus): void {
@@ -432,47 +438,47 @@ export const useConnectionStore = defineStore('connection', {
             })
         },
 
-        handleWorkflowAutoTriggered(payload: Parameters<ReturnType<typeof createWorkflowEventHandlers>['handleWorkflowAutoTriggered']>[0]): void {
+        handleWorkflowAutoTriggered(payload: WorkflowHandlerPayload<'handleWorkflowAutoTriggered'>): void {
             this.getWorkflowHandlers().handleWorkflowAutoTriggered(payload)
         },
 
-        handleWorkflowAiDecideTriggered(payload: Parameters<ReturnType<typeof createWorkflowEventHandlers>['handleWorkflowAiDecideTriggered']>[0]): void {
+        handleWorkflowAiDecideTriggered(payload: WorkflowHandlerPayload<'handleWorkflowAiDecideTriggered'>): void {
             this.getWorkflowHandlers().handleWorkflowAiDecideTriggered(payload)
         },
 
-        handleWorkflowComplete(payload: Parameters<ReturnType<typeof createWorkflowEventHandlers>['handleWorkflowComplete']>[0]): void {
+        handleWorkflowComplete(payload: WorkflowHandlerPayload<'handleWorkflowComplete'>): void {
             this.getWorkflowHandlers().handleWorkflowComplete(payload)
         },
 
-        handleWorkflowDirectTriggered(payload: Parameters<ReturnType<typeof createWorkflowEventHandlers>['handleWorkflowDirectTriggered']>[0]): void {
+        handleWorkflowDirectTriggered(payload: WorkflowHandlerPayload<'handleWorkflowDirectTriggered'>): void {
             this.getWorkflowHandlers().handleWorkflowDirectTriggered(payload)
         },
 
-        handleWorkflowDirectWaiting(payload: Parameters<ReturnType<typeof createWorkflowEventHandlers>['handleWorkflowDirectWaiting']>[0]): void {
+        handleWorkflowDirectWaiting(payload: WorkflowHandlerPayload<'handleWorkflowDirectWaiting'>): void {
             this.getWorkflowHandlers().handleWorkflowDirectWaiting(payload)
         },
 
-        handleWorkflowQueued(payload: Parameters<ReturnType<typeof createWorkflowEventHandlers>['handleWorkflowQueued']>[0]): void {
+        handleWorkflowQueued(payload: WorkflowHandlerPayload<'handleWorkflowQueued'>): void {
             this.getWorkflowHandlers().handleWorkflowQueued(payload)
         },
 
-        handleWorkflowQueueProcessed(payload: Parameters<ReturnType<typeof createWorkflowEventHandlers>['handleWorkflowQueueProcessed']>[0]): void {
+        handleWorkflowQueueProcessed(payload: WorkflowHandlerPayload<'handleWorkflowQueueProcessed'>): void {
             this.getWorkflowHandlers().handleWorkflowQueueProcessed(payload)
         },
 
-        handleAiDecidePending(payload: Parameters<ReturnType<typeof createWorkflowEventHandlers>['handleAiDecidePending']>[0]): void {
+        handleAiDecidePending(payload: WorkflowHandlerPayload<'handleAiDecidePending'>): void {
             this.getWorkflowHandlers().handleAiDecidePending(payload)
         },
 
-        handleAiDecideResult(payload: Parameters<ReturnType<typeof createWorkflowEventHandlers>['handleAiDecideResult']>[0]): void {
+        handleAiDecideResult(payload: WorkflowHandlerPayload<'handleAiDecideResult'>): void {
             this.getWorkflowHandlers().handleAiDecideResult(payload)
         },
 
-        handleAiDecideError(payload: Parameters<ReturnType<typeof createWorkflowEventHandlers>['handleAiDecideError']>[0]): void {
+        handleAiDecideError(payload: WorkflowHandlerPayload<'handleAiDecideError'>): void {
             this.getWorkflowHandlers().handleAiDecideError(payload)
         },
 
-        handleAiDecideClear(payload: Parameters<ReturnType<typeof createWorkflowEventHandlers>['handleAiDecideClear']>[0]): void {
+        handleAiDecideClear(payload: WorkflowHandlerPayload<'handleAiDecideClear'>): void {
             this.getWorkflowHandlers().handleAiDecideClear(payload)
         },
 
@@ -494,14 +500,14 @@ export const useConnectionStore = defineStore('connection', {
         },
 
         updateConnectionFromEvent(connection: Omit<Connection, 'status'>): void {
-            const index = this.connections.findIndex(conn => conn.id === connection.id)
+            const index = this.connections.findIndex(existing => existing.id === connection.id)
             if (index === -1) return
 
             const existingConnection = this.connections[index]
             const enrichedConnection: Connection = {
                 ...connection,
                 triggerMode: connection.triggerMode ?? 'auto',
-                status: existingConnection?.status ?? 'idle' as ConnectionStatus,
+                status: existingConnection?.status ?? ('idle' as ConnectionStatus),
                 decideReason: connection.decideReason ?? existingConnection?.decideReason
             }
 

@@ -27,10 +27,6 @@ function findItemById<T extends { id: string }>(items: T[], itemId: string): T |
     return items.find(item => item.id === itemId)
 }
 
-function getItemName<T extends { name?: string }>(item: T): string | undefined {
-    return item.name
-}
-
 interface NoteItem extends BaseNote {
     [key: string]: unknown
 }
@@ -92,7 +88,7 @@ export interface RebuildNotesConfig {
 type RebuildNotesStoreContext = Pick<NoteStoreContext, 'notes' | 'availableItems' | 'getNotesByPodId'>
 
 function shouldCreateNote(pod: Pod, itemId: string | null | undefined, existingNotes: NoteItem[]): boolean {
-    return !!itemId && existingNotes.length === 0
+    return itemId !== undefined && itemId !== null && itemId !== '' && existingNotes.length === 0
 }
 
 function buildNoteRequest(
@@ -103,7 +99,7 @@ function buildNoteRequest(
     context: RebuildNotesStoreContext
 ): Promise<void> {
     const item = findItemById(context.availableItems as { id: string; name?: string }[], itemId)
-    const itemName = getItemName(item ?? {}) ?? itemId
+    const itemName = item?.name ?? itemId
 
     return createWebSocketRequest<BasePayload, Record<string, unknown>>({
         requestEvent: config.requestEvent,
@@ -249,7 +245,7 @@ export function createNoteStore<TItem, TNote extends BaseNote, TCustomActions ex
         },
 
         actions: {
-            async fetchWithCanvasIdInternal(
+            async fetchWithActiveCanvasId(
                 requestEvent: string,
                 responseEvent: string
             ): Promise<BaseResponse | null> {
@@ -282,7 +278,7 @@ export function createNoteStore<TItem, TNote extends BaseNote, TCustomActions ex
             },
 
             async loadItems(): Promise<void> {
-                const response = await this.fetchWithCanvasIdInternal(
+                const response = await this.fetchWithActiveCanvasId(
                     config.events.listItems.request,
                     config.events.listItems.response
                 )
@@ -295,7 +291,7 @@ export function createNoteStore<TItem, TNote extends BaseNote, TCustomActions ex
             },
 
             async loadNotesFromBackend(): Promise<void> {
-                const response = await this.fetchWithCanvasIdInternal(
+                const response = await this.fetchWithActiveCanvasId(
                     config.events.listNotes.request,
                     config.events.listNotes.response
                 )

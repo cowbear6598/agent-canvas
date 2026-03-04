@@ -2,7 +2,7 @@ import { type Ref, type ComputedRef } from 'vue'
 import { WebSocketResponseEvents } from '@/types/websocket'
 import type { RepositoryGitCloneProgressPayload, RepositoryGitCloneResultPayload } from '@/types/websocket'
 import { useCanvasContext } from '@/composables/canvas/useCanvasContext'
-import { useProgressTracker, handleProgressError } from '@/composables/canvas/useProgressTracker'
+import { useProgressTracker, handleProgressError, markTaskCompleted } from '@/composables/canvas/useProgressTracker'
 import type { ProgressTask } from '@/components/canvas/ProgressNote.vue'
 import { PROGRESS_REMOVE_DELAY_MS } from '@/lib/constants'
 
@@ -88,9 +88,7 @@ export function useGitCloneProgress(): UseGitCloneProgressReturn {
 
     onResult: async (task, payload, helpers) => {
       if (payload.success) {
-        task.status = 'completed'
-        task.progress = 100
-        task.message = '下載完畢'
+        markTaskCompleted(task, '下載完畢')
 
         helpers.showSuccessToast('Repository', 'Clone 成功', task.repoName)
 

@@ -9,8 +9,8 @@ import {fsOperation} from '../utils/operationHelpers.js';
 import {fileExists} from './shared/fileResourceHelpers.js';
 import {safeJsonParse} from '../utils/safeJsonParse.js';
 
-function isFulfilledCanvas(r: PromiseSettledResult<Canvas | null>): r is PromiseFulfilledResult<Canvas> {
-    return r.status === 'fulfilled' && r.value !== null;
+function isFulfilledCanvas(settledResult: PromiseSettledResult<Canvas | null>): settledResult is PromiseFulfilledResult<Canvas> {
+    return settledResult.status === 'fulfilled' && settledResult.value !== null;
 }
 
 function calculateNextSortIndex(canvases: Map<string, Canvas>): number {
@@ -329,7 +329,7 @@ class CanvasStore {
 
             const loadPromises = directories.map((dir) => this.loadSingleCanvas(dir.name));
             const results = await Promise.allSettled(loadPromises);
-            return results.filter(isFulfilledCanvas).map(r => r.value);
+            return results.filter(isFulfilledCanvas).map(settledResult => settledResult.value);
         }, '載入 Canvas 列表失敗');
 
         if (!loadResult.success) {

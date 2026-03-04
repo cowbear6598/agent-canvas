@@ -5,10 +5,39 @@ vi.mock('../../src/services/workflow/workflowEventEmitter.js', () => createWorkf
 vi.mock('../../src/services/connectionStore.js', () => createConnectionStoreMock());
 vi.mock('../../src/utils/logger.js', () => createLoggerMock());
 
-import { buildTransferMessage, isAutoTriggerable, buildQueueProcessedPayload, emitQueueProcessed, createMultiInputCompletionHandlers } from '../../src/services/workflow/workflowHelpers.js';
+import { buildTransferMessage, isAutoTriggerable, buildQueueProcessedPayload, emitQueueProcessed, createMultiInputCompletionHandlers, formatMergedSummaries, buildMessageWithCommand, formatConnectionLog } from '../../src/services/workflow/workflowHelpers.js';
 import { workflowEventEmitter } from '../../src/services/workflow/workflowEventEmitter.js';
 import { connectionStore } from '../../src/services/connectionStore.js';
 import type { QueueProcessedContext, CompletionContext } from '../../src/services/workflow/types.js';
+import type { Pod } from '../../src/types/pod.js';
+import type { Command } from '../../src/types/command.js';
+
+const makePod = (overrides?: Partial<Pod>): Pod => ({
+  id: 'pod-1',
+  name: 'Pod 1',
+  status: 'idle',
+  workspacePath: '/workspace',
+  x: 0,
+  y: 0,
+  rotation: 0,
+  claudeSessionId: null,
+  outputStyleId: null,
+  skillIds: [],
+  subAgentIds: [],
+  mcpServerIds: [],
+  model: 'sonnet',
+  repositoryId: null,
+  commandId: null,
+  autoClear: false,
+  ...overrides,
+});
+
+const makeCommand = (overrides?: Partial<Command>): Command => ({
+  id: 'cmd-1',
+  name: 'my-command',
+  groupId: null,
+  ...overrides,
+});
 
 const makeQueueProcessedContext = (overrides?: Partial<QueueProcessedContext>): QueueProcessedContext => ({
   canvasId: 'canvas-1',
@@ -166,6 +195,122 @@ describe('workflowHelpers', () => {
 
       expect(result).toContain('正常開頭');
       expect(result).toContain('正常結尾');
+    });
+  });
+
+  describe('formatMergedSummaries', () => {
+    it('單一來源時正確格式化', () => {
+      const summaries = new Map([['pod-1', '來源內容']]);
+      const podLookup = (podId: string) => makePod({id: podId, name: 'Pod A'});
+
+      const result = formatMergedSummaries(summaries, podLookup);
+
+      expect(result).toContain('## Source: Pod A');
+      expect(result).toContain('來源內容');
+    });
+
+    it('多來源時所有來源都被合併', () => {
+      const summaries = new Map([
+        ['pod-1', '第一個來源內容'],
+        ['pod-2', '第二個來源內容'],
+      ]);
+      const podLookup = (podId: string) => {
+        const names: Record<string, string> = {'pod-1': 'Pod A', 'pod-2': 'Pod B'};
+        return makePod({id: podId, name: names[podId]});
+      };
+
+      const result = formatMergedSummaries(summaries, podLookup);
+
+      expect(result).toContain('## Source: Pod A');
+      expect(result).toContain('第一個來源內容');
+      expect(result).toContain('## Source: Pod B');
+      expect(result).toContain('第二個來源內容');
+    });
+
+    it('找不到 pod 時回退到 podId', () => {
+      const summaries = new Map([['unknown-pod', '內容']]);
+      const podLookup = (_podId: string) => undefined;
+
+      const result = formatMergedSummaries(summaries, podLookup);
+
+      expect(result).toContain('## Source: unknown-pod');
+    });
+  });
+
+  describe('buildMessageWithCommand', () => {
+    it('有 commandId 且找得到 command 時加前綴', () => {
+      const targetPod = makePod({commandId: 'cmd-1'});
+      const commands = [makeCommand({id: 'cmd-1', name: 'my-command'})];
+
+      const result = buildMessageWithCommand('hello', targetPod, commands);
+
+      expect(result).toBe('/my-command hello');
+    });
+
+    it('找不到 command 時維持原訊息', () => {
+      const targetPod = makePod({commandId: 'non-existent'});
+      const commands = [makeCommand({id: 'cmd-1', name: 'my-command'})];
+
+      const result = buildMessageWithCommand('hello', targetPod, commands);
+
+      expect(result).toBe('hello');
+    });
+
+    it('targetPod 為 undefined 時維持原訊息', () => {
+      const commands = [makeCommand()];
+
+      const result = buildMessageWithCommand('hello', undefined, commands);
+
+      expect(result).toBe('hello');
+    });
+
+    it('targetPod 沒有 commandId 時維持原訊息', () => {
+      const targetPod = makePod({commandId: null});
+      const commands = [makeCommand()];
+
+      const result = buildMessageWithCommand('hello', targetPod, commands);
+
+      expect(result).toBe('hello');
+    });
+  });
+
+  describe('formatConnectionLog', () => {
+    it('有 sourceName 和 targetName 時使用名稱格式', () => {
+      const result = formatConnectionLog({
+        connectionId: 'conn-1',
+        sourceName: 'Pod A',
+        sourcePodId: 'pod-a',
+        targetName: 'Pod B',
+        targetPodId: 'pod-b',
+      });
+
+      expect(result).toContain('conn-1');
+      expect(result).toContain('「Pod A」');
+      expect(result).toContain('「Pod B」');
+    });
+
+    it('sourceName 為 undefined 時回退到 sourcePodId', () => {
+      const result = formatConnectionLog({
+        connectionId: 'conn-1',
+        sourceName: undefined,
+        sourcePodId: 'pod-a',
+        targetName: 'Pod B',
+        targetPodId: 'pod-b',
+      });
+
+      expect(result).toContain('「pod-a」');
+    });
+
+    it('targetName 為 undefined 時回退到 targetPodId', () => {
+      const result = formatConnectionLog({
+        connectionId: 'conn-1',
+        sourceName: 'Pod A',
+        sourcePodId: 'pod-a',
+        targetName: undefined,
+        targetPodId: 'pod-b',
+      });
+
+      expect(result).toContain('「pod-b」');
     });
   });
 

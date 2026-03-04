@@ -97,7 +97,7 @@ class SkillService {
         try {
             buffer = Buffer.from(fileData, 'base64');
         } catch {
-            throw new Error('解壓縮失敗，請確認 ZIP 檔案完整性');
+            throw new Error('Base64 解碼失敗，請確認 ZIP 檔案格式正確');
         }
 
         let entries: Record<string, Uint8Array>;

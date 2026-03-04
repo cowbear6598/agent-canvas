@@ -1,5 +1,5 @@
 import { AbortError } from '@anthropic-ai/claude-agent-sdk';
-import { getErrorMessage, isAbortError, isFileNotFoundError } from '../../src/utils/errorHelpers.js';
+import { getErrorMessage, isAbortError } from '../../src/utils/errorHelpers.js';
 
 describe('錯誤處理工具', () => {
 	describe('isAbortError', () => {
@@ -29,33 +29,6 @@ describe('錯誤處理工具', () => {
 
 		it('傳入字串回傳 false', () => {
 			expect(isAbortError('錯誤訊息')).toBe(false);
-		});
-	});
-
-	describe('isFileNotFoundError', () => {
-		it('傳入 code 為 ENOENT 的 Error 回傳 true', () => {
-			const error = new Error('檔案不存在') as NodeJS.ErrnoException;
-			error.code = 'ENOENT';
-			expect(isFileNotFoundError(error)).toBe(true);
-		});
-
-		it('傳入其他 code 的 Error 回傳 false', () => {
-			const error = new Error('權限不足') as NodeJS.ErrnoException;
-			error.code = 'EACCES';
-			expect(isFileNotFoundError(error)).toBe(false);
-		});
-
-		it('傳入無 code 的 Error 回傳 false', () => {
-			const error = new Error('一般錯誤');
-			expect(isFileNotFoundError(error)).toBe(false);
-		});
-
-		it('傳入 null 回傳 false', () => {
-			expect(isFileNotFoundError(null)).toBe(false);
-		});
-
-		it('傳入字串回傳 false', () => {
-			expect(isFileNotFoundError('錯誤訊息')).toBe(false);
 		});
 	});
 

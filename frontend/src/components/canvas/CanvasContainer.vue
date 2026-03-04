@@ -132,29 +132,6 @@ const {
   mcpServerStore,
 })
 
-/**
- * 檢查所有 Store 是否有任何屬性為 true
- * @param property - Store 屬性名稱（例如 'isDraggingNote' 或 'isOverTrash'）
- * @returns 是否有任何 Store 的該屬性為 true
- */
-const checkAnyStoreProperty = (property: 'isDraggingNote' | 'isOverTrash'): boolean => {
-  const stores = [outputStyleStore, skillStore, subAgentStore, repositoryStore, commandStore, mcpServerStore]
-  return stores.some(store => store[property])
-}
-
-const showTrashZone = computed(() => checkAnyStoreProperty('isDraggingNote'))
-const isTrashHighlighted = computed(() => checkAnyStoreProperty('isOverTrash'))
-
-const isCanvasEmpty = computed(() =>
-    podStore.podCount === 0 &&
-    outputStyleStore.notes.length === 0 &&
-    skillStore.notes.length === 0 &&
-    subAgentStore.notes.length === 0 &&
-    repositoryStore.notes.length === 0 &&
-    commandStore.notes.length === 0 &&
-    mcpServerStore.notes.length === 0
-)
-
 const noteConfigs = [
   { store: outputStyleStore, type: 'outputStyle' as const },
   { store: skillStore, type: 'skill' as const },
@@ -163,6 +140,19 @@ const noteConfigs = [
   { store: commandStore, type: 'command' as const },
   { store: mcpServerStore, type: 'mcpServer' as const },
 ] as const
+
+const allNoteStores = noteConfigs.map(config => config.store)
+
+const checkAnyStoreProperty = (property: 'isDraggingNote' | 'isOverTrash'): boolean =>
+  allNoteStores.some(store => store[property])
+
+const showTrashZone = computed(() => checkAnyStoreProperty('isDraggingNote'))
+const isTrashHighlighted = computed(() => checkAnyStoreProperty('isOverTrash'))
+
+const isCanvasEmpty = computed(() =>
+    podStore.podCount === 0 &&
+    allNoteStores.every(store => store.notes.length === 0)
+)
 
 const noteHandlerMap = Object.fromEntries(
   noteConfigs.map(config => [config.type, useNoteEventHandlers({ store: config.store, trashZoneRef })])
@@ -279,7 +269,7 @@ const handleCreateMcpServerNote = createNoteHandler(mcpServerStore)
 
 const getRepositoryBranchName = (repositoryId: string): string | undefined => {
   const repository = repositoryStore.typedAvailableItems.find(r => r.id === repositoryId)
-  return repository?.currentBranch || repository?.branchName
+  return repository?.currentBranch ?? repository?.branchName
 }
 
 const handleRepositoryContextMenu = (data: { noteId: string; event: MouseEvent }): void => {
@@ -293,7 +283,7 @@ const handleRepositoryContextMenu = (data: { noteId: string; event: MouseEvent }
     repositoryId: repository.id,
     repositoryName: repository.name,
     notePosition: {x: note.x, y: note.y},
-    isWorktree: !!repository.parentRepoId,
+    isWorktree: repository.parentRepoId !== undefined && repository.parentRepoId !== null,
   })
 }
 
