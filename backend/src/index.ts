@@ -12,7 +12,8 @@ import { logger } from './utils/logger.js';
 import { WebSocketResponseEvents } from './schemas/index.js';
 import { isStaticFilesAvailable, serveStaticFile } from './utils/staticFileServer.js';
 import { handleApiRequest } from './api/apiRouter.js';
-import { slackConnectionManager } from './services/slack/slackConnectionManager.js';
+import { slackClientManager } from './services/slack/slackClientManager.js';
+import { handleSlackWebhook } from './services/slack/slackWebhookHandler.js';
 
 function handleWebSocketUpgrade(req: Request, server: Server<{ connectionId: string }>): Response | undefined {
 	const success = server.upgrade(req, { data: { connectionId: '' } });
@@ -42,6 +43,13 @@ async function startServer(): Promise<void> {
 		port: PORT,
 		hostname: '0.0.0.0',
 		async fetch(req, server) {
+			const url = new URL(req.url);
+
+			// /slack/events 路由來自 Slack 伺服器，不需要 CORS origin 驗證
+			if (req.method === 'POST' && url.pathname === '/slack/events') {
+				return handleSlackWebhook(req);
+			}
+
 			const origin = req.headers.get('origin');
 			if (origin && !config.corsOrigin(origin)) {
 				return new Response('Forbidden', { status: 403 });
@@ -134,8 +142,7 @@ const shutdown = async (signal: string): Promise<void> => {
 
 	socketService.stopHeartbeat();
 
-	slackConnectionManager.stopHealthCheck();
-	await slackConnectionManager.destroyAll();
+	slackClientManager.destroyAll();
 
 	logger.log('Startup', 'Complete', '伺服器已成功關閉');
 	process.exit(0);

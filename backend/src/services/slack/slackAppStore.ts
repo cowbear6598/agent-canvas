@@ -12,7 +12,7 @@ class SlackAppStore {
     private apps: Map<string, SlackApp> = new Map();
     private readonly persistence = new PersistenceHelper('Slack', 'SlackAppStore', 'slack-apps');
 
-    create(name: string, botToken: string, appToken: string): Result<SlackApp> {
+    create(name: string, botToken: string, signingSecret: string): Result<SlackApp> {
         for (const app of this.apps.values()) {
             if (app.botToken === botToken) {
                 return err('已存在使用相同 Bot Token 的 Slack App');
@@ -24,7 +24,7 @@ class SlackAppStore {
             id,
             name,
             botToken,
-            appToken,
+            signingSecret,
             connectionStatus: 'disconnected',
             channels: [],
             botUserId: '',
@@ -107,8 +107,8 @@ class SlackAppStore {
                 continue;
             }
 
-            if (!persisted.appToken.startsWith('xapp-')) {
-                logger.warn('Slack', 'Load', `[SlackAppStore] Slack App ${persisted.id} 的 appToken 格式不正確，略過載入`);
+            if (!persisted.signingSecret) {
+                logger.warn('Slack', 'Load', `[SlackAppStore] Slack App ${persisted.id} 的 signingSecret 不存在，略過載入`);
                 continue;
             }
 
@@ -116,7 +116,7 @@ class SlackAppStore {
                 id: persisted.id,
                 name: persisted.name,
                 botToken: persisted.botToken,
-                appToken: persisted.appToken,
+                signingSecret: persisted.signingSecret,
                 botUserId: persisted.botUserId,
                 connectionStatus: 'disconnected',
                 channels: [],
@@ -134,7 +134,7 @@ class SlackAppStore {
             id: app.id,
             name: app.name,
             botToken: app.botToken,
-            appToken: app.appToken,
+            signingSecret: app.signingSecret,
             botUserId: app.botUserId,
         }));
         return persistenceService.writeJson(filePath, persistedApps);

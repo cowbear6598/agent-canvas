@@ -512,22 +512,7 @@ const handlePodSlackUnbound = createUnifiedHandler<BasePayload & { pod?: Pod; ca
 )
 
 const handleSlackConnectionStatusChanged = (payload: { slackAppId: string; connectionStatus: SlackAppConnectionStatus; channels?: SlackChannel[] }): void => {
-  const slackStore = useSlackStore()
-  const existingApp = slackStore.getSlackAppById(payload.slackAppId)
-  const previousStatus = existingApp?.connectionStatus
-  const appName = existingApp?.name ?? ''
-
-  slackStore.updateSlackAppStatus(payload.slackAppId, payload.connectionStatus, payload.channels)
-
-  const { toast } = useToast()
-
-  if (payload.connectionStatus === 'reconnecting') {
-    toast({ title: 'Slack', description: `${appName} 連線中斷，正在重連...`, variant: 'destructive' })
-  } else if (payload.connectionStatus === 'connected' && previousStatus === 'reconnecting') {
-    toast({ title: 'Slack', description: `${appName} 已重新連線` })
-  } else if (payload.connectionStatus === 'disconnected' && previousStatus === 'reconnecting') {
-    toast({ title: 'Slack', description: `${appName} 重連失敗，請檢查設定`, variant: 'destructive' })
-  }
+  useSlackStore().updateSlackAppStatus(payload.slackAppId, payload.connectionStatus, payload.channels)
 }
 
 const handleSlackMessageReceived = (payload: { podId: string; userName: string; text: string }): void => {

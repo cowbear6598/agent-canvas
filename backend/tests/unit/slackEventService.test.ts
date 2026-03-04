@@ -26,8 +26,8 @@ vi.mock('../../src/services/slack/slackAppStore.js', () => ({
     },
 }));
 
-vi.mock('../../src/services/slack/slackConnectionManager.js', () => ({
-    slackConnectionManager: {
+vi.mock('../../src/services/slack/slackClientManager.js', () => ({
+    slackClientManager: {
         sendMessage: vi.fn(() => Promise.resolve({success: true})),
     },
 }));
@@ -56,7 +56,7 @@ import {podStore} from '../../src/services/podStore.js';
 import {messageStore} from '../../src/services/messageStore.js';
 import {socketService} from '../../src/services/socketService.js';
 import {slackAppStore} from '../../src/services/slack/slackAppStore.js';
-import {slackConnectionManager} from '../../src/services/slack/slackConnectionManager.js';
+import {slackClientManager} from '../../src/services/slack/slackClientManager.js';
 import {connectionStore} from '../../src/services/connectionStore.js';
 import {executeStreamingChat} from '../../src/services/claude/streamingChatExecutor.js';
 import {WebSocketResponseEvents} from '../../src/schemas/events.js';
@@ -428,7 +428,7 @@ describe('SlackEventService', () => {
                 event_ts: '111.222',
             } as any);
 
-            expect(slackConnectionManager.sendMessage).toHaveBeenCalledWith('app-1', 'C123', '目前忙碌中，請稍後再試');
+            expect(slackClientManager.sendMessage).toHaveBeenCalledWith('app-1', 'C123', '目前忙碌中，請稍後再試');
             expect(executeStreamingChat).not.toHaveBeenCalled();
         });
 
@@ -471,7 +471,7 @@ describe('SlackEventService', () => {
             } as any);
 
             expect(executeStreamingChat).toHaveBeenCalledOnce();
-            expect(slackConnectionManager.sendMessage).not.toHaveBeenCalled();
+            expect(slackClientManager.sendMessage).not.toHaveBeenCalled();
         });
 
         it('Pod 狀態為 error 時應先重置為 idle 再注入訊息', async () => {
@@ -496,6 +496,42 @@ describe('SlackEventService', () => {
 
             expect(podStore.setStatus).toHaveBeenCalledWith(canvasId, pod.id, 'idle');
             expect(executeStreamingChat).toHaveBeenCalled();
+        });
+    });
+
+    describe('忙碌回覆冷卻機制', () => {
+        it('同一頻道短時間內第二次忙碌時不再呼叫 sendMessage', async () => {
+            const pod = makePod({
+                status: 'chatting',
+                slackBinding: {slackAppId: 'app-1', slackChannelId: 'C456'},
+            });
+            asMock(slackAppStore.getById).mockReturnValue({id: 'app-1', botUserId: 'UBOT'});
+            asMock(podStore.findBySlackApp).mockReturnValue([{canvasId, pod}]);
+
+            const mention = {
+                type: 'app_mention' as const,
+                channel: 'C456',
+                user: 'U456',
+                text: '<@UBOT> 你好',
+                event_ts: '111.222',
+            };
+
+            // 使用遠超過 30 秒冷卻期的初始時間，確保 singleton 先前狀態不影響第一次呼叫
+            const mockNow = vi.spyOn(Date, 'now');
+            mockNow.mockReturnValue(100_000_000);
+
+            await slackEventService.handleAppMention('app-1', mention as any);
+
+            expect(slackClientManager.sendMessage).toHaveBeenCalledTimes(1);
+
+            // 模擬 10 秒後（30 秒冷卻未到），第二次不應再發送
+            mockNow.mockReturnValue(100_010_000);
+
+            await slackEventService.handleAppMention('app-1', mention as any);
+
+            expect(slackClientManager.sendMessage).toHaveBeenCalledTimes(1);
+
+            mockNow.mockRestore();
         });
     });
 

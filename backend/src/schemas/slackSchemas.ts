@@ -5,7 +5,7 @@ export const slackAppListSchema = z.object({});
 export const slackAppCreateSchema = z.object({
   name: z.string().min(1).max(100),
   botToken: z.string().startsWith('xoxb-'),
-  appToken: z.string().startsWith('xapp-'),
+  signingSecret: z.string().regex(/^[a-f0-9]{32}$/, 'Signing Secret 格式不正確'),
 });
 
 const slackAppIdOnlySchema = z.object({

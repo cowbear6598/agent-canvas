@@ -59,7 +59,7 @@ export const useSlackStore = defineStore('slack', {
             }
         },
 
-        async createSlackApp(name: string, botToken: string, appToken: string): Promise<SlackApp | null> {
+        async createSlackApp(name: string, botToken: string, signingSecret: string): Promise<SlackApp | null> {
             const { showSuccessToast } = useToast()
             const { withErrorToast } = useWebSocketErrorHandler()
 
@@ -70,7 +70,7 @@ export const useSlackStore = defineStore('slack', {
                     payload: {
                         name,
                         botToken,
-                        appToken
+                        signingSecret
                     }
                 }),
                 'Slack',

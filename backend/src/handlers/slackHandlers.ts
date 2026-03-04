@@ -10,7 +10,7 @@ import type {
 } from '../schemas';
 import type { SlackApp } from '../types/index.js';
 import { slackAppStore } from '../services/slack/slackAppStore.js';
-import { slackConnectionManager } from '../services/slack/slackConnectionManager.js';
+import { slackClientManager } from '../services/slack/slackClientManager.js';
 import { podStore } from '../services/podStore.js';
 import { socketService } from '../services/socketService.js';
 import { emitError, emitNotFound, emitSuccess } from '../utils/websocketResponse.js';
@@ -44,7 +44,7 @@ export async function handleSlackAppCreate(
     payload: SlackAppCreatePayload,
     requestId: string
 ): Promise<void> {
-    const {name, botToken, appToken} = payload;
+    const {name, botToken, signingSecret} = payload;
 
     const existing = slackAppStore.getByBotToken(botToken);
     if (existing) {
@@ -52,7 +52,7 @@ export async function handleSlackAppCreate(
         return;
     }
 
-    const result = slackAppStore.create(name, botToken, appToken);
+    const result = slackAppStore.create(name, botToken, signingSecret);
     if (handleResultError(result, connectionId, WebSocketResponseEvents.SLACK_APP_CREATED, requestId, '建立 Slack App 失敗')) return;
 
     const app = result.data;
@@ -60,9 +60,9 @@ export async function handleSlackAppCreate(
     logger.log('Slack', 'Create', `建立 Slack App「${app.name}」`);
 
     fireAndForget(
-        slackConnectionManager.connect(app),
+        slackClientManager.initialize(app),
         'Slack',
-        `Slack App「${app.name}」連線失敗`
+        `Slack App「${app.name}」初始化失敗`
     );
 
     socketService.emitToAll(WebSocketResponseEvents.SLACK_APP_CREATED, {
@@ -82,7 +82,7 @@ export async function handleSlackAppDelete(
     const app = getSlackAppOrEmitError(connectionId, slackAppId, WebSocketResponseEvents.SLACK_APP_DELETED, requestId);
     if (!app) return;
 
-    await slackConnectionManager.disconnect(slackAppId);
+    slackClientManager.remove(slackAppId);
 
     const boundPods = podStore.findBySlackApp(slackAppId);
     for (const {canvasId, pod} of boundPods) {
@@ -163,7 +163,7 @@ export async function handleSlackAppChannelsRefresh(
     const app = getSlackAppOrEmitError(connectionId, slackAppId, WebSocketResponseEvents.SLACK_APP_CHANNELS_REFRESHED, requestId);
     if (!app) return;
 
-    const result = await slackConnectionManager.refreshChannels(slackAppId);
+    const result = await slackClientManager.refreshChannels(slackAppId);
     if (handleResultError(result, connectionId, WebSocketResponseEvents.SLACK_APP_CHANNELS_REFRESHED, requestId, '重新取得頻道失敗')) return;
 
     logger.log('Slack', 'Complete', `Slack App「${app.name}」頻道已重新整理`);

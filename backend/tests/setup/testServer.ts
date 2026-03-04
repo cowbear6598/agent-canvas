@@ -29,6 +29,7 @@ export async function createTestServer(): Promise<TestServerInstance> {
   const { eventRouter } = await import('../../src/services/eventRouter.js');
   const { deserialize } = await import('../../src/utils/messageSerializer.js');
   const { handleApiRequest } = await import('../../src/api/apiRouter.js');
+  const { handleSlackWebhook } = await import('../../src/services/slack/slackWebhookHandler.js');
   const { logger } = await import('../../src/utils/logger.js');
   const { WebSocketResponseEvents } = await import('../../src/schemas/index.js');
 
@@ -52,6 +53,13 @@ export async function createTestServer(): Promise<TestServerInstance> {
     port: 0,
     hostname: '0.0.0.0',
     async fetch(req, server) {
+      const url = new URL(req.url);
+
+      // /slack/events 路由來自 Slack 伺服器，不需要 CORS origin 驗證
+      if (req.method === 'POST' && url.pathname === '/slack/events') {
+        return handleSlackWebhook(req);
+      }
+
       // 檢查 CORS Origin
       const origin = req.headers.get('origin');
       if (origin && origin !== testConfig.corsOrigin) {

@@ -1,27 +1,18 @@
 import {v4 as uuidv4} from 'uuid';
-import type {Pod} from '../../types/index.js';
-import type {SlackMessage} from '../../types/index.js';
+import type {Pod, SlackMessage, AppMentionEvent} from '../../types/index.js';
 import {WebSocketResponseEvents} from '../../schemas/events.js';
 import {podStore} from '../podStore.js';
 import {messageStore} from '../messageStore.js';
 import {socketService} from '../socketService.js';
 import {slackAppStore} from './slackAppStore.js';
-import {slackConnectionManager} from './slackConnectionManager.js';
+import {slackClientManager} from './slackClientManager.js';
 import {connectionStore} from '../connectionStore.js';
 import {executeStreamingChat} from '../claude/streamingChatExecutor.js';
 import {logger} from '../../utils/logger.js';
 
-interface AppMentionEvent {
-    type: 'app_mention';
-    channel: string;
-    user?: string;
-    text: string;
-    thread_ts?: string;
-    event_ts: string;
-}
-
 const BUSY_STATUSES = new Set(['chatting', 'summarizing'] as const);
 const MAX_WORKFLOW_CHAIN_SIZE = 50;
+const MAX_SLACK_MESSAGE_LENGTH = 4000;
 
 const INJECTION_PREFIX_PATTERN = /(^|\s)(System:|Human:|Assistant:)/g;
 
@@ -43,7 +34,10 @@ class SlackEventService {
 
         const slackApp = slackAppStore.getById(slackAppId);
         const botUserId = slackApp?.botUserId ?? '';
-        const cleanedText = text.replace(/<@[A-Z0-9]+(?:\|[^>]+)?>/g, '').trim();
+        const rawCleanedText = text.replace(/<@[A-Z0-9]+(?:\|[^>]+)?>/g, '').trim();
+        const cleanedText = rawCleanedText.length > MAX_SLACK_MESSAGE_LENGTH
+            ? rawCleanedText.slice(0, MAX_SLACK_MESSAGE_LENGTH) + '\n...(訊息過長，已截斷)'
+            : rawCleanedText;
 
         const userName = user ?? 'unknown';
 
@@ -80,7 +74,7 @@ class SlackEventService {
             return false;
         }
         if (this.shouldSendBusyReply(channel)) {
-            await slackConnectionManager.sendMessage(slackAppId, channel, '目前忙碌中，請稍後再試');
+            await slackClientManager.sendMessage(slackAppId, channel, '目前忙碌中，請稍後再試');
         }
         return true;
     }

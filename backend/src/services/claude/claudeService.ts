@@ -18,7 +18,7 @@ import {
 } from './messageBuilder.js';
 import type {StreamCallback} from './types.js';
 import {z} from 'zod';
-import {slackConnectionManager} from '../slack/slackConnectionManager.js';
+import {slackClientManager} from '../slack/slackClientManager.js';
 
 export type {StreamEvent, StreamCallback} from './types.js';
 
@@ -358,7 +358,7 @@ export class ClaudeService {
                 thread_ts: z.string().regex(/^\d+\.\d+$/).optional().describe('要回覆的對話串時間戳（選填，格式：timestamp.thread_timestamp）'),
             },
             async (params: {text: string; thread_ts?: string}) => {
-                const result = await slackConnectionManager.sendMessage(
+                const result = await slackClientManager.sendMessage(
                     slackAppId,
                     slackChannelId,
                     params.text,

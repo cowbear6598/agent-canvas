@@ -89,9 +89,8 @@ describe('slackStore', () => {
         const store = useSlackStore()
         const connectedApp = createMockSlackApp({ id: 'app-1', connectionStatus: 'connected' })
         const disconnectedApp = createMockSlackApp({ id: 'app-2', connectionStatus: 'disconnected' })
-        const connectingApp = createMockSlackApp({ id: 'app-3', connectionStatus: 'connecting' })
-        const errorApp = createMockSlackApp({ id: 'app-4', connectionStatus: 'error' })
-        store.slackApps = [connectedApp, disconnectedApp, connectingApp, errorApp]
+        const errorApp = createMockSlackApp({ id: 'app-3', connectionStatus: 'error' })
+        store.slackApps = [connectedApp, disconnectedApp, errorApp]
 
         const result = store.connectedApps
 
@@ -178,7 +177,7 @@ describe('slackStore', () => {
 
       mockCreateWebSocketRequest.mockResolvedValueOnce({ slackApp: newApp })
 
-      const result = await store.createSlackApp('My App', 'xoxb-token', 'xapp-token')
+      const result = await store.createSlackApp('My App', 'xoxb-token', 'test-signing-secret')
 
       expect(mockCreateWebSocketRequest).toHaveBeenCalledWith({
         requestEvent: 'slack:app:create',
@@ -186,7 +185,7 @@ describe('slackStore', () => {
         payload: {
           name: 'My App',
           botToken: 'xoxb-token',
-          appToken: 'xapp-token',
+          signingSecret: 'test-signing-secret',
         },
       })
       expect(mockShowSuccessToast).toHaveBeenCalledWith('Slack', '建立成功', 'My App')
@@ -198,7 +197,7 @@ describe('slackStore', () => {
 
       mockCreateWebSocketRequest.mockResolvedValueOnce({})
 
-      const result = await store.createSlackApp('My App', 'xoxb-token', 'xapp-token')
+      const result = await store.createSlackApp('My App', 'xoxb-token', 'test-signing-secret')
 
       expect(result).toBeNull()
       expect(mockShowSuccessToast).not.toHaveBeenCalled()
@@ -210,7 +209,7 @@ describe('slackStore', () => {
 
       mockCreateWebSocketRequest.mockRejectedValueOnce(error)
 
-      const result = await store.createSlackApp('My App', 'xoxb-token', 'xapp-token')
+      const result = await store.createSlackApp('My App', 'xoxb-token', 'test-signing-secret')
 
       expect(mockShowErrorToast).toHaveBeenCalledWith('Slack', '建立失敗', '建立失敗')
       expect(result).toBeNull()

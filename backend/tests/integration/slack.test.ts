@@ -21,50 +21,35 @@ import {
 } from '../../src/schemas';
 import type { TestWebSocketClient } from '../setup';
 
-vi.mock('@slack/bolt', () => {
-    function MockApp(this: any) {
-        this.start = vi.fn().mockResolvedValue(undefined);
-        this.stop = vi.fn().mockResolvedValue(undefined);
-        this.client = {
-            auth: { test: vi.fn().mockResolvedValue({ user_id: 'U_TEST_BOT' }) },
-            conversations: {
-                list: vi.fn().mockResolvedValue({
-                    channels: [
-                        { id: 'C001', name: 'general', is_member: true },
-                        { id: 'C002', name: 'random', is_member: true },
-                    ],
-                    response_metadata: { next_cursor: '' },
-                }),
-            },
-            chat: { postMessage: vi.fn().mockResolvedValue({ ok: true }) },
+vi.mock('@slack/web-api', () => {
+    function MockWebClient(this: any) {
+        this.auth = {test: vi.fn().mockResolvedValue({user_id: 'U_TEST_BOT'})};
+        this.conversations = {
+            list: vi.fn().mockResolvedValue({
+                channels: [
+                    {id: 'C001', name: 'general', is_member: true},
+                    {id: 'C002', name: 'random', is_member: true},
+                ],
+                response_metadata: {next_cursor: ''},
+            }),
         };
-        this.event = vi.fn();
+        this.chat = {postMessage: vi.fn().mockResolvedValue({ok: true})};
     }
-    return { App: vi.fn().mockImplementation(MockApp) };
+    return {WebClient: vi.fn().mockImplementation(MockWebClient)};
 });
-
-// 等待 Slack App 連線完成（connect 是 fire-and-forget，需要稍等）
-async function waitForSlackConnected(slackAppId: string, retries = 10): Promise<void> {
-    const { slackAppStore } = await import('../../src/services/slack/slackAppStore.js');
-    for (let i = 0; i < retries; i++) {
-        const app = slackAppStore.getById(slackAppId);
-        if (app?.connectionStatus === 'connected') {
-            return;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 50));
-    }
-}
 
 async function createSlackApp(
     client: TestWebSocketClient,
     overrides?: Partial<SlackAppCreatePayload>
 ): Promise<Record<string, any>> {
     const id = uuidv4().replace(/-/g, '').slice(0, 8);
+    // signingSecret 需符合 32 字元 hex 格式
+    const signingSecret = uuidv4().replace(/-/g, '').slice(0, 32);
     const payload: SlackAppCreatePayload & { requestId: string } = {
         requestId: uuidv4(),
         name: `test-app-${id}`,
         botToken: `xoxb-${id}-token`,
-        appToken: `xapp-${id}-token`,
+        signingSecret,
         ...overrides,
     };
 
@@ -75,8 +60,9 @@ async function createSlackApp(
         payload
     );
 
+    // initialize 是 fire-and-forget，短暫等待讓其完成
     if (response.success && response.slackApp?.id) {
-        await waitForSlackConnected(response.slackApp.id);
+        await new Promise((r) => setTimeout(r, 100));
     }
 
     return response;
@@ -128,7 +114,7 @@ describe('Slack 整合', () => {
             createdAppId = response.slackApp.id;
         });
 
-        it('建立 Slack App 時 Token 格式驗證失敗', async () => {
+        it('建立 Slack App 時 botToken 格式驗證失敗', async () => {
             const response = await emitAndWaitResponse<Record<string, any>, Record<string, any>>(
                 client,
                 WebSocketRequestEvents.SLACK_APP_CREATE,
@@ -137,7 +123,24 @@ describe('Slack 整合', () => {
                     requestId: uuidv4(),
                     name: 'invalid-token-app',
                     botToken: 'invalid-token',
-                    appToken: 'xapp-valid-token',
+                    signingSecret: 'abcdef1234567890abcdef1234567890',
+                }
+            );
+
+            expect(response.success).toBe(false);
+            expect(response.error).toBeDefined();
+        });
+
+        it('建立 Slack App 時 signingSecret 為空應失敗', async () => {
+            const response = await emitAndWaitResponse<Record<string, any>, Record<string, any>>(
+                client,
+                WebSocketRequestEvents.SLACK_APP_CREATE,
+                WebSocketResponseEvents.SLACK_APP_CREATED,
+                {
+                    requestId: uuidv4(),
+                    name: 'empty-secret-app',
+                    botToken: 'xoxb-empty-secret',
+                    signingSecret: '',
                 }
             );
 
@@ -154,7 +157,7 @@ describe('Slack 整合', () => {
                     requestId: uuidv4(),
                     name: '',
                     botToken: 'xoxb-empty-name',
-                    appToken: 'xapp-empty-name',
+                    signingSecret: 'abcdef1234567890abcdef1234567890',
                 }
             );
 
@@ -203,7 +206,6 @@ describe('Slack 整合', () => {
             expect(response.success).toBe(true);
             expect(response.slackAppId).toBe(appId);
 
-            // 已刪除，不需要在 afterEach 清理
             createdAppId = '';
         });
 
@@ -288,7 +290,6 @@ describe('Slack 整合', () => {
             const pod = await createPod(client);
             const canvasId = await getCanvasId(client);
 
-            // 先綁定
             await emitAndWaitResponse<PodBindSlackPayload & { requestId: string }, Record<string, any>>(
                 client,
                 WebSocketRequestEvents.POD_BIND_SLACK,
@@ -302,7 +303,6 @@ describe('Slack 整合', () => {
                 }
             );
 
-            // 再解綁
             const response = await emitAndWaitResponse<PodUnbindSlackPayload & { requestId: string }, Record<string, any>>(
                 client,
                 WebSocketRequestEvents.POD_UNBIND_SLACK,
@@ -416,7 +416,6 @@ describe('Slack 整合', () => {
             const deleteResponse = await deleteSlackApp(client, appId);
             expect(deleteResponse.success).toBe(true);
 
-            // setSlackBinding(null) 會移除屬性，結果為 undefined
             const { podStore } = await import('../../src/services/podStore.js');
             const updatedPod = podStore.getById(canvasId, pod.id);
             expect(updatedPod?.slackBinding).toBeUndefined();

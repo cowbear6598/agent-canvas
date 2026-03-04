@@ -19,16 +19,6 @@ describe('slackUtils', () => {
       expect(connectionStatusClass(app)).toBe('bg-green-500')
     })
 
-    it('connecting 狀態應回傳 bg-yellow-500 animate-pulse', () => {
-      const app = createMockSlackApp({ connectionStatus: 'connecting' })
-      expect(connectionStatusClass(app)).toBe('bg-yellow-500 animate-pulse')
-    })
-
-    it('reconnecting 狀態應回傳 bg-orange-500 animate-pulse', () => {
-      const app = createMockSlackApp({ connectionStatus: 'reconnecting' })
-      expect(connectionStatusClass(app)).toBe('bg-orange-500 animate-pulse')
-    })
-
     it('disconnected 狀態應回傳 bg-red-500', () => {
       const app = createMockSlackApp({ connectionStatus: 'disconnected' })
       expect(connectionStatusClass(app)).toBe('bg-red-500')

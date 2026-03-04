@@ -29,7 +29,7 @@ const slackStore = useSlackStore()
 const showAddForm = ref(false)
 const appName = ref('')
 const botToken = ref('')
-const appToken = ref('')
+const signingSecret = ref('')
 const isSubmitting = ref(false)
 const submitError = ref('')
 
@@ -44,18 +44,17 @@ const botTokenError = computed(() => {
   return ''
 })
 
-const appTokenError = computed(() => {
-  if (appToken.value === '') return 'App-Level Token 不可為空'
-  if (!appToken.value.startsWith('xapp-')) return 'App-Level Token 必須以 xapp- 開頭'
+const signingSecretError = computed(() => {
+  if (signingSecret.value === '') return 'Signing Secret 不可為空'
   return ''
 })
 
 const isFormValid = computed(() => {
-  return !nameError.value && !botTokenError.value && !appTokenError.value
+  return !nameError.value && !botTokenError.value && !signingSecretError.value
 })
 
 const isDirty = computed(() => {
-  return appName.value !== '' || botToken.value !== '' || appToken.value !== ''
+  return appName.value !== '' || botToken.value !== '' || signingSecret.value !== ''
 })
 
 const handleClose = (): void => {
@@ -75,7 +74,7 @@ const handleCancelAddForm = (): void => {
 const resetForm = (): void => {
   appName.value = ''
   botToken.value = ''
-  appToken.value = ''
+  signingSecret.value = ''
   submitError.value = ''
 }
 
@@ -85,7 +84,7 @@ const handleConfirmAdd = async (): Promise<void> => {
   isSubmitting.value = true
   submitError.value = ''
 
-  const result = await slackStore.createSlackApp(appName.value, botToken.value, appToken.value)
+  const result = await slackStore.createSlackApp(appName.value, botToken.value, signingSecret.value)
 
   isSubmitting.value = false
 
@@ -189,15 +188,15 @@ const handleDeleteApp = async (appId: string): Promise<void> => {
 
           <div class="space-y-1">
             <Input
-              v-model="appToken"
+              v-model="signingSecret"
               type="password"
-              placeholder="xapp-..."
+              placeholder="Signing Secret"
             />
             <p
-              v-if="isDirty && appTokenError"
+              v-if="isDirty && signingSecretError"
               class="text-xs text-red-500"
             >
-              {{ appTokenError }}
+              {{ signingSecretError }}
             </p>
           </div>
 

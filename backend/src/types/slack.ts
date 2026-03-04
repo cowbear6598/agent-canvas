@@ -1,4 +1,4 @@
-export type SlackAppConnectionStatus = 'connected' | 'disconnected' | 'connecting' | 'reconnecting' | 'error';
+export type SlackAppConnectionStatus = 'connected' | 'disconnected' | 'error';
 
 export interface SlackChannel {
   id: string;
@@ -9,7 +9,7 @@ export interface SlackApp {
   id: string;
   name: string;
   botToken: string;
-  appToken: string;
+  signingSecret: string;
   connectionStatus: SlackAppConnectionStatus;
   channels: SlackChannel[];
   botUserId: string;
@@ -35,6 +35,24 @@ export interface PersistedSlackApp {
   id: string;
   name: string;
   botToken: string;
-  appToken: string;
+  signingSecret: string;
   botUserId: string;
+}
+
+export interface SlackEvent {
+  type: string;
+  channel: string;
+  user?: string;
+  text: string;
+  ts: string;
+  event_ts: string;
+  thread_ts?: string;
+}
+
+export type AppMentionEvent = SlackEvent;
+
+export interface SlackUrlVerificationPayload {
+  type: 'url_verification';
+  challenge: string;
+  token: string;
 }

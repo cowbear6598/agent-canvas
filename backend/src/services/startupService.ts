@@ -11,7 +11,7 @@ import { config } from '../config';
 import { persistenceService } from './persistence';
 import { logger } from '../utils/logger.js';
 import { slackAppStore } from './slack/slackAppStore.js';
-import { slackConnectionManager } from './slack/slackConnectionManager.js';
+import { slackClientManager } from './slack/slackClientManager.js';
 
 class StartupService {
   async initialize(): Promise<Result<void>> {
@@ -106,18 +106,17 @@ class StartupService {
     logger.log('Slack', 'Load', `[StartupService] 開始恢復 ${apps.length} 個 Slack App 連線`);
 
     const results = await Promise.allSettled(
-      apps.map((app) => slackConnectionManager.connect(app))
+      apps.map((app) => slackClientManager.initialize(app))
     );
 
     const appsWithResults = apps.map((slackApp, index) => ({ slackApp, result: results[index] }));
     for (const { slackApp, result } of appsWithResults) {
       if (result.status === 'rejected') {
-        logger.error('Slack', 'Error', `[StartupService] Slack App「${slackApp.name}」連線恢復失敗`, result.reason);
+        logger.error('Slack', 'Error', `[StartupService] Slack App「${slackApp.name}」初始化恢復失敗`, result.reason);
       }
     }
 
-    slackConnectionManager.startHealthCheck();
-    logger.log('Slack', 'Complete', '[StartupService] Slack App 連線恢復完成');
+    logger.log('Slack', 'Complete', '[StartupService] Slack App 初始化恢復完成');
   }
 }
 
