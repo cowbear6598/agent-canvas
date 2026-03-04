@@ -31,7 +31,7 @@ import {requireActiveCanvas, getActiveCanvasIdOrWarn} from '@/utils/canvasGuard'
 
 const MAX_COORD = 100000
 
-/** 選單關閉後的冷卻時間（毫秒），防止同一次滑鼠操作關閉後立刻重開 */
+/** 防止滑鼠 mouseup 事件在關閉選單後立即觸發 click 而重新打開選單 */
 const TYPE_MENU_COOLDOWN_MS = 300
 
 const POD_FALLBACK_INITIAL_X = 100
@@ -63,7 +63,7 @@ export const usePodStore = defineStore('pod', {
 
     getters: {
         selectedPod: (state): Pod | null =>
-            state.pods.find((p) => p.id === state.selectedPodId) || null,
+            state.pods.find((pod) => pod.id === state.selectedPodId) || null,
 
         podCount: (state): number => state.pods.length,
 
@@ -87,7 +87,7 @@ export const usePodStore = defineStore('pod', {
 
     actions: {
         findPodById(podId: string): Pod | undefined {
-            return this.pods.find((p) => p.id === podId)
+            return this.pods.find((pod) => pod.id === podId)
         },
 
         enrichPod(pod: Pod, existingOutput?: string[]): Pod {
@@ -105,7 +105,7 @@ export const usePodStore = defineStore('pod', {
         },
 
         updatePod(pod: Pod): void {
-            const index = this.pods.findIndex((p) => p.id === pod.id)
+            const index = this.pods.findIndex((existingPod) => existingPod.id === pod.id)
             if (index === -1) return
 
             const existing = this.pods[index]
@@ -323,41 +323,32 @@ export const usePodStore = defineStore('pod', {
             this.typeMenuClosedAt = Date.now()
         },
 
-        updatePodOutputStyle(podId: string, outputStyleId: string | null): void {
+        updatePodField<K extends keyof Pod>(podId: string, field: K, value: Pod[K]): void {
             const pod = this.findPodById(podId)
-            if (pod) {
-                pod.outputStyleId = outputStyleId
-            }
+            if (!pod) return
+            pod[field] = value
+        },
+
+        updatePodOutputStyle(podId: string, outputStyleId: string | null): void {
+            this.updatePodField(podId, 'outputStyleId', outputStyleId)
         },
 
         clearPodOutputsByIds(podIds: string[]): void {
             for (const podId of podIds) {
-                const pod = this.findPodById(podId)
-                if (pod) {
-                    pod.output = []
-                }
+                this.updatePodField(podId, 'output', [])
             }
         },
 
         updatePodModel(podId: string, model: ModelType): void {
-            const pod = this.findPodById(podId)
-            if (pod) {
-                pod.model = model
-            }
+            this.updatePodField(podId, 'model', model)
         },
 
         updatePodRepository(podId: string, repositoryId: string | null): void {
-            const pod = this.findPodById(podId)
-            if (!pod) return
-
-            pod.repositoryId = repositoryId
+            this.updatePodField(podId, 'repositoryId', repositoryId)
         },
 
         updatePodCommand(podId: string, commandId: string | null): void {
-            const pod = this.findPodById(podId)
-            if (!pod) return
-
-            pod.commandId = commandId
+            this.updatePodField(podId, 'commandId', commandId)
         },
 
         async setAutoClearWithBackend(podId: string, autoClear: boolean): Promise<Pod | null> {
@@ -391,7 +382,7 @@ export const usePodStore = defineStore('pod', {
         },
 
         removePod(podId: string): void {
-            this.pods = this.pods.filter((p) => p.id !== podId)
+            this.pods = this.pods.filter((pod) => pod.id !== podId)
 
             if (this.selectedPodId === podId) {
                 this.selectedPodId = null
@@ -414,10 +405,7 @@ export const usePodStore = defineStore('pod', {
         },
 
         updatePodName(podId: string, name: string): void {
-            const pod = this.findPodById(podId)
-            if (pod) {
-                pod.name = name
-            }
+            this.updatePodField(podId, 'name', name)
         },
 
         triggerScheduleFiredAnimation(podId: string): void {

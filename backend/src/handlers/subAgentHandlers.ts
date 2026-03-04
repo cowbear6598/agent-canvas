@@ -1,6 +1,5 @@
 import {WebSocketResponseEvents} from '../schemas';
 import type {
-    PodBindSubAgentPayload,
     SubAgentMoveToGroupPayload,
 } from '../schemas';
 import {subAgentService} from '../services/subAgentService.js';
@@ -73,13 +72,7 @@ const subAgentBindHandler = createBindHandler({
     },
 });
 
-export async function handlePodBindSubAgent(
-    connectionId: string,
-    payload: PodBindSubAgentPayload,
-    requestId: string
-): Promise<void> {
-    return subAgentBindHandler(connectionId, payload, requestId);
-}
+export const handlePodBindSubAgent = subAgentBindHandler;
 
 const subAgentMoveToGroupHandler = createMoveToGroupHandler({
     service: subAgentService,

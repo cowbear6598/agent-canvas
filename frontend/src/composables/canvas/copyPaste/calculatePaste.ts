@@ -43,12 +43,14 @@ function updateBoundsForUnboundNotes(bounds: BoundingBox, noteStoreConfigs: Unbo
   }
 }
 
+type HasPosition = { x: number; y: number }
+
 export function calculateBoundingBox<
-  TO extends { x: number; y: number },
-  TS extends { x: number; y: number },
-  TR extends { x: number; y: number },
-  TSA extends { x: number; y: number },
-  TC extends { x: number; y: number }
+  TO extends HasPosition,
+  TS extends HasPosition,
+  TR extends HasPosition,
+  TSA extends HasPosition,
+  TC extends HasPosition
 >(
   pods: CopiedPod[],
   notes: {
@@ -151,17 +153,31 @@ export function transformConnections(connections: CopiedConnection[]): PasteConn
   }))
 }
 
+type ClipboardData = {
+  pods: CopiedPod[]
+  outputStyleNotes: CopiedOutputStyleNote[]
+  skillNotes: CopiedSkillNote[]
+  repositoryNotes: CopiedRepositoryNote[]
+  subAgentNotes: CopiedSubAgentNote[]
+  commandNotes: CopiedCommandNote[]
+  connections: CopiedConnection[]
+}
+
+function isEmptyClipboard(clipboardData: ClipboardData): boolean {
+  const { pods, outputStyleNotes, skillNotes, repositoryNotes, subAgentNotes, commandNotes } = clipboardData
+  return (
+    pods.length === 0 &&
+    outputStyleNotes.length === 0 &&
+    skillNotes.length === 0 &&
+    repositoryNotes.length === 0 &&
+    subAgentNotes.length === 0 &&
+    commandNotes.length === 0
+  )
+}
+
 export function calculatePastePositions(
   targetPosition: { x: number; y: number },
-  clipboardData: {
-    pods: CopiedPod[]
-    outputStyleNotes: CopiedOutputStyleNote[]
-    skillNotes: CopiedSkillNote[]
-    repositoryNotes: CopiedRepositoryNote[]
-    subAgentNotes: CopiedSubAgentNote[]
-    commandNotes: CopiedCommandNote[]
-    connections: CopiedConnection[]
-  }
+  clipboardData: ClipboardData
 ): {
   pods: PastePodItem[]
   outputStyleNotes: PasteOutputStyleNoteItem[]
@@ -173,8 +189,7 @@ export function calculatePastePositions(
 } {
   const { pods, outputStyleNotes, skillNotes, repositoryNotes, subAgentNotes, commandNotes, connections } = clipboardData
 
-  const isEmpty = pods.length === 0 && outputStyleNotes.length === 0 && skillNotes.length === 0 && repositoryNotes.length === 0 && subAgentNotes.length === 0 && commandNotes.length === 0
-  if (isEmpty) {
+  if (isEmptyClipboard(clipboardData)) {
     return { pods: [], outputStyleNotes: [], skillNotes: [], repositoryNotes: [], subAgentNotes: [], commandNotes: [], connections: [] }
   }
 
@@ -193,8 +208,6 @@ export function calculatePastePositions(
   })
 
   const offset = calculateOffsets(boundingBox, targetPosition)
-
-  const newPods = transformPods(pods, offset)
 
   const newOutputStyleNotes = transformNotes(
     outputStyleNotes,
@@ -266,15 +279,13 @@ export function calculatePastePositions(
     })
   )
 
-  const newConnections = transformConnections(connections)
-
   return {
-    pods: newPods,
+    pods: transformPods(pods, offset),
     outputStyleNotes: newOutputStyleNotes,
     skillNotes: newSkillNotes,
     repositoryNotes: newRepositoryNotes,
     subAgentNotes: newSubAgentNotes,
     commandNotes: newCommandNotes,
-    connections: newConnections,
+    connections: transformConnections(connections),
   }
 }

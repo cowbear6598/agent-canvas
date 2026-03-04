@@ -11,7 +11,7 @@ export function appendToolUseToLastSub(subMessages: SubMessage[], toolUseInfo: T
     if (!lastSub) return updated
 
     const subToolUse = lastSub.toolUse || []
-    const exists = subToolUse.some(t => t.toolUseId === toolUseInfo.toolUseId)
+    const exists = subToolUse.some(tool => tool.toolUseId === toolUseInfo.toolUseId)
 
     updated[lastIndex] = {
         ...lastSub,

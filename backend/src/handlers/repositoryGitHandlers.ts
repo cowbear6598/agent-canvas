@@ -132,20 +132,20 @@ function validateNotWorktree(
   return true;
 }
 
+function sanitizeRepoNameChars(raw: string): string {
+  const withoutGitSuffix = raw.replace(/\.git$/, '').replace(/[^\w.-]/g, '-');
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(withoutGitSuffix)) {
+    return withoutGitSuffix.replace(/^[^a-zA-Z0-9]+/, '');
+  }
+  return withoutGitSuffix;
+}
+
+function ensureNonEmptyRepoName(name: string): string {
+  return name.length > 0 ? name : 'unnamed-repo';
+}
+
 function normalizeRepoName(rawName: string): string {
-  let repoName = rawName
-    .replace(/\.git$/, '')
-    .replace(/[^\w.-]/g, '-');
-
-  if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(repoName)) {
-    repoName = repoName.replace(/^[^a-zA-Z0-9]+/, '');
-  }
-
-  if (!repoName || repoName.length === 0) {
-    repoName = 'unnamed-repo';
-  }
-
-  return repoName;
+  return ensureNonEmptyRepoName(sanitizeRepoNameChars(rawName));
 }
 
 function parseSshRepoName(url: string): string {
@@ -437,6 +437,82 @@ export const handleRepositoryCheckDirty = withValidatedGitRepository<RepositoryC
   }
 );
 
+type CheckoutAction = 'switched' | 'fetched' | 'created';
+
+async function performCheckoutWithProgress(
+  connectionId: string,
+  requestId: string,
+  repositoryPath: string,
+  branchName: string,
+  force: boolean | undefined
+): Promise<{ success: false } | { success: true; action: CheckoutAction }> {
+  const throttledEmit = createThrottledProgressEmitter(
+    connectionId,
+    requestId,
+    WebSocketResponseEvents.REPOSITORY_CHECKOUT_BRANCH_PROGRESS
+  );
+
+  const emitCheckoutProgress = (progress: number, message: string): void => {
+    const progressPayload: RepositoryCheckoutBranchProgressPayload = {
+      requestId,
+      progress,
+      message,
+      branchName,
+    };
+    socketService.emitToConnection(connectionId, WebSocketResponseEvents.REPOSITORY_CHECKOUT_BRANCH_PROGRESS, progressPayload);
+  };
+
+  emitCheckoutProgress(0, '準備切換分支...');
+
+  const checkoutResult = await gitService.smartCheckoutBranch(repositoryPath, branchName, {
+    force,
+    onProgress: (progress, message) => throttledEmit(progress, message),
+  });
+
+  if (!checkoutResult.success) {
+    throttledEmit.cancel();
+    return { success: false };
+  }
+
+  throttledEmit.flush();
+
+  const action = checkoutResult.data;
+  const completionMessage = action === 'created' ? '分支建立完成' : '切換完成';
+  emitCheckoutProgress(100, completionMessage);
+
+  return { success: true, action: action as CheckoutAction };
+}
+
+async function broadcastBranchChange(
+  connectionId: string,
+  requestId: string,
+  repositoryId: string,
+  branchName: string,
+  action: CheckoutAction
+): Promise<void> {
+  const metadata = repositoryService.getMetadata(repositoryId);
+  await repositoryService.registerMetadata(repositoryId, {
+    ...metadata,
+    currentBranch: branchName,
+  });
+
+  const response: RepositoryBranchCheckedOutPayload = {
+    requestId,
+    success: true,
+    repositoryId,
+    branchName,
+    action,
+  };
+
+  emitSuccess(connectionId, WebSocketResponseEvents.REPOSITORY_BRANCH_CHECKED_OUT, response);
+
+  const broadcastPayload: BroadcastRepositoryBranchChangedPayload = {
+    repositoryId,
+    branchName,
+  };
+  socketService.emitToAllExcept(connectionId, WebSocketResponseEvents.REPOSITORY_BRANCH_CHANGED, broadcastPayload);
+}
+
 export const handleRepositoryCheckoutBranch = withValidatedGitRepository<RepositoryCheckoutBranchPayload>(
   WebSocketResponseEvents.REPOSITORY_BRANCH_CHECKED_OUT,
   async (connectionId, payload, requestId, repositoryPath) => {
@@ -451,63 +527,16 @@ export const handleRepositoryCheckoutBranch = withValidatedGitRepository<Reposit
     );
     if (!isValid) return;
 
-    const throttledEmit = createThrottledProgressEmitter(
-      connectionId,
-      requestId,
-      WebSocketResponseEvents.REPOSITORY_CHECKOUT_BRANCH_PROGRESS
-    );
-
-    const emitCheckoutProgress = (progress: number, message: string): void => {
-      const progressPayload: RepositoryCheckoutBranchProgressPayload = {
-        requestId,
-        progress,
-        message,
-        branchName,
-      };
-      socketService.emitToConnection(connectionId, WebSocketResponseEvents.REPOSITORY_CHECKOUT_BRANCH_PROGRESS, progressPayload);
-    };
-
-    emitCheckoutProgress(0, '準備切換分支...');
-
-    const checkoutResult = await gitService.smartCheckoutBranch(repositoryPath, branchName, {
-      force,
-      onProgress: (progress, message) => throttledEmit(progress, message),
-    });
+    const checkoutResult = await performCheckoutWithProgress(connectionId, requestId, repositoryPath, branchName, force);
 
     if (!checkoutResult.success) {
-      throttledEmit.cancel();
-      if (handleResultError(checkoutResult, connectionId, WebSocketResponseEvents.REPOSITORY_BRANCH_CHECKED_OUT, requestId, '切換分支失敗')) return;
+      emitError(connectionId, WebSocketResponseEvents.REPOSITORY_BRANCH_CHECKED_OUT, '切換分支失敗', requestId, undefined, 'INTERNAL_ERROR');
+      return;
     }
 
-    throttledEmit.flush();
+    await broadcastBranchChange(connectionId, requestId, repositoryId, branchName, checkoutResult.action);
 
-    const action = checkoutResult.data;
-    const completionMessage = action === 'created' ? '分支建立完成' : '切換完成';
-    emitCheckoutProgress(100, completionMessage);
-
-    const metadata = repositoryService.getMetadata(repositoryId);
-    await repositoryService.registerMetadata(repositoryId, {
-      ...metadata,
-      currentBranch: branchName
-    });
-
-    const response: RepositoryBranchCheckedOutPayload = {
-      requestId,
-      success: true,
-      repositoryId,
-      branchName,
-      action,
-    };
-
-    emitSuccess(connectionId, WebSocketResponseEvents.REPOSITORY_BRANCH_CHECKED_OUT, response);
-
-    const broadcastPayload: BroadcastRepositoryBranchChangedPayload = {
-      repositoryId,
-      branchName,
-    };
-    socketService.emitToAllExcept(connectionId, WebSocketResponseEvents.REPOSITORY_BRANCH_CHANGED, broadcastPayload);
-
-    logger.log('Repository', 'Update', `已切換「${repositoryId}」的分支至「${branchName}」（${action}）`);
+    logger.log('Repository', 'Update', `已切換「${repositoryId}」的分支至「${branchName}」（${checkoutResult.action}）`);
   }
 );
 
@@ -531,6 +560,19 @@ export const handleRepositoryDeleteBranch = withValidatedGitRepository<Repositor
   }
 );
 
+async function withPullLock<T>(repositoryId: string, fn: () => Promise<T>): Promise<{ locked: true } | { locked: false; result: T }> {
+  if (pullingRepositories.has(repositoryId)) {
+    return { locked: true };
+  }
+  pullingRepositories.add(repositoryId);
+  try {
+    const result = await fn();
+    return { locked: false, result };
+  } finally {
+    pullingRepositories.delete(repositoryId);
+  }
+}
+
 export const handleRepositoryPullLatest = withValidatedGitRepository<RepositoryPullLatestPayload>(
   WebSocketResponseEvents.REPOSITORY_PULL_LATEST_RESULT,
   async (connectionId, payload, requestId, repositoryPath) => {
@@ -545,7 +587,26 @@ export const handleRepositoryPullLatest = withValidatedGitRepository<RepositoryP
     );
     if (!isValid) return;
 
-    if (pullingRepositories.has(repositoryId)) {
+    const lockResult = await withPullLock(repositoryId, async () => {
+      const emitPullProgress = createProgressEmitter(
+        connectionId,
+        requestId,
+        WebSocketResponseEvents.REPOSITORY_PULL_LATEST_PROGRESS
+      );
+
+      const throttledEmit = createThrottledProgressEmitter(
+        connectionId,
+        requestId,
+        WebSocketResponseEvents.REPOSITORY_PULL_LATEST_PROGRESS
+      );
+
+      emitPullProgress(0, '準備 Pull...');
+
+      const gitPullResult = await gitService.pullLatest(repositoryPath, (progress, message) => throttledEmit(progress, message));
+      return { gitPullResult, throttledEmit, emitPullProgress };
+    });
+
+    if (lockResult.locked) {
       emitError(
         connectionId,
         WebSocketResponseEvents.REPOSITORY_PULL_LATEST_RESULT,
@@ -557,25 +618,7 @@ export const handleRepositoryPullLatest = withValidatedGitRepository<RepositoryP
       return;
     }
 
-    pullingRepositories.add(repositoryId);
-
-    const emitPullProgress = createProgressEmitter(
-      connectionId,
-      requestId,
-      WebSocketResponseEvents.REPOSITORY_PULL_LATEST_PROGRESS
-    );
-
-    const throttledEmit = createThrottledProgressEmitter(
-      connectionId,
-      requestId,
-      WebSocketResponseEvents.REPOSITORY_PULL_LATEST_PROGRESS
-    );
-
-    emitPullProgress(0, '準備 Pull...');
-
-    const pullResult = await gitService.pullLatest(repositoryPath, (progress, message) => throttledEmit(progress, message)).finally(() => {
-      pullingRepositories.delete(repositoryId);
-    });
+    const { gitPullResult: pullResult, throttledEmit, emitPullProgress } = lockResult.result;
 
     if (!pullResult.success) {
       throttledEmit.cancel();

@@ -1,6 +1,6 @@
 import {v4 as uuidv4} from 'uuid';
 import {WebSocketResponseEvents} from '../../schemas/index.js';
-import type { TriggerMode } from '../../types/index.js';
+import type { TriggerMode, Connection } from '../../types/index.js';
 import type {
   PipelineContext,
   PipelineMethods,
@@ -24,6 +24,7 @@ import {
     buildTransferMessage,
     buildMessageWithCommand,
     forEachMultiInputGroupConnection,
+    isAutoTriggerable,
 } from './workflowHelpers.js';
 import {workflowAutoTriggerService} from './workflowAutoTriggerService.js';
 import { LazyInitializable } from './lazyInitializable.js';
@@ -70,6 +71,33 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     return this.getLastAssistantFallback(sourcePodId);
   }
 
+  private triggerAutoConnections(canvasId: string, sourcePodId: string, connections: Connection[]): Promise<unknown>[] {
+    return connections
+      .filter((conn) => conn.triggerMode === 'auto')
+      .map((connection) => this.deps.autoTriggerService.processAutoTriggerConnection(canvasId, sourcePodId, connection));
+  }
+
+  private triggerAiDecideConnections(canvasId: string, sourcePodId: string, connections: Connection[]): Promise<unknown> {
+    const aiDecideConnections = connections.filter((conn) => conn.triggerMode === 'ai-decide');
+    if (aiDecideConnections.length === 0) return Promise.resolve();
+    return this.deps.aiDecideTriggerService.processAiDecideConnections(canvasId, sourcePodId, aiDecideConnections);
+  }
+
+  private triggerDirectConnections(canvasId: string, sourcePodId: string, connections: Connection[]): Promise<unknown>[] {
+    return connections
+      .filter((conn) => conn.triggerMode === 'direct')
+      .map((connection) => {
+        const pipelineContext: PipelineContext = {
+          canvasId,
+          sourcePodId,
+          connection,
+          triggerMode: 'direct',
+          decideResult: { connectionId: connection.id, approved: true, reason: null, isError: false },
+        };
+        return this.deps.pipeline.execute(pipelineContext, this.deps.directTriggerService);
+      });
+  }
+
   async checkAndTriggerWorkflows(canvasId: string, sourcePodId: string): Promise<void> {
     this.ensureInitialized();
 
@@ -79,29 +107,12 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
       return;
     }
 
-    const autoConnections = connections.filter((conn) => conn.triggerMode === 'auto');
-    const aiDecideConnections = connections.filter((conn) => conn.triggerMode === 'ai-decide');
-    const directConnections = connections.filter((conn) => conn.triggerMode === 'direct');
-
     autoClearService.initializeWorkflowTracking(canvasId, sourcePodId);
 
     await Promise.allSettled([
-      ...autoConnections.map(connection =>
-        this.deps.autoTriggerService.processAutoTriggerConnection(canvasId, sourcePodId, connection)
-      ),
-      aiDecideConnections.length > 0
-        ? this.deps.aiDecideTriggerService.processAiDecideConnections(canvasId, sourcePodId, aiDecideConnections)
-        : Promise.resolve(),
-      ...directConnections.map(connection => {
-        const pipelineContext: PipelineContext = {
-          canvasId,
-          sourcePodId,
-          connection,
-          triggerMode: 'direct',
-          decideResult: { connectionId: connection.id, approved: true, reason: null, isError: false },
-        };
-        return this.deps.pipeline.execute(pipelineContext, this.deps.directTriggerService);
-      }),
+      ...this.triggerAutoConnections(canvasId, sourcePodId, connections),
+      this.triggerAiDecideConnections(canvasId, sourcePodId, connections),
+      ...this.triggerDirectConnections(canvasId, sourcePodId, connections),
     ]);
   }
 
@@ -178,7 +189,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     triggerMode: TriggerMode,
     participatingConnectionIds: string[]
   ): void {
-    if (triggerMode === 'auto' || triggerMode === 'ai-decide') {
+    if (isAutoTriggerable(triggerMode)) {
       this.activateMultiInputConnections(canvasId, targetPodId);
       return;
     }

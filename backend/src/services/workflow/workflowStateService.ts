@@ -3,7 +3,7 @@ import { pendingTargetStore } from '../pendingTargetStore.js';
 import { podStore } from '../podStore.js';
 import { directTriggerStore } from '../directTriggerStore.js';
 import { workflowEventEmitter } from './workflowEventEmitter.js';
-import { formatMergedSummaries } from './workflowHelpers.js';
+import { formatMergedSummaries, isAutoTriggerable } from './workflowHelpers.js';
 import { workflowDirectTriggerService } from './workflowDirectTriggerService.js';
 import {
   type WorkflowPendingPayload,
@@ -56,7 +56,7 @@ class WorkflowStateService {
 
   checkMultiInputScenario(canvasId: string, targetPodId: string): { isMultiInput: boolean; requiredSourcePodIds: string[] } {
     const incomingConnections = connectionStore.findByTargetPodId(canvasId, targetPodId);
-    const triggerableConnections = incomingConnections.filter((conn) => conn.triggerMode === 'auto' || conn.triggerMode === 'ai-decide');
+    const triggerableConnections = incomingConnections.filter((conn) => isAutoTriggerable(conn.triggerMode));
     const requiredSourcePodIds = triggerableConnections.map((conn) => conn.sourcePodId);
 
     return {
@@ -166,7 +166,7 @@ class WorkflowStateService {
       return;
     }
 
-    if (triggerMode !== 'auto' && triggerMode !== 'ai-decide') {
+    if (!isAutoTriggerable(triggerMode)) {
       return;
     }
 

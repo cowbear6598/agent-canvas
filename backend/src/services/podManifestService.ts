@@ -66,14 +66,13 @@ class PodManifestService {
     private async cleanEmptyDirectories(dirsToCheck: Set<string>): Promise<void> {
         const sortedDirs = [...dirsToCheck].sort((a, b) => b.length - a.length);
         for (const dir of sortedDirs) {
-            try {
-                const entries = await fs.readdir(dir);
-                if (entries.length === 0) {
-                    await fs.rmdir(dir);
-                }
-            } catch {
-                // 目錄刪除失敗不影響主流程
-            }
+            await fs.readdir(dir)
+                .then(entries => {
+                    if (entries.length === 0) {
+                        return fs.rmdir(dir);
+                    }
+                })
+                .catch(() => {});
         }
     }
 

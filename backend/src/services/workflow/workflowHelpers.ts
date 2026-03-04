@@ -8,14 +8,16 @@ import {workflowEventEmitter} from './workflowEventEmitter.js';
 import {logger} from '../../utils/logger.js';
 import type {CompletionContext, QueuedContext} from './types.js';
 
+export function isAutoTriggerable(triggerMode: string): boolean {
+    return triggerMode === 'auto' || triggerMode === 'ai-decide';
+}
+
 export function getMultiInputGroupConnections(
     canvasId: string,
     targetPodId: string
 ): Connection[] {
     const allIncomingConnections = connectionStore.findByTargetPodId(canvasId, targetPodId);
-    return allIncomingConnections.filter(conn =>
-        conn.triggerMode === 'auto' || conn.triggerMode === 'ai-decide'
-    );
+    return allIncomingConnections.filter(conn => isAutoTriggerable(conn.triggerMode));
 }
 
 export function forEachMultiInputGroupConnection(
@@ -53,7 +55,7 @@ export function formatMergedSummaries(
 }
 
 function escapeXmlTags(content: string): string {
-    return content.replace(/<\/?source-summary>/gi, '&lt;source-summary&gt;');
+    return content.replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 export function buildTransferMessage(content: string): string {

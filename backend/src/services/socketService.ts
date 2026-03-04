@@ -154,25 +154,27 @@ class SocketService {
 			return;
 		}
 
-		const timeout = setTimeout(() => {
-			const conn = connectionManager.get(connectionId);
-			if (!conn) {
-				return;
-			}
-
-			connectionManager.incrementMissedHeartbeats(connectionId);
-
-			const missed = conn.missedHeartbeats;
-			logger.log('Connection', 'Error', `連線 ${connectionId} 心跳逾時 (${missed}/${this.MAX_MISSED_HEARTBEATS})`);
-
-			if (missed >= this.MAX_MISSED_HEARTBEATS) {
-				logger.log('Connection', 'Delete', `連線 ${connectionId} 因心跳逾時而斷線`);
-				this.clearHeartbeatTimeout(connectionId);
-				conn.webSocket.close(1000, 'Heartbeat timeout');
-			}
-		}, this.HEARTBEAT_TIMEOUT);
+		const timeout = setTimeout(() => this.handleHeartbeatTimeout(connectionId), this.HEARTBEAT_TIMEOUT);
 
 		this.heartbeatTimeouts.set(connectionId, timeout);
+	}
+
+	private handleHeartbeatTimeout(connectionId: string): void {
+		const connection = connectionManager.get(connectionId);
+		if (!connection) {
+			return;
+		}
+
+		connectionManager.incrementMissedHeartbeats(connectionId);
+
+		const missed = connection.missedHeartbeats;
+		logger.log('Connection', 'Error', `連線 ${connectionId} 心跳逾時 (${missed}/${this.MAX_MISSED_HEARTBEATS})`);
+
+		if (missed >= this.MAX_MISSED_HEARTBEATS) {
+			logger.log('Connection', 'Delete', `連線 ${connectionId} 因心跳逾時而斷線`);
+			this.clearHeartbeatTimeout(connectionId);
+			connection.webSocket.close(1000, 'Heartbeat timeout');
+		}
 	}
 
 	handleHeartbeatPong(connectionId: string): void {

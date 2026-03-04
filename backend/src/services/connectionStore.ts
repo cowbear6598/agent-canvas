@@ -35,7 +35,7 @@ class ConnectionStore extends CanvasMapStore<Connection> {
     private readonly canvasWriter = new CanvasWriterHelper('Connection', 'ConnectionStore');
 
     private findByField(canvasId: string, field: 'sourcePodId' | 'targetPodId', value: string): Connection[] {
-        return this.findByPredicate(canvasId, (conn) => conn[field] === value);
+        return this.findByPredicate(canvasId, (connection) => connection[field] === value);
     }
 
     private patchConnection(canvasId: string, connectionId: string, patchFn: (connection: Connection) => void): Connection | undefined {
@@ -146,8 +146,8 @@ class ConnectionStore extends CanvasMapStore<Connection> {
     }
 
     updateConnectionStatus(canvasId: string, connectionId: string, status: ConnectionStatus): Connection | undefined {
-        return this.patchConnection(canvasId, connectionId, (conn) => {
-            conn.connectionStatus = status;
+        return this.patchConnection(canvasId, connectionId, (connection) => {
+            connection.connectionStatus = status;
         });
     }
 
@@ -251,7 +251,7 @@ class ConnectionStore extends CanvasMapStore<Connection> {
 
     findByTriggerMode(canvasId: string, sourcePodId: string, triggerMode: TriggerMode): Connection[] {
         const connections = this.findBySourcePodId(canvasId, sourcePodId);
-        return connections.filter(conn => conn.triggerMode === triggerMode);
+        return connections.filter(connection => connection.triggerMode === triggerMode);
     }
 }
 

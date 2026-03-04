@@ -15,7 +15,7 @@ export function createToolTrackingActions(store: ChatStoreInstance): {
         const messages = getMessages(store, podId)
 
         const existingMessage = messages.find(message => message.id === messageId)
-        if (existingMessage?.toolUse?.some(t => t.toolUseId === toolUseId)) return
+        if (existingMessage?.toolUse?.some(tool => tool.toolUseId === toolUseId)) return
 
         const toolUseInfo: ToolUseInfo = {
             toolUseId,
@@ -51,7 +51,7 @@ export function createToolTrackingActions(store: ChatStoreInstance): {
         if (!message) return
 
         const toolUse = message.toolUse || []
-        const toolIndex = toolUse.findIndex(t => t.toolUseId === toolUseId)
+        const toolIndex = toolUse.findIndex(tool => tool.toolUseId === toolUseId)
         const toolUseInfo: ToolUseInfo = {toolUseId, toolName, input, status: 'running'}
         const updatedToolUse = toolIndex === -1 ? [...toolUse, toolUseInfo] : toolUse
 
@@ -80,7 +80,7 @@ export function createToolTrackingActions(store: ChatStoreInstance): {
         const existingMessage = messages[messageIndex]
         if (!existingMessage) return
 
-        const toolAlreadyExists = existingMessage.toolUse?.some(t => t.toolUseId === toolUseId)
+        const toolAlreadyExists = existingMessage.toolUse?.some(tool => tool.toolUseId === toolUseId)
         if (toolAlreadyExists) return
 
         addToolUseToMessage(podId, messages, messageIndex, toolUseId, toolName, input)

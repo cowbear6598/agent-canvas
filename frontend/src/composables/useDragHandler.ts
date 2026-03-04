@@ -4,7 +4,6 @@ import type { Ref } from 'vue'
 interface UseDragHandlerOptions {
     onMove: (e: MouseEvent) => void
     onEnd: (e: MouseEvent) => void
-    /** 觸發拖曳的滑鼠按鍵（預設 0 = 左鍵，2 = 右鍵） */
     button?: 0 | 1 | 2
 }
 

@@ -4,7 +4,6 @@ export interface WebSocketMessage {
 	type: string;
 	requestId: string;
 	payload: unknown;
-	/** 用於 ack 回應訊息的確認 ID */
 	ackId?: string;
 }
 
@@ -15,7 +14,6 @@ export interface WebSocketResponse {
 	payload?: unknown;
 	error?: string;
 	code?: string;
-	/** 用於心跳等需要確認的訊息 */
 	ackId?: string;
 }
 

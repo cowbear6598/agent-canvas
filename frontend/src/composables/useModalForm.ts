@@ -2,13 +2,9 @@ import { ref } from 'vue'
 import type { Ref } from 'vue'
 
 export interface UseModalFormOptions<TValue> {
-  /** 初始值，預設為空字串（單一輸入時使用） */
   initialValue?: TValue
-  /** 驗證函式，回傳錯誤訊息或 null */
   validator: (value: TValue) => string | null
-  /** 表單提交時執行的非同步回呼，回傳錯誤訊息或 null */
   onSubmit: (value: TValue) => Promise<string | null>
-  /** 關閉時執行的回呼 */
   onClose: () => void
 }
 

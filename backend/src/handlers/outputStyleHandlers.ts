@@ -1,7 +1,5 @@
 import { WebSocketResponseEvents } from '../schemas';
 import type {
-  PodBindOutputStylePayload,
-  PodUnbindOutputStylePayload,
   OutputStyleMoveToGroupPayload,
 } from '../schemas';
 import { outputStyleService } from '../services/outputStyleService.js';
@@ -59,21 +57,8 @@ const outputStyleBindConfig = {
 const outputStyleBindHandler = createBindHandler(outputStyleBindConfig);
 const outputStyleUnbindHandler = createUnbindHandler(outputStyleBindConfig);
 
-export async function handlePodBindOutputStyle(
-  connectionId: string,
-  payload: PodBindOutputStylePayload,
-  requestId: string
-): Promise<void> {
-  return outputStyleBindHandler(connectionId, payload, requestId);
-}
-
-export async function handlePodUnbindOutputStyle(
-  connectionId: string,
-  payload: PodUnbindOutputStylePayload,
-  requestId: string
-): Promise<void> {
-  return outputStyleUnbindHandler(connectionId, payload, requestId);
-}
+export const handlePodBindOutputStyle = outputStyleBindHandler;
+export const handlePodUnbindOutputStyle = outputStyleUnbindHandler;
 
 const outputStyleMoveToGroupHandler = createMoveToGroupHandler({
   service: outputStyleService,

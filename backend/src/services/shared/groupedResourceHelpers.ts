@@ -39,12 +39,9 @@ export async function listGroupedMarkdownResources(
 
     const groupDirs = rootEntries.filter(entry => entry.isDirectory());
     for (const entry of groupDirs) {
-        try {
-            const groupFiles = await collectGroupFiles(basePath, entry.name);
-            resources.push(...groupFiles);
-        } catch (error) {
-            logger.error('Workspace', 'Error', `[GroupedResource] 讀取群組目錄失敗: ${entry.name}`, error);
-        }
+        await collectGroupFiles(basePath, entry.name)
+            .then(groupFiles => resources.push(...groupFiles))
+            .catch(error => logger.error('Workspace', 'Error', `[GroupedResource] 讀取群組目錄失敗: ${entry.name}`, error));
     }
 
     return resources;

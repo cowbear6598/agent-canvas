@@ -152,7 +152,6 @@ export class GenericNoteStore<T extends BaseNote, K extends keyof T> extends Can
     this.canvasWriter.scheduleSave(canvasId, () => this.saveToDisk(canvasId));
   }
 
-  /** 等待指定 Canvas 所有排隊中的磁碟寫入完成 */
   flushWrites(canvasId: string): Promise<void> {
     return this.canvasWriter.flush(canvasId);
   }

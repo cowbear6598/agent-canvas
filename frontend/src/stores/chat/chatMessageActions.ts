@@ -88,7 +88,7 @@ export function createMessageActions(store: ChatStoreInstance): ChatMessageActio
 
     const addUserMessage = async (podId: string, content: string): Promise<void> => {
         const podStore = usePodStore()
-        const pod = podStore.pods.find(p => p.id === podId)
+        const pod = podStore.pods.find(pod => pod.id === podId)
         if (!pod) return
 
         const userMessage: Message = {
@@ -106,7 +106,7 @@ export function createMessageActions(store: ChatStoreInstance): ChatMessageActio
 
     const addRemoteUserMessage = (podId: string, messageId: string, content: string, timestamp: string): void => {
         const podStore = usePodStore()
-        const pod = podStore.pods.find(p => p.id === podId)
+        const pod = podStore.pods.find(pod => pod.id === podId)
         if (!pod) return
 
         const userMessage: Message = {
@@ -186,14 +186,15 @@ export function createMessageActions(store: ChatStoreInstance): ChatMessageActio
 
         if (!existingMessage) return
 
+        const subMessageUpdates = existingMessage.role === 'assistant' && existingMessage.subMessages
+            ? updateAssistantSubMessages(existingMessage, delta, isPartial, content)
+            : {}
+
         updatedMessages[messageIndex] = {
             ...existingMessage,
             content,
-            isPartial
-        }
-
-        if (existingMessage.role === 'assistant' && existingMessage.subMessages) {
-            Object.assign(updatedMessages[messageIndex], updateAssistantSubMessages(existingMessage, delta, isPartial, content))
+            isPartial,
+            ...subMessageUpdates
         }
 
         store.messagesByPodId.set(podId, updatedMessages)

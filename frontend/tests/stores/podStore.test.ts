@@ -1487,6 +1487,36 @@ describe('podStore', () => {
     })
   })
 
+  describe('updatePodField', () => {
+    it('Pod 存在時應成功更新 outputStyleId 欄位', () => {
+      const store = usePodStore()
+      const pod = createMockPod({ id: 'pod-1', outputStyleId: null })
+      store.pods = [pod]
+
+      store.updatePodField('pod-1', 'outputStyleId', 'style-abc')
+
+      expect(store.pods[0]?.outputStyleId).toBe('style-abc')
+    })
+
+    it('Pod 存在時應成功更新 model 欄位', () => {
+      const store = usePodStore()
+      const pod = createMockPod({ id: 'pod-1', model: 'opus' })
+      store.pods = [pod]
+
+      store.updatePodField('pod-1', 'model', 'sonnet')
+
+      expect(store.pods[0]?.model).toBe('sonnet')
+    })
+
+    it('Pod 不存在時應靜默忽略不拋錯', () => {
+      const store = usePodStore()
+      store.pods = []
+
+      expect(() => store.updatePodField('non-existent', 'model', 'haiku')).not.toThrow()
+      expect(store.pods).toHaveLength(0)
+    })
+  })
+
   describe('showTypeMenu / hideTypeMenu', () => {
     it('showTypeMenu 應設定 visible 為 true 並設定 position', () => {
       const store = usePodStore()

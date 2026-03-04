@@ -1,6 +1,6 @@
 import type { Pod } from '@/types/pod'
 import type { AnchorPoint, AnchorPosition } from '@/types/connection'
-import { POD_WIDTH, POD_HEIGHT } from '@/lib/constants'
+import { POD_WIDTH, POD_HEIGHT, DEGREES_TO_RADIANS } from '@/lib/constants'
 
 const DETECTION_RADIUS = 20
 
@@ -19,7 +19,7 @@ export function useAnchorDetection(): {
     const positions: AnchorPosition[] = ['top', 'bottom', 'left', 'right']
 
     const rotation = pod.rotation || 0
-    const radians = (rotation * Math.PI) / 180
+    const radians = rotation * DEGREES_TO_RADIANS
 
     const centerX = pod.x + POD_WIDTH / 2
     const centerY = pod.y + POD_HEIGHT / 2

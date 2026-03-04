@@ -16,13 +16,11 @@ export interface BindResourceConfig<TService, TIdField extends string = string> 
         unbind?: (canvasId: string, podId: string) => void;
     };
     getPodResourceIds: (pod: {skillIds: string[]; commandId: string | null; outputStyleId: string | null; subAgentIds: string[]; mcpServerIds: string[]}) => string[] | string | null;
-    /** 不提供時跳過複製 */
+    /** 某些資源綁定後需要複製檔案到 Pod 工作目錄 */
     copyResourceToPod?: (resourceId: string, pod: Pod) => Promise<void>;
-    /** 不提供時跳過刪除 */
+    /** 某些資源解綁後需要從 Pod 工作目錄刪除檔案 */
     deleteResourceFromPath?: (workspacePath: string) => Promise<void>;
-    /** 允許直接覆蓋的情境使用，如 OutputStyle */
     skipConflictCheck?: boolean;
-    /** 不需要同步的情境使用，如 OutputStyle */
     skipRepositorySync?: boolean;
     events: {
         bound: WebSocketResponseEvents;

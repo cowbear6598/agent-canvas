@@ -6,12 +6,18 @@ class RoomManager {
 		if (!this.rooms.has(roomName)) {
 			this.rooms.set(roomName, new Set());
 		}
-		this.rooms.get(roomName)!.add(connectionId);
+		const room = this.rooms.get(roomName);
+		if (room) {
+			room.add(connectionId);
+		}
 
 		if (!this.connectionRooms.has(connectionId)) {
 			this.connectionRooms.set(connectionId, new Set());
 		}
-		this.connectionRooms.get(connectionId)!.add(roomName);
+		const connectionRoomSet = this.connectionRooms.get(connectionId);
+		if (connectionRoomSet) {
+			connectionRoomSet.add(roomName);
+		}
 	}
 
 	leave(connectionId: string, roomName: string): void {

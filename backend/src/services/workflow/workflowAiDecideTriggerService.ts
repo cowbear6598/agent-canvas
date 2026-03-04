@@ -17,7 +17,7 @@ import { workflowStateService } from './workflowStateService.js';
 import { pendingTargetStore } from '../pendingTargetStore.js';
 import { workflowPipeline } from './workflowPipeline.js';
 import { workflowMultiInputService } from './workflowMultiInputService.js';
-import { forEachMultiInputGroupConnection, formatConnLog, completeMultiInputConnections, buildQueuedPayload } from './workflowHelpers.js';
+import { forEachMultiInputGroupConnection, formatConnLog, completeMultiInputConnections, buildQueuedPayload, isAutoTriggerable } from './workflowHelpers.js';
 import { logger } from '../../utils/logger.js';
 import { getErrorMessage } from '../../utils/errorHelpers.js';
 import { LazyInitializable } from './lazyInitializable.js';
@@ -305,9 +305,7 @@ class WorkflowAiDecideTriggerService extends LazyInitializable<AiDecideTriggerDe
   private isLastRejectionTriggersGroupCancel(canvasId: string, targetPodId: string): boolean {
     this.ensureInitialized();
     const incomingConnections = this.deps.connectionStore.findByTargetPodId(canvasId, targetPodId);
-    const autoAiIncoming = incomingConnections.filter(
-      (c) => c.triggerMode === 'auto' || c.triggerMode === 'ai-decide'
-    );
+    const autoAiIncoming = incomingConnections.filter((c) => isAutoTriggerable(c.triggerMode));
     return autoAiIncoming.length === 1;
   }
 

@@ -55,16 +55,23 @@ class SlackEventService {
             return;
         }
 
-        if (this.isSlackChannelBusy(slackAppId, channel)) {
-            if (this.shouldSendBusyReply(channel)) {
-                await slackConnectionManager.sendMessage(slackAppId, channel, '目前忙碌中，請稍後再試');
-            }
+        if (await this.handleBusyChannel(slackAppId, channel)) {
             return;
         }
 
         for (const {canvasId, pod} of boundPods) {
             await this.processBoundPod(canvasId, pod, message);
         }
+    }
+
+    private async handleBusyChannel(slackAppId: string, channel: string): Promise<boolean> {
+        if (!this.isSlackChannelBusy(slackAppId, channel)) {
+            return false;
+        }
+        if (this.shouldSendBusyReply(channel)) {
+            await slackConnectionManager.sendMessage(slackAppId, channel, '目前忙碌中，請稍後再試');
+        }
+        return true;
     }
 
     private async processBoundPod(canvasId: string, pod: Pod, message: SlackMessage): Promise<void> {
@@ -81,12 +88,9 @@ class SlackEventService {
         const allBoundPods = podStore.findBySlackApp(slackAppId);
         const channelPods = allBoundPods.filter(({pod}) => pod.slackBinding?.slackChannelId === channelId);
 
-        for (const {canvasId, pod} of channelPods) {
-            if (BUSY_STATUSES.has(pod.status as 'chatting' | 'summarizing')) return true;
-            if (this.isWorkflowChainBusy(canvasId, pod.id)) return true;
-        }
-
-        return false;
+        return channelPods.some(({canvasId, pod}) =>
+            BUSY_STATUSES.has(pod.status as 'chatting' | 'summarizing') || this.isWorkflowChainBusy(canvasId, pod.id)
+        );
     }
 
     private shouldSendBusyReply(channelId: string): boolean {
@@ -123,24 +127,30 @@ class SlackEventService {
         return false;
     }
 
+    private processBfsQueue(
+        canvasId: string,
+        queue: string[],
+        visited: Set<string>,
+        predicate: (podId: string) => boolean
+    ): boolean {
+        while (queue.length > 0) {
+            if (visited.size > MAX_WORKFLOW_CHAIN_SIZE) {
+                logger.warn('Slack', 'Warn', `Workflow 鏈超過最大限制 ${MAX_WORKFLOW_CHAIN_SIZE}，停止遍歷`);
+                return false;
+            }
+            const currentId = queue.shift();
+            if (!currentId) break;
+            if (this.processQueueItem(canvasId, currentId, visited, queue, predicate)) return true;
+        }
+        return false;
+    }
+
     // 需要雙向遍歷才能檢測到 Workflow 中間節點的狀態變化，單向遍歷會遺漏反向依賴
     private traverseWorkflowChain(canvasId: string, startPodId: string, predicate: (podId: string) => boolean): boolean {
         const visited = new Set<string>([startPodId]);
         const queue = this.getAdjacentPodIds(canvasId, startPodId).filter(id => !visited.has(id));
         queue.forEach(id => visited.add(id));
-
-        while (queue.length > 0) {
-            if (visited.size > MAX_WORKFLOW_CHAIN_SIZE) {
-                logger.warn('Slack', 'Warn', `Workflow 鏈遍歷超過 ${MAX_WORKFLOW_CHAIN_SIZE} 個節點，中止遍歷`);
-                return false;
-            }
-
-            const currentId = queue.shift();
-            if (!currentId) break;
-
-            if (this.processQueueItem(canvasId, currentId, visited, queue, predicate)) return true;
-        }
-        return false;
+        return this.processBfsQueue(canvasId, queue, visited, predicate);
     }
 
     private isWorkflowChainBusy(canvasId: string, podId: string): boolean {

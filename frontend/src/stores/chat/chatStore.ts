@@ -36,7 +36,7 @@ function hasMessageContent(content: string, contentBlocks: ContentBlock[] | unde
 function resolveCommandForPod(podId: string, pods: Pod[], availableCommands: Command[]): Command | null {
     const pod = pods.find(p => p.id === podId)
     if (!pod?.commandId) return null
-    return availableCommands.find(c => c.id === pod.commandId) ?? null
+    return availableCommands.find(command => command.id === pod.commandId) ?? null
 }
 
 function buildTextPayload(content: string, command: Command | null | undefined): string {

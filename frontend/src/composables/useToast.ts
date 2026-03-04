@@ -1,5 +1,6 @@
 import { ref, type Ref } from 'vue'
 import { generateUUID } from '@/services/utils'
+import { DEFAULT_TOAST_DURATION_MS } from '@/lib/constants'
 
 type ToastVariant = 'default' | 'destructive' | 'success'
 
@@ -57,7 +58,7 @@ export function useToast(): {
   showSuccessToast: (category: ToastCategory, action: string, target?: string) => string
   showErrorToast: (category: ToastCategory, action: string, reason?: string) => string
 } {
-  const toast = ({ title, description, duration = 3000, variant = 'default' }: ToastOptions): string => {
+  const toast = ({ title, description, duration = DEFAULT_TOAST_DURATION_MS, variant = 'default' }: ToastOptions): string => {
     const id = generateUUID()
     const limitedDescription = limitDescriptionLength(description)
     const item: ToastItem = { id, title, description: limitedDescription, duration, variant }

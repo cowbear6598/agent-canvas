@@ -1,4 +1,5 @@
 import type {Connection, ConnectionStatus} from '@/types/connection'
+import {isAutoTriggerable} from '@/lib/workflowUtils'
 import type {
     WorkflowAutoTriggeredPayload,
     WorkflowCompletePayload,
@@ -17,6 +18,21 @@ interface WorkflowHandlerStore {
     connections: Connection[]
     findConnectionById: (connectionId: string) => Connection | undefined
     updateAutoGroupStatus: (targetPodId: string, status: ConnectionStatus) => void
+    setConnectionStatus: (connectionId: string, status: ConnectionStatus) => void
+}
+
+function updateConnectionOrGroupStatus(
+    store: WorkflowHandlerStore,
+    connectionId: string,
+    targetPodId: string,
+    triggerMode: string | undefined,
+    status: ConnectionStatus
+): void {
+    if (isAutoTriggerable(triggerMode)) {
+        store.updateAutoGroupStatus(targetPodId, status)
+    } else {
+        store.setConnectionStatus(connectionId, status)
+    }
 }
 
 export function createWorkflowEventHandlers(store: WorkflowHandlerStore): {
@@ -42,15 +58,7 @@ export function createWorkflowEventHandlers(store: WorkflowHandlerStore): {
     }
 
     const handleWorkflowComplete = (payload: WorkflowCompletePayload): void => {
-        const triggerMode = payload.triggerMode
-        if (triggerMode === 'auto' || triggerMode === 'ai-decide') {
-            store.updateAutoGroupStatus(payload.targetPodId, 'idle')
-        } else {
-            const connection = store.findConnectionById(payload.connectionId)
-            if (connection) {
-                connection.status = 'idle'
-            }
-        }
+        updateConnectionOrGroupStatus(store, payload.connectionId, payload.targetPodId, payload.triggerMode, 'idle')
     }
 
     const handleWorkflowDirectTriggered = (payload: WorkflowDirectTriggeredPayload): void => {
@@ -68,25 +76,11 @@ export function createWorkflowEventHandlers(store: WorkflowHandlerStore): {
     }
 
     const handleWorkflowQueued = (payload: WorkflowQueuedPayload): void => {
-        if (payload.triggerMode === 'auto' || payload.triggerMode === 'ai-decide') {
-            store.updateAutoGroupStatus(payload.targetPodId, 'queued')
-        } else {
-            const connection = store.findConnectionById(payload.connectionId)
-            if (connection) {
-                connection.status = 'queued'
-            }
-        }
+        updateConnectionOrGroupStatus(store, payload.connectionId, payload.targetPodId, payload.triggerMode, 'queued')
     }
 
     const handleWorkflowQueueProcessed = (payload: WorkflowQueueProcessedPayload): void => {
-        if (payload.triggerMode === 'auto' || payload.triggerMode === 'ai-decide') {
-            store.updateAutoGroupStatus(payload.targetPodId, 'active')
-        } else {
-            const connection = store.findConnectionById(payload.connectionId)
-            if (connection) {
-                connection.status = 'active'
-            }
-        }
+        updateConnectionOrGroupStatus(store, payload.connectionId, payload.targetPodId, payload.triggerMode, 'active')
     }
 
     function updateConnectionStatuses(

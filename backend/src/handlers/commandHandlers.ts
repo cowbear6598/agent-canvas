@@ -1,7 +1,5 @@
 import {WebSocketResponseEvents} from '../schemas';
 import type {
-    PodBindCommandPayload,
-    PodUnbindCommandPayload,
     CommandMoveToGroupPayload,
 } from '../schemas';
 import {commandService} from '../services/commandService.js';
@@ -71,21 +69,8 @@ const commandBindConfig: BindResourceConfig<typeof commandService> = {
 const commandBindHandler = createBindHandler(commandBindConfig);
 const commandUnbindHandler = createUnbindHandler(commandBindConfig);
 
-export async function handlePodBindCommand(
-    connectionId: string,
-    payload: PodBindCommandPayload,
-    requestId: string
-): Promise<void> {
-    return commandBindHandler(connectionId, payload, requestId);
-}
-
-export async function handlePodUnbindCommand(
-    connectionId: string,
-    payload: PodUnbindCommandPayload,
-    requestId: string
-): Promise<void> {
-    return commandUnbindHandler(connectionId, payload, requestId);
-}
+export const handlePodBindCommand = commandBindHandler;
+export const handlePodUnbindCommand = commandUnbindHandler;
 
 const commandMoveToGroupHandler = createMoveToGroupHandler({
     service: commandService,

@@ -51,20 +51,17 @@ const RUNNING_CONNECTION_STATUSES = new Set<ConnectionStatus>([
 
 const RUNNING_POD_STATUSES = new Set(['chatting', 'summarizing'])
 
-function shouldUpdateConnection(conn: Connection, targetPodId: string, status: ConnectionStatus): boolean {
-    if (conn.targetPodId !== targetPodId) return false
-    if (conn.triggerMode !== 'auto' && conn.triggerMode !== 'ai-decide') return false
+function shouldUpdateConnection(connection: Connection, targetPodId: string, status: ConnectionStatus): boolean {
+    if (connection.targetPodId !== targetPodId) return false
+    if (connection.triggerMode !== 'auto' && connection.triggerMode !== 'ai-decide') return false
     // ai-deciding 表示 AI 仍在判斷中，不應被強制設為 active（事件亂序保護）
-    if (conn.status === 'ai-deciding' && status === 'active') return false
+    if (connection.status === 'ai-deciding' && status === 'active') return false
     return true
 }
 
 /**
- * 通用 BFS 遍歷，檢查 Workflow 鏈中是否有正在執行的節點或連線。
- *
- * @param startId - 起始 Pod 的 ID
- * @param getNeighbors - 根據 podId 回傳鄰居清單（包含鄰居 ID 及對應連線）
- * @param isRunningPod - 判斷特定 podId 的 Pod 是否正在執行中
+ * 使用 BFS 而非 DFS，確保在循環或極長鏈中不會發生堆疊溢位，
+ * 並能在找到第一個執行中節點時提前返回，避免遍歷整條鏈。
  */
 function isAnyNeighborRunning(
     neighbors: { neighborId: string; conn: Connection }[],
@@ -81,6 +78,17 @@ function isAnyNeighborRunning(
     return false
 }
 
+function processBfsNode(
+    currentId: string,
+    getNeighbors: (podId: string) => { neighborId: string; conn: Connection }[],
+    isRunningPod: (podId: string) => boolean,
+    visited: Set<string>,
+    queue: string[],
+): boolean {
+    if (isRunningPod(currentId)) return true
+    return isAnyNeighborRunning(getNeighbors(currentId), visited, queue)
+}
+
 function runBFS(
     startId: string,
     getNeighbors: (podId: string) => { neighborId: string; conn: Connection }[],
@@ -90,9 +98,9 @@ function runBFS(
     const queue: string[] = [startId]
 
     while (queue.length > 0) {
-        const currentId = queue.shift()!
-        if (isRunningPod(currentId)) return true
-        if (isAnyNeighborRunning(getNeighbors(currentId), visited, queue)) return true
+        const currentId = queue.shift()
+        if (!currentId) break
+        if (processBfsNode(currentId, getNeighbors, isRunningPod, visited, queue)) return true
     }
     return false
 }
@@ -113,16 +121,16 @@ export const useConnectionStore = defineStore('connection', {
     getters: {
         getConnectionsByPodId: (state) => (podId: string): Connection[] => {
             return state.connections.filter(
-                conn => conn.sourcePodId === podId || conn.targetPodId === podId
+                connection => connection.sourcePodId === podId || connection.targetPodId === podId
             )
         },
 
         getOutgoingConnections: (state) => (podId: string): Connection[] => {
-            return state.connections.filter(conn => conn.sourcePodId === podId)
+            return state.connections.filter(connection => connection.sourcePodId === podId)
         },
 
         getConnectionsByTargetPodId: (state) => (podId: string): Connection[] => {
-            return state.connections.filter(conn => conn.targetPodId === podId)
+            return state.connections.filter(connection => connection.targetPodId === podId)
         },
 
         selectedConnection: (state): Connection | null => {
@@ -131,36 +139,36 @@ export const useConnectionStore = defineStore('connection', {
         },
 
         isSourcePod: (state) => (podId: string): boolean => {
-            return !state.connections.some(conn => conn.targetPodId === podId)
+            return !state.connections.some(connection => connection.targetPodId === podId)
         },
 
         hasUpstreamConnections: (state) => (podId: string): boolean => {
-            return state.connections.some(conn => conn.targetPodId === podId)
+            return state.connections.some(connection => connection.targetPodId === podId)
         },
 
         getAiDecideConnections: (state): Connection[] => {
-            return state.connections.filter(conn => conn.triggerMode === 'ai-decide')
+            return state.connections.filter(connection => connection.triggerMode === 'ai-decide')
         },
 
         getAiDecideConnectionsBySourcePodId: (state) => (sourcePodId: string): Connection[] => {
             return state.connections.filter(
-                conn => conn.sourcePodId === sourcePodId && conn.triggerMode === 'ai-decide'
+                connection => connection.sourcePodId === sourcePodId && connection.triggerMode === 'ai-decide'
             )
         },
 
         getDirectConnections: (state): Connection[] => {
-            return state.connections.filter(conn => conn.triggerMode === 'direct')
+            return state.connections.filter(connection => connection.triggerMode === 'direct')
         },
 
         getDirectConnectionsBySourcePodId: (state) => (sourcePodId: string): Connection[] => {
             return state.connections.filter(
-                conn => conn.sourcePodId === sourcePodId && conn.triggerMode === 'direct'
+                connection => connection.sourcePodId === sourcePodId && connection.triggerMode === 'direct'
             )
         },
 
         getPodWorkflowRole: (state) => (podId: string): WorkflowRole => {
-            const hasUpstream = state.connections.some(conn => conn.targetPodId === podId)
-            const hasDownstream = state.connections.some(conn => conn.sourcePodId === podId)
+            const hasUpstream = state.connections.some(connection => connection.targetPodId === podId)
+            const hasDownstream = state.connections.some(connection => connection.sourcePodId === podId)
 
             if (!hasUpstream && !hasDownstream) return 'independent'
             if (!hasUpstream && hasDownstream) return 'head'
@@ -180,12 +188,12 @@ export const useConnectionStore = defineStore('connection', {
                 podId,
                 (currentId) => {
                     const neighbors: { neighborId: string; conn: Connection }[] = []
-                    for (const conn of state.connections) {
-                        if (conn.sourcePodId === currentId) {
-                            neighbors.push({ neighborId: conn.targetPodId, conn })
+                    for (const connection of state.connections) {
+                        if (connection.sourcePodId === currentId) {
+                            neighbors.push({ neighborId: connection.targetPodId, conn: connection })
                         }
-                        if (conn.targetPodId === currentId && conn.sourcePodId) {
-                            neighbors.push({ neighborId: conn.sourcePodId, conn })
+                        if (connection.targetPodId === currentId && connection.sourcePodId) {
+                            neighbors.push({ neighborId: connection.sourcePodId, conn: connection })
                         }
                     }
                     return neighbors
@@ -209,8 +217,8 @@ export const useConnectionStore = defineStore('connection', {
                 sourcePodId,
                 (currentId) => {
                     return state.connections
-                        .filter(conn => conn.sourcePodId === currentId)
-                        .map(conn => ({ neighborId: conn.targetPodId, conn }))
+                        .filter(connection => connection.sourcePodId === currentId)
+                        .map(connection => ({ neighborId: connection.targetPodId, conn: connection }))
                 },
                 (currentId) => {
                     const pod = podStore.getPodById(currentId)
@@ -254,7 +262,7 @@ export const useConnectionStore = defineStore('connection', {
             })
 
             if (response.connections) {
-                this.connections = response.connections.map(conn => normalizeConnection(conn))
+                this.connections = response.connections.map(connection => normalizeConnection(connection))
             }
         },
 
@@ -267,7 +275,7 @@ export const useConnectionStore = defineStore('connection', {
             if (!sourcePodId) return true
 
             const alreadyConnected = this.connections.some(
-                conn => conn.sourcePodId === sourcePodId && conn.targetPodId === targetPodId
+                connection => connection.sourcePodId === sourcePodId && connection.targetPodId === targetPodId
             )
             if (alreadyConnected) {
                 const {toast} = useToast()
@@ -332,11 +340,11 @@ export const useConnectionStore = defineStore('connection', {
 
         deleteConnectionsByPodId(podId: string): void {
             this.connections = this.connections.filter(
-                conn => conn.sourcePodId !== podId && conn.targetPodId !== podId
+                connection => connection.sourcePodId !== podId && connection.targetPodId !== podId
             )
 
             if (this.selectedConnectionId) {
-                const stillExists = this.connections.some(conn => conn.id === this.selectedConnectionId)
+                const stillExists = this.connections.some(connection => connection.id === this.selectedConnectionId)
                 if (!stillExists) {
                     this.selectedConnectionId = null
                 }
@@ -371,23 +379,30 @@ export const useConnectionStore = defineStore('connection', {
         },
 
         updateConnectionStatusByTargetPod(targetPodId: string, status: ConnectionStatus): void {
-            this.connections.forEach(conn => {
-                if (conn.targetPodId === targetPodId) {
+            this.connections.forEach(connection => {
+                if (connection.targetPodId === targetPodId) {
                     // ai-deciding 表示 AI 仍在判斷中，不應被強制設為 active（事件亂序保護）
-                    if (conn.status === 'ai-deciding' && status === 'active') {
+                    if (connection.status === 'ai-deciding' && status === 'active') {
                         return
                     }
-                    conn.status = status
+                    connection.status = status
                 }
             })
         },
 
         updateAutoGroupStatus(targetPodId: string, status: ConnectionStatus): void {
-            this.connections.forEach(conn => {
-                if (shouldUpdateConnection(conn, targetPodId, status)) {
-                    conn.status = status
+            this.connections.forEach(connection => {
+                if (shouldUpdateConnection(connection, targetPodId, status)) {
+                    connection.status = status
                 }
             })
+        },
+
+        setConnectionStatus(connectionId: string, status: ConnectionStatus): void {
+            const connection = this.findConnectionById(connectionId)
+            if (connection) {
+                connection.status = status
+            }
         },
 
         async updateConnectionTriggerMode(connectionId: string, triggerMode: TriggerMode): Promise<Connection | null> {
@@ -481,14 +496,14 @@ export const useConnectionStore = defineStore('connection', {
                 status: 'idle' as ConnectionStatus
             }
 
-            const exists = this.connections.some(conn => conn.id === enrichedConnection.id)
+            const exists = this.connections.some(connection => connection.id === enrichedConnection.id)
             if (!exists) {
                 this.connections.push(enrichedConnection)
             }
         },
 
         updateConnectionFromEvent(connection: Omit<Connection, 'status'>): void {
-            const existingConnection = this.connections.find(conn => conn.id === connection.id)
+            const existingConnection = this.connections.find(existingConn => existingConn.id === connection.id)
             const enrichedConnection: Connection = {
                 ...connection,
                 triggerMode: connection.triggerMode ?? 'auto',
@@ -496,7 +511,7 @@ export const useConnectionStore = defineStore('connection', {
                 decideReason: connection.decideReason ?? existingConnection?.decideReason
             }
 
-            const index = this.connections.findIndex(conn => conn.id === enrichedConnection.id)
+            const index = this.connections.findIndex(existingConn => existingConn.id === enrichedConnection.id)
             if (index !== -1) {
                 this.connections.splice(index, 1, enrichedConnection)
             }

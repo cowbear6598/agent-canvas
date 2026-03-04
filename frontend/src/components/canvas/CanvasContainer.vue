@@ -264,7 +264,7 @@ const handleCanvasClick = (e: MouseEvent): void => {
     '.command-note',
     '.mcp-server-note'
   ]
-  if (ignoredSelectors.some(s => target.closest(s))) {
+  if (ignoredSelectors.some(selector => target.closest(selector))) {
     return
   }
 
