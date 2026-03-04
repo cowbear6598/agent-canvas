@@ -150,6 +150,8 @@ describe('Command 管理', () => {
         { requestId: uuidv4(), canvasId, podId: pod.id, commandId: cmd.id }
       );
 
+      await podStore.flushWrites(pod.id);
+
       const canvasModule = await import('../../src/services/canvasStore.js');
       const canvasDir = canvasModule.canvasStore.getCanvasDir(canvasId);
 

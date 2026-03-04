@@ -102,13 +102,13 @@ function handlePodUpdate<TResponse>(
         return;
     }
 
-    const updatedPod = podStore.update(canvasId, podId, updates);
-    if (!updatedPod) {
+    const result = podStore.update(canvasId, podId, updates);
+    if (!result) {
         emitError(connectionId, responseEvent, `無法更新 Pod: ${podId}`, requestId, podId, 'INTERNAL_ERROR');
         return;
     }
 
-    const response = createResponse(updatedPod);
+    const response = createResponse(result.pod);
     socketService.emitToCanvas(canvasId, responseEvent, response);
 }
 
@@ -204,9 +204,9 @@ export const handlePodSetSchedule = withCanvasId<PodSetSchedulePayload>(
         }
 
         const updates = buildScheduleUpdates(schedule, existingPod.schedule);
-        const updatedPod = podStore.update(canvasId, podId, updates);
+        const updateResult = podStore.update(canvasId, podId, updates);
 
-        if (!updatedPod) {
+        if (!updateResult) {
             emitError(
                 connectionId,
                 WebSocketResponseEvents.POD_SCHEDULE_SET,
@@ -222,7 +222,7 @@ export const handlePodSetSchedule = withCanvasId<PodSetSchedulePayload>(
             requestId,
             canvasId,
             success: true,
-            pod: updatedPod,
+            pod: updateResult.pod,
         };
 
         socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_SCHEDULE_SET, response);

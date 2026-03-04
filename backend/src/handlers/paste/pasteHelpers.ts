@@ -74,7 +74,7 @@ async function createSinglePod(
     }
   }
 
-  const pod = podStore.create(canvasId, {
+  const { pod } = podStore.create(canvasId, {
     name: podItem.name,
     x: podItem.x,
     y: podItem.y,

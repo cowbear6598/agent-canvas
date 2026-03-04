@@ -41,14 +41,14 @@ class PodStore extends CanvasMapStore<Pod> {
         return this.writeQueue.flush(podId);
     }
 
-    private persistPodAsync(canvasId: string, pod: Pod, claudeSessionId?: string): void {
+    private persistPodAsync(canvasId: string, pod: Pod, claudeSessionId?: string): Promise<void> {
         const canvasDir = canvasStore.getCanvasDir(canvasId);
         if (!canvasDir) {
             logger.error('Pod', 'Error', `[PodStore] 找不到 Pod ${pod.id} 所屬的 Canvas`);
-            return;
+            return Promise.resolve();
         }
 
-        this.writeQueue.enqueue(pod.id, async () => {
+        return this.writeQueue.enqueue(pod.id, async () => {
             const result = await podPersistenceService.savePod(canvasDir, pod, claudeSessionId);
             if (!result.success) {
                 logger.error('Pod', 'Error', `[PodStore] 持久化 Pod 失敗 (${pod.id}): ${result.error}`);
@@ -56,25 +56,25 @@ class PodStore extends CanvasMapStore<Pod> {
         });
     }
 
-    private modifyPod(canvasId: string, podId: string, updates: Partial<Pod>, options: ModifyPodOptions = {}): Pod | undefined {
+    private modifyPod(canvasId: string, podId: string, updates: Partial<Pod>, options: ModifyPodOptions = {}): { pod: Pod | undefined; persisted: Promise<void> } {
         const pods = this.getOrCreateCanvasMap(canvasId);
         const pod = pods.get(podId);
         if (!pod) {
-            return undefined;
+            return { pod: undefined, persisted: Promise.resolve() };
         }
 
         const updatedPod = {...pod, ...updates};
         pods.set(podId, updatedPod);
 
         const { shouldPersist = true, claudeSessionId } = options;
-        if (shouldPersist) {
-            this.persistPodAsync(canvasId, updatedPod, claudeSessionId);
-        }
+        const persisted = shouldPersist
+            ? this.persistPodAsync(canvasId, updatedPod, claudeSessionId)
+            : Promise.resolve();
 
-        return updatedPod;
+        return { pod: updatedPod, persisted };
     }
 
-    create(canvasId: string, data: CreatePodRequest): Pod {
+    create(canvasId: string, data: CreatePodRequest): { pod: Pod; persisted: Promise<void> } {
         const id = uuidv4();
         const canvasDir = canvasStore.getCanvasDir(canvasId);
 
@@ -103,9 +103,8 @@ class PodStore extends CanvasMapStore<Pod> {
 
         const pods = this.getOrCreateCanvasMap(canvasId);
         pods.set(id, pod);
-        this.persistPodAsync(canvasId, pod);
 
-        return pod;
+        return { pod, persisted: this.persistPodAsync(canvasId, pod) };
     }
 
     getByName(canvasId: string, name: string): Pod | undefined {
@@ -142,7 +141,7 @@ class PodStore extends CanvasMapStore<Pod> {
         return this.list(canvasId);
     }
 
-    update(canvasId: string, id: string, updates: PodUpdates): Pod | undefined {
+    update(canvasId: string, id: string, updates: PodUpdates): { pod: Pod; persisted: Promise<void> } | undefined {
         const pods = this.getOrCreateCanvasMap(canvasId);
         const pod = pods.get(id);
         if (!pod) {
@@ -153,9 +152,8 @@ class PodStore extends CanvasMapStore<Pod> {
         const updatedPod = this.handleScheduleUpdate(pod, updates, safeUpdates);
 
         pods.set(id, updatedPod);
-        this.persistPodAsync(canvasId, updatedPod);
 
-        return updatedPod;
+        return { pod: updatedPod, persisted: this.persistPodAsync(canvasId, updatedPod) };
     }
 
     private buildSafeUpdates(updates: PodUpdates): Partial<Omit<Pod, 'schedule'>> {
@@ -196,13 +194,14 @@ class PodStore extends CanvasMapStore<Pod> {
             return false;
         }
 
-        this.writeQueue.enqueue(id, async () => {
+        void this.writeQueue.enqueue(id, async () => {
             const result = await podPersistenceService.deletePodData(canvasDir, id);
             if (!result.success) {
                 logger.error('Pod', 'Delete', `[PodStore] 刪除 Pod 資料失敗 (${id}): ${result.error}`);
             }
+        }).finally(() => {
+            this.writeQueue.delete(id);
         });
-        this.writeQueue.delete(id);
 
         return true;
     }
@@ -232,16 +231,16 @@ class PodStore extends CanvasMapStore<Pod> {
         socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_STATUS_CHANGED, payload);
     }
 
-    setClaudeSessionId(canvasId: string, id: string, sessionId: string): void {
-        this.modifyPod(canvasId, id, {claudeSessionId: sessionId});
+    setClaudeSessionId(canvasId: string, id: string, sessionId: string): Promise<void> {
+        return this.modifyPod(canvasId, id, {claudeSessionId: sessionId}).persisted;
     }
 
-    resetClaudeSession(canvasId: string, podId: string): void {
-        this.setClaudeSessionId(canvasId, podId, '');
+    resetClaudeSession(canvasId: string, podId: string): Promise<void> {
+        return this.setClaudeSessionId(canvasId, podId, '');
     }
 
-    setOutputStyleId(canvasId: string, id: string, outputStyleId: string | null): void {
-        this.modifyPod(canvasId, id, {outputStyleId});
+    setOutputStyleId(canvasId: string, id: string, outputStyleId: string | null): Promise<void> {
+        return this.modifyPod(canvasId, id, {outputStyleId}).persisted;
     }
 
     private addIdToArrayField(
@@ -249,21 +248,21 @@ class PodStore extends CanvasMapStore<Pod> {
         podId: string,
         fieldName: 'skillIds' | 'subAgentIds' | 'mcpServerIds',
         id: string
-    ): void {
+    ): Promise<void> {
         const pod = this.getById(canvasId, podId);
         if (!pod || pod[fieldName].includes(id)) {
-            return;
+            return Promise.resolve();
         }
 
-        this.modifyPod(canvasId, podId, {[fieldName]: [...pod[fieldName], id]});
+        return this.modifyPod(canvasId, podId, {[fieldName]: [...pod[fieldName], id]}).persisted;
     }
 
-    addSkillId(canvasId: string, podId: string, skillId: string): void {
-        this.addIdToArrayField(canvasId, podId, 'skillIds', skillId);
+    addSkillId(canvasId: string, podId: string, skillId: string): Promise<void> {
+        return this.addIdToArrayField(canvasId, podId, 'skillIds', skillId);
     }
 
-    addSubAgentId(canvasId: string, podId: string, subAgentId: string): void {
-        this.addIdToArrayField(canvasId, podId, 'subAgentIds', subAgentId);
+    addSubAgentId(canvasId: string, podId: string, subAgentId: string): Promise<void> {
+        return this.addIdToArrayField(canvasId, podId, 'subAgentIds', subAgentId);
     }
 
     private findByArrayField(canvasId: string, field: 'skillIds' | 'subAgentIds' | 'mcpServerIds', targetId: string): Pod[] {
@@ -278,33 +277,33 @@ class PodStore extends CanvasMapStore<Pod> {
         return this.findByArrayField(canvasId, 'subAgentIds', subAgentId);
     }
 
-    addMcpServerId(canvasId: string, podId: string, mcpServerId: string): void {
-        this.addIdToArrayField(canvasId, podId, 'mcpServerIds', mcpServerId);
+    addMcpServerId(canvasId: string, podId: string, mcpServerId: string): Promise<void> {
+        return this.addIdToArrayField(canvasId, podId, 'mcpServerIds', mcpServerId);
     }
 
-    removeMcpServerId(canvasId: string, podId: string, mcpServerId: string): void {
+    removeMcpServerId(canvasId: string, podId: string, mcpServerId: string): Promise<void> {
         const pod = this.getById(canvasId, podId);
         if (!pod) {
-            return;
+            return Promise.resolve();
         }
 
-        this.modifyPod(canvasId, podId, {mcpServerIds: pod.mcpServerIds.filter((id) => id !== mcpServerId)});
+        return this.modifyPod(canvasId, podId, {mcpServerIds: pod.mcpServerIds.filter((id) => id !== mcpServerId)}).persisted;
     }
 
     findByMcpServerId(canvasId: string, mcpServerId: string): Pod[] {
         return this.findByArrayField(canvasId, 'mcpServerIds', mcpServerId);
     }
 
-    setRepositoryId(canvasId: string, id: string, repositoryId: string | null): void {
-        this.modifyPod(canvasId, id, {repositoryId});
+    setRepositoryId(canvasId: string, id: string, repositoryId: string | null): Promise<void> {
+        return this.modifyPod(canvasId, id, {repositoryId}).persisted;
     }
 
-    setAutoClear(canvasId: string, id: string, autoClear: boolean): void {
-        this.modifyPod(canvasId, id, {autoClear});
+    setAutoClear(canvasId: string, id: string, autoClear: boolean): Promise<void> {
+        return this.modifyPod(canvasId, id, {autoClear}).persisted;
     }
 
-    setCommandId(canvasId: string, podId: string, commandId: string | null): void {
-        this.modifyPod(canvasId, podId, {commandId});
+    setCommandId(canvasId: string, podId: string, commandId: string | null): Promise<void> {
+        return this.modifyPod(canvasId, podId, {commandId}).persisted;
     }
 
     findByCommandId(canvasId: string, commandId: string): Pod[] {
@@ -323,10 +322,10 @@ class PodStore extends CanvasMapStore<Pod> {
         return this.findBySingleField(canvasId, 'repositoryId', repositoryId);
     }
 
-    setSlackBinding(canvasId: string, podId: string, binding: PodSlackBinding | null): void {
+    setSlackBinding(canvasId: string, podId: string, binding: PodSlackBinding | null): Promise<void> {
         const pod = this.getById(canvasId, podId);
         if (!pod) {
-            return;
+            return Promise.resolve();
         }
 
         if (binding === null) {
@@ -334,11 +333,10 @@ class PodStore extends CanvasMapStore<Pod> {
             const {slackBinding: _, ...rest} = pod;
             const pods = this.getOrCreateCanvasMap(canvasId);
             pods.set(podId, rest as Pod);
-            this.persistPodAsync(canvasId, rest as Pod);
-            return;
+            return this.persistPodAsync(canvasId, rest as Pod);
         }
 
-        this.modifyPod(canvasId, podId, {slackBinding: binding});
+        return this.modifyPod(canvasId, podId, {slackBinding: binding}).persisted;
     }
 
     findBySlackApp(slackAppId: string): Array<{canvasId: string; pod: Pod}> {
@@ -355,15 +353,15 @@ class PodStore extends CanvasMapStore<Pod> {
         return result;
     }
 
-    setScheduleLastTriggeredAt(canvasId: string, podId: string, date: Date): void {
+    setScheduleLastTriggeredAt(canvasId: string, podId: string, date: Date): Promise<void> {
         const pod = this.getById(canvasId, podId);
         if (!pod || !pod.schedule) {
-            return;
+            return Promise.resolve();
         }
 
-        this.modifyPod(canvasId, podId, {
+        return this.modifyPod(canvasId, podId, {
             schedule: {...pod.schedule, lastTriggeredAt: date},
-        });
+        }).persisted;
     }
 
     getAllWithSchedule(): Array<{ canvasId: string; pod: Pod }> {
@@ -391,13 +389,10 @@ class PodStore extends CanvasMapStore<Pod> {
     }
 
     private applyPodDefaults(persistedPod: PersistedPod, canvasDir: string): Pod {
-        const loadedStatus = persistedPod.status as string;
-
         const pod: Pod = {
             id: persistedPod.id,
             name: persistedPod.name,
-            // 載入時重置為 idle，避免程式重啟後保留舊的忙碌狀態
-            status: loadedStatus === 'busy' ? 'idle' : persistedPod.status,
+            status: persistedPod.status,
             workspacePath: `${canvasDir}/pod-${persistedPod.id}`,
             x: persistedPod.x,
             y: persistedPod.y,

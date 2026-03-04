@@ -33,13 +33,13 @@ describe('Paste Helpers', () => {
       const originalPodId = uuidv4();
       const newPodId = uuidv4();
 
-      // Mock repository 存在
+      // 模擬 repository 存在
       const existsSpy = vi.spyOn(repositoryService, 'exists').mockResolvedValue(true);
       allSpies.push(existsSpy as any);
       const pathSpy = vi.spyOn(repositoryService, 'getRepositoryPath').mockReturnValue('/test/repo/path');
       allSpies.push(pathSpy as any);
 
-      // Mock podStore.create - 使用 prototype mock 方式
+      // 模擬 podStore.create - 使用 prototype mock 方式
       const mockPod = {
         id: newPodId,
         name: 'Test Pod',
@@ -61,7 +61,7 @@ describe('Paste Helpers', () => {
 
       // 保存原始方法並替換
       const originalCreate = podStore.create ? podStore.create.bind(podStore) : undefined;
-      (podStore as any).create = (() => mockPod) as any;
+      (podStore as any).create = (() => ({ pod: mockPod, persisted: Promise.resolve() })) as any;
       allSpies.push({
         restore: () => {
           if (originalCreate) {
@@ -73,7 +73,7 @@ describe('Paste Helpers', () => {
       const getByIdSpy = vi.spyOn(podStore, 'getById').mockReturnValue(undefined);
       allSpies.push(getByIdSpy as any);
 
-      // Mock workspace
+      // 模擬 workspace
       const createWorkspaceSpy = vi.spyOn(workspaceService, 'createWorkspace').mockResolvedValue({ success: true, data: '/test/workspace' });
       allSpies.push(createWorkspaceSpy as any);
 
@@ -107,7 +107,7 @@ describe('Paste Helpers', () => {
       const nonExistentRepoId = 'non-existent-repo';
       const originalPodId = uuidv4();
 
-      // Mock repository 不存在
+      // 模擬 repository 不存在
       const existsSpy = vi.spyOn(repositoryService, 'exists').mockResolvedValue(false);
       allSpies.push(existsSpy as any);
 
@@ -147,11 +147,11 @@ describe('Paste Helpers', () => {
       const originalPodId = uuidv4();
       const newPodId = uuidv4();
 
-      // 確保 exists 不被呼叫，先 mock 一個回傳值（雖然不應該被呼叫）
+      // 確保 exists 不被呼叫，先模擬一個回傳值（雖然不應該被呼叫）
       const existsSpy = vi.spyOn(repositoryService, 'exists').mockResolvedValue(true);
       allSpies.push(existsSpy as any);
 
-      // Mock podStore.create
+      // 模擬 podStore.create
       const mockPod = {
         id: newPodId,
         name: 'Test Pod',
@@ -173,7 +173,7 @@ describe('Paste Helpers', () => {
 
       // 保存原始方法並替換
       const originalCreate = podStore.create ? podStore.create.bind(podStore) : undefined;
-      (podStore as any).create = (() => mockPod) as any;
+      (podStore as any).create = (() => ({ pod: mockPod, persisted: Promise.resolve() })) as any;
       allSpies.push({
         restore: () => {
           if (originalCreate) {
@@ -185,7 +185,7 @@ describe('Paste Helpers', () => {
       const getByIdSpy = vi.spyOn(podStore, 'getById').mockReturnValue(undefined);
       allSpies.push(getByIdSpy as any);
 
-      // Mock workspace
+      // 模擬 workspace
       const createWorkspaceSpy = vi.spyOn(workspaceService, 'createWorkspace').mockResolvedValue({ success: true, data: '/test/workspace' });
       allSpies.push(createWorkspaceSpy as any);
 
@@ -222,16 +222,16 @@ describe('Paste Helpers', () => {
       const successPodId = uuidv4();
       const newPodId = uuidv4();
 
-      // First pod 的 repository 不存在
+      // 第一個 Pod 的 repository 不存在
       const existsSpy = vi.spyOn(repositoryService, 'exists')
-        .mockResolvedValueOnce(false) // First call for failing pod
-        .mockResolvedValueOnce(true); // Second call for success pod
+        .mockResolvedValueOnce(false) // 第一次呼叫：失敗的 pod
+        .mockResolvedValueOnce(true); // 第二次呼叫：成功的 pod
       allSpies.push(existsSpy as any);
 
       const pathSpy = vi.spyOn(repositoryService, 'getRepositoryPath').mockReturnValue('/test/repo/path');
       allSpies.push(pathSpy as any);
 
-      // Mock successful pod creation
+      // 模擬成功建立 Pod
       const mockPod = {
         id: newPodId,
         name: 'Success Pod',
@@ -253,7 +253,7 @@ describe('Paste Helpers', () => {
 
       // 保存原始方法並替換
       const originalCreate = podStore.create ? podStore.create.bind(podStore) : undefined;
-      (podStore as any).create = (() => mockPod) as any;
+      (podStore as any).create = (() => ({ pod: mockPod, persisted: Promise.resolve() })) as any;
       allSpies.push({
         restore: () => {
           if (originalCreate) {
@@ -265,7 +265,7 @@ describe('Paste Helpers', () => {
       const getByIdSpy = vi.spyOn(podStore, 'getById').mockReturnValue(undefined);
       allSpies.push(getByIdSpy as any);
 
-      // Mock workspace
+      // 模擬 workspace
       const createWorkspaceSpy = vi.spyOn(workspaceService, 'createWorkspace').mockResolvedValue({ success: true, data: '/test/workspace' });
       allSpies.push(createWorkspaceSpy as any);
 
@@ -454,7 +454,7 @@ describe('Paste Helpers', () => {
         [validTarget1]: newTarget1,
         [validSource2]: newSource2,
         [validTarget2]: newTarget2,
-        // invalidSource 和 invalidTarget 不在 mapping 中
+        // invalidSource 與 invalidTarget 不在 mapping 中
       };
 
       const mockConnection1 = {
@@ -552,7 +552,7 @@ describe('Paste Helpers', () => {
       const createConnSpy = vi.spyOn(connectionStore, 'create').mockReturnValue(mockConnection);
       allSpies.push(createConnSpy as any);
 
-      // 沒有提供 triggerMode
+      // 未提供 triggerMode
       const connections: PasteConnectionItem[] = [
         {
           originalSourcePodId,

@@ -12,8 +12,8 @@ export interface BindResourceConfig<TService, TIdField extends string = string> 
     isMultiBind: boolean;
     service: TService;
     podStoreMethod: {
-        bind: (canvasId: string, podId: string, resourceId: string) => void;
-        unbind?: (canvasId: string, podId: string) => void;
+        bind: (canvasId: string, podId: string, resourceId: string) => Promise<void>;
+        unbind?: (canvasId: string, podId: string) => Promise<void>;
     };
     getPodResourceIds: (pod: {skillIds: string[]; commandId: string | null; outputStyleId: string | null; subAgentIds: string[]; mcpServerIds: string[]}) => string[] | string | null;
     /** 某些資源綁定後需要複製檔案到 Pod 工作目錄 */
@@ -37,10 +37,7 @@ function isResourceAlreadyBound(
         return Array.isArray(boundIds) && boundIds.includes(resourceId);
     }
 
-    const currentBoundId = boundIds as string | null;
-    const isAlreadyBoundToSameResource = currentBoundId === resourceId;
-    const isAlreadyBoundToDifferentResource = currentBoundId !== null;
-    return isAlreadyBoundToSameResource || isAlreadyBoundToDifferentResource;
+    return (boundIds as string | null) !== null;
 }
 
 async function validatePodAndResource<TService extends {exists: (id: string) => Promise<boolean>}, TIdField extends string>(
@@ -108,7 +105,7 @@ async function performBind<TService, TIdField extends string>(
         await config.copyResourceToPod(resourceId, pod);
     }
 
-    config.podStoreMethod.bind(canvasId, podId, resourceId);
+    await config.podStoreMethod.bind(canvasId, podId, resourceId);
 
     if (!config.skipRepositorySync && pod.repositoryId) {
         await repositorySyncService.syncRepositoryResources(pod.repositoryId);
@@ -189,7 +186,7 @@ export function createUnbindHandler<TService, TIdField extends string>(
                 await config.deleteResourceFromPath(pod.workspacePath);
             }
 
-            config.podStoreMethod.unbind!(canvasId, podId);
+            await config.podStoreMethod.unbind!(canvasId, podId);
 
             if (!config.skipRepositorySync && pod.repositoryId) {
                 await repositorySyncService.syncRepositoryResources(pod.repositoryId);

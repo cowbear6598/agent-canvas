@@ -39,8 +39,8 @@ const outputStyleBindConfig = {
   isMultiBind: false,
   service: outputStyleService,
   podStoreMethod: {
-    bind: (canvasId: string, podId: string, outputStyleId: string): void => podStore.setOutputStyleId(canvasId, podId, outputStyleId),
-    unbind: (canvasId: string, podId: string): void => podStore.setOutputStyleId(canvasId, podId, null),
+    bind: (canvasId: string, podId: string, outputStyleId: string): Promise<void> => podStore.setOutputStyleId(canvasId, podId, outputStyleId),
+    unbind: (canvasId: string, podId: string): Promise<void> => podStore.setOutputStyleId(canvasId, podId, null),
   },
   getPodResourceIds: (pod: { outputStyleId: string | null }): string | null => pod.outputStyleId,
   skipConflictCheck: true,
@@ -51,11 +51,8 @@ const outputStyleBindConfig = {
   },
 };
 
-const outputStyleBindHandler = createBindHandler(outputStyleBindConfig);
-const outputStyleUnbindHandler = createUnbindHandler(outputStyleBindConfig);
-
-export const handlePodBindOutputStyle = outputStyleBindHandler;
-export const handlePodUnbindOutputStyle = outputStyleUnbindHandler;
+export const handlePodBindOutputStyle = createBindHandler(outputStyleBindConfig);
+export const handlePodUnbindOutputStyle = createUnbindHandler(outputStyleBindConfig);
 
 export const handleOutputStyleMoveToGroup = createMoveToGroupHandler({
   service: outputStyleService,

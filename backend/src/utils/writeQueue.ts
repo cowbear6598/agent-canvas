@@ -12,7 +12,7 @@ export class WriteQueue {
         this.storeName = storeName;
     }
 
-    enqueue(key: string, writeFn: () => Promise<void>): void {
+    enqueue(key: string, writeFn: () => Promise<void>): Promise<void> {
         const previousWrite = this.queues.get(key) ?? Promise.resolve();
         const nextWrite = previousWrite
             .then(() => writeFn())
@@ -21,6 +21,7 @@ export class WriteQueue {
                 logger.error(this.category, 'Error', `[${this.storeName}] 寫入佇列執行失敗 (${key}): ${errorMsg}`);
             });
         this.queues.set(key, nextWrite);
+        return nextWrite;
     }
 
     flush(key: string): Promise<void> {

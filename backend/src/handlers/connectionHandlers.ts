@@ -99,14 +99,14 @@ export const handleConnectionCreate = withCanvasId<ConnectionCreatePayload>(
     socketService.emitToCanvas(canvasId, WebSocketResponseEvents.CONNECTION_CREATED, response);
 
     if (targetPod.schedule) {
-      const updatedPod = podStore.update(canvasId, targetPodId, { schedule: null });
+      const result = podStore.update(canvasId, targetPodId, { schedule: null });
 
-      if (updatedPod) {
+      if (result) {
         const podSchedulePayload: PodScheduleSetPayload = {
           requestId: '',
           canvasId,
           success: true,
-          pod: updatedPod,
+          pod: result.pod,
         };
         socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_SCHEDULE_SET, podSchedulePayload);
 

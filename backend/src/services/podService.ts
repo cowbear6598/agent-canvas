@@ -109,7 +109,7 @@ export async function createPodWithWorkspace(
         return { success: false, error: '同一 Canvas 下已存在相同名稱的 Pod' };
     }
 
-    const pod = podStore.create(canvasId, { ...data, name: trimmedName });
+    const { pod } = podStore.create(canvasId, { ...data, name: trimmedName });
 
     const canvasDir = canvasStore.getCanvasDir(canvasId);
     if (canvasDir) {
