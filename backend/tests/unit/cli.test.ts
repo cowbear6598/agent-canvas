@@ -125,7 +125,7 @@ describe('validatePort', () => {
 });
 
 describe('readPidFile 與 writePidFile', () => {
-	const pidPath = path.join(TMP_DIR, 'claude-canvas.pid');
+	const pidPath = path.join(TMP_DIR, 'claude-code-canvas.pid');
 
 	describe('CLI stop 正常停止服務', () => {
 		it('寫入 PID 檔案後能正確讀取', () => {
@@ -142,7 +142,7 @@ describe('readPidFile 與 writePidFile', () => {
 
 	describe('CLI stop 服務未啟動時顯示提示', () => {
 		it('檔案不存在回傳 null', () => {
-			const result = readPidFile('/不存在的路徑/claude-canvas.pid');
+			const result = readPidFile('/不存在的路徑/claude-code-canvas.pid');
 			expect(result).toBeNull();
 		});
 	});
@@ -274,7 +274,7 @@ describe('readConfig 與 writeConfig', () => {
 });
 
 describe('handleLogs', () => {
-	const logPath = path.join(TMP_DIR, 'claude-canvas.log');
+	const logPath = path.join(TMP_DIR, 'claude-code-canvas.log');
 
 	beforeEach(() => {
 		vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -287,7 +287,7 @@ describe('handleLogs', () => {
 
 	describe('CLI logs 日誌檔案不存在時顯示提示', () => {
 		it('log 檔案不存在時印出提示並 exit', () => {
-			handleLogs({}, '/不存在的路徑/claude-canvas.log');
+			handleLogs({}, '/不存在的路徑/claude-code-canvas.log');
 			expect(console.log).toHaveBeenCalledWith('尚無日誌檔案，請先啟動服務');
 			expect(process.exit).toHaveBeenCalledWith(0);
 		});

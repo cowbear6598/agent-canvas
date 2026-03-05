@@ -23,10 +23,10 @@ function isSupportedTarget(value: string): value is SupportedTarget {
 }
 
 function getOutfile(target: string | undefined): string {
-	if (!target) return path.join(DIST_DIR, 'claude-canvas');
+	if (!target) return path.join(DIST_DIR, 'claude-code-canvas');
 
 	const suffix = target.replace(/^bun-/, '');
-	return path.join(DIST_DIR, `claude-canvas-${suffix}`);
+	return path.join(DIST_DIR, `claude-code-canvas-${suffix}`);
 }
 
 /**

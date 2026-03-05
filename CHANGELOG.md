@@ -135,7 +135,7 @@
 
 ### 新增
 - ClaudeService 統一管理所有 Claude Agent SDK 互動
-- CLI 入口（claude-canvas 指令：start/stop/status/config）
+- CLI 入口（claude-code-canvas 指令：start/stop/status/config）
 - curl 安裝腳本 install.sh
 - 編譯腳本 scripts/compile.ts
 - GitHub Actions release workflow

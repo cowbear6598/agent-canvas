@@ -47,22 +47,22 @@ curl -fsSL https://raw.githubusercontent.com/cowbear6598/claude-code-canvas/main
 
 ```bash
 # 啟動服務（背景 daemon 模式，預設 port 3001）
-claude-canvas start
+claude-code-canvas start
 
 # 指定 port 啟動
-claude-canvas start --port 8080
+claude-code-canvas start --port 8080
 
 # 查看服務狀態
-claude-canvas status
+claude-code-canvas status
 
 # 停止服務
-claude-canvas stop
+claude-code-canvas stop
 
 # 查看最新日誌（預設 50 行）
-claude-canvas logs
+claude-code-canvas logs
 
 # 查看指定行數的日誌
-claude-canvas logs -n 100
+claude-code-canvas logs -n 100
 ```
 
 啟動後開啟瀏覽器前往 `http://localhost:3001` 即可使用。
@@ -73,16 +73,16 @@ claude-canvas logs -n 100
 
 ```bash
 # GitHub Token
-claude-canvas config set GITHUB_TOKEN ghp_xxxxx
+claude-code-canvas config set GITHUB_TOKEN ghp_xxxxx
 
 # GitLab Token
-claude-canvas config set GITLAB_TOKEN glpat-xxxxx
+claude-code-canvas config set GITLAB_TOKEN glpat-xxxxx
 
 # 自架 GitLab 網址（選填，預設為 gitlab.com）
-claude-canvas config set GITLAB_URL https://gitlab.example.com
+claude-code-canvas config set GITLAB_URL https://gitlab.example.com
 
 # 查看所有設定
-claude-canvas config list
+claude-code-canvas config list
 ```
 
 ## 教學

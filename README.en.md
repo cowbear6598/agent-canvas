@@ -45,22 +45,22 @@ curl -fsSL https://raw.githubusercontent.com/cowbear6598/claude-code-canvas/main
 
 ```bash
 # Start service (background daemon, default port 3001)
-claude-canvas start
+claude-code-canvas start
 
 # Start with custom port
-claude-canvas start --port 8080
+claude-code-canvas start --port 8080
 
 # Check service status
-claude-canvas status
+claude-code-canvas status
 
 # Stop service
-claude-canvas stop
+claude-code-canvas stop
 
 # View latest logs (default 50 lines)
-claude-canvas logs
+claude-code-canvas logs
 
 # View specific number of log lines
-claude-canvas logs -n 100
+claude-code-canvas logs -n 100
 ```
 
 Open your browser and navigate to `http://localhost:3001` to get started.
@@ -71,16 +71,16 @@ To use Clone features for accessing private repositories, use the `config` comma
 
 ```bash
 # GitHub Token
-claude-canvas config set GITHUB_TOKEN ghp_xxxxx
+claude-code-canvas config set GITHUB_TOKEN ghp_xxxxx
 
 # GitLab Token
-claude-canvas config set GITLAB_TOKEN glpat-xxxxx
+claude-code-canvas config set GITLAB_TOKEN glpat-xxxxx
 
 # Self-hosted GitLab URL (optional, defaults to gitlab.com)
-claude-canvas config set GITLAB_URL https://gitlab.example.com
+claude-code-canvas config set GITLAB_URL https://gitlab.example.com
 
 # List all configurations
-claude-canvas config list
+claude-code-canvas config list
 ```
 
 ## Tutorials

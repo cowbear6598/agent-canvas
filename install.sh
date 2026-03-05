@@ -4,7 +4,7 @@
 
 set -eu
 
-BINARY_NAME="claude-canvas"
+BINARY_NAME="claude-code-canvas"
 GITHUB_REPO="cowbear6598/claude-code-canvas"
 INSTALL_DIR="$HOME/.local/bin"
 

@@ -5,10 +5,10 @@ import pkg from '../../package.json';
 import { safeJsonParse } from './utils/safeJsonParse.js';
 
 const APP_DATA_DIR = path.join(os.homedir(), 'Documents', 'ClaudeCanvas');
-const PID_FILE = path.join(APP_DATA_DIR, 'claude-canvas.pid');
+const PID_FILE = path.join(APP_DATA_DIR, 'claude-code-canvas.pid');
 const CONFIG_FILE = path.join(APP_DATA_DIR, 'config.json');
 const LOG_DIR = path.join(APP_DATA_DIR, 'logs');
-const LOG_FILE = path.join(LOG_DIR, 'claude-canvas.log');
+const LOG_FILE = path.join(LOG_DIR, 'claude-code-canvas.log');
 const MAX_LOG_LINES = 10_000;
 const MAX_LOG_READ_BYTES = 1 * 1024 * 1024;
 
@@ -23,7 +23,7 @@ export function getLocalIp(): string | null {
 const HELP_TEXT = `Claude Canvas - AI Agent 畫布工具
 
 使用方式：
-  claude-canvas <命令> [選項]
+  claude-code-canvas <命令> [選項]
 
 命令：
   start [--port <number>]       啟動服務（背景 daemon 模式）
@@ -301,11 +301,11 @@ function handleConfigSet(args: string[]): void {
 	const value = args[2];
 
 	if (!key || !value) {
-		console.error('使用方式：claude-canvas config set <key> <value>');
+		console.error('使用方式：claude-code-canvas config set <key> <value>');
 		process.exit(1);
 	}
 
-	validateConfigKey(key, 'claude-canvas config set <key> <value>');
+	validateConfigKey(key, 'claude-code-canvas config set <key> <value>');
 
 	const config = readConfig(CONFIG_FILE);
 	config[key] = value;
@@ -317,11 +317,11 @@ function handleConfigGet(args: string[]): void {
 	const key = args[1];
 
 	if (!key) {
-		console.error('使用方式：claude-canvas config get <key>');
+		console.error('使用方式：claude-code-canvas config get <key>');
 		process.exit(1);
 	}
 
-	validateConfigKey(key, 'claude-canvas config get <key>');
+	validateConfigKey(key, 'claude-code-canvas config get <key>');
 
 	const config = readConfig(CONFIG_FILE);
 	const value = config[key];
@@ -364,7 +364,7 @@ export function handleConfig(args: string[]): void {
 		return;
 	}
 
-	console.error('使用方式：claude-canvas config <set|get|list>');
+	console.error('使用方式：claude-code-canvas config <set|get|list>');
 	console.log(HELP_TEXT);
 	process.exit(1);
 }

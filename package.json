@@ -1,5 +1,5 @@
 {
-  "name": "claude-canvas",
+  "name": "claude-code-canvas",
   "version": "0.4.1",
   "private": true,
   "description": "AI Agent 畫布工具",
