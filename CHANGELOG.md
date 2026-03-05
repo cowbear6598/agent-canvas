@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.3] - 2026-03-05
+
+### 新增
+- 多 Pod 並行執行 Slack 訊息處理
+- Pod 執行後自動觸發 autoClear 和 Workflow
+
+### 修正
+- 修復 WebSocket 心跳逾時問題（改用直接 heartbeat:pong 取代 ack 機制）
+- 修復 WriteQueue 佇列競爭條件和 await 遺漏問題
+
+### 重構
+- Slack 整合從 Socket Mode 重構為 HTTP Webhook
+- 移除 WebSocket ack 基礎設施（onWithAck/offWithAck 等）
+
 ## [0.3.2] - 2026-03-04
 
 ### 修正
