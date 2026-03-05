@@ -23,18 +23,6 @@ vi.mock('../../src/services/messageStore.js', () => ({
   },
 }));
 
-vi.mock('../../src/services/persistence/chatPersistence.js', () => ({
-  chatPersistenceService: {
-    clearChatHistory: vi.fn(),
-  },
-}));
-
-vi.mock('../../src/services/canvasStore.js', () => ({
-  canvasStore: {
-    getCanvasDir: vi.fn(),
-  },
-}));
-
 vi.mock('../../src/services/pendingTargetStore.js', () => ({
   pendingTargetStore: {
     clearPendingTarget: vi.fn(),
@@ -60,20 +48,15 @@ import { workflowClearService } from '../../src/services/workflowClearService.js
 import { connectionStore } from '../../src/services/connectionStore.js';
 import { podStore } from '../../src/services/podStore.js';
 import { messageStore } from '../../src/services/messageStore.js';
-import { chatPersistenceService } from '../../src/services/persistence/chatPersistence.js';
-import { canvasStore } from '../../src/services/canvasStore.js';
 import { pendingTargetStore } from '../../src/services/pendingTargetStore.js';
 import { directTriggerStore } from '../../src/services/directTriggerStore.js';
 
 const CANVAS_ID = 'canvas-1';
-const CANVAS_DIR = '/tmp/test-canvas-1';
 const SOURCE_POD_ID = 'pod-1';
 const TARGET_POD_ID = 'pod-2';
 const DOWNSTREAM_POD_ID = 'pod-3';
 
 function setupDefaultMocks() {
-  (canvasStore.getCanvasDir as any).mockReturnValue(CANVAS_DIR);
-
   (connectionStore.findBySourcePodId as any).mockImplementation((_cId: string, podId: string) => {
     if (podId === SOURCE_POD_ID) {
       return [{ id: 'conn-1', sourcePodId: SOURCE_POD_ID, targetPodId: TARGET_POD_ID, triggerMode: 'auto', decideStatus: 'none' }];
@@ -92,8 +75,6 @@ function setupDefaultMocks() {
     };
     return pods[podId] ?? null;
   });
-
-  (chatPersistenceService.clearChatHistory as any).mockResolvedValue({ success: true });
 }
 
 describe('WorkflowClearService', () => {
@@ -103,16 +84,6 @@ describe('WorkflowClearService', () => {
   });
 
   describe('clearWorkflow 基本功能', () => {
-    it('canvas 不存在時，回傳失敗結果', async () => {
-      (canvasStore.getCanvasDir as any).mockReturnValue(null);
-
-      const result = await workflowClearService.clearWorkflow(CANVAS_ID, SOURCE_POD_ID);
-
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('Canvas 不存在');
-      expect(result.clearedPodIds).toHaveLength(0);
-    });
-
     it('成功清除 source pod 及所有下游 pod', async () => {
       const result = await workflowClearService.clearWorkflow(CANVAS_ID, SOURCE_POD_ID);
 
@@ -327,25 +298,6 @@ describe('WorkflowClearService', () => {
       expect(result).toContain(SOURCE_POD_ID);
       expect(result).toContain(TARGET_POD_ID);
       expect(result).toHaveLength(2);
-    });
-  });
-
-  describe('clearWorkflow chatPersistence 失敗處理', () => {
-    it('clearChatHistory 回傳失敗時，流程不中斷，仍回傳 success: true 且清除所有 pod', async () => {
-      (chatPersistenceService.clearChatHistory as any).mockResolvedValue({ success: false, error: '測試錯誤' });
-
-      const result = await workflowClearService.clearWorkflow(CANVAS_ID, SOURCE_POD_ID);
-
-      expect(result.success).toBe(true);
-      expect(result.clearedPodIds).toContain(SOURCE_POD_ID);
-      expect(result.clearedPodIds).toContain(TARGET_POD_ID);
-      expect(result.clearedPodIds).toContain(DOWNSTREAM_POD_ID);
-      expect(messageStore.clearMessages).toHaveBeenCalledWith(SOURCE_POD_ID);
-      expect(messageStore.clearMessages).toHaveBeenCalledWith(TARGET_POD_ID);
-      expect(messageStore.clearMessages).toHaveBeenCalledWith(DOWNSTREAM_POD_ID);
-      expect(podStore.resetClaudeSession).toHaveBeenCalledWith(CANVAS_ID, SOURCE_POD_ID);
-      expect(podStore.resetClaudeSession).toHaveBeenCalledWith(CANVAS_ID, TARGET_POD_ID);
-      expect(podStore.resetClaudeSession).toHaveBeenCalledWith(CANVAS_ID, DOWNSTREAM_POD_ID);
     });
   });
 

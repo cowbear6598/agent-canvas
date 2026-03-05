@@ -1,139 +1,135 @@
 import { promises as fs } from 'fs';
 import path from 'path';
-import { z } from 'zod';
 import { config } from '../config';
 import { isPathWithinDirectory } from '../utils/pathValidator.js';
-import {fileExists, directoryExists} from './shared/fileResourceHelpers.js';
+import { directoryExists } from './shared/fileResourceHelpers.js';
+import { getDb } from '../database/index.js';
+import { getStatements } from '../database/statements.js';
 
-const VALID_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
+interface RepositoryMetadataRow {
+    id: string;
+    name: string;
+    path: string;
+    parent_repo_id: string | null;
+    branch_name: string | null;
+    current_branch: string | null;
+}
 
-const RepositoryMetadataEntrySchema = z.object({
-  parentRepoId: z.string().regex(VALID_ID_PATTERN).optional(),
-  branchName: z.string().optional(),
-  currentBranch: z.string().optional(),
-});
-
-const RepositoryMetadataSchema = z.record(
-  z.string().regex(VALID_ID_PATTERN),
-  RepositoryMetadataEntrySchema
-);
-
-type RepositoryMetadata = z.infer<typeof RepositoryMetadataEntrySchema>;
-
-function isValidRepositoryMetadata(value: unknown): value is Record<string, RepositoryMetadata> {
-  return RepositoryMetadataSchema.safeParse(value).success;
+interface RepositoryMetadata {
+    parentRepoId?: string;
+    branchName?: string;
+    currentBranch?: string;
 }
 
 class RepositoryService {
-  private metadataStore: Map<string, RepositoryMetadata> = new Map();
-  private metadataPath = path.join(config.repositoriesRoot, '.metadata.json');
-
-  async initialize(): Promise<void> {
-    await this.loadMetadata();
-  }
-
-  private async saveMetadata(): Promise<void> {
-    const data = Object.fromEntries(this.metadataStore);
-    await fs.writeFile(this.metadataPath, JSON.stringify(data, null, 2));
-  }
-
-  private async loadMetadata(): Promise<void> {
-    if (!await fileExists(this.metadataPath)) {
-      this.metadataStore = new Map();
-      return;
+    private get stmts(): ReturnType<typeof getStatements>['repositoryMetadata'] {
+        return getStatements(getDb()).repositoryMetadata;
     }
 
-    const content = await fs.readFile(this.metadataPath, 'utf-8');
-    const parsed: unknown = JSON.parse(content);
-
-    if (!isValidRepositoryMetadata(parsed)) {
-      this.metadataStore = new Map();
-      return;
+    async initialize(): Promise<void> {
+        return Promise.resolve();
     }
 
-    this.metadataStore = new Map(Object.entries(parsed));
-  }
+    async list(): Promise<Array<{ id: string; name: string; parentRepoId?: string; branchName?: string; currentBranch?: string }>> {
+        await fs.mkdir(config.repositoriesRoot, { recursive: true });
 
-  async list(): Promise<Array<{ id: string; name: string; parentRepoId?: string; branchName?: string; currentBranch?: string }>> {
-    await fs.mkdir(config.repositoriesRoot, { recursive: true });
+        const entries = await fs.readdir(config.repositoriesRoot, { withFileTypes: true });
+        const repositories: Array<{ id: string; name: string; parentRepoId?: string; branchName?: string; currentBranch?: string }> = [];
 
-    const entries = await fs.readdir(config.repositoriesRoot, { withFileTypes: true });
-    const repositories: Array<{ id: string; name: string; parentRepoId?: string; branchName?: string; currentBranch?: string }> = [];
+        for (const entry of entries) {
+            if (!entry.isDirectory()) continue;
 
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
+            const row = this.stmts.selectById.get(entry.name) as RepositoryMetadataRow | null;
+            repositories.push({
+                id: entry.name,
+                name: entry.name,
+                ...(row?.parent_repo_id && { parentRepoId: row.parent_repo_id }),
+                ...(row?.branch_name && { branchName: row.branch_name }),
+                ...(row?.current_branch && { currentBranch: row.current_branch }),
+            });
+        }
 
-      const metadata = this.metadataStore.get(entry.name);
-      repositories.push({
-        id: entry.name,
-        name: entry.name,
-        ...(metadata?.parentRepoId && { parentRepoId: metadata.parentRepoId }),
-        ...(metadata?.branchName && { branchName: metadata.branchName }),
-        ...(metadata?.currentBranch && { currentBranch: metadata.currentBranch }),
-      });
+        return repositories;
     }
 
-    return repositories;
-  }
+    async create(name: string, options?: { parentRepoId?: string; branchName?: string }): Promise<{ id: string; name: string }> {
+        const repositoryPath = path.join(config.repositoriesRoot, name);
 
-  async create(name: string, options?: { parentRepoId?: string; branchName?: string }): Promise<{ id: string; name: string }> {
-    const repositoryPath = path.join(config.repositoriesRoot, name);
+        if (!isPathWithinDirectory(repositoryPath, config.repositoriesRoot)) {
+            throw new Error('無效的 Repository 路徑');
+        }
 
-    if (!isPathWithinDirectory(repositoryPath, config.repositoriesRoot)) {
-      throw new Error('無效的 Repository 路徑');
+        await fs.mkdir(repositoryPath, { recursive: true });
+
+        if (options?.parentRepoId || options?.branchName) {
+            this.stmts.upsert.run({
+                $id: name,
+                $name: name,
+                $path: repositoryPath,
+                $parentRepoId: options.parentRepoId ?? null,
+                $branchName: options.branchName ?? null,
+                $currentBranch: null,
+            });
+        }
+
+        return { id: name, name };
     }
 
-    await fs.mkdir(repositoryPath, { recursive: true });
+    getMetadata(repositoryId: string): RepositoryMetadata | undefined {
+        const row = this.stmts.selectById.get(repositoryId) as RepositoryMetadataRow | null;
 
-    if (options?.parentRepoId || options?.branchName) {
-      this.metadataStore.set(name, {
-        parentRepoId: options.parentRepoId,
-        branchName: options.branchName,
-      });
+        if (!row) return undefined;
+
+        return {
+            ...(row.parent_repo_id && { parentRepoId: row.parent_repo_id }),
+            ...(row.branch_name && { branchName: row.branch_name }),
+            ...(row.current_branch && { currentBranch: row.current_branch }),
+        };
     }
 
-    return { id: name, name };
-  }
-
-  getMetadata(repositoryId: string): RepositoryMetadata | undefined {
-    return this.metadataStore.get(repositoryId);
-  }
-
-  async registerMetadata(repositoryId: string, metadata: RepositoryMetadata): Promise<void> {
-    this.metadataStore.set(repositoryId, metadata);
-    await this.saveMetadata();
-  }
-
-  async exists(repositoryId: string): Promise<boolean> {
-    const repositoryPath = this.getRepositoryPath(repositoryId);
-    return directoryExists(repositoryPath);
-  }
-
-  getRepositoryPath(repositoryId: string): string {
-    const repositoryPath = path.join(config.repositoriesRoot, repositoryId);
-
-    if (!isPathWithinDirectory(repositoryPath, config.repositoriesRoot)) {
-      throw new Error('無效的 Repository 路徑');
+    async registerMetadata(repositoryId: string, metadata: RepositoryMetadata): Promise<void> {
+        const repositoryPath = this.getRepositoryPath(repositoryId);
+        this.stmts.upsert.run({
+            $id: repositoryId,
+            $name: repositoryId,
+            $path: repositoryPath,
+            $parentRepoId: metadata.parentRepoId ?? null,
+            $branchName: metadata.branchName ?? null,
+            $currentBranch: metadata.currentBranch ?? null,
+        });
+        return Promise.resolve();
     }
 
-    return repositoryPath;
-  }
-
-  getParentDirectory(): string {
-    return config.repositoriesRoot;
-  }
-
-  async delete(repositoryId: string): Promise<void> {
-    const repositoryPath = this.getRepositoryPath(repositoryId);
-
-    if (!isPathWithinDirectory(repositoryPath, config.repositoriesRoot)) {
-      throw new Error(`無效的 Repository 路徑：${repositoryId}`);
+    async exists(repositoryId: string): Promise<boolean> {
+        const repositoryPath = this.getRepositoryPath(repositoryId);
+        return directoryExists(repositoryPath);
     }
 
-    await fs.rm(repositoryPath, { recursive: true, force: true });
-    this.metadataStore.delete(repositoryId);
-    await this.saveMetadata();
-  }
+    getRepositoryPath(repositoryId: string): string {
+        const repositoryPath = path.join(config.repositoriesRoot, repositoryId);
+
+        if (!isPathWithinDirectory(repositoryPath, config.repositoriesRoot)) {
+            throw new Error('無效的 Repository 路徑');
+        }
+
+        return repositoryPath;
+    }
+
+    getParentDirectory(): string {
+        return config.repositoriesRoot;
+    }
+
+    async delete(repositoryId: string): Promise<void> {
+        const repositoryPath = this.getRepositoryPath(repositoryId);
+
+        if (!isPathWithinDirectory(repositoryPath, config.repositoriesRoot)) {
+            throw new Error(`無效的 Repository 路徑：${repositoryId}`);
+        }
+
+        await fs.rm(repositoryPath, { recursive: true, force: true });
+
+        this.stmts.deleteById.run(repositoryId);
+    }
 }
 
 export const repositoryService = new RepositoryService();

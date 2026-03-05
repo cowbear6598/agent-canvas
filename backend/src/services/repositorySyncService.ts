@@ -1,5 +1,3 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
 import { repositoryService } from './repositoryService.js';
 import { podStore } from './podStore.js';
 import { canvasStore } from './canvasStore.js';
@@ -10,6 +8,8 @@ import { podManifestService } from './podManifestService.js';
 import { logger } from '../utils/logger.js';
 import { fsOperation } from '../utils/operationHelpers.js';
 import { validatePodId } from '../utils/pathValidator.js';
+import { getDb } from '../database/index.js';
+import { getStatements } from '../database/statements.js';
 
 interface PodResources {
   commandIds: string[];
@@ -66,7 +66,7 @@ class RepositorySyncService {
   }
 
   private async writeSinglePodManifest(podId: string, resources: PodResources, repositoryPath: string, repositoryId: string): Promise<void> {
-    await podManifestService.deleteManagedFiles(repositoryPath, podId);
+    await podManifestService.deleteManagedFiles(repositoryId, podId);
 
     const copyCommands = resources.commandIds.map(commandId =>
       fsOperation(() => commandService.copyCommandToRepository(commandId, repositoryPath), `複製 command ${commandId} 到 repository ${repositoryId} 失敗`)
@@ -81,7 +81,7 @@ class RepositorySyncService {
     await Promise.all([...copyCommands, ...copySkills, ...copySubAgents]);
 
     const managedFiles = await this.collectPodManagedFiles(resources);
-    await podManifestService.writeManifest(repositoryPath, podId, managedFiles);
+    podManifestService.writeManifest(repositoryId, podId, managedFiles);
   }
 
   private async performSync(repositoryId: string): Promise<void> {
@@ -89,7 +89,7 @@ class RepositorySyncService {
     const allCanvases = canvasStore.list();
     const podResourcesMap = this.collectPodResources(allCanvases, repositoryId);
 
-    await this.cleanOrphanManifests(repositoryPath, podResourcesMap);
+    await this.cleanOrphanManifests(repositoryId, podResourcesMap);
     await this.writePodManifests(podResourcesMap, repositoryPath, repositoryId);
 
     const totalCommands = [...podResourcesMap.values()].reduce((sum, podResources) => sum + podResources.commandIds.length, 0);
@@ -99,37 +99,24 @@ class RepositorySyncService {
     logger.log('Repository', 'Update', `已同步 Repository ${repositoryId}：${totalCommands} 個 Command、${totalSkills} 個 Skill、${totalSubAgents} 個 SubAgent`);
   }
 
-  private isOrphanManifest(fileName: string, activePodResourcesMap: Map<string, PodResources>): { isOrphan: boolean; podId?: string } {
-    const manifestPattern = /^\.pod-manifest-(.+)\.json$/;
-    const match = fileName.match(manifestPattern);
+  private async cleanOrphanManifests(repositoryId: string, activePodResourcesMap: Map<string, PodResources>): Promise<void> {
+    const db = getDb();
+    const stmts = getStatements(db);
 
-    if (!match) return { isOrphan: false };
+    interface ManifestRow { pod_id: string }
+    const rows = stmts.podManifest.selectByRepositoryId.all(repositoryId) as ManifestRow[];
 
-    const podId = match[1];
+    for (const row of rows) {
+      const podId = row.pod_id;
 
-    if (activePodResourcesMap.has(podId)) return { isOrphan: false };
+      if (activePodResourcesMap.has(podId)) continue;
 
-    if (!validatePodId(podId)) {
-      logger.warn('Repository', 'Warn', `孤兒 manifest 的 podId 格式無效，跳過：${podId}`);
-      return { isOrphan: false };
-    }
+      if (!validatePodId(podId)) {
+        logger.warn('Repository', 'Warn', `孤兒 manifest 的 podId 格式無效，跳過：${podId}`);
+        continue;
+      }
 
-    return { isOrphan: true, podId };
-  }
-
-  private async cleanOrphanManifests(repositoryPath: string, activePodResourcesMap: Map<string, PodResources>): Promise<void> {
-    const claudeDir = path.join(repositoryPath, '.claude');
-
-    const dirExists = await fs.access(claudeDir).then(() => true).catch(() => false);
-    if (!dirExists) return;
-
-    const fileNames = await fs.readdir(claudeDir);
-
-    for (const fileName of fileNames) {
-      const { isOrphan, podId } = this.isOrphanManifest(fileName, activePodResourcesMap);
-      if (!isOrphan || !podId) continue;
-
-      await podManifestService.deleteManagedFiles(repositoryPath, podId);
+      await podManifestService.deleteManagedFiles(repositoryId, podId);
     }
   }
 

@@ -4,7 +4,6 @@ import { canvasStore } from './canvasStore.js';
 import { socketService } from './socketService.js';
 import { workflowStateService } from './workflow/index.js';
 import { connectionStore } from './connectionStore.js';
-import { repositoryService } from './repositoryService.js';
 import { repositorySyncService } from './repositorySyncService.js';
 import { podManifestService } from './podManifestService.js';
 import { noteStore, skillNoteStore, repositoryNoteStore, commandNoteStore, subAgentNoteStore, mcpServerNoteStore } from './noteStores.js';
@@ -46,8 +45,7 @@ async function cleanupRepositoryResources(repositoryId: string | null | undefine
     if (!repositoryId) {
         return;
     }
-    const repositoryPath = repositoryService.getRepositoryPath(repositoryId);
-    await podManifestService.deleteManagedFiles(repositoryPath, podId);
+    await podManifestService.deleteManagedFiles(repositoryId, podId);
 }
 
 async function syncRepositoryAfterDelete(repositoryId: string | null | undefined): Promise<void> {

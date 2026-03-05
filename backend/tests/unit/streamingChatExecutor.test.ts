@@ -15,7 +15,6 @@ vi.mock('../../src/services/socketService.js', () => ({
 vi.mock('../../src/services/messageStore.js', () => ({
     messageStore: {
         upsertMessage: vi.fn(() => {}),
-        flushWrites: vi.fn(() => Promise.resolve()),
     },
 }));
 
@@ -95,13 +94,11 @@ describe('executeStreamingChat', () => {
         asMock(claudeService.sendMessage).mockClear();
         asMock(socketService.emitToCanvas).mockClear();
         asMock(messageStore.upsertMessage).mockClear();
-        asMock(messageStore.flushWrites).mockClear();
         asMock(podStore.setStatus).mockClear();
         asMock(logger.log).mockClear();
         asMock(logger.error).mockClear();
 
         asMock(claudeService.sendMessage).mockImplementation(() => Promise.resolve({}));
-        asMock(messageStore.flushWrites).mockImplementation(() => Promise.resolve());
     });
 
     describe('streaming event 處理', () => {
@@ -279,7 +276,7 @@ describe('executeStreamingChat', () => {
     });
 
     describe('成功完成', () => {
-        it('完成後正確呼叫 flushWrites + setStatus idle', async () => {
+        it('完成後正確呼叫 upsertMessage + setStatus idle', async () => {
             mockSendMessageWithEvents([
                 {type: 'text', content: 'Hello'},
                 {type: 'complete'},
@@ -293,7 +290,6 @@ describe('executeStreamingChat', () => {
             });
 
             expect(messageStore.upsertMessage).toHaveBeenCalled();
-            expect(messageStore.flushWrites).toHaveBeenCalledWith(podId);
             expect(podStore.setStatus).toHaveBeenCalledWith(canvasId, podId, 'idle');
         });
 
@@ -320,7 +316,7 @@ describe('executeStreamingChat', () => {
             expect(onComplete).toHaveBeenCalledWith(canvasId, podId);
         });
 
-        it('無 assistant content 時不呼叫 persist 和 flushWrites', async () => {
+        it('無 assistant content 時不呼叫 upsertMessage', async () => {
             mockSendMessageWithEvents([
                 {type: 'complete'},
             ]);
@@ -333,7 +329,6 @@ describe('executeStreamingChat', () => {
             });
 
             expect(messageStore.upsertMessage).not.toHaveBeenCalled();
-            expect(messageStore.flushWrites).not.toHaveBeenCalled();
             expect(podStore.setStatus).toHaveBeenCalledWith(canvasId, podId, 'idle');
         });
     });
@@ -362,7 +357,6 @@ describe('executeStreamingChat', () => {
             expect(result.content).toBe('Hello');
             expect(podStore.setStatus).toHaveBeenCalledWith(canvasId, podId, 'idle');
             expect(messageStore.upsertMessage).toHaveBeenCalled();
-            expect(messageStore.flushWrites).toHaveBeenCalledWith(podId);
             expect(onAborted).toHaveBeenCalledWith(canvasId, podId, expect.any(String));
         });
 

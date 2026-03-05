@@ -1,0 +1,276 @@
+import { initTestDb, closeDb, resetDb, getDb } from '../../src/database/index.js';
+import { getStatements, resetStatements } from '../../src/database/statements.js';
+import { Database } from 'bun:sqlite';
+
+describe('Database', () => {
+  let db: Database;
+
+  beforeEach(() => {
+    resetStatements();
+    db = initTestDb();
+  });
+
+  afterEach(() => {
+    closeDb();
+  });
+
+  describe('初始化', () => {
+    it('應該建立所有資料表', () => {
+      const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all();
+      const tableNames = (tables as { name: string }[]).map((t) => t.name).sort();
+      expect(tableNames).toEqual([
+        'canvases', 'connections', 'mcp_servers', 'messages', 'notes',
+        'pod_manifests', 'pod_mcp_server_ids', 'pod_skill_ids', 'pod_sub_agent_ids',
+        'pods', 'repository_metadata', 'slack_app_channels', 'slack_apps',
+      ]);
+    });
+
+    it('in-memory DB 的 journal_mode 應為 memory（WAL 不適用於記憶體資料庫）', () => {
+      const result = db.prepare('PRAGMA journal_mode').get() as { journal_mode: string };
+      // SQLite :memory: 資料庫不支援 WAL，會維持 memory mode
+      expect(result.journal_mode).toBe('memory');
+    });
+
+    it('應該啟用外鍵約束', () => {
+      const result = db.prepare('PRAGMA foreign_keys').get() as { foreign_keys: number };
+      expect(result.foreign_keys).toBe(1);
+    });
+  });
+
+  describe('resetDb', () => {
+    it('應該清空所有表資料', () => {
+      db.exec("INSERT INTO canvases (id, name, sort_index) VALUES ('c1', 'test', 0)");
+      db.exec("INSERT INTO slack_apps (id, name, bot_token, signing_secret) VALUES ('sa1', 'app', 'token', 'secret')");
+      db.exec("INSERT INTO repository_metadata (id, name, path) VALUES ('r1', 'repo', '/path')");
+
+      resetDb();
+
+      expect((db.prepare('SELECT COUNT(*) as count FROM canvases').get() as { count: number }).count).toBe(0);
+      expect((db.prepare('SELECT COUNT(*) as count FROM slack_apps').get() as { count: number }).count).toBe(0);
+      expect((db.prepare('SELECT COUNT(*) as count FROM repository_metadata').get() as { count: number }).count).toBe(0);
+    });
+  });
+
+  describe('CASCADE 刪除', () => {
+    it('刪除 canvas 時應連帶刪除所有子資料', () => {
+      db.exec("INSERT INTO canvases (id, name, sort_index) VALUES ('c1', 'test', 0)");
+      db.exec("INSERT INTO pods (id, canvas_id, name, workspace_path) VALUES ('p1', 'c1', 'pod1', '/ws')");
+      db.exec("INSERT INTO connections (id, canvas_id, source_pod_id, source_anchor, target_pod_id, target_anchor) VALUES ('conn1', 'c1', 'p1', 'bottom', 'p1', 'top')");
+      db.exec("INSERT INTO notes (id, canvas_id, type, name) VALUES ('n1', 'c1', 'outputStyle', 'note1')");
+      db.exec("INSERT INTO messages (id, pod_id, canvas_id, role, content, timestamp) VALUES ('m1', 'p1', 'c1', 'user', 'hello', '2024-01-01')");
+      db.exec("INSERT INTO pod_skill_ids (pod_id, skill_id) VALUES ('p1', 's1')");
+      db.exec("INSERT INTO pod_sub_agent_ids (pod_id, sub_agent_id) VALUES ('p1', 'sa1')");
+      db.exec("INSERT INTO pod_mcp_server_ids (pod_id, mcp_server_id) VALUES ('p1', 'mcp1')");
+
+      db.exec("DELETE FROM canvases WHERE id = 'c1'");
+
+      expect((db.prepare('SELECT COUNT(*) as count FROM pods').get() as { count: number }).count).toBe(0);
+      expect((db.prepare('SELECT COUNT(*) as count FROM connections').get() as { count: number }).count).toBe(0);
+      expect((db.prepare('SELECT COUNT(*) as count FROM notes').get() as { count: number }).count).toBe(0);
+      expect((db.prepare('SELECT COUNT(*) as count FROM pod_skill_ids').get() as { count: number }).count).toBe(0);
+      expect((db.prepare('SELECT COUNT(*) as count FROM pod_sub_agent_ids').get() as { count: number }).count).toBe(0);
+      expect((db.prepare('SELECT COUNT(*) as count FROM pod_mcp_server_ids').get() as { count: number }).count).toBe(0);
+    });
+
+    it('刪除 pod 時應連帶刪除多對多關聯', () => {
+      db.exec("INSERT INTO canvases (id, name, sort_index) VALUES ('c1', 'test', 0)");
+      db.exec("INSERT INTO pods (id, canvas_id, name, workspace_path) VALUES ('p1', 'c1', 'pod1', '/ws')");
+      db.exec("INSERT INTO pod_skill_ids (pod_id, skill_id) VALUES ('p1', 's1')");
+      db.exec("INSERT INTO pod_skill_ids (pod_id, skill_id) VALUES ('p1', 's2')");
+      db.exec("INSERT INTO pod_sub_agent_ids (pod_id, sub_agent_id) VALUES ('p1', 'sa1')");
+      db.exec("INSERT INTO pod_mcp_server_ids (pod_id, mcp_server_id) VALUES ('p1', 'mcp1')");
+
+      db.exec("DELETE FROM pods WHERE id = 'p1'");
+
+      expect((db.prepare('SELECT COUNT(*) as count FROM pod_skill_ids').get() as { count: number }).count).toBe(0);
+      expect((db.prepare('SELECT COUNT(*) as count FROM pod_sub_agent_ids').get() as { count: number }).count).toBe(0);
+      expect((db.prepare('SELECT COUNT(*) as count FROM pod_mcp_server_ids').get() as { count: number }).count).toBe(0);
+    });
+
+    it('刪除 slack_app 時應連帶刪除 channels', () => {
+      db.exec("INSERT INTO slack_apps (id, name, bot_token, signing_secret) VALUES ('sa1', 'app', 'token', 'secret')");
+      db.exec("INSERT INTO slack_app_channels (slack_app_id, channel_id, channel_name) VALUES ('sa1', 'ch1', 'general')");
+      db.exec("INSERT INTO slack_app_channels (slack_app_id, channel_id, channel_name) VALUES ('sa1', 'ch2', 'random')");
+
+      db.exec("DELETE FROM slack_apps WHERE id = 'sa1'");
+
+      expect((db.prepare('SELECT COUNT(*) as count FROM slack_app_channels').get() as { count: number }).count).toBe(0);
+    });
+  });
+
+  describe('Prepared Statements', () => {
+    it('應該能用 prepared statements 執行 CRUD', () => {
+      const stmts = getStatements(db);
+
+      stmts.canvas.insert.run({ $id: 'c1', $name: 'test-canvas', $sortIndex: 0 });
+
+      const canvas = stmts.canvas.selectById.get('c1') as { id: string; name: string; sort_index: number };
+      expect(canvas.id).toBe('c1');
+      expect(canvas.name).toBe('test-canvas');
+      expect(canvas.sort_index).toBe(0);
+
+      const all = stmts.canvas.selectAll.all() as unknown[];
+      expect(all).toHaveLength(1);
+
+      stmts.canvas.updateName.run({ $id: 'c1', $name: 'renamed' });
+      const updated = stmts.canvas.selectById.get('c1') as { name: string };
+      expect(updated.name).toBe('renamed');
+
+      stmts.canvas.deleteById.run('c1');
+      const deleted = stmts.canvas.selectById.get('c1');
+      expect(deleted).toBeNull();
+    });
+
+    it('應該能操作 pod 及其多對多關聯', () => {
+      const stmts = getStatements(db);
+
+      stmts.canvas.insert.run({ $id: 'c1', $name: 'canvas', $sortIndex: 0 });
+
+      stmts.pod.insert.run({
+        $id: 'p1',
+        $canvasId: 'c1',
+        $name: 'pod1',
+        $status: 'idle',
+        $x: 100,
+        $y: 200,
+        $rotation: 0,
+        $model: 'opus',
+        $workspacePath: '/workspace/p1',
+        $claudeSessionId: null,
+        $outputStyleId: null,
+        $repositoryId: null,
+        $commandId: null,
+        $autoClear: 0,
+        $scheduleJson: null,
+        $slackBindingJson: null,
+      });
+
+      stmts.podSkillIds.insert.run({ $podId: 'p1', $skillId: 'skill-1' });
+      stmts.podSkillIds.insert.run({ $podId: 'p1', $skillId: 'skill-2' });
+
+      const skills = stmts.podSkillIds.selectByPodId.all('p1') as { skill_id: string }[];
+      expect(skills).toHaveLength(2);
+      expect(skills.map((s) => s.skill_id).sort()).toEqual(['skill-1', 'skill-2']);
+
+      // INSERT OR IGNORE 重複不報錯
+      stmts.podSkillIds.insert.run({ $podId: 'p1', $skillId: 'skill-1' });
+      const skillsAfterDup = stmts.podSkillIds.selectByPodId.all('p1') as unknown[];
+      expect(skillsAfterDup).toHaveLength(2);
+
+      stmts.podSkillIds.deleteOne.run({ $podId: 'p1', $skillId: 'skill-1' });
+      const skillsAfterDelete = stmts.podSkillIds.selectByPodId.all('p1') as { skill_id: string }[];
+      expect(skillsAfterDelete).toHaveLength(1);
+      expect(skillsAfterDelete[0].skill_id).toBe('skill-2');
+    });
+
+    it('應該能操作 connection', () => {
+      const stmts = getStatements(db);
+
+      stmts.canvas.insert.run({ $id: 'c1', $name: 'canvas', $sortIndex: 0 });
+
+      stmts.connection.insert.run({
+        $id: 'conn1',
+        $canvasId: 'c1',
+        $sourcePodId: 'p1',
+        $sourceAnchor: 'bottom',
+        $targetPodId: 'p2',
+        $targetAnchor: 'top',
+        $triggerMode: 'auto',
+        $decideStatus: 'none',
+        $decideReason: null,
+        $connectionStatus: 'idle',
+      });
+
+      const conn = stmts.connection.selectById.get('conn1') as { source_pod_id: string; trigger_mode: string };
+      expect(conn.source_pod_id).toBe('p1');
+      expect(conn.trigger_mode).toBe('auto');
+    });
+
+    it('應該能操作 note', () => {
+      const stmts = getStatements(db);
+
+      stmts.canvas.insert.run({ $id: 'c1', $name: 'canvas', $sortIndex: 0 });
+
+      stmts.note.insert.run({
+        $id: 'n1',
+        $canvasId: 'c1',
+        $type: 'outputStyle',
+        $name: 'style-note',
+        $x: 50,
+        $y: 60,
+        $boundToPodId: null,
+        $originalPositionJson: null,
+        $foreignKeyId: 'style-1',
+      });
+
+      const notes = stmts.note.selectByCanvasIdAndType.all({ $canvasId: 'c1', $type: 'outputStyle' }) as { foreign_key_id: string }[];
+      expect(notes).toHaveLength(1);
+      expect(notes[0].foreign_key_id).toBe('style-1');
+
+      // 不同 type 不互相干擾
+      stmts.note.insert.run({
+        $id: 'n2',
+        $canvasId: 'c1',
+        $type: 'skill',
+        $name: 'skill-note',
+        $x: 100,
+        $y: 120,
+        $boundToPodId: null,
+        $originalPositionJson: null,
+        $foreignKeyId: 'skill-1',
+      });
+
+      const outputStyleNotes = stmts.note.selectByCanvasIdAndType.all({ $canvasId: 'c1', $type: 'outputStyle' }) as unknown[];
+      expect(outputStyleNotes).toHaveLength(1);
+
+      const skillNotes = stmts.note.selectByCanvasIdAndType.all({ $canvasId: 'c1', $type: 'skill' }) as unknown[];
+      expect(skillNotes).toHaveLength(1);
+    });
+
+    it('應該能操作 message', () => {
+      const stmts = getStatements(db);
+
+      stmts.message.insert.run({
+        $id: 'm1',
+        $podId: 'p1',
+        $canvasId: 'c1',
+        $role: 'user',
+        $content: 'hello',
+        $timestamp: '2024-01-01T00:00:00Z',
+        $subMessagesJson: null,
+      });
+
+      stmts.message.insert.run({
+        $id: 'm2',
+        $podId: 'p1',
+        $canvasId: 'c1',
+        $role: 'assistant',
+        $content: 'hi',
+        $timestamp: '2024-01-01T00:00:01Z',
+        $subMessagesJson: JSON.stringify([{ id: 'sub1', content: 'sub' }]),
+      });
+
+      const messages = stmts.message.selectByPodId.all('p1') as { role: string; sub_messages_json: string }[];
+      expect(messages).toHaveLength(2);
+      expect(messages[0].role).toBe('user');
+      expect(messages[1].role).toBe('assistant');
+
+      const parsed = JSON.parse(messages[1].sub_messages_json) as { id: string }[];
+      expect(parsed[0].id).toBe('sub1');
+
+      // upsert 測試
+      stmts.message.upsert.run({
+        $id: 'm1',
+        $podId: 'p1',
+        $canvasId: 'c1',
+        $role: 'user',
+        $content: 'updated',
+        $timestamp: '2024-01-01T00:00:00Z',
+        $subMessagesJson: null,
+      });
+
+      const updated = stmts.message.selectById.get('m1') as { content: string };
+      expect(updated.content).toBe('updated');
+    });
+  });
+});

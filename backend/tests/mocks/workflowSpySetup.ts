@@ -64,7 +64,6 @@ export function setupMessageStoreSpy(messages?: PersistedMessage[]) {
         getMessages: vi.spyOn(messageStore, 'getMessages').mockReturnValue(messages || []),
         upsertMessage: vi.spyOn(messageStore, 'upsertMessage').mockImplementation(() => {
         }),
-        flushWrites: vi.spyOn(messageStore, 'flushWrites').mockResolvedValue(undefined),
         clearMessages: vi.spyOn(messageStore, 'clearMessages').mockImplementation(() => {
         }),
     };

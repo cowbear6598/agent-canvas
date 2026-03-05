@@ -1,127 +1,155 @@
-import { mkdir, rm } from 'fs/promises';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
-import { messageStore } from '../../src/services/messageStore';
-import { canvasStore } from '../../src/services/canvasStore';
-import { chatPersistenceService } from '../../src/services/persistence/chatPersistence';
-import type { PersistedMessage } from '../../src/types';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { initTestDb } from '../../src/database/index.js';
+import { resetStatements } from '../../src/database/statements.js';
+import { messageStore } from '../../src/services/messageStore.js';
 
-// 相容 Node.js 和 Bun：import.meta.dir 是 Bun 專屬，Node.js 需要用 fileURLToPath
-const __dirname = import.meta.dir ?? dirname(fileURLToPath(import.meta.url));
+const CANVAS_ID = 'canvas-1';
+const POD_ID = 'pod-1';
 
-describe('MessageStore upsertMessage', () => {
-  let tempDir: string;
-  const canvasId = 'test-canvas-1';
-  const podId = 'test-pod-1';
-  let getCanvasDirSpy: any;
-
-  beforeEach(async () => {
-    tempDir = join(__dirname, `temp-test-${Date.now()}`);
-    await mkdir(tempDir, { recursive: true });
-    getCanvasDirSpy = vi.spyOn(canvasStore, 'getCanvasDir').mockReturnValue(tempDir);
-    await messageStore.flushWrites(podId);
-    messageStore.clearMessages(podId);
+describe('MessageStore', () => {
+  beforeEach(() => {
+    resetStatements();
+    initTestDb();
   });
 
-  afterEach(async () => {
-    vi.restoreAllMocks();
-    await rm(tempDir, { recursive: true, force: true });
-  });
+  describe('addMessage', () => {
+    it('成功新增訊息並回傳 ok 結果', async () => {
+      const result = await messageStore.addMessage(CANVAS_ID, POD_ID, 'user', '你好');
 
-  it('記憶體中無該 message 時新增', () => {
-    const message: PersistedMessage = {
-      id: 'msg-1',
-      role: 'assistant',
-      content: 'Hello',
-      timestamp: new Date().toISOString(),
-    };
-
-    messageStore.upsertMessage(canvasId, podId, message);
-
-    const messages = messageStore.getMessages(podId);
-    expect(messages).toHaveLength(1);
-    expect(messages[0].id).toBe('msg-1');
-    expect(messages[0].content).toBe('Hello');
-  });
-
-  it('記憶體中已有該 message 時更新', () => {
-    const message1: PersistedMessage = {
-      id: 'msg-1',
-      role: 'assistant',
-      content: 'Original',
-      timestamp: new Date().toISOString(),
-    };
-
-    messageStore.upsertMessage(canvasId, podId, message1);
-
-    const message2: PersistedMessage = {
-      id: 'msg-1',
-      role: 'assistant',
-      content: 'Updated',
-      timestamp: new Date().toISOString(),
-    };
-
-    messageStore.upsertMessage(canvasId, podId, message2);
-
-    const messages = messageStore.getMessages(podId);
-    expect(messages).toHaveLength(1);
-    expect(messages[0].id).toBe('msg-1');
-    expect(messages[0].content).toBe('Updated');
-  });
-
-  it('連續快速呼叫時，寫入佇列保證順序執行不遺漏', async () => {
-    const callOrder: string[] = [];
-    const originalUpsert = chatPersistenceService.upsertMessage.bind(chatPersistenceService);
-
-    chatPersistenceService.upsertMessage = vi.fn(async (canvasDir: string, podId: string, message: PersistedMessage) => {
-      callOrder.push(message.content);
-      return originalUpsert(canvasDir, podId, message);
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.data.role).toBe('user');
+      expect(result.data.content).toBe('你好');
+      expect(result.data.id).toBeTruthy();
+      expect(result.data.timestamp).toBeTruthy();
     });
 
-    messageStore.upsertMessage(canvasId, podId, {
-      id: 'msg-1',
-      role: 'assistant',
-      content: 'First',
-      timestamp: new Date().toISOString(),
+    it('新增含 subMessages 的訊息', async () => {
+      const subMessages = [{ id: 'sub-1', content: '工具輸出' }];
+      const result = await messageStore.addMessage(CANVAS_ID, POD_ID, 'assistant', '回覆', subMessages);
+
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.data.subMessages).toEqual(subMessages);
     });
 
-    messageStore.upsertMessage(canvasId, podId, {
-      id: 'msg-1',
-      role: 'assistant',
-      content: 'Second',
-      timestamp: new Date().toISOString(),
+    it('新增不含 subMessages 的訊息時欄位不存在', async () => {
+      const result = await messageStore.addMessage(CANVAS_ID, POD_ID, 'user', '純文字');
+
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.data.subMessages).toBeUndefined();
     });
-
-    messageStore.upsertMessage(canvasId, podId, {
-      id: 'msg-1',
-      role: 'assistant',
-      content: 'Third',
-      timestamp: new Date().toISOString(),
-    });
-
-    await messageStore.flushWrites(podId);
-
-    expect(callOrder).toHaveLength(3);
-    expect(callOrder[0]).toBe('First');
-    expect(callOrder[1]).toBe('Second');
-    expect(callOrder[2]).toBe('Third');
   });
 
-  it('最終一致性：最後一次呼叫的結果確實被持久化', async () => {
-    for (let i = 1; i <= 5; i++) {
-      messageStore.upsertMessage(canvasId, podId, {
+  describe('getMessages', () => {
+    it('無訊息時回傳空陣列', () => {
+      const messages = messageStore.getMessages(POD_ID);
+      expect(messages).toEqual([]);
+    });
+
+    it('依時間排序回傳該 pod 的所有訊息', async () => {
+      await messageStore.addMessage(CANVAS_ID, POD_ID, 'user', '第一則');
+      await messageStore.addMessage(CANVAS_ID, POD_ID, 'assistant', '第二則');
+
+      const messages = messageStore.getMessages(POD_ID);
+
+      expect(messages).toHaveLength(2);
+      expect(messages[0].content).toBe('第一則');
+      expect(messages[1].content).toBe('第二則');
+    });
+
+    it('只回傳指定 pod 的訊息，不混入其他 pod', async () => {
+      await messageStore.addMessage(CANVAS_ID, POD_ID, 'user', '屬於 pod-1');
+      await messageStore.addMessage(CANVAS_ID, 'pod-2', 'user', '屬於 pod-2');
+
+      const messages = messageStore.getMessages(POD_ID);
+
+      expect(messages).toHaveLength(1);
+      expect(messages[0].content).toBe('屬於 pod-1');
+    });
+  });
+
+  describe('clearMessages', () => {
+    it('清除指定 pod 的所有訊息', async () => {
+      await messageStore.addMessage(CANVAS_ID, POD_ID, 'user', '將被清除');
+
+      messageStore.clearMessages(POD_ID);
+
+      expect(messageStore.getMessages(POD_ID)).toHaveLength(0);
+    });
+
+    it('清除時不影響其他 pod 的訊息', async () => {
+      await messageStore.addMessage(CANVAS_ID, POD_ID, 'user', '將被清除');
+      await messageStore.addMessage(CANVAS_ID, 'pod-2', 'user', '應保留');
+
+      messageStore.clearMessages(POD_ID);
+
+      expect(messageStore.getMessages('pod-2')).toHaveLength(1);
+    });
+  });
+
+  describe('upsertMessage', () => {
+    it('記憶體中無該 message 時新增', async () => {
+      const addResult = await messageStore.addMessage(CANVAS_ID, POD_ID, 'assistant', '原始內容');
+      expect(addResult.success).toBe(true);
+      if (!addResult.success) return;
+
+      const updatedMessage = { ...addResult.data, content: '更新後內容' };
+      messageStore.upsertMessage(CANVAS_ID, POD_ID, updatedMessage);
+
+      const messages = messageStore.getMessages(POD_ID);
+      expect(messages).toHaveLength(1);
+      expect(messages[0].content).toBe('更新後內容');
+    });
+
+    it('記憶體中已有該 message 時更新', () => {
+      messageStore.upsertMessage(CANVAS_ID, POD_ID, {
         id: 'msg-1',
         role: 'assistant',
-        content: `Content ${i}`,
+        content: 'Original',
         timestamp: new Date().toISOString(),
       });
-    }
 
-    await messageStore.flushWrites(podId);
+      messageStore.upsertMessage(CANVAS_ID, POD_ID, {
+        id: 'msg-1',
+        role: 'assistant',
+        content: 'Updated',
+        timestamp: new Date().toISOString(),
+      });
 
-    const chatHistory = await chatPersistenceService.loadChatHistory(tempDir, podId);
-    expect(chatHistory?.messages).toHaveLength(1);
-    expect(chatHistory?.messages[0].id).toBe('msg-1');
-    expect(chatHistory?.messages[0].content).toBe('Content 5');
+      const messages = messageStore.getMessages(POD_ID);
+      expect(messages).toHaveLength(1);
+      expect(messages[0].content).toBe('Updated');
+    });
+
+    it('連續呼叫最後結果正確持久化', () => {
+      for (let i = 1; i <= 5; i++) {
+        messageStore.upsertMessage(CANVAS_ID, POD_ID, {
+          id: 'msg-1',
+          role: 'assistant',
+          content: `Content ${i}`,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const messages = messageStore.getMessages(POD_ID);
+      expect(messages).toHaveLength(1);
+      expect(messages[0].content).toBe('Content 5');
+    });
+
+    it('更新含 subMessages 的訊息', async () => {
+      const addResult = await messageStore.addMessage(CANVAS_ID, POD_ID, 'assistant', '原始');
+      expect(addResult.success).toBe(true);
+      if (!addResult.success) return;
+
+      const subMessages = [{ id: 'sub-1', content: '工具結果' }];
+      const updatedMessage = { ...addResult.data, subMessages };
+      messageStore.upsertMessage(CANVAS_ID, POD_ID, updatedMessage);
+
+      const messages = messageStore.getMessages(POD_ID);
+      expect(messages[0].subMessages).toEqual(subMessages);
+    });
   });
+
 });

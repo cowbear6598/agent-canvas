@@ -123,7 +123,7 @@ describe('Command 管理', () => {
       expect(response.success).toBe(false);
     });
 
-    it('綁定 Command 後重新載入仍保留', async () => {
+    it('綁定 Command 後 SQLite 立即持久化', async () => {
       const client = getClient();
       const pod = await createPod(client);
       const cmd = await makeCommand(client);
@@ -135,17 +135,6 @@ describe('Command 管理', () => {
         WebSocketResponseEvents.POD_COMMAND_BOUND,
         { requestId: uuidv4(), canvasId, podId: pod.id, commandId: cmd.id }
       );
-
-      await podStore.flushWrites(pod.id);
-
-      const canvasModule = await import('../../src/services/canvasStore.js');
-      const canvasDir = canvasModule.canvasStore.getCanvasDir(canvasId);
-
-      if (!canvasDir) {
-        throw new Error('Canvas directory not found');
-      }
-
-      await podStore.loadFromDisk(canvasId, canvasDir);
 
       const reloadedPod = podStore.getById(canvasId, pod.id);
       expect(reloadedPod).toBeDefined();

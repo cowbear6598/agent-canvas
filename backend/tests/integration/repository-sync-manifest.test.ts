@@ -33,6 +33,7 @@ import {
     type PodCommandBoundPayload,
     type PodDeletedPayload,
 } from '../../src/types';
+import { podManifestService } from '../../src/services/podManifestService.js';
 
 describe('Repository Sync Manifest 整合測試', () => {
     let server: TestServerInstance;
@@ -112,19 +113,16 @@ describe('Repository Sync Manifest 整合測試', () => {
         return path.join(testConfig.repositoriesRoot, repositoryId);
     }
 
-    function getManifestPath(repositoryId: string, podId: string): string {
-        return path.join(getRepoPath(repositoryId), '.claude', `.pod-manifest-${podId}.json`);
-    }
-
     async function fileExists(filePath: string): Promise<boolean> {
         return fs.access(filePath).then(() => true).catch(() => false);
     }
 
-    async function readManifestFiles(repositoryId: string, podId: string): Promise<string[]> {
-        const manifestPath = getManifestPath(repositoryId, podId);
-        const content = await fs.readFile(manifestPath, 'utf-8');
-        const manifest = JSON.parse(content);
-        return manifest.managedFiles;
+    function hasManifestRecord(repositoryId: string, podId: string): boolean {
+        return podManifestService.readManifest(repositoryId, podId).length > 0;
+    }
+
+    function readManifestFiles(repositoryId: string, podId: string): string[] {
+        return podManifestService.readManifest(repositoryId, podId);
     }
 
     describe('場景一：Pod 有資源綁定 repo', () => {
@@ -140,9 +138,9 @@ describe('Repository Sync Manifest 整合測試', () => {
             const commandPath = path.join(repoPath, '.claude', 'commands', `${command.id}.md`);
 
             expect(await fileExists(commandPath)).toBe(true);
-            expect(await fileExists(getManifestPath(repo.id, pod.id))).toBe(true);
+            expect(hasManifestRecord(repo.id, pod.id)).toBe(true);
 
-            const managedFiles = await readManifestFiles(repo.id, pod.id);
+            const managedFiles = readManifestFiles(repo.id, pod.id);
             expect(managedFiles).toContain(`.claude/commands/${command.id}.md`);
         });
     });
@@ -176,7 +174,7 @@ describe('Repository Sync Manifest 整合測試', () => {
             await bindCommandToPod(pod.id, cmd1.id);
             await bindRepositoryToPod(pod.id, repo.id);
 
-            const managedFilesBefore = await readManifestFiles(repo.id, pod.id);
+            const managedFilesBefore = readManifestFiles(repo.id, pod.id);
             expect(managedFilesBefore).toContain(`.claude/commands/${cmd1.id}.md`);
 
             // 解綁 command，再綁定新 command（模擬換新資源後的 sync）
@@ -191,7 +189,7 @@ describe('Repository Sync Manifest 整合測試', () => {
             await unbindRepositoryFromPod(pod.id);
             await bindRepositoryToPod(pod.id, repo.id);
 
-            const managedFilesAfter = await readManifestFiles(repo.id, pod.id);
+            const managedFilesAfter = readManifestFiles(repo.id, pod.id);
             expect(managedFilesAfter).toContain(`.claude/commands/${cmd2.id}.md`);
 
             const repoPath = getRepoPath(repo.id);
@@ -222,7 +220,7 @@ describe('Repository Sync Manifest 整合測試', () => {
             // command 檔案應已從 repo 刪除
             expect(await fileExists(commandPath)).toBe(false);
 
-            const managedFiles = await readManifestFiles(repo.id, pod.id);
+            const managedFiles = readManifestFiles(repo.id, pod.id);
             expect(managedFiles).not.toContain(`.claude/commands/${command.id}.md`);
         });
     });
@@ -251,8 +249,8 @@ describe('Repository Sync Manifest 整合測試', () => {
             // Pod 管理的 command 應被刪除
             expect(await fileExists(commandPath)).toBe(false);
 
-            // manifest 應被刪除
-            expect(await fileExists(getManifestPath(repo.id, pod.id))).toBe(false);
+            // manifest 記錄應被刪除
+            expect(hasManifestRecord(repo.id, pod.id)).toBe(false);
 
             // 原有的 user-own.md 應保留
             const userOwnPath = path.join(userOwnDir, 'user-own.md');
@@ -284,8 +282,8 @@ describe('Repository Sync Manifest 整合測試', () => {
             // Pod 管理的 command 應被刪除
             expect(await fileExists(commandPath)).toBe(false);
 
-            // manifest 應被刪除
-            expect(await fileExists(getManifestPath(repo.id, pod.id))).toBe(false);
+            // manifest 記錄應被刪除
+            expect(hasManifestRecord(repo.id, pod.id)).toBe(false);
 
             // 原有的 user-own.md 應保留
             const userOwnPath = path.join(userOwnDir, 'user-own.md');
@@ -316,11 +314,11 @@ describe('Repository Sync Manifest 整合測試', () => {
             expect(await fileExists(cmdBPath)).toBe(true);
 
             // 各自的 manifest 應獨立存在
-            expect(await fileExists(getManifestPath(repo.id, podA.id))).toBe(true);
-            expect(await fileExists(getManifestPath(repo.id, podB.id))).toBe(true);
+            expect(hasManifestRecord(repo.id, podA.id)).toBe(true);
+            expect(hasManifestRecord(repo.id, podB.id)).toBe(true);
 
-            const manifestA = await readManifestFiles(repo.id, podA.id);
-            const manifestB = await readManifestFiles(repo.id, podB.id);
+            const manifestA = readManifestFiles(repo.id, podA.id);
+            const manifestB = readManifestFiles(repo.id, podB.id);
 
             expect(manifestA).toContain(`.claude/commands/${cmdA.id}.md`);
             expect(manifestA).not.toContain(`.claude/commands/${cmdB.id}.md`);
@@ -332,11 +330,11 @@ describe('Repository Sync Manifest 整合測試', () => {
 
             // podA 的 command 應被刪除，manifest 應被刪除
             expect(await fileExists(cmdAPath)).toBe(false);
-            expect(await fileExists(getManifestPath(repo.id, podA.id))).toBe(false);
+            expect(hasManifestRecord(repo.id, podA.id)).toBe(false);
 
             // podB 的 command 應仍然存在
             expect(await fileExists(cmdBPath)).toBe(true);
-            expect(await fileExists(getManifestPath(repo.id, podB.id))).toBe(true);
+            expect(hasManifestRecord(repo.id, podB.id)).toBe(true);
         });
     });
 
@@ -367,7 +365,7 @@ describe('Repository Sync Manifest 整合測試', () => {
             expect(newContent).toBe('# Command Content');
 
             // manifest 應記錄該路徑
-            const managedFiles = await readManifestFiles(repo.id, pod.id);
+            const managedFiles = readManifestFiles(repo.id, pod.id);
             expect(managedFiles).toContain(`.claude/commands/${command.id}.md`);
 
             // Pod 解綁後，該檔案應被刪除
@@ -390,52 +388,50 @@ describe('Repository Sync Manifest 整合測試', () => {
             const commandPathInA = path.join(repoAPath, '.claude', 'commands', `${command.id}.md`);
 
             expect(await fileExists(commandPathInA)).toBe(true);
-            expect(await fileExists(getManifestPath(repoA.id, pod.id))).toBe(true);
+            expect(hasManifestRecord(repoA.id, pod.id)).toBe(true);
 
             const repoB = await createRepository(client, `manifest-s9-b-${uuidv4()}`);
             await bindRepositoryToPod(pod.id, repoB.id);
 
             expect(await fileExists(commandPathInA)).toBe(false);
-            expect(await fileExists(getManifestPath(repoA.id, pod.id))).toBe(false);
+            expect(hasManifestRecord(repoA.id, pod.id)).toBe(false);
 
             const repoBPath = getRepoPath(repoB.id);
             const commandPathInB = path.join(repoBPath, '.claude', 'commands', `${command.id}.md`);
             expect(await fileExists(commandPathInB)).toBe(true);
-            expect(await fileExists(getManifestPath(repoB.id, pod.id))).toBe(true);
+            expect(hasManifestRecord(repoB.id, pod.id)).toBe(true);
 
-            const managedFiles = await readManifestFiles(repoB.id, pod.id);
+            const managedFiles = readManifestFiles(repoB.id, pod.id);
             expect(managedFiles).toContain(`.claude/commands/${command.id}.md`);
         });
     });
 
     describe('場景十：孤兒 manifest 清理', () => {
-        it('孤兒 manifest 對應的檔案和 manifest 本身都被清除', async () => {
+        it('孤兒 manifest 對應的檔案和 DB 記錄都被清除', async () => {
             const repo = await createRepository(client, `manifest-s10-${uuidv4()}`);
             const repoPath = getRepoPath(repo.id);
-            const claudeDir = path.join(repoPath, '.claude');
-            await fs.mkdir(claudeDir, { recursive: true });
 
             // 使用合法的 UUID 格式作為假的 podId，才能通過 validatePodId 檢查
             const fakePodId = uuidv4();
-            const orphanManifestPath = path.join(claudeDir, `.pod-manifest-${fakePodId}.json`);
 
-            // 在 repo 的 .claude/ 目錄下手動建立孤兒 manifest，並建立對應的假檔案
+            // 在 repo 建立假的 command 檔案
             const fakeCommandRelPath = `.claude/commands/fake-cmd-${uuidv4()}.md`;
             const fakeCommandAbsPath = path.join(repoPath, fakeCommandRelPath);
             await fs.mkdir(path.dirname(fakeCommandAbsPath), { recursive: true });
             await fs.writeFile(fakeCommandAbsPath, '# Fake Command');
 
-            const orphanManifest = { managedFiles: [fakeCommandRelPath] };
-            await fs.writeFile(orphanManifestPath, JSON.stringify(orphanManifest, null, 2), 'utf-8');
+            // 在 DB 插入孤兒 manifest 記錄（模擬已刪除的 Pod 遺留的記錄）
+            podManifestService.writeManifest(repo.id, fakePodId, [fakeCommandRelPath]);
 
-            expect(await fileExists(orphanManifestPath)).toBe(true);
+            expect(hasManifestRecord(repo.id, fakePodId)).toBe(true);
             expect(await fileExists(fakeCommandAbsPath)).toBe(true);
 
+            // 綁定一個新 Pod，觸發 sync 時會清理孤兒
             const pod = await createPod(client);
             await bindRepositoryToPod(pod.id, repo.id);
 
             expect(await fileExists(fakeCommandAbsPath)).toBe(false);
-            expect(await fileExists(orphanManifestPath)).toBe(false);
+            expect(hasManifestRecord(repo.id, fakePodId)).toBe(false);
         });
     });
 
@@ -464,7 +460,7 @@ describe('Repository Sync Manifest 整合測試', () => {
             expect(await fileExists(path.join(repoPath, '.claude', 'skills', skillId, 'SKILL.md'))).toBe(true);
             expect(await fileExists(path.join(repoPath, '.claude', 'agents', `${subAgent.id}.md`))).toBe(true);
 
-            const managedFiles = await readManifestFiles(repo.id, pod.id);
+            const managedFiles = readManifestFiles(repo.id, pod.id);
             expect(managedFiles).toContain(`.claude/commands/${command.id}.md`);
             expect(managedFiles).toContain(`.claude/skills/${skillId}/SKILL.md`);
             expect(managedFiles).toContain(`.claude/agents/${subAgent.id}.md`);

@@ -650,7 +650,6 @@ describe('Repository 管理', () => {
             const { config } = await import('../../src/config/index.js');
             const { execSync } = await import('child_process');
             const path = await import('path');
-            const fs = await import('fs/promises');
             const repoPath = path.join(config.repositoriesRoot, repo.id);
 
             execSync(`git init "${repoPath}"`, { encoding: 'utf-8' });
@@ -671,16 +670,12 @@ describe('Repository 管理', () => {
 
             expect(createResponse.success).toBe(true);
 
-            const metadataPath = path.join(config.repositoriesRoot, '.metadata.json');
-            const metadataExists = await fs.access(metadataPath).then(() => true).catch(() => false);
-            expect(metadataExists).toBe(true);
-
-            const metadataContent = await fs.readFile(metadataPath, 'utf-8');
-            const metadata = JSON.parse(metadataContent);
+            const { repositoryService } = await import('../../src/services/repositoryService.js');
             const worktreeRepoId = createResponse.repository!.id;
-            expect(metadata[worktreeRepoId]).toBeDefined();
-            expect(metadata[worktreeRepoId].parentRepoId).toBe(repo.id);
-            expect(metadata[worktreeRepoId].branchName).toBe(worktreeName);
+            const metadata = repositoryService.getMetadata(worktreeRepoId);
+            expect(metadata).toBeDefined();
+            expect(metadata!.parentRepoId).toBe(repo.id);
+            expect(metadata!.branchName).toBe(worktreeName);
         });
 
         it('重啟後 Metadata 載入成功', async () => {
@@ -727,7 +722,6 @@ describe('Repository 管理', () => {
             const { config } = await import('../../src/config/index.js');
             const { execSync } = await import('child_process');
             const path = await import('path');
-            const fs = await import('fs/promises');
             const repoPath = path.join(config.repositoriesRoot, repo.id);
 
             execSync(`git init "${repoPath}"`, { encoding: 'utf-8' });
@@ -758,10 +752,9 @@ describe('Repository 管理', () => {
 
             expect(deleteResponse.success).toBe(true);
 
-            const metadataPath = path.join(config.repositoriesRoot, '.metadata.json');
-            const metadataContent = await fs.readFile(metadataPath, 'utf-8');
-            const metadata = JSON.parse(metadataContent);
-            expect(metadata[worktreeRepoId]).toBeUndefined();
+            const { repositoryService } = await import('../../src/services/repositoryService.js');
+            const metadata = repositoryService.getMetadata(worktreeRepoId);
+            expect(metadata).toBeUndefined();
         });
     });
 

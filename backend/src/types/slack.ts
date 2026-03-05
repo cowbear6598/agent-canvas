@@ -31,14 +31,6 @@ export interface SlackMessage {
   eventTs: string;
 }
 
-export interface PersistedSlackApp {
-  id: string;
-  name: string;
-  botToken: string;
-  signingSecret: string;
-  botUserId: string;
-}
-
 export interface SlackEvent {
   type: string;
   channel: string;

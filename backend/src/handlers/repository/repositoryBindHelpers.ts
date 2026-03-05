@@ -15,12 +15,10 @@ export async function clearPodMessages(connectionId: string, podId: string): Pro
 
 	const podName = podStore.getById(canvasId, podId)?.name ?? podId;
 
-	await messageStore
-		.clearMessagesWithPersistence(canvasId, podId)
-		.then(() => {
-			socketService.emitToConnection(connectionId, WebSocketResponseEvents.POD_MESSAGES_CLEARED, { podId });
-		})
-		.catch((error) => {
-			logger.error('Repository', 'Error', `清除 Pod「${podName}」的訊息失敗`, error);
-		});
+	try {
+		messageStore.clearMessages(podId);
+		socketService.emitToConnection(connectionId, WebSocketResponseEvents.POD_MESSAGES_CLEARED, { podId });
+	} catch (error) {
+		logger.error('Repository', 'Error', `清除 Pod「${podName}」的訊息失敗`, error);
+	}
 }

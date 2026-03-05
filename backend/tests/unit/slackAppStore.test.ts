@@ -1,23 +1,12 @@
-import {mkdir, rm} from 'fs/promises';
-import {join, dirname} from 'path';
-import {fileURLToPath} from 'url';
+import {beforeEach, describe, expect, it} from 'vitest';
+import {initTestDb} from '../../src/database/index.js';
+import {resetStatements} from '../../src/database/statements.js';
 import {slackAppStore} from '../../src/services/slack/slackAppStore.js';
 
-const __dirname = import.meta.dir ?? dirname(fileURLToPath(import.meta.url));
-
 describe('SlackAppStore', () => {
-    let tempDir: string;
-
-    beforeEach(async () => {
-        tempDir = join(__dirname, `temp-slack-${Date.now()}`);
-        await mkdir(tempDir, {recursive: true});
-
-        // 重置 store 內部狀態（透過 loadFromDisk 空目錄）
-        await slackAppStore.loadFromDisk(tempDir);
-    });
-
-    afterEach(async () => {
-        await rm(tempDir, {recursive: true, force: true});
+    beforeEach(() => {
+        initTestDb();
+        resetStatements();
     });
 
     describe('create', () => {
@@ -143,82 +132,61 @@ describe('SlackAppStore', () => {
         it('不存在的 App 回傳 false', () => {
             expect(slackAppStore.delete('nonexistent')).toBe(false);
         });
-    });
 
-    describe('loadFromDisk token 格式驗證', () => {
-        it('botToken 非 xoxb- 開頭時略過該筆資料', async () => {
-            const created = slackAppStore.create('App', 'xoxb-valid', 'valid-secret');
+        it('刪除後 runtimeState 也一併清除', () => {
+            const created = slackAppStore.create('App', 'xoxb-token', 'secret');
             const id = created.data!.id;
+            slackAppStore.updateStatus(id, 'connected');
 
-            await slackAppStore.flushWrites();
+            slackAppStore.delete(id);
 
-            const {persistenceService} = await import('../../src/services/persistence/index.js');
-            const {join} = await import('path');
-            const filePath = join(tempDir, 'slack-apps.json');
-            const readResult = await persistenceService.readJson<any[]>(filePath);
-            const apps = readResult.data ?? [];
-            apps.push({id: 'bad-bot-id', name: 'Bad Bot', botToken: 'invalid-token', signingSecret: 'some-secret', botUserId: ''});
-            await persistenceService.writeJson(filePath, apps);
-
-            await slackAppStore.loadFromDisk(tempDir);
-
-            expect(slackAppStore.getById(id)).toBeDefined();
-            expect(slackAppStore.getById('bad-bot-id')).toBeUndefined();
-        });
-
-        it('signingSecret 不存在時略過該筆資料', async () => {
-            const created = slackAppStore.create('App', 'xoxb-valid', 'valid-secret');
-            const id = created.data!.id;
-
-            await slackAppStore.flushWrites();
-
-            const {persistenceService} = await import('../../src/services/persistence/index.js');
-            const {join} = await import('path');
-            const filePath = join(tempDir, 'slack-apps.json');
-            const readResult = await persistenceService.readJson<any[]>(filePath);
-            const apps = readResult.data ?? [];
-            apps.push({id: 'bad-secret-id', name: 'Bad Secret', botToken: 'xoxb-ok', signingSecret: '', botUserId: ''});
-            await persistenceService.writeJson(filePath, apps);
-
-            await slackAppStore.loadFromDisk(tempDir);
-
-            expect(slackAppStore.getById(id)).toBeDefined();
-            expect(slackAppStore.getById('bad-secret-id')).toBeUndefined();
+            expect(slackAppStore.getById(id)).toBeUndefined();
         });
     });
 
-    describe('loadFromDisk / saveToDiskAsync', () => {
-        it('持久化後重新載入可還原資料', async () => {
-            const created = slackAppStore.create('持久化 App', 'xoxb-persist', 'persist-secret');
-            const id = created.data!.id;
-
-            await slackAppStore.flushWrites();
-
-            await slackAppStore.loadFromDisk(tempDir);
-
-            const found = slackAppStore.getById(id);
-            expect(found).toBeDefined();
-            expect(found?.name).toBe('持久化 App');
-            expect(found?.botToken).toBe('xoxb-persist');
-            expect(found?.signingSecret).toBe('persist-secret');
-            expect(found?.connectionStatus).toBe('disconnected');
-            expect(found?.channels).toEqual([]);
-        });
-
-        it('不持久化 connectionStatus 和 channels（runtime 狀態）', async () => {
+    describe('runtime 狀態（connectionStatus、channels）', () => {
+        it('connectionStatus 和 channels 不寫入 DB，重啟後重置為預設值', () => {
             const created = slackAppStore.create('App', 'xoxb-token', 'secret');
             const id = created.data!.id;
 
             slackAppStore.updateStatus(id, 'connected');
             slackAppStore.updateChannels(id, [{id: 'C001', name: 'general'}]);
 
-            await slackAppStore.flushWrites();
+            // 模擬重啟：重新初始化 DB 與 statements
+            initTestDb();
+            resetStatements();
 
-            await slackAppStore.loadFromDisk(tempDir);
+            // 重新建立相同資料（SQLite in-memory 重新初始化後資料消失）
+            const created2 = slackAppStore.create('App', 'xoxb-token', 'secret');
+            const id2 = created2.data!.id;
 
-            const found = slackAppStore.getById(id);
+            const found = slackAppStore.getById(id2);
             expect(found?.connectionStatus).toBe('disconnected');
             expect(found?.channels).toEqual([]);
         });
+
+        it('updateStatus 不影響 channels', () => {
+            const created = slackAppStore.create('App', 'xoxb-token', 'secret');
+            const id = created.data!.id;
+            const channels = [{id: 'C001', name: 'general'}];
+            slackAppStore.updateChannels(id, channels);
+
+            slackAppStore.updateStatus(id, 'error');
+
+            expect(slackAppStore.getById(id)?.channels).toEqual(channels);
+            expect(slackAppStore.getById(id)?.connectionStatus).toBe('error');
+        });
+
+        it('updateChannels 不影響 connectionStatus', () => {
+            const created = slackAppStore.create('App', 'xoxb-token', 'secret');
+            const id = created.data!.id;
+            slackAppStore.updateStatus(id, 'connected');
+
+            slackAppStore.updateChannels(id, [{id: 'C002', name: 'random'}]);
+
+            expect(slackAppStore.getById(id)?.connectionStatus).toBe('connected');
+            expect(slackAppStore.getById(id)?.channels).toEqual([{id: 'C002', name: 'random'}]);
+        });
     });
+
 });

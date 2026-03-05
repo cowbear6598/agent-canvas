@@ -1,8 +1,6 @@
 import { connectionStore } from './connectionStore.js';
 import { podStore } from './podStore.js';
 import { messageStore } from './messageStore.js';
-import { chatPersistenceService } from './persistence/chatPersistence.js';
-import { canvasStore } from './canvasStore.js';
 import { pendingTargetStore } from './pendingTargetStore.js';
 import { directTriggerStore } from './directTriggerStore.js';
 import { logger } from '../utils/logger.js';
@@ -70,23 +68,12 @@ class WorkflowClearService {
   }
 
   async clearWorkflow(canvasId: string, sourcePodId: string): Promise<ClearResult> {
-    const canvasDir = canvasStore.getCanvasDir(canvasId);
-    if (!canvasDir) {
-      return {
-        success: false,
-        clearedPodIds: [],
-        clearedPodNames: [],
-        clearedConnectionIds: [],
-        error: 'Canvas 不存在',
-      };
-    }
-
     const podIds = this.getDownstreamPodIds(canvasId, sourcePodId);
     const clearedPodNames: string[] = [];
     const clearedConnectionIds: string[] = [];
 
     for (const podId of podIds) {
-      const clearResult = await safeExecuteAsync(() => this.clearSinglePod(canvasId, podId, canvasDir));
+      const clearResult = await safeExecuteAsync(() => this.clearSinglePod(canvasId, podId));
       if (!clearResult.success) {
         logger.error('AutoClear', 'Error', `[WorkflowClear] 清除 Pod ${podId} 失敗：${clearResult.error}`);
         continue;
@@ -110,18 +97,11 @@ class WorkflowClearService {
   private async clearSinglePod(
     canvasId: string,
     podId: string,
-    canvasDir: string,
   ): Promise<ClearSinglePodResult | null> {
     const pod = podStore.getById(canvasId, podId);
     if (!pod) return null;
 
     messageStore.clearMessages(podId);
-
-    const clearResult = await chatPersistenceService.clearChatHistory(canvasDir, podId);
-    if (!clearResult.success) {
-      logger.error('AutoClear', 'Error', `[WorkflowClear] 清除 Pod ${podId} 的聊天紀錄時發生錯誤：${clearResult.error}`);
-    }
-
     podStore.resetClaudeSession(canvasId, podId);
 
     const clearedConnectionIds = this.clearAiDecideConnections(canvasId, podId);

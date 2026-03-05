@@ -1,154 +1,95 @@
-import path from 'path';
 import {v4 as uuidv4} from 'uuid';
-import type {SlackApp, SlackAppConnectionStatus, SlackChannel, PersistedSlackApp} from '../../types/index.js';
+import type {SlackApp, SlackAppConnectionStatus, SlackChannel} from '../../types/index.js';
 import {Result, ok, err} from '../../types/index.js';
-import {logger} from '../../utils/logger.js';
-import {persistenceService} from '../persistence/index.js';
-import {PersistenceHelper} from '../shared/PersistenceHelper.js';
+import {getDb} from '../../database/index.js';
+import {getStatements} from '../../database/statements.js';
 
-const SLACK_APPS_FILE = 'slack-apps.json';
+interface SlackAppRow {
+    id: string;
+    name: string;
+    bot_token: string;
+    signing_secret: string;
+    bot_user_id: string;
+}
 
 class SlackAppStore {
-    private apps: Map<string, SlackApp> = new Map();
-    private readonly persistence = new PersistenceHelper('Slack', 'SlackAppStore', 'slack-apps');
+    private runtimeState: Map<string, {connectionStatus: SlackAppConnectionStatus; channels: SlackChannel[]}> =
+        new Map();
+
+    private get stmts(): ReturnType<typeof getStatements>['slackApp'] {
+        return getStatements(getDb()).slackApp;
+    }
+
+    private rowToSlackApp(row: SlackAppRow): SlackApp {
+        const runtime = this.runtimeState.get(row.id);
+        return {
+            id: row.id,
+            name: row.name,
+            botToken: row.bot_token,
+            signingSecret: row.signing_secret,
+            botUserId: row.bot_user_id,
+            connectionStatus: runtime?.connectionStatus ?? 'disconnected',
+            channels: runtime?.channels ?? [],
+        };
+    }
 
     create(name: string, botToken: string, signingSecret: string): Result<SlackApp> {
-        for (const app of this.apps.values()) {
-            if (app.botToken === botToken) {
-                return err('已存在使用相同 Bot Token 的 Slack App');
-            }
+        const existing = this.stmts.selectByBotToken.get(botToken) as SlackAppRow | undefined;
+        if (existing) {
+            return err('已存在使用相同 Bot Token 的 Slack App');
         }
 
         const id = uuidv4();
-        const slackApp: SlackApp = {
+        this.stmts.insert.run({$id: id, $name: name, $botToken: botToken, $signingSecret: signingSecret, $botUserId: ''});
+
+        return ok({
             id,
             name,
             botToken,
             signingSecret,
+            botUserId: '',
             connectionStatus: 'disconnected',
             channels: [],
-            botUserId: '',
-        };
-
-        this.apps.set(id, slackApp);
-        this.saveToDiskAsync();
-
-        return ok(slackApp);
+        });
     }
 
     list(): SlackApp[] {
-        return Array.from(this.apps.values());
+        const rows = this.stmts.selectAll.all() as SlackAppRow[];
+        return rows.map((row) => this.rowToSlackApp(row));
     }
 
     getById(id: string): SlackApp | undefined {
-        return this.apps.get(id);
+        const row = this.stmts.selectById.get(id) as SlackAppRow | undefined;
+        if (!row) return undefined;
+        return this.rowToSlackApp(row);
     }
 
     getByBotToken(botToken: string): SlackApp | undefined {
-        for (const app of this.apps.values()) {
-            if (app.botToken === botToken) {
-                return app;
-            }
-        }
-        return undefined;
-    }
-
-    private updateApp(id: string, updates: Partial<SlackApp>): void {
-        const app = this.apps.get(id);
-        if (!app) {
-            return;
-        }
-
-        this.apps.set(id, {...app, ...updates});
+        const row = this.stmts.selectByBotToken.get(botToken) as SlackAppRow | undefined;
+        if (!row) return undefined;
+        return this.rowToSlackApp(row);
     }
 
     updateStatus(id: string, status: SlackAppConnectionStatus): void {
-        this.updateApp(id, {connectionStatus: status});
+        const current = this.runtimeState.get(id) ?? {connectionStatus: 'disconnected', channels: []};
+        this.runtimeState.set(id, {...current, connectionStatus: status});
     }
 
     updateChannels(id: string, channels: SlackChannel[]): void {
-        this.updateApp(id, {channels});
+        const current = this.runtimeState.get(id) ?? {connectionStatus: 'disconnected', channels: []};
+        this.runtimeState.set(id, {...current, channels});
     }
 
     updateBotUserId(id: string, botUserId: string): void {
-        this.updateApp(id, {botUserId});
+        this.stmts.updateBotUserId.run({$botUserId: botUserId, $id: id});
     }
 
     delete(id: string): boolean {
-        if (!this.apps.delete(id)) {
-            return false;
-        }
-
-        this.saveToDiskAsync();
-        return true;
+        const result = this.stmts.deleteById.run(id);
+        this.runtimeState.delete(id);
+        return result.changes > 0;
     }
 
-    async loadFromDisk(dataDir: string): Promise<Result<void>> {
-        this.persistence.initDataDir(dataDir);
-        const filePath = path.join(dataDir, SLACK_APPS_FILE);
-
-        this.apps.clear();
-
-        const result = await persistenceService.readJson<PersistedSlackApp[]>(filePath);
-        if (!result.success) {
-            return err(result.error ?? '讀取 Slack App 資料失敗');
-        }
-
-        const persistedApps = result.data ?? [];
-
-        if (persistedApps.length === 0) {
-            logger.log('Slack', 'Load', '[SlackAppStore] 尚無已儲存的 Slack App 資料');
-            return ok(undefined);
-        }
-
-        for (const persisted of persistedApps) {
-            if (!persisted.botToken.startsWith('xoxb-')) {
-                logger.warn('Slack', 'Load', `[SlackAppStore] Slack App ${persisted.id} 的 botToken 格式不正確，略過載入`);
-                continue;
-            }
-
-            if (!persisted.signingSecret) {
-                logger.warn('Slack', 'Load', `[SlackAppStore] Slack App ${persisted.id} 的 signingSecret 不存在，略過載入`);
-                continue;
-            }
-
-            const app: SlackApp = {
-                id: persisted.id,
-                name: persisted.name,
-                botToken: persisted.botToken,
-                signingSecret: persisted.signingSecret,
-                botUserId: persisted.botUserId,
-                connectionStatus: 'disconnected',
-                channels: [],
-            };
-            this.apps.set(app.id, app);
-        }
-
-        logger.log('Slack', 'Load', `[SlackAppStore] 已載入 ${this.apps.size} 個 Slack App`);
-        return ok(undefined);
-    }
-
-    private saveToDisk(dataDir: string): Promise<import('../../types/result.js').Result<void>> {
-        const filePath = path.join(dataDir, SLACK_APPS_FILE);
-        const persistedApps: PersistedSlackApp[] = Array.from(this.apps.values()).map((app) => ({
-            id: app.id,
-            name: app.name,
-            botToken: app.botToken,
-            signingSecret: app.signingSecret,
-            botUserId: app.botUserId,
-        }));
-        return persistenceService.writeJson(filePath, persistedApps);
-    }
-
-    saveToDiskAsync(): void {
-        const dataDir = this.persistence.currentDataDir;
-        if (!dataDir) return;
-        this.persistence.scheduleSave(() => this.saveToDisk(dataDir));
-    }
-
-    flushWrites(): Promise<void> {
-        return this.persistence.flush();
-    }
 }
 
 export const slackAppStore = new SlackAppStore();

@@ -1,25 +1,9 @@
-import {describe, it, expect, beforeEach, vi} from 'vitest';
-
-vi.mock('../../src/services/persistence/index.js', () => ({
-    persistenceService: {
-        readJson: vi.fn().mockResolvedValue({success: true, data: null}),
-        writeJson: vi.fn().mockResolvedValue({success: true}),
-    },
-}));
-
-vi.mock('../../src/utils/logger.js', () => ({
-    logger: {
-        log: vi.fn(),
-        warn: vi.fn(),
-        error: vi.fn(),
-    },
-}));
-
+import {describe, it, expect, beforeEach} from 'vitest';
+import {initTestDb, resetDb} from '../../src/database/index.js';
+import {resetStatements} from '../../src/database/statements.js';
 import {McpServerStore} from '../../src/services/mcpServerStore.js';
 import {mcpServerCreateSchema, mcpServerUpdateSchema, podBindMcpServerSchema, podUnbindMcpServerSchema} from '../../src/schemas/mcpServerSchemas.js';
 import type {StdioMcpServerConfig, HttpMcpServerConfig} from '../../src/types/mcpServer.js';
-import {persistenceService} from '../../src/services/persistence/index.js';
-import {logger} from '../../src/utils/logger.js';
 
 describe('McpServerStore', () => {
     let store: McpServerStore;
@@ -35,7 +19,13 @@ describe('McpServerStore', () => {
     };
 
     beforeEach(() => {
+        initTestDb();
+        resetStatements();
         store = new McpServerStore();
+    });
+
+    afterEach(() => {
+        resetDb();
     });
 
     describe('建立 MCP Server', () => {
@@ -137,64 +127,11 @@ describe('McpServerStore', () => {
             expect(results.map((s) => s.id)).toContain(s1.id);
             expect(results.map((s) => s.id)).toContain(s2.id);
         });
-    });
 
-    describe('loadFromDisk', () => {
-        const mockReadJson = persistenceService.readJson as ReturnType<typeof vi.fn>;
-        const mockWarn = logger.warn as ReturnType<typeof vi.fn>;
-
-        beforeEach(() => {
-            vi.clearAllMocks();
-        });
-
-        it('成功載入合格資料', async () => {
-            mockReadJson.mockResolvedValueOnce({
-                success: true,
-                data: [
-                    {id: 'id-1', name: 'server-1', config: {command: 'node'}},
-                    {id: 'id-2', name: 'server-2', config: {type: 'http', url: 'https://example.com'}},
-                ],
-            });
-
-            const result = await store.loadFromDisk('/data');
-
-            expect(result.success).toBe(true);
-            expect(store.list()).toHaveLength(2);
-        });
-
-        it('資料為 null 時載入空清單', async () => {
-            mockReadJson.mockResolvedValueOnce({success: true, data: null});
-
-            const result = await store.loadFromDisk('/data');
-
-            expect(result.success).toBe(true);
-            expect(store.list()).toHaveLength(0);
-        });
-
-        it('讀取失敗時回傳 err', async () => {
-            mockReadJson.mockResolvedValueOnce({success: false, error: '讀取檔案失敗'});
-
-            const result = await store.loadFromDisk('/data');
-
-            expect(result.success).toBe(false);
-        });
-
-        it('結構不合格的項目跳過並 log 警告', async () => {
-            mockReadJson.mockResolvedValueOnce({
-                success: true,
-                data: [
-                    {id: 'id-1', name: 'valid-server', config: {command: 'node'}},
-                    {id: '', name: 'invalid-id', config: {command: 'node'}},
-                    {id: 'id-3', name: '', config: {command: 'node'}},
-                    {id: 'id-4', name: 'invalid name!', config: {command: 'node'}},
-                    {id: 'id-5', name: 'no-config'},
-                ],
-            });
-
-            await store.loadFromDisk('/data');
-
-            expect(store.list()).toHaveLength(1);
-            expect(mockWarn).toHaveBeenCalledTimes(4);
+        it('空陣列回傳空結果', () => {
+            store.create('server-1', stdioConfig);
+            const results = store.getByIds([]);
+            expect(results).toHaveLength(0);
         });
     });
 });
@@ -344,7 +281,13 @@ describe('MCP Server 到 Claude SDK 選項組裝', () => {
     let store: McpServerStore;
 
     beforeEach(() => {
+        initTestDb();
+        resetStatements();
         store = new McpServerStore();
+    });
+
+    afterEach(() => {
+        resetDb();
     });
 
     it('給定多個 MCP Server ID，驗證組裝出的 mcpServers 物件格式正確', () => {
@@ -361,11 +304,10 @@ describe('MCP Server 到 Claude SDK 選項組裝', () => {
         expect(mcpServers['server-two']).toEqual({type: 'http', url: 'https://example.com'});
     });
 
-    it('給定空的 mcpServerIds，驗證不設定 mcpServers 選項', () => {
+    it('給定空的 mcpServerIds，getByIds 回傳空陣列', () => {
+        store.create('server-1', {command: 'node', args: ['a.js']});
+
         const servers = store.getByIds([]);
         expect(servers).toHaveLength(0);
-
-        const shouldSetMcpServers = servers.length > 0;
-        expect(shouldSetMcpServers).toBe(false);
     });
 });

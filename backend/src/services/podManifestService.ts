@@ -2,45 +2,45 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {isPathWithinDirectory} from '../utils/pathValidator.js';
 import {logger} from '../utils/logger.js';
-import {fileExists} from './shared/fileResourceHelpers.js';
+import {repositoryService} from './repositoryService.js';
+import {getDb} from '../database/index.js';
+import {getStatements} from '../database/statements.js';
 import {safeJsonParse} from '../utils/safeJsonParse.js';
 
-interface PodManifest {
-    managedFiles: string[];
+interface PodManifestRow {
+    pod_id: string;
+    repository_id: string;
+    files_json: string;
 }
 
 const CLAUDE_DIR = '.claude';
 
 class PodManifestService {
-    getManifestPath(repositoryPath: string, podId: string): string {
-        return path.join(repositoryPath, CLAUDE_DIR, `.pod-manifest-${podId}.json`);
+    private get stmts(): ReturnType<typeof getStatements> {
+        return getStatements(getDb());
     }
 
-    async readManifest(repositoryPath: string, podId: string): Promise<string[]> {
-        const manifestPath = this.getManifestPath(repositoryPath, podId);
+    readManifest(repositoryId: string, podId: string): string[] {
+        const row = this.stmts.podManifest.selectByPodIdAndRepoId.get({
+            $podId: podId,
+            $repoId: repositoryId,
+        }) as PodManifestRow | null;
 
-        if (!await fileExists(manifestPath)) {
+        if (!row) {
             return [];
         }
 
-        const content = await fs.readFile(manifestPath, 'utf-8');
-        const manifest = safeJsonParse<PodManifest>(content);
-
-        if (!manifest) {
-            logger.warn('Pod', 'Warn', `manifest 解析失敗，路徑: ${manifestPath}`);
-            return [];
-        }
-
-        return manifest.managedFiles ?? [];
+        const parsed = safeJsonParse<string[]>(row.files_json);
+        if (!Array.isArray(parsed)) return [];
+        return parsed;
     }
 
-    async writeManifest(repositoryPath: string, podId: string, managedFiles: string[]): Promise<void> {
-        const claudeDir = path.join(repositoryPath, CLAUDE_DIR);
-        await fs.mkdir(claudeDir, {recursive: true});
-
-        const manifestPath = this.getManifestPath(repositoryPath, podId);
-        const manifest: PodManifest = {managedFiles};
-        await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
+    writeManifest(repositoryId: string, podId: string, managedFiles: string[]): void {
+        this.stmts.podManifest.upsert.run({
+            $podId: podId,
+            $repositoryId: repositoryId,
+            $filesJson: JSON.stringify(managedFiles),
+        });
     }
 
     private async deleteSingleManagedFile(
@@ -76,8 +76,9 @@ class PodManifestService {
         }
     }
 
-    async deleteManagedFiles(repositoryPath: string, podId: string): Promise<void> {
-        const managedFiles = await this.readManifest(repositoryPath, podId);
+    async deleteManagedFiles(repositoryId: string, podId: string): Promise<void> {
+        const repositoryPath = repositoryService.getRepositoryPath(repositoryId);
+        const managedFiles = this.readManifest(repositoryId, podId);
         const claudeDir = path.join(repositoryPath, CLAUDE_DIR);
         const dirsToCheck = new Set<string>();
 
@@ -87,12 +88,14 @@ class PodManifestService {
         }
 
         await this.cleanEmptyDirectories(dirsToCheck);
-        await this.deleteManifestFile(repositoryPath, podId);
+        this.deleteManifestRecord(repositoryId, podId);
     }
 
-    async deleteManifestFile(repositoryPath: string, podId: string): Promise<void> {
-        const manifestPath = this.getManifestPath(repositoryPath, podId);
-        await fs.rm(manifestPath, {force: true});
+    deleteManifestRecord(repositoryId: string, podId: string): void {
+        this.stmts.podManifest.deleteByPodIdAndRepoId.run({
+            $podId: podId,
+            $repoId: repositoryId,
+        });
     }
 
     collectCommandFiles(commandId: string): string[] {

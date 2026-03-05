@@ -3,6 +3,7 @@ import { WebSocketResponseEvents } from '../schemas';
 import type {
   RepositoryCreatedPayload,
 } from '../types';
+import type { Pod } from '../types/index.js';
 import type {
   RepositoryCreatePayload,
   PodBindRepositoryPayload,
@@ -127,8 +128,7 @@ export const handlePodBindRepository = withCanvasId<PodBindRepositoryPayload>(
     await repositorySyncService.syncRepositoryResources(repositoryId);
 
     if (oldRepositoryId && oldRepositoryId !== repositoryId) {
-      const oldRepositoryPath = repositoryService.getRepositoryPath(oldRepositoryId);
-      await podManifestService.deleteManagedFiles(oldRepositoryPath, podId);
+      await podManifestService.deleteManagedFiles(oldRepositoryId, podId);
       await repositorySyncService.syncRepositoryResources(oldRepositoryId);
     }
 
@@ -143,8 +143,6 @@ export const handlePodBindRepository = withCanvasId<PodBindRepositoryPayload>(
     logger.log('Repository', 'Bind', `已將 Repository「${repositoryId}」綁定至 Pod「${getPodDisplayName(canvasId, podId)}」`);
   }
 );
-
-import type { Pod } from '../types/index.js';
 
 function buildCopyOperations(pod: Pod): Promise<unknown>[] {
   return [
@@ -170,8 +168,7 @@ export const handlePodUnbindRepository = withCanvasId<PodUnbindRepositoryPayload
     podStore.resetClaudeSession(canvasId, podId);
 
     if (oldRepositoryId) {
-      const repositoryPath = repositoryService.getRepositoryPath(oldRepositoryId);
-      await podManifestService.deleteManagedFiles(repositoryPath, podId);
+      await podManifestService.deleteManagedFiles(oldRepositoryId, podId);
       await repositorySyncService.syncRepositoryResources(oldRepositoryId);
     }
 

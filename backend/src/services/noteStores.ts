@@ -2,37 +2,37 @@ import { createNoteStore } from './GenericNoteStore.js';
 import type { OutputStyleNote, SkillNote, RepositoryNote, SubAgentNote, CommandNote, McpServerNote } from '../types';
 
 export const noteStore = createNoteStore<OutputStyleNote, 'outputStyleId'>({
-  fileName: 'notes.json',
+  noteType: 'outputStyle',
   foreignKeyField: 'outputStyleId',
   storeName: 'NoteStore',
 });
 
 export const skillNoteStore = createNoteStore<SkillNote, 'skillId'>({
-  fileName: 'skill-notes.json',
+  noteType: 'skill',
   foreignKeyField: 'skillId',
   storeName: 'SkillNoteStore',
 });
 
 export const repositoryNoteStore = createNoteStore<RepositoryNote, 'repositoryId'>({
-  fileName: 'repository-notes.json',
+  noteType: 'repository',
   foreignKeyField: 'repositoryId',
   storeName: 'RepositoryNoteStore',
 });
 
 export const subAgentNoteStore = createNoteStore<SubAgentNote, 'subAgentId'>({
-  fileName: 'subagent-notes.json',
+  noteType: 'subAgent',
   foreignKeyField: 'subAgentId',
   storeName: 'SubAgentNoteStore',
 });
 
 export const commandNoteStore = createNoteStore<CommandNote, 'commandId'>({
-  fileName: 'command-notes.json',
+  noteType: 'command',
   foreignKeyField: 'commandId',
   storeName: 'CommandNoteStore',
 });
 
 export const mcpServerNoteStore = createNoteStore<McpServerNote, 'mcpServerId'>({
-  fileName: 'mcp-server-notes.json',
+  noteType: 'mcpServer',
   foreignKeyField: 'mcpServerId',
   storeName: 'McpServerNoteStore',
 });

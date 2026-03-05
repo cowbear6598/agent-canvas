@@ -27,7 +27,6 @@ export function createMessageStoreMock() {
     messageStore: {
       getMessages: vi.fn(),
       upsertMessage: vi.fn(),
-      flushWrites: vi.fn(),
       clearMessages: vi.fn(),
     },
   };

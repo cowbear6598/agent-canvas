@@ -32,12 +32,12 @@ export type { Connection, AnchorPosition, TriggerMode, AutoTriggerMode, DecideSt
 
 export type { ScheduleConfig, ScheduleConfigInput, ScheduleFrequency, PersistedScheduleConfig } from './schedule.js';
 
-export type { Canvas, PersistedCanvas } from './canvas.js';
+export type { Canvas } from './canvas.js';
 
 export type { McpServer, McpServerConfig, StdioMcpServerConfig, HttpMcpServerConfig } from './mcpServer.js';
 export type { McpServerNote } from './mcpServerNote.js';
 
-export type { SlackApp, SlackAppConnectionStatus, SlackChannel, PodSlackBinding, SlackMessage, PersistedSlackApp, SlackEvent, AppMentionEvent, SlackUrlVerificationPayload } from './slack.js';
+export type { SlackApp, SlackAppConnectionStatus, SlackChannel, PodSlackBinding, SlackMessage, SlackEvent, AppMentionEvent, SlackUrlVerificationPayload } from './slack.js';
 
 export type {
   CreatePodRequest,
@@ -47,7 +47,7 @@ export type {
   ApiError,
 } from './api.js';
 
-export type { PersistedMessage, PersistedSubMessage, PersistedToolUseInfo, ChatHistory, PersistedPod, PersistedConnection } from './persistence.js';
+export type { PersistedMessage, PersistedSubMessage, PersistedToolUseInfo } from './persistence.js';
 
 export * from './responses/index.js';
 

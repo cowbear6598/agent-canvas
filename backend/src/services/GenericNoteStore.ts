@@ -1,13 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
-import { promises as fs } from 'fs';
-import path from 'path';
-import { Result, ok, err } from '../types';
-import { logger } from '../utils/logger.js';
-import { canvasStore } from './canvasStore.js';
-import { persistenceService } from './persistence/index.js';
-import { readJsonFileOrDefault } from './shared/fileResourceHelpers.js';
-import { CanvasMapStore } from './shared/CanvasMapStore.js';
-import { CanvasWriterHelper } from './shared/PersistenceHelper.js';
+import { getDb } from '../database/index.js';
+import { getStatements } from '../database/statements.js';
+import { safeJsonParse } from '../utils/safeJsonParse.js';
 
 export interface BaseNote {
   id: string;
@@ -18,143 +12,171 @@ export interface BaseNote {
   originalPosition: { x: number; y: number } | null;
 }
 
+interface NoteRow {
+  id: string;
+  canvas_id: string;
+  type: string;
+  name: string;
+  x: number;
+  y: number;
+  bound_to_pod_id: string | null;
+  original_position_json: string | null;
+  foreign_key_id: string | null;
+}
+
 interface GenericNoteStoreConfig<T, K extends keyof T> {
-  fileName: string;
+  noteType: string;
   foreignKeyField: K;
   storeName: string;
 }
 
-export class GenericNoteStore<T extends BaseNote, K extends keyof T> extends CanvasMapStore<T> {
-  protected readonly config: GenericNoteStoreConfig<T, K>;
-  private readonly canvasWriter: CanvasWriterHelper;
+export class GenericNoteStore<T extends BaseNote, K extends keyof T> {
+  private readonly noteConfig: GenericNoteStoreConfig<T, K>;
 
   constructor(storeConfig: GenericNoteStoreConfig<T, K>) {
-    super();
-    this.config = storeConfig;
-    this.canvasWriter = new CanvasWriterHelper('Note', this.config.storeName);
+    this.noteConfig = storeConfig;
+  }
+
+  private get stmts(): ReturnType<typeof getStatements> {
+    return getStatements(getDb());
+  }
+
+  private rowToNote(row: NoteRow): T {
+    const note: BaseNote = {
+      id: row.id,
+      name: row.name,
+      x: row.x,
+      y: row.y,
+      boundToPodId: row.bound_to_pod_id,
+      originalPosition: row.original_position_json ? safeJsonParse<{ x: number; y: number }>(row.original_position_json) : null,
+    };
+
+    (note as unknown as Record<string, unknown>)[this.noteConfig.foreignKeyField as string] = row.foreign_key_id ?? '';
+
+    return note as T;
   }
 
   create(canvasId: string, data: Omit<T, 'id'>): T {
     const id = uuidv4();
+    const baseData = data as unknown as BaseNote;
+    const foreignKeyValue = (data as Record<string, unknown>)[this.noteConfig.foreignKeyField as string] as string ?? null;
 
-    const note = {
-      id,
-      ...data,
-    } as T;
+    this.stmts.note.insert.run({
+      $id: id,
+      $canvasId: canvasId,
+      $type: this.noteConfig.noteType,
+      $name: baseData.name,
+      $x: baseData.x,
+      $y: baseData.y,
+      $boundToPodId: baseData.boundToPodId,
+      $originalPositionJson: baseData.originalPosition ? JSON.stringify(baseData.originalPosition) : null,
+      $foreignKeyId: foreignKeyValue,
+    });
 
-    const notesMap = this.getOrCreateCanvasMap(canvasId);
-    notesMap.set(id, note);
-    this.saveToDiskAsync(canvasId);
+    return { id, ...data } as T;
+  }
 
-    return note;
+  getById(canvasId: string, id: string): T | undefined {
+    const row = this.stmts.note.selectById.get(id) as NoteRow | undefined;
+
+    if (!row || row.type !== this.noteConfig.noteType || row.canvas_id !== canvasId) {
+      return undefined;
+    }
+
+    return this.rowToNote(row);
+  }
+
+  list(canvasId: string): T[] {
+    const rows = this.stmts.note.selectByCanvasIdAndType.all({
+      $canvasId: canvasId,
+      $type: this.noteConfig.noteType,
+    }) as NoteRow[];
+
+    return rows.map((row) => this.rowToNote(row));
   }
 
   update(canvasId: string, id: string, updates: Partial<Omit<T, 'id'>>): T | undefined {
-    const notesMap = this.dataByCanvas.get(canvasId);
-    if (!notesMap) {
+    const existing = this.getById(canvasId, id);
+    if (!existing) {
       return undefined;
     }
 
-    const note = notesMap.get(id);
-    if (!note) {
-      return undefined;
-    }
+    const merged = { ...existing, ...updates } as T;
+    const foreignKeyValue = (merged as Record<string, unknown>)[this.noteConfig.foreignKeyField as string] as string ?? null;
 
-    const updatedNote = { ...note, ...updates };
-    notesMap.set(id, updatedNote);
-    this.saveToDiskAsync(canvasId);
+    this.stmts.note.update.run({
+      $id: id,
+      $name: merged.name,
+      $x: merged.x,
+      $y: merged.y,
+      $boundToPodId: merged.boundToPodId,
+      $originalPositionJson: merged.originalPosition ? JSON.stringify(merged.originalPosition) : null,
+      $foreignKeyId: foreignKeyValue,
+    });
 
-    return updatedNote;
+    return merged;
   }
 
   delete(canvasId: string, id: string): boolean {
-    const notesMap = this.dataByCanvas.get(canvasId);
-    if (!notesMap) {
+    const existing = this.getById(canvasId, id);
+    if (!existing) {
       return false;
     }
 
-    const deleted = notesMap.delete(id);
-    if (deleted) {
-      this.saveToDiskAsync(canvasId);
-    }
-    return deleted;
+    const result = this.stmts.note.deleteById.run(id);
+
+    return result.changes > 0;
   }
 
   findByBoundPodId(canvasId: string, podId: string): T[] {
-    return this.findByPredicate(canvasId, (note) => note.boundToPodId === podId);
+    const rows = this.stmts.note.selectByBoundPodId.all({
+      $canvasId: canvasId,
+      $type: this.noteConfig.noteType,
+      $boundToPodId: podId,
+    }) as NoteRow[];
+
+    return rows.map((row) => this.rowToNote(row));
   }
 
   deleteByBoundPodId(canvasId: string, podId: string): string[] {
-    return this.deleteByPredicate(canvasId, (note) => note.boundToPodId === podId);
-  }
+    const notes = this.findByBoundPodId(canvasId, podId);
+    const ids = notes.map((n) => n.id);
 
-  deleteByForeignKey(canvasId: string, foreignKeyValue: string): string[] {
-    return this.deleteByPredicate(canvasId, (note) => note[this.config.foreignKeyField] === foreignKeyValue);
-  }
-
-  private deleteByPredicate(canvasId: string, predicate: (note: T) => boolean): string[] {
-    const notesMap = this.dataByCanvas.get(canvasId);
-    if (!notesMap) {
+    if (ids.length === 0) {
       return [];
     }
 
-    const deletedIds: string[] = [];
-    for (const note of notesMap.values()) {
-      if (!predicate(note)) continue;
-      notesMap.delete(note.id);
-      deletedIds.push(note.id);
-    }
+    this.stmts.note.deleteByBoundPodId.run({
+      $canvasId: canvasId,
+      $type: this.noteConfig.noteType,
+      $boundToPodId: podId,
+    });
 
-    if (deletedIds.length > 0) {
-      this.saveToDiskAsync(canvasId);
-    }
-
-    return deletedIds;
+    return ids;
   }
 
-  async loadFromDisk(canvasId: string, canvasDataDir: string): Promise<Result<void>> {
-    const notesFilePath = path.join(canvasDataDir, this.config.fileName);
+  deleteByForeignKey(canvasId: string, foreignKeyValue: string): string[] {
+    const rows = this.stmts.note.selectByForeignKeyId.all({
+      $canvasId: canvasId,
+      $type: this.noteConfig.noteType,
+      $foreignKeyId: foreignKeyValue,
+    }) as NoteRow[];
 
-    await fs.mkdir(canvasDataDir, { recursive: true });
+    const ids = rows.map((r) => r.id);
 
-    const notesArray = await readJsonFileOrDefault<T>(notesFilePath);
-    if (notesArray === null) {
-      this.dataByCanvas.set(canvasId, new Map());
-      return ok(undefined);
+    if (ids.length === 0) {
+      return [];
     }
 
-    const notesMap = new Map<string, T>();
-    for (const note of notesArray) {
-      notesMap.set(note.id, note);
-    }
+    this.stmts.note.deleteByForeignKeyId.run({
+      $canvasId: canvasId,
+      $type: this.noteConfig.noteType,
+      $foreignKeyId: foreignKeyValue,
+    });
 
-    this.dataByCanvas.set(canvasId, notesMap);
-
-    const canvasName = canvasStore.getNameById(canvasId);
-    logger.log('Note', 'Load', `[${this.config.storeName}] 已載入 ${notesMap.size} 個筆記，畫布 ${canvasName}`);
-    return ok(undefined);
+    return ids;
   }
 
-  async saveToDisk(canvasId: string): Promise<Result<void>> {
-    const canvasDataDir = canvasStore.getCanvasDataDir(canvasId);
-    if (!canvasDataDir) {
-      return err('找不到 Canvas');
-    }
-
-    const notesFilePath = path.join(canvasDataDir, this.config.fileName);
-
-    const notesMap = this.dataByCanvas.get(canvasId);
-    const notesArray = notesMap ? Array.from(notesMap.values()) : [];
-    return persistenceService.writeJson(notesFilePath, notesArray);
-  }
-
-  saveToDiskAsync(canvasId: string): void {
-    this.canvasWriter.scheduleSave(canvasId, () => this.saveToDisk(canvasId));
-  }
-
-  flushWrites(canvasId: string): Promise<void> {
-    return this.canvasWriter.flush(canvasId);
-  }
 }
 
 export function createNoteStore<T extends BaseNote, K extends keyof T>(

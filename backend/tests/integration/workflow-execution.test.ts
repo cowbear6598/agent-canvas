@@ -374,13 +374,15 @@ describe('WorkflowExecution 服務', () => {
             const id = uuidv4();
             const sourcePod = await createPod(client, {name: `source-pod-${id}`, x: 0, y: 0});
             const targetPod = await createPod(client, {name: `target-pod-${id}`, x: 300, y: 0});
-            const connection = await createConnection(client, sourcePod.id, targetPod.id, {
-                triggerMode: 'auto',
-            });
 
+            // 先 seed 訊息再建立 connection，避免 seedPodMessages 觸發 auto workflow 干擾後續斷言
             await seedPodMessages(client, sourcePod.id, [
                 {role: 'user', content: 'Initial message for summary test'},
             ]);
+
+            const connection = await createConnection(client, sourcePod.id, targetPod.id, {
+                triggerMode: 'auto',
+            });
 
             const preGeneratedSummary = 'This is a pre-generated summary for testing purposes.';
 
@@ -389,6 +391,21 @@ describe('WorkflowExecution 服務', () => {
                 WebSocketResponseEvents.WORKFLOW_AUTO_TRIGGERED,
                 10000
             );
+
+            const targetCompletePromise = new Promise<PodChatCompletePayload>((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    reject(new Error('Target complete timeout'));
+                }, 10000);
+
+                const handler = (event: PodChatCompletePayload) => {
+                    if (event.podId === targetPod.id) {
+                        clearTimeout(timeout);
+                        client.off(WebSocketResponseEvents.POD_CHAT_COMPLETE, handler);
+                        resolve(event);
+                    }
+                };
+                client.on(WebSocketResponseEvents.POD_CHAT_COMPLETE, handler);
+            });
 
             const {workflowExecutionService} = await import('../../src/services/workflow/workflowExecutionService.js');
             await workflowExecutionService.triggerWorkflowWithSummary({
@@ -406,8 +423,7 @@ describe('WorkflowExecution 服務', () => {
             expect(autoTriggeredEvent.transferredContent).toBe(preGeneratedSummary);
             expect(autoTriggeredEvent.isSummarized).toBe(true);
 
-            // executeClaudeQuery 是 fire-and-forget，等待異步操作完成
-            await new Promise(resolve => setTimeout(resolve, 200));
+            await targetCompletePromise;
 
             const {messageStore} = await import('../../src/services/messageStore.js');
             const targetMessages = messageStore.getMessages(targetPod.id);
@@ -424,16 +440,17 @@ describe('WorkflowExecution 服務', () => {
             const sourceB = await createPod(client, {name: `source-b-${id}`, x: 0, y: 200});
             const targetPod = await createPod(client, {name: `target-pod-${id}`, x: 400, y: 100});
 
-            const connA = await createConnection(client, sourceA.id, targetPod.id, {
-                triggerMode: 'auto',
-            });
-
             await seedPodMessages(client, sourceA.id, [
                 {role: 'user', content: 'Message from A'},
             ]);
             await seedPodMessages(client, sourceB.id, [
                 {role: 'user', content: 'Message from B'},
             ]);
+
+            // 先 seed 訊息再建立 connection，避免 seedPodMessages 觸發 auto workflow 干擾後續斷言
+            const connA = await createConnection(client, sourceA.id, targetPod.id, {
+                triggerMode: 'auto',
+            });
 
             const mergedSummary = `## Source: Source A
 Content from Source A

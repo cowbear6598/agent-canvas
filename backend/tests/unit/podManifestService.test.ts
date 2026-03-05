@@ -1,15 +1,21 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import {vi} from 'vitest';
 import {podManifestService} from '../../src/services/podManifestService.js';
-import {logger} from '../../src/utils/logger.js';
+import {initTestDb, resetDb} from '../../src/database/index.js';
+import {resetStatements} from '../../src/database/statements.js';
 
 describe('PodManifestService', () => {
     let tmpDir: string;
     const podId = 'test-pod-id';
+    const repositoryId = 'test-repo-id';
+
+    beforeAll(() => {
+        initTestDb();
+    });
 
     beforeEach(async () => {
+        resetDb();
         tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pod-manifest-test-'));
     });
 
@@ -17,145 +23,54 @@ describe('PodManifestService', () => {
         await fs.rm(tmpDir, {recursive: true, force: true});
     });
 
-    describe('getManifestPath', () => {
-        it('應回傳正確的 manifest 路徑', () => {
-            const result = podManifestService.getManifestPath('/repo/path', podId);
-            expect(result).toBe(`/repo/path/.claude/.pod-manifest-${podId}.json`);
-        });
+    afterAll(() => {
+        resetStatements();
     });
 
     describe('readManifest', () => {
-        it('manifest 不存在時回傳空陣列', async () => {
-            const result = await podManifestService.readManifest(tmpDir, podId);
+        it('資料不存在時回傳空陣列', () => {
+            const result = podManifestService.readManifest(repositoryId, podId);
             expect(result).toEqual([]);
         });
 
-        it('manifest 存在時回傳正確的 managedFiles', async () => {
-            const claudeDir = path.join(tmpDir, '.claude');
-            await fs.mkdir(claudeDir, {recursive: true});
-
-            const manifestPath = path.join(claudeDir, `.pod-manifest-${podId}.json`);
+        it('資料存在時回傳正確的 managedFiles', () => {
             const managedFiles = ['.claude/commands/test.md', '.claude/agents/agent.md'];
-            await fs.writeFile(manifestPath, JSON.stringify({managedFiles}), 'utf-8');
+            podManifestService.writeManifest(repositoryId, podId, managedFiles);
 
-            const result = await podManifestService.readManifest(tmpDir, podId);
+            const result = podManifestService.readManifest(repositoryId, podId);
             expect(result).toEqual(managedFiles);
-        });
-
-        it('manifest 內容損壞時回傳空陣列並記錄警告', async () => {
-            const claudeDir = path.join(tmpDir, '.claude');
-            await fs.mkdir(claudeDir, {recursive: true});
-
-            const manifestPath = path.join(claudeDir, `.pod-manifest-${podId}.json`);
-            await fs.writeFile(manifestPath, '{ 這不是有效的 JSON }', 'utf-8');
-
-            const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
-            const result = await podManifestService.readManifest(tmpDir, podId);
-
-            expect(result).toEqual([]);
-            expect(warnSpy).toHaveBeenCalled();
-            warnSpy.mockRestore();
         });
     });
 
     describe('writeManifest', () => {
-        it('正確寫入 managedFiles 到指定路徑', async () => {
+        it('正確寫入 managedFiles 到 DB', () => {
             const managedFiles = ['.claude/commands/test.md'];
-            await podManifestService.writeManifest(tmpDir, podId, managedFiles);
+            podManifestService.writeManifest(repositoryId, podId, managedFiles);
 
-            const manifestPath = podManifestService.getManifestPath(tmpDir, podId);
-            const content = await fs.readFile(manifestPath, 'utf-8');
-            const parsed = JSON.parse(content);
-
-            expect(parsed.managedFiles).toEqual(managedFiles);
+            const result = podManifestService.readManifest(repositoryId, podId);
+            expect(result).toEqual(managedFiles);
         });
 
-        it('目錄不存在時自動建立', async () => {
-            const nestedDir = path.join(tmpDir, 'nested-repo');
-            const managedFiles = ['.claude/commands/test.md'];
+        it('重複寫入時覆蓋舊資料', () => {
+            podManifestService.writeManifest(repositoryId, podId, ['.claude/commands/old.md']);
+            podManifestService.writeManifest(repositoryId, podId, ['.claude/commands/new.md']);
 
-            await podManifestService.writeManifest(nestedDir, podId, managedFiles);
-
-            const manifestPath = podManifestService.getManifestPath(nestedDir, podId);
-            const exists = await fs.access(manifestPath).then(() => true).catch(() => false);
-            expect(exists).toBe(true);
+            const result = podManifestService.readManifest(repositoryId, podId);
+            expect(result).toEqual(['.claude/commands/new.md']);
         });
     });
 
-    describe('deleteManagedFiles', () => {
-        it('只刪除 manifest 中的檔案，保留其他檔案', async () => {
-            const claudeCommandsDir = path.join(tmpDir, '.claude', 'commands');
-            await fs.mkdir(claudeCommandsDir, {recursive: true});
+    describe('deleteManifestRecord', () => {
+        it('從 DB 刪除 manifest 記錄', () => {
+            podManifestService.writeManifest(repositoryId, podId, ['.claude/commands/test.md']);
+            podManifestService.deleteManifestRecord(repositoryId, podId);
 
-            await fs.writeFile(path.join(claudeCommandsDir, 'test.md'), 'managed file');
-            await fs.writeFile(path.join(claudeCommandsDir, 'user-own.md'), 'user file');
-
-            const managedFiles = ['.claude/commands/test.md'];
-            await podManifestService.writeManifest(tmpDir, podId, managedFiles);
-
-            await podManifestService.deleteManagedFiles(tmpDir, podId);
-
-            const testExists = await fs.access(path.join(claudeCommandsDir, 'test.md')).then(() => true).catch(() => false);
-            const userOwnExists = await fs.access(path.join(claudeCommandsDir, 'user-own.md')).then(() => true).catch(() => false);
-
-            expect(testExists).toBe(false);
-            expect(userOwnExists).toBe(true);
+            const result = podManifestService.readManifest(repositoryId, podId);
+            expect(result).toEqual([]);
         });
 
-        it('manifest 中的檔案已不存在時不報錯', async () => {
-            const managedFiles = ['.claude/commands/not-exist.md'];
-            await podManifestService.writeManifest(tmpDir, podId, managedFiles);
-
-            await expect(podManifestService.deleteManagedFiles(tmpDir, podId)).resolves.not.toThrow();
-        });
-
-        it('刪除後清理空目錄', async () => {
-            const skillDir = path.join(tmpDir, '.claude', 'skills', 'my-skill');
-            await fs.mkdir(skillDir, {recursive: true});
-            await fs.writeFile(path.join(skillDir, 'SKILL.md'), 'skill content');
-
-            const managedFiles = ['.claude/skills/my-skill/SKILL.md'];
-            await podManifestService.writeManifest(tmpDir, podId, managedFiles);
-
-            await podManifestService.deleteManagedFiles(tmpDir, podId);
-
-            const skillDirExists = await fs.access(skillDir).then(() => true).catch(() => false);
-            expect(skillDirExists).toBe(false);
-        });
-
-        it('刪除後刪除 manifest 檔案本身', async () => {
-            const managedFiles = ['.claude/commands/test.md'];
-            await podManifestService.writeManifest(tmpDir, podId, managedFiles);
-
-            await podManifestService.deleteManagedFiles(tmpDir, podId);
-
-            const manifestPath = podManifestService.getManifestPath(tmpDir, podId);
-            const manifestExists = await fs.access(manifestPath).then(() => true).catch(() => false);
-            expect(manifestExists).toBe(false);
-        });
-    });
-
-    describe('deleteManifestFile', () => {
-        it('僅刪除 manifest 檔案本身', async () => {
-            const claudeCommandsDir = path.join(tmpDir, '.claude', 'commands');
-            await fs.mkdir(claudeCommandsDir, {recursive: true});
-            await fs.writeFile(path.join(claudeCommandsDir, 'test.md'), 'content');
-
-            const managedFiles = ['.claude/commands/test.md'];
-            await podManifestService.writeManifest(tmpDir, podId, managedFiles);
-
-            await podManifestService.deleteManifestFile(tmpDir, podId);
-
-            const manifestPath = podManifestService.getManifestPath(tmpDir, podId);
-            const manifestExists = await fs.access(manifestPath).then(() => true).catch(() => false);
-            const fileExists = await fs.access(path.join(claudeCommandsDir, 'test.md')).then(() => true).catch(() => false);
-
-            expect(manifestExists).toBe(false);
-            expect(fileExists).toBe(true);
-        });
-
-        it('manifest 不存在時不報錯', async () => {
-            await expect(podManifestService.deleteManifestFile(tmpDir, podId)).resolves.not.toThrow();
+        it('記錄不存在時不報錯', () => {
+            expect(() => podManifestService.deleteManifestRecord(repositoryId, podId)).not.toThrow();
         });
     });
 
