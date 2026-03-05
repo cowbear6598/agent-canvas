@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { requestIdSchema, canvasIdSchema, coordinateSchema, createPasteNoteItemSchema } from './base.js';
+import { requestIdSchema, canvasIdSchema, coordinateSchema, createPasteNoteItemSchema, resourceIdSchema } from './base.js';
 import { modelTypeSchema } from './podSchemas.js';
 import { anchorPositionSchema } from './connectionSchemas.js';
 
@@ -9,25 +9,25 @@ export const pastePodItemSchema = z.object({
   x: coordinateSchema,
   y: coordinateSchema,
   rotation: z.number().finite(),
-  outputStyleId: z.string().uuid().nullable().optional(),
-  skillIds: z.array(z.string().uuid()).optional(),
-  subAgentIds: z.array(z.string().uuid()).optional(),
+  outputStyleId: resourceIdSchema.nullable().optional(),
+  skillIds: z.array(resourceIdSchema).optional(),
+  subAgentIds: z.array(resourceIdSchema).optional(),
   model: modelTypeSchema.optional(),
-  repositoryId: z.string().uuid().nullable().optional(),
-  commandId: z.string().uuid().nullable().optional(),
+  repositoryId: resourceIdSchema.nullable().optional(),
+  commandId: resourceIdSchema.nullable().optional(),
 });
 
-export const pasteOutputStyleNoteItemSchema = createPasteNoteItemSchema({ outputStyleId: z.string() });
+export const pasteOutputStyleNoteItemSchema = createPasteNoteItemSchema({ outputStyleId: resourceIdSchema });
 
-export const pasteSkillNoteItemSchema = createPasteNoteItemSchema({ skillId: z.string() });
+export const pasteSkillNoteItemSchema = createPasteNoteItemSchema({ skillId: resourceIdSchema });
 
-export const pasteRepositoryNoteItemSchema = createPasteNoteItemSchema({ repositoryId: z.string() });
+export const pasteRepositoryNoteItemSchema = createPasteNoteItemSchema({ repositoryId: resourceIdSchema });
 
-export const pasteSubAgentNoteItemSchema = createPasteNoteItemSchema({ subAgentId: z.string() });
+export const pasteSubAgentNoteItemSchema = createPasteNoteItemSchema({ subAgentId: resourceIdSchema });
 
-export const pasteCommandNoteItemSchema = createPasteNoteItemSchema({ commandId: z.string() });
+export const pasteCommandNoteItemSchema = createPasteNoteItemSchema({ commandId: resourceIdSchema });
 
-export const pasteMcpServerNoteItemSchema = createPasteNoteItemSchema({ mcpServerId: z.string() });
+export const pasteMcpServerNoteItemSchema = createPasteNoteItemSchema({ mcpServerId: resourceIdSchema });
 
 export const pasteConnectionItemSchema = z.object({
   originalSourcePodId: z.uuid(),

@@ -486,6 +486,35 @@ describe('貼上功能', () => {
             expect(podAfterSecond?.commandId).toBe(command1.id);
         });
 
+        it('Pod 帶有 non-UUID 格式的 commandId 可以成功 paste', async () => {
+            const client = getClient();
+            // non-UUID 格式的 commandId（名稱即為 id）
+            const nonUuidCommandId = `my-command-v2-${uuidv4().replace(/-/g, '').slice(0, 8)}`;
+            await createCommand(client, nonUuidCommandId, '# Non-UUID Command');
+            const originalPodId = uuidv4();
+
+            const pods: PastePodItem[] = [
+                {originalId: originalPodId, name: 'Non-UUID Command Pod', x: 0, y: 0, rotation: 0, commandId: nonUuidCommandId},
+            ];
+
+            const payload: CanvasPastePayload = {...await emptyPastePayload(), pods};
+
+            const response = await emitAndWaitResponse<CanvasPastePayload, CanvasPasteResultPayload>(
+                client,
+                WebSocketRequestEvents.CANVAS_PASTE,
+                WebSocketResponseEvents.CANVAS_PASTE_RESULT,
+                payload
+            );
+
+            expect(response.createdPods).toHaveLength(1);
+
+            const newPodId = response.podIdMapping[originalPodId];
+            const canvasId = await getCanvasId(client);
+            const {podStore} = await import('../../src/services/podStore.js');
+            const pod = podStore.getById(canvasId, newPodId);
+            expect(pod?.commandId).toBe(nonUuidCommandId);
+        });
+
         it('Pod 的 repositoryId 指向不存在的 UUID 時，回報錯誤且不建立該 Pod', async () => {
             const client = getClient();
             const nonExistentRepositoryId = uuidv4();
