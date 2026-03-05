@@ -234,6 +234,8 @@ export const useChatStore = defineStore('chat', {
             })
 
             this.setTyping(podId, true)
+            // 前端發送時立即更新，不等待 WebSocket 事件來回
+            podStore.updatePodStatus(podId, 'chatting')
         },
 
         addUserMessage(podId: string, content: string): Promise<void> {

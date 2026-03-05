@@ -23,7 +23,7 @@ const chatStore = useChatStore()
 const connectionStore = useConnectionStore()
 
 const messages = computed(() => chatStore.getMessages(props.pod.id))
-const isTyping = computed(() => chatStore.isTyping(props.pod.id))
+const isTyping = computed(() => props.pod.status === 'chatting')
 const isHistoryLoading = computed(() => chatStore.isHistoryLoading(props.pod.id))
 
 const isSlackBound = computed(() => props.pod.slackBinding != null)

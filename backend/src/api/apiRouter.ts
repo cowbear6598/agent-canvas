@@ -1,6 +1,7 @@
 import { handleListCanvases, handleCreateCanvas, handleDeleteCanvas, handleRenameCanvas } from './canvasApi.js';
 import { handleListPods, handleCreatePod, handleDeletePod, handleRenamePod } from './podApi.js';
 import { handleListConnections, handleCreateConnection, handleDeleteConnection, handleUpdateConnection } from './connectionApi.js';
+import { handleListWorkflows, handleWorkflowChat, handleWorkflowStop } from './workflowApi.js';
 import { JSON_HEADERS } from './constants.js';
 import { logger } from '../utils/logger.js';
 
@@ -25,6 +26,9 @@ const ROUTES: Route[] = [
 	{ method: 'DELETE', pattern: new URLPattern({ pathname: '/api/canvas/:id' }), handler: handleDeleteCanvas },
 	{ method: 'PATCH', pattern: new URLPattern({ pathname: '/api/canvas/:id/pods/:podId' }), handler: handleRenamePod },
 	{ method: 'PATCH', pattern: new URLPattern({ pathname: '/api/canvas/:id' }), handler: handleRenameCanvas },
+	{ method: 'GET', pattern: new URLPattern({ pathname: '/api/canvas/:id/workflows' }), handler: handleListWorkflows },
+	{ method: 'POST', pattern: new URLPattern({ pathname: '/api/canvas/:id/workflows/:podId/chat' }), handler: handleWorkflowChat },
+	{ method: 'POST', pattern: new URLPattern({ pathname: '/api/canvas/:id/workflows/:podId/stop' }), handler: handleWorkflowStop },
 ];
 
 function matchRoute(method: string, pathname: string): { handler: ApiHandler; params: Record<string, string> } | null {
