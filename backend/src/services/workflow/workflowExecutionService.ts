@@ -1,5 +1,3 @@
-import {v4 as uuidv4} from 'uuid';
-import {WebSocketResponseEvents} from '../../schemas/index.js';
 import type { TriggerMode, Connection } from '../../types/index.js';
 import type {
   PipelineContext,
@@ -11,9 +9,8 @@ import type {
 } from './types.js';
 import {connectionStore} from '../connectionStore.js';
 import {podStore} from '../podStore.js';
-import {messageStore} from '../messageStore.js';
-import {socketService} from '../socketService.js';
 import {summaryService} from '../summaryService.js';
+import {injectUserMessage} from '../../utils/chatHelpers.js';
 import {workflowQueueService} from './workflowQueueService.js';
 import {autoClearService} from '../autoClear/index.js';
 import {logger} from '../../utils/logger.js';
@@ -238,21 +235,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     const commands = await commandService.list();
     const messageToSend = buildMessageWithCommand(baseMessage, targetPod, commands);
 
-    const userMessageId = uuidv4();
-
-    socketService.emitToCanvas(
-      canvasId,
-      WebSocketResponseEvents.POD_CHAT_USER_MESSAGE,
-      {
-        canvasId,
-        podId: targetPodId,
-        messageId: userMessageId,
-        content: messageToSend,
-        timestamp: new Date().toISOString(),
-      }
-    );
-
-    await messageStore.addMessage(canvasId, targetPodId, 'user', messageToSend);
+    await injectUserMessage({ canvasId, podId: targetPodId, content: messageToSend });
 
     await executeStreamingChat(
       { canvasId, podId: targetPodId, message: messageToSend, abortable: false },

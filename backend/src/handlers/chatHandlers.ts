@@ -1,7 +1,5 @@
-import {v4 as uuidv4} from 'uuid';
 import {WebSocketResponseEvents} from '../schemas';
 import type {
-    ContentBlock,
     Pod,
 } from '../types';
 import { isPodBusy } from '../types/index.js';
@@ -9,19 +7,11 @@ import type {ChatSendPayload, ChatHistoryPayload, ChatAbortPayload} from '../sch
 import {podStore} from '../services/podStore.js';
 import {messageStore} from '../services/messageStore.js';
 import {claudeService} from '../services/claude/claudeService.js';
-import {socketService} from '../services/socketService.js';
 import {emitError, emitSuccess} from '../utils/websocketResponse.js';
 import {onChatComplete, onChatAborted} from '../utils/chatCallbacks.js';
 import {validatePod, withCanvasId} from '../utils/handlerHelpers.js';
 import {executeStreamingChat} from '../services/claude/streamingChatExecutor.js';
-
-export function extractDisplayContent(message: string | ContentBlock[]): string {
-    if (typeof message === 'string') return message;
-
-    return message
-        .map((block) => block.type === 'text' ? block.text : '[image]')
-        .join('');
-}
+import {injectUserMessage} from '../utils/chatHelpers.js';
 
 function validatePodChatReady(
     connectionId: string,
@@ -59,23 +49,7 @@ export const handleChatSend = withCanvasId<ChatSendPayload>(
 
         if (!validatePodChatReady(connectionId, pod, requestId)) return;
 
-        podStore.setStatus(canvasId, podId, 'chatting');
-
-        const userDisplayContent = extractDisplayContent(message);
-
-        await messageStore.addMessage(canvasId, podId, 'user', userDisplayContent);
-
-        socketService.emitToCanvas(
-            canvasId,
-            WebSocketResponseEvents.POD_CHAT_USER_MESSAGE,
-            {
-                canvasId,
-                podId,
-                messageId: uuidv4(),
-                content: userDisplayContent,
-                timestamp: new Date().toISOString(),
-            }
-        );
+        await injectUserMessage({ canvasId, podId, content: message });
 
         const podName = pod.name;
 

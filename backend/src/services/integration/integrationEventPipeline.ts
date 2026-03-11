@@ -1,9 +1,5 @@
-import { v4 as uuidv4 } from 'uuid';
 import type { Pod } from '../../types/index.js';
-import { WebSocketResponseEvents } from '../../schemas/events.js';
 import { podStore } from '../podStore.js';
-import { messageStore } from '../messageStore.js';
-import { socketService } from '../socketService.js';
 import { executeStreamingChat } from '../claude/streamingChatExecutor.js';
 import { logger } from '../../utils/logger.js';
 import { createPostChatCompleteCallback } from '../../utils/operationHelpers.js';
@@ -14,6 +10,7 @@ import { isWorkflowChainBusy } from '../../utils/workflowChainTraversal.js';
 import { integrationRegistry } from './integrationRegistry.js';
 import type { NormalizedEvent } from './types.js';
 import { isPodBusy } from '../../types/index.js';
+import { injectUserMessage } from '../../utils/chatHelpers.js';
 
 class IntegrationEventPipeline {
   private busyReplyCooldowns = new Map<string, number>();
@@ -77,17 +74,7 @@ class IntegrationEventPipeline {
 
     const podName = currentPod?.name ?? podId;
 
-    podStore.setStatus(canvasId, podId, 'chatting');
-
-    await messageStore.addMessage(canvasId, podId, 'user', event.text);
-
-    socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_CHAT_USER_MESSAGE, {
-      canvasId,
-      podId,
-      messageId: uuidv4(),
-      content: event.text,
-      timestamp: new Date().toISOString(),
-    });
+    await injectUserMessage({ canvasId, podId, content: event.text });
 
     logger.log('Integration', 'Complete', `[IntegrationEventPipeline] 注入 ${event.provider} 訊息至 Pod「${podName}」`);
 

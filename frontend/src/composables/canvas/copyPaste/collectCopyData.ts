@@ -185,6 +185,15 @@ const NOTE_STORE_CONFIGS: NoteStoreConfig[] = [
   },
 ]
 
+type CollectedNoteArrays = {
+  outputStyleNote: CopiedOutputStyleNote[]
+  skillNote: CopiedSkillNote[]
+  repositoryNote: CopiedRepositoryNote[]
+  subAgentNote: CopiedSubAgentNote[]
+  commandNote: CopiedCommandNote[]
+  mcpServerNote: CopiedMcpServerNote[]
+}
+
 export function collectSelectedNotes(
   selectedElements: SelectableElement[],
   selectedPodIds: Set<string>,
@@ -197,30 +206,23 @@ export function collectSelectedNotes(
   commandNotes: CopiedCommandNote[]
   mcpServerNotes: CopiedMcpServerNote[]
 } {
-  const copiedOutputStyleNotes: CopiedOutputStyleNote[] = []
-  const copiedSkillNotes: CopiedSkillNote[] = []
-  const copiedRepositoryNotes: CopiedRepositoryNote[] = []
-  const copiedSubAgentNotes: CopiedSubAgentNote[] = []
-  const copiedCommandNotes: CopiedCommandNote[] = []
-  const copiedMcpServerNotes: CopiedMcpServerNote[] = []
+  const arrays: CollectedNoteArrays = {
+    outputStyleNote: [],
+    skillNote: [],
+    repositoryNote: [],
+    subAgentNote: [],
+    commandNote: [],
+    mcpServerNote: [],
+  }
 
   for (const podId of selectedPodIds) {
     const boundNotes = collectBoundNotes(podId, noteStores)
-    copiedOutputStyleNotes.push(...boundNotes.outputStyleNotes)
-    copiedSkillNotes.push(...boundNotes.skillNotes)
-    copiedRepositoryNotes.push(...boundNotes.repositoryNotes)
-    copiedSubAgentNotes.push(...boundNotes.subAgentNotes)
-    copiedCommandNotes.push(...boundNotes.commandNotes)
-    copiedMcpServerNotes.push(...boundNotes.mcpServerNotes)
-  }
-
-  const arrays: Record<string, AnyNote[]> = {
-    outputStyleNote: copiedOutputStyleNotes as AnyNote[],
-    skillNote: copiedSkillNotes as AnyNote[],
-    repositoryNote: copiedRepositoryNotes as AnyNote[],
-    subAgentNote: copiedSubAgentNotes as AnyNote[],
-    commandNote: copiedCommandNotes as AnyNote[],
-    mcpServerNote: copiedMcpServerNotes as AnyNote[],
+    arrays.outputStyleNote.push(...boundNotes.outputStyleNotes)
+    arrays.skillNote.push(...boundNotes.skillNotes)
+    arrays.repositoryNote.push(...boundNotes.repositoryNotes)
+    arrays.subAgentNote.push(...boundNotes.subAgentNotes)
+    arrays.commandNote.push(...boundNotes.commandNotes)
+    arrays.mcpServerNote.push(...boundNotes.mcpServerNotes)
   }
 
   const noteCollectorMap = Object.fromEntries(
@@ -228,7 +230,7 @@ export function collectSelectedNotes(
       config.key,
       {
         collector: createUnboundNoteCollector<AnyNote>(config.getStore(noteStores), config.mapFn),
-        array: arrays[config.key],
+        array: arrays[config.key as keyof CollectedNoteArrays] as AnyNote[],
       },
     ])
   ) as Record<string, { collector: (id: string) => AnyNote | null; array: AnyNote[] }>
@@ -238,12 +240,12 @@ export function collectSelectedNotes(
   }
 
   return {
-    outputStyleNotes: copiedOutputStyleNotes,
-    skillNotes: copiedSkillNotes,
-    repositoryNotes: copiedRepositoryNotes,
-    subAgentNotes: copiedSubAgentNotes,
-    commandNotes: copiedCommandNotes,
-    mcpServerNotes: copiedMcpServerNotes,
+    outputStyleNotes: arrays.outputStyleNote,
+    skillNotes: arrays.skillNote,
+    repositoryNotes: arrays.repositoryNote,
+    subAgentNotes: arrays.subAgentNote,
+    commandNotes: arrays.commandNote,
+    mcpServerNotes: arrays.mcpServerNote,
   }
 }
 

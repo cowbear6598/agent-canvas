@@ -242,7 +242,7 @@ export const usePodStore = defineStore('pod', {
             })
         },
 
-        async renamePodWithBackend(podId: string, name: string): Promise<void> {
+        async renamePodWithBackend(podId: string, name: string): Promise<boolean> {
             const { executeAction } = useCanvasWebSocketAction()
             const { showSuccessToast } = useToast()
 
@@ -255,9 +255,10 @@ export const usePodStore = defineStore('pod', {
                 { errorCategory: 'Pod', errorAction: '重新命名失敗', errorMessage: 'Pod 重新命名失敗' }
             )
 
-            if (!result.success) return
+            if (!result.success) return false
 
             showSuccessToast('Pod', '重新命名成功', name)
+            return true
         },
 
         async setScheduleWithBackend(podId: string, schedule: Schedule | null): Promise<Pod | null> {

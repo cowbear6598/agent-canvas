@@ -58,18 +58,11 @@ export const handleCanvasPaste = withCanvasId<CanvasPastePayload>(
 
         errors.push(...Object.values(noteResultMap).flatMap(r => r.errors));
 
-        const createdOutputStyleNotes = noteResultMap.outputStyle.notes as OutputStyleNote[];
-        const createdSkillNotes = noteResultMap.skill.notes as SkillNote[];
-        const createdRepositoryNotes = noteResultMap.repository.notes as RepositoryNote[];
-        const createdSubAgentNotes = noteResultMap.subAgent.notes as SubAgentNote[];
-        const createdCommandNotes = noteResultMap.command.notes as CommandNote[];
-        const createdMcpServerNotes = noteResultMap.mcpServer.notes as McpServerNote[];
-
         const createdConnections = createPastedConnections(canvasId, connections, podIdMapping);
 
         syncBoundNotesToPod(
             canvasId,
-            createdCommandNotes,
+            noteResultMap.command.notes as CommandNote[],
             note => note.commandId,
             pod => !pod.commandId,
             (cId, pId, cmdId) => podStore.setCommandId(cId, pId, cmdId),
@@ -77,7 +70,7 @@ export const handleCanvasPaste = withCanvasId<CanvasPastePayload>(
 
         syncBoundNotesToPod(
             canvasId,
-            createdMcpServerNotes,
+            noteResultMap.mcpServer.notes as McpServerNote[],
             note => note.mcpServerId,
             (pod, mcpId) => !pod.mcpServerIds.includes(mcpId),
             (cId, pId, mcpId) => podStore.addMcpServerId(cId, pId, mcpId),
@@ -87,12 +80,12 @@ export const handleCanvasPaste = withCanvasId<CanvasPastePayload>(
             requestId,
             success: errors.length === 0,
             createdPods,
-            createdOutputStyleNotes,
-            createdSkillNotes,
-            createdRepositoryNotes,
-            createdSubAgentNotes,
-            createdCommandNotes,
-            createdMcpServerNotes,
+            createdOutputStyleNotes: noteResultMap.outputStyle.notes as OutputStyleNote[],
+            createdSkillNotes: noteResultMap.skill.notes as SkillNote[],
+            createdRepositoryNotes: noteResultMap.repository.notes as RepositoryNote[],
+            createdSubAgentNotes: noteResultMap.subAgent.notes as SubAgentNote[],
+            createdCommandNotes: noteResultMap.command.notes as CommandNote[],
+            createdMcpServerNotes: noteResultMap.mcpServer.notes as McpServerNote[],
             createdConnections,
             podIdMapping,
             errors,
@@ -106,12 +99,12 @@ export const handleCanvasPaste = withCanvasId<CanvasPastePayload>(
 
         const pasteItems: string[] = [];
         if (createdPods.length > 0) pasteItems.push(`${createdPods.length} pod`);
-        if (createdOutputStyleNotes.length > 0) pasteItems.push(`${createdOutputStyleNotes.length} output style`);
-        if (createdSkillNotes.length > 0) pasteItems.push(`${createdSkillNotes.length} skill`);
-        if (createdRepositoryNotes.length > 0) pasteItems.push(`${createdRepositoryNotes.length} repository`);
-        if (createdSubAgentNotes.length > 0) pasteItems.push(`${createdSubAgentNotes.length} subagent`);
-        if (createdCommandNotes.length > 0) pasteItems.push(`${createdCommandNotes.length} command`);
-        if (createdMcpServerNotes.length > 0) pasteItems.push(`${createdMcpServerNotes.length} mcp server`);
+        if (response.createdOutputStyleNotes.length > 0) pasteItems.push(`${response.createdOutputStyleNotes.length} output style`);
+        if (response.createdSkillNotes.length > 0) pasteItems.push(`${response.createdSkillNotes.length} skill`);
+        if (response.createdRepositoryNotes.length > 0) pasteItems.push(`${response.createdRepositoryNotes.length} repository`);
+        if (response.createdSubAgentNotes.length > 0) pasteItems.push(`${response.createdSubAgentNotes.length} subagent`);
+        if (response.createdCommandNotes.length > 0) pasteItems.push(`${response.createdCommandNotes.length} command`);
+        if (response.createdMcpServerNotes.length > 0) pasteItems.push(`${response.createdMcpServerNotes.length} mcp server`);
         if (createdConnections.length > 0) pasteItems.push(`${createdConnections.length} connection`);
         if (errors.length > 0) pasteItems.push(`${errors.length} 個錯誤`);
 

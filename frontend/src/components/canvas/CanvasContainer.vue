@@ -217,9 +217,8 @@ const handleUpdatePod = async (pod: Pod): Promise<void> => {
   podStore.updatePod(pod)
 
   if (oldName !== pod.name) {
-    try {
-      await podStore.renamePodWithBackend(pod.id, pod.name)
-    } catch {
+    const success = await podStore.renamePodWithBackend(pod.id, pod.name)
+    if (!success) {
       podStore.updatePod({ ...pod, name: oldName })
     }
   }

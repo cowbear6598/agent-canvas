@@ -93,11 +93,18 @@ class SkillService {
             throw new Error('檔案格式錯誤，僅支援 ZIP 檔案');
         }
 
-        let buffer: Buffer;
-        try {
-            buffer = Buffer.from(fileData, 'base64');
-        } catch {
+        // Buffer.from 不會 throw，無效的 base64 字元會被靜默忽略，
+        // 因此用正則預先驗證確保輸入合法
+        if (!/^[A-Za-z0-9+/]*={0,2}$/.test(fileData)) {
             throw new Error('Base64 解碼失敗，請確認 ZIP 檔案格式正確');
+        }
+
+        const buffer = Buffer.from(fileData, 'base64');
+
+        // ZIP magic bytes 驗證（PK header = 0x50 0x4B），
+        // 可提早攔截明顯非 ZIP 的資料，避免進入 unzipSync 後才 throw
+        if (buffer.length < 4 || buffer[0] !== 0x50 || buffer[1] !== 0x4B) {
+            throw new Error('解壓縮失敗，請確認 ZIP 檔案完整性');
         }
 
         let entries: Record<string, Uint8Array>;

@@ -17,6 +17,10 @@ export function getProvider(name: string): IntegrationProviderConfig {
   return config
 }
 
+export function findProvider(name: string): IntegrationProviderConfig | null {
+  return registry.get(name) ?? null
+}
+
 export function getAllProviders(): IntegrationProviderConfig[] {
   return Array.from(registry.values())
 }

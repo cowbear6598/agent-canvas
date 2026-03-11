@@ -1,16 +1,12 @@
-import { v4 as uuidv4 } from 'uuid';
 import { jsonResponse, requireCanvas, resolvePod, requireJsonBody } from './apiHelpers.js';
 import { podStore } from '../services/podStore.js';
 import { connectionStore } from '../services/connectionStore.js';
-import { messageStore } from '../services/messageStore.js';
 import { claudeService } from '../services/claude/claudeService.js';
 import { executeStreamingChat } from '../services/claude/streamingChatExecutor.js';
 import { onChatComplete, onChatAborted } from '../utils/chatCallbacks.js';
-import { extractDisplayContent } from '../handlers/chatHandlers.js';
+import { injectUserMessage } from '../utils/chatHelpers.js';
 import { logger } from '../utils/logger.js';
 import { HTTP_STATUS } from '../constants.js';
-import { socketService } from '../services/socketService.js';
-import { WebSocketResponseEvents } from '../schemas/index.js';
 import type { Pod, ContentBlock } from '../types/index.js';
 import { isPodBusy } from '../types/index.js';
 import type { Connection } from '../types/connection.js';
@@ -147,22 +143,7 @@ export async function handleWorkflowChat(req: Request, params: Record<string, st
 
 	void (async (): Promise<void> => {
 		try {
-			podStore.setStatus(canvasId, podId, 'chatting');
-
-			const userDisplayContent = extractDisplayContent(typedMessage);
-			await messageStore.addMessage(canvasId, podId, 'user', userDisplayContent);
-
-			socketService.emitToCanvas(
-				canvasId,
-				WebSocketResponseEvents.POD_CHAT_USER_MESSAGE,
-				{
-					canvasId,
-					podId,
-					messageId: uuidv4(),
-					content: userDisplayContent,
-					timestamp: new Date().toISOString(),
-				},
-			);
+			await injectUserMessage({ canvasId, podId, content: typedMessage });
 
 			await executeStreamingChat(
 				{ canvasId, podId, message: typedMessage, abortable: true },

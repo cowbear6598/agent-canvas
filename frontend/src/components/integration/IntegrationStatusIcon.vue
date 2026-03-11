@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { IntegrationBinding, IntegrationProviderConfig } from '@/types/integration'
-import { getProvider } from '@/integration/providerRegistry'
+import { findProvider } from '@/integration/providerRegistry'
 import { useIntegrationStore } from '@/stores/integrationStore'
 
 const props = defineProps<{
@@ -20,10 +20,8 @@ interface IconData {
 
 const iconDataList = computed<IconData[]>(() =>
   props.bindings.map((binding, index) => {
-    let config: IntegrationProviderConfig | null = null
-    try {
-      config = getProvider(binding.provider)
-    } catch {
+    const config = findProvider(binding.provider)
+    if (!config) {
       return {
         binding,
         config: null,

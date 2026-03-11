@@ -480,6 +480,33 @@ export class ClaudeService {
         }
     }
 
+    private async executeWithSessionRetry(
+        podId: string,
+        canvasId: string,
+        pod: Pod,
+        queryOptions: Options & {abortController: AbortController},
+        prompt: string | AsyncIterable<SDKUserMessage>,
+        state: QueryState,
+        onStream: StreamCallback,
+        isRetry: boolean,
+        retryFn: () => Promise<Message>
+    ): Promise<Message | null> {
+        const {abortController} = queryOptions;
+        const queryStream = query({prompt, options: queryOptions});
+        this.activeQueries.set(podId, {queryStream, abortController});
+
+        try {
+            await this.runQueryStream(queryStream, abortController, state, onStream);
+            this.finalizeSession(canvasId, podId, state, pod);
+            return null;
+        } catch (error) {
+            return this.handleSendMessageError({error, pod, canvasId, podId, onStream, isRetry, retryFn});
+        } finally {
+            // 確保所有情況都清理 activeQueries entry，防止 Memory Leak
+            this.activeQueries.delete(podId);
+        }
+    }
+
     private async sendMessageInternal(
         podId: string,
         message: string | ContentBlock[],
@@ -495,48 +522,27 @@ export class ClaudeService {
         const messageId = uuidv4();
         const state = this.createQueryState();
 
-        try {
-            const resumeSessionId = pod.claudeSessionId;
-            const cwd = this.resolveCwd(pod);
+        const cwd = this.resolveCwd(pod);
+        const queryOptions = await this.buildQueryOptions(pod, cwd);
+        const prompt = this.buildPrompt(message, pod.commandId, pod.claudeSessionId);
 
-            const queryOptions = await this.buildQueryOptions(pod, cwd);
-            const {abortController} = queryOptions;
+        const retryResult = await this.executeWithSessionRetry(
+            podId, canvasId, pod, queryOptions, prompt, state, onStream, isRetry,
+            () => this.sendMessageInternal(podId, message, onStream, true)
+        );
 
-            const prompt = this.buildPrompt(message, pod.commandId, resumeSessionId);
-
-            const queryStream = query({
-                prompt,
-                options: queryOptions,
-            });
-
-            this.activeQueries.set(podId, {queryStream, abortController});
-
-            await this.runQueryStream(queryStream, abortController, state, onStream);
-
-            this.finalizeSession(canvasId, podId, state, pod);
-
-            return {
-                id: messageId,
-                podId,
-                role: 'assistant',
-                content: state.fullContent,
-                toolUse: state.toolUseInfo,
-                createdAt: new Date(),
-            };
-        } catch (error) {
-            return this.handleSendMessageError({
-                error,
-                pod,
-                canvasId,
-                podId,
-                onStream,
-                isRetry,
-                retryFn: () => this.sendMessageInternal(podId, message, onStream, true),
-            });
-        } finally {
-            // 確保所有情況都清理 activeQueries entry，防止 Memory Leak
-            this.activeQueries.delete(podId);
+        if (retryResult !== null) {
+            return retryResult;
         }
+
+        return {
+            id: messageId,
+            podId,
+            role: 'assistant',
+            content: state.fullContent,
+            toolUse: state.toolUseInfo,
+            createdAt: new Date(),
+        };
     }
 
     private extractTextFromAssistantMessage(sdkMessage: SDKAssistantMessage): string {
