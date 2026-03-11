@@ -1,4 +1,4 @@
-import {ref} from 'vue'
+import {ref, toRaw} from 'vue'
 import type {Ref} from 'vue'
 import type {Canvas} from '@/types/canvas'
 import {useCanvasStore} from '@/stores/canvasStore'
@@ -32,7 +32,7 @@ export function useCanvasDragReorder(sidebarRef: Ref<HTMLElement | undefined>): 
     if (!canvas) return
 
     draggedIndex.value = index
-    originalCanvases.value = JSON.parse(JSON.stringify(canvasStore.canvases))
+    originalCanvases.value = structuredClone(toRaw(canvasStore.canvases))
 
     event.dataTransfer.effectAllowed = 'move'
     event.dataTransfer.setData('text/plain', canvas.id)

@@ -5,12 +5,10 @@ import { ok, err } from '../../../types/index.js';
 import type { Result } from '../../../types/index.js';
 import { logger } from '../../../utils/logger.js';
 import { getErrorMessage } from '../../../utils/errorHelpers.js';
-import { socketService } from '../../socketService.js';
-import { escapeUserInput } from '../../../utils/escapeInput.js';
-import { WebSocketResponseEvents } from '../../../schemas/events.js';
 import { integrationAppStore } from '../integrationAppStore.js';
 import { integrationEventPipeline } from '../integrationEventPipeline.js';
 import { createDedupTracker } from '../dedupHelper.js';
+import { destroyProvider, initializeProvider, formatIntegrationMessage, parseWebhookBody } from '../integrationHelpers.js';
 import type { IntegrationApp, IntegrationAppConfig, IntegrationProvider, IntegrationResource, NormalizedEvent } from '../types.js';
 
 const SLACK_CHANNEL_LIST_PAGE_SIZE = 200;
@@ -200,47 +198,45 @@ class SlackProvider implements IntegrationProvider {
     // ClientManager 層
 
     async initialize(app: IntegrationApp): Promise<void> {
-        const botToken = app.config['botToken'];
-        if (typeof botToken !== 'string') {
-            logger.error('Integration', 'Error', `Slack App ${app.id} 缺少 botToken`);
-            integrationAppStore.updateStatus(app.id, 'error');
-            this.broadcastConnectionStatus(app.id);
-            return;
-        }
+        await initializeProvider(
+            app,
+            async () => {
+                const botToken = app.config['botToken'];
+                if (typeof botToken !== 'string') {
+                    logger.error('Integration', 'Error', `Slack App ${app.id} 缺少 botToken`);
+                    return false;
+                }
 
-        const client = new WebClient(botToken);
+                const client = new WebClient(botToken);
 
-        try {
-            const authResult = await client.auth.test();
-            if (authResult.user_id) {
-                integrationAppStore.updateExtraJson(app.id, { botUserId: authResult.user_id });
-            }
-        } catch (error) {
-            logger.error('Integration', 'Error', `Slack App ${app.id} 初始化失敗：${getErrorMessage(error)}`);
-            integrationAppStore.updateStatus(app.id, 'error');
-            this.broadcastConnectionStatus(app.id);
-            return;
-        }
+                try {
+                    const authResult = await client.auth.test();
+                    if (authResult.user_id) {
+                        integrationAppStore.updateExtraJson(app.id, { botUserId: authResult.user_id });
+                    }
+                } catch (error) {
+                    logger.error('Integration', 'Error', `Slack App ${app.id} 初始化失敗：${getErrorMessage(error)}`);
+                    return false;
+                }
 
-        this.clients.set(app.id, client);
-
-        try {
-            await this.fetchAndUpdateChannels(app.id, client);
-        } catch (error) {
-            logger.warn('Integration', 'Warn', `Slack App ${app.id} 取得頻道失敗，繼續初始化：${getErrorMessage(error)}`);
-        }
-
-        integrationAppStore.updateStatus(app.id, 'connected');
-        this.broadcastConnectionStatus(app.id);
-
-        logger.log('Integration', 'Complete', `Slack App ${app.id} 初始化成功`);
+                this.clients.set(app.id, client);
+                return true;
+            },
+            async () => {
+                const client = this.clients.get(app.id);
+                if (!client) return;
+                try {
+                    await this.fetchAndUpdateChannels(app.id, client);
+                } catch (error) {
+                    logger.warn('Integration', 'Warn', `Slack App ${app.id} 取得頻道失敗，繼續初始化：${getErrorMessage(error)}`);
+                }
+            },
+            'Slack',
+        );
     }
 
     destroy(appId: string): void {
-        this.clients.delete(appId);
-        integrationAppStore.updateStatus(appId, 'disconnected');
-        this.broadcastConnectionStatus(appId);
-        logger.log('Integration', 'Complete', `Slack App ${appId} 已移除`);
+        destroyProvider(this.clients as Map<string, unknown>, appId, 'Slack');
     }
 
     destroyAll(): void {
@@ -292,11 +288,7 @@ class SlackProvider implements IntegrationProvider {
                 : rawCleanedText;
 
         const userName = user ?? 'unknown';
-        const escapedUserName = escapeUserInput(userName);
-        const escapedText = escapeUserInput(cleanedText);
-
-        // 第一層：escapeUserInput 處理特殊字元；第二層：<user_data> 標籤作為結構性隔離
-        const formattedText = `[Slack: @${escapedUserName}] <user_data>${escapedText}</user_data>`;
+        const formattedText = formatIntegrationMessage('Slack', userName, cleanedText);
 
         return {
             provider: 'slack',
@@ -313,24 +305,10 @@ class SlackProvider implements IntegrationProvider {
     readonly webhookPath = '/slack/events';
 
     async handleWebhookRequest(req: Request): Promise<Response> {
-        const contentLength = req.headers.get('content-length');
-        if (contentLength && parseInt(contentLength, 10) > MAX_BODY_SIZE) {
-            return new Response('Payload Too Large', { status: 413 });
-        }
+        const parsed = await parseWebhookBody(req, MAX_BODY_SIZE);
+        if (parsed instanceof Response) return parsed;
 
-        const rawBody = await req.text();
-
-        if (rawBody.length > MAX_BODY_SIZE) {
-            return new Response('Payload Too Large', { status: 413 });
-        }
-
-        let payload: unknown;
-        try {
-            payload = JSON.parse(rawBody);
-        } catch {
-            return new Response('無效的 JSON body', { status: 400 });
-        }
-
+        const { rawBody, payload } = parsed;
         const body = payload as Record<string, unknown>;
 
         const headersResult = verifySignatureHeaders(req);
@@ -379,17 +357,6 @@ class SlackProvider implements IntegrationProvider {
         return channels;
     }
 
-    private broadcastConnectionStatus(appId: string): void {
-        const app = integrationAppStore.getById(appId);
-        if (!app) return;
-
-        socketService.emitToAll(WebSocketResponseEvents.INTEGRATION_CONNECTION_STATUS_CHANGED, {
-            provider: 'slack',
-            appId,
-            connectionStatus: app.connectionStatus,
-            resources: app.resources,
-        });
-    }
 }
 
 export const slackProvider = new SlackProvider();

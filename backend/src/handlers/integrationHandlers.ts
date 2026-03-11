@@ -112,7 +112,7 @@ export async function handleIntegrationAppDelete(
 
     const boundPods = podStore.findByIntegrationApp(appId);
     for (const {canvasId, pod} of boundPods) {
-        await podStore.removeIntegrationBinding(canvasId, pod.id, app.provider);
+        podStore.removeIntegrationBinding(canvasId, pod.id, app.provider);
         socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_INTEGRATION_UNBOUND, {
             canvasId,
             podId: pod.id,
@@ -261,7 +261,7 @@ export const handlePodBindIntegration = withCanvasId<PodBindIntegrationPayload>(
             return;
         }
 
-        await podStore.addIntegrationBinding(canvasId, podId, {provider: providerName, appId, resourceId, ...(extra ? {extra} : {})});
+        podStore.addIntegrationBinding(canvasId, podId, {provider: providerName, appId, resourceId, ...(extra ? {extra} : {})});
 
         const resourceName = resource?.name ?? resourceId;
         logger.log('Integration', 'Create', `Pod「${pod.name}」已綁定 ${provider.displayName} App「${app.name}」Resource「${resourceName}」`);
@@ -284,7 +284,7 @@ export const handlePodUnbindIntegration = withCanvasId<PodUnbindIntegrationPaylo
             return;
         }
 
-        await podStore.removeIntegrationBinding(canvasId, podId, providerName);
+        podStore.removeIntegrationBinding(canvasId, podId, providerName);
 
         logger.log('Integration', 'Delete', `Pod「${getPodDisplayName(canvasId, podId)}」已解除 ${providerName} 綁定`);
 

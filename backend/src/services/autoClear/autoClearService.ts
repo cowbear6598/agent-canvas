@@ -1,4 +1,3 @@
-import {connectionStore} from '../connectionStore.js';
 import {podStore} from '../podStore.js';
 import {workflowClearService} from '../workflowClearService.js';
 import {socketService} from '../socketService.js';
@@ -6,65 +5,16 @@ import {terminalPodTracker} from './terminalPodTracker.js';
 import {workflowEventEmitter} from '../workflow/workflowEventEmitter.js';
 import {WebSocketResponseEvents} from '../../schemas';
 import {logger} from '../../utils/logger.js';
-
-function getAutoTriggerTargets(canvasId: string, podId: string): string[] {
-    const connections = connectionStore.findBySourcePodId(canvasId, podId);
-    const triggerableConnections = connections.filter((connection) => connection.triggerMode === 'auto');
-    return triggerableConnections.map((connection) => connection.targetPodId);
-}
-
-function isTerminalPod(podId: string, sourcePodId: string, hasAutoTriggerTargets: boolean): boolean {
-    return podId !== sourcePodId && !hasAutoTriggerTargets;
-}
+import {
+    getAutoTriggerTargets,
+    isTerminalPod,
+    traverseAutoTriggerGraph,
+    buildPropagatedCounts,
+} from './autoClearGraphUtils.js';
 
 class AutoClearService {
-    private traverseAutoTriggerGraph(
-        canvasId: string,
-        startPodIds: string[],
-        visitor: (podId: string, autoTriggerTargets: string[]) => void,
-    ): void {
-        const visitedPodIds = new Set<string>();
-        const pendingPodIds: string[] = [];
-
-        for (const podId of startPodIds) {
-            visitedPodIds.add(podId);
-            pendingPodIds.push(podId);
-        }
-
-        while (pendingPodIds.length > 0) {
-            const currentPodId = pendingPodIds.shift()!;
-            const autoTriggerTargets = getAutoTriggerTargets(canvasId, currentPodId);
-
-            visitor(currentPodId, autoTriggerTargets);
-
-            for (const nextPodId of autoTriggerTargets) {
-                if (!visitedPodIds.has(nextPodId)) {
-                    visitedPodIds.add(nextPodId);
-                    pendingPodIds.push(nextPodId);
-                }
-            }
-        }
-    }
-
-    private buildPropagatedCounts(canvasId: string, sourcePodId: string): Map<string, number> {
-        const propagatedCounts = new Map<string, number>();
-        propagatedCounts.set(sourcePodId, 1);
-
-        this.traverseAutoTriggerGraph(canvasId, [sourcePodId], (podId, autoTriggerTargets) => {
-            const currentCount = propagatedCounts.get(podId) ?? 1;
-            this.accumulateDirectBonus(canvasId, podId, sourcePodId, currentCount, propagatedCounts);
-
-            const updatedCount = propagatedCounts.get(podId) ?? 1;
-            for (const targetPodId of autoTriggerTargets) {
-                propagatedCounts.set(targetPodId, (propagatedCounts.get(targetPodId) ?? 0) + updatedCount);
-            }
-        });
-
-        return propagatedCounts;
-    }
-
     findTerminalPods(canvasId: string, sourcePodId: string): Map<string, number> {
-        const propagatedCounts = this.buildPropagatedCounts(canvasId, sourcePodId);
+        const propagatedCounts = buildPropagatedCounts(canvasId, sourcePodId);
         const terminalPods = new Map<string, number>();
 
         for (const [podId, count] of propagatedCounts) {
@@ -181,28 +131,10 @@ class AutoClearService {
         logger.log('AutoClear', 'Complete', `成功清除 ${result.clearedPodIds.length} 個 Pod：${result.clearedPodNames.join(', ')}`);
     }
 
-    private accumulateDirectBonus(
-        canvasId: string,
-        podId: string,
-        sourcePodId: string,
-        currentCount: number,
-        propagatedCounts: Map<string, number>
-    ): void {
-        if (podId === sourcePodId) {
-            return;
-        }
-
-        const incomingConnections = connectionStore.findByTargetPodId(canvasId, podId);
-        const hasDirectIncoming = incomingConnections.some(connection => connection.triggerMode === 'direct');
-        if (hasDirectIncoming) {
-            propagatedCounts.set(podId, currentCount + 1);
-        }
-    }
-
     private findAffectedTerminalPods(canvasId: string, targetPodId: string): string[] {
         const affectedPodIds: string[] = [];
 
-        this.traverseAutoTriggerGraph(canvasId, [targetPodId], (podId, autoTriggerTargets) => {
+        traverseAutoTriggerGraph(canvasId, [targetPodId], (podId, autoTriggerTargets) => {
             const isTerminal = isTerminalPod(podId, targetPodId, autoTriggerTargets.length > 0);
             if (isTerminal || (podId === targetPodId && autoTriggerTargets.length === 0)) {
                 affectedPodIds.push(podId);

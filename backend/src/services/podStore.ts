@@ -276,38 +276,32 @@ class PodStore {
         });
     }
 
-    setClaudeSessionId(canvasId: string, id: string, sessionId: string): Promise<void> {
+    setClaudeSessionId(canvasId: string, id: string, sessionId: string): void {
         this.stmts.pod.updateClaudeSessionId.run({ $claudeSessionId: sessionId, $id: id });
-        return Promise.resolve();
     }
 
-    resetClaudeSession(canvasId: string, podId: string): Promise<void> {
-        return this.setClaudeSessionId(canvasId, podId, '');
+    resetClaudeSession(canvasId: string, podId: string): void {
+        this.setClaudeSessionId(canvasId, podId, '');
     }
 
-    setOutputStyleId(canvasId: string, id: string, outputStyleId: string | null): Promise<void> {
+    setOutputStyleId(canvasId: string, id: string, outputStyleId: string | null): void {
         this.stmts.pod.updateOutputStyleId.run({ $outputStyleId: outputStyleId, $id: id });
-        return Promise.resolve();
     }
 
-    addSkillId(canvasId: string, podId: string, skillId: string): Promise<void> {
+    addSkillId(canvasId: string, podId: string, skillId: string): void {
         this.stmts.podSkillIds.insert.run({ $podId: podId, $skillId: skillId });
-        return Promise.resolve();
     }
 
-    addSubAgentId(canvasId: string, podId: string, subAgentId: string): Promise<void> {
+    addSubAgentId(canvasId: string, podId: string, subAgentId: string): void {
         this.stmts.podSubAgentIds.insert.run({ $podId: podId, $subAgentId: subAgentId });
-        return Promise.resolve();
     }
 
-    addMcpServerId(canvasId: string, podId: string, mcpServerId: string): Promise<void> {
+    addMcpServerId(canvasId: string, podId: string, mcpServerId: string): void {
         this.stmts.podMcpServerIds.insert.run({ $podId: podId, $mcpServerId: mcpServerId });
-        return Promise.resolve();
     }
 
-    removeMcpServerId(canvasId: string, podId: string, mcpServerId: string): Promise<void> {
+    removeMcpServerId(canvasId: string, podId: string, mcpServerId: string): void {
         this.stmts.podMcpServerIds.deleteOne.run({ $podId: podId, $mcpServerId: mcpServerId });
-        return Promise.resolve();
     }
 
     private findByJoinTableId(
@@ -367,19 +361,16 @@ class PodStore {
         return this.findByDirectColumn(canvasId, this.stmts.pod.selectByRepositoryId, repositoryId);
     }
 
-    setRepositoryId(canvasId: string, id: string, repositoryId: string | null): Promise<void> {
+    setRepositoryId(canvasId: string, id: string, repositoryId: string | null): void {
         this.stmts.pod.updateRepositoryId.run({ $repositoryId: repositoryId, $id: id });
-        return Promise.resolve();
     }
 
-    setAutoClear(canvasId: string, id: string, autoClear: boolean): Promise<void> {
+    setAutoClear(canvasId: string, id: string, autoClear: boolean): void {
         this.stmts.pod.updateAutoClear.run({ $autoClear: autoClear ? 1 : 0, $id: id });
-        return Promise.resolve();
     }
 
-    setCommandId(canvasId: string, podId: string, commandId: string | null): Promise<void> {
+    setCommandId(canvasId: string, podId: string, commandId: string | null): void {
         this.stmts.pod.updateCommandId.run({ $commandId: commandId, $id: podId });
-        return Promise.resolve();
     }
 
     findByIntegrationApp(appId: string): Array<{ canvasId: string; pod: Pod }> {
@@ -419,16 +410,15 @@ class PodStore {
         this.stmts.integrationBinding.deleteByPodIdAndProvider.run(podId, provider);
     }
 
-    setScheduleLastTriggeredAt(canvasId: string, podId: string, date: Date): Promise<void> {
+    setScheduleLastTriggeredAt(canvasId: string, podId: string, date: Date): void {
         const pod = this.getById(canvasId, podId);
-        if (!pod?.schedule) return Promise.resolve();
+        if (!pod?.schedule) return;
 
         const updatedSchedule: ScheduleConfig = { ...pod.schedule, lastTriggeredAt: date };
         this.stmts.pod.updateScheduleJson.run({
             $scheduleJson: serializeSchedule(updatedSchedule),
             $id: podId,
         });
-        return Promise.resolve();
     }
 
     getAllWithSchedule(): Array<{ canvasId: string; pod: Pod }> {

@@ -54,6 +54,7 @@ export default [
         SVGPathElement: 'readonly',
         Range: 'readonly',
         URL: 'readonly',
+        structuredClone: 'readonly',
       },
     },
     plugins: {
@@ -121,6 +122,7 @@ export default [
         SVGPathElement: 'readonly',
         Range: 'readonly',
         URL: 'readonly',
+        structuredClone: 'readonly',
       },
     },
     plugins: {

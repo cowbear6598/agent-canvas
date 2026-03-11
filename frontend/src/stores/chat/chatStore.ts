@@ -162,18 +162,18 @@ export const useChatStore = defineStore('chat', {
             connectionActions.disconnectWebSocket()
         },
 
-        getEventListenerConfig(): Array<{ event: string; handler: (payload: never) => void }> {
+        getEventListenerConfig(): Array<{ event: string; handler: (payload: unknown) => void }> {
             return [
-                { event: WebSocketResponseEvents.CONNECTION_READY, handler: this.handleConnectionReady as (payload: never) => void },
-                { event: WebSocketResponseEvents.POD_CLAUDE_CHAT_MESSAGE, handler: this.handleChatMessage as (payload: never) => void },
-                { event: WebSocketResponseEvents.POD_CHAT_TOOL_USE, handler: this.handleChatToolUse as (payload: never) => void },
-                { event: WebSocketResponseEvents.POD_CHAT_TOOL_RESULT, handler: this.handleChatToolResult as (payload: never) => void },
-                { event: WebSocketResponseEvents.POD_CHAT_COMPLETE, handler: this.handleChatComplete as (payload: never) => void },
-                { event: WebSocketResponseEvents.POD_CHAT_ABORTED, handler: this.handleChatAborted as (payload: never) => void },
-                { event: WebSocketResponseEvents.POD_ERROR, handler: this.handleError as (payload: never) => void },
-                { event: WebSocketResponseEvents.POD_MESSAGES_CLEARED, handler: this.handleMessagesClearedEvent as (payload: never) => void },
-                { event: WebSocketResponseEvents.WORKFLOW_AUTO_CLEARED, handler: this.handleWorkflowAutoCleared as (payload: never) => void },
-                { event: WebSocketResponseEvents.HEARTBEAT_PING, handler: this.handleHeartbeatPing as (payload: never) => void },
+                { event: WebSocketResponseEvents.CONNECTION_READY, handler: this.handleConnectionReady as (payload: unknown) => void },
+                { event: WebSocketResponseEvents.POD_CLAUDE_CHAT_MESSAGE, handler: this.handleChatMessage as (payload: unknown) => void },
+                { event: WebSocketResponseEvents.POD_CHAT_TOOL_USE, handler: this.handleChatToolUse as (payload: unknown) => void },
+                { event: WebSocketResponseEvents.POD_CHAT_TOOL_RESULT, handler: this.handleChatToolResult as (payload: unknown) => void },
+                { event: WebSocketResponseEvents.POD_CHAT_COMPLETE, handler: this.handleChatComplete as (payload: unknown) => void },
+                { event: WebSocketResponseEvents.POD_CHAT_ABORTED, handler: this.handleChatAborted as (payload: unknown) => void },
+                { event: WebSocketResponseEvents.POD_ERROR, handler: this.handleError as (payload: unknown) => void },
+                { event: WebSocketResponseEvents.POD_MESSAGES_CLEARED, handler: this.handleMessagesClearedEvent as (payload: unknown) => void },
+                { event: WebSocketResponseEvents.WORKFLOW_AUTO_CLEARED, handler: this.handleWorkflowAutoCleared as (payload: unknown) => void },
+                { event: WebSocketResponseEvents.HEARTBEAT_PING, handler: this.handleHeartbeatPing as (payload: unknown) => void },
             ]
         },
 

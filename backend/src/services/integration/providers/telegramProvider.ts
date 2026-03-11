@@ -3,11 +3,9 @@ import { ok, err } from '../../../types/index.js';
 import type { Result } from '../../../types/index.js';
 import { logger } from '../../../utils/logger.js';
 import { getErrorMessage } from '../../../utils/errorHelpers.js';
-import { escapeUserInput } from '../../../utils/escapeInput.js';
-import { socketService } from '../../socketService.js';
-import { WebSocketResponseEvents } from '../../../schemas/events.js';
 import { integrationAppStore } from '../integrationAppStore.js';
 import { integrationEventPipeline } from '../integrationEventPipeline.js';
+import { broadcastConnectionStatus, formatIntegrationMessage } from '../integrationHelpers.js';
 import type {
     IntegrationProvider,
     IntegrationApp,
@@ -108,7 +106,7 @@ class TelegramProvider implements IntegrationProvider {
         integrationAppStore.updateExtraJson(app.id, { botUsername });
         integrationAppStore.updateStatus(app.id, 'connected');
 
-        this.broadcastConnectionStatus(app.id);
+        broadcastConnectionStatus('telegram', app.id);
         logger.log('Telegram', 'Complete', `Telegram Bot ${app.id} 初始化成功`);
 
         this.startPolling(app.id, app.config);
@@ -119,7 +117,7 @@ class TelegramProvider implements IntegrationProvider {
         this.pollingOffsets.delete(appId);
 
         integrationAppStore.updateStatus(appId, 'disconnected');
-        this.broadcastConnectionStatus(appId);
+        broadcastConnectionStatus('telegram', appId);
 
         logger.log('Telegram', 'Complete', `Telegram Bot ${appId} 已移除`);
     }
@@ -188,11 +186,7 @@ class TelegramProvider implements IntegrationProvider {
 
         const userName = message.from?.username ?? message.from?.first_name ?? 'unknown';
         const chatId = message.chat.id;
-
-        const escapedUserName = escapeUserInput(userName);
-        const escapedText = escapeUserInput(truncatedText);
-        // 第一層：escapeUserInput 處理特殊字元；第二層：<user_data> 標籤作為結構性隔離
-        const formattedText = `[Telegram: @${escapedUserName}] <user_data>${escapedText}</user_data>`;
+        const formattedText = formatIntegrationMessage('Telegram', userName, truncatedText);
 
         return {
             provider: this.name,
@@ -260,19 +254,7 @@ class TelegramProvider implements IntegrationProvider {
 
     private markError(appId: string): void {
         integrationAppStore.updateStatus(appId, 'error');
-        this.broadcastConnectionStatus(appId);
-    }
-
-    private broadcastConnectionStatus(appId: string): void {
-        const app = integrationAppStore.getById(appId);
-        if (!app) return;
-
-        socketService.emitToAll(WebSocketResponseEvents.INTEGRATION_CONNECTION_STATUS_CHANGED, {
-            provider: this.name,
-            appId,
-            connectionStatus: app.connectionStatus,
-            resources: app.resources,
-        });
+        broadcastConnectionStatus('telegram', appId);
     }
 
     private processUpdate(appId: string, update: TelegramUpdate): void {

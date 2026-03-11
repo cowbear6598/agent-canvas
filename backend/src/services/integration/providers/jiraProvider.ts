@@ -5,11 +5,10 @@ import type { Result } from '../../../types/index.js';
 import { logger } from '../../../utils/logger.js';
 import { getErrorMessage } from '../../../utils/errorHelpers.js';
 import { escapeUserInput } from '../../../utils/escapeInput.js';
-import { socketService } from '../../socketService.js';
-import { WebSocketResponseEvents } from '../../../schemas/events.js';
 import { integrationAppStore } from '../integrationAppStore.js';
 import { integrationEventPipeline } from '../integrationEventPipeline.js';
 import { createDedupTracker } from '../dedupHelper.js';
+import { destroyProvider, initializeProvider, parseWebhookBody } from '../integrationHelpers.js';
 import type { IntegrationProvider, IntegrationApp, IntegrationAppConfig, IntegrationResource, NormalizedEvent } from '../types.js';
 
 // SSRF 防護：封鎖私有 IP 範圍
@@ -176,51 +175,49 @@ class JiraProvider implements IntegrationProvider {
   // ClientManager 層
 
   async initialize(app: IntegrationApp): Promise<void> {
-    const { siteUrl, email, apiToken } = app.config as { siteUrl: string; email: string; apiToken: string };
+    await initializeProvider(
+      app,
+      async () => {
+        const { siteUrl, email, apiToken } = app.config as { siteUrl: string; email: string; apiToken: string };
 
-    if (isPrivateUrl(siteUrl)) {
-      logger.error('Jira', 'Error', `Jira App ${app.id} 初始化失敗：siteUrl 指向私有 IP 或 localhost`);
-      integrationAppStore.updateStatus(app.id, 'error');
-      this.broadcastConnectionStatus(app.id);
-      return;
-    }
+        if (isPrivateUrl(siteUrl)) {
+          logger.error('Jira', 'Error', `Jira App ${app.id} 初始化失敗：siteUrl 指向私有 IP 或 localhost`);
+          return false;
+        }
 
-    const authHeader = `Basic ${Buffer.from(`${email}:${apiToken}`).toString('base64')}`;
+        const authHeader = `Basic ${Buffer.from(`${email}:${apiToken}`).toString('base64')}`;
 
-    try {
-      const res = await fetch(`${siteUrl}/rest/api/3/myself`, {
-        headers: { Authorization: authHeader, Accept: 'application/json' },
-      });
+        try {
+          const res = await fetch(`${siteUrl}/rest/api/3/myself`, {
+            headers: { Authorization: authHeader, Accept: 'application/json' },
+          });
 
-      if (!res.ok) {
-        throw new Error(`API 驗證失敗，狀態碼：${res.status}`);
-      }
-    } catch (error) {
-      logger.error('Jira', 'Error', `Jira App ${app.id} 初始化失敗：${getErrorMessage(error)}`);
-      integrationAppStore.updateStatus(app.id, 'error');
-      this.broadcastConnectionStatus(app.id);
-      return;
-    }
+          if (!res.ok) {
+            throw new Error(`API 驗證失敗，狀態碼：${res.status}`);
+          }
+        } catch (error) {
+          logger.error('Jira', 'Error', `Jira App ${app.id} 初始化失敗：${getErrorMessage(error)}`);
+          return false;
+        }
 
-    this.clients.set(app.id, { authHeader, siteUrl });
-
-    try {
-      await this.fetchProjects(app.id, siteUrl, authHeader);
-    } catch (error) {
-      logger.warn('Jira', 'Warn', `Jira App ${app.id} 取得 Projects 失敗，繼續初始化：${getErrorMessage(error)}`);
-    }
-
-    integrationAppStore.updateStatus(app.id, 'connected');
-    this.broadcastConnectionStatus(app.id);
-
-    logger.log('Jira', 'Complete', `Jira App ${app.id} 初始化成功`);
+        this.clients.set(app.id, { authHeader, siteUrl });
+        return true;
+      },
+      async () => {
+        const client = this.clients.get(app.id);
+        if (!client) return;
+        try {
+          await this.fetchProjects(app.id, client.siteUrl, client.authHeader);
+        } catch (error) {
+          logger.warn('Jira', 'Warn', `Jira App ${app.id} 取得 Projects 失敗，繼續初始化：${getErrorMessage(error)}`);
+        }
+      },
+      'Jira',
+    );
   }
 
   destroy(appId: string): void {
-    this.clients.delete(appId);
-    integrationAppStore.updateStatus(appId, 'disconnected');
-    this.broadcastConnectionStatus(appId);
-    logger.log('Jira', 'Complete', `Jira App ${appId} 已移除`);
+    destroyProvider(this.clients as Map<string, unknown>, appId, 'Jira');
   }
 
   destroyAll(): void {
@@ -273,16 +270,10 @@ class JiraProvider implements IntegrationProvider {
   readonly webhookPath = '/jira/events';
 
   async handleWebhookRequest(req: Request): Promise<Response> {
-    const contentLength = req.headers.get('content-length');
-    if (contentLength && parseInt(contentLength, 10) > MAX_BODY_SIZE) {
-      return new Response('Payload Too Large', { status: 413 });
-    }
+    const parsed = await parseWebhookBody(req, MAX_BODY_SIZE);
+    if (parsed instanceof Response) return parsed;
 
-    const rawBody = await req.text();
-
-    if (rawBody.length > MAX_BODY_SIZE) {
-      return new Response('Payload Too Large', { status: 413 });
-    }
+    const { rawBody, payload: rawPayload } = parsed;
 
     const signatureHeader = req.headers.get('X-Hub-Signature');
     if (!signatureHeader) {
@@ -297,26 +288,19 @@ class JiraProvider implements IntegrationProvider {
       return new Response('Forbidden', { status: 403 });
     }
 
-    let rawPayload: unknown;
-    try {
-      rawPayload = JSON.parse(rawBody);
-    } catch {
-      return new Response('無效的 JSON body', { status: 400 });
-    }
-
     // 簽章驗證通過後，用 signature 做防重放（防止攻擊者重放已驗證的請求）
     if (dedupTracker.isDuplicate(signatureHeader)) {
       logger.log('Jira', 'Complete', '重複的 Webhook 簽章，略過處理');
       return new Response('OK', { status: 200 });
     }
 
-    const parsed = jiraWebhookPayloadSchema.safeParse(rawPayload);
-    if (!parsed.success) {
-      logger.warn('Jira', 'Error', `無效的 Webhook payload：${parsed.error.message}`);
+    const schemaResult = jiraWebhookPayloadSchema.safeParse(rawPayload);
+    if (!schemaResult.success) {
+      logger.warn('Jira', 'Error', `無效的 Webhook payload：${schemaResult.error.message}`);
       return new Response('OK', { status: 200 });
     }
 
-    const webhookPayload = parsed.data;
+    const webhookPayload = schemaResult.data;
     const { webhookEvent } = webhookPayload;
 
     if (!SUPPORTED_EVENTS.has(webhookEvent)) {
@@ -359,17 +343,6 @@ class JiraProvider implements IntegrationProvider {
     return resources;
   }
 
-  private broadcastConnectionStatus(appId: string): void {
-    const app = integrationAppStore.getById(appId);
-    if (!app) return;
-
-    socketService.emitToAll(WebSocketResponseEvents.INTEGRATION_CONNECTION_STATUS_CHANGED, {
-      provider: this.name,
-      appId,
-      connectionStatus: app.connectionStatus,
-      resources: app.resources,
-    });
-  }
 }
 
 export const jiraProvider = new JiraProvider();

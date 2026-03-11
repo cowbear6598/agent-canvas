@@ -92,11 +92,16 @@ class RepositorySyncService {
     await this.cleanOrphanManifests(repositoryId, podResourcesMap);
     await this.writePodManifests(podResourcesMap, repositoryPath, repositoryId);
 
-    const totalCommands = [...podResourcesMap.values()].reduce((sum, podResources) => sum + podResources.commandIds.length, 0);
-    const totalSkills = [...podResourcesMap.values()].reduce((sum, podResources) => sum + podResources.skillIds.length, 0);
-    const totalSubAgents = [...podResourcesMap.values()].reduce((sum, podResources) => sum + podResources.subAgentIds.length, 0);
+    const totals = [...podResourcesMap.values()].reduce(
+      (acc, podResources) => ({
+        commands: acc.commands + podResources.commandIds.length,
+        skills: acc.skills + podResources.skillIds.length,
+        subAgents: acc.subAgents + podResources.subAgentIds.length,
+      }),
+      { commands: 0, skills: 0, subAgents: 0 }
+    );
 
-    logger.log('Repository', 'Update', `已同步 Repository ${repositoryId}：${totalCommands} 個 Command、${totalSkills} 個 Skill、${totalSubAgents} 個 SubAgent`);
+    logger.log('Repository', 'Update', `已同步 Repository ${repositoryId}：${totals.commands} 個 Command、${totals.skills} 個 Skill、${totals.subAgents} 個 SubAgent`);
   }
 
   private async cleanOrphanManifests(repositoryId: string, activePodResourcesMap: Map<string, PodResources>): Promise<void> {

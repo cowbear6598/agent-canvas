@@ -12,8 +12,8 @@ export interface BindResourceConfig<TService, TIdField extends string = string> 
     isMultiBind: boolean;
     service: TService;
     podStoreMethod: {
-        bind: (canvasId: string, podId: string, resourceId: string) => Promise<void>;
-        unbind?: (canvasId: string, podId: string) => Promise<void>;
+        bind: (canvasId: string, podId: string, resourceId: string) => void;
+        unbind?: (canvasId: string, podId: string) => void;
     };
     getPodResourceIds: (pod: {skillIds: string[]; commandId: string | null; outputStyleId: string | null; subAgentIds: string[]; mcpServerIds: string[]}) => string[] | string | null;
     /** 某些資源綁定後需要複製檔案到 Pod 工作目錄 */
@@ -105,7 +105,7 @@ async function performBind<TService, TIdField extends string>(
         await config.copyResourceToPod(resourceId, pod);
     }
 
-    await config.podStoreMethod.bind(canvasId, podId, resourceId);
+    config.podStoreMethod.bind(canvasId, podId, resourceId);
 
     if (!config.skipRepositorySync && pod.repositoryId) {
         await repositorySyncService.syncRepositoryResources(pod.repositoryId);
@@ -186,7 +186,7 @@ export function createUnbindHandler<TService, TIdField extends string>(
                 await config.deleteResourceFromPath(pod.workspacePath);
             }
 
-            await config.podStoreMethod.unbind!(canvasId, podId);
+            config.podStoreMethod.unbind!(canvasId, podId);
 
             if (!config.skipRepositorySync && pod.repositoryId) {
                 await repositorySyncService.syncRepositoryResources(pod.repositoryId);

@@ -24,7 +24,7 @@ function createInitialBounds(): BoundingBox {
   return { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity }
 }
 
-export function updateBoundingBox(
+function updateBoundingBox(
   bounds: BoundingBox,
   x: number,
   y: number,
@@ -57,7 +57,7 @@ function updateBoundsForUnboundNotes(bounds: BoundingBox, noteStoreConfigs: Unbo
   }
 }
 
-export function calculateBoundingBox<
+function calculateBoundingBox<
   TO extends HasPosition,
   TS extends HasPosition,
   TR extends HasPosition,
@@ -101,7 +101,7 @@ export function calculateBoundingBox<
   return bounds
 }
 
-export function calculateOffsets(
+function calculateOffsets(
   boundingBox: BoundingBox,
   targetPosition: { x: number; y: number }
 ): { offsetX: number; offsetY: number } {
@@ -159,7 +159,7 @@ export function transformPods(
   })
 }
 
-export function transformNotes<
+function transformNotes<
   TSource extends { x: number; y: number; name: string; originalPosition: { x: number; y: number } | null },
   TResult
 >(
@@ -178,7 +178,7 @@ export function transformNotes<
   })
 }
 
-export function transformConnections(connections: CopiedConnection[]): PasteConnectionItem[] {
+function transformConnections(connections: CopiedConnection[]): PasteConnectionItem[] {
   return connections.map(connection => ({
     originalSourcePodId: connection.sourcePodId,
     sourceAnchor: connection.sourceAnchor,
