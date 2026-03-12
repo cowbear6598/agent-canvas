@@ -13,10 +13,6 @@
   box-shadow: 3px 3px 0 oklch(0.4 0.02 50 / 0.5);
 }
 
-.pod-doodle:active {
-  cursor: pointer;
-}
-
 .pod-doodle.dragging,
 .pod-doodle.dragging:hover {
   cursor: pointer;
@@ -263,9 +259,9 @@
 /* Multi Instance 圖標樣式 */
 .multi-instance-icon-m {
   font-family: monospace;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: bold;
-  color: oklch(0.98 0 0);
+  color: oklch(0.45 0.01 50);
   line-height: 1;
 }
 
@@ -279,11 +275,6 @@
 }
 
 /* POD Status Animation Styles */
-
-/* Idle 狀態無特殊樣式 */
-.pod-status-idle {
-  /* 預設樣式，無額外動畫 */
-}
 
 /* Chatting 狀態的脈衝動畫（增強版 - 更明顯可見） */
 .pod-status-chatting {
