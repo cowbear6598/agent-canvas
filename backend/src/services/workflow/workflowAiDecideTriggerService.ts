@@ -46,6 +46,7 @@ class WorkflowAiDecideTriggerService extends LazyInitializable<AiDecideTriggerDe
   readonly mode = 'ai-decide' as const;
 
   onTrigger(context: TriggerLifecycleContext): void {
+    if (context.runContext) return;
     this.deps.eventEmitter.emitWorkflowAiDecideTriggered(
       context.canvasId,
       context.connectionId,
@@ -65,6 +66,7 @@ class WorkflowAiDecideTriggerService extends LazyInitializable<AiDecideTriggerDe
   }
 
   onQueued(context: QueuedContext): void {
+    if (context.runContext) return;
     forEachMultiInputGroupConnection(context.canvasId, context.targetPodId, (connection) => {
       this.deps.connectionStore.updateConnectionStatus(context.canvasId, connection.id, 'queued');
     });
@@ -158,7 +160,9 @@ class WorkflowAiDecideTriggerService extends LazyInitializable<AiDecideTriggerDe
     runContext?: RunContext
   ): Promise<void> {
     const connectionIds = connections.map(connection => connection.id);
-    this.deps.eventEmitter.emitAiDecidePending(canvasId, connectionIds, sourcePodId);
+    if (!runContext) {
+      this.deps.eventEmitter.emitAiDecidePending(canvasId, connectionIds, sourcePodId);
+    }
 
     this.setConnectionsToDeciding(canvasId, connections, runContext);
 
@@ -181,13 +185,15 @@ class WorkflowAiDecideTriggerService extends LazyInitializable<AiDecideTriggerDe
       this.deps.connectionStore.updateDecideStatus(canvasId, connection.id, 'error', errorMessage);
       this.deps.connectionStore.updateConnectionStatus(canvasId, connection.id, 'ai-error');
     }
-    this.deps.eventEmitter.emitAiDecideError({
-      canvasId,
-      connectionId: connection.id,
-      sourcePodId,
-      targetPodId: connection.targetPodId,
-      error: errorMessage,
-    });
+    if (!runContext) {
+      this.deps.eventEmitter.emitAiDecideError({
+        canvasId,
+        connectionId: connection.id,
+        sourcePodId,
+        targetPodId: connection.targetPodId,
+        error: errorMessage,
+      });
+    }
     const sourcePodErr = this.deps.podStore.getById(canvasId, sourcePodId);
     const targetPodErr = this.deps.podStore.getById(canvasId, connection.targetPodId);
     const connLogErr = formatConnectionLog({connectionId: connection.id, sourceName: sourcePodErr?.name, sourcePodId, targetName: targetPodErr?.name, targetPodId: connection.targetPodId});
@@ -205,14 +211,16 @@ class WorkflowAiDecideTriggerService extends LazyInitializable<AiDecideTriggerDe
       this.deps.connectionStore.updateDecideStatus(canvasId, connection.id, 'approved', decideResult.reason);
       this.deps.connectionStore.updateConnectionStatus(canvasId, connection.id, 'ai-approved');
     }
-    this.deps.eventEmitter.emitAiDecideResult({
-      canvasId,
-      connectionId: connection.id,
-      sourcePodId,
-      targetPodId: connection.targetPodId,
-      shouldTrigger: true,
-      reason: decideResult.reason ?? '',
-    });
+    if (!runContext) {
+      this.deps.eventEmitter.emitAiDecideResult({
+        canvasId,
+        connectionId: connection.id,
+        sourcePodId,
+        targetPodId: connection.targetPodId,
+        shouldTrigger: true,
+        reason: decideResult.reason ?? '',
+      });
+    }
     const sourcePodApprove = this.deps.podStore.getById(canvasId, sourcePodId);
     const targetPodApprove = this.deps.podStore.getById(canvasId, connection.targetPodId);
     const connLogApprove = formatConnectionLog({connectionId: connection.id, sourceName: sourcePodApprove?.name, sourcePodId, targetName: targetPodApprove?.name, targetPodId: connection.targetPodId});
@@ -238,15 +246,17 @@ class WorkflowAiDecideTriggerService extends LazyInitializable<AiDecideTriggerDe
 
     this.deps.pipeline.execute(pipelineContext, this).catch((error: unknown) => {
       logger.error('Workflow', 'Error', `AI Decide Workflow 執行失敗，連線 ${connection.id}`, error);
-      this.deps.eventEmitter.emitWorkflowComplete({
-        canvasId,
-        connectionId: connection.id,
-        sourcePodId,
-        targetPodId: connection.targetPodId,
-        success: false,
-        error: getErrorMessage(error),
-        triggerMode: 'ai-decide',
-      });
+      if (!runContext) {
+        this.deps.eventEmitter.emitWorkflowComplete({
+          canvasId,
+          connectionId: connection.id,
+          sourcePodId,
+          targetPodId: connection.targetPodId,
+          success: false,
+          error: getErrorMessage(error),
+          triggerMode: 'ai-decide',
+        });
+      }
     });
   }
 
@@ -254,8 +264,10 @@ class WorkflowAiDecideTriggerService extends LazyInitializable<AiDecideTriggerDe
     canvasId: string,
     connection: Connection,
     sourcePodId: string,
-    reason: string
+    reason: string,
+    runContext?: RunContext
   ): void {
+    if (runContext) return;
     this.deps.eventEmitter.emitAiDecideResult({
       canvasId,
       connectionId: connection.id,
@@ -288,7 +300,7 @@ class WorkflowAiDecideTriggerService extends LazyInitializable<AiDecideTriggerDe
       this.deps.connectionStore.updateDecideStatus(canvasId, connection.id, 'rejected', decideResult.reason);
       this.deps.connectionStore.updateConnectionStatus(canvasId, connection.id, 'ai-rejected');
     }
-    this.emitRejectionEvents(canvasId, connection, sourcePodId, reason);
+    this.emitRejectionEvents(canvasId, connection, sourcePodId, reason, runContext);
 
     if (this.shouldDeferToMultiInput(canvasId, connection.targetPodId, runContext)) {
       await this.handleRejectedMultiInput(canvasId, sourcePodId, connection, reason);

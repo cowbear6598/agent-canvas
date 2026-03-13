@@ -112,14 +112,14 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
     );
 
     if (!ready) {
-      workflowStateService.emitPendingStatus(canvasId, connection.targetPodId);
+      workflowStateService.emitPendingStatus(canvasId, connection.targetPodId, runContext);
       return 'not-ready';
     }
 
     if (hasRejection) {
       const targetPod = podStore.getById(canvasId, connection.targetPodId);
       logger.log('Workflow', 'Update', `目標「${targetPod?.name ?? connection.targetPodId}」有被拒絕的來源，不觸發`);
-      workflowStateService.emitPendingStatus(canvasId, connection.targetPodId);
+      workflowStateService.emitPendingStatus(canvasId, connection.targetPodId, runContext);
       return 'rejected';
     }
 
@@ -172,11 +172,13 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
       mergedContentPreview: mergedPreview,
     };
 
-    socketService.emitToCanvas(
-      canvasId,
-      WebSocketResponseEvents.WORKFLOW_SOURCES_MERGED,
-      mergedPayload
-    );
+    if (!runContext) {
+      socketService.emitToCanvas(
+        canvasId,
+        WebSocketResponseEvents.WORKFLOW_SOURCES_MERGED,
+        mergedPayload
+      );
+    }
 
     const strategy = this.deps.strategies[triggerMode];
     // 刻意不 await：合併工作流程是長時間操作，結果透過 WebSocket 通知

@@ -84,16 +84,18 @@ export function completeMultiInputConnections(
     error?: string
 ): void {
     forEachMultiInputGroupConnection(context.canvasId, context.targetPodId, (conn) => {
-        workflowEventEmitter.emitWorkflowComplete({
-            canvasId: context.canvasId,
-            connectionId: conn.id,
-            sourcePodId: conn.sourcePodId,
-            targetPodId: context.targetPodId,
-            success,
-            error,
-            triggerMode: context.triggerMode,
-        });
-        connectionStore.updateConnectionStatus(context.canvasId, conn.id, 'idle');
+        if (!context.runContext) {
+            workflowEventEmitter.emitWorkflowComplete({
+                canvasId: context.canvasId,
+                connectionId: conn.id,
+                sourcePodId: conn.sourcePodId,
+                targetPodId: context.targetPodId,
+                success,
+                error,
+                triggerMode: context.triggerMode,
+            });
+            connectionStore.updateConnectionStatus(context.canvasId, conn.id, 'idle');
+        }
     });
 }
 
@@ -139,6 +141,7 @@ export function buildQueueProcessedPayload(context: QueueProcessedContext): Work
 }
 
 export function emitQueueProcessed(context: QueueProcessedContext): void {
+    if (context.runContext) return;
     workflowEventEmitter.emitWorkflowQueueProcessed(
         context.canvasId,
         buildQueueProcessedPayload(context)

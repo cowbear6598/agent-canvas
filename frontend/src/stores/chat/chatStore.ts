@@ -25,6 +25,7 @@ import {abortSafetyTimers} from './abortSafetyTimers'
 import {usePodStore} from '../pod/podStore'
 import {useCommandStore} from '../note/commandStore'
 import {getActiveCanvasIdOrWarn} from '@/utils/canvasGuard'
+import {isMultiInstanceSourcePod} from '@/utils/multiInstanceGuard'
 
 const ABORT_SAFETY_TIMEOUT_MS = 10_000
 
@@ -232,7 +233,10 @@ export const useChatStore = defineStore('chat', {
 
             this.setTyping(podId, true)
             // 前端發送時立即更新，不等待 WebSocket 事件來回
-            podStore.updatePodStatus(podId, 'chatting')
+            // multi-instance run 模式下源頭 pod 狀態由 run 流程管控，不應覆蓋為 chatting
+            if (!isMultiInstanceSourcePod(podId)) {
+                podStore.updatePodStatus(podId, 'chatting')
+            }
         },
 
         addUserMessage(podId: string, content: string): void {

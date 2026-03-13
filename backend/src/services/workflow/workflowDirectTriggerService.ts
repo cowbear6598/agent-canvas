@@ -83,26 +83,28 @@ class WorkflowDirectTriggerService implements TriggerStrategy {
             sourcePodId,
             targetPodId,
         };
-        workflowEventEmitter.emitDirectWaiting(canvasId, directWaitingPayload);
+        if (!runContext) {
+            workflowEventEmitter.emitDirectWaiting(canvasId, directWaitingPayload);
+        }
 
         if (this.pendingResolvers.has(storeKey)) {
-            this.startCountdownTimer(canvasId, targetPodId, storeKey);
+            this.startCountdownTimer(canvasId, targetPodId, storeKey, runContext);
             return Promise.resolve({ready: false});
         }
 
         return new Promise<CollectSourcesResult>((resolve) => {
             this.pendingResolvers.set(storeKey, resolve);
-            this.startCountdownTimer(canvasId, targetPodId, storeKey);
+            this.startCountdownTimer(canvasId, targetPodId, storeKey, runContext);
         });
     }
 
-    private startCountdownTimer(canvasId: string, targetPodId: string, storeKey = targetPodId): void {
+    private startCountdownTimer(canvasId: string, targetPodId: string, storeKey = targetPodId, runContext?: RunContext): void {
         if (directTriggerStore.hasActiveTimer(storeKey)) {
             directTriggerStore.clearTimer(storeKey);
         }
 
         const timer = setTimeout(() => {
-            this.onTimerExpired(canvasId, targetPodId, storeKey);
+            this.onTimerExpired(canvasId, targetPodId, storeKey, runContext);
         }, MULTI_DIRECT_MERGE_WINDOW_MS);
 
         directTriggerStore.setTimer(storeKey, timer);
@@ -119,13 +121,13 @@ class WorkflowDirectTriggerService implements TriggerStrategy {
         logger.log('Workflow', 'Delete', `已取消目標 ${targetPodId} 的 pending resolver - 連線已刪除`);
     }
 
-    private onTimerExpired(canvasId: string, targetPodId: string, storeKey = targetPodId): void {
+    private onTimerExpired(canvasId: string, targetPodId: string, storeKey = targetPodId, runContext?: RunContext): void {
         const resolver = this.pendingResolvers.get(storeKey);
         if (!resolver) {
             return;
         }
 
-        const result = this.processTimerResult(canvasId, targetPodId, storeKey);
+        const result = this.processTimerResult(canvasId, targetPodId, storeKey, runContext);
         resolver(result);
 
         this.pendingResolvers.delete(storeKey);
@@ -139,7 +141,7 @@ class WorkflowDirectTriggerService implements TriggerStrategy {
             .map(conn => conn.id);
     }
 
-    private processTimerResult(canvasId: string, targetPodId: string, storeKey: string): CollectSourcesResult {
+    private processTimerResult(canvasId: string, targetPodId: string, storeKey: string, runContext?: RunContext): CollectSourcesResult {
         const readySummaries = directTriggerStore.getReadySummaries(storeKey);
         if (!readySummaries || readySummaries.size === 0) {
             return {ready: false};
@@ -157,15 +159,16 @@ class WorkflowDirectTriggerService implements TriggerStrategy {
             (podId) => podStore.getById(canvasId, podId)
         );
 
-        const mergedPayload = {
-            canvasId,
-            targetPodId,
-            sourcePodIds,
-            mergedContentPreview: mergedContent.substring(0, MERGED_CONTENT_PREVIEW_MAX_LENGTH),
-            countdownSeconds: 0,
-        };
-
-        workflowEventEmitter.emitDirectMerged(canvasId, mergedPayload);
+        if (!runContext) {
+            const mergedPayload = {
+                canvasId,
+                targetPodId,
+                sourcePodIds,
+                mergedContentPreview: mergedContent.substring(0, MERGED_CONTENT_PREVIEW_MAX_LENGTH),
+                countdownSeconds: 0,
+            };
+            workflowEventEmitter.emitDirectMerged(canvasId, mergedPayload);
+        }
 
         return {ready: true, mergedContent, isSummarized: true, participatingConnectionIds};
     }
@@ -177,6 +180,8 @@ class WorkflowDirectTriggerService implements TriggerStrategy {
     }
 
     onTrigger(context: TriggerLifecycleContext): void {
+        if (context.runContext) return;
+
         const connections = this.getConnectionsToIterate(
             context.canvasId,
             context.participatingConnectionIds
@@ -195,6 +200,8 @@ class WorkflowDirectTriggerService implements TriggerStrategy {
     }
 
     onComplete(context: CompletionContext, success: boolean, error?: string): void {
+        if (context.runContext) return;
+
         const connections = this.getConnectionsToIterate(
             context.canvasId,
             context.participatingConnectionIds
@@ -210,9 +217,7 @@ class WorkflowDirectTriggerService implements TriggerStrategy {
                 error,
                 triggerMode: context.triggerMode,
             });
-            if (!context.runContext) {
-                connectionStore.updateConnectionStatus(context.canvasId, conn.id, 'idle');
-            }
+            connectionStore.updateConnectionStatus(context.canvasId, conn.id, 'idle');
         }
     }
 
@@ -221,15 +226,15 @@ class WorkflowDirectTriggerService implements TriggerStrategy {
     }
 
     onQueued(context: QueuedContext): void {
+        if (context.runContext) return;
+
         const connections = this.getConnectionsToIterate(
             context.canvasId,
             context.participatingConnectionIds
         );
 
         for (const conn of connections) {
-            if (!context.runContext) {
-                connectionStore.updateConnectionStatus(context.canvasId, conn.id, 'queued');
-            }
+            connectionStore.updateConnectionStatus(context.canvasId, conn.id, 'queued');
             workflowEventEmitter.emitWorkflowQueued(
                 context.canvasId,
                 buildQueuedPayload(context, conn.id, conn.sourcePodId)
@@ -242,6 +247,8 @@ class WorkflowDirectTriggerService implements TriggerStrategy {
      * active 狀態由 triggerWorkflowWithSummary 統一設定。
      */
     onQueueProcessed(context: QueueProcessedContext): void {
+        if (context.runContext) return;
+
         const connections = this.getConnectionsToIterate(
             context.canvasId,
             context.participatingConnectionIds

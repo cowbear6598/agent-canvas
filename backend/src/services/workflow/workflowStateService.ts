@@ -9,13 +9,15 @@ import {
   type WorkflowPendingPayload,
   type WorkflowSourcesMergedPayload,
 } from '../../types/index.js';
+import type { RunContext } from '../../types/run.js';
 import { logger } from '../../utils/logger.js';
 import { MERGED_CONTENT_PREVIEW_MAX_LENGTH } from './constants.js';
 
 function emitMergedIfAllComplete(
   canvasId: string,
   targetPodId: string,
-  emitPendingStatus: (canvasId: string, targetPodId: string) => void
+  emitPendingStatus: (canvasId: string, targetPodId: string, runContext?: RunContext) => void,
+  runContext?: RunContext
 ): boolean {
   const pending = pendingTargetStore.getPendingTarget(targetPodId);
   if (!pending) {
@@ -29,7 +31,7 @@ function emitMergedIfAllComplete(
 
   const allComplete = pending.completedSources.size >= pending.requiredSourcePodIds.length;
   if (!allComplete) {
-    emitPendingStatus(canvasId, targetPodId);
+    emitPendingStatus(canvasId, targetPodId, runContext);
     return false;
   }
 
@@ -48,7 +50,9 @@ function emitMergedIfAllComplete(
     mergedContentPreview: mergedContent.substring(0, MERGED_CONTENT_PREVIEW_MAX_LENGTH),
   };
 
-  workflowEventEmitter.emitWorkflowSourcesMerged(canvasId, mergedPayload);
+  if (!runContext) {
+    workflowEventEmitter.emitWorkflowSourcesMerged(canvasId, mergedPayload);
+  }
   return true;
 }
 
@@ -70,7 +74,9 @@ class WorkflowStateService {
     return incomingConnections.filter((connection) => connection.triggerMode === 'direct').length;
   }
 
-  emitPendingStatus(canvasId: string, targetPodId: string): void {
+  emitPendingStatus(canvasId: string, targetPodId: string, runContext?: RunContext): void {
+    if (runContext) return;
+
     const pending = pendingTargetStore.getPendingTarget(targetPodId);
     if (!pending) {
       return;
@@ -96,7 +102,7 @@ class WorkflowStateService {
     workflowEventEmitter.emitWorkflowPending(canvasId, pendingPayload);
   }
 
-  private tryCompletePendingOrClear(canvasId: string, targetPodId: string, logReason: string): void {
+  private tryCompletePendingOrClear(canvasId: string, targetPodId: string, logReason: string, runContext?: RunContext): void {
     const pending = pendingTargetStore.getPendingTarget(targetPodId);
     if (!pending) {
       return;
@@ -109,7 +115,7 @@ class WorkflowStateService {
     }
 
     logger.log('Workflow', 'Update', `${logReason}，但目標 ${targetPodId} 的剩餘來源已全部完成`);
-    emitMergedIfAllComplete(canvasId, targetPodId, this.emitPendingStatus.bind(this));
+    emitMergedIfAllComplete(canvasId, targetPodId, this.emitPendingStatus.bind(this), runContext);
   }
 
   private processAffectedTarget(canvasId: string, targetPodId: string): void {

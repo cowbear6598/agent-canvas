@@ -97,6 +97,7 @@ class WorkflowAutoTriggerService implements TriggerStrategy {
   }
 
   onTrigger(context: TriggerLifecycleContext): void {
+    if (context.runContext) return;
     const payload: WorkflowAutoTriggeredPayload = {
       connectionId: context.connectionId,
       sourcePodId: context.sourcePodId,
@@ -118,6 +119,7 @@ class WorkflowAutoTriggerService implements TriggerStrategy {
   }
 
   onQueued(context: QueuedContext): void {
+    if (context.runContext) return;
     forEachMultiInputGroupConnection(context.canvasId, context.targetPodId, (conn) => {
       connectionStore.updateConnectionStatus(context.canvasId, conn.id, 'queued');
     });
