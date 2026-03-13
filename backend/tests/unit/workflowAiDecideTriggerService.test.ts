@@ -63,6 +63,15 @@ describe('WorkflowAiDecideTriggerService', () => {
     triggerMode: 'ai-decide',
   });
 
+  const mockRunContext: RunContext = {
+    runId: 'run-1',
+    canvasId,
+    sourcePodId,
+  };
+
+  const createUninitializedService = () =>
+    Object.create(Object.getPrototypeOf(workflowAiDecideTriggerService));
+
   beforeEach(() => {
     vi.clearAllMocks();
 
@@ -203,6 +212,8 @@ describe('WorkflowAiDecideTriggerService', () => {
         '相關任務'
       );
 
+      expect(connectionStore.updateConnectionStatus).toHaveBeenCalledWith(canvasId, 'conn-ai-1', 'ai-approved');
+
       expect(workflowEventEmitter.emitAiDecideResult).toHaveBeenCalledWith({
         canvasId,
         connectionId: 'conn-ai-1',
@@ -295,6 +306,8 @@ describe('WorkflowAiDecideTriggerService', () => {
         'AI 判斷服務發生錯誤'
       );
 
+      expect(connectionStore.updateConnectionStatus).toHaveBeenCalledWith(canvasId, 'conn-ai-1', 'ai-error');
+
       expect(workflowEventEmitter.emitAiDecideError).toHaveBeenCalledWith({
         canvasId,
         connectionId: 'conn-ai-1',
@@ -356,6 +369,14 @@ describe('WorkflowAiDecideTriggerService', () => {
         }
       );
 
+      (connectionStore.updateConnectionStatus as any).mockImplementation(
+        (cId: string, connId: string, status: string) => {
+          if (status === 'ai-deciding') {
+            callOrder.push('updateConnectionStatus-ai-deciding');
+          }
+        }
+      );
+
       (aiDecideService.decideConnections as any).mockImplementation(async () => {
         callOrder.push('decide');
         return {
@@ -375,6 +396,7 @@ describe('WorkflowAiDecideTriggerService', () => {
       expect(callOrder).toEqual([
         'emitAiDecidePending',
         'updateDecideStatus-pending',
+        'updateConnectionStatus-ai-deciding',
         'decide',
         'updateDecideStatus-approved',
       ]);
@@ -512,9 +534,7 @@ describe('WorkflowAiDecideTriggerService', () => {
 
   describe('錯誤處理', () => {
     it('未初始化時呼叫 decide() 拋出錯誤', async () => {
-      const uninitializedService = Object.create(
-        Object.getPrototypeOf(workflowAiDecideTriggerService)
-      );
+      const uninitializedService = createUninitializedService();
 
       await expect(
         uninitializedService.decide({
@@ -526,9 +546,7 @@ describe('WorkflowAiDecideTriggerService', () => {
     });
 
     it('未初始化時呼叫 processAiDecideConnections() 拋出錯誤', async () => {
-      const uninitializedService = Object.create(
-        Object.getPrototypeOf(workflowAiDecideTriggerService)
-      );
+      const uninitializedService = createUninitializedService();
 
       await expect(
         uninitializedService.processAiDecideConnections(canvasId, sourcePodId, [mockConnection])
@@ -552,20 +570,20 @@ describe('WorkflowAiDecideTriggerService', () => {
         [mockConnection]
       );
 
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await vi.waitFor(() => {
+        expect(logger.error).toHaveBeenCalledWith(
+          'Workflow',
+          'Error',
+          expect.stringContaining('AI Decide Workflow 執行失敗，連線'),
+          pipelineError
+        );
+      });
 
       expect(connectionStore.updateDecideStatus).toHaveBeenCalledWith(
         canvasId,
         'conn-ai-1',
         'approved',
         '相關任務'
-      );
-
-      expect(logger.error).toHaveBeenCalledWith(
-        'Workflow',
-        'Error',
-        expect.stringContaining('AI Decide Workflow 執行失敗，連線'),
-        pipelineError
       );
 
       expect(workflowEventEmitter.emitWorkflowComplete).toHaveBeenCalledWith({
@@ -599,10 +617,22 @@ describe('WorkflowAiDecideTriggerService', () => {
       );
     });
 
+    it('run 模式下 onTrigger 不呼叫 emitWorkflowAiDecideTriggered', () => {
+      workflowAiDecideTriggerService.onTrigger({
+        canvasId,
+        connectionId: 'conn-ai-1',
+        sourcePodId,
+        targetPodId,
+        summary: 'Test summary',
+        isSummarized: true,
+        runContext: mockRunContext,
+      });
+
+      expect(workflowEventEmitter.emitWorkflowAiDecideTriggered).not.toHaveBeenCalled();
+    });
+
     it('onTrigger 未初始化時應拋出錯誤', () => {
-      const uninitializedService = Object.create(
-        Object.getPrototypeOf(workflowAiDecideTriggerService)
-      );
+      const uninitializedService = createUninitializedService();
 
       expect(() =>
         uninitializedService.onTrigger({
@@ -614,6 +644,38 @@ describe('WorkflowAiDecideTriggerService', () => {
           isSummarized: true,
         })
       ).toThrow('WorkflowAiDecideTriggerService 尚未初始化');
+    });
+  });
+
+  describe('onQueued() - 佇列生命週期', () => {
+    const mockQueuedContext = {
+      canvasId,
+      connectionId: 'conn-ai-1',
+      sourcePodId,
+      targetPodId,
+      position: 0,
+      queueSize: 1,
+      triggerMode: 'ai-decide' as const,
+      participatingConnectionIds: ['conn-ai-1'],
+    };
+
+    it('非 run 模式：更新連線狀態為 queued 並發送 emitWorkflowQueued 事件', () => {
+      (connectionStore.findByTargetPodId as any).mockReturnValue([mockConnection]);
+
+      workflowAiDecideTriggerService.onQueued(mockQueuedContext);
+
+      expect(connectionStore.updateConnectionStatus).toHaveBeenCalledWith(canvasId, 'conn-ai-1', 'queued');
+      expect(workflowEventEmitter.emitWorkflowQueued).toHaveBeenCalled();
+    });
+
+    it('run 模式：不更新連線狀態也不發送 emitWorkflowQueued 事件', () => {
+      workflowAiDecideTriggerService.onQueued({
+        ...mockQueuedContext,
+        runContext: mockRunContext,
+      });
+
+      expect(connectionStore.updateConnectionStatus).not.toHaveBeenCalled();
+      expect(workflowEventEmitter.emitWorkflowQueued).not.toHaveBeenCalled();
     });
   });
 
@@ -732,12 +794,6 @@ describe('WorkflowAiDecideTriggerService', () => {
   });
 
   describe('run 模式 - AI-Decide 拒絕/出錯時下游 pod instance 狀態更新', () => {
-    const mockRunContext: RunContext = {
-      runId: 'run-1',
-      canvasId,
-      sourcePodId,
-    };
-
     it('run 模式下 AI-Decide 拒絕時呼叫 skipPodInstance', async () => {
       (aiDecideService.decideConnections as any).mockResolvedValue({
         results: [
@@ -858,17 +914,10 @@ describe('WorkflowAiDecideTriggerService', () => {
   });
 
   describe('run 模式 - deciding 狀態與 cascade skip', () => {
-    const mockRunContext: RunContext = {
-      runId: 'run-1',
-      canvasId,
-      sourcePodId,
-    };
-
     const getSkippedPodIds = () =>
-      getSkippedPodIds();
+      (runExecutionService.skipPodInstance as any).mock.calls.map((c: any[]) => c[1]);
 
     beforeEach(() => {
-      (workflowStateService.checkMultiInputScenario as any).mockReturnValue({ isMultiInput: false, requiredSourcePodIds: [] });
       (connectionStore.list as any).mockReturnValue([]);
       (runStore.getPodInstancesByRunId as any).mockReturnValue([]);
     });
@@ -995,6 +1044,191 @@ describe('WorkflowAiDecideTriggerService', () => {
 
       expect(runExecutionService.errorPodInstance).toHaveBeenCalledWith(mockRunContext, targetPodId, 'AI 判斷服務發生錯誤');
       expect(runExecutionService.skipPodInstance).toHaveBeenCalledWith(mockRunContext, 'pod-c');
+    });
+
+    it('triggeredByStatus = error 多層鏈傳遞：A(error)->B->C 應全部被 skip', async () => {
+      const instanceTarget = createMockRunPodInstance({ podId: targetPodId, status: 'deciding' });
+      const instanceC = createMockRunPodInstance({ podId: 'pod-c', status: 'pending' });
+      const instanceD = createMockRunPodInstance({ podId: 'pod-d', status: 'pending' });
+
+      (runStore.getPodInstancesByRunId as any).mockReturnValue([instanceTarget, instanceC, instanceD]);
+      (connectionStore.list as any).mockReturnValue([
+        createMockConnection({ id: 'conn-target-c', sourcePodId: targetPodId, targetPodId: 'pod-c' }),
+        createMockConnection({ id: 'conn-c-d', sourcePodId: 'pod-c', targetPodId: 'pod-d' }),
+      ]);
+
+      (aiDecideService.decideConnections as any).mockResolvedValue({
+        results: [],
+        errors: [{ connectionId: 'conn-ai-1', error: 'AI 失敗' }],
+      });
+
+      await workflowAiDecideTriggerService.processAiDecideConnections(
+        canvasId,
+        sourcePodId,
+        [mockConnection],
+        mockRunContext,
+      );
+
+      expect(runExecutionService.errorPodInstance).toHaveBeenCalledWith(mockRunContext, targetPodId, 'AI 判斷服務發生錯誤');
+      const skipCalls = getSkippedPodIds();
+      expect(skipCalls).toContain('pod-c');
+      expect(skipCalls).toContain('pod-d');
+    });
+
+    it('cascade skip：safetyLimit 防無限迴圈', async () => {
+      const podIds = ['pod-1', 'pod-2', 'pod-3', 'pod-4', 'pod-5'];
+      const instances = [
+        createMockRunPodInstance({ podId: targetPodId, status: 'deciding' }),
+        ...podIds.map(podId => createMockRunPodInstance({ podId, status: 'pending' })),
+      ];
+
+      const connections = podIds.map((podId, index) => {
+        const srcId = index === 0 ? targetPodId : podIds[index - 1];
+        return createMockConnection({ id: `conn-${index}`, sourcePodId: srcId, targetPodId: podId });
+      });
+
+      (runStore.getPodInstancesByRunId as any).mockReturnValue(instances);
+      (connectionStore.list as any).mockReturnValue(connections);
+
+      (aiDecideService.decideConnections as any).mockResolvedValue({
+        results: [{ connectionId: 'conn-ai-1', shouldTrigger: false, reason: '拒絕' }],
+        errors: [],
+      });
+
+      await workflowAiDecideTriggerService.processAiDecideConnections(
+        canvasId,
+        sourcePodId,
+        [mockConnection],
+        mockRunContext,
+      );
+
+      const skipCalls = getSkippedPodIds();
+      expect(skipCalls).toContain(targetPodId);
+      for (const podId of podIds) {
+        expect(skipCalls).toContain(podId);
+      }
+      // 正常情況下鏈式 skip 不應觸發 safetyLimit 警告
+      expect(logger.warn).not.toHaveBeenCalled();
+    });
+
+    it('cascade skip：root pod（無 incoming connection）不被誤 skip', async () => {
+      const rootInstance = createMockRunPodInstance({ podId: 'pod-root', status: 'pending' });
+      const instanceTarget = createMockRunPodInstance({ podId: targetPodId, status: 'deciding' });
+
+      (runStore.getPodInstancesByRunId as any).mockReturnValue([rootInstance, instanceTarget]);
+      // pod-root 沒有任何 incoming connection，targetPodId 有一條 incoming
+      (connectionStore.list as any).mockReturnValue([
+        createMockConnection({ id: 'conn-ai-1', sourcePodId: 'pod-root', targetPodId }),
+      ]);
+
+      (aiDecideService.decideConnections as any).mockResolvedValue({
+        results: [{ connectionId: 'conn-ai-1', shouldTrigger: false, reason: '拒絕' }],
+        errors: [],
+      });
+
+      await workflowAiDecideTriggerService.processAiDecideConnections(
+        canvasId,
+        sourcePodId,
+        [mockConnection],
+        mockRunContext,
+      );
+
+      const skipCalls = getSkippedPodIds();
+      expect(skipCalls).toContain(targetPodId);
+      expect(skipCalls).not.toContain('pod-root');
+    });
+
+    it('run 模式下 AI-Decide 核准時不觸發 cascade skip', async () => {
+      const instanceTarget = createMockRunPodInstance({ podId: targetPodId, status: 'deciding' });
+      const instanceC = createMockRunPodInstance({ podId: 'pod-c', status: 'pending' });
+
+      (runStore.getPodInstancesByRunId as any).mockReturnValue([instanceTarget, instanceC]);
+      (connectionStore.list as any).mockReturnValue([
+        createMockConnection({ id: 'conn-target-c', sourcePodId: targetPodId, targetPodId: 'pod-c' }),
+      ]);
+
+      (aiDecideService.decideConnections as any).mockResolvedValue({
+        results: [{ connectionId: 'conn-ai-1', shouldTrigger: true, reason: '核准' }],
+        errors: [],
+      });
+
+      await workflowAiDecideTriggerService.processAiDecideConnections(
+        canvasId,
+        sourcePodId,
+        [mockConnection],
+        mockRunContext,
+      );
+
+      expect(runExecutionService.skipPodInstance).not.toHaveBeenCalled();
+    });
+
+    it('run 模式下 approved 的連線不更新 connectionStore 狀態', async () => {
+      (aiDecideService.decideConnections as any).mockResolvedValue({
+        results: [{ connectionId: 'conn-ai-1', shouldTrigger: true, reason: '核准' }],
+        errors: [],
+      });
+
+      await workflowAiDecideTriggerService.processAiDecideConnections(
+        canvasId,
+        sourcePodId,
+        [mockConnection],
+        mockRunContext,
+      );
+
+      expect(connectionStore.updateDecideStatus).not.toHaveBeenCalled();
+      expect(connectionStore.updateConnectionStatus).not.toHaveBeenCalled();
+      expect(workflowEventEmitter.emitAiDecideResult).not.toHaveBeenCalled();
+      expect(workflowEventEmitter.emitAiDecidePending).not.toHaveBeenCalled();
+    });
+
+    it('cascade skip：下游 pod 已為 running 狀態時不應被 skip', async () => {
+      const instanceTarget = createMockRunPodInstance({ podId: targetPodId, status: 'deciding' });
+      const instanceC = createMockRunPodInstance({ podId: 'pod-c', status: 'running' });
+
+      (runStore.getPodInstancesByRunId as any).mockReturnValue([instanceTarget, instanceC]);
+      (connectionStore.list as any).mockReturnValue([
+        createMockConnection({ id: 'conn-target-c', sourcePodId: targetPodId, targetPodId: 'pod-c' }),
+      ]);
+
+      (aiDecideService.decideConnections as any).mockResolvedValue({
+        results: [{ connectionId: 'conn-ai-1', shouldTrigger: false, reason: '拒絕' }],
+        errors: [],
+      });
+
+      await workflowAiDecideTriggerService.processAiDecideConnections(
+        canvasId,
+        sourcePodId,
+        [mockConnection],
+        mockRunContext,
+      );
+
+      const skipCalls = getSkippedPodIds();
+      expect(skipCalls).not.toContain('pod-c');
+    });
+
+    it('cascade skip：下游 pod 已為 completed 狀態時不應被 skip', async () => {
+      const instanceTarget = createMockRunPodInstance({ podId: targetPodId, status: 'deciding' });
+      const instanceC = createMockRunPodInstance({ podId: 'pod-c', status: 'completed' });
+
+      (runStore.getPodInstancesByRunId as any).mockReturnValue([instanceTarget, instanceC]);
+      (connectionStore.list as any).mockReturnValue([
+        createMockConnection({ id: 'conn-target-c', sourcePodId: targetPodId, targetPodId: 'pod-c' }),
+      ]);
+
+      (aiDecideService.decideConnections as any).mockResolvedValue({
+        results: [{ connectionId: 'conn-ai-1', shouldTrigger: false, reason: '拒絕' }],
+        errors: [],
+      });
+
+      await workflowAiDecideTriggerService.processAiDecideConnections(
+        canvasId,
+        sourcePodId,
+        [mockConnection],
+        mockRunContext,
+      );
+
+      const skipCalls = getSkippedPodIds();
+      expect(skipCalls).not.toContain('pod-c');
     });
   });
 });
