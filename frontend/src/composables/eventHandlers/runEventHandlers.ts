@@ -51,7 +51,7 @@ const handleRunDeleted = createUnifiedHandler<BasePayload & RunDeletedPayload>(
 // === Standalone Handlers ===
 
 export const handleRunMessage = (payload: RunMessagePayload): void => {
-  if (!payload.canvasId || !isCurrentCanvas(payload.canvasId)) return
+  if (!isCurrentCanvas(payload.canvasId)) return
 
   useRunStore().appendRunChatMessage(
     payload.runId,
@@ -64,7 +64,7 @@ export const handleRunMessage = (payload: RunMessagePayload): void => {
 }
 
 export const handleRunChatComplete = (payload: RunChatCompletePayload): void => {
-  if (!payload.canvasId || !isCurrentCanvas(payload.canvasId)) return
+  if (!isCurrentCanvas(payload.canvasId)) return
 
   useRunStore().handleRunChatComplete(
     payload.runId,
@@ -75,7 +75,7 @@ export const handleRunChatComplete = (payload: RunChatCompletePayload): void => 
 }
 
 export const handleRunToolUse = (payload: RunToolUsePayload): void => {
-  if (!payload.canvasId || !isCurrentCanvas(payload.canvasId)) return
+  if (!isCurrentCanvas(payload.canvasId)) return
 
   useRunStore().handleRunChatToolUse({
     runId: payload.runId,
@@ -88,7 +88,7 @@ export const handleRunToolUse = (payload: RunToolUsePayload): void => {
 }
 
 export const handleRunToolResult = (payload: RunToolResultPayload): void => {
-  if (!payload.canvasId || !isCurrentCanvas(payload.canvasId)) return
+  if (!isCurrentCanvas(payload.canvasId)) return
 
   useRunStore().handleRunChatToolResult({
     runId: payload.runId,

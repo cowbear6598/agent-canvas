@@ -83,7 +83,15 @@ class SummaryService {
     if (!result.success) {
       logger.error('Workflow', 'Error', `[SummaryService] 無法為目標 ${targetPodId} 生成摘要：${result.error}`);
 
-      const fallbackContent = getLastAssistantMessage(sourcePodId);
+      let fallbackContent: string | null;
+      if (runContext) {
+        const runMessages = runStore.getRunMessages(runContext.runId, sourcePodId);
+        const lastAssistant = [...runMessages].reverse().find(m => m.role === 'assistant');
+        fallbackContent = lastAssistant?.content ?? null;
+      } else {
+        fallbackContent = getLastAssistantMessage(sourcePodId);
+      }
+
       if (fallbackContent !== null) {
         return { targetPodId, summary: fallbackContent, success: true };
       }

@@ -392,4 +392,24 @@ describe('RunContext 傳遞驗證', () => {
       );
     });
   });
+
+  describe('6. error 與 abort 路徑', () => {
+    it('executeStreamingChat 拋出錯誤時 handleChatSend 不會吞掉例外', async () => {
+      asMock(podStore.getById).mockReturnValue(makeMultiInstancePod());
+      asMock(executeStreamingChat).mockRejectedValue(new Error('串流錯誤'));
+
+      await expect(
+        handleChatSend(CONNECTION_ID, { podId: SOURCE_POD_ID, message: '測試訊息' }, REQUEST_ID)
+      ).rejects.toThrow('串流錯誤');
+    });
+
+    it('multiInstance pod 找不到時 handleChatSend 不呼叫 runExecutionService.createRun', async () => {
+      asMock(podStore.getById).mockReturnValue(undefined);
+
+      await handleChatSend(CONNECTION_ID, { podId: SOURCE_POD_ID, message: '測試訊息' }, REQUEST_ID);
+
+      expect(runExecutionService.createRun).not.toHaveBeenCalled();
+      expect(executeStreamingChat).not.toHaveBeenCalled();
+    });
+  });
 });

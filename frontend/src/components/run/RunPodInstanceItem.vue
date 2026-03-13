@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { truncateMessage } from '@/utils/runFormatUtils'
-import { formatRelativeTime } from '@/utils/runFormatUtils'
+import { truncateMessage, formatRelativeTime } from '@/utils/runFormatUtils'
 import { RUN_RESPONSE_SUMMARY_LENGTH } from '@/lib/constants'
 import RunStatusIcon from './RunStatusIcon.vue'
 import type { RunPodInstance } from '@/types/run'

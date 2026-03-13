@@ -40,7 +40,8 @@
       "Bash(bunx eslint:*)",
       "Bash(bunx --bun tsc:*)",
       "Bash(tail:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(git stash:*)"
     ]
   },
   "outputStyle": "conductor"

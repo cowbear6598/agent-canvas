@@ -132,10 +132,7 @@ describe('RunExecutionService', () => {
   describe('startPodInstance', () => {
     it('更新 status 為 running 並發送事件', () => {
       const instance = createMockInstance({ status: 'pending' });
-      const updatedInstance = createMockInstance({ status: 'running', triggeredAt: new Date().toISOString() });
-      vi.spyOn(runStore, 'getPodInstance')
-        .mockReturnValueOnce(instance)
-        .mockReturnValueOnce(updatedInstance);
+      vi.spyOn(runStore, 'getPodInstance').mockReturnValueOnce(instance);
       vi.spyOn(runStore, 'updatePodInstanceStatus').mockImplementation(() => {});
 
       runExecutionService.startPodInstance(makeRunContext(), sourcePodId);
@@ -161,12 +158,10 @@ describe('RunExecutionService', () => {
   describe('completePodInstance', () => {
     it('更新 status 為 completed 並評估 run 狀態', () => {
       const instance = createMockInstance({ status: 'running' });
-      const updatedInstance = createMockInstance({ status: 'completed', completedAt: new Date().toISOString() });
-      vi.spyOn(runStore, 'getPodInstance')
-        .mockReturnValueOnce(instance)
-        .mockReturnValueOnce(updatedInstance);
+      const completedInstance = createMockInstance({ status: 'completed', completedAt: new Date().toISOString() });
+      vi.spyOn(runStore, 'getPodInstance').mockReturnValueOnce(instance);
       vi.spyOn(runStore, 'updatePodInstanceStatus').mockImplementation(() => {});
-      vi.spyOn(runStore, 'getPodInstancesByRunId').mockReturnValue([updatedInstance]);
+      vi.spyOn(runStore, 'getPodInstancesByRunId').mockReturnValue([completedInstance]);
       vi.spyOn(runStore, 'updateRunStatus').mockImplementation(() => {});
       vi.spyOn(runStore, 'getRun').mockReturnValue(createMockRun({ status: 'completed', completedAt: new Date().toISOString() }));
 
@@ -197,12 +192,10 @@ describe('RunExecutionService', () => {
   describe('errorPodInstance', () => {
     it('更新 status 為 error 並帶入 errorMessage', () => {
       const instance = createMockInstance({ status: 'running' });
-      const updatedInstance = createMockInstance({ status: 'error', errorMessage: '執行失敗', completedAt: new Date().toISOString() });
-      vi.spyOn(runStore, 'getPodInstance')
-        .mockReturnValueOnce(instance)
-        .mockReturnValueOnce(updatedInstance);
+      const errorInstance = createMockInstance({ status: 'error', errorMessage: '執行失敗', completedAt: new Date().toISOString() });
+      vi.spyOn(runStore, 'getPodInstance').mockReturnValueOnce(instance);
       vi.spyOn(runStore, 'updatePodInstanceStatus').mockImplementation(() => {});
-      vi.spyOn(runStore, 'getPodInstancesByRunId').mockReturnValue([updatedInstance]);
+      vi.spyOn(runStore, 'getPodInstancesByRunId').mockReturnValue([errorInstance]);
       vi.spyOn(runStore, 'updateRunStatus').mockImplementation(() => {});
       vi.spyOn(runStore, 'getRun').mockReturnValue(createMockRun({ status: 'error', completedAt: new Date().toISOString() }));
 
@@ -227,10 +220,7 @@ describe('RunExecutionService', () => {
   describe('summarizingPodInstance', () => {
     it('更新 status 為 summarizing 並發送事件，不評估 run 狀態', () => {
       const instance = createMockInstance({ status: 'running' });
-      const updatedInstance = createMockInstance({ status: 'summarizing' });
-      vi.spyOn(runStore, 'getPodInstance')
-        .mockReturnValueOnce(instance)
-        .mockReturnValueOnce(updatedInstance);
+      vi.spyOn(runStore, 'getPodInstance').mockReturnValueOnce(instance);
       vi.spyOn(runStore, 'updatePodInstanceStatus').mockImplementation(() => {});
       vi.spyOn(runStore, 'getPodInstancesByRunId').mockReturnValue([]);
 
@@ -256,12 +246,10 @@ describe('RunExecutionService', () => {
   describe('skipPodInstance', () => {
     it('更新 status 為 skipped 並發送事件、評估 run 狀態', () => {
       const instance = createMockInstance({ status: 'pending' });
-      const updatedInstance = createMockInstance({ status: 'skipped', completedAt: new Date().toISOString() });
-      vi.spyOn(runStore, 'getPodInstance')
-        .mockReturnValueOnce(instance)
-        .mockReturnValueOnce(updatedInstance);
+      const skippedInstance = createMockInstance({ status: 'skipped', completedAt: new Date().toISOString() });
+      vi.spyOn(runStore, 'getPodInstance').mockReturnValueOnce(instance);
       vi.spyOn(runStore, 'updatePodInstanceStatus').mockImplementation(() => {});
-      vi.spyOn(runStore, 'getPodInstancesByRunId').mockReturnValue([updatedInstance]);
+      vi.spyOn(runStore, 'getPodInstancesByRunId').mockReturnValue([skippedInstance]);
       vi.spyOn(runStore, 'updateRunStatus').mockImplementation(() => {});
       vi.spyOn(runStore, 'getRun').mockReturnValue(createMockRun({ status: 'completed', completedAt: new Date().toISOString() }));
 
@@ -288,9 +276,7 @@ describe('RunExecutionService', () => {
       const errorInstance = createMockInstance({ status: 'error', errorMessage: '失敗' });
       const skippedInstance = createMockInstance({ id: 'instance-2', podId: targetPodId, status: 'skipped' });
       const instance = createMockInstance({ status: 'running' });
-      vi.spyOn(runStore, 'getPodInstance')
-        .mockReturnValueOnce(instance)
-        .mockReturnValueOnce(createMockInstance({ status: 'completed' }));
+      vi.spyOn(runStore, 'getPodInstance').mockReturnValueOnce(instance);
       vi.spyOn(runStore, 'updatePodInstanceStatus').mockImplementation(() => {});
       vi.spyOn(runStore, 'getPodInstancesByRunId').mockReturnValue([errorInstance, skippedInstance]);
       vi.spyOn(runStore, 'updateRunStatus').mockImplementation(() => {});
@@ -305,9 +291,7 @@ describe('RunExecutionService', () => {
       const runningInstance = createMockInstance({ status: 'running' });
       const pendingInstance = createMockInstance({ id: 'instance-2', podId: targetPodId, status: 'pending' });
       const instance = createMockInstance({ status: 'running' });
-      vi.spyOn(runStore, 'getPodInstance')
-        .mockReturnValueOnce(instance)
-        .mockReturnValueOnce(createMockInstance({ status: 'completed' }));
+      vi.spyOn(runStore, 'getPodInstance').mockReturnValueOnce(instance);
       vi.spyOn(runStore, 'updatePodInstanceStatus').mockImplementation(() => {});
       vi.spyOn(runStore, 'getPodInstancesByRunId').mockReturnValue([runningInstance, pendingInstance]);
       vi.spyOn(runStore, 'updateRunStatus').mockImplementation(() => {});
@@ -315,6 +299,56 @@ describe('RunExecutionService', () => {
       runExecutionService.completePodInstance(makeRunContext(), sourcePodId);
 
       expect(runStore.updateRunStatus).not.toHaveBeenCalled();
+    });
+
+    it('全部 instance 為 completed → run 狀態變為 completed', () => {
+      const completedInstance1 = createMockInstance({ status: 'completed' });
+      const completedInstance2 = createMockInstance({ id: 'instance-2', podId: targetPodId, status: 'completed' });
+      const instance = createMockInstance({ status: 'running' });
+      vi.spyOn(runStore, 'getPodInstance').mockReturnValueOnce(instance);
+      vi.spyOn(runStore, 'updatePodInstanceStatus').mockImplementation(() => {});
+      vi.spyOn(runStore, 'getPodInstancesByRunId').mockReturnValue([completedInstance1, completedInstance2]);
+      vi.spyOn(runStore, 'updateRunStatus').mockImplementation(() => {});
+      vi.spyOn(runStore, 'getRun').mockReturnValue(createMockRun({ status: 'completed', completedAt: new Date().toISOString() }));
+
+      runExecutionService.completePodInstance(makeRunContext(), sourcePodId);
+
+      expect(runStore.updateRunStatus).toHaveBeenCalledWith('run-1', 'completed');
+    });
+
+    it('全部 instance 為 completed/skipped 混合 → run 狀態變為 completed', () => {
+      const completedInstance = createMockInstance({ status: 'completed' });
+      const skippedInstance = createMockInstance({ id: 'instance-2', podId: targetPodId, status: 'skipped' });
+      const instance = createMockInstance({ status: 'running' });
+      vi.spyOn(runStore, 'getPodInstance').mockReturnValueOnce(instance);
+      vi.spyOn(runStore, 'updatePodInstanceStatus').mockImplementation(() => {});
+      vi.spyOn(runStore, 'getPodInstancesByRunId').mockReturnValue([completedInstance, skippedInstance]);
+      vi.spyOn(runStore, 'updateRunStatus').mockImplementation(() => {});
+      vi.spyOn(runStore, 'getRun').mockReturnValue(createMockRun({ status: 'completed', completedAt: new Date().toISOString() }));
+
+      runExecutionService.completePodInstance(makeRunContext(), sourcePodId);
+
+      expect(runStore.updateRunStatus).toHaveBeenCalledWith('run-1', 'completed');
+    });
+
+    it('errorPodInstance 後有 error 且無進行中 → run 最終狀態更新為 error 並發送 RUN_STATUS_CHANGED', () => {
+      const errorInstance = createMockInstance({ status: 'error', errorMessage: '執行錯誤' });
+      const completedInstance = createMockInstance({ id: 'instance-2', podId: targetPodId, status: 'completed' });
+      const instance = createMockInstance({ status: 'running' });
+      vi.spyOn(runStore, 'getPodInstance').mockReturnValueOnce(instance);
+      vi.spyOn(runStore, 'updatePodInstanceStatus').mockImplementation(() => {});
+      vi.spyOn(runStore, 'getPodInstancesByRunId').mockReturnValue([errorInstance, completedInstance]);
+      vi.spyOn(runStore, 'updateRunStatus').mockImplementation(() => {});
+      vi.spyOn(runStore, 'getRun').mockReturnValue(createMockRun({ status: 'error', completedAt: new Date().toISOString() }));
+
+      runExecutionService.errorPodInstance(makeRunContext(), sourcePodId, '執行錯誤');
+
+      expect(runStore.updateRunStatus).toHaveBeenCalledWith('run-1', 'error');
+      expect(socketService.emitToCanvas).toHaveBeenCalledWith(
+        canvasId,
+        WebSocketResponseEvents.RUN_STATUS_CHANGED,
+        expect.objectContaining({ status: 'error' }),
+      );
     });
   });
 

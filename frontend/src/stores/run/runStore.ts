@@ -49,6 +49,18 @@ function toMessage(pm: PersistedMessage): Message {
     }
 }
 
+function findRunChatMessage(
+    messages: Map<string, Message[]>,
+    runId: string,
+    podId: string,
+    messageId: string
+): Message | undefined {
+    const key = `${runId}:${podId}`
+    const msgs = messages.get(key)
+    if (!msgs) return undefined
+    return msgs.find(m => m.id === messageId)
+}
+
 export const useRunStore = defineStore('run', {
     state: (): RunState => ({
         runs: [],
@@ -272,11 +284,7 @@ export const useRunStore = defineStore('run', {
             toolName: string
             input: Record<string, unknown>
         }): void {
-            const key = `${payload.runId}:${payload.podId}`
-            const messages = this.runChatMessages.get(key)
-            if (!messages) return
-
-            const message = messages.find(m => m.id === payload.messageId)
+            const message = findRunChatMessage(this.runChatMessages, payload.runId, payload.podId, payload.messageId)
             if (!message) return
 
             const subMessages = message.subMessages ?? []
@@ -301,11 +309,7 @@ export const useRunStore = defineStore('run', {
             toolName: string
             output: string
         }): void {
-            const key = `${payload.runId}:${payload.podId}`
-            const messages = this.runChatMessages.get(key)
-            if (!messages) return
-
-            const message = messages.find(m => m.id === payload.messageId)
+            const message = findRunChatMessage(this.runChatMessages, payload.runId, payload.podId, payload.messageId)
             if (!message?.subMessages) return
 
             for (const subMessage of message.subMessages) {

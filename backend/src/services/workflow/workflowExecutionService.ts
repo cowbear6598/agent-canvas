@@ -50,6 +50,18 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     return fallback ? { content: fallback, isSummarized: false } : null;
   }
 
+  private updateSummaryStatus(canvasId: string, sourcePodId: string, success: boolean, runContext?: RunContext, fallbackAvailable?: boolean): void {
+    if (runContext) {
+      if (success || fallbackAvailable) {
+        runExecutionService.completePodInstance(runContext, sourcePodId);
+      } else {
+        runExecutionService.errorPodInstance(runContext, sourcePodId, '無法生成摘要');
+      }
+    } else {
+      podStore.setStatus(canvasId, sourcePodId, 'idle');
+    }
+  }
+
   async generateSummaryWithFallback(
     canvasId: string,
     sourcePodId: string,
@@ -70,27 +82,13 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     );
 
     if (summaryResult.success) {
-      if (runContext) {
-        runExecutionService.completePodInstance(runContext, sourcePodId);
-      } else {
-        podStore.setStatus(canvasId, sourcePodId, 'idle');
-      }
+      this.updateSummaryStatus(canvasId, sourcePodId, true, runContext);
       return { content: summaryResult.summary, isSummarized: true };
     }
 
     logger.error('Workflow', 'Error', `生成摘要失敗：${summaryResult.error}`);
-    if (!runContext) {
-      podStore.setStatus(canvasId, sourcePodId, 'idle');
-    }
-
     const fallback = this.getLastAssistantFallback(sourcePodId, runContext);
-    if (runContext) {
-      if (fallback) {
-        runExecutionService.completePodInstance(runContext, sourcePodId);
-      } else {
-        runExecutionService.errorPodInstance(runContext, sourcePodId, '無法生成摘要');
-      }
-    }
+    this.updateSummaryStatus(canvasId, sourcePodId, false, runContext, fallback !== null);
     return fallback;
   }
 

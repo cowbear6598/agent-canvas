@@ -106,7 +106,7 @@ function rowToRunMessage(row: RunMessageRow): PersistedMessage {
   };
 }
 
-const COMPLETED_TERMINAL_STATUSES: RunStatus[] = ['completed', 'error'];
+const COMPLETED_TERMINAL_STATUSES = ['completed', 'error'] as const;
 
 class RunStore {
   private get stmts(): ReturnType<typeof getStatements> {
@@ -149,7 +149,7 @@ class RunStore {
   }
 
   updateRunStatus(runId: string, status: RunStatus): void {
-    const completedAt = COMPLETED_TERMINAL_STATUSES.includes(status) ? new Date().toISOString() : null;
+    const completedAt = (COMPLETED_TERMINAL_STATUSES as readonly string[]).includes(status) ? new Date().toISOString() : null;
     this.stmts.workflowRun.updateStatus.run({
       $id: runId,
       $status: status,

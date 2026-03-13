@@ -24,6 +24,10 @@ interface MultiInputServiceDeps {
 }
 
 class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps> {
+  private resolvePendingKey(targetPodId: string, runContext?: RunContext): string {
+    return runContext ? `${runContext.runId}:${targetPodId}` : targetPodId;
+  }
+
   private isTargetPodBusy(targetPod: ReturnType<typeof podStore.getById>): boolean {
     if (targetPod === undefined) return false;
     return isPodBusy(targetPod.status);
@@ -53,7 +57,7 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
       runContext,
     });
 
-    const pendingKey = runContext ? `${runContext.runId}:${connection.targetPodId}` : connection.targetPodId;
+    const pendingKey = this.resolvePendingKey(connection.targetPodId, runContext);
     pendingTargetStore.clearPendingTarget(pendingKey);
   }
 
@@ -64,7 +68,7 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
     summary: string,
     runContext?: RunContext
   ): { ready: boolean; hasRejection: boolean } {
-    const pendingKey = runContext ? `${runContext.runId}:${targetPodId}` : targetPodId;
+    const pendingKey = this.resolvePendingKey(targetPodId, runContext);
     const { allSourcesResponded, hasRejection } = pendingTargetStore.recordSourceCompletion(
       pendingKey,
       sourcePodId,
@@ -80,7 +84,7 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
     targetPodId: string,
     runContext?: RunContext
   ): { completedSummaries: Map<string, string>; mergedContent: string } | null {
-    const pendingKey = runContext ? `${runContext.runId}:${targetPodId}` : targetPodId;
+    const pendingKey = this.resolvePendingKey(targetPodId, runContext);
     const completedSummaries = pendingTargetStore.getCompletedSummaries(pendingKey);
     if (!completedSummaries) {
       logger.error('Workflow', 'Error', '無法取得已完成的摘要');
@@ -196,7 +200,7 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
       `觸發合併工作流程失敗 ${connection.id}`
     );
 
-    const pendingKey = runContext ? `${runContext.runId}:${connection.targetPodId}` : connection.targetPodId;
+    const pendingKey = this.resolvePendingKey(connection.targetPodId, runContext);
     pendingTargetStore.clearPendingTarget(pendingKey);
   }
 }

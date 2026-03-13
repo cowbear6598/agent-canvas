@@ -1,4 +1,5 @@
 import { runStore } from '../runStore.js';
+import type { RunPodInstanceStatus } from '../runStore.js';
 import { connectionStore } from '../connectionStore.js';
 import { podStore } from '../podStore.js';
 import { socketService } from '../socketService.js';
@@ -73,114 +74,61 @@ class RunExecutionService {
   }
 
   startPodInstance(runContext: RunContext, podId: string): void {
-    const instance = runStore.getPodInstance(runContext.runId, podId);
-    if (!instance) {
-      logger.warn('Run', 'Warn', `startPodInstance: 找不到 instance (runId=${runContext.runId}, podId=${podId})`);
-      return;
-    }
-
-    runStore.updatePodInstanceStatus(instance.id, 'running');
-
-    const updatedInstance = runStore.getPodInstance(runContext.runId, podId);
-    socketService.emitToCanvas(runContext.canvasId, WebSocketResponseEvents.RUN_POD_STATUS_CHANGED, {
-      runId: runContext.runId,
-      canvasId: runContext.canvasId,
-      podId,
-      status: updatedInstance?.status ?? 'error',
-      errorMessage: updatedInstance?.errorMessage ?? undefined,
-      triggeredAt: updatedInstance?.triggeredAt ?? undefined,
-      completedAt: updatedInstance?.completedAt ?? undefined,
-    } as RunPodStatusChangedPayload);
+    this.updateAndEmitPodInstanceStatus(runContext, podId, 'running');
   }
 
   completePodInstance(runContext: RunContext, podId: string): void {
-    const instance = runStore.getPodInstance(runContext.runId, podId);
-    if (!instance) {
-      logger.warn('Run', 'Warn', `completePodInstance: 找不到 instance (runId=${runContext.runId}, podId=${podId})`);
-      return;
-    }
-
-    runStore.updatePodInstanceStatus(instance.id, 'completed');
-
-    const updatedInstance = runStore.getPodInstance(runContext.runId, podId);
-    socketService.emitToCanvas(runContext.canvasId, WebSocketResponseEvents.RUN_POD_STATUS_CHANGED, {
-      runId: runContext.runId,
-      canvasId: runContext.canvasId,
-      podId,
-      status: updatedInstance?.status ?? 'error',
-      errorMessage: updatedInstance?.errorMessage ?? undefined,
-      triggeredAt: updatedInstance?.triggeredAt ?? undefined,
-      completedAt: updatedInstance?.completedAt ?? undefined,
-    } as RunPodStatusChangedPayload);
-
-    this.evaluateRunStatus(runContext.runId, runContext.canvasId);
+    this.updateAndEmitPodInstanceStatus(runContext, podId, 'completed', { evaluateRun: true });
   }
 
   errorPodInstance(runContext: RunContext, podId: string, errorMessage: string): void {
-    const instance = runStore.getPodInstance(runContext.runId, podId);
-    if (!instance) {
-      logger.warn('Run', 'Warn', `errorPodInstance: 找不到 instance (runId=${runContext.runId}, podId=${podId})`);
-      return;
-    }
-
-    runStore.updatePodInstanceStatus(instance.id, 'error', errorMessage);
-
-    const updatedInstance = runStore.getPodInstance(runContext.runId, podId);
-    socketService.emitToCanvas(runContext.canvasId, WebSocketResponseEvents.RUN_POD_STATUS_CHANGED, {
-      runId: runContext.runId,
-      canvasId: runContext.canvasId,
-      podId,
-      status: updatedInstance?.status ?? 'error',
-      errorMessage: updatedInstance?.errorMessage ?? undefined,
-      triggeredAt: updatedInstance?.triggeredAt ?? undefined,
-      completedAt: updatedInstance?.completedAt ?? undefined,
-    } as RunPodStatusChangedPayload);
-
-    this.evaluateRunStatus(runContext.runId, runContext.canvasId);
+    this.updateAndEmitPodInstanceStatus(runContext, podId, 'error', { evaluateRun: true, errorMessage });
   }
 
   summarizingPodInstance(runContext: RunContext, podId: string): void {
-    const instance = runStore.getPodInstance(runContext.runId, podId);
-    if (!instance) {
-      logger.warn('Run', 'Warn', `summarizingPodInstance: 找不到 instance (runId=${runContext.runId}, podId=${podId})`);
-      return;
-    }
-
-    runStore.updatePodInstanceStatus(instance.id, 'summarizing');
-
-    const updatedInstance = runStore.getPodInstance(runContext.runId, podId);
-    socketService.emitToCanvas(runContext.canvasId, WebSocketResponseEvents.RUN_POD_STATUS_CHANGED, {
-      runId: runContext.runId,
-      canvasId: runContext.canvasId,
-      podId,
-      status: updatedInstance?.status ?? 'summarizing',
-      errorMessage: updatedInstance?.errorMessage ?? undefined,
-      triggeredAt: updatedInstance?.triggeredAt ?? undefined,
-      completedAt: updatedInstance?.completedAt ?? undefined,
-    } as RunPodStatusChangedPayload);
+    this.updateAndEmitPodInstanceStatus(runContext, podId, 'summarizing');
   }
 
   skipPodInstance(runContext: RunContext, podId: string): void {
+    this.updateAndEmitPodInstanceStatus(runContext, podId, 'skipped', { evaluateRun: true });
+  }
+
+  private updateAndEmitPodInstanceStatus(
+    runContext: RunContext,
+    podId: string,
+    status: RunPodInstanceStatus,
+    options?: { evaluateRun?: boolean; errorMessage?: string },
+  ): void {
     const instance = runStore.getPodInstance(runContext.runId, podId);
     if (!instance) {
-      logger.warn('Run', 'Warn', `skipPodInstance: 找不到 instance (runId=${runContext.runId}, podId=${podId})`);
+      logger.warn('Run', 'Warn', `更新 pod instance 狀態失敗：找不到 instance (runId=${runContext.runId}, podId=${podId})`);
       return;
     }
 
-    runStore.updatePodInstanceStatus(instance.id, 'skipped');
+    if (options?.errorMessage) {
+      runStore.updatePodInstanceStatus(instance.id, status, options.errorMessage);
+    } else {
+      runStore.updatePodInstanceStatus(instance.id, status);
+    }
 
-    const updatedInstance = runStore.getPodInstance(runContext.runId, podId);
+    // store 負責計算 triggeredAt/completedAt，直接根據 status 推導，避免重複查詢
+    const triggeredAt = status === 'running' ? new Date().toISOString() : instance.triggeredAt ?? undefined;
+    const isTerminal = status === 'completed' || status === 'error' || status === 'skipped';
+    const completedAt = isTerminal ? new Date().toISOString() : instance.completedAt ?? undefined;
+
     socketService.emitToCanvas(runContext.canvasId, WebSocketResponseEvents.RUN_POD_STATUS_CHANGED, {
       runId: runContext.runId,
       canvasId: runContext.canvasId,
       podId,
-      status: updatedInstance?.status ?? 'skipped',
-      errorMessage: updatedInstance?.errorMessage ?? undefined,
-      triggeredAt: updatedInstance?.triggeredAt ?? undefined,
-      completedAt: updatedInstance?.completedAt ?? undefined,
-    } as RunPodStatusChangedPayload);
+      status,
+      errorMessage: options?.errorMessage ?? instance.errorMessage ?? undefined,
+      triggeredAt,
+      completedAt,
+    } satisfies RunPodStatusChangedPayload);
 
-    this.evaluateRunStatus(runContext.runId, runContext.canvasId);
+    if (options?.evaluateRun) {
+      this.evaluateRunStatus(runContext.runId, runContext.canvasId);
+    }
   }
 
   /**
