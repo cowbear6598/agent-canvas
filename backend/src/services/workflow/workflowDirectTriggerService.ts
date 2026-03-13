@@ -13,6 +13,7 @@ import type {
     QueuedContext,
     QueueProcessedContext,
 } from './types.js';
+import type { RunContext } from '../../types/run.js';
 import {podStore} from '../podStore.js';
 import {directTriggerStore} from '../directTriggerStore.js';
 import {workflowStateService} from './workflowStateService.js';
@@ -40,7 +41,7 @@ class WorkflowDirectTriggerService implements TriggerStrategy {
     }
 
     async collectSources(context: CollectSourcesContext): Promise<CollectSourcesResult> {
-        const {canvasId, sourcePodId, connection, summary} = context;
+        const {canvasId, sourcePodId, connection, summary, runContext} = context;
         const targetPodId = connection.targetPodId;
 
         const directCount = workflowStateService.getDirectConnectionCount(canvasId, targetPodId);
@@ -49,7 +50,7 @@ class WorkflowDirectTriggerService implements TriggerStrategy {
             return this.handleSingleDirectTrigger(connection.id);
         }
 
-        return this.handleMultiDirectTrigger(canvasId, sourcePodId, targetPodId, connection, summary);
+        return this.handleMultiDirectTrigger(canvasId, sourcePodId, targetPodId, connection, summary, runContext);
     }
 
     private handleSingleDirectTrigger(connectionId: string): CollectSourcesResult {
@@ -61,15 +62,20 @@ class WorkflowDirectTriggerService implements TriggerStrategy {
         sourcePodId: string,
         targetPodId: string,
         connection: Connection,
-        summary: string
+        summary: string,
+        runContext?: RunContext
     ): Promise<CollectSourcesResult> {
-        if (!directTriggerStore.hasDirectPending(targetPodId)) {
-            directTriggerStore.initializeDirectPending(targetPodId);
+        const storeKey = runContext ? `${runContext.runId}:${targetPodId}` : targetPodId;
+
+        if (!directTriggerStore.hasDirectPending(storeKey)) {
+            directTriggerStore.initializeDirectPending(storeKey);
         }
 
-        directTriggerStore.recordDirectReady(targetPodId, sourcePodId, summary);
+        directTriggerStore.recordDirectReady(storeKey, sourcePodId, summary);
 
-        connectionStore.updateConnectionStatus(canvasId, connection.id, 'waiting');
+        if (!runContext) {
+            connectionStore.updateConnectionStatus(canvasId, connection.id, 'waiting');
+        }
 
         const directWaitingPayload: WorkflowDirectWaitingPayload = {
             canvasId,
@@ -79,27 +85,27 @@ class WorkflowDirectTriggerService implements TriggerStrategy {
         };
         workflowEventEmitter.emitDirectWaiting(canvasId, directWaitingPayload);
 
-        if (this.pendingResolvers.has(targetPodId)) {
-            this.startCountdownTimer(canvasId, targetPodId);
+        if (this.pendingResolvers.has(storeKey)) {
+            this.startCountdownTimer(canvasId, targetPodId, storeKey);
             return Promise.resolve({ready: false});
         }
 
         return new Promise<CollectSourcesResult>((resolve) => {
-            this.pendingResolvers.set(targetPodId, resolve);
-            this.startCountdownTimer(canvasId, targetPodId);
+            this.pendingResolvers.set(storeKey, resolve);
+            this.startCountdownTimer(canvasId, targetPodId, storeKey);
         });
     }
 
-    private startCountdownTimer(canvasId: string, targetPodId: string): void {
-        if (directTriggerStore.hasActiveTimer(targetPodId)) {
-            directTriggerStore.clearTimer(targetPodId);
+    private startCountdownTimer(canvasId: string, targetPodId: string, storeKey = targetPodId): void {
+        if (directTriggerStore.hasActiveTimer(storeKey)) {
+            directTriggerStore.clearTimer(storeKey);
         }
 
         const timer = setTimeout(() => {
-            this.onTimerExpired(canvasId, targetPodId);
+            this.onTimerExpired(canvasId, targetPodId, storeKey);
         }, MULTI_DIRECT_MERGE_WINDOW_MS);
 
-        directTriggerStore.setTimer(targetPodId, timer);
+        directTriggerStore.setTimer(storeKey, timer);
     }
 
     cancelPendingResolver(targetPodId: string): void {
@@ -113,17 +119,17 @@ class WorkflowDirectTriggerService implements TriggerStrategy {
         logger.log('Workflow', 'Delete', `已取消目標 ${targetPodId} 的 pending resolver - 連線已刪除`);
     }
 
-    private onTimerExpired(canvasId: string, targetPodId: string): void {
-        const resolver = this.pendingResolvers.get(targetPodId);
+    private onTimerExpired(canvasId: string, targetPodId: string, storeKey = targetPodId): void {
+        const resolver = this.pendingResolvers.get(storeKey);
         if (!resolver) {
             return;
         }
 
-        const result = this.processTimerResult(canvasId, targetPodId);
+        const result = this.processTimerResult(canvasId, targetPodId, storeKey);
         resolver(result);
 
-        this.pendingResolvers.delete(targetPodId);
-        directTriggerStore.clearDirectPending(targetPodId);
+        this.pendingResolvers.delete(storeKey);
+        directTriggerStore.clearDirectPending(storeKey);
     }
 
     private findConnectionIdsBySourcePodIds(canvasId: string, targetPodId: string, sourcePodIds: string[]): string[] {
@@ -133,8 +139,8 @@ class WorkflowDirectTriggerService implements TriggerStrategy {
             .map(conn => conn.id);
     }
 
-    private processTimerResult(canvasId: string, targetPodId: string): CollectSourcesResult {
-        const readySummaries = directTriggerStore.getReadySummaries(targetPodId);
+    private processTimerResult(canvasId: string, targetPodId: string, storeKey: string): CollectSourcesResult {
+        const readySummaries = directTriggerStore.getReadySummaries(storeKey);
         if (!readySummaries || readySummaries.size === 0) {
             return {ready: false};
         }
@@ -204,7 +210,9 @@ class WorkflowDirectTriggerService implements TriggerStrategy {
                 error,
                 triggerMode: context.triggerMode,
             });
-            connectionStore.updateConnectionStatus(context.canvasId, conn.id, 'idle');
+            if (!context.runContext) {
+                connectionStore.updateConnectionStatus(context.canvasId, conn.id, 'idle');
+            }
         }
     }
 
@@ -219,7 +227,9 @@ class WorkflowDirectTriggerService implements TriggerStrategy {
         );
 
         for (const conn of connections) {
-            connectionStore.updateConnectionStatus(context.canvasId, conn.id, 'queued');
+            if (!context.runContext) {
+                connectionStore.updateConnectionStatus(context.canvasId, conn.id, 'queued');
+            }
             workflowEventEmitter.emitWorkflowQueued(
                 context.canvasId,
                 buildQueuedPayload(context, conn.id, conn.sourcePodId)

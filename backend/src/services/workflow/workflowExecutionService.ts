@@ -11,6 +11,7 @@ import {connectionStore} from '../connectionStore.js';
 import {podStore} from '../podStore.js';
 import {summaryService} from '../summaryService.js';
 import {injectUserMessage} from '../../utils/chatHelpers.js';
+import {injectRunUserMessage} from '../../utils/runChatHelpers.js';
 import {workflowQueueService} from './workflowQueueService.js';
 import {logger} from '../../utils/logger.js';
 import {fireAndForget} from '../../utils/operationHelpers.js';
@@ -23,6 +24,8 @@ import {
     isAutoTriggerable,
 } from './workflowHelpers.js';
 import { LazyInitializable } from './lazyInitializable.js';
+import { runExecutionService } from '../workflow/runExecutionService.js';
+import type { RunContext } from '../../types/run.js';
 
 interface ExecutionServiceDeps {
   pipeline: PipelineMethods;
@@ -38,20 +41,27 @@ interface WorkflowChatContext {
   targetPodId: string;
   participatingConnectionIds: string[];
   strategy: TriggerStrategy;
+  runContext?: RunContext;
 }
 
 class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
-  private getLastAssistantFallback(sourcePodId: string): { content: string; isSummarized: boolean } | null {
-    const fallback = this.deps.autoTriggerService.getLastAssistantMessage(sourcePodId);
+  private getLastAssistantFallback(sourcePodId: string, runContext?: RunContext): { content: string; isSummarized: boolean } | null {
+    const fallback = this.deps.autoTriggerService.getLastAssistantMessage(sourcePodId, runContext);
     return fallback ? { content: fallback, isSummarized: false } : null;
   }
 
   async generateSummaryWithFallback(
     canvasId: string,
     sourcePodId: string,
-    targetPodId: string
+    targetPodId: string,
+    runContext?: RunContext
   ): Promise<{ content: string; isSummarized: boolean } | null> {
-    podStore.setStatus(canvasId, sourcePodId, 'summarizing');
+    if (runContext) {
+      runExecutionService.summarizingPodInstance(runContext, sourcePodId);
+    } else {
+      podStore.setStatus(canvasId, sourcePodId, 'summarizing');
+    }
+
     const summaryResult = await summaryService.generateSummaryForTarget(
       canvasId,
       sourcePodId,
@@ -59,28 +69,34 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     );
 
     if (summaryResult.success) {
-      podStore.setStatus(canvasId, sourcePodId, 'idle');
+      if (runContext) {
+        runExecutionService.completePodInstance(runContext, sourcePodId);
+      } else {
+        podStore.setStatus(canvasId, sourcePodId, 'idle');
+      }
       return { content: summaryResult.summary, isSummarized: true };
     }
 
     logger.error('Workflow', 'Error', `生成摘要失敗：${summaryResult.error}`);
-    podStore.setStatus(canvasId, sourcePodId, 'idle');
-    return this.getLastAssistantFallback(sourcePodId);
+    if (!runContext) {
+      podStore.setStatus(canvasId, sourcePodId, 'idle');
+    }
+    return this.getLastAssistantFallback(sourcePodId, runContext);
   }
 
-  private triggerAutoConnections(canvasId: string, sourcePodId: string, connections: Connection[]): Promise<unknown>[] {
+  private triggerAutoConnections(canvasId: string, sourcePodId: string, connections: Connection[], runContext?: RunContext): Promise<unknown>[] {
     return connections
       .filter((conn) => conn.triggerMode === 'auto')
-      .map((connection) => this.deps.autoTriggerService.processAutoTriggerConnection(canvasId, sourcePodId, connection));
+      .map((connection) => this.deps.autoTriggerService.processAutoTriggerConnection(canvasId, sourcePodId, connection, runContext));
   }
 
-  private triggerAiDecideConnections(canvasId: string, sourcePodId: string, connections: Connection[]): Promise<unknown> {
+  private triggerAiDecideConnections(canvasId: string, sourcePodId: string, connections: Connection[], runContext?: RunContext): Promise<unknown> {
     const aiDecideConnections = connections.filter((conn) => conn.triggerMode === 'ai-decide');
     if (aiDecideConnections.length === 0) return Promise.resolve();
-    return this.deps.aiDecideTriggerService.processAiDecideConnections(canvasId, sourcePodId, aiDecideConnections);
+    return this.deps.aiDecideTriggerService.processAiDecideConnections(canvasId, sourcePodId, aiDecideConnections, runContext);
   }
 
-  private triggerDirectConnections(canvasId: string, sourcePodId: string, connections: Connection[]): Promise<unknown>[] {
+  private triggerDirectConnections(canvasId: string, sourcePodId: string, connections: Connection[], runContext?: RunContext): Promise<unknown>[] {
     return connections
       .filter((conn) => conn.triggerMode === 'direct')
       .map((connection) => {
@@ -90,12 +106,13 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
           connection,
           triggerMode: 'direct',
           decideResult: { connectionId: connection.id, approved: true, reason: null, isError: false },
+          runContext,
         };
         return this.deps.pipeline.execute(pipelineContext, this.deps.directTriggerService);
       });
   }
 
-  async checkAndTriggerWorkflows(canvasId: string, sourcePodId: string): Promise<void> {
+  async checkAndTriggerWorkflows(canvasId: string, sourcePodId: string, runContext?: RunContext): Promise<void> {
     const connections = connectionStore.findBySourcePodId(canvasId, sourcePodId);
 
     if (connections.length === 0) {
@@ -103,14 +120,14 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     }
 
     await Promise.allSettled([
-      ...this.triggerAutoConnections(canvasId, sourcePodId, connections),
-      this.triggerAiDecideConnections(canvasId, sourcePodId, connections),
-      ...this.triggerDirectConnections(canvasId, sourcePodId, connections),
+      ...this.triggerAutoConnections(canvasId, sourcePodId, connections, runContext),
+      this.triggerAiDecideConnections(canvasId, sourcePodId, connections, runContext),
+      ...this.triggerDirectConnections(canvasId, sourcePodId, connections, runContext),
     ]);
   }
 
   async triggerWorkflowWithSummary(params: TriggerWorkflowWithSummaryParams): Promise<void> {
-    const {canvasId, connectionId, summary, isSummarized, participatingConnectionIds, strategy} = params;
+    const {canvasId, connectionId, summary, isSummarized, participatingConnectionIds, strategy, runContext} = params;
 
     const connection = connectionStore.getById(canvasId, connectionId);
     if (!connection) {
@@ -131,7 +148,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     const triggerMode = connection.triggerMode;
     const resolvedConnectionIds = participatingConnectionIds ?? [connectionId];
 
-    this.setConnectionsToActive(canvasId, connectionId, targetPodId, triggerMode, resolvedConnectionIds);
+    this.setConnectionsToActive(canvasId, connectionId, targetPodId, triggerMode, resolvedConnectionIds, runContext);
 
     strategy.onTrigger({
       canvasId,
@@ -141,13 +158,18 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
       summary,
       isSummarized,
       participatingConnectionIds: resolvedConnectionIds,
+      runContext,
     });
 
-    podStore.setStatus(canvasId, targetPodId, 'chatting');
+    if (runContext) {
+      runExecutionService.startPodInstance(runContext, targetPodId);
+    } else {
+      podStore.setStatus(canvasId, targetPodId, 'chatting');
+    }
     // 刻意不 await：Claude 查詢是長時間操作，結果透過 WebSocket 事件通知前端。
     // 若改為 await，呼叫方的 Promise.allSettled 會等到查詢完成才繼續，喪失多 connection 並行觸發的能力。
     fireAndForget(
-      this.executeClaudeQuery({ canvasId, connectionId, sourcePodId, targetPodId, content: summary, participatingConnectionIds: resolvedConnectionIds, strategy }),
+      this.executeClaudeQuery({ canvasId, connectionId, sourcePodId, targetPodId, content: summary, participatingConnectionIds: resolvedConnectionIds, strategy, runContext }),
       'Workflow',
       `executeClaudeQuery 執行失敗 (connection: ${connectionId})`
     );
@@ -169,8 +191,12 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     connectionId: string,
     targetPodId: string,
     triggerMode: TriggerMode,
-    participatingConnectionIds: string[]
+    participatingConnectionIds: string[],
+    runContext?: RunContext
   ): void {
+    // run mode 下 connection 是模板，不應改變全域狀態
+    if (runContext) return;
+
     if (isAutoTriggerable(triggerMode)) {
       const multiInputIds: string[] = [];
       forEachMultiInputGroupConnection(canvasId, targetPodId, (conn) => multiInputIds.push(conn.id));
@@ -190,42 +216,54 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
   }
 
   private async onWorkflowChatComplete(params: WorkflowChatContext): Promise<void> {
-    const { canvasId, connectionId, sourcePodId, targetPodId, participatingConnectionIds, strategy } = params;
+    const { canvasId, connectionId, sourcePodId, targetPodId, participatingConnectionIds, strategy, runContext } = params;
     strategy.onComplete(
-      { canvasId, connectionId, sourcePodId, targetPodId, triggerMode: strategy.mode, participatingConnectionIds },
+      { canvasId, connectionId, sourcePodId, targetPodId, triggerMode: strategy.mode, participatingConnectionIds, runContext },
       true
     );
     // 刻意不 await：下游 workflow 觸發獨立於當前查詢完成流程
     fireAndForget(
-      this.checkAndTriggerWorkflows(canvasId, targetPodId),
+      this.checkAndTriggerWorkflows(canvasId, targetPodId, runContext),
       'Workflow',
       `下游 workflow 觸發失敗 (pod: ${targetPodId})`
     );
-    this.scheduleNextInQueue(canvasId, targetPodId);
+
+    if (!runContext) {
+      this.scheduleNextInQueue(canvasId, targetPodId);
+    }
   }
 
   private async onWorkflowChatError(params: WorkflowChatContext, error: Error): Promise<void> {
-    const { canvasId, connectionId, sourcePodId, targetPodId, participatingConnectionIds, strategy } = params;
+    const { canvasId, connectionId, sourcePodId, targetPodId, participatingConnectionIds, strategy, runContext } = params;
     strategy.onError(
-      { canvasId, connectionId, sourcePodId, targetPodId, triggerMode: strategy.mode, participatingConnectionIds },
+      { canvasId, connectionId, sourcePodId, targetPodId, triggerMode: strategy.mode, participatingConnectionIds, runContext },
       error.message
     );
     logger.error('Workflow', 'Error', 'Workflow 執行失敗', error);
-    podStore.setStatus(canvasId, targetPodId, 'idle');
-    this.scheduleNextInQueue(canvasId, targetPodId);
+
+    if (runContext) {
+      runExecutionService.errorPodInstance(runContext, targetPodId, error.message);
+    } else {
+      podStore.setStatus(canvasId, targetPodId, 'idle');
+      this.scheduleNextInQueue(canvasId, targetPodId);
+    }
   }
 
   private async executeClaudeQuery(params: WorkflowChatContext & { content: string }): Promise<void> {
-    const { canvasId, targetPodId, content } = params;
+    const { canvasId, targetPodId, content, runContext } = params;
     const baseMessage = buildTransferMessage(content);
     const targetPod = podStore.getById(canvasId, targetPodId);
     const commands = await commandService.list();
     const messageToSend = buildMessageWithCommand(baseMessage, targetPod, commands);
 
-    await injectUserMessage({ canvasId, podId: targetPodId, content: messageToSend });
+    if (runContext) {
+      await injectRunUserMessage(runContext, targetPodId, messageToSend);
+    } else {
+      await injectUserMessage({ canvasId, podId: targetPodId, content: messageToSend });
+    }
 
     await executeStreamingChat(
-      { canvasId, podId: targetPodId, message: messageToSend, abortable: false },
+      { canvasId, podId: targetPodId, message: messageToSend, abortable: false, runContext },
       {
         onComplete: (_canvasId, _podId) => this.onWorkflowChatComplete(params),
         onError: (_canvasId, _podId, error) => this.onWorkflowChatError(params, error),

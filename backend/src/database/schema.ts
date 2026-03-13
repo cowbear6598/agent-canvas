@@ -161,4 +161,46 @@ export function createTables(db: Database): void {
   );
   db.exec('CREATE INDEX IF NOT EXISTS idx_integration_bindings_app_resource ON integration_bindings(app_id, resource_id)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_integration_bindings_pod ON integration_bindings(pod_id)');
+
+  db.exec(
+    'CREATE TABLE IF NOT EXISTS workflow_runs (' +
+      'id TEXT PRIMARY KEY,' +
+      'canvas_id TEXT NOT NULL,' +
+      'source_pod_id TEXT NOT NULL,' +
+      'trigger_message TEXT NOT NULL,' +
+      "status TEXT NOT NULL DEFAULT 'running'," +
+      'created_at TEXT NOT NULL,' +
+      'completed_at TEXT' +
+      ')'
+  );
+  db.exec('CREATE INDEX IF NOT EXISTS idx_workflow_runs_canvas_id ON workflow_runs(canvas_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_workflow_runs_status ON workflow_runs(canvas_id, status)');
+
+  db.exec(
+    'CREATE TABLE IF NOT EXISTS run_pod_instances (' +
+      'id TEXT PRIMARY KEY,' +
+      'run_id TEXT NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE,' +
+      'pod_id TEXT NOT NULL,' +
+      "status TEXT NOT NULL DEFAULT 'pending'," +
+      'claude_session_id TEXT,' +
+      'error_message TEXT,' +
+      'triggered_at TEXT,' +
+      'completed_at TEXT' +
+      ')'
+  );
+  db.exec('CREATE INDEX IF NOT EXISTS idx_run_pod_instances_run_id ON run_pod_instances(run_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_run_pod_instances_run_pod ON run_pod_instances(run_id, pod_id)');
+
+  db.exec(
+    'CREATE TABLE IF NOT EXISTS run_messages (' +
+      'id TEXT PRIMARY KEY,' +
+      'run_id TEXT NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE,' +
+      'pod_id TEXT NOT NULL,' +
+      'role TEXT NOT NULL,' +
+      'content TEXT NOT NULL,' +
+      'timestamp TEXT NOT NULL,' +
+      'sub_messages_json TEXT' +
+      ')'
+  );
+  db.exec('CREATE INDEX IF NOT EXISTS idx_run_messages_run_pod ON run_messages(run_id, pod_id)');
 }

@@ -110,6 +110,9 @@ export enum WebSocketRequestEvents {
   INTEGRATION_APP_RESOURCES_REFRESH = 'integration:app:resources:refresh',
   POD_BIND_INTEGRATION = 'pod:bind-integration',
   POD_UNBIND_INTEGRATION = 'pod:unbind-integration',
+  RUN_DELETE = 'run:delete',
+  RUN_LOAD_HISTORY = 'run:load-history',
+  RUN_LOAD_POD_MESSAGES = 'run:load-pod-messages',
 }
 
 export enum WebSocketResponseEvents {
@@ -257,4 +260,14 @@ export enum WebSocketResponseEvents {
   POD_INTEGRATION_BOUND = 'pod:integration:bound',
   POD_INTEGRATION_UNBOUND = 'pod:integration:unbound',
   INTEGRATION_CONNECTION_STATUS_CHANGED = 'integration:connection:status:changed',
+  RUN_CREATED = 'run:created',
+  RUN_STATUS_CHANGED = 'run:status:changed',
+  RUN_POD_STATUS_CHANGED = 'run:pod:status:changed',
+  RUN_MESSAGE = 'run:message',
+  RUN_CHAT_COMPLETE = 'run:chat:complete',
+  RUN_CHAT_TOOL_USE = 'run:tool_use',
+  RUN_CHAT_TOOL_RESULT = 'run:tool_result',
+  RUN_DELETED = 'run:deleted',
+  RUN_HISTORY_LOADED = 'run:history:result',
+  RUN_POD_MESSAGES_LOADED = 'run:pod-messages:result',
 }

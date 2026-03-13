@@ -33,6 +33,16 @@
         </button>
 
         <button
+          v-if="runStore.hasMultiInstancePods"
+          data-history-toggle
+          class="flex items-center justify-center rounded-md p-2 hover:bg-accent"
+          title="歷程"
+          @click="runStore.toggleHistoryPanel()"
+        >
+          <History class="h-4 w-4" />
+        </button>
+
+        <button
           v-if="canvasStore.activeCanvas"
           data-canvas-toggle
           class="flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-accent"
@@ -59,14 +69,16 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Sparkles, LayoutDashboard, KeyRound, Settings } from 'lucide-vue-next'
+import { Sparkles, LayoutDashboard, KeyRound, Settings, History } from 'lucide-vue-next'
 import ConnectionStatus from '@/components/ui/ConnectionStatus.vue'
 import IntegrationSelectModal from '@/components/integration/IntegrationSelectModal.vue'
 import IntegrationAppsModal from '@/components/integration/IntegrationAppsModal.vue'
 import GlobalSettingsModal from '@/components/settings/GlobalSettingsModal.vue'
 import { useCanvasStore } from '@/stores/canvasStore'
+import { useRunStore } from '@/stores/run/runStore'
 
 const canvasStore = useCanvasStore()
+const runStore = useRunStore()
 const showIntegrationModal = ref<boolean>(false)
 const selectedProvider = ref<string | null>(null)
 const showSettingsModal = ref<boolean>(false)

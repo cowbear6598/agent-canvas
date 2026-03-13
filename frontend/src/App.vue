@@ -7,6 +7,8 @@ import AppHeader from '@/components/layout/AppHeader.vue'
 import CanvasContainer from '@/components/canvas/CanvasContainer.vue'
 import CanvasSidebar from '@/components/canvas/CanvasSidebar.vue'
 import ChatModal from '@/components/chat/ChatModal.vue'
+import HistoryPanel from '@/components/run/HistoryPanel.vue'
+import RunChatModal from '@/components/run/RunChatModal.vue'
 import {Toast} from '@/components/ui/toast'
 import DisconnectOverlay from '@/components/ui/DisconnectOverlay.vue'
 import {useCopyPaste} from '@/composables/canvas'
@@ -22,6 +24,7 @@ import {logger} from '@/utils/logger'
 
 import { useIntegrationStore } from '@/stores/integrationStore'
 import { getAllProviders } from '@/integration/providerRegistry'
+import { useRunStore } from '@/stores/run/runStore'
 
 const {
   podStore,
@@ -38,10 +41,25 @@ const {
 } = useCanvasContext()
 
 const integrationStore = useIntegrationStore()
+const runStore = useRunStore()
 
 const cursorStore = useCursorStore()
 
 const selectedPod = computed(() => podStore.selectedPod)
+
+const activeRunChatPodName = computed(() => {
+  if (!runStore.activeRunChatModal) return ''
+  const run = runStore.getRunById(runStore.activeRunChatModal.runId)
+  if (!run) return ''
+  const instance = run.podInstances.find(i => i.podId === runStore.activeRunChatModal!.podId)
+  return instance?.podName ?? ''
+})
+
+const activeRunChatRunStatus = computed(() => {
+  if (!runStore.activeRunChatModal) return 'running' as const
+  const run = runStore.getRunById(runStore.activeRunChatModal.runId)
+  return run?.status ?? 'running'
+})
 
 useCopyPaste()
 
@@ -93,6 +111,8 @@ const loadCanvasData = async (): Promise<void> => {
     await chatStore.loadAllPodsHistory(podIds)
     syncHistoryToPodOutput()
   }
+
+  await runStore.loadRuns()
 }
 
 const syncHistoryToPodOutput = (): void => {
@@ -274,6 +294,7 @@ watch(
       }
 
       cursorStore.clearAllCursors()
+      runStore.resetOnCanvasSwitch()
 
       podStore.pods = []
       podStore.selectedPodId = null
@@ -337,6 +358,11 @@ onUnmounted(() => {
       @update:open="canvasStore.setSidebarOpen"
     />
 
+    <HistoryPanel
+      :open="runStore.isHistoryPanelOpen"
+      @update:open="runStore.isHistoryPanelOpen = $event"
+    />
+
     <main class="flex-1 relative">
       <CanvasContainer />
     </main>
@@ -345,6 +371,15 @@ onUnmounted(() => {
       v-if="selectedPod"
       :pod="selectedPod"
       @close="handleCloseChat"
+    />
+
+    <RunChatModal
+      v-if="runStore.activeRunChatModal"
+      :run-id="runStore.activeRunChatModal.runId"
+      :pod-id="runStore.activeRunChatModal.podId"
+      :pod-name="activeRunChatPodName"
+      :run-status="activeRunChatRunStatus"
+      @close="runStore.closeRunChatModal()"
     />
 
     <Toast />

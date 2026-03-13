@@ -38,6 +38,9 @@ export function resetDb(): void {
   database.exec('DELETE FROM global_settings');
 
   // 子表先刪，避免外鍵約束衝突
+  database.exec('DELETE FROM run_messages');
+  database.exec('DELETE FROM run_pod_instances');
+  database.exec('DELETE FROM workflow_runs');
   database.exec('DELETE FROM pod_manifests');
   database.exec('DELETE FROM messages');
   database.exec('DELETE FROM notes');

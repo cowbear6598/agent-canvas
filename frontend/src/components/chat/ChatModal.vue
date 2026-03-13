@@ -7,8 +7,11 @@ import ChatMessages from './ChatMessages.vue'
 import ChatInput from './ChatInput.vue'
 import ChatWorkflowBlockedHint from './ChatWorkflowBlockedHint.vue'
 import ChatIntegrationBlockedHint from '@/components/integration/ChatIntegrationBlockedHint.vue'
+import ChatMultiInstanceInput from './ChatMultiInstanceInput.vue'
 import { useChatStore } from '@/stores/chat'
 import { useConnectionStore } from '@/stores/connectionStore'
+import { useRunStore } from '@/stores/run/runStore'
+import { isMultiInstanceSourcePod } from '@/utils/multiInstanceGuard'
 
 const props = defineProps<{
   pod: Pod
@@ -20,10 +23,12 @@ const emit = defineEmits<{
 
 const chatStore = useChatStore()
 const connectionStore = useConnectionStore()
+const runStore = useRunStore()
 
 const messages = computed(() => chatStore.getMessages(props.pod.id))
 const isTyping = computed(() => props.pod.status === 'chatting')
 const isHistoryLoading = computed(() => chatStore.isHistoryLoading(props.pod.id))
+const isMultiInstanceMode = computed(() => isMultiInstanceSourcePod(props.pod.id))
 
 const firstIntegrationProvider = computed<string | null>(() =>
   props.pod.integrationBindings?.[0]?.provider ?? null
@@ -45,6 +50,12 @@ const handleAbort = (): void => {
 }
 
 const handleClose = (): void => {
+  emit('close')
+}
+
+const handleMultiInstanceSend = async (message: string): Promise<void> => {
+  await chatStore.sendMessage(props.pod.id, message)
+  runStore.openHistoryPanel()
   emit('close')
 }
 
@@ -77,23 +88,33 @@ onUnmounted(() => {
           :pod="pod"
           @close="handleClose"
         />
-        <ChatMessages
-          :messages="messages"
-          :is-typing="isTyping"
-          :is-loading-history="isHistoryLoading"
+        <!-- Multi-instance mode：只顯示簡化版輸入 -->
+        <ChatMultiInstanceInput
+          v-if="isMultiInstanceMode"
+          :pod-id="pod.id"
+          @send="handleMultiInstanceSend"
+          @close="handleClose"
         />
-        <ChatIntegrationBlockedHint
-          v-if="firstIntegrationProvider"
-          :provider="firstIntegrationProvider"
-        />
-        <ChatWorkflowBlockedHint v-else-if="isMiddlePod" />
-        <ChatInput
-          v-else
-          :is-typing="isTyping"
-          :disabled="isWorkflowBusy"
-          @send="handleSend"
-          @abort="handleAbort"
-        />
+        <!-- 正常模式：顯示完整聊天介面 -->
+        <template v-else>
+          <ChatMessages
+            :messages="messages"
+            :is-typing="isTyping"
+            :is-loading-history="isHistoryLoading"
+          />
+          <ChatIntegrationBlockedHint
+            v-if="firstIntegrationProvider"
+            :provider="firstIntegrationProvider"
+          />
+          <ChatWorkflowBlockedHint v-else-if="isMiddlePod" />
+          <ChatInput
+            v-else
+            :is-typing="isTyping"
+            :disabled="isWorkflowBusy"
+            @send="handleSend"
+            @abort="handleAbort"
+          />
+        </template>
       </div>
     </div>
   </div>

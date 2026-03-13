@@ -378,3 +378,21 @@ export interface ConfigUpdatePayload {
   aiDecideModel?: ModelType
 }
 
+export interface RunDeletePayload {
+  requestId: string
+  canvasId: string
+  runId: string
+}
+
+export interface RunLoadHistoryPayload {
+  requestId: string
+  canvasId: string
+}
+
+export interface RunLoadPodMessagesPayload {
+  requestId: string
+  canvasId: string
+  runId: string
+  podId: string
+}
+

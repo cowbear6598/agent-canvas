@@ -109,6 +109,9 @@ export const WebSocketRequestEvents = {
   INTEGRATION_APP_RESOURCES_REFRESH: 'integration:app:resources:refresh',
   POD_BIND_INTEGRATION: 'pod:bind-integration',
   POD_UNBIND_INTEGRATION: 'pod:unbind-integration',
+  RUN_DELETE: 'run:delete',
+  RUN_LOAD_HISTORY: 'run:load-history',
+  RUN_LOAD_POD_MESSAGES: 'run:load-pod-messages',
 } as const
 
 export type WebSocketRequestEvents = typeof WebSocketRequestEvents[keyof typeof WebSocketRequestEvents]
@@ -254,6 +257,16 @@ export const WebSocketResponseEvents = {
   POD_INTEGRATION_BOUND: 'pod:integration:bound',
   POD_INTEGRATION_UNBOUND: 'pod:integration:unbound',
   INTEGRATION_CONNECTION_STATUS_CHANGED: 'integration:connection:status:changed',
+  RUN_CREATED: 'run:created',
+  RUN_STATUS_CHANGED: 'run:status:changed',
+  RUN_POD_STATUS_CHANGED: 'run:pod:status:changed',
+  RUN_MESSAGE: 'run:message',
+  RUN_CHAT_COMPLETE: 'run:chat:complete',
+  RUN_DELETED: 'run:deleted',
+  RUN_HISTORY_RESULT: 'run:history:result',
+  RUN_POD_MESSAGES_RESULT: 'run:pod-messages:result',
+  RUN_TOOL_USE: 'run:tool_use',
+  RUN_TOOL_RESULT: 'run:tool_result',
 } as const
 
 export type WebSocketResponseEvents = typeof WebSocketResponseEvents[keyof typeof WebSocketResponseEvents]

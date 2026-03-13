@@ -9,6 +9,7 @@ export { aiDecideService } from './aiDecideService.js';
 export { aiDecidePromptBuilder } from './aiDecidePromptBuilder.js';
 export { workflowQueueService } from './workflowQueueService.js';
 export { workflowPipeline } from './workflowPipeline.js';
+export { runExecutionService } from './runExecutionService.js';
 export type * from './types.js';
 
 import { workflowPipeline } from './workflowPipeline.js';

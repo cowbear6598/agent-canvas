@@ -6,6 +6,7 @@ import type {
 } from '../../types/index.js';
 import { isPodBusy } from '../../types/index.js';
 import type { ExecutionServiceMethods, TriggerStrategy, HandleMultiInputForConnectionParams } from './types.js';
+import type { RunContext } from '../../types/run.js';
 import {podStore} from '../podStore.js';
 import {socketService} from '../socketService.js';
 import {pendingTargetStore} from '../pendingTargetStore.js';
@@ -33,7 +34,8 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
     connection: Connection,
     completedSummaries: Map<string, string>,
     mergedContent: string,
-    triggerMode: AutoTriggerMode
+    triggerMode: AutoTriggerMode,
+    runContext?: RunContext
   ): void {
     const targetPod = podStore.getById(canvasId, connection.targetPodId);
     logger.log('Workflow', 'Update', `目標 Pod "${targetPod?.name ?? connection.targetPodId}" 忙碌中，將合併的 workflow 加入佇列`);
@@ -48,19 +50,23 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
       summary: mergedContent,
       isSummarized: true,
       triggerMode,
+      runContext,
     });
 
-    pendingTargetStore.clearPendingTarget(connection.targetPodId);
+    const pendingKey = runContext ? `${runContext.runId}:${connection.targetPodId}` : connection.targetPodId;
+    pendingTargetStore.clearPendingTarget(pendingKey);
   }
 
   private recordAndCheckAllSourcesReady(
     targetPodId: string,
     sourcePodId: string,
     requiredSourcePodIds: string[],
-    summary: string
+    summary: string,
+    runContext?: RunContext
   ): { ready: boolean; hasRejection: boolean } {
+    const pendingKey = runContext ? `${runContext.runId}:${targetPodId}` : targetPodId;
     const { allSourcesResponded, hasRejection } = pendingTargetStore.recordSourceCompletion(
-      targetPodId,
+      pendingKey,
       sourcePodId,
       summary,
       requiredSourcePodIds
@@ -71,9 +77,11 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
 
   private getMergedContentOrNull(
     canvasId: string,
-    targetPodId: string
+    targetPodId: string,
+    runContext?: RunContext
   ): { completedSummaries: Map<string, string>; mergedContent: string } | null {
-    const completedSummaries = pendingTargetStore.getCompletedSummaries(targetPodId);
+    const pendingKey = runContext ? `${runContext.runId}:${targetPodId}` : targetPodId;
+    const completedSummaries = pendingTargetStore.getCompletedSummaries(pendingKey);
     if (!completedSummaries) {
       logger.error('Workflow', 'Error', '無法取得已完成的摘要');
       return null;
@@ -92,13 +100,15 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
     sourcePodId: string,
     connection: Connection,
     requiredSourcePodIds: string[],
-    summary: string
+    summary: string,
+    runContext?: RunContext
   ): Promise<'not-ready' | 'rejected' | 'ready'> {
     const { ready, hasRejection } = this.recordAndCheckAllSourcesReady(
       connection.targetPodId,
       sourcePodId,
       requiredSourcePodIds,
-      summary
+      summary,
+      runContext
     );
 
     if (!ready) {
@@ -117,34 +127,40 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
   }
 
   async handleMultiInputForConnection(params: HandleMultiInputForConnectionParams): Promise<void> {
-    const {canvasId, sourcePodId, connection, requiredSourcePodIds, summary, triggerMode} = params;
+    const {canvasId, sourcePodId, connection, requiredSourcePodIds, summary, triggerMode, runContext} = params;
 
-    const readiness = await this.checkMultiInputReadiness(canvasId, sourcePodId, connection, requiredSourcePodIds, summary);
+    const readiness = await this.checkMultiInputReadiness(canvasId, sourcePodId, connection, requiredSourcePodIds, summary, runContext);
     if (readiness !== 'ready') return;
 
-    const merged = this.getMergedContentOrNull(canvasId, connection.targetPodId);
+    const merged = this.getMergedContentOrNull(canvasId, connection.targetPodId, runContext);
     if (!merged) return;
 
-    const targetPod = podStore.getById(canvasId, connection.targetPodId);
-    if (this.isTargetPodBusy(targetPod)) {
-      this.enqueueIfBusy(canvasId, connection, merged.completedSummaries, merged.mergedContent, triggerMode);
-      return;
+    // run mode 下直接觸發，不進行忙碌檢查
+    if (!runContext) {
+      const targetPod = podStore.getById(canvasId, connection.targetPodId);
+      if (this.isTargetPodBusy(targetPod)) {
+        this.enqueueIfBusy(canvasId, connection, merged.completedSummaries, merged.mergedContent, triggerMode);
+        return;
+      }
     }
 
-    this.triggerMergedWorkflow(canvasId, connection, triggerMode);
+    this.triggerMergedWorkflow(canvasId, connection, triggerMode, runContext);
   }
 
   triggerMergedWorkflow(
     canvasId: string,
     connection: Connection,
-    triggerMode: AutoTriggerMode
+    triggerMode: AutoTriggerMode,
+    runContext?: RunContext
   ): void {
-    const merged = this.getMergedContentOrNull(canvasId, connection.targetPodId);
+    const merged = this.getMergedContentOrNull(canvasId, connection.targetPodId, runContext);
     if (!merged) return;
 
     const { completedSummaries, mergedContent } = merged;
 
-    podStore.setStatus(canvasId, connection.targetPodId, 'chatting');
+    if (!runContext) {
+      podStore.setStatus(canvasId, connection.targetPodId, 'chatting');
+    }
 
     const mergedPreview = mergedContent.substring(0, MERGED_CONTENT_PREVIEW_MAX_LENGTH);
 
@@ -172,12 +188,14 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
         isSummarized: true,
         participatingConnectionIds: undefined,
         strategy,
+        runContext,
       }),
       'Workflow',
       `觸發合併工作流程失敗 ${connection.id}`
     );
 
-    pendingTargetStore.clearPendingTarget(connection.targetPodId);
+    const pendingKey = runContext ? `${runContext.runId}:${connection.targetPodId}` : connection.targetPodId;
+    pendingTargetStore.clearPendingTarget(pendingKey);
   }
 }
 

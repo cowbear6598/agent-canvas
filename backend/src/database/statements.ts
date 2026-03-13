@@ -137,6 +137,30 @@ function buildStatements(db: Database): {
     updateExtraJson: ReturnType<Database['prepare']>;
     deleteById: ReturnType<Database['prepare']>;
   };
+  workflowRun: {
+    insert: ReturnType<Database['prepare']>;
+    selectByCanvasId: ReturnType<Database['prepare']>;
+    selectById: ReturnType<Database['prepare']>;
+    updateStatus: ReturnType<Database['prepare']>;
+    deleteById: ReturnType<Database['prepare']>;
+    countByCanvasId: ReturnType<Database['prepare']>;
+    selectOldestCompleted: ReturnType<Database['prepare']>;
+  };
+  runPodInstance: {
+    insert: ReturnType<Database['prepare']>;
+    selectByRunId: ReturnType<Database['prepare']>;
+    selectByRunIdAndPodId: ReturnType<Database['prepare']>;
+    updateStatus: ReturnType<Database['prepare']>;
+    updateClaudeSessionId: ReturnType<Database['prepare']>;
+    selectRunningByRunId: ReturnType<Database['prepare']>;
+    deleteByRunId: ReturnType<Database['prepare']>;
+  };
+  runMessage: {
+    insert: ReturnType<Database['prepare']>;
+    selectByRunIdAndPodId: ReturnType<Database['prepare']>;
+    upsert: ReturnType<Database['prepare']>;
+    deleteByRunId: ReturnType<Database['prepare']>;
+  };
 } {
   return {
     canvas: {
@@ -355,6 +379,59 @@ function buildStatements(db: Database): {
       ),
       updateExtraJson: db.prepare('UPDATE integration_apps SET extra_json = $extraJson WHERE id = $id'),
       deleteById: db.prepare('DELETE FROM integration_apps WHERE id = ?'),
+    },
+
+    workflowRun: {
+      insert: db.prepare(
+        'INSERT INTO workflow_runs (id, canvas_id, source_pod_id, trigger_message, status, created_at, completed_at) VALUES ($id, $canvasId, $sourcePodId, $triggerMessage, $status, $createdAt, $completedAt)',
+      ),
+      selectByCanvasId: db.prepare(
+        'SELECT * FROM workflow_runs WHERE canvas_id = ? ORDER BY created_at DESC',
+      ),
+      selectById: db.prepare('SELECT * FROM workflow_runs WHERE id = ?'),
+      updateStatus: db.prepare(
+        'UPDATE workflow_runs SET status = $status, completed_at = $completedAt WHERE id = $id',
+      ),
+      deleteById: db.prepare('DELETE FROM workflow_runs WHERE id = ?'),
+      countByCanvasId: db.prepare(
+        'SELECT COUNT(*) as count FROM workflow_runs WHERE canvas_id = ?',
+      ),
+      selectOldestCompleted: db.prepare(
+        "SELECT id FROM workflow_runs WHERE canvas_id = ? AND status = 'completed' ORDER BY created_at ASC LIMIT ?",
+      ),
+    },
+
+    runPodInstance: {
+      insert: db.prepare(
+        'INSERT INTO run_pod_instances (id, run_id, pod_id, status, claude_session_id, error_message, triggered_at, completed_at) VALUES ($id, $runId, $podId, $status, $claudeSessionId, $errorMessage, $triggeredAt, $completedAt)',
+      ),
+      selectByRunId: db.prepare('SELECT * FROM run_pod_instances WHERE run_id = ?'),
+      selectByRunIdAndPodId: db.prepare(
+        'SELECT * FROM run_pod_instances WHERE run_id = $runId AND pod_id = $podId',
+      ),
+      updateStatus: db.prepare(
+        'UPDATE run_pod_instances SET status = $status, error_message = $errorMessage, triggered_at = $triggeredAt, completed_at = $completedAt WHERE id = $id',
+      ),
+      updateClaudeSessionId: db.prepare(
+        'UPDATE run_pod_instances SET claude_session_id = $claudeSessionId WHERE id = $id',
+      ),
+      selectRunningByRunId: db.prepare(
+        "SELECT * FROM run_pod_instances WHERE run_id = ? AND status IN ('pending', 'running', 'summarizing')",
+      ),
+      deleteByRunId: db.prepare('DELETE FROM run_pod_instances WHERE run_id = ?'),
+    },
+
+    runMessage: {
+      insert: db.prepare(
+        'INSERT INTO run_messages (id, run_id, pod_id, role, content, timestamp, sub_messages_json) VALUES ($id, $runId, $podId, $role, $content, $timestamp, $subMessagesJson)',
+      ),
+      selectByRunIdAndPodId: db.prepare(
+        'SELECT * FROM run_messages WHERE run_id = $runId AND pod_id = $podId ORDER BY timestamp ASC',
+      ),
+      upsert: db.prepare(
+        'INSERT OR REPLACE INTO run_messages (id, run_id, pod_id, role, content, timestamp, sub_messages_json) VALUES ($id, $runId, $podId, $role, $content, $timestamp, $subMessagesJson)',
+      ),
+      deleteByRunId: db.prepare('DELETE FROM run_messages WHERE run_id = ?'),
     },
   };
 }

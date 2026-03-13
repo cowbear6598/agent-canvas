@@ -1,4 +1,5 @@
 import type { Connection, TriggerMode, AutoTriggerMode } from '../../types/index.js';
+import type { RunContext } from '../../types/run.js';
 
 export interface TriggerDecideContext {
   canvasId: string;
@@ -18,6 +19,7 @@ export interface CollectSourcesContext {
   sourcePodId: string;
   connection: Connection;
   summary: string;
+  runContext?: RunContext;
 }
 
 export interface CollectSourcesResult {
@@ -35,6 +37,7 @@ export interface TriggerLifecycleContext {
   summary: string;
   isSummarized: boolean;
   participatingConnectionIds: string[];
+  runContext?: RunContext;
 }
 
 export interface QueuedContext {
@@ -46,6 +49,7 @@ export interface QueuedContext {
   queueSize: number;
   triggerMode: TriggerMode;
   participatingConnectionIds: string[];
+  runContext?: RunContext;
 }
 
 export interface QueueProcessedContext {
@@ -56,6 +60,7 @@ export interface QueueProcessedContext {
   remainingQueueSize: number;
   triggerMode: TriggerMode;
   participatingConnectionIds: string[];
+  runContext?: RunContext;
 }
 
 export interface CompletionContext {
@@ -65,6 +70,7 @@ export interface CompletionContext {
   targetPodId: string;
   triggerMode: TriggerMode;
   participatingConnectionIds: string[];
+  runContext?: RunContext;
 }
 
 export interface TriggerStrategy {
@@ -88,6 +94,7 @@ export interface PipelineContext {
   connection: Connection;
   triggerMode: TriggerMode;
   decideResult: TriggerDecideResult;
+  runContext?: RunContext;
 }
 
 export interface TriggerWorkflowWithSummaryParams {
@@ -97,13 +104,15 @@ export interface TriggerWorkflowWithSummaryParams {
   isSummarized: boolean;
   participatingConnectionIds: string[] | undefined;
   strategy: TriggerStrategy;
+  runContext?: RunContext;
 }
 
 export interface ExecutionServiceMethods {
   generateSummaryWithFallback(
     canvasId: string,
     sourcePodId: string,
-    targetPodId: string
+    targetPodId: string,
+    runContext?: RunContext
   ): Promise<{ content: string; isSummarized: boolean } | null>;
 
   triggerWorkflowWithSummary(params: TriggerWorkflowWithSummaryParams): Promise<void>;
@@ -123,6 +132,7 @@ export interface HandleMultiInputForConnectionParams {
   requiredSourcePodIds: string[];
   summary: string;
   triggerMode: AutoTriggerMode;
+  runContext?: RunContext;
 }
 
 export interface MultiInputServiceMethods {
@@ -139,6 +149,7 @@ export interface QueueServiceMethods {
     isSummarized: boolean;
     triggerMode: TriggerMode;
     participatingConnectionIds?: string[];
+    runContext?: RunContext;
   }): { position: number; queueSize: number };
 
   processNextInQueue(canvasId: string, targetPodId: string): Promise<void>;
@@ -149,10 +160,10 @@ export interface PipelineMethods {
 }
 
 export interface AiDecideMethods {
-  processAiDecideConnections(canvasId: string, sourcePodId: string, connections: Connection[]): Promise<void>;
+  processAiDecideConnections(canvasId: string, sourcePodId: string, connections: Connection[], runContext?: RunContext): Promise<void>;
 }
 
 export interface AutoTriggerMethods {
-  processAutoTriggerConnection(canvasId: string, sourcePodId: string, connection: Connection): Promise<void>;
-  getLastAssistantMessage(sourcePodId: string): string | null;
+  processAutoTriggerConnection(canvasId: string, sourcePodId: string, connection: Connection, runContext?: RunContext): Promise<void>;
+  getLastAssistantMessage(sourcePodId: string, runContext?: RunContext): string | null;
 }

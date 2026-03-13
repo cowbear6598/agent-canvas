@@ -10,6 +10,7 @@ import type { SubAgentNote, SubAgent } from '@/types/subAgent'
 import type { CommandNote } from '@/types/command'
 import type { McpServerNote } from '@/types/mcpServer'
 import type { Group } from '@/types/group'
+import type { WorkflowRun, RunPodInstance } from '@/types/run'
 
 // 計數器
 let canvasCounter = 0
@@ -21,6 +22,8 @@ let scheduleCounter = 0
 let repositoryCounter = 0
 let subAgentCounter = 0
 let groupCounter = 0
+let runCounter = 0
+let runPodInstanceCounter = 0
 
 /**
  * 建立 Mock Canvas
@@ -233,6 +236,37 @@ export function createMockGroup(overrides?: Partial<Group>): Group {
     id: `group-${++groupCounter}`,
     name: `Group ${groupCounter}`,
     type: 'subAgent',
+    ...overrides,
+  }
+}
+
+/**
+ * 建立 Mock WorkflowRun
+ */
+export function createMockWorkflowRun(overrides?: Partial<WorkflowRun>): WorkflowRun {
+  return {
+    id: `run-${++runCounter}`,
+    canvasId: `canvas-1`,
+    sourcePodId: `pod-1`,
+    sourcePodName: `Pod 1`,
+    triggerMessage: `Trigger message ${runCounter}`,
+    status: 'running',
+    podInstances: [],
+    createdAt: new Date().toISOString(),
+    ...overrides,
+  }
+}
+
+/**
+ * 建立 Mock RunPodInstance
+ */
+export function createMockRunPodInstance(overrides?: Partial<RunPodInstance>): RunPodInstance {
+  return {
+    id: `rpi-${++runPodInstanceCounter}`,
+    runId: `run-1`,
+    podId: `pod-1`,
+    podName: `Pod 1`,
+    status: 'pending',
     ...overrides,
   }
 }

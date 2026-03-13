@@ -23,6 +23,7 @@ describe('Database', () => {
         'mcp_servers', 'messages', 'notes',
         'pod_manifests', 'pod_mcp_server_ids', 'pod_skill_ids', 'pod_sub_agent_ids',
         'pods', 'repository_metadata',
+        'run_messages', 'run_pod_instances', 'workflow_runs',
       ]);
     });
 

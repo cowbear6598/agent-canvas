@@ -27,4 +27,5 @@ export interface Message {
   content: string;
   toolUse: ToolUseInfo | null;
   createdAt: Date;
+  sessionId?: string;
 }

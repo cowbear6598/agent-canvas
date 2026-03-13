@@ -11,7 +11,10 @@ import {socketService} from '../../src/services/socketService.js';
 import {workflowStateService} from '../../src/services/workflow/workflowStateService.js';
 import {commandService} from '../../src/services/commandService.js';
 import {claudeService} from '../../src/services/claude/claudeService.js';
+import {runStore} from '../../src/services/runStore.js';
+import {runExecutionService} from '../../src/services/workflow/runExecutionService.js';
 import type {Connection, PersistedMessage, Pod} from '../../src/types/index.js';
+import type {WorkflowRun, RunPodInstance} from '../../src/services/runStore.js';
 
 interface SetupAllSpiesOptions {
     podLookup?: Map<string, Pod>;
@@ -202,6 +205,65 @@ export function setupClaudeServiceSpy(customClaudeQuery?: (...args: any[]) => Pr
     return spies;
 }
 
+export function setupRunStoreSpy() {
+    const spies = {
+        createRun: vi.spyOn(runStore, 'createRun').mockImplementation((canvasId: string, sourcePodId: string, triggerMessage: string): WorkflowRun => ({
+            id: 'test-run-id',
+            canvasId,
+            sourcePodId,
+            triggerMessage,
+            status: 'running',
+            createdAt: new Date().toISOString(),
+            completedAt: null,
+        })),
+        getRun: vi.spyOn(runStore, 'getRun').mockReturnValue(undefined),
+        getRunsByCanvasId: vi.spyOn(runStore, 'getRunsByCanvasId').mockReturnValue([]),
+        updateRunStatus: vi.spyOn(runStore, 'updateRunStatus').mockImplementation(() => {}),
+        deleteRun: vi.spyOn(runStore, 'deleteRun').mockImplementation(() => {}),
+        countRunsByCanvasId: vi.spyOn(runStore, 'countRunsByCanvasId').mockReturnValue(0),
+        getOldestCompletedRunIds: vi.spyOn(runStore, 'getOldestCompletedRunIds').mockReturnValue([]),
+        createPodInstance: vi.spyOn(runStore, 'createPodInstance').mockImplementation((runId: string, podId: string): RunPodInstance => ({
+            id: 'test-instance-id',
+            runId,
+            podId,
+            status: 'pending',
+            claudeSessionId: null,
+            errorMessage: null,
+            triggeredAt: null,
+            completedAt: null,
+        })),
+        getPodInstance: vi.spyOn(runStore, 'getPodInstance').mockReturnValue(undefined),
+        getPodInstancesByRunId: vi.spyOn(runStore, 'getPodInstancesByRunId').mockReturnValue([]),
+        updatePodInstanceStatus: vi.spyOn(runStore, 'updatePodInstanceStatus').mockImplementation(() => {}),
+        updatePodInstanceClaudeSessionId: vi.spyOn(runStore, 'updatePodInstanceClaudeSessionId').mockImplementation(() => {}),
+        getRunningPodInstances: vi.spyOn(runStore, 'getRunningPodInstances').mockReturnValue([]),
+        addRunMessage: vi.spyOn(runStore, 'addRunMessage').mockImplementation(() => ({
+            id: 'test-msg-id',
+            role: 'user' as const,
+            content: '',
+            timestamp: new Date().toISOString(),
+        })),
+        upsertRunMessage: vi.spyOn(runStore, 'upsertRunMessage').mockImplementation(() => {}),
+        getRunMessages: vi.spyOn(runStore, 'getRunMessages').mockReturnValue([]),
+    };
+    return spies;
+}
+
+export function setupRunExecutionServiceSpy() {
+    const spies = {
+        createRun: vi.spyOn(runExecutionService, 'createRun').mockResolvedValue({ runId: 'test-run-id', canvasId: 'canvas-1', sourcePodId: 'source-pod' }),
+        startPodInstance: vi.spyOn(runExecutionService, 'startPodInstance').mockImplementation(() => {}),
+        completePodInstance: vi.spyOn(runExecutionService, 'completePodInstance').mockImplementation(() => {}),
+        errorPodInstance: vi.spyOn(runExecutionService, 'errorPodInstance').mockImplementation(() => {}),
+        summarizingPodInstance: vi.spyOn(runExecutionService, 'summarizingPodInstance').mockImplementation(() => {}),
+        skipPodInstance: vi.spyOn(runExecutionService, 'skipPodInstance').mockImplementation(() => {}),
+        registerActiveStream: vi.spyOn(runExecutionService, 'registerActiveStream').mockImplementation(() => {}),
+        unregisterActiveStream: vi.spyOn(runExecutionService, 'unregisterActiveStream').mockImplementation(() => {}),
+        deleteRun: vi.spyOn(runExecutionService, 'deleteRun').mockImplementation(() => {}),
+    };
+    return spies;
+}
+
 export function setupAllSpies(options?: SetupAllSpiesOptions) {
     return {
         connectionStore: setupConnectionStoreSpy(options?.connection),
@@ -216,5 +278,7 @@ export function setupAllSpies(options?: SetupAllSpiesOptions) {
         workflowStateService: setupWorkflowStateServiceSpy(options?.directConnectionCount),
         commandService: setupCommandServiceSpy(),
         claudeService: setupClaudeServiceSpy(options?.customClaudeQuery),
+        runStore: setupRunStoreSpy(),
+        runExecutionService: setupRunExecutionServiceSpy(),
     };
 }

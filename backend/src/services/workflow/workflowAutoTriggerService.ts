@@ -11,10 +11,12 @@ import type {
 } from './types.js';
 import { podStore } from '../podStore.js';
 import { messageStore } from '../messageStore.js';
+import { runStore } from '../runStore.js';
 import { connectionStore } from '../connectionStore.js';
 import { workflowEventEmitter } from './workflowEventEmitter.js';
 import { forEachMultiInputGroupConnection, buildQueuedPayload, createMultiInputCompletionHandlers, emitQueueProcessed } from './workflowHelpers.js';
 import { logger } from '../../utils/logger.js';
+import type { RunContext } from '../../types/run.js';
 
 interface Pipeline {
   execute(context: PipelineContext, strategy: TriggerStrategy): Promise<void>;
@@ -37,7 +39,19 @@ class WorkflowAutoTriggerService implements TriggerStrategy {
     }));
   }
 
-  getLastAssistantMessage(sourcePodId: string): string | null {
+  getLastAssistantMessage(sourcePodId: string, runContext?: RunContext): string | null {
+    if (runContext) {
+      const messages = runStore.getRunMessages(runContext.runId, sourcePodId);
+      const assistantMessages = messages.filter((message) => message.role === 'assistant');
+
+      if (assistantMessages.length === 0) {
+        logger.error('Workflow', 'Error', `找不到 assistant 訊息作為備用內容 (Run: ${runContext.runId})`);
+        return null;
+      }
+
+      return assistantMessages[assistantMessages.length - 1].content;
+    }
+
     const messages = messageStore.getMessages(sourcePodId);
     const assistantMessages = messages.filter((message) => message.role === 'assistant');
 
@@ -52,7 +66,8 @@ class WorkflowAutoTriggerService implements TriggerStrategy {
   async processAutoTriggerConnection(
     canvasId: string,
     sourcePodId: string,
-    connection: Connection
+    connection: Connection,
+    runContext?: RunContext
   ): Promise<void> {
     if (!this.pipeline) {
       throw new Error('AutoTriggerService 尚未初始化，請先呼叫 init()');
@@ -75,6 +90,7 @@ class WorkflowAutoTriggerService implements TriggerStrategy {
         reason: null,
         isError: false,
       },
+      runContext,
     };
 
     await this.pipeline.execute(pipelineContext, this);

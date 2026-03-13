@@ -1,8 +1,10 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { TriggerMode } from '../../types/index.js';
 import type { TriggerStrategy, ExecutionServiceMethods } from './types.js';
+import type { RunContext } from '../../types/run.js';
 import { podStore } from '../podStore.js';
 import { LazyInitializable } from './lazyInitializable.js';
+import { logger } from '../../utils/logger.js';
 
 export interface QueueItem {
   id: string;
@@ -14,6 +16,7 @@ export interface QueueItem {
   isSummarized: boolean;
   triggerMode: TriggerMode;
   participatingConnectionIds?: string[];
+  runContext?: RunContext;
   enqueuedAt: Date;
 }
 
@@ -30,6 +33,12 @@ class WorkflowQueueService extends LazyInitializable<QueueServiceDeps> {
   }
 
   enqueue(item: Omit<QueueItem, 'id' | 'enqueuedAt'>): { position: number; queueSize: number } {
+    // run mode 下不應進入佇列，直接回傳防禦性結果
+    if (item.runContext) {
+      logger.warn('Workflow', 'Warn', `[Queue] Run mode 不應呼叫 enqueue (runId: ${item.runContext.runId}, targetPodId: ${item.targetPodId})`);
+      return { position: 0, queueSize: 0 };
+    }
+
     const queueItem: QueueItem = {
       ...item,
       id: uuidv4(),

@@ -97,7 +97,8 @@ describe('WorkflowPipeline', () => {
       expect(mockExecutionService.generateSummaryWithFallback).toHaveBeenCalledWith(
         canvasId,
         sourcePodId,
-        targetPodId
+        targetPodId,
+        undefined
       );
 
       expect(mockStrategy.collectSources).toHaveBeenCalledWith({

@@ -21,7 +21,7 @@ interface PipelineDeps {
 class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
 
   async execute(context: PipelineContext, strategy: TriggerStrategy): Promise<void> {
-    const { canvasId, sourcePodId, connection, triggerMode } = context;
+    const { canvasId, sourcePodId, connection, triggerMode, runContext } = context;
     const { targetPodId, id: connectionId } = connection;
 
     const targetPod = podStore.getById(canvasId, targetPodId);
@@ -38,7 +38,8 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
     const summaryResult = await this.deps.executionService.generateSummaryWithFallback(
       canvasId,
       sourcePodId,
-      targetPodId
+      targetPodId,
+      runContext
     );
 
     if (!summaryResult) {
@@ -51,7 +52,8 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
 
     const { finalSummary, finalIsCondensedSummary, participatingConnectionIds } = collectResult;
 
-    if (targetPod.status !== 'idle') {
+    // run mode 下直接執行，不進入佇列
+    if (!runContext && targetPod.status !== 'idle') {
       logger.log('Workflow', 'Pipeline', `[checkQueue] 目標 Pod 忙碌中 (${targetPod.status})，加入佇列`);
       this.deps.queueService.enqueue({
         canvasId,
@@ -62,6 +64,7 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
         isSummarized: finalIsCondensedSummary,
         triggerMode,
         participatingConnectionIds,
+        runContext,
       });
       // 安全網：立即嘗試消化佇列，防止 enqueue 發生在最後一次 scheduleNextInQueue 之後導致佇列卡住
       fireAndForget(
@@ -79,6 +82,7 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
       isSummarized: finalIsCondensedSummary,
       participatingConnectionIds,
       strategy,
+      runContext,
     });
   }
 
@@ -97,6 +101,7 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
         sourcePodId,
         connection,
         summary: summaryContent,
+        runContext: context.runContext,
       });
 
       if (!collectResult.ready) {
@@ -125,6 +130,7 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
         requiredSourcePodIds,
         summary: summaryContent,
         triggerMode: triggerMode as 'auto' | 'ai-decide',
+        runContext: context.runContext,
       });
       return null;
     }

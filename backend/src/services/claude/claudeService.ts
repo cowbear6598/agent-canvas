@@ -50,6 +50,13 @@ type UserToolResultBlock = {
     content?: string;
 };
 
+export interface RunQueryOptions {
+    /** 覆蓋 pod 全域的 claudeSessionId（來自 run_pod_instances） */
+    sessionId?: string;
+    /** activeQueries 的 key，預設為 podId。Run 模式使用 `${runId}:${podId}` */
+    queryKey?: string;
+}
+
 interface HandleSendMessageErrorParams {
     error: unknown;
     pod: Pod;
@@ -58,6 +65,7 @@ interface HandleSendMessageErrorParams {
     onStream: StreamCallback;
     isRetry: boolean;
     retryFn: () => Promise<Message>;
+    runOptions?: RunQueryOptions;
 }
 
 export interface DisposableChatOptions {
@@ -304,7 +312,7 @@ export class ClaudeService {
     }
 
     private async handleSendMessageError(params: HandleSendMessageErrorParams): Promise<Message> {
-        const {error, pod, canvasId, podId, onStream, isRetry, retryFn} = params;
+        const {error, pod, canvasId, podId, onStream, isRetry, retryFn, runOptions} = params;
 
         if (isAbortError(error)) {
             throw error;
@@ -316,7 +324,10 @@ export class ClaudeService {
                 'Update',
                 `[ClaudeService] Pod ${pod.name} Session 恢復失敗，清除 Session ID 並重試`
             );
-            podStore.resetClaudeSession(canvasId, podId);
+            // Run 模式不 reset pod 全域 session
+            if (!runOptions?.queryKey) {
+                podStore.resetClaudeSession(canvasId, podId);
+            }
             return retryFn();
         }
 
@@ -421,7 +432,8 @@ export class ClaudeService {
 
     private async buildQueryOptions(
         pod: Pod,
-        cwd: string
+        cwd: string,
+        runOptions?: RunQueryOptions
     ): Promise<Options & {abortController: AbortController}> {
         const abortController = new AbortController();
 
@@ -435,8 +447,9 @@ export class ClaudeService {
         this.applyMcpServers(pod, queryOptions);
         this.applyIntegrationToolOptions(pod, queryOptions);
 
-        if (pod.claudeSessionId) {
-            queryOptions.resume = pod.claudeSessionId;
+        const resumeSessionId = runOptions?.sessionId ?? pod.claudeSessionId;
+        if (resumeSessionId) {
+            queryOptions.resume = resumeSessionId;
         }
 
         queryOptions.model = pod.model;
@@ -444,8 +457,8 @@ export class ClaudeService {
         return queryOptions;
     }
 
-    public abortQuery(podId: string): boolean {
-        const entry = this.activeQueries.get(podId);
+    public abortQuery(key: string): boolean {
+        const entry = this.activeQueries.get(key);
         if (!entry) {
             return false;
         }
@@ -453,7 +466,7 @@ export class ClaudeService {
         // close() 會直接殺掉底層 CLI 進程，導致 for await 靜默結束而非拋出 AbortError
         // 這會使 catch 區塊無法被觸發，前端收不到 POD_CHAT_ABORTED 事件
         entry.abortController.abort();
-        this.activeQueries.delete(podId);
+        this.activeQueries.delete(key);
 
         return true;
     }
@@ -461,9 +474,10 @@ export class ClaudeService {
     public async sendMessage(
         podId: string,
         message: string | ContentBlock[],
-        onStream: StreamCallback
+        onStream: StreamCallback,
+        runOptions?: RunQueryOptions
     ): Promise<Message> {
-        return this.sendMessageInternal(podId, message, onStream, false);
+        return this.sendMessageInternal(podId, message, onStream, false, runOptions);
     }
 
     private async runQueryStream(
@@ -485,14 +499,24 @@ export class ClaudeService {
         }
     }
 
-    private finalizeSession(canvasId: string, podId: string, state: QueryState, pod: Pod): void {
-        if (state.sessionId && state.sessionId !== pod.claudeSessionId) {
-            podStore.setClaudeSessionId(canvasId, podId, state.sessionId);
-        }
+    private finalizeSession(
+        canvasId: string,
+        podId: string,
+        state: QueryState,
+        pod: Pod,
+        runOptions?: RunQueryOptions
+    ): void {
+        if (!state.sessionId) return;
+        if (state.sessionId === pod.claudeSessionId) return;
+
+        // Run 模式：不寫入 pod 全域 session（由呼叫方從回傳值自行處理）
+        if (runOptions?.queryKey) return;
+
+        podStore.setClaudeSessionId(canvasId, podId, state.sessionId);
     }
 
     private async executeWithSessionRetry(
-        podId: string,
+        queryKey: string,
         canvasId: string,
         pod: Pod,
         queryOptions: Options & {abortController: AbortController},
@@ -500,21 +524,22 @@ export class ClaudeService {
         state: QueryState,
         onStream: StreamCallback,
         isRetry: boolean,
-        retryFn: () => Promise<Message>
+        retryFn: () => Promise<Message>,
+        runOptions?: RunQueryOptions
     ): Promise<Message | null> {
         const {abortController} = queryOptions;
         const queryStream = query({prompt, options: queryOptions});
-        this.activeQueries.set(podId, {queryStream, abortController});
+        this.activeQueries.set(queryKey, {queryStream, abortController});
 
         try {
             await this.runQueryStream(queryStream, abortController, state, onStream);
-            this.finalizeSession(canvasId, podId, state, pod);
+            this.finalizeSession(canvasId, pod.id, state, pod, runOptions);
             return null;
         } catch (error) {
-            return this.handleSendMessageError({error, pod, canvasId, podId, onStream, isRetry, retryFn});
+            return this.handleSendMessageError({error, pod, canvasId, podId: pod.id, onStream, isRetry, retryFn, runOptions});
         } finally {
             // 確保所有情況都清理 activeQueries entry，防止 Memory Leak
-            this.activeQueries.delete(podId);
+            this.activeQueries.delete(queryKey);
         }
     }
 
@@ -522,7 +547,8 @@ export class ClaudeService {
         podId: string,
         message: string | ContentBlock[],
         onStream: StreamCallback,
-        isRetry: boolean
+        isRetry: boolean,
+        runOptions?: RunQueryOptions
     ): Promise<Message> {
         const result = podStore.getByIdGlobal(podId);
         if (!result) {
@@ -532,14 +558,17 @@ export class ClaudeService {
         const {canvasId, pod} = result;
         const messageId = uuidv4();
         const state = this.createQueryState();
+        const resolvedKey = runOptions?.queryKey ?? podId;
 
         const cwd = this.resolveCwd(pod);
-        const queryOptions = await this.buildQueryOptions(pod, cwd);
-        const prompt = this.buildPrompt(message, pod.commandId, pod.claudeSessionId);
+        const queryOptions = await this.buildQueryOptions(pod, cwd, runOptions);
+        const resumeSessionId = runOptions?.sessionId ?? pod.claudeSessionId;
+        const prompt = this.buildPrompt(message, pod.commandId, resumeSessionId);
 
         const retryResult = await this.executeWithSessionRetry(
-            podId, canvasId, pod, queryOptions, prompt, state, onStream, isRetry,
-            () => this.sendMessageInternal(podId, message, onStream, true)
+            resolvedKey, canvasId, pod, queryOptions, prompt, state, onStream, isRetry,
+            () => this.sendMessageInternal(podId, message, onStream, true, runOptions),
+            runOptions
         );
 
         if (retryResult !== null) {
@@ -553,6 +582,7 @@ export class ClaudeService {
             content: state.fullContent,
             toolUse: state.toolUseInfo,
             createdAt: new Date(),
+            sessionId: state.sessionId ?? undefined,
         };
     }
 

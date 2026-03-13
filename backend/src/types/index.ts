@@ -48,6 +48,18 @@ export type {
 
 export type { PersistedMessage, PersistedSubMessage, PersistedToolUseInfo } from './persistence.js';
 
+export type {
+  RunContext,
+  RunCreatedPayload,
+  RunStatusChangedPayload,
+  RunPodStatusChangedPayload,
+  RunMessagePayload,
+  RunChatCompletePayload,
+  RunDeletedPayload,
+  RunsLoadedPayload,
+  RunPodMessagesLoadedPayload,
+} from './run.js';
+
 export * from './responses/index.js';
 
 // 向後相容：重新 export Event Enums

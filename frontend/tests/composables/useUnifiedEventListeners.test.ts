@@ -66,8 +66,10 @@ describe('useUnifiedEventListeners', () => {
 
       expect(mockWebSocketClient.on).toHaveBeenCalled()
       const callCount = mockWebSocketClient.on.mock.calls.length
-      // listeners 陣列長度加上單獨註冊的 pod:chat:user-message 和 integration:connection:status:changed 共 2 個
-      const expectedCount = listeners.length + 2
+      // listeners 陣列長度加上 standaloneListeners：
+      // pod:chat:user-message、integration:connection:status:changed、
+      // run:message、run:chat:complete、run:tool_use、run:tool_result 共 6 個
+      const expectedCount = listeners.length + 6
       expect(callCount).toBe(expectedCount)
     })
 
@@ -90,8 +92,10 @@ describe('useUnifiedEventListeners', () => {
 
       expect(mockWebSocketClient.off).toHaveBeenCalled()
       const callCount = mockWebSocketClient.off.mock.calls.length
-      // listeners 陣列長度加上單獨取消的 pod:chat:user-message 和 integration:connection:status:changed 共 2 個
-      const expectedCount = listeners.length + 2
+      // listeners 陣列長度加上 standaloneListeners：
+      // pod:chat:user-message、integration:connection:status:changed、
+      // run:message、run:chat:complete、run:tool_use、run:tool_result 共 6 個
+      const expectedCount = listeners.length + 6
       expect(callCount).toBe(expectedCount)
     })
 

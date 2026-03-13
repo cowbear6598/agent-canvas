@@ -22,14 +22,19 @@ import {
 } from './streamEventProcessor.js';
 import {messageStore} from '../messageStore.js';
 import {podStore} from '../podStore.js';
+import {runStore} from '../runStore.js';
+import {runExecutionService} from '../workflow/runExecutionService.js';
 import {socketService} from '../socketService.js';
 import {logger} from '../../utils/logger.js';
+import type { RunContext } from '../../types/run.js';
+import type { RunMessagePayload, RunChatCompletePayload } from '../../types/run.js';
 
 export interface StreamingChatExecutorOptions {
     canvasId: string;
     podId: string;
     message: string | ContentBlock[];
     abortable: boolean;
+    runContext?: RunContext;
 }
 
 export interface StreamingChatExecutorCallbacks {
@@ -53,6 +58,7 @@ interface StreamContext {
     subMessageState: ReturnType<typeof createSubMessageState>;
     flushCurrentSubMessage: () => void;
     persistStreamingMessage: () => void;
+    runContext?: RunContext;
 }
 
 type TextStreamEvent = Extract<StreamEvent, {type: 'text'}>;
@@ -62,71 +68,119 @@ type CompleteStreamEvent = Extract<StreamEvent, {type: 'complete'}>;
 type ErrorStreamEvent = Extract<StreamEvent, {type: 'error'}>;
 
 function handleTextEvent(event: TextStreamEvent, context: StreamContext): void {
-    const {canvasId, podId, messageId, contentBuffer, subMessageState, persistStreamingMessage} = context;
+    const {canvasId, podId, messageId, contentBuffer, subMessageState, persistStreamingMessage, runContext} = context;
 
     contentBuffer.value = processTextEvent(event.content, contentBuffer.value, subMessageState);
 
-    const textPayload: PodChatMessagePayload = {
-        canvasId,
-        podId,
-        messageId,
-        content: contentBuffer.value,
-        isPartial: true,
-        role: 'assistant',
-    };
-    socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_CLAUDE_CHAT_MESSAGE, textPayload);
+    if (runContext) {
+        const runTextPayload: RunMessagePayload = {
+            runId: runContext.runId,
+            canvasId,
+            podId,
+            messageId,
+            content: contentBuffer.value,
+            isPartial: true,
+            role: 'assistant',
+        };
+        socketService.emitToCanvas(canvasId, WebSocketResponseEvents.RUN_MESSAGE, runTextPayload);
+    } else {
+        const textPayload: PodChatMessagePayload = {
+            canvasId,
+            podId,
+            messageId,
+            content: contentBuffer.value,
+            isPartial: true,
+            role: 'assistant',
+        };
+        socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_CLAUDE_CHAT_MESSAGE, textPayload);
+    }
 
     persistStreamingMessage();
 }
 
 function handleToolUseEvent(event: ToolUseStreamEvent, context: StreamContext): void {
-    const {canvasId, podId, messageId, subMessageState, flushCurrentSubMessage, persistStreamingMessage} = context;
+    const {canvasId, podId, messageId, subMessageState, flushCurrentSubMessage, persistStreamingMessage, runContext} = context;
 
     processToolUseEvent(event.toolUseId, event.toolName, event.input, subMessageState, flushCurrentSubMessage);
 
-    const toolUsePayload: PodChatToolUsePayload = {
-        canvasId,
-        podId,
-        messageId,
-        toolUseId: event.toolUseId,
-        toolName: event.toolName,
-        input: event.input,
-    };
-    socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_CHAT_TOOL_USE, toolUsePayload);
+    if (runContext) {
+        socketService.emitToCanvas(canvasId, WebSocketResponseEvents.RUN_CHAT_TOOL_USE, {
+            runId: runContext.runId,
+            canvasId,
+            podId,
+            messageId,
+            toolUseId: event.toolUseId,
+            toolName: event.toolName,
+            input: event.input,
+        });
+    } else {
+        const toolUsePayload: PodChatToolUsePayload = {
+            canvasId,
+            podId,
+            messageId,
+            toolUseId: event.toolUseId,
+            toolName: event.toolName,
+            input: event.input,
+        };
+        socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_CHAT_TOOL_USE, toolUsePayload);
+    }
 
     persistStreamingMessage();
 }
 
 function handleToolResultEvent(event: ToolResultStreamEvent, context: StreamContext): void {
-    const {canvasId, podId, messageId, subMessageState, persistStreamingMessage} = context;
+    const {canvasId, podId, messageId, subMessageState, persistStreamingMessage, runContext} = context;
 
     processToolResultEvent(event.toolUseId, event.output, subMessageState);
 
-    const toolResultPayload: PodChatToolResultPayload = {
-        canvasId,
-        podId,
-        messageId,
-        toolUseId: event.toolUseId,
-        toolName: event.toolName,
-        output: event.output,
-    };
-    socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_CHAT_TOOL_RESULT, toolResultPayload);
+    if (runContext) {
+        socketService.emitToCanvas(canvasId, WebSocketResponseEvents.RUN_CHAT_TOOL_RESULT, {
+            runId: runContext.runId,
+            canvasId,
+            podId,
+            messageId,
+            toolUseId: event.toolUseId,
+            toolName: event.toolName,
+            output: event.output,
+        });
+    } else {
+        const toolResultPayload: PodChatToolResultPayload = {
+            canvasId,
+            podId,
+            messageId,
+            toolUseId: event.toolUseId,
+            toolName: event.toolName,
+            output: event.output,
+        };
+        socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_CHAT_TOOL_RESULT, toolResultPayload);
+    }
 
     persistStreamingMessage();
 }
 
 function handleCompleteEvent(_event: CompleteStreamEvent, context: StreamContext): void {
-    const {canvasId, podId, messageId, contentBuffer, flushCurrentSubMessage} = context;
+    const {canvasId, podId, messageId, contentBuffer, flushCurrentSubMessage, runContext} = context;
 
     flushCurrentSubMessage();
 
-    const completePayload: PodChatCompletePayload = {
-        canvasId,
-        podId,
-        messageId,
-        fullContent: contentBuffer.value,
-    };
-    socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_CHAT_COMPLETE, completePayload);
+    if (runContext) {
+        const runCompletePayload: RunChatCompletePayload = {
+            runId: runContext.runId,
+            canvasId,
+            podId,
+            messageId,
+            fullContent: contentBuffer.value,
+        };
+        socketService.emitToCanvas(canvasId, WebSocketResponseEvents.RUN_CHAT_COMPLETE, runCompletePayload);
+    } else {
+        const completePayload: PodChatCompletePayload = {
+            canvasId,
+            podId,
+            messageId,
+            fullContent: contentBuffer.value,
+        };
+        socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_CHAT_COMPLETE, completePayload);
+    }
 }
 
 function handleErrorEvent(_event: ErrorStreamEvent, context: StreamContext): void {
@@ -157,7 +211,7 @@ async function handleStreamAbort(
     context: StreamContext,
     callbacks?: StreamingChatExecutorCallbacks
 ): Promise<StreamingChatExecutorResult> {
-    const {canvasId, podId, messageId, contentBuffer, subMessageState, flushCurrentSubMessage, persistStreamingMessage} = context;
+    const {canvasId, podId, messageId, contentBuffer, subMessageState, flushCurrentSubMessage, persistStreamingMessage, runContext} = context;
 
     flushCurrentSubMessage();
 
@@ -166,7 +220,11 @@ async function handleStreamAbort(
         persistStreamingMessage();
     }
 
-    podStore.setStatus(canvasId, podId, 'idle');
+    if (runContext) {
+        runExecutionService.unregisterActiveStream(runContext.runId, podId);
+    } else {
+        podStore.setStatus(canvasId, podId, 'idle');
+    }
 
     if (callbacks?.onAborted) {
         await callbacks.onAborted(canvasId, podId, messageId);
@@ -185,9 +243,11 @@ async function handleStreamError(
     error: unknown,
     callbacks?: StreamingChatExecutorCallbacks
 ): Promise<never> {
-    const {canvasId, podId} = context;
+    const {canvasId, podId, runContext} = context;
 
-    podStore.setStatus(canvasId, podId, 'idle');
+    if (!runContext) {
+        podStore.setStatus(canvasId, podId, 'idle');
+    }
 
     if (callbacks?.onError) {
         await callbacks.onError(canvasId, podId, error as Error);
@@ -196,11 +256,16 @@ async function handleStreamError(
     throw error;
 }
 
+/**
+ * run mode 與非 run mode 的差異點超過閾值，加此說明：
+ * - 有 runContext → 使用 run-specific session、key、store，不改 pod 全域狀態
+ * - 無 runContext → 維持原有行為
+ */
 export async function executeStreamingChat(
     options: StreamingChatExecutorOptions,
     callbacks?: StreamingChatExecutorCallbacks
 ): Promise<StreamingChatExecutorResult> {
-    const {canvasId, podId, message, abortable} = options;
+    const {canvasId, podId, message, abortable, runContext} = options;
 
     const messageId = uuidv4();
     const contentBuffer = {value: ''};
@@ -209,7 +274,11 @@ export async function executeStreamingChat(
 
     const persistStreamingMessage = (): void => {
         const persistedMsg = buildPersistedMessage(messageId, contentBuffer.value, subMessageState);
-        messageStore.upsertMessage(canvasId, podId, persistedMsg);
+        if (runContext) {
+            runStore.upsertRunMessage(runContext.runId, podId, persistedMsg);
+        } else {
+            messageStore.upsertMessage(canvasId, podId, persistedMsg);
+        }
     };
 
     const streamContext: StreamContext = {
@@ -220,19 +289,40 @@ export async function executeStreamingChat(
         subMessageState,
         flushCurrentSubMessage,
         persistStreamingMessage,
+        runContext,
     };
 
     const streamingCallback = createStreamingCallback(streamContext);
 
+    // run mode：從 instance 取得 session，並以 runId:podId 作為 query key
+    let runInstance: Awaited<ReturnType<typeof runStore.getPodInstance>> | undefined;
+    if (runContext) {
+        runInstance = runStore.getPodInstance(runContext.runId, podId);
+        runExecutionService.registerActiveStream(runContext.runId, podId);
+    }
+
     try {
-        await claudeService.sendMessage(podId, message, streamingCallback);
+        const runOptions = runContext ? {
+            sessionId: runInstance?.claudeSessionId ?? undefined,
+            queryKey: `${runContext.runId}:${podId}`,
+        } : undefined;
+
+        const resultMessage = await claudeService.sendMessage(podId, message, streamingCallback, runOptions);
 
         const hasAssistantContent = contentBuffer.value.length > 0 || subMessageState.subMessages.length > 0;
         if (hasAssistantContent) {
             persistStreamingMessage();
         }
 
-        podStore.setStatus(canvasId, podId, 'idle');
+        if (runContext) {
+            runExecutionService.unregisterActiveStream(runContext.runId, podId);
+            // 串流完成後，將最新的 sessionId 寫回 run instance
+            if (resultMessage.sessionId && runInstance) {
+                runStore.updatePodInstanceClaudeSessionId(runInstance.id, resultMessage.sessionId);
+            }
+        } else {
+            podStore.setStatus(canvasId, podId, 'idle');
+        }
 
         if (callbacks?.onComplete) {
             await callbacks.onComplete(canvasId, podId);
@@ -245,6 +335,10 @@ export async function executeStreamingChat(
             aborted: false,
         };
     } catch (error) {
+        if (runContext) {
+            runExecutionService.unregisterActiveStream(runContext.runId, podId);
+        }
+
         if (isAbortError(error) && abortable) {
             return handleStreamAbort(streamContext, callbacks);
         }

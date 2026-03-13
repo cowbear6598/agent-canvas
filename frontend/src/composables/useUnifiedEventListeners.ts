@@ -5,6 +5,7 @@ import { getConnectionEventListeners } from './eventHandlers/connectionEventHand
 import { getNoteEventListeners } from './eventHandlers/noteEventHandlers'
 import { getCanvasEventListeners } from './eventHandlers/canvasEventHandlers'
 import { getIntegrationEventListeners, handleIntegrationConnectionStatusChanged } from './eventHandlers/integrationEventHandlers'
+import { getRunEventListeners, getRunStandaloneListeners } from './eventHandlers/runEventHandlers'
 
 const isListenerRegistered = ref(false)
 
@@ -14,14 +15,15 @@ export const listeners = [
   ...getNoteEventListeners(),
   ...getCanvasEventListeners(),
   ...getIntegrationEventListeners(),
+  ...getRunEventListeners(),
 ]
 
-// 這兩個事件的 payload 不含 canvasId / requestId，無法套用 createUnifiedHandler 機制
-// （不需要 Canvas 過濾、不需要 Toast、不需要 pending request 解析），因此維持獨立註冊。
-// 測試也明確以 listeners.length + 2 驗證此分離設計，不應將其納入 listeners 陣列。
+// standalone 事件的 payload 不需經過 createUnifiedHandler 的 requestId / Toast 機制，因此維持獨立註冊。
+// 測試以 listeners.length + standaloneListeners.length 驗證此分離設計，不應將其納入 listeners 陣列。
 const standaloneListeners: Array<{ event: string; handler: (payload: unknown) => void }> = [
   { event: WebSocketResponseEvents.POD_CHAT_USER_MESSAGE, handler: handlePodChatUserMessage as (payload: unknown) => void },
   { event: WebSocketResponseEvents.INTEGRATION_CONNECTION_STATUS_CHANGED, handler: handleIntegrationConnectionStatusChanged as (payload: unknown) => void },
+  ...getRunStandaloneListeners(),
 ]
 
 export function registerUnifiedListeners(): void {

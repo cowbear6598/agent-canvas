@@ -17,6 +17,7 @@ import { cursorHandlerGroup } from './groups/cursorHandlerGroup.js';
 import { mcpServerHandlerGroup } from './groups/mcpServerHandlerGroup.js';
 import { configHandlerGroup } from './groups/configHandlerGroup.js';
 import { integrationHandlerGroup } from './groups/integrationHandlerGroup.js';
+import { runHandlerGroup } from './groups/runHandlerGroup.js';
 
 const registry = new HandlerRegistry();
 
@@ -38,6 +39,7 @@ registry.registerGroup(cursorHandlerGroup);
 registry.registerGroup(mcpServerHandlerGroup);
 registry.registerGroup(configHandlerGroup);
 registry.registerGroup(integrationHandlerGroup);
+registry.registerGroup(runHandlerGroup);
 
 export function registerAllHandlers(): void {
 	registry.registerToRouter();

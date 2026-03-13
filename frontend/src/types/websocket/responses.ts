@@ -7,6 +7,7 @@ import type {CommandNote} from '@/types'
 import type {AnchorPosition} from '@/types'
 import type {McpServerConfig, McpServerNote} from '../mcpServer'
 import type {ResultPayload} from './index'
+import type {WorkflowRun, RunStatus, RunPodStatus} from '../run'
 
 export interface ConnectionReadyPayload {
     socketId: string
@@ -499,5 +500,83 @@ export interface ConfigGetResultPayload extends ResultPayload {
 export interface ConfigUpdatedPayload extends ResultPayload {
     summaryModel?: ModelType
     aiDecideModel?: ModelType
+}
+
+export interface RunCreatedPayload {
+    canvasId: string
+    run: WorkflowRun
+}
+
+export interface RunStatusChangedPayload {
+    canvasId: string
+    runId: string
+    status: RunStatus
+    completedAt?: string
+}
+
+export interface RunPodStatusChangedPayload {
+    canvasId: string
+    runId: string
+    podId: string
+    status: RunPodStatus
+    lastResponseSummary?: string
+    errorMessage?: string
+    triggeredAt?: string
+    completedAt?: string
+}
+
+export interface RunMessagePayload {
+    canvasId: string
+    runId: string
+    podId: string
+    messageId: string
+    content: string
+    isPartial: boolean
+    role?: 'user' | 'assistant'
+}
+
+export interface RunChatCompletePayload {
+    canvasId: string
+    runId: string
+    podId: string
+    messageId: string
+    fullContent: string
+}
+
+export interface RunDeletedPayload {
+    canvasId: string
+    runId: string
+}
+
+export interface RunHistoryResultPayload {
+    requestId: string
+    success: boolean
+    runs?: WorkflowRun[]
+}
+
+export interface RunPodMessagesResultPayload {
+    requestId: string
+    success: boolean
+    messages?: PersistedMessage[]
+}
+
+export interface RunToolUsePayload {
+    canvasId: string
+    runId: string
+    podId: string
+    messageId: string
+    toolUseId: string
+    toolName: string
+    input: Record<string, unknown>
+}
+
+export interface RunToolResultPayload {
+    canvasId: string
+    runId: string
+    podId: string
+    messageId: string
+    toolUseId: string
+    toolName: string
+    output: string
 }
 

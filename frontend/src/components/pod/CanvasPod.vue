@@ -17,6 +17,8 @@ import {getActiveCanvasIdOrWarn} from '@/utils/canvasGuard'
 import {usePodDrag} from '@/composables/pod/usePodDrag'
 import {usePodNoteBinding} from '@/composables/pod/usePodNoteBinding'
 import {useWorkflowClear} from '@/composables/pod/useWorkflowClear'
+import {useToast} from '@/composables/useToast'
+import {isMultiInstanceChainPod, isMultiInstanceSourcePod} from '@/utils/multiInstanceGuard'
 import PodHeader from '@/components/pod/PodHeader.vue'
 import PodMiniScreen from '@/components/pod/PodMiniScreen.vue'
 import PodSlots from '@/components/pod/PodSlots.vue'
@@ -45,6 +47,7 @@ const {
 } = useCanvasContext()
 const {detectTargetAnchor} = useAnchorDetection()
 const {startBatchDrag, isElementSelected, isBatchDragging} = useBatchDrag()
+const {toast} = useToast()
 
 const isActive = computed(() => props.pod.id === podStore.activePodId)
 const boundNote = computed(() => outputStyleStore.getNotesByPodId(props.pod.id)[0])
@@ -80,6 +83,9 @@ const showDeleteDialog = ref(false)
 const showScheduleModal = ref(false)
 
 const isMultiInstanceEnabled = computed(() => props.pod.multiInstance ?? false)
+const isDownstreamMultiInstance = computed(() =>
+  isMultiInstanceChainPod(props.pod.id) && !isMultiInstanceSourcePod(props.pod.id)
+)
 
 const hasSchedule = computed(() => props.pod.schedule !== null && props.pod.schedule !== undefined)
 const scheduleEnabled = computed(() => props.pod.schedule?.enabled ?? false)
@@ -215,6 +221,14 @@ const handleDblClick = (e: MouseEvent): void => {
   const target = e.target as HTMLElement
 
   if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return
+
+  if (isDownstreamMultiInstance.value) {
+    toast({
+      title: 'Pod',
+      description: '此 Pod 屬於 Multi-Instance 流程，請從歷程查看',
+    })
+    return
+  }
 
   handleSelectPod()
 }

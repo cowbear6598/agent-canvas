@@ -3,6 +3,8 @@ import { workflowQueueService } from '../../src/services/workflow/index.js';
 import { workflowExecutionService } from '../../src/services/workflow/index.js';
 import type { Pod, Connection, TriggerMode, PersistedMessage } from '../../src/types/index.js';
 import type { TriggerStrategy } from '../../src/services/workflow/types.js';
+import type { RunContext } from '../../src/types/run.js';
+import type { WorkflowRun, RunPodInstance } from '../../src/services/runStore.js';
 
 // 常用測試 ID
 export const TEST_IDS = {
@@ -105,4 +107,40 @@ export function clearAllQueues(targetPodIds: string[]) {
   targetPodIds.forEach((podId) => {
     while (workflowQueueService.getQueueSize(podId) > 0) workflowQueueService.dequeue(podId);
   });
+}
+
+export function createMockRunContext(overrides?: Partial<RunContext>): RunContext {
+  return {
+    runId: 'test-run-id',
+    canvasId: TEST_IDS.canvasId,
+    sourcePodId: TEST_IDS.sourcePodId,
+    ...overrides,
+  };
+}
+
+export function createMockWorkflowRun(overrides?: Partial<WorkflowRun>): WorkflowRun {
+  return {
+    id: 'test-run-id',
+    canvasId: TEST_IDS.canvasId,
+    sourcePodId: TEST_IDS.sourcePodId,
+    triggerMessage: 'Test trigger message',
+    status: 'running',
+    createdAt: new Date().toISOString(),
+    completedAt: null,
+    ...overrides,
+  };
+}
+
+export function createMockRunPodInstance(overrides?: Partial<RunPodInstance>): RunPodInstance {
+  return {
+    id: 'test-instance-id',
+    runId: 'test-run-id',
+    podId: TEST_IDS.targetPodId,
+    status: 'pending',
+    claudeSessionId: null,
+    errorMessage: null,
+    triggeredAt: null,
+    completedAt: null,
+    ...overrides,
+  };
 }
