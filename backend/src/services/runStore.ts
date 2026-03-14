@@ -222,10 +222,6 @@ class RunStore {
     this.stmts.runPodInstance.settleDirectPathway.run({ $id: instanceId });
   }
 
-  settleAllPathways(instanceId: string): void {
-    this.stmts.runPodInstance.settleAllPathways.run({ $id: instanceId });
-  }
-
   getPodInstance(runId: string, podId: string): RunPodInstance | undefined {
     const row = this.stmts.runPodInstance.selectByRunIdAndPodId.get({
       $runId: runId,

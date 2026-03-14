@@ -241,7 +241,6 @@ export function setupRunStoreSpy() {
         updatePodInstanceClaudeSessionId: vi.spyOn(runStore, 'updatePodInstanceClaudeSessionId').mockImplementation(() => {}),
         settleAutoPathway: vi.spyOn(runStore, 'settleAutoPathway').mockImplementation(() => {}),
         settleDirectPathway: vi.spyOn(runStore, 'settleDirectPathway').mockImplementation(() => {}),
-        settleAllPathways: vi.spyOn(runStore, 'settleAllPathways').mockImplementation(() => {}),
         getRunningPodInstances: vi.spyOn(runStore, 'getRunningPodInstances').mockReturnValue([]),
         addRunMessage: vi.spyOn(runStore, 'addRunMessage').mockImplementation(() => ({
             id: 'test-msg-id',

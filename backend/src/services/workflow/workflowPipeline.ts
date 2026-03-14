@@ -11,6 +11,7 @@ import { runStore } from '../runStore.js';
 import { logger } from '../../utils/logger.js';
 import { LazyInitializable } from './lazyInitializable.js';
 import { fireAndForget } from '../../utils/operationHelpers.js';
+import { isAutoTriggerable } from './workflowHelpers.js';
 
 interface PipelineDeps {
   executionService: ExecutionServiceMethods;
@@ -45,11 +46,13 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
 
     logger.log('Workflow', 'Pipeline', `開始執行 Pipeline："${sourcePodName}" → "${targetPod.name}" (${triggerMode})`);
 
+    const pathway = isAutoTriggerable(triggerMode) ? 'auto' : 'direct';
     const summaryResult = await this.deps.executionService.generateSummaryWithFallback(
       canvasId,
       sourcePodId,
       targetPodId,
-      runContext
+      runContext,
+      pathway
     );
 
     if (!summaryResult) {

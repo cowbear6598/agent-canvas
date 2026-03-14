@@ -98,32 +98,33 @@ describe('evaluateRunStatus — deciding 狀態處理', () => {
 
   it('有 pod 處於 deciding 狀態時，即使其他 pod 有 error，Run 不應結束', () => {
     // instanceA status 為 error，表示已非 pending，settlePodTrigger 會觸發 completed 流程進而呼叫 evaluateRunStatus
-    const instanceA = makeInstance({ podId: 'pod-a', status: 'error' });
+    const instanceA = makeInstance({ podId: 'pod-a', status: 'error', autoPathwaySettled: false });
     const instanceB = makeInstance({ id: 'instance-2', podId: 'pod-b', status: 'deciding' });
-    // 3 calls: settlePodTrigger (1st), settleAllPathways noop, (2nd), updateAndEmitPodInstanceStatus (3rd)
+    const instanceASettled = makeInstance({ podId: 'pod-a', status: 'error', autoPathwaySettled: true });
     vi.spyOn(runStore, 'getPodInstance')
       .mockReturnValueOnce(instanceA)
-      .mockReturnValueOnce(instanceA)
-      .mockReturnValueOnce(instanceA);
-    vi.spyOn(runStore, 'settleAllPathways').mockImplementation(() => {});
+      .mockReturnValueOnce(instanceASettled)
+      .mockReturnValueOnce(instanceASettled);
+    vi.spyOn(runStore, 'settleAutoPathway').mockImplementation(() => {});
     vi.spyOn(runStore, 'updatePodInstanceStatus').mockImplementation(() => {});
     vi.spyOn(runStore, 'updateRunStatus').mockImplementation(() => {});
     vi.spyOn(runStore, 'getPodInstancesByRunId').mockReturnValue([instanceA, instanceB]);
     vi.spyOn(connectionStore, 'list').mockReturnValue([]);
 
-    runExecutionService.settlePodTrigger(makeRunContext(), 'pod-a');
+    runExecutionService.settlePodTrigger(makeRunContext(), 'pod-a', 'auto');
 
     expect(runStore.updateRunStatus).not.toHaveBeenCalled();
   });
 
   it('所有 pod completed/skipped 且無 deciding 時，Run 標記為 completed', () => {
-    const instanceA = makeInstance({ podId: 'pod-a', status: 'completed' });
+    const instanceA = makeInstance({ podId: 'pod-a', status: 'completed', autoPathwaySettled: false });
     const instanceB = makeInstance({ id: 'instance-2', podId: 'pod-b', status: 'skipped' });
+    const instanceASettled = makeInstance({ podId: 'pod-a', status: 'completed', autoPathwaySettled: true });
     vi.spyOn(runStore, 'getPodInstance')
       .mockReturnValueOnce(instanceA)
-      .mockReturnValueOnce(instanceA)
-      .mockReturnValueOnce(instanceA);
-    vi.spyOn(runStore, 'settleAllPathways').mockImplementation(() => {});
+      .mockReturnValueOnce(instanceASettled)
+      .mockReturnValueOnce(instanceASettled);
+    vi.spyOn(runStore, 'settleAutoPathway').mockImplementation(() => {});
     vi.spyOn(runStore, 'updatePodInstanceStatus').mockImplementation(() => {});
     vi.spyOn(runStore, 'updateRunStatus').mockImplementation(() => {});
     vi.spyOn(runStore, 'getPodInstancesByRunId').mockReturnValue([instanceA, instanceB]);
@@ -138,7 +139,7 @@ describe('evaluateRunStatus — deciding 狀態處理', () => {
       completedAt: new Date().toISOString(),
     });
 
-    runExecutionService.settlePodTrigger(makeRunContext(), 'pod-a');
+    runExecutionService.settlePodTrigger(makeRunContext(), 'pod-a', 'auto');
 
     expect(runStore.updateRunStatus).toHaveBeenCalledWith('run-1', 'completed');
   });

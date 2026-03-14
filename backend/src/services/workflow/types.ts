@@ -113,7 +113,8 @@ export interface ExecutionServiceMethods {
     canvasId: string,
     sourcePodId: string,
     targetPodId: string,
-    runContext?: RunContext
+    runContext?: RunContext,
+    pathway?: 'auto' | 'direct'
   ): Promise<{ content: string; isSummarized: boolean } | null>;
 
   triggerWorkflowWithSummary(params: TriggerWorkflowWithSummaryParams): Promise<void>;

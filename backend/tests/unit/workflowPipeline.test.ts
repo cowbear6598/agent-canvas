@@ -107,7 +107,8 @@ describe('WorkflowPipeline', () => {
         canvasId,
         sourcePodId,
         targetPodId,
-        undefined
+        undefined,
+        'auto'
       );
 
       expect(mockStrategy.collectSources).toHaveBeenCalledWith({

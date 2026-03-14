@@ -834,20 +834,20 @@ describe('WorkflowExecutionService.generateSummaryWithFallback runContext 狀態
     vi.restoreAllMocks();
   });
 
-  it('摘要成功時呼叫 settlePodTrigger', async () => {
+  it('摘要成功時呼叫 settlePodTrigger（帶 pathway）', async () => {
     (summaryService.generateSummaryForTarget as any).mockResolvedValue({
       success: true,
       summary: '摘要內容',
     });
 
-    await workflowExecutionService.generateSummaryWithFallback(canvasId, sourcePodId, targetPodId, mockRunContext);
+    await workflowExecutionService.generateSummaryWithFallback(canvasId, sourcePodId, targetPodId, mockRunContext, 'auto');
 
     expect(runExecutionService.summarizingPodInstance).toHaveBeenCalledWith(mockRunContext, sourcePodId);
-    expect(runExecutionService.settlePodTrigger).toHaveBeenCalledWith(mockRunContext, sourcePodId);
+    expect(runExecutionService.settlePodTrigger).toHaveBeenCalledWith(mockRunContext, sourcePodId, 'auto');
     expect(runExecutionService.errorPodInstance).not.toHaveBeenCalled();
   });
 
-  it('摘要失敗但 fallback 有值時呼叫 settlePodTrigger', async () => {
+  it('摘要失敗但 fallback 有值時呼叫 settlePodTrigger（帶 pathway）', async () => {
     (summaryService.generateSummaryForTarget as any).mockResolvedValue({
       success: false,
       summary: '',
@@ -855,9 +855,9 @@ describe('WorkflowExecutionService.generateSummaryWithFallback runContext 狀態
     });
     (mockAutoTriggerServiceForFallback.getLastAssistantMessage as any).mockReturnValue('fallback 內容');
 
-    await workflowExecutionService.generateSummaryWithFallback(canvasId, sourcePodId, targetPodId, mockRunContext);
+    await workflowExecutionService.generateSummaryWithFallback(canvasId, sourcePodId, targetPodId, mockRunContext, 'direct');
 
-    expect(runExecutionService.settlePodTrigger).toHaveBeenCalledWith(mockRunContext, sourcePodId);
+    expect(runExecutionService.settlePodTrigger).toHaveBeenCalledWith(mockRunContext, sourcePodId, 'direct');
     expect(runExecutionService.errorPodInstance).not.toHaveBeenCalled();
   });
 

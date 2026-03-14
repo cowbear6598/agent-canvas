@@ -13,7 +13,7 @@ export const onChatComplete = async (canvasId: string, podId: string): Promise<v
 };
 
 export const onRunChatComplete = async (runContext: RunContext, canvasId: string, podId: string): Promise<void> => {
-  runExecutionService.settlePodTrigger(runContext, podId);
+  runExecutionService.settlePodTrigger(runContext, podId, 'auto');
   workflowExecutionService.checkAndTriggerWorkflows(canvasId, podId, runContext).catch((error) => {
     logger.error('Workflow', 'Error', `檢查 Pod「${podId}」自動觸發 Workflow 失敗 (Run: ${runContext.runId})`, error);
   });

@@ -121,18 +121,24 @@ class RunExecutionService {
     this.updateAndEmitPodInstanceStatus(runContext, podId, 'running');
   }
 
-  settlePodTrigger(runContext: RunContext, podId: string): void {
+  settlePodTrigger(runContext: RunContext, podId: string, pathway: 'auto' | 'direct'): void {
     const instance = runStore.getPodInstance(runContext.runId, podId);
     if (!instance) {
       logger.warn('Run', 'Warn', `settlePodTrigger：找不到 instance (runId=${runContext.runId}, podId=${podId})`);
       return;
     }
 
-    runStore.settleAllPathways(instance.id);
+    if (pathway === 'auto') {
+      runStore.settleAutoPathway(instance.id);
+    } else {
+      runStore.settleDirectPathway(instance.id);
+    }
+
     const updated = runStore.getPodInstance(runContext.runId, podId);
     if (!updated) return;
 
-    if (this.isAllPathwaysSettled(updated) && updated.status !== 'pending') {
+    const wasNeverTriggered = updated.status === 'pending' || updated.status === 'deciding' || updated.status === 'queued' || updated.status === 'waiting';
+    if (this.isAllPathwaysSettled(updated) && !wasNeverTriggered) {
       this.updateAndEmitPodInstanceStatus(runContext, podId, 'completed', { evaluateRun: true });
     }
   }

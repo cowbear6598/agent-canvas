@@ -50,10 +50,12 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     return fallback ? { content: fallback, isSummarized: false } : null;
   }
 
-  private updateSummaryStatus(canvasId: string, sourcePodId: string, success: boolean, runContext?: RunContext, fallbackAvailable?: boolean): void {
+  private updateSummaryStatus(canvasId: string, sourcePodId: string, success: boolean, runContext?: RunContext, fallbackAvailable?: boolean, pathway?: 'auto' | 'direct'): void {
     if (runContext) {
       if (success || fallbackAvailable) {
-        runExecutionService.settlePodTrigger(runContext, sourcePodId);
+        if (pathway) {
+          runExecutionService.settlePodTrigger(runContext, sourcePodId, pathway);
+        }
       } else {
         runExecutionService.errorPodInstance(runContext, sourcePodId, '無法生成摘要');
       }
@@ -66,7 +68,8 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     canvasId: string,
     sourcePodId: string,
     targetPodId: string,
-    runContext?: RunContext
+    runContext?: RunContext,
+    pathway?: 'auto' | 'direct'
   ): Promise<{ content: string; isSummarized: boolean } | null> {
     if (runContext) {
       runExecutionService.summarizingPodInstance(runContext, sourcePodId);
@@ -82,13 +85,13 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     );
 
     if (summaryResult.success) {
-      this.updateSummaryStatus(canvasId, sourcePodId, true, runContext);
+      this.updateSummaryStatus(canvasId, sourcePodId, true, runContext, undefined, pathway);
       return { content: summaryResult.summary, isSummarized: true };
     }
 
     logger.error('Workflow', 'Error', `生成摘要失敗：${summaryResult.error}`);
     const fallback = this.getLastAssistantFallback(sourcePodId, runContext);
-    this.updateSummaryStatus(canvasId, sourcePodId, false, runContext, fallback !== null);
+    this.updateSummaryStatus(canvasId, sourcePodId, false, runContext, fallback !== null, pathway);
     return fallback;
   }
 
@@ -230,7 +233,8 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
       true
     );
     if (runContext) {
-      runExecutionService.settlePodTrigger(runContext, targetPodId);
+      const pathway = isAutoTriggerable(strategy.mode) ? 'auto' : 'direct';
+      runExecutionService.settlePodTrigger(runContext, targetPodId, pathway);
     }
     // 刻意不 await：下游 workflow 觸發獨立於當前查詢完成流程
     fireAndForget(

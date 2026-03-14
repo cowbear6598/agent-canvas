@@ -156,7 +156,6 @@ function buildStatements(db: Database): {
     deleteByRunId: ReturnType<Database['prepare']>;
     settleAutoPathway: ReturnType<Database['prepare']>;
     settleDirectPathway: ReturnType<Database['prepare']>;
-    settleAllPathways: ReturnType<Database['prepare']>;
   };
   runMessage: {
     insert: ReturnType<Database['prepare']>;
@@ -424,10 +423,6 @@ function buildStatements(db: Database): {
       deleteByRunId: db.prepare('DELETE FROM run_pod_instances WHERE run_id = ?'),
       settleAutoPathway: db.prepare('UPDATE run_pod_instances SET auto_pathway_settled = 1 WHERE id = $id'),
       settleDirectPathway: db.prepare('UPDATE run_pod_instances SET direct_pathway_settled = 1 WHERE id = $id'),
-      // 只結算存在的 pathway（NULL 表示此 pathway 不存在，保持 NULL 不變）
-      settleAllPathways: db.prepare(
-        'UPDATE run_pod_instances SET auto_pathway_settled = CASE WHEN auto_pathway_settled IS NOT NULL THEN 1 ELSE NULL END, direct_pathway_settled = CASE WHEN direct_pathway_settled IS NOT NULL THEN 1 ELSE NULL END WHERE id = $id',
-      ),
     },
 
     runMessage: {
