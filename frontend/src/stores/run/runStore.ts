@@ -2,8 +2,6 @@ import { defineStore } from 'pinia'
 import { createWebSocketRequest, websocketClient, WebSocketRequestEvents, WebSocketResponseEvents } from '@/services/websocket'
 import { generateRequestId } from '@/services/utils'
 import { getActiveCanvasIdOrWarn } from '@/utils/canvasGuard'
-import { usePodStore } from '@/stores/pod/podStore'
-import { useConnectionStore } from '@/stores/connectionStore'
 import { MAX_RUNS_PER_CANVAS } from '@/lib/constants'
 import type { WorkflowRun, RunStatus, RunPodStatus } from '@/types/run'
 import type { Message } from '@/types/chat'
@@ -76,14 +74,6 @@ export const useRunStore = defineStore('run', {
             return [...state.runs]
                 .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
                 .slice(0, MAX_RUNS_PER_CANVAS)
-        },
-
-        hasMultiInstancePods(): boolean {
-            const podStore = usePodStore()
-            const connectionStore = useConnectionStore()
-            return podStore.pods.some(
-                pod => pod.multiInstance === true && connectionStore.isSourcePod(pod.id)
-            )
         },
 
         runningRunsCount: (state): number => {

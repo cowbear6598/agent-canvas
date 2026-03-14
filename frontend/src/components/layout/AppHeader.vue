@@ -33,7 +33,6 @@
         </button>
 
         <button
-          v-if="runStore.hasMultiInstancePods"
           data-history-toggle
           class="flex items-center justify-center rounded-md p-2 hover:bg-accent"
           title="歷程"

@@ -2,8 +2,6 @@ import { describe, it, expect, vi } from 'vitest'
 import { webSocketMockFactory, mockCreateWebSocketRequest } from '../../helpers/mockWebSocket'
 import { setupStoreTest } from '../../helpers/testSetup'
 import { useRunStore } from '@/stores/run/runStore'
-import { usePodStore } from '@/stores/pod/podStore'
-import { useConnectionStore } from '@/stores/connectionStore'
 import { useCanvasStore } from '@/stores/canvasStore'
 import type { WorkflowRun, RunPodInstance } from '@/types/run'
 
@@ -114,48 +112,6 @@ describe('runStore', () => {
                 )
 
                 expect(store.sortedRuns).toHaveLength(30)
-            })
-        })
-
-        describe('hasMultiInstancePods', () => {
-            it('有 multiInstance source pod 時應回傳 true', () => {
-                const store = useRunStore()
-                const podStore = usePodStore()
-                const connectionStore = useConnectionStore()
-
-                podStore.pods = [{ id: 'pod-1', name: 'Pod 1', x: 0, y: 0, output: [], rotation: 0, multiInstance: true }]
-                // source pod 表示沒有 targetPodId 指向它
-                connectionStore.connections = []
-
-                expect(store.hasMultiInstancePods).toBe(true)
-            })
-
-            it('沒有 multiInstance pod 時應回傳 false', () => {
-                const store = useRunStore()
-                const podStore = usePodStore()
-
-                podStore.pods = [{ id: 'pod-1', name: 'Pod 1', x: 0, y: 0, output: [], rotation: 0, multiInstance: false }]
-
-                expect(store.hasMultiInstancePods).toBe(false)
-            })
-
-            it('multiInstance pod 為下游節點（非 source）時應回傳 false', () => {
-                const store = useRunStore()
-                const podStore = usePodStore()
-                const connectionStore = useConnectionStore()
-
-                podStore.pods = [{ id: 'pod-2', name: 'Pod 2', x: 0, y: 0, output: [], rotation: 0, multiInstance: true }]
-                connectionStore.connections = [{
-                    id: 'conn-1',
-                    sourcePodId: 'pod-1',
-                    sourceAnchor: 'bottom',
-                    targetPodId: 'pod-2',
-                    targetAnchor: 'top',
-                    triggerMode: 'auto',
-                    status: 'idle',
-                }]
-
-                expect(store.hasMultiInstancePods).toBe(false)
             })
         })
 

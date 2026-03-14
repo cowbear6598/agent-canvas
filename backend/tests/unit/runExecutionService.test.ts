@@ -81,7 +81,11 @@ describe('RunExecutionService', () => {
         if (podId === sourcePodId) return sourceInstance;
         return targetInstance;
       });
-      vi.spyOn(podStore, 'getById').mockReturnValue({ id: sourcePodId, name: 'Source Pod' } as any);
+      vi.spyOn(podStore, 'getById').mockImplementation((cId, podId) => {
+        if (podId === sourcePodId) return { id: sourcePodId, name: 'Source Pod' } as any;
+        if (podId === targetPodId) return { id: targetPodId, name: 'Target Pod' } as any;
+        return undefined;
+      });
       vi.spyOn(runStore, 'countRunsByCanvasId').mockReturnValue(1);
 
       const context = await runExecutionService.createRun(canvasId, sourcePodId, '測試');
@@ -95,6 +99,62 @@ describe('RunExecutionService', () => {
         WebSocketResponseEvents.RUN_CREATED,
         expect.objectContaining({ canvasId, run: expect.objectContaining({ id: mockRun.id, sourcePodName: 'Source Pod' }) }),
       );
+    });
+
+    it('emit payload 的 podInstances 中每個 instance 都有正確的 podName', async () => {
+      const mockRun = createMockRun();
+      const sourceInstance = createMockInstance({ podId: sourcePodId });
+      const targetInstance = createMockInstance({ id: 'instance-2', podId: targetPodId });
+
+      vi.spyOn(runStore, 'createRun').mockReturnValue(mockRun);
+      vi.spyOn(connectionStore, 'findBySourcePodId').mockImplementation((cId, podId) => {
+        if (podId === sourcePodId) {
+          return [{ id: 'conn-1', sourcePodId, targetPodId, sourceAnchor: 'right', targetAnchor: 'left', triggerMode: 'auto', decideStatus: 'none', decideReason: null, connectionStatus: 'idle' }];
+        }
+        return [];
+      });
+      vi.spyOn(runStore, 'createPodInstance').mockImplementation((_, podId) => {
+        if (podId === sourcePodId) return sourceInstance;
+        return targetInstance;
+      });
+      vi.spyOn(podStore, 'getById').mockImplementation((cId, podId) => {
+        if (podId === sourcePodId) return { id: sourcePodId, name: 'Source Pod' } as any;
+        if (podId === targetPodId) return { id: targetPodId, name: 'Target Pod' } as any;
+        return undefined;
+      });
+      vi.spyOn(runStore, 'countRunsByCanvasId').mockReturnValue(1);
+
+      await runExecutionService.createRun(canvasId, sourcePodId, '測試');
+
+      const emitCall = vi.mocked(socketService.emitToCanvas).mock.calls[0];
+      const payload = emitCall?.[2] as any;
+      const instances = payload?.run?.podInstances as Array<{ podId: string; podName: string }>;
+
+      const sourceResult = instances?.find((i) => i.podId === sourcePodId);
+      const targetResult = instances?.find((i) => i.podId === targetPodId);
+
+      expect(sourceResult?.podName).toBe('Source Pod');
+      expect(targetResult?.podName).toBe('Target Pod');
+    });
+
+    it('pod 找不到時 podName fallback 為 podId', async () => {
+      const unknownPodId = 'pod-unknown';
+      const mockRun = createMockRun();
+      const unknownInstance = createMockInstance({ podId: unknownPodId });
+
+      vi.spyOn(runStore, 'createRun').mockReturnValue(mockRun);
+      vi.spyOn(connectionStore, 'findBySourcePodId').mockReturnValue([]);
+      vi.spyOn(runStore, 'createPodInstance').mockReturnValue(unknownInstance);
+      vi.spyOn(podStore, 'getById').mockReturnValue(undefined);
+      vi.spyOn(runStore, 'countRunsByCanvasId').mockReturnValue(1);
+
+      await runExecutionService.createRun(canvasId, unknownPodId, '測試');
+
+      const emitCall = vi.mocked(socketService.emitToCanvas).mock.calls[0];
+      const payload = emitCall?.[2] as any;
+      const instances = payload?.run?.podInstances as Array<{ podId: string; podName: string }>;
+
+      expect(instances?.[0]?.podName).toBe(unknownPodId);
     });
 
     it('source pod 找不到時 sourcePodName fallback 為 podId', async () => {

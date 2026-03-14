@@ -30,14 +30,21 @@ class RunExecutionService {
       return runStore.createPodInstance(workflowRun.id, podId, pathways.autoPathwaySettled, pathways.directPathwaySettled);
     });
 
-    const sourcePod = podStore.getById(canvasId, sourcePodId);
-    const sourcePodName = sourcePod?.name ?? sourcePodId;
+    const instancesWithNames = instances.map((instance) => {
+      const pod = podStore.getById(canvasId, instance.podId);
+      return {
+        ...instance,
+        podName: pod?.name ?? instance.podId,
+      };
+    });
+
+    const sourcePodName = instancesWithNames.find((i) => i.podId === sourcePodId)?.podName ?? sourcePodId;
 
     logger.log('Run', 'Create', `建立 Run ${workflowRun.id}，共 ${instances.length} 個 pod instance`);
 
     socketService.emitToCanvas(canvasId, WebSocketResponseEvents.RUN_CREATED, {
       canvasId,
-      run: { ...workflowRun, podInstances: instances, sourcePodName },
+      run: { ...workflowRun, podInstances: instancesWithNames, sourcePodName },
     } as RunCreatedPayload);
 
     this.enforceRunLimit(canvasId);
