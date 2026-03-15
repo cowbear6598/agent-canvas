@@ -4,10 +4,6 @@ import {WebSocketResponseEvents} from '../../schemas';
 import {isAbortError} from '../../utils/errorHelpers.js';
 import type {
     ContentBlock,
-    PodChatCompletePayload,
-    PodChatMessagePayload,
-    PodChatToolResultPayload,
-    PodChatToolUsePayload,
 } from '../../types';
 
 import {claudeService} from './claudeService.js';
@@ -27,7 +23,135 @@ import {runExecutionService} from '../workflow/runExecutionService.js';
 import {socketService} from '../socketService.js';
 import {logger} from '../../utils/logger.js';
 import type { RunContext } from '../../types/run.js';
-import type { RunMessagePayload, RunChatCompletePayload } from '../../types/run.js';
+
+interface TextEmitParams {
+    canvasId: string;
+    podId: string;
+    messageId: string;
+    content: string;
+}
+
+interface ToolUseEmitParams {
+    canvasId: string;
+    podId: string;
+    messageId: string;
+    toolUseId: string;
+    toolName: string;
+    input: Record<string, unknown>;
+}
+
+interface ToolResultEmitParams {
+    canvasId: string;
+    podId: string;
+    messageId: string;
+    toolUseId: string;
+    toolName: string;
+    output: string;
+}
+
+interface CompleteEmitParams {
+    canvasId: string;
+    podId: string;
+    messageId: string;
+    fullContent: string;
+}
+
+interface ChatEmitStrategy {
+    emitText(params: TextEmitParams): void;
+    emitToolUse(params: ToolUseEmitParams): void;
+    emitToolResult(params: ToolResultEmitParams): void;
+    emitComplete(params: CompleteEmitParams): void;
+}
+
+function createNormalEmitStrategy(): ChatEmitStrategy {
+    return {
+        emitText({canvasId, podId, messageId, content}): void {
+            socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_CLAUDE_CHAT_MESSAGE, {
+                canvasId,
+                podId,
+                messageId,
+                content,
+                isPartial: true,
+                role: 'assistant',
+            });
+        },
+        emitToolUse({canvasId, podId, messageId, toolUseId, toolName, input}): void {
+            socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_CHAT_TOOL_USE, {
+                canvasId,
+                podId,
+                messageId,
+                toolUseId,
+                toolName,
+                input,
+            });
+        },
+        emitToolResult({canvasId, podId, messageId, toolUseId, toolName, output}): void {
+            socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_CHAT_TOOL_RESULT, {
+                canvasId,
+                podId,
+                messageId,
+                toolUseId,
+                toolName,
+                output,
+            });
+        },
+        emitComplete({canvasId, podId, messageId, fullContent}): void {
+            socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_CHAT_COMPLETE, {
+                canvasId,
+                podId,
+                messageId,
+                fullContent,
+            });
+        },
+    };
+}
+
+function createRunEmitStrategy(runId: string): ChatEmitStrategy {
+    return {
+        emitText({canvasId, podId, messageId, content}): void {
+            socketService.emitToCanvas(canvasId, WebSocketResponseEvents.RUN_MESSAGE, {
+                runId,
+                canvasId,
+                podId,
+                messageId,
+                content,
+                isPartial: true,
+                role: 'assistant',
+            });
+        },
+        emitToolUse({canvasId, podId, messageId, toolUseId, toolName, input}): void {
+            socketService.emitToCanvas(canvasId, WebSocketResponseEvents.RUN_CHAT_TOOL_USE, {
+                runId,
+                canvasId,
+                podId,
+                messageId,
+                toolUseId,
+                toolName,
+                input,
+            });
+        },
+        emitToolResult({canvasId, podId, messageId, toolUseId, toolName, output}): void {
+            socketService.emitToCanvas(canvasId, WebSocketResponseEvents.RUN_CHAT_TOOL_RESULT, {
+                runId,
+                canvasId,
+                podId,
+                messageId,
+                toolUseId,
+                toolName,
+                output,
+            });
+        },
+        emitComplete({canvasId, podId, messageId, fullContent}): void {
+            socketService.emitToCanvas(canvasId, WebSocketResponseEvents.RUN_CHAT_COMPLETE, {
+                runId,
+                canvasId,
+                podId,
+                messageId,
+                fullContent,
+            });
+        },
+    };
+}
 
 export interface StreamingChatExecutorOptions {
     canvasId: string;
@@ -58,6 +182,7 @@ interface StreamContext {
     subMessageState: ReturnType<typeof createSubMessageState>;
     flushCurrentSubMessage: () => void;
     persistStreamingMessage: () => void;
+    emitStrategy: ChatEmitStrategy;
     runContext?: RunContext;
 }
 
@@ -68,119 +193,55 @@ type CompleteStreamEvent = Extract<StreamEvent, {type: 'complete'}>;
 type ErrorStreamEvent = Extract<StreamEvent, {type: 'error'}>;
 
 function handleTextEvent(event: TextStreamEvent, context: StreamContext): void {
-    const {canvasId, podId, messageId, contentBuffer, subMessageState, persistStreamingMessage, runContext} = context;
+    const {canvasId, podId, messageId, contentBuffer, subMessageState, persistStreamingMessage, emitStrategy} = context;
 
     contentBuffer.value = processTextEvent(event.content, contentBuffer.value, subMessageState);
 
-    if (runContext) {
-        const runTextPayload: RunMessagePayload = {
-            runId: runContext.runId,
-            canvasId,
-            podId,
-            messageId,
-            content: contentBuffer.value,
-            isPartial: true,
-            role: 'assistant',
-        };
-        socketService.emitToCanvas(canvasId, WebSocketResponseEvents.RUN_MESSAGE, runTextPayload);
-    } else {
-        const textPayload: PodChatMessagePayload = {
-            canvasId,
-            podId,
-            messageId,
-            content: contentBuffer.value,
-            isPartial: true,
-            role: 'assistant',
-        };
-        socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_CLAUDE_CHAT_MESSAGE, textPayload);
-    }
+    emitStrategy.emitText({canvasId, podId, messageId, content: contentBuffer.value});
 
     persistStreamingMessage();
 }
 
 function handleToolUseEvent(event: ToolUseStreamEvent, context: StreamContext): void {
-    const {canvasId, podId, messageId, subMessageState, flushCurrentSubMessage, persistStreamingMessage, runContext} = context;
+    const {canvasId, podId, messageId, subMessageState, flushCurrentSubMessage, persistStreamingMessage, emitStrategy} = context;
 
     processToolUseEvent(event.toolUseId, event.toolName, event.input, subMessageState, flushCurrentSubMessage);
 
-    if (runContext) {
-        socketService.emitToCanvas(canvasId, WebSocketResponseEvents.RUN_CHAT_TOOL_USE, {
-            runId: runContext.runId,
-            canvasId,
-            podId,
-            messageId,
-            toolUseId: event.toolUseId,
-            toolName: event.toolName,
-            input: event.input,
-        });
-    } else {
-        const toolUsePayload: PodChatToolUsePayload = {
-            canvasId,
-            podId,
-            messageId,
-            toolUseId: event.toolUseId,
-            toolName: event.toolName,
-            input: event.input,
-        };
-        socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_CHAT_TOOL_USE, toolUsePayload);
-    }
+    emitStrategy.emitToolUse({
+        canvasId,
+        podId,
+        messageId,
+        toolUseId: event.toolUseId,
+        toolName: event.toolName,
+        input: event.input,
+    });
 
     persistStreamingMessage();
 }
 
 function handleToolResultEvent(event: ToolResultStreamEvent, context: StreamContext): void {
-    const {canvasId, podId, messageId, subMessageState, persistStreamingMessage, runContext} = context;
+    const {canvasId, podId, messageId, subMessageState, persistStreamingMessage, emitStrategy} = context;
 
     processToolResultEvent(event.toolUseId, event.output, subMessageState);
 
-    if (runContext) {
-        socketService.emitToCanvas(canvasId, WebSocketResponseEvents.RUN_CHAT_TOOL_RESULT, {
-            runId: runContext.runId,
-            canvasId,
-            podId,
-            messageId,
-            toolUseId: event.toolUseId,
-            toolName: event.toolName,
-            output: event.output,
-        });
-    } else {
-        const toolResultPayload: PodChatToolResultPayload = {
-            canvasId,
-            podId,
-            messageId,
-            toolUseId: event.toolUseId,
-            toolName: event.toolName,
-            output: event.output,
-        };
-        socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_CHAT_TOOL_RESULT, toolResultPayload);
-    }
+    emitStrategy.emitToolResult({
+        canvasId,
+        podId,
+        messageId,
+        toolUseId: event.toolUseId,
+        toolName: event.toolName,
+        output: event.output,
+    });
 
     persistStreamingMessage();
 }
 
 function handleCompleteEvent(_event: CompleteStreamEvent, context: StreamContext): void {
-    const {canvasId, podId, messageId, contentBuffer, flushCurrentSubMessage, runContext} = context;
+    const {canvasId, podId, messageId, contentBuffer, flushCurrentSubMessage, emitStrategy} = context;
 
     flushCurrentSubMessage();
 
-    if (runContext) {
-        const runCompletePayload: RunChatCompletePayload = {
-            runId: runContext.runId,
-            canvasId,
-            podId,
-            messageId,
-            fullContent: contentBuffer.value,
-        };
-        socketService.emitToCanvas(canvasId, WebSocketResponseEvents.RUN_CHAT_COMPLETE, runCompletePayload);
-    } else {
-        const completePayload: PodChatCompletePayload = {
-            canvasId,
-            podId,
-            messageId,
-            fullContent: contentBuffer.value,
-        };
-        socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_CHAT_COMPLETE, completePayload);
-    }
+    emitStrategy.emitComplete({canvasId, podId, messageId, fullContent: contentBuffer.value});
 }
 
 function handleErrorEvent(_event: ErrorStreamEvent, context: StreamContext): void {
@@ -281,6 +342,10 @@ export async function executeStreamingChat(
         }
     };
 
+    const emitStrategy = runContext
+        ? createRunEmitStrategy(runContext.runId)
+        : createNormalEmitStrategy();
+
     const streamContext: StreamContext = {
         canvasId,
         podId,
@@ -289,6 +354,7 @@ export async function executeStreamingChat(
         subMessageState,
         flushCurrentSubMessage,
         persistStreamingMessage,
+        emitStrategy,
         runContext,
     };
 

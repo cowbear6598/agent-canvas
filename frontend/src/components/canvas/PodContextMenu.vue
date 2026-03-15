@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { FolderOpen, Unplug } from 'lucide-vue-next'
-import { useWebSocketErrorHandler } from '@/composables/useWebSocketErrorHandler'
 import { useToast } from '@/composables/useToast'
-import { createWebSocketRequest, WebSocketRequestEvents, WebSocketResponseEvents } from '@/services/websocket'
+import { WebSocketRequestEvents, WebSocketResponseEvents } from '@/services/websocket'
 import type { PodOpenDirectoryPayload } from '@/types/websocket/requests'
 import type { PodDirectoryOpenedPayload } from '@/types/websocket/responses'
-import { getActiveCanvasIdOrWarn } from '@/utils/canvasGuard'
+import { useSendCanvasAction } from '@/composables/useSendCanvasAction'
 import { usePodStore } from '@/stores'
 import { getAllProviders } from '@/integration/providerRegistry'
 
@@ -33,21 +32,13 @@ const isBound = (provider: string): boolean =>
   bindings.value.some((b) => b.provider === provider)
 
 const handleOpenDirectory = async (): Promise<void> => {
-  const canvasId = getActiveCanvasIdOrWarn('PodContextMenu')
-  if (!canvasId) return
+  const { sendCanvasAction } = useSendCanvasAction()
 
-  const { wrapWebSocketRequest } = useWebSocketErrorHandler()
-
-  const response = await wrapWebSocketRequest(
-    createWebSocketRequest<PodOpenDirectoryPayload, PodDirectoryOpenedPayload>({
-      requestEvent: WebSocketRequestEvents.POD_OPEN_DIRECTORY,
-      responseEvent: WebSocketResponseEvents.POD_DIRECTORY_OPENED,
-      payload: {
-        canvasId,
-        podId: props.podId,
-      },
-    })
-  )
+  const response = await sendCanvasAction<PodOpenDirectoryPayload, PodDirectoryOpenedPayload>({
+    requestEvent: WebSocketRequestEvents.POD_OPEN_DIRECTORY,
+    responseEvent: WebSocketResponseEvents.POD_DIRECTORY_OPENED,
+    payload: { podId: props.podId },
+  })
 
   if (!response) {
     toast({

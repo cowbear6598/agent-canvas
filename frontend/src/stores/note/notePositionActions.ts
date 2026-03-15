@@ -1,6 +1,4 @@
-import {createWebSocketRequest} from '@/services/websocket'
-import {useWebSocketErrorHandler} from '@/composables/useWebSocketErrorHandler'
-import {requireActiveCanvas} from '@/utils/canvasGuard'
+import {useSendCanvasAction} from '@/composables/useSendCanvasAction'
 import type {NoteStoreConfig} from './createNoteStore'
 import type {BasePayload, BaseResponse} from '@/types'
 
@@ -37,21 +35,13 @@ export function createNotePositionActions<TItem>(config: NoteStoreConfig<TItem>)
             note.x = x
             note.y = y
 
-            const {wrapWebSocketRequest} = useWebSocketErrorHandler()
-            const canvasId = requireActiveCanvas()
+            const {sendCanvasAction} = useSendCanvasAction()
 
-            const response = await wrapWebSocketRequest(
-                createWebSocketRequest<BasePayload, BaseResponse>({
-                    requestEvent: config.events.updateNote.request,
-                    responseEvent: config.events.updateNote.response,
-                    payload: {
-                        canvasId,
-                        noteId,
-                        x,
-                        y,
-                    }
-                })
-            )
+            const response = await sendCanvasAction<BasePayload, BaseResponse>({
+                requestEvent: config.events.updateNote.request,
+                responseEvent: config.events.updateNote.response,
+                payload: {noteId, x, y},
+            })
 
             if (!response) {
                 note.x = originalX

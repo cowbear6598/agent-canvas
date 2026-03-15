@@ -5,6 +5,7 @@ import {useWebSocketErrorHandler} from '@/composables/useWebSocketErrorHandler'
 import {useDeleteItem} from '@/composables/useDeleteItem'
 import {useToast} from '@/composables/useToast'
 import {requireActiveCanvas, getActiveCanvasIdOrWarn} from '@/utils/canvasGuard'
+import {useSendCanvasAction} from '@/composables/useSendCanvasAction'
 import {createNoteBindingActions} from './noteBindingActions'
 import type {UnbindBehavior} from './noteBindingActions'
 import {createNotePositionActions} from './notePositionActions'
@@ -361,19 +362,13 @@ export function createNoteStore<TItem, TNote extends BaseNote, TCustomActions ex
             ...createNoteBindingActions(config),
 
             async deleteNote(noteId: string): Promise<void> {
-                const {wrapWebSocketRequest} = useWebSocketErrorHandler()
-                const canvasId = requireActiveCanvas()
+                const {sendCanvasAction} = useSendCanvasAction()
 
-                await wrapWebSocketRequest(
-                    createWebSocketRequest<BasePayload, BaseResponse>({
-                        requestEvent: config.events.deleteNote.request,
-                        responseEvent: config.events.deleteNote.response,
-                        payload: {
-                            canvasId,
-                            noteId,
-                        }
-                    })
-                )
+                await sendCanvasAction<BasePayload, BaseResponse>({
+                    requestEvent: config.events.deleteNote.request,
+                    responseEvent: config.events.deleteNote.response,
+                    payload: {noteId},
+                })
             },
 
             async deleteItem(itemId: string): Promise<void> {

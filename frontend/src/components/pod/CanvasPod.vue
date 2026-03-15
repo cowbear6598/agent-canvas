@@ -1,22 +1,20 @@
 <script setup lang="ts">
 import {ref, computed} from 'vue'
-import type {Pod, ModelType, Schedule} from '@/types'
-import type {AnchorPosition} from '@/types/connection'
+import type {Pod, ModelType} from '@/types'
 import {useCanvasContext} from '@/composables/canvas/useCanvasContext'
-import {useAnchorDetection} from '@/composables/useAnchorDetection'
 import {useBatchDrag} from '@/composables/canvas'
-import {useWebSocketErrorHandler} from '@/composables/useWebSocketErrorHandler'
 import {isCtrlOrCmdPressed} from '@/utils/keyboardHelpers'
-import {createWebSocketRequest, WebSocketRequestEvents, WebSocketResponseEvents} from '@/services/websocket'
+import {WebSocketRequestEvents, WebSocketResponseEvents} from '@/services/websocket'
 import type {
   PodSetModelPayload,
   PodModelSetPayload,
 } from '@/types/websocket'
-import {formatScheduleTooltip} from '@/utils/scheduleUtils'
-import {getActiveCanvasIdOrWarn} from '@/utils/canvasGuard'
+import {useSendCanvasAction} from '@/composables/useSendCanvasAction'
 import {usePodDrag} from '@/composables/pod/usePodDrag'
 import {usePodNoteBinding} from '@/composables/pod/usePodNoteBinding'
 import {useWorkflowClear} from '@/composables/pod/useWorkflowClear'
+import {usePodSchedule} from '@/composables/pod/usePodSchedule'
+import {usePodAnchorDrag} from '@/composables/pod/usePodAnchorDrag'
 import {useToast} from '@/composables/useToast'
 import {isMultiInstanceChainPod, isMultiInstanceSourcePod} from '@/utils/multiInstanceGuard'
 import PodHeader from '@/components/pod/PodHeader.vue'
@@ -45,7 +43,6 @@ const {
   connectionStore,
   chatStore,
 } = useCanvasContext()
-const {detectTargetAnchor} = useAnchorDetection()
 const {startBatchDrag, isElementSelected, isBatchDragging} = useBatchDrag()
 const {toast} = useToast()
 
@@ -80,24 +77,38 @@ const emit = defineEmits<{
 
 const isEditing = ref(false)
 const showDeleteDialog = ref(false)
-const showScheduleModal = ref(false)
 
 const isMultiInstanceEnabled = computed(() => props.pod.multiInstance ?? false)
 const isDownstreamMultiInstance = computed(() =>
   isMultiInstanceChainPod(props.pod.id) && !isMultiInstanceSourcePod(props.pod.id)
 )
 
-const hasSchedule = computed(() => props.pod.schedule !== null && props.pod.schedule !== undefined)
-const scheduleEnabled = computed(() => props.pod.schedule?.enabled ?? false)
-const scheduleTooltip = computed(() => {
-  if (!props.pod.schedule) return ''
-  return formatScheduleTooltip(props.pod.schedule)
-})
-
-const isScheduleFiredAnimating = computed(() => podStore.isScheduleFiredAnimating(props.pod.id))
 const isWorkflowRunning = computed(() => connectionStore.isWorkflowRunning(props.pod.id))
 
 const computedPodId = computed(() => props.pod.id)
+
+const {
+  showScheduleModal,
+  hasSchedule,
+  scheduleEnabled,
+  scheduleTooltip,
+  isScheduleFiredAnimating,
+  handleOpenScheduleModal,
+  handleScheduleConfirm,
+  handleScheduleDelete,
+  handleScheduleToggle,
+  handleClearScheduleFiredAnimation,
+} = usePodSchedule(
+  computedPodId,
+  () => props.pod.schedule,
+  { podStore }
+)
+
+const {
+  handleAnchorDragStart,
+  handleAnchorDragMove,
+  handleAnchorDragEnd,
+} = usePodAnchorDrag({ viewportStore, connectionStore, podStore })
 
 const {isDragging, startSingleDrag} = usePodDrag(
   computedPodId,
@@ -185,31 +196,6 @@ const handleDelete = (): void => {
   showDeleteDialog.value = false
 }
 
-const handleOpenScheduleModal = (): void => {
-  showScheduleModal.value = true
-}
-
-const handleScheduleConfirm = async (schedule: Schedule): Promise<void> => {
-  await podStore.setScheduleWithBackend(props.pod.id, schedule)
-  showScheduleModal.value = false
-}
-
-const handleScheduleDelete = async (): Promise<void> => {
-  await podStore.setScheduleWithBackend(props.pod.id, null)
-  showScheduleModal.value = false
-}
-
-const handleScheduleToggle = async (): Promise<void> => {
-  if (!props.pod.schedule) return
-
-  const newSchedule = {
-    ...props.pod.schedule,
-    enabled: !props.pod.schedule.enabled
-  }
-
-  await podStore.setScheduleWithBackend(props.pod.id, newSchedule)
-}
-
 const handleSelectPod = (): void => {
   podStore.setActivePod(props.pod.id)
   emit('select', props.pod.id)
@@ -233,65 +219,14 @@ const handleDblClick = (e: MouseEvent): void => {
   handleSelectPod()
 }
 
-const handleAnchorDragStart = (data: {
-  podId: string
-  anchor: AnchorPosition
-  screenX: number
-  screenY: number
-}): void => {
-  const canvasX = (data.screenX - viewportStore.offset.x) / viewportStore.zoom
-  const canvasY = (data.screenY - viewportStore.offset.y) / viewportStore.zoom
-
-  connectionStore.startDragging(data.podId, data.anchor, {x: canvasX, y: canvasY})
-}
-
-const handleAnchorDragMove = (data: { screenX: number; screenY: number }): void => {
-  const canvasX = (data.screenX - viewportStore.offset.x) / viewportStore.zoom
-  const canvasY = (data.screenY - viewportStore.offset.y) / viewportStore.zoom
-
-  connectionStore.updateDraggingPosition({x: canvasX, y: canvasY})
-}
-
-const handleAnchorDragEnd = async (): Promise<void> => {
-  if (!connectionStore.draggingConnection) {
-    connectionStore.endDragging()
-    return
-  }
-
-  const {sourcePodId, sourceAnchor, currentPoint} = connectionStore.draggingConnection
-  if (!sourcePodId) return
-
-  const targetAnchor = detectTargetAnchor(currentPoint, podStore.pods, sourcePodId)
-
-  if (targetAnchor) {
-    await connectionStore.createConnection(
-        sourcePodId,
-        sourceAnchor,
-        targetAnchor.podId,
-        targetAnchor.anchor
-    )
-  }
-
-  connectionStore.endDragging()
-}
-
 const handleModelChange = async (model: ModelType): Promise<void> => {
-  const canvasId = getActiveCanvasIdOrWarn('CanvasPod')
-  if (!canvasId) return
+  const {sendCanvasAction} = useSendCanvasAction()
 
-  const {wrapWebSocketRequest} = useWebSocketErrorHandler()
-
-  const response = await wrapWebSocketRequest(
-      createWebSocketRequest<PodSetModelPayload, PodModelSetPayload>({
-        requestEvent: WebSocketRequestEvents.POD_SET_MODEL,
-        responseEvent: WebSocketResponseEvents.POD_MODEL_SET,
-        payload: {
-          canvasId,
-          podId: props.pod.id,
-          model
-        }
-      })
-  )
+  const response = await sendCanvasAction<PodSetModelPayload, PodModelSetPayload>({
+    requestEvent: WebSocketRequestEvents.POD_SET_MODEL,
+    responseEvent: WebSocketResponseEvents.POD_MODEL_SET,
+    payload: {podId: props.pod.id, model},
+  })
 
   if (!response) return
   if (!response.pod) return
@@ -301,10 +236,6 @@ const handleModelChange = async (model: ModelType): Promise<void> => {
 
 const handleToggleMultiInstance = async (): Promise<void> => {
   await podStore.setMultiInstanceWithBackend(props.pod.id, !isMultiInstanceEnabled.value)
-}
-
-const handleClearScheduleFiredAnimation = (): void => {
-  podStore.clearScheduleFiredAnimation(props.pod.id)
 }
 
 const handleContextMenu = (e: MouseEvent): void => {

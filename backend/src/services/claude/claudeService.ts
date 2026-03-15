@@ -57,14 +57,11 @@ export interface RunQueryOptions {
     queryKey?: string;
 }
 
-interface HandleSendMessageErrorParams {
-    error: unknown;
-    pod: Pod;
+interface ExecutionContext {
     canvasId: string;
-    podId: string;
-    onStream: StreamCallback;
-    isRetry: boolean;
-    retryFn: () => Promise<Message>;
+    pod: Pod;
+    queryOptions: Options & {abortController: AbortController};
+    queryKey: string;
     runOptions?: RunQueryOptions;
 }
 
@@ -311,8 +308,14 @@ export class ClaudeService {
         return errorMessage.includes('session') || errorMessage.includes('resume');
     }
 
-    private async handleSendMessageError(params: HandleSendMessageErrorParams): Promise<Message> {
-        const {error, pod, canvasId, podId, onStream, isRetry, retryFn, runOptions} = params;
+    private async handleSendMessageError(
+        context: ExecutionContext,
+        error: unknown,
+        onStream: StreamCallback,
+        isRetry: boolean,
+        retryFn: () => Promise<Message>
+    ): Promise<Message> {
+        const {pod, canvasId, runOptions} = context;
 
         if (isAbortError(error)) {
             throw error;
@@ -326,7 +329,7 @@ export class ClaudeService {
             );
             // Run 模式不 reset pod 全域 session
             if (!runOptions?.queryKey) {
-                podStore.resetClaudeSession(canvasId, podId);
+                podStore.resetClaudeSession(canvasId, pod.id);
             }
             return retryFn();
         }
@@ -499,44 +502,37 @@ export class ClaudeService {
         }
     }
 
-    private finalizeSession(
-        canvasId: string,
-        podId: string,
-        state: QueryState,
-        pod: Pod,
-        runOptions?: RunQueryOptions
-    ): void {
+    private finalizeSession(context: ExecutionContext, state: QueryState): void {
+        const {canvasId, pod, runOptions} = context;
+
         if (!state.sessionId) return;
         if (state.sessionId === pod.claudeSessionId) return;
 
         // Run 模式：不寫入 pod 全域 session（由呼叫方從回傳值自行處理）
         if (runOptions?.queryKey) return;
 
-        podStore.setClaudeSessionId(canvasId, podId, state.sessionId);
+        podStore.setClaudeSessionId(canvasId, pod.id, state.sessionId);
     }
 
     private async executeWithSessionRetry(
-        queryKey: string,
-        canvasId: string,
-        pod: Pod,
-        queryOptions: Options & {abortController: AbortController},
+        context: ExecutionContext,
         prompt: string | AsyncIterable<SDKUserMessage>,
         state: QueryState,
         onStream: StreamCallback,
         isRetry: boolean,
-        retryFn: () => Promise<Message>,
-        runOptions?: RunQueryOptions
+        retryFn: () => Promise<Message>
     ): Promise<Message | null> {
+        const {queryKey, queryOptions} = context;
         const {abortController} = queryOptions;
         const queryStream = query({prompt, options: queryOptions});
         this.activeQueries.set(queryKey, {queryStream, abortController});
 
         try {
             await this.runQueryStream(queryStream, abortController, state, onStream);
-            this.finalizeSession(canvasId, pod.id, state, pod, runOptions);
+            this.finalizeSession(context, state);
             return null;
         } catch (error) {
-            return this.handleSendMessageError({error, pod, canvasId, podId: pod.id, onStream, isRetry, retryFn, runOptions});
+            return this.handleSendMessageError(context, error, onStream, isRetry, retryFn);
         } finally {
             // 確保所有情況都清理 activeQueries entry，防止 Memory Leak
             this.activeQueries.delete(queryKey);
@@ -565,10 +561,11 @@ export class ClaudeService {
         const resumeSessionId = runOptions?.sessionId ?? pod.claudeSessionId;
         const prompt = this.buildPrompt(message, pod.commandId, resumeSessionId);
 
+        const context: ExecutionContext = {canvasId, pod, queryOptions, queryKey: resolvedKey, runOptions};
+
         const retryResult = await this.executeWithSessionRetry(
-            resolvedKey, canvasId, pod, queryOptions, prompt, state, onStream, isRetry,
-            () => this.sendMessageInternal(podId, message, onStream, true, runOptions),
-            runOptions
+            context, prompt, state, onStream, isRetry,
+            () => this.sendMessageInternal(podId, message, onStream, true, runOptions)
         );
 
         if (retryResult !== null) {
