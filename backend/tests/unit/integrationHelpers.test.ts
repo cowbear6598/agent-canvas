@@ -174,6 +174,34 @@ describe('initializeProvider', () => {
 
         expect(integrationAppStore.updateStatus).toHaveBeenCalledWith('app-test-1', 'connected');
     });
+
+    it('初始化成功時 broadcastConnectionStatus 收到的 provider 為小寫', async () => {
+        const app = makeApp({ provider: 'slack' });
+        asMock(integrationAppStore.getById).mockReturnValue(app);
+        const validateFn = vi.fn().mockResolvedValue(true);
+        const fetchFn = vi.fn().mockResolvedValue(undefined);
+
+        await initializeProvider(app, validateFn, fetchFn, 'Slack');
+
+        expect(socketService.emitToAll).toHaveBeenCalledWith(
+            WebSocketResponseEvents.INTEGRATION_CONNECTION_STATUS_CHANGED,
+            expect.objectContaining({ provider: 'slack' }),
+        );
+    });
+
+    it('初始化失敗時 broadcastConnectionStatus 收到的 provider 為小寫', async () => {
+        const app = makeApp({ provider: 'slack' });
+        asMock(integrationAppStore.getById).mockReturnValue(app);
+        const validateFn = vi.fn().mockResolvedValue(false);
+        const fetchFn = vi.fn().mockResolvedValue(undefined);
+
+        await initializeProvider(app, validateFn, fetchFn, 'Slack');
+
+        expect(socketService.emitToAll).toHaveBeenCalledWith(
+            WebSocketResponseEvents.INTEGRATION_CONNECTION_STATUS_CHANGED,
+            expect.objectContaining({ provider: 'slack' }),
+        );
+    });
 });
 
 describe('formatIntegrationMessage', () => {

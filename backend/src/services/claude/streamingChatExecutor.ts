@@ -408,6 +408,7 @@ export async function executeStreamingChat(
         const runOptions = runContext ? {
             sessionId: runInstance?.claudeSessionId ?? undefined,
             queryKey: `${runContext.runId}:${podId}`,
+            runContext,
         } : undefined;
 
         const resultMessage = await claudeService.sendMessage(podId, message, streamingCallback, runOptions);

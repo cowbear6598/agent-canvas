@@ -19,6 +19,8 @@ import {
 import type {StreamCallback} from './types.js';
 import {z} from 'zod';
 import {integrationRegistry} from '../integration/index.js';
+import {replyContextStore, buildReplyContextKey} from '../integration/replyContextStore.js';
+import type {RunContext} from '../../types/run.js';
 
 export type {StreamEvent, StreamCallback} from './types.js';
 
@@ -55,6 +57,8 @@ export interface RunQueryOptions {
     sessionId?: string;
     /** activeQueries 的 key，預設為 podId。Run 模式使用 `${runId}:${podId}` */
     queryKey?: string;
+    /** Run 模式的執行上下文，用於 integration tool 查詢 replyContextStore */
+    runContext?: RunContext;
 }
 
 interface ExecutionContext {
@@ -368,7 +372,9 @@ export class ClaudeService {
 
     private buildIntegrationTool(
         binding: NonNullable<Pod['integrationBindings']>[number],
-        provider: NonNullable<ReturnType<typeof integrationRegistry.get>>
+        provider: NonNullable<ReturnType<typeof integrationRegistry.get>>,
+        podId: string,
+        runContext?: RunContext
     ): {mcpServer: ReturnType<typeof createSdkMcpServer>; serverName: string; toolName: string} {
         const serverName = `${binding.provider}-reply`;
         const toolName = `${binding.provider}_reply`;
@@ -380,7 +386,9 @@ export class ClaudeService {
                 text: z.string().min(1).describe('要發送的訊息內容'),
             },
             async (params: {text: string}) => {
-                const result = await provider.sendMessage!(binding.appId, binding.resourceId, params.text, binding.extra);
+                const replyContext = replyContextStore.get(buildReplyContextKey(runContext, podId));
+                const mergedExtra = {...binding.extra, ...replyContext};
+                const result = await provider.sendMessage!(binding.appId, binding.resourceId, params.text, mergedExtra);
                 if (!result.success) {
                     return {success: false, error: result.error};
                 }
@@ -396,14 +404,14 @@ export class ClaudeService {
         return {mcpServer, serverName, toolName};
     }
 
-    private applyIntegrationToolOptions(pod: Pod, queryOptions: Options): void {
+    private applyIntegrationToolOptions(pod: Pod, queryOptions: Options, runContext?: RunContext): void {
         if (!pod.integrationBindings?.length) return;
 
         const builtTools = pod.integrationBindings
             .map(binding => {
                 const provider = integrationRegistry.get(binding.provider);
                 if (!provider?.sendMessage) return null;
-                return this.buildIntegrationTool(binding, provider);
+                return this.buildIntegrationTool(binding, provider, pod.id, runContext);
             })
             .filter(t => t !== null);
 
@@ -454,7 +462,7 @@ export class ClaudeService {
 
         await this.applyOutputStyle(pod, queryOptions);
         this.applyMcpServers(pod, queryOptions);
-        this.applyIntegrationToolOptions(pod, queryOptions);
+        this.applyIntegrationToolOptions(pod, queryOptions, runOptions?.runContext);
 
         const resumeSessionId = runOptions?.sessionId ?? pod.claudeSessionId;
         if (resumeSessionId) {

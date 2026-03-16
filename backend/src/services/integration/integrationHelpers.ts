@@ -44,14 +44,14 @@ export async function initializeProvider(
     const isValid = await validateAndSetupFn();
     if (!isValid) {
         integrationAppStore.updateStatus(app.id, 'error');
-        broadcastConnectionStatus(logCategory, app.id);
+        broadcastConnectionStatus(app.provider, app.id);
         return;
     }
 
     await fetchResourcesFn();
 
     integrationAppStore.updateStatus(app.id, 'connected');
-    broadcastConnectionStatus(logCategory, app.id);
+    broadcastConnectionStatus(app.provider, app.id);
     logger.log(logCategory, 'Complete', `${logCategory} App ${app.id} 初始化成功`);
 }
 

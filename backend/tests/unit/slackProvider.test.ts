@@ -1,6 +1,20 @@
 import type { Mock } from 'vitest';
 import { createHmac } from 'crypto';
 
+const { mockPostMessage } = vi.hoisted(() => ({
+    mockPostMessage: vi.fn().mockResolvedValue({ ok: true }),
+}));
+
+vi.mock('@slack/web-api', () => ({
+    WebClient: vi.fn().mockImplementation(() => ({
+        auth: { test: vi.fn().mockResolvedValue({ user_id: 'U_BOT' }) },
+        chat: { postMessage: mockPostMessage },
+        conversations: {
+            list: vi.fn().mockResolvedValue({ channels: [], response_metadata: { next_cursor: '' } }),
+        },
+    })),
+}));
+
 vi.mock('../../src/services/integration/integrationAppStore.js', () => ({
     integrationAppStore: {
         getByProviderAndConfigField: vi.fn(() => undefined),
@@ -33,6 +47,7 @@ vi.mock('../../src/utils/logger.js', () => ({
     },
 }));
 
+import { WebClient } from '@slack/web-api';
 import { slackProvider } from '../../src/services/integration/providers/slackProvider.js';
 import { integrationAppStore } from '../../src/services/integration/integrationAppStore.js';
 import type { IntegrationApp } from '../../src/services/integration/types.js';
@@ -349,6 +364,40 @@ describe('SlackProvider - formatEventMessage', () => {
         const result = slackProvider.formatEventMessage(event, app);
         expect(result?.text).toContain('訊息過長，已截斷');
     });
+
+    it('回傳的 NormalizedEvent 應包含 senderId、messageTs、threadTs', () => {
+        const app = makeApp();
+        const event = {
+            type: 'app_mention',
+            channel: 'C12345',
+            user: 'U123',
+            text: '<@U99999> hello',
+            ts: '1234.5678',
+            event_ts: '1234.5678',
+            thread_ts: '1111.2222',
+        };
+
+        const result = slackProvider.formatEventMessage(event, app);
+        expect(result?.senderId).toBe('U123');
+        expect(result?.messageTs).toBe('1234.5678');
+        expect(result?.threadTs).toBe('1111.2222');
+    });
+
+    it('event 無 thread_ts 時 threadTs 應為 undefined', () => {
+        const app = makeApp();
+        const event = {
+            type: 'app_mention',
+            channel: 'C12345',
+            user: 'U123',
+            text: '<@U99999> hello',
+            ts: '1234.5678',
+            event_ts: '1234.5678',
+        };
+
+        const result = slackProvider.formatEventMessage(event, app);
+        expect(result?.threadTs).toBeUndefined();
+        expect(result?.messageTs).toBe('1234.5678');
+    });
 });
 
 describe('SlackProvider - 基本屬性', () => {
@@ -385,6 +434,81 @@ describe('SlackProvider - 基本屬性', () => {
             botToken: 'xoxb-valid-token',
             signingSecret: 'short',
         });
+        expect(result.success).toBe(false);
+    });
+});
+
+describe('SlackProvider - sendMessage', () => {
+    const APP_ID = 'app-sendmsg-1';
+
+    beforeAll(() => {
+        // 直接注入 mock client，避免依賴 initialize 流程
+        const mockClient = {
+            auth: { test: vi.fn().mockResolvedValue({ user_id: 'U_BOT' }) },
+            chat: { postMessage: mockPostMessage },
+            conversations: {
+                list: vi.fn().mockResolvedValue({ channels: [], response_metadata: { next_cursor: '' } }),
+            },
+        };
+        (slackProvider as unknown as { clients: Map<string, unknown> }).clients.set(APP_ID, mockClient);
+    });
+
+    beforeEach(() => {
+        mockPostMessage.mockClear();
+        mockPostMessage.mockResolvedValue({ ok: true });
+    });
+
+    it('有 senderId 時在 text 前加上 <@senderId>', async () => {
+        await slackProvider.sendMessage(APP_ID, 'C123', 'hello', { senderId: 'U123' });
+
+        expect(mockPostMessage).toHaveBeenCalledWith(
+            expect.objectContaining({ text: '<@U123> hello' })
+        );
+    });
+
+    it('無 senderId 時 text 不變', async () => {
+        await slackProvider.sendMessage(APP_ID, 'C123', 'hello');
+
+        expect(mockPostMessage).toHaveBeenCalledWith(
+            expect.objectContaining({ text: 'hello' })
+        );
+    });
+
+    it('有 threadTs 時帶入 thread_ts', async () => {
+        await slackProvider.sendMessage(APP_ID, 'C123', 'hello', { threadTs: '1111.2222' });
+
+        expect(mockPostMessage).toHaveBeenCalledWith(
+            expect.objectContaining({ thread_ts: '1111.2222' })
+        );
+    });
+
+    it('無 threadTs 但有 messageTs 時用 messageTs 作為 thread_ts', async () => {
+        await slackProvider.sendMessage(APP_ID, 'C123', 'hello', { messageTs: '9999.8888' });
+
+        expect(mockPostMessage).toHaveBeenCalledWith(
+            expect.objectContaining({ thread_ts: '9999.8888' })
+        );
+    });
+
+    it('threadTs 優先於 messageTs', async () => {
+        await slackProvider.sendMessage(APP_ID, 'C123', 'hello', { threadTs: '1111.2222', messageTs: '9999.8888' });
+
+        expect(mockPostMessage).toHaveBeenCalledWith(
+            expect.objectContaining({ thread_ts: '1111.2222' })
+        );
+    });
+
+    it('無 threadTs 也無 messageTs 時不帶入 thread_ts', async () => {
+        await slackProvider.sendMessage(APP_ID, 'C123', 'hello');
+
+        expect(mockPostMessage).toHaveBeenCalledWith(
+            expect.objectContaining({ thread_ts: undefined })
+        );
+    });
+
+    it('Client 不存在時回傳錯誤', async () => {
+        const result = await slackProvider.sendMessage('non-existent-app', 'C123', 'hello');
+
         expect(result.success).toBe(false);
     });
 });

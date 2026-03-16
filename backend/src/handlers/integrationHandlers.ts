@@ -17,7 +17,6 @@ import {podStore} from '../services/podStore.js';
 import {socketService} from '../services/socketService.js';
 import {emitError, emitNotFound, emitSuccess} from '../utils/websocketResponse.js';
 import {logger} from '../utils/logger.js';
-import {fireAndForget} from '../utils/operationHelpers.js';
 import {getErrorMessage} from '../utils/errorHelpers.js';
 import {emitPodUpdated, handleResultError, getPodDisplayName, validatePod, withCanvasId} from '../utils/handlerHelpers.js';
 
@@ -86,17 +85,17 @@ export async function handleIntegrationAppCreate(
 
     logger.log('Integration', 'Create', `建立 Integration App「${app.name}」（${provider.displayName}）`);
 
-    fireAndForget(
-        provider.initialize(app),
-        'Integration',
-        `Integration App「${app.name}」初始化失敗`
-    );
+    try {
+        await provider.initialize(app);
+    } catch (error) {
+        logger.log('Integration', 'Error', `Integration App「${app.name}」初始化失敗：${getErrorMessage(error)}`);
+    }
 
     socketService.emitToAll(WebSocketResponseEvents.INTEGRATION_APP_CREATED, {
         requestId,
         success: true,
         provider: providerName,
-        app: sanitizeApp(app),
+        app: sanitizeApp(integrationAppStore.getById(app.id) ?? app),
     });
 }
 

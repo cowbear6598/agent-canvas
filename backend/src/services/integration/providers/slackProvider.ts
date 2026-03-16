@@ -256,13 +256,18 @@ class SlackProvider implements IntegrationProvider {
             return err(`Slack App ${appId} 尚未初始化`);
         }
 
-        const threadTs = extra?.['threadTs'];
+        const senderId = typeof extra?.['senderId'] === 'string' ? extra['senderId'] : undefined;
+        const messageTs = typeof extra?.['messageTs'] === 'string' ? extra['messageTs'] : undefined;
+        const threadTs = typeof extra?.['threadTs'] === 'string' ? extra['threadTs'] : undefined;
+
+        const finalText = senderId ? `<@${senderId}> ${text}` : text;
+        const finalThreadTs = threadTs ?? messageTs;
 
         try {
             await client.chat.postMessage({
                 channel: resourceId,
-                text,
-                thread_ts: typeof threadTs === 'string' ? threadTs : undefined,
+                text: finalText,
+                thread_ts: finalThreadTs,
             });
             return ok(undefined);
         } catch (error) {
@@ -273,7 +278,7 @@ class SlackProvider implements IntegrationProvider {
 
     formatEventMessage(event: unknown, app: IntegrationApp): NormalizedEvent | null {
         const mentionEvent = event as AppMentionEvent;
-        const { channel, user, text } = mentionEvent;
+        const { channel, user, text, ts, thread_ts } = mentionEvent;
 
         const rawCleanedText = text.replace(/<@[A-Z0-9]+(?:\|[^>]+)?>/g, '').trim();
         const truncatedText =
@@ -292,6 +297,9 @@ class SlackProvider implements IntegrationProvider {
             userName,
             text: formattedText,
             rawEvent: event,
+            senderId: user,
+            messageTs: ts,
+            threadTs: thread_ts,
         };
     }
 

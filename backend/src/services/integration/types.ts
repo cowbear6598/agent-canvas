@@ -34,6 +34,9 @@ export interface NormalizedEvent {
   userName: string;
   text: string;
   rawEvent: unknown;
+  senderId?: string;
+  messageTs?: string;
+  threadTs?: string;
 }
 
 export interface IntegrationProvider {
