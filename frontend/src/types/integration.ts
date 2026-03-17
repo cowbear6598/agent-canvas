@@ -72,4 +72,7 @@ export interface IntegrationProviderConfig {
     hint: string
     validate: (value: string) => string
   }
+
+  hasNoResource?: boolean
+  getWebhookUrl?: (app: IntegrationApp) => string
 }

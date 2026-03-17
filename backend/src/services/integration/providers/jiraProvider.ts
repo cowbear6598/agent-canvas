@@ -3,33 +3,15 @@ import { createHmac, timingSafeEqual } from 'crypto';
 import { ok, err } from '../../../types/index.js';
 import type { Result } from '../../../types/index.js';
 import { logger } from '../../../utils/logger.js';
-import { getErrorMessage } from '../../../utils/errorHelpers.js';
 import { escapeUserInput } from '../../../utils/escapeInput.js';
 import { integrationAppStore } from '../integrationAppStore.js';
 import { integrationEventPipeline } from '../integrationEventPipeline.js';
 import { createDedupTracker } from '../dedupHelper.js';
-import { destroyProvider, initializeProvider, parseWebhookBody } from '../integrationHelpers.js';
+import { broadcastConnectionStatus, parseWebhookBody } from '../integrationHelpers.js';
 import type { IntegrationProvider, IntegrationApp, IntegrationAppConfig, IntegrationResource, NormalizedEvent } from '../types.js';
 
-// SSRF 防護：封鎖私有 IP 範圍
-const PRIVATE_IP_PATTERN = /^(127\.|10\.|192\.168\.|169\.254\.|0\.0\.0\.0|localhost)/i;
-
-export function isPrivateUrl(url: string): boolean {
-  try {
-    const { hostname } = new URL(url);
-    return PRIVATE_IP_PATTERN.test(hostname) || isPrivate172Range(hostname);
-  } catch {
-    return false;
-  }
-}
-
-function isPrivate172Range(hostname: string): boolean {
-  const match = hostname.match(/^172\.(\d+)\./);
-  if (!match) return false;
-  const second = parseInt(match[1], 10);
-  return second >= 16 && second <= 31;
-}
-
+const NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
+const MAX_NAME_LENGTH = 50;
 const MAX_BODY_SIZE = 1_000_000;
 
 const SUPPORTED_EVENTS = new Set(['jira:issue_created', 'jira:issue_updated', 'jira:issue_deleted']);
@@ -68,11 +50,6 @@ const jiraWebhookPayloadSchema = z.object({
 
 type JiraWebhookPayload = z.infer<typeof jiraWebhookPayloadSchema>;
 
-interface JiraClientInfo {
-  authHeader: string;
-  siteUrl: string;
-}
-
 function verifyJiraSignature(webhookSecret: string, rawBody: string, signatureHeader: string): boolean {
   const prefix = 'sha256=';
   if (!signatureHeader.startsWith(prefix)) {
@@ -87,14 +64,6 @@ function verifyJiraSignature(webhookSecret: string, rawBody: string, signatureHe
   } catch {
     return false;
   }
-}
-
-function findMatchedApp(rawBody: string, signature: string, apps: IntegrationApp[]): IntegrationApp | null {
-  return apps.find((app) => {
-    const webhookSecret = app.config.webhookSecret as string | undefined;
-    if (!webhookSecret) return false;
-    return verifyJiraSignature(webhookSecret, rawBody, signature);
-  }) ?? null;
 }
 
 function formatJiraEventMessage(webhookEvent: string, issueKey: string, summary: string, userName: string, payload: JiraWebhookPayload): string {
@@ -125,38 +94,25 @@ function formatJiraEventMessage(webhookEvent: string, issueKey: string, summary:
 class JiraProvider implements IntegrationProvider {
   readonly name = 'jira';
   readonly displayName = 'Jira';
+  readonly webhookPathMatchMode = 'prefix' as const;
+  readonly allowManualResourceId = true;
 
   readonly createAppSchema = z.object({
     siteUrl: z
       .string()
       .url('siteUrl 必須為合法 URL')
       .refine((url) => url.startsWith('https://'), 'siteUrl 必須使用 https://')
-      .refine((url) => !isPrivateUrl(url), 'siteUrl 不可指向私有 IP 或 localhost')
       .transform((url) => url.replace(/\/$/, '')),
-    email: z.string().email('email 格式不正確'),
-    apiToken: z.string().min(1),
     webhookSecret: z.string().min(1),
   });
 
-  readonly bindSchema = z.object({
-    resourceId: z.string().min(1),
-  });
-
-  private clients: Map<string, JiraClientInfo> = new Map();
+  readonly bindSchema = z.object({});
 
   validateCreate(config: IntegrationAppConfig): Result<void> {
-    const siteUrl = config.siteUrl as string | undefined;
-    const email = config.email as string | undefined;
-
-    if (!siteUrl || !email) {
-      return err('siteUrl 和 email 為必填欄位');
-    }
-
-    const existing = integrationAppStore.getByProviderAndConfigField('jira', '$.siteUrl', siteUrl);
-    if (existing) {
-      const existingEmail = existing.config.email as string | undefined;
-      if (existingEmail === email) {
-        return err('此 Site URL 與 Email 組合已存在');
+    const name = config.name as string | undefined;
+    if (name !== undefined) {
+      if (name.length > MAX_NAME_LENGTH || !NAME_PATTERN.test(name)) {
+        return err(`name 只允許英數字、底線和連字符，最多 ${MAX_NAME_LENGTH} 個字元`);
       }
     }
 
@@ -166,69 +122,27 @@ class JiraProvider implements IntegrationProvider {
   sanitizeConfig(config: IntegrationAppConfig): Record<string, unknown> {
     return {
       siteUrl: config.siteUrl,
-      email: config.email,
     };
   }
 
   async initialize(app: IntegrationApp): Promise<void> {
-    await initializeProvider(
-      app,
-      async () => {
-        const { siteUrl, email, apiToken } = app.config as { siteUrl: string; email: string; apiToken: string };
-
-        if (isPrivateUrl(siteUrl)) {
-          logger.error('Jira', 'Error', `Jira App ${app.id} 初始化失敗：siteUrl 指向私有 IP 或 localhost`);
-          return false;
-        }
-
-        const authHeader = `Basic ${Buffer.from(`${email}:${apiToken}`).toString('base64')}`;
-
-        try {
-          const res = await fetch(`${siteUrl}/rest/api/3/myself`, {
-            headers: { Authorization: authHeader, Accept: 'application/json' },
-          });
-
-          if (!res.ok) {
-            logger.error('Jira', 'Error', `Jira App ${app.id} 初始化失敗：API 驗證失敗 (${res.status})`);
-            return false;
-          }
-        } catch (error) {
-          logger.error('Jira', 'Error', `Jira App ${app.id} 初始化失敗：${getErrorMessage(error)}`);
-          return false;
-        }
-
-        this.clients.set(app.id, { authHeader, siteUrl });
-        return true;
-      },
-      async () => {
-        const client = this.clients.get(app.id);
-        if (!client) return;
-        try {
-          await this.fetchProjects(app.id, client.siteUrl, client.authHeader);
-        } catch (error) {
-          logger.warn('Jira', 'Warn', `Jira App ${app.id} 取得 Projects 失敗，繼續初始化：${getErrorMessage(error)}`);
-        }
-      },
-      'Jira',
-    );
+    integrationAppStore.updateStatus(app.id, 'connected');
+    broadcastConnectionStatus(this.name, app.id);
+    logger.log('Jira', 'Complete', `Jira App ${app.id} 初始化成功`);
   }
 
   destroy(appId: string): void {
-    destroyProvider(this.clients as Map<string, unknown>, appId, 'jira', 'Jira');
+    integrationAppStore.updateStatus(appId, 'disconnected');
+    broadcastConnectionStatus(this.name, appId);
+    logger.log('Jira', 'Complete', `Jira App ${appId} 已移除`);
   }
 
   destroyAll(): void {
-    this.clients.clear();
-    logger.log('Jira', 'Complete', '已清除所有 Jira Client');
+    logger.log('Jira', 'Complete', '已清除所有 Jira App');
   }
 
-  async refreshResources(appId: string): Promise<IntegrationResource[]> {
-    const client = this.clients.get(appId);
-    if (!client) {
-      throw new Error(`Jira App ${appId} 尚未初始化`);
-    }
-
-    return this.fetchProjects(appId, client.siteUrl, client.authHeader);
+  async refreshResources(_appId: string): Promise<IntegrationResource[]> {
+    return [];
   }
 
   formatEventMessage(event: unknown, app: IntegrationApp): NormalizedEvent | null {
@@ -239,13 +153,6 @@ class JiraProvider implements IntegrationProvider {
     const { webhookEvent } = payload;
 
     const issueKey = payload.issue?.key ?? '';
-    const projectKey = issueKey.split('-')[0] ?? '';
-
-    if (!projectKey) {
-      logger.warn('Jira', 'Warn', `[JiraProvider] 無法從 issue.key 解析 projectKey：${issueKey}`);
-      return null;
-    }
-
     const summary = payload.issue?.fields?.summary ?? '';
     const userName = payload.user?.displayName ?? payload.user?.emailAddress ?? 'unknown';
     const text = formatJiraEventMessage(webhookEvent, issueKey, summary, userName, payload);
@@ -253,7 +160,7 @@ class JiraProvider implements IntegrationProvider {
     return {
       provider: this.name,
       appId: app.id,
-      resourceId: projectKey,
+      resourceId: '*',
       userName,
       text,
       rawEvent: event,
@@ -262,7 +169,19 @@ class JiraProvider implements IntegrationProvider {
 
   readonly webhookPath = '/jira/events';
 
-  async handleWebhookRequest(req: Request): Promise<Response> {
+  async handleWebhookRequest(req: Request, subPath?: string): Promise<Response> {
+    if (!subPath || !NAME_PATTERN.test(subPath)) {
+      logger.warn('Jira', 'Error', '缺少或不合法的 appName 子路徑');
+      return new Response('Not Found', { status: 404 });
+    }
+
+    const appName = subPath;
+    const app = integrationAppStore.getByProviderAndName('jira', appName);
+    if (!app) {
+      logger.warn('Jira', 'Error', `找不到 Jira App：${appName}`);
+      return new Response('Not Found', { status: 404 });
+    }
+
     const parsed = await parseWebhookBody(req, MAX_BODY_SIZE);
     if (parsed instanceof Response) return parsed;
 
@@ -274,9 +193,8 @@ class JiraProvider implements IntegrationProvider {
       return new Response('Forbidden', { status: 403 });
     }
 
-    const jiraApps = integrationAppStore.list('jira');
-    const matchedApp = findMatchedApp(rawBody, signatureHeader, jiraApps);
-    if (!matchedApp) {
+    const webhookSecret = app.config.webhookSecret;
+    if (typeof webhookSecret !== 'string' || webhookSecret.length === 0 || !verifyJiraSignature(webhookSecret, rawBody, signatureHeader)) {
       logger.warn('Jira', 'Error', 'Jira 簽名驗證失敗');
       return new Response('Forbidden', { status: 403 });
     }
@@ -301,39 +219,25 @@ class JiraProvider implements IntegrationProvider {
       return new Response('OK', { status: 200 });
     }
 
-    const normalizedEvent = this.formatEventMessage(rawPayload, matchedApp);
-    if (!normalizedEvent) {
-      return new Response('OK', { status: 200 });
-    }
+    const issueKey = webhookPayload.issue?.key ?? '';
+    const summary = webhookPayload.issue?.fields?.summary ?? '';
+    const userName = webhookPayload.user?.displayName ?? webhookPayload.user?.emailAddress ?? 'unknown';
+    const text = formatJiraEventMessage(webhookEvent, issueKey, summary, userName, webhookPayload);
+
+    const normalizedEvent: NormalizedEvent = {
+      provider: this.name,
+      appId: app.id,
+      resourceId: '*',
+      userName,
+      text,
+      rawEvent: rawPayload,
+    };
 
     // Jira 要求快速回應，使用 fire-and-forget 非同步處理
-    integrationEventPipeline.safeProcessEvent(this.name, matchedApp.id, normalizedEvent);
+    integrationEventPipeline.safeProcessEvent(this.name, app.id, normalizedEvent);
 
     return new Response('OK', { status: 200 });
   }
-
-  private async fetchProjects(appId: string, siteUrl: string, authHeader: string): Promise<IntegrationResource[]> {
-    if (isPrivateUrl(siteUrl)) {
-      throw new Error(`Jira App ${appId} fetchProjects 失敗：siteUrl 指向私有 IP 或 localhost`);
-    }
-
-    const res = await fetch(`${siteUrl}/rest/api/3/project`, {
-      headers: { Authorization: authHeader, Accept: 'application/json' },
-    });
-
-    if (!res.ok) {
-      throw new Error(`取得 Projects 失敗，狀態碼：${res.status}`);
-    }
-
-    const data = await res.json() as Array<{ key: string; name: string }>;
-    const resources: IntegrationResource[] = data.map((p) => ({ id: p.key, name: p.name }));
-
-    integrationAppStore.updateResources(appId, resources);
-    logger.log('Jira', 'Complete', `Jira App ${appId} 取得 ${resources.length} 個 Projects`);
-
-    return resources;
-  }
-
 }
 
 export const jiraProvider = new JiraProvider();

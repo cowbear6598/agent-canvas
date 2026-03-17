@@ -26,7 +26,9 @@ class IntegrationEventPipeline {
   }
 
   async processEvent(provider: string, appId: string, event: NormalizedEvent): Promise<void> {
-    const boundPods = podStore.findByIntegrationAppAndResource(appId, event.resourceId);
+    const boundPods = event.resourceId === '*'
+      ? podStore.findByIntegrationApp(appId)
+      : podStore.findByIntegrationAppAndResource(appId, event.resourceId);
 
     if (boundPods.length === 0) {
       logger.log('Integration', 'Complete', `[IntegrationEventPipeline] 找不到綁定 App ${appId} 和 Resource ${event.resourceId} 的 Pod`);

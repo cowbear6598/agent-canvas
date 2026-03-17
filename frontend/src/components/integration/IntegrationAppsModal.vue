@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Trash2, Plus } from 'lucide-vue-next'
+import { Trash2, Plus, Copy, Check } from 'lucide-vue-next'
 import { getProvider } from '@/integration/providerRegistry'
 import { useIntegrationStore } from '@/stores/integrationStore'
 
@@ -36,6 +36,7 @@ const apps = computed(() => integrationStore.getAppsByProvider(props.provider))
 const showAddForm = ref(false)
 const formValues = ref<Record<string, string>>({})
 const isSubmitting = ref(false)
+const copiedAppId = ref<string | null>(null)
 
 watch(
   () => props.provider,
@@ -48,6 +49,7 @@ watch(
   () => props.open,
   (isOpen) => {
     if (!isOpen) return
+    if (config.value?.hasNoResource) return
     for (const app of apps.value) {
       if (app.connectionStatus === 'connected') {
         integrationStore.refreshAppResources(props.provider, app.id)
@@ -118,6 +120,14 @@ const handleConfirmAdd = async (): Promise<void> => {
 const handleDeleteApp = async (appId: string): Promise<void> => {
   await integrationStore.deleteApp(props.provider, appId)
 }
+
+const handleCopyWebhookUrl = async (appId: string, url: string): Promise<void> => {
+  await navigator.clipboard.writeText(url)
+  copiedAppId.value = appId
+  setTimeout(() => {
+    copiedAppId.value = null
+  }, 2000)
+}
 </script>
 
 <template>
@@ -156,7 +166,30 @@ const handleDeleteApp = async (appId: string): Promise<void> => {
             <span class="font-semibold">{{ app.name }}</span>
 
             <div
-              v-if="config.getResources(app).length > 0"
+              v-if="config.getWebhookUrl"
+              class="flex items-center gap-1"
+            >
+              <span class="truncate font-mono text-xs text-muted-foreground">
+                {{ config.getWebhookUrl(app) }}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                @click="handleCopyWebhookUrl(app.id, config.getWebhookUrl!(app))"
+              >
+                <Check
+                  v-if="copiedAppId === app.id"
+                  class="size-3"
+                />
+                <Copy
+                  v-else
+                  class="size-3"
+                />
+              </Button>
+            </div>
+
+            <div
+              v-if="!config.hasNoResource && config.getResources(app).length > 0"
               class="flex flex-wrap gap-1"
             >
               <span

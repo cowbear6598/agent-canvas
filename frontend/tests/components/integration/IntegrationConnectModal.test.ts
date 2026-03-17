@@ -221,6 +221,27 @@ describe('IntegrationConnectModal', () => {
       expect(integrationStore.refreshAppResources).toHaveBeenCalledWith('slack', 'app-connected')
     })
 
+    it('Jira provider 開啟時不應觸發 refreshAppResources', async () => {
+      const wrapper = await mountComponent({ open: false, podId: 'pod-1', provider: 'jira' })
+      const integrationStore = (await import('@/stores/integrationStore')).useIntegrationStore()
+      integrationStore.apps['jira'] = [
+        {
+          id: 'jira-1',
+          name: 'dcm',
+          connectionStatus: 'connected',
+          provider: 'jira',
+          resources: [],
+          raw: {},
+        },
+      ]
+      integrationStore.refreshAppResources = vi.fn().mockResolvedValue(undefined)
+
+      await wrapper.setProps({ open: true })
+      await wrapper.vm.$nextTick()
+
+      expect(integrationStore.refreshAppResources).not.toHaveBeenCalled()
+    })
+
     it('開啟時不應對 disconnected app 觸發 refreshAppResources', async () => {
       const wrapper = await mountComponent({ open: false, podId: 'pod-1', provider: 'slack' })
       const integrationStore = (await import('@/stores/integrationStore')).useIntegrationStore()
@@ -245,6 +266,98 @@ describe('IntegrationConnectModal', () => {
       await wrapper.vm.$nextTick()
 
       expect(integrationStore.refreshAppResources).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('Jira provider（hasNoResource）', () => {
+    it('選擇 App 後不應顯示資源選擇區塊', async () => {
+      const wrapper = await mountComponent({ open: true, podId: 'pod-1', provider: 'jira' })
+      const integrationStore = (await import('@/stores/integrationStore')).useIntegrationStore()
+      integrationStore.apps['jira'] = [
+        {
+          id: 'jira-1',
+          name: 'dcm',
+          connectionStatus: 'connected',
+          provider: 'jira',
+          resources: [],
+          raw: {},
+        },
+      ]
+
+      await wrapper.vm.$nextTick()
+
+      const vm = wrapper.vm as unknown as {
+        selectedAppId: string | null
+        isNoResource: boolean
+      }
+      vm.selectedAppId = 'jira-1'
+      await wrapper.vm.$nextTick()
+
+      // isNoResource=true，資源選擇 template 不應渲染
+      expect(vm.isNoResource).toBe(true)
+      // 不應出現資源 radio group（資源選擇區的 label 文字是「選擇」+ resourceLabel，但 jira resourceLabel 為空）
+      // 確認 radio input 數量只有 App 選擇的一個，沒有資源 radio
+      const radioInputs = wrapper.findAll('input[type="radio"]')
+      expect(radioInputs).toHaveLength(1)
+    })
+
+    it('選擇 App 後確認按鈕應直接可用', async () => {
+      const wrapper = await mountComponent({ open: true, podId: 'pod-1', provider: 'jira' })
+      const integrationStore = (await import('@/stores/integrationStore')).useIntegrationStore()
+      integrationStore.apps['jira'] = [
+        {
+          id: 'jira-1',
+          name: 'dcm',
+          connectionStatus: 'connected',
+          provider: 'jira',
+          resources: [],
+          raw: {},
+        },
+      ]
+
+      await wrapper.vm.$nextTick()
+
+      const vm = wrapper.vm as unknown as {
+        selectedAppId: string | null
+        isConfirmDisabled: boolean
+      }
+      vm.selectedAppId = 'jira-1'
+      await wrapper.vm.$nextTick()
+
+      expect(vm.isConfirmDisabled).toBe(false)
+    })
+
+    it('確認綁定時 resourceId 傳 *', async () => {
+      const wrapper = await mountComponent({ open: true, podId: 'pod-1', provider: 'jira' })
+      const integrationStore = (await import('@/stores/integrationStore')).useIntegrationStore()
+      integrationStore.apps['jira'] = [
+        {
+          id: 'jira-1',
+          name: 'dcm',
+          connectionStatus: 'connected',
+          provider: 'jira',
+          resources: [],
+          raw: {},
+        },
+      ]
+      integrationStore.bindToPod = vi.fn().mockResolvedValue(undefined)
+
+      await wrapper.vm.$nextTick()
+
+      const vm = wrapper.vm as unknown as { selectedAppId: string | null }
+      vm.selectedAppId = 'jira-1'
+      await wrapper.vm.$nextTick()
+
+      const confirmButton = wrapper.findAll('button').find((b) => b.text() === '確認')
+      await confirmButton?.trigger('click')
+
+      expect(integrationStore.bindToPod).toHaveBeenCalledWith(
+        'jira',
+        'pod-1',
+        'jira-1',
+        '*',
+        expect.any(Object)
+      )
     })
   })
 

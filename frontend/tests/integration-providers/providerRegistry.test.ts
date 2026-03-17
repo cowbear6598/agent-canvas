@@ -227,8 +227,28 @@ describe('providerRegistry', () => {
       expect(getProvider('jira').label).toBe('Jira')
     })
 
-    it('createFormFields 有五個欄位', () => {
-      expect(getProvider('jira').createFormFields).toHaveLength(5)
+    it('createFormFields 有三個欄位', () => {
+      expect(getProvider('jira').createFormFields).toHaveLength(3)
+    })
+
+    it('createFormFields 包含 name、siteUrl、webhookSecret', () => {
+      const keys = getProvider('jira').createFormFields.map((f) => f.key)
+      expect(keys).toEqual(['name', 'siteUrl', 'webhookSecret'])
+    })
+
+    it('name 驗證：空值回傳錯誤', () => {
+      const field = getProvider('jira').createFormFields.find((f) => f.key === 'name')!
+      expect(field.validate('')).toBe('名稱不可為空')
+    })
+
+    it('name 驗證：含不合法字元回傳錯誤', () => {
+      const field = getProvider('jira').createFormFields.find((f) => f.key === 'name')!
+      expect(field.validate('my app!')).toBe('名稱只允許英文字母、數字、底線與連字號')
+    })
+
+    it('name 驗證：合法 URL 安全字元回傳空字串', () => {
+      const field = getProvider('jira').createFormFields.find((f) => f.key === 'name')!
+      expect(field.validate('dcm-app_01')).toBe('')
     })
 
     it('siteUrl 驗證：不以 https:// 開頭回傳錯誤', () => {
@@ -241,7 +261,7 @@ describe('providerRegistry', () => {
       expect(field.validate('https://example.atlassian.net')).toBe('')
     })
 
-    it('transformApp 正確轉換 resources', () => {
+    it('transformApp 回傳空 resources', () => {
       const config = getProvider('jira')
       const app = config.transformApp({
         id: 'app-1',
@@ -250,24 +270,20 @@ describe('providerRegistry', () => {
         resources: [{ id: 'PROJ', name: 'Project Alpha' }],
       })
       expect(app.provider).toBe('jira')
-      expect(app.resources).toEqual([{ id: 'PROJ', label: 'PROJ - Project Alpha' }])
+      expect(app.resources).toEqual([])
     })
 
-    it('buildCreatePayload 包含所有必要欄位，憑證放在 config 欄位內', () => {
+    it('buildCreatePayload 包含 name 和 config: { siteUrl, webhookSecret }', () => {
       const config = getProvider('jira')
       const payload = config.buildCreatePayload({
         name: 'Test',
         siteUrl: 'https://test.atlassian.net',
-        email: 'test@test.com',
-        apiToken: 'token123',
         webhookSecret: 'secret123',
       })
       expect(payload).toEqual({
         name: 'Test',
         config: {
           siteUrl: 'https://test.atlassian.net',
-          email: 'test@test.com',
-          apiToken: 'token123',
           webhookSecret: 'secret123',
         },
       })
@@ -278,9 +294,20 @@ describe('providerRegistry', () => {
       expect(payload).toEqual({ appId: 'app-456' })
     })
 
-    it('buildBindPayload 組合 appId 和 resourceId', () => {
+    it('buildBindPayload 固定回傳 resourceId: *', () => {
       const payload = getProvider('jira').buildBindPayload('app-1', 'PROJ', {})
-      expect(payload).toEqual({ appId: 'app-1', resourceId: 'PROJ' })
+      expect(payload).toEqual({ appId: 'app-1', resourceId: '*' })
+    })
+
+    it('hasNoResource 為 true', () => {
+      expect(getProvider('jira').hasNoResource).toBe(true)
+    })
+
+    it('getWebhookUrl 組合 window.location.origin 和 app.name', () => {
+      const config = getProvider('jira')
+      const app = config.transformApp({ id: 'app-1', name: 'dcm', connectionStatus: 'connected' })
+      const url = config.getWebhookUrl!(app)
+      expect(url).toBe(window.location.origin + '/jira/events/dcm')
     })
   })
 })

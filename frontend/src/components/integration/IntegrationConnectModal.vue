@@ -50,6 +50,8 @@ const resources = computed(() =>
   selectedApp.value ? config.value.getResources(selectedApp.value) : []
 )
 
+const isNoResource = computed<boolean>(() => config.value.hasNoResource ?? false)
+
 const isManualInput = computed<boolean>(() =>
   config.value.hasManualResourceInput?.(extraValues.value) ?? false
 )
@@ -62,6 +64,8 @@ const manualInputError = computed<string>(() => {
 
 const isConfirmDisabled = computed<boolean>(() => {
   if (apps.value.length === 0 || !selectedAppId.value) return true
+
+  if (isNoResource.value) return false
 
   const extraFields = config.value.bindingExtraFields ?? []
   if (extraFields.some((field) => !extraValues.value[field.key])) return true
@@ -97,9 +101,11 @@ watch(
       return
     }
 
-    for (const app of apps.value) {
-      if (app.connectionStatus === 'connected') {
-        integrationStore.refreshAppResources(props.provider, app.id)
+    if (!isNoResource.value) {
+      for (const app of apps.value) {
+        if (app.connectionStatus === 'connected') {
+          integrationStore.refreshAppResources(props.provider, app.id)
+        }
       }
     }
 
@@ -158,18 +164,20 @@ watch(
   { deep: true }
 )
 
+function resolveResourceId(): string | null {
+  if (isNoResource.value) return '*'
+  if (isManualInput.value) {
+    if (manualInputError.value !== '' || manualResourceInput.value === '') return null
+    return manualResourceInput.value
+  }
+  return selectedResourceId.value
+}
+
 const handleConfirm = async (): Promise<void> => {
   if (!selectedAppId.value) return
 
-  let resourceId: string
-
-  if (isManualInput.value) {
-    if (manualInputError.value !== '' || manualResourceInput.value === '') return
-    resourceId = manualResourceInput.value
-  } else {
-    if (!selectedResourceId.value) return
-    resourceId = selectedResourceId.value
-  }
+  const resourceId = resolveResourceId()
+  if (!resourceId) return
 
   const extra: Record<string, unknown> = {}
   Object.entries(extraValues.value).forEach(([k, v]) => {
@@ -194,7 +202,12 @@ const handleClose = (): void => {
       <DialogHeader>
         <DialogTitle>連接 {{ config.label }}</DialogTitle>
         <DialogDescription>
-          選擇要與此 Pod 連接的 {{ config.label }} App 和{{ config.resourceLabel }}
+          <template v-if="isNoResource">
+            選擇要與此 Pod 連接的 {{ config.label }} App
+          </template>
+          <template v-else>
+            選擇要與此 Pod 連接的 {{ config.label }} App 和{{ config.resourceLabel }}
+          </template>
         </DialogDescription>
       </DialogHeader>
 
@@ -236,7 +249,7 @@ const handleClose = (): void => {
             </RadioGroup>
           </div>
 
-          <template v-if="selectedApp">
+          <template v-if="selectedApp && !isNoResource">
             <!-- 額外欄位（如 Telegram 的 private/group 選擇） -->
             <div
               v-for="extraField in config.bindingExtraFields ?? []"

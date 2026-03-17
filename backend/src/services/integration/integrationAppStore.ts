@@ -102,6 +102,12 @@ class IntegrationAppStore {
     this.stmts.updateExtraJson.run({ $extraJson: JSON.stringify(extra), $id: id });
   }
 
+  getByProviderAndName(provider: string, name: string): IntegrationApp | undefined {
+    const row = this.stmts.selectByProviderAndName.get({ $provider: provider, $name: name }) as IntegrationAppRow | undefined;
+    if (!row) return undefined;
+    return this.rowToApp(row);
+  }
+
   delete(id: string): boolean {
     const result = this.stmts.deleteById.run(id);
     this.runtimeState.delete(id);

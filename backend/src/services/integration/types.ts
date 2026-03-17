@@ -61,7 +61,8 @@ export interface IntegrationProvider {
   allowManualResourceId?: boolean;
 
   webhookPath?: string;
-  handleWebhookRequest?(req: Request): Promise<Response>;
+  webhookPathMatchMode?: 'exact' | 'prefix';
+  handleWebhookRequest?(req: Request, subPath?: string): Promise<Response>;
   startPolling?(appId: string, config: IntegrationAppConfig): void;
   stopPolling?(appId: string): void;
 }

@@ -1,4 +1,4 @@
-import type { IntegrationApp, IntegrationProviderConfig, IntegrationResource } from '@/types/integration'
+import type { IntegrationApp, IntegrationProviderConfig } from '@/types/integration'
 import JiraIcon from '@/components/icons/JiraIcon.vue'
 
 const CONNECTION_STATUS_CONFIG: IntegrationProviderConfig['connectionStatusConfig'] = {
@@ -8,18 +8,12 @@ const CONNECTION_STATUS_CONFIG: IntegrationProviderConfig['connectionStatusConfi
 }
 
 function transformApp(rawApp: Record<string, unknown>): IntegrationApp {
-  const rawResources = (rawApp.resources as Array<{ id: string; name: string }> | undefined) ?? []
-  const resources: IntegrationResource[] = rawResources.map((r) => ({
-    id: r.id,
-    label: r.id + ' - ' + r.name,
-  }))
-
   return {
     id: String(rawApp.id ?? ''),
     name: String(rawApp.name ?? ''),
     connectionStatus: (rawApp.connectionStatus as IntegrationApp['connectionStatus']) ?? 'disconnected',
     provider: 'jira',
-    resources,
+    resources: [],
     raw: rawApp,
   }
 }
@@ -34,9 +28,13 @@ export const jiraProviderConfig: IntegrationProviderConfig = {
     {
       key: 'name',
       label: '名稱',
-      placeholder: '例如：My Jira App',
+      placeholder: '例如：dcm',
       type: 'text',
-      validate: (v) => (v === '' ? '名稱不可為空' : ''),
+      validate: (v): string => {
+        if (v === '') return '名稱不可為空'
+        if (!/^[a-zA-Z0-9_-]+$/.test(v)) return '名稱只允許英文字母、數字、底線與連字號'
+        return ''
+      },
     },
     {
       key: 'siteUrl',
@@ -50,50 +48,42 @@ export const jiraProviderConfig: IntegrationProviderConfig = {
       },
     },
     {
-      key: 'email',
-      label: 'Email',
-      placeholder: 'your-email@example.com',
-      type: 'text',
-      validate: (v) => (v === '' ? 'Email 不可為空' : ''),
-    },
-    {
-      key: 'apiToken',
-      label: 'API Token',
-      placeholder: 'Jira API Token',
-      type: 'password',
-      validate: (v) => (v === '' ? 'API Token 不可為空' : ''),
-    },
-    {
       key: 'webhookSecret',
       label: 'Webhook Secret',
-      placeholder: 'Webhook Secret',
+      placeholder: '用於驗證 Webhook 請求的密鑰',
       type: 'password',
-      validate: (v) => (v === '' ? 'Webhook Secret 不可為空' : ''),
+      validate: (v): string => {
+        if (v === '') return 'Webhook Secret 不可為空'
+        if (v.length < 16) return 'Webhook Secret 至少需要 16 個字元'
+        return ''
+      },
     },
   ],
 
-  resourceLabel: 'Project',
-  emptyResourceHint: '此 App 尚無可用 Project',
+  resourceLabel: '',
+  emptyResourceHint: '',
   emptyAppHint: '尚未註冊任何 Jira App',
   bindingExtraFields: undefined,
 
   connectionStatusConfig: CONNECTION_STATUS_CONFIG,
 
+  hasNoResource: true,
+
+  getWebhookUrl: (app) => window.location.origin + '/jira/events/' + app.name,
+
   transformApp,
 
-  getResources: (app) => app.resources,
+  getResources: () => [],
 
   buildCreatePayload: (formValues) => ({
     name: formValues.name,
     config: {
       siteUrl: formValues.siteUrl,
-      email: formValues.email,
-      apiToken: formValues.apiToken,
       webhookSecret: formValues.webhookSecret,
     },
   }),
 
   buildDeletePayload: (appId) => ({ appId }),
 
-  buildBindPayload: (appId, resourceId) => ({ appId, resourceId }),
+  buildBindPayload: (appId) => ({ appId, resourceId: '*' }),
 }

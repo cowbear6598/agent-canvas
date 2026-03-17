@@ -39,8 +39,10 @@ vi.mock('@/components/icons/JiraIcon.vue', () => ({
 
 // Mock lucide icons
 vi.mock('lucide-vue-next', () => ({
-  Trash2: { name: 'Trash2', template: '<svg />', props: ['class'] },
-  Plus: { name: 'Plus', template: '<svg />', props: ['class'] },
+  Trash2: { name: 'Trash2', template: '<svg data-icon="trash2" />', props: ['class'] },
+  Plus: { name: 'Plus', template: '<svg data-icon="plus" />', props: ['class'] },
+  Copy: { name: 'Copy', template: '<svg data-icon="copy" />', props: ['class'] },
+  Check: { name: 'Check', template: '<svg data-icon="check" />', props: ['class'] },
 }))
 
 function createMockApp(overrides?: Partial<IntegrationApp>): IntegrationApp {
@@ -127,14 +129,106 @@ describe('IntegrationAppsModal', () => {
   })
 
   describe('Jira provider', () => {
-    it('新增表單應根據 Jira provider 渲染 5 個欄位', async () => {
+    it('新增表單應根據 Jira provider 渲染 3 個欄位', async () => {
       const wrapper = await mountComponent({ open: true, provider: 'jira' })
 
       const addButton = wrapper.findAll('button').find((b) => b.text().includes('新增 App'))
       await addButton?.trigger('click')
 
       const inputs = wrapper.findAll('input')
-      expect(inputs).toHaveLength(5)
+      expect(inputs).toHaveLength(3)
+    })
+
+    it('Jira App 卡片不顯示 resources badges', async () => {
+      const wrapper = await mountComponent({ open: true, provider: 'jira' })
+      const integrationStore = (await import('@/stores/integrationStore')).useIntegrationStore()
+      integrationStore.apps['jira'] = [
+        {
+          id: 'jira-1',
+          name: 'dcm',
+          connectionStatus: 'connected',
+          provider: 'jira',
+          resources: [],
+          raw: {},
+        },
+      ]
+
+      await wrapper.vm.$nextTick()
+
+      // Jira hasNoResource=true，不應出現 bg-muted 的 resource badge
+      const badges = wrapper.findAll('.rounded-full.bg-muted')
+      expect(badges).toHaveLength(0)
+    })
+
+    it('Jira App 卡片應顯示 Webhook URL', async () => {
+      const wrapper = await mountComponent({ open: true, provider: 'jira' })
+      const integrationStore = (await import('@/stores/integrationStore')).useIntegrationStore()
+      integrationStore.apps['jira'] = [
+        {
+          id: 'jira-1',
+          name: 'dcm',
+          connectionStatus: 'connected',
+          provider: 'jira',
+          resources: [],
+          raw: {},
+        },
+      ]
+
+      await wrapper.vm.$nextTick()
+
+      expect(wrapper.text()).toContain('/jira/events/dcm')
+    })
+
+    it('Webhook URL 旁有複製按鈕', async () => {
+      const wrapper = await mountComponent({ open: true, provider: 'jira' })
+      const integrationStore = (await import('@/stores/integrationStore')).useIntegrationStore()
+      integrationStore.apps['jira'] = [
+        {
+          id: 'jira-1',
+          name: 'dcm',
+          connectionStatus: 'connected',
+          provider: 'jira',
+          resources: [],
+          raw: {},
+        },
+      ]
+
+      await wrapper.vm.$nextTick()
+
+      const copyIcon = wrapper.find('[data-icon="copy"]')
+      expect(copyIcon.exists()).toBe(true)
+    })
+
+    it('點擊複製按鈕應呼叫 clipboard API', async () => {
+      const writeTextMock = vi.fn().mockResolvedValue(undefined)
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText: writeTextMock },
+        writable: true,
+      })
+
+      const wrapper = await mountComponent({ open: true, provider: 'jira' })
+      const integrationStore = (await import('@/stores/integrationStore')).useIntegrationStore()
+      integrationStore.apps['jira'] = [
+        {
+          id: 'jira-1',
+          name: 'dcm',
+          connectionStatus: 'connected',
+          provider: 'jira',
+          resources: [],
+          raw: {},
+        },
+      ]
+
+      await wrapper.vm.$nextTick()
+
+      // 找到含 copy icon 的按鈕並點擊
+      const buttons = wrapper.findAll('button')
+      const copyButton = buttons.find((b) => b.find('[data-icon="copy"]').exists())
+      await copyButton?.trigger('click')
+
+      expect(writeTextMock).toHaveBeenCalledWith(
+        expect.stringContaining('/jira/events/dcm')
+      )
     })
   })
 
@@ -209,6 +303,27 @@ describe('IntegrationAppsModal', () => {
       await wrapper.vm.$nextTick()
 
       expect(integrationStore.refreshAppResources).toHaveBeenCalledWith('slack', 'app-connected')
+    })
+
+    it('Jira provider 開啟時不應觸發 refreshAppResources', async () => {
+      const wrapper = await mountComponent({ open: false, provider: 'jira' })
+      const integrationStore = (await import('@/stores/integrationStore')).useIntegrationStore()
+      integrationStore.apps['jira'] = [
+        {
+          id: 'jira-1',
+          name: 'dcm',
+          connectionStatus: 'connected',
+          provider: 'jira',
+          resources: [],
+          raw: {},
+        },
+      ]
+      integrationStore.refreshAppResources = vi.fn().mockResolvedValue(undefined)
+
+      await wrapper.setProps({ open: true })
+      await wrapper.vm.$nextTick()
+
+      expect(integrationStore.refreshAppResources).not.toHaveBeenCalled()
     })
 
     it('開啟時不應對 disconnected app 觸發 refreshAppResources', async () => {
