@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.7.0] - 2026-03-17
+
+### 新增
+- Multi-Instance Run 功能（Integration 觸發自動建立 WorkflowRun，支援 Slack/Jira/Telegram）
+- Slack 回覆時自動 @ 原始發送者
+- Trigger Settlement Model（auto/direct pathway 獨立結算機制）
+- AI-Decide 狀態視覺化與 Cascade Skip 機制
+- Run Pod Instance 新增 queued/waiting 狀態與視覺圖示
+- Run Mode 新增 RunQueueService 序列執行機制（同一 POD 的多組 pathway 依序執行）
+
+### 修正
+- 修復 handleRunDelete/handleRunLoadPodMessages IDOR 漏洞
+- 修復同一 POD 的 Direct + Auto pathway 在 Run Mode 下並行觸發問題
+- 修復 RunCard 點擊 POD instance 冒泡導致收合
+- 修復 RunChatModal 關閉時連帶關閉 HistoryPanel
+- 修復 getSkippedPodIds 無限遞迴
+- 修復 AI-Decide Run 模式摘要讀取錯誤與 NaN 時間顯示
+- 修復 Run 建立時 pod 名稱空白
+- 修復 triggeredAt 被非 running 狀態覆蓋
+- 修復 Multi-Instance Run 下 Canvas 視覺狀態不應變化
+- 修復新建 Slack App 後頻道為空
+- 歷程按鈕改為永遠顯示
+- runQueueService + workflowQueueService 加入 MAX_QUEUE_SIZE 佇列上限防護
+
+### 重構
+- WorkflowStatusDelegate 策略模式取代 27+ 處 if/runContext 分支
+- PathwayState enum 取代 boolean|null 三值語義
+- ChatEmitStrategy 策略模式消除 streaming handler 的 runContext 分支
+- ClaudeService 引入 ExecutionContext 物件收斂散落參數
+- CanvasPod.vue 拆分 usePodSchedule/usePodAnchorDrag composable
+- Auto Clear 重命名為 Multi Instance
+- 狀態集合常量集中定義 + 共用 helper 提取
+- 無意義註解清理 + 錯誤訊息統一繁體中文
+
 ## [0.6.0] - 2026-03-11
 
 ### 新增
