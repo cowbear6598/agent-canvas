@@ -38,42 +38,63 @@ class IntegrationEventPipeline {
     const multiInstancePods = boundPods.filter(({ pod }) => pod.multiInstance === true);
     const normalPods = boundPods.filter(({ pod }) => pod.multiInstance !== true);
 
+    if (this.shouldReplyBusy(normalPods, multiInstancePods)) {
+      const cooldownKey = `${appId}:${event.resourceId}`;
+      if (shouldSendBusyReply(this.busyReplyCooldowns, cooldownKey)) {
+        this.sendAckReply(provider, appId, event, '目前忙碌中，請稍後再試');
+      }
+    } else {
+      this.sendAckReply(provider, appId, event, '已接收到命令');
+    }
+
     // multiInstance pods 先獨立處理，不受忙碌狀態影響
     const multiInstancePromises = multiInstancePods.map(({ canvasId, pod }) =>
       this.processBoundPod(canvasId, pod, event)
     );
 
-    if (normalPods.length > 0) {
-      if (this.isResourceBusy(appId, event.resourceId, normalPods)) {
-        const cooldownKey = `${appId}:${event.resourceId}`;
-        if (shouldSendBusyReply(this.busyReplyCooldowns, cooldownKey)) {
-          const integrationProvider = integrationRegistry.get(provider);
-          if (integrationProvider?.sendMessage) {
-            await integrationProvider.sendMessage(appId, event.resourceId, '目前忙碌中，請稍後再試');
-          }
-        }
-      } else {
-        const normalResults = await Promise.allSettled(
-          normalPods.map(({ canvasId, pod }) => this.processBoundPod(canvasId, pod, event))
-        );
-        for (let i = 0; i < normalResults.length; i++) {
-          const result = normalResults[i];
-          if (result.status === 'rejected') {
-            const pod = normalPods[i].pod;
-            logger.error('Integration', 'Error', `[IntegrationEventPipeline] Pod「${pod.name}」處理 Integration 訊息失敗`, result.reason);
-          }
-        }
-      }
+    const allNormalBusy = normalPods.length > 0 && this.isResourceBusy(appId, event.resourceId, normalPods);
+
+    if (normalPods.length > 0 && !allNormalBusy) {
+      await this.settleAndLogErrors(
+        normalPods.map(({ canvasId, pod }) => this.processBoundPod(canvasId, pod, event)),
+        normalPods.map(({ pod }) => pod),
+      );
     }
 
-    const multiInstanceResults = await Promise.allSettled(multiInstancePromises);
-    for (let i = 0; i < multiInstanceResults.length; i++) {
-      const result = multiInstanceResults[i];
+    await this.settleAndLogErrors(
+      multiInstancePromises,
+      multiInstancePods.map(({ pod }) => pod),
+    );
+  }
+
+  private shouldReplyBusy(normalPods: Array<{ canvasId: string; pod: Pod }>, multiInstancePods: Array<{ canvasId: string; pod: Pod }>): boolean {
+    const allNormalBusy = normalPods.some(({ canvasId, pod }) =>
+      isPodBusy(pod.status) || isWorkflowChainBusy(canvasId, pod.id)
+    );
+    return normalPods.length > 0 && allNormalBusy && multiInstancePods.length === 0;
+  }
+
+  private async settleAndLogErrors(tasks: Promise<void>[], pods: Pod[]): Promise<void> {
+    const results = await Promise.allSettled(tasks);
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i];
       if (result.status === 'rejected') {
-        const pod = multiInstancePods[i].pod;
-        logger.error('Integration', 'Error', `[IntegrationEventPipeline] Pod「${pod.name}」處理 Integration 訊息失敗`, result.reason);
+        logger.error('Integration', 'Error', `[IntegrationEventPipeline] Pod「${pods[i].name}」處理 Integration 訊息失敗`, result.reason);
       }
     }
+  }
+
+  private sendAckReply(provider: string, appId: string, event: NormalizedEvent, message: string): void {
+    const integrationProvider = integrationRegistry.get(provider);
+    if (!integrationProvider?.sendMessage) return;
+
+    const extra = integrationProvider.buildAckExtra?.(event) ?? {};
+
+    const sendPromise = integrationProvider.sendMessage(appId, event.resourceId, message, extra);
+    sendPromise.catch((error: unknown) => {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.warn('Integration', 'Warn', `[IntegrationEventPipeline] 發送確認回覆失敗：${errorMessage}`);
+    });
   }
 
   private isResourceBusy(appId: string, resourceId: string, pods?: Array<{ canvasId: string; pod: Pod }>): boolean {

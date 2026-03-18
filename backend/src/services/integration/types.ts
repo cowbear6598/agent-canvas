@@ -37,6 +37,7 @@ export interface NormalizedEvent {
   senderId?: string;
   messageTs?: string;
   threadTs?: string;
+  messageId?: number;
 }
 
 export interface IntegrationProvider {
@@ -54,6 +55,7 @@ export interface IntegrationProvider {
   destroyAll(): void;
   refreshResources(appId: string): Promise<IntegrationResource[]>;
   sendMessage?(appId: string, resourceId: string, text: string, extra?: Record<string, unknown>): Promise<Result<void>>;
+  buildAckExtra?(event: NormalizedEvent): Record<string, unknown>;
 
   formatEventMessage(event: unknown, app: IntegrationApp): NormalizedEvent | null;
 

@@ -277,6 +277,14 @@ class SlackProvider implements IntegrationProvider {
         }
     }
 
+    buildAckExtra(event: NormalizedEvent): Record<string, unknown> {
+        return {
+            senderId: event.senderId,
+            messageTs: event.messageTs,
+            threadTs: event.threadTs,
+        };
+    }
+
     formatEventMessage(event: unknown, app: IntegrationApp): NormalizedEvent | null {
         const mentionEvent = event as AppMentionEvent;
         const { channel, user, text, ts, thread_ts } = mentionEvent;

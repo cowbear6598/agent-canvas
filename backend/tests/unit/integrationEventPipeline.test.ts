@@ -48,14 +48,6 @@ vi.mock('../../src/services/integration/integrationRegistry.js', () => ({
   },
 }));
 
-vi.mock('../../src/services/workflow/runExecutionService.js', () => ({
-  runExecutionService: {
-    createRun: vi.fn(() => Promise.resolve({ runId: 'run-1', canvasId: 'canvas-1' })),
-    startPodInstance: vi.fn(),
-    settlePodTrigger: vi.fn(),
-  },
-}));
-
 vi.mock('../../src/utils/runChatHelpers.js', () => ({
   launchMultiInstanceRun: vi.fn(() => Promise.resolve({ runId: 'run-1', canvasId: 'canvas-1' })),
 }));
@@ -95,7 +87,6 @@ import { executeStreamingChat } from '../../src/services/claude/streamingChatExe
 import { workflowExecutionService } from '../../src/services/workflow/index.js';
 import { isWorkflowChainBusy } from '../../src/utils/workflowChainTraversal.js';
 import { integrationRegistry } from '../../src/services/integration/integrationRegistry.js';
-import { runExecutionService } from '../../src/services/workflow/runExecutionService.js';
 import { launchMultiInstanceRun } from '../../src/utils/runChatHelpers.js';
 import { onRunChatComplete } from '../../src/utils/chatCallbacks.js';
 import { injectUserMessage, buildDisplayContentWithCommand } from '../../src/utils/chatHelpers.js';
@@ -156,8 +147,6 @@ describe('IntegrationEventPipeline', () => {
     asMock(workflowExecutionService.checkAndTriggerWorkflows).mockResolvedValue(undefined);
     asMock(isWorkflowChainBusy).mockReturnValue(false);
     asMock(integrationRegistry.get).mockReturnValue(undefined);
-    asMock(runExecutionService.createRun).mockResolvedValue(mockRunContext);
-    asMock(runExecutionService.startPodInstance).mockReturnValue(undefined);
     asMock(launchMultiInstanceRun).mockResolvedValue(mockRunContext);
     asMock(onRunChatComplete).mockReturnValue(undefined);
     asMock(injectUserMessage).mockResolvedValue(undefined);
@@ -247,7 +236,7 @@ describe('IntegrationEventPipeline', () => {
 
         await integrationEventPipeline.processEvent('slack', 'app-1', event);
 
-        expect(mockSendMessage).toHaveBeenCalledWith('app-1', 'C-sendmsg-test', '目前忙碌中，請稍後再試');
+        expect(mockSendMessage).toHaveBeenCalledWith('app-1', 'C-sendmsg-test', '目前忙碌中，請稍後再試', expect.any(Object));
       });
 
       it('資源忙碌且 Provider 無 sendMessage 時不拋出錯誤', async () => {
@@ -262,7 +251,6 @@ describe('IntegrationEventPipeline', () => {
 
       it('同一資源短時間內第二次忙碌不再發送忙碌回覆', async () => {
         const pod = makePod({ status: 'chatting', id: 'pod-busy' });
-        // findByIntegrationAppAndResource 在 isResourceBusy 內也被呼叫，需統一回傳
         asMock(podStore.findByIntegrationAppAndResource).mockReturnValue([{ canvasId, pod }]);
 
         const mockSendMessage = vi.fn(() => Promise.resolve({ success: true as const }));
@@ -431,16 +419,17 @@ describe('IntegrationEventPipeline', () => {
         expect(launchMultiInstanceRun).toHaveBeenCalled();
       });
 
-      it('processEvent 層級：所有 Pod 皆為 multiInstance 時不發送忙碌回覆', async () => {
+      it('processEvent 層級：所有 Pod 皆為 multiInstance 時回覆「已接收到命令」', async () => {
         const pod = makePod({ multiInstance: true, status: 'chatting' });
+        const event = makeEvent({ resourceId: 'C-multi-only' });
         asMock(podStore.findByIntegrationAppAndResource).mockReturnValue([{ canvasId, pod }]);
 
         const mockSendMessage = vi.fn(() => Promise.resolve({ success: true as const }));
         asMock(integrationRegistry.get).mockReturnValue({ sendMessage: mockSendMessage });
 
-        await integrationEventPipeline.processEvent('slack', 'app-1', makeEvent());
+        await integrationEventPipeline.processEvent('slack', 'app-1', event);
 
-        expect(mockSendMessage).not.toHaveBeenCalled();
+        expect(mockSendMessage).toHaveBeenCalledWith('app-1', 'C-multi-only', '已接收到命令', expect.any(Object));
       });
 
       it('完成後應呼叫 onRunChatComplete', async () => {
@@ -600,6 +589,215 @@ describe('IntegrationEventPipeline', () => {
       await vi.waitFor(() => {
         expect(podStore.findByIntegrationAppAndResource).toHaveBeenCalled();
       });
+    });
+  });
+
+  describe('確認回覆', () => {
+    async function assertAckReply(options: {
+      provider: string;
+      appId: string;
+      event: Partial<NormalizedEvent>;
+      pods: Pod[];
+      expectedMessage: string;
+      expectedExtra?: Record<string, unknown>;
+      shouldCall?: boolean;
+    }): Promise<void> {
+      const { provider, appId, event, pods, expectedMessage, expectedExtra, shouldCall = true } = options;
+      const fullEvent = makeEvent(event);
+
+      asMock(podStore.findByIntegrationAppAndResource).mockReturnValue(
+        pods.map(pod => ({ canvasId, pod }))
+      );
+      asMock(podStore.getById).mockImplementation((_cId: string, id: string) =>
+        pods.find(p => p.id === id)
+      );
+
+      const mockSendMessage = vi.fn(() => Promise.resolve({ success: true as const }));
+      const mockBuildAckExtra = vi.fn(() => expectedExtra ?? {});
+      asMock(integrationRegistry.get).mockReturnValue({
+        sendMessage: mockSendMessage,
+        buildAckExtra: mockBuildAckExtra,
+      });
+
+      await integrationEventPipeline.processEvent(provider, appId, fullEvent);
+
+      if (!shouldCall) {
+        expect(mockSendMessage).not.toHaveBeenCalled();
+        return;
+      }
+
+      const extraMatcher = expectedExtra
+        ? expect.objectContaining(expectedExtra)
+        : expect.any(Object);
+
+      expect(mockSendMessage).toHaveBeenCalledWith(appId, fullEvent.resourceId, expectedMessage, extraMatcher);
+    }
+
+    it('Slack 一般模式 Pod 非忙碌 — 回覆「已接收到命令」並帶 senderId 和 thread', async () => {
+      await assertAckReply({
+        provider: 'slack',
+        appId: 'app-1',
+        event: { resourceId: 'C-ack-slack-idle', senderId: 'U123', messageTs: '1000.0001', threadTs: '1000.0000' },
+        pods: [makePod({ status: 'idle' })],
+        expectedMessage: '已接收到命令',
+        expectedExtra: { senderId: 'U123', messageTs: '1000.0001', threadTs: '1000.0000' },
+      });
+    });
+
+    it('Slack 一般模式 Pod 忙碌 — 回覆「目前忙碌中，請稍後再試」並帶 senderId 和 thread', async () => {
+      await assertAckReply({
+        provider: 'slack',
+        appId: 'app-1',
+        event: { resourceId: 'C-ack-slack-busy', senderId: 'U456', messageTs: '2000.0001', threadTs: '2000.0000' },
+        pods: [makePod({ status: 'chatting' })],
+        expectedMessage: '目前忙碌中，請稍後再試',
+        expectedExtra: { senderId: 'U456', messageTs: '2000.0001', threadTs: '2000.0000' },
+      });
+    });
+
+    it('Slack Multi-Instance 模式 Pod — 回覆「已接收到命令」', async () => {
+      await assertAckReply({
+        provider: 'slack',
+        appId: 'app-1',
+        event: { resourceId: 'C-ack-slack-multi' },
+        pods: [makePod({ multiInstance: true })],
+        expectedMessage: '已接收到命令',
+      });
+    });
+
+    it('Slack 同時有一般（閒置）與 Multi-Instance Pod — 只回覆一次「已接收到命令」', async () => {
+      const normalPod = makePod({ id: 'pod-normal', status: 'idle' });
+      const multiPod = makePod({ id: 'pod-multi', multiInstance: true });
+      const event = makeEvent({ resourceId: 'C-ack-slack-mixed-idle' });
+      asMock(podStore.findByIntegrationAppAndResource).mockReturnValue([
+        { canvasId, pod: normalPod },
+        { canvasId, pod: multiPod },
+      ]);
+      asMock(podStore.getById).mockImplementation((_cId: string, id: string) =>
+        id === 'pod-normal' ? normalPod : id === 'pod-multi' ? multiPod : undefined
+      );
+
+      const mockSendMessage = vi.fn(() => Promise.resolve({ success: true as const }));
+      asMock(integrationRegistry.get).mockReturnValue({ sendMessage: mockSendMessage });
+
+      await integrationEventPipeline.processEvent('slack', 'app-1', event);
+
+      expect(mockSendMessage).toHaveBeenCalledTimes(1);
+      expect(mockSendMessage).toHaveBeenCalledWith('app-1', 'C-ack-slack-mixed-idle', '已接收到命令', expect.any(Object));
+    });
+
+    it('Slack 同時有一般（忙碌）與 Multi-Instance Pod — 回覆「已接收到命令」（因 multiInstance 會處理）', async () => {
+      const normalPod = makePod({ id: 'pod-normal-busy', status: 'chatting' });
+      const multiPod = makePod({ id: 'pod-multi-busy', multiInstance: true });
+      const event = makeEvent({ resourceId: 'C-ack-slack-mixed-busy' });
+      asMock(podStore.findByIntegrationAppAndResource).mockReturnValue([
+        { canvasId, pod: normalPod },
+        { canvasId, pod: multiPod },
+      ]);
+
+      const mockSendMessage = vi.fn(() => Promise.resolve({ success: true as const }));
+      asMock(integrationRegistry.get).mockReturnValue({ sendMessage: mockSendMessage });
+
+      await integrationEventPipeline.processEvent('slack', 'app-1', event);
+
+      expect(mockSendMessage).toHaveBeenCalledTimes(1);
+      expect(mockSendMessage).toHaveBeenCalledWith('app-1', 'C-ack-slack-mixed-busy', '已接收到命令', expect.any(Object));
+    });
+
+    it('Slack 沒有綁定 Pod — 不回覆', async () => {
+      await assertAckReply({
+        provider: 'slack',
+        appId: 'app-1',
+        event: makeEvent(),
+        pods: [],
+        expectedMessage: '',
+        shouldCall: false,
+      });
+    });
+
+    it('Telegram 一般模式 Pod 非忙碌 — 回覆「已接收到命令」（無 senderId mention），extra 包含 replyToMessageId', async () => {
+      await assertAckReply({
+        provider: 'telegram',
+        appId: 'app-tg',
+        event: { provider: 'telegram', resourceId: '99999', messageId: 42, senderId: undefined },
+        pods: [makePod({ status: 'idle' })],
+        expectedMessage: '已接收到命令',
+        expectedExtra: { replyToMessageId: 42 },
+      });
+    });
+
+    it('Telegram 一般模式 Pod 忙碌 — 回覆「目前忙碌中，請稍後再試」', async () => {
+      await assertAckReply({
+        provider: 'telegram',
+        appId: 'app-tg',
+        event: { provider: 'telegram', resourceId: 'tg-busy-unique', messageId: 55 },
+        pods: [makePod({ status: 'chatting' })],
+        expectedMessage: '目前忙碌中，請稍後再試',
+        expectedExtra: { replyToMessageId: 55 },
+      });
+    });
+
+    it('Telegram Multi-Instance 模式 Pod — 回覆「已接收到命令」', async () => {
+      await assertAckReply({
+        provider: 'telegram',
+        appId: 'app-tg',
+        event: { provider: 'telegram', resourceId: 'tg-multi-unique', messageId: 77 },
+        pods: [makePod({ multiInstance: true })],
+        expectedMessage: '已接收到命令',
+      });
+    });
+
+    it('Telegram 沒有綁定 Pod — 不回覆', async () => {
+      await assertAckReply({
+        provider: 'telegram',
+        appId: 'app-tg',
+        event: { provider: 'telegram' },
+        pods: [],
+        expectedMessage: '',
+        shouldCall: false,
+      });
+    });
+
+    it('忙碌回覆受冷卻時間控制（30 秒內不重複）', async () => {
+      const pod = makePod({ status: 'chatting' });
+      const event = makeEvent({ resourceId: 'C-cooldown-test' });
+      asMock(podStore.findByIntegrationAppAndResource).mockReturnValue([{ canvasId, pod }]);
+
+      const mockSendMessage = vi.fn(() => Promise.resolve({ success: true as const }));
+      asMock(integrationRegistry.get).mockReturnValue({ sendMessage: mockSendMessage });
+
+      const mockNow = vi.spyOn(Date, 'now');
+      mockNow.mockReturnValue(300_000_000);
+
+      await integrationEventPipeline.processEvent('slack', 'app-1', event);
+      expect(mockSendMessage).toHaveBeenCalledTimes(1);
+
+      mockNow.mockReturnValue(300_015_000);
+      await integrationEventPipeline.processEvent('slack', 'app-1', event);
+      expect(mockSendMessage).toHaveBeenCalledTimes(1);
+
+      // 超過 30 秒後可再次發送
+      mockNow.mockReturnValue(300_035_000);
+      await integrationEventPipeline.processEvent('slack', 'app-1', event);
+      expect(mockSendMessage).toHaveBeenCalledTimes(2);
+
+      mockNow.mockRestore();
+    });
+
+    it('確認回覆 sendMessage 失敗時不影響後續訊息處理', async () => {
+      const pod = makePod({ status: 'idle' });
+      const event = makeEvent({ resourceId: 'C-ack-fail' });
+      asMock(podStore.findByIntegrationAppAndResource).mockReturnValue([{ canvasId, pod }]);
+      asMock(podStore.getById).mockReturnValue(pod);
+
+      const mockSendMessage = vi.fn(() => Promise.reject(new Error('網路錯誤')));
+      asMock(integrationRegistry.get).mockReturnValue({ sendMessage: mockSendMessage });
+
+      await expect(
+        integrationEventPipeline.processEvent('slack', 'app-1', event)
+      ).resolves.not.toThrow();
+
+      expect(executeStreamingChat).toHaveBeenCalled();
     });
   });
 });

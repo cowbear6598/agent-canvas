@@ -161,6 +161,14 @@ describe('TelegramProvider - formatEventMessage', () => {
         const result = telegramProvider.formatEventMessage(message, app);
         expect(result?.resourceId).toBe(String(chatId));
     });
+
+    it('應將 message_id 填入 NormalizedEvent.messageId', () => {
+        const app = makeApp({ id: appId });
+        const message = makeMessageEvent({ message_id: 12345 });
+
+        const result = telegramProvider.formatEventMessage(message, app);
+        expect(result?.messageId).toBe(12345);
+    });
 });
 
 describe('TelegramProvider - sendMessage', () => {

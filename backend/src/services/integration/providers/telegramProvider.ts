@@ -172,6 +172,10 @@ class TelegramProvider implements IntegrationProvider {
         }
     }
 
+    buildAckExtra(event: NormalizedEvent): Record<string, unknown> {
+        return { replyToMessageId: event.messageId };
+    }
+
     formatEventMessage(event: unknown, app: IntegrationApp): NormalizedEvent | null {
         const message = event as TelegramApiMessage;
         if (message.from?.is_bot === true) return null;
@@ -194,6 +198,7 @@ class TelegramProvider implements IntegrationProvider {
             userName,
             text: formattedText,
             rawEvent: event,
+            messageId: message.message_id,
         };
     }
 
