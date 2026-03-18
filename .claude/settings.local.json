@@ -41,8 +41,8 @@
       "Bash(bunx --bun tsc:*)",
       "Bash(tail:*)",
       "Bash(cd:*)",
-      "Bash(git stash:*)"
+      "Bash(git stash:*)",
+      "Read(~/.claude/*)"
     ]
-  },
-  "outputStyle": "conductor"
+  }
 }
