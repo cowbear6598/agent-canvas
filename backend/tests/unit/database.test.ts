@@ -140,6 +140,9 @@ describe("Database", () => {
       db.exec(
         "INSERT INTO pod_mcp_server_ids (pod_id, mcp_server_id) VALUES ('p1', 'mcp1')",
       );
+      db.exec(
+        "INSERT INTO pod_plugin_ids (pod_id, plugin_id) VALUES ('p1', 'plg1')",
+      );
 
       db.exec("DELETE FROM canvases WHERE id = 'c1'");
 
@@ -192,6 +195,13 @@ describe("Database", () => {
             .get() as { count: number }
         ).count,
       ).toBe(0);
+      expect(
+        (
+          db.prepare("SELECT COUNT(*) as count FROM pod_plugin_ids").get() as {
+            count: number;
+          }
+        ).count,
+      ).toBe(0);
     });
 
     it("刪除 pod 時應連帶刪除多對多關聯及 integration_bindings", () => {
@@ -218,6 +228,9 @@ describe("Database", () => {
       );
       db.exec(
         "INSERT INTO pod_mcp_server_ids (pod_id, mcp_server_id) VALUES ('p1', 'mcp1')",
+      );
+      db.exec(
+        "INSERT INTO pod_plugin_ids (pod_id, plugin_id) VALUES ('p1', 'plg1')",
       );
 
       db.exec("DELETE FROM pods WHERE id = 'p1'");
@@ -248,6 +261,13 @@ describe("Database", () => {
           db
             .prepare("SELECT COUNT(*) as count FROM pod_mcp_server_ids")
             .get() as { count: number }
+        ).count,
+      ).toBe(0);
+      expect(
+        (
+          db.prepare("SELECT COUNT(*) as count FROM pod_plugin_ids").get() as {
+            count: number;
+          }
         ).count,
       ).toBe(0);
     });

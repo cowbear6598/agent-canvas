@@ -1,6 +1,7 @@
 <template>
   <header
     class="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-md"
+    @contextmenu.prevent
   >
     <div class="container mx-auto flex h-16 items-center justify-between px-4">
       <div class="flex items-center gap-3">
@@ -67,22 +68,28 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { Sparkles, LayoutDashboard, KeyRound, Settings, History } from 'lucide-vue-next'
-import ConnectionStatus from '@/components/ui/ConnectionStatus.vue'
-import IntegrationSelectModal from '@/components/integration/IntegrationSelectModal.vue'
-import IntegrationAppsModal from '@/components/integration/IntegrationAppsModal.vue'
-import GlobalSettingsModal from '@/components/settings/GlobalSettingsModal.vue'
-import { useCanvasStore } from '@/stores/canvasStore'
-import { useRunStore } from '@/stores/run/runStore'
+import { ref } from "vue";
+import {
+  Sparkles,
+  LayoutDashboard,
+  KeyRound,
+  Settings,
+  History,
+} from "lucide-vue-next";
+import ConnectionStatus from "@/components/ui/ConnectionStatus.vue";
+import IntegrationSelectModal from "@/components/integration/IntegrationSelectModal.vue";
+import IntegrationAppsModal from "@/components/integration/IntegrationAppsModal.vue";
+import GlobalSettingsModal from "@/components/settings/GlobalSettingsModal.vue";
+import { useCanvasStore } from "@/stores/canvasStore";
+import { useRunStore } from "@/stores/run/runStore";
 
-const canvasStore = useCanvasStore()
-const runStore = useRunStore()
-const showIntegrationModal = ref<boolean>(false)
-const selectedProvider = ref<string | null>(null)
-const showSettingsModal = ref<boolean>(false)
+const canvasStore = useCanvasStore();
+const runStore = useRunStore();
+const showIntegrationModal = ref<boolean>(false);
+const selectedProvider = ref<string | null>(null);
+const showSettingsModal = ref<boolean>(false);
 
 const handleIntegrationSelect = (category: string): void => {
-  selectedProvider.value = category
-}
+  selectedProvider.value = category;
+};
 </script>

@@ -71,15 +71,17 @@ export const podOpenDirectorySchema = z.object({
 });
 
 export const podSetPluginsSchema = z.object({
-  requestId: z.string(),
-  canvasId: z.string(),
-  podId: z.string(),
-  pluginIds: z.array(
-    z
-      .string()
-      .regex(/^[a-zA-Z0-9@._-]+$/)
-      .max(100),
-  ),
+  requestId: requestIdSchema,
+  canvasId: canvasIdSchema,
+  podId: podIdSchema,
+  pluginIds: z
+    .array(
+      z
+        .string()
+        .regex(/^[a-zA-Z0-9@._-]+$/)
+        .max(100),
+    )
+    .max(50),
 });
 
 export type PodCreatePayload = z.infer<typeof podCreateSchema>;

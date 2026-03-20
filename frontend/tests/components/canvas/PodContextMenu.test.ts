@@ -118,22 +118,47 @@ describe("PodContextMenu", () => {
       expect(button.text()).toContain("打開工作目錄");
     });
 
-    it("應渲染背景遮罩", () => {
+    it("不應渲染全螢幕背景遮罩", () => {
       const wrapper = mountMenu();
 
+      // 已改用 document-level mousedown 監聽，不再使用全螢幕 overlay
       const overlay = wrapper.find(".fixed.inset-0.z-40");
-      expect(overlay.exists()).toBe(true);
+      expect(overlay.exists()).toBe(false);
     });
   });
 
-  describe("點擊背景遮罩關閉選單", () => {
-    it("點擊背景遮罩應 emit close", async () => {
+  describe("點擊選單外部關閉選單", () => {
+    it("在選單外部觸發 mousedown 應 emit close", async () => {
       const wrapper = mountMenu();
 
-      const overlay = wrapper.find(".fixed.inset-0.z-40");
-      await overlay.trigger("click");
+      // 模擬在選單外部的 document mousedown（capture phase）
+      const event = new MouseEvent("mousedown", {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+      });
+      Object.defineProperty(event, "target", { value: document.body });
+      document.dispatchEvent(event);
 
+      await wrapper.vm.$nextTick();
       expect(wrapper.emitted("close")).toBeTruthy();
+    });
+
+    it("右鍵點選單外部應 emit close 但不呼叫 stopPropagation", async () => {
+      const wrapper = mountMenu();
+
+      const event = new MouseEvent("mousedown", {
+        bubbles: true,
+        cancelable: true,
+        button: 2,
+      });
+      Object.defineProperty(event, "target", { value: document.body });
+      const stopPropagationSpy = vi.spyOn(event, "stopPropagation");
+      document.dispatchEvent(event);
+
+      await wrapper.vm.$nextTick();
+      expect(wrapper.emitted("close")).toBeTruthy();
+      expect(stopPropagationSpy).not.toHaveBeenCalled();
     });
   });
 

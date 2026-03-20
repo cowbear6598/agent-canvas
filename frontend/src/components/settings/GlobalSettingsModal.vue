@@ -133,6 +133,8 @@ watch(
           </Select>
         </div>
 
+        <div class="border-t border-border" />
+
         <div class="space-y-2">
           <Label>AI 決策模型</Label>
           <p class="text-xs text-muted-foreground">
@@ -153,6 +155,8 @@ watch(
             </SelectContent>
           </Select>
         </div>
+
+        <div class="border-t border-border" />
 
         <div class="space-y-2">
           <Label>Plugin 管理</Label>

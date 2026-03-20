@@ -540,8 +540,7 @@ export interface ConfigUpdatedPayload extends ResultPayload {
 }
 
 export interface PodPluginsSetPayload extends ResultPayload {
-  podId: string;
-  pluginIds: string[];
+  pod?: Pod;
 }
 
 export interface PluginListResultPayload extends ResultPayload {

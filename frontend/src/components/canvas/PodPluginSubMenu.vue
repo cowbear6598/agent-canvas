@@ -35,6 +35,11 @@ onMounted(async () => {
     installedPlugins.value = await listPlugins();
   } catch {
     installedPlugins.value = [];
+    toast({
+      title: "載入 Plugin 列表失敗",
+      description: "無法取得已安裝的 Plugin 列表，請稍後再試",
+      variant: "destructive",
+    });
   }
 });
 
@@ -99,8 +104,10 @@ const handleToggle = async (
         <div
           v-for="plugin in installedPlugins"
           :key="plugin.id"
-          class="flex items-center justify-between gap-3 px-2 py-1 rounded hover:bg-secondary"
-          @click.stop
+          class="flex items-center justify-between gap-3 px-2 py-1 rounded hover:bg-secondary cursor-pointer"
+          @click.stop="
+            handleToggle(plugin.id, !localPluginIds.includes(plugin.id))
+          "
         >
           <div>
             <p class="text-xs font-mono">{{ plugin.name }}</p>
@@ -110,6 +117,7 @@ const handleToggle = async (
           </div>
           <Switch
             :model-value="localPluginIds.includes(plugin.id)"
+            @click.stop
             @update:model-value="(val: boolean) => handleToggle(plugin.id, val)"
           />
         </div>
