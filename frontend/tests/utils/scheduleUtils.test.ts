@@ -218,8 +218,8 @@ describe("scheduleUtils", () => {
     });
 
     it("應該計算「每天」的下次觸發時間（今天尚未執行）", () => {
-      const now = new Date("2026-02-08T08:00:00");
-      vi.setSystemTime(now);
+      // UTC 01:00 = UTC+8 09:00，排程設定 10:30，尚未到達
+      vi.setSystemTime(new Date("2026-02-08T01:00:00Z"));
 
       const schedule: Schedule = {
         frequency: "every-day",
@@ -234,14 +234,15 @@ describe("scheduleUtils", () => {
       };
 
       const result = getNextTriggerTime(schedule);
-      expect(result.getHours()).toBe(10);
-      expect(result.getMinutes()).toBe(30);
-      expect(result.getDate()).toBe(now.getDate());
+      // UTC+8 10:30 = UTC 02:30，同一天（2/8）
+      expect(result.getUTCHours()).toBe(2);
+      expect(result.getUTCMinutes()).toBe(30);
+      expect(result.getUTCDate()).toBe(8);
     });
 
     it("應該計算「每天」的下次觸發時間（今天已執行）", () => {
-      const now = new Date("2026-02-08T12:00:00");
-      vi.setSystemTime(now);
+      // UTC 04:00 = UTC+8 12:00，排程設定 10:30，已過
+      vi.setSystemTime(new Date("2026-02-08T04:00:00Z"));
 
       const schedule: Schedule = {
         frequency: "every-day",
@@ -256,14 +257,15 @@ describe("scheduleUtils", () => {
       };
 
       const result = getNextTriggerTime(schedule);
-      expect(result.getHours()).toBe(10);
-      expect(result.getMinutes()).toBe(30);
-      expect(result.getDate()).toBe(now.getDate() + 1);
+      // 明天 UTC+8 10:30 = 明天 UTC 02:30（2/9）
+      expect(result.getUTCHours()).toBe(2);
+      expect(result.getUTCMinutes()).toBe(30);
+      expect(result.getUTCDate()).toBe(9);
     });
 
     it("應該計算「每週」的下次觸發時間（本週有下次）", () => {
-      const now = new Date("2026-02-09T08:00:00");
-      vi.setSystemTime(now);
+      // UTC 00:00（週一）= UTC+8 08:00（週一），weekdays=[3,5]，下次是週三
+      vi.setSystemTime(new Date("2026-02-09T00:00:00Z"));
 
       const schedule: Schedule = {
         frequency: "every-week",
@@ -278,9 +280,10 @@ describe("scheduleUtils", () => {
       };
 
       const result = getNextTriggerTime(schedule);
-      expect(result.getDay()).toBe(3);
-      expect(result.getHours()).toBe(10);
-      expect(result.getMinutes()).toBe(0);
+      // UTC+8 週三 10:00 = UTC 週三 02:00（2026-02-11T02:00:00Z）
+      expect(result.getUTCDay()).toBe(3);
+      expect(result.getUTCHours()).toBe(2);
+      expect(result.getUTCMinutes()).toBe(0);
     });
 
     it("應該計算「每週」的下次觸發時間（需要下週）", () => {
@@ -457,8 +460,8 @@ describe("scheduleUtils", () => {
     });
 
     it("應該格式化排程提示（每秒）", () => {
-      const now = new Date("2026-02-08T10:00:00");
-      vi.setSystemTime(now);
+      // UTC 02:00 = UTC+8 10:00，下次觸發 +1s 後，tooltip 應顯示 UTC+8 的 10:00
+      vi.setSystemTime(new Date("2026-02-08T02:00:00Z"));
 
       const schedule: Schedule = {
         frequency: "every-second",
@@ -473,8 +476,7 @@ describe("scheduleUtils", () => {
       };
 
       const result = formatScheduleTooltip(schedule);
-      const expectedTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-      expect(result).toBe(`每秒 | 下次：${expectedTime}`);
+      expect(result).toBe("每秒 | 下次：10:00");
     });
 
     it("應該格式化排程提示（每天）", () => {
