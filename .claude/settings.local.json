@@ -45,5 +45,6 @@
       "Read(~/.claude/*)",
       "Bash(git:*)"
     ]
-  }
+  },
+  "outputStyle": "soap-dev:Conductor"
 }

@@ -1,398 +1,406 @@
-import type { ModelType, Schedule } from '../pod'
-import type { AnchorPosition } from '@/types'
-import type { McpServerConfig } from '../mcpServer'
+import type { ModelType, Schedule } from "../pod";
+import type { AnchorPosition } from "@/types";
+import type { McpServerConfig } from "../mcpServer";
 
-export type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
+export type ImageMediaType =
+  | "image/jpeg"
+  | "image/png"
+  | "image/gif"
+  | "image/webp";
 
 export interface PodCreatePayload {
-  requestId: string
-  canvasId: string
-  name: string
-  x: number
-  y: number
-  rotation: number
+  requestId: string;
+  canvasId: string;
+  name: string;
+  x: number;
+  y: number;
+  rotation: number;
 }
 
 export interface PodListPayload {
-  requestId: string
-  canvasId: string
+  requestId: string;
+  canvasId: string;
 }
 
 export interface PodMovePayload {
-  requestId: string
-  canvasId: string
-  podId: string
-  x: number
-  y: number
+  requestId: string;
+  canvasId: string;
+  podId: string;
+  x: number;
+  y: number;
 }
 
 export interface PodRenamePayload {
-  requestId: string
-  canvasId: string
-  podId: string
-  name: string
+  requestId: string;
+  canvasId: string;
+  podId: string;
+  name: string;
 }
 
 export interface PodSetModelPayload {
-  requestId: string
-  canvasId: string
-  podId: string
-  model: ModelType
+  requestId: string;
+  canvasId: string;
+  podId: string;
+  model: ModelType;
 }
 
 export interface PodSetSchedulePayload {
-  requestId: string
-  canvasId: string
-  podId: string
-  schedule: Schedule | null
+  requestId: string;
+  canvasId: string;
+  podId: string;
+  schedule: Schedule | null;
 }
 
 export interface PodDeletePayload {
-  requestId: string
-  canvasId: string
-  podId: string
+  requestId: string;
+  canvasId: string;
+  podId: string;
 }
 
 export interface TextContentBlock {
-  type: 'text'
-  text: string
+  type: "text";
+  text: string;
 }
 
 export interface ImageContentBlock {
-  type: 'image'
-  mediaType: ImageMediaType
-  base64Data: string
+  type: "image";
+  mediaType: ImageMediaType;
+  base64Data: string;
 }
 
-export type ContentBlock = TextContentBlock | ImageContentBlock
+export type ContentBlock = TextContentBlock | ImageContentBlock;
 
 export interface PodChatSendPayload {
-  requestId: string
-  canvasId: string
-  podId: string
-  message: string | ContentBlock[]
+  requestId: string;
+  canvasId: string;
+  podId: string;
+  message: string | ContentBlock[];
 }
 
 export interface PodChatHistoryPayload {
-  requestId: string
-  canvasId: string
-  podId: string
+  requestId: string;
+  canvasId: string;
+  podId: string;
 }
 
 export interface PodChatAbortPayload {
-  requestId: string
-  canvasId: string
-  podId: string
+  requestId: string;
+  canvasId: string;
+  podId: string;
 }
 
 export interface NoteCreatePayload {
-  requestId: string
-  canvasId: string
-  outputStyleId: string
-  name: string
-  x: number
-  y: number
-  boundToPodId: string | null
-  originalPosition: { x: number; y: number } | null
+  requestId: string;
+  canvasId: string;
+  outputStyleId: string;
+  name: string;
+  x: number;
+  y: number;
+  boundToPodId: string | null;
+  originalPosition: { x: number; y: number } | null;
 }
 
 export interface ConnectionCreatePayload {
-  requestId: string
-  canvasId: string
-  sourcePodId?: string
-  sourceAnchor: AnchorPosition
-  targetPodId: string
-  targetAnchor: AnchorPosition
+  requestId: string;
+  canvasId: string;
+  sourcePodId?: string;
+  sourceAnchor: AnchorPosition;
+  targetPodId: string;
+  targetAnchor: AnchorPosition;
 }
 
 export interface ConnectionListPayload {
-  requestId: string
-  canvasId: string
+  requestId: string;
+  canvasId: string;
 }
 
 export interface ConnectionDeletePayload {
-  requestId: string
-  canvasId: string
-  connectionId: string
+  requestId: string;
+  canvasId: string;
+  connectionId: string;
 }
 
 export interface WorkflowGetDownstreamPodsPayload {
-  requestId: string
-  canvasId: string
-  sourcePodId: string
+  requestId: string;
+  canvasId: string;
+  sourcePodId: string;
 }
 
 export interface WorkflowClearPayload {
-  requestId: string
-  canvasId: string
-  sourcePodId: string
+  requestId: string;
+  canvasId: string;
+  sourcePodId: string;
 }
 
 export interface PastePodItem {
-  originalId: string
-  name: string
-  x: number
-  y: number
-  rotation: number
-  outputStyleId?: string | null
-  skillIds?: string[]
-  subAgentIds?: string[]
-  model?: ModelType
-  repositoryId?: string | null
-  commandId?: string | null
+  originalId: string;
+  name: string;
+  x: number;
+  y: number;
+  rotation: number;
+  outputStyleId?: string | null;
+  skillIds?: string[];
+  subAgentIds?: string[];
+  model?: ModelType;
+  repositoryId?: string | null;
+  commandId?: string | null;
 }
 
 export interface PasteOutputStyleNoteItem {
-  outputStyleId: string
-  name: string
-  x: number
-  y: number
-  boundToOriginalPodId: string | null
-  originalPosition: { x: number; y: number } | null
+  outputStyleId: string;
+  name: string;
+  x: number;
+  y: number;
+  boundToOriginalPodId: string | null;
+  originalPosition: { x: number; y: number } | null;
 }
 
 export interface PasteSkillNoteItem {
-  skillId: string
-  name: string
-  x: number
-  y: number
-  boundToOriginalPodId: string | null
-  originalPosition: { x: number; y: number } | null
+  skillId: string;
+  name: string;
+  x: number;
+  y: number;
+  boundToOriginalPodId: string | null;
+  originalPosition: { x: number; y: number } | null;
 }
 
 export interface PasteRepositoryNoteItem {
-  repositoryId: string
-  name: string
-  x: number
-  y: number
-  boundToOriginalPodId: string | null
-  originalPosition: { x: number; y: number } | null
+  repositoryId: string;
+  name: string;
+  x: number;
+  y: number;
+  boundToOriginalPodId: string | null;
+  originalPosition: { x: number; y: number } | null;
 }
 
 export interface PasteConnectionItem {
-  originalSourcePodId: string
-  sourceAnchor: AnchorPosition
-  originalTargetPodId: string
-  targetAnchor: AnchorPosition
-  triggerMode?: 'auto' | 'ai-decide' | 'direct'
+  originalSourcePodId: string;
+  sourceAnchor: AnchorPosition;
+  originalTargetPodId: string;
+  targetAnchor: AnchorPosition;
+  triggerMode?: "auto" | "ai-decide" | "direct";
 }
 
 export interface ConnectionUpdatePayload {
-  requestId: string
-  canvasId: string
-  connectionId: string
-  triggerMode: 'auto' | 'ai-decide' | 'direct'
+  requestId: string;
+  canvasId: string;
+  connectionId: string;
+  triggerMode: "auto" | "ai-decide" | "direct";
 }
 
 export interface CanvasPastePayload {
-  requestId: string
-  canvasId: string
-  pods: PastePodItem[]
-  outputStyleNotes: PasteOutputStyleNoteItem[]
-  skillNotes: PasteSkillNoteItem[]
-  repositoryNotes: PasteRepositoryNoteItem[]
-  subAgentNotes: PasteSubAgentNoteItem[]
-  commandNotes: PasteCommandNoteItem[]
-  mcpServerNotes: PasteMcpServerNoteItem[]
-  connections: PasteConnectionItem[]
+  requestId: string;
+  canvasId: string;
+  pods: PastePodItem[];
+  outputStyleNotes: PasteOutputStyleNoteItem[];
+  skillNotes: PasteSkillNoteItem[];
+  repositoryNotes: PasteRepositoryNoteItem[];
+  subAgentNotes: PasteSubAgentNoteItem[];
+  commandNotes: PasteCommandNoteItem[];
+  mcpServerNotes: PasteMcpServerNoteItem[];
+  connections: PasteConnectionItem[];
 }
 
 export interface RepositoryCreatePayload {
-  requestId: string
-  canvasId: string
-  name: string
+  requestId: string;
+  canvasId: string;
+  name: string;
 }
 
 export interface RepositoryGitClonePayload {
-  requestId: string
-  canvasId: string
-  repoUrl: string
-  branch?: string
+  requestId: string;
+  canvasId: string;
+  repoUrl: string;
+  branch?: string;
 }
 
 export interface PodSetMultiInstancePayload {
-  requestId: string
-  canvasId: string
-  podId: string
-  multiInstance: boolean
+  requestId: string;
+  canvasId: string;
+  podId: string;
+  multiInstance: boolean;
 }
 
 export interface PasteSubAgentNoteItem {
-  subAgentId: string
-  name: string
-  x: number
-  y: number
-  boundToOriginalPodId: string | null
-  originalPosition: { x: number; y: number } | null
+  subAgentId: string;
+  name: string;
+  x: number;
+  y: number;
+  boundToOriginalPodId: string | null;
+  originalPosition: { x: number; y: number } | null;
 }
 
 export interface CommandNoteCreatePayload {
-  requestId: string
-  canvasId: string
-  commandId: string
-  name: string
-  x: number
-  y: number
-  boundToPodId: string | null
-  originalPosition: { x: number; y: number } | null
+  requestId: string;
+  canvasId: string;
+  commandId: string;
+  name: string;
+  x: number;
+  y: number;
+  boundToPodId: string | null;
+  originalPosition: { x: number; y: number } | null;
 }
 
 export interface PasteCommandNoteItem {
-  commandId: string
-  name: string
-  x: number
-  y: number
-  boundToOriginalPodId: string | null
-  originalPosition: { x: number; y: number } | null
+  commandId: string;
+  name: string;
+  x: number;
+  y: number;
+  boundToOriginalPodId: string | null;
+  originalPosition: { x: number; y: number } | null;
 }
 
 export interface PasteMcpServerNoteItem {
-  mcpServerId: string
-  name: string
-  x: number
-  y: number
-  boundToOriginalPodId: string | null
-  originalPosition: { x: number; y: number } | null
+  mcpServerId: string;
+  name: string;
+  x: number;
+  y: number;
+  boundToOriginalPodId: string | null;
+  originalPosition: { x: number; y: number } | null;
 }
 
 export interface RepositoryCheckGitPayload {
-  requestId: string
-  canvasId: string
-  repositoryId: string
+  requestId: string;
+  canvasId: string;
+  repositoryId: string;
 }
 
 export interface RepositoryWorktreeCreatePayload {
-  requestId: string
-  canvasId: string
-  repositoryId: string
-  worktreeName: string
+  requestId: string;
+  canvasId: string;
+  repositoryId: string;
+  worktreeName: string;
 }
 
 export interface RepositoryGetLocalBranchesPayload {
-  requestId: string
-  canvasId: string
-  repositoryId: string
+  requestId: string;
+  canvasId: string;
+  repositoryId: string;
 }
 
 export interface RepositoryCheckDirtyPayload {
-  requestId: string
-  canvasId: string
-  repositoryId: string
+  requestId: string;
+  canvasId: string;
+  repositoryId: string;
 }
 
 export interface RepositoryCheckoutBranchPayload {
-  requestId: string
-  canvasId: string
-  repositoryId: string
-  branchName: string
-  force: boolean
+  requestId: string;
+  canvasId: string;
+  repositoryId: string;
+  branchName: string;
+  force: boolean;
 }
 
 export interface RepositoryDeleteBranchPayload {
-  requestId: string
-  canvasId: string
-  repositoryId: string
-  branchName: string
-  force: boolean
+  requestId: string;
+  canvasId: string;
+  repositoryId: string;
+  branchName: string;
+  force: boolean;
 }
 
 export interface RepositoryPullLatestPayload {
-  requestId: string
-  canvasId: string
-  repositoryId: string
+  requestId: string;
+  canvasId: string;
+  repositoryId: string;
 }
 
 export interface GroupCreatePayload {
-  requestId: string
-  canvasId: string
-  name: string
-  type: 'command' | 'outputStyle' | 'subAgent'
+  requestId: string;
+  canvasId: string;
+  name: string;
+  type: "command" | "outputStyle" | "subAgent";
 }
 
 export interface GroupListPayload {
-  requestId: string
-  canvasId: string
-  type: 'command' | 'outputStyle' | 'subAgent'
+  requestId: string;
+  canvasId: string;
+  type: "command" | "outputStyle" | "subAgent";
 }
 
 export interface GroupDeletePayload {
-  requestId: string
-  canvasId: string
-  groupId: string
+  requestId: string;
+  canvasId: string;
+  groupId: string;
 }
 
 export interface MoveToGroupPayload {
-  requestId: string
-  canvasId: string
-  itemId: string
-  groupId: string | null
+  requestId: string;
+  canvasId: string;
+  itemId: string;
+  groupId: string | null;
 }
 
 export interface SkillImportPayload {
-  requestId: string
-  canvasId: string
-  fileName: string
-  fileData: string
-  fileSize: number
+  requestId: string;
+  canvasId: string;
+  fileName: string;
+  fileData: string;
+  fileSize: number;
 }
 
 export interface McpServerCreatePayload {
-  requestId: string
-  canvasId: string
-  name: string
-  config: McpServerConfig
+  requestId: string;
+  canvasId: string;
+  name: string;
+  config: McpServerConfig;
 }
 
 export interface McpServerUpdatePayload {
-  requestId: string
-  canvasId: string
-  mcpServerId: string
-  name: string
-  config: McpServerConfig
+  requestId: string;
+  canvasId: string;
+  mcpServerId: string;
+  name: string;
+  config: McpServerConfig;
 }
 
 export interface McpServerReadPayload {
-  requestId: string
-  canvasId: string
-  mcpServerId: string
+  requestId: string;
+  canvasId: string;
+  mcpServerId: string;
 }
 
 export interface CursorMovePayload {
-  x: number
-  y: number
+  x: number;
+  y: number;
 }
 
 export interface PodOpenDirectoryPayload {
-  requestId: string
-  canvasId: string
-  podId: string
+  requestId: string;
+  canvasId: string;
+  podId: string;
 }
 
 export interface ConfigGetPayload {
-  requestId: string
+  requestId: string;
 }
 
 export interface ConfigUpdatePayload {
-  requestId: string
-  summaryModel?: ModelType
-  aiDecideModel?: ModelType
+  requestId: string;
+  summaryModel?: ModelType;
+  aiDecideModel?: ModelType;
+  enabledPluginIds?: string[];
+}
+
+export interface PluginListPayload {
+  requestId: string;
 }
 
 export interface RunDeletePayload {
-  requestId: string
-  canvasId: string
-  runId: string
+  requestId: string;
+  canvasId: string;
+  runId: string;
 }
 
 export interface RunLoadHistoryPayload {
-  requestId: string
-  canvasId: string
+  requestId: string;
+  canvasId: string;
 }
 
 export interface RunLoadPodMessagesPayload {
-  requestId: string
-  canvasId: string
-  runId: string
-  podId: string
+  requestId: string;
+  canvasId: string;
+  runId: string;
+  podId: string;
 }
-

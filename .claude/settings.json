@@ -1,3 +1,6 @@
 {
-  "enabledPlugins": {}
+  "enabledPlugins": {},
+  "permissions": {                                                                                                  
+      "defaultMode": "bypassPermissions" 
+    } 
 }
