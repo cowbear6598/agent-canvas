@@ -4,6 +4,7 @@ import { podStore } from "./podStore.js";
 import { messageStore } from "./messageStore.js";
 import { socketService } from "./socketService.js";
 import { workflowExecutionService } from "./workflow";
+import { commandService } from "./commandService.js";
 import { logger } from "../utils/logger.js";
 import { fireAndForget } from "../utils/operationHelpers.js";
 import { executeStreamingChat } from "./claude/streamingChatExecutor.js";
@@ -174,10 +175,17 @@ class ScheduleService {
     logger.log("Schedule", "Update", `Pod「${pod.id}」排程已觸發`);
 
     if (pod.multiInstance === true) {
+      const commands = await commandService.list();
+      const command = pod.commandId
+        ? commands.find((cmd) => cmd.id === pod.commandId)
+        : null;
+      const displayMessage = command ? `/${command.name} ` : "";
+
       await launchMultiInstanceRun({
         canvasId,
         podId: pod.id,
         message: "",
+        displayMessage,
         abortable: false,
         onComplete: (runContext) =>
           onRunChatComplete(runContext, canvasId, pod.id),

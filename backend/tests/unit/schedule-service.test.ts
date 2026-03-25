@@ -15,6 +15,7 @@ const mockLaunchMultiInstanceRun = vi.fn();
 const mockExecuteStreamingChat = vi.fn();
 const mockCheckAndTriggerWorkflows = vi.fn();
 const mockGetTimezoneOffset = vi.fn();
+const mockCommandList = vi.fn();
 
 vi.mock("../../src/services/podStore.js", () => ({
   podStore: {
@@ -54,6 +55,12 @@ vi.mock("../../src/services/workflow/index.js", () => ({
 vi.mock("../../src/services/configStore.js", () => ({
   configStore: {
     getTimezoneOffset: mockGetTimezoneOffset,
+  },
+}));
+
+vi.mock("../../src/services/commandService.js", () => ({
+  commandService: {
+    list: mockCommandList,
   },
 }));
 
@@ -844,15 +851,58 @@ describe("排程觸發 multi-instance 分支", () => {
     mockExecuteStreamingChat.mockResolvedValue(undefined);
     mockAddMessage.mockResolvedValue(undefined);
     mockCheckAndTriggerWorkflows.mockResolvedValue(undefined);
+    mockCommandList.mockResolvedValue([]);
 
     // 重新 import scheduleService 以套用 mock
     vi.resetModules();
   });
 
-  it("multiInstance Pod 排程觸發時應呼叫 launchMultiInstanceRun", async () => {
+  it("multiInstance Pod 排程觸發時應呼叫 launchMultiInstanceRun（無 command 時 displayMessage 為空字串）", async () => {
     const multiInstancePod = { ...basePod, multiInstance: true };
     mockGetAllWithSchedule.mockReturnValue([
       { canvasId: CANVAS_ID, pod: multiInstancePod },
+    ]);
+    mockCommandList.mockResolvedValue([]);
+
+    const { scheduleService } =
+      await import("../../src/services/scheduleService.js");
+    await (scheduleService as any).fireSchedule(
+      CANVAS_ID,
+      multiInstancePod,
+      new Date(),
+    );
+
+    expect(mockLaunchMultiInstanceRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        canvasId: CANVAS_ID,
+        podId: POD_ID,
+        message: "",
+        displayMessage: "",
+        abortable: false,
+      }),
+    );
+    expect(mockExecuteStreamingChat).not.toHaveBeenCalled();
+    expect(mockSetStatus).not.toHaveBeenCalled();
+    expect(mockSetScheduleLastTriggeredAt).toHaveBeenCalledWith(
+      CANVAS_ID,
+      POD_ID,
+      expect.any(Date),
+    );
+    expect(mockEmitToCanvas).toHaveBeenCalled();
+  });
+
+  it("multiInstance Pod 有 commandId 時 displayMessage 應帶 /commandName", async () => {
+    const COMMAND_ID = "cmd-1";
+    const multiInstancePod = {
+      ...basePod,
+      multiInstance: true,
+      commandId: COMMAND_ID,
+    };
+    mockGetAllWithSchedule.mockReturnValue([
+      { canvasId: CANVAS_ID, pod: multiInstancePod },
+    ]);
+    mockCommandList.mockResolvedValue([
+      { id: COMMAND_ID, name: "my-command", groupId: null },
     ]);
 
     const { scheduleService } =
@@ -868,17 +918,38 @@ describe("排程觸發 multi-instance 分支", () => {
         canvasId: CANVAS_ID,
         podId: POD_ID,
         message: "",
+        displayMessage: "/my-command ",
         abortable: false,
       }),
     );
-    expect(mockExecuteStreamingChat).not.toHaveBeenCalled();
-    expect(mockSetStatus).not.toHaveBeenCalled();
-    expect(mockSetScheduleLastTriggeredAt).toHaveBeenCalledWith(
+  });
+
+  it("有 commandId 但 command 已被刪除時 displayMessage 應為空字串", async () => {
+    const multiInstancePod = {
+      ...basePod,
+      multiInstance: true,
+      commandId: "deleted-cmd",
+    };
+    mockGetAllWithSchedule.mockReturnValue([
+      { canvasId: CANVAS_ID, pod: multiInstancePod },
+    ]);
+    mockCommandList.mockResolvedValue([]);
+
+    const { scheduleService } =
+      await import("../../src/services/scheduleService.js");
+    await (scheduleService as any).fireSchedule(
       CANVAS_ID,
-      POD_ID,
-      expect.any(Date),
+      multiInstancePod,
+      new Date(),
     );
-    expect(mockEmitToCanvas).toHaveBeenCalled();
+
+    expect(mockLaunchMultiInstanceRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        canvasId: CANVAS_ID,
+        podId: POD_ID,
+        displayMessage: "",
+      }),
+    );
   });
 
   it("非 multiInstance Pod 排程觸發時應走一般模式", async () => {

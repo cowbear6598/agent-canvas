@@ -181,6 +181,11 @@ const handleScheduleFired = async (
   if (pod) {
     podStore.triggerScheduleFiredAnimation(payload.podId);
 
+    // multi-instance pod 不需要在 canvas mini screen 顯示訊息
+    if (pod.multiInstance === true) {
+      return;
+    }
+
     const command = pod.commandId
       ? commandStore.typedAvailableItems.find(
           (command) => command.id === pod.commandId,
