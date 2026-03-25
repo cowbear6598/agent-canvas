@@ -557,8 +557,16 @@ class RunExecutionService {
     const activePodIds = this.activeRunStreams.get(runId);
     if (activePodIds) {
       for (const podId of activePodIds) {
-        // Run mode 的 query key 是 ${runId}:${podId}
-        claudeService.abortQuery(`${runId}:${podId}`);
+        try {
+          // Run mode 的 query key 是 ${runId}:${podId}
+          claudeService.abortQuery(`${runId}:${podId}`);
+        } catch (error) {
+          // Claude SDK 內部在 abort 時可能拋出 "Operation aborted" 錯誤，忽略即可
+          console.warn(
+            `[Run] [Delete] 中止 Pod ${podId} 時發生非致命錯誤:`,
+            error,
+          );
+        }
       }
       this.activeRunStreams.delete(runId);
     }
