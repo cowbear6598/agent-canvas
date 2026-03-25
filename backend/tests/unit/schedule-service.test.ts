@@ -4,6 +4,59 @@ import {
   isSameDayWithOffset,
 } from "../../src/utils/timezoneUtils.js";
 
+// ---- multi-instance 整合測試用的 mock ----
+const mockGetAllWithSchedule = vi.fn();
+const mockSetScheduleLastTriggeredAt = vi.fn();
+const mockSetStatus = vi.fn();
+const mockGetById = vi.fn();
+const mockAddMessage = vi.fn();
+const mockEmitToCanvas = vi.fn();
+const mockLaunchMultiInstanceRun = vi.fn();
+const mockExecuteStreamingChat = vi.fn();
+const mockCheckAndTriggerWorkflows = vi.fn();
+const mockGetTimezoneOffset = vi.fn();
+
+vi.mock("../../src/services/podStore.js", () => ({
+  podStore: {
+    getAllWithSchedule: mockGetAllWithSchedule,
+    setScheduleLastTriggeredAt: mockSetScheduleLastTriggeredAt,
+    setStatus: mockSetStatus,
+    getById: mockGetById,
+  },
+}));
+
+vi.mock("../../src/services/messageStore.js", () => ({
+  messageStore: {
+    addMessage: mockAddMessage,
+  },
+}));
+
+vi.mock("../../src/services/socketService.js", () => ({
+  socketService: {
+    emitToCanvas: mockEmitToCanvas,
+  },
+}));
+
+vi.mock("../../src/utils/runChatHelpers.js", () => ({
+  launchMultiInstanceRun: mockLaunchMultiInstanceRun,
+}));
+
+vi.mock("../../src/services/claude/streamingChatExecutor.js", () => ({
+  executeStreamingChat: mockExecuteStreamingChat,
+}));
+
+vi.mock("../../src/services/workflow/index.js", () => ({
+  workflowExecutionService: {
+    checkAndTriggerWorkflows: mockCheckAndTriggerWorkflows,
+  },
+}));
+
+vi.mock("../../src/services/configStore.js", () => ({
+  configStore: {
+    getTimezoneOffset: mockGetTimezoneOffset,
+  },
+}));
+
 // 測試用的內部 shouldFire 檢查函數
 type ShouldFireChecker = (
   schedule: ScheduleConfig,
@@ -740,5 +793,116 @@ describe("Schedule Service 時區修正", () => {
 
       expect(shouldFireWithOffset(schedule, now, -5)).toBe(true);
     });
+  });
+});
+
+// ---- 排程觸發 multi-instance 分支整合測試 ----
+describe("排程觸發 multi-instance 分支", () => {
+  const CANVAS_ID = "canvas-1";
+  const POD_ID = "pod-1";
+
+  const baseSchedule: ScheduleConfig = {
+    frequency: "every-second",
+    second: 1,
+    intervalMinute: 0,
+    intervalHour: 0,
+    hour: 0,
+    minute: 0,
+    weekdays: [],
+    enabled: true,
+    lastTriggeredAt: null,
+  };
+
+  const basePod = {
+    id: POD_ID,
+    name: "Test Pod",
+    status: "idle" as const,
+    x: 0,
+    y: 0,
+    rotation: 0,
+    model: "opus" as const,
+    workspacePath: "/tmp",
+    claudeSessionId: null,
+    outputStyleId: null,
+    repositoryId: null,
+    commandId: null,
+    multiInstance: false,
+    skillIds: [],
+    subAgentIds: [],
+    mcpServerIds: [],
+    schedule: baseSchedule,
+  };
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    mockGetTimezoneOffset.mockReturnValue(0);
+    mockLaunchMultiInstanceRun.mockResolvedValue({
+      runId: "run-1",
+      canvasId: CANVAS_ID,
+      sourcePodId: POD_ID,
+    });
+    mockExecuteStreamingChat.mockResolvedValue(undefined);
+    mockAddMessage.mockResolvedValue(undefined);
+    mockCheckAndTriggerWorkflows.mockResolvedValue(undefined);
+
+    // 重新 import scheduleService 以套用 mock
+    vi.resetModules();
+  });
+
+  it("multiInstance Pod 排程觸發時應呼叫 launchMultiInstanceRun", async () => {
+    const multiInstancePod = { ...basePod, multiInstance: true };
+    mockGetAllWithSchedule.mockReturnValue([
+      { canvasId: CANVAS_ID, pod: multiInstancePod },
+    ]);
+
+    const { scheduleService } =
+      await import("../../src/services/scheduleService.js");
+    await (scheduleService as any).fireSchedule(
+      CANVAS_ID,
+      multiInstancePod,
+      new Date(),
+    );
+
+    expect(mockLaunchMultiInstanceRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        canvasId: CANVAS_ID,
+        podId: POD_ID,
+        message: "",
+        abortable: false,
+      }),
+    );
+    expect(mockExecuteStreamingChat).not.toHaveBeenCalled();
+    expect(mockSetStatus).not.toHaveBeenCalled();
+    expect(mockSetScheduleLastTriggeredAt).toHaveBeenCalledWith(
+      CANVAS_ID,
+      POD_ID,
+      expect.any(Date),
+    );
+    expect(mockEmitToCanvas).toHaveBeenCalled();
+  });
+
+  it("非 multiInstance Pod 排程觸發時應走一般模式", async () => {
+    const normalPod = { ...basePod, multiInstance: false };
+    mockGetAllWithSchedule.mockReturnValue([
+      { canvasId: CANVAS_ID, pod: normalPod },
+    ]);
+
+    const { scheduleService } =
+      await import("../../src/services/scheduleService.js");
+    await (scheduleService as any).fireSchedule(
+      CANVAS_ID,
+      normalPod,
+      new Date(),
+    );
+
+    expect(mockExecuteStreamingChat).toHaveBeenCalled();
+    expect(mockLaunchMultiInstanceRun).not.toHaveBeenCalled();
+    expect(mockSetStatus).toHaveBeenCalledWith(CANVAS_ID, POD_ID, "chatting");
+    expect(mockSetScheduleLastTriggeredAt).toHaveBeenCalledWith(
+      CANVAS_ID,
+      POD_ID,
+      expect.any(Date),
+    );
+    expect(mockEmitToCanvas).toHaveBeenCalled();
   });
 });

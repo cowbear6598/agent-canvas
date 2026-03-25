@@ -7,6 +7,8 @@ import { workflowExecutionService } from "./workflow";
 import { logger } from "../utils/logger.js";
 import { fireAndForget } from "../utils/operationHelpers.js";
 import { executeStreamingChat } from "./claude/streamingChatExecutor.js";
+import { launchMultiInstanceRun } from "../utils/runChatHelpers.js";
+import { onRunChatComplete } from "../utils/chatCallbacks.js";
 import {
   toOffsettedParts,
   isSameDayWithOffset,
@@ -171,7 +173,18 @@ class ScheduleService {
 
     logger.log("Schedule", "Update", `Pod「${pod.id}」排程已觸發`);
 
-    await this.sendScheduleMessage(canvasId, pod.id);
+    if (pod.multiInstance === true) {
+      await launchMultiInstanceRun({
+        canvasId,
+        podId: pod.id,
+        message: "",
+        abortable: false,
+        onComplete: (runContext) =>
+          onRunChatComplete(runContext, canvasId, pod.id),
+      });
+    } else {
+      await this.sendScheduleMessage(canvasId, pod.id);
+    }
   }
 
   private async sendScheduleMessage(
