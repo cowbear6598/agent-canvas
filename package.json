@@ -7,8 +7,6 @@
     "build": "bun run build:frontend && bun run build:compile",
     "build:frontend": "cd frontend && bun run build",
     "build:compile": "bun scripts/compile.ts",
-    "release": "bun run scripts/release.ts",
-    "test": "cd backend && bun run test && cd ../frontend && bun run test:run",
-    "style": "cd backend && bun run style && cd ../frontend && bun run style"
+    "release": "bun run scripts/release.ts"
   }
 }
