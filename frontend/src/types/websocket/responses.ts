@@ -533,12 +533,18 @@ export interface ConfigGetResultPayload extends ResultPayload {
   summaryModel?: ModelType;
   aiDecideModel?: ModelType;
   timezoneOffset?: number;
+  backupGitRemoteUrl?: string;
+  backupTime?: string;
+  backupEnabled?: boolean;
 }
 
 export interface ConfigUpdatedPayload extends ResultPayload {
   summaryModel?: ModelType;
   aiDecideModel?: ModelType;
   timezoneOffset?: number;
+  backupGitRemoteUrl?: string;
+  backupTime?: string;
+  backupEnabled?: boolean;
 }
 
 export interface PodPluginsSetPayload extends ResultPayload {
@@ -627,4 +633,21 @@ export interface RunToolResultPayload {
   toolUseId: string;
   toolName: string;
   output: string;
+}
+
+export type BackupTestConnectionResultPayload = ResultPayload;
+
+export type BackupTriggerResultPayload = ResultPayload;
+
+export interface BackupStartedPayload {
+  timestamp: string;
+}
+
+export interface BackupCompletedPayload {
+  timestamp: string;
+}
+
+export interface BackupFailedPayload {
+  error: string;
+  timestamp: string;
 }

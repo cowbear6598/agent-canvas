@@ -143,6 +143,7 @@ function buildStatements(db: Database): {
     selectByProviderAndName: ReturnType<Database["prepare"]>;
     selectByProviderAndConfigField: ReturnType<Database["prepare"]>;
     updateExtraJson: ReturnType<Database["prepare"]>;
+    updateConfigJson: ReturnType<Database["prepare"]>;
     deleteById: ReturnType<Database["prepare"]>;
   };
   workflowRun: {
@@ -488,6 +489,9 @@ function buildStatements(db: Database): {
       ),
       updateExtraJson: db.prepare(
         "UPDATE integration_apps SET extra_json = $extraJson WHERE id = $id",
+      ),
+      updateConfigJson: db.prepare(
+        "UPDATE integration_apps SET config_json = $configJson WHERE id = $id",
       ),
       deleteById: db.prepare("DELETE FROM integration_apps WHERE id = ?"),
     },

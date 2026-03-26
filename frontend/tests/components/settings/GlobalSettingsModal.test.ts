@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
-import { nextTick } from "vue";
+import { nextTick, reactive } from "vue";
 import GlobalSettingsModal from "@/components/settings/GlobalSettingsModal.vue";
 
 // Mock UI 元件
@@ -38,7 +38,7 @@ vi.mock("@/components/ui/label", () => ({
 vi.mock("@/components/ui/select", () => ({
   Select: {
     name: "Select",
-    props: ["modelValue"],
+    props: ["modelValue", "disabled"],
     emits: ["update:modelValue"],
     template:
       '<div class="select-mock" :data-value="modelValue"><slot /></div>',
@@ -74,6 +74,16 @@ vi.mock("@/components/ui/scroll-area", () => ({
   },
 }));
 
+vi.mock("@/components/ui/input", () => ({
+  Input: {
+    name: "Input",
+    props: ["modelValue", "placeholder", "disabled"],
+    emits: ["update:modelValue"],
+    template:
+      '<input class="input-mock" :value="modelValue" :placeholder="placeholder" :disabled="disabled" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+  },
+}));
+
 // 使用 vi.hoisted 確保 mock 在 vi.mock 中可用
 const { mockGetConfig, mockUpdateConfig } = vi.hoisted(() => ({
   mockGetConfig: vi.fn(),
@@ -85,13 +95,15 @@ vi.mock("@/services/configApi", () => ({
   updateConfig: mockUpdateConfig,
 }));
 
-// 使用 vi.hoisted 確保 mock 在 vi.mock 中可用
-const { mockListPlugins } = vi.hoisted(() => ({
-  mockListPlugins: vi.fn(),
+// 備份 API mock
+const { mockTestBackupConnection, mockTriggerBackup } = vi.hoisted(() => ({
+  mockTestBackupConnection: vi.fn(),
+  mockTriggerBackup: vi.fn(),
 }));
 
-vi.mock("@/services/pluginApi", () => ({
-  listPlugins: mockListPlugins,
+vi.mock("@/services/backupApi", () => ({
+  testBackupConnection: mockTestBackupConnection,
+  triggerBackup: mockTriggerBackup,
 }));
 
 // 使用 vi.hoisted 確保 mock 在 vi.mock 中可用
@@ -121,17 +133,35 @@ vi.mock("@/composables/useWebSocketErrorHandler", () => ({
   }),
 }));
 
-// mock configStore
-const { mockSetTimezoneOffset } = vi.hoisted(() => ({
+// mock configStore - 使用 reactive 讓 watch 能正確追蹤狀態變化
+const { mockSetTimezoneOffset, mockSetBackupConfig } = vi.hoisted(() => ({
   mockSetTimezoneOffset: vi.fn(),
+  mockSetBackupConfig: vi.fn(),
 }));
 
+// mockConfigStoreState 必須在 vi.mock 工廠外部宣告，才能在測試中存取
+// 使用 reactive 讓 watch 能偵測到狀態改變
+let mockConfigStoreState: {
+  timezoneOffset: number;
+  backupStatus: "idle" | "running" | "success" | "failed";
+  lastBackupTime: string | null;
+  lastBackupError: string | null;
+  setTimezoneOffset: (offset: number) => void;
+  setBackupConfig: (config: {
+    gitRemoteUrl: string;
+    time: string;
+    enabled: boolean;
+  }) => void;
+  setBackupStatus: (
+    status: "idle" | "running" | "success" | "failed",
+    error?: string | null,
+  ) => void;
+  setLastBackupTime: (time: string) => void;
+  fetchConfig: () => Promise<void>;
+};
+
 vi.mock("@/stores/configStore", () => ({
-  useConfigStore: () => ({
-    timezoneOffset: 8,
-    setTimezoneOffset: mockSetTimezoneOffset,
-    fetchConfig: vi.fn(),
-  }),
+  useConfigStore: () => mockConfigStoreState,
 }));
 
 function mountModal(open = true) {
@@ -143,12 +173,32 @@ function mountModal(open = true) {
 describe("GlobalSettingsModal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // 每次測試前重置 reactive configStore state
+    mockConfigStoreState = reactive({
+      timezoneOffset: 8,
+      backupStatus: "idle" as "idle" | "running" | "success" | "failed",
+      lastBackupTime: null as string | null,
+      lastBackupError: null as string | null,
+      setTimezoneOffset: mockSetTimezoneOffset,
+      setBackupConfig: mockSetBackupConfig,
+      setBackupStatus: vi.fn(
+        (
+          status: "idle" | "running" | "success" | "failed",
+          error?: string | null,
+        ) => {
+          mockConfigStoreState.backupStatus = status;
+          mockConfigStoreState.lastBackupError = error ?? null;
+        },
+      ),
+      setLastBackupTime: vi.fn((time: string) => {
+        mockConfigStoreState.lastBackupTime = time;
+      }),
+      fetchConfig: vi.fn(),
+    });
     // 預設 withErrorToast 直接執行 promise 並回傳結果
     mockWithErrorToast.mockImplementation((promise: Promise<unknown>) =>
       promise.catch(() => null),
     );
-    // 預設 listPlugins 回傳空陣列
-    mockListPlugins.mockResolvedValue([]);
   });
 
   it("應正確渲染 Modal 標題與兩個模型選擇區塊", async () => {
@@ -269,8 +319,10 @@ describe("GlobalSettingsModal", () => {
     await nextTick();
     await nextTick();
 
-    const button = wrapper.find("button");
-    await button.trigger("click");
+    const saveButton = wrapper
+      .findAll("button")
+      .find((b) => b.text().includes("儲存"))!;
+    await saveButton.trigger("click");
     await nextTick();
 
     expect(mockUpdateConfig).toHaveBeenCalledWith(
@@ -298,7 +350,9 @@ describe("GlobalSettingsModal", () => {
     await nextTick();
     await nextTick();
 
-    const button = wrapper.find("button");
+    const button = wrapper
+      .findAll("button")
+      .find((b) => b.text().includes("儲存"))!;
     await button.trigger("click");
     await nextTick();
     await nextTick();
@@ -325,7 +379,9 @@ describe("GlobalSettingsModal", () => {
     await nextTick();
     await nextTick();
 
-    const button = wrapper.find("button");
+    const button = wrapper
+      .findAll("button")
+      .find((b) => b.text().includes("儲存"))!;
     await button.trigger("click");
     await nextTick();
     await nextTick();
@@ -351,7 +407,9 @@ describe("GlobalSettingsModal", () => {
     const wrapper = mountModal(true);
     await nextTick();
 
-    const button = wrapper.find("button");
+    const button = wrapper
+      .findAll("button")
+      .find((b) => b.text().includes("儲存"))!;
     expect(button.attributes("disabled")).toBeDefined();
 
     resolveGetConfig({
@@ -385,7 +443,9 @@ describe("GlobalSettingsModal", () => {
     await nextTick();
     await nextTick();
 
-    const button = wrapper.find("button");
+    const button = wrapper
+      .findAll("button")
+      .find((b) => b.text().includes("儲存"))!;
     await button.trigger("click");
     await nextTick();
 
@@ -395,174 +455,6 @@ describe("GlobalSettingsModal", () => {
     resolveUpdate({ success: true });
     await nextTick();
     await nextTick();
-
-    wrapper.unmount();
-  });
-
-  it("應呼叫 listPlugins 並在載入後顯示 Plugin 列表", async () => {
-    mockWithErrorToast.mockImplementation(
-      (promise: Promise<unknown>) => promise,
-    );
-    mockGetConfig.mockResolvedValue({
-      success: true,
-      summaryModel: "sonnet",
-      aiDecideModel: "sonnet",
-      enabledPluginIds: [],
-    });
-    mockListPlugins.mockResolvedValue([
-      {
-        id: "plugin-1@test-repo",
-        name: "My Plugin",
-        version: "1.0.0",
-        description: "測試 Plugin",
-        repo: "test-repo",
-      },
-    ]);
-
-    const wrapper = mountModal(true);
-    await flushPromises();
-
-    expect(mockListPlugins).toHaveBeenCalledTimes(1);
-    // 預設收合，需展開 repo 才能看到 plugin
-    expect(wrapper.text()).toContain("test-repo");
-    // 點擊 repo 標題展開
-    const repoHeader = wrapper.find(".cursor-pointer");
-    await repoHeader.trigger("click");
-    expect(wrapper.text()).toContain("My Plugin");
-    expect(wrapper.text()).toContain("1.0.0");
-
-    wrapper.unmount();
-  });
-
-  it("Plugin 列表應以唯讀方式顯示，不顯示開關", async () => {
-    mockWithErrorToast.mockImplementation(
-      (promise: Promise<unknown>) => promise,
-    );
-    mockGetConfig.mockResolvedValue({
-      success: true,
-      summaryModel: "sonnet",
-      aiDecideModel: "sonnet",
-    });
-    mockListPlugins.mockResolvedValue([
-      {
-        id: "plugin-1@test-repo",
-        name: "Plugin A",
-        version: "1.0.0",
-        description: "",
-        repo: "test-repo",
-      },
-      {
-        id: "plugin-2@test-repo",
-        name: "Plugin B",
-        version: "2.0.0",
-        description: "",
-        repo: "test-repo",
-      },
-    ]);
-
-    const wrapper = mountModal(true);
-    await flushPromises();
-
-    // 展開 repo 才能看到 plugin
-    const repoHeader = wrapper.find(".cursor-pointer");
-    await repoHeader.trigger("click");
-
-    // Plugin 列表為唯讀，不應有開關
-    const switches = wrapper.findAll(".switch-mock");
-    expect(switches).toHaveLength(0);
-    // 但應顯示 Plugin 名稱
-    expect(wrapper.text()).toContain("Plugin A");
-    expect(wrapper.text()).toContain("Plugin B");
-
-    wrapper.unmount();
-  });
-
-  it("Plugin 列表為唯讀，不應有可操作的開關元件", async () => {
-    mockWithErrorToast.mockImplementation(
-      (promise: Promise<unknown>) => promise,
-    );
-    mockGetConfig.mockResolvedValue({
-      success: true,
-      summaryModel: "sonnet",
-      aiDecideModel: "sonnet",
-    });
-    mockListPlugins.mockResolvedValue([
-      {
-        id: "plugin-1@test-repo",
-        name: "Plugin A",
-        version: "1.0.0",
-        description: "",
-        repo: "test-repo",
-      },
-    ]);
-
-    const wrapper = mountModal(true);
-    await flushPromises();
-
-    // 不應有 Switch 元件
-    const switchComp = wrapper.findComponent({ name: "Switch" });
-    expect(switchComp.exists()).toBe(false);
-
-    wrapper.unmount();
-  });
-
-  it("listPlugins 回傳空陣列，應顯示空狀態提示", async () => {
-    mockWithErrorToast.mockImplementation(
-      (promise: Promise<unknown>) => promise,
-    );
-    mockGetConfig.mockResolvedValue({
-      success: true,
-      summaryModel: "sonnet",
-      aiDecideModel: "sonnet",
-    });
-    mockListPlugins.mockResolvedValue([]);
-
-    const wrapper = mountModal(true);
-    await flushPromises();
-
-    expect(wrapper.text()).toContain(
-      "尚未安裝任何 Plugin，請透過 Claude Code CLI 安裝",
-    );
-
-    wrapper.unmount();
-  });
-
-  it("點擊儲存時不應送出 enabledPluginIds", async () => {
-    mockWithErrorToast.mockImplementation(
-      (promise: Promise<unknown>) => promise,
-    );
-    mockGetConfig.mockResolvedValue({
-      success: true,
-      summaryModel: "sonnet",
-      aiDecideModel: "sonnet",
-    });
-    mockListPlugins.mockResolvedValue([
-      {
-        id: "plugin-1@test-repo",
-        name: "Plugin A",
-        version: "1.0.0",
-        description: "",
-        repo: "test-repo",
-      },
-    ]);
-    mockUpdateConfig.mockResolvedValue({ success: true });
-
-    const wrapper = mountModal(true);
-    await flushPromises();
-
-    const saveButton = wrapper.findComponent({ name: "Button" });
-    await saveButton.trigger("click");
-    await nextTick();
-
-    expect(mockUpdateConfig).toHaveBeenCalledWith(
-      expect.objectContaining({
-        summaryModel: "sonnet",
-        aiDecideModel: "sonnet",
-      }),
-    );
-    expect(mockUpdateConfig).not.toHaveBeenCalledWith(
-      expect.objectContaining({ enabledPluginIds: expect.anything() }),
-    );
 
     wrapper.unmount();
   });
@@ -646,13 +538,519 @@ describe("GlobalSettingsModal", () => {
     await nextTick();
     await nextTick();
 
-    const button = wrapper.find("button");
+    const button = wrapper
+      .findAll("button")
+      .find((b) => b.text().includes("儲存"))!;
     await button.trigger("click");
     await nextTick();
 
     expect(mockUpdateConfig).toHaveBeenCalledWith(
       expect.objectContaining({ timezoneOffset: 8 }),
     );
+
+    wrapper.unmount();
+  });
+
+  // ==== 備份設定相關測試 ====
+
+  it("應渲染備份設定區塊標題與描述文字", async () => {
+    mockGetConfig.mockResolvedValue({
+      success: true,
+      summaryModel: "sonnet",
+      aiDecideModel: "sonnet",
+    });
+    const wrapper = mountModal(true);
+    await nextTick();
+
+    expect(wrapper.text()).toContain("備份設定");
+    expect(wrapper.text()).toContain(
+      "設定 Git 遠端儲存庫，定時自動備份畫布資料",
+    );
+
+    wrapper.unmount();
+  });
+
+  it("載入設定後應正確顯示伺服器回傳的備份設定值", async () => {
+    mockWithErrorToast.mockImplementation(
+      (promise: Promise<unknown>) => promise,
+    );
+    mockGetConfig.mockResolvedValue({
+      success: true,
+      summaryModel: "sonnet",
+      aiDecideModel: "sonnet",
+      backupGitRemoteUrl: "git@github.com:test/repo.git",
+      backupTime: "04:30",
+      backupEnabled: true,
+    });
+
+    const wrapper = mountModal(true);
+    await nextTick();
+    await nextTick();
+
+    const input = wrapper.find(".input-mock");
+    expect(input.attributes("value")).toBe("git@github.com:test/repo.git");
+
+    const switchComp = wrapper.findComponent({ name: "Switch" });
+    expect(switchComp.props("modelValue")).toBe(true);
+
+    wrapper.unmount();
+  });
+
+  it("Git Remote URL 輸入框應正確綁定 v-model", async () => {
+    mockWithErrorToast.mockImplementation(
+      (promise: Promise<unknown>) => promise,
+    );
+    mockGetConfig.mockResolvedValue({
+      success: true,
+      summaryModel: "sonnet",
+      aiDecideModel: "sonnet",
+      backupEnabled: true,
+    });
+
+    const wrapper = mountModal(true);
+    await nextTick();
+    await nextTick();
+
+    const inputComp = wrapper.findComponent({ name: "Input" });
+    await inputComp.vm.$emit("update:modelValue", "git@new-url.git");
+    await nextTick();
+
+    expect(inputComp.props("modelValue")).toBe("git@new-url.git");
+
+    wrapper.unmount();
+  });
+
+  it("備份時間選擇器應正確綁定 v-model（時與分）", async () => {
+    mockWithErrorToast.mockImplementation(
+      (promise: Promise<unknown>) => promise,
+    );
+    mockGetConfig.mockResolvedValue({
+      success: true,
+      summaryModel: "sonnet",
+      aiDecideModel: "sonnet",
+      backupEnabled: true,
+      backupTime: "03:00",
+    });
+
+    const wrapper = mountModal(true);
+    await nextTick();
+    await nextTick();
+
+    const selects = wrapper.findAllComponents({ name: "Select" });
+    // 時區在 index 2，backupHour 在 index 3，backupMinute 在 index 4
+    const hourSelect = selects[3];
+    const minuteSelect = selects[4];
+
+    await hourSelect?.vm.$emit("update:modelValue", "05");
+    await minuteSelect?.vm.$emit("update:modelValue", "30");
+    await nextTick();
+
+    expect(hourSelect?.props("modelValue")).toBe("05");
+    expect(minuteSelect?.props("modelValue")).toBe("30");
+
+    wrapper.unmount();
+  });
+
+  it("備份開關應正確綁定 v-model", async () => {
+    mockWithErrorToast.mockImplementation(
+      (promise: Promise<unknown>) => promise,
+    );
+    mockGetConfig.mockResolvedValue({
+      success: true,
+      summaryModel: "sonnet",
+      aiDecideModel: "sonnet",
+      backupEnabled: false,
+    });
+
+    const wrapper = mountModal(true);
+    await nextTick();
+    await nextTick();
+
+    const switchComp = wrapper.findComponent({ name: "Switch" });
+    await switchComp.vm.$emit("update:modelValue", true);
+    await nextTick();
+
+    expect(switchComp.props("modelValue")).toBe(true);
+
+    wrapper.unmount();
+  });
+
+  it("點擊儲存應發送包含備份設定的 payload", async () => {
+    mockWithErrorToast.mockImplementation(
+      (promise: Promise<unknown>) => promise,
+    );
+    mockGetConfig.mockResolvedValue({
+      success: true,
+      summaryModel: "sonnet",
+      aiDecideModel: "sonnet",
+      backupGitRemoteUrl: "git@github.com:test/backup.git",
+      backupTime: "03:00",
+      backupEnabled: true,
+    });
+    mockUpdateConfig.mockResolvedValue({ success: true });
+
+    const wrapper = mountModal(true);
+    await nextTick();
+    await nextTick();
+
+    const saveButton = wrapper
+      .findAll("button")
+      .find((b) => b.text().includes("儲存"))!;
+    await saveButton.trigger("click");
+    await nextTick();
+
+    expect(mockUpdateConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        backupGitRemoteUrl: "git@github.com:test/backup.git",
+        backupTime: "03:00",
+        backupEnabled: true,
+      }),
+    );
+
+    wrapper.unmount();
+  });
+
+  it("備份開關關閉時，Git Remote URL 與時間選擇器應被禁用", async () => {
+    mockWithErrorToast.mockImplementation(
+      (promise: Promise<unknown>) => promise,
+    );
+    mockGetConfig.mockResolvedValue({
+      success: true,
+      summaryModel: "sonnet",
+      aiDecideModel: "sonnet",
+      backupEnabled: false,
+    });
+
+    const wrapper = mountModal(true);
+    await nextTick();
+    await nextTick();
+
+    const input = wrapper.find(".input-mock");
+    expect(input.attributes("disabled")).toBeDefined();
+
+    const selects = wrapper.findAllComponents({ name: "Select" });
+    // backupHour select (index 3) 應該 disabled
+    expect(selects[3]?.props("disabled")).toBe(true);
+    // backupMinute select (index 4) 應該 disabled
+    expect(selects[4]?.props("disabled")).toBe(true);
+
+    wrapper.unmount();
+  });
+
+  it("點擊「立即備份」應發送 BACKUP_TRIGGER 事件", async () => {
+    mockWithErrorToast.mockImplementation(
+      (promise: Promise<unknown>) => promise,
+    );
+    mockGetConfig.mockResolvedValue({
+      success: true,
+      summaryModel: "sonnet",
+      aiDecideModel: "sonnet",
+      backupEnabled: true,
+      backupGitRemoteUrl: "git@github.com:test/backup.git",
+    });
+    mockTriggerBackup.mockResolvedValue({ success: true });
+
+    const wrapper = mountModal(true);
+    await nextTick();
+    await nextTick();
+
+    const buttons = wrapper.findAll("button");
+    const backupBtn = buttons.find((b) => b.text().includes("立即備份"));
+    await backupBtn?.trigger("click");
+    await nextTick();
+
+    expect(mockTriggerBackup).toHaveBeenCalled();
+
+    wrapper.unmount();
+  });
+
+  it("立即備份進行中應禁用按鈕並顯示載入文字", async () => {
+    mockWithErrorToast.mockImplementation(
+      (promise: Promise<unknown>) => promise,
+    );
+    mockGetConfig.mockResolvedValue({
+      success: true,
+      summaryModel: "sonnet",
+      aiDecideModel: "sonnet",
+      backupEnabled: true,
+      backupGitRemoteUrl: "git@github.com:test/backup.git",
+    });
+
+    let resolveBackup!: (value: unknown) => void;
+    const backupPromise = new Promise((resolve) => {
+      resolveBackup = resolve;
+    });
+    mockTriggerBackup.mockReturnValue(backupPromise);
+
+    const wrapper = mountModal(true);
+    await nextTick();
+    await nextTick();
+
+    const buttons = wrapper.findAll("button");
+    const backupBtn = buttons.find((b) => b.text().includes("立即備份"));
+    await backupBtn?.trigger("click");
+    await nextTick();
+
+    const updatedButtons = wrapper.findAll("button");
+    const loadingBtn = updatedButtons.find((b) =>
+      b.text().includes("備份中..."),
+    );
+    expect(loadingBtn).toBeDefined();
+    expect(loadingBtn?.attributes("disabled")).toBeDefined();
+
+    resolveBackup({ success: true });
+    await flushPromises();
+
+    wrapper.unmount();
+  });
+
+  it("立即備份成功時應顯示成功 toast 並更新狀態", async () => {
+    mockWithErrorToast.mockImplementation(
+      (promise: Promise<unknown>) => promise,
+    );
+    mockGetConfig.mockResolvedValue({
+      success: true,
+      summaryModel: "sonnet",
+      aiDecideModel: "sonnet",
+      backupEnabled: true,
+      backupGitRemoteUrl: "git@github.com:test/backup.git",
+    });
+    mockTriggerBackup.mockResolvedValue({ success: true });
+
+    const wrapper = mountModal(true);
+    await nextTick();
+    await nextTick();
+
+    const buttons = wrapper.findAll("button");
+    const backupBtn = buttons.find((b) => b.text().includes("立即備份"));
+    await backupBtn?.trigger("click");
+    await flushPromises();
+
+    expect(mockShowSuccessToast).toHaveBeenCalledWith("Config", "備份已觸發");
+
+    wrapper.unmount();
+  });
+
+  it("立即備份失敗時應顯示錯誤 toast 並更新狀態", async () => {
+    mockWithErrorToast.mockImplementation(
+      (promise: Promise<unknown>, category: string, action: string) => {
+        void category;
+        void action;
+        return promise.catch(() => null);
+      },
+    );
+    mockGetConfig.mockResolvedValue({
+      success: true,
+      summaryModel: "sonnet",
+      aiDecideModel: "sonnet",
+      backupEnabled: true,
+      backupGitRemoteUrl: "git@github.com:test/backup.git",
+    });
+    mockTriggerBackup.mockRejectedValue(new Error("備份失敗"));
+
+    const wrapper = mountModal(true);
+    await nextTick();
+    await nextTick();
+
+    const buttons = wrapper.findAll("button");
+    const backupBtn = buttons.find((b) => b.text().includes("立即備份"));
+    await backupBtn?.trigger("click");
+    await flushPromises();
+
+    expect(mockShowSuccessToast).not.toHaveBeenCalledWith(
+      "Config",
+      "備份已觸發",
+    );
+
+    wrapper.unmount();
+  });
+
+  it("備份開關關閉時「立即備份」按鈕應被禁用", async () => {
+    mockWithErrorToast.mockImplementation(
+      (promise: Promise<unknown>) => promise,
+    );
+    mockGetConfig.mockResolvedValue({
+      success: true,
+      summaryModel: "sonnet",
+      aiDecideModel: "sonnet",
+      backupEnabled: false,
+      backupGitRemoteUrl: "git@github.com:test/backup.git",
+    });
+
+    const wrapper = mountModal(true);
+    await nextTick();
+    await nextTick();
+
+    const buttons = wrapper.findAll("button");
+    const backupBtn = buttons.find((b) => b.text().includes("立即備份"));
+
+    expect(backupBtn?.attributes("disabled")).toBeDefined();
+
+    wrapper.unmount();
+  });
+
+  it("Git Remote URL 為空時「立即備份」按鈕應被禁用", async () => {
+    mockWithErrorToast.mockImplementation(
+      (promise: Promise<unknown>) => promise,
+    );
+    mockGetConfig.mockResolvedValue({
+      success: true,
+      summaryModel: "sonnet",
+      aiDecideModel: "sonnet",
+      backupEnabled: true,
+      backupGitRemoteUrl: "",
+    });
+
+    const wrapper = mountModal(true);
+    await nextTick();
+    await nextTick();
+
+    const buttons = wrapper.findAll("button");
+    const backupBtn = buttons.find((b) => b.text().includes("立即備份"));
+
+    expect(backupBtn?.attributes("disabled")).toBeDefined();
+
+    wrapper.unmount();
+  });
+
+  it("應顯示上次備份時間與備份狀態", async () => {
+    mockWithErrorToast.mockImplementation(
+      (promise: Promise<unknown>) => promise,
+    );
+    mockGetConfig.mockResolvedValue({
+      success: true,
+      summaryModel: "sonnet",
+      aiDecideModel: "sonnet",
+    });
+    // 設定 configStore 狀態
+    mockConfigStoreState.lastBackupTime = "2026-03-26T03:00:00Z";
+    mockConfigStoreState.backupStatus = "success";
+
+    const wrapper = mountModal(true);
+    await nextTick();
+    await nextTick();
+
+    expect(wrapper.text()).toContain("上次備份：2026-03-26T03:00:00Z");
+
+    wrapper.unmount();
+  });
+
+  // ==== 備份驗證相關測試 ====
+
+  it("備份開啟但 Git Remote URL 為空時，點擊儲存應顯示 inline 錯誤訊息且不送出請求", async () => {
+    mockWithErrorToast.mockImplementation(
+      (promise: Promise<unknown>) => promise,
+    );
+    mockGetConfig.mockResolvedValue({
+      success: true,
+      summaryModel: "sonnet",
+      aiDecideModel: "sonnet",
+      backupEnabled: true,
+      backupGitRemoteUrl: "",
+    });
+
+    const wrapper = mountModal(true);
+    await nextTick();
+    await nextTick();
+
+    const saveButton = wrapper
+      .findAll("button")
+      .find((b) => b.text().includes("儲存"))!;
+    await saveButton.trigger("click");
+    await nextTick();
+
+    // 應顯示 inline 錯誤訊息，不使用 toast
+    expect(mockShowErrorToast).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain("請填寫 Git Remote URL");
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
+
+    wrapper.unmount();
+  });
+
+  it("備份關閉時即使 Git Remote URL 為空，點擊儲存也應正常送出", async () => {
+    mockWithErrorToast.mockImplementation(
+      (promise: Promise<unknown>) => promise,
+    );
+    mockGetConfig.mockResolvedValue({
+      success: true,
+      summaryModel: "sonnet",
+      aiDecideModel: "sonnet",
+      backupEnabled: false,
+      backupGitRemoteUrl: "",
+    });
+    mockUpdateConfig.mockResolvedValue({ success: true });
+
+    const wrapper = mountModal(true);
+    await nextTick();
+    await nextTick();
+
+    const saveButton = wrapper
+      .findAll("button")
+      .find((b) => b.text().includes("儲存"))!;
+    await saveButton.trigger("click");
+    await nextTick();
+
+    expect(mockShowErrorToast).not.toHaveBeenCalled();
+    expect(mockUpdateConfig).toHaveBeenCalled();
+
+    wrapper.unmount();
+  });
+
+  // ==== 備份失敗 inline 錯誤訊息測試 ====
+
+  it("configStore.backupStatus 變成 failed 時，應顯示 inline 錯誤訊息", async () => {
+    mockWithErrorToast.mockImplementation(
+      (promise: Promise<unknown>) => promise,
+    );
+    mockGetConfig.mockResolvedValue({
+      success: true,
+      summaryModel: "sonnet",
+      aiDecideModel: "sonnet",
+      backupEnabled: true,
+      backupGitRemoteUrl: "git@github.com:test/backup.git",
+    });
+
+    const wrapper = mountModal(true);
+    await nextTick();
+    await nextTick();
+
+    // 模擬後端發來 BACKUP_FAILED 事件後，handleBackupFailed 呼叫 configStore.setBackupStatus
+    mockConfigStoreState.setBackupStatus("failed", "備份推送失敗");
+    await nextTick();
+    await nextTick();
+
+    expect(wrapper.text()).toContain("備份推送失敗");
+
+    wrapper.unmount();
+  });
+
+  it("configStore.backupStatus 已是 failed、lastBackupError 更新時，應顯示新的 inline 錯誤訊息", async () => {
+    mockWithErrorToast.mockImplementation(
+      (promise: Promise<unknown>) => promise,
+    );
+    mockGetConfig.mockResolvedValue({
+      success: true,
+      summaryModel: "sonnet",
+      aiDecideModel: "sonnet",
+      backupEnabled: true,
+      backupGitRemoteUrl: "git@github.com:test/backup.git",
+    });
+
+    // 初始狀態：上次備份已失敗
+    mockConfigStoreState.backupStatus = "failed";
+    mockConfigStoreState.lastBackupError = "舊的錯誤訊息";
+
+    const wrapper = mountModal(true);
+    await nextTick();
+    await nextTick();
+
+    // 模擬第二次備份失敗（backupStatus 保持 failed，但 lastBackupError 改變）
+    // 正常流程會先變成 running 再 failed，但測試邊界情況
+    mockConfigStoreState.setBackupStatus("failed", "新的備份推送失敗");
+    await nextTick();
+    await nextTick();
+
+    expect(wrapper.text()).toContain("新的備份推送失敗");
 
     wrapper.unmount();
   });

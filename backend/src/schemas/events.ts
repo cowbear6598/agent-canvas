@@ -115,6 +115,8 @@ export enum WebSocketRequestEvents {
   RUN_LOAD_POD_MESSAGES = "run:load-pod-messages",
   PLUGIN_LIST = "plugin:list",
   POD_SET_PLUGINS = "pod:set-plugins",
+  BACKUP_TRIGGER = "backup:trigger",
+  BACKUP_TEST_CONNECTION = "backup:test-connection",
 }
 
 export enum WebSocketResponseEvents {
@@ -274,4 +276,9 @@ export enum WebSocketResponseEvents {
   RUN_POD_MESSAGES_LOADED = "run:pod-messages:result",
   PLUGIN_LIST_RESULT = "plugin:list:result",
   POD_PLUGINS_SET = "pod:plugins:set",
+  BACKUP_TRIGGER_RESULT = "backup:trigger:result",
+  BACKUP_STARTED = "backup:started",
+  BACKUP_COMPLETED = "backup:completed",
+  BACKUP_FAILED = "backup:failed",
+  BACKUP_TEST_CONNECTION_RESULT = "backup:test-connection:result",
 }

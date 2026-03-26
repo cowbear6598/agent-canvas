@@ -4,6 +4,9 @@ export interface GlobalConfig {
   summaryModel: ModelType;
   aiDecideModel: ModelType;
   timezoneOffset: number;
+  backupGitRemoteUrl: string;
+  backupTime: string;
+  backupEnabled: boolean;
 }
 
 export const MODEL_OPTIONS: { value: ModelType; label: string }[] = [

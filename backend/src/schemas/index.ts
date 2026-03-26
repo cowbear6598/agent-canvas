@@ -21,6 +21,7 @@ export * from "./configSchemas.js";
 export * from "./integrationSchemas.js";
 export * from "./runSchemas.js";
 export * from "./pluginSchemas.js";
+export * from "./backupSchemas.js";
 
 /** 系統內部使用的 connectionId 常數（非真實 WebSocket 連線） */
 export const SystemConnectionIds = {

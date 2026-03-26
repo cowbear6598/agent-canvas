@@ -19,6 +19,7 @@ import { configHandlerGroup } from "./groups/configHandlerGroup.js";
 import { integrationHandlerGroup } from "./groups/integrationHandlerGroup.js";
 import { runHandlerGroup } from "./groups/runHandlerGroup.js";
 import { pluginHandlerGroup } from "./groups/pluginHandlerGroup.js";
+import { backupHandlerGroup } from "./groups/backupHandlerGroup.js";
 
 const registry = new HandlerRegistry();
 
@@ -42,6 +43,7 @@ registry.registerGroup(configHandlerGroup);
 registry.registerGroup(integrationHandlerGroup);
 registry.registerGroup(runHandlerGroup);
 registry.registerGroup(pluginHandlerGroup);
+registry.registerGroup(backupHandlerGroup);
 
 export function registerAllHandlers(): void {
   registry.registerToRouter();

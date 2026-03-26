@@ -25,6 +25,9 @@ export async function updateConfig(config: {
   summaryModel: ModelType;
   aiDecideModel: ModelType;
   timezoneOffset: number;
+  backupGitRemoteUrl?: string;
+  backupTime?: string;
+  backupEnabled?: boolean;
 }): Promise<ConfigUpdatedPayload> {
   return createWebSocketRequest<ConfigUpdatePayload, ConfigUpdatedPayload>({
     requestEvent: WebSocketRequestEvents.CONFIG_UPDATE,
@@ -33,6 +36,9 @@ export async function updateConfig(config: {
       summaryModel: config.summaryModel,
       aiDecideModel: config.aiDecideModel,
       timezoneOffset: config.timezoneOffset,
+      backupGitRemoteUrl: config.backupGitRemoteUrl,
+      backupTime: config.backupTime,
+      backupEnabled: config.backupEnabled,
     },
   });
 }

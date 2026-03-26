@@ -381,6 +381,9 @@ export interface ConfigUpdatePayload {
   summaryModel?: ModelType;
   aiDecideModel?: ModelType;
   timezoneOffset?: number;
+  backupGitRemoteUrl?: string;
+  backupTime?: string;
+  backupEnabled?: boolean;
 }
 
 export interface PodSetPluginsPayload {
@@ -410,4 +413,14 @@ export interface RunLoadPodMessagesPayload {
   canvasId: string;
   runId: string;
   podId: string;
+}
+
+export interface BackupTestConnectionPayload {
+  requestId: string;
+  gitRemoteUrl: string;
+}
+
+export interface BackupTriggerPayload {
+  requestId: string;
+  gitRemoteUrl: string;
 }
