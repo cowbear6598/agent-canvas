@@ -8,6 +8,7 @@ import { shouldSendBusyReply } from "../../utils/busyChatManager.js";
 import { isWorkflowChainBusy } from "../../utils/workflowChainTraversal.js";
 import { integrationRegistry } from "./integrationRegistry.js";
 import type { NormalizedEvent } from "./types.js";
+import { shouldFilterJiraEvent } from "./providers/jiraProvider.js";
 import { isPodBusy } from "../../types/index.js";
 import {
   injectUserMessage,
@@ -55,10 +56,26 @@ class IntegrationEventPipeline {
       return;
     }
 
-    const multiInstancePods = boundPods.filter(
+    // 針對 Jira 事件依各 Pod 的 eventFilter 過濾
+    const filteredPods =
+      provider === "jira"
+        ? boundPods.filter(({ pod }) => {
+            const binding = pod.integrationBindings?.find(
+              (b) => b.appId === appId,
+            );
+            const eventFilter = binding?.extra?.["eventFilter"] as
+              | string
+              | undefined;
+            return !shouldFilterJiraEvent(eventFilter, event.rawEvent);
+          })
+        : boundPods;
+
+    if (filteredPods.length === 0) return;
+
+    const multiInstancePods = filteredPods.filter(
       ({ pod }) => pod.multiInstance === true,
     );
-    const normalPods = boundPods.filter(
+    const normalPods = filteredPods.filter(
       ({ pod }) => pod.multiInstance !== true,
     );
 

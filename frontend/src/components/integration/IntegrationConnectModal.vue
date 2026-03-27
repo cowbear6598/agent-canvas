@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, computed, nextTick } from 'vue'
+import { ref, watch, computed, nextTick } from "vue";
 import {
   Dialog,
   DialogContent,
@@ -7,197 +7,212 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { Label } from '@/components/ui/label'
-import { Input } from '@/components/ui/input'
-import { getProvider } from '@/integration/providerRegistry'
-import { useIntegrationStore } from '@/stores/integrationStore'
-import { usePodStore } from '@/stores'
-import type { IntegrationApp, IntegrationProviderConfig } from '@/types/integration'
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { getProvider } from "@/integration/providerRegistry";
+import { useIntegrationStore } from "@/stores/integrationStore";
+import { usePodStore } from "@/stores";
+import type {
+  IntegrationApp,
+  IntegrationProviderConfig,
+} from "@/types/integration";
 
 interface Props {
-  open: boolean
-  podId: string
-  provider: string
+  open: boolean;
+  podId: string;
+  provider: string;
 }
 
-const props = defineProps<Props>()
+const props = defineProps<Props>();
 
 const emit = defineEmits<{
-  'update:open': [value: boolean]
-}>()
+  "update:open": [value: boolean];
+}>();
 
-const integrationStore = useIntegrationStore()
-const podStore = usePodStore()
+const integrationStore = useIntegrationStore();
+const podStore = usePodStore();
 
-const config = computed<IntegrationProviderConfig>(() => getProvider(props.provider))
-const apps = computed(() => integrationStore.getAppsByProvider(props.provider))
+const config = computed<IntegrationProviderConfig>(() =>
+  getProvider(props.provider),
+);
+const apps = computed(() => integrationStore.getAppsByProvider(props.provider));
 
-const selectedAppId = ref<string | null>(null)
-const extraValues = ref<Record<string, string>>({})
-const selectedResourceId = ref<string | null>(null)
-const manualResourceInput = ref<string>('')
+const selectedAppId = ref<string | null>(null);
+const extraValues = ref<Record<string, string>>({});
+const selectedResourceId = ref<string | null>(null);
+const manualResourceInput = ref<string>("");
 
-const isRestoringBinding = ref(false)
+const isRestoringBinding = ref(false);
 
 const selectedApp = computed<IntegrationApp | undefined>(() =>
-  selectedAppId.value ? integrationStore.getAppById(props.provider, selectedAppId.value) : undefined
-)
+  selectedAppId.value
+    ? integrationStore.getAppById(props.provider, selectedAppId.value)
+    : undefined,
+);
 
 const resources = computed(() =>
-  selectedApp.value ? config.value.getResources(selectedApp.value) : []
-)
+  selectedApp.value ? config.value.getResources(selectedApp.value) : [],
+);
 
-const isNoResource = computed<boolean>(() => config.value.hasNoResource ?? false)
+const isNoResource = computed<boolean>(
+  () => config.value.hasNoResource ?? false,
+);
 
-const isManualInput = computed<boolean>(() =>
-  config.value.hasManualResourceInput?.(extraValues.value) ?? false
-)
+const isManualInput = computed<boolean>(
+  () => config.value.hasManualResourceInput?.(extraValues.value) ?? false,
+);
 
 const manualInputError = computed<string>(() => {
-  const manualConfig = config.value.manualResourceInputConfig
-  if (!manualConfig) return ''
-  return manualConfig.validate(manualResourceInput.value)
-})
+  const manualConfig = config.value.manualResourceInputConfig;
+  if (!manualConfig) return "";
+  return manualConfig.validate(manualResourceInput.value);
+});
 
 const isConfirmDisabled = computed<boolean>(() => {
-  if (apps.value.length === 0 || !selectedAppId.value) return true
+  if (apps.value.length === 0 || !selectedAppId.value) return true;
 
-  if (isNoResource.value) return false
+  const extraFields = config.value.bindingExtraFields ?? [];
+  if (extraFields.some((field) => !extraValues.value[field.key])) return true;
 
-  const extraFields = config.value.bindingExtraFields ?? []
-  if (extraFields.some((field) => !extraValues.value[field.key])) return true
+  if (isNoResource.value) return false;
 
   if (isManualInput.value) {
-    return manualInputError.value !== '' || manualResourceInput.value === ''
+    return manualInputError.value !== "" || manualResourceInput.value === "";
   }
 
-  return !selectedResourceId.value
-})
+  return !selectedResourceId.value;
+});
 
 function initExtraValues(): void {
-  const extra: Record<string, string> = {}
-  const extraFields = config.value.bindingExtraFields ?? []
+  const extra: Record<string, string> = {};
+  const extraFields = config.value.bindingExtraFields ?? [];
   extraFields.forEach((field) => {
-    extra[field.key] = field.defaultValue
-  })
-  extraValues.value = extra
+    extra[field.key] = field.defaultValue;
+  });
+  extraValues.value = extra;
 }
 
 function resetState(): void {
-  selectedAppId.value = null
-  selectedResourceId.value = null
-  manualResourceInput.value = ''
-  initExtraValues()
+  selectedAppId.value = null;
+  selectedResourceId.value = null;
+  manualResourceInput.value = "";
+  initExtraValues();
 }
 
 watch(
   () => props.open,
   (newOpen) => {
     if (!newOpen) {
-      resetState()
-      return
+      resetState();
+      return;
     }
 
     if (!isNoResource.value) {
       for (const app of apps.value) {
-        if (app.connectionStatus === 'connected') {
-          integrationStore.refreshAppResources(props.provider, app.id)
+        if (app.connectionStatus === "connected") {
+          integrationStore.refreshAppResources(props.provider, app.id);
         }
       }
     }
 
-    initExtraValues()
+    initExtraValues();
 
-    const pod = podStore.getPodById(props.podId)
-    const binding = (pod?.integrationBindings ?? []).find((b) => b.provider === props.provider)
+    const pod = podStore.getPodById(props.podId);
+    const binding = (pod?.integrationBindings ?? []).find(
+      (b) => b.provider === props.provider,
+    );
 
     if (!binding) {
-      selectedAppId.value = null
-      selectedResourceId.value = null
-      manualResourceInput.value = ''
-      return
+      selectedAppId.value = null;
+      selectedResourceId.value = null;
+      manualResourceInput.value = "";
+      return;
     }
 
     // 防止 selectedAppId 設定後立即觸發 watch 清除 selectedResourceId
-    isRestoringBinding.value = true
-    selectedAppId.value = binding.appId
+    isRestoringBinding.value = true;
+    selectedAppId.value = binding.appId;
 
-    const extraFields = config.value.bindingExtraFields ?? []
+    const extraFields = config.value.bindingExtraFields ?? [];
     extraFields.forEach((field) => {
-      const savedValue = binding.extra[field.key]
-      if (typeof savedValue === 'string') {
-        extraValues.value[field.key] = savedValue
+      const savedValue = binding.extra[field.key];
+      if (typeof savedValue === "string") {
+        extraValues.value[field.key] = savedValue;
       }
-    })
+    });
 
-    selectedResourceId.value = binding.resourceId
+    selectedResourceId.value = binding.resourceId;
 
     // private 模式下 resourceId 即為 User ID
     if (config.value.hasManualResourceInput?.(extraValues.value)) {
-      manualResourceInput.value = binding.resourceId
+      manualResourceInput.value = binding.resourceId;
     }
 
     nextTick(() => {
-      isRestoringBinding.value = false
-    })
-  }
-)
+      isRestoringBinding.value = false;
+    });
+  },
+);
 
 // 防止回填期間清除資源選擇
 watch(selectedAppId, () => {
-  if (isRestoringBinding.value) return
-  selectedResourceId.value = null
-  manualResourceInput.value = ''
-})
+  if (isRestoringBinding.value) return;
+  selectedResourceId.value = null;
+  manualResourceInput.value = "";
+});
 
 // 防止回填期間清除資源選擇
 watch(
   extraValues,
   () => {
-    if (isRestoringBinding.value) return
-    selectedResourceId.value = null
-    manualResourceInput.value = ''
+    if (isRestoringBinding.value) return;
+    selectedResourceId.value = null;
+    manualResourceInput.value = "";
   },
-  { deep: true }
-)
+  { deep: true },
+);
 
 function resolveResourceId(): string | null {
-  if (isNoResource.value) return '*'
+  if (isNoResource.value) return "*";
   if (isManualInput.value) {
-    if (manualInputError.value !== '' || manualResourceInput.value === '') return null
-    return manualResourceInput.value
+    if (manualInputError.value !== "" || manualResourceInput.value === "")
+      return null;
+    return manualResourceInput.value;
   }
-  return selectedResourceId.value
+  return selectedResourceId.value;
 }
 
 const handleConfirm = async (): Promise<void> => {
-  if (!selectedAppId.value) return
+  if (!selectedAppId.value) return;
 
-  const resourceId = resolveResourceId()
-  if (!resourceId) return
+  const resourceId = resolveResourceId();
+  if (!resourceId) return;
 
-  const extra: Record<string, unknown> = {}
+  const extra: Record<string, unknown> = {};
   Object.entries(extraValues.value).forEach(([k, v]) => {
-    extra[k] = v
-  })
+    extra[k] = v;
+  });
 
-  await integrationStore.bindToPod(props.provider, props.podId, selectedAppId.value, resourceId, extra)
-  emit('update:open', false)
-}
+  await integrationStore.bindToPod(
+    props.provider,
+    props.podId,
+    selectedAppId.value,
+    resourceId,
+    extra,
+  );
+  emit("update:open", false);
+};
 
 const handleClose = (): void => {
-  emit('update:open', false)
-}
+  emit("update:open", false);
+};
 </script>
 
 <template>
-  <Dialog
-    :open="open"
-    @update:open="handleClose"
-  >
+  <Dialog :open="open" @update:open="handleClose">
     <DialogContent class="max-w-lg">
       <DialogHeader>
         <DialogTitle>連接 {{ config.label }}</DialogTitle>
@@ -206,7 +221,9 @@ const handleClose = (): void => {
             選擇要與此 Pod 連接的 {{ config.label }} App
           </template>
           <template v-else>
-            選擇要與此 Pod 連接的 {{ config.label }} App 和{{ config.resourceLabel }}
+            選擇要與此 Pod 連接的 {{ config.label }} App 和{{
+              config.resourceLabel
+            }}
           </template>
         </DialogDescription>
       </DialogHeader>
@@ -222,26 +239,23 @@ const handleClose = (): void => {
         <template v-else>
           <div class="space-y-2">
             <Label>選擇 App</Label>
-            <RadioGroup
-              v-model="selectedAppId"
-              class="space-y-2"
-            >
+            <RadioGroup v-model="selectedAppId" class="space-y-2">
               <div
                 v-for="app in apps"
                 :key="app.id"
                 class="flex items-center gap-3"
               >
-                <RadioGroupItem
-                  :id="`app-${app.id}`"
-                  :value="app.id"
-                />
+                <RadioGroupItem :id="`app-${app.id}`" :value="app.id" />
                 <Label
                   :for="`app-${app.id}`"
                   class="flex cursor-pointer items-center gap-2 font-normal"
                 >
                   <span
                     class="size-2 shrink-0 rounded-full"
-                    :class="config.connectionStatusConfig[app.connectionStatus]?.dotClass"
+                    :class="
+                      config.connectionStatusConfig[app.connectionStatus]
+                        ?.dotClass
+                    "
                   />
                   {{ app.name }}
                 </Label>
@@ -249,8 +263,10 @@ const handleClose = (): void => {
             </RadioGroup>
           </div>
 
-          <template v-if="selectedApp && !isNoResource">
-            <!-- 額外欄位（如 Telegram 的 private/group 選擇） -->
+          <!-- 額外欄位（如 Jira 事件過濾、Telegram 的 private/group 選擇） -->
+          <template
+            v-if="selectedApp && (config.bindingExtraFields ?? []).length > 0"
+          >
             <div
               v-for="extraField in config.bindingExtraFields ?? []"
               :key="extraField.key"
@@ -279,7 +295,9 @@ const handleClose = (): void => {
                 </div>
               </RadioGroup>
             </div>
+          </template>
 
+          <template v-if="selectedApp && !isNoResource">
             <!-- 手動輸入模式（如 Telegram private User ID） -->
             <div
               v-if="isManualInput && config.manualResourceInputConfig"
@@ -306,10 +324,7 @@ const handleClose = (): void => {
             </div>
 
             <!-- 資源列表選擇 -->
-            <div
-              v-else
-              class="space-y-2"
-            >
+            <div v-else class="space-y-2">
               <Label>選擇{{ config.resourceLabel }}</Label>
               <div
                 v-if="resources.length === 0"
@@ -317,11 +332,7 @@ const handleClose = (): void => {
               >
                 {{ config.emptyResourceHint }}
               </div>
-              <RadioGroup
-                v-else
-                v-model="selectedResourceId"
-                class="space-y-2"
-              >
+              <RadioGroup v-else v-model="selectedResourceId" class="space-y-2">
                 <div
                   v-for="resource in resources"
                   :key="resource.id"
@@ -345,12 +356,7 @@ const handleClose = (): void => {
       </div>
 
       <DialogFooter>
-        <Button
-          variant="outline"
-          @click="handleClose"
-        >
-          取消
-        </Button>
+        <Button variant="outline" @click="handleClose"> 取消 </Button>
         <Button
           variant="default"
           :disabled="isConfirmDisabled"
