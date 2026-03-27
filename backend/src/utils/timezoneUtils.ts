@@ -27,7 +27,7 @@ export function toOffsettedParts(
     hours: shifted.getUTCHours(),
     minutes: shifted.getUTCMinutes(),
     seconds: shifted.getUTCSeconds(),
-    day: shifted.getUTCDay(),
+    day: (shifted.getUTCDay() + 6) % 7, // 轉換為 ISO 慣例：0=週一, 6=週日
   };
 }
 

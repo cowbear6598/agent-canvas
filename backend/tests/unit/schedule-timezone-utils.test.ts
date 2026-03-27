@@ -54,7 +54,33 @@ describe("toOffsettedParts", () => {
     const date = new Date("2026-03-22T16:00:00Z");
     const parts = toOffsettedParts(date, 8);
 
-    expect(parts.day).toBe(1); // 週一
+    expect(parts.day).toBe(0); // 週一（ISO 慣例：0=週一, 6=週日）
+  });
+
+  describe("weekday (day) 欄位邊界測試", () => {
+    it("UTC 週日（getUTCDay()=0）offset=0 時 day 應為 6", () => {
+      // 2026-03-22 是週日，UTC getUTCDay() 回傳 0，ISO 慣例轉換後應為 6
+      const date = new Date("2026-03-22T10:00:00Z");
+      const parts = toOffsettedParts(date, 0);
+
+      expect(parts.day).toBe(6); // 週日（ISO 慣例：6=週日）
+    });
+
+    it("UTC 週六（getUTCDay()=6）offset=0 時 day 應為 5", () => {
+      // 2026-03-21 是週六，UTC getUTCDay() 回傳 6，ISO 慣例轉換後應為 5
+      const date = new Date("2026-03-21T10:00:00Z");
+      const parts = toOffsettedParts(date, 0);
+
+      expect(parts.day).toBe(5); // 週六（ISO 慣例：5=週六）
+    });
+
+    it("offset 跨日導致 weekday 從週日變為週一", () => {
+      // 2026-03-22T22:00:00Z 是 UTC 週日 22:00，加 offset=8 後跨入週一
+      const date = new Date("2026-03-22T22:00:00Z");
+      const parts = toOffsettedParts(date, 8);
+
+      expect(parts.day).toBe(0); // 跨日後為週一（ISO 慣例：0=週一）
+    });
   });
 });
 

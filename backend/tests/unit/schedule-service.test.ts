@@ -440,7 +440,7 @@ describe("Schedule Service", () => {
         intervalHour: 0,
         hour: 10,
         minute: 0,
-        weekdays: [1, 3, 5], // 週一、週三、週五
+        weekdays: [0, 2, 4], // 週一、週三、週五（ISO 慣例：0=週一, 6=週日）
         enabled: true,
         lastTriggeredAt: null,
       };
@@ -460,7 +460,7 @@ describe("Schedule Service", () => {
         intervalHour: 0,
         hour: 10,
         minute: 0,
-        weekdays: [1], // 週一
+        weekdays: [0], // 週一（ISO 慣例）
         enabled: true,
         lastTriggeredAt: lastTriggered,
       };
@@ -479,7 +479,7 @@ describe("Schedule Service", () => {
         intervalHour: 0,
         hour: 10,
         minute: 0,
-        weekdays: [1], // 週一
+        weekdays: [0], // 週一（ISO 慣例）
         enabled: true,
         lastTriggeredAt: lastTriggered,
       };
@@ -498,7 +498,7 @@ describe("Schedule Service", () => {
         intervalHour: 0,
         hour: 10,
         minute: 0,
-        weekdays: [1], // 週一
+        weekdays: [0], // 週一（ISO 慣例）
         enabled: true,
         lastTriggeredAt: lastTriggered,
       };
@@ -516,7 +516,7 @@ describe("Schedule Service", () => {
         intervalHour: 0,
         hour: 10,
         minute: 0,
-        weekdays: [1], // 週一
+        weekdays: [0], // 週一（ISO 慣例）
         enabled: true,
         lastTriggeredAt: lastTriggered,
       };
@@ -535,7 +535,7 @@ describe("Schedule Service", () => {
         intervalHour: 0,
         hour: 10,
         minute: 0,
-        weekdays: [1, 3, 5], // 週一、週三、週五
+        weekdays: [0, 2, 4], // 週一、週三、週五（ISO 慣例：0=週一, 6=週日）
         enabled: true,
         lastTriggeredAt: lastTriggered,
       };
@@ -747,7 +747,7 @@ describe("Schedule Service 時區修正", () => {
   });
 
   describe("shouldFire - every-week 時區修正", () => {
-    it("UTC 週日 16:00 在 offset=8 時 weekday 應為 1（週一）", () => {
+    it("UTC 週日 16:00 在 offset=8 時 weekday 應為 0（週一，ISO 慣例）", () => {
       // 2026-03-22T16:00:00Z 是 UTC 週日，台北時間 2026-03-23T00:00 週一
       const now = new Date("2026-03-22T16:00:00Z");
       const schedule: ScheduleConfig = {
@@ -757,7 +757,7 @@ describe("Schedule Service 時區修正", () => {
         intervalHour: 0,
         hour: 0,
         minute: 0,
-        weekdays: [1],
+        weekdays: [0], // 週一（ISO 慣例）
         enabled: true,
         lastTriggeredAt: null,
       };
@@ -775,7 +775,7 @@ describe("Schedule Service 時區修正", () => {
         intervalHour: 0,
         hour: 12,
         minute: 0,
-        weekdays: [1],
+        weekdays: [0], // 週一（ISO 慣例）
         enabled: true,
         lastTriggeredAt: null,
       };
@@ -793,7 +793,7 @@ describe("Schedule Service 時區修正", () => {
         intervalHour: 0,
         hour: 21,
         minute: 0,
-        weekdays: [0], // 週日
+        weekdays: [6], // 週日（ISO 慣例）
         enabled: true,
         lastTriggeredAt: null,
       };
