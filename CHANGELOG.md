@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.9.2] - 2026-03-30
+
+### 新增
+- 優化畫布觸控板互動體驗（二指滾動改為平移、捏合改為縮放、Space+左鍵拖拽平移、調整縮放靈敏度）
+- 新增 Multi-Instance Run worktree 隔離機制
+
+### 修正
+- 升級 Claude Agent SDK 至 0.2.87 修復 CI 型別檢查錯誤與 tool handler 回傳格式
+- WebSocket 不再將伺服器內部路徑洩漏到前端
+
 ## [0.9.1] - 2026-03-27
 
 ### 修正
