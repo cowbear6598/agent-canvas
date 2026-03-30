@@ -215,7 +215,8 @@ export function createTables(db: Database): void {
       "triggered_at TEXT," +
       "completed_at TEXT," +
       "auto_pathway_settled INTEGER," +
-      "direct_pathway_settled INTEGER" +
+      "direct_pathway_settled INTEGER," +
+      "worktree_path TEXT" +
       ")",
   );
   db.exec(
@@ -239,4 +240,14 @@ export function createTables(db: Database): void {
   db.exec(
     "CREATE INDEX IF NOT EXISTS idx_run_messages_run_pod ON run_messages(run_id, pod_id)",
   );
+
+  // Migration: run_pod_instances 新增 worktree_path 欄位
+  try {
+    db.exec("ALTER TABLE run_pod_instances ADD COLUMN worktree_path TEXT");
+  } catch (e) {
+    // 欄位已存在時忽略，其他錯誤重新拋出
+    if (!(e instanceof Error && e.message.includes("duplicate column"))) {
+      throw e;
+    }
+  }
 }

@@ -1,9 +1,9 @@
-import type { WorkflowRun, RunPodInstance } from '../services/runStore.js';
-import type { PersistedMessage } from './persistence.js';
-import type { MessageRole } from './message.js';
+import type { WorkflowRun, RunPodInstance } from "../services/runStore.js";
+import type { PersistedMessage } from "./persistence.js";
+import type { MessageRole } from "./message.js";
 
 /** not-applicable: 該路徑不存在; pending: 尚未 settle; settled: 已完成 settle */
-export type PathwayState = 'not-applicable' | 'pending' | 'settled'
+export type PathwayState = "not-applicable" | "pending" | "settled";
 
 export type { WorkflowRun, RunPodInstance };
 
@@ -13,9 +13,14 @@ export interface RunContext {
   sourcePodId: string;
 }
 
+/** 前端使用的 RunPodInstance，去除內部路徑資訊並附加 Pod 名稱 */
+export type RunPodInstancePublic = Omit<RunPodInstance, "worktreePath"> & {
+  podName: string;
+};
+
 /** 前端 WorkflowRun 包含內嵌的 podInstances，用於 wire format */
 export interface WorkflowRunWithInstances extends WorkflowRun {
-  podInstances: RunPodInstance[];
+  podInstances: RunPodInstancePublic[];
   sourcePodName: string;
 }
 

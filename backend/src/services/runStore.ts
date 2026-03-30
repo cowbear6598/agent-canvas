@@ -1,19 +1,53 @@
-import { randomUUID } from 'crypto';
-import type { PersistedMessage, PersistedSubMessage } from '../types';
-import type { PathwayState } from '../types/run.js';
-import { getStmts } from '../database/stmtsHelper.js';
-import { safeJsonParse } from '../utils/safeJsonParse.js';
-import { pathwayStateToSqliteInt, sqliteIntToPathwayState } from '../utils/pathwayHelpers.js';
+import { randomUUID } from "crypto";
+import type { PersistedMessage, PersistedSubMessage } from "../types";
+import type { PathwayState } from "../types/run.js";
+import { getStmts } from "../database/stmtsHelper.js";
+import { safeJsonParse } from "../utils/safeJsonParse.js";
+import {
+  pathwayStateToSqliteInt,
+  sqliteIntToPathwayState,
+} from "../utils/pathwayHelpers.js";
 
-export type RunStatus = 'running' | 'completed' | 'error';
-export type RunPodInstanceStatus = 'pending' | 'running' | 'summarizing' | 'deciding' | 'queued' | 'waiting' | 'completed' | 'error' | 'skipped';
+export type RunStatus = "running" | "completed" | "error";
+export type RunPodInstanceStatus =
+  | "pending"
+  | "running"
+  | "summarizing"
+  | "deciding"
+  | "queued"
+  | "waiting"
+  | "completed"
+  | "error"
+  | "skipped";
 
-export const NEVER_TRIGGERED_STATUSES = new Set<RunPodInstanceStatus>(['pending', 'deciding', 'queued', 'waiting']);
-export const IN_PROGRESS_STATUSES = new Set<RunPodInstanceStatus>(['running', 'pending', 'summarizing', 'deciding', 'queued', 'waiting']);
-export const TRIGGERABLE_STATUSES = new Set<RunPodInstanceStatus>(['pending', 'deciding', 'queued', 'waiting', 'running']);
-export const TERMINAL_POD_STATUSES = new Set<RunPodInstanceStatus>(['completed', 'error', 'skipped']);
+export const NEVER_TRIGGERED_STATUSES = new Set<RunPodInstanceStatus>([
+  "pending",
+  "deciding",
+  "queued",
+  "waiting",
+]);
+export const IN_PROGRESS_STATUSES = new Set<RunPodInstanceStatus>([
+  "running",
+  "pending",
+  "summarizing",
+  "deciding",
+  "queued",
+  "waiting",
+]);
+export const TRIGGERABLE_STATUSES = new Set<RunPodInstanceStatus>([
+  "pending",
+  "deciding",
+  "queued",
+  "waiting",
+  "running",
+]);
+export const TERMINAL_POD_STATUSES = new Set<RunPodInstanceStatus>([
+  "completed",
+  "error",
+  "skipped",
+]);
 // Run 層級終態（不含 skipped，skipped 只存在於 pod 層級）
-export const RUN_TERMINAL_STATUSES = new Set<RunStatus>(['completed', 'error']);
+export const RUN_TERMINAL_STATUSES = new Set<RunStatus>(["completed", "error"]);
 
 export interface WorkflowRun {
   id: string;
@@ -36,6 +70,7 @@ export interface RunPodInstance {
   completedAt: string | null;
   autoPathwaySettled: PathwayState;
   directPathwaySettled: PathwayState;
+  worktreePath: string | null;
 }
 
 export interface RunMessage {
@@ -69,6 +104,7 @@ interface RunPodInstanceRow {
   completed_at: string | null;
   auto_pathway_settled: number | null;
   direct_pathway_settled: number | null;
+  worktree_path: string | null;
 }
 
 interface RunMessageRow {
@@ -105,34 +141,42 @@ function rowToRunPodInstance(row: RunPodInstanceRow): RunPodInstance {
     completedAt: row.completed_at,
     autoPathwaySettled: sqliteIntToPathwayState(row.auto_pathway_settled),
     directPathwaySettled: sqliteIntToPathwayState(row.direct_pathway_settled),
+    worktreePath: row.worktree_path,
   };
 }
 
 function rowToRunMessage(row: RunMessageRow): PersistedMessage {
   return {
     id: row.id,
-    role: row.role as 'user' | 'assistant',
+    role: row.role as "user" | "assistant",
     content: row.content,
     timestamp: row.timestamp,
     ...(row.sub_messages_json
-      ? { subMessages: safeJsonParse<PersistedSubMessage[]>(row.sub_messages_json) ?? undefined }
+      ? {
+          subMessages:
+            safeJsonParse<PersistedSubMessage[]>(row.sub_messages_json) ??
+            undefined,
+        }
       : {}),
   };
 }
-
 
 class RunStore {
   private get stmts(): ReturnType<typeof getStmts> {
     return getStmts();
   }
 
-  createRun(canvasId: string, sourcePodId: string, triggerMessage: string): WorkflowRun {
+  createRun(
+    canvasId: string,
+    sourcePodId: string,
+    triggerMessage: string,
+  ): WorkflowRun {
     const run: WorkflowRun = {
       id: randomUUID(),
       canvasId,
       sourcePodId,
       triggerMessage,
-      status: 'running',
+      status: "running",
       createdAt: new Date().toISOString(),
       completedAt: null,
     };
@@ -151,18 +195,24 @@ class RunStore {
   }
 
   getRun(runId: string): WorkflowRun | undefined {
-    const row = this.stmts.workflowRun.selectById.get(runId) as WorkflowRunRow | undefined;
+    const row = this.stmts.workflowRun.selectById.get(runId) as
+      | WorkflowRunRow
+      | undefined;
     if (!row) return undefined;
     return rowToWorkflowRun(row);
   }
 
   getRunsByCanvasId(canvasId: string): WorkflowRun[] {
-    const rows = this.stmts.workflowRun.selectByCanvasId.all(canvasId) as WorkflowRunRow[];
+    const rows = this.stmts.workflowRun.selectByCanvasId.all(
+      canvasId,
+    ) as WorkflowRunRow[];
     return rows.map(rowToWorkflowRun);
   }
 
   updateRunStatus(runId: string, status: RunStatus): void {
-    const completedAt = RUN_TERMINAL_STATUSES.has(status) ? new Date().toISOString() : null;
+    const completedAt = RUN_TERMINAL_STATUSES.has(status)
+      ? new Date().toISOString()
+      : null;
     this.stmts.workflowRun.updateStatus.run({
       $id: runId,
       $status: status,
@@ -175,32 +225,39 @@ class RunStore {
   }
 
   countRunsByCanvasId(canvasId: string): number {
-    const result = this.stmts.workflowRun.countByCanvasId.get(canvasId) as { count: number };
+    const result = this.stmts.workflowRun.countByCanvasId.get(canvasId) as {
+      count: number;
+    };
     return result.count;
   }
 
   getOldestCompletedRunIds(canvasId: string, limit: number): string[] {
-    const rows = this.stmts.workflowRun.selectOldestCompleted.all(canvasId, limit) as Array<{ id: string }>;
-    return rows.map(r => r.id);
+    const rows = this.stmts.workflowRun.selectOldestCompleted.all(
+      canvasId,
+      limit,
+    ) as Array<{ id: string }>;
+    return rows.map((r) => r.id);
   }
 
   createPodInstance(
     runId: string,
     podId: string,
-    autoPathwaySettled: PathwayState = 'not-applicable',
-    directPathwaySettled: PathwayState = 'not-applicable',
+    autoPathwaySettled: PathwayState = "not-applicable",
+    directPathwaySettled: PathwayState = "not-applicable",
+    worktreePath: string | null = null,
   ): RunPodInstance {
     const instance: RunPodInstance = {
       id: randomUUID(),
       runId,
       podId,
-      status: 'pending',
+      status: "pending",
       claudeSessionId: null,
       errorMessage: null,
       triggeredAt: null,
       completedAt: null,
       autoPathwaySettled,
       directPathwaySettled,
+      worktreePath,
     };
 
     this.stmts.runPodInstance.insert.run({
@@ -214,6 +271,7 @@ class RunStore {
       $completedAt: instance.completedAt,
       $autoPathwaySettled: pathwayStateToSqliteInt(autoPathwaySettled),
       $directPathwaySettled: pathwayStateToSqliteInt(directPathwaySettled),
+      $worktreePath: worktreePath,
     });
 
     return instance;
@@ -227,6 +285,21 @@ class RunStore {
     this.stmts.runPodInstance.settleDirectPathway.run({ $id: instanceId });
   }
 
+  getWorktreePathsByRunId(
+    runId: string,
+  ): Array<{ podId: string; worktreePath: string }> {
+    const rows = this.stmts.runPodInstance.selectWorktreePathsByRunId.all(
+      runId,
+    ) as Array<{
+      pod_id: string;
+      worktree_path: string;
+    }>;
+    return rows.map((r) => ({
+      podId: r.pod_id,
+      worktreePath: r.worktree_path,
+    }));
+  }
+
   getPodInstance(runId: string, podId: string): RunPodInstance | undefined {
     const row = this.stmts.runPodInstance.selectByRunIdAndPodId.get({
       $runId: runId,
@@ -237,7 +310,9 @@ class RunStore {
   }
 
   getPodInstancesByRunId(runId: string): RunPodInstance[] {
-    const rows = this.stmts.runPodInstance.selectByRunId.all(runId) as RunPodInstanceRow[];
+    const rows = this.stmts.runPodInstance.selectByRunId.all(
+      runId,
+    ) as RunPodInstanceRow[];
     return rows.map(rowToRunPodInstance);
   }
 
@@ -247,8 +322,10 @@ class RunStore {
     errorMessage?: string,
   ): void {
     // triggeredAt 只在 running 時設定，SQL 層會用 CASE WHEN 保護非 running 狀態不覆蓋已有值
-    const triggeredAt = status === 'running' ? new Date().toISOString() : null;
-    const completedAt = TERMINAL_POD_STATUSES.has(status) ? new Date().toISOString() : null;
+    const triggeredAt = status === "running" ? new Date().toISOString() : null;
+    const completedAt = TERMINAL_POD_STATUSES.has(status)
+      ? new Date().toISOString()
+      : null;
     this.stmts.runPodInstance.updateStatus.run({
       $id: instanceId,
       $status: status,
@@ -258,7 +335,10 @@ class RunStore {
     });
   }
 
-  updatePodInstanceClaudeSessionId(instanceId: string, sessionId: string): void {
+  updatePodInstanceClaudeSessionId(
+    instanceId: string,
+    sessionId: string,
+  ): void {
     this.stmts.runPodInstance.updateClaudeSessionId.run({
       $claudeSessionId: sessionId,
       $id: instanceId,
@@ -266,14 +346,16 @@ class RunStore {
   }
 
   getRunningPodInstances(runId: string): RunPodInstance[] {
-    const rows = this.stmts.runPodInstance.selectRunningByRunId.all(runId) as RunPodInstanceRow[];
+    const rows = this.stmts.runPodInstance.selectRunningByRunId.all(
+      runId,
+    ) as RunPodInstanceRow[];
     return rows.map(rowToRunPodInstance);
   }
 
   addRunMessage(
     runId: string,
     podId: string,
-    role: 'user' | 'assistant',
+    role: "user" | "assistant",
     content: string,
     subMessages?: PersistedSubMessage[],
   ): PersistedMessage {
@@ -298,7 +380,11 @@ class RunStore {
     return message;
   }
 
-  upsertRunMessage(runId: string, podId: string, message: PersistedMessage): void {
+  upsertRunMessage(
+    runId: string,
+    podId: string,
+    message: PersistedMessage,
+  ): void {
     this.stmts.runMessage.upsert.run({
       $id: message.id,
       $runId: runId,
@@ -306,7 +392,9 @@ class RunStore {
       $role: message.role,
       $content: message.content,
       $timestamp: message.timestamp,
-      $subMessagesJson: message.subMessages ? JSON.stringify(message.subMessages) : null,
+      $subMessagesJson: message.subMessages
+        ? JSON.stringify(message.subMessages)
+        : null,
     });
   }
 

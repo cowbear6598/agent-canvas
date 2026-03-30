@@ -38,6 +38,7 @@ import {
   buildReplyContextKey,
 } from "../integration/replyContextStore.js";
 import type { RunContext } from "../../types/run.js";
+import { runStore } from "../runStore.js";
 import { scanInstalledPlugins } from "../pluginScanner.js";
 
 export type { StreamEvent, StreamCallback } from "./types.js";
@@ -703,7 +704,29 @@ export class ClaudeService {
     const state = this.createQueryState();
     const resolvedKey = runOptions?.queryKey ?? podId;
 
-    const cwd = this.resolveCwd(pod);
+    let cwd = this.resolveCwd(pod);
+
+    // Run mode：若 Instance 有 worktreePath，覆寫 cwd
+    if (runOptions?.runContext) {
+      const instance = runStore.getPodInstance(
+        runOptions.runContext.runId,
+        podId,
+      );
+      if (instance?.worktreePath) {
+        if (
+          !isPathWithinDirectory(instance.worktreePath, config.repositoriesRoot)
+        ) {
+          logger.error(
+            "Chat",
+            "Check",
+            `worktreePath 不在合法範圍內：${instance.worktreePath}`,
+          );
+          throw new Error("Run Instance 的工作目錄路徑不合法");
+        }
+        cwd = instance.worktreePath;
+      }
+    }
+
     const queryOptions = await this.buildQueryOptions(pod, cwd, runOptions);
     const resumeSessionId = runOptions?.sessionId ?? pod.claudeSessionId;
     const prompt = this.buildPrompt(message, pod.commandId, resumeSessionId);

@@ -165,6 +165,7 @@ function buildStatements(db: Database): {
     deleteByRunId: ReturnType<Database["prepare"]>;
     settleAutoPathway: ReturnType<Database["prepare"]>;
     settleDirectPathway: ReturnType<Database["prepare"]>;
+    selectWorktreePathsByRunId: ReturnType<Database["prepare"]>;
   };
   runMessage: {
     insert: ReturnType<Database["prepare"]>;
@@ -518,7 +519,7 @@ function buildStatements(db: Database): {
 
     runPodInstance: {
       insert: db.prepare(
-        "INSERT INTO run_pod_instances (id, run_id, pod_id, status, claude_session_id, error_message, triggered_at, completed_at, auto_pathway_settled, direct_pathway_settled) VALUES ($id, $runId, $podId, $status, $claudeSessionId, $errorMessage, $triggeredAt, $completedAt, $autoPathwaySettled, $directPathwaySettled)",
+        "INSERT INTO run_pod_instances (id, run_id, pod_id, status, claude_session_id, error_message, triggered_at, completed_at, auto_pathway_settled, direct_pathway_settled, worktree_path) VALUES ($id, $runId, $podId, $status, $claudeSessionId, $errorMessage, $triggeredAt, $completedAt, $autoPathwaySettled, $directPathwaySettled, $worktreePath)",
       ),
       selectByRunId: db.prepare(
         "SELECT * FROM run_pod_instances WHERE run_id = ?",
@@ -543,6 +544,9 @@ function buildStatements(db: Database): {
       ),
       settleDirectPathway: db.prepare(
         "UPDATE run_pod_instances SET direct_pathway_settled = 1 WHERE id = $id",
+      ),
+      selectWorktreePathsByRunId: db.prepare(
+        "SELECT pod_id, worktree_path FROM run_pod_instances WHERE run_id = ? AND worktree_path IS NOT NULL",
       ),
     },
 
