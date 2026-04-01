@@ -42,9 +42,6 @@ import { getActiveCanvasIdOrWarn } from "@/utils/canvasGuard";
 
 const MAX_COORD = 100000;
 
-/** 防止滑鼠 mouseup 事件在關閉選單後立即觸發 click 而重新打開選單 */
-const TYPE_MENU_COOLDOWN_MS = 300;
-
 const POD_FALLBACK_INITIAL_X = 100;
 const POD_FALLBACK_X_SPACING = 300;
 const POD_FALLBACK_INITIAL_Y = 150;
@@ -61,7 +58,6 @@ export const usePodStore = defineStore("pod", () => {
     visible: false,
     position: null,
   });
-  const typeMenuClosedAt = ref<number>(0);
   const scheduleFiredPodIds = ref<Set<string>>(new Set());
 
   const selectedPod = computed(
@@ -321,8 +317,6 @@ export const usePodStore = defineStore("pod", () => {
   }
 
   function showTypeMenu(position: Position): void {
-    if (Date.now() - typeMenuClosedAt.value < TYPE_MENU_COOLDOWN_MS) return;
-
     typeMenu.value = {
       visible: true,
       position,
@@ -334,7 +328,6 @@ export const usePodStore = defineStore("pod", () => {
       visible: false,
       position: null,
     };
-    typeMenuClosedAt.value = Date.now();
   }
 
   function updatePodField<K extends keyof Pod>(
@@ -456,7 +449,6 @@ export const usePodStore = defineStore("pod", () => {
     selectedPodId,
     activePodId,
     typeMenu,
-    typeMenuClosedAt,
     scheduleFiredPodIds,
     selectedPod,
     podCount,

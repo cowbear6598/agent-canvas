@@ -2,7 +2,7 @@
 import type { TriggerMode } from "@/types/connection";
 import type { ModelType } from "@/types/pod";
 import { Zap, Brain, ArrowRight, ChevronRight } from "lucide-vue-next";
-import { ref } from "vue";
+import { ref, onMounted, onUnmounted } from "vue";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useToast } from "@/composables/useToast";
 import {
@@ -125,9 +125,29 @@ const handleSetAiDecideModel = (targetModel: ModelType): Promise<void> =>
     "ai-decide-model-changed",
   );
 
-const handleBackgroundClick = (): void => {
+const menuRef = ref<HTMLElement | null>(null);
+
+const handleOutsideClick = (event: MouseEvent): void => {
+  if (!menuRef.value) return;
+  const menuEl = menuRef.value;
+  if (menuEl?.contains(event.target as Node)) return;
+
+  // 右鍵點選單外部：關閉選單，讓事件繼續傳播到 canvas/connection
+  // 左鍵點選單外部：關閉選單並停止事件傳播
+  if (event.button !== 2) {
+    event.stopPropagation();
+  }
+
   emit("close");
 };
+
+onMounted(() => {
+  document.addEventListener("mousedown", handleOutsideClick, true);
+});
+
+onUnmounted(() => {
+  document.removeEventListener("mousedown", handleOutsideClick, true);
+});
 
 const isSummaryMenuOpen = ref(false);
 const isAiModelMenuOpen = ref(false);
@@ -140,198 +160,197 @@ const MODEL_OPTIONS: { value: ModelType; label: string }[] = [
 </script>
 
 <template>
-  <div class="fixed inset-0 z-40" @click="handleBackgroundClick">
+  <div
+    ref="menuRef"
+    class="bg-card border border-doodle-ink rounded-md p-1 fixed z-50"
+    :style="{
+      left: `${position.x}px`,
+      top: `${position.y}px`,
+    }"
+    @contextmenu.prevent
+  >
+    <button
+      :class="[
+        'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary',
+        {
+          'bg-secondary border-l-2 border-l-primary':
+            currentTriggerMode === 'auto',
+        },
+      ]"
+      @click="handleSetTriggerMode('auto')"
+    >
+      <Zap
+        :size="14"
+        :class="
+          currentTriggerMode === 'auto' ? 'text-primary' : 'text-foreground'
+        "
+      />
+      <span
+        :class="[
+          'font-mono',
+          currentTriggerMode === 'auto'
+            ? 'text-primary font-semibold'
+            : 'text-foreground',
+        ]"
+      >
+        自動觸發 (Auto)
+      </span>
+    </button>
+
+    <button
+      :class="[
+        'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary',
+        {
+          'bg-secondary border-l-2 border-l-primary':
+            currentTriggerMode === 'direct',
+        },
+      ]"
+      @click="handleSetTriggerMode('direct')"
+    >
+      <ArrowRight
+        :size="14"
+        :class="
+          currentTriggerMode === 'direct' ? 'text-primary' : 'text-foreground'
+        "
+      />
+      <span
+        :class="[
+          'font-mono',
+          currentTriggerMode === 'direct'
+            ? 'text-primary font-semibold'
+            : 'text-foreground',
+        ]"
+      >
+        直接觸發 (Direct)
+      </span>
+    </button>
+
+    <button
+      :class="[
+        'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary',
+        {
+          'bg-secondary border-l-2 border-l-primary':
+            currentTriggerMode === 'ai-decide',
+        },
+      ]"
+      @click="handleSetTriggerMode('ai-decide')"
+    >
+      <Brain
+        :size="14"
+        :class="
+          currentTriggerMode === 'ai-decide'
+            ? 'text-primary'
+            : 'text-foreground'
+        "
+      />
+      <span
+        :class="[
+          'font-mono',
+          currentTriggerMode === 'ai-decide'
+            ? 'text-primary font-semibold'
+            : 'text-foreground',
+        ]"
+      >
+        AI 判斷 (AI Decide)
+      </span>
+    </button>
+
+    <div class="border-t border-border my-1" />
+
+    <!-- Summary Model 子選單觸發器 -->
     <div
-      class="bg-card border border-doodle-ink rounded-md p-1 fixed z-50"
-      :style="{
-        left: `${position.x}px`,
-        top: `${position.y}px`,
-      }"
-      @click.stop
+      class="relative"
+      @mouseenter="isSummaryMenuOpen = true"
+      @mouseleave="isSummaryMenuOpen = false"
     >
       <button
-        :class="[
-          'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary',
-          {
-            'bg-secondary border-l-2 border-l-primary':
-              currentTriggerMode === 'auto',
-          },
-        ]"
-        @click="handleSetTriggerMode('auto')"
+        class="w-full flex items-center justify-between gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary"
+        :class="{ 'bg-secondary': isSummaryMenuOpen }"
       >
-        <Zap
-          :size="14"
-          :class="
-            currentTriggerMode === 'auto' ? 'text-primary' : 'text-foreground'
-          "
-        />
-        <span
-          :class="[
-            'font-mono',
-            currentTriggerMode === 'auto'
-              ? 'text-primary font-semibold'
-              : 'text-foreground',
-          ]"
-        >
-          自動觸發 (Auto)
-        </span>
+        <span class="font-mono text-foreground">Summary Model</span>
+        <ChevronRight :size="12" class="text-muted-foreground" />
       </button>
 
-      <button
-        :class="[
-          'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary',
-          {
-            'bg-secondary border-l-2 border-l-primary':
-              currentTriggerMode === 'direct',
-          },
-        ]"
-        @click="handleSetTriggerMode('direct')"
-      >
-        <ArrowRight
-          :size="14"
-          :class="
-            currentTriggerMode === 'direct' ? 'text-primary' : 'text-foreground'
-          "
-        />
-        <span
-          :class="[
-            'font-mono',
-            currentTriggerMode === 'direct'
-              ? 'text-primary font-semibold'
-              : 'text-foreground',
-          ]"
-        >
-          直接觸發 (Direct)
-        </span>
-      </button>
-
-      <button
-        :class="[
-          'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary',
-          {
-            'bg-secondary border-l-2 border-l-primary':
-              currentTriggerMode === 'ai-decide',
-          },
-        ]"
-        @click="handleSetTriggerMode('ai-decide')"
-      >
-        <Brain
-          :size="14"
-          :class="
-            currentTriggerMode === 'ai-decide'
-              ? 'text-primary'
-              : 'text-foreground'
-          "
-        />
-        <span
-          :class="[
-            'font-mono',
-            currentTriggerMode === 'ai-decide'
-              ? 'text-primary font-semibold'
-              : 'text-foreground',
-          ]"
-        >
-          AI 判斷 (AI Decide)
-        </span>
-      </button>
-
-      <div class="border-t border-border my-1" />
-
-      <!-- Summary Model 子選單觸發器 -->
+      <!-- 子選單 -->
       <div
-        class="relative"
-        @mouseenter="isSummaryMenuOpen = true"
-        @mouseleave="isSummaryMenuOpen = false"
+        v-if="isSummaryMenuOpen"
+        class="absolute left-full top-0 ml-1 bg-card border border-doodle-ink rounded-md p-1 z-50 min-w-[120px]"
       >
         <button
-          class="w-full flex items-center justify-between gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary"
-          :class="{ 'bg-secondary': isSummaryMenuOpen }"
+          v-for="option in MODEL_OPTIONS"
+          :key="option.value"
+          :class="[
+            'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary',
+            {
+              'bg-secondary border-l-2 border-l-primary':
+                currentSummaryModel === option.value,
+            },
+          ]"
+          @click="handleSetSummaryModel(option.value)"
         >
-          <span class="font-mono text-foreground">Summary Model</span>
-          <ChevronRight :size="12" class="text-muted-foreground" />
-        </button>
-
-        <!-- 子選單 -->
-        <div
-          v-if="isSummaryMenuOpen"
-          class="absolute left-full top-0 ml-1 bg-card border border-doodle-ink rounded-md p-1 z-50 min-w-[120px]"
-        >
-          <button
-            v-for="option in MODEL_OPTIONS"
-            :key="option.value"
+          <span
             :class="[
-              'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary',
-              {
-                'bg-secondary border-l-2 border-l-primary':
-                  currentSummaryModel === option.value,
-              },
+              'font-mono',
+              currentSummaryModel === option.value
+                ? 'text-primary font-semibold'
+                : 'text-foreground',
             ]"
-            @click="handleSetSummaryModel(option.value)"
           >
-            <span
-              :class="[
-                'font-mono',
-                currentSummaryModel === option.value
-                  ? 'text-primary font-semibold'
-                  : 'text-foreground',
-              ]"
-            >
-              {{ option.label }}
-            </span>
-          </button>
-        </div>
+            {{ option.label }}
+          </span>
+        </button>
       </div>
+    </div>
 
-      <!-- AI Model 子選單觸發器 -->
+    <!-- AI Model 子選單觸發器 -->
+    <div
+      class="relative"
+      :class="{
+        'opacity-50 pointer-events-none': currentTriggerMode !== 'ai-decide',
+      }"
+      @mouseenter="
+        currentTriggerMode === 'ai-decide' && (isAiModelMenuOpen = true)
+      "
+      @mouseleave="
+        currentTriggerMode === 'ai-decide' && (isAiModelMenuOpen = false)
+      "
+    >
+      <button
+        class="w-full flex items-center justify-between gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary"
+        :class="{ 'bg-secondary': isAiModelMenuOpen }"
+      >
+        <span class="font-mono text-foreground">AI Model</span>
+        <ChevronRight :size="12" class="text-muted-foreground" />
+      </button>
+
+      <!-- 子選單 -->
       <div
-        class="relative"
-        :class="{
-          'opacity-50 pointer-events-none': currentTriggerMode !== 'ai-decide',
-        }"
-        @mouseenter="
-          currentTriggerMode === 'ai-decide' && (isAiModelMenuOpen = true)
-        "
-        @mouseleave="
-          currentTriggerMode === 'ai-decide' && (isAiModelMenuOpen = false)
-        "
+        v-if="isAiModelMenuOpen"
+        class="absolute left-full top-0 ml-1 bg-card border border-doodle-ink rounded-md p-1 z-50 min-w-[120px]"
       >
         <button
-          class="w-full flex items-center justify-between gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary"
-          :class="{ 'bg-secondary': isAiModelMenuOpen }"
+          v-for="option in MODEL_OPTIONS"
+          :key="option.value"
+          :class="[
+            'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary',
+            {
+              'bg-secondary border-l-2 border-l-primary':
+                currentAiDecideModel === option.value,
+            },
+          ]"
+          @click="handleSetAiDecideModel(option.value)"
         >
-          <span class="font-mono text-foreground">AI Model</span>
-          <ChevronRight :size="12" class="text-muted-foreground" />
-        </button>
-
-        <!-- 子選單 -->
-        <div
-          v-if="isAiModelMenuOpen"
-          class="absolute left-full top-0 ml-1 bg-card border border-doodle-ink rounded-md p-1 z-50 min-w-[120px]"
-        >
-          <button
-            v-for="option in MODEL_OPTIONS"
-            :key="option.value"
+          <span
             :class="[
-              'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary',
-              {
-                'bg-secondary border-l-2 border-l-primary':
-                  currentAiDecideModel === option.value,
-              },
+              'font-mono',
+              currentAiDecideModel === option.value
+                ? 'text-primary font-semibold'
+                : 'text-foreground',
             ]"
-            @click="handleSetAiDecideModel(option.value)"
           >
-            <span
-              :class="[
-                'font-mono',
-                currentAiDecideModel === option.value
-                  ? 'text-primary font-semibold'
-                  : 'text-foreground',
-              ]"
-            >
-              {{ option.label }}
-            </span>
-          </button>
-        </div>
+            {{ option.label }}
+          </span>
+        </button>
       </div>
     </div>
   </div>
