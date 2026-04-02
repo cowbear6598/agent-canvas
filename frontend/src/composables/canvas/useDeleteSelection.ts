@@ -3,6 +3,7 @@ import { useCanvasContext } from './useCanvasContext'
 import { useToast } from '@/composables/useToast'
 import { isEditingElement } from '@/utils/domHelpers'
 import { DEFAULT_TOAST_DURATION_MS } from '@/lib/constants'
+import { t } from '@/i18n'
 
 async function deleteSelectedElements(): Promise<void> {
   const { podStore, selectionStore, outputStyleStore, skillStore, repositoryStore, subAgentStore, commandStore, mcpServerStore } = useCanvasContext()
@@ -45,8 +46,8 @@ async function deleteSelectedElements(): Promise<void> {
     })
 
     toast({
-      title: '刪除部分失敗',
-      description: `${failedCount} 個物件刪除失敗`,
+      title: t('composable.deleteSelection.partialFailed'),
+      description: t('composable.deleteSelection.partialFailedDesc', { count: failedCount }),
       duration: DEFAULT_TOAST_DURATION_MS
     })
   }

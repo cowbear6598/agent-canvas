@@ -5,41 +5,40 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { getAllProviders } from '@/integration/providerRegistry'
+} from "@/components/ui/dialog";
+import { getAllProviders } from "@/integration/providerRegistry";
 
 interface Props {
-  open: boolean
+  open: boolean;
 }
 
-defineProps<Props>()
+defineProps<Props>();
 
 const emit = defineEmits<{
-  'update:open': [value: boolean]
-  select: [category: string]
-}>()
+  "update:open": [value: boolean];
+  select: [category: string];
+}>();
 
-const categories = getAllProviders()
+const categories = getAllProviders();
 
 const handleSelect = (categoryId: string): void => {
-  emit('update:open', false)
-  emit('select', categoryId)
-}
+  emit("update:open", false);
+  emit("select", categoryId);
+};
 
 const handleClose = (): void => {
-  emit('update:open', false)
-}
+  emit("update:open", false);
+};
 </script>
 
 <template>
-  <Dialog
-    :open="open"
-    @update:open="handleClose"
-  >
+  <Dialog :open="open" @update:open="handleClose">
     <DialogContent class="max-w-md">
       <DialogHeader>
-        <DialogTitle>整合服務</DialogTitle>
-        <DialogDescription>選擇要管理的整合服務</DialogDescription>
+        <DialogTitle>{{ $t("integration.select.title") }}</DialogTitle>
+        <DialogDescription class="sr-only">
+          {{ $t("integration.select.title") }}
+        </DialogDescription>
       </DialogHeader>
 
       <div class="space-y-2 py-2">
@@ -49,16 +48,12 @@ const handleClose = (): void => {
           class="flex w-full cursor-pointer items-center gap-4 rounded-lg border border-border px-4 py-3 transition-colors hover:bg-accent"
           @click="handleSelect(category.name)"
         >
-          <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted">
-            <component
-              :is="category.icon"
-              class="h-5 w-5"
-            />
+          <span
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted"
+          >
+            <component :is="category.icon" class="h-5 w-5" />
           </span>
-          <div class="flex flex-col gap-0.5 text-left">
-            <span class="text-sm font-semibold">{{ category.label }}</span>
-            <span class="text-xs text-muted-foreground">{{ category.description }}</span>
-          </div>
+          <span class="text-sm font-semibold">{{ category.label }}</span>
         </button>
       </div>
     </DialogContent>

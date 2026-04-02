@@ -4,6 +4,7 @@ import { reactive, onMounted, onUnmounted, ref } from "vue";
 import { GitBranch, Download } from "lucide-vue-next";
 import { useRepositoryStore } from "@/stores/note/repositoryStore";
 import { useToast } from "@/composables/useToast";
+import { useI18n } from "vue-i18n";
 import CreateWorktreeModal from "./CreateWorktreeModal.vue";
 import BranchSelectModal from "./BranchSelectModal.vue";
 import ForceCheckoutModal from "./ForceCheckoutModal.vue";
@@ -35,6 +36,7 @@ const emit = defineEmits<{
 
 const repositoryStore = useRepositoryStore();
 const { showErrorToast } = useToast();
+const { t } = useI18n();
 
 const uiState = reactive({
   isGit: false,
@@ -152,7 +154,7 @@ const handleBranchSelect = async (branchName: string): Promise<void> => {
 
   if (!dirtyResult.success) {
     modalState.showBranch = false;
-    showErrorToast("Git", dirtyResult.error || "檢查修改狀態失敗");
+    showErrorToast("Git", dirtyResult.error || t("canvas.checkDirtyFailed"));
     emit("close");
     return;
   }
@@ -256,7 +258,9 @@ const handlePullLatestConfirm = async (): Promise<void> => {
       @click="handleCreateWorktreeClick"
     >
       <GitBranch :size="14" class="text-foreground" />
-      <span class="font-mono text-foreground">建立 Worktree</span>
+      <span class="font-mono text-foreground">{{
+        $t("canvas.repositoryContextMenu.createWorktree")
+      }}</span>
     </button>
 
     <button
@@ -273,7 +277,9 @@ const handlePullLatestConfirm = async (): Promise<void> => {
       @click="handleSwitchBranchClick"
     >
       <GitBranch :size="14" class="text-foreground" />
-      <span class="font-mono text-foreground">切換分支</span>
+      <span class="font-mono text-foreground">{{
+        $t("canvas.repositoryContextMenu.switchBranch")
+      }}</span>
     </button>
 
     <button
@@ -288,14 +294,16 @@ const handlePullLatestConfirm = async (): Promise<void> => {
       @click="handlePullLatestClick"
     >
       <Download :size="14" class="text-foreground" />
-      <span class="font-mono text-foreground">Pull 至最新版本</span>
+      <span class="font-mono text-foreground">{{
+        $t("canvas.repositoryContextMenu.pullLatest")
+      }}</span>
     </button>
 
     <p
       v-if="!uiState.isGit && !uiState.isCheckingGit"
       class="text-xs text-muted-foreground mt-0.5 ml-6"
     >
-      此資料夾不是 Git Repository
+      {{ $t("canvas.repository.notGitRepo") }}
     </p>
   </div>
 

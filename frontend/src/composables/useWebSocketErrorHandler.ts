@@ -1,6 +1,7 @@
 import { useToast } from '@/composables/useToast'
 import type { ToastCategory } from '@/composables/useToast'
 import { sanitizeErrorForUser } from '@/utils/errorSanitizer'
+import { t } from '@/i18n'
 
 export function useWebSocketErrorHandler(): {
   handleWebSocketError: (error: unknown, title?: string) => void
@@ -9,10 +10,11 @@ export function useWebSocketErrorHandler(): {
 } {
   const { toast, showErrorToast } = useToast()
 
-  const handleWebSocketError = (error: unknown, title = '操作失敗'): void => {
+  const handleWebSocketError = (error: unknown, title?: string): void => {
+    const resolvedTitle = title ?? t('common.error.operation')
     const message = sanitizeErrorForUser(error)
     toast({
-      title,
+      title: resolvedTitle,
       description: message,
       variant: 'destructive'
     })

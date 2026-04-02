@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onUnmounted, watch } from 'vue'
-import { Eraser, Trash2, Timer } from 'lucide-vue-next'
+import { ref, computed, onUnmounted, watch } from "vue";
+import { Eraser, Trash2, Timer } from "lucide-vue-next";
 import {
   Dialog,
   DialogContent,
@@ -8,163 +8,176 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
-const props = withDefaults(defineProps<{
-  podId: string
-  podName: string
-  isSourcePod: boolean
-  showScheduleButton: boolean
-  isMultiInstanceEnabled: boolean
-  isLoadingDownstream: boolean
-  isClearing: boolean
-  isWorkflowRunning?: boolean
-  downstreamPods: Array<{ id: string; name: string }>
-  showClearDialog: boolean
-  showDeleteDialog: boolean
-  hasSchedule: boolean
-  scheduleEnabled: boolean
-  scheduleTooltip: string
-  isScheduleFiredAnimating?: boolean
-}>(), {
-  isScheduleFiredAnimating: false,
-  isWorkflowRunning: false,
-})
+const props = withDefaults(
+  defineProps<{
+    podId: string;
+    podName: string;
+    isSourcePod: boolean;
+    showScheduleButton: boolean;
+    isMultiInstanceEnabled: boolean;
+    isLoadingDownstream: boolean;
+    isClearing: boolean;
+    isWorkflowRunning?: boolean;
+    downstreamPods: Array<{ id: string; name: string }>;
+    showClearDialog: boolean;
+    showDeleteDialog: boolean;
+    hasSchedule: boolean;
+    scheduleEnabled: boolean;
+    scheduleTooltip: string;
+    isScheduleFiredAnimating?: boolean;
+  }>(),
+  {
+    isScheduleFiredAnimating: false,
+    isWorkflowRunning: false,
+  },
+);
 
 const emit = defineEmits<{
-  'delete': []
-  'clear-workflow': []
-  'toggle-multi-instance': []
-  'update:show-clear-dialog': [value: boolean]
-  'update:show-delete-dialog': [value: boolean]
-  'confirm-clear': []
-  'cancel-clear': []
-  'confirm-delete': []
-  'cancel-delete': []
-  'open-schedule-modal': []
-  'clear-schedule-fired-animation': []
-}>()
+  delete: [];
+  "clear-workflow": [];
+  "toggle-multi-instance": [];
+  "update:show-clear-dialog": [value: boolean];
+  "update:show-delete-dialog": [value: boolean];
+  "confirm-clear": [];
+  "cancel-clear": [];
+  "confirm-delete": [];
+  "cancel-delete": [];
+  "open-schedule-modal": [];
+  "clear-schedule-fired-animation": [];
+}>();
 
-const SCHEDULE_FIRED_ANIMATION_DURATION_MS = 1800
-const TOGGLE_DEBOUNCE_GUARD_MS = 5000
+const SCHEDULE_FIRED_ANIMATION_DURATION_MS = 1800;
+const TOGGLE_DEBOUNCE_GUARD_MS = 5000;
 
-const longPressTimer = ref<ReturnType<typeof setTimeout> | null>(null)
-let isLongPress = false
-const isToggling = ref(false)
-const LONG_PRESS_DURATION_MS = 500
+const longPressTimer = ref<ReturnType<typeof setTimeout> | null>(null);
+let isLongPress = false;
+const isToggling = ref(false);
+const LONG_PRESS_DURATION_MS = 500;
 
-const isLongPressing = ref(false)
-const longPressProgress = ref(0)
-const mousePosition = ref({ x: 0, y: 0 })
-let progressAnimationFrame: number | null = null
-let longPressStartTime: number | null = null
+const isLongPressing = ref(false);
+const longPressProgress = ref(0);
+const mousePosition = ref({ x: 0, y: 0 });
+let progressAnimationFrame: number | null = null;
+let longPressStartTime: number | null = null;
 
-const isEraserDisabled = computed(() =>
-  props.isLoadingDownstream || props.isClearing || isToggling.value || props.isWorkflowRunning
-)
+const isEraserDisabled = computed(
+  () =>
+    props.isLoadingDownstream ||
+    props.isClearing ||
+    isToggling.value ||
+    props.isWorkflowRunning,
+);
 
 const cleanupLongPress = (): void => {
   if (longPressTimer.value) {
-    clearTimeout(longPressTimer.value)
-    longPressTimer.value = null
+    clearTimeout(longPressTimer.value);
+    longPressTimer.value = null;
   }
-  isLongPressing.value = false
-  longPressProgress.value = 0
+  isLongPressing.value = false;
+  longPressProgress.value = 0;
   if (progressAnimationFrame) {
-    cancelAnimationFrame(progressAnimationFrame)
-    progressAnimationFrame = null
+    cancelAnimationFrame(progressAnimationFrame);
+    progressAnimationFrame = null;
   }
-}
+};
 
 const handleEraserMouseDown = (event: MouseEvent): void => {
-  event.stopPropagation()
-  isLongPress = false
-  isLongPressing.value = true
-  longPressProgress.value = 0
-  longPressStartTime = performance.now()
+  event.stopPropagation();
+  isLongPress = false;
+  isLongPressing.value = true;
+  longPressProgress.value = 0;
+  longPressStartTime = performance.now();
 
-  mousePosition.value = { x: event.clientX, y: event.clientY }
+  mousePosition.value = { x: event.clientX, y: event.clientY };
 
   const updateProgress = (): void => {
-    if (!longPressStartTime || !isLongPressing.value) return
+    if (!longPressStartTime || !isLongPressing.value) return;
 
-    const elapsed = performance.now() - longPressStartTime
-    longPressProgress.value = Math.min(elapsed / LONG_PRESS_DURATION_MS, 1)
+    const elapsed = performance.now() - longPressStartTime;
+    longPressProgress.value = Math.min(elapsed / LONG_PRESS_DURATION_MS, 1);
 
     if (longPressProgress.value < 1) {
-      progressAnimationFrame = requestAnimationFrame(updateProgress)
+      progressAnimationFrame = requestAnimationFrame(updateProgress);
     }
-  }
-  progressAnimationFrame = requestAnimationFrame(updateProgress)
+  };
+  progressAnimationFrame = requestAnimationFrame(updateProgress);
 
   longPressTimer.value = setTimeout(() => {
-    isLongPress = true
-    isLongPressing.value = false
-    longPressProgress.value = 0
-    isToggling.value = true
-    emit('toggle-multi-instance')
+    isLongPress = true;
+    isLongPressing.value = false;
+    longPressProgress.value = 0;
+    isToggling.value = true;
+    emit("toggle-multi-instance");
     setTimeout(() => {
-      isToggling.value = false
-    }, TOGGLE_DEBOUNCE_GUARD_MS)
-  }, LONG_PRESS_DURATION_MS)
-}
+      isToggling.value = false;
+    }, TOGGLE_DEBOUNCE_GUARD_MS);
+  }, LONG_PRESS_DURATION_MS);
+};
 
 const handleEraserMouseUp = (): void => {
-  cleanupLongPress()
+  cleanupLongPress();
   if (!isLongPress) {
-    emit('clear-workflow')
+    emit("clear-workflow");
   }
-}
+};
 
 const handleEraserMouseLeave = (): void => {
-  cleanupLongPress()
-}
+  cleanupLongPress();
+};
 
 const handleDelete = (): void => {
-  emit('update:show-delete-dialog', true)
-}
+  emit("update:show-delete-dialog", true);
+};
 
 const confirmDelete = (): void => {
-  emit('confirm-delete')
-}
+  emit("confirm-delete");
+};
 
 const cancelDelete = (): void => {
-  emit('cancel-delete')
-}
+  emit("cancel-delete");
+};
 
 const confirmClear = (): void => {
-  emit('confirm-clear')
-}
+  emit("confirm-clear");
+};
 
 const cancelClear = (): void => {
-  emit('cancel-clear')
-}
+  emit("cancel-clear");
+};
 
-let scheduleFiredAnimationTimer: ReturnType<typeof setTimeout> | null = null
+let scheduleFiredAnimationTimer: ReturnType<typeof setTimeout> | null = null;
 
 onUnmounted(() => {
-  cleanupLongPress()
+  cleanupLongPress();
   if (scheduleFiredAnimationTimer) {
-    clearTimeout(scheduleFiredAnimationTimer)
-    scheduleFiredAnimationTimer = null
+    clearTimeout(scheduleFiredAnimationTimer);
+    scheduleFiredAnimationTimer = null;
   }
-})
+});
 
-watch(() => props.isMultiInstanceEnabled, () => {
-  isToggling.value = false
-})
+watch(
+  () => props.isMultiInstanceEnabled,
+  () => {
+    isToggling.value = false;
+  },
+);
 
-watch(() => props.isScheduleFiredAnimating, (newValue) => {
-  if (newValue) {
-    if (scheduleFiredAnimationTimer) {
-      clearTimeout(scheduleFiredAnimationTimer)
+watch(
+  () => props.isScheduleFiredAnimating,
+  (newValue) => {
+    if (newValue) {
+      if (scheduleFiredAnimationTimer) {
+        clearTimeout(scheduleFiredAnimationTimer);
+      }
+      scheduleFiredAnimationTimer = setTimeout(() => {
+        emit("clear-schedule-fired-animation");
+      }, SCHEDULE_FIRED_ANIMATION_DURATION_MS);
     }
-    scheduleFiredAnimationTimer = setTimeout(() => {
-      emit('clear-schedule-fired-animation')
-    }, SCHEDULE_FIRED_ANIMATION_DURATION_MS)
-  }
-})
+  },
+);
 </script>
 
 <template>
@@ -172,7 +185,10 @@ watch(() => props.isScheduleFiredAnimating, (newValue) => {
     <button
       v-if="showScheduleButton"
       class="pod-action-button-base schedule-button"
-      :class="{ 'schedule-enabled': scheduleEnabled, 'schedule-fired-animating': isScheduleFiredAnimating }"
+      :class="{
+        'schedule-enabled': scheduleEnabled,
+        'schedule-fired-animating': isScheduleFiredAnimating,
+      }"
       :title="hasSchedule ? scheduleTooltip : undefined"
       @click.stop="$emit('open-schedule-modal')"
     >
@@ -193,14 +209,8 @@ watch(() => props.isScheduleFiredAnimating, (newValue) => {
       @mouseup="handleEraserMouseUp"
       @mouseleave="handleEraserMouseLeave"
     >
-      <span
-        v-if="isMultiInstanceEnabled"
-        class="multi-instance-icon-m"
-      >M</span>
-      <Eraser
-        v-else
-        :size="16"
-      />
+      <span v-if="isMultiInstanceEnabled" class="multi-instance-icon-m">M</span>
+      <Eraser v-else :size="16" />
     </button>
   </div>
 
@@ -210,10 +220,10 @@ watch(() => props.isScheduleFiredAnimating, (newValue) => {
   >
     <DialogContent>
       <DialogHeader>
-        <DialogTitle>清理 Workflow</DialogTitle>
-        <DialogDescription>
-          即將清空以下 POD 的所有訊息：
-        </DialogDescription>
+        <DialogTitle>{{ $t("pod.clearWorkflow.title") }}</DialogTitle>
+        <DialogDescription>{{
+          $t("pod.clearWorkflow.description")
+        }}</DialogDescription>
       </DialogHeader>
 
       <div class="py-4">
@@ -229,19 +239,19 @@ watch(() => props.isScheduleFiredAnimating, (newValue) => {
       </div>
 
       <DialogFooter>
-        <Button
-          variant="outline"
-          :disabled="isClearing"
-          @click="cancelClear"
-        >
-          取消
+        <Button variant="outline" :disabled="isClearing" @click="cancelClear">
+          {{ $t("common.cancel") }}
         </Button>
         <Button
           variant="destructive"
           :disabled="isClearing"
           @click="confirmClear"
         >
-          {{ isClearing ? '清理中...' : '確認清理' }}
+          {{
+            isClearing
+              ? $t("pod.clearWorkflow.clearing")
+              : $t("pod.clearWorkflow.confirm")
+          }}
         </Button>
       </DialogFooter>
     </DialogContent>
@@ -253,25 +263,19 @@ watch(() => props.isScheduleFiredAnimating, (newValue) => {
   >
     <DialogContent>
       <DialogHeader>
-        <DialogTitle>刪除 Pod</DialogTitle>
+        <DialogTitle>{{ $t("pod.delete.title") }}</DialogTitle>
         <DialogDescription>
-          確定要刪除「{{ podName }}」嗎？此操作無法復原。
+          {{ $t("pod.delete.description", { name: podName }) }}
         </DialogDescription>
       </DialogHeader>
 
       <DialogFooter>
-        <Button
-          variant="outline"
-          @click="cancelDelete"
-        >
-          取消
-        </Button>
-        <Button
-          variant="destructive"
-          @click="confirmDelete"
-        >
-          確認刪除
-        </Button>
+        <Button variant="outline" @click="cancelDelete">{{
+          $t("common.cancel")
+        }}</Button>
+        <Button variant="destructive" @click="confirmDelete">{{
+          $t("pod.delete.confirm")
+        }}</Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>
@@ -282,15 +286,10 @@ watch(() => props.isScheduleFiredAnimating, (newValue) => {
       class="long-press-indicator"
       :style="{
         left: mousePosition.x + 'px',
-        top: mousePosition.y + 'px'
+        top: mousePosition.y + 'px',
       }"
     >
-      <svg
-        class="long-press-ring"
-        width="52"
-        height="52"
-        viewBox="0 0 52 52"
-      >
+      <svg class="long-press-ring" width="52" height="52" viewBox="0 0 52 52">
         <circle
           cx="26"
           cy="26"

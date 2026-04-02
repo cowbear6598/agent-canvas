@@ -1,6 +1,7 @@
 import { ref, computed, watch, type Ref, type ComputedRef } from 'vue'
 import { websocketClient } from '@/services/websocket'
 import { useToast, type ToastCategory } from '@/composables/useToast'
+import { t } from '@/i18n'
 import { useCanvasContext } from '@/composables/canvas/useCanvasContext'
 import type { ProgressTask } from '@/components/canvas/ProgressNote.vue'
 import { PROGRESS_REMOVE_DELAY_ON_ERROR_MS } from '@/lib/constants'
@@ -93,7 +94,7 @@ export function useProgressTracker<TTask extends TimeoutTask, TProgressPayload, 
 
   const onTimeout = options.onTimeout ?? ((task: TTask, helpers: ProgressTaskHelpers): void => {
     task.status = 'failed'
-    task.message = '操作逾時，請重試'
+    task.message = t('composable.canvas.progressTimeout')
     onTimeoutExtra?.(task)
     helpers.scheduleRemove(task.requestId, PROGRESS_REMOVE_DELAY_ON_ERROR_MS)
   })

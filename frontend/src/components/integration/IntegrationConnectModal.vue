@@ -215,14 +215,23 @@ const handleClose = (): void => {
   <Dialog :open="open" @update:open="handleClose">
     <DialogContent class="max-w-lg">
       <DialogHeader>
-        <DialogTitle>連接 {{ config.label }}</DialogTitle>
+        <DialogTitle>{{
+          $t("integration.connect.title", { provider: config.label })
+        }}</DialogTitle>
         <DialogDescription>
           <template v-if="isNoResource">
-            選擇要與此 Pod 連接的 {{ config.label }} App
+            {{
+              $t("integration.connect.descriptionNoResource", {
+                provider: config.label,
+              })
+            }}
           </template>
           <template v-else>
-            選擇要與此 Pod 連接的 {{ config.label }} App 和{{
-              config.resourceLabel
+            {{
+              $t("integration.connect.descriptionWithResource", {
+                provider: config.label,
+                resourceLabel: config.resourceLabel,
+              })
             }}
           </template>
         </DialogDescription>
@@ -233,12 +242,12 @@ const handleClose = (): void => {
           v-if="apps.length === 0"
           class="py-4 text-sm text-muted-foreground"
         >
-          尚未有可用的 {{ config.label }} App，請先前往管理介面新增
+          {{ $t("integration.connect.noAppsHint", { provider: config.label }) }}
         </div>
 
         <template v-else>
           <div class="space-y-2">
-            <Label>選擇 App</Label>
+            <Label>{{ $t("integration.connect.selectApp") }}</Label>
             <RadioGroup v-model="selectedAppId" class="space-y-2">
               <div
                 v-for="app in apps"
@@ -325,7 +334,11 @@ const handleClose = (): void => {
 
             <!-- 資源列表選擇 -->
             <div v-else class="space-y-2">
-              <Label>選擇{{ config.resourceLabel }}</Label>
+              <Label>{{
+                $t("integration.connect.selectResource", {
+                  resourceLabel: config.resourceLabel,
+                })
+              }}</Label>
               <div
                 v-if="resources.length === 0"
                 class="text-sm text-muted-foreground"
@@ -356,13 +369,15 @@ const handleClose = (): void => {
       </div>
 
       <DialogFooter>
-        <Button variant="outline" @click="handleClose"> 取消 </Button>
+        <Button variant="outline" @click="handleClose">{{
+          $t("common.cancel")
+        }}</Button>
         <Button
           variant="default"
           :disabled="isConfirmDisabled"
           @click="handleConfirm"
         >
-          確認
+          {{ $t("common.confirm") }}
         </Button>
       </DialogFooter>
     </DialogContent>

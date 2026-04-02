@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, computed } from "vue";
+import { useI18n } from "vue-i18n";
 import {
   Dialog,
   DialogContent,
@@ -38,6 +39,7 @@ const emit = defineEmits<{
   "update:open": [value: boolean];
 }>();
 
+const { t } = useI18n();
 const { showSuccessToast } = useToast();
 const { withErrorToast } = useWebSocketErrorHandler();
 
@@ -72,7 +74,11 @@ const loadConfig = async (): Promise<void> => {
   isLoading.value = true;
   loadFailed.value = false;
   try {
-    const result = await withErrorToast(getConfig(), "Config", "載入失敗");
+    const result = await withErrorToast(
+      getConfig(),
+      "Config",
+      t("settings.loadFailed"),
+    );
     if (!result) {
       loadFailed.value = true;
       return;
@@ -118,7 +124,7 @@ const handleSave = async (): Promise<void> => {
         backupEnabled: backupEnabled.value,
       }),
       "Config",
-      "儲存失敗",
+      t("settings.saveFailed"),
     );
     if (result) {
       // API 成功後才更新 UI 狀態，避免失敗時 URL 被錯誤清空
@@ -129,7 +135,7 @@ const handleSave = async (): Promise<void> => {
         time: backupTime,
         enabled: backupEnabled.value,
       });
-      showSuccessToast("Config", "儲存成功");
+      showSuccessToast("Config", t("settings.saveSuccess"));
       emit("update:open", false);
     }
   } finally {
@@ -147,7 +153,8 @@ const handleTriggerBackup = async (): Promise<void> => {
     await triggerBackup(backupGitRemoteUrl.value);
     // 不跳 Toast；後端會推送 BACKUP_STARTED 事件，store 狀態自動更新
   } catch (err) {
-    const message = err instanceof Error ? err.message : "備份觸發失敗";
+    const message =
+      err instanceof Error ? err.message : t("settings.backup.backingUp");
     backupError.value = message;
   }
 };
@@ -182,18 +189,21 @@ watch(
   <Dialog :open="open" @update:open="handleClose">
     <DialogContent class="max-w-md">
       <DialogHeader>
-        <DialogTitle>全域設定</DialogTitle>
-        <DialogDescription>管理模型與全域參數設定</DialogDescription>
+        <DialogTitle>{{ $t("settings.title") }}</DialogTitle>
+        <DialogDescription class="sr-only">
+          {{ $t("settings.title") }}
+        </DialogDescription>
       </DialogHeader>
 
       <ScrollArea class="h-[420px] pr-3">
         <div class="space-y-4 py-2">
           <div class="space-y-2">
-            <Label>時區</Label>
-            <p class="text-xs text-muted-foreground">排程觸發時間的時區設定</p>
+            <Label>{{ $t("settings.timezone") }}</Label>
             <Select v-model="timezoneOffset">
               <SelectTrigger>
-                <SelectValue placeholder="選擇時區" />
+                <SelectValue
+                  :placeholder="$t('settings.timezonePlaceholder')"
+                />
               </SelectTrigger>
               <SelectContent position="popper">
                 <SelectItem
@@ -213,10 +223,7 @@ watch(
           <div class="space-y-2">
             <div class="flex items-center justify-between">
               <div>
-                <Label>備份設定</Label>
-                <p class="text-xs text-muted-foreground">
-                  設定 Git 遠端儲存庫，定時自動備份畫布資料
-                </p>
+                <Label>{{ $t("settings.backup.title") }}</Label>
               </div>
               <Switch v-model="backupEnabled" />
             </div>
@@ -224,7 +231,7 @@ watch(
             <div class="relative">
               <Input
                 v-model="backupGitRemoteUrl"
-                placeholder="git@github.com:user/backup.git"
+                :placeholder="$t('settings.backup.gitRemoteUrlPlaceholder')"
                 :disabled="!backupEnabled || isBackingUp"
                 :class="[
                   backupUrlError ? 'border-destructive' : '',
@@ -241,7 +248,7 @@ watch(
               />
             </div>
             <p v-if="backupUrlError" class="text-xs text-destructive">
-              請填寫 Git Remote URL
+              {{ $t("settings.backup.gitRemoteUrlRequired") }}
             </p>
             <p v-if="backupError" class="text-xs text-destructive">
               {{ backupError }}
@@ -249,12 +256,12 @@ watch(
 
             <div class="flex items-center justify-between gap-2">
               <div class="flex items-center gap-1.5">
-                <span class="text-xs text-muted-foreground leading-none"
-                  >每日備份時間</span
-                >
+                <span class="text-xs text-muted-foreground leading-none">{{
+                  $t("settings.backup.dailyBackupTime")
+                }}</span>
                 <Select v-model="backupHour" :disabled="!backupEnabled">
                   <SelectTrigger class="w-20">
-                    <SelectValue placeholder="時" />
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent position="popper">
                     <SelectItem
@@ -269,7 +276,7 @@ watch(
                 <span class="text-sm leading-none">:</span>
                 <Select v-model="backupMinute" :disabled="!backupEnabled">
                   <SelectTrigger class="w-20">
-                    <SelectValue placeholder="分" />
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent position="popper">
                     <SelectItem
@@ -288,7 +295,11 @@ watch(
                 :disabled="isBackupActionsDisabled || isBackingUp"
                 @click="handleTriggerBackup"
               >
-                {{ isBackingUp ? "備份中..." : "立即備份" }}
+                {{
+                  isBackingUp
+                    ? $t("settings.backup.backingUp")
+                    : $t("settings.backup.backupNow")
+                }}
               </Button>
             </div>
 
@@ -296,7 +307,11 @@ watch(
               v-if="configStore.lastBackupTime"
               class="text-xs text-muted-foreground"
             >
-              上次備份：{{ configStore.lastBackupTime }}
+              {{
+                $t("settings.backup.lastBackup", {
+                  time: configStore.lastBackupTime,
+                })
+              }}
             </div>
           </div>
         </div>
@@ -307,7 +322,7 @@ watch(
           :disabled="isLoading || isSaving || loadFailed"
           @click="handleSave"
         >
-          {{ isSaving ? "儲存中..." : "儲存" }}
+          {{ isSaving ? $t("settings.saving") : $t("common.save") }}
         </Button>
       </DialogFooter>
     </DialogContent>

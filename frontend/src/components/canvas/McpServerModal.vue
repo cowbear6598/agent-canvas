@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch } from "vue";
 import {
   Dialog,
   DialogContent,
@@ -7,142 +7,167 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import type { McpServerConfig } from '@/types'
-import { useModalForm } from '@/composables/useModalForm'
-import { RESOURCE_NAME_PATTERN } from '@/lib/validators'
-import { safeJsonParse } from '@/utils/safeJsonParse'
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import type { McpServerConfig } from "@/types";
+import { useModalForm } from "@/composables/useModalForm";
+import { RESOURCE_NAME_PATTERN } from "@/lib/validators";
+import { safeJsonParse } from "@/utils/safeJsonParse";
+import { useI18n } from "vue-i18n";
 
 interface Props {
-  open: boolean
-  mode: 'create' | 'edit'
-  initialName?: string
-  initialConfig?: McpServerConfig
+  open: boolean;
+  mode: "create" | "edit";
+  initialName?: string;
+  initialConfig?: McpServerConfig;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   initialName: undefined,
   initialConfig: undefined,
-})
+});
 
 const emit = defineEmits<{
-  'update:open': [value: boolean]
-  'submit': [payload: { name: string; config: McpServerConfig }]
-}>()
+  "update:open": [value: boolean];
+  submit: [payload: { name: string; config: McpServerConfig }];
+}>();
 
-const jsonPlaceholder = '{"my-mcp-server": {"command": "npx", "args": ["-y", "my-mcp"]}}'
+const { t } = useI18n();
 
-const validateMcpServerName = (parsed: Record<string, unknown>): string | null => {
-  const keys = Object.keys(parsed)
-  if (keys.length === 0) return '請輸入至少一個 MCP Server 設定'
+const jsonPlaceholder =
+  '{"my-mcp-server": {"command": "npx", "args": ["-y", "my-mcp"]}}';
 
-  const name = keys[0] as string
-  if (!RESOURCE_NAME_PATTERN.test(name)) return '名稱只能包含英數字、底線和連字號'
+const validateMcpServerName = (
+  parsed: Record<string, unknown>,
+): string | null => {
+  const keys = Object.keys(parsed);
+  if (keys.length === 0) return t("canvas.mcpServer.minOneServer");
 
-  return null
-}
+  const name = keys[0] as string;
+  if (!RESOURCE_NAME_PATTERN.test(name))
+    return t("canvas.mcpServer.nameInvalid");
 
-const validateMcpServerMode = (config: Record<string, unknown>): string | null => {
-  const isStdioMode = typeof config.command === 'string'
-  const isHttpMode = typeof config.type === 'string' && typeof config.url === 'string'
+  return null;
+};
+
+const validateMcpServerMode = (
+  config: Record<string, unknown>,
+): string | null => {
+  const isStdioMode = typeof config.command === "string";
+  const isHttpMode =
+    typeof config.type === "string" && typeof config.url === "string";
 
   if (!isStdioMode && !isHttpMode) {
-    return '設定必須包含 command 欄位（stdio 模式）或 type + url 欄位（http/sse 模式）'
+    return t("canvas.mcpServer.modeError");
   }
 
-  return null
-}
+  return null;
+};
 
-const validateStdioConfig = (config: Record<string, unknown>): string | null => {
-  if (typeof config.command !== 'string') return null
-  if (config.command.trim() === '') return 'command 欄位不能為空'
+const validateStdioConfig = (
+  config: Record<string, unknown>,
+): string | null => {
+  if (typeof config.command !== "string") return null;
+  if (config.command.trim() === "") return t("canvas.mcpServer.commandEmpty");
 
-  return null
-}
+  return null;
+};
 
 const validateHttpConfig = (config: Record<string, unknown>): string | null => {
-  const isHttpMode = typeof config.type === 'string' && typeof config.url === 'string'
-  if (!isHttpMode) return null
+  const isHttpMode =
+    typeof config.type === "string" && typeof config.url === "string";
+  if (!isHttpMode) return null;
 
   if (!URL.canParse(config.url as string)) {
-    return 'url 欄位格式不正確'
+    return t("canvas.mcpServer.urlInvalid");
   }
 
-  return null
-}
+  return null;
+};
 
 const validateArgs = (config: Record<string, unknown>): string | null => {
-  if (config.args === undefined) return null
+  if (config.args === undefined) return null;
 
   const isValidArgs =
-    Array.isArray(config.args) && config.args.every((arg) => typeof arg === 'string')
-  if (!isValidArgs) return 'args 欄位必須是字串陣列'
+    Array.isArray(config.args) &&
+    config.args.every((arg) => typeof arg === "string");
+  if (!isValidArgs) return t("canvas.mcpServer.argsInvalid");
 
-  return null
-}
+  return null;
+};
 
-const lastParsed = ref<Record<string, unknown> | null>(null)
+const lastParsed = ref<Record<string, unknown> | null>(null);
 
 const parseAndValidateJson = (jsonText: string): string | null => {
-  const parsed = safeJsonParse<Record<string, unknown>>(jsonText)
-  if (!parsed) return 'JSON 格式錯誤，請檢查語法'
+  const parsed = safeJsonParse<Record<string, unknown>>(jsonText);
+  if (!parsed) return t("canvas.mcpServer.parseError");
 
-  const nameError = validateMcpServerName(parsed)
-  if (nameError) return nameError
+  const nameError = validateMcpServerName(parsed);
+  if (nameError) return nameError;
 
-  const name = Object.keys(parsed)[0] as string
-  const config = parsed[name] as Record<string, unknown>
+  const name = Object.keys(parsed)[0] as string;
+  const config = parsed[name] as Record<string, unknown>;
 
   const configError =
     validateMcpServerMode(config) ??
     validateStdioConfig(config) ??
     validateHttpConfig(config) ??
-    validateArgs(config)
+    validateArgs(config);
 
-  if (configError) return configError
+  if (configError) return configError;
 
-  lastParsed.value = parsed
-  return null
-}
+  lastParsed.value = parsed;
+  return null;
+};
 
-const { inputValue: jsonText, errorMessage, handleSubmit, handleClose, resetForm } = useModalForm<string>({
+const {
+  inputValue: jsonText,
+  errorMessage,
+  handleSubmit,
+  handleClose,
+  resetForm,
+} = useModalForm<string>({
   validator: parseAndValidateJson,
   onSubmit: async () => {
-    const parsed = lastParsed.value
-    if (!parsed) return '解析結果遺失，請重新提交'
-    const name = Object.keys(parsed)[0] as string
-    const config = parsed[name] as McpServerConfig
-    emit('submit', { name, config })
-    return null
+    const parsed = lastParsed.value;
+    if (!parsed) return t("canvas.mcpServer.parseLost");
+    const name = Object.keys(parsed)[0] as string;
+    const config = parsed[name] as McpServerConfig;
+    emit("submit", { name, config });
+    return null;
   },
-  onClose: () => emit('update:open', false),
-})
+  onClose: () => emit("update:open", false),
+});
 
 watch(
   () => props.open,
   (newOpen) => {
     if (newOpen) {
-      if (props.mode === 'edit' && props.initialName && props.initialConfig) {
-        jsonText.value = JSON.stringify({ [props.initialName]: props.initialConfig }, null, 2)
+      if (props.mode === "edit" && props.initialName && props.initialConfig) {
+        jsonText.value = JSON.stringify(
+          { [props.initialName]: props.initialConfig },
+          null,
+          2,
+        );
       } else {
-        resetForm()
+        resetForm();
       }
     }
-  }
-)
+  },
+);
 </script>
 
 <template>
-  <Dialog
-    :open="open"
-    @update:open="handleClose"
-  >
+  <Dialog :open="open" @update:open="handleClose">
     <DialogContent class="max-w-2xl">
       <DialogHeader>
-        <DialogTitle>{{ mode === 'create' ? '新增 MCP Server' : '編輯 MCP Server' }}</DialogTitle>
+        <DialogTitle>{{
+          mode === "create"
+            ? $t("canvas.mcpServer.createTitle")
+            : $t("canvas.mcpServer.editTitle")
+        }}</DialogTitle>
         <DialogDescription>
-          請貼入 JSON 格式的 MCP Server 設定，第一個 key 為名稱，value 為設定內容
+          {{ $t("canvas.mcpServer.description") }}
         </DialogDescription>
       </DialogHeader>
 
@@ -153,26 +178,17 @@ watch(
           class="w-full h-[300px] p-3 bg-card border-2 border-doodle-ink rounded text-base font-mono resize-none focus:outline-none focus:ring-2 focus:ring-doodle-ink/50 doodle-textarea"
         />
 
-        <p
-          v-if="errorMessage"
-          class="text-sm text-red-500 font-mono"
-        >
+        <p v-if="errorMessage" class="text-sm text-red-500 font-mono">
           {{ errorMessage }}
         </p>
       </div>
 
       <DialogFooter>
-        <Button
-          variant="outline"
-          @click="handleClose"
-        >
-          取消
+        <Button variant="outline" @click="handleClose">
+          {{ $t("common.cancel") }}
         </Button>
-        <Button
-          variant="default"
-          @click="handleSubmit"
-        >
-          {{ mode === 'create' ? '建立' : '儲存' }}
+        <Button variant="default" @click="handleSubmit">
+          {{ mode === "create" ? $t("common.create") : $t("common.save") }}
         </Button>
       </DialogFooter>
     </DialogContent>

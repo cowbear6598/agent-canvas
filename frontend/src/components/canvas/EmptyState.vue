@@ -1,5 +1,4 @@
-<script setup lang="ts">
-</script>
+<script setup lang="ts"></script>
 
 <template>
   <div
@@ -20,7 +19,7 @@
         </svg>
       </div>
       <p class="font-sans text-2xl text-muted-foreground whitespace-nowrap">
-        Right-click to create Pod or Note
+        {{ $t("canvas.emptyState") }}
       </p>
     </div>
   </div>

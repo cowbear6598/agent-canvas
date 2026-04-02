@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { getProvider } from '@/integration/providerRegistry'
+import { computed } from "vue";
+import { getProvider } from "@/integration/providerRegistry";
 
 const props = defineProps<{
-  provider: string
-}>()
+  provider: string;
+}>();
 
-const config = computed(() => getProvider(props.provider))
+const config = computed(() => getProvider(props.provider));
 </script>
 
 <template>
@@ -16,12 +16,9 @@ const config = computed(() => getProvider(props.provider))
       :data-testid="`${provider}-blocked-hint`"
     >
       <div class="flex items-center justify-center gap-2 py-4">
-        <component
-          :is="config.icon"
-          :size="16"
-        />
+        <component :is="config.icon" :size="16" />
         <p class="text-sm font-mono text-muted-foreground">
-          此 Pod 已連接 {{ config.label }}，訊息由 {{ config.label }} 驅動
+          {{ $t("chat.integrationBlockedHint", { label: config.label }) }}
         </p>
       </div>
     </div>

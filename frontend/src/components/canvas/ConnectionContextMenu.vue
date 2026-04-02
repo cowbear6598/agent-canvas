@@ -5,6 +5,7 @@ import { Zap, Brain, ArrowRight, ChevronRight } from "lucide-vue-next";
 import { ref, onMounted, onUnmounted } from "vue";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useToast } from "@/composables/useToast";
+import { useI18n } from "vue-i18n";
 import {
   DEFAULT_TOAST_DURATION_MS,
   SHORT_TOAST_DURATION_MS,
@@ -29,6 +30,7 @@ const emit = defineEmits<{
 
 const connectionStore = useConnectionStore();
 const { toast } = useToast();
+const { t } = useI18n();
 
 const handleSetTriggerMode = async (targetMode: TriggerMode): Promise<void> => {
   if (targetMode === props.currentTriggerMode) {
@@ -43,21 +45,23 @@ const handleSetTriggerMode = async (targetMode: TriggerMode): Promise<void> => {
 
   if (result) {
     const modeTextMap: Record<TriggerMode, string> = {
-      auto: "自動觸發",
-      "ai-decide": "AI 判斷",
-      direct: "直接觸發",
+      auto: t("canvas.connectionContextMenu.triggerModeAutoLabel"),
+      "ai-decide": t("canvas.connectionContextMenu.triggerModeAiDecideLabel"),
+      direct: t("canvas.connectionContextMenu.triggerModeDirectLabel"),
     };
     toast({
-      title: "觸發模式已變更",
-      description: `已切換為${modeTextMap[targetMode]}模式`,
+      title: t("canvas.connectionContextMenu.triggerModeChanged"),
+      description: t("canvas.connectionContextMenu.triggerModeChangedDesc", {
+        mode: modeTextMap[targetMode],
+      }),
       duration: SHORT_TOAST_DURATION_MS,
     });
     emit("trigger-mode-changed");
     emit("close");
   } else {
     toast({
-      title: "變更失敗",
-      description: "無法變更觸發模式",
+      title: t("canvas.connectionContextMenu.changeFailed"),
+      description: t("canvas.connectionContextMenu.triggerModeChangeFailed"),
       duration: DEFAULT_TOAST_DURATION_MS,
     });
   }
@@ -87,7 +91,9 @@ const handleSetModel = async (
   if (result) {
     toast({
       title: successTitle,
-      description: `已切換為 ${MODEL_LABEL_MAP[targetModel]}`,
+      description: t("canvas.connectionContextMenu.modelSwitched", {
+        model: MODEL_LABEL_MAP[targetModel],
+      }),
       duration: SHORT_TOAST_DURATION_MS,
     });
     if (changedEvent === "summary-model-changed") {
@@ -98,7 +104,7 @@ const handleSetModel = async (
     emit("close");
   } else {
     toast({
-      title: "變更失敗",
+      title: t("canvas.connectionContextMenu.changeFailed"),
       description: failDesc,
       duration: DEFAULT_TOAST_DURATION_MS,
     });
@@ -110,8 +116,8 @@ const handleSetSummaryModel = (targetModel: ModelType): Promise<void> =>
     targetModel,
     props.currentSummaryModel,
     connectionStore.updateConnectionSummaryModel,
-    "總結模型已變更",
-    "無法變更總結模型",
+    t("canvas.connectionContextMenu.summaryModelChanged"),
+    t("canvas.connectionContextMenu.summaryModelChangeFailed"),
     "summary-model-changed",
   );
 
@@ -120,8 +126,8 @@ const handleSetAiDecideModel = (targetModel: ModelType): Promise<void> =>
     targetModel,
     props.currentAiDecideModel,
     connectionStore.updateConnectionAiDecideModel,
-    "AI 決策模型已變更",
-    "無法變更 AI 決策模型",
+    t("canvas.connectionContextMenu.aiDecideModelChanged"),
+    t("canvas.connectionContextMenu.aiDecideModelChangeFailed"),
     "ai-decide-model-changed",
   );
 
@@ -193,7 +199,7 @@ const MODEL_OPTIONS: { value: ModelType; label: string }[] = [
             : 'text-foreground',
         ]"
       >
-        自動觸發 (Auto)
+        {{ $t("canvas.connectionContextMenu.triggerModeAuto") }}
       </span>
     </button>
 
@@ -221,7 +227,7 @@ const MODEL_OPTIONS: { value: ModelType; label: string }[] = [
             : 'text-foreground',
         ]"
       >
-        直接觸發 (Direct)
+        {{ $t("canvas.connectionContextMenu.triggerModeDirect") }}
       </span>
     </button>
 
@@ -251,7 +257,7 @@ const MODEL_OPTIONS: { value: ModelType; label: string }[] = [
             : 'text-foreground',
         ]"
       >
-        AI 判斷 (AI Decide)
+        {{ $t("canvas.connectionContextMenu.triggerModeAiDecide") }}
       </span>
     </button>
 
@@ -267,7 +273,9 @@ const MODEL_OPTIONS: { value: ModelType; label: string }[] = [
         class="w-full flex items-center justify-between gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary"
         :class="{ 'bg-secondary': isSummaryMenuOpen }"
       >
-        <span class="font-mono text-foreground">Summary Model</span>
+        <span class="font-mono text-foreground">{{
+          $t("canvas.connectionContextMenu.summaryModel")
+        }}</span>
         <ChevronRight :size="12" class="text-muted-foreground" />
       </button>
 
@@ -319,7 +327,9 @@ const MODEL_OPTIONS: { value: ModelType; label: string }[] = [
         class="w-full flex items-center justify-between gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary"
         :class="{ 'bg-secondary': isAiModelMenuOpen }"
       >
-        <span class="font-mono text-foreground">AI Model</span>
+        <span class="font-mono text-foreground">{{
+          $t("canvas.connectionContextMenu.aiModel")
+        }}</span>
         <ChevronRight :size="12" class="text-muted-foreground" />
       </button>
 

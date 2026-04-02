@@ -145,10 +145,12 @@ const handleCopyWebhookUrl = async (
   <Dialog :open="open" @update:open="handleClose">
     <DialogContent v-if="config" class="max-w-2xl">
       <DialogHeader>
-        <DialogTitle>{{ config.label }} Apps 管理</DialogTitle>
-        <DialogDescription
-          >管理已註冊的 {{ config.label }} App 與連線狀態</DialogDescription
-        >
+        <DialogTitle>{{
+          $t("integration.apps.title", { provider: config.label })
+        }}</DialogTitle>
+        <DialogDescription class="sr-only">
+          {{ $t("integration.apps.title", { provider: config.label }) }}
+        </DialogDescription>
       </DialogHeader>
 
       <div class="space-y-3">
@@ -239,14 +241,18 @@ const handleCopyWebhookUrl = async (
 
           <div class="flex justify-end gap-2">
             <Button variant="outline" @click="handleCancelAddForm">
-              取消
+              {{ $t("common.cancel") }}
             </Button>
             <Button
               variant="default"
               :disabled="isSubmitting || !isFormValid"
               @click="handleConfirmAdd"
             >
-              {{ isSubmitting ? "連線中..." : "確認新增" }}
+              {{
+                isSubmitting
+                  ? $t("integration.apps.connecting")
+                  : $t("integration.apps.confirmAdd")
+              }}
             </Button>
           </div>
         </div>
@@ -258,7 +264,7 @@ const handleCopyWebhookUrl = async (
           @click="handleOpenAddForm"
         >
           <Plus class="size-4" />
-          新增 App
+          {{ $t("integration.apps.addApp") }}
         </Button>
       </div>
 

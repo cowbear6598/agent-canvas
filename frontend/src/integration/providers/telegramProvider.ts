@@ -1,64 +1,103 @@
-import type { IntegrationApp, IntegrationProviderConfig } from '@/types/integration'
-import TelegramIcon from '@/components/icons/TelegramIcon.vue'
+import type {
+  IntegrationApp,
+  IntegrationProviderConfig,
+} from "@/types/integration";
+import TelegramIcon from "@/components/icons/TelegramIcon.vue";
+import { t } from "@/i18n";
 
-const CONNECTION_STATUS_CONFIG: IntegrationProviderConfig['connectionStatusConfig'] = {
-  connected: { dotClass: 'bg-green-500', bg: 'bg-white', label: '已連接' },
-  disconnected: { dotClass: 'bg-red-500', bg: 'bg-red-100', label: '已斷線' },
-  error: { dotClass: 'bg-red-500', bg: 'bg-red-100', label: '錯誤' },
-}
+const CONNECTION_STATUS_CONFIG: IntegrationProviderConfig["connectionStatusConfig"] =
+  {
+    connected: { dotClass: "bg-green-500", bg: "bg-white", label: "connected" },
+    disconnected: {
+      dotClass: "bg-red-500",
+      bg: "bg-red-100",
+      label: "disconnected",
+    },
+    error: { dotClass: "bg-red-500", bg: "bg-red-100", label: "error" },
+  };
 
 function transformApp(rawApp: Record<string, unknown>): IntegrationApp {
   return {
-    id: String(rawApp.id ?? ''),
-    name: String(rawApp.name ?? ''),
-    connectionStatus: (rawApp.connectionStatus as IntegrationApp['connectionStatus']) ?? 'disconnected',
-    provider: 'telegram',
+    id: String(rawApp.id ?? ""),
+    name: String(rawApp.name ?? ""),
+    connectionStatus:
+      (rawApp.connectionStatus as IntegrationApp["connectionStatus"]) ??
+      "disconnected",
+    provider: "telegram",
     resources: [],
     raw: {
       botUsername: rawApp.botUsername,
     },
-  }
+  };
 }
 
 export const telegramProviderConfig: IntegrationProviderConfig = {
-  name: 'telegram',
-  label: 'Telegram',
+  name: "telegram",
+  label: "Telegram",
   icon: TelegramIcon,
-  description: '管理 Telegram Bot 連線與設定',
+  description: "integration.telegram.description",
 
-  createFormFields: [
-    {
-      key: 'name',
-      label: '名稱',
-      placeholder: '例如：My Telegram Bot',
-      type: 'text',
-      validate: (v) => (v === '' ? '名稱不可為空' : ''),
-    },
-    {
-      key: 'botToken',
-      label: 'Bot Token',
-      placeholder: '123456:ABC-DEF...',
-      type: 'password',
-      validate: (v) => (v === '' ? 'Bot Token 不可為空' : ''),
-    },
-  ],
+  get createFormFields() {
+    return [
+      {
+        key: "name",
+        get label() {
+          return t("integration.telegram.field.name.label");
+        },
+        get placeholder() {
+          return t("integration.telegram.field.name.placeholder");
+        },
+        type: "text" as const,
+        validate: (v: string) =>
+          v === "" ? t("integration.telegram.validate.nameRequired") : "",
+      },
+      {
+        key: "botToken",
+        get label() {
+          return t("integration.telegram.field.botToken.label");
+        },
+        get placeholder() {
+          return t("integration.telegram.field.botToken.placeholder");
+        },
+        type: "password" as const,
+        validate: (v: string) =>
+          v === "" ? t("integration.telegram.validate.botTokenRequired") : "",
+      },
+    ];
+  },
 
-  resourceLabel: 'User ID',
-  emptyResourceHint: '',
-  emptyAppHint: '尚未註冊任何 Telegram Bot',
+  get resourceLabel() {
+    return t("integration.telegram.resourceLabel");
+  },
+  get emptyResourceHint() {
+    return t("integration.telegram.emptyResourceHint");
+  },
+  get emptyAppHint() {
+    return t("integration.telegram.emptyAppHint");
+  },
 
   bindingExtraFields: [],
 
   hasManualResourceInput: () => true,
 
-  manualResourceInputConfig: {
-    label: 'Telegram User ID',
-    placeholder: '請輸入 User ID',
-    hint: '請輸入 Telegram User ID（可透過 @userinfobot 查詢）',
-    validate: (v) => {
-      const n = parseInt(v, 10)
-      return !v || isNaN(n) || n <= 0 ? 'User ID 必須為正整數' : ''
-    },
+  get manualResourceInputConfig() {
+    return {
+      get label() {
+        return t("integration.telegram.field.userId.label");
+      },
+      get placeholder() {
+        return t("integration.telegram.field.userId.placeholder");
+      },
+      get hint() {
+        return t("integration.telegram.field.userId.hint");
+      },
+      validate: (v: string) => {
+        const n = parseInt(v, 10);
+        return !v || isNaN(n) || n <= 0
+          ? t("integration.telegram.validate.userIdInvalid")
+          : "";
+      },
+    };
   },
 
   connectionStatusConfig: CONNECTION_STATUS_CONFIG,
@@ -79,6 +118,6 @@ export const telegramProviderConfig: IntegrationProviderConfig = {
   buildBindPayload: (appId, resourceId) => ({
     appId,
     resourceId,
-    extra: { chatType: 'private' },
+    extra: { chatType: "private" },
   }),
-}
+};

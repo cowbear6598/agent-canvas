@@ -3,6 +3,7 @@ import { WebSocketResponseEvents } from '@/types/websocket'
 import type { RepositoryCheckoutBranchProgressPayload, RepositoryBranchCheckedOutPayload } from '@/types/websocket'
 import { useCanvasContext } from '@/composables/canvas/useCanvasContext'
 import { useProgressTracker, handleProgressError, markTaskCompleted } from '@/composables/canvas/useProgressTracker'
+import { t } from '@/i18n'
 import type { ProgressTask } from '@/components/canvas/ProgressNote.vue'
 import { PROGRESS_REMOVE_DELAY_MS } from '@/lib/constants'
 
@@ -44,7 +45,7 @@ export function useCheckoutProgress(): UseCheckoutProgressReturn {
       branchName: payload.branchName,
       repositoryId: '',
       progress: 0,
-      message: '準備切換分支...',
+      message: t('composable.gitCheckout.preparing'),
       status: 'checking-out',
     }),
 
@@ -57,7 +58,7 @@ export function useCheckoutProgress(): UseCheckoutProgressReturn {
 
     onResult: (task, payload, helpers) => {
       if (payload.success && payload.branchName && payload.repositoryId) {
-        markTaskCompleted(task, '切換完成')
+        markTaskCompleted(task, t('composable.gitCheckout.completed'))
 
         const existingRepository = repositoryStore.typedAvailableItems.find(
           (item) => item.id === payload.repositoryId
@@ -66,14 +67,14 @@ export function useCheckoutProgress(): UseCheckoutProgressReturn {
           existingRepository.currentBranch = payload.branchName
         }
 
-        helpers.showSuccessToast('Git', '切換分支成功', payload.branchName)
+        helpers.showSuccessToast('Git', t('composable.gitCheckout.success'), payload.branchName)
 
         helpers.scheduleRemove(payload.requestId, PROGRESS_REMOVE_DELAY_MS)
       } else {
         handleProgressError(task, helpers, payload.requestId, payload.error, {
           category: 'Git',
-          action: '切換分支失敗',
-          defaultMessage: '切換分支失敗',
+          action: t('composable.gitCheckout.failed'),
+          defaultMessage: t('composable.gitCheckout.failed'),
         })
       }
     },
@@ -93,7 +94,7 @@ export function useCheckoutProgress(): UseCheckoutProgressReturn {
       branchName,
       repositoryId,
       progress: 0,
-      message: '準備切換分支...',
+      message: t('composable.gitCheckout.preparing'),
       status: 'checking-out',
     })
   }

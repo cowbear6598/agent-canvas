@@ -5,7 +5,7 @@
       data-testid="workflow-blocked-hint"
     >
       <p class="text-sm font-mono text-muted-foreground text-center py-4">
-        此 Pod 在 Workflow 中，僅頭尾 Pod 可輸入
+        {{ $t("chat.workflowBlockedHint") }}
       </p>
     </div>
   </div>

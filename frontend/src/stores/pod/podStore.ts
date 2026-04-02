@@ -33,6 +33,7 @@ import type {
 } from "@/types/websocket";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useToast } from "@/composables/useToast";
+import { t } from "@/i18n";
 import { useCanvasWebSocketAction } from "@/composables/useCanvasWebSocketAction";
 import {
   isValidPod as isValidPodFn,
@@ -139,20 +140,20 @@ export const usePodStore = defineStore("pod", () => {
       },
       {
         errorCategory: "Pod",
-        errorAction: "建立失敗",
-        errorMessage: "Pod 建立失敗",
+        errorAction: t("common.error.create"),
+        errorMessage: t("store.pod.createFailed"),
       },
     );
 
     if (!result.success) return null;
 
     if (!result.data.pod) {
-      const errorMessage = "Pod 建立失敗：後端未回傳 Pod 資料";
-      showErrorToast("Pod", "建立失敗", errorMessage);
+      const errorMessage = t("store.pod.createBackendFailed");
+      showErrorToast("Pod", t("common.error.create"), errorMessage);
       return null;
     }
 
-    showSuccessToast("Pod", "建立成功", pod.name);
+    showSuccessToast("Pod", t("common.success.create"), pod.name);
 
     return {
       ...result.data.pod,
@@ -175,14 +176,14 @@ export const usePodStore = defineStore("pod", () => {
       },
       {
         errorCategory: "Pod",
-        errorAction: "刪除失敗",
-        errorMessage: "Pod 刪除失敗",
+        errorAction: t("common.error.delete"),
+        errorMessage: t("store.pod.deleteFailed"),
       },
     );
 
     if (!result.success) return;
 
-    showSuccessToast("Pod", "刪除成功", podName);
+    showSuccessToast("Pod", t("common.success.delete"), podName);
   }
 
   function syncPodsFromBackend(podsData: Pod[]): void {
@@ -269,14 +270,14 @@ export const usePodStore = defineStore("pod", () => {
       },
       {
         errorCategory: "Pod",
-        errorAction: "重新命名失敗",
-        errorMessage: "Pod 重新命名失敗",
+        errorAction: t("store.pod.renameFailed"),
+        errorMessage: t("store.pod.renameFailed"),
       },
     );
 
     if (!result.success) return false;
 
-    showSuccessToast("Pod", "重新命名成功", name);
+    showSuccessToast("Pod", t("store.pod.renamed"), name);
     return true;
   }
 
@@ -295,15 +296,18 @@ export const usePodStore = defineStore("pod", () => {
       },
       {
         errorCategory: "Schedule",
-        errorAction: "設定失敗",
-        errorMessage: "Schedule 設定失敗",
+        errorAction: t("common.error.operation"),
+        errorMessage: t("store.pod.scheduleFailed"),
       },
     );
 
     if (!result.success || !result.data.success || !result.data.pod)
       return null;
 
-    const action = schedule === null ? "清除成功" : "更新成功";
+    const action =
+      schedule === null
+        ? t("common.success.delete")
+        : t("common.success.update");
     showSuccessToast("Schedule", action);
     return result.data.pod;
   }
@@ -387,15 +391,15 @@ export const usePodStore = defineStore("pod", () => {
       },
       {
         errorCategory: "Pod",
-        errorAction: "設定失敗",
-        errorMessage: "Pod 設定失敗",
+        errorAction: t("common.error.operation"),
+        errorMessage: t("store.pod.multiInstanceFailed"),
       },
     );
 
     if (!result.success || !result.data.success || !result.data.pod)
       return null;
 
-    showSuccessToast("Pod", "設定成功");
+    showSuccessToast("Pod", t("common.success.update"));
     return result.data.pod;
   }
 

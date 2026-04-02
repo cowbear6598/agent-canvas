@@ -120,17 +120,23 @@
   <Dialog :open="showDeleteDialog" @update:open="showDeleteDialog = false">
     <DialogContent class="max-w-md">
       <DialogHeader>
-        <DialogTitle>確認刪除</DialogTitle>
+        <DialogTitle>{{ $t("canvas.sidebar.confirmDelete") }}</DialogTitle>
         <DialogDescription>
-          確定要刪除 Canvas「{{ deleteTargetName }}」？此操作無法復原。
+          {{
+            $t("canvas.sidebar.confirmDeleteMessage", {
+              name: deleteTargetName,
+            })
+          }}
         </DialogDescription>
       </DialogHeader>
 
       <DialogFooter>
         <Button variant="outline" @click="showDeleteDialog = false">
-          取消
+          {{ $t("common.cancel") }}
         </Button>
-        <Button variant="destructive" @click="confirmDelete"> 刪除 </Button>
+        <Button variant="destructive" @click="confirmDelete">{{
+          $t("common.delete")
+        }}</Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>

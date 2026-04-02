@@ -1,42 +1,71 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
-import { Palette, Wrench, FolderOpen, Bot, Github, FolderPlus, FilePlus, Import, Server } from 'lucide-vue-next'
-import type { Position, PodTypeConfig, OutputStyleListItem, Skill, Repository, SubAgent, McpServer } from '@/types'
-import { podTypes } from '@/data/podTypes'
-import { useCanvasContext } from '@/composables/canvas/useCanvasContext'
-import { useMenuPosition } from '@/composables/useMenuPosition'
-import { useSkillImport } from '@/composables/useSkillImport'
-import PodTypeMenuSubmenu from './PodTypeMenuSubmenu.vue'
+import { ref, onMounted, onUnmounted, computed } from "vue";
+import {
+  Palette,
+  Wrench,
+  FolderOpen,
+  Bot,
+  Github,
+  FolderPlus,
+  FilePlus,
+  Import,
+  Server,
+} from "lucide-vue-next";
+import type {
+  Position,
+  PodTypeConfig,
+  OutputStyleListItem,
+  Skill,
+  Repository,
+  SubAgent,
+  McpServer,
+} from "@/types";
+import { podTypes } from "@/data/podTypes";
+import { useCanvasContext } from "@/composables/canvas/useCanvasContext";
+import { useMenuPosition } from "@/composables/useMenuPosition";
+import { useSkillImport } from "@/composables/useSkillImport";
+import PodTypeMenuSubmenu from "./PodTypeMenuSubmenu.vue";
+import { useI18n } from "vue-i18n";
 
 interface Props {
-  position: Position
+  position: Position;
 }
 
-const props = defineProps<Props>()
+const props = defineProps<Props>();
 
-type ItemType = 'outputStyle' | 'skill' | 'repository' | 'subAgent' | 'command' | 'mcpServer'
-type ResourceType = 'outputStyle' | 'subAgent' | 'command'
-type GroupType = 'outputStyleGroup' | 'subAgentGroup' | 'commandGroup'
+type ItemType =
+  | "outputStyle"
+  | "skill"
+  | "repository"
+  | "subAgent"
+  | "command"
+  | "mcpServer";
+type ResourceType = "outputStyle" | "subAgent" | "command";
+type GroupType = "outputStyleGroup" | "subAgentGroup" | "commandGroup";
 
 const emit = defineEmits<{
-  select: [config: PodTypeConfig]
-  'create-output-style-note': [outputStyleId: string]
-  'create-skill-note': [skillId: string]
-  'create-subagent-note': [subAgentId: string]
-  'create-repository-note': [repositoryId: string]
-  'create-command-note': [commandId: string]
-  'create-mcp-server-note': [mcpServerId: string]
-  'clone-started': [payload: { requestId: string; repoName: string }]
-  'open-create-modal': [resourceType: ResourceType, title: string]
-  'open-edit-modal': [resourceType: ResourceType, id: string]
-  'open-delete-modal': [type: ItemType, id: string, name: string]
-  'open-create-group-modal': [groupType: GroupType, title: string]
-  'open-delete-group-modal': [groupType: GroupType, groupId: string, name: string]
-  'open-create-repository-modal': []
-  'open-clone-repository-modal': []
-  'open-mcp-server-modal': [mode: 'create' | 'edit', mcpServerId?: string]
-  close: []
-}>()
+  select: [config: PodTypeConfig];
+  "create-output-style-note": [outputStyleId: string];
+  "create-skill-note": [skillId: string];
+  "create-subagent-note": [subAgentId: string];
+  "create-repository-note": [repositoryId: string];
+  "create-command-note": [commandId: string];
+  "create-mcp-server-note": [mcpServerId: string];
+  "clone-started": [payload: { requestId: string; repoName: string }];
+  "open-create-modal": [resourceType: ResourceType, title: string];
+  "open-edit-modal": [resourceType: ResourceType, id: string];
+  "open-delete-modal": [type: ItemType, id: string, name: string];
+  "open-create-group-modal": [groupType: GroupType, title: string];
+  "open-delete-group-modal": [
+    groupType: GroupType,
+    groupId: string,
+    name: string,
+  ];
+  "open-create-repository-modal": [];
+  "open-clone-repository-modal": [];
+  "open-mcp-server-modal": [mode: "create" | "edit", mcpServerId?: string];
+  close: [];
+}>();
 
 const {
   outputStyleStore,
@@ -45,30 +74,39 @@ const {
   repositoryStore,
   commandStore,
   mcpServerStore,
-  podStore
-} = useCanvasContext()
+  podStore,
+} = useCanvasContext();
 
-const { importSkill, isImporting } = useSkillImport()
+const { importSkill, isImporting } = useSkillImport();
+const { t } = useI18n();
 
-const menuRef = ref<HTMLElement | null>(null)
-const openMenuType = ref<'outputStyle' | 'skill' | 'subAgent' | 'repository' | 'command' | 'mcpServer' | null>(null)
-const hoveredItemId = ref<string | null>(null)
+const menuRef = ref<HTMLElement | null>(null);
+const openMenuType = ref<
+  | "outputStyle"
+  | "skill"
+  | "subAgent"
+  | "repository"
+  | "command"
+  | "mcpServer"
+  | null
+>(null);
+const hoveredItemId = ref<string | null>(null);
 
 const handleOutsideMouseDown = (event: MouseEvent): void => {
-  if (!event.target) return
+  if (!event.target) return;
 
-  const menuEl = menuRef.value
+  const menuEl = menuRef.value;
   if (menuEl && !menuEl.contains(event.target as Node)) {
-    podStore.hideTypeMenu()
+    podStore.hideTypeMenu();
 
     if (event.button !== 2) {
-      event.stopPropagation()
+      event.stopPropagation();
     }
   }
-}
+};
 
 onMounted(async () => {
-  document.addEventListener('mousedown', handleOutsideMouseDown, true)
+  document.addEventListener("mousedown", handleOutsideMouseDown, true);
 
   await Promise.all([
     outputStyleStore.loadOutputStyles(),
@@ -79,145 +117,178 @@ onMounted(async () => {
     repositoryStore.loadRepositories(),
     commandStore.loadCommands(),
     commandStore.loadGroups(),
-    mcpServerStore.loadMcpServers()
-  ])
-})
+    mcpServerStore.loadMcpServers(),
+  ]);
+});
 
 onUnmounted(() => {
-  document.removeEventListener('mousedown', handleOutsideMouseDown, true)
-})
+  document.removeEventListener("mousedown", handleOutsideMouseDown, true);
+});
 
 const handleSelect = (config: PodTypeConfig): void => {
-  emit('select', config)
-}
+  emit("select", config);
+};
 
 const handleOutputStyleSelect = (style: OutputStyleListItem): void => {
-  openMenuType.value = null
-  emit('create-output-style-note', style.id)
-  emit('close')
-}
+  openMenuType.value = null;
+  emit("create-output-style-note", style.id);
+  emit("close");
+};
 
 const handleSkillSelect = (skill: Skill): void => {
-  openMenuType.value = null
-  emit('create-skill-note', skill.id)
-  emit('close')
-}
+  openMenuType.value = null;
+  emit("create-skill-note", skill.id);
+  emit("close");
+};
 
 const handleSubAgentSelect = (subAgent: SubAgent): void => {
-  openMenuType.value = null
-  emit('create-subagent-note', subAgent.id)
-  emit('close')
-}
+  openMenuType.value = null;
+  emit("create-subagent-note", subAgent.id);
+  emit("close");
+};
 
 const handleRepositorySelect = (repository: Repository): void => {
-  openMenuType.value = null
-  emit('create-repository-note', repository.id)
-  emit('close')
-}
+  openMenuType.value = null;
+  emit("create-repository-note", repository.id);
+  emit("close");
+};
 
 const handleCommandSelect = (command: { id: string; name: string }): void => {
-  openMenuType.value = null
-  emit('create-command-note', command.id)
-  emit('close')
-}
+  openMenuType.value = null;
+  emit("create-command-note", command.id);
+  emit("close");
+};
 
 const handleMcpServerSelect = (mcpServer: McpServer): void => {
-  openMenuType.value = null
-  emit('create-mcp-server-note', mcpServer.id)
-  emit('close')
-}
+  openMenuType.value = null;
+  emit("create-mcp-server-note", mcpServer.id);
+  emit("close");
+};
 
 const handleNewMcpServer = (): void => {
-  openMenuType.value = null
-  emit('open-mcp-server-modal', 'create')
-  emit('close')
-}
+  openMenuType.value = null;
+  emit("open-mcp-server-modal", "create");
+  emit("close");
+};
 
-const handleDeleteClick = (type: ItemType, id: string, name: string, event: Event): void => {
-  event.stopPropagation()
-  openMenuType.value = null
-  emit('open-delete-modal', type, id, name)
-  emit('close')
-}
+const handleDeleteClick = (
+  type: ItemType,
+  id: string,
+  name: string,
+  event: Event,
+): void => {
+  event.stopPropagation();
+  openMenuType.value = null;
+  emit("open-delete-modal", type, id, name);
+  emit("close");
+};
 
 const openCreateModal = (resourceType: ResourceType, title: string): void => {
-  openMenuType.value = null
-  emit('open-create-modal', resourceType, title)
-  emit('close')
-}
+  openMenuType.value = null;
+  emit("open-create-modal", resourceType, title);
+  emit("close");
+};
 
-const handleNewOutputStyle = (): void => openCreateModal('outputStyle', '新增 Output Style')
-const handleNewSubAgent = (): void => openCreateModal('subAgent', '新增 SubAgent')
-const handleNewCommand = (): void => openCreateModal('command', '新增 Command')
+const handleNewOutputStyle = (): void =>
+  openCreateModal("outputStyle", t("canvas.podTypeMenu.newOutputStyle"));
+const handleNewSubAgent = (): void =>
+  openCreateModal("subAgent", t("canvas.podTypeMenu.newSubAgent"));
+const handleNewCommand = (): void =>
+  openCreateModal("command", t("canvas.podTypeMenu.newCommand"));
 
 const handleNewRepository = (): void => {
-  openMenuType.value = null
-  emit('open-create-repository-modal')
-  emit('close')
-}
+  openMenuType.value = null;
+  emit("open-create-repository-modal");
+  emit("close");
+};
 
 const handleCloneRepository = (): void => {
-  openMenuType.value = null
-  emit('open-clone-repository-modal')
-  emit('close')
-}
+  openMenuType.value = null;
+  emit("open-clone-repository-modal");
+  emit("close");
+};
 
 const openEditModal = (
   resourceType: ResourceType,
   id: string,
-  event: Event
+  event: Event,
 ): void => {
-  event.stopPropagation()
-  openMenuType.value = null
-  emit('open-edit-modal', resourceType, id)
-  emit('close')
-}
+  event.stopPropagation();
+  openMenuType.value = null;
+  emit("open-edit-modal", resourceType, id);
+  emit("close");
+};
 
 const handleOutputStyleEdit = (id: string, _name: string, event: Event): void =>
-  openEditModal('outputStyle', id, event)
+  openEditModal("outputStyle", id, event);
 
 const handleSubAgentEdit = (id: string, _name: string, event: Event): void =>
-  openEditModal('subAgent', id, event)
+  openEditModal("subAgent", id, event);
 
 const handleCommandEdit = (id: string, _name: string, event: Event): void =>
-  openEditModal('command', id, event)
+  openEditModal("command", id, event);
 
 const openCreateGroupModal = (groupType: GroupType, title: string): void => {
-  openMenuType.value = null
-  emit('open-create-group-modal', groupType, title)
-  emit('close')
-}
+  openMenuType.value = null;
+  emit("open-create-group-modal", groupType, title);
+  emit("close");
+};
 
-const handleNewOutputStyleGroup = (): void => openCreateGroupModal('outputStyleGroup', '新增 Output Style 群組')
-const handleNewSubAgentGroup = (): void => openCreateGroupModal('subAgentGroup', '新增 SubAgent 群組')
-const handleNewCommandGroup = (): void => openCreateGroupModal('commandGroup', '新增 Command 群組')
+const handleNewOutputStyleGroup = (): void =>
+  openCreateGroupModal(
+    "outputStyleGroup",
+    t("canvas.podTypeMenu.newOutputStyleGroup"),
+  );
+const handleNewSubAgentGroup = (): void =>
+  openCreateGroupModal(
+    "subAgentGroup",
+    t("canvas.podTypeMenu.newSubAgentGroup"),
+  );
+const handleNewCommandGroup = (): void =>
+  openCreateGroupModal("commandGroup", t("canvas.podTypeMenu.newCommandGroup"));
 
-const handleGroupDelete = (groupType: GroupType, groupId: string, name: string, event: Event): void => {
-  event.stopPropagation()
-  openMenuType.value = null
-  emit('open-delete-group-modal', groupType, groupId, name)
-  emit('close')
-}
+const handleGroupDelete = (
+  groupType: GroupType,
+  groupId: string,
+  name: string,
+  event: Event,
+): void => {
+  event.stopPropagation();
+  openMenuType.value = null;
+  emit("open-delete-group-modal", groupType, groupId, name);
+  emit("close");
+};
 
-const handleOutputStyleDropToGroup = (itemId: string, groupId: string | null): void => {
-  outputStyleStore.moveItemToGroup(itemId, groupId)
-}
+const handleOutputStyleDropToGroup = (
+  itemId: string,
+  groupId: string | null,
+): void => {
+  outputStyleStore.moveItemToGroup(itemId, groupId);
+};
 
-const handleSubAgentDropToGroup = (itemId: string, groupId: string | null): void => {
-  subAgentStore.moveItemToGroup(itemId, groupId)
-}
+const handleSubAgentDropToGroup = (
+  itemId: string,
+  groupId: string | null,
+): void => {
+  subAgentStore.moveItemToGroup(itemId, groupId);
+};
 
-const handleCommandDropToGroup = (itemId: string, groupId: string | null): void => {
-  commandStore.moveItemToGroup(itemId, groupId)
-}
+const handleCommandDropToGroup = (
+  itemId: string,
+  groupId: string | null,
+): void => {
+  commandStore.moveItemToGroup(itemId, groupId);
+};
 
 const handleImportSkill = async (): Promise<void> => {
-  openMenuType.value = null
-  await importSkill()
-  emit('close')
-}
+  openMenuType.value = null;
+  await importSkill();
+  emit("close");
+};
 
-const { menuStyle } = useMenuPosition({ position: computed(() => props.position) })
+const { menuStyle } = useMenuPosition({
+  position: computed(() => props.position),
+});
 </script>
 
 <template>
@@ -236,11 +307,7 @@ const { menuStyle } = useMenuPosition({ position: computed(() => props.position)
         class="w-8 h-8 rounded-full flex items-center justify-center border border-doodle-ink"
         style="background-color: var(--doodle-blue)"
       >
-        <component
-          :is="podTypes[0].icon"
-          :size="16"
-          class="text-card"
-        />
+        <component :is="podTypes[0].icon" :size="16" class="text-card" />
       </span>
       <span class="font-mono text-sm text-foreground">Pod</span>
     </button>
@@ -257,10 +324,7 @@ const { menuStyle } = useMenuPosition({ position: computed(() => props.position)
           class="w-8 h-8 rounded-full flex items-center justify-center border border-doodle-ink"
           style="background-color: var(--doodle-pink)"
         >
-          <Palette
-            :size="16"
-            class="text-card"
-          />
+          <Palette :size="16" class="text-card" />
         </span>
         <span class="font-mono text-sm text-foreground">Styles &gt;</span>
       </button>
@@ -273,9 +337,14 @@ const { menuStyle } = useMenuPosition({ position: computed(() => props.position)
         :expanded-group-ids="outputStyleStore.expandedGroupIds"
         @item-select="handleOutputStyleSelect"
         @item-edit="handleOutputStyleEdit"
-        @item-delete="(id, name, event) => handleDeleteClick('outputStyle', id, name, event)"
+        @item-delete="
+          (id, name, event) => handleDeleteClick('outputStyle', id, name, event)
+        "
         @toggle-group="(groupId) => outputStyleStore.toggleGroupExpand(groupId)"
-        @group-delete="(groupId, name, event) => handleGroupDelete('outputStyleGroup', groupId, name, event)"
+        @group-delete="
+          (groupId, name, event) =>
+            handleGroupDelete('outputStyleGroup', groupId, name, event)
+        "
         @item-drop-to-group="handleOutputStyleDropToGroup"
       >
         <template #footer>
@@ -323,9 +392,14 @@ const { menuStyle } = useMenuPosition({ position: computed(() => props.position)
         :expanded-group-ids="commandStore.expandedGroupIds"
         @item-select="handleCommandSelect"
         @item-edit="handleCommandEdit"
-        @item-delete="(id, name, event) => handleDeleteClick('command', id, name, event)"
+        @item-delete="
+          (id, name, event) => handleDeleteClick('command', id, name, event)
+        "
         @toggle-group="(groupId) => commandStore.toggleGroupExpand(groupId)"
-        @group-delete="(groupId, name, event) => handleGroupDelete('commandGroup', groupId, name, event)"
+        @group-delete="
+          (groupId, name, event) =>
+            handleGroupDelete('commandGroup', groupId, name, event)
+        "
         @item-drop-to-group="handleCommandDropToGroup"
       >
         <template #footer>
@@ -360,10 +434,7 @@ const { menuStyle } = useMenuPosition({ position: computed(() => props.position)
           class="w-8 h-8 rounded-full flex items-center justify-center border border-doodle-ink"
           style="background-color: var(--doodle-green)"
         >
-          <Wrench
-            :size="16"
-            class="text-card"
-          />
+          <Wrench :size="16" class="text-card" />
         </span>
         <span class="font-mono text-sm text-foreground">Skills &gt;</span>
       </button>
@@ -374,7 +445,9 @@ const { menuStyle } = useMenuPosition({ position: computed(() => props.position)
         :visible="openMenuType === 'skill'"
         :editable="false"
         @item-select="handleSkillSelect"
-        @item-delete="(id, name, event) => handleDeleteClick('skill', id, name, event)"
+        @item-delete="
+          (id, name, event) => handleDeleteClick('skill', id, name, event)
+        "
       >
         <template #footer>
           <div class="border-t border-doodle-ink/30 my-1" />
@@ -402,10 +475,7 @@ const { menuStyle } = useMenuPosition({ position: computed(() => props.position)
           class="w-8 h-8 rounded-full flex items-center justify-center border border-doodle-ink"
           style="background-color: var(--doodle-sand)"
         >
-          <Bot
-            :size="16"
-            class="text-card"
-          />
+          <Bot :size="16" class="text-card" />
         </span>
         <span class="font-mono text-sm text-foreground">Agents &gt;</span>
       </button>
@@ -418,9 +488,14 @@ const { menuStyle } = useMenuPosition({ position: computed(() => props.position)
         :expanded-group-ids="subAgentStore.expandedGroupIds"
         @item-select="handleSubAgentSelect"
         @item-edit="handleSubAgentEdit"
-        @item-delete="(id, name, event) => handleDeleteClick('subAgent', id, name, event)"
+        @item-delete="
+          (id, name, event) => handleDeleteClick('subAgent', id, name, event)
+        "
         @toggle-group="(groupId) => subAgentStore.toggleGroupExpand(groupId)"
-        @group-delete="(groupId, name, event) => handleGroupDelete('subAgentGroup', groupId, name, event)"
+        @group-delete="
+          (groupId, name, event) =>
+            handleGroupDelete('subAgentGroup', groupId, name, event)
+        "
         @item-drop-to-group="handleSubAgentDropToGroup"
       >
         <template #footer>
@@ -455,10 +530,7 @@ const { menuStyle } = useMenuPosition({ position: computed(() => props.position)
           class="w-8 h-8 rounded-full flex items-center justify-center border border-doodle-ink"
           style="background-color: var(--doodle-purple)"
         >
-          <Server
-            :size="16"
-            class="text-card"
-          />
+          <Server :size="16" class="text-card" />
         </span>
         <span class="font-mono text-sm text-foreground">MCPs &gt;</span>
       </button>
@@ -469,7 +541,9 @@ const { menuStyle } = useMenuPosition({ position: computed(() => props.position)
         :visible="openMenuType === 'mcpServer'"
         :editable="false"
         @item-select="handleMcpServerSelect"
-        @item-delete="(id, name, event) => handleDeleteClick('mcpServer', id, name, event)"
+        @item-delete="
+          (id, name, event) => handleDeleteClick('mcpServer', id, name, event)
+        "
       >
         <template #footer>
           <div class="border-t border-doodle-ink/30 my-1" />
@@ -496,10 +570,7 @@ const { menuStyle } = useMenuPosition({ position: computed(() => props.position)
           class="w-8 h-8 rounded-full flex items-center justify-center border border-doodle-ink"
           style="background-color: var(--doodle-orange)"
         >
-          <FolderOpen
-            :size="16"
-            class="text-card"
-          />
+          <FolderOpen :size="16" class="text-card" />
         </span>
         <span class="font-mono text-sm text-foreground">Repository &gt;</span>
       </button>
@@ -509,7 +580,9 @@ const { menuStyle } = useMenuPosition({ position: computed(() => props.position)
         :items="repositoryStore.typedAvailableItems"
         :visible="openMenuType === 'repository'"
         @item-select="handleRepositorySelect"
-        @item-delete="(id, name, event) => handleDeleteClick('repository', id, name, event)"
+        @item-delete="
+          (id, name, event) => handleDeleteClick('repository', id, name, event)
+        "
       >
         <template #footer>
           <div class="border-t border-doodle-ink/30 my-1" />

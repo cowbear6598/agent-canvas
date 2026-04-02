@@ -2,6 +2,7 @@
 import { computed, ref, onMounted, onUnmounted } from "vue";
 import { FolderOpen, Unplug, Puzzle, ChevronRight } from "lucide-vue-next";
 import { useToast } from "@/composables/useToast";
+import { useI18n } from "vue-i18n";
 import {
   WebSocketRequestEvents,
   WebSocketResponseEvents,
@@ -28,6 +29,7 @@ const emit = defineEmits<{
 }>();
 
 const { toast } = useToast();
+const { t } = useI18n();
 
 const pod = computed(() => usePodStore().getPodById(props.podId));
 const bindings = computed(() => pod.value?.integrationBindings ?? []);
@@ -88,8 +90,8 @@ const handleOpenDirectory = async (): Promise<void> => {
 
   if (!response) {
     toast({
-      title: "打開目錄失敗",
-      description: "無法打開工作目錄，請稍後再試",
+      title: t("canvas.podContextMenu.openDirectoryFailed"),
+      description: t("canvas.podContextMenu.openDirectoryFailedDesc"),
       variant: "destructive",
     });
     return;
@@ -124,7 +126,9 @@ const handleDisconnect = (provider: string): void => {
       @click="handleOpenDirectory"
     >
       <FolderOpen :size="14" />
-      <span class="font-mono">打開工作目錄</span>
+      <span class="font-mono">{{
+        $t("canvas.podContextMenu.openDirectory")
+      }}</span>
     </button>
 
     <div class="my-1 border-t border-border" />
@@ -135,7 +139,9 @@ const handleDisconnect = (provider: string): void => {
       @mouseleave="handlePluginMenuLeave"
     >
       <Puzzle :size="14" />
-      <span class="font-mono flex-1">Plugin</span>
+      <span class="font-mono flex-1">{{
+        $t("canvas.podContextMenu.plugin")
+      }}</span>
       <ChevronRight :size="12" />
     </button>
 
@@ -148,7 +154,9 @@ const handleDisconnect = (provider: string): void => {
         @click="handleConnect(provider.name)"
       >
         <component :is="provider.icon" :size="14" />
-        <span class="font-mono">連接 {{ provider.label }}</span>
+        <span class="font-mono">{{
+          $t("canvas.podContextMenu.connect", { label: provider.label })
+        }}</span>
       </button>
 
       <button
@@ -157,7 +165,9 @@ const handleDisconnect = (provider: string): void => {
         @click="handleDisconnect(provider.name)"
       >
         <Unplug :size="14" />
-        <span class="font-mono">斷開 {{ provider.label }}</span>
+        <span class="font-mono">{{
+          $t("canvas.podContextMenu.disconnect", { label: provider.label })
+        }}</span>
       </button>
     </template>
   </div>

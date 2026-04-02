@@ -1,22 +1,23 @@
-import { useCanvasStore } from '@/stores/canvasStore'
+import { useCanvasStore } from "@/stores/canvasStore";
+import { t } from "@/i18n";
 
 export function requireActiveCanvas(): string {
-    const canvasStore = useCanvasStore()
+  const canvasStore = useCanvasStore();
 
-    if (!canvasStore.activeCanvasId) {
-        throw new Error('沒有啟用的畫布')
-    }
+  if (!canvasStore.activeCanvasId) {
+    throw new Error(t("canvas.noActiveCanvas"));
+  }
 
-    return canvasStore.activeCanvasId
+  return canvasStore.activeCanvasId;
 }
 
 export function getActiveCanvasIdOrWarn(context: string): string | null {
-    const canvasStore = useCanvasStore()
+  const canvasStore = useCanvasStore();
 
-    if (!canvasStore.activeCanvasId) {
-        console.warn(`[${context}] 沒有啟用的畫布`)
-        return null
-    }
+  if (!canvasStore.activeCanvasId) {
+    console.warn(`[${context}] ${t("canvas.noActiveCanvas")}`);
+    return null;
+  }
 
-    return canvasStore.activeCanvasId
+  return canvasStore.activeCanvasId;
 }

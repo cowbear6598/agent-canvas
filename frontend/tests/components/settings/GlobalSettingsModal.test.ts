@@ -209,7 +209,6 @@ describe("GlobalSettingsModal", () => {
     await nextTick();
 
     expect(wrapper.text()).toContain("全域設定");
-    expect(wrapper.text()).toContain("管理模型與全域參數設定");
     expect(wrapper.text()).toContain("時區");
     expect(wrapper.text()).not.toContain("AI 決策模型");
 
@@ -503,9 +502,6 @@ describe("GlobalSettingsModal", () => {
     await nextTick();
 
     expect(wrapper.text()).toContain("備份設定");
-    expect(wrapper.text()).toContain(
-      "設定 Git 遠端儲存庫，定時自動備份畫布資料",
-    );
 
     wrapper.unmount();
   });

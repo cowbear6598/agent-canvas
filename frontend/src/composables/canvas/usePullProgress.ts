@@ -3,6 +3,7 @@ import { WebSocketResponseEvents } from '@/types/websocket'
 import type { RepositoryPullLatestProgressPayload, RepositoryPullLatestResultPayload } from '@/types/websocket'
 import { useCanvasContext } from '@/composables/canvas/useCanvasContext'
 import { useProgressTracker, handleProgressError, markTaskCompleted } from '@/composables/canvas/useProgressTracker'
+import { t } from '@/i18n'
 import type { ProgressTask } from '@/components/canvas/ProgressNote.vue'
 import { PROGRESS_REMOVE_DELAY_MS } from '@/lib/constants'
 
@@ -53,18 +54,18 @@ export function usePullProgress(): UsePullProgressReturn {
       if (task.timedOut) return
 
       if (payload.success) {
-        markTaskCompleted(task, 'Pull 完成')
+        markTaskCompleted(task, t('composable.gitPull.completed'))
 
         await repositoryStore.loadRepositories()
 
-        helpers.showSuccessToast('Git', 'Pull 成功', task.repositoryName)
+        helpers.showSuccessToast('Git', t('composable.gitPull.success'), task.repositoryName)
 
         helpers.scheduleRemove(payload.requestId, PROGRESS_REMOVE_DELAY_MS)
       } else {
         handleProgressError(task, helpers, payload.requestId, payload.error, {
           category: 'Git',
-          action: 'Pull 失敗',
-          defaultMessage: 'Pull 失敗',
+          action: t('composable.gitPull.failed'),
+          defaultMessage: t('composable.gitPull.failed'),
         })
       }
     },
@@ -88,7 +89,7 @@ export function usePullProgress(): UsePullProgressReturn {
       repositoryName,
       repositoryId,
       progress: 0,
-      message: '準備 Pull...',
+      message: t('composable.gitPull.preparing'),
       status: 'pulling',
       timedOut: false,
     })

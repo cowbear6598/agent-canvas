@@ -6,61 +6,59 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import WarningBox from '@/components/ui/WarningBox.vue'
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import WarningBox from "@/components/ui/WarningBox.vue";
+import { useI18n } from "vue-i18n";
 
 interface Props {
-  open: boolean
-  targetBranch: string
+  open: boolean;
+  targetBranch: string;
 }
 
-const props = defineProps<Props>()
+const props = defineProps<Props>();
 
 const emit = defineEmits<{
-  'update:open': [value: boolean]
-  'cancel': []
-  'force-checkout': []
-}>()
+  "update:open": [value: boolean];
+  cancel: [];
+  "force-checkout": [];
+}>();
+
+const { t } = useI18n();
 
 const handleCancel = (): void => {
-  emit('cancel')
-  emit('update:open', false)
-}
+  emit("cancel");
+  emit("update:open", false);
+};
 
 const handleForceCheckout = (): void => {
-  emit('force-checkout')
-}
+  emit("force-checkout");
+};
 </script>
 
 <template>
-  <Dialog
-    :open="open"
-    @update:open="emit('update:open', $event)"
-  >
+  <Dialog :open="open" @update:open="emit('update:open', $event)">
     <DialogContent class="max-w-md">
       <DialogHeader>
-        <DialogTitle>有未儲存的修改</DialogTitle>
+        <DialogTitle>{{ $t("canvas.forceCheckout.title") }}</DialogTitle>
         <DialogDescription class="space-y-3">
           <WarningBox
-            title="目前有未 commit 的修改"
-            :description="`切換到 ${props.targetBranch} 將會丟失所有未 commit 的修改`"
+            :title="t('canvas.forceCheckout.uncommittedWarningTitle')"
+            :description="
+              t('canvas.forceCheckout.uncommittedWarningDesc', {
+                branch: props.targetBranch,
+              })
+            "
           />
         </DialogDescription>
       </DialogHeader>
 
       <DialogFooter class="gap-2">
-        <Button
-          variant="outline"
-          @click="handleCancel"
-        >
-          取消
+        <Button variant="outline" @click="handleCancel">
+          {{ $t("common.cancel") }}
         </Button>
-        <Button
-          variant="destructive"
-          @click="handleForceCheckout"
-        >
-          強制切換
+        <Button variant="destructive" @click="handleForceCheckout">
+          {{ $t("canvas.forceCheckout.forceCheckoutButton") }}
         </Button>
       </DialogFooter>
     </DialogContent>

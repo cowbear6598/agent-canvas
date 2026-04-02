@@ -1,4 +1,6 @@
-const MAX_ERROR_LENGTH = 200
+import { t } from "@/i18n";
+
+const MAX_ERROR_LENGTH = 200;
 
 const SENSITIVE_PATTERNS = [
   /[A-Za-z]:\\[\w\\.-]+/g,
@@ -7,65 +9,70 @@ const SENSITIVE_PATTERNS = [
   /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g,
   /[a-zA-Z0-9_-]{20,}/g,
   /at\s+[\w.]+\s+\([^)]+\)/g,
-]
+];
 
-const ERROR_MAPPING: Record<string, string> = {
-  'ECONNREFUSED': '無法連線到伺服器',
-  'ENOTFOUND': '找不到伺服器',
-  'ETIMEDOUT': '連線逾時',
-  'ECONNRESET': '連線中斷',
-  'ALREADY_EXISTS': '資源已存在',
-  'NOT_FOUND': '找不到資源',
-  'UNAUTHORIZED': '權限不足',
-  'FORBIDDEN': '禁止存取',
-  'INVALID_REQUEST': '請求格式錯誤',
-  'INTERNAL_ERROR': '伺服器內部錯誤',
-}
+const ERROR_CODE_KEYS = [
+  "ECONNREFUSED",
+  "ENOTFOUND",
+  "ETIMEDOUT",
+  "ECONNRESET",
+  "ALREADY_EXISTS",
+  "NOT_FOUND",
+  "UNAUTHORIZED",
+  "FORBIDDEN",
+  "INVALID_REQUEST",
+  "INTERNAL_ERROR",
+] as const;
+
+type ErrorCode = (typeof ERROR_CODE_KEYS)[number];
 
 function removeSensitiveInfo(message: string): string {
-  let sanitized = message
+  let sanitized = message;
 
   for (const pattern of SENSITIVE_PATTERNS) {
-    sanitized = sanitized.replace(pattern, '[已隱藏]')
+    sanitized = sanitized.replace(pattern, t("error.redacted"));
   }
 
-  return sanitized
+  return sanitized;
 }
 
 function mapErrorCode(message: string): string {
-  for (const [code, friendlyMessage] of Object.entries(ERROR_MAPPING)) {
+  for (const code of ERROR_CODE_KEYS) {
     if (message.includes(code)) {
-      return friendlyMessage
+      return t(`error.${code}` as `error.${ErrorCode}`);
     }
   }
 
-  return message
+  return message;
 }
 
-function limitLength(message: string, maxLength: number = MAX_ERROR_LENGTH): string {
+function limitLength(
+  message: string,
+  maxLength: number = MAX_ERROR_LENGTH,
+): string {
   if (message.length <= maxLength) {
-    return message
+    return message;
   }
 
-  return message.substring(0, maxLength) + '...'
+  return message.substring(0, maxLength) + "...";
 }
 
 export function sanitizeErrorForUser(error: unknown): string {
-  let message: string
+  let message: string;
 
   if (error instanceof Error) {
-    message = error.message
-  } else if (typeof error === 'string') {
-    message = error
-  } else if (error && typeof error === 'object' && 'message' in error) {
-    message = String(error.message)
+    message = error.message;
+  } else if (typeof error === "string") {
+    message = error;
+  } else if (error && typeof error === "object" && "message" in error) {
+    message = String(error.message);
   } else {
-    message = '未知錯誤'
+    message = t("common.error.unknown");
   }
 
-  message = mapErrorCode(message)
-  message = removeSensitiveInfo(message)
-  message = limitLength(message)
+  message = mapErrorCode(message);
+  message = removeSensitiveInfo(message);
+  message = limitLength(message);
 
-  return message
+  return message;
 }

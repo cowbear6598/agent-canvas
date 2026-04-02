@@ -7,6 +7,7 @@ import { useCommandStore } from '@/stores/note/commandStore'
 import { useMcpServerStore } from '@/stores/note/mcpServerStore'
 import type { OutputStyleNote, SkillNote, RepositoryNote, SubAgentNote, CommandNote, McpServer, McpServerNote } from '@/types'
 import { createUnifiedHandler } from './sharedHandlerUtils'
+import { t } from '@/i18n'
 import type { BasePayload } from './sharedHandlerUtils'
 
 interface NoteHandlerConfig<TNote> {
@@ -100,14 +101,14 @@ const handleOutputStyleDeleted = createUnifiedHandler<BasePayload & { outputStyl
   (payload) => {
     useOutputStyleStore().removeItemFromEvent(payload.outputStyleId, payload.deletedNoteIds)
   },
-  { toastMessage: '輸出風格已刪除' }
+  { toastMessage: () => t('composable.eventHandler.outputStyleDeleted') }
 )
 
 const handleSkillDeleted = createUnifiedHandler<BasePayload & { skillId: string; deletedNoteIds?: string[]; canvasId: string }>(
   (payload) => {
     useSkillStore().removeItemFromEvent(payload.skillId, payload.deletedNoteIds)
   },
-  { toastMessage: 'Skill 已刪除' }
+  { toastMessage: () => t('composable.eventHandler.skillDeleted') }
 )
 
 const handleRepositoryWorktreeCreated = createUnifiedHandler<BasePayload & { repository?: RepositoryItem; canvasId: string }>(
@@ -116,14 +117,14 @@ const handleRepositoryWorktreeCreated = createUnifiedHandler<BasePayload & { rep
       useRepositoryStore().addItemFromEvent(payload.repository)
     }
   },
-  { toastMessage: 'Worktree 建立成功' }
+  { toastMessage: () => t('composable.eventHandler.worktreeCreated') }
 )
 
 const handleRepositoryDeleted = createUnifiedHandler<BasePayload & { repositoryId: string; deletedNoteIds?: string[]; canvasId: string }>(
   (payload) => {
     useRepositoryStore().removeItemFromEvent(payload.repositoryId, payload.deletedNoteIds)
   },
-  { toastMessage: 'Repository 已刪除' }
+  { toastMessage: () => t('composable.eventHandler.repositoryDeleted') }
 )
 
 const handleRepositoryBranchChanged = createUnifiedHandler<BasePayload & { repositoryId: string; branchName: string }>(
@@ -143,14 +144,14 @@ const handleSubAgentDeleted = createUnifiedHandler<BasePayload & { subAgentId: s
   (payload) => {
     useSubAgentStore().removeItemFromEvent(payload.subAgentId, payload.deletedNoteIds)
   },
-  { toastMessage: 'SubAgent 已刪除' }
+  { toastMessage: () => t('composable.eventHandler.subAgentDeleted') }
 )
 
 const handleCommandDeleted = createUnifiedHandler<BasePayload & { commandId: string; deletedNoteIds?: string[]; canvasId: string }>(
   (payload) => {
     useCommandStore().removeItemFromEvent(payload.commandId, payload.deletedNoteIds)
   },
-  { toastMessage: 'Command 已刪除' }
+  { toastMessage: () => t('composable.eventHandler.commandDeleted') }
 )
 
 const handleMcpServerCreated = createUnifiedHandler<BasePayload & { mcpServer?: McpServer; canvasId: string }>(
@@ -159,7 +160,7 @@ const handleMcpServerCreated = createUnifiedHandler<BasePayload & { mcpServer?: 
       useMcpServerStore().addItemFromEvent(payload.mcpServer)
     }
   },
-  { toastMessage: 'MCP Server 已建立' }
+  { toastMessage: () => t('composable.eventHandler.mcpServerCreated') }
 )
 
 const handleMcpServerUpdated = createUnifiedHandler<BasePayload & { mcpServer?: McpServer; canvasId: string }>(
@@ -168,7 +169,7 @@ const handleMcpServerUpdated = createUnifiedHandler<BasePayload & { mcpServer?: 
       useMcpServerStore().updateItemFromEvent(payload.mcpServer)
     }
   },
-  { toastMessage: 'MCP Server 已更新' }
+  { toastMessage: () => t('composable.eventHandler.mcpServerUpdated') }
 )
 
 const handleMcpServerDeleted = createUnifiedHandler<BasePayload & { mcpServerId: string; deletedNoteIds?: string[]; canvasId: string }>(
@@ -179,7 +180,7 @@ const handleMcpServerDeleted = createUnifiedHandler<BasePayload & { mcpServerId:
     }
     useMcpServerStore().removeItemFromEvent(payload.mcpServerId, payload.deletedNoteIds)
   },
-  { toastMessage: 'MCP Server 已刪除', skipCanvasCheck: true }
+  { toastMessage: () => t('composable.eventHandler.mcpServerDeleted'), skipCanvasCheck: true }
 )
 
 export function getNoteEventListeners(): Array<{ event: string; handler: (payload: unknown) => void }> {

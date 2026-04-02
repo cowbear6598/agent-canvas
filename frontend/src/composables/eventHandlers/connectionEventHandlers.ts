@@ -2,6 +2,7 @@ import { WebSocketResponseEvents } from '@/services/websocket'
 import { useConnectionStore } from '@/stores/connectionStore'
 import type { Connection } from '@/types'
 import { createUnifiedHandler } from './sharedHandlerUtils'
+import { t } from '@/i18n'
 import type { BasePayload } from './sharedHandlerUtils'
 
 type RawConnectionFromEvent = Omit<Connection, 'status'>
@@ -12,7 +13,7 @@ const handleConnectionCreated = createUnifiedHandler<BasePayload & { connection?
       useConnectionStore().addConnectionFromEvent(payload.connection)
     }
   },
-  { toastMessage: '連線建立成功' }
+  { toastMessage: () => t('composable.eventHandler.connectionCreated') }
 )
 
 const handleConnectionUpdated = createUnifiedHandler<BasePayload & { connection?: RawConnectionFromEvent; canvasId: string }>(
@@ -27,7 +28,7 @@ const handleConnectionDeleted = createUnifiedHandler<BasePayload & { connectionI
   (payload) => {
     useConnectionStore().removeConnectionFromEvent(payload.connectionId)
   },
-  { toastMessage: '連線已刪除' }
+  { toastMessage: () => t('composable.eventHandler.connectionDeleted') }
 )
 
 export function getConnectionEventListeners(): Array<{ event: string; handler: (payload: unknown) => void }> {

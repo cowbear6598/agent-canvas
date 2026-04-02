@@ -1,0 +1,639 @@
+{
+  "common": {
+    "save": "儲存",
+    "cancel": "取消",
+    "confirm": "確認",
+    "delete": "刪除",
+    "create": "建立",
+    "update": "更新",
+    "edit": "編輯",
+    "close": "關閉",
+    "copy": "複製",
+    "import": "匯入",
+    "export": "匯出",
+    "enable": "啟用",
+    "disable": "停用",
+    "add": "新增",
+    "saving": "儲存中...",
+    "connecting": "連線中...",
+    "loading": "載入中...",
+    "backingUp": "備份中...",
+    "clearing": "清理中...",
+    "connectionStatus": {
+      "connected": "已連接",
+      "disconnected": "已斷線",
+      "error": "錯誤"
+    },
+    "success": {
+      "create": "建立成功",
+      "delete": "刪除成功",
+      "update": "更新成功",
+      "save": "儲存成功",
+      "import": "匯入成功",
+      "copy": "複製成功",
+      "move": "移動成功"
+    },
+    "error": {
+      "operation": "操作失敗",
+      "create": "建立失敗",
+      "delete": "刪除失敗",
+      "update": "更新失敗",
+      "save": "儲存失敗",
+      "load": "載入失敗",
+      "import": "匯入失敗",
+      "networkFailed": "網路連線失敗",
+      "unknown": "未知錯誤"
+    },
+    "validation": {
+      "required": "不可為空",
+      "nameRequired": "名稱不可為空",
+      "formatError": "格式錯誤",
+      "invalidFormat": "格式不正確"
+    },
+    "confirmDelete": "確認刪除",
+    "confirmDeleteMessage": "確定要刪除「{name}」嗎？此操作無法復原。",
+    "cannotDelete": "無法刪除"
+  },
+  "integration": {
+    "select": {
+      "title": "整合服務"
+    },
+    "apps": {
+      "title": "{provider} Apps",
+      "addApp": "新增 App",
+      "connecting": "連線中...",
+      "confirmAdd": "確認新增"
+    },
+    "connect": {
+      "title": "連接 {provider}",
+      "descriptionNoResource": "選擇要與此 Pod 連接的 {provider} App",
+      "descriptionWithResource": "選擇要與此 Pod 連接的 {provider} App 和{resourceLabel}",
+      "noAppsHint": "尚未有可用的 {provider} App，請先前往管理介面新增",
+      "selectApp": "選擇 App",
+      "selectResource": "選擇{resourceLabel}"
+    },
+    "status": {
+      "appRemoved": "{provider} App 已移除",
+      "appStatus": "{provider} {status}：{name}"
+    },
+    "toast": {
+      "bindFailed": "綁定失敗",
+      "unbindFailed": "解除綁定失敗",
+      "noCanvas": "尚未選取 Canvas"
+    },
+    "slack": {
+      "emptyAppHint": "尚未註冊任何 Slack App",
+      "emptyResourceHint": "此 App 尚無可用頻道",
+      "resourceLabel": "頻道",
+      "field": {
+        "name": {
+          "label": "名稱",
+          "placeholder": "例如：My Slack Bot"
+        },
+        "botToken": {
+          "label": "Bot Token",
+          "placeholder": "xoxb-..."
+        },
+        "signingSecret": {
+          "label": "Signing Secret",
+          "placeholder": "Signing Secret"
+        }
+      },
+      "validate": {
+        "nameRequired": "名稱不可為空",
+        "botTokenRequired": "Bot Token 不可為空",
+        "botTokenPrefix": "Bot Token 必須以 xoxb- 開頭",
+        "signingSecretRequired": "Signing Secret 不可為空"
+      }
+    },
+    "telegram": {
+      "emptyAppHint": "尚未註冊任何 Telegram Bot",
+      "emptyResourceHint": "",
+      "resourceLabel": "User ID",
+      "field": {
+        "name": {
+          "label": "名稱",
+          "placeholder": "例如：My Telegram Bot"
+        },
+        "botToken": {
+          "label": "Bot Token",
+          "placeholder": "123456:ABC-DEF..."
+        },
+        "userId": {
+          "label": "Telegram User ID",
+          "placeholder": "請輸入 User ID",
+          "hint": "請輸入 Telegram User ID（可透過 {'@'}userinfobot 查詢）"
+        }
+      },
+      "validate": {
+        "nameRequired": "名稱不可為空",
+        "botTokenRequired": "Bot Token 不可為空",
+        "userIdInvalid": "User ID 必須為正整數"
+      }
+    },
+    "jira": {
+      "emptyAppHint": "尚未註冊任何 Jira App",
+      "emptyResourceHint": "",
+      "resourceLabel": "",
+      "field": {
+        "name": {
+          "label": "名稱",
+          "placeholder": "例如：my-project"
+        },
+        "siteUrl": {
+          "label": "Site URL",
+          "placeholder": "https://your-domain.atlassian.net"
+        },
+        "webhookSecret": {
+          "label": "Webhook Secret",
+          "placeholder": "用於驗證 Webhook 請求的密鑰"
+        }
+      },
+      "validate": {
+        "nameRequired": "名稱不可為空",
+        "nameInvalid": "名稱只允許英文字母、數字、底線與連字號",
+        "siteUrlRequired": "Site URL 不可為空",
+        "siteUrlPrefix": "Site URL 必須以 https:// 開頭",
+        "webhookSecretRequired": "Webhook Secret 不可為空",
+        "webhookSecretLength": "Webhook Secret 至少需要 16 個字元"
+      },
+      "eventFilter": {
+        "label": "事件過濾模式",
+        "all": "所有事件",
+        "statusChanged": "僅狀態變更"
+      }
+    },
+    "sentry": {
+      "emptyAppHint": "尚未註冊任何 Sentry App",
+      "emptyResourceHint": "",
+      "resourceLabel": "",
+      "field": {
+        "name": {
+          "label": "名稱",
+          "placeholder": "例如：my-sentry-app"
+        },
+        "clientSecret": {
+          "label": "Client Secret",
+          "placeholder": "Sentry Internal Integration 的 Client Secret"
+        }
+      },
+      "validate": {
+        "nameRequired": "名稱不可為空",
+        "nameTooLong": "名稱最多 50 個字元",
+        "nameInvalid": "名稱只允許英文字母、數字、底線與連字號",
+        "clientSecretRequired": "Client Secret 不可為空",
+        "clientSecretLength": "Client Secret 至少需要 32 個字元"
+      }
+    }
+  },
+  "pod": {
+    "multiInstance": {
+      "readonlyHint": "此 Pod 屬於 Multi-Instance 流程，請從歷程查看"
+    },
+    "clearWorkflow": {
+      "title": "清理 Workflow",
+      "description": "即將清空以下 POD 的所有訊息：",
+      "confirm": "確認清理",
+      "clearing": "清理中..."
+    },
+    "delete": {
+      "title": "刪除 Pod",
+      "description": "確定要刪除「{name}」嗎？此操作無法復原。",
+      "confirm": "確認刪除"
+    },
+    "slot": {
+      "duplicateTitle": "已存在，無法插入",
+      "skillDuplicate": "此 Skill 已綁定到此 Pod",
+      "subAgentDuplicate": "此 SubAgent 已綁定到此 Pod",
+      "mcpServerDuplicate": "此 MCP Server 已綁定到此 Pod"
+    }
+  },
+  "run": {
+    "historyPanel": {
+      "title": "歷程",
+      "empty": "尚無執行歷程"
+    },
+    "chatModal": {
+      "historyBadge": "（歷程紀錄）",
+      "readonlyHint": "此為歷程紀錄，僅供查看"
+    }
+  },
+  "chat": {
+    "loadingHistory": "正在載入對話歷史...",
+    "inputPlaceholder": "輸入訊息...",
+    "summarizedBadge": "摘要",
+    "workflowBlockedHint": "此 Pod 在 Workflow 中，僅頭尾 Pod 可輸入",
+    "integrationBlockedHint": "此 Pod 已連接 {label}，訊息由 {label} 驅動",
+    "multiInstanceHint": "此 Pod 已啟用 Multi-Instance，每次送出訊息將建立新的 Run",
+    "toolOutput": {
+      "errorTitle": "{toolName} 錯誤資訊",
+      "resultTitle": "{toolName} 執行結果",
+      "executionError": "此工具執行時發生錯誤",
+      "inputParams": "輸入參數",
+      "executionResult": "執行結果",
+      "noResult": "無執行結果"
+    }
+  },
+  "layout": {
+    "header": {
+      "globalSettings": "全域設定",
+      "integrations": "整合服務管理",
+      "history": "歷程"
+    }
+  },
+  "error": {
+    "ECONNREFUSED": "無法連線到伺服器",
+    "ENOTFOUND": "找不到伺服器",
+    "ETIMEDOUT": "連線逾時",
+    "ECONNRESET": "連線中斷",
+    "ALREADY_EXISTS": "資源已存在",
+    "NOT_FOUND": "找不到資源",
+    "UNAUTHORIZED": "權限不足",
+    "FORBIDDEN": "禁止存取",
+    "INVALID_REQUEST": "請求格式錯誤",
+    "INTERNAL_ERROR": "伺服器內部錯誤",
+    "redacted": "[已隱藏]"
+  },
+  "validation": {
+    "gitUrlRequired": "請輸入 Git Repository URL",
+    "gitUrlPrefix": "URL 必須以 https:// 或 git\\@ 開頭"
+  },
+  "schedule": {
+    "everySecond": "每秒",
+    "everyXMinute": "每 {n} 分鐘",
+    "everyXHour": "每 {n} 小時",
+    "everyDay": "每天 {time}",
+    "everyWeek": "每週{days} {time}",
+    "unknownFrequency": "未知頻率",
+    "nextTime": "{frequency} {'|'} 下次：{time}",
+    "weekdaySeparator": "、",
+    "weekdays": {
+      "0": "日",
+      "1": "一",
+      "2": "二",
+      "3": "三",
+      "4": "四",
+      "5": "五",
+      "6": "六"
+    }
+  },
+  "websocket": {
+    "notConnected": "WebSocket 尚未連線",
+    "requestTimeout": "請求逾時：{event}"
+  },
+  "canvas": {
+    "noActiveCanvas": "沒有啟用的畫布",
+    "emptyState": "右鍵點擊以建立 Pod 或 Note",
+    "sidebar": {
+      "title": "Canvas",
+      "newCanvas": "New Canvas",
+      "noCanvases": "No canvases yet",
+      "confirmDelete": "確認刪除",
+      "confirmDeleteMessage": "確定要刪除 Canvas「{name}」？此操作無法復原。"
+    },
+    "branchSelect": {
+      "title": "切換分支",
+      "description": "選擇要切換的分支 ({name})",
+      "inputPlaceholder": "輸入分支名稱",
+      "switchButton": "切換",
+      "currentLabel": "(目前)",
+      "worktreeOccupied": "已被 Worktree 佔用",
+      "nameRequired": "請輸入分支名稱",
+      "nameInvalid": "只能包含英文字母、數字、底線、連字號和斜線",
+      "nameFormatError": "分支名稱格式錯誤"
+    },
+    "worktree": {
+      "createTitle": "建立 Worktree",
+      "createDescription": "從 {name} 建立新的 Worktree",
+      "nameLabel": "Worktree 名稱",
+      "namePlaceholder": "例如：feature1、bugfix-123",
+      "nameRequired": "請輸入 Worktree 名稱",
+      "nameInvalid": "名稱只能包含英文字母、數字、底線和連字號"
+    },
+    "repository": {
+      "createTitle": "新建資料夾",
+      "createDescription": "請輸入資料夾名稱（只允許英數字、底線、連字號）",
+      "nameRequired": "請輸入資料夾名稱",
+      "nameInvalid": "只允許英數字、底線、連字號",
+      "createFailed": "建立資料夾失敗",
+      "notGitRepo": "此資料夾不是 Git Repository"
+    },
+    "clone": {
+      "title": "Clone Repository",
+      "description": "請輸入 Git Repository URL",
+      "detected": "偵測到 {platform}"
+    },
+    "deleteBranch": {
+      "title": "確認刪除分支",
+      "description": "確定要刪除分支「{name}」嗎？此操作無法復原。"
+    },
+    "forceCheckout": {
+      "title": "有未儲存的修改",
+      "uncommittedWarningTitle": "目前有未 commit 的修改",
+      "uncommittedWarningDesc": "切換到 {branch} 將會丟失所有未 commit 的修改",
+      "forceCheckoutButton": "強制切換"
+    },
+    "pullLatest": {
+      "title": "Pull 至最新版本",
+      "warningTitle": "此操作將丟棄所有本地修改",
+      "warningDesc": "執行 git fetch + git reset --hard 將無法還原未 commit 的變更",
+      "confirmButton": "確認 Pull"
+    },
+    "repositoryContextMenu": {
+      "createWorktree": "建立 Worktree",
+      "switchBranch": "切換分支",
+      "pullLatest": "Pull 至最新版本"
+    },
+    "podContextMenu": {
+      "openDirectory": "打開工作目錄",
+      "plugin": "Plugin",
+      "connect": "連接 {label}",
+      "disconnect": "斷開 {label}",
+      "openDirectoryFailed": "打開目錄失敗",
+      "openDirectoryFailedDesc": "無法打開工作目錄，請稍後再試",
+      "noPluginInstalled": "尚未安裝任何 Plugin",
+      "pluginLoadFailed": "載入 Plugin 列表失敗",
+      "pluginLoadFailedDesc": "無法取得已安裝的 Plugin 列表，請稍後再試",
+      "pluginUpdateFailed": "Plugin 設定失敗",
+      "pluginUpdateFailedDesc": "無法更新 Pod Plugin 設定，請稍後再試"
+    },
+    "connectionContextMenu": {
+      "triggerModeAuto": "自動觸發 (Auto)",
+      "triggerModeDirect": "直接觸發 (Direct)",
+      "triggerModeAiDecide": "AI 判斷 (AI Decide)",
+      "summaryModel": "Summary Model",
+      "aiModel": "AI Model",
+      "triggerModeChanged": "觸發模式已變更",
+      "triggerModeChangedDesc": "已切換為{mode}模式",
+      "triggerModeAutoLabel": "自動觸發",
+      "triggerModeDirectLabel": "直接觸發",
+      "triggerModeAiDecideLabel": "AI 判斷",
+      "changeFailed": "變更失敗",
+      "triggerModeChangeFailed": "無法變更觸發模式",
+      "summaryModelChanged": "總結模型已變更",
+      "summaryModelChangeFailed": "無法變更總結模型",
+      "aiDecideModelChanged": "AI 決策模型已變更",
+      "aiDecideModelChangeFailed": "無法變更 AI 決策模型",
+      "modelSwitched": "已切換為 {model}"
+    },
+    "confirmDelete": {
+      "cannotDelete": "無法刪除",
+      "inUseMessage": "此項目正在被 Pod 使用，無法刪除",
+      "confirmMessage": "確定要刪除「{name}」嗎？"
+    },
+    "createEdit": {
+      "descriptionCreate": "請輸入名稱與內容",
+      "descriptionEdit": "編輯內容",
+      "descriptionNameOnly": "請輸入名稱",
+      "namePlaceholder": "名稱",
+      "contentPlaceholder": "內容",
+      "editTitleWithType": "編輯 {type}"
+    },
+    "mcpServer": {
+      "createTitle": "新增 MCP Server",
+      "editTitle": "編輯 MCP Server",
+      "description": "請貼入 JSON 格式的 MCP Server 設定，第一個 key 為名稱，value 為設定內容",
+      "parseError": "JSON 格式錯誤，請檢查語法",
+      "minOneServer": "請輸入至少一個 MCP Server 設定",
+      "nameInvalid": "名稱只能包含英數字、底線和連字號",
+      "modeError": "設定必須包含 command 欄位（stdio 模式）或 type + url 欄位（http/sse 模式）",
+      "commandEmpty": "command 欄位不能為空",
+      "urlInvalid": "url 欄位格式不正確",
+      "argsInvalid": "args 欄位必須是字串陣列",
+      "parseLost": "解析結果遺失，請重新提交"
+    },
+    "scheduleModal": {
+      "createTitle": "設定排程",
+      "editTitle": "編輯排程",
+      "description": "設定 Pod 的自動執行排程",
+      "frequency": "執行頻率",
+      "everySecond": "每x秒",
+      "everyXMinute": "每x分",
+      "everyXHour": "每x小時",
+      "everyDay": "每天",
+      "everyWeek": "每週",
+      "second": "秒",
+      "intervalMinute": "分鐘",
+      "intervalHour": "小時數",
+      "executionTime": "執行時間",
+      "hourUnit": "時",
+      "minuteUnit": "分",
+      "selectWeekday": "選擇星期",
+      "weekdayRequired": "請至少選擇一天",
+      "weekdays": {
+        "0": "週一",
+        "1": "週二",
+        "2": "週三",
+        "3": "週四",
+        "4": "週五",
+        "5": "週六",
+        "6": "週日"
+      },
+      "disableButton": "停用",
+      "enableButton": "啟用",
+      "updateButton": "更新"
+    },
+    "checkDirtyFailed": "檢查修改狀態失敗",
+    "connectionLine": {
+      "aiRejectedReason": "不觸發原因：{reason}",
+      "aiErrorReason": "錯誤：{reason}"
+    },
+    "podTypeMenu": {
+      "newOutputStyle": "新增 Output Style",
+      "newSubAgent": "新增 SubAgent",
+      "newCommand": "新增 Command",
+      "newOutputStyleGroup": "新增 Output Style 群組",
+      "newSubAgentGroup": "新增 SubAgent 群組",
+      "newCommandGroup": "新增 Command 群組"
+    }
+  },
+  "store": {
+    "canvas": {
+      "deleted": "{name} 已被刪除",
+      "orderSaveFailed": "排序儲存失敗",
+      "renameFailed": "重新命名失敗",
+      "renamed": "重新命名成功"
+    },
+    "connection": {
+      "alreadyExists": "連線已存在",
+      "alreadyExistsDesc": "這兩個 Pod 之間已經有連線了",
+      "createFailed": "連線建立失敗",
+      "deleteFailed": "連線刪除失敗",
+      "updateFailed": "連線更新失敗",
+      "summaryModelUpdateFailed": "連線摘要模型更新失敗",
+      "aiDecideModelUpdateFailed": "連線 AI 決策模型更新失敗"
+    },
+    "pod": {
+      "createFailed": "Pod 建立失敗",
+      "createBackendFailed": "Pod 建立失敗：後端未回傳 Pod 資料",
+      "deleteFailed": "Pod 刪除失敗",
+      "renameFailed": "Pod 重新命名失敗",
+      "renamed": "重新命名成功",
+      "scheduleFailed": "Schedule 設定失敗",
+      "multiInstanceFailed": "Pod 設定失敗"
+    },
+    "integration": {
+      "createFailed": "建立失敗",
+      "created": "建立成功",
+      "deleteFailed": "刪除失敗",
+      "deleted": "刪除成功",
+      "bindFailed": "綁定失敗",
+      "unbindFailed": "解除綁定失敗",
+      "noCanvas": "尚未選取 Canvas"
+    },
+    "backup": {
+      "completed": "備份完成"
+    },
+    "repository": {
+      "createFailed": "建立資料夾失敗",
+      "worktreeCreateFailed": "建立 Worktree 失敗",
+      "checkGitFailed": "檢查 Git 狀態失敗",
+      "getBranchesFailed": "取得分支列表失敗",
+      "checkDirtyFailed": "檢查修改狀態失敗",
+      "deleteBranchFailed": "刪除分支失敗",
+      "deleteBranchSuccess": "刪除分支成功",
+      "createSuccess": "建立成功",
+      "worktreeCreateSuccess": "Worktree 建立成功"
+    },
+    "resource": {
+      "createFailed": "建立失敗",
+      "updateFailed": "更新失敗",
+      "createSuccess": "建立成功",
+      "updateSuccess": "更新成功",
+      "deleteSuccess": "刪除成功",
+      "deleteFailed": "刪除項目失敗",
+      "loadFailed": "載入失敗"
+    },
+    "group": {
+      "noActiveCanvas": "無作用中的畫布",
+      "loadFailed": "載入群組失敗",
+      "createNameRequired": "群組名稱不能為空",
+      "createFailed": "建立群組失敗",
+      "createSuccess": "建立群組成功",
+      "deleteFailed": "刪除群組失敗",
+      "deleteSuccess": "刪除群組成功",
+      "invalidGroupId": "無效的群組 ID",
+      "invalidItemId": "無效的項目 ID",
+      "moveFailed": "移動失敗",
+      "moveSuccess": "移動成功"
+    }
+  },
+  "composable": {
+    "canvas": {
+      "noActiveCanvas": "沒有啟用的畫布",
+      "progressTimeout": "操作逾時，請重試"
+    },
+    "chat": {
+      "websocketNotConnected": "WebSocket 尚未連線",
+      "heartbeatTimeout": "連線逾時",
+      "heartbeatTimeoutDesc": "未收到伺服器心跳回應",
+      "disconnected": "連線中斷",
+      "disconnectReasons": {
+        "transportClose": "連線已關閉",
+        "transportError": "連線傳輸錯誤",
+        "pingTimeout": "心跳超時",
+        "serverDisconnect": "伺服器主動斷開",
+        "clientDisconnect": "客戶端主動斷開",
+        "unknown": "未知原因"
+      },
+      "imageTooLarge": "圖片大小超過 5MB 限制",
+      "imageUnsupportedFormat": "不支援的圖片格式",
+      "imageUnsupportedFormatDesc": "僅支援 JPEG/PNG/GIF/WebP",
+      "imageReadFailed": "圖片讀取失敗",
+      "imageInvalidFormat": "圖片格式無效",
+      "imageInvalidData": "圖片資料無效",
+      "uploadTooMany": "一次最多只能上傳 1 張圖片",
+      "speechMaxLength": "已達到最大文字長度限制",
+      "speechUnsupported": "此瀏覽器不支援語音輸入功能"
+    },
+    "skillImport": {
+      "invalidFormat": "檔案格式錯誤，僅支援 ZIP 檔案",
+      "fileTooLarge": "檔案大小超過 5MB 限制",
+      "networkFailed": "網路傳輸失敗，請重試",
+      "base64Failed": "Base64 轉換失敗",
+      "importFailed": "匯入失敗",
+      "importSuccess": "匯入成功",
+      "importSuccessOverwrite": "匯入成功（已覆蓋）"
+    },
+    "eventHandler": {
+      "podCreated": "Pod 建立成功",
+      "podRenamed": "重命名成功",
+      "podModelSet": "模型設定成功",
+      "podScheduleSet": "排程設定成功",
+      "podDeleted": "Pod 已刪除",
+      "workflowCleared": "已清空訊息",
+      "connectionCreated": "連線建立成功",
+      "connectionDeleted": "連線已刪除",
+      "canvasCreated": "Canvas 建立成功",
+      "canvasRenamed": "Canvas 重命名成功",
+      "pasted": "貼上成功",
+      "outputStyleDeleted": "輸出風格已刪除",
+      "skillDeleted": "Skill 已刪除",
+      "worktreeCreated": "Worktree 建立成功",
+      "repositoryDeleted": "Repository 已刪除",
+      "subAgentDeleted": "SubAgent 已刪除",
+      "commandDeleted": "Command 已刪除",
+      "mcpServerCreated": "MCP Server 已建立",
+      "mcpServerUpdated": "MCP Server 已更新",
+      "mcpServerDeleted": "MCP Server 已刪除"
+    },
+    "deleteSelection": {
+      "partialFailed": "刪除部分失敗",
+      "partialFailedDesc": "{count} 個物件刪除失敗"
+    },
+    "gitClone": {
+      "repoExists": "倉庫已存在",
+      "authFailed": "認證失敗，請確認 Token 設定",
+      "notFound": "找不到倉庫",
+      "networkFailed": "網路連線失敗",
+      "branchNotFound": "指定的分支不存在",
+      "diskFull": "磁碟空間不足",
+      "cloneStarted": "開始下載...",
+      "cloneCompleted": "下載完畢",
+      "cloneFailed": "未知錯誤",
+      "cloneSuccess": "Clone 成功"
+    },
+    "gitCheckout": {
+      "preparing": "準備切換分支...",
+      "completed": "切換完成",
+      "failed": "切換分支失敗",
+      "success": "切換分支成功"
+    },
+    "gitPull": {
+      "preparing": "準備 Pull...",
+      "completed": "Pull 完成",
+      "failed": "Pull 失敗",
+      "success": "Pull 成功"
+    },
+    "editModal": {
+      "editTitle": "編輯 {resource}"
+    }
+  },
+  "time": {
+    "notStarted": "尚未開始",
+    "unknown": "時間未知",
+    "justNow": "剛剛",
+    "minutesAgo": "{n} 分鐘前",
+    "hoursAgo": "{n} 小時前",
+    "daysAgo": "{n} 天前"
+  },
+  "settings": {
+    "title": "全域設定",
+    "timezone": "時區",
+    "timezonePlaceholder": "選擇時區",
+    "backup": {
+      "title": "備份設定",
+      "gitRemoteUrl": "Git Remote URL",
+      "gitRemoteUrlPlaceholder": "git{'@'}github.com:user/backup.git",
+      "gitRemoteUrlRequired": "請填寫 Git Remote URL",
+      "dailyBackupTime": "每日備份時間",
+      "backupNow": "立即備份",
+      "backingUp": "備份中...",
+      "lastBackup": "上次備份：{time}"
+    },
+    "saving": "儲存中...",
+    "loadFailed": "載入失敗",
+    "saveFailed": "儲存失敗",
+    "saveSuccess": "儲存成功"
+  }
+}

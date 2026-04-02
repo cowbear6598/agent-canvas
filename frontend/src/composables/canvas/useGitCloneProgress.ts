@@ -3,6 +3,7 @@ import { WebSocketResponseEvents } from '@/types/websocket'
 import type { RepositoryGitCloneProgressPayload, RepositoryGitCloneResultPayload } from '@/types/websocket'
 import { useCanvasContext } from '@/composables/canvas/useCanvasContext'
 import { useProgressTracker, handleProgressError, markTaskCompleted } from '@/composables/canvas/useProgressTracker'
+import { t } from '@/i18n'
 import type { ProgressTask } from '@/components/canvas/ProgressNote.vue'
 import { PROGRESS_REMOVE_DELAY_MS } from '@/lib/constants'
 
@@ -38,27 +39,27 @@ function getErrorMessage(error: string): string {
   const lowerError = error.toLowerCase()
 
   if (error.includes('ALREADY_EXISTS')) {
-    return '倉庫已存在'
+    return t('composable.gitClone.repoExists')
   }
 
   if (lowerError.includes('authentication') || lowerError.includes('401') || lowerError.includes('403')) {
-    return 'Token 權限不足，請檢查 .env 中的 Token 設定'
+    return t('composable.gitClone.authFailed')
   }
 
   if (lowerError.includes('not found') || lowerError.includes('404')) {
-    return '找不到倉庫'
+    return t('composable.gitClone.notFound')
   }
 
   if (lowerError.includes('network') || lowerError.includes('timeout')) {
-    return '網路連線失敗'
+    return t('composable.gitClone.networkFailed')
   }
 
   if (lowerError.includes('branch') || lowerError.includes('ref')) {
-    return '指定的分支不存在'
+    return t('composable.gitClone.branchNotFound')
   }
 
   if (lowerError.includes('space') || lowerError.includes('disk')) {
-    return '磁碟空間不足'
+    return t('composable.gitClone.diskFull')
   }
 
   return error
@@ -88,9 +89,9 @@ export function useGitCloneProgress(): UseGitCloneProgressReturn {
 
     onResult: async (task, payload, helpers) => {
       if (payload.success) {
-        markTaskCompleted(task, '下載完畢')
+        markTaskCompleted(task, t('composable.gitClone.cloneCompleted'))
 
-        helpers.showSuccessToast('Repository', 'Clone 成功', task.repoName)
+        helpers.showSuccessToast('Repository', t('composable.gitClone.cloneSuccess'), task.repoName)
 
         await repositoryStore.loadRepositories()
 
@@ -98,8 +99,8 @@ export function useGitCloneProgress(): UseGitCloneProgressReturn {
       } else {
         handleProgressError(task, helpers, payload.requestId, payload.error, {
           category: 'Repository',
-          action: 'Clone 失敗',
-          defaultMessage: '未知錯誤',
+          action: t('composable.gitClone.cloneFailed'),
+          defaultMessage: t('composable.gitClone.cloneFailed'),
         }, getErrorMessage)
       }
     },
@@ -118,7 +119,7 @@ export function useGitCloneProgress(): UseGitCloneProgressReturn {
       requestId,
       repoName,
       progress: 0,
-      message: '開始下載...',
+      message: t('composable.gitClone.cloneStarted'),
       status: 'cloning',
     })
   }

@@ -1,99 +1,104 @@
-import {generateRequestId} from '@/services/utils'
-import {websocketClient} from './WebSocketClient'
+import { generateRequestId } from "@/services/utils";
+import { websocketClient } from "./WebSocketClient";
+import { t } from "@/i18n";
 
 export interface WebSocketRequestConfig<TPayload, TResult> {
-    requestEvent: string
-    responseEvent: string
-    payload: Omit<TPayload, 'requestId'>
-    timeout?: number
-    matchResponse?: (response: TResult, requestId: string) => boolean
+  requestEvent: string;
+  responseEvent: string;
+  payload: Omit<TPayload, "requestId">;
+  timeout?: number;
+  matchResponse?: (response: TResult, requestId: string) => boolean;
 }
 
-const DEFAULT_REQUEST_TIMEOUT_MS = 10_000
+const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 
 interface WebSocketResponse {
-    requestId?: string
-    success?: boolean
-    error?: string
+  requestId?: string;
+  success?: boolean;
+  error?: string;
 }
 
 export interface PendingRequest<T = unknown> {
-    requestId: string
-    resolve: (data: T) => void
-    reject: (error: Error) => void
-    timeoutId: ReturnType<typeof setTimeout>
-    responseEvent: string
-    timestamp: number
+  requestId: string;
+  resolve: (data: T) => void;
+  reject: (error: Error) => void;
+  timeoutId: ReturnType<typeof setTimeout>;
+  responseEvent: string;
+  timestamp: number;
 }
 
-const pendingRequests = new Map<string, PendingRequest>()
+const pendingRequests = new Map<string, PendingRequest>();
 
-export function tryResolvePendingRequest(requestId: string, data: unknown): boolean {
-    const request = pendingRequests.get(requestId)
-    if (request) {
-        clearTimeout(request.timeoutId)
-        pendingRequests.delete(requestId)
-        request.resolve(data)
-        return true
+export function tryResolvePendingRequest(
+  requestId: string,
+  data: unknown,
+): boolean {
+  const request = pendingRequests.get(requestId);
+  if (request) {
+    clearTimeout(request.timeoutId);
+    pendingRequests.delete(requestId);
+    request.resolve(data);
+    return true;
+  }
+  return false;
+}
+
+export async function createWebSocketRequest<
+  TPayload extends { requestId: string },
+  TResult,
+>(config: WebSocketRequestConfig<TPayload, TResult>): Promise<TResult> {
+  const {
+    requestEvent,
+    responseEvent,
+    payload,
+    timeout = DEFAULT_REQUEST_TIMEOUT_MS,
+    matchResponse,
+  } = config;
+
+  return new Promise<TResult>((resolve, reject) => {
+    if (!websocketClient.isConnected.value) {
+      reject(new Error(t("websocket.notConnected")));
+      return;
     }
-    return false
-}
 
-export async function createWebSocketRequest<TPayload extends { requestId: string }, TResult>(
-    config: WebSocketRequestConfig<TPayload, TResult>
-): Promise<TResult> {
-    const {
-        requestEvent,
-        responseEvent,
-        payload,
-        timeout = DEFAULT_REQUEST_TIMEOUT_MS,
-        matchResponse
-    } = config
+    const requestId = generateRequestId();
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-    return new Promise<TResult>((resolve, reject) => {
-        if (!websocketClient.isConnected.value) {
-            reject(new Error('WebSocket 尚未連線'))
-            return
-        }
+    const handleResponse = (response: TResult): void => {
+      const responseWithBase = response as TResult & WebSocketResponse;
 
-        const requestId = generateRequestId()
-        let timeoutId: ReturnType<typeof setTimeout> | null = null
+      const shouldMatch = matchResponse
+        ? matchResponse(response, requestId)
+        : responseWithBase.requestId === requestId;
 
-        const handleResponse = (response: TResult): void => {
-            const responseWithBase = response as TResult & WebSocketResponse
+      if (!shouldMatch) return;
 
-            const shouldMatch = matchResponse
-                ? matchResponse(response, requestId)
-                : responseWithBase.requestId === requestId
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
 
-            if (!shouldMatch) return
+      websocketClient.off(responseEvent, handleResponse);
 
-            if (timeoutId) {
-                clearTimeout(timeoutId)
-                timeoutId = null
-            }
+      if (responseWithBase.success === false) {
+        const error = responseWithBase.error ?? t("common.error.unknown");
+        reject(new Error(error));
+        return;
+      }
 
-            websocketClient.off(responseEvent, handleResponse)
+      resolve(response);
+    };
 
-            if (responseWithBase.success === false) {
-                const error = responseWithBase.error ?? '未知錯誤'
-                reject(new Error(error))
-                return
-            }
+    websocketClient.on(responseEvent, handleResponse);
 
-            resolve(response)
-        }
+    websocketClient.emit(requestEvent, {
+      ...payload,
+      requestId,
+    } as TPayload);
 
-        websocketClient.on(responseEvent, handleResponse)
-
-        websocketClient.emit(requestEvent, {
-            ...payload,
-            requestId
-        } as TPayload)
-
-        timeoutId = setTimeout(() => {
-            websocketClient.off(responseEvent, handleResponse)
-            reject(new Error(`請求逾時：${requestEvent}`))
-        }, timeout)
-    })
+    timeoutId = setTimeout(() => {
+      websocketClient.off(responseEvent, handleResponse);
+      reject(new Error(t("websocket.requestTimeout", { event: requestEvent })));
+    }, timeout);
+  });
 }

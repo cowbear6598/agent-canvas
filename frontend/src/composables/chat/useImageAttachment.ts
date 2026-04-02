@@ -2,6 +2,7 @@ import type {Ref} from 'vue'
 import {MAX_IMAGE_SIZE_BYTES, SUPPORTED_IMAGE_MEDIA_TYPES, MAX_IMAGES_PER_DROP} from '@/lib/constants'
 import {useToast} from '@/composables/useToast'
 import type {ImageMediaType} from '@/types/websocket/requests'
+import {t} from '@/i18n'
 
 export interface ImageAttachment {
   mediaType: ImageMediaType
@@ -54,32 +55,32 @@ export function useImageAttachment(options: {
 
   const insertImageAtCursor = async (file: File): Promise<void> => {
     if (file.size > MAX_IMAGE_SIZE_BYTES) {
-      toast({title: '圖片大小超過 5MB 限制'})
+      toast({title: t('composable.chat.imageTooLarge')})
       return
     }
 
     if (!isValidImageType(file.type)) {
       toast({
-        title: '不支援的圖片格式',
-        description: '僅支援 JPEG/PNG/GIF/WebP',
+        title: t('composable.chat.imageUnsupportedFormat'),
+        description: t('composable.chat.imageUnsupportedFormatDesc'),
       })
       return
     }
 
     const result = await readFileAsDataURL(file)
     if (!result) {
-      toast({title: '圖片讀取失敗'})
+      toast({title: t('composable.chat.imageReadFailed')})
       return
     }
 
     if (!/^data:image\/(jpeg|png|gif|webp);base64,/.test(result)) {
-      toast({title: '圖片格式無效'})
+      toast({title: t('composable.chat.imageInvalidFormat')})
       return
     }
 
     const base64Data = result.split(',')[1]
     if (!base64Data) {
-      toast({title: '圖片資料無效'})
+      toast({title: t('composable.chat.imageInvalidData')})
       return
     }
 
@@ -104,7 +105,7 @@ export function useImageAttachment(options: {
 
     const imageFiles = Array.from(files).filter(file => isValidImageType(file.type))
     if (imageFiles.length > MAX_IMAGES_PER_DROP) {
-      toast({title: '一次最多只能上傳 1 張圖片'})
+      toast({title: t('composable.chat.uploadTooMany')})
     }
 
     const fileToInsert = imageFiles[0]

@@ -2,6 +2,7 @@ import { useWebSocketErrorHandler } from '@/composables/useWebSocketErrorHandler
 import { createWebSocketRequest } from '@/services/websocket'
 import { requireActiveCanvas } from '@/utils/canvasGuard'
 import { useToast } from '@/composables/useToast'
+import { t } from '@/i18n'
 import type { WebSocketRequestEvents, WebSocketResponseEvents } from '@/types/websocket'
 import type { ToastCategory } from '@/composables/useToast'
 
@@ -122,16 +123,16 @@ export function createResourceCRUDActions<
 
       if (!response) {
         if (toastCategory) {
-          showErrorToast(toastCategory, '建立失敗', `建立 ${resourceType} 失敗`)
+          showErrorToast(toastCategory, t('common.error.create'), t('store.resource.createFailed'))
         }
-        return { success: false, error: `建立 ${resourceType} 失敗` }
+        return { success: false, error: t('store.resource.createFailed') }
       }
 
       const item = config.extractItemFromResponse.create(response)
       if (!item) {
-        const error = (response as { error?: string }).error || `建立 ${resourceType} 失敗`
+        const error = (response as { error?: string }).error || t('store.resource.createFailed')
         if (toastCategory) {
-          showErrorToast(toastCategory, '建立失敗', error)
+          showErrorToast(toastCategory, t('common.error.create'), error)
         }
         return {
           success: false,
@@ -141,7 +142,7 @@ export function createResourceCRUDActions<
 
       items.push(item as TItem)
       if (toastCategory) {
-        showSuccessToast(toastCategory, '建立成功', name)
+        showSuccessToast(toastCategory, t('common.success.create'), name)
       }
       return { success: true, item }
     },
@@ -166,16 +167,16 @@ export function createResourceCRUDActions<
 
       if (!response) {
         if (toastCategory) {
-          showErrorToast(toastCategory, '更新失敗', `更新 ${resourceType} 失敗`)
+          showErrorToast(toastCategory, t('common.error.update'), t('store.resource.updateFailed'))
         }
-        return { success: false, error: `更新 ${resourceType} 失敗` }
+        return { success: false, error: t('store.resource.updateFailed') }
       }
 
       const item = config.extractItemFromResponse.update(response)
       if (!item) {
-        const error = (response as { error?: string }).error || `更新 ${resourceType} 失敗`
+        const error = (response as { error?: string }).error || t('store.resource.updateFailed')
         if (toastCategory) {
-          showErrorToast(toastCategory, '更新失敗', error)
+          showErrorToast(toastCategory, t('common.error.update'), error)
         }
         return {
           success: false,
@@ -186,7 +187,7 @@ export function createResourceCRUDActions<
       const updateFn = config.updateItemsList ?? defaultReplaceItemInList
       updateFn(items, itemId, item)
       if (toastCategory) {
-        showSuccessToast(toastCategory, '更新成功', item.name)
+        showSuccessToast(toastCategory, t('common.success.update'), item.name)
       }
       return { success: true, item }
     },

@@ -2,6 +2,7 @@ import {ref, onMounted, onUnmounted} from 'vue'
 import type {Ref} from 'vue'
 import {MAX_MESSAGE_LENGTH} from '@/lib/constants'
 import {useToast} from '@/composables/useToast'
+import {t} from '@/i18n'
 
 interface SpeechRecognitionResult {
   readonly [index: number]: { transcript: string }
@@ -60,7 +61,7 @@ export function useSpeechRecognition(options: {
     if (currentText.value.length + transcript.length > MAX_MESSAGE_LENGTH) {
       updateText((currentText.value + transcript).slice(0, MAX_MESSAGE_LENGTH))
       recognition.value?.stop()
-      toast({title: '已達到最大文字長度限制'})
+      toast({title: t('composable.chat.speechMaxLength')})
       return
     }
 
@@ -104,7 +105,7 @@ export function useSpeechRecognition(options: {
   const toggleListening = (): void => {
     if (disabled.value) return
     if (!recognition.value) {
-      toast({title: '此瀏覽器不支援語音輸入功能'})
+      toast({title: t('composable.chat.speechUnsupported')})
       return
     }
 

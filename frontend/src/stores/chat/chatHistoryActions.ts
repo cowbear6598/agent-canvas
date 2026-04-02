@@ -12,6 +12,7 @@ import type {
     PersistedMessage
 } from '@/types/websocket'
 import type {ChatStoreInstance} from './chatStore'
+import {t} from '@/i18n'
 
 const HISTORY_LOAD_TIMEOUT_MS = 10000
 
@@ -41,7 +42,7 @@ export function createHistoryActions(store: ChatStoreInstance, messageActions: M
         }
 
         if (!store.isConnected) {
-            const error = 'WebSocket 尚未連線'
+            const error = t('composable.chat.websocketNotConnected')
             setHistoryLoadingStatus(podId, 'error')
             setHistoryLoadingError(podId, error)
             throw new Error(error)

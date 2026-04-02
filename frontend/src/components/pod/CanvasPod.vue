@@ -1,34 +1,38 @@
 <script setup lang="ts">
-import {ref, computed} from 'vue'
-import type {Pod, ModelType} from '@/types'
-import {useCanvasContext} from '@/composables/canvas/useCanvasContext'
-import {useBatchDrag} from '@/composables/canvas'
-import {isCtrlOrCmdPressed} from '@/utils/keyboardHelpers'
-import {WebSocketRequestEvents, WebSocketResponseEvents} from '@/services/websocket'
-import type {
-  PodSetModelPayload,
-  PodModelSetPayload,
-} from '@/types/websocket'
-import {useSendCanvasAction} from '@/composables/useSendCanvasAction'
-import {usePodDrag} from '@/composables/pod/usePodDrag'
-import {usePodNoteBinding} from '@/composables/pod/usePodNoteBinding'
-import {useWorkflowClear} from '@/composables/pod/useWorkflowClear'
-import {usePodSchedule} from '@/composables/pod/usePodSchedule'
-import {usePodAnchorDrag} from '@/composables/pod/usePodAnchorDrag'
-import {useToast} from '@/composables/useToast'
-import {isMultiInstanceChainPod, isMultiInstanceSourcePod} from '@/utils/multiInstanceGuard'
-import PodHeader from '@/components/pod/PodHeader.vue'
-import PodMiniScreen from '@/components/pod/PodMiniScreen.vue'
-import PodSlots from '@/components/pod/PodSlots.vue'
-import PodAnchors from '@/components/pod/PodAnchors.vue'
-import PodActions from '@/components/pod/PodActions.vue'
-import PodModelSelector from '@/components/pod/PodModelSelector.vue'
-import IntegrationStatusIcon from '@/components/integration/IntegrationStatusIcon.vue'
-import ScheduleModal from '@/components/canvas/ScheduleModal.vue'
+import { ref, computed } from "vue";
+import type { Pod, ModelType } from "@/types";
+import { useCanvasContext } from "@/composables/canvas/useCanvasContext";
+import { useBatchDrag } from "@/composables/canvas";
+import { isCtrlOrCmdPressed } from "@/utils/keyboardHelpers";
+import {
+  WebSocketRequestEvents,
+  WebSocketResponseEvents,
+} from "@/services/websocket";
+import type { PodSetModelPayload, PodModelSetPayload } from "@/types/websocket";
+import { useSendCanvasAction } from "@/composables/useSendCanvasAction";
+import { usePodDrag } from "@/composables/pod/usePodDrag";
+import { usePodNoteBinding } from "@/composables/pod/usePodNoteBinding";
+import { useWorkflowClear } from "@/composables/pod/useWorkflowClear";
+import { usePodSchedule } from "@/composables/pod/usePodSchedule";
+import { usePodAnchorDrag } from "@/composables/pod/usePodAnchorDrag";
+import { useToast } from "@/composables/useToast";
+import { useI18n } from "vue-i18n";
+import {
+  isMultiInstanceChainPod,
+  isMultiInstanceSourcePod,
+} from "@/utils/multiInstanceGuard";
+import PodHeader from "@/components/pod/PodHeader.vue";
+import PodMiniScreen from "@/components/pod/PodMiniScreen.vue";
+import PodSlots from "@/components/pod/PodSlots.vue";
+import PodAnchors from "@/components/pod/PodAnchors.vue";
+import PodActions from "@/components/pod/PodActions.vue";
+import PodModelSelector from "@/components/pod/PodModelSelector.vue";
+import IntegrationStatusIcon from "@/components/integration/IntegrationStatusIcon.vue";
+import ScheduleModal from "@/components/canvas/ScheduleModal.vue";
 
 const props = defineProps<{
-  pod: Pod
-}>()
+  pod: Pod;
+}>();
 
 const {
   podStore,
@@ -42,51 +46,72 @@ const {
   mcpServerStore,
   connectionStore,
   chatStore,
-} = useCanvasContext()
-const {startBatchDrag, isElementSelected, isBatchDragging} = useBatchDrag()
-const {toast} = useToast()
-const {sendCanvasAction} = useSendCanvasAction()
+} = useCanvasContext();
+const { startBatchDrag, isElementSelected, isBatchDragging } = useBatchDrag();
+const { toast } = useToast();
+const { sendCanvasAction } = useSendCanvasAction();
+const { t } = useI18n();
 
-const isActive = computed(() => props.pod.id === podStore.activePodId)
-const boundNote = computed(() => outputStyleStore.getNotesByPodId(props.pod.id)[0])
-const boundSkillNotes = computed(() => skillStore.getNotesByPodId(props.pod.id))
-const boundSubAgentNotes = computed(() => subAgentStore.getNotesByPodId(props.pod.id))
-const boundRepositoryNote = computed(() => repositoryStore.getNotesByPodId(props.pod.id)[0])
-const boundCommandNote = computed(() => commandStore.getNotesByPodId(props.pod.id)[0])
-const boundMcpServerNotes = computed(() => mcpServerStore.getNotesByPodId(props.pod.id))
-const isSourcePod = computed(() => connectionStore.isSourcePod(props.pod.id))
-const hasUpstreamConnection = computed(() => connectionStore.hasUpstreamConnections(props.pod.id))
-const showScheduleButton = computed(() => isSourcePod.value || !hasUpstreamConnection.value)
-const currentModel = computed(() => props.pod.model ?? 'opus')
+const isActive = computed(() => props.pod.id === podStore.activePodId);
+const boundNote = computed(
+  () => outputStyleStore.getNotesByPodId(props.pod.id)[0],
+);
+const boundSkillNotes = computed(() =>
+  skillStore.getNotesByPodId(props.pod.id),
+);
+const boundSubAgentNotes = computed(() =>
+  subAgentStore.getNotesByPodId(props.pod.id),
+);
+const boundRepositoryNote = computed(
+  () => repositoryStore.getNotesByPodId(props.pod.id)[0],
+);
+const boundCommandNote = computed(
+  () => commandStore.getNotesByPodId(props.pod.id)[0],
+);
+const boundMcpServerNotes = computed(() =>
+  mcpServerStore.getNotesByPodId(props.pod.id),
+);
+const isSourcePod = computed(() => connectionStore.isSourcePod(props.pod.id));
+const hasUpstreamConnection = computed(() =>
+  connectionStore.hasUpstreamConnections(props.pod.id),
+);
+const showScheduleButton = computed(
+  () => isSourcePod.value || !hasUpstreamConnection.value,
+);
+const currentModel = computed(() => props.pod.model ?? "opus");
 
 const isSelected = computed(() =>
-    selectionStore.selectedPodIds.includes(props.pod.id)
-)
+  selectionStore.selectedPodIds.includes(props.pod.id),
+);
 
 const podStatusClass = computed(() => {
-  return props.pod.status ? `pod-status-${props.pod.status}` : ''
-})
+  return props.pod.status ? `pod-status-${props.pod.status}` : "";
+});
 
 const emit = defineEmits<{
-  select: [podId: string]
-  update: [pod: Pod]
-  delete: [id: string]
-  'drag-end': [data: { id: string; x: number; y: number }]
-  'drag-complete': [data: { id: string }]
-  contextmenu: [data: { podId: string; event: MouseEvent }]
-}>()
+  select: [podId: string];
+  update: [pod: Pod];
+  delete: [id: string];
+  "drag-end": [data: { id: string; x: number; y: number }];
+  "drag-complete": [data: { id: string }];
+  contextmenu: [data: { podId: string; event: MouseEvent }];
+}>();
 
-const isEditing = ref(false)
-const showDeleteDialog = ref(false)
+const isEditing = ref(false);
+const showDeleteDialog = ref(false);
 
-const isMultiInstanceEnabled = computed(() => props.pod.multiInstance ?? false)
-const isDownstreamMultiInstance = computed(() =>
-  isMultiInstanceChainPod(props.pod.id) && !isMultiInstanceSourcePod(props.pod.id)
-)
+const isMultiInstanceEnabled = computed(() => props.pod.multiInstance ?? false);
+const isDownstreamMultiInstance = computed(
+  () =>
+    isMultiInstanceChainPod(props.pod.id) &&
+    !isMultiInstanceSourcePod(props.pod.id),
+);
 
-const isWorkflowRunning = computed(() => connectionStore.isWorkflowRunning(props.pod.id))
+const isWorkflowRunning = computed(() =>
+  connectionStore.isWorkflowRunning(props.pod.id),
+);
 
-const computedPodId = computed(() => props.pod.id)
+const computedPodId = computed(() => props.pod.id);
 
 const {
   showScheduleModal,
@@ -99,38 +124,28 @@ const {
   handleScheduleDelete,
   handleScheduleToggle,
   handleClearScheduleFiredAnimation,
-} = usePodSchedule(
-  computedPodId,
-  () => props.pod.schedule,
-  { podStore }
-)
+} = usePodSchedule(computedPodId, () => props.pod.schedule, { podStore });
 
-const {
-  handleAnchorDragStart,
-  handleAnchorDragMove,
-  handleAnchorDragEnd,
-} = usePodAnchorDrag({ viewportStore, connectionStore, podStore })
+const { handleAnchorDragStart, handleAnchorDragMove, handleAnchorDragEnd } =
+  usePodAnchorDrag({ viewportStore, connectionStore, podStore });
 
-const {isDragging, startSingleDrag} = usePodDrag(
+const { isDragging, startSingleDrag } = usePodDrag(
   computedPodId,
   () => ({ x: props.pod.x, y: props.pod.y }),
   isElementSelected,
   emit,
-  { viewportStore, selectionStore, podStore, connectionStore }
-)
+  { viewportStore, selectionStore, podStore, connectionStore },
+);
 
-const {handleNoteDrop, handleNoteRemove} = usePodNoteBinding(
-  computedPodId,
-  {
-    outputStyleStore,
-    skillStore,
-    subAgentStore,
-    repositoryStore,
-    commandStore,
-    mcpServerStore,
-    podStore
-  }
-)
+const { handleNoteDrop, handleNoteRemove } = usePodNoteBinding(computedPodId, {
+  outputStyleStore,
+  skillStore,
+  subAgentStore,
+  repositoryStore,
+  commandStore,
+  mcpServerStore,
+  podStore,
+});
 
 const {
   showClearDialog,
@@ -140,107 +155,110 @@ const {
   handleClearWorkflow,
   handleConfirmClear,
   handleCancelClear,
-} = useWorkflowClear(
-  computedPodId,
-  { chatStore, podStore, connectionStore }
-)
+} = useWorkflowClear(computedPodId, { chatStore, podStore, connectionStore });
 
 const SLOT_CLASSES = [
-  '.pod-output-style-slot',
-  '.pod-skill-slot',
-  '.pod-subagent-slot',
-  '.pod-repository-slot',
-  '.pod-command-slot',
-  '.pod-mcp-server-slot'
-]
+  ".pod-output-style-slot",
+  ".pod-skill-slot",
+  ".pod-subagent-slot",
+  ".pod-repository-slot",
+  ".pod-command-slot",
+  ".pod-mcp-server-slot",
+];
 
 const shouldBlockForSlot = (target: HTMLElement): boolean => {
-  return SLOT_CLASSES.some(cls => target.closest(cls) !== null)
-}
+  return SLOT_CLASSES.some((cls) => target.closest(cls) !== null);
+};
 
 const handleCtrlClick = (): void => {
-  selectionStore.toggleElement({type: 'pod', id: props.pod.id})
-  podStore.setActivePod(props.pod.id)
-  connectionStore.selectConnection(null)
-}
+  selectionStore.toggleElement({ type: "pod", id: props.pod.id });
+  podStore.setActivePod(props.pod.id);
+  connectionStore.selectConnection(null);
+};
 
 const handleCtrlOrModifierClick = (e: MouseEvent): boolean => {
-  if (!isCtrlOrCmdPressed(e)) return false
-  handleCtrlClick()
-  return true
-}
+  if (!isCtrlOrCmdPressed(e)) return false;
+  handleCtrlClick();
+  return true;
+};
 
 const handleMouseDown = (e: MouseEvent): void => {
-  const target = e.target as HTMLElement
+  const target = e.target as HTMLElement;
 
-  if (shouldBlockForSlot(target)) return
-  if (handleCtrlOrModifierClick(e)) return
-  if (isElementSelected('pod', props.pod.id) && startBatchDrag(e)) return
+  if (shouldBlockForSlot(target)) return;
+  if (handleCtrlOrModifierClick(e)) return;
+  if (isElementSelected("pod", props.pod.id) && startBatchDrag(e)) return;
 
-  startSingleDrag(e)
-}
+  startSingleDrag(e);
+};
 
 const handleRename = (): void => {
-  isEditing.value = true
-}
+  isEditing.value = true;
+};
 
 const handleUpdateName = (name: string): void => {
-  emit('update', {...props.pod, name})
-}
+  emit("update", { ...props.pod, name });
+};
 
 const handleSaveName = (): void => {
-  isEditing.value = false
-}
+  isEditing.value = false;
+};
 
 const handleDelete = (): void => {
-  emit('delete', props.pod.id)
-  showDeleteDialog.value = false
-}
+  emit("delete", props.pod.id);
+  showDeleteDialog.value = false;
+};
 
 const handleSelectPod = (): void => {
-  podStore.setActivePod(props.pod.id)
-  emit('select', props.pod.id)
-}
+  podStore.setActivePod(props.pod.id);
+  emit("select", props.pod.id);
+};
 
 const handleDblClick = (e: MouseEvent): void => {
-  if (isEditing.value || isDragging.value) return
+  if (isEditing.value || isDragging.value) return;
 
-  const target = e.target as HTMLElement
+  const target = e.target as HTMLElement;
 
-  if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return
+  if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
 
   if (isDownstreamMultiInstance.value) {
     toast({
-      title: 'Pod',
-      description: '此 Pod 屬於 Multi-Instance 流程，請從歷程查看',
-    })
-    return
+      title: "Pod",
+      description: t("pod.multiInstance.readonlyHint"),
+    });
+    return;
   }
 
-  handleSelectPod()
-}
+  handleSelectPod();
+};
 
 const handleModelChange = async (model: ModelType): Promise<void> => {
-  const response = await sendCanvasAction<PodSetModelPayload, PodModelSetPayload>({
+  const response = await sendCanvasAction<
+    PodSetModelPayload,
+    PodModelSetPayload
+  >({
     requestEvent: WebSocketRequestEvents.POD_SET_MODEL,
     responseEvent: WebSocketResponseEvents.POD_MODEL_SET,
-    payload: {podId: props.pod.id, model},
-  })
+    payload: { podId: props.pod.id, model },
+  });
 
-  if (!response) return
-  if (!response.pod) return
+  if (!response) return;
+  if (!response.pod) return;
 
-  podStore.updatePodModel(props.pod.id, response.pod.model ?? 'opus')
-}
+  podStore.updatePodModel(props.pod.id, response.pod.model ?? "opus");
+};
 
 const handleToggleMultiInstance = async (): Promise<void> => {
-  await podStore.setMultiInstanceWithBackend(props.pod.id, !isMultiInstanceEnabled.value)
-}
+  await podStore.setMultiInstanceWithBackend(
+    props.pod.id,
+    !isMultiInstanceEnabled.value,
+  );
+};
 
 const handleContextMenu = (e: MouseEvent): void => {
-  e.preventDefault()
-  emit('contextmenu', { podId: props.pod.id, event: e })
-}
+  e.preventDefault();
+  emit("contextmenu", { podId: props.pod.id, event: e });
+};
 </script>
 
 <template>
@@ -273,7 +291,9 @@ const handleContextMenu = (e: MouseEvent): void => {
         :bound-repository-note="boundRepositoryNote"
         :bound-command-note="boundCommandNote"
         :bound-mcp-server-notes="boundMcpServerNotes"
-        @output-style-dropped="(noteId) => handleNoteDrop('outputStyle', noteId)"
+        @output-style-dropped="
+          (noteId) => handleNoteDrop('outputStyle', noteId)
+        "
         @output-style-removed="() => handleNoteRemove('outputStyle')"
         @skill-dropped="(noteId) => handleNoteDrop('skill', noteId)"
         @subagent-dropped="(noteId) => handleNoteDrop('subAgent', noteId)"
@@ -286,7 +306,10 @@ const handleContextMenu = (e: MouseEvent): void => {
 
       <div
         class="pod-doodle w-56 overflow-visible relative"
-        :class="[podStatusClass, { selected: isSelected, dragging: isDragging || isBatchDragging }]"
+        :class="[
+          podStatusClass,
+          { selected: isSelected, dragging: isDragging || isBatchDragging },
+        ]"
         @dblclick="handleDblClick"
         @contextmenu="handleContextMenu"
       >
@@ -314,9 +337,7 @@ const handleContextMenu = (e: MouseEvent): void => {
             @rename="handleRename"
           />
 
-          <PodMiniScreen
-            :output="pod.output"
-          />
+          <PodMiniScreen :output="pod.output" />
         </div>
       </div>
 

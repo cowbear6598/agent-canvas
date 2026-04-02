@@ -5,6 +5,7 @@ import { listPlugins } from "@/services/pluginApi";
 import { updatePodPlugins as updatePodPluginsApi } from "@/services/podPluginApi";
 import { usePodStore } from "@/stores";
 import { useToast } from "@/composables/useToast";
+import { useI18n } from "vue-i18n";
 import { getActiveCanvasIdOrWarn } from "@/utils/canvasGuard";
 import type { InstalledPlugin } from "@/types/plugin";
 
@@ -22,6 +23,7 @@ const emit = defineEmits<{
 
 const podStore = usePodStore();
 const { toast } = useToast();
+const { t } = useI18n();
 
 const installedPlugins = ref<InstalledPlugin[]>([]);
 const localPluginIds = ref<string[]>([]);
@@ -35,8 +37,8 @@ onMounted(async () => {
   } catch {
     installedPlugins.value = [];
     toast({
-      title: "載入 Plugin 列表失敗",
-      description: "無法取得已安裝的 Plugin 列表，請稍後再試",
+      title: t("canvas.podContextMenu.pluginLoadFailed"),
+      description: t("canvas.podContextMenu.pluginLoadFailedDesc"),
       variant: "destructive",
     });
   }
@@ -73,8 +75,8 @@ const handleToggle = async (
     localPluginIds.value = previous;
     podStore.updatePodPlugins(props.podId, previous);
     toast({
-      title: "Plugin 設定失敗",
-      description: "無法更新 Pod Plugin 設定，請稍後再試",
+      title: t("canvas.podContextMenu.pluginUpdateFailed"),
+      description: t("canvas.podContextMenu.pluginUpdateFailedDesc"),
       variant: "destructive",
     });
   }
@@ -96,7 +98,7 @@ const handleToggle = async (
       v-if="installedPlugins.length === 0"
       class="px-2 py-1 text-xs text-muted-foreground font-mono"
     >
-      尚未安裝任何 Plugin
+      {{ $t("canvas.podContextMenu.noPluginInstalled") }}
     </div>
     <div v-else class="pod-menu-submenu-scrollable space-y-1">
       <div

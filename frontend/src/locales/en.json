@@ -1,0 +1,639 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "create": "Create",
+    "update": "Update",
+    "edit": "Edit",
+    "close": "Close",
+    "copy": "Copy",
+    "import": "Import",
+    "export": "Export",
+    "enable": "Enable",
+    "disable": "Disable",
+    "add": "Add",
+    "saving": "Saving...",
+    "connecting": "Connecting...",
+    "loading": "Loading...",
+    "backingUp": "Backing up...",
+    "clearing": "Clearing...",
+    "connectionStatus": {
+      "connected": "Connected",
+      "disconnected": "Disconnected",
+      "error": "Error"
+    },
+    "success": {
+      "create": "Created successfully",
+      "delete": "Deleted successfully",
+      "update": "Updated successfully",
+      "save": "Saved successfully",
+      "import": "Imported successfully",
+      "copy": "Copied successfully",
+      "move": "Moved successfully"
+    },
+    "error": {
+      "operation": "Operation failed",
+      "create": "Create failed",
+      "delete": "Delete failed",
+      "update": "Update failed",
+      "save": "Save failed",
+      "load": "Load failed",
+      "import": "Import failed",
+      "networkFailed": "Network connection failed",
+      "unknown": "Unknown error"
+    },
+    "validation": {
+      "required": "Cannot be empty",
+      "nameRequired": "Name cannot be empty",
+      "formatError": "Format error",
+      "invalidFormat": "Invalid format"
+    },
+    "confirmDelete": "Confirm Delete",
+    "confirmDeleteMessage": "Are you sure you want to delete \"{name}\"? This action cannot be undone.",
+    "cannotDelete": "Cannot delete"
+  },
+  "integration": {
+    "select": {
+      "title": "Integrations"
+    },
+    "apps": {
+      "title": "{provider} Apps",
+      "addApp": "Add App",
+      "connecting": "Connecting...",
+      "confirmAdd": "Confirm"
+    },
+    "connect": {
+      "title": "Connect {provider}",
+      "descriptionNoResource": "Select the {provider} App to connect with this Pod",
+      "descriptionWithResource": "Select the {provider} App and {resourceLabel} to connect with this Pod",
+      "noAppsHint": "No {provider} App available. Please add one in the management panel first.",
+      "selectApp": "Select App",
+      "selectResource": "Select {resourceLabel}"
+    },
+    "status": {
+      "appRemoved": "{provider} App removed",
+      "appStatus": "{provider} {status}: {name}"
+    },
+    "toast": {
+      "bindFailed": "Bind failed",
+      "unbindFailed": "Unbind failed",
+      "noCanvas": "No canvas selected"
+    },
+    "slack": {
+      "emptyAppHint": "No Slack App registered yet",
+      "emptyResourceHint": "No channels available for this App",
+      "resourceLabel": "Channel",
+      "field": {
+        "name": {
+          "label": "Name",
+          "placeholder": "e.g. My Slack Bot"
+        },
+        "botToken": {
+          "label": "Bot Token",
+          "placeholder": "xoxb-..."
+        },
+        "signingSecret": {
+          "label": "Signing Secret",
+          "placeholder": "Signing Secret"
+        }
+      },
+      "validate": {
+        "nameRequired": "Name cannot be empty",
+        "botTokenRequired": "Bot Token cannot be empty",
+        "botTokenPrefix": "Bot Token must start with xoxb-",
+        "signingSecretRequired": "Signing Secret cannot be empty"
+      }
+    },
+    "telegram": {
+      "emptyAppHint": "No Telegram Bot registered yet",
+      "emptyResourceHint": "",
+      "resourceLabel": "User ID",
+      "field": {
+        "name": {
+          "label": "Name",
+          "placeholder": "e.g. My Telegram Bot"
+        },
+        "botToken": {
+          "label": "Bot Token",
+          "placeholder": "123456:ABC-DEF..."
+        },
+        "userId": {
+          "label": "Telegram User ID",
+          "placeholder": "Enter User ID",
+          "hint": "Enter your Telegram User ID (can be found via {'@'}userinfobot)"
+        }
+      },
+      "validate": {
+        "nameRequired": "Name cannot be empty",
+        "botTokenRequired": "Bot Token cannot be empty",
+        "userIdInvalid": "User ID must be a positive integer"
+      }
+    },
+    "jira": {
+      "emptyAppHint": "No Jira App registered yet",
+      "emptyResourceHint": "",
+      "resourceLabel": "",
+      "field": {
+        "name": {
+          "label": "Name",
+          "placeholder": "e.g. my-project"
+        },
+        "siteUrl": {
+          "label": "Site URL",
+          "placeholder": "https://your-domain.atlassian.net"
+        },
+        "webhookSecret": {
+          "label": "Webhook Secret",
+          "placeholder": "Secret key for verifying webhook requests"
+        }
+      },
+      "validate": {
+        "nameRequired": "Name cannot be empty",
+        "nameInvalid": "Name can only contain letters, numbers, underscores and hyphens",
+        "siteUrlRequired": "Site URL cannot be empty",
+        "siteUrlPrefix": "Site URL must start with https://",
+        "webhookSecretRequired": "Webhook Secret cannot be empty",
+        "webhookSecretLength": "Webhook Secret must be at least 16 characters"
+      },
+      "eventFilter": {
+        "label": "Event Filter Mode",
+        "all": "All Events",
+        "statusChanged": "Status Changed Only"
+      }
+    },
+    "sentry": {
+      "emptyAppHint": "No Sentry App registered yet",
+      "emptyResourceHint": "",
+      "resourceLabel": "",
+      "field": {
+        "name": {
+          "label": "Name",
+          "placeholder": "e.g. my-sentry-app"
+        },
+        "clientSecret": {
+          "label": "Client Secret",
+          "placeholder": "Client Secret from Sentry Internal Integration"
+        }
+      },
+      "validate": {
+        "nameRequired": "Name cannot be empty",
+        "nameTooLong": "Name must be 50 characters or less",
+        "nameInvalid": "Name can only contain letters, numbers, underscores and hyphens",
+        "clientSecretRequired": "Client Secret cannot be empty",
+        "clientSecretLength": "Client Secret must be at least 32 characters"
+      }
+    }
+  },
+  "pod": {
+    "multiInstance": {
+      "readonlyHint": "This Pod is part of a Multi-Instance workflow. View details in run history."
+    },
+    "clearWorkflow": {
+      "title": "Clear Workflow",
+      "description": "The following PODs will have all messages cleared:",
+      "confirm": "Confirm Clear",
+      "clearing": "Clearing..."
+    },
+    "delete": {
+      "title": "Delete Pod",
+      "description": "Are you sure you want to delete \"{name}\"? This action cannot be undone.",
+      "confirm": "Confirm Delete"
+    },
+    "slot": {
+      "duplicateTitle": "Already exists, cannot insert",
+      "skillDuplicate": "This Skill is already bound to this Pod",
+      "subAgentDuplicate": "This SubAgent is already bound to this Pod",
+      "mcpServerDuplicate": "This MCP Server is already bound to this Pod"
+    }
+  },
+  "run": {
+    "historyPanel": {
+      "title": "History",
+      "empty": "No run history yet"
+    },
+    "chatModal": {
+      "historyBadge": "(History)",
+      "readonlyHint": "This is a history record, read-only"
+    }
+  },
+  "chat": {
+    "loadingHistory": "Loading conversation history...",
+    "inputPlaceholder": "Type a message...",
+    "summarizedBadge": "Summary",
+    "workflowBlockedHint": "This Pod is in a Workflow. Only the first and last Pod can send messages.",
+    "integrationBlockedHint": "This Pod is connected to {label}. Messages are driven by {label}.",
+    "multiInstanceHint": "This Pod has Multi-Instance enabled. Each message will create a new Run.",
+    "toolOutput": {
+      "errorTitle": "{toolName} Error",
+      "resultTitle": "{toolName} Result",
+      "executionError": "An error occurred while executing this tool",
+      "inputParams": "Input Parameters",
+      "executionResult": "Execution Result",
+      "noResult": "No result"
+    }
+  },
+  "layout": {
+    "header": {
+      "globalSettings": "Global Settings",
+      "integrations": "Integrations",
+      "history": "History"
+    }
+  },
+  "error": {
+    "ECONNREFUSED": "Unable to connect to server",
+    "ENOTFOUND": "Server not found",
+    "ETIMEDOUT": "Connection timed out",
+    "ECONNRESET": "Connection reset",
+    "ALREADY_EXISTS": "Resource already exists",
+    "NOT_FOUND": "Resource not found",
+    "UNAUTHORIZED": "Unauthorized",
+    "FORBIDDEN": "Access forbidden",
+    "INVALID_REQUEST": "Invalid request format",
+    "INTERNAL_ERROR": "Internal server error",
+    "redacted": "[redacted]"
+  },
+  "validation": {
+    "gitUrlRequired": "Please enter a Git Repository URL",
+    "gitUrlPrefix": "URL must start with https:// or git\\@"
+  },
+  "schedule": {
+    "everySecond": "Every second",
+    "everyXMinute": "Every {n} minutes",
+    "everyXHour": "Every {n} hours",
+    "everyDay": "Daily at {time}",
+    "everyWeek": "Weekly on {days} at {time}",
+    "unknownFrequency": "Unknown frequency",
+    "nextTime": "{frequency} {'|'} Next: {time}",
+    "weekdaySeparator": ", ",
+    "weekdays": {
+      "0": "Sun",
+      "1": "Mon",
+      "2": "Tue",
+      "3": "Wed",
+      "4": "Thu",
+      "5": "Fri",
+      "6": "Sat"
+    }
+  },
+  "websocket": {
+    "notConnected": "WebSocket is not connected",
+    "requestTimeout": "Request timed out: {event}"
+  },
+  "canvas": {
+    "noActiveCanvas": "No active canvas",
+    "emptyState": "Right-click to create Pod or Note",
+    "sidebar": {
+      "title": "Canvas",
+      "newCanvas": "New Canvas",
+      "noCanvases": "No canvases yet",
+      "confirmDelete": "Confirm Delete",
+      "confirmDeleteMessage": "Are you sure you want to delete Canvas \"{name}\"? This action cannot be undone."
+    },
+    "branchSelect": {
+      "title": "Switch Branch",
+      "description": "Select a branch to switch to ({name})",
+      "inputPlaceholder": "Enter branch name",
+      "switchButton": "Switch",
+      "currentLabel": "(current)",
+      "worktreeOccupied": "Occupied by Worktree",
+      "nameRequired": "Please enter a branch name",
+      "nameInvalid": "Only letters, numbers, underscores, hyphens and slashes are allowed",
+      "nameFormatError": "Invalid branch name format"
+    },
+    "worktree": {
+      "createTitle": "Create Worktree",
+      "createDescription": "Create a new Worktree from {name}",
+      "nameLabel": "Worktree Name",
+      "namePlaceholder": "e.g. feature1, bugfix-123",
+      "nameRequired": "Please enter a Worktree name",
+      "nameInvalid": "Name can only contain letters, numbers, underscores and hyphens"
+    },
+    "repository": {
+      "createTitle": "New Folder",
+      "createDescription": "Enter a folder name (letters, numbers, underscores and hyphens only)",
+      "nameRequired": "Please enter a folder name",
+      "nameInvalid": "Only letters, numbers, underscores and hyphens are allowed",
+      "createFailed": "Failed to create folder",
+      "notGitRepo": "This folder is not a Git Repository"
+    },
+    "clone": {
+      "title": "Clone Repository",
+      "description": "Enter Git Repository URL",
+      "detected": "Detected {platform}"
+    },
+    "deleteBranch": {
+      "title": "Confirm Delete Branch",
+      "description": "Are you sure you want to delete branch \"{name}\"? This action cannot be undone."
+    },
+    "forceCheckout": {
+      "title": "Unsaved Changes",
+      "uncommittedWarningTitle": "You have uncommitted changes",
+      "uncommittedWarningDesc": "Switching to {branch} will discard all uncommitted changes",
+      "forceCheckoutButton": "Force Switch"
+    },
+    "pullLatest": {
+      "title": "Pull to Latest",
+      "warningTitle": "This will discard all local changes",
+      "warningDesc": "Running git fetch + git reset --hard cannot restore uncommitted changes",
+      "confirmButton": "Confirm Pull"
+    },
+    "repositoryContextMenu": {
+      "createWorktree": "Create Worktree",
+      "switchBranch": "Switch Branch",
+      "pullLatest": "Pull to Latest"
+    },
+    "podContextMenu": {
+      "openDirectory": "Open Working Directory",
+      "plugin": "Plugin",
+      "connect": "Connect {label}",
+      "disconnect": "Disconnect {label}",
+      "openDirectoryFailed": "Failed to open directory",
+      "openDirectoryFailedDesc": "Unable to open working directory, please try again later",
+      "noPluginInstalled": "No plugins installed",
+      "pluginLoadFailed": "Failed to load plugin list",
+      "pluginLoadFailedDesc": "Unable to retrieve installed plugins, please try again later",
+      "pluginUpdateFailed": "Plugin configuration failed",
+      "pluginUpdateFailedDesc": "Unable to update Pod plugin settings, please try again later"
+    },
+    "connectionContextMenu": {
+      "triggerModeAuto": "Auto Trigger (Auto)",
+      "triggerModeDirect": "Direct Trigger (Direct)",
+      "triggerModeAiDecide": "AI Decide (AI Decide)",
+      "summaryModel": "Summary Model",
+      "aiModel": "AI Model",
+      "triggerModeChanged": "Trigger mode changed",
+      "triggerModeChangedDesc": "Switched to {mode} mode",
+      "triggerModeAutoLabel": "Auto Trigger",
+      "triggerModeDirectLabel": "Direct Trigger",
+      "triggerModeAiDecideLabel": "AI Decide",
+      "changeFailed": "Change failed",
+      "triggerModeChangeFailed": "Unable to change trigger mode",
+      "summaryModelChanged": "Summary model changed",
+      "summaryModelChangeFailed": "Unable to change summary model",
+      "aiDecideModelChanged": "AI decide model changed",
+      "aiDecideModelChangeFailed": "Unable to change AI decide model",
+      "modelSwitched": "Switched to {model}"
+    },
+    "confirmDelete": {
+      "cannotDelete": "Cannot delete",
+      "inUseMessage": "This item is currently in use by a Pod and cannot be deleted",
+      "confirmMessage": "Are you sure you want to delete \"{name}\"?"
+    },
+    "createEdit": {
+      "descriptionCreate": "Enter name and content",
+      "descriptionEdit": "Edit content",
+      "descriptionNameOnly": "Enter a name",
+      "namePlaceholder": "Name",
+      "contentPlaceholder": "Content",
+      "editTitleWithType": "Edit {type}"
+    },
+    "mcpServer": {
+      "createTitle": "Add MCP Server",
+      "editTitle": "Edit MCP Server",
+      "description": "Paste JSON-format MCP Server config. The first key is the name, the value is the config.",
+      "parseError": "JSON format error, please check the syntax",
+      "minOneServer": "Please enter at least one MCP Server config",
+      "nameInvalid": "Name can only contain letters, numbers, underscores and hyphens",
+      "modeError": "Config must contain a command field (stdio mode) or type + url fields (http/sse mode)",
+      "commandEmpty": "command field cannot be empty",
+      "urlInvalid": "url field format is invalid",
+      "argsInvalid": "args field must be an array of strings",
+      "parseLost": "Parse result lost, please resubmit"
+    },
+    "scheduleModal": {
+      "createTitle": "Set Schedule",
+      "editTitle": "Edit Schedule",
+      "description": "Set automatic execution schedule for Pod",
+      "frequency": "Frequency",
+      "everySecond": "Every x seconds",
+      "everyXMinute": "Every x minutes",
+      "everyXHour": "Every x hours",
+      "everyDay": "Every day",
+      "everyWeek": "Every week",
+      "second": "Seconds",
+      "intervalMinute": "Minutes",
+      "intervalHour": "Hours",
+      "executionTime": "Execution time",
+      "hourUnit": "Hour",
+      "minuteUnit": "Minute",
+      "selectWeekday": "Select weekdays",
+      "weekdayRequired": "Please select at least one day",
+      "weekdays": {
+        "0": "Mon",
+        "1": "Tue",
+        "2": "Wed",
+        "3": "Thu",
+        "4": "Fri",
+        "5": "Sat",
+        "6": "Sun"
+      },
+      "disableButton": "Disable",
+      "enableButton": "Enable",
+      "updateButton": "Update"
+    },
+    "checkDirtyFailed": "Failed to check modification status",
+    "connectionLine": {
+      "aiRejectedReason": "Not triggered: {reason}",
+      "aiErrorReason": "Error: {reason}"
+    },
+    "podTypeMenu": {
+      "newOutputStyle": "New Output Style",
+      "newSubAgent": "New SubAgent",
+      "newCommand": "New Command",
+      "newOutputStyleGroup": "New Output Style Group",
+      "newSubAgentGroup": "New SubAgent Group",
+      "newCommandGroup": "New Command Group"
+    }
+  },
+  "store": {
+    "canvas": {
+      "deleted": "{name} has been deleted",
+      "orderSaveFailed": "Failed to save order",
+      "renameFailed": "Rename failed",
+      "renamed": "Renamed successfully"
+    },
+    "connection": {
+      "alreadyExists": "Connection already exists",
+      "alreadyExistsDesc": "There is already a connection between these two Pods",
+      "createFailed": "Failed to create connection",
+      "deleteFailed": "Failed to delete connection",
+      "updateFailed": "Failed to update connection",
+      "summaryModelUpdateFailed": "Failed to update connection summary model",
+      "aiDecideModelUpdateFailed": "Failed to update connection AI decide model"
+    },
+    "pod": {
+      "createFailed": "Pod creation failed",
+      "createBackendFailed": "Pod creation failed: backend did not return Pod data",
+      "deleteFailed": "Pod deletion failed",
+      "renameFailed": "Pod rename failed",
+      "renamed": "Renamed successfully",
+      "scheduleFailed": "Schedule configuration failed",
+      "multiInstanceFailed": "Pod configuration failed"
+    },
+    "integration": {
+      "createFailed": "Create failed",
+      "created": "Created successfully",
+      "deleteFailed": "Delete failed",
+      "deleted": "Deleted successfully",
+      "bindFailed": "Bind failed",
+      "unbindFailed": "Unbind failed",
+      "noCanvas": "No canvas selected"
+    },
+    "backup": {
+      "completed": "Backup completed"
+    },
+    "repository": {
+      "createFailed": "Failed to create folder",
+      "worktreeCreateFailed": "Failed to create Worktree",
+      "checkGitFailed": "Failed to check Git status",
+      "getBranchesFailed": "Failed to get branch list",
+      "checkDirtyFailed": "Failed to check modification status",
+      "deleteBranchFailed": "Failed to delete branch",
+      "deleteBranchSuccess": "Branch deleted successfully",
+      "createSuccess": "Created successfully",
+      "worktreeCreateSuccess": "Worktree created successfully"
+    },
+    "resource": {
+      "createFailed": "Create failed",
+      "updateFailed": "Update failed",
+      "createSuccess": "Created successfully",
+      "updateSuccess": "Updated successfully",
+      "deleteSuccess": "Deleted successfully",
+      "deleteFailed": "Failed to delete item",
+      "loadFailed": "Load failed"
+    },
+    "group": {
+      "noActiveCanvas": "No active canvas",
+      "loadFailed": "Failed to load groups",
+      "createNameRequired": "Group name cannot be empty",
+      "createFailed": "Failed to create group",
+      "createSuccess": "Group created successfully",
+      "deleteFailed": "Failed to delete group",
+      "deleteSuccess": "Group deleted successfully",
+      "invalidGroupId": "Invalid group ID",
+      "invalidItemId": "Invalid item ID",
+      "moveFailed": "Move failed",
+      "moveSuccess": "Moved successfully"
+    }
+  },
+  "composable": {
+    "canvas": {
+      "noActiveCanvas": "No active canvas",
+      "progressTimeout": "Operation timed out, please try again"
+    },
+    "chat": {
+      "websocketNotConnected": "WebSocket is not connected",
+      "heartbeatTimeout": "Connection timed out",
+      "heartbeatTimeoutDesc": "No heartbeat response from server",
+      "disconnected": "Connection lost",
+      "disconnectReasons": {
+        "transportClose": "Connection closed",
+        "transportError": "Connection transport error",
+        "pingTimeout": "Heartbeat timeout",
+        "serverDisconnect": "Server disconnected",
+        "clientDisconnect": "Client disconnected",
+        "unknown": "Unknown reason"
+      },
+      "imageTooLarge": "Image size exceeds 5MB limit",
+      "imageUnsupportedFormat": "Unsupported image format",
+      "imageUnsupportedFormatDesc": "Only JPEG/PNG/GIF/WebP are supported",
+      "imageReadFailed": "Failed to read image",
+      "imageInvalidFormat": "Invalid image format",
+      "imageInvalidData": "Invalid image data",
+      "uploadTooMany": "You can only upload 1 image at a time",
+      "speechMaxLength": "Maximum text length reached",
+      "speechUnsupported": "Speech input is not supported by this browser"
+    },
+    "skillImport": {
+      "invalidFormat": "Invalid file format, only ZIP files are supported",
+      "fileTooLarge": "File size exceeds 5MB limit",
+      "networkFailed": "Network transfer failed, please try again",
+      "base64Failed": "Base64 conversion failed",
+      "importFailed": "Import failed",
+      "importSuccess": "Imported successfully",
+      "importSuccessOverwrite": "Imported successfully (overwritten)"
+    },
+    "eventHandler": {
+      "podCreated": "Pod created",
+      "podRenamed": "Renamed successfully",
+      "podModelSet": "Model configured",
+      "podScheduleSet": "Schedule configured",
+      "podDeleted": "Pod deleted",
+      "workflowCleared": "Messages cleared",
+      "connectionCreated": "Connection created",
+      "connectionDeleted": "Connection deleted",
+      "canvasCreated": "Canvas created",
+      "canvasRenamed": "Canvas renamed",
+      "pasted": "Pasted successfully",
+      "outputStyleDeleted": "Output style deleted",
+      "skillDeleted": "Skill deleted",
+      "worktreeCreated": "Worktree created",
+      "repositoryDeleted": "Repository deleted",
+      "subAgentDeleted": "SubAgent deleted",
+      "commandDeleted": "Command deleted",
+      "mcpServerCreated": "MCP Server created",
+      "mcpServerUpdated": "MCP Server updated",
+      "mcpServerDeleted": "MCP Server deleted"
+    },
+    "deleteSelection": {
+      "partialFailed": "Some deletions failed",
+      "partialFailedDesc": "{count} items failed to delete"
+    },
+    "gitClone": {
+      "repoExists": "Repository already exists",
+      "authFailed": "Authentication failed, please check your Token settings",
+      "notFound": "Repository not found",
+      "networkFailed": "Network connection failed",
+      "branchNotFound": "Specified branch does not exist",
+      "diskFull": "Insufficient disk space",
+      "cloneStarted": "Starting download...",
+      "cloneCompleted": "Download complete",
+      "cloneFailed": "Unknown error",
+      "cloneSuccess": "Clone successful"
+    },
+    "gitCheckout": {
+      "preparing": "Preparing to switch branch...",
+      "completed": "Switch complete",
+      "failed": "Failed to switch branch",
+      "success": "Branch switched successfully"
+    },
+    "gitPull": {
+      "preparing": "Preparing Pull...",
+      "completed": "Pull complete",
+      "failed": "Pull failed",
+      "success": "Pull successful"
+    },
+    "editModal": {
+      "editTitle": "Edit {resource}"
+    }
+  },
+  "time": {
+    "notStarted": "Not started",
+    "unknown": "Unknown time",
+    "justNow": "Just now",
+    "minutesAgo": "{n} minutes ago",
+    "hoursAgo": "{n} hours ago",
+    "daysAgo": "{n} days ago"
+  },
+  "settings": {
+    "title": "Global Settings",
+    "timezone": "Timezone",
+    "timezonePlaceholder": "Select timezone",
+    "backup": {
+      "title": "Backup Settings",
+      "gitRemoteUrl": "Git Remote URL",
+      "gitRemoteUrlPlaceholder": "git{'@'}github.com:user/backup.git",
+      "gitRemoteUrlRequired": "Please fill in the Git Remote URL",
+      "dailyBackupTime": "Daily backup time",
+      "backupNow": "Backup Now",
+      "backingUp": "Backing up...",
+      "lastBackup": "Last backup: {time}"
+    },
+    "saving": "Saving...",
+    "loadFailed": "Load failed",
+    "saveFailed": "Save failed",
+    "saveSuccess": "Saved successfully"
+  }
+}

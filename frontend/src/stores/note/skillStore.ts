@@ -4,6 +4,7 @@ import type { NoteStoreContext, TypedNoteStore } from './createNoteStore'
 import { WebSocketRequestEvents, WebSocketResponseEvents } from '@/services/websocket'
 import type { SkillImportPayload, SkillImportedPayload } from '@/types/websocket'
 import { useSendCanvasAction } from '@/composables/useSendCanvasAction'
+import { t } from '@/i18n'
 
 interface SkillStoreCustomActions {
   deleteSkill(skillId: string): Promise<void>
@@ -78,7 +79,7 @@ const store = createNoteStore<Skill, SkillNote>({
 
       return {
         success: false,
-        error: result?.error ?? '匯入失敗'
+        error: result?.error ?? t('composable.skillImport.importFailed')
       }
     },
   }

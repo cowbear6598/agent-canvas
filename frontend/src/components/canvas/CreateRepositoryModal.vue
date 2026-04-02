@@ -6,52 +6,62 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { useRepositoryStore } from '@/stores/note'
-import { useModalForm } from '@/composables/useModalForm'
-import { validateResourceName } from '@/lib/validators'
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useRepositoryStore } from "@/stores/note";
+import { useModalForm } from "@/composables/useModalForm";
+import { validateResourceName } from "@/lib/validators";
+import { useI18n } from "vue-i18n";
 
 interface Props {
-  open: boolean
+  open: boolean;
 }
 
-defineProps<Props>()
+defineProps<Props>();
 
 const emit = defineEmits<{
-  'update:open': [value: boolean]
-  created: [repository: { id: string; name: string }]
-}>()
+  "update:open": [value: boolean];
+  created: [repository: { id: string; name: string }];
+}>();
 
-const repositoryStore = useRepositoryStore()
+const { t } = useI18n();
 
-const { inputValue: folderName, isSubmitting, errorMessage, handleSubmit, handleClose } = useModalForm<string>({
+const repositoryStore = useRepositoryStore();
+
+const {
+  inputValue: folderName,
+  isSubmitting,
+  errorMessage,
+  handleSubmit,
+  handleClose,
+} = useModalForm<string>({
   validator: (name) =>
-    validateResourceName(name, '請輸入資料夾名稱', '只允許英數字、底線、連字號'),
+    validateResourceName(
+      name,
+      t("canvas.repository.nameRequired"),
+      t("canvas.repository.nameInvalid"),
+    ),
   onSubmit: async (name) => {
-    const result = await repositoryStore.createRepository(name)
+    const result = await repositoryStore.createRepository(name);
     if (result.success && result.repository) {
-      emit('created', result.repository)
-      emit('update:open', false)
-      return null
+      emit("created", result.repository);
+      emit("update:open", false);
+      return null;
     }
-    return result.error || '建立資料夾失敗'
+    return result.error || t("canvas.repository.createFailed");
   },
-  onClose: () => emit('update:open', false),
-})
+  onClose: () => emit("update:open", false),
+});
 </script>
 
 <template>
-  <Dialog
-    :open="open"
-    @update:open="handleClose"
-  >
+  <Dialog :open="open" @update:open="handleClose">
     <DialogContent class="max-w-md">
       <DialogHeader>
-        <DialogTitle>新建資料夾</DialogTitle>
+        <DialogTitle>{{ $t("canvas.repository.createTitle") }}</DialogTitle>
         <DialogDescription>
-          請輸入資料夾名稱（只允許英數字、底線、連字號）
+          {{ $t("canvas.repository.createDescription") }}
         </DialogDescription>
       </DialogHeader>
 
@@ -61,26 +71,20 @@ const { inputValue: folderName, isSubmitting, errorMessage, handleSubmit, handle
         @keyup.enter="handleSubmit"
       />
 
-      <p
-        v-if="errorMessage"
-        class="text-sm text-destructive"
-      >
+      <p v-if="errorMessage" class="text-sm text-destructive">
         {{ errorMessage }}
       </p>
 
       <DialogFooter>
-        <Button
-          variant="outline"
-          @click="handleClose"
-        >
-          取消
+        <Button variant="outline" @click="handleClose">
+          {{ $t("common.cancel") }}
         </Button>
         <Button
           variant="default"
           :disabled="isSubmitting"
           @click="handleSubmit"
         >
-          建立
+          {{ $t("common.create") }}
         </Button>
       </DialogFooter>
     </DialogContent>

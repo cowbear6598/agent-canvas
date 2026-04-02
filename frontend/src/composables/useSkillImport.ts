@@ -2,13 +2,14 @@ import { ref, type Ref } from 'vue'
 import { useSkillStore } from '@/stores/note/skillStore'
 import { useToast } from '@/composables/useToast'
 import { useWebSocketErrorHandler } from '@/composables/useWebSocketErrorHandler'
+import { t } from '@/i18n'
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024
 const ALLOWED_EXTENSIONS = ['.zip']
 
-const ERROR_INVALID_FORMAT = '檔案格式錯誤，僅支援 ZIP 檔案'
-const ERROR_FILE_TOO_LARGE = '檔案大小超過 5MB 限制'
-const ERROR_NETWORK_FAILED = '網路傳輸失敗，請重試'
+// 使用 t() 動態取得錯誤訊息
+
+
 
 interface ValidationResult {
   valid: boolean
@@ -20,15 +21,15 @@ const validateFile = (file: File): ValidationResult => {
   const hasValidExtension = ALLOWED_EXTENSIONS.some(ext => fileName.endsWith(ext))
 
   if (!hasValidExtension) {
-    return { valid: false, error: ERROR_INVALID_FORMAT }
+    return { valid: false, error: t('composable.skillImport.invalidFormat') }
   }
 
   if (file.type && !['application/zip', 'application/x-zip-compressed', ''].includes(file.type)) {
-    return { valid: false, error: ERROR_INVALID_FORMAT }
+    return { valid: false, error: t('composable.skillImport.invalidFormat') }
   }
 
   if (file.size > MAX_FILE_SIZE) {
-    return { valid: false, error: ERROR_FILE_TOO_LARGE }
+    return { valid: false, error: t('composable.skillImport.fileTooLarge') }
   }
 
   return { valid: true }
@@ -43,14 +44,14 @@ const convertToBase64 = (file: File): Promise<string> => {
       const parts = result.split(',')
       const base64Data = parts.length > 1 ? parts[1] : result
       if (!base64Data) {
-        reject(new Error('Base64 轉換失敗'))
+        reject(new Error(t('composable.skillImport.base64Failed')))
         return
       }
       resolve(base64Data)
     }
 
     reader.onerror = (): void => {
-      reject(new Error(ERROR_NETWORK_FAILED))
+      reject(new Error(t('composable.skillImport.networkFailed')))
     }
 
     reader.readAsDataURL(file)
@@ -96,7 +97,7 @@ export function useSkillImport(): UseSkillImportReturn {
 
     const validation = validateFile(file)
     if (!validation.valid) {
-      showErrorToast('Skill', '匯入失敗', validation.error)
+      showErrorToast('Skill', t('composable.skillImport.importFailed'), validation.error)
       return
     }
 
@@ -107,15 +108,15 @@ export function useSkillImport(): UseSkillImportReturn {
       const result = await skillStore.importSkill(file.name, fileData, file.size)
 
       if (!result.success) {
-        throw new Error(result.error ?? '未知錯誤')
+        throw new Error(result.error ?? t('common.error.unknown'))
       }
 
       const skillName = result.skill?.name ?? file.name
-      const toastMsg = result.isOverwrite ? '匯入成功（已覆蓋）' : '匯入成功'
+      const toastMsg = result.isOverwrite ? t('composable.skillImport.importSuccessOverwrite') : t('composable.skillImport.importSuccess')
       showSuccessToast('Skill', toastMsg, skillName)
     }
 
-    await withErrorToast(runImport(), 'Skill', '匯入失敗')
+    await withErrorToast(runImport(), 'Skill', t('composable.skillImport.importFailed'))
 
     isImporting.value = false
   }

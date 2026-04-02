@@ -18,6 +18,7 @@ import {
 } from "@/services/websocket";
 import { useToast } from "@/composables/useToast";
 import { useCanvasWebSocketAction } from "@/composables/useCanvasWebSocketAction";
+import { t } from "@/i18n";
 import { getActiveCanvasIdOrWarn } from "@/utils/canvasGuard";
 import { DEFAULT_TOAST_DURATION_MS } from "@/lib/constants";
 import { DEFAULT_SUMMARY_MODEL, DEFAULT_AI_DECIDE_MODEL } from "@/types/config";
@@ -412,8 +413,8 @@ export const useConnectionStore = defineStore("connection", () => {
     );
     if (alreadyConnected) {
       toast({
-        title: "連線已存在",
-        description: "這兩個 Pod 之間已經有連線了",
+        title: t("store.connection.alreadyExists"),
+        description: t("store.connection.alreadyExistsDesc"),
         duration: DEFAULT_TOAST_DURATION_MS,
       });
       return false;
@@ -455,8 +456,8 @@ export const useConnectionStore = defineStore("connection", () => {
       },
       {
         errorCategory: "Connection",
-        errorAction: "建立失敗",
-        errorMessage: "連線建立失敗",
+        errorAction: t("common.error.create"),
+        errorMessage: t("store.connection.createFailed"),
       },
     );
 
@@ -474,8 +475,8 @@ export const useConnectionStore = defineStore("connection", () => {
       },
       {
         errorCategory: "Connection",
-        errorAction: "刪除失敗",
-        errorMessage: "連線刪除失敗",
+        errorAction: t("common.error.delete"),
+        errorMessage: t("store.connection.deleteFailed"),
       },
     );
   }
@@ -545,7 +546,7 @@ export const useConnectionStore = defineStore("connection", () => {
       },
       {
         errorCategory: "Connection",
-        errorAction: "更新失敗",
+        errorAction: t("common.error.update"),
         errorMessage,
       },
     );
@@ -562,7 +563,7 @@ export const useConnectionStore = defineStore("connection", () => {
     return executeConnectionUpdate(
       connectionId,
       { triggerMode },
-      "連線更新失敗",
+      t("store.connection.updateFailed"),
     );
   }
 
@@ -573,7 +574,7 @@ export const useConnectionStore = defineStore("connection", () => {
     return executeConnectionUpdate(
       connectionId,
       { summaryModel },
-      "連線摘要模型更新失敗",
+      t("store.connection.summaryModelUpdateFailed"),
     );
   }
 
@@ -584,7 +585,7 @@ export const useConnectionStore = defineStore("connection", () => {
     return executeConnectionUpdate(
       connectionId,
       { aiDecideModel },
-      "連線 AI 決策模型更新失敗",
+      t("store.connection.aiDecideModelUpdateFailed"),
     );
   }
 

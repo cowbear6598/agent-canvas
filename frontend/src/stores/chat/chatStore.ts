@@ -26,6 +26,7 @@ import {usePodStore} from '../pod/podStore'
 import {useCommandStore} from '../note/commandStore'
 import {getActiveCanvasIdOrWarn} from '@/utils/canvasGuard'
 import {isMultiInstanceSourcePod} from '@/utils/multiInstanceGuard'
+import {t} from '@/i18n'
 
 const ABORT_SAFETY_TIMEOUT_MS = 10_000
 
@@ -211,7 +212,7 @@ export const useChatStore = defineStore('chat', {
 
         async sendMessage(podId: string, content: string, contentBlocks?: ContentBlock[]): Promise<void> {
             if (!this.isConnected) {
-                throw new Error('WebSocket 尚未連線')
+                throw new Error(t('composable.chat.websocketNotConnected'))
             }
 
             if (!hasMessageContent(content, contentBlocks)) return

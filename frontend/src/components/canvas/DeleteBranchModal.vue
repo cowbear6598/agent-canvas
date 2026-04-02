@@ -6,57 +6,48 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 interface Props {
-  open: boolean
-  branchName: string
+  open: boolean;
+  branchName: string;
 }
 
-defineProps<Props>()
+defineProps<Props>();
 
 const emit = defineEmits<{
-  'update:open': [value: boolean]
-  'confirm': []
-  'cancel': []
-}>()
+  "update:open": [value: boolean];
+  confirm: [];
+  cancel: [];
+}>();
 
 const handleConfirm = (): void => {
-  emit('confirm')
-}
+  emit("confirm");
+};
 
 const handleCancel = (): void => {
-  emit('cancel')
-  emit('update:open', false)
-}
+  emit("cancel");
+  emit("update:open", false);
+};
 </script>
 
 <template>
-  <Dialog
-    :open="open"
-    @update:open="emit('update:open', $event)"
-  >
+  <Dialog :open="open" @update:open="emit('update:open', $event)">
     <DialogContent class="max-w-md">
       <DialogHeader>
-        <DialogTitle>確認刪除分支</DialogTitle>
+        <DialogTitle>{{ $t("canvas.deleteBranch.title") }}</DialogTitle>
         <DialogDescription>
-          確定要刪除分支「{{ branchName }}」嗎？此操作無法復原。
+          {{ $t("canvas.deleteBranch.description", { name: branchName }) }}
         </DialogDescription>
       </DialogHeader>
 
       <DialogFooter>
-        <Button
-          variant="outline"
-          @click="handleCancel"
-        >
-          取消
+        <Button variant="outline" @click="handleCancel">
+          {{ $t("common.cancel") }}
         </Button>
-        <Button
-          variant="destructive"
-          @click="handleConfirm"
-        >
-          刪除
+        <Button variant="destructive" @click="handleConfirm">
+          {{ $t("common.delete") }}
         </Button>
       </DialogFooter>
     </DialogContent>

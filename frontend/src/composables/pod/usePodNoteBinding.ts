@@ -1,6 +1,7 @@
 import type { Ref } from 'vue'
 import { useToast } from '@/composables/useToast'
 import { DEFAULT_TOAST_DURATION_MS } from '@/lib/constants'
+import { t } from '@/i18n'
 import type { UnbindBehavior } from '@/stores/note/noteBindingActions'
 
 export type NoteType = 'outputStyle' | 'skill' | 'subAgent' | 'repository' | 'command' | 'mcpServer'
@@ -59,10 +60,10 @@ interface UsePodNoteBindingReturn {
   handleNoteRemove: (noteType: NoteType) => Promise<void>
 }
 
-const DUPLICATE_BIND_MESSAGES: Partial<Record<NoteType, string>> = {
-  skill: '此 Skill 已綁定到此 Pod',
-  subAgent: '此 SubAgent 已綁定到此 Pod',
-  mcpServer: '此 MCP Server 已綁定到此 Pod',
+const DUPLICATE_BIND_MESSAGES: Partial<Record<NoteType, () => string>> = {
+  skill: () => t('pod.slot.skillDuplicate'),
+  subAgent: () => t('pod.slot.subAgentDuplicate'),
+  mcpServer: () => t('pod.slot.mcpServerDuplicate'),
 }
 
 const isAlreadyBound = (mapping: NoteStoreMapping, note: NoteItem, podId: string): boolean => {
@@ -134,9 +135,9 @@ export function usePodNoteBinding(
     if (!note) return
 
     if (isAlreadyBound(mapping, note, podId.value)) {
-      const description = DUPLICATE_BIND_MESSAGES[noteType]
-      if (description) {
-        toast({ title: '已存在，無法插入', description, duration: DEFAULT_TOAST_DURATION_MS })
+      const descFn = DUPLICATE_BIND_MESSAGES[noteType]
+      if (descFn) {
+        toast({ title: t('pod.slot.duplicateTitle'), description: descFn(), duration: DEFAULT_TOAST_DURATION_MS })
       }
       return
     }

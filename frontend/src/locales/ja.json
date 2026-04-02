@@ -1,0 +1,639 @@
+{
+  "common": {
+    "save": "保存",
+    "cancel": "キャンセル",
+    "confirm": "確認",
+    "delete": "削除",
+    "create": "作成",
+    "update": "更新",
+    "edit": "編集",
+    "close": "閉じる",
+    "copy": "コピー",
+    "import": "インポート",
+    "export": "エクスポート",
+    "enable": "有効化",
+    "disable": "無効化",
+    "add": "追加",
+    "saving": "保存中...",
+    "connecting": "接続中...",
+    "loading": "読み込み中...",
+    "backingUp": "バックアップ中...",
+    "clearing": "クリア中...",
+    "connectionStatus": {
+      "connected": "接続済み",
+      "disconnected": "切断",
+      "error": "エラー"
+    },
+    "success": {
+      "create": "作成しました",
+      "delete": "削除しました",
+      "update": "更新しました",
+      "save": "保存しました",
+      "import": "インポートしました",
+      "copy": "コピーしました",
+      "move": "移動しました"
+    },
+    "error": {
+      "operation": "操作に失敗しました",
+      "create": "作成に失敗しました",
+      "delete": "削除に失敗しました",
+      "update": "更新に失敗しました",
+      "save": "保存に失敗しました",
+      "load": "読み込みに失敗しました",
+      "import": "インポートに失敗しました",
+      "networkFailed": "ネットワーク接続に失敗しました",
+      "unknown": "不明なエラー"
+    },
+    "validation": {
+      "required": "入力必須です",
+      "nameRequired": "名前を入力してください",
+      "formatError": "フォーマットエラー",
+      "invalidFormat": "形式が正しくありません"
+    },
+    "confirmDelete": "削除の確認",
+    "confirmDeleteMessage": "「{name}」を削除してもよろしいですか？この操作は元に戻せません。",
+    "cannotDelete": "削除できません"
+  },
+  "pod": {
+    "multiInstance": {
+      "readonlyHint": "この Pod は Multi-Instance ワークフローの一部です。詳細は実行履歴からご確認ください。"
+    },
+    "clearWorkflow": {
+      "title": "ワークフローをクリア",
+      "description": "以下の POD のすべてのメッセージがクリアされます：",
+      "confirm": "クリアを確認",
+      "clearing": "クリア中..."
+    },
+    "delete": {
+      "title": "Pod を削除",
+      "description": "「{name}」を削除してもよろしいですか？この操作は元に戻せません。",
+      "confirm": "削除を確認"
+    },
+    "slot": {
+      "duplicateTitle": "すでに存在しています",
+      "skillDuplicate": "このスキルはすでにこの Pod にバインドされています",
+      "subAgentDuplicate": "このサブエージェントはすでにこの Pod にバインドされています",
+      "mcpServerDuplicate": "この MCP サーバーはすでにこの Pod にバインドされています"
+    }
+  },
+  "run": {
+    "historyPanel": {
+      "title": "実行履歴",
+      "empty": "実行履歴がありません"
+    },
+    "chatModal": {
+      "historyBadge": "（履歴）",
+      "readonlyHint": "これは実行履歴です。閲覧のみ可能です"
+    }
+  },
+  "chat": {
+    "loadingHistory": "会話履歴を読み込み中...",
+    "inputPlaceholder": "メッセージを入力...",
+    "summarizedBadge": "要約",
+    "workflowBlockedHint": "この Pod はワークフロー内にあります。最初と最後の Pod のみ送信できます。",
+    "integrationBlockedHint": "この Pod は {label} に接続されています。メッセージは {label} によって送信されます。",
+    "multiInstanceHint": "この Pod は Multi-Instance が有効です。メッセージを送信するたびに新しい Run が作成されます。",
+    "toolOutput": {
+      "errorTitle": "{toolName} エラー情報",
+      "resultTitle": "{toolName} 実行結果",
+      "executionError": "このツールの実行中にエラーが発生しました",
+      "inputParams": "入力パラメータ",
+      "executionResult": "実行結果",
+      "noResult": "実行結果なし"
+    }
+  },
+  "layout": {
+    "header": {
+      "globalSettings": "グローバル設定",
+      "integrations": "インテグレーション管理",
+      "history": "実行履歴"
+    }
+  },
+  "error": {
+    "ECONNREFUSED": "サーバーに接続できません",
+    "ENOTFOUND": "サーバーが見つかりません",
+    "ETIMEDOUT": "接続がタイムアウトしました",
+    "ECONNRESET": "接続がリセットされました",
+    "ALREADY_EXISTS": "リソースがすでに存在します",
+    "NOT_FOUND": "リソースが見つかりません",
+    "UNAUTHORIZED": "権限がありません",
+    "FORBIDDEN": "アクセスが禁止されています",
+    "INVALID_REQUEST": "リクエストの形式が正しくありません",
+    "INTERNAL_ERROR": "サーバー内部エラー",
+    "redacted": "[非表示]"
+  },
+  "validation": {
+    "gitUrlRequired": "Git リポジトリの URL を入力してください",
+    "gitUrlPrefix": "URL は https:// または git\\@ で始まる必要があります"
+  },
+  "schedule": {
+    "everySecond": "毎秒",
+    "everyXMinute": "{n} 分ごと",
+    "everyXHour": "{n} 時間ごと",
+    "everyDay": "毎日 {time}",
+    "everyWeek": "毎週{days} {time}",
+    "unknownFrequency": "不明な頻度",
+    "nextTime": "{frequency} {'|'} 次回：{time}",
+    "weekdaySeparator": "、",
+    "weekdays": {
+      "0": "日曜日",
+      "1": "月曜日",
+      "2": "火曜日",
+      "3": "水曜日",
+      "4": "木曜日",
+      "5": "金曜日",
+      "6": "土曜日"
+    }
+  },
+  "websocket": {
+    "notConnected": "WebSocket が接続されていません",
+    "requestTimeout": "リクエストがタイムアウトしました：{event}"
+  },
+  "canvas": {
+    "noActiveCanvas": "アクティブなキャンバスがありません",
+    "emptyState": "右クリックして Pod または Note を作成",
+    "sidebar": {
+      "title": "Canvas",
+      "newCanvas": "New Canvas",
+      "noCanvases": "No canvases yet",
+      "confirmDelete": "削除の確認",
+      "confirmDeleteMessage": "Canvas「{name}」を削除してもよろしいですか？この操作は元に戻せません。"
+    },
+    "branchSelect": {
+      "title": "ブランチを切り替える",
+      "description": "切り替えるブランチを選択 ({name})",
+      "inputPlaceholder": "ブランチ名を入力",
+      "switchButton": "切り替え",
+      "currentLabel": "(現在)",
+      "worktreeOccupied": "Worktree に使用中",
+      "nameRequired": "ブランチ名を入力してください",
+      "nameInvalid": "英数字、アンダースコア、ハイフン、スラッシュのみ使用できます",
+      "nameFormatError": "ブランチ名の形式が正しくありません"
+    },
+    "worktree": {
+      "createTitle": "Worktree を作成",
+      "createDescription": "{name} から新しい Worktree を作成",
+      "nameLabel": "Worktree 名",
+      "namePlaceholder": "例：feature1、bugfix-123",
+      "nameRequired": "Worktree 名を入力してください",
+      "nameInvalid": "名前は英数字、アンダースコア、ハイフンのみ使用できます"
+    },
+    "repository": {
+      "createTitle": "新規フォルダー",
+      "createDescription": "フォルダー名を入力（英数字、アンダースコア、ハイフンのみ）",
+      "nameRequired": "フォルダー名を入力してください",
+      "nameInvalid": "英数字、アンダースコア、ハイフンのみ使用できます",
+      "createFailed": "フォルダーの作成に失敗しました",
+      "notGitRepo": "このフォルダーは Git リポジトリではありません"
+    },
+    "clone": {
+      "title": "Clone Repository",
+      "description": "Git リポジトリ URL を入力してください",
+      "detected": "{platform} を検出しました"
+    },
+    "deleteBranch": {
+      "title": "ブランチ削除の確認",
+      "description": "ブランチ「{name}」を削除してもよろしいですか？この操作は元に戻せません。"
+    },
+    "forceCheckout": {
+      "title": "未保存の変更があります",
+      "uncommittedWarningTitle": "コミットされていない変更があります",
+      "uncommittedWarningDesc": "{branch} に切り替えると、コミットされていない変更がすべて失われます",
+      "forceCheckoutButton": "強制切り替え"
+    },
+    "pullLatest": {
+      "title": "最新版に Pull",
+      "warningTitle": "ローカルの変更がすべて破棄されます",
+      "warningDesc": "git fetch + git reset --hard を実行するとコミットされていない変更は復元できません",
+      "confirmButton": "Pull を確認"
+    },
+    "repositoryContextMenu": {
+      "createWorktree": "Worktree を作成",
+      "switchBranch": "ブランチを切り替える",
+      "pullLatest": "最新版に Pull"
+    },
+    "podContextMenu": {
+      "openDirectory": "作業ディレクトリを開く",
+      "plugin": "Plugin",
+      "connect": "{label} を接続",
+      "disconnect": "{label} を切断",
+      "openDirectoryFailed": "ディレクトリを開けませんでした",
+      "openDirectoryFailedDesc": "作業ディレクトリを開けません。後でもう一度お試しください",
+      "noPluginInstalled": "プラグインがインストールされていません",
+      "pluginLoadFailed": "プラグイン一覧の読み込みに失敗しました",
+      "pluginLoadFailedDesc": "インストール済みプラグインを取得できません。後でもう一度お試しください",
+      "pluginUpdateFailed": "プラグイン設定に失敗しました",
+      "pluginUpdateFailedDesc": "Pod のプラグイン設定を更新できません。後でもう一度お試しください"
+    },
+    "connectionContextMenu": {
+      "triggerModeAuto": "自動トリガー (Auto)",
+      "triggerModeDirect": "直接トリガー (Direct)",
+      "triggerModeAiDecide": "AI 判定 (AI Decide)",
+      "summaryModel": "Summary Model",
+      "aiModel": "AI Model",
+      "triggerModeChanged": "トリガーモードを変更しました",
+      "triggerModeChangedDesc": "{mode} モードに切り替えました",
+      "triggerModeAutoLabel": "自動トリガー",
+      "triggerModeDirectLabel": "直接トリガー",
+      "triggerModeAiDecideLabel": "AI 判定",
+      "changeFailed": "変更に失敗しました",
+      "triggerModeChangeFailed": "トリガーモードを変更できません",
+      "summaryModelChanged": "要約モデルを変更しました",
+      "summaryModelChangeFailed": "要約モデルを変更できません",
+      "aiDecideModelChanged": "AI 判定モデルを変更しました",
+      "aiDecideModelChangeFailed": "AI 判定モデルを変更できません",
+      "modelSwitched": "{model} に切り替えました"
+    },
+    "confirmDelete": {
+      "cannotDelete": "削除できません",
+      "inUseMessage": "このアイテムは Pod に使用中のため削除できません",
+      "confirmMessage": "「{name}」を削除してもよろしいですか？"
+    },
+    "createEdit": {
+      "descriptionCreate": "名前と内容を入力してください",
+      "descriptionEdit": "内容を編集",
+      "descriptionNameOnly": "名前を入力してください",
+      "namePlaceholder": "名前",
+      "contentPlaceholder": "内容",
+      "editTitleWithType": "{type} を編集"
+    },
+    "mcpServer": {
+      "createTitle": "MCP Server を追加",
+      "editTitle": "MCP Server を編集",
+      "description": "JSON 形式の MCP Server 設定を貼り付けてください。最初のキーが名前、値が設定内容です。",
+      "parseError": "JSON 形式が正しくありません。構文を確認してください",
+      "minOneServer": "MCP Server の設定を少なくとも 1 つ入力してください",
+      "nameInvalid": "名前は英数字、アンダースコア、ハイフンのみ使用できます",
+      "modeError": "設定には command フィールド（stdio モード）または type + url フィールド（http/sse モード）が必要です",
+      "commandEmpty": "command フィールドを空にできません",
+      "urlInvalid": "url フィールドの形式が正しくありません",
+      "argsInvalid": "args フィールドは文字列の配列である必要があります",
+      "parseLost": "解析結果が失われました。再度送信してください"
+    },
+    "scheduleModal": {
+      "createTitle": "スケジュールを設定",
+      "editTitle": "スケジュールを編集",
+      "description": "Pod の自動実行スケジュールを設定します",
+      "frequency": "実行頻度",
+      "everySecond": "x 秒ごと",
+      "everyXMinute": "x 分ごと",
+      "everyXHour": "x 時間ごと",
+      "everyDay": "毎日",
+      "everyWeek": "毎週",
+      "second": "秒",
+      "intervalMinute": "分",
+      "intervalHour": "時間",
+      "executionTime": "実行時刻",
+      "hourUnit": "時",
+      "minuteUnit": "分",
+      "selectWeekday": "曜日を選択",
+      "weekdayRequired": "少なくとも 1 日選択してください",
+      "weekdays": {
+        "0": "月",
+        "1": "火",
+        "2": "水",
+        "3": "木",
+        "4": "金",
+        "5": "土",
+        "6": "日"
+      },
+      "disableButton": "無効化",
+      "enableButton": "有効化",
+      "updateButton": "更新"
+    },
+    "checkDirtyFailed": "変更状態の確認に失敗しました",
+    "connectionLine": {
+      "aiRejectedReason": "トリガーしない理由：{reason}",
+      "aiErrorReason": "エラー：{reason}"
+    },
+    "podTypeMenu": {
+      "newOutputStyle": "Output Style を追加",
+      "newSubAgent": "SubAgent を追加",
+      "newCommand": "Command を追加",
+      "newOutputStyleGroup": "Output Style グループを追加",
+      "newSubAgentGroup": "SubAgent グループを追加",
+      "newCommandGroup": "Command グループを追加"
+    }
+  },
+  "store": {
+    "canvas": {
+      "deleted": "{name} が削除されました",
+      "orderSaveFailed": "順序の保存に失敗しました",
+      "renameFailed": "名前の変更に失敗しました",
+      "renamed": "名前を変更しました"
+    },
+    "connection": {
+      "alreadyExists": "接続は既に存在します",
+      "alreadyExistsDesc": "この 2 つの Pod の間にはすでに接続があります",
+      "createFailed": "接続の作成に失敗しました",
+      "deleteFailed": "接続の削除に失敗しました",
+      "updateFailed": "接続の更新に失敗しました",
+      "summaryModelUpdateFailed": "接続の要約モデルの更新に失敗しました",
+      "aiDecideModelUpdateFailed": "接続の AI 判定モデルの更新に失敗しました"
+    },
+    "pod": {
+      "createFailed": "Pod の作成に失敗しました",
+      "createBackendFailed": "Pod の作成に失敗しました：バックエンドが Pod データを返しませんでした",
+      "deleteFailed": "Pod の削除に失敗しました",
+      "renameFailed": "Pod の名前変更に失敗しました",
+      "renamed": "名前を変更しました",
+      "scheduleFailed": "スケジュールの設定に失敗しました",
+      "multiInstanceFailed": "Pod の設定に失敗しました"
+    },
+    "integration": {
+      "createFailed": "作成に失敗しました",
+      "created": "作成しました",
+      "deleteFailed": "削除に失敗しました",
+      "deleted": "削除しました",
+      "bindFailed": "バインドに失敗しました",
+      "unbindFailed": "バインド解除に失敗しました",
+      "noCanvas": "キャンバスが選択されていません"
+    },
+    "backup": {
+      "completed": "バックアップが完了しました"
+    },
+    "repository": {
+      "createFailed": "フォルダーの作成に失敗しました",
+      "worktreeCreateFailed": "Worktree の作成に失敗しました",
+      "checkGitFailed": "Git の状態確認に失敗しました",
+      "getBranchesFailed": "ブランチ一覧の取得に失敗しました",
+      "checkDirtyFailed": "変更状態の確認に失敗しました",
+      "deleteBranchFailed": "ブランチの削除に失敗しました",
+      "deleteBranchSuccess": "ブランチを削除しました",
+      "createSuccess": "作成しました",
+      "worktreeCreateSuccess": "Worktree を作成しました"
+    },
+    "resource": {
+      "createFailed": "作成に失敗しました",
+      "updateFailed": "更新に失敗しました",
+      "createSuccess": "作成しました",
+      "updateSuccess": "更新しました",
+      "deleteSuccess": "削除しました",
+      "deleteFailed": "アイテムの削除に失敗しました",
+      "loadFailed": "読み込みに失敗しました"
+    },
+    "group": {
+      "noActiveCanvas": "アクティブなキャンバスがありません",
+      "loadFailed": "グループの読み込みに失敗しました",
+      "createNameRequired": "グループ名を入力してください",
+      "createFailed": "グループの作成に失敗しました",
+      "createSuccess": "グループを作成しました",
+      "deleteFailed": "グループの削除に失敗しました",
+      "deleteSuccess": "グループを削除しました",
+      "invalidGroupId": "無効なグループ ID です",
+      "invalidItemId": "無効なアイテム ID です",
+      "moveFailed": "移動に失敗しました",
+      "moveSuccess": "移動しました"
+    }
+  },
+  "composable": {
+    "canvas": {
+      "noActiveCanvas": "アクティブなキャンバスがありません",
+      "progressTimeout": "操作がタイムアウトしました。もう一度お試しください"
+    },
+    "chat": {
+      "websocketNotConnected": "WebSocket が接続されていません",
+      "heartbeatTimeout": "接続がタイムアウトしました",
+      "heartbeatTimeoutDesc": "サーバーからのハートビート応答がありません",
+      "disconnected": "接続が切断されました",
+      "disconnectReasons": {
+        "transportClose": "接続が閉じられました",
+        "transportError": "接続の転送エラー",
+        "pingTimeout": "ハートビートタイムアウト",
+        "serverDisconnect": "サーバーが切断しました",
+        "clientDisconnect": "クライアントが切断しました",
+        "unknown": "不明な理由"
+      },
+      "imageTooLarge": "画像のサイズが 5MB の制限を超えています",
+      "imageUnsupportedFormat": "サポートされていない画像形式です",
+      "imageUnsupportedFormatDesc": "JPEG/PNG/GIF/WebP のみサポートされています",
+      "imageReadFailed": "画像の読み込みに失敗しました",
+      "imageInvalidFormat": "画像の形式が無効です",
+      "imageInvalidData": "画像データが無効です",
+      "uploadTooMany": "一度にアップロードできる画像は 1 枚までです",
+      "speechMaxLength": "最大テキスト長に達しました",
+      "speechUnsupported": "このブラウザは音声入力をサポートしていません"
+    },
+    "skillImport": {
+      "invalidFormat": "ファイル形式が正しくありません。ZIP ファイルのみサポートされています",
+      "fileTooLarge": "ファイルサイズが 5MB の制限を超えています",
+      "networkFailed": "ネットワーク転送に失敗しました。もう一度お試しください",
+      "base64Failed": "Base64 変換に失敗しました",
+      "importFailed": "インポートに失敗しました",
+      "importSuccess": "インポートしました",
+      "importSuccessOverwrite": "インポートしました（上書き済み）"
+    },
+    "eventHandler": {
+      "podCreated": "Pod を作成しました",
+      "podRenamed": "名前を変更しました",
+      "podModelSet": "モデルを設定しました",
+      "podScheduleSet": "スケジュールを設定しました",
+      "podDeleted": "Pod を削除しました",
+      "workflowCleared": "メッセージをクリアしました",
+      "connectionCreated": "接続を作成しました",
+      "connectionDeleted": "接続を削除しました",
+      "canvasCreated": "Canvas を作成しました",
+      "canvasRenamed": "Canvas の名前を変更しました",
+      "pasted": "貼り付けました",
+      "outputStyleDeleted": "出力スタイルを削除しました",
+      "skillDeleted": "Skill を削除しました",
+      "worktreeCreated": "Worktree を作成しました",
+      "repositoryDeleted": "Repository を削除しました",
+      "subAgentDeleted": "SubAgent を削除しました",
+      "commandDeleted": "Command を削除しました",
+      "mcpServerCreated": "MCP Server を作成しました",
+      "mcpServerUpdated": "MCP Server を更新しました",
+      "mcpServerDeleted": "MCP Server を削除しました"
+    },
+    "deleteSelection": {
+      "partialFailed": "一部の削除に失敗しました",
+      "partialFailedDesc": "{count} 件のアイテムの削除に失敗しました"
+    },
+    "gitClone": {
+      "repoExists": "リポジトリはすでに存在します",
+      "authFailed": "認証に失敗しました。Token の設定を確認してください",
+      "notFound": "リポジトリが見つかりません",
+      "networkFailed": "ネットワーク接続に失敗しました",
+      "branchNotFound": "指定されたブランチが存在しません",
+      "diskFull": "ディスク容量が不足しています",
+      "cloneStarted": "ダウンロードを開始しています...",
+      "cloneCompleted": "ダウンロードが完了しました",
+      "cloneFailed": "不明なエラー",
+      "cloneSuccess": "Clone が成功しました"
+    },
+    "gitCheckout": {
+      "preparing": "ブランチの切り替えを準備中...",
+      "completed": "切り替えが完了しました",
+      "failed": "ブランチの切り替えに失敗しました",
+      "success": "ブランチを切り替えました"
+    },
+    "gitPull": {
+      "preparing": "Pull を準備中...",
+      "completed": "Pull が完了しました",
+      "failed": "Pull に失敗しました",
+      "success": "Pull が成功しました"
+    },
+    "editModal": {
+      "editTitle": "{resource} を編集"
+    }
+  },
+  "time": {
+    "notStarted": "未開始",
+    "unknown": "時刻不明",
+    "justNow": "たった今",
+    "minutesAgo": "{n} 分前",
+    "hoursAgo": "{n} 時間前",
+    "daysAgo": "{n} 日前"
+  },
+  "settings": {
+    "title": "グローバル設定",
+    "timezone": "タイムゾーン",
+    "timezonePlaceholder": "タイムゾーンを選択",
+    "backup": {
+      "title": "バックアップ設定",
+      "gitRemoteUrl": "Git リモート URL",
+      "gitRemoteUrlPlaceholder": "git{'@'}github.com:user/backup.git",
+      "gitRemoteUrlRequired": "Git リモート URL を入力してください",
+      "dailyBackupTime": "毎日のバックアップ時刻",
+      "backupNow": "今すぐバックアップ",
+      "backingUp": "バックアップ中...",
+      "lastBackup": "前回のバックアップ：{time}"
+    },
+    "saving": "保存中...",
+    "loadFailed": "読み込みに失敗しました",
+    "saveFailed": "保存に失敗しました",
+    "saveSuccess": "保存しました"
+  },
+  "integration": {
+    "select": {
+      "title": "インテグレーション"
+    },
+    "apps": {
+      "title": "{provider} Apps",
+      "addApp": "App を追加",
+      "connecting": "接続中...",
+      "confirmAdd": "追加する"
+    },
+    "connect": {
+      "title": "{provider} を接続",
+      "descriptionNoResource": "この Pod に接続する {provider} App を選択してください",
+      "descriptionWithResource": "この Pod に接続する {provider} App と{resourceLabel}を選択してください",
+      "noAppsHint": "利用可能な {provider} App がありません。先に管理画面から追加してください。",
+      "selectApp": "App を選択",
+      "selectResource": "{resourceLabel}を選択"
+    },
+    "status": {
+      "appRemoved": "{provider} App が削除されました",
+      "appStatus": "{provider} {status}：{name}"
+    },
+    "toast": {
+      "bindFailed": "バインドに失敗しました",
+      "unbindFailed": "バインド解除に失敗しました",
+      "noCanvas": "キャンバスが選択されていません"
+    },
+    "slack": {
+      "emptyAppHint": "Slack App がまだ登録されていません",
+      "emptyResourceHint": "この App に利用可能なチャンネルがありません",
+      "resourceLabel": "チャンネル",
+      "field": {
+        "name": {
+          "label": "名前",
+          "placeholder": "例：My Slack Bot"
+        },
+        "botToken": {
+          "label": "Bot Token",
+          "placeholder": "xoxb-..."
+        },
+        "signingSecret": {
+          "label": "Signing Secret",
+          "placeholder": "Signing Secret"
+        }
+      },
+      "validate": {
+        "nameRequired": "名前を入力してください",
+        "botTokenRequired": "Bot Token を入力してください",
+        "botTokenPrefix": "Bot Token は xoxb- で始まる必要があります",
+        "signingSecretRequired": "Signing Secret を入力してください"
+      }
+    },
+    "telegram": {
+      "emptyAppHint": "Telegram Bot がまだ登録されていません",
+      "emptyResourceHint": "",
+      "resourceLabel": "ユーザー ID",
+      "field": {
+        "name": {
+          "label": "名前",
+          "placeholder": "例：My Telegram Bot"
+        },
+        "botToken": {
+          "label": "Bot Token",
+          "placeholder": "123456:ABC-DEF..."
+        },
+        "userId": {
+          "label": "Telegram ユーザー ID",
+          "placeholder": "ユーザー ID を入力",
+          "hint": "Telegram ユーザー ID を入力してください（{'@'}userinfobot で確認できます）"
+        }
+      },
+      "validate": {
+        "nameRequired": "名前を入力してください",
+        "botTokenRequired": "Bot Token を入力してください",
+        "userIdInvalid": "ユーザー ID は正の整数である必要があります"
+      }
+    },
+    "jira": {
+      "emptyAppHint": "Jira App がまだ登録されていません",
+      "emptyResourceHint": "",
+      "resourceLabel": "",
+      "field": {
+        "name": {
+          "label": "名前",
+          "placeholder": "例：my-project"
+        },
+        "siteUrl": {
+          "label": "サイト URL",
+          "placeholder": "https://your-domain.atlassian.net"
+        },
+        "webhookSecret": {
+          "label": "Webhook Secret",
+          "placeholder": "Webhook リクエスト検証用のシークレット"
+        }
+      },
+      "validate": {
+        "nameRequired": "名前を入力してください",
+        "nameInvalid": "名前には英数字、アンダースコア、ハイフンのみ使用できます",
+        "siteUrlRequired": "サイト URL を入力してください",
+        "siteUrlPrefix": "サイト URL は https:// で始まる必要があります",
+        "webhookSecretRequired": "Webhook Secret を入力してください",
+        "webhookSecretLength": "Webhook Secret は 16 文字以上必要です"
+      },
+      "eventFilter": {
+        "label": "イベントフィルターモード",
+        "all": "すべてのイベント",
+        "statusChanged": "ステータス変更のみ"
+      }
+    },
+    "sentry": {
+      "emptyAppHint": "Sentry App がまだ登録されていません",
+      "emptyResourceHint": "",
+      "resourceLabel": "",
+      "field": {
+        "name": {
+          "label": "名前",
+          "placeholder": "例：my-sentry-app"
+        },
+        "clientSecret": {
+          "label": "Client Secret",
+          "placeholder": "Sentry Internal Integration の Client Secret"
+        }
+      },
+      "validate": {
+        "nameRequired": "名前を入力してください",
+        "nameTooLong": "名前は 50 文字以内にしてください",
+        "nameInvalid": "名前には英数字、アンダースコア、ハイフンのみ使用できます",
+        "clientSecretRequired": "Client Secret を入力してください",
+        "clientSecretLength": "Client Secret は 32 文字以上必要です"
+      }
+    }
+  }
+}

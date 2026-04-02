@@ -1,11 +1,16 @@
-import type { Repository, RepositoryNote } from '@/types'
-import { createNoteStore } from './createNoteStore'
-import type { NoteStoreContext, TypedNoteStore } from './createNoteStore'
-import { websocketClient, WebSocketRequestEvents, WebSocketResponseEvents } from '@/services/websocket'
-import { useCanvasWebSocketAction } from '@/composables/useCanvasWebSocketAction'
-import { requireActiveCanvas } from '@/utils/canvasGuard'
-import { useToast } from '@/composables/useToast'
-import { generateRequestId } from '@/services/utils'
+import type { Repository, RepositoryNote } from "@/types";
+import { createNoteStore } from "./createNoteStore";
+import type { NoteStoreContext, TypedNoteStore } from "./createNoteStore";
+import {
+  websocketClient,
+  WebSocketRequestEvents,
+  WebSocketResponseEvents,
+} from "@/services/websocket";
+import { useCanvasWebSocketAction } from "@/composables/useCanvasWebSocketAction";
+import { requireActiveCanvas } from "@/utils/canvasGuard";
+import { useToast } from "@/composables/useToast";
+import { generateRequestId } from "@/services/utils";
+import { t } from "@/i18n";
 import type {
   RepositoryCreatePayload,
   RepositoryCreatedPayload,
@@ -20,122 +25,203 @@ import type {
   RepositoryCheckoutBranchPayload,
   RepositoryDeleteBranchPayload,
   RepositoryBranchDeletedPayload,
-  RepositoryPullLatestPayload
-} from '@/types/websocket'
+  RepositoryPullLatestPayload,
+} from "@/types/websocket";
 
 interface RepositoryStoreCustomActions {
-  createRepository(name: string): Promise<{ success: boolean; repository?: { id: string; name: string }; error?: string }>
-  deleteRepository(repositoryId: string): Promise<void>
-  loadRepositories(): Promise<void>
-  checkIsGit(repositoryId: string): Promise<boolean>
-  createWorktree(repositoryId: string, worktreeName: string, sourceNotePosition: { x: number; y: number }): Promise<{ success: boolean; error?: string }>
-  getLocalBranches(repositoryId: string): Promise<{ success: boolean; branches?: string[]; currentBranch?: string; worktreeBranches?: string[]; error?: string }>
-  checkDirty(repositoryId: string): Promise<{ success: boolean; isDirty?: boolean; error?: string }>
-  checkoutBranch(repositoryId: string, branchName: string, force?: boolean): Promise<{ requestId: string }>
-  deleteBranch(repositoryId: string, branchName: string): Promise<{ success: boolean; branchName?: string; error?: string }>
-  pullLatest(repositoryId: string): Promise<{ requestId: string }>
-  isWorktree(repositoryId: string): boolean
+  createRepository(name: string): Promise<{
+    success: boolean;
+    repository?: { id: string; name: string };
+    error?: string;
+  }>;
+  deleteRepository(repositoryId: string): Promise<void>;
+  loadRepositories(): Promise<void>;
+  checkIsGit(repositoryId: string): Promise<boolean>;
+  createWorktree(
+    repositoryId: string,
+    worktreeName: string,
+    sourceNotePosition: { x: number; y: number },
+  ): Promise<{ success: boolean; error?: string }>;
+  getLocalBranches(repositoryId: string): Promise<{
+    success: boolean;
+    branches?: string[];
+    currentBranch?: string;
+    worktreeBranches?: string[];
+    error?: string;
+  }>;
+  checkDirty(
+    repositoryId: string,
+  ): Promise<{ success: boolean; isDirty?: boolean; error?: string }>;
+  checkoutBranch(
+    repositoryId: string,
+    branchName: string,
+    force?: boolean,
+  ): Promise<{ requestId: string }>;
+  deleteBranch(
+    repositoryId: string,
+    branchName: string,
+  ): Promise<{ success: boolean; branchName?: string; error?: string }>;
+  pullLatest(repositoryId: string): Promise<{ requestId: string }>;
+  isWorktree(repositoryId: string): boolean;
 }
 
 function createRepositoryCustomActions(): RepositoryStoreCustomActions {
-  const { executeAction: executeRepositoryAction } = useCanvasWebSocketAction()
-  const { showSuccessToast, showErrorToast } = useToast()
+  const { executeAction: executeRepositoryAction } = useCanvasWebSocketAction();
+  const { showSuccessToast, showErrorToast } = useToast();
 
   return {
-    async createRepository(this: NoteStoreContext<Repository>, name: string): Promise<{ success: boolean; repository?: { id: string; name: string }; error?: string }> {
-      const result = await executeRepositoryAction<RepositoryCreatePayload, RepositoryCreatedPayload>(
+    async createRepository(
+      this: NoteStoreContext<Repository>,
+      name: string,
+    ): Promise<{
+      success: boolean;
+      repository?: { id: string; name: string };
+      error?: string;
+    }> {
+      const result = await executeRepositoryAction<
+        RepositoryCreatePayload,
+        RepositoryCreatedPayload
+      >(
         {
           requestEvent: WebSocketRequestEvents.REPOSITORY_CREATE,
           responseEvent: WebSocketResponseEvents.REPOSITORY_CREATED,
           payload: { name },
         },
-        { errorCategory: 'Repository', errorAction: '建立失敗', errorMessage: '建立資料夾失敗' }
-      )
+        {
+          errorCategory: "Repository",
+          errorAction: t("common.error.create"),
+          errorMessage: t("store.repository.createFailed"),
+        },
+      );
 
-      if (!result.success) return result
+      if (!result.success) return result;
 
       if (!result.data.repository) {
-        const error = result.data.error || '建立資料夾失敗'
-        showErrorToast('Repository', '建立失敗', error)
-        return { success: false, error }
+        const error = result.data.error || t("store.repository.createFailed");
+        showErrorToast("Repository", t("common.error.create"), error);
+        return { success: false, error };
       }
 
-      this.availableItems.push(result.data.repository)
-      showSuccessToast('Repository', '建立成功', name)
-      return { success: true, repository: result.data.repository }
+      this.availableItems.push(result.data.repository);
+      showSuccessToast("Repository", t("store.repository.createSuccess"), name);
+      return { success: true, repository: result.data.repository };
     },
 
-    async deleteRepository(this: NoteStoreContext<Repository>, repositoryId: string): Promise<void> {
-      return this.deleteItem(repositoryId)
+    async deleteRepository(
+      this: NoteStoreContext<Repository>,
+      repositoryId: string,
+    ): Promise<void> {
+      return this.deleteItem(repositoryId);
     },
 
     async loadRepositories(this: NoteStoreContext<Repository>): Promise<void> {
-      return this.loadItems()
+      return this.loadItems();
     },
 
-    async checkIsGit(this: NoteStoreContext<Repository>, repositoryId: string): Promise<boolean> {
-      const result = await executeRepositoryAction<RepositoryCheckGitPayload, RepositoryCheckGitResultPayload>(
+    async checkIsGit(
+      this: NoteStoreContext<Repository>,
+      repositoryId: string,
+    ): Promise<boolean> {
+      const result = await executeRepositoryAction<
+        RepositoryCheckGitPayload,
+        RepositoryCheckGitResultPayload
+      >(
         {
           requestEvent: WebSocketRequestEvents.REPOSITORY_CHECK_GIT,
           responseEvent: WebSocketResponseEvents.REPOSITORY_CHECK_GIT_RESULT,
           payload: { repositoryId },
         },
-        { errorCategory: 'Repository', errorAction: '檢查 Git 狀態失敗', errorMessage: '檢查 Git 狀態失敗' }
-      )
+        {
+          errorCategory: "Repository",
+          errorAction: t("store.repository.checkGitFailed"),
+          errorMessage: t("store.repository.checkGitFailed"),
+        },
+      );
 
-      if (!result.success || !result.data.success) return false
+      if (!result.success || !result.data.success) return false;
 
-      const existingRepository = this.availableItems.find((item: Repository) => item.id === repositoryId)
+      const existingRepository = this.availableItems.find(
+        (item: Repository) => item.id === repositoryId,
+      );
       if (existingRepository) {
-        existingRepository.isGit = result.data.isGit
+        existingRepository.isGit = result.data.isGit;
       }
 
-      return result.data.isGit
+      return result.data.isGit;
     },
 
-    async createWorktree(this: NoteStoreContext<Repository>, repositoryId: string, worktreeName: string, sourceNotePosition: { x: number; y: number }): Promise<{ success: boolean; error?: string }> {
-      const result = await executeRepositoryAction<RepositoryWorktreeCreatePayload, RepositoryWorktreeCreatedPayload>(
+    async createWorktree(
+      this: NoteStoreContext<Repository>,
+      repositoryId: string,
+      worktreeName: string,
+      sourceNotePosition: { x: number; y: number },
+    ): Promise<{ success: boolean; error?: string }> {
+      const result = await executeRepositoryAction<
+        RepositoryWorktreeCreatePayload,
+        RepositoryWorktreeCreatedPayload
+      >(
         {
           requestEvent: WebSocketRequestEvents.REPOSITORY_WORKTREE_CREATE,
           responseEvent: WebSocketResponseEvents.REPOSITORY_WORKTREE_CREATED,
           payload: { repositoryId, worktreeName },
         },
-        { errorCategory: 'Repository', errorAction: 'Worktree 建立失敗', errorMessage: '建立 Worktree 失敗' }
-      )
+        {
+          errorCategory: "Repository",
+          errorAction: t("store.repository.worktreeCreateFailed"),
+          errorMessage: t("store.repository.worktreeCreateFailed"),
+        },
+      );
 
-      if (!result.success) return result
+      if (!result.success) return result;
 
       if (!result.data.success) {
-        const error = result.data.error || '建立 Worktree 失敗'
-        showErrorToast('Repository', 'Worktree 建立失敗', error)
-        return { success: false, error }
+        const error = result.data.error || t("store.repository.worktreeCreateFailed");
+        showErrorToast("Repository", t("store.repository.worktreeCreateFailed"), error);
+        return { success: false, error };
       }
 
       if (result.data.repository) {
-        this.availableItems.push(result.data.repository)
+        this.availableItems.push(result.data.repository);
 
         await this.createNote(
           result.data.repository.id,
           sourceNotePosition.x + 150,
-          sourceNotePosition.y + 80
-        )
+          sourceNotePosition.y + 80,
+        );
       }
 
-      showSuccessToast('Repository', 'Worktree 建立成功', worktreeName)
-      return { success: true }
+      showSuccessToast("Repository", t("store.repository.worktreeCreateSuccess"), worktreeName);
+      return { success: true };
     },
 
-    async getLocalBranches(this: NoteStoreContext<Repository>, repositoryId: string): Promise<{ success: boolean; branches?: string[]; currentBranch?: string; worktreeBranches?: string[]; error?: string }> {
-      const result = await executeRepositoryAction<RepositoryGetLocalBranchesPayload, RepositoryLocalBranchesResultPayload>(
+    async getLocalBranches(
+      this: NoteStoreContext<Repository>,
+      repositoryId: string,
+    ): Promise<{
+      success: boolean;
+      branches?: string[];
+      currentBranch?: string;
+      worktreeBranches?: string[];
+      error?: string;
+    }> {
+      const result = await executeRepositoryAction<
+        RepositoryGetLocalBranchesPayload,
+        RepositoryLocalBranchesResultPayload
+      >(
         {
           requestEvent: WebSocketRequestEvents.REPOSITORY_GET_LOCAL_BRANCHES,
-          responseEvent: WebSocketResponseEvents.REPOSITORY_LOCAL_BRANCHES_RESULT,
+          responseEvent:
+            WebSocketResponseEvents.REPOSITORY_LOCAL_BRANCHES_RESULT,
           payload: { repositoryId },
         },
-        { errorCategory: 'Git', errorAction: '取得分支列表失敗', errorMessage: '取得分支列表失敗' }
-      )
+        {
+          errorCategory: "Git",
+          errorAction: t("store.repository.getBranchesFailed"),
+          errorMessage: t("store.repository.getBranchesFailed"),
+        },
+      );
 
-      if (!result.success) return result
+      if (!result.success) return result;
 
       return {
         success: result.data.success,
@@ -143,31 +229,46 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
         currentBranch: result.data.currentBranch,
         worktreeBranches: result.data.worktreeBranches,
         error: result.data.error,
-      }
+      };
     },
 
-    async checkDirty(this: NoteStoreContext<Repository>, repositoryId: string): Promise<{ success: boolean; isDirty?: boolean; error?: string }> {
-      const result = await executeRepositoryAction<RepositoryCheckDirtyPayload, RepositoryDirtyCheckResultPayload>(
+    async checkDirty(
+      this: NoteStoreContext<Repository>,
+      repositoryId: string,
+    ): Promise<{ success: boolean; isDirty?: boolean; error?: string }> {
+      const result = await executeRepositoryAction<
+        RepositoryCheckDirtyPayload,
+        RepositoryDirtyCheckResultPayload
+      >(
         {
           requestEvent: WebSocketRequestEvents.REPOSITORY_CHECK_DIRTY,
           responseEvent: WebSocketResponseEvents.REPOSITORY_DIRTY_CHECK_RESULT,
           payload: { repositoryId },
         },
-        { errorCategory: 'Git', errorAction: '檢查修改狀態失敗', errorMessage: '檢查修改狀態失敗' }
-      )
+        {
+          errorCategory: "Git",
+          errorAction: t("store.repository.checkDirtyFailed"),
+          errorMessage: t("store.repository.checkDirtyFailed"),
+        },
+      );
 
-      if (!result.success) return result
+      if (!result.success) return result;
 
       return {
         success: result.data.success,
         isDirty: result.data.isDirty,
         error: result.data.error,
-      }
+      };
     },
 
-    async checkoutBranch(this: NoteStoreContext<Repository>, repositoryId: string, branchName: string, force: boolean = false): Promise<{ requestId: string }> {
-      const canvasId = requireActiveCanvas()
-      const requestId = generateRequestId()
+    async checkoutBranch(
+      this: NoteStoreContext<Repository>,
+      repositoryId: string,
+      branchName: string,
+      force: boolean = false,
+    ): Promise<{ requestId: string }> {
+      const canvasId = requireActiveCanvas();
+      const requestId = generateRequestId();
 
       websocketClient.emit<RepositoryCheckoutBranchPayload>(
         WebSocketRequestEvents.REPOSITORY_CHECKOUT_BRANCH,
@@ -176,66 +277,89 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
           canvasId,
           repositoryId,
           branchName,
-          force
-        }
-      )
+          force,
+        },
+      );
 
-      return { requestId }
+      return { requestId };
     },
 
-    async deleteBranch(this: NoteStoreContext<Repository>, repositoryId: string, branchName: string): Promise<{ success: boolean; branchName?: string; error?: string }> {
-      const result = await executeRepositoryAction<RepositoryDeleteBranchPayload, RepositoryBranchDeletedPayload>(
+    async deleteBranch(
+      this: NoteStoreContext<Repository>,
+      repositoryId: string,
+      branchName: string,
+    ): Promise<{ success: boolean; branchName?: string; error?: string }> {
+      const result = await executeRepositoryAction<
+        RepositoryDeleteBranchPayload,
+        RepositoryBranchDeletedPayload
+      >(
         {
           requestEvent: WebSocketRequestEvents.REPOSITORY_DELETE_BRANCH,
           responseEvent: WebSocketResponseEvents.REPOSITORY_BRANCH_DELETED,
           payload: { repositoryId, branchName, force: true },
         },
-        { errorCategory: 'Git', errorAction: '刪除分支失敗', errorMessage: '刪除分支失敗' }
-      )
+        {
+          errorCategory: "Git",
+          errorAction: t("store.repository.deleteBranchFailed"),
+          errorMessage: t("store.repository.deleteBranchFailed"),
+        },
+      );
 
-      if (!result.success) return result
+      if (!result.success) return result;
 
       if (result.data.success) {
-        showSuccessToast('Git', '刪除分支成功', branchName)
+        showSuccessToast("Git", t("store.repository.deleteBranchSuccess"), branchName);
       } else if (result.data.error) {
-        showErrorToast('Git', '刪除分支失敗', result.data.error)
+        showErrorToast("Git", t("store.repository.deleteBranchFailed"), result.data.error);
       }
 
       return {
         success: result.data.success,
         branchName: result.data.branchName,
         error: result.data.error,
-      }
+      };
     },
 
-    async pullLatest(this: NoteStoreContext<Repository>, repositoryId: string): Promise<{ requestId: string }> {
-      const canvasId = requireActiveCanvas()
-      const requestId = generateRequestId()
+    async pullLatest(
+      this: NoteStoreContext<Repository>,
+      repositoryId: string,
+    ): Promise<{ requestId: string }> {
+      const canvasId = requireActiveCanvas();
+      const requestId = generateRequestId();
 
       websocketClient.emit<RepositoryPullLatestPayload>(
         WebSocketRequestEvents.REPOSITORY_PULL_LATEST,
         {
           requestId,
           canvasId,
-          repositoryId
-        }
-      )
+          repositoryId,
+        },
+      );
 
-      return { requestId }
+      return { requestId };
     },
 
-    isWorktree(this: NoteStoreContext<Repository>, repositoryId: string): boolean {
-      const repository = this.availableItems.find((item: Repository) => item.id === repositoryId)
-      return repository?.parentRepoId !== undefined && repository?.parentRepoId !== null && repository?.parentRepoId !== ''
+    isWorktree(
+      this: NoteStoreContext<Repository>,
+      repositoryId: string,
+    ): boolean {
+      const repository = this.availableItems.find(
+        (item: Repository) => item.id === repositoryId,
+      );
+      return (
+        repository?.parentRepoId !== undefined &&
+        repository?.parentRepoId !== null &&
+        repository?.parentRepoId !== ""
+      );
     },
-  }
+  };
 }
 
 const store = createNoteStore<Repository, RepositoryNote>({
-  storeName: 'repository',
-  relationship: 'one-to-one',
-  responseItemsKey: 'repositories',
-  itemIdField: 'repositoryId',
+  storeName: "repository",
+  relationship: "one-to-one",
+  responseItemsKey: "repositories",
+  itemIdField: "repositoryId",
   events: {
     listItems: {
       request: WebSocketRequestEvents.REPOSITORY_LIST,
@@ -274,6 +398,9 @@ const store = createNoteStore<Repository, RepositoryNote>({
     repositoryId: item.id,
   }),
   customActions: createRepositoryCustomActions(),
-})
+});
 
-export const useRepositoryStore = store as TypedNoteStore<typeof store, RepositoryStoreCustomActions>
+export const useRepositoryStore = store as TypedNoteStore<
+  typeof store,
+  RepositoryStoreCustomActions
+>;

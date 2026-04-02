@@ -1,32 +1,33 @@
 <script setup lang="ts">
-import {ref, computed, watch} from 'vue'
-import {Send, Mic, Square} from 'lucide-vue-next'
-import {
-  MAX_MESSAGE_LENGTH,
-  TEXTAREA_MAX_HEIGHT,
-} from '@/lib/constants'
-import ScrollArea from '@/components/ui/scroll-area/ScrollArea.vue'
-import type {ContentBlock} from '@/types/websocket/requests'
-import {useSpeechRecognition} from '@/composables/chat/useSpeechRecognition'
-import {useImageAttachment} from '@/composables/chat/useImageAttachment'
-import {useContentBlocks} from '@/composables/chat/useContentBlocks'
-import {useSelectionManager} from '@/composables/chat/useSelectionManager'
+import { ref, computed, watch } from "vue";
+import { useI18n } from "vue-i18n";
+import { Send, Mic, Square } from "lucide-vue-next";
+import { MAX_MESSAGE_LENGTH, TEXTAREA_MAX_HEIGHT } from "@/lib/constants";
+import ScrollArea from "@/components/ui/scroll-area/ScrollArea.vue";
+import type { ContentBlock } from "@/types/websocket/requests";
+import { useSpeechRecognition } from "@/composables/chat/useSpeechRecognition";
+import { useImageAttachment } from "@/composables/chat/useImageAttachment";
+import { useContentBlocks } from "@/composables/chat/useContentBlocks";
+import { useSelectionManager } from "@/composables/chat/useSelectionManager";
 
 const props = defineProps<{
-  isTyping?: boolean
-  disabled?: boolean
-}>()
+  isTyping?: boolean;
+  disabled?: boolean;
+}>();
 
 const emit = defineEmits<{
-  send: [message: string, contentBlocks?: ContentBlock[]]
-  abort: []
-}>()
+  send: [message: string, contentBlocks?: ContentBlock[]];
+  abort: [];
+}>();
 
-const input = ref('')
-const editableRef = ref<HTMLDivElement | null>(null)
-const isAborting = ref(false)
+const input = ref("");
+const editableRef = ref<HTMLDivElement | null>(null);
+const isAborting = ref(false);
 
-const disabledRef = computed(() => props.disabled ?? false)
+const { t } = useI18n();
+const inputPlaceholder = computed(() => t("chat.inputPlaceholder"));
+
+const disabledRef = computed(() => props.disabled ?? false);
 
 const {
   moveCursorToEnd,
@@ -34,136 +35,145 @@ const {
   insertLineBreak,
   handleTextPaste,
   findImageAtomBefore,
-} = useSelectionManager({editableRef})
+} = useSelectionManager({ editableRef });
 
 const updateText = (text: string): void => {
-  const element = editableRef.value
-  if (!element) return
+  const element = editableRef.value;
+  if (!element) return;
 
-  const truncated = text.slice(0, MAX_MESSAGE_LENGTH)
-  input.value = truncated
-  element.innerText = truncated
-  moveCursorToEnd()
-}
+  const truncated = text.slice(0, MAX_MESSAGE_LENGTH);
+  input.value = truncated;
+  element.innerText = truncated;
+  moveCursorToEnd();
+};
 
-const {isListening, toggleListening} = useSpeechRecognition({
+const { isListening, toggleListening } = useSpeechRecognition({
   disabled: disabledRef,
   currentText: input,
   updateText,
-})
+});
 
-const {imageDataMap, findImageFile, handleImagePaste, handleDrop} = useImageAttachment({
-  editableRef,
-  insertNodeAtCursor,
-})
+const { imageDataMap, findImageFile, handleImagePaste, handleDrop } =
+  useImageAttachment({
+    editableRef,
+    insertNodeAtCursor,
+  });
 
-const {countTextLength, buildContentBlocks, extractTextFromBlocks} = useContentBlocks({
-  editableRef,
-  imageDataMap,
-})
+const { countTextLength, buildContentBlocks, extractTextFromBlocks } =
+  useContentBlocks({
+    editableRef,
+    imageDataMap,
+  });
 
 const handleInput = (event: Event): void => {
-  const target = event.target as HTMLDivElement
-  const innerText = target.innerText
+  const target = event.target as HTMLDivElement;
+  const innerText = target.innerText;
 
-  let textLength = 0
+  let textLength = 0;
   for (const child of Array.from(target.childNodes)) {
-    textLength += countTextLength(child)
+    textLength += countTextLength(child);
   }
 
   if (textLength > MAX_MESSAGE_LENGTH) {
-    updateText(innerText)
+    updateText(innerText);
   } else {
-    input.value = innerText
+    input.value = innerText;
   }
-}
+};
 
 const handlePaste = async (event: ClipboardEvent): Promise<void> => {
-  event.preventDefault()
-  const imageFile = findImageFile(event.clipboardData?.files ?? null)
+  event.preventDefault();
+  const imageFile = findImageFile(event.clipboardData?.files ?? null);
 
   if (imageFile) {
-    await handleImagePaste(imageFile)
-    return
+    await handleImagePaste(imageFile);
+    return;
   }
 
   // 避免貼上後送出時檢查失敗，透過 callback 同步 input.value
-  handleTextPaste(event, (text) => { input.value = text })
-}
+  handleTextPaste(event, (text) => {
+    input.value = text;
+  });
+};
 
 const clearInput = (): void => {
-  input.value = ''
+  input.value = "";
   if (editableRef.value) {
-    editableRef.value.querySelectorAll<HTMLElement>('[data-type="image"]').forEach(el => {
-      imageDataMap.delete(el)
-    })
-    editableRef.value.textContent = ''
+    editableRef.value
+      .querySelectorAll<HTMLElement>('[data-type="image"]')
+      .forEach((el) => {
+        imageDataMap.delete(el);
+      });
+    editableRef.value.textContent = "";
   }
-}
+};
 
 const handleAbort = (): void => {
-  if (isAborting.value) return
-  isAborting.value = true
-  emit('abort')
-}
+  if (isAborting.value) return;
+  isAborting.value = true;
+  emit("abort");
+};
 
 const handleSend = (): void => {
-  if (props.disabled) return
-  const blocks = buildContentBlocks()
-  if (blocks.length === 0) return
+  if (props.disabled) return;
+  const blocks = buildContentBlocks();
+  if (blocks.length === 0) return;
 
-  const textContent = extractTextFromBlocks(blocks)
-  if (textContent.length > MAX_MESSAGE_LENGTH) return
+  const textContent = extractTextFromBlocks(blocks);
+  if (textContent.length > MAX_MESSAGE_LENGTH) return;
 
-  const hasImages = blocks.some(block => block.type === 'image')
+  const hasImages = blocks.some((block) => block.type === "image");
   if (hasImages) {
-    emit('send', textContent, blocks)
+    emit("send", textContent, blocks);
   } else {
-    emit('send', input.value)
+    emit("send", input.value);
   }
 
-  clearInput()
-}
+  clearInput();
+};
 
 const deleteImageAtom = (element: HTMLElement): void => {
-  imageDataMap.delete(element)
-  element.remove()
-  editableRef.value?.dispatchEvent(new Event('input', {bubbles: true}))
-}
+  imageDataMap.delete(element);
+  element.remove();
+  editableRef.value?.dispatchEvent(new Event("input", { bubbles: true }));
+};
 
 const handleEnterKey = (event: KeyboardEvent): void => {
-  if (event.ctrlKey || event.shiftKey) return insertLineBreak(event)
-  event.preventDefault()
-  if (props.isTyping) return
-  if (props.disabled) return
-  handleSend()
-}
+  if (event.ctrlKey || event.shiftKey) return insertLineBreak(event);
+  event.preventDefault();
+  if (props.isTyping) return;
+  if (props.disabled) return;
+  handleSend();
+};
 
 const handleBackspaceKey = (event: KeyboardEvent): void => {
-  const selection = window.getSelection()
-  if (!selection || selection.rangeCount === 0) return
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return;
 
-  const range = selection.getRangeAt(0)
-  if (!range.collapsed) return
+  const range = selection.getRangeAt(0);
+  if (!range.collapsed) return;
 
-  const imageAtom = findImageAtomBefore(range)
+  const imageAtom = findImageAtomBefore(range);
   if (imageAtom) {
-    event.preventDefault()
-    deleteImageAtom(imageAtom)
+    event.preventDefault();
+    deleteImageAtom(imageAtom);
   }
-}
+};
 
 const handleKeyDown = (event: KeyboardEvent): void => {
-  if (event.isComposing || event.keyCode === 229) return
-  if (event.key === 'Enter') return handleEnterKey(event)
-  if (event.key === 'Backspace') return handleBackspaceKey(event)
-}
+  if (event.isComposing || event.keyCode === 229) return;
+  if (event.key === "Enter") return handleEnterKey(event);
+  if (event.key === "Backspace") return handleBackspaceKey(event);
+};
 
-watch(() => props.isTyping, (newValue, oldValue) => {
-  if (oldValue === true && newValue === false) {
-    isAborting.value = false
-  }
-})
+watch(
+  () => props.isTyping,
+  (newValue, oldValue) => {
+    if (oldValue === true && newValue === false) {
+      isAborting.value = false;
+    }
+  },
+);
 </script>
 
 <template>
@@ -171,11 +181,15 @@ watch(() => props.isTyping, (newValue, oldValue) => {
     <div class="flex gap-2">
       <ScrollArea
         class="flex-1 border-2 border-doodle-ink rounded-lg bg-card focus-within:ring-2 focus-within:ring-primary"
-        :style="{ boxShadow: '2px 2px 0 var(--doodle-ink)', maxHeight: TEXTAREA_MAX_HEIGHT + 'px' }"
+        :style="{
+          boxShadow: '2px 2px 0 var(--doodle-ink)',
+          maxHeight: TEXTAREA_MAX_HEIGHT + 'px',
+        }"
       >
         <div
           ref="editableRef"
           :contenteditable="!disabled"
+          :data-placeholder="inputPlaceholder"
           class="px-4 py-3 font-mono text-sm outline-none leading-5 chat-input-editable"
           :class="{ 'opacity-50': disabled }"
           @input="handleInput"
@@ -191,10 +205,7 @@ watch(() => props.isTyping, (newValue, oldValue) => {
         class="doodle-action-btn bg-doodle-coral disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-x-0 disabled:hover:translate-y-0"
         @click="handleAbort"
       >
-        <Square
-          :size="16"
-          class="text-card"
-        />
+        <Square :size="16" class="text-card" />
       </button>
       <button
         v-else
@@ -202,10 +213,7 @@ watch(() => props.isTyping, (newValue, oldValue) => {
         class="doodle-action-btn bg-doodle-green disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-x-0 disabled:hover:translate-y-0"
         @click="handleSend"
       >
-        <Send
-          :size="20"
-          class="text-card"
-        />
+        <Send :size="20" class="text-card" />
       </button>
       <button
         :disabled="disabled"
@@ -239,7 +247,7 @@ watch(() => props.isTyping, (newValue, oldValue) => {
 }
 
 .chat-input-editable:empty::before {
-  content: '輸入訊息...';
+  content: attr(data-placeholder);
   color: oklch(0.55 0.02 50);
   pointer-events: none;
 }

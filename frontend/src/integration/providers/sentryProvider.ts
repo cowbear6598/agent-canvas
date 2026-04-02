@@ -3,12 +3,17 @@ import type {
   IntegrationProviderConfig,
 } from "@/types/integration";
 import SentryIcon from "@/components/icons/SentryIcon.vue";
+import { t } from "@/i18n";
 
 const CONNECTION_STATUS_CONFIG: IntegrationProviderConfig["connectionStatusConfig"] =
   {
-    connected: { dotClass: "bg-green-500", bg: "bg-white", label: "已連接" },
-    disconnected: { dotClass: "bg-red-500", bg: "bg-red-100", label: "已斷線" },
-    error: { dotClass: "bg-red-500", bg: "bg-red-100", label: "錯誤" },
+    connected: { dotClass: "bg-green-500", bg: "bg-white", label: "connected" },
+    disconnected: {
+      dotClass: "bg-red-500",
+      bg: "bg-red-100",
+      label: "disconnected",
+    },
+    error: { dotClass: "bg-red-500", bg: "bg-red-100", label: "error" },
   };
 
 function transformApp(rawApp: Record<string, unknown>): IntegrationApp {
@@ -28,38 +33,57 @@ export const sentryProviderConfig: IntegrationProviderConfig = {
   name: "sentry",
   label: "Sentry",
   icon: SentryIcon,
-  description: "管理 Sentry App 連線與設定",
+  description: "integration.sentry.description",
 
-  createFormFields: [
-    {
-      key: "name",
-      label: "名稱",
-      placeholder: "例如：my-sentry-app",
-      type: "text",
-      validate: (v): string => {
-        if (v === "") return "名稱不可為空";
-        if (v.length > 50) return "名稱最多 50 個字元";
-        if (!/^[a-zA-Z0-9_-]+$/.test(v))
-          return "名稱只允許英文字母、數字、底線與連字號";
-        return "";
+  get createFormFields() {
+    return [
+      {
+        key: "name",
+        get label() {
+          return t("integration.sentry.field.name.label");
+        },
+        get placeholder() {
+          return t("integration.sentry.field.name.placeholder");
+        },
+        type: "text" as const,
+        validate: (v: string): string => {
+          if (v === "") return t("integration.sentry.validate.nameRequired");
+          if (v.length > 50)
+            return t("integration.sentry.validate.nameTooLong");
+          if (!/^[a-zA-Z0-9_-]+$/.test(v))
+            return t("integration.sentry.validate.nameInvalid");
+          return "";
+        },
       },
-    },
-    {
-      key: "clientSecret",
-      label: "Client Secret",
-      placeholder: "Sentry Internal Integration 的 Client Secret",
-      type: "password",
-      validate: (v): string => {
-        if (v === "") return "Client Secret 不可為空";
-        if (v.length < 32) return "Client Secret 至少需要 32 個字元";
-        return "";
+      {
+        key: "clientSecret",
+        get label() {
+          return t("integration.sentry.field.clientSecret.label");
+        },
+        get placeholder() {
+          return t("integration.sentry.field.clientSecret.placeholder");
+        },
+        type: "password" as const,
+        validate: (v: string): string => {
+          if (v === "")
+            return t("integration.sentry.validate.clientSecretRequired");
+          if (v.length < 32)
+            return t("integration.sentry.validate.clientSecretLength");
+          return "";
+        },
       },
-    },
-  ],
+    ];
+  },
 
-  resourceLabel: "",
-  emptyResourceHint: "",
-  emptyAppHint: "尚未註冊任何 Sentry App",
+  get resourceLabel() {
+    return t("integration.sentry.resourceLabel");
+  },
+  get emptyResourceHint() {
+    return t("integration.sentry.emptyResourceHint");
+  },
+  get emptyAppHint() {
+    return t("integration.sentry.emptyAppHint");
+  },
 
   connectionStatusConfig: CONNECTION_STATUS_CONFIG,
 

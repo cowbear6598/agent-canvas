@@ -71,7 +71,9 @@ onUnmounted(() => {
           <div class="flex items-center gap-2">
             <RunStatusIcon :status="runStatus" />
             <span class="font-semibold">{{ podName }}</span>
-            <span class="text-xs text-muted-foreground">（歷程紀錄）</span>
+            <span class="text-xs text-muted-foreground">{{
+              $t("run.chatModal.historyBadge")
+            }}</span>
           </div>
           <button class="rounded-md p-1 hover:bg-accent" @click="handleClose">
             <X :size="20" />
@@ -87,7 +89,7 @@ onUnmounted(() => {
         <div
           class="p-4 border-t-2 border-doodle-ink text-center text-sm text-muted-foreground"
         >
-          此為歷程紀錄，僅供查看
+          {{ $t("run.chatModal.readonlyHint") }}
         </div>
       </div>
     </div>

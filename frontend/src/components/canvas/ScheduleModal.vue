@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { FrequencyType, Schedule } from "@/types/pod";
+import { useI18n } from "vue-i18n";
 
 interface Props {
   open: boolean;
@@ -34,6 +35,8 @@ const emit = defineEmits<{
   confirm: [schedule: Schedule];
   delete: [];
 }>();
+
+const { t } = useI18n();
 
 const frequency = ref<FrequencyType>("every-second");
 const second = ref(10);
@@ -52,15 +55,16 @@ const intervalMinuteOptions = createRange(1, 59);
 const intervalHourOptions = createRange(1, 23);
 const hourOptions = createRange(0, 23);
 const minuteOptions = createRange(0, 59);
-const weekdayOptions = [
-  { value: 0, label: "週一" },
-  { value: 1, label: "週二" },
-  { value: 2, label: "週三" },
-  { value: 3, label: "週四" },
-  { value: 4, label: "週五" },
-  { value: 5, label: "週六" },
-  { value: 6, label: "週日" },
-];
+
+const weekdayOptions = computed(() => [
+  { value: 0, label: t("canvas.scheduleModal.weekdays.0") },
+  { value: 1, label: t("canvas.scheduleModal.weekdays.1") },
+  { value: 2, label: t("canvas.scheduleModal.weekdays.2") },
+  { value: 3, label: t("canvas.scheduleModal.weekdays.3") },
+  { value: 4, label: t("canvas.scheduleModal.weekdays.4") },
+  { value: 5, label: t("canvas.scheduleModal.weekdays.5") },
+  { value: 6, label: t("canvas.scheduleModal.weekdays.6") },
+]);
 
 const isEditMode = computed(
   () => props.existingSchedule !== undefined && props.existingSchedule !== null,
@@ -87,7 +91,7 @@ const validate = (): boolean => {
   weekdaysError.value = "";
 
   if (frequency.value === "every-week" && weekdays.value.length === 0) {
-    weekdaysError.value = "請至少選擇一天";
+    weekdaysError.value = t("canvas.scheduleModal.weekdayRequired");
     return false;
   }
 
@@ -161,42 +165,48 @@ const formatMinute = (min: number): string => {
   <Dialog :open="open" @update:open="handleClose">
     <DialogContent class="max-w-md font-mono">
       <DialogHeader>
-        <DialogTitle>{{ isEditMode ? "編輯排程" : "設定排程" }}</DialogTitle>
-        <DialogDescription> 設定 Pod 的自動執行排程 </DialogDescription>
+        <DialogTitle>{{
+          isEditMode
+            ? $t("canvas.scheduleModal.editTitle")
+            : $t("canvas.scheduleModal.createTitle")
+        }}</DialogTitle>
+        <DialogDescription>{{
+          $t("canvas.scheduleModal.description")
+        }}</DialogDescription>
       </DialogHeader>
 
       <div class="space-y-4">
         <div class="space-y-2">
-          <Label>執行頻率</Label>
+          <Label>{{ $t("canvas.scheduleModal.frequency") }}</Label>
           <RadioGroup v-model="frequency" class="space-y-2">
             <div class="flex items-center space-x-2">
               <RadioGroupItem id="every-second" value="every-second" />
               <Label for="every-second" class="font-normal cursor-pointer">
-                每x秒
+                {{ $t("canvas.scheduleModal.everySecond") }}
               </Label>
             </div>
             <div class="flex items-center space-x-2">
               <RadioGroupItem id="every-x-minute" value="every-x-minute" />
               <Label for="every-x-minute" class="font-normal cursor-pointer">
-                每x分
+                {{ $t("canvas.scheduleModal.everyXMinute") }}
               </Label>
             </div>
             <div class="flex items-center space-x-2">
               <RadioGroupItem id="every-x-hour" value="every-x-hour" />
               <Label for="every-x-hour" class="font-normal cursor-pointer">
-                每x小時
+                {{ $t("canvas.scheduleModal.everyXHour") }}
               </Label>
             </div>
             <div class="flex items-center space-x-2">
               <RadioGroupItem id="every-day" value="every-day" />
               <Label for="every-day" class="font-normal cursor-pointer">
-                每天
+                {{ $t("canvas.scheduleModal.everyDay") }}
               </Label>
             </div>
             <div class="flex items-center space-x-2">
               <RadioGroupItem id="every-week" value="every-week" />
               <Label for="every-week" class="font-normal cursor-pointer">
-                每週
+                {{ $t("canvas.scheduleModal.everyWeek") }}
               </Label>
             </div>
           </RadioGroup>
@@ -205,7 +215,9 @@ const formatMinute = (min: number): string => {
         <hr v-if="frequency === 'every-second'" class="border-border" />
 
         <div v-if="frequency === 'every-second'" class="space-y-2">
-          <Label for="second-select">秒</Label>
+          <Label for="second-select">{{
+            $t("canvas.scheduleModal.second")
+          }}</Label>
           <Select id="second-select" v-model="second">
             <SelectTrigger>
               <SelectValue>{{ second }}</SelectValue>
@@ -221,7 +233,9 @@ const formatMinute = (min: number): string => {
         <hr v-if="frequency === 'every-x-minute'" class="border-border" />
 
         <div v-if="frequency === 'every-x-minute'" class="space-y-2">
-          <Label for="interval-minute-select">分鐘</Label>
+          <Label for="interval-minute-select">{{
+            $t("canvas.scheduleModal.intervalMinute")
+          }}</Label>
           <Select id="interval-minute-select" v-model="intervalMinute">
             <SelectTrigger>
               <SelectValue>{{ intervalMinute }}</SelectValue>
@@ -241,7 +255,9 @@ const formatMinute = (min: number): string => {
         <hr v-if="frequency === 'every-x-hour'" class="border-border" />
 
         <div v-if="frequency === 'every-x-hour'" class="space-y-2">
-          <Label for="interval-hour-select">小時數</Label>
+          <Label for="interval-hour-select">{{
+            $t("canvas.scheduleModal.intervalHour")
+          }}</Label>
           <Select id="interval-hour-select" v-model="intervalHour">
             <SelectTrigger>
               <SelectValue>{{ intervalHour }}</SelectValue>
@@ -257,11 +273,11 @@ const formatMinute = (min: number): string => {
         <hr v-if="frequency === 'every-day'" class="border-border" />
 
         <div v-if="frequency === 'every-day'" class="space-y-2">
-          <Label>執行時間</Label>
+          <Label>{{ $t("canvas.scheduleModal.executionTime") }}</Label>
           <div class="flex gap-4">
             <div class="flex-1">
               <Label for="hour-select" class="text-xs text-muted-foreground">
-                時
+                {{ $t("canvas.scheduleModal.hourUnit") }}
               </Label>
               <Select id="hour-select" v-model="hour">
                 <SelectTrigger>
@@ -276,7 +292,7 @@ const formatMinute = (min: number): string => {
             </div>
             <div class="flex-1">
               <Label for="minute-select" class="text-xs text-muted-foreground">
-                分
+                {{ $t("canvas.scheduleModal.minuteUnit") }}
               </Label>
               <Select id="minute-select" v-model="minute">
                 <SelectTrigger>
@@ -295,7 +311,7 @@ const formatMinute = (min: number): string => {
         <hr v-if="frequency === 'every-week'" class="border-border" />
 
         <div v-if="frequency === 'every-week'" class="space-y-2">
-          <Label>選擇星期</Label>
+          <Label>{{ $t("canvas.scheduleModal.selectWeekday") }}</Label>
           <div class="flex flex-wrap gap-3">
             <div
               v-for="day in weekdayOptions"
@@ -322,14 +338,14 @@ const formatMinute = (min: number): string => {
             {{ weekdaysError }}
           </p>
 
-          <Label>執行時間</Label>
+          <Label>{{ $t("canvas.scheduleModal.executionTime") }}</Label>
           <div class="flex gap-4">
             <div class="flex-1">
               <Label
                 for="custom-hour-select"
                 class="text-xs text-muted-foreground"
               >
-                時
+                {{ $t("canvas.scheduleModal.hourUnit") }}
               </Label>
               <Select id="custom-hour-select" v-model="hour">
                 <SelectTrigger>
@@ -347,7 +363,7 @@ const formatMinute = (min: number): string => {
                 for="custom-minute-select"
                 class="text-xs text-muted-foreground"
               >
-                分
+                {{ $t("canvas.scheduleModal.minuteUnit") }}
               </Label>
               <Select id="custom-minute-select" v-model="minute">
                 <SelectTrigger>
@@ -365,14 +381,22 @@ const formatMinute = (min: number): string => {
       </div>
 
       <DialogFooter class="flex justify-end gap-2">
-        <Button variant="outline" @click="handleClose"> 取消 </Button>
+        <Button variant="outline" @click="handleClose">{{
+          $t("common.cancel")
+        }}</Button>
         <!-- 編輯已啟用排程：顯示停用（紅色）+ 更新（綠色）兩個按鈕 -->
         <template v-if="isEditMode && existingSchedule?.enabled">
-          <Button variant="destructive" @click="handleDisable"> 停用 </Button>
-          <Button variant="default" @click="handleConfirm"> 更新 </Button>
+          <Button variant="destructive" @click="handleDisable">{{
+            $t("canvas.scheduleModal.disableButton")
+          }}</Button>
+          <Button variant="default" @click="handleConfirm">{{
+            $t("canvas.scheduleModal.updateButton")
+          }}</Button>
         </template>
         <!-- 新建模式或編輯已停用排程：顯示啟用按鈕 -->
-        <Button v-else variant="default" @click="handleConfirm"> 啟用 </Button>
+        <Button v-else variant="default" @click="handleConfirm">{{
+          $t("canvas.scheduleModal.enableButton")
+        }}</Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>

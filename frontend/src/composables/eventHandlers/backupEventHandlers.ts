@@ -1,6 +1,7 @@
 import { WebSocketResponseEvents } from "@/services/websocket";
 import { useConfigStore } from "@/stores/configStore";
 import { useToast } from "@/composables/useToast";
+import { t } from "@/i18n";
 import type {
   BackupStartedPayload,
   BackupCompletedPayload,
@@ -18,7 +19,7 @@ export const handleBackupCompleted = (
   configStore.setBackupStatus("success");
   configStore.setLastBackupTime(payload.timestamp);
   const { showSuccessToast } = useToast();
-  showSuccessToast("Config", "備份完成");
+  showSuccessToast("Config", t("store.backup.completed"));
 };
 
 export const handleBackupFailed = (payload: BackupFailedPayload): void => {

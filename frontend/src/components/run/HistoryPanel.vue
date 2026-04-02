@@ -101,7 +101,9 @@ onUnmounted(() => {
         class="flex items-center justify-between border-b border-border px-4 py-3"
       >
         <div class="flex items-center gap-2">
-          <h2 class="text-lg font-semibold">歷程</h2>
+          <h2 class="text-lg font-semibold">
+            {{ $t("run.historyPanel.title") }}
+          </h2>
           <span
             v-if="runStore.runningRunsCount > 0"
             class="text-xs bg-doodle-blue text-white rounded-full px-2 py-0.5"
@@ -120,7 +122,7 @@ onUnmounted(() => {
             v-if="runStore.sortedRuns.length === 0"
             class="py-8 text-center text-sm text-muted-foreground"
           >
-            尚無執行歷程
+            {{ $t("run.historyPanel.empty") }}
           </div>
           <RunCard
             v-for="run in runStore.sortedRuns"

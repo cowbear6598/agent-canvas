@@ -115,7 +115,7 @@ describe("IntegrationAppsModal", () => {
   describe("Slack provider", () => {
     it("應顯示正確標題", async () => {
       const wrapper = await mountComponent({ open: true, provider: "slack" });
-      expect(wrapper.text()).toContain("Slack Apps 管理");
+      expect(wrapper.text()).toContain("Slack Apps");
     });
 
     it("沒有 App 時應顯示空狀態提示", async () => {
@@ -157,7 +157,7 @@ describe("IntegrationAppsModal", () => {
         open: true,
         provider: "telegram",
       });
-      expect(wrapper.text()).toContain("Telegram Apps 管理");
+      expect(wrapper.text()).toContain("Telegram Apps");
     });
 
     it("新增表單應根據 Telegram provider 渲染 2 個欄位", async () => {

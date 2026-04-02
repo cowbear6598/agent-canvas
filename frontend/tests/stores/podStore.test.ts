@@ -908,7 +908,7 @@ describe("podStore", () => {
         }),
         expect.objectContaining({
           errorCategory: "Pod",
-          errorAction: "重新命名失敗",
+          errorAction: "Pod 重新命名失敗",
         }),
       );
       expect(mockShowSuccessToast).toHaveBeenCalledWith(
@@ -1113,7 +1113,7 @@ describe("podStore", () => {
         }),
         expect.objectContaining({
           errorCategory: "Schedule",
-          errorAction: "設定失敗",
+          errorAction: "操作失敗",
         }),
       );
       expect(mockShowSuccessToast).toHaveBeenCalledWith("Schedule", "更新成功");
@@ -1134,7 +1134,7 @@ describe("podStore", () => {
 
       const result = await store.setScheduleWithBackend("pod-1", null);
 
-      expect(mockShowSuccessToast).toHaveBeenCalledWith("Schedule", "清除成功");
+      expect(mockShowSuccessToast).toHaveBeenCalledWith("Schedule", "刪除成功");
       expect(result).toEqual(updatedPod);
     });
 
@@ -1547,10 +1547,10 @@ describe("podStore", () => {
         }),
         expect.objectContaining({
           errorCategory: "Pod",
-          errorAction: "設定失敗",
+          errorAction: "操作失敗",
         }),
       );
-      expect(mockShowSuccessToast).toHaveBeenCalledWith("Pod", "設定成功");
+      expect(mockShowSuccessToast).toHaveBeenCalledWith("Pod", "更新成功");
       expect(result).toEqual(updatedPod);
     });
 

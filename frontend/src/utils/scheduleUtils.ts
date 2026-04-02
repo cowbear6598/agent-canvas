@@ -1,5 +1,6 @@
 import type { FrequencyType, Schedule } from "@/types/pod";
 import { MS_PER_SECOND, MS_PER_MINUTE, MS_PER_HOUR } from "@/lib/constants";
+import { t } from "@/i18n";
 
 /**
  * 格式化 Schedule 頻率為可讀文字
@@ -9,23 +10,29 @@ export function formatScheduleFrequency(schedule: Schedule): string {
 
   switch (frequency) {
     case "every-second":
-      return "每秒";
+      return t("schedule.everySecond");
     case "every-x-minute":
-      return `每 ${schedule.intervalMinute} 分鐘`;
+      return t("schedule.everyXMinute", { n: schedule.intervalMinute });
     case "every-x-hour":
-      return `每 ${schedule.intervalHour} 小時`;
-    case "every-day":
-      return `每天 ${String(schedule.hour).padStart(2, "0")}:${String(schedule.minute).padStart(2, "0")}`;
+      return t("schedule.everyXHour", { n: schedule.intervalHour });
+    case "every-day": {
+      const time = `${String(schedule.hour).padStart(2, "0")}:${String(schedule.minute).padStart(2, "0")}`;
+      return t("schedule.everyDay", { time });
+    }
     case "every-week": {
-      const weekdayNames = ["日", "一", "二", "三", "四", "五", "六"];
       const days = schedule.weekdays
         .sort((a, b) => a - b)
-        .map((d) => weekdayNames[d])
-        .join("、");
-      return `每週${days} ${String(schedule.hour).padStart(2, "0")}:${String(schedule.minute).padStart(2, "0")}`;
+        .map((d) =>
+          t(
+            `schedule.weekdays.${d}` as `schedule.weekdays.${0 | 1 | 2 | 3 | 4 | 5 | 6}`,
+          ),
+        )
+        .join(t("schedule.weekdaySeparator"));
+      const time = `${String(schedule.hour).padStart(2, "0")}:${String(schedule.minute).padStart(2, "0")}`;
+      return t("schedule.everyWeek", { days, time });
     }
     default:
-      return "未知頻率";
+      return t("schedule.unknownFrequency");
   }
 }
 
@@ -240,5 +247,5 @@ export function formatScheduleTooltip(
   const tzDate = new Date(nextTime.getTime() + timezoneOffset * MS_PER_HOUR);
   const timeStr = `${String(tzDate.getUTCHours()).padStart(2, "0")}:${String(tzDate.getUTCMinutes()).padStart(2, "0")}`;
 
-  return `${frequency} | 下次：${timeStr}`;
+  return t("schedule.nextTime", { frequency, time: timeStr });
 }

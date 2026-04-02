@@ -4,6 +4,7 @@ import type { WebSocketRequestConfig } from '@/services/websocket/createWebSocke
 import { useWebSocketErrorHandler } from '@/composables/useWebSocketErrorHandler'
 import { useToast } from '@/composables/useToast'
 import type { ToastCategory } from '@/composables/useToast'
+import { t } from '@/i18n'
 
 export type WebSocketActionResult<T> =
   | { success: true; data: T }
@@ -36,7 +37,7 @@ export function useCanvasWebSocketAction(): {
   ): Promise<WebSocketActionResult<TResponse>> => {
     const canvasId = getActiveCanvasIdOrWarn('useCanvasWebSocketAction')
     if (!canvasId) {
-      return { success: false, error: '沒有啟用的畫布' }
+      return { success: false, error: t('composable.canvas.noActiveCanvas') }
     }
 
     const fullPayload = { ...config.payload, canvasId } as Omit<TPayload, 'requestId'>

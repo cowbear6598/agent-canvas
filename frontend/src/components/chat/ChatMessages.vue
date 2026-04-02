@@ -1,41 +1,41 @@
 <script setup lang="ts">
-import { ref, watch, nextTick, onMounted } from 'vue'
-import type { Message } from '@/types'
-import ChatMessageBubble from './ChatMessageBubble.vue'
-import TypingIndicator from './TypingIndicator.vue'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import { ref, watch, nextTick, onMounted } from "vue";
+import type { Message } from "@/types";
+import ChatMessageBubble from "./ChatMessageBubble.vue";
+import TypingIndicator from "./TypingIndicator.vue";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const props = withDefaults(
   defineProps<{
-    messages: Message[]
-    isTyping: boolean
-    isLoadingHistory?: boolean
+    messages: Message[];
+    isTyping: boolean;
+    isLoadingHistory?: boolean;
   }>(),
   {
-    isLoadingHistory: false
-  }
-)
+    isLoadingHistory: false,
+  },
+);
 
-const messagesEndRef = ref<HTMLDivElement | null>(null)
+const messagesEndRef = ref<HTMLDivElement | null>(null);
 
 const scrollToBottom = async (smooth = true): Promise<void> => {
-  await nextTick()
+  await nextTick();
   messagesEndRef.value?.scrollIntoView({
-    behavior: smooth ? 'smooth' : 'instant',
-    block: 'end'
-  })
-}
+    behavior: smooth ? "smooth" : "instant",
+    block: "end",
+  });
+};
 
 onMounted(() => {
-  scrollToBottom(false)
-})
+  scrollToBottom(false);
+});
 
 watch(
   () => [props.messages.length, props.isTyping] as const,
   () => {
-    scrollToBottom(true)
-  }
-)
+    scrollToBottom(true);
+  },
+);
 </script>
 
 <template>
@@ -47,15 +47,12 @@ watch(
       >
         <div class="flex flex-col items-center gap-3 text-muted-foreground">
           <TypingIndicator />
-          <span class="text-sm">正在載入對話歷史...</span>
+          <span class="text-sm">{{ $t("chat.loadingHistory") }}</span>
         </div>
       </div>
 
       <template v-else>
-        <template
-          v-for="message in messages"
-          :key="message.id"
-        >
+        <template v-for="message in messages" :key="message.id">
           <ChatMessageBubble
             v-if="message.role === 'user'"
             :content="message.content"
@@ -65,7 +62,9 @@ watch(
           />
 
           <template v-else-if="message.role === 'assistant'">
-            <template v-if="message.subMessages && message.subMessages.length > 0">
+            <template
+              v-if="message.subMessages && message.subMessages.length > 0"
+            >
               <ChatMessageBubble
                 v-for="sub in message.subMessages"
                 :key="sub.id"
@@ -88,10 +87,7 @@ watch(
           </template>
         </template>
 
-        <div
-          v-if="isTyping"
-          class="flex justify-start"
-        >
+        <div v-if="isTyping" class="flex justify-start">
           <div
             class="p-3 rounded-lg border-2 border-doodle-ink bg-card"
             :style="{ boxShadow: '2px 2px 0 var(--doodle-ink)' }"

@@ -1,6 +1,7 @@
 import { useWebSocketErrorHandler } from '@/composables/useWebSocketErrorHandler'
 import { createWebSocketRequest } from '@/services/websocket'
 import { useToast } from '@/composables/useToast'
+import { t } from '@/i18n'
 import { getActiveCanvasIdOrWarn } from '@/utils/canvasGuard'
 import type { ToastCategory } from '@/composables/useToast'
 import { isNullResponse } from './noteStoreHelpers'
@@ -47,7 +48,7 @@ type CanvasGuardResult =
 
 function guardActiveCanvas(storeName: string): CanvasGuardResult {
   const canvasId = getActiveCanvasIdOrWarn(storeName)
-  if (!canvasId) return { canvasId: null, failure: { success: false, error: '無作用中的畫布' } }
+  if (!canvasId) return { canvasId: null, failure: { success: false, error: t('store.group.noActiveCanvas') } }
   return { canvasId, failure: null }
 }
 
@@ -71,7 +72,7 @@ export function createGroupCRUDActions(config: GroupCRUDConfig): GroupCRUDAction
         })
       )
 
-      if (isNullResponse(response, showErrorToast, config.toastCategory, '載入群組失敗')) return
+      if (isNullResponse(response, showErrorToast, config.toastCategory, t('store.group.loadFailed'))) return
 
       if (response.groups) {
         this.groups = response.groups
@@ -80,7 +81,7 @@ export function createGroupCRUDActions(config: GroupCRUDConfig): GroupCRUDAction
 
     async createGroup(this: GroupCRUDStoreContext, name: string): Promise<{ success: boolean; group?: Group; error?: string }> {
       if (!name?.trim()) {
-        return { success: false, error: '群組名稱不能為空' }
+        return { success: false, error: t('store.group.createNameRequired') }
       }
 
       const { canvasId, failure } = guardActiveCanvas(config.storeName)
@@ -98,11 +99,11 @@ export function createGroupCRUDActions(config: GroupCRUDConfig): GroupCRUDAction
         })
       )
 
-      if (isNullResponse(response, showErrorToast, config.toastCategory, '建立群組失敗')) return { success: false, error: '建立群組失敗' }
+      if (isNullResponse(response, showErrorToast, config.toastCategory, t('store.group.createFailed'))) return { success: false, error: t('store.group.createFailed') }
 
       if (response.group) {
         this.addGroupFromEvent(response.group)
-        showSuccessToast(config.toastCategory, '建立群組成功', name)
+        showSuccessToast(config.toastCategory, t('store.group.createSuccess'), name)
       }
 
       return {
@@ -114,7 +115,7 @@ export function createGroupCRUDActions(config: GroupCRUDConfig): GroupCRUDAction
 
     async deleteGroup(this: GroupCRUDStoreContext, groupId: string): Promise<{ success: boolean; error?: string }> {
       if (!groupId?.trim()) {
-        return { success: false, error: '無效的群組 ID' }
+        return { success: false, error: t('store.group.invalidGroupId') }
       }
 
       const { canvasId, failure } = guardActiveCanvas(config.storeName)
@@ -131,11 +132,11 @@ export function createGroupCRUDActions(config: GroupCRUDConfig): GroupCRUDAction
         })
       )
 
-      if (isNullResponse(response, showErrorToast, config.toastCategory, '刪除群組失敗')) return { success: false, error: '刪除群組失敗' }
+      if (isNullResponse(response, showErrorToast, config.toastCategory, t('store.group.deleteFailed'))) return { success: false, error: t('store.group.deleteFailed') }
 
       if (response.success && response.groupId) {
         this.removeGroupFromEvent(response.groupId)
-        showSuccessToast(config.toastCategory, '刪除群組成功')
+        showSuccessToast(config.toastCategory, t('store.group.deleteSuccess'))
       }
 
       return {
@@ -146,7 +147,7 @@ export function createGroupCRUDActions(config: GroupCRUDConfig): GroupCRUDAction
 
     async moveItemToGroup(this: GroupCRUDStoreContext, itemId: string, groupId: string | null): Promise<{ success: boolean; error?: string }> {
       if (!itemId?.trim()) {
-        return { success: false, error: '無效的項目 ID' }
+        return { success: false, error: t('store.group.invalidItemId') }
       }
 
       const { canvasId, failure } = guardActiveCanvas(config.storeName)
@@ -164,11 +165,11 @@ export function createGroupCRUDActions(config: GroupCRUDConfig): GroupCRUDAction
         })
       )
 
-      if (isNullResponse(response, showErrorToast, config.toastCategory, '移動失敗')) return { success: false, error: '移動失敗' }
+      if (isNullResponse(response, showErrorToast, config.toastCategory, t('store.group.moveFailed'))) return { success: false, error: t('store.group.moveFailed') }
 
       if (response.success && response.itemId) {
         this.updateItemGroupId(response.itemId, response.groupId ?? null)
-        showSuccessToast(config.toastCategory, '移動成功')
+        showSuccessToast(config.toastCategory, t('store.group.moveSuccess'))
       }
 
       return {
