@@ -76,6 +76,11 @@ vi.mock("lucide-vue-next", () => ({
     template: '<svg data-icon="check" />',
     props: ["class"],
   },
+  Webhook: {
+    name: "Webhook",
+    template: '<svg data-icon="webhook" />',
+    props: ["class"],
+  },
 }));
 
 function createMockApp(overrides?: Partial<IntegrationApp>): IntegrationApp {

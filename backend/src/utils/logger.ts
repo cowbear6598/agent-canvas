@@ -37,6 +37,7 @@ export type LogCategory =
   | "Telegram"
   | "Jira"
   | "Sentry"
+  | "Webhook"
   | "Integration"
   | "Run"
   | "Backup"
@@ -69,6 +70,7 @@ const CATEGORY_COLORS: Record<LogCategory, string> = {
   Telegram: ANSI_COLORS.BLUE,
   Jira: ANSI_COLORS.BLUE,
   Sentry: ANSI_COLORS.BLUE,
+  Webhook: ANSI_COLORS.BLUE,
   Integration: ANSI_COLORS.BLUE,
   Run: ANSI_COLORS.GREEN,
   Backup: ANSI_COLORS.YELLOW,

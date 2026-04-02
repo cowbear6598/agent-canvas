@@ -77,7 +77,6 @@ class SentryProvider implements IntegrationProvider {
   readonly displayName = "Sentry";
   readonly webhookPath = "/sentry/events";
   readonly webhookPathMatchMode = "prefix" as const;
-  readonly allowManualResourceId = true;
 
   readonly createAppSchema = z.object({
     clientSecret: z.string().min(32, "Client Secret 至少需要 32 個字元"),

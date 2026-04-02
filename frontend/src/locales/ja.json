@@ -634,6 +634,27 @@
         "clientSecretRequired": "Client Secret を入力してください",
         "clientSecretLength": "Client Secret は 32 文字以上必要です"
       }
+    },
+    "webhook": {
+      "description": "カスタム Webhook エンドポイントで外部 HTTP リクエストから Pod をトリガー",
+      "emptyAppHint": "Webhook App がまだ作成されていません",
+      "emptyResourceHint": "",
+      "resourceLabel": "",
+      "field": {
+        "name": {
+          "label": "名前",
+          "placeholder": "例：deploy-hook"
+        }
+      },
+      "validate": {
+        "nameRequired": "名前は必須です",
+        "nameTooLong": "名前は 50 文字以内にしてください",
+        "nameInvalid": "名前には英字、数字、アンダースコア、ハイフンのみ使用できます"
+      },
+      "token": {
+        "label": "Token",
+        "copied": "Token をコピーしました"
+      }
     }
   }
 }

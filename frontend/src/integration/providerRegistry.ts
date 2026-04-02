@@ -3,6 +3,7 @@ import { slackProviderConfig } from "./providers/slackProvider";
 import { telegramProviderConfig } from "./providers/telegramProvider";
 import { jiraProviderConfig } from "./providers/jiraProvider";
 import { sentryProviderConfig } from "./providers/sentryProvider";
+import { webhookProviderConfig } from "./providers/webhookProvider";
 
 const registry = new Map<string, IntegrationProviderConfig>();
 
@@ -30,3 +31,4 @@ registerProvider(slackProviderConfig);
 registerProvider(telegramProviderConfig);
 registerProvider(jiraProviderConfig);
 registerProvider(sentryProviderConfig);
+registerProvider(webhookProviderConfig);

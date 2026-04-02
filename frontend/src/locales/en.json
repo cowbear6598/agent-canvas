@@ -184,6 +184,27 @@
         "clientSecretRequired": "Client Secret cannot be empty",
         "clientSecretLength": "Client Secret must be at least 32 characters"
       }
+    },
+    "webhook": {
+      "description": "Custom Webhook endpoint to trigger Pods from external HTTP requests",
+      "emptyAppHint": "No Webhook App created yet",
+      "emptyResourceHint": "",
+      "resourceLabel": "",
+      "field": {
+        "name": {
+          "label": "Name",
+          "placeholder": "e.g. deploy-hook"
+        }
+      },
+      "validate": {
+        "nameRequired": "Name is required",
+        "nameTooLong": "Name must be 50 characters or less",
+        "nameInvalid": "Name may only contain letters, numbers, underscores, and hyphens"
+      },
+      "token": {
+        "label": "Token",
+        "copied": "Token copied"
+      }
     }
   },
   "pod": {

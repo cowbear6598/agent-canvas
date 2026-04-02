@@ -152,7 +152,6 @@ class JiraProvider implements IntegrationProvider {
   readonly name = "jira";
   readonly displayName = "Jira";
   readonly webhookPathMatchMode = "prefix" as const;
-  readonly allowManualResourceId = true;
 
   readonly createAppSchema = z.object({
     siteUrl: z

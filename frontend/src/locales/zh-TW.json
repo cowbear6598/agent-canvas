@@ -184,6 +184,27 @@
         "clientSecretRequired": "Client Secret 不可為空",
         "clientSecretLength": "Client Secret 至少需要 32 個字元"
       }
+    },
+    "webhook": {
+      "description": "自訂 Webhook 端點，接收外部 HTTP 請求觸發 Pod",
+      "emptyAppHint": "尚未建立任何 Webhook App",
+      "emptyResourceHint": "",
+      "resourceLabel": "",
+      "field": {
+        "name": {
+          "label": "名稱",
+          "placeholder": "例如：deploy-hook"
+        }
+      },
+      "validate": {
+        "nameRequired": "名稱不可為空",
+        "nameTooLong": "名稱最多 50 個字元",
+        "nameInvalid": "名稱只允許英文字母、數字、底線與連字號"
+      },
+      "token": {
+        "label": "Token",
+        "copied": "Token 已複製"
+      }
     }
   },
   "pod": {

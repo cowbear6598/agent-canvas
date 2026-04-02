@@ -1,6 +1,6 @@
-import type { z } from 'zod';
-import type { Result } from '../../types/index.js';
-import type { IntegrationConnectionStatus } from '../../types/integration.js';
+import type { z } from "zod";
+import type { Result } from "../../types/index.js";
+import type { IntegrationConnectionStatus } from "../../types/integration.js";
 
 export type { IntegrationConnectionStatus };
 
@@ -23,7 +23,7 @@ export interface IntegrationApp {
   resources: IntegrationResource[];
 }
 
-export type SanitizedIntegrationApp = Omit<IntegrationApp, 'config'> & {
+export type SanitizedIntegrationApp = Omit<IntegrationApp, "config"> & {
   config: Record<string, unknown>;
 };
 
@@ -54,16 +54,24 @@ export interface IntegrationProvider {
   destroy(appId: string): void;
   destroyAll(): void;
   refreshResources(appId: string): Promise<IntegrationResource[]>;
-  sendMessage?(appId: string, resourceId: string, text: string, extra?: Record<string, unknown>): Promise<Result<void>>;
+  sendMessage?(
+    appId: string,
+    resourceId: string,
+    text: string,
+    extra?: Record<string, unknown>,
+  ): Promise<Result<void>>;
   buildAckExtra?(event: NormalizedEvent): Record<string, unknown>;
 
-  formatEventMessage(event: unknown, app: IntegrationApp): NormalizedEvent | null;
+  formatEventMessage(
+    event: unknown,
+    app: IntegrationApp,
+  ): NormalizedEvent | null;
 
-  // 允許手動輸入 Resource ID（跳過 resources 列表驗證）
-  allowManualResourceId?: boolean;
+  // 啟用時，綁定必須從 resources 列表中選擇，不允許手動輸入
+  strictResourceValidation?: boolean;
 
   webhookPath?: string;
-  webhookPathMatchMode?: 'exact' | 'prefix';
+  webhookPathMatchMode?: "exact" | "prefix";
   handleWebhookRequest?(req: Request, subPath?: string): Promise<Response>;
   startPolling?(appId: string, config: IntegrationAppConfig): void;
   stopPolling?(appId: string): void;

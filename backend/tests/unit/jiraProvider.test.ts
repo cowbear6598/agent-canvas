@@ -100,8 +100,8 @@ describe("JiraProvider - 基本屬性", () => {
     expect(jiraProvider.webhookPathMatchMode).toBe("prefix");
   });
 
-  it("allowManualResourceId 應為 true", () => {
-    expect(jiraProvider.allowManualResourceId).toBe(true);
+  it("strictResourceValidation 應為 undefined（不啟用嚴格驗證）", () => {
+    expect(jiraProvider.strictResourceValidation).toBeUndefined();
   });
 });
 

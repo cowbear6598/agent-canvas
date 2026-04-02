@@ -37,6 +37,8 @@ const showAddForm = ref(false);
 const formValues = ref<Record<string, string>>({});
 const isSubmitting = ref(false);
 const copiedAppId = ref<string | null>(null);
+const copiedTokenAppId = ref<string | null>(null);
+const copyTimers: Record<string, ReturnType<typeof setTimeout>> = {};
 
 watch(
   () => props.provider,
@@ -129,15 +131,44 @@ const handleDeleteApp = async (appId: string): Promise<void> => {
   await integrationStore.deleteApp(props.provider, appId);
 };
 
-const handleCopyWebhookUrl = async (
+function handleCopy(
+  text: string,
+  setState: (id: string | null) => void,
   appId: string,
-  url: string,
-): Promise<void> => {
-  await navigator.clipboard.writeText(url);
-  copiedAppId.value = appId;
-  setTimeout(() => {
-    copiedAppId.value = null;
-  }, 2000);
+  timerKey: string,
+): void {
+  navigator.clipboard
+    .writeText(text)
+    .then(() => {
+      setState(appId);
+      clearTimeout(copyTimers[timerKey]);
+      copyTimers[timerKey] = setTimeout(() => setState(null), 2000);
+    })
+    .catch(() => {
+      // clipboard 失敗時靜默處理
+    });
+}
+
+const handleCopyWebhookUrl = (appId: string, url: string): void => {
+  handleCopy(
+    url,
+    (id) => {
+      copiedAppId.value = id;
+    },
+    appId,
+    `url-${appId}`,
+  );
+};
+
+const handleCopyToken = (appId: string, token: string): void => {
+  handleCopy(
+    token,
+    (id) => {
+      copiedTokenAppId.value = id;
+    },
+    appId,
+    `token-${appId}`,
+  );
 };
 </script>
 
@@ -176,12 +207,41 @@ const handleCopyWebhookUrl = async (
           <div class="flex flex-1 flex-col overflow-hidden">
             <span class="font-semibold">{{ app.name }}</span>
 
-            <span
-              v-if="config.getWebhookUrl"
-              class="truncate font-mono text-xs text-muted-foreground"
+            <div v-if="config.getWebhookUrl" class="flex items-center gap-1">
+              <span class="truncate font-mono text-xs text-muted-foreground">
+                {{ config.getWebhookUrl(app) }}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                class="size-5 shrink-0"
+                @click="
+                  handleCopyWebhookUrl(app.id, config.getWebhookUrl!(app))
+                "
+              >
+                <Check v-if="copiedAppId === app.id" class="size-3" />
+                <Copy v-else class="size-3" />
+              </Button>
+            </div>
+
+            <div
+              v-if="config.getTokenValue?.(app)"
+              class="flex items-center gap-1"
             >
-              {{ config.getWebhookUrl(app) }}
-            </span>
+              <span class="font-mono text-xs text-muted-foreground">
+                {{ config.tokenLabel ? $t(config.tokenLabel) : "" }}:
+                ••••••••••••
+              </span>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                class="size-5 shrink-0"
+                @click="handleCopyToken(app.id, config.getTokenValue!(app)!)"
+              >
+                <Check v-if="copiedTokenAppId === app.id" class="size-3" />
+                <Copy v-else class="size-3" />
+              </Button>
+            </div>
 
             <div
               v-if="
@@ -200,15 +260,6 @@ const handleCopyWebhookUrl = async (
           </div>
 
           <div class="flex shrink-0 items-center gap-1">
-            <Button
-              v-if="config.getWebhookUrl"
-              variant="ghost"
-              size="icon-sm"
-              @click="handleCopyWebhookUrl(app.id, config.getWebhookUrl!(app))"
-            >
-              <Check v-if="copiedAppId === app.id" class="size-3" />
-              <Copy v-else class="size-3" />
-            </Button>
             <Button
               variant="ghost"
               size="icon-sm"
