@@ -590,7 +590,8 @@
       "commandDeleted": "Command 已刪除",
       "mcpServerCreated": "MCP Server 已建立",
       "mcpServerUpdated": "MCP Server 已更新",
-      "mcpServerDeleted": "MCP Server 已刪除"
+      "mcpServerDeleted": "MCP Server 已刪除",
+      "mcpServerReadFailed": "讀取 MCP Server 失敗"
     },
     "deleteSelection": {
       "partialFailed": "刪除部分失敗",

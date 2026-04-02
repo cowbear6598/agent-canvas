@@ -639,7 +639,7 @@ describe('connectionStore', () => {
           isSummarized: false,
         }
 
-        store.handleWorkflowAutoTriggered(payload)
+        store.getWorkflowHandlers().handleWorkflowAutoTriggered(payload)
 
         expect(conn1.status).toBe('active')
         expect(conn2.status).toBe('active')
@@ -660,7 +660,7 @@ describe('connectionStore', () => {
           isSummarized: false,
         }
 
-        store.handleWorkflowAutoTriggered(payload)
+        store.getWorkflowHandlers().handleWorkflowAutoTriggered(payload)
 
         expect(conn1.status).toBe('active')
         expect(conn2.status).toBe('active')
@@ -682,7 +682,7 @@ describe('connectionStore', () => {
           triggerMode: 'auto',
         }
 
-        store.handleWorkflowComplete(payload)
+        store.getWorkflowHandlers().handleWorkflowComplete(payload)
 
         expect(conn1.status).toBe('idle')
         expect(conn2.status).toBe('idle')
@@ -702,7 +702,7 @@ describe('connectionStore', () => {
           triggerMode: 'direct',
         }
 
-        store.handleWorkflowComplete(payload)
+        store.getWorkflowHandlers().handleWorkflowComplete(payload)
 
         expect(conn1.status).toBe('idle')
         expect(conn2.status).toBe('active')
@@ -725,7 +725,7 @@ describe('connectionStore', () => {
           isSummarized: false,
         }
 
-        store.handleWorkflowDirectTriggered(payload)
+        store.getWorkflowHandlers().handleWorkflowDirectTriggered(payload)
 
         expect(conn1.status).toBe('active')
         expect(conn2.status).toBe('idle')
@@ -746,7 +746,7 @@ describe('connectionStore', () => {
           targetPodId: 'pod-b',
         }
 
-        store.handleWorkflowDirectWaiting(payload)
+        store.getWorkflowHandlers().handleWorkflowDirectWaiting(payload)
 
         expect(conn1.status).toBe('waiting')
         expect(conn2.status).toBe('idle')
@@ -767,7 +767,7 @@ describe('connectionStore', () => {
           sourcePodId: 'pod-a',
         }
 
-        store.handleAiDecidePending(payload)
+        store.getWorkflowHandlers().handleAiDecidePending(payload)
 
         expect(conn1.status).toBe('ai-deciding')
         expect(conn1.decideReason).toBeUndefined()
@@ -792,7 +792,7 @@ describe('connectionStore', () => {
           reason: 'approved',
         }
 
-        store.handleAiDecideResult(payload)
+        store.getWorkflowHandlers().handleAiDecideResult(payload)
 
         expect(conn.status).toBe('ai-approved')
         expect(conn.decideReason).toBeUndefined()
@@ -812,7 +812,7 @@ describe('connectionStore', () => {
           reason: 'not relevant',
         }
 
-        store.handleAiDecideResult(payload)
+        store.getWorkflowHandlers().handleAiDecideResult(payload)
 
         expect(conn.status).toBe('ai-rejected')
         expect(conn.decideReason).toBe('not relevant')
@@ -833,7 +833,7 @@ describe('connectionStore', () => {
           error: 'AI service error',
         }
 
-        store.handleAiDecideError(payload)
+        store.getWorkflowHandlers().handleAiDecideError(payload)
 
         expect(conn.status).toBe('ai-error')
         expect(conn.decideReason).toBe('AI service error')
@@ -853,7 +853,7 @@ describe('connectionStore', () => {
           connectionIds: ['conn-1', 'conn-2'],
         }
 
-        store.handleAiDecideClear(payload)
+        store.getWorkflowHandlers().handleAiDecideClear(payload)
 
         expect(conn1.status).toBe('idle')
         expect(conn1.decideReason).toBeUndefined()
@@ -881,7 +881,7 @@ describe('connectionStore', () => {
           triggerMode: 'auto',
         }
 
-        store.handleWorkflowQueued(payload)
+        store.getWorkflowHandlers().handleWorkflowQueued(payload)
 
         expect(conn1.status).toBe('queued')
         expect(conn2.status).toBe('queued')
@@ -904,7 +904,7 @@ describe('connectionStore', () => {
           triggerMode: 'direct',
         }
 
-        store.handleWorkflowQueued(payload)
+        store.getWorkflowHandlers().handleWorkflowQueued(payload)
 
         expect(conn1.status).toBe('queued')
         expect(conn2.status).toBe('idle')
@@ -927,7 +927,7 @@ describe('connectionStore', () => {
           triggerMode: 'auto',
         }
 
-        store.handleWorkflowQueueProcessed(payload)
+        store.getWorkflowHandlers().handleWorkflowQueueProcessed(payload)
 
         expect(conn1.status).toBe('active')
         expect(conn2.status).toBe('active')
@@ -948,7 +948,7 @@ describe('connectionStore', () => {
           triggerMode: 'direct',
         }
 
-        store.handleWorkflowQueueProcessed(payload)
+        store.getWorkflowHandlers().handleWorkflowQueueProcessed(payload)
 
         expect(conn1.status).toBe('active')
         expect(conn2.status).toBe('queued')

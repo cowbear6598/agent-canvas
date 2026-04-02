@@ -270,7 +270,7 @@ describe("Canvas/Pod 操作完整流程", () => {
       connectionStore.addConnectionFromEvent({
         ...newConnection,
       });
-      connectionStore.handleWorkflowAutoTriggered({
+      connectionStore.getWorkflowHandlers().handleWorkflowAutoTriggered({
         connectionId: "conn-1",
         sourcePodId: "pod-1",
         targetPodId: "pod-2",
@@ -283,7 +283,7 @@ describe("Canvas/Pod 操作完整流程", () => {
       );
       expect(activeConnection?.status).toBe("active");
 
-      connectionStore.handleWorkflowComplete({
+      connectionStore.getWorkflowHandlers().handleWorkflowComplete({
         requestId: "req-1",
         connectionId: "conn-1",
         targetPodId: "pod-2",
@@ -313,7 +313,7 @@ describe("Canvas/Pod 操作完整流程", () => {
 
       expect(connectionStore.connections[0]?.status).toBe("idle");
 
-      connectionStore.handleWorkflowAutoTriggered({
+      connectionStore.getWorkflowHandlers().handleWorkflowAutoTriggered({
         connectionId: "conn-1",
         sourcePodId: "pod-a",
         targetPodId: "pod-b",
@@ -323,7 +323,7 @@ describe("Canvas/Pod 操作完整流程", () => {
 
       expect(connectionStore.connections[0]?.status).toBe("active");
 
-      connectionStore.handleWorkflowComplete({
+      connectionStore.getWorkflowHandlers().handleWorkflowComplete({
         requestId: "req-1",
         connectionId: "conn-1",
         targetPodId: "pod-b",
@@ -348,7 +348,7 @@ describe("Canvas/Pod 操作完整流程", () => {
 
       expect(connectionStore.connections[0]?.status).toBe("idle");
 
-      connectionStore.handleAiDecidePending({
+      connectionStore.getWorkflowHandlers().handleAiDecidePending({
         canvasId: "canvas-1",
         connectionIds: ["conn-1"],
         sourcePodId: "pod-a",
@@ -357,7 +357,7 @@ describe("Canvas/Pod 操作完整流程", () => {
       expect(connectionStore.connections[0]?.status).toBe("ai-deciding");
       expect(connectionStore.connections[0]?.decideReason).toBeUndefined();
 
-      connectionStore.handleAiDecideResult({
+      connectionStore.getWorkflowHandlers().handleAiDecideResult({
         canvasId: "canvas-1",
         connectionId: "conn-1",
         sourcePodId: "pod-a",
@@ -383,7 +383,7 @@ describe("Canvas/Pod 操作完整流程", () => {
       });
       connectionStore.connections = [conn];
 
-      connectionStore.handleAiDecidePending({
+      connectionStore.getWorkflowHandlers().handleAiDecidePending({
         canvasId: "canvas-1",
         connectionIds: ["conn-1"],
         sourcePodId: "pod-a",
@@ -391,7 +391,7 @@ describe("Canvas/Pod 操作完整流程", () => {
 
       expect(connectionStore.connections[0]?.status).toBe("ai-deciding");
 
-      connectionStore.handleAiDecideResult({
+      connectionStore.getWorkflowHandlers().handleAiDecideResult({
         canvasId: "canvas-1",
         connectionId: "conn-1",
         sourcePodId: "pod-a",
@@ -403,7 +403,7 @@ describe("Canvas/Pod 操作完整流程", () => {
       expect(connectionStore.connections[0]?.status).toBe("ai-rejected");
       expect(connectionStore.connections[0]?.decideReason).toBe("not relevant");
 
-      connectionStore.handleAiDecideClear({
+      connectionStore.getWorkflowHandlers().handleAiDecideClear({
         canvasId: "canvas-1",
         connectionIds: ["conn-1"],
       });

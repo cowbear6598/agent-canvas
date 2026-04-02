@@ -120,9 +120,10 @@ export function useEditModal(
       id: string,
     ) => Promise<{ id: string; name: string; content: string } | null>
   > = {
-    outputStyle: (id) => outputStyleStore.readOutputStyle!(id),
-    subAgent: (id) => subAgentStore.readSubAgent!(id),
-    command: (id) => commandStore.readCommand!(id),
+    outputStyle: (id) =>
+      outputStyleStore.readOutputStyle?.(id) ?? Promise.resolve(null),
+    subAgent: (id) => subAgentStore.readSubAgent?.(id) ?? Promise.resolve(null),
+    command: (id) => commandStore.readCommand?.(id) ?? Promise.resolve(null),
   };
 
   function getCanvasPosition(): { x: number; y: number } | null {
@@ -164,13 +165,14 @@ export function useEditModal(
     content: string,
   ): () => Promise<void> {
     const store = resourceStoreMap[storeKey];
-    const createFnMap: Record<
-      ResourceType,
-      | ((
+    const createFnMap: Partial<
+      Record<
+        ResourceType,
+        (
           n: string,
           c: string,
-        ) => Promise<{ success: boolean; [key: string]: unknown }>)
-      | undefined
+        ) => Promise<{ success: boolean; [key: string]: unknown }>
+      >
     > = {
       outputStyle: store.createOutputStyle,
       subAgent: store.createSubAgent,
@@ -178,7 +180,9 @@ export function useEditModal(
     };
     const createFn = createFnMap[storeKey];
 
-    return () => createResourceWithNote(name, content, createFn!, storeKey);
+    if (!createFn) return async () => {};
+
+    return () => createResourceWithNote(name, content, createFn, storeKey);
   }
 
   function handleOpenCreateModal(
@@ -248,9 +252,13 @@ export function useEditModal(
     const updateActions: Partial<
       Record<ExtendedResourceType, () => Promise<unknown>>
     > = {
-      outputStyle: () => outputStyleStore.updateOutputStyle!(itemId, content),
-      subAgent: () => subAgentStore.updateSubAgent!(itemId, content),
-      command: () => commandStore.updateCommand!(itemId, content),
+      outputStyle: () =>
+        outputStyleStore.updateOutputStyle?.(itemId, content) ??
+        Promise.resolve(),
+      subAgent: () =>
+        subAgentStore.updateSubAgent?.(itemId, content) ?? Promise.resolve(),
+      command: () =>
+        commandStore.updateCommand?.(itemId, content) ?? Promise.resolve(),
     };
 
     const action = updateActions[resourceType];
@@ -271,9 +279,14 @@ export function useEditModal(
       outputStyle: createItemAction("outputStyle", name, content),
       subAgent: createItemAction("subAgent", name, content),
       command: createItemAction("command", name, content),
-      outputStyleGroup: () => outputStyleStore.createGroup!(name),
-      subAgentGroup: () => subAgentStore.createGroup!(name),
-      commandGroup: () => commandStore.createGroup!(name),
+      outputStyleGroup: () =>
+        outputStyleStore.createGroup?.(name) ??
+        Promise.resolve({ success: false }),
+      subAgentGroup: () =>
+        subAgentStore.createGroup?.(name) ??
+        Promise.resolve({ success: false }),
+      commandGroup: () =>
+        commandStore.createGroup?.(name) ?? Promise.resolve({ success: false }),
     };
 
     await createActions[resourceType]();

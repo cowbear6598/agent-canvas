@@ -49,9 +49,6 @@ interface RawConnection {
 }
 
 type WorkflowHandlers = ReturnType<typeof createWorkflowEventHandlers>;
-type WorkflowHandlerPayload<K extends keyof WorkflowHandlers> = Parameters<
-  WorkflowHandlers[K]
->[0];
 
 function castHandler<T>(
   handler: (payload: T) => void,
@@ -325,50 +322,51 @@ export const useConnectionStore = defineStore("connection", () => {
   }
 
   function getWorkflowEventMap(): Array<[string, (payload: unknown) => void]> {
+    const handlers = getWorkflowHandlers();
     return [
       [
         WebSocketResponseEvents.WORKFLOW_AUTO_TRIGGERED,
-        castHandler(handleWorkflowAutoTriggered),
+        castHandler(handlers.handleWorkflowAutoTriggered),
       ],
       [
         WebSocketResponseEvents.WORKFLOW_COMPLETE,
-        castHandler(handleWorkflowComplete),
+        castHandler(handlers.handleWorkflowComplete),
       ],
       [
         WebSocketResponseEvents.WORKFLOW_AI_DECIDE_PENDING,
-        castHandler(handleAiDecidePending),
+        castHandler(handlers.handleAiDecidePending),
       ],
       [
         WebSocketResponseEvents.WORKFLOW_AI_DECIDE_RESULT,
-        castHandler(handleAiDecideResult),
+        castHandler(handlers.handleAiDecideResult),
       ],
       [
         WebSocketResponseEvents.WORKFLOW_AI_DECIDE_ERROR,
-        castHandler(handleAiDecideError),
+        castHandler(handlers.handleAiDecideError),
       ],
       [
         WebSocketResponseEvents.WORKFLOW_AI_DECIDE_CLEAR,
-        castHandler(handleAiDecideClear),
+        castHandler(handlers.handleAiDecideClear),
       ],
       [
         WebSocketResponseEvents.WORKFLOW_AI_DECIDE_TRIGGERED,
-        castHandler(handleWorkflowAiDecideTriggered),
+        castHandler(handlers.handleWorkflowAiDecideTriggered),
       ],
       [
         WebSocketResponseEvents.WORKFLOW_DIRECT_TRIGGERED,
-        castHandler(handleWorkflowDirectTriggered),
+        castHandler(handlers.handleWorkflowDirectTriggered),
       ],
       [
         WebSocketResponseEvents.WORKFLOW_DIRECT_WAITING,
-        castHandler(handleWorkflowDirectWaiting),
+        castHandler(handlers.handleWorkflowDirectWaiting),
       ],
       [
         WebSocketResponseEvents.WORKFLOW_QUEUED,
-        castHandler(handleWorkflowQueued),
+        castHandler(handlers.handleWorkflowQueued),
       ],
       [
         WebSocketResponseEvents.WORKFLOW_QUEUE_PROCESSED,
-        castHandler(handleWorkflowQueueProcessed),
+        castHandler(handlers.handleWorkflowQueueProcessed),
       ],
     ];
   }
@@ -601,72 +599,6 @@ export const useConnectionStore = defineStore("connection", () => {
     });
   }
 
-  function handleWorkflowAutoTriggered(
-    payload: WorkflowHandlerPayload<"handleWorkflowAutoTriggered">,
-  ): void {
-    getWorkflowHandlers().handleWorkflowAutoTriggered(payload);
-  }
-
-  function handleWorkflowAiDecideTriggered(
-    payload: WorkflowHandlerPayload<"handleWorkflowAiDecideTriggered">,
-  ): void {
-    getWorkflowHandlers().handleWorkflowAiDecideTriggered(payload);
-  }
-
-  function handleWorkflowComplete(
-    payload: WorkflowHandlerPayload<"handleWorkflowComplete">,
-  ): void {
-    getWorkflowHandlers().handleWorkflowComplete(payload);
-  }
-
-  function handleWorkflowDirectTriggered(
-    payload: WorkflowHandlerPayload<"handleWorkflowDirectTriggered">,
-  ): void {
-    getWorkflowHandlers().handleWorkflowDirectTriggered(payload);
-  }
-
-  function handleWorkflowDirectWaiting(
-    payload: WorkflowHandlerPayload<"handleWorkflowDirectWaiting">,
-  ): void {
-    getWorkflowHandlers().handleWorkflowDirectWaiting(payload);
-  }
-
-  function handleWorkflowQueued(
-    payload: WorkflowHandlerPayload<"handleWorkflowQueued">,
-  ): void {
-    getWorkflowHandlers().handleWorkflowQueued(payload);
-  }
-
-  function handleWorkflowQueueProcessed(
-    payload: WorkflowHandlerPayload<"handleWorkflowQueueProcessed">,
-  ): void {
-    getWorkflowHandlers().handleWorkflowQueueProcessed(payload);
-  }
-
-  function handleAiDecidePending(
-    payload: WorkflowHandlerPayload<"handleAiDecidePending">,
-  ): void {
-    getWorkflowHandlers().handleAiDecidePending(payload);
-  }
-
-  function handleAiDecideResult(
-    payload: WorkflowHandlerPayload<"handleAiDecideResult">,
-  ): void {
-    getWorkflowHandlers().handleAiDecideResult(payload);
-  }
-
-  function handleAiDecideError(
-    payload: WorkflowHandlerPayload<"handleAiDecideError">,
-  ): void {
-    getWorkflowHandlers().handleAiDecideError(payload);
-  }
-
-  function handleAiDecideClear(
-    payload: WorkflowHandlerPayload<"handleAiDecideClear">,
-  ): void {
-    getWorkflowHandlers().handleAiDecideClear(payload);
-  }
-
   function clearAiDecideStatusByConnectionIds(connectionIds: string[]): void {
     getWorkflowHandlers().clearAiDecideStatusByConnectionIds(connectionIds);
   }
@@ -719,6 +651,12 @@ export const useConnectionStore = defineStore("connection", () => {
     connections.value = removeById(connections.value, connectionId);
   }
 
+  // 切換 canvas 時重設 connection 相關狀態
+  function resetForCanvasSwitch(): void {
+    connections.value = [];
+    selectedConnectionId.value = null;
+  }
+
   return {
     connections,
     selectedConnectionId,
@@ -752,20 +690,10 @@ export const useConnectionStore = defineStore("connection", () => {
     getWorkflowHandlers,
     setupWorkflowListeners,
     cleanupWorkflowListeners,
-    handleWorkflowAutoTriggered,
-    handleWorkflowAiDecideTriggered,
-    handleWorkflowComplete,
-    handleWorkflowDirectTriggered,
-    handleWorkflowDirectWaiting,
-    handleWorkflowQueued,
-    handleWorkflowQueueProcessed,
-    handleAiDecidePending,
-    handleAiDecideResult,
-    handleAiDecideError,
-    handleAiDecideClear,
     clearAiDecideStatusByConnectionIds,
     addConnectionFromEvent,
     updateConnectionFromEvent,
     removeConnectionFromEvent,
+    resetForCanvasSwitch,
   };
 });

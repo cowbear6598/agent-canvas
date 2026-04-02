@@ -102,7 +102,7 @@ export const sentryProviderConfig: IntegrationProviderConfig = {
 
   buildDeletePayload: (appId) => ({ appId }),
 
-  buildBindPayload: (appId, _resourceId) => ({
+  buildBindPayload: (appId, _resourceId, _extra) => ({
     appId,
     resourceId: "*",
   }),

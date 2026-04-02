@@ -23,7 +23,7 @@ const MS_PER_MINUTE = 60 * 1000;
 const MS_PER_HOUR = 60 * 60 * 1000;
 const SCHEDULE_TRIGGER_SECOND = 0;
 
-type ShouldFireChecker = (
+export type ShouldFireChecker = (
   schedule: ScheduleConfig,
   now: Date,
   offset: number,
@@ -59,7 +59,7 @@ function isFirstTriggerOrNewDay(
   return !isSameDayWithOffset(new Date(schedule.lastTriggeredAt!), now, offset);
 }
 
-const shouldFireCheckers: Record<
+export const shouldFireCheckers: Record<
   ScheduleConfig["frequency"],
   ShouldFireChecker
 > = {

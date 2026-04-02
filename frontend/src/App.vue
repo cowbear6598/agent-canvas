@@ -342,35 +342,15 @@ watch(
     cursorStore.clearAllCursors();
     runStore.resetOnCanvasSwitch();
 
-    podStore.pods = [];
-    podStore.selectedPodId = null;
-    podStore.activePodId = null;
-
-    connectionStore.connections = [];
-    connectionStore.selectedConnectionId = null;
-
-    outputStyleStore.notes = [];
-    outputStyleStore.availableItems = [];
-
-    skillStore.notes = [];
-    skillStore.availableItems = [];
-
-    subAgentStore.notes = [];
-    subAgentStore.availableItems = [];
-
-    repositoryStore.notes = [];
-    repositoryStore.availableItems = [];
-
-    commandStore.notes = [];
-    commandStore.availableItems = [];
-
-    mcpServerStore.notes = [];
-    mcpServerStore.availableItems = [];
-
-    chatStore.messagesByPodId.clear();
-    chatStore.isTypingByPodId.clear();
-    chatStore.historyLoadingStatus.clear();
-    chatStore.historyLoadingError.clear();
+    podStore.resetForCanvasSwitch();
+    connectionStore.resetForCanvasSwitch();
+    outputStyleStore.resetForCanvasSwitch();
+    skillStore.resetForCanvasSwitch();
+    subAgentStore.resetForCanvasSwitch();
+    repositoryStore.resetForCanvasSwitch();
+    commandStore.resetForCanvasSwitch();
+    mcpServerStore.resetForCanvasSwitch();
+    chatStore.resetForCanvasSwitch();
 
     await loadCanvasData();
   },

@@ -448,6 +448,13 @@ export const usePodStore = defineStore("pod", () => {
     scheduleFiredPodIds.value = new Set(scheduleFiredPodIds.value);
   }
 
+  // 切換 canvas 時重設 pod 相關狀態
+  function resetForCanvasSwitch(): void {
+    pods.value = [];
+    selectedPodId.value = null;
+    activePodId.value = null;
+  }
+
   return {
     pods,
     selectedPodId,
@@ -491,5 +498,6 @@ export const usePodStore = defineStore("pod", () => {
     updatePodName,
     triggerScheduleFiredAnimation,
     clearScheduleFiredAnimation,
+    resetForCanvasSwitch,
   };
 });

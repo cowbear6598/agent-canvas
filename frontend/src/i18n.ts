@@ -11,10 +11,15 @@ const DEFAULT_LOCALE: SupportedLocale = "zh-TW";
 const LOCALE_STORAGE_KEY = "locale";
 
 // 從 localStorage 讀取語言偏好，若不在支援清單內則回退到預設值
+// 在測試環境或 SSR 中 localStorage 可能不可用，安全降級為預設語言
 function getInitialLocale(): SupportedLocale {
-  const stored = localStorage.getItem(LOCALE_STORAGE_KEY);
-  if (stored && (SUPPORTED_LOCALES as string[]).includes(stored)) {
-    return stored as SupportedLocale;
+  try {
+    const stored = localStorage.getItem(LOCALE_STORAGE_KEY);
+    if (stored && (SUPPORTED_LOCALES as string[]).includes(stored)) {
+      return stored as SupportedLocale;
+    }
+  } catch {
+    // localStorage 不可用（測試環境、SSR 等），使用預設語言
   }
   return DEFAULT_LOCALE;
 }

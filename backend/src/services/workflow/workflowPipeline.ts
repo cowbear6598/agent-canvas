@@ -5,6 +5,7 @@ import type {
   MultiInputServiceMethods,
   QueueServiceMethods,
 } from "./types.js";
+import type { WorkflowStatusDelegate } from "./workflowStatusDelegate.js";
 import { podStore } from "../podStore.js";
 import { runStore, TRIGGERABLE_STATUSES } from "../runStore.js";
 import { logger } from "../../utils/logger.js";
@@ -19,6 +20,19 @@ interface PipelineDeps {
   executionService: ExecutionServiceMethods;
   multiInputService: MultiInputServiceMethods;
   queueService: QueueServiceMethods;
+}
+
+/** 佇列操作的共用參數 */
+interface EnqueueParams {
+  canvasId: string;
+  connectionId: string;
+  sourcePodId: string;
+  targetPodId: string;
+  finalSummary: string;
+  finalIsSummarized: boolean;
+  triggerMode: PipelineContext["triggerMode"];
+  participatingConnectionIds?: string[];
+  runContext: PipelineContext["runContext"];
 }
 
 class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
@@ -98,52 +112,24 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
     const { finalSummary, finalIsSummarized, participatingConnectionIds } =
       collectResult;
 
-    if (delegate?.shouldEnqueue() && delegate.isBusy(canvasId, targetPodId)) {
-      logger.log(
-        "Workflow",
-        "Pipeline",
-        `[checkQueue] 目標 Pod 忙碌中，加入佇列`,
-      );
-      delegate.enqueue({
-        canvasId,
-        connectionId,
-        sourcePodId,
-        targetPodId,
-        summary: finalSummary,
-        isSummarized: finalIsSummarized,
-        triggerMode,
-        participatingConnectionIds,
-        runContext,
-      });
-      // 安全網：立即嘗試消化佇列，防止 enqueue 發生在最後一次 scheduleNextInQueue 之後導致佇列卡住
-      delegate.scheduleNextInQueue(canvasId, targetPodId);
-      return;
-    }
+    const enqueueParams: EnqueueParams = {
+      canvasId,
+      connectionId,
+      sourcePodId,
+      targetPodId,
+      finalSummary,
+      finalIsSummarized,
+      triggerMode,
+      participatingConnectionIds,
+      runContext,
+    };
 
-    if (!delegate && targetPod.status !== "idle") {
-      logger.log(
-        "Workflow",
-        "Pipeline",
-        `[checkQueue] 目標 Pod 忙碌中 (${targetPod.status})，加入佇列`,
-      );
-      this.deps.queueService.enqueue({
-        canvasId,
-        connectionId,
-        sourcePodId,
-        targetPodId,
-        summary: finalSummary,
-        isSummarized: finalIsSummarized,
-        triggerMode,
-        participatingConnectionIds,
-        runContext,
-      });
-      // 安全網：立即嘗試消化佇列，防止 enqueue 發生在最後一次 scheduleNextInQueue 之後導致佇列卡住
-      fireAndForget(
-        this.deps.queueService.processNextInQueue(canvasId, targetPodId),
-        "Workflow",
-        `[checkQueue] enqueue 後嘗試消化佇列失敗`,
-      );
-      return;
+    // Run mode（有 delegate）：透過 delegate 的佇列機制處理排隊
+    if (delegate) {
+      if (this.enqueueForRunMode(delegate, enqueueParams)) return;
+    } else {
+      // Normal mode（無 delegate）：透過 queueService 處理排隊
+      if (this.enqueueForNormalMode(targetPod.status, enqueueParams)) return;
     }
 
     await this.deps.executionService.triggerWorkflowWithSummary({
@@ -156,6 +142,106 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
       runContext,
       delegate,
     });
+  }
+
+  /**
+   * Run mode 佇列邏輯（delegate 存在時）。
+   *
+   * Run mode 下，delegate 依 Pod instance 的 running 狀態判斷是否忙碌，
+   * 並透過 RunModeDelegate 或 NormalModeDelegate 各自的佇列實作排隊。
+   * 回傳 true 表示已加入佇列，呼叫方應立即 return。
+   */
+  private enqueueForRunMode(
+    delegate: WorkflowStatusDelegate,
+    params: EnqueueParams,
+  ): boolean {
+    const {
+      canvasId,
+      connectionId,
+      sourcePodId,
+      targetPodId,
+      finalSummary,
+      finalIsSummarized,
+      triggerMode,
+      participatingConnectionIds,
+      runContext,
+    } = params;
+
+    if (!delegate.shouldEnqueue() || !delegate.isBusy(canvasId, targetPodId)) {
+      return false;
+    }
+
+    logger.log(
+      "Workflow",
+      "Pipeline",
+      `[checkQueue] 目標 Pod 忙碌中，加入佇列`,
+    );
+    delegate.enqueue({
+      canvasId,
+      connectionId,
+      sourcePodId,
+      targetPodId,
+      summary: finalSummary,
+      isSummarized: finalIsSummarized,
+      triggerMode,
+      participatingConnectionIds,
+      runContext,
+    });
+    // 安全網：立即嘗試消化佇列，防止 enqueue 發生在最後一次 scheduleNextInQueue 之後導致佇列卡住
+    delegate.scheduleNextInQueue(canvasId, targetPodId);
+    return true;
+  }
+
+  /**
+   * Normal mode 佇列邏輯（無 delegate 時的備用路徑）。
+   *
+   * Normal mode 下，直接以 Pod 的 status 判斷是否忙碌，
+   * 並透過 queueService 排隊，再嘗試立即消化佇列。
+   * 回傳 true 表示已加入佇列，呼叫方應立即 return。
+   */
+  private enqueueForNormalMode(
+    targetPodStatus: string,
+    params: EnqueueParams,
+  ): boolean {
+    const {
+      canvasId,
+      connectionId,
+      sourcePodId,
+      targetPodId,
+      finalSummary,
+      finalIsSummarized,
+      triggerMode,
+      participatingConnectionIds,
+      runContext,
+    } = params;
+
+    if (targetPodStatus === "idle") {
+      return false;
+    }
+
+    logger.log(
+      "Workflow",
+      "Pipeline",
+      `[checkQueue] 目標 Pod 忙碌中 (${targetPodStatus})，加入佇列`,
+    );
+    this.deps.queueService.enqueue({
+      canvasId,
+      connectionId,
+      sourcePodId,
+      targetPodId,
+      summary: finalSummary,
+      isSummarized: finalIsSummarized,
+      triggerMode,
+      participatingConnectionIds,
+      runContext,
+    });
+    // 安全網：立即嘗試消化佇列，防止 enqueue 發生在最後一次 scheduleNextInQueue 之後導致佇列卡住
+    fireAndForget(
+      this.deps.queueService.processNextInQueue(canvasId, targetPodId),
+      "Workflow",
+      `[checkQueue] enqueue 後嘗試消化佇列失敗`,
+    );
+    return true;
   }
 
   private async runCollectSourcesStage(

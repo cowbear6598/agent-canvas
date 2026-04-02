@@ -437,7 +437,8 @@
       "commandDeleted": "Command を削除しました",
       "mcpServerCreated": "MCP Server を作成しました",
       "mcpServerUpdated": "MCP Server を更新しました",
-      "mcpServerDeleted": "MCP Server を削除しました"
+      "mcpServerDeleted": "MCP Server を削除しました",
+      "mcpServerReadFailed": "MCP Server の読み込みに失敗しました"
     },
     "deleteSelection": {
       "partialFailed": "一部の削除に失敗しました",

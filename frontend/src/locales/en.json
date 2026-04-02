@@ -590,7 +590,8 @@
       "commandDeleted": "Command deleted",
       "mcpServerCreated": "MCP Server created",
       "mcpServerUpdated": "MCP Server updated",
-      "mcpServerDeleted": "MCP Server deleted"
+      "mcpServerDeleted": "MCP Server deleted",
+      "mcpServerReadFailed": "Failed to read MCP Server"
     },
     "deleteSelection": {
       "partialFailed": "Some deletions failed",

@@ -10,6 +10,7 @@ import {
   initializeProvider,
   formatIntegrationMessage,
 } from "../integrationHelpers.js";
+import { escapeUserInput } from "../../../utils/escapeInput.js";
 import type {
   IntegrationProvider,
   IntegrationApp,
@@ -215,13 +216,15 @@ class TelegramProvider implements IntegrationProvider {
           "\n...(訊息過長，已截斷)"
         : rawText;
 
-    const userName =
+    const rawUserName =
       message.from?.username ?? message.from?.first_name ?? "unknown";
+    const userName = escapeUserInput(rawUserName);
+    const cleanedText = escapeUserInput(truncatedText);
     const chatId = message.chat.id;
     const formattedText = formatIntegrationMessage(
       "Telegram",
       userName,
-      truncatedText,
+      cleanedText,
     );
 
     return {

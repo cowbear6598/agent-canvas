@@ -498,12 +498,15 @@ export class ClaudeService {
     return { mcpServer, serverName, toolName };
   }
 
+  /**
+   * 套用 Integration Tool 設定，回傳包含 mcpServers 與 allowedTools 的 partial options
+   */
   private applyIntegrationToolOptions(
     pod: Pod,
-    queryOptions: Options,
+    base: Pick<Options, "mcpServers" | "allowedTools">,
     runContext?: RunContext,
-  ): void {
-    if (!pod.integrationBindings?.length) return;
+  ): Pick<Options, "mcpServers" | "allowedTools"> {
+    if (!pod.integrationBindings?.length) return base;
 
     const builtTools = pod.integrationBindings
       .map((binding) => {
@@ -514,44 +517,55 @@ export class ClaudeService {
       .filter((t) => t !== null);
 
     const mcpServers: NonNullable<Options["mcpServers"]> = {
-      ...queryOptions.mcpServers,
+      ...base.mcpServers,
     };
-    const allowedTools: string[] = [...(queryOptions.allowedTools ?? [])];
+    const allowedTools: string[] = [...(base.allowedTools ?? [])];
 
     for (const { mcpServer, serverName, toolName } of builtTools) {
       mcpServers[serverName] = mcpServer;
       allowedTools.push(`mcp__${serverName}__${toolName}`);
     }
 
-    queryOptions.mcpServers = mcpServers as Options["mcpServers"];
-    queryOptions.allowedTools = allowedTools;
+    return {
+      mcpServers: mcpServers as Options["mcpServers"],
+      allowedTools,
+    };
   }
 
+  /**
+   * 套用輸出風格設定，回傳包含 systemPrompt 的 partial options（若無設定則回傳空物件）
+   */
   private async applyOutputStyle(
     pod: Pod,
-    queryOptions: Options,
-  ): Promise<void> {
-    if (!pod.outputStyleId) return;
+  ): Promise<Pick<Options, "systemPrompt">> {
+    if (!pod.outputStyleId) return {};
 
     const styleContent = await outputStyleService.getContent(pod.outputStyleId);
     if (styleContent) {
-      queryOptions.systemPrompt = styleContent;
+      return { systemPrompt: styleContent };
     }
+    return {};
   }
 
-  private applyMcpServers(pod: Pod, queryOptions: Options): void {
-    if (!pod.mcpServerIds?.length) return;
+  /**
+   * 套用 MCP Server 設定，回傳包含 mcpServers 的 partial options（若無設定則回傳空物件）
+   */
+  private applyMcpServers(pod: Pod): Pick<Options, "mcpServers"> {
+    if (!pod.mcpServerIds?.length) return {};
 
     const servers = mcpServerStore.getByIds(pod.mcpServerIds);
     const mcpServers: NonNullable<Options["mcpServers"]> = {};
     for (const server of servers) {
       mcpServers[server.name] = server.config;
     }
-    queryOptions.mcpServers = mcpServers;
+    return { mcpServers };
   }
 
-  private applyPlugins(pod: Pod, queryOptions: Options): void {
-    if (!pod.pluginIds?.length) return;
+  /**
+   * 套用 Plugin 設定，回傳包含 plugins 的 partial options（若無設定則回傳空物件）
+   */
+  private applyPlugins(pod: Pod): Pick<Options, "plugins"> {
+    if (!pod.pluginIds?.length) return {};
 
     const enabledSet = new Set(pod.pluginIds);
     const plugins = scanInstalledPlugins()
@@ -564,10 +578,14 @@ export class ClaudeService {
       );
 
     if (plugins.length > 0) {
-      queryOptions.plugins = plugins;
+      return { plugins };
     }
+    return {};
   }
 
+  /**
+   * 建構 Claude 查詢所需的完整 Options，以不可變（immutable）方式合併各項設定
+   */
   private async buildQueryOptions(
     pod: Pod,
     cwd: string,
@@ -575,34 +593,41 @@ export class ClaudeService {
   ): Promise<Options & { abortController: AbortController }> {
     const abortController = new AbortController();
 
-    const queryOptions: Options & { abortController: AbortController } = {
-      ...this.buildBaseOptions(cwd),
-      allowedTools: [
-        "Read",
-        "Write",
-        "Edit",
-        "Bash",
-        "Glob",
-        "Grep",
-        "Skill",
-        "WebSearch",
-      ],
-      abortController,
-    };
+    const baseAllowedTools: string[] = [
+      "Read",
+      "Write",
+      "Edit",
+      "Bash",
+      "Glob",
+      "Grep",
+      "Skill",
+      "WebSearch",
+    ];
 
-    await this.applyOutputStyle(pod, queryOptions);
-    this.applyMcpServers(pod, queryOptions);
-    this.applyIntegrationToolOptions(pod, queryOptions, runOptions?.runContext);
-    this.applyPlugins(pod, queryOptions);
+    const outputStyleOptions = await this.applyOutputStyle(pod);
+    const mcpServerOptions = this.applyMcpServers(pod);
+    const integrationOptions = this.applyIntegrationToolOptions(
+      pod,
+      {
+        mcpServers: mcpServerOptions.mcpServers,
+        allowedTools: baseAllowedTools,
+      },
+      runOptions?.runContext,
+    );
+    const pluginOptions = this.applyPlugins(pod);
 
     const resumeSessionId = runOptions?.sessionId ?? pod.claudeSessionId;
-    if (resumeSessionId) {
-      queryOptions.resume = resumeSessionId;
-    }
 
-    queryOptions.model = pod.model;
-
-    return queryOptions;
+    return {
+      ...this.buildBaseOptions(cwd),
+      ...outputStyleOptions,
+      ...mcpServerOptions,
+      ...integrationOptions,
+      ...pluginOptions,
+      ...(resumeSessionId ? { resume: resumeSessionId } : {}),
+      model: pod.model,
+      abortController,
+    };
   }
 
   public abortQuery(key: string): boolean {
@@ -705,6 +730,38 @@ export class ClaudeService {
     }
   }
 
+  /**
+   * 解析最終的 cwd 路徑：Run 模式下若 Instance 有 worktreePath 則優先使用，
+   * 否則 fallback 到 Pod 原始路徑（由 resolveCwd 負責）
+   */
+  private resolveCwdWithRunContext(
+    pod: Pod,
+    runOptions?: RunQueryOptions,
+  ): string {
+    const baseCwd = this.resolveCwd(pod);
+
+    if (!runOptions?.runContext) return baseCwd;
+
+    const instance = runStore.getPodInstance(
+      runOptions.runContext.runId,
+      pod.id,
+    );
+    if (!instance?.worktreePath) return baseCwd;
+
+    if (
+      !isPathWithinDirectory(instance.worktreePath, config.repositoriesRoot)
+    ) {
+      logger.error(
+        "Chat",
+        "Check",
+        `worktreePath 不在合法範圍內：${instance.worktreePath}`,
+      );
+      throw new Error("Run Instance 的工作目錄路徑不合法");
+    }
+
+    return instance.worktreePath;
+  }
+
   private async sendMessageInternal(
     podId: string,
     message: string | ContentBlock[],
@@ -722,29 +779,7 @@ export class ClaudeService {
     const state = this.createQueryState();
     const resolvedKey = runOptions?.queryKey ?? podId;
 
-    let cwd = this.resolveCwd(pod);
-
-    // Run mode：若 Instance 有 worktreePath，覆寫 cwd
-    if (runOptions?.runContext) {
-      const instance = runStore.getPodInstance(
-        runOptions.runContext.runId,
-        podId,
-      );
-      if (instance?.worktreePath) {
-        if (
-          !isPathWithinDirectory(instance.worktreePath, config.repositoriesRoot)
-        ) {
-          logger.error(
-            "Chat",
-            "Check",
-            `worktreePath 不在合法範圍內：${instance.worktreePath}`,
-          );
-          throw new Error("Run Instance 的工作目錄路徑不合法");
-        }
-        cwd = instance.worktreePath;
-      }
-    }
-
+    const cwd = this.resolveCwdWithRunContext(pod, runOptions);
     const queryOptions = await this.buildQueryOptions(pod, cwd, runOptions);
     const resumeSessionId = runOptions?.sessionId ?? pod.claudeSessionId;
     const prompt = this.buildPrompt(message, pod.commandId, resumeSessionId);

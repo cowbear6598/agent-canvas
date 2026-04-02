@@ -254,24 +254,25 @@ export function createMessageActions(
     isPartial: boolean,
     delta: string,
   ): void => {
-    const updatedMessages = [...messages];
-    const existingMessage = updatedMessages[messageIndex];
+    const existingMessage = messages[messageIndex];
 
     if (!existingMessage) return;
 
-    const subMessageUpdates =
-      existingMessage.role === "assistant" && existingMessage.subMessages
-        ? updateAssistantSubMessages(existingMessage, delta, isPartial)
-        : {};
+    // 直接對既有物件做屬性賦值，避免每個 chunk 都淺複製整個訊息陣列（O(n) 開銷）
+    existingMessage.content = content;
+    existingMessage.isPartial = isPartial;
 
-    updatedMessages[messageIndex] = {
-      ...existingMessage,
-      content,
-      isPartial,
-      ...subMessageUpdates,
-    };
+    if (existingMessage.role === "assistant" && existingMessage.subMessages) {
+      const { subMessages } = updateAssistantSubMessages(
+        existingMessage,
+        delta,
+        isPartial,
+      );
+      existingMessage.subMessages = subMessages;
+    }
 
-    store.messagesByPodId.set(podId, updatedMessages);
+    // 原陣列參考不變，透過 Map.set() 讓 Pinia reactive Map 觸發更新
+    store.messagesByPodId.set(podId, messages);
 
     if (isPartial) {
       setTyping(store, podId, true);

@@ -605,6 +605,12 @@ export function createNoteStore<
         }
       },
 
+      // 切換 canvas 時重設 note store 狀態
+      resetForCanvasSwitch(): void {
+        this.notes = [];
+        this.availableItems = [];
+      },
+
       ...(config.customActions ?? ({} as TCustomActions)),
       ...buildCRUDActions(config),
     },

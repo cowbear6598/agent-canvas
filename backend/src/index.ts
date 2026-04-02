@@ -230,9 +230,9 @@ process.on("SIGTERM", () => shutdown("SIGTERM"));
 
 // 全域錯誤處理：防止 SDK 內部的未捕獲錯誤 crash 整個應用程式
 process.on("uncaughtException", (error) => {
-  console.error("[全域錯誤處理] 未捕獲的例外:", error);
+  logger.error("Startup", "Error", "未捕獲的例外", error);
 });
 
 process.on("unhandledRejection", (reason) => {
-  console.error("[全域錯誤處理] 未處理的 Promise rejection:", reason);
+  logger.error("Startup", "Error", "未處理的 Promise rejection", reason);
 });

@@ -115,5 +115,5 @@ export const slackProviderConfig: IntegrationProviderConfig = {
 
   buildDeletePayload: (appId) => ({ appId }),
 
-  buildBindPayload: (appId, resourceId) => ({ appId, resourceId }),
+  buildBindPayload: (appId, resourceId, _extra) => ({ appId, resourceId }),
 };

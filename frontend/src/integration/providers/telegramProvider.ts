@@ -115,7 +115,7 @@ export const telegramProviderConfig: IntegrationProviderConfig = {
 
   buildDeletePayload: (appId) => ({ appId }),
 
-  buildBindPayload: (appId, resourceId) => ({
+  buildBindPayload: (appId, resourceId, _extra) => ({
     appId,
     resourceId,
     extra: { chatType: "private" },

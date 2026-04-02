@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import type { Database } from "bun:sqlite";
+import { Database } from "bun:sqlite";
 import { WebSocketResponseEvents } from "../schemas";
 import type {
   Pod,
@@ -108,6 +108,23 @@ function serializeSchedule(schedule?: ScheduleConfig): string | null {
 }
 
 class PodStore {
+  /** 以 podIds 長度為 key 快取 batchLoadRelations 用的 PreparedStatement */
+  private readonly relationsStmtCache = new Map<
+    number,
+    {
+      skill: ReturnType<Database["prepare"]>;
+      subAgent: ReturnType<Database["prepare"]>;
+      mcpServer: ReturnType<Database["prepare"]>;
+      plugin: ReturnType<Database["prepare"]>;
+    }
+  >();
+
+  /** 以 podIds 長度為 key 快取 batchLoadBindings 用的 PreparedStatement */
+  private readonly bindingsStmtCache = new Map<
+    number,
+    ReturnType<Database["prepare"]>
+  >();
+
   private get stmts(): ReturnType<typeof getStmts> {
     return getStmts();
   }
@@ -132,8 +149,184 @@ class PodStore {
     return pod;
   }
 
-  private toPodListWithBindings(rows: PodRow[]): Pod[] {
-    return rows.map((row) => this.toPodWithBindings(row));
+  /**
+   * 批次載入多個 Pod 的關聯表資料（skill、subAgent、mcpServer、plugin）。
+   * 使用 WHERE pod_id IN (...) 一次查詢，避免 N+1 問題。
+   * PreparedStatement 以 podIds.length 為 key 快取，避免重複 prepare。
+   * 僅用於列表查詢（如 list()），單筆查詢請改用 rowToPod()。
+   */
+  private batchLoadRelations(podIds: string[]): {
+    skillIds: Map<string, string[]>;
+    subAgentIds: Map<string, string[]>;
+    mcpServerIds: Map<string, string[]>;
+    pluginIds: Map<string, string[]>;
+  } {
+    if (podIds.length === 0) {
+      return {
+        skillIds: new Map(),
+        subAgentIds: new Map(),
+        mcpServerIds: new Map(),
+        pluginIds: new Map(),
+      };
+    }
+
+    const n = podIds.length;
+    let cached = this.relationsStmtCache.get(n);
+    if (!cached) {
+      const db = getDb();
+      const placeholders = podIds.map(() => "?").join(", ");
+      cached = {
+        skill: db.prepare(
+          `SELECT pod_id, skill_id FROM pod_skill_ids WHERE pod_id IN (${placeholders})`,
+        ),
+        subAgent: db.prepare(
+          `SELECT pod_id, sub_agent_id FROM pod_sub_agent_ids WHERE pod_id IN (${placeholders})`,
+        ),
+        mcpServer: db.prepare(
+          `SELECT pod_id, mcp_server_id FROM pod_mcp_server_ids WHERE pod_id IN (${placeholders})`,
+        ),
+        plugin: db.prepare(
+          `SELECT pod_id, plugin_id FROM pod_plugin_ids WHERE pod_id IN (${placeholders})`,
+        ),
+      };
+      this.relationsStmtCache.set(n, cached);
+    }
+
+    const skillRows = cached.skill.all(...podIds) as Array<{
+      pod_id: string;
+      skill_id: string;
+    }>;
+    const subAgentRows = cached.subAgent.all(...podIds) as Array<{
+      pod_id: string;
+      sub_agent_id: string;
+    }>;
+    const mcpServerRows = cached.mcpServer.all(...podIds) as Array<{
+      pod_id: string;
+      mcp_server_id: string;
+    }>;
+    const pluginRows = cached.plugin.all(...podIds) as Array<{
+      pod_id: string;
+      plugin_id: string;
+    }>;
+
+    const skillIds = new Map<string, string[]>();
+    const subAgentIds = new Map<string, string[]>();
+    const mcpServerIds = new Map<string, string[]>();
+    const pluginIds = new Map<string, string[]>();
+
+    for (const r of skillRows) {
+      if (!skillIds.has(r.pod_id)) skillIds.set(r.pod_id, []);
+      skillIds.get(r.pod_id)!.push(r.skill_id);
+    }
+    for (const r of subAgentRows) {
+      if (!subAgentIds.has(r.pod_id)) subAgentIds.set(r.pod_id, []);
+      subAgentIds.get(r.pod_id)!.push(r.sub_agent_id);
+    }
+    for (const r of mcpServerRows) {
+      if (!mcpServerIds.has(r.pod_id)) mcpServerIds.set(r.pod_id, []);
+      mcpServerIds.get(r.pod_id)!.push(r.mcp_server_id);
+    }
+    for (const r of pluginRows) {
+      if (!pluginIds.has(r.pod_id)) pluginIds.set(r.pod_id, []);
+      pluginIds.get(r.pod_id)!.push(r.plugin_id);
+    }
+
+    return { skillIds, subAgentIds, mcpServerIds, pluginIds };
+  }
+
+  /**
+   * 批次載入多個 Pod 的 integration binding 資料。
+   * 使用 WHERE pod_id IN (...) 一次查詢，避免 N+1 問題。
+   * PreparedStatement 以 podIds.length 為 key 快取，避免重複 prepare。
+   * 僅用於列表查詢（如 list()），單筆查詢請改用 loadBindingsForPod()。
+   */
+  private batchLoadBindings(
+    podIds: string[],
+  ): Map<string, IntegrationBinding[]> {
+    if (podIds.length === 0) {
+      return new Map();
+    }
+
+    const n = podIds.length;
+    let stmt = this.bindingsStmtCache.get(n);
+    if (!stmt) {
+      const db = getDb();
+      const placeholders = podIds.map(() => "?").join(", ");
+      stmt = db.prepare(
+        `SELECT * FROM integration_bindings WHERE pod_id IN (${placeholders})`,
+      );
+      this.bindingsStmtCache.set(n, stmt);
+    }
+
+    const rows = stmt.all(...podIds) as IntegrationBindingRow[];
+
+    const result = new Map<string, IntegrationBinding[]>();
+
+    for (const row of rows) {
+      if (!result.has(row.pod_id)) result.set(row.pod_id, []);
+      result.get(row.pod_id)!.push({
+        provider: row.provider,
+        appId: row.app_id,
+        resourceId: row.resource_id,
+        extra: row.extra_json
+          ? (safeJsonParse<Record<string, unknown>>(row.extra_json) ??
+            undefined)
+          : undefined,
+      });
+    }
+
+    return result;
+  }
+
+  /**
+   * 將多筆 PodRow 組合為 Pod 陣列，使用批次查詢取代逐筆子查詢。
+   * 僅用於列表查詢（如 list()），避免 N+1 問題。
+   */
+  private rowsToPods(rows: PodRow[]): Pod[] {
+    if (rows.length === 0) return [];
+
+    const podIds = rows.map((r) => r.id);
+    const relations = this.batchLoadRelations(podIds);
+    const bindingsMap = this.batchLoadBindings(podIds);
+
+    return rows.map((row) => {
+      const pod: Pod = {
+        id: row.id,
+        name: row.name,
+        status: row.status as PodStatus,
+        workspacePath: row.workspace_path,
+        x: row.x,
+        y: row.y,
+        rotation: row.rotation,
+        claudeSessionId: row.claude_session_id,
+        outputStyleId: row.output_style_id,
+        skillIds: relations.skillIds.get(row.id) ?? [],
+        subAgentIds: relations.subAgentIds.get(row.id) ?? [],
+        mcpServerIds: relations.mcpServerIds.get(row.id) ?? [],
+        pluginIds: relations.pluginIds.get(row.id) ?? [],
+        model: row.model as Pod["model"],
+        repositoryId: row.repository_id,
+        commandId: row.command_id,
+        multiInstance: row.multi_instance === 1,
+        integrationBindings: bindingsMap.get(row.id) ?? [],
+      };
+
+      if (row.schedule_json) {
+        const persisted = safeJsonParse<Record<string, unknown>>(
+          row.schedule_json,
+        );
+        if (persisted) {
+          pod.schedule = {
+            ...persisted,
+            lastTriggeredAt: persisted.lastTriggeredAt
+              ? new Date(persisted.lastTriggeredAt as string)
+              : null,
+          } as ScheduleConfig;
+        }
+      }
+
+      return pod;
+    });
   }
 
   create(
@@ -226,7 +419,8 @@ class PodStore {
 
   list(canvasId: string): Pod[] {
     const rows = this.stmts.pod.selectByCanvasId.all(canvasId) as PodRow[];
-    return this.toPodListWithBindings(rows);
+    // 使用批次查詢取代逐筆子查詢，避免 N+1 問題
+    return this.rowsToPods(rows);
   }
 
   /** @deprecated 請改用 list() */
@@ -251,6 +445,69 @@ class PodStore {
     return result.count > 0;
   }
 
+  /**
+   * 將傳入的 schedule 與現有 Pod 的排程合併：
+   * - 明確傳入 null 時刪除排程（回傳 undefined）
+   * - 傳入 schedule 物件時保留其 lastTriggeredAt，若缺少則補 null
+   * - 未傳入 schedule 時維持現有排程不變
+   */
+  private mergeSchedule(
+    existing: Pod,
+    incoming: PodUpdates,
+  ): ScheduleConfig | undefined {
+    if ("schedule" in incoming && incoming.schedule === null) {
+      return undefined;
+    }
+    if (incoming.schedule) {
+      return incoming.schedule.lastTriggeredAt
+        ? incoming.schedule
+        : { ...incoming.schedule, lastTriggeredAt: null };
+    }
+    return existing.schedule;
+  }
+
+  /**
+   * 依照 updates 中提供的 id 陣列，重新寫入四張 join table（skillIds、subAgentIds、mcpServerIds、pluginIds）。
+   * 未傳入的欄位（undefined）視為不更新，維持原有資料。
+   */
+  private updateJoinTables(podId: string, updates: PodUpdates): void {
+    if (updates.skillIds !== undefined) {
+      this.replaceJoinTableIds(
+        podId,
+        this.stmts.podSkillIds,
+        updates.skillIds,
+        (valueId) => ({ $podId: podId, $skillId: valueId }),
+      );
+    }
+
+    if (updates.subAgentIds !== undefined) {
+      this.replaceJoinTableIds(
+        podId,
+        this.stmts.podSubAgentIds,
+        updates.subAgentIds,
+        (valueId) => ({ $podId: podId, $subAgentId: valueId }),
+      );
+    }
+
+    if (updates.mcpServerIds !== undefined) {
+      this.replaceJoinTableIds(
+        podId,
+        this.stmts.podMcpServerIds,
+        updates.mcpServerIds,
+        (valueId) => ({ $podId: podId, $mcpServerId: valueId }),
+      );
+    }
+
+    if (updates.pluginIds !== undefined) {
+      this.replaceJoinTableIds(
+        podId,
+        this.stmts.podPluginIds,
+        updates.pluginIds,
+        (valueId) => ({ $podId: podId, $pluginId: valueId }),
+      );
+    }
+  }
+
   update(
     canvasId: string,
     id: string,
@@ -265,15 +522,11 @@ class PodStore {
           key !== "id" && key !== "workspacePath" && key !== "schedule",
       ),
     ) as Partial<Pod>;
-    const updatedPod: Pod = { ...pod, ...safeUpdates };
-
-    if ("schedule" in updates && updates.schedule === null) {
-      delete updatedPod.schedule;
-    } else if (updates.schedule) {
-      updatedPod.schedule = updates.schedule.lastTriggeredAt
-        ? updates.schedule
-        : { ...updates.schedule, lastTriggeredAt: null };
-    }
+    const updatedPod: Pod = {
+      ...pod,
+      ...safeUpdates,
+      schedule: this.mergeSchedule(pod, updates),
+    };
 
     this.stmts.pod.update.run({
       $id: id,
@@ -291,41 +544,7 @@ class PodStore {
       $scheduleJson: serializeSchedule(updatedPod.schedule),
     });
 
-    if (updates.skillIds !== undefined) {
-      this.replaceJoinTableIds(
-        id,
-        this.stmts.podSkillIds,
-        updates.skillIds,
-        (valueId) => ({ $podId: id, $skillId: valueId }),
-      );
-    }
-
-    if (updates.subAgentIds !== undefined) {
-      this.replaceJoinTableIds(
-        id,
-        this.stmts.podSubAgentIds,
-        updates.subAgentIds,
-        (valueId) => ({ $podId: id, $subAgentId: valueId }),
-      );
-    }
-
-    if (updates.mcpServerIds !== undefined) {
-      this.replaceJoinTableIds(
-        id,
-        this.stmts.podMcpServerIds,
-        updates.mcpServerIds,
-        (valueId) => ({ $podId: id, $mcpServerId: valueId }),
-      );
-    }
-
-    if (updates.pluginIds !== undefined) {
-      this.replaceJoinTableIds(
-        id,
-        this.stmts.podPluginIds,
-        updates.pluginIds,
-        (valueId) => ({ $podId: id, $pluginId: valueId }),
-      );
-    }
+    this.updateJoinTables(id, updates);
 
     return { pod: updatedPod, persisted: Promise.resolve() };
   }
@@ -415,15 +634,18 @@ class PodStore {
     valueId: string,
   ): Pod[] {
     const podIdRows = selectByValueId.all(valueId) as Array<{ pod_id: string }>;
-    const rows = podIdRows
-      .map(
-        (r) =>
-          this.stmts.pod.selectByCanvasIdAndId.get(canvasId, r.pod_id) as
-            | PodRow
-            | undefined,
+    const podIds = podIdRows.map((r) => r.pod_id);
+    if (podIds.length === 0) return [];
+
+    // 用 WHERE id IN (...) 一次取得所有 Pod，再過濾 canvas，避免 N+1
+    const db = getDb();
+    const placeholders = podIds.map(() => "?").join(", ");
+    const rows = db
+      .prepare(
+        `SELECT * FROM pods WHERE canvas_id = ? AND id IN (${placeholders})`,
       )
-      .filter((row): row is PodRow => row !== undefined);
-    return this.toPodListWithBindings(rows);
+      .all(canvasId, ...podIds) as PodRow[];
+    return this.rowsToPods(rows);
   }
 
   private replaceJoinTableIds(
@@ -475,7 +697,7 @@ class PodStore {
     const rows = (statement.all(id) as PodRow[]).filter(
       (r) => r.canvas_id === canvasId,
     );
-    return this.toPodListWithBindings(rows);
+    return this.rowsToPods(rows);
   }
 
   findByCommandId(canvasId: string, commandId: string): Pod[] {
@@ -533,13 +755,17 @@ class PodStore {
       appId,
     ) as IntegrationBindingRow[];
     const podIds = [...new Set(bindingRows.map((r) => r.pod_id))];
-    return podIds
-      .map((id) => this.stmts.pod.selectById.get(id) as PodRow | undefined)
-      .filter((row): row is PodRow => row !== undefined)
-      .map((row) => ({
-        canvasId: row.canvas_id,
-        pod: this.toPodWithBindings(row),
-      }));
+    if (podIds.length === 0) return [];
+
+    // 用 WHERE id IN (...) 一次取得所有 Pod，避免 N+1
+    const db = getDb();
+    const placeholders = podIds.map(() => "?").join(", ");
+    const rows = db
+      .prepare(`SELECT * FROM pods WHERE id IN (${placeholders})`)
+      .all(...podIds) as PodRow[];
+    const canvasIdMap = new Map(rows.map((r) => [r.id, r.canvas_id]));
+    const pods = this.rowsToPods(rows);
+    return pods.map((pod) => ({ canvasId: canvasIdMap.get(pod.id)!, pod }));
   }
 
   findByIntegrationAppAndResource(
@@ -552,13 +778,17 @@ class PodStore {
         resourceId,
       ) as IntegrationBindingRow[];
     const podIds = [...new Set(bindingRows.map((r) => r.pod_id))];
-    return podIds
-      .map((id) => this.stmts.pod.selectById.get(id) as PodRow | undefined)
-      .filter((row): row is PodRow => row !== undefined)
-      .map((row) => ({
-        canvasId: row.canvas_id,
-        pod: this.toPodWithBindings(row),
-      }));
+    if (podIds.length === 0) return [];
+
+    // 用 WHERE id IN (...) 一次取得所有 Pod，避免 N+1
+    const db = getDb();
+    const placeholders = podIds.map(() => "?").join(", ");
+    const rows = db
+      .prepare(`SELECT * FROM pods WHERE id IN (${placeholders})`)
+      .all(...podIds) as PodRow[];
+    const canvasIdMap = new Map(rows.map((r) => [r.id, r.canvas_id]));
+    const pods = this.rowsToPods(rows);
+    return pods.map((pod) => ({ canvasId: canvasIdMap.get(pod.id)!, pod }));
   }
 
   addIntegrationBinding(
@@ -611,12 +841,12 @@ class PodStore {
 
   getAllWithSchedule(): Array<{ canvasId: string; pod: Pod }> {
     const rows = this.stmts.pod.selectWithSchedule.all() as PodRow[];
-    return rows
-      .map((row) => ({
-        canvasId: row.canvas_id,
-        pod: this.toPodWithBindings(row),
-      }))
-      .filter(({ pod }) => pod.schedule?.enabled === true);
+    // 使用批次查詢取代逐筆子查詢，避免 N+1 問題
+    const canvasIdMap = new Map(rows.map((r) => [r.id, r.canvas_id]));
+    const pods = this.rowsToPods(rows);
+    return pods
+      .filter((pod) => pod.schedule?.enabled === true)
+      .map((pod) => ({ canvasId: canvasIdMap.get(pod.id)!, pod }));
   }
 
   /**

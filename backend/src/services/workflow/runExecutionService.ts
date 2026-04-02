@@ -35,17 +35,26 @@ export function isInstanceUnreachable(
   instance: RunPodInstance,
   incomingConns: Connection[],
   allInstances: RunPodInstance[],
+  // 可選的 Map 索引，由呼叫方預先建立以避免反覆 find()；
+  // 未提供時退回線性搜尋（保持向下相容）
+  instanceMap?: Map<string, RunPodInstance>,
 ): { autoUnreachable: boolean; directUnreachable: boolean } {
   const autoConns = incomingConns.filter((c) =>
     isAutoTriggerable(c.triggerMode),
   );
   const directConns = incomingConns.filter((c) => c.triggerMode === "direct");
 
+  // 使用 Map 直接查找 O(1)，否則退回 find() O(N)
+  const findInstance = (podId: string): RunPodInstance | undefined =>
+    instanceMap
+      ? instanceMap.get(podId)
+      : allInstances.find((i) => i.podId === podId);
+
   const autoUnreachable =
     instance.autoPathwaySettled === "pending" &&
     autoConns.length > 0 &&
     autoConns.some((c) => {
-      const src = allInstances.find((i) => i.podId === c.sourcePodId);
+      const src = findInstance(c.sourcePodId);
       return src && (src.status === "skipped" || src.status === "error");
     });
 
@@ -53,7 +62,7 @@ export function isInstanceUnreachable(
     instance.directPathwaySettled === "pending" &&
     directConns.length > 0 &&
     directConns.every((c) => {
-      const src = allInstances.find((i) => i.podId === c.sourcePodId);
+      const src = findInstance(c.sourcePodId);
       return src && (src.status === "skipped" || src.status === "error");
     });
 
@@ -70,6 +79,9 @@ export function settleInstanceIfUnreachable(
   connections: Connection[],
   instances: RunPodInstance[],
   instancePodIds: Set<string>,
+  // 可選的 Map 索引，由呼叫方預先建立以避免反覆 find()；
+  // 未提供時退回線性搜尋（保持向下相容）
+  instanceMap?: Map<string, RunPodInstance>,
 ): boolean {
   if (!NEVER_TRIGGERED_STATUSES.has(instance.status)) return false;
 
@@ -81,6 +93,7 @@ export function settleInstanceIfUnreachable(
     instance,
     incomingConns,
     instances,
+    instanceMap,
   );
 
   if (autoUnreachable) {
@@ -396,63 +409,88 @@ class RunExecutionService {
   /**
    * 在 evaluateRunStatus 前呼叫，偵測不可達路徑並直接更新 DB + emit WebSocket。
    * 不呼叫 settleAndSkipPath，避免遞迴觸發 evaluateRunStatus。
-   * while 迴圈確保多層級聯 skip 能完整處理。
    * Auto 路徑：ANY auto-triggerable source skipped/error → 不可達
    * Direct 路徑：ALL direct sources skipped/error → 不可達
+   *
+   * 效能優化：
+   * 1. 預先建立 Map<podId, instance> 索引，將 isInstanceUnreachable 內部的 find() O(N) 降為 O(1)。
+   * 2. 使用 BFS 佇列取代「每輪掃描全部 instances」的作法：
+   *    只把「剛被 settle 的 instance 的直接下游」加入待處理佇列，
+   *    避免 O(N²) 的反覆全掃描。
    */
   private settleUnreachablePaths(runId: string, canvasId: string): void {
     const instances = runStore.getPodInstancesByRunId(runId);
     const connections = connectionStore.list(canvasId);
     const instancePodIds = new Set(instances.map((i) => i.podId));
-    let safetyLimit = instances.length;
 
-    while (safetyLimit-- > 0) {
-      let changed = false;
+    // 建立 podId → instance 的 Map 索引，查找 O(1)，避免 find() 線性搜尋
+    const instanceMap = new Map<string, RunPodInstance>(
+      instances.map((i) => [i.podId, i]),
+    );
 
-      for (const instance of instances) {
-        const settled = settleInstanceIfUnreachable(
-          instance,
-          connections,
-          instances,
-          instancePodIds,
-        );
-        if (!settled) continue;
-
-        changed = true;
-
-        // 所有路徑已 settled 且狀態已更新時，發送 WebSocket 通知
-        if (
-          isAllPathwaysSettled(
-            instance.autoPathwaySettled,
-            instance.directPathwaySettled,
-          ) &&
-          (instance.status === "skipped" || instance.status === "completed")
-        ) {
-          socketService.emitToCanvas(
-            canvasId,
-            WebSocketResponseEvents.RUN_POD_STATUS_CHANGED,
-            {
-              runId,
-              canvasId,
-              podId: instance.podId,
-              status: instance.status,
-              completedAt: new Date().toISOString(),
-              autoPathwaySettled: instance.autoPathwaySettled,
-              directPathwaySettled: instance.directPathwaySettled,
-            } satisfies RunPodStatusChangedPayload,
-          );
-        }
+    // 預先建立 targetPodId → Connection[] 的索引，快速找出某 pod 的下游
+    const downstreamMap = new Map<string, string[]>();
+    for (const conn of connections) {
+      if (!instancePodIds.has(conn.sourcePodId)) continue;
+      if (!downstreamMap.has(conn.sourcePodId)) {
+        downstreamMap.set(conn.sourcePodId, []);
       }
-
-      if (!changed) break;
+      downstreamMap.get(conn.sourcePodId)!.push(conn.targetPodId);
     }
 
-    if (safetyLimit <= 0) {
-      logger.warn(
-        "Run",
-        "Warn",
-        `settleUnreachablePaths 達到迭代上限 (runId: ${runId})`,
+    // 初始佇列：所有尚未進入終態的 instance（首輪需全部掃描一次）
+    const queue: RunPodInstance[] = instances.filter((i) =>
+      NEVER_TRIGGERED_STATUSES.has(i.status),
+    );
+    const inQueue = new Set<string>(queue.map((i) => i.podId));
+
+    while (queue.length > 0) {
+      const instance = queue.shift()!;
+      inQueue.delete(instance.podId);
+
+      const settled = settleInstanceIfUnreachable(
+        instance,
+        connections,
+        instances,
+        instancePodIds,
+        instanceMap,
       );
+      if (!settled) continue;
+
+      // 所有路徑已 settled 且狀態已更新時，發送 WebSocket 通知
+      if (
+        isAllPathwaysSettled(
+          instance.autoPathwaySettled,
+          instance.directPathwaySettled,
+        ) &&
+        (instance.status === "skipped" || instance.status === "completed")
+      ) {
+        socketService.emitToCanvas(
+          canvasId,
+          WebSocketResponseEvents.RUN_POD_STATUS_CHANGED,
+          {
+            runId,
+            canvasId,
+            podId: instance.podId,
+            status: instance.status,
+            completedAt: new Date().toISOString(),
+            autoPathwaySettled: instance.autoPathwaySettled,
+            directPathwaySettled: instance.directPathwaySettled,
+          } satisfies RunPodStatusChangedPayload,
+        );
+      }
+
+      // 只將剛 settle 的 instance 的直接下游加入佇列，
+      // 避免重新掃描全部 instances（O(N) → O(下游數量)）
+      const downstreamPodIds = downstreamMap.get(instance.podId) ?? [];
+      for (const podId of downstreamPodIds) {
+        if (inQueue.has(podId)) continue;
+        const downstream = instanceMap.get(podId);
+        if (downstream && NEVER_TRIGGERED_STATUSES.has(downstream.status)) {
+          queue.push(downstream);
+          inQueue.add(podId);
+        }
+      }
     }
   }
 

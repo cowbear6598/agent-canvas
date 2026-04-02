@@ -3,6 +3,7 @@ import {
   requireCanvas,
   resolvePod,
   requireJsonBody,
+  UUID_REGEX,
 } from "./apiHelpers.js";
 import { podStore } from "../services/podStore.js";
 import { connectionStore } from "../services/connectionStore.js";
@@ -21,6 +22,24 @@ import {
 } from "../schemas/chatSchemas.js";
 import { z } from "zod";
 import { NormalModeExecutionStrategy } from "../services/normalExecutionStrategy.js";
+
+/**
+ * 安全解碼 URL 中的 podId 參數，並驗證格式是否合法（UUID 或 pod 名稱）。
+ * 若解碼失敗或格式不合法，回傳 null。
+ */
+function decodePodId(raw: string): string | null {
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(raw);
+  } catch {
+    // 非法的 % 序列（如 %2G、雙重編碼殘留等）
+    return null;
+  }
+  if (UUID_REGEX.test(decoded)) return decoded;
+  // pod 名稱長度上限與 resolvePod 一致
+  if (decoded.length > 0 && decoded.length <= 100) return decoded;
+  return null;
+}
 
 interface WorkflowNode {
   pod: Pod;
@@ -118,7 +137,15 @@ export async function handleWorkflowChat(
   const jsonError = requireJsonBody(req);
   if (jsonError) return jsonError;
 
-  const pod = resolvePod(canvas.id, decodeURIComponent(params.podId));
+  const podIdDecoded = decodePodId(params.podId);
+  if (!podIdDecoded) {
+    return jsonResponse(
+      { error: "無效的 Pod ID 格式" },
+      HTTP_STATUS.BAD_REQUEST,
+    );
+  }
+
+  const pod = resolvePod(canvas.id, podIdDecoded);
   if (!pod) {
     return jsonResponse({ error: "找不到 Pod" }, HTTP_STATUS.NOT_FOUND);
   }
@@ -182,13 +209,9 @@ export async function handleWorkflowChat(
         `Pod「${podName}」REST API 發送訊息失敗`,
         err,
       );
-      try {
-        const pod = podStore.getById(canvasId, podId);
-        if (pod) {
-          podStore.setStatus(canvasId, podId, "idle");
-        }
-      } catch {
-        logger.warn("Chat", "Warn", "錯誤回滾時無法存取資料庫");
+      const pod = podStore.getById(canvasId, podId);
+      if (pod) {
+        podStore.setStatus(canvasId, podId, "idle");
       }
     }
   })();
@@ -203,7 +226,15 @@ export function handleWorkflowStop(
   const { canvas, error } = requireCanvas(params.id);
   if (error) return error;
 
-  const pod = resolvePod(canvas.id, decodeURIComponent(params.podId));
+  const podIdDecoded = decodePodId(params.podId);
+  if (!podIdDecoded) {
+    return jsonResponse(
+      { error: "無效的 Pod ID 格式" },
+      HTTP_STATUS.BAD_REQUEST,
+    );
+  }
+
+  const pod = resolvePod(canvas.id, podIdDecoded);
   if (!pod) {
     return jsonResponse({ error: "找不到 Pod" }, HTTP_STATUS.NOT_FOUND);
   }
