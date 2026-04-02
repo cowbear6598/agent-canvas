@@ -50,6 +50,7 @@ describe("providerRegistry", () => {
       expect(getProvider("slack").name).toBe("slack");
       expect(getProvider("telegram").name).toBe("telegram");
       expect(getProvider("jira").name).toBe("jira");
+      expect(getProvider("sentry").name).toBe("sentry");
     });
 
     it("取得不存在的 provider 時拋出錯誤", () => {
@@ -66,6 +67,7 @@ describe("providerRegistry", () => {
       expect(names).toContain("slack");
       expect(names).toContain("telegram");
       expect(names).toContain("jira");
+      expect(names).toContain("sentry");
     });
   });
 
@@ -393,6 +395,120 @@ describe("providerRegistry", () => {
 
     it("hasNoResource 為 true", () => {
       expect(getProvider("jira").hasNoResource).toBe(true);
+    });
+  });
+
+  describe("sentryProvider config", () => {
+    it("label 為 Sentry", () => {
+      expect(getProvider("sentry").label).toBe("Sentry");
+    });
+
+    it("createFormFields 有兩個欄位", () => {
+      expect(getProvider("sentry").createFormFields).toHaveLength(2);
+    });
+
+    it("createFormFields 包含 name 和 clientSecret", () => {
+      const keys = getProvider("sentry").createFormFields.map((f) => f.key);
+      expect(keys).toEqual(["name", "clientSecret"]);
+    });
+
+    it("name 驗證：空值回傳錯誤", () => {
+      const field = getProvider("sentry").createFormFields.find(
+        (f) => f.key === "name",
+      )!;
+      expect(field.validate("")).toContain("不可為空");
+    });
+
+    it("name 驗證：含不合法字元回傳錯誤", () => {
+      const field = getProvider("sentry").createFormFields.find(
+        (f) => f.key === "name",
+      )!;
+      expect(field.validate("my app!")).not.toBe("");
+    });
+
+    it("name 驗證：合法字元回傳空字串", () => {
+      const field = getProvider("sentry").createFormFields.find(
+        (f) => f.key === "name",
+      )!;
+      expect(field.validate("my-sentry_01")).toBe("");
+    });
+
+    it("clientSecret 驗證：空值回傳錯誤", () => {
+      const field = getProvider("sentry").createFormFields.find(
+        (f) => f.key === "clientSecret",
+      )!;
+      expect(field.validate("")).toContain("不可為空");
+    });
+
+    it("clientSecret 驗證：長度不足回傳錯誤", () => {
+      const field = getProvider("sentry").createFormFields.find(
+        (f) => f.key === "clientSecret",
+      )!;
+      expect(field.validate("short")).toContain("至少");
+    });
+
+    it("clientSecret 驗證：正確格式回傳空字串", () => {
+      const field = getProvider("sentry").createFormFields.find(
+        (f) => f.key === "clientSecret",
+      )!;
+      expect(field.validate("secret-xxx-32-chars-long-enough!!")).toBe("");
+    });
+
+    it("hasNoResource 為 true", () => {
+      expect(getProvider("sentry").hasNoResource).toBe(true);
+    });
+
+    it("transformApp 回傳空 resources，provider 為 sentry", () => {
+      const config = getProvider("sentry");
+      const app = config.transformApp({
+        id: "app-1",
+        name: "My Sentry",
+        connectionStatus: "connected",
+      });
+      expect(app.provider).toBe("sentry");
+      expect(app.resources).toEqual([]);
+    });
+
+    it("buildCreatePayload 包含 name 和 config: { clientSecret }", () => {
+      const config = getProvider("sentry");
+      const payload = config.buildCreatePayload({
+        name: "Test",
+        clientSecret: "secret-xxx-32-chars-long-enough!!",
+      });
+      expect(payload).toEqual({
+        name: "Test",
+        config: {
+          clientSecret: "secret-xxx-32-chars-long-enough!!",
+        },
+      });
+    });
+
+    it("buildDeletePayload 使用 appId", () => {
+      const payload = getProvider("sentry").buildDeletePayload("app-789");
+      expect(payload).toEqual({ appId: "app-789" });
+    });
+
+    it("buildBindPayload 固定回傳 resourceId: *", () => {
+      const payload = getProvider("sentry").buildBindPayload(
+        "app-1",
+        "anything",
+        {},
+      );
+      expect(payload).toMatchObject({ resourceId: "*" });
+    });
+
+    it("getWebhookUrl 根據 app name 回傳正確的 webhook URL 路徑", () => {
+      const config = getProvider("sentry");
+      const mockApp = {
+        id: "app-1",
+        name: "my-sentry-app",
+        connectionStatus: "connected" as const,
+        provider: "sentry",
+        resources: [],
+        raw: {},
+      };
+      const url = config.getWebhookUrl!(mockApp);
+      expect(url).toMatch(/\/sentry\/events\/my-sentry-app$/);
     });
   });
 });
