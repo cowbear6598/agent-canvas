@@ -132,7 +132,7 @@ describe("handleChatSend", () => {
     expect(mockEmitError).toHaveBeenCalledWith(
       CONNECTION_ID,
       "pod:error",
-      expect.stringContaining("已連接外部服務"),
+      expect.objectContaining({ key: expect.any(String) }),
       REQUEST_ID,
       POD_ID,
       "INTEGRATION_BOUND",
@@ -177,7 +177,7 @@ describe("handleChatSend", () => {
     expect(mockEmitError).toHaveBeenCalledWith(
       CONNECTION_ID,
       "pod:error",
-      expect.stringContaining("目前正在"),
+      expect.objectContaining({ key: expect.any(String) }),
       REQUEST_ID,
       POD_ID,
       "POD_BUSY",
@@ -198,7 +198,7 @@ describe("handleChatSend", () => {
     expect(mockEmitError).toHaveBeenCalledWith(
       CONNECTION_ID,
       "pod:error",
-      expect.stringContaining("目前正在"),
+      expect.objectContaining({ key: expect.any(String) }),
       REQUEST_ID,
       POD_ID,
       "POD_BUSY",
@@ -276,7 +276,7 @@ describe("handleChatAbort", () => {
     expect(mockEmitError).toHaveBeenCalledWith(
       CONNECTION_ID,
       "pod:error",
-      expect.stringContaining("目前不在對話中"),
+      expect.objectContaining({ key: expect.any(String) }),
       REQUEST_ID,
       POD_ID,
       "POD_NOT_CHATTING",
@@ -293,7 +293,7 @@ describe("handleChatAbort", () => {
     expect(mockEmitError).toHaveBeenCalledWith(
       CONNECTION_ID,
       "pod:error",
-      expect.stringContaining("目前不在對話中"),
+      expect.objectContaining({ key: expect.any(String) }),
       REQUEST_ID,
       POD_ID,
       "POD_NOT_CHATTING",
@@ -325,7 +325,7 @@ describe("handleChatAbort", () => {
     expect(mockEmitError).toHaveBeenCalledWith(
       CONNECTION_ID,
       "pod:error",
-      expect.stringContaining("找不到"),
+      expect.objectContaining({ key: expect.any(String) }),
       REQUEST_ID,
       POD_ID,
       "NO_ACTIVE_QUERY",
@@ -342,14 +342,13 @@ describe("handleChatHistory", () => {
 
     await handleChatHistory(CONNECTION_ID, { podId: POD_ID }, REQUEST_ID);
 
-    expect(mockEmitSuccess).toHaveBeenCalledWith(
+    expect(mockEmitError).toHaveBeenCalledWith(
       CONNECTION_ID,
       "pod:chat:history:result",
-      {
-        requestId: REQUEST_ID,
-        success: false,
-        error: expect.stringContaining(POD_ID),
-      },
+      expect.objectContaining({ key: expect.any(String) }),
+      REQUEST_ID,
+      POD_ID,
+      "NOT_FOUND",
     );
     expect(mockGetMessages).not.toHaveBeenCalled();
   });

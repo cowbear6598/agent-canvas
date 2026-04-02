@@ -2,6 +2,7 @@ import type { GenericNoteStore, BaseNote } from '../../services/GenericNoteStore
 import type { WebSocketResponseEvents } from '../../schemas';
 import { socketService } from '../../services/socketService.js';
 import { emitError, emitNotFound } from '../../utils/websocketResponse.js';
+import { createI18nError } from '../../utils/i18nError.js';
 import { logger } from '../../utils/logger.js';
 import { withCanvasId } from '../../utils/handlerHelpers.js';
 
@@ -142,7 +143,7 @@ export function createNoteHandlers<TNote extends BaseNote, TForeignKey extends s
         emitError(
           connectionId,
           events.updated,
-          `更新 Note 失敗：${noteId}`,
+          createI18nError('errors.noteUpdateFailed', { id: noteId }),
           requestId,
           undefined,
           'INTERNAL_ERROR'
@@ -178,7 +179,7 @@ export function createNoteHandlers<TNote extends BaseNote, TForeignKey extends s
         emitError(
           connectionId,
           events.deleted,
-          `從 Store 刪除 Note 失敗：${noteId}`,
+          createI18nError('errors.noteDeleteFailed', { id: noteId }),
           requestId,
           undefined,
           'INTERNAL_ERROR'

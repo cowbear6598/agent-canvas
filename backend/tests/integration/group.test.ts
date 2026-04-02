@@ -70,7 +70,7 @@ describe('Group 管理', () => {
             const response = await createGroup('command', groupName);
 
             expect(response.success).toBe(false);
-            expect(response.error).toContain('已存在');
+            expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
         });
 
         it('路徑穿越攻擊時建立群組失敗', async () => {
@@ -219,7 +219,7 @@ describe('Group 管理', () => {
             );
 
             expect(response.success).toBe(false);
-            expect(response.error).toContain('還有項目');
+            expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
         });
 
         it('不存在的群組時刪除失敗', async () => {
@@ -233,7 +233,7 @@ describe('Group 管理', () => {
             );
 
             expect(response.success).toBe(false);
-            expect(response.error).toContain('找不到');
+            expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
         });
     });
 

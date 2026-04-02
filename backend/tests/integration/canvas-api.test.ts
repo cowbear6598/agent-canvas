@@ -113,7 +113,7 @@ describe('Canvas REST API', () => {
 			const response = await postCanvas(server.baseUrl, { name: 'duplicate-test' });
 			expect(response.status).toBe(400);
 			const body = await response.json();
-			expect(body.error).toBe('已存在相同名稱的 Canvas');
+			expect(body.error).toBeTruthy();
 		});
 
 		it('request body 非 JSON 格式回傳 400', async () => {
@@ -516,7 +516,7 @@ describe('Canvas REST API', () => {
 			expect(response.status).toBe(400);
 
 			const body = await response.json();
-			expect(body.error).toContain('已存在相同名稱的 Canvas');
+			expect(body.error).toBeTruthy();
 		});
 
 		it('重新命名為自己目前名稱回傳 400', async () => {
@@ -530,7 +530,7 @@ describe('Canvas REST API', () => {
 			expect(response.status).toBe(400);
 
 			const body = await response.json();
-			expect(body.error).toBe('已存在相同名稱的 Canvas');
+			expect(body.error).toBeTruthy();
 		});
 
 		it('name 為 Windows 保留名稱回傳 400', async () => {

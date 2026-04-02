@@ -157,7 +157,7 @@ describe("Pod 管理", () => {
       );
 
       expect(response.success).toBe(false);
-      expect(response.error).toContain("找不到");
+      expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
     });
   });
 
@@ -185,7 +185,7 @@ describe("Pod 管理", () => {
       );
 
       expect(response.success).toBe(false);
-      expect(response.error).toContain("找不到");
+      expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
     });
   });
 
@@ -212,7 +212,7 @@ describe("Pod 管理", () => {
       );
 
       expect(response.success).toBe(false);
-      expect(response.error).toContain("找不到");
+      expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
     });
 
     it("重命名為已存在的名稱應回傳錯誤", async () => {
@@ -236,7 +236,7 @@ describe("Pod 管理", () => {
       );
 
       expect(response.success).toBe(false);
-      expect(response.error).toContain("已存在相同名稱");
+      expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
     });
 
     it("重命名為自己目前的名稱回傳錯誤", async () => {
@@ -255,7 +255,7 @@ describe("Pod 管理", () => {
       );
 
       expect(response.success).toBe(false);
-      expect(response.error).toContain("已存在相同名稱");
+      expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
     });
   });
 
@@ -298,7 +298,7 @@ describe("Pod 管理", () => {
       );
 
       expect(response.success).toBe(false);
-      expect(response.error).toContain("找不到");
+      expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
     });
   });
 
@@ -448,7 +448,7 @@ describe("Pod 管理", () => {
       );
 
       expect(response.success).toBe(false);
-      expect(response.error).toContain("找不到");
+      expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
     });
   });
 
@@ -756,7 +756,7 @@ describe("Pod 管理", () => {
       );
 
       expect(response.success).toBe(false);
-      expect(response.error).toContain("找不到");
+      expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
     });
   });
 
@@ -857,7 +857,7 @@ describe("Pod 管理", () => {
       );
 
       expect(response.success).toBe(false);
-      expect(response.error).toContain("找不到");
+      expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
     });
   });
 });

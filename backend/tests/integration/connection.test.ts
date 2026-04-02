@@ -86,7 +86,7 @@ describe('Connection 管理', () => {
       );
 
       expect(response.success).toBe(false);
-      expect(response.error).toContain('找不到');
+      expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
     });
 
     it('目標 Pod 不存在時建立連線失敗', async () => {
@@ -102,7 +102,7 @@ describe('Connection 管理', () => {
       );
 
       expect(response.success).toBe(false);
-      expect(response.error).toContain('找不到');
+      expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
     });
   });
 
@@ -169,7 +169,7 @@ describe('Connection 管理', () => {
       );
 
       expect(response.success).toBe(false);
-      expect(response.error).toContain('找不到');
+      expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
     });
   });
 
@@ -219,7 +219,7 @@ describe('Connection 管理', () => {
       );
 
       expect(response.success).toBe(false);
-      expect(response.error).toContain('找不到');
+      expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
     });
   });
 });

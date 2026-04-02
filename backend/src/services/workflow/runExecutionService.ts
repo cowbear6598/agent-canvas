@@ -27,6 +27,7 @@ import type {
 import { gitService } from "../workspace/gitService.js";
 import { config } from "../../config/index.js";
 import path from "path";
+import { getResultErrorString } from "../../types/result.js";
 
 const MAX_RUNS_PER_CANVAS = 30;
 
@@ -576,7 +577,7 @@ class RunExecutionService {
           logger.warn(
             "Run",
             "Warn",
-            `移除 worktree 失敗（已忽略），runId=${runId}, podId=${entry.podId}, path=${entry.worktreePath}: ${result.error}`,
+            `移除 worktree 失敗（已忽略），runId=${runId}, podId=${entry.podId}, path=${entry.worktreePath}: ${getResultErrorString(result.error)}`,
           );
         }
       }),
@@ -651,6 +652,20 @@ class RunExecutionService {
     }
   }
 
+  /**
+   * 找出目前所有包含指定 podId 的活躍 runId 列表。
+   * 用於刪除 Pod 時中止 Run 模式的查詢。
+   */
+  getActiveRunIdsForPod(podId: string): string[] {
+    const runIds: string[] = [];
+    for (const [runId, podIds] of this.activeRunStreams) {
+      if (podIds.has(podId)) {
+        runIds.push(runId);
+      }
+    }
+    return runIds;
+  }
+
   async deleteRun(runId: string): Promise<void> {
     const activePodIds = this.activeRunStreams.get(runId);
     if (activePodIds) {
@@ -660,9 +675,10 @@ class RunExecutionService {
           claudeService.abortQuery(`${runId}:${podId}`);
         } catch (error) {
           // Claude SDK 內部在 abort 時可能拋出 "Operation aborted" 錯誤，忽略即可
-          console.warn(
-            `[Run] [Delete] 中止 Pod ${podId} 時發生非致命錯誤:`,
-            error,
+          logger.warn(
+            "Run",
+            "Delete",
+            `中止 Pod ${podId} 時發生非致命錯誤: ${error}`,
           );
         }
       }

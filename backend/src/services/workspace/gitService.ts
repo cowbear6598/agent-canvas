@@ -1,5 +1,5 @@
 import { simpleGit, SimpleGitProgressEvent } from "simple-git";
-import { Result, ok, err } from "../../types";
+import { Result, ok, err, getResultErrorString } from "../../types";
 import { config } from "../../config";
 import { logger } from "../../utils/logger.js";
 import { isPathWithinDirectory } from "../../utils/pathValidator.js";
@@ -375,7 +375,7 @@ class GitService {
     branchName: string,
   ): Promise<string | null> {
     const currentBranchResult = await this.getCurrentBranch(workspacePath);
-    if (!currentBranchResult.success) return currentBranchResult.error;
+    if (!currentBranchResult.success) return getResultErrorString(currentBranchResult.error);
     if (currentBranchResult.data === branchName)
       return "無法刪除目前所在的分支";
     return null;

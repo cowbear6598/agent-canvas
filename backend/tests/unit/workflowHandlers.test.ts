@@ -93,7 +93,7 @@ describe('handleWorkflowGetDownstreamPods', () => {
     expect(mockEmitNotFound).toHaveBeenCalledWith(
       CONNECTION_ID,
       'workflow:get-downstream-pods:result',
-      '來源 Pod',
+      "Pod",
       SOURCE_POD_ID,
       REQUEST_ID
     );
@@ -110,7 +110,7 @@ describe('handleWorkflowClear', () => {
     expect(mockEmitNotFound).toHaveBeenCalledWith(
       CONNECTION_ID,
       'workflow:clear:result',
-      '來源 Pod',
+      "Pod",
       SOURCE_POD_ID,
       REQUEST_ID
     );

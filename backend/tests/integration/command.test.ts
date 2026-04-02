@@ -193,7 +193,7 @@ describe('Command 管理', () => {
       );
 
       expect(response.success).toBe(false);
-      expect(response.error).toContain('找不到');
+      expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
     });
   });
 });

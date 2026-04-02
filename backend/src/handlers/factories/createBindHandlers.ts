@@ -2,6 +2,7 @@ import type {WebSocketResponseEvents} from '../../schemas';
 import type {Pod} from '../../types/pod.js';
 import {repositorySyncService} from '../../services/repositorySyncService.js';
 import {emitSuccess, emitError} from '../../utils/websocketResponse.js';
+import { createI18nError } from '../../utils/i18nError.js';
 import {logger, type LogCategory} from '../../utils/logger.js';
 import {validatePod, withCanvasId, emitPodUpdated} from '../../utils/handlerHelpers.js';
 
@@ -57,7 +58,7 @@ async function validatePodAndResource<TService extends {exists: (id: string) => 
         emitError(
             connectionId,
             config.events.bound,
-            `${config.resourceName} 找不到: ${resourceId}`,
+            createI18nError('errors.resourceNotFound', { resource: config.resourceName, id: resourceId }),
             requestId,
             podId,
             'NOT_FOUND'
@@ -86,8 +87,8 @@ function checkConflict<TService, TIdField extends string>(
     }
 
     const conflictMessage = config.isMultiBind
-        ? `${config.resourceName} ${resourceId} 已綁定到 Pod ${podId}`
-        : `Pod ${podId} 已有 ${config.resourceName.toLowerCase()} ${boundIds} 綁定，請先解綁`;
+        ? createI18nError('errors.resourceAlreadyBound', { resource: config.resourceName, resourceId, podId })
+        : createI18nError('errors.podResourceConflict', { podId, resource: config.resourceName, boundIds: String(boundIds) });
 
     emitError(connectionId, config.events.bound, conflictMessage, requestId, podId, 'CONFLICT');
     return true;

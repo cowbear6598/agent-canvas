@@ -10,6 +10,7 @@ import { podStore } from "../services/podStore.js";
 import { messageStore } from "../services/messageStore.js";
 import { claudeService } from "../services/claude/claudeService.js";
 import { emitError, emitSuccess } from "../utils/websocketResponse.js";
+import { createI18nError } from "../utils/i18nError.js";
 import {
   onChatComplete,
   onChatAborted,
@@ -30,7 +31,7 @@ function validateIntegrationBindings(
     emitError(
       connectionId,
       WebSocketResponseEvents.POD_ERROR,
-      `Pod「${pod.name}」已連接外部服務，無法手動發送訊息`,
+      createI18nError("errors.podIntegrationBound", { name: pod.name }),
       requestId,
       pod.id,
       "INTEGRATION_BOUND",
@@ -49,7 +50,7 @@ function validatePodNotBusy(
     emitError(
       connectionId,
       WebSocketResponseEvents.POD_ERROR,
-      `Pod ${pod.id} 目前正在 ${pod.status}，請稍後再試`,
+      createI18nError("errors.podBusy", { id: pod.id, status: pod.status }),
       requestId,
       pod.id,
       "POD_BUSY",
@@ -134,7 +135,7 @@ export const handleChatAbort = withCanvasId<ChatAbortPayload>(
       emitError(
         connectionId,
         WebSocketResponseEvents.POD_ERROR,
-        `Pod ${podId} 目前不在對話中，無法中斷`,
+        createI18nError("errors.podNotChatting", { id: podId }),
         requestId,
         podId,
         "POD_NOT_CHATTING",
@@ -149,7 +150,7 @@ export const handleChatAbort = withCanvasId<ChatAbortPayload>(
       emitError(
         connectionId,
         WebSocketResponseEvents.POD_ERROR,
-        `找不到 Pod ${podId} 的活躍查詢`,
+        createI18nError("errors.noActiveQuery", { id: podId }),
         requestId,
         podId,
         "NO_ACTIVE_QUERY",
@@ -171,14 +172,13 @@ export const handleChatHistory = withCanvasId<ChatHistoryPayload>(
 
     const pod = podStore.getById(canvasId, podId);
     if (!pod) {
-      emitSuccess(
+      emitError(
         connectionId,
         WebSocketResponseEvents.POD_CHAT_HISTORY_RESULT,
-        {
-          requestId,
-          success: false,
-          error: `找不到 Pod：${podId}`,
-        },
+        createI18nError("errors.podNotFound", { id: podId }),
+        requestId,
+        podId,
+        "NOT_FOUND",
       );
       return;
     }

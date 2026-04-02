@@ -149,7 +149,7 @@ describe('SubAgent 管理', () => {
       );
 
       expect(response.success).toBe(false);
-      expect(response.error).toContain('已綁定');
+      expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
     });
 
     it('成功綁定 SubAgent 到已有 Repository 的 Pod', async () => {

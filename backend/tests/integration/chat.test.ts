@@ -105,7 +105,7 @@ describe('Chat 管理', () => {
 
       const errorEvent = await errorPromise;
       expect(errorEvent.code).toBe('NOT_FOUND');
-      expect(errorEvent.error).toContain('找不到');
+      expect(errorEvent.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
     });
 
     it('Pod 已連接外部服務時發送失敗並回傳 INTEGRATION_BOUND', async () => {
@@ -138,7 +138,7 @@ describe('Chat 管理', () => {
 
       const errorEvent = await errorPromise;
       expect(errorEvent.code).toBe('INTEGRATION_BOUND');
-      expect(errorEvent.error).toContain('外部服務');
+      expect(errorEvent.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
 
       await podStore.removeIntegrationBinding(canvasId, pod.id, 'slack');
     });
@@ -164,7 +164,7 @@ describe('Chat 管理', () => {
 
       const errorEvent = await errorPromise;
       expect(errorEvent.code).toBe('POD_BUSY');
-      expect(errorEvent.error).toContain('summarizing');
+      expect(errorEvent.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
 
       podStore.setStatus(canvasId, pod.id, 'idle');
     });
@@ -196,7 +196,7 @@ describe('Chat 管理', () => {
       );
 
       expect(response.success).toBe(false);
-      expect(response.error).toContain('找不到');
+      expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
     });
   });
 });

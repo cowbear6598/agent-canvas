@@ -152,7 +152,7 @@ describe("handlePodSetPlugins", () => {
     expect(mockEmitError).toHaveBeenCalledWith(
       CONNECTION_ID,
       "pod:plugins:set",
-      expect.stringContaining(POD_ID),
+      expect.objectContaining({ key: expect.any(String) }),
       REQUEST_ID,
       POD_ID,
       "INTERNAL_ERROR",

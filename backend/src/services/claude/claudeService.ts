@@ -21,6 +21,7 @@ import { mcpServerStore } from "../mcpServerStore.js";
 import { isAbortError, getErrorMessage } from "../../utils/errorHelpers.js";
 import { outputStyleService } from "../outputStyleService.js";
 import { Message, ToolUseInfo, ContentBlock, Pod } from "../../types";
+import { getResultErrorString } from "../../types/result.js";
 import { config } from "../../config";
 import { logger } from "../../utils/logger.js";
 import { getClaudeCodePath } from "./claudePathResolver.js";
@@ -476,7 +477,12 @@ export class ClaudeService {
         );
         if (!result.success) {
           return {
-            content: [{ type: "text" as const, text: `錯誤: ${result.error}` }],
+            content: [
+              {
+                type: "text" as const,
+                text: `錯誤: ${getResultErrorString(result.error)}`,
+              },
+            ],
             isError: true,
           };
         }
@@ -611,6 +617,15 @@ export class ClaudeService {
     this.activeQueries.delete(key);
 
     return true;
+  }
+
+  public abortAllQueries(): number {
+    const count = this.activeQueries.size;
+    for (const entry of this.activeQueries.values()) {
+      entry.abortController.abort();
+    }
+    this.activeQueries.clear();
+    return count;
   }
 
   public async sendMessage(
@@ -888,7 +903,7 @@ export class ClaudeService {
       const result = await this.collectTextFromStream(queryStream);
       return result.success
         ? { content: result.content, success: true }
-        : { content: "", success: false, error: result.error };
+        : { content: "", success: false, error: result.error ?? "" };
     } catch (error) {
       const errorMessage = getErrorMessage(error);
       logger.error(

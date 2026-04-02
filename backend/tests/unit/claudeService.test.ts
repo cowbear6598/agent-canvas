@@ -995,6 +995,72 @@ describe("ClaudeService", () => {
     });
   });
 
+  describe("abortAllQueries", () => {
+    it("有 active queries 時應中止所有並回傳正確數量", async () => {
+      const { podStore } = await import("../../src/services/podStore.js");
+      const mockPod1 = createMockPod({ id: "pod-abort-all-1" });
+      const mockPod2 = createMockPod({ id: "pod-abort-all-2" });
+
+      (podStore.getByIdGlobal as any).mockImplementation((podId: string) => {
+        if (podId === "pod-abort-all-1")
+          return { canvasId: "test-canvas", pod: mockPod1 };
+        if (podId === "pod-abort-all-2")
+          return { canvasId: "test-canvas", pod: mockPod2 };
+        return null;
+      });
+
+      let resolveStream1!: () => void;
+      let resolveStream2!: () => void;
+      const streamPromise1 = new Promise<void>((resolve) => {
+        resolveStream1 = resolve;
+      });
+      const streamPromise2 = new Promise<void>((resolve) => {
+        resolveStream2 = resolve;
+      });
+
+      mockQueryGenerator = async function* () {
+        yield { type: "system", subtype: "init", session_id: "session-all-1" };
+        await streamPromise1;
+      };
+
+      const sendPromise1 = claudeService.sendMessage(
+        "pod-abort-all-1",
+        "test1",
+        onStreamCallback,
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      mockQueryGenerator = async function* () {
+        yield { type: "system", subtype: "init", session_id: "session-all-2" };
+        await streamPromise2;
+      };
+
+      const sendPromise2 = claudeService.sendMessage(
+        "pod-abort-all-2",
+        "test2",
+        onStreamCallback,
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      const count = claudeService.abortAllQueries();
+      expect(count).toBe(2);
+
+      resolveStream1();
+      resolveStream2();
+      await Promise.all([
+        sendPromise1.catch(() => {}),
+        sendPromise2.catch(() => {}),
+      ]);
+    });
+
+    it("無 active queries 時應回傳 0", () => {
+      const count = claudeService.abortAllQueries();
+      expect(count).toBe(0);
+    });
+  });
+
   describe("abortQuery", () => {
     it("中止存在的查詢應回傳 true", async () => {
       const { podStore } = await import("../../src/services/podStore.js");

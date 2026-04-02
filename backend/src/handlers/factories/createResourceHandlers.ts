@@ -2,6 +2,7 @@ import type { WebSocketResponseEvents } from '../../schemas';
 import type { Pod } from '../../types/index.js';
 import { socketService } from '../../services/socketService.js';
 import { emitError, emitNotFound } from '../../utils/websocketResponse.js';
+import { createI18nError } from '../../utils/i18nError.js';
 import { logger, type LogCategory } from '../../utils/logger.js';
 import { handleResourceDelete } from '../../utils/handlerHelpers.js';
 
@@ -128,7 +129,7 @@ export function createResourceHandlers<T extends { id: string; name: string }, T
       emitError(
         connectionId,
         events.created,
-        `${resourceName} 已存在: ${name}`,
+        createI18nError('errors.resourceExists', { resource: resourceName, name }),
         requestId,
         undefined,
         'ALREADY_EXISTS'

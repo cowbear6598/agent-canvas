@@ -8,6 +8,7 @@ import { runExecutionService } from "../services/workflow/runExecutionService.js
 import { runStore } from "../services/runStore.js";
 import { podStore } from "../services/podStore.js";
 import { emitSuccess, emitError } from "../utils/websocketResponse.js";
+import { createI18nError } from "../utils/i18nError.js";
 import { withCanvasId } from "../utils/handlerHelpers.js";
 import type { WorkflowRun } from "../services/runStore.js";
 
@@ -23,7 +24,7 @@ function findRunOrEmitNotFound(
     emitError(
       connectionId,
       event,
-      "找不到指定的 Run",
+      createI18nError('errors.runNotFound'),
       requestId,
       undefined,
       "NOT_FOUND",

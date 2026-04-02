@@ -11,6 +11,7 @@ import type { IntegrationBinding } from "../types/integration.js";
 import { socketService } from "./socketService.js";
 import { canvasStore } from "./canvasStore.js";
 import { getStmts } from "../database/stmtsHelper.js";
+import { getDb } from "../database/index.js";
 import { safeJsonParse } from "../utils/safeJsonParse.js";
 
 type PodUpdates = Partial<Omit<Pod, "schedule">> & {
@@ -616,6 +617,19 @@ class PodStore {
         pod: this.toPodWithBindings(row),
       }))
       .filter(({ pod }) => pod.schedule?.enabled === true);
+  }
+
+  /**
+   * 將所有 chatting 或 summarizing 狀態的 Pod 重設為 idle（僅更新 DB，不廣播 WebSocket）
+   * 用於 graceful shutdown 時清理 busy 狀態的 Pod
+   */
+  resetAllBusyPods(): number {
+    const result = getDb()
+      .prepare(
+        "UPDATE pods SET status = 'idle' WHERE status IN ('chatting', 'summarizing')",
+      )
+      .run() as { changes: number };
+    return result.changes;
   }
 }
 

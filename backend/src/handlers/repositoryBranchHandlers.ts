@@ -18,6 +18,7 @@ import { gitService } from '../services/workspace/gitService.js';
 import { emitSuccess, emitError } from '../utils/websocketResponse.js';
 import { logger } from '../utils/logger.js';
 import { handleResultError } from '../utils/handlerHelpers.js';
+import { createI18nError } from '../utils/i18nError.js';
 import {
   withValidatedGitRepository,
   createThrottledProgressEmitter,
@@ -44,7 +45,7 @@ async function performCheckoutWithProgress(
     WebSocketResponseEvents.REPOSITORY_CHECKOUT_BRANCH_PROGRESS
   );
 
-  throttledEmit(0, '準備切換分支...');
+  throttledEmit(0, createI18nError('progress.preparingCheckout'));
 
   const checkoutResult = await gitService.smartCheckoutBranch(repositoryPath, branchName, {
     force,
@@ -59,7 +60,7 @@ async function performCheckoutWithProgress(
   throttledEmit.flush();
 
   const action = checkoutResult.data;
-  const completionMessage = action === 'created' ? '分支建立完成' : '切換完成';
+  const completionMessage = action === 'created' ? createI18nError('progress.branchCreated') : createI18nError('progress.checkoutComplete');
   throttledEmit(100, completionMessage);
 
   return { success: true, action: action as CheckoutAction };
@@ -101,7 +102,7 @@ export const handleRepositoryGetLocalBranches = withValidatedGitRepository<Repos
     const { repositoryId } = payload;
 
     const branchesResult = await gitService.getLocalBranches(repositoryPath);
-    if (handleResultError(branchesResult, connectionId, WebSocketResponseEvents.REPOSITORY_LOCAL_BRANCHES_RESULT, requestId, '取得本地分支失敗')) return;
+    if (handleResultError(branchesResult, connectionId, WebSocketResponseEvents.REPOSITORY_LOCAL_BRANCHES_RESULT, requestId, createI18nError('errors.getBranchesFailed'))) return;
 
     const response: RepositoryLocalBranchesResultPayload = {
       requestId,
@@ -122,7 +123,7 @@ export const handleRepositoryCheckDirty = withValidatedGitRepository<RepositoryC
     const { repositoryId } = payload;
 
     const dirtyResult = await gitService.hasUncommittedChanges(repositoryPath);
-    if (handleResultError(dirtyResult, connectionId, WebSocketResponseEvents.REPOSITORY_DIRTY_CHECK_RESULT, requestId, '檢查未提交變更失敗')) return;
+    if (handleResultError(dirtyResult, connectionId, WebSocketResponseEvents.REPOSITORY_DIRTY_CHECK_RESULT, requestId, createI18nError('errors.checkDirtyFailed'))) return;
 
     const response: RepositoryDirtyCheckResultPayload = {
       requestId,
@@ -149,7 +150,7 @@ export const handleRepositoryCheckoutBranch = withValidatedGitRepository<Reposit
     });
 
     if (!checkoutResult.success) {
-      emitError(connectionId, WebSocketResponseEvents.REPOSITORY_BRANCH_CHECKED_OUT, '切換分支失敗', requestId, undefined, 'INTERNAL_ERROR');
+      emitError(connectionId, WebSocketResponseEvents.REPOSITORY_BRANCH_CHECKED_OUT, createI18nError('errors.checkoutFailed'), requestId, undefined, 'INTERNAL_ERROR');
       return;
     }
 
@@ -157,7 +158,7 @@ export const handleRepositoryCheckoutBranch = withValidatedGitRepository<Reposit
 
     logger.log('Repository', 'Update', `已切換「${repositoryId}」的分支至「${branchName}」（${checkoutResult.action}）`);
   },
-  { rejectWorktree: { errorMessage: 'Worktree 無法切換分支' } }
+  { rejectWorktree: { errorMessage: createI18nError('errors.worktreeCheckoutNotAllowed') } }
 );
 
 export const handleRepositoryDeleteBranch = withValidatedGitRepository<RepositoryDeleteBranchPayload>(
@@ -166,7 +167,7 @@ export const handleRepositoryDeleteBranch = withValidatedGitRepository<Repositor
     const { repositoryId, branchName, force } = payload;
 
     const deleteResult = await gitService.deleteBranch(repositoryPath, branchName, force);
-    if (handleResultError(deleteResult, connectionId, WebSocketResponseEvents.REPOSITORY_BRANCH_DELETED, requestId, '刪除分支失敗')) return;
+    if (handleResultError(deleteResult, connectionId, WebSocketResponseEvents.REPOSITORY_BRANCH_DELETED, requestId, createI18nError('errors.deleteBranchFailed'))) return;
 
     const response: RepositoryBranchDeletedPayload = {
       requestId,

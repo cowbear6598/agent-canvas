@@ -24,6 +24,7 @@ import {
 import { connectionStore } from "../../services/connectionStore.js";
 import { repositoryService } from "../../services/repositoryService.js";
 import { getErrorMessage } from "../../utils/websocketResponse.js";
+import { createI18nError, type I18nError } from "../../utils/i18nError.js";
 import { logger } from "../../utils/logger.js";
 import fs from "fs/promises";
 import path from "path";
@@ -49,9 +50,10 @@ function recordError(
   error: unknown,
   context: string,
 ): void {
-  const errorMessage = getErrorMessage(error);
+  const errorMessage = error instanceof Object && "key" in error ? error as I18nError : getErrorMessage(error);
   errors.push({ type, originalId, error: errorMessage });
-  logger.error("Paste", "Error", `${context}：${errorMessage}`);
+  const logMessage = typeof errorMessage === "string" ? errorMessage : errorMessage.key;
+  logger.error("Paste", "Error", `${context}：${logMessage}`);
 }
 
 async function copyClaudeDir(srcCwd: string, destCwd: string): Promise<void> {
@@ -78,7 +80,7 @@ async function createSinglePod(
   if (finalRepositoryId) {
     const exists = await repositoryService.exists(finalRepositoryId);
     if (!exists) {
-      throw new Error("Repository 不存在");
+      throw createI18nError("errors.repoNotExists");
     }
   }
 

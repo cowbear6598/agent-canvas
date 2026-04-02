@@ -18,6 +18,11 @@ import { handleApiRequest } from "./api/apiRouter.js";
 import { handleIntegrationWebhook } from "./services/integration/integrationWebhookRouter.js";
 import { integrationRegistry } from "./services/integration/index.js";
 import { scheduleService } from "./services/scheduleService.js";
+import { getResultErrorString } from "./types/result.js";
+import { claudeService } from "./services/claude/claudeService.js";
+import { podStore } from "./services/podStore.js";
+import { runStore } from "./services/runStore.js";
+import { runExecutionService } from "./services/workflow/runExecutionService.js";
 
 function handleWebSocketUpgrade(
   req: Request,
@@ -32,7 +37,12 @@ async function startServer(): Promise<void> {
   const result = await startupService.initialize();
 
   if (!result.success) {
-    logger.error("Startup", "Error", "伺服器啟動失敗", result.error);
+    logger.error(
+      "Startup",
+      "Error",
+      "伺服器啟動失敗",
+      getResultErrorString(result.error),
+    );
     process.exit(1);
   }
 
@@ -162,7 +172,48 @@ async function startServer(): Promise<void> {
 startServer();
 
 const shutdown = async (signal: string): Promise<void> => {
-  logger.log("Shutdown", "Complete", `收到 ${signal}，正在優雅關閉`);
+  logger.log("Shutdown", "Init", `收到 ${signal}，正在優雅關閉`);
+
+  // 步驟 1：中止所有活躍的 Claude 查詢
+  const abortedCount = claudeService.abortAllQueries();
+  if (abortedCount > 0) {
+    logger.log(
+      "Shutdown",
+      "Complete",
+      `已中止 ${abortedCount} 個活躍的 Claude 查詢`,
+    );
+  }
+
+  // 步驟 2：重設所有 busy 狀態的 Pod 為 idle（僅更新 DB，不廣播）
+  const resetCount = podStore.resetAllBusyPods();
+  if (resetCount > 0) {
+    logger.log(
+      "Shutdown",
+      "Complete",
+      `已重設 ${resetCount} 個 busy Pod 為 idle`,
+    );
+  }
+
+  // 步驟 3：刪除所有 running 狀態的 Run（含 worktree 清理）
+  const runningRuns = runStore.getRunningRuns();
+  if (runningRuns.length > 0) {
+    logger.log(
+      "Shutdown",
+      "Complete",
+      `正在清理 ${runningRuns.length} 個執行中的 Run`,
+    );
+    await Promise.all(
+      runningRuns.map((run) =>
+        runExecutionService.deleteRun(run.id).catch((error) => {
+          logger.error(
+            "Shutdown",
+            "Error",
+            `清理 Run ${run.id} 時發生錯誤: ${error}`,
+          );
+        }),
+      ),
+    );
+  }
 
   for (const provider of integrationRegistry.list()) {
     provider.destroyAll();

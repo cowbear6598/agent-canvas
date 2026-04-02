@@ -116,7 +116,7 @@ describe('Skill 管理', () => {
       );
 
       expect(response.success).toBe(false);
-      expect(response.error).toContain('已綁定');
+      expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
     });
   });
 
@@ -147,7 +147,7 @@ describe('Skill 管理', () => {
       );
 
       expect(response.success).toBe(false);
-      expect(response.error).toContain('找不到');
+      expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
     });
 
     it('使用中時刪除失敗', async () => {
@@ -171,7 +171,7 @@ describe('Skill 管理', () => {
       );
 
       expect(response.success).toBe(false);
-      expect(response.error).toContain('使用中');
+      expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
     });
   });
 });

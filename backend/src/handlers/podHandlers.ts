@@ -34,6 +34,7 @@ import {
   withCanvasId,
   handleResultError,
 } from "../utils/handlerHelpers.js";
+import { createI18nError } from "../utils/i18nError.js";
 
 export const handlePodCreate = withCanvasId<PodCreatePayload>(
   WebSocketResponseEvents.POD_CREATED,
@@ -57,7 +58,7 @@ export const handlePodCreate = withCanvasId<PodCreatePayload>(
         connectionId,
         WebSocketResponseEvents.POD_CREATED,
         requestId,
-        "建立 Pod 失敗",
+        createI18nError('errors.podCreateFailed'),
       )
     )
       return;
@@ -133,7 +134,7 @@ export const handlePodDelete = withCanvasId<PodDeletePayload>(
       connectionId,
       WebSocketResponseEvents.POD_DELETED,
       requestId,
-      "刪除 Pod 失敗",
+      createI18nError('errors.podDeleteFailed'),
     );
   },
 );
@@ -162,7 +163,7 @@ function handlePodUpdate<TResponse>(
     emitError(
       connectionId,
       responseEvent,
-      `無法更新 Pod: ${podId}`,
+      createI18nError('errors.podUpdateFailed', { id: podId }),
       requestId,
       podId,
       "INTERNAL_ERROR",
@@ -211,7 +212,7 @@ export const handlePodRename = withCanvasId<PodRenamePayload>(
       emitError(
         connectionId,
         WebSocketResponseEvents.POD_RENAMED,
-        "同一 Canvas 下已存在相同名稱的 Pod",
+        createI18nError('errors.podNameDuplicate'),
         requestId,
         podId,
         "DUPLICATE_NAME",
@@ -348,7 +349,7 @@ export const handlePodSetSchedule = withCanvasId<PodSetSchedulePayload>(
       emitError(
         connectionId,
         WebSocketResponseEvents.POD_SCHEDULE_SET,
-        `無法更新 Pod: ${podId}`,
+        createI18nError('errors.podUpdateFailed', { id: podId }),
         requestId,
         podId,
         "INTERNAL_ERROR",
@@ -409,7 +410,7 @@ export const handlePodOpenDirectory = withCanvasId<PodOpenDirectoryPayload>(
       emitError(
         connectionId,
         WebSocketResponseEvents.POD_DIRECTORY_OPENED,
-        "目標目錄不存在",
+        createI18nError('errors.targetDirectoryNotExists'),
         requestId,
         podId,
         "INTERNAL_ERROR",
@@ -422,7 +423,7 @@ export const handlePodOpenDirectory = withCanvasId<PodOpenDirectoryPayload>(
       emitError(
         connectionId,
         WebSocketResponseEvents.POD_DIRECTORY_OPENED,
-        `不支援的作業系統: ${process.platform}`,
+        createI18nError('errors.unsupportedOs', { os: process.platform }),
         requestId,
         podId,
         "INTERNAL_ERROR",
@@ -437,7 +438,7 @@ export const handlePodOpenDirectory = withCanvasId<PodOpenDirectoryPayload>(
       emitError(
         connectionId,
         WebSocketResponseEvents.POD_DIRECTORY_OPENED,
-        "打開目錄失敗",
+        createI18nError('errors.openDirectoryFailed'),
         requestId,
         podId,
         "INTERNAL_ERROR",
@@ -486,7 +487,7 @@ export const handlePodSetPlugins = withCanvasId<PodSetPluginsPayload>(
       emitError(
         connectionId,
         WebSocketResponseEvents.POD_PLUGINS_SET,
-        `無法更新 Pod: ${podId}`,
+        createI18nError('errors.podUpdateFailed', { id: podId }),
         requestId,
         podId,
         "INTERNAL_ERROR",

@@ -111,7 +111,7 @@ class SummaryService {
       logger.error(
         "Workflow",
         "Error",
-        `[SummaryService] 無法為目標 ${targetPodId} 生成摘要：${result.error}`,
+        `[SummaryService] 無法為目標 ${targetPodId} 生成摘要：${result.error ?? ""}`,
       );
 
       let fallbackContent: string | null;
@@ -132,7 +132,12 @@ class SummaryService {
         return { targetPodId, summary: fallbackContent, success: true };
       }
 
-      return { targetPodId, summary: "", success: false, error: result.error };
+      return {
+        targetPodId,
+        summary: "",
+        success: false,
+        error: result.error ?? "",
+      };
     }
 
     return { targetPodId, summary: result.content, success: true };

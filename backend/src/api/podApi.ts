@@ -1,178 +1,228 @@
-import { podStore } from '../services/podStore.js';
-import { jsonResponse, requireCanvas, resolvePod, requireJsonBody } from './apiHelpers.js';
-import { createPodWithWorkspace, deletePodWithCleanup } from '../services/podService.js';
-import { logger } from '../utils/logger.js';
-import type { ModelType } from '../types/pod.js';
-import { HTTP_STATUS } from '../constants.js';
-import { socketService } from '../services/socketService.js';
-import { WebSocketResponseEvents } from '../schemas/index.js';
+import { podStore } from "../services/podStore.js";
+import {
+  jsonResponse,
+  requireCanvas,
+  resolvePod,
+  requireJsonBody,
+} from "./apiHelpers.js";
+import {
+  createPodWithWorkspace,
+  deletePodWithCleanup,
+} from "../services/podService.js";
+import { logger } from "../utils/logger.js";
+import type { ModelType } from "../types/pod.js";
+import { HTTP_STATUS } from "../constants.js";
+import { socketService } from "../services/socketService.js";
+import { WebSocketResponseEvents } from "../schemas/index.js";
+import { getResultErrorString } from "../types/result.js";
 
-const VALID_MODELS: ModelType[] = ['opus', 'sonnet', 'haiku'];
+const VALID_MODELS: ModelType[] = ["opus", "sonnet", "haiku"];
 
 interface ValidatedCreatePodBody {
-	name: string;
-	x: number;
-	y: number;
-	model: ModelType;
+  name: string;
+  x: number;
+  y: number;
+  model: ModelType;
 }
 
 function validatePodName(data: Record<string, unknown>): string | null {
-	if (!data.name || typeof data.name !== 'string' || data.name.trim() === '') {
-		return 'Pod 名稱不能為空';
-	}
-	if (data.name.trim().length > 100) {
-		return 'Pod 名稱不能超過 100 個字元';
-	}
-	return null;
+  if (!data.name || typeof data.name !== "string" || data.name.trim() === "") {
+    return "Pod 名稱不能為空";
+  }
+  if (data.name.trim().length > 100) {
+    return "Pod 名稱不能超過 100 個字元";
+  }
+  return null;
 }
 
 function isFiniteNumber(value: unknown): value is number {
-	return typeof value === 'number' && Number.isFinite(value);
+  return typeof value === "number" && Number.isFinite(value);
 }
 
 const COORDINATE_RANGE = { min: -100000, max: 100000 };
 
 function isInCoordinateRange(value: number): boolean {
-	return value >= COORDINATE_RANGE.min && value <= COORDINATE_RANGE.max;
+  return value >= COORDINATE_RANGE.min && value <= COORDINATE_RANGE.max;
 }
 
 function validatePodCoordinates(data: Record<string, unknown>): string | null {
-	if (!isFiniteNumber(data.x) || !isFiniteNumber(data.y) || !isInCoordinateRange(data.x) || !isInCoordinateRange(data.y)) {
-		return '必須提供有效的 x 和 y 座標';
-	}
-	return null;
+  if (
+    !isFiniteNumber(data.x) ||
+    !isFiniteNumber(data.y) ||
+    !isInCoordinateRange(data.x) ||
+    !isInCoordinateRange(data.y)
+  ) {
+    return "必須提供有效的 x 和 y 座標";
+  }
+  return null;
 }
 
 function validatePodModel(data: Record<string, unknown>): string | null {
-	if (data.model !== undefined && !VALID_MODELS.includes(data.model as ModelType)) {
-		return '無效的模型類型';
-	}
-	return null;
+  if (
+    data.model !== undefined &&
+    !VALID_MODELS.includes(data.model as ModelType)
+  ) {
+    return "無效的模型類型";
+  }
+  return null;
 }
 
-function validateCreatePodBody(data: Record<string, unknown>): { error: string } | ValidatedCreatePodBody {
-	const nameError = validatePodName(data);
-	if (nameError) return { error: nameError };
+function validateCreatePodBody(
+  data: Record<string, unknown>,
+): { error: string } | ValidatedCreatePodBody {
+  const nameError = validatePodName(data);
+  if (nameError) return { error: nameError };
 
-	const coordinatesError = validatePodCoordinates(data);
-	if (coordinatesError) return { error: coordinatesError };
+  const coordinatesError = validatePodCoordinates(data);
+  if (coordinatesError) return { error: coordinatesError };
 
-	const modelError = validatePodModel(data);
-	if (modelError) return { error: modelError };
+  const modelError = validatePodModel(data);
+  if (modelError) return { error: modelError };
 
-	const name = (data.name as string).trim();
-	const model = (data.model as ModelType) ?? 'opus';
+  const name = (data.name as string).trim();
+  const model = (data.model as ModelType) ?? "opus";
 
-	return { name, x: data.x as number, y: data.y as number, model };
+  return { name, x: data.x as number, y: data.y as number, model };
 }
 
-export function handleListPods(_req: Request, params: Record<string, string>): Response {
-	const { canvas, error } = requireCanvas(params.id);
-	if (error) return error;
+export function handleListPods(
+  _req: Request,
+  params: Record<string, string>,
+): Response {
+  const { canvas, error } = requireCanvas(params.id);
+  if (error) return error;
 
-	const pods = podStore.list(canvas.id);
-	return jsonResponse({ pods }, HTTP_STATUS.OK);
+  const pods = podStore.list(canvas.id);
+  return jsonResponse({ pods }, HTTP_STATUS.OK);
 }
 
-export async function handleCreatePod(req: Request, params: Record<string, string>): Promise<Response> {
-	const jsonError = requireJsonBody(req);
-	if (jsonError) return jsonError;
+export async function handleCreatePod(
+  req: Request,
+  params: Record<string, string>,
+): Promise<Response> {
+  const jsonError = requireJsonBody(req);
+  if (jsonError) return jsonError;
 
-	const body = await req.json();
+  const body = await req.json();
 
-	const { canvas, error } = requireCanvas(params.id);
-	if (error) return error;
+  const { canvas, error } = requireCanvas(params.id);
+  if (error) return error;
 
-	const validated = validateCreatePodBody(body as Record<string, unknown>);
-	if ('error' in validated) {
-		return jsonResponse({ error: validated.error }, HTTP_STATUS.BAD_REQUEST);
-	}
+  const validated = validateCreatePodBody(body as Record<string, unknown>);
+  if ("error" in validated) {
+    return jsonResponse({ error: validated.error }, HTTP_STATUS.BAD_REQUEST);
+  }
 
-	if (podStore.hasName(canvas.id, validated.name)) {
-		return jsonResponse({ error: '同一 Canvas 下已存在相同名稱的 Pod' }, HTTP_STATUS.CONFLICT);
-	}
+  if (podStore.hasName(canvas.id, validated.name)) {
+    return jsonResponse(
+      { error: "同一 Canvas 下已存在相同名稱的 Pod" },
+      HTTP_STATUS.CONFLICT,
+    );
+  }
 
-	const result = await createPodWithWorkspace(
-		canvas.id,
-		{
-			name: validated.name,
-			x: validated.x,
-			y: validated.y,
-			rotation: 0,
-			model: validated.model,
-		},
-		'system',
-	);
+  const result = await createPodWithWorkspace(
+    canvas.id,
+    {
+      name: validated.name,
+      x: validated.x,
+      y: validated.y,
+      rotation: 0,
+      model: validated.model,
+    },
+    "system",
+  );
 
-	if (!result.success) {
-		logger.error('Pod', 'Error', '建立 Pod 失敗', result.error);
-		return jsonResponse({ error: '建立 Pod 時發生內部錯誤' }, HTTP_STATUS.INTERNAL_ERROR);
-	}
+  if (!result.success) {
+    logger.error("Pod", "Error", "建立 Pod 失敗", getResultErrorString(result.error));
+    return jsonResponse(
+      { error: "建立 Pod 時發生內部錯誤" },
+      HTTP_STATUS.INTERNAL_ERROR,
+    );
+  }
 
-	return jsonResponse({ pod: result.data.pod }, HTTP_STATUS.CREATED);
+  return jsonResponse({ pod: result.data.pod }, HTTP_STATUS.CREATED);
 }
 
-export async function handleRenamePod(req: Request, params: Record<string, string>): Promise<Response> {
-	const jsonError = requireJsonBody(req);
-	if (jsonError) return jsonError;
+export async function handleRenamePod(
+  req: Request,
+  params: Record<string, string>,
+): Promise<Response> {
+  const jsonError = requireJsonBody(req);
+  if (jsonError) return jsonError;
 
-	const body = await req.json() as Record<string, unknown>;
+  const body = (await req.json()) as Record<string, unknown>;
 
-	const { canvas, error } = requireCanvas(params.id);
-	if (error) return error;
+  const { canvas, error } = requireCanvas(params.id);
+  if (error) return error;
 
-	const pod = resolvePod(canvas.id, decodeURIComponent(params.podId));
-	if (!pod) {
-		return jsonResponse({ error: '找不到 Pod' }, HTTP_STATUS.NOT_FOUND);
-	}
+  const pod = resolvePod(canvas.id, decodeURIComponent(params.podId));
+  if (!pod) {
+    return jsonResponse({ error: "找不到 Pod" }, HTTP_STATUS.NOT_FOUND);
+  }
 
-	const nameError = validatePodName(body);
-	if (nameError) {
-		return jsonResponse({ error: nameError }, HTTP_STATUS.BAD_REQUEST);
-	}
+  const nameError = validatePodName(body);
+  if (nameError) {
+    return jsonResponse({ error: nameError }, HTTP_STATUS.BAD_REQUEST);
+  }
 
-	const trimmedName = (body.name as string).trim();
+  const trimmedName = (body.name as string).trim();
 
-	if (podStore.hasName(canvas.id, trimmedName)) {
-		return jsonResponse({ error: '同一 Canvas 下已存在相同名稱的 Pod' }, HTTP_STATUS.CONFLICT);
-	}
+  if (podStore.hasName(canvas.id, trimmedName)) {
+    return jsonResponse(
+      { error: "同一 Canvas 下已存在相同名稱的 Pod" },
+      HTTP_STATUS.CONFLICT,
+    );
+  }
 
-	const oldName = pod.name;
-	const result = podStore.update(canvas.id, pod.id, { name: trimmedName });
+  const oldName = pod.name;
+  const result = podStore.update(canvas.id, pod.id, { name: trimmedName });
 
-	if (!result) {
-		logger.error('Pod', 'Error', '重新命名 Pod 失敗');
-		return jsonResponse({ error: '重新命名 Pod 時發生內部錯誤' }, HTTP_STATUS.INTERNAL_ERROR);
-	}
+  if (!result) {
+    logger.error("Pod", "Error", "重新命名 Pod 失敗");
+    return jsonResponse(
+      { error: "重新命名 Pod 時發生內部錯誤" },
+      HTTP_STATUS.INTERNAL_ERROR,
+    );
+  }
 
-	logger.log('Pod', 'Rename', `已重命名 Pod「${oldName}」為「${result.pod.name}」`);
+  logger.log(
+    "Pod",
+    "Rename",
+    `已重命名 Pod「${oldName}」為「${result.pod.name}」`,
+  );
 
-	socketService.emitToCanvas(canvas.id, WebSocketResponseEvents.POD_RENAMED, {
-		requestId: 'system',
-		canvasId: canvas.id,
-		success: true,
-		pod: result.pod,
-		podId: result.pod.id,
-		name: result.pod.name,
-	});
+  socketService.emitToCanvas(canvas.id, WebSocketResponseEvents.POD_RENAMED, {
+    requestId: "system",
+    canvasId: canvas.id,
+    success: true,
+    pod: result.pod,
+    podId: result.pod.id,
+    name: result.pod.name,
+  });
 
-	return jsonResponse({ pod: result.pod }, HTTP_STATUS.OK);
+  return jsonResponse({ pod: result.pod }, HTTP_STATUS.OK);
 }
 
-export async function handleDeletePod(_req: Request, params: Record<string, string>): Promise<Response> {
-	const { canvas, error } = requireCanvas(params.id);
-	if (error) return error;
+export async function handleDeletePod(
+  _req: Request,
+  params: Record<string, string>,
+): Promise<Response> {
+  const { canvas, error } = requireCanvas(params.id);
+  if (error) return error;
 
-	const pod = resolvePod(canvas.id, decodeURIComponent(params.podId));
-	if (!pod) {
-		return jsonResponse({ error: '找不到 Pod' }, HTTP_STATUS.NOT_FOUND);
-	}
+  const pod = resolvePod(canvas.id, decodeURIComponent(params.podId));
+  if (!pod) {
+    return jsonResponse({ error: "找不到 Pod" }, HTTP_STATUS.NOT_FOUND);
+  }
 
-	const result = await deletePodWithCleanup(canvas.id, pod.id, 'system');
-	if (!result.success) {
-		logger.error('Pod', 'Error', '刪除 Pod 失敗', result.error);
-		return jsonResponse({ error: '刪除 Pod 時發生錯誤' }, HTTP_STATUS.INTERNAL_ERROR);
-	}
+  const result = await deletePodWithCleanup(canvas.id, pod.id, "system");
+  if (!result.success) {
+    logger.error("Pod", "Error", "刪除 Pod 失敗", getResultErrorString(result.error));
+    return jsonResponse(
+      { error: "刪除 Pod 時發生錯誤" },
+      HTTP_STATUS.INTERNAL_ERROR,
+    );
+  }
 
-	return jsonResponse({ success: true }, HTTP_STATUS.OK);
+  return jsonResponse({ success: true }, HTTP_STATUS.OK);
 }

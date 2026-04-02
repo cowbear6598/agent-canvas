@@ -88,7 +88,7 @@ describe('handleRunDelete', () => {
         expect(mockEmitError).toHaveBeenCalledWith(
             CONNECTION_ID,
             'run:deleted',
-            '找不到指定的 Run',
+            expect.objectContaining({ key: expect.any(String) }),
             REQUEST_ID,
             undefined,
             'NOT_FOUND'
@@ -104,7 +104,7 @@ describe('handleRunDelete', () => {
         expect(mockEmitError).toHaveBeenCalledWith(
             CONNECTION_ID,
             'run:deleted',
-            '找不到指定的 Run',
+            expect.objectContaining({ key: expect.any(String) }),
             REQUEST_ID,
             undefined,
             'NOT_FOUND'
@@ -293,7 +293,7 @@ describe('handleRunLoadPodMessages', () => {
         expect(mockEmitError).toHaveBeenCalledWith(
             CONNECTION_ID,
             'run:pod-messages:result',
-            '找不到指定的 Run',
+            expect.objectContaining({ key: expect.any(String) }),
             REQUEST_ID,
             undefined,
             'NOT_FOUND'
@@ -309,7 +309,7 @@ describe('handleRunLoadPodMessages', () => {
         expect(mockEmitError).toHaveBeenCalledWith(
             CONNECTION_ID,
             'run:pod-messages:result',
-            '找不到指定的 Run',
+            expect.objectContaining({ key: expect.any(String) }),
             REQUEST_ID,
             undefined,
             'NOT_FOUND'

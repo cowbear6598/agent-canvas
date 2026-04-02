@@ -1,11 +1,14 @@
-import { Result, ok, err } from '../types';
-import { repositoryService } from '../services/repositoryService.js';
-import { gitService } from '../services/workspace/gitService.js';
+import { Result, ok, err } from "../types";
+import { repositoryService } from "../services/repositoryService.js";
+import { gitService } from "../services/workspace/gitService.js";
+import { createI18nError } from "./i18nError.js";
 
-export async function validateRepositoryExists(repositoryId: string): Promise<Result<string>> {
+export async function validateRepositoryExists(
+  repositoryId: string,
+): Promise<Result<string>> {
   const exists = await repositoryService.exists(repositoryId);
   if (!exists) {
-    return err(`找不到 Repository: ${repositoryId}`);
+    return err(createI18nError("errors.repoNotFound", { id: repositoryId }));
   }
 
   const repositoryPath = repositoryService.getRepositoryPath(repositoryId);
@@ -13,7 +16,7 @@ export async function validateRepositoryExists(repositoryId: string): Promise<Re
 }
 
 export async function getValidatedGitRepository(
-  repositoryId: string
+  repositoryId: string,
 ): Promise<Result<{ repositoryPath: string; isGit: boolean }>> {
   const validateResult = await validateRepositoryExists(repositoryId);
   if (!validateResult.success) {
@@ -28,7 +31,7 @@ export async function getValidatedGitRepository(
   }
 
   if (!isGitResult.data) {
-    return err('不是 Git Repository');
+    return err(createI18nError("errors.notGitRepo"));
   }
 
   return ok({ repositoryPath, isGit: true });

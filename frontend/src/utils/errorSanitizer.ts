@@ -11,17 +11,13 @@ const SENSITIVE_PATTERNS = [
   /at\s+[\w.]+\s+\([^)]+\)/g,
 ];
 
+// 僅保留網路 / 系統層級錯誤碼的 mapping；
+// 後端業務錯誤已改為回傳 i18n key，不在此處處理。
 const ERROR_CODE_KEYS = [
   "ECONNREFUSED",
   "ENOTFOUND",
   "ETIMEDOUT",
   "ECONNRESET",
-  "ALREADY_EXISTS",
-  "NOT_FOUND",
-  "UNAUTHORIZED",
-  "FORBIDDEN",
-  "INVALID_REQUEST",
-  "INTERNAL_ERROR",
 ] as const;
 
 type ErrorCode = (typeof ERROR_CODE_KEYS)[number];

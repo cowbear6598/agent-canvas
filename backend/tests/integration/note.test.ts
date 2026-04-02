@@ -137,7 +137,7 @@ describe('Note 管理', () => {
       );
 
       expect(response.success).toBe(false);
-      expect(response.error).toContain('找不到');
+      expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
     });
   });
 
@@ -169,7 +169,7 @@ describe('Note 管理', () => {
       );
 
       expect(response.success).toBe(false);
-      expect(response.error).toContain('找不到');
+      expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
     });
   });
 
@@ -194,7 +194,7 @@ describe('Note 管理', () => {
       );
 
       expect(response.success).toBe(false);
-      expect(response.error).toContain('找不到');
+      expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
     });
 
     it('已刪除後再更新失敗', async () => {
@@ -222,7 +222,7 @@ describe('Note 管理', () => {
       );
 
       expect(updateResponse.success).toBe(false);
-      expect(updateResponse.error).toContain('找不到');
+      expect(updateResponse.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
     });
 
     it('重複刪除失敗', async () => {
@@ -245,7 +245,7 @@ describe('Note 管理', () => {
       );
 
       expect(deleteResponse.success).toBe(false);
-      expect(deleteResponse.error).toContain('找不到');
+      expect(deleteResponse.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
     });
 
     it('部分欄位只更新提供的', async () => {
@@ -331,7 +331,7 @@ describe('Note 管理', () => {
       );
 
       expect(response.success).toBe(false);
-      expect(response.error).toContain('找不到');
+      expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
     });
 
     it('不存在的 ID 時刪除失敗', async () => {
@@ -345,7 +345,7 @@ describe('Note 管理', () => {
       );
 
       expect(response.success).toBe(false);
-      expect(response.error).toContain('找不到');
+      expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
     });
 
     it('部分欄位只更新提供的', async () => {

@@ -343,3 +343,71 @@ describe("PodStore - Integration Binding", () => {
     });
   });
 });
+
+describe("PodStore - resetAllBusyPods", () => {
+  let canvasId: string;
+
+  beforeEach(() => {
+    initTestDb();
+    resetStatements();
+
+    const stmts = getStatements(getDb());
+    canvasId = "test-canvas-reset";
+    stmts.canvas.insert.run({
+      $id: canvasId,
+      $name: "test-canvas-reset",
+      $sortIndex: 0,
+    });
+  });
+
+  afterEach(() => {
+    closeDb();
+  });
+
+  function createTestPod(name: string) {
+    const { pod } = podStore.create(canvasId, {
+      name,
+      x: 0,
+      y: 0,
+      rotation: 0,
+    });
+    return pod;
+  }
+
+  it("有 chatting/summarizing Pod 時應重設為 idle 並回傳正確數量", () => {
+    const pod1 = createTestPod("pod-chatting");
+    const pod2 = createTestPod("pod-summarizing");
+    const pod3 = createTestPod("pod-idle");
+
+    // 直接更新 DB 狀態，繞過 socketService 廣播
+    getDb()
+      .prepare("UPDATE pods SET status = 'chatting' WHERE id = ?")
+      .run(pod1.id);
+    getDb()
+      .prepare("UPDATE pods SET status = 'summarizing' WHERE id = ?")
+      .run(pod2.id);
+
+    const count = podStore.resetAllBusyPods();
+
+    expect(count).toBe(2);
+    expect(podStore.getById(canvasId, pod1.id)?.status).toBe("idle");
+    expect(podStore.getById(canvasId, pod2.id)?.status).toBe("idle");
+    expect(podStore.getById(canvasId, pod3.id)?.status).toBe("idle");
+  });
+
+  it("無 busy Pod 時應回傳 0", () => {
+    createTestPod("pod-idle-only");
+
+    const count = podStore.resetAllBusyPods();
+
+    expect(count).toBe(0);
+  });
+
+  it("idle Pod 不應被更動", () => {
+    const pod = createTestPod("pod-stays-idle");
+
+    podStore.resetAllBusyPods();
+
+    expect(podStore.getById(canvasId, pod.id)?.status).toBe("idle");
+  });
+});

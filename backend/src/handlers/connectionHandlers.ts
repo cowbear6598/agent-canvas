@@ -26,6 +26,7 @@ import {
   emitNotFound,
 } from "../utils/websocketResponse.js";
 import { logger } from "../utils/logger.js";
+import { createI18nError } from "../utils/i18nError.js";
 import { withCanvasId, getPodDisplayName } from "../utils/handlerHelpers.js";
 
 function findConnectionOrEmitError(
@@ -65,7 +66,7 @@ function findPodsOrEmitError(
     emitError(
       wsConnectionId,
       responseEvent,
-      `來源 Pod 找不到: ${sourcePodId}`,
+      createI18nError('errors.sourcePodNotFound', { id: sourcePodId }),
       requestId,
       undefined,
       "NOT_FOUND",
@@ -79,7 +80,7 @@ function findPodsOrEmitError(
     emitError(
       wsConnectionId,
       responseEvent,
-      `目標 Pod 找不到: ${targetPodId}`,
+      createI18nError('errors.targetPodNotFound', { id: targetPodId }),
       requestId,
       undefined,
       "NOT_FOUND",
@@ -224,7 +225,7 @@ export const handleConnectionDelete = withCanvasId<ConnectionDeletePayload>(
       emitError(
         wsConnectionId,
         WebSocketResponseEvents.CONNECTION_DELETED,
-        `無法從 store 刪除 connection: ${connectionId}`,
+        createI18nError('errors.connectionDeleteFailed', { id: connectionId }),
         requestId,
         undefined,
         "INTERNAL_ERROR",
@@ -297,7 +298,7 @@ export const handleConnectionUpdate = withCanvasId<ConnectionUpdatePayload>(
       emitError(
         wsConnectionId,
         WebSocketResponseEvents.CONNECTION_UPDATED,
-        `無法更新 connection: ${connectionId}`,
+        createI18nError('errors.connectionUpdateFailed', { id: connectionId }),
         requestId,
         undefined,
         "INTERNAL_ERROR",

@@ -25,6 +25,7 @@ import {
 } from "../utils/websocketResponse.js";
 import { logger } from "../utils/logger.js";
 import { getErrorMessage } from "../utils/errorHelpers.js";
+import { createI18nError } from "../utils/i18nError.js";
 import {
   emitPodUpdated,
   handleResultError,
@@ -58,7 +59,7 @@ function getProviderOrEmitError(
     emitError(
       connectionId,
       responseEvent,
-      `找不到 Integration Provider「${providerName}」`,
+      createI18nError('errors.providerNotFound', { name: providerName }),
       requestId,
       undefined,
       "PROVIDER_NOT_FOUND",
@@ -110,7 +111,7 @@ export async function handleIntegrationAppCreate(
     emitError(
       connectionId,
       WebSocketResponseEvents.INTEGRATION_APP_CREATED,
-      `設定驗證失敗：${message}`,
+      createI18nError('errors.configValidationFailed', { message }),
       requestId,
       undefined,
       "VALIDATION_ERROR",
@@ -129,7 +130,7 @@ export async function handleIntegrationAppCreate(
       connectionId,
       WebSocketResponseEvents.INTEGRATION_APP_CREATED,
       requestId,
-      "建立 Integration App 失敗",
+      createI18nError('errors.integrationAppCreateFailed'),
     )
   )
     return;
@@ -328,7 +329,7 @@ export async function handleIntegrationAppResourcesRefresh(
     emitError(
       connectionId,
       WebSocketResponseEvents.INTEGRATION_APP_RESOURCES_REFRESHED,
-      `重新取得 Resources 失敗：${getErrorMessage(error)}`,
+      createI18nError('errors.refreshResourcesFailed', { message: getErrorMessage(error) }),
       requestId,
     );
     return;
@@ -386,7 +387,7 @@ export const handlePodBindIntegration = withCanvasId<PodBindIntegrationPayload>(
       emitError(
         connectionId,
         WebSocketResponseEvents.POD_INTEGRATION_BOUND,
-        `Integration App「${app.name}」尚未連線`,
+        createI18nError('errors.integrationAppNotConnected', { name: app.name }),
         requestId,
         undefined,
         "NOT_CONNECTED",
@@ -411,7 +412,7 @@ export const handlePodBindIntegration = withCanvasId<PodBindIntegrationPayload>(
       emitError(
         connectionId,
         WebSocketResponseEvents.POD_INTEGRATION_BOUND,
-        `綁定設定驗證失敗：${message}`,
+        createI18nError('errors.bindConfigValidationFailed', { message }),
         requestId,
         undefined,
         "VALIDATION_ERROR",
@@ -480,7 +481,7 @@ export const handlePodUnbindIntegration =
         emitError(
           connectionId,
           WebSocketResponseEvents.POD_INTEGRATION_UNBOUND,
-          `Pod「${getPodDisplayName(canvasId, podId)}」尚未綁定 ${providerName}`,
+          createI18nError('errors.podProviderNotBound', { podName: getPodDisplayName(canvasId, podId), provider: providerName }),
           requestId,
           undefined,
           "NOT_BOUND",

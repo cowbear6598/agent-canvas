@@ -21,6 +21,7 @@ import { skillService } from '../services/skillService.js';
 import { subAgentService } from '../services/subAgentService.js';
 import { commandService } from '../services/commandService.js';
 import { emitError } from '../utils/websocketResponse.js';
+import { createI18nError } from '../utils/i18nError.js';
 import { clearPodMessages } from './repository/repositoryBindHelpers.js';
 import { logger, type LogCategory, type LogAction } from '../utils/logger.js';
 import { createNoteHandlers } from './factories/createNoteHandlers.js';
@@ -59,7 +60,7 @@ export async function handleRepositoryCreate(
     emitError(
       connectionId,
       WebSocketResponseEvents.REPOSITORY_CREATED,
-      `Repository 已存在: ${name}`,
+      createI18nError('errors.repoExists', { name }),
       requestId,
       undefined,
       'ALREADY_EXISTS'
@@ -118,7 +119,7 @@ export const handlePodBindRepository = withCanvasId<PodBindRepositoryPayload>(
     }
 
     const validateResult = await validateRepositoryExists(repositoryId);
-    if (handleResultError(validateResult, connectionId, WebSocketResponseEvents.POD_REPOSITORY_BOUND, requestId, '找不到 Repository', 'NOT_FOUND')) return;
+    if (handleResultError(validateResult, connectionId, WebSocketResponseEvents.POD_REPOSITORY_BOUND, requestId, createI18nError('errors.repoNotFound'), 'NOT_FOUND')) return;
 
     const oldRepositoryId = pod.repositoryId;
 

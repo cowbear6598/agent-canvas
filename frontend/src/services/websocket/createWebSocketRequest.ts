@@ -12,10 +12,15 @@ export interface WebSocketRequestConfig<TPayload, TResult> {
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 
+interface WebSocketErrorObject {
+  key: string;
+  params?: Record<string, unknown>;
+}
+
 interface WebSocketResponse {
   requestId?: string;
   success?: boolean;
-  error?: string;
+  error?: string | WebSocketErrorObject;
 }
 
 export interface PendingRequest<T = unknown> {
@@ -81,8 +86,24 @@ export async function createWebSocketRequest<
       websocketClient.off(responseEvent, handleResponse);
 
       if (responseWithBase.success === false) {
-        const error = responseWithBase.error ?? t("common.error.unknown");
-        reject(new Error(error));
+        const rawError = responseWithBase.error;
+        let errorMessage: string;
+
+        if (rawError && typeof rawError === "object" && "key" in rawError) {
+          // 後端回傳 i18n key 格式的錯誤物件，翻譯後顯示
+          const translated = t(rawError.key, rawError.params ?? {});
+          // 若翻譯結果與 key 相同，代表找不到對應翻譯，退回通用錯誤訊息
+          errorMessage =
+            translated === rawError.key
+              ? t("common.error.unknown")
+              : translated;
+        } else if (typeof rawError === "string") {
+          errorMessage = rawError;
+        } else {
+          errorMessage = t("common.error.unknown");
+        }
+
+        reject(new Error(errorMessage));
         return;
       }
 

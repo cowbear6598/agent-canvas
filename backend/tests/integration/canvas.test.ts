@@ -128,7 +128,7 @@ describe('Canvas 管理', () => {
             );
 
             expect(response.success).toBe(false);
-            expect(response.error).toContain('找不到');
+            expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
         });
 
         it('空白名稱時重命名失敗', async () => {
@@ -181,7 +181,7 @@ describe('Canvas 管理', () => {
             );
 
             expect(response.success).toBe(false);
-            expect(response.error).toContain('已存在');
+            expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
         });
     });
 
@@ -211,7 +211,7 @@ describe('Canvas 管理', () => {
             );
 
             expect(response.success).toBe(false);
-            expect(response.error).toContain('找不到');
+            expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
         });
 
         it('使用中時刪除失敗', async () => {
@@ -226,7 +226,7 @@ describe('Canvas 管理', () => {
             );
 
             expect(response.success).toBe(false);
-            expect(response.error).toContain('無法刪除正在使用的 Canvas');
+            expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
         });
     });
 
@@ -256,7 +256,7 @@ describe('Canvas 管理', () => {
             );
 
             expect(response.success).toBe(false);
-            expect(response.error).toContain('找不到');
+            expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
         });
     });
 
@@ -381,7 +381,7 @@ describe('Canvas 管理', () => {
             );
 
             expect(response.success).toBe(false);
-            expect(response.error).toContain('重複');
+            expect(response.error).toEqual(expect.objectContaining({ key: expect.any(String) }));
         });
     });
 });

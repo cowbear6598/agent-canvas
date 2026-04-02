@@ -4,6 +4,7 @@ import { backupService } from "./backupService.js";
 import { socketService } from "./socketService.js";
 import { toOffsettedParts } from "../utils/timezoneUtils.js";
 import { logger } from "../utils/logger.js";
+import { getResultErrorString } from "../types/result.js";
 
 const TICK_INTERVAL_MS = 1000;
 const BACKUP_TRIGGER_SECOND = 0;
@@ -111,10 +112,10 @@ class BackupScheduleService {
       logger.log("Backup", "Complete", "自動備份完成");
     } else {
       socketService.emitToAll(WebSocketResponseEvents.BACKUP_FAILED, {
-        error: result.error,
+        error: getResultErrorString(result.error),
         timestamp: new Date().toISOString(),
       });
-      logger.error("Backup", "Error", `自動備份失敗：${result.error}`);
+      logger.error("Backup", "Error", `自動備份失敗：${getResultErrorString(result.error)}`);
     }
   }
 }

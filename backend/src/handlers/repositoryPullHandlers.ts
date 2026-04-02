@@ -5,6 +5,7 @@ import { gitService } from '../services/workspace/gitService.js';
 import { emitSuccess, emitError } from '../utils/websocketResponse.js';
 import { logger } from '../utils/logger.js';
 import { handleResultError } from '../utils/handlerHelpers.js';
+import { createI18nError } from '../utils/i18nError.js';
 import {
   withValidatedGitRepository,
   createProgressEmitter,
@@ -31,7 +32,7 @@ async function executePullWithProgress(
   connectionId: string,
   requestId: string,
   repositoryPath: string
-): Promise<{ gitPullResult: Awaited<ReturnType<typeof gitService.pullLatest>>; throttledEmit: ThrottledProgressEmitter; emitProgress: (progress: number, message: string) => void }> {
+): Promise<{ gitPullResult: Awaited<ReturnType<typeof gitService.pullLatest>>; throttledEmit: ThrottledProgressEmitter; emitProgress: (progress: number, message: string | import("../utils/i18nError.js").I18nError) => void }> {
   const emitProgress = createProgressEmitter(connectionId, requestId, WebSocketResponseEvents.REPOSITORY_PULL_LATEST_PROGRESS);
   const throttledEmit = createThrottledProgressEmitter(
     connectionId,
@@ -39,7 +40,7 @@ async function executePullWithProgress(
     WebSocketResponseEvents.REPOSITORY_PULL_LATEST_PROGRESS
   );
 
-  emitProgress(0, '準備 Pull...');
+  emitProgress(0, createI18nError('progress.preparingPull'));
 
   const gitPullResult = await gitService.pullLatest(repositoryPath, (progress, message) => throttledEmit(progress, message));
   return { gitPullResult, throttledEmit, emitProgress };
@@ -56,7 +57,7 @@ export const handleRepositoryPullLatest = withValidatedGitRepository<RepositoryP
       emitError(
         connectionId,
         WebSocketResponseEvents.REPOSITORY_PULL_LATEST_RESULT,
-        '此 Repository 已有 Pull 操作進行中',
+        createI18nError('errors.repoPullInProgress'),
         requestId,
         undefined,
         'CONFLICT'
@@ -68,12 +69,12 @@ export const handleRepositoryPullLatest = withValidatedGitRepository<RepositoryP
 
     if (!pullResult.success) {
       throttledEmit.cancel();
-      handleResultError(pullResult, connectionId, WebSocketResponseEvents.REPOSITORY_PULL_LATEST_RESULT, requestId, 'Pull 失敗');
+      handleResultError(pullResult, connectionId, WebSocketResponseEvents.REPOSITORY_PULL_LATEST_RESULT, requestId, createI18nError('errors.pullFailed'));
       return;
     }
 
     throttledEmit.flush();
-    emitProgress(100, 'Pull 完成');
+    emitProgress(100, createI18nError('progress.pullComplete'));
 
     const response: RepositoryPullLatestResultPayload = {
       requestId,
@@ -85,5 +86,5 @@ export const handleRepositoryPullLatest = withValidatedGitRepository<RepositoryP
 
     logger.log('Repository', 'Update', `已 Pull「${repositoryId}」的最新版本`);
   },
-  { rejectWorktree: { errorMessage: 'Worktree 無法執行 Pull' } }
+  { rejectWorktree: { errorMessage: createI18nError('errors.worktreePullNotAllowed') } }
 );

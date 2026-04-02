@@ -1,11 +1,14 @@
-import { v4 as uuidv4 } from 'uuid';
-import { emitAndWaitResponse } from '../setup';
-import { getCanvasId } from './canvasHelper.js';
-import { createPod } from './podHelper.js';
+import { v4 as uuidv4 } from "uuid";
+import { emitAndWaitResponse } from "../setup";
+import { getCanvasId } from "./canvasHelper.js";
+import { createPod } from "./podHelper.js";
 
 export interface CRUDTestConfig {
   resourceName: string;
-  createResource: (client: any, name?: string) => Promise<{ id: string; name: string }>;
+  createResource: (
+    client: any,
+    name?: string,
+  ) => Promise<{ id: string; name: string }>;
   fakeResourceId: string;
   events: {
     create?: { request: string; response: string };
@@ -35,16 +38,16 @@ export interface CRUDTestConfig {
 
 export function describeCRUDTests(
   config: CRUDTestConfig,
-  getContext: () => { client: any; server: any }
+  getContext: () => { client: any; server: any },
 ): void {
   const invalidNames = config.invalidNames ?? [
-    { name: '測試', desc: '中文名稱' },
-    { name: 'my item!', desc: '特殊字元' },
+    { name: "測試", desc: "中文名稱" },
+    { name: "my item!", desc: "特殊字元" },
   ];
 
   if (config.events.create) {
     describe(`${config.resourceName} 建立`, () => {
-      it('success_when_created', async () => {
+      it("success_when_created", async () => {
         const { client } = getContext();
         const name = `test-${uuidv4()}`;
         const resource = await config.createResource(client, name);
@@ -53,7 +56,7 @@ export function describeCRUDTests(
         expect(resource.name).toBe(name);
       });
 
-      it('failed_when_create_with_duplicate_name', async () => {
+      it("failed_when_create_with_duplicate_name", async () => {
         const { client } = getContext();
         const name = `dup-${uuidv4()}`;
         await config.createResource(client, name);
@@ -63,31 +66,42 @@ export function describeCRUDTests(
           client,
           config.events.create!.request,
           config.events.create!.response,
-          { requestId: uuidv4(), ...config.payloadBuilders.create!(canvasId, name) }
+          {
+            requestId: uuidv4(),
+            ...config.payloadBuilders.create!(canvasId, name),
+          },
         );
 
         expect(response.success).toBe(false);
-        expect(response.error).toContain('已存在');
-      });
-
-      it.each(invalidNames)('建立失敗 - 不合法名稱: $desc', async ({ name }) => {
-        const { client } = getContext();
-        const canvasId = await getCanvasId(client);
-        const response = await emitAndWaitResponse<any, Record<string, any>>(
-          client,
-          config.events.create!.request,
-          config.events.create!.response,
-          { requestId: uuidv4(), ...config.payloadBuilders.create!(canvasId, name) }
+        expect(response.error).toEqual(
+          expect.objectContaining({ key: expect.any(String) }),
         );
-
-        expect(response.success).toBe(false);
-        expect(response.error).toContain('名稱只允許');
       });
+
+      it.each(invalidNames)(
+        "建立失敗 - 不合法名稱: $desc",
+        async ({ name }) => {
+          const { client } = getContext();
+          const canvasId = await getCanvasId(client);
+          const response = await emitAndWaitResponse<any, Record<string, any>>(
+            client,
+            config.events.create!.request,
+            config.events.create!.response,
+            {
+              requestId: uuidv4(),
+              ...config.payloadBuilders.create!(canvasId, name),
+            },
+          );
+
+          expect(response.success).toBe(false);
+          expect(response.error).toBeDefined();
+        },
+      );
     });
   }
 
   describe(`${config.resourceName} 列表`, () => {
-    it('success_when_list_returns_all', async () => {
+    it("success_when_list_returns_all", async () => {
       const { client } = getContext();
       const resource = await config.createResource(client);
 
@@ -96,18 +110,20 @@ export function describeCRUDTests(
         client,
         config.events.list.request,
         config.events.list.response,
-        { requestId: uuidv4(), ...config.payloadBuilders.list(canvasId) }
+        { requestId: uuidv4(), ...config.payloadBuilders.list(canvasId) },
       );
 
       expect(response.success).toBe(true);
-      const names = response[config.responseFieldName.list]!.map((r: any) => r.name);
+      const names = response[config.responseFieldName.list]!.map(
+        (r: any) => r.name,
+      );
       expect(names).toContain(resource.name);
     });
   });
 
   if (config.events.read) {
     describe(`${config.resourceName} 讀取`, () => {
-      it('success_when_read_returns_content', async () => {
+      it("success_when_read_returns_content", async () => {
         const { client } = getContext();
         const resource = await config.createResource(client);
 
@@ -116,34 +132,44 @@ export function describeCRUDTests(
           client,
           config.events.read!.request,
           config.events.read!.response,
-          { requestId: uuidv4(), ...config.payloadBuilders.read!(canvasId, resource.id) }
+          {
+            requestId: uuidv4(),
+            ...config.payloadBuilders.read!(canvasId, resource.id),
+          },
         );
 
         expect(response.success).toBe(true);
         if (config.hasContentValidation) {
-          expect(response[config.responseFieldName.read!]!.content).toBeDefined();
+          expect(
+            response[config.responseFieldName.read!]!.content,
+          ).toBeDefined();
         }
       });
 
-      it('failed_when_read_with_nonexistent_id', async () => {
+      it("failed_when_read_with_nonexistent_id", async () => {
         const { client } = getContext();
         const canvasId = await getCanvasId(client);
         const response = await emitAndWaitResponse<any, Record<string, any>>(
           client,
           config.events.read!.request,
           config.events.read!.response,
-          { requestId: uuidv4(), ...config.payloadBuilders.read!(canvasId, config.fakeResourceId) }
+          {
+            requestId: uuidv4(),
+            ...config.payloadBuilders.read!(canvasId, config.fakeResourceId),
+          },
         );
 
         expect(response.success).toBe(false);
-        expect(response.error).toContain('找不到');
+        expect(response.error).toEqual(
+          expect.objectContaining({ key: expect.any(String) }),
+        );
       });
     });
   }
 
   if (config.events.update) {
     describe(`${config.resourceName} 更新`, () => {
-      it('success_when_updated', async () => {
+      it("success_when_updated", async () => {
         const { client } = getContext();
         const resource = await config.createResource(client);
 
@@ -152,30 +178,38 @@ export function describeCRUDTests(
           client,
           config.events.update!.request,
           config.events.update!.response,
-          { requestId: uuidv4(), ...config.payloadBuilders.update!(canvasId, resource.id) }
+          {
+            requestId: uuidv4(),
+            ...config.payloadBuilders.update!(canvasId, resource.id),
+          },
         );
 
         expect(response.success).toBe(true);
       });
 
-      it('failed_when_update_with_nonexistent_id', async () => {
+      it("failed_when_update_with_nonexistent_id", async () => {
         const { client } = getContext();
         const canvasId = await getCanvasId(client);
         const response = await emitAndWaitResponse<any, Record<string, any>>(
           client,
           config.events.update!.request,
           config.events.update!.response,
-          { requestId: uuidv4(), ...config.payloadBuilders.update!(canvasId, config.fakeResourceId) }
+          {
+            requestId: uuidv4(),
+            ...config.payloadBuilders.update!(canvasId, config.fakeResourceId),
+          },
         );
 
         expect(response.success).toBe(false);
-        expect(response.error).toContain('找不到');
+        expect(response.error).toEqual(
+          expect.objectContaining({ key: expect.any(String) }),
+        );
       });
     });
   }
 
   describe(`${config.resourceName} 刪除`, () => {
-    it('success_when_deleted', async () => {
+    it("success_when_deleted", async () => {
       const { client } = getContext();
       const resource = await config.createResource(client);
 
@@ -184,27 +218,35 @@ export function describeCRUDTests(
         client,
         config.events.delete.request,
         config.events.delete.response,
-        { requestId: uuidv4(), ...config.payloadBuilders.delete(canvasId, resource.id) }
+        {
+          requestId: uuidv4(),
+          ...config.payloadBuilders.delete(canvasId, resource.id),
+        },
       );
 
       expect(response.success).toBe(true);
     });
 
-    it('failed_when_delete_with_nonexistent_id', async () => {
+    it("failed_when_delete_with_nonexistent_id", async () => {
       const { client } = getContext();
       const canvasId = await getCanvasId(client);
       const response = await emitAndWaitResponse<any, Record<string, any>>(
         client,
         config.events.delete.request,
         config.events.delete.response,
-        { requestId: uuidv4(), ...config.payloadBuilders.delete(canvasId, config.fakeResourceId) }
+        {
+          requestId: uuidv4(),
+          ...config.payloadBuilders.delete(canvasId, config.fakeResourceId),
+        },
       );
 
       expect(response.success).toBe(false);
-      expect(response.error).toContain('找不到');
+      expect(response.error).toEqual(
+        expect.objectContaining({ key: expect.any(String) }),
+      );
     });
 
-    it('failed_when_delete_while_in_use', async () => {
+    it("failed_when_delete_while_in_use", async () => {
       const { client } = getContext();
       const pod = await createPod(client);
       const resource = await config.createResource(client);
@@ -216,19 +258,28 @@ export function describeCRUDTests(
         config.bindForDeleteTest.bindEvent.response,
         {
           requestId: uuidv4(),
-          ...config.bindForDeleteTest.buildPayload(canvasId, pod.id, resource.id),
-        }
+          ...config.bindForDeleteTest.buildPayload(
+            canvasId,
+            pod.id,
+            resource.id,
+          ),
+        },
       );
 
       const response = await emitAndWaitResponse<any, Record<string, any>>(
         client,
         config.events.delete.request,
         config.events.delete.response,
-        { requestId: uuidv4(), ...config.payloadBuilders.delete(canvasId, resource.id) }
+        {
+          requestId: uuidv4(),
+          ...config.payloadBuilders.delete(canvasId, resource.id),
+        },
       );
 
       expect(response.success).toBe(false);
-      expect(response.error).toContain('使用中');
+      expect(response.error).toEqual(
+        expect.objectContaining({ key: expect.any(String) }),
+      );
     });
   });
 }

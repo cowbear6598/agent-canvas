@@ -2,6 +2,7 @@ import { WebSocketResponseEvents, GroupCreatePayload, GroupListPayload, GroupDel
 import { groupStore } from '../services/groupStore.js';
 import { GroupType, GROUP_TYPES } from '../types';
 import { emitError, emitSuccess, emitNotFound } from '../utils/websocketResponse.js';
+import { createI18nError } from '../utils/i18nError.js';
 import { socketService } from '../services/socketService.js';
 
 export async function handleGroupCreate(connectionId: string, payload: GroupCreatePayload, requestId: string): Promise<void> {
@@ -9,7 +10,7 @@ export async function handleGroupCreate(connectionId: string, payload: GroupCrea
 
   const exists = await groupStore.exists(name, type);
   if (exists) {
-    emitError(connectionId, WebSocketResponseEvents.GROUP_CREATED, 'Group 名稱已存在', requestId, undefined, 'ALREADY_EXISTS');
+    emitError(connectionId, WebSocketResponseEvents.GROUP_CREATED, createI18nError('errors.groupNameExists'), requestId, undefined, 'ALREADY_EXISTS');
     return;
   }
 
@@ -45,7 +46,7 @@ export async function handleGroupDelete(connectionId: string, payload: GroupDele
 
   const hasItems = await groupStore.hasItems(groupId, type);
   if (hasItems) {
-    emitError(connectionId, WebSocketResponseEvents.GROUP_DELETED, 'Group 內還有項目，無法刪除', requestId, undefined, 'GROUP_NOT_EMPTY');
+    emitError(connectionId, WebSocketResponseEvents.GROUP_DELETED, createI18nError('errors.groupNotEmpty'), requestId, undefined, 'GROUP_NOT_EMPTY');
     return;
   }
 

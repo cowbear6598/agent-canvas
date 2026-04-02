@@ -1,7 +1,7 @@
-import { v4 as uuidv4 } from 'uuid';
-import { emitAndWaitResponse } from '../setup';
-import { getCanvasId } from './canvasHelper.js';
-import { FAKE_UUID } from './testConstants.js';
+import { v4 as uuidv4 } from "uuid";
+import { emitAndWaitResponse } from "../setup";
+import { getCanvasId } from "./canvasHelper.js";
+import { FAKE_UUID } from "./testConstants.js";
 
 export interface NoteCRUDTestConfig {
   resourceName: string;
@@ -17,10 +17,10 @@ export interface NoteCRUDTestConfig {
 
 export function describeNoteCRUDTests(
   config: NoteCRUDTestConfig,
-  getContext: () => { client: any; server: any }
+  getContext: () => { client: any; server: any },
 ): void {
   describe(`${config.resourceName} Note CRUD`, () => {
-    it('success_when_note_created', async () => {
+    it("success_when_note_created", async () => {
       const { client } = getContext();
       const parent = await config.createParentResource(client);
       const note = await config.createNote(client, parent.id);
@@ -29,7 +29,7 @@ export function describeNoteCRUDTests(
       expect(note[config.parentIdFieldName]).toBe(parent.id);
     });
 
-    it('success_when_note_list_returns_all', async () => {
+    it("success_when_note_list_returns_all", async () => {
       const { client } = getContext();
       const parent = await config.createParentResource(client);
       await config.createNote(client, parent.id);
@@ -39,14 +39,14 @@ export function describeNoteCRUDTests(
         client,
         config.events.list.request,
         config.events.list.response,
-        { requestId: uuidv4(), canvasId }
+        { requestId: uuidv4(), canvasId },
       );
 
       expect(response.success).toBe(true);
       expect(response.notes!.length).toBeGreaterThanOrEqual(1);
     });
 
-    it('success_when_note_updated', async () => {
+    it("success_when_note_updated", async () => {
       const { client } = getContext();
       const parent = await config.createParentResource(client);
       const note = await config.createNote(client, parent.id);
@@ -56,28 +56,30 @@ export function describeNoteCRUDTests(
         client,
         config.events.update.request,
         config.events.update.response,
-        { requestId: uuidv4(), canvasId, noteId: note.id, x: 555 }
+        { requestId: uuidv4(), canvasId, noteId: note.id, x: 555 },
       );
 
       expect(response.success).toBe(true);
       expect(response.note!.x).toBe(555);
     });
 
-    it('failed_when_note_update_with_nonexistent_id', async () => {
+    it("failed_when_note_update_with_nonexistent_id", async () => {
       const { client } = getContext();
       const canvasId = await getCanvasId(client);
       const response = await emitAndWaitResponse<any, Record<string, any>>(
         client,
         config.events.update.request,
         config.events.update.response,
-        { requestId: uuidv4(), canvasId, noteId: FAKE_UUID, x: 0 }
+        { requestId: uuidv4(), canvasId, noteId: FAKE_UUID, x: 0 },
       );
 
       expect(response.success).toBe(false);
-      expect(response.error).toContain('找不到');
+      expect(response.error).toEqual(
+        expect.objectContaining({ key: expect.any(String) }),
+      );
     });
 
-    it('success_when_note_deleted', async () => {
+    it("success_when_note_deleted", async () => {
       const { client } = getContext();
       const parent = await config.createParentResource(client);
       const note = await config.createNote(client, parent.id);
@@ -87,25 +89,27 @@ export function describeNoteCRUDTests(
         client,
         config.events.delete.request,
         config.events.delete.response,
-        { requestId: uuidv4(), canvasId, noteId: note.id }
+        { requestId: uuidv4(), canvasId, noteId: note.id },
       );
 
       expect(response.success).toBe(true);
       expect(response.noteId).toBe(note.id);
     });
 
-    it('failed_when_note_delete_with_nonexistent_id', async () => {
+    it("failed_when_note_delete_with_nonexistent_id", async () => {
       const { client } = getContext();
       const canvasId = await getCanvasId(client);
       const response = await emitAndWaitResponse<any, Record<string, any>>(
         client,
         config.events.delete.request,
         config.events.delete.response,
-        { requestId: uuidv4(), canvasId, noteId: FAKE_UUID }
+        { requestId: uuidv4(), canvasId, noteId: FAKE_UUID },
       );
 
       expect(response.success).toBe(false);
-      expect(response.error).toContain('找不到');
+      expect(response.error).toEqual(
+        expect.objectContaining({ key: expect.any(String) }),
+      );
     });
   });
 }
