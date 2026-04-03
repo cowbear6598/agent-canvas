@@ -10,6 +10,7 @@ import type {
 } from "@/types/connection";
 import type { ModelType } from "@/types/pod";
 import { usePodStore } from "@/stores/pod/podStore";
+import { useSelectionStore } from "@/stores/pod/selectionStore";
 import {
   createWebSocketRequest,
   websocketClient,
@@ -156,7 +157,7 @@ function buildIsRunningPod(
 
 export const useConnectionStore = defineStore("connection", () => {
   const { executeAction } = useCanvasWebSocketAction();
-  const { toast } = useToast();
+  const { toast, showErrorToast } = useToast();
 
   const connections = ref<Connection[]>([]);
   const selectedConnectionId = ref<string | null>(null);
@@ -465,7 +466,10 @@ export const useConnectionStore = defineStore("connection", () => {
   }
 
   async function deleteConnection(connectionId: string): Promise<void> {
-    await executeAction<ConnectionDeletePayload, ConnectionDeletedPayload>(
+    const result = await executeAction<
+      ConnectionDeletePayload,
+      ConnectionDeletedPayload
+    >(
       {
         requestEvent: WebSocketRequestEvents.CONNECTION_DELETE,
         responseEvent: WebSocketResponseEvents.CONNECTION_DELETED,
@@ -475,8 +479,18 @@ export const useConnectionStore = defineStore("connection", () => {
         errorCategory: "Connection",
         errorAction: t("common.error.delete"),
         errorMessage: t("store.connection.deleteFailed"),
+        suppressErrorToast: true,
       },
     );
+
+    if (!result.success) {
+      // 若 connection 已不存在於 store，代表後端廣播的 CONNECTION_DELETED 已先到達
+      // 視為刪除成功，不顯示錯誤 toast
+      const stillExists = connections.value.some((c) => c.id === connectionId);
+      if (stillExists) {
+        showErrorToast("Connection", t("common.error.delete"));
+      }
+    }
   }
 
   function deleteConnectionsByPodId(podId: string): void {
@@ -497,6 +511,11 @@ export const useConnectionStore = defineStore("connection", () => {
 
   function selectConnection(connectionId: string | null): void {
     selectedConnectionId.value = connectionId;
+    // 選擇 connection 時清除 pod 選擇（互斥），null 代表取消選擇不觸發
+    if (connectionId !== null) {
+      const selectionStore = useSelectionStore();
+      selectionStore.clearSelection();
+    }
   }
 
   function startDragging(
