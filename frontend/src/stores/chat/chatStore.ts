@@ -252,9 +252,9 @@ export const useChatStore = defineStore("chat", {
       connectionActions.handleHeartbeatPing(payload);
     },
 
-    handleSocketDisconnect(reason: string): void {
+    handleSocketDisconnect(code: string): void {
       const connectionActions = this.getConnectionActions();
-      connectionActions.handleSocketDisconnect(reason);
+      connectionActions.handleSocketDisconnect(code);
     },
 
     handleError(payload: PodErrorPayload): void {

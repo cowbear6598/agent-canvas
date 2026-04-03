@@ -21,11 +21,15 @@ class WebSocketClient {
   private wsUrl: string = "";
   private eventListeners: Map<string, Set<EventHandler>> = new Map();
   private disconnectListeners: Set<(reason: string) => void> = new Set();
+  private visibilityChangeHandler: (() => void) | null = null;
+  private visibilityListenerRegistered = false;
 
   public readonly isConnected = ref(false);
   public readonly disconnectReason = ref<string | null>(null);
 
   connect(url?: string): void {
+    this.setupVisibilityChangeListener();
+
     if (this.socket?.readyState === WebSocket.OPEN) {
       return;
     }
@@ -55,8 +59,15 @@ class WebSocketClient {
   }
 
   disconnect(): void {
+    this.teardownVisibilityChangeListener();
     this.stopReconnect();
     this.cleanupSocket();
+  }
+
+  // 強制重連：關閉舊 socket 並啟動重連，但不拆除 visibility listener
+  forceReconnect(): void {
+    this.cleanupSocket();
+    this.startReconnect();
   }
 
   private cleanupSocket(): void {
@@ -69,7 +80,10 @@ class WebSocketClient {
     this.socket.onerror = null;
     this.socket.onmessage = null;
 
-    if (this.socket.readyState === WebSocket.OPEN) {
+    if (
+      this.socket.readyState === WebSocket.OPEN ||
+      this.socket.readyState === WebSocket.CONNECTING
+    ) {
       this.socket.close();
     }
 
@@ -77,8 +91,52 @@ class WebSocketClient {
     this.isConnected.value = false;
   }
 
-  private startReconnect(): void {
+  private setupVisibilityChangeListener(): void {
+    if (this.visibilityListenerRegistered) {
+      return;
+    }
+
+    const handler = () => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+
+      // 連線正常，不需要重連
+      if (this.socket?.readyState === WebSocket.OPEN) {
+        return;
+      }
+
+      // 已有重連 timer 在進行，不重複觸發
+      if (this.reconnectTimer !== null) {
+        return;
+      }
+
+      logger.log("[WebSocket] 頁面重新顯示，偵測到斷線，啟動重連...");
+      this.startReconnect();
+    };
+
+    document.addEventListener("visibilitychange", handler);
+    this.visibilityChangeHandler = handler;
+    this.visibilityListenerRegistered = true;
+  }
+
+  private teardownVisibilityChangeListener(): void {
+    if (this.visibilityChangeHandler !== null) {
+      document.removeEventListener(
+        "visibilitychange",
+        this.visibilityChangeHandler,
+      );
+      this.visibilityChangeHandler = null;
+    }
+    this.visibilityListenerRegistered = false;
+  }
+
+  startReconnect(): void {
     this.stopReconnect();
+
+    // 立即嘗試第一次重連，不等 interval
+    logger.log("[WebSocket] 嘗試重新連線...");
+    this.reconnectOnce();
 
     this.reconnectTimer = setInterval(() => {
       logger.log("[WebSocket] 嘗試重新連線...");
@@ -118,10 +176,10 @@ class WebSocketClient {
   private handleClose(event: CloseEvent): void {
     logger.log("[WebSocket] 連線關閉:", event.code, event.reason);
     this.isConnected.value = false;
-    this.disconnectReason.value = event.reason || `code ${event.code}`;
+    this.disconnectReason.value = String(event.code);
 
     this.disconnectListeners.forEach((callback) => {
-      callback(this.disconnectReason.value ?? "");
+      callback(String(event.code));
     });
 
     this.startReconnect();

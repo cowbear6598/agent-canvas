@@ -391,11 +391,11 @@
       "heartbeatTimeoutDesc": "サーバーからのハートビート応答がありません",
       "disconnected": "接続が切断されました",
       "disconnectReasons": {
-        "transportClose": "接続が閉じられました",
-        "transportError": "接続の転送エラー",
-        "pingTimeout": "ハートビートタイムアウト",
-        "serverDisconnect": "サーバーが切断しました",
-        "clientDisconnect": "クライアントが切断しました",
+        "1000": "正常切断",
+        "1001": "エンドポイント離脱（ページ遷移）",
+        "1006": "異常切断",
+        "1011": "サーバーエラー",
+        "1012": "サーバー再起動",
         "unknown": "不明な理由"
       },
       "imageTooLarge": "画像のサイズが 5MB の制限を超えています",

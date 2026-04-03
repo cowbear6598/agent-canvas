@@ -544,11 +544,11 @@
       "heartbeatTimeoutDesc": "No heartbeat response from server",
       "disconnected": "Connection lost",
       "disconnectReasons": {
-        "transportClose": "Connection closed",
-        "transportError": "Connection transport error",
-        "pingTimeout": "Heartbeat timeout",
-        "serverDisconnect": "Server disconnected",
-        "clientDisconnect": "Client disconnected",
+        "1000": "Normal closure",
+        "1001": "Endpoint leaving (page navigation)",
+        "1006": "Abnormal disconnection",
+        "1011": "Server error",
+        "1012": "Server restarting",
         "unknown": "Unknown reason"
       },
       "imageTooLarge": "Image size exceeds 5MB limit",

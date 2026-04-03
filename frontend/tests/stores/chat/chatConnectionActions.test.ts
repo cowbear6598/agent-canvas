@@ -176,7 +176,7 @@ describe("chatConnectionActions", () => {
   });
 
   describe("心跳超時", () => {
-    it("超過 20 秒未收到心跳：設定 disconnected、顯示 Toast", async () => {
+    it("超過 20 秒未收到心跳：呼叫 forceReconnect，不顯示 Toast", async () => {
       vi.useFakeTimers();
       const store = useChatStore();
 
@@ -189,11 +189,10 @@ describe("chatConnectionActions", () => {
       vi.spyOn(Date, "now").mockReturnValue(now + 21000);
       vi.advanceTimersByTime(5000);
 
-      expect(store.connectionStatus).toBe("disconnected");
-      expect(mockToast).toHaveBeenCalledWith({
-        title: "連線逾時",
-        description: "未收到伺服器心跳回應",
-      });
+      expect(mockWebSocketClient.forceReconnect).toHaveBeenCalledOnce();
+      expect(mockWebSocketClient.disconnect).not.toHaveBeenCalled();
+      expect(mockWebSocketClient.startReconnect).not.toHaveBeenCalled();
+      expect(mockToast).not.toHaveBeenCalled();
 
       vi.useRealTimers();
     });
@@ -226,10 +225,10 @@ describe("chatConnectionActions", () => {
 
       vi.spyOn(Date, "now").mockReturnValue(now + 21000);
       vi.advanceTimersByTime(4900);
-      expect(store.connectionStatus).toBe("connected");
+      expect(mockWebSocketClient.forceReconnect).not.toHaveBeenCalled();
 
       vi.advanceTimersByTime(100);
-      expect(store.connectionStatus).toBe("disconnected");
+      expect(mockWebSocketClient.forceReconnect).toHaveBeenCalledOnce();
 
       vi.useRealTimers();
     });
@@ -270,21 +269,21 @@ describe("chatConnectionActions", () => {
       expect(store.historyLoadingError.size).toBe(0);
     });
 
-    it("顯示斷線 Toast（已知 reason 顯示友善訊息）", () => {
+    it("顯示斷線 Toast（已知 close code 顯示友善訊息）", () => {
       const store = useChatStore();
 
-      store.handleSocketDisconnect("transport close");
+      store.handleSocketDisconnect("1000");
 
       expect(mockToast).toHaveBeenCalledWith({
         title: "連線中斷",
-        description: "連線已關閉",
+        description: "正常關閉",
       });
     });
 
-    it("顯示斷線 Toast（未知 reason 顯示未知原因）", () => {
+    it("顯示斷線 Toast（未知 close code 顯示未知原因）", () => {
       const store = useChatStore();
 
-      store.handleSocketDisconnect("Network error");
+      store.handleSocketDisconnect("9999");
 
       expect(mockToast).toHaveBeenCalledWith({
         title: "連線中斷",
@@ -292,20 +291,20 @@ describe("chatConnectionActions", () => {
       });
     });
 
-    it("所有已知 reason 皆有對應友善訊息", () => {
-      const knownReasons: Record<string, string> = {
-        "transport close": "連線已關閉",
-        "transport error": "連線傳輸錯誤",
-        "ping timeout": "心跳超時",
-        "io server disconnect": "伺服器主動斷開",
-        "io client disconnect": "客戶端主動斷開",
+    it("所有已知 close code 皆有對應友善訊息", () => {
+      const knownCodes: Record<string, string> = {
+        "1000": "正常關閉",
+        "1001": "端點離開（頁面導航）",
+        "1006": "連線異常中斷",
+        "1011": "伺服器端錯誤",
+        "1012": "伺服器重啟",
       };
 
-      for (const [reason, expectedMessage] of Object.entries(knownReasons)) {
+      for (const [code, expectedMessage] of Object.entries(knownCodes)) {
         vi.clearAllMocks();
         const store = useChatStore();
 
-        store.handleSocketDisconnect(reason);
+        store.handleSocketDisconnect(code);
 
         expect(mockToast).toHaveBeenCalledWith({
           title: "連線中斷",
@@ -319,7 +318,7 @@ describe("chatConnectionActions", () => {
       store.isTypingByPodId.set("pod-1", true);
       store.isTypingByPodId.set("pod-2", true);
 
-      store.handleSocketDisconnect("transport close");
+      store.handleSocketDisconnect("1000");
 
       expect(store.isTypingByPodId.size).toBe(0);
     });

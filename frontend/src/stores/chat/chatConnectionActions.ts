@@ -8,16 +8,17 @@ import type {
 import { t } from "@/i18n";
 import type { ChatStoreInstance } from "./chatStore";
 
-const DISCONNECT_REASON_KEY_MAP: Record<string, string> = {
-  "transport close": "composable.chat.disconnectReasons.transportClose",
-  "transport error": "composable.chat.disconnectReasons.transportError",
-  "ping timeout": "composable.chat.disconnectReasons.pingTimeout",
-  "io server disconnect": "composable.chat.disconnectReasons.serverDisconnect",
-  "io client disconnect": "composable.chat.disconnectReasons.clientDisconnect",
+const CLOSE_CODE_I18N_MAP: Record<string, string> = {
+  "1000": "composable.chat.disconnectReasons.1000",
+  "1001": "composable.chat.disconnectReasons.1001",
+  "1006": "composable.chat.disconnectReasons.1006",
+  "1011": "composable.chat.disconnectReasons.1011",
+  "1012": "composable.chat.disconnectReasons.1012",
 };
 
-const getDisconnectMessage = (reason: string): string => {
-  const key = DISCONNECT_REASON_KEY_MAP[reason];
+// 接收原生 WebSocket close code 字串，查表取得對應的 i18n 訊息
+const getDisconnectMessage = (code: string): string => {
+  const key = CLOSE_CODE_I18N_MAP[code];
   return key ? t(key) : t("composable.chat.disconnectReasons.unknown");
 };
 
@@ -31,7 +32,7 @@ export function createConnectionActions(store: ChatStoreInstance): {
   handleHeartbeatPing: (payload: HeartbeatPingPayload) => void;
   startHeartbeatCheck: () => void;
   stopHeartbeatCheck: () => void;
-  handleSocketDisconnect: (reason: string) => void;
+  handleSocketDisconnect: (code: string) => void;
   handleError: (payload: PodErrorPayload) => void;
 } {
   const initWebSocket = (): void => {
@@ -86,13 +87,8 @@ export function createConnectionActions(store: ChatStoreInstance): {
 
       if (elapsed > HEARTBEAT_TIMEOUT_MS) {
         stopHeartbeatCheck();
-        store.connectionStatus = "disconnected";
-
-        const { toast } = useToast();
-        toast({
-          title: t("composable.chat.heartbeatTimeout"),
-          description: t("composable.chat.heartbeatTimeoutDesc"),
-        });
+        // 使用 forceReconnect 關閉舊連線並重連，保留 visibility listener
+        websocketClient.forceReconnect();
       }
     }, HEARTBEAT_CHECK_INTERVAL_MS);
   };
@@ -112,8 +108,8 @@ export function createConnectionActions(store: ChatStoreInstance): {
     store.historyLoadingError.clear();
   };
 
-  const handleSocketDisconnect = (reason: string): void => {
-    store.disconnectReason = getDisconnectMessage(reason);
+  const handleSocketDisconnect = (code: string): void => {
+    store.disconnectReason = getDisconnectMessage(code);
     store.connectionStatus = "disconnected";
     stopHeartbeatCheck();
     resetConnectionState();
@@ -123,7 +119,7 @@ export function createConnectionActions(store: ChatStoreInstance): {
     const { toast } = useToast();
     toast({
       title: t("composable.chat.disconnected"),
-      description: getDisconnectMessage(reason),
+      description: getDisconnectMessage(code),
     });
   };
 

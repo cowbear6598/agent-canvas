@@ -544,11 +544,11 @@
       "heartbeatTimeoutDesc": "未收到伺服器心跳回應",
       "disconnected": "連線中斷",
       "disconnectReasons": {
-        "transportClose": "連線已關閉",
-        "transportError": "連線傳輸錯誤",
-        "pingTimeout": "心跳超時",
-        "serverDisconnect": "伺服器主動斷開",
-        "clientDisconnect": "客戶端主動斷開",
+        "1000": "正常關閉",
+        "1001": "端點離開（頁面導航）",
+        "1006": "連線異常中斷",
+        "1011": "伺服器端錯誤",
+        "1012": "伺服器重啟",
         "unknown": "未知原因"
       },
       "imageTooLarge": "圖片大小超過 5MB 限制",

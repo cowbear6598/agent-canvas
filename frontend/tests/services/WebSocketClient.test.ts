@@ -161,7 +161,8 @@ describe("WebSocketClient", () => {
       websocketClient.disconnect();
 
       vi.advanceTimersByTime(10000);
-      expect(mockWebSocketInstances.length).toBe(initialCount);
+      // startReconnect 會立即呼叫一次 reconnectOnce()，所以 disconnect 前已多建立 1 個實例
+      expect(mockWebSocketInstances.length).toBe(initialCount + 1);
 
       vi.useRealTimers();
     });
@@ -381,6 +382,99 @@ describe("WebSocketClient", () => {
     });
   });
 
+  describe("visibilitychange", () => {
+    it("Tab 回來且 socket 已斷線，應觸發重連", () => {
+      websocketClient.connect("http://localhost:3001");
+      const firstInstance = mockWebSocketInstances[0]!;
+      firstInstance.triggerOpen();
+
+      // 模擬 socket 進入 CLOSED 狀態
+      firstInstance.readyState = MockWebSocket.CLOSED;
+
+      const countBefore = mockWebSocketInstances.length;
+
+      // 模擬頁面重新顯示
+      Object.defineProperty(document, "visibilityState", {
+        value: "visible",
+        configurable: true,
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+
+      // 應建立新的 WebSocket 實例（重連被觸發）
+      expect(mockWebSocketInstances.length).toBeGreaterThan(countBefore);
+    });
+
+    it("Tab 回來但 socket 仍正常連線，不應觸發重連", () => {
+      websocketClient.connect("http://localhost:3001");
+      const firstInstance = mockWebSocketInstances[0]!;
+      firstInstance.triggerOpen();
+
+      // 確保 readyState 為 OPEN
+      expect(firstInstance.readyState).toBe(MockWebSocket.OPEN);
+
+      const countBefore = mockWebSocketInstances.length;
+
+      // 模擬頁面重新顯示
+      Object.defineProperty(document, "visibilityState", {
+        value: "visible",
+        configurable: true,
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+
+      // 不應建立新的 WebSocket 實例
+      expect(mockWebSocketInstances.length).toBe(countBefore);
+    });
+
+    it("disconnect() 後 visibility listener 應被移除，不再觸發重連", () => {
+      websocketClient.connect("http://localhost:3001");
+      const firstInstance = mockWebSocketInstances[0]!;
+      firstInstance.triggerOpen();
+
+      websocketClient.disconnect();
+
+      const countBefore = mockWebSocketInstances.length;
+
+      // 模擬 socket 狀態為斷線後觸發 visibilitychange
+      Object.defineProperty(document, "visibilityState", {
+        value: "visible",
+        configurable: true,
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+
+      // listener 已被移除，不應建立新實例
+      expect(mockWebSocketInstances.length).toBe(countBefore);
+    });
+
+    it("connect() 多次呼叫，visibilitychange 觸發重連只執行一次", () => {
+      vi.useFakeTimers();
+
+      // 多次呼叫 connect()
+      websocketClient.connect("http://localhost:3001");
+      mockWebSocketInstances[0]!.triggerOpen();
+      websocketClient.connect("http://localhost:3001");
+      websocketClient.connect("http://localhost:3001");
+
+      // 模擬 socket 進入 CLOSED 狀態
+      const lastInstance =
+        mockWebSocketInstances[mockWebSocketInstances.length - 1]!;
+      lastInstance.readyState = MockWebSocket.CLOSED;
+
+      const countBefore = mockWebSocketInstances.length;
+
+      // 模擬頁面重新顯示
+      Object.defineProperty(document, "visibilityState", {
+        value: "visible",
+        configurable: true,
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+
+      // startReconnect 立即呼叫一次 reconnectOnce()，應只新增 1 個實例
+      expect(mockWebSocketInstances.length).toBe(countBefore + 1);
+
+      vi.useRealTimers();
+    });
+  });
+
   describe("斷線重連", () => {
     it("應該在 handleClose 時觸發 disconnect listener", () => {
       const disconnectCallback = vi.fn();
@@ -392,8 +486,8 @@ describe("WebSocketClient", () => {
 
       instance.triggerClose(1006, "異常關閉");
 
-      expect(disconnectCallback).toHaveBeenCalledWith("異常關閉");
-      expect(websocketClient.disconnectReason.value).toBe("異常關閉");
+      expect(disconnectCallback).toHaveBeenCalledWith("1006");
+      expect(websocketClient.disconnectReason.value).toBe("1006");
     });
 
     it("應該在斷線時啟動重連機制", () => {
@@ -408,7 +502,8 @@ describe("WebSocketClient", () => {
 
       vi.advanceTimersByTime(3000);
 
-      expect(mockWebSocketInstances.length).toBe(initialCount + 1);
+      // startReconnect 立即呼叫一次（+1），3000ms 後 interval 再呼叫一次（+1），共 +2
+      expect(mockWebSocketInstances.length).toBe(initialCount + 2);
 
       vi.useRealTimers();
     });
@@ -421,9 +516,13 @@ describe("WebSocketClient", () => {
 
       firstInstance.triggerClose(1006, "異常關閉");
 
+      // startReconnect 立即建立 instances[1]，3000ms 後 interval 建立 instances[2]
       vi.advanceTimersByTime(3000);
 
-      mockWebSocketInstances[1]!.triggerOpen();
+      // 觸發最新一次重連實例的 open 事件，讓 stopReconnect 被呼叫
+      const lastInstance =
+        mockWebSocketInstances[mockWebSocketInstances.length - 1]!;
+      lastInstance.triggerOpen();
 
       const countAfterReconnect = mockWebSocketInstances.length;
       vi.advanceTimersByTime(10000);
@@ -454,7 +553,7 @@ describe("WebSocketClient", () => {
 
       instance.triggerClose(1006, "");
 
-      expect(websocketClient.disconnectReason.value).toBe("code 1006");
+      expect(websocketClient.disconnectReason.value).toBe("1006");
     });
   });
 });
