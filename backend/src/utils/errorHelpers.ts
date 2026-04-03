@@ -14,3 +14,18 @@ export function isAbortError(error: unknown): boolean {
 	return error instanceof AbortError || (error instanceof Error && error.name === 'AbortError');
 }
 
+/**
+ * 判斷 error 是否為程式 bug（TypeError、ReferenceError 等），
+ * 而非外部 SDK／網路錯誤。
+ * 程式 bug 應向上拋出，讓開發者能即時發現問題。
+ */
+export function isProgrammingError(error: unknown): boolean {
+	return (
+		error instanceof TypeError ||
+		error instanceof ReferenceError ||
+		error instanceof RangeError ||
+		error instanceof SyntaxError ||
+		error instanceof EvalError ||
+		error instanceof URIError
+	)
+}

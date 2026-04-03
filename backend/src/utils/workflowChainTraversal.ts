@@ -6,22 +6,43 @@ import {isPodBusy} from '../types/index.js';
 
 const MAX_WORKFLOW_CHAIN_SIZE = 50;
 
-function getAdjacentPodIds(canvasId: string, podId: string): string[] {
-    const downstream = connectionStore.findBySourcePodId(canvasId, podId).map(conn => conn.targetPodId);
-    const upstream = connectionStore.findByTargetPodId(canvasId, podId).map(conn => conn.sourcePodId);
+type ConnectionMaps = {
+    sourceMap: Map<string, string[]>
+    targetMap: Map<string, string[]>
+}
+
+function buildConnectionMaps(canvasId: string): ConnectionMaps {
+    const connections = connectionStore.list(canvasId);
+    const sourceMap = new Map<string, string[]>();
+    const targetMap = new Map<string, string[]>();
+
+    for (const conn of connections) {
+        if (!sourceMap.has(conn.sourcePodId)) sourceMap.set(conn.sourcePodId, []);
+        sourceMap.get(conn.sourcePodId)!.push(conn.targetPodId);
+
+        if (!targetMap.has(conn.targetPodId)) targetMap.set(conn.targetPodId, []);
+        targetMap.get(conn.targetPodId)!.push(conn.sourcePodId);
+    }
+
+    return { sourceMap, targetMap };
+}
+
+function getAdjacentPodIds(podId: string, maps: ConnectionMaps): string[] {
+    const downstream = maps.sourceMap.get(podId) ?? [];
+    const upstream = maps.targetMap.get(podId) ?? [];
     return [...downstream, ...upstream];
 }
 
 function processQueueItem(
-    canvasId: string,
     currentId: string,
     visited: Set<string>,
     queue: string[],
+    maps: ConnectionMaps,
     predicate: (podId: string) => boolean
 ): boolean {
     if (predicate(currentId)) return true;
 
-    for (const adjacentId of getAdjacentPodIds(canvasId, currentId)) {
+    for (const adjacentId of getAdjacentPodIds(currentId, maps)) {
         if (!visited.has(adjacentId)) {
             visited.add(adjacentId);
             queue.push(adjacentId);
@@ -32,9 +53,9 @@ function processQueueItem(
 
 function processBfsQueue(
     logCategory: LogCategory,
-    canvasId: string,
     queue: string[],
     visited: Set<string>,
+    maps: ConnectionMaps,
     predicate: (podId: string) => boolean
 ): boolean {
     while (queue.length > 0) {
@@ -44,7 +65,7 @@ function processBfsQueue(
         }
         const currentId = queue.shift();
         if (!currentId) break;
-        if (processQueueItem(canvasId, currentId, visited, queue, predicate)) return true;
+        if (processQueueItem(currentId, visited, queue, maps, predicate)) return true;
     }
     return false;
 }
@@ -56,10 +77,11 @@ export function traverseWorkflowChain(
     startPodId: string,
     predicate: (podId: string) => boolean
 ): boolean {
+    const maps = buildConnectionMaps(canvasId);
     const visited = new Set<string>([startPodId]);
-    const queue = getAdjacentPodIds(canvasId, startPodId).filter(id => !visited.has(id));
+    const queue = getAdjacentPodIds(startPodId, maps).filter(id => !visited.has(id));
     queue.forEach(id => visited.add(id));
-    return processBfsQueue(logCategory, canvasId, queue, visited, predicate);
+    return processBfsQueue(logCategory, queue, visited, maps, predicate);
 }
 
 export function isWorkflowChainBusy(canvasId: string, podId: string): boolean {

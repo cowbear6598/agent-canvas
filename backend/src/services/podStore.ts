@@ -46,57 +46,6 @@ interface IntegrationBindingRow {
   extra_json: string | null;
 }
 
-function rowToPod(row: PodRow): Pod {
-  const stmts = getStmts();
-
-  const skillRows = stmts.podSkillIds.selectByPodId.all(row.id) as Array<{
-    skill_id: string;
-  }>;
-  const subAgentRows = stmts.podSubAgentIds.selectByPodId.all(row.id) as Array<{
-    sub_agent_id: string;
-  }>;
-  const mcpServerRows = stmts.podMcpServerIds.selectByPodId.all(
-    row.id,
-  ) as Array<{ mcp_server_id: string }>;
-  const pluginRows = stmts.podPluginIds.selectByPodId.all(row.id) as Array<{
-    plugin_id: string;
-  }>;
-
-  const pod: Pod = {
-    id: row.id,
-    name: row.name,
-    status: row.status as PodStatus,
-    workspacePath: row.workspace_path,
-    x: row.x,
-    y: row.y,
-    rotation: row.rotation,
-    claudeSessionId: row.claude_session_id,
-    outputStyleId: row.output_style_id,
-    skillIds: skillRows.map((r) => r.skill_id),
-    subAgentIds: subAgentRows.map((r) => r.sub_agent_id),
-    mcpServerIds: mcpServerRows.map((r) => r.mcp_server_id),
-    pluginIds: pluginRows.map((r) => r.plugin_id),
-    model: row.model as Pod["model"],
-    repositoryId: row.repository_id,
-    commandId: row.command_id,
-    multiInstance: row.multi_instance === 1,
-  };
-
-  if (row.schedule_json) {
-    const persisted = safeJsonParse<Record<string, unknown>>(row.schedule_json);
-    if (persisted) {
-      pod.schedule = {
-        ...persisted,
-        lastTriggeredAt: persisted.lastTriggeredAt
-          ? new Date(persisted.lastTriggeredAt as string)
-          : null,
-      } as ScheduleConfig;
-    }
-  }
-
-  return pod;
-}
-
 function serializeSchedule(schedule?: ScheduleConfig): string | null {
   if (!schedule) return null;
   return JSON.stringify({
@@ -144,16 +93,15 @@ class PodStore {
   }
 
   private toPodWithBindings(row: PodRow): Pod {
-    const pod = rowToPod(row);
-    pod.integrationBindings = this.loadBindingsForPod(pod.id);
-    return pod;
+    // 使用 rowsToPods 批次路徑（含 batchLoadRelations + batchLoadBindings），避免 N+1
+    const pods = this.rowsToPods([row]);
+    return pods[0]!;
   }
 
   /**
    * 批次載入多個 Pod 的關聯表資料（skill、subAgent、mcpServer、plugin）。
    * 使用 WHERE pod_id IN (...) 一次查詢，避免 N+1 問題。
    * PreparedStatement 以 podIds.length 為 key 快取，避免重複 prepare。
-   * 僅用於列表查詢（如 list()），單筆查詢請改用 rowToPod()。
    */
   private batchLoadRelations(podIds: string[]): {
     skillIds: Map<string, string[]>;
@@ -554,11 +502,20 @@ class PodStore {
     return result.changes > 0;
   }
 
-  setStatus(canvasId: string, id: string, status: PodStatus): void {
-    const pod = this.getById(canvasId, id);
-    if (!pod) return;
+  /**
+   * 輕量查詢：只取 status 欄位，不載入關聯資料，供高頻場景使用。
+   */
+  getStatusById(canvasId: string, podId: string): PodStatus | undefined {
+    const row = this.stmts.pod.selectStatusByCanvasIdAndId.get(
+      canvasId,
+      podId,
+    ) as { status: string } | undefined;
+    return row?.status as PodStatus | undefined;
+  }
 
-    const previousStatus = pod.status;
+  setStatus(canvasId: string, id: string, status: PodStatus): void {
+    const previousStatus = this.getStatusById(canvasId, id);
+    if (previousStatus === undefined) return;
     if (previousStatus === status) return;
 
     this.stmts.pod.updateStatus.run({ $id: id, $status: status });
@@ -724,6 +681,22 @@ class PodStore {
     );
   }
 
+  /**
+   * 取得所有 Canvas 中綁定指定 repository 的 Pod，一次查詢取代按 canvas 逐一查詢。
+   * 使用批次載入關聯資料，避免 N+1 問題。
+   */
+  findAllByRepositoryId(
+    repositoryId: string,
+  ): Array<{ canvasId: string; pod: Pod }> {
+    const rows = this.stmts.pod.selectByRepositoryId.all(
+      repositoryId,
+    ) as PodRow[];
+    if (rows.length === 0) return [];
+    const canvasIdMap = new Map(rows.map((r) => [r.id, r.canvas_id]));
+    const pods = this.rowsToPods(rows);
+    return pods.map((pod) => ({ canvasId: canvasIdMap.get(pod.id)!, pod }));
+  }
+
   setRepositoryId(
     canvasId: string,
     id: string,
@@ -847,6 +820,48 @@ class PodStore {
     return pods
       .filter((pod) => pod.schedule?.enabled === true)
       .map((pod) => ({ canvasId: canvasIdMap.get(pod.id)!, pod }));
+  }
+
+  /**
+   * 輕量化查詢：只取排程判斷所需的最少欄位（canvas_id、id、schedule_json）。
+   * 不做任何 join table 查詢，專供 scheduleService.tick() 每秒輪詢使用。
+   */
+  listScheduleInfo(): Array<{
+    canvasId: string;
+    podId: string;
+    schedule: ScheduleConfig;
+  }> {
+    const rows = this.stmts.pod.selectScheduleInfo.all() as Array<{
+      canvas_id: string;
+      id: string;
+      schedule_json: string;
+    }>;
+
+    const result: Array<{
+      canvasId: string;
+      podId: string;
+      schedule: ScheduleConfig;
+    }> = [];
+
+    for (const row of rows) {
+      const persisted = safeJsonParse<Record<string, unknown>>(
+        row.schedule_json,
+      );
+      if (!persisted) continue;
+
+      const schedule = {
+        ...persisted,
+        lastTriggeredAt: persisted.lastTriggeredAt
+          ? new Date(persisted.lastTriggeredAt as string)
+          : null,
+      } as ScheduleConfig;
+
+      if (!schedule.enabled) continue;
+
+      result.push({ canvasId: row.canvas_id, podId: row.id, schedule });
+    }
+
+    return result;
   }
 
   /**

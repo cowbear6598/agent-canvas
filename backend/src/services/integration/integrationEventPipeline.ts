@@ -286,7 +286,6 @@ class IntegrationEventPipeline {
         { onComplete },
       );
     } catch (error) {
-      podStore.setStatus(canvasId, podId, "error");
       logger.error(
         "Integration",
         "Error",

@@ -22,6 +22,7 @@ import type {
 const NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
 const MAX_NAME_LENGTH = 50;
 const MAX_BODY_SIZE = 1_000_000;
+const MAX_WEBHOOK_AGE_MS = 5 * 60 * 1000;
 
 export type JiraEventFilter = "all" | "status_changed";
 
@@ -279,7 +280,25 @@ class JiraProvider implements IntegrationProvider {
       return new Response("Forbidden", { status: 403 });
     }
 
-    // 簽章驗證通過後，用 signature 做防重放（防止攻擊者重放已驗證的請求）
+    // 簽章驗證通過後，檢查 timestamp 時間窗口防止重放攻擊
+    const rawPayloadObj =
+      typeof rawPayload === "object" && rawPayload !== null
+        ? (rawPayload as Record<string, unknown>)
+        : null;
+    const timestampMs =
+      rawPayloadObj !== null && typeof rawPayloadObj["timestamp"] === "number"
+        ? rawPayloadObj["timestamp"]
+        : null;
+    if (timestampMs === null) {
+      logger.warn("Jira", "Error", "Jira webhook 缺少 timestamp 欄位");
+      return new Response("Forbidden", { status: 403 });
+    }
+    if (Math.abs(Date.now() - timestampMs) > MAX_WEBHOOK_AGE_MS) {
+      logger.warn("Jira", "Error", "Jira Webhook timestamp 已過期，拒絕請求");
+      return new Response("Forbidden", { status: 403 });
+    }
+
+    // 用 signature 做防重放（防止攻擊者重放已驗證的請求）
     if (dedupTracker.isDuplicate(signatureHeader)) {
       logger.log("Jira", "Complete", "重複的 Webhook 簽章，略過處理");
       return new Response("OK", { status: 200 });

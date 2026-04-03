@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { ok, err } from "../../../../types/index.js";
 import type { Result } from "../../../../types/index.js";
 import { logger } from "../../../../utils/logger.js";
+import { escapeUserInput } from "../../../../utils/escapeInput.js";
 import { integrationAppStore } from "../../integrationAppStore.js";
 import { integrationEventPipeline } from "../../integrationEventPipeline.js";
 import { createDedupTracker } from "../../dedupHelper.js";
@@ -68,7 +69,10 @@ function formatSentryIssueMessage(
   culprit: string,
   issueUrl: string,
 ): string {
-  const content = `偵測到新 Issue：${issueTitle}\nCulprit：${culprit}\nURL：${issueUrl}`;
+  const escapedIssueTitle = escapeUserInput(issueTitle);
+  const escapedCulprit = escapeUserInput(culprit);
+  const escapedIssueUrl = escapeUserInput(issueUrl);
+  const content = `偵測到新 Issue：${escapedIssueTitle}\nCulprit：${escapedCulprit}\nURL：${escapedIssueUrl}`;
   return formatIntegrationMessage("Sentry", projectName, content);
 }
 

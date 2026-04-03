@@ -25,6 +25,7 @@ import type {
   RunDeletedPayload,
 } from "../../types/run.js";
 import { gitService } from "../workspace/gitService.js";
+import { fireAndForget } from "../../utils/operationHelpers.js";
 import { config } from "../../config/index.js";
 import path from "path";
 import { getResultErrorString } from "../../types/result.js";
@@ -299,7 +300,7 @@ class RunExecutionService {
     const overflow = count - MAX_RUNS_PER_CANVAS;
     const oldestIds = runStore.getOldestCompletedRunIds(canvasId, overflow);
     for (const runId of oldestIds) {
-      void this.deleteRun(runId);
+      fireAndForget(this.deleteRun(runId), "Run", "清理舊 Run 失敗");
     }
   }
 
@@ -659,7 +660,11 @@ class RunExecutionService {
     logger.log("Run", "Complete", `Run ${runId} 狀態變更為 ${newStatus}`);
 
     // Run 自然完成時立即回收所有 worktree
-    void this.cleanupRunWorktrees(runId);
+    fireAndForget(
+      this.cleanupRunWorktrees(runId),
+      "Run",
+      "清理 Run worktree 失敗",
+    );
 
     socketService.emitToCanvas(
       canvasId,

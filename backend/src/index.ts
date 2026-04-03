@@ -16,6 +16,7 @@ import {
 } from "./utils/staticFileServer.js";
 import { handleApiRequest } from "./api/apiRouter.js";
 import { handleIntegrationWebhook } from "./services/integration/integrationWebhookRouter.js";
+import { replyContextStore } from "./services/integration/replyContextStore.js";
 import { integrationRegistry } from "./services/integration/index.js";
 import { scheduleService } from "./services/scheduleService.js";
 import { getResultErrorString } from "./types/result.js";
@@ -220,6 +221,7 @@ const shutdown = async (signal: string): Promise<void> => {
   }
   scheduleService.stop();
   socketService.stopHeartbeat();
+  replyContextStore.dispose();
 
   logger.log("Shutdown", "Complete", "伺服器已成功關閉");
   process.exit(0);

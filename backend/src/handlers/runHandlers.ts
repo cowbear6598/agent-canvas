@@ -10,6 +10,7 @@ import { podStore } from "../services/podStore.js";
 import { emitSuccess, emitError } from "../utils/websocketResponse.js";
 import { createI18nError } from "../utils/i18nError.js";
 import { withCanvasId } from "../utils/handlerHelpers.js";
+import { fireAndForget } from "../utils/operationHelpers.js";
 import type { WorkflowRun } from "../services/runStore.js";
 
 function findRunOrEmitNotFound(
@@ -24,7 +25,7 @@ function findRunOrEmitNotFound(
     emitError(
       connectionId,
       event,
-      createI18nError('errors.runNotFound'),
+      createI18nError("errors.runNotFound"),
       requestId,
       undefined,
       "NOT_FOUND",
@@ -53,7 +54,7 @@ export const handleRunDelete = withCanvasId<RunDeletePayload>(
     );
     if (!run) return;
 
-    void runExecutionService.deleteRun(runId);
+    fireAndForget(runExecutionService.deleteRun(runId), "Run", "刪除 Run 失敗");
   },
 );
 

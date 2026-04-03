@@ -8,5 +8,8 @@
     "build:frontend": "cd frontend && bun run build",
     "build:compile": "bun scripts/compile.ts",
     "release": "bun run scripts/release.ts"
+  },
+  "devDependencies": {
+    "prettier": "^3.8.1"
   }
 }

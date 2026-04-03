@@ -1,15 +1,14 @@
-import { repositoryService } from './repositoryService.js';
-import { podStore } from './podStore.js';
-import { canvasStore } from './canvasStore.js';
-import { commandService } from './commandService.js';
-import { skillService } from './skillService.js';
-import { subAgentService } from './subAgentService.js';
-import { podManifestService } from './podManifestService.js';
-import { logger } from '../utils/logger.js';
-import { fsOperation } from '../utils/operationHelpers.js';
-import { validatePodId } from '../utils/pathValidator.js';
-import { getDb } from '../database/index.js';
-import { getStatements } from '../database/statements.js';
+import { repositoryService } from "./repositoryService.js";
+import { podStore } from "./podStore.js";
+import { commandService } from "./commandService.js";
+import { skillService } from "./skillService.js";
+import { subAgentService } from "./subAgentService.js";
+import { podManifestService } from "./podManifestService.js";
+import { logger } from "../utils/logger.js";
+import { fsOperation } from "../utils/operationHelpers.js";
+import { validatePodId } from "../utils/pathValidator.js";
+import { getDb } from "../database/index.js";
+import { getStatements } from "../database/statements.js";
 
 interface PodResources {
   commandIds: string[];
@@ -28,7 +27,12 @@ class RepositorySyncService {
     }
 
     const syncPromise = this.performSync(repositoryId).catch((error) => {
-      logger.error('Repository', 'Error', `同步 repository ${repositoryId} 資源失敗`, error);
+      logger.error(
+        "Repository",
+        "Error",
+        `同步 repository ${repositoryId} 資源失敗`,
+        error,
+      );
     });
     this.locks.set(repositoryId, syncPromise);
 
@@ -38,7 +42,10 @@ class RepositorySyncService {
     }
   }
 
-  private async waitForExistingLock(repositoryId: string, existingLock: Promise<void>): Promise<void> {
+  private async waitForExistingLock(
+    repositoryId: string,
+    existingLock: Promise<void>,
+  ): Promise<void> {
     await existingLock;
     const newLock = this.locks.get(repositoryId);
     if (newLock && newLock !== existingLock) {
@@ -46,36 +53,64 @@ class RepositorySyncService {
     }
   }
 
-  private collectPodResources(allCanvases: ReturnType<typeof canvasStore.list>, repositoryId: string): Map<string, PodResources> {
-    const allPods = allCanvases.flatMap(canvas => podStore.findByRepositoryId(canvas.id, repositoryId));
+  private collectPodResources(repositoryId: string): Map<string, PodResources> {
+    const allPods = podStore.findAllByRepositoryId(repositoryId);
 
-    return new Map(allPods.map(pod => [
-      pod.id,
-      {
-        commandIds: pod.commandId ? [pod.commandId] : [],
-        skillIds: [...pod.skillIds],
-        subAgentIds: [...pod.subAgentIds],
-      },
-    ]));
+    return new Map(
+      allPods.map(({ pod }) => [
+        pod.id,
+        {
+          commandIds: pod.commandId ? [pod.commandId] : [],
+          skillIds: [...pod.skillIds],
+          subAgentIds: [...pod.subAgentIds],
+        },
+      ]),
+    );
   }
 
-  private async writePodManifests(podResourcesMap: Map<string, PodResources>, repositoryPath: string, repositoryId: string): Promise<void> {
-    for (const [podId, resources] of podResourcesMap) {
-      await this.writeSinglePodManifest(podId, resources, repositoryPath, repositoryId);
-    }
+  private async writePodManifests(
+    podResourcesMap: Map<string, PodResources>,
+    repositoryPath: string,
+    repositoryId: string,
+  ): Promise<void> {
+    await Promise.all(
+      [...podResourcesMap].map(([podId, resources]) =>
+        this.writeSinglePodManifest(
+          podId,
+          resources,
+          repositoryPath,
+          repositoryId,
+        ),
+      ),
+    );
   }
 
-  private async writeSinglePodManifest(podId: string, resources: PodResources, repositoryPath: string, repositoryId: string): Promise<void> {
+  private async writeSinglePodManifest(
+    podId: string,
+    resources: PodResources,
+    repositoryPath: string,
+    repositoryId: string,
+  ): Promise<void> {
     await podManifestService.deleteManagedFiles(repositoryId, podId);
 
-    const copyCommands = resources.commandIds.map(commandId =>
-      fsOperation(() => commandService.copyCommandToRepository(commandId, repositoryPath), `複製 command ${commandId} 到 repository ${repositoryId} 失敗`)
+    const copyCommands = resources.commandIds.map((commandId) =>
+      fsOperation(
+        () => commandService.copyCommandToRepository(commandId, repositoryPath),
+        `複製 command ${commandId} 到 repository ${repositoryId} 失敗`,
+      ),
     );
-    const copySkills = resources.skillIds.map(skillId =>
-      fsOperation(() => skillService.copySkillToRepository(skillId, repositoryPath), `複製 skill ${skillId} 到 repository ${repositoryId} 失敗`)
+    const copySkills = resources.skillIds.map((skillId) =>
+      fsOperation(
+        () => skillService.copySkillToRepository(skillId, repositoryPath),
+        `複製 skill ${skillId} 到 repository ${repositoryId} 失敗`,
+      ),
     );
-    const copySubAgents = resources.subAgentIds.map(subAgentId =>
-      fsOperation(() => subAgentService.copySubAgentToRepository(subAgentId, repositoryPath), `複製 subagent ${subAgentId} 到 repository ${repositoryId} 失敗`)
+    const copySubAgents = resources.subAgentIds.map((subAgentId) =>
+      fsOperation(
+        () =>
+          subAgentService.copySubAgentToRepository(subAgentId, repositoryPath),
+        `複製 subagent ${subAgentId} 到 repository ${repositoryId} 失敗`,
+      ),
     );
 
     await Promise.all([...copyCommands, ...copySkills, ...copySubAgents]);
@@ -86,8 +121,7 @@ class RepositorySyncService {
 
   private async performSync(repositoryId: string): Promise<void> {
     const repositoryPath = repositoryService.getRepositoryPath(repositoryId);
-    const allCanvases = canvasStore.list();
-    const podResourcesMap = this.collectPodResources(allCanvases, repositoryId);
+    const podResourcesMap = this.collectPodResources(repositoryId);
 
     await this.cleanOrphanManifests(repositoryId, podResourcesMap);
     await this.writePodManifests(podResourcesMap, repositoryPath, repositoryId);
@@ -98,18 +132,29 @@ class RepositorySyncService {
         skills: acc.skills + podResources.skillIds.length,
         subAgents: acc.subAgents + podResources.subAgentIds.length,
       }),
-      { commands: 0, skills: 0, subAgents: 0 }
+      { commands: 0, skills: 0, subAgents: 0 },
     );
 
-    logger.log('Repository', 'Update', `已同步 Repository ${repositoryId}：${totals.commands} 個 Command、${totals.skills} 個 Skill、${totals.subAgents} 個 SubAgent`);
+    logger.log(
+      "Repository",
+      "Update",
+      `已同步 Repository ${repositoryId}：${totals.commands} 個 Command、${totals.skills} 個 Skill、${totals.subAgents} 個 SubAgent`,
+    );
   }
 
-  private async cleanOrphanManifests(repositoryId: string, activePodResourcesMap: Map<string, PodResources>): Promise<void> {
+  private async cleanOrphanManifests(
+    repositoryId: string,
+    activePodResourcesMap: Map<string, PodResources>,
+  ): Promise<void> {
     const db = getDb();
     const stmts = getStatements(db);
 
-    interface ManifestRow { pod_id: string }
-    const rows = stmts.podManifest.selectByRepositoryId.all(repositoryId) as ManifestRow[];
+    interface ManifestRow {
+      pod_id: string;
+    }
+    const rows = stmts.podManifest.selectByRepositoryId.all(
+      repositoryId,
+    ) as ManifestRow[];
 
     for (const row of rows) {
       const podId = row.pod_id;
@@ -117,7 +162,11 @@ class RepositorySyncService {
       if (activePodResourcesMap.has(podId)) continue;
 
       if (!validatePodId(podId)) {
-        logger.warn('Repository', 'Warn', `孤兒 manifest 的 podId 格式無效，跳過：${podId}`);
+        logger.warn(
+          "Repository",
+          "Warn",
+          `孤兒 manifest 的 podId 格式無效，跳過：${podId}`,
+        );
         continue;
       }
 
@@ -125,7 +174,9 @@ class RepositorySyncService {
     }
   }
 
-  private async collectPodManagedFiles(resources: PodResources): Promise<string[]> {
+  private async collectPodManagedFiles(
+    resources: PodResources,
+  ): Promise<string[]> {
     const files: string[] = [];
 
     for (const commandId of resources.commandIds) {
@@ -134,7 +185,10 @@ class RepositorySyncService {
 
     for (const skillId of resources.skillIds) {
       const skillSourcePath = skillService.getSkillDirectoryPath(skillId);
-      const skillFiles = await podManifestService.collectSkillFiles(skillId, skillSourcePath);
+      const skillFiles = await podManifestService.collectSkillFiles(
+        skillId,
+        skillSourcePath,
+      );
       files.push(...skillFiles);
     }
 

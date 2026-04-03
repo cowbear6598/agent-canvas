@@ -22,6 +22,7 @@
     "src/**/*.tsx",
     "src/**/*.vue",
     "tests/**/*.ts",
-    "vite.config.ts"
+    "vite.config.ts",
+    "../shared/**/*.ts"
   ]
 }

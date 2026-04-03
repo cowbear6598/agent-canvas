@@ -425,7 +425,7 @@ describe("IntegrationEventPipeline", () => {
         expect(executeStreamingChat).toHaveBeenCalled();
       });
 
-      it("executeStreamingChat 拋出錯誤時設定 Pod 狀態為 error", async () => {
+      it("executeStreamingChat 拋出錯誤時 injectMessage 的 catch 不設定 Pod 狀態，錯誤向上拋出由 settleAndLogErrors 處理", async () => {
         const pod = makePod();
         asMock(podStore.findByIntegrationAppAndResource).mockReturnValue([
           { canvasId, pod },
@@ -433,13 +433,12 @@ describe("IntegrationEventPipeline", () => {
         asMock(podStore.getById).mockReturnValue(pod);
         asMock(executeStreamingChat).mockRejectedValue(new Error("串流失敗"));
 
-        await integrationEventPipeline.processEvent(
-          "slack",
-          "app-1",
-          makeEvent(),
-        );
+        // processEvent 本身不拋出（由 settleAndLogErrors 吞掉），但 podStore.setStatus 不應被以 "error" 呼叫
+        await expect(
+          integrationEventPipeline.processEvent("slack", "app-1", makeEvent()),
+        ).resolves.not.toThrow();
 
-        expect(podStore.setStatus).toHaveBeenCalledWith(
+        expect(podStore.setStatus).not.toHaveBeenCalledWith(
           canvasId,
           podId,
           "error",

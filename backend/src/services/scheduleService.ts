@@ -130,14 +130,14 @@ class ScheduleService {
   private tick(): void {
     const now = new Date();
     const offset = configStore.getTimezoneOffset();
-    const podsWithSchedule = podStore.getAllWithSchedule();
+    const scheduleInfoList = podStore.listScheduleInfo();
 
-    for (const { canvasId, pod } of podsWithSchedule) {
-      if (pod.schedule && this.shouldFire(pod.schedule, now, offset)) {
+    for (const { canvasId, podId, schedule } of scheduleInfoList) {
+      if (this.shouldFire(schedule, now, offset)) {
         fireAndForget(
-          this.fireSchedule(canvasId, pod, now),
+          this.fireScheduleById(canvasId, podId, now),
           "Schedule",
-          `觸發 Pod「${pod.id}」排程失敗`,
+          `觸發 Pod「${podId}」排程失敗`,
         );
       }
     }
@@ -150,6 +150,19 @@ class ScheduleService {
   ): boolean {
     const checker = shouldFireCheckers[schedule.frequency];
     return checker ? checker(schedule, now, offset) : false;
+  }
+
+  private async fireScheduleById(
+    canvasId: string,
+    podId: string,
+    now: Date,
+  ): Promise<void> {
+    const pod = podStore.getById(canvasId, podId);
+    if (!pod) {
+      logger.log("Schedule", "Update", `找不到 Pod「${podId}」，跳過排程觸發`);
+      return;
+    }
+    await this.fireSchedule(canvasId, pod, now);
   }
 
   private async fireSchedule(
@@ -176,6 +189,7 @@ class ScheduleService {
     logger.log("Schedule", "Update", `Pod「${pod.id}」排程已觸發`);
 
     if (pod.multiInstance === true) {
+      // commandService 無單筆查詢方法（如 getById），改用有記憶體快取（TTL 30s）的 list() 取代
       const commands = await commandService.list();
       const command = pod.commandId
         ? commands.find((cmd) => cmd.id === pod.commandId)

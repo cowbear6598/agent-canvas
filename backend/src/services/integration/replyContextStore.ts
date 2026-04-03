@@ -13,8 +13,20 @@ interface StoreEntry {
 }
 
 const REPLY_CONTEXT_TTL_MS = 30 * 60 * 1000;
+const CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
 
 const store = new Map<string, StoreEntry>();
+
+function cleanup(): void {
+    const now = Date.now();
+    for (const [key, entry] of store) {
+        if (now - entry.createdAt > REPLY_CONTEXT_TTL_MS) {
+            store.delete(key);
+        }
+    }
+}
+
+const cleanupTimer = setInterval(cleanup, CLEANUP_INTERVAL_MS);
 
 export function buildReplyContextKey(runContext: RunContext | undefined, podId: string): string {
     if (runContext) {
@@ -49,5 +61,9 @@ export const replyContextStore = {
 
     delete(key: string): void {
         store.delete(key);
+    },
+
+    dispose(): void {
+        clearInterval(cleanupTimer);
     },
 };

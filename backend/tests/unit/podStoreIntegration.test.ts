@@ -105,6 +105,15 @@ describe("PodStore - Integration Binding", () => {
     initTestDb();
     resetStatements();
 
+    // 清除 podStore 內部以 DB 實例為基礎的 PreparedStatement 快取，
+    // 避免跨測試重用已關閉 DB 的 statement 導致 binding 查詢回傳空結果
+    const store = podStore as unknown as {
+      relationsStmtCache: Map<unknown, unknown>;
+      bindingsStmtCache: Map<unknown, unknown>;
+    };
+    store.relationsStmtCache.clear();
+    store.bindingsStmtCache.clear();
+
     (
       integrationRegistry as unknown as {
         providers: Map<string, IntegrationProvider>;
@@ -350,6 +359,15 @@ describe("PodStore - resetAllBusyPods", () => {
   beforeEach(() => {
     initTestDb();
     resetStatements();
+
+    // 清除 podStore 內部以 DB 實例為基礎的 PreparedStatement 快取，
+    // 避免跨測試重用已關閉 DB 的 statement 導致查詢失效
+    const store = podStore as unknown as {
+      relationsStmtCache: Map<unknown, unknown>;
+      bindingsStmtCache: Map<unknown, unknown>;
+    };
+    store.relationsStmtCache.clear();
+    store.bindingsStmtCache.clear();
 
     const stmts = getStatements(getDb());
     canvasId = "test-canvas-reset";

@@ -18,6 +18,7 @@ function buildStatements(db: Database): {
     selectByCanvasId: ReturnType<Database["prepare"]>;
     selectById: ReturnType<Database["prepare"]>;
     selectByCanvasIdAndId: ReturnType<Database["prepare"]>;
+    selectStatusByCanvasIdAndId: ReturnType<Database["prepare"]>;
     selectByCanvasIdAndName: ReturnType<Database["prepare"]>;
     countByCanvasIdAndName: ReturnType<Database["prepare"]>;
     update: ReturnType<Database["prepare"]>;
@@ -32,6 +33,7 @@ function buildStatements(db: Database): {
     selectByOutputStyleId: ReturnType<Database["prepare"]>;
     selectByRepositoryId: ReturnType<Database["prepare"]>;
     selectByCommandId: ReturnType<Database["prepare"]>;
+    selectScheduleInfo: ReturnType<Database["prepare"]>;
     deleteById: ReturnType<Database["prepare"]>;
     deleteByCanvasId: ReturnType<Database["prepare"]>;
   };
@@ -201,6 +203,9 @@ function buildStatements(db: Database): {
       selectByCanvasIdAndId: db.prepare(
         "SELECT * FROM pods WHERE canvas_id = ? AND id = ?",
       ),
+      selectStatusByCanvasIdAndId: db.prepare(
+        "SELECT status FROM pods WHERE canvas_id = ? AND id = ?",
+      ),
       selectByCanvasIdAndName: db.prepare(
         "SELECT * FROM pods WHERE canvas_id = ? AND name = ?",
       ),
@@ -241,6 +246,9 @@ function buildStatements(db: Database): {
         "SELECT * FROM pods WHERE repository_id = ?",
       ),
       selectByCommandId: db.prepare("SELECT * FROM pods WHERE command_id = ?"),
+      selectScheduleInfo: db.prepare(
+        "SELECT canvas_id, id, schedule_json FROM pods WHERE schedule_json IS NOT NULL",
+      ),
       deleteById: db.prepare("DELETE FROM pods WHERE id = ?"),
       deleteByCanvasId: db.prepare("DELETE FROM pods WHERE canvas_id = ?"),
     },

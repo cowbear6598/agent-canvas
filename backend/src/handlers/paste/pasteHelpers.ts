@@ -50,9 +50,13 @@ function recordError(
   error: unknown,
   context: string,
 ): void {
-  const errorMessage = error instanceof Object && "key" in error ? error as I18nError : getErrorMessage(error);
+  const errorMessage =
+    error instanceof Object && "key" in error
+      ? (error as I18nError)
+      : getErrorMessage(error);
   errors.push({ type, originalId, error: errorMessage });
-  const logMessage = typeof errorMessage === "string" ? errorMessage : errorMessage.key;
+  const logMessage =
+    typeof errorMessage === "string" ? errorMessage : errorMessage.key;
   logger.error("Paste", "Error", `${context}：${logMessage}`);
 }
 
@@ -338,33 +342,27 @@ const NOTE_PASTE_CONFIGS = {
 
 export type NotePasteType = keyof typeof NOTE_PASTE_CONFIGS;
 
-type NoteItemForType<K extends NotePasteType> = K extends "outputStyle"
-  ? NoteItemWithId<"outputStyleId">
-  : K extends "skill"
-    ? NoteItemWithId<"skillId">
-    : K extends "repository"
-      ? NoteItemWithId<"repositoryId">
-      : K extends "subAgent"
-        ? NoteItemWithId<"subAgentId">
-        : K extends "command"
-          ? NoteItemWithId<"commandId">
-          : K extends "mcpServer"
-            ? NoteItemWithId<"mcpServerId">
-            : never;
+interface NoteItemMap {
+  outputStyle: NoteItemWithId<"outputStyleId">;
+  skill: NoteItemWithId<"skillId">;
+  repository: NoteItemWithId<"repositoryId">;
+  subAgent: NoteItemWithId<"subAgentId">;
+  command: NoteItemWithId<"commandId">;
+  mcpServer: NoteItemWithId<"mcpServerId">;
+}
 
-type NoteForType<K extends NotePasteType> = K extends "outputStyle"
-  ? OutputStyleNote
-  : K extends "skill"
-    ? SkillNote
-    : K extends "repository"
-      ? RepositoryNote
-      : K extends "subAgent"
-        ? SubAgentNote
-        : K extends "command"
-          ? CommandNote
-          : K extends "mcpServer"
-            ? McpServerNote
-            : never;
+interface NoteMap {
+  outputStyle: OutputStyleNote;
+  skill: SkillNote;
+  repository: RepositoryNote;
+  subAgent: SubAgentNote;
+  command: CommandNote;
+  mcpServer: McpServerNote;
+}
+
+type NoteItemForType<K extends NotePasteType> = NoteItemMap[K];
+
+type NoteForType<K extends NotePasteType> = NoteMap[K];
 
 export function createPastedNotesByType<K extends NotePasteType>(
   type: K,

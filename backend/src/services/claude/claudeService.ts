@@ -18,7 +18,11 @@ import type {
 } from "@anthropic-ai/claude-agent-sdk";
 import { podStore } from "../podStore.js";
 import { mcpServerStore } from "../mcpServerStore.js";
-import { isAbortError, getErrorMessage } from "../../utils/errorHelpers.js";
+import {
+  isAbortError,
+  getErrorMessage,
+  isProgrammingError,
+} from "../../utils/errorHelpers.js";
 import { outputStyleService } from "../outputStyleService.js";
 import { Message, ToolUseInfo, ContentBlock, Pod } from "../../types";
 import { getResultErrorString } from "../../types/result.js";
@@ -940,6 +944,12 @@ export class ClaudeService {
         ? { content: result.content, success: true }
         : { content: "", success: false, error: result.error ?? "" };
     } catch (error) {
+      // 程式 bug（TypeError、ReferenceError 等）應向上拋出，讓開發者能發現問題
+      // 只捕捉 Claude SDK 的外部錯誤（網路錯誤、API 錯誤、AbortError 等）
+      if (isProgrammingError(error)) {
+        throw error;
+      }
+
       const errorMessage = getErrorMessage(error);
       logger.error(
         "Chat",

@@ -412,7 +412,7 @@ describe("JiraProvider - handleWebhookRequest safeProcessEvent 呼叫驗證", ()
       await import("../../src/services/integration/integrationEventPipeline.js");
     const body = {
       webhookEvent: "jira:issue_created",
-      timestamp: 1700000001,
+      timestamp: Date.now(),
       issue: { key: "PROJ-10", fields: { summary: "Valid Issue" } },
       user: { displayName: "Tester" },
     };
@@ -437,7 +437,7 @@ describe("JiraProvider - handleWebhookRequest safeProcessEvent 呼叫驗證", ()
       await import("../../src/services/integration/integrationEventPipeline.js");
     const body = {
       webhookEvent: "jira:sprint_started",
-      timestamp: 1700000002,
+      timestamp: Date.now(),
       issue: { key: "PROJ-11", fields: { summary: "Sprint Issue" } },
       user: { displayName: "Tester" },
     };
