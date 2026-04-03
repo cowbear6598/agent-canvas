@@ -1,6 +1,6 @@
 {
   "name": "claude-code-canvas-backend",
-  "version": "0.9.2",
+  "version": "1.0.0",
   "description": "Backend server for Claude Code Canvas",
   "main": "dist/index.js",
   "type": "module",

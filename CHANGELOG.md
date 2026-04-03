@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.0.0] - 2026-04-03
+
+### 新增
+- 新增 Webhook Integration，支援自訂 Webhook 端點接收外部 HTTP 請求觸發 Pod 執行
+- 新增 Bearer Token 驗證和去重防護
+- 新增 Sentry Webhook Integration，支援 Sentry issue.created 事件觸發 Pod 執行
+- 完成 i18n 國際化，支援繁體中文、英文、日文三語切換
+- AI 決策模型改為每條連線獨立設定（預設 Sonnet）
+- 總結模型改為每條連線獨立設定（預設 Sonnet）
+
+### 修正
+- 修復刪除 connection line 時偶爾誤報「刪除失敗」的問題
+- 修復選擇 pod 後再選 connection line 時 pod 選擇框未消失的問題
+- 修復 Multi-instance 模式下多 pathway Pod 佇列死鎖
+- 修復 podStore N+1 查詢問題，改用批次查詢與 batchLoadRelations
+- 修復 claudeService executeDisposableChat 錯誤處理，程式 bug 不再被靜默吞掉
+- 修復 integrationEventPipeline 雙重 Pod 狀態設定問題
+- 修復 useEditModal 非空斷言 runtime 風險
+- 修復完成後端錯誤訊息 i18n 國際化，所有錯誤改為 i18n key 格式
+
+### 優化
+- 優化 settleUnreachablePaths 演算法從 O(N²) 降為 O(N+E)
+- 優化 scheduleService tick 為輕量查詢
+- 優化 repositorySyncService 改一次性查詢並並行寫入
+- 優化 workflowChainTraversal 預載 connection 建 Map 索引
+- 優化前端 selectionStore isElementSelected 從 O(N) 改為 O(1) Set 查找
+- 強化安全防護：CORS 生產環境移除 ngrok wildcard、Telegram 輸入 sanitize、Repository 名稱字元驗證
+- 統一右鍵選單關閉行為，改用 mousedown 捕獲模式取代背景遮罩層
+- 刪除正在執行的 Pod 時自動中止 Claude 查詢，避免資源洩漏
+- 後端關閉時自動清理：中止活躍查詢、重設 Pod 狀態、刪除執行中的 Run
+
 ## [0.9.2] - 2026-03-30
 
 ### 新增
