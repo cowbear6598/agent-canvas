@@ -23,6 +23,7 @@ import type {
 const NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
 const MAX_NAME_LENGTH = 50;
 const MAX_BODY_SIZE = 1_000_000;
+const SUPPORTED_ACTIONS = new Set(["created", "unresolved"]);
 
 const dedupTracker = createDedupTracker();
 
@@ -31,6 +32,7 @@ const sentryWebhookPayloadSchema = z.object({
   data: z.object({
     issue: z.object({
       title: z.string(),
+      shortId: z.string().optional(),
       culprit: z.string().optional(),
       metadata: z.record(z.string(), z.unknown()).optional(),
       web_url: z.string().optional(),
@@ -68,11 +70,15 @@ function formatSentryIssueMessage(
   issueTitle: string,
   culprit: string,
   issueUrl: string,
+  shortId?: string,
 ): string {
   const escapedIssueTitle = escapeUserInput(issueTitle);
   const escapedCulprit = escapeUserInput(culprit);
   const escapedIssueUrl = escapeUserInput(issueUrl);
-  const content = `偵測到新 Issue：${escapedIssueTitle}\nCulprit：${escapedCulprit}\nURL：${escapedIssueUrl}`;
+  const titleLine = shortId
+    ? `偵測到新 Issue：[${escapeUserInput(shortId)}] ${escapedIssueTitle}`
+    : `偵測到新 Issue：${escapedIssueTitle}`;
+  const content = `${titleLine}\nCulprit：${escapedCulprit}\nURL：${escapedIssueUrl}`;
   return formatIntegrationMessage("Sentry", projectName, content);
 }
 
@@ -136,6 +142,7 @@ class SentryProvider implements IntegrationProvider {
 
     const payload: SentryWebhookPayload = parsed.data;
     const issueTitle = payload.data.issue.title;
+    const shortId = payload.data.issue.shortId;
     const culprit = payload.data.issue.culprit ?? "";
     const projectName = payload.data.project?.name ?? "Sentry";
     const issueUrl = payload.data.issue.web_url ?? "";
@@ -145,6 +152,7 @@ class SentryProvider implements IntegrationProvider {
       issueTitle,
       culprit,
       issueUrl,
+      shortId,
     );
 
     return {
@@ -221,11 +229,11 @@ class SentryProvider implements IntegrationProvider {
     }
 
     const webhookPayload = schemaResult.data;
-    if (webhookPayload.action !== "created") {
+    if (!SUPPORTED_ACTIONS.has(webhookPayload.action)) {
       logger.log(
         "Sentry",
         "Complete",
-        `收到非 created 的 Sentry action（${webhookPayload.action}），略過`,
+        `收到不支援的 Sentry action（${webhookPayload.action}），略過`,
       );
       return new Response("OK", { status: 200 });
     }

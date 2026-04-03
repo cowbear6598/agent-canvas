@@ -60,6 +60,7 @@ function buildValidPayload(actionOverride: string = "created"): object {
     data: {
       issue: {
         title: "TypeError: Cannot read property 'foo' of undefined",
+        shortId: "MY-PROJECT-1",
         culprit: "src/utils/foo.ts in bar",
         metadata: { type: "TypeError" },
         web_url: "https://sentry.io/organizations/test/issues/123/",
@@ -164,6 +165,27 @@ describe("SentryProvider - handleWebhookRequest issue.created 事件觸發", () 
   });
 });
 
+describe("SentryProvider - handleWebhookRequest issue.unresolved 事件觸發", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    asMock(integrationAppStore.getByProviderAndName).mockReturnValue(makeApp());
+  });
+
+  it("收到合法 issue.unresolved 事件應回傳 200 且觸發 safeProcessEvent", async () => {
+    const { integrationEventPipeline } =
+      await import("../../src/services/integration/integrationEventPipeline.js");
+    const payload = buildValidPayload("unresolved");
+    const req = buildSignedRequest(payload, CLIENT_SECRET);
+
+    const res = await sentryProvider.handleWebhookRequest(req, "test-app");
+
+    expect(res.status).toBe(200);
+    expect(
+      asMock(integrationEventPipeline.safeProcessEvent),
+    ).toHaveBeenCalledOnce();
+  });
+});
+
 describe("SentryProvider - handleWebhookRequest 簽章驗證", () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -204,7 +226,7 @@ describe("SentryProvider - handleWebhookRequest 簽章驗證", () => {
   });
 });
 
-describe("SentryProvider - handleWebhookRequest 非 created action", () => {
+describe("SentryProvider - handleWebhookRequest 不支援的 action", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     asMock(integrationAppStore.getByProviderAndName).mockReturnValue(makeApp());
@@ -323,6 +345,48 @@ describe("SentryProvider - formatEventMessage", () => {
     expect(result?.text).toContain(
       "TypeError: Cannot read property 'foo' of undefined",
     );
+  });
+
+  it("回傳的 text 包含 shortId", () => {
+    const app = makeApp();
+    const payload = buildValidPayload("created");
+
+    const result = sentryProvider.formatEventMessage(payload, app);
+
+    expect(result).not.toBeNull();
+    expect(result?.text).toContain("MY-PROJECT-1");
+  });
+
+  it("payload 缺少 shortId 時 formatEventMessage 仍正常運作", () => {
+    const app = makeApp();
+    const payloadWithoutShortId = {
+      action: "created",
+      data: {
+        issue: {
+          title: "TypeError: Cannot read property 'foo' of undefined",
+          culprit: "src/utils/foo.ts in bar",
+          metadata: { type: "TypeError" },
+          web_url: "https://sentry.io/organizations/test/issues/123/",
+        },
+        project: {
+          name: "my-project",
+          slug: "my-project",
+        },
+      },
+    };
+
+    const result = sentryProvider.formatEventMessage(
+      payloadWithoutShortId,
+      app,
+    );
+
+    expect(result).not.toBeNull();
+    expect(result?.text).toContain(
+      "TypeError: Cannot read property 'foo' of undefined",
+    );
+    // 無 shortId 時訊息中不應出現 shortId 的括號格式（如 [MY-PROJECT-1]）
+    expect(result?.text).not.toContain("[MY-PROJECT-1]");
+    expect(result?.text).toContain("偵測到新 Issue：");
   });
 
   it("收到無效 payload（空物件）應回傳 null", () => {
