@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.0.1] - 2026-04-03
+
+### 新增
+- Sentry webhook 新增支援 unresolved action，issue 被重新標為未解決時也會觸發通知
+- Sentry 通知訊息加入 shortId 顯示，方便辨識是哪個 issue
+
+### 修正
+- 修復切換瀏覽器分頁或最小化後 WebSocket 斷線不顯示錯誤、無法重連的問題
+- 新增頁面可見性偵測，回到頁面時自動檢查連線狀態並重連
+- 修復心跳逾時只顯示錯誤但不觸發重連的問題
+- 修復重連時 CONNECTING 狀態的舊連線未被正確關閉的問題
+- 將斷線原因從 Socket.io 格式更新為原生 WebSocket close code
+
 ## [1.0.0] - 2026-04-03
 
 ### 新增
