@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.0.2] - 2026-04-07
+
+### 新增
+- 下載工作目錄功能，支援自動打包 zip 並下載
+- 進度面板顯示下載進度（已下載大小），下載完成後自動觸發瀏覽器下載
+- 串流壓縮支援大型目錄，不受記憶體限制
+- 依照 .gitignore 規則排除檔案，保留 .git 目錄
+- CORS 支援，開發環境前後端跨域請求正常運作
+- 完成 README 三語版本（zh-TW / English / Japanese）教學內容大幅擴充
+- Connection Line 模型設定（Summary Model / AI Model）教學
+- 一般模式與 Multi-Instance 模式教學，說明 Git Repo Worktree 隔離機制
+- Plugin 使用教學
+- Workflow 實戰案例教學（Auto 串接、AI 條件分支、多輸入聚合）
+- Schedule 排程教學
+- 右上角功能總覽（切換語系、全域設定、Integration 串接含 Webhook、歷程）
+
+### 修正
+- 路徑邊界驗證防止目錄穿越攻擊
+- 客戶端斷線時自動中止打包，避免浪費伺服器資源
+- 修正三語 README 目錄 anchor link 格式（大小寫、空格），修復點擊無法跳轉的問題
+- 統一三語 README 所有圖片路徑為 ./tutorials/ 格式，修正部分語系圖片無法顯示的問題
+- 修正 en / ja 版本 Pod 圖片無法顯示的問題
+- 修正圖片 alt text 及章節名稱統一
+- 更新注意事項：移除 Alpha 標記，支援平台改為 macOS / Linux
+
 ## [1.0.1] - 2026-04-03
 
 ### 新增
