@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, onUnmounted } from "vue";
 import {
   Dialog,
   DialogContent,
@@ -131,22 +131,61 @@ const handleDeleteApp = async (appId: string): Promise<void> => {
   await integrationStore.deleteApp(props.provider, appId);
 };
 
+onUnmounted(() => {
+  // 元件銷毀時清除所有未完成的 timer，避免記憶體洩漏
+  for (const key of Object.keys(copyTimers)) {
+    clearTimeout(copyTimers[key]);
+  }
+});
+
+// 獨立函式：透過 execCommand 複製（非安全環境 fallback）
+// 必須插入 dialog 內部，否則 Radix FocusScope 會攔截焦點導致複製失敗
+function copyViaExecCommand(text: string): boolean {
+  const container = document.querySelector("[role='dialog']") ?? document.body;
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  textarea.style.opacity = "0";
+  container.appendChild(textarea);
+  try {
+    textarea.focus();
+    textarea.select();
+    textarea.setSelectionRange(0, textarea.value.length);
+    return document.execCommand("copy");
+  } catch {
+    // 靜默處理
+    return false;
+  } finally {
+    container.removeChild(textarea);
+  }
+}
+
 function handleCopy(
   text: string,
   setState: (id: string | null) => void,
   appId: string,
   timerKey: string,
 ): void {
-  navigator.clipboard
-    .writeText(text)
-    .then(() => {
-      setState(appId);
-      clearTimeout(copyTimers[timerKey]);
-      copyTimers[timerKey] = setTimeout(() => setState(null), 2000);
-    })
-    .catch(() => {
-      // clipboard 失敗時靜默處理
-    });
+  const onSuccess = (): void => {
+    setState(appId);
+    clearTimeout(copyTimers[timerKey]);
+    copyTimers[timerKey] = setTimeout(() => setState(null), 2000);
+  };
+
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard
+      .writeText(text)
+      .then(onSuccess)
+      .catch(() => {
+        // clipboard API 權限被拒時，fallback 到 execCommand
+        if (copyViaExecCommand(text)) onSuccess();
+      });
+  } else {
+    // fallback：非安全環境（如透過 IP 存取）下使用 execCommand
+    if (copyViaExecCommand(text)) onSuccess();
+  }
 }
 
 const handleCopyWebhookUrl = (appId: string, url: string): void => {
