@@ -141,30 +141,35 @@ class RunExecutionService {
     );
 
     const chainPodIds = this.collectChainPodIds(canvasId, sourcePodId);
-    const instances = await Promise.all(
-      chainPodIds.map(async (podId) => {
-        const pathways = this.calculatePathways(
-          canvasId,
-          podId,
-          sourcePodId,
-          chainPodIds,
-        );
+    // key: repositoryId，value: 已建立的 worktree 路徑（null 表示建立失敗或無需建立）
+    // 使用序列執行以避免並發時重複建立相同 repositoryId 的 worktree
+    const worktreeCache = new Map<string, string | null>();
+    const instances: ReturnType<typeof runStore.createPodInstance>[] = [];
+    for (const podId of chainPodIds) {
+      const pathways = this.calculatePathways(
+        canvasId,
+        podId,
+        sourcePodId,
+        chainPodIds,
+      );
 
-        const worktreePath = await this.resolveWorktreePath(
-          canvasId,
-          podId,
-          workflowRun.id,
-        );
+      const worktreePath = await this.resolveWorktreePath(
+        canvasId,
+        podId,
+        workflowRun.id,
+        worktreeCache,
+      );
 
-        return runStore.createPodInstance(
+      instances.push(
+        runStore.createPodInstance(
           workflowRun.id,
           podId,
           pathways.autoPathwaySettled,
           pathways.directPathwaySettled,
           worktreePath,
-        );
-      }),
-    );
+        ),
+      );
+    }
 
     const instancesWithNames = instances.map((instance) => {
       const { worktreePath: _worktreePath, ...instanceData } = instance;
@@ -199,21 +204,35 @@ class RunExecutionService {
     canvasId: string,
     podId: string,
     runId: string,
+    worktreeCache: Map<string, string | null>,
   ): Promise<string | null> {
     const pod = podStore.getById(canvasId, podId);
     if (!pod?.repositoryId) return null;
 
-    const repoPath = path.join(config.repositoriesRoot, pod.repositoryId);
+    const { repositoryId } = pod;
+
+    // 同一 Run 內相同 repositoryId 的 Pod 共用一個 worktree
+    if (worktreeCache.has(repositoryId)) {
+      return worktreeCache.get(repositoryId) ?? null;
+    }
+
+    const repoPath = path.join(config.repositoriesRoot, repositoryId);
     const isGitResult = await gitService.isGitRepository(repoPath);
-    if (!isGitResult.success || !isGitResult.data) return null;
+    if (!isGitResult.success || !isGitResult.data) {
+      worktreeCache.set(repositoryId, null);
+      return null;
+    }
 
     // 空的 repo（尚無任何 commit）無法建立 worktree，直接回傳 null 不印錯誤
     const hasCommitsResult = await gitService.hasCommits(repoPath);
-    if (!hasCommitsResult.success || !hasCommitsResult.data) return null;
+    if (!hasCommitsResult.success || !hasCommitsResult.data) {
+      worktreeCache.set(repositoryId, null);
+      return null;
+    }
 
     const worktreePath = path.join(
       config.repositoriesRoot,
-      `${pod.repositoryId}-run-${runId}-${podId}`,
+      `${repositoryId}-run-${runId}`,
     );
 
     const createResult = await gitService.createDetachedWorktree(
@@ -225,11 +244,13 @@ class RunExecutionService {
       logger.warn(
         "Run",
         "Warn",
-        `建立 Detached Worktree 失敗，fallback 到原始路徑 (podId=${podId}, runId=${runId}): ${createResult.error}`,
+        `建立 Detached Worktree 失敗，fallback 到原始路徑 (repositoryId=${repositoryId}, runId=${runId}): ${createResult.error}`,
       );
+      worktreeCache.set(repositoryId, null);
       return null;
     }
 
+    worktreeCache.set(repositoryId, worktreePath);
     return worktreePath;
   }
 
@@ -588,8 +609,16 @@ class RunExecutionService {
     const entries = runStore.getWorktreePathsByRunId(runId);
     if (entries.length === 0) return;
 
+    // 去重：同一 Run 內共用相同 worktreePath 的 Pod 只清理一次，保留第一筆 entry
+    const seenPaths = new Set<string>();
+    const uniqueEntries = entries.filter((entry) => {
+      if (seenPaths.has(entry.worktreePath)) return false;
+      seenPaths.add(entry.worktreePath);
+      return true;
+    });
+
     await Promise.all(
-      entries.map(async (entry) => {
+      uniqueEntries.map(async (entry) => {
         const podResult = podStore.getByIdGlobal(entry.podId);
         if (!podResult) {
           logger.warn(

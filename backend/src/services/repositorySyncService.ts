@@ -73,16 +73,17 @@ class RepositorySyncService {
     repositoryPath: string,
     repositoryId: string,
   ): Promise<void> {
-    await Promise.all(
-      [...podResourcesMap].map(([podId, resources]) =>
-        this.writeSinglePodManifest(
-          podId,
-          resources,
-          repositoryPath,
-          repositoryId,
-        ),
-      ),
-    );
+    // 串行執行，避免多個 Pod 共用同一 repo 時，
+    // 某 Pod 的 cleanEmptyDirectories 刪除目錄後
+    // 導致其他 Pod 的 copyCommand 寫入失敗的 race condition
+    for (const [podId, resources] of podResourcesMap) {
+      await this.writeSinglePodManifest(
+        podId,
+        resources,
+        repositoryPath,
+        repositoryId,
+      );
+    }
   }
 
   private async writeSinglePodManifest(

@@ -364,7 +364,7 @@ class GitService {
     return gitOperationWithPath(
       parentRepoPath,
       async (git) => {
-        await git.raw(["worktree", "remove", worktreePath]);
+        await git.raw(["worktree", "remove", "--force", worktreePath]);
       },
       "移除 Worktree 失敗",
     );
@@ -375,7 +375,8 @@ class GitService {
     branchName: string,
   ): Promise<string | null> {
     const currentBranchResult = await this.getCurrentBranch(workspacePath);
-    if (!currentBranchResult.success) return getResultErrorString(currentBranchResult.error);
+    if (!currentBranchResult.success)
+      return getResultErrorString(currentBranchResult.error);
     if (currentBranchResult.data === branchName)
       return "無法刪除目前所在的分支";
     return null;
