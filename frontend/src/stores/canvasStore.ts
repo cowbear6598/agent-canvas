@@ -8,8 +8,6 @@ import { useToast } from "@/composables/useToast";
 import { useWebSocketErrorHandler } from "@/composables/useWebSocketErrorHandler";
 import { removeById } from "@/lib/arrayHelpers";
 import { t } from "@/i18n";
-import { getApiBaseUrl } from "@/services/utils";
-
 import type {
   Canvas,
   CanvasCreatePayload,
@@ -26,55 +24,6 @@ import type {
   CanvasReorderedPayload,
 } from "@/types/canvas";
 
-// 需要密碼才能切換的標記錯誤
-export interface CanvasPasswordRequiredError {
-  type: "CANVAS_PASSWORD_REQUIRED";
-  canvasId: string;
-}
-
-export function isCanvasPasswordRequiredError(
-  err: unknown,
-): err is CanvasPasswordRequiredError {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    (err as CanvasPasswordRequiredError).type === "CANVAS_PASSWORD_REQUIRED"
-  );
-}
-
-/**
- * 呼叫密碼相關 API 的通用 helper，統一處理 fetch + 錯誤解析 + toast 通知
- * @returns 成功時回傳 true，失敗時顯示 toast 並回傳 false
- */
-async function callPasswordApi(
-  url: string,
-  method: string,
-  body: Record<string, string>,
-  errorToastKey: string,
-): Promise<boolean> {
-  const { showErrorToast } = useToast();
-
-  const response = await fetch(url, {
-    method,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    let reason: string | undefined;
-    try {
-      const responseBody = await response.json();
-      if (responseBody?.error) reason = responseBody.error;
-    } catch {
-      // 無法解析回應，使用預設錯誤訊息
-    }
-    showErrorToast("Canvas", t(errorToastKey), reason);
-    return false;
-  }
-
-  return true;
-}
-
 interface CanvasState {
   canvases: Canvas[];
   activeCanvasId: string | null;
@@ -82,7 +31,6 @@ interface CanvasState {
   isLoading: boolean;
   isDragging: boolean;
   draggedCanvasId: string | null;
-  verifiedPasswords: Map<string, string>;
 }
 
 export const useCanvasStore = defineStore("canvas", {
@@ -93,7 +41,6 @@ export const useCanvasStore = defineStore("canvas", {
     isLoading: false,
     isDragging: false,
     draggedCanvasId: null,
-    verifiedPasswords: new Map(),
   }),
 
   getters: {
@@ -104,12 +51,6 @@ export const useCanvasStore = defineStore("canvas", {
         null
       );
     },
-
-    getCanvasPassword:
-      (state) =>
-      (canvasId: string): string | undefined => {
-        return state.verifiedPasswords.get(canvasId);
-      },
   },
 
   actions: {
@@ -247,110 +188,8 @@ export const useCanvasStore = defineStore("canvas", {
       showSuccessToast("Canvas", t("common.success.delete"));
     },
 
-    async setPassword(canvasId: string, password: string): Promise<void> {
-      const { showSuccessToast } = useToast();
-      const baseUrl = getApiBaseUrl();
-
-      const ok = await callPasswordApi(
-        `${baseUrl}/api/canvas/${canvasId}/password`,
-        "POST",
-        { password },
-        "store.canvas.setPasswordFailed",
-      );
-      if (!ok) return;
-
-      const canvas = this.canvases.find((c) => c.id === canvasId);
-      if (canvas) {
-        canvas.isPasswordProtected = true;
-      }
-      this.verifiedPasswords.set(canvasId, password);
-      showSuccessToast("Canvas", t("store.canvas.passwordSet"));
-    },
-
-    async changePassword(
-      canvasId: string,
-      oldPassword: string,
-      newPassword: string,
-    ): Promise<void> {
-      const { showSuccessToast } = useToast();
-      const baseUrl = getApiBaseUrl();
-
-      const ok = await callPasswordApi(
-        `${baseUrl}/api/canvas/${canvasId}/password`,
-        "PUT",
-        { oldPassword, newPassword },
-        "store.canvas.changePasswordFailed",
-      );
-      if (!ok) return;
-
-      this.verifiedPasswords.set(canvasId, newPassword);
-      showSuccessToast("Canvas", t("store.canvas.passwordChanged"));
-    },
-
-    async removePassword(canvasId: string, password: string): Promise<void> {
-      const { showSuccessToast } = useToast();
-      const baseUrl = getApiBaseUrl();
-
-      const ok = await callPasswordApi(
-        `${baseUrl}/api/canvas/${canvasId}/password`,
-        "DELETE",
-        { password },
-        "store.canvas.removePasswordFailed",
-      );
-      if (!ok) return;
-
-      const canvas = this.canvases.find((c) => c.id === canvasId);
-      if (canvas) {
-        canvas.isPasswordProtected = false;
-      }
-      this.verifiedPasswords.delete(canvasId);
-      showSuccessToast("Canvas", t("store.canvas.passwordRemoved"));
-    },
-
-    async verifyPassword(canvasId: string, password: string): Promise<boolean> {
-      const baseUrl = getApiBaseUrl();
-
-      const response = await fetch(
-        `${baseUrl}/api/canvas/${canvasId}/verify-password`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ password }),
-        },
-      );
-
-      if (!response.ok) {
-        return false;
-      }
-
-      this.verifiedPasswords.set(canvasId, password);
-      return true;
-    },
-
-    clearVerifiedPassword(canvasId: string): void {
-      this.verifiedPasswords.delete(canvasId);
-    },
-
     async switchCanvas(canvasId: string): Promise<void> {
       if (this.activeCanvasId === canvasId) return;
-
-      const targetCanvas = this.canvases.find((c) => c.id === canvasId);
-
-      if (targetCanvas?.isPasswordProtected) {
-        const verifiedPassword = this.verifiedPasswords.get(canvasId);
-        if (!verifiedPassword) {
-          // 尚未驗證密碼，拋出標記錯誤讓呼叫端處理
-          throw {
-            type: "CANVAS_PASSWORD_REQUIRED",
-            canvasId,
-          } as CanvasPasswordRequiredError;
-        }
-      }
-
-      // 組合 payload，有已驗證密碼時一併帶入
-      const password = this.verifiedPasswords.get(canvasId);
-      const payload: Omit<CanvasSwitchPayload, "requestId"> = { canvasId };
-      if (password) payload.password = password;
 
       const response = await createWebSocketRequest<
         CanvasSwitchPayload,
@@ -358,7 +197,9 @@ export const useCanvasStore = defineStore("canvas", {
       >({
         requestEvent: WebSocketRequestEvents.CANVAS_SWITCH,
         responseEvent: WebSocketResponseEvents.CANVAS_SWITCHED,
-        payload,
+        payload: {
+          canvasId,
+        },
       });
 
       if (response.success && response.canvasId) {
@@ -371,7 +212,6 @@ export const useCanvasStore = defineStore("canvas", {
       this.activeCanvasId = null;
       this.isSidebarOpen = false;
       this.isLoading = false;
-      this.verifiedPasswords = new Map();
     },
 
     addCanvasFromEvent(canvas: Canvas): void {
@@ -403,13 +243,6 @@ export const useCanvasStore = defineStore("canvas", {
       const canvas = this.canvases.find((item) => item.id === canvasId);
       if (canvas) {
         canvas.name = newName;
-      }
-    },
-
-    updateLockFromEvent(canvasId: string, isLocked: boolean): void {
-      const canvas = this.canvases.find((item) => item.id === canvasId);
-      if (canvas) {
-        canvas.isPasswordProtected = isLocked;
       }
     },
 

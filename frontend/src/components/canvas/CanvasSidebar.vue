@@ -92,13 +92,7 @@
                   @blur="cancelRename"
                 />
               </div>
-              <span v-else class="flex flex-1 items-center gap-1 text-sm">
-                {{ canvas.name }}
-                <Lock
-                  v-if="canvas.isPasswordProtected"
-                  class="h-3 w-3 shrink-0 text-muted-foreground"
-                />
-              </span>
+              <span v-else class="flex-1 text-sm">{{ canvas.name }}</span>
 
               <div
                 class="flex items-center gap-1 opacity-0 group-hover:opacity-100"
@@ -108,18 +102,6 @@
                   @click.stop="startRename(canvas.id, canvas.name)"
                 >
                   <Pencil class="h-4 w-4" />
-                </button>
-                <button
-                  class="rounded-md p-1 hover:bg-accent-foreground/10"
-                  @click.stop="
-                    openPasswordDialog(
-                      canvas.id,
-                      canvas.name,
-                      canvas.isPasswordProtected,
-                    )
-                  "
-                >
-                  <KeyRound class="h-4 w-4" />
                 </button>
                 <button
                   class="rounded-md p-1 hover:bg-destructive/20"
@@ -158,45 +140,11 @@
       </DialogFooter>
     </DialogContent>
   </Dialog>
-
-  <!-- 密碼子選單 Dialog（已設定密碼時） -->
-  <Dialog :open="showPasswordMenu" @update:open="showPasswordMenu = false">
-    <DialogContent class="max-w-xs">
-      <DialogHeader>
-        <DialogTitle>{{ $t("canvas.password.manage") }}</DialogTitle>
-      </DialogHeader>
-      <div class="flex flex-col gap-2">
-        <Button
-          variant="outline"
-          class="justify-start"
-          @click="openPasswordDialogMode('change')"
-        >
-          {{ $t("canvas.password.changeTitle") }}
-        </Button>
-        <Button
-          variant="outline"
-          class="justify-start text-destructive hover:text-destructive"
-          @click="openPasswordDialogMode('remove')"
-        >
-          {{ $t("canvas.password.removeTitle") }}
-        </Button>
-      </div>
-    </DialogContent>
-  </Dialog>
-
-  <CanvasPasswordDialog
-    :open="showPasswordDialog"
-    :mode="passwordDialogMode"
-    :canvas-id="passwordTargetCanvasId"
-    :canvas-name="passwordTargetCanvasName"
-    @update:open="showPasswordDialog = $event"
-    @success="handlePasswordSuccess"
-  />
 </template>
 
 <script setup lang="ts">
 import { ref, watch, nextTick, onUnmounted } from "vue";
-import { X, Plus, Pencil, Trash2, Lock, KeyRound } from "lucide-vue-next";
+import { X, Plus, Pencil, Trash2 } from "lucide-vue-next";
 import { useCanvasStore } from "@/stores/canvasStore";
 import {
   Dialog,
@@ -209,7 +157,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useCanvasDragReorder } from "@/composables/canvas/useCanvasDragReorder";
-import CanvasPasswordDialog from "@/components/canvas/CanvasPasswordDialog.vue";
 
 interface Props {
   open: boolean;
@@ -238,18 +185,6 @@ const renameInputRef = ref<HTMLInputElement | HTMLInputElement[] | undefined>(
 const showDeleteDialog = ref(false);
 const deleteTargetId = ref<string | null>(null);
 const deleteTargetName = ref("");
-
-// 密碼相關狀態
-const showPasswordDialog = ref(false);
-const passwordDialogMode = ref<"set" | "change" | "remove" | "verify">("set");
-const passwordTargetCanvasId = ref("");
-const passwordTargetCanvasName = ref("");
-
-// 密碼子選單狀態（已設定密碼時）
-const showPasswordMenu = ref(false);
-
-// 待切換的 canvas（驗證密碼後再切換）
-const pendingSwitchCanvasId = ref<string | null>(null);
 
 const {
   draggedIndex,
@@ -329,60 +264,9 @@ const confirmDelete = (): void => {
   deleteTargetName.value = "";
 };
 
-// 開啟密碼設定按鈕：依照是否已有密碼決定流程
-const openPasswordDialog = (
-  canvasId: string,
-  canvasName: string,
-  isPasswordProtected: boolean,
-): void => {
-  passwordTargetCanvasId.value = canvasId;
-  passwordTargetCanvasName.value = canvasName;
-
-  if (isPasswordProtected) {
-    // 已設定密碼：顯示子選單（修改/解除）
-    showPasswordMenu.value = true;
-  } else {
-    // 未設定密碼：直接開啟設定 dialog
-    passwordDialogMode.value = "set";
-    showPasswordDialog.value = true;
-  }
-};
-
-// 子選單選擇後開啟對應的密碼 dialog
-const openPasswordDialogMode = (mode: "change" | "remove"): void => {
-  showPasswordMenu.value = false;
-  passwordDialogMode.value = mode;
-  showPasswordDialog.value = true;
-};
-
-// 密碼操作成功後的處理
-const handlePasswordSuccess = (): void => {
-  // 若是驗證成功（verify 模式），切換至待切換的 canvas
-  if (passwordDialogMode.value === "verify" && pendingSwitchCanvasId.value) {
-    const targetId = pendingSwitchCanvasId.value;
-    pendingSwitchCanvasId.value = null;
-    canvasStore.switchCanvas(targetId);
-    emit("update:open", false);
-  }
-};
-
-const handleSwitchCanvas = async (canvasId: string): Promise<void> => {
+const handleSwitchCanvas = (canvasId: string): void => {
   if (renamingCanvasId.value || isCreating.value) return;
 
-  const canvas = canvasStore.canvases.find((c) => c.id === canvasId);
-  if (!canvas) return;
-
-  // 若 canvas 有密碼保護且尚未驗證，開啟驗證 dialog
-  if (canvas.isPasswordProtected && !canvasStore.getCanvasPassword(canvasId)) {
-    passwordTargetCanvasId.value = canvasId;
-    passwordTargetCanvasName.value = canvas.name;
-    passwordDialogMode.value = "verify";
-    pendingSwitchCanvasId.value = canvasId;
-    showPasswordDialog.value = true;
-    return;
-  }
-
-  // 已驗證或無密碼，直接切換
   canvasStore.switchCanvas(canvasId);
   emit("update:open", false);
 };

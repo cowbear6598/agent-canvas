@@ -241,7 +241,6 @@ export const WebSocketResponseEvents = {
   CANVAS_DELETED: "canvas:deleted",
   CANVAS_SWITCHED: "canvas:switched",
   CANVAS_REORDERED: "canvas:reordered",
-  CANVAS_LOCK_CHANGED: "canvas:lock:changed",
   GROUP_CREATED: "group:created",
   GROUP_LIST_RESULT: "group:list:result",
   GROUP_DELETED: "group:deleted",

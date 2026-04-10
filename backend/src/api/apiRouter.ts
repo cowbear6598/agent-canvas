@@ -22,12 +22,6 @@ import {
   handleWorkflowStop,
 } from "./workflowApi.js";
 import { handleDownloadPodDirectory } from "./podDownloadApi.js";
-import {
-  handleSetCanvasPassword,
-  handleChangeCanvasPassword,
-  handleRemoveCanvasPassword,
-  handleVerifyCanvasPassword,
-} from "./canvasPasswordApi.js";
 import { JSON_HEADERS } from "./constants.js";
 import { logger } from "../utils/logger.js";
 
@@ -91,26 +85,6 @@ const ROUTES: Route[] = [
     method: "POST",
     pattern: new URLPattern({ pathname: "/api/canvas/:id/connections" }),
     handler: handleCreateConnection,
-  },
-  {
-    method: "POST",
-    pattern: new URLPattern({ pathname: "/api/canvas/:id/password" }),
-    handler: handleSetCanvasPassword,
-  },
-  {
-    method: "PUT",
-    pattern: new URLPattern({ pathname: "/api/canvas/:id/password" }),
-    handler: handleChangeCanvasPassword,
-  },
-  {
-    method: "DELETE",
-    pattern: new URLPattern({ pathname: "/api/canvas/:id/password" }),
-    handler: handleRemoveCanvasPassword,
-  },
-  {
-    method: "POST",
-    pattern: new URLPattern({ pathname: "/api/canvas/:id/verify-password" }),
-    handler: handleVerifyCanvasPassword,
   },
   {
     method: "DELETE",

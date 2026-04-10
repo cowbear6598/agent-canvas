@@ -11,7 +11,6 @@ interface CanvasRow {
   id: string;
   name: string;
   sort_index: number;
-  password_hash: string | null;
 }
 
 function rowToCanvas(row: CanvasRow): Canvas {
@@ -19,7 +18,6 @@ function rowToCanvas(row: CanvasRow): Canvas {
     id: row.id,
     name: row.name,
     sortIndex: row.sort_index,
-    passwordHash: row.password_hash,
   };
 }
 
@@ -105,12 +103,7 @@ class CanvasStore {
       $sortIndex: sortIndex,
     });
 
-    const canvas: Canvas = {
-      id,
-      name: trimmedName,
-      sortIndex,
-      passwordHash: null,
-    };
+    const canvas: Canvas = { id, name: trimmedName, sortIndex };
     logger.log("Canvas", "Create", `已建立畫布：${trimmedName}`);
 
     return ok(canvas);
@@ -210,84 +203,6 @@ class CanvasStore {
 
     logger.log("Canvas", "Reorder", `已重新排序 ${canvasIds.length} 個畫布`);
     return ok(undefined);
-  }
-
-  async setPassword(id: string, password: string): Promise<Result<void>> {
-    const canvas = this.getById(id);
-    if (!canvas) {
-      return err(createI18nError("errors.canvasNotFound"));
-    }
-
-    const hash = await Bun.password.hash(password);
-    this.stmts.canvas.updatePasswordHash.run({ $passwordHash: hash, $id: id });
-    logger.log("Canvas", "Update", `已設定畫布密碼：${canvas.name}`);
-
-    return ok(undefined);
-  }
-
-  async changePassword(
-    id: string,
-    oldPassword: string,
-    newPassword: string,
-  ): Promise<Result<void>> {
-    const canvas = this.getById(id);
-    if (!canvas) {
-      return err(createI18nError("errors.canvasNotFound"));
-    }
-
-    if (canvas.passwordHash === null) {
-      return err(createI18nError("errors.canvasPasswordNotSet"));
-    }
-
-    const isValid = await Bun.password.verify(oldPassword, canvas.passwordHash);
-    if (!isValid) {
-      return err(createI18nError("errors.canvasOldPasswordWrong"));
-    }
-
-    const hash = await Bun.password.hash(newPassword);
-    this.stmts.canvas.updatePasswordHash.run({ $passwordHash: hash, $id: id });
-    logger.log("Canvas", "Update", `已變更畫布密碼：${canvas.name}`);
-
-    return ok(undefined);
-  }
-
-  async removePassword(id: string, password: string): Promise<Result<void>> {
-    const canvas = this.getById(id);
-    if (!canvas) {
-      return err(createI18nError("errors.canvasNotFound"));
-    }
-
-    if (canvas.passwordHash === null) {
-      return err(createI18nError("errors.canvasPasswordNotSet"));
-    }
-
-    const isValid = await Bun.password.verify(password, canvas.passwordHash);
-    if (!isValid) {
-      return err(createI18nError("errors.canvasPasswordWrong"));
-    }
-
-    this.stmts.canvas.updatePasswordHash.run({
-      $passwordHash: null,
-      $id: id,
-    });
-    logger.log("Canvas", "Update", `已移除畫布密碼：${canvas.name}`);
-
-    return ok(undefined);
-  }
-
-  async verifyPassword(id: string, password: string): Promise<boolean> {
-    const canvas = this.getById(id);
-
-    if (!canvas) return false;
-    if (canvas.passwordHash === null) return true;
-
-    return Bun.password.verify(password, canvas.passwordHash);
-  }
-
-  isLocked(id: string): boolean {
-    const canvas = this.getById(id);
-    if (!canvas) return false;
-    return canvas.passwordHash !== null;
   }
 
   getCanvasDir(canvasId: string): string | undefined {

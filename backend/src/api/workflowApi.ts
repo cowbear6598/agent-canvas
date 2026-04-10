@@ -4,7 +4,6 @@ import {
   resolvePod,
   requireJsonBody,
   UUID_REGEX,
-  requireCanvasPassword,
 } from "./apiHelpers.js";
 import { podStore } from "../services/podStore.js";
 import { connectionStore } from "../services/connectionStore.js";
@@ -117,15 +116,12 @@ function validateMessage(message: unknown): string | null {
   return null;
 }
 
-export async function handleListWorkflows(
-  req: Request,
+export function handleListWorkflows(
+  _req: Request,
   params: Record<string, string>,
-): Promise<Response> {
+): Response {
   const { canvas, error } = requireCanvas(params.id);
   if (error) return error;
-
-  const passwordCheck = await requireCanvasPassword(req, canvas.id);
-  if (passwordCheck) return passwordCheck;
 
   const workflows = buildWorkflows(canvas.id);
   return jsonResponse({ workflows }, HTTP_STATUS.OK);
@@ -137,9 +133,6 @@ export async function handleWorkflowChat(
 ): Promise<Response> {
   const { canvas, error } = requireCanvas(params.id);
   if (error) return error;
-
-  const passwordCheck = await requireCanvasPassword(req, canvas.id);
-  if (passwordCheck) return passwordCheck;
 
   const jsonError = requireJsonBody(req);
   if (jsonError) return jsonError;
@@ -226,15 +219,12 @@ export async function handleWorkflowChat(
   return jsonResponse({ success: true, podId: pod.id }, HTTP_STATUS.ACCEPTED);
 }
 
-export async function handleWorkflowStop(
-  req: Request,
+export function handleWorkflowStop(
+  _req: Request,
   params: Record<string, string>,
-): Promise<Response> {
+): Response {
   const { canvas, error } = requireCanvas(params.id);
   if (error) return error;
-
-  const passwordCheck = await requireCanvasPassword(req, canvas.id);
-  if (passwordCheck) return passwordCheck;
 
   const podIdDecoded = decodePodId(params.podId);
   if (!podIdDecoded) {

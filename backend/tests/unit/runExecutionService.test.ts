@@ -265,12 +265,8 @@ describe("RunExecutionService", () => {
       vi.spyOn(runStore, "getRun").mockReturnValue(
         createMockRun({ id: "old-run-1" }),
       );
-      vi.spyOn(runStore, "getWorktreePathsByRunId").mockReturnValue([]);
 
       await runExecutionService.createRun(canvasId, sourcePodId, "測試");
-
-      // enforceRunLimit 使用 fireAndForget 觸發 deleteRun，需等待 microtask queue 清空
-      await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(deleteSpy).toHaveBeenCalledWith("old-run-1");
     });

@@ -180,27 +180,6 @@ export async function handleCanvasSwitch(
     return;
   }
 
-  // 密碼驗證：若 Canvas 已鎖定，需提供正確密碼才能切換
-  if (canvasStore.isLocked(payload.canvasId)) {
-    const isValid = payload.password
-      ? await canvasStore.verifyPassword(payload.canvasId, payload.password)
-      : false;
-
-    if (!isValid) {
-      socketService.emitToConnection(
-        connectionId,
-        WebSocketResponseEvents.CANVAS_SWITCHED,
-        {
-          requestId: payload.requestId,
-          success: false,
-          error: createI18nError("errors.canvasPasswordRequired"),
-          errorCode: "PASSWORD_REQUIRED",
-        },
-      );
-      return;
-    }
-  }
-
   broadcastCursorLeft(connectionId);
 
   canvasStore.setActiveCanvas(connectionId, payload.canvasId);

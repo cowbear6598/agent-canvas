@@ -3,26 +3,18 @@ import { socketService } from "../services/socketService.js";
 import { cursorColorManager } from "../services/cursorColorManager.js";
 import { WebSocketResponseEvents } from "../schemas/index.js";
 import { toCanvasDto } from "../utils/canvasDto.js";
-import {
-  jsonResponse,
-  requireCanvas,
-  requireJsonBody,
-  requireCanvasPassword,
-} from "./apiHelpers.js";
+import { jsonResponse, requireCanvas, requireJsonBody } from "./apiHelpers.js";
 import { HTTP_STATUS } from "../constants.js";
 import { getResultErrorString } from "../types/result.js";
 
 export async function handleDeleteCanvas(
-  req: Request,
+  _req: Request,
   params: Record<string, string>,
 ): Promise<Response> {
   const { canvas, error } = requireCanvas(params.id);
   if (error) return error;
 
   const { id: canvasId } = canvas;
-
-  const passwordCheck = await requireCanvasPassword(req, canvasId);
-  if (passwordCheck) return passwordCheck;
 
   const result = await canvasStore.delete(canvasId);
   if (!result.success) {
@@ -71,9 +63,6 @@ export async function handleRenameCanvas(
   const { canvas, error } = requireCanvas(params.id);
   if (error) return error;
 
-  const passwordCheck = await requireCanvasPassword(req, canvas.id);
-  if (passwordCheck) return passwordCheck;
-
   if (!isValidCreateCanvasBody(body)) {
     return jsonResponse(
       { error: "Canvas 名稱不能為空" },
@@ -84,10 +73,7 @@ export async function handleRenameCanvas(
   const result = await canvasStore.rename(canvas.id, body.name);
 
   if (!result.success) {
-    return jsonResponse(
-      { error: getResultErrorString(result.error) },
-      HTTP_STATUS.BAD_REQUEST,
-    );
+    return jsonResponse({ error: getResultErrorString(result.error) }, HTTP_STATUS.BAD_REQUEST);
   }
 
   const canvasData = { id: result.data.id, name: result.data.name };
@@ -122,10 +108,7 @@ export async function handleCreateCanvas(
   const result = await canvasStore.create(body.name);
 
   if (!result.success) {
-    return jsonResponse(
-      { error: getResultErrorString(result.error) },
-      HTTP_STATUS.BAD_REQUEST,
-    );
+    return jsonResponse({ error: getResultErrorString(result.error) }, HTTP_STATUS.BAD_REQUEST);
   }
 
   const canvasDto = toCanvasDto(result.data);

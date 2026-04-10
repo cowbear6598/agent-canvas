@@ -37,9 +37,9 @@ describe("canvasEventHandlers", () => {
   }
 
   describe("getCanvasEventListeners", () => {
-    it("應回傳 6 個 listener", () => {
+    it("應回傳 5 個 listener", () => {
       const result = getCanvasEventListeners();
-      expect(result).toHaveLength(6);
+      expect(result).toHaveLength(5);
     });
   });
 

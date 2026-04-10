@@ -56,10 +56,7 @@ const handleCanvasRenamed = createUnifiedHandler<
   (payload) => {
     useCanvasStore().renameCanvasFromEvent(payload.canvasId, payload.newName);
   },
-  {
-    toastMessage: () => t("composable.eventHandler.canvasRenamed"),
-    skipCanvasCheck: true,
-  },
+  { toastMessage: () => t("composable.eventHandler.canvasRenamed"), skipCanvasCheck: true },
 );
 
 const handleCanvasDeleted = createUnifiedHandler<
@@ -76,15 +73,6 @@ const handleCanvasReordered = createUnifiedHandler<
 >(
   (payload) => {
     useCanvasStore().reorderCanvasesFromEvent(payload.canvasIds);
-  },
-  { skipCanvasCheck: true },
-);
-
-const handleCanvasLockChanged = createUnifiedHandler<
-  BasePayload & { canvasId: string; isLocked: boolean }
->(
-  (payload) => {
-    useCanvasStore().updateLockFromEvent(payload.canvasId, payload.isLocked);
   },
   { skipCanvasCheck: true },
 );
@@ -164,10 +152,6 @@ export function getCanvasEventListeners(): Array<{
     {
       event: WebSocketResponseEvents.CANVAS_PASTE_RESULT,
       handler: handleCanvasPasted as (payload: unknown) => void,
-    },
-    {
-      event: WebSocketResponseEvents.CANVAS_LOCK_CHANGED,
-      handler: handleCanvasLockChanged as (payload: unknown) => void,
     },
   ];
 }

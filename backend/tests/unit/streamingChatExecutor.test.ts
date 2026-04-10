@@ -40,7 +40,6 @@ vi.mock("../../src/services/workflow/runExecutionService.js", () => ({
     registerActiveStream: vi.fn(() => {}),
     unregisterActiveStream: vi.fn(() => {}),
     errorPodInstance: vi.fn(() => {}),
-    isRunAborted: vi.fn(() => false),
   },
 }));
 

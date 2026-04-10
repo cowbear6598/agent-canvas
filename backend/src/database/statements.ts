@@ -11,8 +11,6 @@ function buildStatements(db: Database): {
     selectMaxSortIndex: ReturnType<Database["prepare"]>;
     updateName: ReturnType<Database["prepare"]>;
     updateSortIndex: ReturnType<Database["prepare"]>;
-    updatePasswordHash: ReturnType<Database["prepare"]>;
-    selectPasswordHash: ReturnType<Database["prepare"]>;
     deleteById: ReturnType<Database["prepare"]>;
   };
   pod: {
@@ -193,12 +191,6 @@ function buildStatements(db: Database): {
       updateName: db.prepare("UPDATE canvases SET name = $name WHERE id = $id"),
       updateSortIndex: db.prepare(
         "UPDATE canvases SET sort_index = $sortIndex WHERE id = $id",
-      ),
-      updatePasswordHash: db.prepare(
-        "UPDATE canvases SET password_hash = $passwordHash WHERE id = $id",
-      ),
-      selectPasswordHash: db.prepare(
-        "SELECT password_hash FROM canvases WHERE id = ?",
       ),
       deleteById: db.prepare("DELETE FROM canvases WHERE id = ?"),
     },
