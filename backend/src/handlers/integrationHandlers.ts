@@ -59,7 +59,7 @@ function getProviderOrEmitError(
     emitError(
       connectionId,
       responseEvent,
-      createI18nError('errors.providerNotFound', { name: providerName }),
+      createI18nError("errors.providerNotFound", { name: providerName }),
       requestId,
       undefined,
       "PROVIDER_NOT_FOUND",
@@ -111,7 +111,7 @@ export async function handleIntegrationAppCreate(
     emitError(
       connectionId,
       WebSocketResponseEvents.INTEGRATION_APP_CREATED,
-      createI18nError('errors.configValidationFailed', { message }),
+      createI18nError("errors.configValidationFailed", { message }),
       requestId,
       undefined,
       "VALIDATION_ERROR",
@@ -130,7 +130,7 @@ export async function handleIntegrationAppCreate(
       connectionId,
       WebSocketResponseEvents.INTEGRATION_APP_CREATED,
       requestId,
-      createI18nError('errors.integrationAppCreateFailed'),
+      createI18nError("errors.integrationAppCreateFailed"),
     )
   )
     return;
@@ -143,27 +143,27 @@ export async function handleIntegrationAppCreate(
     `建立 Integration App「${app.name}」（${provider.displayName}）`,
   );
 
-  const INIT_TIMEOUT_MS = 30_000;
-  try {
-    await Promise.race([
-      provider.initialize(app),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("初始化逾時")), INIT_TIMEOUT_MS),
-      ),
-    ]);
-  } catch (error) {
-    logger.error(
-      "Integration",
-      "Error",
-      `Integration App「${app.name}」初始化失敗或逾時：${getErrorMessage(error)}`,
-    );
-  }
-
+  // 先回應建立成功（app 已寫入 DB），不等待初始化
   socketService.emitToAll(WebSocketResponseEvents.INTEGRATION_APP_CREATED, {
     requestId,
     success: true,
     provider: providerName,
     app: sanitizeApp(integrationAppStore.getById(app.id) ?? app),
+  });
+
+  // 背景執行初始化，狀態變更透過 broadcastConnectionStatus 通知前端
+  const INIT_TIMEOUT_MS = 30_000;
+  Promise.race([
+    provider.initialize(app),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("初始化逾時")), INIT_TIMEOUT_MS),
+    ),
+  ]).catch((error) => {
+    logger.error(
+      "Integration",
+      "Error",
+      `Integration App「${app.name}」初始化失敗或逾時：${getErrorMessage(error)}`,
+    );
   });
 }
 
@@ -329,7 +329,9 @@ export async function handleIntegrationAppResourcesRefresh(
     emitError(
       connectionId,
       WebSocketResponseEvents.INTEGRATION_APP_RESOURCES_REFRESHED,
-      createI18nError('errors.refreshResourcesFailed', { message: getErrorMessage(error) }),
+      createI18nError("errors.refreshResourcesFailed", {
+        message: getErrorMessage(error),
+      }),
       requestId,
     );
     return;
@@ -387,7 +389,9 @@ export const handlePodBindIntegration = withCanvasId<PodBindIntegrationPayload>(
       emitError(
         connectionId,
         WebSocketResponseEvents.POD_INTEGRATION_BOUND,
-        createI18nError('errors.integrationAppNotConnected', { name: app.name }),
+        createI18nError("errors.integrationAppNotConnected", {
+          name: app.name,
+        }),
         requestId,
         undefined,
         "NOT_CONNECTED",
@@ -412,7 +416,7 @@ export const handlePodBindIntegration = withCanvasId<PodBindIntegrationPayload>(
       emitError(
         connectionId,
         WebSocketResponseEvents.POD_INTEGRATION_BOUND,
-        createI18nError('errors.bindConfigValidationFailed', { message }),
+        createI18nError("errors.bindConfigValidationFailed", { message }),
         requestId,
         undefined,
         "VALIDATION_ERROR",
@@ -481,7 +485,10 @@ export const handlePodUnbindIntegration =
         emitError(
           connectionId,
           WebSocketResponseEvents.POD_INTEGRATION_UNBOUND,
-          createI18nError('errors.podProviderNotBound', { podName: getPodDisplayName(canvasId, podId), provider: providerName }),
+          createI18nError("errors.podProviderNotBound", {
+            podName: getPodDisplayName(canvasId, podId),
+            provider: providerName,
+          }),
           requestId,
           undefined,
           "NOT_BOUND",
