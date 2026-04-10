@@ -98,6 +98,11 @@ describe("RunExecutionService — Worktree 整合測試", () => {
         success: true,
         data: true,
       });
+      // mock syncToRemoteLatest 避免實際執行 git fetch
+      vi.spyOn(gitService, "syncToRemoteLatest").mockResolvedValue({
+        success: true,
+        data: undefined,
+      });
       vi.spyOn(gitService, "createDetachedWorktree").mockResolvedValue({
         success: true,
         data: undefined,
@@ -190,6 +195,11 @@ describe("RunExecutionService — Worktree 整合測試", () => {
       vi.spyOn(gitService, "hasCommits").mockResolvedValue({
         success: true,
         data: true,
+      });
+      // mock syncToRemoteLatest 避免實際執行 git fetch
+      vi.spyOn(gitService, "syncToRemoteLatest").mockResolvedValue({
+        success: true,
+        data: undefined,
       });
       vi.spyOn(gitService, "createDetachedWorktree").mockResolvedValue({
         success: false,

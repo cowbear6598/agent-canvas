@@ -230,6 +230,18 @@ class RunExecutionService {
       return null;
     }
 
+    // Run 啟動前同步 remote 最新版本
+    const syncResult = await gitService.syncToRemoteLatest(repoPath);
+    if (!syncResult.success) {
+      logger.error(
+        "Run",
+        "Error",
+        `同步 remote 最新版本失敗，中止該 repo 的 worktree 建立 (repositoryId=${repositoryId}): ${syncResult.error}`,
+      );
+      worktreeCache.set(repositoryId, null);
+      return null;
+    }
+
     const worktreePath = path.join(
       config.repositoriesRoot,
       `${repositoryId}-run-${runId}`,

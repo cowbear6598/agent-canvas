@@ -625,6 +625,54 @@ class GitService {
     }
   }
 
+  /**
+   * 將 repo 同步到 remote 最新版本（供 Run 啟動前使用）
+   * - 無 remote 時靜默跳過
+   * - 失敗時回傳 err 但不拋出例外
+   */
+  async syncToRemoteLatest(workspacePath: string): Promise<Result<void>> {
+    // 檢查是否有 origin remote
+    const hasRemoteResult = await gitOperationWithPath(
+      workspacePath,
+      async (git) => {
+        const remotes = await git.getRemotes();
+        return remotes.some((remote) => remote.name === "origin");
+      },
+      "檢查 remote 失敗",
+    );
+
+    // 檢查 remote 失敗（例如 .git 損壞），回傳錯誤
+    if (!hasRemoteResult.success) {
+      return err(
+        `檢查 remote 失敗：${getResultErrorString(hasRemoteResult.error)}`,
+      );
+    }
+
+    // 沒有 origin remote，靜默跳過
+    if (!hasRemoteResult.data) {
+      return ok(undefined);
+    }
+
+    // 取得當前分支名稱
+    const branchResult = await this.validateCurrentBranch(workspacePath);
+    if (!branchResult.success) {
+      return err(`同步失敗：${branchResult.error}`);
+    }
+
+    const currentBranch = branchResult.data;
+
+    // 執行 fetch + reset --hard + clean -fd
+    return gitOperationWithPath(
+      workspacePath,
+      async (git) => {
+        await git.fetch(["origin", currentBranch]);
+        await git.reset(["--hard", `origin/${currentBranch}`]);
+        await git.clean(["f", "d"]);
+      },
+      "同步 remote 最新版本失敗",
+    );
+  }
+
   async pullLatest(
     workspacePath: string,
     onProgress?: (progress: number, message: string) => void,

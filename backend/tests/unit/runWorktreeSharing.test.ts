@@ -129,6 +129,11 @@ describe("Run Worktree 共用邏輯", () => {
         success: true,
         data: true,
       });
+      // mock syncToRemoteLatest 避免實際執行 git fetch
+      vi.spyOn(gitService, "syncToRemoteLatest").mockResolvedValue({
+        success: true,
+        data: undefined,
+      });
       const createDetachedWorktreeSpy = vi
         .spyOn(gitService, "createDetachedWorktree")
         .mockResolvedValue({ success: true, data: undefined });
@@ -210,6 +215,11 @@ describe("Run Worktree 共用邏輯", () => {
       vi.spyOn(gitService, "hasCommits").mockResolvedValue({
         success: true,
         data: true,
+      });
+      // mock syncToRemoteLatest 避免實際執行 git fetch
+      vi.spyOn(gitService, "syncToRemoteLatest").mockResolvedValue({
+        success: true,
+        data: undefined,
       });
       const createDetachedWorktreeSpy = vi
         .spyOn(gitService, "createDetachedWorktree")
@@ -373,6 +383,11 @@ describe("Run Worktree 共用邏輯", () => {
       vi.spyOn(gitService, "hasCommits").mockResolvedValue({
         success: true,
         data: true,
+      });
+      // mock syncToRemoteLatest 避免實際執行 git fetch
+      vi.spyOn(gitService, "syncToRemoteLatest").mockResolvedValue({
+        success: true,
+        data: undefined,
       });
       // createDetachedWorktree 回傳失敗
       const createDetachedWorktreeSpy = vi
