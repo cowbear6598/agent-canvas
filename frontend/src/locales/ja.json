@@ -307,6 +307,24 @@
       "newOutputStyleGroup": "Output Style グループを追加",
       "newSubAgentGroup": "SubAgent グループを追加",
       "newCommandGroup": "Command グループを追加"
+    },
+    "password": {
+      "setTitle": "パスワードを設定",
+      "changeTitle": "パスワードを変更",
+      "removeTitle": "パスワードを解除",
+      "verifyTitle": "パスワードを入力",
+      "password": "パスワード",
+      "confirmPassword": "パスワードを確認",
+      "oldPassword": "現在のパスワード",
+      "newPassword": "新しいパスワード",
+      "confirmNewPassword": "新しいパスワードを確認",
+      "mismatch": "パスワードが一致しません",
+      "setSuccess": "パスワードを設定しました",
+      "changeSuccess": "パスワードを変更しました",
+      "removeSuccess": "パスワードを解除しました",
+      "verifyFailed": "パスワードが正しくありません",
+      "required": "この Canvas はロックされています。パスワードを入力してください",
+      "manage": "パスワード管理"
     }
   },
   "store": {
@@ -314,7 +332,13 @@
       "deleted": "{name} が削除されました",
       "orderSaveFailed": "順序の保存に失敗しました",
       "renameFailed": "名前の変更に失敗しました",
-      "renamed": "名前を変更しました"
+      "renamed": "名前を変更しました",
+      "passwordSet": "パスワードを設定しました",
+      "setPasswordFailed": "パスワードの設定に失敗しました",
+      "passwordChanged": "パスワードを変更しました",
+      "changePasswordFailed": "パスワードの変更に失敗しました",
+      "passwordRemoved": "パスワードを解除しました",
+      "removePasswordFailed": "パスワードの解除に失敗しました"
     },
     "connection": {
       "alreadyExists": "接続は既に存在します",
@@ -510,6 +534,10 @@
     "connectionUpdateFailed": "コネクションの更新に失敗しました：{id}",
     "canvasNotFound": "Canvas が見つかりません",
     "canvasInUse": "使用中の Canvas は削除できません",
+    "canvasPasswordNotSet": "この Canvas にはパスワードが設定されていません",
+    "canvasOldPasswordWrong": "古いパスワードが正しくありません",
+    "canvasPasswordWrong": "パスワードが正しくありません",
+    "canvasPasswordRequired": "パスワードが正しくないか、提供されていません",
     "repoUrlTooLong": "リポジトリ URL が長さの制限を超えています",
     "repoUrlInvalidFormat": "リポジトリ URL の形式が正しくありません",
     "httpsUrlAuthNotAllowed": "HTTPS URL に認証情報を含めることはできません",

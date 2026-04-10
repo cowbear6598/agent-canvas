@@ -460,6 +460,24 @@
       "newOutputStyleGroup": "New Output Style Group",
       "newSubAgentGroup": "New SubAgent Group",
       "newCommandGroup": "New Command Group"
+    },
+    "password": {
+      "setTitle": "Set Password",
+      "changeTitle": "Change Password",
+      "removeTitle": "Remove Password",
+      "verifyTitle": "Enter Password",
+      "password": "Password",
+      "confirmPassword": "Confirm Password",
+      "oldPassword": "Old Password",
+      "newPassword": "New Password",
+      "confirmNewPassword": "Confirm New Password",
+      "mismatch": "Passwords do not match",
+      "setSuccess": "Password set successfully",
+      "changeSuccess": "Password changed successfully",
+      "removeSuccess": "Password removed",
+      "verifyFailed": "Incorrect password",
+      "required": "This Canvas is locked, please enter the password",
+      "manage": "Manage Password"
     }
   },
   "store": {
@@ -467,7 +485,13 @@
       "deleted": "{name} has been deleted",
       "orderSaveFailed": "Failed to save order",
       "renameFailed": "Rename failed",
-      "renamed": "Renamed successfully"
+      "renamed": "Renamed successfully",
+      "passwordSet": "Password set successfully",
+      "setPasswordFailed": "Failed to set password",
+      "passwordChanged": "Password changed successfully",
+      "changePasswordFailed": "Failed to change password",
+      "passwordRemoved": "Password removed",
+      "removePasswordFailed": "Failed to remove password"
     },
     "connection": {
       "alreadyExists": "Connection already exists",
@@ -663,6 +687,10 @@
     "connectionUpdateFailed": "Failed to update connection: {id}",
     "canvasNotFound": "Canvas not found",
     "canvasInUse": "Cannot delete a Canvas that is in use",
+    "canvasPasswordNotSet": "This canvas does not have a password set",
+    "canvasOldPasswordWrong": "Old password is incorrect",
+    "canvasPasswordWrong": "Incorrect password",
+    "canvasPasswordRequired": "Password is incorrect or not provided",
     "repoUrlTooLong": "Repository URL exceeds length limit",
     "repoUrlInvalidFormat": "Invalid Repository URL format",
     "httpsUrlAuthNotAllowed": "HTTPS URL must not contain authentication credentials",

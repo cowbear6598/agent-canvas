@@ -2,7 +2,11 @@ import { readdir, readFile, stat } from "fs/promises";
 import path from "path";
 import { Zip, ZipDeflate } from "fflate";
 import ignore from "ignore";
-import { requireCanvas, resolvePod } from "./apiHelpers.js";
+import {
+  requireCanvas,
+  resolvePod,
+  requireCanvasPassword,
+} from "./apiHelpers.js";
 import { repositoryService } from "../services/repositoryService.js";
 import { HTTP_STATUS } from "../constants.js";
 import { logger } from "../utils/logger.js";
@@ -123,6 +127,9 @@ export async function handleDownloadPodDirectory(
 ): Promise<Response> {
   const { canvas, error } = requireCanvas(params.id);
   if (error) return error;
+
+  const passwordCheck = await requireCanvasPassword(req, canvas.id);
+  if (passwordCheck) return passwordCheck;
 
   const pod = resolvePod(canvas.id, decodeURIComponent(params.podId));
   if (!pod) {

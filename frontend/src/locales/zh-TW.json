@@ -460,6 +460,24 @@
       "newOutputStyleGroup": "新增 Output Style 群組",
       "newSubAgentGroup": "新增 SubAgent 群組",
       "newCommandGroup": "新增 Command 群組"
+    },
+    "password": {
+      "setTitle": "設定密碼",
+      "changeTitle": "修改密碼",
+      "removeTitle": "解除密碼",
+      "verifyTitle": "輸入密碼",
+      "password": "密碼",
+      "confirmPassword": "確認密碼",
+      "oldPassword": "舊密碼",
+      "newPassword": "新密碼",
+      "confirmNewPassword": "確認新密碼",
+      "mismatch": "密碼不一致",
+      "setSuccess": "密碼設定成功",
+      "changeSuccess": "密碼修改成功",
+      "removeSuccess": "密碼已解除",
+      "verifyFailed": "密碼錯誤",
+      "required": "此 Canvas 已鎖定，請輸入密碼",
+      "manage": "密碼管理"
     }
   },
   "store": {
@@ -467,7 +485,13 @@
       "deleted": "{name} 已被刪除",
       "orderSaveFailed": "排序儲存失敗",
       "renameFailed": "重新命名失敗",
-      "renamed": "重新命名成功"
+      "renamed": "重新命名成功",
+      "passwordSet": "密碼設定成功",
+      "setPasswordFailed": "密碼設定失敗",
+      "passwordChanged": "密碼修改成功",
+      "changePasswordFailed": "密碼修改失敗",
+      "passwordRemoved": "密碼已解除",
+      "removePasswordFailed": "解除密碼失敗"
     },
     "connection": {
       "alreadyExists": "連線已存在",
@@ -663,6 +687,10 @@
     "connectionUpdateFailed": "無法更新 connection：{id}",
     "canvasNotFound": "找不到 Canvas",
     "canvasInUse": "無法刪除正在使用的 Canvas",
+    "canvasPasswordNotSet": "此畫布尚未設定密碼",
+    "canvasOldPasswordWrong": "舊密碼不正確",
+    "canvasPasswordWrong": "密碼不正確",
+    "canvasPasswordRequired": "密碼錯誤或未提供密碼",
     "repoUrlTooLong": "Repository URL 長度超過限制",
     "repoUrlInvalidFormat": "Repository URL 格式不正確",
     "httpsUrlAuthNotAllowed": "HTTPS URL 不允許包含認證資訊",

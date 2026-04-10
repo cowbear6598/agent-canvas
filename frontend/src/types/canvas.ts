@@ -1,79 +1,81 @@
 export interface Canvas {
-  id: string
-  name: string
-  sortIndex: number
+  id: string;
+  name: string;
+  sortIndex: number;
+  isPasswordProtected: boolean;
 }
 
 export interface CanvasCreatePayload {
-  requestId: string
-  name: string
+  requestId: string;
+  name: string;
 }
 
 export interface CanvasListPayload {
-  requestId: string
+  requestId: string;
 }
 
 export interface CanvasRenamePayload {
-  requestId: string
-  canvasId: string
-  newName: string
+  requestId: string;
+  canvasId: string;
+  newName: string;
 }
 
 export interface CanvasDeletePayload {
-  requestId: string
-  canvasId: string
+  requestId: string;
+  canvasId: string;
 }
 
 export interface CanvasSwitchPayload {
-  requestId: string
-  canvasId: string
+  requestId: string;
+  canvasId: string;
+  password?: string;
 }
 
 export interface CanvasCreatedPayload {
-  requestId: string
-  success: boolean
-  canvas?: Canvas
-  error?: string
+  requestId: string;
+  success: boolean;
+  canvas?: Canvas;
+  error?: string;
 }
 
 export interface CanvasListResultPayload {
-  requestId: string
-  success: boolean
-  canvases?: Canvas[]
-  error?: string
+  requestId: string;
+  success: boolean;
+  canvases?: Canvas[];
+  error?: string;
 }
 
 export interface CanvasRenamedPayload {
-  requestId: string
-  success: boolean
+  requestId: string;
+  success: boolean;
   canvas?: {
-    id: string
-    name: string
-  }
-  error?: string
+    id: string;
+    name: string;
+  };
+  error?: string;
 }
 
 export interface CanvasDeletedPayload {
-  requestId: string
-  success: boolean
-  canvasId?: string
-  error?: string
+  requestId: string;
+  success: boolean;
+  canvasId?: string;
+  error?: string;
 }
 
 export interface CanvasSwitchedPayload {
-  requestId: string
-  success: boolean
-  canvasId?: string
-  error?: string
+  requestId: string;
+  success: boolean;
+  canvasId?: string;
+  error?: string;
 }
 
 export interface CanvasReorderPayload {
-  requestId: string
-  canvasIds: string[]
+  requestId: string;
+  canvasIds: string[];
 }
 
 export interface CanvasReorderedPayload {
-  requestId: string
-  success: boolean
-  error?: string
+  requestId: string;
+  success: boolean;
+  error?: string;
 }

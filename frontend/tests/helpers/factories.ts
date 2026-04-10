@@ -49,6 +49,7 @@ export function createMockCanvas(overrides?: Partial<Canvas>): Canvas {
     id: `canvas-${++canvasCounter}`,
     name: `Canvas ${canvasCounter}`,
     sortIndex: canvasCounter,
+    isPasswordProtected: false,
     ...overrides,
   };
 }

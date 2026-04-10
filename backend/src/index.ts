@@ -96,8 +96,9 @@ async function startServer(): Promise<void> {
       const corsHeaders = origin
         ? {
             "Access-Control-Allow-Origin": origin,
-            "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type",
+            "Access-Control-Allow-Methods":
+              "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, X-Canvas-Password",
             "Access-Control-Max-Age": "86400",
           }
         : undefined;

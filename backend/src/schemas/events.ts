@@ -279,4 +279,5 @@ export enum WebSocketResponseEvents {
   BACKUP_COMPLETED = "backup:completed",
   BACKUP_FAILED = "backup:failed",
   BACKUP_TEST_CONNECTION_RESULT = "backup:test-connection:result",
+  CANVAS_LOCK_CHANGED = "canvas:lock:changed",
 }

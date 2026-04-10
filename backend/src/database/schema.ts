@@ -274,4 +274,14 @@ export function createTables(db: Database): void {
       throw e;
     }
   }
+
+  // Migration: canvases 新增 password_hash 欄位（Canvas 密碼鎖功能）
+  try {
+    db.exec("ALTER TABLE canvases ADD COLUMN password_hash TEXT");
+  } catch (e) {
+    // 欄位已存在時忽略，其他錯誤重新拋出
+    if (!(e instanceof Error && e.message.includes("duplicate column"))) {
+      throw e;
+    }
+  }
 }

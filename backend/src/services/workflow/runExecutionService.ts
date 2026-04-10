@@ -128,6 +128,10 @@ export function settleInstanceIfUnreachable(
 class RunExecutionService {
   // key: runId, value: Set<podId> — 追蹤每個 run 中正在活躍串流的 pod
   private activeRunStreams: Map<string, Set<string>> = new Map();
+  // key: runId, value: AbortController — 每個 run 對應一個中止控制器
+  private runAbortControllers: Map<string, AbortController> = new Map();
+  // key: runId, value: Set<Promise<void>> — 每個 run 追蹤所有進行中的非同步任務
+  private pendingRunTasks: Map<string, Set<Promise<void>>> = new Map();
 
   async createRun(
     canvasId: string,
@@ -139,6 +143,10 @@ class RunExecutionService {
       sourcePodId,
       triggerMessage,
     );
+
+    // 為每個 Run 建立獨立的中止控制器與任務追蹤集合
+    this.runAbortControllers.set(workflowRun.id, new AbortController());
+    this.pendingRunTasks.set(workflowRun.id, new Set());
 
     const chainPodIds = this.collectChainPodIds(canvasId, sourcePodId);
     // key: repositoryId，value: 已建立的 worktree 路徑（null 表示建立失敗或無需建立）
@@ -757,7 +765,45 @@ class RunExecutionService {
     return runIds;
   }
 
+  /**
+   * 檢查指定 run 是否已被中止。
+   * 若 controller 不存在（已清理或未建立），也視為已中止，防止殘留操作繼續執行。
+   */
+  isRunAborted(runId: string): boolean {
+    const controller = this.runAbortControllers.get(runId);
+    if (!controller) return true;
+    return controller.signal.aborted;
+  }
+
+  /**
+   * 取得指定 run 的 abort signal，供執行策略使用。
+   */
+  getRunAbortSignal(runId: string): AbortSignal | undefined {
+    return this.runAbortControllers.get(runId)?.signal;
+  }
+
+  /**
+   * 將非同步任務加入指定 run 的追蹤集合。
+   * 任務完成（resolve 或 reject）後自動移除，避免集合持續累積。
+   */
+  trackRunTask(runId: string, task: Promise<void>): void {
+    const tasks = this.pendingRunTasks.get(runId);
+    if (!tasks) return;
+
+    tasks.add(task);
+    task.finally(() => {
+      tasks.delete(task);
+    });
+  }
+
   async deleteRun(runId: string): Promise<void> {
+    // 第一步：發出中止信號，通知所有進行中操作停止
+    const abortController = this.runAbortControllers.get(runId);
+    if (abortController) {
+      abortController.abort();
+    }
+
+    // 第二步：逐一中止 Claude 串流
     const activePodIds = this.activeRunStreams.get(runId);
     if (activePodIds) {
       for (const podId of activePodIds) {
@@ -776,14 +822,26 @@ class RunExecutionService {
       this.activeRunStreams.delete(runId);
     }
 
+    // 第三步：等待所有進行中的任務完成，避免 DB 刪除後發生 FOREIGN KEY 錯誤
+    // 加入 10 秒 timeout，防止 Claude SDK 未回應 abort 時無限等待
+    const pendingTasks = [...(this.pendingRunTasks.get(runId) ?? [])];
+    await Promise.race([
+      Promise.allSettled(pendingTasks),
+      new Promise<void>((resolve) => setTimeout(resolve, 10000)),
+    ]);
+
     const run = runStore.getRun(runId);
     const canvasId = run?.canvasId ?? "";
 
-    // 防禦性清理：處理 Run 中途被砍、或 evaluateRunStatus 清理失敗的情況
+    // 第四步：防禦性清理 worktree，然後刪除 DB 資料
     await this.cleanupRunWorktrees(runId);
 
     runStore.deleteRun(runId);
     logger.log("Run", "Delete", `刪除 Run ${runId}`);
+
+    // 清理 AbortController 與任務追蹤集合
+    this.runAbortControllers.delete(runId);
+    this.pendingRunTasks.delete(runId);
 
     if (canvasId) {
       socketService.emitToCanvas(

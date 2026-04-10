@@ -1,3 +1,4 @@
+import { fetchWithCanvasPassword } from "@/services/canvasPasswordFetch";
 import { getApiBaseUrl } from "@/services/utils";
 
 async function readStreamWithProgress(
@@ -44,8 +45,9 @@ export async function downloadPodDirectory(
   onProgress?: (downloadedBytes: number) => void,
 ): Promise<void> {
   const baseUrl = getApiBaseUrl();
-  const response = await fetch(
+  const response = await fetchWithCanvasPassword(
     `${baseUrl}/api/canvas/${canvasId}/pods/${podId}/download`,
+    canvasId,
   );
 
   if (!response.ok) {

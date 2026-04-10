@@ -4,6 +4,7 @@ import {
   requireCanvas,
   resolvePod,
   requireJsonBody,
+  requireCanvasPassword,
 } from "./apiHelpers.js";
 import {
   createPodWithWorkspace,
@@ -85,12 +86,15 @@ function validateCreatePodBody(
   return { name, x: data.x as number, y: data.y as number, model };
 }
 
-export function handleListPods(
-  _req: Request,
+export async function handleListPods(
+  req: Request,
   params: Record<string, string>,
-): Response {
+): Promise<Response> {
   const { canvas, error } = requireCanvas(params.id);
   if (error) return error;
+
+  const passwordCheck = await requireCanvasPassword(req, canvas.id);
+  if (passwordCheck) return passwordCheck;
 
   const pods = podStore.list(canvas.id);
   return jsonResponse({ pods }, HTTP_STATUS.OK);
@@ -107,6 +111,9 @@ export async function handleCreatePod(
 
   const { canvas, error } = requireCanvas(params.id);
   if (error) return error;
+
+  const passwordCheck = await requireCanvasPassword(req, canvas.id);
+  if (passwordCheck) return passwordCheck;
 
   const validated = validateCreatePodBody(body as Record<string, unknown>);
   if ("error" in validated) {
@@ -133,7 +140,12 @@ export async function handleCreatePod(
   );
 
   if (!result.success) {
-    logger.error("Pod", "Error", "建立 Pod 失敗", getResultErrorString(result.error));
+    logger.error(
+      "Pod",
+      "Error",
+      "建立 Pod 失敗",
+      getResultErrorString(result.error),
+    );
     return jsonResponse(
       { error: "建立 Pod 時發生內部錯誤" },
       HTTP_STATUS.INTERNAL_ERROR,
@@ -154,6 +166,9 @@ export async function handleRenamePod(
 
   const { canvas, error } = requireCanvas(params.id);
   if (error) return error;
+
+  const passwordCheck = await requireCanvasPassword(req, canvas.id);
+  if (passwordCheck) return passwordCheck;
 
   const pod = resolvePod(canvas.id, decodeURIComponent(params.podId));
   if (!pod) {
@@ -204,11 +219,14 @@ export async function handleRenamePod(
 }
 
 export async function handleDeletePod(
-  _req: Request,
+  req: Request,
   params: Record<string, string>,
 ): Promise<Response> {
   const { canvas, error } = requireCanvas(params.id);
   if (error) return error;
+
+  const passwordCheck = await requireCanvasPassword(req, canvas.id);
+  if (passwordCheck) return passwordCheck;
 
   const pod = resolvePod(canvas.id, decodeURIComponent(params.podId));
   if (!pod) {
@@ -217,7 +235,12 @@ export async function handleDeletePod(
 
   const result = await deletePodWithCleanup(canvas.id, pod.id, "system");
   if (!result.success) {
-    logger.error("Pod", "Error", "刪除 Pod 失敗", getResultErrorString(result.error));
+    logger.error(
+      "Pod",
+      "Error",
+      "刪除 Pod 失敗",
+      getResultErrorString(result.error),
+    );
     return jsonResponse(
       { error: "刪除 Pod 時發生錯誤" },
       HTTP_STATUS.INTERNAL_ERROR,

@@ -47,6 +47,10 @@ const sharedGlobals = {
   Blob: "readonly",
   ArrayBuffer: "readonly",
   ReadableStream: "readonly",
+  Headers: "readonly",
+  Response: "readonly",
+  Request: "readonly",
+  RequestInit: "readonly",
 };
 
 export default [

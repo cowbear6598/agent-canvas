@@ -171,6 +171,8 @@ export class RunModeExecutionStrategy implements ExecutionStrategy {
   }
 
   persistMessage(podId: string, message: PersistedMessage): void {
+    // Run 已被刪除時跳過寫入，避免 FOREIGN KEY constraint failed
+    if (runExecutionService.isRunAborted(this.runContext.runId)) return;
     runStore.upsertRunMessage(this.runContext.runId, podId, message);
   }
 
@@ -178,6 +180,8 @@ export class RunModeExecutionStrategy implements ExecutionStrategy {
     podId: string,
     content: string | ContentBlock[],
   ): Promise<void> {
+    // Run 已被刪除時跳過寫入，避免 FOREIGN KEY constraint failed
+    if (runExecutionService.isRunAborted(this.runContext.runId)) return;
     await injectRunUserMessage(this.runContext, podId, content);
   }
 

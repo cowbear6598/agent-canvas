@@ -30,6 +30,7 @@ import {
 } from "./workflowStatusDelegate.js";
 import { NormalModeExecutionStrategy } from "../normalExecutionStrategy.js";
 import { RunModeExecutionStrategy } from "../executionStrategy.js";
+import { runExecutionService } from "./runExecutionService.js";
 
 interface ExecutionServiceDeps {
   pipeline: PipelineMethods;
@@ -169,6 +170,11 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     sourcePodId: string,
     runContext?: RunContext,
   ): Promise<void> {
+    // Run 已被刪除時中止，避免觸發下游導致 FOREIGN KEY 錯誤
+    if (runContext && runExecutionService.isRunAborted(runContext.runId)) {
+      return;
+    }
+
     const connections = connectionStore.findBySourcePodId(
       canvasId,
       sourcePodId,
@@ -265,18 +271,31 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
 
     // 刻意不 await：Claude 查詢是長時間操作，結果透過 WebSocket 事件通知前端。
     // 若改為 await，呼叫方的 Promise.allSettled 會等到查詢完成才繼續，喪失多 connection 並行觸發的能力。
+
+    // Run 已被刪除時跳過查詢，避免 FOREIGN KEY 錯誤
+    if (runContext && runExecutionService.isRunAborted(runContext.runId)) {
+      return;
+    }
+
+    const queryTask = this.executeClaudeQuery({
+      canvasId,
+      connectionId,
+      sourcePodId,
+      targetPodId,
+      content: summary,
+      participatingConnectionIds: resolvedConnectionIds,
+      strategy,
+      runContext,
+      delegate,
+    });
+
+    // Run mode 下追蹤此任務，讓 deleteRun 能等待完成再刪 DB，避免 FOREIGN KEY 錯誤
+    if (runContext) {
+      runExecutionService.trackRunTask(runContext.runId, queryTask);
+    }
+
     fireAndForget(
-      this.executeClaudeQuery({
-        canvasId,
-        connectionId,
-        sourcePodId,
-        targetPodId,
-        content: summary,
-        participatingConnectionIds: resolvedConnectionIds,
-        strategy,
-        runContext,
-        delegate,
-      }),
+      queryTask,
       "Workflow",
       `executeClaudeQuery 執行失敗 (connection: ${connectionId})`,
     );
@@ -351,11 +370,22 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     );
 
     // 刻意不 await：下游 workflow 觸發獨立於當前查詢完成流程
-    fireAndForget(
-      this.checkAndTriggerWorkflows(canvasId, targetPodId, runContext),
-      "Workflow",
-      `下游 workflow 觸發失敗 (pod: ${targetPodId})`,
-    );
+    // Run 已被刪除時跳過下游觸發，避免 FOREIGN KEY 錯誤
+    if (!runContext || !runExecutionService.isRunAborted(runContext.runId)) {
+      const downstreamTask = this.checkAndTriggerWorkflows(
+        canvasId,
+        targetPodId,
+        runContext,
+      );
+      if (runContext) {
+        runExecutionService.trackRunTask(runContext.runId, downstreamTask);
+      }
+      fireAndForget(
+        downstreamTask,
+        "Workflow",
+        `下游 workflow 觸發失敗 (pod: ${targetPodId})`,
+      );
+    }
 
     delegate.scheduleNextInQueue(canvasId, targetPodId);
   }
