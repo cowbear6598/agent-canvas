@@ -139,6 +139,24 @@ function isSessionResumeError(errorMessage: string): boolean {
   );
 }
 
+/**
+ * 解析 Claude 查詢應使用的 resumeSessionId。
+ *
+ * - Run mode（runOptions.queryKey 存在）：只使用 runOptions.sessionId，
+ *   不 fallback 到 pod 全域 session，因為 Run mode 是一次性執行。
+ * - Normal mode：優先使用 runOptions.sessionId，否則 fallback 到 podClaudeSessionId。
+ */
+export function resolveResumeSessionId(
+  runOptions: RunQueryOptions | undefined,
+  podClaudeSessionId: string | null | undefined,
+): string | null {
+  const isRunMode = Boolean(runOptions?.queryKey);
+  if (isRunMode) {
+    return runOptions?.sessionId ?? null;
+  }
+  return runOptions?.sessionId ?? podClaudeSessionId ?? null;
+}
+
 export class ClaudeService {
   private activeQueries = new Map<
     string,
@@ -723,7 +741,10 @@ export class ClaudeService {
     );
     const pluginOptions = this.applyPlugins(pod);
 
-    const resumeSessionId = runOptions?.sessionId ?? pod.claudeSessionId;
+    const resumeSessionId = resolveResumeSessionId(
+      runOptions,
+      pod.claudeSessionId,
+    );
 
     return {
       ...this.buildBaseOptions(cwd),
@@ -889,7 +910,10 @@ export class ClaudeService {
 
     const cwd = this.resolveCwdWithRunContext(pod, runOptions);
     const queryOptions = await this.buildQueryOptions(pod, cwd, runOptions);
-    const resumeSessionId = runOptions?.sessionId ?? pod.claudeSessionId;
+    const resumeSessionId = resolveResumeSessionId(
+      runOptions,
+      pod.claudeSessionId,
+    );
     const prompt = this.buildPrompt(message, pod.commandId, resumeSessionId);
 
     const context: ExecutionContext = {

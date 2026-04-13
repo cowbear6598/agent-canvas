@@ -661,13 +661,12 @@ class GitService {
 
     const currentBranch = branchResult.data;
 
-    // 執行 fetch + reset --hard + clean -fd
+    // 執行 fetch + reset --hard（不執行 clean -fd，避免刪除 .claude/ 等動態管理的 untracked 檔案）
     return gitOperationWithPath(
       workspacePath,
       async (git) => {
         await git.fetch(["origin", currentBranch]);
         await git.reset(["--hard", `origin/${currentBranch}`]);
-        await git.clean(["f", "d"]);
       },
       "同步 remote 最新版本失敗",
     );

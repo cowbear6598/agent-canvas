@@ -25,6 +25,7 @@ vi.mock("../../src/utils/logger.js", () => ({
 
 import {
   claudeService,
+  resolveResumeSessionId,
   type StreamEvent,
 } from "../../src/services/claude/claudeService.js";
 import * as claudeAgentSdk from "@anthropic-ai/claude-agent-sdk";
@@ -1326,5 +1327,48 @@ describe("ClaudeService", () => {
         }),
       );
     });
+  });
+});
+
+describe("resolveResumeSessionId", () => {
+  const podSessionId = "pod-global-session";
+
+  it("Run mode + 無 sessionId：應回傳 null，不 fallback 到 pod session", () => {
+    const result = resolveResumeSessionId(
+      { queryKey: "run1:pod1" },
+      podSessionId,
+    );
+    expect(result).toBeNull();
+  });
+
+  it("Run mode + 有 sessionId：應回傳 runOptions.sessionId", () => {
+    const result = resolveResumeSessionId(
+      { queryKey: "run1:pod1", sessionId: "session-abc" },
+      podSessionId,
+    );
+    expect(result).toBe("session-abc");
+  });
+
+  it("Normal mode + runOptions 為 undefined：應 fallback 到 pod.claudeSessionId", () => {
+    const result = resolveResumeSessionId(undefined, podSessionId);
+    expect(result).toBe(podSessionId);
+  });
+
+  it("Normal mode + runOptions 無 sessionId（空物件）：應 fallback 到 pod.claudeSessionId", () => {
+    const result = resolveResumeSessionId({}, podSessionId);
+    expect(result).toBe(podSessionId);
+  });
+
+  it("Normal mode + 有 sessionId：應優先使用 runOptions.sessionId，不使用 pod session", () => {
+    const result = resolveResumeSessionId(
+      { sessionId: "session-xyz" },
+      podSessionId,
+    );
+    expect(result).toBe("session-xyz");
+  });
+
+  it("Normal mode + pod.claudeSessionId 為 null：應回傳 null", () => {
+    const result = resolveResumeSessionId(undefined, null);
+    expect(result).toBeNull();
   });
 });
