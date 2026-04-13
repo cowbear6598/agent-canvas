@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.7] - 2026-04-13
+
+### 修正
+- 修復 Multi-Instance Pod 綁定 Integration 時聊天室無法觸發 Run 的問題，改為顯示 Integration 驅動提示
+- 修復 Run 模式誤用 Pod 全域舊 Session 導致 Claude 無回覆的問題
+- 修復 syncToRemoteLatest 的 git clean -fd 刪除 .claude/ 目錄導致 Claude SDK 無法運作的問題
+- 修復 Integration App 建立時因等待初始化導致測試 timeout 的問題
+- 修復建立回應阻塞初始化的問題，改為立即發送回應並背景執行初始化
+
 ## [1.0.6] - 2026-04-10
 
 ### 新增
