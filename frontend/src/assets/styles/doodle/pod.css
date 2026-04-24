@@ -351,7 +351,7 @@
   box-shadow:
     0 0 20px oklch(0.75 0.22 220 / 0.8),
     0 0 32px oklch(0.65 0.2 220 / 0.5);
-  animation: pod-chatting-glow-opacity 2s ease-in-out infinite;
+  animation: pod-glow-pulse-opacity 2s ease-in-out infinite;
 }
 
 /* Summarizing 狀態：金黃色呼吸光暈，只動 opacity */
@@ -359,7 +359,7 @@
   box-shadow:
     0 0 20px 8px oklch(0.8 0.18 85 / 0.7),
     0 0 30px 12px oklch(0.75 0.15 85 / 0.5);
-  animation: pod-summarizing-glow-opacity 2s ease-in-out infinite;
+  animation: pod-glow-pulse-opacity 2s ease-in-out infinite;
 }
 
 /* Selected 狀態：薄荷綠外圈光暈 */
@@ -367,18 +367,9 @@
   box-shadow: 0 0 0 3px oklch(0.65 0.15 170 / 0.6);
 }
 
-/* keyframes：只動 opacity（Compositor Thread 可加速，無 Paint） */
-@keyframes pod-chatting-glow-opacity {
-  0%,
-  100% {
-    opacity: 0.4;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
-@keyframes pod-summarizing-glow-opacity {
+/* keyframes：只動 opacity（Compositor Thread 可加速，無 Paint）
+   chatting 與 summarizing 共用此動畫，兩者僅 box-shadow 色彩不同 */
+@keyframes pod-glow-pulse-opacity {
   0%,
   100% {
     opacity: 0.4;

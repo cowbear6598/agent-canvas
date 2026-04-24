@@ -1,4 +1,6 @@
 <script setup lang="ts">
+// 介面採扁平 props/emit 設計，每種 slot 類型獨立傳入與通知；
+// 新增 slot 類型需同步更新此元件 props、template、emits 與 CanvasPod 對應 listener。
 import { computed, toRef } from "vue";
 import { useI18n } from "vue-i18n";
 import type {
@@ -50,6 +52,8 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 
+// 子元件自行取 store 是有意設計，避免父元件介面爆炸；
+// store 為 singleton，重複呼叫無額外成本。
 const skillStore = useSkillStore();
 const subAgentStore = useSubAgentStore();
 const mcpServerStore = useMcpServerStore();
@@ -69,102 +73,180 @@ const {
 
 /** 不支援功能時顯示的 tooltip 文字（由 i18n 提供） */
 const DISABLED_TOOLTIP = computed(() => t("pod.slot.codexDisabled"));
+
+// -----------------------------------------------------------------------
+// Slot 設定陣列：每筆描述一個 slot 的型態、資料來源與 emit 對應
+// 新增 slot 類型只需在此加一筆，並補對應 emit 宣告即可。
+//
+// type === 'single'：對應 PodSingleBindSlot（一個 slot 只能綁定一個 note）
+// type === 'multi'： 對應 PodMultiBindSlot（一個 slot 可綁定多個 note）
+// -----------------------------------------------------------------------
+
+type SingleSlotConfig = {
+  kind: "single";
+  areaClass: string;
+  slotClass: string;
+  label: string;
+  store: typeof outputStyleStore | typeof repositoryStore | typeof commandStore;
+  boundNote: () => OutputStyleNote | RepositoryNote | CommandNote | undefined;
+  disabled: () => boolean;
+  disabledTooltip: () => string;
+  onDropped: (noteId: string) => void;
+  onRemoved: () => void;
+};
+
+type MultiSlotConfig = {
+  kind: "multi";
+  areaClass: string;
+  slotClass: string;
+  label: string;
+  store: typeof skillStore | typeof subAgentStore | typeof mcpServerStore;
+  boundNotes: () => SkillNote[] | SubAgentNote[] | McpServerNote[];
+  duplicateToastTitle: () => string;
+  duplicateToastDescription: () => string;
+  menuScrollableClass: string;
+  itemIdField: string;
+  disabled: () => boolean;
+  disabledTooltip: () => string;
+  onDropped: (noteId: string) => void;
+};
+
+type SlotConfig = SingleSlotConfig | MultiSlotConfig;
+
+const slotConfigs = computed((): SlotConfig[] => [
+  {
+    kind: "single",
+    areaClass: "pod-notch-area-base pod-notch-area",
+    slotClass: "pod-output-style-slot",
+    label: "Style",
+    store: outputStyleStore,
+    boundNote: () => props.boundOutputStyleNote,
+    disabled: () => !isOutputStyleEnabled.value,
+    disabledTooltip: () => DISABLED_TOOLTIP.value,
+    onDropped: (noteId: string) => {
+      if (!noteId) return;
+      emit("output-style-dropped", noteId);
+    },
+    onRemoved: () => emit("output-style-removed"),
+  },
+  {
+    kind: "multi",
+    areaClass: "pod-notch-area-base pod-skill-notch-area",
+    slotClass: "pod-skill-slot",
+    label: "Skills",
+    store: skillStore,
+    boundNotes: () => props.boundSkillNotes,
+    duplicateToastTitle: () => t("pod.slot.duplicateTitle"),
+    duplicateToastDescription: () => t("pod.slot.skillDuplicate"),
+    menuScrollableClass: "pod-skill-menu-scrollable",
+    itemIdField: "skillId",
+    disabled: () => !isSkillEnabled.value,
+    disabledTooltip: () => DISABLED_TOOLTIP.value,
+    onDropped: (noteId: string) => {
+      if (!noteId) return;
+      emit("skill-dropped", noteId);
+    },
+  },
+  {
+    kind: "multi",
+    areaClass: "pod-notch-area-base pod-subagent-notch-area",
+    slotClass: "pod-subagent-slot",
+    label: "SubAgents",
+    store: subAgentStore,
+    boundNotes: () => props.boundSubAgentNotes,
+    duplicateToastTitle: () => t("pod.slot.duplicateTitle"),
+    duplicateToastDescription: () => t("pod.slot.subAgentDuplicate"),
+    menuScrollableClass: "pod-subagent-menu-scrollable",
+    itemIdField: "subAgentId",
+    disabled: () => !isSubAgentEnabled.value,
+    disabledTooltip: () => DISABLED_TOOLTIP.value,
+    onDropped: (noteId: string) => {
+      if (!noteId) return;
+      emit("subagent-dropped", noteId);
+    },
+  },
+  {
+    kind: "single",
+    areaClass: "pod-notch-area-base pod-repository-notch-area",
+    slotClass: "pod-repository-slot",
+    label: "Repo",
+    store: repositoryStore,
+    boundNote: () => props.boundRepositoryNote,
+    disabled: () => !isRepositoryEnabled.value,
+    disabledTooltip: () => DISABLED_TOOLTIP.value,
+    onDropped: (noteId: string) => {
+      if (!noteId) return;
+      emit("repository-dropped", noteId);
+    },
+    onRemoved: () => emit("repository-removed"),
+  },
+  {
+    kind: "single",
+    areaClass: "pod-notch-area-base pod-command-notch-area",
+    slotClass: "pod-command-slot",
+    label: "Command",
+    store: commandStore,
+    boundNote: () => props.boundCommandNote,
+    disabled: () => !isCommandEnabled.value,
+    disabledTooltip: () => DISABLED_TOOLTIP.value,
+    onDropped: (noteId: string) => {
+      if (!noteId) return;
+      emit("command-dropped", noteId);
+    },
+    onRemoved: () => emit("command-removed"),
+  },
+  {
+    kind: "multi",
+    areaClass: "pod-notch-area-base pod-mcp-server-notch-area",
+    slotClass: "pod-mcp-server-slot",
+    label: "MCPs",
+    store: mcpServerStore,
+    boundNotes: () => props.boundMcpServerNotes,
+    duplicateToastTitle: () => t("pod.slot.duplicateTitle"),
+    duplicateToastDescription: () => t("pod.slot.mcpServerDuplicate"),
+    menuScrollableClass: "pod-mcp-server-menu-scrollable",
+    itemIdField: "mcpServerId",
+    disabled: () => !isMcpEnabled.value,
+    disabledTooltip: () => DISABLED_TOOLTIP.value,
+    onDropped: (noteId: string) => {
+      if (!noteId) return;
+      emit("mcp-server-dropped", noteId);
+    },
+  },
+]);
 </script>
 
 <template>
-  <div class="pod-notch-area-base pod-notch-area">
-    <PodSingleBindSlot
-      :pod-id="props.podId"
-      :bound-note="props.boundOutputStyleNote"
-      :store="outputStyleStore"
-      label="Style"
-      slot-class="pod-output-style-slot"
-      :pod-rotation="props.podRotation"
-      :disabled="!isOutputStyleEnabled"
-      :disabled-tooltip="DISABLED_TOOLTIP"
-      @note-dropped="(noteId) => emit('output-style-dropped', noteId)"
-      @note-removed="() => emit('output-style-removed')"
-    />
-  </div>
-
-  <div class="pod-notch-area-base pod-skill-notch-area">
-    <PodMultiBindSlot
-      :pod-id="props.podId"
-      :bound-notes="props.boundSkillNotes"
-      :store="skillStore"
-      label="Skills"
-      :duplicate-toast-title="t('pod.slot.duplicateTitle')"
-      :duplicate-toast-description="t('pod.slot.skillDuplicate')"
-      slot-class="pod-skill-slot"
-      menu-scrollable-class="pod-skill-menu-scrollable"
-      item-id-field="skillId"
-      :disabled="!isSkillEnabled"
-      :disabled-tooltip="DISABLED_TOOLTIP"
-      @note-dropped="(noteId) => emit('skill-dropped', noteId)"
-    />
-  </div>
-
-  <div class="pod-notch-area-base pod-subagent-notch-area">
-    <PodMultiBindSlot
-      :pod-id="props.podId"
-      :bound-notes="props.boundSubAgentNotes"
-      :store="subAgentStore"
-      label="SubAgents"
-      :duplicate-toast-title="t('pod.slot.duplicateTitle')"
-      :duplicate-toast-description="t('pod.slot.subAgentDuplicate')"
-      slot-class="pod-subagent-slot"
-      menu-scrollable-class="pod-subagent-menu-scrollable"
-      item-id-field="subAgentId"
-      :disabled="!isSubAgentEnabled"
-      :disabled-tooltip="DISABLED_TOOLTIP"
-      @note-dropped="(noteId) => emit('subagent-dropped', noteId)"
-    />
-  </div>
-
-  <div class="pod-notch-area-base pod-repository-notch-area">
-    <PodSingleBindSlot
-      :pod-id="props.podId"
-      :bound-note="props.boundRepositoryNote"
-      :store="repositoryStore"
-      label="Repo"
-      slot-class="pod-repository-slot"
-      :pod-rotation="props.podRotation"
-      :disabled="!isRepositoryEnabled"
-      :disabled-tooltip="DISABLED_TOOLTIP"
-      @note-dropped="(noteId) => emit('repository-dropped', noteId)"
-      @note-removed="() => emit('repository-removed')"
-    />
-  </div>
-
-  <div class="pod-notch-area-base pod-command-notch-area">
-    <PodSingleBindSlot
-      :pod-id="props.podId"
-      :bound-note="props.boundCommandNote"
-      :store="commandStore"
-      label="Command"
-      slot-class="pod-command-slot"
-      :pod-rotation="props.podRotation"
-      :disabled="!isCommandEnabled"
-      :disabled-tooltip="DISABLED_TOOLTIP"
-      @note-dropped="(noteId) => emit('command-dropped', noteId)"
-      @note-removed="() => emit('command-removed')"
-    />
-  </div>
-
-  <div class="pod-notch-area-base pod-mcp-server-notch-area">
-    <PodMultiBindSlot
-      :pod-id="props.podId"
-      :bound-notes="props.boundMcpServerNotes"
-      :store="mcpServerStore"
-      label="MCPs"
-      :duplicate-toast-title="t('pod.slot.duplicateTitle')"
-      :duplicate-toast-description="t('pod.slot.mcpServerDuplicate')"
-      slot-class="pod-mcp-server-slot"
-      menu-scrollable-class="pod-mcp-server-menu-scrollable"
-      item-id-field="mcpServerId"
-      :disabled="!isMcpEnabled"
-      :disabled-tooltip="DISABLED_TOOLTIP"
-      @note-dropped="(noteId) => emit('mcp-server-dropped', noteId)"
-    />
-  </div>
+  <template v-for="slot in slotConfigs" :key="slot.slotClass">
+    <div :class="slot.areaClass">
+      <PodSingleBindSlot
+        v-if="slot.kind === 'single'"
+        :pod-id="props.podId"
+        :bound-note="slot.boundNote()"
+        :store="slot.store"
+        :label="slot.label"
+        :slot-class="slot.slotClass"
+        :pod-rotation="props.podRotation"
+        :disabled="slot.disabled()"
+        :disabled-tooltip="slot.disabledTooltip()"
+        @note-dropped="slot.onDropped"
+        @note-removed="slot.onRemoved()"
+      />
+      <PodMultiBindSlot
+        v-else-if="slot.kind === 'multi'"
+        :pod-id="props.podId"
+        :bound-notes="slot.boundNotes()"
+        :store="slot.store"
+        :label="slot.label"
+        :duplicate-toast-title="slot.duplicateToastTitle()"
+        :duplicate-toast-description="slot.duplicateToastDescription()"
+        :slot-class="slot.slotClass"
+        :menu-scrollable-class="slot.menuScrollableClass"
+        :item-id-field="slot.itemIdField"
+        :disabled="slot.disabled()"
+        :disabled-tooltip="slot.disabledTooltip()"
+        @note-dropped="slot.onDropped"
+      />
+    </div>
+  </template>
 </template>

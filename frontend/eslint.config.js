@@ -18,6 +18,7 @@ const sharedGlobals = {
   cancelAnimationFrame: "readonly",
   fetch: "readonly",
   FormData: "readonly",
+  Element: "readonly",
   HTMLElement: "readonly",
   HTMLInputElement: "readonly",
   HTMLTextAreaElement: "readonly",

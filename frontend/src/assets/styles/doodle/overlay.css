@@ -1,3 +1,25 @@
+/* Overlay modal（從 interactions.css 遷入，overlay 相關規則集中於此） */
+.modal-overlay {
+  background: oklch(0.1 0.01 50 / 0.7);
+  backdrop-filter: blur(4px);
+}
+
+/* Long Press Progress Indicator - Doodle Style（從 interactions.css 遷入） */
+.long-press-indicator {
+  position: fixed;
+  pointer-events: none;
+  z-index: 10000;
+  transform: translate(-50%, -50%);
+}
+
+.long-press-ring {
+  filter: drop-shadow(2px 2px 0 oklch(0.4 0.02 50 / 0.5));
+}
+
+.long-press-ring circle:last-child {
+  transition: stroke-dashoffset 0.05s linear;
+}
+
 /* Trash Zone */
 .trash-zone {
   position: fixed;
@@ -59,14 +81,30 @@
 }
 
 .disconnect-overlay::before {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(45deg, oklch(0.12 0 0 / 0.3) 25%, transparent 25%, transparent 75%, oklch(0.12 0 0 / 0.3) 75%, oklch(0.12 0 0 / 0.3)),
-    linear-gradient(-45deg, oklch(0.15 0 0 / 0.3) 25%, transparent 25%, transparent 75%, oklch(0.15 0 0 / 0.3) 75%, oklch(0.15 0 0 / 0.3));
+    linear-gradient(
+      45deg,
+      oklch(0.12 0 0 / 0.3) 25%,
+      transparent 25%,
+      transparent 75%,
+      oklch(0.12 0 0 / 0.3) 75%,
+      oklch(0.12 0 0 / 0.3)
+    ),
+    linear-gradient(
+      -45deg,
+      oklch(0.15 0 0 / 0.3) 25%,
+      transparent 25%,
+      transparent 75%,
+      oklch(0.15 0 0 / 0.3) 75%,
+      oklch(0.15 0 0 / 0.3)
+    );
   background-size: 3px 3px;
-  background-position: 0 0, 1.5px 1.5px;
+  background-position:
+    0 0,
+    1.5px 1.5px;
   pointer-events: none;
   opacity: 0.4;
 }
@@ -115,7 +153,6 @@
   stroke-linejoin: round;
   stroke-dasharray: 6 4 18 3 10 7 9 5;
 }
-
 
 .disconnect-overlay.tv-turn-off {
   animation: tv-turn-off 0.5s ease-out forwards;

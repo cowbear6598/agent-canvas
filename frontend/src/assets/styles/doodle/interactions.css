@@ -1,9 +1,3 @@
-/* Overlay modal */
-.modal-overlay {
-  background: oklch(0.1 0.01 50 / 0.7);
-  backdrop-filter: blur(4px);
-}
-
 /* Selection - 框選相關樣式 */
 /* box-shadow 光暈改由 .pod-glow-layer.pod-glow-selected 負責（不受 transform: rotate 影響） */
 /* 此處只保留 border-color 和基礎陰影，確保邊框色正確 */
@@ -16,20 +10,4 @@
 .skill-note.selected {
   box-shadow: 0 0 0 2px oklch(0.65 0.15 170 / 0.6);
   border-color: oklch(0.55 0.15 170);
-}
-
-/* Long Press Progress Indicator - Doodle Style */
-.long-press-indicator {
-  position: fixed;
-  pointer-events: none;
-  z-index: 10000;
-  transform: translate(-50%, -50%);
-}
-
-.long-press-ring {
-  filter: drop-shadow(2px 2px 0 oklch(0.4 0.02 50 / 0.5));
-}
-
-.long-press-ring circle:last-child {
-  transition: stroke-dashoffset 0.05s linear;
 }

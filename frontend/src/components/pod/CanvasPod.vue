@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, toRef } from "vue";
 import type { Pod } from "@/types";
 import { useCanvasContext } from "@/composables/canvas/useCanvasContext";
 import { useBatchDrag } from "@/composables/canvas";
@@ -81,16 +81,32 @@ const showScheduleButton = computed(
 );
 const currentModel = computed(() => props.pod.providerConfig.model);
 
+// isElementSelected 內部使用 selectedElementSet（Set<string>），O(1) 查找
 const isSelected = computed(() =>
-  selectionStore.selectedPodIds.includes(props.pod.id),
+  selectionStore.isElementSelected("pod", props.pod.id),
 );
 
+// PodStatus 白名單（對應 types/pod.ts 的 PodStatus union）；
+// 未知 status 不注入任意 class，回傳空字串。
+const ALLOWED_STATUSES = ["idle", "chatting", "summarizing", "error"] as const;
+
 const podStatusClass = computed(() => {
-  return props.pod.status ? `pod-status-${props.pod.status}` : "";
+  const status = props.pod.status;
+  return status && (ALLOWED_STATUSES as readonly string[]).includes(status)
+    ? `pod-status-${status}`
+    : "";
 });
 
+// 允許的 provider 列表（與 PodProvider type 保持同步）；
+// 未知 provider 不注入任意 class，回傳空字串。
+const ALLOWED_PROVIDERS = ["claude", "codex"] as const;
+
 // 依 provider 動態套用漸層 class，方便未來擴增第三個 provider
-const podProviderClass = computed(() => `pod-provider-${props.pod.provider}`);
+const podProviderClass = computed(() =>
+  (ALLOWED_PROVIDERS as readonly string[]).includes(props.pod.provider)
+    ? `pod-provider-${props.pod.provider}`
+    : "",
+);
 
 const emit = defineEmits<{
   select: [podId: string];
@@ -115,7 +131,8 @@ const isWorkflowRunning = computed(() =>
   connectionStore.isWorkflowRunning(props.pod.id),
 );
 
-const computedPodId = computed(() => props.pod.id);
+// toRef(() => ...) 的 getter 形式（Vue 3.3+）更語義化：此為「對 prop 的引用」非「衍生計算值」
+const computedPodId = toRef(() => props.pod.id);
 
 // 取得此 Pod 的 capability，用於守門不支援的功能入口
 const { isRunModeEnabled } = usePodCapabilities(computedPodId);
@@ -164,17 +181,12 @@ const {
   handleCancelClear,
 } = useWorkflowClear(computedPodId, { chatStore, podStore, connectionStore });
 
-const SLOT_CLASSES = [
-  ".pod-output-style-slot",
-  ".pod-skill-slot",
-  ".pod-subagent-slot",
-  ".pod-repository-slot",
-  ".pod-command-slot",
-  ".pod-mcp-server-slot",
-];
+// 合併成單一 CSS selector 字串，closest() 一次查詢取代原本最差 6 次 DOM 遍歷
+const SLOT_CLASSES =
+  ".pod-output-style-slot, .pod-skill-slot, .pod-subagent-slot, .pod-repository-slot, .pod-command-slot, .pod-mcp-server-slot";
 
 const shouldBlockForSlot = (target: HTMLElement): boolean => {
-  return SLOT_CLASSES.some((cls) => target.closest(cls) !== null);
+  return target.closest(SLOT_CLASSES) !== null;
 };
 
 const handleCtrlClick = (): void => {
@@ -221,21 +233,29 @@ const handleSelectPod = (): void => {
   emit("select", props.pod.id);
 };
 
-const handleDblClick = (e: MouseEvent): void => {
-  if (isEditing.value || isDragging.value) return;
+/**
+ * 守門：判斷雙擊事件是否允許進入編輯/選取流程
+ * 回傳 true 表示可以繼續，false 表示應終止（含副作用如 toast）
+ */
+const canActivateEdit = (target: Element | null): boolean => {
+  if (isEditing.value || isDragging.value) return false;
 
-  const target = e.target as HTMLElement;
-
-  if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
+  const el = target as HTMLElement;
+  if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") return false;
 
   if (isDownstreamMultiInstance.value) {
     toast({
       title: "Pod",
       description: t("pod.multiInstance.readonlyHint"),
     });
-    return;
+    return false;
   }
 
+  return true;
+};
+
+const handleDblClick = (e: MouseEvent): void => {
+  if (!canActivateEdit(e.target as Element | null)) return;
   handleSelectPod();
 };
 
@@ -300,6 +320,7 @@ const handleContextMenu = (e: MouseEvent): void => {
         @update:model="handleModelChange"
       />
 
+      <!-- PodSlots 介面採扁平 props/emit 設計；新增 slot 類型需同步更新 PodSlots props/emits/template 與此處 listener -->
       <PodSlots
         :pod-id="pod.id"
         :pod-rotation="pod.rotation"
