@@ -111,7 +111,10 @@ onUnmounted(() => {
             {{ runStore.runningRunsCount }}
           </span>
         </div>
-        <button class="rounded-md p-1 hover:bg-accent" @click="handleClose">
+        <button
+          class="rounded-md p-1 hover:bg-accent"
+          @click="handleClose"
+        >
           <X class="h-5 w-5" />
         </button>
       </div>

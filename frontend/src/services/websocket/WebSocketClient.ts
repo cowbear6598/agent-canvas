@@ -96,7 +96,7 @@ class WebSocketClient {
       return;
     }
 
-    const handler = () => {
+    const handler = (): void => {
       if (document.visibilityState !== "visible") {
         return;
       }

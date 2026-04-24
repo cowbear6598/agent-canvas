@@ -56,7 +56,10 @@ const {
 </script>
 
 <template>
-  <Dialog :open="open" @update:open="handleClose">
+  <Dialog
+    :open="open"
+    @update:open="handleClose"
+  >
     <DialogContent class="max-w-md">
       <DialogHeader>
         <DialogTitle>{{ $t("canvas.repository.createTitle") }}</DialogTitle>
@@ -71,12 +74,18 @@ const {
         @keyup.enter="handleSubmit"
       />
 
-      <p v-if="errorMessage" class="text-sm text-destructive">
+      <p
+        v-if="errorMessage"
+        class="text-sm text-destructive"
+      >
         {{ errorMessage }}
       </p>
 
       <DialogFooter>
-        <Button variant="outline" @click="handleClose">
+        <Button
+          variant="outline"
+          @click="handleClose"
+        >
           {{ $t("common.cancel") }}
         </Button>
         <Button

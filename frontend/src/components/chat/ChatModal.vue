@@ -100,7 +100,10 @@ onUnmounted(() => {
 
     <div class="relative max-w-3xl w-full h-[85vh]">
       <div class="chat-window flex flex-col h-full overflow-hidden">
-        <ChatHeader :pod="pod" @close="handleClose" />
+        <ChatHeader
+          :pod="pod"
+          @close="handleClose"
+        />
         <!-- Multi-instance mode：只顯示簡化版輸入（但若有 integration binding 則優先顯示提示） -->
         <ChatMultiInstanceInput
           v-if="isMultiInstanceMode && !firstIntegrationProvider"

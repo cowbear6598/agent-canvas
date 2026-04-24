@@ -100,7 +100,10 @@ const handleToggle = async (
     >
       {{ $t("canvas.podContextMenu.noPluginInstalled") }}
     </div>
-    <div v-else class="pod-menu-submenu-scrollable space-y-1">
+    <div
+      v-else
+      class="pod-menu-submenu-scrollable space-y-1"
+    >
       <div
         v-for="plugin in installedPlugins"
         :key="plugin.id"
@@ -110,7 +113,9 @@ const handleToggle = async (
         "
       >
         <div>
-          <p class="text-xs font-mono">{{ plugin.name }}</p>
+          <p class="text-xs font-mono">
+            {{ plugin.name }}
+          </p>
           <p class="text-xs text-muted-foreground font-mono">
             v{{ plugin.version }}
           </p>

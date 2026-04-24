@@ -116,7 +116,10 @@ const handleDeleteClick = (event: Event, branchName: string): void => {
 </script>
 
 <template>
-  <Dialog :open="open" @update:open="emit('update:open', $event)">
+  <Dialog
+    :open="open"
+    @update:open="emit('update:open', $event)"
+  >
     <DialogContent class="max-w-md">
       <DialogHeader>
         <DialogTitle>{{ $t("canvas.branchSelect.title") }}</DialogTitle>
@@ -131,7 +134,10 @@ const handleDeleteClick = (event: Event, branchName: string): void => {
           :placeholder="$t('canvas.branchSelect.inputPlaceholder')"
           @keydown="handleInputKeydown"
         />
-        <Button :disabled="!inputBranchName.trim()" @click="handleInputSubmit">
+        <Button
+          :disabled="!inputBranchName.trim()"
+          @click="handleInputSubmit"
+        >
           {{ $t("canvas.branchSelect.switchButton") }}
         </Button>
       </div>
@@ -162,8 +168,7 @@ const handleDeleteClick = (event: Event, branchName: string): void => {
               <span
                 v-if="branch === currentBranch"
                 class="ml-2 text-muted-foreground"
-                >{{ $t("canvas.branchSelect.currentLabel") }}</span
-              >
+              >{{ $t("canvas.branchSelect.currentLabel") }}</span>
             </button>
             <button
               v-if="branch !== currentBranch"
@@ -171,7 +176,10 @@ const handleDeleteClick = (event: Event, branchName: string): void => {
               class="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-destructive/10"
               @click="handleDeleteClick($event, branch)"
             >
-              <Trash2 :size="14" class="text-destructive" />
+              <Trash2
+                :size="14"
+                class="text-destructive"
+              />
             </button>
           </div>
 
@@ -196,7 +204,10 @@ const handleDeleteClick = (event: Event, branchName: string): void => {
       </ScrollArea>
 
       <DialogFooter>
-        <Button variant="outline" @click="handleClose">
+        <Button
+          variant="outline"
+          @click="handleClose"
+        >
           {{ $t("common.cancel") }}
         </Button>
       </DialogFooter>

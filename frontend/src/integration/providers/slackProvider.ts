@@ -1,4 +1,5 @@
 import type {
+  FormFieldDefinition,
   IntegrationApp,
   IntegrationProviderConfig,
   IntegrationResource,
@@ -43,26 +44,26 @@ export const slackProviderConfig: IntegrationProviderConfig = {
   icon: SlackIcon,
   description: "integration.slack.description",
 
-  get createFormFields() {
+  get createFormFields(): FormFieldDefinition[] {
     return [
       {
         key: "name",
-        get label() {
+        get label(): string {
           return t("integration.slack.field.name.label");
         },
-        get placeholder() {
+        get placeholder(): string {
           return t("integration.slack.field.name.placeholder");
         },
         type: "text" as const,
-        validate: (v: string) =>
+        validate: (v: string): string =>
           v === "" ? t("integration.slack.validate.nameRequired") : "",
       },
       {
         key: "botToken",
-        get label() {
+        get label(): string {
           return t("integration.slack.field.botToken.label");
         },
-        get placeholder() {
+        get placeholder(): string {
           return t("integration.slack.field.botToken.placeholder");
         },
         type: "password" as const,
@@ -75,14 +76,14 @@ export const slackProviderConfig: IntegrationProviderConfig = {
       },
       {
         key: "signingSecret",
-        get label() {
+        get label(): string {
           return t("integration.slack.field.signingSecret.label");
         },
-        get placeholder() {
+        get placeholder(): string {
           return t("integration.slack.field.signingSecret.placeholder");
         },
         type: "password" as const,
-        validate: (v: string) =>
+        validate: (v: string): string =>
           v === "" ? t("integration.slack.validate.signingSecretRequired") : "",
       },
     ];

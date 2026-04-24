@@ -79,7 +79,11 @@ const { isDropTarget, isInserting } = useSlotDropTarget({
 
 <template>
   <!-- disabled 時包一層 wrapper 加 title tooltip；pointer-events-none 防止 drop 偵測 -->
-  <div v-if="disabled" class="relative" :title="disabledTooltip">
+  <div
+    v-if="disabled"
+    class="relative"
+    :title="disabledTooltip"
+  >
     <div
       class="pod-slot-base pointer-events-none opacity-50 cursor-not-allowed"
       :class="[slotClass]"
@@ -105,7 +109,10 @@ const { isDropTarget, isInserting } = useSlotDropTarget({
     @mouseenter="showMenu = true"
     @mouseleave="showMenu = false"
   >
-    <span class="text-xs font-mono" :class="{ 'opacity-50': !hasItems }">
+    <span
+      class="text-xs font-mono"
+      :class="{ 'opacity-50': !hasItems }"
+    >
       <template v-if="hasItems">({{ itemCount }}) </template>{{ label }}
     </span>
 

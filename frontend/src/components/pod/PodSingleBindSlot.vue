@@ -74,7 +74,11 @@ const handleSlotClick = async (e: MouseEvent): Promise<void> => {
 
 <template>
   <!-- disabled 時包一層 wrapper 加 title tooltip；pointer-events-none 防止 drop 偵測 -->
-  <div v-if="disabled" class="relative" :title="disabledTooltip">
+  <div
+    v-if="disabled"
+    class="relative"
+    :title="disabledTooltip"
+  >
     <div
       class="pod-slot-base pointer-events-none opacity-50 cursor-not-allowed"
       :class="[slotClass]"

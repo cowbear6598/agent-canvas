@@ -162,85 +162,153 @@ const formatMinute = (min: number): string => {
 </script>
 
 <template>
-  <Dialog :open="open" @update:open="handleClose">
+  <Dialog
+    :open="open"
+    @update:open="handleClose"
+  >
     <DialogContent class="max-w-md font-mono">
       <DialogHeader>
-        <DialogTitle>{{
-          isEditMode
-            ? $t("canvas.scheduleModal.editTitle")
-            : $t("canvas.scheduleModal.createTitle")
-        }}</DialogTitle>
-        <DialogDescription>{{
-          $t("canvas.scheduleModal.description")
-        }}</DialogDescription>
+        <DialogTitle>
+          {{
+            isEditMode
+              ? $t("canvas.scheduleModal.editTitle")
+              : $t("canvas.scheduleModal.createTitle")
+          }}
+        </DialogTitle>
+        <DialogDescription>
+          {{
+            $t("canvas.scheduleModal.description")
+          }}
+        </DialogDescription>
       </DialogHeader>
 
       <div class="space-y-4">
         <div class="space-y-2">
           <Label>{{ $t("canvas.scheduleModal.frequency") }}</Label>
-          <RadioGroup v-model="frequency" class="space-y-2">
+          <RadioGroup
+            v-model="frequency"
+            class="space-y-2"
+          >
             <div class="flex items-center space-x-2">
-              <RadioGroupItem id="every-second" value="every-second" />
-              <Label for="every-second" class="font-normal cursor-pointer">
+              <RadioGroupItem
+                id="every-second"
+                value="every-second"
+              />
+              <Label
+                for="every-second"
+                class="font-normal cursor-pointer"
+              >
                 {{ $t("canvas.scheduleModal.everySecond") }}
               </Label>
             </div>
             <div class="flex items-center space-x-2">
-              <RadioGroupItem id="every-x-minute" value="every-x-minute" />
-              <Label for="every-x-minute" class="font-normal cursor-pointer">
+              <RadioGroupItem
+                id="every-x-minute"
+                value="every-x-minute"
+              />
+              <Label
+                for="every-x-minute"
+                class="font-normal cursor-pointer"
+              >
                 {{ $t("canvas.scheduleModal.everyXMinute") }}
               </Label>
             </div>
             <div class="flex items-center space-x-2">
-              <RadioGroupItem id="every-x-hour" value="every-x-hour" />
-              <Label for="every-x-hour" class="font-normal cursor-pointer">
+              <RadioGroupItem
+                id="every-x-hour"
+                value="every-x-hour"
+              />
+              <Label
+                for="every-x-hour"
+                class="font-normal cursor-pointer"
+              >
                 {{ $t("canvas.scheduleModal.everyXHour") }}
               </Label>
             </div>
             <div class="flex items-center space-x-2">
-              <RadioGroupItem id="every-day" value="every-day" />
-              <Label for="every-day" class="font-normal cursor-pointer">
+              <RadioGroupItem
+                id="every-day"
+                value="every-day"
+              />
+              <Label
+                for="every-day"
+                class="font-normal cursor-pointer"
+              >
                 {{ $t("canvas.scheduleModal.everyDay") }}
               </Label>
             </div>
             <div class="flex items-center space-x-2">
-              <RadioGroupItem id="every-week" value="every-week" />
-              <Label for="every-week" class="font-normal cursor-pointer">
+              <RadioGroupItem
+                id="every-week"
+                value="every-week"
+              />
+              <Label
+                for="every-week"
+                class="font-normal cursor-pointer"
+              >
                 {{ $t("canvas.scheduleModal.everyWeek") }}
               </Label>
             </div>
           </RadioGroup>
         </div>
 
-        <hr v-if="frequency === 'every-second'" class="border-border" />
+        <hr
+          v-if="frequency === 'every-second'"
+          class="border-border"
+        >
 
-        <div v-if="frequency === 'every-second'" class="space-y-2">
+        <div
+          v-if="frequency === 'every-second'"
+          class="space-y-2"
+        >
           <Label for="second-select">{{
             $t("canvas.scheduleModal.second")
           }}</Label>
-          <Select id="second-select" v-model="second">
+          <Select
+            id="second-select"
+            v-model="second"
+          >
             <SelectTrigger>
               <SelectValue>{{ second }}</SelectValue>
             </SelectTrigger>
-            <SelectContent position="popper" side="top">
-              <SelectItem v-for="s in secondOptions" :key="s" :value="s">
+            <SelectContent
+              position="popper"
+              side="top"
+            >
+              <SelectItem
+                v-for="s in secondOptions"
+                :key="s"
+                :value="s"
+              >
                 {{ s }}
               </SelectItem>
             </SelectContent>
           </Select>
         </div>
 
-        <hr v-if="frequency === 'every-x-minute'" class="border-border" />
+        <hr
+          v-if="frequency === 'every-x-minute'"
+          class="border-border"
+        >
 
-        <div v-if="frequency === 'every-x-minute'" class="space-y-2">
+        <div
+          v-if="frequency === 'every-x-minute'"
+          class="space-y-2"
+        >
           <Label for="interval-minute-select">{{
             $t("canvas.scheduleModal.intervalMinute")
           }}</Label>
-          <Select id="interval-minute-select" v-model="intervalMinute">
+          <Select
+            id="interval-minute-select"
+            v-model="intervalMinute"
+          >
             <SelectTrigger>
               <SelectValue>{{ intervalMinute }}</SelectValue>
             </SelectTrigger>
-            <SelectContent position="popper" side="top">
+            <SelectContent
+              position="popper"
+              side="top"
+            >
               <SelectItem
                 v-for="m in intervalMinuteOptions"
                 :key="m"
@@ -252,54 +320,102 @@ const formatMinute = (min: number): string => {
           </Select>
         </div>
 
-        <hr v-if="frequency === 'every-x-hour'" class="border-border" />
+        <hr
+          v-if="frequency === 'every-x-hour'"
+          class="border-border"
+        >
 
-        <div v-if="frequency === 'every-x-hour'" class="space-y-2">
+        <div
+          v-if="frequency === 'every-x-hour'"
+          class="space-y-2"
+        >
           <Label for="interval-hour-select">{{
             $t("canvas.scheduleModal.intervalHour")
           }}</Label>
-          <Select id="interval-hour-select" v-model="intervalHour">
+          <Select
+            id="interval-hour-select"
+            v-model="intervalHour"
+          >
             <SelectTrigger>
               <SelectValue>{{ intervalHour }}</SelectValue>
             </SelectTrigger>
-            <SelectContent position="popper" side="top">
-              <SelectItem v-for="h in intervalHourOptions" :key="h" :value="h">
+            <SelectContent
+              position="popper"
+              side="top"
+            >
+              <SelectItem
+                v-for="h in intervalHourOptions"
+                :key="h"
+                :value="h"
+              >
                 {{ h }}
               </SelectItem>
             </SelectContent>
           </Select>
         </div>
 
-        <hr v-if="frequency === 'every-day'" class="border-border" />
+        <hr
+          v-if="frequency === 'every-day'"
+          class="border-border"
+        >
 
-        <div v-if="frequency === 'every-day'" class="space-y-2">
+        <div
+          v-if="frequency === 'every-day'"
+          class="space-y-2"
+        >
           <Label>{{ $t("canvas.scheduleModal.executionTime") }}</Label>
           <div class="flex gap-4">
             <div class="flex-1">
-              <Label for="hour-select" class="text-xs text-muted-foreground">
+              <Label
+                for="hour-select"
+                class="text-xs text-muted-foreground"
+              >
                 {{ $t("canvas.scheduleModal.hourUnit") }}
               </Label>
-              <Select id="hour-select" v-model="hour">
+              <Select
+                id="hour-select"
+                v-model="hour"
+              >
                 <SelectTrigger>
                   <SelectValue>{{ hour }}</SelectValue>
                 </SelectTrigger>
-                <SelectContent position="popper" side="top">
-                  <SelectItem v-for="h in hourOptions" :key="h" :value="h">
+                <SelectContent
+                  position="popper"
+                  side="top"
+                >
+                  <SelectItem
+                    v-for="h in hourOptions"
+                    :key="h"
+                    :value="h"
+                  >
                     {{ h }}
                   </SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div class="flex-1">
-              <Label for="minute-select" class="text-xs text-muted-foreground">
+              <Label
+                for="minute-select"
+                class="text-xs text-muted-foreground"
+              >
                 {{ $t("canvas.scheduleModal.minuteUnit") }}
               </Label>
-              <Select id="minute-select" v-model="minute">
+              <Select
+                id="minute-select"
+                v-model="minute"
+              >
                 <SelectTrigger>
                   <SelectValue>{{ formatMinute(minute) }}</SelectValue>
                 </SelectTrigger>
-                <SelectContent position="popper" side="top">
-                  <SelectItem v-for="m in minuteOptions" :key="m" :value="m">
+                <SelectContent
+                  position="popper"
+                  side="top"
+                >
+                  <SelectItem
+                    v-for="m in minuteOptions"
+                    :key="m"
+                    :value="m"
+                  >
                     {{ formatMinute(m) }}
                   </SelectItem>
                 </SelectContent>
@@ -308,9 +424,15 @@ const formatMinute = (min: number): string => {
           </div>
         </div>
 
-        <hr v-if="frequency === 'every-week'" class="border-border" />
+        <hr
+          v-if="frequency === 'every-week'"
+          class="border-border"
+        >
 
-        <div v-if="frequency === 'every-week'" class="space-y-2">
+        <div
+          v-if="frequency === 'every-week'"
+          class="space-y-2"
+        >
           <Label>{{ $t("canvas.scheduleModal.selectWeekday") }}</Label>
           <div class="flex flex-wrap gap-3">
             <div
@@ -334,7 +456,10 @@ const formatMinute = (min: number): string => {
               </Label>
             </div>
           </div>
-          <p v-if="weekdaysError" class="text-sm text-red-500">
+          <p
+            v-if="weekdaysError"
+            class="text-sm text-red-500"
+          >
             {{ weekdaysError }}
           </p>
 
@@ -347,12 +472,22 @@ const formatMinute = (min: number): string => {
               >
                 {{ $t("canvas.scheduleModal.hourUnit") }}
               </Label>
-              <Select id="custom-hour-select" v-model="hour">
+              <Select
+                id="custom-hour-select"
+                v-model="hour"
+              >
                 <SelectTrigger>
                   <SelectValue>{{ hour }}</SelectValue>
                 </SelectTrigger>
-                <SelectContent position="popper" side="top">
-                  <SelectItem v-for="h in hourOptions" :key="h" :value="h">
+                <SelectContent
+                  position="popper"
+                  side="top"
+                >
+                  <SelectItem
+                    v-for="h in hourOptions"
+                    :key="h"
+                    :value="h"
+                  >
                     {{ h }}
                   </SelectItem>
                 </SelectContent>
@@ -365,12 +500,22 @@ const formatMinute = (min: number): string => {
               >
                 {{ $t("canvas.scheduleModal.minuteUnit") }}
               </Label>
-              <Select id="custom-minute-select" v-model="minute">
+              <Select
+                id="custom-minute-select"
+                v-model="minute"
+              >
                 <SelectTrigger>
                   <SelectValue>{{ formatMinute(minute) }}</SelectValue>
                 </SelectTrigger>
-                <SelectContent position="popper" side="top">
-                  <SelectItem v-for="m in minuteOptions" :key="m" :value="m">
+                <SelectContent
+                  position="popper"
+                  side="top"
+                >
+                  <SelectItem
+                    v-for="m in minuteOptions"
+                    :key="m"
+                    :value="m"
+                  >
                     {{ formatMinute(m) }}
                   </SelectItem>
                 </SelectContent>
@@ -381,22 +526,43 @@ const formatMinute = (min: number): string => {
       </div>
 
       <DialogFooter class="flex justify-end gap-2">
-        <Button variant="outline" @click="handleClose">{{
-          $t("common.cancel")
-        }}</Button>
+        <Button
+          variant="outline"
+          @click="handleClose"
+        >
+          {{
+            $t("common.cancel")
+          }}
+        </Button>
         <!-- 編輯已啟用排程：顯示停用（紅色）+ 更新（綠色）兩個按鈕 -->
         <template v-if="isEditMode && existingSchedule?.enabled">
-          <Button variant="destructive" @click="handleDisable">{{
-            $t("canvas.scheduleModal.disableButton")
-          }}</Button>
-          <Button variant="default" @click="handleConfirm">{{
-            $t("canvas.scheduleModal.updateButton")
-          }}</Button>
+          <Button
+            variant="destructive"
+            @click="handleDisable"
+          >
+            {{
+              $t("canvas.scheduleModal.disableButton")
+            }}
+          </Button>
+          <Button
+            variant="default"
+            @click="handleConfirm"
+          >
+            {{
+              $t("canvas.scheduleModal.updateButton")
+            }}
+          </Button>
         </template>
         <!-- 新建模式或編輯已停用排程：顯示啟用按鈕 -->
-        <Button v-else variant="default" @click="handleConfirm">{{
-          $t("canvas.scheduleModal.enableButton")
-        }}</Button>
+        <Button
+          v-else
+          variant="default"
+          @click="handleConfirm"
+        >
+          {{
+            $t("canvas.scheduleModal.enableButton")
+          }}
+        </Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>

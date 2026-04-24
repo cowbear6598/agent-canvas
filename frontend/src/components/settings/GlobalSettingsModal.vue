@@ -186,7 +186,10 @@ watch(
 </script>
 
 <template>
-  <Dialog :open="open" @update:open="handleClose">
+  <Dialog
+    :open="open"
+    @update:open="handleClose"
+  >
     <DialogContent class="max-w-md">
       <DialogHeader>
         <DialogTitle>{{ $t("settings.title") }}</DialogTitle>
@@ -247,10 +250,16 @@ watch(
                 class="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground"
               />
             </div>
-            <p v-if="backupUrlError" class="text-xs text-destructive">
+            <p
+              v-if="backupUrlError"
+              class="text-xs text-destructive"
+            >
               {{ $t("settings.backup.gitRemoteUrlRequired") }}
             </p>
-            <p v-if="backupError" class="text-xs text-destructive">
+            <p
+              v-if="backupError"
+              class="text-xs text-destructive"
+            >
               {{ backupError }}
             </p>
 
@@ -259,7 +268,10 @@ watch(
                 <span class="text-xs text-muted-foreground leading-none">{{
                   $t("settings.backup.dailyBackupTime")
                 }}</span>
-                <Select v-model="backupHour" :disabled="!backupEnabled">
+                <Select
+                  v-model="backupHour"
+                  :disabled="!backupEnabled"
+                >
                   <SelectTrigger class="w-20">
                     <SelectValue />
                   </SelectTrigger>
@@ -274,7 +286,10 @@ watch(
                   </SelectContent>
                 </Select>
                 <span class="text-sm leading-none">:</span>
-                <Select v-model="backupMinute" :disabled="!backupEnabled">
+                <Select
+                  v-model="backupMinute"
+                  :disabled="!backupEnabled"
+                >
                   <SelectTrigger class="w-20">
                     <SelectValue />
                   </SelectTrigger>

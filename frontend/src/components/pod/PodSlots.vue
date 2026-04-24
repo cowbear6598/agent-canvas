@@ -123,7 +123,7 @@ const slotConfigs = computed((): SlotConfig[] => [
     boundNote: () => props.boundOutputStyleNote,
     disabled: () => !isOutputStyleEnabled.value,
     disabledTooltip: () => DISABLED_TOOLTIP.value,
-    onDropped: (noteId: string) => {
+    onDropped: (noteId: string): void => {
       if (!noteId) return;
       emit("output-style-dropped", noteId);
     },
@@ -142,7 +142,7 @@ const slotConfigs = computed((): SlotConfig[] => [
     itemIdField: "skillId",
     disabled: () => !isSkillEnabled.value,
     disabledTooltip: () => DISABLED_TOOLTIP.value,
-    onDropped: (noteId: string) => {
+    onDropped: (noteId: string): void => {
       if (!noteId) return;
       emit("skill-dropped", noteId);
     },
@@ -160,7 +160,7 @@ const slotConfigs = computed((): SlotConfig[] => [
     itemIdField: "subAgentId",
     disabled: () => !isSubAgentEnabled.value,
     disabledTooltip: () => DISABLED_TOOLTIP.value,
-    onDropped: (noteId: string) => {
+    onDropped: (noteId: string): void => {
       if (!noteId) return;
       emit("subagent-dropped", noteId);
     },
@@ -174,7 +174,7 @@ const slotConfigs = computed((): SlotConfig[] => [
     boundNote: () => props.boundRepositoryNote,
     disabled: () => !isRepositoryEnabled.value,
     disabledTooltip: () => DISABLED_TOOLTIP.value,
-    onDropped: (noteId: string) => {
+    onDropped: (noteId: string): void => {
       if (!noteId) return;
       emit("repository-dropped", noteId);
     },
@@ -189,7 +189,7 @@ const slotConfigs = computed((): SlotConfig[] => [
     boundNote: () => props.boundCommandNote,
     disabled: () => !isCommandEnabled.value,
     disabledTooltip: () => DISABLED_TOOLTIP.value,
-    onDropped: (noteId: string) => {
+    onDropped: (noteId: string): void => {
       if (!noteId) return;
       emit("command-dropped", noteId);
     },
@@ -208,7 +208,7 @@ const slotConfigs = computed((): SlotConfig[] => [
     itemIdField: "mcpServerId",
     disabled: () => !isMcpEnabled.value,
     disabledTooltip: () => DISABLED_TOOLTIP.value,
-    onDropped: (noteId: string) => {
+    onDropped: (noteId: string): void => {
       if (!noteId) return;
       emit("mcp-server-dropped", noteId);
     },
@@ -217,7 +217,10 @@ const slotConfigs = computed((): SlotConfig[] => [
 </script>
 
 <template>
-  <template v-for="slot in slotConfigs" :key="slot.slotClass">
+  <template
+    v-for="slot in slotConfigs"
+    :key="slot.slotClass"
+  >
     <div :class="slot.areaClass">
       <PodSingleBindSlot
         v-if="slot.kind === 'single'"

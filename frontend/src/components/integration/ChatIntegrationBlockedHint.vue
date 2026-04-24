@@ -16,7 +16,10 @@ const config = computed(() => getProvider(props.provider));
       :data-testid="`${provider}-blocked-hint`"
     >
       <div class="flex items-center justify-center gap-2 py-4">
-        <component :is="config.icon" :size="16" />
+        <component
+          :is="config.icon"
+          :size="16"
+        />
         <p class="text-sm font-mono text-muted-foreground">
           {{ $t("chat.integrationBlockedHint", { label: config.label }) }}
         </p>

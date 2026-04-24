@@ -224,11 +224,14 @@ export interface NoteStoreContext<TItem = unknown> extends BaseNoteState {
   getNotesByPodId(podId: string): NoteItem[];
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// Pinia 的 StoreDefinition 型別結構複雜，這裡作為 generic constraint 必須允許任意 callable，
+// 改用 unknown 會導致實際的 store 函式無法被賦值進來，屬於 TS 慣用的 generic constraint 寫法。
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export type TypedNoteStore<
   TStore extends (...args: any[]) => any,
   TCustomActions extends object,
 > = (() => ReturnType<TStore> & TCustomActions) & { $id: string };
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function createNoteStore<

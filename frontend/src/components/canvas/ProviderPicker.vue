@@ -84,7 +84,10 @@ const handleSelectCodex = (): void => {
 </script>
 
 <template>
-  <div class="pod-menu-submenu" @contextmenu.prevent>
+  <div
+    class="pod-menu-submenu"
+    @contextmenu.prevent
+  >
     <!--
       Claude 選項：metadata 未載入時 disabled。
       點擊事件掛在外層 div，確保 disabled 狀態下仍可顯示 toast 提示；
@@ -116,7 +119,10 @@ const handleSelectCodex = (): void => {
         <span
           class="w-8 h-8 rounded-full flex items-center justify-center border border-doodle-ink bg-white flex-shrink-0"
         >
-          <OpenAILogo :size="16" class="text-black" />
+          <OpenAILogo
+            :size="16"
+            class="text-black"
+          />
         </span>
         <span class="font-mono">Codex</span>
       </button>

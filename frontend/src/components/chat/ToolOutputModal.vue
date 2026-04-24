@@ -57,7 +57,10 @@ watchEffect(async () => {
 </script>
 
 <template>
-  <Dialog :open="open" @update:open="(val) => emit('update:open', val)">
+  <Dialog
+    :open="open"
+    @update:open="(val) => emit('update:open', val)"
+  >
     <DialogContent class="max-w-2xl max-h-[80vh] flex flex-col">
       <DialogHeader>
         <DialogTitle>{{ modalTitle }}</DialogTitle>
@@ -72,17 +75,22 @@ watchEffect(async () => {
           {{ $t("chat.toolOutput.executionError") }}
         </div>
 
-        <div v-if="hasInput" class="mb-4">
+        <div
+          v-if="hasInput"
+          class="mb-4"
+        >
           <h4 class="text-sm font-semibold text-muted-foreground mb-2">
             {{ $t("chat.toolOutput.inputParams") }}
           </h4>
           <pre
             class="bg-muted rounded-lg p-3 overflow-x-auto text-xs font-mono"
-            >{{ formattedInput }}</pre
-          >
+          >{{ formattedInput }}</pre>
         </div>
 
-        <hr v-if="hasInput && hasOutput" class="my-4 border-border" />
+        <hr
+          v-if="hasInput && hasOutput"
+          class="my-4 border-border"
+        >
 
         <div>
           <h4
@@ -92,9 +100,16 @@ watchEffect(async () => {
             {{ $t("chat.toolOutput.executionResult") }}
           </h4>
 
-          <div v-if="hasOutput" class="markdown-body" v-html="renderedOutput" />
+          <div
+            v-if="hasOutput"
+            class="markdown-body"
+            v-html="renderedOutput"
+          />
 
-          <p v-else class="text-muted-foreground text-sm">
+          <p
+            v-else
+            class="text-muted-foreground text-sm"
+          >
             {{ $t("chat.toolOutput.noResult") }}
           </p>
         </div>

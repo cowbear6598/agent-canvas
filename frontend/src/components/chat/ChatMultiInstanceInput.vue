@@ -43,13 +43,16 @@ onMounted(() => {
           :style="{ boxShadow: '2px 2px 0 var(--doodle-ink)' }"
           :placeholder="t('chat.inputPlaceholder')"
           @keydown.enter="handleSend"
-        />
+        >
         <button
           class="px-4 py-3 border-2 border-doodle-ink rounded-lg bg-doodle-green"
           :style="{ boxShadow: '2px 2px 0 var(--doodle-ink)' }"
           @click="handleSend"
         >
-          <Send :size="20" class="text-card" />
+          <Send
+            :size="20"
+            class="text-card"
+          />
         </button>
       </div>
     </div>

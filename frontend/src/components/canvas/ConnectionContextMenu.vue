@@ -276,7 +276,10 @@ const MODEL_OPTIONS: { value: ModelType; label: string }[] = [
         <span class="font-mono text-foreground">{{
           $t("canvas.connectionContextMenu.summaryModel")
         }}</span>
-        <ChevronRight :size="12" class="text-muted-foreground" />
+        <ChevronRight
+          :size="12"
+          class="text-muted-foreground"
+        />
       </button>
 
       <!-- 子選單 -->
@@ -330,7 +333,10 @@ const MODEL_OPTIONS: { value: ModelType; label: string }[] = [
         <span class="font-mono text-foreground">{{
           $t("canvas.connectionContextMenu.aiModel")
         }}</span>
-        <ChevronRight :size="12" class="text-muted-foreground" />
+        <ChevronRight
+          :size="12"
+          class="text-muted-foreground"
+        />
       </button>
 
       <!-- 子選單 -->

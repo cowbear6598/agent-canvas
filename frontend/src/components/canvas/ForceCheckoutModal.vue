@@ -37,7 +37,10 @@ const handleForceCheckout = (): void => {
 </script>
 
 <template>
-  <Dialog :open="open" @update:open="emit('update:open', $event)">
+  <Dialog
+    :open="open"
+    @update:open="emit('update:open', $event)"
+  >
     <DialogContent class="max-w-md">
       <DialogHeader>
         <DialogTitle>{{ $t("canvas.forceCheckout.title") }}</DialogTitle>
@@ -54,10 +57,16 @@ const handleForceCheckout = (): void => {
       </DialogHeader>
 
       <DialogFooter class="gap-2">
-        <Button variant="outline" @click="handleCancel">
+        <Button
+          variant="outline"
+          @click="handleCancel"
+        >
           {{ $t("common.cancel") }}
         </Button>
-        <Button variant="destructive" @click="handleForceCheckout">
+        <Button
+          variant="destructive"
+          @click="handleForceCheckout"
+        >
           {{ $t("canvas.forceCheckout.forceCheckoutButton") }}
         </Button>
       </DialogFooter>

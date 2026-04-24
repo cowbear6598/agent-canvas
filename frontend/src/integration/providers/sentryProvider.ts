@@ -1,4 +1,5 @@
 import type {
+  FormFieldDefinition,
   IntegrationApp,
   IntegrationProviderConfig,
 } from "@/types/integration";
@@ -35,14 +36,14 @@ export const sentryProviderConfig: IntegrationProviderConfig = {
   icon: SentryIcon,
   description: "integration.sentry.description",
 
-  get createFormFields() {
+  get createFormFields(): FormFieldDefinition[] {
     return [
       {
         key: "name",
-        get label() {
+        get label(): string {
           return t("integration.sentry.field.name.label");
         },
-        get placeholder() {
+        get placeholder(): string {
           return t("integration.sentry.field.name.placeholder");
         },
         type: "text" as const,
@@ -57,10 +58,10 @@ export const sentryProviderConfig: IntegrationProviderConfig = {
       },
       {
         key: "clientSecret",
-        get label() {
+        get label(): string {
           return t("integration.sentry.field.clientSecret.label");
         },
-        get placeholder() {
+        get placeholder(): string {
           return t("integration.sentry.field.clientSecret.placeholder");
         },
         type: "password" as const,

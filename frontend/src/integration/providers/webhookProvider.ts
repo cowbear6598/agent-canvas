@@ -1,4 +1,5 @@
 import type {
+  FormFieldDefinition,
   IntegrationApp,
   IntegrationProviderConfig,
 } from "@/types/integration";
@@ -35,14 +36,14 @@ export const webhookProviderConfig: IntegrationProviderConfig = {
   icon: Webhook,
   description: "integration.webhook.description",
 
-  get createFormFields() {
+  get createFormFields(): FormFieldDefinition[] {
     return [
       {
         key: "name",
-        get label() {
+        get label(): string {
           return t("integration.webhook.field.name.label");
         },
-        get placeholder() {
+        get placeholder(): string {
           return t("integration.webhook.field.name.placeholder");
         },
         type: "text" as const,
@@ -90,7 +91,12 @@ export const webhookProviderConfig: IntegrationProviderConfig = {
 
   getWebhookUrl: (app) => `/webhook/${app.name}`,
 
-  getTokenValue: (app) => (app.raw as any).config?.token ?? null,
+  getTokenValue: (app) => {
+    // app.raw 來自後端原始資料，這裡安全地取出 config.token
+    const config = (app.raw as { config?: { token?: unknown } }).config;
+    const token = config?.token;
+    return typeof token === "string" ? token : null;
+  },
 
   tokenLabel: "integration.webhook.token.label",
 };

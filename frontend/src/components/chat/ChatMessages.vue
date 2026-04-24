@@ -52,7 +52,10 @@ watch(
       </div>
 
       <template v-else>
-        <template v-for="message in messages" :key="message.id">
+        <template
+          v-for="message in messages"
+          :key="message.id"
+        >
           <ChatMessageBubble
             v-if="message.role === 'user'"
             :content="message.content"
@@ -87,7 +90,10 @@ watch(
           </template>
         </template>
 
-        <div v-if="isTyping" class="flex justify-start">
+        <div
+          v-if="isTyping"
+          class="flex justify-start"
+        >
           <div
             class="p-3 rounded-lg border-2 border-doodle-ink bg-card"
             :style="{ boxShadow: '2px 2px 0 var(--doodle-ink)' }"

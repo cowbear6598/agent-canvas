@@ -33,7 +33,10 @@ const handleCancel = (): void => {
 </script>
 
 <template>
-  <Dialog :open="open" @update:open="emit('update:open', $event)">
+  <Dialog
+    :open="open"
+    @update:open="emit('update:open', $event)"
+  >
     <DialogContent class="max-w-md">
       <DialogHeader>
         <DialogTitle>{{ $t("canvas.deleteBranch.title") }}</DialogTitle>
@@ -43,10 +46,16 @@ const handleCancel = (): void => {
       </DialogHeader>
 
       <DialogFooter>
-        <Button variant="outline" @click="handleCancel">
+        <Button
+          variant="outline"
+          @click="handleCancel"
+        >
           {{ $t("common.cancel") }}
         </Button>
-        <Button variant="destructive" @click="handleConfirm">
+        <Button
+          variant="destructive"
+          @click="handleConfirm"
+        >
           {{ $t("common.delete") }}
         </Button>
       </DialogFooter>

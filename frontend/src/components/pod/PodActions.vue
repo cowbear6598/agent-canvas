@@ -216,8 +216,14 @@ watch(
       @mouseup="handleEraserMouseUp"
       @mouseleave="handleEraserMouseLeave"
     >
-      <span v-if="isMultiInstanceEnabled" class="multi-instance-icon-m">M</span>
-      <Eraser v-else :size="16" />
+      <span
+        v-if="isMultiInstanceEnabled"
+        class="multi-instance-icon-m"
+      >M</span>
+      <Eraser
+        v-else
+        :size="16"
+      />
     </button>
   </div>
 
@@ -228,9 +234,11 @@ watch(
     <DialogContent>
       <DialogHeader>
         <DialogTitle>{{ $t("pod.clearWorkflow.title") }}</DialogTitle>
-        <DialogDescription>{{
-          $t("pod.clearWorkflow.description")
-        }}</DialogDescription>
+        <DialogDescription>
+          {{
+            $t("pod.clearWorkflow.description")
+          }}
+        </DialogDescription>
       </DialogHeader>
 
       <div class="py-4">
@@ -246,7 +254,11 @@ watch(
       </div>
 
       <DialogFooter>
-        <Button variant="outline" :disabled="isClearing" @click="cancelClear">
+        <Button
+          variant="outline"
+          :disabled="isClearing"
+          @click="cancelClear"
+        >
           {{ $t("common.cancel") }}
         </Button>
         <Button
@@ -277,12 +289,22 @@ watch(
       </DialogHeader>
 
       <DialogFooter>
-        <Button variant="outline" @click="cancelDelete">{{
-          $t("common.cancel")
-        }}</Button>
-        <Button variant="destructive" @click="confirmDelete">{{
-          $t("pod.delete.confirm")
-        }}</Button>
+        <Button
+          variant="outline"
+          @click="cancelDelete"
+        >
+          {{
+            $t("common.cancel")
+          }}
+        </Button>
+        <Button
+          variant="destructive"
+          @click="confirmDelete"
+        >
+          {{
+            $t("pod.delete.confirm")
+          }}
+        </Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>
@@ -296,7 +318,12 @@ watch(
         top: mousePosition.y + 'px',
       }"
     >
-      <svg class="long-press-ring" width="52" height="52" viewBox="0 0 52 52">
+      <svg
+        class="long-press-ring"
+        width="52"
+        height="52"
+        viewBox="0 0 52 52"
+      >
         <circle
           cx="26"
           cy="26"

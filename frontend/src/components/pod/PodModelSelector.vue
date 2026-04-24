@@ -105,7 +105,10 @@ const selectModel = (model: string): void => {
 </script>
 
 <template>
-  <div class="pod-model-slot" @mouseleave="handleMouseLeave">
+  <div
+    class="pod-model-slot"
+    @mouseleave="handleMouseLeave"
+  >
     <TransitionGroup
       name="card-swap"
       tag="div"

@@ -58,8 +58,11 @@ const handleSave = (): void => {
         class="flex-1 min-w-0 w-full bg-transparent border-b-2 border-doodle-ink/50 outline-none font-sans text-base"
         @blur="handleSave"
         @keydown.enter="handleSave"
-      />
-      <h3 v-else class="flex-1 font-sans text-base text-foreground truncate">
+      >
+      <h3
+        v-else
+        class="flex-1 font-sans text-base text-foreground truncate"
+      >
         {{ name }}
       </h3>
       <button

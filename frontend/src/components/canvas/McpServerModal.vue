@@ -158,14 +158,19 @@ watch(
 </script>
 
 <template>
-  <Dialog :open="open" @update:open="handleClose">
+  <Dialog
+    :open="open"
+    @update:open="handleClose"
+  >
     <DialogContent class="max-w-2xl">
       <DialogHeader>
-        <DialogTitle>{{
-          mode === "create"
-            ? $t("canvas.mcpServer.createTitle")
-            : $t("canvas.mcpServer.editTitle")
-        }}</DialogTitle>
+        <DialogTitle>
+          {{
+            mode === "create"
+              ? $t("canvas.mcpServer.createTitle")
+              : $t("canvas.mcpServer.editTitle")
+          }}
+        </DialogTitle>
         <DialogDescription>
           {{ $t("canvas.mcpServer.description") }}
         </DialogDescription>
@@ -178,16 +183,25 @@ watch(
           class="w-full h-[300px] p-3 bg-card border-2 border-doodle-ink rounded text-base font-mono resize-none focus:outline-none focus:ring-2 focus:ring-doodle-ink/50 doodle-textarea"
         />
 
-        <p v-if="errorMessage" class="text-sm text-red-500 font-mono">
+        <p
+          v-if="errorMessage"
+          class="text-sm text-red-500 font-mono"
+        >
           {{ errorMessage }}
         </p>
       </div>
 
       <DialogFooter>
-        <Button variant="outline" @click="handleClose">
+        <Button
+          variant="outline"
+          @click="handleClose"
+        >
           {{ $t("common.cancel") }}
         </Button>
-        <Button variant="default" @click="handleSubmit">
+        <Button
+          variant="default"
+          @click="handleSubmit"
+        >
           {{ mode === "create" ? $t("common.create") : $t("common.save") }}
         </Button>
       </DialogFooter>

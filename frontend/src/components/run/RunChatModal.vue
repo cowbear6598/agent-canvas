@@ -63,7 +63,10 @@ onUnmounted(() => {
       @mousedown.stop
       @click="handleClose"
     />
-    <div class="relative max-w-3xl w-full h-[85vh]" @mousedown.stop>
+    <div
+      class="relative max-w-3xl w-full h-[85vh]"
+      @mousedown.stop
+    >
       <div class="chat-window flex flex-col h-full overflow-hidden">
         <div
           class="flex items-center justify-between p-4 border-b-2 border-doodle-ink"
@@ -75,7 +78,10 @@ onUnmounted(() => {
               $t("run.chatModal.historyBadge")
             }}</span>
           </div>
-          <button class="rounded-md p-1 hover:bg-accent" @click="handleClose">
+          <button
+            class="rounded-md p-1 hover:bg-accent"
+            @click="handleClose"
+          >
             <X :size="20" />
           </button>
         </div>

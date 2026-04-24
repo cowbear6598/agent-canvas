@@ -26,7 +26,10 @@ const { t } = useI18n();
 </script>
 
 <template>
-  <Dialog :open="open" @update:open="emit('update:open', $event)">
+  <Dialog
+    :open="open"
+    @update:open="emit('update:open', $event)"
+  >
     <DialogContent class="max-w-md">
       <DialogHeader>
         <DialogTitle>{{ $t("canvas.pullLatest.title") }}</DialogTitle>
@@ -39,10 +42,16 @@ const { t } = useI18n();
       </DialogHeader>
 
       <DialogFooter class="gap-2">
-        <Button variant="outline" @click="emit('update:open', false)">
+        <Button
+          variant="outline"
+          @click="emit('update:open', false)"
+        >
           {{ $t("common.cancel") }}
         </Button>
-        <Button variant="destructive" @click="emit('confirm')">
+        <Button
+          variant="destructive"
+          @click="emit('confirm')"
+        >
           {{ $t("canvas.pullLatest.confirmButton") }}
         </Button>
       </DialogFooter>

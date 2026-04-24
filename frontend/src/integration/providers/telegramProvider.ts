@@ -1,4 +1,5 @@
 import type {
+  FormFieldDefinition,
   IntegrationApp,
   IntegrationProviderConfig,
 } from "@/types/integration";
@@ -37,30 +38,30 @@ export const telegramProviderConfig: IntegrationProviderConfig = {
   icon: TelegramIcon,
   description: "integration.telegram.description",
 
-  get createFormFields() {
+  get createFormFields(): FormFieldDefinition[] {
     return [
       {
         key: "name",
-        get label() {
+        get label(): string {
           return t("integration.telegram.field.name.label");
         },
-        get placeholder() {
+        get placeholder(): string {
           return t("integration.telegram.field.name.placeholder");
         },
         type: "text" as const,
-        validate: (v: string) =>
+        validate: (v: string): string =>
           v === "" ? t("integration.telegram.validate.nameRequired") : "",
       },
       {
         key: "botToken",
-        get label() {
+        get label(): string {
           return t("integration.telegram.field.botToken.label");
         },
-        get placeholder() {
+        get placeholder(): string {
           return t("integration.telegram.field.botToken.placeholder");
         },
         type: "password" as const,
-        validate: (v: string) =>
+        validate: (v: string): string =>
           v === "" ? t("integration.telegram.validate.botTokenRequired") : "",
       },
     ];
@@ -80,18 +81,20 @@ export const telegramProviderConfig: IntegrationProviderConfig = {
 
   hasManualResourceInput: () => true,
 
-  get manualResourceInputConfig() {
+  get manualResourceInputConfig(): NonNullable<
+    IntegrationProviderConfig["manualResourceInputConfig"]
+  > {
     return {
-      get label() {
+      get label(): string {
         return t("integration.telegram.field.userId.label");
       },
-      get placeholder() {
+      get placeholder(): string {
         return t("integration.telegram.field.userId.placeholder");
       },
-      get hint() {
+      get hint(): string {
         return t("integration.telegram.field.userId.hint");
       },
-      validate: (v: string) => {
+      validate: (v: string): string => {
         const n = parseInt(v, 10);
         return !v || isNaN(n) || n <= 0
           ? t("integration.telegram.validate.userIdInvalid")

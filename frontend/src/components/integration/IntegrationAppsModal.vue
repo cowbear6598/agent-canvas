@@ -212,12 +212,20 @@ const handleCopyToken = (appId: string, token: string): void => {
 </script>
 
 <template>
-  <Dialog :open="open" @update:open="handleClose">
-    <DialogContent v-if="config" class="max-w-2xl">
+  <Dialog
+    :open="open"
+    @update:open="handleClose"
+  >
+    <DialogContent
+      v-if="config"
+      class="max-w-2xl"
+    >
       <DialogHeader>
-        <DialogTitle>{{
-          $t("integration.apps.title", { provider: config.label })
-        }}</DialogTitle>
+        <DialogTitle>
+          {{
+            $t("integration.apps.title", { provider: config.label })
+          }}
+        </DialogTitle>
         <DialogDescription class="sr-only">
           {{ $t("integration.apps.title", { provider: config.label }) }}
         </DialogDescription>
@@ -246,7 +254,10 @@ const handleCopyToken = (appId: string, token: string): void => {
           <div class="flex flex-1 flex-col overflow-hidden">
             <span class="font-semibold">{{ app.name }}</span>
 
-            <div v-if="config.getWebhookUrl" class="flex items-center gap-1">
+            <div
+              v-if="config.getWebhookUrl"
+              class="flex items-center gap-1"
+            >
               <span class="truncate font-mono text-xs text-muted-foreground">
                 {{ config.getWebhookUrl(app) }}
               </span>
@@ -258,8 +269,14 @@ const handleCopyToken = (appId: string, token: string): void => {
                   handleCopyWebhookUrl(app.id, config.getWebhookUrl!(app))
                 "
               >
-                <Check v-if="copiedAppId === app.id" class="size-3" />
-                <Copy v-else class="size-3" />
+                <Check
+                  v-if="copiedAppId === app.id"
+                  class="size-3"
+                />
+                <Copy
+                  v-else
+                  class="size-3"
+                />
               </Button>
             </div>
 
@@ -277,8 +294,14 @@ const handleCopyToken = (appId: string, token: string): void => {
                 class="size-5 shrink-0"
                 @click="handleCopyToken(app.id, config.getTokenValue!(app)!)"
               >
-                <Check v-if="copiedTokenAppId === app.id" class="size-3" />
-                <Copy v-else class="size-3" />
+                <Check
+                  v-if="copiedTokenAppId === app.id"
+                  class="size-3"
+                />
+                <Copy
+                  v-else
+                  class="size-3"
+                />
               </Button>
             </div>
 
@@ -310,7 +333,10 @@ const handleCopyToken = (appId: string, token: string): void => {
           </div>
         </div>
 
-        <div v-if="showAddForm" class="space-y-3 rounded-md border px-4 py-3">
+        <div
+          v-if="showAddForm"
+          class="space-y-3 rounded-md border px-4 py-3"
+        >
           <div
             v-for="field in config.createFormFields"
             :key="field.key"
@@ -330,7 +356,10 @@ const handleCopyToken = (appId: string, token: string): void => {
           </div>
 
           <div class="flex justify-end gap-2">
-            <Button variant="outline" @click="handleCancelAddForm">
+            <Button
+              variant="outline"
+              @click="handleCancelAddForm"
+            >
               {{ $t("common.cancel") }}
             </Button>
             <Button

@@ -49,7 +49,10 @@ const {
 </script>
 
 <template>
-  <Dialog :open="open" @update:open="handleClose">
+  <Dialog
+    :open="open"
+    @update:open="handleClose"
+  >
     <DialogContent class="max-w-md">
       <DialogHeader>
         <DialogTitle>{{ $t("canvas.worktree.createTitle") }}</DialogTitle>
@@ -71,15 +74,24 @@ const {
         />
       </div>
 
-      <p v-if="errorMessage" class="text-sm text-destructive">
+      <p
+        v-if="errorMessage"
+        class="text-sm text-destructive"
+      >
         {{ errorMessage }}
       </p>
 
       <DialogFooter>
-        <Button variant="outline" @click="handleClose">
+        <Button
+          variant="outline"
+          @click="handleClose"
+        >
           {{ $t("common.cancel") }}
         </Button>
-        <Button variant="default" @click="handleSubmit">
+        <Button
+          variant="default"
+          @click="handleSubmit"
+        >
           {{ $t("common.confirm") }}
         </Button>
       </DialogFooter>

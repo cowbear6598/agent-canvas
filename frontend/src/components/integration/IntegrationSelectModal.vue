@@ -32,7 +32,10 @@ const handleClose = (): void => {
 </script>
 
 <template>
-  <Dialog :open="open" @update:open="handleClose">
+  <Dialog
+    :open="open"
+    @update:open="handleClose"
+  >
     <DialogContent class="max-w-md">
       <DialogHeader>
         <DialogTitle>{{ $t("integration.select.title") }}</DialogTitle>
@@ -51,7 +54,10 @@ const handleClose = (): void => {
           <span
             class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted"
           >
-            <component :is="category.icon" class="h-5 w-5" />
+            <component
+              :is="category.icon"
+              class="h-5 w-5"
+            />
           </span>
           <span class="text-sm font-semibold">{{ category.label }}</span>
         </button>

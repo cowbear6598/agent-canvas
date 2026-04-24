@@ -68,6 +68,9 @@ const iconDataList = computed<IconData[]>(() =>
     :title="iconData.tooltip"
     :style="iconData.style"
   >
-    <component :is="iconData.config?.icon" :size="18" />
+    <component
+      :is="iconData.config?.icon"
+      :size="18"
+    />
   </div>
 </template>

@@ -87,7 +87,10 @@ const handleKeyDown = (e: KeyboardEvent): void => {
 </script>
 
 <template>
-  <Dialog :open="open" @update:open="handleClose">
+  <Dialog
+    :open="open"
+    @update:open="handleClose"
+  >
     <DialogContent class="max-w-2xl">
       <DialogHeader>
         <DialogTitle>{{ title }}</DialogTitle>
@@ -104,7 +107,7 @@ const handleKeyDown = (e: KeyboardEvent): void => {
           maxlength="100"
           class="w-full p-3 bg-card border-2 border-doodle-ink rounded text-base font-mono focus:outline-none focus:ring-2 focus:ring-doodle-ink/50 disabled:cursor-not-allowed disabled:opacity-50"
           @keydown.enter="!showContent && handleSubmit()"
-        />
+        >
 
         <textarea
           v-if="showContent"
@@ -117,10 +120,16 @@ const handleKeyDown = (e: KeyboardEvent): void => {
       </div>
 
       <DialogFooter>
-        <Button variant="outline" @click="handleClose">
+        <Button
+          variant="outline"
+          @click="handleClose"
+        >
           {{ $t("common.cancel") }}
         </Button>
-        <Button variant="default" @click="handleSubmit">
+        <Button
+          variant="default"
+          @click="handleSubmit"
+        >
           {{ mode === "create" ? $t("common.create") : $t("common.save") }}
         </Button>
       </DialogFooter>

@@ -84,7 +84,10 @@ const closeToolModal = (): void => {
       :style="{ boxShadow: '2px 2px 0 var(--doodle-ink)' }"
     >
       <div class="p-3">
-        <div v-if="hasToolUse" class="mb-2 flex flex-wrap gap-1.5">
+        <div
+          v-if="hasToolUse"
+          class="mb-2 flex flex-wrap gap-1.5"
+        >
           <component
             :is="isClickable(tool.status) ? 'button' : 'div'"
             v-for="tool in uniqueToolUse"
@@ -114,7 +117,10 @@ const closeToolModal = (): void => {
           </component>
         </div>
 
-        <div v-if="isSummarized" class="message-summary-badge">
+        <div
+          v-if="isSummarized"
+          class="message-summary-badge"
+        >
           <FileText :size="10" />
           <span>{{ $t("chat.summarizedBadge") }}</span>
         </div>

@@ -145,7 +145,10 @@ const handleDisconnect = (provider: string): void => {
       <ChevronRight :size="12" />
     </button>
 
-    <template v-for="provider in providers" :key="provider.name">
+    <template
+      v-for="provider in providers"
+      :key="provider.name"
+    >
       <div class="my-1 border-t border-border" />
 
       <button
@@ -153,7 +156,10 @@ const handleDisconnect = (provider: string): void => {
         class="w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary"
         @click="handleConnect(provider.name)"
       >
-        <component :is="provider.icon" :size="14" />
+        <component
+          :is="provider.icon"
+          :size="14"
+        />
         <span class="font-mono">{{
           $t("canvas.podContextMenu.connect", { label: provider.label })
         }}</span>

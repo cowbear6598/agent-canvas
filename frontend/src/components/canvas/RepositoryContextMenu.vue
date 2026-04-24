@@ -257,7 +257,10 @@ const handlePullLatestConfirm = async (): Promise<void> => {
       ]"
       @click="handleCreateWorktreeClick"
     >
-      <GitBranch :size="14" class="text-foreground" />
+      <GitBranch
+        :size="14"
+        class="text-foreground"
+      />
       <span class="font-mono text-foreground">{{
         $t("canvas.repositoryContextMenu.createWorktree")
       }}</span>
@@ -276,7 +279,10 @@ const handlePullLatestConfirm = async (): Promise<void> => {
       ]"
       @click="handleSwitchBranchClick"
     >
-      <GitBranch :size="14" class="text-foreground" />
+      <GitBranch
+        :size="14"
+        class="text-foreground"
+      />
       <span class="font-mono text-foreground">{{
         $t("canvas.repositoryContextMenu.switchBranch")
       }}</span>
@@ -293,7 +299,10 @@ const handlePullLatestConfirm = async (): Promise<void> => {
       ]"
       @click="handlePullLatestClick"
     >
-      <Download :size="14" class="text-foreground" />
+      <Download
+        :size="14"
+        class="text-foreground"
+      />
       <span class="font-mono text-foreground">{{
         $t("canvas.repositoryContextMenu.pullLatest")
       }}</span>

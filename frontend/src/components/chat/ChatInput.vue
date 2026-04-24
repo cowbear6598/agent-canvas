@@ -205,7 +205,10 @@ watch(
         class="doodle-action-btn bg-doodle-coral disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-x-0 disabled:hover:translate-y-0"
         @click="handleAbort"
       >
-        <Square :size="16" class="text-card" />
+        <Square
+          :size="16"
+          class="text-card"
+        />
       </button>
       <button
         v-else
@@ -213,7 +216,10 @@ watch(
         class="doodle-action-btn bg-doodle-green disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-x-0 disabled:hover:translate-y-0"
         @click="handleSend"
       >
-        <Send :size="20" class="text-card" />
+        <Send
+          :size="20"
+          class="text-card"
+        />
       </button>
       <button
         :disabled="disabled"

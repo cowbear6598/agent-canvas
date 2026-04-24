@@ -212,12 +212,17 @@ const handleClose = (): void => {
 </script>
 
 <template>
-  <Dialog :open="open" @update:open="handleClose">
+  <Dialog
+    :open="open"
+    @update:open="handleClose"
+  >
     <DialogContent class="max-w-lg">
       <DialogHeader>
-        <DialogTitle>{{
-          $t("integration.connect.title", { provider: config.label })
-        }}</DialogTitle>
+        <DialogTitle>
+          {{
+            $t("integration.connect.title", { provider: config.label })
+          }}
+        </DialogTitle>
         <DialogDescription>
           <template v-if="isNoResource">
             {{
@@ -248,13 +253,19 @@ const handleClose = (): void => {
         <template v-else>
           <div class="space-y-2">
             <Label>{{ $t("integration.connect.selectApp") }}</Label>
-            <RadioGroup v-model="selectedAppId" class="space-y-2">
+            <RadioGroup
+              v-model="selectedAppId"
+              class="space-y-2"
+            >
               <div
                 v-for="app in apps"
                 :key="app.id"
                 class="flex items-center gap-3"
               >
-                <RadioGroupItem :id="`app-${app.id}`" :value="app.id" />
+                <RadioGroupItem
+                  :id="`app-${app.id}`"
+                  :value="app.id"
+                />
                 <Label
                   :for="`app-${app.id}`"
                   class="flex cursor-pointer items-center gap-2 font-normal"
@@ -333,7 +344,10 @@ const handleClose = (): void => {
             </div>
 
             <!-- 資源列表選擇 -->
-            <div v-else class="space-y-2">
+            <div
+              v-else
+              class="space-y-2"
+            >
               <Label>{{
                 $t("integration.connect.selectResource", {
                   resourceLabel: config.resourceLabel,
@@ -345,7 +359,11 @@ const handleClose = (): void => {
               >
                 {{ config.emptyResourceHint }}
               </div>
-              <RadioGroup v-else v-model="selectedResourceId" class="space-y-2">
+              <RadioGroup
+                v-else
+                v-model="selectedResourceId"
+                class="space-y-2"
+              >
                 <div
                   v-for="resource in resources"
                   :key="resource.id"
@@ -369,9 +387,14 @@ const handleClose = (): void => {
       </div>
 
       <DialogFooter>
-        <Button variant="outline" @click="handleClose">{{
-          $t("common.cancel")
-        }}</Button>
+        <Button
+          variant="outline"
+          @click="handleClose"
+        >
+          {{
+            $t("common.cancel")
+          }}
+        </Button>
         <Button
           variant="default"
           :disabled="isConfirmDisabled"

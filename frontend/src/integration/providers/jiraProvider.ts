@@ -1,4 +1,6 @@
 import type {
+  BindingExtraFieldDefinition,
+  FormFieldDefinition,
   IntegrationApp,
   IntegrationProviderConfig,
 } from "@/types/integration";
@@ -35,14 +37,14 @@ export const jiraProviderConfig: IntegrationProviderConfig = {
   icon: JiraIcon,
   description: "integration.jira.description",
 
-  get createFormFields() {
+  get createFormFields(): FormFieldDefinition[] {
     return [
       {
         key: "name",
-        get label() {
+        get label(): string {
           return t("integration.jira.field.name.label");
         },
-        get placeholder() {
+        get placeholder(): string {
           return t("integration.jira.field.name.placeholder");
         },
         type: "text" as const,
@@ -55,10 +57,10 @@ export const jiraProviderConfig: IntegrationProviderConfig = {
       },
       {
         key: "siteUrl",
-        get label() {
+        get label(): string {
           return t("integration.jira.field.siteUrl.label");
         },
-        get placeholder() {
+        get placeholder(): string {
           return t("integration.jira.field.siteUrl.placeholder");
         },
         type: "text" as const,
@@ -71,10 +73,10 @@ export const jiraProviderConfig: IntegrationProviderConfig = {
       },
       {
         key: "webhookSecret",
-        get label() {
+        get label(): string {
           return t("integration.jira.field.webhookSecret.label");
         },
-        get placeholder() {
+        get placeholder(): string {
           return t("integration.jira.field.webhookSecret.placeholder");
         },
         type: "password" as const,
@@ -99,25 +101,25 @@ export const jiraProviderConfig: IntegrationProviderConfig = {
     return t("integration.jira.emptyAppHint");
   },
 
-  get bindingExtraFields() {
+  get bindingExtraFields(): BindingExtraFieldDefinition[] {
     return [
       {
         key: "eventFilter",
-        get label() {
+        get label(): string {
           return t("integration.jira.eventFilter.label");
         },
         type: "radio" as const,
-        get options() {
+        get options(): Array<{ value: string; label: string }> {
           return [
             {
               value: "all",
-              get label() {
+              get label(): string {
                 return t("integration.jira.eventFilter.all");
               },
             },
             {
               value: "status_changed",
-              get label() {
+              get label(): string {
                 return t("integration.jira.eventFilter.statusChanged");
               },
             },
