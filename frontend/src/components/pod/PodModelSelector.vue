@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onUnmounted } from "vue";
-import type { PodProvider } from "@/types/pod";
+import type { ModelOption, PodProvider } from "@/types/pod";
+import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
 
 const props = defineProps<{
   podId: string;
@@ -48,54 +49,48 @@ onUnmounted(() => {
   pendingTimers.value.clear();
 });
 
-/** 可選模型選項的共用型別 */
-interface ModelOption {
-  label: string;
-  value: string;
-}
-
-/** Codex 可選模型清單：label 為顯示名稱，value 為實際傳給後端的小寫字串 */
-const CODEX_OPTIONS: ReadonlyArray<ModelOption> = [
-  { label: "GPT-5.4", value: "gpt-5.4" },
-  { label: "GPT-5.5", value: "gpt-5.5" },
-  { label: "GPT-5.4-mini", value: "gpt-5.4-mini" },
-];
-
-/** Claude 可選模型清單 */
-const CLAUDE_OPTIONS: ReadonlyArray<ModelOption> = [
-  { label: "Opus", value: "opus" },
-  { label: "Sonnet", value: "sonnet" },
-  { label: "Haiku", value: "haiku" },
-];
+const providerCapabilityStore = useProviderCapabilityStore();
 
 /**
  * 依 provider 動態決定可選模型清單。
- * TODO: 後端新增 Provider.metadata.availableModels 欄位後，改為動態從 providerCapabilityStore 拉取，
- * 取代本檔案的 CLAUDE_OPTIONS / CODEX_OPTIONS 硬編碼。
+ * 由 providerCapabilityStore 統一管理各 provider 的 availableModels，
+ * 後端於 provider:list 回應中帶入；store 尚未載入時會回傳空陣列。
  */
-const allOptions = computed((): ModelOption[] => {
-  if (props.provider === "codex") {
-    return [...CODEX_OPTIONS];
-  }
-  // claude（預設）
-  return [...CLAUDE_OPTIONS];
+const allOptions = computed((): ReadonlyArray<ModelOption> => {
+  return providerCapabilityStore.getAvailableModels(props.provider);
 });
 
-/** Codex 只有單一選項，不需展開 */
-const isSingleOption = computed(() => allOptions.value.length === 1);
+/**
+ * Fallback 用的 effectiveOptions：
+ * - 若 store 尚未載入（WebSocket 連線瞬間未完成或斷線中），allOptions 為空陣列，
+ *   此時退回只顯示 currentModel 一張卡片，避免選擇器空白或出錯。
+ * - 否則直接使用 allOptions。
+ * sortedOptions、isSingleOption、selectModel 皆以 effectiveOptions 為依據。
+ */
+const effectiveOptions = computed((): ReadonlyArray<ModelOption> => {
+  if (allOptions.value.length === 0) {
+    return [{ label: props.currentModel, value: props.currentModel }];
+  }
+  return allOptions.value;
+});
+
+/** 單一選項時不開放切換，也不展開多張卡片 */
+const isSingleOption = computed(() => effectiveOptions.value.length === 1);
 
 /** 單次迴圈同時收集 active 與 others，避免兩次掃描 */
 const sortedOptions = computed((): ModelOption[] => {
   const active: ModelOption[] = [];
   const others: ModelOption[] = [];
-  for (const o of allOptions.value) {
+  for (const o of effectiveOptions.value) {
     if (o.value === props.currentModel) {
       active.push(o);
     } else {
       others.push(o);
     }
   }
-  return active.length > 0 ? [...active, ...others] : allOptions.value;
+  return active.length > 0
+    ? [...active, ...others]
+    : [...effectiveOptions.value];
 });
 
 const handleMouseEnter = (): void => {
@@ -123,8 +118,9 @@ const selectModel = async (model: string): Promise<void> => {
   if (isSingleOption.value) return;
   if (isAnimating.value || isCollapsing.value) return;
 
-  // 只允許清單中存在的 model
-  if (!allOptions.value.some((o) => o.value === model)) return;
+  // 以 providerCapabilityStore 的 availableModels 為白名單（透過 effectiveOptions 取得），
+  // 不在清單內時直接 return 不 emit，防止 devtools 偽造非法 model 值
+  if (!effectiveOptions.value.some((o) => o.value === model)) return;
 
   if (model === props.currentModel) {
     // 點擊 active 選項：直接收合

@@ -48,6 +48,39 @@ describe("getProvider().metadata.capabilities", () => {
 });
 
 // ================================================================
+// getProvider().metadata.availableModels
+// ================================================================
+describe("getProvider().metadata.availableModels", () => {
+  it("claude 的 availableModels 應為 Opus / Sonnet / Haiku 三筆且 label + value 完全一致", () => {
+    const models = getProvider("claude").metadata.availableModels;
+
+    // 明確斷言長度與每筆內容，避免順序改動或缺漏未被捕捉
+    expect(models).toHaveLength(3);
+    expect(models[0]).toEqual({ label: "Opus", value: "opus" });
+    expect(models[1]).toEqual({ label: "Sonnet", value: "sonnet" });
+    expect(models[2]).toEqual({ label: "Haiku", value: "haiku" });
+  });
+
+  it("codex 的 availableModels 應為 GPT-5.4 / GPT-5.5 / GPT-5.4-mini 三筆且 label + value 完全一致", () => {
+    const models = getProvider("codex").metadata.availableModels;
+
+    expect(models).toHaveLength(3);
+    expect(models[0]).toEqual({ label: "GPT-5.4", value: "gpt-5.4" });
+    expect(models[1]).toEqual({ label: "GPT-5.5", value: "gpt-5.5" });
+    expect(models[2]).toEqual({ label: "GPT-5.4-mini", value: "gpt-5.4-mini" });
+  });
+
+  it("claude 與 codex 的 availableModels 應為 frozen，避免前後端共用清單被意外改動", () => {
+    expect(
+      Object.isFrozen(getProvider("claude").metadata.availableModels),
+    ).toBe(true);
+    expect(Object.isFrozen(getProvider("codex").metadata.availableModels)).toBe(
+      true,
+    );
+  });
+});
+
+// ================================================================
 // getProvider
 // ================================================================
 describe("getProvider", () => {

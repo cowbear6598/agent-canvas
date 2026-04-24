@@ -47,6 +47,17 @@ export interface CodexOptions {
   model: string;
 }
 
+/**
+ * Provider 可選模型選項的共用型別。
+ * label 為 UI 顯示名稱，value 為實際傳給後端 providerConfig.model 的字串。
+ * 鏡射自後端 `provider:list` payload 中 `availableModels` 欄位的元素結構，
+ * 前後端共用此資料契約。
+ */
+export interface ModelOption {
+  label: string;
+  value: string;
+}
+
 /** 各 Provider 支援的功能能力表 */
 export interface ProviderCapabilities {
   chat: boolean;

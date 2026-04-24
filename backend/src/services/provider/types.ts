@@ -21,6 +21,12 @@ export interface ProviderMetadata<TOptions = unknown> {
   name: ProviderName;
   capabilities: ProviderCapabilities;
   defaultOptions: TOptions;
+  /**
+   * Provider 主動聲告支援的模型清單，作為前後端共通的資料契約。
+   * 前端模型選擇器會依此動態渲染選項，新增 provider 時僅需在此宣告即可，
+   * 不需要修改前端選擇器的硬編碼。
+   */
+  availableModels: ReadonlyArray<{ label: string; value: string }>;
 }
 
 /** Provider 支援的功能能力矩陣 */

@@ -28,3 +28,17 @@ export const CODEX_CAPABILITIES: Readonly<ProviderCapabilities> = Object.freeze(
     runMode: false,
   },
 );
+
+/** Claude Provider 支援的模型清單，供前端選擇器動態渲染 */
+export const CLAUDE_AVAILABLE_MODELS = Object.freeze([
+  Object.freeze({ label: "Opus", value: "opus" }),
+  Object.freeze({ label: "Sonnet", value: "sonnet" }),
+  Object.freeze({ label: "Haiku", value: "haiku" }),
+] as const);
+
+/** Codex Provider 支援的模型清單，供前端選擇器動態渲染 */
+export const CODEX_AVAILABLE_MODELS = Object.freeze([
+  Object.freeze({ label: "GPT-5.4", value: "gpt-5.4" }),
+  Object.freeze({ label: "GPT-5.5", value: "gpt-5.5" }),
+  Object.freeze({ label: "GPT-5.4-mini", value: "gpt-5.4-mini" }),
+] as const);

@@ -7,6 +7,7 @@ import {
 import { podStore } from "../../src/services/podStore.js";
 import { integrationAppStore } from "../../src/services/integration/integrationAppStore.js";
 import { integrationRegistry } from "../../src/services/integration/integrationRegistry.js";
+import { logger } from "../../src/utils/logger.js";
 import { z } from "zod";
 import type {
   IntegrationProvider,
@@ -697,5 +698,267 @@ describe("PodStore - create 回傳 integrationBindings", () => {
     expect(pod.integrationBindings).toBeDefined();
     expect(Array.isArray(pod.integrationBindings)).toBe(true);
     expect(pod.integrationBindings).toHaveLength(0);
+  });
+});
+
+// ================================================================
+// PodStore - Provider / Model 驗證（create / update / resolveProvider / resolveProviderConfig）
+// ================================================================
+describe("PodStore - Provider / Model 驗證", () => {
+  let canvasId: string;
+
+  beforeEach(() => {
+    initTestDb();
+    resetStatements();
+
+    // 清除 podStore 內部以 DB 實例為基礎的 PreparedStatement 快取，
+    // 避免跨測試重用已關閉 DB 的 statement 導致查詢失效
+    type PodStoreTestHooks = {
+      relationsStmtCache: Map<string, unknown>;
+      bindingsStmtCache: Map<number, unknown>;
+      joinTableStmtCache: Map<string, unknown>;
+    };
+    const store = podStore as unknown as PodStoreTestHooks;
+    store.relationsStmtCache.clear();
+    store.bindingsStmtCache.clear();
+    store.joinTableStmtCache.clear();
+
+    // 清除 logger mock 的歷史呼叫紀錄，避免跨測試污染 warn 斷言
+    vi.clearAllMocks();
+
+    const stmts = getStatements(getDb());
+    canvasId = "test-canvas-provider-validation";
+    stmts.canvas.insert.run({
+      $id: canvasId,
+      $name: "test-canvas-provider-validation",
+      $sortIndex: 0,
+    });
+  });
+
+  afterEach(() => {
+    closeDb();
+  });
+
+  /**
+   * private 方法存取用的測試 hook 型別。
+   * resolveProvider / resolveProviderConfig 是 PodStore 內部實作，
+   * 透過 type assertion 存取以避開 TS private modifier 限制。
+   * 注意：這些方法內部會呼叫 this.sanitizeProviderConfig，必須用 bind 保留 this。
+   */
+  type PodStorePrivateHooks = {
+    resolveProvider: (row: {
+      id: string;
+      provider: string;
+      provider_config_json: string | null;
+    }) => string;
+    resolveProviderConfig: (
+      row: {
+        id: string;
+        provider: string;
+        provider_config_json: string | null;
+      },
+      provider: string,
+    ) => Record<string, unknown>;
+  };
+
+  function getPrivateHooks(): PodStorePrivateHooks {
+    const store = podStore as unknown as PodStorePrivateHooks;
+    return {
+      resolveProvider: store.resolveProvider.bind(podStore),
+      resolveProviderConfig: store.resolveProviderConfig.bind(podStore),
+    };
+  }
+
+  // ─── create / update + model 驗證 ─────────────────────────────────────────
+
+  it("create 傳入非法 model 時應 throw，且 DB 不應寫入新紀錄", () => {
+    const podName = "pod-create-invalid-model";
+
+    expect(() =>
+      podStore.create(canvasId, {
+        name: podName,
+        x: 0,
+        y: 0,
+        rotation: 0,
+        provider: "claude",
+        providerConfig: { model: "not-a-model" },
+      }),
+    ).toThrow(/claude/);
+
+    // DB 內應查不到此 Pod（create 失敗時不該有殘留資料）
+    // bun:sqlite 查無資料時回傳 null，故以 toBeFalsy 同時涵蓋 null / undefined
+    const row = getDb()
+      .prepare("SELECT id FROM pods WHERE canvas_id = ? AND name = ?")
+      .get(canvasId, podName);
+    expect(row).toBeFalsy();
+  });
+
+  it("update 傳入非法 model 時應 throw，且 DB 內容不應被變動", () => {
+    // 先建立一個合法 Pod
+    const { pod } = podStore.create(canvasId, {
+      name: "pod-update-invalid-model",
+      x: 0,
+      y: 0,
+      rotation: 0,
+      provider: "claude",
+      providerConfig: { model: "opus" },
+    });
+
+    // 取得改動前的 DB 狀態快照
+    const before = getDb()
+      .prepare("SELECT provider, provider_config_json FROM pods WHERE id = ?")
+      .get(pod.id) as { provider: string; provider_config_json: string };
+
+    expect(() =>
+      podStore.update(canvasId, pod.id, {
+        providerConfig: { model: "bogus-model" },
+      }),
+    ).toThrow(/claude/);
+
+    // 改動後 DB 應與改動前完全一致
+    const after = getDb()
+      .prepare("SELECT provider, provider_config_json FROM pods WHERE id = ?")
+      .get(pod.id) as { provider: string; provider_config_json: string };
+
+    expect(after).toEqual(before);
+  });
+
+  it("create 傳入合法 model 時應成功建立並可從 DB 讀出", () => {
+    const { pod } = podStore.create(canvasId, {
+      name: "pod-create-valid-codex",
+      x: 0,
+      y: 0,
+      rotation: 0,
+      provider: "codex",
+      providerConfig: { model: "gpt-5.5" },
+    });
+
+    const found = podStore.getById(canvasId, pod.id);
+    expect(found).toBeDefined();
+    expect(found!.provider).toBe("codex");
+    expect(found!.providerConfig).toEqual({ model: "gpt-5.5" });
+
+    // DB 原始欄位亦應同步寫入
+    const row = getDb()
+      .prepare("SELECT provider, provider_config_json FROM pods WHERE id = ?")
+      .get(pod.id) as { provider: string; provider_config_json: string };
+    expect(row.provider).toBe("codex");
+    expect(JSON.parse(row.provider_config_json)).toEqual({ model: "gpt-5.5" });
+  });
+
+  it("update 傳入另一個合法 model 時應成功更新 DB", () => {
+    const { pod } = podStore.create(canvasId, {
+      name: "pod-update-valid-model",
+      x: 0,
+      y: 0,
+      rotation: 0,
+      provider: "claude",
+      providerConfig: { model: "opus" },
+    });
+
+    podStore.update(canvasId, pod.id, {
+      providerConfig: { model: "sonnet" },
+    });
+
+    const row = getDb()
+      .prepare("SELECT provider_config_json FROM pods WHERE id = ?")
+      .get(pod.id) as { provider_config_json: string };
+    expect(JSON.parse(row.provider_config_json)).toEqual({ model: "sonnet" });
+
+    const found = podStore.getById(canvasId, pod.id);
+    expect(found!.providerConfig).toEqual({ model: "sonnet" });
+  });
+
+  // ─── resolveProvider ─────────────────────────────────────────────────────
+
+  it("resolveProvider 傳入合法 provider 字串時應回傳原值且不呼叫 logger.warn", () => {
+    const { resolveProvider } = getPrivateHooks();
+
+    expect(
+      resolveProvider({
+        id: "test-1",
+        provider: "claude",
+        provider_config_json: null,
+      }),
+    ).toBe("claude");
+    expect(
+      resolveProvider({
+        id: "test-2",
+        provider: "codex",
+        provider_config_json: null,
+      }),
+    ).toBe("codex");
+
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it("resolveProvider 傳入未知 provider 字串時應 fallback 為 claude 並呼叫 logger.warn 至少一次", () => {
+    const { resolveProvider } = getPrivateHooks();
+
+    const result = resolveProvider({
+      id: "test-unknown",
+      provider: "gemini",
+      provider_config_json: null,
+    });
+
+    expect(result).toBe("claude");
+    expect(logger.warn).toHaveBeenCalled();
+    // 至少有一次 warn 的訊息帶有 provider 關鍵字與 fallback 字樣（zh-TW）
+    const warnCalls = (
+      logger.warn as unknown as { mock: { calls: unknown[][] } }
+    ).mock.calls;
+    const matched = warnCalls.some((call) =>
+      call.some((arg) => typeof arg === "string" && arg.includes("gemini")),
+    );
+    expect(matched).toBe(true);
+  });
+
+  // ─── resolveProviderConfig ───────────────────────────────────────────────
+
+  it("resolveProviderConfig 在 DB row 缺少 model 時應補上 provider 的 defaultOptions.model", () => {
+    const { resolveProviderConfig } = getPrivateHooks();
+
+    // 模擬 DB row：provider_config_json 為空物件，沒有 model 欄位
+    const row = {
+      id: "row-missing-model",
+      provider: "claude",
+      provider_config_json: "{}",
+    };
+    const cfg = resolveProviderConfig(row, "claude");
+
+    // claude 的 defaultOptions.model 為 "opus"
+    expect(cfg.model).toBe("opus");
+    // 不應因為補預設值觸發 warn（僅當 model 存在但非法才會 warn）
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it("resolveProviderConfig 在 DB row 帶有非法 model 時應保留原值不 throw 並呼叫 logger.warn 至少一次", () => {
+    const { resolveProviderConfig } = getPrivateHooks();
+
+    // 模擬舊資料：providerConfig.model 為 availableModels 外的歷史值
+    const row = {
+      id: "row-legacy-illegal-model",
+      provider: "claude",
+      provider_config_json: JSON.stringify({ model: "legacy-unknown-model" }),
+    };
+
+    let cfg: Record<string, unknown> = {};
+    expect(() => {
+      cfg = resolveProviderConfig(row, "claude");
+    }).not.toThrow();
+
+    // 保留原值，讓舊 pod 仍能被開啟
+    expect(cfg.model).toBe("legacy-unknown-model");
+    expect(logger.warn).toHaveBeenCalled();
+    const warnCalls = (
+      logger.warn as unknown as { mock: { calls: unknown[][] } }
+    ).mock.calls;
+    const matched = warnCalls.some((call) =>
+      call.some(
+        (arg) =>
+          typeof arg === "string" && arg.includes("legacy-unknown-model"),
+      ),
+    );
+    expect(matched).toBe(true);
   });
 });

@@ -9,7 +9,7 @@ import type {
 } from "../types";
 import type { IntegrationBinding } from "../types/integration.js";
 import type { ProviderName } from "./provider/types.js";
-import { getProvider } from "./provider/index.js";
+import { getProvider, providerRegistry } from "./provider/index.js";
 import { socketService } from "./socketService.js";
 import { canvasStore } from "./canvasStore.js";
 import { getStmts } from "../database/stmtsHelper.js";
@@ -298,14 +298,15 @@ class PodStore {
    * DB 欄位可能為空或含歷史非法值，需 fallback 以保持向後相容。
    */
   private resolveProvider(row: PodRow): ProviderName {
+    // 以 providerRegistry 的 key 作為白名單，未來新增 provider 時自動涵蓋，不需回頭改這個函式
     const isValidProvider = (value: unknown): value is ProviderName =>
-      value === "claude" || value === "codex";
+      typeof value === "string" && value in providerRegistry;
 
     if (!isValidProvider(row.provider)) {
       logger.warn(
         "Pod",
         "Warn",
-        `未知 provider：${String(row.provider)}，fallback 為 claude`,
+        `收到未知 provider 值：${String(row.provider)}，已 fallback 為 claude`,
       );
       return "claude";
     }
@@ -314,6 +315,8 @@ class PodStore {
 
   /**
    * 白名單過濾 providerConfig，只保留合法欄位（目前僅 model）。
+   * 不驗證 model 值是否在 provider 的 availableModels 內，供讀取路徑（DB → Pod 物件）使用，
+   * 避免舊 pod 中可能存在的不合法 model 值造成 Pod 打不開。寫入路徑請改用 sanitizeProviderConfigStrict。
    * 歷史 DB 舊格式 {provider, model} 需淨化為 {model} 以符合 .strict() schema，前端型別曾為 discriminated union 導致多餘 key 流入。
    */
   private sanitizeProviderConfig(
@@ -326,6 +329,30 @@ class PodStore {
     return sanitized;
   }
 
+  /**
+   * 嚴格版的 providerConfig 白名單過濾：在保留 model 欄位後，
+   * 會檢查 model 值是否在指定 provider 的 metadata.availableModels 清單內，
+   * 不合法時 throw Error（不 fallback），供寫入路徑（create / update）使用。
+   */
+  private sanitizeProviderConfigStrict(
+    raw: Record<string, unknown>,
+    provider: ProviderName,
+  ): Record<string, unknown> {
+    const sanitized = this.sanitizeProviderConfig(raw);
+
+    if ("model" in sanitized) {
+      const availableModels = getProvider(provider).metadata.availableModels;
+      const legalValues = availableModels.map((m) => m.value);
+      if (!legalValues.includes(sanitized.model as string)) {
+        throw new Error(
+          `Provider ${provider} 不支援 model ${String(sanitized.model)}，合法選項：${legalValues.join("、")}`,
+        );
+      }
+    }
+
+    return sanitized;
+  }
+
   /** 解析 DB row 的 providerConfig，缺少 model 時補入對應 provider 的預設值 */
   private resolveProviderConfig(
     row: PodRow,
@@ -334,13 +361,25 @@ class PodStore {
     const raw =
       safeJsonParse<Record<string, unknown>>(row.provider_config_json ?? "") ??
       {};
-    // 白名單過濾，丟棄舊格式中的 provider 等多餘 key
+    // 讀取路徑：使用 relaxed 版本白名單過濾，丟棄舊格式中的 provider 等多餘 key；
+    // 不驗證 model 是否在 availableModels 內，避免舊 pod 的歷史 model 值導致 Pod 打不開
     const sanitized = this.sanitizeProviderConfig(raw);
     if (!("model" in sanitized)) {
       // providerConfig 無 model 欄位時補入 provider 預設值
       const defaultOptions = getProvider(provider).metadata
         .defaultOptions as Record<string, unknown>;
       sanitized.model = defaultOptions.model;
+    } else {
+      // 讀取時額外做一次 availableModels 檢查，若不合法則 warn log 但保留原值
+      const availableModels = getProvider(provider).metadata.availableModels;
+      const legalValues = availableModels.map((m) => m.value);
+      if (!legalValues.includes(sanitized.model as string)) {
+        logger.warn(
+          "Pod",
+          "Warn",
+          `DB 中 Pod ${row.id} 的 providerConfig.model 值 ${String(sanitized.model)} 不在 provider ${provider} 的 availableModels 內（合法選項：${legalValues.join("、")}），保留原值`,
+        );
+      }
     }
     return sanitized;
   }
@@ -413,11 +452,14 @@ class PodStore {
 
     const provider: ProviderName = data.provider ?? "claude";
     const incomingConfig = data.providerConfig ?? null;
-    // 白名單過濾後確保 providerConfig 一定含有 model 欄位
+    // 寫入路徑使用 strict 版白名單過濾，model 不合法時直接 throw 由上層回報給 WebSocket 客戶端
     const rawConfig: Record<string, unknown> = incomingConfig
       ? { ...incomingConfig }
       : {};
-    const providerConfig = this.sanitizeProviderConfig(rawConfig);
+    const providerConfig = this.sanitizeProviderConfigStrict(
+      rawConfig,
+      provider,
+    );
     if (!("model" in providerConfig)) {
       const defaultOptions = getProvider(provider).metadata
         .defaultOptions as Record<string, unknown>;
@@ -630,8 +672,14 @@ class PodStore {
       $multiInstance: updatedPod.multiInstance ? 1 : 0,
       $scheduleJson: serializeSchedule(updatedPod.schedule),
       $provider: updatedPod.provider,
+      // 寫入路徑使用 strict 版白名單過濾，model 不合法時直接 throw 由上層回報給 WebSocket 客戶端
       $providerConfigJson: updatedPod.providerConfig
-        ? JSON.stringify(this.sanitizeProviderConfig(updatedPod.providerConfig))
+        ? JSON.stringify(
+            this.sanitizeProviderConfigStrict(
+              updatedPod.providerConfig,
+              updatedPod.provider,
+            ),
+          )
         : null,
     });
 

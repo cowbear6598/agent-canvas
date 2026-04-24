@@ -20,7 +20,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "0.2.87",
+    "@anthropic-ai/claude-agent-sdk": "0.2.119",
     "@slack/web-api": "^7.14.1",
     "fflate": "^0.8.2",
     "ignore": "^7.0.5",

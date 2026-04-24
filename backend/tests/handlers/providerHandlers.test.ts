@@ -80,11 +80,31 @@ describe("handleProviderList", () => {
     expect(Array.isArray(payload.providers)).toBe(true);
     expect(payload.providers.length).toBeGreaterThan(0);
 
-    // 每個 provider 應包含 name、capabilities 及 defaultOptions
+    // 每個 provider 應包含 name、capabilities、defaultOptions 以及 availableModels
     for (const provider of payload.providers) {
       expect(provider).toHaveProperty("name");
       expect(provider).toHaveProperty("capabilities");
       expect(provider).toHaveProperty("defaultOptions");
+      expect(provider).toHaveProperty("availableModels");
+      expect(Array.isArray(provider.availableModels)).toBe(true);
+    }
+  });
+
+  it("每個 provider 的 availableModels 應與該 provider metadata.availableModels 完全一致", async () => {
+    await handleProviderList(
+      CONNECTION_ID,
+      { requestId: REQUEST_ID },
+      REQUEST_ID,
+    );
+
+    const [, , payload] = mockEmitToConnection.mock.calls[0];
+
+    // 逐一比對 payload.providers 與 registry 對應的 metadata.availableModels
+    for (const provider of payload.providers) {
+      const expected =
+        providerRegistry[provider.name as keyof typeof providerRegistry]
+          .metadata.availableModels;
+      expect(provider.availableModels).toEqual(expected);
     }
   });
 

@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount } from "@vue/test-utils";
-import { createTestingPinia } from "@pinia/testing";
 import {
   webSocketMockFactory,
   mockCreateWebSocketRequest,
@@ -18,6 +17,7 @@ import {
 import { useCanvasStore } from "@/stores/canvasStore";
 import { usePodStore } from "@/stores/pod/podStore";
 import { useConnectionStore } from "@/stores/connectionStore";
+import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
 import type { Pod } from "@/types";
 import PodModelSelector from "@/components/pod/PodModelSelector.vue";
 
@@ -491,17 +491,39 @@ describe("Canvas/Pod 操作完整流程", () => {
       });
       mockCreateWebSocketRequest.mockResolvedValueOnce({ pod: updatedPod });
 
+      // 元件動態化後，PodModelSelector 的選項來自 providerCapabilityStore；
+      // 必須先注入 mock availableModels 讓 UI 能 render 出 Opus / Sonnet / Haiku 卡片
+      const providerCapabilityStore = useProviderCapabilityStore();
+      providerCapabilityStore.syncFromPayload([
+        {
+          name: "claude",
+          capabilities: {
+            chat: true,
+            outputStyle: false,
+            skill: false,
+            subAgent: false,
+            repository: false,
+            command: false,
+            mcp: false,
+            integration: false,
+            runMode: false,
+          },
+          availableModels: [
+            { label: "Opus", value: "opus" },
+            { label: "Sonnet", value: "sonnet" },
+            { label: "Haiku", value: "haiku" },
+          ],
+        },
+      ]);
+
       // Act：掛載 PodModelSelector 元件，模擬點擊 sonnet 選項觸發 update:model emit
+      // 不再另外建立 createTestingPinia，直接沿用 setupStoreTest() 已 setActivePinia 的 instance，
+      // 確保元件讀到的就是上面 syncFromPayload 注入的 availableModels。
       const wrapper = mount(PodModelSelector, {
         props: {
           podId: "pod-1",
           currentModel: "opus",
           provider: "claude",
-        },
-        global: {
-          plugins: [
-            createTestingPinia({ createSpy: vi.fn, stubActions: true }),
-          ],
         },
       });
 

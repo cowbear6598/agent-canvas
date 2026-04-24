@@ -9,7 +9,10 @@
  *   - sessionRetry.ts：Session resume 失敗時自動重試一次
  */
 
-import { CLAUDE_CAPABILITIES } from "./capabilities.js";
+import {
+  CLAUDE_AVAILABLE_MODELS,
+  CLAUDE_CAPABILITIES,
+} from "./capabilities.js";
 import {
   buildClaudeOptions,
   BASE_ALLOWED_TOOLS,
@@ -50,6 +53,7 @@ export const claudeProvider: AgentProvider<ClaudeOptions> = {
       includePartialMessages: true,
       pathToClaudeCodeExecutable: getClaudeCodePath(),
     },
+    availableModels: CLAUDE_AVAILABLE_MODELS,
   } satisfies ProviderMetadata<ClaudeOptions>,
 
   /**

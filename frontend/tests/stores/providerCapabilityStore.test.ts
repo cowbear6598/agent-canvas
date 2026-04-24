@@ -440,4 +440,93 @@ describe("providerCapabilityStore", () => {
       expect(store.defaultOptionsByProvider).toEqual({});
     });
   });
+
+  // ----------------------------------------------------------------
+  // availableModels — syncFromPayload / getAvailableModels（Phase 3 新增）
+  // ----------------------------------------------------------------
+  describe("availableModels 寫入與讀取", () => {
+    it("syncFromPayload 帶入含 availableModels 的 providers 後，getAvailableModels 應分別回傳對應清單", () => {
+      const store = useProviderCapabilityStore();
+
+      const claudeModels = [
+        { label: "Claude Opus 4.5", value: "claude-opus-4-5" },
+        { label: "Claude Sonnet 4.5", value: "claude-sonnet-4-5" },
+      ];
+      const codexModels = [
+        { label: "GPT-5.4", value: "gpt-5.4" },
+        { label: "GPT-5.4 Mini", value: "gpt-5.4-mini" },
+      ];
+
+      store.syncFromPayload([
+        {
+          name: "claude",
+          capabilities: CLAUDE_TEST_CAPABILITIES,
+          availableModels: claudeModels,
+        },
+        {
+          name: "codex",
+          capabilities: CODEX_TEST_CAPABILITIES,
+          availableModels: codexModels,
+        },
+      ]);
+
+      // 斷言 label / value 完整對上
+      expect(store.getAvailableModels("claude")).toEqual(claudeModels);
+      expect(store.getAvailableModels("codex")).toEqual(codexModels);
+    });
+
+    it("getAvailableModels 傳入未知 provider 時應回傳空陣列", () => {
+      const store = useProviderCapabilityStore();
+
+      // 未載入任何 payload：未知 provider
+      expect(store.getAvailableModels("unknown")).toEqual([]);
+
+      // 載入部分 provider 後，另一個未聲告的 provider 仍回空陣列
+      store.syncFromPayload([
+        {
+          name: "claude",
+          capabilities: CLAUDE_TEST_CAPABILITIES,
+          availableModels: [
+            { label: "Claude Opus 4.5", value: "claude-opus-4-5" },
+          ],
+        },
+      ]);
+
+      expect(store.getAvailableModels("unknown")).toEqual([]);
+      expect(store.getAvailableModels("codex")).toEqual([]);
+    });
+
+    it("loadFromBackend 成功後，availableModelsByProvider 內應包含預期的 provider 與 availableModels", async () => {
+      const store = useProviderCapabilityStore();
+
+      const claudeModels = [
+        { label: "Claude Opus 4.5", value: "claude-opus-4-5" },
+        { label: "Claude Sonnet 4.5", value: "claude-sonnet-4-5" },
+      ];
+      const codexModels = [{ label: "GPT-5.4", value: "gpt-5.4" }];
+
+      mockCreateWebSocketRequest.mockResolvedValueOnce({
+        providers: [
+          {
+            name: "claude",
+            capabilities: CLAUDE_TEST_CAPABILITIES,
+            availableModels: claudeModels,
+          },
+          {
+            name: "codex",
+            capabilities: CODEX_TEST_CAPABILITIES,
+            availableModels: codexModels,
+          },
+        ],
+      });
+
+      await store.loadFromBackend();
+
+      expect(store.availableModelsByProvider["claude"]).toEqual(claudeModels);
+      expect(store.availableModelsByProvider["codex"]).toEqual(codexModels);
+      // 同時透過 getter 再次驗證
+      expect(store.getAvailableModels("claude")).toEqual(claudeModels);
+      expect(store.getAvailableModels("codex")).toEqual(codexModels);
+    });
+  });
 });

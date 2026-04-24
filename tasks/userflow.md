@@ -1,54 +1,57 @@
-# Pod Model Selector UI 改版 User Flow
+# User Flow — Provider 抽象層擴充性補齊
 
-## 切換 Pod 所用的 AI Model
+## 功能一：Pod 模型清單改為動態（來自後端 metadata）
 
-### 情境：使用者查看 Pod 預設狀態
-- Given 使用者在 Canvas 上看到一個 Pod
-- When 沒有任何滑鼠動作、只是單純看著 Pod
-- Then 使用者在 Pod 的上方中央看到一個橫向寬版 tag，寬度大約是 Pod 上緣寬度的一半，tag 上只顯示目前這個 Pod 正在使用的 model 名稱（例如 Sonnet）
-- And 看不到其他兩個 model 選項
+### 情境：使用者開啟畫布時看到正確的模型清單
+- Given 使用者開啟 Agent 畫布且 WebSocket 連線成功
+- When 畫面上的 Pod 顯示模型選擇器
+- Then 模型選擇器顯示的選項與該 Pod 所屬 provider（Claude 或 Codex）後端聲告的模型清單一致
 
-### 情境：使用者把滑鼠移到 model tag 上
-- Given 使用者看到 Pod 上方只有顯示當前 model 的橫向 tag
-- When 使用者把滑鼠移到那個 tag 上
-- Then 整個 model selector 會先「扶起來」（整體往上提一小段距離）
-- And 另外兩個 model 選項從上方垂直堆疊長出來
-- And 當前使用中的 model 停留在最下方（貼近 Pod），另外兩個選項往上排列
-- And 使用者可以清楚看到全部三個 model（Opus / Sonnet / Haiku）
+### 情境：使用者切換 Pod 的 provider 後看到對應模型
+- Given 使用者建立一個新的 Pod
+- When 使用者將 Pod 的 provider 設定為 Codex
+- Then 模型選擇器只顯示 Codex 支援的模型清單（從後端取得）
 
-### 情境：使用者切換到不同的 model
-- Given 使用者 hover 在 model selector 上，看到 3 個 model 選項展開中
-- When 使用者點擊其中一個不是目前使用中的 model
-- Then Pod 所使用的 model 被切換成被點擊的那一個
-- And 當滑鼠離開後，Pod 上方只會顯示新選的 model 名稱
+### 情境：WebSocket 連線剛建立、模型清單還沒載入完
+- Given 使用者剛開啟畫布，WebSocket 連線瞬間尚未完成
+- When Pod 的模型選擇器渲染
+- Then 選擇器只顯示目前 Pod 的 model 一張卡片，不會有空白或錯誤畫面
 
-### 情境：使用者點擊目前已經使用中的 model
-- Given 使用者 hover 在 model selector 上，看到 3 個 model 選項展開中
-- When 使用者點擊最下方那個已經使用中的 model
-- Then Pod 的 model 維持不變
-- And 展開的選項收合回預設樣子
+### 情境：使用者切換模型
+- Given 使用者看著模型選擇器，且清單已從後端載入
+- When 使用者點擊清單中的另一個模型
+- Then Pod 切換到該模型，訊息送出後後端以該模型回應
 
-### 情境：使用者的滑鼠移開 model selector
-- Given 使用者剛剛 hover 在展開的 model selector 上
-- When 使用者把滑鼠移離 model selector 區域
-- Then 另外兩個 model 選項收回去
-- And 整個 selector 放下來（回到原本位置）
-- And 只剩下顯示當前 model 的橫向 tag
+### 情境：WebSocket 斷線重連後
+- Given 使用者因網路問題斷線，稍後自動重連成功
+- When 重連完成
+- Then 模型清單自動重新從後端載入，使用者不需手動重整
 
-### 情境：Canvas 上有多個 Pod，使用者只切換其中一個
-- Given 使用者在 Canvas 上同時放了多個 Pod，每個 Pod 都有自己的 model selector
-- When 使用者 hover 並切換某一個 Pod 的 model
-- Then 只有那一個 Pod 的 model 被換掉
-- And 其他 Pod 的 model 選擇維持不變
-- And 其他 Pod 的 model selector 也不會跟著展開
+---
 
-### 情境：Pod 中間的畫面內容不受影響
-- Given 使用者在 Pod 中央看得到 PodMiniScreen 正在顯示 agent 的執行內容
-- When 使用者 hover model selector，或是切換 model
-- Then Pod 中央的 PodMiniScreen 顯示內容持續正常運作，不會被遮住、不會閃動、也不會被推擠變形
+## 功能二：Model 白名單驗證（後端為準、不 fallback）
 
-### 情境：使用者在展開狀態下把滑鼠從一個選項移到另一個選項
-- Given model selector 已經展開，3 個 model 都看得到
-- When 使用者在展開範圍內把滑鼠在不同選項之間移動
-- Then selector 保持展開狀態
-- And 不會因為短暫滑過縫隙就誤收合
+### 情境：使用者選擇了合法模型
+- Given 使用者在模型選擇器上看到清單
+- When 使用者點擊清單中任一選項
+- Then Pod 的 model 更新成功，不會有錯誤
+
+### 情境：異常請求嘗試寫入不合法模型
+- Given 有人（或前端 bug）繞過 UI 直接發送切換模型的請求，model 值不在後端聲告的清單內
+- When 後端接收到該請求
+- Then 後端拒絕寫入（throw error），DB 不會被寫入非法值，前端收到錯誤回應
+- And 後端**不會**自動把 model 改成預設值，因為使用者要求「驗證但不要 fallback」
+
+---
+
+## 功能三：新增第三個 Provider 時零硬編碼（開發者視角）
+
+### 情境：開發者新增一個假想的 Gemini provider
+- Given 開發者在 `backend/src/services/provider/` 下新增 geminiProvider.ts，並在 `index.ts` 的 registry 加入 `gemini: geminiProvider`
+- When 開發者重啟後端
+- Then podStore 的 provider 白名單驗證自動把 `gemini` 視為合法 provider，不需要改 podStore 程式碼
+
+### 情境：新 Provider 聲告自己的模型清單
+- Given 開發者在新 provider 的 metadata 宣告了 `availableModels`
+- When 前端透過 `provider:list` 取得 provider 清單
+- Then 使用者在該 provider 的 Pod 上看到新 provider 的模型清單，不需要改前端程式碼

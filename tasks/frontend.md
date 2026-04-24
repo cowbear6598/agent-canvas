@@ -1,113 +1,88 @@
-# 前端實作計畫書 — Pod Model Selector 改版
+# 前端實作計畫書 — Pod Model Selector 動態模型清單
 
-> 目的：把 `PodModelSelector` 從 Pod 左上角的 3 張垂直直立窄卡改為 Pod 上緣中央的一條橫向寬版 tag，hover 時整個組合「扶起來」，其他 model 選項從上方垂直堆疊長出。純前端改動，不動後端、不動 slot 系統架構、不保留向後相容。
-
-## 測試案例列表（先列名稱，Phase 4 才實作）
-
-1. 預設只顯示當前 active model 橫向 tag（非 active 選項不渲染或不可見）
-2. Hover 時整體往上扶起、非 active 選項展開可見
-3. 點擊非 active 選項會 emit `update:model` 帶正確 value
-4. 點擊當前 active 選項不會 emit，會觸發收合動畫
-5. Hover 離開後經過 debounce 自動收合回預設
-6. Hover 在 active 與非 active 選項之間移動不會誤收合（hover 容錯區覆蓋縫隙）
-7. Codex provider 只有單一選項時不展開非 active 區塊
-8. Selector 寬度約為 Pod 上緣的 50%、水平置中
-9. 展開時不遮擋 Pod 中央的 PodMiniScreen（z-index 層疊正確）
-10. 多個 Pod 的 selector 互相獨立，hover 一個不會影響另一個
+> 目的：把 `PodModelSelector.vue` 內的硬編碼 `CLAUDE_OPTIONS` / `CODEX_OPTIONS` 常數移除，改為從 `providerCapabilityStore` 動態取得 `availableModels`（後端透過 `provider:list` WebSocket 事件推送）。資料未載入時沿用既有 `isSingleOption` 機制只顯示 currentModel，不新增 skeleton/loading UI。前端驗證（白名單）也一併改用 store 動態資料，不保留向後相容。
 
 ---
 
-### Phase 1
+## 測試案例列表（先列名稱，Phase 實作時才寫內容）
 
-A. 盤點與確認改動範圍
-  - [ ] 開啟 `/frontend/src/components/pod/PodModelSelector.vue`，確認 L16-18 的三個時間常數（`HOVER_DEBOUNCE_MS` / `COLLAPSE_ANIMATION_MS` / `SELECT_FEEDBACK_DELAY_MS`）會完整保留，這次只改視覺與 DOM 結構
-  - [ ] 確認 `isHovered` / `isAnimating` / `isCollapsing` / `hoverTimeoutId` 四個 ref 狀態機邏輯保留不動，`handleMouseEnter` / `handleMouseLeave` / `selectModel` 三個 handler 也保留
-  - [ ] 確認 `allOptions` / `isSingleOption` / `sortedOptions` 三個 computed 的語義（active 在第一個）維持不變，僅 template 呈現順序可能調整
-  - [ ] 確認 `emit("update:model", model)` 只有 `selectModel` 一處呼叫，WebSocket 通訊不動
-  - [ ] 確認 `CanvasPod.vue` L340-345 的 PodModelSelector 插入點位置不變，props 與 emits 不變
-  - [ ] 確認 `/frontend/src/assets/styles/doodle/slots.css` 的 `.pod-slot-has-item`（L31-40）樣式（實線 border + `2px 2px 0` 投影）作為 has-note 風格參考
+### `frontend/tests/stores/providerCapabilityStore.test.ts`
+1. `syncFromPayload` 收到含 `availableModels` 的 payload 後，`getAvailableModels(provider)` 回傳與 payload 一致的清單
+2. 查詢未知 provider 時，`getAvailableModels` 回傳空陣列
+3. `loadFromBackend` 成功後 state 內含正確的 `availableModels`
 
-### Phase 2
+### `frontend/tests/components/pod/PodModelSelector.test.ts`
+4. Store 的 `getAvailableModels` 回傳空陣列時（Loading 情境），元件只顯示 currentModel 一張卡片（取消原先被 skip 的 `isSingleOption` 測試）
+5. Provider 為 `claude` 時，顯示 store 回傳的 claude 模型清單
+6. Provider 為 `codex` 時，顯示 store 回傳的 codex 模型清單
+7. （改寫既有測試）「Codex 三個選項可切換」改為從 mock store 注入資料後驗證切換行為
+8. 點擊清單中選項會 emit `update:model` 帶正確 value
+9. 白名單驗證：當欲切換的 model 不在 store 回傳的 availableModels 中時，`selectModel` 不會 emit
+10. Hover / animation / guard（動畫期間二次點擊）等既有行為在注入 mock store 後仍正常
 
-A. 改寫 PodModelSelector.vue template
-  - [ ] 外層 `.pod-model-slot` 容器保留，但移除左對齊語意，改為用於「上方中央」定位的錨點
-  - [ ] 容器改為 stack 垂直堆疊排列：`.model-cards-stack`（或沿用 `.model-cards-container`，但語義已改）
-  - [ ] 堆疊順序：非 active 選項放上面（離 Pod 遠）、active 選項固定在最下面（貼 Pod 上緣）
-    - 排序策略：在 template 反轉 `sortedOptions` 或用 CSS `flex-direction: column-reverse`，擇一即可，計畫採用 CSS 方式以減少 computed 改動
-  - [ ] 每個 `.model-card` 仍為 `<button>`，保留 `@mouseenter`（active 才觸發展開）與 `@click.stop="selectModel"`
-  - [ ] active 卡片永遠可見（預設狀態）；非 active 卡片預設 `opacity: 0; pointer-events: none`，`.expanded` 時變 `opacity: 1; pointer-events: auto`
-  - [ ] 加入 hover 容錯區：在堆疊上方與左右擴一圈透明 padding / `::before` 偽元素，讓滑鼠在縫隙移動仍被容器捕捉到
-  - [ ] 維持 `TransitionGroup` 包裝，確保切換動畫自然；若 `card-swap` 動畫類別在橫向場景下不適合，改名並於 CSS 重新定義
+---
 
-B. 改寫 PodModelSelector.vue CSS
-  - [ ] 刪除 `.model-card` 上的 `writing-mode: vertical-lr` / `text-orientation: upright` / `letter-spacing: -2px` / `width: 24px` / `min-height: 70px` / `height: max-content`，全部換成橫向 tag 尺寸
-  - [ ] 新增橫向 tag 樣式：
-    - padding 約 `4px 10px`（視 Pod 上緣高度微調）
-    - `border: 2px solid var(--doodle-ink)`、`border-radius: 2px`（對齊 `pod-slot-has-item` 的實線風格）
-    - `box-shadow: 2px 2px 0 oklch(0.4 0.02 50 / 0.3)`（對齊 has-note 投影）
-    - hover 時 `box-shadow: 3px 3px 0 oklch(0.4 0.02 50 / 0.4)`（對齊 has-note hover 投影）
-    - 字體保留 `var(--font-mono)`，字級改回水平常態（約 `10px`~`11px`），`letter-spacing` 回正常
-    - `white-space: nowrap` 保留
-  - [ ] `.pod-model-slot` 定位改為上方中央：
-    - `position: absolute; bottom: 100%;`
-    - `left: 50%; transform: translateX(-50%);`
-    - 移除原本的 `left: 12px`
-    - `margin-bottom` 微調讓 active tag 貼住 Pod 上緣（原本 `-12px` 視新尺寸調整，避免重疊到 pod border）
-  - [ ] Selector 寬度為 Pod 上緣 50%：
-    - 採 `width: 50%` 讓它相對 Pod wrapper（`CanvasPod.vue` 的 `.pod-with-notch` 或 `.pod-doodle`）父層為基準；若發現父層不是定位上下文，再於父層加 `position: relative`（僅在必要時）
-    - 備案：若 50% 寬讓文字太擠，用 `min-width` 設一個合理下限
-    - `.model-card` 內寬 `width: 100%` 讓每張卡片填滿 selector 寬度，視覺上成為等寬堆疊
-  - [ ] 垂直堆疊容器 `.model-cards-stack`：
-    - `display: flex; flex-direction: column-reverse;`（active 顯示在最下靠近 Pod）
-    - `gap: 4px`
-    - `transition: transform 0.3s ease;`
-    - 預設 `transform: translateY(2px)`（輕微往下貼 Pod；實作時為對齊 notch，減少下推深度到 2px）
-    - `.expanded` 時 `transform: translateY(-12px)`（整個組合扶起來讓出展開空間；展開行程約 14px，配合預設 2px 下推）
-  - [ ] 非 active 卡片可見性規則：
-    - 預設 `opacity: 0; pointer-events: none; transform: translateY(8px);`（稍微往下、為展開做起點）
-    - `.expanded .model-card:not(.active)` → `opacity: 1; pointer-events: auto; transform: translateY(0);`
-    - `.collapsing .model-card:not(.active)` → `opacity: 0` 過渡出場
-  - [ ] z-index 層級：
-    - `.pod-model-slot` 原 `z-index: -1` 會讓 selector 在 Pod 後面，原設計因為位置在上方所以 Pod 只遮到下緣；改為上方中央後若 Pod 內 mini screen 高度/位置有交疊風險，改為 `z-index: 1`，並確認 active tag 預設 `translateY(12px)` 不會蓋到 `PodMiniScreen`（Mini Screen 位置為 Pod 內部、不在 Pod 上緣外，理論上安全）
-    - 展開時 selector 顯示在 Pod 上方外部，`z-index` 只需要高過 Pod 外框光暈層即可，不要蓋過跨 Pod 的 context menu
-  - [ ] Hover 容錯區：
-    - 於 `.pod-model-slot` 新增 `padding: 8px 12px 0 12px`（向上、左右延伸）讓堆疊縫隙與頂部空白仍在 `mouseleave` 判定內
-    - 或改用 `::before` 偽元素覆蓋整個容器擴大版圖（擇一即可，計畫採 padding 方案較單純）
-  - [ ] 保留 `.card-opus` / `.card-sonnet` / `.card-haiku` / `.card-codex` 的背景色 class，但垂直文字 hack（`letter-spacing: -1px` 等）一併刪除
-  - [ ] 刪除 `.card-single` 下關於 cursor 的 hack 以外的 vertical-only 規則；cursor 規則保留
+## Phase 1（可並行）
 
-C. CanvasPod.vue 定位上下文確認
-  - [ ] 在 `CanvasPod.vue` L335-345 確認 PodModelSelector 的直接父層（`.pod-with-notch` 或 `.pod-doodle`）有 `position: relative`；若無則補上，讓 `width: 50%` 相對 Pod 寬度計算
-  - [ ] 若父層已經 `position: relative`，不做變動；只在開發者工具驗證寬度為 Pod 的 50% 後打勾
-  - [ ] 不修改 emit listener，不修改 provider / currentModel props 傳遞
+A. 型別定義擴充
+  - [ ] 打開 `frontend/src/types/pod.ts`，新增（或從 `PodModelSelector.vue` 搬遷）共用型別 `ModelOption`，欄位為 `label: string` 與 `value: string`，並使用 `ReadonlyArray<ModelOption>` 作為清單型別
+  - [ ] 在同一檔案（或 WebSocket 型別定義所在檔）找到 `ProviderListItem`（或 `provider:list` 事件 payload 的 Item 型別），補上 `availableModels: ReadonlyArray<ModelOption>` 欄位
+  - [ ] 匯出 `ModelOption`，讓 store 與元件都從 `types/pod.ts` import，避免重複定義
+  - [ ] 全域搜尋既有 `{ label: string; value: string }` 內嵌型別的使用點，統一替換為匯入 `ModelOption`（範圍限於 pod 相關檔，不改無關的地方）
 
-### Phase 3
+B. providerCapabilityStore 擴充
+  - [ ] 打開 `frontend/src/stores/providerCapabilityStore.ts`
+  - [ ] 在檔頭常數區（`CONSERVATIVE_FALLBACK_CAPABILITIES` 附近）新增 `EMPTY_AVAILABLE_MODELS` 常數，內容為空陣列，型別 `ReadonlyArray<ModelOption>`，作為 `getAvailableModels` 找不到時的回傳值
+  - [ ] 於 state 區段新增 `availableModelsByProvider: Record<PodProvider, ReadonlyArray<ModelOption>>`，初始值為空物件（或以 `{}` 為初始值並由 getter 做保底）
+  - [ ] 於 getters 新增 `getAvailableModels(provider: PodProvider): ReadonlyArray<ModelOption>`；找不到對應 provider 時回傳 `EMPTY_AVAILABLE_MODELS`，並在註解以 zh-TW 說明「後端資料尚未載入或 provider 未聲告時回傳空陣列」
+  - [ ] 修改 action `syncFromPayload(providers)`：遍歷 providers 時除了原本的 capabilities，也把每個 provider 的 `availableModels` 寫入 `availableModelsByProvider[provider.name]`
+  - [ ] 確認 `loadFromBackend` 失敗分支不會覆寫 availableModels（維持上一次成功值），並以 zh-TW 註解寫明理由
+  - [ ] 確認 reset / disconnect 相關 action（若有）會把 `availableModelsByProvider` 清為空物件，避免重連時殘留舊資料；若無既有 reset action 則不新增，讓 `syncFromPayload` 直接以新 payload 覆蓋即可
 
-A. 清理舊程式碼與驗證
-  - [ ] 全域搜尋 `writing-mode: vertical-lr`，確認只剩非 PodModelSelector 的 slot 相關檔，不殘留在本元件
-  - [ ] 全域搜尋 `.card-opus` / `.card-sonnet` / `.card-haiku` / `.card-codex` 的使用位置，確保改版後仍正確對應
-  - [ ] 在瀏覽器手動驗證 10 個 user flow 情境：
-    - 預設只看到 active tag、水平置中、寬度約 Pod 50%
-    - Hover 整體扶起、非 active 選項從上方長出
-    - 點擊非 active 選項切換 model，收合後只剩新 active
-    - 點擊當前 active 選項 → 收合動畫
-    - 離開 hover 區 → 經 debounce 收合
-    - Hover 在縫隙之間移動不誤收合
-    - Codex 單一選項只顯示 tag、hover 不展開額外選項
-    - Mini Screen 不被遮擋、不抖動
-    - 兩個 Pod 同時存在時互不影響
-    - 連續快速 hover / click 不會卡死動畫（沿用 `isAnimating` 保護）
-  - [ ] 跑 `bun run style`（前端目錄下）確認 ESLint + TypeScript 無警告
-  - [ ] 告知使用者改動屬於純前端，不需重啟後端
+## Phase 2
 
-### Phase 4
+A. PodModelSelector.vue 改為動態取用 store
+  - [ ] 打開 `frontend/src/components/pod/PodModelSelector.vue`
+  - [ ] 刪除第 58-62 行 `CODEX_OPTIONS` 常數
+  - [ ] 刪除第 65-69 行 `CLAUDE_OPTIONS` 常數
+  - [ ] 刪除第 71-75 行的 TODO 註解（這次就是要實現它）
+  - [ ] 在 `<script setup>` 中 import `useProviderCapabilityStore`，並於元件內以 `storeToRefs` 或直接呼叫方式取得 store
+  - [ ] 修改 `allOptions = computed(...)`：移除 `if (props.provider === "codex")` 的硬編碼分支，改為 `providerCapabilityStore.getAvailableModels(props.provider)`，並確保回傳型別仍為 `ReadonlyArray<ModelOption>`
+  - [ ] 確認 `sortedOptions`（active 置頂）computed 不需變動（上游 allOptions 已動態化）
+  - [ ] 確認 `isSingleOption` computed 不需變動；當 store 尚未載入時 `allOptions.value.length === 0`，需在 computed 內加入 zh-TW 註解並處理「空清單時 fallback 為只顯示 currentModel」
+    - 作法：若 `allOptions.value.length === 0`，在 template/computed 層直接視為只有 currentModel 一筆（可另建一個 `effectiveOptions` computed，當空時回傳 `[{ label: currentModel, value: currentModel }]`，由 `sortedOptions` 與 `isSingleOption` 改為以 `effectiveOptions` 為基礎）
+  - [ ] 修改 `selectModel` 的白名單驗證 `inAllOptions`：改用動態 `allOptions.value`（或 `effectiveOptions.value`）判斷；行為不變（不在清單內時直接 return 不 emit），保留既有 zh-TW 錯誤註解並更新為「以 providerCapabilityStore 的 availableModels 為白名單」
+  - [ ] 從 `<script setup>` 與 `<template>` 檢查所有對 `ModelOption` 的 import 是否改為來自 `types/pod.ts`，移除本檔內重複定義
+  - [ ] Props / Emits 維持不變（`provider` / `currentModel` / `update:model`），不改 `CanvasPod.vue` 端的呼叫方式
 
-A. 補測試
-  - [ ] 於 `PodModelSelector` 對應的測試檔（如無則新增 `PodModelSelector.spec.ts`，擺在元件同層或既有 `__tests__` 目錄，依專案慣例）寫以下 Vue Test：
-    - [ ] 測試 1：預設只顯示 active model tag（斷言非 active 的 button opacity 為 0 或 `pointer-events: none`）
-    - [ ] 測試 2：Hover 後展開，非 active 選項可見且可點擊
-    - [ ] 測試 3：點擊非 active 選項 emit `update:model` 帶正確值
-    - [ ] 測試 4：點擊 active 選項不 emit、進入 collapsing 狀態
-    - [ ] 測試 5：`mouseleave` 後經 `HOVER_DEBOUNCE_MS` 收合（用 `vi.useFakeTimers()` 推進時間）
-    - [ ] 測試 6：Codex provider 且只有單一選項時，不進入可切換模式（`selectModel` 早退）
-  - [ ] 跑 `bun run test`（前端目錄下）確認新測試全通過，既有測試無回歸
+B. 連動檢查（不改動但需確認）
+  - [ ] 開啟 `frontend/src/App.vue` 第 292-304 行，確認 WebSocket 連線就緒時已呼叫 `providerCapabilityStore.loadFromBackend()`（重連情境由既有流程處理），不需修改
+  - [ ] 確認 `frontend/src/lib/providerOptions.ts`、`frontend/src/composables/pod/usePodCapabilities.ts`、`CanvasPod.vue` 不需改動
+  - [ ] 全域搜尋 `CLAUDE_OPTIONS`、`CODEX_OPTIONS`，確認已完全移除（除了舊測試會在下一個 Phase 處理）
+
+## Phase 3
+
+A. providerCapabilityStore 測試
+  - [ ] 打開 `frontend/tests/stores/providerCapabilityStore.test.ts`
+  - [ ] 既有 capabilities 相關測試保留不動
+  - [ ] 新增測試 1：`syncFromPayload` 寫入含 `availableModels` 的 providers 後，`getAvailableModels("claude")` 與 `getAvailableModels("codex")` 分別回傳對應清單（斷言 label/value 完整對上）
+  - [ ] 新增測試 2：呼叫 `getAvailableModels` 傳入未知 provider（例如字串 `"unknown"` 或未聲告的 provider）時回傳空陣列
+  - [ ] 新增測試 3：模擬 `loadFromBackend` 成功（以 fetch mock 或對應的 WebSocket 模擬機制）後，state 的 `availableModelsByProvider` 內包含預期的 provider 與 availableModels
+  - [ ] 測試中使用的 mock payload 需符合新的 `ProviderListItem` 型別（含 `availableModels`）
+
+B. PodModelSelector.vue 測試
+  - [ ] 打開 `frontend/tests/components/pod/PodModelSelector.test.ts`
+  - [ ] 在既有 `beforeEach` 內建立 Pinia testing instance，並準備一個可設定 `availableModelsByProvider` 的 helper，讓每個 it 能注入 mock 資料
+  - [ ] 取消第 237 行附近原本 skip 的 `isSingleOption` 測試，改寫為：「store 回傳空陣列時，元件只顯示 currentModel 一張卡片、`isSingleOption` 為 true、非 active 區塊不展開」（涵蓋 Loading 情境）
+  - [ ] 新增測試：`provider="claude"` 且 store 注入 claude 模型清單時，畫面顯示所有 claude 選項，active 在對應位置
+  - [ ] 新增測試：`provider="codex"` 且 store 注入 codex 模型清單時，畫面顯示所有 codex 選項
+  - [ ] 將既有「Codex 三個選項可切換」測試改寫為：透過 mock store 注入三個 codex 選項，驗證點擊切換仍能 emit 正確 value，不再依賴硬編碼 `CODEX_OPTIONS`
+  - [ ] 新增白名單驗證測試：當 `selectModel` 被以不在 store availableModels 的 value 呼叫時，元件不會 emit `update:model`（可透過直接呼叫 component instance method 或模擬 DOM 事件）
+  - [ ] 既有 hover / animation / guard（動畫期間二次點擊）測試保留，但在 mount 前先注入 mock store 資料，確保 `allOptions` 不為空導致行為改變
+
+## Phase 4
+
+A. 風格檢查與測試
+  - [ ] 於 `frontend` 目錄跑 `bun run style` 確認 ESLint + TypeScript 無錯誤、無新增 warning
+  - [ ] 於 `frontend` 目錄跑 `bun run test` 確認本次所有新增 / 改寫的測試全通過，既有測試無回歸
+  - [ ] 告知使用者此改動屬於純前端，不需重啟後端；但需等後端完成 `availableModels` 推送後才能在實機觀察到真實資料（本地測試以 mock store 驗證即可）

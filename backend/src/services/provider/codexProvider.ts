@@ -12,7 +12,7 @@
  *   - `-` 表示從 stdin 讀取 prompt
  */
 
-import { CODEX_CAPABILITIES } from "./capabilities.js";
+import { CODEX_AVAILABLE_MODELS, CODEX_CAPABILITIES } from "./capabilities.js";
 import { normalize } from "./codexNormalizer.js";
 import type {
   AgentProvider,
@@ -355,6 +355,7 @@ export class CodexProvider implements AgentProvider<CodexOptions> {
       model: "gpt-5.4",
       resumeMode: "cli",
     },
+    availableModels: CODEX_AVAILABLE_MODELS,
   };
 
   /**

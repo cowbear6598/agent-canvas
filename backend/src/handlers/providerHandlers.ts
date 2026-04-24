@@ -19,16 +19,17 @@ export async function handleProviderList(
   payload: ProviderListPayload,
   requestId: string,
 ): Promise<void> {
-  // 從 providerRegistry 建立 providers 列表，每個 provider 附帶 capabilities 與 defaultOptions
+  // 從 providerRegistry 建立 providers 列表，每個 provider 附帶 capabilities、defaultOptions 與 availableModels
   const providers = (Object.keys(providerRegistry) as ProviderName[]).map(
-    (name) => ({
-      name,
-      capabilities: getProvider(name).metadata.capabilities,
-      defaultOptions: getProvider(name).metadata.defaultOptions as Record<
-        string,
-        unknown
-      >,
-    }),
+    (name) => {
+      const { metadata } = getProvider(name);
+      return {
+        name,
+        capabilities: metadata.capabilities,
+        defaultOptions: metadata.defaultOptions as Record<string, unknown>,
+        availableModels: metadata.availableModels,
+      };
+    },
   );
 
   const response: ProviderListResultPayload = {

@@ -1,6 +1,10 @@
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
-import type { PodProvider, ProviderCapabilities } from "@/types/pod";
+import type {
+  ModelOption,
+  PodProvider,
+  ProviderCapabilities,
+} from "@/types/pod";
 import {
   createWebSocketRequest,
   WebSocketRequestEvents,
@@ -25,6 +29,13 @@ const CONSERVATIVE_FALLBACK_CAPABILITIES: ProviderCapabilities = {
 };
 
 /**
+ * getAvailableModels 找不到對應 provider 時的回傳值。
+ * 後端資料尚未載入或 provider 未聲告時回傳空陣列；
+ * 使用單一 frozen 實例避免每次呼叫產生新陣列，方便呼叫端做參考比較。
+ */
+const EMPTY_AVAILABLE_MODELS: ReadonlyArray<ModelOption> = Object.freeze([]);
+
+/**
  * provider:list 回應的單一 Provider 資料結構。
  * defaultOptions 為 optional：後端 Phase 6 才會帶此欄位，
  * 前端先行處理以確保 graceful degradation。
@@ -34,6 +45,11 @@ interface ProviderListItem {
   capabilities: ProviderCapabilities;
   /** 後端 Phase 6 後才帶入；不存在時預設 {} */
   defaultOptions?: Record<string, unknown>;
+  /**
+   * 後端提供的可選模型清單；未來由此欄位取代前端 CLAUDE_OPTIONS / CODEX_OPTIONS 硬編碼。
+   * 後端尚未帶入時為 undefined，UI 層需 fallback 至內建清單。
+   */
+  availableModels?: ReadonlyArray<ModelOption>;
 }
 
 /** provider:list:result 回應格式 */
@@ -70,6 +86,15 @@ export const useProviderCapabilityStore = defineStore(
      */
     const defaultOptionsByProvider = ref<
       Record<PodProvider, Record<string, unknown>>
+    >({});
+
+    /**
+     * 各 Provider 的可選模型清單。
+     * 初值為空物件，由 syncFromPayload 寫入；
+     * 未收到對應 provider 資料時，getAvailableModels 回傳 EMPTY_AVAILABLE_MODELS。
+     */
+    const availableModelsByProvider = ref<
+      Record<PodProvider, ReadonlyArray<ModelOption>>
     >({});
 
     /** 是否已從後端成功載入一次 */
@@ -126,18 +151,43 @@ export const useProviderCapabilityStore = defineStore(
       );
     });
 
+    /**
+     * 取得指定 Provider 的可選模型清單。
+     * 後端資料尚未載入或 provider 未聲告時回傳空陣列（EMPTY_AVAILABLE_MODELS），
+     * 呼叫端應自行判斷是否 fallback 至僅顯示 currentModel 的行為。
+     */
+    const getAvailableModels = computed(
+      () =>
+        (provider: PodProvider): ReadonlyArray<ModelOption> => {
+          return (
+            availableModelsByProvider.value[provider] ?? EMPTY_AVAILABLE_MODELS
+          );
+        },
+    );
+
     // ---- Actions ----
 
     /**
      * 把後端回傳的 providers 陣列寫入 state。
-     * 同時更新 capabilitiesByProvider 與 defaultOptionsByProvider。
-     * 若 payload 未帶 defaultOptions，寫入 {} 確保 graceful degradation。
+     * 同時更新 capabilitiesByProvider、defaultOptionsByProvider 與 availableModelsByProvider。
+     * 若 payload 未帶 defaultOptions，寫入 {} 確保 graceful degradation；
+     * 若 payload 未帶 availableModels，寫入空陣列，UI 層會 fallback 至 currentModel 單卡模式。
      */
     function syncFromPayload(providers: ProviderListItem[]): void {
-      for (const { name, capabilities, defaultOptions } of providers) {
+      for (const {
+        name,
+        capabilities,
+        defaultOptions,
+        availableModels,
+      } of providers) {
         capabilitiesByProvider.value[name] = { ...capabilities };
         // 後端 Phase 6 才送 defaultOptions，此階段先以 {} 填充確保不 crash
         defaultOptionsByProvider.value[name] = { ...(defaultOptions ?? {}) };
+        // 後端提供 availableModels 時寫入，未帶則以空陣列覆蓋；
+        // 淺拷貝一份避免外部引用污染 store 內部狀態
+        availableModelsByProvider.value[name] = availableModels
+          ? [...availableModels]
+          : [];
       }
     }
 
@@ -164,7 +214,10 @@ export const useProviderCapabilityStore = defineStore(
 
         loaded.value = true;
       } catch {
-        // 失敗時維持初始空物件，僅顯示提示，不中斷流程
+        // 失敗時不動 capabilitiesByProvider / defaultOptionsByProvider / availableModelsByProvider，
+        // 維持上一次成功載入的值；若從未成功則維持初始空物件。
+        // 理由：WebSocket 瞬斷重連期間，UI 應繼續使用上一次有效的模型清單，
+        // 避免下拉選單瞬間變空導致使用者已選的模型被 fallback 邏輯誤重置。
         toast({
           title: "Provider",
           description: "無法取得 provider capabilities，部分功能可能不正常",
@@ -176,10 +229,12 @@ export const useProviderCapabilityStore = defineStore(
     return {
       capabilitiesByProvider,
       defaultOptionsByProvider,
+      availableModelsByProvider,
       loaded,
       getCapabilities,
       isCapabilityEnabled,
       getDefaultOptions,
+      getAvailableModels,
       isKnownProvider,
       syncFromPayload,
       loadFromBackend,
