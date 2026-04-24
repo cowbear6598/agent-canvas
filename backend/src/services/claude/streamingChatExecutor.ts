@@ -508,6 +508,14 @@ export async function executeStreamingChat(
       abortRegistry.unregister(queryKey);
     }
 
+    // 收斂 abort 判斷：部分 Provider（例如 Codex）的 abort 實作是 proc.kill()
+    // 觸發 for-await 以 break 結束，不會拋 AbortError。
+    // 若不在此檢查 abortController.signal.aborted，就會被誤判為「正常完成」
+    // 走進 finalizeAfterStream，把半成品 sessionId 寫入 DB，導致下一次 resume 失敗。
+    if (abortController.signal.aborted && abortable) {
+      return handleStreamAbort(streamContext, callbacks);
+    }
+
     // 串流正常結束後收尾處理（含 session ID 持久化）
     await finalizeAfterStream(streamContext, capturedSessionId);
 
