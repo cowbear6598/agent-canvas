@@ -17,6 +17,10 @@ import type {
 import type { Result } from "../../src/types/index.js";
 import { ok } from "../../src/types/index.js";
 
+/**
+ * 測試用 mock：跳過真實加密以加速測試，不涵蓋加密失敗邊界。
+ * 使用 Base64 模擬加密行為，讓 encrypt/decrypt 可驗算但不進行真實 AES 操作。
+ */
 vi.mock("../../src/services/encryptionService.js", () => ({
   encryptionService: {
     encrypt: (text: string) => Buffer.from(text).toString("base64"),
@@ -107,12 +111,15 @@ describe("PodStore - Integration Binding", () => {
 
     // 清除 podStore 內部以 DB 實例為基礎的 PreparedStatement 快取，
     // 避免跨測試重用已關閉 DB 的 statement 導致 binding 查詢回傳空結果
-    const store = podStore as unknown as {
-      relationsStmtCache: Map<unknown, unknown>;
-      bindingsStmtCache: Map<unknown, unknown>;
+    type PodStoreTestHooks = {
+      relationsStmtCache: Map<string, unknown>;
+      bindingsStmtCache: Map<number, unknown>;
+      joinTableStmtCache: Map<string, unknown>;
     };
+    const store = podStore as unknown as PodStoreTestHooks;
     store.relationsStmtCache.clear();
     store.bindingsStmtCache.clear();
+    store.joinTableStmtCache.clear();
 
     (
       integrationRegistry as unknown as {
@@ -360,12 +367,15 @@ describe("PodStore - providerConfig 白名單過濾", () => {
     initTestDb();
     resetStatements();
 
-    const store = podStore as unknown as {
-      relationsStmtCache: Map<unknown, unknown>;
-      bindingsStmtCache: Map<unknown, unknown>;
+    type PodStoreTestHooks = {
+      relationsStmtCache: Map<string, unknown>;
+      bindingsStmtCache: Map<number, unknown>;
+      joinTableStmtCache: Map<string, unknown>;
     };
+    const store = podStore as unknown as PodStoreTestHooks;
     store.relationsStmtCache.clear();
     store.bindingsStmtCache.clear();
+    store.joinTableStmtCache.clear();
 
     const stmts = getStatements(getDb());
     canvasId = "test-canvas-sanitize";
@@ -490,12 +500,15 @@ describe("PodStore - resetAllBusyPods", () => {
 
     // 清除 podStore 內部以 DB 實例為基礎的 PreparedStatement 快取，
     // 避免跨測試重用已關閉 DB 的 statement 導致查詢失效
-    const store = podStore as unknown as {
-      relationsStmtCache: Map<unknown, unknown>;
-      bindingsStmtCache: Map<unknown, unknown>;
+    type PodStoreTestHooks = {
+      relationsStmtCache: Map<string, unknown>;
+      bindingsStmtCache: Map<number, unknown>;
+      joinTableStmtCache: Map<string, unknown>;
     };
+    const store = podStore as unknown as PodStoreTestHooks;
     store.relationsStmtCache.clear();
     store.bindingsStmtCache.clear();
+    store.joinTableStmtCache.clear();
 
     const stmts = getStatements(getDb());
     canvasId = "test-canvas-reset";
@@ -555,5 +568,134 @@ describe("PodStore - resetAllBusyPods", () => {
     podStore.resetAllBusyPods();
 
     expect(podStore.getById(canvasId, pod.id)?.status).toBe("idle");
+  });
+});
+
+describe("PodStore - hasName", () => {
+  let canvasId: string;
+
+  beforeEach(() => {
+    initTestDb();
+    resetStatements();
+
+    type PodStoreTestHooks = {
+      relationsStmtCache: Map<string, unknown>;
+      bindingsStmtCache: Map<number, unknown>;
+      joinTableStmtCache: Map<string, unknown>;
+    };
+    const store = podStore as unknown as PodStoreTestHooks;
+    store.relationsStmtCache.clear();
+    store.bindingsStmtCache.clear();
+    store.joinTableStmtCache.clear();
+
+    const stmts = getStatements(getDb());
+    canvasId = "test-canvas-hasname";
+    stmts.canvas.insert.run({
+      $id: canvasId,
+      $name: "test-canvas-hasname",
+      $sortIndex: 0,
+    });
+  });
+
+  afterEach(() => {
+    closeDb();
+  });
+
+  it("存在的名稱回傳 true", () => {
+    const { pod } = podStore.create(canvasId, {
+      name: "existing-pod",
+      x: 0,
+      y: 0,
+      rotation: 0,
+    });
+
+    expect(podStore.hasName(canvasId, pod.name)).toBe(true);
+  });
+
+  it("不存在的名稱回傳 false", () => {
+    expect(podStore.hasName(canvasId, "non-existent-pod")).toBe(false);
+  });
+
+  it("excludePodId 排除自己，同名不視為衝突", () => {
+    const { pod } = podStore.create(canvasId, {
+      name: "self-pod",
+      x: 0,
+      y: 0,
+      rotation: 0,
+    });
+
+    // 排除自己時不應算作名稱衝突
+    expect(podStore.hasName(canvasId, pod.name, pod.id)).toBe(false);
+  });
+
+  it("excludePodId 只排除自己，其他存在的不同名 pod 不影響查詢結果", () => {
+    // 建立 pod1 命名為 "pod-conflict-target"
+    const { pod: pod1 } = podStore.create(canvasId, {
+      name: "pod-conflict-target",
+      x: 0,
+      y: 0,
+      rotation: 0,
+    });
+    // 建立 pod2 命名為 "pod-conflict-other"（不同名）
+    const { pod: pod2 } = podStore.create(canvasId, {
+      name: "pod-conflict-other",
+      x: 10,
+      y: 10,
+      rotation: 0,
+    });
+
+    // 排除 pod2，查詢 "pod-conflict-target"：pod1 存在，應回傳 true
+    expect(podStore.hasName(canvasId, "pod-conflict-target", pod2.id)).toBe(
+      true,
+    );
+    // 排除 pod1，查詢 "pod-conflict-target"：pod1 被排除，應回傳 false
+    expect(podStore.hasName(canvasId, "pod-conflict-target", pod1.id)).toBe(
+      false,
+    );
+  });
+});
+
+describe("PodStore - create 回傳 integrationBindings", () => {
+  let canvasId: string;
+
+  beforeEach(() => {
+    initTestDb();
+    resetStatements();
+
+    type PodStoreTestHooks = {
+      relationsStmtCache: Map<string, unknown>;
+      bindingsStmtCache: Map<number, unknown>;
+      joinTableStmtCache: Map<string, unknown>;
+    };
+    const store = podStore as unknown as PodStoreTestHooks;
+    store.relationsStmtCache.clear();
+    store.bindingsStmtCache.clear();
+    store.joinTableStmtCache.clear();
+
+    const stmts = getStatements(getDb());
+    canvasId = "test-canvas-create-bindings";
+    stmts.canvas.insert.run({
+      $id: canvasId,
+      $name: "test-canvas-create-bindings",
+      $sortIndex: 0,
+    });
+  });
+
+  afterEach(() => {
+    closeDb();
+  });
+
+  it("create 直接回傳的 Pod 含 integrationBindings 空陣列", () => {
+    const { pod } = podStore.create(canvasId, {
+      name: "new-pod",
+      x: 0,
+      y: 0,
+      rotation: 0,
+    });
+
+    // create 路徑應直接含 integrationBindings 欄位，與 getById/list 路徑一致
+    expect(pod.integrationBindings).toBeDefined();
+    expect(Array.isArray(pod.integrationBindings)).toBe(true);
+    expect(pod.integrationBindings).toHaveLength(0);
   });
 });

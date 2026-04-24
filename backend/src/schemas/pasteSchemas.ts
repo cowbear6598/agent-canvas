@@ -14,10 +14,16 @@ export const pastePodItemSchema = z.object({
   name: z.string().min(1).max(100),
   x: coordinateSchema,
   y: coordinateSchema,
-  rotation: z.number().finite(),
-  /** AI provider 名稱，避免貼上時 provider 身份靜默降級 */
+  rotation: z.number().finite().min(-360).max(360),
+  /**
+   * AI provider 名稱必須明確帶入 paste payload：
+   * Zod 的 .strip() 行為會靜默丟棄未宣告欄位，前端型別曾因此導致 provider 身份遺失 bug。
+   */
   provider: providerSchema.optional(),
-  /** provider 對應的設定（含 model 等參數） */
+  /**
+   * provider 對應的設定（含 model 等參數）必須明確帶入 paste payload：
+   * Zod strip 會靜默丟失未宣告欄位，前端型別若有變動會讓 model 資訊消失，曾真實發生 bug。
+   */
   providerConfig: providerConfigSchema.optional(),
   outputStyleId: resourceIdSchema.nullable().optional(),
   skillIds: z.array(resourceIdSchema).optional(),

@@ -33,7 +33,11 @@ function buildStatements(db: Database): {
     selectByOutputStyleId: ReturnType<Database["prepare"]>;
     selectByRepositoryId: ReturnType<Database["prepare"]>;
     selectByCommandId: ReturnType<Database["prepare"]>;
+    selectByCommandIdAndCanvas: ReturnType<Database["prepare"]>;
+    selectByOutputStyleIdAndCanvas: ReturnType<Database["prepare"]>;
+    selectByRepositoryIdAndCanvas: ReturnType<Database["prepare"]>;
     selectScheduleInfo: ReturnType<Database["prepare"]>;
+    resetAllBusy: ReturnType<Database["prepare"]>;
     deleteById: ReturnType<Database["prepare"]>;
     deleteByCanvasId: ReturnType<Database["prepare"]>;
   };
@@ -247,8 +251,20 @@ function buildStatements(db: Database): {
         "SELECT * FROM pods WHERE repository_id = ?",
       ),
       selectByCommandId: db.prepare("SELECT * FROM pods WHERE command_id = ?"),
+      selectByCommandIdAndCanvas: db.prepare(
+        "SELECT * FROM pods WHERE command_id = ? AND canvas_id = ?",
+      ),
+      selectByOutputStyleIdAndCanvas: db.prepare(
+        "SELECT * FROM pods WHERE output_style_id = ? AND canvas_id = ?",
+      ),
+      selectByRepositoryIdAndCanvas: db.prepare(
+        "SELECT * FROM pods WHERE repository_id = ? AND canvas_id = ?",
+      ),
       selectScheduleInfo: db.prepare(
         "SELECT canvas_id, id, schedule_json FROM pods WHERE schedule_json IS NOT NULL",
+      ),
+      resetAllBusy: db.prepare(
+        "UPDATE pods SET status = 'idle' WHERE status IN ('chatting', 'summarizing')",
       ),
       deleteById: db.prepare("DELETE FROM pods WHERE id = ?"),
       deleteByCanvasId: db.prepare("DELETE FROM pods WHERE canvas_id = ?"),

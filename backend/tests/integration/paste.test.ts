@@ -904,5 +904,144 @@ describe("貼上功能", () => {
       expect(pod?.provider).toBe("claude");
       expect(pod?.providerConfig?.model).toBe(nonDefaultClaudeModel);
     });
+
+    it("含非法 pluginId 格式（含 '/'）的 paste payload 回傳 VALIDATION_ERROR", async () => {
+      const client = getClient();
+      const canvasId = await getCanvasId(client);
+
+      const rawPayload = {
+        requestId: uuidv4(),
+        canvasId,
+        pods: [
+          {
+            originalId: uuidv4(),
+            name: "Evil Plugin Pod",
+            x: 0,
+            y: 0,
+            rotation: 0,
+            pluginIds: ["plugin/evil"],
+          },
+        ],
+        outputStyleNotes: [],
+        skillNotes: [],
+        repositoryNotes: [],
+        subAgentNotes: [],
+        commandNotes: [],
+        connections: [],
+      };
+
+      const response = await emitAndWaitResponse(
+        client,
+        WebSocketRequestEvents.CANVAS_PASTE,
+        WebSocketResponseEvents.CANVAS_PASTE_RESULT,
+        rawPayload,
+      );
+
+      // Zod 驗證失敗時，wsMiddleware 回傳 code: "VALIDATION_ERROR"
+      expect((response as any).code).toBe("VALIDATION_ERROR");
+      expect((response as any).success).toBe(false);
+    });
+
+    it("貼上與現有 Pod 同名時後端自動加後綴（resolveUniquePodName）", async () => {
+      const client = getClient();
+      const canvasId = await getCanvasId(client);
+
+      // 先貼上一個名為 "Pod 1" 的 Pod
+      const firstPayload: CanvasPastePayload = {
+        requestId: uuidv4(),
+        canvasId,
+        pods: [
+          { originalId: uuidv4(), name: "Pod 1", x: 0, y: 0, rotation: 0 },
+        ],
+        outputStyleNotes: [],
+        skillNotes: [],
+        repositoryNotes: [],
+        subAgentNotes: [],
+        commandNotes: [],
+        connections: [],
+      };
+
+      await emitAndWaitResponse<CanvasPastePayload, CanvasPasteResultPayload>(
+        client,
+        WebSocketRequestEvents.CANVAS_PASTE,
+        WebSocketResponseEvents.CANVAS_PASTE_RESULT,
+        firstPayload,
+      );
+
+      // 再貼上同名 "Pod 1"，後端應自動加後綴
+      const secondPayload: CanvasPastePayload = {
+        requestId: uuidv4(),
+        canvasId,
+        pods: [
+          { originalId: uuidv4(), name: "Pod 1", x: 50, y: 50, rotation: 0 },
+        ],
+        outputStyleNotes: [],
+        skillNotes: [],
+        repositoryNotes: [],
+        subAgentNotes: [],
+        commandNotes: [],
+        connections: [],
+      };
+
+      const secondResponse = await emitAndWaitResponse<
+        CanvasPastePayload,
+        CanvasPasteResultPayload
+      >(
+        client,
+        WebSocketRequestEvents.CANVAS_PASTE,
+        WebSocketResponseEvents.CANVAS_PASTE_RESULT,
+        secondPayload,
+      );
+
+      expect(secondResponse.createdPods).toHaveLength(1);
+      // 驗證 DB 中寫入的名稱帶有後綴而非重名
+      const { podStore } = await import("../../src/services/podStore.js");
+      const allPods = podStore.list(canvasId);
+      const podNames = allPods.map((p) => p.name);
+      expect(podNames).toContain("Pod 1");
+      expect(podNames).toContain("Pod 1 (2)");
+    });
+
+    it("貼上帶合法 pluginIds 的 Pod 後 DB 正確寫入 pluginIds", async () => {
+      const client = getClient();
+      const originalPodId = uuidv4();
+
+      const pods: PastePodItem[] = [
+        {
+          originalId: originalPodId,
+          name: "Plugin Pod",
+          x: 0,
+          y: 0,
+          rotation: 0,
+          pluginIds: ["my-plugin", "another.plugin@1.0"],
+        },
+      ];
+
+      const payload: CanvasPastePayload = {
+        ...(await emptyPastePayload()),
+        pods,
+      };
+
+      const response = await emitAndWaitResponse<
+        CanvasPastePayload,
+        CanvasPasteResultPayload
+      >(
+        client,
+        WebSocketRequestEvents.CANVAS_PASTE,
+        WebSocketResponseEvents.CANVAS_PASTE_RESULT,
+        payload,
+      );
+
+      expect(response.createdPods).toHaveLength(1);
+
+      const newPodId = response.podIdMapping[originalPodId];
+      const canvasId = await getCanvasId(client);
+      const { podStore } = await import("../../src/services/podStore.js");
+      const pod = podStore.getById(canvasId, newPodId);
+
+      expect(pod?.pluginIds).toContain("my-plugin");
+      expect(pod?.pluginIds).toContain("another.plugin@1.0");
+      expect(pod?.pluginIds).toHaveLength(2);
+    });
   });
 });

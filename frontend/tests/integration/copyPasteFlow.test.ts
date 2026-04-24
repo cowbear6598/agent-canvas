@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { webSocketMockFactory } from "../helpers/mockWebSocket";
+import {
+  webSocketMockFactory,
+  mockCreateWebSocketRequest,
+} from "../helpers/mockWebSocket";
 import { setupStoreTest } from "../helpers/testSetup";
 import {
   createMockPod,
@@ -23,6 +26,8 @@ import { useConnectionStore } from "@/stores/connectionStore";
 import { useClipboardStore } from "@/stores/clipboardStore";
 import { useCanvasStore } from "@/stores/canvasStore";
 import type { SelectableElement } from "@/types";
+import type { CopiedPod } from "@/types/clipboard";
+import type { Pod } from "@/types/pod";
 
 const { mockShowSuccessToast, mockShowErrorToast, mockToast } = vi.hoisted(
   () => ({
@@ -41,6 +46,27 @@ vi.mock("@/composables/useToast", () => ({
     showErrorToast: mockShowErrorToast,
   }),
 }));
+
+/**
+ * 將 Pod 映射至 CopiedPod 結構（複製時保留所有必要欄位）。
+ * 抽出為 helper 以避免各 test case 中重複手寫 map 物件。
+ */
+function toCopiedPod(p: Pod): CopiedPod {
+  return {
+    id: p.id,
+    name: p.name,
+    x: p.x,
+    y: p.y,
+    rotation: p.rotation,
+    provider: p.provider,
+    providerConfig: p.providerConfig,
+    outputStyleId: p.outputStyleId,
+    skillIds: p.skillIds,
+    subAgentIds: p.subAgentIds,
+    repositoryId: p.repositoryId,
+    commandId: p.commandId,
+  };
+}
 
 describe("複製貼上/批量操作完整流程", () => {
   let podStore: ReturnType<typeof usePodStore>;
@@ -74,6 +100,22 @@ describe("複製貼上/批量操作完整流程", () => {
     canvasStore.activeCanvasId = "test-canvas-id";
   });
 
+  /**
+   * 回傳包含全部六種 Note 類型的 noteGroups 陣列，
+   * 供 calculateSelectedElements 使用。每個 test case 呼叫此函式一次即可，
+   * 無需重複手寫六個 store 對應關係。
+   */
+  function buildNoteGroups() {
+    return [
+      { notes: outputStyleStore.notes, type: "outputStyleNote" as const },
+      { notes: skillStore.notes, type: "skillNote" as const },
+      { notes: repositoryStore.notes, type: "repositoryNote" as const },
+      { notes: subAgentStore.notes, type: "subAgentNote" as const },
+      { notes: commandStore.notes, type: "commandNote" as const },
+      { notes: mcpServerStore.notes, type: "mcpServerNote" as const },
+    ];
+  }
+
   describe("框選 -> 複製 -> 貼上", () => {
     it("應正確將框選的 Pod 和 Note 複製到 clipboardStore", () => {
       const pod1 = createMockPod({ id: "pod-1", x: 100, y: 100 });
@@ -95,18 +137,13 @@ describe("複製貼上/批量操作完整流程", () => {
       outputStyleStore.notes = [outputNote as any];
       skillStore.notes = [skillNote as any];
 
-      selectionStore.startSelection(0, 0);
-      selectionStore.updateSelection(500, 500);
+      // 選取範圍涵蓋 x=[0,500], y=[0,500]，pod1(100,100)、pod2(200,200)、note1(300,300)、note2(400,400) 均在範圍內
+      const SELECTION_BOX = { x1: 0, y1: 0, x2: 500, y2: 500 };
+      selectionStore.startSelection(SELECTION_BOX.x1, SELECTION_BOX.y1);
+      selectionStore.updateSelection(SELECTION_BOX.x2, SELECTION_BOX.y2);
       selectionStore.calculateSelectedElements({
         pods: podStore.pods,
-        noteGroups: [
-          { notes: outputStyleStore.notes, type: "outputStyleNote" },
-          { notes: skillStore.notes, type: "skillNote" },
-          { notes: repositoryStore.notes, type: "repositoryNote" },
-          { notes: subAgentStore.notes, type: "subAgentNote" },
-          { notes: commandStore.notes, type: "commandNote" },
-          { notes: mcpServerStore.notes, type: "mcpServerNote" as const },
-        ],
+        noteGroups: buildNoteGroups(),
       });
 
       const selectedElements = selectionStore.selectedElements;
@@ -115,20 +152,7 @@ describe("複製貼上/批量操作完整流程", () => {
       );
       const copiedPods = podStore.pods
         .filter((p) => selectedPodIds.has(p.id))
-        .map((p) => ({
-          id: p.id,
-          name: p.name,
-          x: p.x,
-          y: p.y,
-          rotation: p.rotation,
-          provider: p.provider,
-          providerConfig: p.providerConfig,
-          outputStyleId: p.outputStyleId,
-          skillIds: p.skillIds,
-          subAgentIds: p.subAgentIds,
-          repositoryId: p.repositoryId,
-          commandId: p.commandId,
-        }));
+        .map(toCopiedPod);
 
       const copiedOutputStyleNotes = outputStyleStore.notes
         .filter((n) =>
@@ -199,18 +223,13 @@ describe("複製貼上/批量操作完整流程", () => {
       podStore.pods = [pod];
       outputStyleStore.notes = [boundNote as any, unboundNote as any];
 
-      selectionStore.startSelection(0, 0);
-      selectionStore.updateSelection(500, 500);
+      // 選取範圍涵蓋 x=[0,500], y=[0,500]，pod(100,100)、兩個 note(150,150)/(200,200) 均在範圍內
+      const SELECTION_BOX = { x1: 0, y1: 0, x2: 500, y2: 500 };
+      selectionStore.startSelection(SELECTION_BOX.x1, SELECTION_BOX.y1);
+      selectionStore.updateSelection(SELECTION_BOX.x2, SELECTION_BOX.y2);
       selectionStore.calculateSelectedElements({
         pods: podStore.pods,
-        noteGroups: [
-          { notes: outputStyleStore.notes, type: "outputStyleNote" },
-          { notes: skillStore.notes, type: "skillNote" },
-          { notes: repositoryStore.notes, type: "repositoryNote" },
-          { notes: subAgentStore.notes, type: "subAgentNote" },
-          { notes: commandStore.notes, type: "commandNote" },
-          { notes: mcpServerStore.notes, type: "mcpServerNote" as const },
-        ],
+        noteGroups: buildNoteGroups(),
       });
 
       const selectedElements = selectionStore.selectedElements;
@@ -260,18 +279,13 @@ describe("複製貼上/批量操作完整流程", () => {
       podStore.pods = [pod1, pod2];
       connectionStore.connections = [connection];
 
-      selectionStore.startSelection(0, 0);
-      selectionStore.updateSelection(500, 500);
+      // 選取範圍涵蓋 x=[0,500], y=[0,500]，pod1(100,100)、pod2(200,200) 均在範圍內
+      const SELECTION_BOX = { x1: 0, y1: 0, x2: 500, y2: 500 };
+      selectionStore.startSelection(SELECTION_BOX.x1, SELECTION_BOX.y1);
+      selectionStore.updateSelection(SELECTION_BOX.x2, SELECTION_BOX.y2);
       selectionStore.calculateSelectedElements({
         pods: podStore.pods,
-        noteGroups: [
-          { notes: outputStyleStore.notes, type: "outputStyleNote" },
-          { notes: skillStore.notes, type: "skillNote" },
-          { notes: repositoryStore.notes, type: "repositoryNote" },
-          { notes: subAgentStore.notes, type: "subAgentNote" },
-          { notes: commandStore.notes, type: "commandNote" },
-          { notes: mcpServerStore.notes, type: "mcpServerNote" as const },
-        ],
+        noteGroups: buildNoteGroups(),
       });
 
       const selectedElements = selectionStore.selectedElements;
@@ -320,18 +334,13 @@ describe("複製貼上/批量操作完整流程", () => {
       podStore.pods = [pod];
       mcpServerStore.notes = [mcpServerNote as any];
 
-      selectionStore.startSelection(0, 0);
-      selectionStore.updateSelection(500, 500);
+      // 選取範圍涵蓋 x=[0,500], y=[0,500]，pod(100,100)、mcpServerNote(300,300) 均在範圍內
+      const SELECTION_BOX = { x1: 0, y1: 0, x2: 500, y2: 500 };
+      selectionStore.startSelection(SELECTION_BOX.x1, SELECTION_BOX.y1);
+      selectionStore.updateSelection(SELECTION_BOX.x2, SELECTION_BOX.y2);
       selectionStore.calculateSelectedElements({
         pods: podStore.pods,
-        noteGroups: [
-          { notes: outputStyleStore.notes, type: "outputStyleNote" },
-          { notes: skillStore.notes, type: "skillNote" },
-          { notes: repositoryStore.notes, type: "repositoryNote" },
-          { notes: subAgentStore.notes, type: "subAgentNote" },
-          { notes: commandStore.notes, type: "commandNote" },
-          { notes: mcpServerStore.notes, type: "mcpServerNote" as const },
-        ],
+        noteGroups: buildNoteGroups(),
       });
 
       const selectedElements = selectionStore.selectedElements;
@@ -377,17 +386,7 @@ describe("複製貼上/批量操作完整流程", () => {
       });
 
       clipboardStore.setCopy(
-        [
-          {
-            id: pod.id,
-            name: pod.name,
-            x: pod.x,
-            y: pod.y,
-            rotation: pod.rotation,
-            provider: pod.provider,
-            providerConfig: pod.providerConfig,
-          },
-        ],
+        [toCopiedPod(pod)],
         [
           {
             id: note.id,
@@ -430,18 +429,13 @@ describe("複製貼上/批量操作完整流程", () => {
 
       podStore.pods = [codexPod];
 
-      selectionStore.startSelection(0, 0);
-      selectionStore.updateSelection(500, 500);
+      // 選取範圍涵蓋 x=[0,500], y=[0,500]，codexPod(100,100) 在範圍內
+      const SELECTION_BOX = { x1: 0, y1: 0, x2: 500, y2: 500 };
+      selectionStore.startSelection(SELECTION_BOX.x1, SELECTION_BOX.y1);
+      selectionStore.updateSelection(SELECTION_BOX.x2, SELECTION_BOX.y2);
       selectionStore.calculateSelectedElements({
         pods: podStore.pods,
-        noteGroups: [
-          { notes: outputStyleStore.notes, type: "outputStyleNote" },
-          { notes: skillStore.notes, type: "skillNote" },
-          { notes: repositoryStore.notes, type: "repositoryNote" },
-          { notes: subAgentStore.notes, type: "subAgentNote" },
-          { notes: commandStore.notes, type: "commandNote" },
-          { notes: mcpServerStore.notes, type: "mcpServerNote" as const },
-        ],
+        noteGroups: buildNoteGroups(),
       });
 
       const selectedElements = selectionStore.selectedElements;
@@ -450,20 +444,7 @@ describe("複製貼上/批量操作完整流程", () => {
       );
       const copiedPods = podStore.pods
         .filter((p) => selectedPodIds.has(p.id))
-        .map((p) => ({
-          id: p.id,
-          name: p.name,
-          x: p.x,
-          y: p.y,
-          rotation: p.rotation,
-          provider: p.provider,
-          providerConfig: p.providerConfig,
-          outputStyleId: p.outputStyleId,
-          skillIds: p.skillIds,
-          subAgentIds: p.subAgentIds,
-          repositoryId: p.repositoryId,
-          commandId: p.commandId,
-        }));
+        .map(toCopiedPod);
 
       clipboardStore.setCopy(copiedPods, [], [], [], [], [], [], []);
 
@@ -484,22 +465,16 @@ describe("複製貼上/批量操作完整流程", () => {
         providerConfig: { model: CODEX_DEFAULT_MODEL },
       });
 
-      const copiedPod = {
-        id: codexPod.id,
-        name: codexPod.name,
-        x: codexPod.x,
-        y: codexPod.y,
-        rotation: codexPod.rotation,
-        provider: codexPod.provider,
-        providerConfig: codexPod.providerConfig,
-        outputStyleId: codexPod.outputStyleId,
-        skillIds: codexPod.skillIds,
-        subAgentIds: codexPod.subAgentIds,
-        repositoryId: codexPod.repositoryId,
-        commandId: codexPod.commandId,
-      };
-
-      clipboardStore.setCopy([copiedPod], [], [], [], [], [], [], []);
+      clipboardStore.setCopy(
+        [toCopiedPod(codexPod)],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+      );
 
       // 確認 clipboard 中保留了 Codex provider 身份
       const storedPod = clipboardStore.copiedPods[0]!;
@@ -525,20 +500,7 @@ describe("複製貼上/批量操作完整流程", () => {
         providerConfig: { model: CODEX_DEFAULT_MODEL },
       });
 
-      const copiedPods = [claudePod, codexPod].map((p) => ({
-        id: p.id,
-        name: p.name,
-        x: p.x,
-        y: p.y,
-        rotation: p.rotation,
-        provider: p.provider,
-        providerConfig: p.providerConfig,
-        outputStyleId: p.outputStyleId,
-        skillIds: p.skillIds,
-        subAgentIds: p.subAgentIds,
-        repositoryId: p.repositoryId,
-        commandId: p.commandId,
-      }));
+      const copiedPods = [claudePod, codexPod].map(toCopiedPod);
 
       clipboardStore.setCopy(copiedPods, [], [], [], [], [], [], []);
 
@@ -563,18 +525,13 @@ describe("複製貼上/批量操作完整流程", () => {
 
       podStore.pods = [pod1, pod2];
 
-      selectionStore.startSelection(0, 0);
-      selectionStore.updateSelection(500, 500);
+      // 選取範圍涵蓋 x=[0,500], y=[0,500]，pod1(100,100)、pod2(200,200) 均在範圍內
+      const SELECTION_BOX = { x1: 0, y1: 0, x2: 500, y2: 500 };
+      selectionStore.startSelection(SELECTION_BOX.x1, SELECTION_BOX.y1);
+      selectionStore.updateSelection(SELECTION_BOX.x2, SELECTION_BOX.y2);
       selectionStore.calculateSelectedElements({
         pods: podStore.pods,
-        noteGroups: [
-          { notes: outputStyleStore.notes, type: "outputStyleNote" },
-          { notes: skillStore.notes, type: "skillNote" },
-          { notes: repositoryStore.notes, type: "repositoryNote" },
-          { notes: subAgentStore.notes, type: "subAgentNote" },
-          { notes: commandStore.notes, type: "commandNote" },
-          { notes: mcpServerStore.notes, type: "mcpServerNote" as const },
-        ],
+        noteGroups: buildNoteGroups(),
       });
 
       const dx = 50;
@@ -621,18 +578,14 @@ describe("複製貼上/批量操作完整流程", () => {
       outputStyleStore.notes = [note1 as any, boundNote as any];
       skillStore.notes = [note2 as any];
 
-      selectionStore.startSelection(0, 0);
-      selectionStore.updateSelection(500, 500);
+      // 選取範圍涵蓋 x=[0,500], y=[0,500]；note1(100,100)、note2(200,200)、boundNote(300,300) 均在範圍內
+      // boundNote 雖被選中但因 boundToPodId !== null 而不移動
+      const SELECTION_BOX = { x1: 0, y1: 0, x2: 500, y2: 500 };
+      selectionStore.startSelection(SELECTION_BOX.x1, SELECTION_BOX.y1);
+      selectionStore.updateSelection(SELECTION_BOX.x2, SELECTION_BOX.y2);
       selectionStore.calculateSelectedElements({
         pods: podStore.pods,
-        noteGroups: [
-          { notes: outputStyleStore.notes, type: "outputStyleNote" },
-          { notes: skillStore.notes, type: "skillNote" },
-          { notes: repositoryStore.notes, type: "repositoryNote" },
-          { notes: subAgentStore.notes, type: "subAgentNote" },
-          { notes: commandStore.notes, type: "commandNote" },
-          { notes: mcpServerStore.notes, type: "mcpServerNote" as const },
-        ],
+        noteGroups: buildNoteGroups(),
       });
 
       const dx = 30;
@@ -720,18 +673,13 @@ describe("複製貼上/批量操作完整流程", () => {
 
       podStore.pods = [pod1, pod2, pod3];
 
-      selectionStore.startSelection(0, 0);
-      selectionStore.updateSelection(500, 500);
+      // 選取範圍涵蓋 x=[0,500], y=[0,500]；pod1(100,100)、pod2(200,200) 在範圍內，pod3(1000,1000) 不在
+      const SELECTION_BOX = { x1: 0, y1: 0, x2: 500, y2: 500 };
+      selectionStore.startSelection(SELECTION_BOX.x1, SELECTION_BOX.y1);
+      selectionStore.updateSelection(SELECTION_BOX.x2, SELECTION_BOX.y2);
       selectionStore.calculateSelectedElements({
         pods: podStore.pods,
-        noteGroups: [
-          { notes: outputStyleStore.notes, type: "outputStyleNote" },
-          { notes: skillStore.notes, type: "skillNote" },
-          { notes: repositoryStore.notes, type: "repositoryNote" },
-          { notes: subAgentStore.notes, type: "subAgentNote" },
-          { notes: commandStore.notes, type: "commandNote" },
-          { notes: mcpServerStore.notes, type: "mcpServerNote" as const },
-        ],
+        noteGroups: buildNoteGroups(),
       });
 
       expect(selectionStore.selectedPodIds).toHaveLength(2);
@@ -769,18 +717,13 @@ describe("複製貼上/批量操作完整流程", () => {
       outputStyleStore.notes = [note1 as any, note3 as any];
       skillStore.notes = [note2 as any];
 
-      selectionStore.startSelection(0, 0);
-      selectionStore.updateSelection(500, 500);
+      // 選取範圍涵蓋 x=[0,500], y=[0,500]；note1(100,100)、note2(200,200) 在範圍內，note3(1000,1000) 不在
+      const SELECTION_BOX = { x1: 0, y1: 0, x2: 500, y2: 500 };
+      selectionStore.startSelection(SELECTION_BOX.x1, SELECTION_BOX.y1);
+      selectionStore.updateSelection(SELECTION_BOX.x2, SELECTION_BOX.y2);
       selectionStore.calculateSelectedElements({
         pods: podStore.pods,
-        noteGroups: [
-          { notes: outputStyleStore.notes, type: "outputStyleNote" },
-          { notes: skillStore.notes, type: "skillNote" },
-          { notes: repositoryStore.notes, type: "repositoryNote" },
-          { notes: subAgentStore.notes, type: "subAgentNote" },
-          { notes: commandStore.notes, type: "commandNote" },
-          { notes: mcpServerStore.notes, type: "mcpServerNote" as const },
-        ],
+        noteGroups: buildNoteGroups(),
       });
 
       const deletePromises: Promise<void>[] = [];
@@ -810,6 +753,36 @@ describe("複製貼上/批量操作完整流程", () => {
 
       expect(selectionStore.hasSelection).toBe(false);
       expect(selectionStore.selectedElements).toHaveLength(0);
+    });
+
+    it("刪除 Pod 成功（WS 回應有效）後應呼叫 showSuccessToast", async () => {
+      const pod = createMockPod({ id: "pod-success", x: 100, y: 100 });
+      podStore.pods = [pod];
+
+      // 模擬後端回傳成功
+      mockCreateWebSocketRequest.mockResolvedValueOnce({ success: true });
+
+      await podStore.deletePodWithBackend("pod-success");
+
+      expect(mockShowSuccessToast).toHaveBeenCalledWith(
+        "Pod",
+        expect.any(String),
+        expect.any(String),
+      );
+      expect(mockShowErrorToast).not.toHaveBeenCalled();
+    });
+
+    it("刪除 Pod 失敗（WS 無回應）後應呼叫 showErrorToast 而非 showSuccessToast", async () => {
+      const pod = createMockPod({ id: "pod-fail", x: 100, y: 100 });
+      podStore.pods = [pod];
+
+      // mockCreateWebSocketRequest 預設回傳 null，模擬 WS 無回應（逾時或錯誤）
+      mockCreateWebSocketRequest.mockResolvedValueOnce(null);
+
+      await podStore.deletePodWithBackend("pod-fail");
+
+      expect(mockShowErrorToast).toHaveBeenCalled();
+      expect(mockShowSuccessToast).not.toHaveBeenCalled();
     });
 
     it("應在刪除 Pod 時自動清理相關 Connection", () => {
@@ -847,18 +820,12 @@ describe("複製貼上/批量操作完整流程", () => {
 
       podStore.pods = [pod1, pod2];
 
+      // 選取範圍涵蓋 x=[0,300], y=[0,300]，pod1(100,100)、pod2(200,200) 均在範圍內
       selectionStore.startSelection(0, 0);
       selectionStore.updateSelection(300, 300);
       selectionStore.calculateSelectedElements({
         pods: podStore.pods,
-        noteGroups: [
-          { notes: outputStyleStore.notes, type: "outputStyleNote" },
-          { notes: skillStore.notes, type: "skillNote" },
-          { notes: repositoryStore.notes, type: "repositoryNote" },
-          { notes: subAgentStore.notes, type: "subAgentNote" },
-          { notes: commandStore.notes, type: "commandNote" },
-          { notes: mcpServerStore.notes, type: "mcpServerNote" as const },
-        ],
+        noteGroups: buildNoteGroups(),
       });
       selectionStore.endSelection();
 
@@ -872,35 +839,23 @@ describe("複製貼上/批量操作完整流程", () => {
 
       podStore.pods = [pod1, pod2, pod3];
 
+      // 第一次框選：x=[0,350], y=[0,350]，pod1(100,100)、pod2(250,250) 在範圍內，pod3(400,400) 不在
       selectionStore.startSelection(0, 0);
       selectionStore.updateSelection(350, 350);
       selectionStore.calculateSelectedElements({
         pods: podStore.pods,
-        noteGroups: [
-          { notes: outputStyleStore.notes, type: "outputStyleNote" },
-          { notes: skillStore.notes, type: "skillNote" },
-          { notes: repositoryStore.notes, type: "repositoryNote" },
-          { notes: subAgentStore.notes, type: "subAgentNote" },
-          { notes: commandStore.notes, type: "commandNote" },
-          { notes: mcpServerStore.notes, type: "mcpServerNote" as const },
-        ],
+        noteGroups: buildNoteGroups(),
       });
       selectionStore.endSelection();
 
       expect(selectionStore.selectedPodIds).toEqual(["pod-1", "pod-2"]);
 
+      // Ctrl 第二次框選：x=[350,700], y=[350,700]，pod3(400,400) 在範圍內；pod2(250,250) 已被選中故 toggle 移除
       selectionStore.startSelection(350, 350, true);
       selectionStore.updateSelection(700, 700);
       selectionStore.calculateSelectedElements({
         pods: podStore.pods,
-        noteGroups: [
-          { notes: outputStyleStore.notes, type: "outputStyleNote" },
-          { notes: skillStore.notes, type: "skillNote" },
-          { notes: repositoryStore.notes, type: "repositoryNote" },
-          { notes: subAgentStore.notes, type: "subAgentNote" },
-          { notes: commandStore.notes, type: "commandNote" },
-          { notes: mcpServerStore.notes, type: "mcpServerNote" as const },
-        ],
+        noteGroups: buildNoteGroups(),
       });
       selectionStore.endSelection();
 
@@ -915,18 +870,12 @@ describe("複製貼上/批量操作完整流程", () => {
       selectionStore.setSelectedElements([{ type: "pod", id: "pod-1" }]);
       expect(selectionStore.selectedPodIds).toEqual(["pod-1"]);
 
+      // Ctrl 框選：x=[0,300], y=[0,300]，pod1(100,100) 已被選中故 toggle 移除
       selectionStore.startSelection(0, 0, true);
       selectionStore.updateSelection(300, 300);
       selectionStore.calculateSelectedElements({
         pods: podStore.pods,
-        noteGroups: [
-          { notes: outputStyleStore.notes, type: "outputStyleNote" },
-          { notes: skillStore.notes, type: "skillNote" },
-          { notes: repositoryStore.notes, type: "repositoryNote" },
-          { notes: subAgentStore.notes, type: "subAgentNote" },
-          { notes: commandStore.notes, type: "commandNote" },
-          { notes: mcpServerStore.notes, type: "mcpServerNote" as const },
-        ],
+        noteGroups: buildNoteGroups(),
       });
       selectionStore.endSelection();
 
@@ -941,18 +890,12 @@ describe("複製貼上/批量操作完整流程", () => {
 
       selectionStore.setSelectedElements([{ type: "pod", id: "pod-1" }]);
 
+      // Ctrl 框選：x=[400,600], y=[400,600]，pod2(500,500) 未被選中故加入
       selectionStore.startSelection(400, 400, true);
       selectionStore.updateSelection(600, 600);
       selectionStore.calculateSelectedElements({
         pods: podStore.pods,
-        noteGroups: [
-          { notes: outputStyleStore.notes, type: "outputStyleNote" },
-          { notes: skillStore.notes, type: "skillNote" },
-          { notes: repositoryStore.notes, type: "repositoryNote" },
-          { notes: subAgentStore.notes, type: "subAgentNote" },
-          { notes: commandStore.notes, type: "commandNote" },
-          { notes: mcpServerStore.notes, type: "mcpServerNote" as const },
-        ],
+        noteGroups: buildNoteGroups(),
       });
       selectionStore.endSelection();
 
