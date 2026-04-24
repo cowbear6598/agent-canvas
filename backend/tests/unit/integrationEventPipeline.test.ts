@@ -370,22 +370,14 @@ describe("IntegrationEventPipeline", () => {
 
     describe("Pod 狀態處理", () => {
       it("Pod 狀態為 chatting 時跳過該 Pod", async () => {
+        // 測試設計：
+        // - boundPods（filteredPods）含一個 chatting Pod（normalPods）
+        // - isResourceBusy 檢查時，傳入的 pods 參數也是 chatting，所以 isResourceBusy 回傳 true
+        // - executeNormalPods 直接因 isResourceBusy=true 跳過，executeStreamingChat 不被呼叫
         const pod = makePod({ status: "chatting" });
-        // isResourceBusy 回傳 false（模擬只有單一 Pod 綁定同一資源但此處讓 isWorkflowChainBusy 回傳 false）
-        // 需讓 isResourceBusy 回傳 false，但 processBoundPod 仍要跳過 chatting pod
-        // 做法：findByIntegrationAppAndResource 第一次在 processEvent 回傳該 pod，讓 isResourceBusy 呼叫時回傳 idle pod
-        let callCount = 0;
-        asMock(podStore.findByIntegrationAppAndResource).mockImplementation(
-          () => {
-            callCount++;
-            // 第一次呼叫（processEvent 取得 boundPods）和第三次（isResourceBusy 內部）
-            // isResourceBusy 是第二次呼叫
-            if (callCount === 2) {
-              return [{ canvasId, pod: makePod({ status: "idle" }) }];
-            }
-            return [{ canvasId, pod }];
-          },
-        );
+        asMock(podStore.findByIntegrationAppAndResource).mockReturnValue([
+          { canvasId, pod },
+        ]);
         asMock(podStore.getById).mockReturnValue(pod);
 
         await integrationEventPipeline.processEvent(

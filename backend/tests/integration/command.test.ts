@@ -511,12 +511,15 @@ describe("Command 跨 Provider 展開行為", () => {
 
     await messagePromise;
 
-    // 等待 onStreamComplete 執行
-    await new Promise((resolve) => setTimeout(resolve, 300));
-
+    // 等待 Pod 狀態回到 idle（輪詢斷言，避免固定 sleep 造成不穩定）
     const { podStore: ps } = await import("../../src/services/podStore.js");
-    const reloaded = ps.getById(canvasId, pod.id);
-    expect(reloaded?.status).toBe("idle");
+    await vi.waitFor(
+      () => {
+        const reloaded = ps.getById(canvasId, pod.id);
+        expect(reloaded?.status).toBe("idle");
+      },
+      { timeout: 3000 },
+    );
 
     readSpy.mockRestore();
   });
@@ -559,8 +562,15 @@ describe("Command 跨 Provider 展開行為", () => {
     await firstMsgPromise;
     readSpy.mockRestore();
 
-    // 等待 idle 狀態
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    // 等待 Pod 狀態回到 idle（輪詢斷言，避免固定 sleep 造成不穩定）
+    const { podStore: ps13c } = await import("../../src/services/podStore.js");
+    await vi.waitFor(
+      () => {
+        const reloaded = ps13c.getById(canvasId, pod.id);
+        expect(reloaded?.status).toBe("idle");
+      },
+      { timeout: 3000 },
+    );
 
     // 解除 command 綁定
     await emitAndWaitResponse<
@@ -887,11 +897,14 @@ describe("Command 跨 Provider 展開行為", () => {
     expect(msgEvent.content).toContain(`Command 「${fakeCommandId}」已不存在`);
     expect(msgEvent.content).toContain("請至 Pod 設定重新選擇或解除綁定");
 
-    // 等待 idle 狀態
-    await new Promise((resolve) => setTimeout(resolve, 300));
-
-    const reloaded = ps.getById(canvasId, pod.id);
-    expect(reloaded?.status).toBe("idle");
+    // 等待 Pod 狀態回到 idle（輪詢斷言，避免固定 sleep 造成不穩定）
+    await vi.waitFor(
+      () => {
+        const reloaded = ps.getById(canvasId, pod.id);
+        expect(reloaded?.status).toBe("idle");
+      },
+      { timeout: 3000 },
+    );
 
     readSpy.mockRestore();
   });
@@ -1018,10 +1031,14 @@ describe("Command 跨 Provider 展開行為", () => {
     expect(lastUserMsg.content).toContain("original user text");
     expect(lastUserMsg.content).not.toContain("<command");
 
-    // 等待 idle
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    const reloaded = ps.getById(canvasId, pod.id);
-    expect(reloaded?.status).toBe("idle");
+    // 等待 Pod 狀態回到 idle（輪詢斷言，避免固定 sleep 造成不穩定）
+    await vi.waitFor(
+      () => {
+        const reloaded = ps.getById(canvasId, pod.id);
+        expect(reloaded?.status).toBe("idle");
+      },
+      { timeout: 3000 },
+    );
 
     readSpy.mockRestore();
   });

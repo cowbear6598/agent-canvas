@@ -69,6 +69,66 @@ function validatePodNotBusy(
   return true;
 }
 
+type ExpandCommandResult =
+  | { ok: true; message: string | ContentBlock[] }
+  | { ok: false; commandId: string };
+
+/**
+ * 嘗試展開 Pod 綁定的 Command 內容。
+ * - pod 無 commandId 時：直接回傳原始訊息（ok: true）
+ * - command 讀取成功時：回傳展開版訊息（ok: true）
+ * - command 讀取失敗（檔案已消失）：回傳 ok: false 帶 commandId
+ */
+async function tryExpandCommandMessage(
+  pod: Pod,
+  message: string | ContentBlock[],
+): Promise<ExpandCommandResult> {
+  if (!pod.commandId) {
+    return { ok: true, message };
+  }
+
+  const commandId = pod.commandId;
+  const markdown = await commandService.read(commandId);
+  if (markdown !== null) {
+    return {
+      ok: true,
+      message: expandCommandMessage({ message, markdown }),
+    };
+  }
+
+  logger.warn(
+    "Chat",
+    "Check",
+    `[handleChatSend] Command 不存在，回傳錯誤給前端（commandId=${commandId}, podId=${pod.id}）`,
+  );
+  return { ok: false, commandId };
+}
+
+/**
+ * 處理 Command 不存在的情況：推送錯誤文字至前端，並將 Pod 狀態重設為 idle。
+ * commandId 為 Command 的檔名（即展示用名稱），直接顯示給使用者是合適的。
+ */
+function handleCommandNotFound(
+  canvasId: string,
+  podId: string,
+  commandId: string,
+): void {
+  const errorText = buildCommandNotFoundMessage(commandId);
+  socketService.emitToCanvas(
+    canvasId,
+    WebSocketResponseEvents.POD_CLAUDE_CHAT_MESSAGE,
+    {
+      canvasId,
+      podId,
+      messageId: uuidv4(),
+      content: `\n\n⚠️ ${errorText}`,
+      isPartial: false,
+      role: "assistant",
+    },
+  );
+  podStore.setStatus(canvasId, podId, "idle");
+}
+
 export const handleChatSend = withCanvasId<ChatSendPayload>(
   WebSocketResponseEvents.POD_ERROR,
   async (
@@ -124,53 +184,28 @@ export const handleChatSend = withCanvasId<ChatSendPayload>(
     if (!validatePodNotBusy(connectionId, pod, requestId)) return;
 
     // 展開 Command 內容（在 injectUserMessage 之前執行，確保 DB 存入展開版）
-    let finalMessage: string | ContentBlock[] = message;
-    let commandReadFailed = false;
+    const expandResult = await tryExpandCommandMessage(pod, message);
 
-    if (pod.commandId) {
-      const commandId = pod.commandId;
-      const markdown = await commandService.read(commandId);
-      if (markdown !== null) {
-        finalMessage = expandCommandMessage({
-          message,
-          markdown,
-        });
-      } else {
-        logger.warn(
-          "Chat",
-          "Check",
-          `[handleChatSend] Command 不存在，回傳錯誤給前端（commandId=${commandId}, podId=${podId}）`,
-        );
-        commandReadFailed = true;
-      }
+    // DB 存入展開版（或原文，若 command 讀不到）
+    const contentToStore = expandResult.ok ? expandResult.message : message;
+    await injectUserMessage({ canvasId, podId, content: contentToStore });
+
+    if (!expandResult.ok) {
+      // Command 檔案已消失：推送錯誤文字讓前端顯示，並將 pod 回到 idle
+      handleCommandNotFound(canvasId, podId, expandResult.commandId);
+      return;
     }
 
     const strategy = new NormalModeExecutionStrategy(canvasId);
 
-    // DB 存入展開版（或原文，若 command 讀不到）
-    await injectUserMessage({ canvasId, podId, content: finalMessage });
-
-    if (commandReadFailed) {
-      // Command 檔案已消失：推送錯誤文字讓前端顯示，並將 pod 回到 idle
-      const errorText = buildCommandNotFoundMessage(pod.commandId!);
-      socketService.emitToCanvas(
-        canvasId,
-        WebSocketResponseEvents.POD_CLAUDE_CHAT_MESSAGE,
-        {
-          canvasId,
-          podId,
-          messageId: uuidv4(),
-          content: `\n\n⚠️ ${errorText}`,
-          isPartial: false,
-          role: "assistant",
-        },
-      );
-      podStore.setStatus(canvasId, podId, "idle");
-      return;
-    }
-
     await executeStreamingChat(
-      { canvasId, podId, message: finalMessage, abortable: true, strategy },
+      {
+        canvasId,
+        podId,
+        message: expandResult.message,
+        abortable: true,
+        strategy,
+      },
       {
         onComplete: onChatComplete,
         onAborted: (abortedCanvasId, abortedPodId, messageId) =>

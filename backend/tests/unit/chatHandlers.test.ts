@@ -153,8 +153,7 @@ function makePod(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // 預設：commandService.read 回傳 null（無 command 內容）
-  mockCommandServiceRead.mockResolvedValue(null);
+  // commandService.read 不設預設值：各需要 commandId 的 case 應在測試內明確設定
   // 預設：expandCommandMessage 回傳展開版字串
   mockExpandCommandMessage.mockImplementation(
     (params: { message: string; markdown: string }) =>

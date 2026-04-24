@@ -33,6 +33,36 @@ import {
   type RepositoryWorktreeCreatedPayload,
 } from "../../src/types";
 
+/** Pod 綁定 Skill 的共用輔助函式，提升至檔案頂層避免在各 describe block 重複定義 */
+async function bindSkillToPod(client: any, podId: string, skillId: string) {
+  const canvasId = await getCanvasId(client);
+  const { WebSocketRequestEvents, WebSocketResponseEvents } =
+    await import("../../src/schemas/index.js");
+  return await emitAndWaitResponse(
+    client,
+    WebSocketRequestEvents.POD_BIND_SKILL,
+    WebSocketResponseEvents.POD_SKILL_BOUND,
+    { requestId: uuidv4(), canvasId, podId, skillId },
+  );
+}
+
+/** Pod 綁定 SubAgent 的共用輔助函式，提升至檔案頂層避免在各 describe block 重複定義 */
+async function bindSubAgentToPod(
+  client: any,
+  podId: string,
+  subAgentId: string,
+) {
+  const canvasId = await getCanvasId(client);
+  const { WebSocketRequestEvents, WebSocketResponseEvents } =
+    await import("../../src/schemas/index.js");
+  return await emitAndWaitResponse(
+    client,
+    WebSocketRequestEvents.POD_BIND_SUBAGENT,
+    WebSocketResponseEvents.POD_SUBAGENT_BOUND,
+    { requestId: uuidv4(), canvasId, podId, subAgentId },
+  );
+}
+
 describe("Repository 管理", () => {
   const { getServer, getClient } = setupIntegrationTest();
 
@@ -123,34 +153,6 @@ describe("Repository 管理", () => {
   });
 
   describe("Pod 綁定 Repository 資源同步", () => {
-    async function bindSkillToPod(client: any, podId: string, skillId: string) {
-      const canvasId = await getCanvasId(client);
-      const { WebSocketRequestEvents, WebSocketResponseEvents } =
-        await import("../../src/schemas/index.js");
-      return await emitAndWaitResponse(
-        client,
-        WebSocketRequestEvents.POD_BIND_SKILL,
-        WebSocketResponseEvents.POD_SKILL_BOUND,
-        { requestId: uuidv4(), canvasId, podId, skillId },
-      );
-    }
-
-    async function bindSubAgentToPod(
-      client: any,
-      podId: string,
-      subAgentId: string,
-    ) {
-      const canvasId = await getCanvasId(client);
-      const { WebSocketRequestEvents, WebSocketResponseEvents } =
-        await import("../../src/schemas/index.js");
-      return await emitAndWaitResponse(
-        client,
-        WebSocketRequestEvents.POD_BIND_SUBAGENT,
-        WebSocketResponseEvents.POD_SUBAGENT_BOUND,
-        { requestId: uuidv4(), canvasId, podId, subAgentId },
-      );
-    }
-
     it("綁定 Repository 後 Pod 資源被刪除", async () => {
       const client = getClient();
       const pod = await createPod(client);
@@ -425,34 +427,6 @@ describe("Repository 管理", () => {
   });
 
   describe("Pod 解除綁定 Repository 資源同步", () => {
-    async function bindSkillToPod(client: any, podId: string, skillId: string) {
-      const canvasId = await getCanvasId(client);
-      const { WebSocketRequestEvents, WebSocketResponseEvents } =
-        await import("../../src/schemas/index.js");
-      return await emitAndWaitResponse(
-        client,
-        WebSocketRequestEvents.POD_BIND_SKILL,
-        WebSocketResponseEvents.POD_SKILL_BOUND,
-        { requestId: uuidv4(), canvasId, podId, skillId },
-      );
-    }
-
-    async function bindSubAgentToPod(
-      client: any,
-      podId: string,
-      subAgentId: string,
-    ) {
-      const canvasId = await getCanvasId(client);
-      const { WebSocketRequestEvents, WebSocketResponseEvents } =
-        await import("../../src/schemas/index.js");
-      return await emitAndWaitResponse(
-        client,
-        WebSocketRequestEvents.POD_BIND_SUBAGENT,
-        WebSocketResponseEvents.POD_SUBAGENT_BOUND,
-        { requestId: uuidv4(), canvasId, podId, subAgentId },
-      );
-    }
-
     it("解除綁定後資源複製到 Pod", async () => {
       const client = getClient();
       const pod = await createPod(client);

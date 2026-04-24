@@ -571,13 +571,17 @@ describe("executeStreamingChat", () => {
       const onAborted = vi.fn(() => {});
       const onComplete = vi.fn(() => {});
 
+      const strategy = makeStrategy();
+      // spy on strategy.onStreamComplete：abort 路徑不應進入 finalizeAfterStream
+      const onStreamCompleteSpy = vi.spyOn(strategy, "onStreamComplete");
+
       const result = await executeStreamingChat(
         {
           canvasId,
           podId,
           message,
           abortable: true,
-          strategy: makeStrategy(),
+          strategy,
         },
         {
           onAborted,
@@ -604,8 +608,11 @@ describe("executeStreamingChat", () => {
       // 正常完成的 onComplete 不應被呼叫
       expect(onComplete).not.toHaveBeenCalled();
 
-      // finalizeAfterStream 不應被執行，因此 setSessionId 不應被呼叫
-      // （避免把半成品 sessionId 寫入 DB，這是此 patch 的核心目的）
+      // finalizeAfterStream 整體未執行：strategy.onStreamComplete 不應被呼叫
+      // （避免把半成品 sessionId 寫入 DB，也避免正常完成的狀態機轉換被誤觸發）
+      expect(onStreamCompleteSpy).not.toHaveBeenCalled();
+
+      // setSessionId 不應被呼叫（onStreamComplete 未被執行的額外確認）
       expect(podStore.setSessionId).not.toHaveBeenCalled();
     });
 

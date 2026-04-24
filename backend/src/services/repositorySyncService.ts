@@ -18,6 +18,15 @@ interface PodResources {
 class RepositorySyncService {
   private locks: Map<string, Promise<void>> = new Map();
 
+  /**
+   * 同步指定 Repository 的資源（Command / Skill / SubAgent manifest）。
+   *
+   * 此函式保證不拋出：即使 performSync 內部失敗，錯誤只會記入 log，
+   * 不會向呼叫端傳播。呼叫端無需 try/catch。
+   *
+   * 同時對同一 repositoryId 的並發呼叫，後者會等待前者完成後才繼續，
+   * 以 lock 機制防止 race condition。
+   */
   async syncRepositoryResources(repositoryId: string): Promise<void> {
     const existingLock = this.locks.get(repositoryId);
     if (existingLock) {
@@ -41,14 +50,25 @@ class RepositorySyncService {
     }
   }
 
+  /**
+   * 等待指定 repositoryId 上的所有 pending lock 都 resolve。
+   * 採用鏈式等待：每次等待完前一個 lock 後，再檢查是否又有新的 lock 排入，
+   * 直到沒有更多 pending lock 為止，確保呼叫端在所有進行中的 sync 都完成後才返回。
+   */
   private async waitForExistingLock(
     repositoryId: string,
     existingLock: Promise<void>,
   ): Promise<void> {
-    await existingLock;
-    const newLock = this.locks.get(repositoryId);
-    if (newLock && newLock !== existingLock) {
-      await newLock;
+    let currentLock: Promise<void> = existingLock;
+    while (true) {
+      await currentLock;
+      const nextLock = this.locks.get(repositoryId);
+      if (!nextLock || nextLock === currentLock) {
+        // 沒有新的 lock 排入，結束等待
+        break;
+      }
+      // 有新的 lock 排入（在等待期間又有新的 sync 啟動），繼續等待
+      currentLock = nextLock;
     }
   }
 
@@ -56,25 +76,34 @@ class RepositorySyncService {
     const allPods = podStore.findAllByRepositoryId(repositoryId);
 
     return new Map(
-      allPods.map(({ pod }) => [
-        pod.id,
-        {
-          commandIds: pod.commandId ? [pod.commandId] : [],
-          skillIds: [...pod.skillIds],
-          subAgentIds: [...pod.subAgentIds],
-        },
-      ]),
+      allPods.map(({ pod }) => {
+        // 語意明確的中間變數：避免 pod.commandId ? [pod.commandId] : [] 三元運算式在閱讀時語意模糊
+        const commandIds = pod.commandId ? [pod.commandId] : [];
+        return [
+          pod.id,
+          {
+            commandIds,
+            skillIds: [...pod.skillIds],
+            subAgentIds: [...pod.subAgentIds],
+          },
+        ];
+      }),
     );
   }
 
+  /**
+   * 將所有 Pod 的資源 manifest 依序寫入 Repository 目錄。
+   *
+   * 此函式刻意採用串行（for...await）而非並行（Promise.all）執行：
+   * 多個 Pod 共用同一 Repository 時，若並行執行，某 Pod 的 cleanEmptyDirectories
+   * 可能刪除目錄後，導致其他 Pod 的 copyCommand 嘗試寫入該目錄時失敗（race condition）。
+   * 請勿將此改為並行，除非底層的 cleanEmptyDirectories 與 copyCommand 已具備並發安全性。
+   */
   private async writePodManifests(
     podResourcesMap: Map<string, PodResources>,
     repositoryPath: string,
     repositoryId: string,
   ): Promise<void> {
-    // 串行執行，避免多個 Pod 共用同一 repo 時，
-    // 某 Pod 的 cleanEmptyDirectories 刪除目錄後
-    // 導致其他 Pod 的 copyCommand 寫入失敗的 race condition
     for (const [podId, resources] of podResourcesMap) {
       await this.writeSinglePodManifest(
         podId,

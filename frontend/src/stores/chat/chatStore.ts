@@ -29,7 +29,12 @@ import { getActiveCanvasIdOrWarn } from "@/utils/canvasGuard";
 import { isMultiInstanceSourcePod } from "@/utils/multiInstanceGuard";
 import { t } from "@/i18n";
 
-const ABORT_SAFETY_TIMEOUT_MS = 10_000;
+/** 單一 ContentBlock base64Data 大小上限（5MB decoded） */
+const MAX_CONTENT_BLOCK_SIZE_BYTES = 5 * 1024 * 1024;
+/** 所有 contentBlocks base64Data 加總大小上限（20MB decoded） */
+const MAX_CONTENT_BLOCKS_TOTAL_BYTES = 20 * 1024 * 1024;
+
+const ABORT_TIMEOUT_MS = 10_000;
 
 // 單例 store 的 actions 快取，避免每次呼叫都重新建立物件
 let cachedConnectionActions: ReturnType<typeof createConnectionActions> | null =
@@ -130,6 +135,8 @@ export const useChatStore = defineStore("chat", {
     },
 
     disconnectWebSocket(): void {
+      // 在 WebSocket 斷線時清除 actions 快取，避免跨測試或跨 session 的狀態污染
+      resetChatActionsCache();
       const connectionActions = this.getConnectionActions();
       connectionActions.disconnectWebSocket();
     },
@@ -226,6 +233,24 @@ export const useChatStore = defineStore("chat", {
 
       if (!hasMessageContent(content, contentBlocks)) return;
 
+      // contentBlocks 大小驗證：單 block < 5MB，總計 < 20MB（decoded bytes 估算）
+      if (contentBlocks && contentBlocks.length > 0) {
+        let totalBytes = 0;
+        for (const block of contentBlocks) {
+          if (block.type === "image") {
+            // base64 字串長度 * 3/4 ≈ decoded bytes
+            const blockBytes = Math.ceil((block.base64Data.length * 3) / 4);
+            if (blockBytes > MAX_CONTENT_BLOCK_SIZE_BYTES) {
+              throw new Error(t("composable.chat.imageTooLarge"));
+            }
+            totalBytes += blockBytes;
+          }
+        }
+        if (totalBytes > MAX_CONTENT_BLOCKS_TOTAL_BYTES) {
+          throw new Error(t("composable.chat.imageTooLarge"));
+        }
+      }
+
       // 後端會根據 pod 綁定的 commandId 自行展開指令，前端直接送原文
       const messagePayload: string | ContentBlock[] =
         contentBlocks && contentBlocks.length > 0 ? contentBlocks : content;
@@ -315,7 +340,7 @@ export const useChatStore = defineStore("chat", {
         if (this.isTypingByPodId.get(podId)) {
           this.setTyping(podId, false);
         }
-      }, ABORT_SAFETY_TIMEOUT_MS);
+      }, ABORT_TIMEOUT_MS);
       abortSafetyTimers.set(podId, timer);
     },
 
@@ -382,6 +407,8 @@ export const useChatStore = defineStore("chat", {
       this.isTypingByPodId.clear();
       this.historyLoadingStatus.clear();
       this.historyLoadingError.clear();
+      // 清除累積長度追蹤，避免跨 canvas 的舊 messageId 殘留導致計算錯誤
+      this.accumulatedLengthByMessageId.clear();
     },
   },
 });

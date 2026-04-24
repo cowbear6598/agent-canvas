@@ -82,7 +82,9 @@ function buildPrompt(
   resumeSessionId: string | null,
 ): string | AsyncIterable<SDKUserMessage> {
   if (typeof message === "string") {
-    const prompt = message.trim().length === 0 ? "請開始執行" : message;
+    // 空白訊息 fallback：使用語意明確的中間變數，避免三元運算式在閱讀時語意模糊
+    const trimmed = message.trim();
+    const prompt = trimmed.length === 0 ? "請開始執行" : trimmed;
     return prompt;
   }
 
@@ -229,6 +231,9 @@ function* handleResult(
       ? sdkMessage.errors.join(", ")
       : "Unknown error";
 
+  // 先送出使用者友善警告文字（通用格式，不含 errors 原始內容，避免洩漏內部細節）。
+  // 接著 throw，由 runClaudeQuery 的呼叫鏈（executeStreamingChat → handleStreamError）
+  // 完整攔截並走通用錯誤路徑，不會洩漏給前端。
   yield {
     type: "text",
     content: "\n\n⚠️ 與 Claude 通訊時發生錯誤，請稍後再試",
@@ -263,17 +268,16 @@ function* dispatchSDKMessage(
   sdkMessage: SDKMessage,
   state: QueryState,
 ): Generator<NormalizedEvent> {
-  if (sdkMessage.type === "system" && sdkMessage.subtype === "init") {
-    yield* handleSystemInit(sdkMessage as SDKSystemMessage, state);
-    return;
-  }
-
-  if (sdkMessage.type === "system" && sdkMessage.subtype === "api_retry") {
-    yield* handleApiRetry(sdkMessage as SDKAPIRetryMessage);
-    return;
-  }
-
   switch (sdkMessage.type) {
+    case "system":
+      // system/init 與 system/api_retry 依 subtype 分流，統一在 switch 內完成
+      if (sdkMessage.subtype === "init") {
+        yield* handleSystemInit(sdkMessage as SDKSystemMessage, state);
+      } else if (sdkMessage.subtype === "api_retry") {
+        yield* handleApiRetry(sdkMessage as SDKAPIRetryMessage);
+      }
+      // 其他 subtype 略過
+      break;
     case "assistant":
       yield* handleAssistant(sdkMessage as SDKAssistantMessage, state);
       break;
@@ -331,7 +335,18 @@ export async function* runClaudeQuery(
 
   const prompt = buildPrompt(message, resumeSessionId);
 
-  // 組裝 SDK Options（將 ClaudeOptions 展開至 SDK 的 Options 格式）
+  // 建立 abortController，供 ctx.abortSignal 橋接
+  const abortController = new AbortController();
+  if (abortSignal.aborted) {
+    abortController.abort();
+  } else {
+    const onAbort = (): void => abortController.abort();
+    abortSignal.addEventListener("abort", onAbort, { once: true });
+  }
+
+  // 一次建構完整 sdkOptions，使用物件展開將 ClaudeOptions 映射到 SDK Options 格式；
+  // 選填欄位（systemPrompt / mcpServers / plugins / resume）只在有值時才包含，
+  // 避免傳入 undefined 干擾 SDK 行為
   const sdkOptions: Options & { abortController: AbortController } = {
     cwd: workspacePath,
     settingSources: options.settingSources,
@@ -340,29 +355,12 @@ export async function* runClaudeQuery(
     pathToClaudeCodeExecutable: options.pathToClaudeCodeExecutable,
     allowedTools: options.allowedTools,
     model: options.model,
-    abortController: new AbortController(),
+    abortController,
+    ...(options.systemPrompt ? { systemPrompt: options.systemPrompt } : {}),
+    ...(options.mcpServers ? { mcpServers: options.mcpServers } : {}),
+    ...(options.plugins ? { plugins: options.plugins } : {}),
+    ...(resumeSessionId ? { resume: resumeSessionId } : {}),
   };
-
-  // 將 ctx.abortSignal 橋接到 SDK 的 abortController
-  if (abortSignal.aborted) {
-    sdkOptions.abortController.abort();
-  } else {
-    const onAbort = (): void => sdkOptions.abortController.abort();
-    abortSignal.addEventListener("abort", onAbort, { once: true });
-  }
-
-  if (options.systemPrompt) {
-    sdkOptions.systemPrompt = options.systemPrompt;
-  }
-  if (options.mcpServers) {
-    sdkOptions.mcpServers = options.mcpServers;
-  }
-  if (options.plugins) {
-    sdkOptions.plugins = options.plugins;
-  }
-  if (resumeSessionId) {
-    sdkOptions.resume = resumeSessionId;
-  }
 
   const state: QueryState = {
     sessionId: null,
@@ -370,10 +368,14 @@ export async function* runClaudeQuery(
     activeTools: new Map(),
   };
 
+  // resumeSessionId 遮蔽：僅顯示前 6 字，避免 session 識別符出現在 log 中
+  const maskedResume = resumeSessionId
+    ? `${resumeSessionId.slice(0, 6)}...`
+    : "null";
   logger.log(
     "Chat",
     "Update",
-    `[runClaudeQuery] Pod ${podId} 開始查詢，model=${options.model}，resume=${resumeSessionId ?? "null"}，runContext=${runContext?.runId ?? "null"}`,
+    `[runClaudeQuery] Pod ${podId} 開始查詢，model=${options.model}，resume=${maskedResume}，runContext=${runContext?.runId ?? "null"}`,
   );
 
   const queryStream: Query = query({ prompt, options: sdkOptions });

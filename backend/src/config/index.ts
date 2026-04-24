@@ -75,6 +75,7 @@ function loadConfig(): Config {
     }
 
     // 非生產環境：允許本地、ngrok pattern 以及白名單
+    // 開發便利性設計：允許所有 ngrok pattern。staging / production 應改設 ALLOWED_ORIGINS 環境變數以收斂
     const ngrokFreePattern = /^https?:\/\/[\w-]+\.ngrok-free\.dev$/;
     const ngrokProPattern = /^https?:\/\/[\w-]+\.ngrok\.io$/;
 

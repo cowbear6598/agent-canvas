@@ -19,12 +19,31 @@ const CACHE_TTL_MS = 30_000;
 let cachedCommands: Command[] | null = null;
 let cacheTimestamp = 0;
 
-// read() 快取策略：mtime-based，不使用 TTL。
+// read() 快取策略：mtime-based，搭配 LRU 上限（256 條目）。
 // 以 mtime 作為「內容是否變動」的權威依據，確保外部修改檔案也能被感知。
+// 上限設計避免無限成長（例如大量一次性 Command 讀取後快取累積）。
+const COMMAND_CONTENT_CACHE_MAX = 256;
 const cachedCommandContents: Map<
   string,
   { content: string; mtimeMs: number; filePath: string }
 > = new Map();
+
+/** 將 id 加入或更新 cachedCommandContents，並在超過上限時刪除最舊的條目（LRU eviction） */
+function setCachedCommandContent(
+  id: string,
+  value: { content: string; mtimeMs: number; filePath: string },
+): void {
+  // 若已存在，先刪除後重新插入，使其成為 Map 末尾（最新存取）
+  cachedCommandContents.delete(id);
+  cachedCommandContents.set(id, value);
+  // 超過上限時刪除最舊（Map iteration 順序即插入順序）
+  if (cachedCommandContents.size > COMMAND_CONTENT_CACHE_MAX) {
+    const oldestKey = cachedCommandContents.keys().next().value;
+    if (oldestKey !== undefined) {
+      cachedCommandContents.delete(oldestKey);
+    }
+  }
+}
 
 /** 清除 Command list 快取與 read 內容快取，強制下次重新讀取磁碟 */
 function invalidateCache(): void {
@@ -77,6 +96,9 @@ export const commandService = {
    * id 不合法或檔案不存在時回傳 null，不丟錯。
    */
   async read(id: string): Promise<string | null> {
+    // 防禦性 guard：空字串或 falsy id 直接回傳 null，避免不必要的 I/O
+    if (!id) return null;
+
     // 1. 透過 findFilePath 取得實際檔案路徑
     const filePath = await baseService.findFilePath(id);
     if (!filePath) {
@@ -112,7 +134,7 @@ export const commandService = {
       return null;
     }
 
-    cachedCommandContents.set(id, { content, mtimeMs, filePath });
+    setCachedCommandContent(id, { content, mtimeMs, filePath });
     return content;
   },
 

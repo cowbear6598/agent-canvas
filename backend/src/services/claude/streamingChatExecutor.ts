@@ -2,6 +2,8 @@ import { v4 as uuidv4 } from "uuid";
 
 import { isAbortError } from "../../utils/errorHelpers.js";
 import type { ContentBlock, PersistedSubMessage } from "../../types";
+import type { Pod } from "../../types/pod.js";
+import type { RunContext } from "../../types/run.js";
 
 import { abortRegistry } from "../provider/abortRegistry.js";
 import type { StreamEvent } from "./types.js";
@@ -68,6 +70,21 @@ function hasAssistantContent(state: MutableStreamState): boolean {
 /** 串流期間 throttle 節流的時間窗口（毫秒）：200ms 上限延遲對 UX 可接受 */
 const THROTTLE_MS = 200;
 
+/**
+ * 節流持久化的可變狀態，從 StreamContext 中獨立出來，
+ * 避免與串流事件狀態混雜，也不需要 getter/setter proxy 橋接。
+ */
+interface ThrottleContext {
+  /** 節流 timer handle，供 finalize / abort 清除待排程的舊 timer */
+  pendingTimer: ReturnType<typeof setTimeout> | null;
+  /** 上次實際寫入 DB 的時間戳（ms），初始值 0 */
+  lastPersistAt: number;
+}
+
+/**
+ * 串流事件狀態 + 執行策略兩類關注點的集合體。
+ * streamingCallback 不存放於此，改以傳參方式注入各使用方，避免初始化順序問題。
+ */
 interface StreamContext {
   canvasId: string;
   podId: string;
@@ -81,18 +98,10 @@ interface StreamContext {
   persistStreamingMessage: () => void;
   /** 串流中節流版本的 persistStreamingMessage，避免 DB write lock 競爭 */
   persistThrottled: () => void;
-  /** 節流 timer handle，供 finalize / abort 清除待排程的舊 timer */
-  pendingTimer: ReturnType<typeof setTimeout> | null;
-  /** 上次實際寫入 DB 的時間戳（ms），初始值 0 */
-  lastPersistAt: number;
+  /** 節流狀態，供 finalize / abort 清除 timer */
+  throttleContext: ThrottleContext;
   emitStrategy: ReturnType<ExecutionStrategy["createEmitStrategy"]>;
   strategy: ExecutionStrategy;
-  /**
-   * 串流事件回呼，供 handleErrorEvent 在記錄 log 後推送通用警告文字給前端。
-   * 由 createStreamingCallback 建立後回寫至此欄位（因 callback 依賴 context，
-   * 需在 context 建立後才能設定，初始值以 no-op 佔位）。
-   */
-  streamingCallback: (event: StreamEvent) => void;
   /**
    * 串流期間捕捉到的 session ID（session_started 事件寫入）。
    * 由 processNormalizedEvent 在收到 session_started 時寫入，
@@ -107,7 +116,11 @@ type ToolResultStreamEvent = Extract<StreamEvent, { type: "tool_result" }>;
 type CompleteStreamEvent = Extract<StreamEvent, { type: "complete" }>;
 type ErrorStreamEvent = Extract<StreamEvent, { type: "error" }>;
 
-function handleTextEvent(event: TextStreamEvent, context: StreamContext): void {
+function handleTextEvent(
+  event: TextStreamEvent,
+  context: StreamContext,
+  _streamingCallback: (event: StreamEvent) => void,
+): void {
   const {
     canvasId,
     podId,
@@ -137,6 +150,7 @@ function handleTextEvent(event: TextStreamEvent, context: StreamContext): void {
 function handleToolUseEvent(
   event: ToolUseStreamEvent,
   context: StreamContext,
+  _streamingCallback: (event: StreamEvent) => void,
 ): void {
   const {
     canvasId,
@@ -171,6 +185,7 @@ function handleToolUseEvent(
 function handleToolResultEvent(
   event: ToolResultStreamEvent,
   context: StreamContext,
+  _streamingCallback: (event: StreamEvent) => void,
 ): void {
   const {
     canvasId,
@@ -195,10 +210,11 @@ function handleToolResultEvent(
   persistThrottled();
 }
 
-// `_event` 參數未使用，遵守 no-unused-vars 規則保留 `_` 前綴
+// `_event`、`_streamingCallback` 參數未使用，遵守 no-unused-vars 規則保留 `_` 前綴
 function handleCompleteEvent(
   _event: CompleteStreamEvent,
   context: StreamContext,
+  _streamingCallback: (event: StreamEvent) => void,
 ): void {
   const {
     canvasId,
@@ -232,8 +248,9 @@ const MAX_USER_FACING_MSG_LENGTH = 500;
 function handleErrorEvent(
   event: ErrorStreamEvent,
   context: StreamContext,
+  streamingCallback: (event: StreamEvent) => void,
 ): void {
-  const { canvasId, podId, streamingCallback } = context;
+  const { canvasId, podId } = context;
 
   // 原始錯誤訊息記入 server log，不暴露給前端
   logger.error(
@@ -272,29 +289,35 @@ type StreamEventHandlerMap = {
   [K in StreamEvent["type"]]: (
     event: Extract<StreamEvent, { type: K }>,
     context: StreamContext,
+    streamingCallback: (event: StreamEvent) => void,
   ) => void;
 };
 
-const streamEventHandlers: StreamEventHandlerMap = {
-  text: handleTextEvent,
-  tool_use: handleToolUseEvent,
-  tool_result: handleToolResultEvent,
-  complete: handleCompleteEvent,
-  error: handleErrorEvent,
-};
-
+/**
+ * 建立串流事件回呼（streamingCallback）。
+ * callback 作為閉包傳入 handleErrorEvent，解決 callback 依賴 context 的初始化順序問題，
+ * 不再需要把 callback 回寫至 context 欄位。
+ */
 function createStreamingCallback(
   context: StreamContext,
 ): (event: StreamEvent) => void {
+  // 分派表：各 event handler 接受 streamingCallback 以便 handleErrorEvent 推送警告文字
+  const handlers: StreamEventHandlerMap = {
+    text: handleTextEvent,
+    tool_use: handleToolUseEvent,
+    tool_result: handleToolResultEvent,
+    complete: handleCompleteEvent,
+    error: handleErrorEvent,
+  };
+
   const callback = (event: StreamEvent): void => {
-    const handler = streamEventHandlers[event.type] as (
+    const handler = handlers[event.type] as (
       event: StreamEvent,
       context: StreamContext,
+      cb: (e: StreamEvent) => void,
     ) => void;
-    handler(event, context);
+    handler(event, context, callback);
   };
-  // 回寫至 context，供 handleErrorEvent 推送通用警告文字給前端
-  context.streamingCallback = callback;
   return callback;
 }
 
@@ -310,12 +333,13 @@ async function handleStreamAbort(
     flushCurrentSubMessage,
     persistStreamingMessage,
     strategy,
+    throttleContext,
   } = context;
 
   // 清除節流 timer，避免最終 persist 後又被舊 timer 覆寫
-  if (context.pendingTimer !== null) {
-    clearTimeout(context.pendingTimer);
-    context.pendingTimer = null;
+  if (throttleContext.pendingTimer !== null) {
+    clearTimeout(throttleContext.pendingTimer);
+    throttleContext.pendingTimer = null;
   }
 
   flushCurrentSubMessage();
@@ -382,10 +406,10 @@ function setupStreamContext(
 
   const emitStrategy = strategy.createEmitStrategy();
 
-  // 節流狀態（封閉於 context，避免跨串流共享）
-  const throttleState = {
+  // 節流狀態獨立封裝為 ThrottleContext（不使用 getter/setter proxy，直接傳遞物件參照）
+  const throttleContext: ThrottleContext = {
     lastPersistAt: 0,
-    pendingTimer: null as ReturnType<typeof setTimeout> | null,
+    pendingTimer: null,
   };
 
   /**
@@ -396,23 +420,22 @@ function setupStreamContext(
    */
   const persistThrottled = (): void => {
     const now = Date.now();
-    if (now - throttleState.lastPersistAt >= THROTTLE_MS) {
+    if (now - throttleContext.lastPersistAt >= THROTTLE_MS) {
       // 窗口已過，立即寫入並更新時間戳
-      throttleState.lastPersistAt = now;
+      throttleContext.lastPersistAt = now;
       persistStreamingMessage();
-    } else if (throttleState.pendingTimer === null) {
+    } else if (throttleContext.pendingTimer === null) {
       // 窗口內尚無待排程 timer，新增一個；不重複排程
-      const delay = THROTTLE_MS - (now - throttleState.lastPersistAt);
-      throttleState.pendingTimer = setTimeout(() => {
-        throttleState.pendingTimer = null;
-        throttleState.lastPersistAt = Date.now();
+      const delay = THROTTLE_MS - (now - throttleContext.lastPersistAt);
+      throttleContext.pendingTimer = setTimeout(() => {
+        throttleContext.pendingTimer = null;
+        throttleContext.lastPersistAt = Date.now();
         persistStreamingMessage();
       }, delay);
     }
     // 已有 pending timer：payload 由閉包保持最新，不需重排
   };
 
-  // 將 throttleState 的可變欄位映射到 context（讓 abort / finalize 能清除 timer）
   const context: StreamContext = {
     canvasId,
     podId,
@@ -424,22 +447,9 @@ function setupStreamContext(
     flushCurrentSubMessage,
     persistStreamingMessage,
     persistThrottled,
-    get pendingTimer() {
-      return throttleState.pendingTimer;
-    },
-    set pendingTimer(v) {
-      throttleState.pendingTimer = v;
-    },
-    get lastPersistAt() {
-      return throttleState.lastPersistAt;
-    },
-    set lastPersistAt(v) {
-      throttleState.lastPersistAt = v;
-    },
+    throttleContext,
     emitStrategy,
     strategy,
-    // createStreamingCallback 建立後會回寫此欄位；初始值以 no-op 佔位，避免型別錯誤
-    streamingCallback: () => undefined,
     // session_started 事件由 processNormalizedEvent 寫入；初始值 undefined
     capturedSessionId: undefined,
   };
@@ -451,12 +461,18 @@ async function finalizeAfterStream(
   context: StreamContext,
   sessionId: string | undefined,
 ): Promise<void> {
-  const { streamState, persistStreamingMessage, podId, strategy } = context;
+  const {
+    streamState,
+    persistStreamingMessage,
+    podId,
+    strategy,
+    throttleContext,
+  } = context;
 
   // 清除節流 timer，避免最終 persist 後又被舊 timer 覆寫
-  if (context.pendingTimer !== null) {
-    clearTimeout(context.pendingTimer);
-    context.pendingTimer = null;
+  if (throttleContext.pendingTimer !== null) {
+    clearTimeout(throttleContext.pendingTimer);
+    throttleContext.pendingTimer = null;
   }
 
   if (hasAssistantContent(streamState)) {
@@ -560,10 +576,7 @@ function processNormalizedEvent(
  *
  * 路徑安全性驗證：worktreePath 與 pod.workspacePath 均必須在 config.repositoriesRoot 內。
  */
-function resolveWorkspacePath(
-  pod: import("../../types/pod.js").Pod,
-  runContext?: import("../../types/run.js").RunContext,
-): string {
+function resolveWorkspacePath(pod: Pod, runContext?: RunContext): string {
   if (runContext) {
     const instance = runStore.getPodInstance(runContext.runId, pod.id);
     if (instance?.worktreePath) {
