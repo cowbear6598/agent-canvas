@@ -19,10 +19,6 @@ import { useCanvasStore } from "@/stores/canvasStore";
 import { usePodStore } from "@/stores/pod/podStore";
 import { useConnectionStore } from "@/stores/connectionStore";
 import type { Pod } from "@/types";
-import {
-  CLAUDE_DEFAULT_MODEL,
-  CODEX_DEFAULT_MODEL,
-} from "@/constants/providerDefaults";
 import PodModelSelector from "@/components/pod/PodModelSelector.vue";
 
 // Mock WebSocket
@@ -65,7 +61,7 @@ function createTestPodPayload(
     commandId: null,
     schedule: null,
     provider: "claude",
-    providerConfig: { model: CLAUDE_DEFAULT_MODEL },
+    providerConfig: { model: "opus" },
     ...overrides,
   };
 }
@@ -252,7 +248,7 @@ describe("Canvas/Pod 操作完整流程", () => {
 
       const pod = createMockPod({
         id: "pod-1",
-        providerConfig: { model: CLAUDE_DEFAULT_MODEL },
+        providerConfig: { model: "opus" },
         outputStyleId: null,
       });
       podStore.pods = [pod];
@@ -479,11 +475,11 @@ describe("Canvas/Pod 操作完整流程", () => {
     it("切換 Claude Pod model：Opus → Sonnet，PodModelSelector emit update:model 且 store 更新", async () => {
       const podStore = usePodStore();
 
-      // Arrange：初始 Pod（model: CLAUDE_DEFAULT_MODEL）
+      // Arrange：初始 Pod（model: "opus"）
       const pod = createMockPod({
         id: "pod-1",
         provider: "claude",
-        providerConfig: { model: CLAUDE_DEFAULT_MODEL },
+        providerConfig: { model: "opus" },
       });
       podStore.pods = [pod];
 
@@ -499,7 +495,7 @@ describe("Canvas/Pod 操作完整流程", () => {
       const wrapper = mount(PodModelSelector, {
         props: {
           podId: "pod-1",
-          currentModel: CLAUDE_DEFAULT_MODEL,
+          currentModel: "opus",
           provider: "claude",
         },
         global: {
@@ -565,11 +561,11 @@ describe("Canvas/Pod 操作完整流程", () => {
       });
       podStore.pods = [pod];
 
-      // 模擬後端回傳已更新的 Pod（model: CODEX_DEFAULT_MODEL）
+      // 模擬後端回傳已更新的 Pod（model: "gpt-5.4"）
       const updatedPod = createMockPod({
         id: "pod-codex-1",
         provider: "codex",
-        providerConfig: { model: CODEX_DEFAULT_MODEL },
+        providerConfig: { model: "gpt-5.4" },
       });
       mockCreateWebSocketRequest.mockResolvedValueOnce({
         pod: updatedPod,
@@ -583,7 +579,7 @@ describe("Canvas/Pod 操作完整流程", () => {
         payload: {
           podId: "pod-codex-1",
           canvasId: "canvas-1",
-          model: CODEX_DEFAULT_MODEL,
+          model: "gpt-5.4",
         },
       });
 
@@ -601,14 +597,14 @@ describe("Canvas/Pod 操作完整流程", () => {
           requestEvent: "pod:set-model",
           payload: expect.objectContaining({
             podId: "pod-codex-1",
-            model: CODEX_DEFAULT_MODEL,
+            model: "gpt-5.4",
           }),
         }),
       );
 
       // Assert：store 已更新 providerConfig.model
       const updatedStorePod = podStore.getPodById("pod-codex-1");
-      expect(updatedStorePod?.providerConfig.model).toBe(CODEX_DEFAULT_MODEL);
+      expect(updatedStorePod?.providerConfig.model).toBe("gpt-5.4");
     });
   });
 

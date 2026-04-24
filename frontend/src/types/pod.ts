@@ -5,9 +5,47 @@ export type ModelType = "opus" | "sonnet" | "haiku";
 
 export type PodStatus = "idle" | "chatting" | "summarizing" | "error";
 
-export type PodProvider = "claude" | "codex";
+/**
+ * Pod 所屬的 Provider 名稱。
+ * 改為寬鬆字串，執行時以 providerCapabilityStore 的 key 集合為真值來源。
+ * 舊版 "claude" | "codex" literal union 已移除，compile-time 限縮改由
+ * providerOptions.ts 的 narrow helper（getClaudeOptions / getCodexOptions）達成。
+ *
+ * 鏡射自後端 backend/src/services/provider/types.ts（ProviderName）；
+ * 修改時請同步。
+ */
+export type PodProvider = string;
 
+/**
+ * Provider 通用設定，資料形狀維持平坦 { model: string }。
+ * 不因 discriminated union 拆分，避免 DB 遷移與全專案 access path 改動。
+ * Provider-specific 型別請見 ClaudeOptions / CodexOptions，
+ * 並透過 providerOptions.ts 的 narrow helper 取得強型別。
+ *
+ * 鏡射自後端 backend/src/services/provider/types.ts（ChatRequestContext.providerConfig）；
+ * 修改時請同步。
+ */
 export type ProviderConfig = { model: string };
+
+/**
+ * Claude Provider 的執行選項型別。
+ * 鏡射自後端 backend/src/services/provider/claudeProvider.ts（ClaudeOptions）；
+ * 目前僅含 model，未來可擴充 outputStyleId 等欄位。
+ * 修改後端 ClaudeOptions 時請同步更新此型別。
+ */
+export interface ClaudeOptions {
+  model: string;
+}
+
+/**
+ * Codex Provider 的執行選項型別。
+ * 鏡射自後端 backend/src/services/provider/codexProvider.ts（CodexOptions）；
+ * 目前僅含 model，未來可擴充欄位。
+ * 修改後端 CodexOptions 時請同步更新此型別。
+ */
+export interface CodexOptions {
+  model: string;
+}
 
 /** 各 Provider 支援的功能能力表 */
 export interface ProviderCapabilities {

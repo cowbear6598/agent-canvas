@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
 import type { PodProvider } from "@/types/pod";
-import { CODEX_DEFAULT_MODEL } from "@/constants/providerDefaults";
+import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
 
 const props = defineProps<{
   podId: string;
@@ -22,12 +22,22 @@ const isAnimating = ref(false);
 const isCollapsing = ref(false);
 const hoverTimeoutId = ref<number | null>(null);
 
+const providerCapabilityStore = useProviderCapabilityStore();
+
 /** 依 provider 動態決定可選模型清單 */
 const allOptions = computed(() => {
   if (props.provider === "codex") {
-    return [{ label: "GPT 5.4", value: CODEX_DEFAULT_MODEL }];
+    // 從 store 動態讀取 Codex 預設 model；若 metadata 尚未載入則顯示 "—" 作為 placeholder
+    const codexDefaultModel =
+      (providerCapabilityStore.getDefaultOptions("codex")?.["model"] as
+        | string
+        | undefined) ?? "";
+    const displayValue = codexDefaultModel || "—";
+    // TODO: 待後端 metadata 擴充 availableModels 後，改為從 store 動態拿可切換 model 清單
+    return [{ label: "GPT 5.4", value: displayValue }];
   }
   // claude（預設）
+  // TODO: 待後端 metadata 擴充 availableModels 後，改為從 store 動態拿可切換 model 清單
   return [
     { label: "Opus", value: "opus" },
     { label: "Sonnet", value: "sonnet" },

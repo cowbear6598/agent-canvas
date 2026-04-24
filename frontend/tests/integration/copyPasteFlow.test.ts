@@ -9,10 +9,6 @@ import {
   createMockNote,
   createMockConnection,
 } from "../helpers/factories";
-import {
-  CLAUDE_DEFAULT_MODEL,
-  CODEX_DEFAULT_MODEL,
-} from "@/constants/providerDefaults";
 import { usePodStore, useSelectionStore, useViewportStore } from "@/stores/pod";
 import {
   useOutputStyleStore,
@@ -424,7 +420,7 @@ describe("複製貼上/批量操作完整流程", () => {
         x: 100,
         y: 100,
         provider: "codex",
-        providerConfig: { model: CODEX_DEFAULT_MODEL },
+        providerConfig: { model: "gpt-5.4" },
       });
 
       podStore.pods = [codexPod];
@@ -452,7 +448,7 @@ describe("複製貼上/批量操作完整流程", () => {
       expect(clipboardStore.copiedPods).toHaveLength(1);
       expect(clipboardStore.copiedPods[0]!.provider).toBe("codex");
       expect(clipboardStore.copiedPods[0]!.providerConfig.model).toBe(
-        CODEX_DEFAULT_MODEL,
+        "gpt-5.4",
       );
     });
 
@@ -462,7 +458,7 @@ describe("複製貼上/批量操作完整流程", () => {
         x: 150,
         y: 150,
         provider: "codex",
-        providerConfig: { model: CODEX_DEFAULT_MODEL },
+        providerConfig: { model: "gpt-5.4" },
       });
 
       clipboardStore.setCopy(
@@ -490,14 +486,14 @@ describe("複製貼上/批量操作完整流程", () => {
         x: 100,
         y: 100,
         provider: "claude",
-        providerConfig: { model: CLAUDE_DEFAULT_MODEL },
+        providerConfig: { model: "opus" },
       });
       const codexPod = createMockPod({
         id: "pod-codex-mix",
         x: 300,
         y: 300,
         provider: "codex",
-        providerConfig: { model: CODEX_DEFAULT_MODEL },
+        providerConfig: { model: "gpt-5.4" },
       });
 
       const copiedPods = [claudePod, codexPod].map(toCopiedPod);
@@ -512,9 +508,9 @@ describe("複製貼上/批量操作完整流程", () => {
         (p) => p.id === "pod-codex-mix",
       )!;
       expect(storedClaude.provider).toBe("claude");
-      expect(storedClaude.providerConfig.model).toBe(CLAUDE_DEFAULT_MODEL);
+      expect(storedClaude.providerConfig.model).toBe("opus");
       expect(storedCodex.provider).toBe("codex");
-      expect(storedCodex.providerConfig.model).toBe(CODEX_DEFAULT_MODEL);
+      expect(storedCodex.providerConfig.model).toBe("gpt-5.4");
     });
   });
 

@@ -448,3 +448,42 @@
     var(--card) var(--pod-provider-gradient-stop)
   );
 }
+
+/* =============================================
+   未知 Provider fallback badge（Phase 6 A）
+
+   顯示條件：providerCapabilityStore.loaded = true
+             且 isKnownProvider(pod.provider) = false
+   設計原則：
+   - 插入在 PodHeader 下方、PodMiniScreen 上方
+   - 不遮蓋 output 歷史（無遮罩/overlay）
+   - 視覺語言：小型警示 badge，帶紅點 + 灰文字
+   ============================================= */
+.unknown-provider-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  margin-bottom: 4px;
+  border-radius: 4px;
+  background-color: color-mix(in srgb, var(--destructive) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--destructive) 30%, transparent);
+}
+
+.unknown-provider-badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--destructive);
+  flex-shrink: 0;
+}
+
+.unknown-provider-badge__text {
+  font-size: 0.6rem;
+  color: var(--destructive);
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

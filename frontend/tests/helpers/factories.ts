@@ -6,7 +6,6 @@ import type {
   PodStatus,
   FrequencyType,
 } from "@/types/pod";
-import { CLAUDE_DEFAULT_MODEL } from "@/constants/providerDefaults";
 import type {
   Connection,
   TriggerMode,
@@ -94,7 +93,7 @@ export function createMockPod(overrides?: Partial<Pod>): Pod {
     commandId: null,
     schedule: null,
     provider: "claude",
-    providerConfig: { model: CLAUDE_DEFAULT_MODEL },
+    providerConfig: { model: "opus" },
     ...overrides,
   };
 }

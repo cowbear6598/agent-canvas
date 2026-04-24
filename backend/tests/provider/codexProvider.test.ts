@@ -7,13 +7,15 @@
  * - spawn ENOENT 時推出 error event
  * - stdout JSON line 解析
  * - exit code 非 0 且無 turn_complete 時推出 error event
+ * - ctx.options.model 被正確傳入 --model 旗標
  *
  * Mock 方法：vi.spyOn(Bun, "spawn") 替換 Bun.spawn（Bun 全域不可重新賦值，
  * 但 Bun.spawn 屬性是 writable，可透過 spyOn 攔截）
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import type { NormalizedEvent } from "../../src/services/provider/types.js";
+import type { CodexOptions } from "../../src/services/provider/codexProvider.js";
 
 // ── logger mock ────────────────────────────────────────────────────────
 vi.mock("../../src/utils/logger.js", () => ({
@@ -77,16 +79,17 @@ function makeCtx(
     workspacePath: string;
     resumeSessionId: string | null;
     abortSignal: AbortSignal;
-    providerConfig: Record<string, unknown>;
+    options: CodexOptions;
   }> = {},
 ) {
+  const defaultOptions: CodexOptions = { model: "gpt-5.4", resumeMode: "cli" };
   return {
     podId: "pod-test-001",
     message: "Hello, Codex!",
     workspacePath: "/workspace/test",
     resumeSessionId: null,
     abortSignal: new AbortController().signal,
-    providerConfig: {},
+    options: defaultOptions,
     ...overrides,
   };
 }
@@ -110,7 +113,7 @@ describe("CodexProvider", () => {
     const provider = new CodexProvider();
     const ctx = makeCtx({
       resumeSessionId: null,
-      providerConfig: { model: "gpt-4o" },
+      options: { model: "gpt-4o", resumeMode: "cli" },
     });
 
     await collectEvents(provider.chat(ctx));
@@ -260,20 +263,22 @@ describe("CodexProvider", () => {
   });
 
   // ── 補充：model 預設值 ────────────────────────────────────────────
-  it("未提供 model 時應使用預設模型，spawn 指令含 --model", async () => {
+  it("ctx.options.model 應被正確傳入 --model 旗標", async () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
     const provider = new CodexProvider();
-    // 不帶 providerConfig
-    const ctx = makeCtx({ providerConfig: undefined });
+    // 帶入 options.model = "gpt-5.4-pro"
+    const ctx = makeCtx({
+      options: { model: "gpt-5.4-pro", resumeMode: "cli" },
+    });
     await collectEvents(provider.chat(ctx));
 
     const [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
-    // --model 應存在且其後跟著預設模型名稱
+    // --model 應存在且其後跟著指定的模型名稱
     const modelIdx = spawnArgs.indexOf("--model");
     expect(modelIdx).toBeGreaterThan(-1);
-    expect(spawnArgs[modelIdx + 1]).toBeTruthy();
+    expect(spawnArgs[modelIdx + 1]).toBe("gpt-5.4-pro");
   });
 
   // ── 補充：resumeSessionId 格式不合法 → 改走新對話 ───────────────────

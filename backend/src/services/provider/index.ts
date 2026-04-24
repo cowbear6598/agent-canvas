@@ -1,86 +1,46 @@
-import type {
-  AgentProvider,
-  ProviderCapabilities,
-  ProviderName,
-} from "./types.js";
-import { CLAUDE_CAPABILITIES, CODEX_CAPABILITIES } from "./capabilities.js";
+import type { AgentProvider } from "./types.js";
 import { claudeProvider } from "./claudeProvider.js";
 import { codexProvider } from "./codexProvider.js";
 
-/** 所有支援的 Provider 名稱列表，供遍歷使用 */
-export const PROVIDER_NAMES: readonly ProviderName[] = [
-  "claude",
-  "codex",
-] as const;
+// ─── Registry ─────────────────────────────────────────────────────────────────
 
 /**
- * Provider singleton 快取：ProviderName -> AgentProvider 實例
+ * Provider 登記表（registry）。
  *
- * Provider 採用 singleton 設計，生命週期與程序相同，不需動態釋放，
- * 因此 cache 永不過期。若未來支援動態 provider（例如熱重載或多版本並存），
- * 需在此加入對應的清理機制。
+ * 以 `as const` 讓 TypeScript 推導 key 字面型別，`ProviderName` 型別由此衍生。
+ * 未來新增第三個 provider 時，只需在此加一個 key，ProviderName 自動擴展，
+ * 不需要動 executor / chatHandlers 等呼叫端。
  */
-const providerCache = new Map<ProviderName, AgentProvider>();
+export const providerRegistry = {
+  claude: claudeProvider,
+  codex: codexProvider,
+} as const;
 
 /**
- * 取得指定 Provider 的能力矩陣（純函式，無副作用）
- * 直接從 capabilities.ts 常數讀取，不需要 instantiate provider
+ * 所有支援的 Provider 名稱型別，由 providerRegistry 的 key 自動推導。
+ * 不再需要手動維護 "claude" | "codex" 字面型別。
  */
-export function getCapabilities(name: ProviderName): ProviderCapabilities {
-  switch (name) {
-    case "claude":
-      return CLAUDE_CAPABILITIES;
-    case "codex":
-      return CODEX_CAPABILITIES;
-  }
-}
+export type ProviderName = keyof typeof providerRegistry;
+
+// ─── Provider 存取 ────────────────────────────────────────────────────────────
 
 /**
- * 取得指定 Provider 的 singleton 實例（lazy instantiation）
- * 第一次呼叫時才進行建立，之後從快取直接返回
+ * 同步取得指定 Provider 的 singleton 實例。
  *
- * @throws Error 若 Provider 模組匯出格式不符預期
+ * 直接從 providerRegistry 讀取，不需要快取。
+ *
+ * @throws Error 若 name 不存在於 providerRegistry（TypeScript 型別系統已防止此情況）
  */
-export async function getProvider(name: ProviderName): Promise<AgentProvider> {
-  // 已有快取直接返回
-  const cached = providerCache.get(name);
-  if (cached) return cached;
-
-  let provider: AgentProvider;
-
-  switch (name) {
-    case "claude": {
-      provider = claudeProvider;
-      break;
-    }
-
-    case "codex": {
-      provider = codexProvider;
-      break;
-    }
-
-    default: {
-      // TypeScript exhaust check：確保所有 ProviderName 都有處理
-      const _exhaustive: never = name;
-      throw new Error(`[ProviderRegistry] 未知的 Provider：${_exhaustive}`);
-    }
-  }
-
-  providerCache.set(name, provider);
-  return provider;
-}
-
-/**
- * 清除 Provider singleton 快取（主要供測試使用）
- */
-export function clearProviderCache(): void {
-  providerCache.clear();
+export function getProvider(name: ProviderName): AgentProvider {
+  return providerRegistry[name];
 }
 
 // ─── Re-exports ───────────────────────────────────────────────────────────────
 export type {
   AgentProvider,
   ProviderCapabilities,
-  ProviderName,
+  ProviderMetadata,
+  ChatRequestContext,
+  NormalizedEvent,
 } from "./types.js";
 export { CLAUDE_CAPABILITIES, CODEX_CAPABILITIES } from "./capabilities.js";

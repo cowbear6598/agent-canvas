@@ -12,14 +12,28 @@
  *   - `-` 表示從 stdin 讀取 prompt
  */
 
-import { CODEX_CAPABILITIES, CODEX_DEFAULT_MODEL } from "./capabilities.js";
+import { CODEX_CAPABILITIES } from "./capabilities.js";
 import { normalize } from "./codexNormalizer.js";
 import type {
   AgentProvider,
   ChatRequestContext,
   NormalizedEvent,
+  ProviderMetadata,
 } from "./types.js";
 import { logger } from "../../utils/logger.js";
+import type { Pod } from "../../types/pod.js";
+import type { RunContext } from "../../types/run.js";
+
+/**
+ * Codex provider 的執行時選項（執行時型別，由 buildOptions 輸出）。
+ * 與 Pod.providerConfig（儲存型別 { model: string }）是兩個獨立概念。
+ */
+export interface CodexOptions {
+  /** 使用的模型名稱 */
+  model: string;
+  /** resume 模式固定為 "cli"（Codex 目前只支援 CLI resume 路徑） */
+  resumeMode: "cli";
+}
 
 /** 合法 resumeSessionId 格式（防止 CLI 旗標注入） */
 const SESSION_ID_RE = /^[a-zA-Z0-9_-]+$/;
@@ -330,28 +344,57 @@ async function* streamCodexOutput(
   }
 }
 
-export class CodexProvider implements AgentProvider {
-  readonly name = "codex" as const;
-  readonly capabilities = CODEX_CAPABILITIES;
+export class CodexProvider implements AgentProvider<CodexOptions> {
+  /**
+   * Codex provider 的 metadata，包含 name、capabilities 與預設執行時選項。
+   */
+  readonly metadata: ProviderMetadata<CodexOptions> = {
+    name: "codex",
+    capabilities: CODEX_CAPABILITIES,
+    defaultOptions: {
+      model: "gpt-5.4",
+      resumeMode: "cli",
+    },
+  };
 
-  /** 正在執行中的 subprocess，以 podSessionKey 為 key */
-  private readonly activeProcesses = new Map<string, Bun.Subprocess>();
+  /**
+   * 從 Pod 設定建構 Codex 執行時選項。
+   *
+   * - 讀取 `pod.providerConfig?.model`：若為合法字串（通過 MODEL_RE 驗證）則使用之，
+   *   否則回傳 metadata.defaultOptions.model。
+   * - resumeMode 固定為 "cli"（Codex 目前只支援 CLI resume 路徑）。
+   * - runContext 本 Phase 不使用（但簽名必須收），以符合 AgentProvider 介面規範。
+   */
+  async buildOptions(
+    pod: Pod,
+    _runContext?: RunContext,
+  ): Promise<CodexOptions> {
+    const rawModel = pod.providerConfig?.model;
+    const model =
+      typeof rawModel === "string" && MODEL_RE.test(rawModel)
+        ? rawModel
+        : this.metadata.defaultOptions.model;
 
-  async *chat(ctx: ChatRequestContext): AsyncIterable<NormalizedEvent> {
+    return {
+      model,
+      resumeMode: "cli",
+    };
+  }
+
+  async *chat(
+    ctx: ChatRequestContext<CodexOptions>,
+  ): AsyncIterable<NormalizedEvent> {
     const {
       podId,
       message,
       workspacePath,
       resumeSessionId,
       abortSignal,
-      providerConfig,
+      options,
     } = ctx;
 
-    // 從 providerConfig 取得模型，預設 CODEX_DEFAULT_MODEL
-    const model =
-      typeof providerConfig?.model === "string"
-        ? providerConfig.model
-        : CODEX_DEFAULT_MODEL;
+    // 從 ctx.options 取得模型（Phase 3 起不再從 ctx.providerConfig 取值）
+    const model = options?.model ?? this.metadata.defaultOptions.model;
 
     // ── 驗證 model（防止 CLI 旗標注入） ───────────────────────────────
     if (!MODEL_RE.test(model)) {
@@ -397,18 +440,15 @@ export class CodexProvider implements AgentProvider {
       return;
     }
 
-    // 以 podId 作為 session key 管理 subprocess
-    const sessionKey = podId;
-    this.activeProcesses.set(sessionKey, proc);
-
     // ── abort signal 處理 ──────────────────────────────────────────
+    // abort 由外部 abortRegistry 驅動 signal，subprocess 監聽 signal 自己退場；
+    // Phase 3 起不再使用 activeProcesses Map 自管 subprocess。
     const onAbort = (): void => {
       try {
         proc?.kill();
       } catch {
-        // 已結束則忽略
+        // subprocess 已結束則忽略
       }
-      this.activeProcesses.delete(sessionKey);
     };
 
     if (abortSignal.aborted) {
@@ -421,25 +461,7 @@ export class CodexProvider implements AgentProvider {
       yield* streamCodexOutput(proc, promptText, abortSignal, podId);
     } finally {
       abortSignal.removeEventListener("abort", onAbort);
-      this.activeProcesses.delete(sessionKey);
     }
-  }
-
-  /**
-   * 取消指定 podSessionKey 的進行中 subprocess。
-   * @returns 是否成功找到並 kill subprocess
-   */
-  cancel(podSessionKey: string): boolean {
-    const proc = this.activeProcesses.get(podSessionKey);
-    if (!proc) return false;
-
-    try {
-      proc.kill();
-    } catch {
-      // 已結束則忽略
-    }
-    this.activeProcesses.delete(podSessionKey);
-    return true;
   }
 }
 

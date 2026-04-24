@@ -18,5 +18,7 @@ export interface ProviderListResultPayload {
   providers: Array<{
     name: ProviderName;
     capabilities: ProviderCapabilities;
+    /** Provider 預設執行時選項，各 provider 形狀不同，前端各自解析 */
+    defaultOptions: Record<string, unknown>;
   }>;
 }

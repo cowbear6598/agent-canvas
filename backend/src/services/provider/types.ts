@@ -1,8 +1,27 @@
 import type { ContentBlock } from "../../types/message.js";
+import type { Pod } from "../../types/pod.js";
 import type { RunContext } from "../../types/run.js";
+// ProviderName 由 index.ts 的 providerRegistry 推導後 re-export，
+// 此處以 import type 反向引用，避免 index.ts ↔ types.ts 產生循環 import 問題。
+import type { ProviderName } from "./index.js";
+export type { ProviderName };
 
-/** 支援的 Provider 名稱 */
-export type ProviderName = "claude" | "codex";
+/**
+ * Provider 自報的 metadata，包含名稱、能力矩陣與預設選項。
+ *
+ * - `name`：Provider 名稱，對應 providerRegistry 的 key
+ * - `capabilities`：功能能力矩陣，前端依此決定顯示哪些設定選項
+ * - `defaultOptions`：Provider 的預設執行時選項（執行時型別 TOptions）；
+ *   前端可透過 provider:list 取得此值，供新建 Pod 時顯示預設模型等資訊
+ *
+ * 注意：TOptions 是「執行時型別」，與 Pod.providerConfig（儲存型別 { model: string }）
+ * 是兩個獨立概念；抽象隔離發生在執行時層，不影響 DB schema。
+ */
+export interface ProviderMetadata<TOptions = unknown> {
+  name: ProviderName;
+  capabilities: ProviderCapabilities;
+  defaultOptions: TOptions;
+}
 
 /** Provider 支援的功能能力矩陣 */
 export interface ProviderCapabilities {
@@ -61,24 +80,43 @@ export type NormalizedEvent =
       fatal: boolean;
     };
 
-/** Provider chat 呼叫的請求 Context */
-export interface ChatRequestContext {
+/**
+ * Provider chat 呼叫的請求 Context
+ *
+ * - `options`：執行時型別（由 buildOptions 輸出、僅存在於記憶體中），
+ *   每個 provider 的形狀由自身決定（ClaudeOptions / CodexOptions）。
+ *
+ * session 建立時統一由 provider yield session_started NormalizedEvent 回報，
+ * executor 在 for-await loop 內消化並呼叫 strategy.onSessionInit。
+ */
+export interface ChatRequestContext<TOptions = unknown> {
   podId: string;
   message: string | ContentBlock[];
   workspacePath: string;
   resumeSessionId: string | null;
   abortSignal: AbortSignal;
   runContext?: RunContext;
-  /** Provider 特定設定（例如 codex 的 model 名稱），來自 Pod.providerConfig */
-  providerConfig?: Record<string, unknown>;
+  /**
+   * Provider 執行時選項，由 buildOptions(pod, runContext?) 產生。
+   * 型別由 provider 決定（TOptions）。
+   */
+  options?: TOptions;
 }
 
-/** Provider 抽象介面，所有 Provider 實作需遵循此合約 */
-export interface AgentProvider {
-  name: ProviderName;
-  capabilities: ProviderCapabilities;
+/**
+ * Provider 抽象介面，所有 Provider 實作需遵循此合約。
+ */
+export interface AgentProvider<TOptions = unknown> {
+  /**
+   * Provider metadata，包含 name、capabilities 與 defaultOptions。
+   */
+  metadata: ProviderMetadata<TOptions>;
+  /**
+   * 從 Pod 設定與 RunContext 建構執行時選項（TOptions）。
+   * 簽名固定為 async（統一讓調用端不必判斷 union 型別）。
+   * runContext 為必傳參數位（可為 undefined），供 buildIntegrationTool 等 closure 使用。
+   */
+  buildOptions(pod: Pod, runContext?: RunContext): Promise<TOptions>;
   /** 發起聊天，回傳標準化事件的 AsyncIterable */
-  chat(ctx: ChatRequestContext): AsyncIterable<NormalizedEvent>;
-  /** 取消指定 podSessionKey 的進行中請求，回傳是否成功取消 */
-  cancel(podSessionKey: string): boolean;
+  chat(ctx: ChatRequestContext<TOptions>): AsyncIterable<NormalizedEvent>;
 }

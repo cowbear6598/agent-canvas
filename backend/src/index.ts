@@ -20,8 +20,8 @@ import { replyContextStore } from "./services/integration/replyContextStore.js";
 import { integrationRegistry } from "./services/integration/index.js";
 import { scheduleService } from "./services/scheduleService.js";
 import { getResultErrorString } from "./types/result.js";
-import { claudeService } from "./services/claude/claudeService.js";
 import { podStore } from "./services/podStore.js";
+import { abortRegistry } from "./services/provider/abortRegistry.js";
 import { runStore } from "./services/runStore.js";
 import { runExecutionService } from "./services/workflow/runExecutionService.js";
 
@@ -206,14 +206,10 @@ startServer();
 const shutdown = async (signal: string): Promise<void> => {
   logger.log("Shutdown", "Init", `收到 ${signal}，正在優雅關閉`);
 
-  // 步驟 1：中止所有活躍的 Claude 查詢
-  const abortedCount = claudeService.abortAllQueries();
+  // 步驟 1：中止所有活躍的查詢（透過 abortRegistry 統一管理）
+  const abortedCount = abortRegistry.abortAll();
   if (abortedCount > 0) {
-    logger.log(
-      "Shutdown",
-      "Complete",
-      `已中止 ${abortedCount} 個活躍的 Claude 查詢`,
-    );
+    logger.log("Shutdown", "Complete", `已中止 ${abortedCount} 個活躍的查詢`);
   }
 
   // 步驟 2：重設所有 busy 狀態的 Pod 為 idle（僅更新 DB，不廣播）

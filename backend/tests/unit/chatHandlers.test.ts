@@ -5,6 +5,7 @@ const mockGetById = vi.fn();
 const mockSetStatus = vi.fn();
 const mockGetMessages = vi.fn();
 const mockAbortQuery = vi.fn();
+const mockAbortRegistryAbort = vi.fn();
 const mockEmitSuccess = vi.fn();
 const mockEmitError = vi.fn();
 const mockValidatePod = vi.fn();
@@ -49,6 +50,12 @@ vi.mock("../../src/services/claude/claudeService.js", () => ({
   },
 }));
 
+vi.mock("../../src/services/provider/abortRegistry.js", () => ({
+  abortRegistry: {
+    abort: mockAbortRegistryAbort,
+  },
+}));
+
 vi.mock("../../src/utils/websocketResponse.js", () => ({
   emitSuccess: mockEmitSuccess,
   emitError: mockEmitError,
@@ -72,10 +79,14 @@ vi.mock("../../src/utils/chatCallbacks.js", () => ({
   onRunChatComplete: vi.fn(),
 }));
 
-// mock getCapabilities：預設 claude provider 支援 runMode
+// mock getProvider：預設 claude provider 支援 runMode
 vi.mock("../../src/services/provider/index.js", () => ({
-  getCapabilities: vi.fn((provider: string) => ({
-    runMode: provider === "claude",
+  getProvider: vi.fn((provider: string) => ({
+    metadata: {
+      capabilities: {
+        runMode: provider === "claude",
+      },
+    },
   })),
 }));
 
@@ -266,7 +277,7 @@ describe("handleChatSend", () => {
   // Capability 守門：Codex Pod + multiInstance 不支援 Run 模式
   // ================================================================
   it("Codex Pod 且 multiInstance=true 時應回傳 RUN_NOT_SUPPORTED 錯誤，不執行後續 chat 邏輯", async () => {
-    // Codex provider：getCapabilities 回傳 runMode: false
+    // Codex provider：getProvider().metadata.capabilities.runMode === false
     const pod = makePod({ provider: "codex", multiInstance: true });
     mockValidatePod.mockReturnValue(pod);
 
@@ -290,7 +301,7 @@ describe("handleChatSend", () => {
   });
 
   it("Claude Pod 且 multiInstance=true 時不應觸發 RUN_NOT_SUPPORTED 錯誤", async () => {
-    // Claude provider：getCapabilities 回傳 runMode: true
+    // Claude provider：getProvider().metadata.capabilities.runMode === true
     const pod = makePod({ provider: "claude", multiInstance: true });
     mockValidatePod.mockReturnValue(pod);
     mockLaunchMultiInstanceRun.mockResolvedValue(undefined);
@@ -413,7 +424,7 @@ describe("handleChatAbort", () => {
 
     await handleChatAbort(CONNECTION_ID, { podId: POD_ID }, REQUEST_ID);
 
-    expect(mockAbortQuery).not.toHaveBeenCalled();
+    expect(mockAbortRegistryAbort).not.toHaveBeenCalled();
   });
 
   it("Pod 狀態非 chatting 時應回傳 POD_NOT_CHATTING 錯誤", async () => {
@@ -430,7 +441,7 @@ describe("handleChatAbort", () => {
       POD_ID,
       "POD_NOT_CHATTING",
     );
-    expect(mockAbortQuery).not.toHaveBeenCalled();
+    expect(mockAbortRegistryAbort).not.toHaveBeenCalled();
   });
 
   it("Pod 狀態為 summarizing 時也應回傳 POD_NOT_CHATTING 錯誤", async () => {
@@ -447,29 +458,31 @@ describe("handleChatAbort", () => {
       POD_ID,
       "POD_NOT_CHATTING",
     );
-    expect(mockAbortQuery).not.toHaveBeenCalled();
+    expect(mockAbortRegistryAbort).not.toHaveBeenCalled();
   });
 
-  it("Pod 狀態為 chatting 且 abortQuery 成功時不應發送錯誤", async () => {
+  it("Pod 狀態為 chatting 且 abort 成功時不應發送錯誤", async () => {
     const pod = makePod({ status: "chatting" });
     mockValidatePod.mockReturnValue(pod);
-    mockAbortQuery.mockReturnValue(true);
+    // chatHandlers 現在改呼叫 abortRegistry.abort
+    mockAbortRegistryAbort.mockReturnValue(true);
 
     await handleChatAbort(CONNECTION_ID, { podId: POD_ID }, REQUEST_ID);
 
-    expect(mockAbortQuery).toHaveBeenCalledWith(POD_ID);
+    expect(mockAbortRegistryAbort).toHaveBeenCalledWith(POD_ID);
     expect(mockEmitError).not.toHaveBeenCalled();
     expect(mockSetStatus).not.toHaveBeenCalled();
   });
 
-  it("Pod 狀態為 chatting 但 abortQuery 失敗時應重設狀態為 idle 並回傳 NO_ACTIVE_QUERY 錯誤", async () => {
+  it("Pod 狀態為 chatting 但 abort 失敗時應重設狀態為 idle 並回傳 NO_ACTIVE_QUERY 錯誤", async () => {
     const pod = makePod({ status: "chatting" });
     mockValidatePod.mockReturnValue(pod);
-    mockAbortQuery.mockReturnValue(false);
+    // chatHandlers 現在改呼叫 abortRegistry.abort
+    mockAbortRegistryAbort.mockReturnValue(false);
 
     await handleChatAbort(CONNECTION_ID, { podId: POD_ID }, REQUEST_ID);
 
-    expect(mockAbortQuery).toHaveBeenCalledWith(POD_ID);
+    expect(mockAbortRegistryAbort).toHaveBeenCalledWith(POD_ID);
     expect(mockSetStatus).toHaveBeenCalledWith(CANVAS_ID, POD_ID, "idle");
     expect(mockEmitError).toHaveBeenCalledWith(
       CONNECTION_ID,

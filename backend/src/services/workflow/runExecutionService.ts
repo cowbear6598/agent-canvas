@@ -11,7 +11,7 @@ import { connectionStore } from "../connectionStore.js";
 import type { Connection } from "../../types/index.js";
 import { podStore } from "../podStore.js";
 import { socketService } from "../socketService.js";
-import { claudeService } from "../claude/claudeService.js";
+import { abortRegistry } from "../provider/abortRegistry.js";
 import { logger } from "../../utils/logger.js";
 import { WebSocketResponseEvents } from "../../schemas/events.js";
 import { isAutoTriggerable, buildRunQueueKey } from "./workflowHelpers.js";
@@ -763,7 +763,7 @@ class RunExecutionService {
       for (const podId of activePodIds) {
         try {
           // Run mode 的 query key 是 ${runId}:${podId}
-          claudeService.abortQuery(`${runId}:${podId}`);
+          abortRegistry.abort(`${runId}:${podId}`);
         } catch (error) {
           // Claude SDK 內部在 abort 時可能拋出 "Operation aborted" 錯誤，忽略即可
           logger.warn(

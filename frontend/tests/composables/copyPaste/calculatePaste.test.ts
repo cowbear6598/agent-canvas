@@ -4,10 +4,6 @@ import {
   transformPods,
 } from "@/composables/canvas/copyPaste/calculatePaste";
 import type { CopiedPod } from "@/types";
-import {
-  CLAUDE_DEFAULT_MODEL,
-  CODEX_DEFAULT_MODEL,
-} from "@/constants/providerDefaults";
 
 describe("generatePasteName", () => {
   it("名稱已存在時加上 (1) 後綴", () => {
@@ -62,7 +58,7 @@ describe("transformPods with existingNames", () => {
         y: 0,
         rotation: 0,
         provider: "claude",
-        providerConfig: { model: CLAUDE_DEFAULT_MODEL },
+        providerConfig: { model: "opus" },
       },
       {
         id: "2",
@@ -71,7 +67,7 @@ describe("transformPods with existingNames", () => {
         y: 100,
         rotation: 0,
         provider: "claude",
-        providerConfig: { model: CLAUDE_DEFAULT_MODEL },
+        providerConfig: { model: "opus" },
       },
     ];
     const existingNames = new Set(["Pod A"]);
@@ -93,7 +89,7 @@ describe("transformPods with existingNames", () => {
         y: 0,
         rotation: 0,
         provider: "claude",
-        providerConfig: { model: CLAUDE_DEFAULT_MODEL },
+        providerConfig: { model: "opus" },
       },
       {
         id: "2",
@@ -102,7 +98,7 @@ describe("transformPods with existingNames", () => {
         y: 100,
         rotation: 0,
         provider: "claude",
-        providerConfig: { model: CLAUDE_DEFAULT_MODEL },
+        providerConfig: { model: "opus" },
       },
     ];
     const existingNames = new Set(["Pod A", "Pod B"]);
@@ -124,7 +120,7 @@ describe("transformPods with existingNames", () => {
         y: 0,
         rotation: 0,
         provider: "claude",
-        providerConfig: { model: CLAUDE_DEFAULT_MODEL },
+        providerConfig: { model: "opus" },
       },
     ];
     const existingNames = new Set(["Pod A"]);
@@ -142,7 +138,7 @@ describe("transformPods with existingNames", () => {
         y: 0,
         rotation: 0,
         provider: "codex",
-        providerConfig: { model: CODEX_DEFAULT_MODEL },
+        providerConfig: { model: "gpt-5.4" },
       },
     ];
     const existingNames = new Set<string>();
@@ -152,7 +148,7 @@ describe("transformPods with existingNames", () => {
       existingNames,
     );
     expect(result[0]!.provider).toBe("codex");
-    expect(result[0]!.providerConfig.model).toBe(CODEX_DEFAULT_MODEL);
+    expect(result[0]!.providerConfig.model).toBe("gpt-5.4");
   });
 
   it("非預設 model 的 Claude Pod 貼上後 PastePodItem 應保留正確 providerConfig.model", () => {
@@ -187,7 +183,7 @@ describe("transformPods with existingNames", () => {
         y: 0,
         rotation: 0,
         provider: "claude",
-        providerConfig: { model: CLAUDE_DEFAULT_MODEL },
+        providerConfig: { model: "opus" },
       },
       {
         id: "codex-1",
@@ -196,7 +192,7 @@ describe("transformPods with existingNames", () => {
         y: 100,
         rotation: 0,
         provider: "codex",
-        providerConfig: { model: CODEX_DEFAULT_MODEL },
+        providerConfig: { model: "gpt-5.4" },
       },
     ];
     const existingNames = new Set<string>();
@@ -208,9 +204,9 @@ describe("transformPods with existingNames", () => {
     const claudeResult = result.find((p) => p.originalId === "claude-1");
     const codexResult = result.find((p) => p.originalId === "codex-1");
     expect(claudeResult!.provider).toBe("claude");
-    expect(claudeResult!.providerConfig.model).toBe(CLAUDE_DEFAULT_MODEL);
+    expect(claudeResult!.providerConfig.model).toBe("opus");
     expect(codexResult!.provider).toBe("codex");
-    expect(codexResult!.providerConfig.model).toBe(CODEX_DEFAULT_MODEL);
+    expect(codexResult!.providerConfig.model).toBe("gpt-5.4");
   });
 });
 

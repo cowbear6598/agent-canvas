@@ -14,7 +14,7 @@ import { runStore } from "../../src/services/runStore.js";
 import { connectionStore } from "../../src/services/connectionStore.js";
 import { podStore } from "../../src/services/podStore.js";
 import { socketService } from "../../src/services/socketService.js";
-import { claudeService } from "../../src/services/claude/claudeService.js";
+import { abortRegistry } from "../../src/services/provider/abortRegistry.js";
 import { logger } from "../../src/utils/logger.js";
 import { WebSocketResponseEvents } from "../../src/schemas/events.js";
 import type {
@@ -1263,7 +1263,8 @@ describe("RunExecutionService", () => {
       runExecutionService.unregisterActiveStream("run-x", "pod-2");
 
       // deleteRun 呼叫時不應 abort 任何 pod（Map 已清空）
-      vi.spyOn(claudeService, "abortQuery").mockReturnValue(false);
+      // runExecutionService 現在改呼叫 abortRegistry.abort
+      vi.spyOn(abortRegistry, "abort").mockReturnValue(false);
       vi.spyOn(runStore, "getRun").mockReturnValue(
         createMockRun({ id: "run-x" }),
       );
@@ -1271,14 +1272,14 @@ describe("RunExecutionService", () => {
 
       runExecutionService.deleteRun("run-x");
 
-      expect(claudeService.abortQuery).not.toHaveBeenCalled();
+      expect(abortRegistry.abort).not.toHaveBeenCalled();
     });
 
     it("Set 為空時從 Map 移除 runId", () => {
       runExecutionService.registerActiveStream("run-y", "pod-1");
       runExecutionService.unregisterActiveStream("run-y", "pod-1");
 
-      vi.spyOn(claudeService, "abortQuery").mockReturnValue(false);
+      vi.spyOn(abortRegistry, "abort").mockReturnValue(false);
       vi.spyOn(runStore, "getRun").mockReturnValue(
         createMockRun({ id: "run-y" }),
       );
@@ -1286,14 +1287,15 @@ describe("RunExecutionService", () => {
 
       runExecutionService.deleteRun("run-y");
 
-      expect(claudeService.abortQuery).not.toHaveBeenCalled();
+      expect(abortRegistry.abort).not.toHaveBeenCalled();
     });
   });
 
   describe("deleteRun", () => {
     it("中斷活躍串流中的 pod 並刪除 run 發送事件", async () => {
       runExecutionService.registerActiveStream("run-del", "pod-active");
-      vi.spyOn(claudeService, "abortQuery").mockReturnValue(true);
+      // runExecutionService 現在改呼叫 abortRegistry.abort
+      vi.spyOn(abortRegistry, "abort").mockReturnValue(true);
       vi.spyOn(runStore, "getRun").mockReturnValue(
         createMockRun({ id: "run-del", canvasId }),
       );
@@ -1302,9 +1304,7 @@ describe("RunExecutionService", () => {
 
       await runExecutionService.deleteRun("run-del");
 
-      expect(claudeService.abortQuery).toHaveBeenCalledWith(
-        "run-del:pod-active",
-      );
+      expect(abortRegistry.abort).toHaveBeenCalledWith("run-del:pod-active");
       expect(runStore.deleteRun).toHaveBeenCalledWith("run-del");
       expect(socketService.emitToCanvas).toHaveBeenCalledWith(
         canvasId,
@@ -1324,8 +1324,8 @@ describe("RunExecutionService", () => {
       expect(socketService.emitToCanvas).not.toHaveBeenCalled();
     });
 
-    it("無活躍串流時不呼叫 abortQuery", async () => {
-      vi.spyOn(claudeService, "abortQuery").mockReturnValue(false);
+    it("無活躍串流時不呼叫 abort", async () => {
+      vi.spyOn(abortRegistry, "abort").mockReturnValue(false);
       vi.spyOn(runStore, "getRun").mockReturnValue(
         createMockRun({ id: "run-no-stream", canvasId }),
       );
@@ -1334,7 +1334,7 @@ describe("RunExecutionService", () => {
 
       await runExecutionService.deleteRun("run-no-stream");
 
-      expect(claudeService.abortQuery).not.toHaveBeenCalled();
+      expect(abortRegistry.abort).not.toHaveBeenCalled();
     });
   });
 });

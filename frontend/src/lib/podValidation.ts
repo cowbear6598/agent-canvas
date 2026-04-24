@@ -1,9 +1,6 @@
 import type { Pod, PodProvider, ProviderConfig } from "@/types";
 import { validatePodName } from "@/lib/sanitize";
-import {
-  CLAUDE_DEFAULT_MODEL,
-  CODEX_DEFAULT_MODEL,
-} from "@/constants/providerDefaults";
+import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
 
 function hasValidIdentity(pod: Pod): boolean {
   return validatePodName(pod.name) && pod.id.trim() !== "";
@@ -34,17 +31,36 @@ function pickOutputArray(
 }
 
 /**
- * 依據 provider 決定預設的 providerConfig
+ * 依據 provider 決定預設的 providerConfig。
+ * 優先回傳 existing（已有值時不覆蓋）；
+ * 否則從 providerCapabilityStore.getDefaultOptions(provider) 取預設。
+ * 若 store 尚未載入（回 undefined）或後端尚未送 defaultOptions（回 {}），
+ * 回傳 placeholder { model: "" } 並發出 warn。
  */
 function resolveProviderConfig(
   provider: PodProvider,
   existing: ProviderConfig | undefined,
 ): ProviderConfig {
   if (existing) return existing;
-  if (provider === "codex") {
-    return { model: CODEX_DEFAULT_MODEL };
+
+  const store = useProviderCapabilityStore();
+  const defaultOptions = store.getDefaultOptions(provider);
+
+  // undefined：未知 provider 或 metadata 尚未從後端載入
+  // {}：已知 provider 但後端尚未送 defaultOptions（Phase 6 前的狀態）
+  if (
+    defaultOptions === undefined ||
+    !("model" in defaultOptions) ||
+    typeof defaultOptions.model !== "string" ||
+    defaultOptions.model === ""
+  ) {
+    console.warn(
+      `[podValidation] 未知 provider 或 provider metadata 尚未載入，使用空 model placeholder（provider: ${provider}）`,
+    );
+    return { model: "" };
   }
-  return { model: CLAUDE_DEFAULT_MODEL };
+
+  return { model: defaultOptions.model as string };
 }
 
 /**

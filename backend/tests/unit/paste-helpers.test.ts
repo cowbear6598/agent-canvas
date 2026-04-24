@@ -1,7 +1,9 @@
 import { v4 as uuidv4 } from "uuid";
 import type { PastePodItem, PasteConnectionItem } from "../../src/schemas";
 import type { PasteError } from "../../src/types";
-import { CODEX_DEFAULT_MODEL } from "../../src/services/provider/capabilities.js";
+import { codexProvider } from "../../src/services/provider/codexProvider.js";
+
+const CODEX_DEFAULT_MODEL = codexProvider.metadata.defaultOptions.model;
 
 describe("Paste Helpers", () => {
   let canvasId: string;

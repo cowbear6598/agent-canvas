@@ -7,7 +7,7 @@ import { emitError, emitNotFound } from "./websocketResponse.js";
 import { logger, type LogCategory } from "./logger.js";
 import { createI18nError, type I18nError } from "./i18nError.js";
 import {
-  getCapabilities,
+  getProvider,
   type ProviderCapabilities,
 } from "../services/provider/index.js";
 
@@ -101,7 +101,7 @@ export function assertCapability(
   responseEvent: WebSocketResponseEvents,
   requestId: string,
 ): boolean {
-  const cap = getCapabilities(pod.provider);
+  const cap = getProvider(pod.provider).metadata.capabilities;
   if (cap[key]) return true;
   emitError(
     connectionId,

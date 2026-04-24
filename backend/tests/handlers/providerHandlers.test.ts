@@ -17,22 +17,25 @@ vi.mock("../../src/schemas/index.js", () => ({
   },
 }));
 
-// mock provider index：使用真實的 PROVIDER_NAMES + getCapabilities
-// 這裡不 mock，讓 handler 直接使用真實實作，以驗證 capabilities 正確性
+// mock provider index：使用真實的 providerRegistry + getProvider
+// 這裡不 mock，讓 handler 直接使用真實實作，以驗證 capabilities / defaultOptions 正確性
 vi.mock("../../src/services/provider/index.js", async (importOriginal) => {
-  // 取得真實模組，直接回傳以驗證 capabilities 常數
+  // 取得真實模組，直接回傳以驗證 capabilities / defaultOptions 常數
   const actual =
     await importOriginal<
       typeof import("../../src/services/provider/index.js")
     >();
   return {
-    PROVIDER_NAMES: actual.PROVIDER_NAMES,
-    getCapabilities: actual.getCapabilities,
+    providerRegistry: actual.providerRegistry,
+    getProvider: actual.getProvider,
   };
 });
 
 const { handleProviderList } =
   await import("../../src/handlers/providerHandlers.js");
+
+const { providerRegistry } =
+  await import("../../src/services/provider/index.js");
 
 const CONNECTION_ID = "conn-test-1";
 const REQUEST_ID = "req-test-1";
@@ -77,10 +80,11 @@ describe("handleProviderList", () => {
     expect(Array.isArray(payload.providers)).toBe(true);
     expect(payload.providers.length).toBeGreaterThan(0);
 
-    // 每個 provider 應包含 name 及 capabilities
+    // 每個 provider 應包含 name、capabilities 及 defaultOptions
     for (const provider of payload.providers) {
       expect(provider).toHaveProperty("name");
       expect(provider).toHaveProperty("capabilities");
+      expect(provider).toHaveProperty("defaultOptions");
     }
   });
 
@@ -138,6 +142,46 @@ describe("handleProviderList", () => {
     expect(caps.mcp).toBe(false);
     expect(caps.integration).toBe(false);
     expect(caps.runMode).toBe(false);
+  });
+
+  it("claude 的 defaultOptions.model 應與 providerRegistry.claude.metadata.defaultOptions.model 一致", async () => {
+    await handleProviderList(
+      CONNECTION_ID,
+      { requestId: REQUEST_ID },
+      REQUEST_ID,
+    );
+
+    const [, , payload] = mockEmitToConnection.mock.calls[0];
+    const claude = payload.providers.find(
+      (p: { name: string }) => p.name === "claude",
+    );
+
+    // claude provider 必須存在且 defaultOptions 含 model
+    expect(claude).toBeDefined();
+    expect(claude.defaultOptions).toBeDefined();
+    expect(claude.defaultOptions.model).toBe(
+      providerRegistry.claude.metadata.defaultOptions.model,
+    );
+  });
+
+  it("codex 的 defaultOptions.model 應與 providerRegistry.codex.metadata.defaultOptions.model 一致", async () => {
+    await handleProviderList(
+      CONNECTION_ID,
+      { requestId: REQUEST_ID },
+      REQUEST_ID,
+    );
+
+    const [, , payload] = mockEmitToConnection.mock.calls[0];
+    const codex = payload.providers.find(
+      (p: { name: string }) => p.name === "codex",
+    );
+
+    // codex provider 必須存在且 defaultOptions 含 model
+    expect(codex).toBeDefined();
+    expect(codex.defaultOptions).toBeDefined();
+    expect(codex.defaultOptions.model).toBe(
+      providerRegistry.codex.metadata.defaultOptions.model,
+    );
   });
 
   it("response payload 應帶回 request 的 requestId 供 RPC 對應", async () => {

@@ -9,16 +9,13 @@ import type {
 } from "../types";
 import type { IntegrationBinding } from "../types/integration.js";
 import type { ProviderName } from "./provider/types.js";
-import { CODEX_DEFAULT_MODEL } from "./provider/capabilities.js";
+import { getProvider } from "./provider/index.js";
 import { socketService } from "./socketService.js";
 import { canvasStore } from "./canvasStore.js";
 import { getStmts } from "../database/stmtsHelper.js";
 import { getDb } from "../database/index.js";
 import { safeJsonParse } from "../utils/safeJsonParse.js";
 import { logger } from "../utils/logger.js";
-
-/** Claude provider 的預設 model */
-const CLAUDE_DEFAULT_MODEL = "opus" as const;
 
 /** LRU 快取上限（entry 數） */
 const STMT_CACHE_MAX = 32;
@@ -341,8 +338,9 @@ class PodStore {
     const sanitized = this.sanitizeProviderConfig(raw);
     if (!("model" in sanitized)) {
       // providerConfig 無 model 欄位時補入 provider 預設值
-      sanitized.model =
-        provider === "codex" ? CODEX_DEFAULT_MODEL : CLAUDE_DEFAULT_MODEL;
+      const defaultOptions = getProvider(provider).metadata
+        .defaultOptions as Record<string, unknown>;
+      sanitized.model = defaultOptions.model;
     }
     return sanitized;
   }
@@ -421,8 +419,9 @@ class PodStore {
       : {};
     const providerConfig = this.sanitizeProviderConfig(rawConfig);
     if (!("model" in providerConfig)) {
-      providerConfig.model =
-        provider === "codex" ? CODEX_DEFAULT_MODEL : CLAUDE_DEFAULT_MODEL;
+      const defaultOptions = getProvider(provider).metadata
+        .defaultOptions as Record<string, unknown>;
+      providerConfig.model = defaultOptions.model;
     }
 
     const pod: Pod = {

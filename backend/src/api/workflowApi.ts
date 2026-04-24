@@ -7,8 +7,8 @@ import {
 } from "./apiHelpers.js";
 import { podStore } from "../services/podStore.js";
 import { connectionStore } from "../services/connectionStore.js";
-import { claudeService } from "../services/claude/claudeService.js";
 import { executeStreamingChat } from "../services/claude/streamingChatExecutor.js";
+import { abortRegistry } from "../services/provider/abortRegistry.js";
 import { onChatComplete, onChatAborted } from "../utils/chatCallbacks.js";
 import { injectUserMessage } from "../utils/chatHelpers.js";
 import { logger } from "../utils/logger.js";
@@ -246,7 +246,7 @@ export function handleWorkflowStop(
     );
   }
 
-  const aborted = claudeService.abortQuery(pod.id);
+  const aborted = abortRegistry.abort(pod.id);
 
   if (!aborted) {
     podStore.setStatus(canvas.id, pod.id, "idle");

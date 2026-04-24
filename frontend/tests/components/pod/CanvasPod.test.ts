@@ -4,6 +4,7 @@ import { createTestingPinia } from "@pinia/testing";
 import { ref, computed } from "vue";
 import CanvasPod from "@/components/pod/CanvasPod.vue";
 import type { Pod } from "@/types";
+import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
 
 // 可在測試中動態調整的 mock 狀態
 const mockSelectedPodIds = ref<string[]>([]);
@@ -451,5 +452,175 @@ describe("CanvasPod Provider Pod 漸層 class 綁定", () => {
     expect(miniScreen.classes()).not.toContain("pod-provider-codex");
 
     wrapper.unmount();
+  });
+});
+
+// -----------------------------------------------------------------------
+// Phase 6 A：未知 Provider fallback UI
+// -----------------------------------------------------------------------
+
+/**
+ * 掛載 CanvasPod 並直接設定 providerCapabilityStore 狀態，
+ * 用於測試未知 provider 的 fallback UI 行為。
+ *
+ * @param pod 測試用 Pod
+ * @param storeState providerCapabilityStore 的初始狀態
+ */
+function mountCanvasPodWithStoreState(
+  pod: Pod,
+  storeState: {
+    loaded: boolean;
+    capabilitiesByProvider: Record<string, object>;
+  },
+) {
+  const wrapper = mount(CanvasPod, {
+    props: { pod },
+    global: {
+      plugins: [createTestingPinia({ createSpy: vi.fn, stubActions: true })],
+    },
+    attachTo: document.body,
+  });
+
+  // 直接設定 store state，驅動 isUnknownProvider computed
+  const store = useProviderCapabilityStore();
+  store.loaded = storeState.loaded;
+  // 以 unknown 轉型繞過嚴格泛型型別，測試環境不需完整 ProviderCapabilities 結構
+  store.capabilitiesByProvider =
+    storeState.capabilitiesByProvider as unknown as typeof store.capabilitiesByProvider;
+
+  return wrapper;
+}
+
+describe("CanvasPod Phase 6A：未知 Provider fallback UI", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSelectedPodIds.value = [];
+    mockIsDragging.value = false;
+    mockIsBatchDragging.value = false;
+  });
+
+  it("store 已載入且 provider 未知時，顯示 unknown-provider-badge", async () => {
+    const pod = createMockPod({ provider: "deprecated-provider" });
+    const wrapper = mountCanvasPodWithStoreState(pod, {
+      loaded: true,
+      capabilitiesByProvider: {
+        // 只含 claude、codex，不含 deprecated-provider
+        claude: { chat: true },
+        codex: { chat: true },
+      },
+    });
+
+    // 等待 Vue 重新渲染（狀態更新後）
+    await wrapper.vm.$nextTick();
+
+    const badge = wrapper.find("[data-testid='unknown-provider-badge']");
+    expect(badge.exists()).toBe(true);
+    expect(badge.text()).toContain("此 Provider 已下線或尚未支援");
+
+    wrapper.unmount();
+  });
+
+  it("store 已載入且 provider 已知（claude）時，不顯示 unknown-provider-badge", async () => {
+    const pod = createMockPod({ provider: "claude" });
+    const wrapper = mountCanvasPodWithStoreState(pod, {
+      loaded: true,
+      capabilitiesByProvider: {
+        claude: { chat: true },
+        codex: { chat: true },
+      },
+    });
+
+    await wrapper.vm.$nextTick();
+
+    const badge = wrapper.find("[data-testid='unknown-provider-badge']");
+    expect(badge.exists()).toBe(false);
+
+    wrapper.unmount();
+  });
+
+  it("store 已載入且 provider 已知（codex）時，不顯示 unknown-provider-badge", async () => {
+    const pod = createMockPod({ provider: "codex" });
+    const wrapper = mountCanvasPodWithStoreState(pod, {
+      loaded: true,
+      capabilitiesByProvider: {
+        claude: { chat: true },
+        codex: { chat: true },
+      },
+    });
+
+    await wrapper.vm.$nextTick();
+
+    const badge = wrapper.find("[data-testid='unknown-provider-badge']");
+    expect(badge.exists()).toBe(false);
+
+    wrapper.unmount();
+  });
+
+  it("store 尚未載入（loaded=false）時，即使 provider 不存在也不顯示 fallback badge（避免時序誤判）", async () => {
+    const pod = createMockPod({ provider: "unknown-provider" });
+    const wrapper = mountCanvasPodWithStoreState(pod, {
+      loaded: false,
+      capabilitiesByProvider: {},
+    });
+
+    await wrapper.vm.$nextTick();
+
+    const badge = wrapper.find("[data-testid='unknown-provider-badge']");
+    // loaded=false → 不觸發 fallback，badge 不應出現
+    expect(badge.exists()).toBe(false);
+
+    wrapper.unmount();
+  });
+
+  it("未知 provider Pod 仍顯示 output 歷史（PodMiniScreen 存在）", async () => {
+    const pod = createMockPod({
+      provider: "deprecated-provider",
+      output: ["上次的回覆內容"],
+    });
+    const wrapper = mountCanvasPodWithStoreState(pod, {
+      loaded: true,
+      capabilitiesByProvider: { claude: { chat: true } },
+    });
+
+    await wrapper.vm.$nextTick();
+
+    // fallback badge 出現
+    expect(
+      wrapper.find("[data-testid='unknown-provider-badge']").exists(),
+    ).toBe(true);
+    // PodMiniScreen 仍然存在（output 歷史可見）
+    expect(wrapper.find(".pod-mini-screen-stub").exists()).toBe(true);
+
+    wrapper.unmount();
+  });
+
+  it("多 Pod rendering：未知 provider Pod 顯示 badge，正常 Pod 不受影響", async () => {
+    // 正常 Pod（claude）
+    const knownPod = createMockPod({ id: "pod-known", provider: "claude" });
+    const wrapperKnown = mountCanvasPodWithStoreState(knownPod, {
+      loaded: true,
+      capabilitiesByProvider: { claude: { chat: true } },
+    });
+    await wrapperKnown.vm.$nextTick();
+    expect(
+      wrapperKnown.find("[data-testid='unknown-provider-badge']").exists(),
+    ).toBe(false);
+
+    // 未知 provider Pod
+    const unknownPod = createMockPod({
+      id: "pod-unknown",
+      provider: "gone-provider",
+    });
+    const wrapperUnknown = mountCanvasPodWithStoreState(unknownPod, {
+      loaded: true,
+      capabilitiesByProvider: { claude: { chat: true } },
+    });
+    await wrapperUnknown.vm.$nextTick();
+    expect(
+      wrapperUnknown.find("[data-testid='unknown-provider-badge']").exists(),
+    ).toBe(true);
+
+    wrapperKnown.unmount();
+    wrapperUnknown.unmount();
   });
 });

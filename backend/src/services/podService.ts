@@ -23,7 +23,7 @@ import type { Pod } from "../types/pod.js";
 import { isPodBusy } from "../types/pod.js";
 import { logger } from "../utils/logger.js";
 import { createI18nError } from "../utils/i18nError.js";
-import { claudeService } from "./claude/claudeService.js";
+import { abortRegistry } from "./provider/abortRegistry.js";
 import { runExecutionService } from "./workflow/runExecutionService.js";
 
 interface CreatePodResult {
@@ -91,13 +91,13 @@ export async function deletePodWithCleanup(
 
   // 若 Pod 正在執行查詢，先中止以避免記憶體洩漏
   if (isPodBusy(pod.status)) {
-    // abortQuery 只回傳 boolean，不會拋例外，直接呼叫即可
-    claudeService.abortQuery(podId);
+    // abort 只回傳 boolean，不會拋例外，直接呼叫即可
+    abortRegistry.abort(podId);
 
     // 中止 Run 模式的查詢（key 格式為 ${runId}:${podId}）
     const activeRunIds = runExecutionService.getActiveRunIdsForPod(podId);
     for (const runId of activeRunIds) {
-      claudeService.abortQuery(`${runId}:${podId}`);
+      abortRegistry.abort(`${runId}:${podId}`);
     }
   }
 

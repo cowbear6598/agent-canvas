@@ -23,7 +23,9 @@ import {
   type PasteMcpServerNoteItem,
 } from "../../src/schemas";
 import { type CanvasPasteResultPayload } from "../../src/types";
-import { CODEX_DEFAULT_MODEL } from "../../src/services/provider/capabilities.js";
+import { codexProvider } from "../../src/services/provider/codexProvider.js";
+
+const CODEX_DEFAULT_MODEL = codexProvider.metadata.defaultOptions.model;
 
 describe("貼上功能", () => {
   const { getClient } = setupIntegrationTest();

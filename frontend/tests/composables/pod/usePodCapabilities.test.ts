@@ -5,10 +5,6 @@ import { setupTestPinia } from "../../helpers/mockStoreFactory";
 import { usePodCapabilities } from "@/composables/pod/usePodCapabilities";
 import { usePodStore } from "@/stores/pod";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
-import {
-  CLAUDE_FALLBACK_CAPABILITIES,
-  CODEX_FALLBACK_CAPABILITIES,
-} from "@/constants/providerDefaults";
 import { createMockPod } from "../../helpers/factories";
 
 // mock WebSocket，避免 providerCapabilityStore 的 loadFromBackend 觸發真實連線
@@ -31,6 +27,48 @@ vi.mock("@/composables/useToast", () => ({
   }),
 }));
 
+/** Phase 2 後，完整的 Claude capabilities（需由 syncFromPayload 注入） */
+const CLAUDE_FULL_CAPABILITIES = {
+  chat: true,
+  outputStyle: true,
+  skill: true,
+  subAgent: true,
+  repository: true,
+  command: true,
+  mcp: true,
+  integration: true,
+  runMode: true,
+};
+
+/** Phase 2 後，Codex 的 capabilities（需由 syncFromPayload 注入） */
+const CODEX_CAPABILITIES = {
+  chat: true,
+  outputStyle: false,
+  skill: false,
+  subAgent: false,
+  repository: false,
+  command: false,
+  mcp: false,
+  integration: false,
+  runMode: false,
+};
+
+/**
+ * Phase 2 保守 fallback：metadata 未載入時所有 provider 的預設值。
+ * getCapabilities 找不到 provider 時回傳此值。
+ */
+const CONSERVATIVE_FALLBACK = {
+  chat: true,
+  outputStyle: false,
+  skill: false,
+  subAgent: false,
+  repository: false,
+  command: false,
+  mcp: false,
+  integration: false,
+  runMode: false,
+};
+
 describe("usePodCapabilities", () => {
   beforeEach(() => {
     const pinia = setupTestPinia();
@@ -41,13 +79,27 @@ describe("usePodCapabilities", () => {
   // ─── 輔助：注入 Pod 與 capabilities 到 store ───────────────────────────────
 
   /**
-   * 將指定 provider 的 Pod 加入 podStore，並回傳對應 podId ref
+   * 將指定 provider 的 Pod 加入 podStore，並回傳對應 podId ref。
+   * Phase 2 後 capabilitiesByProvider 初值為空物件，
+   * 若需要完整能力需另行呼叫 syncFromPayload。
    */
   function setupPod(provider: "claude" | "codex", podId = "pod-test") {
     const podStore = usePodStore();
     const pod = createMockPod({ id: podId, provider });
     podStore.pods = [pod];
     return ref(podId);
+  }
+
+  /**
+   * 注入完整的 claude + codex capabilities 到 store。
+   * 模擬後端 metadata 已成功載入的狀態。
+   */
+  function injectAllCapabilities() {
+    const capabilityStore = useProviderCapabilityStore();
+    capabilityStore.syncFromPayload([
+      { name: "claude", capabilities: CLAUDE_FULL_CAPABILITIES },
+      { name: "codex", capabilities: CODEX_CAPABILITIES },
+    ]);
   }
 
   // ─── Case 1：Codex Pod ─────────────────────────────────────────────────────
@@ -60,67 +112,76 @@ describe("usePodCapabilities", () => {
       expect(isCodex.value).toBe(true);
     });
 
-    it("isRunModeEnabled 應為 false", () => {
+    it("isRunModeEnabled 應為 false（Codex 不支援）", () => {
+      injectAllCapabilities();
       const podId = setupPod("codex");
       const { isRunModeEnabled } = usePodCapabilities(podId);
 
       expect(isRunModeEnabled.value).toBe(false);
     });
 
-    it("isSkillEnabled 應為 false", () => {
+    it("isSkillEnabled 應為 false（Codex 不支援）", () => {
+      injectAllCapabilities();
       const podId = setupPod("codex");
       const { isSkillEnabled } = usePodCapabilities(podId);
 
       expect(isSkillEnabled.value).toBe(false);
     });
 
-    it("isOutputStyleEnabled 應為 false", () => {
+    it("isOutputStyleEnabled 應為 false（Codex 不支援）", () => {
+      injectAllCapabilities();
       const podId = setupPod("codex");
       const { isOutputStyleEnabled } = usePodCapabilities(podId);
 
       expect(isOutputStyleEnabled.value).toBe(false);
     });
 
-    it("isSubAgentEnabled 應為 false", () => {
+    it("isSubAgentEnabled 應為 false（Codex 不支援）", () => {
+      injectAllCapabilities();
       const podId = setupPod("codex");
       const { isSubAgentEnabled } = usePodCapabilities(podId);
 
       expect(isSubAgentEnabled.value).toBe(false);
     });
 
-    it("isRepositoryEnabled 應為 false", () => {
+    it("isRepositoryEnabled 應為 false（Codex 不支援）", () => {
+      injectAllCapabilities();
       const podId = setupPod("codex");
       const { isRepositoryEnabled } = usePodCapabilities(podId);
 
       expect(isRepositoryEnabled.value).toBe(false);
     });
 
-    it("isCommandEnabled 應為 false", () => {
+    it("isCommandEnabled 應為 false（Codex 不支援）", () => {
+      injectAllCapabilities();
       const podId = setupPod("codex");
       const { isCommandEnabled } = usePodCapabilities(podId);
 
       expect(isCommandEnabled.value).toBe(false);
     });
 
-    it("isMcpEnabled 應為 false", () => {
+    it("isMcpEnabled 應為 false（Codex 不支援）", () => {
+      injectAllCapabilities();
       const podId = setupPod("codex");
       const { isMcpEnabled } = usePodCapabilities(podId);
 
       expect(isMcpEnabled.value).toBe(false);
     });
 
-    it("isIntegrationEnabled 應為 false", () => {
+    it("isIntegrationEnabled 應為 false（Codex 不支援）", () => {
+      injectAllCapabilities();
       const podId = setupPod("codex");
       const { isIntegrationEnabled } = usePodCapabilities(podId);
 
       expect(isIntegrationEnabled.value).toBe(false);
     });
 
-    it("capabilities 應等於 CODEX_FALLBACK_CAPABILITIES", () => {
+    it("capabilities 應等於 Codex capabilities（從 store 讀取）", () => {
+      injectAllCapabilities();
       const podId = setupPod("codex");
       const { capabilities } = usePodCapabilities(podId);
 
-      expect(capabilities.value).toEqual(CODEX_FALLBACK_CAPABILITIES);
+      expect(capabilities.value).toEqual(CODEX_CAPABILITIES);
     });
   });
 
@@ -134,7 +195,8 @@ describe("usePodCapabilities", () => {
       expect(isCodex.value).toBe(false);
     });
 
-    it("所有 isXxxEnabled 應皆為 true", () => {
+    it("metadata 載入後所有 isXxxEnabled 應皆為 true", () => {
+      injectAllCapabilities();
       const podId = setupPod("claude");
       const {
         isOutputStyleEnabled,
@@ -157,11 +219,12 @@ describe("usePodCapabilities", () => {
       expect(isRunModeEnabled.value).toBe(true);
     });
 
-    it("capabilities 應等於 CLAUDE_FALLBACK_CAPABILITIES", () => {
+    it("capabilities 應等於 Claude full capabilities（從 store 讀取）", () => {
+      injectAllCapabilities();
       const podId = setupPod("claude");
       const { capabilities } = usePodCapabilities(podId);
 
-      expect(capabilities.value).toEqual(CLAUDE_FALLBACK_CAPABILITIES);
+      expect(capabilities.value).toEqual(CLAUDE_FULL_CAPABILITIES);
     });
   });
 
@@ -176,15 +239,15 @@ describe("usePodCapabilities", () => {
       expect(isCodex.value).toBe(false);
     });
 
-    it("capabilities 應 fallback 到 claude 能力表", () => {
+    it("capabilities 應 fallback 到保守值（metadata 未載入時回保守 fallback）", () => {
       const podId = ref("non-existent-pod");
       const { capabilities } = usePodCapabilities(podId);
 
-      // provider fallback 'claude' → CLAUDE_FALLBACK_CAPABILITIES
-      expect(capabilities.value).toEqual(CLAUDE_FALLBACK_CAPABILITIES);
+      // Phase 2：metadata 未載入，getCapabilities 回保守 fallback（chat: true 其餘 false）
+      expect(capabilities.value).toEqual(CONSERVATIVE_FALLBACK);
     });
 
-    it("所有 isXxxEnabled 應皆為 true（claude fallback）", () => {
+    it("metadata 未載入時所有 isXxxEnabled 皆為 false（保守 fallback）", () => {
       const podId = ref("non-existent-pod");
       const {
         isOutputStyleEnabled,
@@ -197,14 +260,14 @@ describe("usePodCapabilities", () => {
         isRunModeEnabled,
       } = usePodCapabilities(podId);
 
-      expect(isOutputStyleEnabled.value).toBe(true);
-      expect(isSkillEnabled.value).toBe(true);
-      expect(isSubAgentEnabled.value).toBe(true);
-      expect(isRepositoryEnabled.value).toBe(true);
-      expect(isCommandEnabled.value).toBe(true);
-      expect(isMcpEnabled.value).toBe(true);
-      expect(isIntegrationEnabled.value).toBe(true);
-      expect(isRunModeEnabled.value).toBe(true);
+      expect(isOutputStyleEnabled.value).toBe(false);
+      expect(isSkillEnabled.value).toBe(false);
+      expect(isSubAgentEnabled.value).toBe(false);
+      expect(isRepositoryEnabled.value).toBe(false);
+      expect(isCommandEnabled.value).toBe(false);
+      expect(isMcpEnabled.value).toBe(false);
+      expect(isIntegrationEnabled.value).toBe(false);
+      expect(isRunModeEnabled.value).toBe(false);
     });
   });
 
@@ -212,6 +275,7 @@ describe("usePodCapabilities", () => {
 
   describe("podId 變動時 computed 應重新計算", () => {
     it("從 claude Pod 切換到 codex Pod 後，isCodex 應從 false 變為 true", async () => {
+      injectAllCapabilities();
       const podStore = usePodStore();
       const claudePod = createMockPod({ id: "pod-claude", provider: "claude" });
       const codexPod = createMockPod({ id: "pod-codex", provider: "codex" });
@@ -231,6 +295,7 @@ describe("usePodCapabilities", () => {
     });
 
     it("從 codex Pod 切換到 claude Pod 後，isSkillEnabled 應從 false 變為 true", async () => {
+      injectAllCapabilities();
       const podStore = usePodStore();
       const claudePod = createMockPod({ id: "pod-claude", provider: "claude" });
       const codexPod = createMockPod({ id: "pod-codex", provider: "codex" });
@@ -249,7 +314,8 @@ describe("usePodCapabilities", () => {
       expect(isSkillEnabled.value).toBe(true);
     });
 
-    it("從有效 Pod 切換到不存在的 podId，capabilities 應退回 claude fallback", async () => {
+    it("從有效 Pod 切換到不存在的 podId，isCodex 變 false，capabilities 退回 claude fallback", async () => {
+      injectAllCapabilities();
       const podStore = usePodStore();
       const codexPod = createMockPod({ id: "pod-codex", provider: "codex" });
       podStore.pods = [codexPod];
@@ -259,15 +325,16 @@ describe("usePodCapabilities", () => {
 
       // 初始為 codex
       expect(isCodex.value).toBe(true);
-      expect(capabilities.value).toEqual(CODEX_FALLBACK_CAPABILITIES);
+      expect(capabilities.value).toEqual(CODEX_CAPABILITIES);
 
       // 切換到不存在的 pod
       podId.value = "non-existent";
       await nextTick();
 
-      // fallback 到 claude
+      // composable 在 pod 不存在時 provider fallback 到 "claude"（既有行為）
+      // 因 claude metadata 已注入，capabilities 為完整 claude 能力
       expect(isCodex.value).toBe(false);
-      expect(capabilities.value).toEqual(CLAUDE_FALLBACK_CAPABILITIES);
+      expect(capabilities.value).toEqual(CLAUDE_FULL_CAPABILITIES);
     });
   });
 
@@ -275,18 +342,19 @@ describe("usePodCapabilities", () => {
 
   describe("capability store 變動時 composable 應跟著反映", () => {
     it("syncFromPayload 將 claude 的 skill 設為 false 後，isSkillEnabled 應變為 false", async () => {
+      injectAllCapabilities();
       const podId = setupPod("claude");
       const capabilityStore = useProviderCapabilityStore();
       const { isSkillEnabled } = usePodCapabilities(podId);
 
-      // 初始 claude → skill: true
+      // metadata 已注入 → 初始 claude skill: true
       expect(isSkillEnabled.value).toBe(true);
 
       // 模擬後端回傳 claude 功能表，將 skill 關閉
       capabilityStore.syncFromPayload([
         {
           name: "claude",
-          capabilities: { ...CLAUDE_FALLBACK_CAPABILITIES, skill: false },
+          capabilities: { ...CLAUDE_FULL_CAPABILITIES, skill: false },
         },
       ]);
       await nextTick();
@@ -295,6 +363,7 @@ describe("usePodCapabilities", () => {
     });
 
     it("syncFromPayload 將 codex 的 runMode 設為 true 後，isRunModeEnabled 應變為 true", async () => {
+      injectAllCapabilities();
       const podId = setupPod("codex");
       const capabilityStore = useProviderCapabilityStore();
       const { isRunModeEnabled } = usePodCapabilities(podId);
@@ -306,7 +375,7 @@ describe("usePodCapabilities", () => {
       capabilityStore.syncFromPayload([
         {
           name: "codex",
-          capabilities: { ...CODEX_FALLBACK_CAPABILITIES, runMode: true },
+          capabilities: { ...CODEX_CAPABILITIES, runMode: true },
         },
       ]);
       await nextTick();
@@ -315,16 +384,17 @@ describe("usePodCapabilities", () => {
     });
 
     it("syncFromPayload 更新 capabilities 後，整個 capabilities computed 應同步反映", async () => {
+      injectAllCapabilities();
       const podId = setupPod("claude");
       const capabilityStore = useProviderCapabilityStore();
       const { capabilities } = usePodCapabilities(podId);
 
-      // 初始為完整 claude 能力
+      // metadata 已注入 → 初始為完整 claude 能力
       expect(capabilities.value.mcp).toBe(true);
 
       // 後端回傳 mcp: false
       const updatedCapabilities = {
-        ...CLAUDE_FALLBACK_CAPABILITIES,
+        ...CLAUDE_FULL_CAPABILITIES,
         mcp: false,
       };
       capabilityStore.syncFromPayload([

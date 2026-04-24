@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import { isAbortError } from "../../utils/errorHelpers.js";
 import type { ContentBlock, PersistedSubMessage } from "../../types";
 
-import { claudeService } from "./claudeService.js";
+import { abortRegistry } from "../provider/abortRegistry.js";
 import type { StreamEvent } from "./types.js";
 import {
   buildPersistedMessage,
@@ -18,6 +18,9 @@ import { logger } from "../../utils/logger.js";
 import type { ExecutionStrategy } from "../executionStrategy.js";
 import { getProvider } from "../provider/index.js";
 import type { NormalizedEvent } from "../provider/types.js";
+import { runStore } from "../runStore.js";
+import { isPathWithinDirectory } from "../../utils/pathValidator.js";
+import { config } from "../../config/index.js";
 
 export interface StreamingChatExecutorOptions {
   canvasId: string;
@@ -382,62 +385,100 @@ function normalizedEventToStreamEvent(ev: NormalizedEvent): StreamEvent | null {
 }
 
 /**
- * AbortController 的建立、注冊與清理統一封裝，避免各 try/finally 重複。
+ * 解析查詢的工作目錄（workspacePath）。
+ *
+ * Phase 4 暫時 inline 實作（Phase 5 會抽到 backend/src/services/runtime/workspacePath.ts）：
+ *   - Run mode 且 instance 有 worktreePath → 使用 worktreePath
+ *   - 否則 → 使用 pod.workspacePath
+ *
+ * 路徑安全性驗證：worktreePath 必須在 config.repositoriesRoot 內。
  */
-async function withCodexAbort<T>(
-  queryKey: string,
-  callback: (signal: AbortSignal) => Promise<T>,
-): Promise<T> {
-  const abortController = new AbortController();
-  claudeService.registerAbortKey(queryKey, abortController);
-  try {
-    return await callback(abortController.signal);
-  } finally {
-    claudeService.unregisterAbortKey(queryKey);
+function resolveWorkspacePath(
+  pod: import("../../types/pod.js").Pod,
+  runContext?: import("../../types/run.js").RunContext,
+): string {
+  if (runContext) {
+    const instance = runStore.getPodInstance(runContext.runId, pod.id);
+    if (instance?.worktreePath) {
+      if (
+        !isPathWithinDirectory(instance.worktreePath, config.repositoriesRoot)
+      ) {
+        logger.error(
+          "Chat",
+          "Check",
+          `[executeStreamingChat] worktreePath 不在合法範圍內：${instance.worktreePath}`,
+        );
+        throw new Error("Run Instance 的工作目錄路徑不合法");
+      }
+      return instance.worktreePath;
+    }
   }
+  return pod.workspacePath;
 }
 
 /**
- * 執行 Codex provider 的串流聊天，將 NormalizedEvent 轉為 StreamEvent 後呼叫 streamingCallback。
- * podResult 由入口 executeStreamingChat 統一查詢後傳入，避免重複呼叫 getByIdGlobal。
+ * 統一的串流聊天執行器，透過 ExecutionStrategy 區分 Normal mode 與 Run mode 的差異。
+ *
+ * Phase 5A 更新：
+ *   - 移除 if (provider === "codex") 分流與 executeCodexStream / withCodexAbort
+ *   - Claude 與 Codex 統一走 provider.buildOptions + provider.chat(ctx) 單一路徑
+ *   - claudeService.sendMessage 已不再被呼叫（Phase 5B 才刪除 claudeService 本體）
  */
-async function executeCodexStream(
+export async function executeStreamingChat(
   options: StreamingChatExecutorOptions,
-  podResult: NonNullable<ReturnType<typeof podStore.getByIdGlobal>>,
-  streamContext: StreamContext,
-  streamingCallback: (event: StreamEvent) => void,
   callbacks?: StreamingChatExecutorCallbacks,
 ): Promise<StreamingChatExecutorResult> {
   const { podId, message, abortable, strategy } = options;
+
+  // 設定串流上下文
+  const streamContext = setupStreamContext(options);
   const { canvasId, messageId, streamState } = streamContext;
+  const streamingCallback = createStreamingCallback(streamContext);
+
+  // 查詢 Pod 與 Provider
+  const podResult = podStore.getByIdGlobal(podId);
+  if (!podResult) {
+    throw new Error(`找不到 Pod ${podId}`);
+  }
+
   const { pod } = podResult;
+  const providerName = pod.provider ?? "claude";
+  const provider = getProvider(providerName);
 
   const sessionId = strategy.getSessionId(podId);
   const queryKey = strategy.getQueryKey(podId);
   const runContext = strategy.getRunContext();
 
-  // 串流開始前置處理
+  // 串流開始前置處理（Run mode 需在此註冊 active stream）
   strategy.onStreamStart(podId);
 
   try {
-    // AbortController 建立、注冊與清理由 withCodexAbort 統一負責
-    return await withCodexAbort(queryKey, async (abortSignal) => {
-      const provider = await getProvider("codex");
+    // abortRegistry 建立 controller，供外部 abort 呼叫（透過 registry 觸發 signal）
+    const abortController = abortRegistry.register(queryKey);
 
-      const ctx = {
-        podId,
-        message,
-        workspacePath: pod.workspacePath,
-        resumeSessionId: sessionId ?? null,
-        abortSignal,
-        runContext,
-        providerConfig: pod.providerConfig ?? undefined,
-      };
+    // 解析工作目錄
+    const workspacePath = resolveWorkspacePath(pod, runContext);
 
-      let capturedSessionId: string | undefined;
+    // 建構 Provider 執行時選項
+    const providerOptions = await provider.buildOptions(pod, runContext);
 
+    // 組裝 ChatRequestContext
+    const ctx = {
+      podId,
+      message,
+      workspacePath,
+      resumeSessionId: sessionId ?? null,
+      abortSignal: abortController.signal,
+      runContext,
+      options: providerOptions,
+    };
+
+    let capturedSessionId: string | undefined;
+
+    try {
+      // 消費 provider.chat(ctx) 的 NormalizedEvent 串流（Claude 與 Codex 共用）
       for await (const ev of provider.chat(ctx)) {
-        // 捕捉 session_started，留到 finalizeAfterStream 使用
+        // session_started：捕捉 sessionId，留到 finalizeAfterStream 使用
         if (ev.type === "session_started") {
           capturedSessionId = ev.sessionId;
           continue;
@@ -448,7 +489,7 @@ async function executeCodexStream(
 
         streamingCallback(streamEvent);
 
-        // error 事件：以 ⚠️ 文字形式通知前端
+        // error 事件：以 ⚠️ 文字通知前端
         // fatal=true → 拋出例外終止串流；fatal=false → 僅警告，繼續消費
         if (ev.type === "error") {
           streamingCallback({
@@ -462,84 +503,13 @@ async function executeCodexStream(
           continue;
         }
       }
-
-      // 串流正常結束後收尾處理
-      await finalizeAfterStream(streamContext, capturedSessionId);
-
-      if (callbacks?.onComplete) {
-        await callbacks.onComplete(canvasId, podId);
-      }
-
-      const hasAssistantContent =
-        streamState.accumulatedContent.length > 0 ||
-        streamState.subMessages.length > 0;
-
-      return {
-        messageId,
-        content: streamState.accumulatedContent,
-        hasContent: hasAssistantContent,
-        aborted: false,
-      };
-    });
-  } catch (error) {
-    return handleExecutionError(error, streamContext, abortable, callbacks);
-  }
-}
-
-/**
- * 統一的串流聊天執行器，透過 ExecutionStrategy 區分 Normal mode 與 Run mode 的差異。
- * Provider 分流：`provider === 'codex'` 走新分支，其餘維持 Claude 原路徑。
- */
-export async function executeStreamingChat(
-  options: StreamingChatExecutorOptions,
-  callbacks?: StreamingChatExecutorCallbacks,
-): Promise<StreamingChatExecutorResult> {
-  const { podId, message, abortable, strategy } = options;
-
-  // 設定串流上下文
-  const streamContext = setupStreamContext(options);
-  const { canvasId, messageId, streamState } = streamContext;
-  const streamingCallback = createStreamingCallback(streamContext);
-
-  // ── Provider 分流 ──────────────────────────────────────────────────
-  // 入口統一查詢一次 podResult，分流後直接傳入，避免各分支重複呼叫 getByIdGlobal
-  const podResult = podStore.getByIdGlobal(podId);
-  const provider = podResult?.pod.provider ?? "claude";
-
-  if (provider === "codex") {
-    if (!podResult) {
-      throw new Error(`找不到 Pod ${podId}`);
+    } finally {
+      // 無論串流正常或異常結束，都清理 abortRegistry entry 防 Memory Leak
+      abortRegistry.unregister(queryKey);
     }
-    return executeCodexStream(
-      options,
-      podResult,
-      streamContext,
-      streamingCallback,
-      callbacks,
-    );
-  }
 
-  // ── 以下為 Claude 原始路徑（不動） ────────────────────────────────
-
-  // 取得 session ID 與 query key
-  const sessionId = strategy.getSessionId(podId);
-  const queryKey = strategy.getQueryKey(podId);
-  const runContext = strategy.getRunContext();
-
-  // 串流開始前置處理（Run mode 需在此註冊 active stream）
-  strategy.onStreamStart(podId);
-
-  try {
-    // 呼叫 Claude API
-    const resultMessage = await claudeService.sendMessage(
-      podId,
-      message,
-      streamingCallback,
-      { sessionId, queryKey, runContext },
-    );
-
-    // 完成後續處理
-    await finalizeAfterStream(streamContext, resultMessage.sessionId);
+    // 串流正常結束後收尾處理（含 session ID 持久化）
+    await finalizeAfterStream(streamContext, capturedSessionId);
 
     if (callbacks?.onComplete) {
       await callbacks.onComplete(canvasId, podId);

@@ -7,10 +7,6 @@ import {
   createUnboundNoteCollector,
 } from "@/composables/canvas/copyPaste/collectCopyData";
 import type { SelectableElement } from "@/types";
-import {
-  CLAUDE_DEFAULT_MODEL,
-  CODEX_DEFAULT_MODEL,
-} from "@/constants/providerDefaults";
 
 describe("collectCopyData", () => {
   describe("collectBoundNotesFromStore", () => {
@@ -54,7 +50,7 @@ describe("collectCopyData", () => {
           repositoryId: null,
           commandId: null,
           provider: "claude" as const,
-          providerConfig: { model: CLAUDE_DEFAULT_MODEL },
+          providerConfig: { model: "opus" },
         },
       ];
 
@@ -84,7 +80,7 @@ describe("collectCopyData", () => {
           repositoryId: null,
           commandId: null,
           provider: "codex" as const,
-          providerConfig: { model: CODEX_DEFAULT_MODEL },
+          providerConfig: { model: "gpt-5.4" },
         },
       ];
 
@@ -96,7 +92,7 @@ describe("collectCopyData", () => {
 
       expect(result).toHaveLength(1);
       expect(result[0]!.provider).toBe("codex");
-      expect(result[0]!.providerConfig.model).toBe(CODEX_DEFAULT_MODEL);
+      expect(result[0]!.providerConfig.model).toBe("gpt-5.4");
     });
 
     it("非預設 model 的 Claude Pod 複製後 CopiedPod 應保留正確 providerConfig.model", () => {
@@ -143,7 +139,7 @@ describe("collectCopyData", () => {
           repositoryId: null,
           commandId: null,
           provider: "claude" as const,
-          providerConfig: { model: CLAUDE_DEFAULT_MODEL },
+          providerConfig: { model: "opus" },
         },
         {
           id: "pod-codex",
@@ -157,7 +153,7 @@ describe("collectCopyData", () => {
           repositoryId: null,
           commandId: null,
           provider: "codex" as const,
-          providerConfig: { model: CODEX_DEFAULT_MODEL },
+          providerConfig: { model: "gpt-5.4" },
         },
       ];
 
@@ -172,9 +168,9 @@ describe("collectCopyData", () => {
       const claudeResult = result.find((p) => p.id === "pod-claude");
       const codexResult = result.find((p) => p.id === "pod-codex");
       expect(claudeResult!.provider).toBe("claude");
-      expect(claudeResult!.providerConfig.model).toBe(CLAUDE_DEFAULT_MODEL);
+      expect(claudeResult!.providerConfig.model).toBe("opus");
       expect(codexResult!.provider).toBe("codex");
-      expect(codexResult!.providerConfig.model).toBe(CODEX_DEFAULT_MODEL);
+      expect(codexResult!.providerConfig.model).toBe("gpt-5.4");
     });
   });
 

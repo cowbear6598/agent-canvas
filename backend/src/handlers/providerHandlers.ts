@@ -3,7 +3,11 @@ import type {
   ProviderListPayload,
   ProviderListResultPayload,
 } from "../schemas";
-import { PROVIDER_NAMES, getCapabilities } from "../services/provider/index.js";
+import {
+  providerRegistry,
+  getProvider,
+  type ProviderName,
+} from "../services/provider/index.js";
 import { socketService } from "../services/socketService.js";
 
 /**
@@ -15,11 +19,17 @@ export async function handleProviderList(
   payload: ProviderListPayload,
   requestId: string,
 ): Promise<void> {
-  // 從 PROVIDER_NAMES 建立 providers 列表，每個 provider 附帶其 capabilities
-  const providers = PROVIDER_NAMES.map((name) => ({
-    name,
-    capabilities: getCapabilities(name),
-  }));
+  // 從 providerRegistry 建立 providers 列表，每個 provider 附帶 capabilities 與 defaultOptions
+  const providers = (Object.keys(providerRegistry) as ProviderName[]).map(
+    (name) => ({
+      name,
+      capabilities: getProvider(name).metadata.capabilities,
+      defaultOptions: getProvider(name).metadata.defaultOptions as Record<
+        string,
+        unknown
+      >,
+    }),
+  );
 
   const response: ProviderListResultPayload = {
     requestId,

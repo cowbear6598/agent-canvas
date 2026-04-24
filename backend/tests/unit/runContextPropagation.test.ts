@@ -151,10 +151,14 @@ vi.mock("../../src/services/commandService.js", () => ({
   },
 }));
 
-// mock getCapabilities：claude 支援 runMode，codex 不支援
+// mock getProvider：claude 支援 runMode，codex 不支援
 vi.mock("../../src/services/provider/index.js", () => ({
-  getCapabilities: vi.fn((provider: string) => ({
-    runMode: provider === "claude",
+  getProvider: vi.fn((provider: string) => ({
+    metadata: {
+      capabilities: {
+        runMode: provider === "claude",
+      },
+    },
   })),
 }));
 

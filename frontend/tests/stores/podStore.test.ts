@@ -20,8 +20,6 @@ import { useCanvasStore } from "@/stores/canvasStore";
 import { useConnectionStore } from "@/stores/connectionStore";
 import type { Pod, Schedule } from "@/types";
 import { MAX_POD_NAME_LENGTH } from "@/lib/constants";
-import { CLAUDE_DEFAULT_MODEL } from "@/constants/providerDefaults";
-
 // Mock WebSocket
 vi.mock("@/services/websocket", () => webSocketMockFactory());
 
@@ -349,8 +347,8 @@ describe("podStore", () => {
       expect(result.y).toBe(150);
       expect(result.output).toEqual([]);
       expect(result.outputStyleId).toBeNull();
-      // model 已 deprecated，改驗 providerConfig.model
-      expect(result.providerConfig?.model).toBe("opus");
+      // store 未載入 defaultOptions 時，enrichPod 回傳 placeholder { model: "" }
+      expect(result.providerConfig?.model).toBe("");
       expect(result.multiInstance).toBe(false);
       expect(result.commandId).toBeNull();
       expect(result.schedule).toBeNull();
@@ -571,7 +569,7 @@ describe("podStore", () => {
         commandId: null,
         schedule: null,
         provider: "claude",
-        providerConfig: { model: CLAUDE_DEFAULT_MODEL },
+        providerConfig: { model: "opus" },
         ...overrides,
       };
     }
@@ -608,7 +606,7 @@ describe("podStore", () => {
             y: 400,
             rotation: 0.5,
             provider: "claude",
-            providerConfig: { model: CLAUDE_DEFAULT_MODEL },
+            providerConfig: { model: "opus" },
           }),
         }),
         expect.objectContaining({
@@ -1241,8 +1239,8 @@ describe("podStore", () => {
         store.addPodFromEvent(incompletePod);
 
         expect(store.pods[0]?.x).toBe(100);
-        // model 已 deprecated，改驗 providerConfig.model
-        expect(store.pods[0]?.providerConfig?.model).toBe("opus");
+        // store 未載入 defaultOptions 時，enrichPod 回傳 placeholder { model: "" }
+        expect(store.pods[0]?.providerConfig?.model).toBe("");
       });
     });
 
@@ -1558,8 +1556,8 @@ describe("podStore", () => {
       expect(store.pods).toHaveLength(2);
       // enrichPod 應填入預設值
       expect(store.pods[0]?.x).toBe(100);
-      // providerConfig 缺失時應補 claude 預設 model
-      expect(store.pods[1]?.providerConfig?.model).toBe(CLAUDE_DEFAULT_MODEL);
+      // store 未載入 defaultOptions 時，enrichPod 回傳 placeholder { model: "" }
+      expect(store.pods[1]?.providerConfig?.model).toBe("");
     });
 
     it("應過濾掉無效 Pod", () => {
@@ -1640,14 +1638,14 @@ describe("podStore", () => {
       const store = usePodStore();
       const pod = createMockPod({
         id: "pod-1",
-        providerConfig: { model: CLAUDE_DEFAULT_MODEL },
+        providerConfig: { model: "opus" },
       });
       store.pods = [pod];
 
       store.updatePodProviderConfigModel("pod-1", "");
 
       // model 不應被更新
-      expect(store.pods[0]?.providerConfig?.model).toBe(CLAUDE_DEFAULT_MODEL);
+      expect(store.pods[0]?.providerConfig?.model).toBe("opus");
       expect(console.warn).toHaveBeenCalledWith(
         "[PodStore] model 不合法，已拒絕更新：",
       );

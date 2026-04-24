@@ -22,6 +22,7 @@ import {
   isMultiInstanceChainPod,
   isMultiInstanceSourcePod,
 } from "@/utils/multiInstanceGuard";
+import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
 import PodHeader from "@/components/pod/PodHeader.vue";
 import PodMiniScreen from "@/components/pod/PodMiniScreen.vue";
 import PodSlots from "@/components/pod/PodSlots.vue";
@@ -52,6 +53,20 @@ const { startBatchDrag, isElementSelected, isBatchDragging } = useBatchDrag();
 const { toast } = useToast();
 const { sendCanvasAction } = useSendCanvasAction();
 const { t } = useI18n();
+
+// ---- Provider 未知 fallback 判斷 ----
+const providerCapabilityStore = useProviderCapabilityStore();
+
+/**
+ * 當 store 已載入（loaded = true）且 provider 不在已知清單中，
+ * 視為未知 provider，顯示 fallback UI 並封鎖對話入口。
+ * loaded 為 false 時（metadata 尚未抵達）跳過判斷，避免時序誤判。
+ */
+const isUnknownProvider = computed(
+  () =>
+    providerCapabilityStore.loaded &&
+    !providerCapabilityStore.isKnownProvider(props.pod.provider),
+);
 
 const isActive = computed(() => props.pod.id === podStore.activePodId);
 const boundNote = computed(
@@ -243,6 +258,15 @@ const canActivateEdit = (target: Element | null): boolean => {
   const el = target as HTMLElement;
   if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") return false;
 
+  // 未知 provider：封鎖對話入口，顯示提示 toast
+  if (isUnknownProvider.value) {
+    toast({
+      title: "Provider",
+      description: "此 Provider 已下線或尚未支援，無法開啟對話",
+    });
+    return false;
+  }
+
   if (isDownstreamMultiInstance.value) {
     toast({
       title: "Pod",
@@ -375,6 +399,20 @@ const handleContextMenu = (e: MouseEvent): void => {
             @save="handleSaveName"
             @rename="handleRename"
           />
+
+          <!-- 未知 Provider fallback badge：
+               store 已載入後仍找不到此 provider，表示已下線或尚未支援。
+               僅插入提示 badge，保留下方 output 歷史可見，不遮蓋整個 Pod。 -->
+          <div
+            v-if="isUnknownProvider"
+            class="unknown-provider-badge"
+            data-testid="unknown-provider-badge"
+          >
+            <span class="unknown-provider-badge__dot" />
+            <span class="unknown-provider-badge__text">
+              此 Provider 已下線或尚未支援
+            </span>
+          </div>
 
           <PodMiniScreen :output="pod.output" />
         </div>

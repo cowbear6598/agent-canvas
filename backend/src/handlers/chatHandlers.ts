@@ -8,8 +8,8 @@ import type {
 } from "../schemas";
 import { podStore } from "../services/podStore.js";
 import { messageStore } from "../services/messageStore.js";
-import { claudeService } from "../services/claude/claudeService.js";
 import { emitError, emitSuccess } from "../utils/websocketResponse.js";
+import { abortRegistry } from "../services/provider/abortRegistry.js";
 import { createI18nError } from "../utils/i18nError.js";
 import {
   onChatComplete,
@@ -21,7 +21,7 @@ import { executeStreamingChat } from "../services/claude/streamingChatExecutor.j
 import { injectUserMessage } from "../utils/chatHelpers.js";
 import { launchMultiInstanceRun } from "../utils/runChatHelpers.js";
 import { NormalModeExecutionStrategy } from "../services/normalExecutionStrategy.js";
-import { getCapabilities } from "../services/provider/index.js";
+import { getProvider } from "../services/provider/index.js";
 
 function validateIntegrationBindings(
   connectionId: string,
@@ -82,7 +82,10 @@ export const handleChatSend = withCanvasId<ChatSendPayload>(
     if (!validateIntegrationBindings(connectionId, pod, requestId)) return;
 
     // Capability 守門：Codex Pod 不支援 Run 模式
-    if (pod.multiInstance === true && !getCapabilities(pod.provider).runMode) {
+    if (
+      pod.multiInstance === true &&
+      !getProvider(pod.provider).metadata.capabilities.runMode
+    ) {
       emitError(
         connectionId,
         WebSocketResponseEvents.POD_ERROR,
@@ -157,7 +160,7 @@ export const handleChatAbort = withCanvasId<ChatAbortPayload>(
       return;
     }
 
-    const aborted = claudeService.abortQuery(podId);
+    const aborted = abortRegistry.abort(podId);
     if (!aborted) {
       // abort 失敗但 pod 狀態是 chatting，重設為 idle 避免卡死
       podStore.setStatus(canvasId, podId, "idle");
