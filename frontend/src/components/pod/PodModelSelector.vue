@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, onUnmounted } from "vue";
 import type { PodProvider } from "@/types/pod";
 
 const props = defineProps<{
@@ -19,36 +19,83 @@ const SELECT_FEEDBACK_DELAY_MS = 400;
 const isHovered = ref(false);
 const isAnimating = ref(false);
 const isCollapsing = ref(false);
-const hoverTimeoutId = ref<number | null>(null);
+const hoverTimeoutId = ref<ReturnType<typeof setTimeout> | null>(null);
+const pendingTimers = ref<Set<ReturnType<typeof setTimeout>>>(new Set());
 
-/** Codex 可選模型清單：label 為顯示名稱（大寫），value 為實際傳給後端的小寫字串 */
-const CODEX_OPTIONS = [
+/** 追蹤 timer 並回傳 Promise，元件 unmount 後若 await 回來可檢查 isUnmounted */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const id = setTimeout(() => {
+      pendingTimers.value.delete(id);
+      resolve();
+    }, ms);
+    pendingTimers.value.add(id);
+  });
+}
+
+/** 元件 unmount 後設為 true，供 async 函式提前退出 */
+let isUnmounted = false;
+
+onUnmounted(() => {
+  isUnmounted = true;
+  // 清掉 hover debounce timer
+  if (hoverTimeoutId.value !== null) {
+    clearTimeout(hoverTimeoutId.value);
+    hoverTimeoutId.value = null;
+  }
+  // 清掉所有 pending select/collapse timer
+  pendingTimers.value.forEach(clearTimeout);
+  pendingTimers.value.clear();
+});
+
+/** 可選模型選項的共用型別 */
+interface ModelOption {
+  label: string;
+  value: string;
+}
+
+/** Codex 可選模型清單：label 為顯示名稱，value 為實際傳給後端的小寫字串 */
+const CODEX_OPTIONS: ReadonlyArray<ModelOption> = [
   { label: "GPT-5.4", value: "gpt-5.4" },
   { label: "GPT-5.5", value: "gpt-5.5" },
   { label: "GPT-5.4-mini", value: "gpt-5.4-mini" },
-] as const;
+];
 
-/** 依 provider 動態決定可選模型清單 */
-const allOptions = computed(() => {
+/** Claude 可選模型清單 */
+const CLAUDE_OPTIONS: ReadonlyArray<ModelOption> = [
+  { label: "Opus", value: "opus" },
+  { label: "Sonnet", value: "sonnet" },
+  { label: "Haiku", value: "haiku" },
+];
+
+/**
+ * 依 provider 動態決定可選模型清單。
+ * TODO: 後端新增 Provider.metadata.availableModels 欄位後，改為動態從 providerCapabilityStore 拉取，
+ * 取代本檔案的 CLAUDE_OPTIONS / CODEX_OPTIONS 硬編碼。
+ */
+const allOptions = computed((): ModelOption[] => {
   if (props.provider === "codex") {
     return [...CODEX_OPTIONS];
   }
   // claude（預設）
-  // TODO: 待後端 metadata 擴充 availableModels 後，改為從 store 動態拿可切換 model 清單
-  return [
-    { label: "Opus", value: "opus" },
-    { label: "Sonnet", value: "sonnet" },
-    { label: "Haiku", value: "haiku" },
-  ];
+  return [...CLAUDE_OPTIONS];
 });
 
 /** Codex 只有單一選項，不需展開 */
 const isSingleOption = computed(() => allOptions.value.length === 1);
 
-const sortedOptions = computed(() => {
-  const active = allOptions.value.find((o) => o.value === props.currentModel);
-  const others = allOptions.value.filter((o) => o.value !== props.currentModel);
-  return active ? [active, ...others] : allOptions.value;
+/** 單次迴圈同時收集 active 與 others，避免兩次掃描 */
+const sortedOptions = computed((): ModelOption[] => {
+  const active: ModelOption[] = [];
+  const others: ModelOption[] = [];
+  for (const o of allOptions.value) {
+    if (o.value === props.currentModel) {
+      active.push(o);
+    } else {
+      others.push(o);
+    }
+  }
+  return active.length > 0 ? [...active, ...others] : allOptions.value;
 });
 
 const handleMouseEnter = (): void => {
@@ -65,44 +112,48 @@ const handleMouseEnter = (): void => {
 const handleMouseLeave = (): void => {
   if (isAnimating.value) return;
 
-  hoverTimeoutId.value = window.setTimeout(() => {
+  hoverTimeoutId.value = setTimeout(() => {
     isHovered.value = false;
     hoverTimeoutId.value = null;
   }, HOVER_DEBOUNCE_MS);
 };
 
-const selectModel = (model: string): void => {
+const selectModel = async (model: string): Promise<void> => {
   // 單一選項時點擊不做任何事
   if (isSingleOption.value) return;
   if (isAnimating.value || isCollapsing.value) return;
 
+  // 只允許清單中存在的 model
+  if (!allOptions.value.some((o) => o.value === model)) return;
+
   if (model === props.currentModel) {
+    // 點擊 active 選項：直接收合
     isCollapsing.value = true;
-    setTimeout(() => {
-      isHovered.value = false;
-      isCollapsing.value = false;
-    }, COLLAPSE_ANIMATION_MS);
+    await sleep(COLLAPSE_ANIMATION_MS);
+    if (isUnmounted) return;
+    isHovered.value = false;
+    isCollapsing.value = false;
     return;
   }
 
   isAnimating.value = true;
-
   emit("update:model", model);
 
-  setTimeout(() => {
-    isCollapsing.value = true;
+  // 視覺 feedback 後觸發收合動畫
+  await sleep(SELECT_FEEDBACK_DELAY_MS);
+  if (isUnmounted) return;
+  isCollapsing.value = true;
 
-    setTimeout(() => {
-      isHovered.value = false;
-      isCollapsing.value = false;
-      isAnimating.value = false;
-    }, COLLAPSE_ANIMATION_MS);
-  }, SELECT_FEEDBACK_DELAY_MS);
+  await sleep(COLLAPSE_ANIMATION_MS);
+  if (isUnmounted) return;
+  isHovered.value = false;
+  isCollapsing.value = false;
+  isAnimating.value = false;
 };
 </script>
 
 <template>
-  <!-- 上方中央定位錨點；Phase 2 B 會對齊 CSS -->
+  <!-- 上方中央定位錨點 -->
   <div
     class="pod-model-slot"
     @mouseleave="handleMouseLeave"
@@ -111,7 +162,6 @@ const selectModel = (model: string): void => {
       model-cards-stack：垂直堆疊容器。
       flex-direction: column-reverse → sortedOptions[0]（active）視覺上固定在最底部貼近 Pod，
       非 active 選項從上方依序堆疊，hover 時展開。
-      Phase 2 B 負責定義此 class 的 CSS。
     -->
     <TransitionGroup
       name="stack-slide"
@@ -142,7 +192,7 @@ const selectModel = (model: string): void => {
 
 <style scoped>
 /*
-  Pod Model Selector — Phase 2 B 完整橫向寬版 CSS
+  Pod Model Selector CSS
   ====================================================
   .pod-model-slot     : 定位錨點，絕對定位在 Pod 上方中央
   .model-cards-stack  : 垂直堆疊容器（column-reverse；active 在底部貼 Pod）
@@ -154,11 +204,9 @@ const selectModel = (model: string): void => {
    --------------------------------
    bottom: 100% 讓整個 selector 在 Pod 上緣外。
    left: 50% + translateX(-50%) 對齊 Pod 水平中心。
-   width: fit-content 讓錨點自然跟隨 stack 內容寬度，
-   避免撐滿 50% Pod 寬造成視覺過寬。
    margin-bottom: -2px 下推 2px 讓 active card 底邊與 Pod 邊框對齊 notch
    （配合 .model-cards-stack 預設 translateY(2px)，共下推 4px，
-   剛好讓卡片底部邊框與 Pod 上邊框微微重疊產生「插槽」視覺）。
+   讓卡片底部邊框與 Pod 上邊框微微重疊產生「插槽」視覺）。
    z-index: -1 讓 selector 插入 Pod 內（被 Pod 本體遮住底部），
    只露出上方部分，產生「插進 Pod」的視覺感。
    pointer-events 由子元素 .model-cards-stack 與 .model-card 各自控制，
@@ -170,7 +218,6 @@ const selectModel = (model: string): void => {
   bottom: 100%;
   left: 50%;
   transform: translateX(-50%);
-  /* fit-content 讓錨點隨 stack 內容寬縮小，避免撐滿 50% Pod 寬 */
   width: fit-content;
   /* 下推 2px 讓底邊與 Pod 邊框對齊 notch */
   margin-bottom: -2px;
@@ -223,13 +270,7 @@ const selectModel = (model: string): void => {
   pointer-events: auto;
 }
 
-/* --------------------------------
-   model-card：橫向 tag 樣式
-   --------------------------------
-   移除所有垂直文字規則（writing-mode / text-orientation / letter-spacing hack）。
-   改為水平 tag 形式：padding 4px 10px、等寬填滿 selector。
-   對齊 .pod-slot-has-item 的實線 doodle 風格。
-*/
+/* .model-card：橫向 tag 樣式 */
 .model-card {
   /* 直接寫死 notch × 0.85，避免依賴 width: 100% 在 button 上失效
      --model-notch-width 定義於 .pod-with-notch（共同祖先，pod.css） */
@@ -255,8 +296,7 @@ const selectModel = (model: string): void => {
   transform: translateY(8px);
   transition:
     opacity 0.3s ease,
-    transform 0.3s ease,
-    box-shadow 0.15s ease;
+    transform 0.3s ease;
   white-space: nowrap;
   user-select: none;
   display: flex;

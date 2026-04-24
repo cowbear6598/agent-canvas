@@ -61,8 +61,8 @@ B. 改寫 PodModelSelector.vue CSS
     - `display: flex; flex-direction: column-reverse;`（active 顯示在最下靠近 Pod）
     - `gap: 4px`
     - `transition: transform 0.3s ease;`
-    - 預設 `transform: translateY(12px)`（輕微往下貼 Pod）
-    - `.expanded` 時 `transform: translateY(-8px)`（整個組合扶起來讓出展開空間）
+    - 預設 `transform: translateY(2px)`（輕微往下貼 Pod；實作時為對齊 notch，減少下推深度到 2px）
+    - `.expanded` 時 `transform: translateY(-12px)`（整個組合扶起來讓出展開空間；展開行程約 14px，配合預設 2px 下推）
   - [ ] 非 active 卡片可見性規則：
     - 預設 `opacity: 0; pointer-events: none; transform: translateY(8px);`（稍微往下、為展開做起點）
     - `.expanded .model-card:not(.active)` → `opacity: 1; pointer-events: auto; transform: translateY(0);`

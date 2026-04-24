@@ -1,7 +1,7 @@
 /* Pod card doodle style */
 
 /* ===========================================
-   CSS class 與後端 PodProvider 枚舉耦合說明（#18）
+   CSS class 與後端 PodProvider 枚舉耦合說明
 
    .pod-provider-claude 對應 PodProvider.Claude
    .pod-provider-codex  對應 PodProvider.Codex
@@ -18,7 +18,7 @@
 /* ===========================================
    CSS Custom Properties
 
-   --pod-provider-gradient-stop（#23, #37）
+   --pod-provider-gradient-stop（Provider 漸層終止點變數）
    - 型別：長度單位
    - 值：1rem（使用 rem 而非 px，理由如下）
      1. rem 相對於根元素 font-size（通常 16px），等價於原 16px 硬寫值
@@ -40,7 +40,7 @@
   border: 2px solid var(--doodle-ink);
   border-radius: 6px;
   box-shadow: 2px 2px 0 oklch(0.4 0.02 50 / 0.4);
-  /* #33：原 transition: all 改為僅列出實際會變動的屬性，減少 hover Paint 成本 */
+  /* 優化：列舉變動屬性，減少 Paint 成本（避免 transition: all 觸發全屬性重算） */
   transition:
     box-shadow 0.15s ease,
     transform 0.15s ease;
@@ -94,8 +94,7 @@
 }
 
 /* Model 凹槽（POD 上方中央）
-   寬度配合 .model-cards-stack max-width 140px + 左右各 8px buffer = 156px，
-   確保 notch 比 card 略寬，視覺上完整包住 selector 底邊 border。
+   寬度為 notch（110px）、與 `.model-cards-stack` 的 card 維持 85% 差距；詳見 `--model-notch-width` 定義。
    height: 8px 覆蓋 Pod 上邊 border 產生「挖槽」視覺。
    z-index: -1 確保被 Pod 本體遮住底部，只露出上方。 */
 .model-notch {
@@ -159,7 +158,7 @@
   border: 2px solid var(--doodle-ink);
   border-radius: 50%;
   cursor: default;
-  /* #33：原 transition: all 改為僅列出實際會變動的屬性（scale、box-shadow） */
+  /* 優化：列舉變動屬性（scale、box-shadow），減少 Paint 成本（避免 transition: all 觸發全屬性重算） */
   transition:
     box-shadow 0.2s ease,
     scale 0.2s ease;
@@ -224,7 +223,7 @@
   border: 2px solid var(--doodle-ink);
   border-radius: 4px;
   cursor: pointer;
-  /* #33：原 transition: all 改為僅列出實際會變動的屬性（transform、box-shadow、background-color） */
+  /* 優化：列舉變動屬性（transform、box-shadow、background-color），減少 Paint 成本（避免 transition: all 觸發全屬性重算） */
   transition:
     box-shadow 0.2s ease,
     transform 0.2s ease,
@@ -420,7 +419,7 @@
 }
 
 /* ===========================================
-   Provider Pod 漸層樣式（#18, #23, #37）
+   Provider Pod 漸層樣式
 
    套用對象：.pod-doodle 容器（Pod 本體）
    效果：頂端依 provider 顏色，在 Pod 頂端 padding 區
