@@ -17,7 +17,11 @@ import { podStore } from "../podStore.js";
 import { logger } from "../../utils/logger.js";
 import type { ExecutionStrategy } from "../executionStrategy.js";
 import { getProvider } from "../provider/index.js";
-import type { NormalizedEvent } from "../provider/types.js";
+import type {
+  AgentProvider,
+  ChatRequestContext,
+  NormalizedEvent,
+} from "../provider/types.js";
 import { runStore } from "../runStore.js";
 import { isPathWithinDirectory } from "../../utils/pathValidator.js";
 import { config } from "../../config/index.js";
@@ -56,16 +60,45 @@ interface MutableStreamState {
   subMessages: PersistedSubMessage[];
 }
 
+/** 判斷串流狀態中是否已累積任何 assistant 內容（文字或 tool use 子訊息） */
+function hasAssistantContent(state: MutableStreamState): boolean {
+  return state.accumulatedContent.length > 0 || state.subMessages.length > 0;
+}
+
+/** 串流期間 throttle 節流的時間窗口（毫秒）：200ms 上限延遲對 UX 可接受 */
+const THROTTLE_MS = 200;
+
 interface StreamContext {
   canvasId: string;
   podId: string;
+  /** Pod 顯示名稱，setupStreamContext 先以 podId 填入，executeStreamingChat 取得 pod 後覆寫為 pod.name */
+  podName: string;
   messageId: string;
   streamState: MutableStreamState;
   subMessageState: ReturnType<typeof createSubMessageState>;
   flushCurrentSubMessage: () => void;
+  /** 直接寫入 DB（僅供 finalize / abort 呼叫，確保最終落盤） */
   persistStreamingMessage: () => void;
+  /** 串流中節流版本的 persistStreamingMessage，避免 DB write lock 競爭 */
+  persistThrottled: () => void;
+  /** 節流 timer handle，供 finalize / abort 清除待排程的舊 timer */
+  pendingTimer: ReturnType<typeof setTimeout> | null;
+  /** 上次實際寫入 DB 的時間戳（ms），初始值 0 */
+  lastPersistAt: number;
   emitStrategy: ReturnType<ExecutionStrategy["createEmitStrategy"]>;
   strategy: ExecutionStrategy;
+  /**
+   * 串流事件回呼，供 handleErrorEvent 在記錄 log 後推送通用警告文字給前端。
+   * 由 createStreamingCallback 建立後回寫至此欄位（因 callback 依賴 context，
+   * 需在 context 建立後才能設定，初始值以 no-op 佔位）。
+   */
+  streamingCallback: (event: StreamEvent) => void;
+  /**
+   * 串流期間捕捉到的 session ID（session_started 事件寫入）。
+   * 由 processNormalizedEvent 在收到 session_started 時寫入，
+   * 供 finalizeAfterStream 持久化 session。
+   */
+  capturedSessionId: string | undefined;
 }
 
 type TextStreamEvent = Extract<StreamEvent, { type: "text" }>;
@@ -81,7 +114,7 @@ function handleTextEvent(event: TextStreamEvent, context: StreamContext): void {
     messageId,
     streamState,
     subMessageState,
-    persistStreamingMessage,
+    persistThrottled,
     emitStrategy,
   } = context;
 
@@ -98,7 +131,7 @@ function handleTextEvent(event: TextStreamEvent, context: StreamContext): void {
     content: streamState.accumulatedContent,
   });
 
-  persistStreamingMessage();
+  persistThrottled();
 }
 
 function handleToolUseEvent(
@@ -111,7 +144,7 @@ function handleToolUseEvent(
     messageId,
     subMessageState,
     flushCurrentSubMessage,
-    persistStreamingMessage,
+    persistThrottled,
     emitStrategy,
   } = context;
 
@@ -132,7 +165,7 @@ function handleToolUseEvent(
     input: event.input,
   });
 
-  persistStreamingMessage();
+  persistThrottled();
 }
 
 function handleToolResultEvent(
@@ -144,7 +177,7 @@ function handleToolResultEvent(
     podId,
     messageId,
     subMessageState,
-    persistStreamingMessage,
+    persistThrottled,
     emitStrategy,
   } = context;
 
@@ -159,9 +192,10 @@ function handleToolResultEvent(
     output: event.output,
   });
 
-  persistStreamingMessage();
+  persistThrottled();
 }
 
+// `_event` 參數未使用，遵守 no-unused-vars 規則保留 `_` 前綴
 function handleCompleteEvent(
   _event: CompleteStreamEvent,
   context: StreamContext,
@@ -186,15 +220,27 @@ function handleCompleteEvent(
 }
 
 function handleErrorEvent(
-  _event: ErrorStreamEvent,
+  event: ErrorStreamEvent,
   context: StreamContext,
 ): void {
-  const { canvasId, podId } = context;
+  const { canvasId, podId, streamingCallback } = context;
+
+  // 原始錯誤訊息記入 server log，不暴露給前端
   logger.error(
     "Chat",
     "Error",
-    `Pod ${podStore.getById(canvasId, podId)?.name ?? podId} streaming 過程發生錯誤`,
+    `Provider 串流錯誤（podId=${podId}, canvasId=${canvasId}, fatal=${event.fatal}）：${event.error}`,
   );
+
+  // 前端僅收到通用警告，不含原始訊息
+  const genericMessage = event.fatal
+    ? "\n\n⚠️ 發生嚴重錯誤，對話已中斷"
+    : "\n\n⚠️ 發生錯誤，請稍後再試";
+  streamingCallback({ type: "text", content: genericMessage });
+
+  if (event.fatal) {
+    throw new Error("串流處理發生嚴重錯誤");
+  }
 }
 
 type StreamEventHandlerMap = {
@@ -215,13 +261,16 @@ const streamEventHandlers: StreamEventHandlerMap = {
 function createStreamingCallback(
   context: StreamContext,
 ): (event: StreamEvent) => void {
-  return (event: StreamEvent) => {
+  const callback = (event: StreamEvent): void => {
     const handler = streamEventHandlers[event.type] as (
       event: StreamEvent,
       context: StreamContext,
     ) => void;
     handler(event, context);
   };
+  // 回寫至 context，供 handleErrorEvent 推送通用警告文字給前端
+  context.streamingCallback = callback;
+  return callback;
 }
 
 async function handleStreamAbort(
@@ -238,12 +287,16 @@ async function handleStreamAbort(
     strategy,
   } = context;
 
+  // 清除節流 timer，避免最終 persist 後又被舊 timer 覆寫
+  if (context.pendingTimer !== null) {
+    clearTimeout(context.pendingTimer);
+    context.pendingTimer = null;
+  }
+
   flushCurrentSubMessage();
 
-  const hasAssistantContent =
-    streamState.accumulatedContent.length > 0 ||
-    streamState.subMessages.length > 0;
-  if (hasAssistantContent) {
+  if (hasAssistantContent(streamState)) {
+    // abort 路徑直接呼叫 persistStreamingMessage（非節流版），確保最終狀態落盤
     persistStreamingMessage();
   }
 
@@ -256,7 +309,7 @@ async function handleStreamAbort(
   return {
     messageId,
     content: streamState.accumulatedContent,
-    hasContent: hasAssistantContent,
+    hasContent: hasAssistantContent(streamState),
     aborted: true,
   };
 }
@@ -304,17 +357,69 @@ function setupStreamContext(
 
   const emitStrategy = strategy.createEmitStrategy();
 
-  return {
+  // 節流狀態（封閉於 context，避免跨串流共享）
+  const throttleState = {
+    lastPersistAt: 0,
+    pendingTimer: null as ReturnType<typeof setTimeout> | null,
+  };
+
+  /**
+   * 節流版 persistStreamingMessage：
+   * - 距上次寫入 >= THROTTLE_MS 時立即寫入
+   * - 否則排程 setTimeout 到下個窗口開頭寫入最後一次 payload
+   * - 同一窗口內多次呼叫只排一個 timer，並使用最新 payload（閉包自動取最新 streamState）
+   */
+  const persistThrottled = (): void => {
+    const now = Date.now();
+    if (now - throttleState.lastPersistAt >= THROTTLE_MS) {
+      // 窗口已過，立即寫入並更新時間戳
+      throttleState.lastPersistAt = now;
+      persistStreamingMessage();
+    } else if (throttleState.pendingTimer === null) {
+      // 窗口內尚無待排程 timer，新增一個；不重複排程
+      const delay = THROTTLE_MS - (now - throttleState.lastPersistAt);
+      throttleState.pendingTimer = setTimeout(() => {
+        throttleState.pendingTimer = null;
+        throttleState.lastPersistAt = Date.now();
+        persistStreamingMessage();
+      }, delay);
+    }
+    // 已有 pending timer：payload 由閉包保持最新，不需重排
+  };
+
+  // 將 throttleState 的可變欄位映射到 context（讓 abort / finalize 能清除 timer）
+  const context: StreamContext = {
     canvasId,
     podId,
+    // pod.name 尚未取得，先以 podId 填入；executeStreamingChat 取得 pod 後會覆寫
+    podName: podId,
     messageId,
     streamState,
     subMessageState,
     flushCurrentSubMessage,
     persistStreamingMessage,
+    persistThrottled,
+    get pendingTimer() {
+      return throttleState.pendingTimer;
+    },
+    set pendingTimer(v) {
+      throttleState.pendingTimer = v;
+    },
+    get lastPersistAt() {
+      return throttleState.lastPersistAt;
+    },
+    set lastPersistAt(v) {
+      throttleState.lastPersistAt = v;
+    },
     emitStrategy,
     strategy,
+    // createStreamingCallback 建立後會回寫此欄位；初始值以 no-op 佔位，避免型別錯誤
+    streamingCallback: () => undefined,
+    // session_started 事件由 processNormalizedEvent 寫入；初始值 undefined
+    capturedSessionId: undefined,
   };
+
+  return context;
 }
 
 async function finalizeAfterStream(
@@ -323,10 +428,14 @@ async function finalizeAfterStream(
 ): Promise<void> {
   const { streamState, persistStreamingMessage, podId, strategy } = context;
 
-  const hasAssistantContent =
-    streamState.accumulatedContent.length > 0 ||
-    streamState.subMessages.length > 0;
-  if (hasAssistantContent) {
+  // 清除節流 timer，避免最終 persist 後又被舊 timer 覆寫
+  if (context.pendingTimer !== null) {
+    clearTimeout(context.pendingTimer);
+    context.pendingTimer = null;
+  }
+
+  if (hasAssistantContent(streamState)) {
+    // finalize 路徑直接呼叫 persistStreamingMessage（非節流版），確保最終狀態落盤
     persistStreamingMessage();
   }
 
@@ -377,7 +486,7 @@ function normalizedEventToStreamEvent(ev: NormalizedEvent): StreamEvent | null {
     case "turn_complete":
       return { type: "complete" };
     case "error":
-      return { type: "error", error: ev.message };
+      return { type: "error", error: ev.message, fatal: ev.fatal };
     case "session_started":
       // 由呼叫端自行暫存，不直接轉成 StreamEvent
       return null;
@@ -385,13 +494,41 @@ function normalizedEventToStreamEvent(ev: NormalizedEvent): StreamEvent | null {
 }
 
 /**
+ * 處理單一正規化串流事件：
+ *   - session_started → 寫入 streamContext.capturedSessionId，供 finalizeAfterStream 持久化
+ *   - 其餘事件 → 轉換為 StreamEvent 後交由 streamingCallback 分派給對應 handler
+ *
+ * 此函式為 module-scope 純函式（無 side effect 以外的回傳值），
+ * 由 executeStreamingChat 的 for-await 迴圈逐事件呼叫。
+ */
+function processNormalizedEvent(
+  ev: NormalizedEvent,
+  streamContext: StreamContext,
+  streamingCallback: (event: StreamEvent) => void,
+): void {
+  if (ev.type === "session_started") {
+    streamContext.capturedSessionId = ev.sessionId;
+    return;
+  }
+
+  const streamEvent = normalizedEventToStreamEvent(ev);
+  if (streamEvent === null) return;
+
+  streamingCallback(streamEvent);
+}
+
+/**
  * 解析查詢的工作目錄（workspacePath）。
  *
- * Phase 4 暫時 inline 實作（Phase 5 會抽到 backend/src/services/runtime/workspacePath.ts）：
+ * TODO: 考慮抽成獨立模組（backend/src/services/workspace/workspacePath.ts）
+ *       目前因尚未決定拆分時機而保留 inline。
+ *       再次 refactor 時重新評估是否值得獨立封裝。
+ *
+ * 邏輯：
  *   - Run mode 且 instance 有 worktreePath → 使用 worktreePath
  *   - 否則 → 使用 pod.workspacePath
  *
- * 路徑安全性驗證：worktreePath 必須在 config.repositoriesRoot 內。
+ * 路徑安全性驗證：worktreePath 與 pod.workspacePath 均必須在 config.repositoriesRoot 內。
  */
 function resolveWorkspacePath(
   pod: import("../../types/pod.js").Pod,
@@ -406,14 +543,73 @@ function resolveWorkspacePath(
         logger.error(
           "Chat",
           "Check",
-          `[executeStreamingChat] worktreePath 不在合法範圍內：${instance.worktreePath}`,
+          `[resolveWorkspacePath] 工作目錄安全驗證失敗：worktreePath="${instance.worktreePath}" 不在允許範圍 repositoriesRoot="${config.repositoriesRoot}" 內（podId=${pod.id}, runId=${runContext.runId}）`,
         );
-        throw new Error("Run Instance 的工作目錄路徑不合法");
+        throw new Error("工作目錄驗證失敗");
       }
       return instance.worktreePath;
     }
   }
+
+  // 驗證 pod.workspacePath 必須在 appDataRoot 內，防止 Path Traversal
+  // 注意：Pod 一般工作區在 canvasRoot（canvasRoot 是 appDataRoot 的子目錄），
+  // Run mode worktree 則在 repositoriesRoot，兩者皆在 appDataRoot 之下。
+  if (!isPathWithinDirectory(pod.workspacePath, config.appDataRoot)) {
+    logger.error("Chat", "Check", "Pod workspacePath 不在 appDataRoot 內", {
+      podId: pod.id,
+      workspacePath: pod.workspacePath,
+      appDataRoot: config.appDataRoot,
+    });
+    throw new Error("工作目錄驗證失敗");
+  }
+
   return pod.workspacePath;
+}
+
+/**
+ * 執行 provider 串流的核心迴圈，並封裝 abort 生命週期管理。
+ *
+ * 職責：
+ *   1. 向 abortRegistry 登記 queryKey，取得 AbortController 並注入 abortSignal 至 ctx
+ *   2. for-await 消費 provider.chat(ctx) 的事件，逐一交由 processNormalizedEvent 處理
+ *   3. 無論正常或異常結束，finally 保證從 registry 登出（防 Memory Leak）
+ *   4. 回傳 { aborted } 表達 abort 是否發生
+ *
+ * 收斂 abort 判斷說明：
+ *   部分 Provider（例如 Codex）的 abort 實作是 proc.kill()，
+ *   for-await 以 break 結束而非拋出 AbortError。
+ *   若不在此檢查 signal.aborted，呼叫端會誤判為「正常完成」，
+ *   走進 finalizeAfterStream 把半成品 sessionId 寫入 DB，導致下次 resume 失敗。
+ */
+async function runProviderStream(
+  provider: AgentProvider,
+  ctxWithoutSignal: Omit<ChatRequestContext, "abortSignal">,
+  queryKey: string,
+  abortable: boolean,
+  streamContext: StreamContext,
+  streamingCallback: (event: StreamEvent) => void,
+): Promise<{ aborted: boolean }> {
+  // abortRegistry 建立 controller，供外部 abort 呼叫（透過 registry 觸發 signal）
+  const abortController = abortRegistry.register(queryKey);
+  const ctx: ChatRequestContext = {
+    ...ctxWithoutSignal,
+    abortSignal: abortController.signal,
+  };
+
+  try {
+    // 消費 provider.chat(ctx) 的 NormalizedEvent 串流（Claude 與 Codex 共用）
+    for await (const ev of provider.chat(ctx)) {
+      processNormalizedEvent(ev, streamContext, streamingCallback);
+    }
+  } finally {
+    // 無論串流正常或異常結束，都清理 abortRegistry entry 防 Memory Leak
+    abortRegistry.unregister(queryKey);
+  }
+
+  if (abortController.signal.aborted && abortable) {
+    return { aborted: true };
+  }
+  return { aborted: false };
 }
 
 /**
@@ -438,10 +634,18 @@ export async function executeStreamingChat(
   // 查詢 Pod 與 Provider
   const podResult = podStore.getByIdGlobal(podId);
   if (!podResult) {
-    throw new Error(`找不到 Pod ${podId}`);
+    // 不將 podId 暴露給 client，改記入 server log 供除錯追查
+    logger.error(
+      "Chat",
+      "Check",
+      `[executeStreamingChat] 找不到 Pod（podId=${podId}, canvasId=${options.canvasId}）`,
+    );
+    throw new Error("找不到 Pod");
   }
 
   const { pod } = podResult;
+  // 取得 pod.name 後立即寫入 streamContext，讓後續 handler（例如 handleErrorEvent）直接從 context 讀取
+  streamContext.podName = pod.name;
   const providerName = pod.provider ?? "claude";
   const provider = getProvider(providerName);
 
@@ -453,84 +657,46 @@ export async function executeStreamingChat(
   strategy.onStreamStart(podId);
 
   try {
-    // abortRegistry 建立 controller，供外部 abort 呼叫（透過 registry 觸發 signal）
-    const abortController = abortRegistry.register(queryKey);
-
     // 解析工作目錄
     const workspacePath = resolveWorkspacePath(pod, runContext);
 
     // 建構 Provider 執行時選項
     const providerOptions = await provider.buildOptions(pod, runContext);
 
-    // 組裝 ChatRequestContext
-    const ctx = {
+    // 組裝 ChatRequestContext（不含 abortSignal，由 runProviderStream 內部注入）
+    const ctxWithoutSignal: Omit<ChatRequestContext, "abortSignal"> = {
       podId,
       message,
       workspacePath,
       resumeSessionId: sessionId ?? null,
-      abortSignal: abortController.signal,
       runContext,
       options: providerOptions,
     };
 
-    let capturedSessionId: string | undefined;
+    const result = await runProviderStream(
+      provider,
+      ctxWithoutSignal,
+      queryKey,
+      abortable,
+      streamContext,
+      streamingCallback,
+    );
 
-    try {
-      // 消費 provider.chat(ctx) 的 NormalizedEvent 串流（Claude 與 Codex 共用）
-      for await (const ev of provider.chat(ctx)) {
-        // session_started：捕捉 sessionId，留到 finalizeAfterStream 使用
-        if (ev.type === "session_started") {
-          capturedSessionId = ev.sessionId;
-          continue;
-        }
-
-        const streamEvent = normalizedEventToStreamEvent(ev);
-        if (streamEvent === null) continue;
-
-        streamingCallback(streamEvent);
-
-        // error 事件：以 ⚠️ 文字通知前端
-        // fatal=true → 拋出例外終止串流；fatal=false → 僅警告，繼續消費
-        if (ev.type === "error") {
-          streamingCallback({
-            type: "text",
-            content: `\n\n⚠️ ${ev.message}`,
-          });
-          if (ev.fatal) {
-            throw new Error(ev.message);
-          }
-          // 非 fatal 錯誤：不拋出，讓串流繼續
-          continue;
-        }
-      }
-    } finally {
-      // 無論串流正常或異常結束，都清理 abortRegistry entry 防 Memory Leak
-      abortRegistry.unregister(queryKey);
-    }
-
-    // 收斂 abort 判斷：部分 Provider（例如 Codex）的 abort 實作是 proc.kill()
-    // 觸發 for-await 以 break 結束，不會拋 AbortError。
-    // 若不在此檢查 abortController.signal.aborted，就會被誤判為「正常完成」
-    // 走進 finalizeAfterStream，把半成品 sessionId 寫入 DB，導致下一次 resume 失敗。
-    if (abortController.signal.aborted && abortable) {
+    if (result.aborted) {
       return handleStreamAbort(streamContext, callbacks);
     }
 
     // 串流正常結束後收尾處理（含 session ID 持久化）
-    await finalizeAfterStream(streamContext, capturedSessionId);
+    await finalizeAfterStream(streamContext, streamContext.capturedSessionId);
 
     if (callbacks?.onComplete) {
       await callbacks.onComplete(canvasId, podId);
     }
 
-    const hasAssistantContent =
-      streamState.accumulatedContent.length > 0 ||
-      streamState.subMessages.length > 0;
-
     return {
       messageId,
       content: streamState.accumulatedContent,
-      hasContent: hasAssistantContent,
+      hasContent: hasAssistantContent(streamState),
       aborted: false,
     };
   } catch (error) {

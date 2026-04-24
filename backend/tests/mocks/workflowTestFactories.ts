@@ -1,3 +1,4 @@
+import path from "path";
 import { vi } from "vitest";
 import { workflowQueueService } from "../../src/services/workflow/index.js";
 import { workflowExecutionService } from "../../src/services/workflow/index.js";
@@ -13,6 +14,7 @@ import type {
   WorkflowRun,
   RunPodInstance,
 } from "../../src/services/runStore.js";
+import { config } from "../../src/config/index.js";
 
 // 常用測試 ID
 export const TEST_IDS = {
@@ -23,6 +25,7 @@ export const TEST_IDS = {
 } as const;
 
 // Pod Factory
+// workspacePath 必須位於 config.repositoriesRoot 之下，以通過路徑安全驗證
 export function createMockPod(overrides?: Partial<Pod>): Pod {
   return {
     id: "test-pod",
@@ -31,7 +34,7 @@ export function createMockPod(overrides?: Partial<Pod>): Pod {
     providerConfig: { model: "sonnet" },
     sessionId: null,
     repositoryId: null,
-    workspacePath: "/test/workspace",
+    workspacePath: path.join(config.repositoriesRoot, "test-workspace"),
     commandId: null,
     outputStyleId: null,
     status: "idle",

@@ -6,6 +6,7 @@
  *   - claudeService 模組已從測試移除（executor 本身不再 import claudeService）
  */
 
+import path from "path";
 import type { Mock } from "vitest";
 
 // mock getProvider：預設回傳無 chat 事件的 stub，測試中再覆寫
@@ -76,6 +77,8 @@ import { RunModeExecutionStrategy } from "../../src/services/executionStrategy.j
 import type { RunContext } from "../../src/types/run.js";
 import { getProvider } from "../../src/services/provider/index.js";
 import type { NormalizedEvent } from "../../src/services/provider/types.js";
+import { abortRegistry } from "../../src/services/provider/abortRegistry.js";
+import { config } from "../../src/config/index.js";
 
 /** 取得 mock 函式的型別化引用，避免重複的 `as Mock<any>` 轉型 */
 function asMock(fn: unknown): Mock<any> {
@@ -92,6 +95,7 @@ async function* makeEventStream(events: Array<NormalizedEvent>) {
 /**
  * 建立帶有 provider=claude 的假 podResult，供 podStore.getByIdGlobal 回傳。
  * Phase 4 起 Claude 路徑需要 podResult 非 null。
+ * workspacePath 必須位於 config.repositoriesRoot 之下，以通過路徑安全驗證。
  */
 function makeClaudePodResult() {
   return {
@@ -101,7 +105,7 @@ function makeClaudePodResult() {
       canvasId: "test-canvas",
       name: "claude-pod",
       provider: "claude" as const,
-      workspacePath: "/tmp/workspace",
+      workspacePath: path.join(config.repositoriesRoot, "test-workspace"),
       providerConfig: { model: "opus" },
       sessionId: null,
       status: "idle" as const,
@@ -117,6 +121,7 @@ function makeClaudePodResult() {
 
 /**
  * 建立帶有 provider=codex 的假 podResult，供 podStore.getByIdGlobal 回傳。
+ * workspacePath 必須位於 config.repositoriesRoot 之下，以通過路徑安全驗證。
  */
 function makeCodexPodResult() {
   return {
@@ -126,7 +131,7 @@ function makeCodexPodResult() {
       canvasId: "test-canvas",
       name: "codex-pod",
       provider: "codex" as const,
-      workspacePath: "/tmp/workspace",
+      workspacePath: path.join(config.repositoriesRoot, "test-workspace"),
       providerConfig: null,
       sessionId: null,
       status: "idle" as const,
@@ -334,7 +339,7 @@ describe("executeStreamingChat", () => {
       );
     });
 
-    it("每個 streaming event 都呼叫 persistStreamingMessage（upsert）", async () => {
+    it("串流完成後最終 persist 確保寫入（throttle 節流中間呼叫，finalize 保證最終落盤）", async () => {
       setupProviderMock([
         { type: "text", content: "Hello" },
         {
@@ -360,8 +365,18 @@ describe("executeStreamingChat", () => {
         strategy: makeStrategy(),
       });
 
-      // streaming 中 3 次（text, tool_use, tool_result）+ 完成後最終 persist 1 次
-      expect(messageStore.upsertMessage).toHaveBeenCalledTimes(4);
+      // 因 throttle 節流，中間呼叫次數不確定；但 finalize 必定呼叫一次最終 persist
+      // 驗收重點：upsertMessage 至少被呼叫一次，且最後一次帶有正確的最終狀態
+      expect(messageStore.upsertMessage).toHaveBeenCalled();
+      // upsertMessage 簽名：(canvasId, podId, message)
+      expect(messageStore.upsertMessage).toHaveBeenLastCalledWith(
+        canvasId,
+        podId,
+        expect.objectContaining({
+          role: "assistant",
+          content: "Hello",
+        }),
+      );
     });
 
     it("error event（fatal=true）拋出例外終止串流", async () => {
@@ -377,7 +392,7 @@ describe("executeStreamingChat", () => {
           abortable: false,
           strategy: makeStrategy(),
         }),
-      ).rejects.toThrow("某致命錯誤");
+      ).rejects.toThrow("串流處理發生嚴重錯誤");
     });
 
     it("error event（fatal=false）不拋出、繼續消費後續事件", async () => {
@@ -533,6 +548,67 @@ describe("executeStreamingChat", () => {
       expect(onAborted).not.toHaveBeenCalled();
     });
 
+    it("break-style abort（signal.aborted 但不拋 AbortError）正確走 handleStreamAbort 路徑", async () => {
+      // 模擬 Codex-style abort：provider 的 async generator 在收到 signal 後以 break 結束，
+      // 不拋出 AbortError，對應實作第 515-516 行的 signal.aborted 檢查分支。
+      const chatMock = vi.fn(async function* () {
+        // 先 yield 部分文字（模擬已有進度）
+        yield { type: "text" as const, content: "部分回應" };
+
+        // 以 NormalModeExecutionStrategy 的 queryKey 格式（= podId）觸發 abort，
+        // 這樣 abortController.signal.aborted 在 for-await 結束後會是 true
+        abortRegistry.abort(podId);
+
+        // 直接 return（break-style），不拋 AbortError
+        return;
+      });
+      asMock(getProvider).mockReturnValue({
+        chat: chatMock,
+        cancel: vi.fn(() => false),
+        buildOptions: vi.fn().mockResolvedValue({}),
+      });
+
+      const onAborted = vi.fn(() => {});
+      const onComplete = vi.fn(() => {});
+
+      const result = await executeStreamingChat(
+        {
+          canvasId,
+          podId,
+          message,
+          abortable: true,
+          strategy: makeStrategy(),
+        },
+        {
+          onAborted,
+          onComplete,
+        },
+      );
+
+      // 應回傳 aborted=true（走 handleStreamAbort 而非正常結束）
+      expect(result.aborted).toBe(true);
+
+      // 應保留已 yield 的部分文字
+      expect(result.content).toBe("部分回應");
+
+      // podStore.setStatus 應設為 idle（onStreamAbort 觸發）
+      expect(podStore.setStatus).toHaveBeenCalledWith(canvasId, podId, "idle");
+
+      // onAborted callback 應被呼叫（帶 messageId）
+      expect(onAborted).toHaveBeenCalledWith(
+        canvasId,
+        podId,
+        expect.any(String),
+      );
+
+      // 正常完成的 onComplete 不應被呼叫
+      expect(onComplete).not.toHaveBeenCalled();
+
+      // finalizeAfterStream 不應被執行，因此 setSessionId 不應被呼叫
+      // （避免把半成品 sessionId 寫入 DB，這是此 patch 的核心目的）
+      expect(podStore.setSessionId).not.toHaveBeenCalled();
+    });
+
     it("SDK AbortError 實例也正確處理", async () => {
       const chatMock = vi.fn(async function* () {
         yield { type: "text" as const, content: "Hello" };
@@ -561,6 +637,111 @@ describe("executeStreamingChat", () => {
 
       expect(result.aborted).toBe(true);
       expect(onAborted).toHaveBeenCalled();
+    });
+  });
+
+  describe("Pod 不存在錯誤處理", () => {
+    it("podStore.getByIdGlobal 回傳 null 時，executeStreamingChat reject 並帶有通用錯誤訊息（不含 podId），且 provider.chat 未被呼叫", async () => {
+      // 局部覆寫：模擬 Pod 不存在的情境（不影響其他 test case，因 beforeEach 會重置）
+      asMock(podStore.getByIdGlobal).mockReturnValue(null);
+
+      // 獨立建立 chatMock，用以驗證 provider.chat 完全未被呼叫
+      const chatMock = vi.fn(async function* () {
+        yield { type: "text" as const, content: "不應看到此內容" };
+      });
+      asMock(getProvider).mockReturnValue({
+        chat: chatMock,
+        cancel: vi.fn(() => false),
+        buildOptions: vi.fn().mockResolvedValue({}),
+      });
+
+      // 應以 rejection 結束，且錯誤訊息包含「找不到 Pod」（不含 podId，避免洩漏給 client）
+      await expect(
+        executeStreamingChat({
+          canvasId,
+          podId,
+          message,
+          abortable: false,
+          strategy: makeStrategy(),
+        }),
+      ).rejects.toThrow(/找不到 Pod/);
+
+      // provider.chat 在 Pod 查找失敗後不應被呼叫
+      expect(chatMock).not.toHaveBeenCalled();
+    });
+
+    it("podStore.getByIdGlobal 回傳 undefined 時，同樣 reject 並帶有通用錯誤訊息（不含 podId）", async () => {
+      // 局部覆寫：mock 回傳 undefined（與 null 分別測試，確保兩種 falsy 值都被防護）
+      asMock(podStore.getByIdGlobal).mockReturnValue(undefined);
+
+      const chatMock = vi.fn(async function* () {
+        yield { type: "text" as const, content: "不應看到此內容" };
+      });
+      asMock(getProvider).mockReturnValue({
+        chat: chatMock,
+        cancel: vi.fn(() => false),
+        buildOptions: vi.fn().mockResolvedValue({}),
+      });
+
+      await expect(
+        executeStreamingChat({
+          canvasId,
+          podId,
+          message,
+          abortable: false,
+          strategy: makeStrategy(),
+        }),
+      ).rejects.toThrow(/找不到 Pod/);
+
+      expect(chatMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("pod.workspacePath 路徑安全驗證", () => {
+    it("pod.workspacePath 不在 repositoriesRoot 內時，拋出「工作目錄驗證失敗」且 provider.chat 未被呼叫", async () => {
+      // 設定帶有非法 workspacePath 的 pod（不在 repositoriesRoot 下）
+      asMock(podStore.getByIdGlobal).mockReturnValue({
+        canvasId: "test-canvas",
+        pod: {
+          id: "test-pod",
+          canvasId: "test-canvas",
+          name: "claude-pod",
+          provider: "claude" as const,
+          workspacePath: "/tmp/evil-workspace",
+          providerConfig: { model: "opus" },
+          sessionId: null,
+          status: "idle" as const,
+          outputStyleId: null,
+          mcpServerIds: [],
+          pluginIds: [],
+          integrationBindings: [],
+          commandId: null,
+          repositoryId: null,
+        },
+      });
+
+      const chatMock = vi.fn(async function* () {
+        yield { type: "text" as const, content: "不應看到此內容" };
+      });
+      asMock(getProvider).mockReturnValue({
+        chat: chatMock,
+        cancel: vi.fn(() => false),
+        buildOptions: vi.fn().mockResolvedValue({}),
+      });
+
+      // 驗證應在 provider.chat 執行前就擋下，拋出通用錯誤訊息
+      await expect(
+        executeStreamingChat({
+          canvasId,
+          podId,
+          message,
+          abortable: false,
+          strategy: makeStrategy(),
+        }),
+      ).rejects.toThrow("工作目錄驗證失敗");
+
+      // provider.chat 不應被呼叫
+      expect(chatMock).not.toHaveBeenCalled();
     });
   });
 
@@ -692,7 +873,7 @@ describe("executeStreamingChat", () => {
           abortable: false,
           strategy: makeStrategy(),
         }),
-      ).rejects.toThrow("某致命錯誤");
+      ).rejects.toThrow("串流處理發生嚴重錯誤");
 
       // streamingCallback 應收到含 ⚠️ 的 text 廣播
       const textPayloads = collectedPayloads.filter(
@@ -1012,6 +1193,90 @@ describe("executeStreamingChat", () => {
 
       // 不應寫入 messageStore
       expect(messageStore.upsertMessage).not.toHaveBeenCalled();
+    });
+
+    it("resolveWorkspacePath：runContext 存在且 instance.worktreePath 合法時，provider.chat 收到的 workspacePath 為 worktreePath 而非 pod.workspacePath", async () => {
+      // 合法路徑：位於測試用 config.repositoriesRoot（由 testConfig 覆蓋的 tmp 目錄）之下
+      const validWorktreePath = path.join(
+        config.repositoriesRoot,
+        "some-repo",
+        "worktree-branch",
+      );
+
+      // mock runStore.getPodInstance 回傳帶有合法 worktreePath 的 instance
+      asMock(runStore.getPodInstance).mockReturnValue({
+        worktreePath: validWorktreePath,
+      });
+
+      // 捕捉 provider.chat 收到的 ctx 參數
+      const capturedCtxList: unknown[] = [];
+      const chatMock = vi.fn(async function* (ctx: unknown) {
+        capturedCtxList.push(ctx);
+        yield { type: "text" as const, content: "worktree 回應" };
+        yield { type: "turn_complete" as const };
+      });
+      asMock(getProvider).mockReturnValue({
+        chat: chatMock,
+        cancel: vi.fn(() => false),
+        buildOptions: vi.fn().mockResolvedValue({}),
+      });
+
+      await executeStreamingChat({
+        canvasId,
+        podId,
+        message,
+        abortable: false,
+        strategy: makeRunStrategy(),
+      });
+
+      // provider.chat 應被呼叫一次
+      expect(chatMock).toHaveBeenCalledTimes(1);
+
+      // ctx.workspacePath 應為 worktreePath，而非 pod.workspacePath
+      expect(chatMock).toHaveBeenCalledWith(
+        expect.objectContaining({ workspacePath: validWorktreePath }),
+      );
+
+      // 確認確實不是 pod.workspacePath（位於 repositoriesRoot/test-workspace）
+      expect(capturedCtxList[0]).not.toMatchObject({
+        workspacePath: path.join(config.repositoriesRoot, "test-workspace"),
+      });
+
+      // 不應拋出「Run Instance 的工作目錄路徑不合法」錯誤（隱含在 await 成功完成）
+    });
+
+    it("resolveWorkspacePath：worktreePath 不在 repositoriesRoot 內時，拋出「工作目錄驗證失敗」並且 provider.chat 未被呼叫", async () => {
+      // 非法路徑：/tmp/evil-path 不在 config.repositoriesRoot（~/Documents/ClaudeCanvas/repositories）之下
+      const illegalWorktreePath = "/tmp/evil-path";
+
+      // mock runStore.getPodInstance 回傳帶有非法 worktreePath 的 instance
+      asMock(runStore.getPodInstance).mockReturnValue({
+        worktreePath: illegalWorktreePath,
+      });
+
+      // 建立 chatMock 並注入 provider，用來驗證安全驗證是否在 provider 執行前就擋下
+      const chatMock = vi.fn(async function* () {
+        yield { type: "text" as const, content: "不應該看到這個" };
+      });
+      asMock(getProvider).mockReturnValue({
+        chat: chatMock,
+        cancel: vi.fn(() => false),
+        buildOptions: vi.fn().mockResolvedValue({}),
+      });
+
+      // 應拋出安全驗證錯誤
+      await expect(
+        executeStreamingChat({
+          canvasId,
+          podId,
+          message,
+          abortable: false,
+          strategy: makeRunStrategy(),
+        }),
+      ).rejects.toThrow("工作目錄驗證失敗");
+
+      // 安全驗證應在 provider.chat 執行前就擋下，不能讓攻擊者繞過驗證
+      expect(chatMock).not.toHaveBeenCalled();
     });
   });
 });
