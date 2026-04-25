@@ -1,7 +1,6 @@
 import { WebSocketResponseEvents } from "@/services/websocket";
 import { usePodStore } from "@/stores/pod/podStore";
 import { useConnectionStore } from "@/stores/connectionStore";
-import { useOutputStyleStore } from "@/stores/note/outputStyleStore";
 import { useSkillStore } from "@/stores/note/skillStore";
 import { useRepositoryStore } from "@/stores/note/repositoryStore";
 import { useSubAgentStore } from "@/stores/note/subAgentStore";
@@ -10,7 +9,6 @@ import { useMcpServerStore } from "@/stores/note/mcpServerStore";
 import { useCanvasStore } from "@/stores/canvasStore";
 import type {
   Pod,
-  OutputStyleNote,
   SkillNote,
   RepositoryNote,
   SubAgentNote,
@@ -56,7 +54,10 @@ const handleCanvasRenamed = createUnifiedHandler<
   (payload) => {
     useCanvasStore().renameCanvasFromEvent(payload.canvasId, payload.newName);
   },
-  { toastMessage: () => t("composable.eventHandler.canvasRenamed"), skipCanvasCheck: true },
+  {
+    toastMessage: () => t("composable.eventHandler.canvasRenamed"),
+    skipCanvasCheck: true,
+  },
 );
 
 const handleCanvasDeleted = createUnifiedHandler<
@@ -81,7 +82,6 @@ const handleCanvasPasted = createUnifiedHandler<
   BasePayload & {
     canvasId: string;
     createdPods?: Pod[];
-    createdOutputStyleNotes?: OutputStyleNote[];
     createdSkillNotes?: SkillNote[];
     createdRepositoryNotes?: RepositoryNote[];
     createdSubAgentNotes?: SubAgentNote[];
@@ -93,7 +93,6 @@ const handleCanvasPasted = createUnifiedHandler<
   (payload) => {
     const podStore = usePodStore();
     const connectionStore = useConnectionStore();
-    const outputStyleStore = useOutputStyleStore();
     const skillStore = useSkillStore();
     const repositoryStore = useRepositoryStore();
     const subAgentStore = useSubAgentStore();
@@ -102,9 +101,6 @@ const handleCanvasPasted = createUnifiedHandler<
 
     addCreatedItems(payload.createdPods, (pod) =>
       podStore.addPodFromEvent(pod),
-    );
-    addCreatedItems(payload.createdOutputStyleNotes, (note) =>
-      outputStyleStore.addNoteFromEvent(note),
     );
     addCreatedItems(payload.createdSkillNotes, (note) =>
       skillStore.addNoteFromEvent(note),

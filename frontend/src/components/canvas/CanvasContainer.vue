@@ -44,7 +44,6 @@ const {
   podStore,
   viewportStore,
   selectionStore,
-  outputStyleStore,
   skillStore,
   subAgentStore,
   repositoryStore,
@@ -83,7 +82,7 @@ const {
   handleOpenEditModal,
   handleCreateEditSubmit,
 } = useEditModal(
-  { outputStyleStore, subAgentStore, commandStore, viewportStore },
+  { subAgentStore, commandStore, viewportStore },
   lastMenuPosition,
 );
 
@@ -101,7 +100,6 @@ const {
   handleOpenDeleteGroupModal,
   handleConfirmDelete: handleDeleteConfirm,
 } = useDeleteResource({
-  outputStyleStore,
   skillStore,
   subAgentStore,
   repositoryStore,
@@ -129,7 +127,6 @@ const {
   showTrashZone,
   isTrashHighlighted,
   isCanvasEmpty,
-  handleCreateOutputStyleNote,
   handleCreateSkillNote,
   handleCreateSubAgentNote,
   handleCreateRepositoryNote,
@@ -140,7 +137,6 @@ const {
 } = useCanvasNoteHandlers({
   podStore,
   viewportStore,
-  outputStyleStore,
   skillStore,
   subAgentStore,
   repositoryStore,
@@ -173,7 +169,6 @@ const handleCanvasClick = (e: MouseEvent): void => {
   const ignoredSelectors = [
     ".connection-line",
     ".pod-doodle",
-    ".output-style-note",
     ".skill-note",
     ".subagent-note",
     ".repository-note",
@@ -311,17 +306,10 @@ const handleOpenMcpServerModal = withMenuPosition(openMcpServerModal);
 
 /** 處理 PodTypeMenu 的統一 create-note 事件，依 type 分派至對應的 note 建立函式 */
 const handleCreateNote = (payload: {
-  type:
-    | "outputStyle"
-    | "skill"
-    | "subAgent"
-    | "repository"
-    | "command"
-    | "mcpServer";
+  type: "skill" | "subAgent" | "repository" | "command" | "mcpServer";
   id: string;
 }): void => {
   const handlerMap = {
-    outputStyle: handleCreateOutputStyleNote,
     skill: handleCreateSkillNote,
     subAgent: handleCreateSubAgentNote,
     repository: handleCreateRepositoryNote,
@@ -367,17 +355,6 @@ const handleOpenModal = (payload: {
       @drag-end="handleDragEnd"
       @drag-complete="handlePodDragComplete"
       @contextmenu="handlePodContextMenu"
-    />
-
-    <GenericNote
-      v-for="note in outputStyleStore.getUnboundNotes"
-      :key="note.id"
-      :note="note"
-      note-type="outputStyle"
-      @drag-end="noteHandlerMap.outputStyle.handleDragEnd"
-      @drag-move="noteHandlerMap.outputStyle.handleDragMove"
-      @drag-complete="noteHandlerMap.outputStyle.handleDragComplete"
-      @dblclick="handleNoteDoubleClick"
     />
 
     <GenericNote
@@ -510,7 +487,7 @@ const handleOpenModal = (payload: {
     v-model:open="showDeleteModal"
     :item-name="deleteTarget?.name ?? ''"
     :is-in-use="isDeleteTargetInUse"
-    :item-type="deleteTarget?.type ?? 'outputStyle'"
+    :item-type="deleteTarget?.type ?? 'skill'"
     @confirm="handleDeleteConfirm"
   />
 

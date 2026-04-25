@@ -32,7 +32,6 @@ interface Config {
   githubToken?: string;
   gitlabToken?: string;
   gitlabUrl?: string;
-  outputStylesPath: string;
   skillsPath: string;
   agentsPath: string;
   commandsPath: string;
@@ -94,7 +93,6 @@ function loadConfig(): Config {
   const appDataRoot = dataRoot;
   const canvasRoot = path.join(dataRoot, "canvas");
   const repositoriesRoot = path.join(dataRoot, "repositories");
-  const outputStylesPath = path.join(dataRoot, "output-styles");
   const skillsPath = path.join(dataRoot, "skills");
   const agentsPath = path.join(dataRoot, "agents");
   const commandsPath = path.join(dataRoot, "commands");
@@ -114,7 +112,6 @@ function loadConfig(): Config {
     githubToken,
     gitlabToken,
     gitlabUrl,
-    outputStylesPath,
     skillsPath,
     agentsPath,
     commandsPath,

@@ -829,7 +829,6 @@ describe("排程觸發 multi-instance 分支", () => {
     rotation: 0,
     workspacePath: "/tmp",
     sessionId: null,
-    outputStyleId: null,
     repositoryId: null,
     commandId: null,
     multiInstance: false,

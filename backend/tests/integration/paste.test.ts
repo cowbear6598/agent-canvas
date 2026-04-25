@@ -1,7 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import { emitAndWaitResponse, setupIntegrationTest } from "../setup";
 import {
-  createOutputStyle,
   createSkillFile,
   createRepository,
   createSubAgent,
@@ -15,7 +14,6 @@ import {
   type CanvasPastePayload,
   type PastePodItem,
   type PasteConnectionItem,
-  type PasteOutputStyleNoteItem,
   type PasteSkillNoteItem,
   type PasteRepositoryNoteItem,
   type PasteSubAgentNoteItem,
@@ -37,7 +35,6 @@ describe("貼上功能", () => {
       requestId: uuidv4(),
       canvasId,
       pods: [],
-      outputStyleNotes: [],
       skillNotes: [],
       repositoryNotes: [],
       subAgentNotes: [],
@@ -91,53 +88,6 @@ describe("貼上功能", () => {
       expect(response.createdPods).toHaveLength(2);
       expect(response.createdConnections).toHaveLength(1);
       expect(Object.keys(response.podIdMapping)).toHaveLength(2);
-    });
-
-    it("成功貼上並建立綁定 Pod 的註記", async () => {
-      const client = getClient();
-      const style = await createOutputStyle(
-        client,
-        `paste-style-${uuidv4()}`,
-        "# Style",
-      );
-      const podId = uuidv4();
-
-      const pods: PastePodItem[] = [
-        { originalId: podId, name: "Note Pod", x: 0, y: 0, rotation: 0 },
-      ];
-
-      const outputStyleNotes: PasteOutputStyleNoteItem[] = [
-        {
-          outputStyleId: style.id,
-          name: "Note",
-          x: 10,
-          y: 10,
-          boundToOriginalPodId: podId,
-          originalPosition: { x: 10, y: 10 },
-        },
-      ];
-
-      const payload: CanvasPastePayload = {
-        ...(await emptyPastePayload()),
-        pods,
-        outputStyleNotes,
-      };
-
-      const response = await emitAndWaitResponse<
-        CanvasPastePayload,
-        CanvasPasteResultPayload
-      >(
-        client,
-        WebSocketRequestEvents.CANVAS_PASTE,
-        WebSocketResponseEvents.CANVAS_PASTE_RESULT,
-        payload,
-      );
-
-      expect(response.createdPods).toHaveLength(1);
-      expect(response.createdOutputStyleNotes).toHaveLength(1);
-
-      const newPodId = response.podIdMapping[podId];
-      expect(response.createdOutputStyleNotes[0].boundToPodId).toBe(newPodId);
     });
 
     it("成功貼上空內容", async () => {
@@ -924,7 +874,6 @@ describe("貼上功能", () => {
             pluginIds: ["plugin/evil"],
           },
         ],
-        outputStyleNotes: [],
         skillNotes: [],
         repositoryNotes: [],
         subAgentNotes: [],
@@ -955,7 +904,6 @@ describe("貼上功能", () => {
         pods: [
           { originalId: uuidv4(), name: "Pod 1", x: 0, y: 0, rotation: 0 },
         ],
-        outputStyleNotes: [],
         skillNotes: [],
         repositoryNotes: [],
         subAgentNotes: [],
@@ -977,7 +925,6 @@ describe("貼上功能", () => {
         pods: [
           { originalId: uuidv4(), name: "Pod 1", x: 50, y: 50, rotation: 0 },
         ],
-        outputStyleNotes: [],
         skillNotes: [],
         repositoryNotes: [],
         subAgentNotes: [],

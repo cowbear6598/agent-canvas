@@ -44,7 +44,6 @@ describe("collectCopyData", () => {
           x: 0,
           y: 0,
           rotation: 0,
-          outputStyleId: null,
           skillIds: [],
           subAgentIds: [],
           repositoryId: null,
@@ -57,7 +56,6 @@ describe("collectCopyData", () => {
       const selectedElements: SelectableElement[] = [
         { type: "pod", id: "pod-1" },
         { type: "skillNote", id: "note-1" },
-        { type: "outputStyleNote", id: "note-2" },
       ];
 
       const result = collectSelectedPods(selectedElements, pods as any);
@@ -74,7 +72,6 @@ describe("collectCopyData", () => {
           x: 100,
           y: 200,
           rotation: 0,
-          outputStyleId: null,
           skillIds: [],
           subAgentIds: [],
           repositoryId: null,
@@ -104,7 +101,6 @@ describe("collectCopyData", () => {
           x: 50,
           y: 50,
           rotation: 0,
-          outputStyleId: null,
           skillIds: [],
           subAgentIds: [],
           repositoryId: null,
@@ -133,7 +129,6 @@ describe("collectCopyData", () => {
           x: 0,
           y: 0,
           rotation: 0,
-          outputStyleId: null,
           skillIds: [],
           subAgentIds: [],
           repositoryId: null,
@@ -147,7 +142,6 @@ describe("collectCopyData", () => {
           x: 200,
           y: 200,
           rotation: 0,
-          outputStyleId: null,
           skillIds: [],
           subAgentIds: [],
           repositoryId: null,
@@ -222,7 +216,6 @@ describe("collectCopyData", () => {
   describe("collectBoundNotes - mcpServerNote", () => {
     it("應收集 mcpServerNote 並用 boundToPodId 綁定", () => {
       const stores = {
-        outputStyleStore: { notes: [] },
         skillStore: { notes: [] },
         repositoryStore: { notes: [] },
         subAgentStore: { notes: [] },

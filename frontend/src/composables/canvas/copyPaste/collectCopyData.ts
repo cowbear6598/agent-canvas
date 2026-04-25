@@ -1,7 +1,6 @@
 import type {
   SelectableElement,
   CopiedPod,
-  CopiedOutputStyleNote,
   CopiedSkillNote,
   CopiedRepositoryNote,
   CopiedSubAgentNote,
@@ -19,7 +18,6 @@ type NoteWithIndexSignature = {
 };
 
 type AnyNote =
-  | CopiedOutputStyleNote
   | CopiedSkillNote
   | CopiedRepositoryNote
   | CopiedSubAgentNote
@@ -33,7 +31,6 @@ type StoreWithNotes<
 };
 
 export interface BoundNotesByType {
-  outputStyleNotes: CopiedOutputStyleNote[];
   skillNotes: CopiedSkillNote[];
   repositoryNotes: CopiedRepositoryNote[];
   subAgentNotes: CopiedSubAgentNote[];
@@ -90,8 +87,6 @@ function createOriginalBoundNoteMapper<
     }) as unknown as T;
 }
 
-const mapToOutputStyleNote =
-  createBoundNoteMapper<CopiedOutputStyleNote>("outputStyleId");
 const mapToSkillNote = createBoundNoteMapper<CopiedSkillNote>("skillId");
 const mapToSubAgentNote =
   createBoundNoteMapper<CopiedSubAgentNote>("subAgentId");
@@ -107,11 +102,6 @@ export function collectBoundNotes(
   stores: NoteStores,
 ): BoundNotesByType {
   return {
-    outputStyleNotes: collectBoundNotesFromStore(
-      podId,
-      stores.outputStyleStore,
-      mapToOutputStyleNote,
-    ),
     skillNotes: collectBoundNotesFromStore(
       podId,
       stores.skillStore,
@@ -171,7 +161,6 @@ export function collectSelectedPods(
           rotation: pod.rotation,
           provider: pod.provider,
           providerConfig: pod.providerConfig,
-          outputStyleId: pod.outputStyleId,
           skillIds: pod.skillIds,
           subAgentIds: pod.subAgentIds,
           repositoryId: pod.repositoryId,
@@ -198,7 +187,6 @@ function collectNoteFromElement(
 }
 
 export interface NoteStores {
-  outputStyleStore: StoreWithNotes;
   skillStore: StoreWithNotes;
   repositoryStore: StoreWithNotes;
   subAgentStore: StoreWithNotes;
@@ -213,11 +201,6 @@ interface NoteStoreConfig {
 }
 
 const NOTE_STORE_CONFIGS: NoteStoreConfig[] = [
-  {
-    key: "outputStyleNote",
-    getStore: (noteStores) => noteStores.outputStyleStore,
-    mapFn: mapToOutputStyleNote,
-  },
   {
     key: "skillNote",
     getStore: (noteStores) => noteStores.skillStore,
@@ -246,7 +229,6 @@ const NOTE_STORE_CONFIGS: NoteStoreConfig[] = [
 ];
 
 type CollectedNoteArrays = {
-  outputStyleNote: CopiedOutputStyleNote[];
   skillNote: CopiedSkillNote[];
   repositoryNote: CopiedRepositoryNote[];
   subAgentNote: CopiedSubAgentNote[];
@@ -259,7 +241,6 @@ export function collectSelectedNotes(
   selectedPodIds: Set<string>,
   noteStores: NoteStores,
 ): {
-  outputStyleNotes: CopiedOutputStyleNote[];
   skillNotes: CopiedSkillNote[];
   repositoryNotes: CopiedRepositoryNote[];
   subAgentNotes: CopiedSubAgentNote[];
@@ -267,7 +248,6 @@ export function collectSelectedNotes(
   mcpServerNotes: CopiedMcpServerNote[];
 } {
   const arrays: CollectedNoteArrays = {
-    outputStyleNote: [],
     skillNote: [],
     repositoryNote: [],
     subAgentNote: [],
@@ -277,7 +257,6 @@ export function collectSelectedNotes(
 
   for (const podId of selectedPodIds) {
     const boundNotes = collectBoundNotes(podId, noteStores);
-    arrays.outputStyleNote.push(...boundNotes.outputStyleNotes);
     arrays.skillNote.push(...boundNotes.skillNotes);
     arrays.repositoryNote.push(...boundNotes.repositoryNotes);
     arrays.subAgentNote.push(...boundNotes.subAgentNotes);
@@ -306,7 +285,6 @@ export function collectSelectedNotes(
   }
 
   return {
-    outputStyleNotes: arrays.outputStyleNote,
     skillNotes: arrays.skillNote,
     repositoryNotes: arrays.repositoryNote,
     subAgentNotes: arrays.subAgentNote,

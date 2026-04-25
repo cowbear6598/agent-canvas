@@ -8,7 +8,6 @@ import {
 } from "@/lib/constants";
 
 export type NoteType =
-  | "outputStyleNote"
   | "skillNote"
   | "repositoryNote"
   | "subAgentNote"
@@ -115,12 +114,6 @@ export const useSelectionStore = defineStore("selection", {
      */
     selectedPodIds: (state): string[] =>
       selectIdsByType(state.selectedElements, "pod"),
-
-    /**
-     * 取得選中的 OutputStyleNote ID 列表
-     */
-    selectedOutputStyleNoteIds: (state): string[] =>
-      selectIdsByType(state.selectedElements, "outputStyleNote"),
 
     /**
      * 取得選中的 SkillNote ID 列表

@@ -40,7 +40,6 @@ const {
   podStore,
   viewportStore,
   selectionStore,
-  outputStyleStore,
   skillStore,
   subAgentStore,
   repositoryStore,
@@ -69,9 +68,6 @@ const isUnknownProvider = computed(
 );
 
 const isActive = computed(() => props.pod.id === podStore.activePodId);
-const boundNote = computed(
-  () => outputStyleStore.getNotesByPodId(props.pod.id)[0],
-);
 const boundSkillNotes = computed(() =>
   skillStore.getNotesByPodId(props.pod.id),
 );
@@ -177,7 +173,6 @@ const { isDragging, startSingleDrag } = usePodDrag(
 );
 
 const { handleNoteDrop, handleNoteRemove } = usePodNoteBinding(computedPodId, {
-  outputStyleStore,
   skillStore,
   subAgentStore,
   repositoryStore,
@@ -196,9 +191,9 @@ const {
   handleCancelClear,
 } = useWorkflowClear(computedPodId, { chatStore, podStore, connectionStore });
 
-// 合併成單一 CSS selector 字串，closest() 一次查詢取代原本最差 6 次 DOM 遍歷
+// 合併成單一 CSS selector 字串，closest() 一次查詢取代原本最差 5 次 DOM 遍歷
 const SLOT_CLASSES =
-  ".pod-output-style-slot, .pod-skill-slot, .pod-subagent-slot, .pod-repository-slot, .pod-command-slot, .pod-mcp-server-slot";
+  ".pod-skill-slot, .pod-subagent-slot, .pod-repository-slot, .pod-command-slot, .pod-mcp-server-slot";
 
 const shouldBlockForSlot = (target: HTMLElement): boolean => {
   return target.closest(SLOT_CLASSES) !== null;
@@ -325,7 +320,7 @@ const handleContextMenu = (e: MouseEvent): void => {
     }"
     @mousedown="handleMouseDown"
   >
-    <!-- 光暈層：放在 pod-with-notch 之外，不受 transform: rotate 影響 -->
+    <!-- 光暈層：放在 pod-wrapper 之外，不受 transform: rotate 影響 -->
     <!-- position: absolute; inset: 0 讓此層與外層 wrapper 等大（即 pod-doodle 等大） -->
     <div
       class="pod-glow-layer"
@@ -333,7 +328,7 @@ const handleContextMenu = (e: MouseEvent): void => {
     />
 
     <div
-      class="relative pod-with-notch pod-with-skill-notch pod-with-subagent-notch pod-with-mcp-server-notch"
+      class="relative pod-wrapper pod-with-skill-notch pod-with-subagent-notch pod-with-mcp-server-notch"
       :class="{ dragging: isDragging || isBatchDragging }"
       :style="{ '--pod-rotation': `${pod.rotation}deg` }"
     >
@@ -348,16 +343,11 @@ const handleContextMenu = (e: MouseEvent): void => {
       <PodSlots
         :pod-id="pod.id"
         :pod-rotation="pod.rotation"
-        :bound-output-style-note="boundNote"
         :bound-skill-notes="boundSkillNotes"
         :bound-sub-agent-notes="boundSubAgentNotes"
         :bound-repository-note="boundRepositoryNote"
         :bound-command-note="boundCommandNote"
         :bound-mcp-server-notes="boundMcpServerNotes"
-        @output-style-dropped="
-          (noteId) => handleNoteDrop('outputStyle', noteId)
-        "
-        @output-style-removed="() => handleNoteRemove('outputStyle')"
         @skill-dropped="(noteId) => handleNoteDrop('skill', noteId)"
         @subagent-dropped="(noteId) => handleNoteDrop('subAgent', noteId)"
         @repository-dropped="(noteId) => handleNoteDrop('repository', noteId)"

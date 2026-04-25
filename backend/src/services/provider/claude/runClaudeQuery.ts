@@ -345,7 +345,7 @@ export async function* runClaudeQuery(
   }
 
   // 一次建構完整 sdkOptions，使用物件展開將 ClaudeOptions 映射到 SDK Options 格式；
-  // 選填欄位（systemPrompt / mcpServers / plugins / resume）只在有值時才包含，
+  // 選填欄位（mcpServers / plugins / resume）只在有值時才包含，
   // 避免傳入 undefined 干擾 SDK 行為
   const sdkOptions: Options & { abortController: AbortController } = {
     cwd: workspacePath,
@@ -356,7 +356,6 @@ export async function* runClaudeQuery(
     allowedTools: options.allowedTools,
     model: options.model,
     abortController,
-    ...(options.systemPrompt ? { systemPrompt: options.systemPrompt } : {}),
     ...(options.mcpServers ? { mcpServers: options.mcpServers } : {}),
     ...(options.plugins ? { plugins: options.plugins } : {}),
     ...(resumeSessionId ? { resume: resumeSessionId } : {}),

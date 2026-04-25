@@ -22,7 +22,6 @@ vi.mock("@/composables/useToast", () => ({
 /** 測試用 Claude capabilities（全功能開啟） */
 const CLAUDE_TEST_CAPABILITIES = {
   chat: true,
-  outputStyle: true,
   skill: true,
   subAgent: true,
   repository: true,
@@ -35,7 +34,6 @@ const CLAUDE_TEST_CAPABILITIES = {
 /** 測試用 Codex capabilities（chat + command 開啟） */
 const CODEX_TEST_CAPABILITIES = {
   chat: true,
-  outputStyle: false,
   skill: false,
   subAgent: false,
   repository: false,
@@ -48,7 +46,6 @@ const CODEX_TEST_CAPABILITIES = {
 /** 保守 fallback（找不到 provider 時應回傳的值） */
 const CONSERVATIVE_FALLBACK = {
   chat: true,
-  outputStyle: false,
   skill: false,
   subAgent: false,
   repository: false,

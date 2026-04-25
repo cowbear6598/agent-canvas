@@ -1,6 +1,5 @@
 import { WebSocketResponseEvents } from "@/services/websocket";
 import { usePodStore } from "@/stores/pod/podStore";
-import { useOutputStyleStore } from "@/stores/note/outputStyleStore";
 import { useSkillStore } from "@/stores/note/skillStore";
 import { useRepositoryStore } from "@/stores/note/repositoryStore";
 import { useSubAgentStore } from "@/stores/note/subAgentStore";
@@ -13,9 +12,6 @@ import type { BasePayload } from "./sharedHandlerUtils";
 import { t } from "@/i18n";
 
 type DeletedNoteIds = {
-  // 'note' 對應後端 PodDeletedPayload.deletedNoteIds.note，實際為 OutputStyleNote 的 ID 清單。
-  // 此命名由後端 WebSocket 協議決定，前端不應單方面更改以避免協議不一致。
-  note?: string[];
   skillNote?: string[];
   repositoryNote?: string[];
   commandNote?: string[];
@@ -27,7 +23,6 @@ const noteTypeHandlers: {
   key: keyof DeletedNoteIds;
   getStore: () => { removeNoteFromEvent: (id: string) => void };
 }[] = [
-  { key: "note", getStore: () => useOutputStyleStore() },
   { key: "skillNote", getStore: () => useSkillStore() },
   { key: "repositoryNote", getStore: () => useRepositoryStore() },
   { key: "commandNote", getStore: () => useCommandStore() },
@@ -183,14 +178,6 @@ export function getPodEventListeners(): Array<{
     {
       event: WebSocketResponseEvents.POD_DELETED,
       handler: handlePodDeleted as (payload: unknown) => void,
-    },
-    {
-      event: WebSocketResponseEvents.POD_OUTPUT_STYLE_BOUND,
-      handler: handlePodStateUpdated as (payload: unknown) => void,
-    },
-    {
-      event: WebSocketResponseEvents.POD_OUTPUT_STYLE_UNBOUND,
-      handler: handlePodStateUpdated as (payload: unknown) => void,
     },
     {
       event: WebSocketResponseEvents.POD_SKILL_BOUND,

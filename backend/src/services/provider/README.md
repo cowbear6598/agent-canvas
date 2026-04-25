@@ -8,7 +8,7 @@
 
 **「任何一個 AI 不影響另一個 AI」**：
 
-- Claude 有 OutputStyle、MCP Server、Plugin、Integration 等豐富能力
+- Claude 有 MCP Server、Plugin、Integration 等豐富能力
 - Codex 只支援基本聊天，透過 CLI subprocess 執行
 
 兩者走完全相同的執行路徑（`provider.buildOptions` → `provider.chat`），executor 完全不知道裡面是 SDK 還是 subprocess。
@@ -41,7 +41,7 @@ backend/src/services/provider/
 ├── codexProvider.ts           ← Codex Provider 實作
 ├── codexProvider.md           ← Codex 獨有行為說明
 └── claude/                    ← Claude 子模組
-    ├── buildClaudeOptions.ts  ← 選項建構（OutputStyle / MCP / Plugin / Integration）
+    ├── buildClaudeOptions.ts  ← 選項建構（MCP / Plugin / Integration）
     ├── runClaudeQuery.ts      ← SDK 呼叫 + SDKMessage → NormalizedEvent 轉換
     └── sessionRetry.ts        ← Session resume 失敗自動重試
 ```
@@ -72,8 +72,7 @@ backend/tests/provider/
 /** MyAI Provider 支援的功能 */
 export const MYAI_CAPABILITIES: Readonly<ProviderCapabilities> = Object.freeze({
   chat: true,
-  outputStyle: false,   // 不支援的能力設 false
-  skill: false,
+  skill: false,         // 不支援的能力設 false
   subAgent: false,
   repository: false,
   command: false,
@@ -216,7 +215,7 @@ async buildOptions(pod: Pod): Promise<MyAIOptions> {
 }
 ```
 
-原因：統一讓 executor 不必判斷 union 型別；Claude 的 `buildClaudeOptions` 需要 async 呼叫 `outputStyleService.getContent`，設計上統一為 async。
+原因：統一讓 executor 不必判斷 union 型別；Claude 的 `buildClaudeOptions` 內部可能需要 async 呼叫外部 service，設計上統一為 async。
 
 ### 2. `chat(ctx)` 必須消費 `ctx.abortSignal`
 
@@ -276,7 +275,7 @@ async buildOptions(pod: Pod, _runContext?: RunContext): Promise<MyAIOptions> {
 
 `claudeProvider.ts` 是完整能力的參考實作：
 
-- `buildOptions` 委派給 `claude/buildClaudeOptions.ts`，涵蓋 OutputStyle / MCP / Plugin / Integration 全部邏輯
+- `buildOptions` 委派給 `claude/buildClaudeOptions.ts`，涵蓋 MCP / Plugin / Integration 全部邏輯
 - `chat` 委派給 `claude/sessionRetry.ts`（包裝 `claude/runClaudeQuery.ts`），支援 session resume 失敗後自動重試
 - 子模組拆解讓各功能獨立可測
 

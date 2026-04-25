@@ -3,7 +3,6 @@
  *
  * 驗證 buildClaudeOptions 從 Pod 設定正確建構 ClaudeOptions：
  * - 空 Pod（無特殊設定）→ 等於 metadata.defaultOptions + pod model
- * - pod.outputStyleId → systemPrompt 被填入（mock outputStyleService.getContent）
  * - pod.mcpServerIds → mcpServers 被填入（mock mcpServerStore.getByIds）
  * - pod.pluginIds → plugins 被填入（mock scanInstalledPlugins）
  * - pod.integrationBindings → mcpServers 加 reply server、allowedTools 含 mcp__ 前綴（mock integrationRegistry）
@@ -14,12 +13,6 @@
  */
 
 // ── 所有 mock 必須在 import 前設定 ────────────────────────────────────────────
-
-vi.mock("../../src/services/outputStyleService.js", () => ({
-  outputStyleService: {
-    getContent: vi.fn(),
-  },
-}));
 
 vi.mock("../../src/services/mcpServerStore.js", () => ({
   mcpServerStore: {
@@ -91,7 +84,6 @@ vi.mock("@anthropic-ai/claude-agent-sdk", async () => {
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { claudeProvider } from "../../src/services/provider/claudeProvider.js";
-import { outputStyleService } from "../../src/services/outputStyleService.js";
 import { mcpServerStore } from "../../src/services/mcpServerStore.js";
 import { scanInstalledPlugins } from "../../src/services/pluginScanner.js";
 import { integrationRegistry } from "../../src/services/integration/index.js";
@@ -108,7 +100,6 @@ function makePod(overrides: Partial<Pod> = {}): Pod {
     status: "idle",
     providerConfig: {},
     workspacePath: "/workspace/test",
-    outputStyleId: null,
     skillIds: [],
     mcpServerIds: [],
     pluginIds: [],
@@ -131,7 +122,6 @@ describe("claudeProvider.buildOptions()", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // 預設 mock 回傳值
-    vi.mocked(outputStyleService.getContent).mockResolvedValue(null);
     vi.mocked(mcpServerStore.getByIds).mockReturnValue([]);
     vi.mocked(scanInstalledPlugins).mockReturnValue([]);
     vi.mocked(integrationRegistry.get).mockReturnValue(undefined);
@@ -156,7 +146,6 @@ describe("claudeProvider.buildOptions()", () => {
     }
 
     // 未設定的能力欄位不應存在或為空
-    expect(options.systemPrompt).toBeUndefined();
     expect(options.mcpServers).toBeUndefined();
     expect(options.plugins).toBeUndefined();
   });
@@ -169,28 +158,7 @@ describe("claudeProvider.buildOptions()", () => {
     expect(options.model).toBe("sonnet");
   });
 
-  // ── Case 3：pod.outputStyleId → systemPrompt 被填入 ──────────────────
-  it("pod.outputStyleId 設定時應呼叫 outputStyleService.getContent，並填入 systemPrompt", async () => {
-    const styleContent = "你是一位專業的程式碼審查員";
-    vi.mocked(outputStyleService.getContent).mockResolvedValue(styleContent);
-
-    const pod = makePod({ outputStyleId: "style-review" });
-    const options = await claudeProvider.buildOptions(pod);
-
-    expect(outputStyleService.getContent).toHaveBeenCalledWith("style-review");
-    expect(options.systemPrompt).toBe(styleContent);
-  });
-
-  it("outputStyleService.getContent 回傳 null 時，systemPrompt 應為 undefined", async () => {
-    vi.mocked(outputStyleService.getContent).mockResolvedValue(null);
-
-    const pod = makePod({ outputStyleId: "style-nonexistent" });
-    const options = await claudeProvider.buildOptions(pod);
-
-    expect(options.systemPrompt).toBeUndefined();
-  });
-
-  // ── Case 4：pod.mcpServerIds → mcpServers 被填入 ─────────────────────
+  // ── Case 3：pod.mcpServerIds → mcpServers 被填入 ─────────────────────
   it("pod.mcpServerIds 設定時應呼叫 mcpServerStore.getByIds，並填入 mcpServers", async () => {
     const mockServers = [
       {
@@ -374,12 +342,7 @@ describe("claudeProvider.buildOptions()", () => {
   });
 
   // ── Case 7：多能力組合同時存在 ───────────────────────────────────────
-  it("OutputStyle + MCP + Plugin + Integration 同時設定時，產物各欄位均正確", async () => {
-    // mock OutputStyle
-    vi.mocked(outputStyleService.getContent).mockResolvedValue(
-      "你是一位全能助理",
-    );
-
+  it("MCP + Plugin + Integration 同時設定時，產物各欄位均正確", async () => {
     // mock MCP Server
     vi.mocked(mcpServerStore.getByIds).mockReturnValue([
       {
@@ -420,7 +383,6 @@ describe("claudeProvider.buildOptions()", () => {
 
     const pod = makePod({
       providerConfig: { model: "sonnet" },
-      outputStyleId: "style-full",
       mcpServerIds: ["mcp-combo"],
       pluginIds: ["plugin-combo"],
       integrationBindings: [
@@ -436,9 +398,6 @@ describe("claudeProvider.buildOptions()", () => {
 
     // model 覆寫
     expect(options.model).toBe("sonnet");
-
-    // OutputStyle
-    expect(options.systemPrompt).toBe("你是一位全能助理");
 
     // MCP Server
     expect(options.mcpServers?.["combo-server"]).toBeDefined();

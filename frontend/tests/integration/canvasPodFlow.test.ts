@@ -53,7 +53,6 @@ function createTestPodPayload(
     rotation: 0,
     output: [],
     status: "idle",
-    outputStyleId: null,
     skillIds: [],
     subAgentIds: [],
     repositoryId: null,
@@ -242,47 +241,18 @@ describe("Canvas/Pod 操作完整流程", () => {
     });
   });
 
-  describe("Pod 設定與 Note 綁定", () => {
-    it("建立 Pod -> 設定 Model -> 綁定 OutputStyle Note", () => {
+  describe("Pod 設定", () => {
+    it("建立 Pod -> 設定 Model", () => {
       const podStore = usePodStore();
 
       const pod = createMockPod({
         id: "pod-1",
         providerConfig: { model: "opus" },
-        outputStyleId: null,
       });
       podStore.pods = [pod];
 
       podStore.updatePodProviderConfigModel("pod-1", "sonnet");
       expect(podStore.getPodById("pod-1")?.providerConfig.model).toBe("sonnet");
-
-      podStore.updatePodOutputStyle("pod-1", "output-style-1");
-      expect(podStore.getPodById("pod-1")?.outputStyleId).toBe(
-        "output-style-1",
-      );
-    });
-
-    it("驗證 Pod 的 outputStyleId 更新", () => {
-      const podStore = usePodStore();
-
-      const pod = createMockPod({ id: "pod-1", outputStyleId: null });
-      podStore.pods = [pod];
-
-      podStore.updatePodOutputStyle("pod-1", "style-123");
-
-      const updatedPod = podStore.getPodById("pod-1");
-      expect(updatedPod?.outputStyleId).toBe("style-123");
-    });
-
-    it("驗證清除 outputStyleId", () => {
-      const podStore = usePodStore();
-
-      const pod = createMockPod({ id: "pod-1", outputStyleId: "style-123" });
-      podStore.pods = [pod];
-
-      podStore.updatePodOutputStyle("pod-1", null);
-
-      expect(podStore.getPodById("pod-1")?.outputStyleId).toBeNull();
     });
   });
 
@@ -499,7 +469,6 @@ describe("Canvas/Pod 操作完整流程", () => {
           name: "claude",
           capabilities: {
             chat: true,
-            outputStyle: false,
             skill: false,
             subAgent: false,
             repository: false,

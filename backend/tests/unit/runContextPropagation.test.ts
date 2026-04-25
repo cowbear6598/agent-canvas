@@ -199,7 +199,6 @@ function makeMultiInstancePod(overrides: Partial<Pod> = {}): Pod {
     y: 0,
     rotation: 0,
     sessionId: null,
-    outputStyleId: null,
     repositoryId: null,
     commandId: null,
     skillIds: [],

@@ -26,7 +26,6 @@ export type LogCategory =
   | "Connection"
   | "Paste"
   | "Note"
-  | "OutputStyle"
   | "Git"
   | "Schedule"
   | "Canvas"
@@ -64,7 +63,6 @@ const CATEGORY_COLORS: Record<LogCategory, string> = {
   Git: ANSI_COLORS.YELLOW,
   Note: ANSI_COLORS.YELLOW,
   Paste: ANSI_COLORS.YELLOW,
-  OutputStyle: ANSI_COLORS.YELLOW,
   Schedule: ANSI_COLORS.YELLOW,
   Slack: ANSI_COLORS.BLUE,
   Telegram: ANSI_COLORS.BLUE,

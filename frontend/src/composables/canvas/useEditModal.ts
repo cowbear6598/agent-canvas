@@ -4,8 +4,8 @@ import type { Group, Position } from "@/types";
 import { screenToCanvasPosition } from "@/lib/canvasCoordinateUtils";
 import { t } from "@/i18n";
 
-type ResourceType = "outputStyle" | "subAgent" | "command";
-type GroupType = "outputStyleGroup" | "subAgentGroup" | "commandGroup";
+type ResourceType = "subAgent" | "command";
+type GroupType = "subAgentGroup" | "commandGroup";
 type ExtendedResourceType = ResourceType | GroupType;
 
 interface EditModalState {
@@ -20,23 +20,12 @@ interface EditModalState {
 }
 
 interface ResourceStore {
-  readOutputStyle?: (
-    id: string,
-  ) => Promise<{ id: string; name: string; content: string } | null>;
   readSubAgent?: (
     id: string,
   ) => Promise<{ id: string; name: string; content: string } | null>;
   readCommand?: (
     id: string,
   ) => Promise<{ id: string; name: string; content: string } | null>;
-  createOutputStyle?: (
-    name: string,
-    content: string,
-  ) => Promise<{
-    success: boolean;
-    outputStyle?: { id: string };
-    [key: string]: unknown;
-  }>;
   createSubAgent?: (
     name: string,
     content: string,
@@ -53,7 +42,6 @@ interface ResourceStore {
     command?: { id: string };
     [key: string]: unknown;
   }>;
-  updateOutputStyle?: (id: string, content: string) => Promise<unknown>;
   updateSubAgent?: (id: string, content: string) => Promise<unknown>;
   updateCommand?: (id: string, content: string) => Promise<unknown>;
   createNote: (id: string, x: number, y: number) => Promise<void>;
@@ -65,14 +53,12 @@ interface ResourceStore {
 type ResourceStoreMap = Record<ResourceType, ResourceStore>;
 
 interface EditModalStores {
-  outputStyleStore: ResourceStore;
   subAgentStore: ResourceStore;
   commandStore: ResourceStore;
   viewportStore: { offset: { x: number; y: number }; zoom: number };
 }
 
 const resourceTitleMap: Record<ResourceType, string> = {
-  outputStyle: "Output Style",
   subAgent: "SubAgent",
   command: "Command",
 };
@@ -94,8 +80,7 @@ export function useEditModal(
   }) => Promise<void>;
   closeEditModal: () => void;
 } {
-  const { outputStyleStore, subAgentStore, commandStore, viewportStore } =
-    stores;
+  const { subAgentStore, commandStore, viewportStore } = stores;
 
   const editModal = ref<EditModalState>({
     visible: false,
@@ -103,13 +88,12 @@ export function useEditModal(
     title: "",
     initialName: "",
     initialContent: "",
-    resourceType: "outputStyle",
+    resourceType: "subAgent",
     itemId: "",
     showContent: true,
   });
 
   const resourceStoreMap: ResourceStoreMap = {
-    outputStyle: outputStyleStore,
     subAgent: subAgentStore,
     command: commandStore,
   };
@@ -120,8 +104,6 @@ export function useEditModal(
       id: string,
     ) => Promise<{ id: string; name: string; content: string } | null>
   > = {
-    outputStyle: (id) =>
-      outputStyleStore.readOutputStyle?.(id) ?? Promise.resolve(null),
     subAgent: (id) => subAgentStore.readSubAgent?.(id) ?? Promise.resolve(null),
     command: (id) => commandStore.readCommand?.(id) ?? Promise.resolve(null),
   };
@@ -174,7 +156,6 @@ export function useEditModal(
         ) => Promise<{ success: boolean; [key: string]: unknown }>
       >
     > = {
-      outputStyle: store.createOutputStyle,
       subAgent: store.createSubAgent,
       command: store.createCommand,
     };
@@ -252,9 +233,6 @@ export function useEditModal(
     const updateActions: Partial<
       Record<ExtendedResourceType, () => Promise<unknown>>
     > = {
-      outputStyle: () =>
-        outputStyleStore.updateOutputStyle?.(itemId, content) ??
-        Promise.resolve(),
       subAgent: () =>
         subAgentStore.updateSubAgent?.(itemId, content) ?? Promise.resolve(),
       command: () =>
@@ -276,12 +254,8 @@ export function useEditModal(
       ExtendedResourceType,
       () => Promise<void | { success: boolean; group?: Group; error?: string }>
     > = {
-      outputStyle: createItemAction("outputStyle", name, content),
       subAgent: createItemAction("subAgent", name, content),
       command: createItemAction("command", name, content),
-      outputStyleGroup: () =>
-        outputStyleStore.createGroup?.(name) ??
-        Promise.resolve({ success: false }),
       subAgentGroup: () =>
         subAgentStore.createGroup?.(name) ??
         Promise.resolve({ success: false }),

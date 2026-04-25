@@ -5,7 +5,6 @@ import type {
   PodProvider,
   ProviderCapabilities,
 } from "../pod";
-import type { OutputStyleNote } from "@/types";
 import type { SkillNote } from "@/types";
 import type { Repository, RepositoryNote } from "@/types";
 import type { SubAgentNote } from "@/types";
@@ -52,7 +51,6 @@ export interface PodScheduleSetPayload extends ResultPayload {
 export interface PodDeletedPayload extends ResultPayload {
   podId?: string;
   deletedNoteIds?: {
-    note?: string[];
     skillNote?: string[];
     repositoryNote?: string[];
     commandNote?: string[];
@@ -131,31 +129,6 @@ export interface PodChatHistoryResultPayload extends ResultPayload {
   messages?: PersistedMessage[];
 }
 
-export interface OutputStyleCreatedPayload {
-  requestId: string;
-  success: boolean;
-  outputStyle?: { id: string; name: string };
-  error?: string;
-}
-
-export interface OutputStyleUpdatedPayload {
-  requestId: string;
-  success: boolean;
-  outputStyle?: { id: string; name: string };
-  error?: string;
-}
-
-export interface OutputStyleReadResultPayload {
-  requestId: string;
-  success: boolean;
-  outputStyle?: { id: string; name: string; content: string };
-  error?: string;
-}
-
-export interface NoteCreatedPayload extends ResultPayload {
-  note?: OutputStyleNote;
-}
-
 export interface ConnectionPayloadItem {
   id: string;
   sourcePodId?: string;
@@ -223,7 +196,6 @@ export interface WorkflowClearResultPayload extends ResultPayload {
 export interface PasteError {
   type:
     | "pod"
-    | "outputStyleNote"
     | "skillNote"
     | "repositoryNote"
     | "subAgentNote"
@@ -235,7 +207,6 @@ export interface PasteError {
 
 export interface CanvasPasteResultPayload extends ResultPayload {
   createdPods: Pod[];
-  createdOutputStyleNotes: OutputStyleNote[];
   createdSkillNotes: SkillNote[];
   createdRepositoryNotes: RepositoryNote[];
   createdSubAgentNotes: SubAgentNote[];
@@ -377,7 +348,7 @@ export interface GroupCreatedPayload {
   group?: {
     id: string;
     name: string;
-    type: "command" | "outputStyle" | "subAgent";
+    type: "command" | "subAgent";
   };
   error?: string;
 }
@@ -388,7 +359,7 @@ export interface GroupListResultPayload {
   groups?: Array<{
     id: string;
     name: string;
-    type: "command" | "outputStyle" | "subAgent";
+    type: "command" | "subAgent";
   }>;
   error?: string;
 }

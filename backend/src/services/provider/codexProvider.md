@@ -99,7 +99,6 @@ abortSignal.addEventListener("abort", onAbort, { once: true });
 | 能力 | 支援 | 說明 |
 |---|---|---|
 | `chat` | ✓ | 基本聊天（JSON line 格式輸出） |
-| `outputStyle` | ✗ | 無 system prompt 設定機制 |
 | `skill` | ✗ | 無 Command / Skill 支援 |
 | `subAgent` | ✗ | 無 Sub-Agent 機制 |
 | `repository` | ✗ | cwd 只從 `ctx.workspacePath` 取得，無 repositoryId 處理 |

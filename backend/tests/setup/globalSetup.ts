@@ -1,8 +1,8 @@
 // Bun Test 全域 Setup/Teardown
 // 透過 preload 載入，使用 beforeAll/afterAll 來管理全域測試生命週期
 
-import { mkdir, rm } from 'fs/promises';
-import { testConfig } from './testConfig.js';
+import { mkdir, rm } from "fs/promises";
+import { testConfig } from "./testConfig.js";
 
 /**
  * 全域 beforeAll
@@ -13,7 +13,6 @@ beforeAll(async () => {
     await mkdir(testConfig.appDataRoot, { recursive: true });
     await mkdir(testConfig.canvasRoot, { recursive: true });
     await mkdir(testConfig.repositoriesRoot, { recursive: true });
-    await mkdir(testConfig.outputStylesPath, { recursive: true });
     await mkdir(testConfig.skillsPath, { recursive: true });
     await mkdir(testConfig.agentsPath, { recursive: true });
     await mkdir(testConfig.commandsPath, { recursive: true });

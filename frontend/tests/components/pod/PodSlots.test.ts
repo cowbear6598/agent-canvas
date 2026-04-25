@@ -64,7 +64,6 @@ const createMockStore = () => ({
 const mockSkillStore = createMockStore();
 const mockSubAgentStore = createMockStore();
 const mockMcpServerStore = createMockStore();
-const mockOutputStyleStore = createMockStore();
 const mockRepositoryStore = createMockStore();
 const mockCommandStore = createMockStore();
 
@@ -72,7 +71,6 @@ vi.mock("@/stores/note", () => ({
   useSkillStore: () => mockSkillStore,
   useSubAgentStore: () => mockSubAgentStore,
   useMcpServerStore: () => mockMcpServerStore,
-  useOutputStyleStore: () => mockOutputStyleStore,
   useRepositoryStore: () => mockRepositoryStore,
   useCommandStore: () => mockCommandStore,
 }));
@@ -82,7 +80,6 @@ vi.mock("@/stores/note", () => ({
 // -----------------------------------------------------------------------
 
 const mockCapabilities = {
-  isOutputStyleEnabled: computed(() => true),
   isSkillEnabled: computed(() => true),
   isSubAgentEnabled: computed(() => true),
   isRepositoryEnabled: computed(() => true),
@@ -113,7 +110,6 @@ function mountPodSlots(overrides: Record<string, unknown> = {}) {
     props: {
       podId: "pod-1",
       podRotation: 0,
-      boundOutputStyleNote: undefined,
       boundSkillNotes: [],
       boundSubAgentNotes: [],
       boundRepositoryNote: undefined,
@@ -133,7 +129,6 @@ describe("PodSlots - Codex provider Pod：Command 以外 slot 為 disabled", () 
     vi.clearAllMocks();
     // 切換成 Codex capabilities：Command 為 enabled，其餘 slot disabled
     Object.assign(mockCapabilities, {
-      isOutputStyleEnabled: computed(() => false),
       isSkillEnabled: computed(() => false),
       isSubAgentEnabled: computed(() => false),
       isRepositoryEnabled: computed(() => false),
@@ -142,15 +137,14 @@ describe("PodSlots - Codex provider Pod：Command 以外 slot 為 disabled", () 
     });
   });
 
-  it("OutputStyle 與 Repository 的 single-bind slot disabled 應為 true，Command 應為 false", () => {
+  it("Repository 的 single-bind slot disabled 應為 true，Command 應為 false", () => {
     const wrapper = mountPodSlots();
     const singleSlots = wrapper.findAll(".single-bind-slot-stub");
 
-    // OutputStyle（0）、Repository（1）、Command（2）共 3 個 single-bind slot
-    expect(singleSlots.length).toBe(3);
-    expect(singleSlots[0]!.attributes("data-disabled")).toBe("true"); // OutputStyle disabled
-    expect(singleSlots[1]!.attributes("data-disabled")).toBe("true"); // Repository disabled
-    expect(singleSlots[2]!.attributes("data-disabled")).toBe("false"); // Command enabled
+    // Repository（0）、Command（1）共 2 個 single-bind slot
+    expect(singleSlots.length).toBe(2);
+    expect(singleSlots[0]!.attributes("data-disabled")).toBe("true"); // Repository disabled
+    expect(singleSlots[1]!.attributes("data-disabled")).toBe("false"); // Command enabled
 
     wrapper.unmount();
   });
@@ -168,16 +162,13 @@ describe("PodSlots - Codex provider Pod：Command 以外 slot 為 disabled", () 
     wrapper.unmount();
   });
 
-  it("OutputStyle、Repository、Skill、SubAgent、MCP 的 disabled-tooltip 應為 pod.slot.codexDisabled", () => {
+  it("Repository、Skill、SubAgent、MCP 的 disabled-tooltip 應為 pod.slot.codexDisabled", () => {
     const wrapper = mountPodSlots();
     const singleSlots = wrapper.findAll(".single-bind-slot-stub");
     const multiSlots = wrapper.findAll(".multi-bind-slot-stub");
 
-    // 真正會 disabled 的 slot：OutputStyle（0）、Repository（1）
+    // 真正會 disabled 的 slot：Repository（0）
     expect(singleSlots[0]!.attributes("data-disabled-tooltip")).toBe(
-      "pod.slot.codexDisabled",
-    );
-    expect(singleSlots[1]!.attributes("data-disabled-tooltip")).toBe(
       "pod.slot.codexDisabled",
     );
 
@@ -195,8 +186,8 @@ describe("PodSlots - Codex provider Pod：Command 以外 slot 為 disabled", () 
     const wrapper = mountPodSlots();
     const singleSlots = wrapper.findAll(".single-bind-slot-stub");
 
-    // Command slot 為 single-bind slots 中的 index 2
-    const commandSlot = singleSlots[2]!;
+    // Command slot 為 single-bind slots 中的 index 1
+    const commandSlot = singleSlots[1]!;
     expect(commandSlot.attributes("data-disabled")).toBe("false");
     // disabled 為 false 時，disabled-tooltip 雖然仍傳入但不應影響 UI；
     // 重點是 disabled 屬性正確，確認其值非 "true"
@@ -215,7 +206,6 @@ describe("PodSlots - Claude provider Pod：全部 slot 為 enabled", () => {
     vi.clearAllMocks();
     // 切換成 Claude capabilities：所有 slot enabled
     Object.assign(mockCapabilities, {
-      isOutputStyleEnabled: computed(() => true),
       isSkillEnabled: computed(() => true),
       isSubAgentEnabled: computed(() => true),
       isRepositoryEnabled: computed(() => true),
@@ -228,7 +218,7 @@ describe("PodSlots - Claude provider Pod：全部 slot 為 enabled", () => {
     const wrapper = mountPodSlots();
     const singleSlots = wrapper.findAll(".single-bind-slot-stub");
 
-    expect(singleSlots.length).toBe(3);
+    expect(singleSlots.length).toBe(2);
     for (const slot of singleSlots) {
       expect(slot.attributes("data-disabled")).toBe("false");
     }
@@ -257,37 +247,12 @@ describe("PodSlots - emit 事件轉發", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     Object.assign(mockCapabilities, {
-      isOutputStyleEnabled: computed(() => true),
       isSkillEnabled: computed(() => true),
       isSubAgentEnabled: computed(() => true),
       isRepositoryEnabled: computed(() => true),
       isCommandEnabled: computed(() => true),
       isMcpEnabled: computed(() => true),
     });
-  });
-
-  it("OutputStyle slot note-dropped → emit output-style-dropped", async () => {
-    const wrapper = mountPodSlots();
-    const singleSlots = wrapper.findAll(".single-bind-slot-stub");
-
-    // slotClass 順序：output-style-slot（index 0）, repository-slot（1）, command-slot（2）
-    await singleSlots[0]!.trigger("click");
-
-    expect(wrapper.emitted("output-style-dropped")).toBeTruthy();
-    expect(wrapper.emitted("output-style-dropped")![0]).toEqual(["note-1"]);
-
-    wrapper.unmount();
-  });
-
-  it("OutputStyle slot note-removed → emit output-style-removed", async () => {
-    const wrapper = mountPodSlots();
-    const singleSlots = wrapper.findAll(".single-bind-slot-stub");
-
-    await singleSlots[0]!.trigger("dblclick");
-
-    expect(wrapper.emitted("output-style-removed")).toBeTruthy();
-
-    wrapper.unmount();
   });
 
   it("Skill slot note-dropped → emit skill-dropped", async () => {
@@ -319,7 +284,7 @@ describe("PodSlots - emit 事件轉發", () => {
     const wrapper = mountPodSlots();
     const singleSlots = wrapper.findAll(".single-bind-slot-stub");
 
-    await singleSlots[1]!.trigger("click");
+    await singleSlots[0]!.trigger("click");
 
     expect(wrapper.emitted("repository-dropped")).toBeTruthy();
     expect(wrapper.emitted("repository-dropped")![0]).toEqual(["note-1"]);
@@ -331,7 +296,7 @@ describe("PodSlots - emit 事件轉發", () => {
     const wrapper = mountPodSlots();
     const singleSlots = wrapper.findAll(".single-bind-slot-stub");
 
-    await singleSlots[1]!.trigger("dblclick");
+    await singleSlots[0]!.trigger("dblclick");
 
     expect(wrapper.emitted("repository-removed")).toBeTruthy();
 
@@ -342,7 +307,7 @@ describe("PodSlots - emit 事件轉發", () => {
     const wrapper = mountPodSlots();
     const singleSlots = wrapper.findAll(".single-bind-slot-stub");
 
-    await singleSlots[2]!.trigger("click");
+    await singleSlots[1]!.trigger("click");
 
     expect(wrapper.emitted("command-dropped")).toBeTruthy();
     expect(wrapper.emitted("command-dropped")![0]).toEqual(["note-1"]);
@@ -354,7 +319,7 @@ describe("PodSlots - emit 事件轉發", () => {
     const wrapper = mountPodSlots();
     const singleSlots = wrapper.findAll(".single-bind-slot-stub");
 
-    await singleSlots[2]!.trigger("dblclick");
+    await singleSlots[1]!.trigger("dblclick");
 
     expect(wrapper.emitted("command-removed")).toBeTruthy();
 
@@ -381,7 +346,6 @@ describe("PodSlots - emit 事件轉發", () => {
 
     // PodSlots 的 onDropped 守門：空字串不應 emit
     // 由於 mock stub 固定 emit 'note-1'，此測試確認 '空值不傳入' 的邏輯存在於元件
-    expect(wrapper.emitted("output-style-dropped")).toBeFalsy();
     expect(wrapper.emitted("skill-dropped")).toBeFalsy();
 
     wrapper.unmount();

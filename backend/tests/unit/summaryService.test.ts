@@ -1,7 +1,6 @@
 // Import 真實模組
 import { summaryService } from "../../src/services/summaryService.js";
 import { commandService } from "../../src/services/commandService.js";
-import { outputStyleService } from "../../src/services/outputStyleService.js";
 import { podStore } from "../../src/services/podStore.js";
 import { messageStore } from "../../src/services/messageStore.js";
 import { runStore } from "../../src/services/runStore.js";
@@ -19,7 +18,6 @@ describe("SummaryService", () => {
     repositoryId: null,
     workspacePath: "/test/workspace",
     commandId: null,
-    outputStyleId: null,
     status: "idle" as const,
   } as any;
 
@@ -31,7 +29,6 @@ describe("SummaryService", () => {
     repositoryId: null,
     workspacePath: "/test/workspace",
     commandId: null,
-    outputStyleId: null,
     status: "idle" as const,
   } as any;
 
@@ -53,9 +50,6 @@ describe("SummaryService", () => {
   beforeEach(() => {
     // commandService
     vi.spyOn(commandService, "getContent").mockResolvedValue(null);
-
-    // outputStyleService
-    vi.spyOn(outputStyleService, "getContent").mockResolvedValue(null);
 
     // podStore
     vi.spyOn(podStore, "getById").mockImplementation(
@@ -182,7 +176,6 @@ describe("SummaryService", () => {
       const targetPodWithCommand = {
         ...mockTargetPod,
         commandId: "analyze-command",
-        outputStyleId: "style-123",
       };
 
       (podStore.getById as any).mockImplementation(
@@ -196,9 +189,6 @@ describe("SummaryService", () => {
       (commandService.getContent as any).mockResolvedValue(
         "Analyze the performance.",
       );
-      (outputStyleService.getContent as any).mockResolvedValue(
-        "You are an analyst.",
-      );
 
       await summaryService.generateSummaryForTarget(
         "canvas-1",
@@ -208,9 +198,7 @@ describe("SummaryService", () => {
 
       expect(summaryPromptBuilder.buildUserPrompt).toHaveBeenCalledWith({
         sourcePodName: "Source Pod",
-        sourcePodOutputStyle: null,
         targetPodName: "Target Pod",
-        targetPodOutputStyle: "You are an analyst.",
         targetPodCommand: "Analyze the performance.",
         conversationHistory: "[User]: Hello\n\n[Assistant]: Hi",
       });

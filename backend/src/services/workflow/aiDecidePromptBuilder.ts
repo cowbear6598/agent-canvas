@@ -1,10 +1,9 @@
-import { sanitizeForPrompt } from '../../utils/promptSanitizer.js';
+import { sanitizeForPrompt } from "../../utils/promptSanitizer.js";
 
 const AI_DECIDE_SOURCE_SUMMARY_MAX_CHARS = 150 as const;
 
 export interface AiDecideSourceSummaryContext {
   podName: string;
-  outputStyle: string | null;
   conversationHistory: string;
 }
 
@@ -12,7 +11,6 @@ export interface AiDecideTargetInfo {
   connectionId: string;
   targetPodId: string;
   targetPodName: string;
-  targetPodOutputStyle: string | null;
   targetPodCommand: string | null;
 }
 
@@ -41,12 +39,6 @@ function buildTargetSection(target: AiDecideTargetInfo): string {
   let section = `## Target Pod: <user_data>${sanitizeForPrompt(target.targetPodName)}</user_data>\n`;
   section += `- Connection ID: ${target.connectionId}\n`;
 
-  if (target.targetPodOutputStyle) {
-    section += `- OutputStyle：\n<user_data>\n${sanitizeForPrompt(target.targetPodOutputStyle)}\n</user_data>\n`;
-  } else {
-    section += `- OutputStyle：無\n`;
-  }
-
   if (target.targetPodCommand) {
     section += `- Command：\n<user_data>\n${sanitizeForPrompt(target.targetPodCommand)}\n</user_data>\n`;
   } else {
@@ -65,8 +57,7 @@ class AiDecidePromptBuilder {
 
 判斷標準：
 1. 上游任務的產出是否與下游任務的需求相關
-2. 下游任務的 OutputStyle（輸出風格）如果有指定，是否與上游產出匹配
-3. 下游任務的 Command（命令）如果有指定，是否需要上游的產出作為輸入
+2. 下游任務的 Command（命令）如果有指定，是否需要上游的產出作為輸入
 
 請根據上下文資訊，為每個 Target Pod 做出判斷，並提供簡短的理由說明。
 
@@ -85,14 +76,10 @@ class AiDecidePromptBuilder {
   }
 
   buildSourceSummaryUserPrompt(context: AiDecideSourceSummaryContext): string {
-    const outputStyleSection = context.outputStyle
-      ? `# OutputStyle\n<user_data>\n${sanitizeForPrompt(context.outputStyle)}\n</user_data>\n\n`
-      : '';
-
     return `# Pod 名稱
 <user_data>${sanitizeForPrompt(context.podName)}</user_data>
 
-${outputStyleSection}# 對話歷史
+# 對話歷史
 <user_data>
 ${sanitizeForPrompt(context.conversationHistory)}
 </user_data>

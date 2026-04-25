@@ -23,7 +23,6 @@ describe("getProvider().metadata.capabilities", () => {
     const caps = getProvider("claude").metadata.capabilities;
 
     expect(caps.chat).toBe(true);
-    expect(caps.outputStyle).toBe(true);
     expect(caps.skill).toBe(true);
     expect(caps.subAgent).toBe(true);
     expect(caps.repository).toBe(true);
@@ -37,7 +36,6 @@ describe("getProvider().metadata.capabilities", () => {
     const caps = getProvider("codex").metadata.capabilities;
 
     expect(caps.chat).toBe(true);
-    expect(caps.outputStyle).toBe(false);
     expect(caps.skill).toBe(false);
     expect(caps.subAgent).toBe(false);
     expect(caps.repository).toBe(false);

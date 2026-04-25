@@ -126,7 +126,7 @@ describe("Database", () => {
         "INSERT INTO connections (id, canvas_id, source_pod_id, source_anchor, target_pod_id, target_anchor) VALUES ('conn1', 'c1', 'p1', 'bottom', 'p1', 'top')",
       );
       db.exec(
-        "INSERT INTO notes (id, canvas_id, type, name) VALUES ('n1', 'c1', 'outputStyle', 'note1')",
+        "INSERT INTO notes (id, canvas_id, type, name) VALUES ('n1', 'c1', 'skill', 'note1')",
       );
       db.exec(
         "INSERT INTO messages (id, pod_id, canvas_id, role, content, timestamp) VALUES ('m1', 'p1', 'c1', 'user', 'hello', '2024-01-01')",
@@ -319,7 +319,6 @@ describe("Database", () => {
         $rotation: 0,
         $workspacePath: "/workspace/p1",
         $sessionId: null,
-        $outputStyleId: null,
         $repositoryId: null,
         $commandId: null,
         $multiInstance: 0,
@@ -391,21 +390,21 @@ describe("Database", () => {
       stmts.note.insert.run({
         $id: "n1",
         $canvasId: "c1",
-        $type: "outputStyle",
-        $name: "style-note",
+        $type: "command",
+        $name: "command-note",
         $x: 50,
         $y: 60,
         $boundToPodId: null,
         $originalPositionJson: null,
-        $foreignKeyId: "style-1",
+        $foreignKeyId: "cmd-1",
       });
 
       const notes = stmts.note.selectByCanvasIdAndType.all({
         $canvasId: "c1",
-        $type: "outputStyle",
+        $type: "command",
       }) as { foreign_key_id: string }[];
       expect(notes).toHaveLength(1);
-      expect(notes[0].foreign_key_id).toBe("style-1");
+      expect(notes[0].foreign_key_id).toBe("cmd-1");
 
       // 不同 type 不互相干擾
       stmts.note.insert.run({
@@ -420,11 +419,11 @@ describe("Database", () => {
         $foreignKeyId: "skill-1",
       });
 
-      const outputStyleNotes = stmts.note.selectByCanvasIdAndType.all({
+      const commandNotes = stmts.note.selectByCanvasIdAndType.all({
         $canvasId: "c1",
-        $type: "outputStyle",
+        $type: "command",
       }) as unknown[];
-      expect(outputStyleNotes).toHaveLength(1);
+      expect(commandNotes).toHaveLength(1);
 
       const skillNotes = stmts.note.selectByCanvasIdAndType.all({
         $canvasId: "c1",

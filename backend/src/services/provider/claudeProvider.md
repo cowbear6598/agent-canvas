@@ -2,7 +2,7 @@
 
 ## 總覽
 
-`claudeProvider` 透過 Anthropic Claude Agent SDK（`@anthropic-ai/claude-agent-sdk`）執行 AI 查詢，支援 Claude 全部的獨有能力：OutputStyle、MCP Server、Plugin、Integration Tool、Sub-Agent、Repository、Session Resume/Retry、Run 模式。
+`claudeProvider` 透過 Anthropic Claude Agent SDK（`@anthropic-ai/claude-agent-sdk`）執行 AI 查詢，支援 Claude 全部的獨有能力：MCP Server、Plugin、Integration Tool、Sub-Agent、Repository、Session Resume/Retry、Run 模式。
 
 實作分為三個子模組 + 一個主模組：
 
@@ -50,7 +50,6 @@ const sdkOptions: Options = {
   model: options.model,
   abortController: new AbortController(),
   // 以下為 Pod 設定衍生：
-  systemPrompt: options.systemPrompt,   // 來自 OutputStyle
   mcpServers: options.mcpServers,       // 來自 MCP Server + Integration Tool
   plugins: options.plugins,             // 來自 Plugin
   resume: ctx.resumeSessionId,          // 來自 Pod session
@@ -101,11 +100,10 @@ for await (const sdkMessage of query({ prompt, options: sdkOptions })) {
 
 ```
 1. buildBaseOptions（固定 SDK 設定）
-2. applyOutputStyle（systemPrompt）
-3. applyMcpServers（mcpServers）
-4. applyIntegrationToolOptions（追加 mcpServers + allowedTools）
-5. applyPlugins（plugins）
-6. model（來自 pod.providerConfig.model 或 "opus" fallback）
+2. applyMcpServers（mcpServers）
+3. applyIntegrationToolOptions（追加 mcpServers + allowedTools）
+4. applyPlugins（plugins）
+5. model（來自 pod.providerConfig.model 或 "opus" fallback）
 ```
 
 注意：`ClaudeOptions.cwd` 在 `buildOptions` 階段為 `undefined`，由 `runClaudeQuery` 在組裝 SDK Options 時從 `ctx.workspacePath` 填入。
@@ -138,13 +136,6 @@ for await (const sdkMessage of query({ prompt, options: sdkOptions })) {
 ```
 
 ---
-
-## OutputStyle 套用
-
-`pod.outputStyleId` → `outputStyleService.getContent(outputStyleId)` → `ClaudeOptions.systemPrompt`
-
-- 若 `outputStyleId` 為 null 或 service 回傳 null，`systemPrompt` 不設定
-- 系統提示會覆蓋 SDK 的預設 system prompt
 
 ## MCP Server 套用
 

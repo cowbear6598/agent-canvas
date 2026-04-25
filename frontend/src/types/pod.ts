@@ -30,7 +30,7 @@ export type ProviderConfig = { model: string };
 /**
  * Claude Provider 的執行選項型別。
  * 鏡射自後端 backend/src/services/provider/claudeProvider.ts（ClaudeOptions）；
- * 目前僅含 model，未來可擴充 outputStyleId 等欄位。
+ * 目前僅含 model，未來可擴充欄位。
  * 修改後端 ClaudeOptions 時請同步更新此型別。
  */
 export interface ClaudeOptions {
@@ -61,7 +61,6 @@ export interface ModelOption {
 /** 各 Provider 支援的功能能力表 */
 export interface ProviderCapabilities {
   chat: boolean;
-  outputStyle: boolean;
   skill: boolean;
   subAgent: boolean;
   repository: boolean;
@@ -100,7 +99,6 @@ export interface Pod {
   rotation: number;
   status?: PodStatus;
   workspacePath?: string;
-  outputStyleId?: string | null;
   skillIds?: string[];
   subAgentIds?: string[];
   mcpServerIds?: string[];

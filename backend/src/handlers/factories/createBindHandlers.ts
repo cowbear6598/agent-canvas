@@ -28,7 +28,6 @@ export interface BindResourceConfig<
   getPodResourceIds: (pod: {
     skillIds: string[];
     commandId: string | null;
-    outputStyleId: string | null;
     subAgentIds: string[];
     mcpServerIds: string[];
   }) => string[] | string | null;

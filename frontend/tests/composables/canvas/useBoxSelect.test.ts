@@ -1,837 +1,861 @@
-import { describe, it, expect, vi } from 'vitest'
-import { defineComponent, h } from 'vue'
-import { mount } from '@vue/test-utils'
-import { setupStoreTest } from '../../helpers/testSetup'
-import { useBoxSelect } from '@/composables/canvas/useBoxSelect'
-import { useSelectionStore } from '@/stores/pod/selectionStore'
-import { useViewportStore } from '@/stores/pod/viewportStore'
-import { usePodStore } from '@/stores/pod/podStore'
-import { useOutputStyleStore, useSkillStore, useSubAgentStore, useRepositoryStore, useCommandStore, useMcpServerStore } from '@/stores/note'
+import { describe, it, expect, vi } from "vitest";
+import { defineComponent, h } from "vue";
+import { mount } from "@vue/test-utils";
+import { setupStoreTest } from "../../helpers/testSetup";
+import { useBoxSelect } from "@/composables/canvas/useBoxSelect";
+import { useSelectionStore } from "@/stores/pod/selectionStore";
+import { useViewportStore } from "@/stores/pod/viewportStore";
+import { usePodStore } from "@/stores/pod/podStore";
+import {
+  useSkillStore,
+  useSubAgentStore,
+  useRepositoryStore,
+  useCommandStore,
+  useMcpServerStore,
+} from "@/stores/note";
 
 // Mock useCanvasContext
-vi.mock('@/composables/canvas/useCanvasContext', () => ({
+vi.mock("@/composables/canvas/useCanvasContext", () => ({
   useCanvasContext: () => ({
     viewportStore: useViewportStore(),
     selectionStore: useSelectionStore(),
     podStore: usePodStore(),
-    outputStyleStore: useOutputStyleStore(),
     skillStore: useSkillStore(),
     subAgentStore: useSubAgentStore(),
     repositoryStore: useRepositoryStore(),
     commandStore: useCommandStore(),
     mcpServerStore: useMcpServerStore(),
   }),
-}))
+}));
 
 // Mock isCtrlOrCmdPressed
-vi.mock('@/utils/keyboardHelpers', () => ({
+vi.mock("@/utils/keyboardHelpers", () => ({
   isCtrlOrCmdPressed: vi.fn(() => false),
-}))
+}));
 
-const BOX_SELECT_THRESHOLD = 5
+const BOX_SELECT_THRESHOLD = 5;
 
-describe('useBoxSelect', () => {
-  setupStoreTest()
+describe("useBoxSelect", () => {
+  setupStoreTest();
 
-  describe('回傳值', () => {
-    it('應回傳 isBoxSelecting ref 和 startBoxSelect 函數', () => {
+  describe("回傳值", () => {
+    it("應回傳 isBoxSelecting ref 和 startBoxSelect 函數", () => {
       const TestComponent = defineComponent({
         setup() {
-          const result = useBoxSelect()
-          return { result }
+          const result = useBoxSelect();
+          return { result };
         },
         render() {
-          return h('div')
+          return h("div");
         },
-      })
+      });
 
-      const wrapper = mount(TestComponent)
-      const { result } = wrapper.vm
+      const wrapper = mount(TestComponent);
+      const { result } = wrapper.vm;
 
-      expect(result.isBoxSelecting).toBeDefined()
-      expect(result.isBoxSelecting.value).toBe(false)
-      expect(result.startBoxSelect).toBeTypeOf('function')
-    })
-  })
+      expect(result.isBoxSelecting).toBeDefined();
+      expect(result.isBoxSelecting.value).toBe(false);
+      expect(result.startBoxSelect).toBeTypeOf("function");
+    });
+  });
 
-  describe('startBoxSelect - 按鈕過濾', () => {
-    it('非左鍵點擊時不應啟動框選', () => {
-      const selectionStore = useSelectionStore()
-      const startSelectionSpy = vi.spyOn(selectionStore, 'startSelection')
+  describe("startBoxSelect - 按鈕過濾", () => {
+    it("非左鍵點擊時不應啟動框選", () => {
+      const selectionStore = useSelectionStore();
+      const startSelectionSpy = vi.spyOn(selectionStore, "startSelection");
 
       const TestComponent = defineComponent({
         setup() {
-          const { startBoxSelect } = useBoxSelect()
-          return { startBoxSelect }
+          const { startBoxSelect } = useBoxSelect();
+          return { startBoxSelect };
         },
         render() {
-          return h('div', { class: 'canvas-grid' })
+          return h("div", { class: "canvas-grid" });
         },
-      })
+      });
 
-      const wrapper = mount(TestComponent)
-      const canvasElement = wrapper.element
+      const wrapper = mount(TestComponent);
+      const canvasElement = wrapper.element;
 
       // 右鍵點擊 (button = 2)
-      const rightClickEvent = new MouseEvent('mousedown', {
+      const rightClickEvent = new MouseEvent("mousedown", {
         button: 2,
         clientX: 100,
         clientY: 100,
-      })
-      Object.defineProperty(rightClickEvent, 'target', {
+      });
+      Object.defineProperty(rightClickEvent, "target", {
         value: canvasElement,
         writable: false,
-      })
+      });
 
-      wrapper.vm.startBoxSelect(rightClickEvent)
+      wrapper.vm.startBoxSelect(rightClickEvent);
 
-      expect(startSelectionSpy).not.toHaveBeenCalled()
-    })
+      expect(startSelectionSpy).not.toHaveBeenCalled();
+    });
 
-    it('中鍵點擊時不應啟動框選', () => {
-      const selectionStore = useSelectionStore()
-      const startSelectionSpy = vi.spyOn(selectionStore, 'startSelection')
+    it("中鍵點擊時不應啟動框選", () => {
+      const selectionStore = useSelectionStore();
+      const startSelectionSpy = vi.spyOn(selectionStore, "startSelection");
 
       const TestComponent = defineComponent({
         setup() {
-          const { startBoxSelect } = useBoxSelect()
-          return { startBoxSelect }
+          const { startBoxSelect } = useBoxSelect();
+          return { startBoxSelect };
         },
         render() {
-          return h('div', { class: 'canvas-grid' })
+          return h("div", { class: "canvas-grid" });
         },
-      })
+      });
 
-      const wrapper = mount(TestComponent)
-      const canvasElement = wrapper.element
+      const wrapper = mount(TestComponent);
+      const canvasElement = wrapper.element;
 
       // 中鍵點擊 (button = 1)
-      const middleClickEvent = new MouseEvent('mousedown', {
+      const middleClickEvent = new MouseEvent("mousedown", {
         button: 1,
         clientX: 100,
         clientY: 100,
-      })
-      Object.defineProperty(middleClickEvent, 'target', {
+      });
+      Object.defineProperty(middleClickEvent, "target", {
         value: canvasElement,
         writable: false,
-      })
+      });
 
-      wrapper.vm.startBoxSelect(middleClickEvent)
+      wrapper.vm.startBoxSelect(middleClickEvent);
 
-      expect(startSelectionSpy).not.toHaveBeenCalled()
-    })
-  })
+      expect(startSelectionSpy).not.toHaveBeenCalled();
+    });
+  });
 
-  describe('startBoxSelect - 目標元素過濾', () => {
-    it('target 非 canvas-grid 也非 canvas-content 時不應啟動框選', () => {
-      const selectionStore = useSelectionStore()
-      const startSelectionSpy = vi.spyOn(selectionStore, 'startSelection')
+  describe("startBoxSelect - 目標元素過濾", () => {
+    it("target 非 canvas-grid 也非 canvas-content 時不應啟動框選", () => {
+      const selectionStore = useSelectionStore();
+      const startSelectionSpy = vi.spyOn(selectionStore, "startSelection");
 
       const TestComponent = defineComponent({
         setup() {
-          const { startBoxSelect } = useBoxSelect()
-          return { startBoxSelect }
+          const { startBoxSelect } = useBoxSelect();
+          return { startBoxSelect };
         },
         render() {
-          return h('div', { class: 'other-element' })
+          return h("div", { class: "other-element" });
         },
-      })
+      });
 
-      const wrapper = mount(TestComponent)
-      const otherElement = wrapper.element
+      const wrapper = mount(TestComponent);
+      const otherElement = wrapper.element;
 
-      const clickEvent = new MouseEvent('mousedown', {
+      const clickEvent = new MouseEvent("mousedown", {
         button: 0,
         clientX: 100,
         clientY: 100,
-      })
-      Object.defineProperty(clickEvent, 'target', {
+      });
+      Object.defineProperty(clickEvent, "target", {
         value: otherElement,
         writable: false,
-      })
+      });
 
-      wrapper.vm.startBoxSelect(clickEvent)
+      wrapper.vm.startBoxSelect(clickEvent);
 
-      expect(startSelectionSpy).not.toHaveBeenCalled()
-    })
+      expect(startSelectionSpy).not.toHaveBeenCalled();
+    });
 
-    it('target 為 canvas-grid 時應啟動框選', () => {
-      const viewportStore = useViewportStore()
-      const selectionStore = useSelectionStore()
-      viewportStore.zoom = 1
-      viewportStore.offset = { x: 0, y: 0 }
+    it("target 為 canvas-grid 時應啟動框選", () => {
+      const viewportStore = useViewportStore();
+      const selectionStore = useSelectionStore();
+      viewportStore.zoom = 1;
+      viewportStore.offset = { x: 0, y: 0 };
 
-      const startSelectionSpy = vi.spyOn(selectionStore, 'startSelection')
+      const startSelectionSpy = vi.spyOn(selectionStore, "startSelection");
 
       const TestComponent = defineComponent({
         setup() {
-          const { startBoxSelect } = useBoxSelect()
-          return { startBoxSelect }
+          const { startBoxSelect } = useBoxSelect();
+          return { startBoxSelect };
         },
         render() {
-          return h('div', { class: 'canvas-grid' })
+          return h("div", { class: "canvas-grid" });
         },
-      })
+      });
 
-      const wrapper = mount(TestComponent)
-      const canvasElement = wrapper.element
+      const wrapper = mount(TestComponent);
+      const canvasElement = wrapper.element;
 
-      const clickEvent = new MouseEvent('mousedown', {
+      const clickEvent = new MouseEvent("mousedown", {
         button: 0,
         clientX: 100,
         clientY: 200,
-      })
-      Object.defineProperty(clickEvent, 'target', {
+      });
+      Object.defineProperty(clickEvent, "target", {
         value: canvasElement,
         writable: false,
-      })
+      });
 
-      wrapper.vm.startBoxSelect(clickEvent)
+      wrapper.vm.startBoxSelect(clickEvent);
 
-      expect(startSelectionSpy).toHaveBeenCalledWith(100, 200, false)
-    })
+      expect(startSelectionSpy).toHaveBeenCalledWith(100, 200, false);
+    });
 
-    it('target 為 canvas-content 時應啟動框選', () => {
-      const viewportStore = useViewportStore()
-      const selectionStore = useSelectionStore()
-      viewportStore.zoom = 1
-      viewportStore.offset = { x: 0, y: 0 }
+    it("target 為 canvas-content 時應啟動框選", () => {
+      const viewportStore = useViewportStore();
+      const selectionStore = useSelectionStore();
+      viewportStore.zoom = 1;
+      viewportStore.offset = { x: 0, y: 0 };
 
-      const startSelectionSpy = vi.spyOn(selectionStore, 'startSelection')
+      const startSelectionSpy = vi.spyOn(selectionStore, "startSelection");
 
       const TestComponent = defineComponent({
         setup() {
-          const { startBoxSelect } = useBoxSelect()
-          return { startBoxSelect }
+          const { startBoxSelect } = useBoxSelect();
+          return { startBoxSelect };
         },
         render() {
-          return h('div', { class: 'canvas-content' })
+          return h("div", { class: "canvas-content" });
         },
-      })
+      });
 
-      const wrapper = mount(TestComponent)
-      const canvasElement = wrapper.element
+      const wrapper = mount(TestComponent);
+      const canvasElement = wrapper.element;
 
-      const clickEvent = new MouseEvent('mousedown', {
+      const clickEvent = new MouseEvent("mousedown", {
         button: 0,
         clientX: 100,
         clientY: 200,
-      })
-      Object.defineProperty(clickEvent, 'target', {
+      });
+      Object.defineProperty(clickEvent, "target", {
         value: canvasElement,
         writable: false,
-      })
+      });
 
-      wrapper.vm.startBoxSelect(clickEvent)
+      wrapper.vm.startBoxSelect(clickEvent);
 
-      expect(startSelectionSpy).toHaveBeenCalledWith(100, 200, false)
-    })
-  })
+      expect(startSelectionSpy).toHaveBeenCalledWith(100, 200, false);
+    });
+  });
 
-  describe('startBoxSelect - 啟動框選', () => {
-    it('zoom 為 0 時不應啟動框選', () => {
-      const viewportStore = useViewportStore()
-      const selectionStore = useSelectionStore()
-      viewportStore.zoom = 0
-      viewportStore.offset = { x: 0, y: 0 }
+  describe("startBoxSelect - 啟動框選", () => {
+    it("zoom 為 0 時不應啟動框選", () => {
+      const viewportStore = useViewportStore();
+      const selectionStore = useSelectionStore();
+      viewportStore.zoom = 0;
+      viewportStore.offset = { x: 0, y: 0 };
 
-      const startSelectionSpy = vi.spyOn(selectionStore, 'startSelection')
+      const startSelectionSpy = vi.spyOn(selectionStore, "startSelection");
 
       const TestComponent = defineComponent({
         setup() {
-          const { startBoxSelect } = useBoxSelect()
-          return { startBoxSelect }
+          const { startBoxSelect } = useBoxSelect();
+          return { startBoxSelect };
         },
         render() {
-          return h('div', { class: 'canvas-grid' })
+          return h("div", { class: "canvas-grid" });
         },
-      })
+      });
 
-      const wrapper = mount(TestComponent)
-      const canvasElement = wrapper.element
+      const wrapper = mount(TestComponent);
+      const canvasElement = wrapper.element;
 
-      const clickEvent = new MouseEvent('mousedown', {
+      const clickEvent = new MouseEvent("mousedown", {
         button: 0,
         clientX: 100,
         clientY: 200,
-      })
-      Object.defineProperty(clickEvent, 'target', {
+      });
+      Object.defineProperty(clickEvent, "target", {
         value: canvasElement,
         writable: false,
-      })
+      });
 
-      wrapper.vm.startBoxSelect(clickEvent)
+      wrapper.vm.startBoxSelect(clickEvent);
 
-      expect(startSelectionSpy).not.toHaveBeenCalled()
-    })
+      expect(startSelectionSpy).not.toHaveBeenCalled();
+    });
 
-    it('應設定 selectionStore.startSelection 並轉換座標', () => {
-      const viewportStore = useViewportStore()
-      const selectionStore = useSelectionStore()
-      viewportStore.zoom = 2
-      viewportStore.offset = { x: 50, y: 100 }
+    it("應設定 selectionStore.startSelection 並轉換座標", () => {
+      const viewportStore = useViewportStore();
+      const selectionStore = useSelectionStore();
+      viewportStore.zoom = 2;
+      viewportStore.offset = { x: 50, y: 100 };
 
-      const startSelectionSpy = vi.spyOn(selectionStore, 'startSelection')
+      const startSelectionSpy = vi.spyOn(selectionStore, "startSelection");
 
-      let isBoxSelecting: any
+      let isBoxSelecting: any;
       const TestComponent = defineComponent({
         setup() {
-          const result = useBoxSelect()
-          isBoxSelecting = result.isBoxSelecting
-          return { startBoxSelect: result.startBoxSelect }
+          const result = useBoxSelect();
+          isBoxSelecting = result.isBoxSelecting;
+          return { startBoxSelect: result.startBoxSelect };
         },
         render() {
-          return h('div', { class: 'canvas-grid' })
+          return h("div", { class: "canvas-grid" });
         },
-      })
+      });
 
-      const wrapper = mount(TestComponent)
-      const canvasElement = wrapper.element
+      const wrapper = mount(TestComponent);
+      const canvasElement = wrapper.element;
 
-      const clickEvent = new MouseEvent('mousedown', {
+      const clickEvent = new MouseEvent("mousedown", {
         button: 0,
         clientX: 250,
         clientY: 300,
-      })
-      Object.defineProperty(clickEvent, 'target', {
+      });
+      Object.defineProperty(clickEvent, "target", {
         value: canvasElement,
         writable: false,
-      })
+      });
 
-      wrapper.vm.startBoxSelect(clickEvent)
+      wrapper.vm.startBoxSelect(clickEvent);
 
       // canvasX = (250 - 50) / 2 = 100
       // canvasY = (300 - 100) / 2 = 100
-      expect(startSelectionSpy).toHaveBeenCalledWith(100, 100, false)
-      expect(isBoxSelecting.value).toBe(true)
-    })
+      expect(startSelectionSpy).toHaveBeenCalledWith(100, 100, false);
+      expect(isBoxSelecting.value).toBe(true);
+    });
 
-    it('Ctrl 按下時應傳遞 isCtrlPressed = true', async () => {
-      const { isCtrlOrCmdPressed } = await import('@/utils/keyboardHelpers')
-      vi.mocked(isCtrlOrCmdPressed).mockReturnValueOnce(true)
+    it("Ctrl 按下時應傳遞 isCtrlPressed = true", async () => {
+      const { isCtrlOrCmdPressed } = await import("@/utils/keyboardHelpers");
+      vi.mocked(isCtrlOrCmdPressed).mockReturnValueOnce(true);
 
-      const viewportStore = useViewportStore()
-      const selectionStore = useSelectionStore()
-      viewportStore.zoom = 1
-      viewportStore.offset = { x: 0, y: 0 }
+      const viewportStore = useViewportStore();
+      const selectionStore = useSelectionStore();
+      viewportStore.zoom = 1;
+      viewportStore.offset = { x: 0, y: 0 };
 
-      const startSelectionSpy = vi.spyOn(selectionStore, 'startSelection')
+      const startSelectionSpy = vi.spyOn(selectionStore, "startSelection");
 
       const TestComponent = defineComponent({
         setup() {
-          const { startBoxSelect } = useBoxSelect()
-          return { startBoxSelect }
+          const { startBoxSelect } = useBoxSelect();
+          return { startBoxSelect };
         },
         render() {
-          return h('div', { class: 'canvas-grid' })
+          return h("div", { class: "canvas-grid" });
         },
-      })
+      });
 
-      const wrapper = mount(TestComponent)
-      const canvasElement = wrapper.element
+      const wrapper = mount(TestComponent);
+      const canvasElement = wrapper.element;
 
-      const clickEvent = new MouseEvent('mousedown', {
+      const clickEvent = new MouseEvent("mousedown", {
         button: 0,
         clientX: 100,
         clientY: 200,
         ctrlKey: true,
-      })
-      Object.defineProperty(clickEvent, 'target', {
+      });
+      Object.defineProperty(clickEvent, "target", {
         value: canvasElement,
         writable: false,
-      })
+      });
 
-      wrapper.vm.startBoxSelect(clickEvent)
+      wrapper.vm.startBoxSelect(clickEvent);
 
-      expect(startSelectionSpy).toHaveBeenCalledWith(100, 200, true)
-    })
-  })
+      expect(startSelectionSpy).toHaveBeenCalledWith(100, 200, true);
+    });
+  });
 
-  describe('拖曳與結束框選', () => {
-    it('拖曳距離小於閾值時應呼叫 cancelSelection', async () => {
-      const viewportStore = useViewportStore()
-      const selectionStore = useSelectionStore()
-      viewportStore.zoom = 1
-      viewportStore.offset = { x: 0, y: 0 }
+  describe("拖曳與結束框選", () => {
+    it("拖曳距離小於閾值時應呼叫 cancelSelection", async () => {
+      const viewportStore = useViewportStore();
+      const selectionStore = useSelectionStore();
+      viewportStore.zoom = 1;
+      viewportStore.offset = { x: 0, y: 0 };
 
-      const cancelSelectionSpy = vi.spyOn(selectionStore, 'cancelSelection')
+      const cancelSelectionSpy = vi.spyOn(selectionStore, "cancelSelection");
 
-      let isBoxSelecting: any
+      let isBoxSelecting: any;
       const TestComponent = defineComponent({
         setup() {
-          const result = useBoxSelect()
-          isBoxSelecting = result.isBoxSelecting
-          return { startBoxSelect: result.startBoxSelect }
+          const result = useBoxSelect();
+          isBoxSelecting = result.isBoxSelecting;
+          return { startBoxSelect: result.startBoxSelect };
         },
         render() {
-          return h('div', { class: 'canvas-grid' })
+          return h("div", { class: "canvas-grid" });
         },
-      })
+      });
 
-      const wrapper = mount(TestComponent)
-      const canvasElement = wrapper.element
+      const wrapper = mount(TestComponent);
+      const canvasElement = wrapper.element;
 
       // 開始框選
-      const mousedownEvent = new MouseEvent('mousedown', {
+      const mousedownEvent = new MouseEvent("mousedown", {
         button: 0,
         clientX: 100,
         clientY: 100,
-      })
-      Object.defineProperty(mousedownEvent, 'target', {
+      });
+      Object.defineProperty(mousedownEvent, "target", {
         value: canvasElement,
         writable: false,
-      })
+      });
 
-      wrapper.vm.startBoxSelect(mousedownEvent)
-      expect(isBoxSelecting.value).toBe(true)
+      wrapper.vm.startBoxSelect(mousedownEvent);
+      expect(isBoxSelecting.value).toBe(true);
 
       // 移動 2 像素（小於閾值 5）
-      const mousemoveEvent = new MouseEvent('mousemove', {
+      const mousemoveEvent = new MouseEvent("mousemove", {
         clientX: 102,
         clientY: 102,
-      })
-      document.dispatchEvent(mousemoveEvent)
+      });
+      document.dispatchEvent(mousemoveEvent);
 
       // 放開滑鼠
-      const mouseupEvent = new MouseEvent('mouseup', {
+      const mouseupEvent = new MouseEvent("mouseup", {
         clientX: 102,
         clientY: 102,
-      })
-      document.dispatchEvent(mouseupEvent)
+      });
+      document.dispatchEvent(mouseupEvent);
 
       // 距離 = Math.sqrt(2^2 + 2^2) = 2.83 < 5
-      expect(cancelSelectionSpy).toHaveBeenCalled()
-      expect(isBoxSelecting.value).toBe(false)
-    })
+      expect(cancelSelectionSpy).toHaveBeenCalled();
+      expect(isBoxSelecting.value).toBe(false);
+    });
 
-    it('拖曳距離等於閾值時應呼叫 endSelection', async () => {
-      const viewportStore = useViewportStore()
-      const selectionStore = useSelectionStore()
-      viewportStore.zoom = 1
-      viewportStore.offset = { x: 0, y: 0 }
+    it("拖曳距離等於閾值時應呼叫 endSelection", async () => {
+      const viewportStore = useViewportStore();
+      const selectionStore = useSelectionStore();
+      viewportStore.zoom = 1;
+      viewportStore.offset = { x: 0, y: 0 };
 
-      const endSelectionSpy = vi.spyOn(selectionStore, 'endSelection')
-      const cancelSelectionSpy = vi.spyOn(selectionStore, 'cancelSelection')
+      const endSelectionSpy = vi.spyOn(selectionStore, "endSelection");
+      const cancelSelectionSpy = vi.spyOn(selectionStore, "cancelSelection");
 
-      let isBoxSelecting: any
+      let isBoxSelecting: any;
       const TestComponent = defineComponent({
         setup() {
-          const result = useBoxSelect()
-          isBoxSelecting = result.isBoxSelecting
-          return { startBoxSelect: result.startBoxSelect }
+          const result = useBoxSelect();
+          isBoxSelecting = result.isBoxSelecting;
+          return { startBoxSelect: result.startBoxSelect };
         },
         render() {
-          return h('div', { class: 'canvas-grid' })
+          return h("div", { class: "canvas-grid" });
         },
-      })
+      });
 
-      const wrapper = mount(TestComponent)
-      const canvasElement = wrapper.element
+      const wrapper = mount(TestComponent);
+      const canvasElement = wrapper.element;
 
       // 開始框選
-      const mousedownEvent = new MouseEvent('mousedown', {
+      const mousedownEvent = new MouseEvent("mousedown", {
         button: 0,
         clientX: 100,
         clientY: 100,
-      })
-      Object.defineProperty(mousedownEvent, 'target', {
+      });
+      Object.defineProperty(mousedownEvent, "target", {
         value: canvasElement,
         writable: false,
-      })
+      });
 
-      wrapper.vm.startBoxSelect(mousedownEvent)
-      expect(isBoxSelecting.value).toBe(true)
+      wrapper.vm.startBoxSelect(mousedownEvent);
+      expect(isBoxSelecting.value).toBe(true);
 
       // 移動 3 和 4 像素（畢氏定理 = 5）
-      const mouseupEvent = new MouseEvent('mouseup', {
+      const mouseupEvent = new MouseEvent("mouseup", {
         clientX: 103,
         clientY: 104,
-      })
-      document.dispatchEvent(mouseupEvent)
+      });
+      document.dispatchEvent(mouseupEvent);
 
       // 距離 = Math.sqrt(3^2 + 4^2) = 5 (不大於閾值)
-      expect(endSelectionSpy).toHaveBeenCalled()
-      expect(cancelSelectionSpy).not.toHaveBeenCalled()
-    })
+      expect(endSelectionSpy).toHaveBeenCalled();
+      expect(cancelSelectionSpy).not.toHaveBeenCalled();
+    });
 
-    it('拖曳距離大於閾值時應呼叫 endSelection', async () => {
-      const viewportStore = useViewportStore()
-      const selectionStore = useSelectionStore()
-      viewportStore.zoom = 1
-      viewportStore.offset = { x: 0, y: 0 }
+    it("拖曳距離大於閾值時應呼叫 endSelection", async () => {
+      const viewportStore = useViewportStore();
+      const selectionStore = useSelectionStore();
+      viewportStore.zoom = 1;
+      viewportStore.offset = { x: 0, y: 0 };
 
-      const endSelectionSpy = vi.spyOn(selectionStore, 'endSelection')
-      const cancelSelectionSpy = vi.spyOn(selectionStore, 'cancelSelection')
+      const endSelectionSpy = vi.spyOn(selectionStore, "endSelection");
+      const cancelSelectionSpy = vi.spyOn(selectionStore, "cancelSelection");
 
-      let isBoxSelecting: any
+      let isBoxSelecting: any;
       const TestComponent = defineComponent({
         setup() {
-          const result = useBoxSelect()
-          isBoxSelecting = result.isBoxSelecting
-          return { startBoxSelect: result.startBoxSelect }
+          const result = useBoxSelect();
+          isBoxSelecting = result.isBoxSelecting;
+          return { startBoxSelect: result.startBoxSelect };
         },
         render() {
-          return h('div', { class: 'canvas-grid' })
+          return h("div", { class: "canvas-grid" });
         },
-      })
+      });
 
-      const wrapper = mount(TestComponent)
-      const canvasElement = wrapper.element
+      const wrapper = mount(TestComponent);
+      const canvasElement = wrapper.element;
 
       // 開始框選
-      const mousedownEvent = new MouseEvent('mousedown', {
+      const mousedownEvent = new MouseEvent("mousedown", {
         button: 0,
         clientX: 100,
         clientY: 100,
-      })
-      Object.defineProperty(mousedownEvent, 'target', {
+      });
+      Object.defineProperty(mousedownEvent, "target", {
         value: canvasElement,
         writable: false,
-      })
+      });
 
-      wrapper.vm.startBoxSelect(mousedownEvent)
-      expect(isBoxSelecting.value).toBe(true)
+      wrapper.vm.startBoxSelect(mousedownEvent);
+      expect(isBoxSelecting.value).toBe(true);
 
       // 移動 10 像素（大於閾值 5）
-      const mouseupEvent = new MouseEvent('mouseup', {
+      const mouseupEvent = new MouseEvent("mouseup", {
         clientX: 110,
         clientY: 110,
-      })
-      document.dispatchEvent(mouseupEvent)
+      });
+      document.dispatchEvent(mouseupEvent);
 
       // 距離 = Math.sqrt(10^2 + 10^2) = 14.14 > 5
-      expect(endSelectionSpy).toHaveBeenCalled()
-      expect(cancelSelectionSpy).not.toHaveBeenCalled()
-      expect(isBoxSelecting.value).toBe(false)
-    })
+      expect(endSelectionSpy).toHaveBeenCalled();
+      expect(cancelSelectionSpy).not.toHaveBeenCalled();
+      expect(isBoxSelecting.value).toBe(false);
+    });
 
-    it('拖曳過程中應呼叫 updateSelection 和 calculateSelectedElements', async () => {
-      const viewportStore = useViewportStore()
-      const selectionStore = useSelectionStore()
-      const podStore = usePodStore()
-      const outputStyleStore = useOutputStyleStore()
-      const skillStore = useSkillStore()
-      const repositoryStore = useRepositoryStore()
-      const subAgentStore = useSubAgentStore()
-      const commandStore = useCommandStore()
-      const mcpServerStore = useMcpServerStore()
+    it("拖曳過程中應呼叫 updateSelection 和 calculateSelectedElements", async () => {
+      const viewportStore = useViewportStore();
+      const selectionStore = useSelectionStore();
+      const podStore = usePodStore();
+      const skillStore = useSkillStore();
+      const repositoryStore = useRepositoryStore();
+      const subAgentStore = useSubAgentStore();
+      const commandStore = useCommandStore();
+      const mcpServerStore = useMcpServerStore();
 
-      viewportStore.zoom = 2
-      viewportStore.offset = { x: 50, y: 100 }
+      viewportStore.zoom = 2;
+      viewportStore.offset = { x: 50, y: 100 };
 
-      const updateSelectionSpy = vi.spyOn(selectionStore, 'updateSelection')
-      const calculateSelectedElementsSpy = vi.spyOn(selectionStore, 'calculateSelectedElements')
+      const updateSelectionSpy = vi.spyOn(selectionStore, "updateSelection");
+      const calculateSelectedElementsSpy = vi.spyOn(
+        selectionStore,
+        "calculateSelectedElements",
+      );
 
       const TestComponent = defineComponent({
         setup() {
-          const { startBoxSelect } = useBoxSelect()
-          return { startBoxSelect }
+          const { startBoxSelect } = useBoxSelect();
+          return { startBoxSelect };
         },
         render() {
-          return h('div', { class: 'canvas-grid' })
+          return h("div", { class: "canvas-grid" });
         },
-      })
+      });
 
-      const wrapper = mount(TestComponent)
-      const canvasElement = wrapper.element
+      const wrapper = mount(TestComponent);
+      const canvasElement = wrapper.element;
 
       // 開始框選
-      const mousedownEvent = new MouseEvent('mousedown', {
+      const mousedownEvent = new MouseEvent("mousedown", {
         button: 0,
         clientX: 250,
         clientY: 300,
-      })
-      Object.defineProperty(mousedownEvent, 'target', {
+      });
+      Object.defineProperty(mousedownEvent, "target", {
         value: canvasElement,
         writable: false,
-      })
+      });
 
-      wrapper.vm.startBoxSelect(mousedownEvent)
+      wrapper.vm.startBoxSelect(mousedownEvent);
 
       // 移動滑鼠
-      const mousemoveEvent = new MouseEvent('mousemove', {
+      const mousemoveEvent = new MouseEvent("mousemove", {
         clientX: 450,
         clientY: 500,
-      })
-      document.dispatchEvent(mousemoveEvent)
+      });
+      document.dispatchEvent(mousemoveEvent);
 
       // moveCanvasX = (450 - 50) / 2 = 200
       // moveCanvasY = (500 - 100) / 2 = 200
-      expect(updateSelectionSpy).toHaveBeenCalledWith(200, 200)
+      expect(updateSelectionSpy).toHaveBeenCalledWith(200, 200);
       expect(calculateSelectedElementsSpy).toHaveBeenCalledWith({
         pods: podStore.pods,
         noteGroups: [
-          { notes: outputStyleStore.notes, type: 'outputStyleNote' },
-          { notes: skillStore.notes, type: 'skillNote' },
-          { notes: repositoryStore.notes, type: 'repositoryNote' },
-          { notes: subAgentStore.notes, type: 'subAgentNote' },
-          { notes: commandStore.notes, type: 'commandNote' },
-          { notes: mcpServerStore.notes, type: 'mcpServerNote' },
+          { notes: skillStore.notes, type: "skillNote" },
+          { notes: repositoryStore.notes, type: "repositoryNote" },
+          { notes: subAgentStore.notes, type: "subAgentNote" },
+          { notes: commandStore.notes, type: "commandNote" },
+          { notes: mcpServerStore.notes, type: "mcpServerNote" },
         ],
-      })
-    })
-  })
+      });
+    });
+  });
 
-  describe('事件監聽器清理', () => {
-    it('unmount 時應清理事件監聽器', () => {
-      const removeEventListenerSpy = vi.spyOn(document, 'removeEventListener')
+  describe("事件監聽器清理", () => {
+    it("unmount 時應清理事件監聽器", () => {
+      const removeEventListenerSpy = vi.spyOn(document, "removeEventListener");
 
       const TestComponent = defineComponent({
         setup() {
-          const { startBoxSelect } = useBoxSelect()
-          return { startBoxSelect }
+          const { startBoxSelect } = useBoxSelect();
+          return { startBoxSelect };
         },
         render() {
-          return h('div', { class: 'canvas-grid' })
+          return h("div", { class: "canvas-grid" });
         },
-      })
+      });
 
-      const wrapper = mount(TestComponent)
-      const canvasElement = wrapper.element
+      const wrapper = mount(TestComponent);
+      const canvasElement = wrapper.element;
 
       // 開始框選（註冊事件監聽器）
-      const mousedownEvent = new MouseEvent('mousedown', {
+      const mousedownEvent = new MouseEvent("mousedown", {
         button: 0,
         clientX: 100,
         clientY: 100,
-      })
-      Object.defineProperty(mousedownEvent, 'target', {
+      });
+      Object.defineProperty(mousedownEvent, "target", {
         value: canvasElement,
         writable: false,
-      })
+      });
 
-      const viewportStore = useViewportStore()
-      viewportStore.zoom = 1
-      viewportStore.offset = { x: 0, y: 0 }
+      const viewportStore = useViewportStore();
+      viewportStore.zoom = 1;
+      viewportStore.offset = { x: 0, y: 0 };
 
-      wrapper.vm.startBoxSelect(mousedownEvent)
+      wrapper.vm.startBoxSelect(mousedownEvent);
 
-      removeEventListenerSpy.mockClear()
+      removeEventListenerSpy.mockClear();
 
       // 卸載元件
-      wrapper.unmount()
+      wrapper.unmount();
 
-      expect(removeEventListenerSpy).toHaveBeenCalledWith('mousemove', expect.any(Function))
-      expect(removeEventListenerSpy).toHaveBeenCalledWith('mouseup', expect.any(Function))
-    })
+      expect(removeEventListenerSpy).toHaveBeenCalledWith(
+        "mousemove",
+        expect.any(Function),
+      );
+      expect(removeEventListenerSpy).toHaveBeenCalledWith(
+        "mouseup",
+        expect.any(Function),
+      );
+    });
 
-    it('mouseup 後應清理事件監聽器', () => {
-      const removeEventListenerSpy = vi.spyOn(document, 'removeEventListener')
+    it("mouseup 後應清理事件監聽器", () => {
+      const removeEventListenerSpy = vi.spyOn(document, "removeEventListener");
 
       const TestComponent = defineComponent({
         setup() {
-          const { startBoxSelect } = useBoxSelect()
-          return { startBoxSelect }
+          const { startBoxSelect } = useBoxSelect();
+          return { startBoxSelect };
         },
         render() {
-          return h('div', { class: 'canvas-grid' })
+          return h("div", { class: "canvas-grid" });
         },
-      })
+      });
 
-      const wrapper = mount(TestComponent)
-      const canvasElement = wrapper.element
+      const wrapper = mount(TestComponent);
+      const canvasElement = wrapper.element;
 
-      const viewportStore = useViewportStore()
-      viewportStore.zoom = 1
-      viewportStore.offset = { x: 0, y: 0 }
+      const viewportStore = useViewportStore();
+      viewportStore.zoom = 1;
+      viewportStore.offset = { x: 0, y: 0 };
 
       // 開始框選
-      const mousedownEvent = new MouseEvent('mousedown', {
+      const mousedownEvent = new MouseEvent("mousedown", {
         button: 0,
         clientX: 100,
         clientY: 100,
-      })
-      Object.defineProperty(mousedownEvent, 'target', {
+      });
+      Object.defineProperty(mousedownEvent, "target", {
         value: canvasElement,
         writable: false,
-      })
+      });
 
-      wrapper.vm.startBoxSelect(mousedownEvent)
+      wrapper.vm.startBoxSelect(mousedownEvent);
 
-      removeEventListenerSpy.mockClear()
+      removeEventListenerSpy.mockClear();
 
       // 放開滑鼠
-      const mouseupEvent = new MouseEvent('mouseup', {
+      const mouseupEvent = new MouseEvent("mouseup", {
         clientX: 150,
         clientY: 150,
-      })
-      document.dispatchEvent(mouseupEvent)
+      });
+      document.dispatchEvent(mouseupEvent);
 
-      expect(removeEventListenerSpy).toHaveBeenCalledWith('mousemove', expect.any(Function))
-      expect(removeEventListenerSpy).toHaveBeenCalledWith('mouseup', expect.any(Function))
-    })
+      expect(removeEventListenerSpy).toHaveBeenCalledWith(
+        "mousemove",
+        expect.any(Function),
+      );
+      expect(removeEventListenerSpy).toHaveBeenCalledWith(
+        "mouseup",
+        expect.any(Function),
+      );
+    });
 
-    it('多次啟動框選時應先清理舊的事件監聽器', () => {
-      const removeEventListenerSpy = vi.spyOn(document, 'removeEventListener')
+    it("多次啟動框選時應先清理舊的事件監聽器", () => {
+      const removeEventListenerSpy = vi.spyOn(document, "removeEventListener");
 
       const TestComponent = defineComponent({
         setup() {
-          const { startBoxSelect } = useBoxSelect()
-          return { startBoxSelect }
+          const { startBoxSelect } = useBoxSelect();
+          return { startBoxSelect };
         },
         render() {
-          return h('div', { class: 'canvas-grid' })
+          return h("div", { class: "canvas-grid" });
         },
-      })
+      });
 
-      const wrapper = mount(TestComponent)
-      const canvasElement = wrapper.element
+      const wrapper = mount(TestComponent);
+      const canvasElement = wrapper.element;
 
-      const viewportStore = useViewportStore()
-      viewportStore.zoom = 1
-      viewportStore.offset = { x: 0, y: 0 }
+      const viewportStore = useViewportStore();
+      viewportStore.zoom = 1;
+      viewportStore.offset = { x: 0, y: 0 };
 
       // 第一次啟動框選
-      const mousedownEvent1 = new MouseEvent('mousedown', {
+      const mousedownEvent1 = new MouseEvent("mousedown", {
         button: 0,
         clientX: 100,
         clientY: 100,
-      })
-      Object.defineProperty(mousedownEvent1, 'target', {
+      });
+      Object.defineProperty(mousedownEvent1, "target", {
         value: canvasElement,
         writable: false,
-      })
+      });
 
-      wrapper.vm.startBoxSelect(mousedownEvent1)
+      wrapper.vm.startBoxSelect(mousedownEvent1);
 
-      removeEventListenerSpy.mockClear()
+      removeEventListenerSpy.mockClear();
 
       // 第二次啟動框選（應先清理第一次的監聽器）
-      const mousedownEvent2 = new MouseEvent('mousedown', {
+      const mousedownEvent2 = new MouseEvent("mousedown", {
         button: 0,
         clientX: 200,
         clientY: 200,
-      })
-      Object.defineProperty(mousedownEvent2, 'target', {
+      });
+      Object.defineProperty(mousedownEvent2, "target", {
         value: canvasElement,
         writable: false,
-      })
+      });
 
-      wrapper.vm.startBoxSelect(mousedownEvent2)
+      wrapper.vm.startBoxSelect(mousedownEvent2);
 
-      expect(removeEventListenerSpy).toHaveBeenCalledWith('mousemove', expect.any(Function))
-      expect(removeEventListenerSpy).toHaveBeenCalledWith('mouseup', expect.any(Function))
-    })
-  })
+      expect(removeEventListenerSpy).toHaveBeenCalledWith(
+        "mousemove",
+        expect.any(Function),
+      );
+      expect(removeEventListenerSpy).toHaveBeenCalledWith(
+        "mouseup",
+        expect.any(Function),
+      );
+    });
+  });
 
-  describe('Input blur 處理', () => {
-    it('activeElement 為 input 時應 blur', () => {
-      const input = document.createElement('input')
-      document.body.appendChild(input)
-      input.focus()
+  describe("Input blur 處理", () => {
+    it("activeElement 為 input 時應 blur", () => {
+      const input = document.createElement("input");
+      document.body.appendChild(input);
+      input.focus();
 
-      const blurSpy = vi.spyOn(input, 'blur')
+      const blurSpy = vi.spyOn(input, "blur");
 
-      const viewportStore = useViewportStore()
-      viewportStore.zoom = 1
-      viewportStore.offset = { x: 0, y: 0 }
+      const viewportStore = useViewportStore();
+      viewportStore.zoom = 1;
+      viewportStore.offset = { x: 0, y: 0 };
 
       const TestComponent = defineComponent({
         setup() {
-          const { startBoxSelect } = useBoxSelect()
-          return { startBoxSelect }
+          const { startBoxSelect } = useBoxSelect();
+          return { startBoxSelect };
         },
         render() {
-          return h('div', { class: 'canvas-grid' })
+          return h("div", { class: "canvas-grid" });
         },
-      })
+      });
 
-      const wrapper = mount(TestComponent)
-      const canvasElement = wrapper.element
+      const wrapper = mount(TestComponent);
+      const canvasElement = wrapper.element;
 
-      const mousedownEvent = new MouseEvent('mousedown', {
+      const mousedownEvent = new MouseEvent("mousedown", {
         button: 0,
         clientX: 100,
         clientY: 100,
-      })
-      Object.defineProperty(mousedownEvent, 'target', {
+      });
+      Object.defineProperty(mousedownEvent, "target", {
         value: canvasElement,
         writable: false,
-      })
+      });
 
-      wrapper.vm.startBoxSelect(mousedownEvent)
+      wrapper.vm.startBoxSelect(mousedownEvent);
 
-      expect(blurSpy).toHaveBeenCalled()
+      expect(blurSpy).toHaveBeenCalled();
 
-      document.body.removeChild(input)
-    })
+      document.body.removeChild(input);
+    });
 
-    it('activeElement 為 textarea 時應 blur', () => {
-      const textarea = document.createElement('textarea')
-      document.body.appendChild(textarea)
-      textarea.focus()
+    it("activeElement 為 textarea 時應 blur", () => {
+      const textarea = document.createElement("textarea");
+      document.body.appendChild(textarea);
+      textarea.focus();
 
-      const blurSpy = vi.spyOn(textarea, 'blur')
+      const blurSpy = vi.spyOn(textarea, "blur");
 
-      const viewportStore = useViewportStore()
-      viewportStore.zoom = 1
-      viewportStore.offset = { x: 0, y: 0 }
+      const viewportStore = useViewportStore();
+      viewportStore.zoom = 1;
+      viewportStore.offset = { x: 0, y: 0 };
 
       const TestComponent = defineComponent({
         setup() {
-          const { startBoxSelect } = useBoxSelect()
-          return { startBoxSelect }
+          const { startBoxSelect } = useBoxSelect();
+          return { startBoxSelect };
         },
         render() {
-          return h('div', { class: 'canvas-grid' })
+          return h("div", { class: "canvas-grid" });
         },
-      })
+      });
 
-      const wrapper = mount(TestComponent)
-      const canvasElement = wrapper.element
+      const wrapper = mount(TestComponent);
+      const canvasElement = wrapper.element;
 
-      const mousedownEvent = new MouseEvent('mousedown', {
+      const mousedownEvent = new MouseEvent("mousedown", {
         button: 0,
         clientX: 100,
         clientY: 100,
-      })
-      Object.defineProperty(mousedownEvent, 'target', {
+      });
+      Object.defineProperty(mousedownEvent, "target", {
         value: canvasElement,
         writable: false,
-      })
+      });
 
-      wrapper.vm.startBoxSelect(mousedownEvent)
+      wrapper.vm.startBoxSelect(mousedownEvent);
 
-      expect(blurSpy).toHaveBeenCalled()
+      expect(blurSpy).toHaveBeenCalled();
 
-      document.body.removeChild(textarea)
-    })
+      document.body.removeChild(textarea);
+    });
 
-    it('activeElement 非 input/textarea 時不應報錯', () => {
-      const div = document.createElement('div')
-      document.body.appendChild(div)
-      div.focus()
+    it("activeElement 非 input/textarea 時不應報錯", () => {
+      const div = document.createElement("div");
+      document.body.appendChild(div);
+      div.focus();
 
-      const viewportStore = useViewportStore()
-      viewportStore.zoom = 1
-      viewportStore.offset = { x: 0, y: 0 }
+      const viewportStore = useViewportStore();
+      viewportStore.zoom = 1;
+      viewportStore.offset = { x: 0, y: 0 };
 
       const TestComponent = defineComponent({
         setup() {
-          const { startBoxSelect } = useBoxSelect()
-          return { startBoxSelect }
+          const { startBoxSelect } = useBoxSelect();
+          return { startBoxSelect };
         },
         render() {
-          return h('div', { class: 'canvas-grid' })
+          return h("div", { class: "canvas-grid" });
         },
-      })
+      });
 
-      const wrapper = mount(TestComponent)
-      const canvasElement = wrapper.element
+      const wrapper = mount(TestComponent);
+      const canvasElement = wrapper.element;
 
-      const mousedownEvent = new MouseEvent('mousedown', {
+      const mousedownEvent = new MouseEvent("mousedown", {
         button: 0,
         clientX: 100,
         clientY: 100,
-      })
-      Object.defineProperty(mousedownEvent, 'target', {
+      });
+      Object.defineProperty(mousedownEvent, "target", {
         value: canvasElement,
         writable: false,
-      })
+      });
 
-      expect(() => wrapper.vm.startBoxSelect(mousedownEvent)).not.toThrow()
+      expect(() => wrapper.vm.startBoxSelect(mousedownEvent)).not.toThrow();
 
-      document.body.removeChild(div)
-    })
-  })
-})
+      document.body.removeChild(div);
+    });
+  });
+});

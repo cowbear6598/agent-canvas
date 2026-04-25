@@ -128,7 +128,6 @@ describe("handleProviderList", () => {
     const caps = claude.capabilities;
     // 所有能力欄位皆應為 true
     expect(caps.chat).toBe(true);
-    expect(caps.outputStyle).toBe(true);
     expect(caps.skill).toBe(true);
     expect(caps.subAgent).toBe(true);
     expect(caps.repository).toBe(true);
@@ -156,7 +155,6 @@ describe("handleProviderList", () => {
     const caps = codex.capabilities;
     // chat 為 true，其餘全部 false
     expect(caps.chat).toBe(true);
-    expect(caps.outputStyle).toBe(false);
     expect(caps.skill).toBe(false);
     expect(caps.subAgent).toBe(false);
     expect(caps.repository).toBe(false);

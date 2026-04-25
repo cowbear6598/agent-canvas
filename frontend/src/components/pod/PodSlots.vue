@@ -4,7 +4,6 @@
 import { computed, toRef } from "vue";
 import { useI18n } from "vue-i18n";
 import type {
-  OutputStyleNote,
   SkillNote,
   SubAgentNote,
   RepositoryNote,
@@ -17,7 +16,6 @@ import {
   useSkillStore,
   useSubAgentStore,
   useMcpServerStore,
-  useOutputStyleStore,
   useRepositoryStore,
   useCommandStore,
 } from "@/stores/note";
@@ -26,7 +24,6 @@ import { usePodCapabilities } from "@/composables/pod/usePodCapabilities";
 const props = defineProps<{
   podId: string;
   podRotation: number;
-  boundOutputStyleNote: OutputStyleNote | undefined;
   boundSkillNotes: SkillNote[];
   boundSubAgentNotes: SubAgentNote[];
   boundRepositoryNote: RepositoryNote | undefined;
@@ -39,8 +36,6 @@ const props = defineProps<{
 // 所有模板與邏輯一律透過 props.xxx 存取。
 
 const emit = defineEmits<{
-  "output-style-dropped": [noteId: string];
-  "output-style-removed": [];
   "skill-dropped": [noteId: string];
   "subagent-dropped": [noteId: string];
   "repository-dropped": [noteId: string];
@@ -57,13 +52,11 @@ const { t } = useI18n();
 const skillStore = useSkillStore();
 const subAgentStore = useSubAgentStore();
 const mcpServerStore = useMcpServerStore();
-const outputStyleStore = useOutputStyleStore();
 const repositoryStore = useRepositoryStore();
 const commandStore = useCommandStore();
 
 // 讀取 Pod 對應 Provider 的 capability flags
 const {
-  isOutputStyleEnabled,
   isSkillEnabled,
   isSubAgentEnabled,
   isRepositoryEnabled,
@@ -87,8 +80,8 @@ type SingleSlotConfig = {
   areaClass: string;
   slotClass: string;
   label: string;
-  store: typeof outputStyleStore | typeof repositoryStore | typeof commandStore;
-  boundNote: () => OutputStyleNote | RepositoryNote | CommandNote | undefined;
+  store: typeof repositoryStore | typeof commandStore;
+  boundNote: () => RepositoryNote | CommandNote | undefined;
   disabled: () => boolean;
   disabledTooltip: () => string;
   onDropped: (noteId: string) => void;
@@ -114,21 +107,6 @@ type MultiSlotConfig = {
 type SlotConfig = SingleSlotConfig | MultiSlotConfig;
 
 const slotConfigs = computed((): SlotConfig[] => [
-  {
-    kind: "single",
-    areaClass: "pod-notch-area-base pod-notch-area",
-    slotClass: "pod-output-style-slot",
-    label: "Style",
-    store: outputStyleStore,
-    boundNote: () => props.boundOutputStyleNote,
-    disabled: () => !isOutputStyleEnabled.value,
-    disabledTooltip: () => DISABLED_TOOLTIP.value,
-    onDropped: (noteId: string): void => {
-      if (!noteId) return;
-      emit("output-style-dropped", noteId);
-    },
-    onRemoved: () => emit("output-style-removed"),
-  },
   {
     kind: "multi",
     areaClass: "pod-notch-area-base pod-skill-notch-area",
@@ -217,10 +195,7 @@ const slotConfigs = computed((): SlotConfig[] => [
 </script>
 
 <template>
-  <template
-    v-for="slot in slotConfigs"
-    :key="slot.slotClass"
-  >
+  <template v-for="slot in slotConfigs" :key="slot.slotClass">
     <div :class="slot.areaClass">
       <PodSingleBindSlot
         v-if="slot.kind === 'single'"

@@ -1,544 +1,596 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
-import { defineComponent } from 'vue'
-import { webSocketMockFactory, mockCreateWebSocketRequest } from '../../helpers/mockWebSocket'
-import { setupStoreTest } from '../../helpers/testSetup'
-import { createMockPod } from '../../helpers/factories'
-import { useDeleteSelection } from '@/composables/canvas/useDeleteSelection'
-import { useCanvasContext } from '@/composables/canvas/useCanvasContext'
-import type { SelectableElement } from '@/types'
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { mount } from "@vue/test-utils";
+import { defineComponent } from "vue";
+import {
+  webSocketMockFactory,
+  mockCreateWebSocketRequest,
+} from "../../helpers/mockWebSocket";
+import { setupStoreTest } from "../../helpers/testSetup";
+import { createMockPod } from "../../helpers/factories";
+import { useDeleteSelection } from "@/composables/canvas/useDeleteSelection";
+import { useCanvasContext } from "@/composables/canvas/useCanvasContext";
+import type { SelectableElement } from "@/types";
 
 // Mock WebSocket
-vi.mock('@/services/websocket', () => webSocketMockFactory())
+vi.mock("@/services/websocket", () => webSocketMockFactory());
 
 // Mock useToast and domHelpers
 const { mockToast, mockIsEditingElement } = vi.hoisted(() => ({
   mockToast: vi.fn(),
   mockIsEditingElement: vi.fn(),
-}))
+}));
 
-vi.mock('@/composables/useToast', () => ({
+vi.mock("@/composables/useToast", () => ({
   useToast: () => ({
     toast: mockToast,
   }),
-}))
+}));
 
-vi.mock('@/utils/domHelpers', () => ({
+vi.mock("@/utils/domHelpers", () => ({
   isEditingElement: () => mockIsEditingElement(),
-}))
+}));
 
-describe('useDeleteSelection', () => {
+describe("useDeleteSelection", () => {
   setupStoreTest(() => {
-    mockIsEditingElement.mockReturnValue(false)
-    const { canvasStore } = useCanvasContext()
-    canvasStore.activeCanvasId = 'canvas-1'
-  })
+    mockIsEditingElement.mockReturnValue(false);
+    const { canvasStore } = useCanvasContext();
+    canvasStore.activeCanvasId = "canvas-1";
+  });
 
-  describe('deleteSelectedElements', () => {
-    it('無選中元素時不操作', async () => {
-      const { selectionStore, podStore, outputStyleStore } = useCanvasContext()
+  describe("deleteSelectedElements", () => {
+    it("無選中元素時不操作", async () => {
+      const { selectionStore, podStore, skillStore } = useCanvasContext();
 
       // 建立測試元件來呼叫 composable
       const TestComponent = defineComponent({
         setup() {
-          return useDeleteSelection()
+          return useDeleteSelection();
         },
-        template: '<div></div>',
-      })
+        template: "<div></div>",
+      });
 
-      const wrapper = mount(TestComponent)
-      const { deleteSelectedElements } = wrapper.vm as ReturnType<typeof useDeleteSelection>
+      const wrapper = mount(TestComponent);
+      const { deleteSelectedElements } = wrapper.vm as ReturnType<
+        typeof useDeleteSelection
+      >;
 
-      selectionStore.selectedElements = []
+      selectionStore.selectedElements = [];
 
-      const deletePodSpy = vi.spyOn(podStore, 'deletePodWithBackend')
-      const deleteNoteSpy = vi.spyOn(outputStyleStore, 'deleteNote')
-      const clearSelectionSpy = vi.spyOn(selectionStore, 'clearSelection')
+      const deletePodSpy = vi.spyOn(podStore, "deletePodWithBackend");
+      const deleteNoteSpy = vi.spyOn(skillStore, "deleteNote");
+      const clearSelectionSpy = vi.spyOn(selectionStore, "clearSelection");
 
-      await deleteSelectedElements()
+      await deleteSelectedElements();
 
-      expect(deletePodSpy).not.toHaveBeenCalled()
-      expect(deleteNoteSpy).not.toHaveBeenCalled()
-      expect(clearSelectionSpy).not.toHaveBeenCalled()
-    })
+      expect(deletePodSpy).not.toHaveBeenCalled();
+      expect(deleteNoteSpy).not.toHaveBeenCalled();
+      expect(clearSelectionSpy).not.toHaveBeenCalled();
+    });
 
-    it('刪除選中的 Pod', async () => {
-      const { selectionStore, podStore } = useCanvasContext()
+    it("刪除選中的 Pod", async () => {
+      const { selectionStore, podStore } = useCanvasContext();
 
       const TestComponent = defineComponent({
         setup() {
-          return useDeleteSelection()
+          return useDeleteSelection();
         },
-        template: '<div></div>',
-      })
+        template: "<div></div>",
+      });
 
-      const wrapper = mount(TestComponent)
-      const { deleteSelectedElements } = wrapper.vm as ReturnType<typeof useDeleteSelection>
+      const wrapper = mount(TestComponent);
+      const { deleteSelectedElements } = wrapper.vm as ReturnType<
+        typeof useDeleteSelection
+      >;
 
-      const pod1 = createMockPod({ id: 'pod-1' })
-      const pod2 = createMockPod({ id: 'pod-2' })
-      podStore.pods = [pod1, pod2]
+      const pod1 = createMockPod({ id: "pod-1" });
+      const pod2 = createMockPod({ id: "pod-2" });
+      podStore.pods = [pod1, pod2];
 
       selectionStore.selectedElements = [
-        { type: 'pod', id: 'pod-1' },
-        { type: 'pod', id: 'pod-2' },
-      ] as SelectableElement[]
+        { type: "pod", id: "pod-1" },
+        { type: "pod", id: "pod-2" },
+      ] as SelectableElement[];
 
-      const deletePodSpy = vi.spyOn(podStore, 'deletePodWithBackend').mockResolvedValue()
-      const clearSelectionSpy = vi.spyOn(selectionStore, 'clearSelection')
+      const deletePodSpy = vi
+        .spyOn(podStore, "deletePodWithBackend")
+        .mockResolvedValue();
+      const clearSelectionSpy = vi.spyOn(selectionStore, "clearSelection");
 
-      await deleteSelectedElements()
+      await deleteSelectedElements();
 
-      expect(deletePodSpy).toHaveBeenCalledTimes(2)
-      expect(deletePodSpy).toHaveBeenCalledWith('pod-1')
-      expect(deletePodSpy).toHaveBeenCalledWith('pod-2')
-      expect(clearSelectionSpy).toHaveBeenCalled()
-    })
+      expect(deletePodSpy).toHaveBeenCalledTimes(2);
+      expect(deletePodSpy).toHaveBeenCalledWith("pod-1");
+      expect(deletePodSpy).toHaveBeenCalledWith("pod-2");
+      expect(clearSelectionSpy).toHaveBeenCalled();
+    });
 
-    it('刪除選中的 outputStyleNote', async () => {
-      const { selectionStore, outputStyleStore } = useCanvasContext()
+    it("刪除選中的 skillNote", async () => {
+      const { selectionStore, skillStore } = useCanvasContext();
 
       const TestComponent = defineComponent({
         setup() {
-          return useDeleteSelection()
+          return useDeleteSelection();
         },
-        template: '<div></div>',
-      })
+        template: "<div></div>",
+      });
 
-      const wrapper = mount(TestComponent)
-      const { deleteSelectedElements } = wrapper.vm as ReturnType<typeof useDeleteSelection>
+      const wrapper = mount(TestComponent);
+      const { deleteSelectedElements } = wrapper.vm as ReturnType<
+        typeof useDeleteSelection
+      >;
 
       selectionStore.selectedElements = [
-        { type: 'outputStyleNote', id: 'note-1' },
-        { type: 'outputStyleNote', id: 'note-2' },
-      ] as SelectableElement[]
+        { type: "skillNote", id: "skill-note-1" },
+      ] as SelectableElement[];
 
-      const deleteNoteSpy = vi.spyOn(outputStyleStore, 'deleteNote').mockResolvedValue()
-      const clearSelectionSpy = vi.spyOn(selectionStore, 'clearSelection')
+      const deleteNoteSpy = vi
+        .spyOn(skillStore, "deleteNote")
+        .mockResolvedValue();
+      const clearSelectionSpy = vi.spyOn(selectionStore, "clearSelection");
 
-      await deleteSelectedElements()
+      await deleteSelectedElements();
 
-      expect(deleteNoteSpy).toHaveBeenCalledTimes(2)
-      expect(deleteNoteSpy).toHaveBeenCalledWith('note-1')
-      expect(deleteNoteSpy).toHaveBeenCalledWith('note-2')
-      expect(clearSelectionSpy).toHaveBeenCalled()
-    })
+      expect(deleteNoteSpy).toHaveBeenCalledWith("skill-note-1");
+      expect(clearSelectionSpy).toHaveBeenCalled();
+    });
 
-    it('刪除選中的 skillNote', async () => {
-      const { selectionStore, skillStore } = useCanvasContext()
+    it("刪除選中的 repositoryNote", async () => {
+      const { selectionStore, repositoryStore } = useCanvasContext();
 
       const TestComponent = defineComponent({
         setup() {
-          return useDeleteSelection()
+          return useDeleteSelection();
         },
-        template: '<div></div>',
-      })
+        template: "<div></div>",
+      });
 
-      const wrapper = mount(TestComponent)
-      const { deleteSelectedElements } = wrapper.vm as ReturnType<typeof useDeleteSelection>
+      const wrapper = mount(TestComponent);
+      const { deleteSelectedElements } = wrapper.vm as ReturnType<
+        typeof useDeleteSelection
+      >;
 
       selectionStore.selectedElements = [
-        { type: 'skillNote', id: 'skill-note-1' },
-      ] as SelectableElement[]
+        { type: "repositoryNote", id: "repo-note-1" },
+      ] as SelectableElement[];
 
-      const deleteNoteSpy = vi.spyOn(skillStore, 'deleteNote').mockResolvedValue()
-      const clearSelectionSpy = vi.spyOn(selectionStore, 'clearSelection')
+      const deleteNoteSpy = vi
+        .spyOn(repositoryStore, "deleteNote")
+        .mockResolvedValue();
+      const clearSelectionSpy = vi.spyOn(selectionStore, "clearSelection");
 
-      await deleteSelectedElements()
+      await deleteSelectedElements();
 
-      expect(deleteNoteSpy).toHaveBeenCalledWith('skill-note-1')
-      expect(clearSelectionSpy).toHaveBeenCalled()
-    })
+      expect(deleteNoteSpy).toHaveBeenCalledWith("repo-note-1");
+      expect(clearSelectionSpy).toHaveBeenCalled();
+    });
 
-    it('刪除選中的 repositoryNote', async () => {
-      const { selectionStore, repositoryStore } = useCanvasContext()
+    it("刪除選中的 subAgentNote", async () => {
+      const { selectionStore, subAgentStore } = useCanvasContext();
 
       const TestComponent = defineComponent({
         setup() {
-          return useDeleteSelection()
+          return useDeleteSelection();
         },
-        template: '<div></div>',
-      })
+        template: "<div></div>",
+      });
 
-      const wrapper = mount(TestComponent)
-      const { deleteSelectedElements } = wrapper.vm as ReturnType<typeof useDeleteSelection>
+      const wrapper = mount(TestComponent);
+      const { deleteSelectedElements } = wrapper.vm as ReturnType<
+        typeof useDeleteSelection
+      >;
 
       selectionStore.selectedElements = [
-        { type: 'repositoryNote', id: 'repo-note-1' },
-      ] as SelectableElement[]
+        { type: "subAgentNote", id: "subagent-note-1" },
+      ] as SelectableElement[];
 
-      const deleteNoteSpy = vi.spyOn(repositoryStore, 'deleteNote').mockResolvedValue()
-      const clearSelectionSpy = vi.spyOn(selectionStore, 'clearSelection')
+      const deleteNoteSpy = vi
+        .spyOn(subAgentStore, "deleteNote")
+        .mockResolvedValue();
 
-      await deleteSelectedElements()
+      await deleteSelectedElements();
 
-      expect(deleteNoteSpy).toHaveBeenCalledWith('repo-note-1')
-      expect(clearSelectionSpy).toHaveBeenCalled()
-    })
+      expect(deleteNoteSpy).toHaveBeenCalledWith("subagent-note-1");
+      expect(selectionStore.clearSelection).toHaveBeenCalled();
+    });
 
-    it('刪除選中的 subAgentNote', async () => {
-      const { selectionStore, subAgentStore } = useCanvasContext()
+    it("刪除選中的 commandNote", async () => {
+      const { selectionStore, commandStore } = useCanvasContext();
 
       const TestComponent = defineComponent({
         setup() {
-          return useDeleteSelection()
+          return useDeleteSelection();
         },
-        template: '<div></div>',
-      })
+        template: "<div></div>",
+      });
 
-      const wrapper = mount(TestComponent)
-      const { deleteSelectedElements } = wrapper.vm as ReturnType<typeof useDeleteSelection>
+      const wrapper = mount(TestComponent);
+      const { deleteSelectedElements } = wrapper.vm as ReturnType<
+        typeof useDeleteSelection
+      >;
 
       selectionStore.selectedElements = [
-        { type: 'subAgentNote', id: 'subagent-note-1' },
-      ] as SelectableElement[]
+        { type: "commandNote", id: "command-note-1" },
+      ] as SelectableElement[];
 
-      const deleteNoteSpy = vi.spyOn(subAgentStore, 'deleteNote').mockResolvedValue()
+      const deleteNoteSpy = vi
+        .spyOn(commandStore, "deleteNote")
+        .mockResolvedValue();
 
-      await deleteSelectedElements()
+      await deleteSelectedElements();
 
-      expect(deleteNoteSpy).toHaveBeenCalledWith('subagent-note-1')
-      expect(selectionStore.clearSelection).toHaveBeenCalled()
-    })
+      expect(deleteNoteSpy).toHaveBeenCalledWith("command-note-1");
+      expect(selectionStore.clearSelection).toHaveBeenCalled();
+    });
 
-    it('刪除選中的 commandNote', async () => {
-      const { selectionStore, commandStore } = useCanvasContext()
+    it("刪除選中的 mcpServerNote", async () => {
+      const { selectionStore, mcpServerStore } = useCanvasContext();
 
       const TestComponent = defineComponent({
         setup() {
-          return useDeleteSelection()
+          return useDeleteSelection();
         },
-        template: '<div></div>',
-      })
+        template: "<div></div>",
+      });
 
-      const wrapper = mount(TestComponent)
-      const { deleteSelectedElements } = wrapper.vm as ReturnType<typeof useDeleteSelection>
+      const wrapper = mount(TestComponent);
+      const { deleteSelectedElements } = wrapper.vm as ReturnType<
+        typeof useDeleteSelection
+      >;
 
       selectionStore.selectedElements = [
-        { type: 'commandNote', id: 'command-note-1' },
-      ] as SelectableElement[]
+        { type: "mcpServerNote", id: "mcp-server-note-1" },
+      ] as SelectableElement[];
 
-      const deleteNoteSpy = vi.spyOn(commandStore, 'deleteNote').mockResolvedValue()
+      const deleteNoteSpy = vi
+        .spyOn(mcpServerStore, "deleteNote")
+        .mockResolvedValue();
 
-      await deleteSelectedElements()
+      await deleteSelectedElements();
 
-      expect(deleteNoteSpy).toHaveBeenCalledWith('command-note-1')
-      expect(selectionStore.clearSelection).toHaveBeenCalled()
-    })
+      expect(deleteNoteSpy).toHaveBeenCalledWith("mcp-server-note-1");
+      expect(selectionStore.clearSelection).toHaveBeenCalled();
+    });
 
-    it('刪除選中的 mcpServerNote', async () => {
-      const { selectionStore, mcpServerStore } = useCanvasContext()
+    it("混合刪除 Pod 和多種 Note（含 mcpServerNote）", async () => {
+      const {
+        selectionStore,
+        podStore,
+        skillStore,
+        repositoryStore,
+        subAgentStore,
+        commandStore,
+        mcpServerStore,
+      } = useCanvasContext();
 
       const TestComponent = defineComponent({
         setup() {
-          return useDeleteSelection()
+          return useDeleteSelection();
         },
-        template: '<div></div>',
-      })
+        template: "<div></div>",
+      });
 
-      const wrapper = mount(TestComponent)
-      const { deleteSelectedElements } = wrapper.vm as ReturnType<typeof useDeleteSelection>
+      const wrapper = mount(TestComponent);
+      const { deleteSelectedElements } = wrapper.vm as ReturnType<
+        typeof useDeleteSelection
+      >;
 
       selectionStore.selectedElements = [
-        { type: 'mcpServerNote', id: 'mcp-server-note-1' },
-      ] as SelectableElement[]
+        { type: "pod", id: "pod-1" },
+        { type: "skillNote", id: "skill-1" },
+        { type: "repositoryNote", id: "repo-1" },
+        { type: "subAgentNote", id: "subagent-1" },
+        { type: "commandNote", id: "command-1" },
+        { type: "mcpServerNote", id: "mcp-1" },
+      ] as SelectableElement[];
 
-      const deleteNoteSpy = vi.spyOn(mcpServerStore, 'deleteNote').mockResolvedValue()
+      const deletePodSpy = vi
+        .spyOn(podStore, "deletePodWithBackend")
+        .mockResolvedValue();
+      const deleteSkillSpy = vi
+        .spyOn(skillStore, "deleteNote")
+        .mockResolvedValue();
+      const deleteRepositorySpy = vi
+        .spyOn(repositoryStore, "deleteNote")
+        .mockResolvedValue();
+      const deleteSubAgentSpy = vi
+        .spyOn(subAgentStore, "deleteNote")
+        .mockResolvedValue();
+      const deleteCommandSpy = vi
+        .spyOn(commandStore, "deleteNote")
+        .mockResolvedValue();
+      const deleteMcpServerSpy = vi
+        .spyOn(mcpServerStore, "deleteNote")
+        .mockResolvedValue();
 
-      await deleteSelectedElements()
+      await deleteSelectedElements();
 
-      expect(deleteNoteSpy).toHaveBeenCalledWith('mcp-server-note-1')
-      expect(selectionStore.clearSelection).toHaveBeenCalled()
-    })
+      expect(deletePodSpy).toHaveBeenCalledWith("pod-1");
+      expect(deleteSkillSpy).toHaveBeenCalledWith("skill-1");
+      expect(deleteRepositorySpy).toHaveBeenCalledWith("repo-1");
+      expect(deleteSubAgentSpy).toHaveBeenCalledWith("subagent-1");
+      expect(deleteCommandSpy).toHaveBeenCalledWith("command-1");
+      expect(deleteMcpServerSpy).toHaveBeenCalledWith("mcp-1");
+      expect(selectionStore.clearSelection).toHaveBeenCalled();
+    });
 
-    it('混合刪除 Pod 和多種 Note（含 mcpServerNote）', async () => {
-      const { selectionStore, podStore, outputStyleStore, skillStore, repositoryStore, subAgentStore, commandStore, mcpServerStore } = useCanvasContext()
+    it("部分刪除失敗時顯示 Toast 但不阻斷其他刪除", async () => {
+      const { selectionStore, podStore, skillStore } = useCanvasContext();
 
       const TestComponent = defineComponent({
         setup() {
-          return useDeleteSelection()
+          return useDeleteSelection();
         },
-        template: '<div></div>',
-      })
+        template: "<div></div>",
+      });
 
-      const wrapper = mount(TestComponent)
-      const { deleteSelectedElements } = wrapper.vm as ReturnType<typeof useDeleteSelection>
+      const wrapper = mount(TestComponent);
+      const { deleteSelectedElements } = wrapper.vm as ReturnType<
+        typeof useDeleteSelection
+      >;
 
       selectionStore.selectedElements = [
-        { type: 'pod', id: 'pod-1' },
-        { type: 'outputStyleNote', id: 'output-1' },
-        { type: 'skillNote', id: 'skill-1' },
-        { type: 'repositoryNote', id: 'repo-1' },
-        { type: 'subAgentNote', id: 'subagent-1' },
-        { type: 'commandNote', id: 'command-1' },
-        { type: 'mcpServerNote', id: 'mcp-1' },
-      ] as SelectableElement[]
+        { type: "pod", id: "pod-1" },
+        { type: "pod", id: "pod-2" },
+        { type: "skillNote", id: "note-1" },
+      ] as SelectableElement[];
 
-      const deletePodSpy = vi.spyOn(podStore, 'deletePodWithBackend').mockResolvedValue()
-      const deleteOutputStyleSpy = vi.spyOn(outputStyleStore, 'deleteNote').mockResolvedValue()
-      const deleteSkillSpy = vi.spyOn(skillStore, 'deleteNote').mockResolvedValue()
-      const deleteRepositorySpy = vi.spyOn(repositoryStore, 'deleteNote').mockResolvedValue()
-      const deleteSubAgentSpy = vi.spyOn(subAgentStore, 'deleteNote').mockResolvedValue()
-      const deleteCommandSpy = vi.spyOn(commandStore, 'deleteNote').mockResolvedValue()
-      const deleteMcpServerSpy = vi.spyOn(mcpServerStore, 'deleteNote').mockResolvedValue()
+      const consoleErrorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
 
-      await deleteSelectedElements()
-
-      expect(deletePodSpy).toHaveBeenCalledWith('pod-1')
-      expect(deleteOutputStyleSpy).toHaveBeenCalledWith('output-1')
-      expect(deleteSkillSpy).toHaveBeenCalledWith('skill-1')
-      expect(deleteRepositorySpy).toHaveBeenCalledWith('repo-1')
-      expect(deleteSubAgentSpy).toHaveBeenCalledWith('subagent-1')
-      expect(deleteCommandSpy).toHaveBeenCalledWith('command-1')
-      expect(deleteMcpServerSpy).toHaveBeenCalledWith('mcp-1')
-      expect(selectionStore.clearSelection).toHaveBeenCalled()
-    })
-
-    it('部分刪除失敗時顯示 Toast 但不阻斷其他刪除', async () => {
-      const { selectionStore, podStore, outputStyleStore } = useCanvasContext()
-
-      const TestComponent = defineComponent({
-        setup() {
-          return useDeleteSelection()
-        },
-        template: '<div></div>',
-      })
-
-      const wrapper = mount(TestComponent)
-      const { deleteSelectedElements } = wrapper.vm as ReturnType<typeof useDeleteSelection>
-
-      selectionStore.selectedElements = [
-        { type: 'pod', id: 'pod-1' },
-        { type: 'pod', id: 'pod-2' },
-        { type: 'outputStyleNote', id: 'note-1' },
-      ] as SelectableElement[]
-
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
-      vi.spyOn(podStore, 'deletePodWithBackend')
+      vi.spyOn(podStore, "deletePodWithBackend")
         .mockResolvedValueOnce() // pod-1 成功
-        .mockRejectedValueOnce(new Error('Pod 刪除失敗')) // pod-2 失敗
+        .mockRejectedValueOnce(new Error("Pod 刪除失敗")); // pod-2 失敗
 
-      vi.spyOn(outputStyleStore, 'deleteNote').mockResolvedValueOnce() // note-1 成功
+      vi.spyOn(skillStore, "deleteNote").mockResolvedValueOnce(); // note-1 成功
 
-      await deleteSelectedElements()
-
-      expect(mockToast).toHaveBeenCalledWith({
-        title: '刪除部分失敗',
-        description: '1 個物件刪除失敗',
-        duration: 3000,
-      })
-
-      expect(consoleErrorSpy).toHaveBeenCalledWith('刪除元素失敗:', expect.any(Error))
-      expect(selectionStore.clearSelection).toHaveBeenCalled()
-
-      consoleErrorSpy.mockRestore()
-    })
-
-    it('多個刪除失敗時 Toast 顯示正確失敗數量', async () => {
-      const { selectionStore, podStore } = useCanvasContext()
-
-      const TestComponent = defineComponent({
-        setup() {
-          return useDeleteSelection()
-        },
-        template: '<div></div>',
-      })
-
-      const wrapper = mount(TestComponent)
-      const { deleteSelectedElements } = wrapper.vm as ReturnType<typeof useDeleteSelection>
-
-      selectionStore.selectedElements = [
-        { type: 'pod', id: 'pod-1' },
-        { type: 'pod', id: 'pod-2' },
-        { type: 'pod', id: 'pod-3' },
-      ] as SelectableElement[]
-
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
-      vi.spyOn(podStore, 'deletePodWithBackend')
-        .mockRejectedValueOnce(new Error('失敗 1'))
-        .mockRejectedValueOnce(new Error('失敗 2'))
-        .mockResolvedValueOnce() // pod-3 成功
-
-      await deleteSelectedElements()
+      await deleteSelectedElements();
 
       expect(mockToast).toHaveBeenCalledWith({
-        title: '刪除部分失敗',
-        description: '2 個物件刪除失敗',
+        title: "刪除部分失敗",
+        description: "1 個物件刪除失敗",
         duration: 3000,
-      })
+      });
 
-      expect(selectionStore.clearSelection).toHaveBeenCalled()
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        "刪除元素失敗:",
+        expect.any(Error),
+      );
+      expect(selectionStore.clearSelection).toHaveBeenCalled();
 
-      consoleErrorSpy.mockRestore()
-    })
+      consoleErrorSpy.mockRestore();
+    });
 
-    it('全部刪除成功時不顯示 Toast', async () => {
-      const { selectionStore, podStore } = useCanvasContext()
+    it("多個刪除失敗時 Toast 顯示正確失敗數量", async () => {
+      const { selectionStore, podStore } = useCanvasContext();
 
       const TestComponent = defineComponent({
         setup() {
-          return useDeleteSelection()
+          return useDeleteSelection();
         },
-        template: '<div></div>',
-      })
+        template: "<div></div>",
+      });
 
-      const wrapper = mount(TestComponent)
-      const { deleteSelectedElements } = wrapper.vm as ReturnType<typeof useDeleteSelection>
+      const wrapper = mount(TestComponent);
+      const { deleteSelectedElements } = wrapper.vm as ReturnType<
+        typeof useDeleteSelection
+      >;
 
       selectionStore.selectedElements = [
-        { type: 'pod', id: 'pod-1' },
-        { type: 'pod', id: 'pod-2' },
-      ] as SelectableElement[]
+        { type: "pod", id: "pod-1" },
+        { type: "pod", id: "pod-2" },
+        { type: "pod", id: "pod-3" },
+      ] as SelectableElement[];
 
-      vi.spyOn(podStore, 'deletePodWithBackend').mockResolvedValue()
+      const consoleErrorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
 
-      await deleteSelectedElements()
+      vi.spyOn(podStore, "deletePodWithBackend")
+        .mockRejectedValueOnce(new Error("失敗 1"))
+        .mockRejectedValueOnce(new Error("失敗 2"))
+        .mockResolvedValueOnce(); // pod-3 成功
 
-      expect(mockToast).not.toHaveBeenCalled()
-      expect(selectionStore.clearSelection).toHaveBeenCalled()
-    })
-  })
+      await deleteSelectedElements();
 
-  describe('handleKeyDown', () => {
-    it('Delete 鍵觸發刪除', async () => {
-      const { selectionStore, podStore } = useCanvasContext()
-      selectionStore.selectedElements = [{ type: 'pod', id: 'pod-1' }] as SelectableElement[]
+      expect(mockToast).toHaveBeenCalledWith({
+        title: "刪除部分失敗",
+        description: "2 個物件刪除失敗",
+        duration: 3000,
+      });
+
+      expect(selectionStore.clearSelection).toHaveBeenCalled();
+
+      consoleErrorSpy.mockRestore();
+    });
+
+    it("全部刪除成功時不顯示 Toast", async () => {
+      const { selectionStore, podStore } = useCanvasContext();
 
       const TestComponent = defineComponent({
         setup() {
-          useDeleteSelection()
-          return {}
+          return useDeleteSelection();
         },
-        template: '<div></div>',
-      })
+        template: "<div></div>",
+      });
 
-      const deletePodSpy = vi.spyOn(podStore, 'deletePodWithBackend').mockResolvedValue()
+      const wrapper = mount(TestComponent);
+      const { deleteSelectedElements } = wrapper.vm as ReturnType<
+        typeof useDeleteSelection
+      >;
 
-      mount(TestComponent)
+      selectionStore.selectedElements = [
+        { type: "pod", id: "pod-1" },
+        { type: "pod", id: "pod-2" },
+      ] as SelectableElement[];
+
+      vi.spyOn(podStore, "deletePodWithBackend").mockResolvedValue();
+
+      await deleteSelectedElements();
+
+      expect(mockToast).not.toHaveBeenCalled();
+      expect(selectionStore.clearSelection).toHaveBeenCalled();
+    });
+  });
+
+  describe("handleKeyDown", () => {
+    it("Delete 鍵觸發刪除", async () => {
+      const { selectionStore, podStore } = useCanvasContext();
+      selectionStore.selectedElements = [
+        { type: "pod", id: "pod-1" },
+      ] as SelectableElement[];
+
+      const TestComponent = defineComponent({
+        setup() {
+          useDeleteSelection();
+          return {};
+        },
+        template: "<div></div>",
+      });
+
+      const deletePodSpy = vi
+        .spyOn(podStore, "deletePodWithBackend")
+        .mockResolvedValue();
+
+      mount(TestComponent);
 
       // 模擬按下 Delete 鍵
-      const event = new KeyboardEvent('keydown', { key: 'Delete' })
-      document.dispatchEvent(event)
+      const event = new KeyboardEvent("keydown", { key: "Delete" });
+      document.dispatchEvent(event);
 
       // 等待 async 操作完成
-      await new Promise(resolve => setTimeout(resolve, 0))
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
-      expect(deletePodSpy).toHaveBeenCalledWith('pod-1')
-    })
+      expect(deletePodSpy).toHaveBeenCalledWith("pod-1");
+    });
 
-    it('在輸入框中按下 Delete 鍵不觸發刪除', async () => {
-      const { selectionStore, podStore } = useCanvasContext()
-      selectionStore.selectedElements = [{ type: 'pod', id: 'pod-1' }] as SelectableElement[]
+    it("在輸入框中按下 Delete 鍵不觸發刪除", async () => {
+      const { selectionStore, podStore } = useCanvasContext();
+      selectionStore.selectedElements = [
+        { type: "pod", id: "pod-1" },
+      ] as SelectableElement[];
 
-      mockIsEditingElement.mockReturnValue(true)
-
-      const TestComponent = defineComponent({
-        setup() {
-          useDeleteSelection()
-          return {}
-        },
-        template: '<div></div>',
-      })
-
-      const deletePodSpy = vi.spyOn(podStore, 'deletePodWithBackend').mockResolvedValue()
-
-      mount(TestComponent)
-
-      const event = new KeyboardEvent('keydown', { key: 'Delete' })
-      document.dispatchEvent(event)
-
-      await new Promise(resolve => setTimeout(resolve, 0))
-
-      expect(deletePodSpy).not.toHaveBeenCalled()
-    })
-
-    it('無選取時按下 Delete 鍵不觸發刪除', async () => {
-      const { selectionStore, podStore } = useCanvasContext()
-      selectionStore.selectedElements = []
+      mockIsEditingElement.mockReturnValue(true);
 
       const TestComponent = defineComponent({
         setup() {
-          useDeleteSelection()
-          return {}
+          useDeleteSelection();
+          return {};
         },
-        template: '<div></div>',
-      })
+        template: "<div></div>",
+      });
 
-      const deletePodSpy = vi.spyOn(podStore, 'deletePodWithBackend').mockResolvedValue()
+      const deletePodSpy = vi
+        .spyOn(podStore, "deletePodWithBackend")
+        .mockResolvedValue();
 
-      mount(TestComponent)
+      mount(TestComponent);
 
-      const event = new KeyboardEvent('keydown', { key: 'Delete' })
-      document.dispatchEvent(event)
+      const event = new KeyboardEvent("keydown", { key: "Delete" });
+      document.dispatchEvent(event);
 
-      await new Promise(resolve => setTimeout(resolve, 0))
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
-      expect(deletePodSpy).not.toHaveBeenCalled()
-    })
+      expect(deletePodSpy).not.toHaveBeenCalled();
+    });
 
-    it('按下非 Delete 鍵不觸發刪除', async () => {
-      const { selectionStore, podStore } = useCanvasContext()
-      selectionStore.selectedElements = [{ type: 'pod', id: 'pod-1' }] as SelectableElement[]
+    it("無選取時按下 Delete 鍵不觸發刪除", async () => {
+      const { selectionStore, podStore } = useCanvasContext();
+      selectionStore.selectedElements = [];
 
       const TestComponent = defineComponent({
         setup() {
-          useDeleteSelection()
-          return {}
+          useDeleteSelection();
+          return {};
         },
-        template: '<div></div>',
-      })
+        template: "<div></div>",
+      });
 
-      const deletePodSpy = vi.spyOn(podStore, 'deletePodWithBackend').mockResolvedValue()
+      const deletePodSpy = vi
+        .spyOn(podStore, "deletePodWithBackend")
+        .mockResolvedValue();
 
-      mount(TestComponent)
+      mount(TestComponent);
 
-      const event = new KeyboardEvent('keydown', { key: 'Backspace' })
-      document.dispatchEvent(event)
+      const event = new KeyboardEvent("keydown", { key: "Delete" });
+      document.dispatchEvent(event);
 
-      await new Promise(resolve => setTimeout(resolve, 0))
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
-      expect(deletePodSpy).not.toHaveBeenCalled()
-    })
-  })
+      expect(deletePodSpy).not.toHaveBeenCalled();
+    });
 
-  describe('生命週期', () => {
-    it('onMounted 時註冊 keydown 事件監聽器', () => {
-      const addEventListenerSpy = vi.spyOn(document, 'addEventListener')
+    it("按下非 Delete 鍵不觸發刪除", async () => {
+      const { selectionStore, podStore } = useCanvasContext();
+      selectionStore.selectedElements = [
+        { type: "pod", id: "pod-1" },
+      ] as SelectableElement[];
 
       const TestComponent = defineComponent({
         setup() {
-          useDeleteSelection()
-          return {}
+          useDeleteSelection();
+          return {};
         },
-        template: '<div></div>',
-      })
+        template: "<div></div>",
+      });
 
-      mount(TestComponent)
+      const deletePodSpy = vi
+        .spyOn(podStore, "deletePodWithBackend")
+        .mockResolvedValue();
 
-      expect(addEventListenerSpy).toHaveBeenCalledWith('keydown', expect.any(Function))
+      mount(TestComponent);
 
-      addEventListenerSpy.mockRestore()
-    })
+      const event = new KeyboardEvent("keydown", { key: "Backspace" });
+      document.dispatchEvent(event);
 
-    it('onUnmounted 時移除 keydown 事件監聽器', () => {
-      const removeEventListenerSpy = vi.spyOn(document, 'removeEventListener')
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(deletePodSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("生命週期", () => {
+    it("onMounted 時註冊 keydown 事件監聽器", () => {
+      const addEventListenerSpy = vi.spyOn(document, "addEventListener");
 
       const TestComponent = defineComponent({
         setup() {
-          useDeleteSelection()
-          return {}
+          useDeleteSelection();
+          return {};
         },
-        template: '<div></div>',
-      })
+        template: "<div></div>",
+      });
 
-      const wrapper = mount(TestComponent)
-      wrapper.unmount()
+      mount(TestComponent);
 
-      expect(removeEventListenerSpy).toHaveBeenCalledWith('keydown', expect.any(Function))
+      expect(addEventListenerSpy).toHaveBeenCalledWith(
+        "keydown",
+        expect.any(Function),
+      );
 
-      removeEventListenerSpy.mockRestore()
-    })
-  })
-})
+      addEventListenerSpy.mockRestore();
+    });
+
+    it("onUnmounted 時移除 keydown 事件監聽器", () => {
+      const removeEventListenerSpy = vi.spyOn(document, "removeEventListener");
+
+      const TestComponent = defineComponent({
+        setup() {
+          useDeleteSelection();
+          return {};
+        },
+        template: "<div></div>",
+      });
+
+      const wrapper = mount(TestComponent);
+      wrapper.unmount();
+
+      expect(removeEventListenerSpy).toHaveBeenCalledWith(
+        "keydown",
+        expect.any(Function),
+      );
+
+      removeEventListenerSpy.mockRestore();
+    });
+  });
+});

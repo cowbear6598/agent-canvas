@@ -5,7 +5,6 @@ import { screenToCanvasPosition } from "@/lib/canvasCoordinateUtils";
 import type { usePodStore } from "@/stores/pod";
 import type { useViewportStore } from "@/stores/pod";
 import type {
-  useOutputStyleStore,
   useSkillStore,
   useSubAgentStore,
   useRepositoryStore,
@@ -16,7 +15,7 @@ import TrashZone from "@/components/canvas/TrashZone.vue";
 import type { McpServerConfig } from "@/types";
 import { useToast } from "@/composables/useToast";
 
-type EditableNoteType = "outputStyle" | "subAgent" | "command";
+type EditableNoteType = "subAgent" | "command";
 
 interface McpServerModalState {
   visible: boolean;
@@ -44,7 +43,6 @@ interface NoteStoreBase {
 interface UseCanvasNoteHandlersOptions {
   podStore: ReturnType<typeof usePodStore>;
   viewportStore: ReturnType<typeof useViewportStore>;
-  outputStyleStore: ReturnType<typeof useOutputStyleStore>;
   skillStore: ReturnType<typeof useSkillStore>;
   subAgentStore: ReturnType<typeof useSubAgentStore>;
   repositoryStore: ReturnType<typeof useRepositoryStore>;
@@ -58,20 +56,13 @@ interface UseCanvasNoteHandlersOptions {
   mcpServerModal: Ref<McpServerModalState>;
 }
 
-type NoteType =
-  | "outputStyle"
-  | "skill"
-  | "subAgent"
-  | "repository"
-  | "command"
-  | "mcpServer";
+type NoteType = "skill" | "subAgent" | "repository" | "command" | "mcpServer";
 
 export function useCanvasNoteHandlers(options: UseCanvasNoteHandlersOptions): {
   noteHandlerMap: Record<NoteType, ReturnType<typeof useNoteEventHandlers>>;
   showTrashZone: ComputedRef<boolean>;
   isTrashHighlighted: ComputedRef<boolean>;
   isCanvasEmpty: ComputedRef<boolean>;
-  handleCreateOutputStyleNote: (itemId: string) => void;
   handleCreateSkillNote: (itemId: string) => void;
   handleCreateSubAgentNote: (itemId: string) => void;
   handleCreateRepositoryNote: (itemId: string) => void;
@@ -86,7 +77,6 @@ export function useCanvasNoteHandlers(options: UseCanvasNoteHandlersOptions): {
   const {
     podStore,
     viewportStore,
-    outputStyleStore,
     skillStore,
     subAgentStore,
     repositoryStore,
@@ -100,7 +90,6 @@ export function useCanvasNoteHandlers(options: UseCanvasNoteHandlersOptions): {
   const { showErrorToast } = useToast();
 
   const noteConfigs = [
-    { store: outputStyleStore as NoteStoreBase, type: "outputStyle" as const },
     { store: skillStore as NoteStoreBase, type: "skill" as const },
     { store: subAgentStore as NoteStoreBase, type: "subAgent" as const },
     { store: repositoryStore as NoteStoreBase, type: "repository" as const },
@@ -145,9 +134,6 @@ export function useCanvasNoteHandlers(options: UseCanvasNoteHandlersOptions): {
     };
   };
 
-  const handleCreateOutputStyleNote = createNoteHandler(
-    outputStyleStore as NoteStoreBase,
-  );
   const handleCreateSkillNote = createNoteHandler(skillStore as NoteStoreBase);
   const handleCreateSubAgentNote = createNoteHandler(
     subAgentStore as NoteStoreBase,
@@ -175,9 +161,6 @@ export function useCanvasNoteHandlers(options: UseCanvasNoteHandlersOptions): {
     EditableNoteType,
     (noteId: string) => string | undefined
   > = {
-    outputStyle: (noteId) =>
-      outputStyleStore.typedNotes.find((note) => note.id === noteId)
-        ?.outputStyleId,
     subAgent: (noteId) =>
       subAgentStore.typedNotes.find((note) => note.id === noteId)?.subAgentId,
     command: (noteId) =>
@@ -238,7 +221,6 @@ export function useCanvasNoteHandlers(options: UseCanvasNoteHandlersOptions): {
     showTrashZone,
     isTrashHighlighted,
     isCanvasEmpty,
-    handleCreateOutputStyleNote,
     handleCreateSkillNote,
     handleCreateSubAgentNote,
     handleCreateRepositoryNote,

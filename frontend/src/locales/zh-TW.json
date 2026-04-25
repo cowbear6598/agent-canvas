@@ -455,10 +455,8 @@
       "aiErrorReason": "錯誤：{reason}"
     },
     "podTypeMenu": {
-      "newOutputStyle": "新增 Output Style",
       "newSubAgent": "新增 SubAgent",
       "newCommand": "新增 Command",
-      "newOutputStyleGroup": "新增 Output Style 群組",
       "newSubAgentGroup": "新增 SubAgent 群組",
       "newCommandGroup": "新增 Command 群組"
     }
@@ -583,7 +581,6 @@
       "canvasCreated": "Canvas 建立成功",
       "canvasRenamed": "Canvas 重命名成功",
       "pasted": "貼上成功",
-      "outputStyleDeleted": "輸出風格已刪除",
       "skillDeleted": "Skill 已刪除",
       "worktreeCreated": "Worktree 建立成功",
       "repositoryDeleted": "Repository 已刪除",

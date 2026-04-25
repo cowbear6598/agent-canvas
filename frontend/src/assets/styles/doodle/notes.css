@@ -10,7 +10,9 @@
   border-radius: 2px;
   box-shadow: 2px 2px 0 oklch(0.4 0.02 50 / 0.3);
   cursor: grab;
-  transition: box-shadow 0.15s ease, transform 0.15s ease;
+  transition:
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -20,7 +22,11 @@
 }
 
 .note-base.animating {
-  transition: left 0.3s ease, top 0.3s ease, box-shadow 0.15s ease, transform 0.15s ease;
+  transition:
+    left 0.3s ease,
+    top 0.3s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
 }
 
 .note-base:hover {
@@ -51,11 +57,6 @@
 /* ===================================
    各類型 Note
    =================================== */
-
-/* Output Style Note */
-.output-style-note {
-  background: var(--doodle-yellow);
-}
 
 /* Repository Note */
 .repository-note {

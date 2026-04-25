@@ -34,7 +34,7 @@
 }
 
 .pod-doodle {
-  /* --model-notch-width 已移至 .pod-with-notch（共同祖先），
+  /* --model-notch-width 已移至 .pod-wrapper（共同祖先），
      讓 PodModelSelector 與此處的 .model-notch 都能讀到同一變數 */
   background: var(--card);
   border: 2px solid var(--doodle-ink);
@@ -62,19 +62,17 @@
    Pod Notch System (凹槽系統)
 
    結構說明：
-   - .pod-notch-area: Slot 容器的位置（Output Style）
    - .pod-skill-notch-area: Slot 容器的位置（Skill）
    - .model-notch: POD 上方的 Model 凹槽視覺效果
-   - ::before: POD 左側的凹槽視覺效果（Output Style）
    - ::after: POD 左側的凹槽視覺效果（Skill）
 
    位置對齊注意事項：
-   - .pod-notch-area 的 top 要和 Slot 內容對齊
-   - ::before 的 top 是凹槽視覺效果的位置（相對於 .pod-doodle）
-   - 兩者的 top 值可能不同，因為參考點不同
+   - .pod-*-notch-area 的 top 要和 Slot 內容對齊
+   - ::after 的 top 是凹槽視覺效果的位置（相對於 .pod-doodle）
    =========================================== */
 
-.pod-with-notch {
+/* Pod 容器基底：rotate 變換、model notch 寬度變數、hover/dragging 狀態 */
+.pod-wrapper {
   /* notch 與 card 寬度的單一真相來源；定義在此讓 PodModelSelector（兄弟層）
      與 .pod-doodle（子層）都能透過 CSS 繼承讀到此變數 */
   --model-notch-width: 110px;
@@ -83,13 +81,13 @@
   transform: rotate(var(--pod-rotation, 0deg));
 }
 
-.pod-with-notch:has(.pod-doodle:hover) {
+.pod-wrapper:has(.pod-doodle:hover) {
   transform: translate(-0.5px, -0.5px)
     rotate(calc(var(--pod-rotation, 0deg) + 0.5deg));
 }
 
-.pod-with-notch.dragging,
-.pod-with-notch.dragging:hover {
+.pod-wrapper.dragging,
+.pod-wrapper.dragging:hover {
   transform: rotate(calc(var(--pod-rotation, 0deg) - 1deg));
 }
 
@@ -112,34 +110,12 @@
   z-index: -1;
 }
 
-/* Output Style Slot 容器位置（移至右側） */
-.pod-notch-area {
-  right: 0;
-  top: 18px;
-  transform: translateX(100%);
-}
-
-/* Output Style 凹槽視覺效果（POD 右側的小突出） */
-.pod-with-notch .pod-doodle::before {
-  content: "";
-  position: absolute;
-  right: -6px; /* 凹槽往右延伸的距離 */
-  top: 16px; /* 凹槽的垂直位置（相對於 .pod-doodle） */
-  width: 8px; /* 凹槽寬度 */
-  height: 32px; /* 凹槽高度 */
-  background: var(--card);
-  border: 2px solid var(--doodle-ink);
-  border-left: none;
-  border-radius: 0 4px 4px 0;
-  z-index: -1;
-}
-
 /* Skill 凹槽視覺效果（POD 左側） */
 .pod-with-skill-notch .pod-doodle::after {
   content: "";
   position: absolute;
   left: -6px; /* 凹槽往左延伸的距離 */
-  top: 16px; /* 凹槽的垂直位置（與 Output Style 同高） */
+  top: 16px; /* 凹槽的垂直位置 */
   width: 8px; /* 凹槽寬度 */
   height: 32px; /* 凹槽高度 */
   background: var(--card);
@@ -334,7 +310,7 @@
 
    實作說明：
    - 光暈渲染改為獨立的 .pod-glow-layer div，位於 CanvasPod.vue
-     最外層 wrapper（.absolute.select-none）內，作為 .pod-with-notch
+     最外層 wrapper（.absolute.select-none）內，作為 .pod-wrapper
      的前一個兄弟元素
    - 此層不在任何 transform: rotate 容器內，故 box-shadow 渲染
      位置不受祖先 transform 影響，完整包覆 Pod 四周
@@ -342,7 +318,7 @@
 
    定位說明：
    - position: absolute; inset: 0 讓此層與外層 wrapper 等大
-   - 外層 wrapper（.absolute.select-none）size 由 .pod-with-notch
+   - 外層 wrapper（.absolute.select-none）size 由 .pod-wrapper
      內容撐起（即 pod-doodle 的大小），故 inset: 0 剛好覆蓋整個 Pod
    - pointer-events: none 確保不影響點擊事件
    - border-radius 與 pod-doodle 一致（6px）
@@ -436,7 +412,7 @@
      保持閱讀對比度
    - 靜態漸層，無 transition/animation（效能考量）
    - 狀態光暈（chatting/summarizing）由外層 .pod-glow-layer div 負責，
-     不受 .pod-with-notch 的 transform: rotate 影響
+     不受 .pod-wrapper 的 transform: rotate 影響
 
    class 與後端 PodProvider 枚舉的耦合說明詳見檔案頂部註解。
    =========================================== */

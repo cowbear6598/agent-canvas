@@ -46,7 +46,6 @@ describe("enrichPod", () => {
           name: "claude",
           capabilities: {
             chat: true,
-            outputStyle: true,
             skill: true,
             subAgent: true,
             repository: true,
@@ -75,7 +74,6 @@ describe("enrichPod", () => {
           name: "codex",
           capabilities: {
             chat: true,
-            outputStyle: false,
             skill: false,
             subAgent: false,
             repository: false,
@@ -108,7 +106,6 @@ describe("enrichPod", () => {
           name: "claude",
           capabilities: {
             chat: true,
-            outputStyle: true,
             skill: true,
             subAgent: true,
             repository: true,

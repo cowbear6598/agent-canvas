@@ -5,7 +5,6 @@ import { t } from "@/i18n";
 import type { UnbindBehavior } from "@/stores/note/noteBindingActions";
 
 export type NoteType =
-  | "outputStyle"
   | "skill"
   | "subAgent"
   | "repository"
@@ -13,7 +12,6 @@ export type NoteType =
   | "mcpServer";
 
 interface NoteItem {
-  outputStyleId?: string;
   skillId?: string;
   subAgentId?: string;
   repositoryId?: string;
@@ -36,9 +34,6 @@ interface NoteStoreMapping {
 }
 
 interface NoteStores {
-  outputStyleStore: BaseBindableNoteStore & {
-    unbindFromPod: (podId: string, behavior: UnbindBehavior) => Promise<void>;
-  };
   skillStore: BaseBindableNoteStore & {
     isItemBoundToPod: (itemId: string, podId: string) => boolean;
   };
@@ -55,7 +50,6 @@ interface NoteStores {
     isItemBoundToPod: (itemId: string, podId: string) => boolean;
   };
   podStore: {
-    updatePodOutputStyle: (podId: string, itemId: string | null) => void;
     updatePodRepository: (podId: string, itemId: string | null) => void;
     updatePodCommand: (podId: string, itemId: string | null) => void;
   };
@@ -92,7 +86,6 @@ export function usePodNoteBinding(
 ): UsePodNoteBindingReturn {
   const { toast } = useToast();
   const {
-    outputStyleStore,
     skillStore,
     subAgentStore,
     repositoryStore,
@@ -102,15 +95,6 @@ export function usePodNoteBinding(
   } = stores;
 
   const noteStoreMap: Record<NoteType, NoteStoreMapping> = {
-    outputStyle: {
-      bindToPod: (noteId, pid) => outputStyleStore.bindToPod(noteId, pid),
-      getNoteById: (noteId) => outputStyleStore.getNoteById(noteId),
-      unbindFromPod: (pid, behavior) =>
-        outputStyleStore.unbindFromPod(pid, behavior),
-      getItemId: (note) => note.outputStyleId,
-      updatePodField: (pid, itemId) =>
-        podStore.updatePodOutputStyle(pid, itemId),
-    },
     skill: {
       bindToPod: (noteId, pid) => skillStore.bindToPod(noteId, pid),
       getNoteById: (noteId) => skillStore.getNoteById(noteId),

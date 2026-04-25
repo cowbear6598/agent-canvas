@@ -41,14 +41,8 @@ vi.mock("@/components/ui/button", () => ({
   },
 }));
 
-type ItemType =
-  | "outputStyle"
-  | "skill"
-  | "repository"
-  | "subAgent"
-  | "command"
-  | "mcpServer";
-type GroupType = "outputStyleGroup" | "subAgentGroup" | "commandGroup";
+type ItemType = "skill" | "repository" | "subAgent" | "command" | "mcpServer";
+type GroupType = "subAgentGroup" | "commandGroup";
 type ExtendedItemType = ItemType | GroupType;
 
 function mountModal(
@@ -64,7 +58,7 @@ function mountModal(
       open: true,
       itemName: "Test Item",
       isInUse: false,
-      itemType: "outputStyle",
+      itemType: "skill",
       ...props,
     },
   });
@@ -129,13 +123,6 @@ describe("ConfirmDeleteModal", () => {
       const buttons = wrapper.findAll("button");
       expect(buttons.length).toBe(1);
       expect(buttons[0]?.text()).toContain("確認");
-    });
-
-    it("outputStyle 在 isInUse 為 true 時阻擋刪除", () => {
-      const wrapper = mountModal({ isInUse: true, itemType: "outputStyle" });
-
-      const buttons = wrapper.findAll("button");
-      expect(buttons.some((btn) => btn.text().includes("刪除"))).toBe(false);
     });
 
     it("command 在 isInUse 為 true 時阻擋刪除", () => {

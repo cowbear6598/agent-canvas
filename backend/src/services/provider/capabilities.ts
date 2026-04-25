@@ -4,7 +4,6 @@ import type { ProviderCapabilities } from "./types.js";
 export const CLAUDE_CAPABILITIES: Readonly<ProviderCapabilities> =
   Object.freeze({
     chat: true,
-    outputStyle: true,
     skill: true,
     subAgent: true,
     repository: true,
@@ -18,7 +17,6 @@ export const CLAUDE_CAPABILITIES: Readonly<ProviderCapabilities> =
 export const CODEX_CAPABILITIES: Readonly<ProviderCapabilities> = Object.freeze(
   {
     chat: true,
-    outputStyle: false,
     skill: false,
     subAgent: false,
     repository: false,

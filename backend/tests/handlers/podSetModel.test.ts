@@ -96,7 +96,6 @@ function makePod(overrides: Partial<Pod> = {}): Pod {
     rotation: 0,
     workspacePath: "/tmp",
     sessionId: null,
-    outputStyleId: null,
     repositoryId: null,
     commandId: null,
     multiInstance: false,

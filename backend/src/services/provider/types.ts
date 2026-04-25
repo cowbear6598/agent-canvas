@@ -38,8 +38,6 @@ export interface ProviderMetadata<TOptions = unknown> {
 export interface ProviderCapabilities {
   /** 是否支援基本聊天 */
   chat: boolean;
-  /** 是否支援輸出風格 */
-  outputStyle: boolean;
   /** 是否支援 Skill */
   skill: boolean;
   /** 是否支援 Sub-Agent */

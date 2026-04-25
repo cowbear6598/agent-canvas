@@ -7,7 +7,6 @@ import {
 } from "@/lib/constants";
 import type {
   CopiedPod,
-  CopiedOutputStyleNote,
   CopiedSkillNote,
   CopiedRepositoryNote,
   CopiedSubAgentNote,
@@ -15,7 +14,6 @@ import type {
   CopiedMcpServerNote,
   CopiedConnection,
   PastePodItem,
-  PasteOutputStyleNoteItem,
   PasteSkillNoteItem,
   PasteRepositoryNoteItem,
   PasteSubAgentNoteItem,
@@ -73,7 +71,6 @@ function updateBoundsForUnboundNotes(
 }
 
 function calculateBoundingBox<
-  TO extends HasPosition,
   TS extends HasPosition,
   TR extends HasPosition,
   TSA extends HasPosition,
@@ -82,7 +79,6 @@ function calculateBoundingBox<
 >(
   pods: CopiedPod[],
   notes: {
-    outputStyleNotes: TO[];
     skillNotes: TS[];
     repositoryNotes: TR[];
     subAgentNotes: TSA[];
@@ -90,7 +86,6 @@ function calculateBoundingBox<
     mcpServerNotes: TM[];
   },
   getBoundKeys: {
-    outputStyleNote: (n: TO) => string | null;
     skillNote: (n: TS) => string | null;
     repositoryNote: (n: TR) => string | null;
     subAgentNote: (n: TSA) => string | null;
@@ -105,7 +100,6 @@ function calculateBoundingBox<
   }
 
   updateBoundsForUnboundNotes(bounds, [
-    toUnboundNoteEntry(notes.outputStyleNotes, getBoundKeys.outputStyleNote),
     toUnboundNoteEntry(notes.skillNotes, getBoundKeys.skillNote),
     toUnboundNoteEntry(notes.repositoryNotes, getBoundKeys.repositoryNote),
     toUnboundNoteEntry(notes.subAgentNotes, getBoundKeys.subAgentNote),
@@ -174,7 +168,6 @@ export function transformPods(
       rotation: pod.rotation,
       provider: pod.provider,
       providerConfig: pod.providerConfig,
-      outputStyleId: pod.outputStyleId,
       skillIds: pod.skillIds,
       subAgentIds: pod.subAgentIds,
       repositoryId: pod.repositoryId,
@@ -221,7 +214,6 @@ function transformConnections(
 
 type ClipboardData = {
   pods: CopiedPod[];
-  outputStyleNotes: CopiedOutputStyleNote[];
   skillNotes: CopiedSkillNote[];
   repositoryNotes: CopiedRepositoryNote[];
   subAgentNotes: CopiedSubAgentNote[];
@@ -231,7 +223,6 @@ type ClipboardData = {
 };
 
 type CopiedNote =
-  | CopiedOutputStyleNote
   | CopiedSkillNote
   | CopiedRepositoryNote
   | CopiedSubAgentNote
@@ -247,7 +238,6 @@ type NoteTransformConfig<TSource extends CopiedNote, TResult> = {
 function isEmptyClipboard(clipboardData: ClipboardData): boolean {
   const {
     pods,
-    outputStyleNotes,
     skillNotes,
     repositoryNotes,
     subAgentNotes,
@@ -256,7 +246,6 @@ function isEmptyClipboard(clipboardData: ClipboardData): boolean {
   } = clipboardData;
   return (
     pods.length === 0 &&
-    outputStyleNotes.length === 0 &&
     skillNotes.length === 0 &&
     repositoryNotes.length === 0 &&
     subAgentNotes.length === 0 &&
@@ -271,7 +260,6 @@ export function calculatePastePositions(
   existingNames: Set<string>,
 ): {
   pods: PastePodItem[];
-  outputStyleNotes: PasteOutputStyleNoteItem[];
   skillNotes: PasteSkillNoteItem[];
   repositoryNotes: PasteRepositoryNoteItem[];
   subAgentNotes: PasteSubAgentNoteItem[];
@@ -281,7 +269,6 @@ export function calculatePastePositions(
 } {
   const {
     pods,
-    outputStyleNotes,
     skillNotes,
     repositoryNotes,
     subAgentNotes,
@@ -293,7 +280,6 @@ export function calculatePastePositions(
   if (isEmptyClipboard(clipboardData)) {
     return {
       pods: [],
-      outputStyleNotes: [],
       skillNotes: [],
       repositoryNotes: [],
       subAgentNotes: [],
@@ -306,7 +292,6 @@ export function calculatePastePositions(
   const boundingBox = calculateBoundingBox(
     pods,
     {
-      outputStyleNotes,
       skillNotes,
       repositoryNotes,
       subAgentNotes,
@@ -314,7 +299,6 @@ export function calculatePastePositions(
       mcpServerNotes,
     },
     {
-      outputStyleNote: (note) => note.boundToPodId,
       skillNote: (note) => note.boundToPodId,
       repositoryNote: (note) => note.boundToOriginalPodId,
       subAgentNote: (note) => note.boundToPodId,
@@ -338,21 +322,6 @@ export function calculatePastePositions(
 
   return {
     pods: transformPods(pods, offset, existingNames),
-    outputStyleNotes: applyTransform<
-      CopiedOutputStyleNote,
-      PasteOutputStyleNoteItem
-    >({
-      notes: outputStyleNotes,
-      getBoundKey: (note) => note.boundToPodId,
-      mapFn: (note, position) => ({
-        outputStyleId: note.outputStyleId,
-        name: note.name,
-        x: position.x,
-        y: position.y,
-        boundToOriginalPodId: note.boundToPodId,
-        originalPosition: note.originalPosition,
-      }),
-    }),
     skillNotes: applyTransform<CopiedSkillNote, PasteSkillNoteItem>({
       notes: skillNotes,
       getBoundKey: (note) => note.boundToPodId,

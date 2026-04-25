@@ -63,7 +63,6 @@ export interface PodDeletedPayload {
   success: boolean;
   podId?: string;
   deletedNoteIds?: {
-    note?: string[];
     skillNote?: string[];
     repositoryNote?: string[];
     commandNote?: string[];
@@ -141,22 +140,6 @@ export interface PodErrorPayload {
   podId?: string;
   error: string;
   code: string;
-}
-
-export interface PodOutputStyleBoundPayload {
-  requestId: string;
-  canvasId: string;
-  success: boolean;
-  pod?: Pod;
-  error?: string;
-}
-
-export interface PodOutputStyleUnboundPayload {
-  requestId: string;
-  canvasId: string;
-  success: boolean;
-  pod?: Pod;
-  error?: string;
 }
 
 export interface PodSkillBoundPayload {

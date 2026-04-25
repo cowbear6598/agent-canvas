@@ -26,8 +26,8 @@ Provider 的靜態描述，系統啟動時就確定，不會隨請求改變。
 從 Pod 的持久化設定與 RunContext 建構**執行時選項**。
 
 **責任**：
-- 讀取 `pod.providerConfig`、`pod.outputStyleId`、`pod.mcpServerIds` 等 Pod 設定
-- 呼叫外部 service（如 `outputStyleService.getContent`）取得設定內容
+- 讀取 `pod.providerConfig`、`pod.mcpServerIds` 等 Pod 設定
+- 呼叫外部 service 取得設定內容
 - 回傳完整的 `TOptions`，executor 直接傳入 `chat(ctx)` 使用
 
 **規範**：
@@ -152,12 +152,11 @@ interface ProviderMetadata<TOptions = unknown> {
 
 ### `capabilities: ProviderCapabilities`
 
-功能能力矩陣，前端依此決定顯示哪些設定選項（OutputStyle、MCP 等）。
+功能能力矩陣，前端依此決定顯示哪些設定選項（MCP 等）。
 
 ```ts
 interface ProviderCapabilities {
   chat: boolean;        // 基本聊天（應永遠為 true）
-  outputStyle: boolean; // Output Style 設定
   skill: boolean;       // Skill（Command）功能
   subAgent: boolean;    // Sub-Agent 功能
   repository: boolean;  // Repository 綁定

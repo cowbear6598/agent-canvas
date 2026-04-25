@@ -89,7 +89,6 @@ export function enrichPod(pod: Pod, preservedOutput?: string[]): Pod {
     y: pod.y ?? 150,
     rotation: pod.rotation ?? Math.random() * 2 - 1,
     output: pickOutputArray(preservedOutput, pod.output),
-    outputStyleId: pod.outputStyleId ?? null,
     multiInstance: pod.multiInstance ?? false,
     commandId: pod.commandId ?? null,
     schedule: pod.schedule ?? null,

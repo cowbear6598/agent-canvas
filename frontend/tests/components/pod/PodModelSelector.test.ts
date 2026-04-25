@@ -20,7 +20,6 @@ const COLLAPSE_ANIMATION_MS = 300;
 
 const TEST_CAPABILITIES = {
   chat: true,
-  outputStyle: false,
   skill: false,
   subAgent: false,
   repository: false,

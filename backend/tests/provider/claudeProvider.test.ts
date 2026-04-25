@@ -42,9 +42,6 @@ vi.mock("../../src/utils/logger.js", () => ({
 }));
 
 // buildClaudeOptions 的依賴 mock（讓 buildOptions 可以成功執行）
-vi.mock("../../src/services/outputStyleService.js", () => ({
-  outputStyleService: { getContent: vi.fn().mockResolvedValue(null) },
-}));
 vi.mock("../../src/services/mcpServerStore.js", () => ({
   mcpServerStore: { getByIds: vi.fn().mockReturnValue([]) },
 }));

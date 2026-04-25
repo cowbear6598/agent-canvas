@@ -36,7 +36,6 @@ export function createMockPod(overrides?: Partial<Pod>): Pod {
     repositoryId: null,
     workspacePath: path.join(config.repositoriesRoot, "test-workspace"),
     commandId: null,
-    outputStyleId: null,
     status: "idle",
     x: 0,
     y: 0,

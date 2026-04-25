@@ -1,217 +1,368 @@
-import { WebSocketResponseEvents } from '@/services/websocket'
-import { useOutputStyleStore } from '@/stores/note/outputStyleStore'
-import { useSkillStore } from '@/stores/note/skillStore'
-import { useRepositoryStore } from '@/stores/note/repositoryStore'
-import { useSubAgentStore } from '@/stores/note/subAgentStore'
-import { useCommandStore } from '@/stores/note/commandStore'
-import { useMcpServerStore } from '@/stores/note/mcpServerStore'
-import type { OutputStyleNote, SkillNote, RepositoryNote, SubAgentNote, CommandNote, McpServer, McpServerNote } from '@/types'
-import { createUnifiedHandler } from './sharedHandlerUtils'
-import { t } from '@/i18n'
-import type { BasePayload } from './sharedHandlerUtils'
+import { WebSocketResponseEvents } from "@/services/websocket";
+import { useSkillStore } from "@/stores/note/skillStore";
+import { useRepositoryStore } from "@/stores/note/repositoryStore";
+import { useSubAgentStore } from "@/stores/note/subAgentStore";
+import { useCommandStore } from "@/stores/note/commandStore";
+import { useMcpServerStore } from "@/stores/note/mcpServerStore";
+import type {
+  SkillNote,
+  RepositoryNote,
+  SubAgentNote,
+  CommandNote,
+  McpServer,
+  McpServerNote,
+} from "@/types";
+import { createUnifiedHandler } from "./sharedHandlerUtils";
+import { t } from "@/i18n";
+import type { BasePayload } from "./sharedHandlerUtils";
 
 interface NoteHandlerConfig<TNote> {
   getStore: () => {
-    addNoteFromEvent: (note: TNote) => void
-    updateNoteFromEvent: (note: TNote) => void
-    removeNoteFromEvent: (noteId: string) => void
-  }
+    addNoteFromEvent: (note: TNote) => void;
+    updateNoteFromEvent: (note: TNote) => void;
+    removeNoteFromEvent: (noteId: string) => void;
+  };
 }
 
-type NotePayloadCreated<TNote> = BasePayload & { note?: TNote; canvasId: string }
-type NotePayloadUpdated<TNote> = BasePayload & { note?: TNote; canvasId: string }
-type NotePayloadDeleted = BasePayload & { noteId: string; canvasId: string }
+type NotePayloadCreated<TNote> = BasePayload & {
+  note?: TNote;
+  canvasId: string;
+};
+type NotePayloadUpdated<TNote> = BasePayload & {
+  note?: TNote;
+  canvasId: string;
+};
+type NotePayloadDeleted = BasePayload & { noteId: string; canvasId: string };
 
 function createNoteHandlers<TNote>(config: NoteHandlerConfig<TNote>): {
-  created: (payload: NotePayloadCreated<TNote>) => void
-  updated: (payload: NotePayloadUpdated<TNote>) => void
-  deleted: (payload: NotePayloadDeleted) => void
+  created: (payload: NotePayloadCreated<TNote>) => void;
+  updated: (payload: NotePayloadUpdated<TNote>) => void;
+  deleted: (payload: NotePayloadDeleted) => void;
 } {
   return {
     created: createUnifiedHandler<NotePayloadCreated<TNote>>((payload) => {
       if (payload.note) {
-        config.getStore().addNoteFromEvent(payload.note)
+        config.getStore().addNoteFromEvent(payload.note);
       }
     }),
     updated: createUnifiedHandler<NotePayloadUpdated<TNote>>((payload) => {
       if (payload.note) {
-        config.getStore().updateNoteFromEvent(payload.note)
+        config.getStore().updateNoteFromEvent(payload.note);
       }
     }),
     deleted: createUnifiedHandler<NotePayloadDeleted>((payload) => {
-      config.getStore().removeNoteFromEvent(payload.noteId)
+      config.getStore().removeNoteFromEvent(payload.noteId);
     }),
-  }
+  };
 }
 
 function isValidStringField(value: unknown): boolean {
-  return typeof value === 'string' && value.trim() !== ''
+  return typeof value === "string" && value.trim() !== "";
 }
 
-function validateIdAndName(id: unknown, name: unknown, context: string): boolean {
+function validateIdAndName(
+  id: unknown,
+  name: unknown,
+  context: string,
+): boolean {
   if (!isValidStringField(id)) {
-    console.error(`[Security] 無效的 ${context}.id 格式`)
-    return false
+    console.error(`[Security] 無效的 ${context}.id 格式`);
+    return false;
   }
 
   if (!isValidStringField(name)) {
-    console.error(`[Security] 無效的 ${context}.name 格式`)
-    return false
+    console.error(`[Security] 無效的 ${context}.name 格式`);
+    return false;
   }
 
-  return true
+  return true;
 }
 
 function containsXssPattern(name: string): boolean {
-  return /<script|javascript:|on\w+=/i.test(name)
+  return /<script|javascript:|on\w+=/i.test(name);
 }
 
-type RepositoryItem = { id: string; name: string; parentRepoId?: string; branchName?: string }
+type RepositoryItem = {
+  id: string;
+  name: string;
+  parentRepoId?: string;
+  branchName?: string;
+};
 
 const validateRepositoryItem = (repository: RepositoryItem): boolean => {
-  if (!validateIdAndName(repository.id, repository.name, 'repository')) return false
+  if (!validateIdAndName(repository.id, repository.name, "repository"))
+    return false;
 
   if (containsXssPattern(repository.name)) {
-    console.error('[Security] 潛在惡意的 repository.name:', repository.name)
-    return false
+    console.error("[Security] 潛在惡意的 repository.name:", repository.name);
+    return false;
   }
 
-  return true
-}
+  return true;
+};
 
 const validateMcpServer = (mcpServer: McpServer): boolean => {
-  if (!validateIdAndName(mcpServer.id, mcpServer.name, 'mcpServer')) return false
+  if (!validateIdAndName(mcpServer.id, mcpServer.name, "mcpServer"))
+    return false;
 
   if (containsXssPattern(mcpServer.name)) {
-    console.error('[Security] 潛在惡意的 mcpServer.name:', mcpServer.name)
-    return false
+    console.error("[Security] 潛在惡意的 mcpServer.name:", mcpServer.name);
+    return false;
   }
 
-  return true
-}
+  return true;
+};
 
-const outputStyleNoteHandlers = createNoteHandlers<OutputStyleNote>({ getStore: useOutputStyleStore })
-const skillNoteHandlers = createNoteHandlers<SkillNote>({ getStore: useSkillStore })
-const repositoryNoteHandlers = createNoteHandlers<RepositoryNote>({ getStore: useRepositoryStore })
-const subAgentNoteHandlers = createNoteHandlers<SubAgentNote>({ getStore: useSubAgentStore })
-const commandNoteHandlers = createNoteHandlers<CommandNote>({ getStore: useCommandStore })
-const mcpServerNoteHandlers = createNoteHandlers<McpServerNote>({ getStore: useMcpServerStore })
+const skillNoteHandlers = createNoteHandlers<SkillNote>({
+  getStore: useSkillStore,
+});
+const repositoryNoteHandlers = createNoteHandlers<RepositoryNote>({
+  getStore: useRepositoryStore,
+});
+const subAgentNoteHandlers = createNoteHandlers<SubAgentNote>({
+  getStore: useSubAgentStore,
+});
+const commandNoteHandlers = createNoteHandlers<CommandNote>({
+  getStore: useCommandStore,
+});
+const mcpServerNoteHandlers = createNoteHandlers<McpServerNote>({
+  getStore: useMcpServerStore,
+});
 
-const handleOutputStyleDeleted = createUnifiedHandler<BasePayload & { outputStyleId: string; deletedNoteIds?: string[]; canvasId: string }>(
+const handleSkillDeleted = createUnifiedHandler<
+  BasePayload & { skillId: string; deletedNoteIds?: string[]; canvasId: string }
+>(
   (payload) => {
-    useOutputStyleStore().removeItemFromEvent(payload.outputStyleId, payload.deletedNoteIds)
+    useSkillStore().removeItemFromEvent(
+      payload.skillId,
+      payload.deletedNoteIds,
+    );
   },
-  { toastMessage: () => t('composable.eventHandler.outputStyleDeleted') }
-)
+  { toastMessage: () => t("composable.eventHandler.skillDeleted") },
+);
 
-const handleSkillDeleted = createUnifiedHandler<BasePayload & { skillId: string; deletedNoteIds?: string[]; canvasId: string }>(
-  (payload) => {
-    useSkillStore().removeItemFromEvent(payload.skillId, payload.deletedNoteIds)
-  },
-  { toastMessage: () => t('composable.eventHandler.skillDeleted') }
-)
-
-const handleRepositoryWorktreeCreated = createUnifiedHandler<BasePayload & { repository?: RepositoryItem; canvasId: string }>(
+const handleRepositoryWorktreeCreated = createUnifiedHandler<
+  BasePayload & { repository?: RepositoryItem; canvasId: string }
+>(
   (payload) => {
     if (payload.repository && validateRepositoryItem(payload.repository)) {
-      useRepositoryStore().addItemFromEvent(payload.repository)
+      useRepositoryStore().addItemFromEvent(payload.repository);
     }
   },
-  { toastMessage: () => t('composable.eventHandler.worktreeCreated') }
-)
+  { toastMessage: () => t("composable.eventHandler.worktreeCreated") },
+);
 
-const handleRepositoryDeleted = createUnifiedHandler<BasePayload & { repositoryId: string; deletedNoteIds?: string[]; canvasId: string }>(
+const handleRepositoryDeleted = createUnifiedHandler<
+  BasePayload & {
+    repositoryId: string;
+    deletedNoteIds?: string[];
+    canvasId: string;
+  }
+>(
   (payload) => {
-    useRepositoryStore().removeItemFromEvent(payload.repositoryId, payload.deletedNoteIds)
+    useRepositoryStore().removeItemFromEvent(
+      payload.repositoryId,
+      payload.deletedNoteIds,
+    );
   },
-  { toastMessage: () => t('composable.eventHandler.repositoryDeleted') }
-)
+  { toastMessage: () => t("composable.eventHandler.repositoryDeleted") },
+);
 
-const handleRepositoryBranchChanged = createUnifiedHandler<BasePayload & { repositoryId: string; branchName: string }>(
+const handleRepositoryBranchChanged = createUnifiedHandler<
+  BasePayload & { repositoryId: string; branchName: string }
+>(
   (payload) => {
-    if (!payload.branchName || !/^[a-zA-Z0-9_\-/]+$/.test(payload.branchName)) return
+    if (!payload.branchName || !/^[a-zA-Z0-9_\-/]+$/.test(payload.branchName))
+      return;
 
-    const repositoryStore = useRepositoryStore()
-    const repository = repositoryStore.typedAvailableItems.find((item) => item.id === payload.repositoryId)
+    const repositoryStore = useRepositoryStore();
+    const repository = repositoryStore.typedAvailableItems.find(
+      (item) => item.id === payload.repositoryId,
+    );
     if (repository) {
-      repository.currentBranch = payload.branchName
+      repository.currentBranch = payload.branchName;
     }
   },
-  { skipCanvasCheck: true }
-)
+  { skipCanvasCheck: true },
+);
 
-const handleSubAgentDeleted = createUnifiedHandler<BasePayload & { subAgentId: string; deletedNoteIds?: string[]; canvasId: string }>(
+const handleSubAgentDeleted = createUnifiedHandler<
+  BasePayload & {
+    subAgentId: string;
+    deletedNoteIds?: string[];
+    canvasId: string;
+  }
+>(
   (payload) => {
-    useSubAgentStore().removeItemFromEvent(payload.subAgentId, payload.deletedNoteIds)
+    useSubAgentStore().removeItemFromEvent(
+      payload.subAgentId,
+      payload.deletedNoteIds,
+    );
   },
-  { toastMessage: () => t('composable.eventHandler.subAgentDeleted') }
-)
+  { toastMessage: () => t("composable.eventHandler.subAgentDeleted") },
+);
 
-const handleCommandDeleted = createUnifiedHandler<BasePayload & { commandId: string; deletedNoteIds?: string[]; canvasId: string }>(
+const handleCommandDeleted = createUnifiedHandler<
+  BasePayload & {
+    commandId: string;
+    deletedNoteIds?: string[];
+    canvasId: string;
+  }
+>(
   (payload) => {
-    useCommandStore().removeItemFromEvent(payload.commandId, payload.deletedNoteIds)
+    useCommandStore().removeItemFromEvent(
+      payload.commandId,
+      payload.deletedNoteIds,
+    );
   },
-  { toastMessage: () => t('composable.eventHandler.commandDeleted') }
-)
+  { toastMessage: () => t("composable.eventHandler.commandDeleted") },
+);
 
-const handleMcpServerCreated = createUnifiedHandler<BasePayload & { mcpServer?: McpServer; canvasId: string }>(
+const handleMcpServerCreated = createUnifiedHandler<
+  BasePayload & { mcpServer?: McpServer; canvasId: string }
+>(
   (payload) => {
     if (payload.mcpServer && validateMcpServer(payload.mcpServer)) {
-      useMcpServerStore().addItemFromEvent(payload.mcpServer)
+      useMcpServerStore().addItemFromEvent(payload.mcpServer);
     }
   },
-  { toastMessage: () => t('composable.eventHandler.mcpServerCreated') }
-)
+  { toastMessage: () => t("composable.eventHandler.mcpServerCreated") },
+);
 
-const handleMcpServerUpdated = createUnifiedHandler<BasePayload & { mcpServer?: McpServer; canvasId: string }>(
+const handleMcpServerUpdated = createUnifiedHandler<
+  BasePayload & { mcpServer?: McpServer; canvasId: string }
+>(
   (payload) => {
     if (payload.mcpServer && validateMcpServer(payload.mcpServer)) {
-      useMcpServerStore().updateItemFromEvent(payload.mcpServer)
+      useMcpServerStore().updateItemFromEvent(payload.mcpServer);
     }
   },
-  { toastMessage: () => t('composable.eventHandler.mcpServerUpdated') }
-)
+  { toastMessage: () => t("composable.eventHandler.mcpServerUpdated") },
+);
 
-const handleMcpServerDeleted = createUnifiedHandler<BasePayload & { mcpServerId: string; deletedNoteIds?: string[]; canvasId: string }>(
+const handleMcpServerDeleted = createUnifiedHandler<
+  BasePayload & {
+    mcpServerId: string;
+    deletedNoteIds?: string[];
+    canvasId: string;
+  }
+>(
   (payload) => {
-    if (!payload.mcpServerId || typeof payload.mcpServerId !== 'string') {
-      console.error('[Security] 無效的 mcpServerId:', payload.mcpServerId)
-      return
+    if (!payload.mcpServerId || typeof payload.mcpServerId !== "string") {
+      console.error("[Security] 無效的 mcpServerId:", payload.mcpServerId);
+      return;
     }
-    useMcpServerStore().removeItemFromEvent(payload.mcpServerId, payload.deletedNoteIds)
+    useMcpServerStore().removeItemFromEvent(
+      payload.mcpServerId,
+      payload.deletedNoteIds,
+    );
   },
-  { toastMessage: () => t('composable.eventHandler.mcpServerDeleted'), skipCanvasCheck: true }
-)
+  {
+    toastMessage: () => t("composable.eventHandler.mcpServerDeleted"),
+    skipCanvasCheck: true,
+  },
+);
 
-export function getNoteEventListeners(): Array<{ event: string; handler: (payload: unknown) => void }> {
+export function getNoteEventListeners(): Array<{
+  event: string;
+  handler: (payload: unknown) => void;
+}> {
   return [
-    { event: WebSocketResponseEvents.OUTPUT_STYLE_DELETED, handler: handleOutputStyleDeleted as (payload: unknown) => void },
-    { event: WebSocketResponseEvents.NOTE_CREATED, handler: outputStyleNoteHandlers.created as (payload: unknown) => void },
-    { event: WebSocketResponseEvents.NOTE_UPDATED, handler: outputStyleNoteHandlers.updated as (payload: unknown) => void },
-    { event: WebSocketResponseEvents.NOTE_DELETED, handler: outputStyleNoteHandlers.deleted as (payload: unknown) => void },
-    { event: WebSocketResponseEvents.SKILL_NOTE_CREATED, handler: skillNoteHandlers.created as (payload: unknown) => void },
-    { event: WebSocketResponseEvents.SKILL_NOTE_UPDATED, handler: skillNoteHandlers.updated as (payload: unknown) => void },
-    { event: WebSocketResponseEvents.SKILL_NOTE_DELETED, handler: skillNoteHandlers.deleted as (payload: unknown) => void },
-    { event: WebSocketResponseEvents.SKILL_DELETED, handler: handleSkillDeleted as (payload: unknown) => void },
-    { event: WebSocketResponseEvents.REPOSITORY_WORKTREE_CREATED, handler: handleRepositoryWorktreeCreated as (payload: unknown) => void },
-    { event: WebSocketResponseEvents.REPOSITORY_DELETED, handler: handleRepositoryDeleted as (payload: unknown) => void },
-    { event: WebSocketResponseEvents.REPOSITORY_BRANCH_CHANGED, handler: handleRepositoryBranchChanged as (payload: unknown) => void },
-    { event: WebSocketResponseEvents.REPOSITORY_NOTE_CREATED, handler: repositoryNoteHandlers.created as (payload: unknown) => void },
-    { event: WebSocketResponseEvents.REPOSITORY_NOTE_UPDATED, handler: repositoryNoteHandlers.updated as (payload: unknown) => void },
-    { event: WebSocketResponseEvents.REPOSITORY_NOTE_DELETED, handler: repositoryNoteHandlers.deleted as (payload: unknown) => void },
-    { event: WebSocketResponseEvents.SUBAGENT_DELETED, handler: handleSubAgentDeleted as (payload: unknown) => void },
-    { event: WebSocketResponseEvents.SUBAGENT_NOTE_CREATED, handler: subAgentNoteHandlers.created as (payload: unknown) => void },
-    { event: WebSocketResponseEvents.SUBAGENT_NOTE_UPDATED, handler: subAgentNoteHandlers.updated as (payload: unknown) => void },
-    { event: WebSocketResponseEvents.SUBAGENT_NOTE_DELETED, handler: subAgentNoteHandlers.deleted as (payload: unknown) => void },
-    { event: WebSocketResponseEvents.COMMAND_DELETED, handler: handleCommandDeleted as (payload: unknown) => void },
-    { event: WebSocketResponseEvents.COMMAND_NOTE_CREATED, handler: commandNoteHandlers.created as (payload: unknown) => void },
-    { event: WebSocketResponseEvents.COMMAND_NOTE_UPDATED, handler: commandNoteHandlers.updated as (payload: unknown) => void },
-    { event: WebSocketResponseEvents.COMMAND_NOTE_DELETED, handler: commandNoteHandlers.deleted as (payload: unknown) => void },
-    { event: WebSocketResponseEvents.MCP_SERVER_CREATED, handler: handleMcpServerCreated as (payload: unknown) => void },
-    { event: WebSocketResponseEvents.MCP_SERVER_UPDATED, handler: handleMcpServerUpdated as (payload: unknown) => void },
-    { event: WebSocketResponseEvents.MCP_SERVER_DELETED, handler: handleMcpServerDeleted as (payload: unknown) => void },
-    { event: WebSocketResponseEvents.MCP_SERVER_NOTE_CREATED, handler: mcpServerNoteHandlers.created as (payload: unknown) => void },
-    { event: WebSocketResponseEvents.MCP_SERVER_NOTE_UPDATED, handler: mcpServerNoteHandlers.updated as (payload: unknown) => void },
-    { event: WebSocketResponseEvents.MCP_SERVER_NOTE_DELETED, handler: mcpServerNoteHandlers.deleted as (payload: unknown) => void },
-  ]
+    {
+      event: WebSocketResponseEvents.SKILL_NOTE_CREATED,
+      handler: skillNoteHandlers.created as (payload: unknown) => void,
+    },
+    {
+      event: WebSocketResponseEvents.SKILL_NOTE_UPDATED,
+      handler: skillNoteHandlers.updated as (payload: unknown) => void,
+    },
+    {
+      event: WebSocketResponseEvents.SKILL_NOTE_DELETED,
+      handler: skillNoteHandlers.deleted as (payload: unknown) => void,
+    },
+    {
+      event: WebSocketResponseEvents.SKILL_DELETED,
+      handler: handleSkillDeleted as (payload: unknown) => void,
+    },
+    {
+      event: WebSocketResponseEvents.REPOSITORY_WORKTREE_CREATED,
+      handler: handleRepositoryWorktreeCreated as (payload: unknown) => void,
+    },
+    {
+      event: WebSocketResponseEvents.REPOSITORY_DELETED,
+      handler: handleRepositoryDeleted as (payload: unknown) => void,
+    },
+    {
+      event: WebSocketResponseEvents.REPOSITORY_BRANCH_CHANGED,
+      handler: handleRepositoryBranchChanged as (payload: unknown) => void,
+    },
+    {
+      event: WebSocketResponseEvents.REPOSITORY_NOTE_CREATED,
+      handler: repositoryNoteHandlers.created as (payload: unknown) => void,
+    },
+    {
+      event: WebSocketResponseEvents.REPOSITORY_NOTE_UPDATED,
+      handler: repositoryNoteHandlers.updated as (payload: unknown) => void,
+    },
+    {
+      event: WebSocketResponseEvents.REPOSITORY_NOTE_DELETED,
+      handler: repositoryNoteHandlers.deleted as (payload: unknown) => void,
+    },
+    {
+      event: WebSocketResponseEvents.SUBAGENT_DELETED,
+      handler: handleSubAgentDeleted as (payload: unknown) => void,
+    },
+    {
+      event: WebSocketResponseEvents.SUBAGENT_NOTE_CREATED,
+      handler: subAgentNoteHandlers.created as (payload: unknown) => void,
+    },
+    {
+      event: WebSocketResponseEvents.SUBAGENT_NOTE_UPDATED,
+      handler: subAgentNoteHandlers.updated as (payload: unknown) => void,
+    },
+    {
+      event: WebSocketResponseEvents.SUBAGENT_NOTE_DELETED,
+      handler: subAgentNoteHandlers.deleted as (payload: unknown) => void,
+    },
+    {
+      event: WebSocketResponseEvents.COMMAND_DELETED,
+      handler: handleCommandDeleted as (payload: unknown) => void,
+    },
+    {
+      event: WebSocketResponseEvents.COMMAND_NOTE_CREATED,
+      handler: commandNoteHandlers.created as (payload: unknown) => void,
+    },
+    {
+      event: WebSocketResponseEvents.COMMAND_NOTE_UPDATED,
+      handler: commandNoteHandlers.updated as (payload: unknown) => void,
+    },
+    {
+      event: WebSocketResponseEvents.COMMAND_NOTE_DELETED,
+      handler: commandNoteHandlers.deleted as (payload: unknown) => void,
+    },
+    {
+      event: WebSocketResponseEvents.MCP_SERVER_CREATED,
+      handler: handleMcpServerCreated as (payload: unknown) => void,
+    },
+    {
+      event: WebSocketResponseEvents.MCP_SERVER_UPDATED,
+      handler: handleMcpServerUpdated as (payload: unknown) => void,
+    },
+    {
+      event: WebSocketResponseEvents.MCP_SERVER_DELETED,
+      handler: handleMcpServerDeleted as (payload: unknown) => void,
+    },
+    {
+      event: WebSocketResponseEvents.MCP_SERVER_NOTE_CREATED,
+      handler: mcpServerNoteHandlers.created as (payload: unknown) => void,
+    },
+    {
+      event: WebSocketResponseEvents.MCP_SERVER_NOTE_UPDATED,
+      handler: mcpServerNoteHandlers.updated as (payload: unknown) => void,
+    },
+    {
+      event: WebSocketResponseEvents.MCP_SERVER_NOTE_DELETED,
+      handler: mcpServerNoteHandlers.deleted as (payload: unknown) => void,
+    },
+  ];
 }

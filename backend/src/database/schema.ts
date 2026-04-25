@@ -20,7 +20,6 @@ export function createTables(db: Database): void {
       "rotation REAL NOT NULL DEFAULT 0," +
       "workspace_path TEXT NOT NULL," +
       "session_id TEXT," +
-      "output_style_id TEXT," +
       "repository_id TEXT," +
       "command_id TEXT," +
       "multi_instance INTEGER NOT NULL DEFAULT 0," +
@@ -365,6 +364,22 @@ export function createTables(db: Database): void {
         e instanceof Error &&
         (e.message.includes("no such column") ||
           e.message.includes("no such index") ||
+          e.message.includes("Cannot drop column"))
+      )
+    ) {
+      throw e;
+    }
+  }
+
+  // Migration: 砍除 Output Style 功能後移除欄位
+  // 冪等：欄位不存在時 catch "no such column" / "Cannot drop column" 靜默忽略
+  try {
+    db.exec("ALTER TABLE pods DROP COLUMN output_style_id");
+  } catch (e) {
+    if (
+      !(
+        e instanceof Error &&
+        (e.message.includes("no such column") ||
           e.message.includes("Cannot drop column"))
       )
     ) {

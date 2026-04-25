@@ -13,10 +13,6 @@ export type {
   ImageContentBlock,
 } from "./message.js";
 
-export type { OutputStyle, OutputStyleListItem } from "./outputStyle.js";
-
-export type { OutputStyleNote } from "./outputStyleNote.js";
-
 export type { Skill } from "./skill.js";
 
 export type { SkillNote } from "./skillNote.js";

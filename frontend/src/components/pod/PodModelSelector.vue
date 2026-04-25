@@ -163,10 +163,7 @@ const selectModel = async (model: string): Promise<void> => {
 
 <template>
   <!-- 上方中央定位錨點 -->
-  <div
-    class="pod-model-slot"
-    @mouseleave="handleMouseLeave"
-  >
+  <div class="pod-model-slot" @mouseleave="handleMouseLeave">
     <!--
       model-cards-stack：垂直堆疊容器。
       flex-direction: column-reverse → sortedOptions[0]（active）視覺上固定在最底部貼近 Pod，
@@ -252,7 +249,7 @@ const selectModel = async (model: string): Promise<void> => {
   gap: 4px;
   position: relative;
   /* notch 與 card 永遠保持 15% 差距：card = notch × 0.85
-     --model-notch-width 定義於 .pod-with-notch（共同祖先），
+     --model-notch-width 定義於 .pod-wrapper（共同祖先），
      PodModelSelector 與 .pod-doodle 皆可繼承此變數 */
   width: calc(var(--model-notch-width) * 0.85);
   /* 預設只有 active 卡片可互動；.expanded 後開放整個容器 */
@@ -284,7 +281,7 @@ const selectModel = async (model: string): Promise<void> => {
 /* .model-card：橫向 tag 樣式 */
 .model-card {
   /* 直接寫死 notch × 0.85，避免依賴 width: 100% 在 button 上失效
-     --model-notch-width 定義於 .pod-with-notch（共同祖先，pod.css） */
+     --model-notch-width 定義於 .pod-wrapper（共同祖先，pod.css） */
   width: calc(var(--model-notch-width) * 0.85);
   /* border-box 確保 padding 不增加視覺寬度 */
   box-sizing: border-box;

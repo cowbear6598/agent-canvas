@@ -455,10 +455,8 @@
       "aiErrorReason": "Error: {reason}"
     },
     "podTypeMenu": {
-      "newOutputStyle": "New Output Style",
       "newSubAgent": "New SubAgent",
       "newCommand": "New Command",
-      "newOutputStyleGroup": "New Output Style Group",
       "newSubAgentGroup": "New SubAgent Group",
       "newCommandGroup": "New Command Group"
     }
@@ -583,7 +581,6 @@
       "canvasCreated": "Canvas created",
       "canvasRenamed": "Canvas renamed",
       "pasted": "Pasted successfully",
-      "outputStyleDeleted": "Output style deleted",
       "skillDeleted": "Skill deleted",
       "worktreeCreated": "Worktree created",
       "repositoryDeleted": "Repository deleted",

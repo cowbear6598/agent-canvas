@@ -60,7 +60,7 @@ describe('useSlotEject', () => {
       // Mock DOM 元素
       const mockSlotElement = document.createElement('div')
       const mockPodElement = document.createElement('div')
-      mockPodElement.className = 'pod-with-notch'
+      mockPodElement.className = 'pod-wrapper'
       mockPodElement.appendChild(mockSlotElement)
       slotRef.value = mockSlotElement
 
@@ -111,7 +111,7 @@ describe('useSlotEject', () => {
     it('應呼叫 stopPropagation 和 preventDefault', async () => {
       const mockSlotElement = document.createElement('div')
       const mockPodElement = document.createElement('div')
-      mockPodElement.className = 'pod-with-notch'
+      mockPodElement.className = 'pod-wrapper'
       mockPodElement.appendChild(mockSlotElement)
       slotRef.value = mockSlotElement
 
@@ -185,7 +185,7 @@ describe('useSlotEject', () => {
       expect(mockUnbindFromPod).not.toHaveBeenCalled()
     })
 
-    it('找不到 .pod-with-notch 父元素時應 early return', async () => {
+    it('找不到 .pod-wrapper 父元素時應 early return', async () => {
       const mockSlotElement = document.createElement('div')
       slotRef.value = mockSlotElement
 
@@ -205,7 +205,7 @@ describe('useSlotEject', () => {
     it('應計算彈出位置（rotation = 0，向右彈出）', async () => {
       const mockSlotElement = document.createElement('div')
       const mockPodElement = document.createElement('div')
-      mockPodElement.className = 'pod-with-notch'
+      mockPodElement.className = 'pod-wrapper'
       mockPodElement.appendChild(mockSlotElement)
       slotRef.value = mockSlotElement
 
@@ -257,7 +257,7 @@ describe('useSlotEject', () => {
     it('應計算彈出位置（rotation = 90，向下彈出）', async () => {
       const mockSlotElement = document.createElement('div')
       const mockPodElement = document.createElement('div')
-      mockPodElement.className = 'pod-with-notch'
+      mockPodElement.className = 'pod-wrapper'
       mockPodElement.appendChild(mockSlotElement)
       slotRef.value = mockSlotElement
 
@@ -313,7 +313,7 @@ describe('useSlotEject', () => {
     it('應計算彈出位置（rotation = 180，向左彈出）', async () => {
       const mockSlotElement = document.createElement('div')
       const mockPodElement = document.createElement('div')
-      mockPodElement.className = 'pod-with-notch'
+      mockPodElement.className = 'pod-wrapper'
       mockPodElement.appendChild(mockSlotElement)
       slotRef.value = mockSlotElement
 
@@ -368,7 +368,7 @@ describe('useSlotEject', () => {
     it('應計算彈出位置（rotation = 270，向上彈出）', async () => {
       const mockSlotElement = document.createElement('div')
       const mockPodElement = document.createElement('div')
-      mockPodElement.className = 'pod-with-notch'
+      mockPodElement.className = 'pod-wrapper'
       mockPodElement.appendChild(mockSlotElement)
       slotRef.value = mockSlotElement
 
@@ -423,7 +423,7 @@ describe('useSlotEject', () => {
     it('應考慮 viewport zoom（zoom = 2）', async () => {
       const mockSlotElement = document.createElement('div')
       const mockPodElement = document.createElement('div')
-      mockPodElement.className = 'pod-with-notch'
+      mockPodElement.className = 'pod-wrapper'
       mockPodElement.appendChild(mockSlotElement)
       slotRef.value = mockSlotElement
 
@@ -472,7 +472,7 @@ describe('useSlotEject', () => {
     it('應考慮 viewport offset', async () => {
       const mockSlotElement = document.createElement('div')
       const mockPodElement = document.createElement('div')
-      mockPodElement.className = 'pod-with-notch'
+      mockPodElement.className = 'pod-wrapper'
       mockPodElement.appendChild(mockSlotElement)
       slotRef.value = mockSlotElement
 
@@ -521,7 +521,7 @@ describe('useSlotEject', () => {
     it('應呼叫 setNoteAnimating 和 unbindFromPod', async () => {
       const mockSlotElement = document.createElement('div')
       const mockPodElement = document.createElement('div')
-      mockPodElement.className = 'pod-with-notch'
+      mockPodElement.className = 'pod-wrapper'
       mockPodElement.appendChild(mockSlotElement)
       slotRef.value = mockSlotElement
 
@@ -564,7 +564,7 @@ describe('useSlotEject', () => {
     it('完成後應呼叫 onRemoved callback', async () => {
       const mockSlotElement = document.createElement('div')
       const mockPodElement = document.createElement('div')
-      mockPodElement.className = 'pod-with-notch'
+      mockPodElement.className = 'pod-wrapper'
       mockPodElement.appendChild(mockSlotElement)
       slotRef.value = mockSlotElement
 
@@ -606,7 +606,7 @@ describe('useSlotEject', () => {
     it('300ms 後應重置 isEjecting 和 animating', async () => {
       const mockSlotElement = document.createElement('div')
       const mockPodElement = document.createElement('div')
-      mockPodElement.className = 'pod-with-notch'
+      mockPodElement.className = 'pod-wrapper'
       mockPodElement.appendChild(mockSlotElement)
       slotRef.value = mockSlotElement
 
@@ -655,7 +655,7 @@ describe('useSlotEject', () => {
     it('unbindFromPod 失敗時應拋出錯誤', async () => {
       const mockSlotElement = document.createElement('div')
       const mockPodElement = document.createElement('div')
-      mockPodElement.className = 'pod-with-notch'
+      mockPodElement.className = 'pod-wrapper'
       mockPodElement.appendChild(mockSlotElement)
       slotRef.value = mockSlotElement
 

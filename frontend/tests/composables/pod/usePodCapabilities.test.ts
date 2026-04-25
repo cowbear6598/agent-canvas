@@ -30,7 +30,6 @@ vi.mock("@/composables/useToast", () => ({
 /** Phase 2 後，完整的 Claude capabilities（需由 syncFromPayload 注入） */
 const CLAUDE_FULL_CAPABILITIES = {
   chat: true,
-  outputStyle: true,
   skill: true,
   subAgent: true,
   repository: true,
@@ -43,7 +42,6 @@ const CLAUDE_FULL_CAPABILITIES = {
 /** Phase 2 後，Codex 的 capabilities（需由 syncFromPayload 注入） */
 const CODEX_CAPABILITIES = {
   chat: true,
-  outputStyle: false,
   skill: false,
   subAgent: false,
   repository: false,
@@ -59,7 +57,6 @@ const CODEX_CAPABILITIES = {
  */
 const CONSERVATIVE_FALLBACK = {
   chat: true,
-  outputStyle: false,
   skill: false,
   subAgent: false,
   repository: false,
@@ -128,14 +125,6 @@ describe("usePodCapabilities", () => {
       expect(isSkillEnabled.value).toBe(false);
     });
 
-    it("isOutputStyleEnabled 應為 false（Codex 不支援）", () => {
-      injectAllCapabilities();
-      const podId = setupPod("codex");
-      const { isOutputStyleEnabled } = usePodCapabilities(podId);
-
-      expect(isOutputStyleEnabled.value).toBe(false);
-    });
-
     it("isSubAgentEnabled 應為 false（Codex 不支援）", () => {
       injectAllCapabilities();
       const podId = setupPod("codex");
@@ -199,7 +188,6 @@ describe("usePodCapabilities", () => {
       injectAllCapabilities();
       const podId = setupPod("claude");
       const {
-        isOutputStyleEnabled,
         isSkillEnabled,
         isSubAgentEnabled,
         isRepositoryEnabled,
@@ -209,7 +197,6 @@ describe("usePodCapabilities", () => {
         isRunModeEnabled,
       } = usePodCapabilities(podId);
 
-      expect(isOutputStyleEnabled.value).toBe(true);
       expect(isSkillEnabled.value).toBe(true);
       expect(isSubAgentEnabled.value).toBe(true);
       expect(isRepositoryEnabled.value).toBe(true);
@@ -250,7 +237,6 @@ describe("usePodCapabilities", () => {
     it("metadata 未載入時所有 isXxxEnabled 皆為 false（保守 fallback）", () => {
       const podId = ref("non-existent-pod");
       const {
-        isOutputStyleEnabled,
         isSkillEnabled,
         isSubAgentEnabled,
         isRepositoryEnabled,
@@ -260,7 +246,6 @@ describe("usePodCapabilities", () => {
         isRunModeEnabled,
       } = usePodCapabilities(podId);
 
-      expect(isOutputStyleEnabled.value).toBe(false);
       expect(isSkillEnabled.value).toBe(false);
       expect(isSubAgentEnabled.value).toBe(false);
       expect(isRepositoryEnabled.value).toBe(false);

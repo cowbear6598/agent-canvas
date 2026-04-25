@@ -9,7 +9,6 @@ import {
   type Component,
 } from "vue";
 import {
-  Palette,
   Wrench,
   FolderOpen,
   Bot,
@@ -22,7 +21,6 @@ import {
 import type {
   Position,
   PodTypeConfig,
-  OutputStyleListItem,
   Skill,
   Repository,
   SubAgent,
@@ -43,17 +41,10 @@ interface Props {
 
 const props = defineProps<Props>();
 
-type ItemType =
-  | "outputStyle"
-  | "skill"
-  | "repository"
-  | "subAgent"
-  | "command"
-  | "mcpServer";
-type ResourceType = "outputStyle" | "subAgent" | "command";
-type GroupType = "outputStyleGroup" | "subAgentGroup" | "commandGroup";
+type ItemType = "skill" | "repository" | "subAgent" | "command" | "mcpServer";
+type ResourceType = "subAgent" | "command";
+type GroupType = "subAgentGroup" | "commandGroup";
 type OpenMenuType =
-  | "outputStyle"
   | "skill"
   | "subAgent"
   | "repository"
@@ -61,9 +52,8 @@ type OpenMenuType =
   | "mcpServer"
   | "pod";
 
-/** 建立 Note 的 discriminated union，統一六個 create-*-note 事件為一個事件 */
+/** 建立 Note 的 discriminated union，統一五個 create-*-note 事件為一個事件 */
 type CreateNotePayload =
-  | { type: "outputStyle"; id: string }
   | { type: "skill"; id: string }
   | { type: "subAgent"; id: string }
   | { type: "repository"; id: string }
@@ -105,7 +95,6 @@ const emit = defineEmits<{
 }>();
 
 const {
-  outputStyleStore,
   skillStore,
   subAgentStore,
   repositoryStore,
@@ -138,8 +127,6 @@ onMounted(async () => {
   document.addEventListener("mousedown", handleOutsideMouseDown, true);
 
   await Promise.all([
-    outputStyleStore.loadOutputStyles(),
-    outputStyleStore.loadGroups(),
     skillStore.loadSkills(),
     subAgentStore.loadSubAgents(),
     subAgentStore.loadGroups(),
@@ -162,12 +149,6 @@ const handleProviderSelect = (payload: {
   if (!podTypes[0]) return;
   openMenuType.value = null;
   emit("select", podTypes[0], payload.provider, payload.providerConfig);
-};
-
-const handleOutputStyleSelect = (style: OutputStyleListItem): void => {
-  openMenuType.value = null;
-  emit("create-note", { type: "outputStyle", id: style.id });
-  emit("close");
 };
 
 const handleSkillSelect = (skill: Skill): void => {
@@ -224,8 +205,6 @@ const openCreateModal = (resourceType: ResourceType, title: string): void => {
   emit("close");
 };
 
-const handleNewOutputStyle = (): void =>
-  openCreateModal("outputStyle", t("canvas.podTypeMenu.newOutputStyle"));
 const handleNewSubAgent = (): void =>
   openCreateModal("subAgent", t("canvas.podTypeMenu.newSubAgent"));
 const handleNewCommand = (): void =>
@@ -254,9 +233,6 @@ const openEditModal = (
   emit("close");
 };
 
-const handleOutputStyleEdit = (id: string, _name: string, event: Event): void =>
-  openEditModal("outputStyle", id, event);
-
 const handleSubAgentEdit = (id: string, _name: string, event: Event): void =>
   openEditModal("subAgent", id, event);
 
@@ -269,11 +245,6 @@ const openCreateGroupModal = (groupType: GroupType, title: string): void => {
   emit("close");
 };
 
-const handleNewOutputStyleGroup = (): void =>
-  openCreateGroupModal(
-    "outputStyleGroup",
-    t("canvas.podTypeMenu.newOutputStyleGroup"),
-  );
 const handleNewSubAgentGroup = (): void =>
   openCreateGroupModal(
     "subAgentGroup",
@@ -292,13 +263,6 @@ const handleGroupDelete = (
   openMenuType.value = null;
   emit("open-delete-group-modal", groupType, groupId, name);
   emit("close");
-};
-
-const handleOutputStyleDropToGroup = (
-  itemId: string,
-  groupId: string | null,
-): void => {
-  outputStyleStore.moveItemToGroup(itemId, groupId);
 };
 
 const handleSubAgentDropToGroup = (
@@ -397,31 +361,6 @@ const buildMenuSection = (config: SectionConfig): MenuSection => ({
  * 由 watchEffect 驅動 buildMenuSection 轉換，避免在 template 中直接呼叫 getter 閉包。
  */
 const SECTION_CONFIGS: SectionConfig[] = [
-  {
-    type: "outputStyle",
-    label: "Styles >",
-    iconColor: "var(--doodle-pink)",
-    icon: Palette,
-    getItems: () => outputStyleStore.typedAvailableItems,
-    getGroups: () => outputStyleStore.groups,
-    getExpandedGroupIds: () => outputStyleStore.expandedGroupIds,
-    onSelect: (item) => handleOutputStyleSelect(item as OutputStyleListItem),
-    onEdit: handleOutputStyleEdit,
-    onDelete: (id, name, event) =>
-      handleDeleteClick("outputStyle", id, name, event),
-    onToggleGroup: (groupId) => outputStyleStore.toggleGroupExpand(groupId),
-    onGroupDelete: (groupId, name, event) =>
-      handleGroupDelete("outputStyleGroup", groupId, name, event),
-    onDropToGroup: handleOutputStyleDropToGroup,
-    footerActions: [
-      { icon: FilePlus, label: "New File...", handler: handleNewOutputStyle },
-      {
-        icon: FolderPlus,
-        label: "New Group...",
-        handler: handleNewOutputStyleGroup,
-      },
-    ],
-  },
   {
     type: "command",
     label: "Commands >",
@@ -562,11 +501,7 @@ const { menuStyle } = useMenuPosition({
           class="w-8 h-8 rounded-full flex items-center justify-center border border-doodle-ink"
           style="background-color: var(--doodle-blue)"
         >
-          <component
-            :is="podTypes[0].icon"
-            :size="16"
-            class="text-card"
-          />
+          <component :is="podTypes[0].icon" :size="16" class="text-card" />
         </span>
         <span class="font-mono text-sm text-foreground">Pod &gt;</span>
       </button>
@@ -599,10 +534,7 @@ const { menuStyle } = useMenuPosition({
             :size="16"
             class="text-card"
           />
-          <span
-            v-else
-            class="text-xs text-card font-mono font-bold"
-          >{{
+          <span v-else class="text-xs text-card font-mono font-bold">{{
             section.iconSlot
           }}</span>
         </span>
@@ -625,10 +557,7 @@ const { menuStyle } = useMenuPosition({
         @group-delete="section.onGroupDelete"
         @item-drop-to-group="section.onDropToGroup"
       >
-        <template
-          v-if="section.footerActions.length > 0"
-          #footer
-        >
+        <template v-if="section.footerActions.length > 0" #footer>
           <div class="border-t border-doodle-ink/30 my-1" />
           <div
             v-for="action in section.footerActions"
@@ -637,10 +566,7 @@ const { menuStyle } = useMenuPosition({
             :class="{ 'opacity-50 cursor-not-allowed': action.disabled }"
             @click="action.handler"
           >
-            <component
-              :is="action.icon"
-              :size="16"
-            />
+            <component :is="action.icon" :size="16" />
             {{ action.label }}
           </div>
         </template>

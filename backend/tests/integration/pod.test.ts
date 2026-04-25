@@ -13,7 +13,6 @@ import {
 } from "../helpers";
 import { createConnection } from "../helpers";
 import {
-  createOutputStyle,
   createMcpServer,
   createMcpServerNote,
   createRepository,
@@ -29,8 +28,6 @@ import {
   type PodSetSchedulePayload,
   type PodDeletePayload,
   type ConnectionListPayload,
-  type NoteCreatePayload,
-  type NoteListPayload,
   type McpServerNoteListPayload,
   type PodBindRepositoryPayload,
 } from "../../src/schemas";
@@ -43,8 +40,6 @@ import {
   type PodScheduleSetPayload,
   type PodDeletedPayload,
   type ConnectionListResultPayload,
-  type NoteCreatedPayload,
-  type NoteListResultPayload,
   type McpServerNoteListResultPayload,
   type PodRepositoryBoundPayload,
 } from "../../src/types";
@@ -362,55 +357,6 @@ describe("Pod 管理", () => {
         (c) => c.sourcePodId === podA.id || c.targetPodId === podA.id,
       );
       expect(related).toHaveLength(0);
-    });
-
-    it("刪除 Pod 時清理相關筆記", async () => {
-      const client = getClient();
-      const pod = await createPod(client);
-      const style = await createOutputStyle(
-        client,
-        `style-${uuidv4()}`,
-        "# Test",
-      );
-
-      const canvasId = await getCanvasId(client);
-      await emitAndWaitResponse<NoteCreatePayload, NoteCreatedPayload>(
-        client,
-        WebSocketRequestEvents.NOTE_CREATE,
-        WebSocketResponseEvents.NOTE_CREATED,
-        {
-          requestId: uuidv4(),
-          canvasId,
-          outputStyleId: style.id,
-          name: "Bound Note",
-          x: 0,
-          y: 0,
-          boundToPodId: pod.id,
-          originalPosition: null,
-        },
-      );
-
-      await emitAndWaitResponse<PodDeletePayload, PodDeletedPayload>(
-        client,
-        WebSocketRequestEvents.POD_DELETE,
-        WebSocketResponseEvents.POD_DELETED,
-        { requestId: uuidv4(), canvasId, podId: pod.id },
-      );
-
-      const listResponse = await emitAndWaitResponse<
-        NoteListPayload,
-        NoteListResultPayload
-      >(
-        client,
-        WebSocketRequestEvents.NOTE_LIST,
-        WebSocketResponseEvents.NOTE_LIST_RESULT,
-        { requestId: uuidv4(), canvasId },
-      );
-
-      const bound = listResponse.notes!.filter(
-        (n) => n.boundToPodId === pod.id,
-      );
-      expect(bound).toHaveLength(0);
     });
 
     it("刪除 Pod 時清理綁定的 MCP Server Note", async () => {

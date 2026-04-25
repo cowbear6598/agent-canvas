@@ -5,7 +5,7 @@
  * 以符合 AgentProvider<ClaudeOptions>.buildOptions 的介面契約。
  *
  * 產出 ClaudeOptions，涵蓋 Claude 獨有能力：
- *   OutputStyle / MCP Server / Plugin / Integration Tool / Base Options / Model
+ *   MCP Server / Plugin / Integration Tool / Base Options / Model
  */
 
 import path from "path";
@@ -18,7 +18,6 @@ import {
 import { z } from "zod";
 
 import { mcpServerStore } from "../../mcpServerStore.js";
-import { outputStyleService } from "../../outputStyleService.js";
 import { scanInstalledPlugins } from "../../pluginScanner.js";
 import { integrationRegistry } from "../../integration/index.js";
 import {
@@ -39,13 +38,11 @@ import { logger } from "../../../utils/logger.js";
  * Claude provider 的執行時選項（執行時型別，由 buildClaudeOptions 輸出）。
  * 與 Pod.providerConfig（儲存型別 { model: string }）是兩個獨立概念。
  *
- * 承載 Claude 獨有能力：OutputStyle / MCP / Plugins / Integration / Base SDK 設定
+ * 承載 Claude 獨有能力：MCP / Plugins / Integration / Base SDK 設定
  */
 export interface ClaudeOptions {
   /** 使用的 Claude 模型（預設為 "opus"） */
   model: string;
-  /** 系統提示（來自 OutputStyle 設定） */
-  systemPrompt?: string;
   /** MCP Server 設定（來自 mcpServerIds 與 Integration Tool） */
   mcpServers?: Options["mcpServers"];
   /** Plugin 設定（來自 pluginIds） */
@@ -108,24 +105,6 @@ export function resolvePodCwd(pod: Pod): string {
     throw new Error(`非法的工作目錄路徑：${pod.workspacePath}`);
   }
   return resolvedCwd;
-}
-
-// ─── applyOutputStyle ────────────────────────────────────────────────────────
-
-/**
- * 套用 OutputStyle 設定，回傳包含 systemPrompt 的 partial options。
- * 若 pod 無 outputStyleId 設定，則回傳空物件。
- */
-async function applyOutputStyle(
-  pod: Pod,
-): Promise<Pick<ClaudeOptions, "systemPrompt">> {
-  if (!pod.outputStyleId) return {};
-
-  const styleContent = await outputStyleService.getContent(pod.outputStyleId);
-  if (styleContent) {
-    return { systemPrompt: styleContent };
-  }
-  return {};
 }
 
 // ─── applyMcpServers ─────────────────────────────────────────────────────────
@@ -277,11 +256,10 @@ function applyIntegrationToolOptions(
  *
  * 合併順序：
  *   1. buildBaseOptions（固定 SDK 設定 + cwd）
- *   2. applyOutputStyle（systemPrompt）
- *   3. applyMcpServers（mcpServers）
- *   4. applyIntegrationToolOptions（追加 mcpServers + allowedTools）
- *   5. applyPlugins（plugins）
- *   6. model（來自 pod.providerConfig.model 或 default）
+ *   2. applyMcpServers（mcpServers）
+ *   3. applyIntegrationToolOptions（追加 mcpServers + allowedTools）
+ *   4. applyPlugins（plugins）
+ *   5. model（來自 pod.providerConfig.model 或 default）
  *
  * runContext 用於 buildIntegrationTool 內部 closure 讀取 replyContextStore。
  *
@@ -292,7 +270,6 @@ export async function buildClaudeOptions(
   pod: Pod,
   runContext?: RunContext,
 ): Promise<ClaudeOptions> {
-  const outputStyleOptions = await applyOutputStyle(pod);
   const mcpServerOptions = applyMcpServers(pod);
   const pluginOptions = applyPlugins(pod);
 
@@ -323,7 +300,6 @@ export async function buildClaudeOptions(
   // 合併所有選項（mcpServers 已包含 MCP Server + Integration 兩者）
   const result: ClaudeOptions = {
     ...baseOptions,
-    ...outputStyleOptions,
     ...(integrationResult.mcpServers &&
     Object.keys(integrationResult.mcpServers).length > 0
       ? { mcpServers: integrationResult.mcpServers }

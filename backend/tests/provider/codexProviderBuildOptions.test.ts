@@ -21,7 +21,6 @@ function makePod(overrides: Partial<Pick<Pod, "providerConfig">> = {}): Pod {
     status: "idle",
     providerConfig: {},
     workspacePath: "/workspace/test",
-    outputStyleId: null,
     skillIds: [],
     mcpServerIds: [],
     pluginIds: [],

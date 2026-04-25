@@ -344,13 +344,6 @@ export const usePodStore = defineStore("pod", () => {
     pod[field] = value;
   }
 
-  function updatePodOutputStyle(
-    podId: string,
-    outputStyleId: string | null,
-  ): void {
-    updatePodField(podId, "outputStyleId", outputStyleId);
-  }
-
   function clearPodOutputsByIds(podIds: string[]): void {
     for (const podId of podIds) {
       updatePodField(podId, "output", []);
@@ -500,7 +493,6 @@ export const usePodStore = defineStore("pod", () => {
     showTypeMenu,
     hideTypeMenu,
     updatePodField,
-    updatePodOutputStyle,
     clearPodOutputsByIds,
     updatePodProviderConfigModel,
     updatePodRepository,

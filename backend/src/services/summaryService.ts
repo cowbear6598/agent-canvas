@@ -3,7 +3,6 @@ import { summaryPromptBuilder } from "./summaryPromptBuilder.js";
 import { podStore } from "./podStore.js";
 import { messageStore } from "./messageStore.js";
 import { runStore } from "./runStore.js";
-import { outputStyleService } from "./outputStyleService.js";
 import { commandService } from "./commandService.js";
 import { logger } from "../utils/logger.js";
 import { getLastAssistantMessage } from "../utils/messageHelper.js";
@@ -23,20 +22,10 @@ async function buildSummaryContext(
   messages: PersistedMessage[],
 ): Promise<{
   sourcePodName: string;
-  sourcePodOutputStyle: string | null;
   targetPodName: string;
-  targetPodOutputStyle: string | null;
   targetPodCommand: string | null;
   conversationHistory: string;
 }> {
-  const sourcePodOutputStyle = sourcePod.outputStyleId
-    ? await outputStyleService.getContent(sourcePod.outputStyleId)
-    : null;
-
-  const targetPodOutputStyle = targetPod.outputStyleId
-    ? await outputStyleService.getContent(targetPod.outputStyleId)
-    : null;
-
   const targetPodCommand = targetPod.commandId
     ? await commandService.getContent(targetPod.commandId)
     : null;
@@ -46,9 +35,7 @@ async function buildSummaryContext(
 
   return {
     sourcePodName: sourcePod.name,
-    sourcePodOutputStyle,
     targetPodName: targetPod.name,
-    targetPodOutputStyle,
     targetPodCommand,
     conversationHistory,
   };
@@ -95,9 +82,7 @@ class SummaryService {
     }
 
     const context = await buildSummaryContext(sourcePod, targetPod, messages);
-    const systemPrompt = summaryPromptBuilder.buildSystemPrompt(
-      context.sourcePodOutputStyle,
-    );
+    const systemPrompt = summaryPromptBuilder.buildSystemPrompt();
     const userPrompt = summaryPromptBuilder.buildUserPrompt(context);
 
     const result = await claudeService.executeDisposableChat({

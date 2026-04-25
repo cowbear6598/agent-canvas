@@ -7,7 +7,6 @@ import {
 import { podStore } from "../podStore.js";
 import { messageStore } from "../messageStore.js";
 import { runStore } from "../runStore.js";
-import { outputStyleService } from "../outputStyleService.js";
 import { commandService } from "../commandService.js";
 import { claudeService } from "../claude/claudeService.js";
 import { summaryPromptBuilder } from "../summaryPromptBuilder.js";
@@ -295,20 +294,14 @@ class AiDecideService {
     targetPod: NonNullable<ReturnType<typeof podStore.getById>>,
     conn: Connection,
   ): Promise<AiDecideTargetInfo> {
-    const [targetPodOutputStyle, targetPodCommand] = await Promise.all([
-      targetPod.outputStyleId
-        ? outputStyleService.getContent(targetPod.outputStyleId)
-        : Promise.resolve(null),
-      targetPod.commandId
-        ? commandService.getContent(targetPod.commandId)
-        : Promise.resolve(null),
-    ]);
+    const targetPodCommand = targetPod.commandId
+      ? await commandService.getContent(targetPod.commandId)
+      : null;
 
     return {
       connectionId: conn.id,
       targetPodId: conn.targetPodId,
       targetPodName: targetPod.name,
-      targetPodOutputStyle,
       targetPodCommand,
     };
   }
@@ -354,14 +347,10 @@ class AiDecideService {
 
     const conversationHistory =
       summaryPromptBuilder.formatConversationHistory(messages);
-    const outputStyle = sourcePod.outputStyleId
-      ? await outputStyleService.getContent(sourcePod.outputStyleId)
-      : null;
 
     const systemPrompt = aiDecidePromptBuilder.buildSourceSummarySystemPrompt();
     const userPrompt = aiDecidePromptBuilder.buildSourceSummaryUserPrompt({
       podName: sourcePod.name,
-      outputStyle,
       conversationHistory,
     });
 

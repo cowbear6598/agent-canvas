@@ -18,7 +18,6 @@ import { claudeService } from "../../src/services/claude/claudeService.js";
 import { podStore } from "../../src/services/podStore.js";
 import { messageStore } from "../../src/services/messageStore.js";
 import { runStore } from "../../src/services/runStore.js";
-import { outputStyleService } from "../../src/services/outputStyleService.js";
 import { commandService } from "../../src/services/commandService.js";
 import { summaryPromptBuilder } from "../../src/services/summaryPromptBuilder.js";
 import { logger } from "../../src/utils/logger.js";
@@ -34,7 +33,6 @@ describe("AiDecideService", () => {
     repositoryId: null,
     workspacePath: "/test/workspace",
     commandId: null,
-    outputStyleId: null,
     status: "idle" as const,
   } as any;
 
@@ -46,7 +44,6 @@ describe("AiDecideService", () => {
     repositoryId: null,
     workspacePath: "/test/workspace",
     commandId: null,
-    outputStyleId: null,
     status: "idle" as const,
   } as any;
 
@@ -98,9 +95,6 @@ describe("AiDecideService", () => {
 
     // runStore
     vi.spyOn(runStore, "getRunMessages").mockReturnValue(mockMessages);
-
-    // outputStyleService
-    vi.spyOn(outputStyleService, "getContent").mockResolvedValue(null);
 
     // commandService
     vi.spyOn(commandService, "getContent").mockResolvedValue(null);
@@ -429,11 +423,10 @@ describe("AiDecideService", () => {
     });
   });
 
-  describe("正確組裝 prompt（包含 source 摘要、target OutputStyle、target Command）", () => {
+  describe("正確組裝 prompt（包含 source 摘要、target Command）", () => {
     it("傳給 executeMcpChat 的 options 包含正確資訊", async () => {
       const targetPodWithResources = {
         ...mockTargetPod,
-        outputStyleId: "style-1",
         commandId: "command-1",
       };
 
@@ -445,9 +438,6 @@ describe("AiDecideService", () => {
         },
       );
 
-      (outputStyleService.getContent as any).mockResolvedValue(
-        "You are a code reviewer.",
-      );
       (commandService.getContent as any).mockResolvedValue(
         "Review the code for bugs.",
       );
@@ -479,7 +469,6 @@ describe("AiDecideService", () => {
 
       expect(callOptions.prompt).toContain("Target Pod");
       expect(callOptions.systemPrompt).toContain("Workflow 觸發判斷者");
-      expect(outputStyleService.getContent).toHaveBeenCalledWith("style-1");
       expect(commandService.getContent).toHaveBeenCalledWith("command-1");
     });
   });

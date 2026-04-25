@@ -35,7 +35,6 @@ function initRawDb(): Database {
       "model TEXT NOT NULL DEFAULT 'opus'," +
       "workspace_path TEXT NOT NULL," +
       "claude_session_id TEXT," +
-      "output_style_id TEXT," +
       "repository_id TEXT," +
       "command_id TEXT," +
       "multi_instance INTEGER NOT NULL DEFAULT 0," +

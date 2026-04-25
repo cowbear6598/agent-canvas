@@ -46,7 +46,6 @@ interface PodRow {
   rotation: number;
   workspace_path: string;
   session_id: string | null;
-  output_style_id: string | null;
   repository_id: string | null;
   command_id: string | null;
   multi_instance: number;
@@ -439,7 +438,6 @@ class PodStore {
         y: row.y,
         rotation: row.rotation,
         sessionId: row.session_id,
-        outputStyleId: row.output_style_id,
         skillIds: relations.skillIds.get(row.id) ?? [],
         subAgentIds: relations.subAgentIds.get(row.id) ?? [],
         mcpServerIds: relations.mcpServerIds.get(row.id) ?? [],
@@ -541,7 +539,6 @@ class PodStore {
       y: data.y,
       rotation: data.rotation,
       sessionId: null,
-      outputStyleId: data.outputStyleId ?? null,
       skillIds: data.skillIds ?? [],
       subAgentIds: data.subAgentIds ?? [],
       mcpServerIds: data.mcpServerIds ?? [],
@@ -567,7 +564,6 @@ class PodStore {
         $rotation: pod.rotation,
         $workspacePath: pod.workspacePath,
         $sessionId: pod.sessionId,
-        $outputStyleId: pod.outputStyleId,
         $repositoryId: pod.repositoryId,
         $commandId: pod.commandId,
         $multiInstance: 0,
@@ -727,7 +723,6 @@ class PodStore {
         $y: updatedPod.y,
         $rotation: updatedPod.rotation,
         $sessionId: updatedPod.sessionId,
-        $outputStyleId: updatedPod.outputStyleId,
         $repositoryId: updatedPod.repositoryId,
         $commandId: updatedPod.commandId,
         $multiInstance: updatedPod.multiInstance ? 1 : 0,
@@ -787,17 +782,6 @@ class PodStore {
 
   resetClaudeSession(canvasId: string, podId: string): void {
     this.setSessionId(canvasId, podId, "");
-  }
-
-  setOutputStyleId(
-    canvasId: string,
-    id: string,
-    outputStyleId: string | null,
-  ): void {
-    this.stmts.pod.updateOutputStyleId.run({
-      $outputStyleId: outputStyleId,
-      $id: id,
-    });
   }
 
   addSkillId(canvasId: string, podId: string, skillId: string): void {
@@ -898,14 +882,6 @@ class PodStore {
   findByCommandId(canvasId: string, commandId: string): Pod[] {
     const rows = this.stmts.pod.selectByCommandIdAndCanvas.all(
       commandId,
-      canvasId,
-    ) as PodRow[];
-    return this.rowsToPods(rows);
-  }
-
-  findByOutputStyleId(canvasId: string, outputStyleId: string): Pod[] {
-    const rows = this.stmts.pod.selectByOutputStyleIdAndCanvas.all(
-      outputStyleId,
       canvasId,
     ) as PodRow[];
     return this.rowsToPods(rows);

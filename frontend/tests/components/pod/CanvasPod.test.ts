@@ -35,7 +35,6 @@ vi.mock("@/components/pod/PodSlots.vue", () => ({
     props: [
       "podId",
       "podRotation",
-      "boundOutputStyleNote",
       "boundSkillNotes",
       "boundSubAgentNotes",
       "boundRepositoryNote",
@@ -122,7 +121,6 @@ vi.mock("@/composables/canvas/useCanvasContext", () => ({
         type === "pod" && mockSelectedPodIds.value.includes(id),
       toggleElement: vi.fn(),
     },
-    outputStyleStore: { getNotesByPodId: vi.fn().mockReturnValue([]) },
     skillStore: { getNotesByPodId: vi.fn().mockReturnValue([]) },
     subAgentStore: { getNotesByPodId: vi.fn().mockReturnValue([]) },
     repositoryStore: { getNotesByPodId: vi.fn().mockReturnValue([]) },
@@ -366,11 +364,11 @@ describe("CanvasPod dragging class 拖曳狀態", () => {
     mockIsBatchDragging.value = false;
   });
 
-  it("isDragging=false & isBatchDragging=false：pod-with-notch 與 pod-doodle 不含 dragging class", () => {
+  it("isDragging=false & isBatchDragging=false：pod-wrapper 與 pod-doodle 不含 dragging class", () => {
     const pod = createMockPod();
     const wrapper = mountCanvasPod(pod);
 
-    const podWithNotch = wrapper.find(".pod-with-notch");
+    const podWithNotch = wrapper.find(".pod-wrapper");
     const podDoodle = wrapper.find(".pod-doodle");
 
     expect(podWithNotch.classes()).not.toContain("dragging");
@@ -379,13 +377,13 @@ describe("CanvasPod dragging class 拖曳狀態", () => {
     wrapper.unmount();
   });
 
-  it("isDragging=true：pod-with-notch 與 pod-doodle 含 dragging class", () => {
+  it("isDragging=true：pod-wrapper 與 pod-doodle 含 dragging class", () => {
     // 更新 mockIsDragging，usePodDrag mock 的 getter 會讀取此值
     mockIsDragging.value = true;
     const pod = createMockPod();
     const wrapper = mountCanvasPod(pod);
 
-    const podWithNotch = wrapper.find(".pod-with-notch");
+    const podWithNotch = wrapper.find(".pod-wrapper");
     const podDoodle = wrapper.find(".pod-doodle");
 
     expect(podWithNotch.classes()).toContain("dragging");
@@ -394,13 +392,13 @@ describe("CanvasPod dragging class 拖曳狀態", () => {
     wrapper.unmount();
   });
 
-  it("isBatchDragging=true：pod-with-notch 與 pod-doodle 含 dragging class", () => {
+  it("isBatchDragging=true：pod-wrapper 與 pod-doodle 含 dragging class", () => {
     // 更新 mockIsBatchDragging，useBatchDrag mock 的 getter 會讀取此值
     mockIsBatchDragging.value = true;
     const pod = createMockPod();
     const wrapper = mountCanvasPod(pod);
 
-    const podWithNotch = wrapper.find(".pod-with-notch");
+    const podWithNotch = wrapper.find(".pod-wrapper");
     const podDoodle = wrapper.find(".pod-doodle");
 
     expect(podWithNotch.classes()).toContain("dragging");

@@ -37,7 +37,6 @@ describe("Paste Helpers", () => {
       rotation: 0,
       workspacePath: "/test/workspace",
       repositoryId: null,
-      outputStyleId: null,
       skillIds: [] as string[],
       subAgentIds: [] as string[],
       mcpServerIds: [] as string[],
@@ -584,15 +583,16 @@ describe("Paste Helpers", () => {
     it("noteStore.create 拋例外後錯誤被 recordError 捕捉，不影響其他 note", async () => {
       const { createPastedNotesByType } =
         await import("../../src/handlers/paste/pasteHelpers.js");
-      const { noteStore } = await import("../../src/services/noteStores.js");
+      const { skillNoteStore } =
+        await import("../../src/services/noteStores.js");
 
-      vi.spyOn(noteStore, "create").mockImplementation(() => {
+      vi.spyOn(skillNoteStore, "create").mockImplementation(() => {
         throw new Error("DB 寫入失敗");
       });
 
       const noteItems = [
         {
-          outputStyleId: uuidv4(),
+          skillId: uuidv4(),
           name: "Broken Note",
           x: 0,
           y: 0,
@@ -601,16 +601,11 @@ describe("Paste Helpers", () => {
         },
       ];
 
-      const result = createPastedNotesByType(
-        "outputStyle",
-        canvasId,
-        noteItems,
-        {},
-      );
+      const result = createPastedNotesByType("skill", canvasId, noteItems, {});
 
       expect(result.notes).toHaveLength(0);
       expect(result.errors).toHaveLength(1);
-      expect(result.errors[0].type).toBe("outputStyleNote");
+      expect(result.errors[0].type).toBe("skillNote");
     });
   });
 

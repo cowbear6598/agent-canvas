@@ -43,7 +43,6 @@ const makePod = (overrides?: Partial<Pod>): Pod => ({
   y: 0,
   rotation: 0,
   sessionId: null,
-  outputStyleId: null,
   skillIds: [],
   subAgentIds: [],
   mcpServerIds: [],

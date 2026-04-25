@@ -99,17 +99,6 @@ export interface PodChatAbortPayload {
   podId: string;
 }
 
-export interface NoteCreatePayload {
-  requestId: string;
-  canvasId: string;
-  outputStyleId: string;
-  name: string;
-  x: number;
-  y: number;
-  boundToPodId: string | null;
-  originalPosition: { x: number; y: number } | null;
-}
-
 export interface ConnectionCreatePayload {
   requestId: string;
   canvasId: string;
@@ -152,20 +141,10 @@ export interface PastePodItem {
   provider: PodProvider;
   /** Provider 對應的設定（含 model 等參數） */
   providerConfig: ProviderConfig;
-  outputStyleId?: string | null;
   skillIds?: string[];
   subAgentIds?: string[];
   repositoryId?: string | null;
   commandId?: string | null;
-}
-
-export interface PasteOutputStyleNoteItem {
-  outputStyleId: string;
-  name: string;
-  x: number;
-  y: number;
-  boundToOriginalPodId: string | null;
-  originalPosition: { x: number; y: number } | null;
 }
 
 export interface PasteSkillNoteItem {
@@ -209,7 +188,6 @@ export interface CanvasPastePayload {
   requestId: string;
   canvasId: string;
   pods: PastePodItem[];
-  outputStyleNotes: PasteOutputStyleNoteItem[];
   skillNotes: PasteSkillNoteItem[];
   repositoryNotes: PasteRepositoryNoteItem[];
   subAgentNotes: PasteSubAgentNoteItem[];
@@ -327,13 +305,13 @@ export interface GroupCreatePayload {
   requestId: string;
   canvasId: string;
   name: string;
-  type: "command" | "outputStyle" | "subAgent";
+  type: "command" | "subAgent";
 }
 
 export interface GroupListPayload {
   requestId: string;
   canvasId: string;
-  type: "command" | "outputStyle" | "subAgent";
+  type: "command" | "subAgent";
 }
 
 export interface GroupDeletePayload {

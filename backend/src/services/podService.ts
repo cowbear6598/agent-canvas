@@ -7,7 +7,6 @@ import { connectionStore } from "./connectionStore.js";
 import { repositorySyncService } from "./repositorySyncService.js";
 import { podManifestService } from "./podManifestService.js";
 import {
-  noteStore,
   skillNoteStore,
   repositoryNoteStore,
   commandNoteStore,
@@ -40,7 +39,6 @@ export function deleteAllPodNotes(
     };
     key: keyof NonNullable<PodDeletedPayload["deletedNoteIds"]>;
   }> = [
-    { store: noteStore, key: "note" },
     { store: skillNoteStore, key: "skillNote" },
     { store: repositoryNoteStore, key: "repositoryNote" },
     { store: commandNoteStore, key: "commandNote" },

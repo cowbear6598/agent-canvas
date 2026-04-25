@@ -302,10 +302,8 @@
       "aiErrorReason": "エラー：{reason}"
     },
     "podTypeMenu": {
-      "newOutputStyle": "Output Style を追加",
       "newSubAgent": "SubAgent を追加",
       "newCommand": "Command を追加",
-      "newOutputStyleGroup": "Output Style グループを追加",
       "newSubAgentGroup": "SubAgent グループを追加",
       "newCommandGroup": "Command グループを追加"
     }
@@ -430,7 +428,6 @@
       "canvasCreated": "Canvas を作成しました",
       "canvasRenamed": "Canvas の名前を変更しました",
       "pasted": "貼り付けました",
-      "outputStyleDeleted": "出力スタイルを削除しました",
       "skillDeleted": "Skill を削除しました",
       "worktreeCreated": "Worktree を作成しました",
       "repositoryDeleted": "Repository を削除しました",

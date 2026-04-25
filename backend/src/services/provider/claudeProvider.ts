@@ -4,7 +4,7 @@
  * 實作 AgentProvider<ClaudeOptions> 介面，透過 Claude SDK 執行 AI 查詢。
  *
  * 子模組：
- *   - buildClaudeOptions.ts：從 Pod 設定組裝 ClaudeOptions（OutputStyle / MCP / Plugin / Integration）
+ *   - buildClaudeOptions.ts：從 Pod 設定組裝 ClaudeOptions（MCP / Plugin / Integration）
  *   - runClaudeQuery.ts：SDKMessage → NormalizedEvent 的轉換（直接呼叫 SDK query()）
  *   - sessionRetry.ts：Session resume 失敗時自動重試一次
  */
@@ -60,7 +60,7 @@ export const claudeProvider: AgentProvider<ClaudeOptions> = {
 
   /**
    * 從 Pod 設定與 RunContext 建構執行時選項（ClaudeOptions）。
-   * 委派給 buildClaudeOptions 子模組，涵蓋 OutputStyle / MCP / Plugin / Integration 全部邏輯。
+   * 委派給 buildClaudeOptions 子模組，涵蓋 MCP / Plugin / Integration 全部邏輯。
    */
   async buildOptions(
     pod: Pod,

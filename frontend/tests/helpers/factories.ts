@@ -19,7 +19,6 @@ import type {
   ToolUseStatus,
 } from "@/types/chat";
 import type { BaseNote } from "@/types/note";
-import type { OutputStyleNote } from "@/types/outputStyle";
 import type { SkillNote } from "@/types/skill";
 import type { Repository, RepositoryNote } from "@/types/repository";
 import type { SubAgentNote, SubAgent } from "@/types/subAgent";
@@ -92,7 +91,6 @@ export function createMockPod(overrides?: Partial<Pod>): Pod {
     output: [],
     rotation: 0,
     status: "idle" as PodStatus,
-    outputStyleId: null,
     skillIds: [],
     subAgentIds: [],
     repositoryId: null,
@@ -166,21 +164,9 @@ export function createMockAssistantMessage(
  * 建立 Mock Note (依類型)
  */
 export function createMockNote(
-  type:
-    | "outputStyle"
-    | "skill"
-    | "repository"
-    | "subAgent"
-    | "command"
-    | "mcpServer",
+  type: "skill" | "repository" | "subAgent" | "command" | "mcpServer",
   overrides?: Partial<BaseNote>,
-):
-  | OutputStyleNote
-  | SkillNote
-  | RepositoryNote
-  | SubAgentNote
-  | CommandNote
-  | McpServerNote {
+): SkillNote | RepositoryNote | SubAgentNote | CommandNote | McpServerNote {
   const baseNote: BaseNote = {
     id: `note-${++noteCounter}`,
     name: `Note ${noteCounter}`,
@@ -192,12 +178,6 @@ export function createMockNote(
   };
 
   switch (type) {
-    case "outputStyle":
-      return {
-        ...baseNote,
-        outputStyleId: `output-style-${noteCounter}`,
-      } as OutputStyleNote;
-
     case "skill":
       return {
         ...baseNote,

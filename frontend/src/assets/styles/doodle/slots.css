@@ -85,25 +85,6 @@
 }
 
 /* ===================================
-   Output Style Slot
-   =================================== */
-
-/* Pod Output Style Slot */
-
-.pod-output-style-slot.has-note {
-  background: var(--doodle-yellow);
-  transform: translateX(-50%);
-}
-
-.pod-output-style-slot.has-note:hover {
-  transform: translateX(-50%) translate(0.5px, -0.5px);
-}
-
-.pod-output-style-slot.ejecting {
-  animation: eject-from-slot-right 0.3s ease-out forwards;
-}
-
-/* ===================================
    Repository Slot
    =================================== */
 
@@ -125,7 +106,7 @@
 /* Repository Slot 容器位置（POD 右側） */
 .pod-repository-notch-area {
   right: 0;
-  top: 98px;
+  top: 84px;
   transform: translateX(100%);
 }
 
@@ -133,7 +114,7 @@
 .repository-notch {
   position: absolute;
   right: -6px;
-  top: 96px;
+  top: 82px;
   width: 8px;
   height: 32px;
   background: var(--card);
@@ -168,7 +149,7 @@
 /* Command Slot 容器位置（POD 右側） */
 .pod-command-notch-area {
   right: 0;
-  top: 58px;
+  top: 44px;
   transform: translateX(100%);
 }
 
@@ -176,7 +157,7 @@
 .command-notch {
   position: absolute;
   right: -6px;
-  top: 56px;
+  top: 42px;
   width: 8px;
   height: 32px;
   background: var(--card);
@@ -196,7 +177,7 @@
 }
 
 .pod-skill-slot::before {
-  content: '';
+  content: "";
   position: absolute;
   left: -16px;
   top: 0;
@@ -240,7 +221,7 @@
 }
 
 .pod-subagent-slot::before {
-  content: '';
+  content: "";
   position: absolute;
   left: -16px;
   top: 0;
@@ -293,7 +274,7 @@
 }
 
 .pod-mcp-server-slot::before {
-  content: '';
+  content: "";
   position: absolute;
   left: -16px;
   top: 0;

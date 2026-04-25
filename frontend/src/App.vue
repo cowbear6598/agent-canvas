@@ -35,7 +35,6 @@ const {
   podStore,
   viewportStore,
   chatStore,
-  outputStyleStore,
   skillStore,
   subAgentStore,
   repositoryStore,
@@ -85,11 +84,6 @@ const loadCanvasData = async (): Promise<void> => {
   viewportStore.resetToCenter();
 
   await Promise.all([
-    (async (): Promise<void> => {
-      await outputStyleStore.loadOutputStyles();
-      await outputStyleStore.loadNotesFromBackend();
-      await outputStyleStore.rebuildNotesFromPods(podStore.pods);
-    })(),
     (async (): Promise<void> => {
       await skillStore.loadSkills();
       await skillStore.loadNotesFromBackend();
@@ -349,7 +343,6 @@ watch(
 
     podStore.resetForCanvasSwitch();
     connectionStore.resetForCanvasSwitch();
-    outputStyleStore.resetForCanvasSwitch();
     skillStore.resetForCanvasSwitch();
     subAgentStore.resetForCanvasSwitch();
     repositoryStore.resetForCanvasSwitch();
@@ -403,11 +396,7 @@ onUnmounted(() => {
       <CanvasContainer />
     </main>
 
-    <ChatModal
-      v-if="selectedPod"
-      :pod="selectedPod"
-      @close="handleCloseChat"
-    />
+    <ChatModal v-if="selectedPod" :pod="selectedPod" @close="handleCloseChat" />
 
     <RunChatModal
       v-if="runStore.activeRunChatModal"

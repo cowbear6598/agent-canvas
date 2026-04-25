@@ -346,7 +346,6 @@ describe("podStore", () => {
       expect(result.x).toBe(100);
       expect(result.y).toBe(150);
       expect(result.output).toEqual([]);
-      expect(result.outputStyleId).toBeNull();
       // store 未載入 defaultOptions 時，enrichPod 回傳 placeholder { model: "" }
       expect(result.providerConfig?.model).toBe("");
       expect(result.multiInstance).toBe(false);
@@ -362,7 +361,6 @@ describe("podStore", () => {
         y: 600,
         rotation: 1.5,
         output: ["existing"],
-        outputStyleId: "style-1",
         providerConfig: { model: "sonnet" },
         multiInstance: true,
         commandId: "cmd-1",
@@ -375,7 +373,6 @@ describe("podStore", () => {
       expect(result.y).toBe(600);
       expect(result.rotation).toBe(1.5);
       expect(result.output).toEqual(["existing"]);
-      expect(result.outputStyleId).toBe("style-1");
       expect(result.providerConfig.model).toBe("sonnet");
       expect(result.multiInstance).toBe(true);
       expect(result.commandId).toBe("cmd-1");
@@ -561,7 +558,6 @@ describe("podStore", () => {
         rotation: 0,
         output: [],
         status: "idle",
-        outputStyleId: null,
         skillIds: [],
         subAgentIds: [],
         repositoryId: null,
@@ -1337,36 +1333,6 @@ describe("podStore", () => {
       });
     });
 
-    describe("updatePodOutputStyle", () => {
-      it("應更新 Pod 的 outputStyleId", () => {
-        const store = usePodStore();
-        const pod = createMockPod({ id: "pod-1", outputStyleId: null });
-        store.pods = [pod];
-
-        store.updatePodOutputStyle("pod-1", "style-1");
-
-        expect(store.pods[0]?.outputStyleId).toBe("style-1");
-      });
-
-      it("可以清除 outputStyleId", () => {
-        const store = usePodStore();
-        const pod = createMockPod({ id: "pod-1", outputStyleId: "style-1" });
-        store.pods = [pod];
-
-        store.updatePodOutputStyle("pod-1", null);
-
-        expect(store.pods[0]?.outputStyleId).toBeNull();
-      });
-
-      it("Pod 不存在時不應報錯", () => {
-        const store = usePodStore();
-
-        expect(() =>
-          store.updatePodOutputStyle("non-existent", "style-1"),
-        ).not.toThrow();
-      });
-    });
-
     describe("updatePodRepository", () => {
       it("應更新 Pod 的 repositoryId", () => {
         const store = usePodStore();
@@ -1687,24 +1653,24 @@ describe("podStore", () => {
   });
 
   describe("updatePodField", () => {
-    it("Pod 存在時應成功更新 outputStyleId 欄位", () => {
+    it("Pod 存在時應成功更新 commandId 欄位", () => {
       const store = usePodStore();
-      const pod = createMockPod({ id: "pod-1", outputStyleId: null });
+      const pod = createMockPod({ id: "pod-1", commandId: null });
       store.pods = [pod];
 
-      store.updatePodField("pod-1", "outputStyleId", "style-abc");
+      store.updatePodField("pod-1", "commandId", "cmd-abc");
 
-      expect(store.pods[0]?.outputStyleId).toBe("style-abc");
+      expect(store.pods[0]?.commandId).toBe("cmd-abc");
     });
 
-    it("Pod 存在時應成功更新 outputStyleId 至另一個值", () => {
+    it("Pod 存在時應成功更新 commandId 至另一個值", () => {
       const store = usePodStore();
-      const pod = createMockPod({ id: "pod-1", outputStyleId: "style-old" });
+      const pod = createMockPod({ id: "pod-1", commandId: "cmd-old" });
       store.pods = [pod];
 
-      store.updatePodField("pod-1", "outputStyleId", "style-new");
+      store.updatePodField("pod-1", "commandId", "cmd-new");
 
-      expect(store.pods[0]?.outputStyleId).toBe("style-new");
+      expect(store.pods[0]?.commandId).toBe("cmd-new");
     });
 
     it("Pod 不存在時應靜默忽略不拋錯", () => {
@@ -1712,7 +1678,7 @@ describe("podStore", () => {
       store.pods = [];
 
       expect(() =>
-        store.updatePodField("non-existent", "outputStyleId", null),
+        store.updatePodField("non-existent", "commandId", null),
       ).not.toThrow();
       expect(store.pods).toHaveLength(0);
     });

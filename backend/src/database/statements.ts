@@ -24,17 +24,14 @@ function buildStatements(db: Database): {
     update: ReturnType<Database["prepare"]>;
     updateStatus: ReturnType<Database["prepare"]>;
     updateSessionId: ReturnType<Database["prepare"]>;
-    updateOutputStyleId: ReturnType<Database["prepare"]>;
     updateRepositoryId: ReturnType<Database["prepare"]>;
     updateCommandId: ReturnType<Database["prepare"]>;
     updateMultiInstance: ReturnType<Database["prepare"]>;
     updateScheduleJson: ReturnType<Database["prepare"]>;
     selectWithSchedule: ReturnType<Database["prepare"]>;
-    selectByOutputStyleId: ReturnType<Database["prepare"]>;
     selectByRepositoryId: ReturnType<Database["prepare"]>;
     selectByCommandId: ReturnType<Database["prepare"]>;
     selectByCommandIdAndCanvas: ReturnType<Database["prepare"]>;
-    selectByOutputStyleIdAndCanvas: ReturnType<Database["prepare"]>;
     selectByRepositoryIdAndCanvas: ReturnType<Database["prepare"]>;
     selectScheduleInfo: ReturnType<Database["prepare"]>;
     resetAllBusy: ReturnType<Database["prepare"]>;
@@ -201,7 +198,7 @@ function buildStatements(db: Database): {
 
     pod: {
       insert: db.prepare(
-        "INSERT INTO pods (id, canvas_id, name, status, x, y, rotation, workspace_path, session_id, output_style_id, repository_id, command_id, multi_instance, schedule_json, provider, provider_config_json) VALUES ($id, $canvasId, $name, $status, $x, $y, $rotation, $workspacePath, $sessionId, $outputStyleId, $repositoryId, $commandId, $multiInstance, $scheduleJson, $provider, $providerConfigJson)",
+        "INSERT INTO pods (id, canvas_id, name, status, x, y, rotation, workspace_path, session_id, repository_id, command_id, multi_instance, schedule_json, provider, provider_config_json) VALUES ($id, $canvasId, $name, $status, $x, $y, $rotation, $workspacePath, $sessionId, $repositoryId, $commandId, $multiInstance, $scheduleJson, $provider, $providerConfigJson)",
       ),
       selectByCanvasId: db.prepare("SELECT * FROM pods WHERE canvas_id = ?"),
       selectById: db.prepare("SELECT * FROM pods WHERE id = ?"),
@@ -218,16 +215,13 @@ function buildStatements(db: Database): {
         "SELECT COUNT(*) as count FROM pods WHERE canvas_id = $canvasId AND name = $name AND id != $excludeId",
       ),
       update: db.prepare(
-        "UPDATE pods SET name = $name, status = $status, x = $x, y = $y, rotation = $rotation, session_id = $sessionId, output_style_id = $outputStyleId, repository_id = $repositoryId, command_id = $commandId, multi_instance = $multiInstance, schedule_json = $scheduleJson, provider = $provider, provider_config_json = $providerConfigJson WHERE id = $id",
+        "UPDATE pods SET name = $name, status = $status, x = $x, y = $y, rotation = $rotation, session_id = $sessionId, repository_id = $repositoryId, command_id = $commandId, multi_instance = $multiInstance, schedule_json = $scheduleJson, provider = $provider, provider_config_json = $providerConfigJson WHERE id = $id",
       ),
       updateStatus: db.prepare(
         "UPDATE pods SET status = $status WHERE id = $id",
       ),
       updateSessionId: db.prepare(
         "UPDATE pods SET session_id = $sessionId WHERE id = $id",
-      ),
-      updateOutputStyleId: db.prepare(
-        "UPDATE pods SET output_style_id = $outputStyleId WHERE id = $id",
       ),
       updateRepositoryId: db.prepare(
         "UPDATE pods SET repository_id = $repositoryId WHERE id = $id",
@@ -244,18 +238,12 @@ function buildStatements(db: Database): {
       selectWithSchedule: db.prepare(
         "SELECT * FROM pods WHERE schedule_json IS NOT NULL",
       ),
-      selectByOutputStyleId: db.prepare(
-        "SELECT * FROM pods WHERE output_style_id = ?",
-      ),
       selectByRepositoryId: db.prepare(
         "SELECT * FROM pods WHERE repository_id = ?",
       ),
       selectByCommandId: db.prepare("SELECT * FROM pods WHERE command_id = ?"),
       selectByCommandIdAndCanvas: db.prepare(
         "SELECT * FROM pods WHERE command_id = ? AND canvas_id = ?",
-      ),
-      selectByOutputStyleIdAndCanvas: db.prepare(
-        "SELECT * FROM pods WHERE output_style_id = ? AND canvas_id = ?",
       ),
       selectByRepositoryIdAndCanvas: db.prepare(
         "SELECT * FROM pods WHERE repository_id = ? AND canvas_id = ?",
