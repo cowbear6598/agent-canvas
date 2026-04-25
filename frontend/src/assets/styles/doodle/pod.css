@@ -1,34 +1,9 @@
 /* Pod card doodle style */
 
-/* ===========================================
-   CSS class 與後端 PodProvider 枚舉耦合說明
+/* class 命名規則：pod-provider-${provider}，新增 provider 時在底部加對應 class 即可 */
 
-   .pod-provider-claude 對應 PodProvider.Claude
-   .pod-provider-codex  對應 PodProvider.Codex
-
-   命名規則：`pod-provider-${PodProvider 值（小寫）}`
-   請與以下定義保持同步：
-   - backend/src/types/pod.ts 中的 PodProvider 枚舉
-   - frontend/src/types/pod.ts 中的 PodProvider 枚舉
-
-   若未來新增第三個 Provider（例如 PodProvider.Gemini），
-   在此檔案底部新增對應的 .pod-provider-gemini class 即可。
-   =========================================== */
-
-/* ===========================================
-   CSS Custom Properties
-
-   --pod-provider-gradient-stop（Provider 漸層終止點變數）
-   - 型別：長度單位
-   - 值：1rem（使用 rem 而非 px，理由如下）
-     1. rem 相對於根元素 font-size（通常 16px），等價於原 16px 硬寫值
-     2. 使用 rem 而非 px 的關鍵原因：避免受 CanvasViewport 的
-        transform: scale(zoom) 影響視覺比例。px 為絕對像素，
-        zoom 放大時 16px 視覺被放大成 32px+；改用 rem 不受
-        viewport 縮放影響，漸層終止點維持穩定視覺比例
-     3. 選擇 1rem（約等於 16px）讓漸層只在 Pod 頂端 padding 區
-        完成，Mini screen 以下保持奶油白以維持文字對比度
-   =========================================== */
+/* --pod-provider-gradient-stop 使用 rem 而非 px：
+   避免受 CanvasViewport transform: scale(zoom) 影響，漸層終止點維持穩定視覺比例 */
 :root {
   --pod-provider-gradient-stop: 1rem;
 }
@@ -58,18 +33,7 @@
   box-shadow: 4px 4px 0 oklch(0.4 0.02 50 / 0.5);
 }
 
-/* ===========================================
-   Pod Notch System (凹槽系統)
-
-   結構說明：
-   - .pod-skill-notch-area: Slot 容器的位置（Skill）
-   - .model-notch: POD 上方的 Model 凹槽視覺效果
-   - ::after: POD 左側的凹槽視覺效果（Skill）
-
-   位置對齊注意事項：
-   - .pod-*-notch-area 的 top 要和 Slot 內容對齊
-   - ::after 的 top 是凹槽視覺效果的位置（相對於 .pod-doodle）
-   =========================================== */
+/* Pod Notch System（凹槽系統）：各 notch 位置與對應 Slot 內容對齊 */
 
 /* Pod 容器基底：rotate 變換、model notch 寬度變數、hover/dragging 狀態 */
 .pod-wrapper {

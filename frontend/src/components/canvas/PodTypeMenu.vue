@@ -501,7 +501,11 @@ const { menuStyle } = useMenuPosition({
           class="w-8 h-8 rounded-full flex items-center justify-center border border-doodle-ink"
           style="background-color: var(--doodle-blue)"
         >
-          <component :is="podTypes[0].icon" :size="16" class="text-card" />
+          <component
+            :is="podTypes[0].icon"
+            :size="16"
+            class="text-card"
+          />
         </span>
         <span class="font-mono text-sm text-foreground">Pod &gt;</span>
       </button>
@@ -534,7 +538,10 @@ const { menuStyle } = useMenuPosition({
             :size="16"
             class="text-card"
           />
-          <span v-else class="text-xs text-card font-mono font-bold">{{
+          <span
+            v-else
+            class="text-xs text-card font-mono font-bold"
+          >{{
             section.iconSlot
           }}</span>
         </span>
@@ -557,7 +564,10 @@ const { menuStyle } = useMenuPosition({
         @group-delete="section.onGroupDelete"
         @item-drop-to-group="section.onDropToGroup"
       >
-        <template v-if="section.footerActions.length > 0" #footer>
+        <template
+          v-if="section.footerActions.length > 0"
+          #footer
+        >
           <div class="border-t border-doodle-ink/30 my-1" />
           <div
             v-for="action in section.footerActions"
@@ -566,7 +576,10 @@ const { menuStyle } = useMenuPosition({
             :class="{ 'opacity-50 cursor-not-allowed': action.disabled }"
             @click="action.handler"
           >
-            <component :is="action.icon" :size="16" />
+            <component
+              :is="action.icon"
+              :size="16"
+            />
             {{ action.label }}
           </div>
         </template>

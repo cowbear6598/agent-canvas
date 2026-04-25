@@ -396,7 +396,11 @@ onUnmounted(() => {
       <CanvasContainer />
     </main>
 
-    <ChatModal v-if="selectedPod" :pod="selectedPod" @close="handleCloseChat" />
+    <ChatModal
+      v-if="selectedPod"
+      :pod="selectedPod"
+      @close="handleCloseChat"
+    />
 
     <RunChatModal
       v-if="runStore.activeRunChatModal"

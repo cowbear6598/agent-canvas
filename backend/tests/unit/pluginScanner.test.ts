@@ -7,7 +7,7 @@ vi.mock("fs");
 const mockReadFileSync = vi.mocked(fs.readFileSync);
 
 // 動態 import pluginScanner，需在 mock 設定後才 import
-const { scanInstalledPlugins } =
+const { scanInstalledPlugins, clearScanInstalledPluginsCache } =
   await import("../../src/services/pluginScanner.js");
 
 const INSTALLED_PLUGINS_PATH = `${process.env.HOME}/.claude/plugins/installed_plugins.json`;
@@ -27,6 +27,7 @@ function makePluginManifest(
 describe("pluginScanner", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearScanInstalledPluginsCache();
   });
 
   afterEach(() => {

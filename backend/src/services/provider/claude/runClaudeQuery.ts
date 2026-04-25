@@ -157,9 +157,10 @@ function* handleAssistant(
     const userMessage = result.shouldAbort
       ? result.userMessage
       : "與 Claude 通訊時發生錯誤，請稍後再試";
-    // 先送出錯誤文字，再拋出，讓上層感知到失敗
+    // 先送出錯誤文字，再拋出，讓上層感知到失敗；原始 SDK 錯誤只記 log，不暴露給前端
+    logger.error("Chat", "Error", "assistant message 錯誤", sdkMessage.error);
     yield { type: "text", content: `\n\n⚠️ ${userMessage}` };
-    throw new Error(`assistant message 錯誤：${sdkMessage.error}`);
+    throw new Error("Claude SDK 回傳 assistant 錯誤");
   }
 }
 
@@ -226,19 +227,15 @@ function* handleResult(
     return;
   }
 
-  const errorMessage =
-    sdkMessage.errors.length > 0
-      ? sdkMessage.errors.join(", ")
-      : "Unknown error";
+  // 原始 SDK errors 只記 log，不暴露給前端（避免洩漏內部細節）
+  logger.error("Chat", "Error", "result/error 回傳錯誤", sdkMessage.errors);
 
-  // 先送出使用者友善警告文字（通用格式，不含 errors 原始內容，避免洩漏內部細節）。
-  // 接著 throw，由 runClaudeQuery 的呼叫鏈（executeStreamingChat → handleStreamError）
-  // 完整攔截並走通用錯誤路徑，不會洩漏給前端。
+  // 先送出使用者友善警告文字，接著 throw，由呼叫鏈完整攔截並走通用錯誤路徑
   yield {
     type: "text",
     content: "\n\n⚠️ 與 Claude 通訊時發生錯誤，請稍後再試",
   };
-  throw new Error(errorMessage);
+  throw new Error("Claude SDK result 回傳錯誤");
 }
 
 /** rate_limit_event → throw if rejected */
@@ -259,8 +256,23 @@ function* handleAuthStatus(
   const result = checkAuthStatus(sdkMessage.error);
   if (!result.shouldAbort) return;
 
+  // 原始 SDK error 只記 log，不暴露給前端
+  logger.error("Chat", "Error", "auth_status 錯誤", sdkMessage.error);
   yield { type: "text", content: `\n\n⚠️ ${result.userMessage}` };
-  throw new Error(`auth_status 錯誤：${sdkMessage.error}`);
+  throw new Error("Claude SDK auth_status 錯誤");
+}
+
+/** system case 的內部子路由：依 subtype 分派至 handleSystemInit / handleApiRetry */
+function* dispatchSystemMessage(
+  sdkMessage: SDKSystemMessage | SDKAPIRetryMessage,
+  state: QueryState,
+): Generator<NormalizedEvent> {
+  if (sdkMessage.subtype === "init") {
+    yield* handleSystemInit(sdkMessage as SDKSystemMessage, state);
+  } else if (sdkMessage.subtype === "api_retry") {
+    yield* handleApiRetry(sdkMessage as SDKAPIRetryMessage);
+  }
+  // 其他 subtype 略過
 }
 
 /** 分派 SDKMessage 至對應的處理器，回傳 NormalizedEvent iterable */
@@ -270,13 +282,10 @@ function* dispatchSDKMessage(
 ): Generator<NormalizedEvent> {
   switch (sdkMessage.type) {
     case "system":
-      // system/init 與 system/api_retry 依 subtype 分流，統一在 switch 內完成
-      if (sdkMessage.subtype === "init") {
-        yield* handleSystemInit(sdkMessage as SDKSystemMessage, state);
-      } else if (sdkMessage.subtype === "api_retry") {
-        yield* handleApiRetry(sdkMessage as SDKAPIRetryMessage);
-      }
-      // 其他 subtype 略過
+      yield* dispatchSystemMessage(
+        sdkMessage as SDKSystemMessage | SDKAPIRetryMessage,
+        state,
+      );
       break;
     case "assistant":
       yield* handleAssistant(sdkMessage as SDKAssistantMessage, state);

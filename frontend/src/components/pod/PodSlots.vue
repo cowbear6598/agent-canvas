@@ -82,8 +82,8 @@ type SingleSlotConfig = {
   label: string;
   store: typeof repositoryStore | typeof commandStore;
   boundNote: () => RepositoryNote | CommandNote | undefined;
-  disabled: () => boolean;
-  disabledTooltip: () => string;
+  disabled: boolean;
+  disabledTooltip: string;
   onDropped: (noteId: string) => void;
   onRemoved: () => void;
 };
@@ -99,15 +99,15 @@ type MultiSlotConfig = {
   duplicateToastDescription: () => string;
   menuScrollableClass: string;
   itemIdField: string;
-  disabled: () => boolean;
-  disabledTooltip: () => string;
+  disabled: boolean;
+  disabledTooltip: string;
   onDropped: (noteId: string) => void;
 };
 
 type SlotConfig = SingleSlotConfig | MultiSlotConfig;
 
-const slotConfigs = computed((): SlotConfig[] => [
-  {
+function createSkillSlotConfig(): MultiSlotConfig {
+  return {
     kind: "multi",
     areaClass: "pod-notch-area-base pod-skill-notch-area",
     slotClass: "pod-skill-slot",
@@ -118,14 +118,17 @@ const slotConfigs = computed((): SlotConfig[] => [
     duplicateToastDescription: () => t("pod.slot.skillDuplicate"),
     menuScrollableClass: "pod-skill-menu-scrollable",
     itemIdField: "skillId",
-    disabled: () => !isSkillEnabled.value,
-    disabledTooltip: () => DISABLED_TOOLTIP.value,
+    disabled: !isSkillEnabled.value,
+    disabledTooltip: DISABLED_TOOLTIP.value,
     onDropped: (noteId: string): void => {
       if (!noteId) return;
       emit("skill-dropped", noteId);
     },
-  },
-  {
+  };
+}
+
+function createSubAgentSlotConfig(): MultiSlotConfig {
+  return {
     kind: "multi",
     areaClass: "pod-notch-area-base pod-subagent-notch-area",
     slotClass: "pod-subagent-slot",
@@ -136,44 +139,53 @@ const slotConfigs = computed((): SlotConfig[] => [
     duplicateToastDescription: () => t("pod.slot.subAgentDuplicate"),
     menuScrollableClass: "pod-subagent-menu-scrollable",
     itemIdField: "subAgentId",
-    disabled: () => !isSubAgentEnabled.value,
-    disabledTooltip: () => DISABLED_TOOLTIP.value,
+    disabled: !isSubAgentEnabled.value,
+    disabledTooltip: DISABLED_TOOLTIP.value,
     onDropped: (noteId: string): void => {
       if (!noteId) return;
       emit("subagent-dropped", noteId);
     },
-  },
-  {
+  };
+}
+
+function createRepositorySlotConfig(): SingleSlotConfig {
+  return {
     kind: "single",
     areaClass: "pod-notch-area-base pod-repository-notch-area",
     slotClass: "pod-repository-slot",
     label: "Repo",
     store: repositoryStore,
     boundNote: () => props.boundRepositoryNote,
-    disabled: () => !isRepositoryEnabled.value,
-    disabledTooltip: () => DISABLED_TOOLTIP.value,
+    disabled: !isRepositoryEnabled.value,
+    disabledTooltip: DISABLED_TOOLTIP.value,
     onDropped: (noteId: string): void => {
       if (!noteId) return;
       emit("repository-dropped", noteId);
     },
     onRemoved: () => emit("repository-removed"),
-  },
-  {
+  };
+}
+
+function createCommandSlotConfig(): SingleSlotConfig {
+  return {
     kind: "single",
     areaClass: "pod-notch-area-base pod-command-notch-area",
     slotClass: "pod-command-slot",
     label: "Command",
     store: commandStore,
     boundNote: () => props.boundCommandNote,
-    disabled: () => !isCommandEnabled.value,
-    disabledTooltip: () => DISABLED_TOOLTIP.value,
+    disabled: !isCommandEnabled.value,
+    disabledTooltip: DISABLED_TOOLTIP.value,
     onDropped: (noteId: string): void => {
       if (!noteId) return;
       emit("command-dropped", noteId);
     },
     onRemoved: () => emit("command-removed"),
-  },
-  {
+  };
+}
+
+function createMcpSlotConfig(): MultiSlotConfig {
+  return {
     kind: "multi",
     areaClass: "pod-notch-area-base pod-mcp-server-notch-area",
     slotClass: "pod-mcp-server-slot",
@@ -184,13 +196,21 @@ const slotConfigs = computed((): SlotConfig[] => [
     duplicateToastDescription: () => t("pod.slot.mcpServerDuplicate"),
     menuScrollableClass: "pod-mcp-server-menu-scrollable",
     itemIdField: "mcpServerId",
-    disabled: () => !isMcpEnabled.value,
-    disabledTooltip: () => DISABLED_TOOLTIP.value,
+    disabled: !isMcpEnabled.value,
+    disabledTooltip: DISABLED_TOOLTIP.value,
     onDropped: (noteId: string): void => {
       if (!noteId) return;
       emit("mcp-server-dropped", noteId);
     },
-  },
+  };
+}
+
+const slotConfigs = computed((): SlotConfig[] => [
+  createSkillSlotConfig(),
+  createSubAgentSlotConfig(),
+  createRepositorySlotConfig(),
+  createCommandSlotConfig(),
+  createMcpSlotConfig(),
 ]);
 </script>
 
@@ -205,8 +225,8 @@ const slotConfigs = computed((): SlotConfig[] => [
         :label="slot.label"
         :slot-class="slot.slotClass"
         :pod-rotation="props.podRotation"
-        :disabled="slot.disabled()"
-        :disabled-tooltip="slot.disabledTooltip()"
+        :disabled="slot.disabled"
+        :disabled-tooltip="slot.disabledTooltip"
         @note-dropped="slot.onDropped"
         @note-removed="slot.onRemoved()"
       />
@@ -221,8 +241,8 @@ const slotConfigs = computed((): SlotConfig[] => [
         :slot-class="slot.slotClass"
         :menu-scrollable-class="slot.menuScrollableClass"
         :item-id-field="slot.itemIdField"
-        :disabled="slot.disabled()"
-        :disabled-tooltip="slot.disabledTooltip()"
+        :disabled="slot.disabled"
+        :disabled-tooltip="slot.disabledTooltip"
         @note-dropped="slot.onDropped"
       />
     </div>

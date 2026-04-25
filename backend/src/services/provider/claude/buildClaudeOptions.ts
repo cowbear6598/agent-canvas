@@ -95,14 +95,26 @@ export function resolvePodCwd(pod: Pod): string {
     if (
       !isPathWithinDirectory(resolvedCwd, path.resolve(config.repositoriesRoot))
     ) {
-      throw new Error(`非法的工作目錄路徑：${pod.repositoryId}`);
+      logger.error(
+        "Pod",
+        "Error",
+        `resolvePodCwd：repositoryId 路徑穿越，podId=${pod.id}`,
+        pod.repositoryId,
+      );
+      throw new Error("非法的工作目錄路徑");
     }
     return resolvedCwd;
   }
 
   const resolvedCwd = path.resolve(pod.workspacePath);
   if (!isPathWithinDirectory(resolvedCwd, path.resolve(config.canvasRoot))) {
-    throw new Error(`非法的工作目錄路徑：${pod.workspacePath}`);
+    logger.error(
+      "Pod",
+      "Error",
+      `resolvePodCwd：workspacePath 超出允許範圍，podId=${pod.id}`,
+      pod.workspacePath,
+    );
+    throw new Error("工作目錄不在允許範圍內");
   }
   return resolvedCwd;
 }
@@ -151,6 +163,47 @@ function applyPlugins(pod: Pod): Pick<ClaudeOptions, "plugins"> {
 
 // ─── buildIntegrationTool ────────────────────────────────────────────────────
 
+type ReplyToolHandler = (params: { text: string }) => Promise<{
+  content: Array<{ type: "text"; text: string }>;
+  isError?: boolean;
+}>;
+
+/**
+ * 建立 reply tool 的 async handler 閉包：執行 sendMessage 並格式化成功/失敗結果。
+ * 透過 replyContextStore 取得 runContext 以定址正確的回覆上下文。
+ */
+function createReplyToolHandler(
+  binding: NonNullable<Pod["integrationBindings"]>[number],
+  provider: NonNullable<ReturnType<typeof integrationRegistry.get>>,
+  podId: string,
+  runContext?: RunContext,
+): ReplyToolHandler {
+  return async (params: { text: string }) => {
+    const replyContext = replyContextStore.get(
+      buildReplyContextKey(runContext, podId),
+    );
+    const mergedExtra = { ...binding.extra, ...replyContext };
+    const result = await provider.sendMessage!(
+      binding.appId,
+      binding.resourceId,
+      params.text,
+      mergedExtra,
+    );
+    if (!result.success) {
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `錯誤: ${getResultErrorString(result.error)}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+    return { content: [{ type: "text" as const, text: "success" }] };
+  };
+}
+
 /**
  * 建立單一 Integration 的 MCP reply tool，回傳 mcpServer、serverName 與 toolName。
  * closure 透過 replyContextStore 取得 runContext 以定址正確的回覆上下文。
@@ -176,30 +229,7 @@ function buildIntegrationTool(
     {
       text: z.string().min(1).describe("要發送的訊息內容"),
     },
-    async (params: { text: string }) => {
-      const replyContext = replyContextStore.get(
-        buildReplyContextKey(runContext, podId),
-      );
-      const mergedExtra = { ...binding.extra, ...replyContext };
-      const result = await provider.sendMessage!(
-        binding.appId,
-        binding.resourceId,
-        params.text,
-        mergedExtra,
-      );
-      if (!result.success) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `錯誤: ${getResultErrorString(result.error)}`,
-            },
-          ],
-          isError: true,
-        };
-      }
-      return { content: [{ type: "text" as const, text: "success" }] };
-    },
+    createReplyToolHandler(binding, provider, podId, runContext),
   );
 
   const mcpServer = createSdkMcpServer({
@@ -236,7 +266,7 @@ function applyIntegrationToolOptions(
   const mcpServers: NonNullable<Options["mcpServers"]> = {
     ...base.mcpServers,
   };
-  const allowedTools: string[] = [...(base.allowedTools ?? [])];
+  const allowedTools: string[] = [...base.allowedTools];
 
   for (const { mcpServer, serverName, toolName } of builtTools) {
     mcpServers[serverName] = mcpServer;
@@ -266,6 +296,8 @@ function applyIntegrationToolOptions(
  * 注意：cwd 在 buildOptions 階段尚未知道（需等 executor 解析 workspacePath），
  * 因此此函式產出的 ClaudeOptions.cwd 為 undefined，由 chat() 負責在組裝 SDK options 時填入。
  */
+// 介面契約（AgentProvider.buildOptions）要求回傳 Promise<TOptions>，實際執行同步；
+// async 保留以符合介面簽名，不影響執行效能。
 export async function buildClaudeOptions(
   pod: Pod,
   runContext?: RunContext,

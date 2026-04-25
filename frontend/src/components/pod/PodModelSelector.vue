@@ -163,7 +163,10 @@ const selectModel = async (model: string): Promise<void> => {
 
 <template>
   <!-- 上方中央定位錨點 -->
-  <div class="pod-model-slot" @mouseleave="handleMouseLeave">
+  <div
+    class="pod-model-slot"
+    @mouseleave="handleMouseLeave"
+  >
     <!--
       model-cards-stack：垂直堆疊容器。
       flex-direction: column-reverse → sortedOptions[0]（active）視覺上固定在最底部貼近 Pod，

@@ -1,6 +1,38 @@
 import { Database } from "bun:sqlite";
 
-export function createTables(db: Database): void {
+/**
+ * 判斷 migration catch 到的錯誤是否可以忽略（冪等性保護）。
+ * DDL 語句在欄位已存在、已刪除或索引已存在時回傳的錯誤訊息應列入 allowedMessages。
+ */
+function isIgnorableMigrationError(
+  e: unknown,
+  ...allowedMessages: string[]
+): boolean {
+  if (!(e instanceof Error)) return false;
+  return allowedMessages.some((msg) => e.message.includes(msg));
+}
+
+/**
+ * 執行單一 migration SQL，遭遇可忽略錯誤時靜默略過，其餘錯誤重新拋出。
+ * 統一封裝 try-catch 樣板，避免重複。
+ */
+function runMigration(
+  db: Database,
+  sql: string,
+  ignoredMessages: string[],
+): void {
+  try {
+    db.exec(sql);
+  } catch (e) {
+    if (!isIgnorableMigrationError(e, ...ignoredMessages)) throw e;
+  }
+}
+
+/**
+ * 建立所有資料表（CREATE TABLE IF NOT EXISTS）。
+ * 只含純 DDL，不含 migration 語句。
+ */
+function createBaseTables(db: Database): void {
   db.exec(
     "CREATE TABLE IF NOT EXISTS canvases (" +
       "id TEXT PRIMARY KEY," +
@@ -30,23 +62,6 @@ export function createTables(db: Database): void {
       ")",
   );
   db.exec("CREATE INDEX IF NOT EXISTS idx_pods_canvas_id ON pods(canvas_id)");
-  // Migration: 既有 DB 補上 (canvas_id, name) 唯一索引，防止 TOCTOU rename 競爭條件
-  try {
-    db.exec(
-      "CREATE UNIQUE INDEX IF NOT EXISTS idx_pods_canvas_name ON pods(canvas_id, name)",
-    );
-  } catch (e) {
-    // 索引已存在或建立失敗時忽略（fresh install 已由 UNIQUE constraint 涵蓋）
-    if (
-      !(
-        e instanceof Error &&
-        (e.message.includes("already exists") ||
-          e.message.includes("UNIQUE constraint"))
-      )
-    ) {
-      throw e;
-    }
-  }
 
   db.exec(
     "CREATE TABLE IF NOT EXISTS pod_skill_ids (" +
@@ -258,132 +273,87 @@ export function createTables(db: Database): void {
   db.exec(
     "CREATE INDEX IF NOT EXISTS idx_run_messages_run_pod ON run_messages(run_id, pod_id)",
   );
+}
+
+/**
+ * 執行所有歷史 migration（ALTER TABLE / CREATE INDEX 等）。
+ * 每條 migration 均冪等：重複執行不 throw。
+ */
+function runMigrations(db: Database): void {
+  // Migration: 既有 DB 補上 (canvas_id, name) 唯一索引，防止 TOCTOU rename 競爭條件
+  runMigration(
+    db,
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_pods_canvas_name ON pods(canvas_id, name)",
+    ["already exists"],
+  );
 
   // Migration: pods.claude_session_id 重命名為 session_id（語意統一，支援 Claude 以外的 provider）
-  try {
-    db.exec("ALTER TABLE pods RENAME COLUMN claude_session_id TO session_id");
-  } catch (e) {
-    // 欄位不存在（已是新名稱）或 fresh install 時忽略
-    if (
-      !(
-        e instanceof Error &&
-        (e.message.includes("no such column") ||
-          e.message.includes("duplicate column"))
-      )
-    ) {
-      throw e;
-    }
-  }
+  runMigration(
+    db,
+    "ALTER TABLE pods RENAME COLUMN claude_session_id TO session_id",
+    ["no such column", "duplicate column"],
+  );
 
   // Migration: run_pod_instances.claude_session_id 重命名為 session_id（語意統一，支援 Claude 以外的 provider）
-  try {
-    db.exec(
-      "ALTER TABLE run_pod_instances RENAME COLUMN claude_session_id TO session_id",
-    );
-  } catch (e) {
-    // 欄位不存在（已是新名稱）或 fresh install 時忽略
-    if (
-      !(
-        e instanceof Error &&
-        (e.message.includes("no such column") ||
-          e.message.includes("duplicate column"))
-      )
-    ) {
-      throw e;
-    }
-  }
+  runMigration(
+    db,
+    "ALTER TABLE run_pod_instances RENAME COLUMN claude_session_id TO session_id",
+    ["no such column", "duplicate column"],
+  );
 
   // Migration: run_pod_instances 新增 worktree_path 欄位
-  try {
-    db.exec("ALTER TABLE run_pod_instances ADD COLUMN worktree_path TEXT");
-  } catch (e) {
-    // 欄位已存在時忽略，其他錯誤重新拋出
-    if (!(e instanceof Error && e.message.includes("duplicate column"))) {
-      throw e;
-    }
-  }
+  runMigration(
+    db,
+    "ALTER TABLE run_pod_instances ADD COLUMN worktree_path TEXT",
+    ["duplicate column"],
+  );
 
   // Migration: connections 新增 summary_model 欄位
-  try {
-    db.exec(
-      "ALTER TABLE connections ADD COLUMN summary_model TEXT NOT NULL DEFAULT 'sonnet'",
-    );
-  } catch (e) {
-    // 欄位已存在時忽略，其他錯誤重新拋出
-    if (!(e instanceof Error && e.message.includes("duplicate column"))) {
-      throw e;
-    }
-  }
+  runMigration(
+    db,
+    "ALTER TABLE connections ADD COLUMN summary_model TEXT NOT NULL DEFAULT 'sonnet'",
+    ["duplicate column"],
+  );
 
   // Migration: connections 新增 ai_decide_model 欄位
-  try {
-    db.exec(
-      "ALTER TABLE connections ADD COLUMN ai_decide_model TEXT NOT NULL DEFAULT 'sonnet'",
-    );
-  } catch (e) {
-    // 欄位已存在時忽略，其他錯誤重新拋出
-    if (!(e instanceof Error && e.message.includes("duplicate column"))) {
-      throw e;
-    }
-  }
+  runMigration(
+    db,
+    "ALTER TABLE connections ADD COLUMN ai_decide_model TEXT NOT NULL DEFAULT 'sonnet'",
+    ["duplicate column"],
+  );
 
   // Migration: pods 新增 provider 欄位（預設 'claude' 確保舊資料相容）
-  try {
-    db.exec(
-      "ALTER TABLE pods ADD COLUMN provider TEXT NOT NULL DEFAULT 'claude'",
-    );
-  } catch (e) {
-    // 欄位已存在時忽略，其他錯誤重新拋出
-    if (!(e instanceof Error && e.message.includes("duplicate column"))) {
-      throw e;
-    }
-  }
+  runMigration(
+    db,
+    "ALTER TABLE pods ADD COLUMN provider TEXT NOT NULL DEFAULT 'claude'",
+    ["duplicate column"],
+  );
 
   // Migration: pods 新增 provider_config_json 欄位
-  try {
-    db.exec("ALTER TABLE pods ADD COLUMN provider_config_json TEXT");
-  } catch (e) {
-    // 欄位已存在時忽略，其他錯誤重新拋出
-    if (!(e instanceof Error && e.message.includes("duplicate column"))) {
-      throw e;
-    }
-  }
+  runMigration(db, "ALTER TABLE pods ADD COLUMN provider_config_json TEXT", [
+    "duplicate column",
+  ]);
 
   // Migration: 移除 pods.model 欄位（providerConfig.model 已成為唯一來源）
-  // 注意：舊版的 data migration（將 model 搬移至 provider_config_json）已移除，
-  // 因為 pods.model 欄位已由下方的 DROP COLUMN migration 刪除，
-  // 重複執行會因「no such column: model」導致啟動錯誤。
   // SQLite 3.35+ 支援 ALTER TABLE DROP COLUMN，Bun 內建 SQLite 3.51.0 可安全使用
-  // 冪等：欄位不存在時 catch "no such column" 靜默忽略
-  try {
-    db.exec("ALTER TABLE pods DROP COLUMN model");
-  } catch (e) {
-    // 欄位已不存在（fresh install 或已執行過此 migration）時忽略
-    if (
-      !(
-        e instanceof Error &&
-        (e.message.includes("no such column") ||
-          e.message.includes("no such index") ||
-          e.message.includes("Cannot drop column"))
-      )
-    ) {
-      throw e;
-    }
-  }
+  // 冪等：欄位不存在時靜默忽略
+  runMigration(db, "ALTER TABLE pods DROP COLUMN model", [
+    "no such column",
+    "no such index",
+    "Cannot drop column",
+  ]);
 
   // Migration: 砍除 Output Style 功能後移除欄位
-  // 冪等：欄位不存在時 catch "no such column" / "Cannot drop column" 靜默忽略
-  try {
-    db.exec("ALTER TABLE pods DROP COLUMN output_style_id");
-  } catch (e) {
-    if (
-      !(
-        e instanceof Error &&
-        (e.message.includes("no such column") ||
-          e.message.includes("Cannot drop column"))
-      )
-    ) {
-      throw e;
-    }
-  }
+  // 冪等：欄位不存在時靜默忽略
+  runMigration(db, "ALTER TABLE pods DROP COLUMN output_style_id", [
+    "no such column",
+    "Cannot drop column",
+  ]);
 }
+
+export function createTables(db: Database): void {
+  createBaseTables(db);
+  runMigrations(db);
+}
+
+export { isIgnorableMigrationError, runMigration };

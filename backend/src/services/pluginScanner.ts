@@ -9,6 +9,17 @@ const INSTALLED_PLUGINS_PATH = path.join(
   "installed_plugins.json",
 );
 
+// 5 秒 TTL 快取，避免每次 buildClaudeOptions 都重讀磁碟
+const CACHE_TTL_MS = 5000;
+let cachedPlugins: InstalledPlugin[] | null = null;
+let cacheExpiresAt = 0;
+
+/** 僅供測試使用：清除快取，讓下一次呼叫重新讀檔 */
+export function clearScanInstalledPluginsCache(): void {
+  cachedPlugins = null;
+  cacheExpiresAt = 0;
+}
+
 export interface InstalledPlugin {
   id: string;
   name: string;
@@ -51,12 +62,19 @@ function readPluginManifest(installPath: string): PluginManifest | null {
 }
 
 export function scanInstalledPlugins(): InstalledPlugin[] {
+  const now = Date.now();
+  if (cachedPlugins !== null && now < cacheExpiresAt) {
+    return cachedPlugins;
+  }
+
   let fileContent: string;
 
   try {
     fileContent = fs.readFileSync(INSTALLED_PLUGINS_PATH, "utf-8");
   } catch {
-    return [];
+    cachedPlugins = [];
+    cacheExpiresAt = now + CACHE_TTL_MS;
+    return cachedPlugins;
   }
 
   let data: InstalledPluginsFile;
@@ -64,11 +82,15 @@ export function scanInstalledPlugins(): InstalledPlugin[] {
   try {
     data = JSON.parse(fileContent) as InstalledPluginsFile;
   } catch {
-    return [];
+    cachedPlugins = [];
+    cacheExpiresAt = now + CACHE_TTL_MS;
+    return cachedPlugins;
   }
 
   if (data.version !== 2 || !data.plugins || typeof data.plugins !== "object") {
-    return [];
+    cachedPlugins = [];
+    cacheExpiresAt = now + CACHE_TTL_MS;
+    return cachedPlugins;
   }
 
   const seenPaths = new Set<string>();
@@ -97,5 +119,7 @@ export function scanInstalledPlugins(): InstalledPlugin[] {
     }
   }
 
-  return result;
+  cachedPlugins = result;
+  cacheExpiresAt = now + CACHE_TTL_MS;
+  return cachedPlugins;
 }

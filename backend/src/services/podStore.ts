@@ -93,8 +93,14 @@ class PodStore {
     ReturnType<Database["prepare"]>
   >();
 
-  /** 以 "tableName:n" 為 key 快取 findByJoinTableId / findByIntegrationApp* 用的 PreparedStatement（LRU 上限 32） */
-  private readonly joinTableStmtCache = new Map<
+  /** 以 n（長度）為 key 快取 findByJoinTableId 用的 PreparedStatement（LRU 上限 32） */
+  private readonly joinFetchStmtCache = new Map<
+    string,
+    ReturnType<Database["prepare"]>
+  >();
+
+  /** 以 n（長度）為 key 快取 fetchPodsByIds 用的 PreparedStatement（LRU 上限 32） */
+  private readonly podsByIdsStmtCache = new Map<
     string,
     ReturnType<Database["prepare"]>
   >();
@@ -182,6 +188,26 @@ class PodStore {
   }
 
   /**
+   * 通用 relation 查詢輔助函式：取得 PreparedStatement、執行查詢、透過 batchGroupBy 組裝 Map。
+   * 消除 batchLoadRelations 內四段重複的「getRelationStmt → all → batchGroupBy」流程。
+   */
+  private loadRelation(
+    tableName: string,
+    valueColumn: string,
+    podIds: string[],
+    placeholders: string,
+  ): Map<string, string[]> {
+    const n = podIds.length;
+    const stmt = this.getRelationStmt(tableName, valueColumn, n, placeholders);
+    const rows = stmt.all(...podIds) as Array<Record<string, string>>;
+    return this.batchGroupBy(
+      rows,
+      (r) => r.pod_id,
+      (r) => r[valueColumn],
+    );
+  }
+
+  /**
    * 批次載入多個 Pod 的關聯表資料（skill、subAgent、mcpServer、plugin）。
    * 使用 WHERE pod_id IN (...) 一次查詢，避免 N+1 問題。
    * PreparedStatement 以 "tableName:n" 為 key 快取，不同 relation 類別不會互相命中。
@@ -201,71 +227,32 @@ class PodStore {
       };
     }
 
-    const n = podIds.length;
     const placeholders = podIds.map(() => "?").join(", ");
 
-    const skillStmt = this.getRelationStmt(
-      "pod_skill_ids",
-      "skill_id",
-      n,
-      placeholders,
-    );
-    const subAgentStmt = this.getRelationStmt(
-      "pod_sub_agent_ids",
-      "sub_agent_id",
-      n,
-      placeholders,
-    );
-    const mcpServerStmt = this.getRelationStmt(
-      "pod_mcp_server_ids",
-      "mcp_server_id",
-      n,
-      placeholders,
-    );
-    const pluginStmt = this.getRelationStmt(
-      "pod_plugin_ids",
-      "plugin_id",
-      n,
-      placeholders,
-    );
-
-    const skillRows = skillStmt.all(...podIds) as Array<{
-      pod_id: string;
-      skill_id: string;
-    }>;
-    const subAgentRows = subAgentStmt.all(...podIds) as Array<{
-      pod_id: string;
-      sub_agent_id: string;
-    }>;
-    const mcpServerRows = mcpServerStmt.all(...podIds) as Array<{
-      pod_id: string;
-      mcp_server_id: string;
-    }>;
-    const pluginRows = pluginStmt.all(...podIds) as Array<{
-      pod_id: string;
-      plugin_id: string;
-    }>;
-
     return {
-      skillIds: this.batchGroupBy(
-        skillRows,
-        (r) => r.pod_id,
-        (r) => r.skill_id,
+      skillIds: this.loadRelation(
+        "pod_skill_ids",
+        "skill_id",
+        podIds,
+        placeholders,
       ),
-      subAgentIds: this.batchGroupBy(
-        subAgentRows,
-        (r) => r.pod_id,
-        (r) => r.sub_agent_id,
+      subAgentIds: this.loadRelation(
+        "pod_sub_agent_ids",
+        "sub_agent_id",
+        podIds,
+        placeholders,
       ),
-      mcpServerIds: this.batchGroupBy(
-        mcpServerRows,
-        (r) => r.pod_id,
-        (r) => r.mcp_server_id,
+      mcpServerIds: this.loadRelation(
+        "pod_mcp_server_ids",
+        "mcp_server_id",
+        podIds,
+        placeholders,
       ),
-      pluginIds: this.batchGroupBy(
-        pluginRows,
-        (r) => r.pod_id,
-        (r) => r.plugin_id,
+      pluginIds: this.loadRelation(
+        "pod_plugin_ids",
+        "plugin_id",
+        podIds,
+        placeholders,
       ),
     };
   }
@@ -325,10 +312,14 @@ class PodStore {
       typeof value === "string" && value in providerRegistry;
 
     if (!isValidProvider(row.provider)) {
+      const rawValue = String(row.provider);
+      const safeValue = /^[a-z0-9_-]{1,32}$/.test(rawValue)
+        ? rawValue
+        : `<invalid format, len=${rawValue.length}>`;
       logger.warn(
         "Pod",
         "Warn",
-        `收到未知 provider 值：${String(row.provider).slice(0, 64)}，已 fallback 為 claude`,
+        `收到未知 provider 值：${safeValue}，已 fallback 為 claude`,
       );
       return "claude";
     }
@@ -381,13 +372,39 @@ class PodStore {
     provider: ProviderName,
     podId: string,
   ): void {
-    const { availableModelValues } = getProvider(provider).metadata;
-    if (!availableModelValues.has(model as string)) {
+    if (typeof model !== "string") {
       logger.warn(
         "Pod",
         "Warn",
-        `DB 中 Pod ${podId} 的 providerConfig.model 值 ${String(model)} 不在 provider ${provider} 的 availableModels 內，保留原值`,
+        `DB 中 Pod ${podId} 的 providerConfig.model 非字串值（typeof=${typeof model}），略過範圍檢查`,
       );
+      return;
+    }
+    const { availableModelValues } = getProvider(provider).metadata;
+    if (!availableModelValues.has(model)) {
+      logger.warn(
+        "Pod",
+        "Warn",
+        `DB 中 Pod ${podId} 的 providerConfig.model 值 ${model} 不在 provider ${provider} 的 availableModels 內，保留原值`,
+      );
+    }
+  }
+
+  /**
+   * 確保 sanitized 物件含有 model 欄位：
+   * 若缺少則補入 provider 預設值；若已有則做 availableModels 範圍檢查並 warn log（保留原值）。
+   */
+  private ensureModelField(
+    sanitized: Record<string, unknown>,
+    provider: ProviderName,
+    podId: string,
+  ): void {
+    if (!("model" in sanitized)) {
+      const defaultOptions = getProvider(provider).metadata
+        .defaultOptions as Record<string, unknown>;
+      sanitized.model = defaultOptions.model;
+    } else {
+      this.warnIfModelOutOfRange(sanitized.model, provider, podId);
     }
   }
 
@@ -402,15 +419,7 @@ class PodStore {
     // 讀取路徑：使用 relaxed 版本白名單過濾，丟棄舊格式中的 provider 等多餘 key；
     // 不驗證 model 是否在 availableModels 內，避免舊 pod 的歷史 model 值導致 Pod 打不開
     const sanitized = this.sanitizeProviderConfig(raw);
-    if (!("model" in sanitized)) {
-      // providerConfig 無 model 欄位時補入 provider 預設值
-      const defaultOptions = getProvider(provider).metadata
-        .defaultOptions as Record<string, unknown>;
-      sanitized.model = defaultOptions.model;
-    } else {
-      // 讀取時額外做一次 availableModels 檢查，若不合法則 warn log 但保留原值
-      this.warnIfModelOutOfRange(sanitized.model, provider, row.id);
-    }
+    this.ensureModelField(sanitized, provider, row.id);
     return sanitized;
   }
 
@@ -683,6 +692,24 @@ class PodStore {
     }
   }
 
+  /**
+   * 合併既有 Pod 與 updates，回傳新的 Pod 物件。
+   * 過濾不可變欄位（id、workspacePath、schedule），並呼叫 mergeSchedule 處理排程合併。
+   */
+  private buildUpdatedPod(pod: Pod, updates: PodUpdates): Pod {
+    const {
+      id: _id,
+      workspacePath: _wp,
+      schedule: _sched,
+      ...safeUpdates
+    } = updates as PodUpdates & Partial<Pod>;
+    return {
+      ...pod,
+      ...safeUpdates,
+      schedule: this.mergeSchedule(pod, updates),
+    };
+  }
+
   update(
     canvasId: string,
     id: string,
@@ -691,17 +718,7 @@ class PodStore {
     const pod = this.getById(canvasId, id);
     if (!pod) return undefined;
 
-    const safeUpdates = Object.fromEntries(
-      Object.entries(updates as PodUpdates & Partial<Pod>).filter(
-        ([key]) =>
-          key !== "id" && key !== "workspacePath" && key !== "schedule",
-      ),
-    ) as Partial<Pod>;
-    const updatedPod: Pod = {
-      ...pod,
-      ...safeUpdates,
-      schedule: this.mergeSchedule(pod, updates),
-    };
+    const updatedPod = this.buildUpdatedPod(pod, updates);
 
     // sanitizeProviderConfigStrict 在 transaction 外先驗證，不合法時直接 throw（transaction 不會啟動）
     const sanitizedProviderConfigJson = updatedPod.providerConfig
@@ -825,14 +842,14 @@ class PodStore {
     if (podIds.length === 0) return [];
 
     // 用 WHERE id IN (...) 一次取得所有 Pod，再過濾 canvas，避免 N+1
-    const cacheKey = `join_fetch_by_canvas:${podIds.length}`;
-    let stmt = this.joinTableStmtCache.get(cacheKey);
+    const cacheKey = `${podIds.length}`;
+    let stmt = this.joinFetchStmtCache.get(cacheKey);
     if (!stmt) {
       const placeholders = podIds.map(() => "?").join(", ");
       stmt = getDb().prepare(
         `SELECT * FROM pods WHERE canvas_id = ? AND id IN (${placeholders})`,
       );
-      lruSet(this.joinTableStmtCache, cacheKey, stmt);
+      lruSet(this.joinFetchStmtCache, cacheKey, stmt);
     }
     const rows = stmt.all(canvasId, ...podIds) as PodRow[];
     return this.rowsToPods(rows);
@@ -944,14 +961,14 @@ class PodStore {
   private fetchPodsByIds(
     podIds: string[],
   ): Array<{ canvasId: string; pod: Pod }> {
-    const cacheKey = `pods_by_ids:${podIds.length}`;
-    let stmt = this.joinTableStmtCache.get(cacheKey);
+    const cacheKey = `${podIds.length}`;
+    let stmt = this.podsByIdsStmtCache.get(cacheKey);
     if (!stmt) {
       const placeholders = podIds.map(() => "?").join(", ");
       stmt = getDb().prepare(
         `SELECT * FROM pods WHERE id IN (${placeholders})`,
       );
-      lruSet(this.joinTableStmtCache, cacheKey, stmt);
+      lruSet(this.podsByIdsStmtCache, cacheKey, stmt);
     }
     const rows = stmt.all(...podIds) as PodRow[];
     const canvasIdMap = new Map(rows.map((r) => [r.id, r.canvas_id]));
@@ -1018,9 +1035,10 @@ class PodStore {
     date: Date,
   ): void {
     // 輕量查詢：只讀 schedule_json，不做 join table 查詢，避免 getById() 的完整多表 join
-    const row = this.stmts.pod.selectByCanvasIdAndId.get(canvasId, podId) as
-      | Pick<PodRow, "schedule_json">
-      | undefined;
+    const row = this.stmts.pod.selectScheduleJsonByCanvasAndId.get({
+      $canvasId: canvasId,
+      $id: podId,
+    }) as { schedule_json: string | null } | undefined;
     if (!row?.schedule_json) return;
 
     const persisted = safeJsonParse<Record<string, unknown>>(row.schedule_json);

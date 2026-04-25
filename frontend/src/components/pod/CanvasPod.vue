@@ -99,22 +99,25 @@ const isSelected = computed(() =>
 
 // PodStatus 白名單（對應 types/pod.ts 的 PodStatus union）；
 // 未知 status 不注入任意 class，回傳空字串。
-const ALLOWED_STATUSES = ["idle", "chatting", "summarizing", "error"] as const;
+const ALLOWED_STATUSES = new Set<string>([
+  "idle",
+  "chatting",
+  "summarizing",
+  "error",
+]);
 
 const podStatusClass = computed(() => {
   const status = props.pod.status;
-  return status && (ALLOWED_STATUSES as readonly string[]).includes(status)
-    ? `pod-status-${status}`
-    : "";
+  return status && ALLOWED_STATUSES.has(status) ? `pod-status-${status}` : "";
 });
 
-// 允許的 provider 列表（與 PodProvider type 保持同步）；
+// 允許的 provider 集合（與 PodProvider type 保持同步）；
 // 未知 provider 不注入任意 class，回傳空字串。
-const ALLOWED_PROVIDERS = ["claude", "codex"] as const;
+const ALLOWED_PROVIDERS = new Set<string>(["claude", "codex"]);
 
 // 依 provider 動態套用漸層 class，方便未來擴增第三個 provider
 const podProviderClass = computed(() =>
-  (ALLOWED_PROVIDERS as readonly string[]).includes(props.pod.provider)
+  ALLOWED_PROVIDERS.has(props.pod.provider)
     ? `pod-provider-${props.pod.provider}`
     : "",
 );

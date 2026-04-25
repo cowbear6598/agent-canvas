@@ -34,6 +34,7 @@ function buildStatements(db: Database): {
     selectByCommandIdAndCanvas: ReturnType<Database["prepare"]>;
     selectByRepositoryIdAndCanvas: ReturnType<Database["prepare"]>;
     selectScheduleInfo: ReturnType<Database["prepare"]>;
+    selectScheduleJsonByCanvasAndId: ReturnType<Database["prepare"]>;
     resetAllBusy: ReturnType<Database["prepare"]>;
     deleteById: ReturnType<Database["prepare"]>;
     deleteByCanvasId: ReturnType<Database["prepare"]>;
@@ -250,6 +251,9 @@ function buildStatements(db: Database): {
       ),
       selectScheduleInfo: db.prepare(
         "SELECT canvas_id, id, schedule_json FROM pods WHERE schedule_json IS NOT NULL",
+      ),
+      selectScheduleJsonByCanvasAndId: db.prepare(
+        "SELECT schedule_json FROM pods WHERE canvas_id = $canvasId AND id = $id",
       ),
       resetAllBusy: db.prepare(
         "UPDATE pods SET status = 'idle' WHERE status IN ('chatting', 'summarizing')",

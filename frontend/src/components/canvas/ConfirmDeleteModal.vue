@@ -52,7 +52,10 @@ const handleConfirm = (): void => {
 </script>
 
 <template>
-  <Dialog :open="open" @update:open="handleClose">
+  <Dialog
+    :open="open"
+    @update:open="handleClose"
+  >
     <DialogContent class="max-w-md">
       <DialogHeader>
         <DialogTitle>{{ dialogTitle }}</DialogTitle>
@@ -61,15 +64,24 @@ const handleConfirm = (): void => {
 
       <DialogFooter>
         <template v-if="isInUse">
-          <Button variant="outline" @click="handleClose">
+          <Button
+            variant="outline"
+            @click="handleClose"
+          >
             {{ $t("common.confirm") }}
           </Button>
         </template>
         <template v-else>
-          <Button variant="outline" @click="handleClose">
+          <Button
+            variant="outline"
+            @click="handleClose"
+          >
             {{ $t("common.cancel") }}
           </Button>
-          <Button variant="destructive" @click="handleConfirm">
+          <Button
+            variant="destructive"
+            @click="handleConfirm"
+          >
             {{ $t("common.delete") }}
           </Button>
         </template>

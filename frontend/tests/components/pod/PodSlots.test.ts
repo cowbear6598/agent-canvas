@@ -30,7 +30,7 @@ vi.mock("@/components/pod/PodMultiBindSlot.vue", () => ({
   default: {
     name: "PodMultiBindSlot",
     template:
-      "<div class='multi-bind-slot-stub' :data-slot-class='slotClass' :data-disabled='disabled' :data-disabled-tooltip='disabledTooltip' @click=\"$emit('note-dropped', 'note-1')\"></div>",
+      "<div class='multi-bind-slot-stub' :data-slot-class='slotClass' :data-disabled='disabled' :data-disabled-tooltip='disabledTooltip' @click=\"$emit('note-dropped', 'note-1')\" @contextmenu=\"$emit('note-dropped', '')\"></div>",
     props: [
       "podId",
       "boundNotes",
@@ -340,12 +340,14 @@ describe("PodSlots - emit 事件轉發", () => {
 
   it("空字串 noteId 應被守門，不 re-emit 父層事件", async () => {
     // 測試縱深防禦：PodSlots 的 onDropped handler 應攔截空 noteId
-    // 此測試驗證 onDropped 守門的正確性
-    // （實際觸發需從 slotConfigs 的 onDropped 呼叫，這裡透過直接呼叫驗證）
+    // 透過 contextmenu 觸發 multi-bind slot emit 空字串 noteId
     const wrapper = mountPodSlots();
+    const multiSlots = wrapper.findAll(".multi-bind-slot-stub");
 
-    // PodSlots 的 onDropped 守門：空字串不應 emit
-    // 由於 mock stub 固定 emit 'note-1'，此測試確認 '空值不傳入' 的邏輯存在於元件
+    // 觸發 Skill slot 的 note-dropped 事件（傳入空字串 ''）
+    await multiSlots[0]!.trigger("contextmenu");
+
+    // 空 noteId 應被守門，不應 re-emit skill-dropped
     expect(wrapper.emitted("skill-dropped")).toBeFalsy();
 
     wrapper.unmount();

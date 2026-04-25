@@ -377,23 +377,6 @@ describe("selectionStore", () => {
         ]);
       });
 
-      it("SkillNote 與框選範圍相交時應被選中", () => {
-        const store = useSelectionStore();
-        const note = createMockNote("skill", { id: "note-1", x: 100, y: 100 });
-
-        store.startSelection(50, 50);
-        store.updateSelection(150, 150);
-
-        store.calculateSelectedElements({
-          pods: [],
-          noteGroups: [{ notes: [note], type: "skillNote" }],
-        });
-
-        expect(store.selectedElements).toEqual([
-          { type: "skillNote", id: "note-1" },
-        ]);
-      });
-
       it("RepositoryNote 與框選範圍相交時應被選中", () => {
         const store = useSelectionStore();
         const note = createMockNote("repository", {

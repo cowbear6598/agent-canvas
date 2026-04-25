@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   webSocketMockFactory,
   mockCreateWebSocketRequest,
@@ -104,74 +104,52 @@ describe("createNoteStore", () => {
   setupStoreTest();
 
   describe("初始狀態", () => {
-    it("availableItems 應為空陣列", () => {
-      const config = createTestConfig();
-      const store = createNoteStore<TestItem, TestNote>(config)();
+    let store: ReturnType<
+      ReturnType<typeof createNoteStore<TestItem, TestNote>>
+    >;
 
+    beforeEach(() => {
+      store = createNoteStore<TestItem, TestNote>(createTestConfig())();
+    });
+
+    it("availableItems 應為空陣列", () => {
       expect(store.availableItems).toEqual([]);
     });
 
     it("notes 應為空陣列", () => {
-      const config = createTestConfig();
-      const store = createNoteStore<TestItem, TestNote>(config)();
-
       expect(store.notes).toEqual([]);
     });
 
     it("isLoading 應為 false", () => {
-      const config = createTestConfig();
-      const store = createNoteStore<TestItem, TestNote>(config)();
-
       expect(store.isLoading).toBe(false);
     });
 
     it("error 應為 null", () => {
-      const config = createTestConfig();
-      const store = createNoteStore<TestItem, TestNote>(config)();
-
       expect(store.error).toBeNull();
     });
 
     it("groups 應為空陣列", () => {
-      const config = createTestConfig();
-      const store = createNoteStore<TestItem, TestNote>(config)();
-
       expect(store.groups).toEqual([]);
     });
 
     it("draggedNoteId 應為 null", () => {
-      const config = createTestConfig();
-      const store = createNoteStore<TestItem, TestNote>(config)();
-
       expect(store.draggedNoteId).toBeNull();
     });
 
     it("animatingNoteIds 應為空 Set", () => {
-      const config = createTestConfig();
-      const store = createNoteStore<TestItem, TestNote>(config)();
-
       expect(store.animatingNoteIds).toBeInstanceOf(Set);
       expect(store.animatingNoteIds.size).toBe(0);
     });
 
     it("isDraggingNote 應為 false", () => {
-      const config = createTestConfig();
-      const store = createNoteStore<TestItem, TestNote>(config)();
-
       expect(store.isDraggingNote).toBe(false);
     });
 
     it("isOverTrash 應為 false", () => {
-      const config = createTestConfig();
-      const store = createNoteStore<TestItem, TestNote>(config)();
-
       expect(store.isOverTrash).toBe(false);
     });
 
     it("expandedGroupIds 應為空 Set", () => {
-      const config = createTestConfig();
-      const store = createNoteStore<TestItem, TestNote>(config)();
-
       expect(store.expandedGroupIds).toBeInstanceOf(Set);
       expect(store.expandedGroupIds.size).toBe(0);
     });
@@ -581,11 +559,18 @@ describe("createNoteStore", () => {
   });
 
   describe("loadItems", () => {
+    let store: ReturnType<
+      ReturnType<typeof createNoteStore<TestItem, TestNote>>
+    >;
+    let canvasStore: ReturnType<typeof useCanvasStore>;
+
+    beforeEach(() => {
+      canvasStore = useCanvasStore();
+      store = createNoteStore<TestItem, TestNote>(createTestConfig())();
+    });
+
     it("成功時應設定 availableItems、isLoading 切換", async () => {
-      const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
-      const config = createTestConfig();
-      const store = createNoteStore<TestItem, TestNote>(config)();
 
       const items = [
         { id: "item-1", name: "Item 1" },
@@ -607,10 +592,7 @@ describe("createNoteStore", () => {
     });
 
     it("無 activeCanvasId 時不應載入", async () => {
-      const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = null;
-      const config = createTestConfig();
-      const store = createNoteStore<TestItem, TestNote>(config)();
 
       await store.loadItems();
 
@@ -619,10 +601,7 @@ describe("createNoteStore", () => {
     });
 
     it("失敗時應設定 error", async () => {
-      const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
-      const config = createTestConfig();
-      const store = createNoteStore<TestItem, TestNote>(config)();
 
       mockCreateWebSocketRequest.mockResolvedValueOnce(null);
 
@@ -633,10 +612,7 @@ describe("createNoteStore", () => {
     });
 
     it("response 無對應 key 時不應設定 availableItems", async () => {
-      const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
-      const config = createTestConfig();
-      const store = createNoteStore<TestItem, TestNote>(config)();
 
       mockCreateWebSocketRequest.mockResolvedValueOnce({});
 
@@ -648,11 +624,18 @@ describe("createNoteStore", () => {
   });
 
   describe("loadNotesFromBackend", () => {
+    let store: ReturnType<
+      ReturnType<typeof createNoteStore<TestItem, TestNote>>
+    >;
+    let canvasStore: ReturnType<typeof useCanvasStore>;
+
+    beforeEach(() => {
+      canvasStore = useCanvasStore();
+      store = createNoteStore<TestItem, TestNote>(createTestConfig())();
+    });
+
     it("成功時應設定 notes", async () => {
-      const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
-      const config = createTestConfig();
-      const store = createNoteStore<TestItem, TestNote>(config)();
 
       const notes = [
         { ...createMockNote("skill"), testItemId: "item-1" },
@@ -674,10 +657,7 @@ describe("createNoteStore", () => {
     });
 
     it("無 activeCanvasId 時不應載入", async () => {
-      const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = null;
-      const config = createTestConfig();
-      const store = createNoteStore<TestItem, TestNote>(config)();
 
       await store.loadNotesFromBackend();
 
@@ -686,10 +666,7 @@ describe("createNoteStore", () => {
     });
 
     it("失敗時應設定 error", async () => {
-      const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
-      const config = createTestConfig();
-      const store = createNoteStore<TestItem, TestNote>(config)();
 
       mockCreateWebSocketRequest.mockResolvedValueOnce(null);
 
@@ -1449,19 +1426,22 @@ describe("createNoteStore", () => {
   });
 
   describe("拖曳狀態", () => {
+    let store: ReturnType<
+      ReturnType<typeof createNoteStore<TestItem, TestNote>>
+    >;
+
+    beforeEach(() => {
+      store = createNoteStore<TestItem, TestNote>(createTestConfig())();
+    });
+
     describe("setDraggedNote", () => {
       it("應設定 draggedNoteId", () => {
-        const config = createTestConfig();
-        const store = createNoteStore<TestItem, TestNote>(config)();
-
         store.setDraggedNote("note-1");
 
         expect(store.draggedNoteId).toBe("note-1");
       });
 
       it("可以清除 draggedNoteId", () => {
-        const config = createTestConfig();
-        const store = createNoteStore<TestItem, TestNote>(config)();
         store.draggedNoteId = "note-1";
 
         store.setDraggedNote(null);
@@ -1472,17 +1452,12 @@ describe("createNoteStore", () => {
 
     describe("setNoteAnimating", () => {
       it("isAnimating: true 時應新增到 animatingNoteIds", () => {
-        const config = createTestConfig();
-        const store = createNoteStore<TestItem, TestNote>(config)();
-
         store.setNoteAnimating("note-1", true);
 
         expect(store.animatingNoteIds.has("note-1")).toBe(true);
       });
 
       it("isAnimating: false 時應從 animatingNoteIds 移除", () => {
-        const config = createTestConfig();
-        const store = createNoteStore<TestItem, TestNote>(config)();
         store.animatingNoteIds = new Set(["note-1"]);
 
         store.setNoteAnimating("note-1", false);
@@ -1493,17 +1468,12 @@ describe("createNoteStore", () => {
 
     describe("setIsDraggingNote", () => {
       it("應設定 isDraggingNote", () => {
-        const config = createTestConfig();
-        const store = createNoteStore<TestItem, TestNote>(config)();
-
         store.setIsDraggingNote(true);
 
         expect(store.isDraggingNote).toBe(true);
       });
 
       it("可以清除 isDraggingNote", () => {
-        const config = createTestConfig();
-        const store = createNoteStore<TestItem, TestNote>(config)();
         store.isDraggingNote = true;
 
         store.setIsDraggingNote(false);
@@ -1514,17 +1484,12 @@ describe("createNoteStore", () => {
 
     describe("setIsOverTrash", () => {
       it("應設定 isOverTrash", () => {
-        const config = createTestConfig();
-        const store = createNoteStore<TestItem, TestNote>(config)();
-
         store.setIsOverTrash(true);
 
         expect(store.isOverTrash).toBe(true);
       });
 
       it("可以清除 isOverTrash", () => {
-        const config = createTestConfig();
-        const store = createNoteStore<TestItem, TestNote>(config)();
         store.isOverTrash = true;
 
         store.setIsOverTrash(false);
@@ -1535,19 +1500,22 @@ describe("createNoteStore", () => {
   });
 
   describe("群組展開", () => {
+    let store: ReturnType<
+      ReturnType<typeof createNoteStore<TestItem, TestNote>>
+    >;
+
+    beforeEach(() => {
+      store = createNoteStore<TestItem, TestNote>(createTestConfig())();
+    });
+
     describe("toggleGroupExpand", () => {
       it("群組未展開時應展開", () => {
-        const config = createTestConfig();
-        const store = createNoteStore<TestItem, TestNote>(config)();
-
         store.toggleGroupExpand("group-1");
 
         expect(store.expandedGroupIds.has("group-1")).toBe(true);
       });
 
       it("群組已展開時應收合", () => {
-        const config = createTestConfig();
-        const store = createNoteStore<TestItem, TestNote>(config)();
         store.expandedGroupIds = new Set(["group-1"]);
 
         store.toggleGroupExpand("group-1");
@@ -1558,8 +1526,6 @@ describe("createNoteStore", () => {
 
     describe("updateItemGroupId", () => {
       it("應更新 item 的 groupId", () => {
-        const config = createTestConfig();
-        const store = createNoteStore<TestItem, TestNote>(config)();
         const item: TestItem = { id: "item-1", name: "Item 1", groupId: null };
         store.availableItems = [item] as unknown[];
 
@@ -1569,8 +1535,6 @@ describe("createNoteStore", () => {
       });
 
       it("可以清除 groupId", () => {
-        const config = createTestConfig();
-        const store = createNoteStore<TestItem, TestNote>(config)();
         const item: TestItem = {
           id: "item-1",
           name: "Item 1",
@@ -1584,9 +1548,6 @@ describe("createNoteStore", () => {
       });
 
       it("item 不存在時不應報錯", () => {
-        const config = createTestConfig();
-        const store = createNoteStore<TestItem, TestNote>(config)();
-
         expect(() =>
           store.updateItemGroupId("non-existent", "group-1"),
         ).not.toThrow();
@@ -1622,9 +1583,16 @@ describe("createNoteStore", () => {
             }),
             getReadPayload: (itemId: string) => ({ itemId }),
             extractItemFromResponse: {
-              create: (response: unknown) => (response as any)?.item,
-              update: (response: unknown) => (response as any)?.item,
-              read: (response: unknown) => (response as any)?.item,
+              create: (response: unknown) =>
+                (response as { item?: { id: string; name: string } })?.item,
+              update: (response: unknown) =>
+                (response as { item?: { id: string; name: string } })?.item,
+              read: (response: unknown) =>
+                (
+                  response as {
+                    item?: { id: string; name: string; content: string };
+                  }
+                )?.item,
             },
             updateItemsList: (items: any[], itemId: string, newItem: any) => {
               const index = items.findIndex((i) => i.id === itemId);

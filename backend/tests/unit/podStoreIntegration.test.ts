@@ -15,12 +15,14 @@ function clearPodStoreCache(): void {
   type PodStoreTestHooks = {
     relationsStmtCache: Map<string, unknown>;
     bindingsStmtCache: Map<string, unknown>;
-    joinTableStmtCache: Map<string, unknown>;
+    joinFetchStmtCache: Map<string, unknown>;
+    podsByIdsStmtCache: Map<string, unknown>;
   };
   const store = podStore as unknown as PodStoreTestHooks;
   store.relationsStmtCache.clear();
   store.bindingsStmtCache.clear();
-  store.joinTableStmtCache.clear();
+  store.joinFetchStmtCache.clear();
+  store.podsByIdsStmtCache.clear();
 }
 import { integrationAppStore } from "../../src/services/integration/integrationAppStore.js";
 import { integrationRegistry } from "../../src/services/integration/integrationRegistry.js";

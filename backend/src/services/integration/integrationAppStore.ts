@@ -121,15 +121,17 @@ class IntegrationAppStore {
     jsonPath: string,
     value: string,
   ): IntegrationApp | undefined {
+    // 白名單驗證：jsonPath 只允許 $.fieldName 格式（字母、數字、底線）
+    if (!/^\$\.[a-zA-Z_][a-zA-Z0-9_]*$/.test(jsonPath)) {
+      throw new Error(`非法的 jsonPath 格式：${jsonPath}`);
+    }
     // 加密後無法使用 SQLite 的 json_extract 查詢，改為應用層過濾
     const rows = this.stmts.selectByProvider.all(
       provider,
     ) as IntegrationAppRow[];
     for (const row of rows) {
       const app = this.rowToApp(row);
-      const fieldName = jsonPath.startsWith("$.")
-        ? jsonPath.slice(2)
-        : jsonPath;
+      const fieldName = jsonPath.slice(2);
       if (app.config[fieldName] === value) {
         return app;
       }
