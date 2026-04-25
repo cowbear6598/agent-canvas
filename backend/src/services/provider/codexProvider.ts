@@ -7,9 +7,12 @@
  * 實作 AgentProvider 介面，支援基本聊天（chat=true）。
  *
  * CLI 指令組合：
- *   - 新對話：`codex exec - --json --yolo --skip-git-repo-check --model <model>`
- *   - 恢復對話：`codex exec resume <id> - --json --yolo`
+ *   - 新對話：`codex exec - --json --skip-git-repo-check --cd <repoPath> --full-auto -c sandbox_workspace_write.network_access=true --model <model>`
+ *   - 恢復對話：`codex exec resume <id> - --json --cd <repoPath> --full-auto -c sandbox_workspace_write.network_access=true`
  *   - `-` 表示從 stdin 讀取 prompt
+ *   - `--full-auto` 取代舊版 `--yolo`，保留 OS-level workspace 寫入限制
+ *   - `--cd <repoPath>` 明確錨定 sandbox boundary，與 Bun.spawn cwd 雙保險
+ *   - `-c sandbox_workspace_write.network_access=true` 允許 npm install / git push 等網路需求
  */
 
 import {
@@ -165,16 +168,19 @@ function buildPromptText(
  * 組合 codex CLI 參數。
  * 驗證 resumeSessionId 及 model 格式，防止 CLI 旗標注入。
  *
+ * args 含 `--cd <repoPath>` 是雙保險：Bun.spawn cwd 已由上層 `resolvePodCwd` 統一解析，
+ * `--cd` 則明確錨定 sandbox boundary，確保 codex sandbox 寫入限制與工作目錄一致。
+ *
  * @param resumeSessionId 恢復對話的 session ID，為 null 時走新對話模式
  * @param model 模型名稱（已通過 MODEL_RE 驗證）
+ * @param repoPath 工作目錄路徑（由上層 resolvePodCwd 解析過的合法路徑）
  * @returns CLI 參數陣列（不含 "codex" 本身）
  */
 function buildCodexArgs(
   resumeSessionId: string | null,
   model: string,
+  repoPath: string,
 ): string[] {
-  const args: string[] = [];
-
   if (resumeSessionId) {
     if (!SESSION_ID_RE.test(resumeSessionId)) {
       // resumeSessionId 格式不合法，防止旗標注入，改走新對話
@@ -183,33 +189,50 @@ function buildCodexArgs(
         "Warn",
         `[CodexProvider] resumeSessionId 格式不合法，已略過並改為新對話：${resumeSessionId}`,
       );
-      args.push(
+      return [
         "exec",
         "-",
         "--json",
-        "--yolo",
         "--skip-git-repo-check",
+        "--cd",
+        repoPath,
+        "--full-auto",
+        "-c",
+        "sandbox_workspace_write.network_access=true",
         "--model",
         model,
-      );
-    } else {
-      // 恢復對話模式：不帶 --model（由 session 決定）
-      args.push("exec", "resume", resumeSessionId, "-", "--json", "--yolo");
+      ];
     }
-  } else {
-    // 新對話模式
-    args.push(
+
+    // 恢復對話模式：不帶 --model（由 session 決定）
+    return [
       "exec",
+      "resume",
+      resumeSessionId,
       "-",
       "--json",
-      "--yolo",
-      "--skip-git-repo-check",
-      "--model",
-      model,
-    );
+      "--cd",
+      repoPath,
+      "--full-auto",
+      "-c",
+      "sandbox_workspace_write.network_access=true",
+    ];
   }
 
-  return args;
+  // 新對話模式
+  return [
+    "exec",
+    "-",
+    "--json",
+    "--skip-git-repo-check",
+    "--cd",
+    repoPath,
+    "--full-auto",
+    "-c",
+    "sandbox_workspace_write.network_access=true",
+    "--model",
+    model,
+  ];
 }
 
 /**
@@ -229,16 +252,19 @@ function isEnoentError(err: unknown): boolean {
  * 啟動 codex subprocess，直接 throw 原始錯誤，由 chat() 呼叫端統一判斷。
  * 不在此處做 ENOENT 包裝——改由 chat() 使用 isEnoentError 統一處理。
  *
+ * cwd 與 args 中的 `--cd` 使用同一個 repoPath（雙保險）。
+ * repoPath 已由上層 `resolvePodCwd` 統一解析，此處直接使用。
+ *
  * @param args CLI 參數（不含 "codex"）
- * @param workspacePath 工作目錄
+ * @param repoPath 工作目錄路徑（與 args 中 --cd 後的值同值）
  * @returns Bun.Subprocess
  */
 function spawnCodexProcess(
   args: string[],
-  workspacePath: string,
+  repoPath: string,
 ): Bun.Subprocess<"pipe", "pipe", "pipe"> {
   return Bun.spawn(["codex", ...args], {
-    cwd: workspacePath,
+    cwd: repoPath,
     stdin: "pipe",
     stdout: "pipe",
     stderr: "pipe",
@@ -464,7 +490,8 @@ export class CodexProvider implements AgentProvider<CodexOptions> {
     }
 
     // ── 組合 CLI 參數 ──────────────────────────────────────────────
-    const codexArgs = buildCodexArgs(resumeSessionId, model);
+    // workspacePath 已由上層 resolvePodCwd 統一解析，直接傳入作為 repoPath
+    const codexArgs = buildCodexArgs(resumeSessionId, model, workspacePath);
 
     // ── 組合 prompt 文字 ───────────────────────────────────────────
     const promptText = buildPromptText(message);

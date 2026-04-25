@@ -13,13 +13,13 @@ export const CLAUDE_CAPABILITIES: Readonly<ProviderCapabilities> =
     runMode: true,
   });
 
-/** Codex Provider 僅支援基本聊天，其餘功能皆不支援 */
+/** Codex Provider 支援聊天、指令與 repository，其餘功能皆不支援 */
 export const CODEX_CAPABILITIES: Readonly<ProviderCapabilities> = Object.freeze(
   {
     chat: true,
     skill: false,
     subAgent: false,
-    repository: false,
+    repository: true,
     command: true,
     mcp: false,
     integration: false,

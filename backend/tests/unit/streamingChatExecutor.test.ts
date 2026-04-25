@@ -95,7 +95,8 @@ async function* makeEventStream(events: Array<NormalizedEvent>) {
 /**
  * 建立帶有 provider=claude 的假 podResult，供 podStore.getByIdGlobal 回傳。
  * Phase 4 起 Claude 路徑需要 podResult 非 null。
- * workspacePath 必須位於 config.repositoriesRoot 之下，以通過路徑安全驗證。
+ * workspacePath 必須位於 config.canvasRoot 之下：repositoryId=null 時，
+ * resolvePodCwd 會以 canvasRoot 為根驗證 workspacePath。
  */
 function makeClaudePodResult() {
   return {
@@ -105,7 +106,7 @@ function makeClaudePodResult() {
       canvasId: "test-canvas",
       name: "claude-pod",
       provider: "claude" as const,
-      workspacePath: path.join(config.repositoriesRoot, "test-workspace"),
+      workspacePath: path.join(config.canvasRoot, "test-canvas", "pod-test"),
       providerConfig: { model: "opus" },
       sessionId: null,
       status: "idle" as const,
@@ -120,7 +121,8 @@ function makeClaudePodResult() {
 
 /**
  * 建立帶有 provider=codex 的假 podResult，供 podStore.getByIdGlobal 回傳。
- * workspacePath 必須位於 config.repositoriesRoot 之下，以通過路徑安全驗證。
+ * workspacePath 必須位於 config.canvasRoot 之下：repositoryId=null 時，
+ * resolvePodCwd 會以 canvasRoot 為根驗證 workspacePath。
  */
 function makeCodexPodResult() {
   return {
@@ -130,7 +132,7 @@ function makeCodexPodResult() {
       canvasId: "test-canvas",
       name: "codex-pod",
       provider: "codex" as const,
-      workspacePath: path.join(config.repositoriesRoot, "test-workspace"),
+      workspacePath: path.join(config.canvasRoot, "test-canvas", "pod-test"),
       providerConfig: null,
       sessionId: null,
       status: "idle" as const,
@@ -702,9 +704,173 @@ describe("executeStreamingChat", () => {
     });
   });
 
+  // ================================================================
+  // resolvePodCwd 整合測試（非 Run mode）
+  // ================================================================
+  describe("resolvePodCwd 整合（非 Run mode）", () => {
+    /**
+     * 捕捉 provider.chat 收到的第一個 ctx 參數並回傳。
+     * 呼叫 executeStreamingChat 完成後即可讀取 capturedCtx。
+     */
+    function makeCaptureCtxMock(): {
+      chatMock: ReturnType<typeof vi.fn>;
+      getCapturedCtx: () => unknown;
+    } {
+      let capturedCtx: unknown = undefined;
+      const chatMock = vi.fn(async function* (ctx: unknown) {
+        capturedCtx = ctx;
+        yield { type: "turn_complete" as const };
+      });
+      asMock(getProvider).mockReturnValue({
+        chat: chatMock,
+        cancel: vi.fn(() => false),
+        buildOptions: vi.fn().mockResolvedValue({}),
+      });
+      return {
+        chatMock,
+        getCapturedCtx: () => capturedCtx,
+      };
+    }
+
+    it("綁定 Repository（repositoryId 非 null）時，provider.chat 收到的 workspacePath 為 repositoriesRoot/repositoryId", async () => {
+      // 構造帶有 repositoryId 的 Pod（綁定 Repository 分支）
+      asMock(podStore.getByIdGlobal).mockReturnValue({
+        canvasId: "test-canvas",
+        pod: {
+          id: "test-pod",
+          canvasId: "test-canvas",
+          name: "claude-pod",
+          provider: "claude" as const,
+          workspacePath: path.join(
+            config.canvasRoot,
+            "test-canvas",
+            "pod-test",
+          ),
+          providerConfig: { model: "opus" },
+          sessionId: null,
+          status: "idle" as const,
+          mcpServerIds: [],
+          pluginIds: [],
+          integrationBindings: [],
+          commandId: null,
+          repositoryId: "test-repo",
+        },
+      });
+
+      const { chatMock, getCapturedCtx } = makeCaptureCtxMock();
+
+      await executeStreamingChat({
+        canvasId,
+        podId,
+        message,
+        abortable: false,
+        strategy: makeStrategy(),
+      });
+
+      // provider.chat 應被呼叫一次
+      expect(chatMock).toHaveBeenCalledTimes(1);
+
+      // ctx.workspacePath 應為 repositoriesRoot/repositoryId（resolvePodCwd 的 repositoryId 分支）
+      const expectedCwd = path.resolve(
+        path.join(config.repositoriesRoot, "test-repo"),
+      );
+      expect(getCapturedCtx()).toMatchObject({ workspacePath: expectedCwd });
+    });
+
+    it("未綁定 Repository（repositoryId=null）時，provider.chat 收到的 workspacePath 為 pod.workspacePath（canvasRoot 內）", async () => {
+      // 構造不帶 repositoryId 的 Pod（未綁定分支，走 canvasRoot 驗證）
+      const podWorkspacePath = path.join(
+        config.canvasRoot,
+        "test-canvas",
+        "pod-test",
+      );
+      asMock(podStore.getByIdGlobal).mockReturnValue({
+        canvasId: "test-canvas",
+        pod: {
+          id: "test-pod",
+          canvasId: "test-canvas",
+          name: "claude-pod",
+          provider: "claude" as const,
+          workspacePath: podWorkspacePath,
+          providerConfig: { model: "opus" },
+          sessionId: null,
+          status: "idle" as const,
+          mcpServerIds: [],
+          pluginIds: [],
+          integrationBindings: [],
+          commandId: null,
+          repositoryId: null,
+        },
+      });
+
+      const { chatMock, getCapturedCtx } = makeCaptureCtxMock();
+
+      await executeStreamingChat({
+        canvasId,
+        podId,
+        message,
+        abortable: false,
+        strategy: makeStrategy(),
+      });
+
+      // provider.chat 應被呼叫一次
+      expect(chatMock).toHaveBeenCalledTimes(1);
+
+      // ctx.workspacePath 應為 pod.workspacePath（resolvePodCwd 的 workspacePath 分支）
+      expect(getCapturedCtx()).toMatchObject({
+        workspacePath: path.resolve(podWorkspacePath),
+      });
+    });
+
+    it("resolvePodCwd 拋錯（workspacePath 不在 canvasRoot 內）時，provider.chat 不被呼叫", async () => {
+      // 構造帶有非法 workspacePath 的 Pod（repositoryId=null，走 canvasRoot 驗證，必定失敗）
+      asMock(podStore.getByIdGlobal).mockReturnValue({
+        canvasId: "test-canvas",
+        pod: {
+          id: "test-pod",
+          canvasId: "test-canvas",
+          name: "claude-pod",
+          provider: "claude" as const,
+          workspacePath: "/tmp/evil-path",
+          providerConfig: { model: "opus" },
+          sessionId: null,
+          status: "idle" as const,
+          mcpServerIds: [],
+          pluginIds: [],
+          integrationBindings: [],
+          commandId: null,
+          repositoryId: null,
+        },
+      });
+
+      const chatMock = vi.fn(async function* () {
+        yield { type: "text" as const, content: "不應看到此內容" };
+      });
+      asMock(getProvider).mockReturnValue({
+        chat: chatMock,
+        cancel: vi.fn(() => false),
+        buildOptions: vi.fn().mockResolvedValue({}),
+      });
+
+      // resolvePodCwd 應在 provider.chat 執行前就拋錯
+      await expect(
+        executeStreamingChat({
+          canvasId,
+          podId,
+          message,
+          abortable: false,
+          strategy: makeStrategy(),
+        }),
+      ).rejects.toThrow("工作目錄不在允許範圍內");
+
+      // provider.chat 不應被呼叫
+      expect(chatMock).not.toHaveBeenCalled();
+    });
+  });
+
   describe("pod.workspacePath 路徑安全驗證", () => {
-    it("pod.workspacePath 不在 repositoriesRoot 內時，拋出「工作目錄驗證失敗」且 provider.chat 未被呼叫", async () => {
-      // 設定帶有非法 workspacePath 的 pod（不在 repositoriesRoot 下）
+    it("pod.workspacePath 不在 canvasRoot 內時，拋出「工作目錄不在允許範圍內」且 provider.chat 未被呼叫", async () => {
+      // 設定帶有非法 workspacePath 的 pod（不在 canvasRoot 下，repositoryId=null 時 resolvePodCwd 以 canvasRoot 為根驗證）
       asMock(podStore.getByIdGlobal).mockReturnValue({
         canvasId: "test-canvas",
         pod: {
@@ -733,7 +899,7 @@ describe("executeStreamingChat", () => {
         buildOptions: vi.fn().mockResolvedValue({}),
       });
 
-      // 驗證應在 provider.chat 執行前就擋下，拋出通用錯誤訊息
+      // 驗證應在 provider.chat 執行前就擋下，拋出 resolvePodCwd 的路徑安全驗證錯誤
       await expect(
         executeStreamingChat({
           canvasId,
@@ -742,7 +908,7 @@ describe("executeStreamingChat", () => {
           abortable: false,
           strategy: makeStrategy(),
         }),
-      ).rejects.toThrow("工作目錄驗證失敗");
+      ).rejects.toThrow("工作目錄不在允許範圍內");
 
       // provider.chat 不應被呼叫
       expect(chatMock).not.toHaveBeenCalled();
@@ -1241,9 +1407,9 @@ describe("executeStreamingChat", () => {
         expect.objectContaining({ workspacePath: validWorktreePath }),
       );
 
-      // 確認確實不是 pod.workspacePath（位於 repositoriesRoot/test-workspace）
+      // 確認確實不是 pod.workspacePath（位於 canvasRoot/test-canvas/pod-test）
       expect(capturedCtxList[0]).not.toMatchObject({
-        workspacePath: path.join(config.repositoriesRoot, "test-workspace"),
+        workspacePath: path.join(config.canvasRoot, "test-canvas", "pod-test"),
       });
 
       // 不應拋出「Run Instance 的工作目錄路徑不合法」錯誤（隱含在 await 成功完成）

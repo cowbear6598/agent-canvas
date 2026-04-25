@@ -2,7 +2,7 @@
 import { ref, computed, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { Send, Mic, Square } from "lucide-vue-next";
-import { MAX_MESSAGE_LENGTH, TEXTAREA_MAX_HEIGHT } from "@/lib/constants";
+import { TEXTAREA_MAX_HEIGHT } from "@/lib/constants";
 import ScrollArea from "@/components/ui/scroll-area/ScrollArea.vue";
 import type { ContentBlock } from "@/types/websocket/requests";
 import { useSpeechRecognition } from "@/composables/chat/useSpeechRecognition";
@@ -41,9 +41,8 @@ const updateText = (text: string): void => {
   const element = editableRef.value;
   if (!element) return;
 
-  const truncated = text.slice(0, MAX_MESSAGE_LENGTH);
-  input.value = truncated;
-  element.innerText = truncated;
+  input.value = text;
+  element.innerText = text;
   moveCursorToEnd();
 };
 
@@ -59,26 +58,14 @@ const { imageDataMap, findImageFile, handleImagePaste, handleDrop } =
     insertNodeAtCursor,
   });
 
-const { countTextLength, buildContentBlocks, extractTextFromBlocks } =
-  useContentBlocks({
-    editableRef,
-    imageDataMap,
-  });
+const { buildContentBlocks, extractTextFromBlocks } = useContentBlocks({
+  editableRef,
+  imageDataMap,
+});
 
 const handleInput = (event: Event): void => {
   const target = event.target as HTMLDivElement;
-  const innerText = target.innerText;
-
-  let textLength = 0;
-  for (const child of Array.from(target.childNodes)) {
-    textLength += countTextLength(child);
-  }
-
-  if (textLength > MAX_MESSAGE_LENGTH) {
-    updateText(innerText);
-  } else {
-    input.value = innerText;
-  }
+  input.value = target.innerText;
 };
 
 const handlePaste = async (event: ClipboardEvent): Promise<void> => {
@@ -120,7 +107,6 @@ const handleSend = (): void => {
   if (blocks.length === 0) return;
 
   const textContent = extractTextFromBlocks(blocks);
-  if (textContent.length > MAX_MESSAGE_LENGTH) return;
 
   const hasImages = blocks.some((block) => block.type === "image");
   if (hasImages) {
@@ -205,10 +191,7 @@ watch(
         class="doodle-action-btn bg-doodle-coral disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-x-0 disabled:hover:translate-y-0"
         @click="handleAbort"
       >
-        <Square
-          :size="16"
-          class="text-card"
-        />
+        <Square :size="16" class="text-card" />
       </button>
       <button
         v-else
@@ -216,10 +199,7 @@ watch(
         class="doodle-action-btn bg-doodle-green disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-x-0 disabled:hover:translate-y-0"
         @click="handleSend"
       >
-        <Send
-          :size="20"
-          class="text-card"
-        />
+        <Send :size="20" class="text-card" />
       </button>
       <button
         :disabled="disabled"

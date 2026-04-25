@@ -25,7 +25,8 @@ export const TEST_IDS = {
 } as const;
 
 // Pod Factory
-// workspacePath 必須位於 config.repositoriesRoot 之下，以通過路徑安全驗證
+// workspacePath 必須位於 config.canvasRoot 之下（repositoryId=null 時 resolvePodCwd 會驗證 canvasRoot），
+// 若要測試 repositoryId 非 null 的情境，請在 overrides 中同時覆寫 repositoryId 與 workspacePath
 export function createMockPod(overrides?: Partial<Pod>): Pod {
   return {
     id: "test-pod",
@@ -34,7 +35,7 @@ export function createMockPod(overrides?: Partial<Pod>): Pod {
     providerConfig: { model: "sonnet" },
     sessionId: null,
     repositoryId: null,
-    workspacePath: path.join(config.repositoriesRoot, "test-workspace"),
+    workspacePath: path.join(config.canvasRoot, "test-canvas", "pod-test"),
     commandId: null,
     status: "idle",
     x: 0,

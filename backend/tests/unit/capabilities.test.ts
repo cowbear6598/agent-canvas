@@ -33,6 +33,10 @@ describe("CODEX_CAPABILITIES 能力旗標", () => {
     expect(CODEX_CAPABILITIES.runMode).toBe(false);
   });
 
+  it("repository 應為 true（Codex 支援 Repository）", () => {
+    expect(CODEX_CAPABILITIES.repository).toBe(true);
+  });
+
   it("command 應為 true（Codex 支援 Command）", () => {
     expect(CODEX_CAPABILITIES.command).toBe(true);
   });

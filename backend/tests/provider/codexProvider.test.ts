@@ -106,7 +106,7 @@ describe("CodexProvider", () => {
   });
 
   // ── Case 1：首次對話 spawn 指令 ───────────────────────────────────
-  it("首次對話時 spawn 指令應包含 --json --yolo --skip-git-repo-check --model <model>", async () => {
+  it("首次對話時 spawn 指令應包含 --json --skip-git-repo-check --cd <workspacePath> --full-auto -c sandbox_workspace_write.network_access=true --model <model>", async () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
@@ -125,15 +125,19 @@ describe("CodexProvider", () => {
       "exec",
       "-",
       "--json",
-      "--yolo",
       "--skip-git-repo-check",
+      "--cd",
+      ctx.workspacePath,
+      "--full-auto",
+      "-c",
+      "sandbox_workspace_write.network_access=true",
       "--model",
       "gpt-4o",
     ]);
   });
 
   // ── Case 2：resume 時 spawn 指令包含 resume <id> ───────────────────
-  it("resumeSessionId 存在時 spawn 指令應包含 exec resume <id> - --json --yolo", async () => {
+  it("resumeSessionId 存在時 spawn 指令應包含 exec resume <id> - --json --cd <workspacePath> --full-auto -c sandbox_workspace_write.network_access=true", async () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
@@ -151,7 +155,11 @@ describe("CodexProvider", () => {
       "session-abc123",
       "-",
       "--json",
-      "--yolo",
+      "--cd",
+      ctx.workspacePath,
+      "--full-auto",
+      "-c",
+      "sandbox_workspace_write.network_access=true",
     ]);
   });
 
@@ -296,5 +304,48 @@ describe("CodexProvider", () => {
     expect(spawnArgs).not.toContain("resume");
     // 應走新對話流程
     expect(spawnArgs).toContain("--skip-git-repo-check");
+  });
+
+  // ── 補充：spawn cwd 與 --cd 路徑必須一致 ─────────────────────────
+  it("spawn 的 cwd 與 args 中 --cd 後一個元素必須相同", async () => {
+    const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
+    spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
+
+    const provider = new CodexProvider();
+    const ctx = makeCtx({ resumeSessionId: null });
+    await collectEvents(provider.chat(ctx));
+
+    expect(spawnSpy).toHaveBeenCalledOnce();
+    const [spawnArgs, spawnOptions] = spawnSpy.mock.calls[0] as [
+      string[],
+      { cwd?: string },
+    ];
+
+    const cdIdx = spawnArgs.indexOf("--cd");
+    expect(cdIdx).toBeGreaterThan(-1);
+    const cdPath = spawnArgs[cdIdx + 1];
+    expect(cdPath).toBe(spawnOptions.cwd);
+  });
+
+  // ── 補充：args 不含 -c sandbox_workspace_write.writable_roots（負面斷言）
+  it("Codex 在綁定 Repository 時，args 中不包含 -c sandbox_workspace_write.writable_roots", async () => {
+    const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
+    spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
+
+    const provider = new CodexProvider();
+    const ctx = makeCtx({
+      workspacePath: "/repos/my-repo",
+      resumeSessionId: null,
+    });
+    await collectEvents(provider.chat(ctx));
+
+    expect(spawnSpy).toHaveBeenCalledOnce();
+    const [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
+
+    // args 不應包含 writable_roots 設定（Codex 使用 network_access=true 但不限制 writable_roots）
+    const hasWritableRoots = spawnArgs.some((arg) =>
+      arg.includes("writable_roots"),
+    );
+    expect(hasWritableRoots).toBe(false);
   });
 });

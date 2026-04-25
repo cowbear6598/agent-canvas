@@ -48,7 +48,6 @@ vi.mock("../../src/config/index.js", () => ({
 
 import {
   buildClaudeOptions,
-  resolvePodCwd,
   BASE_ALLOWED_TOOLS,
 } from "../../src/services/provider/claude/buildClaudeOptions.js";
 import { mcpServerStore } from "../../src/services/mcpServerStore.js";
@@ -196,43 +195,6 @@ describe("buildClaudeOptions", () => {
       // BASE_ALLOWED_TOOLS 也應保留
       expect(result.allowedTools).toContain("Read");
     });
-  });
-});
-
-describe("resolvePodCwd", () => {
-  it("合法 workspacePath（在 canvasRoot 內）應正常回傳", () => {
-    const pod = createBasePod({ workspacePath: "/canvas/my-pod" });
-
-    const result = resolvePodCwd(pod);
-
-    expect(result).toBe("/canvas/my-pod");
-  });
-
-  it("含路徑穿越字元（../）的 repositoryId 應 throw", () => {
-    const pod = createBasePod({
-      repositoryId: "../evil",
-    });
-
-    expect(() => resolvePodCwd(pod)).toThrow("非法的工作目錄路徑");
-  });
-
-  it("合法 repositoryId 應組合 repositoriesRoot 並回傳", () => {
-    const pod = createBasePod({
-      repositoryId: "my-repo",
-    });
-
-    const result = resolvePodCwd(pod);
-
-    expect(result).toBe("/repos/my-repo");
-  });
-
-  it("workspacePath 在 canvasRoot 以外時應 throw", () => {
-    const pod = createBasePod({
-      workspacePath: "/tmp/evil-path",
-      repositoryId: null,
-    });
-
-    expect(() => resolvePodCwd(pod)).toThrow("工作目錄不在允許範圍內");
   });
 });
 

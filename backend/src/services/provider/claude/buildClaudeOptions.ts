@@ -8,7 +8,6 @@
  *   MCP Server / Plugin / Integration Tool / Base Options / Model
  */
 
-import path from "path";
 import {
   type Options,
   type SdkPluginConfig,
@@ -28,8 +27,6 @@ import { getClaudeCodePath } from "../../claude/claudePathResolver.js";
 import type { Pod } from "../../../types/pod.js";
 import type { RunContext } from "../../../types/run.js";
 import { getResultErrorString } from "../../../types/result.js";
-import { config } from "../../../config/index.js";
-import { isPathWithinDirectory } from "../../../utils/pathValidator.js";
 import { logger } from "../../../utils/logger.js";
 
 // ─── ClaudeOptions 介面定義 ──────────────────────────────────────────────────
@@ -78,46 +75,7 @@ export const BASE_ALLOWED_TOOLS: readonly string[] = [
   "WebSearch",
 ];
 
-// ─── resolveCwd ──────────────────────────────────────────────────────────────
-
-/**
- * 解析 Claude 查詢的工作目錄。
- * - 有 repositoryId → 使用 repositoriesRoot / repositoryId（驗證路徑合法性）
- * - 否則 → 使用 pod.workspacePath（驗證在 canvasRoot 內）
- *
- * 沿用 claudeService.resolveCwd 的邏輯。
- */
-export function resolvePodCwd(pod: Pod): string {
-  if (pod.repositoryId) {
-    const resolvedCwd = path.resolve(
-      path.join(config.repositoriesRoot, pod.repositoryId),
-    );
-    if (
-      !isPathWithinDirectory(resolvedCwd, path.resolve(config.repositoriesRoot))
-    ) {
-      logger.error(
-        "Pod",
-        "Error",
-        `resolvePodCwd：repositoryId 路徑穿越，podId=${pod.id}`,
-        pod.repositoryId,
-      );
-      throw new Error("非法的工作目錄路徑");
-    }
-    return resolvedCwd;
-  }
-
-  const resolvedCwd = path.resolve(pod.workspacePath);
-  if (!isPathWithinDirectory(resolvedCwd, path.resolve(config.canvasRoot))) {
-    logger.error(
-      "Pod",
-      "Error",
-      `resolvePodCwd：workspacePath 超出允許範圍，podId=${pod.id}`,
-      pod.workspacePath,
-    );
-    throw new Error("工作目錄不在允許範圍內");
-  }
-  return resolvedCwd;
-}
+export { resolvePodCwd } from "../../shared/podPathResolver.js";
 
 // ─── applyMcpServers ─────────────────────────────────────────────────────────
 

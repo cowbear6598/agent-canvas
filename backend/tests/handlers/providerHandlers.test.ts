@@ -137,7 +137,7 @@ describe("handleProviderList", () => {
     expect(caps.runMode).toBe(true);
   });
 
-  it("codex 的 capabilities 中 chat=true、command=true，其餘全部 false", async () => {
+  it("codex 的 capabilities 中 chat=true、command=true、repository=true，其餘全部 false", async () => {
     await handleProviderList(
       CONNECTION_ID,
       { requestId: REQUEST_ID },
@@ -153,11 +153,11 @@ describe("handleProviderList", () => {
     expect(codex).toBeDefined();
 
     const caps = codex.capabilities;
-    // chat 為 true，其餘全部 false
+    // chat、command、repository 為 true，其餘全部 false
     expect(caps.chat).toBe(true);
     expect(caps.skill).toBe(false);
     expect(caps.subAgent).toBe(false);
-    expect(caps.repository).toBe(false);
+    expect(caps.repository).toBe(true);
     expect(caps.command).toBe(true);
     expect(caps.mcp).toBe(false);
     expect(caps.integration).toBe(false);

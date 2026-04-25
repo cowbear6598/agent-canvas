@@ -27,6 +27,7 @@ import type {
 import { runStore } from "../runStore.js";
 import { isPathWithinDirectory } from "../../utils/pathValidator.js";
 import { config } from "../../config/index.js";
+import { resolvePodCwd } from "../shared/podPathResolver.js";
 
 export interface StreamingChatExecutorOptions {
   canvasId: string;
@@ -566,17 +567,16 @@ function processNormalizedEvent(
 /**
  * 解析查詢的工作目錄（workspacePath）。
  *
- * TODO: 考慮抽成獨立模組（backend/src/services/workspace/workspacePath.ts）
- *       目前因尚未決定拆分時機而保留 inline。
- *       再次 refactor 時重新評估是否值得獨立封裝。
- *
  * 邏輯：
- *   - Run mode 且 instance 有 worktreePath → 使用 worktreePath
- *   - 否則 → 使用 pod.workspacePath
+ *   - Run mode 且 instance 有 worktreePath → 使用 worktreePath（驗證在 repositoriesRoot 內）
+ *   - 非 Run mode → 委由 resolvePodCwd(pod) 統一解析：
+ *     - 有 repositoryId → 使用 repositoriesRoot / repositoryId（驗證路徑在 repositoriesRoot 內）
+ *     - 否則 → 使用 pod.workspacePath（驗證在 canvasRoot 內）
  *
- * 路徑安全性驗證：worktreePath 與 pod.workspacePath 均必須在 config.repositoriesRoot 內。
+ * 路徑驗證失敗時直接拋錯，由上層回報錯誤給前端，不做 silent fallback。
  */
 function resolveWorkspacePath(pod: Pod, runContext?: RunContext): string {
+  // Run mode worktree 分支：沿用原本邏輯，驗證 worktreePath 在 repositoriesRoot 內
   if (runContext) {
     const instance = runStore.getPodInstance(runContext.runId, pod.id);
     if (instance?.worktreePath) {
@@ -594,19 +594,9 @@ function resolveWorkspacePath(pod: Pod, runContext?: RunContext): string {
     }
   }
 
-  // 驗證 pod.workspacePath 必須在 appDataRoot 內，防止 Path Traversal
-  // 注意：Pod 一般工作區在 canvasRoot（canvasRoot 是 appDataRoot 的子目錄），
-  // Run mode worktree 則在 repositoriesRoot，兩者皆在 appDataRoot 之下。
-  if (!isPathWithinDirectory(pod.workspacePath, config.appDataRoot)) {
-    logger.error("Chat", "Check", "Pod workspacePath 不在 appDataRoot 內", {
-      podId: pod.id,
-      workspacePath: pod.workspacePath,
-      appDataRoot: config.appDataRoot,
-    });
-    throw new Error("工作目錄驗證失敗");
-  }
-
-  return pod.workspacePath;
+  // 非 Run mode：cwd 由 resolvePodCwd 統一解析，
+  // repositoryId 路徑與 workspacePath 兩條分支皆由 helper 處理（含路徑安全驗證）。
+  return resolvePodCwd(pod);
 }
 
 /**
