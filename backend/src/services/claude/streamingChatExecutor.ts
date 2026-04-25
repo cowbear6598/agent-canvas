@@ -63,12 +63,11 @@ interface MutableStreamState {
   subMessages: PersistedSubMessage[];
 }
 
-/** 判斷串流狀態中是否已累積任何 assistant 內容（文字或 tool use 子訊息） */
 function hasAssistantContent(state: MutableStreamState): boolean {
   return state.accumulatedContent.length > 0 || state.subMessages.length > 0;
 }
 
-/** 串流期間 throttle 節流的時間窗口（毫秒）：200ms 上限延遲對 UX 可接受 */
+/** 串流節流窗口：200ms 上限延遲對 UX 可接受 */
 const THROTTLE_MS = 200;
 
 /**
@@ -117,11 +116,7 @@ type ToolResultStreamEvent = Extract<StreamEvent, { type: "tool_result" }>;
 type CompleteStreamEvent = Extract<StreamEvent, { type: "complete" }>;
 type ErrorStreamEvent = Extract<StreamEvent, { type: "error" }>;
 
-function handleTextEvent(
-  event: TextStreamEvent,
-  context: StreamContext,
-  _streamingCallback: (event: StreamEvent) => void,
-): void {
+function handleTextEvent(event: TextStreamEvent, context: StreamContext): void {
   const {
     canvasId,
     podId,
@@ -151,7 +146,6 @@ function handleTextEvent(
 function handleToolUseEvent(
   event: ToolUseStreamEvent,
   context: StreamContext,
-  _streamingCallback: (event: StreamEvent) => void,
 ): void {
   const {
     canvasId,
@@ -186,7 +180,6 @@ function handleToolUseEvent(
 function handleToolResultEvent(
   event: ToolResultStreamEvent,
   context: StreamContext,
-  _streamingCallback: (event: StreamEvent) => void,
 ): void {
   const {
     canvasId,
@@ -211,11 +204,9 @@ function handleToolResultEvent(
   persistThrottled();
 }
 
-// `_event`、`_streamingCallback` 參數未使用，遵守 no-unused-vars 規則保留 `_` 前綴
 function handleCompleteEvent(
   _event: CompleteStreamEvent,
   context: StreamContext,
-  _streamingCallback: (event: StreamEvent) => void,
 ): void {
   const {
     canvasId,
@@ -236,16 +227,6 @@ function handleCompleteEvent(
   });
 }
 
-/**
- * 可直接顯示給使用者的錯誤代碼白名單。
- * 白名單內的 code 代表「可恢復的使用者操作錯誤」，訊息已在產生端組裝成使用者友善格式，
- * 可直接推送給前端；不在白名單內的 code 一律以通用警告文字取代，避免洩漏系統內部細節。
- */
-const RECOVERABLE_CODES = new Set(["COMMAND_NOT_FOUND"]);
-
-/** 訊息長度上限，避免惡意長訊息灌版 */
-const MAX_USER_FACING_MSG_LENGTH = 500;
-
 function handleErrorEvent(
   event: ErrorStreamEvent,
   context: StreamContext,
@@ -260,24 +241,10 @@ function handleErrorEvent(
     `Provider 串流錯誤（podId=${podId}, canvasId=${canvasId}, fatal=${event.fatal}, code=${event.code ?? "無"}）：${event.error}`,
   );
 
-  // 判斷是否為可直接顯示給使用者的可恢復錯誤
-  const isRecoverable =
-    event.code !== undefined && RECOVERABLE_CODES.has(event.code);
-
-  let displayMessage: string;
-  if (isRecoverable) {
-    // 白名單內的 code：使用產生端組裝的使用者友善訊息，並限制長度防止灌版
-    const truncated =
-      event.error.length > MAX_USER_FACING_MSG_LENGTH
-        ? event.error.slice(0, MAX_USER_FACING_MSG_LENGTH) + "…"
-        : event.error;
-    displayMessage = `\n\n⚠️ ${truncated}`;
-  } else {
-    // 無 code 或不在白名單：使用通用警告，不洩漏原始訊息
-    displayMessage = event.fatal
-      ? "\n\n⚠️ 發生嚴重錯誤，對話已中斷"
-      : "\n\n⚠️ 發生錯誤，請稍後再試";
-  }
+  // 使用通用警告，不洩漏原始訊息給前端
+  const displayMessage = event.fatal
+    ? "\n\n⚠️ 發生嚴重錯誤，對話已中斷"
+    : "\n\n⚠️ 發生錯誤，請稍後再試";
 
   streamingCallback({ type: "text", content: displayMessage });
 
@@ -286,38 +253,32 @@ function handleErrorEvent(
   }
 }
 
-type StreamEventHandlerMap = {
-  [K in StreamEvent["type"]]: (
-    event: Extract<StreamEvent, { type: K }>,
-    context: StreamContext,
-    streamingCallback: (event: StreamEvent) => void,
-  ) => void;
-};
-
 /**
  * 建立串流事件回呼（streamingCallback）。
- * callback 作為閉包傳入 handleErrorEvent，解決 callback 依賴 context 的初始化順序問題，
- * 不再需要把 callback 回寫至 context 欄位。
+ * 不需要 callback 的 handler 直接接受 (event, context)；
+ * handleErrorEvent 以 callback 閉包方式傳入，保持初始化順序安全。
  */
 function createStreamingCallback(
   context: StreamContext,
 ): (event: StreamEvent) => void {
-  // 分派表：各 event handler 接受 streamingCallback 以便 handleErrorEvent 推送警告文字
-  const handlers: StreamEventHandlerMap = {
-    text: handleTextEvent,
-    tool_use: handleToolUseEvent,
-    tool_result: handleToolResultEvent,
-    complete: handleCompleteEvent,
-    error: handleErrorEvent,
-  };
-
   const callback = (event: StreamEvent): void => {
-    const handler = handlers[event.type] as (
-      event: StreamEvent,
-      context: StreamContext,
-      cb: (e: StreamEvent) => void,
-    ) => void;
-    handler(event, context, callback);
+    switch (event.type) {
+      case "text":
+        handleTextEvent(event, context);
+        break;
+      case "tool_use":
+        handleToolUseEvent(event, context);
+        break;
+      case "tool_result":
+        handleToolResultEvent(event, context);
+        break;
+      case "complete":
+        handleCompleteEvent(event, context);
+        break;
+      case "error":
+        handleErrorEvent(event, context, callback);
+        break;
+    }
   };
   return callback;
 }
@@ -380,6 +341,41 @@ async function handleStreamError(
   throw error;
 }
 
+/**
+ * 建立節流持久化函式與對應的 ThrottleContext。
+ *
+ * - 距上次寫入 >= throttleMs 時立即寫入
+ * - 否則排程 setTimeout 到下個窗口開頭寫入最後一次 payload
+ * - 同一窗口內多次呼叫只排一個 timer，並使用最新 payload（閉包自動取最新 streamState）
+ */
+function createThrottledPersist(
+  persistFn: () => void,
+  throttleMs: number,
+): { persistThrottled: () => void; throttleContext: ThrottleContext } {
+  const throttleContext: ThrottleContext = {
+    lastPersistAt: 0,
+    pendingTimer: null,
+  };
+
+  const persistThrottled = (): void => {
+    const now = Date.now();
+    if (now - throttleContext.lastPersistAt >= throttleMs) {
+      throttleContext.lastPersistAt = now;
+      persistFn();
+    } else if (throttleContext.pendingTimer === null) {
+      const delay = throttleMs - (now - throttleContext.lastPersistAt);
+      throttleContext.pendingTimer = setTimeout(() => {
+        throttleContext.pendingTimer = null;
+        // lastPersistAt 在呼叫 persistFn 之前更新，防止下一個事件誤判窗口已過造成雙寫
+        throttleContext.lastPersistAt = Date.now();
+        persistFn();
+      }, delay);
+    }
+  };
+
+  return { persistThrottled, throttleContext };
+}
+
 function setupStreamContext(
   options: StreamingChatExecutorOptions,
 ): StreamContext {
@@ -407,35 +403,10 @@ function setupStreamContext(
 
   const emitStrategy = strategy.createEmitStrategy();
 
-  // 節流狀態獨立封裝為 ThrottleContext（不使用 getter/setter proxy，直接傳遞物件參照）
-  const throttleContext: ThrottleContext = {
-    lastPersistAt: 0,
-    pendingTimer: null,
-  };
-
-  /**
-   * 節流版 persistStreamingMessage：
-   * - 距上次寫入 >= THROTTLE_MS 時立即寫入
-   * - 否則排程 setTimeout 到下個窗口開頭寫入最後一次 payload
-   * - 同一窗口內多次呼叫只排一個 timer，並使用最新 payload（閉包自動取最新 streamState）
-   */
-  const persistThrottled = (): void => {
-    const now = Date.now();
-    if (now - throttleContext.lastPersistAt >= THROTTLE_MS) {
-      // 窗口已過，立即寫入並更新時間戳
-      throttleContext.lastPersistAt = now;
-      persistStreamingMessage();
-    } else if (throttleContext.pendingTimer === null) {
-      // 窗口內尚無待排程 timer，新增一個；不重複排程
-      const delay = THROTTLE_MS - (now - throttleContext.lastPersistAt);
-      throttleContext.pendingTimer = setTimeout(() => {
-        throttleContext.pendingTimer = null;
-        throttleContext.lastPersistAt = Date.now();
-        persistStreamingMessage();
-      }, delay);
-    }
-    // 已有 pending timer：payload 由閉包保持最新，不需重排
-  };
+  const { persistThrottled, throttleContext } = createThrottledPersist(
+    persistStreamingMessage,
+    THROTTLE_MS,
+  );
 
   const context: StreamContext = {
     canvasId,
@@ -502,7 +473,8 @@ async function handleExecutionError(
 
 /**
  * 將 NormalizedEvent 轉換為 StreamEvent，供 streamingCallback 消費。
- * `thinking` 暫走 text 路徑（前端不區分），`session_started` 回傳 null（由呼叫端自行暫存）。
+ * `thinking` 暫走 text 路徑（前端不區分）。
+ * `session_started` 回傳 null（由呼叫端寫入 capturedSessionId，不直接轉 StreamEvent）。
  */
 function normalizedEventToStreamEvent(ev: NormalizedEvent): StreamEvent | null {
   switch (ev.type) {
@@ -535,7 +507,6 @@ function normalizedEventToStreamEvent(ev: NormalizedEvent): StreamEvent | null {
         code: ev.code,
       };
     case "session_started":
-      // 由呼叫端自行暫存，不直接轉成 StreamEvent
       return null;
   }
 }
@@ -543,7 +514,7 @@ function normalizedEventToStreamEvent(ev: NormalizedEvent): StreamEvent | null {
 /**
  * 處理單一正規化串流事件：
  *   - session_started → 寫入 streamContext.capturedSessionId，供 finalizeAfterStream 持久化
- *   - 其餘事件 → 轉換為 StreamEvent 後交由 streamingCallback 分派給對應 handler
+ *   - 其餘事件 → 透過 normalizedEventToStreamEvent 轉換後交由 streamingCallback 分派
  *
  * 此函式為 module-scope 純函式（無 side effect 以外的回傳值），
  * 由 executeStreamingChat 的 for-await 迴圈逐事件呼叫。
@@ -559,9 +530,9 @@ function processNormalizedEvent(
   }
 
   const streamEvent = normalizedEventToStreamEvent(ev);
-  if (streamEvent === null) return;
-
-  streamingCallback(streamEvent);
+  if (streamEvent !== null) {
+    streamingCallback(streamEvent);
+  }
 }
 
 /**

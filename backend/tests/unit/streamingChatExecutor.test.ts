@@ -7,6 +7,7 @@
  */
 
 import path from "path";
+import { vi } from "vitest";
 import type { Mock } from "vitest";
 
 // mock getProvider：預設回傳無 chat 事件的 stub，測試中再覆寫
@@ -93,21 +94,23 @@ async function* makeEventStream(events: Array<NormalizedEvent>) {
 }
 
 /**
- * 建立帶有 provider=claude 的假 podResult，供 podStore.getByIdGlobal 回傳。
- * Phase 4 起 Claude 路徑需要 podResult 非 null。
+ * 建立假 podResult 的共用基底。
  * workspacePath 必須位於 config.canvasRoot 之下：repositoryId=null 時，
  * resolvePodCwd 會以 canvasRoot 為根驗證 workspacePath。
  */
-function makeClaudePodResult() {
+function makePodResult(
+  provider: "claude" | "codex",
+  overrides?: Record<string, unknown>,
+) {
   return {
     canvasId: "test-canvas",
     pod: {
       id: "test-pod",
       canvasId: "test-canvas",
-      name: "claude-pod",
-      provider: "claude" as const,
+      name: `${provider}-pod`,
+      provider,
       workspacePath: path.join(config.canvasRoot, "test-canvas", "pod-test"),
-      providerConfig: { model: "opus" },
+      providerConfig: provider === "claude" ? { model: "opus" } : null,
       sessionId: null,
       status: "idle" as const,
       mcpServerIds: [],
@@ -115,34 +118,24 @@ function makeClaudePodResult() {
       integrationBindings: [],
       commandId: null,
       repositoryId: null,
+      ...overrides,
     },
   };
 }
 
 /**
+ * 建立帶有 provider=claude 的假 podResult，供 podStore.getByIdGlobal 回傳。
+ * Phase 4 起 Claude 路徑需要 podResult 非 null。
+ */
+function makeClaudePodResult() {
+  return makePodResult("claude");
+}
+
+/**
  * 建立帶有 provider=codex 的假 podResult，供 podStore.getByIdGlobal 回傳。
- * workspacePath 必須位於 config.canvasRoot 之下：repositoryId=null 時，
- * resolvePodCwd 會以 canvasRoot 為根驗證 workspacePath。
  */
 function makeCodexPodResult() {
-  return {
-    canvasId: "test-canvas",
-    pod: {
-      id: "test-pod",
-      canvasId: "test-canvas",
-      name: "codex-pod",
-      provider: "codex" as const,
-      workspacePath: path.join(config.canvasRoot, "test-canvas", "pod-test"),
-      providerConfig: null,
-      sessionId: null,
-      status: "idle" as const,
-      mcpServerIds: [],
-      pluginIds: [],
-      integrationBindings: [],
-      commandId: null,
-      repositoryId: null,
-    },
-  };
+  return makePodResult("codex");
 }
 
 /**
@@ -180,13 +173,6 @@ describe("executeStreamingChat", () => {
 
     // Phase 4：預設回傳 Claude pod，讓 Claude 路徑能正確進入
     asMock(podStore.getByIdGlobal).mockReturnValue(makeClaudePodResult());
-
-    // 預設 provider mock：無事件（測試中再覆寫）
-    asMock(getProvider).mockReturnValue({
-      chat: vi.fn(async function* () {}),
-      cancel: vi.fn(() => false),
-      buildOptions: vi.fn().mockResolvedValue({}),
-    });
   });
 
   describe("streaming event 處理（Claude 路徑）", () => {
@@ -1479,46 +1465,6 @@ describe("executeStreamingChat", () => {
       asMock(logger.error).mockClear();
     });
 
-    // ── 測試 20 ──────────────────────────────────────────────────────────────
-    it("測試 20：code=COMMAND_NOT_FOUND + fatal=false → 推送原 error 字串（非通用警告），server log 仍記錄原訊息", async () => {
-      const collectedContents = collectTextContents();
-
-      setupProviderMock([
-        {
-          type: "error",
-          message: "自訂訊息",
-          fatal: false,
-          code: "COMMAND_NOT_FOUND",
-        },
-        { type: "turn_complete" },
-      ]);
-
-      await executeStreamingChat({
-        canvasId,
-        podId,
-        message,
-        abortable: false,
-        strategy: new NormalModeExecutionStrategy(canvasId),
-      });
-
-      // 應推送「⚠️ 自訂訊息」（白名單 code，使用原始訊息）
-      const warningContents = collectedContents.filter((c) => c.includes("⚠️"));
-      expect(warningContents.length).toBeGreaterThan(0);
-      // 應包含原始 error 字串，而非通用警告
-      expect(warningContents.some((c) => c.includes("自訂訊息"))).toBe(true);
-      // 不應是通用警告
-      expect(
-        warningContents.some((c) => c.includes("發生錯誤，請稍後再試")),
-      ).toBe(false);
-
-      // server log 應記錄原始訊息
-      expect(logger.error).toHaveBeenCalledWith(
-        "Chat",
-        "Error",
-        expect.stringContaining("自訂訊息"),
-      );
-    });
-
     // ── 測試 21 ──────────────────────────────────────────────────────────────
     it("測試 21：無 code + fatal=false → 推送通用警告「\\n\\n⚠️ 發生錯誤，請稍後再試」", async () => {
       const collectedContents = collectTextContents();
@@ -1544,149 +1490,6 @@ describe("executeStreamingChat", () => {
       ).toBe(true);
       // 不應洩漏原始訊息 "xxx"
       expect(warningContents.some((c) => c.includes("xxx"))).toBe(false);
-    });
-
-    // ── 測試 22 ──────────────────────────────────────────────────────────────
-    it("測試 22：未白名單的 code + fatal=false → 視為無 code，推送通用警告", async () => {
-      const collectedContents = collectTextContents();
-
-      setupProviderMock([
-        {
-          type: "error",
-          message: "xxx",
-          fatal: false,
-          code: "UNKNOWN_CODE" as "COMMAND_NOT_FOUND",
-        },
-        { type: "turn_complete" },
-      ]);
-
-      await executeStreamingChat({
-        canvasId,
-        podId,
-        message,
-        abortable: false,
-        strategy: new NormalModeExecutionStrategy(canvasId),
-      });
-
-      // 未白名單的 code 應使用通用警告，不洩漏原始訊息
-      const warningContents = collectedContents.filter((c) => c.includes("⚠️"));
-      expect(warningContents.length).toBeGreaterThan(0);
-      expect(
-        warningContents.some((c) => c.includes("發生錯誤，請稍後再試")),
-      ).toBe(true);
-      expect(warningContents.some((c) => c.includes("xxx"))).toBe(false);
-    });
-
-    // ── 測試 23 ──────────────────────────────────────────────────────────────
-    it("測試 23：code=COMMAND_NOT_FOUND + error 超過 500 字元 → 推送文字被 truncate 至 500 字元", async () => {
-      const collectedContents = collectTextContents();
-
-      // 建立超過 500 字元的長訊息
-      const longMessage = "A".repeat(600);
-
-      setupProviderMock([
-        {
-          type: "error",
-          message: longMessage,
-          fatal: false,
-          code: "COMMAND_NOT_FOUND",
-        },
-        { type: "turn_complete" },
-      ]);
-
-      await executeStreamingChat({
-        canvasId,
-        podId,
-        message,
-        abortable: false,
-        strategy: new NormalModeExecutionStrategy(canvasId),
-      });
-
-      // 應找到含有 ⚠️ 的廣播
-      const warningContents = collectedContents.filter((c) => c.includes("⚠️"));
-      expect(warningContents.length).toBeGreaterThan(0);
-
-      // 推送的訊息中，A 的連續段落不應超過 500 字元（truncate 後最多 500 個 A + "…"）
-      const warningText = warningContents[0];
-      // 扣掉前綴「\n\n⚠️ 」，剩餘部分應不超過 500 字元 + "…"
-      const contentPart = warningText.replace(/^\n\n⚠️ /, "");
-      // 原始長度 600 字元，截斷後應為 500 字元 + "…"
-      expect(contentPart.length).toBeLessThanOrEqual(501); // 500 chars + "…"
-      expect(contentPart.endsWith("…")).toBe(true);
-    });
-
-    // ── 測試 24 ──────────────────────────────────────────────────────────────
-    it("測試 24：code=COMMAND_NOT_FOUND + fatal=true → 依舊 throw（code 不影響 fatal 分支）", async () => {
-      setupProviderMock([
-        {
-          type: "error",
-          message: "致命錯誤",
-          fatal: true,
-          code: "COMMAND_NOT_FOUND",
-        },
-      ]);
-
-      // fatal=true 即使有 COMMAND_NOT_FOUND code，也應 throw
-      await expect(
-        executeStreamingChat({
-          canvasId,
-          podId,
-          message,
-          abortable: false,
-          strategy: new NormalModeExecutionStrategy(canvasId),
-        }),
-      ).rejects.toThrow("串流處理發生嚴重錯誤");
-    });
-
-    // ── 測試 25 ──────────────────────────────────────────────────────────────
-    it("測試 25：normalizedEventToStreamEvent 將 NormalizedEvent.error 的 code 欄位帶入 StreamEvent.error（透過 handleErrorEvent 行為驗證）", async () => {
-      // 驗收策略：COMMAND_NOT_FOUND code 到達 handleErrorEvent 後，
-      // 會走「顯示原始訊息」分支而非「通用警告」分支，
-      // 代表 normalizedEventToStreamEvent 確實把 code 帶入了 StreamEvent。
-      const collectedContents: string[] = [];
-      asMock(socketService.emitToCanvas).mockImplementation(
-        (_cId: string, event: string, payload: unknown) => {
-          if (
-            event === WebSocketResponseEvents.POD_CLAUDE_CHAT_MESSAGE &&
-            typeof payload === "object" &&
-            payload !== null &&
-            "content" in payload &&
-            typeof (payload as { content: unknown }).content === "string"
-          ) {
-            collectedContents.push((payload as { content: string }).content);
-          }
-        },
-      );
-
-      setupProviderMock([
-        {
-          type: "error",
-          message: "code 帶入驗證訊息",
-          fatal: false,
-          code: "COMMAND_NOT_FOUND",
-        },
-        { type: "turn_complete" },
-      ]);
-
-      await executeStreamingChat({
-        canvasId,
-        podId,
-        message,
-        abortable: false,
-        strategy: new NormalModeExecutionStrategy(canvasId),
-      });
-
-      // 若 code 有被帶入，handleErrorEvent 會走白名單分支，顯示原始訊息
-      const warningContents = collectedContents.filter((c) => c.includes("⚠️"));
-      expect(warningContents.length).toBeGreaterThan(0);
-      // 原始訊息應出現在廣播中（證明 code 被正確傳遞到 handleErrorEvent）
-      expect(warningContents.some((c) => c.includes("code 帶入驗證訊息"))).toBe(
-        true,
-      );
-      // 通用警告文字不應出現
-      expect(
-        warningContents.some((c) => c.includes("發生錯誤，請稍後再試")),
-      ).toBe(false);
     });
   });
 });

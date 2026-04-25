@@ -63,31 +63,22 @@ const BASE64_RE = /^[A-Za-z0-9+/=]+$/;
  */
 const STDERR_MAX_BYTES = 64 * 1024;
 
-/**
- * 傳入 codex subprocess 的環境變數白名單（固定清單）。
- * 僅傳遞 codex 實際需要的 key，避免洩漏其他 API key、DB 連線字串等敏感資訊。
- */
+/** 傳入 codex subprocess 的環境變數白名單：僅傳遞 codex 實際需要的 key，避免洩漏敏感資訊 */
 const CODEX_ENV_WHITELIST = new Set([
-  "PATH", // 讓 codex 找到可執行檔與依賴
-  "HOME", // 讀取使用者設定檔
-  "LANG", // 避免 CLI 輸出亂碼
-  "LC_ALL", // locale override
-  "OPENAI_API_KEY", // codex 的 API 認證
-  "TERM", // 終端機類型
+  "PATH",
+  "HOME",
+  "LANG",
+  "LC_ALL",
+  "OPENAI_API_KEY",
+  "TERM",
 ]);
 
-/**
- * CODEX 特定環境變數額外允許清單（Set）。
- * 命名規則：Set / Array 白名單用 _WHITELIST 後綴。
- * 與 CODEX_ENV_WHITELIST 的區別：前者為系統通用 key，此處為 CODEX 專屬 key。
- * 使用 Set 以 O(1) has() 替代 Array.includes()，與 CODEX_ENV_WHITELIST 資料結構一致。
- */
+/** CODEX 專屬環境變數額外允許清單 */
 const CODEX_ENV_EXTRA_WHITELIST: ReadonlySet<string> = new Set([
   "CODEX_DISABLE_TELEMETRY",
   "CODEX_LOG_LEVEL",
 ]);
 
-/** 篩選環境變數，僅保留白名單與明確允許的 CODEX_* key */
 function buildCodexEnv(): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env)) {
@@ -98,6 +89,9 @@ function buildCodexEnv(): Record<string, string> {
   }
   return out;
 }
+
+/** process.env 在 process 生命週期內不會改變，模組載入時快取一次 */
+const CODEX_ENV = buildCodexEnv();
 
 /**
  * 將 stderr 文字中的敏感資訊遮蔽。
@@ -131,6 +125,17 @@ function buildPromptText(
     }
 
     if (block.type === "image") {
+      // 驗證 MIME 類型整體格式（拒絕含換行或控制字元）
+      const MIME_FORMAT_RE = /^image\/[a-z0-9.+-]+$/;
+      if (!MIME_FORMAT_RE.test(block.mediaType)) {
+        logger.warn(
+          "Chat",
+          "Warn",
+          "[CodexProvider] 附件 MIME 類型格式不合法，已略過",
+        );
+        continue;
+      }
+
       // 驗證 base64 格式，防止換行符等字元造成 prompt injection
       if (!BASE64_RE.test(block.base64Data)) {
         logger.warn(
@@ -141,7 +146,7 @@ function buildPromptText(
         continue;
       }
 
-      // 驗證 MIME 類型
+      // 驗證 MIME 副類型白名單
       const rawExt = block.mediaType
         .split("/")[1]
         ?.toLowerCase()
@@ -150,7 +155,7 @@ function buildPromptText(
         logger.warn(
           "Chat",
           "Warn",
-          `[CodexProvider] 附件 MIME 類型不在白名單內，已略過（mediaType: ${block.mediaType}）`,
+          "[CodexProvider] 附件 MIME 類型不在白名單內，已略過",
         );
         continue;
       }
@@ -162,6 +167,23 @@ function buildPromptText(
   }
 
   return parts.join("\n");
+}
+
+/** 組合新對話的 CLI 參數（無 resumeSessionId 或 sessionId 不合法時使用）。 */
+function buildNewSessionArgs(model: string, repoPath: string): string[] {
+  return [
+    "exec",
+    "-",
+    "--json",
+    "--skip-git-repo-check",
+    "--cd",
+    repoPath,
+    "--full-auto",
+    "-c",
+    "sandbox_workspace_write.network_access=true",
+    "--model",
+    model,
+  ];
 }
 
 /**
@@ -189,19 +211,7 @@ function buildCodexArgs(
         "Warn",
         `[CodexProvider] resumeSessionId 格式不合法，已略過並改為新對話：${resumeSessionId}`,
       );
-      return [
-        "exec",
-        "-",
-        "--json",
-        "--skip-git-repo-check",
-        "--cd",
-        repoPath,
-        "--full-auto",
-        "-c",
-        "sandbox_workspace_write.network_access=true",
-        "--model",
-        model,
-      ];
+      return buildNewSessionArgs(model, repoPath);
     }
 
     // 恢復對話模式：不帶 --model（由 session 決定）
@@ -219,20 +229,7 @@ function buildCodexArgs(
     ];
   }
 
-  // 新對話模式
-  return [
-    "exec",
-    "-",
-    "--json",
-    "--skip-git-repo-check",
-    "--cd",
-    repoPath,
-    "--full-auto",
-    "-c",
-    "sandbox_workspace_write.network_access=true",
-    "--model",
-    model,
-  ];
+  return buildNewSessionArgs(model, repoPath);
 }
 
 /**
@@ -268,7 +265,7 @@ function spawnCodexProcess(
     stdin: "pipe",
     stdout: "pipe",
     stderr: "pipe",
-    env: buildCodexEnv(),
+    env: CODEX_ENV,
   });
 }
 
@@ -336,7 +333,7 @@ async function* handleExitCode(
     return;
   }
 
-  // 未完成 turn 且非零 exit code → yield error event
+  // 未完成 turn 且非零 exit code → yield error event（使用者友善訊息，exit code 細節留在 log）
   logger.error(
     "Chat",
     "Error",
@@ -347,9 +344,52 @@ async function* handleExitCode(
   }
   yield {
     type: "error",
-    message: `Codex 執行時發生錯誤（exit code: ${exitCode}），請查閱伺服器日誌`,
+    message: "執行發生錯誤，請查閱伺服器日誌",
     fatal: false,
   };
+}
+
+/**
+ * 逐行解析 stdout ReadableStream，yield 解析成功的 NormalizedEvent。
+ * 透過 out 參數回傳 hasTurnComplete（generator 無法直接回傳值給 yield* 呼叫端）。
+ */
+async function* processStdoutLines(
+  stdout: ReadableStream<Uint8Array>,
+  abortSignal: AbortSignal,
+  out: { hasTurnComplete: boolean },
+): AsyncGenerator<NormalizedEvent> {
+  let buffer = "";
+
+  for await (const chunk of stdout) {
+    if (abortSignal.aborted) break;
+
+    buffer += Buffer.from(chunk as Uint8Array).toString("utf-8");
+
+    const lines = buffer.split("\n");
+    // 最後一段可能不完整，保留在 buffer
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      const event = normalize(line);
+      if (event !== null) {
+        if (event.type === "turn_complete") {
+          out.hasTurnComplete = true;
+        }
+        yield event;
+      }
+    }
+  }
+
+  // 處理 stdout 結束時剩餘的 buffer 內容
+  if (buffer.trim()) {
+    const event = normalize(buffer);
+    if (event !== null) {
+      if (event.type === "turn_complete") {
+        out.hasTurnComplete = true;
+      }
+      yield event;
+    }
+  }
 }
 
 /**
@@ -376,39 +416,12 @@ async function* streamCodexOutput(
   const stderrPromise = collectStderr(proc, abortSignal);
 
   // ── 逐行讀取 stdout ─────────────────────────────────────────────
-  let buffer = "";
-  let hasTurnComplete = false;
-
-  for await (const chunk of proc.stdout as ReadableStream<Uint8Array>) {
-    if (abortSignal.aborted) break;
-
-    buffer += Buffer.from(chunk as Uint8Array).toString("utf-8");
-
-    const lines = buffer.split("\n");
-    // 最後一段可能不完整，保留在 buffer
-    buffer = lines.pop() ?? "";
-
-    for (const line of lines) {
-      const event = normalize(line);
-      if (event !== null) {
-        if (event.type === "turn_complete") {
-          hasTurnComplete = true;
-        }
-        yield event;
-      }
-    }
-  }
-
-  // 處理 stdout 結束時剩餘的 buffer 內容
-  if (buffer.trim()) {
-    const event = normalize(buffer);
-    if (event !== null) {
-      if (event.type === "turn_complete") {
-        hasTurnComplete = true;
-      }
-      yield event;
-    }
-  }
+  const turnState = { hasTurnComplete: false };
+  yield* processStdoutLines(
+    proc.stdout as ReadableStream<Uint8Array>,
+    abortSignal,
+    turnState,
+  );
 
   // ── 等待 stderr 收集完成 ────────────────────────────────────────
   const stderrText = await stderrPromise;
@@ -419,7 +432,7 @@ async function* streamCodexOutput(
   yield* handleExitCode(
     exitCode,
     abortSignal,
-    hasTurnComplete,
+    turnState.hasTurnComplete,
     stderrText,
     podId,
   );
@@ -464,23 +477,35 @@ export class CodexProvider implements AgentProvider<CodexOptions> {
     };
   }
 
+  /**
+   * 準備執行所需的 CLI 參數與 prompt 文字。
+   * 驗證 model 格式，若不合法回傳 null（由 chat() 負責 yield error）。
+   */
+  private prepareExecution(
+    ctx: ChatRequestContext<CodexOptions>,
+  ): { codexArgs: string[]; promptText: string } | null {
+    const { message, workspacePath, resumeSessionId, options } = ctx;
+    const model = options?.model ?? this.metadata.defaultOptions.model;
+
+    if (!MODEL_RE.test(model)) {
+      return null;
+    }
+
+    const codexArgs = buildCodexArgs(resumeSessionId, model, workspacePath);
+    const promptText = buildPromptText(message);
+
+    return { codexArgs, promptText };
+  }
+
   async *chat(
     ctx: ChatRequestContext<CodexOptions>,
   ): AsyncIterable<NormalizedEvent> {
-    const {
-      podId,
-      message,
-      workspacePath,
-      resumeSessionId,
-      abortSignal,
-      options,
-    } = ctx;
+    const { podId, workspacePath, abortSignal, options } = ctx;
 
-    // 從 ctx.options 取得模型（Phase 3 起不再從 ctx.providerConfig 取值）
-    const model = options?.model ?? this.metadata.defaultOptions.model;
-
-    // ── 驗證 model（防止 CLI 旗標注入） ───────────────────────────────
-    if (!MODEL_RE.test(model)) {
+    // ── 準備執行（model 驗證 + CLI 參數 + prompt 轉換） ─────────────
+    const execution = this.prepareExecution(ctx);
+    if (execution === null) {
+      const model = options?.model ?? this.metadata.defaultOptions.model;
       yield {
         type: "error",
         message: `不合法的 model 名稱：${model}`,
@@ -489,12 +514,7 @@ export class CodexProvider implements AgentProvider<CodexOptions> {
       return;
     }
 
-    // ── 組合 CLI 參數 ──────────────────────────────────────────────
-    // workspacePath 已由上層 resolvePodCwd 統一解析，直接傳入作為 repoPath
-    const codexArgs = buildCodexArgs(resumeSessionId, model, workspacePath);
-
-    // ── 組合 prompt 文字 ───────────────────────────────────────────
-    const promptText = buildPromptText(message);
+    const { codexArgs, promptText } = execution;
 
     // ── Spawn subprocess ───────────────────────────────────────────
     let proc: Bun.Subprocess<"pipe", "pipe", "pipe"> | null = null;
@@ -526,13 +546,23 @@ export class CodexProvider implements AgentProvider<CodexOptions> {
     }
 
     // ── abort signal 處理 ──────────────────────────────────────────
-    // abort 由外部 abortRegistry 驅動 signal，subprocess 監聽 signal 自己退場；
-    // Phase 3 起不再使用 activeProcesses Map 自管 subprocess。
     const onAbort = (): void => {
       try {
         proc?.kill();
-      } catch {
-        // subprocess 已結束則忽略
+      } catch (err: unknown) {
+        // ESRCH：subprocess 已結束，屬正常情況直接忽略
+        if (
+          err instanceof Error &&
+          (err as NodeJS.ErrnoException).code === "ESRCH"
+        ) {
+          return;
+        }
+        logger.error(
+          "Chat",
+          "Warn",
+          "[CodexProvider] kill subprocess 時發生非預期錯誤",
+          err,
+        );
       }
     };
 

@@ -12,6 +12,7 @@ import { useChatStore } from "@/stores/chat";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useRunStore } from "@/stores/run/runStore";
 import { isMultiInstanceSourcePod } from "@/utils/multiInstanceGuard";
+import { useToast } from "@/composables/useToast";
 
 const props = defineProps<{
   pod: Pod;
@@ -24,6 +25,7 @@ const emit = defineEmits<{
 const chatStore = useChatStore();
 const connectionStore = useConnectionStore();
 const runStore = useRunStore();
+const { showErrorToast } = useToast();
 
 const messages = computed(() => chatStore.getMessages(props.pod.id));
 const isTyping = computed(() => props.pod.status === "chatting");
@@ -54,9 +56,13 @@ const handleSend = async (
   content: string,
   contentBlocks?: ContentBlock[],
 ): Promise<void> => {
-  if (!content.trim() && !contentBlocks) return;
+  if (!content.trim() && (!contentBlocks || contentBlocks.length === 0)) return;
 
-  await chatStore.sendMessage(props.pod.id, content, contentBlocks);
+  try {
+    await chatStore.sendMessage(props.pod.id, content, contentBlocks);
+  } catch {
+    showErrorToast("Pod", "訊息發送失敗");
+  }
 };
 
 const handleAbort = (): void => {

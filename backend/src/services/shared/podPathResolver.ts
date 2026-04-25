@@ -25,11 +25,14 @@ export function resolvePodCwd(pod: Pod): string {
     if (
       !isPathWithinDirectory(resolvedCwd, path.resolve(config.repositoriesRoot))
     ) {
+      // sanitize repositoryId：截前 64 字元 + 移除控制字元，避免 log injection
+      const truncatedRepoId = pod.repositoryId.slice(0, 64);
+      // eslint-disable-next-line no-control-regex
+      const safeRepoId = truncatedRepoId.replace(/[\x00-\x1f\x7f]/g, "");
       logger.error(
         "Pod",
         "Error",
-        `resolvePodCwd：repositoryId 路徑穿越，podId=${pod.id}`,
-        pod.repositoryId,
+        `resolvePodCwd：repositoryId 路徑穿越，podId=${pod.id}，repositoryId=${safeRepoId}`,
       );
       throw new Error("非法的工作目錄路徑");
     }

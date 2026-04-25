@@ -218,9 +218,6 @@ describe("applyIntegrationToolOptions：provider 不存在時跳過（不 crash�
       ],
     });
 
-    // 不應拋出錯誤
-    await expect(buildClaudeOptions(pod)).resolves.toBeDefined();
-
     const result = await buildClaudeOptions(pod);
 
     // 沒有合法的 integration，不應產出 mcpServers

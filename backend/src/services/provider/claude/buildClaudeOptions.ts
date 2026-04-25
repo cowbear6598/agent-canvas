@@ -75,8 +75,6 @@ export const BASE_ALLOWED_TOOLS: readonly string[] = [
   "WebSearch",
 ];
 
-export { resolvePodCwd } from "../../shared/podPathResolver.js";
-
 // ─── applyMcpServers ─────────────────────────────────────────────────────────
 
 /**
@@ -201,8 +199,27 @@ function buildIntegrationTool(
 // ─── applyIntegrationToolOptions ─────────────────────────────────────────────
 
 /**
+ * 收集 pod 所有 integrationBindings 並建構 IntegrationTool 清單。
+ * 無 sendMessage 或 provider 不存在的 binding 自動略過。
+ */
+function collectIntegrationTools(
+  pod: Pod,
+  runContext?: RunContext,
+): ReturnType<typeof buildIntegrationTool>[] {
+  if (!pod.integrationBindings?.length) return [];
+
+  return pod.integrationBindings
+    .map((binding) => {
+      const provider = integrationRegistry.get(binding.provider);
+      if (!provider?.sendMessage) return null;
+      return buildIntegrationTool(binding, provider, pod.id, runContext);
+    })
+    .filter((t) => t !== null);
+}
+
+/**
  * 套用 Integration Tool 設定，回傳包含 mcpServers 與 allowedTools 的 partial options。
- * 若 pod 無 integrationBindings，則原封不動回傳 base。
+ * 若 pod 無 integrationBindings 或無合法 tool，則原封不動回傳 base。
  *
  * 對應 claudeService.applyIntegrationToolOptions 的邏輯。
  */
@@ -211,15 +228,9 @@ function applyIntegrationToolOptions(
   base: { mcpServers?: Options["mcpServers"]; allowedTools: string[] },
   runContext?: RunContext,
 ): { mcpServers?: Options["mcpServers"]; allowedTools: string[] } {
-  if (!pod.integrationBindings?.length) return base;
+  const builtTools = collectIntegrationTools(pod, runContext);
 
-  const builtTools = pod.integrationBindings
-    .map((binding) => {
-      const provider = integrationRegistry.get(binding.provider);
-      if (!provider?.sendMessage) return null;
-      return buildIntegrationTool(binding, provider, pod.id, runContext);
-    })
-    .filter((t) => t !== null);
+  if (builtTools.length === 0) return base;
 
   const mcpServers: NonNullable<Options["mcpServers"]> = {
     ...base.mcpServers,
@@ -232,7 +243,7 @@ function applyIntegrationToolOptions(
   }
 
   return {
-    mcpServers: mcpServers as Options["mcpServers"],
+    mcpServers: { ...mcpServers },
     allowedTools,
   };
 }
@@ -281,6 +292,9 @@ export async function buildClaudeOptions(
 
   const baseOptions: Omit<ClaudeOptions, "model"> = {
     settingSources: ["project"],
+    // 安全敏感點：bypassPermissions 讓 Claude 繞過工具使用權限確認。
+    // 每次修改 BASE_ALLOWED_TOOLS 時須同步做 security review，
+    // 確認新增工具不會引入非預期的系統存取風險。
     permissionMode: "bypassPermissions",
     includePartialMessages: true,
     pathToClaudeCodeExecutable: getClaudeCodePath(),
@@ -298,10 +312,14 @@ export async function buildClaudeOptions(
     model,
   };
 
+  // sanitize pod.name：截前 50 字元 + 移除控制字元，避免 log injection
+  // eslint-disable-next-line no-control-regex
+  const safePodName = pod.name.slice(0, 50).replace(/[\x00-\x1f\x7f]/g, "");
+
   logger.log(
     "Chat",
     "Update",
-    `[buildClaudeOptions] Pod ${pod.name} 選項建構完成：model=${model}，allowedTools=${result.allowedTools.length}，mcpServers=${Object.keys(result.mcpServers ?? {}).length}，plugins=${result.plugins?.length ?? 0}`,
+    `[buildClaudeOptions] Pod ${safePodName} 選項建構完成：model=${model}，allowedTools=${result.allowedTools.length}，mcpServers=${Object.keys(result.mcpServers ?? {}).length}，plugins=${result.plugins?.length ?? 0}`,
   );
 
   return result;

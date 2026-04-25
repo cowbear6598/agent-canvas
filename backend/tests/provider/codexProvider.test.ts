@@ -248,7 +248,8 @@ describe("CodexProvider", () => {
     expect(errorEvents).toHaveLength(1);
 
     const e = errorEvents[0] as Extract<NormalizedEvent, { type: "error" }>;
-    expect(e.message).toContain("exit code: 1");
+    // exit code 細節只寫 server log，前端顯示使用者友善訊息
+    expect(e.message).toContain("執行發生錯誤");
     // 執行時錯誤 fatal=false（非 spawn 失敗）
     expect(e.fatal).toBe(false);
   });

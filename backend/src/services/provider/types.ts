@@ -87,19 +87,9 @@ export type NormalizedEvent =
       type: "error";
       message: string;
       fatal: boolean;
-      /**
-       * 結構化錯誤代碼，僅用於「可恢復使用者錯誤」，系統錯誤不帶 code。
-       * handleErrorEvent 透過 RECOVERABLE_CODES 白名單決定是否直接顯示原始訊息給使用者。
-       */
-      code?: RecoverableErrorCode | (string & Record<never, never>);
+      /** 結構化錯誤代碼，供未來擴充使用；系統錯誤不帶 code。 */
+      code?: string;
     };
-
-/**
- * 可恢復使用者錯誤的代碼 union type。
- * 僅用於「可恢復使用者操作錯誤」，對應 handleErrorEvent 的 RECOVERABLE_CODES 白名單。
- * 系統層錯誤（Provider 內部錯誤、網路異常等）不應帶此 code。
- */
-export type RecoverableErrorCode = "COMMAND_NOT_FOUND";
 
 /**
  * Provider chat 呼叫的請求 Context
