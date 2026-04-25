@@ -112,11 +112,11 @@ describe("Logger 顏色輸出", () => {
   });
 
   describe("功能類 Category 使用綠色", () => {
-    it("Skill Category 輸出包含綠色 ANSI 碼", async () => {
+    it("McpServer Category 輸出包含綠色 ANSI 碼", async () => {
       const logger = await getLogger();
-      logger.log("Skill", "Create", "Skill 建立成功: my-skill");
+      logger.log("McpServer", "Create", "MCP Server 建立成功");
       expect(consoleLogCalls[0]).toContain(ANSI_COLORS.GREEN);
-      expect(consoleLogCalls[0]).toContain("[Skill]");
+      expect(consoleLogCalls[0]).toContain("[McpServer]");
     });
 
     it("Command Category 輸出包含綠色 ANSI 碼", async () => {
@@ -176,9 +176,9 @@ describe("Logger 顏色輸出", () => {
 
     it("錯誤訊息覆蓋原本的 Category 顏色", async () => {
       const logger = await getLogger();
-      logger.error("Skill", "Error", "Skill 建立失敗");
+      logger.error("Command", "Error", "Command 建立失敗");
       expect(consoleErrorCalls[0]).toContain(ANSI_COLORS.RED);
-      // 確保不包含綠色（Skill 原本的顏色）
+      // 確保不包含綠色（Command 原本的顏色）
       expect(consoleErrorCalls[0]).not.toContain(ANSI_COLORS.GREEN);
     });
 
@@ -207,13 +207,13 @@ describe("Logger 顏色輸出", () => {
 
     it("只有 [Category] 部分有顏色（一般 log）", async () => {
       const logger = await getLogger();
-      logger.log("Skill", "Create", "Skill 建立成功");
+      logger.log("Command", "Create", "Command 建立成功");
       const output = consoleLogCalls[0];
 
       expect(output).toContain(ANSI_COLORS.GREEN);
       expect(output).toContain(ANSI_COLORS.RESET);
       expect(output).toMatch(
-        /\x1b\[32m\[Skill\]\x1b\[0m \[Create\] Skill 建立成功/,
+        /\x1b\[32m\[Command\]\x1b\[0m \[Create\] Command 建立成功/,
       );
     });
 

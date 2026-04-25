@@ -30,7 +30,7 @@ vi.mock("@/composables/useToast", () => ({
 /** Phase 2 後，完整的 Claude capabilities（需由 syncFromPayload 注入） */
 const CLAUDE_FULL_CAPABILITIES = {
   chat: true,
-  skill: true,
+  plugin: true,
   subAgent: true,
   repository: true,
   command: true,
@@ -42,7 +42,7 @@ const CLAUDE_FULL_CAPABILITIES = {
 /** Phase 2 後，Codex 的 capabilities（需由 syncFromPayload 注入） */
 const CODEX_CAPABILITIES = {
   chat: true,
-  skill: false,
+  plugin: false,
   subAgent: false,
   repository: false,
   command: true,
@@ -57,7 +57,7 @@ const CODEX_CAPABILITIES = {
  */
 const CONSERVATIVE_FALLBACK = {
   chat: true,
-  skill: false,
+  plugin: false,
   subAgent: false,
   repository: false,
   command: false,
@@ -117,12 +117,12 @@ describe("usePodCapabilities", () => {
       expect(isRunModeEnabled.value).toBe(false);
     });
 
-    it("isSkillEnabled 應為 false（Codex 不支援）", () => {
+    it("isPluginEnabled 應為 false（Codex 不支援）", () => {
       injectAllCapabilities();
       const podId = setupPod("codex");
-      const { isSkillEnabled } = usePodCapabilities(podId);
+      const { isPluginEnabled } = usePodCapabilities(podId);
 
-      expect(isSkillEnabled.value).toBe(false);
+      expect(isPluginEnabled.value).toBe(false);
     });
 
     it("isSubAgentEnabled 應為 false（Codex 不支援）", () => {
@@ -188,7 +188,7 @@ describe("usePodCapabilities", () => {
       injectAllCapabilities();
       const podId = setupPod("claude");
       const {
-        isSkillEnabled,
+        isPluginEnabled,
         isSubAgentEnabled,
         isRepositoryEnabled,
         isCommandEnabled,
@@ -197,7 +197,7 @@ describe("usePodCapabilities", () => {
         isRunModeEnabled,
       } = usePodCapabilities(podId);
 
-      expect(isSkillEnabled.value).toBe(true);
+      expect(isPluginEnabled.value).toBe(true);
       expect(isSubAgentEnabled.value).toBe(true);
       expect(isRepositoryEnabled.value).toBe(true);
       expect(isCommandEnabled.value).toBe(true);
@@ -237,7 +237,7 @@ describe("usePodCapabilities", () => {
     it("metadata 未載入時所有 isXxxEnabled 皆為 false（保守 fallback）", () => {
       const podId = ref("non-existent-pod");
       const {
-        isSkillEnabled,
+        isPluginEnabled,
         isSubAgentEnabled,
         isRepositoryEnabled,
         isCommandEnabled,
@@ -246,7 +246,7 @@ describe("usePodCapabilities", () => {
         isRunModeEnabled,
       } = usePodCapabilities(podId);
 
-      expect(isSkillEnabled.value).toBe(false);
+      expect(isPluginEnabled.value).toBe(false);
       expect(isSubAgentEnabled.value).toBe(false);
       expect(isRepositoryEnabled.value).toBe(false);
       expect(isCommandEnabled.value).toBe(false);
@@ -279,7 +279,7 @@ describe("usePodCapabilities", () => {
       expect(isCodex.value).toBe(true);
     });
 
-    it("從 codex Pod 切換到 claude Pod 後，isSkillEnabled 應從 false 變為 true", async () => {
+    it("從 codex Pod 切換到 claude Pod 後，isPluginEnabled 應從 false 變為 true", async () => {
       injectAllCapabilities();
       const podStore = usePodStore();
       const claudePod = createMockPod({ id: "pod-claude", provider: "claude" });
@@ -287,16 +287,16 @@ describe("usePodCapabilities", () => {
       podStore.pods = [claudePod, codexPod];
 
       const podId = ref("pod-codex");
-      const { isSkillEnabled } = usePodCapabilities(podId);
+      const { isPluginEnabled } = usePodCapabilities(podId);
 
-      // 初始為 codex → isSkillEnabled false
-      expect(isSkillEnabled.value).toBe(false);
+      // 初始為 codex → isPluginEnabled false
+      expect(isPluginEnabled.value).toBe(false);
 
       // 切換到 claude pod
       podId.value = "pod-claude";
       await nextTick();
 
-      expect(isSkillEnabled.value).toBe(true);
+      expect(isPluginEnabled.value).toBe(true);
     });
 
     it("從有效 Pod 切換到不存在的 podId，isCodex 變 false，capabilities 退回 claude fallback", async () => {
@@ -326,25 +326,25 @@ describe("usePodCapabilities", () => {
   // ─── Case 5：capability store 變動時 reactivity ────────────────────────────
 
   describe("capability store 變動時 composable 應跟著反映", () => {
-    it("syncFromPayload 將 claude 的 skill 設為 false 後，isSkillEnabled 應變為 false", async () => {
+    it("syncFromPayload 將 claude 的 plugin 設為 false 後，isPluginEnabled 應變為 false", async () => {
       injectAllCapabilities();
       const podId = setupPod("claude");
       const capabilityStore = useProviderCapabilityStore();
-      const { isSkillEnabled } = usePodCapabilities(podId);
+      const { isPluginEnabled } = usePodCapabilities(podId);
 
-      // metadata 已注入 → 初始 claude skill: true
-      expect(isSkillEnabled.value).toBe(true);
+      // metadata 已注入 → 初始 claude plugin: true
+      expect(isPluginEnabled.value).toBe(true);
 
-      // 模擬後端回傳 claude 功能表，將 skill 關閉
+      // 模擬後端回傳 claude 功能表，將 plugin 關閉
       capabilityStore.syncFromPayload([
         {
           name: "claude",
-          capabilities: { ...CLAUDE_FULL_CAPABILITIES, skill: false },
+          capabilities: { ...CLAUDE_FULL_CAPABILITIES, plugin: false },
         },
       ]);
       await nextTick();
 
-      expect(isSkillEnabled.value).toBe(false);
+      expect(isPluginEnabled.value).toBe(false);
     });
 
     it("syncFromPayload 將 codex 的 runMode 設為 true 後，isRunModeEnabled 應變為 true", async () => {
@@ -388,6 +388,33 @@ describe("usePodCapabilities", () => {
       await nextTick();
 
       expect(capabilities.value.mcp).toBe(false);
+    });
+  });
+
+  // ─── Case 6：isPluginEnabled — 兩個 provider 皆支援 plugin ─────────────────
+
+  describe("isPluginEnabled — claude 與 codex 皆可回傳 true", () => {
+    it("Claude provider 的 isPluginEnabled 應為 true", () => {
+      injectAllCapabilities();
+      const podId = setupPod("claude");
+      const { isPluginEnabled } = usePodCapabilities(podId);
+
+      expect(isPluginEnabled.value).toBe(true);
+    });
+
+    it("Codex provider 的 isPluginEnabled 在 plugin:true 時應為 true", () => {
+      const capabilityStore = useProviderCapabilityStore();
+      // 注入 codex plugin: true（後端開放 plugin 給 codex 時的狀態）
+      capabilityStore.syncFromPayload([
+        {
+          name: "codex",
+          capabilities: { ...CODEX_CAPABILITIES, plugin: true },
+        },
+      ]);
+      const podId = setupPod("codex");
+      const { isPluginEnabled } = usePodCapabilities(podId);
+
+      expect(isPluginEnabled.value).toBe(true);
     });
   });
 });

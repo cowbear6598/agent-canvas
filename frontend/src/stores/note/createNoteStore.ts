@@ -22,7 +22,6 @@ import { buildCRUDActions } from "./buildCRUDActions";
 import { t } from "@/i18n";
 
 const STORE_TO_CATEGORY_MAP: Record<string, ToastCategory> = {
-  skill: "Skill",
   repository: "Repository",
   subAgent: "SubAgent",
   command: "Command",
@@ -37,7 +36,7 @@ function findItemById<T extends { id: string }>(
 }
 
 interface NoteItem extends BaseNote {
-  // index signature 允許透過 config.itemIdField（如 'commandId'、'skillId'）進行動態 key 查找
+  // index signature 允許透過 config.itemIdField（如 'commandId'）進行動態 key 查找
   [key: string]: unknown;
 }
 

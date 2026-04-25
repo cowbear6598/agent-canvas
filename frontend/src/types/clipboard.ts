@@ -11,20 +11,9 @@ export interface CopiedPod {
   provider: PodProvider;
   /** Provider 對應的設定（複製時保留，貼上時還原） */
   providerConfig: ProviderConfig;
-  skillIds?: string[];
   subAgentIds?: string[];
   repositoryId?: string | null;
   commandId?: string | null;
-}
-
-export interface CopiedSkillNote {
-  id: string;
-  skillId: string;
-  name: string;
-  x: number;
-  y: number;
-  boundToPodId: string | null;
-  originalPosition: { x: number; y: number } | null;
 }
 
 export interface CopiedRepositoryNote {

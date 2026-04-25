@@ -48,7 +48,7 @@ function mountPickerWithDefaults(options?: {
         name: "claude",
         capabilities: {
           chat: true,
-          skill: true,
+          plugin: true,
           subAgent: true,
           repository: true,
           command: true,
@@ -68,7 +68,7 @@ function mountPickerWithDefaults(options?: {
         name: "codex",
         capabilities: {
           chat: true,
-          skill: false,
+          plugin: false,
           subAgent: false,
           repository: false,
           command: false,
@@ -199,7 +199,7 @@ describe("ProviderPicker", () => {
           name: "claude",
           capabilities: {
             chat: true,
-            skill: true,
+            plugin: true,
             subAgent: true,
             repository: true,
             command: true,

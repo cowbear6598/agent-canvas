@@ -19,7 +19,6 @@ import type {
   ToolUseStatus,
 } from "@/types/chat";
 import type { BaseNote } from "@/types/note";
-import type { SkillNote } from "@/types/skill";
 import type { Repository, RepositoryNote } from "@/types/repository";
 import type { SubAgentNote, SubAgent } from "@/types/subAgent";
 import type { CommandNote } from "@/types/command";
@@ -91,7 +90,6 @@ export function createMockPod(overrides?: Partial<Pod>): Pod {
     output: [],
     rotation: 0,
     status: "idle" as PodStatus,
-    skillIds: [],
     subAgentIds: [],
     repositoryId: null,
     multiInstance: false,
@@ -164,9 +162,9 @@ export function createMockAssistantMessage(
  * 建立 Mock Note (依類型)
  */
 export function createMockNote(
-  type: "skill" | "repository" | "subAgent" | "command" | "mcpServer",
+  type: "repository" | "subAgent" | "command" | "mcpServer",
   overrides?: Partial<BaseNote>,
-): SkillNote | RepositoryNote | SubAgentNote | CommandNote | McpServerNote {
+): RepositoryNote | SubAgentNote | CommandNote | McpServerNote {
   const baseNote: BaseNote = {
     id: `note-${++noteCounter}`,
     name: `Note ${noteCounter}`,
@@ -178,12 +176,6 @@ export function createMockNote(
   };
 
   switch (type) {
-    case "skill":
-      return {
-        ...baseNote,
-        skillId: `skill-${noteCounter}`,
-      } as SkillNote;
-
     case "repository":
       return {
         ...baseNote,

@@ -1,5 +1,4 @@
 import type { Pod } from "../pod.js";
-import type { SkillNote } from "../skillNote.js";
 import type { RepositoryNote } from "../repositoryNote.js";
 import type { SubAgentNote } from "../subAgentNote.js";
 import type { CommandNote } from "../commandNote.js";
@@ -10,7 +9,6 @@ import type { I18nError } from "../../utils/i18nError.js";
 export interface PasteError {
   type:
     | "pod"
-    | "skillNote"
     | "repositoryNote"
     | "subAgentNote"
     | "commandNote"
@@ -23,7 +21,6 @@ export interface CanvasPasteResultPayload {
   requestId: string;
   success: boolean;
   createdPods: Pod[];
-  createdSkillNotes: SkillNote[];
   createdRepositoryNotes: RepositoryNote[];
   createdSubAgentNotes: SubAgentNote[];
   createdCommandNotes: CommandNote[];

@@ -2,7 +2,6 @@ import { WebSocketResponseEvents } from "../schemas";
 import type {
   CanvasPasteResultPayload,
   PasteError,
-  SkillNote,
   RepositoryNote,
   SubAgentNote,
   CommandNote,
@@ -46,7 +45,6 @@ export const handleCanvasPaste = withCanvasId<CanvasPastePayload>(
   ): Promise<void> => {
     const {
       pods,
-      skillNotes,
       repositoryNotes,
       subAgentNotes,
       commandNotes,
@@ -65,12 +63,6 @@ export const handleCanvasPaste = withCanvasId<CanvasPastePayload>(
     );
 
     const noteResultMap = {
-      skill: createPastedNotesByType(
-        "skill",
-        canvasId,
-        skillNotes,
-        podIdMapping,
-      ),
       repository: createPastedNotesByType(
         "repository",
         canvasId,
@@ -125,7 +117,6 @@ export const handleCanvasPaste = withCanvasId<CanvasPastePayload>(
       requestId,
       success: errors.length === 0,
       createdPods,
-      createdSkillNotes: noteResultMap.skill.notes as SkillNote[],
       createdRepositoryNotes: noteResultMap.repository
         .notes as RepositoryNote[],
       createdSubAgentNotes: noteResultMap.subAgent.notes as SubAgentNote[],
@@ -148,8 +139,6 @@ export const handleCanvasPaste = withCanvasId<CanvasPastePayload>(
 
     const pasteItems: string[] = [];
     if (createdPods.length > 0) pasteItems.push(`${createdPods.length} pod`);
-    if (response.createdSkillNotes.length > 0)
-      pasteItems.push(`${response.createdSkillNotes.length} skill`);
     if (response.createdRepositoryNotes.length > 0)
       pasteItems.push(`${response.createdRepositoryNotes.length} repository`);
     if (response.createdSubAgentNotes.length > 0)

@@ -1,14 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted } from "vue";
-import { Download, Unplug, Puzzle, ChevronRight } from "lucide-vue-next";
+import { Download, Unplug } from "lucide-vue-next";
 import { useI18n } from "vue-i18n";
 import { downloadPodDirectory } from "@/services/podApi";
 import { getActiveCanvasIdOrWarn } from "@/utils/canvasGuard";
 import { generateUUID } from "@/services/utils";
 import { usePodStore } from "@/stores";
 import { getAllProviders } from "@/integration/providerRegistry";
-import PodPluginSubMenu from "./PodPluginSubMenu.vue";
-import { usePluginSubMenu } from "@/composables/canvas/usePluginSubMenu";
 import { useDownloadProgress } from "@/composables/canvas/useDownloadProgress";
 
 interface Props {
@@ -33,28 +31,16 @@ const providers = getAllProviders();
 const downloadProgress = useDownloadProgress();
 
 const menuRef = ref<HTMLElement | null>(null);
-const subMenuRef = ref<InstanceType<typeof PodPluginSubMenu> | null>(null);
-
-const {
-  showPluginSubMenu,
-  pluginMenuPosition,
-  handlePluginMenuEnter,
-  handlePluginMenuLeave,
-  handlePluginSubMenuCancelClose,
-  handlePluginSubMenuClose,
-} = usePluginSubMenu();
 
 const isBound = (provider: string): boolean =>
   bindings.value.some((b) => b.provider === provider);
 
 const handleOutsideClick = (event: MouseEvent): void => {
   const menuEl = menuRef.value;
-  const subMenuEl = subMenuRef.value?.$el as HTMLElement | undefined;
 
   const insideMenu = menuEl?.contains(event.target as Node) ?? false;
-  const insideSubMenu = subMenuEl?.contains(event.target as Node) ?? false;
 
-  if (insideMenu || insideSubMenu) return;
+  if (insideMenu) return;
 
   // 右鍵點選單外部：關閉選單，讓事件繼續傳播到 canvas/pod
   // 左鍵點選單外部：關閉選單並停止事件傳播
@@ -131,24 +117,7 @@ const handleDisconnect = (provider: string): void => {
       }}</span>
     </button>
 
-    <div class="my-1 border-t border-border" />
-
-    <button
-      class="w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary"
-      @mouseenter="handlePluginMenuEnter"
-      @mouseleave="handlePluginMenuLeave"
-    >
-      <Puzzle :size="14" />
-      <span class="font-mono flex-1">{{
-        $t("canvas.podContextMenu.plugin")
-      }}</span>
-      <ChevronRight :size="12" />
-    </button>
-
-    <template
-      v-for="provider in providers"
-      :key="provider.name"
-    >
+    <template v-for="provider in providers" :key="provider.name">
       <div class="my-1 border-t border-border" />
 
       <button
@@ -156,10 +125,7 @@ const handleDisconnect = (provider: string): void => {
         class="w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary"
         @click="handleConnect(provider.name)"
       >
-        <component
-          :is="provider.icon"
-          :size="14"
-        />
+        <component :is="provider.icon" :size="14" />
         <span class="font-mono">{{
           $t("canvas.podContextMenu.connect", { label: provider.label })
         }}</span>
@@ -177,13 +143,4 @@ const handleDisconnect = (provider: string): void => {
       </button>
     </template>
   </div>
-
-  <PodPluginSubMenu
-    v-if="showPluginSubMenu"
-    ref="subMenuRef"
-    :pod-id="podId"
-    :position="pluginMenuPosition"
-    @cancel-close="handlePluginSubMenuCancelClose"
-    @close="handlePluginSubMenuClose"
-  />
 </template>

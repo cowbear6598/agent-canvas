@@ -3,9 +3,11 @@ import type {
   PodListResultPayload,
   PodGetResultPayload,
   PodScheduleSetPayload,
+  PodPluginsSetPayload,
   Pod,
   ScheduleConfig,
 } from "../types";
+import { isPodBusy } from "../types/index.js";
 import type {
   PodCreatePayload,
   PodListPayload,
@@ -439,6 +441,22 @@ export const handlePodSetPlugins = withCanvasId<PodSetPluginsPayload>(
       return;
     }
 
+    if (isPodBusy(existingPod.status)) {
+      const busyResponse: PodPluginsSetPayload = {
+        requestId,
+        canvasId,
+        podId,
+        success: false,
+        reason: "pod-busy",
+      };
+      socketService.emitToConnection(
+        connectionId,
+        WebSocketResponseEvents.POD_PLUGINS_SET,
+        busyResponse,
+      );
+      return;
+    }
+
     const result = podStore.update(canvasId, podId, { pluginIds });
     if (!result) {
       emitError(
@@ -452,15 +470,16 @@ export const handlePodSetPlugins = withCanvasId<PodSetPluginsPayload>(
       return;
     }
 
+    const successResponse: PodPluginsSetPayload = {
+      requestId,
+      canvasId,
+      success: true,
+      pod: result.pod,
+    };
     socketService.emitToCanvas(
       canvasId,
       WebSocketResponseEvents.POD_PLUGINS_SET,
-      {
-        requestId,
-        canvasId,
-        success: true,
-        pod: result.pod,
-      },
+      successResponse,
     );
   },
 );

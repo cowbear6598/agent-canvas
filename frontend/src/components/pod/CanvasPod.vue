@@ -31,6 +31,7 @@ import PodActions from "@/components/pod/PodActions.vue";
 import PodModelSelector from "@/components/pod/PodModelSelector.vue";
 import IntegrationStatusIcon from "@/components/integration/IntegrationStatusIcon.vue";
 import ScheduleModal from "@/components/canvas/ScheduleModal.vue";
+import PluginPopover from "@/components/pod/PluginPopover.vue";
 
 const props = defineProps<{
   pod: Pod;
@@ -40,7 +41,6 @@ const {
   podStore,
   viewportStore,
   selectionStore,
-  skillStore,
   subAgentStore,
   repositoryStore,
   commandStore,
@@ -68,9 +68,6 @@ const isUnknownProvider = computed(
 );
 
 const isActive = computed(() => props.pod.id === podStore.activePodId);
-const boundSkillNotes = computed(() =>
-  skillStore.getNotesByPodId(props.pod.id),
-);
 const boundSubAgentNotes = computed(() =>
   subAgentStore.getNotesByPodId(props.pod.id),
 );
@@ -176,7 +173,6 @@ const { isDragging, startSingleDrag } = usePodDrag(
 );
 
 const { handleNoteDrop, handleNoteRemove } = usePodNoteBinding(computedPodId, {
-  skillStore,
   subAgentStore,
   repositoryStore,
   commandStore,
@@ -194,9 +190,27 @@ const {
   handleCancelClear,
 } = useWorkflowClear(computedPodId, { chatStore, podStore, connectionStore });
 
+// Plugin notch 相關狀態
+const pluginActiveCount = computed(() => props.pod.pluginIds?.length ?? 0);
+
+// error 狀態仍允許切換 plugin，故不含 'error'
+const isPodBusy = computed(
+  () => props.pod.status === "chatting" || props.pod.status === "summarizing",
+);
+
+const showPluginPopover = ref(false);
+const pluginAnchorRect = ref<DOMRect | null>(null);
+
+const handlePluginClick = (event: MouseEvent): void => {
+  pluginAnchorRect.value = (
+    event.currentTarget as HTMLElement
+  ).getBoundingClientRect();
+  showPluginPopover.value = true;
+};
+
 // 合併成單一 CSS selector 字串，closest() 一次查詢取代原本最差 5 次 DOM 遍歷
 const SLOT_CLASSES =
-  ".pod-skill-slot, .pod-subagent-slot, .pod-repository-slot, .pod-command-slot, .pod-mcp-server-slot";
+  ".pod-plugin-slot, .pod-subagent-slot, .pod-repository-slot, .pod-command-slot, .pod-mcp-server-slot";
 
 const shouldBlockForSlot = (target: HTMLElement): boolean => {
   return target.closest(SLOT_CLASSES) !== null;
@@ -331,7 +345,7 @@ const handleContextMenu = (e: MouseEvent): void => {
     />
 
     <div
-      class="relative pod-wrapper pod-with-skill-notch pod-with-subagent-notch pod-with-mcp-server-notch"
+      class="relative pod-wrapper pod-with-plugin-notch pod-with-subagent-notch pod-with-mcp-server-notch"
       :class="{ dragging: isDragging || isBatchDragging }"
       :style="{ '--pod-rotation': `${pod.rotation}deg` }"
     >
@@ -346,12 +360,13 @@ const handleContextMenu = (e: MouseEvent): void => {
       <PodSlots
         :pod-id="pod.id"
         :pod-rotation="pod.rotation"
-        :bound-skill-notes="boundSkillNotes"
+        :plugin-active-count="pluginActiveCount"
+        :provider="pod.provider"
         :bound-sub-agent-notes="boundSubAgentNotes"
         :bound-repository-note="boundRepositoryNote"
         :bound-command-note="boundCommandNote"
         :bound-mcp-server-notes="boundMcpServerNotes"
-        @skill-dropped="(noteId) => handleNoteDrop('skill', noteId)"
+        @plugin-clicked="handlePluginClick"
         @subagent-dropped="(noteId) => handleNoteDrop('subAgent', noteId)"
         @repository-dropped="(noteId) => handleNoteDrop('repository', noteId)"
         @repository-removed="() => handleNoteRemove('repository')"
@@ -448,6 +463,15 @@ const handleContextMenu = (e: MouseEvent): void => {
         @confirm="handleScheduleConfirm"
         @delete="handleScheduleDelete"
         @toggle="handleScheduleToggle"
+      />
+
+      <PluginPopover
+        v-if="showPluginPopover && pluginAnchorRect"
+        :pod-id="pod.id"
+        :anchor-rect="pluginAnchorRect"
+        :busy="isPodBusy"
+        :provider="pod.provider"
+        @close="showPluginPopover = false"
       />
     </div>
   </div>

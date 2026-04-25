@@ -44,7 +44,6 @@ describe("Database", () => {
         "pod_manifests",
         "pod_mcp_server_ids",
         "pod_plugin_ids",
-        "pod_skill_ids",
         "pod_sub_agent_ids",
         "pods",
         "repository_metadata",
@@ -132,9 +131,6 @@ describe("Database", () => {
         "INSERT INTO messages (id, pod_id, canvas_id, role, content, timestamp) VALUES ('m1', 'p1', 'c1', 'user', 'hello', '2024-01-01')",
       );
       db.exec(
-        "INSERT INTO pod_skill_ids (pod_id, skill_id) VALUES ('p1', 's1')",
-      );
-      db.exec(
         "INSERT INTO pod_sub_agent_ids (pod_id, sub_agent_id) VALUES ('p1', 'sa1')",
       );
       db.exec(
@@ -176,13 +172,6 @@ describe("Database", () => {
       ).toBe(0);
       expect(
         (
-          db.prepare("SELECT COUNT(*) as count FROM pod_skill_ids").get() as {
-            count: number;
-          }
-        ).count,
-      ).toBe(0);
-      expect(
-        (
           db
             .prepare("SELECT COUNT(*) as count FROM pod_sub_agent_ids")
             .get() as { count: number }
@@ -218,12 +207,6 @@ describe("Database", () => {
         "INSERT INTO integration_bindings (id, pod_id, canvas_id, provider, app_id, resource_id) VALUES ('ib1', 'p1', 'c1', 'slack', 'ia1', 'res1')",
       );
       db.exec(
-        "INSERT INTO pod_skill_ids (pod_id, skill_id) VALUES ('p1', 's1')",
-      );
-      db.exec(
-        "INSERT INTO pod_skill_ids (pod_id, skill_id) VALUES ('p1', 's2')",
-      );
-      db.exec(
         "INSERT INTO pod_sub_agent_ids (pod_id, sub_agent_id) VALUES ('p1', 'sa1')",
       );
       db.exec(
@@ -240,13 +223,6 @@ describe("Database", () => {
           db
             .prepare("SELECT COUNT(*) as count FROM integration_bindings")
             .get() as { count: number }
-        ).count,
-      ).toBe(0);
-      expect(
-        (
-          db.prepare("SELECT COUNT(*) as count FROM pod_skill_ids").get() as {
-            count: number;
-          }
         ).count,
       ).toBe(0);
       expect(
@@ -327,31 +303,36 @@ describe("Database", () => {
         $providerConfigJson: JSON.stringify({ model: "opus" }),
       });
 
-      stmts.podSkillIds.insert.run({ $podId: "p1", $skillId: "skill-1" });
-      stmts.podSkillIds.insert.run({ $podId: "p1", $skillId: "skill-2" });
+      stmts.podSubAgentIds.insert.run({ $podId: "p1", $subAgentId: "agent-1" });
+      stmts.podSubAgentIds.insert.run({ $podId: "p1", $subAgentId: "agent-2" });
 
-      const skills = stmts.podSkillIds.selectByPodId.all("p1") as {
-        skill_id: string;
+      const agents = stmts.podSubAgentIds.selectByPodId.all("p1") as {
+        sub_agent_id: string;
       }[];
-      expect(skills).toHaveLength(2);
-      expect(skills.map((s) => s.skill_id).sort()).toEqual([
-        "skill-1",
-        "skill-2",
+      expect(agents).toHaveLength(2);
+      expect(agents.map((a) => a.sub_agent_id).sort()).toEqual([
+        "agent-1",
+        "agent-2",
       ]);
 
       // INSERT OR IGNORE 重複不報錯
-      stmts.podSkillIds.insert.run({ $podId: "p1", $skillId: "skill-1" });
-      const skillsAfterDup = stmts.podSkillIds.selectByPodId.all(
+      stmts.podSubAgentIds.insert.run({ $podId: "p1", $subAgentId: "agent-1" });
+      const agentsAfterDup = stmts.podSubAgentIds.selectByPodId.all(
         "p1",
       ) as unknown[];
-      expect(skillsAfterDup).toHaveLength(2);
+      expect(agentsAfterDup).toHaveLength(2);
 
-      stmts.podSkillIds.deleteOne.run({ $podId: "p1", $skillId: "skill-1" });
-      const skillsAfterDelete = stmts.podSkillIds.selectByPodId.all("p1") as {
-        skill_id: string;
+      stmts.podSubAgentIds.deleteOne.run({
+        $podId: "p1",
+        $subAgentId: "agent-1",
+      });
+      const agentsAfterDelete = stmts.podSubAgentIds.selectByPodId.all(
+        "p1",
+      ) as {
+        sub_agent_id: string;
       }[];
-      expect(skillsAfterDelete).toHaveLength(1);
-      expect(skillsAfterDelete[0].skill_id).toBe("skill-2");
+      expect(agentsAfterDelete).toHaveLength(1);
+      expect(agentsAfterDelete[0].sub_agent_id).toBe("agent-2");
     });
 
     it("應該能操作 connection", () => {

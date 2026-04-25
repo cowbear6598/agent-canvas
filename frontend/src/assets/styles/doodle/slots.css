@@ -172,47 +172,74 @@
 }
 
 /* ===================================
-   Skill Slot
+   Plugin Slot
    =================================== */
 
-/* Pod Skill Slot */
-.pod-skill-slot {
+/* Pod Plugin Slot（實線方框，區別於其他 dashed notch） */
+.pod-plugin-slot {
   position: relative;
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  background: transparent;
+  border: 2px solid var(--doodle-ink);
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: var(--font-mono), monospace, sans-serif;
+  transition:
+    background-color 0.2s ease,
+    box-shadow 0.2s ease,
+    color 0.2s ease;
+  white-space: nowrap;
+  pointer-events: auto;
 }
 
-.pod-skill-slot::before {
-  content: "";
+.pod-plugin-slot:hover {
+  background: var(--secondary);
+  box-shadow: 2px 2px 0 oklch(0.4 0.02 50 / 0.3);
+}
+
+.pod-plugin-slot[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Plugin Slot 啟用狀態（有 plugin 已安裝並啟用，Claude 專用） */
+.pod-plugin-slot--active {
+  background: var(--doodle-sand);
+  border-color: var(--doodle-ink);
+  box-shadow: 2px 2px 0 oklch(0.4 0.02 50 / 0.3);
+  color: var(--doodle-ink);
+}
+
+.pod-plugin-slot--active:hover {
+  background: var(--doodle-sand);
+  box-shadow: 3px 3px 0 oklch(0.4 0.02 50 / 0.4);
+}
+
+/* Plugin Slot Codex 狀態（永遠顯示沙色，不需 toggle，僅供資訊展示） */
+.pod-plugin-slot--codex {
+  background: var(--doodle-sand);
+  border-color: var(--doodle-ink);
+  box-shadow: 2px 2px 0 oklch(0.4 0.02 50 / 0.3);
+  color: var(--doodle-ink);
+}
+
+.pod-plugin-slot--codex:hover {
+  background: var(--doodle-sand);
+  box-shadow: 3px 3px 0 oklch(0.4 0.02 50 / 0.4);
+}
+
+/* Plugin Slot 容器位置（POD 左側） */
+.pod-plugin-notch-area {
   position: absolute;
-  left: -16px;
-  top: 0;
-  width: 16px;
-  height: 100%;
-}
-
-.pod-skill-slot.has-notes {
-  background: var(--doodle-light-blue);
-  border-style: dashed;
-  transform: translateX(50%);
-}
-
-.pod-skill-slot.has-notes:hover {
-  transform: translateX(50%) translate(-0.5px, -0.5px);
-}
-
-.pod-skill-slot.inserting {
-  animation: slide-into-slot 0.3s ease-out;
-}
-
-/* Skill Slot 容器位置 */
-.pod-skill-notch-area {
   left: 0;
   top: 18px;
   transform: translateX(-100%);
-}
-
-/* Pod Skill Menu Scrollable max-height 與其他不同，保持獨立 */
-.pod-skill-menu-scrollable {
-  max-height: calc(30px * 5 + 8px);
+  z-index: -1;
+  pointer-events: none;
 }
 
 /* ===================================

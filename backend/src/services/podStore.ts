@@ -131,7 +131,7 @@ class PodStore {
 
   /**
    * 通用 batch group by 輔助函式：將 rows 按 keyFn 分組，valueFn 萃取每筆的值。
-   * 消除 skill/subAgent/mcpServer/plugin 四段 for-loop 的重複結構。
+   * 消除多段 for-loop 的重複結構。
    */
   private batchGroupBy<T>(
     rows: T[],
@@ -149,7 +149,6 @@ class PodStore {
 
   /** 合法的 tableName 白名單，防止 SQL injection */
   private static readonly ALLOWED_RELATION_TABLES = new Set([
-    "pod_skill_ids",
     "pod_sub_agent_ids",
     "pod_mcp_server_ids",
     "pod_plugin_ids",
@@ -157,7 +156,6 @@ class PodStore {
 
   /** 合法的 valueColumn 白名單，防止 SQL injection */
   private static readonly ALLOWED_RELATION_COLUMNS = new Set([
-    "skill_id",
     "sub_agent_id",
     "mcp_server_id",
     "plugin_id",
@@ -208,19 +206,17 @@ class PodStore {
   }
 
   /**
-   * 批次載入多個 Pod 的關聯表資料（skill、subAgent、mcpServer、plugin）。
+   * 批次載入多個 Pod 的關聯表資料（subAgent、mcpServer、plugin）。
    * 使用 WHERE pod_id IN (...) 一次查詢，避免 N+1 問題。
    * PreparedStatement 以 "tableName:n" 為 key 快取，不同 relation 類別不會互相命中。
    */
   private batchLoadRelations(podIds: string[]): {
-    skillIds: Map<string, string[]>;
     subAgentIds: Map<string, string[]>;
     mcpServerIds: Map<string, string[]>;
     pluginIds: Map<string, string[]>;
   } {
     if (podIds.length === 0) {
       return {
-        skillIds: new Map(),
         subAgentIds: new Map(),
         mcpServerIds: new Map(),
         pluginIds: new Map(),
@@ -230,12 +226,6 @@ class PodStore {
     const placeholders = podIds.map(() => "?").join(", ");
 
     return {
-      skillIds: this.loadRelation(
-        "pod_skill_ids",
-        "skill_id",
-        podIds,
-        placeholders,
-      ),
       subAgentIds: this.loadRelation(
         "pod_sub_agent_ids",
         "sub_agent_id",
@@ -447,7 +437,6 @@ class PodStore {
         y: row.y,
         rotation: row.rotation,
         sessionId: row.session_id,
-        skillIds: relations.skillIds.get(row.id) ?? [],
         subAgentIds: relations.subAgentIds.get(row.id) ?? [],
         mcpServerIds: relations.mcpServerIds.get(row.id) ?? [],
         pluginIds: relations.pluginIds.get(row.id) ?? [],
@@ -478,17 +467,13 @@ class PodStore {
   }
 
   /**
-   * 私有 helper：將 Pod 的四張 join table（skillIds / subAgentIds / mcpServerIds / pluginIds）
+   * 私有 helper：將 Pod 的三張 join table（subAgentIds / mcpServerIds / pluginIds）
    * 批次寫入 DB。必須在同一個 transaction 內被呼叫（由 create / update 統一保證）。
    */
   private insertJoinTableIds(
     podId: string,
-    pod: Pick<Pod, "skillIds" | "subAgentIds" | "mcpServerIds" | "pluginIds">,
+    pod: Pick<Pod, "subAgentIds" | "mcpServerIds" | "pluginIds">,
   ): void {
-    for (const skillId of pod.skillIds) {
-      this.stmts.podSkillIds.insert.run({ $podId: podId, $skillId: skillId });
-    }
-
     for (const subAgentId of pod.subAgentIds) {
       this.stmts.podSubAgentIds.insert.run({
         $podId: podId,
@@ -548,7 +533,6 @@ class PodStore {
       y: data.y,
       rotation: data.rotation,
       sessionId: null,
-      skillIds: data.skillIds ?? [],
       subAgentIds: data.subAgentIds ?? [],
       mcpServerIds: data.mcpServerIds ?? [],
       pluginIds: data.pluginIds ?? [],
@@ -651,19 +635,10 @@ class PodStore {
   }
 
   /**
-   * 依照 updates 中提供的 id 陣列，重新寫入四張 join table（skillIds、subAgentIds、mcpServerIds、pluginIds）。
+   * 依照 updates 中提供的 id 陣列，重新寫入三張 join table（subAgentIds、mcpServerIds、pluginIds）。
    * 未傳入的欄位（undefined）視為不更新，維持原有資料。
    */
   private updateJoinTables(podId: string, updates: PodUpdates): void {
-    if (updates.skillIds !== undefined) {
-      this.replaceJoinTableIds(
-        podId,
-        this.stmts.podSkillIds,
-        updates.skillIds,
-        (valueId) => ({ $podId: podId, $skillId: valueId }),
-      );
-    }
-
     if (updates.subAgentIds !== undefined) {
       this.replaceJoinTableIds(
         podId,
@@ -801,10 +776,6 @@ class PodStore {
     this.setSessionId(canvasId, podId, "");
   }
 
-  addSkillId(canvasId: string, podId: string, skillId: string): void {
-    this.stmts.podSkillIds.insert.run({ $podId: podId, $skillId: skillId });
-  }
-
   addSubAgentId(canvasId: string, podId: string, subAgentId: string): void {
     this.stmts.podSubAgentIds.insert.run({
       $podId: podId,
@@ -834,7 +805,7 @@ class PodStore {
     canvasId: string,
     selectByValueId: ReturnType<
       typeof getStmts
-    >["podSkillIds"]["selectBySkillId"],
+    >["podSubAgentIds"]["selectBySubAgentId"],
     valueId: string,
   ): Pod[] {
     const podIdRows = selectByValueId.all(valueId) as Array<{ pod_id: string }>;
@@ -860,8 +831,8 @@ class PodStore {
     stmtGroup: {
       deleteByPodId: ReturnType<
         typeof getStmts
-      >["podSkillIds"]["deleteByPodId"];
-      insert: ReturnType<typeof getStmts>["podSkillIds"]["insert"];
+      >["podSubAgentIds"]["deleteByPodId"];
+      insert: ReturnType<typeof getStmts>["podSubAgentIds"]["insert"];
     },
     valueIds: string[],
     buildParams: (valueId: string) => Record<string, string>,
@@ -870,14 +841,6 @@ class PodStore {
     for (const valueId of valueIds) {
       stmtGroup.insert.run(buildParams(valueId));
     }
-  }
-
-  findBySkillId(canvasId: string, skillId: string): Pod[] {
-    return this.findByJoinTableId(
-      canvasId,
-      this.stmts.podSkillIds.selectBySkillId,
-      skillId,
-    );
   }
 
   findBySubAgentId(canvasId: string, subAgentId: string): Pod[] {

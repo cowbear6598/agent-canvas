@@ -7,7 +7,6 @@ import { useSelectionStore } from "@/stores/pod/selectionStore";
 import { useViewportStore } from "@/stores/pod/viewportStore";
 import { usePodStore } from "@/stores/pod/podStore";
 import {
-  useSkillStore,
   useSubAgentStore,
   useRepositoryStore,
   useCommandStore,
@@ -20,7 +19,6 @@ vi.mock("@/composables/canvas/useCanvasContext", () => ({
     viewportStore: useViewportStore(),
     selectionStore: useSelectionStore(),
     podStore: usePodStore(),
-    skillStore: useSkillStore(),
     subAgentStore: useSubAgentStore(),
     repositoryStore: useRepositoryStore(),
     commandStore: useCommandStore(),
@@ -514,7 +512,6 @@ describe("useBoxSelect", () => {
       const viewportStore = useViewportStore();
       const selectionStore = useSelectionStore();
       const podStore = usePodStore();
-      const skillStore = useSkillStore();
       const repositoryStore = useRepositoryStore();
       const subAgentStore = useSubAgentStore();
       const commandStore = useCommandStore();
@@ -568,7 +565,6 @@ describe("useBoxSelect", () => {
       expect(calculateSelectedElementsSpy).toHaveBeenCalledWith({
         pods: podStore.pods,
         noteGroups: [
-          { notes: skillStore.notes, type: "skillNote" },
           { notes: repositoryStore.notes, type: "repositoryNote" },
           { notes: subAgentStore.notes, type: "subAgentNote" },
           { notes: commandStore.notes, type: "commandNote" },

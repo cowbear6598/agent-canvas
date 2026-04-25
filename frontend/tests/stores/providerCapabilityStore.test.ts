@@ -22,7 +22,7 @@ vi.mock("@/composables/useToast", () => ({
 /** 測試用 Claude capabilities（全功能開啟） */
 const CLAUDE_TEST_CAPABILITIES = {
   chat: true,
-  skill: true,
+  plugin: false,
   subAgent: true,
   repository: true,
   command: true,
@@ -34,7 +34,7 @@ const CLAUDE_TEST_CAPABILITIES = {
 /** 測試用 Codex capabilities（chat + command 開啟） */
 const CODEX_TEST_CAPABILITIES = {
   chat: true,
-  skill: false,
+  plugin: false,
   subAgent: false,
   repository: false,
   command: true,
@@ -46,7 +46,7 @@ const CODEX_TEST_CAPABILITIES = {
 /** 保守 fallback（找不到 provider 時應回傳的值） */
 const CONSERVATIVE_FALLBACK = {
   chat: true,
-  skill: false,
+  plugin: false,
   subAgent: false,
   repository: false,
   command: false,
@@ -105,7 +105,7 @@ describe("providerCapabilityStore", () => {
       store.syncFromPayload([
         {
           name: "claude",
-          capabilities: { ...CLAUDE_TEST_CAPABILITIES, skill: false },
+          capabilities: { ...CLAUDE_TEST_CAPABILITIES, plugin: true },
         },
         {
           name: "codex",
@@ -113,7 +113,7 @@ describe("providerCapabilityStore", () => {
         },
       ]);
 
-      expect(store.capabilitiesByProvider["claude"]!.skill).toBe(false);
+      expect(store.capabilitiesByProvider["claude"]!.plugin).toBe(true);
       expect(store.capabilitiesByProvider["codex"]!.chat).toBe(false);
     });
   });
@@ -326,14 +326,17 @@ describe("providerCapabilityStore", () => {
       expect(store.isCapabilityEnabled("codex", "runMode")).toBe(false);
     });
 
-    it("寫入後 isCapabilityEnabled('claude', 'skill') 應回正確值", () => {
+    it("寫入後 isCapabilityEnabled('claude', 'plugin') 應回正確值", () => {
       const store = useProviderCapabilityStore();
 
       store.syncFromPayload([
-        { name: "claude", capabilities: CLAUDE_TEST_CAPABILITIES },
+        {
+          name: "claude",
+          capabilities: { ...CLAUDE_TEST_CAPABILITIES, plugin: true },
+        },
       ]);
 
-      expect(store.isCapabilityEnabled("claude", "skill")).toBe(true);
+      expect(store.isCapabilityEnabled("claude", "plugin")).toBe(true);
     });
 
     it("寫入後 isCapabilityEnabled('codex', 'chat') 應回 true", () => {
@@ -555,13 +558,13 @@ describe("providerCapabilityStore", () => {
       store.syncFromPayload([
         {
           name: "claude",
-          capabilities: { ...CLAUDE_TEST_CAPABILITIES, skill: false },
+          capabilities: { ...CLAUDE_TEST_CAPABILITIES, chat: false },
           availableModels: [{ label: "Sonnet", value: "sonnet" }],
         },
       ]);
 
       // claude 的 capabilities 應被覆蓋（不累積舊值）
-      expect(store.getCapabilities("claude").skill).toBe(false);
+      expect(store.getCapabilities("claude").chat).toBe(false);
       // claude 的 availableModels 應被覆蓋為新清單
       expect(store.getAvailableModels("claude")).toEqual([
         { label: "Sonnet", value: "sonnet" },

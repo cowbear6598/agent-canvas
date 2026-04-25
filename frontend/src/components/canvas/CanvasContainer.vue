@@ -44,7 +44,6 @@ const {
   podStore,
   viewportStore,
   selectionStore,
-  skillStore,
   subAgentStore,
   repositoryStore,
   commandStore,
@@ -100,7 +99,6 @@ const {
   handleOpenDeleteGroupModal,
   handleConfirmDelete: handleDeleteConfirm,
 } = useDeleteResource({
-  skillStore,
   subAgentStore,
   repositoryStore,
   commandStore,
@@ -127,7 +125,6 @@ const {
   showTrashZone,
   isTrashHighlighted,
   isCanvasEmpty,
-  handleCreateSkillNote,
   handleCreateSubAgentNote,
   handleCreateRepositoryNote,
   handleCreateCommandNote,
@@ -137,7 +134,6 @@ const {
 } = useCanvasNoteHandlers({
   podStore,
   viewportStore,
-  skillStore,
   subAgentStore,
   repositoryStore,
   commandStore,
@@ -169,7 +165,6 @@ const handleCanvasClick = (e: MouseEvent): void => {
   const ignoredSelectors = [
     ".connection-line",
     ".pod-doodle",
-    ".skill-note",
     ".subagent-note",
     ".repository-note",
     ".command-note",
@@ -306,11 +301,10 @@ const handleOpenMcpServerModal = withMenuPosition(openMcpServerModal);
 
 /** 處理 PodTypeMenu 的統一 create-note 事件，依 type 分派至對應的 note 建立函式 */
 const handleCreateNote = (payload: {
-  type: "skill" | "subAgent" | "repository" | "command" | "mcpServer";
+  type: "subAgent" | "repository" | "command" | "mcpServer";
   id: string;
 }): void => {
   const handlerMap = {
-    skill: handleCreateSkillNote,
     subAgent: handleCreateSubAgentNote,
     repository: handleCreateRepositoryNote,
     command: handleCreateCommandNote,
@@ -355,16 +349,6 @@ const handleOpenModal = (payload: {
       @drag-end="handleDragEnd"
       @drag-complete="handlePodDragComplete"
       @contextmenu="handlePodContextMenu"
-    />
-
-    <GenericNote
-      v-for="note in skillStore.getUnboundNotes"
-      :key="note.id"
-      :note="note"
-      note-type="skill"
-      @drag-end="noteHandlerMap.skill.handleDragEnd"
-      @drag-move="noteHandlerMap.skill.handleDragMove"
-      @drag-complete="noteHandlerMap.skill.handleDragComplete"
     />
 
     <GenericNote
@@ -487,7 +471,7 @@ const handleOpenModal = (payload: {
     v-model:open="showDeleteModal"
     :item-name="deleteTarget?.name ?? ''"
     :is-in-use="isDeleteTargetInUse"
-    :item-type="deleteTarget?.type ?? 'skill'"
+    :item-type="deleteTarget?.type ?? 'repository'"
     @confirm="handleDeleteConfirm"
   />
 

@@ -35,7 +35,6 @@ function createOptions(overrides: Record<string, unknown> = {}) {
     typeMenu: { position: null as { x: number; y: number } | null },
   };
   const viewportStore = { offset: { x: 0, y: 0 }, zoom: 1 };
-  const skillStore = createNoteStore();
   const subAgentStore = createNoteStore();
   const repositoryStore = createNoteStore();
   const commandStore = createNoteStore();
@@ -55,7 +54,6 @@ function createOptions(overrides: Record<string, unknown> = {}) {
   return {
     podStore,
     viewportStore,
-    skillStore,
     subAgentStore,
     repositoryStore,
     commandStore,
@@ -71,7 +69,7 @@ describe("useCanvasNoteHandlers", () => {
   describe("showTrashZone", () => {
     it("任一 store 有 isDraggingNote 時為 true", () => {
       const options = createOptions();
-      options.skillStore.isDraggingNote = true;
+      options.subAgentStore.isDraggingNote = true;
 
       const { showTrashZone } = useCanvasNoteHandlers(
         options as unknown as Parameters<typeof useCanvasNoteHandlers>[0],
@@ -115,7 +113,7 @@ describe("useCanvasNoteHandlers", () => {
 
     it("任一 store 有 notes 時為 false", () => {
       const options = createOptions();
-      options.skillStore.notes = [{ id: "note-1" }];
+      options.subAgentStore.notes = [{ id: "note-1" }];
 
       const { isCanvasEmpty } = useCanvasNoteHandlers(
         options as unknown as Parameters<typeof useCanvasNoteHandlers>[0],
@@ -170,34 +168,6 @@ describe("useCanvasNoteHandlers", () => {
       expect(options.mcpServerModal.value.mode).toBe("edit");
       expect(options.mcpServerModal.value.mcpServerId).toBe("mcp-1");
       expect(options.mcpServerModal.value.initialName).toBe("My MCP");
-    });
-  });
-
-  describe("createNoteHandler", () => {
-    it("沒有 typeMenu.position 時不應呼叫 createNote", () => {
-      const options = createOptions();
-      options.podStore.typeMenu.position = null;
-
-      const { handleCreateSkillNote } = useCanvasNoteHandlers(
-        options as unknown as Parameters<typeof useCanvasNoteHandlers>[0],
-      );
-
-      handleCreateSkillNote("sk-1");
-
-      expect(options.skillStore.createNote).not.toHaveBeenCalled();
-    });
-
-    it("有 typeMenu.position 時應呼叫 createNote", () => {
-      const options = createOptions();
-      options.podStore.typeMenu.position = { x: 100, y: 200 };
-
-      const { handleCreateSkillNote } = useCanvasNoteHandlers(
-        options as unknown as Parameters<typeof useCanvasNoteHandlers>[0],
-      );
-
-      handleCreateSkillNote("skill-1");
-
-      expect(options.skillStore.createNote).toHaveBeenCalled();
     });
   });
 });

@@ -7,14 +7,12 @@ import {
 } from "@/lib/constants";
 import type {
   CopiedPod,
-  CopiedSkillNote,
   CopiedRepositoryNote,
   CopiedSubAgentNote,
   CopiedCommandNote,
   CopiedMcpServerNote,
   CopiedConnection,
   PastePodItem,
-  PasteSkillNoteItem,
   PasteRepositoryNoteItem,
   PasteSubAgentNoteItem,
   PasteCommandNoteItem,
@@ -71,7 +69,6 @@ function updateBoundsForUnboundNotes(
 }
 
 function calculateBoundingBox<
-  TS extends HasPosition,
   TR extends HasPosition,
   TSA extends HasPosition,
   TC extends HasPosition,
@@ -79,14 +76,12 @@ function calculateBoundingBox<
 >(
   pods: CopiedPod[],
   notes: {
-    skillNotes: TS[];
     repositoryNotes: TR[];
     subAgentNotes: TSA[];
     commandNotes: TC[];
     mcpServerNotes: TM[];
   },
   getBoundKeys: {
-    skillNote: (n: TS) => string | null;
     repositoryNote: (n: TR) => string | null;
     subAgentNote: (n: TSA) => string | null;
     commandNote: (n: TC) => string | null;
@@ -100,7 +95,6 @@ function calculateBoundingBox<
   }
 
   updateBoundsForUnboundNotes(bounds, [
-    toUnboundNoteEntry(notes.skillNotes, getBoundKeys.skillNote),
     toUnboundNoteEntry(notes.repositoryNotes, getBoundKeys.repositoryNote),
     toUnboundNoteEntry(notes.subAgentNotes, getBoundKeys.subAgentNote),
     toUnboundNoteEntry(notes.commandNotes, getBoundKeys.commandNote),
@@ -168,7 +162,6 @@ export function transformPods(
       rotation: pod.rotation,
       provider: pod.provider,
       providerConfig: pod.providerConfig,
-      skillIds: pod.skillIds,
       subAgentIds: pod.subAgentIds,
       repositoryId: pod.repositoryId,
       commandId: pod.commandId,
@@ -214,7 +207,6 @@ function transformConnections(
 
 type ClipboardData = {
   pods: CopiedPod[];
-  skillNotes: CopiedSkillNote[];
   repositoryNotes: CopiedRepositoryNote[];
   subAgentNotes: CopiedSubAgentNote[];
   commandNotes: CopiedCommandNote[];
@@ -223,7 +215,6 @@ type ClipboardData = {
 };
 
 type CopiedNote =
-  | CopiedSkillNote
   | CopiedRepositoryNote
   | CopiedSubAgentNote
   | CopiedCommandNote
@@ -236,17 +227,10 @@ type NoteTransformConfig<TSource extends CopiedNote, TResult> = {
 };
 
 function isEmptyClipboard(clipboardData: ClipboardData): boolean {
-  const {
-    pods,
-    skillNotes,
-    repositoryNotes,
-    subAgentNotes,
-    commandNotes,
-    mcpServerNotes,
-  } = clipboardData;
+  const { pods, repositoryNotes, subAgentNotes, commandNotes, mcpServerNotes } =
+    clipboardData;
   return (
     pods.length === 0 &&
-    skillNotes.length === 0 &&
     repositoryNotes.length === 0 &&
     subAgentNotes.length === 0 &&
     commandNotes.length === 0 &&
@@ -260,7 +244,6 @@ export function calculatePastePositions(
   existingNames: Set<string>,
 ): {
   pods: PastePodItem[];
-  skillNotes: PasteSkillNoteItem[];
   repositoryNotes: PasteRepositoryNoteItem[];
   subAgentNotes: PasteSubAgentNoteItem[];
   commandNotes: PasteCommandNoteItem[];
@@ -269,7 +252,6 @@ export function calculatePastePositions(
 } {
   const {
     pods,
-    skillNotes,
     repositoryNotes,
     subAgentNotes,
     commandNotes,
@@ -280,7 +262,6 @@ export function calculatePastePositions(
   if (isEmptyClipboard(clipboardData)) {
     return {
       pods: [],
-      skillNotes: [],
       repositoryNotes: [],
       subAgentNotes: [],
       commandNotes: [],
@@ -292,14 +273,12 @@ export function calculatePastePositions(
   const boundingBox = calculateBoundingBox(
     pods,
     {
-      skillNotes,
       repositoryNotes,
       subAgentNotes,
       commandNotes,
       mcpServerNotes,
     },
     {
-      skillNote: (note) => note.boundToPodId,
       repositoryNote: (note) => note.boundToOriginalPodId,
       subAgentNote: (note) => note.boundToPodId,
       commandNote: (note) => note.boundToOriginalPodId,
@@ -322,18 +301,6 @@ export function calculatePastePositions(
 
   return {
     pods: transformPods(pods, offset, existingNames),
-    skillNotes: applyTransform<CopiedSkillNote, PasteSkillNoteItem>({
-      notes: skillNotes,
-      getBoundKey: (note) => note.boundToPodId,
-      mapFn: (note, position) => ({
-        skillId: note.skillId,
-        name: note.name,
-        x: position.x,
-        y: position.y,
-        boundToOriginalPodId: note.boundToPodId,
-        originalPosition: note.originalPosition,
-      }),
-    }),
     repositoryNotes: applyTransform<
       CopiedRepositoryNote,
       PasteRepositoryNoteItem

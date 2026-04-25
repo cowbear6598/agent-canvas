@@ -3,10 +3,6 @@ import { useDeleteResource } from "@/composables/canvas/useDeleteResource";
 
 describe("useDeleteResource", () => {
   let mockStores: {
-    skillStore: {
-      isItemInUse: ReturnType<typeof vi.fn>;
-      deleteSkill: ReturnType<typeof vi.fn>;
-    };
     subAgentStore: {
       isItemInUse: ReturnType<typeof vi.fn>;
       deleteSubAgent: ReturnType<typeof vi.fn>;
@@ -29,10 +25,6 @@ describe("useDeleteResource", () => {
 
   beforeEach(() => {
     mockStores = {
-      skillStore: {
-        isItemInUse: vi.fn().mockReturnValue(false),
-        deleteSkill: vi.fn().mockResolvedValue(undefined),
-      },
       subAgentStore: {
         isItemInUse: vi.fn().mockReturnValue(false),
         deleteSubAgent: vi.fn().mockResolvedValue(undefined),
@@ -58,23 +50,14 @@ describe("useDeleteResource", () => {
     it("開啟刪除 Modal 時應設定 deleteTarget 並顯示 Modal", () => {
       const composable = useDeleteResource(mockStores as any);
 
-      composable.handleOpenDeleteModal("skill", "sk-1", "My Skill");
+      composable.handleOpenDeleteModal("repository", "repo-1", "My Repo");
 
       expect(composable.showDeleteModal.value).toBe(true);
       expect(composable.deleteTarget.value).toEqual({
-        type: "skill",
-        id: "sk-1",
-        name: "My Skill",
+        type: "repository",
+        id: "repo-1",
+        name: "My Repo",
       });
-    });
-
-    it("開啟 skill 刪除 Modal 時應設定正確的 type", () => {
-      const composable = useDeleteResource(mockStores as any);
-
-      composable.handleOpenDeleteModal("skill", "skill-1", "My Skill");
-
-      expect(composable.deleteTarget.value?.type).toBe("skill");
-      expect(composable.deleteTarget.value?.id).toBe("skill-1");
     });
   });
 
@@ -100,15 +83,6 @@ describe("useDeleteResource", () => {
       const composable = useDeleteResource(mockStores as any);
 
       expect(composable.isDeleteTargetInUse.value).toBe(false);
-    });
-
-    it("skill 被使用中時應回傳 true", () => {
-      const composable = useDeleteResource(mockStores as any);
-      mockStores.skillStore.isItemInUse.mockReturnValue(true);
-
-      composable.handleOpenDeleteModal("skill", "sk-1", "My Skill");
-
-      expect(composable.isDeleteTargetInUse.value).toBe(true);
     });
 
     it("group 類型永遠不算被使用中", () => {
@@ -139,16 +113,7 @@ describe("useDeleteResource", () => {
 
       await composable.handleConfirmDelete();
 
-      expect(mockStores.skillStore.deleteSkill).not.toHaveBeenCalled();
-    });
-
-    it("確認刪除 skill 後應呼叫 deleteSkill", async () => {
-      const composable = useDeleteResource(mockStores as any);
-      composable.handleOpenDeleteModal("skill", "skill-1", "My Skill");
-
-      await composable.handleConfirmDelete();
-
-      expect(mockStores.skillStore.deleteSkill).toHaveBeenCalledWith("skill-1");
+      expect(mockStores.subAgentStore.deleteSubAgent).not.toHaveBeenCalled();
     });
 
     it("確認刪除 repository 後應呼叫 deleteRepository", async () => {
@@ -210,7 +175,7 @@ describe("useDeleteResource", () => {
   describe("closeDeleteModal - 關閉刪除 Modal", () => {
     it("關閉後 showDeleteModal 應為 false", () => {
       const composable = useDeleteResource(mockStores as any);
-      composable.handleOpenDeleteModal("skill", "sk-1", "My Skill");
+      composable.handleOpenDeleteModal("repository", "repo-1", "My Repo");
 
       composable.closeDeleteModal();
 
@@ -219,7 +184,7 @@ describe("useDeleteResource", () => {
 
     it("關閉後 deleteTarget 應被清空", () => {
       const composable = useDeleteResource(mockStores as any);
-      composable.handleOpenDeleteModal("skill", "skill-1", "My Skill");
+      composable.handleOpenDeleteModal("repository", "repo-1", "My Repo");
 
       composable.closeDeleteModal();
 

@@ -1,6 +1,5 @@
 import { WebSocketResponseEvents } from "@/services/websocket";
 import { usePodStore } from "@/stores/pod/podStore";
-import { useSkillStore } from "@/stores/note/skillStore";
 import { useRepositoryStore } from "@/stores/note/repositoryStore";
 import { useSubAgentStore } from "@/stores/note/subAgentStore";
 import { useCommandStore } from "@/stores/note/commandStore";
@@ -12,7 +11,6 @@ import type { BasePayload } from "./sharedHandlerUtils";
 import { t } from "@/i18n";
 
 type DeletedNoteIds = {
-  skillNote?: string[];
   repositoryNote?: string[];
   commandNote?: string[];
   subAgentNote?: string[];
@@ -23,7 +21,6 @@ const noteTypeHandlers: {
   key: keyof DeletedNoteIds;
   getStore: () => { removeNoteFromEvent: (id: string) => void };
 }[] = [
-  { key: "skillNote", getStore: () => useSkillStore() },
   { key: "repositoryNote", getStore: () => useRepositoryStore() },
   { key: "commandNote", getStore: () => useCommandStore() },
   { key: "subAgentNote", getStore: () => useSubAgentStore() },
@@ -178,10 +175,6 @@ export function getPodEventListeners(): Array<{
     {
       event: WebSocketResponseEvents.POD_DELETED,
       handler: handlePodDeleted as (payload: unknown) => void,
-    },
-    {
-      event: WebSocketResponseEvents.POD_SKILL_BOUND,
-      handler: handlePodStateUpdated as (payload: unknown) => void,
     },
     {
       event: WebSocketResponseEvents.POD_REPOSITORY_BOUND,

@@ -102,7 +102,7 @@ function applyPlugins(pod: Pod): Pick<ClaudeOptions, "plugins"> {
   if (!pod.pluginIds?.length) return {};
 
   const enabledSet = new Set(pod.pluginIds);
-  const plugins = scanInstalledPlugins()
+  const plugins = scanInstalledPlugins("claude")
     .filter((plugin) => enabledSet.has(plugin.id))
     .map(
       (plugin): SdkPluginConfig => ({

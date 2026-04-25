@@ -14,7 +14,6 @@ import { podStore } from "../services/podStore.js";
 import { socketService } from "../services/socketService.js";
 import { gitService } from "../services/workspace/gitService.js";
 import { repositorySyncService } from "../services/repositorySyncService.js";
-import { skillService } from "../services/skillService.js";
 import { subAgentService } from "../services/subAgentService.js";
 import { commandService } from "../services/commandService.js";
 import { emitError } from "../utils/websocketResponse.js";
@@ -97,12 +96,11 @@ async function cleanupOldWorkspaceResources(
 ): Promise<void> {
   const deleteOperations = [
     commandService.deleteCommandFromPath(podWorkspacePath),
-    skillService.deleteSkillsFromPath(podWorkspacePath),
     subAgentService.deleteSubAgentsFromPath(podWorkspacePath),
   ];
 
   const results = await Promise.allSettled(deleteOperations);
-  const operationNames = ["commands", "skills", "subagents"];
+  const operationNames = ["commands", "subagents"];
 
   logRejectedResults(
     results,
@@ -211,9 +209,6 @@ export const handlePodBindRepository = withCanvasId<PodBindRepositoryPayload>(
 
 function buildCopyOperations(pod: Pod): Promise<unknown>[] {
   return [
-    ...pod.skillIds.map((id) =>
-      skillService.copySkillToPod(id, pod.id, pod.workspacePath),
-    ),
     ...pod.subAgentIds.map((id) =>
       subAgentService.copySubAgentToPod(id, pod.id, pod.workspacePath),
     ),

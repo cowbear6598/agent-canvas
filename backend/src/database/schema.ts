@@ -64,14 +64,6 @@ function createBaseTables(db: Database): void {
   db.exec("CREATE INDEX IF NOT EXISTS idx_pods_canvas_id ON pods(canvas_id)");
 
   db.exec(
-    "CREATE TABLE IF NOT EXISTS pod_skill_ids (" +
-      "pod_id TEXT NOT NULL REFERENCES pods(id) ON DELETE CASCADE," +
-      "skill_id TEXT NOT NULL," +
-      "PRIMARY KEY (pod_id, skill_id)" +
-      ")",
-  );
-
-  db.exec(
     "CREATE TABLE IF NOT EXISTS pod_sub_agent_ids (" +
       "pod_id TEXT NOT NULL REFERENCES pods(id) ON DELETE CASCADE," +
       "sub_agent_id TEXT NOT NULL," +
@@ -349,6 +341,11 @@ function runMigrations(db: Database): void {
     "no such column",
     "Cannot drop column",
   ]);
+
+  // Migration: 砍除 SkillNote / skillIds 功能後移除 join table
+  // 冪等：table 不存在時靜默忽略
+  runMigration(db, "DROP TABLE IF EXISTS pod_skill_ids", ["no such table"]);
+  runMigration(db, "DROP TABLE IF EXISTS skill_notes", ["no such table"]);
 }
 
 export function createTables(db: Database): void {

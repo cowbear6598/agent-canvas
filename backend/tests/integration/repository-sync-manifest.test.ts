@@ -14,7 +14,6 @@ import {
 import {
   createPod,
   createRepository,
-  createSkillFile,
   createSubAgent,
   getCanvasId,
 } from "../helpers";
@@ -72,13 +71,13 @@ describe("Repository Sync Manifest 整合測試", () => {
     );
   }
 
-  async function bindSkillToPod(podId: string, skillId: string) {
+  async function bindSubAgentToPod(podId: string, subAgentId: string) {
     const canvasId = await getCanvasId(client);
     return emitAndWaitResponse(
       client,
-      WebSocketRequestEvents.POD_BIND_SKILL,
-      WebSocketResponseEvents.POD_SKILL_BOUND,
-      { requestId: uuidv4(), canvasId, podId, skillId },
+      WebSocketRequestEvents.POD_BIND_SUBAGENT,
+      WebSocketResponseEvents.POD_SUBAGENT_BOUND,
+      { requestId: uuidv4(), canvasId, podId, subAgentId },
     );
   }
 
@@ -115,25 +114,28 @@ describe("Repository Sync Manifest 整合測試", () => {
     it("資源被複製且 manifest 正確記錄", async () => {
       const pod = await createPod(client);
       const repo = await createRepository(client, `manifest-s1-${uuidv4()}`);
-      const skillId = await createSkillFile(`skill-${uuidv4()}`, "# Skill");
+      const subAgent = await createSubAgent(
+        client,
+        `agent-${uuidv4()}`,
+        "# Agent Content",
+      );
 
-      await bindSkillToPod(pod.id, skillId);
+      await bindSubAgentToPod(pod.id, subAgent.id);
       await bindRepositoryToPod(pod.id, repo.id);
 
       const repoPath = getRepoPath(repo.id);
-      const skillPath = path.join(
+      const agentPath = path.join(
         repoPath,
         ".claude",
-        "skills",
-        skillId,
-        "SKILL.md",
+        "agents",
+        `${subAgent.id}.md`,
       );
 
-      expect(await fileExists(skillPath)).toBe(true);
+      expect(await fileExists(agentPath)).toBe(true);
       expect(hasManifestRecord(repo.id, pod.id)).toBe(true);
 
       const managedFiles = readManifestFiles(repo.id, pod.id);
-      expect(managedFiles).toContain(`.claude/skills/${skillId}/SKILL.md`);
+      expect(managedFiles).toContain(`.claude/agents/${subAgent.id}.md`);
     });
   });
 
@@ -164,76 +166,87 @@ describe("Repository Sync Manifest 整合測試", () => {
     it("新檔案加入 manifest 且舊檔案不受影響", async () => {
       const pod = await createPod(client);
       const repo = await createRepository(client, `manifest-s3-${uuidv4()}`);
-      const skill1Id = await createSkillFile(`skill-${uuidv4()}`, "# Skill 1");
+      const subAgent1 = await createSubAgent(
+        client,
+        `agent-${uuidv4()}`,
+        "# Agent 1",
+      );
 
-      await bindSkillToPod(pod.id, skill1Id);
+      await bindSubAgentToPod(pod.id, subAgent1.id);
       await bindRepositoryToPod(pod.id, repo.id);
 
       const managedFilesBefore = readManifestFiles(repo.id, pod.id);
-      expect(managedFilesBefore).toContain(
-        `.claude/skills/${skill1Id}/SKILL.md`,
-      );
+      expect(managedFilesBefore).toContain(`.claude/agents/${subAgent1.id}.md`);
 
-      // 解綁再綁回 repo，模擬換新 skill 後的 sync
+      // 解綁再綁回 repo，模擬換新 subAgent 後的 sync
       await unbindRepositoryFromPod(pod.id);
 
-      // 綁定新的 skill
-      const skill2Id = await createSkillFile(`skill-${uuidv4()}`, "# Skill 2");
+      // 綁定新的 subAgent
+      const subAgent2 = await createSubAgent(
+        client,
+        `agent-${uuidv4()}`,
+        "# Agent 2",
+      );
       const canvasId = await getCanvasId(client);
       await emitAndWaitResponse(
         client,
-        WebSocketRequestEvents.POD_BIND_SKILL,
-        WebSocketResponseEvents.POD_SKILL_BOUND,
-        { requestId: uuidv4(), canvasId, podId: pod.id, skillId: skill2Id },
+        WebSocketRequestEvents.POD_BIND_SUBAGENT,
+        WebSocketResponseEvents.POD_SUBAGENT_BOUND,
+        {
+          requestId: uuidv4(),
+          canvasId,
+          podId: pod.id,
+          subAgentId: subAgent2.id,
+        },
       );
 
       // 綁回 repo，觸發新 sync
       await bindRepositoryToPod(pod.id, repo.id);
 
       const managedFilesAfter = readManifestFiles(repo.id, pod.id);
-      expect(managedFilesAfter).toContain(
-        `.claude/skills/${skill2Id}/SKILL.md`,
-      );
+      expect(managedFilesAfter).toContain(`.claude/agents/${subAgent2.id}.md`);
 
       const repoPath = getRepoPath(repo.id);
-      const skill2Path = path.join(
+      const agent2Path = path.join(
         repoPath,
         ".claude",
-        "skills",
-        skill2Id,
-        "SKILL.md",
+        "agents",
+        `${subAgent2.id}.md`,
       );
-      expect(await fileExists(skill2Path)).toBe(true);
+      expect(await fileExists(agent2Path)).toBe(true);
     });
   });
 
   describe("場景四：Pod 解綁 repo 後資源從 repo 清除且 manifest 更新", () => {
-    it("解綁 repo 後 Pod 管理的 skill 檔案從 repo 刪除且 manifest 清除", async () => {
+    it("解綁 repo 後 Pod 管理的 subAgent 檔案從 repo 刪除且 manifest 清除", async () => {
       const pod = await createPod(client);
       const repo = await createRepository(client, `manifest-s4-${uuidv4()}`);
-      const skillId = await createSkillFile(`skill-${uuidv4()}`, "# Skill");
+      const subAgent = await createSubAgent(
+        client,
+        `agent-${uuidv4()}`,
+        "# Agent Content",
+      );
 
-      await bindSkillToPod(pod.id, skillId);
+      await bindSubAgentToPod(pod.id, subAgent.id);
       await bindRepositoryToPod(pod.id, repo.id);
 
       const repoPath = getRepoPath(repo.id);
-      const skillPath = path.join(
+      const agentPath = path.join(
         repoPath,
         ".claude",
-        "skills",
-        skillId,
-        "SKILL.md",
+        "agents",
+        `${subAgent.id}.md`,
       );
 
-      // 綁定後 skill 應存在於 repo
-      expect(await fileExists(skillPath)).toBe(true);
+      // 綁定後 subAgent 應存在於 repo
+      expect(await fileExists(agentPath)).toBe(true);
       expect(hasManifestRecord(repo.id, pod.id)).toBe(true);
 
       // 解綁 repo
       await unbindRepositoryFromPod(pod.id);
 
-      // skill 檔案應已從 repo 刪除，manifest 應清除
-      expect(await fileExists(skillPath)).toBe(false);
+      // subAgent 檔案應已從 repo 刪除，manifest 應清除
+      expect(await fileExists(agentPath)).toBe(false);
       expect(hasManifestRecord(repo.id, pod.id)).toBe(false);
     });
   });
@@ -242,40 +255,43 @@ describe("Repository Sync Manifest 整合測試", () => {
     it("只刪除該 Pod manifest 中的檔案，manifest 本身也刪除", async () => {
       const pod = await createPod(client);
       const repo = await createRepository(client, `manifest-s5-${uuidv4()}`);
-      const skillId = await createSkillFile(`skill-${uuidv4()}`, "# Skill");
+      const subAgent = await createSubAgent(
+        client,
+        `agent-${uuidv4()}`,
+        "# Agent Content",
+      );
 
       // 手動建立 repo 原有的檔案
       const repoPath = getRepoPath(repo.id);
-      const userOwnDir = path.join(repoPath, ".claude", "skills");
+      const userOwnDir = path.join(repoPath, ".claude", "agents");
       await fs.mkdir(userOwnDir, { recursive: true });
       await fs.writeFile(
-        path.join(userOwnDir, "user-own-skill.md"),
-        "# User Own Skill",
+        path.join(userOwnDir, "user-own-agent.md"),
+        "# User Own Agent",
       );
 
-      await bindSkillToPod(pod.id, skillId);
+      await bindSubAgentToPod(pod.id, subAgent.id);
       await bindRepositoryToPod(pod.id, repo.id);
 
-      const skillPath = path.join(
+      const agentPath = path.join(
         repoPath,
         ".claude",
-        "skills",
-        skillId,
-        "SKILL.md",
+        "agents",
+        `${subAgent.id}.md`,
       );
-      expect(await fileExists(skillPath)).toBe(true);
+      expect(await fileExists(agentPath)).toBe(true);
 
       // 解綁 repo
       await unbindRepositoryFromPod(pod.id);
 
-      // Pod 管理的 skill 應被刪除
-      expect(await fileExists(skillPath)).toBe(false);
+      // Pod 管理的 subAgent 應被刪除
+      expect(await fileExists(agentPath)).toBe(false);
 
       // manifest 記錄應被刪除
       expect(hasManifestRecord(repo.id, pod.id)).toBe(false);
 
-      // 原有的 user-own-skill.md 應保留
-      const userOwnPath = path.join(userOwnDir, "user-own-skill.md");
+      // 原有的 user-own-agent.md 應保留
+      const userOwnPath = path.join(userOwnDir, "user-own-agent.md");
       expect(await fileExists(userOwnPath)).toBe(true);
     });
   });
@@ -284,40 +300,43 @@ describe("Repository Sync Manifest 整合測試", () => {
     it("Pod 管理的資源被清除，manifest 被刪除，repo 原有檔案保留", async () => {
       const pod = await createPod(client);
       const repo = await createRepository(client, `manifest-s6-${uuidv4()}`);
-      const skillId = await createSkillFile(`skill-${uuidv4()}`, "# Skill");
+      const subAgent = await createSubAgent(
+        client,
+        `agent-${uuidv4()}`,
+        "# Agent Content",
+      );
 
       // 手動建立 repo 原有的檔案
       const repoPath = getRepoPath(repo.id);
-      const userOwnDir = path.join(repoPath, ".claude", "skills");
+      const userOwnDir = path.join(repoPath, ".claude", "agents");
       await fs.mkdir(userOwnDir, { recursive: true });
       await fs.writeFile(
-        path.join(userOwnDir, "user-own-skill.md"),
-        "# User Own Skill",
+        path.join(userOwnDir, "user-own-agent.md"),
+        "# User Own Agent",
       );
 
-      await bindSkillToPod(pod.id, skillId);
+      await bindSubAgentToPod(pod.id, subAgent.id);
       await bindRepositoryToPod(pod.id, repo.id);
 
-      const skillPath = path.join(
+      const agentPath = path.join(
         repoPath,
         ".claude",
-        "skills",
-        skillId,
-        "SKILL.md",
+        "agents",
+        `${subAgent.id}.md`,
       );
-      expect(await fileExists(skillPath)).toBe(true);
+      expect(await fileExists(agentPath)).toBe(true);
 
       // 刪除 Pod
       await deletePod(pod.id);
 
-      // Pod 管理的 skill 應被刪除
-      expect(await fileExists(skillPath)).toBe(false);
+      // Pod 管理的 subAgent 應被刪除
+      expect(await fileExists(agentPath)).toBe(false);
 
       // manifest 記錄應被刪除
       expect(hasManifestRecord(repo.id, pod.id)).toBe(false);
 
-      // 原有的 user-own-skill.md 應保留
-      const userOwnPath = path.join(userOwnDir, "user-own-skill.md");
+      // 原有的 user-own-agent.md 應保留
+      const userOwnPath = path.join(userOwnDir, "user-own-agent.md");
       expect(await fileExists(userOwnPath)).toBe(true);
     });
   });
@@ -327,34 +346,40 @@ describe("Repository Sync Manifest 整合測試", () => {
       const podA = await createPod(client);
       const podB = await createPod(client);
       const repo = await createRepository(client, `manifest-s7-${uuidv4()}`);
-      const skillAId = await createSkillFile(`skill-${uuidv4()}`, "# Skill A");
-      const skillBId = await createSkillFile(`skill-${uuidv4()}`, "# Skill B");
+      const subAgentA = await createSubAgent(
+        client,
+        `agent-${uuidv4()}`,
+        "# Agent A",
+      );
+      const subAgentB = await createSubAgent(
+        client,
+        `agent-${uuidv4()}`,
+        "# Agent B",
+      );
 
-      await bindSkillToPod(podA.id, skillAId);
-      await bindSkillToPod(podB.id, skillBId);
+      await bindSubAgentToPod(podA.id, subAgentA.id);
+      await bindSubAgentToPod(podB.id, subAgentB.id);
 
       await bindRepositoryToPod(podA.id, repo.id);
       await bindRepositoryToPod(podB.id, repo.id);
 
       const repoPath = getRepoPath(repo.id);
-      const skillAPath = path.join(
+      const agentAPath = path.join(
         repoPath,
         ".claude",
-        "skills",
-        skillAId,
-        "SKILL.md",
+        "agents",
+        `${subAgentA.id}.md`,
       );
-      const skillBPath = path.join(
+      const agentBPath = path.join(
         repoPath,
         ".claude",
-        "skills",
-        skillBId,
-        "SKILL.md",
+        "agents",
+        `${subAgentB.id}.md`,
       );
 
-      // 兩個 skill 都應存在
-      expect(await fileExists(skillAPath)).toBe(true);
-      expect(await fileExists(skillBPath)).toBe(true);
+      // 兩個 subAgent 都應存在
+      expect(await fileExists(agentAPath)).toBe(true);
+      expect(await fileExists(agentBPath)).toBe(true);
 
       // 各自的 manifest 應獨立存在
       expect(hasManifestRecord(repo.id, podA.id)).toBe(true);
@@ -363,102 +388,67 @@ describe("Repository Sync Manifest 整合測試", () => {
       const manifestA = readManifestFiles(repo.id, podA.id);
       const manifestB = readManifestFiles(repo.id, podB.id);
 
-      expect(manifestA).toContain(`.claude/skills/${skillAId}/SKILL.md`);
-      expect(manifestA).not.toContain(`.claude/skills/${skillBId}/SKILL.md`);
-      expect(manifestB).toContain(`.claude/skills/${skillBId}/SKILL.md`);
-      expect(manifestB).not.toContain(`.claude/skills/${skillAId}/SKILL.md`);
+      expect(manifestA).toContain(`.claude/agents/${subAgentA.id}.md`);
+      expect(manifestA).not.toContain(`.claude/agents/${subAgentB.id}.md`);
+      expect(manifestB).toContain(`.claude/agents/${subAgentB.id}.md`);
+      expect(manifestB).not.toContain(`.claude/agents/${subAgentA.id}.md`);
 
       // 解綁 podA
       await unbindRepositoryFromPod(podA.id);
 
-      // podA 的 skill 應被刪除，manifest 應被刪除
-      expect(await fileExists(skillAPath)).toBe(false);
+      // podA 的 subAgent 應被刪除，manifest 應被刪除
+      expect(await fileExists(agentAPath)).toBe(false);
       expect(hasManifestRecord(repo.id, podA.id)).toBe(false);
 
-      // podB 的 skill 應仍然存在
-      expect(await fileExists(skillBPath)).toBe(true);
+      // podB 的 subAgent 應仍然存在
+      expect(await fileExists(agentBPath)).toBe(true);
       expect(hasManifestRecord(repo.id, podB.id)).toBe(true);
-    });
-  });
-
-  describe("場景八：同名衝突", () => {
-    it("Pod skill 覆蓋 repo 原有同名 skill 目錄，解綁後該目錄被刪除", async () => {
-      const pod = await createPod(client);
-      const repo = await createRepository(client, `manifest-s8-${uuidv4()}`);
-
-      // 建立 skill
-      const skillId = `skill-${uuidv4().slice(0, 8)}`;
-      await createSkillFile(skillId, "# Skill Content");
-
-      // 在 repo 手動建立同名的原有 skill 目錄
-      const repoPath = getRepoPath(repo.id);
-      const skillsDir = path.join(repoPath, ".claude", "skills", skillId);
-      await fs.mkdir(skillsDir, { recursive: true });
-      const sameNamePath = path.join(skillsDir, "SKILL.md");
-      await fs.writeFile(sameNamePath, "# Original Skill");
-
-      const originalContent = await fs.readFile(sameNamePath, "utf-8");
-      expect(originalContent).toBe("# Original Skill");
-
-      // Pod 綁定同名的 skill 到 repo，應覆蓋原有檔案
-      await bindSkillToPod(pod.id, skillId);
-      await bindRepositoryToPod(pod.id, repo.id);
-
-      expect(await fileExists(sameNamePath)).toBe(true);
-      const newContent = await fs.readFile(sameNamePath, "utf-8");
-      expect(newContent).toBe("# Skill Content");
-
-      // manifest 應記錄該路徑
-      const managedFiles = readManifestFiles(repo.id, pod.id);
-      expect(managedFiles).toContain(`.claude/skills/${skillId}/SKILL.md`);
-
-      // Pod 解綁後，該檔案應被刪除
-      await unbindRepositoryFromPod(pod.id);
-      expect(await fileExists(sameNamePath)).toBe(false);
     });
   });
 
   describe("場景九：Pod 從 repo A 切換到 repo B", () => {
     it("repo A 的資源和 manifest 被清除，repo B 有 Pod 的資源和 manifest", async () => {
       const pod = await createPod(client);
-      const skillId = await createSkillFile(`skill-${uuidv4()}`, "# Skill");
+      const subAgent = await createSubAgent(
+        client,
+        `agent-${uuidv4()}`,
+        "# Agent Content",
+      );
 
-      await bindSkillToPod(pod.id, skillId);
+      await bindSubAgentToPod(pod.id, subAgent.id);
 
       const repoA = await createRepository(client, `manifest-s9-a-${uuidv4()}`);
       await bindRepositoryToPod(pod.id, repoA.id);
 
       const repoAPath = getRepoPath(repoA.id);
-      const skillPathInA = path.join(
+      const agentPathInA = path.join(
         repoAPath,
         ".claude",
-        "skills",
-        skillId,
-        "SKILL.md",
+        "agents",
+        `${subAgent.id}.md`,
       );
 
-      expect(await fileExists(skillPathInA)).toBe(true);
+      expect(await fileExists(agentPathInA)).toBe(true);
       expect(hasManifestRecord(repoA.id, pod.id)).toBe(true);
 
       const repoB = await createRepository(client, `manifest-s9-b-${uuidv4()}`);
       await bindRepositoryToPod(pod.id, repoB.id);
 
-      expect(await fileExists(skillPathInA)).toBe(false);
+      expect(await fileExists(agentPathInA)).toBe(false);
       expect(hasManifestRecord(repoA.id, pod.id)).toBe(false);
 
       const repoBPath = getRepoPath(repoB.id);
-      const skillPathInB = path.join(
+      const agentPathInB = path.join(
         repoBPath,
         ".claude",
-        "skills",
-        skillId,
-        "SKILL.md",
+        "agents",
+        `${subAgent.id}.md`,
       );
-      expect(await fileExists(skillPathInB)).toBe(true);
+      expect(await fileExists(agentPathInB)).toBe(true);
       expect(hasManifestRecord(repoB.id, pod.id)).toBe(true);
 
       const managedFiles = readManifestFiles(repoB.id, pod.id);
-      expect(managedFiles).toContain(`.claude/skills/${skillId}/SKILL.md`);
+      expect(managedFiles).toContain(`.claude/agents/${subAgent.id}.md`);
     });
   });
 
@@ -494,13 +484,9 @@ describe("Repository Sync Manifest 整合測試", () => {
   });
 
   describe("場景：多種資源類型同時 sync", () => {
-    it("skill、subAgent 都被正確複製且記錄在 manifest 中（command 不再同步至 repo）", async () => {
+    it("subAgent 被正確複製且記錄在 manifest 中（command 不再同步至 repo）", async () => {
       const pod = await createPod(client);
       const repo = await createRepository(client, `manifest-multi-${uuidv4()}`);
-      const skillId = await createSkillFile(
-        `skill-${uuidv4()}`,
-        "# Test Skill",
-      );
       const subAgent = await createSubAgent(
         client,
         `agent-${uuidv4()}`,
@@ -509,17 +495,6 @@ describe("Repository Sync Manifest 整合測試", () => {
 
       const canvasId = await getCanvasId(client);
 
-      await emitAndWaitResponse(
-        client,
-        WebSocketRequestEvents.POD_BIND_SKILL,
-        WebSocketResponseEvents.POD_SKILL_BOUND,
-        {
-          requestId: uuidv4(),
-          canvasId,
-          podId: pod.id,
-          skillId,
-        },
-      );
       await emitAndWaitResponse(
         client,
         WebSocketRequestEvents.POD_BIND_SUBAGENT,
@@ -537,17 +512,11 @@ describe("Repository Sync Manifest 整合測試", () => {
 
       expect(
         await fileExists(
-          path.join(repoPath, ".claude", "skills", skillId, "SKILL.md"),
-        ),
-      ).toBe(true);
-      expect(
-        await fileExists(
           path.join(repoPath, ".claude", "agents", `${subAgent.id}.md`),
         ),
       ).toBe(true);
 
       const managedFiles = readManifestFiles(repo.id, pod.id);
-      expect(managedFiles).toContain(`.claude/skills/${skillId}/SKILL.md`);
       expect(managedFiles).toContain(`.claude/agents/${subAgent.id}.md`);
     });
   });

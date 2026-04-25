@@ -63,7 +63,6 @@ describe("Pod 管理", () => {
       expect(pod.y).toBe(200);
       expect(pod.rotation).toBe(5);
       expect(pod.workspacePath).toBeDefined();
-      expect(pod.skillIds).toEqual([]);
       expect(pod.subAgentIds).toEqual([]);
     });
 

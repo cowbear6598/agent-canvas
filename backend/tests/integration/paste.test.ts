@@ -1,7 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import { emitAndWaitResponse, setupIntegrationTest } from "../setup";
 import {
-  createSkillFile,
   createRepository,
   createSubAgent,
   createCommand,
@@ -14,7 +13,6 @@ import {
   type CanvasPastePayload,
   type PastePodItem,
   type PasteConnectionItem,
-  type PasteSkillNoteItem,
   type PasteRepositoryNoteItem,
   type PasteSubAgentNoteItem,
   type PasteCommandNoteItem,
@@ -226,43 +224,6 @@ describe("貼上功能", () => {
 
         expect(response.createdConnections).toHaveLength(1);
       });
-    });
-
-    it("成功貼上並建立技能註記", async () => {
-      const client = getClient();
-      const skillId = await createSkillFile(
-        `skill-${uuidv4()}`,
-        "# Test Skill",
-      );
-
-      const skillNotes: PasteSkillNoteItem[] = [
-        {
-          skillId,
-          name: "Skill Note",
-          x: 10,
-          y: 10,
-          boundToOriginalPodId: null,
-          originalPosition: { x: 10, y: 10 },
-        },
-      ];
-
-      const payload: CanvasPastePayload = {
-        ...(await emptyPastePayload()),
-        skillNotes,
-      };
-
-      const response = await emitAndWaitResponse<
-        CanvasPastePayload,
-        CanvasPasteResultPayload
-      >(
-        client,
-        WebSocketRequestEvents.CANVAS_PASTE,
-        WebSocketResponseEvents.CANVAS_PASTE_RESULT,
-        payload,
-      );
-
-      expect(response.createdSkillNotes).toHaveLength(1);
-      expect(response.createdSkillNotes[0].skillId).toBe(skillId);
     });
 
     it("成功貼上並建立儲存庫註記", async () => {

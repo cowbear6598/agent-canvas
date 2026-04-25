@@ -61,14 +61,12 @@ const createMockStore = () => ({
   setNoteAnimating: vi.fn(),
 });
 
-const mockSkillStore = createMockStore();
 const mockSubAgentStore = createMockStore();
 const mockMcpServerStore = createMockStore();
 const mockRepositoryStore = createMockStore();
 const mockCommandStore = createMockStore();
 
 vi.mock("@/stores/note", () => ({
-  useSkillStore: () => mockSkillStore,
   useSubAgentStore: () => mockSubAgentStore,
   useMcpServerStore: () => mockMcpServerStore,
   useRepositoryStore: () => mockRepositoryStore,
@@ -80,7 +78,7 @@ vi.mock("@/stores/note", () => ({
 // -----------------------------------------------------------------------
 
 const mockCapabilities = {
-  isSkillEnabled: computed(() => true),
+  isPluginEnabled: computed(() => true),
   isSubAgentEnabled: computed(() => true),
   isRepositoryEnabled: computed(() => true),
   isCommandEnabled: computed(() => true),
@@ -110,7 +108,8 @@ function mountPodSlots(overrides: Record<string, unknown> = {}) {
     props: {
       podId: "pod-1",
       podRotation: 0,
-      boundSkillNotes: [],
+      pluginActiveCount: 0,
+      provider: "claude",
       boundSubAgentNotes: [],
       boundRepositoryNote: undefined,
       boundCommandNote: undefined,
@@ -129,7 +128,7 @@ describe("PodSlots - Codex provider Pod：Command 以外 slot 為 disabled", () 
     vi.clearAllMocks();
     // 切換成 Codex capabilities：Command 為 enabled，其餘 slot disabled
     Object.assign(mockCapabilities, {
-      isSkillEnabled: computed(() => false),
+      isPluginEnabled: computed(() => false),
       isSubAgentEnabled: computed(() => false),
       isRepositoryEnabled: computed(() => false),
       isCommandEnabled: computed(() => true),
@@ -153,8 +152,8 @@ describe("PodSlots - Codex provider Pod：Command 以外 slot 為 disabled", () 
     const wrapper = mountPodSlots();
     const multiSlots = wrapper.findAll(".multi-bind-slot-stub");
 
-    // Skill（0）、SubAgent（1）、MCP（2）共 3 個 multi-bind slot
-    expect(multiSlots.length).toBe(3);
+    // SubAgent（0）、MCP（1）共 2 個 multi-bind slot
+    expect(multiSlots.length).toBe(2);
     for (const slot of multiSlots) {
       expect(slot.attributes("data-disabled")).toBe("true");
     }
@@ -162,7 +161,7 @@ describe("PodSlots - Codex provider Pod：Command 以外 slot 為 disabled", () 
     wrapper.unmount();
   });
 
-  it("Repository、Skill、SubAgent、MCP 的 disabled-tooltip 應為 pod.slot.codexDisabled", () => {
+  it("Repository、SubAgent、MCP 的 disabled-tooltip 應為 pod.slot.codexDisabled", () => {
     const wrapper = mountPodSlots();
     const singleSlots = wrapper.findAll(".single-bind-slot-stub");
     const multiSlots = wrapper.findAll(".multi-bind-slot-stub");
@@ -172,7 +171,7 @@ describe("PodSlots - Codex provider Pod：Command 以外 slot 為 disabled", () 
       "pod.slot.codexDisabled",
     );
 
-    // Skill（0）、SubAgent（1）、MCP（2）
+    // SubAgent（0）、MCP（1）
     for (const slot of multiSlots) {
       expect(slot.attributes("data-disabled-tooltip")).toBe(
         "pod.slot.codexDisabled",
@@ -206,7 +205,7 @@ describe("PodSlots - Claude provider Pod：全部 slot 為 enabled", () => {
     vi.clearAllMocks();
     // 切換成 Claude capabilities：所有 slot enabled
     Object.assign(mockCapabilities, {
-      isSkillEnabled: computed(() => true),
+      isPluginEnabled: computed(() => true),
       isSubAgentEnabled: computed(() => true),
       isRepositoryEnabled: computed(() => true),
       isCommandEnabled: computed(() => true),
@@ -230,7 +229,8 @@ describe("PodSlots - Claude provider Pod：全部 slot 為 enabled", () => {
     const wrapper = mountPodSlots();
     const multiSlots = wrapper.findAll(".multi-bind-slot-stub");
 
-    expect(multiSlots.length).toBe(3);
+    // SubAgent（0）、MCP（1）共 2 個 multi-bind slot
+    expect(multiSlots.length).toBe(2);
     for (const slot of multiSlots) {
       expect(slot.attributes("data-disabled")).toBe("false");
     }
@@ -247,7 +247,7 @@ describe("PodSlots - emit 事件轉發", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     Object.assign(mockCapabilities, {
-      isSkillEnabled: computed(() => true),
+      isPluginEnabled: computed(() => true),
       isSubAgentEnabled: computed(() => true),
       isRepositoryEnabled: computed(() => true),
       isCommandEnabled: computed(() => true),
@@ -255,24 +255,12 @@ describe("PodSlots - emit 事件轉發", () => {
     });
   });
 
-  it("Skill slot note-dropped → emit skill-dropped", async () => {
-    const wrapper = mountPodSlots();
-    const multiSlots = wrapper.findAll(".multi-bind-slot-stub");
-
-    // 順序：skill（0）、subagent（1）、mcp（2）
-    await multiSlots[0]!.trigger("click");
-
-    expect(wrapper.emitted("skill-dropped")).toBeTruthy();
-    expect(wrapper.emitted("skill-dropped")![0]).toEqual(["note-1"]);
-
-    wrapper.unmount();
-  });
-
   it("SubAgent slot note-dropped → emit subagent-dropped", async () => {
     const wrapper = mountPodSlots();
     const multiSlots = wrapper.findAll(".multi-bind-slot-stub");
 
-    await multiSlots[1]!.trigger("click");
+    // 順序：subagent（0）、mcp（1）
+    await multiSlots[0]!.trigger("click");
 
     expect(wrapper.emitted("subagent-dropped")).toBeTruthy();
     expect(wrapper.emitted("subagent-dropped")![0]).toEqual(["note-1"]);
@@ -330,7 +318,8 @@ describe("PodSlots - emit 事件轉發", () => {
     const wrapper = mountPodSlots();
     const multiSlots = wrapper.findAll(".multi-bind-slot-stub");
 
-    await multiSlots[2]!.trigger("click");
+    // 順序：subagent（0）、mcp（1）
+    await multiSlots[1]!.trigger("click");
 
     expect(wrapper.emitted("mcp-server-dropped")).toBeTruthy();
     expect(wrapper.emitted("mcp-server-dropped")![0]).toEqual(["note-1"]);
@@ -344,11 +333,11 @@ describe("PodSlots - emit 事件轉發", () => {
     const wrapper = mountPodSlots();
     const multiSlots = wrapper.findAll(".multi-bind-slot-stub");
 
-    // 觸發 Skill slot 的 note-dropped 事件（傳入空字串 ''）
+    // 觸發 SubAgent slot 的 note-dropped 事件（傳入空字串 ''）
     await multiSlots[0]!.trigger("contextmenu");
 
-    // 空 noteId 應被守門，不應 re-emit skill-dropped
-    expect(wrapper.emitted("skill-dropped")).toBeFalsy();
+    // 空 noteId 應被守門，不應 re-emit subagent-dropped
+    expect(wrapper.emitted("subagent-dropped")).toBeFalsy();
 
     wrapper.unmount();
   });

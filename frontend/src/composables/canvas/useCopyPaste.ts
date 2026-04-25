@@ -39,7 +39,6 @@ export function useCopyPaste(): void {
     podStore,
     viewportStore,
     selectionStore,
-    skillStore,
     repositoryStore,
     subAgentStore,
     commandStore,
@@ -66,7 +65,6 @@ export function useCopyPaste(): void {
 
     const copiedPods = collectSelectedPods(selectedElements, podStore.pods);
     const copiedNotes = collectSelectedNotes(selectedElements, selectedPodIds, {
-      skillStore,
       repositoryStore,
       subAgentStore,
       commandStore,
@@ -79,7 +77,6 @@ export function useCopyPaste(): void {
 
     clipboardStore.setCopy(
       copiedPods,
-      copiedNotes.skillNotes,
       copiedNotes.repositoryNotes,
       copiedNotes.subAgentNotes,
       copiedNotes.commandNotes,
@@ -103,7 +100,6 @@ export function useCopyPaste(): void {
     const existingNames = new Set(podStore.pods.map((p) => p.name));
     const {
       pods,
-      skillNotes,
       repositoryNotes,
       subAgentNotes,
       commandNotes,
@@ -120,7 +116,6 @@ export function useCopyPaste(): void {
         payload: {
           canvasId: requireActiveCanvas(),
           pods,
-          skillNotes,
           repositoryNotes,
           subAgentNotes,
           commandNotes,
@@ -138,7 +133,6 @@ export function useCopyPaste(): void {
         type: "pod" as const,
         id: pod.id,
       })),
-      ...collectUnboundCreatedElements("skillNote", response.createdSkillNotes),
       ...collectUnboundCreatedElements(
         "repositoryNote",
         response.createdRepositoryNotes,

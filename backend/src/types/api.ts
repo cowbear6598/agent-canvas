@@ -6,7 +6,6 @@ export interface CreatePodRequest {
   x: number;
   y: number;
   rotation: number;
-  skillIds?: string[];
   subAgentIds?: string[];
   mcpServerIds?: string[];
   pluginIds?: string[];

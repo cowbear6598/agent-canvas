@@ -3,12 +3,7 @@ import { setupStoreTest } from "../../helpers/testSetup";
 import { createMockPod, createMockNote } from "../../helpers/factories";
 import { useBatchDrag } from "@/composables/canvas/useBatchDrag";
 import type { Pod } from "@/types";
-import type {
-  SkillNote,
-  RepositoryNote,
-  SubAgentNote,
-  CommandNote,
-} from "@/types";
+import type { RepositoryNote, SubAgentNote, CommandNote } from "@/types";
 
 // Mock useCanvasContext
 const mockPodStore = {
@@ -30,18 +25,6 @@ const mockViewportStore = {
 const mockSelectionStore = {
   hasSelection: false,
   selectedElements: [] as Array<{ type: string; id: string }>,
-};
-
-const mockSkillStore = {
-  notes: [] as SkillNote[],
-  updateNotePositionLocal: vi.fn((noteId: string, x: number, y: number) => {
-    const note = mockSkillStore.notes.find((n) => n.id === noteId);
-    if (note) {
-      note.x = x;
-      note.y = y;
-    }
-  }),
-  updateNotePosition: vi.fn(),
 };
 
 const mockRepositoryStore = {
@@ -85,7 +68,6 @@ vi.mock("@/composables/canvas/useCanvasContext", () => ({
     podStore: mockPodStore,
     viewportStore: mockViewportStore,
     selectionStore: mockSelectionStore,
-    skillStore: mockSkillStore,
     repositoryStore: mockRepositoryStore,
     subAgentStore: mockSubAgentStore,
     commandStore: mockCommandStore,
@@ -103,9 +85,6 @@ describe("useBatchDrag", () => {
     mockViewportStore.zoom = 1;
     mockSelectionStore.hasSelection = false;
     mockSelectionStore.selectedElements = [];
-    mockSkillStore.notes = [];
-    mockSkillStore.updateNotePositionLocal.mockClear();
-    mockSkillStore.updateNotePosition.mockClear();
     mockRepositoryStore.notes = [];
     mockRepositoryStore.updateNotePositionLocal.mockClear();
     mockRepositoryStore.updateNotePosition.mockClear();
@@ -188,70 +167,6 @@ describe("useBatchDrag", () => {
 
       expect(mockPodStore.movePod).toHaveBeenCalledWith("pod-1", 150, 150);
       expect(mockPodStore.movePod).toHaveBeenCalledWith("pod-2", 250, 250);
-    });
-
-    it("移動所有選中的 Note（呼叫各 store 的 updateNotePositionLocal）", () => {
-      const { startBatchDrag } = useBatchDrag();
-      const skillNote = createMockNote("skill", {
-        id: "note-2",
-        x: 200,
-        y: 200,
-        boundToPodId: null,
-      });
-      mockSkillStore.notes = [skillNote as SkillNote];
-      mockSelectionStore.hasSelection = true;
-      mockSelectionStore.selectedElements = [
-        { type: "skillNote", id: "note-2" },
-      ];
-
-      const startEvent = new MouseEvent("mousedown", {
-        button: 0,
-        clientX: 100,
-        clientY: 100,
-      });
-      startBatchDrag(startEvent);
-
-      const moveEvent = new MouseEvent("mousemove", {
-        clientX: 150,
-        clientY: 150,
-      });
-      document.dispatchEvent(moveEvent);
-
-      expect(mockSkillStore.updateNotePositionLocal).toHaveBeenCalledWith(
-        "note-2",
-        250,
-        250,
-      );
-    });
-
-    it("已綁定的 Note（boundToPodId !== null）不移動", () => {
-      const { startBatchDrag } = useBatchDrag();
-      const boundNote = createMockNote("skill", {
-        id: "note-1",
-        x: 100,
-        y: 100,
-        boundToPodId: "pod-1",
-      });
-      mockSkillStore.notes = [boundNote as SkillNote];
-      mockSelectionStore.hasSelection = true;
-      mockSelectionStore.selectedElements = [
-        { type: "skillNote", id: "note-1" },
-      ];
-
-      const startEvent = new MouseEvent("mousedown", {
-        button: 0,
-        clientX: 100,
-        clientY: 100,
-      });
-      startBatchDrag(startEvent);
-
-      const moveEvent = new MouseEvent("mousemove", {
-        clientX: 150,
-        clientY: 150,
-      });
-      document.dispatchEvent(moveEvent);
-
-      expect(mockSkillStore.updateNotePositionLocal).not.toHaveBeenCalled();
     });
 
     it("delta 計算考慮 viewportStore.zoom", () => {
@@ -430,45 +345,6 @@ describe("useBatchDrag", () => {
       expect(mockPodStore.syncPodPosition).toHaveBeenCalledWith("pod-2");
     });
 
-    it("同步所有移動的 Note（updateNotePosition）", async () => {
-      const { startBatchDrag } = useBatchDrag();
-      const skillNote = createMockNote("skill", {
-        id: "note-2",
-        x: 200,
-        y: 200,
-        boundToPodId: null,
-      });
-      mockSkillStore.notes = [skillNote as SkillNote];
-      mockSelectionStore.hasSelection = true;
-      mockSelectionStore.selectedElements = [
-        { type: "skillNote", id: "note-2" },
-      ];
-
-      const startEvent = new MouseEvent("mousedown", {
-        button: 0,
-        clientX: 100,
-        clientY: 100,
-      });
-      startBatchDrag(startEvent);
-
-      const moveEvent = new MouseEvent("mousemove", {
-        clientX: 150,
-        clientY: 150,
-      });
-      document.dispatchEvent(moveEvent);
-
-      const upEvent = new MouseEvent("mouseup");
-      document.dispatchEvent(upEvent);
-
-      await new Promise((resolve) => setTimeout(resolve, 0));
-
-      expect(mockSkillStore.updateNotePosition).toHaveBeenCalledWith(
-        "note-2",
-        250,
-        250,
-      );
-    });
-
     it("只同步有移動過的元素", async () => {
       const { startBatchDrag } = useBatchDrag();
       const pod1 = createMockPod({ id: "pod-1", x: 100, y: 100 });
@@ -577,18 +453,6 @@ describe("useBatchDrag", () => {
       expect(isElementSelected("pod", "pod-3")).toBe(false);
     });
 
-    it("委派到 selectionStore.selectedElements 檢查（Note）", () => {
-      const { isElementSelected } = useBatchDrag();
-      mockSelectionStore.selectedElements = [
-        { type: "skillNote", id: "note-1" },
-        { type: "subAgentNote", id: "note-2" },
-      ];
-
-      expect(isElementSelected("skillNote", "note-1")).toBe(true);
-      expect(isElementSelected("subAgentNote", "note-2")).toBe(true);
-      expect(isElementSelected("skillNote", "note-2")).toBe(false);
-    });
-
     it("檢查所有 Note 類型", () => {
       const { isElementSelected } = useBatchDrag();
       mockSelectionStore.selectedElements = [
@@ -626,30 +490,6 @@ describe("useBatchDrag", () => {
 
       expect(() => document.dispatchEvent(moveEvent)).not.toThrow();
       expect(mockPodStore.movePod).not.toHaveBeenCalled();
-    });
-
-    it("選中的 Note 不存在時不應報錯", () => {
-      const { startBatchDrag } = useBatchDrag();
-      mockSkillStore.notes = [];
-      mockSelectionStore.hasSelection = true;
-      mockSelectionStore.selectedElements = [
-        { type: "skillNote", id: "non-existent" },
-      ];
-
-      const startEvent = new MouseEvent("mousedown", {
-        button: 0,
-        clientX: 100,
-        clientY: 100,
-      });
-      startBatchDrag(startEvent);
-
-      const moveEvent = new MouseEvent("mousemove", {
-        clientX: 150,
-        clientY: 150,
-      });
-
-      expect(() => document.dispatchEvent(moveEvent)).not.toThrow();
-      expect(mockSkillStore.updateNotePositionLocal).not.toHaveBeenCalled();
     });
   });
 

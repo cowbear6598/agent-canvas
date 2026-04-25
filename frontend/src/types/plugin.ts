@@ -4,4 +4,5 @@ export interface InstalledPlugin {
   version: string;
   description: string;
   repo: string;
+  compatibleProviders: ("claude" | "codex")[];
 }

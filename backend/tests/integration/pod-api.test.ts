@@ -63,7 +63,6 @@ describe("GET /api/canvas/:id/pods", () => {
     expect(typeof pod.x).toBe("number");
     expect(typeof pod.y).toBe("number");
     expect(typeof pod.rotation).toBe("number");
-    expect(Array.isArray(pod.skillIds)).toBe(true);
     expect(Array.isArray(pod.subAgentIds)).toBe(true);
     expect(Array.isArray(pod.mcpServerIds)).toBe(true);
     // Pod.model 已移除，改用 providerConfig.model 作為唯一來源
@@ -317,7 +316,6 @@ describe("POST /api/canvas/:id/pods", () => {
     expect(pod.rotation).toBe(0);
     // Pod.model 已移除，改用 providerConfig.model 作為唯一來源
     expect(typeof pod.providerConfig?.model).toBe("string");
-    expect(Array.isArray(pod.skillIds)).toBe(true);
     expect(Array.isArray(pod.subAgentIds)).toBe(true);
     expect(Array.isArray(pod.mcpServerIds)).toBe(true);
     expect(typeof pod.multiInstance).toBe("boolean");

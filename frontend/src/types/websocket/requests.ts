@@ -141,19 +141,9 @@ export interface PastePodItem {
   provider: PodProvider;
   /** Provider 對應的設定（含 model 等參數） */
   providerConfig: ProviderConfig;
-  skillIds?: string[];
   subAgentIds?: string[];
   repositoryId?: string | null;
   commandId?: string | null;
-}
-
-export interface PasteSkillNoteItem {
-  skillId: string;
-  name: string;
-  x: number;
-  y: number;
-  boundToOriginalPodId: string | null;
-  originalPosition: { x: number; y: number } | null;
 }
 
 export interface PasteRepositoryNoteItem {
@@ -188,7 +178,6 @@ export interface CanvasPastePayload {
   requestId: string;
   canvasId: string;
   pods: PastePodItem[];
-  skillNotes: PasteSkillNoteItem[];
   repositoryNotes: PasteRepositoryNoteItem[];
   subAgentNotes: PasteSubAgentNoteItem[];
   commandNotes: PasteCommandNoteItem[];
@@ -327,14 +316,6 @@ export interface MoveToGroupPayload {
   groupId: string | null;
 }
 
-export interface SkillImportPayload {
-  requestId: string;
-  canvasId: string;
-  fileName: string;
-  fileData: string;
-  fileSize: number;
-}
-
 export interface McpServerCreatePayload {
   requestId: string;
   canvasId: string;
@@ -382,6 +363,7 @@ export interface PodSetPluginsPayload {
 
 export interface PluginListPayload {
   requestId: string;
+  provider?: "claude" | "codex";
 }
 
 export interface RunDeletePayload {

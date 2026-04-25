@@ -4,7 +4,7 @@ import type { ProviderCapabilities } from "./types.js";
 export const CLAUDE_CAPABILITIES: Readonly<ProviderCapabilities> =
   Object.freeze({
     chat: true,
-    skill: true,
+    plugin: true,
     subAgent: true,
     repository: true,
     command: true,
@@ -13,11 +13,11 @@ export const CLAUDE_CAPABILITIES: Readonly<ProviderCapabilities> =
     runMode: true,
   });
 
-/** Codex Provider 支援聊天、指令與 repository，其餘功能皆不支援 */
+/** Codex Provider 支援聊天、指令、repository 與 plugin，其餘功能皆不支援 */
 export const CODEX_CAPABILITIES: Readonly<ProviderCapabilities> = Object.freeze(
   {
     chat: true,
-    skill: false,
+    plugin: true,
     subAgent: false,
     repository: true,
     command: true,

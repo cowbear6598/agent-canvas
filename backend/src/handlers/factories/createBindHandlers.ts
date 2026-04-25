@@ -18,7 +18,7 @@ export interface BindResourceConfig<
 > {
   resourceName: string;
   idField: TIdField;
-  /** true: 陣列模式如 skillIds，false: 單一值模式如 commandId */
+  /** true: 陣列模式如 subAgentIds，false: 單一值模式如 commandId */
   isMultiBind: boolean;
   service: TService;
   podStoreMethod: {
@@ -26,7 +26,6 @@ export interface BindResourceConfig<
     unbind?: (canvasId: string, podId: string) => void;
   };
   getPodResourceIds: (pod: {
-    skillIds: string[];
     commandId: string | null;
     subAgentIds: string[];
     mcpServerIds: string[];

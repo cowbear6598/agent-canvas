@@ -5,7 +5,7 @@ import { useCanvasContext } from "@/composables/canvas/useCanvasContext";
 import { useBatchDrag } from "@/composables/canvas";
 import { isCtrlOrCmdPressed } from "@/utils/keyboardHelpers";
 
-type NoteType = "skill" | "subAgent" | "repository" | "command" | "mcpServer";
+type NoteType = "subAgent" | "repository" | "command" | "mcpServer";
 
 interface Props {
   note: BaseNote;
@@ -33,7 +33,6 @@ const emit = defineEmits<{
 const {
   viewportStore,
   selectionStore,
-  skillStore,
   subAgentStore,
   repositoryStore,
   commandStore,
@@ -43,11 +42,6 @@ const {
 const { startBatchDrag, isElementSelected } = useBatchDrag();
 
 const NOTE_TYPE_CONFIG = {
-  skill: {
-    store: skillStore,
-    selectionType: "skillNote" as const,
-    cssClass: "skill-note",
-  },
   subAgent: {
     store: subAgentStore,
     selectionType: "subAgentNote" as const,
@@ -71,7 +65,7 @@ const NOTE_TYPE_CONFIG = {
 } as const;
 
 const noteStore = computed(
-  () => NOTE_TYPE_CONFIG[props.noteType]?.store ?? skillStore,
+  () => NOTE_TYPE_CONFIG[props.noteType]?.store ?? subAgentStore,
 );
 
 const isDragging = ref(false);

@@ -8,7 +8,7 @@ import type { ProviderCapabilities } from "@/types/pod";
 export interface UsePodCapabilitiesReturn {
   capabilities: ComputedRef<ProviderCapabilities>;
   isCodex: ComputedRef<boolean>;
-  isSkillEnabled: ComputedRef<boolean>;
+  isPluginEnabled: ComputedRef<boolean>;
   isSubAgentEnabled: ComputedRef<boolean>;
   isRepositoryEnabled: ComputedRef<boolean>;
   isCommandEnabled: ComputedRef<boolean>;
@@ -40,8 +40,8 @@ export function usePodCapabilities(
     return pod?.provider === "codex";
   });
 
-  /** Skill slot 是否啟用 */
-  const isSkillEnabled = computed((): boolean => capabilities.value.skill);
+  /** Plugin slot 是否啟用 */
+  const isPluginEnabled = computed((): boolean => capabilities.value.plugin);
 
   /** SubAgent slot 是否啟用 */
   const isSubAgentEnabled = computed(
@@ -70,7 +70,7 @@ export function usePodCapabilities(
   return {
     capabilities,
     isCodex,
-    isSkillEnabled,
+    isPluginEnabled,
     isSubAgentEnabled,
     isRepositoryEnabled,
     isCommandEnabled,

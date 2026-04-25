@@ -8,7 +8,6 @@ const MAX_DESCRIPTION_LENGTH = 200;
 
 export type ToastCategory =
   | "Pod"
-  | "Skill"
   | "Repository"
   | "Canvas"
   | "Workspace"

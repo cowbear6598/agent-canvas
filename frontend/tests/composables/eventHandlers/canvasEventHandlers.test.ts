@@ -4,7 +4,6 @@ import { setupStoreTest } from "../../helpers/testSetup";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { usePodStore } from "@/stores/pod/podStore";
 import { useConnectionStore } from "@/stores/connectionStore";
-import { useSkillStore } from "@/stores/note/skillStore";
 import { useRepositoryStore } from "@/stores/note/repositoryStore";
 import { useSubAgentStore } from "@/stores/note/subAgentStore";
 import { useCommandStore } from "@/stores/note/commandStore";
@@ -126,7 +125,6 @@ describe("canvasEventHandlers", () => {
     it("canvasId 匹配時應將所有建立的項目加入各 store", () => {
       const podStore = usePodStore();
       const connectionStore = useConnectionStore();
-      const skillStore = useSkillStore();
       const repositoryStore = useRepositoryStore();
       const subAgentStore = useSubAgentStore();
       const commandStore = useCommandStore();
@@ -134,7 +132,6 @@ describe("canvasEventHandlers", () => {
 
       const podSpy = vi.spyOn(podStore, "addPodFromEvent");
       const connSpy = vi.spyOn(connectionStore, "addConnectionFromEvent");
-      const skillSpy = vi.spyOn(skillStore, "addNoteFromEvent");
       const repoSpy = vi.spyOn(repositoryStore, "addNoteFromEvent");
       const subAgentSpy = vi.spyOn(subAgentStore, "addNoteFromEvent");
       const commandSpy = vi.spyOn(commandStore, "addNoteFromEvent");
@@ -154,7 +151,6 @@ describe("canvasEventHandlers", () => {
         canvasId: "canvas-1",
         createdPods: [pod],
         createdConnections: [connection],
-        createdSkillNotes: [{ id: "sk-1" }],
         createdRepositoryNotes: [{ id: "rp-1" }],
         createdSubAgentNotes: [{ id: "sa-1" }],
         createdCommandNotes: [{ id: "cmd-1" }],
@@ -163,7 +159,6 @@ describe("canvasEventHandlers", () => {
 
       expect(podSpy).toHaveBeenCalledWith(pod);
       expect(connSpy).toHaveBeenCalledWith(connection);
-      expect(skillSpy).toHaveBeenCalled();
       expect(repoSpy).toHaveBeenCalled();
       expect(subAgentSpy).toHaveBeenCalled();
       expect(commandSpy).toHaveBeenCalled();

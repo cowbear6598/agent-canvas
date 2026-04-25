@@ -1,5 +1,4 @@
 export { usePodStore, useViewportStore, useSelectionStore } from "./pod";
-export { useSkillStore } from "./note";
 export { useChatStore } from "./chat";
 export { useConnectionStore } from "./connectionStore";
 export { useClipboardStore } from "./clipboardStore";

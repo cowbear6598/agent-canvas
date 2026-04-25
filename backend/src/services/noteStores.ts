@@ -1,17 +1,10 @@
 import { createNoteStore } from "./GenericNoteStore.js";
 import type {
-  SkillNote,
   RepositoryNote,
   SubAgentNote,
   CommandNote,
   McpServerNote,
 } from "../types";
-
-export const skillNoteStore = createNoteStore<SkillNote, "skillId">({
-  noteType: "skill",
-  foreignKeyField: "skillId",
-  storeName: "SkillNoteStore",
-});
 
 export const repositoryNoteStore = createNoteStore<
   RepositoryNote,

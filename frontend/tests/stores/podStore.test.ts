@@ -558,7 +558,6 @@ describe("podStore", () => {
         rotation: 0,
         output: [],
         status: "idle",
-        skillIds: [],
         subAgentIds: [],
         repositoryId: null,
         multiInstance: false,

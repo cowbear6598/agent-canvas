@@ -71,10 +71,15 @@
     },
     "slot": {
       "duplicateTitle": "すでに存在しています",
-      "skillDuplicate": "このスキルはすでにこの Pod にバインドされています",
       "subAgentDuplicate": "このサブエージェントはすでにこの Pod にバインドされています",
       "mcpServerDuplicate": "この MCP サーバーはすでにこの Pod にバインドされています",
-      "codexDisabled": "Codex はこの機能をサポートしていません"
+      "codexDisabled": "Codex はこの機能をサポートしていません",
+      "pluginsLabel": "Plugins",
+      "pluginsLoading": "読み込み中...",
+      "pluginsBusyTooltip": "タスク実行中です。完了までお待ちください。",
+      "pluginsEmpty": "プラグインがインストールされていません",
+      "pluginsToggleFailed": "変更に失敗しました。ロールバックされました",
+      "pluginsCodexHint": "Codex プラグインは codex でグローバル管理されています"
     }
   },
   "run": {
@@ -209,16 +214,10 @@
     },
     "podContextMenu": {
       "downloadDirectory": "作業ディレクトリをダウンロード（zip）",
-      "plugin": "Plugin",
       "connect": "{label} を接続",
       "disconnect": "{label} を切断",
       "downloadDirectoryFailed": "ディレクトリのダウンロードに失敗しました",
-      "downloadDirectoryFailedDesc": "作業ディレクトリをダウンロードできません。後でもう一度お試しください",
-      "noPluginInstalled": "プラグインがインストールされていません",
-      "pluginLoadFailed": "プラグイン一覧の読み込みに失敗しました",
-      "pluginLoadFailedDesc": "インストール済みプラグインを取得できません。後でもう一度お試しください",
-      "pluginUpdateFailed": "プラグイン設定に失敗しました",
-      "pluginUpdateFailedDesc": "Pod のプラグイン設定を更新できません。後でもう一度お試しください"
+      "downloadDirectoryFailedDesc": "作業ディレクトリをダウンロードできません。後でもう一度お試しください"
     },
     "connectionContextMenu": {
       "triggerModeAuto": "自動トリガー (Auto)",
@@ -407,15 +406,6 @@
       "speechMaxLength": "最大テキスト長に達しました",
       "speechUnsupported": "このブラウザは音声入力をサポートしていません"
     },
-    "skillImport": {
-      "invalidFormat": "ファイル形式が正しくありません。ZIP ファイルのみサポートされています",
-      "fileTooLarge": "ファイルサイズが 5MB の制限を超えています",
-      "networkFailed": "ネットワーク転送に失敗しました。もう一度お試しください",
-      "base64Failed": "Base64 変換に失敗しました",
-      "importFailed": "インポートに失敗しました",
-      "importSuccess": "インポートしました",
-      "importSuccessOverwrite": "インポートしました（上書き済み）"
-    },
     "eventHandler": {
       "podCreated": "Pod を作成しました",
       "podRenamed": "名前を変更しました",
@@ -428,7 +418,6 @@
       "canvasCreated": "Canvas を作成しました",
       "canvasRenamed": "Canvas の名前を変更しました",
       "pasted": "貼り付けました",
-      "skillDeleted": "Skill を削除しました",
       "worktreeCreated": "Worktree を作成しました",
       "repositoryDeleted": "Repository を削除しました",
       "subAgentDeleted": "SubAgent を削除しました",

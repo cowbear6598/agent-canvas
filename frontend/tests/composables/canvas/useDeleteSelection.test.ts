@@ -39,7 +39,7 @@ describe("useDeleteSelection", () => {
 
   describe("deleteSelectedElements", () => {
     it("無選中元素時不操作", async () => {
-      const { selectionStore, podStore, skillStore } = useCanvasContext();
+      const { selectionStore, podStore } = useCanvasContext();
 
       // 建立測試元件來呼叫 composable
       const TestComponent = defineComponent({
@@ -57,13 +57,11 @@ describe("useDeleteSelection", () => {
       selectionStore.selectedElements = [];
 
       const deletePodSpy = vi.spyOn(podStore, "deletePodWithBackend");
-      const deleteNoteSpy = vi.spyOn(skillStore, "deleteNote");
       const clearSelectionSpy = vi.spyOn(selectionStore, "clearSelection");
 
       await deleteSelectedElements();
 
       expect(deletePodSpy).not.toHaveBeenCalled();
-      expect(deleteNoteSpy).not.toHaveBeenCalled();
       expect(clearSelectionSpy).not.toHaveBeenCalled();
     });
 
@@ -101,36 +99,6 @@ describe("useDeleteSelection", () => {
       expect(deletePodSpy).toHaveBeenCalledTimes(2);
       expect(deletePodSpy).toHaveBeenCalledWith("pod-1");
       expect(deletePodSpy).toHaveBeenCalledWith("pod-2");
-      expect(clearSelectionSpy).toHaveBeenCalled();
-    });
-
-    it("刪除選中的 skillNote", async () => {
-      const { selectionStore, skillStore } = useCanvasContext();
-
-      const TestComponent = defineComponent({
-        setup() {
-          return useDeleteSelection();
-        },
-        template: "<div></div>",
-      });
-
-      const wrapper = mount(TestComponent);
-      const { deleteSelectedElements } = wrapper.vm as ReturnType<
-        typeof useDeleteSelection
-      >;
-
-      selectionStore.selectedElements = [
-        { type: "skillNote", id: "skill-note-1" },
-      ] as SelectableElement[];
-
-      const deleteNoteSpy = vi
-        .spyOn(skillStore, "deleteNote")
-        .mockResolvedValue();
-      const clearSelectionSpy = vi.spyOn(selectionStore, "clearSelection");
-
-      await deleteSelectedElements();
-
-      expect(deleteNoteSpy).toHaveBeenCalledWith("skill-note-1");
       expect(clearSelectionSpy).toHaveBeenCalled();
     });
 
@@ -255,7 +223,6 @@ describe("useDeleteSelection", () => {
       const {
         selectionStore,
         podStore,
-        skillStore,
         repositoryStore,
         subAgentStore,
         commandStore,
@@ -276,7 +243,6 @@ describe("useDeleteSelection", () => {
 
       selectionStore.selectedElements = [
         { type: "pod", id: "pod-1" },
-        { type: "skillNote", id: "skill-1" },
         { type: "repositoryNote", id: "repo-1" },
         { type: "subAgentNote", id: "subagent-1" },
         { type: "commandNote", id: "command-1" },
@@ -285,9 +251,6 @@ describe("useDeleteSelection", () => {
 
       const deletePodSpy = vi
         .spyOn(podStore, "deletePodWithBackend")
-        .mockResolvedValue();
-      const deleteSkillSpy = vi
-        .spyOn(skillStore, "deleteNote")
         .mockResolvedValue();
       const deleteRepositorySpy = vi
         .spyOn(repositoryStore, "deleteNote")
@@ -305,7 +268,6 @@ describe("useDeleteSelection", () => {
       await deleteSelectedElements();
 
       expect(deletePodSpy).toHaveBeenCalledWith("pod-1");
-      expect(deleteSkillSpy).toHaveBeenCalledWith("skill-1");
       expect(deleteRepositorySpy).toHaveBeenCalledWith("repo-1");
       expect(deleteSubAgentSpy).toHaveBeenCalledWith("subagent-1");
       expect(deleteCommandSpy).toHaveBeenCalledWith("command-1");
@@ -314,7 +276,7 @@ describe("useDeleteSelection", () => {
     });
 
     it("部分刪除失敗時顯示 Toast 但不阻斷其他刪除", async () => {
-      const { selectionStore, podStore, skillStore } = useCanvasContext();
+      const { selectionStore, podStore, repositoryStore } = useCanvasContext();
 
       const TestComponent = defineComponent({
         setup() {
@@ -331,7 +293,7 @@ describe("useDeleteSelection", () => {
       selectionStore.selectedElements = [
         { type: "pod", id: "pod-1" },
         { type: "pod", id: "pod-2" },
-        { type: "skillNote", id: "note-1" },
+        { type: "repositoryNote", id: "note-1" },
       ] as SelectableElement[];
 
       const consoleErrorSpy = vi
@@ -342,7 +304,7 @@ describe("useDeleteSelection", () => {
         .mockResolvedValueOnce() // pod-1 成功
         .mockRejectedValueOnce(new Error("Pod 刪除失敗")); // pod-2 失敗
 
-      vi.spyOn(skillStore, "deleteNote").mockResolvedValueOnce(); // note-1 成功
+      vi.spyOn(repositoryStore, "deleteNote").mockResolvedValueOnce(); // note-1 成功
 
       await deleteSelectedElements();
 

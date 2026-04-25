@@ -9,7 +9,6 @@ async function deleteSelectedElements(): Promise<void> {
   const {
     podStore,
     selectionStore,
-    skillStore,
     repositoryStore,
     subAgentStore,
     commandStore,
@@ -22,7 +21,6 @@ async function deleteSelectedElements(): Promise<void> {
 
   const storeMap: Record<string, (id: string) => Promise<void>> = {
     pod: (id) => podStore.deletePodWithBackend(id),
-    skillNote: (id) => skillStore.deleteNote(id),
     repositoryNote: (id) => repositoryStore.deleteNote(id),
     subAgentNote: (id) => subAgentStore.deleteNote(id),
     commandNote: (id) => commandStore.deleteNote(id),

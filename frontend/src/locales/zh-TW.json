@@ -224,10 +224,15 @@
     },
     "slot": {
       "duplicateTitle": "已存在，無法插入",
-      "skillDuplicate": "此 Skill 已綁定到此 Pod",
       "subAgentDuplicate": "此 SubAgent 已綁定到此 Pod",
       "mcpServerDuplicate": "此 MCP Server 已綁定到此 Pod",
-      "codexDisabled": "Codex 不支援此功能"
+      "codexDisabled": "Codex 不支援此功能",
+      "pluginsLabel": "Plugins",
+      "pluginsLoading": "載入中...",
+      "pluginsBusyTooltip": "任務進行中，請等待完成",
+      "pluginsEmpty": "尚未安裝 plugin",
+      "pluginsToggleFailed": "變更失敗，已回滾",
+      "pluginsCodexHint": "Codex plugin 由 codex 全域管理"
     }
   },
   "run": {
@@ -362,16 +367,10 @@
     },
     "podContextMenu": {
       "downloadDirectory": "下載工作目錄（zip）",
-      "plugin": "Plugin",
       "connect": "連接 {label}",
       "disconnect": "斷開 {label}",
       "downloadDirectoryFailed": "下載目錄失敗",
-      "downloadDirectoryFailedDesc": "無法下載工作目錄，請稍後再試",
-      "noPluginInstalled": "尚未安裝任何 Plugin",
-      "pluginLoadFailed": "載入 Plugin 列表失敗",
-      "pluginLoadFailedDesc": "無法取得已安裝的 Plugin 列表，請稍後再試",
-      "pluginUpdateFailed": "Plugin 設定失敗",
-      "pluginUpdateFailedDesc": "無法更新 Pod Plugin 設定，請稍後再試"
+      "downloadDirectoryFailedDesc": "無法下載工作目錄，請稍後再試"
     },
     "connectionContextMenu": {
       "triggerModeAuto": "自動觸發 (Auto)",
@@ -560,15 +559,6 @@
       "speechMaxLength": "已達到最大文字長度限制",
       "speechUnsupported": "此瀏覽器不支援語音輸入功能"
     },
-    "skillImport": {
-      "invalidFormat": "檔案格式錯誤，僅支援 ZIP 檔案",
-      "fileTooLarge": "檔案大小超過 5MB 限制",
-      "networkFailed": "網路傳輸失敗，請重試",
-      "base64Failed": "Base64 轉換失敗",
-      "importFailed": "匯入失敗",
-      "importSuccess": "匯入成功",
-      "importSuccessOverwrite": "匯入成功（已覆蓋）"
-    },
     "eventHandler": {
       "podCreated": "Pod 建立成功",
       "podRenamed": "重命名成功",
@@ -581,7 +571,6 @@
       "canvasCreated": "Canvas 建立成功",
       "canvasRenamed": "Canvas 重命名成功",
       "pasted": "貼上成功",
-      "skillDeleted": "Skill 已刪除",
       "worktreeCreated": "Worktree 建立成功",
       "repositoryDeleted": "Repository 已刪除",
       "subAgentDeleted": "SubAgent 已刪除",

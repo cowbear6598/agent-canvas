@@ -1,11 +1,9 @@
 import { WebSocketResponseEvents } from "@/services/websocket";
-import { useSkillStore } from "@/stores/note/skillStore";
 import { useRepositoryStore } from "@/stores/note/repositoryStore";
 import { useSubAgentStore } from "@/stores/note/subAgentStore";
 import { useCommandStore } from "@/stores/note/commandStore";
 import { useMcpServerStore } from "@/stores/note/mcpServerStore";
 import type {
-  SkillNote,
   RepositoryNote,
   SubAgentNote,
   CommandNote,
@@ -113,9 +111,6 @@ const validateMcpServer = (mcpServer: McpServer): boolean => {
   return true;
 };
 
-const skillNoteHandlers = createNoteHandlers<SkillNote>({
-  getStore: useSkillStore,
-});
 const repositoryNoteHandlers = createNoteHandlers<RepositoryNote>({
   getStore: useRepositoryStore,
 });
@@ -128,18 +123,6 @@ const commandNoteHandlers = createNoteHandlers<CommandNote>({
 const mcpServerNoteHandlers = createNoteHandlers<McpServerNote>({
   getStore: useMcpServerStore,
 });
-
-const handleSkillDeleted = createUnifiedHandler<
-  BasePayload & { skillId: string; deletedNoteIds?: string[]; canvasId: string }
->(
-  (payload) => {
-    useSkillStore().removeItemFromEvent(
-      payload.skillId,
-      payload.deletedNoteIds,
-    );
-  },
-  { toastMessage: () => t("composable.eventHandler.skillDeleted") },
-);
 
 const handleRepositoryWorktreeCreated = createUnifiedHandler<
   BasePayload & { repository?: RepositoryItem; canvasId: string }
@@ -268,22 +251,6 @@ export function getNoteEventListeners(): Array<{
   handler: (payload: unknown) => void;
 }> {
   return [
-    {
-      event: WebSocketResponseEvents.SKILL_NOTE_CREATED,
-      handler: skillNoteHandlers.created as (payload: unknown) => void,
-    },
-    {
-      event: WebSocketResponseEvents.SKILL_NOTE_UPDATED,
-      handler: skillNoteHandlers.updated as (payload: unknown) => void,
-    },
-    {
-      event: WebSocketResponseEvents.SKILL_NOTE_DELETED,
-      handler: skillNoteHandlers.deleted as (payload: unknown) => void,
-    },
-    {
-      event: WebSocketResponseEvents.SKILL_DELETED,
-      handler: handleSkillDeleted as (payload: unknown) => void,
-    },
     {
       event: WebSocketResponseEvents.REPOSITORY_WORKTREE_CREATED,
       handler: handleRepositoryWorktreeCreated as (payload: unknown) => void,

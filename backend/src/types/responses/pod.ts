@@ -57,13 +57,22 @@ export interface PodScheduleSetPayload {
   error?: string;
 }
 
+export interface PodPluginsSetPayload {
+  requestId: string;
+  canvasId: string;
+  success: boolean;
+  podId?: string;
+  pod?: Pod;
+  error?: string;
+  reason?: "pod-busy";
+}
+
 export interface PodDeletedPayload {
   requestId: string;
   canvasId: string;
   success: boolean;
   podId?: string;
   deletedNoteIds?: {
-    skillNote?: string[];
     repositoryNote?: string[];
     commandNote?: string[];
     subAgentNote?: string[];
@@ -140,14 +149,6 @@ export interface PodErrorPayload {
   podId?: string;
   error: string;
   code: string;
-}
-
-export interface PodSkillBoundPayload {
-  requestId: string;
-  canvasId: string;
-  success: boolean;
-  pod?: Pod;
-  error?: string;
 }
 
 export interface PodRepositoryBoundPayload {

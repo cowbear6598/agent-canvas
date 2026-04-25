@@ -33,19 +33,6 @@ import {
   type RepositoryWorktreeCreatedPayload,
 } from "../../src/types";
 
-/** Pod 綁定 Skill 的共用輔助函式，提升至檔案頂層避免在各 describe block 重複定義 */
-async function bindSkillToPod(client: any, podId: string, skillId: string) {
-  const canvasId = await getCanvasId(client);
-  const { WebSocketRequestEvents, WebSocketResponseEvents } =
-    await import("../../src/schemas/index.js");
-  return await emitAndWaitResponse(
-    client,
-    WebSocketRequestEvents.POD_BIND_SKILL,
-    WebSocketResponseEvents.POD_SKILL_BOUND,
-    { requestId: uuidv4(), canvasId, podId, skillId },
-  );
-}
-
 /** Pod 綁定 SubAgent 的共用輔助函式，提升至檔案頂層避免在各 describe block 重複定義 */
 async function bindSubAgentToPod(
   client: any,
@@ -158,32 +145,19 @@ describe("Repository 管理", () => {
       const pod = await createPod(client);
       const repo = await createRepository(client, `sync-delete-${uuidv4()}`);
 
-      const { createSkillFile, createSubAgent } =
-        await import("../helpers/index.js");
-      const skillId = await createSkillFile(
-        `skill-${uuidv4()}`,
-        "# Test Skill",
-      );
+      const { createSubAgent } = await import("../helpers/index.js");
       const subAgent = await createSubAgent(
         client,
         `subagent-${uuidv4()}`,
         "Test SubAgent",
       );
 
-      await bindSkillToPod(client, pod.id, skillId);
       await bindSubAgentToPod(client, pod.id, subAgent.id);
 
       const path = await import("path");
       const fs = await import("fs/promises");
       const podWorkspacePath = pod.workspacePath;
 
-      const skillPath = path.join(
-        podWorkspacePath,
-        ".claude",
-        "skills",
-        skillId,
-        "SKILL.md",
-      );
       const subAgentPath = path.join(
         podWorkspacePath,
         ".claude",
@@ -191,16 +165,11 @@ describe("Repository 管理", () => {
         `${subAgent.id}.md`,
       );
 
-      const skillExistsBefore = await fs
-        .access(skillPath)
-        .then(() => true)
-        .catch(() => false);
       const subAgentExistsBefore = await fs
         .access(subAgentPath)
         .then(() => true)
         .catch(() => false);
 
-      expect(skillExistsBefore).toBe(true);
       expect(subAgentExistsBefore).toBe(true);
 
       const canvasId = await getCanvasId(client);
@@ -214,16 +183,11 @@ describe("Repository 管理", () => {
         { requestId: uuidv4(), canvasId, podId: pod.id, repositoryId: repo.id },
       );
 
-      const skillExistsAfter = await fs
-        .access(skillPath)
-        .then(() => true)
-        .catch(() => false);
       const subAgentExistsAfter = await fs
         .access(subAgentPath)
         .then(() => true)
         .catch(() => false);
 
-      expect(skillExistsAfter).toBe(false);
       expect(subAgentExistsAfter).toBe(false);
     });
 
@@ -232,19 +196,13 @@ describe("Repository 管理", () => {
       const pod = await createPod(client);
       const repo = await createRepository(client, `sync-add-${uuidv4()}`);
 
-      const { createSkillFile, createSubAgent } =
-        await import("../helpers/index.js");
-      const skillId = await createSkillFile(
-        `skill-${uuidv4()}`,
-        "# Test Skill",
-      );
+      const { createSubAgent } = await import("../helpers/index.js");
       const subAgent = await createSubAgent(
         client,
         `subagent-${uuidv4()}`,
         "Test SubAgent",
       );
 
-      await bindSkillToPod(client, pod.id, skillId);
       await bindSubAgentToPod(client, pod.id, subAgent.id);
 
       const canvasId = await getCanvasId(client);
@@ -263,13 +221,6 @@ describe("Repository 管理", () => {
       const fs = await import("fs/promises");
       const repoPath = path.join(config.repositoriesRoot, repo.id);
 
-      const skillPath = path.join(
-        repoPath,
-        ".claude",
-        "skills",
-        skillId,
-        "SKILL.md",
-      );
       const subAgentPath = path.join(
         repoPath,
         ".claude",
@@ -277,16 +228,11 @@ describe("Repository 管理", () => {
         `${subAgent.id}.md`,
       );
 
-      const skillExists = await fs
-        .access(skillPath)
-        .then(() => true)
-        .catch(() => false);
       const subAgentExists = await fs
         .access(subAgentPath)
         .then(() => true)
         .catch(() => false);
 
-      expect(skillExists).toBe(true);
       expect(subAgentExists).toBe(true);
     });
 
@@ -296,13 +242,14 @@ describe("Repository 管理", () => {
       const repo1 = await createRepository(client, `sync-old-${uuidv4()}`);
       const repo2 = await createRepository(client, `sync-new-${uuidv4()}`);
 
-      const { createSkillFile } = await import("../helpers/index.js");
-      const skillId = await createSkillFile(
-        `skill-${uuidv4()}`,
-        "# Test Skill",
+      const { createSubAgent } = await import("../helpers/index.js");
+      const subAgent = await createSubAgent(
+        client,
+        `subagent-${uuidv4()}`,
+        "Test SubAgent",
       );
 
-      await bindSkillToPod(client, pod.id, skillId);
+      await bindSubAgentToPod(client, pod.id, subAgent.id);
 
       const canvasId = await getCanvasId(client);
       await emitAndWaitResponse<
@@ -324,19 +271,18 @@ describe("Repository 管理", () => {
       const path = await import("path");
       const fs = await import("fs/promises");
       const repo1Path = path.join(config.repositoriesRoot, repo1.id);
-      const skillPath1 = path.join(
+      const agentPath1 = path.join(
         repo1Path,
         ".claude",
-        "skills",
-        skillId,
-        "SKILL.md",
+        "agents",
+        `${subAgent.id}.md`,
       );
 
-      const skill1ExistsBefore = await fs
-        .access(skillPath1)
+      const agent1ExistsBefore = await fs
+        .access(agentPath1)
         .then(() => true)
         .catch(() => false);
-      expect(skill1ExistsBefore).toBe(true);
+      expect(agent1ExistsBefore).toBe(true);
 
       await emitAndWaitResponse<
         PodBindRepositoryPayload,
@@ -353,25 +299,24 @@ describe("Repository 管理", () => {
         },
       );
 
-      const skill1ExistsAfter = await fs
-        .access(skillPath1)
+      const agent1ExistsAfter = await fs
+        .access(agentPath1)
         .then(() => true)
         .catch(() => false);
-      expect(skill1ExistsAfter).toBe(false);
+      expect(agent1ExistsAfter).toBe(false);
 
       const repo2Path = path.join(config.repositoriesRoot, repo2.id);
-      const skillPath2 = path.join(
+      const agentPath2 = path.join(
         repo2Path,
         ".claude",
-        "skills",
-        skillId,
-        "SKILL.md",
+        "agents",
+        `${subAgent.id}.md`,
       );
-      const skill2Exists = await fs
-        .access(skillPath2)
+      const agent2Exists = await fs
+        .access(agentPath2)
         .then(() => true)
         .catch(() => false);
-      expect(skill2Exists).toBe(true);
+      expect(agent2Exists).toBe(true);
     });
   });
 
@@ -432,19 +377,13 @@ describe("Repository 管理", () => {
       const pod = await createPod(client);
       const repo = await createRepository(client, `unbind-copy-${uuidv4()}`);
 
-      const { createSkillFile, createSubAgent } =
-        await import("../helpers/index.js");
-      const skillId = await createSkillFile(
-        `skill-${uuidv4()}`,
-        "# Test Skill",
-      );
+      const { createSubAgent } = await import("../helpers/index.js");
       const subAgent = await createSubAgent(
         client,
         `subagent-${uuidv4()}`,
         "Test SubAgent",
       );
 
-      await bindSkillToPod(client, pod.id, skillId);
       await bindSubAgentToPod(client, pod.id, subAgent.id);
 
       const canvasId = await getCanvasId(client);
@@ -462,18 +401,17 @@ describe("Repository 管理", () => {
       const fs = await import("fs/promises");
       const podWorkspacePath = pod.workspacePath;
 
-      const skillPathBefore = path.join(
+      const subAgentPathBefore = path.join(
         podWorkspacePath,
         ".claude",
-        "skills",
-        skillId,
-        "SKILL.md",
+        "agents",
+        `${subAgent.id}.md`,
       );
-      const skillExistsBefore = await fs
-        .access(skillPathBefore)
+      const subAgentExistsBefore = await fs
+        .access(subAgentPathBefore)
         .then(() => true)
         .catch(() => false);
-      expect(skillExistsBefore).toBe(false);
+      expect(subAgentExistsBefore).toBe(false);
 
       await emitAndWaitResponse<
         PodUnbindRepositoryPayload,
@@ -485,13 +423,6 @@ describe("Repository 管理", () => {
         { requestId: uuidv4(), canvasId, podId: pod.id },
       );
 
-      const skillPath = path.join(
-        podWorkspacePath,
-        ".claude",
-        "skills",
-        skillId,
-        "SKILL.md",
-      );
       const subAgentPath = path.join(
         podWorkspacePath,
         ".claude",
@@ -499,16 +430,11 @@ describe("Repository 管理", () => {
         `${subAgent.id}.md`,
       );
 
-      const skillExists = await fs
-        .access(skillPath)
-        .then(() => true)
-        .catch(() => false);
       const subAgentExists = await fs
         .access(subAgentPath)
         .then(() => true)
         .catch(() => false);
 
-      expect(skillExists).toBe(true);
       expect(subAgentExists).toBe(true);
     });
 
@@ -517,13 +443,14 @@ describe("Repository 管理", () => {
       const pod = await createPod(client);
       const repo = await createRepository(client, `unbind-clean-${uuidv4()}`);
 
-      const { createSkillFile } = await import("../helpers/index.js");
-      const skillId = await createSkillFile(
-        `skill-${uuidv4()}`,
-        "# Test Skill",
+      const { createSubAgent } = await import("../helpers/index.js");
+      const subAgent = await createSubAgent(
+        client,
+        `subagent-${uuidv4()}`,
+        "Test SubAgent",
       );
 
-      await bindSkillToPod(client, pod.id, skillId);
+      await bindSubAgentToPod(client, pod.id, subAgent.id);
 
       const canvasId = await getCanvasId(client);
       await emitAndWaitResponse<
@@ -540,19 +467,18 @@ describe("Repository 管理", () => {
       const path = await import("path");
       const fs = await import("fs/promises");
       const repoPath = path.join(config.repositoriesRoot, repo.id);
-      const skillPathInRepo = path.join(
+      const agentPathInRepo = path.join(
         repoPath,
         ".claude",
-        "skills",
-        skillId,
-        "SKILL.md",
+        "agents",
+        `${subAgent.id}.md`,
       );
 
-      const skillExistsInRepo = await fs
-        .access(skillPathInRepo)
+      const agentExistsInRepo = await fs
+        .access(agentPathInRepo)
         .then(() => true)
         .catch(() => false);
-      expect(skillExistsInRepo).toBe(true);
+      expect(agentExistsInRepo).toBe(true);
 
       await emitAndWaitResponse<
         PodUnbindRepositoryPayload,
@@ -564,11 +490,11 @@ describe("Repository 管理", () => {
         { requestId: uuidv4(), canvasId, podId: pod.id },
       );
 
-      const skillExistsAfterUnbind = await fs
-        .access(skillPathInRepo)
+      const agentExistsAfterUnbind = await fs
+        .access(agentPathInRepo)
         .then(() => true)
         .catch(() => false);
-      expect(skillExistsAfterUnbind).toBe(false);
+      expect(agentExistsAfterUnbind).toBe(false);
     });
   });
 

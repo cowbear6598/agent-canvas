@@ -177,11 +177,11 @@ describe("createNoteStore", () => {
         const config = createTestConfig();
         const store = createNoteStore<TestItem, TestNote>(config)();
         const note1 = {
-          ...createMockNote("skill"),
+          ...createMockNote("repository"),
           testItemId: "item-1",
         } as TestNote;
         const note2 = {
-          ...createMockNote("skill"),
+          ...createMockNote("repository"),
           testItemId: "item-2",
         } as TestNote;
         store.notes = [note1, note2];
@@ -197,12 +197,12 @@ describe("createNoteStore", () => {
         const config = createTestConfig();
         const store = createNoteStore<TestItem, TestNote>(config)();
         const unboundNote = {
-          ...createMockNote("skill"),
+          ...createMockNote("repository"),
           boundToPodId: null,
           testItemId: "item-1",
         } as TestNote;
         const boundNote = {
-          ...createMockNote("skill"),
+          ...createMockNote("repository"),
           boundToPodId: "pod-1",
           testItemId: "item-2",
         } as TestNote;
@@ -218,12 +218,12 @@ describe("createNoteStore", () => {
         const config = createTestConfig();
         const store = createNoteStore<TestItem, TestNote>(config)();
         const boundNote1 = {
-          ...createMockNote("skill"),
+          ...createMockNote("repository"),
           boundToPodId: "pod-1",
           testItemId: "item-1",
         } as TestNote;
         const boundNote2 = {
-          ...createMockNote("skill"),
+          ...createMockNote("repository"),
           boundToPodId: "pod-2",
           testItemId: "item-2",
         } as TestNote;
@@ -240,12 +240,12 @@ describe("createNoteStore", () => {
         const config = createTestConfig({ relationship: "one-to-one" });
         const store = createNoteStore<TestItem, TestNote>(config)();
         const note1 = {
-          ...createMockNote("skill"),
+          ...createMockNote("repository"),
           boundToPodId: "pod-1",
           testItemId: "item-1",
         } as TestNote;
         const note2 = {
-          ...createMockNote("skill"),
+          ...createMockNote("repository"),
           boundToPodId: "pod-1",
           testItemId: "item-2",
         } as TestNote;
@@ -261,7 +261,7 @@ describe("createNoteStore", () => {
         const config = createTestConfig({ relationship: "one-to-one" });
         const store = createNoteStore<TestItem, TestNote>(config)();
         const note = {
-          ...createMockNote("skill"),
+          ...createMockNote("repository"),
           boundToPodId: "pod-1",
           testItemId: "item-1",
         } as TestNote;
@@ -278,17 +278,17 @@ describe("createNoteStore", () => {
         const config = createTestConfig({ relationship: "one-to-many" });
         const store = createNoteStore<TestItem, TestNote>(config)();
         const note1 = {
-          ...createMockNote("skill"),
+          ...createMockNote("repository"),
           boundToPodId: "pod-1",
           testItemId: "item-1",
         } as TestNote;
         const note2 = {
-          ...createMockNote("skill"),
+          ...createMockNote("repository"),
           boundToPodId: "pod-1",
           testItemId: "item-2",
         } as TestNote;
         const note3 = {
-          ...createMockNote("skill"),
+          ...createMockNote("repository"),
           boundToPodId: "pod-2",
           testItemId: "item-3",
         } as TestNote;
@@ -305,7 +305,7 @@ describe("createNoteStore", () => {
         const config = createTestConfig({ relationship: "one-to-many" });
         const store = createNoteStore<TestItem, TestNote>(config)();
         const note = {
-          ...createMockNote("skill"),
+          ...createMockNote("repository"),
           boundToPodId: "pod-1",
           testItemId: "item-1",
         } as TestNote;
@@ -322,11 +322,11 @@ describe("createNoteStore", () => {
         const config = createTestConfig();
         const store = createNoteStore<TestItem, TestNote>(config)();
         const note1 = {
-          ...createMockNote("skill", { id: "note-1" }),
+          ...createMockNote("repository", { id: "note-1" }),
           testItemId: "item-1",
         } as TestNote;
         const note2 = {
-          ...createMockNote("skill", { id: "note-2" }),
+          ...createMockNote("repository", { id: "note-2" }),
           testItemId: "item-2",
         } as TestNote;
         store.notes = [note1, note2];
@@ -340,7 +340,7 @@ describe("createNoteStore", () => {
         const config = createTestConfig();
         const store = createNoteStore<TestItem, TestNote>(config)();
         const note = {
-          ...createMockNote("skill", { id: "note-1" }),
+          ...createMockNote("repository", { id: "note-1" }),
           testItemId: "item-1",
         } as TestNote;
         store.notes = [note];
@@ -374,7 +374,7 @@ describe("createNoteStore", () => {
         const config = createTestConfig();
         const store = createNoteStore<TestItem, TestNote>(config)();
         const unboundNote = {
-          ...createMockNote("skill", { id: "note-1" }),
+          ...createMockNote("repository", { id: "note-1" }),
           boundToPodId: null,
           testItemId: "item-1",
         } as TestNote;
@@ -388,7 +388,7 @@ describe("createNoteStore", () => {
         const config = createTestConfig();
         const store = createNoteStore<TestItem, TestNote>(config)();
         const unboundNote = {
-          ...createMockNote("skill", { id: "note-1" }),
+          ...createMockNote("repository", { id: "note-1" }),
           boundToPodId: null,
           testItemId: "item-1",
         } as TestNote;
@@ -402,7 +402,7 @@ describe("createNoteStore", () => {
         const config = createTestConfig();
         const store = createNoteStore<TestItem, TestNote>(config)();
         const boundNote = {
-          ...createMockNote("skill", { id: "note-1" }),
+          ...createMockNote("repository", { id: "note-1" }),
           boundToPodId: "pod-1",
           testItemId: "item-1",
         } as TestNote;
@@ -427,7 +427,7 @@ describe("createNoteStore", () => {
         const config = createTestConfig();
         const store = createNoteStore<TestItem, TestNote>(config)();
         const boundNote = {
-          ...createMockNote("skill"),
+          ...createMockNote("repository"),
           boundToPodId: "pod-1",
           testItemId: "item-1",
         } as TestNote;
@@ -440,7 +440,7 @@ describe("createNoteStore", () => {
         const config = createTestConfig();
         const store = createNoteStore<TestItem, TestNote>(config)();
         const unboundNote = {
-          ...createMockNote("skill"),
+          ...createMockNote("repository"),
           boundToPodId: null,
           testItemId: "item-1",
         } as TestNote;
@@ -462,7 +462,7 @@ describe("createNoteStore", () => {
         const config = createTestConfig();
         const store = createNoteStore<TestItem, TestNote>(config)();
         const boundNote = {
-          ...createMockNote("skill"),
+          ...createMockNote("repository"),
           boundToPodId: "pod-1",
           testItemId: "item-1",
         } as TestNote;
@@ -475,7 +475,7 @@ describe("createNoteStore", () => {
         const config = createTestConfig();
         const store = createNoteStore<TestItem, TestNote>(config)();
         const boundNote = {
-          ...createMockNote("skill"),
+          ...createMockNote("repository"),
           boundToPodId: "pod-1",
           testItemId: "item-1",
         } as TestNote;
@@ -488,7 +488,7 @@ describe("createNoteStore", () => {
         const config = createTestConfig();
         const store = createNoteStore<TestItem, TestNote>(config)();
         const unboundNote = {
-          ...createMockNote("skill"),
+          ...createMockNote("repository"),
           boundToPodId: null,
           testItemId: "item-1",
         } as TestNote;
@@ -638,8 +638,8 @@ describe("createNoteStore", () => {
       canvasStore.activeCanvasId = "canvas-1";
 
       const notes = [
-        { ...createMockNote("skill"), testItemId: "item-1" },
-        { ...createMockNote("skill"), testItemId: "item-2" },
+        { ...createMockNote("repository"), testItemId: "item-1" },
+        { ...createMockNote("repository"), testItemId: "item-2" },
       ];
 
       mockCreateWebSocketRequest.mockResolvedValueOnce({ notes });
@@ -737,7 +737,7 @@ describe("createNoteStore", () => {
       const config = createTestConfig();
       const store = createNoteStore<TestItem, TestNote>(config)();
       const note = {
-        ...createMockNote("skill", { id: "note-1", x: 100, y: 200 }),
+        ...createMockNote("repository", { id: "note-1", x: 100, y: 200 }),
         testItemId: "item-1",
       } as TestNote;
       store.notes = [note];
@@ -767,7 +767,7 @@ describe("createNoteStore", () => {
       const config = createTestConfig();
       const store = createNoteStore<TestItem, TestNote>(config)();
       const note = {
-        ...createMockNote("skill", { id: "note-1", x: 100, y: 200 }),
+        ...createMockNote("repository", { id: "note-1", x: 100, y: 200 }),
         testItemId: "item-1",
       } as TestNote;
       store.notes = [note];
@@ -797,7 +797,7 @@ describe("createNoteStore", () => {
       const config = createTestConfig();
       const store = createNoteStore<TestItem, TestNote>(config)();
       const note = {
-        ...createMockNote("skill", { id: "note-1", x: 100, y: 200 }),
+        ...createMockNote("repository", { id: "note-1", x: 100, y: 200 }),
         testItemId: "item-1",
       } as TestNote;
       store.notes = [note];
@@ -825,12 +825,12 @@ describe("createNoteStore", () => {
       const config = createTestConfig({ relationship: "one-to-one" });
       const store = createNoteStore<TestItem, TestNote>(config)();
       const existingNote = {
-        ...createMockNote("skill", { id: "note-1" }),
+        ...createMockNote("repository", { id: "note-1" }),
         boundToPodId: "pod-1",
         testItemId: "item-1",
       } as TestNote;
       const newNote = {
-        ...createMockNote("skill", { id: "note-2" }),
+        ...createMockNote("repository", { id: "note-2" }),
         boundToPodId: null,
         testItemId: "item-2",
       } as TestNote;
@@ -857,7 +857,7 @@ describe("createNoteStore", () => {
       const config = createTestConfig();
       const store = createNoteStore<TestItem, TestNote>(config)();
       const note = {
-        ...createMockNote("skill", { id: "note-1", x: 300, y: 400 }),
+        ...createMockNote("repository", { id: "note-1", x: 300, y: 400 }),
         boundToPodId: null,
         testItemId: "item-1",
       } as TestNote;
@@ -894,7 +894,7 @@ describe("createNoteStore", () => {
       const config = createTestConfig({ bindEvents: undefined });
       const store = createNoteStore<TestItem, TestNote>(config)();
       const note = {
-        ...createMockNote("skill", { id: "note-1" }),
+        ...createMockNote("repository", { id: "note-1" }),
         boundToPodId: null,
         testItemId: "item-1",
       } as TestNote;
@@ -924,7 +924,7 @@ describe("createNoteStore", () => {
       const config = createTestConfig({ relationship: "one-to-one" });
       const store = createNoteStore<TestItem, TestNote>(config)();
       const note = {
-        ...createMockNote("skill", { id: "note-1" }),
+        ...createMockNote("repository", { id: "note-1" }),
         boundToPodId: "pod-1",
         testItemId: "item-1",
       } as TestNote;
@@ -960,7 +960,7 @@ describe("createNoteStore", () => {
       const config = createTestConfig({ relationship: "one-to-one" });
       const store = createNoteStore<TestItem, TestNote>(config)();
       const note = {
-        ...createMockNote("skill", {
+        ...createMockNote("repository", {
           id: "note-1",
           originalPosition: { x: 100, y: 200 },
         }),
@@ -989,7 +989,7 @@ describe("createNoteStore", () => {
       const config = createTestConfig({ relationship: "one-to-one" });
       const store = createNoteStore<TestItem, TestNote>(config)();
       const note = {
-        ...createMockNote("skill", { id: "note-1" }),
+        ...createMockNote("repository", { id: "note-1" }),
         boundToPodId: "pod-1",
         testItemId: "item-1",
       } as TestNote;
@@ -1018,7 +1018,7 @@ describe("createNoteStore", () => {
       const config = createTestConfig({ relationship: "one-to-many" });
       const store = createNoteStore<TestItem, TestNote>(config)();
       const note = {
-        ...createMockNote("skill", { id: "note-1" }),
+        ...createMockNote("repository", { id: "note-1" }),
         boundToPodId: "pod-1",
         testItemId: "item-1",
       } as TestNote;
@@ -1038,7 +1038,7 @@ describe("createNoteStore", () => {
       });
       const store = createNoteStore<TestItem, TestNote>(config)();
       const note = {
-        ...createMockNote("skill", { id: "note-1" }),
+        ...createMockNote("repository", { id: "note-1" }),
         boundToPodId: "pod-1",
         testItemId: "item-1",
       } as TestNote;
@@ -1055,7 +1055,7 @@ describe("createNoteStore", () => {
       const config = createTestConfig({ relationship: "one-to-one" });
       const store = createNoteStore<TestItem, TestNote>(config)();
       const note = {
-        ...createMockNote("skill", { id: "note-1" }),
+        ...createMockNote("repository", { id: "note-1" }),
         boundToPodId: "pod-1",
         testItemId: "item-1",
       } as TestNote;
@@ -1108,11 +1108,11 @@ describe("createNoteStore", () => {
       const item: TestItem = { id: "item-1", name: "Item 1" };
       store.availableItems = [item] as unknown[];
       const note1 = {
-        ...createMockNote("skill", { id: "note-1" }),
+        ...createMockNote("repository", { id: "note-1" }),
         testItemId: "item-1",
       } as TestNote;
       const note2 = {
-        ...createMockNote("skill", { id: "note-2" }),
+        ...createMockNote("repository", { id: "note-2" }),
         testItemId: "item-2",
       } as TestNote;
       store.notes = [note1, note2];
@@ -1209,7 +1209,7 @@ describe("createNoteStore", () => {
         const config = createTestConfig();
         const store = createNoteStore<TestItem, TestNote>(config)();
         const note = {
-          ...createMockNote("skill"),
+          ...createMockNote("repository"),
           testItemId: "item-1",
         } as TestNote;
 
@@ -1223,7 +1223,7 @@ describe("createNoteStore", () => {
         const config = createTestConfig();
         const store = createNoteStore<TestItem, TestNote>(config)();
         const note = {
-          ...createMockNote("skill", { id: "note-1" }),
+          ...createMockNote("repository", { id: "note-1" }),
           testItemId: "item-1",
         } as TestNote;
         store.notes = [note];
@@ -1239,13 +1239,13 @@ describe("createNoteStore", () => {
         const config = createTestConfig();
         const store = createNoteStore<TestItem, TestNote>(config)();
         const originalNote = {
-          ...createMockNote("skill", { id: "note-1", name: "Original" }),
+          ...createMockNote("repository", { id: "note-1", name: "Original" }),
           testItemId: "item-1",
         } as TestNote;
         store.notes = [originalNote];
 
         const updatedNote = {
-          ...createMockNote("skill", { id: "note-1", name: "Updated" }),
+          ...createMockNote("repository", { id: "note-1", name: "Updated" }),
           testItemId: "item-1",
         } as TestNote;
         store.updateNoteFromEvent(updatedNote);
@@ -1258,7 +1258,7 @@ describe("createNoteStore", () => {
         const config = createTestConfig();
         const store = createNoteStore<TestItem, TestNote>(config)();
         const note = {
-          ...createMockNote("skill", { id: "non-existent" }),
+          ...createMockNote("repository", { id: "non-existent" }),
           testItemId: "item-1",
         } as TestNote;
 
@@ -1271,11 +1271,11 @@ describe("createNoteStore", () => {
         const config = createTestConfig();
         const store = createNoteStore<TestItem, TestNote>(config)();
         const note1 = {
-          ...createMockNote("skill", { id: "note-1" }),
+          ...createMockNote("repository", { id: "note-1" }),
           testItemId: "item-1",
         } as TestNote;
         const note2 = {
-          ...createMockNote("skill", { id: "note-2" }),
+          ...createMockNote("repository", { id: "note-2" }),
           testItemId: "item-2",
         } as TestNote;
         store.notes = [note1, note2];
@@ -1326,11 +1326,11 @@ describe("createNoteStore", () => {
         const item2: TestItem = { id: "item-2", name: "Item 2" };
         store.availableItems = [item1, item2] as unknown[];
         const note1 = {
-          ...createMockNote("skill", { id: "note-1" }),
+          ...createMockNote("repository", { id: "note-1" }),
           testItemId: "item-1",
         } as TestNote;
         const note2 = {
-          ...createMockNote("skill", { id: "note-2" }),
+          ...createMockNote("repository", { id: "note-2" }),
           testItemId: "item-2",
         } as TestNote;
         store.notes = [note1, note2];
@@ -1350,7 +1350,7 @@ describe("createNoteStore", () => {
         const item2: TestItem = { id: "item-2", name: "Item 2" };
         store.availableItems = [item1, item2] as unknown[];
         const note1 = {
-          ...createMockNote("skill", { id: "note-1" }),
+          ...createMockNote("repository", { id: "note-1" }),
           testItemId: "item-1",
         } as TestNote;
         store.notes = [note1];
@@ -1561,7 +1561,7 @@ describe("createNoteStore", () => {
         crudConfig: {
           resourceType: "TestResource",
           methodPrefix: "testResource",
-          toastCategory: "Skill",
+          toastCategory: "Note",
           events: {
             create: {
               request: "test-resource:create" as any,

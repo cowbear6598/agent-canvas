@@ -224,10 +224,15 @@
     },
     "slot": {
       "duplicateTitle": "Already exists, cannot insert",
-      "skillDuplicate": "This Skill is already bound to this Pod",
       "subAgentDuplicate": "This SubAgent is already bound to this Pod",
       "mcpServerDuplicate": "This MCP Server is already bound to this Pod",
-      "codexDisabled": "Codex doesn't support this"
+      "codexDisabled": "Codex doesn't support this",
+      "pluginsLabel": "Plugins",
+      "pluginsLoading": "Loading...",
+      "pluginsBusyTooltip": "Task in progress, please wait.",
+      "pluginsEmpty": "No plugins installed",
+      "pluginsToggleFailed": "Update failed, rolled back",
+      "pluginsCodexHint": "Codex plugins are globally managed by codex"
     }
   },
   "run": {
@@ -362,16 +367,10 @@
     },
     "podContextMenu": {
       "downloadDirectory": "Download Working Directory (zip)",
-      "plugin": "Plugin",
       "connect": "Connect {label}",
       "disconnect": "Disconnect {label}",
       "downloadDirectoryFailed": "Failed to download directory",
-      "downloadDirectoryFailedDesc": "Unable to download working directory, please try again later",
-      "noPluginInstalled": "No plugins installed",
-      "pluginLoadFailed": "Failed to load plugin list",
-      "pluginLoadFailedDesc": "Unable to retrieve installed plugins, please try again later",
-      "pluginUpdateFailed": "Plugin configuration failed",
-      "pluginUpdateFailedDesc": "Unable to update Pod plugin settings, please try again later"
+      "downloadDirectoryFailedDesc": "Unable to download working directory, please try again later"
     },
     "connectionContextMenu": {
       "triggerModeAuto": "Auto Trigger (Auto)",
@@ -560,15 +559,6 @@
       "speechMaxLength": "Maximum text length reached",
       "speechUnsupported": "Speech input is not supported by this browser"
     },
-    "skillImport": {
-      "invalidFormat": "Invalid file format, only ZIP files are supported",
-      "fileTooLarge": "File size exceeds 5MB limit",
-      "networkFailed": "Network transfer failed, please try again",
-      "base64Failed": "Base64 conversion failed",
-      "importFailed": "Import failed",
-      "importSuccess": "Imported successfully",
-      "importSuccessOverwrite": "Imported successfully (overwritten)"
-    },
     "eventHandler": {
       "podCreated": "Pod created",
       "podRenamed": "Renamed successfully",
@@ -581,7 +571,6 @@
       "canvasCreated": "Canvas created",
       "canvasRenamed": "Canvas renamed",
       "pasted": "Pasted successfully",
-      "skillDeleted": "Skill deleted",
       "worktreeCreated": "Worktree created",
       "repositoryDeleted": "Repository deleted",
       "subAgentDeleted": "SubAgent deleted",

@@ -27,7 +27,7 @@
 }
 
 .pod-menu-submenu::before {
-  content: '';
+  content: "";
   position: absolute;
   left: -12px;
   top: 0;
@@ -58,7 +58,6 @@
 
 /* Pod Menu Submenu Scrollable */
 .pod-menu-submenu-scrollable,
-.pod-skill-menu-scrollable,
 .pod-subagent-menu-scrollable {
   max-height: calc(36px * 5 + 8px);
   overflow-y: auto;
@@ -66,20 +65,17 @@
 
 /* Scrollbar 基礎樣式 */
 .pod-menu-submenu-scrollable::-webkit-scrollbar,
-.pod-skill-menu-scrollable::-webkit-scrollbar,
 .pod-subagent-menu-scrollable::-webkit-scrollbar {
   width: 8px;
 }
 
 .pod-menu-submenu-scrollable::-webkit-scrollbar-track,
-.pod-skill-menu-scrollable::-webkit-scrollbar-track,
 .pod-subagent-menu-scrollable::-webkit-scrollbar-track {
   background: oklch(0.9 0.01 50);
   border-radius: 4px;
 }
 
 .pod-menu-submenu-scrollable::-webkit-scrollbar-thumb,
-.pod-skill-menu-scrollable::-webkit-scrollbar-thumb,
 .pod-subagent-menu-scrollable::-webkit-scrollbar-thumb {
   background: oklch(0.6 0.02 50);
   border-radius: 4px;
@@ -87,7 +83,6 @@
 }
 
 .pod-menu-submenu-scrollable::-webkit-scrollbar-thumb:hover,
-.pod-skill-menu-scrollable::-webkit-scrollbar-thumb:hover,
 .pod-subagent-menu-scrollable::-webkit-scrollbar-thumb:hover {
   background: oklch(0.5 0.02 50);
 }

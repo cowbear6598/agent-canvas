@@ -74,14 +74,14 @@
   z-index: -1;
 }
 
-/* Skill 凹槽視覺效果（POD 左側） */
-.pod-with-skill-notch .pod-doodle::after {
+/* Plugin 凹槽視覺效果（POD 左側） */
+.pod-with-plugin-notch .pod-doodle::after {
   content: "";
   position: absolute;
-  left: -6px; /* 凹槽往左延伸的距離 */
-  top: 16px; /* 凹槽的垂直位置 */
-  width: 8px; /* 凹槽寬度 */
-  height: 32px; /* 凹槽高度 */
+  left: -6px;
+  top: 16px;
+  width: 8px;
+  height: 32px;
   background: var(--card);
   border: 2px solid var(--doodle-ink);
   border-right: none;

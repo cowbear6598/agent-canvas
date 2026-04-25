@@ -4,7 +4,6 @@ export * from "./podSchemas.js";
 export * from "./chatSchemas.js";
 export * from "./connectionSchemas.js";
 export * from "./workflowSchemas.js";
-export * from "./skillSchemas.js";
 export * from "./commandSchemas.js";
 export * from "./pasteSchemas.js";
 export * from "./repositorySchemas.js";

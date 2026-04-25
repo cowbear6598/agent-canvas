@@ -4,16 +4,16 @@
 import { computed, toRef } from "vue";
 import { useI18n } from "vue-i18n";
 import type {
-  SkillNote,
   SubAgentNote,
   RepositoryNote,
   CommandNote,
   McpServerNote,
 } from "@/types";
+import type { PodProvider } from "@/types/pod";
 import PodMultiBindSlot from "@/components/pod/PodMultiBindSlot.vue";
 import PodSingleBindSlot from "@/components/pod/PodSingleBindSlot.vue";
+import PodPluginSlot from "@/components/pod/PodPluginSlot.vue";
 import {
-  useSkillStore,
   useSubAgentStore,
   useMcpServerStore,
   useRepositoryStore,
@@ -24,7 +24,8 @@ import { usePodCapabilities } from "@/composables/pod/usePodCapabilities";
 const props = defineProps<{
   podId: string;
   podRotation: number;
-  boundSkillNotes: SkillNote[];
+  pluginActiveCount: number;
+  provider: PodProvider;
   boundSubAgentNotes: SubAgentNote[];
   boundRepositoryNote: RepositoryNote | undefined;
   boundCommandNote: CommandNote | undefined;
@@ -36,7 +37,7 @@ const props = defineProps<{
 // 所有模板與邏輯一律透過 props.xxx 存取。
 
 const emit = defineEmits<{
-  "skill-dropped": [noteId: string];
+  "plugin-clicked": [event: MouseEvent];
   "subagent-dropped": [noteId: string];
   "repository-dropped": [noteId: string];
   "repository-removed": [];
@@ -49,7 +50,6 @@ const { t } = useI18n();
 
 // 子元件自行取 store 是有意設計，避免父元件介面爆炸；
 // store 為 singleton，重複呼叫無額外成本。
-const skillStore = useSkillStore();
 const subAgentStore = useSubAgentStore();
 const mcpServerStore = useMcpServerStore();
 const repositoryStore = useRepositoryStore();
@@ -57,7 +57,7 @@ const commandStore = useCommandStore();
 
 // 讀取 Pod 對應 Provider 的 capability flags
 const {
-  isSkillEnabled,
+  isPluginEnabled,
   isSubAgentEnabled,
   isRepositoryEnabled,
   isCommandEnabled,
@@ -66,6 +66,9 @@ const {
 
 /** 不支援功能時顯示的 tooltip 文字（由 i18n 提供） */
 const DISABLED_TOOLTIP = computed(() => t("pod.slot.codexDisabled"));
+
+/** Plugin capability 關閉（目前兩個 provider plugin: true，恆為 false，保留以利擴充） */
+const pluginCapabilityDisabled = computed(() => !isPluginEnabled.value);
 
 // -----------------------------------------------------------------------
 // Slot 設定陣列：每筆描述一個 slot 的型態、資料來源與 emit 對應
@@ -93,8 +96,8 @@ type MultiSlotConfig = {
   areaClass: string;
   slotClass: string;
   label: string;
-  store: typeof skillStore | typeof subAgentStore | typeof mcpServerStore;
-  boundNotes: () => SkillNote[] | SubAgentNote[] | McpServerNote[];
+  store: typeof subAgentStore | typeof mcpServerStore;
+  boundNotes: () => SubAgentNote[] | McpServerNote[];
   duplicateToastTitle: () => string;
   duplicateToastDescription: () => string;
   menuScrollableClass: string;
@@ -105,27 +108,6 @@ type MultiSlotConfig = {
 };
 
 type SlotConfig = SingleSlotConfig | MultiSlotConfig;
-
-function createSkillSlotConfig(): MultiSlotConfig {
-  return {
-    kind: "multi",
-    areaClass: "pod-notch-area-base pod-skill-notch-area",
-    slotClass: "pod-skill-slot",
-    label: "Skills",
-    store: skillStore,
-    boundNotes: () => props.boundSkillNotes,
-    duplicateToastTitle: () => t("pod.slot.duplicateTitle"),
-    duplicateToastDescription: () => t("pod.slot.skillDuplicate"),
-    menuScrollableClass: "pod-skill-menu-scrollable",
-    itemIdField: "skillId",
-    disabled: !isSkillEnabled.value,
-    disabledTooltip: DISABLED_TOOLTIP.value,
-    onDropped: (noteId: string): void => {
-      if (!noteId) return;
-      emit("skill-dropped", noteId);
-    },
-  };
-}
 
 function createSubAgentSlotConfig(): MultiSlotConfig {
   return {
@@ -206,7 +188,6 @@ function createMcpSlotConfig(): MultiSlotConfig {
 }
 
 const slotConfigs = computed((): SlotConfig[] => [
-  createSkillSlotConfig(),
   createSubAgentSlotConfig(),
   createRepositorySlotConfig(),
   createCommandSlotConfig(),
@@ -215,10 +196,16 @@ const slotConfigs = computed((): SlotConfig[] => [
 </script>
 
 <template>
-  <template
-    v-for="slot in slotConfigs"
-    :key="slot.slotClass"
-  >
+  <PodPluginSlot
+    :pod-id="props.podId"
+    :pod-rotation="props.podRotation"
+    :active-count="props.pluginActiveCount"
+    :provider="props.provider"
+    :capability-disabled="pluginCapabilityDisabled"
+    :disabled-tooltip="DISABLED_TOOLTIP"
+    @click="(ev) => emit('plugin-clicked', ev)"
+  />
+  <template v-for="slot in slotConfigs" :key="slot.slotClass">
     <div :class="slot.areaClass">
       <PodSingleBindSlot
         v-if="slot.kind === 'single'"

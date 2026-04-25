@@ -19,7 +19,6 @@ type StoreConfigEntry = {
 
 interface BatchDragStores {
   podStore: ReturnType<typeof useCanvasContext>["podStore"];
-  skillStore: NoteStore;
   repositoryStore: NoteStore;
   subAgentStore: NoteStore;
   commandStore: NoteStore;
@@ -28,7 +27,6 @@ interface BatchDragStores {
 
 interface MovedElementSets {
   movedPodIds: Set<string>;
-  movedSkillNoteIds: Set<string>;
   movedRepositoryNoteIds: Set<string>;
   movedSubAgentNoteIds: Set<string>;
   movedCommandNoteIds: Set<string>;
@@ -41,7 +39,6 @@ function createStoreConfigMap(
 ): Record<string, StoreConfigEntry> {
   const {
     podStore,
-    skillStore,
     repositoryStore,
     subAgentStore,
     commandStore,
@@ -49,7 +46,6 @@ function createStoreConfigMap(
   } = stores;
   const {
     movedPodIds,
-    movedSkillNoteIds,
     movedRepositoryNoteIds,
     movedSubAgentNoteIds,
     movedCommandNoteIds,
@@ -62,13 +58,6 @@ function createStoreConfigMap(
         podStore.movePod(id, x, y),
       getItem: (id: string) => podStore.pods.find((pod) => pod.id === id),
       isPod: true,
-    },
-    skillNote: {
-      movedSet: movedSkillNoteIds,
-      moveItem: (id: string, x: number, y: number) =>
-        skillStore.updateNotePositionLocal(id, x, y),
-      getItem: (id: string) => skillStore.notes.find((note) => note.id === id),
-      isPod: false,
     },
     repositoryNote: {
       movedSet: movedRepositoryNoteIds,
@@ -111,7 +100,6 @@ export function useBatchDrag(): {
   isElementSelected: (
     type:
       | "pod"
-      | "skillNote"
       | "repositoryNote"
       | "subAgentNote"
       | "commandNote"
@@ -123,7 +111,6 @@ export function useBatchDrag(): {
     podStore,
     viewportStore,
     selectionStore,
-    skillStore,
     repositoryStore,
     subAgentStore,
     commandStore,
@@ -134,7 +121,6 @@ export function useBatchDrag(): {
     startX: 0,
     startY: 0,
     movedPodIds: new Set<string>(),
-    movedSkillNoteIds: new Set<string>(),
     movedRepositoryNoteIds: new Set<string>(),
     movedSubAgentNoteIds: new Set<string>(),
     movedCommandNoteIds: new Set<string>(),
@@ -143,7 +129,6 @@ export function useBatchDrag(): {
 
   const clearDragState = (): void => {
     dragState.movedPodIds.clear();
-    dragState.movedSkillNoteIds.clear();
     dragState.movedRepositoryNoteIds.clear();
     dragState.movedSubAgentNoteIds.clear();
     dragState.movedCommandNoteIds.clear();
@@ -151,7 +136,6 @@ export function useBatchDrag(): {
   };
 
   const noteMovedSets: { set: Set<string>; store: NoteStore }[] = [
-    { set: dragState.movedSkillNoteIds, store: skillStore },
     { set: dragState.movedRepositoryNoteIds, store: repositoryStore },
     { set: dragState.movedSubAgentNoteIds, store: subAgentStore },
     { set: dragState.movedCommandNoteIds, store: commandStore },
@@ -217,7 +201,6 @@ export function useBatchDrag(): {
     const storeConfigMap = createStoreConfigMap(
       {
         podStore,
-        skillStore,
         repositoryStore,
         subAgentStore,
         commandStore,
@@ -225,7 +208,6 @@ export function useBatchDrag(): {
       },
       {
         movedPodIds: dragState.movedPodIds,
-        movedSkillNoteIds: dragState.movedSkillNoteIds,
         movedRepositoryNoteIds: dragState.movedRepositoryNoteIds,
         movedSubAgentNoteIds: dragState.movedSubAgentNoteIds,
         movedCommandNoteIds: dragState.movedCommandNoteIds,
@@ -278,7 +260,6 @@ export function useBatchDrag(): {
   const isElementSelected = (
     type:
       | "pod"
-      | "skillNote"
       | "repositoryNote"
       | "subAgentNote"
       | "commandNote"

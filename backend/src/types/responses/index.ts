@@ -1,6 +1,5 @@
 export * from "./pod.js";
 export * from "./connection.js";
-export * from "./skill.js";
 export * from "./command.js";
 export * from "./repository.js";
 export * from "./subAgent.js";

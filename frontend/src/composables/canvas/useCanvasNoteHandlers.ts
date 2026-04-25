@@ -5,7 +5,6 @@ import { screenToCanvasPosition } from "@/lib/canvasCoordinateUtils";
 import type { usePodStore } from "@/stores/pod";
 import type { useViewportStore } from "@/stores/pod";
 import type {
-  useSkillStore,
   useSubAgentStore,
   useRepositoryStore,
   useCommandStore,
@@ -43,7 +42,6 @@ interface NoteStoreBase {
 interface UseCanvasNoteHandlersOptions {
   podStore: ReturnType<typeof usePodStore>;
   viewportStore: ReturnType<typeof useViewportStore>;
-  skillStore: ReturnType<typeof useSkillStore>;
   subAgentStore: ReturnType<typeof useSubAgentStore>;
   repositoryStore: ReturnType<typeof useRepositoryStore>;
   commandStore: ReturnType<typeof useCommandStore>;
@@ -56,14 +54,13 @@ interface UseCanvasNoteHandlersOptions {
   mcpServerModal: Ref<McpServerModalState>;
 }
 
-type NoteType = "skill" | "subAgent" | "repository" | "command" | "mcpServer";
+type NoteType = "subAgent" | "repository" | "command" | "mcpServer";
 
 export function useCanvasNoteHandlers(options: UseCanvasNoteHandlersOptions): {
   noteHandlerMap: Record<NoteType, ReturnType<typeof useNoteEventHandlers>>;
   showTrashZone: ComputedRef<boolean>;
   isTrashHighlighted: ComputedRef<boolean>;
   isCanvasEmpty: ComputedRef<boolean>;
-  handleCreateSkillNote: (itemId: string) => void;
   handleCreateSubAgentNote: (itemId: string) => void;
   handleCreateRepositoryNote: (itemId: string) => void;
   handleCreateCommandNote: (itemId: string) => void;
@@ -77,7 +74,6 @@ export function useCanvasNoteHandlers(options: UseCanvasNoteHandlersOptions): {
   const {
     podStore,
     viewportStore,
-    skillStore,
     subAgentStore,
     repositoryStore,
     commandStore,
@@ -90,7 +86,6 @@ export function useCanvasNoteHandlers(options: UseCanvasNoteHandlersOptions): {
   const { showErrorToast } = useToast();
 
   const noteConfigs = [
-    { store: skillStore as NoteStoreBase, type: "skill" as const },
     { store: subAgentStore as NoteStoreBase, type: "subAgent" as const },
     { store: repositoryStore as NoteStoreBase, type: "repository" as const },
     { store: commandStore as NoteStoreBase, type: "command" as const },
@@ -134,7 +129,6 @@ export function useCanvasNoteHandlers(options: UseCanvasNoteHandlersOptions): {
     };
   };
 
-  const handleCreateSkillNote = createNoteHandler(skillStore as NoteStoreBase);
   const handleCreateSubAgentNote = createNoteHandler(
     subAgentStore as NoteStoreBase,
   );
@@ -221,7 +215,6 @@ export function useCanvasNoteHandlers(options: UseCanvasNoteHandlersOptions): {
     showTrashZone,
     isTrashHighlighted,
     isCanvasEmpty,
-    handleCreateSkillNote,
     handleCreateSubAgentNote,
     handleCreateRepositoryNote,
     handleCreateCommandNote,

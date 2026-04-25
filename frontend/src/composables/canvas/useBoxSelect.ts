@@ -13,7 +13,6 @@ export function useBoxSelect(): {
     viewportStore,
     selectionStore,
     podStore,
-    skillStore,
     subAgentStore,
     repositoryStore,
     commandStore,
@@ -35,7 +34,6 @@ export function useBoxSelect(): {
       selectionStore.calculateSelectedElements({
         pods: podStore.pods,
         noteGroups: [
-          { notes: skillStore.notes, type: "skillNote" as const },
           { notes: repositoryStore.notes, type: "repositoryNote" as const },
           { notes: subAgentStore.notes, type: "subAgentNote" as const },
           { notes: commandStore.notes, type: "commandNote" as const },

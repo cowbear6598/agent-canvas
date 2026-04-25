@@ -1,4 +1,4 @@
-import path from 'path';
+import path from "path";
 
 export function validateResourceId(id: string): boolean {
   if (!id) {
@@ -12,7 +12,6 @@ export function validateResourceId(id: string): boolean {
   return id.length <= 100;
 }
 
-export const validateSkillId = validateResourceId;
 export const validateSubAgentId = validateResourceId;
 export const validateCommandId = validateResourceId;
 
@@ -21,14 +20,22 @@ export function validatePodId(podId: string): boolean {
     return false;
   }
 
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(podId);
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    podId,
+  );
 }
 
-export function isPathWithinDirectory(filePath: string, directory: string): boolean {
+export function isPathWithinDirectory(
+  filePath: string,
+  directory: string,
+): boolean {
   const resolvedPath = path.resolve(filePath);
   const resolvedDir = path.resolve(directory);
 
-  return resolvedPath.startsWith(resolvedDir + path.sep) || resolvedPath === resolvedDir;
+  return (
+    resolvedPath.startsWith(resolvedDir + path.sep) ||
+    resolvedPath === resolvedDir
+  );
 }
 
 function validatePathSegment(segment: string): boolean {
@@ -38,7 +45,7 @@ function validatePathSegment(segment: string): boolean {
 export function sanitizePathSegment(segment: string): string {
   const sanitized = path.basename(segment);
   if (!validatePathSegment(sanitized)) {
-    throw new Error('名稱格式不正確，只能包含英文、數字、dash');
+    throw new Error("名稱格式不正確，只能包含英文、數字、dash");
   }
   return sanitized;
 }

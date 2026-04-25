@@ -5,7 +5,6 @@ import type {
   PodProvider,
   ProviderCapabilities,
 } from "../pod";
-import type { SkillNote } from "@/types";
 import type { Repository, RepositoryNote } from "@/types";
 import type { SubAgentNote } from "@/types";
 import type { CommandNote } from "@/types";
@@ -51,7 +50,6 @@ export interface PodScheduleSetPayload extends ResultPayload {
 export interface PodDeletedPayload extends ResultPayload {
   podId?: string;
   deletedNoteIds?: {
-    skillNote?: string[];
     repositoryNote?: string[];
     commandNote?: string[];
     subAgentNote?: string[];
@@ -196,7 +194,6 @@ export interface WorkflowClearResultPayload extends ResultPayload {
 export interface PasteError {
   type:
     | "pod"
-    | "skillNote"
     | "repositoryNote"
     | "subAgentNote"
     | "commandNote"
@@ -207,7 +204,6 @@ export interface PasteError {
 
 export interface CanvasPasteResultPayload extends ResultPayload {
   createdPods: Pod[];
-  createdSkillNotes: SkillNote[];
   createdRepositoryNotes: RepositoryNote[];
   createdSubAgentNotes: SubAgentNote[];
   createdCommandNotes: CommandNote[];
@@ -371,14 +367,6 @@ export interface GroupDeletedPayload extends ResultPayload {
 export interface MovedToGroupPayload extends ResultPayload {
   itemId?: string;
   groupId?: string | null;
-}
-
-export interface SkillImportedPayload {
-  requestId: string;
-  success: boolean;
-  skill?: { id: string; name: string; description: string };
-  isOverwrite?: boolean;
-  error?: string;
 }
 
 export interface WorkflowAiDecidePendingPayload {

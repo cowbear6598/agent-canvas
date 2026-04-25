@@ -128,7 +128,7 @@ describe("handleProviderList", () => {
     const caps = claude.capabilities;
     // 所有能力欄位皆應為 true
     expect(caps.chat).toBe(true);
-    expect(caps.skill).toBe(true);
+    expect(caps.plugin).toBe(true);
     expect(caps.subAgent).toBe(true);
     expect(caps.repository).toBe(true);
     expect(caps.command).toBe(true);
@@ -137,7 +137,7 @@ describe("handleProviderList", () => {
     expect(caps.runMode).toBe(true);
   });
 
-  it("codex 的 capabilities 中 chat=true、command=true、repository=true，其餘全部 false", async () => {
+  it("codex 的 capabilities 中 chat=true、command=true、repository=true、plugin=true，其餘全部 false", async () => {
     await handleProviderList(
       CONNECTION_ID,
       { requestId: REQUEST_ID },
@@ -153,9 +153,9 @@ describe("handleProviderList", () => {
     expect(codex).toBeDefined();
 
     const caps = codex.capabilities;
-    // chat、command、repository 為 true，其餘全部 false
+    // chat、command、repository、plugin 為 true，其餘全部 false
     expect(caps.chat).toBe(true);
-    expect(caps.skill).toBe(false);
+    expect(caps.plugin).toBe(true);
     expect(caps.subAgent).toBe(false);
     expect(caps.repository).toBe(true);
     expect(caps.command).toBe(true);

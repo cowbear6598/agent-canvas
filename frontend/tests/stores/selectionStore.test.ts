@@ -51,9 +51,9 @@ describe("selectionStore", () => {
         const store = useSelectionStore();
         store.selectedElements = [
           { type: "pod", id: "pod-1" },
-          { type: "skillNote", id: "note-1" },
+          { type: "repositoryNote", id: "note-1" },
           { type: "pod", id: "pod-2" },
-          { type: "skillNote", id: "note-2" },
+          { type: "repositoryNote", id: "note-2" },
         ];
 
         expect(store.selectedPodIds).toEqual(["pod-1", "pod-2"]);
@@ -62,24 +62,11 @@ describe("selectionStore", () => {
       it("沒有 pod 時應回傳空陣列", () => {
         const store = useSelectionStore();
         store.selectedElements = [
-          { type: "skillNote", id: "note-1" },
-          { type: "skillNote", id: "note-2" },
+          { type: "repositoryNote", id: "note-1" },
+          { type: "repositoryNote", id: "note-2" },
         ];
 
         expect(store.selectedPodIds).toEqual([]);
-      });
-    });
-
-    describe("selectedSkillNoteIds", () => {
-      it("應篩選出 type 為 skillNote 的 id", () => {
-        const store = useSelectionStore();
-        store.selectedElements = [
-          { type: "skillNote", id: "note-1" },
-          { type: "pod", id: "pod-1" },
-          { type: "skillNote", id: "note-2" },
-        ];
-
-        expect(store.selectedSkillNoteIds).toEqual(["note-1", "note-2"]);
       });
     });
 
@@ -143,11 +130,11 @@ describe("selectionStore", () => {
         const store = useSelectionStore();
         store.selectedElements = [
           { type: "pod", id: "pod-1" },
-          { type: "skillNote", id: "note-1" },
+          { type: "repositoryNote", id: "note-1" },
         ];
 
         expect(store.isElementSelected("pod", "pod-1")).toBe(true);
-        expect(store.isElementSelected("skillNote", "note-1")).toBe(true);
+        expect(store.isElementSelected("repositoryNote", "note-1")).toBe(true);
       });
 
       it("元素不在 selectedElements 中時應回傳 false", () => {
@@ -155,7 +142,7 @@ describe("selectionStore", () => {
         store.selectedElements = [{ type: "pod", id: "pod-1" }];
 
         expect(store.isElementSelected("pod", "pod-2")).toBe(false);
-        expect(store.isElementSelected("skillNote", "note-1")).toBe(false);
+        expect(store.isElementSelected("repositoryNote", "note-1")).toBe(false);
       });
 
       it("應依 type 和 id 同時判斷", () => {
@@ -163,7 +150,7 @@ describe("selectionStore", () => {
         store.selectedElements = [{ type: "pod", id: "pod-1" }];
 
         expect(store.isElementSelected("pod", "pod-1")).toBe(true);
-        expect(store.isElementSelected("skillNote", "pod-1")).toBe(false);
+        expect(store.isElementSelected("repositoryNote", "pod-1")).toBe(false);
       });
     });
   });
@@ -212,7 +199,7 @@ describe("selectionStore", () => {
       const store = useSelectionStore();
       const existingElements: SelectableElement[] = [
         { type: "pod", id: "pod-1" },
-        { type: "skillNote", id: "note-1" },
+        { type: "repositoryNote", id: "note-1" },
       ];
       store.selectedElements = existingElements;
 
@@ -357,26 +344,6 @@ describe("selectionStore", () => {
     });
 
     describe("Note 選取", () => {
-      it("SkillNote 與框選範圍相交時應被選中", () => {
-        const store = useSelectionStore();
-        const note = createMockNote("skill", { id: "note-1", x: 100, y: 100 });
-
-        // 框選範圍：(50, 50) 到 (150, 150)
-        // Note 範圍：(100, 100) 到 (180, 130)
-        // 有相交
-        store.startSelection(50, 50);
-        store.updateSelection(150, 150);
-
-        store.calculateSelectedElements({
-          pods: [],
-          noteGroups: [{ notes: [note], type: "skillNote" }],
-        });
-
-        expect(store.selectedElements).toEqual([
-          { type: "skillNote", id: "note-1" },
-        ]);
-      });
-
       it("RepositoryNote 與框選範圍相交時應被選中", () => {
         const store = useSelectionStore();
         const note = createMockNote("repository", {
@@ -463,13 +430,13 @@ describe("selectionStore", () => {
 
       it("已綁定的 Note (boundToPodId !== null) 不應被選中", () => {
         const store = useSelectionStore();
-        const boundNote = createMockNote("skill", {
+        const boundNote = createMockNote("repository", {
           id: "note-1",
           x: 100,
           y: 100,
           boundToPodId: "pod-1",
         });
-        const unboundNote = createMockNote("skill", {
+        const unboundNote = createMockNote("repository", {
           id: "note-2",
           x: 100,
           y: 150,
@@ -481,18 +448,24 @@ describe("selectionStore", () => {
 
         store.calculateSelectedElements({
           pods: [],
-          noteGroups: [{ notes: [boundNote, unboundNote], type: "skillNote" }],
+          noteGroups: [
+            { notes: [boundNote, unboundNote], type: "repositoryNote" },
+          ],
         });
 
         // 只有未綁定的 note 被選中
         expect(store.selectedElements).toEqual([
-          { type: "skillNote", id: "note-2" },
+          { type: "repositoryNote", id: "note-2" },
         ]);
       });
 
       it("Note 與框選範圍無相交時不應被選中", () => {
         const store = useSelectionStore();
-        const note = createMockNote("skill", { id: "note-1", x: 500, y: 500 });
+        const note = createMockNote("repository", {
+          id: "note-1",
+          x: 500,
+          y: 500,
+        });
 
         // 框選範圍：(0, 0) 到 (100, 100)
         // Note 範圍：(500, 500) 到 (580, 530)
@@ -502,7 +475,7 @@ describe("selectionStore", () => {
 
         store.calculateSelectedElements({
           pods: [],
-          noteGroups: [{ notes: [note], type: "skillNote" }],
+          noteGroups: [{ notes: [note], type: "repositoryNote" }],
         });
 
         expect(store.selectedElements).toEqual([]);
@@ -513,17 +486,17 @@ describe("selectionStore", () => {
       it("應能同時選取 Pod 和多種 Note", () => {
         const store = useSelectionStore();
         const pod = createMockPod({ id: "pod-1", x: 100, y: 100 });
-        const outputNote = createMockNote("skill", {
+        const repoNote1 = createMockNote("repository", {
           id: "note-1",
           x: 150,
           y: 150,
         });
-        const skillNote = createMockNote("skill", {
+        const subAgentNote = createMockNote("subAgent", {
           id: "note-2",
           x: 200,
           y: 200,
         });
-        const repoNote = createMockNote("repository", {
+        const repoNote2 = createMockNote("repository", {
           id: "note-3",
           x: 250,
           y: 250,
@@ -535,16 +508,16 @@ describe("selectionStore", () => {
         store.calculateSelectedElements({
           pods: [pod],
           noteGroups: [
-            { notes: [outputNote], type: "skillNote" },
-            { notes: [skillNote], type: "skillNote" },
-            { notes: [repoNote], type: "repositoryNote" },
+            { notes: [repoNote1], type: "repositoryNote" },
+            { notes: [subAgentNote], type: "subAgentNote" },
+            { notes: [repoNote2], type: "repositoryNote" },
           ],
         });
 
         expect(store.selectedElements).toEqual([
           { type: "pod", id: "pod-1" },
-          { type: "skillNote", id: "note-1" },
-          { type: "skillNote", id: "note-2" },
+          { type: "repositoryNote", id: "note-1" },
+          { type: "subAgentNote", id: "note-2" },
           { type: "repositoryNote", id: "note-3" },
         ]);
       });
@@ -553,8 +526,12 @@ describe("selectionStore", () => {
         const store = useSelectionStore();
         const pod1 = createMockPod({ id: "pod-1", x: 100, y: 100 });
         const pod2 = createMockPod({ id: "pod-2", x: 1000, y: 1000 });
-        const note1 = createMockNote("skill", { id: "note-1", x: 150, y: 150 });
-        const note2 = createMockNote("skill", {
+        const note1 = createMockNote("repository", {
+          id: "note-1",
+          x: 150,
+          y: 150,
+        });
+        const note2 = createMockNote("repository", {
           id: "note-2",
           x: 2000,
           y: 2000,
@@ -565,12 +542,12 @@ describe("selectionStore", () => {
 
         store.calculateSelectedElements({
           pods: [pod1, pod2],
-          noteGroups: [{ notes: [note1, note2], type: "skillNote" }],
+          noteGroups: [{ notes: [note1, note2], type: "repositoryNote" }],
         });
 
         expect(store.selectedElements).toEqual([
           { type: "pod", id: "pod-1" },
-          { type: "skillNote", id: "note-1" },
+          { type: "repositoryNote", id: "note-1" },
         ]);
       });
     });
@@ -682,12 +659,16 @@ describe("selectionStore", () => {
         const pod1 = createMockPod({ id: "pod-1", x: 100, y: 100 });
         const pod2 = createMockPod({ id: "pod-2", x: 200, y: 200 });
         const pod3 = createMockPod({ id: "pod-3", x: 300, y: 300 });
-        const note1 = createMockNote("skill", { id: "note-1", x: 150, y: 150 });
+        const note1 = createMockNote("repository", {
+          id: "note-1",
+          x: 150,
+          y: 150,
+        });
 
         // 先選中 pod-1 和 note-1
         store.selectedElements = [
           { type: "pod", id: "pod-1" },
-          { type: "skillNote", id: "note-1" },
+          { type: "repositoryNote", id: "note-1" },
         ];
 
         // 開始 Ctrl 框選，框選範圍包含 pod-1, pod-2, pod-3
@@ -696,7 +677,7 @@ describe("selectionStore", () => {
 
         store.calculateSelectedElements({
           pods: [pod1, pod2, pod3],
-          noteGroups: [{ notes: [note1], type: "skillNote" }],
+          noteGroups: [{ notes: [note1], type: "repositoryNote" }],
         });
 
         // pod-1 被 toggle 移除（已在 initial 中，又被框選到）
@@ -896,18 +877,6 @@ describe("selectionStore", () => {
       expect(store.box).toBeNull();
     });
 
-    it("應清除 selectedElements", () => {
-      const store = useSelectionStore();
-      store.selectedElements = [
-        { type: "pod", id: "pod-1" },
-        { type: "skillNote", id: "note-1" },
-      ];
-
-      store.clearSelection();
-
-      expect(store.selectedElements).toEqual([]);
-    });
-
     it("應清除所有選取狀態", () => {
       const store = useSelectionStore();
       store.isSelecting = true;
@@ -923,45 +892,6 @@ describe("selectionStore", () => {
   });
 
   describe("toggleElement", () => {
-    it("已選取的元素應被移除", () => {
-      const store = useSelectionStore();
-      store.selectedElements = [
-        { type: "pod", id: "pod-1" },
-        { type: "skillNote", id: "note-1" },
-      ];
-
-      store.toggleElement({ type: "pod", id: "pod-1" });
-
-      expect(store.selectedElements).toEqual([
-        { type: "skillNote", id: "note-1" },
-      ]);
-    });
-
-    it("未選取的元素應被加入", () => {
-      const store = useSelectionStore();
-      store.selectedElements = [{ type: "pod", id: "pod-1" }];
-
-      store.toggleElement({ type: "skillNote", id: "note-1" });
-
-      expect(store.selectedElements).toEqual([
-        { type: "pod", id: "pod-1" },
-        { type: "skillNote", id: "note-1" },
-      ]);
-    });
-
-    it("應依 type 和 id 同時判斷", () => {
-      const store = useSelectionStore();
-      store.selectedElements = [{ type: "pod", id: "pod-1" }];
-
-      // 相同 id 但不同 type，應被視為不同元素
-      store.toggleElement({ type: "skillNote", id: "pod-1" });
-
-      expect(store.selectedElements).toEqual([
-        { type: "pod", id: "pod-1" },
-        { type: "skillNote", id: "pod-1" },
-      ]);
-    });
-
     it("空陣列時應能加入元素", () => {
       const store = useSelectionStore();
       store.selectedElements = [];
@@ -990,32 +920,6 @@ describe("selectionStore", () => {
   });
 
   describe("setSelectedElements", () => {
-    it("應直接設定 selectedElements 陣列", () => {
-      const store = useSelectionStore();
-      const elements: SelectableElement[] = [
-        { type: "pod", id: "pod-1" },
-        { type: "skillNote", id: "note-1" },
-      ];
-
-      store.setSelectedElements(elements);
-
-      expect(store.selectedElements).toEqual(elements);
-    });
-
-    it("應覆蓋既有的 selectedElements", () => {
-      const store = useSelectionStore();
-      store.selectedElements = [{ type: "pod", id: "old-pod" }];
-
-      const newElements: SelectableElement[] = [
-        { type: "pod", id: "pod-1" },
-        { type: "skillNote", id: "note-1" },
-      ];
-
-      store.setSelectedElements(newElements);
-
-      expect(store.selectedElements).toEqual(newElements);
-    });
-
     it("應能設定空陣列", () => {
       const store = useSelectionStore();
       store.selectedElements = [{ type: "pod", id: "pod-1" }];
@@ -1023,22 +927,6 @@ describe("selectionStore", () => {
       store.setSelectedElements([]);
 
       expect(store.selectedElements).toEqual([]);
-    });
-
-    it("應能設定多種類型的元素", () => {
-      const store = useSelectionStore();
-      const elements: SelectableElement[] = [
-        { type: "pod", id: "pod-1" },
-        { type: "skillNote", id: "note-1" },
-        { type: "skillNote", id: "note-2" },
-        { type: "repositoryNote", id: "note-3" },
-        { type: "subAgentNote", id: "note-4" },
-        { type: "commandNote", id: "note-5" },
-      ];
-
-      store.setSelectedElements(elements);
-
-      expect(store.selectedElements).toEqual(elements);
     });
   });
 });

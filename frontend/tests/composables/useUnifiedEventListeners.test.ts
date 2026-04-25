@@ -19,7 +19,6 @@ import {
 import { resetChatActionsCache } from "@/stores/chat/chatStore";
 import { usePodStore } from "@/stores/pod/podStore";
 import { useConnectionStore } from "@/stores/connectionStore";
-import { useSkillStore } from "@/stores/note/skillStore";
 import { useRepositoryStore } from "@/stores/note/repositoryStore";
 import { useSubAgentStore } from "@/stores/note/subAgentStore";
 import { useCommandStore } from "@/stores/note/commandStore";
@@ -30,7 +29,6 @@ import { useIntegrationStore } from "@/stores/integrationStore";
 import type {
   Pod,
   Connection,
-  SkillNote,
   RepositoryNote,
   SubAgentNote,
   CommandNote,
@@ -308,31 +306,22 @@ describe("useUnifiedEventListeners", () => {
       expect(updatedPod?.providerConfig.model).toBe("sonnet");
     });
 
-    it("pod:deleted 應移除 Pod 並清理相關 notes", () => {
+    it("pod:deleted 應移除 Pod", () => {
       const { registerUnifiedListeners } = useUnifiedEventListeners();
       const podStore = usePodStore();
-      const skillStore = useSkillStore();
 
       const pod = createMockPod({ id: "pod-1" });
       podStore.pods = [pod];
-
-      const skillNote = createMockNote("skill", {
-        id: "skill-note-1",
-      }) as SkillNote;
-      skillStore.notes = [skillNote] as any[];
 
       registerUnifiedListeners();
 
       simulateEvent("pod:deleted", {
         canvasId: "canvas-1",
         podId: "pod-1",
-        deletedNoteIds: {
-          skillNote: ["skill-note-1"],
-        },
+        deletedNoteIds: {},
       });
 
       expect(podStore.pods.some((p) => p.id === "pod-1")).toBe(false);
-      expect(skillStore.notes.some((n) => n.id === "skill-note-1")).toBe(false);
     });
   });
 
@@ -392,80 +381,6 @@ describe("useUnifiedEventListeners", () => {
       expect(connectionStore.connections.some((c) => c.id === "conn-1")).toBe(
         false,
       );
-    });
-  });
-
-  describe("Skill Note 事件處理", () => {
-    it("skill-note:created 應新增 note", () => {
-      const { registerUnifiedListeners } = useUnifiedEventListeners();
-      const skillStore = useSkillStore();
-
-      registerUnifiedListeners();
-
-      const note = createMockNote("skill", { id: "skill-note-1" }) as SkillNote;
-      simulateEvent("skill-note:created", {
-        canvasId: "canvas-1",
-        note,
-      });
-
-      expect(skillStore.notes.some((n) => n.id === "skill-note-1")).toBe(true);
-    });
-
-    it("skill-note:updated 應更新 note", () => {
-      const { registerUnifiedListeners } = useUnifiedEventListeners();
-      const skillStore = useSkillStore();
-      const note = createMockNote("skill", {
-        id: "skill-note-1",
-        name: "Old",
-      }) as SkillNote;
-      skillStore.notes = [note] as any[];
-
-      registerUnifiedListeners();
-
-      simulateEvent("skill-note:updated", {
-        canvasId: "canvas-1",
-        note: { ...note, name: "New" },
-      });
-
-      const updated = skillStore.notes.find((n) => n.id === "skill-note-1");
-      expect(updated?.name).toBe("New");
-    });
-
-    it("skill-note:deleted 應移除 note", () => {
-      const { registerUnifiedListeners } = useUnifiedEventListeners();
-      const skillStore = useSkillStore();
-      const note = createMockNote("skill", { id: "skill-note-1" }) as SkillNote;
-      skillStore.notes = [note] as any[];
-
-      registerUnifiedListeners();
-
-      simulateEvent("skill-note:deleted", {
-        canvasId: "canvas-1",
-        noteId: "skill-note-1",
-      });
-
-      expect(skillStore.notes.some((n) => n.id === "skill-note-1")).toBe(false);
-    });
-
-    it("skill:deleted 應移除 skill 和相關 notes", () => {
-      const { registerUnifiedListeners } = useUnifiedEventListeners();
-      const skillStore = useSkillStore();
-      skillStore.availableItems = [{ id: "skill-1", name: "Test Skill" }];
-      const note = createMockNote("skill", { id: "skill-note-1" }) as SkillNote;
-      skillStore.notes = [note] as any[];
-
-      registerUnifiedListeners();
-
-      simulateEvent("skill:deleted", {
-        canvasId: "canvas-1",
-        skillId: "skill-1",
-        deletedNoteIds: ["skill-note-1"],
-      });
-
-      expect(
-        skillStore.availableItems.some((i) => (i as any).id === "skill-1"),
-      ).toBe(false);
-      expect(skillStore.notes.some((n) => n.id === "skill-note-1")).toBe(false);
     });
   });
 
@@ -1018,26 +933,21 @@ describe("useUnifiedEventListeners", () => {
   });
 
   describe("canvas:paste:result 批次操作", () => {
-    it("應批次新增 Pods、Connections 和各種 Notes", () => {
+    it("應批次新增 Pods 和 Connections", () => {
       const { registerUnifiedListeners } = useUnifiedEventListeners();
       const podStore = usePodStore();
       const connectionStore = useConnectionStore();
-      const skillStore = useSkillStore();
 
       registerUnifiedListeners();
 
       const pod1 = createMockPod({ id: "pod-1" });
       const pod2 = createMockPod({ id: "pod-2" });
       const conn = createMockConnection({ id: "conn-1" });
-      const skillNote = createMockNote("skill", {
-        id: "skill-note-1",
-      }) as SkillNote;
 
       simulateEvent("canvas:paste:result", {
         canvasId: "canvas-1",
         createdPods: [pod1, pod2],
         createdConnections: [conn],
-        createdSkillNotes: [skillNote],
       });
 
       expect(podStore.pods.some((p) => p.id === "pod-1")).toBe(true);
@@ -1045,7 +955,6 @@ describe("useUnifiedEventListeners", () => {
       expect(connectionStore.connections.some((c) => c.id === "conn-1")).toBe(
         true,
       );
-      expect(skillStore.notes.some((n) => n.id === "skill-note-1")).toBe(true);
     });
   });
 
@@ -1137,15 +1046,11 @@ describe("useUnifiedEventListeners", () => {
     it("應移除所有類型的 deleted notes", () => {
       const { registerUnifiedListeners } = useUnifiedEventListeners();
       const podStore = usePodStore();
-      const skillStore = useSkillStore();
       const repositoryStore = useRepositoryStore();
       const commandStore = useCommandStore();
       const subAgentStore = useSubAgentStore();
       const mcpServerStore = useMcpServerStore();
 
-      skillStore.notes = [
-        createMockNote("skill", { id: "skill-note-1" }) as SkillNote,
-      ] as any[];
       repositoryStore.notes = [
         createMockNote("repository", { id: "repo-note-1" }) as RepositoryNote,
       ] as any[];
@@ -1168,7 +1073,6 @@ describe("useUnifiedEventListeners", () => {
         canvasId: "canvas-1",
         podId: "pod-1",
         deletedNoteIds: {
-          skillNote: ["skill-note-1"],
           repositoryNote: ["repo-note-1"],
           commandNote: ["cmd-note-1"],
           subAgentNote: ["subagent-note-1"],
@@ -1176,7 +1080,6 @@ describe("useUnifiedEventListeners", () => {
         },
       });
 
-      expect(skillStore.notes.length).toBe(0);
       expect(repositoryStore.notes.length).toBe(0);
       expect(commandStore.notes.length).toBe(0);
       expect(subAgentStore.notes.length).toBe(0);

@@ -8,13 +8,15 @@ export async function handlePluginList(
   payload: PluginListPayload,
   requestId: string,
 ): Promise<void> {
-  const plugins = scanInstalledPlugins().map(
-    ({ id, name, version, description, repo }) => ({
+  const { provider } = payload;
+  const plugins = scanInstalledPlugins(provider).map(
+    ({ id, name, version, description, repo, compatibleProviders }) => ({
       id,
       name,
       version,
       description,
       repo,
+      compatibleProviders,
     }),
   );
 

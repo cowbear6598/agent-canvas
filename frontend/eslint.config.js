@@ -38,6 +38,7 @@ const sharedGlobals = {
   performance: "readonly",
   crypto: "readonly",
   AbortController: "readonly",
+  DOMRect: "readonly",
   WebSocket: "readonly",
   MessageEvent: "readonly",
   CloseEvent: "readonly",

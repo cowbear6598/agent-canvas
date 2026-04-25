@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from "vitest";
 import { webSocketMockFactory } from "../../helpers/mockWebSocket";
 import { setupStoreTest } from "../../helpers/testSetup";
 import { useCanvasStore } from "@/stores/canvasStore";
-import { useSkillStore } from "@/stores/note/skillStore";
 import { useRepositoryStore } from "@/stores/note/repositoryStore";
 import { useSubAgentStore } from "@/stores/note/subAgentStore";
 import { useCommandStore } from "@/stores/note/commandStore";
@@ -36,32 +35,8 @@ describe("noteEventHandlers", () => {
   describe("getNoteEventListeners", () => {
     it("應回傳正確數量的 listener", () => {
       const result = getNoteEventListeners();
-      // 5 種 note 各 3 個 CRUD + skill/repository/subAgent/command/mcpServer 各 1 個 deleted + worktree created + branch changed + mcpServer CRUD
-      expect(result.length).toBeGreaterThanOrEqual(20);
-    });
-  });
-
-  describe("skillNote handlers（canvasId 防護）", () => {
-    it("skill:note:created - canvasId 匹配時應呼叫 addNoteFromEvent", () => {
-      const store = useSkillStore();
-      const spy = vi.spyOn(store, "addNoteFromEvent");
-      const note = { id: "sk-note-1" };
-
-      findHandler("skill-note:created")({ canvasId: "canvas-1", note });
-
-      expect(spy).toHaveBeenCalledWith(note);
-    });
-
-    it("skill:note:created - canvasId 不匹配時不應執行", () => {
-      const store = useSkillStore();
-      const spy = vi.spyOn(store, "addNoteFromEvent");
-
-      findHandler("skill-note:created")({
-        canvasId: "other-canvas",
-        note: { id: "sk-note-1" },
-      });
-
-      expect(spy).not.toHaveBeenCalled();
+      // repository/subAgent/command/mcpServer 各類 CRUD + deleted + worktree created + branch changed
+      expect(result.length).toBeGreaterThanOrEqual(15);
     });
   });
 

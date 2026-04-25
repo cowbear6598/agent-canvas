@@ -1,6 +1,5 @@
 import { repositoryService } from "./repositoryService.js";
 import { podStore } from "./podStore.js";
-import { skillService } from "./skillService.js";
 import { subAgentService } from "./subAgentService.js";
 import { podManifestService } from "./podManifestService.js";
 import { logger } from "../utils/logger.js";
@@ -11,7 +10,6 @@ import { getStatements } from "../database/statements.js";
 
 interface PodResources {
   commandIds: string[];
-  skillIds: string[];
   subAgentIds: string[];
 }
 
@@ -83,7 +81,6 @@ class RepositorySyncService {
           pod.id,
           {
             commandIds,
-            skillIds: [...pod.skillIds],
             subAgentIds: [...pod.subAgentIds],
           },
         ];
@@ -122,12 +119,6 @@ class RepositorySyncService {
   ): Promise<void> {
     await podManifestService.deleteManagedFiles(repositoryId, podId);
 
-    const copySkills = resources.skillIds.map((skillId) =>
-      fsOperation(
-        () => skillService.copySkillToRepository(skillId, repositoryPath),
-        `複製 skill ${skillId} 到 repository ${repositoryId} 失敗`,
-      ),
-    );
     const copySubAgents = resources.subAgentIds.map((subAgentId) =>
       fsOperation(
         () =>
@@ -136,7 +127,7 @@ class RepositorySyncService {
       ),
     );
 
-    await Promise.all([...copySkills, ...copySubAgents]);
+    await Promise.all(copySubAgents);
 
     const managedFiles = await this.collectPodManagedFiles(resources);
     podManifestService.writeManifest(repositoryId, podId, managedFiles);
@@ -152,16 +143,15 @@ class RepositorySyncService {
     const totals = [...podResourcesMap.values()].reduce(
       (acc, podResources) => ({
         commands: acc.commands + podResources.commandIds.length,
-        skills: acc.skills + podResources.skillIds.length,
         subAgents: acc.subAgents + podResources.subAgentIds.length,
       }),
-      { commands: 0, skills: 0, subAgents: 0 },
+      { commands: 0, subAgents: 0 },
     );
 
     logger.log(
       "Repository",
       "Update",
-      `已同步 Repository ${repositoryId}：${totals.commands} 個 Command、${totals.skills} 個 Skill、${totals.subAgents} 個 SubAgent`,
+      `已同步 Repository ${repositoryId}：${totals.commands} 個 Command、${totals.subAgents} 個 SubAgent`,
     );
   }
 
@@ -204,15 +194,6 @@ class RepositorySyncService {
 
     for (const commandId of resources.commandIds) {
       files.push(...podManifestService.collectCommandFiles(commandId));
-    }
-
-    for (const skillId of resources.skillIds) {
-      const skillSourcePath = skillService.getSkillDirectoryPath(skillId);
-      const skillFiles = await podManifestService.collectSkillFiles(
-        skillId,
-        skillSourcePath,
-      );
-      files.push(...skillFiles);
     }
 
     for (const subAgentId of resources.subAgentIds) {

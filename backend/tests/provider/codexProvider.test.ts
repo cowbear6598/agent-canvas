@@ -82,7 +82,10 @@ function makeCtx(
     options: CodexOptions;
   }> = {},
 ) {
-  const defaultOptions: CodexOptions = { model: "gpt-5.4", resumeMode: "cli" };
+  const defaultOptions: CodexOptions = {
+    model: "gpt-5.4",
+    resumeMode: "cli",
+  };
   return {
     podId: "pod-test-001",
     message: "Hello, Codex!",

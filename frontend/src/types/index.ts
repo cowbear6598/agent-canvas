@@ -4,7 +4,6 @@ export * from "./canvas";
 export * from "./selection";
 export * from "./websocket";
 export * from "./note";
-export * from "./skill";
 export * from "./connection";
 export * from "./clipboard";
 export * from "./repository";

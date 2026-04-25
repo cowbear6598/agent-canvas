@@ -1,6 +1,5 @@
 import type {
   Pod,
-  SkillNote,
   RepositoryNote,
   SubAgentNote,
   CommandNote,
@@ -13,7 +12,6 @@ import { podStore } from "../../services/podStore.js";
 import { getPodDisplayName } from "../../utils/handlerHelpers.js";
 import { workspaceService } from "../../services/workspace";
 import {
-  skillNoteStore,
   subAgentNoteStore,
   repositoryNoteStore,
   commandNoteStore,
@@ -152,7 +150,6 @@ async function createSinglePod(
     rotation: podItem.rotation,
     provider: podItem.provider,
     providerConfig: podItem.providerConfig,
-    skillIds: podItem.skillIds ?? [],
     subAgentIds: podItem.subAgentIds ?? [],
     pluginIds: podItem.pluginIds ?? [],
     repositoryId: finalRepositoryId,
@@ -352,7 +349,6 @@ function makeNoteConfig<
  * PasteError 類型與 ID 欄位名，供 createPastedNotesByType 統一分發。
  */
 const NOTE_PASTE_CONFIGS = {
-  skill: makeNoteConfig("skillId", skillNoteStore, "skillNote"),
   repository: makeNoteConfig(
     "repositoryId",
     repositoryNoteStore,
@@ -366,7 +362,6 @@ const NOTE_PASTE_CONFIGS = {
 export type NotePasteType = keyof typeof NOTE_PASTE_CONFIGS;
 
 interface NoteItemMap {
-  skill: NoteItemWithId<"skillId">;
   repository: NoteItemWithId<"repositoryId">;
   subAgent: NoteItemWithId<"subAgentId">;
   command: NoteItemWithId<"commandId">;
@@ -374,7 +369,6 @@ interface NoteItemMap {
 }
 
 interface NoteMap {
-  skill: SkillNote;
   repository: RepositoryNote;
   subAgent: SubAgentNote;
   command: CommandNote;

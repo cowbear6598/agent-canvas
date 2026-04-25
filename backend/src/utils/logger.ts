@@ -18,7 +18,6 @@ export type LogCategory =
   | "Startup"
   | "Pod"
   | "Chat"
-  | "Skill"
   | "Command"
   | "Repository"
   | "SubAgent"
@@ -56,7 +55,6 @@ const CATEGORY_COLORS: Record<LogCategory, string> = {
   Repository: ANSI_COLORS.MAGENTA,
   Workspace: ANSI_COLORS.MAGENTA,
   Canvas: ANSI_COLORS.MAGENTA,
-  Skill: ANSI_COLORS.GREEN,
   Command: ANSI_COLORS.GREEN,
   Chat: ANSI_COLORS.GREEN,
   McpServer: ANSI_COLORS.GREEN,

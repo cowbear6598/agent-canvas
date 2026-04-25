@@ -4,15 +4,9 @@ import { DEFAULT_TOAST_DURATION_MS } from "@/lib/constants";
 import { t } from "@/i18n";
 import type { UnbindBehavior } from "@/stores/note/noteBindingActions";
 
-export type NoteType =
-  | "skill"
-  | "subAgent"
-  | "repository"
-  | "command"
-  | "mcpServer";
+export type NoteType = "subAgent" | "repository" | "command" | "mcpServer";
 
 interface NoteItem {
-  skillId?: string;
   subAgentId?: string;
   repositoryId?: string;
   commandId?: string;
@@ -34,9 +28,6 @@ interface NoteStoreMapping {
 }
 
 interface NoteStores {
-  skillStore: BaseBindableNoteStore & {
-    isItemBoundToPod: (itemId: string, podId: string) => boolean;
-  };
   subAgentStore: BaseBindableNoteStore & {
     isItemBoundToPod: (itemId: string, podId: string) => boolean;
   };
@@ -61,7 +52,6 @@ interface UsePodNoteBindingReturn {
 }
 
 const DUPLICATE_BIND_MESSAGES: Partial<Record<NoteType, () => string>> = {
-  skill: () => t("pod.slot.skillDuplicate"),
   subAgent: () => t("pod.slot.subAgentDuplicate"),
   mcpServer: () => t("pod.slot.mcpServerDuplicate"),
 };
@@ -86,7 +76,6 @@ export function usePodNoteBinding(
 ): UsePodNoteBindingReturn {
   const { toast } = useToast();
   const {
-    skillStore,
     subAgentStore,
     repositoryStore,
     commandStore,
@@ -95,13 +84,6 @@ export function usePodNoteBinding(
   } = stores;
 
   const noteStoreMap: Record<NoteType, NoteStoreMapping> = {
-    skill: {
-      bindToPod: (noteId, pid) => skillStore.bindToPod(noteId, pid),
-      getNoteById: (noteId) => skillStore.getNoteById(noteId),
-      isItemBoundToPod: (itemId, pid) =>
-        skillStore.isItemBoundToPod(itemId, pid),
-      getItemId: (note) => note.skillId,
-    },
     subAgent: {
       bindToPod: (noteId, pid) => subAgentStore.bindToPod(noteId, pid),
       getNoteById: (noteId) => subAgentStore.getNoteById(noteId),

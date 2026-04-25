@@ -1,7 +1,6 @@
 import { defineStore } from "pinia";
 import type {
   CopiedPod,
-  CopiedSkillNote,
   CopiedRepositoryNote,
   CopiedSubAgentNote,
   CopiedCommandNote,
@@ -11,7 +10,6 @@ import type {
 
 interface ClipboardState {
   copiedPods: CopiedPod[];
-  copiedSkillNotes: CopiedSkillNote[];
   copiedRepositoryNotes: CopiedRepositoryNote[];
   copiedSubAgentNotes: CopiedSubAgentNote[];
   copiedCommandNotes: CopiedCommandNote[];
@@ -22,7 +20,6 @@ interface ClipboardState {
 export const useClipboardStore = defineStore("clipboard", {
   state: (): ClipboardState => ({
     copiedPods: [],
-    copiedSkillNotes: [],
     copiedRepositoryNotes: [],
     copiedSubAgentNotes: [],
     copiedCommandNotes: [],
@@ -33,7 +30,6 @@ export const useClipboardStore = defineStore("clipboard", {
   getters: {
     isEmpty: (state): boolean =>
       state.copiedPods.length === 0 &&
-      state.copiedSkillNotes.length === 0 &&
       state.copiedRepositoryNotes.length === 0 &&
       state.copiedSubAgentNotes.length === 0 &&
       state.copiedCommandNotes.length === 0 &&
@@ -44,7 +40,6 @@ export const useClipboardStore = defineStore("clipboard", {
   actions: {
     setCopy(
       pods: CopiedPod[],
-      skillNotes: CopiedSkillNote[],
       repositoryNotes: CopiedRepositoryNote[],
       subAgentNotes: CopiedSubAgentNote[],
       commandNotes: CopiedCommandNote[],
@@ -52,7 +47,6 @@ export const useClipboardStore = defineStore("clipboard", {
       connections: CopiedConnection[],
     ): void {
       this.copiedPods = pods;
-      this.copiedSkillNotes = skillNotes;
       this.copiedRepositoryNotes = repositoryNotes;
       this.copiedSubAgentNotes = subAgentNotes;
       this.copiedCommandNotes = commandNotes;
@@ -62,7 +56,6 @@ export const useClipboardStore = defineStore("clipboard", {
 
     clear(): void {
       this.copiedPods = [];
-      this.copiedSkillNotes = [];
       this.copiedRepositoryNotes = [];
       this.copiedSubAgentNotes = [];
       this.copiedCommandNotes = [];
@@ -72,7 +65,6 @@ export const useClipboardStore = defineStore("clipboard", {
 
     getCopiedData(): {
       pods: CopiedPod[];
-      skillNotes: CopiedSkillNote[];
       repositoryNotes: CopiedRepositoryNote[];
       subAgentNotes: CopiedSubAgentNote[];
       commandNotes: CopiedCommandNote[];
@@ -81,7 +73,6 @@ export const useClipboardStore = defineStore("clipboard", {
     } {
       return {
         pods: this.copiedPods,
-        skillNotes: this.copiedSkillNotes,
         repositoryNotes: this.copiedRepositoryNotes,
         subAgentNotes: this.copiedSubAgentNotes,
         commandNotes: this.copiedCommandNotes,

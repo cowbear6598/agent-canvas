@@ -11,7 +11,6 @@ import {
 } from "../helpers/factories";
 import { usePodStore, useSelectionStore, useViewportStore } from "@/stores/pod";
 import {
-  useSkillStore,
   useRepositoryStore,
   useSubAgentStore,
   useCommandStore,
@@ -55,7 +54,6 @@ function toCopiedPod(p: Pod): CopiedPod {
     rotation: p.rotation,
     provider: p.provider,
     providerConfig: p.providerConfig,
-    skillIds: p.skillIds,
     subAgentIds: p.subAgentIds,
     repositoryId: p.repositoryId,
     commandId: p.commandId,
@@ -66,7 +64,6 @@ describe("複製貼上/批量操作完整流程", () => {
   let podStore: ReturnType<typeof usePodStore>;
   let selectionStore: ReturnType<typeof useSelectionStore>;
   let viewportStore: ReturnType<typeof useViewportStore>;
-  let skillStore: ReturnType<typeof useSkillStore>;
   let repositoryStore: ReturnType<typeof useRepositoryStore>;
   let subAgentStore: ReturnType<typeof useSubAgentStore>;
   let commandStore: ReturnType<typeof useCommandStore>;
@@ -81,7 +78,6 @@ describe("複製貼上/批量操作完整流程", () => {
     podStore = usePodStore();
     selectionStore = useSelectionStore();
     viewportStore = useViewportStore();
-    skillStore = useSkillStore();
     repositoryStore = useRepositoryStore();
     subAgentStore = useSubAgentStore();
     commandStore = useCommandStore();
@@ -93,13 +89,11 @@ describe("複製貼上/批量操作完整流程", () => {
   });
 
   /**
-   * 回傳包含全部六種 Note 類型的 noteGroups 陣列，
-   * 供 calculateSelectedElements 使用。每個 test case 呼叫此函式一次即可，
-   * 無需重複手寫六個 store 對應關係。
+   * 回傳包含全部 Note 類型的 noteGroups 陣列，
+   * 供 calculateSelectedElements 使用。
    */
   function buildNoteGroups() {
     return [
-      { notes: skillStore.notes, type: "skillNote" as const },
       { notes: repositoryStore.notes, type: "repositoryNote" as const },
       { notes: subAgentStore.notes, type: "subAgentNote" as const },
       { notes: commandStore.notes, type: "commandNote" as const },
@@ -108,120 +102,6 @@ describe("複製貼上/批量操作完整流程", () => {
   }
 
   describe("框選 -> 複製 -> 貼上", () => {
-    it("應正確將框選的 Pod 和 Note 複製到 clipboardStore", () => {
-      const pod1 = createMockPod({ id: "pod-1", x: 100, y: 100 });
-      const pod2 = createMockPod({ id: "pod-2", x: 200, y: 200 });
-      const skillNote = createMockNote("skill", {
-        id: "note-2",
-        x: 400,
-        y: 400,
-        boundToPodId: null,
-      });
-
-      podStore.pods = [pod1, pod2];
-      skillStore.notes = [skillNote as any];
-
-      // 選取範圍涵蓋 x=[0,500], y=[0,500]，pod1(100,100)、pod2(200,200)、note2(400,400) 均在範圍內
-      const SELECTION_BOX = { x1: 0, y1: 0, x2: 500, y2: 500 };
-      selectionStore.startSelection(SELECTION_BOX.x1, SELECTION_BOX.y1);
-      selectionStore.updateSelection(SELECTION_BOX.x2, SELECTION_BOX.y2);
-      selectionStore.calculateSelectedElements({
-        pods: podStore.pods,
-        noteGroups: buildNoteGroups(),
-      });
-
-      const selectedElements = selectionStore.selectedElements;
-      const selectedPodIds = new Set(
-        selectedElements.filter((el) => el.type === "pod").map((el) => el.id),
-      );
-      const copiedPods = podStore.pods
-        .filter((p) => selectedPodIds.has(p.id))
-        .map(toCopiedPod);
-
-      const copiedSkillNotes = skillStore.notes
-        .filter((n) =>
-          selectedElements.some(
-            (el) => el.type === "skillNote" && el.id === n.id,
-          ),
-        )
-        .map((n) => ({
-          id: n.id,
-          skillId: n.skillId,
-          name: n.name,
-          x: n.x,
-          y: n.y,
-          boundToPodId: n.boundToPodId,
-          originalPosition: n.originalPosition,
-        }));
-
-      clipboardStore.setCopy(
-        copiedPods,
-        copiedSkillNotes as any,
-        [],
-        [],
-        [],
-        [],
-        [],
-      );
-
-      expect(clipboardStore.isEmpty).toBe(false);
-      expect(clipboardStore.copiedPods).toHaveLength(2);
-      expect(clipboardStore.copiedSkillNotes).toHaveLength(1);
-      expect(clipboardStore.copiedPods[0]!.id).toBe("pod-1");
-      expect(clipboardStore.copiedPods[1]!.id).toBe("pod-2");
-    });
-
-    it("應過濾掉已綁定的 Note，只複製未綁定的 Note", () => {
-      const pod = createMockPod({ id: "pod-1", x: 100, y: 100 });
-      const boundNote = createMockNote("skill", {
-        id: "note-1",
-        x: 150,
-        y: 150,
-        boundToPodId: "pod-1",
-      });
-      const unboundNote = createMockNote("skill", {
-        id: "note-2",
-        x: 200,
-        y: 200,
-        boundToPodId: null,
-      });
-
-      podStore.pods = [pod];
-      skillStore.notes = [boundNote as any, unboundNote as any];
-
-      // 選取範圍涵蓋 x=[0,500], y=[0,500]，pod(100,100)、兩個 note(150,150)/(200,200) 均在範圍內
-      const SELECTION_BOX = { x1: 0, y1: 0, x2: 500, y2: 500 };
-      selectionStore.startSelection(SELECTION_BOX.x1, SELECTION_BOX.y1);
-      selectionStore.updateSelection(SELECTION_BOX.x2, SELECTION_BOX.y2);
-      selectionStore.calculateSelectedElements({
-        pods: podStore.pods,
-        noteGroups: buildNoteGroups(),
-      });
-
-      const selectedElements = selectionStore.selectedElements;
-      const copiedSkillNotes = skillStore.notes
-        .filter(
-          (n) =>
-            selectedElements.some(
-              (el) => el.type === "skillNote" && el.id === n.id,
-            ) && n.boundToPodId === null,
-        )
-        .map((n) => ({
-          id: n.id,
-          skillId: n.skillId,
-          name: n.name,
-          x: n.x,
-          y: n.y,
-          boundToPodId: n.boundToPodId,
-          originalPosition: n.originalPosition,
-        }));
-
-      clipboardStore.setCopy([], copiedSkillNotes as any, [], [], [], [], []);
-
-      expect(clipboardStore.copiedSkillNotes).toHaveLength(1);
-      expect(clipboardStore.copiedSkillNotes[0]!.id).toBe("note-2");
-    });
-
     it("應複製兩個 Pod 之間的 Connection", () => {
       const pod1 = createMockPod({ id: "pod-1", x: 100, y: 100 });
       const pod2 = createMockPod({ id: "pod-2", x: 200, y: 200 });
@@ -263,7 +143,7 @@ describe("複製貼上/批量操作完整流程", () => {
           triggerMode: conn.triggerMode,
         }));
 
-      clipboardStore.setCopy([], [], [], [], [], [], copiedConnections as any);
+      clipboardStore.setCopy([], [], [], [], [], copiedConnections as any);
 
       expect(clipboardStore.copiedConnections).toHaveLength(1);
       expect(clipboardStore.copiedConnections[0]!.sourcePodId).toBe("pod-1");
@@ -308,15 +188,7 @@ describe("複製貼上/批量操作完整流程", () => {
           originalPosition: n.originalPosition,
         }));
 
-      clipboardStore.setCopy(
-        [],
-        [],
-        [],
-        [],
-        [],
-        copiedMcpServerNotes as any,
-        [],
-      );
+      clipboardStore.setCopy([], [], [], [], copiedMcpServerNotes as any, []);
 
       expect(clipboardStore.isEmpty).toBe(false);
       expect(clipboardStore.copiedMcpServerNotes).toHaveLength(1);
@@ -325,43 +197,19 @@ describe("複製貼上/批量操作完整流程", () => {
 
     it("應在貼上後更新 selectionStore 為新建立的元素", () => {
       const pod = createMockPod({ id: "pod-1", x: 100, y: 100 });
-      const note = createMockNote("skill", {
-        id: "note-1",
-        x: 200,
-        y: 200,
-        boundToPodId: null,
-      });
 
-      clipboardStore.setCopy(
-        [toCopiedPod(pod)],
-        [
-          {
-            id: note.id,
-            skillId: (note as any).skillId,
-            name: note.name,
-            x: note.x,
-            y: note.y,
-            boundToPodId: note.boundToPodId,
-            originalPosition: note.originalPosition,
-          },
-        ],
-        [],
-        [],
-        [],
-        [],
-        [],
-      );
+      clipboardStore.setCopy([toCopiedPod(pod)], [], [], [], [], []);
 
       const newSelectedElements: SelectableElement[] = [
         { type: "pod", id: "new-pod-1" },
-        { type: "skillNote", id: "new-note-1" },
+        { type: "repositoryNote", id: "new-note-1" },
       ];
       selectionStore.setSelectedElements(newSelectedElements);
 
       expect(selectionStore.selectedElements).toHaveLength(2);
       expect(selectionStore.selectedElements).toEqual(newSelectedElements);
       expect(selectionStore.selectedPodIds).toEqual(["new-pod-1"]);
-      expect(selectionStore.selectedSkillNoteIds).toEqual(["new-note-1"]);
+      expect(selectionStore.selectedRepositoryNoteIds).toEqual(["new-note-1"]);
     });
 
     it("Codex Pod 複製後 clipboardStore 應正確保留 provider=codex 與 providerConfig.model", () => {
@@ -392,7 +240,7 @@ describe("複製貼上/批量操作完整流程", () => {
         .filter((p) => selectedPodIds.has(p.id))
         .map(toCopiedPod);
 
-      clipboardStore.setCopy(copiedPods, [], [], [], [], [], []);
+      clipboardStore.setCopy(copiedPods, [], [], [], [], []);
 
       expect(clipboardStore.isEmpty).toBe(false);
       expect(clipboardStore.copiedPods).toHaveLength(1);
@@ -411,7 +259,7 @@ describe("複製貼上/批量操作完整流程", () => {
         providerConfig: { model: "gpt-5.4" },
       });
 
-      clipboardStore.setCopy([toCopiedPod(codexPod)], [], [], [], [], [], []);
+      clipboardStore.setCopy([toCopiedPod(codexPod)], [], [], [], [], []);
 
       // 確認 clipboard 中保留了 Codex provider 身份
       const storedPod = clipboardStore.copiedPods[0]!;
@@ -439,7 +287,7 @@ describe("複製貼上/批量操作完整流程", () => {
 
       const copiedPods = [claudePod, codexPod].map(toCopiedPod);
 
-      clipboardStore.setCopy(copiedPods, [], [], [], [], [], []);
+      clipboardStore.setCopy(copiedPods, [], [], [], [], []);
 
       expect(clipboardStore.copiedPods).toHaveLength(2);
       const storedClaude = clipboardStore.copiedPods.find(
@@ -492,8 +340,8 @@ describe("複製貼上/批量操作完整流程", () => {
       expect(updatedPod2?.y).toBe(250);
     });
 
-    it("應更新所有選中的未綁定 Note 的座標", () => {
-      const note1 = createMockNote("skill", {
+    it("應更新所有選中的未綁定 RepositoryNote 的座標", () => {
+      const note1 = createMockNote("repository", {
         id: "note-1",
         x: 100,
         y: 100,
@@ -505,15 +353,14 @@ describe("複製貼上/批量操作完整流程", () => {
         y: 200,
         boundToPodId: null,
       });
-      const boundNote = createMockNote("skill", {
+      const boundNote = createMockNote("repository", {
         id: "note-3",
         x: 300,
         y: 300,
         boundToPodId: "pod-1",
       });
 
-      skillStore.notes = [note1 as any, boundNote as any];
-      repositoryStore.notes = [note2 as any];
+      repositoryStore.notes = [note1 as any, note2 as any, boundNote as any];
 
       // 選取範圍涵蓋 x=[0,500], y=[0,500]；note1(100,100)、note2(200,200)、boundNote(300,300) 均在範圍內
       // boundNote 雖被選中但因 boundToPodId !== null 而不移動
@@ -529,16 +376,7 @@ describe("複製貼上/批量操作完整流程", () => {
       const dy = 40;
 
       selectionStore.selectedElements.forEach((element) => {
-        if (element.type === "skillNote") {
-          const note = skillStore.notes.find((n) => n.id === element.id);
-          if (note && note.boundToPodId === null) {
-            skillStore.updateNotePositionLocal(
-              element.id,
-              note.x + dx,
-              note.y + dy,
-            );
-          }
-        } else if (element.type === "repositoryNote") {
+        if (element.type === "repositoryNote") {
           const note = repositoryStore.notes.find((n) => n.id === element.id);
           if (note && note.boundToPodId === null) {
             repositoryStore.updateNotePositionLocal(
@@ -550,9 +388,11 @@ describe("複製貼上/批量操作完整流程", () => {
         }
       });
 
-      const updatedNote1 = skillStore.notes.find((n) => n.id === "note-1");
+      const updatedNote1 = repositoryStore.notes.find((n) => n.id === "note-1");
       const updatedNote2 = repositoryStore.notes.find((n) => n.id === "note-2");
-      const updatedBoundNote = skillStore.notes.find((n) => n.id === "note-3");
+      const updatedBoundNote = repositoryStore.notes.find(
+        (n) => n.id === "note-3",
+      );
 
       expect(updatedNote1?.x).toBe(130);
       expect(updatedNote1?.y).toBe(140);
@@ -577,20 +417,22 @@ describe("複製貼上/批量操作完整流程", () => {
     });
 
     it("應在拖曳後調用 updateNotePosition 同步 Note 到後端", async () => {
-      const note = createMockNote("skill", {
+      const note = createMockNote("repository", {
         id: "note-1",
         x: 100,
         y: 100,
         boundToPodId: null,
       });
-      skillStore.notes = [note as any];
+      repositoryStore.notes = [note as any];
 
-      selectionStore.setSelectedElements([{ type: "skillNote", id: "note-1" }]);
+      selectionStore.setSelectedElements([
+        { type: "repositoryNote", id: "note-1" },
+      ]);
 
-      const updateSpy = vi.spyOn(skillStore, "updateNotePosition");
+      const updateSpy = vi.spyOn(repositoryStore, "updateNotePosition");
 
-      skillStore.updateNotePositionLocal("note-1", 150, 150);
-      await skillStore.updateNotePosition("note-1", 150, 150);
+      repositoryStore.updateNotePositionLocal("note-1", 150, 150);
+      await repositoryStore.updateNotePosition("note-1", 150, 150);
 
       expect(updateSpy).toHaveBeenCalledWith("note-1", 150, 150);
     });
@@ -626,7 +468,7 @@ describe("複製貼上/批量操作完整流程", () => {
     });
 
     it("應刪除所有選中的 Note", async () => {
-      const note1 = createMockNote("skill", {
+      const note1 = createMockNote("repository", {
         id: "note-1",
         x: 100,
         y: 100,
@@ -638,15 +480,14 @@ describe("複製貼上/批量操作完整流程", () => {
         y: 200,
         boundToPodId: null,
       });
-      const note3 = createMockNote("skill", {
+      const note3 = createMockNote("repository", {
         id: "note-3",
         x: 1000,
         y: 1000,
         boundToPodId: null,
       });
 
-      skillStore.notes = [note1 as any, note3 as any];
-      repositoryStore.notes = [note2 as any];
+      repositoryStore.notes = [note1 as any, note2 as any, note3 as any];
 
       // 選取範圍涵蓋 x=[0,500], y=[0,500]；note1(100,100)、note2(200,200) 在範圍內，note3(1000,1000) 不在
       const SELECTION_BOX = { x1: 0, y1: 0, x2: 500, y2: 500 };
@@ -658,10 +499,6 @@ describe("複製貼上/批量操作完整流程", () => {
       });
 
       const deletePromises: Promise<void>[] = [];
-
-      selectionStore.selectedSkillNoteIds.forEach((id) => {
-        deletePromises.push(skillStore.deleteNote(id));
-      });
 
       selectionStore.selectedRepositoryNoteIds.forEach((id) => {
         deletePromises.push(repositoryStore.deleteNote(id));
@@ -675,7 +512,7 @@ describe("複製貼上/批量操作完整流程", () => {
     it("應在刪除後清空 selection", () => {
       selectionStore.setSelectedElements([
         { type: "pod", id: "pod-1" },
-        { type: "skillNote", id: "note-1" },
+        { type: "repositoryNote", id: "note-1" },
       ]);
 
       expect(selectionStore.hasSelection).toBe(true);

@@ -41,7 +41,7 @@ vi.mock("@/components/ui/button", () => ({
   },
 }));
 
-type ItemType = "skill" | "repository" | "subAgent" | "command" | "mcpServer";
+type ItemType = "repository" | "subAgent" | "command" | "mcpServer";
 type GroupType = "subAgentGroup" | "commandGroup";
 type ExtendedItemType = ItemType | GroupType;
 
@@ -58,7 +58,7 @@ function mountModal(
       open: true,
       itemName: "Test Item",
       isInUse: false,
-      itemType: "skill",
+      itemType: "repository",
       ...props,
     },
   });

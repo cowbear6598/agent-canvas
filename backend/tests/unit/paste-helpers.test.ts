@@ -583,16 +583,16 @@ describe("Paste Helpers", () => {
     it("noteStore.create 拋例外後錯誤被 recordError 捕捉，不影響其他 note", async () => {
       const { createPastedNotesByType } =
         await import("../../src/handlers/paste/pasteHelpers.js");
-      const { skillNoteStore } =
+      const { subAgentNoteStore } =
         await import("../../src/services/noteStores.js");
 
-      vi.spyOn(skillNoteStore, "create").mockImplementation(() => {
+      vi.spyOn(subAgentNoteStore, "create").mockImplementation(() => {
         throw new Error("DB 寫入失敗");
       });
 
       const noteItems = [
         {
-          skillId: uuidv4(),
+          subAgentId: uuidv4(),
           name: "Broken Note",
           x: 0,
           y: 0,
@@ -601,11 +601,16 @@ describe("Paste Helpers", () => {
         },
       ];
 
-      const result = createPastedNotesByType("skill", canvasId, noteItems, {});
+      const result = createPastedNotesByType(
+        "subAgent",
+        canvasId,
+        noteItems,
+        {},
+      );
 
       expect(result.notes).toHaveLength(0);
       expect(result.errors).toHaveLength(1);
-      expect(result.errors[0].type).toBe("skillNote");
+      expect(result.errors[0].type).toBe("subAgentNote");
     });
   });
 

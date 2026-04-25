@@ -1,7 +1,6 @@
 export interface SelectableElement {
   type:
     | "pod"
-    | "skillNote"
     | "repositoryNote"
     | "subAgentNote"
     | "commandNote"

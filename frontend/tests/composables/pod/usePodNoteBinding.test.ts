@@ -15,11 +15,6 @@ vi.mock("@/composables/useToast", () => ({
 describe("usePodNoteBinding", () => {
   const podId = ref("pod-1");
 
-  let mockSkillStore: {
-    bindToPod: ReturnType<typeof vi.fn>;
-    getNoteById: ReturnType<typeof vi.fn>;
-    isItemBoundToPod: ReturnType<typeof vi.fn>;
-  };
   let mockSubAgentStore: {
     bindToPod: ReturnType<typeof vi.fn>;
     getNoteById: ReturnType<typeof vi.fn>;
@@ -48,11 +43,6 @@ describe("usePodNoteBinding", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mockSkillStore = {
-      bindToPod: vi.fn().mockResolvedValue(undefined),
-      getNoteById: vi.fn(),
-      isItemBoundToPod: vi.fn(() => false),
-    };
     mockSubAgentStore = {
       bindToPod: vi.fn().mockResolvedValue(undefined),
       getNoteById: vi.fn(),
@@ -81,9 +71,6 @@ describe("usePodNoteBinding", () => {
 
   function buildStores(): Parameters<typeof usePodNoteBinding>[1] {
     return {
-      skillStore: mockSkillStore as Parameters<
-        typeof usePodNoteBinding
-      >[1]["skillStore"],
       subAgentStore: mockSubAgentStore as Parameters<
         typeof usePodNoteBinding
       >[1]["subAgentStore"],
@@ -103,32 +90,6 @@ describe("usePodNoteBinding", () => {
   }
 
   describe("handleNoteDrop", () => {
-    it("note 不存在時應直接 return，不呼叫 bindToPod", async () => {
-      mockSkillStore.getNoteById.mockReturnValue(undefined);
-
-      const { handleNoteDrop } = usePodNoteBinding(podId, buildStores());
-      await handleNoteDrop("skill", "note-99");
-
-      expect(mockSkillStore.bindToPod).not.toHaveBeenCalled();
-      expect(mockToast).not.toHaveBeenCalled();
-    });
-
-    it("skill 重複綁定時應顯示 toast 並不呼叫 bindToPod", async () => {
-      mockSkillStore.getNoteById.mockReturnValue({ skillId: "skill-1" });
-      mockSkillStore.isItemBoundToPod.mockReturnValue(true);
-
-      const { handleNoteDrop } = usePodNoteBinding(podId, buildStores());
-      await handleNoteDrop("skill", "note-1");
-
-      expect(mockToast).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: "已存在，無法插入",
-          description: "此 Skill 已綁定到此 Pod",
-        }),
-      );
-      expect(mockSkillStore.bindToPod).not.toHaveBeenCalled();
-    });
-
     it("subAgent 重複綁定時應顯示 toast 並不呼叫 bindToPod", async () => {
       mockSubAgentStore.getNoteById.mockReturnValue({ subAgentId: "sub-1" });
       mockSubAgentStore.isItemBoundToPod.mockReturnValue(true);
@@ -159,17 +120,6 @@ describe("usePodNoteBinding", () => {
         }),
       );
       expect(mockMcpServerStore.bindToPod).not.toHaveBeenCalled();
-    });
-
-    it("skill 綁定成功後應呼叫 bindToPod（skill 無 updatePodField）", async () => {
-      mockSkillStore.getNoteById.mockReturnValue({ skillId: "skill-1" });
-      mockSkillStore.isItemBoundToPod.mockReturnValue(false);
-
-      const { handleNoteDrop } = usePodNoteBinding(podId, buildStores());
-      await handleNoteDrop("skill", "note-1");
-
-      expect(mockSkillStore.bindToPod).toHaveBeenCalledWith("note-1", "pod-1");
-      expect(mockToast).not.toHaveBeenCalled();
     });
 
     it("repository 綁定成功後應呼叫 bindToPod 和 updatePodRepository", async () => {
@@ -229,13 +179,6 @@ describe("usePodNoteBinding", () => {
         mode: "return-to-original",
       });
       expect(mockPodStore.updatePodCommand).toHaveBeenCalledWith("pod-1", null);
-    });
-
-    it("skill（無 unbindFromPod）移除時應直接 return，不拋出錯誤", async () => {
-      const { handleNoteRemove } = usePodNoteBinding(podId, buildStores());
-      await expect(handleNoteRemove("skill")).resolves.not.toThrow();
-
-      expect(mockSkillStore.bindToPod).not.toHaveBeenCalled();
     });
   });
 });

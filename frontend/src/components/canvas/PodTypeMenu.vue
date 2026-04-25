@@ -9,19 +9,16 @@ import {
   type Component,
 } from "vue";
 import {
-  Wrench,
   FolderOpen,
   Bot,
   Github,
   FolderPlus,
   FilePlus,
-  Import,
   Server,
 } from "lucide-vue-next";
 import type {
   Position,
   PodTypeConfig,
-  Skill,
   Repository,
   SubAgent,
   McpServer,
@@ -30,7 +27,6 @@ import type { PodProvider, ProviderConfig } from "@/types/pod";
 import { podTypes } from "@/data/podTypes";
 import { useCanvasContext } from "@/composables/canvas/useCanvasContext";
 import { useMenuPosition } from "@/composables/useMenuPosition";
-import { useSkillImport } from "@/composables/useSkillImport";
 import PodTypeMenuSubmenu from "./PodTypeMenuSubmenu.vue";
 import ProviderPicker from "./ProviderPicker.vue";
 import { useI18n } from "vue-i18n";
@@ -41,20 +37,13 @@ interface Props {
 
 const props = defineProps<Props>();
 
-type ItemType = "skill" | "repository" | "subAgent" | "command" | "mcpServer";
+type ItemType = "repository" | "subAgent" | "command" | "mcpServer";
 type ResourceType = "subAgent" | "command";
 type GroupType = "subAgentGroup" | "commandGroup";
-type OpenMenuType =
-  | "skill"
-  | "subAgent"
-  | "repository"
-  | "command"
-  | "mcpServer"
-  | "pod";
+type OpenMenuType = "subAgent" | "repository" | "command" | "mcpServer" | "pod";
 
 /** 建立 Note 的 discriminated union，統一五個 create-*-note 事件為一個事件 */
 type CreateNotePayload =
-  | { type: "skill"; id: string }
   | { type: "subAgent"; id: string }
   | { type: "repository"; id: string }
   | { type: "command"; id: string }
@@ -95,7 +84,6 @@ const emit = defineEmits<{
 }>();
 
 const {
-  skillStore,
   subAgentStore,
   repositoryStore,
   commandStore,
@@ -103,7 +91,6 @@ const {
   podStore,
 } = useCanvasContext();
 
-const { importSkill, isImporting } = useSkillImport();
 const { t } = useI18n();
 
 const menuRef = ref<HTMLElement | null>(null);
@@ -127,7 +114,6 @@ onMounted(async () => {
   document.addEventListener("mousedown", handleOutsideMouseDown, true);
 
   await Promise.all([
-    skillStore.loadSkills(),
     subAgentStore.loadSubAgents(),
     subAgentStore.loadGroups(),
     repositoryStore.loadRepositories(),
@@ -149,12 +135,6 @@ const handleProviderSelect = (payload: {
   if (!podTypes[0]) return;
   openMenuType.value = null;
   emit("select", podTypes[0], payload.provider, payload.providerConfig);
-};
-
-const handleSkillSelect = (skill: Skill): void => {
-  openMenuType.value = null;
-  emit("create-note", { type: "skill", id: skill.id });
-  emit("close");
 };
 
 const handleSubAgentSelect = (subAgent: SubAgent): void => {
@@ -279,12 +259,6 @@ const handleCommandDropToGroup = (
   commandStore.moveItemToGroup(itemId, groupId);
 };
 
-const handleImportSkill = async (): Promise<void> => {
-  openMenuType.value = null;
-  await importSkill();
-  emit("close");
-};
-
 interface FooterAction {
   icon: Component;
   label: string;
@@ -389,27 +363,6 @@ const SECTION_CONFIGS: SectionConfig[] = [
     ],
   },
   {
-    type: "skill",
-    label: "Skills >",
-    iconColor: "var(--doodle-green)",
-    icon: Wrench,
-    editable: false,
-    getItems: () => skillStore.typedAvailableItems,
-    onSelect: (item) => handleSkillSelect(item as Skill),
-    onDelete: (id, name, event) => handleDeleteClick("skill", id, name, event),
-    footerActions: [
-      {
-        icon: Import,
-        label: "Import...",
-        handler: handleImportSkill,
-        // isImporting 是響應式 ref，在 watchEffect 執行 buildMenuSection 時被追蹤，確保 disabled 狀態隨之更新
-        get disabled(): boolean {
-          return isImporting.value;
-        },
-      },
-    ],
-  },
-  {
     type: "subAgent",
     label: "Agents >",
     iconColor: "var(--doodle-sand)",
@@ -501,11 +454,7 @@ const { menuStyle } = useMenuPosition({
           class="w-8 h-8 rounded-full flex items-center justify-center border border-doodle-ink"
           style="background-color: var(--doodle-blue)"
         >
-          <component
-            :is="podTypes[0].icon"
-            :size="16"
-            class="text-card"
-          />
+          <component :is="podTypes[0].icon" :size="16" class="text-card" />
         </span>
         <span class="font-mono text-sm text-foreground">Pod &gt;</span>
       </button>
@@ -538,10 +487,7 @@ const { menuStyle } = useMenuPosition({
             :size="16"
             class="text-card"
           />
-          <span
-            v-else
-            class="text-xs text-card font-mono font-bold"
-          >{{
+          <span v-else class="text-xs text-card font-mono font-bold">{{
             section.iconSlot
           }}</span>
         </span>
@@ -564,10 +510,7 @@ const { menuStyle } = useMenuPosition({
         @group-delete="section.onGroupDelete"
         @item-drop-to-group="section.onDropToGroup"
       >
-        <template
-          v-if="section.footerActions.length > 0"
-          #footer
-        >
+        <template v-if="section.footerActions.length > 0" #footer>
           <div class="border-t border-doodle-ink/30 my-1" />
           <div
             v-for="action in section.footerActions"
@@ -576,10 +519,7 @@ const { menuStyle } = useMenuPosition({
             :class="{ 'opacity-50 cursor-not-allowed': action.disabled }"
             @click="action.handler"
           >
-            <component
-              :is="action.icon"
-              :size="16"
-            />
+            <component :is="action.icon" :size="16" />
             {{ action.label }}
           </div>
         </template>

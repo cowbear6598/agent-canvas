@@ -61,7 +61,7 @@ export interface ModelOption {
 /** 各 Provider 支援的功能能力表 */
 export interface ProviderCapabilities {
   chat: boolean;
-  skill: boolean;
+  plugin: boolean;
   subAgent: boolean;
   repository: boolean;
   command: boolean;
@@ -99,7 +99,6 @@ export interface Pod {
   rotation: number;
   status?: PodStatus;
   workspacePath?: string;
-  skillIds?: string[];
   subAgentIds?: string[];
   mcpServerIds?: string[];
   pluginIds?: string[];

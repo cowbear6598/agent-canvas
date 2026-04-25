@@ -25,7 +25,6 @@ export const pastePodItemSchema = z.object({
    * Zod strip 會靜默丟失未宣告欄位，前端型別若有變動會讓 model 資訊消失，曾真實發生 bug。
    */
   providerConfig: providerConfigSchema.optional(),
-  skillIds: z.array(resourceIdSchema).optional(),
   subAgentIds: z.array(resourceIdSchema).optional(),
   pluginIds: z
     .array(
@@ -37,10 +36,6 @@ export const pastePodItemSchema = z.object({
     .optional(),
   repositoryId: resourceIdSchema.nullable().optional(),
   commandId: resourceIdSchema.nullable().optional(),
-});
-
-export const pasteSkillNoteItemSchema = createPasteNoteItemSchema({
-  skillId: resourceIdSchema,
 });
 
 export const pasteRepositoryNoteItemSchema = createPasteNoteItemSchema({
@@ -71,7 +66,6 @@ export const canvasPasteSchema = z.object({
   requestId: requestIdSchema,
   canvasId: canvasIdSchema,
   pods: z.array(pastePodItemSchema).max(100),
-  skillNotes: z.array(pasteSkillNoteItemSchema).max(100),
   repositoryNotes: z.array(pasteRepositoryNoteItemSchema).max(100),
   subAgentNotes: z.array(pasteSubAgentNoteItemSchema).max(100),
   commandNotes: z.array(pasteCommandNoteItemSchema).max(100).optional(),
@@ -81,7 +75,6 @@ export const canvasPasteSchema = z.object({
 
 export type PastePodItem = z.infer<typeof pastePodItemSchema>;
 export type CanvasPastePayload = z.infer<typeof canvasPasteSchema>;
-export type PasteSkillNoteItem = z.infer<typeof pasteSkillNoteItemSchema>;
 export type PasteRepositoryNoteItem = z.infer<
   typeof pasteRepositoryNoteItemSchema
 >;

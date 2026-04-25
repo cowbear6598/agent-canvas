@@ -2,7 +2,7 @@ import { ref, computed } from "vue";
 import type { Ref, ComputedRef } from "vue";
 import type { Group } from "@/types";
 
-type ItemType = "skill" | "repository" | "subAgent" | "command" | "mcpServer";
+type ItemType = "repository" | "subAgent" | "command" | "mcpServer";
 type GroupType = "subAgentGroup" | "commandGroup";
 type ExtendedItemType = ItemType | GroupType;
 
@@ -17,9 +17,6 @@ interface DeletableStore {
 }
 
 interface DeleteResourceStores {
-  skillStore: DeletableStore & {
-    deleteSkill: (id: string) => Promise<void>;
-  };
   subAgentStore: DeletableStore & {
     deleteSubAgent: (id: string) => Promise<void>;
     deleteGroup: (id: string) => Promise<{ success: boolean; error?: string }>;
@@ -53,13 +50,8 @@ export function useDeleteResource(stores: DeleteResourceStores): {
   handleConfirmDelete: () => Promise<void>;
   closeDeleteModal: () => void;
 } {
-  const {
-    skillStore,
-    subAgentStore,
-    repositoryStore,
-    commandStore,
-    mcpServerStore,
-  } = stores;
+  const { subAgentStore, repositoryStore, commandStore, mcpServerStore } =
+    stores;
 
   const showDeleteModal = ref(false);
   const deleteTarget = ref<DeleteTarget | null>(null);
@@ -70,7 +62,6 @@ export function useDeleteResource(stores: DeleteResourceStores): {
     const { type, id } = deleteTarget.value;
 
     const inUseChecks: Record<ExtendedItemType, () => boolean> = {
-      skill: (): boolean => skillStore.isItemInUse(id),
       subAgent: (): boolean => subAgentStore.isItemInUse(id),
       repository: (): boolean => repositoryStore.isItemInUse(id),
       command: (): boolean => commandStore.isItemInUse(id),
@@ -109,7 +100,6 @@ export function useDeleteResource(stores: DeleteResourceStores): {
       ExtendedItemType,
       () => Promise<void | { success: boolean; group?: Group; error?: string }>
     > = {
-      skill: (): Promise<void> => skillStore.deleteSkill(id),
       subAgent: (): Promise<void> => subAgentStore.deleteSubAgent(id),
       repository: (): Promise<void> => repositoryStore.deleteRepository(id),
       command: (): Promise<void> => commandStore.deleteCommand(id),
