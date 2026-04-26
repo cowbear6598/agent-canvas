@@ -12,7 +12,6 @@ export function validateResourceId(id: string): boolean {
   return id.length <= 100;
 }
 
-export const validateSubAgentId = validateResourceId;
 export const validateCommandId = validateResourceId;
 
 export function validatePodId(podId: string): boolean {

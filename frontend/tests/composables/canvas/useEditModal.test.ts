@@ -8,14 +8,6 @@ describe("useEditModal", () => {
     zoom: 1,
   };
 
-  let mockSubAgentStore: {
-    readSubAgent: ReturnType<typeof vi.fn>;
-    createSubAgent: ReturnType<typeof vi.fn>;
-    updateSubAgent: ReturnType<typeof vi.fn>;
-    createNote: ReturnType<typeof vi.fn>;
-    createGroup: ReturnType<typeof vi.fn>;
-  };
-
   let mockCommandStore: {
     readCommand: ReturnType<typeof vi.fn>;
     createCommand: ReturnType<typeof vi.fn>;
@@ -25,20 +17,6 @@ describe("useEditModal", () => {
   };
 
   beforeEach(() => {
-    mockSubAgentStore = {
-      readSubAgent: vi.fn().mockResolvedValue({
-        id: "sa-1",
-        name: "My Agent",
-        content: "content",
-      }),
-      createSubAgent: vi
-        .fn()
-        .mockResolvedValue({ success: true, subAgent: { id: "sa-new" } }),
-      updateSubAgent: vi.fn().mockResolvedValue({ success: true }),
-      createNote: vi.fn().mockResolvedValue(undefined),
-      createGroup: vi.fn().mockResolvedValue({ success: true }),
-    };
-
     mockCommandStore = {
       readCommand: vi.fn().mockResolvedValue({
         id: "cmd-1",
@@ -59,7 +37,6 @@ describe("useEditModal", () => {
     return {
       composable: useEditModal(
         {
-          subAgentStore: mockSubAgentStore as any,
           commandStore: mockCommandStore as any,
           viewportStore: mockViewportStore,
         },
@@ -70,23 +47,13 @@ describe("useEditModal", () => {
   }
 
   describe("handleOpenCreateModal - 開啟建立 Modal", () => {
-    it("開啟 subAgent 建立 Modal 時應設定正確初始狀態", () => {
-      const { composable } = createComposable();
-      composable.handleOpenCreateModal("subAgent", "建立 SubAgent");
-
-      expect(composable.editModal.value.visible).toBe(true);
-      expect(composable.editModal.value.mode).toBe("create");
-      expect(composable.editModal.value.title).toBe("建立 SubAgent");
-      expect(composable.editModal.value.resourceType).toBe("subAgent");
-      expect(composable.editModal.value.initialName).toBe("");
-      expect(composable.editModal.value.initialContent).toBe("");
-      expect(composable.editModal.value.showContent).toBe(true);
-    });
-
     it("開啟 command 建立 Modal 時應設定正確 resourceType", () => {
       const { composable } = createComposable();
       composable.handleOpenCreateModal("command", "建立 Command");
 
+      expect(composable.editModal.value.visible).toBe(true);
+      expect(composable.editModal.value.mode).toBe("create");
+      expect(composable.editModal.value.title).toBe("建立 Command");
       expect(composable.editModal.value.resourceType).toBe("command");
       expect(composable.editModal.value.showContent).toBe(true);
     });
@@ -95,33 +62,33 @@ describe("useEditModal", () => {
   describe("handleOpenCreateGroupModal - 開啟建立群組 Modal", () => {
     it("開啟群組建立 Modal 時 showContent 應為 false", () => {
       const { composable } = createComposable();
-      composable.handleOpenCreateGroupModal("subAgentGroup", "建立群組");
+      composable.handleOpenCreateGroupModal("commandGroup", "建立群組");
 
       expect(composable.editModal.value.visible).toBe(true);
       expect(composable.editModal.value.mode).toBe("create");
-      expect(composable.editModal.value.resourceType).toBe("subAgentGroup");
+      expect(composable.editModal.value.resourceType).toBe("commandGroup");
       expect(composable.editModal.value.showContent).toBe(false);
     });
   });
 
   describe("handleOpenEditModal - 開啟編輯 Modal", () => {
-    it("開啟 subAgent 編輯 Modal 時應讀取資料並設定初始值", async () => {
+    it("開啟 command 編輯 Modal 時應讀取資料並設定初始值", async () => {
       const { composable } = createComposable();
-      await composable.handleOpenEditModal("subAgent", "sa-1");
+      await composable.handleOpenEditModal("command", "cmd-1");
 
-      expect(mockSubAgentStore.readSubAgent).toHaveBeenCalledWith("sa-1");
+      expect(mockCommandStore.readCommand).toHaveBeenCalledWith("cmd-1");
       expect(composable.editModal.value.visible).toBe(true);
       expect(composable.editModal.value.mode).toBe("edit");
-      expect(composable.editModal.value.title).toBe("編輯 SubAgent");
-      expect(composable.editModal.value.initialName).toBe("My Agent");
+      expect(composable.editModal.value.title).toBe("編輯 Command");
+      expect(composable.editModal.value.initialName).toBe("My Command");
       expect(composable.editModal.value.initialContent).toBe("content");
     });
 
     it("讀取資料失敗時不應開啟 Modal", async () => {
       const { composable } = createComposable();
-      mockSubAgentStore.readSubAgent.mockResolvedValue(null);
+      mockCommandStore.readCommand.mockResolvedValue(null);
 
-      await composable.handleOpenEditModal("subAgent", "sa-not-found");
+      await composable.handleOpenEditModal("command", "cmd-not-found");
 
       expect(composable.editModal.value.visible).toBe(false);
     });
@@ -135,7 +102,7 @@ describe("useEditModal", () => {
   });
 
   describe("handleCreateEditSubmit（edit mode）- 更新資源", () => {
-    it("更新 subAgent 後應關閉 Modal", async () => {
+    it("更新 command 後應關閉 Modal", async () => {
       const { composable } = createComposable();
       composable.editModal.value = {
         visible: true,
@@ -143,40 +110,40 @@ describe("useEditModal", () => {
         title: "",
         initialName: "",
         initialContent: "",
-        resourceType: "subAgent",
-        itemId: "sa-1",
+        resourceType: "command",
+        itemId: "cmd-1",
         showContent: true,
       };
 
       await composable.handleCreateEditSubmit({
         name: "name",
-        content: "agent content",
+        content: "cmd content",
       });
 
-      expect(mockSubAgentStore.updateSubAgent).toHaveBeenCalledWith(
-        "sa-1",
-        "agent content",
+      expect(mockCommandStore.updateCommand).toHaveBeenCalledWith(
+        "cmd-1",
+        "cmd content",
       );
       expect(composable.editModal.value.visible).toBe(false);
     });
   });
 
   describe("handleCreateEditSubmit（create mode）- 建立資源", () => {
-    it("建立 subAgent 後應呼叫 createNote 並關閉 Modal", async () => {
+    it("建立 command 後應呼叫 createNote 並關閉 Modal", async () => {
       const { composable } = createComposable({ x: 100, y: 200 });
-      composable.handleOpenCreateModal("subAgent", "建立");
+      composable.handleOpenCreateModal("command", "建立");
 
       await composable.handleCreateEditSubmit({
-        name: "My Agent",
-        content: "agent content",
+        name: "My Command",
+        content: "cmd content",
       });
 
-      expect(mockSubAgentStore.createSubAgent).toHaveBeenCalledWith(
-        "My Agent",
-        "agent content",
+      expect(mockCommandStore.createCommand).toHaveBeenCalledWith(
+        "My Command",
+        "cmd content",
       );
-      expect(mockSubAgentStore.createNote).toHaveBeenCalledWith(
-        "sa-new",
+      expect(mockCommandStore.createNote).toHaveBeenCalledWith(
+        "cmd-new",
         100,
         200,
       );
@@ -185,42 +152,30 @@ describe("useEditModal", () => {
 
     it("建立群組時應呼叫 createGroup 而非 createNote", async () => {
       const { composable } = createComposable();
-      composable.handleOpenCreateGroupModal("subAgentGroup", "建立群組");
+      composable.handleOpenCreateGroupModal("commandGroup", "建立群組");
 
       await composable.handleCreateEditSubmit({
         name: "My Group",
         content: "",
       });
 
-      expect(mockSubAgentStore.createGroup).toHaveBeenCalledWith("My Group");
-      expect(mockSubAgentStore.createNote).not.toHaveBeenCalled();
+      expect(mockCommandStore.createGroup).toHaveBeenCalledWith("My Group");
+      expect(mockCommandStore.createNote).not.toHaveBeenCalled();
       expect(composable.editModal.value.visible).toBe(false);
-    });
-
-    it("建立 command 群組時應呼叫 commandStore.createGroup", async () => {
-      const { composable } = createComposable();
-      composable.handleOpenCreateGroupModal("commandGroup", "建立指令群組");
-
-      await composable.handleCreateEditSubmit({
-        name: "CMD Group",
-        content: "",
-      });
-
-      expect(mockCommandStore.createGroup).toHaveBeenCalledWith("CMD Group");
     });
 
     it("沒有 lastMenuPosition 時不應建立 Note", async () => {
       const { composable, lastMenuPosition } = createComposable();
       lastMenuPosition.value = null;
-      composable.handleOpenCreateModal("subAgent", "建立 SubAgent");
+      composable.handleOpenCreateModal("command", "建立 Command");
 
       await composable.handleCreateEditSubmit({
-        name: "Agent",
+        name: "Command",
         content: "content",
       });
 
-      expect(mockSubAgentStore.createSubAgent).toHaveBeenCalled();
-      expect(mockSubAgentStore.createNote).not.toHaveBeenCalled();
+      expect(mockCommandStore.createCommand).toHaveBeenCalled();
+      expect(mockCommandStore.createNote).not.toHaveBeenCalled();
     });
   });
 
@@ -268,7 +223,7 @@ describe("useEditModal", () => {
   describe("closeEditModal - 關閉 Modal", () => {
     it("關閉 Modal 後 visible 應為 false", () => {
       const { composable } = createComposable();
-      composable.handleOpenCreateModal("subAgent", "建立");
+      composable.handleOpenCreateModal("command", "建立");
       expect(composable.editModal.value.visible).toBe(true);
 
       composable.closeEditModal();

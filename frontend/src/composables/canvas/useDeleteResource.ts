@@ -2,8 +2,8 @@ import { ref, computed } from "vue";
 import type { Ref, ComputedRef } from "vue";
 import type { Group } from "@/types";
 
-type ItemType = "repository" | "subAgent" | "command" | "mcpServer";
-type GroupType = "subAgentGroup" | "commandGroup";
+type ItemType = "repository" | "command" | "mcpServer";
+type GroupType = "commandGroup";
 type ExtendedItemType = ItemType | GroupType;
 
 interface DeleteTarget {
@@ -17,10 +17,6 @@ interface DeletableStore {
 }
 
 interface DeleteResourceStores {
-  subAgentStore: DeletableStore & {
-    deleteSubAgent: (id: string) => Promise<void>;
-    deleteGroup: (id: string) => Promise<{ success: boolean; error?: string }>;
-  };
   repositoryStore: DeletableStore & {
     deleteRepository: (id: string) => Promise<void>;
   };
@@ -50,8 +46,7 @@ export function useDeleteResource(stores: DeleteResourceStores): {
   handleConfirmDelete: () => Promise<void>;
   closeDeleteModal: () => void;
 } {
-  const { subAgentStore, repositoryStore, commandStore, mcpServerStore } =
-    stores;
+  const { repositoryStore, commandStore, mcpServerStore } = stores;
 
   const showDeleteModal = ref(false);
   const deleteTarget = ref<DeleteTarget | null>(null);
@@ -62,11 +57,9 @@ export function useDeleteResource(stores: DeleteResourceStores): {
     const { type, id } = deleteTarget.value;
 
     const inUseChecks: Record<ExtendedItemType, () => boolean> = {
-      subAgent: (): boolean => subAgentStore.isItemInUse(id),
       repository: (): boolean => repositoryStore.isItemInUse(id),
       command: (): boolean => commandStore.isItemInUse(id),
       mcpServer: (): boolean => mcpServerStore.isItemInUse(id),
-      subAgentGroup: (): boolean => false,
       commandGroup: (): boolean => false,
     };
 
@@ -100,11 +93,9 @@ export function useDeleteResource(stores: DeleteResourceStores): {
       ExtendedItemType,
       () => Promise<void | { success: boolean; group?: Group; error?: string }>
     > = {
-      subAgent: (): Promise<void> => subAgentStore.deleteSubAgent(id),
       repository: (): Promise<void> => repositoryStore.deleteRepository(id),
       command: (): Promise<void> => commandStore.deleteCommand(id),
       mcpServer: (): Promise<void> => mcpServerStore.deleteMcpServer(id),
-      subAgentGroup: () => subAgentStore.deleteGroup(id),
       commandGroup: () => commandStore.deleteGroup(id),
     };
 

@@ -57,33 +57,28 @@
 }
 
 /* Pod Menu Submenu Scrollable */
-.pod-menu-submenu-scrollable,
-.pod-subagent-menu-scrollable {
+.pod-menu-submenu-scrollable {
   max-height: calc(36px * 5 + 8px);
   overflow-y: auto;
 }
 
 /* Scrollbar 基礎樣式 */
-.pod-menu-submenu-scrollable::-webkit-scrollbar,
-.pod-subagent-menu-scrollable::-webkit-scrollbar {
+.pod-menu-submenu-scrollable::-webkit-scrollbar {
   width: 8px;
 }
 
-.pod-menu-submenu-scrollable::-webkit-scrollbar-track,
-.pod-subagent-menu-scrollable::-webkit-scrollbar-track {
+.pod-menu-submenu-scrollable::-webkit-scrollbar-track {
   background: oklch(0.9 0.01 50);
   border-radius: 4px;
 }
 
-.pod-menu-submenu-scrollable::-webkit-scrollbar-thumb,
-.pod-subagent-menu-scrollable::-webkit-scrollbar-thumb {
+.pod-menu-submenu-scrollable::-webkit-scrollbar-thumb {
   background: oklch(0.6 0.02 50);
   border-radius: 4px;
   border: 1px solid var(--doodle-ink);
 }
 
-.pod-menu-submenu-scrollable::-webkit-scrollbar-thumb:hover,
-.pod-subagent-menu-scrollable::-webkit-scrollbar-thumb:hover {
+.pod-menu-submenu-scrollable::-webkit-scrollbar-thumb:hover {
   background: oklch(0.5 0.02 50);
 }
 

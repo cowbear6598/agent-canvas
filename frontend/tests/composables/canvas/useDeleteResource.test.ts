@@ -3,11 +3,6 @@ import { useDeleteResource } from "@/composables/canvas/useDeleteResource";
 
 describe("useDeleteResource", () => {
   let mockStores: {
-    subAgentStore: {
-      isItemInUse: ReturnType<typeof vi.fn>;
-      deleteSubAgent: ReturnType<typeof vi.fn>;
-      deleteGroup: ReturnType<typeof vi.fn>;
-    };
     repositoryStore: {
       isItemInUse: ReturnType<typeof vi.fn>;
       deleteRepository: ReturnType<typeof vi.fn>;
@@ -25,11 +20,6 @@ describe("useDeleteResource", () => {
 
   beforeEach(() => {
     mockStores = {
-      subAgentStore: {
-        isItemInUse: vi.fn().mockReturnValue(false),
-        deleteSubAgent: vi.fn().mockResolvedValue(undefined),
-        deleteGroup: vi.fn().mockResolvedValue({ success: true }),
-      },
       repositoryStore: {
         isItemInUse: vi.fn().mockReturnValue(false),
         deleteRepository: vi.fn().mockResolvedValue(undefined),
@@ -66,13 +56,13 @@ describe("useDeleteResource", () => {
       const composable = useDeleteResource(mockStores as any);
 
       composable.handleOpenDeleteGroupModal(
-        "subAgentGroup",
+        "commandGroup",
         "group-1",
         "My Group",
       );
 
       expect(composable.showDeleteModal.value).toBe(true);
-      expect(composable.deleteTarget.value?.type).toBe("subAgentGroup");
+      expect(composable.deleteTarget.value?.type).toBe("commandGroup");
       expect(composable.deleteTarget.value?.id).toBe("group-1");
       expect(composable.deleteTarget.value?.name).toBe("My Group");
     });
@@ -89,7 +79,7 @@ describe("useDeleteResource", () => {
       const composable = useDeleteResource(mockStores as any);
 
       composable.handleOpenDeleteGroupModal(
-        "subAgentGroup",
+        "commandGroup",
         "group-1",
         "My Group",
       );
@@ -113,7 +103,9 @@ describe("useDeleteResource", () => {
 
       await composable.handleConfirmDelete();
 
-      expect(mockStores.subAgentStore.deleteSubAgent).not.toHaveBeenCalled();
+      expect(
+        mockStores.repositoryStore.deleteRepository,
+      ).not.toHaveBeenCalled();
     });
 
     it("確認刪除 repository 後應呼叫 deleteRepository", async () => {
@@ -155,12 +147,12 @@ describe("useDeleteResource", () => {
 
     it("刪除失敗時不應關閉 Modal", async () => {
       const composable = useDeleteResource(mockStores as any);
-      mockStores.subAgentStore.deleteGroup.mockResolvedValue({
+      mockStores.commandStore.deleteGroup.mockResolvedValue({
         success: false,
         error: "刪除失敗",
       });
       composable.handleOpenDeleteGroupModal(
-        "subAgentGroup",
+        "commandGroup",
         "group-1",
         "My Group",
       );

@@ -83,19 +83,6 @@ describe("selectionStore", () => {
       });
     });
 
-    describe("selectedSubAgentNoteIds", () => {
-      it("應篩選出 type 為 subAgentNote 的 id", () => {
-        const store = useSelectionStore();
-        store.selectedElements = [
-          { type: "subAgentNote", id: "note-1" },
-          { type: "pod", id: "pod-1" },
-          { type: "subAgentNote", id: "note-2" },
-        ];
-
-        expect(store.selectedSubAgentNoteIds).toEqual(["note-1", "note-2"]);
-      });
-    });
-
     describe("selectedCommandNoteIds", () => {
       it("應篩選出 type 為 commandNote 的 id", () => {
         const store = useSelectionStore();
@@ -365,27 +352,6 @@ describe("selectionStore", () => {
         ]);
       });
 
-      it("SubAgentNote 與框選範圍相交時應被選中", () => {
-        const store = useSelectionStore();
-        const note = createMockNote("subAgent", {
-          id: "note-1",
-          x: 100,
-          y: 100,
-        });
-
-        store.startSelection(50, 50);
-        store.updateSelection(150, 150);
-
-        store.calculateSelectedElements({
-          pods: [],
-          noteGroups: [{ notes: [note], type: "subAgentNote" }],
-        });
-
-        expect(store.selectedElements).toEqual([
-          { type: "subAgentNote", id: "note-1" },
-        ]);
-      });
-
       it("CommandNote 與框選範圍相交時應被選中", () => {
         const store = useSelectionStore();
         const note = createMockNote("command", {
@@ -491,11 +457,6 @@ describe("selectionStore", () => {
           x: 150,
           y: 150,
         });
-        const subAgentNote = createMockNote("subAgent", {
-          id: "note-2",
-          x: 200,
-          y: 200,
-        });
         const repoNote2 = createMockNote("repository", {
           id: "note-3",
           x: 250,
@@ -509,7 +470,6 @@ describe("selectionStore", () => {
           pods: [pod],
           noteGroups: [
             { notes: [repoNote1], type: "repositoryNote" },
-            { notes: [subAgentNote], type: "subAgentNote" },
             { notes: [repoNote2], type: "repositoryNote" },
           ],
         });
@@ -517,7 +477,6 @@ describe("selectionStore", () => {
         expect(store.selectedElements).toEqual([
           { type: "pod", id: "pod-1" },
           { type: "repositoryNote", id: "note-1" },
-          { type: "subAgentNote", id: "note-2" },
           { type: "repositoryNote", id: "note-3" },
         ]);
       });

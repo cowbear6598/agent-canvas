@@ -2,7 +2,6 @@ import type {
   SelectableElement,
   CopiedPod,
   CopiedRepositoryNote,
-  CopiedSubAgentNote,
   CopiedCommandNote,
   CopiedMcpServerNote,
   CopiedConnection,
@@ -16,11 +15,7 @@ type NoteWithIndexSignature = {
   [key: string]: unknown;
 };
 
-type AnyNote =
-  | CopiedRepositoryNote
-  | CopiedSubAgentNote
-  | CopiedCommandNote
-  | CopiedMcpServerNote;
+type AnyNote = CopiedRepositoryNote | CopiedCommandNote | CopiedMcpServerNote;
 
 type StoreWithNotes<
   TNote extends NoteWithIndexSignature = NoteWithIndexSignature,
@@ -54,7 +49,6 @@ function buildNoteByIdMap<TNote extends NoteWithIndexSignature>(
 
 export interface BoundNotesByType {
   repositoryNotes: CopiedRepositoryNote[];
-  subAgentNotes: CopiedSubAgentNote[];
   commandNotes: CopiedCommandNote[];
   mcpServerNotes: CopiedMcpServerNote[];
 }
@@ -121,8 +115,6 @@ function createOriginalBoundNoteMapper<
     }) as unknown as T;
 }
 
-const mapToSubAgentNote =
-  createBoundNoteMapper<CopiedSubAgentNote>("subAgentId");
 const mapToMcpServerNote =
   createBoundNoteMapper<CopiedMcpServerNote>("mcpServerId");
 const mapToRepositoryNote =
@@ -139,11 +131,6 @@ export function collectBoundNotes(
       podId,
       stores.repositoryStore,
       mapToRepositoryNote,
-    ),
-    subAgentNotes: collectBoundNotesFromStore(
-      podId,
-      stores.subAgentStore,
-      mapToSubAgentNote,
     ),
     commandNotes: collectBoundNotesFromStore(
       podId,
@@ -207,7 +194,6 @@ export function collectSelectedPods(
           rotation: pod.rotation,
           provider: pod.provider,
           providerConfig: pod.providerConfig,
-          subAgentIds: pod.subAgentIds,
           mcpServerIds: pod.mcpServerIds,
           pluginIds: pod.pluginIds,
           repositoryId: pod.repositoryId,
@@ -235,7 +221,6 @@ function collectNoteFromElement(
 
 export interface NoteStores {
   repositoryStore: StoreWithNotes;
-  subAgentStore: StoreWithNotes;
   commandStore: StoreWithNotes;
   mcpServerStore: StoreWithNotes;
 }
@@ -253,11 +238,6 @@ const NOTE_STORE_CONFIGS: NoteStoreConfig[] = [
     mapFn: mapToRepositoryNote,
   },
   {
-    key: "subAgentNote",
-    getStore: (noteStores) => noteStores.subAgentStore,
-    mapFn: mapToSubAgentNote,
-  },
-  {
     key: "commandNote",
     getStore: (noteStores) => noteStores.commandStore,
     mapFn: mapToCommandNote,
@@ -271,7 +251,6 @@ const NOTE_STORE_CONFIGS: NoteStoreConfig[] = [
 
 type CollectedNoteArrays = {
   repositoryNote: CopiedRepositoryNote[];
-  subAgentNote: CopiedSubAgentNote[];
   commandNote: CopiedCommandNote[];
   mcpServerNote: CopiedMcpServerNote[];
 };
@@ -282,13 +261,11 @@ export function collectSelectedNotes(
   noteStores: NoteStores,
 ): {
   repositoryNotes: CopiedRepositoryNote[];
-  subAgentNotes: CopiedSubAgentNote[];
   commandNotes: CopiedCommandNote[];
   mcpServerNotes: CopiedMcpServerNote[];
 } {
   const arrays: CollectedNoteArrays = {
     repositoryNote: [],
-    subAgentNote: [],
     commandNote: [],
     mcpServerNote: [],
   };
@@ -296,9 +273,6 @@ export function collectSelectedNotes(
   // 各 store 各建一份 groupBy Map（O(N)），供後續 bound note 查找使用（#51）
   const repositoryBoundMap = buildBoundNotesByPodMap(
     noteStores.repositoryStore.notes,
-  );
-  const subAgentBoundMap = buildBoundNotesByPodMap(
-    noteStores.subAgentStore.notes,
   );
   const commandBoundMap = buildBoundNotesByPodMap(
     noteStores.commandStore.notes,
@@ -314,9 +288,6 @@ export function collectSelectedNotes(
         repositoryBoundMap,
         mapToRepositoryNote,
       ),
-    );
-    arrays.subAgentNote.push(
-      ...collectBoundNotesFromMap(podId, subAgentBoundMap, mapToSubAgentNote),
     );
     arrays.commandNote.push(
       ...collectBoundNotesFromMap(podId, commandBoundMap, mapToCommandNote),
@@ -349,7 +320,6 @@ export function collectSelectedNotes(
 
   return {
     repositoryNotes: arrays.repositoryNote,
-    subAgentNotes: arrays.subAgentNote,
     commandNotes: arrays.commandNote,
     mcpServerNotes: arrays.mcpServerNote,
   };

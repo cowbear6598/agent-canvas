@@ -1,6 +1,5 @@
 import { usePodStore, useViewportStore, useSelectionStore } from "@/stores/pod";
 import {
-  useSubAgentStore,
   useRepositoryStore,
   useCommandStore,
   useMcpServerStore,
@@ -15,7 +14,6 @@ export function useCanvasContext(): {
   podStore: ReturnType<typeof usePodStore>;
   viewportStore: ReturnType<typeof useViewportStore>;
   selectionStore: ReturnType<typeof useSelectionStore>;
-  subAgentStore: ReturnType<typeof useSubAgentStore>;
   repositoryStore: ReturnType<typeof useRepositoryStore>;
   commandStore: ReturnType<typeof useCommandStore>;
   mcpServerStore: ReturnType<typeof useMcpServerStore>;
@@ -28,7 +26,6 @@ export function useCanvasContext(): {
   const podStore = usePodStore();
   const viewportStore = useViewportStore();
   const selectionStore = useSelectionStore();
-  const subAgentStore = useSubAgentStore();
   const repositoryStore = useRepositoryStore();
   const commandStore = useCommandStore();
   const mcpServerStore = useMcpServerStore();
@@ -42,7 +39,6 @@ export function useCanvasContext(): {
     podStore,
     viewportStore,
     selectionStore,
-    subAgentStore,
     repositoryStore,
     commandStore,
     mcpServerStore,

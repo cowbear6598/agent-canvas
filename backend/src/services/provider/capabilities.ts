@@ -5,7 +5,6 @@ export const CLAUDE_CAPABILITIES: Readonly<ProviderCapabilities> =
   Object.freeze({
     chat: true,
     plugin: true,
-    subAgent: true,
     repository: true,
     command: true,
     mcp: true,
@@ -18,7 +17,6 @@ export const CODEX_CAPABILITIES: Readonly<ProviderCapabilities> = Object.freeze(
   {
     chat: true,
     plugin: true,
-    subAgent: false,
     repository: true,
     command: true,
     mcp: false,

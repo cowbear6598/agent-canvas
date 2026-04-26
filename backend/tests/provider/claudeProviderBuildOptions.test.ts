@@ -104,7 +104,7 @@ function makePod(overrides: Partial<Pod> = {}): Pod {
     mcpServerIds: [],
     pluginIds: [],
     integrationBindings: [],
-    subAgentIds: [],
+
     repositoryId: null,
     commandId: null,
     multiInstance: false,

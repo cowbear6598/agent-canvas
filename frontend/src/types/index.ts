@@ -7,7 +7,6 @@ export * from "./note";
 export * from "./connection";
 export * from "./clipboard";
 export * from "./repository";
-export * from "./subAgent";
 export * from "./command";
 export * from "./group";
 export * from "./mcpServer";

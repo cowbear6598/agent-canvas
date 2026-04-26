@@ -17,10 +17,6 @@ describe("CODEX_CAPABILITIES 能力旗標", () => {
     expect(CODEX_CAPABILITIES.plugin).toBe(true);
   });
 
-  it("subAgent 應為 false（Codex 不支援 SubAgent）", () => {
-    expect(CODEX_CAPABILITIES.subAgent).toBe(false);
-  });
-
   it("mcp 應為 false（Codex 不支援 MCP）", () => {
     expect(CODEX_CAPABILITIES.mcp).toBe(false);
   });
@@ -69,7 +65,6 @@ describe("CLAUDE_CAPABILITIES 能力旗標", () => {
   it("所有能力應為 true（Claude 支援所有功能）", () => {
     expect(CLAUDE_CAPABILITIES.chat).toBe(true);
     expect(CLAUDE_CAPABILITIES.plugin).toBe(true);
-    expect(CLAUDE_CAPABILITIES.subAgent).toBe(true);
     expect(CLAUDE_CAPABILITIES.repository).toBe(true);
     expect(CLAUDE_CAPABILITIES.command).toBe(true);
     expect(CLAUDE_CAPABILITIES.mcp).toBe(true);

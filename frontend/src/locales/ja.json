@@ -71,7 +71,6 @@
     },
     "slot": {
       "duplicateTitle": "すでに存在しています",
-      "subAgentDuplicate": "このサブエージェントはすでにこの Pod にバインドされています",
       "mcpServerDuplicate": "この MCP サーバーはすでにこの Pod にバインドされています",
       "codexDisabled": "Codex はこの機能をサポートしていません",
       "pluginsLabel": "Plugins",
@@ -301,9 +300,7 @@
       "aiErrorReason": "エラー：{reason}"
     },
     "podTypeMenu": {
-      "newSubAgent": "SubAgent を追加",
       "newCommand": "Command を追加",
-      "newSubAgentGroup": "SubAgent グループを追加",
       "newCommandGroup": "Command グループを追加"
     }
   },
@@ -420,7 +417,6 @@
       "pasted": "貼り付けました",
       "worktreeCreated": "Worktree を作成しました",
       "repositoryDeleted": "Repository を削除しました",
-      "subAgentDeleted": "SubAgent を削除しました",
       "commandDeleted": "Command を削除しました",
       "mcpServerCreated": "MCP Server を作成しました",
       "mcpServerUpdated": "MCP Server を更新しました",

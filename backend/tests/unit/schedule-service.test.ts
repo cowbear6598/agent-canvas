@@ -833,7 +833,7 @@ describe("排程觸發 multi-instance 分支", () => {
     commandId: null,
     multiInstance: false,
     skillIds: [],
-    subAgentIds: [],
+
     mcpServerIds: [],
     provider: "claude" as const,
     providerConfig: { model: "opus" },

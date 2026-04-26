@@ -11,7 +11,6 @@ export interface CopiedPod {
   provider: PodProvider;
   /** Provider 對應的設定（複製時保留，貼上時還原） */
   providerConfig: ProviderConfig;
-  subAgentIds?: string[];
   mcpServerIds?: string[];
   pluginIds?: string[];
   repositoryId?: string | null;
@@ -24,16 +23,6 @@ export interface CopiedRepositoryNote {
   x: number;
   y: number;
   boundToOriginalPodId: string | null;
-  originalPosition: { x: number; y: number } | null;
-}
-
-export interface CopiedSubAgentNote {
-  id: string;
-  subAgentId: string;
-  name: string;
-  x: number;
-  y: number;
-  boundToPodId: string | null;
   originalPosition: { x: number; y: number } | null;
 }
 

@@ -1,8 +1,7 @@
-export type GroupType = "command" | "subagent";
+export type GroupType = "command";
 
 export const GROUP_TYPES = {
   COMMAND: "command",
-  SUBAGENT: "subagent",
 } as const;
 
 export interface Group {

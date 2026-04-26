@@ -100,7 +100,6 @@ abortSignal.addEventListener("abort", onAbort, { once: true });
 |---|---|---|
 | `chat` | ✓ | 基本聊天（JSON line 格式輸出） |
 | `skill` | ✗ | 無 Command / Skill 支援 |
-| `subAgent` | ✗ | 無 Sub-Agent 機制 |
 | `repository` | ✗ | cwd 只從 `ctx.workspacePath` 取得，無 repositoryId 處理 |
 | `command` | ✗ | 無 Command 前綴機制 |
 | `mcp` | ✗ | 無 MCP Server 整合 |

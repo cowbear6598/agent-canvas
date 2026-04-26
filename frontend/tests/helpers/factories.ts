@@ -20,7 +20,6 @@ import type {
 } from "@/types/chat";
 import type { BaseNote } from "@/types/note";
 import type { Repository, RepositoryNote } from "@/types/repository";
-import type { SubAgentNote, SubAgent } from "@/types/subAgent";
 import type { CommandNote } from "@/types/command";
 import type { McpServerNote } from "@/types/mcpServer";
 import type { Group } from "@/types/group";
@@ -34,7 +33,6 @@ let messageCounter = 0;
 let noteCounter = 0;
 let scheduleCounter = 0;
 let repositoryCounter = 0;
-let subAgentCounter = 0;
 let groupCounter = 0;
 let runCounter = 0;
 let runPodInstanceCounter = 0;
@@ -90,7 +88,6 @@ export function createMockPod(overrides?: Partial<Pod>): Pod {
     output: [],
     rotation: 0,
     status: "idle" as PodStatus,
-    subAgentIds: [],
     repositoryId: null,
     multiInstance: false,
     commandId: null,
@@ -162,9 +159,9 @@ export function createMockAssistantMessage(
  * 建立 Mock Note (依類型)
  */
 export function createMockNote(
-  type: "repository" | "subAgent" | "command" | "mcpServer",
+  type: "repository" | "command" | "mcpServer",
   overrides?: Partial<BaseNote>,
-): RepositoryNote | SubAgentNote | CommandNote | McpServerNote {
+): RepositoryNote | CommandNote | McpServerNote {
   const baseNote: BaseNote = {
     id: `note-${++noteCounter}`,
     name: `Note ${noteCounter}`,
@@ -181,12 +178,6 @@ export function createMockNote(
         ...baseNote,
         repositoryId: `repository-${noteCounter}`,
       } as RepositoryNote;
-
-    case "subAgent":
-      return {
-        ...baseNote,
-        subAgentId: `sub-agent-${noteCounter}`,
-      } as SubAgentNote;
 
     case "command":
       return {
@@ -227,35 +218,13 @@ export function createMockRepositoryNote(
 }
 
 /**
- * 建立 Mock SubAgent
- */
-export function createMockSubAgent(overrides?: Partial<SubAgent>): SubAgent {
-  return {
-    id: `subagent-${++subAgentCounter}`,
-    name: `SubAgent ${subAgentCounter}`,
-    description: `Description for SubAgent ${subAgentCounter}`,
-    groupId: null,
-    ...overrides,
-  };
-}
-
-/**
- * 建立 Mock SubAgentNote
- */
-export function createMockSubAgentNote(
-  overrides?: Partial<SubAgentNote>,
-): SubAgentNote {
-  return createMockNote("subAgent", overrides) as SubAgentNote;
-}
-
-/**
  * 建立 Mock Group
  */
 export function createMockGroup(overrides?: Partial<Group>): Group {
   return {
     id: `group-${++groupCounter}`,
     name: `Group ${groupCounter}`,
-    type: "subAgent",
+    type: "command",
     ...overrides,
   };
 }

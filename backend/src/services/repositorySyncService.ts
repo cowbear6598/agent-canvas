@@ -1,22 +1,19 @@
 import { repositoryService } from "./repositoryService.js";
 import { podStore } from "./podStore.js";
-import { subAgentService } from "./subAgentService.js";
 import { podManifestService } from "./podManifestService.js";
 import { logger } from "../utils/logger.js";
-import { fsOperation } from "../utils/operationHelpers.js";
 import { validatePodId } from "../utils/pathValidator.js";
 import { getStmts } from "../database/stmtsHelper.js";
 
 interface PodResources {
   commandIds: string[];
-  subAgentIds: string[];
 }
 
 class RepositorySyncService {
   private locks: Map<string, Promise<void>> = new Map();
 
   /**
-   * 同步指定 Repository 的資源（Command / Skill / SubAgent manifest）。
+   * 同步指定 Repository 的資源（Command / Skill manifest）。
    *
    * 此函式保證不拋出：即使 performSync 內部失敗，錯誤只會記入 log，
    * 不會向呼叫端傳播。呼叫端無需 try/catch。
@@ -81,7 +78,6 @@ class RepositorySyncService {
           pod.id,
           {
             commandIds,
-            subAgentIds: [...pod.subAgentIds],
           },
         ];
       }),
@@ -119,27 +115,6 @@ class RepositorySyncService {
   ): Promise<void> {
     await podManifestService.deleteManagedFiles(repositoryId, podId);
 
-    const copySubAgents = resources.subAgentIds.map((subAgentId) =>
-      fsOperation(
-        () =>
-          subAgentService.copySubAgentToRepository(subAgentId, repositoryPath),
-        `複製 subagent ${subAgentId} 到 repository ${repositoryId} 失敗`,
-      ),
-    );
-
-    // 使用 allSettled 確保單一 subAgent 複製失敗不影響其他項目，
-    // 失敗項目 log 後跳過，避免 partial state 污染整體 sync
-    const copyResults = await Promise.allSettled(copySubAgents);
-    copyResults.forEach((r, i) => {
-      if (r.status === "rejected") {
-        logger.warn(
-          "Repository",
-          "Warn",
-          `writeSinglePodManifest：複製 subAgent 第 ${i + 1} 筆失敗，略過此項`,
-        );
-      }
-    });
-
     const managedFiles = await this.collectPodManagedFiles(resources);
     podManifestService.writeManifest(repositoryId, podId, managedFiles);
   }
@@ -154,15 +129,14 @@ class RepositorySyncService {
     const totals = [...podResourcesMap.values()].reduce(
       (acc, podResources) => ({
         commands: acc.commands + podResources.commandIds.length,
-        subAgents: acc.subAgents + podResources.subAgentIds.length,
       }),
-      { commands: 0, subAgents: 0 },
+      { commands: 0 },
     );
 
     logger.log(
       "Repository",
       "Update",
-      `已同步 Repository ${repositoryId}：${totals.commands} 個 Command、${totals.subAgents} 個 SubAgent`,
+      `已同步 Repository ${repositoryId}：${totals.commands} 個 Command`,
     );
   }
 
@@ -202,10 +176,6 @@ class RepositorySyncService {
 
     for (const commandId of resources.commandIds) {
       files.push(...podManifestService.collectCommandFiles(commandId));
-    }
-
-    for (const subAgentId of resources.subAgentIds) {
-      files.push(...podManifestService.collectSubAgentFiles(subAgentId));
     }
 
     return files;

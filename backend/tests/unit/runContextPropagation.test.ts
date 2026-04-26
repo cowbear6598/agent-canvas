@@ -202,7 +202,7 @@ function makeMultiInstancePod(overrides: Partial<Pod> = {}): Pod {
     repositoryId: null,
     commandId: null,
     skillIds: [],
-    subAgentIds: [],
+
     multiInstance: true,
     integrationBindings: undefined,
     provider: "claude",

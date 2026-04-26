@@ -92,13 +92,6 @@ describe("PodManifestService", () => {
       expect(result).toEqual([".claude/commands/my-command.md"]);
     });
   });
-
-  describe("collectSubAgentFiles", () => {
-    it("回傳正確的 subAgent 檔案路徑格式", () => {
-      const result = podManifestService.collectSubAgentFiles("my-agent");
-      expect(result).toEqual([".claude/agents/my-agent.md"]);
-    });
-  });
 });
 
 describe("isPathWithinDirectory — 邊界案例", () => {

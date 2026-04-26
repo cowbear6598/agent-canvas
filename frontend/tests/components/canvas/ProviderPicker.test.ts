@@ -49,7 +49,6 @@ function mountPickerWithDefaults(options?: {
         capabilities: {
           chat: true,
           plugin: true,
-          subAgent: true,
           repository: true,
           command: true,
           mcp: true,
@@ -69,7 +68,6 @@ function mountPickerWithDefaults(options?: {
         capabilities: {
           chat: true,
           plugin: false,
-          subAgent: false,
           repository: false,
           command: false,
           mcp: false,
@@ -200,7 +198,6 @@ describe("ProviderPicker", () => {
           capabilities: {
             chat: true,
             plugin: true,
-            subAgent: true,
             repository: true,
             command: true,
             mcp: true,

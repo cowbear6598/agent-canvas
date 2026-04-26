@@ -23,7 +23,6 @@ vi.mock("@/composables/useToast", () => ({
 const CLAUDE_TEST_CAPABILITIES = {
   chat: true,
   plugin: false,
-  subAgent: true,
   repository: true,
   command: true,
   mcp: true,
@@ -35,7 +34,6 @@ const CLAUDE_TEST_CAPABILITIES = {
 const CODEX_TEST_CAPABILITIES = {
   chat: true,
   plugin: true,
-  subAgent: false,
   repository: false,
   command: true,
   mcp: false,
@@ -47,7 +45,6 @@ const CODEX_TEST_CAPABILITIES = {
 const CONSERVATIVE_FALLBACK = {
   chat: true,
   plugin: false,
-  subAgent: false,
   repository: false,
   command: false,
   mcp: false,

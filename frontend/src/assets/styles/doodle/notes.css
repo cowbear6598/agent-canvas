@@ -88,20 +88,6 @@
   text-overflow: ellipsis;
 }
 
-/* SubAgent Note - 沙漠色/奶油色筆記 */
-.subagent-note {
-  background: var(--doodle-sand);
-  border-style: dashed;
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.subagent-note.selected {
-  box-shadow: 0 0 0 2px oklch(0.65 0.15 170 / 0.6);
-  border-color: oklch(0.55 0.15 170);
-}
-
 /* MCP Server Note */
 .mcp-server-note {
   background: var(--doodle-purple);

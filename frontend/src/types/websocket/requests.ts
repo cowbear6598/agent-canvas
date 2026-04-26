@@ -141,7 +141,6 @@ export interface PastePodItem {
   provider: PodProvider;
   /** Provider 對應的設定（含 model 等參數） */
   providerConfig: ProviderConfig;
-  subAgentIds?: string[];
   mcpServerIds?: string[];
   pluginIds?: string[];
   repositoryId?: string | null;
@@ -181,7 +180,6 @@ export interface CanvasPastePayload {
   canvasId: string;
   pods: PastePodItem[];
   repositoryNotes: PasteRepositoryNoteItem[];
-  subAgentNotes: PasteSubAgentNoteItem[];
   commandNotes: PasteCommandNoteItem[];
   mcpServerNotes: PasteMcpServerNoteItem[];
   connections: PasteConnectionItem[];
@@ -205,15 +203,6 @@ export interface PodSetMultiInstancePayload {
   canvasId: string;
   podId: string;
   multiInstance: boolean;
-}
-
-export interface PasteSubAgentNoteItem {
-  subAgentId: string;
-  name: string;
-  x: number;
-  y: number;
-  boundToOriginalPodId: string | null;
-  originalPosition: { x: number; y: number } | null;
 }
 
 export interface CommandNoteCreatePayload {
@@ -296,13 +285,13 @@ export interface GroupCreatePayload {
   requestId: string;
   canvasId: string;
   name: string;
-  type: "command" | "subAgent";
+  type: "command";
 }
 
 export interface GroupListPayload {
   requestId: string;
   canvasId: string;
-  type: "command" | "subAgent";
+  type: "command";
 }
 
 export interface GroupDeletePayload {

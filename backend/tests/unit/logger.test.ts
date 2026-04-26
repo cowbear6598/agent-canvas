@@ -79,13 +79,6 @@ describe("Logger 顏色輸出", () => {
       expect(consoleLogCalls[0]).toContain(ANSI_COLORS.BLUE);
       expect(consoleLogCalls[0]).toContain("[Workflow]");
     });
-
-    it("SubAgent Category 輸出包含藍色 ANSI 碼", async () => {
-      const logger = await getLogger();
-      logger.log("SubAgent", "Create", "建立子代理");
-      expect(consoleLogCalls[0]).toContain(ANSI_COLORS.BLUE);
-      expect(consoleLogCalls[0]).toContain("[SubAgent]");
-    });
   });
 
   describe("資料類 Category 使用紫色", () => {

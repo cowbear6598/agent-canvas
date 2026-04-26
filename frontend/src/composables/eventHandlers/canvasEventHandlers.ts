@@ -2,14 +2,12 @@ import { WebSocketResponseEvents } from "@/services/websocket";
 import { usePodStore } from "@/stores/pod/podStore";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useRepositoryStore } from "@/stores/note/repositoryStore";
-import { useSubAgentStore } from "@/stores/note/subAgentStore";
 import { useCommandStore } from "@/stores/note/commandStore";
 import { useMcpServerStore } from "@/stores/note/mcpServerStore";
 import { useCanvasStore } from "@/stores/canvasStore";
 import type {
   Pod,
   RepositoryNote,
-  SubAgentNote,
   CommandNote,
   Canvas,
   McpServerNote,
@@ -81,7 +79,6 @@ const handleCanvasPasted = createUnifiedHandler<
     canvasId: string;
     createdPods?: Pod[];
     createdRepositoryNotes?: RepositoryNote[];
-    createdSubAgentNotes?: SubAgentNote[];
     createdCommandNotes?: CommandNote[];
     createdMcpServerNotes?: McpServerNote[];
     createdConnections?: RawConnectionFromEvent[];
@@ -91,7 +88,6 @@ const handleCanvasPasted = createUnifiedHandler<
     const podStore = usePodStore();
     const connectionStore = useConnectionStore();
     const repositoryStore = useRepositoryStore();
-    const subAgentStore = useSubAgentStore();
     const commandStore = useCommandStore();
     const mcpServerStore = useMcpServerStore();
 
@@ -100,9 +96,6 @@ const handleCanvasPasted = createUnifiedHandler<
     );
     addCreatedItems(payload.createdRepositoryNotes, (note) =>
       repositoryStore.addNoteFromEvent(note),
-    );
-    addCreatedItems(payload.createdSubAgentNotes, (note) =>
-      subAgentStore.addNoteFromEvent(note),
     );
     addCreatedItems(payload.createdCommandNotes, (note) =>
       commandStore.addNoteFromEvent(note),

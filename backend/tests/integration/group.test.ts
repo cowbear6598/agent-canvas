@@ -1,12 +1,11 @@
 import { v4 as uuidv4 } from "uuid";
 import { emitAndWaitResponse, setupIntegrationTest } from "../setup";
-import { createCommand, createSubAgent } from "../helpers";
+import { createCommand } from "../helpers";
 import {
   type CommandMoveToGroupPayload,
   type GroupCreatePayload,
   type GroupDeletePayload,
   type GroupListPayload,
-  type SubAgentMoveToGroupPayload,
   WebSocketRequestEvents,
   WebSocketResponseEvents,
 } from "../../src/schemas";
@@ -21,7 +20,7 @@ import {
 describe("Group 管理", () => {
   const { getServer, getClient } = setupIntegrationTest();
 
-  async function createGroup(type: "command" | "subagent", name?: string) {
+  async function createGroup(type: "command", name?: string) {
     const client = getClient();
     const server = getServer();
     const groupName = name ?? `group-${uuidv4().slice(0, 8)}`;
@@ -41,14 +40,6 @@ describe("Group 管理", () => {
       expect(response.success).toBe(true);
       expect(response.group).toBeDefined();
       expect(response.group!.type).toBe("command");
-    });
-
-    it("成功建立 SubAgent 群組", async () => {
-      const response = await createGroup("subagent");
-
-      expect(response.success).toBe(true);
-      expect(response.group).toBeDefined();
-      expect(response.group!.type).toBe("subagent");
     });
 
     it("重複名稱時建立群組失敗", async () => {
@@ -168,28 +159,6 @@ describe("Group 管理", () => {
       expect(response.success).toBe(true);
       expect(response.groups).toBeDefined();
       expect(response.groups!.length).toBeGreaterThan(0);
-      expect(
-        response.groups!.some((g: Group) => g.id === group.group!.id),
-      ).toBe(true);
-    });
-
-    it("成功列出 SubAgent 群組", async () => {
-      const client = getClient();
-      const server = getServer();
-      const group = await createGroup("subagent");
-
-      const response = await emitAndWaitResponse<
-        GroupListPayload,
-        GroupListResultResponse
-      >(
-        client,
-        WebSocketRequestEvents.GROUP_LIST,
-        WebSocketResponseEvents.GROUP_LIST_RESULT,
-        { requestId: uuidv4(), canvasId: server.canvasId, type: "subagent" },
-      );
-
-      expect(response.success).toBe(true);
-      expect(response.groups).toBeDefined();
       expect(
         response.groups!.some((g: Group) => g.id === group.group!.id),
       ).toBe(true);
@@ -374,65 +343,6 @@ describe("Group 管理", () => {
 
       expect(response.success).toBe(true);
       expect(response.groupId).toBe(group2.group!.id);
-    });
-  });
-
-  describe("SubAgent 移動到 Group", () => {
-    it("成功將 SubAgent 移至群組", async () => {
-      const client = getClient();
-      const group = await createGroup("subagent");
-      const agent = await createSubAgent(
-        client,
-        `agent-${uuidv4()}`,
-        "# Agent",
-      );
-
-      const response = await emitAndWaitResponse<
-        SubAgentMoveToGroupPayload,
-        ItemMovedToGroupResponse
-      >(
-        client,
-        WebSocketRequestEvents.SUBAGENT_MOVE_TO_GROUP,
-        WebSocketResponseEvents.SUBAGENT_MOVED_TO_GROUP,
-        { requestId: uuidv4(), itemId: agent.id, groupId: group.group!.id },
-      );
-
-      expect(response.success).toBe(true);
-      expect(response.itemId).toBe(agent.id);
-      expect(response.groupId).toBe(group.group!.id);
-    });
-
-    it("成功將 SubAgent 從群組移至根目錄", async () => {
-      const client = getClient();
-      const group = await createGroup("subagent");
-      const agent = await createSubAgent(
-        client,
-        `agent-${uuidv4()}`,
-        "# Agent",
-      );
-
-      await emitAndWaitResponse<
-        SubAgentMoveToGroupPayload,
-        ItemMovedToGroupResponse
-      >(
-        client,
-        WebSocketRequestEvents.SUBAGENT_MOVE_TO_GROUP,
-        WebSocketResponseEvents.SUBAGENT_MOVED_TO_GROUP,
-        { requestId: uuidv4(), itemId: agent.id, groupId: group.group!.id },
-      );
-
-      const response = await emitAndWaitResponse<
-        SubAgentMoveToGroupPayload,
-        ItemMovedToGroupResponse
-      >(
-        client,
-        WebSocketRequestEvents.SUBAGENT_MOVE_TO_GROUP,
-        WebSocketResponseEvents.SUBAGENT_MOVED_TO_GROUP,
-        { requestId: uuidv4(), itemId: agent.id, groupId: null },
-      );
-
-      expect(response.success).toBe(true);
-      expect(response.groupId).toBeNull();
     });
   });
 });

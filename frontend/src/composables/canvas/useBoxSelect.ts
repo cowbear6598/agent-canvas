@@ -13,7 +13,6 @@ export function useBoxSelect(): {
     viewportStore,
     selectionStore,
     podStore,
-    subAgentStore,
     repositoryStore,
     commandStore,
     mcpServerStore,
@@ -35,7 +34,6 @@ export function useBoxSelect(): {
         pods: podStore.pods,
         noteGroups: [
           { notes: repositoryStore.notes, type: "repositoryNote" as const },
-          { notes: subAgentStore.notes, type: "subAgentNote" as const },
           { notes: commandStore.notes, type: "commandNote" as const },
           { notes: mcpServerStore.notes, type: "mcpServerNote" as const },
         ],

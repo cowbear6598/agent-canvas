@@ -171,10 +171,6 @@ for await (const sdkMessage of query({ prompt, options: sdkOptions })) {
 - `buildClaudeOptions(pod, runContext?)` 必須收 `runContext` 參數
 - `AgentProvider.buildOptions` 介面同樣設計為 `(pod, runContext?)` 簽名
 
-## Sub-Agent
-
-Sub-Agent 功能目前透過 `pod.subAgentIds` 設定，`buildClaudeOptions` 現階段未對此額外處理（Sub-Agent 的 SDK 整合路徑由 SDK 本身的 agent 機制處理）。
-
 ## Repository / cwd 解析
 
 `resolvePodCwd(pod)` 解析工作目錄：

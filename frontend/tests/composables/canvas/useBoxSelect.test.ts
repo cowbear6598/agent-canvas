@@ -7,7 +7,6 @@ import { useSelectionStore } from "@/stores/pod/selectionStore";
 import { useViewportStore } from "@/stores/pod/viewportStore";
 import { usePodStore } from "@/stores/pod/podStore";
 import {
-  useSubAgentStore,
   useRepositoryStore,
   useCommandStore,
   useMcpServerStore,
@@ -19,7 +18,6 @@ vi.mock("@/composables/canvas/useCanvasContext", () => ({
     viewportStore: useViewportStore(),
     selectionStore: useSelectionStore(),
     podStore: usePodStore(),
-    subAgentStore: useSubAgentStore(),
     repositoryStore: useRepositoryStore(),
     commandStore: useCommandStore(),
     mcpServerStore: useMcpServerStore(),
@@ -513,7 +511,6 @@ describe("useBoxSelect", () => {
       const selectionStore = useSelectionStore();
       const podStore = usePodStore();
       const repositoryStore = useRepositoryStore();
-      const subAgentStore = useSubAgentStore();
       const commandStore = useCommandStore();
       const mcpServerStore = useMcpServerStore();
 
@@ -566,7 +563,6 @@ describe("useBoxSelect", () => {
         pods: podStore.pods,
         noteGroups: [
           { notes: repositoryStore.notes, type: "repositoryNote" },
-          { notes: subAgentStore.notes, type: "subAgentNote" },
           { notes: commandStore.notes, type: "commandNote" },
           { notes: mcpServerStore.notes, type: "mcpServerNote" },
         ],

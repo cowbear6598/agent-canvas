@@ -2,7 +2,6 @@ import { v4 as uuidv4 } from "uuid";
 import { emitAndWaitResponse, setupIntegrationTest } from "../setup";
 import {
   createRepository,
-  createSubAgent,
   createCommand,
   createMcpServer,
   getCanvasId,
@@ -14,7 +13,6 @@ import {
   type PastePodItem,
   type PasteConnectionItem,
   type PasteRepositoryNoteItem,
-  type PasteSubAgentNoteItem,
   type PasteCommandNoteItem,
   type PasteMcpServerNoteItem,
 } from "../../src/schemas";
@@ -35,7 +33,6 @@ describe("貼上功能", () => {
       pods: [],
       skillNotes: [],
       repositoryNotes: [],
-      subAgentNotes: [],
       commandNotes: [],
       connections: [],
     };
@@ -260,44 +257,6 @@ describe("貼上功能", () => {
       expect(response.createdRepositoryNotes[0].repositoryId).toBe(
         repository.id,
       );
-    });
-
-    it("成功貼上並建立子代理註記", async () => {
-      const client = getClient();
-      const subAgent = await createSubAgent(
-        client,
-        `subagent-${uuidv4()}`,
-        "# Test SubAgent",
-      );
-
-      const subAgentNotes: PasteSubAgentNoteItem[] = [
-        {
-          subAgentId: subAgent.id,
-          name: "SubAgent Note",
-          x: 10,
-          y: 10,
-          boundToOriginalPodId: null,
-          originalPosition: { x: 10, y: 10 },
-        },
-      ];
-
-      const payload: CanvasPastePayload = {
-        ...(await emptyPastePayload()),
-        subAgentNotes,
-      };
-
-      const response = await emitAndWaitResponse<
-        CanvasPastePayload,
-        CanvasPasteResultPayload
-      >(
-        client,
-        WebSocketRequestEvents.CANVAS_PASTE,
-        WebSocketResponseEvents.CANVAS_PASTE_RESULT,
-        payload,
-      );
-
-      expect(response.createdSubAgentNotes).toHaveLength(1);
-      expect(response.createdSubAgentNotes[0].subAgentId).toBe(subAgent.id);
     });
 
     it("成功貼上並建立綁定 Pod 的指令註記", async () => {
@@ -837,7 +796,7 @@ describe("貼上功能", () => {
         ],
         skillNotes: [],
         repositoryNotes: [],
-        subAgentNotes: [],
+
         commandNotes: [],
         connections: [],
       };
@@ -867,7 +826,7 @@ describe("貼上功能", () => {
         ],
         skillNotes: [],
         repositoryNotes: [],
-        subAgentNotes: [],
+
         commandNotes: [],
         connections: [],
       };
@@ -888,7 +847,7 @@ describe("貼上功能", () => {
         ],
         skillNotes: [],
         repositoryNotes: [],
-        subAgentNotes: [],
+
         commandNotes: [],
         connections: [],
       };

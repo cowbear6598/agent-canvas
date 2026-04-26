@@ -139,10 +139,6 @@ class PodManifestService {
   collectCommandFiles(commandId: string): string[] {
     return [`${CLAUDE_DIR}/commands/${commandId}.md`];
   }
-
-  collectSubAgentFiles(subAgentId: string): string[] {
-    return [`${CLAUDE_DIR}/agents/${subAgentId}.md`];
-  }
 }
 
 export const podManifestService = new PodManifestService();

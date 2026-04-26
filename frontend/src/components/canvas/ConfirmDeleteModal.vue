@@ -11,8 +11,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { useI18n } from "vue-i18n";
 
-type ItemType = "repository" | "subAgent" | "command" | "mcpServer";
-type GroupType = "subAgentGroup" | "commandGroup";
+type ItemType = "repository" | "command" | "mcpServer";
+type GroupType = "commandGroup";
 type ExtendedItemType = ItemType | GroupType;
 
 interface Props {
@@ -52,10 +52,7 @@ const handleConfirm = (): void => {
 </script>
 
 <template>
-  <Dialog
-    :open="open"
-    @update:open="handleClose"
-  >
+  <Dialog :open="open" @update:open="handleClose">
     <DialogContent class="max-w-md">
       <DialogHeader>
         <DialogTitle>{{ dialogTitle }}</DialogTitle>
@@ -64,24 +61,15 @@ const handleConfirm = (): void => {
 
       <DialogFooter>
         <template v-if="isInUse">
-          <Button
-            variant="outline"
-            @click="handleClose"
-          >
+          <Button variant="outline" @click="handleClose">
             {{ $t("common.confirm") }}
           </Button>
         </template>
         <template v-else>
-          <Button
-            variant="outline"
-            @click="handleClose"
-          >
+          <Button variant="outline" @click="handleClose">
             {{ $t("common.cancel") }}
           </Button>
-          <Button
-            variant="destructive"
-            @click="handleConfirm"
-          >
+          <Button variant="destructive" @click="handleConfirm">
             {{ $t("common.delete") }}
           </Button>
         </template>

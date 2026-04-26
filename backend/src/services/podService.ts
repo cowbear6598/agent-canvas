@@ -9,7 +9,6 @@ import { podManifestService } from "./podManifestService.js";
 import {
   repositoryNoteStore,
   commandNoteStore,
-  subAgentNoteStore,
   mcpServerNoteStore,
 } from "./noteStores.js";
 import { WebSocketResponseEvents } from "../schemas/index.js";
@@ -40,7 +39,6 @@ export function deleteAllPodNotes(
   }> = [
     { store: repositoryNoteStore, key: "repositoryNote" },
     { store: commandNoteStore, key: "commandNote" },
-    { store: subAgentNoteStore, key: "subAgentNote" },
     { store: mcpServerNoteStore, key: "mcpServerNote" },
   ];
 

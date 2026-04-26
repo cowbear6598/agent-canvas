@@ -84,8 +84,6 @@ class GroupStore {
     switch (type) {
       case "command":
         return config.commandsPath;
-      case "subagent":
-        return config.agentsPath;
       default:
         throw new Error(`未知的 GroupType: ${type}`);
     }

@@ -19,7 +19,6 @@ import { useToast } from "@/composables/useToast";
 const CONSERVATIVE_FALLBACK_CAPABILITIES: ProviderCapabilities = {
   chat: true,
   plugin: false,
-  subAgent: false,
   repository: false,
   command: false,
   mcp: false,

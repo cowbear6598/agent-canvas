@@ -47,7 +47,6 @@ describe("enrichPod", () => {
           capabilities: {
             chat: true,
             plugin: false,
-            subAgent: true,
             repository: true,
             command: true,
             mcp: true,
@@ -75,7 +74,6 @@ describe("enrichPod", () => {
           capabilities: {
             chat: true,
             plugin: false,
-            subAgent: false,
             repository: false,
             command: false,
             mcp: false,
@@ -107,7 +105,6 @@ describe("enrichPod", () => {
           capabilities: {
             chat: true,
             plugin: false,
-            subAgent: true,
             repository: true,
             command: true,
             mcp: true,

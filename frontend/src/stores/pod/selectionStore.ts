@@ -7,11 +7,7 @@ import {
   NOTE_HEIGHT,
 } from "@/lib/constants";
 
-export type NoteType =
-  | "repositoryNote"
-  | "subAgentNote"
-  | "commandNote"
-  | "mcpServerNote";
+export type NoteType = "repositoryNote" | "commandNote" | "mcpServerNote";
 
 type SelectionBox = { minX: number; maxX: number; minY: number; maxY: number };
 
@@ -119,12 +115,6 @@ export const useSelectionStore = defineStore("selection", {
      */
     selectedRepositoryNoteIds: (state): string[] =>
       selectIdsByType(state.selectedElements, "repositoryNote"),
-
-    /**
-     * 取得選中的 SubAgentNote ID 列表
-     */
-    selectedSubAgentNoteIds: (state): string[] =>
-      selectIdsByType(state.selectedElements, "subAgentNote"),
 
     /**
      * 取得選中的 CommandNote ID 列表

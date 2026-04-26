@@ -2,7 +2,6 @@ export * from "./pod.js";
 export * from "./connection.js";
 export * from "./command.js";
 export * from "./repository.js";
-export * from "./subAgent.js";
 export * from "./schedule.js";
 export * from "./workflow.js";
 export * from "./canvas.js";

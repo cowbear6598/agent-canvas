@@ -26,7 +26,7 @@ function makePod(overrides: Partial<Pick<Pod, "providerConfig">> = {}): Pod {
     mcpServerIds: [],
     pluginIds: [],
     integrationBindings: [],
-    subAgentIds: [],
+
     repositoryId: null,
     commandId: null,
     multiInstance: false,

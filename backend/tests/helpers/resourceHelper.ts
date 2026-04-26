@@ -8,14 +8,12 @@ import {
   WebSocketRequestEvents,
   WebSocketResponseEvents,
   type RepositoryCreatePayload,
-  type SubAgentCreatePayload,
   type CommandCreatePayload,
   type McpServerCreatePayload,
   type McpServerNoteCreatePayload,
 } from "../../src/schemas";
 import {
   type RepositoryCreatedPayload,
-  type SubAgentCreatedPayload,
   type CommandCreatedPayload,
   type McpServerCreatedPayload,
   type McpServerNoteCreatedPayload,
@@ -58,36 +56,6 @@ export async function createRepository(
   );
 
   return response.repository!;
-}
-
-export async function createSubAgent(
-  client: TestWebSocketClient,
-  name: string,
-  content: string,
-  overrides?: Partial<SubAgentCreatePayload>,
-): Promise<{ id: string; name: string }> {
-  if (!client.id) {
-    throw new Error("Socket not connected");
-  }
-
-  const canvasModule = await import("../../src/services/canvasStore.js");
-  const canvasId = canvasModule.canvasStore.getActiveCanvas(client.id);
-
-  if (!canvasId) {
-    throw new Error("No active canvas for socket");
-  }
-
-  const response = await emitAndWaitResponse<
-    SubAgentCreatePayload,
-    SubAgentCreatedPayload
-  >(
-    client,
-    WebSocketRequestEvents.SUBAGENT_CREATE,
-    WebSocketResponseEvents.SUBAGENT_CREATED,
-    { requestId: uuidv4(), canvasId, name, content, ...overrides },
-  );
-
-  return response.subAgent!;
 }
 
 export async function createCommand(

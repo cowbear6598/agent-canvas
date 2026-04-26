@@ -41,7 +41,6 @@ const {
   podStore,
   viewportStore,
   selectionStore,
-  subAgentStore,
   repositoryStore,
   commandStore,
   mcpServerStore,
@@ -68,9 +67,6 @@ const isUnknownProvider = computed(
 );
 
 const isActive = computed(() => props.pod.id === podStore.activePodId);
-const boundSubAgentNotes = computed(() =>
-  subAgentStore.getNotesByPodId(props.pod.id),
-);
 const boundRepositoryNote = computed(
   () => repositoryStore.getNotesByPodId(props.pod.id)[0],
 );
@@ -173,7 +169,6 @@ const { isDragging, startSingleDrag } = usePodDrag(
 );
 
 const { handleNoteDrop, handleNoteRemove } = usePodNoteBinding(computedPodId, {
-  subAgentStore,
   repositoryStore,
   commandStore,
   mcpServerStore,
@@ -208,9 +203,9 @@ const handlePluginClick = (event: MouseEvent): void => {
   showPluginPopover.value = true;
 };
 
-// 合併成單一 CSS selector 字串，closest() 一次查詢取代原本最差 5 次 DOM 遍歷
+// 合併成單一 CSS selector 字串，closest() 一次查詢取代原本最差 4 次 DOM 遍歷
 const SLOT_CLASSES =
-  ".pod-plugin-slot, .pod-subagent-slot, .pod-repository-slot, .pod-command-slot, .pod-mcp-server-slot";
+  ".pod-plugin-slot, .pod-repository-slot, .pod-command-slot, .pod-mcp-server-slot";
 
 const shouldBlockForSlot = (target: HTMLElement): boolean => {
   return target.closest(SLOT_CLASSES) !== null;
@@ -345,7 +340,7 @@ const handleContextMenu = (e: MouseEvent): void => {
     />
 
     <div
-      class="relative pod-wrapper pod-with-plugin-notch pod-with-subagent-notch pod-with-mcp-server-notch"
+      class="relative pod-wrapper pod-with-plugin-notch pod-with-mcp-server-notch"
       :class="{ dragging: isDragging || isBatchDragging }"
       :style="{ '--pod-rotation': `${pod.rotation}deg` }"
     >
@@ -362,12 +357,10 @@ const handleContextMenu = (e: MouseEvent): void => {
         :pod-rotation="pod.rotation"
         :plugin-active-count="pluginActiveCount"
         :provider="pod.provider"
-        :bound-sub-agent-notes="boundSubAgentNotes"
         :bound-repository-note="boundRepositoryNote"
         :bound-command-note="boundCommandNote"
         :bound-mcp-server-notes="boundMcpServerNotes"
         @plugin-clicked="handlePluginClick"
-        @subagent-dropped="(noteId) => handleNoteDrop('subAgent', noteId)"
         @repository-dropped="(noteId) => handleNoteDrop('repository', noteId)"
         @repository-removed="() => handleNoteRemove('repository')"
         @command-dropped="(noteId) => handleNoteDrop('command', noteId)"
@@ -385,7 +378,6 @@ const handleContextMenu = (e: MouseEvent): void => {
         @contextmenu="handleContextMenu"
       >
         <div class="model-notch" />
-        <div class="subagent-notch" />
         <div class="mcp-server-notch" />
         <div class="repository-notch" />
         <div class="command-notch" />

@@ -53,13 +53,6 @@ function buildStatements(db: Database): {
     deleteByPodId: ReturnType<Database["prepare"]>;
     deleteByAppId: ReturnType<Database["prepare"]>;
   };
-  podSubAgentIds: {
-    insert: ReturnType<Database["prepare"]>;
-    selectByPodId: ReturnType<Database["prepare"]>;
-    deleteByPodId: ReturnType<Database["prepare"]>;
-    deleteOne: ReturnType<Database["prepare"]>;
-    selectBySubAgentId: ReturnType<Database["prepare"]>;
-  };
   podMcpServerIds: {
     insert: ReturnType<Database["prepare"]>;
     selectByPodId: ReturnType<Database["prepare"]>;
@@ -299,24 +292,6 @@ function buildStatements(db: Database): {
       ),
       deleteByAppId: db.prepare(
         "DELETE FROM integration_bindings WHERE app_id = ?",
-      ),
-    },
-
-    podSubAgentIds: {
-      insert: db.prepare(
-        "INSERT OR IGNORE INTO pod_sub_agent_ids (pod_id, sub_agent_id) VALUES ($podId, $subAgentId)",
-      ),
-      selectByPodId: db.prepare(
-        "SELECT sub_agent_id FROM pod_sub_agent_ids WHERE pod_id = ?",
-      ),
-      deleteByPodId: db.prepare(
-        "DELETE FROM pod_sub_agent_ids WHERE pod_id = ?",
-      ),
-      deleteOne: db.prepare(
-        "DELETE FROM pod_sub_agent_ids WHERE pod_id = $podId AND sub_agent_id = $subAgentId",
-      ),
-      selectBySubAgentId: db.prepare(
-        "SELECT pod_id FROM pod_sub_agent_ids WHERE sub_agent_id = ?",
       ),
     },
 

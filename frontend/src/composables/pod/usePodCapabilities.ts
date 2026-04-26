@@ -9,7 +9,6 @@ export interface UsePodCapabilitiesReturn {
   capabilities: ComputedRef<ProviderCapabilities>;
   isCodex: ComputedRef<boolean>;
   isPluginEnabled: ComputedRef<boolean>;
-  isSubAgentEnabled: ComputedRef<boolean>;
   isRepositoryEnabled: ComputedRef<boolean>;
   isCommandEnabled: ComputedRef<boolean>;
   isMcpEnabled: ComputedRef<boolean>;
@@ -43,11 +42,6 @@ export function usePodCapabilities(
   /** Plugin slot 是否啟用 */
   const isPluginEnabled = computed((): boolean => capabilities.value.plugin);
 
-  /** SubAgent slot 是否啟用 */
-  const isSubAgentEnabled = computed(
-    (): boolean => capabilities.value.subAgent,
-  );
-
   /** Repository slot 是否啟用 */
   const isRepositoryEnabled = computed(
     (): boolean => capabilities.value.repository,
@@ -71,7 +65,6 @@ export function usePodCapabilities(
     capabilities,
     isCodex,
     isPluginEnabled,
-    isSubAgentEnabled,
     isRepositoryEnabled,
     isCommandEnabled,
     isMcpEnabled,

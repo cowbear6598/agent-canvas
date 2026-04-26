@@ -20,7 +20,6 @@ type StoreConfigEntry = {
 interface BatchDragStores {
   podStore: ReturnType<typeof useCanvasContext>["podStore"];
   repositoryStore: NoteStore;
-  subAgentStore: NoteStore;
   commandStore: NoteStore;
   mcpServerStore: NoteStore;
 }
@@ -28,7 +27,6 @@ interface BatchDragStores {
 interface MovedElementSets {
   movedPodIds: Set<string>;
   movedRepositoryNoteIds: Set<string>;
-  movedSubAgentNoteIds: Set<string>;
   movedCommandNoteIds: Set<string>;
   movedMcpServerNoteIds: Set<string>;
 }
@@ -37,17 +35,10 @@ function createStoreConfigMap(
   stores: BatchDragStores,
   movedSets: MovedElementSets,
 ): Record<string, StoreConfigEntry> {
-  const {
-    podStore,
-    repositoryStore,
-    subAgentStore,
-    commandStore,
-    mcpServerStore,
-  } = stores;
+  const { podStore, repositoryStore, commandStore, mcpServerStore } = stores;
   const {
     movedPodIds,
     movedRepositoryNoteIds,
-    movedSubAgentNoteIds,
     movedCommandNoteIds,
     movedMcpServerNoteIds,
   } = movedSets;
@@ -57,7 +48,6 @@ function createStoreConfigMap(
   const repositoryMap = new Map(
     repositoryStore.notes.map((n) => [n.id ?? "", n]),
   );
-  const subAgentMap = new Map(subAgentStore.notes.map((n) => [n.id ?? "", n]));
   const commandMap = new Map(commandStore.notes.map((n) => [n.id ?? "", n]));
   const mcpServerMap = new Map(
     mcpServerStore.notes.map((n) => [n.id ?? "", n]),
@@ -76,13 +66,6 @@ function createStoreConfigMap(
       moveItem: (id: string, x: number, y: number) =>
         repositoryStore.updateNotePositionLocal(id, x, y),
       getItem: (id: string) => repositoryMap.get(id),
-      isPod: false,
-    },
-    subAgentNote: {
-      movedSet: movedSubAgentNoteIds,
-      moveItem: (id: string, x: number, y: number) =>
-        subAgentStore.updateNotePositionLocal(id, x, y),
-      getItem: (id: string) => subAgentMap.get(id),
       isPod: false,
     },
     commandNote: {
@@ -106,12 +89,7 @@ export function useBatchDrag(): {
   isBatchDragging: import("vue").Ref<boolean>;
   startBatchDrag: (e: MouseEvent) => boolean;
   isElementSelected: (
-    type:
-      | "pod"
-      | "repositoryNote"
-      | "subAgentNote"
-      | "commandNote"
-      | "mcpServerNote",
+    type: "pod" | "repositoryNote" | "commandNote" | "mcpServerNote",
     id: string,
   ) => boolean;
 } {
@@ -120,7 +98,6 @@ export function useBatchDrag(): {
     viewportStore,
     selectionStore,
     repositoryStore,
-    subAgentStore,
     commandStore,
     mcpServerStore,
   } = useCanvasContext();
@@ -130,7 +107,6 @@ export function useBatchDrag(): {
     startY: 0,
     movedPodIds: new Set<string>(),
     movedRepositoryNoteIds: new Set<string>(),
-    movedSubAgentNoteIds: new Set<string>(),
     movedCommandNoteIds: new Set<string>(),
     movedMcpServerNoteIds: new Set<string>(),
   };
@@ -138,14 +114,12 @@ export function useBatchDrag(): {
   const clearDragState = (): void => {
     dragState.movedPodIds.clear();
     dragState.movedRepositoryNoteIds.clear();
-    dragState.movedSubAgentNoteIds.clear();
     dragState.movedCommandNoteIds.clear();
     dragState.movedMcpServerNoteIds.clear();
   };
 
   const noteMovedSets: { set: Set<string>; store: NoteStore }[] = [
     { set: dragState.movedRepositoryNoteIds, store: repositoryStore },
-    { set: dragState.movedSubAgentNoteIds, store: subAgentStore },
     { set: dragState.movedCommandNoteIds, store: commandStore },
     { set: dragState.movedMcpServerNoteIds, store: mcpServerStore },
   ];
@@ -210,14 +184,12 @@ export function useBatchDrag(): {
       {
         podStore,
         repositoryStore,
-        subAgentStore,
         commandStore,
         mcpServerStore,
       },
       {
         movedPodIds: dragState.movedPodIds,
         movedRepositoryNoteIds: dragState.movedRepositoryNoteIds,
-        movedSubAgentNoteIds: dragState.movedSubAgentNoteIds,
         movedCommandNoteIds: dragState.movedCommandNoteIds,
         movedMcpServerNoteIds: dragState.movedMcpServerNoteIds,
       },
@@ -266,12 +238,7 @@ export function useBatchDrag(): {
   };
 
   const isElementSelected = (
-    type:
-      | "pod"
-      | "repositoryNote"
-      | "subAgentNote"
-      | "commandNote"
-      | "mcpServerNote",
+    type: "pod" | "repositoryNote" | "commandNote" | "mcpServerNote",
     id: string,
   ): boolean => {
     // selectionStore.isElementSelected 內部使用 Set，O(1) 查找

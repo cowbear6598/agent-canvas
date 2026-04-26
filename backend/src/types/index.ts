@@ -21,10 +21,6 @@ export type { Repository } from "./repository.js";
 
 export type { RepositoryNote } from "./repositoryNote.js";
 
-export type { SubAgent } from "./subAgent.js";
-
-export type { SubAgentNote } from "./subAgentNote.js";
-
 export type { Group, GroupType } from "./group.js";
 export { GROUP_TYPES } from "./group.js";
 

@@ -20,7 +20,6 @@ import { resetChatActionsCache } from "@/stores/chat/chatStore";
 import { usePodStore } from "@/stores/pod/podStore";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useRepositoryStore } from "@/stores/note/repositoryStore";
-import { useSubAgentStore } from "@/stores/note/subAgentStore";
 import { useCommandStore } from "@/stores/note/commandStore";
 import { useMcpServerStore } from "@/stores/note/mcpServerStore";
 import { useCanvasStore } from "@/stores/canvasStore";
@@ -30,7 +29,6 @@ import type {
   Pod,
   Connection,
   RepositoryNote,
-  SubAgentNote,
   CommandNote,
   Canvas,
   McpServer,
@@ -662,114 +660,6 @@ describe("useUnifiedEventListeners", () => {
     });
   });
 
-  describe("SubAgent Note 事件處理", () => {
-    it("subagent:created 不再被監聽（後端改為 emitToConnection）", () => {
-      const { registerUnifiedListeners } = useUnifiedEventListeners();
-      const subAgentStore = useSubAgentStore();
-
-      registerUnifiedListeners();
-
-      simulateEvent("subagent:created", {
-        canvasId: "canvas-1",
-        subAgent: { id: "subagent-1", name: "Test SubAgent" },
-      });
-
-      expect(
-        subAgentStore.availableItems.some(
-          (s) => (s as any).id === "subagent-1",
-        ),
-      ).toBe(false);
-    });
-
-    it("subagent:deleted 應移除 subAgent 和相關 notes", () => {
-      const { registerUnifiedListeners } = useUnifiedEventListeners();
-      const subAgentStore = useSubAgentStore();
-      subAgentStore.availableItems = [{ id: "subagent-1", name: "Test" }];
-      const note = createMockNote("subAgent", {
-        id: "subagent-note-1",
-      }) as SubAgentNote;
-      subAgentStore.notes = [note] as any[];
-
-      registerUnifiedListeners();
-
-      simulateEvent("subagent:deleted", {
-        canvasId: "canvas-1",
-        subAgentId: "subagent-1",
-        deletedNoteIds: ["subagent-note-1"],
-      });
-
-      expect(
-        subAgentStore.availableItems.some(
-          (s) => (s as any).id === "subagent-1",
-        ),
-      ).toBe(false);
-      expect(subAgentStore.notes.some((n) => n.id === "subagent-note-1")).toBe(
-        false,
-      );
-    });
-
-    it("subagent-note:created 應新增 note", () => {
-      const { registerUnifiedListeners } = useUnifiedEventListeners();
-      const subAgentStore = useSubAgentStore();
-
-      registerUnifiedListeners();
-
-      const note = createMockNote("subAgent", {
-        id: "subagent-note-1",
-      }) as SubAgentNote;
-      simulateEvent("subagent-note:created", {
-        canvasId: "canvas-1",
-        note,
-      });
-
-      expect(subAgentStore.notes.some((n) => n.id === "subagent-note-1")).toBe(
-        true,
-      );
-    });
-
-    it("subagent-note:updated 應更新 note", () => {
-      const { registerUnifiedListeners } = useUnifiedEventListeners();
-      const subAgentStore = useSubAgentStore();
-      const note = createMockNote("subAgent", {
-        id: "subagent-note-1",
-        name: "Old",
-      }) as SubAgentNote;
-      subAgentStore.notes = [note] as any[];
-
-      registerUnifiedListeners();
-
-      simulateEvent("subagent-note:updated", {
-        canvasId: "canvas-1",
-        note: { ...note, name: "New" },
-      });
-
-      const updated = subAgentStore.notes.find(
-        (n) => n.id === "subagent-note-1",
-      );
-      expect(updated?.name).toBe("New");
-    });
-
-    it("subagent-note:deleted 應移除 note", () => {
-      const { registerUnifiedListeners } = useUnifiedEventListeners();
-      const subAgentStore = useSubAgentStore();
-      const note = createMockNote("subAgent", {
-        id: "subagent-note-1",
-      }) as SubAgentNote;
-      subAgentStore.notes = [note] as any[];
-
-      registerUnifiedListeners();
-
-      simulateEvent("subagent-note:deleted", {
-        canvasId: "canvas-1",
-        noteId: "subagent-note-1",
-      });
-
-      expect(subAgentStore.notes.some((n) => n.id === "subagent-note-1")).toBe(
-        false,
-      );
-    });
-  });
-
   describe("Command Note 事件處理", () => {
     it("command:created 不再被監聽（後端改為 emitToConnection）", () => {
       const { registerUnifiedListeners } = useUnifiedEventListeners();
@@ -1048,7 +938,6 @@ describe("useUnifiedEventListeners", () => {
       const podStore = usePodStore();
       const repositoryStore = useRepositoryStore();
       const commandStore = useCommandStore();
-      const subAgentStore = useSubAgentStore();
       const mcpServerStore = useMcpServerStore();
 
       repositoryStore.notes = [
@@ -1056,9 +945,6 @@ describe("useUnifiedEventListeners", () => {
       ] as any[];
       commandStore.notes = [
         createMockNote("command", { id: "cmd-note-1" }) as CommandNote,
-      ] as any[];
-      subAgentStore.notes = [
-        createMockNote("subAgent", { id: "subagent-note-1" }) as SubAgentNote,
       ] as any[];
       mcpServerStore.notes = [
         createMockNote("mcpServer", { id: "mcp-note-1" }) as McpServerNote,
@@ -1075,14 +961,12 @@ describe("useUnifiedEventListeners", () => {
         deletedNoteIds: {
           repositoryNote: ["repo-note-1"],
           commandNote: ["cmd-note-1"],
-          subAgentNote: ["subagent-note-1"],
           mcpServerNote: ["mcp-note-1"],
         },
       });
 
       expect(repositoryStore.notes.length).toBe(0);
       expect(commandStore.notes.length).toBe(0);
-      expect(subAgentStore.notes.length).toBe(0);
       expect(mcpServerStore.notes.length).toBe(0);
     });
   });

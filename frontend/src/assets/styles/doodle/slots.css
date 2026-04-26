@@ -236,63 +236,10 @@
 .pod-plugin-notch-area {
   position: absolute;
   left: 0;
-  top: 18px;
+  top: 44px;
   transform: translateX(-100%);
   z-index: -1;
   pointer-events: none;
-}
-
-/* ===================================
-   SubAgent Slot
-   =================================== */
-
-/* Pod SubAgent Slot */
-.pod-subagent-slot {
-  position: relative;
-}
-
-.pod-subagent-slot::before {
-  content: "";
-  position: absolute;
-  left: -16px;
-  top: 0;
-  width: 16px;
-  height: 100%;
-}
-
-.pod-subagent-slot.has-notes {
-  background: var(--doodle-sand);
-  border-style: dashed;
-  transform: translateX(50%);
-}
-
-.pod-subagent-slot.has-notes:hover {
-  transform: translateX(50%) translate(-0.5px, -0.5px);
-}
-
-.pod-subagent-slot.inserting {
-  animation: slide-into-slot 0.3s ease-out;
-}
-
-/* SubAgent Slot 容器位置（在 Skill 下方） */
-.pod-subagent-notch-area {
-  left: 0;
-  top: 58px;
-  transform: translateX(-100%);
-}
-
-/* SubAgent 凹槽視覺效果（POD 左側第二個凹槽） */
-.pod-with-subagent-notch .pod-doodle .subagent-notch {
-  position: absolute;
-  left: -6px;
-  top: 56px;
-  width: 8px;
-  height: 32px;
-  background: var(--card);
-  border: 2px solid var(--doodle-ink);
-  border-right: none;
-  border-radius: 4px 0 0 4px;
-  z-index: -1;
 }
 
 /* ===================================
@@ -327,10 +274,10 @@
   animation: slide-into-slot 0.3s ease-out;
 }
 
-/* MCP Server Slot 容器位置（在 SubAgent 下方） */
+/* MCP Server Slot 容器位置（POD 左側） */
 .pod-mcp-server-notch-area {
   left: 0;
-  top: 98px;
+  top: 84px;
   transform: translateX(-100%);
 }
 
@@ -339,11 +286,11 @@
   max-height: calc(30px * 5 + 8px);
 }
 
-/* MCP Server 凹槽視覺效果（POD 左側第三個凹槽） */
+/* MCP Server 凹槽視覺效果（POD 左側第二個凹槽） */
 .pod-with-mcp-server-notch .pod-doodle .mcp-server-notch {
   position: absolute;
   left: -6px;
-  top: 96px;
+  top: 82px;
   width: 8px;
   height: 32px;
   background: var(--card);

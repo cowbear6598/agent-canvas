@@ -73,7 +73,6 @@ backend/tests/provider/
 export const MYAI_CAPABILITIES: Readonly<ProviderCapabilities> = Object.freeze({
   chat: true,
   skill: false,         // 不支援的能力設 false
-  subAgent: false,
   repository: false,
   command: false,
   mcp: false,

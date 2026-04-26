@@ -38,7 +38,6 @@ describe("Paste Helpers", () => {
       workspacePath: "/test/workspace",
       repositoryId: null,
       skillIds: [] as string[],
-      subAgentIds: [] as string[],
       mcpServerIds: [] as string[],
       pluginIds: [] as string[],
       commandId: null,
@@ -574,43 +573,6 @@ describe("Paste Helpers", () => {
       ).resolves.not.toThrow();
       // Pod 仍應建立成功
       expect(errors).toHaveLength(0);
-    });
-  });
-
-  // ── createPastedNotesByType 失敗路徑 ──────────────────────────────────────
-
-  describe("createPastedNotesByType - noteStore.create 失敗路徑", () => {
-    it("noteStore.create 拋例外後錯誤被 recordError 捕捉，不影響其他 note", async () => {
-      const { createPastedNotesByType } =
-        await import("../../src/handlers/paste/pasteHelpers.js");
-      const { subAgentNoteStore } =
-        await import("../../src/services/noteStores.js");
-
-      vi.spyOn(subAgentNoteStore, "create").mockImplementation(() => {
-        throw new Error("DB 寫入失敗");
-      });
-
-      const noteItems = [
-        {
-          subAgentId: uuidv4(),
-          name: "Broken Note",
-          x: 0,
-          y: 0,
-          boundToOriginalPodId: null,
-          originalPosition: null,
-        },
-      ];
-
-      const result = createPastedNotesByType(
-        "subAgent",
-        canvasId,
-        noteItems,
-        {},
-      );
-
-      expect(result.notes).toHaveLength(0);
-      expect(result.errors).toHaveLength(1);
-      expect(result.errors[0].type).toBe("subAgentNote");
     });
   });
 

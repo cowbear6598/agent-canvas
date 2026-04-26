@@ -1,7 +1,6 @@
 import type {
   Pod,
   RepositoryNote,
-  SubAgentNote,
   CommandNote,
   McpServerNote,
   Connection,
@@ -13,7 +12,6 @@ import { podStore } from "../../services/podStore.js";
 import { getPodDisplayName } from "../../utils/handlerHelpers.js";
 import { workspaceService } from "../../services/workspace";
 import {
-  subAgentNoteStore,
   repositoryNoteStore,
   commandNoteStore,
   mcpServerNoteStore,
@@ -146,7 +144,6 @@ async function createSinglePod(
     rotation: podItem.rotation,
     provider: podItem.provider,
     providerConfig: podItem.providerConfig,
-    subAgentIds: podItem.subAgentIds ?? [],
     mcpServerIds: podItem.mcpServerIds ?? [],
     pluginIds: podItem.pluginIds ?? [],
     repositoryId: finalRepositoryId,
@@ -378,7 +375,6 @@ const NOTE_PASTE_CONFIGS = {
     repositoryNoteStore,
     "repositoryNote",
   ),
-  subAgent: makeNoteConfig("subAgentId", subAgentNoteStore, "subAgentNote"),
   command: makeNoteConfig("commandId", commandNoteStore, "commandNote"),
   mcpServer: makeNoteConfig("mcpServerId", mcpServerNoteStore, "mcpServerNote"),
 } as const;
@@ -387,14 +383,12 @@ export type NotePasteType = keyof typeof NOTE_PASTE_CONFIGS;
 
 interface NoteItemMap {
   repository: NoteItemWithId<"repositoryId">;
-  subAgent: NoteItemWithId<"subAgentId">;
   command: NoteItemWithId<"commandId">;
   mcpServer: NoteItemWithId<"mcpServerId">;
 }
 
 interface NoteMap {
   repository: RepositoryNote;
-  subAgent: SubAgentNote;
   command: CommandNote;
   mcpServer: McpServerNote;
 }

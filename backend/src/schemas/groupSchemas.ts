@@ -11,13 +11,13 @@ export const groupCreateSchema = z.object({
     .min(1, "群組名稱不能為空")
     .max(100, "群組名稱不能超過100字元")
     .regex(pathSegmentRegex, "群組名稱格式不正確，只能包含英文、數字、dash"),
-  type: z.enum(["command", "subagent"]),
+  type: z.enum(["command"]),
 });
 
 export const groupListSchema = z.object({
   requestId: requestIdSchema,
   canvasId: canvasIdSchema,
-  type: z.enum(["command", "subagent"]),
+  type: z.enum(["command"]),
 });
 
 export const groupDeleteSchema = z.object({

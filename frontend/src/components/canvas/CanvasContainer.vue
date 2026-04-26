@@ -44,7 +44,6 @@ const {
   podStore,
   viewportStore,
   selectionStore,
-  subAgentStore,
   repositoryStore,
   commandStore,
   mcpServerStore,
@@ -80,10 +79,7 @@ const {
   handleOpenCreateGroupModal,
   handleOpenEditModal,
   handleCreateEditSubmit,
-} = useEditModal(
-  { subAgentStore, commandStore, viewportStore },
-  lastMenuPosition,
-);
+} = useEditModal({ commandStore, viewportStore }, lastMenuPosition);
 
 const {
   mcpServerModal,
@@ -99,7 +95,6 @@ const {
   handleOpenDeleteGroupModal,
   handleConfirmDelete: handleDeleteConfirm,
 } = useDeleteResource({
-  subAgentStore,
   repositoryStore,
   commandStore,
   mcpServerStore,
@@ -125,7 +120,6 @@ const {
   showTrashZone,
   isTrashHighlighted,
   isCanvasEmpty,
-  handleCreateSubAgentNote,
   handleCreateRepositoryNote,
   handleCreateCommandNote,
   handleCreateMcpServerNote,
@@ -134,7 +128,6 @@ const {
 } = useCanvasNoteHandlers({
   podStore,
   viewportStore,
-  subAgentStore,
   repositoryStore,
   commandStore,
   mcpServerStore,
@@ -165,7 +158,6 @@ const handleCanvasClick = (e: MouseEvent): void => {
   const ignoredSelectors = [
     ".connection-line",
     ".pod-doodle",
-    ".subagent-note",
     ".repository-note",
     ".command-note",
     ".mcp-server-note",
@@ -301,11 +293,10 @@ const handleOpenMcpServerModal = withMenuPosition(openMcpServerModal);
 
 /** 處理 PodTypeMenu 的統一 create-note 事件，依 type 分派至對應的 note 建立函式 */
 const handleCreateNote = (payload: {
-  type: "subAgent" | "repository" | "command" | "mcpServer";
+  type: "repository" | "command" | "mcpServer";
   id: string;
 }): void => {
   const handlerMap = {
-    subAgent: handleCreateSubAgentNote,
     repository: handleCreateRepositoryNote,
     command: handleCreateCommandNote,
     mcpServer: handleCreateMcpServerNote,
@@ -349,17 +340,6 @@ const handleOpenModal = (payload: {
       @drag-end="handleDragEnd"
       @drag-complete="handlePodDragComplete"
       @contextmenu="handlePodContextMenu"
-    />
-
-    <GenericNote
-      v-for="note in subAgentStore.getUnboundNotes"
-      :key="note.id"
-      :note="note"
-      note-type="subAgent"
-      @drag-end="noteHandlerMap.subAgent.handleDragEnd"
-      @drag-move="noteHandlerMap.subAgent.handleDragMove"
-      @drag-complete="noteHandlerMap.subAgent.handleDragComplete"
-      @dblclick="handleNoteDoubleClick"
     />
 
     <GenericNote

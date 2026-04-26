@@ -3,18 +3,12 @@
 // 新增 slot 類型需同步更新此元件 props、template、emits 與 CanvasPod 對應 listener。
 import { computed, toRef } from "vue";
 import { useI18n } from "vue-i18n";
-import type {
-  SubAgentNote,
-  RepositoryNote,
-  CommandNote,
-  McpServerNote,
-} from "@/types";
+import type { RepositoryNote, CommandNote, McpServerNote } from "@/types";
 import type { PodProvider } from "@/types/pod";
 import PodMultiBindSlot from "@/components/pod/PodMultiBindSlot.vue";
 import PodSingleBindSlot from "@/components/pod/PodSingleBindSlot.vue";
 import PodPluginSlot from "@/components/pod/PodPluginSlot.vue";
 import {
-  useSubAgentStore,
   useMcpServerStore,
   useRepositoryStore,
   useCommandStore,
@@ -26,7 +20,6 @@ const props = defineProps<{
   podRotation: number;
   pluginActiveCount: number;
   provider: PodProvider;
-  boundSubAgentNotes: SubAgentNote[];
   boundRepositoryNote: RepositoryNote | undefined;
   boundCommandNote: CommandNote | undefined;
   boundMcpServerNotes: McpServerNote[];
@@ -38,7 +31,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   "plugin-clicked": [event: MouseEvent];
-  "subagent-dropped": [noteId: string];
   "repository-dropped": [noteId: string];
   "repository-removed": [];
   "command-dropped": [noteId: string];
@@ -50,19 +42,13 @@ const { t } = useI18n();
 
 // 子元件自行取 store 是有意設計，避免父元件介面爆炸；
 // store 為 singleton，重複呼叫無額外成本。
-const subAgentStore = useSubAgentStore();
 const mcpServerStore = useMcpServerStore();
 const repositoryStore = useRepositoryStore();
 const commandStore = useCommandStore();
 
 // 讀取 Pod 對應 Provider 的 capability flags
-const {
-  isPluginEnabled,
-  isSubAgentEnabled,
-  isRepositoryEnabled,
-  isCommandEnabled,
-  isMcpEnabled,
-} = usePodCapabilities(toRef(props, "podId"));
+const { isPluginEnabled, isRepositoryEnabled, isCommandEnabled, isMcpEnabled } =
+  usePodCapabilities(toRef(props, "podId"));
 
 /** 不支援功能時顯示的 tooltip 文字（由 i18n 提供） */
 const DISABLED_TOOLTIP = computed(() => t("pod.slot.codexDisabled"));
@@ -96,8 +82,8 @@ type MultiSlotConfig = {
   areaClass: string;
   slotClass: string;
   label: string;
-  store: typeof subAgentStore | typeof mcpServerStore;
-  boundNotes: () => SubAgentNote[] | McpServerNote[];
+  store: typeof mcpServerStore;
+  boundNotes: () => McpServerNote[];
   duplicateToastTitle: () => string;
   duplicateToastDescription: () => string;
   menuScrollableClass: string;
@@ -108,27 +94,6 @@ type MultiSlotConfig = {
 };
 
 type SlotConfig = SingleSlotConfig | MultiSlotConfig;
-
-function createSubAgentSlotConfig(): MultiSlotConfig {
-  return {
-    kind: "multi",
-    areaClass: "pod-notch-area-base pod-subagent-notch-area",
-    slotClass: "pod-subagent-slot",
-    label: "SubAgents",
-    store: subAgentStore,
-    boundNotes: () => props.boundSubAgentNotes,
-    duplicateToastTitle: () => t("pod.slot.duplicateTitle"),
-    duplicateToastDescription: () => t("pod.slot.subAgentDuplicate"),
-    menuScrollableClass: "pod-subagent-menu-scrollable",
-    itemIdField: "subAgentId",
-    disabled: !isSubAgentEnabled.value,
-    disabledTooltip: DISABLED_TOOLTIP.value,
-    onDropped: (noteId: string): void => {
-      if (!noteId) return;
-      emit("subagent-dropped", noteId);
-    },
-  };
-}
 
 function createRepositorySlotConfig(): SingleSlotConfig {
   return {
@@ -188,7 +153,6 @@ function createMcpSlotConfig(): MultiSlotConfig {
 }
 
 const slotConfigs = computed((): SlotConfig[] => [
-  createSubAgentSlotConfig(),
   createRepositorySlotConfig(),
   createCommandSlotConfig(),
   createMcpSlotConfig(),
@@ -205,10 +169,7 @@ const slotConfigs = computed((): SlotConfig[] => [
     :disabled-tooltip="DISABLED_TOOLTIP"
     @click="(ev) => emit('plugin-clicked', ev)"
   />
-  <template
-    v-for="slot in slotConfigs"
-    :key="slot.slotClass"
-  >
+  <template v-for="slot in slotConfigs" :key="slot.slotClass">
     <div :class="slot.areaClass">
       <PodSingleBindSlot
         v-if="slot.kind === 'single'"

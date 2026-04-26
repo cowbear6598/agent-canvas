@@ -4,8 +4,8 @@ import type { Group, Position } from "@/types";
 import { screenToCanvasPosition } from "@/lib/canvasCoordinateUtils";
 import { t } from "@/i18n";
 
-type ResourceType = "subAgent" | "command";
-type GroupType = "subAgentGroup" | "commandGroup";
+type ResourceType = "command";
+type GroupType = "commandGroup";
 type ExtendedResourceType = ResourceType | GroupType;
 
 interface EditModalState {
@@ -20,20 +20,9 @@ interface EditModalState {
 }
 
 interface ResourceStore {
-  readSubAgent?: (
-    id: string,
-  ) => Promise<{ id: string; name: string; content: string } | null>;
   readCommand?: (
     id: string,
   ) => Promise<{ id: string; name: string; content: string } | null>;
-  createSubAgent?: (
-    name: string,
-    content: string,
-  ) => Promise<{
-    success: boolean;
-    subAgent?: { id: string };
-    [key: string]: unknown;
-  }>;
   createCommand?: (
     name: string,
     content: string,
@@ -42,7 +31,6 @@ interface ResourceStore {
     command?: { id: string };
     [key: string]: unknown;
   }>;
-  updateSubAgent?: (id: string, content: string) => Promise<unknown>;
   updateCommand?: (id: string, content: string) => Promise<unknown>;
   createNote: (id: string, x: number, y: number) => Promise<void>;
   createGroup?: (
@@ -53,13 +41,11 @@ interface ResourceStore {
 type ResourceStoreMap = Record<ResourceType, ResourceStore>;
 
 interface EditModalStores {
-  subAgentStore: ResourceStore;
   commandStore: ResourceStore;
   viewportStore: { offset: { x: number; y: number }; zoom: number };
 }
 
 const resourceTitleMap: Record<ResourceType, string> = {
-  subAgent: "SubAgent",
   command: "Command",
 };
 
@@ -80,7 +66,7 @@ export function useEditModal(
   }) => Promise<void>;
   closeEditModal: () => void;
 } {
-  const { subAgentStore, commandStore, viewportStore } = stores;
+  const { commandStore, viewportStore } = stores;
 
   const editModal = ref<EditModalState>({
     visible: false,
@@ -88,13 +74,12 @@ export function useEditModal(
     title: "",
     initialName: "",
     initialContent: "",
-    resourceType: "subAgent",
+    resourceType: "command",
     itemId: "",
     showContent: true,
   });
 
   const resourceStoreMap: ResourceStoreMap = {
-    subAgent: subAgentStore,
     command: commandStore,
   };
 
@@ -104,7 +89,6 @@ export function useEditModal(
       id: string,
     ) => Promise<{ id: string; name: string; content: string } | null>
   > = {
-    subAgent: (id) => subAgentStore.readSubAgent?.(id) ?? Promise.resolve(null),
     command: (id) => commandStore.readCommand?.(id) ?? Promise.resolve(null),
   };
 
@@ -156,7 +140,6 @@ export function useEditModal(
         ) => Promise<{ success: boolean; [key: string]: unknown }>
       >
     > = {
-      subAgent: store.createSubAgent,
       command: store.createCommand,
     };
     const createFn = createFnMap[storeKey];
@@ -233,8 +216,6 @@ export function useEditModal(
     const updateActions: Partial<
       Record<ExtendedResourceType, () => Promise<unknown>>
     > = {
-      subAgent: () =>
-        subAgentStore.updateSubAgent?.(itemId, content) ?? Promise.resolve(),
       command: () =>
         commandStore.updateCommand?.(itemId, content) ?? Promise.resolve(),
     };
@@ -254,11 +235,7 @@ export function useEditModal(
       ExtendedResourceType,
       () => Promise<void | { success: boolean; group?: Group; error?: string }>
     > = {
-      subAgent: createItemAction("subAgent", name, content),
       command: createItemAction("command", name, content),
-      subAgentGroup: () =>
-        subAgentStore.createGroup?.(name) ??
-        Promise.resolve({ success: false }),
       commandGroup: () =>
         commandStore.createGroup?.(name) ?? Promise.resolve({ success: false }),
     };

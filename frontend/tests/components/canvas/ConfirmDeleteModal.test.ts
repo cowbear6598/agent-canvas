@@ -41,8 +41,8 @@ vi.mock("@/components/ui/button", () => ({
   },
 }));
 
-type ItemType = "repository" | "subAgent" | "command" | "mcpServer";
-type GroupType = "subAgentGroup" | "commandGroup";
+type ItemType = "repository" | "command" | "mcpServer";
+type GroupType = "commandGroup";
 type ExtendedItemType = ItemType | GroupType;
 
 function mountModal(
@@ -105,26 +105,6 @@ describe("ConfirmDeleteModal", () => {
   });
 
   describe("一般類型在使用中", () => {
-    it("subAgent 在 isInUse 為 true 時顯示「無法刪除」標題", () => {
-      const wrapper = mountModal({ isInUse: true, itemType: "subAgent" });
-
-      expect(wrapper.text()).toContain("無法刪除");
-    });
-
-    it("subAgent 在 isInUse 為 true 時顯示無法刪除提示", () => {
-      const wrapper = mountModal({ isInUse: true, itemType: "subAgent" });
-
-      expect(wrapper.text()).toContain("此項目正在被 Pod 使用，無法刪除");
-    });
-
-    it("subAgent 在 isInUse 為 true 時只顯示確定按鈕", () => {
-      const wrapper = mountModal({ isInUse: true, itemType: "subAgent" });
-
-      const buttons = wrapper.findAll("button");
-      expect(buttons.length).toBe(1);
-      expect(buttons[0]?.text()).toContain("確認");
-    });
-
     it("command 在 isInUse 為 true 時阻擋刪除", () => {
       const wrapper = mountModal({ isInUse: true, itemType: "command" });
 
@@ -197,7 +177,7 @@ describe("ConfirmDeleteModal", () => {
     });
 
     it("點擊確定按鈕（isInUse 為 true 時）emit update:open 為 false", async () => {
-      const wrapper = mountModal({ isInUse: true, itemType: "subAgent" });
+      const wrapper = mountModal({ isInUse: true, itemType: "command" });
 
       const buttons = wrapper.findAll("button");
       const confirmButton = buttons.find((btn) => btn.text().includes("確認"));

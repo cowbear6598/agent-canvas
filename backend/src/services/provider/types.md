@@ -158,7 +158,6 @@ interface ProviderMetadata<TOptions = unknown> {
 interface ProviderCapabilities {
   chat: boolean;        // 基本聊天（應永遠為 true）
   skill: boolean;       // Skill（Command）功能
-  subAgent: boolean;    // Sub-Agent 功能
   repository: boolean;  // Repository 綁定
   command: boolean;     // Command 設定
   mcp: boolean;         // MCP Server 功能

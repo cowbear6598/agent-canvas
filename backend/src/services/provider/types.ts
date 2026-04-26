@@ -40,8 +40,6 @@ export interface ProviderCapabilities {
   chat: boolean;
   /** 是否支援 Plugin */
   plugin: boolean;
-  /** 是否支援 Sub-Agent */
-  subAgent: boolean;
   /** 是否支援 Repository */
   repository: boolean;
   /** 是否支援 Command */

@@ -43,7 +43,7 @@ export function createMockPod(overrides?: Partial<Pod>): Pod {
     rotation: 0,
     multiInstance: false,
     skillIds: [],
-    subAgentIds: [],
+
     ...overrides,
   } as Pod;
 }

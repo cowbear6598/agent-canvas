@@ -24,7 +24,6 @@ describe("getProvider().metadata.capabilities", () => {
 
     expect(caps.chat).toBe(true);
     expect(caps.plugin).toBe(true);
-    expect(caps.subAgent).toBe(true);
     expect(caps.repository).toBe(true);
     expect(caps.command).toBe(true);
     expect(caps.mcp).toBe(true);
@@ -37,7 +36,6 @@ describe("getProvider().metadata.capabilities", () => {
 
     expect(caps.chat).toBe(true);
     expect(caps.plugin).toBe(true);
-    expect(caps.subAgent).toBe(false);
     expect(caps.repository).toBe(true);
     expect(caps.command).toBe(true);
     expect(caps.mcp).toBe(false);

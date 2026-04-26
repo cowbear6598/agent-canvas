@@ -53,7 +53,6 @@ function createTestPodPayload(
     rotation: 0,
     output: [],
     status: "idle",
-    subAgentIds: [],
     repositoryId: null,
     multiInstance: false,
     commandId: null,
@@ -469,7 +468,6 @@ describe("Canvas/Pod 操作完整流程", () => {
           capabilities: {
             chat: true,
             plugin: false,
-            subAgent: false,
             repository: false,
             command: false,
             mcp: false,

@@ -18,7 +18,7 @@ export interface BindResourceConfig<
 > {
   resourceName: string;
   idField: TIdField;
-  /** true: 陣列模式如 subAgentIds，false: 單一值模式如 commandId */
+  /** true: 陣列模式如 mcpServerIds，false: 單一值模式如 commandId */
   isMultiBind: boolean;
   service: TService;
   podStoreMethod: {
@@ -27,7 +27,6 @@ export interface BindResourceConfig<
   };
   getPodResourceIds: (pod: {
     commandId: string | null;
-    subAgentIds: string[];
     mcpServerIds: string[];
   }) => string[] | string | null;
   /** 某些資源綁定後需要複製檔案到 Pod 工作目錄 */

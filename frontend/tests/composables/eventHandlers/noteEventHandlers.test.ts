@@ -3,7 +3,6 @@ import { webSocketMockFactory } from "../../helpers/mockWebSocket";
 import { setupStoreTest } from "../../helpers/testSetup";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { useRepositoryStore } from "@/stores/note/repositoryStore";
-import { useSubAgentStore } from "@/stores/note/subAgentStore";
 import { useCommandStore } from "@/stores/note/commandStore";
 import { useMcpServerStore } from "@/stores/note/mcpServerStore";
 import { getNoteEventListeners } from "@/composables/eventHandlers/noteEventHandlers";
@@ -35,8 +34,8 @@ describe("noteEventHandlers", () => {
   describe("getNoteEventListeners", () => {
     it("應回傳正確數量的 listener", () => {
       const result = getNoteEventListeners();
-      // repository/subAgent/command/mcpServer 各類 CRUD + deleted + worktree created + branch changed
-      expect(result.length).toBeGreaterThanOrEqual(15);
+      // repository/command/mcpServer 各類 CRUD + deleted + worktree created + branch changed
+      expect(result.length).toBeGreaterThanOrEqual(10);
     });
   });
 
@@ -118,18 +117,6 @@ describe("noteEventHandlers", () => {
       findHandler("repository-note:created")({
         canvasId: "other-canvas",
         note: { id: "rn-1" },
-      });
-
-      expect(spy).not.toHaveBeenCalled();
-    });
-
-    it("subagent:note:created - canvasId 不匹配時不應執行", () => {
-      const store = useSubAgentStore();
-      const spy = vi.spyOn(store, "addNoteFromEvent");
-
-      findHandler("subagent-note:created")({
-        canvasId: "other-canvas",
-        note: { id: "sa-1" },
       });
 
       expect(spy).not.toHaveBeenCalled();

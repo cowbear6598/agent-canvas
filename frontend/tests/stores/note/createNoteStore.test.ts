@@ -503,8 +503,8 @@ describe("createNoteStore", () => {
         const config = createTestConfig();
         const store = createNoteStore<TestItem, TestNote>(config)();
         store.groups = [
-          { id: "group-2", name: "Group B", type: "subAgent" },
-          { id: "group-1", name: "Group A", type: "subAgent" },
+          { id: "group-2", name: "Group B", type: "command" },
+          { id: "group-1", name: "Group A", type: "command" },
         ] as Group[];
         store.availableItems = [
           { id: "item-3", name: "Item C" },
@@ -543,7 +543,7 @@ describe("createNoteStore", () => {
         const config = createTestConfig();
         const store = createNoteStore<TestItem, TestNote>(config)();
         store.groups = [
-          { id: "group-1", name: "Group A", type: "subAgent" },
+          { id: "group-1", name: "Group A", type: "command" },
         ] as Group[];
         store.availableItems = [
           { id: "item-1", name: "Item A", groupId: "group-1" },
@@ -1369,7 +1369,7 @@ describe("createNoteStore", () => {
         const group: Group = {
           id: "group-1",
           name: "Group 1",
-          type: "subAgent",
+          type: "command",
         };
 
         store.addGroupFromEvent(group);
@@ -1384,7 +1384,7 @@ describe("createNoteStore", () => {
         const group: Group = {
           id: "group-1",
           name: "Group 1",
-          type: "subAgent",
+          type: "command",
         };
         store.groups = [group];
 
@@ -1401,12 +1401,12 @@ describe("createNoteStore", () => {
         const group1: Group = {
           id: "group-1",
           name: "Group 1",
-          type: "subAgent",
+          type: "command",
         };
         const group2: Group = {
           id: "group-2",
           name: "Group 2",
-          type: "subAgent",
+          type: "command",
         };
         store.groups = [group1, group2];
 

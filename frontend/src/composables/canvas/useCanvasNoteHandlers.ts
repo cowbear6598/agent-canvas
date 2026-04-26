@@ -6,7 +6,6 @@ import { screenToCanvasPosition } from "@/lib/canvasCoordinateUtils";
 import type { usePodStore } from "@/stores/pod";
 import type { useViewportStore } from "@/stores/pod";
 import type {
-  useSubAgentStore,
   useRepositoryStore,
   useCommandStore,
   useMcpServerStore,
@@ -15,7 +14,7 @@ import TrashZone from "@/components/canvas/TrashZone.vue";
 import type { McpServerConfig } from "@/types";
 
 // EditableNoteType 供 UseCanvasNoteHandlersOptions.handleOpenEditModal 型別引用
-type EditableNoteType = "subAgent" | "command";
+type EditableNoteType = "command";
 
 interface McpServerModalState {
   visible: boolean;
@@ -43,7 +42,6 @@ interface NoteStoreBase {
 interface UseCanvasNoteHandlersOptions {
   podStore: ReturnType<typeof usePodStore>;
   viewportStore: ReturnType<typeof useViewportStore>;
-  subAgentStore: ReturnType<typeof useSubAgentStore>;
   repositoryStore: ReturnType<typeof useRepositoryStore>;
   commandStore: ReturnType<typeof useCommandStore>;
   mcpServerStore: ReturnType<typeof useMcpServerStore>;
@@ -55,14 +53,13 @@ interface UseCanvasNoteHandlersOptions {
   mcpServerModal: Ref<McpServerModalState>;
 }
 
-type NoteType = "subAgent" | "repository" | "command" | "mcpServer";
+type NoteType = "repository" | "command" | "mcpServer";
 
 export function useCanvasNoteHandlers(options: UseCanvasNoteHandlersOptions): {
   noteHandlerMap: Record<NoteType, ReturnType<typeof useNoteEventHandlers>>;
   showTrashZone: ComputedRef<boolean>;
   isTrashHighlighted: ComputedRef<boolean>;
   isCanvasEmpty: ComputedRef<boolean>;
-  handleCreateSubAgentNote: (itemId: string) => void;
   handleCreateRepositoryNote: (itemId: string) => void;
   handleCreateCommandNote: (itemId: string) => void;
   handleCreateMcpServerNote: (itemId: string) => void;
@@ -75,7 +72,6 @@ export function useCanvasNoteHandlers(options: UseCanvasNoteHandlersOptions): {
   const {
     podStore,
     viewportStore,
-    subAgentStore,
     repositoryStore,
     commandStore,
     mcpServerStore,
@@ -85,7 +81,6 @@ export function useCanvasNoteHandlers(options: UseCanvasNoteHandlersOptions): {
   } = options;
 
   const noteConfigs = [
-    { store: subAgentStore as NoteStoreBase, type: "subAgent" as const },
     { store: repositoryStore as NoteStoreBase, type: "repository" as const },
     { store: commandStore as NoteStoreBase, type: "command" as const },
     { store: mcpServerStore as NoteStoreBase, type: "mcpServer" as const },
@@ -128,9 +123,6 @@ export function useCanvasNoteHandlers(options: UseCanvasNoteHandlersOptions): {
     };
   };
 
-  const handleCreateSubAgentNote = createNoteHandler(
-    subAgentStore as NoteStoreBase,
-  );
   const handleCreateRepositoryNote = createNoteHandler(
     repositoryStore as NoteStoreBase,
   );
@@ -151,7 +143,7 @@ export function useCanvasNoteHandlers(options: UseCanvasNoteHandlersOptions): {
   };
 
   const { handleNoteDoubleClick } = useNoteDoubleClick(
-    { subAgentStore, commandStore, mcpServerStore },
+    { commandStore, mcpServerStore },
     mcpServerModal,
     handleOpenEditModal,
   );
@@ -161,7 +153,6 @@ export function useCanvasNoteHandlers(options: UseCanvasNoteHandlersOptions): {
     showTrashZone,
     isTrashHighlighted,
     isCanvasEmpty,
-    handleCreateSubAgentNote,
     handleCreateRepositoryNote,
     handleCreateCommandNote,
     handleCreateMcpServerNote,

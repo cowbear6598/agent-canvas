@@ -11,7 +11,6 @@ export type ToastCategory =
   | "Repository"
   | "Canvas"
   | "Workspace"
-  | "SubAgent"
   | "Workflow"
   | "Git"
   | "Command"

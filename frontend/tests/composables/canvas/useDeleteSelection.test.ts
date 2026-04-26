@@ -132,35 +132,6 @@ describe("useDeleteSelection", () => {
       expect(clearSelectionSpy).toHaveBeenCalled();
     });
 
-    it("刪除選中的 subAgentNote", async () => {
-      const { selectionStore, subAgentStore } = useCanvasContext();
-
-      const TestComponent = defineComponent({
-        setup() {
-          return useDeleteSelection();
-        },
-        template: "<div></div>",
-      });
-
-      const wrapper = mount(TestComponent);
-      const { deleteSelectedElements } = wrapper.vm as ReturnType<
-        typeof useDeleteSelection
-      >;
-
-      selectionStore.selectedElements = [
-        { type: "subAgentNote", id: "subagent-note-1" },
-      ] as SelectableElement[];
-
-      const deleteNoteSpy = vi
-        .spyOn(subAgentStore, "deleteNote")
-        .mockResolvedValue();
-
-      await deleteSelectedElements();
-
-      expect(deleteNoteSpy).toHaveBeenCalledWith("subagent-note-1");
-      expect(selectionStore.clearSelection).toHaveBeenCalled();
-    });
-
     it("刪除選中的 commandNote", async () => {
       const { selectionStore, commandStore } = useCanvasContext();
 
@@ -224,7 +195,6 @@ describe("useDeleteSelection", () => {
         selectionStore,
         podStore,
         repositoryStore,
-        subAgentStore,
         commandStore,
         mcpServerStore,
       } = useCanvasContext();
@@ -244,7 +214,6 @@ describe("useDeleteSelection", () => {
       selectionStore.selectedElements = [
         { type: "pod", id: "pod-1" },
         { type: "repositoryNote", id: "repo-1" },
-        { type: "subAgentNote", id: "subagent-1" },
         { type: "commandNote", id: "command-1" },
         { type: "mcpServerNote", id: "mcp-1" },
       ] as SelectableElement[];
@@ -254,9 +223,6 @@ describe("useDeleteSelection", () => {
         .mockResolvedValue();
       const deleteRepositorySpy = vi
         .spyOn(repositoryStore, "deleteNote")
-        .mockResolvedValue();
-      const deleteSubAgentSpy = vi
-        .spyOn(subAgentStore, "deleteNote")
         .mockResolvedValue();
       const deleteCommandSpy = vi
         .spyOn(commandStore, "deleteNote")
@@ -269,7 +235,6 @@ describe("useDeleteSelection", () => {
 
       expect(deletePodSpy).toHaveBeenCalledWith("pod-1");
       expect(deleteRepositorySpy).toHaveBeenCalledWith("repo-1");
-      expect(deleteSubAgentSpy).toHaveBeenCalledWith("subagent-1");
       expect(deleteCommandSpy).toHaveBeenCalledWith("command-1");
       expect(deleteMcpServerSpy).toHaveBeenCalledWith("mcp-1");
       expect(selectionStore.clearSelection).toHaveBeenCalled();

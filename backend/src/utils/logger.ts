@@ -20,7 +20,6 @@ export type LogCategory =
   | "Chat"
   | "Command"
   | "Repository"
-  | "SubAgent"
   | "Workflow"
   | "Connection"
   | "Paste"
@@ -51,7 +50,6 @@ const CATEGORY_COLORS: Record<LogCategory, string> = {
   WebSocket: ANSI_COLORS.GRAY,
   Pod: ANSI_COLORS.BLUE,
   Workflow: ANSI_COLORS.BLUE,
-  SubAgent: ANSI_COLORS.BLUE,
   Repository: ANSI_COLORS.MAGENTA,
   Workspace: ANSI_COLORS.MAGENTA,
   Canvas: ANSI_COLORS.MAGENTA,

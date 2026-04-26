@@ -45,7 +45,6 @@ describe("collectCopyData", () => {
           y: 0,
           rotation: 0,
 
-          subAgentIds: [],
           repositoryId: null,
           commandId: null,
           provider: "claude" as const,
@@ -72,7 +71,6 @@ describe("collectCopyData", () => {
           y: 200,
           rotation: 0,
 
-          subAgentIds: [],
           repositoryId: null,
           commandId: null,
           provider: "codex" as const,
@@ -101,7 +99,6 @@ describe("collectCopyData", () => {
           y: 50,
           rotation: 0,
 
-          subAgentIds: [],
           repositoryId: null,
           commandId: null,
           provider: "claude" as const,
@@ -129,7 +126,6 @@ describe("collectCopyData", () => {
           y: 0,
           rotation: 0,
 
-          subAgentIds: [],
           repositoryId: null,
           commandId: null,
           provider: "claude" as const,
@@ -142,7 +138,6 @@ describe("collectCopyData", () => {
           y: 200,
           rotation: 0,
 
-          subAgentIds: [],
           repositoryId: null,
           commandId: null,
           provider: "codex" as const,
@@ -216,7 +211,6 @@ describe("collectCopyData", () => {
     it("應收集 mcpServerNote 並用 boundToPodId 綁定", () => {
       const stores = {
         repositoryStore: { notes: [] },
-        subAgentStore: { notes: [] },
         commandStore: { notes: [] },
         mcpServerStore: {
           notes: [

@@ -31,7 +31,6 @@ vi.mock("@/composables/useToast", () => ({
 const CLAUDE_FULL_CAPABILITIES = {
   chat: true,
   plugin: true,
-  subAgent: true,
   repository: true,
   command: true,
   mcp: true,
@@ -43,7 +42,6 @@ const CLAUDE_FULL_CAPABILITIES = {
 const CODEX_CAPABILITIES = {
   chat: true,
   plugin: true,
-  subAgent: false,
   repository: false,
   command: true,
   mcp: false,
@@ -58,7 +56,6 @@ const CODEX_CAPABILITIES = {
 const CONSERVATIVE_FALLBACK = {
   chat: true,
   plugin: false,
-  subAgent: false,
   repository: false,
   command: false,
   mcp: false,
@@ -125,14 +122,6 @@ describe("usePodCapabilities", () => {
       expect(isPluginEnabled.value).toBe(true);
     });
 
-    it("isSubAgentEnabled 應為 false（Codex 不支援）", () => {
-      injectAllCapabilities();
-      const podId = setupPod("codex");
-      const { isSubAgentEnabled } = usePodCapabilities(podId);
-
-      expect(isSubAgentEnabled.value).toBe(false);
-    });
-
     it("isRepositoryEnabled 應為 false（Codex 不支援）", () => {
       injectAllCapabilities();
       const podId = setupPod("codex");
@@ -189,7 +178,6 @@ describe("usePodCapabilities", () => {
       const podId = setupPod("claude");
       const {
         isPluginEnabled,
-        isSubAgentEnabled,
         isRepositoryEnabled,
         isCommandEnabled,
         isMcpEnabled,
@@ -198,7 +186,6 @@ describe("usePodCapabilities", () => {
       } = usePodCapabilities(podId);
 
       expect(isPluginEnabled.value).toBe(true);
-      expect(isSubAgentEnabled.value).toBe(true);
       expect(isRepositoryEnabled.value).toBe(true);
       expect(isCommandEnabled.value).toBe(true);
       expect(isMcpEnabled.value).toBe(true);
@@ -238,7 +225,6 @@ describe("usePodCapabilities", () => {
       const podId = ref("non-existent-pod");
       const {
         isPluginEnabled,
-        isSubAgentEnabled,
         isRepositoryEnabled,
         isCommandEnabled,
         isMcpEnabled,
@@ -247,7 +233,6 @@ describe("usePodCapabilities", () => {
       } = usePodCapabilities(podId);
 
       expect(isPluginEnabled.value).toBe(false);
-      expect(isSubAgentEnabled.value).toBe(false);
       expect(isRepositoryEnabled.value).toBe(false);
       expect(isCommandEnabled.value).toBe(false);
       expect(isMcpEnabled.value).toBe(false);

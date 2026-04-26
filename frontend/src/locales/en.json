@@ -224,7 +224,6 @@
     },
     "slot": {
       "duplicateTitle": "Already exists, cannot insert",
-      "subAgentDuplicate": "This SubAgent is already bound to this Pod",
       "mcpServerDuplicate": "This MCP Server is already bound to this Pod",
       "codexDisabled": "Codex doesn't support this",
       "pluginsLabel": "Plugins",
@@ -454,9 +453,7 @@
       "aiErrorReason": "Error: {reason}"
     },
     "podTypeMenu": {
-      "newSubAgent": "New SubAgent",
       "newCommand": "New Command",
-      "newSubAgentGroup": "New SubAgent Group",
       "newCommandGroup": "New Command Group"
     }
   },
@@ -573,7 +570,6 @@
       "pasted": "Pasted successfully",
       "worktreeCreated": "Worktree created",
       "repositoryDeleted": "Repository deleted",
-      "subAgentDeleted": "SubAgent deleted",
       "commandDeleted": "Command deleted",
       "mcpServerCreated": "MCP Server created",
       "mcpServerUpdated": "MCP Server updated",

@@ -1,14 +1,12 @@
 import { v4 as uuidv4 } from "uuid";
 import { emitAndWaitResponse, setupIntegrationTest } from "../setup";
-import { createPod, FAKE_UUID, createSubAgent, getCanvasId } from "../helpers";
+import { createPod, FAKE_UUID, getCanvasId } from "../helpers";
 import {
   WebSocketRequestEvents,
   WebSocketResponseEvents,
-  type PodBindSubAgentPayload,
   type ConnectionCreatePayload,
 } from "../../src/schemas";
 import {
-  type PodSubAgentBoundPayload,
   type PodStatusChangedPayload,
   type ConnectionCreatedPayload,
 } from "../../src/types";
@@ -87,71 +85,6 @@ describe("Store 覆蓋率測試", () => {
       expect(statusChanges[0].previousStatus).toBe("idle");
 
       client.off(WebSocketResponseEvents.POD_STATUS_CHANGED, listener);
-    });
-
-    it("SubAgent 不在列表時新增成功", async () => {
-      const client = getClient();
-      const pod = await createPod(client);
-      const subAgent = await createSubAgent(
-        client,
-        `subagent-${uuidv4()}`,
-        "# Test",
-      );
-
-      const canvasId = await getCanvasId(client);
-      const response = await emitAndWaitResponse<
-        PodBindSubAgentPayload,
-        PodSubAgentBoundPayload
-      >(
-        client,
-        WebSocketRequestEvents.POD_BIND_SUBAGENT,
-        WebSocketResponseEvents.POD_SUBAGENT_BOUND,
-        {
-          requestId: uuidv4(),
-          canvasId,
-          podId: pod.id,
-          subAgentId: subAgent.id,
-        },
-      );
-
-      expect(response.success).toBe(true);
-      expect(response.pod!.subAgentIds).toContain(subAgent.id);
-    });
-
-    it("SubAgent 已在列表時跳過", async () => {
-      const client = getClient();
-      const pod = await createPod(client);
-      const subAgent = await createSubAgent(
-        client,
-        `subagent-${uuidv4()}`,
-        "# Test",
-      );
-      const canvasId = await getCanvasId(client);
-
-      await emitAndWaitResponse<
-        PodBindSubAgentPayload,
-        PodSubAgentBoundPayload
-      >(
-        client,
-        WebSocketRequestEvents.POD_BIND_SUBAGENT,
-        WebSocketResponseEvents.POD_SUBAGENT_BOUND,
-        {
-          requestId: uuidv4(),
-          canvasId,
-          podId: pod.id,
-          subAgentId: subAgent.id,
-        },
-      );
-
-      const beforeLength = podStore.getById(canvasId, pod.id)!.subAgentIds
-        .length;
-
-      podStore.addSubAgentId(canvasId, pod.id, subAgent.id);
-
-      const afterLength = podStore.getById(canvasId, pod.id)!.subAgentIds
-        .length;
-
-      expect(beforeLength).toBe(afterLength);
     });
 
     it("Canvas 找不到時拋出錯誤", () => {

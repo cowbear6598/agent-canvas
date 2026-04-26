@@ -1,14 +1,10 @@
 import type { Ref } from "vue";
-import type {
-  useSubAgentStore,
-  useCommandStore,
-  useMcpServerStore,
-} from "@/stores/note";
+import type { useCommandStore, useMcpServerStore } from "@/stores/note";
 import type { McpServerConfig } from "@/types";
 import { useToast } from "@/composables/useToast";
 
-type EditableNoteType = "subAgent" | "command";
-type NoteType = "subAgent" | "repository" | "command" | "mcpServer";
+type EditableNoteType = "command";
+type NoteType = "repository" | "command" | "mcpServer";
 
 interface McpServerModalState {
   visible: boolean;
@@ -19,7 +15,6 @@ interface McpServerModalState {
 }
 
 interface UseNoteDoubleClickStores {
-  subAgentStore: ReturnType<typeof useSubAgentStore>;
   commandStore: ReturnType<typeof useCommandStore>;
   mcpServerStore: ReturnType<typeof useMcpServerStore>;
 }
@@ -37,15 +32,13 @@ export function useNoteDoubleClick(
     noteType: NoteType;
   }) => Promise<void>;
 } {
-  const { subAgentStore, commandStore, mcpServerStore } = stores;
+  const { commandStore, mcpServerStore } = stores;
   const { showErrorToast } = useToast();
 
   const editableNoteResourceIdGetters: Record<
     EditableNoteType,
     (noteId: string) => string | undefined
   > = {
-    subAgent: (noteId) =>
-      subAgentStore.typedNotes.find((note) => note.id === noteId)?.subAgentId,
     command: (noteId) =>
       commandStore.typedNotes.find((note) => note.id === noteId)?.commandId,
   };

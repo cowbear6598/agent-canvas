@@ -14,7 +14,6 @@ import { podStore } from "../services/podStore.js";
 import { socketService } from "../services/socketService.js";
 import { gitService } from "../services/workspace/gitService.js";
 import { repositorySyncService } from "../services/repositorySyncService.js";
-import { subAgentService } from "../services/subAgentService.js";
 import { commandService } from "../services/commandService.js";
 import { emitError } from "../utils/websocketResponse.js";
 import { createI18nError } from "../utils/i18nError.js";
@@ -96,11 +95,10 @@ async function cleanupOldWorkspaceResources(
 ): Promise<void> {
   const deleteOperations = [
     commandService.deleteCommandFromPath(podWorkspacePath),
-    subAgentService.deleteSubAgentsFromPath(podWorkspacePath),
   ];
 
   const results = await Promise.allSettled(deleteOperations);
-  const operationNames = ["commands", "subagents"];
+  const operationNames = ["commands"];
 
   logRejectedResults(
     results,
@@ -207,22 +205,13 @@ export const handlePodBindRepository = withCanvasId<PodBindRepositoryPayload>(
   },
 );
 
-function buildCopyOperations(pod: Pod): Promise<unknown>[] {
-  return [
-    ...pod.subAgentIds.map((id) =>
-      subAgentService.copySubAgentToPod(id, pod.id, pod.workspacePath),
-    ),
-  ];
-}
-
 /**
  * 解除 Repository 綁定後的資源清理：
  * 1. 刪除該 Pod 在舊 repository 的 managed files
  * 2. 重新同步舊 repository 的資源
- * 3. 執行 Pod 的 subAgent 複製操作
  */
 async function unbindRepositoryCleanup(
-  canvasId: string,
+  _canvasId: string,
   pod: Pod,
   oldRepositoryId: string | null,
 ): Promise<void> {
@@ -230,19 +219,6 @@ async function unbindRepositoryCleanup(
     await podManifestService.deleteManagedFiles(oldRepositoryId, pod.id);
     await repositorySyncService.syncRepositoryResources(oldRepositoryId);
   }
-
-  const results = await Promise.allSettled(buildCopyOperations(pod));
-
-  results.forEach((result) => {
-    if (result.status === "rejected") {
-      logger.error(
-        "Repository",
-        "Unbind",
-        `複製資源至 Pod「${getPodDisplayName(canvasId, pod.id)}」失敗`,
-        result.reason,
-      );
-    }
-  });
 }
 
 export const handlePodUnbindRepository =

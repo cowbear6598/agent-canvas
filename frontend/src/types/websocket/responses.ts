@@ -6,7 +6,6 @@ import type {
   ProviderCapabilities,
 } from "../pod";
 import type { Repository, RepositoryNote } from "@/types";
-import type { SubAgentNote } from "@/types";
 import type { CommandNote } from "@/types";
 import type { AnchorPosition } from "@/types";
 import type { McpServerConfig, McpServerNote } from "../mcpServer";
@@ -52,7 +51,6 @@ export interface PodDeletedPayload extends ResultPayload {
   deletedNoteIds?: {
     repositoryNote?: string[];
     commandNote?: string[];
-    subAgentNote?: string[];
     mcpServerNote?: string[];
   };
 }
@@ -192,12 +190,7 @@ export interface WorkflowClearResultPayload extends ResultPayload {
 }
 
 export interface PasteError {
-  type:
-    | "pod"
-    | "repositoryNote"
-    | "subAgentNote"
-    | "commandNote"
-    | "mcpServerNote";
+  type: "pod" | "repositoryNote" | "commandNote" | "mcpServerNote";
   originalId: string;
   error: string;
 }
@@ -205,7 +198,6 @@ export interface PasteError {
 export interface CanvasPasteResultPayload extends ResultPayload {
   createdPods: Pod[];
   createdRepositoryNotes: RepositoryNote[];
-  createdSubAgentNotes: SubAgentNote[];
   createdCommandNotes: CommandNote[];
   createdMcpServerNotes: McpServerNote[];
   createdConnections: ConnectionPayloadItem[];
@@ -236,27 +228,6 @@ export interface PodMessagesClearedPayload {
 
 export interface PodMultiInstanceSetPayload extends ResultPayload {
   pod?: Pod;
-}
-
-export interface SubAgentCreatedPayload {
-  requestId: string;
-  success: boolean;
-  subAgent?: { id: string; name: string };
-  error?: string;
-}
-
-export interface SubAgentUpdatedPayload {
-  requestId: string;
-  success: boolean;
-  subAgent?: { id: string; name: string };
-  error?: string;
-}
-
-export interface SubAgentReadResultPayload {
-  requestId: string;
-  success: boolean;
-  subAgent?: { id: string; name: string; content: string };
-  error?: string;
 }
 
 export interface CommandCreatedPayload {
@@ -344,7 +315,7 @@ export interface GroupCreatedPayload {
   group?: {
     id: string;
     name: string;
-    type: "command" | "subAgent";
+    type: "command";
   };
   error?: string;
 }
@@ -355,7 +326,7 @@ export interface GroupListResultPayload {
   groups?: Array<{
     id: string;
     name: string;
-    type: "command" | "subAgent";
+    type: "command";
   }>;
   error?: string;
 }

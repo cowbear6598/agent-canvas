@@ -21,7 +21,6 @@ export interface Pod {
   y: number;
   rotation: number;
   sessionId: string | null;
-  subAgentIds: string[];
   mcpServerIds: string[];
   pluginIds: string[];
   provider: ProviderName;

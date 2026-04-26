@@ -10,19 +10,12 @@ import {
 } from "vue";
 import {
   FolderOpen,
-  Bot,
   Github,
   FolderPlus,
   FilePlus,
   Server,
 } from "lucide-vue-next";
-import type {
-  Position,
-  PodTypeConfig,
-  Repository,
-  SubAgent,
-  McpServer,
-} from "@/types";
+import type { Position, PodTypeConfig, Repository, McpServer } from "@/types";
 import type { PodProvider, ProviderConfig } from "@/types/pod";
 import { podTypes } from "@/data/podTypes";
 import { useCanvasContext } from "@/composables/canvas/useCanvasContext";
@@ -37,14 +30,13 @@ interface Props {
 
 const props = defineProps<Props>();
 
-type ItemType = "repository" | "subAgent" | "command" | "mcpServer";
-type ResourceType = "subAgent" | "command";
-type GroupType = "subAgentGroup" | "commandGroup";
-type OpenMenuType = "subAgent" | "repository" | "command" | "mcpServer" | "pod";
+type ItemType = "repository" | "command" | "mcpServer";
+type ResourceType = "command";
+type GroupType = "commandGroup";
+type OpenMenuType = "repository" | "command" | "mcpServer" | "pod";
 
-/** 建立 Note 的 discriminated union，統一五個 create-*-note 事件為一個事件 */
+/** 建立 Note 的 discriminated union，統一 create-*-note 事件為一個事件 */
 type CreateNotePayload =
-  | { type: "subAgent"; id: string }
   | { type: "repository"; id: string }
   | { type: "command"; id: string }
   | { type: "mcpServer"; id: string };
@@ -83,13 +75,8 @@ const emit = defineEmits<{
   close: [];
 }>();
 
-const {
-  subAgentStore,
-  repositoryStore,
-  commandStore,
-  mcpServerStore,
-  podStore,
-} = useCanvasContext();
+const { repositoryStore, commandStore, mcpServerStore, podStore } =
+  useCanvasContext();
 
 const { t } = useI18n();
 
@@ -114,8 +101,6 @@ onMounted(async () => {
   document.addEventListener("mousedown", handleOutsideMouseDown, true);
 
   await Promise.all([
-    subAgentStore.loadSubAgents(),
-    subAgentStore.loadGroups(),
     repositoryStore.loadRepositories(),
     commandStore.loadCommands(),
     commandStore.loadGroups(),
@@ -135,12 +120,6 @@ const handleProviderSelect = (payload: {
   if (!podTypes[0]) return;
   openMenuType.value = null;
   emit("select", podTypes[0], payload.provider, payload.providerConfig);
-};
-
-const handleSubAgentSelect = (subAgent: SubAgent): void => {
-  openMenuType.value = null;
-  emit("create-note", { type: "subAgent", id: subAgent.id });
-  emit("close");
 };
 
 const handleRepositorySelect = (repository: Repository): void => {
@@ -185,8 +164,6 @@ const openCreateModal = (resourceType: ResourceType, title: string): void => {
   emit("close");
 };
 
-const handleNewSubAgent = (): void =>
-  openCreateModal("subAgent", t("canvas.podTypeMenu.newSubAgent"));
 const handleNewCommand = (): void =>
   openCreateModal("command", t("canvas.podTypeMenu.newCommand"));
 
@@ -213,9 +190,6 @@ const openEditModal = (
   emit("close");
 };
 
-const handleSubAgentEdit = (id: string, _name: string, event: Event): void =>
-  openEditModal("subAgent", id, event);
-
 const handleCommandEdit = (id: string, _name: string, event: Event): void =>
   openEditModal("command", id, event);
 
@@ -225,11 +199,6 @@ const openCreateGroupModal = (groupType: GroupType, title: string): void => {
   emit("close");
 };
 
-const handleNewSubAgentGroup = (): void =>
-  openCreateGroupModal(
-    "subAgentGroup",
-    t("canvas.podTypeMenu.newSubAgentGroup"),
-  );
 const handleNewCommandGroup = (): void =>
   openCreateGroupModal("commandGroup", t("canvas.podTypeMenu.newCommandGroup"));
 
@@ -243,13 +212,6 @@ const handleGroupDelete = (
   openMenuType.value = null;
   emit("open-delete-group-modal", groupType, groupId, name);
   emit("close");
-};
-
-const handleSubAgentDropToGroup = (
-  itemId: string,
-  groupId: string | null,
-): void => {
-  subAgentStore.moveItemToGroup(itemId, groupId);
 };
 
 const handleCommandDropToGroup = (
@@ -363,31 +325,6 @@ const SECTION_CONFIGS: SectionConfig[] = [
     ],
   },
   {
-    type: "subAgent",
-    label: "Agents >",
-    iconColor: "var(--doodle-sand)",
-    icon: Bot,
-    getItems: () => subAgentStore.typedAvailableItems,
-    getGroups: () => subAgentStore.groups,
-    getExpandedGroupIds: () => subAgentStore.expandedGroupIds,
-    onSelect: (item) => handleSubAgentSelect(item as SubAgent),
-    onEdit: handleSubAgentEdit,
-    onDelete: (id, name, event) =>
-      handleDeleteClick("subAgent", id, name, event),
-    onToggleGroup: (groupId) => subAgentStore.toggleGroupExpand(groupId),
-    onGroupDelete: (groupId, name, event) =>
-      handleGroupDelete("subAgentGroup", groupId, name, event),
-    onDropToGroup: handleSubAgentDropToGroup,
-    footerActions: [
-      { icon: FilePlus, label: "New File...", handler: handleNewSubAgent },
-      {
-        icon: FolderPlus,
-        label: "New Group...",
-        handler: handleNewSubAgentGroup,
-      },
-    ],
-  },
-  {
     type: "mcpServer",
     label: "MCPs >",
     iconColor: "var(--doodle-purple)",
@@ -454,11 +391,7 @@ const { menuStyle } = useMenuPosition({
           class="w-8 h-8 rounded-full flex items-center justify-center border border-doodle-ink"
           style="background-color: var(--doodle-blue)"
         >
-          <component
-            :is="podTypes[0].icon"
-            :size="16"
-            class="text-card"
-          />
+          <component :is="podTypes[0].icon" :size="16" class="text-card" />
         </span>
         <span class="font-mono text-sm text-foreground">Pod &gt;</span>
       </button>
@@ -491,10 +424,7 @@ const { menuStyle } = useMenuPosition({
             :size="16"
             class="text-card"
           />
-          <span
-            v-else
-            class="text-xs text-card font-mono font-bold"
-          >{{
+          <span v-else class="text-xs text-card font-mono font-bold">{{
             section.iconSlot
           }}</span>
         </span>
@@ -517,10 +447,7 @@ const { menuStyle } = useMenuPosition({
         @group-delete="section.onGroupDelete"
         @item-drop-to-group="section.onDropToGroup"
       >
-        <template
-          v-if="section.footerActions.length > 0"
-          #footer
-        >
+        <template v-if="section.footerActions.length > 0" #footer>
           <div class="border-t border-doodle-ink/30 my-1" />
           <div
             v-for="action in section.footerActions"
@@ -529,10 +456,7 @@ const { menuStyle } = useMenuPosition({
             :class="{ 'opacity-50 cursor-not-allowed': action.disabled }"
             @click="action.handler"
           >
-            <component
-              :is="action.icon"
-              :size="16"
-            />
+            <component :is="action.icon" :size="16" />
             {{ action.label }}
           </div>
         </template>

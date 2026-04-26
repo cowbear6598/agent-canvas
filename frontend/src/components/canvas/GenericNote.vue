@@ -5,7 +5,7 @@ import { useCanvasContext } from "@/composables/canvas/useCanvasContext";
 import { useBatchDrag } from "@/composables/canvas";
 import { isCtrlOrCmdPressed } from "@/utils/keyboardHelpers";
 
-type NoteType = "subAgent" | "repository" | "command" | "mcpServer";
+type NoteType = "repository" | "command" | "mcpServer";
 
 interface Props {
   note: BaseNote;
@@ -33,7 +33,6 @@ const emit = defineEmits<{
 const {
   viewportStore,
   selectionStore,
-  subAgentStore,
   repositoryStore,
   commandStore,
   mcpServerStore,
@@ -42,11 +41,6 @@ const {
 const { startBatchDrag, isElementSelected } = useBatchDrag();
 
 const NOTE_TYPE_CONFIG = {
-  subAgent: {
-    store: subAgentStore,
-    selectionType: "subAgentNote" as const,
-    cssClass: "subagent-note",
-  },
   repository: {
     store: repositoryStore,
     selectionType: "repositoryNote" as const,
@@ -64,9 +58,7 @@ const NOTE_TYPE_CONFIG = {
   },
 } as const;
 
-const noteStore = computed(
-  () => NOTE_TYPE_CONFIG[props.noteType]?.store ?? subAgentStore,
-);
+const noteStore = computed(() => NOTE_TYPE_CONFIG[props.noteType].store);
 
 const isDragging = ref(false);
 const isAnimating = computed(() =>
@@ -227,10 +219,10 @@ const displayName = computed(() => {
 
 /**
  * 處理雙擊事件
- * subAgent、command、mcpServer 三種類型可編輯
+ * command、mcpServer 兩種類型可編輯
  */
 const handleDoubleClick = (): void => {
-  const editableTypes: NoteType[] = ["subAgent", "command", "mcpServer"];
+  const editableTypes: NoteType[] = ["command", "mcpServer"];
 
   if (editableTypes.includes(props.noteType)) {
     emit("dblclick", { noteId: props.note.id, noteType: props.noteType });

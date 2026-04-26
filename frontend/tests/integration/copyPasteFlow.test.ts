@@ -12,7 +12,6 @@ import {
 import { usePodStore, useSelectionStore, useViewportStore } from "@/stores/pod";
 import {
   useRepositoryStore,
-  useSubAgentStore,
   useCommandStore,
   useMcpServerStore,
 } from "@/stores/note";
@@ -54,7 +53,6 @@ function toCopiedPod(p: Pod): CopiedPod {
     rotation: p.rotation,
     provider: p.provider,
     providerConfig: p.providerConfig,
-    subAgentIds: p.subAgentIds,
     repositoryId: p.repositoryId,
     commandId: p.commandId,
   };
@@ -65,7 +63,6 @@ describe("複製貼上/批量操作完整流程", () => {
   let selectionStore: ReturnType<typeof useSelectionStore>;
   let viewportStore: ReturnType<typeof useViewportStore>;
   let repositoryStore: ReturnType<typeof useRepositoryStore>;
-  let subAgentStore: ReturnType<typeof useSubAgentStore>;
   let commandStore: ReturnType<typeof useCommandStore>;
   let mcpServerStore: ReturnType<typeof useMcpServerStore>;
   let connectionStore: ReturnType<typeof useConnectionStore>;
@@ -79,7 +76,6 @@ describe("複製貼上/批量操作完整流程", () => {
     selectionStore = useSelectionStore();
     viewportStore = useViewportStore();
     repositoryStore = useRepositoryStore();
-    subAgentStore = useSubAgentStore();
     commandStore = useCommandStore();
     mcpServerStore = useMcpServerStore();
     connectionStore = useConnectionStore();
@@ -95,7 +91,6 @@ describe("複製貼上/批量操作完整流程", () => {
   function buildNoteGroups() {
     return [
       { notes: repositoryStore.notes, type: "repositoryNote" as const },
-      { notes: subAgentStore.notes, type: "subAgentNote" as const },
       { notes: commandStore.notes, type: "commandNote" as const },
       { notes: mcpServerStore.notes, type: "mcpServerNote" as const },
     ];
@@ -143,7 +138,7 @@ describe("複製貼上/批量操作完整流程", () => {
           triggerMode: conn.triggerMode,
         }));
 
-      clipboardStore.setCopy([], [], [], [], [], copiedConnections as any);
+      clipboardStore.setCopy([], [], [], [], copiedConnections as any);
 
       expect(clipboardStore.copiedConnections).toHaveLength(1);
       expect(clipboardStore.copiedConnections[0]!.sourcePodId).toBe("pod-1");
@@ -188,7 +183,7 @@ describe("複製貼上/批量操作完整流程", () => {
           originalPosition: n.originalPosition,
         }));
 
-      clipboardStore.setCopy([], [], [], [], copiedMcpServerNotes as any, []);
+      clipboardStore.setCopy([], [], [], copiedMcpServerNotes as any, []);
 
       expect(clipboardStore.isEmpty).toBe(false);
       expect(clipboardStore.copiedMcpServerNotes).toHaveLength(1);
@@ -198,7 +193,7 @@ describe("複製貼上/批量操作完整流程", () => {
     it("應在貼上後更新 selectionStore 為新建立的元素", () => {
       const pod = createMockPod({ id: "pod-1", x: 100, y: 100 });
 
-      clipboardStore.setCopy([toCopiedPod(pod)], [], [], [], [], []);
+      clipboardStore.setCopy([toCopiedPod(pod)], [], [], [], []);
 
       const newSelectedElements: SelectableElement[] = [
         { type: "pod", id: "new-pod-1" },
@@ -240,7 +235,7 @@ describe("複製貼上/批量操作完整流程", () => {
         .filter((p) => selectedPodIds.has(p.id))
         .map(toCopiedPod);
 
-      clipboardStore.setCopy(copiedPods, [], [], [], [], []);
+      clipboardStore.setCopy(copiedPods, [], [], [], []);
 
       expect(clipboardStore.isEmpty).toBe(false);
       expect(clipboardStore.copiedPods).toHaveLength(1);
@@ -259,7 +254,7 @@ describe("複製貼上/批量操作完整流程", () => {
         providerConfig: { model: "gpt-5.4" },
       });
 
-      clipboardStore.setCopy([toCopiedPod(codexPod)], [], [], [], [], []);
+      clipboardStore.setCopy([toCopiedPod(codexPod)], [], [], [], []);
 
       // 確認 clipboard 中保留了 Codex provider 身份
       const storedPod = clipboardStore.copiedPods[0]!;
@@ -287,7 +282,7 @@ describe("複製貼上/批量操作完整流程", () => {
 
       const copiedPods = [claudePod, codexPod].map(toCopiedPod);
 
-      clipboardStore.setCopy(copiedPods, [], [], [], [], []);
+      clipboardStore.setCopy(copiedPods, [], [], [], []);
 
       expect(clipboardStore.copiedPods).toHaveLength(2);
       const storedClaude = clipboardStore.copiedPods.find(

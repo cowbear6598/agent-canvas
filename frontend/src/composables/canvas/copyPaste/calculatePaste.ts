@@ -8,13 +8,11 @@ import {
 import type {
   CopiedPod,
   CopiedRepositoryNote,
-  CopiedSubAgentNote,
   CopiedCommandNote,
   CopiedMcpServerNote,
   CopiedConnection,
   PastePodItem,
   PasteRepositoryNoteItem,
-  PasteSubAgentNoteItem,
   PasteCommandNoteItem,
   PasteMcpServerNoteItem,
   PasteConnectionItem,
@@ -70,20 +68,17 @@ function updateBoundsForUnboundNotes(
 
 function calculateBoundingBox<
   TR extends HasPosition,
-  TSA extends HasPosition,
   TC extends HasPosition,
   TM extends HasPosition,
 >(
   pods: CopiedPod[],
   notes: {
     repositoryNotes: TR[];
-    subAgentNotes: TSA[];
     commandNotes: TC[];
     mcpServerNotes: TM[];
   },
   getBoundKeys: {
     repositoryNote: (n: TR) => string | null;
-    subAgentNote: (n: TSA) => string | null;
     commandNote: (n: TC) => string | null;
     mcpServerNote: (n: TM) => string | null;
   },
@@ -96,7 +91,6 @@ function calculateBoundingBox<
 
   updateBoundsForUnboundNotes(bounds, [
     toUnboundNoteEntry(notes.repositoryNotes, getBoundKeys.repositoryNote),
-    toUnboundNoteEntry(notes.subAgentNotes, getBoundKeys.subAgentNote),
     toUnboundNoteEntry(notes.commandNotes, getBoundKeys.commandNote),
     toUnboundNoteEntry(notes.mcpServerNotes, getBoundKeys.mcpServerNote),
   ]);
@@ -162,7 +156,6 @@ export function transformPods(
       rotation: pod.rotation,
       provider: pod.provider,
       providerConfig: pod.providerConfig,
-      subAgentIds: pod.subAgentIds,
       mcpServerIds: pod.mcpServerIds,
       pluginIds: pod.pluginIds,
       repositoryId: pod.repositoryId,
@@ -210,7 +203,6 @@ function transformConnections(
 type ClipboardData = {
   pods: CopiedPod[];
   repositoryNotes: CopiedRepositoryNote[];
-  subAgentNotes: CopiedSubAgentNote[];
   commandNotes: CopiedCommandNote[];
   mcpServerNotes: CopiedMcpServerNote[];
   connections: CopiedConnection[];
@@ -218,7 +210,6 @@ type ClipboardData = {
 
 type CopiedNote =
   | CopiedRepositoryNote
-  | CopiedSubAgentNote
   | CopiedCommandNote
   | CopiedMcpServerNote;
 
@@ -229,12 +220,10 @@ type NoteTransformConfig<TSource extends CopiedNote, TResult> = {
 };
 
 function isEmptyClipboard(clipboardData: ClipboardData): boolean {
-  const { pods, repositoryNotes, subAgentNotes, commandNotes, mcpServerNotes } =
-    clipboardData;
+  const { pods, repositoryNotes, commandNotes, mcpServerNotes } = clipboardData;
   return (
     pods.length === 0 &&
     repositoryNotes.length === 0 &&
-    subAgentNotes.length === 0 &&
     commandNotes.length === 0 &&
     mcpServerNotes.length === 0
   );
@@ -247,25 +236,17 @@ export function calculatePastePositions(
 ): {
   pods: PastePodItem[];
   repositoryNotes: PasteRepositoryNoteItem[];
-  subAgentNotes: PasteSubAgentNoteItem[];
   commandNotes: PasteCommandNoteItem[];
   mcpServerNotes: PasteMcpServerNoteItem[];
   connections: PasteConnectionItem[];
 } {
-  const {
-    pods,
-    repositoryNotes,
-    subAgentNotes,
-    commandNotes,
-    mcpServerNotes,
-    connections,
-  } = clipboardData;
+  const { pods, repositoryNotes, commandNotes, mcpServerNotes, connections } =
+    clipboardData;
 
   if (isEmptyClipboard(clipboardData)) {
     return {
       pods: [],
       repositoryNotes: [],
-      subAgentNotes: [],
       commandNotes: [],
       mcpServerNotes: [],
       connections: [],
@@ -276,13 +257,11 @@ export function calculatePastePositions(
     pods,
     {
       repositoryNotes,
-      subAgentNotes,
       commandNotes,
       mcpServerNotes,
     },
     {
       repositoryNote: (note) => note.boundToOriginalPodId,
-      subAgentNote: (note) => note.boundToPodId,
       commandNote: (note) => note.boundToOriginalPodId,
       mcpServerNote: (note) => note.boundToPodId,
     },
@@ -315,18 +294,6 @@ export function calculatePastePositions(
         x: position.x,
         y: position.y,
         boundToOriginalPodId: note.boundToOriginalPodId,
-        originalPosition: note.originalPosition,
-      }),
-    }),
-    subAgentNotes: applyTransform<CopiedSubAgentNote, PasteSubAgentNoteItem>({
-      notes: subAgentNotes,
-      getBoundKey: (note) => note.boundToPodId,
-      mapFn: (note, position) => ({
-        subAgentId: note.subAgentId,
-        name: note.name,
-        x: position.x,
-        y: position.y,
-        boundToOriginalPodId: note.boundToPodId,
         originalPosition: note.originalPosition,
       }),
     }),

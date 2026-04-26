@@ -13,7 +13,6 @@ async function deleteSelectedElements(
     podStore,
     selectionStore,
     repositoryStore,
-    subAgentStore,
     commandStore,
     mcpServerStore,
   } = canvasContext;
@@ -24,7 +23,6 @@ async function deleteSelectedElements(
   const storeMap: Record<string, (id: string) => Promise<void>> = {
     pod: (id) => podStore.deletePodWithBackend(id),
     repositoryNote: (id) => repositoryStore.deleteNote(id),
-    subAgentNote: (id) => subAgentStore.deleteNote(id),
     commandNote: (id) => commandStore.deleteNote(id),
     mcpServerNote: (id) => mcpServerStore.deleteNote(id),
   };

@@ -15,11 +15,6 @@ vi.mock("@/composables/useToast", () => ({
 describe("usePodNoteBinding", () => {
   const podId = ref("pod-1");
 
-  let mockSubAgentStore: {
-    bindToPod: ReturnType<typeof vi.fn>;
-    getNoteById: ReturnType<typeof vi.fn>;
-    isItemBoundToPod: ReturnType<typeof vi.fn>;
-  };
   let mockRepositoryStore: {
     bindToPod: ReturnType<typeof vi.fn>;
     getNoteById: ReturnType<typeof vi.fn>;
@@ -43,11 +38,6 @@ describe("usePodNoteBinding", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mockSubAgentStore = {
-      bindToPod: vi.fn().mockResolvedValue(undefined),
-      getNoteById: vi.fn(),
-      isItemBoundToPod: vi.fn(() => false),
-    };
     mockRepositoryStore = {
       bindToPod: vi.fn().mockResolvedValue(undefined),
       getNoteById: vi.fn(),
@@ -71,9 +61,6 @@ describe("usePodNoteBinding", () => {
 
   function buildStores(): Parameters<typeof usePodNoteBinding>[1] {
     return {
-      subAgentStore: mockSubAgentStore as Parameters<
-        typeof usePodNoteBinding
-      >[1]["subAgentStore"],
       repositoryStore: mockRepositoryStore as Parameters<
         typeof usePodNoteBinding
       >[1]["repositoryStore"],
@@ -90,22 +77,6 @@ describe("usePodNoteBinding", () => {
   }
 
   describe("handleNoteDrop", () => {
-    it("subAgent 重複綁定時應顯示 toast 並不呼叫 bindToPod", async () => {
-      mockSubAgentStore.getNoteById.mockReturnValue({ subAgentId: "sub-1" });
-      mockSubAgentStore.isItemBoundToPod.mockReturnValue(true);
-
-      const { handleNoteDrop } = usePodNoteBinding(podId, buildStores());
-      await handleNoteDrop("subAgent", "note-1");
-
-      expect(mockToast).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: "已存在，無法插入",
-          description: "此 SubAgent 已綁定到此 Pod",
-        }),
-      );
-      expect(mockSubAgentStore.bindToPod).not.toHaveBeenCalled();
-    });
-
     it("mcpServer 重複綁定時應顯示 toast 並不呼叫 bindToPod", async () => {
       mockMcpServerStore.getNoteById.mockReturnValue({ mcpServerId: "mcp-1" });
       mockMcpServerStore.isItemBoundToPod.mockReturnValue(true);

@@ -75,7 +75,6 @@ export interface PodDeletedPayload {
   deletedNoteIds?: {
     repositoryNote?: string[];
     commandNote?: string[];
-    subAgentNote?: string[];
     mcpServerNote?: string[];
   };
   error?: string;
@@ -160,14 +159,6 @@ export interface PodRepositoryBoundPayload {
 }
 
 export interface PodRepositoryUnboundPayload {
-  requestId: string;
-  canvasId: string;
-  success: boolean;
-  pod?: Pod;
-  error?: string;
-}
-
-export interface PodSubAgentBoundPayload {
   requestId: string;
   canvasId: string;
   success: boolean;

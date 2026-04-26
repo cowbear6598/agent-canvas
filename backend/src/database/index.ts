@@ -50,7 +50,6 @@ export function resetDb(): void {
   database.exec("DELETE FROM messages");
   database.exec("DELETE FROM notes");
   database.exec("DELETE FROM connections");
-  database.exec("DELETE FROM pod_sub_agent_ids");
   database.exec("DELETE FROM pod_mcp_server_ids");
   database.exec("DELETE FROM integration_bindings");
   database.exec("DELETE FROM pods");

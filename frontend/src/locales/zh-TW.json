@@ -224,7 +224,6 @@
     },
     "slot": {
       "duplicateTitle": "已存在，無法插入",
-      "subAgentDuplicate": "此 SubAgent 已綁定到此 Pod",
       "mcpServerDuplicate": "此 MCP Server 已綁定到此 Pod",
       "codexDisabled": "Codex 不支援此功能",
       "pluginsLabel": "Plugins",
@@ -454,9 +453,7 @@
       "aiErrorReason": "錯誤：{reason}"
     },
     "podTypeMenu": {
-      "newSubAgent": "新增 SubAgent",
       "newCommand": "新增 Command",
-      "newSubAgentGroup": "新增 SubAgent 群組",
       "newCommandGroup": "新增 Command 群組"
     }
   },
@@ -573,7 +570,6 @@
       "pasted": "貼上成功",
       "worktreeCreated": "Worktree 建立成功",
       "repositoryDeleted": "Repository 已刪除",
-      "subAgentDeleted": "SubAgent 已刪除",
       "commandDeleted": "Command 已刪除",
       "mcpServerCreated": "MCP Server 已建立",
       "mcpServerUpdated": "MCP Server 已更新",

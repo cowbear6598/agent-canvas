@@ -1,7 +1,6 @@
 import { WebSocketResponseEvents } from "@/services/websocket";
 import { usePodStore } from "@/stores/pod/podStore";
 import { useRepositoryStore } from "@/stores/note/repositoryStore";
-import { useSubAgentStore } from "@/stores/note/subAgentStore";
 import { useCommandStore } from "@/stores/note/commandStore";
 import { useMcpServerStore } from "@/stores/note/mcpServerStore";
 import { useChatStore } from "@/stores/chat/chatStore";
@@ -13,7 +12,6 @@ import { t } from "@/i18n";
 type DeletedNoteIds = {
   repositoryNote?: string[];
   commandNote?: string[];
-  subAgentNote?: string[];
   mcpServerNote?: string[];
 };
 
@@ -23,7 +21,6 @@ const noteTypeHandlers: {
 }[] = [
   { key: "repositoryNote", getStore: () => useRepositoryStore() },
   { key: "commandNote", getStore: () => useCommandStore() },
-  { key: "subAgentNote", getStore: () => useSubAgentStore() },
   { key: "mcpServerNote", getStore: () => useMcpServerStore() },
 ];
 
@@ -182,10 +179,6 @@ export function getPodEventListeners(): Array<{
     },
     {
       event: WebSocketResponseEvents.POD_REPOSITORY_UNBOUND,
-      handler: handlePodStateUpdated as (payload: unknown) => void,
-    },
-    {
-      event: WebSocketResponseEvents.POD_SUBAGENT_BOUND,
       handler: handlePodStateUpdated as (payload: unknown) => void,
     },
     {

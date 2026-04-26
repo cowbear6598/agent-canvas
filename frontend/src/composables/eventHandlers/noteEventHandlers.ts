@@ -1,11 +1,9 @@
 import { WebSocketResponseEvents } from "@/services/websocket";
 import { useRepositoryStore } from "@/stores/note/repositoryStore";
-import { useSubAgentStore } from "@/stores/note/subAgentStore";
 import { useCommandStore } from "@/stores/note/commandStore";
 import { useMcpServerStore } from "@/stores/note/mcpServerStore";
 import type {
   RepositoryNote,
-  SubAgentNote,
   CommandNote,
   McpServer,
   McpServerNote,
@@ -114,9 +112,6 @@ const validateMcpServer = (mcpServer: McpServer): boolean => {
 const repositoryNoteHandlers = createNoteHandlers<RepositoryNote>({
   getStore: useRepositoryStore,
 });
-const subAgentNoteHandlers = createNoteHandlers<SubAgentNote>({
-  getStore: useSubAgentStore,
-});
 const commandNoteHandlers = createNoteHandlers<CommandNote>({
   getStore: useCommandStore,
 });
@@ -164,22 +159,6 @@ const handleRepositoryBranchChanged = createUnifiedHandler<
     );
   },
   { skipCanvasCheck: true },
-);
-
-const handleSubAgentDeleted = createUnifiedHandler<
-  BasePayload & {
-    subAgentId: string;
-    deletedNoteIds?: string[];
-    canvasId: string;
-  }
->(
-  (payload) => {
-    useSubAgentStore().removeItemFromEvent(
-      payload.subAgentId,
-      payload.deletedNoteIds,
-    );
-  },
-  { toastMessage: () => t("composable.eventHandler.subAgentDeleted") },
 );
 
 const handleCommandDeleted = createUnifiedHandler<
@@ -271,22 +250,6 @@ export function getNoteEventListeners(): Array<{
     {
       event: WebSocketResponseEvents.REPOSITORY_NOTE_DELETED,
       handler: repositoryNoteHandlers.deleted as (payload: unknown) => void,
-    },
-    {
-      event: WebSocketResponseEvents.SUBAGENT_DELETED,
-      handler: handleSubAgentDeleted as (payload: unknown) => void,
-    },
-    {
-      event: WebSocketResponseEvents.SUBAGENT_NOTE_CREATED,
-      handler: subAgentNoteHandlers.created as (payload: unknown) => void,
-    },
-    {
-      event: WebSocketResponseEvents.SUBAGENT_NOTE_UPDATED,
-      handler: subAgentNoteHandlers.updated as (payload: unknown) => void,
-    },
-    {
-      event: WebSocketResponseEvents.SUBAGENT_NOTE_DELETED,
-      handler: subAgentNoteHandlers.deleted as (payload: unknown) => void,
     },
     {
       event: WebSocketResponseEvents.COMMAND_DELETED,

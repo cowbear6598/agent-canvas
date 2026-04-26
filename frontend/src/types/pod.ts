@@ -62,7 +62,6 @@ export interface ModelOption {
 export interface ProviderCapabilities {
   chat: boolean;
   plugin: boolean;
-  subAgent: boolean;
   repository: boolean;
   command: boolean;
   mcp: boolean;
@@ -99,7 +98,6 @@ export interface Pod {
   rotation: number;
   status?: PodStatus;
   workspacePath?: string;
-  subAgentIds?: string[];
   mcpServerIds?: string[];
   pluginIds?: string[];
   repositoryId?: string | null;

@@ -3,7 +3,6 @@ import type {
   CanvasPasteResultPayload,
   PasteError,
   RepositoryNote,
-  SubAgentNote,
   CommandNote,
   McpServerNote,
   Pod,
@@ -43,14 +42,8 @@ export const handleCanvasPaste = withCanvasId<CanvasPastePayload>(
     payload: CanvasPastePayload,
     requestId: string,
   ): Promise<void> => {
-    const {
-      pods,
-      repositoryNotes,
-      subAgentNotes,
-      commandNotes,
-      mcpServerNotes,
-      connections,
-    } = payload;
+    const { pods, repositoryNotes, commandNotes, mcpServerNotes, connections } =
+      payload;
 
     const podIdMapping: Record<string, string> = {};
     const errors: PasteError[] = [];
@@ -67,12 +60,6 @@ export const handleCanvasPaste = withCanvasId<CanvasPastePayload>(
         "repository",
         canvasId,
         repositoryNotes,
-        podIdMapping,
-      ),
-      subAgent: createPastedNotesByType(
-        "subAgent",
-        canvasId,
-        subAgentNotes,
         podIdMapping,
       ),
       command: createPastedNotesByType(
@@ -119,7 +106,6 @@ export const handleCanvasPaste = withCanvasId<CanvasPastePayload>(
       createdPods,
       createdRepositoryNotes: noteResultMap.repository
         .notes as RepositoryNote[],
-      createdSubAgentNotes: noteResultMap.subAgent.notes as SubAgentNote[],
       createdCommandNotes: noteResultMap.command.notes as CommandNote[],
       createdMcpServerNotes: noteResultMap.mcpServer.notes as McpServerNote[],
       createdConnections,
@@ -141,8 +127,6 @@ export const handleCanvasPaste = withCanvasId<CanvasPastePayload>(
     if (createdPods.length > 0) pasteItems.push(`${createdPods.length} pod`);
     if (response.createdRepositoryNotes.length > 0)
       pasteItems.push(`${response.createdRepositoryNotes.length} repository`);
-    if (response.createdSubAgentNotes.length > 0)
-      pasteItems.push(`${response.createdSubAgentNotes.length} subagent`);
     if (response.createdCommandNotes.length > 0)
       pasteItems.push(`${response.createdCommandNotes.length} command`);
     if (response.createdMcpServerNotes.length > 0)

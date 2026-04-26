@@ -23,7 +23,6 @@ import { t } from "@/i18n";
 
 const STORE_TO_CATEGORY_MAP: Record<string, ToastCategory> = {
   repository: "Repository",
-  subAgent: "SubAgent",
   command: "Command",
   mcpServer: "McpServer",
 };

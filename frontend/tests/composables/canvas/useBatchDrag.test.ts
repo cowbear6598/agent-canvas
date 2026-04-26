@@ -3,7 +3,7 @@ import { setupStoreTest } from "../../helpers/testSetup";
 import { createMockPod, createMockNote } from "../../helpers/factories";
 import { useBatchDrag } from "@/composables/canvas/useBatchDrag";
 import type { Pod } from "@/types";
-import type { RepositoryNote, SubAgentNote, CommandNote } from "@/types";
+import type { RepositoryNote, CommandNote } from "@/types";
 
 // Mock useCanvasContext
 const mockPodStore = {
@@ -36,18 +36,6 @@ const mockRepositoryStore = {
   notes: [] as RepositoryNote[],
   updateNotePositionLocal: vi.fn((noteId: string, x: number, y: number) => {
     const note = mockRepositoryStore.notes.find((n) => n.id === noteId);
-    if (note) {
-      note.x = x;
-      note.y = y;
-    }
-  }),
-  updateNotePosition: vi.fn(),
-};
-
-const mockSubAgentStore = {
-  notes: [] as SubAgentNote[],
-  updateNotePositionLocal: vi.fn((noteId: string, x: number, y: number) => {
-    const note = mockSubAgentStore.notes.find((n) => n.id === noteId);
     if (note) {
       note.x = x;
       note.y = y;
@@ -91,7 +79,6 @@ vi.mock("@/composables/canvas/useCanvasContext", () => ({
     viewportStore: mockViewportStore,
     selectionStore: mockSelectionStore,
     repositoryStore: mockRepositoryStore,
-    subAgentStore: mockSubAgentStore,
     commandStore: mockCommandStore,
     mcpServerStore: mockMcpServerStore,
   }),
@@ -112,9 +99,6 @@ describe("useBatchDrag", () => {
     mockRepositoryStore.notes = [];
     mockRepositoryStore.updateNotePositionLocal.mockClear();
     mockRepositoryStore.updateNotePosition.mockClear();
-    mockSubAgentStore.notes = [];
-    mockSubAgentStore.updateNotePositionLocal.mockClear();
-    mockSubAgentStore.updateNotePosition.mockClear();
     mockCommandStore.notes = [];
     mockCommandStore.updateNotePositionLocal.mockClear();
     mockCommandStore.updateNotePosition.mockClear();
@@ -267,26 +251,18 @@ describe("useBatchDrag", () => {
         y: 100,
         boundToPodId: null,
       });
-      const subAgentNote = createMockNote("subAgent", {
+      const commandNote = createMockNote("command", {
         id: "note-2",
         x: 200,
         y: 200,
         boundToPodId: null,
       });
-      const commandNote = createMockNote("command", {
-        id: "note-3",
-        x: 300,
-        y: 300,
-        boundToPodId: null,
-      });
       mockRepositoryStore.notes = [repositoryNote as RepositoryNote];
-      mockSubAgentStore.notes = [subAgentNote as SubAgentNote];
       mockCommandStore.notes = [commandNote as CommandNote];
       mockSelectionStore.hasSelection = true;
       mockSelectionStore.selectedElements = [
         { type: "repositoryNote", id: "note-1" },
-        { type: "subAgentNote", id: "note-2" },
-        { type: "commandNote", id: "note-3" },
+        { type: "commandNote", id: "note-2" },
       ];
 
       const startEvent = new MouseEvent("mousedown", {
@@ -307,15 +283,10 @@ describe("useBatchDrag", () => {
         150,
         150,
       );
-      expect(mockSubAgentStore.updateNotePositionLocal).toHaveBeenCalledWith(
+      expect(mockCommandStore.updateNotePositionLocal).toHaveBeenCalledWith(
         "note-2",
         250,
         250,
-      );
-      expect(mockCommandStore.updateNotePositionLocal).toHaveBeenCalledWith(
-        "note-3",
-        350,
-        350,
       );
     });
   });
@@ -410,26 +381,18 @@ describe("useBatchDrag", () => {
         y: 100,
         boundToPodId: null,
       });
-      const subAgentNote = createMockNote("subAgent", {
+      const commandNote = createMockNote("command", {
         id: "note-2",
         x: 200,
         y: 200,
         boundToPodId: null,
       });
-      const commandNote = createMockNote("command", {
-        id: "note-3",
-        x: 300,
-        y: 300,
-        boundToPodId: null,
-      });
       mockRepositoryStore.notes = [repositoryNote as RepositoryNote];
-      mockSubAgentStore.notes = [subAgentNote as SubAgentNote];
       mockCommandStore.notes = [commandNote as CommandNote];
       mockSelectionStore.hasSelection = true;
       mockSelectionStore.selectedElements = [
         { type: "repositoryNote", id: "note-1" },
-        { type: "subAgentNote", id: "note-2" },
-        { type: "commandNote", id: "note-3" },
+        { type: "commandNote", id: "note-2" },
       ];
 
       const startEvent = new MouseEvent("mousedown", {
@@ -455,15 +418,10 @@ describe("useBatchDrag", () => {
         150,
         150,
       );
-      expect(mockSubAgentStore.updateNotePosition).toHaveBeenCalledWith(
+      expect(mockCommandStore.updateNotePosition).toHaveBeenCalledWith(
         "note-2",
         250,
         250,
-      );
-      expect(mockCommandStore.updateNotePosition).toHaveBeenCalledWith(
-        "note-3",
-        350,
-        350,
       );
     });
   });
@@ -484,13 +442,11 @@ describe("useBatchDrag", () => {
       const { isElementSelected } = useBatchDrag();
       mockSelectionStore.selectedElements = [
         { type: "repositoryNote", id: "note-1" },
-        { type: "subAgentNote", id: "note-2" },
-        { type: "commandNote", id: "note-3" },
+        { type: "commandNote", id: "note-2" },
       ];
 
       expect(isElementSelected("repositoryNote", "note-1")).toBe(true);
-      expect(isElementSelected("subAgentNote", "note-2")).toBe(true);
-      expect(isElementSelected("commandNote", "note-3")).toBe(true);
+      expect(isElementSelected("commandNote", "note-2")).toBe(true);
     });
   });
 

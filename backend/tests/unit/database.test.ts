@@ -44,7 +44,6 @@ describe("Database", () => {
         "pod_manifests",
         "pod_mcp_server_ids",
         "pod_plugin_ids",
-        "pod_sub_agent_ids",
         "pods",
         "repository_metadata",
         "run_messages",
@@ -137,9 +136,6 @@ describe("Database", () => {
           VALUES ('m1', 'p1', 'c1', 'user', 'hello', '2024-01-01')`,
       );
       db.exec(
-        "INSERT INTO pod_sub_agent_ids (pod_id, sub_agent_id) VALUES ('p1', 'sa1')",
-      );
-      db.exec(
         "INSERT INTO pod_mcp_server_ids (pod_id, mcp_server_id) VALUES ('p1', 'mcp1')",
       );
       db.exec(
@@ -179,13 +175,6 @@ describe("Database", () => {
       expect(
         (
           db
-            .prepare("SELECT COUNT(*) as count FROM pod_sub_agent_ids")
-            .get() as { count: number }
-        ).count,
-      ).toBe(0);
-      expect(
-        (
-          db
             .prepare("SELECT COUNT(*) as count FROM pod_mcp_server_ids")
             .get() as { count: number }
         ).count,
@@ -215,9 +204,6 @@ describe("Database", () => {
           VALUES ('ib1', 'p1', 'c1', 'slack', 'ia1', 'res1')`,
       );
       db.exec(
-        "INSERT INTO pod_sub_agent_ids (pod_id, sub_agent_id) VALUES ('p1', 'sa1')",
-      );
-      db.exec(
         "INSERT INTO pod_mcp_server_ids (pod_id, mcp_server_id) VALUES ('p1', 'mcp1')",
       );
       db.exec(
@@ -230,13 +216,6 @@ describe("Database", () => {
         (
           db
             .prepare("SELECT COUNT(*) as count FROM integration_bindings")
-            .get() as { count: number }
-        ).count,
-      ).toBe(0);
-      expect(
-        (
-          db
-            .prepare("SELECT COUNT(*) as count FROM pod_sub_agent_ids")
             .get() as { count: number }
         ).count,
       ).toBe(0);
@@ -311,36 +290,34 @@ describe("Database", () => {
         $providerConfigJson: JSON.stringify({ model: "opus" }),
       });
 
-      stmts.podSubAgentIds.insert.run({ $podId: "p1", $subAgentId: "agent-1" });
-      stmts.podSubAgentIds.insert.run({ $podId: "p1", $subAgentId: "agent-2" });
+      stmts.podMcpServerIds.insert.run({ $podId: "p1", $mcpServerId: "mcp-1" });
+      stmts.podMcpServerIds.insert.run({ $podId: "p1", $mcpServerId: "mcp-2" });
 
-      const agents = stmts.podSubAgentIds.selectByPodId.all("p1") as {
-        sub_agent_id: string;
+      const mcpServers = stmts.podMcpServerIds.selectByPodId.all("p1") as {
+        mcp_server_id: string;
       }[];
-      expect(agents).toHaveLength(2);
-      expect(agents.map((a) => a.sub_agent_id).sort()).toEqual([
-        "agent-1",
-        "agent-2",
+      expect(mcpServers).toHaveLength(2);
+      expect(mcpServers.map((m) => m.mcp_server_id).sort()).toEqual([
+        "mcp-1",
+        "mcp-2",
       ]);
 
       // INSERT OR IGNORE 重複不報錯
-      stmts.podSubAgentIds.insert.run({ $podId: "p1", $subAgentId: "agent-1" });
-      const agentsAfterDup = stmts.podSubAgentIds.selectByPodId.all(
+      stmts.podMcpServerIds.insert.run({ $podId: "p1", $mcpServerId: "mcp-1" });
+      const mcpAfterDup = stmts.podMcpServerIds.selectByPodId.all(
         "p1",
       ) as unknown[];
-      expect(agentsAfterDup).toHaveLength(2);
+      expect(mcpAfterDup).toHaveLength(2);
 
-      stmts.podSubAgentIds.deleteOne.run({
+      stmts.podMcpServerIds.deleteOne.run({
         $podId: "p1",
-        $subAgentId: "agent-1",
+        $mcpServerId: "mcp-1",
       });
-      const agentsAfterDelete = stmts.podSubAgentIds.selectByPodId.all(
-        "p1",
-      ) as {
-        sub_agent_id: string;
+      const mcpAfterDelete = stmts.podMcpServerIds.selectByPodId.all("p1") as {
+        mcp_server_id: string;
       }[];
-      expect(agentsAfterDelete).toHaveLength(1);
-      expect(agentsAfterDelete[0].sub_agent_id).toBe("agent-2");
+      expect(mcpAfterDelete).toHaveLength(1);
+      expect(mcpAfterDelete[0].mcp_server_id).toBe("mcp-2");
     });
 
     it("應該能操作 connection", () => {

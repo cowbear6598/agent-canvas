@@ -35,7 +35,6 @@ function createOptions(overrides: Record<string, unknown> = {}) {
     typeMenu: { position: null as { x: number; y: number } | null },
   };
   const viewportStore = { offset: { x: 0, y: 0 }, zoom: 1 };
-  const subAgentStore = createNoteStore();
   const repositoryStore = createNoteStore();
   const commandStore = createNoteStore();
   const mcpServerStore = createNoteStore({
@@ -54,7 +53,6 @@ function createOptions(overrides: Record<string, unknown> = {}) {
   return {
     podStore,
     viewportStore,
-    subAgentStore,
     repositoryStore,
     commandStore,
     mcpServerStore,
@@ -69,7 +67,7 @@ describe("useCanvasNoteHandlers", () => {
   describe("showTrashZone", () => {
     it("任一 store 有 isDraggingNote 時為 true", () => {
       const options = createOptions();
-      options.subAgentStore.isDraggingNote = true;
+      options.repositoryStore.isDraggingNote = true;
 
       const { showTrashZone } = useCanvasNoteHandlers(
         options as unknown as Parameters<typeof useCanvasNoteHandlers>[0],
@@ -113,7 +111,7 @@ describe("useCanvasNoteHandlers", () => {
 
     it("任一 store 有 notes 時為 false", () => {
       const options = createOptions();
-      options.subAgentStore.notes = [{ id: "note-1" }];
+      options.repositoryStore.notes = [{ id: "note-1" }];
 
       const { isCanvasEmpty } = useCanvasNoteHandlers(
         options as unknown as Parameters<typeof useCanvasNoteHandlers>[0],
@@ -124,25 +122,6 @@ describe("useCanvasNoteHandlers", () => {
   });
 
   describe("handleNoteDoubleClick", () => {
-    it("subAgent 類型應呼叫 handleOpenEditModal", async () => {
-      const options = createOptions();
-      options.subAgentStore.typedNotes = [{ id: "note-1", subAgentId: "sa-1" }];
-
-      const { handleNoteDoubleClick } = useCanvasNoteHandlers(
-        options as unknown as Parameters<typeof useCanvasNoteHandlers>[0],
-      );
-
-      await handleNoteDoubleClick({
-        noteId: "note-1",
-        noteType: "subAgent",
-      });
-
-      expect(options.handleOpenEditModal).toHaveBeenCalledWith(
-        "subAgent",
-        "sa-1",
-      );
-    });
-
     it("mcpServer 類型應讀取資料並設定 modal", async () => {
       const mockMcpServerData = {
         name: "My MCP",
