@@ -127,6 +127,26 @@ const handleWorkflowClearResult = createUnifiedHandler<
 );
 
 /**
+ * 多人協作同步：當其他 client 切換 Pod 的 Plugin 時，
+ * 更新本地 podStore 狀態，避免各 client 之間狀態不同步。
+ * payload.pod 包含後端廣播的完整 PodPublicView，取 pluginIds 欄位更新本地。
+ */
+const handlePodPluginsSet = (payload: {
+  requestId?: string;
+  canvasId?: string;
+  success?: boolean;
+  pod?: Pod;
+}): void => {
+  if (
+    !payload.success ||
+    !payload.pod?.id ||
+    !Array.isArray(payload.pod.pluginIds)
+  )
+    return;
+  usePodStore().updatePodPlugins(payload.pod.id, payload.pod.pluginIds);
+};
+
+/**
  * 多人協作同步：當其他 client 更新 Pod 的 MCP server 名稱清單時，
  * 更新本地 podStore 狀態，避免各 client 之間狀態不同步。
  */
@@ -213,6 +233,10 @@ export function getPodEventListeners(): Array<{
     {
       event: WebSocketResponseEvents.POD_MCP_SERVER_NAMES_UPDATED,
       handler: handlePodMcpServerNamesUpdated as (payload: unknown) => void,
+    },
+    {
+      event: WebSocketResponseEvents.POD_PLUGINS_SET,
+      handler: handlePodPluginsSet as (payload: unknown) => void,
     },
   ];
 }

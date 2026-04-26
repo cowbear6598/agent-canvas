@@ -41,6 +41,10 @@
      與 .pod-doodle（子層）都能透過 CSS 繼承讀到此變數 */
   --model-notch-width: 110px;
   position: relative;
+  /* isolation: isolate 建立獨立的 stacking context，使 notch（z-index: -1）
+     被限制在 pod-wrapper 內部，不會跌到外層的 .connection-layer（z-index: 5）之下，
+     同時仍保持「在 pod-doodle 後方探出一角」的視覺效果 */
+  isolation: isolate;
   transition: transform 0.15s ease;
   transform: rotate(var(--pod-rotation, 0deg));
 }
@@ -326,9 +330,12 @@
   animation: pod-glow-pulse-opacity 2s ease-in-out infinite;
 }
 
-/* Selected 狀態：薄荷綠外圈光暈 */
+/* Selected 狀態：薄荷綠外圈描邊
+   改用 outline 而非 box-shadow，避免與 chatting/summarizing 的 box-shadow 互蓋，
+   讓兩種視覺效果可以同時並存。*/
 .pod-glow-layer.pod-glow-selected {
-  box-shadow: 0 0 0 3px oklch(0.65 0.15 170 / 0.6);
+  outline: 3px solid oklch(0.65 0.15 170 / 0.6);
+  outline-offset: 0px;
 }
 
 /* keyframes：只動 opacity（Compositor Thread 可加速，無 Paint）
