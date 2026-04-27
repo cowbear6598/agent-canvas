@@ -87,7 +87,7 @@ function loadConfig(): Config {
     return isLocal || isNgrok || isWhitelisted;
   };
 
-  const dataRoot = path.join(os.homedir(), "Documents", "ClaudeCanvas");
+  const dataRoot = path.join(os.homedir(), "Documents", "AgentCanvas");
 
   const appDataRoot = dataRoot;
   const canvasRoot = path.join(dataRoot, "canvas");

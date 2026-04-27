@@ -1,11 +1,11 @@
 #!/bin/sh
-# Claude Canvas installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/cowbear6598/claude-code-canvas/main/install.sh | sh
+# Agent Canvas installer
+# Usage: curl -fsSL https://raw.githubusercontent.com/cowbear6598/agent-canvas/main/install.sh | sh
 
 set -eu
 
-BINARY_NAME="claude-code-canvas"
-GITHUB_REPO="cowbear6598/claude-code-canvas"
+BINARY_NAME="agent-canvas"
+GITHUB_REPO="cowbear6598/agent-canvas"
 INSTALL_DIR="$HOME/.local/bin"
 
 # ---------------------------------------------------------------------------
@@ -53,7 +53,7 @@ fi
 # Detect OS and architecture
 # ---------------------------------------------------------------------------
 
-header "Claude Canvas Installer"
+header "Agent Canvas Installer"
 
 info "Detecting platform..."
 
@@ -155,7 +155,7 @@ fi
 INSTALLED_VERSION="$("$BINARY_NAME" --version 2>&1 || true)"
 
 printf "\n"
-success "Claude Canvas ${VERSION} installed successfully!"
+success "Agent Canvas ${VERSION} installed successfully!"
 printf "\n"
 info "Get started:"
 info "  ${BOLD}${BINARY_NAME} start${RESET}"

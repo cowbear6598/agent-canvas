@@ -3,7 +3,7 @@ import fs from "fs/promises";
 
 // 注意：全域 testConfig.ts（setupFiles）已在模組載入前將 config.commandsPath
 // 覆寫為系統臨時目錄下的唯一子目錄，因此 commandService 的 baseService
-// 在第一次 import 時即綁定到該安全路徑，不會寫入 ~/Documents/ClaudeCanvas/。
+// 在第一次 import 時即綁定到該安全路徑，不會寫入 ~/Documents/AgentCanvas/。
 
 import { commandService } from "../../src/services/commandService.js";
 

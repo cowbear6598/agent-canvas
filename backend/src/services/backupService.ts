@@ -38,8 +38,8 @@ class BackupService {
       const isRepo = await git.checkIsRepo();
       if (!isRepo) {
         await git.init();
-        await git.addConfig("user.name", "ClaudeCanvas Backup");
-        await git.addConfig("user.email", "backup@claudecanvas.local");
+        await git.addConfig("user.name", "AgentCanvas Backup");
+        await git.addConfig("user.email", "backup@agentcanvas.local");
       }
       await this.ensureGitignore();
       return ok(undefined);
@@ -113,7 +113,7 @@ class BackupService {
   ): Promise<void> {
     const timestamp = new Date().toISOString();
     try {
-      await git.commit(`ClaudeCanvas 自動備份 ${timestamp}`);
+      await git.commit(`AgentCanvas 自動備份 ${timestamp}`);
     } catch (commitError) {
       // 無檔案變更時 commit 會失敗，這不視為錯誤，繼續 push
       const commitMessage =

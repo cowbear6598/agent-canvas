@@ -42,7 +42,7 @@ jobs:
         run: TARGET=bun-linux-arm64 bun scripts/compile.ts
 
       - name: 計算 SHA256（供下載驗證用）
-        run: shasum -a 256 dist/claude-code-canvas-* > dist/checksums.txt
+        run: shasum -a 256 dist/agent-canvas-* > dist/checksums.txt
 
       - name: 擷取 CHANGELOG 對應版本內容
         id: changelog
@@ -58,8 +58,8 @@ jobs:
         with:
           body: ${{ steps.changelog.outputs.body }}
           files: |
-            dist/claude-code-canvas-darwin-arm64
-            dist/claude-code-canvas-darwin-x64
-            dist/claude-code-canvas-linux-x64
-            dist/claude-code-canvas-linux-arm64
+            dist/agent-canvas-darwin-arm64
+            dist/agent-canvas-darwin-x64
+            dist/agent-canvas-linux-x64
+            dist/agent-canvas-linux-arm64
             dist/checksums.txt

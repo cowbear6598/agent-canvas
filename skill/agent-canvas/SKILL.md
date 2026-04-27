@@ -1,14 +1,14 @@
 ---
-name: claude-code-canvas
-description: 透過 REST API 操控 claude-code-canvas 畫布系統。當 AI Agent 需要查詢或操控畫布時使用此 Skill 參考可用的端點和格式。
+name: agent-canvas
+description: 透過 REST API 操控 agent-canvas 畫布系統。當 AI Agent 需要查詢或操控畫布時使用此 Skill 參考可用的端點和格式。
 user-invocable: true
 disable-model-invocation: false
 allowed-tools: Bash(curl *)
 ---
 
-# claude-code-canvas 概覽
+# agent-canvas 概覽
 
-claude-code-canvas 是一個 Agent 畫布系統，後端使用 **Bun + TypeScript** 實作，提供 REST API 通訊方式：
+agent-canvas 是一個 Agent 畫布系統，後端使用 **Bun + TypeScript** 實作，提供 REST API 通訊方式：
 
 - **REST API**：HTTP 端點，用於查詢畫布資訊
 
@@ -16,7 +16,7 @@ claude-code-canvas 是一個 Agent 畫布系統，後端使用 **Bun + TypeScrip
 
 ## 前置條件
 
-使用此 Skill 前，claude-code-canvas 後端必須正在運行。
+使用此 Skill 前，agent-canvas 後端必須正在運行。
 
 - 預設位址：`http://localhost:3001`
 

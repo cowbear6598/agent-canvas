@@ -1402,7 +1402,7 @@ describe("executeStreamingChat", () => {
     });
 
     it("resolveWorkspacePath：worktreePath 不在 repositoriesRoot 內時，拋出「工作目錄驗證失敗」並且 provider.chat 未被呼叫", async () => {
-      // 非法路徑：/tmp/evil-path 不在 config.repositoriesRoot（~/Documents/ClaudeCanvas/repositories）之下
+      // 非法路徑：/tmp/evil-path 不在 config.repositoriesRoot（~/Documents/AgentCanvas/repositories）之下
       const illegalWorktreePath = "/tmp/evil-path";
 
       // mock runStore.getPodInstance 回傳帶有非法 worktreePath 的 instance

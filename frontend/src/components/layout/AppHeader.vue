@@ -10,7 +10,7 @@
           class="text-2xl font-bold tracking-tight"
           style="font-family: var(--font-handwriting)"
         >
-          Claude Code Canvas
+          Agent Canvas
         </h1>
       </div>
 
@@ -18,10 +18,7 @@
         <ConnectionStatus />
 
         <!-- 語言切換按鈕 -->
-        <div
-          ref="localeMenuRef"
-          class="relative"
-        >
+        <div ref="localeMenuRef" class="relative">
           <button
             class="flex items-center gap-1 rounded-md px-2 py-2 hover:bg-accent text-xs font-mono"
             :title="currentLocaleLabel"

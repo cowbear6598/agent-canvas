@@ -1,7 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="6" fill="#D4763C"/>
-  <rect x="6" y="6" width="8" height="8" rx="2" fill="#FFF0E6"/>
-  <rect x="18" y="6" width="8" height="8" rx="2" fill="#F5A96B"/>
-  <rect x="6" y="18" width="8" height="8" rx="2" fill="#F5A96B"/>
-  <rect x="18" y="18" width="8" height="8" rx="2" fill="#FFF0E6"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="g" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f59e0b"/><stop offset="1" stop-color="#ec4899"/></linearGradient></defs><g fill="none" stroke="url(#g)" stroke-linecap="round"><path stroke-width="1.5" d="M12 9V4M16 9V4M20 9V4M12 23v5M16 23v5M20 23v5M9 12H4M9 16H4M9 20H4M23 12h5M23 16h5M23 20h5"/><rect x="9" y="9" width="14" height="14" rx="2.5" stroke-width="1.8"/></g><g fill="url(#g)"><circle cx="13" cy="13" r="1.2"/><circle cx="19" cy="13" r="1.2"/><circle cx="13" cy="19" r="1.2"/><circle cx="19" cy="19" r="1.2"/></g></svg>

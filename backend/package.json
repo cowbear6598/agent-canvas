@@ -1,7 +1,7 @@
 {
-  "name": "claude-code-canvas-backend",
+  "name": "agent-canvas-backend",
   "version": "1.0.7",
-  "description": "Backend server for Claude Code Canvas",
+  "description": "Backend server for Agent Canvas",
   "main": "dist/index.js",
   "type": "module",
   "directories": {

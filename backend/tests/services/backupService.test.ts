@@ -68,11 +68,11 @@ describe("BackupService", () => {
       expect(mockGit.init).toHaveBeenCalled();
       expect(mockGit.addConfig).toHaveBeenCalledWith(
         "user.name",
-        "ClaudeCanvas Backup",
+        "AgentCanvas Backup",
       );
       expect(mockGit.addConfig).toHaveBeenCalledWith(
         "user.email",
-        "backup@claudecanvas.local",
+        "backup@agentcanvas.local",
       );
     });
 
