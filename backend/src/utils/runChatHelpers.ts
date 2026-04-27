@@ -26,10 +26,6 @@ export interface LaunchMultiInstanceRunParams {
    * 未提供時：記錄 warn 並繼續以原始訊息執行。
    */
   onCommandNotFound?: (commandId: string) => void;
-  /**
-   * 設為 true 時跳過 Command 展開（上游已自行展開，例如 schedule 的空字串 fallback 路徑）。
-   */
-  skipCommandExpand?: boolean;
 }
 
 export async function launchMultiInstanceRun(
@@ -45,45 +41,42 @@ export async function launchMultiInstanceRun(
     onAborted,
     onRunContextCreated,
     onCommandNotFound,
-    skipCommandExpand,
   } = params;
 
-  // 在注入歷史記錄前先展開 Command（除非上游已自行展開），確保歷史與送給 Claude 的訊息一致
+  // 在注入歷史記錄前先展開 Command，確保歷史與送給 Claude 的訊息一致
   let resolvedMessage: string | ContentBlock[] = message;
 
-  if (!(skipCommandExpand ?? false)) {
-    const podResult = podStore.getByIdGlobal(podId);
-    if (podResult) {
-      const expandResult = await tryExpandCommandMessage(
-        podResult.pod,
-        message,
-        "launchMultiInstanceRun",
-      );
-      if (!expandResult.ok) {
-        if (onCommandNotFound) {
-          // 提供了 callback 表示呼叫端（例如 chat handler）要攔截此情況並自行結束流程
-          // 建立 Run 骨架並注入原始訊息後提早結束，不呼叫 Claude
-          const triggerMsg = displayMessage ?? extractDisplayContent(message);
-          const rc = await runExecutionService.createRun(
-            canvasId,
-            podId,
-            triggerMsg,
-          );
-          runExecutionService.startPodInstance(rc, podId);
-          await injectRunUserMessage(rc, podId, displayMessage ?? message);
-          onRunContextCreated?.(rc);
-          onCommandNotFound(expandResult.commandId);
-          return rc;
-        }
-        logger.warn(
-          "Run",
-          "Check",
-          `[launchMultiInstanceRun] Command 不存在（commandId=${expandResult.commandId}, podId=${podId}），以原始訊息繼續執行`,
+  const podResult = podStore.getByIdGlobal(podId);
+  if (podResult) {
+    const expandResult = await tryExpandCommandMessage(
+      podResult.pod,
+      message,
+      "launchMultiInstanceRun",
+    );
+    if (!expandResult.ok) {
+      if (onCommandNotFound) {
+        // 提供了 callback 表示呼叫端（例如 chat handler）要攔截此情況並自行結束流程
+        // 建立 Run 骨架並注入原始訊息後提早結束，不呼叫 Claude
+        const triggerMsg = displayMessage ?? extractDisplayContent(message);
+        const rc = await runExecutionService.createRun(
+          canvasId,
+          podId,
+          triggerMsg,
         );
-        // 未提供 callback：繼續以原始訊息執行
-      } else {
-        resolvedMessage = expandResult.message;
+        runExecutionService.startPodInstance(rc, podId);
+        await injectRunUserMessage(rc, podId, displayMessage ?? message);
+        onRunContextCreated?.(rc);
+        onCommandNotFound(expandResult.commandId);
+        return rc;
       }
+      logger.warn(
+        "Run",
+        "Check",
+        `[launchMultiInstanceRun] Command 不存在（commandId=${expandResult.commandId}, podId=${podId}），以原始訊息繼續執行`,
+      );
+      // 未提供 callback：繼續以原始訊息執行
+    } else {
+      resolvedMessage = expandResult.message;
     }
   }
 
@@ -113,8 +106,6 @@ export async function launchMultiInstanceRun(
       message: resolvedMessage,
       abortable,
       strategy,
-      // 上游已展開，跳過 executeStreamingChat 內部的二次展開
-      skipCommandExpand: true,
     },
     {
       onComplete: () => onComplete(runContext),

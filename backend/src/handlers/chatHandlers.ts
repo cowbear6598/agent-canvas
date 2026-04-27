@@ -177,8 +177,6 @@ export const handleChatSend = withCanvasId<ChatSendPayload>(
         message: resolvedMessage,
         abortable: true,
         strategy,
-        // 上游已展開，跳過 executeStreamingChat 內部的二次展開
-        skipCommandExpand: true,
       },
       {
         onComplete: onChatComplete,

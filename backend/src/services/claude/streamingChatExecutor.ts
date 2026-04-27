@@ -4,7 +4,6 @@ import { isAbortError } from "../../utils/errorHelpers.js";
 import type { ContentBlock, PersistedSubMessage } from "../../types";
 import type { Pod } from "../../types/pod.js";
 import type { RunContext } from "../../types/run.js";
-import { tryExpandCommandMessage } from "../commandExpander.js";
 
 import { abortRegistry } from "../provider/abortRegistry.js";
 import type { StreamEvent } from "./types.js";
@@ -33,14 +32,15 @@ import { resolvePodCwd } from "../shared/podPathResolver.js";
 export interface StreamingChatExecutorOptions {
   canvasId: string;
   podId: string;
+  /**
+   * 已展開後的訊息內容（含 Command `<command>` 標籤，若有）。
+   * 契約：caller 必須在進入 executor 前自行完成 Command 展開，executor 不再做展開。
+   * 五條 caller 路徑（chatHandlers / runChatHelpers / scheduleService / workflowExecutionService /
+   * integrationEventPipeline / workflowApi）皆於上游呼叫 tryExpandCommandMessage 後再傳入。
+   */
   message: string | ContentBlock[];
   abortable: boolean;
   strategy: ExecutionStrategy;
-  /**
-   * 設為 true 時跳過 Command 展開（上游已自行展開，例如 schedule 的空字串 fallback 路徑）。
-   * 預設 false：由 executeStreamingChat 統一展開，確保所有觸發路徑都套用 Command 內容。
-   */
-  skipCommandExpand?: boolean;
 }
 
 export interface StreamingChatExecutorCallbacks {
@@ -55,12 +55,6 @@ export interface StreamingChatExecutorCallbacks {
     podId: string,
     messageId: string,
   ) => void | Promise<void>;
-  /**
-   * Pod 綁定的 Command 已不存在時觸發。
-   * - 提供此 callback 時：由呼叫端負責向前端推送錯誤 UI，executeStreamingChat 不繼續執行。
-   * - 未提供時：記錄 warn 並繼續以原始訊息執行（適用於 workflow / schedule 等背景觸發路徑）。
-   */
-  onCommandNotFound?: (commandId: string) => void;
 }
 
 export interface StreamingChatExecutorResult {
@@ -640,7 +634,7 @@ export async function executeStreamingChat(
   options: StreamingChatExecutorOptions,
   callbacks?: StreamingChatExecutorCallbacks,
 ): Promise<StreamingChatExecutorResult> {
-  const { podId, message, abortable, strategy, skipCommandExpand } = options;
+  const { podId, message, abortable, strategy } = options;
 
   // 設定串流上下文
   const streamContext = setupStreamContext(options);
@@ -669,40 +663,8 @@ export async function executeStreamingChat(
   const queryKey = strategy.getQueryKey(podId);
   const runContext = strategy.getRunContext();
 
-  // 統一展開 Command 內容（skipCommandExpand=true 表示上游已自行展開，例如 schedule 的空字串 fallback 路徑）
-  let resolvedMessage: string | ContentBlock[] = message;
-  if (!skipCommandExpand) {
-    const expandResult = await tryExpandCommandMessage(
-      pod,
-      message,
-      "executeStreamingChat",
-    );
-    if (!expandResult.ok) {
-      if (callbacks?.onCommandNotFound) {
-        // 由呼叫端負責向前端推送錯誤 UI
-        callbacks.onCommandNotFound(expandResult.commandId);
-      } else {
-        // 背景觸發路徑（workflow / schedule / integration）：記錄 warn 並繼續以原始訊息執行
-        logger.warn(
-          "Chat",
-          "Check",
-          `[executeStreamingChat] Command 不存在（commandId=${expandResult.commandId}, podId=${podId}），以原始訊息繼續執行`,
-        );
-      }
-      if (callbacks?.onCommandNotFound) {
-        // 提供了 callback 表示呼叫端（例如 chat handler）要攔截此情況並自行結束流程
-        return {
-          messageId,
-          content: "",
-          hasContent: false,
-          aborted: false,
-        };
-      }
-      // 未提供 callback：繼續以原始訊息執行
-    } else {
-      resolvedMessage = expandResult.message;
-    }
-  }
+  // message 必須由 caller 預先完成 Command 展開（契約見 StreamingChatExecutorOptions.message 註解）
+  const resolvedMessage = message;
 
   // 串流開始前置處理（Run mode 需在此註冊 active stream）
   strategy.onStreamStart(podId);

@@ -1,7 +1,6 @@
 import { WebSocketResponseEvents } from "../schemas";
 import type { Pod, ScheduleConfig, ContentBlock } from "../types";
 import { podStore } from "./podStore.js";
-import { messageStore } from "./messageStore.js";
 import { socketService } from "./socketService.js";
 import { workflowExecutionService } from "./workflow";
 import { logger } from "../utils/logger.js";
@@ -9,6 +8,7 @@ import { fireAndForget } from "../utils/operationHelpers.js";
 import { executeStreamingChat } from "./claude/streamingChatExecutor.js";
 import { launchMultiInstanceRun } from "../utils/runChatHelpers.js";
 import { onRunChatComplete } from "../utils/chatCallbacks.js";
+import { injectUserMessage } from "../utils/chatHelpers.js";
 import {
   toOffsettedParts,
   isSameDayWithOffset,
@@ -16,6 +16,57 @@ import {
 import { configStore } from "./configStore.js";
 import { NormalModeExecutionStrategy } from "./normalExecutionStrategy.js";
 import { tryExpandCommandMessage } from "./commandExpander.js";
+
+/**
+ * 排程觸發但 Command 不存在 / 訊息為空時的 fallback 字串。
+ * 避免 codex stdin 為空導致崩潰。
+ */
+const SCHEDULE_FALLBACK_MESSAGE = "排程啟動，完成以下任務：";
+
+/**
+ * 排程路徑專用的 Command 展開 helper。
+ *
+ * 行為（保留排程兩條路徑共用的空字串 fallback 邏輯）：
+ *   1. message 為空字串 → 直接回傳空字串（保留原有空字串 fallback 邏輯，由呼叫端判斷是否替換為 SCHEDULE_FALLBACK_MESSAGE）
+ *   2. 否則呼叫 tryExpandCommandMessage：
+ *      - ok=true 且展開後訊息為空字串 → 回傳 SCHEDULE_FALLBACK_MESSAGE
+ *      - ok=true → 回傳展開後訊息
+ *      - ok=false → 記 warn 並回傳 SCHEDULE_FALLBACK_MESSAGE，避免 codex stdin 為空崩潰
+ *
+ * @param context - 呼叫來源（log 標識），例如 "schedule/multiInstance" / "schedule/sendScheduleMessage"
+ */
+async function expandScheduleMessage(
+  pod: Pod,
+  message: string | ContentBlock[],
+  context: string,
+): Promise<string | ContentBlock[]> {
+  // 排程訊息為空字串時直接回傳，保留既有空字串 fallback 邏輯
+  if (typeof message === "string" && message === "") {
+    // 維持原本行為：以排程啟動語句替換空字串，避免 codex stdin 為空崩潰
+    // 同時：若 pod 綁定 commandId，仍走展開路徑取得 command 內容
+    if (!pod.commandId) {
+      return SCHEDULE_FALLBACK_MESSAGE;
+    }
+  }
+
+  const expandResult = await tryExpandCommandMessage(pod, message, context);
+
+  if (!expandResult.ok) {
+    logger.warn(
+      "Schedule",
+      "Update",
+      `Pod「${pod.id}」排程觸發：Command「${expandResult.commandId}」不存在，改用排程啟動語句觸發（context=${context}）`,
+    );
+    return SCHEDULE_FALLBACK_MESSAGE;
+  }
+
+  // 展開後仍可能為空字串（無 commandId 且原始訊息為空），同樣用排程啟動語句取代
+  const expanded = expandResult.message;
+  if (typeof expanded === "string" && expanded === "") {
+    return SCHEDULE_FALLBACK_MESSAGE;
+  }
+  return expanded;
+}
 
 const TICK_INTERVAL_MS = 1000;
 const MS_PER_SECOND = 1000;
@@ -189,39 +240,19 @@ class ScheduleService {
     logger.log("Schedule", "Update", `Pod「${pod.id}」排程已觸發`);
 
     if (pod.multiInstance === true) {
-      // 排程路徑需要特殊的空字串 fallback 邏輯，因此在此自行展開 Command 訊息，
-      // 並告知 launchMultiInstanceRun 跳過再次展開（skipCommandExpand: true），避免雙重展開。
-      // ok=false 代表 commandId 存在但 command 已被刪除；仍要觸發，用排程啟動語句避免 codex stdin 為空崩潰
-      const expandResult = await tryExpandCommandMessage(
+      // 排程路徑透過 expandScheduleMessage 統一處理 Command 展開與空字串 fallback。
+      // launchMultiInstanceRun 會自行處理展開（無 commandId 時為 no-op）；此處傳入已展開後字串即可。
+      const runMessage = await expandScheduleMessage(
         pod,
         "",
         "schedule/multiInstance",
       );
 
-      let runMessage: string | ContentBlock[];
-      if (!expandResult.ok) {
-        logger.warn(
-          "Schedule",
-          "Update",
-          `Pod「${pod.id}」排程觸發：Command「${expandResult.commandId}」不存在，改用排程啟動語句觸發`,
-        );
-        runMessage = "排程啟動，完成以下任務：";
-      } else {
-        // 展開後仍可能為空字串（無 commandId 且原始訊息為空），同樣用排程啟動語句取代
-        const raw = expandResult.message;
-        runMessage =
-          typeof raw === "string" && raw === ""
-            ? "排程啟動，完成以下任務："
-            : raw;
-      }
-
-      // skipCommandExpand: true — 上方已自行處理展開與空字串 fallback，不需要再次展開
       await launchMultiInstanceRun({
         canvasId,
         podId: pod.id,
         message: runMessage,
         abortable: false,
-        skipCommandExpand: true,
         onComplete: (runContext) =>
           onRunChatComplete(runContext, canvasId, pod.id),
       });
@@ -233,41 +264,20 @@ class ScheduleService {
   private async sendScheduleMessage(canvasId: string, pod: Pod): Promise<void> {
     const podId = pod.id;
 
-    // 排程路徑需要特殊的空字串 fallback 邏輯，因此在此自行展開 Command 訊息，
-    // 並告知 executeStreamingChat 跳過再次展開（skipCommandExpand: true），避免雙重展開。
-    // ok=false 代表 commandId 存在但 command 已被刪除；仍要觸發，用排程啟動語句避免 codex stdin 為空崩潰
-    const expandResult = await tryExpandCommandMessage(
+    // 排程路徑透過 expandScheduleMessage 統一處理 Command 展開與空字串 fallback。
+    const message = await expandScheduleMessage(
       pod,
       "",
       "schedule/sendScheduleMessage",
     );
 
-    let message: string | ContentBlock[];
-    if (!expandResult.ok) {
-      logger.warn(
-        "Schedule",
-        "Update",
-        `Pod「${podId}」排程觸發：Command「${expandResult.commandId}」不存在，改用排程啟動語句觸發`,
-      );
-      message = "排程啟動，完成以下任務：";
-    } else {
-      // 展開後仍可能為空字串（無 commandId 且原始訊息為空），同樣用排程啟動語句取代
-      const raw = expandResult.message;
-      message =
-        typeof raw === "string" && raw === ""
-          ? "排程啟動，完成以下任務："
-          : raw;
-    }
-
-    podStore.setStatus(canvasId, podId, "chatting");
-
-    // DB 存入展開後的訊息，確保歷史記錄顯示正確
-    await messageStore.addMessage(
+    // 統一透過 injectUserMessage 處理：設置 pod status、寫入 messageStore、
+    // 並推送 POD_CHAT_USER_MESSAGE WS 事件，使前端顯示與 DB 儲存一致為展開後內容。
+    await injectUserMessage({
       canvasId,
       podId,
-      "user",
-      typeof message === "string" ? message : "",
-    );
+      content: message,
+    });
 
     const onScheduleChatComplete = async (
       completedCanvasId: string,
@@ -285,7 +295,8 @@ class ScheduleService {
 
     const strategy = new NormalModeExecutionStrategy(canvasId);
 
-    // skipCommandExpand: true — 上方已自行處理展開與空字串 fallback，不需要再次展開
+    // 上方已透過 expandScheduleMessage 自行處理展開與空字串 fallback，
+    // 訊息已是展開後內容，直接送入 executor。
     await executeStreamingChat(
       {
         canvasId,
@@ -293,7 +304,6 @@ class ScheduleService {
         message,
         abortable: false,
         strategy,
-        skipCommandExpand: true,
       },
       { onComplete: onScheduleChatComplete },
     );

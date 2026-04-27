@@ -433,8 +433,6 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
         message: resolvedMessage,
         abortable: false,
         strategy: execStrategy,
-        // 上游已展開，跳過 executeStreamingChat 內部的二次展開
-        skipCommandExpand: true,
       },
       {
         onComplete: (_canvasId, _podId) => this.onWorkflowChatComplete(params),

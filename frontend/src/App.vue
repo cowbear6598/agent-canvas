@@ -167,14 +167,9 @@ const handleScheduleFired = async (
       return;
     }
 
-    const command = pod.commandId
-      ? commandStore.typedAvailableItems.find(
-          (command) => command.id === pod.commandId,
-        )
-      : null;
-    const displayMessage = command ? `/${command.name} ` : "";
-
-    chatStore.addUserMessage(payload.podId, displayMessage);
+    // user message 顯示完全靠後端 WS 推送 POD_CHAT_USER_MESSAGE
+    // （見 backend scheduleService.sendScheduleMessage → injectUserMessage），
+    // 由 podEventHandlers 的 addRemoteUserMessage 接收並顯示展開後的訊息內容。
   }
 };
 

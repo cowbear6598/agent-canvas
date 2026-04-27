@@ -16,6 +16,7 @@ import { isPodBusy } from "../../types/index.js";
 import { injectUserMessage } from "../../utils/chatHelpers.js";
 import { launchMultiInstanceRun } from "../../utils/runChatHelpers.js";
 import { onRunChatComplete } from "../../utils/chatCallbacks.js";
+import { tryExpandCommandMessage } from "../commandExpander.js";
 import {
   replyContextStore,
   buildReplyContextKey,
@@ -285,7 +286,8 @@ class IntegrationEventPipeline {
 
     const podName = currentPod.name;
 
-    // 長度上限檢查：超過 MAX_EVENT_TEXT_LENGTH 時截斷並記 warn，避免惡意長訊息灌版
+    // 長度上限檢查：超過 MAX_EVENT_TEXT_LENGTH 時截斷並記 warn，避免惡意長訊息灌版。
+    // 注意：必須先截斷再展開 Command，否則 <command> 標籤可能被截斷切爛。
     let textToInject = event.text;
     if (textToInject.length > MAX_EVENT_TEXT_LENGTH) {
       logger.warn(
@@ -296,7 +298,27 @@ class IntegrationEventPipeline {
       textToInject = textToInject.slice(0, MAX_EVENT_TEXT_LENGTH);
     }
 
-    await injectUserMessage({ canvasId, podId, content: textToInject });
+    // 在 inject 與 executeStreamingChat 之前先展開 Command，
+    // 確保歷史記錄與送進 LLM 的訊息一致（不一致為原 bug）。
+    const expandResult = await tryExpandCommandMessage(
+      currentPod,
+      textToInject,
+      "integrationEventPipeline",
+    );
+    if (!expandResult.ok) {
+      // 背景觸發路徑無 UI 推送通道，僅記 warn 並終止本次 inject 流程
+      logger.warn(
+        "Integration",
+        "Warn",
+        `[IntegrationEventPipeline] Pod「${podName}」綁定的 Command「${expandResult.commandId}」不存在，跳過此次注入（provider=${event.provider}, podId=${podId}）`,
+      );
+      return;
+    }
+
+    // tryExpandCommandMessage 對 string 輸入回傳 string，型別在此已收斂
+    const resolvedMessage = expandResult.message;
+
+    await injectUserMessage({ canvasId, podId, content: resolvedMessage });
 
     logger.log(
       "Integration",
@@ -322,7 +344,13 @@ class IntegrationEventPipeline {
 
     try {
       await executeStreamingChat(
-        { canvasId, podId, message: textToInject, abortable: false, strategy },
+        {
+          canvasId,
+          podId,
+          message: resolvedMessage,
+          abortable: false,
+          strategy,
+        },
         { onComplete },
       );
     } catch (error) {

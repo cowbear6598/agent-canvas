@@ -90,6 +90,13 @@ vi.mock("../../src/services/integration/replyContextStore.js", () => ({
   setReplyContextIfPresent: vi.fn(),
 }));
 
+vi.mock("../../src/services/commandExpander.js", () => ({
+  // 預設行為：無 commandId 時直接回傳原始訊息（ok=true）
+  tryExpandCommandMessage: vi.fn((_pod: unknown, message: unknown) =>
+    Promise.resolve({ ok: true, message }),
+  ),
+}));
+
 import { integrationEventPipeline } from "../../src/services/integration/integrationEventPipeline.js";
 import { podStore } from "../../src/services/podStore.js";
 import { executeStreamingChat } from "../../src/services/claude/streamingChatExecutor.js";
@@ -103,6 +110,8 @@ import {
   replyContextStore,
   setReplyContextIfPresent,
 } from "../../src/services/integration/replyContextStore.js";
+import { tryExpandCommandMessage } from "../../src/services/commandExpander.js";
+import { logger } from "../../src/utils/logger.js";
 import type { Pod } from "../../src/types/index.js";
 import type { NormalizedEvent } from "../../src/services/integration/types.js";
 import type { RunContext } from "../../src/types/run.js";
@@ -173,6 +182,11 @@ describe("IntegrationEventPipeline", () => {
     asMock(replyContextStore.set).mockReturnValue(undefined);
     asMock(replyContextStore.get).mockReturnValue(undefined);
     asMock(replyContextStore.delete).mockReturnValue(undefined);
+    // 預設：tryExpandCommandMessage 回傳 ok:true 帶原始訊息（無 commandId 情境）
+    asMock(tryExpandCommandMessage).mockImplementation(
+      (_pod: unknown, message: unknown) =>
+        Promise.resolve({ ok: true, message }),
+    );
   });
 
   describe("processEvent", () => {
@@ -452,6 +466,111 @@ describe("IntegrationEventPipeline", () => {
           canvasId,
           podId,
           "chatting",
+        );
+      });
+    });
+
+    describe("Command 展開", () => {
+      it("Pod 綁 commandId 時，injectUserMessage 與 executeStreamingChat 收到展開後內容", async () => {
+        const pod = makePod({ commandId: "my-cmd" });
+        const expanded =
+          "<command>\n## 命令內容\n</command>\n[Slack: @testuser] <user_data>測試訊息</user_data>";
+        asMock(podStore.findByIntegrationAppAndResource).mockReturnValue([
+          { canvasId, pod },
+        ]);
+        asMock(podStore.getById).mockReturnValue(pod);
+        asMock(tryExpandCommandMessage).mockResolvedValue({
+          ok: true,
+          message: expanded,
+        });
+
+        await integrationEventPipeline.processEvent(
+          "slack",
+          "app-1",
+          makeEvent(),
+        );
+
+        expect(tryExpandCommandMessage).toHaveBeenCalledWith(
+          pod,
+          "[Slack: @testuser] <user_data>測試訊息</user_data>",
+          "integrationEventPipeline",
+        );
+        expect(injectUserMessage).toHaveBeenCalledWith(
+          expect.objectContaining({ canvasId, podId, content: expanded }),
+        );
+        expect(executeStreamingChat).toHaveBeenCalledWith(
+          expect.objectContaining({
+            canvasId,
+            podId,
+            message: expanded,
+            abortable: false,
+          }),
+          { onComplete: expect.any(Function) },
+        );
+      });
+
+      it("Pod 綁 commandId 但 command 找不到時，記 warn、不推 UI、不呼叫 inject 與 executor", async () => {
+        const pod = makePod({ commandId: "missing-cmd" });
+        asMock(podStore.findByIntegrationAppAndResource).mockReturnValue([
+          { canvasId, pod },
+        ]);
+        asMock(podStore.getById).mockReturnValue(pod);
+        asMock(tryExpandCommandMessage).mockResolvedValue({
+          ok: false,
+          commandId: "missing-cmd",
+        });
+
+        await integrationEventPipeline.processEvent(
+          "slack",
+          "app-1",
+          makeEvent(),
+        );
+
+        expect(logger.warn).toHaveBeenCalledWith(
+          "Integration",
+          "Warn",
+          expect.stringContaining("missing-cmd"),
+        );
+        expect(injectUserMessage).not.toHaveBeenCalled();
+        expect(executeStreamingChat).not.toHaveBeenCalled();
+      });
+
+      it("超長訊息含 command 時，先截斷再展開後再 inject", async () => {
+        const pod = makePod({ commandId: "my-cmd" });
+        // 構造超過 8000 字元的長訊息
+        const longText = "X".repeat(10000);
+        const event = makeEvent({ text: longText });
+        const expectedTruncated = longText.slice(0, 8000);
+        const expectedExpanded = `<command>\n## 命令內容\n</command>\n${expectedTruncated}`;
+
+        asMock(podStore.findByIntegrationAppAndResource).mockReturnValue([
+          { canvasId, pod },
+        ]);
+        asMock(podStore.getById).mockReturnValue(pod);
+        asMock(tryExpandCommandMessage).mockImplementation(
+          (_pod: unknown, message: unknown) => {
+            // 驗證 tryExpandCommandMessage 收到的是「截斷後」的字串（長度 8000）
+            expect(typeof message === "string" && message.length === 8000).toBe(
+              true,
+            );
+            return Promise.resolve({ ok: true, message: expectedExpanded });
+          },
+        );
+
+        await integrationEventPipeline.processEvent("slack", "app-1", event);
+
+        // 驗證順序：截斷 → 展開 → inject
+        expect(tryExpandCommandMessage).toHaveBeenCalledWith(
+          pod,
+          expectedTruncated,
+          "integrationEventPipeline",
+        );
+        expect(injectUserMessage).toHaveBeenCalledWith(
+          expect.objectContaining({ content: expectedExpanded }),
+        );
+        expect(executeStreamingChat).toHaveBeenCalledWith(
+          expect.objectContaining({ message: expectedExpanded }),
+          expect.anything(),
         );
       });
     });

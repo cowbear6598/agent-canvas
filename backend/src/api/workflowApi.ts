@@ -22,6 +22,7 @@ import {
 } from "../schemas/chatSchemas.js";
 import { z } from "zod";
 import { NormalModeExecutionStrategy } from "../services/normalExecutionStrategy.js";
+import { tryExpandCommandMessage } from "../services/commandExpander.js";
 
 /**
  * 安全解碼 URL 中的 podId 參數，並驗證格式是否合法（UUID 或 pod 名稱）。
@@ -190,12 +191,38 @@ export async function handleWorkflowChat(
 
   void (async (): Promise<void> => {
     try {
-      await injectUserMessage({ canvasId, podId, content: typedMessage });
+      // 在 inject 與 executeStreamingChat 之前先展開 Command，
+      // 確保歷史記錄與送進 LLM 的訊息一致（不一致為原 bug）。
+      const expandResult = await tryExpandCommandMessage(
+        pod,
+        typedMessage,
+        "workflowApi",
+      );
+      if (!expandResult.ok) {
+        // 純外部 API 路徑無 UI 推送機制，僅記 warn 並終止本次處理
+        logger.warn(
+          "Chat",
+          "Check",
+          `Pod「${podName}」REST API 綁定的 Command「${expandResult.commandId}」不存在，跳過此次處理`,
+        );
+        podStore.setStatus(canvasId, podId, "idle");
+        return;
+      }
+
+      const resolvedMessage = expandResult.message;
+
+      await injectUserMessage({ canvasId, podId, content: resolvedMessage });
 
       const strategy = new NormalModeExecutionStrategy(canvasId);
 
       await executeStreamingChat(
-        { canvasId, podId, message: typedMessage, abortable: true, strategy },
+        {
+          canvasId,
+          podId,
+          message: resolvedMessage,
+          abortable: true,
+          strategy,
+        },
         {
           onComplete: onChatComplete,
           onAborted: (abortedCanvasId, abortedPodId, messageId) =>

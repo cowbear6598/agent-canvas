@@ -1079,4 +1079,48 @@ describe("排程觸發 multi-instance 分支", () => {
     );
     expect(mockEmitToCanvas).toHaveBeenCalled();
   });
+
+  it("非 multiInstance Pod 走 injectUserMessage：DB 寫入展開後內容並 emit POD_CHAT_USER_MESSAGE", async () => {
+    const COMMAND_ID = "cmd-1";
+    const EXPANDED_MESSAGE = "<command>\nmy-command-content\n</command>\n";
+    const normalPod = {
+      ...basePod,
+      multiInstance: false,
+      commandId: COMMAND_ID,
+    };
+    mockGetAllWithSchedule.mockReturnValue([
+      { canvasId: CANVAS_ID, pod: normalPod },
+    ]);
+    mockTryExpandCommandMessage.mockResolvedValue({
+      ok: true,
+      message: EXPANDED_MESSAGE,
+    });
+
+    const { scheduleService } =
+      await import("../../src/services/scheduleService.js");
+    await (scheduleService as any).fireSchedule(
+      CANVAS_ID,
+      normalPod,
+      new Date(),
+    );
+
+    // messageStore.addMessage 應寫入展開後內容（與 DB 儲存一致）
+    expect(mockAddMessage).toHaveBeenCalledWith(
+      CANVAS_ID,
+      POD_ID,
+      "user",
+      EXPANDED_MESSAGE,
+    );
+
+    // 應 emit POD_CHAT_USER_MESSAGE WS 事件，content 為展開後內容
+    expect(mockEmitToCanvas).toHaveBeenCalledWith(
+      CANVAS_ID,
+      "pod:chat:user-message",
+      expect.objectContaining({
+        canvasId: CANVAS_ID,
+        podId: POD_ID,
+        content: EXPANDED_MESSAGE,
+      }),
+    );
+  });
 });
