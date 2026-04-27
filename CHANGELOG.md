@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.1.1] - 2026-04-27
+
+### 修正
+- 修復 install.sh 執行時 checksum 驗證失敗的問題（release workflow 產生的 checksums.txt 含 dist/ 路徑前綴，與 install.sh 期待的純檔名不一致）
+
 ## [1.1.0] - 2026-04-27
 
 ### 新增

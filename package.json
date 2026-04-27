@@ -1,6 +1,6 @@
 {
   "name": "agent-canvas",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "private": true,
   "description": "AI Agent 畫布工具",
   "scripts": {

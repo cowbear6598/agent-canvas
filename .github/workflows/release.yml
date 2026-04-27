@@ -42,7 +42,7 @@ jobs:
         run: TARGET=bun-linux-arm64 bun scripts/compile.ts
 
       - name: 計算 SHA256（供下載驗證用）
-        run: shasum -a 256 dist/agent-canvas-* > dist/checksums.txt
+        run: (cd dist && shasum -a 256 agent-canvas-* > checksums.txt)
 
       - name: 擷取 CHANGELOG 對應版本內容
         id: changelog
