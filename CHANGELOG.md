@@ -1,5 +1,78 @@
 # Changelog
 
+## [1.1.0] - 2026-04-27
+
+### 新增
+- 專案改名 claude-code-canvas → agent-canvas（前後端文件、配置、遷移機制全面更新）
+- Pod 模型選擇器動畫優化：async/await 時序控制、收合動畫精準串接、元件卸載時 timer 清理
+- 統一 Claude/Codex 模型選項結構（ModelOption interface、CLAUDE_OPTIONS/CODEX_OPTIONS 對稱）
+- Plugin 系統全面取代 SkillNote，整合 Plugin Gateway 重構
+- SubAgent 連根拔重構完成
+- Command 跨 Provider 統一展開機制（tryExpandCommandMessage 共用 helper）
+- 資料庫 migration 流程強化（runMigration/isIgnorableMigrationError helper，消除重複 try-catch）
+- Pod 設定流程清晰度提升（ensureModelField/buildUpdatedPod/loadRelation 專用 helper）
+- Claude Provider 敏感資訊保護強化（固定字串替代原始錯誤、路徑訊息泛化、warn log sanitize）
+- Pod Slot 結構最佳化（5 個 createSlotConfig helper、ALLOWED_STATUSES/PROVIDERS 改 Set）
+- Claude Provider 訊息分派改進（dispatchSystemMessage/createReplyToolHandler 邏輯拆分）
+- ESLint 檢查修復：268 個 warning 清到 0（排版、型別標註、any 限制）
+- 補強單元測試覆蓋：capabilities/eventsSchema/buildClaudeOptions/runClaudeQuery/providerTypes 五份測試檔
+- Codex Provider 抽象層擴充完成，Provider interface 標準化 metadata + 配置驗證
+- 模型選項管理：支援多 Provider 動態模型列表與白名單驗證
+- Claude Agent SDK 升級至 0.2.119（新 Provider 擴充機制支援）
+- Provider 統一抽象層重構：AgentProvider<TOptions> 介面標準化
+- 統一 abortRegistry 管理所有 abort 生命週期，移除跨抽象邊界的 hack
+- Provider 透過 metadata.defaultOptions 自報預設值，模型 default 單一來源
+- 前端新增 providerOptions helper 與 Pod 未知 Provider fallback UI
+- Codex Pod Run 模式漏用 worktreePath 的 bug 修復
+- 新增 provider 擴充 playbook（README/types/claudeProvider/codexProvider 四份 .md）
+
+### 修正
+- 修復建立 Pod 時前端 console 出現 canvasId 缺失警告
+- 修復新建 Pod 沒及時顯示的問題
+- 修復下游 Pod 透過工作流觸發時 Command 沒展開成 xml tag
+- 修復 Run 模式（multiInstance）觸發時 Command 沒展開成 xml tag
+- 修復排程觸發時 codex 因 stdin 為空崩潰、Command 沒展開、無 commandId 時直接跳過不觸發 AI 的問題
+- 補回 README 改名遺漏項目（標題、安裝 URL、CLI 指令全面更新為 agent-canvas / Agent Canvas）
+- Pod 建立與更新的原子性保護（DB transaction 包起主表與 join table 寫入）
+- 避免伺服器系統路徑透過 provider:list 回應洩漏給前端
+- 補齊前後端 provider 清單型別契約一致性（CapabilityConfig 與 SET 引入）
+- 修復 WebSocket 請求缺 requestId 導致後端驗證失敗
+- 強化 Codex 子程序 stderr 並行收集，避免緩衝滿時卡住
+- 擴充 Codex 敏感資訊遮蔽規則（Authorization/api_key/sk- 等模式）
+- Pod Model Selector 動畫期間鎖定選取值，避免競態造成切換異常
+- Pod 複製貼上被錯誤轉為 Claude 的問題修復
+- 修復貼上流程中 provider/model 設定遺失（DB schema 移除舊 Pod.model 欄位）
+- 強化貼上路徑驗證避免任意目錄複製
+- Codex Pod abort 後 thread/resume 失敗修復
+- Codex 對話事件順序與錯誤處理修正（session_started 早發、可恢復錯誤不中斷對話）
+- Codex CLI 安全性強化（model 名稱白名單、環境變數明確允許清單、stderr 敏感資訊過濾）
+- 同名 Pod 並發建立的競爭條件修復（DB UNIQUE 約束 + 自動加序號後綴）
+- Pod 運行時光暈定位錯亂修復（脫離 transform 容器獨立元素）
+- Claude Pod 上 note 拖放綁定失敗修復（保留響應性）
+- Pod 建立安全性補強：provider allowlist 守門、model 名稱格式驗證、Pod id 格式驗證
+- Pod 名稱編輯驗證失敗改為 Toast 提示
+- Pod 模型 roundtrip 型別安全修復
+
+### 優化
+- Pod 貼上效能最佳化（改並發建立、重名查詢改記憶體查找）
+- sortedOptions 改為單次迴圈，去掉 find + filter 兩次掃描
+- PodModelSelector 動畫效能優化（去掉 box-shadow Paint 掉幀）
+- Pod 介面收斂、效能最佳化、安全性強化
+- Codex 整合流程補強、isCollapsing guard、未知 provider fallback 測試補充
+- podStore 拆分 resolveProviderConfig、codexProvider 抽出 collectStderr/handleExitCode/isEnoentError
+- Provider 命名清單改用 Set<string>，減少 model 驗證的陣列分配
+- 程式碼品質與可讀性改善（命名、註解、重複邏輯抽 helper、型別重組）
+- MCP 重構（複雜度降低、安全性強化、效能優化、廣播路徑改 PodPublicView）
+- MCP 多人協作：podEventHandlers 加 POD_MCP_SERVER_NAMES_UPDATED listener、connection 改進
+- MCP 效能優化：podStore podMap O(1) 查找、createNoteStore notesByPodId getter、selectionStore 維護避免重建、pasteHandlers syncBoundNotes 改批次
+- Provider Header 漸層改用 rem 相對單位、補 dark mode 漸層色
+- Pod 狀態光暈（執行中藍、彙整黃、選中薄荷綠）改用 Compositor 加速動畫
+- PodTypeMenu 六個 section build 函式抽為 factory + 宣告式 config 陣列
+- 模型 emit 事件合併為 8 個（相關事件改 discriminated union）
+- Pod 介面響應性與型別安全改善
+- 消除 Record 濫用、修復過度嵌套、統一命名
+- 動畫效能優化（transition 改列舉具體屬性取代 all）
+
 ## [1.0.7] - 2026-04-13
 
 ### 修正
