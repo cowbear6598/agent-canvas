@@ -26,12 +26,11 @@ const SCHEDULE_FALLBACK_MESSAGE = "排程啟動，完成以下任務：";
 /**
  * 排程路徑專用的 Command 展開 helper。
  *
- * 行為（保留排程兩條路徑共用的空字串 fallback 邏輯）：
- *   1. message 為空字串 → 直接回傳空字串（保留原有空字串 fallback 邏輯，由呼叫端判斷是否替換為 SCHEDULE_FALLBACK_MESSAGE）
- *   2. 否則呼叫 tryExpandCommandMessage：
- *      - ok=true 且展開後訊息為空字串 → 回傳 SCHEDULE_FALLBACK_MESSAGE
- *      - ok=true → 回傳展開後訊息
- *      - ok=false → 記 warn 並回傳 SCHEDULE_FALLBACK_MESSAGE，避免 codex stdin 為空崩潰
+ * 行為：
+ *   - 呼叫 tryExpandCommandMessage（無 commandId 時回傳原訊息）
+ *   - ok=true 且展開後訊息為空字串 → 回傳 SCHEDULE_FALLBACK_MESSAGE（避免 codex stdin 為空崩潰）
+ *   - ok=true → 回傳展開後訊息
+ *   - ok=false（Command 檔案已消失）→ warn + 回傳 SCHEDULE_FALLBACK_MESSAGE
  *
  * @param context - 呼叫來源（log 標識），例如 "schedule/multiInstance" / "schedule/sendScheduleMessage"
  */
@@ -40,15 +39,6 @@ async function expandScheduleMessage(
   message: string | ContentBlock[],
   context: string,
 ): Promise<string | ContentBlock[]> {
-  // 排程訊息為空字串時直接回傳，保留既有空字串 fallback 邏輯
-  if (typeof message === "string" && message === "") {
-    // 維持原本行為：以排程啟動語句替換空字串，避免 codex stdin 為空崩潰
-    // 同時：若 pod 綁定 commandId，仍走展開路徑取得 command 內容
-    if (!pod.commandId) {
-      return SCHEDULE_FALLBACK_MESSAGE;
-    }
-  }
-
   const expandResult = await tryExpandCommandMessage(pod, message, context);
 
   if (!expandResult.ok) {
@@ -295,8 +285,6 @@ class ScheduleService {
 
     const strategy = new NormalModeExecutionStrategy(canvasId);
 
-    // 上方已透過 expandScheduleMessage 自行處理展開與空字串 fallback，
-    // 訊息已是展開後內容，直接送入 executor。
     await executeStreamingChat(
       {
         canvasId,

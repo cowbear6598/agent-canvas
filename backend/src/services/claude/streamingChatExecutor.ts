@@ -35,7 +35,7 @@ export interface StreamingChatExecutorOptions {
   /**
    * 已展開後的訊息內容（含 Command `<command>` 標籤，若有）。
    * 契約：caller 必須在進入 executor 前自行完成 Command 展開，executor 不再做展開。
-   * 五條 caller 路徑（chatHandlers / runChatHelpers / scheduleService / workflowExecutionService /
+   * 六條 caller 路徑（chatHandlers / runChatHelpers / scheduleService / workflowExecutionService /
    * integrationEventPipeline / workflowApi）皆於上游呼叫 tryExpandCommandMessage 後再傳入。
    */
   message: string | ContentBlock[];
@@ -663,9 +663,6 @@ export async function executeStreamingChat(
   const queryKey = strategy.getQueryKey(podId);
   const runContext = strategy.getRunContext();
 
-  // message 必須由 caller 預先完成 Command 展開（契約見 StreamingChatExecutorOptions.message 註解）
-  const resolvedMessage = message;
-
   // 串流開始前置處理（Run mode 需在此註冊 active stream）
   strategy.onStreamStart(podId);
 
@@ -677,10 +674,9 @@ export async function executeStreamingChat(
     const providerOptions = await provider.buildOptions(pod, runContext);
 
     // 組裝 ChatRequestContext（不含 abortSignal，由 runProviderStream 內部注入）
-    // resolvedMessage 已在上方完成 Command 展開（或為原始訊息，若無 Command 或已跳過展開）
     const ctxWithoutSignal: Omit<ChatRequestContext, "abortSignal"> = {
       podId,
-      message: resolvedMessage,
+      message,
       workspacePath,
       resumeSessionId: sessionId ?? null,
       runContext,

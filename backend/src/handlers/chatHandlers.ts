@@ -131,12 +131,12 @@ export const handleChatSend = withCanvasId<ChatSendPayload>(
     const podName = pod.name;
 
     if (pod.multiInstance === true) {
-      // Command 展開由 launchMultiInstanceRun 內部處理（在注入前展開，確保歷史與 Claude 一致）
       await launchMultiInstanceRun({
         canvasId,
         podId,
         message,
         abortable: true,
+        commandNotFoundBehavior: "skip",
         onCommandNotFound: (commandId) =>
           handleCommandNotFound(canvasId, podId, commandId),
         onComplete: (runContext) =>

@@ -155,9 +155,7 @@ const handlePodStatusChanged = (payload: PodStatusChangedPayload): void => {
   podStore.updatePodStatus(payload.podId, payload.status);
 };
 
-const handleScheduleFired = async (
-  payload: ScheduleFiredPayload,
-): Promise<void> => {
+const handleScheduleFired = (payload: ScheduleFiredPayload): void => {
   const pod = podStore.getPodById(payload.podId);
   if (pod) {
     podStore.triggerScheduleFiredAnimation(payload.podId);
@@ -166,10 +164,6 @@ const handleScheduleFired = async (
     if (pod.multiInstance === true) {
       return;
     }
-
-    // user message 顯示完全靠後端 WS 推送 POD_CHAT_USER_MESSAGE
-    // （見 backend scheduleService.sendScheduleMessage → injectUserMessage），
-    // 由 podEventHandlers 的 addRemoteUserMessage 接收並顯示展開後的訊息內容。
   }
 };
 

@@ -3,6 +3,7 @@ import {
   toOffsettedParts,
   isSameDayWithOffset,
 } from "../../src/utils/timezoneUtils.js";
+import { WebSocketResponseEvents } from "../../src/schemas/index.js";
 
 // ---- multi-instance 整合測試用的 mock ----
 const mockGetAllWithSchedule = vi.fn();
@@ -884,6 +885,8 @@ describe("排程觸發 multi-instance 分支", () => {
       }),
     );
     expect(mockExecuteStreamingChat).not.toHaveBeenCalled();
+    // multiInstance 路徑不走 messageStore.addMessage（由 launchMultiInstanceRun 內部處理）
+    expect(mockAddMessage).not.toHaveBeenCalled();
     expect(mockSetScheduleLastTriggeredAt).toHaveBeenCalledWith(
       CANVAS_ID,
       POD_ID,
@@ -925,6 +928,8 @@ describe("排程觸發 multi-instance 分支", () => {
       }),
     );
     expect(mockExecuteStreamingChat).not.toHaveBeenCalled();
+    // multiInstance 路徑不走 messageStore.addMessage（由 launchMultiInstanceRun 內部處理）
+    expect(mockAddMessage).not.toHaveBeenCalled();
     expect(mockSetScheduleLastTriggeredAt).toHaveBeenCalledWith(
       CANVAS_ID,
       POD_ID,
@@ -965,6 +970,8 @@ describe("排程觸發 multi-instance 分支", () => {
       }),
     );
     expect(mockExecuteStreamingChat).not.toHaveBeenCalled();
+    // multiInstance 路徑不走 messageStore.addMessage（由 launchMultiInstanceRun 內部處理）
+    expect(mockAddMessage).not.toHaveBeenCalled();
   });
 
   it("非 multiInstance Pod 無 commandId 時應仍觸發，message 使用排程啟動語句", async () => {
@@ -1115,7 +1122,7 @@ describe("排程觸發 multi-instance 分支", () => {
     // 應 emit POD_CHAT_USER_MESSAGE WS 事件，content 為展開後內容
     expect(mockEmitToCanvas).toHaveBeenCalledWith(
       CANVAS_ID,
-      "pod:chat:user-message",
+      WebSocketResponseEvents.POD_CHAT_USER_MESSAGE,
       expect.objectContaining({
         canvasId: CANVAS_ID,
         podId: POD_ID,

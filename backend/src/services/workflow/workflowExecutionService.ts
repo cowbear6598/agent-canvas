@@ -408,8 +408,6 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
         ? new RunModeExecutionStrategy(canvasId, runContext)
         : new NormalModeExecutionStrategy(canvasId);
 
-    // 在注入歷史記錄前先展開 Command，確保歷史與送給 Claude 的訊息一致
-    // Command 不存在時：記錄 warn 並以原始訊息繼續，避免 workflow 卡死
     const targetPod = podStore.getById(canvasId, targetPodId);
     let resolvedMessage: string | ContentBlock[] = baseMessage;
     if (targetPod) {
@@ -418,10 +416,23 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
         baseMessage,
         "workflow.executeClaudeQuery",
       );
-      if (expandResult.ok) {
-        resolvedMessage = expandResult.message;
+      if (!expandResult.ok) {
+        // Command 不存在：與其他 caller 對齊，中斷本次執行並透過 delegate 標記錯誤
+        // 讓 workflow 調度器得以繼續處理佇列中其他節點，不靜默忽略展開失敗
+        logger.warn(
+          "Workflow",
+          "Warn",
+          `Pod「${targetPodId}」workflow 路徑：Command「${expandResult.commandId}」不存在，中止本次執行`,
+        );
+        await this.onWorkflowChatError(
+          params,
+          new Error(
+            `Command「${expandResult.commandId}」不存在，請至 Pod 設定重新選擇或解除綁定`,
+          ),
+        );
+        return;
       }
-      // Command 不存在時 tryExpandCommandMessage 內部已記錄 warn，直接繼續用原始訊息
+      resolvedMessage = expandResult.message;
     }
 
     await execStrategy.addUserMessage(targetPodId, resolvedMessage);

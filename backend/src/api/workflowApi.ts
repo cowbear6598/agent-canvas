@@ -236,10 +236,7 @@ export async function handleWorkflowChat(
         `Pod「${podName}」REST API 發送訊息失敗`,
         err,
       );
-      const pod = podStore.getById(canvasId, podId);
-      if (pod) {
-        podStore.setStatus(canvasId, podId, "idle");
-      }
+      podStore.setStatus(canvasId, podId, "idle");
     }
   })();
 

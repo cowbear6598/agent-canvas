@@ -132,6 +132,88 @@ async function flushAsync(): Promise<void> {
   }
 }
 
+describe("handleWorkflowChat — 守門路徑", () => {
+  it("(d) 無效 podId 編碼時，回 400", async () => {
+    // decodePodId 無法解碼時（長度為 0 或超過 100 的非 UUID 格式）
+    const req = makeRequest({ message: "test" });
+    const response = await handleWorkflowChat(req, {
+      id: CANVAS_ID,
+      podId: "",
+    });
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body).toHaveProperty("error");
+  });
+
+  it("pod 不存在時，回 404", async () => {
+    // resolvePod 回傳 null
+    mockResolvePod.mockReturnValue(null);
+    const req = makeRequest({ message: "test" });
+    const response = await handleWorkflowChat(req, {
+      id: CANVAS_ID,
+      podId: POD_ID,
+    });
+    expect(response.status).toBe(404);
+    const body = await response.json();
+    expect(body).toHaveProperty("error");
+  });
+
+  it("(e) inboundConnections 非空（非 entry pod）時，回 400", async () => {
+    // Pod 有 inbound connection，不是 workflow 入口
+    mockResolvePod.mockReturnValue(makePod());
+    mockFindByTargetPodId.mockReturnValue([
+      { sourcePodId: "other-pod", targetPodId: POD_ID },
+    ]);
+    const req = makeRequest({ message: "test" });
+    const response = await handleWorkflowChat(req, {
+      id: CANVAS_ID,
+      podId: POD_ID,
+    });
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body).toHaveProperty("error");
+  });
+
+  it("(b) Pod 已綁 integration 時，回 400", async () => {
+    mockResolvePod.mockReturnValue(
+      makePod({ integrationBindings: [{ provider: "github" }] }),
+    );
+    const req = makeRequest({ message: "test" });
+    const response = await handleWorkflowChat(req, {
+      id: CANVAS_ID,
+      podId: POD_ID,
+    });
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body).toHaveProperty("error");
+  });
+
+  it("(c) Pod 已 chatting 時，回 409", async () => {
+    mockResolvePod.mockReturnValue(makePod({ status: "chatting" }));
+    const req = makeRequest({ message: "test" });
+    const response = await handleWorkflowChat(req, {
+      id: CANVAS_ID,
+      podId: POD_ID,
+    });
+    expect(response.status).toBe(409);
+    const body = await response.json();
+    expect(body).toHaveProperty("error");
+  });
+
+  it("(f) 訊息 zod 驗證失敗（空字串）時，回 400", async () => {
+    mockResolvePod.mockReturnValue(makePod());
+    // messageSchema 要求 string.min(1)，空字串應失敗
+    const req = makeRequest({ message: "" });
+    const response = await handleWorkflowChat(req, {
+      id: CANVAS_ID,
+      podId: POD_ID,
+    });
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body).toHaveProperty("error");
+  });
+});
+
 describe("handleWorkflowChat — Command 展開", () => {
   it("Pod 綁 commandId 時，injectUserMessage 與 executeStreamingChat 收到展開後內容", async () => {
     const pod = makePod({ commandId: "my-cmd" });
