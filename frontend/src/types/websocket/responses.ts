@@ -23,6 +23,7 @@ export interface ConnectionReadyPayload {
 }
 
 export interface PodCreatedPayload extends ResultPayload {
+  canvasId?: string;
   pod?: Pod;
 }
 
@@ -423,6 +424,9 @@ export interface McpListResultPayload extends ResultPayload {
 
 /** Pod 的 MCP server 名稱清單已更新 */
 export interface PodMcpServerNamesUpdatedPayload extends ResultPayload {
+  canvasId: string;
+  podId?: string;
+  mcpServerNames?: string[];
   pod?: Pod;
 }
 
@@ -445,6 +449,8 @@ export interface ConfigUpdatedPayload extends ResultPayload {
 }
 
 export interface PodPluginsSetPayload extends ResultPayload {
+  canvasId: string;
+  podId?: string;
   pod?: Pod;
 }
 

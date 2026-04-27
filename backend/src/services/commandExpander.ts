@@ -1,4 +1,7 @@
 import type { ContentBlock } from "../types/message.ts";
+import type { Pod } from "../types/pod.js";
+import { commandService } from "./commandService.js";
+import { logger } from "../utils/logger.js";
 
 /**
  * 當 Command 不存在時的備援提示訊息（供整合錯誤處理使用）
@@ -45,4 +48,42 @@ export function expandCommandMessage(params: {
     }
     return block;
   });
+}
+
+export type ExpandCommandResult =
+  | { ok: true; message: string | ContentBlock[] }
+  | { ok: false; commandId: string };
+
+/**
+ * 嘗試展開 Pod 綁定的 Command 內容（共用版本）。
+ * - pod 無 commandId 時：直接回傳原始訊息（ok: true）
+ * - command 讀取成功時：回傳展開版訊息（ok: true）
+ * - command 讀取失敗（檔案已消失）：回傳 ok: false 帶 commandId
+ *
+ * @param context - 呼叫來源，供 log 識別（例如 "handleChatSend" / "workflow" / "schedule"）
+ */
+export async function tryExpandCommandMessage(
+  pod: Pod,
+  message: string | ContentBlock[],
+  context = "unknown",
+): Promise<ExpandCommandResult> {
+  if (!pod.commandId) {
+    return { ok: true, message };
+  }
+
+  const commandId = pod.commandId;
+  const markdown = await commandService.read(commandId);
+  if (markdown !== null) {
+    return {
+      ok: true,
+      message: expandCommandMessage({ message, markdown }),
+    };
+  }
+
+  logger.warn(
+    "Chat",
+    "Check",
+    `[${context}] Command 不存在，commandId=${commandId}, podId=${pod.id}`,
+  );
+  return { ok: false, commandId };
 }

@@ -20,7 +20,6 @@ import {
   emitQueueProcessed,
   createMultiInputCompletionHandlers,
   formatMergedSummaries,
-  buildMessageWithCommand,
   formatConnectionLog,
   resolvePendingKey,
 } from "../../src/services/workflow/workflowHelpers.js";
@@ -32,7 +31,6 @@ import type {
 } from "../../src/services/workflow/types.js";
 import type { RunContext } from "../../src/types/run.js";
 import type { Pod } from "../../src/types/pod.js";
-import type { Command } from "../../src/types/command.js";
 
 const makePod = (overrides?: Partial<Pod>): Pod => ({
   id: "pod-1",
@@ -51,13 +49,6 @@ const makePod = (overrides?: Partial<Pod>): Pod => ({
   repositoryId: null,
   commandId: null,
   multiInstance: false,
-  ...overrides,
-});
-
-const makeCommand = (overrides?: Partial<Command>): Command => ({
-  id: "cmd-1",
-  name: "my-command",
-  groupId: null,
   ...overrides,
 });
 
@@ -286,43 +277,6 @@ describe("workflowHelpers", () => {
       const result = formatMergedSummaries(summaries, podLookup);
 
       expect(result).toContain("## Source: unknown-pod");
-    });
-  });
-
-  describe("buildMessageWithCommand", () => {
-    it("有 commandId 且找得到 command 時加前綴", () => {
-      const targetPod = makePod({ commandId: "cmd-1" });
-      const commands = [makeCommand({ id: "cmd-1", name: "my-command" })];
-
-      const result = buildMessageWithCommand("hello", targetPod, commands);
-
-      expect(result).toBe("/my-command hello");
-    });
-
-    it("找不到 command 時維持原訊息", () => {
-      const targetPod = makePod({ commandId: "non-existent" });
-      const commands = [makeCommand({ id: "cmd-1", name: "my-command" })];
-
-      const result = buildMessageWithCommand("hello", targetPod, commands);
-
-      expect(result).toBe("hello");
-    });
-
-    it("targetPod 為 undefined 時維持原訊息", () => {
-      const commands = [makeCommand()];
-
-      const result = buildMessageWithCommand("hello", undefined, commands);
-
-      expect(result).toBe("hello");
-    });
-
-    it("targetPod 沒有 commandId 時維持原訊息", () => {
-      const targetPod = makePod({ commandId: null });
-      const commands = [makeCommand()];
-
-      const result = buildMessageWithCommand("hello", targetPod, commands);
-
-      expect(result).toBe("hello");
     });
   });
 

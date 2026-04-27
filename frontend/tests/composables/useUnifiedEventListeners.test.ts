@@ -965,16 +965,143 @@ describe("useUnifiedEventListeners", () => {
     });
   });
 
-  // TODO Phase 4: MCP Server 事件處理測試重構後補回（mcpServerStore 移除後暫時跳過）
-  describe.skip("MCP Server 事件處理", () => {
-    it("mcp-server:created 應新增 MCP Server 到 mcpServerStore", () => {});
-    it("mcp-server:updated 應更新 mcpServerStore 中的 MCP Server", () => {});
-    it("mcp-server:deleted 應移除 MCP Server 和相關 notes", () => {});
-    it("mcp-server-note:created 應新增 note", () => {});
-    it("mcp-server-note:updated 應更新 note", () => {});
-    it("mcp-server-note:deleted 應移除 note", () => {});
-    it("pod:mcp-server:bound 應更新 Pod", () => {});
-    it("pod:mcp-server:unbound 應更新 Pod", () => {});
+  describe("pod:plugins:set 事件處理", () => {
+    it("canvasId 匹配且 success=true 時應呼叫 updatePodPlugins", () => {
+      const { registerUnifiedListeners } = useUnifiedEventListeners();
+      const podStore = usePodStore();
+      const pod = createMockPod({ id: "pod-1", pluginIds: [] });
+      podStore.pods = [pod];
+      const spy = vi.spyOn(podStore, "updatePodPlugins");
+
+      registerUnifiedListeners();
+
+      simulateEvent("pod:plugins:set", {
+        canvasId: "canvas-1",
+        success: true,
+        pod: { ...pod, pluginIds: ["plugin-a", "plugin-b"] },
+      });
+
+      expect(spy).toHaveBeenCalledWith("pod-1", ["plugin-a", "plugin-b"]);
+    });
+
+    it("success=false 時不應呼叫 updatePodPlugins", () => {
+      const { registerUnifiedListeners } = useUnifiedEventListeners();
+      const podStore = usePodStore();
+      const pod = createMockPod({ id: "pod-1", pluginIds: [] });
+      podStore.pods = [pod];
+      const spy = vi.spyOn(podStore, "updatePodPlugins");
+
+      registerUnifiedListeners();
+
+      simulateEvent("pod:plugins:set", {
+        canvasId: "canvas-1",
+        success: false,
+        pod: { ...pod, pluginIds: ["plugin-a"] },
+      });
+
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it("canvasId 不匹配時不應呼叫 updatePodPlugins", () => {
+      const { registerUnifiedListeners } = useUnifiedEventListeners();
+      const podStore = usePodStore();
+      const pod = createMockPod({ id: "pod-1", pluginIds: [] });
+      podStore.pods = [pod];
+      const spy = vi.spyOn(podStore, "updatePodPlugins");
+
+      registerUnifiedListeners();
+
+      simulateEvent("pod:plugins:set", {
+        canvasId: "canvas-other",
+        success: true,
+        pod: { ...pod, pluginIds: ["plugin-a"] },
+      });
+
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it("payload 缺少 canvasId 時不應呼叫 updatePodPlugins", () => {
+      const { registerUnifiedListeners } = useUnifiedEventListeners();
+      const podStore = usePodStore();
+      const pod = createMockPod({ id: "pod-1", pluginIds: [] });
+      podStore.pods = [pod];
+      const spy = vi.spyOn(podStore, "updatePodPlugins");
+
+      registerUnifiedListeners();
+
+      simulateEvent("pod:plugins:set", {
+        success: true,
+        pod: { ...pod, pluginIds: ["plugin-a"] },
+      });
+
+      expect(spy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("pod:mcp-server-names:updated 事件處理", () => {
+    it("canvasId 匹配且 podId 存在時應呼叫 updatePodMcpServers", () => {
+      const { registerUnifiedListeners } = useUnifiedEventListeners();
+      const podStore = usePodStore();
+      const pod = createMockPod({ id: "pod-1" });
+      podStore.pods = [pod];
+      const spy = vi.spyOn(podStore, "updatePodMcpServers");
+
+      registerUnifiedListeners();
+
+      simulateEvent("pod:mcp-server-names:updated", {
+        canvasId: "canvas-1",
+        podId: "pod-1",
+        mcpServerNames: ["server-a", "server-b"],
+      });
+
+      expect(spy).toHaveBeenCalledWith("pod-1", ["server-a", "server-b"]);
+    });
+
+    it("podId 缺失時不應呼叫 updatePodMcpServers", () => {
+      const { registerUnifiedListeners } = useUnifiedEventListeners();
+      const podStore = usePodStore();
+      const spy = vi.spyOn(podStore, "updatePodMcpServers");
+
+      registerUnifiedListeners();
+
+      simulateEvent("pod:mcp-server-names:updated", {
+        canvasId: "canvas-1",
+        mcpServerNames: ["server-a"],
+      });
+
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it("canvasId 不匹配時不應呼叫 updatePodMcpServers", () => {
+      const { registerUnifiedListeners } = useUnifiedEventListeners();
+      const podStore = usePodStore();
+      const spy = vi.spyOn(podStore, "updatePodMcpServers");
+
+      registerUnifiedListeners();
+
+      simulateEvent("pod:mcp-server-names:updated", {
+        canvasId: "canvas-other",
+        podId: "pod-1",
+        mcpServerNames: ["server-a"],
+      });
+
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it("payload 缺少 canvasId 時不應呼叫 updatePodMcpServers", () => {
+      const { registerUnifiedListeners } = useUnifiedEventListeners();
+      const podStore = usePodStore();
+      const spy = vi.spyOn(podStore, "updatePodMcpServers");
+
+      registerUnifiedListeners();
+
+      simulateEvent("pod:mcp-server-names:updated", {
+        podId: "pod-1",
+        mcpServerNames: ["server-a"],
+      });
+
+      expect(spy).not.toHaveBeenCalled();
+    });
   });
 
   describe("Integration 統一事件處理", () => {

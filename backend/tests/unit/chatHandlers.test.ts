@@ -15,6 +15,7 @@ const mockLaunchMultiInstanceRun = vi.fn();
 const mockCommandServiceRead = vi.fn();
 const mockExpandCommandMessage = vi.fn();
 const mockBuildCommandNotFoundMessage = vi.fn();
+const mockTryExpandCommandMessage = vi.fn();
 const mockSocketServiceEmitToCanvas = vi.fn();
 const mockLoggerWarn = vi.fn();
 
@@ -114,6 +115,8 @@ vi.mock("../../src/services/commandExpander.js", () => ({
     mockExpandCommandMessage(...args),
   buildCommandNotFoundMessage: (...args: unknown[]) =>
     mockBuildCommandNotFoundMessage(...args),
+  tryExpandCommandMessage: (...args: unknown[]) =>
+    mockTryExpandCommandMessage(...args),
 }));
 
 vi.mock("../../src/services/socketService.js", () => ({
@@ -163,6 +166,10 @@ beforeEach(() => {
   mockBuildCommandNotFoundMessage.mockImplementation(
     (commandId: string) =>
       `Command 「${commandId}」已不存在，請至 Pod 設定重新選擇或解除綁定。`,
+  );
+  // 預設：tryExpandCommandMessage 回傳 ok:true 帶原始訊息（無 commandId 情境）
+  mockTryExpandCommandMessage.mockImplementation(
+    (_pod: unknown, message: string) => Promise.resolve({ ok: true, message }),
   );
   // 預設：injectUserMessage 成功
   mockInjectUserMessage.mockResolvedValue(undefined);
@@ -496,10 +503,11 @@ describe("handleChatSend", () => {
     const commandId = "my-cmd";
     const pod = makePod({ status: "idle", commandId });
     mockValidatePod.mockReturnValue(pod);
-    mockCommandServiceRead.mockResolvedValue("## Command 內容");
-    mockExpandCommandMessage.mockReturnValue(
-      `<command>\n## Command 內容\n</command>\n使用者訊息`,
-    );
+    const expandedMessage = `<command>\n## Command 內容\n</command>\n使用者訊息`;
+    mockTryExpandCommandMessage.mockResolvedValue({
+      ok: true,
+      message: expandedMessage,
+    });
 
     await handleChatSend(
       CONNECTION_ID,
@@ -507,13 +515,12 @@ describe("handleChatSend", () => {
       REQUEST_ID,
     );
 
-    // commandService.read 應被呼叫
-    expect(mockCommandServiceRead).toHaveBeenCalledWith(commandId);
-    // expandCommandMessage 應被呼叫
-    expect(mockExpandCommandMessage).toHaveBeenCalledWith({
-      message: "使用者訊息",
-      markdown: "## Command 內容",
-    });
+    // tryExpandCommandMessage 應被呼叫
+    expect(mockTryExpandCommandMessage).toHaveBeenCalledWith(
+      pod,
+      "使用者訊息",
+      "handleChatSend",
+    );
     // injectUserMessage 收到展開版
     expect(mockInjectUserMessage).toHaveBeenCalledWith({
       canvasId: CANVAS_ID,
@@ -533,8 +540,8 @@ describe("handleChatSend", () => {
     const commandId = "missing-cmd";
     const pod = makePod({ status: "idle", commandId });
     mockValidatePod.mockReturnValue(pod);
-    // read 回 null（command 不存在）
-    mockCommandServiceRead.mockResolvedValue(null);
+    // tryExpandCommandMessage 回 ok:false（command 不存在）
+    mockTryExpandCommandMessage.mockResolvedValue({ ok: false, commandId });
     mockBuildCommandNotFoundMessage.mockReturnValue(
       `Command 「${commandId}」已不存在，請至 Pod 設定重新選擇或解除綁定。`,
     );

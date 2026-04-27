@@ -1,10 +1,9 @@
 import { WebSocketResponseEvents } from "../schemas";
-import type { Pod, ScheduleConfig } from "../types";
+import type { Pod, ScheduleConfig, ContentBlock } from "../types";
 import { podStore } from "./podStore.js";
 import { messageStore } from "./messageStore.js";
 import { socketService } from "./socketService.js";
 import { workflowExecutionService } from "./workflow";
-import { commandService } from "./commandService.js";
 import { logger } from "../utils/logger.js";
 import { fireAndForget } from "../utils/operationHelpers.js";
 import { executeStreamingChat } from "./claude/streamingChatExecutor.js";
@@ -16,6 +15,7 @@ import {
 } from "../utils/timezoneUtils.js";
 import { configStore } from "./configStore.js";
 import { NormalModeExecutionStrategy } from "./normalExecutionStrategy.js";
+import { tryExpandCommandMessage } from "./commandExpander.js";
 
 const TICK_INTERVAL_MS = 1000;
 const MS_PER_SECOND = 1000;
@@ -189,34 +189,81 @@ class ScheduleService {
     logger.log("Schedule", "Update", `Pod「${pod.id}」排程已觸發`);
 
     if (pod.multiInstance === true) {
-      // commandService 無單筆查詢方法（如 getById），改用有記憶體快取（TTL 30s）的 list() 取代
-      const commands = await commandService.list();
-      const command = pod.commandId
-        ? commands.find((cmd) => cmd.id === pod.commandId)
-        : null;
-      const displayMessage = command ? `/${command.name} ` : "";
+      // 嘗試展開 command 訊息；無 commandId 時 tryExpandCommandMessage 直接回傳原始訊息
+      const expandResult = await tryExpandCommandMessage(
+        pod,
+        "",
+        "schedule/multiInstance",
+      );
+
+      // ok=false 代表 commandId 存在但 command 已被刪除；仍要觸發，用排程啟動語句避免 codex stdin 為空崩潰
+      let runMessage: string | ContentBlock[];
+      if (!expandResult.ok) {
+        logger.warn(
+          "Schedule",
+          "Update",
+          `Pod「${pod.id}」排程觸發：Command「${expandResult.commandId}」不存在，改用排程啟動語句觸發`,
+        );
+        runMessage = "排程啟動，完成以下任務：";
+      } else {
+        // 展開後仍可能為空字串（無 commandId 且原始訊息為空），同樣用排程啟動語句取代
+        const raw = expandResult.message;
+        runMessage =
+          typeof raw === "string" && raw === ""
+            ? "排程啟動，完成以下任務："
+            : raw;
+      }
 
       await launchMultiInstanceRun({
         canvasId,
         podId: pod.id,
-        message: "",
-        displayMessage,
+        message: runMessage,
         abortable: false,
         onComplete: (runContext) =>
           onRunChatComplete(runContext, canvasId, pod.id),
       });
     } else {
-      await this.sendScheduleMessage(canvasId, pod.id);
+      await this.sendScheduleMessage(canvasId, pod);
     }
   }
 
-  private async sendScheduleMessage(
-    canvasId: string,
-    podId: string,
-  ): Promise<void> {
+  private async sendScheduleMessage(canvasId: string, pod: Pod): Promise<void> {
+    const podId = pod.id;
+
+    // 嘗試展開 command 訊息；無 commandId 時 tryExpandCommandMessage 直接回傳原始訊息
+    const expandResult = await tryExpandCommandMessage(
+      pod,
+      "",
+      "schedule/sendScheduleMessage",
+    );
+
+    // ok=false 代表 commandId 存在但 command 已被刪除；仍要觸發，用排程啟動語句避免 codex stdin 為空崩潰
+    let message: string | ContentBlock[];
+    if (!expandResult.ok) {
+      logger.warn(
+        "Schedule",
+        "Update",
+        `Pod「${podId}」排程觸發：Command「${expandResult.commandId}」不存在，改用排程啟動語句觸發`,
+      );
+      message = "排程啟動，完成以下任務：";
+    } else {
+      // 展開後仍可能為空字串（無 commandId 且原始訊息為空），同樣用排程啟動語句取代
+      const raw = expandResult.message;
+      message =
+        typeof raw === "string" && raw === ""
+          ? "排程啟動，完成以下任務："
+          : raw;
+    }
+
     podStore.setStatus(canvasId, podId, "chatting");
 
-    await messageStore.addMessage(canvasId, podId, "user", "");
+    // DB 存入展開後的訊息，確保歷史記錄顯示正確
+    await messageStore.addMessage(
+      canvasId,
+      podId,
+      "user",
+      typeof message === "string" ? message : "",
+    );
 
     const onScheduleChatComplete = async (
       completedCanvasId: string,
@@ -235,7 +282,7 @@ class ScheduleService {
     const strategy = new NormalModeExecutionStrategy(canvasId);
 
     await executeStreamingChat(
-      { canvasId, podId, message: "", abortable: false, strategy },
+      { canvasId, podId, message, abortable: false, strategy },
       { onComplete: onScheduleChatComplete },
     );
   }

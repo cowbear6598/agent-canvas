@@ -2,7 +2,7 @@ import { ref } from "vue";
 import { websocketClient, WebSocketResponseEvents } from "@/services/websocket";
 import {
   getPodEventListeners,
-  handlePodChatUserMessage,
+  getStandalonePodListeners,
 } from "./eventHandlers/podEventHandlers";
 import { getConnectionEventListeners } from "./eventHandlers/connectionEventHandlers";
 import { getNoteEventListeners } from "./eventHandlers/noteEventHandlers";
@@ -34,10 +34,7 @@ const standaloneListeners: Array<{
   event: string;
   handler: (payload: unknown) => void;
 }> = [
-  {
-    event: WebSocketResponseEvents.POD_CHAT_USER_MESSAGE,
-    handler: handlePodChatUserMessage as (payload: unknown) => void,
-  },
+  ...getStandalonePodListeners(),
   {
     event: WebSocketResponseEvents.INTEGRATION_CONNECTION_STATUS_CHANGED,
     handler: handleIntegrationConnectionStatusChanged as (

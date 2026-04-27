@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import { WebSocketResponseEvents } from "../schemas";
-import type { Pod, ContentBlock } from "../types";
+import type { Pod } from "../types";
 import { isPodBusy } from "../types/index.js";
 import type {
   ChatSendPayload,
@@ -23,13 +23,11 @@ import { injectUserMessage } from "../utils/chatHelpers.js";
 import { launchMultiInstanceRun } from "../utils/runChatHelpers.js";
 import { NormalModeExecutionStrategy } from "../services/normalExecutionStrategy.js";
 import { getProvider } from "../services/provider/index.js";
-import { commandService } from "../services/commandService.js";
 import {
   buildCommandNotFoundMessage,
-  expandCommandMessage,
+  tryExpandCommandMessage,
 } from "../services/commandExpander.js";
 import { socketService } from "../services/socketService.js";
-import { logger } from "../utils/logger.js";
 
 function validateIntegrationBindings(
   connectionId: string,
@@ -67,41 +65,6 @@ function validatePodNotBusy(
     return false;
   }
   return true;
-}
-
-type ExpandCommandResult =
-  | { ok: true; message: string | ContentBlock[] }
-  | { ok: false; commandId: string };
-
-/**
- * 嘗試展開 Pod 綁定的 Command 內容。
- * - pod 無 commandId 時：直接回傳原始訊息（ok: true）
- * - command 讀取成功時：回傳展開版訊息（ok: true）
- * - command 讀取失敗（檔案已消失）：回傳 ok: false 帶 commandId
- */
-async function tryExpandCommandMessage(
-  pod: Pod,
-  message: string | ContentBlock[],
-): Promise<ExpandCommandResult> {
-  if (!pod.commandId) {
-    return { ok: true, message };
-  }
-
-  const commandId = pod.commandId;
-  const markdown = await commandService.read(commandId);
-  if (markdown !== null) {
-    return {
-      ok: true,
-      message: expandCommandMessage({ message, markdown }),
-    };
-  }
-
-  logger.warn(
-    "Chat",
-    "Check",
-    `[handleChatSend] Command 不存在，回傳錯誤給前端（commandId=${commandId}, podId=${pod.id}）`,
-  );
-  return { ok: false, commandId };
 }
 
 /**
@@ -168,10 +131,20 @@ export const handleChatSend = withCanvasId<ChatSendPayload>(
     const podName = pod.name;
 
     if (pod.multiInstance === true) {
+      // multiInstance 分支也需展開 Command，確保 AI 收到 <command> xml tag
+      const runExpandResult = await tryExpandCommandMessage(
+        pod,
+        message,
+        "handleChatSend/multiInstance",
+      );
+      if (!runExpandResult.ok) {
+        handleCommandNotFound(canvasId, podId, runExpandResult.commandId);
+        return;
+      }
       await launchMultiInstanceRun({
         canvasId,
         podId,
-        message,
+        message: runExpandResult.message,
         abortable: true,
         onComplete: (runContext) =>
           onRunChatComplete(runContext, canvasId, podId),
@@ -184,7 +157,11 @@ export const handleChatSend = withCanvasId<ChatSendPayload>(
     if (!validatePodNotBusy(connectionId, pod, requestId)) return;
 
     // 展開 Command 內容（在 injectUserMessage 之前執行，確保 DB 存入展開版）
-    const expandResult = await tryExpandCommandMessage(pod, message);
+    const expandResult = await tryExpandCommandMessage(
+      pod,
+      message,
+      "handleChatSend",
+    );
 
     // DB 存入展開版（或原文，若 command 讀不到）
     const contentToStore = expandResult.ok ? expandResult.message : message;

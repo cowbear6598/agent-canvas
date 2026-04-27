@@ -356,6 +356,7 @@
 }
 
 /* 排程觸發動畫狀態 - 作用於整個按鈕（包含背景） */
+/* keyframe schedule-fired-jump 定義於 animations.css */
 .schedule-button.schedule-fired-animating {
   animation: schedule-fired-jump 1.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
   z-index: 100;

@@ -162,6 +162,7 @@ export async function createPodWithWorkspace(
 
   socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_CREATED, {
     requestId,
+    canvasId,
     success: true,
     pod: toPodPublicView(pod),
   });
