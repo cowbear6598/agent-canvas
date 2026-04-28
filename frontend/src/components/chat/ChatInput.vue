@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, nextTick } from "vue";
+import {
+  ref,
+  computed,
+  watch,
+  onMounted,
+  onBeforeUnmount,
+  nextTick,
+} from "vue";
 import { useI18n } from "vue-i18n";
 import { Send, Mic, Square } from "lucide-vue-next";
 import { TEXTAREA_MAX_HEIGHT } from "@/lib/constants";
@@ -28,6 +35,8 @@ const emit = defineEmits<{
 const input = ref("");
 const editableRef = ref<HTMLDivElement | null>(null);
 const isAborting = ref(false);
+// abort 後若 isTyping 始終未從 true→false，最多 3 秒後強制重置 isAborting，防止按鈕永久 disabled
+let abortFallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
 // ChatModal 透過 v-if 掛載，nextTick 確保 DOM 完成渲染後才 focus
 onMounted(() => {
@@ -110,6 +119,14 @@ const handleAbort = (): void => {
   if (isAborting.value) return;
   isAborting.value = true;
   emit("abort");
+
+  // Fallback：若 isTyping 始終未改變，3 秒後強制重置 isAborting，避免按鈕永久 disabled
+  abortFallbackTimer = setTimeout(() => {
+    abortFallbackTimer = null;
+    if (isAborting.value) {
+      isAborting.value = false;
+    }
+  }, 3000);
 };
 
 const handleSend = (): void => {
@@ -167,10 +184,22 @@ watch(
   () => props.isTyping,
   (newValue, oldValue) => {
     if (oldValue === true && newValue === false) {
+      // isTyping 正常從 true→false，清除 fallback timer 再重置
+      if (abortFallbackTimer !== null) {
+        clearTimeout(abortFallbackTimer);
+        abortFallbackTimer = null;
+      }
       isAborting.value = false;
     }
   },
 );
+
+onBeforeUnmount(() => {
+  if (abortFallbackTimer !== null) {
+    clearTimeout(abortFallbackTimer);
+    abortFallbackTimer = null;
+  }
+});
 </script>
 
 <template>

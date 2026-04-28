@@ -466,10 +466,10 @@ describe("McpPopover", () => {
     });
   });
 
-  // ── 案例 8：getActiveCanvasIdOrWarn 回傳 undefined 時回滾 ─────────────────
+  // ── 案例 8：getActiveCanvasIdOrWarn 回傳 undefined 時不執行 toggle ──────────
 
-  describe("案例 8：getActiveCanvasIdOrWarn 回傳 undefined 時回滾 localMcpServerNames", () => {
-    it("canvasId 取不到時，localMcpServerNames 應回滾，podStore 也應回滾", async () => {
+  describe("案例 8：getActiveCanvasIdOrWarn 回傳 undefined 時不執行 toggle", () => {
+    it("canvasId 取不到時不執行 toggle（store 不被呼叫）", async () => {
       mockListMcpServers.mockResolvedValue([MOCK_MCP_SERVER]);
       mockGetPodById.mockReturnValue({ id: "pod-1", mcpServerNames: [] });
       // mock getActiveCanvasIdOrWarn 回傳 undefined
@@ -485,17 +485,10 @@ describe("McpPopover", () => {
       switchBtn!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       await nextTick();
 
-      // 樂觀更新後因 canvasId 不存在應立即回滾
-      // podStore 最後一次呼叫應傳入空陣列（回滾值）
-      const calls = mockUpdatePodMcpServers.mock.calls;
-      // 第一次呼叫（樂觀更新），第二次呼叫（回滾）
-      expect(calls.length).toBeGreaterThanOrEqual(2);
-      const lastCall = calls.at(-1);
-      expect(lastCall).toBeDefined();
-      expect(lastCall![0]).toBe("pod-1");
-      expect(lastCall![1]).toEqual([]);
+      // canvasId 取不到時在樂觀更新前就 early return，podStore 不應被呼叫
+      expect(mockUpdatePodMcpServers).not.toHaveBeenCalled();
 
-      // API 不應被呼叫（canvasId 不存在，直接 return 前就回滾）
+      // API 不應被呼叫（canvasId 不存在，直接 return）
       expect(mockUpdatePodMcpServersApi).not.toHaveBeenCalled();
     });
   });

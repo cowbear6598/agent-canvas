@@ -731,4 +731,174 @@ describe("ConnectionContextMenu", () => {
       expect(labels.some((l) => l.includes("GPT"))).toBe(false);
     });
   });
+
+  describe("Trigger Mode 切換 - 成功流程", () => {
+    it("點擊 Direct（非當前 auto）應呼叫 updateConnectionTriggerMode 並帶正確參數", async () => {
+      mockUpdateConnectionTriggerMode.mockResolvedValue({ id: "conn-123" });
+      const wrapper = mountMenu({ currentTriggerMode: "auto" });
+
+      const buttons = wrapper.findAll("button");
+      const directBtn = buttons.find((b) =>
+        b.text().includes("直接觸發 (Direct)"),
+      );
+      await directBtn?.trigger("click");
+      await wrapper.vm.$nextTick();
+
+      expect(mockUpdateConnectionTriggerMode).toHaveBeenCalledWith(
+        "conn-123",
+        "direct",
+      );
+    });
+
+    it("點擊 ai-decide（非當前 auto）應呼叫 updateConnectionTriggerMode 並帶正確參數", async () => {
+      mockUpdateConnectionTriggerMode.mockResolvedValue({ id: "conn-123" });
+      const wrapper = mountMenu({ currentTriggerMode: "auto" });
+
+      const buttons = wrapper.findAll("button");
+      const aiDecideBtn = buttons.find((b) =>
+        b.text().includes("AI 判斷 (AI Decide)"),
+      );
+      await aiDecideBtn?.trigger("click");
+      await wrapper.vm.$nextTick();
+
+      expect(mockUpdateConnectionTriggerMode).toHaveBeenCalledWith(
+        "conn-123",
+        "ai-decide",
+      );
+    });
+
+    it("切換 trigger mode 成功後應顯示成功 toast", async () => {
+      mockUpdateConnectionTriggerMode.mockResolvedValue({ id: "conn-123" });
+      const wrapper = mountMenu({ currentTriggerMode: "auto" });
+
+      const buttons = wrapper.findAll("button");
+      const directBtn = buttons.find((b) =>
+        b.text().includes("直接觸發 (Direct)"),
+      );
+      await directBtn?.trigger("click");
+      await wrapper.vm.$nextTick();
+
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "觸發模式已變更",
+        }),
+      );
+    });
+
+    it("切換 trigger mode 成功後應 emit trigger-mode-changed", async () => {
+      mockUpdateConnectionTriggerMode.mockResolvedValue({ id: "conn-123" });
+      const wrapper = mountMenu({ currentTriggerMode: "auto" });
+
+      const buttons = wrapper.findAll("button");
+      const directBtn = buttons.find((b) =>
+        b.text().includes("直接觸發 (Direct)"),
+      );
+      await directBtn?.trigger("click");
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.emitted("trigger-mode-changed")).toBeTruthy();
+    });
+
+    it("切換 trigger mode 成功後應 emit close", async () => {
+      mockUpdateConnectionTriggerMode.mockResolvedValue({ id: "conn-123" });
+      const wrapper = mountMenu({ currentTriggerMode: "auto" });
+
+      const buttons = wrapper.findAll("button");
+      const directBtn = buttons.find((b) =>
+        b.text().includes("直接觸發 (Direct)"),
+      );
+      await directBtn?.trigger("click");
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.emitted("close")).toBeTruthy();
+    });
+  });
+
+  describe("Trigger Mode 切換 - 點擊已選中的 mode", () => {
+    it("點擊已選中的 auto 不應呼叫 updateConnectionTriggerMode", async () => {
+      const wrapper = mountMenu({ currentTriggerMode: "auto" });
+
+      const buttons = wrapper.findAll("button");
+      const autoBtn = buttons.find((b) => b.text().includes("自動觸發 (Auto)"));
+      await autoBtn?.trigger("click");
+      await wrapper.vm.$nextTick();
+
+      expect(mockUpdateConnectionTriggerMode).not.toHaveBeenCalled();
+    });
+
+    it("點擊已選中的 mode 應直接 emit close", async () => {
+      const wrapper = mountMenu({ currentTriggerMode: "direct" });
+
+      const buttons = wrapper.findAll("button");
+      const directBtn = buttons.find((b) =>
+        b.text().includes("直接觸發 (Direct)"),
+      );
+      await directBtn?.trigger("click");
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.emitted("close")).toBeTruthy();
+    });
+
+    it("點擊已選中的 mode 不應顯示 toast", async () => {
+      const wrapper = mountMenu({ currentTriggerMode: "ai-decide" });
+
+      const buttons = wrapper.findAll("button");
+      const aiDecideBtn = buttons.find((b) =>
+        b.text().includes("AI 判斷 (AI Decide)"),
+      );
+      await aiDecideBtn?.trigger("click");
+      await wrapper.vm.$nextTick();
+
+      expect(mockToast).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Trigger Mode 切換 - 失敗流程", () => {
+    it("updateConnectionTriggerMode 失敗時應顯示失敗 toast", async () => {
+      mockUpdateConnectionTriggerMode.mockResolvedValue(null);
+      const wrapper = mountMenu({ currentTriggerMode: "auto" });
+
+      const buttons = wrapper.findAll("button");
+      const directBtn = buttons.find((b) =>
+        b.text().includes("直接觸發 (Direct)"),
+      );
+      await directBtn?.trigger("click");
+      await wrapper.vm.$nextTick();
+
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "變更失敗",
+          description: "無法變更觸發模式",
+        }),
+      );
+    });
+
+    it("updateConnectionTriggerMode 失敗時不應 emit trigger-mode-changed", async () => {
+      mockUpdateConnectionTriggerMode.mockResolvedValue(null);
+      const wrapper = mountMenu({ currentTriggerMode: "auto" });
+
+      const buttons = wrapper.findAll("button");
+      const directBtn = buttons.find((b) =>
+        b.text().includes("直接觸發 (Direct)"),
+      );
+      await directBtn?.trigger("click");
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.emitted("trigger-mode-changed")).toBeFalsy();
+    });
+
+    it("updateConnectionTriggerMode 失敗時不應 emit close", async () => {
+      mockUpdateConnectionTriggerMode.mockResolvedValue(null);
+      const wrapper = mountMenu({ currentTriggerMode: "auto" });
+
+      const buttons = wrapper.findAll("button");
+      const directBtn = buttons.find((b) =>
+        b.text().includes("直接觸發 (Direct)"),
+      );
+      await directBtn?.trigger("click");
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.emitted("close")).toBeFalsy();
+    });
+  });
 });

@@ -1,10 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount } from "@vue/test-utils";
 import { createTestingPinia } from "@pinia/testing";
-import { ref, computed } from "vue";
+import { ref } from "vue";
 import CanvasPod from "@/components/pod/CanvasPod.vue";
 import type { Pod } from "@/types";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
+import {
+  createUsePodScheduleMock,
+  createUseWorkflowClearMock,
+  createUsePodCapabilitiesMock,
+  createUsePodAnchorDragMock,
+  createUsePodNoteBindingMock,
+  createUseI18nMock,
+  createMockPod,
+  mountCanvasPod,
+} from "./__setup__/canvasPodMocks";
 
 // 可在測試中動態調整的 mock 狀態
 const mockSelectedPodIds = ref<string[]>([]);
@@ -171,57 +181,23 @@ vi.mock("@/composables/pod/usePodDrag", () => ({
 }));
 
 vi.mock("@/composables/pod/usePodNoteBinding", () => ({
-  usePodNoteBinding: () => ({
-    handleNoteDrop: vi.fn(),
-    handleNoteRemove: vi.fn(),
-  }),
+  usePodNoteBinding: () => createUsePodNoteBindingMock(),
 }));
 
 vi.mock("@/composables/pod/useWorkflowClear", () => ({
-  useWorkflowClear: () => ({
-    showClearDialog: ref(false),
-    downstreamPods: ref([]),
-    isLoadingDownstream: ref(false),
-    isClearing: ref(false),
-    handleClearWorkflow: vi.fn(),
-    handleConfirmClear: vi.fn(),
-    handleCancelClear: vi.fn(),
-  }),
+  useWorkflowClear: () => createUseWorkflowClearMock(),
 }));
 
 vi.mock("@/composables/pod/usePodSchedule", () => ({
-  usePodSchedule: () => ({
-    showScheduleModal: ref(false),
-    hasSchedule: computed(() => false),
-    scheduleEnabled: computed(() => false),
-    scheduleTooltip: computed(() => ""),
-    isScheduleFiredAnimating: ref(false),
-    handleOpenScheduleModal: vi.fn(),
-    handleScheduleConfirm: vi.fn(),
-    handleScheduleDelete: vi.fn(),
-    handleScheduleToggle: vi.fn(),
-    handleClearScheduleFiredAnimation: vi.fn(),
-  }),
+  usePodSchedule: () => createUsePodScheduleMock(),
 }));
 
 vi.mock("@/composables/pod/usePodAnchorDrag", () => ({
-  usePodAnchorDrag: () => ({
-    handleAnchorDragStart: vi.fn(),
-    handleAnchorDragMove: vi.fn(),
-    handleAnchorDragEnd: vi.fn(),
-  }),
+  usePodAnchorDrag: () => createUsePodAnchorDragMock(),
 }));
 
 vi.mock("@/composables/pod/usePodCapabilities", () => ({
-  usePodCapabilities: () => ({
-    capabilities: computed(() => ({})),
-    isCodex: computed(() => false),
-    isPluginEnabled: computed(() => false),
-    isRepositoryEnabled: computed(() => false),
-    isCommandEnabled: computed(() => false),
-    isMcpEnabled: computed(() => false),
-    isIntegrationEnabled: computed(() => false),
-  }),
+  usePodCapabilities: () => createUsePodCapabilitiesMock(),
 }));
 
 vi.mock("@/composables/useToast", () => ({
@@ -240,30 +216,17 @@ vi.mock("@/services/websocket", () => ({
   WebSocketResponseEvents: { POD_MODEL_SET: "pod:model_set" },
 }));
 
-function createMockPod(overrides: Partial<Pod> = {}): Pod {
-  return {
-    id: "pod-1",
-    name: "Test Pod",
-    x: 0,
-    y: 0,
-    output: [],
-    rotation: 0,
-    multiInstance: false,
-    provider: "claude",
-    providerConfig: { model: "claude-sonnet-4-5" },
-    ...overrides,
-  };
-}
+vi.mock("vue-i18n", () => ({
+  useI18n: () => createUseI18nMock(),
+}));
 
-function mountCanvasPod(pod: Pod) {
-  return mount(CanvasPod, {
-    props: { pod },
-    global: {
-      plugins: [createTestingPinia({ createSpy: vi.fn, stubActions: true })],
-    },
-    attachTo: document.body,
-  });
-}
+vi.mock("@/stores/run/runStore", () => ({
+  useRunStore: () => ({
+    openHistoryPanel: vi.fn(),
+  }),
+}));
+
+// createMockPod / mountCanvasPod 已由 __setup__/canvasPodMocks 提供，此處複用匯入版本
 
 // -----------------------------------------------------------------------
 // 項目 13：podStatusClass 白名單驗證
@@ -277,7 +240,7 @@ describe("CanvasPod podStatusClass 白名單驗證", () => {
     mockIsBatchDragging.value = false;
   });
 
-  const statusCases: Array<{
+  const podStatusTestCases: Array<{
     status: string | undefined;
     expectedClass: string | null;
   }> = [
@@ -288,7 +251,7 @@ describe("CanvasPod podStatusClass 白名單驗證", () => {
     { status: undefined, expectedClass: null },
   ];
 
-  it.each(statusCases)(
+  it.each(podStatusTestCases)(
     'pod.status === "$status"：.pod-glow-layer class 驗證',
     ({ status, expectedClass }) => {
       const pod = createMockPod({ status: status as any });
@@ -682,9 +645,10 @@ describe("CanvasPod Phase 35：handleModelChange 與未知 Provider 守門", () 
     await podDoodle.trigger("dblclick");
 
     // 應顯示 toast（通知 provider 不可用）
+    // 使用 i18n key 斷言，避免翻譯字串變更導致測試脆弱
     expect(mockToast).toHaveBeenCalledWith(
       expect.objectContaining({
-        description: expect.stringContaining("無法開啟對話"),
+        description: expect.stringContaining("pod.provider.unknownDescription"),
       }),
     );
 

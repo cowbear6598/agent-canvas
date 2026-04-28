@@ -49,7 +49,7 @@ const handleSetTriggerMode = async (targetMode: TriggerMode): Promise<void> => {
   );
 
   if (result) {
-    const modeTextMap: Record<TriggerMode, string> = {
+    const triggerModeLabels: Record<TriggerMode, string> = {
       auto: t("canvas.connectionContextMenu.triggerModeAutoLabel"),
       "ai-decide": t("canvas.connectionContextMenu.triggerModeAiDecideLabel"),
       direct: t("canvas.connectionContextMenu.triggerModeDirectLabel"),
@@ -57,7 +57,7 @@ const handleSetTriggerMode = async (targetMode: TriggerMode): Promise<void> => {
     toast({
       title: t("canvas.connectionContextMenu.triggerModeChanged"),
       description: t("canvas.connectionContextMenu.triggerModeChangedDesc", {
-        mode: modeTextMap[targetMode],
+        mode: triggerModeLabels[targetMode],
       }),
       duration: SHORT_TOAST_DURATION_MS,
     });
@@ -83,27 +83,27 @@ const showModelChangeToast = (title: string, label: string): void => {
   });
 };
 
-/** 發送模型變更事件並關閉選單 */
-const emitModelChanged = (
-  eventName: "summary-model-changed" | "ai-decide-model-changed",
-): void => {
-  if (eventName === "summary-model-changed") {
-    emit("summary-model-changed");
-  } else {
-    emit("ai-decide-model-changed");
-  }
-  emit("close");
-};
+interface SetModelOptions {
+  targetModel: string;
+  currentModel: string;
+  updateFn: (connectionId: string, model: string) => Promise<unknown>;
+  successTitle: string;
+  failDesc: string;
+  changedEvent: "summary-model-changed" | "ai-decide-model-changed";
+  displayLabel?: string;
+}
 
-const handleSetModel = async (
-  targetModel: string,
-  currentModel: string,
-  updateFn: (connectionId: string, model: string) => Promise<unknown>,
-  successTitle: string,
-  failDesc: string,
-  changedEvent: "summary-model-changed" | "ai-decide-model-changed",
-  displayLabel?: string,
-): Promise<void> => {
+const handleSetModel = async (options: SetModelOptions): Promise<void> => {
+  const {
+    targetModel,
+    currentModel,
+    updateFn,
+    successTitle,
+    failDesc,
+    changedEvent,
+    displayLabel,
+  } = options;
+
   if (targetModel === currentModel) {
     emit("close");
     return;
@@ -113,7 +113,13 @@ const handleSetModel = async (
 
   if (result) {
     showModelChangeToast(successTitle, displayLabel ?? targetModel);
-    emitModelChanged(changedEvent);
+    // 透過分支縮窄 changedEvent union type，讓 TypeScript emit overload 能正確解析
+    if (changedEvent === "summary-model-changed") {
+      emit("summary-model-changed");
+    } else if (changedEvent === "ai-decide-model-changed") {
+      emit("ai-decide-model-changed");
+    }
+    emit("close");
   } else {
     toast({
       title: t("canvas.connectionContextMenu.changeFailed"),
@@ -132,29 +138,29 @@ const handleSetSummaryModel = (
   targetValue: string,
   displayLabel: string,
 ): Promise<void> =>
-  handleSetModel(
-    targetValue,
-    props.currentSummaryModel,
-    connectionStore.updateConnectionSummaryModel,
-    t("canvas.connectionContextMenu.summaryModelChanged"),
-    t("canvas.connectionContextMenu.summaryModelChangeFailed"),
-    "summary-model-changed",
+  handleSetModel({
+    targetModel: targetValue,
+    currentModel: props.currentSummaryModel,
+    updateFn: connectionStore.updateConnectionSummaryModel,
+    successTitle: t("canvas.connectionContextMenu.summaryModelChanged"),
+    failDesc: t("canvas.connectionContextMenu.summaryModelChangeFailed"),
+    changedEvent: "summary-model-changed",
     displayLabel,
-  );
+  });
 
 const handleSetAiDecideModel = (option: {
   value: ModelType;
   label: string;
 }): Promise<void> =>
-  handleSetModel(
-    option.value,
-    props.currentAiDecideModel,
-    connectionStore.updateConnectionAiDecideModel,
-    t("canvas.connectionContextMenu.aiDecideModelChanged"),
-    t("canvas.connectionContextMenu.aiDecideModelChangeFailed"),
-    "ai-decide-model-changed",
-    option.label,
-  );
+  handleSetModel({
+    targetModel: option.value,
+    currentModel: props.currentAiDecideModel,
+    updateFn: connectionStore.updateConnectionAiDecideModel,
+    successTitle: t("canvas.connectionContextMenu.aiDecideModelChanged"),
+    failDesc: t("canvas.connectionContextMenu.aiDecideModelChangeFailed"),
+    changedEvent: "ai-decide-model-changed",
+    displayLabel: option.label,
+  });
 
 const menuRef = ref<HTMLElement | null>(null);
 
@@ -229,6 +235,20 @@ const closeAiModelMenuDelayed = (): void => {
   }, SUBMENU_CLOSE_DELAY_MS);
 };
 
+/** ai-model 觸發器區塊的 mouseenter handler */
+const handleAiModelMenuEnter = (): void => {
+  if (props.currentTriggerMode === "ai-decide") {
+    openAiModelMenu();
+  }
+};
+
+/** ai-model 觸發器區塊的 mouseleave handler */
+const handleAiModelMenuLeave = (): void => {
+  if (props.currentTriggerMode === "ai-decide") {
+    closeAiModelMenuDelayed();
+  }
+};
+
 /**
  * AI Decide Model 子選單專用：硬編碼 Claude 三選一。
  * 不受上游 provider 影響，始終顯示此固定清單。
@@ -252,7 +272,7 @@ const summaryModelOptions = computed(() => {
   if (!sourcePod) return null;
 
   const models = providerCapabilityStore.getAvailableModels(sourcePod.provider);
-  // 若後端尚未推送 capability 資料，回傳 null 觸發「載入中」顯示
+  // 回傳 null（而非空陣列）是為了讓 template 能以單一條件判斷「資料尚未就緒」並顯示載入中
   if (models.length === 0) return null;
 
   return models;
@@ -432,10 +452,8 @@ const summaryModelOptions = computed(() => {
       :class="{
         'opacity-50 pointer-events-none': currentTriggerMode !== 'ai-decide',
       }"
-      @mouseenter="currentTriggerMode === 'ai-decide' && openAiModelMenu()"
-      @mouseleave="
-        currentTriggerMode === 'ai-decide' && closeAiModelMenuDelayed()
-      "
+      @mouseenter="handleAiModelMenuEnter"
+      @mouseleave="handleAiModelMenuLeave"
     >
       <button
         class="w-full flex items-center justify-between gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary"

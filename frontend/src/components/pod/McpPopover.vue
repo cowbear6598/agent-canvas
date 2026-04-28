@@ -7,8 +7,8 @@ import {
   updatePodMcpServers as updatePodMcpServersApi,
 } from "@/services/mcpApi";
 import { usePodStore } from "@/stores/pod";
-import { useToast } from "@/composables/useToast";
 import { getActiveCanvasIdOrWarn } from "@/utils/canvasGuard";
+import { useOptimisticToggle } from "@/composables/pod/useOptimisticToggle";
 import type { McpListItem } from "@/types/mcp";
 import type { PodProvider } from "@/types/pod";
 
@@ -25,7 +25,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const podStore = usePodStore();
-const { toast } = useToast();
+const { runToggle } = useOptimisticToggle();
 
 const installedMcpServers = ref<McpListItem[]>([]);
 const localMcpServerNames = ref<string[]>([]);
@@ -82,56 +82,40 @@ onUnmounted(() => {
   document.removeEventListener("mousedown", handleMousedown, true);
 });
 
+/** 從例外取得錯誤描述字串；直接顯示後端回傳的 i18n 翻譯訊息，fallback 到 mcpToggleFailed */
+const resolveErrorDescription = (err: unknown): string =>
+  err instanceof Error && err.message
+    ? err.message
+    : t("pod.slot.mcpToggleFailed");
+
 const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
   // Codex pod 不支援 toggle，防呆直接 return
   if (isCodex.value) return;
-  const previous = [...localMcpServerNames.value];
 
-  // 樂觀更新 localMcpServerNames
+  // 組裝下一個狀態清單
+  let nextNames: string[];
   if (enabled) {
-    if (!localMcpServerNames.value.includes(name)) {
-      localMcpServerNames.value = [...localMcpServerNames.value, name];
-    }
+    nextNames = localMcpServerNames.value.includes(name)
+      ? [...localMcpServerNames.value]
+      : [...localMcpServerNames.value, name];
   } else {
-    localMcpServerNames.value = localMcpServerNames.value.filter(
-      (n) => n !== name,
-    );
+    nextNames = localMcpServerNames.value.filter((n) => n !== name);
   }
 
-  // 同步到 store
-  podStore.updatePodMcpServers(props.podId, localMcpServerNames.value);
-
+  // 取得 canvasId，取不到直接 return（不進入樂觀更新）
   const canvasId = getActiveCanvasIdOrWarn("McpPopover");
-  if (!canvasId) {
-    // 取不到 canvasId，回滾並 return
-    localMcpServerNames.value = previous;
-    podStore.updatePodMcpServers(props.podId, previous);
-    return;
-  }
+  if (!canvasId) return;
 
-  try {
-    await updatePodMcpServersApi(
-      canvasId,
-      props.podId,
-      localMcpServerNames.value,
-    );
-  } catch (err: unknown) {
-    // 回滾
-    localMcpServerNames.value = previous;
-    podStore.updatePodMcpServers(props.podId, previous);
-
-    // 直接顯示後端回傳的 i18n 翻譯訊息，fallback 到 mcpToggleFailed
-    const description =
-      err instanceof Error && err.message
-        ? err.message
-        : t("pod.slot.mcpToggleFailed");
-
-    toast({
-      title: "Pod",
-      description,
-      variant: "destructive",
-    });
-  }
+  await runToggle(nextNames, {
+    getCurrent: () => [...localMcpServerNames.value],
+    setLocal: (items) => {
+      localMcpServerNames.value = items;
+    },
+    setStore: (items) => podStore.updatePodMcpServers(props.podId, items),
+    callApi: (items) => updatePodMcpServersApi(canvasId, props.podId, items),
+    resolveError: resolveErrorDescription,
+    failToast: { title: "Pod" },
+  });
 };
 </script>
 

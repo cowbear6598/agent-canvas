@@ -17,10 +17,25 @@ import type {
 import type { McpListItem } from "@/types/mcp";
 import type { PodProvider } from "@/types/pod";
 
-/** 查詢指定 Provider 的 MCP server 清單 */
+/** MCP server 清單快取 TTL（毫秒）；避免使用者頻繁開關 popover 反覆打 API */
+const MCP_SERVER_LIST_CACHE_TTL_MS = 30 * 1000;
+
+interface McpServerListCacheEntry {
+  data: McpListItem[];
+  expiresAt: number;
+}
+
+const mcpServerListCache = new Map<string, McpServerListCacheEntry>();
+
+/** 查詢指定 Provider 的 MCP server 清單（30 秒 TTL 快取） */
 export async function listMcpServers(
   provider: PodProvider,
 ): Promise<McpListItem[]> {
+  const cached = mcpServerListCache.get(provider);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.data;
+  }
+
   const result = await createWebSocketRequest<
     McpListPayload,
     McpListResultPayload
@@ -29,7 +44,26 @@ export async function listMcpServers(
     responseEvent: WebSocketResponseEvents.MCP_LIST_RESULT,
     payload: { provider: provider as "claude" | "codex" },
   });
-  return result.items ?? [];
+
+  const data = result.items ?? [];
+  mcpServerListCache.set(provider, {
+    data,
+    expiresAt: Date.now() + MCP_SERVER_LIST_CACHE_TTL_MS,
+  });
+
+  return data;
+}
+
+/**
+ * 讓指定 provider（或全部）的 MCP server 清單快取失效。
+ * 供「使用者主動刷新」等情境呼叫。
+ */
+export function invalidateMcpServersCache(provider?: PodProvider): void {
+  if (provider) {
+    mcpServerListCache.delete(provider);
+  } else {
+    mcpServerListCache.clear();
+  }
 }
 
 /** 後端錯誤物件（i18n key 格式） */

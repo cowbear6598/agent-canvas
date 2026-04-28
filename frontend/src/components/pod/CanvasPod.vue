@@ -17,6 +17,7 @@ import { useWorkflowClear } from "@/composables/pod/useWorkflowClear";
 import { usePodSchedule } from "@/composables/pod/usePodSchedule";
 import { usePodAnchorDrag } from "@/composables/pod/usePodAnchorDrag";
 import { usePodFileDrop } from "@/composables/pod/usePodFileDrop";
+import { usePodPopovers } from "@/composables/pod/usePodPopovers";
 import { useToast } from "@/composables/useToast";
 import { useI18n } from "vue-i18n";
 import {
@@ -101,21 +102,14 @@ const ALLOWED_STATUSES = new Set<string>([
   "error",
 ]);
 
-const podStatusClass = computed(() => {
+const podStatusClasses = computed(() => {
   const status = props.pod.status;
   return status && ALLOWED_STATUSES.has(status) ? `pod-status-${status}` : "";
 });
 
-// 依 providerCapabilityStore 的 key 集合動態建構允許的 provider Set（O(1) 查找）；
-// 未知 provider 不注入任意 class，回傳空字串。
-// computed 確保 store 載入後自動更新。
-const allowedProviders = computed(
-  () => new Set(Object.keys(providerCapabilityStore.capabilitiesByProvider)),
-);
-
 // 依 provider 動態套用漸層 class，方便未來擴增更多 provider
-const podProviderClass = computed(() =>
-  allowedProviders.value.has(props.pod.provider)
+const podProviderClasses = computed(() =>
+  providerCapabilityStore.allowedProviders.has(props.pod.provider)
     ? `pod-provider-${props.pod.provider}`
     : "",
 );
@@ -143,7 +137,6 @@ const isWorkflowRunning = computed(() =>
   connectionStore.isWorkflowRunning(props.pod.id),
 );
 
-// toRef(() => ...) 的 getter 形式（Vue 3.3+）更語義化：此為「對 prop 的引用」非「衍生計算值」
 const computedPodId = toRef(() => props.pod.id);
 
 const {
@@ -226,38 +219,17 @@ const {
   },
 });
 
-const showPluginPopover = ref(false);
-const pluginAnchorRect = ref<DOMRect | null>(null);
-
-const handlePluginClick = (event: MouseEvent): void => {
-  // 已開啟時點擊視為 toggle 關閉
-  if (showPluginPopover.value) {
-    showPluginPopover.value = false;
-    return;
-  }
-  pluginAnchorRect.value = (
-    event.currentTarget as HTMLElement
-  ).getBoundingClientRect();
-  showPluginPopover.value = true;
-};
+const {
+  showPluginPopover,
+  pluginAnchorRect,
+  handlePluginClick,
+  showMcpPopover,
+  mcpAnchorRect,
+  handleMcpClick,
+} = usePodPopovers();
 
 // MCP notch 相關狀態
 const podMcpActiveCount = computed(() => props.pod.mcpServerNames?.length ?? 0);
-
-const showMcpPopover = ref(false);
-const mcpAnchorRect = ref<DOMRect | null>(null);
-
-const handleMcpClick = (event: MouseEvent): void => {
-  // 已開啟時點擊視為 toggle 關閉
-  if (showMcpPopover.value) {
-    showMcpPopover.value = false;
-    return;
-  }
-  mcpAnchorRect.value = (
-    event.currentTarget as HTMLElement
-  ).getBoundingClientRect();
-  showMcpPopover.value = true;
-};
 
 // 合併成單一 CSS selector 字串，closest() 一次查詢取代原本最差 4 次 DOM 遍歷
 const SLOT_CLASSES =
@@ -312,38 +284,48 @@ const handleSelectPod = (): void => {
 };
 
 /**
- * 守門：判斷雙擊事件是否允許進入編輯/選取流程
- * 回傳 true 表示可以繼續，false 表示應終止（含副作用如 toast）
+ * 判斷雙擊是否被封鎖，並回傳封鎖原因。
+ * blocked=false 表示可繼續進入對話；blocked=true 表示應終止。
+ * reason 供 handleDblClick 決定是否顯示 toast。
  */
-const canActivateEdit = (target: Element | null): boolean => {
-  if (isEditing.value || isDragging.value) return false;
+const isEditBlocked = (
+  target: Element | null,
+): {
+  blocked: boolean;
+  reason?: "dragging" | "input" | "unknownProvider" | "downstreamMultiInstance";
+} => {
+  if (isEditing.value || isDragging.value)
+    return { blocked: true, reason: "dragging" };
 
   const el = target as HTMLElement;
-  if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") return false;
+  if (el.tagName === "INPUT" || el.tagName === "TEXTAREA")
+    return { blocked: true, reason: "input" };
 
-  // 未知 provider：封鎖對話入口，顯示提示 toast
-  if (isUnknownProvider.value) {
+  if (isUnknownProvider.value)
+    return { blocked: true, reason: "unknownProvider" };
+  if (isDownstreamMultiInstance.value)
+    return { blocked: true, reason: "downstreamMultiInstance" };
+
+  return { blocked: false };
+};
+
+const handleDblClick = (e: MouseEvent): void => {
+  const { blocked, reason } = isEditBlocked(e.target as Element | null);
+  if (!blocked) {
+    handleSelectPod();
+    return;
+  }
+  if (reason === "unknownProvider") {
     toast({
       title: t("pod.provider.title"),
       description: t("pod.provider.unknownDescription"),
     });
-    return false;
-  }
-
-  if (isDownstreamMultiInstance.value) {
+  } else if (reason === "downstreamMultiInstance") {
     toast({
       title: "Pod",
       description: t("pod.multiInstance.readonlyHint"),
     });
-    return false;
   }
-
-  return true;
-};
-
-const handleDblClick = (e: MouseEvent): void => {
-  if (!canActivateEdit(e.target as Element | null)) return;
-  handleSelectPod();
 };
 
 const handleModelChange = async (model: string): Promise<void> => {
@@ -397,7 +379,7 @@ const handleContextMenu = (e: MouseEvent): void => {
     <!-- selected/drag-over 狀態已移至 pod-wrapper 內層（pod-inner-highlight），跟著旋轉 -->
     <div
       class="pod-glow-layer"
-      :class="[podStatusClass]"
+      :class="[podStatusClasses]"
     />
 
     <div
@@ -432,7 +414,7 @@ const handleContextMenu = (e: MouseEvent): void => {
       <div
         class="pod-doodle w-56 overflow-visible relative"
         :class="[
-          podProviderClass,
+          podProviderClasses,
           { selected: isSelected, dragging: isDragging || isBatchDragging },
         ]"
         @dblclick="handleDblClick"

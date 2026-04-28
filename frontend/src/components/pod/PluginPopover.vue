@@ -5,8 +5,8 @@ import { Switch } from "@/components/ui/switch";
 import { listPlugins } from "@/services/pluginApi";
 import { updatePodPlugins as updatePodPluginsApi } from "@/services/podPluginApi";
 import { usePodStore } from "@/stores/pod";
-import { useToast } from "@/composables/useToast";
 import { getActiveCanvasIdOrWarn } from "@/utils/canvasGuard";
+import { useOptimisticToggle } from "@/composables/pod/useOptimisticToggle";
 import type { InstalledPlugin } from "@/types/plugin";
 import type { PodProvider } from "@/types/pod";
 
@@ -23,7 +23,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const podStore = usePodStore();
-const { toast } = useToast();
+const { runToggle } = useOptimisticToggle();
 
 const installedPlugins = ref<InstalledPlugin[]>([]);
 const localPluginIds = ref<string[]>([]);
@@ -80,58 +80,49 @@ onUnmounted(() => {
   document.removeEventListener("mousedown", handleMousedown, true);
 });
 
+/** 依 reason 欄位決定 plugin toggle 的錯誤描述字串 */
+const resolvePluginErrorDescription = (err: unknown): string => {
+  const reason =
+    err !== null && typeof err === "object" && "reason" in err
+      ? (err as Record<string, unknown>).reason
+      : undefined;
+
+  return reason === "pod-busy"
+    ? t("pod.slot.pluginsBusyTooltip")
+    : t("pod.slot.pluginsToggleFailed");
+};
+
 const handleToggle = async (
   pluginId: string,
   enabled: boolean,
 ): Promise<void> => {
   // Codex pod 不支援 toggle，防呆直接 return
   if (isCodex.value) return;
-  const previous = [...localPluginIds.value];
 
-  // 樂觀更新 localPluginIds
+  // 組裝下一個狀態清單
+  let nextIds: string[];
   if (enabled) {
-    if (!localPluginIds.value.includes(pluginId)) {
-      localPluginIds.value = [...localPluginIds.value, pluginId];
-    }
+    nextIds = localPluginIds.value.includes(pluginId)
+      ? [...localPluginIds.value]
+      : [...localPluginIds.value, pluginId];
   } else {
-    localPluginIds.value = localPluginIds.value.filter((id) => id !== pluginId);
+    nextIds = localPluginIds.value.filter((id) => id !== pluginId);
   }
 
-  // 同步到 store
-  podStore.updatePodPlugins(props.podId, localPluginIds.value);
-
+  // 取得 canvasId，取不到直接 return（不進入樂觀更新）
   const canvasId = getActiveCanvasIdOrWarn("PluginPopover");
-  if (!canvasId) {
-    // 取不到 canvasId，回滾並 return
-    localPluginIds.value = previous;
-    podStore.updatePodPlugins(props.podId, previous);
-    return;
-  }
+  if (!canvasId) return;
 
-  try {
-    await updatePodPluginsApi(canvasId, props.podId, localPluginIds.value);
-  } catch (err: unknown) {
-    // 回滾
-    localPluginIds.value = previous;
-    podStore.updatePodPlugins(props.podId, previous);
-
-    // 依 reason 欄位決定 toast 文案
-    const reason =
-      err !== null && typeof err === "object" && "reason" in err
-        ? (err as Record<string, unknown>).reason
-        : undefined;
-
-    const description =
-      reason === "pod-busy"
-        ? t("pod.slot.pluginsBusyTooltip")
-        : t("pod.slot.pluginsToggleFailed");
-
-    toast({
-      title: "Pod",
-      description,
-      variant: "destructive",
-    });
-  }
+  await runToggle(nextIds, {
+    getCurrent: () => [...localPluginIds.value],
+    setLocal: (items) => {
+      localPluginIds.value = items;
+    },
+    setStore: (items) => podStore.updatePodPlugins(props.podId, items),
+    callApi: (items) => updatePodPluginsApi(canvasId, props.podId, items),
+    resolveError: resolvePluginErrorDescription,
+    failToast: { title: "Pod" },
+  });
 };
 </script>
 

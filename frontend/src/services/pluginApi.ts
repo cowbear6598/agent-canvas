@@ -8,9 +8,24 @@ import type { PluginListResultPayload } from "@/types/websocket/responses";
 import type { InstalledPlugin } from "@/types/plugin";
 import type { PodProvider } from "@/types/pod";
 
+/** Plugin 清單快取 TTL（毫秒）；避免使用者頻繁開關 popover 反覆打 API */
+const PLUGIN_LIST_CACHE_TTL_MS = 30 * 1000;
+
+interface PluginListCacheEntry {
+  data: InstalledPlugin[];
+  expiresAt: number;
+}
+
+const pluginListCache = new Map<string, PluginListCacheEntry>();
+
 export async function listPlugins(
   provider: PodProvider,
 ): Promise<InstalledPlugin[]> {
+  const cached = pluginListCache.get(provider);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.data;
+  }
+
   const result = await createWebSocketRequest<
     PluginListPayload,
     PluginListResultPayload
@@ -19,5 +34,24 @@ export async function listPlugins(
     responseEvent: WebSocketResponseEvents.PLUGIN_LIST_RESULT,
     payload: { provider: provider as "claude" | "codex" },
   });
-  return result.plugins ?? [];
+
+  const data = result.plugins ?? [];
+  pluginListCache.set(provider, {
+    data,
+    expiresAt: Date.now() + PLUGIN_LIST_CACHE_TTL_MS,
+  });
+
+  return data;
+}
+
+/**
+ * 讓指定 provider（或全部）的 plugin 清單快取失效。
+ * 供「使用者主動刷新」等情境呼叫。
+ */
+export function invalidatePluginListCache(provider?: PodProvider): void {
+  if (provider) {
+    pluginListCache.delete(provider);
+  } else {
+    pluginListCache.clear();
+  }
 }

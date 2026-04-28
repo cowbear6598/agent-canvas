@@ -209,6 +209,14 @@ export const useProviderCapabilityStore = defineStore(
         },
     );
 
+    /**
+     * 所有已知 provider 的 Set，供各 Pod 共用同一份參考（O(1) 查找）。
+     * 集中在 store 計算，避免每個 Pod 元件各自重建 Set。
+     */
+    const allowedProviders = computed(
+      () => new Set<string>(Object.keys(capabilitiesByProvider.value)),
+    );
+
     // ---- Actions ----
 
     /**
@@ -278,6 +286,7 @@ export const useProviderCapabilityStore = defineStore(
       defaultOptionsByProvider,
       availableModelsByProvider,
       loaded,
+      allowedProviders,
       getCapabilities,
       isCapabilityEnabled,
       getDefaultOptions,

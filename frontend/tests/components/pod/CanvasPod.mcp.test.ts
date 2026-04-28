@@ -3,11 +3,17 @@
  * 覆蓋 popover 開關 + props 傳遞
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mount } from "@vue/test-utils";
-import { createTestingPinia } from "@pinia/testing";
-import { ref, computed } from "vue";
-import CanvasPod from "@/components/pod/CanvasPod.vue";
-import type { Pod } from "@/types";
+import { ref } from "vue";
+import {
+  createUsePodScheduleMock,
+  createUseWorkflowClearMock,
+  createUsePodCapabilitiesMock,
+  createUsePodAnchorDragMock,
+  createUsePodNoteBindingMock,
+  createUseI18nMock,
+  createMockPod,
+  mountCanvasPod,
+} from "./__setup__/canvasPodMocks";
 
 // ── 可動態調整的 mock 狀態 ───────────────────────────────────────────────
 const mockSelectedPodIds = ref<string[]>([]);
@@ -201,57 +207,23 @@ vi.mock("@/composables/pod/usePodDrag", () => ({
 }));
 
 vi.mock("@/composables/pod/usePodNoteBinding", () => ({
-  usePodNoteBinding: () => ({
-    handleNoteDrop: vi.fn(),
-    handleNoteRemove: vi.fn(),
-  }),
+  usePodNoteBinding: () => createUsePodNoteBindingMock(),
 }));
 
 vi.mock("@/composables/pod/useWorkflowClear", () => ({
-  useWorkflowClear: () => ({
-    showClearDialog: ref(false),
-    downstreamPods: ref([]),
-    isLoadingDownstream: ref(false),
-    isClearing: ref(false),
-    handleClearWorkflow: vi.fn(),
-    handleConfirmClear: vi.fn(),
-    handleCancelClear: vi.fn(),
-  }),
+  useWorkflowClear: () => createUseWorkflowClearMock(),
 }));
 
 vi.mock("@/composables/pod/usePodSchedule", () => ({
-  usePodSchedule: () => ({
-    showScheduleModal: ref(false),
-    hasSchedule: computed(() => false),
-    scheduleEnabled: computed(() => false),
-    scheduleTooltip: computed(() => ""),
-    isScheduleFiredAnimating: ref(false),
-    handleOpenScheduleModal: vi.fn(),
-    handleScheduleConfirm: vi.fn(),
-    handleScheduleDelete: vi.fn(),
-    handleScheduleToggle: vi.fn(),
-    handleClearScheduleFiredAnimation: vi.fn(),
-  }),
+  usePodSchedule: () => createUsePodScheduleMock(),
 }));
 
 vi.mock("@/composables/pod/usePodAnchorDrag", () => ({
-  usePodAnchorDrag: () => ({
-    handleAnchorDragStart: vi.fn(),
-    handleAnchorDragMove: vi.fn(),
-    handleAnchorDragEnd: vi.fn(),
-  }),
+  usePodAnchorDrag: () => createUsePodAnchorDragMock(),
 }));
 
 vi.mock("@/composables/pod/usePodCapabilities", () => ({
-  usePodCapabilities: () => ({
-    capabilities: computed(() => ({})),
-    isCodex: computed(() => false),
-    isPluginEnabled: computed(() => false),
-    isRepositoryEnabled: computed(() => false),
-    isCommandEnabled: computed(() => false),
-    isMcpEnabled: computed(() => false),
-    isIntegrationEnabled: computed(() => false),
-  }),
+  usePodCapabilities: () => createUsePodCapabilitiesMock(),
 }));
 
 vi.mock("@/composables/useToast", () => ({
@@ -270,36 +242,18 @@ vi.mock("@/services/websocket", () => ({
   WebSocketResponseEvents: { POD_MODEL_SET: "pod:model_set" },
 }));
 
-// ── 輔助函式 ──────────────────────────────────────────────────────────────
+vi.mock("vue-i18n", () => ({
+  useI18n: () => createUseI18nMock(),
+}));
 
-function createMockPod(overrides: Partial<Pod> = {}): Pod {
-  return {
-    id: "pod-1",
-    name: "Test Pod",
-    x: 0,
-    y: 0,
-    output: [],
-    rotation: 0,
-    multiInstance: false,
-    provider: "claude",
-    providerConfig: { model: "claude-sonnet-4-5" },
-    mcpServerNames: [],
-    pluginIds: [],
-    ...overrides,
-  };
-}
-
-function mountCanvasPod(pod: Pod) {
-  return mount(CanvasPod, {
-    props: { pod },
-    global: {
-      plugins: [createTestingPinia({ createSpy: vi.fn, stubActions: true })],
-    },
-    attachTo: document.body,
-  });
-}
+vi.mock("@/stores/run/runStore", () => ({
+  useRunStore: () => ({
+    openHistoryPanel: vi.fn(),
+  }),
+}));
 
 // ── 測試 ──────────────────────────────────────────────────────────────────
+// createMockPod / mountCanvasPod 已由 __setup__/canvasPodMocks 提供，此處複用匯入版本
 
 describe("CanvasPod MCP popover 整合測試", () => {
   beforeEach(() => {

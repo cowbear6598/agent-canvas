@@ -34,6 +34,8 @@ import {
   POD_MENU_X_OFFSET,
   POD_MENU_Y_OFFSET,
   DEFAULT_POD_ROTATION_RANGE,
+  POD_WIDTH,
+  POD_HEIGHT,
 } from "@/lib/constants";
 import { screenToCanvasPosition } from "@/lib/canvasCoordinateUtils";
 import { useIntegrationStore } from "@/stores/integrationStore";
@@ -121,6 +123,49 @@ const {
   commandStore,
   trashZoneRef,
   handleOpenEditModal,
+});
+
+/**
+ * 視口虛擬化：只渲染當前視口範圍（含 buffer）內的 Pod，
+ * 避免 50+ Pod 時全部保留在 DOM 耗用記憶體與 layout 資源。
+ *
+ * 選擇此方案（v-for 過濾）而非 v-show，原因：
+ *   - ConnectionLine 的座標計算完全依賴 Pod 資料（pod.x, pod.y, pod.rotation），
+ *     不依賴 DOM 元件實例，因此連線不受 Pod unmount 影響。
+ *   - selection、minimap 等功能仍走 podStore.pods 全集，不受影響。
+ *   - v-if 真正移除 DOM，可節省記憶體與渲染成本；v-show 僅隱藏，無法達到此效果。
+ */
+const VIEWPORT_BUFFER_RATIO = 0.5;
+
+const visiblePods = computed(() => {
+  const { offset, zoom } = viewportStore;
+
+  // 視窗尺寸（螢幕座標）
+  const screenW = window.innerWidth;
+  const screenH = window.innerHeight;
+
+  // 加上 buffer，避免 Pod 剛進入邊緣時閃爍
+  const bufferX = screenW * VIEWPORT_BUFFER_RATIO;
+  const bufferY = screenH * VIEWPORT_BUFFER_RATIO;
+
+  // 將帶有 buffer 的螢幕邊界轉換為 canvas 座標系
+  const canvasLeft = (-offset.x - bufferX) / zoom;
+  const canvasTop = (-offset.y - bufferY) / zoom;
+  const canvasRight = (-offset.x + screenW + bufferX) / zoom;
+  const canvasBottom = (-offset.y + screenH + bufferY) / zoom;
+
+  return podStore.pods.filter((pod) => {
+    // 使用 Pod 的 AABB（忽略旋轉以求簡單，旋轉後邊界略大也在 buffer 容許範圍內）
+    const podRight = pod.x + POD_WIDTH;
+    const podBottom = pod.y + POD_HEIGHT;
+
+    return (
+      podRight >= canvasLeft &&
+      pod.x <= canvasRight &&
+      podBottom >= canvasTop &&
+      pod.y <= canvasBottom
+    );
+  });
 });
 
 const handleContextMenu = (e: MouseEvent): void => {
@@ -299,8 +344,9 @@ const handleOpenModal = (payload: { type: string }): void => {
 
     <SelectionBox />
 
+    <!-- 視口虛擬化：只渲染可見範圍（含 buffer）內的 Pod，詳見 visiblePods computed -->
     <CanvasPod
-      v-for="pod in podStore.pods"
+      v-for="pod in visiblePods"
       :key="pod.id"
       :pod="pod"
       @select="handleSelectPod"

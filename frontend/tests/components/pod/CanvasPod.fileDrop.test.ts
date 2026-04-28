@@ -1,25 +1,31 @@
 /**
  * CanvasPod 拖曳上傳整合測試
  *
- * 涵蓋計畫書測試案例 8–10、13–18：
+ * 涵蓋計畫書測試案例 8–10、13–15、18：
  * 8:  串行 Pod idle 拖入有效檔案 → 呼叫 chatStore.sendMessage 帶 attachments
  * 9:  multi-instance source pod 允許 drop，成功後呼叫 runStore.openHistoryPanel()
  * 10: 拖入時套用高亮 class，dragleave 後移除
  * 13: 串行 Pod chatting / summarizing 時 isFileDropDisabled = true
  * 14: 下游 multi-instance pod 時 isFileDropDisabled = true
  * 15: unknown provider 時 isFileDropDisabled = true
- * 16: 後端回 errors.attachmentDiskFull → toast
- * 17: 後端回 errors.attachmentWriteFailed → toast
  * 18: generic 送出失敗（websocket emit 拋例外）→ toast podDropSendFailed
+ *
+ * 注意：案例 16/17（後端 pod:error 附件錯誤路徑）因測試環境無法重現完整
+ *   WebSocket → chatStore 路徑，已移除（原先為空殼測試，無法驗證元件行為）。
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mount } from "@vue/test-utils";
-import { createTestingPinia } from "@pinia/testing";
-import { ref, computed, nextTick } from "vue";
-import CanvasPod from "@/components/pod/CanvasPod.vue";
-import type { Pod } from "@/types";
+import { ref, nextTick } from "vue";
 import type { PodChatAttachment } from "@/types/websocket/requests";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
+import {
+  createUsePodScheduleMock,
+  createUseWorkflowClearMock,
+  createUsePodCapabilitiesMock,
+  createUsePodAnchorDragMock,
+  createUsePodNoteBindingMock,
+  createMockPod,
+  mountCanvasPod,
+} from "./__setup__/canvasPodMocks";
 
 // ---- 動態 mock 狀態 ----
 
@@ -219,57 +225,23 @@ vi.mock("@/composables/pod/usePodDrag", () => ({
 }));
 
 vi.mock("@/composables/pod/usePodNoteBinding", () => ({
-  usePodNoteBinding: () => ({
-    handleNoteDrop: vi.fn(),
-    handleNoteRemove: vi.fn(),
-  }),
+  usePodNoteBinding: () => createUsePodNoteBindingMock(),
 }));
 
 vi.mock("@/composables/pod/useWorkflowClear", () => ({
-  useWorkflowClear: () => ({
-    showClearDialog: ref(false),
-    downstreamPods: ref([]),
-    isLoadingDownstream: ref(false),
-    isClearing: ref(false),
-    handleClearWorkflow: vi.fn(),
-    handleConfirmClear: vi.fn(),
-    handleCancelClear: vi.fn(),
-  }),
+  useWorkflowClear: () => createUseWorkflowClearMock(),
 }));
 
 vi.mock("@/composables/pod/usePodSchedule", () => ({
-  usePodSchedule: () => ({
-    showScheduleModal: ref(false),
-    hasSchedule: computed(() => false),
-    scheduleEnabled: computed(() => false),
-    scheduleTooltip: computed(() => ""),
-    isScheduleFiredAnimating: ref(false),
-    handleOpenScheduleModal: vi.fn(),
-    handleScheduleConfirm: vi.fn(),
-    handleScheduleDelete: vi.fn(),
-    handleScheduleToggle: vi.fn(),
-    handleClearScheduleFiredAnimation: vi.fn(),
-  }),
+  usePodSchedule: () => createUsePodScheduleMock(),
 }));
 
 vi.mock("@/composables/pod/usePodAnchorDrag", () => ({
-  usePodAnchorDrag: () => ({
-    handleAnchorDragStart: vi.fn(),
-    handleAnchorDragMove: vi.fn(),
-    handleAnchorDragEnd: vi.fn(),
-  }),
+  usePodAnchorDrag: () => createUsePodAnchorDragMock(),
 }));
 
 vi.mock("@/composables/pod/usePodCapabilities", () => ({
-  usePodCapabilities: () => ({
-    capabilities: computed(() => ({})),
-    isCodex: computed(() => false),
-    isPluginEnabled: computed(() => false),
-    isRepositoryEnabled: computed(() => false),
-    isCommandEnabled: computed(() => false),
-    isMcpEnabled: computed(() => false),
-    isIntegrationEnabled: computed(() => false),
-  }),
+  usePodCapabilities: () => createUsePodCapabilitiesMock(),
 }));
 
 vi.mock("@/composables/useToast", () => ({
@@ -291,41 +263,12 @@ vi.mock("@/services/websocket", () => ({
 }));
 
 // ---- 工具函式 ----
-
-function createMockPod(overrides: Partial<Pod> = {}): Pod {
-  return {
-    id: "pod-1",
-    name: "Test Pod",
-    x: 0,
-    y: 0,
-    output: [],
-    rotation: 0,
-    multiInstance: false,
-    provider: "claude",
-    providerConfig: { model: "claude-sonnet-4-5" },
-    ...overrides,
-  };
-}
-
-function mountCanvasPod(pod: Pod) {
-  return mount(CanvasPod, {
-    props: { pod },
-    global: {
-      plugins: [createTestingPinia({ createSpy: vi.fn, stubActions: true })],
-    },
-    attachTo: document.body,
-  });
-}
+// createMockPod / mountCanvasPod 已由 __setup__/canvasPodMocks 提供，此處複用匯入版本
 
 /**
- * 建立合法 DragEvent，帶有指定的 File 陣列。
- * 使用 Object.defineProperty 注入 dataTransfer，避免 jsdom 限制。
+ * 建構符合 FileList 介面的物件（jsdom 不支援直接建立 FileList）。
  */
-function createDropEvent(files: File[]): DragEvent {
-  const items = files.map(() => ({
-    webkitGetAsEntry: vi.fn().mockReturnValue({ isDirectory: false }),
-  }));
-
+function makeFileList(files: File[]): FileList {
   const fileList = {
     length: files.length,
     item: (i: number) => files[i] ?? null,
@@ -336,22 +279,39 @@ function createDropEvent(files: File[]): DragEvent {
   for (let i = 0; i < files.length; i++) {
     (fileList as Record<string | number, unknown>)[i] = files[i];
   }
+  return fileList as unknown as FileList;
+}
 
+/**
+ * 建構含 files/items 的 DataTransfer mock 物件（注入至 DragEvent）。
+ */
+function makeDataTransfer(files: File[]): DataTransfer {
+  const items = files.map(() => ({
+    webkitGetAsEntry: vi.fn().mockReturnValue({ isDirectory: false }),
+  }));
+  return {
+    files: makeFileList(files),
+    items: {
+      length: items.length,
+      [Symbol.iterator]: function* () {
+        for (const item of items) yield item;
+      },
+    },
+    dropEffect: "copy",
+  } as unknown as DataTransfer;
+}
+
+/**
+ * 建立合法 DragEvent，帶有指定的 File 陣列。
+ * 使用 Object.defineProperty 注入 dataTransfer，避免 jsdom 限制。
+ */
+function createDropEvent(files: File[]): DragEvent {
   const event = new Event("drop", {
     bubbles: true,
     cancelable: true,
   }) as DragEvent;
   Object.defineProperty(event, "dataTransfer", {
-    value: {
-      files: fileList,
-      items: {
-        length: items.length,
-        [Symbol.iterator]: function* () {
-          for (const item of items) yield item;
-        },
-      },
-      dropEffect: "copy",
-    },
+    value: makeDataTransfer(files),
     writable: true,
     configurable: true,
   });
@@ -436,7 +396,12 @@ function setKnownProvider(
 // ---- 測試 ----
 
 describe("CanvasPod 拖曳上傳整合", () => {
+  // 保存原始 FileReader，避免直接屬性賦值汙染後續測試環境
+  // vi.restoreAllMocks() 無法還原此類替換，需手動還原
+  let originalFileReader: typeof window.FileReader;
+
   beforeEach(() => {
+    originalFileReader = (window as any).FileReader;
     vi.clearAllMocks();
     mockSelectedPodIds.value = [];
     mockIsDragging.value = false;
@@ -447,6 +412,8 @@ describe("CanvasPod 拖曳上傳整合", () => {
   });
 
   afterEach(() => {
+    // 明確還原全域 FileReader，確保不汙染後續測試
+    (window as any).FileReader = originalFileReader;
     vi.restoreAllMocks();
   });
 
@@ -711,51 +678,6 @@ describe("CanvasPod 拖曳上傳整合", () => {
     expect(mockSendMessage).toHaveBeenCalled();
 
     wrapper.unmount();
-  });
-
-  // -----------------------------------------------------------------------
-  // 案例 16/17：後端透過 pod:error 推送附件錯誤 → toast 顯示對應翻譯文案
-  //
-  // 觸發路徑：後端完成 WebSocket 事件 pod:error → chatStore.handleError →
-  //   t(error.key) 取得翻譯文案 → useToast().toast()
-  //
-  // 測試策略：由於 CanvasPod 測試環境的 chatStore 透過 useCanvasContext mock，
-  //   無法直接重現完整 WebSocket → chatStore 路徑，改以參數化方式驗證：
-  //   直接呼叫 mockToast（模擬 handleError 內部的 toast 呼叫），
-  //   確認每個 i18n key 對應的翻譯文案不同，且各自與 case 18 的 podDropSendFailed 有別。
-  // -----------------------------------------------------------------------
-  describe("案例 16/17：後端 pod:error 附件錯誤 → toast 顯示對應翻譯文案（參數化）", () => {
-    const errorCases = [
-      {
-        name: "errors.attachmentDiskFull",
-        // zh-TW 翻譯來自 frontend/src/locales/zh-TW.json
-        expectedTitle: "磁碟空間不足，無法寫入檔案",
-      },
-      {
-        name: "errors.attachmentWriteFailed",
-        expectedTitle: "檔案寫入失敗，請稍後再試",
-      },
-    ];
-
-    it.each(errorCases)(
-      "後端推送 $name 時，toast 標題應顯示對應翻譯（而非 podDropSendFailed）",
-      ({ name: _key, expectedTitle }) => {
-        // 模擬 handleError 內部邏輯：t(error.key) → toast()
-        // 此路徑與 case 18（usePodFileDrop catch）不同，因此 title 不同
-        mockToast({
-          title: expectedTitle,
-          variant: "destructive",
-        });
-
-        expect(mockToast).toHaveBeenCalledWith({
-          title: expectedTitle,
-          variant: "destructive",
-        });
-
-        // 確認此訊息與 case 18 的 podDropSendFailed 不同（實質區分兩條路徑）
-        expect(expectedTitle).not.toContain("傳送失敗");
-      },
-    );
   });
 
   // -----------------------------------------------------------------------

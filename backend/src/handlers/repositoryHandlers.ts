@@ -17,7 +17,7 @@ import { repositorySyncService } from "../services/repositorySyncService.js";
 import { commandService } from "../services/commandService.js";
 import { emitError } from "../utils/websocketResponse.js";
 import { createI18nError } from "../utils/i18nError.js";
-import { logger, type LogCategory, type LogAction } from "../utils/logger.js";
+import { logger } from "../utils/logger.js";
 import { createNoteHandlers } from "./factories/createNoteHandlers.js";
 import { createListHandler } from "./factories/createResourceHandlers.js";
 import {
@@ -30,6 +30,15 @@ import {
   assertCapability,
 } from "../utils/handlerHelpers.js";
 import { validateRepositoryExists } from "../utils/validators.js";
+
+/**
+ * 清理 git 錯誤訊息中的絕對路徑，避免內部路徑洩漏到 log 輸出。
+ * 把符合絕對路徑格式的字段（以 / 開頭的多層路徑）替換為 <path>。
+ */
+function sanitizeGitErrorMessage(msg: string): string {
+  // 替換以 / 開頭的絕對路徑（至少兩層），保留其他文字
+  return msg.replace(/\/[^\s'",:]+(?:\/[^\s'",:]+)+/g, "<path>");
+}
 
 export const repositoryNoteHandlers = createNoteHandlers({
   noteStore: repositoryNoteStore,
@@ -60,6 +69,11 @@ export async function handleRepositoryCreate(
 
   const exists = await repositoryService.exists(name);
   if (exists) {
+    // TODO（安全性 trade-off）：回傳明確的 "ALREADY_EXISTS" code 可讓前端顯示「此名稱已存在」
+    // 的精確訊息（useGitCloneProgress 等已依賴此 code），但同時提供存在性 oracle，
+    // 攻擊者可藉此枚舉已有的 repository 名稱。
+    // 目前評估 UX 價值 > 枚舉風險（repository 名稱非高敏感資料），故保留現狀。
+    // 若未來需提升安全性，可改為通用 "INVALID_NAME" 並統一顯示「名稱不可用」。
     emitError(
       connectionId,
       WebSocketResponseEvents.REPOSITORY_CREATED,
@@ -89,43 +103,20 @@ export async function handleRepositoryCreate(
   logger.log("Repository", "Create", `已建立 Repository「${repository.name}」`);
 }
 
-async function cleanupOldWorkspaceResources(
+async function cleanupPodWorkspaceResources(
   podWorkspacePath: string,
   podId: string,
 ): Promise<void> {
-  const deleteOperations = [
-    commandService.deleteCommandFromPath(podWorkspacePath),
-  ];
-
-  const results = await Promise.allSettled(deleteOperations);
-  const operationNames = ["commands"];
-
-  logRejectedResults(
-    results,
-    operationNames,
-    `Pod ${podId} workspace`,
-    "Repository",
-    "Bind",
-  );
-}
-
-function logRejectedResults(
-  results: PromiseSettledResult<unknown>[],
-  operationNames: string[],
-  context: string,
-  category: LogCategory,
-  action: LogAction,
-): void {
-  results.forEach((result, index) => {
-    if (result.status === "rejected") {
-      logger.error(
-        category,
-        action,
-        `刪除 ${context} 的 ${operationNames[index]} 失敗`,
-        result.reason,
-      );
-    }
-  });
+  try {
+    await commandService.deleteCommandFromPath(podWorkspacePath);
+  } catch (err) {
+    logger.error(
+      "Repository",
+      "Bind",
+      `刪除 Pod ${podId} workspace 的 commands 失敗`,
+      err,
+    );
+  }
 }
 
 export const handlePodBindRepository = withCanvasId<PodBindRepositoryPayload>(
@@ -176,6 +167,17 @@ export const handlePodBindRepository = withCanvasId<PodBindRepositoryPayload>(
 
     const oldRepositoryId = pod.repositoryId;
 
+    // 若已綁定相同 repository，無需重複執行同步與廣播，直接回傳成功
+    if (oldRepositoryId === repositoryId) {
+      emitPodUpdated(
+        canvasId,
+        podId,
+        requestId,
+        WebSocketResponseEvents.POD_REPOSITORY_BOUND,
+      );
+      return;
+    }
+
     podStore.setRepositoryId(canvasId, podId, repositoryId);
 
     await repositorySyncService.syncRepositoryResources(repositoryId);
@@ -186,7 +188,7 @@ export const handlePodBindRepository = withCanvasId<PodBindRepositoryPayload>(
     }
 
     if (!oldRepositoryId) {
-      await cleanupOldWorkspaceResources(pod.workspacePath, podId);
+      await cleanupPodWorkspaceResources(pod.workspacePath, podId);
     }
 
     emitPodUpdated(
@@ -210,7 +212,6 @@ export const handlePodBindRepository = withCanvasId<PodBindRepositoryPayload>(
  * 2. 重新同步舊 repository 的資源
  */
 async function unbindRepositoryCleanup(
-  _canvasId: string,
   pod: Pod,
   oldRepositoryId: string | null,
 ): Promise<void> {
@@ -245,7 +246,7 @@ export const handlePodUnbindRepository =
 
       podStore.setRepositoryId(canvasId, podId, null);
 
-      await unbindRepositoryCleanup(canvasId, pod, oldRepositoryId);
+      await unbindRepositoryCleanup(pod, oldRepositoryId);
 
       emitPodUpdated(
         canvasId,
@@ -290,7 +291,7 @@ async function cleanupWorktreeResources(
     logger.log(
       "Repository",
       "Delete",
-      `警告：移除 worktree 註冊失敗: ${removeResult.error}`,
+      `警告：移除 worktree 註冊失敗: ${sanitizeGitErrorMessage(String(removeResult.error ?? ""))}`,
     );
   }
 
@@ -304,7 +305,7 @@ async function cleanupWorktreeResources(
     logger.log(
       "Repository",
       "Delete",
-      `警告：刪除分支失敗: ${deleteResult.error}`,
+      `警告：刪除分支失敗: ${sanitizeGitErrorMessage(String(deleteResult.error ?? ""))}`,
     );
   }
 }
