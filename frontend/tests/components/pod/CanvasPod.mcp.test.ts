@@ -499,7 +499,7 @@ describe("CanvasPod MCP popover 整合測試", () => {
   // ── mcp-trigger 連按兩次 toggle 行為 ─────────────────────────────────────
 
   describe("mcp-trigger 連按兩次 toggle 行為", () => {
-    it("第二次點擊 mcp-trigger 不會關閉 popover（必須點外部才關）", async () => {
+    it("第二次點擊 mcp-trigger 會關閉 popover（toggle 行為）", async () => {
       const pod = createMockPod();
       const wrapper = mountCanvasPod(pod);
 
@@ -507,9 +507,9 @@ describe("CanvasPod MCP popover 整合測試", () => {
       await wrapper.find(".mcp-trigger").trigger("click");
       expect(wrapper.find(".mcp-popover-stub").exists()).toBe(true);
 
-      // 第二次點擊：實作沒有 toggle close，popover 仍保持開啟
+      // 第二次點擊：toggle close，popover 應關閉
       await wrapper.find(".mcp-trigger").trigger("click");
-      expect(wrapper.find(".mcp-popover-stub").exists()).toBe(true);
+      expect(wrapper.find(".mcp-popover-stub").exists()).toBe(false);
 
       wrapper.unmount();
     });

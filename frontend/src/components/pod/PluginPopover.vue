@@ -42,9 +42,15 @@ const handleKeydown = (event: KeyboardEvent): void => {
   }
 };
 
-/** 點擊外部關閉（capture 階段攔截，避免內部 click 誤觸） */
+/** 點擊外部關閉（capture 階段攔截，避免內部 click 誤觸）
+ *  排除 Plugin 觸發按鈕（.pod-plugin-notch-area）：
+ *  點觸發按鈕時讓 click 事件走到 handlePluginClick 的 toggle 邏輯，
+ *  避免「mousedown 先關、click 再開」的競態導致 popover 無法關閉。
+ */
 const handleMousedown = (event: MouseEvent): void => {
   if (!rootRef.value) return;
+  // 若點擊落在 Plugin 觸發區，略過此次關閉，交由 toggle handler 處理
+  if ((event.target as Element).closest(".pod-plugin-notch-area")) return;
   if (!rootRef.value.contains(event.target as Node)) {
     emit("close");
   }

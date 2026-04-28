@@ -330,19 +330,35 @@
   animation: pod-glow-pulse-opacity 2s ease-in-out infinite;
 }
 
-/* Selected 狀態：薄荷綠外圈描邊
+/* ===========================================
+   Pod 內層 Highlight（跟著 Pod 旋轉）
+
+   - .pod-inner-highlight 位於 .pod-wrapper 內層（在 rotate 容器內）
+   - selected/drag-over 狀態放在此層，使 outline/box-shadow 跟著 Pod 旋轉
+   - chatting/summarizing 等光暈仍留在外層 .pod-glow-layer（不受 rotate 截切）
+   =========================================== */
+
+.pod-inner-highlight {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 6px;
+  /* 預設無 highlight */
+}
+
+/* Selected 狀態：薄荷綠外圈描邊（跟著 Pod 旋轉）
    改用 outline 而非 box-shadow，避免與 chatting/summarizing 的 box-shadow 互蓋，
    讓兩種視覺效果可以同時並存。*/
-.pod-glow-layer.pod-glow-selected {
+.pod-inner-highlight.pod-glow-selected {
   outline: 3px solid oklch(0.65 0.15 170 / 0.6);
   outline-offset: 0px;
 }
 
-/* Drop Target 狀態：藍紫色（violet，hue 280）外圈 glow
+/* Drop Target 狀態：藍紫色（violet，hue 280）外圈 glow（跟著 Pod 旋轉）
    與 selected 薄荷綠（hue 170）明顯區分，
    與 deciding 紫色（hue 300）也有 20 度色相差距。
    使用 box-shadow 而非 outline，讓光量感更明顯（drop 是互動提示需要即時回饋）。*/
-.pod-glow-layer.pod-glow-drop-target {
+.pod-inner-highlight.pod-glow-drop-target {
   box-shadow:
     0 0 0 3px oklch(0.65 0.18 280 / 0.7),
     0 0 16px 4px oklch(0.65 0.18 280 / 0.4);

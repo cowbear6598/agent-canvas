@@ -17,7 +17,6 @@ import { repositorySyncService } from "../services/repositorySyncService.js";
 import { commandService } from "../services/commandService.js";
 import { emitError } from "../utils/websocketResponse.js";
 import { createI18nError } from "../utils/i18nError.js";
-import { clearPodMessages } from "./repository/repositoryBindHelpers.js";
 import { logger, type LogCategory, type LogAction } from "../utils/logger.js";
 import { createNoteHandlers } from "./factories/createNoteHandlers.js";
 import { createListHandler } from "./factories/createResourceHandlers.js";
@@ -178,7 +177,6 @@ export const handlePodBindRepository = withCanvasId<PodBindRepositoryPayload>(
     const oldRepositoryId = pod.repositoryId;
 
     podStore.setRepositoryId(canvasId, podId, repositoryId);
-    podStore.resetClaudeSession(canvasId, podId);
 
     await repositorySyncService.syncRepositoryResources(repositoryId);
 
@@ -190,8 +188,6 @@ export const handlePodBindRepository = withCanvasId<PodBindRepositoryPayload>(
     if (!oldRepositoryId) {
       await cleanupOldWorkspaceResources(pod.workspacePath, podId);
     }
-
-    await clearPodMessages(connectionId, podId);
 
     emitPodUpdated(
       canvasId,
@@ -248,11 +244,8 @@ export const handlePodUnbindRepository =
       const oldRepositoryId = pod.repositoryId;
 
       podStore.setRepositoryId(canvasId, podId, null);
-      podStore.resetClaudeSession(canvasId, podId);
 
       await unbindRepositoryCleanup(canvasId, pod, oldRepositoryId);
-
-      await clearPodMessages(connectionId, podId);
 
       emitPodUpdated(
         canvasId,

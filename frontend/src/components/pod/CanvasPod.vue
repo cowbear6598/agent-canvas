@@ -230,6 +230,11 @@ const showPluginPopover = ref(false);
 const pluginAnchorRect = ref<DOMRect | null>(null);
 
 const handlePluginClick = (event: MouseEvent): void => {
+  // 已開啟時點擊視為 toggle 關閉
+  if (showPluginPopover.value) {
+    showPluginPopover.value = false;
+    return;
+  }
   pluginAnchorRect.value = (
     event.currentTarget as HTMLElement
   ).getBoundingClientRect();
@@ -243,6 +248,11 @@ const showMcpPopover = ref(false);
 const mcpAnchorRect = ref<DOMRect | null>(null);
 
 const handleMcpClick = (event: MouseEvent): void => {
+  // 已開啟時點擊視為 toggle 關閉
+  if (showMcpPopover.value) {
+    showMcpPopover.value = false;
+    return;
+  }
   mcpAnchorRect.value = (
     event.currentTarget as HTMLElement
   ).getBoundingClientRect();
@@ -383,15 +393,11 @@ const handleContextMenu = (e: MouseEvent): void => {
     @drop="handleDrop"
   >
     <!-- 光暈層：放在 pod-wrapper 之外，不受 transform: rotate 影響 -->
-    <!-- position: absolute; inset: 0 讓此層與外層 wrapper 等大（即 pod-doodle 等大） -->
-    <!-- isDragOver 時套用 pod-glow-drop-target（獨立藍紫色），與 selected 薄荷綠視覺區分 -->
+    <!-- 此層僅承載 chatting/summarizing 等需要完整包覆（不被截切）的光暈效果 -->
+    <!-- selected/drag-over 狀態已移至 pod-wrapper 內層（pod-inner-highlight），跟著旋轉 -->
     <div
       class="pod-glow-layer"
-      :class="[
-        podStatusClass,
-        { 'pod-glow-selected': isSelected },
-        { 'pod-glow-drop-target': isDragOver },
-      ]"
+      :class="[podStatusClass]"
     />
 
     <div
@@ -432,6 +438,14 @@ const handleContextMenu = (e: MouseEvent): void => {
         @dblclick="handleDblClick"
         @contextmenu="handleContextMenu"
       >
+        <!-- 內層 highlight：selected/drag-over 狀態，隨 pod-wrapper 的 rotate 一起旋轉 -->
+        <div
+          class="pod-inner-highlight"
+          :class="[
+            { 'pod-glow-selected': isSelected },
+            { 'pod-glow-drop-target': isDragOver },
+          ]"
+        />
         <div class="model-notch" />
         <div class="mcp-notch" />
         <div class="mcp-server-notch" />

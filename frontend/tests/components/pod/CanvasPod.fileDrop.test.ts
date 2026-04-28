@@ -546,7 +546,8 @@ describe("CanvasPod 拖曳上傳整合", () => {
     wrapper.element.dispatchEvent(dragEnterEvent);
     await nextTick();
 
-    const glowLayer = wrapper.find(".pod-glow-layer");
+    // pod-glow-drop-target 已移至 pod-inner-highlight（跟著 Pod 旋轉），非 pod-glow-layer
+    const glowLayer = wrapper.find(".pod-inner-highlight");
     expect(glowLayer.classes()).toContain("pod-glow-drop-target");
 
     // dragleave 模擬完全離開容器（relatedTarget 在容器外）

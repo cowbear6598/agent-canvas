@@ -178,10 +178,56 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener("mousedown", handleOutsideClick, true);
+  // 清理子選單延遲關閉 timer，避免 unmount 後 timer 仍觸發
+  if (summaryMenuCloseTimer.value !== null) {
+    clearTimeout(summaryMenuCloseTimer.value);
+  }
+  if (aiModelMenuCloseTimer.value !== null) {
+    clearTimeout(aiModelMenuCloseTimer.value);
+  }
 });
 
 const isSummaryMenuOpen = ref(false);
 const isAiModelMenuOpen = ref(false);
+
+/**
+ * 子選單 hover 關閉延遲（180ms）：
+ * 避免滑鼠從觸發項往子選單移動途中（經過 menu 背景或微小 gap）誤觸 mouseleave 而關閉。
+ * 同時解決 Mac IME 候選視窗出現時 pointer hit-test 被劫持導致誤關的問題。
+ */
+const SUBMENU_CLOSE_DELAY_MS = 180;
+const summaryMenuCloseTimer = ref<ReturnType<typeof setTimeout> | null>(null);
+const aiModelMenuCloseTimer = ref<ReturnType<typeof setTimeout> | null>(null);
+
+const openSummaryMenu = (): void => {
+  if (summaryMenuCloseTimer.value !== null) {
+    clearTimeout(summaryMenuCloseTimer.value);
+    summaryMenuCloseTimer.value = null;
+  }
+  isSummaryMenuOpen.value = true;
+};
+
+const closeSummaryMenuDelayed = (): void => {
+  summaryMenuCloseTimer.value = setTimeout(() => {
+    isSummaryMenuOpen.value = false;
+    summaryMenuCloseTimer.value = null;
+  }, SUBMENU_CLOSE_DELAY_MS);
+};
+
+const openAiModelMenu = (): void => {
+  if (aiModelMenuCloseTimer.value !== null) {
+    clearTimeout(aiModelMenuCloseTimer.value);
+    aiModelMenuCloseTimer.value = null;
+  }
+  isAiModelMenuOpen.value = true;
+};
+
+const closeAiModelMenuDelayed = (): void => {
+  aiModelMenuCloseTimer.value = setTimeout(() => {
+    isAiModelMenuOpen.value = false;
+    aiModelMenuCloseTimer.value = null;
+  }, SUBMENU_CLOSE_DELAY_MS);
+};
 
 /**
  * AI Decide Model 子選單專用：硬編碼 Claude 三選一。
@@ -312,10 +358,11 @@ const summaryModelOptions = computed(() => {
     <div class="border-t border-border my-1" />
 
     <!-- Summary Model 子選單觸發器 -->
+    <!-- @mouseenter/@mouseleave 改用延遲函式，避免滑鼠途經間隙或 IME 視窗時誤關 -->
     <div
       class="relative"
-      @mouseenter="isSummaryMenuOpen = true"
-      @mouseleave="isSummaryMenuOpen = false"
+      @mouseenter="openSummaryMenu"
+      @mouseleave="closeSummaryMenuDelayed"
     >
       <button
         class="w-full flex items-center justify-between gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary"
@@ -330,57 +377,64 @@ const summaryModelOptions = computed(() => {
         />
       </button>
 
-      <!-- Summary Model 子選單：根據上游 Pod provider 動態渲染 -->
+      <!-- Summary Model 子選單：根據上游 Pod provider 動態渲染
+           移除 ml-1（4px gap），改在浮層加 pl-1 撐出等價的視覺空間，
+           確保滑鼠從觸發項移往子選單時不會觸發 mouseleave -->
       <div
         v-if="isSummaryMenuOpen"
-        class="absolute left-full top-0 ml-1 bg-card border border-doodle-ink rounded-md p-1 z-50 min-w-[120px]"
+        class="absolute left-full top-0 pl-1 z-50"
+        @mouseenter="openSummaryMenu"
+        @mouseleave="closeSummaryMenuDelayed"
       >
-        <!-- 上游 Pod 不存在或 capability 尚未載入時顯示載入中提示 -->
         <div
-          v-if="summaryModelOptions === null"
-          class="px-2 py-1 text-xs font-mono text-muted-foreground"
+          class="bg-card border border-doodle-ink rounded-md p-1 min-w-[120px]"
         >
-          {{ $t("canvas.connectionContextMenu.loading") }}
-        </div>
-
-        <!-- 動態渲染上游 provider 的可選模型清單 -->
-        <button
-          v-for="option in summaryModelOptions ?? []"
-          :key="option.value"
-          :class="[
-            'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary',
-            {
-              'bg-secondary border-l-2 border-l-primary':
-                currentSummaryModel === option.value,
-            },
-          ]"
-          @click="handleSetSummaryModel(option.value, option.label)"
-        >
-          <span
-            :class="[
-              'font-mono',
-              currentSummaryModel === option.value
-                ? 'text-primary font-semibold'
-                : 'text-foreground',
-            ]"
+          <!-- 上游 Pod 不存在或 capability 尚未載入時顯示載入中提示 -->
+          <div
+            v-if="summaryModelOptions === null"
+            class="px-2 py-1 text-xs font-mono text-muted-foreground"
           >
-            {{ option.label }}
-          </span>
-        </button>
+            {{ $t("canvas.connectionContextMenu.loading") }}
+          </div>
+
+          <!-- 動態渲染上游 provider 的可選模型清單 -->
+          <button
+            v-for="option in summaryModelOptions ?? []"
+            :key="option.value"
+            :class="[
+              'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary',
+              {
+                'bg-secondary border-l-2 border-l-primary':
+                  currentSummaryModel === option.value,
+              },
+            ]"
+            @click="handleSetSummaryModel(option.value, option.label)"
+          >
+            <span
+              :class="[
+                'font-mono',
+                currentSummaryModel === option.value
+                  ? 'text-primary font-semibold'
+                  : 'text-foreground',
+              ]"
+            >
+              {{ option.label }}
+            </span>
+          </button>
+        </div>
       </div>
     </div>
 
     <!-- AI Model 子選單觸發器 -->
+    <!-- @mouseenter/@mouseleave 改用延遲函式，避免滑鼠途經間隙或 IME 視窗時誤關 -->
     <div
       class="relative"
       :class="{
         'opacity-50 pointer-events-none': currentTriggerMode !== 'ai-decide',
       }"
-      @mouseenter="
-        currentTriggerMode === 'ai-decide' && (isAiModelMenuOpen = true)
-      "
+      @mouseenter="currentTriggerMode === 'ai-decide' && openAiModelMenu()"
       @mouseleave="
-        currentTriggerMode === 'ai-decide' && (isAiModelMenuOpen = false)
+        currentTriggerMode === 'ai-decide' && closeAiModelMenuDelayed()
       "
     >
       <button
@@ -396,35 +450,41 @@ const summaryModelOptions = computed(() => {
         />
       </button>
 
-      <!-- 子選單 -->
+      <!-- 子選單：移除 ml-1（4px gap），改用 pl-1 撐出等價視覺空間 -->
       <div
         v-if="isAiModelMenuOpen"
-        class="absolute left-full top-0 ml-1 bg-card border border-doodle-ink rounded-md p-1 z-50 min-w-[120px]"
+        class="absolute left-full top-0 pl-1 z-50"
+        @mouseenter="openAiModelMenu"
+        @mouseleave="closeAiModelMenuDelayed"
       >
-        <!-- AI Decide Model 子選單：始終硬編碼 Claude 三選一，不受上游 provider 影響 -->
-        <button
-          v-for="option in AI_DECIDE_MODEL_OPTIONS"
-          :key="option.value"
-          :class="[
-            'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary',
-            {
-              'bg-secondary border-l-2 border-l-primary':
-                currentAiDecideModel === option.value,
-            },
-          ]"
-          @click="handleSetAiDecideModel(option)"
+        <div
+          class="bg-card border border-doodle-ink rounded-md p-1 min-w-[120px]"
         >
-          <span
+          <!-- AI Decide Model 子選單：始終硬編碼 Claude 三選一，不受上游 provider 影響 -->
+          <button
+            v-for="option in AI_DECIDE_MODEL_OPTIONS"
+            :key="option.value"
             :class="[
-              'font-mono',
-              currentAiDecideModel === option.value
-                ? 'text-primary font-semibold'
-                : 'text-foreground',
+              'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary',
+              {
+                'bg-secondary border-l-2 border-l-primary':
+                  currentAiDecideModel === option.value,
+              },
             ]"
+            @click="handleSetAiDecideModel(option)"
           >
-            {{ option.label }}
-          </span>
-        </button>
+            <span
+              :class="[
+                'font-mono',
+                currentAiDecideModel === option.value
+                  ? 'text-primary font-semibold'
+                  : 'text-foreground',
+              ]"
+            >
+              {{ option.label }}
+            </span>
+          </button>
+        </div>
       </div>
     </div>
   </div>

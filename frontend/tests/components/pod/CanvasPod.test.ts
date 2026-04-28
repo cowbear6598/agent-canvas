@@ -349,15 +349,16 @@ describe("CanvasPod pod-glow-selected class 選取狀態", () => {
     wrapper.unmount();
   });
 
-  it("selectedPodIds 包含 pod.id 時，.pod-glow-layer 含 pod-glow-selected", () => {
+  it("selectedPodIds 包含 pod.id 時，.pod-inner-highlight 含 pod-glow-selected", () => {
     const pod = createMockPod({ id: "pod-selected" });
     // 設定 mockSelectedPodIds 讓 useCanvasContext mock 的 getter 回傳含 pod.id 的陣列
     mockSelectedPodIds.value = ["pod-selected"];
     const wrapper = mountCanvasPod(pod);
 
-    const glowLayer = wrapper.find(".pod-glow-layer");
-    expect(glowLayer.exists()).toBe(true);
-    expect(glowLayer.classes()).toContain("pod-glow-selected");
+    // pod-glow-selected 已移至 pod-inner-highlight（跟著 Pod 旋轉），非 pod-glow-layer
+    const innerHighlight = wrapper.find(".pod-inner-highlight");
+    expect(innerHighlight.exists()).toBe(true);
+    expect(innerHighlight.classes()).toContain("pod-glow-selected");
 
     wrapper.unmount();
   });

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, onMounted, nextTick } from "vue";
 import { useI18n } from "vue-i18n";
 import { Send, Mic, Square } from "lucide-vue-next";
 import { TEXTAREA_MAX_HEIGHT } from "@/lib/constants";
@@ -28,6 +28,13 @@ const emit = defineEmits<{
 const input = ref("");
 const editableRef = ref<HTMLDivElement | null>(null);
 const isAborting = ref(false);
+
+// ChatModal 透過 v-if 掛載，nextTick 確保 DOM 完成渲染後才 focus
+onMounted(() => {
+  nextTick(() => {
+    editableRef.value?.focus();
+  });
+});
 
 const { t } = useI18n();
 const inputPlaceholder = computed(() => t("chat.inputPlaceholder"));
