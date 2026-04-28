@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.1.4] - 2026-04-28
+
+### 新增
+- 拖曳檔案到 Pod 觸發 Agent 功能
+- 統一前後端常量（MAX_MESSAGE_LENGTH、MAX_CONTENT_BLOCK_SIZE_BYTES 等）
+- 拖曳資料夾錯誤訊息國際化支援（三語）
+- 強化資料驗證與防禦（UUID 邊界檢查、檔名路徑字元過濾、df 輸出欄位驗證）
+
+### 修正
+- 修正連線右鍵選單的 Summary Model / AI Model 子選單關閉延遲 180ms 的卡頓問題
+- 修正 Pod 旋轉 highlight 顯示
+- 修正 MCP 與 Plugin toggle 互動行為
+- 修正 ConnectionContextMenu 子選單 hover delay
+- 修正 Repository 變動不清訊息與 session 同步問題
+- 修正 Chat input focus 與輸入行為
+- 優化連線與 Pod 互動體驗，強化防禦與效能
+- 優化啟動流程結構（runMigrations、startBackgroundServices 函式抽出）
+- 優化暫存清理與檔案讀取效能（tmpCleanupService 改用 chunk 並行 stat、前端拖檔改用 chunk 並行讀取）
+- 補強單元測試覆蓋率
+
 ## [1.1.3] - 2026-04-28
 
 ### 修正
