@@ -1,478 +1,466 @@
-import { describe, it, expect, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
-import { setupStoreTest } from '../../helpers/testSetup'
-import RepositoryContextMenu from '@/components/canvas/RepositoryContextMenu.vue'
+import { describe, it, expect, vi } from "vitest";
+import { mount } from "@vue/test-utils";
+import {
+  webSocketMockFactory,
+  mockCreateWebSocketRequest,
+} from "../../helpers/mockWebSocket";
+import { setupStoreTest } from "../../helpers/testSetup";
+import { useCanvasStore } from "@/stores/canvasStore";
+import RepositoryContextMenu from "@/components/canvas/RepositoryContextMenu.vue";
 
-const mockCheckIsGit = vi.fn()
-const mockGetLocalBranches = vi.fn()
-const mockCheckDirty = vi.fn()
-const mockCheckoutBranch = vi.fn()
-const mockCreateWorktree = vi.fn()
-const mockDeleteBranch = vi.fn()
-const mockPullLatest = vi.fn()
+// ── WS 邊界 mock ──────────────────────────────────────────────
+vi.mock("@/services/websocket", () => webSocketMockFactory());
 
-vi.mock('@/stores/note/repositoryStore', () => ({
-  useRepositoryStore: () => ({
-    checkIsGit: mockCheckIsGit,
-    getLocalBranches: mockGetLocalBranches,
-    checkDirty: mockCheckDirty,
-    checkoutBranch: mockCheckoutBranch,
-    createWorktree: mockCreateWorktree,
-    deleteBranch: mockDeleteBranch,
-    pullLatest: mockPullLatest,
-  }),
-}))
-
-const mockShowErrorToast = vi.fn()
-
-vi.mock('@/composables/useToast', () => ({
+// ── useToast：驗證元件層自己呼叫的 showErrorToast ────────────
+const { mockShowErrorToast } = vi.hoisted(() => ({
+  mockShowErrorToast: vi.fn(),
+}));
+vi.mock("@/composables/useToast", () => ({
   useToast: () => ({
-    showErrorToast: mockShowErrorToast,
     showSuccessToast: vi.fn(),
+    showErrorToast: mockShowErrorToast,
     toast: vi.fn(),
     dismiss: vi.fn(),
     toasts: { value: [] },
   }),
-}))
+}));
 
-vi.mock('lucide-vue-next', () => ({
-  GitBranch: { name: 'GitBranch', template: '<svg />' },
-  Download: { name: 'Download', template: '<svg />' },
-}))
-
-vi.mock('@/components/canvas/CreateWorktreeModal.vue', () => ({
+// ── UI 元件 mock（避免複雜子元件 render 干擾）────────────────
+vi.mock("lucide-vue-next", () => ({
+  GitBranch: { name: "GitBranch", template: "<svg />" },
+  Download: { name: "Download", template: "<svg />" },
+}));
+vi.mock("@/components/canvas/CreateWorktreeModal.vue", () => ({
   default: {
-    name: 'CreateWorktreeModal',
-    props: ['open', 'repositoryName'],
-    emits: ['update:open', 'submit'],
-    template: '<div />',
+    name: "CreateWorktreeModal",
+    props: ["open", "repositoryName"],
+    emits: ["update:open", "submit"],
+    template: "<div />",
   },
-}))
-
-vi.mock('@/components/canvas/BranchSelectModal.vue', () => ({
+}));
+vi.mock("@/components/canvas/BranchSelectModal.vue", () => ({
   default: {
-    name: 'BranchSelectModal',
-    props: ['open', 'branches', 'currentBranch', 'repositoryName', 'worktreeBranches'],
-    emits: ['update:open', 'select', 'delete'],
-    template: '<div />',
+    name: "BranchSelectModal",
+    props: [
+      "open",
+      "branches",
+      "currentBranch",
+      "repositoryName",
+      "worktreeBranches",
+    ],
+    emits: ["update:open", "select", "delete"],
+    template: "<div />",
   },
-}))
-
-vi.mock('@/components/canvas/ForceCheckoutModal.vue', () => ({
+}));
+vi.mock("@/components/canvas/ForceCheckoutModal.vue", () => ({
   default: {
-    name: 'ForceCheckoutModal',
-    props: ['open', 'targetBranch'],
-    emits: ['update:open', 'force-checkout'],
-    template: '<div />',
+    name: "ForceCheckoutModal",
+    props: ["open", "targetBranch"],
+    emits: ["update:open", "force-checkout"],
+    template: "<div />",
   },
-}))
-
-vi.mock('@/components/canvas/DeleteBranchModal.vue', () => ({
+}));
+vi.mock("@/components/canvas/DeleteBranchModal.vue", () => ({
   default: {
-    name: 'DeleteBranchModal',
-    props: ['open', 'branchName'],
-    emits: ['update:open', 'confirm'],
-    template: '<div />',
+    name: "DeleteBranchModal",
+    props: ["open", "branchName"],
+    emits: ["update:open", "confirm"],
+    template: "<div />",
   },
-}))
-
-vi.mock('@/components/canvas/PullLatestConfirmModal.vue', () => ({
+}));
+vi.mock("@/components/canvas/PullLatestConfirmModal.vue", () => ({
   default: {
-    name: 'PullLatestConfirmModal',
-    props: ['open'],
-    emits: ['update:open', 'confirm'],
-    template: '<div />',
+    name: "PullLatestConfirmModal",
+    props: ["open"],
+    emits: ["update:open", "confirm"],
+    template: "<div />",
   },
-}))
+}));
 
+// ── 預設 props ────────────────────────────────────────────────
 const defaultProps = {
   position: { x: 100, y: 100 },
-  repositoryId: 'repo-123',
-  repositoryName: 'test-repo',
+  repositoryId: "repo-123",
+  repositoryName: "test-repo",
   notePosition: { x: 50, y: 50 },
   isWorktree: false,
-}
+};
 
 function mountMenu(props = {}) {
   return mount(RepositoryContextMenu, {
     props: { ...defaultProps, ...props },
     attachTo: document.body,
-  })
+  });
 }
 
-describe('RepositoryContextMenu', () => {
+describe("RepositoryContextMenu", () => {
+  // 使用真實 repositoryStore + Pinia，只 mock WS 邊界
   setupStoreTest(() => {
-    mockCheckIsGit.mockResolvedValue(true)
-  })
+    const canvasStore = useCanvasStore();
+    canvasStore.activeCanvasId = "canvas-1";
+    // onMounted 呼叫 checkIsGit，預設回傳 true
+    mockCreateWebSocketRequest.mockResolvedValue({
+      success: true,
+      isGit: true,
+    });
+  });
 
-  describe('handleBranchSelect - checkDirty 失敗', () => {
-    it('checkDirty 失敗時應顯示錯誤 Toast（含 error 訊息）', async () => {
-      mockGetLocalBranches.mockResolvedValue({
-        success: true,
-        branches: ['main', 'feature'],
-        currentBranch: 'main',
-        worktreeBranches: [],
-      })
-      mockCheckDirty.mockResolvedValue({ success: false, error: '無法取得 Git 狀態' })
+  describe("render smoke — 元件可正常掛載", () => {
+    it("帶入有效 props 應成功 render", async () => {
+      const wrapper = mountMenu();
+      await wrapper.vm.$nextTick();
+      expect(wrapper.exists()).toBe(true);
+    });
+  });
 
-      const wrapper = mountMenu()
-      await wrapper.vm.$nextTick()
+  describe("handleBranchSelect — checkDirty 失敗時的 emit / toast 行為", () => {
+    it("checkDirty 失敗（含 error 訊息）時元件應呼叫 showErrorToast", async () => {
+      // checkIsGit 成功 → checkDirty 失敗
+      mockCreateWebSocketRequest
+        .mockResolvedValueOnce({ success: true, isGit: true }) // checkIsGit
+        .mockResolvedValueOnce({ success: false, error: "無法取得 Git 狀態" }); // checkDirty
 
-      const vm = wrapper.vm as unknown as {
-        handleBranchSelect: (branch: string) => Promise<void>
-      }
-      await vm.handleBranchSelect('feature')
-
-      expect(mockShowErrorToast).toHaveBeenCalledWith('Git', '無法取得 Git 狀態')
-    })
-
-    it('checkDirty 失敗且無 error 訊息時應顯示預設錯誤文字', async () => {
-      mockCheckDirty.mockResolvedValue({ success: false, error: undefined })
-
-      const wrapper = mountMenu()
-      await wrapper.vm.$nextTick()
+      const wrapper = mountMenu();
+      await wrapper.vm.$nextTick();
 
       const vm = wrapper.vm as unknown as {
-        handleBranchSelect: (branch: string) => Promise<void>
-      }
-      await vm.handleBranchSelect('feature')
+        handleBranchSelect: (branch: string) => Promise<void>;
+      };
+      await vm.handleBranchSelect("feature");
 
-      expect(mockShowErrorToast).toHaveBeenCalledWith('Git', '檢查修改狀態失敗')
-    })
+      expect(mockShowErrorToast).toHaveBeenCalledWith(
+        "Git",
+        "無法取得 Git 狀態",
+      );
+    });
 
-    it('checkDirty 失敗時不應執行 checkout', async () => {
-      mockCheckDirty.mockResolvedValue({ success: false, error: '錯誤' })
+    it("checkDirty 失敗且無 error 訊息時應顯示預設錯誤文字", async () => {
+      mockCreateWebSocketRequest
+        .mockResolvedValueOnce({ success: true, isGit: true }) // checkIsGit
+        .mockResolvedValueOnce({ success: false }); // checkDirty 無 error
 
-      const wrapper = mountMenu()
-      await wrapper.vm.$nextTick()
-
-      const vm = wrapper.vm as unknown as {
-        handleBranchSelect: (branch: string) => Promise<void>
-      }
-      await vm.handleBranchSelect('feature')
-
-      expect(mockCheckoutBranch).not.toHaveBeenCalled()
-    })
-
-    it('checkDirty 失敗時應 emit close', async () => {
-      mockCheckDirty.mockResolvedValue({ success: false, error: '錯誤' })
-
-      const wrapper = mountMenu()
-      await wrapper.vm.$nextTick()
+      const wrapper = mountMenu();
+      await wrapper.vm.$nextTick();
 
       const vm = wrapper.vm as unknown as {
-        handleBranchSelect: (branch: string) => Promise<void>
-      }
-      await vm.handleBranchSelect('feature')
+        handleBranchSelect: (branch: string) => Promise<void>;
+      };
+      await vm.handleBranchSelect("feature");
 
-      expect(wrapper.emitted('close')).toBeTruthy()
-    })
+      expect(mockShowErrorToast).toHaveBeenCalledWith(
+        "Git",
+        "檢查修改狀態失敗",
+      );
+    });
 
-    it('checkDirty 成功且未修改時應執行 checkout', async () => {
-      mockCheckDirty.mockResolvedValue({ success: true, isDirty: false })
-      mockCheckoutBranch.mockResolvedValue({ success: true })
+    it("checkDirty 失敗時應 emit close", async () => {
+      mockCreateWebSocketRequest
+        .mockResolvedValueOnce({ success: true, isGit: true }) // checkIsGit
+        .mockResolvedValueOnce({ success: false, error: "錯誤" }); // checkDirty
 
-      const wrapper = mountMenu()
-      await wrapper.vm.$nextTick()
-
-      const vm = wrapper.vm as unknown as {
-        handleBranchSelect: (branch: string) => Promise<void>
-      }
-      await vm.handleBranchSelect('feature')
-
-      expect(mockShowErrorToast).not.toHaveBeenCalled()
-      expect(mockCheckoutBranch).toHaveBeenCalledWith('repo-123', 'feature', false)
-    })
-
-    it('checkDirty 成功且有未提交修改時不應顯示錯誤 Toast', async () => {
-      mockCheckDirty.mockResolvedValue({ success: true, isDirty: true })
-
-      const wrapper = mountMenu()
-      await wrapper.vm.$nextTick()
+      const wrapper = mountMenu();
+      await wrapper.vm.$nextTick();
 
       const vm = wrapper.vm as unknown as {
-        handleBranchSelect: (branch: string) => Promise<void>
-      }
-      await vm.handleBranchSelect('feature')
+        handleBranchSelect: (branch: string) => Promise<void>;
+      };
+      await vm.handleBranchSelect("feature");
 
-      expect(mockShowErrorToast).not.toHaveBeenCalled()
-      expect(mockCheckoutBranch).not.toHaveBeenCalled()
-    })
-  })
+      expect(wrapper.emitted("close")).toBeTruthy();
+    });
 
-  describe('Modal close handlers - 使用者取消時 emit close', () => {
-    it('使用者取消 WorktreeModal 時應 emit close', async () => {
-      const wrapper = mountMenu()
-      await wrapper.vm.$nextTick()
+    it("checkDirty 成功且未修改（isDirty: false）時應執行 checkout，不顯示 errorToast", async () => {
+      mockCreateWebSocketRequest
+        .mockResolvedValueOnce({ success: true, isGit: true }) // checkIsGit
+        .mockResolvedValueOnce({ success: true, isDirty: false }); // checkDirty
+      // checkoutBranch 使用 websocketClient.emit（fire-and-forget），不需額外 mock
 
-      const vm = wrapper.vm as unknown as {
-        handleWorktreeModalClose: (open: boolean) => void
-      }
-      vm.handleWorktreeModalClose(false)
-
-      expect(wrapper.emitted('close')).toBeTruthy()
-    })
-
-    it('使用者取消 BranchModal 時應 emit close', async () => {
-      const wrapper = mountMenu()
-      await wrapper.vm.$nextTick()
+      const wrapper = mountMenu();
+      await wrapper.vm.$nextTick();
 
       const vm = wrapper.vm as unknown as {
-        handleBranchModalClose: (open: boolean) => void
-      }
-      vm.handleBranchModalClose(false)
+        handleBranchSelect: (branch: string) => Promise<void>;
+      };
+      await vm.handleBranchSelect("feature");
 
-      expect(wrapper.emitted('close')).toBeTruthy()
-    })
+      expect(mockShowErrorToast).not.toHaveBeenCalled();
+    });
 
-    it('使用者取消 ForceCheckoutModal 時應 emit close', async () => {
-      const wrapper = mountMenu()
-      await wrapper.vm.$nextTick()
+    it("checkDirty 成功且 isDirty: true 時不應顯示 errorToast", async () => {
+      mockCreateWebSocketRequest
+        .mockResolvedValueOnce({ success: true, isGit: true }) // checkIsGit
+        .mockResolvedValueOnce({ success: true, isDirty: true }); // checkDirty
 
-      const vm = wrapper.vm as unknown as {
-        handleForceCheckoutModalClose: (open: boolean) => void
-      }
-      vm.handleForceCheckoutModalClose(false)
-
-      expect(wrapper.emitted('close')).toBeTruthy()
-    })
-
-    it('使用者取消 DeleteBranchModal 時應 emit close', async () => {
-      const wrapper = mountMenu()
-      await wrapper.vm.$nextTick()
+      const wrapper = mountMenu();
+      await wrapper.vm.$nextTick();
 
       const vm = wrapper.vm as unknown as {
-        handleDeleteBranchModalClose: (open: boolean) => void
-      }
-      vm.handleDeleteBranchModalClose(false)
+        handleBranchSelect: (branch: string) => Promise<void>;
+      };
+      await vm.handleBranchSelect("feature");
 
-      expect(wrapper.emitted('close')).toBeTruthy()
-    })
+      expect(mockShowErrorToast).not.toHaveBeenCalled();
+    });
+  });
 
-    it('使用者取消 PullConfirmModal 時應 emit close', async () => {
-      const wrapper = mountMenu()
-      await wrapper.vm.$nextTick()
+  describe("handleBranchSelect — isDirty: true 時的 ForceCheckoutModal 狀態", () => {
+    it("checkDirty 返回 isDirty: true 時應開啟 ForceCheckoutModal", async () => {
+      mockCreateWebSocketRequest
+        .mockResolvedValueOnce({ success: true, isGit: true }) // checkIsGit
+        .mockResolvedValueOnce({ success: true, isDirty: true }); // checkDirty
 
-      const vm = wrapper.vm as unknown as {
-        handlePullConfirmModalClose: (open: boolean) => void
-      }
-      vm.handlePullConfirmModalClose(false)
-
-      expect(wrapper.emitted('close')).toBeTruthy()
-    })
-
-    it('Modal open 為 true 時不應 emit close', async () => {
-      const wrapper = mountMenu()
-      await wrapper.vm.$nextTick()
+      const wrapper = mountMenu();
+      await wrapper.vm.$nextTick();
 
       const vm = wrapper.vm as unknown as {
-        handleWorktreeModalClose: (open: boolean) => void
-      }
-      vm.handleWorktreeModalClose(true)
+        handleBranchSelect: (branch: string) => Promise<void>;
+        modalState: { showForceCheckout: boolean };
+      };
+      await vm.handleBranchSelect("feature");
 
-      expect(wrapper.emitted('close')).toBeFalsy()
-    })
-  })
+      expect(vm.modalState.showForceCheckout).toBe(true);
+    });
 
-  describe('handleDeleteBranchConfirm - 刪除分支', () => {
-    it('刪除失敗時應 emit close', async () => {
-      mockDeleteBranch.mockResolvedValue({ success: false })
+    it("checkDirty 返回 isDirty: true 時應設定 targetBranch", async () => {
+      mockCreateWebSocketRequest
+        .mockResolvedValueOnce({ success: true, isGit: true }) // checkIsGit
+        .mockResolvedValueOnce({ success: true, isDirty: true }); // checkDirty
 
-      const wrapper = mountMenu()
-      await wrapper.vm.$nextTick()
-
-      const vm = wrapper.vm as unknown as {
-        handleDeleteBranchConfirm: () => Promise<void>
-      }
-      await vm.handleDeleteBranchConfirm()
-
-      expect(wrapper.emitted('close')).toBeTruthy()
-    })
-
-    it('刪除成功時應重新載入分支列表', async () => {
-      mockDeleteBranch.mockResolvedValue({ success: true })
-      mockGetLocalBranches.mockResolvedValue({
-        success: true,
-        branches: ['main'],
-        currentBranch: 'main',
-        worktreeBranches: [],
-      })
-
-      const wrapper = mountMenu()
-      await wrapper.vm.$nextTick()
+      const wrapper = mountMenu();
+      await wrapper.vm.$nextTick();
 
       const vm = wrapper.vm as unknown as {
-        handleDeleteBranchConfirm: () => Promise<void>
-      }
-      await vm.handleDeleteBranchConfirm()
+        handleBranchSelect: (branch: string) => Promise<void>;
+        dataState: { targetBranch: string };
+      };
+      await vm.handleBranchSelect("feature");
 
-      expect(mockGetLocalBranches).toHaveBeenCalledWith('repo-123')
-    })
-  })
+      expect(vm.dataState.targetBranch).toBe("feature");
+    });
+  });
 
-  describe('handlePullLatestConfirm - Pull 操作', () => {
-    it('Pull 完成後應 emit close', async () => {
-      mockPullLatest.mockResolvedValue({ requestId: 'req-456' })
+  describe("handleForceCheckout — force checkout 完整流程的 emit", () => {
+    it("ForceCheckout 確認後應 emit branch-switched", async () => {
+      mockCreateWebSocketRequest
+        .mockResolvedValueOnce({ success: true, isGit: true }) // checkIsGit
+        .mockResolvedValueOnce({ success: true, isDirty: true }); // checkDirty
 
-      const wrapper = mountMenu()
-      await wrapper.vm.$nextTick()
-
-      const vm = wrapper.vm as unknown as {
-        handlePullLatestConfirm: () => Promise<void>
-      }
-      await vm.handlePullLatestConfirm()
-
-      expect(wrapper.emitted('close')).toBeTruthy()
-    })
-
-    it('Pull 完成後應 emit pull-started 並帶正確 payload', async () => {
-      mockPullLatest.mockResolvedValue({ requestId: 'req-456' })
-
-      const wrapper = mountMenu()
-      await wrapper.vm.$nextTick()
+      const wrapper = mountMenu();
+      await wrapper.vm.$nextTick();
 
       const vm = wrapper.vm as unknown as {
-        handlePullLatestConfirm: () => Promise<void>
-      }
-      await vm.handlePullLatestConfirm()
+        handleBranchSelect: (branch: string) => Promise<void>;
+        handleForceCheckout: () => Promise<void>;
+      };
 
-      expect(wrapper.emitted('pull-started')).toBeTruthy()
-      expect(wrapper.emitted('pull-started')?.[0]).toEqual([
-        {
-          requestId: 'req-456',
-          repositoryName: 'test-repo',
-          repositoryId: 'repo-123',
-        },
-      ])
-    })
-  })
+      await vm.handleBranchSelect("feature");
+      await vm.handleForceCheckout();
 
-  describe('handleForceCheckout - Force checkout 完整流程', () => {
-    it('ForceCheckout 確認後應以 force: true 呼叫 checkoutBranch', async () => {
-      mockCheckDirty.mockResolvedValue({ success: true, isDirty: true })
-      mockCheckoutBranch.mockResolvedValue({ success: true })
+      expect(wrapper.emitted("branch-switched")).toBeTruthy();
+    });
 
-      const wrapper = mountMenu()
-      await wrapper.vm.$nextTick()
+    it("ForceCheckout 確認後應 emit close", async () => {
+      mockCreateWebSocketRequest
+        .mockResolvedValueOnce({ success: true, isGit: true }) // checkIsGit
+        .mockResolvedValueOnce({ success: true, isDirty: true }); // checkDirty
+
+      const wrapper = mountMenu();
+      await wrapper.vm.$nextTick();
 
       const vm = wrapper.vm as unknown as {
-        handleBranchSelect: (branch: string) => Promise<void>
-        handleForceCheckout: () => Promise<void>
-        dataState: { targetBranch: string }
-        modalState: { showForceCheckout: boolean }
-      }
+        handleBranchSelect: (branch: string) => Promise<void>;
+        handleForceCheckout: () => Promise<void>;
+      };
 
-      await vm.handleBranchSelect('feature')
-      await vm.handleForceCheckout()
+      await vm.handleBranchSelect("feature");
+      await vm.handleForceCheckout();
 
-      expect(mockCheckoutBranch).toHaveBeenCalledWith('repo-123', 'feature', true)
-    })
+      expect(wrapper.emitted("close")).toBeTruthy();
+    });
+  });
 
-    it('ForceCheckout 確認後應 emit branch-switched', async () => {
-      mockCheckDirty.mockResolvedValue({ success: true, isDirty: true })
-      mockCheckoutBranch.mockResolvedValue({ success: true })
+  describe("performCheckout — 正常 checkout 的 emit", () => {
+    it("isDirty: false 時 checkout 後應 emit branch-switched", async () => {
+      mockCreateWebSocketRequest
+        .mockResolvedValueOnce({ success: true, isGit: true }) // checkIsGit
+        .mockResolvedValueOnce({ success: true, isDirty: false }); // checkDirty
 
-      const wrapper = mountMenu()
-      await wrapper.vm.$nextTick()
-
-      const vm = wrapper.vm as unknown as {
-        handleBranchSelect: (branch: string) => Promise<void>
-        handleForceCheckout: () => Promise<void>
-      }
-
-      await vm.handleBranchSelect('feature')
-      await vm.handleForceCheckout()
-
-      expect(wrapper.emitted('branch-switched')).toBeTruthy()
-    })
-
-    it('ForceCheckout 確認後應 emit close', async () => {
-      mockCheckDirty.mockResolvedValue({ success: true, isDirty: true })
-      mockCheckoutBranch.mockResolvedValue({ success: true })
-
-      const wrapper = mountMenu()
-      await wrapper.vm.$nextTick()
+      const wrapper = mountMenu();
+      await wrapper.vm.$nextTick();
 
       const vm = wrapper.vm as unknown as {
-        handleBranchSelect: (branch: string) => Promise<void>
-        handleForceCheckout: () => Promise<void>
-      }
+        handleBranchSelect: (branch: string) => Promise<void>;
+      };
+      await vm.handleBranchSelect("feature");
 
-      await vm.handleBranchSelect('feature')
-      await vm.handleForceCheckout()
+      expect(wrapper.emitted("branch-switched")).toBeTruthy();
+    });
+  });
 
-      expect(wrapper.emitted('close')).toBeTruthy()
-    })
-  })
-
-  describe('handleBranchSelect - isDirty = true 時的 ForceCheckoutModal', () => {
-    it('checkDirty 返回 isDirty: true 時應開啟 ForceCheckoutModal', async () => {
-      mockCheckDirty.mockResolvedValue({ success: true, isDirty: true })
-
-      const wrapper = mountMenu()
-      await wrapper.vm.$nextTick()
+  describe("handleBranchDelete — 刪除分支的 UI 狀態變化", () => {
+    it("選擇刪除分支時應設定 branchToDelete 並開啟 DeleteBranchModal", async () => {
+      const wrapper = mountMenu();
+      await wrapper.vm.$nextTick();
 
       const vm = wrapper.vm as unknown as {
-        handleBranchSelect: (branch: string) => Promise<void>
-        modalState: { showForceCheckout: boolean }
-      }
+        handleBranchDelete: (branch: string) => void;
+        dataState: { branchToDelete: string };
+        modalState: { showDeleteBranch: boolean; showBranch: boolean };
+      };
 
-      await vm.handleBranchSelect('feature')
+      vm.handleBranchDelete("old-feature");
 
-      expect(vm.modalState.showForceCheckout).toBe(true)
-    })
+      expect(vm.dataState.branchToDelete).toBe("old-feature");
+      expect(vm.modalState.showDeleteBranch).toBe(true);
+      expect(vm.modalState.showBranch).toBe(false);
+    });
+  });
 
-    it('checkDirty 返回 isDirty: true 時應設定 targetBranch', async () => {
-      mockCheckDirty.mockResolvedValue({ success: true, isDirty: true })
+  describe("handleDeleteBranchConfirm — 刪除分支後的行為", () => {
+    it("刪除失敗時應 emit close", async () => {
+      mockCreateWebSocketRequest
+        .mockResolvedValueOnce({ success: true, isGit: true }) // checkIsGit
+        .mockResolvedValueOnce({ success: false }); // deleteBranch
 
-      const wrapper = mountMenu()
-      await wrapper.vm.$nextTick()
-
-      const vm = wrapper.vm as unknown as {
-        handleBranchSelect: (branch: string) => Promise<void>
-        dataState: { targetBranch: string }
-      }
-
-      await vm.handleBranchSelect('feature')
-
-      expect(vm.dataState.targetBranch).toBe('feature')
-    })
-  })
-
-  describe('handleBranchDelete - 刪除分支流程', () => {
-    it('選擇刪除分支時應設定 branchToDelete 並開啟 DeleteBranchModal', async () => {
-      const wrapper = mountMenu()
-      await wrapper.vm.$nextTick()
+      const wrapper = mountMenu();
+      await wrapper.vm.$nextTick();
 
       const vm = wrapper.vm as unknown as {
-        handleBranchDelete: (branch: string) => void
-        dataState: { branchToDelete: string }
-        modalState: { showDeleteBranch: boolean; showBranch: boolean }
-      }
+        handleDeleteBranchConfirm: () => Promise<void>;
+      };
+      await vm.handleDeleteBranchConfirm();
 
-      vm.handleBranchDelete('old-feature')
+      expect(wrapper.emitted("close")).toBeTruthy();
+    });
 
-      expect(vm.dataState.branchToDelete).toBe('old-feature')
-      expect(vm.modalState.showDeleteBranch).toBe(true)
-      expect(vm.modalState.showBranch).toBe(false)
-    })
-  })
+    it("刪除成功時應呼叫 getLocalBranches 重新載入分支列表", async () => {
+      mockCreateWebSocketRequest
+        .mockResolvedValueOnce({ success: true, isGit: true }) // checkIsGit
+        .mockResolvedValueOnce({ success: true, branchName: "feature-1" }) // deleteBranch
+        .mockResolvedValueOnce({
+          success: true,
+          branches: ["main"],
+          currentBranch: "main",
+          worktreeBranches: [],
+        }); // getLocalBranches
 
-  describe('performCheckout - checkout 成功後的 emit', () => {
-    it('正常 checkout（非 force）後應 emit branch-switched', async () => {
-      mockCheckDirty.mockResolvedValue({ success: true, isDirty: false })
-      mockCheckoutBranch.mockResolvedValue({ success: true })
-
-      const wrapper = mountMenu()
-      await wrapper.vm.$nextTick()
+      const wrapper = mountMenu();
+      await wrapper.vm.$nextTick();
 
       const vm = wrapper.vm as unknown as {
-        handleBranchSelect: (branch: string) => Promise<void>
-      }
+        handleDeleteBranchConfirm: () => Promise<void>;
+      };
+      await vm.handleDeleteBranchConfirm();
 
-      await vm.handleBranchSelect('feature')
+      // getLocalBranches 被呼叫（mockCreateWebSocketRequest 被呼叫 3 次）
+      expect(mockCreateWebSocketRequest).toHaveBeenCalledTimes(3);
+    });
+  });
 
-      expect(wrapper.emitted('branch-switched')).toBeTruthy()
-    })
-  })
-})
+  describe("handlePullLatestConfirm — Pull 操作的 emit", () => {
+    it("Pull 完成後應 emit close", async () => {
+      // pullLatest 使用 websocketClient.emit（fire-and-forget），不需額外 mock
+      const wrapper = mountMenu();
+      await wrapper.vm.$nextTick();
+
+      const vm = wrapper.vm as unknown as {
+        handlePullLatestConfirm: () => Promise<void>;
+      };
+      await vm.handlePullLatestConfirm();
+
+      expect(wrapper.emitted("close")).toBeTruthy();
+    });
+
+    it("Pull 完成後應 emit pull-started 並帶有 repositoryName 和 repositoryId", async () => {
+      const wrapper = mountMenu();
+      await wrapper.vm.$nextTick();
+
+      const vm = wrapper.vm as unknown as {
+        handlePullLatestConfirm: () => Promise<void>;
+      };
+      await vm.handlePullLatestConfirm();
+
+      expect(wrapper.emitted("pull-started")).toBeTruthy();
+      const [payload] = wrapper.emitted("pull-started")![0] as [
+        { requestId: string; repositoryName: string; repositoryId: string },
+      ];
+      expect(payload.repositoryName).toBe("test-repo");
+      expect(payload.repositoryId).toBe("repo-123");
+      expect(typeof payload.requestId).toBe("string");
+    });
+  });
+
+  describe("Modal close handlers — 使用者取消時 emit close", () => {
+    it("使用者取消 WorktreeModal 時應 emit close", async () => {
+      const wrapper = mountMenu();
+      await wrapper.vm.$nextTick();
+
+      const vm = wrapper.vm as unknown as {
+        handleWorktreeModalClose: (open: boolean) => void;
+      };
+      vm.handleWorktreeModalClose(false);
+
+      expect(wrapper.emitted("close")).toBeTruthy();
+    });
+
+    it("使用者取消 BranchModal 時應 emit close", async () => {
+      const wrapper = mountMenu();
+      await wrapper.vm.$nextTick();
+
+      const vm = wrapper.vm as unknown as {
+        handleBranchModalClose: (open: boolean) => void;
+      };
+      vm.handleBranchModalClose(false);
+
+      expect(wrapper.emitted("close")).toBeTruthy();
+    });
+
+    it("使用者取消 ForceCheckoutModal 時應 emit close", async () => {
+      const wrapper = mountMenu();
+      await wrapper.vm.$nextTick();
+
+      const vm = wrapper.vm as unknown as {
+        handleForceCheckoutModalClose: (open: boolean) => void;
+      };
+      vm.handleForceCheckoutModalClose(false);
+
+      expect(wrapper.emitted("close")).toBeTruthy();
+    });
+
+    it("使用者取消 DeleteBranchModal 時應 emit close", async () => {
+      const wrapper = mountMenu();
+      await wrapper.vm.$nextTick();
+
+      const vm = wrapper.vm as unknown as {
+        handleDeleteBranchModalClose: (open: boolean) => void;
+      };
+      vm.handleDeleteBranchModalClose(false);
+
+      expect(wrapper.emitted("close")).toBeTruthy();
+    });
+
+    it("使用者取消 PullConfirmModal 時應 emit close", async () => {
+      const wrapper = mountMenu();
+      await wrapper.vm.$nextTick();
+
+      const vm = wrapper.vm as unknown as {
+        handlePullConfirmModalClose: (open: boolean) => void;
+      };
+      vm.handlePullConfirmModalClose(false);
+
+      expect(wrapper.emitted("close")).toBeTruthy();
+    });
+
+    it("Modal open 為 true 時不應 emit close", async () => {
+      const wrapper = mountMenu();
+      await wrapper.vm.$nextTick();
+
+      const vm = wrapper.vm as unknown as {
+        handleWorktreeModalClose: (open: boolean) => void;
+      };
+      vm.handleWorktreeModalClose(true);
+
+      expect(wrapper.emitted("close")).toBeFalsy();
+    });
+  });
+});

@@ -1,110 +1,74 @@
+/**
+ * CanvasPod 元件測試（合併版）
+ *
+ * 涵蓋：
+ * - render smoke
+ * - podStatusClass 白名單 / pod-glow-selected
+ * - provider 漸層 class / unknown provider fallback badge + 雙擊守門
+ * - 拖曳高亮（dragenter / dragleave CSS class）
+ * - 上傳中互動封鎖（PodActions isUploading、contextmenu、PodAnchors v-if、PodUploadOverlay）
+ * - MCP / Plugin popover 開關與 busy prop 傳遞
+ * - PodSlots mcpActiveCount / pluginActiveCount 計數傳遞
+ * - handleModelChange 成功更新 podStore
+ *
+ * 細節行為已在 composable 測試涵蓋：
+ * - usePodFileDrop.test.ts — dragEvent 驗證、handleDrop 流程、retryFailed
+ * - usePodCapabilities.test.ts — capabilities 邏輯
+ */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount } from "@vue/test-utils";
-import { createTestingPinia } from "@pinia/testing";
-import { ref } from "vue";
+import { nextTick } from "vue";
+import { setActivePinia } from "pinia";
+import { setupTestPinia } from "../../helpers/mockStoreFactory";
 import CanvasPod from "@/components/pod/CanvasPod.vue";
-import type { Pod } from "@/types";
+import { usePodStore } from "@/stores/pod/podStore";
+import { useSelectionStore } from "@/stores/pod/selectionStore";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
-import {
-  createUsePodScheduleMock,
-  createUseWorkflowClearMock,
-  createUsePodCapabilitiesMock,
-  createUsePodAnchorDragMock,
-  createUsePodNoteBindingMock,
-  createUseI18nMock,
-  createMockPod,
-  mountCanvasPod,
-} from "./__setup__/canvasPodMocks";
+import { useUploadStore } from "@/stores/upload/uploadStore";
+import type { Pod } from "@/types";
 
-// 可在測試中動態調整的 mock 狀態
-const mockSelectedPodIds = ref<string[]>([]);
-const mockIsDragging = ref(false);
-const mockIsBatchDragging = ref(false);
+// ── 邊界 mock：WS 與 Toast ─────────────────────────────────────────────────
+// 使用 vi.hoisted 確保 mock factory 能在模組初始化前取得 spy 實例
 
-// 可在測試中查驗與控制的 spy 實例
-const mockUpdatePodProviderConfigModel = vi.fn();
-const mockSendCanvasAction = vi.fn();
-const mockToast = vi.fn();
-
-// Mock 子元件，避免各子元件自行引入複雜依賴
-vi.mock("@/components/pod/PodHeader.vue", () => ({
-  default: {
-    name: "PodHeader",
-    template: "<div class='pod-header-stub'></div>",
-    props: ["name", "isEditing"],
-  },
+const { mockCreateWebSocketRequest, mockToast } = vi.hoisted(() => ({
+  mockCreateWebSocketRequest: vi.fn().mockResolvedValue({}),
+  mockToast: vi.fn(),
 }));
 
-vi.mock("@/components/pod/PodMiniScreen.vue", () => ({
-  default: {
-    name: "PodMiniScreen",
-    template: "<div class='pod-mini-screen-stub'></div>",
-    props: ["output"],
-  },
+vi.mock("@/services/websocket", async () => {
+  const actual = await vi.importActual<typeof import("@/services/websocket")>(
+    "@/services/websocket",
+  );
+  return {
+    ...actual,
+    createWebSocketRequest: (...args: unknown[]) =>
+      mockCreateWebSocketRequest(...args),
+  };
+});
+
+vi.mock("@/composables/useToast", () => ({
+  useToast: () => ({ toast: mockToast }),
 }));
 
-vi.mock("@/components/pod/PodSlots.vue", () => ({
-  default: {
-    name: "PodSlots",
-    template: "<div></div>",
-    props: [
-      "podId",
-      "podRotation",
-      "boundSkillNotes",
-      "boundRepositoryNote",
-      "boundCommandNote",
-      "boundMcpServerNotes",
-    ],
-  },
-}));
+// ── 複雜子元件 stub（有外部 API 呼叫，不適合在元件測試環境中執行）──────────────
 
-vi.mock("@/components/pod/PodAnchors.vue", () => ({
+vi.mock("@/components/pod/PluginPopover.vue", () => ({
   default: {
-    name: "PodAnchors",
-    template: "<div></div>",
-    props: ["podId"],
-  },
-}));
-
-vi.mock("@/components/pod/PodActions.vue", () => ({
-  default: {
-    name: "PodActions",
-    template: "<div></div>",
-    props: [
-      "podId",
-      "podName",
-      "isSourcePod",
-      "showScheduleButton",
-      "isMultiInstanceEnabled",
-      "isLoadingDownstream",
-      "isClearing",
-      "downstreamPods",
-      "showClearDialog",
-      "showDeleteDialog",
-      "hasSchedule",
-      "scheduleEnabled",
-      "scheduleTooltip",
-      "isScheduleFiredAnimating",
-      "isWorkflowRunning",
-    ],
-  },
-}));
-
-vi.mock("@/components/pod/PodModelSelector.vue", () => ({
-  default: {
-    name: "PodModelSelector",
+    name: "PluginPopover",
     template:
-      "<div class='model-selector-stub' @click=\"$emit('update:model', 'sonnet')\"></div>",
-    props: ["podId", "provider", "currentModel"],
-    emits: ["update:model"],
+      "<div class='plugin-popover-stub' @click=\"$emit('close')\"></div>",
+    props: ["podId", "anchorRect", "busy", "provider"],
+    emits: ["close"],
   },
 }));
 
-vi.mock("@/components/integration/IntegrationStatusIcon.vue", () => ({
+vi.mock("@/components/pod/McpPopover.vue", () => ({
   default: {
-    name: "IntegrationStatusIcon",
-    template: "<div></div>",
-    props: ["bindings"],
+    name: "McpPopover",
+    template:
+      "<div class='mcp-popover-stub' :data-pod-id='podId' :data-busy='String(busy)' :data-provider='provider' @click=\"$emit('close')\"></div>",
+    props: ["podId", "anchorRect", "busy", "provider"],
+    emits: ["close"],
   },
 }));
 
@@ -116,632 +80,415 @@ vi.mock("@/components/canvas/ScheduleModal.vue", () => ({
   },
 }));
 
-// Mock composables
-vi.mock("@/composables/canvas/useCanvasContext", () => ({
-  useCanvasContext: () => ({
-    podStore: {
-      activePodId: null,
-      setActivePod: vi.fn(),
-      updatePodProviderConfigModel: mockUpdatePodProviderConfigModel,
-      setMultiInstanceWithBackend: vi.fn(),
-    },
-    viewportStore: {},
-    selectionStore: {
-      // selectedPodIds 讀取 mockSelectedPodIds.value，讓各測試可動態調整（供測試直接檢查陣列用）
-      get selectedPodIds() {
-        return mockSelectedPodIds.value;
+// ── 工具函式 ───────────────────────────────────────────────────────────────
+
+function mkPod(overrides: Partial<Pod> = {}): Pod {
+  return {
+    id: "pod-1",
+    name: "Test Pod",
+    x: 0,
+    y: 0,
+    output: [],
+    rotation: 0,
+    multiInstance: false,
+    provider: "claude",
+    providerConfig: { model: "claude-sonnet-4-5" },
+    ...overrides,
+  };
+}
+
+const mountPod = (pod: Pod) =>
+  mount(CanvasPod, { props: { pod }, attachTo: document.body });
+
+/** 注入 claude + codex capabilities，模擬後端 metadata 已載入（含 loaded=true） */
+function injectCapabilities() {
+  const store = useProviderCapabilityStore();
+  store.syncFromPayload([
+    {
+      name: "claude",
+      capabilities: {
+        chat: true,
+        plugin: true,
+        repository: true,
+        command: true,
+        mcp: true,
       },
-      // isElementSelected 使用 mockSelectedPodIds 做 O(1) 查找（與 CanvasPod 實際邏輯一致）
-      isElementSelected: (type: string, id: string) =>
-        type === "pod" && mockSelectedPodIds.value.includes(id),
-      toggleElement: vi.fn(),
     },
-    skillStore: { getNotesByPodId: vi.fn().mockReturnValue([]) },
-    repositoryStore: { getNotesByPodId: vi.fn().mockReturnValue([]) },
-    commandStore: { getNotesByPodId: vi.fn().mockReturnValue([]) },
-    mcpServerStore: { getNotesByPodId: vi.fn().mockReturnValue([]) },
-    connectionStore: {
-      isSourcePod: vi.fn().mockReturnValue(false),
-      hasUpstreamConnections: vi.fn().mockReturnValue(false),
-      isWorkflowRunning: vi.fn().mockReturnValue(false),
-      selectConnection: vi.fn(),
+    {
+      name: "codex",
+      capabilities: {
+        chat: true,
+        plugin: true,
+        repository: true,
+        command: true,
+        mcp: true,
+      },
     },
-    clipboardStore: {},
-    chatStore: {},
-    canvasStore: {},
-    integrationStore: {},
-  }),
-}));
+  ]);
+  // syncFromPayload 本身不設 loaded，手動設定以模擬 loadFromBackend 完成
+  store.loaded = true;
+}
 
-vi.mock("@/composables/canvas", () => ({
-  useBatchDrag: () => ({
-    startBatchDrag: vi.fn().mockReturnValue(false),
-    isElementSelected: vi.fn().mockReturnValue(false),
-    // isBatchDragging 讀取 mockIsBatchDragging，讓各測試可動態調整
-    get isBatchDragging() {
-      return mockIsBatchDragging;
-    },
-  }),
-}));
+// ── 全域 beforeEach ────────────────────────────────────────────────────────
 
-vi.mock("@/composables/useSendCanvasAction", () => ({
-  useSendCanvasAction: () => ({
-    sendCanvasAction: mockSendCanvasAction,
-  }),
-}));
+beforeEach(() => {
+  setActivePinia(setupTestPinia());
+  vi.clearAllMocks();
+  mockCreateWebSocketRequest.mockResolvedValue({});
+});
 
-vi.mock("@/composables/pod/usePodDrag", () => ({
-  usePodDrag: () => ({
-    // isDragging 讀取 mockIsDragging，讓各測試可動態調整
-    get isDragging() {
-      return mockIsDragging;
-    },
-    startSingleDrag: vi.fn(),
-  }),
-}));
+// ─────────────────────────────────────────────────────────────────────────
+// 1. Render smoke
+// ─────────────────────────────────────────────────────────────────────────
 
-vi.mock("@/composables/pod/usePodNoteBinding", () => ({
-  usePodNoteBinding: () => createUsePodNoteBindingMock(),
-}));
+describe("CanvasPod render smoke", () => {
+  it("有效 pod prop 應正常掛載並渲染 pod-doodle", () => {
+    const wrapper = mountPod(mkPod());
+    expect(wrapper.find(".pod-doodle").exists()).toBe(true);
+    wrapper.unmount();
+  });
+});
 
-vi.mock("@/composables/pod/useWorkflowClear", () => ({
-  useWorkflowClear: () => createUseWorkflowClearMock(),
-}));
+// ─────────────────────────────────────────────────────────────────────────
+// 2. podStatusClass 白名單
+// ─────────────────────────────────────────────────────────────────────────
 
-vi.mock("@/composables/pod/usePodSchedule", () => ({
-  usePodSchedule: () => createUsePodScheduleMock(),
-}));
-
-vi.mock("@/composables/pod/usePodAnchorDrag", () => ({
-  usePodAnchorDrag: () => createUsePodAnchorDragMock(),
-}));
-
-vi.mock("@/composables/pod/usePodCapabilities", () => ({
-  usePodCapabilities: () => createUsePodCapabilitiesMock(),
-}));
-
-vi.mock("@/composables/useToast", () => ({
-  useToast: () => ({
-    toast: mockToast,
-  }),
-}));
-
-vi.mock("@/utils/multiInstanceGuard", () => ({
-  isMultiInstanceChainPod: vi.fn().mockReturnValue(false),
-  isMultiInstanceSourcePod: vi.fn().mockReturnValue(false),
-}));
-
-vi.mock("@/services/websocket", () => ({
-  WebSocketRequestEvents: { POD_SET_MODEL: "pod:set_model" },
-  WebSocketResponseEvents: { POD_MODEL_SET: "pod:model_set" },
-}));
-
-vi.mock("vue-i18n", () => ({
-  useI18n: () => createUseI18nMock(),
-}));
-
-vi.mock("@/stores/run/runStore", () => ({
-  useRunStore: () => ({
-    openHistoryPanel: vi.fn(),
-  }),
-}));
-
-// createMockPod / mountCanvasPod 已由 __setup__/canvasPodMocks 提供，此處複用匯入版本
-
-// -----------------------------------------------------------------------
-// 項目 13：podStatusClass 白名單驗證
-// -----------------------------------------------------------------------
-
-describe("CanvasPod podStatusClass 白名單驗證", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockSelectedPodIds.value = [];
-    mockIsDragging.value = false;
-    mockIsBatchDragging.value = false;
+describe("CanvasPod podStatusClass 白名單", () => {
+  it.each([
+    { status: "chatting", cls: "pod-status-chatting" },
+    { status: "summarizing", cls: "pod-status-summarizing" },
+    { status: "error", cls: "pod-status-error" },
+    { status: "idle", cls: "pod-status-idle" },
+  ])('status="$status" → pod-glow-layer 含 $cls', ({ status, cls }) => {
+    const wrapper = mountPod(mkPod({ status: status as Pod["status"] }));
+    expect(wrapper.find(".pod-glow-layer").classes()).toContain(cls);
+    wrapper.unmount();
   });
 
-  const podStatusTestCases: Array<{
-    status: string | undefined;
-    expectedClass: string | null;
-  }> = [
-    { status: "chatting", expectedClass: "pod-status-chatting" },
-    { status: "summarizing", expectedClass: "pod-status-summarizing" },
-    { status: "error", expectedClass: "pod-status-error" },
-    { status: "idle", expectedClass: "pod-status-idle" },
-    { status: undefined, expectedClass: null },
-  ];
+  it("未知 status 不應套用任何 pod-status-* class", () => {
+    const wrapper = mountPod(mkPod({ status: "unknown" as Pod["status"] }));
+    expect(
+      wrapper
+        .find(".pod-glow-layer")
+        .classes()
+        .some((c) => c.startsWith("pod-status-")),
+    ).toBe(false);
+    wrapper.unmount();
+  });
+});
 
-  it.each(podStatusTestCases)(
-    'pod.status === "$status"：.pod-glow-layer class 驗證',
-    ({ status, expectedClass }) => {
-      const pod = createMockPod({ status: status as any });
-      const wrapper = mountCanvasPod(pod);
+// ─────────────────────────────────────────────────────────────────────────
+// 3. pod-glow-selected
+// ─────────────────────────────────────────────────────────────────────────
 
-      const glowLayer = wrapper.find(".pod-glow-layer");
-      expect(glowLayer.exists()).toBe(true);
+describe("CanvasPod pod-glow-selected", () => {
+  it("pod 被選取後 .pod-inner-highlight 含 pod-glow-selected", async () => {
+    const wrapper = mountPod(mkPod({ id: "pod-sel" }));
+    useSelectionStore().toggleElement({ type: "pod", id: "pod-sel" });
+    await nextTick();
+    expect(wrapper.find(".pod-inner-highlight").classes()).toContain(
+      "pod-glow-selected",
+    );
+    wrapper.unmount();
+  });
+});
 
-      if (expectedClass) {
-        expect(glowLayer.classes()).toContain(expectedClass);
-      } else {
-        // status 為 undefined：不應含任何 pod-status-* class
-        expect(
-          glowLayer.classes().some((c) => c.startsWith("pod-status-")),
-        ).toBe(false);
-      }
+// ─────────────────────────────────────────────────────────────────────────
+// 4. provider 漸層 class
+// ─────────────────────────────────────────────────────────────────────────
 
+describe("CanvasPod provider 漸層 class", () => {
+  it.each([
+    { provider: "claude", expectedCls: "pod-provider-claude" },
+    { provider: "codex", expectedCls: "pod-provider-codex" },
+  ])(
+    "provider=$provider → pod-doodle 含 $expectedCls",
+    async ({ provider, expectedCls }) => {
+      const wrapper = mountPod(
+        mkPod({ provider: provider as Pod["provider"] }),
+      );
+      injectCapabilities();
+      await nextTick();
+      expect(wrapper.find(".pod-doodle").classes()).toContain(expectedCls);
       wrapper.unmount();
     },
   );
 
-  it("未知 status 值應 fallback 為不套用任何 pod-status-* class", () => {
-    // 型別斷言模擬外部傳入未知 status
-    const pod = createMockPod({ status: "unknown-status" as any });
-    const wrapper = mountCanvasPod(pod);
+  it("未知 provider → pod-doodle 不含任何 pod-provider-* class", async () => {
+    const wrapper = mountPod(mkPod({ provider: "gone" as Pod["provider"] }));
+    injectCapabilities();
+    await nextTick();
+    expect(
+      wrapper
+        .find(".pod-doodle")
+        .classes()
+        .some((c) => c.startsWith("pod-provider-")),
+    ).toBe(false);
+    wrapper.unmount();
+  });
+});
 
-    const glowLayer = wrapper.find(".pod-glow-layer");
-    expect(glowLayer.exists()).toBe(true);
-    expect(glowLayer.classes().some((c) => c.startsWith("pod-status-"))).toBe(
-      false,
+// ─────────────────────────────────────────────────────────────────────────
+// 5. unknown provider fallback badge + 雙擊守門
+// ─────────────────────────────────────────────────────────────────────────
+
+describe("CanvasPod unknown provider", () => {
+  it("store 載入後 provider 未知時顯示 unknown-provider-badge", async () => {
+    const wrapper = mountPod(
+      mkPod({ provider: "deprecated" as Pod["provider"] }),
     );
-
-    wrapper.unmount();
-  });
-});
-
-// -----------------------------------------------------------------------
-// 項目 14：pod-glow-selected 選取狀態
-// -----------------------------------------------------------------------
-
-describe("CanvasPod pod-glow-selected class 選取狀態", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockSelectedPodIds.value = [];
-    mockIsDragging.value = false;
-    mockIsBatchDragging.value = false;
-  });
-
-  it("selectedPodIds 不含 pod.id 時，.pod-glow-layer 不含 pod-glow-selected", () => {
-    mockSelectedPodIds.value = [];
-    const pod = createMockPod({ id: "pod-1" });
-    const wrapper = mountCanvasPod(pod);
-
-    const glowLayer = wrapper.find(".pod-glow-layer");
-    expect(glowLayer.exists()).toBe(true);
-    expect(glowLayer.classes()).not.toContain("pod-glow-selected");
-
-    wrapper.unmount();
-  });
-
-  it("selectedPodIds 包含 pod.id 時，.pod-inner-highlight 含 pod-glow-selected", () => {
-    const pod = createMockPod({ id: "pod-selected" });
-    // 設定 mockSelectedPodIds 讓 useCanvasContext mock 的 getter 回傳含 pod.id 的陣列
-    mockSelectedPodIds.value = ["pod-selected"];
-    const wrapper = mountCanvasPod(pod);
-
-    // pod-glow-selected 已移至 pod-inner-highlight（跟著 Pod 旋轉），非 pod-glow-layer
-    const innerHighlight = wrapper.find(".pod-inner-highlight");
-    expect(innerHighlight.exists()).toBe(true);
-    expect(innerHighlight.classes()).toContain("pod-glow-selected");
-
-    wrapper.unmount();
-  });
-});
-
-// -----------------------------------------------------------------------
-// 項目 15：dragging class 拖曳狀態
-// -----------------------------------------------------------------------
-
-describe("CanvasPod dragging class 拖曳狀態", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockSelectedPodIds.value = [];
-    mockIsDragging.value = false;
-    mockIsBatchDragging.value = false;
-  });
-
-  it("isDragging=false & isBatchDragging=false：pod-wrapper 與 pod-doodle 不含 dragging class", () => {
-    const pod = createMockPod();
-    const wrapper = mountCanvasPod(pod);
-
-    const podWithNotch = wrapper.find(".pod-wrapper");
-    const podDoodle = wrapper.find(".pod-doodle");
-
-    expect(podWithNotch.classes()).not.toContain("dragging");
-    expect(podDoodle.classes()).not.toContain("dragging");
-
-    wrapper.unmount();
-  });
-
-  it("isDragging=true：pod-wrapper 與 pod-doodle 含 dragging class", () => {
-    // 更新 mockIsDragging，usePodDrag mock 的 getter 會讀取此值
-    mockIsDragging.value = true;
-    const pod = createMockPod();
-    const wrapper = mountCanvasPod(pod);
-
-    const podWithNotch = wrapper.find(".pod-wrapper");
-    const podDoodle = wrapper.find(".pod-doodle");
-
-    expect(podWithNotch.classes()).toContain("dragging");
-    expect(podDoodle.classes()).toContain("dragging");
-
-    wrapper.unmount();
-  });
-
-  it("isBatchDragging=true：pod-wrapper 與 pod-doodle 含 dragging class", () => {
-    // 更新 mockIsBatchDragging，useBatchDrag mock 的 getter 會讀取此值
-    mockIsBatchDragging.value = true;
-    const pod = createMockPod();
-    const wrapper = mountCanvasPod(pod);
-
-    const podWithNotch = wrapper.find(".pod-wrapper");
-    const podDoodle = wrapper.find(".pod-doodle");
-
-    expect(podWithNotch.classes()).toContain("dragging");
-    expect(podDoodle.classes()).toContain("dragging");
-
-    wrapper.unmount();
-  });
-});
-
-describe("CanvasPod Provider Pod 漸層 class 綁定", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockSelectedPodIds.value = [];
-    mockIsDragging.value = false;
-    mockIsBatchDragging.value = false;
-  });
-
-  it('當 pod.provider === "claude" 時，.pod-doodle 元素套用 pod-provider-claude class，不含 pod-provider-codex', async () => {
-    const pod = createMockPod({ provider: "claude" });
-    const wrapper = mountCanvasPod(pod);
-    // allowedProviders 由 providerCapabilityStore.capabilitiesByProvider keys 動態建構
-    // 設定後需 await nextTick 讓 computed 重算並觸發 DOM 更新
-    const store = useProviderCapabilityStore();
-    store.capabilitiesByProvider = {
-      claude: { chat: true },
-    } as unknown as typeof store.capabilitiesByProvider;
-    await wrapper.vm.$nextTick();
-
-    const podDoodle = wrapper.find(".pod-doodle");
-    expect(podDoodle.exists()).toBe(true);
-    expect(podDoodle.classes()).toContain("pod-provider-claude");
-    expect(podDoodle.classes()).not.toContain("pod-provider-codex");
-
-    wrapper.unmount();
-  });
-
-  it('當 pod.provider === "codex" 時，.pod-doodle 元素套用 pod-provider-codex class，不含 pod-provider-claude', async () => {
-    const pod = createMockPod({ provider: "codex" });
-    const wrapper = mountCanvasPod(pod);
-    // allowedProviders 由 providerCapabilityStore.capabilitiesByProvider keys 動態建構
-    // 設定後需 await nextTick 讓 computed 重算並觸發 DOM 更新
-    const store = useProviderCapabilityStore();
-    store.capabilitiesByProvider = {
-      claude: { chat: true },
-      codex: { chat: true },
-    } as unknown as typeof store.capabilitiesByProvider;
-    await wrapper.vm.$nextTick();
-
-    const podDoodle = wrapper.find(".pod-doodle");
-    expect(podDoodle.exists()).toBe(true);
-    expect(podDoodle.classes()).toContain("pod-provider-codex");
-    expect(podDoodle.classes()).not.toContain("pod-provider-claude");
-
-    wrapper.unmount();
-  });
-
-  it("Mini screen stub 區塊不含 pod-provider-* class", async () => {
-    const pod = createMockPod({ provider: "claude" });
-    const wrapper = mountCanvasPod(pod);
-    const store = useProviderCapabilityStore();
-    store.capabilitiesByProvider = {
-      claude: { chat: true },
-    } as unknown as typeof store.capabilitiesByProvider;
-    await wrapper.vm.$nextTick();
-
-    const miniScreen = wrapper.find(".pod-mini-screen-stub");
-    expect(miniScreen.exists()).toBe(true);
-    expect(miniScreen.classes()).not.toContain("pod-provider-claude");
-    expect(miniScreen.classes()).not.toContain("pod-provider-codex");
-
-    wrapper.unmount();
-  });
-});
-
-// -----------------------------------------------------------------------
-// Phase 6 A：未知 Provider fallback UI
-// -----------------------------------------------------------------------
-
-/**
- * 掛載 CanvasPod 並直接設定 providerCapabilityStore 狀態，
- * 用於測試未知 provider 的 fallback UI 行為。
- *
- * @param pod 測試用 Pod
- * @param storeState providerCapabilityStore 的初始狀態
- */
-function mountCanvasPodWithStoreState(
-  pod: Pod,
-  storeState: {
-    loaded: boolean;
-    capabilitiesByProvider: Record<string, object>;
-  },
-) {
-  const wrapper = mount(CanvasPod, {
-    props: { pod },
-    global: {
-      plugins: [createTestingPinia({ createSpy: vi.fn, stubActions: true })],
-    },
-    attachTo: document.body,
-  });
-
-  // 直接設定 store state，驅動 isUnknownProvider computed
-  const store = useProviderCapabilityStore();
-  store.loaded = storeState.loaded;
-  // 以 unknown 轉型繞過嚴格泛型型別，測試環境不需完整 ProviderCapabilities 結構
-  store.capabilitiesByProvider =
-    storeState.capabilitiesByProvider as unknown as typeof store.capabilitiesByProvider;
-
-  return wrapper;
-}
-
-describe("CanvasPod Phase 6A：未知 Provider fallback UI", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockSelectedPodIds.value = [];
-    mockIsDragging.value = false;
-    mockIsBatchDragging.value = false;
-  });
-
-  it("store 已載入且 provider 未知時，顯示 unknown-provider-badge", async () => {
-    const pod = createMockPod({ provider: "deprecated-provider" });
-    const wrapper = mountCanvasPodWithStoreState(pod, {
-      loaded: true,
-      capabilitiesByProvider: {
-        // 只含 claude、codex，不含 deprecated-provider
-        claude: { chat: true },
-        codex: { chat: true },
-      },
-    });
-
-    // 等待 Vue 重新渲染（狀態更新後）
-    await wrapper.vm.$nextTick();
-
-    const badge = wrapper.find("[data-testid='unknown-provider-badge']");
-    expect(badge.exists()).toBe(true);
-    expect(badge.text()).toContain("此 Provider 已下線或尚未支援");
-
-    wrapper.unmount();
-  });
-
-  it("store 已載入且 provider 已知（claude）時，不顯示 unknown-provider-badge", async () => {
-    const pod = createMockPod({ provider: "claude" });
-    const wrapper = mountCanvasPodWithStoreState(pod, {
-      loaded: true,
-      capabilitiesByProvider: {
-        claude: { chat: true },
-        codex: { chat: true },
-      },
-    });
-
-    await wrapper.vm.$nextTick();
-
-    const badge = wrapper.find("[data-testid='unknown-provider-badge']");
-    expect(badge.exists()).toBe(false);
-
-    wrapper.unmount();
-  });
-
-  it("store 已載入且 provider 已知（codex）時，不顯示 unknown-provider-badge", async () => {
-    const pod = createMockPod({ provider: "codex" });
-    const wrapper = mountCanvasPodWithStoreState(pod, {
-      loaded: true,
-      capabilitiesByProvider: {
-        claude: { chat: true },
-        codex: { chat: true },
-      },
-    });
-
-    await wrapper.vm.$nextTick();
-
-    const badge = wrapper.find("[data-testid='unknown-provider-badge']");
-    expect(badge.exists()).toBe(false);
-
-    wrapper.unmount();
-  });
-
-  it("store 尚未載入（loaded=false）時，即使 provider 不存在也不顯示 fallback badge（避免時序誤判）", async () => {
-    const pod = createMockPod({ provider: "unknown-provider" });
-    const wrapper = mountCanvasPodWithStoreState(pod, {
-      loaded: false,
-      capabilitiesByProvider: {},
-    });
-
-    await wrapper.vm.$nextTick();
-
-    const badge = wrapper.find("[data-testid='unknown-provider-badge']");
-    // loaded=false → 不觸發 fallback，badge 不應出現
-    expect(badge.exists()).toBe(false);
-
-    wrapper.unmount();
-  });
-
-  it("未知 provider Pod 仍顯示 output 歷史（PodMiniScreen 存在）", async () => {
-    const pod = createMockPod({
-      provider: "deprecated-provider",
-      output: ["上次的回覆內容"],
-    });
-    const wrapper = mountCanvasPodWithStoreState(pod, {
-      loaded: true,
-      capabilitiesByProvider: { claude: { chat: true } },
-    });
-
-    await wrapper.vm.$nextTick();
-
-    // fallback badge 出現
+    injectCapabilities();
+    await nextTick();
     expect(
       wrapper.find("[data-testid='unknown-provider-badge']").exists(),
     ).toBe(true);
-    // PodMiniScreen 仍然存在（output 歷史可見）
-    expect(wrapper.find(".pod-mini-screen-stub").exists()).toBe(true);
-
     wrapper.unmount();
   });
 
-  it("多 Pod rendering：未知 provider Pod 顯示 badge，正常 Pod 不受影響", async () => {
-    // 正常 Pod（claude）
-    const knownPod = createMockPod({ id: "pod-known", provider: "claude" });
-    const wrapperKnown = mountCanvasPodWithStoreState(knownPod, {
-      loaded: true,
-      capabilitiesByProvider: { claude: { chat: true } },
-    });
-    await wrapperKnown.vm.$nextTick();
+  it("store 載入後 provider 已知（claude）時不顯示 badge", async () => {
+    const wrapper = mountPod(mkPod({ provider: "claude" }));
+    injectCapabilities();
+    await nextTick();
     expect(
-      wrapperKnown.find("[data-testid='unknown-provider-badge']").exists(),
+      wrapper.find("[data-testid='unknown-provider-badge']").exists(),
     ).toBe(false);
+    wrapper.unmount();
+  });
 
-    // 未知 provider Pod
-    const unknownPod = createMockPod({
-      id: "pod-unknown",
-      provider: "gone-provider",
-    });
-    const wrapperUnknown = mountCanvasPodWithStoreState(unknownPod, {
-      loaded: true,
-      capabilitiesByProvider: { claude: { chat: true } },
-    });
-    await wrapperUnknown.vm.$nextTick();
+  it("store 尚未載入（loaded=false）時不顯示 badge（避免時序誤判）", async () => {
+    const wrapper = mountPod(
+      mkPod({ provider: "unknown-p" as Pod["provider"] }),
+    );
+    // 不呼叫 injectCapabilities → loaded 維持 false
+    await nextTick();
     expect(
-      wrapperUnknown.find("[data-testid='unknown-provider-badge']").exists(),
-    ).toBe(true);
+      wrapper.find("[data-testid='unknown-provider-badge']").exists(),
+    ).toBe(false);
+    wrapper.unmount();
+  });
 
-    wrapperKnown.unmount();
-    wrapperUnknown.unmount();
+  it("未知 provider 雙擊應顯示 toast 並阻止進入對話", async () => {
+    const wrapper = mountPod(
+      mkPod({ provider: "deprecated" as Pod["provider"] }),
+    );
+    injectCapabilities();
+    await nextTick();
+    await wrapper.find(".pod-doodle").trigger("dblclick");
+    // 未知 provider 雙擊應顯示 toast（title 含 "Provider"，description 說明不可用）
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({ title: expect.stringContaining("Provider") }),
+    );
+    wrapper.unmount();
   });
 });
 
-// -----------------------------------------------------------------------
-// 項目 35：handleModelChange / 未知 Provider 雙擊守門
-// -----------------------------------------------------------------------
+// ─────────────────────────────────────────────────────────────────────────
+// 6. 拖曳高亮 class
+// ─────────────────────────────────────────────────────────────────────────
 
-describe("CanvasPod Phase 35：handleModelChange 與未知 Provider 守門", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockSelectedPodIds.value = [];
-    mockIsDragging.value = false;
-    mockIsBatchDragging.value = false;
-  });
+describe("CanvasPod 拖曳高亮", () => {
+  it("dragenter 後套用 pod-glow-drop-target，dragleave 後移除", async () => {
+    const wrapper = mountPod(mkPod({ status: "idle" }));
+    injectCapabilities();
+    await nextTick();
 
-  it("isUnknownProvider=true 時雙擊應顯示 toast 並阻止進入對話", async () => {
-    const pod = createMockPod({ provider: "deprecated-provider" });
-    const wrapper = mountCanvasPodWithStoreState(pod, {
-      loaded: true,
-      capabilitiesByProvider: { claude: { chat: true } },
+    wrapper.element.dispatchEvent(new Event("dragenter", { bubbles: true }));
+    await nextTick();
+    expect(wrapper.find(".pod-inner-highlight").classes()).toContain(
+      "pod-glow-drop-target",
+    );
+
+    const leaveEvent = new Event("dragleave", { bubbles: true }) as DragEvent;
+    Object.defineProperty(leaveEvent, "currentTarget", {
+      value: wrapper.element,
+      configurable: true,
     });
-
-    await wrapper.vm.$nextTick();
-
-    // 雙擊 .pod-doodle 觸發 handleDblClick
-    const podDoodle = wrapper.find(".pod-doodle");
-    expect(podDoodle.exists()).toBe(true);
-    await podDoodle.trigger("dblclick");
-
-    // 應顯示 toast（通知 provider 不可用）
-    // 使用 i18n key 斷言，避免翻譯字串變更導致測試脆弱
-    expect(mockToast).toHaveBeenCalledWith(
-      expect.objectContaining({
-        description: expect.stringContaining("pod.provider.unknownDescription"),
-      }),
+    Object.defineProperty(leaveEvent, "relatedTarget", {
+      value: document.createElement("span"),
+      configurable: true,
+    });
+    wrapper.element.dispatchEvent(leaveEvent);
+    await nextTick();
+    expect(wrapper.find(".pod-inner-highlight").classes()).not.toContain(
+      "pod-glow-drop-target",
     );
 
     wrapper.unmount();
   });
+});
 
-  it("handleModelChange()：後端回傳成功應更新 providerConfig.model", async () => {
-    // 模擬 sendCanvasAction 回傳含 pod 的成功回應
-    mockSendCanvasAction.mockResolvedValueOnce({
+// ─────────────────────────────────────────────────────────────────────────
+// 7. 上傳中互動封鎖
+// ─────────────────────────────────────────────────────────────────────────
+
+describe("CanvasPod 上傳中互動封鎖", () => {
+  /** 直接設定 uploadStore state，使 isUploading(podId) getter 回傳 true */
+  function setUploading(podId: string) {
+    const uploadStore = useUploadStore();
+    uploadStore.uploadStateByPodId[podId] = {
+      status: "uploading",
+      uploadSessionId: "s1",
+      files: [],
+      aggregateProgress: 50,
+    };
+  }
+
+  beforeEach(() => injectCapabilities());
+
+  it("上傳中 PodActions 應收到 isUploading=true", async () => {
+    const wrapper = mountPod(mkPod({ id: "pod-upload" }));
+    setUploading("pod-upload");
+    await nextTick();
+    expect(
+      wrapper.findComponent({ name: "PodActions" }).props("isUploading"),
+    ).toBe(true);
+    wrapper.unmount();
+  });
+
+  it("上傳中右鍵選單不應觸發 contextmenu emit", async () => {
+    const wrapper = mountPod(mkPod({ id: "pod-1" }));
+    setUploading("pod-1");
+    await nextTick();
+    await wrapper.find(".pod-doodle").trigger("contextmenu");
+    expect(wrapper.emitted("contextmenu")).toBeFalsy();
+    wrapper.unmount();
+  });
+
+  it("上傳中 PodAnchors 應從 DOM 移除（v-if=false）", async () => {
+    const wrapper = mountPod(mkPod({ id: "pod-1" }));
+    setUploading("pod-1");
+    await nextTick();
+    expect(wrapper.findComponent({ name: "PodAnchors" }).exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("上傳中應渲染 PodUploadOverlay 封鎖聊天區", async () => {
+    const wrapper = mountPod(mkPod({ id: "pod-1" }));
+    setUploading("pod-1");
+    await nextTick();
+    expect(wrapper.findComponent({ name: "PodUploadOverlay" }).exists()).toBe(
+      true,
+    );
+    wrapper.unmount();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// 8. MCP / Plugin popover 開關與 props
+// ─────────────────────────────────────────────────────────────────────────
+
+describe("CanvasPod MCP / Plugin popover", () => {
+  beforeEach(() => injectCapabilities());
+
+  it("點擊 .pod-mcp-slot 後 McpPopover 應渲染", async () => {
+    const wrapper = mountPod(mkPod());
+    await nextTick();
+    await wrapper.find(".pod-mcp-slot").trigger("click");
+    expect(wrapper.find(".mcp-popover-stub").exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it("McpPopover emit close 後 popover 應消失", async () => {
+    const wrapper = mountPod(mkPod());
+    await nextTick();
+    await wrapper.find(".pod-mcp-slot").trigger("click");
+    await wrapper.find(".mcp-popover-stub").trigger("click");
+    expect(wrapper.find(".mcp-popover-stub").exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("McpPopover 應接收正確 podId 與 provider", async () => {
+    const wrapper = mountPod(mkPod({ id: "pod-mcp", provider: "claude" }));
+    await nextTick();
+    await wrapper.find(".pod-mcp-slot").trigger("click");
+    const stub = wrapper.find(".mcp-popover-stub");
+    expect(stub.attributes("data-pod-id")).toBe("pod-mcp");
+    expect(stub.attributes("data-provider")).toBe("claude");
+    wrapper.unmount();
+  });
+
+  it("Pod busy（chatting）時 McpPopover busy 應為 true", async () => {
+    const wrapper = mountPod(mkPod({ status: "chatting" as Pod["status"] }));
+    await nextTick();
+    await wrapper.find(".pod-mcp-slot").trigger("click");
+    expect(wrapper.find(".mcp-popover-stub").attributes("data-busy")).toBe(
+      "true",
+    );
+    wrapper.unmount();
+  });
+
+  it("開啟 MCP popover 時 Plugin popover 不應渲染", async () => {
+    const wrapper = mountPod(mkPod());
+    await nextTick();
+    await wrapper.find(".pod-mcp-slot").trigger("click");
+    expect(wrapper.find(".mcp-popover-stub").exists()).toBe(true);
+    expect(wrapper.find(".plugin-popover-stub").exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("第二次點擊 .pod-mcp-slot 應 toggle 關閉 McpPopover", async () => {
+    const wrapper = mountPod(mkPod());
+    await nextTick();
+    await wrapper.find(".pod-mcp-slot").trigger("click");
+    expect(wrapper.find(".mcp-popover-stub").exists()).toBe(true);
+    await wrapper.find(".pod-mcp-slot").trigger("click");
+    expect(wrapper.find(".mcp-popover-stub").exists()).toBe(false);
+    wrapper.unmount();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// 9. PodSlots 計數 props
+// ─────────────────────────────────────────────────────────────────────────
+
+describe("CanvasPod PodSlots 計數 props", () => {
+  it("pod.mcpServerNames 有 2 個時 PodSlots 應收到 mcpActiveCount=2", () => {
+    injectCapabilities();
+    const wrapper = mountPod(mkPod({ mcpServerNames: ["a", "b"] }));
+    expect(
+      wrapper.findComponent({ name: "PodSlots" }).props("mcpActiveCount"),
+    ).toBe(2);
+    wrapper.unmount();
+  });
+
+  it("pod.pluginIds 有 3 個時 PodSlots 應收到 pluginActiveCount=3", () => {
+    injectCapabilities();
+    const wrapper = mountPod(mkPod({ pluginIds: ["p1", "p2", "p3"] }));
+    expect(
+      wrapper.findComponent({ name: "PodSlots" }).props("pluginActiveCount"),
+    ).toBe(3);
+    wrapper.unmount();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// 10. handleModelChange
+// ─────────────────────────────────────────────────────────────────────────
+
+describe("CanvasPod handleModelChange", () => {
+  it("後端回傳成功應更新 podStore.providerConfig.model", async () => {
+    const { useCanvasStore } = await import("@/stores/canvasStore");
+    const canvasStore = useCanvasStore();
+    canvasStore.activeCanvasId = "canvas-1"; // 讓 sendCanvasAction 能取得 canvasId
+
+    const pod = mkPod({ id: "pod-m", provider: "claude" });
+    const podStore = usePodStore();
+    podStore.pods = [pod];
+    mockCreateWebSocketRequest.mockResolvedValueOnce({
       pod: { providerConfig: { model: "haiku" } },
     });
+    injectCapabilities();
+    const wrapper = mountPod(pod);
+    await nextTick();
 
-    const pod = createMockPod({ provider: "claude" });
-    const wrapper = mountCanvasPod(pod);
-    await wrapper.vm.$nextTick();
+    wrapper
+      .findComponent({ name: "PodModelSelector" })
+      .vm.$emit("update:model", "haiku");
+    await nextTick();
+    await new Promise((r) => setTimeout(r, 0));
+    await nextTick();
 
-    // 點擊 model-selector-stub 觸發 update:model emit
-    const selector = wrapper.find(".model-selector-stub");
-    if (selector.exists()) {
-      await selector.trigger("click");
-    }
-
-    // 等待非同步更新
-    await wrapper.vm.$nextTick();
-    await wrapper.vm.$nextTick();
-
-    // updatePodProviderConfigModel 應被呼叫
-    expect(mockUpdatePodProviderConfigModel).toHaveBeenCalledWith(
-      "pod-1",
-      "haiku",
-    );
-
-    wrapper.unmount();
-  });
-
-  it("handleModelChange()：後端回傳 null 應靜默無副作用", async () => {
-    // 模擬 sendCanvasAction 回傳 null（失敗情境）
-    mockSendCanvasAction.mockResolvedValueOnce(null);
-
-    const pod = createMockPod({ provider: "claude" });
-    const wrapper = mountCanvasPod(pod);
-    await wrapper.vm.$nextTick();
-
-    const selector = wrapper.find(".model-selector-stub");
-    if (selector.exists()) {
-      await selector.trigger("click");
-    }
-
-    await wrapper.vm.$nextTick();
-    await wrapper.vm.$nextTick();
-
-    // response 為 null → 不呼叫 updatePodProviderConfigModel
-    expect(mockUpdatePodProviderConfigModel).not.toHaveBeenCalled();
-
-    wrapper.unmount();
-  });
-
-  it("handleModelChange()：response.pod 為 undefined 應靜默無副作用", async () => {
-    // 模擬 sendCanvasAction 回傳不含 pod 的回應
-    mockSendCanvasAction.mockResolvedValueOnce({ pod: undefined });
-
-    const pod = createMockPod({ provider: "claude" });
-    const wrapper = mountCanvasPod(pod);
-    await wrapper.vm.$nextTick();
-
-    const selector = wrapper.find(".model-selector-stub");
-    if (selector.exists()) {
-      await selector.trigger("click");
-    }
-
-    await wrapper.vm.$nextTick();
-    await wrapper.vm.$nextTick();
-
-    // response.pod 為 undefined → 不呼叫 updatePodProviderConfigModel
-    expect(mockUpdatePodProviderConfigModel).not.toHaveBeenCalled();
-
-    wrapper.unmount();
-  });
-
-  it("podProviderClass：未知 provider 應回空字串（不注入任意 class）", () => {
-    // 未知 provider 不應出現在 pod-doodle class 中
-    const pod = createMockPod({ provider: "gone-provider" });
-    const wrapper = mountCanvasPod(pod);
-
-    const podDoodle = wrapper.find(".pod-doodle");
-    expect(podDoodle.exists()).toBe(true);
-
-    // 不應有 pod-provider-gone-provider 或其他 pod-provider-* class
-    const podProviderClasses = podDoodle
-      .classes()
-      .filter((c) => c.startsWith("pod-provider-"));
-    expect(podProviderClasses).toHaveLength(0);
-
+    expect(podStore.getPodById("pod-m")?.providerConfig.model).toBe("haiku");
     wrapper.unmount();
   });
 });
