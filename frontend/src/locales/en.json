@@ -243,7 +243,10 @@
       "mcpClaudeEmptyHint": "Run `claude mcp add` to install",
       "mcpCodexEmptyHint": "Run `codex mcp add` to install",
       "mcpToggleFailed": "Failed to toggle MCP server",
-      "mcpCodexHint": "Codex MCP servers are managed globally by codex"
+      "mcpCodexHint": "Codex MCP servers are managed globally by codex",
+      "searchPlaceholder": "Search…",
+      "pluginsSearchEmpty": "No matching plugin found",
+      "mcpSearchEmpty": "No matching MCP server found"
     }
   },
   "run": {

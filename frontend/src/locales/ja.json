@@ -90,7 +90,10 @@
       "mcpClaudeEmptyHint": "`claude mcp add` でインストールしてください",
       "mcpCodexEmptyHint": "`codex mcp add` でインストールしてください",
       "mcpToggleFailed": "MCP server の切替に失敗しました",
-      "mcpCodexHint": "Codex MCP server は codex でグローバル管理されます"
+      "mcpCodexHint": "Codex MCP server は codex でグローバル管理されます",
+      "searchPlaceholder": "検索…",
+      "pluginsSearchEmpty": "該当する plugin が見つかりません",
+      "mcpSearchEmpty": "該当する MCP server が見つかりません"
     }
   },
   "run": {

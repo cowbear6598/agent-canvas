@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed, onMounted, onUnmounted, nextTick } from "vue";
 import { useI18n } from "vue-i18n";
 import { Switch } from "@/components/ui/switch";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { listPlugins } from "@/services/pluginApi";
 import { updatePodPlugins as updatePodPluginsApi } from "@/services/podPluginApi";
 import { usePodStore } from "@/stores/pod";
@@ -29,6 +30,25 @@ const installedPlugins = ref<InstalledPlugin[]>([]);
 const localPluginIds = ref<string[]>([]);
 const loading = ref<boolean>(false);
 const loadFailed = ref<boolean>(false);
+
+/** 搜尋輸入框的文字內容 */
+const searchQuery = ref<string>("");
+/** 搜尋輸入框的 template ref，用於自動 focus */
+const searchInputRef = ref<HTMLInputElement | null>(null);
+
+/**
+ * 依搜尋字串過濾 plugin 清單。
+ * 若搜尋字串為空則回傳完整清單；否則對 plugin.name 做大小寫不敏感比對。
+ */
+const filteredPlugins = computed<InstalledPlugin[]>(() => {
+  if (searchQuery.value === "") {
+    return installedPlugins.value;
+  }
+  const query = searchQuery.value.toLowerCase();
+  return installedPlugins.value.filter((plugin) =>
+    plugin.name.toLowerCase().includes(query),
+  );
+});
 
 /** Codex provider 唯讀模式：plugin 只展示不可 toggle */
 const isCodex = computed(() => props.provider === "codex");
@@ -70,6 +90,10 @@ onMounted(async () => {
   } finally {
     loading.value = false;
   }
+
+  // 清單載入完成後等 DOM 更新，再將 focus 移至搜尋輸入框
+  await nextTick();
+  searchInputRef.value?.focus();
 
   document.addEventListener("keydown", handleKeydown);
   document.addEventListener("mousedown", handleMousedown, true);
@@ -130,7 +154,7 @@ const handleToggle = async (
   <Teleport to="body">
     <div
       ref="rootRef"
-      class="fixed z-50 min-w-52 rounded-md border border-doodle-ink bg-card p-2 shadow-md"
+      class="fixed z-50 min-w-60 rounded-md border border-doodle-ink bg-card p-2 shadow-md"
       :style="{
         left: `${anchorRect.left - 8}px`,
         top: `${anchorRect.top}px`,
@@ -138,6 +162,16 @@ const handleToggle = async (
       }"
       @click.stop
     >
+      <!-- 搜尋輸入框：常駐顯示，popover 開啟後自動 focus -->
+      <input
+        ref="searchInputRef"
+        v-model="searchQuery"
+        class="pod-popover-search"
+        type="text"
+        :placeholder="t('pod.slot.searchPlaceholder')"
+        @click.stop
+      >
+
       <!-- 載入中 -->
       <div
         v-if="loading"
@@ -149,7 +183,7 @@ const handleToggle = async (
         <span>{{ t("pod.slot.pluginsLoading") }}</span>
       </div>
 
-      <!-- 空狀態（載入失敗或無 plugin） -->
+      <!-- 空狀態（載入失敗或尚未安裝任何 plugin） -->
       <div
         v-else-if="loadFailed || installedPlugins.length === 0"
         class="px-2 py-1 text-xs font-mono text-muted-foreground whitespace-pre-wrap"
@@ -157,60 +191,74 @@ const handleToggle = async (
         {{ t("pod.slot.pluginsEmpty") }}
       </div>
 
-      <!-- Plugin 列表（Claude：可 toggle；Codex：唯讀展示） -->
+      <!-- 搜尋無結果：有已安裝 plugin 但過濾後為空 -->
       <div
-        v-else
-        class="space-y-1"
+        v-else-if="filteredPlugins.length === 0"
+        class="px-2 py-1 text-xs font-mono text-muted-foreground"
       >
+        {{ t("pod.slot.pluginsSearchEmpty") }}
+      </div>
+
+      <!-- Plugin 列表（Claude：可 toggle；Codex：唯讀展示） -->
+      <template v-else>
         <!-- Codex 唯讀模式：顯示 name vX.Y.Z + 已啟用勾勾標籤 -->
-        <template v-if="isCodex">
-          <div
-            v-for="plugin in installedPlugins"
-            :key="plugin.id"
-            class="flex items-center justify-between gap-3 rounded px-2 py-1"
-          >
-            <p class="text-xs font-mono">
-              {{ plugin.name }} v{{ plugin.version }}
-            </p>
-            <span
-              class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-mono text-green-600"
-            >
-              ✓
-            </span>
-          </div>
-          <!-- Codex hint：全域管理說明 -->
+        <div v-if="isCodex">
+          <ScrollArea class="pod-popover-scrollable">
+            <div class="space-y-1">
+              <div
+                v-for="plugin in filteredPlugins"
+                :key="plugin.id"
+                class="flex items-center justify-between gap-3 rounded px-2 py-1"
+              >
+                <p class="text-xs font-mono">
+                  {{ plugin.name }} v{{ plugin.version }}
+                </p>
+                <span
+                  class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-mono text-green-600"
+                >
+                  ✓
+                </span>
+              </div>
+            </div>
+          </ScrollArea>
+          <!-- Codex hint：在 ScrollArea 外，避免隨列表捲動 -->
           <p class="mt-1 px-2 text-xs font-mono text-muted-foreground">
             {{ t("pod.slot.pluginsCodexHint") }}
           </p>
-        </template>
+        </div>
 
         <!-- Claude 模式：可 toggle -->
-        <template v-else>
-          <div
-            v-for="plugin in installedPlugins"
-            :key="plugin.id"
-            class="group relative flex items-center justify-between gap-3 rounded px-2 py-1 hover:bg-secondary"
-            :title="busy ? t('pod.slot.pluginsBusyTooltip') : undefined"
-          >
-            <div>
-              <p class="text-xs font-mono">
-                {{ plugin.name }}
-              </p>
-              <p class="text-xs font-mono text-muted-foreground">
-                v{{ plugin.version }}
-              </p>
+        <ScrollArea
+          v-else
+          class="pod-popover-scrollable"
+        >
+          <div class="space-y-1">
+            <div
+              v-for="plugin in filteredPlugins"
+              :key="plugin.id"
+              class="group relative flex items-center justify-between gap-3 rounded px-2 py-1 hover:bg-secondary"
+              :title="busy ? t('pod.slot.pluginsBusyTooltip') : undefined"
+            >
+              <div>
+                <p class="text-xs font-mono">
+                  {{ plugin.name }}
+                </p>
+                <p class="text-xs font-mono text-muted-foreground">
+                  v{{ plugin.version }}
+                </p>
+              </div>
+              <Switch
+                :model-value="localPluginIds.includes(plugin.id)"
+                :disabled="busy"
+                @click.stop
+                @update:model-value="
+                  (val: boolean) => handleToggle(plugin.id, val)
+                "
+              />
             </div>
-            <Switch
-              :model-value="localPluginIds.includes(plugin.id)"
-              :disabled="busy"
-              @click.stop
-              @update:model-value="
-                (val: boolean) => handleToggle(plugin.id, val)
-              "
-            />
           </div>
-        </template>
-      </div>
+        </ScrollArea>
+      </template>
     </div>
   </Teleport>
 </template>

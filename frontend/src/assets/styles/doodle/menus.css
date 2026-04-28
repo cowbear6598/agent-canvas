@@ -209,3 +209,31 @@
   cursor: not-allowed;
   opacity: 0.4;
 }
+
+/* Pod Popover Search */
+.pod-popover-search {
+  width: 100%;
+  padding: 4px 8px;
+  border: none;
+  border-bottom: 1.5px solid var(--doodle-ink);
+  outline: none;
+  background: transparent;
+  font-size: 0.825rem;
+  font-family: var(--font-mono), monospace, sans-serif;
+  color: var(--foreground);
+  box-sizing: border-box;
+  margin-bottom: 4px;
+}
+
+/* Pod Popover Scrollable */
+.pod-popover-scrollable {
+  max-height: calc(36px * 5);
+}
+
+/* reka-ui ScrollAreaViewport 預設 h-full 會跟著 Root 被撐開，
+   需明確繼承 max-height 並設 overflow-y: auto，
+   才能讓 viewport 在超過限制高度時觸發 scrollbar */
+.pod-popover-scrollable [data-reka-scroll-area-viewport] {
+  max-height: inherit;
+  overflow-y: auto;
+}

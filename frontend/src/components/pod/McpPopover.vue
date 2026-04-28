@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed, onMounted, onUnmounted, nextTick } from "vue";
 import { useI18n } from "vue-i18n";
 import { Switch } from "@/components/ui/switch";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   listMcpServers,
   updatePodMcpServers as updatePodMcpServersApi,
@@ -31,6 +32,20 @@ const installedMcpServers = ref<McpListItem[]>([]);
 const localMcpServerNames = ref<string[]>([]);
 const loading = ref<boolean>(false);
 const loadFailed = ref<boolean>(false);
+
+/** 搜尋框輸入字串 */
+const searchQuery = ref<string>("");
+/** 搜尋框 input 元素 ref，用於自動 focus */
+const searchInputRef = ref<HTMLInputElement | null>(null);
+
+/** 依 searchQuery 過濾 MCP server 清單（不分大小寫比對名稱） */
+const filteredMcpServers = computed<McpListItem[]>(() => {
+  const query = searchQuery.value.toLowerCase();
+  if (!query) return installedMcpServers.value;
+  return installedMcpServers.value.filter((server) =>
+    server.name.toLowerCase().includes(query),
+  );
+});
 
 /** Codex provider 唯讀模式：MCP 只展示不可 toggle */
 const isCodex = computed(() => props.provider === "codex");
@@ -72,6 +87,10 @@ onMounted(async () => {
   } finally {
     loading.value = false;
   }
+
+  // 載入完成後自動 focus 搜尋框
+  await nextTick();
+  searchInputRef.value?.focus();
 
   document.addEventListener("keydown", handleKeydown);
   document.addEventListener("mousedown", handleMousedown, true);
@@ -123,7 +142,7 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
   <Teleport to="body">
     <div
       ref="rootRef"
-      class="fixed z-50 min-w-52 rounded-md border border-doodle-ink bg-card p-2 shadow-md"
+      class="fixed z-50 min-w-60 rounded-md border border-doodle-ink bg-card p-2 shadow-md"
       :style="{
         left: `${anchorRect.left - 8}px`,
         top: `${anchorRect.top}px`,
@@ -131,6 +150,16 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
       }"
       @click.stop
     >
+      <!-- 搜尋框：永遠顯示於頂部（載入中時也顯示，等待中可先輸入） -->
+      <input
+        ref="searchInputRef"
+        v-model="searchQuery"
+        class="pod-popover-search"
+        type="text"
+        :placeholder="t('pod.slot.searchPlaceholder')"
+        @click.stop
+      >
+
       <!-- 載入中 -->
       <div
         v-if="loading"
@@ -157,63 +186,77 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
         </p>
       </div>
 
-      <!-- MCP server 列表（Claude：可 toggle；Codex：唯讀展示） -->
+      <!-- 搜尋無結果：有安裝但過濾後無符合項目 -->
       <div
-        v-else
-        class="space-y-1"
+        v-else-if="filteredMcpServers.length === 0"
+        class="px-2 py-1 text-xs font-mono text-muted-foreground"
       >
-        <!-- Codex 唯讀模式：顯示 name + 類型標籤（stdio/http）+ ✓ -->
-        <template v-if="isCodex">
-          <div
-            v-for="server in installedMcpServers"
-            :key="server.name"
-            class="flex items-center justify-between gap-3 rounded px-2 py-1"
-          >
-            <p class="text-xs font-mono">
-              {{ server.name }}
-            </p>
-            <div class="flex items-center gap-1">
-              <span
-                v-if="server.type"
-                class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-mono text-muted-foreground bg-secondary"
+        {{ t("pod.slot.mcpSearchEmpty") }}
+      </div>
+
+      <!-- MCP server 列表（Claude：可 toggle；Codex：唯讀展示） -->
+      <template v-else>
+        <!-- Codex 唯讀模式：ScrollArea 包列表，Codex hint 固定在外部 -->
+        <div v-if="isCodex">
+          <ScrollArea class="pod-popover-scrollable">
+            <div class="space-y-1">
+              <div
+                v-for="server in filteredMcpServers"
+                :key="server.name"
+                class="flex items-center justify-between gap-3 rounded px-2 py-1"
               >
-                {{ server.type }}
-              </span>
-              <span
-                class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-mono text-green-600"
-              >
-                ✓
-              </span>
+                <p class="text-xs font-mono">
+                  {{ server.name }}
+                </p>
+                <div class="flex items-center gap-1">
+                  <span
+                    v-if="server.type"
+                    class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-mono text-muted-foreground bg-secondary"
+                  >
+                    {{ server.type }}
+                  </span>
+                  <span
+                    class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-mono text-green-600"
+                  >
+                    ✓
+                  </span>
+                </div>
+              </div>
             </div>
-          </div>
-          <!-- Codex hint：全域管理說明 -->
+          </ScrollArea>
+          <!-- Codex hint 在 ScrollArea 外：固定顯示，不隨列表捲動 -->
           <p class="mt-1 px-2 text-xs font-mono text-muted-foreground">
             {{ t("pod.slot.mcpCodexHint") }}
           </p>
-        </template>
+        </div>
 
-        <!-- Claude 模式：所有 server 均可 toggle -->
-        <template v-else>
-          <div
-            v-for="server in installedMcpServers"
-            :key="server.name"
-            class="group relative flex items-center justify-between gap-3 rounded px-2 py-1 hover:bg-secondary"
-            :title="busy ? t('pod.slot.mcpBusyTooltip') : undefined"
-          >
-            <p class="text-xs font-mono">
-              {{ server.name }}
-            </p>
-            <Switch
-              :model-value="localMcpServerNames.includes(server.name)"
-              :disabled="busy"
-              @click.stop
-              @update:model-value="
-                (val: boolean) => handleToggle(server.name, val)
-              "
-            />
+        <!-- Claude 模式：ScrollArea 包列表，所有 server 均可 toggle -->
+        <ScrollArea
+          v-else
+          class="pod-popover-scrollable"
+        >
+          <div class="space-y-1">
+            <div
+              v-for="server in filteredMcpServers"
+              :key="server.name"
+              class="group relative flex items-center justify-between gap-3 rounded px-2 py-1 hover:bg-secondary"
+              :title="busy ? t('pod.slot.mcpBusyTooltip') : undefined"
+            >
+              <p class="text-xs font-mono">
+                {{ server.name }}
+              </p>
+              <Switch
+                :model-value="localMcpServerNames.includes(server.name)"
+                :disabled="busy"
+                @click.stop
+                @update:model-value="
+                  (val: boolean) => handleToggle(server.name, val)
+                "
+              />
+            </div>
           </div>
-        </template>
-      </div>
+        </ScrollArea>
+      </template>
     </div>
   </Teleport>
 </template>

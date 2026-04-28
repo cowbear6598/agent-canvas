@@ -243,7 +243,10 @@
       "mcpClaudeEmptyHint": "請使用 `claude mcp add` 安裝",
       "mcpCodexEmptyHint": "請使用 `codex mcp add` 安裝",
       "mcpToggleFailed": "切換 MCP server 失敗",
-      "mcpCodexHint": "Codex MCP server 由 codex 全域管理"
+      "mcpCodexHint": "Codex MCP server 由 codex 全域管理",
+      "searchPlaceholder": "搜尋…",
+      "pluginsSearchEmpty": "找不到符合的 plugin",
+      "mcpSearchEmpty": "找不到符合的 MCP server"
     }
   },
   "run": {
