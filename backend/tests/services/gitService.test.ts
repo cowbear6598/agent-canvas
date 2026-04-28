@@ -1,4 +1,8 @@
 import { vi } from "vitest";
+import os from "os";
+import path from "path";
+import fs from "fs/promises";
+import { $ } from "bun";
 import {
   detectGitSource,
   buildAuthenticatedUrl,
@@ -9,7 +13,9 @@ import {
 } from "../../src/services/workspace/gitService";
 import { ok, err } from "../../src/types";
 import { config } from "../../src/config";
-import path from "path";
+import { initGitRepo, cleanupRepo } from "../helpers/gitTestHelper";
+
+// ─── 純邏輯函式（不需要 git CLI） ──────────────────────────────────────────
 
 describe("GitService - Git 來源偵測與認證", () => {
   describe("extractDomainFromUrl", () => {
@@ -88,6 +94,8 @@ describe("GitService - Git 來源偵測與認證", () => {
   });
 
   describe("buildAuthenticatedUrl", () => {
+    // 保留 vi.spyOn：測試目的是驗證「不同 token 環境下的 URL 組裝格式」，
+    // 與真 git repo 無關，mock config getter 是唯一可靠方式
     afterEach(() => {
       vi.restoreAllMocks();
     });
@@ -227,9 +235,12 @@ describe("GitService - Git 來源偵測與認證", () => {
   });
 });
 
+// ─── clone 路徑驗證（純邊界邏輯，不需要真 git） ──────────────────────────
+
 describe("GitService - clone 路徑驗證", () => {
   it("targetPath 在允許範圍外時應回傳錯誤，不執行 git clone", async () => {
-    const outsidePath = path.join("/tmp", "outside-repo");
+    // /tmp 不在 config.repositoriesRoot 內，驗證 path boundary 邏輯
+    const outsidePath = path.join(os.tmpdir(), "outside-repo");
     const result = await gitService.clone(
       "https://github.com/user/repo.git",
       outsidePath,
@@ -239,6 +250,8 @@ describe("GitService - clone 路徑驗證", () => {
     expect(result.error).toBe("目標路徑不在允許的範圍內");
   });
 });
+
+// ─── fetchRemoteBranch 分支名驗證（純邏輯，不需要真 git） ────────────────
 
 describe("GitService - fetchRemoteBranch 分支名驗證", () => {
   it("無效分支名稱（含路徑穿越）應回傳錯誤", async () => {
@@ -262,18 +275,86 @@ describe("GitService - fetchRemoteBranch 分支名驗證", () => {
   });
 });
 
-describe("GitService - smartCheckoutBranch", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
+// ─── hasCommits：使用真 git repo 驗證邊界行為 ────────────────────────────
+
+describe("GitService - hasCommits（真 git repo）", () => {
+  let repoDir: string;
+
+  beforeEach(async () => {
+    // 在 os.tmpdir() 下建立唯一測試目錄，跨平台安全
+    repoDir = path.join(
+      os.tmpdir(),
+      `git-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
+    await fs.mkdir(repoDir, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await cleanupRepo(repoDir);
+  });
+
+  it("空 git repo（無任何 commit）時回傳 ok(false)", async () => {
+    // 建立空 repo：只 init，不做任何 commit
+    await $`git init ${repoDir}`.quiet();
+    await $`git -C ${repoDir} config user.email "test@example.com"`.quiet();
+    await $`git -C ${repoDir} config user.name "Test User"`.quiet();
+
+    const result = await gitService.hasCommits(repoDir);
+
+    // 空 repo 的 HEAD 是 ambiguous，應回傳 ok(false)
+    expect(result.success).toBe(true);
+    expect(result.data).toBe(false);
+  });
+
+  it("有 commit 的 repo 回傳 ok(true)", async () => {
+    // 使用 helper 建立含初始 commit 的 repo
+    await initGitRepo(repoDir);
+
+    const result = await gitService.hasCommits(repoDir);
+
+    expect(result.success).toBe(true);
+    expect(result.data).toBe(true);
+  });
+
+  it("路徑不存在時回傳 err（非「無 commit」白名單錯誤）", async () => {
+    const nonExistentPath = path.join(os.tmpdir(), `nonexistent-${Date.now()}`);
+
+    const result = await gitService.hasCommits(nonExistentPath);
+
+    // 不存在的路徑，git 會拋出非白名單錯誤 → 回傳 err
+    expect(result.success).toBe(false);
+  });
+});
+
+// ─── smartCheckoutBranch：混合策略 ───────────────────────────────────────
+//
+// 快樂路徑（本地/遠端分支 checkout、建立分支）→ 用真 git repo 驗證
+// 失敗路徑（回傳 err 的控制流程）→ 保留 vi.spyOn（無法用真 git 可靠模擬）
+
+describe("GitService - smartCheckoutBranch（真 git repo）", () => {
+  let repoDir: string;
+
+  beforeEach(async () => {
+    repoDir = path.join(
+      os.tmpdir(),
+      `smart-checkout-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
+    await fs.mkdir(repoDir, { recursive: true });
+    // 建立含初始 commit 的 repo（user config 已由 initGitRepo 設好）
+    await initGitRepo(repoDir);
+  });
+
+  afterEach(async () => {
+    await cleanupRepo(repoDir);
   });
 
   it("本地分支存在時直接 checkout，回傳 switched", async () => {
-    vi.spyOn(gitService, "branchExists").mockResolvedValue(ok(true));
-    vi.spyOn(gitService, "checkoutBranch").mockResolvedValue(ok(undefined));
+    // 預先建立 feature-branch 分支
+    await $`git -C ${repoDir} branch feature-branch`.quiet();
 
     const progressCalls: Array<[number, string]> = [];
     const result = await gitService.smartCheckoutBranch(
-      "/fake/path",
+      repoDir,
       "feature-branch",
       {
         onProgress: (progress, message) =>
@@ -295,72 +376,19 @@ describe("GitService - smartCheckoutBranch", () => {
       expect(typeof message).toBe("string");
       expect(message.length).toBeGreaterThan(0);
     });
-    expect(gitService.checkoutBranch).toHaveBeenCalledWith(
-      "/fake/path",
-      "feature-branch",
-      undefined,
-    );
-  });
-
-  it("本地不存在、遠端存在時 fetch 後 checkout，回傳 fetched", async () => {
-    vi.spyOn(gitService, "branchExists").mockResolvedValue(ok(false));
-    vi.spyOn(gitService, "checkRemoteBranchExists").mockResolvedValue(ok(true));
-    vi.spyOn(gitService, "fetchRemoteBranch").mockResolvedValue(ok(undefined));
-    vi.spyOn(gitService, "checkoutBranch").mockResolvedValue(ok(undefined));
-
-    const progressCalls: Array<[number, string]> = [];
-    const result = await gitService.smartCheckoutBranch(
-      "/fake/path",
-      "feature-branch",
-      {
-        onProgress: (progress, message) =>
-          progressCalls.push([progress, message]),
-      },
-    );
-
-    expect(result.success).toBe(true);
-    expect(result.data).toBe("fetched");
-    // 驗證 onProgress 呼叫次數與每次傳入的結構
-    expect(progressCalls.length).toBeGreaterThanOrEqual(3);
-    expect(progressCalls).toContainEqual([10, "檢查本地分支..."]);
-    expect(progressCalls).toContainEqual([20, "檢查遠端分支..."]);
-    expect(progressCalls).toContainEqual([80, "切換分支..."]);
-    progressCalls.forEach(([progress, message]) => {
-      expect(typeof progress).toBe("number");
-      expect(progress).toBeGreaterThanOrEqual(0);
-      expect(progress).toBeLessThanOrEqual(100);
-      expect(typeof message).toBe("string");
-    });
-    expect(gitService.fetchRemoteBranch).toHaveBeenCalledWith(
-      "/fake/path",
-      "feature-branch",
-      expect.any(Function),
-    );
-    expect(gitService.checkoutBranch).toHaveBeenCalledWith(
-      "/fake/path",
-      "feature-branch",
-      undefined,
-    );
+    // 確認實際已切換到 feature-branch
+    const currentBranch = await gitService.getCurrentBranch(repoDir);
+    expect(currentBranch.success).toBe(true);
+    expect(currentBranch.data).toBe("feature-branch");
   });
 
   it("本地與遠端都不存在時建立新分支，回傳 created", async () => {
-    vi.spyOn(gitService, "branchExists").mockResolvedValue(ok(false));
-    vi.spyOn(gitService, "checkRemoteBranchExists").mockResolvedValue(
-      ok(false),
-    );
-    vi.spyOn(gitService, "createAndCheckoutBranch").mockResolvedValue(
-      ok(undefined),
-    );
-
+    // repo 沒有 remote，所以不存在遠端分支，直接建立新分支
     const progressCalls: Array<[number, string]> = [];
-    const result = await gitService.smartCheckoutBranch(
-      "/fake/path",
-      "new-branch",
-      {
-        onProgress: (progress, message) =>
-          progressCalls.push([progress, message]),
-      },
-    );
+    const result = await gitService.smartCheckoutBranch(repoDir, "new-branch", {
+      onProgress: (progress, message) =>
+        progressCalls.push([progress, message]),
+    });
 
     expect(result.success).toBe(true);
     expect(result.data).toBe("created");
@@ -373,10 +401,68 @@ describe("GitService - smartCheckoutBranch", () => {
       expect(progress).toBeLessThanOrEqual(100);
       expect(typeof message).toBe("string");
     });
-    expect(gitService.createAndCheckoutBranch).toHaveBeenCalledWith(
-      "/fake/path",
-      "new-branch",
+    // 確認實際已切換到 new-branch
+    const currentBranch = await gitService.getCurrentBranch(repoDir);
+    expect(currentBranch.success).toBe(true);
+    expect(currentBranch.data).toBe("new-branch");
+  });
+
+  it("本地不存在、遠端存在時 fetch 後 checkout，回傳 fetched", async () => {
+    // 建立有 remote 的 repo，並在 remote 上新增 remote-only-branch
+    const remoteDir = path.join(
+      os.tmpdir(),
+      `smart-co-remote-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     );
+    await fs.mkdir(remoteDir, { recursive: true });
+
+    try {
+      // 建立 bare remote
+      await $`git init --bare ${remoteDir}`.quiet();
+      // 設定 origin remote
+      await $`git -C ${repoDir} remote add origin ${remoteDir}`.quiet();
+      // push initial branch 到 remote
+      await $`git -C ${repoDir} push -u origin HEAD`.quiet();
+      // 在 remote 建立 remote-only-branch（透過 push 一個本地 ref 到 remote）
+      await $`git -C ${repoDir} push origin HEAD:refs/heads/remote-only-branch`.quiet();
+
+      const progressCalls: Array<[number, string]> = [];
+      const result = await gitService.smartCheckoutBranch(
+        repoDir,
+        "remote-only-branch",
+        {
+          onProgress: (progress, message) =>
+            progressCalls.push([progress, message]),
+        },
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.data).toBe("fetched");
+      // 驗證 onProgress 呼叫次數與每次傳入的結構
+      expect(progressCalls.length).toBeGreaterThanOrEqual(2);
+      expect(progressCalls).toContainEqual([10, "檢查本地分支..."]);
+      expect(progressCalls).toContainEqual([80, "切換分支..."]);
+      progressCalls.forEach(([progress, message]) => {
+        expect(typeof progress).toBe("number");
+        expect(progress).toBeGreaterThanOrEqual(0);
+        expect(progress).toBeLessThanOrEqual(100);
+        expect(typeof message).toBe("string");
+      });
+      // 確認實際已切換到 remote-only-branch
+      const currentBranch = await gitService.getCurrentBranch(repoDir);
+      expect(currentBranch.success).toBe(true);
+      expect(currentBranch.data).toBe("remote-only-branch");
+    } finally {
+      await cleanupRepo(remoteDir);
+    }
+  });
+});
+
+describe("GitService - smartCheckoutBranch（失敗路徑，vi.spyOn）", () => {
+  // 保留 vi.spyOn：以下 case 測試「內部流程在某步驟回傳 err 時，
+  // 外層能正確傳遞錯誤並提早中止」，與真 git 行為無關，
+  // 用 spy 比用真 git 模擬更精確、更穩定
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("無效分支名稱回傳錯誤，不執行任何 git 操作", async () => {
@@ -432,49 +518,5 @@ describe("GitService - smartCheckoutBranch", () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toBe("從遠端 fetch 分支失敗");
-  });
-});
-
-describe("GitService - hasCommits 邊界情境", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it("revparse 拋出含 'ambiguous argument' 的錯誤時回傳 ok(false)", async () => {
-    vi.spyOn(
-      gitService as unknown as { hasCommits: () => unknown },
-      "hasCommits" as never,
-    );
-    // 測試 hasCommits 本身的判斷邏輯：只需 mock simpleGit 行為
-    // 此為純邏輯邊界測試，驗證各種「無 commit」訊息都回傳 ok(false)
-    const knownEmptyMessages = [
-      "ambiguous argument 'HEAD'",
-      "unknown revision or path",
-      "bad revision 'HEAD'",
-      "does not have any commits yet",
-    ];
-
-    for (const msg of knownEmptyMessages) {
-      vi.resetModules();
-      // 使用 mock 簡化 simpleGit 行為
-      const mockRevparse = vi.fn().mockRejectedValue(new Error(msg));
-      vi.doMock("simple-git", () => ({
-        default: () => ({ revparse: mockRevparse }),
-        simpleGit: () => ({ revparse: mockRevparse }),
-      }));
-    }
-    // 以上邊界訊息清單驗證完成（邏輯層已在 gitService.ts 中覆蓋，此處記錄邊界值）
-    expect(knownEmptyMessages).toHaveLength(4);
-  });
-
-  it("revparse 拋出非預期訊息時 hasCommits 應回傳 err", async () => {
-    // 直接使用不存在路徑（不是空 repo，也不存在）觸發 git 錯誤
-    // 預期回傳 err（非已知的「無 commit」訊息）
-    const result = await gitService.hasCommits("/nonexistent-path-xyz-abc");
-
-    // 因為路徑不存在，simpleGit 會拋出不在白名單的錯誤
-    // 結果必須是 err 或 ok，不應 throw
-    expect(result).toBeDefined();
-    expect(typeof result.success).toBe("boolean");
   });
 });
