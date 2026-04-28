@@ -151,6 +151,19 @@ async function handleUrlVerification(
   return Response.json({ challenge });
 }
 
+/**
+ * 查找符合簽名驗證的 Slack App。
+ * 整合「查 app + 驗簽」兩個步驟，驗證失敗時回傳 null。
+ */
+function findVerifiedApp(
+  timestamp: string,
+  rawBody: string,
+  signature: string,
+): IntegrationApp | null {
+  const apps = integrationAppStore.list("slack");
+  return findMatchedApp(timestamp, rawBody, signature, apps);
+}
+
 async function handleEventCallback(
   body: Record<string, unknown>,
   timestamp: string,
@@ -162,8 +175,7 @@ async function handleEventCallback(
     return new Response("缺少 api_app_id 欄位", { status: 400 });
   }
 
-  const apps = integrationAppStore.list("slack");
-  const app = findMatchedApp(timestamp, rawBody, signature, apps);
+  const app = findVerifiedApp(timestamp, rawBody, signature);
 
   if (!app) {
     logger.warn("Integration", "Error", "Slack 簽名驗證失敗");
@@ -223,6 +235,15 @@ class SlackProvider implements IntegrationProvider {
   });
 
   private clients: Map<string, WebClient> = new Map();
+
+  /** 頻道清單快取：避免高頻 refreshResources 呼叫時重複全量拉取 Slack API */
+  private channelCache: Map<
+    string,
+    { channels: IntegrationResource[]; expiresAt: number }
+  > = new Map();
+
+  /** 頻道快取 TTL：60 秒 */
+  private static readonly CHANNEL_CACHE_TTL_MS = 60_000;
 
   validateCreate(config: IntegrationAppConfig): Result<void> {
     const botToken = config["botToken"];
@@ -323,7 +344,8 @@ class SlackProvider implements IntegrationProvider {
       return [];
     }
 
-    return this.fetchAndUpdateChannels(appId, client);
+    // 主動 refresh 時 forceRefresh = true，確保拿到最新頻道清單
+    return this.fetchAndUpdateChannels(appId, client, true);
   }
 
   async sendMessage(
@@ -445,7 +467,21 @@ class SlackProvider implements IntegrationProvider {
   private async fetchAndUpdateChannels(
     appId: string,
     client: WebClient,
+    forceRefresh = false,
   ): Promise<IntegrationResource[]> {
+    // 被動讀取時（forceRefresh = false）優先回傳快取，避免高頻呼叫重複拉取 Slack API
+    if (!forceRefresh) {
+      const cached = this.channelCache.get(appId);
+      if (cached && Date.now() < cached.expiresAt) {
+        logger.log(
+          "Integration",
+          "Complete",
+          `Slack App ${appId} 頻道清單命中快取（${cached.channels.length} 個頻道）`,
+        );
+        return cached.channels;
+      }
+    }
+
     const channels: IntegrationResource[] = [];
     let cursor: string | undefined;
 
@@ -464,6 +500,11 @@ class SlackProvider implements IntegrationProvider {
       cursor = result.response_metadata?.next_cursor || undefined;
     } while (cursor);
 
+    // 更新快取與 DB
+    this.channelCache.set(appId, {
+      channels,
+      expiresAt: Date.now() + SlackProvider.CHANNEL_CACHE_TTL_MS,
+    });
     integrationAppStore.updateResources(appId, channels);
     logger.log(
       "Integration",

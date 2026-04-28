@@ -380,6 +380,10 @@ class TelegramProvider implements IntegrationProvider {
           `Telegram Bot ${appId} polling 失敗，${retryDelay}ms 後重試：${safeMessage}`,
         );
         await new Promise((resolve) => setTimeout(resolve, retryDelay));
+        // destroy 競態防禦：等待結束後再次確認 pollingOffsets 仍持有 appId 且訊號未中止，
+        // 避免 destroy 已完成但 loop 仍進入下一輪重試
+        if (!this.pollingOffsets.has(appId) || controller.signal.aborted)
+          return;
         retryDelay = Math.min(retryDelay * 2, MAX_RETRY_DELAY);
       }
     }

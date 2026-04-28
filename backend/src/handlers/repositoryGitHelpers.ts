@@ -10,20 +10,29 @@ export type ThrottledProgressEmitter = ThrottledFunction<
   [number, string | I18nError]
 >;
 
-export function emitGitValidationError(
-  connectionId: string,
-  responseEvent: WebSocketResponseEvents,
+/**
+ * 純函式：根據 error 內容判斷應回傳的 error code。
+ * 優先檢查 i18n error 物件的 key（新格式），再退回字串比對（向後相容）。
+ */
+function resolveErrorCode(
   error: string | I18nError,
-  requestId: string,
-): void {
-  // 優先檢查 i18n error 物件的 key（新格式），再退回字串比對（向後相容）
+): "NOT_FOUND" | "VALIDATION_ERROR" {
   const isNotFound =
     (typeof error === "object" &&
       error !== null &&
       "key" in error &&
       /notFound|NotFound/.test(error.key)) ||
     (typeof error === "string" && error.includes("找不到"));
-  const errorCode = isNotFound ? "NOT_FOUND" : "VALIDATION_ERROR";
+  return isNotFound ? "NOT_FOUND" : "VALIDATION_ERROR";
+}
+
+export function emitGitValidationError(
+  connectionId: string,
+  responseEvent: WebSocketResponseEvents,
+  error: string | I18nError,
+  requestId: string,
+): void {
+  const errorCode = resolveErrorCode(error);
   emitError(
     connectionId,
     responseEvent,

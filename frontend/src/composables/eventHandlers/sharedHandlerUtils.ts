@@ -10,6 +10,18 @@ export interface BasePayload {
 
 export interface UnifiedHandlerOptions {
   toastMessage?: string | (() => string);
+  /**
+   * 跳過 canvasId 比對的兩種機制，語意不同：
+   *
+   * - `payload.canvasId === null`：後端 emit 此事件時沒有 canvas 範疇（全域事件），
+   *   前端永遠處理，不需額外設定此選項。
+   *
+   * - `skipCanvasCheck: true`：此 handler 本身不需要 canvas 比對
+   *   （例如管理全域狀態的 handler），明確告知 createUnifiedHandler 略過比對邏輯。
+   *
+   * 注意：未設定 skipCanvasCheck 且 payload.canvasId 為 undefined 時，
+   * 會以 warn log 略過並視為配置錯誤。
+   */
   skipCanvasCheck?: boolean;
 }
 

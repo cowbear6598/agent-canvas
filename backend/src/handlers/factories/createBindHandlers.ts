@@ -1,6 +1,7 @@
 import type { WebSocketResponseEvents } from "../../schemas";
 import type { Pod } from "../../types/pod.js";
 import type { ProviderCapabilities } from "../../services/provider/index.js";
+import { toPodPublicView } from "../../types/index.js";
 import { repositorySyncService } from "../../services/repositorySyncService.js";
 import { emitSuccess, emitError } from "../../utils/websocketResponse.js";
 import { createI18nError } from "../../utils/i18nError.js";
@@ -266,10 +267,11 @@ export function createUnbindHandler<TService, TIdField extends string>(
 
       const boundId = config.getPodResourceIds(pod);
       if (!boundId) {
+        // 已解綁（idempotent 路徑），與 emitPodUpdated 回傳格式一致：pod 包成 PodPublicView
         const response = {
           requestId,
           success: true,
-          pod,
+          pod: toPodPublicView(pod),
         };
         emitSuccess(connectionId, config.events.unbound!, response);
         return;

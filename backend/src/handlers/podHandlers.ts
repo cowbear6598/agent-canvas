@@ -202,7 +202,18 @@ export const handlePodMove = withCanvasId<PodMovePayload>(
 
 /**
  * 封裝「預檢 + UNIQUE 例外」兩道名稱衝突防線。
- * 回傳 true 表示衝突已透過 emitError 處理，caller 應直接 return。
+ *
+ * 回傳 discriminated union：
+ * - `{ conflicted: true }`：名稱衝突，emitError 已發送，**caller 應直接 return**。
+ * - `{ conflicted: false; result }`：無衝突，`result` 為 podStore.update 回傳值，
+ *   caller 可直接使用 result 進行後續處理。
+ *
+ * 使用範例：
+ * ```ts
+ * const checkResult = checkPodNameConflict(...);
+ * if (checkResult.conflicted) return;
+ * const { result } = checkResult; // 此時 result 型別已收窄
+ * ```
  */
 function checkPodNameConflict(
   connectionId: string,
@@ -381,6 +392,25 @@ function resolveLastTriggeredAt(
   return existingSchedule?.lastTriggeredAt ?? null;
 }
 
+/**
+ * 純函式：比對兩個排程設定的所有欄位（含 weekdays 排序正規化），
+ * 回傳是否有任何欄位發生變更。
+ */
+function hasScheduleFieldsChanged(
+  next: NonNullable<PodSetSchedulePayload["schedule"]>,
+  existing: NonNullable<Pod["schedule"]>,
+): boolean {
+  return (
+    next.frequency !== existing.frequency ||
+    next.hour !== existing.hour ||
+    next.minute !== existing.minute ||
+    next.second !== existing.second ||
+    next.intervalMinute !== existing.intervalMinute ||
+    next.intervalHour !== existing.intervalHour ||
+    [...next.weekdays].sort().join() !== [...existing.weekdays].sort().join()
+  );
+}
+
 export function buildScheduleUpdates(
   schedule: NonNullable<PodSetSchedulePayload["schedule"]> | null,
   existingSchedule: Pod["schedule"],
@@ -393,14 +423,7 @@ export function buildScheduleUpdates(
     schedule.enabled && (!existingSchedule || !existingSchedule.enabled);
 
   const hasScheduleChanged = existingSchedule
-    ? schedule.frequency !== existingSchedule.frequency ||
-      schedule.hour !== existingSchedule.hour ||
-      schedule.minute !== existingSchedule.minute ||
-      schedule.second !== existingSchedule.second ||
-      schedule.intervalMinute !== existingSchedule.intervalMinute ||
-      schedule.intervalHour !== existingSchedule.intervalHour ||
-      [...schedule.weekdays].sort().join() !==
-        [...existingSchedule.weekdays].sort().join()
+    ? hasScheduleFieldsChanged(schedule, existingSchedule)
     : false;
 
   const lastTriggeredAt = resolveLastTriggeredAt(
@@ -534,11 +557,13 @@ export const handlePodSetPlugins = withCanvasId<PodSetPluginsPayload>(
       return;
     }
 
+    // ignoredIds：被過濾掉的 plugin ID 清單，前端可據此提示使用者
     const successResponse: PodPluginsSetPayload = {
       requestId,
       canvasId,
       success: true,
       pod: toPodPublicView(result.pod),
+      ignoredIds: invalidIds,
     };
     socketService.emitToCanvas(
       canvasId,

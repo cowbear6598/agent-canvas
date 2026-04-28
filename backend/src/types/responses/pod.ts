@@ -57,15 +57,24 @@ export interface PodScheduleSetPayload {
   error?: string;
 }
 
-export interface PodPluginsSetPayload {
-  requestId: string;
-  canvasId: string;
-  success: boolean;
-  podId?: string;
-  pod?: PodPublicView;
-  error?: string;
-  reason?: "pod-busy";
-}
+/** Pod plugin 設定結果（discriminated union，以 success 欄位區分兩條路徑） */
+export type PodPluginsSetPayload =
+  | {
+      requestId: string;
+      canvasId: string;
+      success: true;
+      pod?: PodPublicView;
+      /** self-healing 過濾掉的 plugin ID 清單（未安裝的 plugin） */
+      ignoredIds: string[];
+    }
+  | {
+      requestId: string;
+      canvasId: string;
+      podId?: string;
+      success: false;
+      /** pod-busy：Pod 正忙碌，無法修改 plugin 設定 */
+      reason: "pod-busy";
+    };
 
 export interface PodDeletedPayload {
   requestId: string;

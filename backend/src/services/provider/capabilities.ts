@@ -10,7 +10,7 @@ export const CLAUDE_CAPABILITIES: Readonly<ProviderCapabilities> =
     mcp: true,
   });
 
-/** Codex Provider 支援聊天、指令、repository 與 plugin */
+/** Codex Provider 支援所有功能，與 Claude 行為完全一致（chat、command、repository、plugin、mcp 皆為 true） */
 export const CODEX_CAPABILITIES: Readonly<ProviderCapabilities> = Object.freeze(
   {
     chat: true,

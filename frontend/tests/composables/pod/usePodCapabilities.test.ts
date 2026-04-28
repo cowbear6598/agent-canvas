@@ -36,13 +36,13 @@ const CLAUDE_FULL_CAPABILITIES = {
   mcp: true,
 };
 
-/** Phase 2 後，Codex 的 capabilities（需由 syncFromPayload 注入） */
+/** Phase 2 後，Codex 的 capabilities（需由 syncFromPayload 注入）。與後端 CODEX_CAPABILITIES 一致，所有欄位皆為 true */
 const CODEX_CAPABILITIES = {
   chat: true,
   plugin: true,
-  repository: false,
+  repository: true,
   command: true,
-  mcp: false,
+  mcp: true,
 };
 
 /**
@@ -108,12 +108,12 @@ describe("usePodCapabilities", () => {
       expect(isPluginEnabled.value).toBe(true);
     });
 
-    it("isRepositoryEnabled 應為 false（Codex 不支援）", () => {
+    it("isRepositoryEnabled 應為 true（Codex 與 Claude 行為一致）", () => {
       injectAllCapabilities();
       const podId = setupPod("codex");
       const { isRepositoryEnabled } = usePodCapabilities(podId);
 
-      expect(isRepositoryEnabled.value).toBe(false);
+      expect(isRepositoryEnabled.value).toBe(true);
     });
 
     it("isCommandEnabled 應為 true（codex 已開放 command）", () => {
@@ -124,12 +124,12 @@ describe("usePodCapabilities", () => {
       expect(isCommandEnabled.value).toBe(true);
     });
 
-    it("isMcpEnabled 應為 false（Codex 不支援）", () => {
+    it("isMcpEnabled 應為 true（Codex 與 Claude 行為一致）", () => {
       injectAllCapabilities();
       const podId = setupPod("codex");
       const { isMcpEnabled } = usePodCapabilities(podId);
 
-      expect(isMcpEnabled.value).toBe(false);
+      expect(isMcpEnabled.value).toBe(true);
     });
 
     it("capabilities 應等於 Codex capabilities（從 store 讀取）", () => {

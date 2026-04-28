@@ -546,7 +546,9 @@
     "pullComplete": "Pull 完了",
     "preparingCheckout": "ブランチ切り替えを準備中...",
     "branchCreated": "ブランチを作成しました",
-    "checkoutComplete": "切り替え完了"
+    "checkoutComplete": "切り替え完了",
+    "repositoryCloneStart": "Git clone を開始中...",
+    "repositoryCreated": "Repository を作成しました、clone を開始中..."
   },
   "settings": {
     "title": "グローバル設定",

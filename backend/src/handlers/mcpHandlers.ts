@@ -121,6 +121,7 @@ export async function handlePodSetMcpServerNames(
   podStore.setMcpServerNames(podId, validNames);
 
   // 廣播 POD_MCP_SERVER_NAMES_UPDATED 給 canvas 所有連線
+  // ignoredNames：被過濾掉的 name 清單，前端可據此提示使用者
   socketService.emitToCanvas(
     canvasId,
     WebSocketResponseEvents.POD_MCP_SERVER_NAMES_UPDATED,
@@ -130,6 +131,7 @@ export async function handlePodSetMcpServerNames(
       podId,
       success: true,
       mcpServerNames: validNames,
+      ignoredNames: invalidNames,
     },
   );
 }

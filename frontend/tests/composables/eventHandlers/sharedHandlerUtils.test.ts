@@ -50,6 +50,22 @@ describe("createUnifiedHandler", () => {
     expect(mockLoggerWarn).not.toHaveBeenCalled();
   });
 
+  it("canvasId 為 null 時，不呼叫 isCurrentCanvas（直接執行不走 canvas 比對分支）", () => {
+    // isCurrentCanvas 內部依賴 useCanvasStore，將 activeCanvasId 設為與 payload 不同的值。
+    // 若 isCurrentCanvas 被錯誤地呼叫，handler 就不會被執行（因為 null !== "other-canvas"）。
+    // 但 canvasId = null 時 handler 一定要被呼叫，即可驗證 isCurrentCanvas 沒有介入。
+    const canvasStore = useCanvasStore();
+    canvasStore.activeCanvasId = "other-canvas";
+
+    const handler = vi.fn();
+    const unified = createUnifiedHandler(handler);
+
+    unified({ canvasId: null });
+
+    // canvasId === null → 全域事件 → handler 直接執行，不需要 isCurrentCanvas 比對
+    expect(handler).toHaveBeenCalledOnce();
+  });
+
   it("canvasId 為 undefined 時，觸發 logger 警告且 handler 不被呼叫", () => {
     const handler = vi.fn();
     const unified = createUnifiedHandler(handler);

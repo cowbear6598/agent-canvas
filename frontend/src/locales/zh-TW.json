@@ -699,7 +699,9 @@
     "pullComplete": "Pull 完成",
     "preparingCheckout": "準備切換分支...",
     "branchCreated": "分支建立完成",
-    "checkoutComplete": "切換完成"
+    "checkoutComplete": "切換完成",
+    "repositoryCloneStart": "開始 Git clone...",
+    "repositoryCreated": "Repository 已建立，開始 clone..."
   },
   "settings": {
     "title": "全域設定",

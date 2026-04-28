@@ -103,7 +103,12 @@ async function validateWorktreePrerequisites(
     worktreeName,
   );
   if (pathSafetyError) return pathSafetyError;
-  return checkBranchAvailability(repositoryPath, worktreeName);
+  const branchError = await checkBranchAvailability(
+    repositoryPath,
+    worktreeName,
+  );
+  if (branchError) return branchError;
+  return null;
 }
 
 export async function handleRepositoryWorktreeCreate(

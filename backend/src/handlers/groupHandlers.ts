@@ -5,7 +5,6 @@ import {
   GroupDeletePayload,
 } from "../schemas";
 import { groupStore } from "../services/groupStore.js";
-import { GroupType } from "../types";
 import {
   emitError,
   emitSuccess,
@@ -67,8 +66,8 @@ export async function handleGroupDelete(
 ): Promise<void> {
   const { canvasId, groupId } = payload;
 
-  const type = await findGroupType(groupId);
-  if (!type) {
+  const isCommand = await checkIsCommandGroup(groupId);
+  if (!isCommand) {
     emitNotFound(
       connectionId,
       WebSocketResponseEvents.GROUP_DELETED,
@@ -80,7 +79,8 @@ export async function handleGroupDelete(
     return;
   }
 
-  const hasItems = await groupStore.hasItems(groupId, type);
+  // 目前 codebase 僅有 "command" 一種 groupType，已由 checkIsCommandGroup 確認
+  const hasItems = await groupStore.hasItems(groupId, "command");
   if (hasItems) {
     emitError(
       connectionId,
@@ -94,7 +94,7 @@ export async function handleGroupDelete(
     return;
   }
 
-  const deleted = await groupStore.delete(groupId, type);
+  const deleted = await groupStore.delete(groupId, "command");
   if (!deleted) {
     emitNotFound(
       connectionId,
@@ -114,7 +114,10 @@ export async function handleGroupDelete(
   });
 }
 
-async function findGroupType(groupId: string): Promise<GroupType | null> {
-  const exists = await groupStore.exists(groupId, "command");
-  return exists ? "command" : null;
+/**
+ * 確認指定 group 是否為 command 類型。
+ * 目前 codebase 僅有 "command" 一種 groupType，未來新增其他類型時需擴充此函式。
+ */
+async function checkIsCommandGroup(groupId: string): Promise<boolean> {
+  return groupStore.exists(groupId, "command");
 }

@@ -428,6 +428,8 @@ export interface PodMcpServerNamesUpdatedPayload extends ResultPayload {
   canvasId: string;
   podId?: string;
   mcpServerNames?: string[];
+  /** self-healing 過濾掉的 MCP server name 清單（不存在於 ~/.claude.json） */
+  ignoredNames?: string[];
   pod?: Pod;
 }
 
@@ -449,11 +451,24 @@ export interface ConfigUpdatedPayload extends ResultPayload {
   backupEnabled?: boolean;
 }
 
-export interface PodPluginsSetPayload extends ResultPayload {
-  canvasId: string;
-  podId?: string;
-  pod?: Pod;
-}
+/** Pod plugin 設定結果（discriminated union，以 success 欄位區分兩條路徑） */
+export type PodPluginsSetPayload =
+  | {
+      requestId?: string;
+      canvasId: string;
+      success: true;
+      pod?: Pod;
+      /** self-healing 過濾掉的 plugin ID 清單（未安裝的 plugin） */
+      ignoredIds?: string[];
+    }
+  | {
+      requestId?: string;
+      canvasId: string;
+      podId?: string;
+      success: false;
+      /** pod-busy：Pod 正忙碌，無法修改 plugin 設定 */
+      reason: "pod-busy";
+    };
 
 export interface PluginListResultPayload extends ResultPayload {
   plugins?: InstalledPlugin[];

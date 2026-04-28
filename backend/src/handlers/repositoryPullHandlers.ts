@@ -6,6 +6,7 @@ import { emitSuccess, emitError } from "../utils/websocketResponse.js";
 import { logger } from "../utils/logger.js";
 import { handleResultError } from "../utils/handlerHelpers.js";
 import { createI18nError } from "../utils/i18nError.js";
+import type { I18nError } from "../utils/i18nError.js";
 import {
   withValidatedGitRepository,
   createProgressEmitter,
@@ -13,7 +14,19 @@ import {
   type ThrottledProgressEmitter,
 } from "./repositoryGitHelpers.js";
 
+/**
+ * 模組單例，存活週期 = process lifetime。
+ * 用途：in-memory 並發鎖，防止同一 repository 同時執行多個 pull 操作。
+ * 測試時需注意隔離（每個測試前應確保此 Set 為空，或透過 module reset）。
+ */
 const pullingRepositories = new Set<string>();
+
+/** executePullWithProgress 的回傳型別 */
+interface PullProgressResult {
+  gitPullResult: Awaited<ReturnType<typeof gitService.pullLatest>>;
+  throttledEmit: ThrottledProgressEmitter;
+  emitProgress: (progress: number, message: string | I18nError) => void;
+}
 
 async function withPullLock<T>(
   repositoryId: string,
@@ -35,14 +48,7 @@ async function executePullWithProgress(
   connectionId: string,
   requestId: string,
   repositoryPath: string,
-): Promise<{
-  gitPullResult: Awaited<ReturnType<typeof gitService.pullLatest>>;
-  throttledEmit: ThrottledProgressEmitter;
-  emitProgress: (
-    progress: number,
-    message: string | import("../utils/i18nError.js").I18nError,
-  ) => void;
-}> {
+): Promise<PullProgressResult> {
   const emitProgress = createProgressEmitter(
     connectionId,
     requestId,

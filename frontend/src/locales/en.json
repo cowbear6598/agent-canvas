@@ -699,7 +699,9 @@
     "pullComplete": "Pull complete",
     "preparingCheckout": "Preparing branch switch...",
     "branchCreated": "Branch created",
-    "checkoutComplete": "Branch switch complete"
+    "checkoutComplete": "Branch switch complete",
+    "repositoryCloneStart": "Starting Git clone...",
+    "repositoryCreated": "Repository created, starting clone..."
   },
   "settings": {
     "title": "Global Settings",

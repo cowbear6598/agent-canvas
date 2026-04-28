@@ -34,6 +34,31 @@ import {
   withCanvasId,
 } from "../utils/handlerHelpers.js";
 
+/**
+ * 為任意 Promise 加上逾時機制。
+ * 內部正確使用 clearTimeout，確保 promise resolve/reject 後計時器立即被清除，
+ * 不會造成計時器累積。
+ */
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  errorMsg: string,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(errorMsg)), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (reason) => {
+        clearTimeout(timer);
+        reject(reason);
+      },
+    );
+  });
+}
+
 function sanitizeApp(app: IntegrationApp): SanitizedIntegrationApp {
   const provider = integrationRegistry.get(app.provider);
   const sanitizedConfig = provider ? provider.sanitizeConfig(app.config) : {};
@@ -157,20 +182,18 @@ export async function handleIntegrationAppCreate(
     app: sanitizeApp(integrationAppStore.getById(app.id) ?? app),
   });
 
-  // 背景執行初始化，狀態變更透過 broadcastConnectionStatus 通知前端
+  // 背景執行初始化，狀態變更透過 broadcastConnectionStatus 通知前端。
+  // 30 秒逾時：對應 Slack OAuth handshake、外部 API 首次連線等最慢情境的合理上限。
   const INIT_TIMEOUT_MS = 30_000;
-  Promise.race([
-    provider.initialize(app),
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("初始化逾時")), INIT_TIMEOUT_MS),
-    ),
-  ]).catch((error) => {
-    logger.error(
-      "Integration",
-      "Error",
-      `Integration App「${app.name}」初始化失敗或逾時：${getErrorMessage(error)}`,
-    );
-  });
+  withTimeout(provider.initialize(app), INIT_TIMEOUT_MS, "初始化逾時").catch(
+    (error) => {
+      logger.error(
+        "Integration",
+        "Error",
+        `Integration App「${app.name}」初始化失敗或逾時：${getErrorMessage(error)}`,
+      );
+    },
+  );
 }
 
 export async function handleIntegrationAppDelete(
