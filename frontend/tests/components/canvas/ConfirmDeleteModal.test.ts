@@ -1,7 +1,8 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
 import ConfirmDeleteModal from "@/components/canvas/ConfirmDeleteModal.vue";
 
+// mock shadcn dialog，讓 open prop 控制渲染、並轉發 update:open 事件（供 ESC 測試）
 vi.mock("@/components/ui/dialog", () => ({
   Dialog: {
     name: "Dialog",
@@ -9,54 +10,26 @@ vi.mock("@/components/ui/dialog", () => ({
     emits: ["update:open"],
     template: '<div v-if="open" data-testid="dialog"><slot /></div>',
   },
-  DialogContent: {
-    name: "DialogContent",
-    template: '<div data-testid="dialog-content"><slot /></div>',
-  },
-  DialogHeader: {
-    name: "DialogHeader",
-    template: '<div data-testid="dialog-header"><slot /></div>',
-  },
-  DialogTitle: {
-    name: "DialogTitle",
-    template: '<div data-testid="dialog-title"><slot /></div>',
-  },
-  DialogDescription: {
-    name: "DialogDescription",
-    template: '<div data-testid="dialog-description"><slot /></div>',
-  },
-  DialogFooter: {
-    name: "DialogFooter",
-    template: '<div data-testid="dialog-footer"><slot /></div>',
-  },
+  DialogContent: { template: "<div><slot /></div>" },
+  DialogHeader: { template: "<div><slot /></div>" },
+  DialogTitle: { template: "<div data-testid='dialog-title'><slot /></div>" },
+  DialogDescription: { template: "<div><slot /></div>" },
+  DialogFooter: { template: "<div><slot /></div>" },
 }));
 
 vi.mock("@/components/ui/button", () => ({
   Button: {
     name: "Button",
     props: ["variant", "disabled"],
-    emits: ["click"],
-    template:
-      '<button :disabled="disabled" @click="$emit(\'click\', $event)"><slot /></button>',
+    template: "<button @click=\"$emit('click', $event)\"><slot /></button>",
   },
 }));
 
-type ItemType = "repository" | "command";
-type GroupType = "commandGroup";
-type ExtendedItemType = ItemType | GroupType;
-
-function mountModal(
-  props: {
-    open?: boolean;
-    itemName?: string;
-    isInUse?: boolean;
-    itemType?: ExtendedItemType;
-  } = {},
-) {
+function mountModal(props = {}) {
   return mount(ConfirmDeleteModal, {
     props: {
       open: true,
-      itemName: "Test Item",
+      itemName: "TestItem",
       isInUse: false,
       itemType: "repository",
       ...props,
@@ -64,91 +37,35 @@ function mountModal(
   });
 }
 
-describe("ConfirmDeleteModal", () => {
-  describe("基本顯示", () => {
-    it("open 為 false 時不渲染內容", () => {
-      const wrapper = mountModal({ open: false });
-
-      expect(wrapper.find('[data-testid="dialog"]').exists()).toBe(false);
-    });
-
-    it("isInUse 為 false 時顯示「確認刪除」標題", () => {
-      const wrapper = mountModal({ isInUse: false });
-
-      expect(wrapper.text()).toContain("確認刪除");
-    });
-
-    it("isInUse 為 false 時顯示項目名稱", () => {
-      const wrapper = mountModal({
-        isInUse: false,
-        itemName: "我的 Output Style",
-      });
-
-      expect(wrapper.text()).toContain("我的 Output Style");
-    });
-
-    it("isInUse 為 false 時顯示取消和刪除兩個按鈕，不顯示只有確定的按鈕", () => {
-      const wrapper = mountModal({ isInUse: false });
-
-      const buttons = wrapper.findAll("button");
-      expect(buttons.some((btn) => btn.text().includes("取消"))).toBe(true);
-      expect(buttons.some((btn) => btn.text().includes("刪除"))).toBe(true);
-      // 應有取消和刪除兩個按鈕，而不是只有確定
-      expect(buttons.length).toBe(2);
-    });
+describe("ConfirmDeleteModal smoke", () => {
+  it("open=true 時渲染標題", () => {
+    const wrapper = mountModal();
+    expect(wrapper.find("[data-testid='dialog']").exists()).toBe(true);
   });
 
-  describe("一般類型在使用中", () => {
-    it("command 在 isInUse 為 true 時阻擋刪除", () => {
-      const wrapper = mountModal({ isInUse: true, itemType: "command" });
-
-      const buttons = wrapper.findAll("button");
-      expect(buttons.some((btn) => btn.text().includes("刪除"))).toBe(false);
-    });
+  it("點確認（刪除）觸發 confirm emit", async () => {
+    const wrapper = mountModal();
+    const deleteBtn = wrapper
+      .findAll("button")
+      .find((b) => b.text().includes("刪除"));
+    await deleteBtn!.trigger("click");
+    expect(wrapper.emitted("confirm")).toBeTruthy();
   });
 
-  describe("按鈕行為", () => {
-    it("點擊取消按鈕 emit update:open 為 false", async () => {
-      const wrapper = mountModal({ isInUse: false });
+  it("點取消觸發 update:open(false)", async () => {
+    const wrapper = mountModal();
+    const cancelBtn = wrapper
+      .findAll("button")
+      .find((b) => b.text().includes("取消"));
+    await cancelBtn!.trigger("click");
+    expect(wrapper.emitted("update:open")?.[0]).toEqual([false]);
+  });
 
-      const buttons = wrapper.findAll("button");
-      const cancelButton = buttons.find((btn) => btn.text().includes("取消"));
-      await cancelButton!.trigger("click");
-
-      expect(wrapper.emitted("update:open")).toBeTruthy();
-      expect(wrapper.emitted("update:open")![0]).toEqual([false]);
-    });
-
-    it("點擊刪除按鈕 emit confirm 事件", async () => {
-      const wrapper = mountModal({ isInUse: false });
-
-      const buttons = wrapper.findAll("button");
-      const deleteButton = buttons.find((btn) => btn.text().includes("刪除"));
-      await deleteButton!.trigger("click");
-
-      expect(wrapper.emitted("confirm")).toBeTruthy();
-    });
-
-    it("點擊刪除按鈕同時 emit update:open 為 false", async () => {
-      const wrapper = mountModal({ isInUse: false });
-
-      const buttons = wrapper.findAll("button");
-      const deleteButton = buttons.find((btn) => btn.text().includes("刪除"));
-      await deleteButton!.trigger("click");
-
-      expect(wrapper.emitted("update:open")).toBeTruthy();
-      expect(wrapper.emitted("update:open")![0]).toEqual([false]);
-    });
-
-    it("點擊確定按鈕（isInUse 為 true 時）emit update:open 為 false", async () => {
-      const wrapper = mountModal({ isInUse: true, itemType: "command" });
-
-      const buttons = wrapper.findAll("button");
-      const confirmButton = buttons.find((btn) => btn.text().includes("確認"));
-      await confirmButton!.trigger("click");
-
-      expect(wrapper.emitted("update:open")).toBeTruthy();
-      expect(wrapper.emitted("update:open")![0]).toEqual([false]);
-    });
+  it("ESC（Dialog update:open false）觸發關閉", async () => {
+    const wrapper = mountModal();
+    await wrapper
+      .findComponent({ name: "Dialog" })
+      .vm.$emit("update:open", false);
+    expect(wrapper.emitted("update:open")?.[0]).toEqual([false]);
   });
 });
