@@ -10,6 +10,7 @@ import {
 } from "../../src/database/statements.js";
 import { Database } from "bun:sqlite";
 
+// Schema 結構驗證：建立、CASCADE 刪除、Prepared Statements CRUD
 describe("Database", () => {
   let db: Database;
 
