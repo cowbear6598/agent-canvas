@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import {
   createTmpDir,
@@ -65,55 +64,66 @@ async function writeCodexPluginManifest(
 // 測試套件
 // ─────────────────────────────────────────────
 
-// 注意：Bun 的 os.homedir() 不受 process.env.HOME 動態改變影響，
-// 因此 scanClaudeInstalledPlugins 的 isPathWithinDirectory 安全驗證
-// 永遠使用真實的 os.homedir()。
-// Claude 來源的 installPath 必須建立在真實 ~/.claude/plugins/ 下的測試子目錄，
-// Codex 來源的 installPath 則可放在 os.tmpdir() 下的 tmp dir。
+/**
+ * 設計說明（方向 B）：
+ *
+ * ESM native 模組無法被 vi.spyOn 攔截（Module namespace is not configurable in ESM），
+ * 因此改由產品碼加入 resolveClaudePluginsRoot() helper，讓測試透過 env var 注入路徑：
+ *
+ *   - CLAUDE_PLUGINS_INSTALLED_PATH：覆寫頂層 const，讓 installed_plugins.json 指向 tmpHome
+ *   - CODEX_PLUGINS_CACHE_DIR：覆寫頂層 const，讓 Codex cache 路徑指向 tmpHome
+ *   - CLAUDE_PLUGINS_ROOT_OVERRIDE：覆寫 resolveClaudePluginsRoot()，
+ *     讓 scanClaudeInstalledPlugins() 內的 isPathWithinDirectory 安全驗證指向 tmpHome
+ *
+ * 搭配 vi.resetModules() + 動態 import，確保每次 reimport 時頂層 const 重新計算。
+ * 完全不依賴、不接觸真實 ~/.claude/plugins/。
+ */
 
 describe("pluginScanner", () => {
-  // Claude 來源：使用真實 ~/.claude/plugins/ 下的測試隔離子目錄
-  // 避免污染既有 installed_plugins.json，改用 CLAUDE_PLUGINS_INSTALLED_PATH 覆寫
-  const REAL_CLAUDE_PLUGINS = join(homedir(), ".claude", "plugins");
-
-  // 每個測試的隔離目錄名稱（在 ~/.claude/plugins/test-<pid>-<rand> 下建立）
-  let claudeTestDir: string; // ~/.claude/plugins/test-<pid>-<rand>
-  let installedPluginsPath: string; // 覆寫用的 installed_plugins.json 路徑
-
-  // Codex 來源：使用 os.tmpdir() 下的獨立 tmp dir
-  let tmpHome: string; // /tmp/ccc-test-xxx
-  let codexCacheDir: string; // /tmp/ccc-test-xxx/.codex/plugins/cache
+  // 每個測試都使用獨立的 tmpHome，完全隔離於真實 HOME 目錄之外
+  let tmpHome: string; // /tmp/ccc-plugin-test-xxx（模擬 HOME）
+  let claudePluginsRoot: string; // tmpHome/.claude/plugins
+  let claudeTestDir: string; // tmpHome/.claude/plugins/test-<rand>（Claude plugin installPath 隔離區）
+  let installedPluginsPath: string; // 覆寫 CLAUDE_PLUGINS_INSTALLED_PATH 用
+  let codexCacheDir: string; // tmpHome/.codex/plugins/cache
 
   // 預設 no-op，確保 afterEach 在 beforeEach 提早失敗時也能安全呼叫
   let restoreEnv: () => void = () => {};
 
   beforeEach(async () => {
-    // 確保 ~/.claude/plugins/ 存在（CI 環境可能未建立該目錄）
-    await mkdir(REAL_CLAUDE_PLUGINS, { recursive: true });
+    // 1. 建立完全隔離的 tmpHome（不碰真實 ~/）
+    tmpHome = await createTmpDir("ccc-plugin-test-");
 
-    // 建立 Claude 測試隔離子目錄（在真實的 ~/.claude/plugins/ 下）
-    // 必須在此目錄下，因為產品碼 scanClaudeInstalledPlugins 以 os.homedir()
-    // 為基礎做 isPathWithinDirectory 安全驗證，無法透過 env var 覆寫
-    claudeTestDir = await mkdtemp(join(REAL_CLAUDE_PLUGINS, "test-"));
+    // 2. 建立 Claude plugins 目錄結構於 tmpHome 內
+    claudePluginsRoot = join(tmpHome, ".claude", "plugins");
+    await mkdir(claudePluginsRoot, { recursive: true });
+
+    // 3. 在 tmpHome/.claude/plugins/ 下建立每個測試的隔離子目錄
+    //    Claude plugin installPath 必須在此目錄下，才能通過 CLAUDE_PLUGINS_ROOT_OVERRIDE 驗證
+    claudeTestDir = await mkdtemp(join(claudePluginsRoot, "test-"));
     installedPluginsPath = join(claudeTestDir, "installed_plugins.json");
 
-    // 建立 Codex 用的 tmp dir（透過 helper 使用 os.tmpdir()）
-    tmpHome = await createTmpDir("ccc-plugin-test-");
+    // 4. 建立 Codex cache 目錄結構於 tmpHome 內
     codexCacheDir = join(tmpHome, ".codex", "plugins", "cache");
     await mkdir(codexCacheDir, { recursive: true });
 
-    // 儲存並覆寫環境變數
+    // 5. 設定所有 env var 覆寫，讓 reimport 後的產品碼完全指向 tmpHome 內的路徑：
+    //    - CLAUDE_PLUGINS_INSTALLED_PATH：覆寫頂層 const
+    //    - CODEX_PLUGINS_CACHE_DIR：覆寫頂層 const
+    //    - CLAUDE_PLUGINS_ROOT_OVERRIDE：覆寫 resolveClaudePluginsRoot()，
+    //      讓 isPathWithinDirectory 安全驗證不再依賴 os.homedir()
     restoreEnv = overrideEnv({
       CLAUDE_PLUGINS_INSTALLED_PATH: installedPluginsPath,
       CODEX_PLUGINS_CACHE_DIR: codexCacheDir,
+      CLAUDE_PLUGINS_ROOT_OVERRIDE: claudePluginsRoot,
     });
   });
 
   afterEach(async () => {
+    // 還原 env var
     restoreEnv();
 
-    // 清掉測試目錄（Claude 測試子目錄 + Codex tmp dir）
-    await rm(claudeTestDir, { recursive: true, force: true });
+    // 清除 tmpHome（包含所有測試產生的檔案）；真實 ~/.claude/plugins/ 完全不受影響
     await cleanupTmpDir(tmpHome);
   });
 
@@ -121,6 +131,7 @@ describe("pluginScanner", () => {
    * 清除 module 快取並重新 import pluginScanner，
    * 讓 module 頂層常數（INSTALLED_PLUGINS_PATH / CODEX_PLUGINS_CACHE_DIR）
    * 重新讀取目前的 process.env 值。
+   * resolveClaudePluginsRoot() 在函式呼叫時也會讀到 CLAUDE_PLUGINS_ROOT_OVERRIDE。
    */
   async function reimportPluginScanner() {
     vi.resetModules();
@@ -157,7 +168,7 @@ describe("pluginScanner", () => {
 
   describe("正常解析 Plugin 列表", () => {
     it("應正確解析 Plugin 的 id、name、version、description、installPath，且 compatibleProviders 含 claude", async () => {
-      // installPath 必須在真實 ~/.claude/plugins/ 下才能通過 isPathWithinDirectory 驗證
+      // installPath 在 tmpHome/.claude/plugins/ 下，可通過 isPathWithinDirectory 驗證
       const installPath = join(claudeTestDir, "my-plugin", "1.0.0");
       await mkdir(installPath, { recursive: true });
       await writeClaudePluginManifest(
@@ -521,7 +532,7 @@ describe("pluginScanner", () => {
     });
 
     it("應正確掃描 Codex cache 目錄並建立 plugin", async () => {
-      // ~/.codex/plugins/cache/openai-curated/gmail/1.0.0/
+      // tmpHome/.codex/plugins/cache/openai-curated/gmail/1.0.0/
       const installPath = join(
         codexCacheDir,
         "openai-curated",
@@ -679,7 +690,7 @@ describe("pluginScanner", () => {
 
   describe("Claude 與 Codex 來源同 id 合併", () => {
     it("同 id 的 plugin 兩邊都有時應合併 compatibleProviders", async () => {
-      // Claude 來源：installPath 在真實 ~/.claude/plugins/ 下（通過安全驗證）
+      // Claude 來源：installPath 在 tmpHome/.claude/plugins/ 下（通過安全驗證）
       const claudeInstallPath = join(
         claudeTestDir,
         "shared",
@@ -708,7 +719,7 @@ describe("pluginScanner", () => {
         }),
       );
 
-      // Codex 來源：installPath 在 codexCacheDir 內
+      // Codex 來源：installPath 在 codexCacheDir 內（tmpHome 下）
       const codexInstallPath = join(
         codexCacheDir,
         "shared-marketplace",

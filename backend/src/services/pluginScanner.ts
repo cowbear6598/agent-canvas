@@ -25,6 +25,20 @@ const CODEX_PLUGINS_CACHE_DIR =
   process.env.CODEX_PLUGINS_CACHE_DIR ??
   path.join(os.homedir(), ".codex", "plugins", "cache");
 
+/**
+ * 解析 Claude plugins 根目錄路徑。
+ * 優先讀取測試專用 env var CLAUDE_PLUGINS_ROOT_OVERRIDE，
+ * 沒設時 fallback 為 os.homedir()/.claude/plugins（預設行為不變）。
+ * 此 helper 使呼叫端在測試中可透過 env var 注入假路徑，
+ * 不需修改任何預設行為，且不依賴 ESM 無法 spy 的 os.homedir()。
+ */
+function resolveClaudePluginsRoot(): string {
+  return (
+    process.env.CLAUDE_PLUGINS_ROOT_OVERRIDE ??
+    path.join(os.homedir(), ".claude", "plugins")
+  );
+}
+
 // 5 秒 TTL 快取，避免每次 buildClaudeOptions 都重讀磁碟
 // 快取保存全集（不分 provider），provider 過濾在取值後做，避免快取碎片化
 const CACHE_TTL_MS = 5000;
@@ -146,7 +160,7 @@ function scanClaudeInstalledPlugins(): InstalledPlugin[] {
       if (!entry.installPath || seenPaths.has(entry.installPath)) continue;
 
       // 驗證 installPath 必須在允許的 Claude plugins 目錄內，防止惡意路徑注入
-      const claudePluginsRoot = path.join(os.homedir(), ".claude", "plugins");
+      const claudePluginsRoot = resolveClaudePluginsRoot();
       if (!isPathWithinDirectory(entry.installPath, claudePluginsRoot)) {
         logger.warn(
           "Run",
