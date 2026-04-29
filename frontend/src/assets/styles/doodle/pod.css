@@ -447,6 +447,15 @@
   );
 }
 
+/* Gemini Pod：淡天空藍 → 奶油白（--pod-provider-gradient-stop 終止） */
+.pod-provider-gemini {
+  background: linear-gradient(
+    to bottom,
+    var(--pod-provider-gemini-top) 0,
+    var(--card) var(--pod-provider-gradient-stop)
+  );
+}
+
 /* =============================================
    未知 Provider fallback badge（Phase 6 A）
 

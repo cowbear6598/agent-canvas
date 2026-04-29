@@ -1,6 +1,7 @@
 import type { AgentProvider } from "./types.js";
 import { claudeProvider } from "./claudeProvider.js";
 import { codexProvider } from "./codexProvider.js";
+import { geminiProvider } from "./geminiProvider.js";
 
 // ─── Registry ─────────────────────────────────────────────────────────────────
 
@@ -14,6 +15,7 @@ import { codexProvider } from "./codexProvider.js";
 export const providerRegistry = {
   claude: claudeProvider,
   codex: codexProvider,
+  gemini: geminiProvider,
 } as const;
 
 /**
@@ -75,4 +77,8 @@ export type {
   ChatRequestContext,
   NormalizedEvent,
 } from "./types.js";
-export { CLAUDE_CAPABILITIES, CODEX_CAPABILITIES } from "./capabilities.js";
+export {
+  CLAUDE_CAPABILITIES,
+  CODEX_CAPABILITIES,
+  GEMINI_CAPABILITIES,
+} from "./capabilities.js";

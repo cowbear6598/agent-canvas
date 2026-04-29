@@ -16,7 +16,7 @@ const defaultProps = {
   activeCount: 3,
   provider: "claude" as PodProvider,
   capabilityDisabled: false,
-  disabledTooltip: "pod.slot.codexDisabled",
+  disabledTooltip: "pod.slot.providerDisabled",
 };
 
 function mountSlot(overrides: Partial<typeof defaultProps> = {}) {
@@ -64,10 +64,10 @@ describe("PodPluginSlot", () => {
     it("tooltip（title）應套用 disabledTooltip 值", () => {
       const wrapper = mountSlot({
         capabilityDisabled: true,
-        disabledTooltip: "pod.slot.codexDisabled",
+        disabledTooltip: "pod.slot.providerDisabled",
       });
       const button = wrapper.find("button");
-      expect(button.attributes("title")).toBe("pod.slot.codexDisabled");
+      expect(button.attributes("title")).toBe("pod.slot.providerDisabled");
       wrapper.unmount();
     });
 

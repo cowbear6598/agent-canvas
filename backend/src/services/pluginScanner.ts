@@ -316,15 +316,21 @@ function mergePlugins(
   return Array.from(map.values());
 }
 
-export function scanInstalledPlugins(
-  provider?: "claude" | "codex",
-): InstalledPlugin[] {
+// 支援 plugin 的 provider 集合：未列入此集合的 provider（例如 gemini）一律回傳空陣列
+const PLUGIN_SUPPORTED_PROVIDERS = new Set<string>(["claude", "codex"]);
+
+export function scanInstalledPlugins(provider?: string): InstalledPlugin[] {
+  // 不支援 plugin 的 provider 直接回傳空陣列，避免在後續邏輯誤判
+  if (provider !== undefined && !PLUGIN_SUPPORTED_PROVIDERS.has(provider)) {
+    return [];
+  }
+
   const now = Date.now();
   if (cachedPlugins !== null && now < cacheExpiresAt) {
     // 快取命中：provider 過濾在此做
     if (provider) {
       return cachedPlugins.filter((p) =>
-        p.compatibleProviders.includes(provider),
+        (p.compatibleProviders as string[]).includes(provider),
       );
     }
     return cachedPlugins;
@@ -338,7 +344,7 @@ export function scanInstalledPlugins(
 
   if (provider) {
     return cachedPlugins.filter((p) =>
-      p.compatibleProviders.includes(provider),
+      (p.compatibleProviders as string[]).includes(provider),
     );
   }
   return cachedPlugins;

@@ -248,7 +248,7 @@
     },
     "slot": {
       "duplicateTitle": "已存在，無法插入",
-      "codexDisabled": "Codex 不支援此功能",
+      "providerDisabled": "此 Provider 不支援此功能",
       "pluginsLabel": "Plugins",
       "pluginsLoading": "載入中...",
       "pluginsBusyTooltip": "任務進行中，請等待完成",

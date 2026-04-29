@@ -46,7 +46,7 @@ const { isPluginEnabled, isRepositoryEnabled, isCommandEnabled, isMcpEnabled } =
   usePodCapabilities(toRef(props, "podId"));
 
 /** 不支援功能時顯示的 tooltip 文字（由 i18n 提供） */
-const DISABLED_TOOLTIP = computed(() => t("pod.slot.codexDisabled"));
+const DISABLED_TOOLTIP = computed(() => t("pod.slot.providerDisabled"));
 
 /** Plugin capability 關閉（目前兩個 provider plugin: true，恆為 false，保留以利擴充） */
 const pluginCapabilityDisabled = computed(() => !isPluginEnabled.value);
@@ -135,10 +135,7 @@ const slotConfigs = computed((): SlotConfig[] => [
     :disabled-tooltip="DISABLED_TOOLTIP"
     @click="(ev) => emit('mcp-clicked', ev)"
   />
-  <template
-    v-for="slot in slotConfigs"
-    :key="slot.slotClass"
-  >
+  <template v-for="slot in slotConfigs" :key="slot.slotClass">
     <div :class="slot.areaClass">
       <PodSingleBindSlot
         :pod-id="props.podId"

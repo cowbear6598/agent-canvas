@@ -4,6 +4,7 @@
 import { computed } from "vue";
 import AnthropicLogo from "@/components/icons/AnthropicLogo.vue";
 import OpenAILogo from "@/components/icons/OpenAILogo.vue";
+import GeminiLogo from "@/components/icons/GeminiLogo.vue";
 import type { PodProvider, ProviderConfig } from "@/types/pod";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
 import { useToast } from "@/composables/useToast";
@@ -46,6 +47,13 @@ const isCodexDisabled = computed((): boolean => {
 });
 
 /**
+ * Gemini 按鈕是否應 disabled：metadata 尚未載入時 disable。
+ */
+const isGeminiDisabled = computed((): boolean => {
+  return resolveModel("gemini") === undefined;
+});
+
+/**
  * 顯示「Provider 載入中」提示 toast（metadata 尚未就緒時使用）。
  */
 function showLoadingToast(): void {
@@ -81,13 +89,23 @@ const handleSelectCodex = (): void => {
     providerConfig: { model },
   });
 };
+
+/** 選 Gemini → 從 store 取預設 model 後 emit select；若 metadata 未就緒則顯示提示 */
+const handleSelectGemini = (): void => {
+  const model = resolveModel("gemini");
+  if (model === undefined) {
+    showLoadingToast();
+    return;
+  }
+  emit("select", {
+    provider: "gemini",
+    providerConfig: { model },
+  });
+};
 </script>
 
 <template>
-  <div
-    class="pod-menu-submenu"
-    @contextmenu.prevent
-  >
+  <div class="pod-menu-submenu" @contextmenu.prevent>
     <!--
       Claude 選項：metadata 未載入時 disabled。
       點擊事件掛在外層 div，確保 disabled 狀態下仍可顯示 toast 提示；
@@ -119,12 +137,28 @@ const handleSelectCodex = (): void => {
         <span
           class="w-8 h-8 rounded-full flex items-center justify-center border border-doodle-ink bg-white flex-shrink-0"
         >
-          <OpenAILogo
-            :size="16"
-            class="text-black"
-          />
+          <OpenAILogo :size="16" class="text-black" />
         </span>
         <span class="font-mono">Codex</span>
+      </button>
+    </div>
+
+    <!--
+      Gemini 選項：metadata 未載入時 disabled。
+      同上，點擊事件掛在外層 div 代理，確保 disabled 狀態下仍可顯示 toast 提示；
+      原生 disabled button 不觸發 click 事件，所以需外層代理。
+    -->
+    <div @click="handleSelectGemini">
+      <button
+        class="pod-menu-submenu-item flex items-center gap-3"
+        :disabled="isGeminiDisabled"
+      >
+        <span
+          class="w-8 h-8 rounded-full flex items-center justify-center border border-doodle-ink bg-white flex-shrink-0"
+        >
+          <GeminiLogo :size="16" />
+        </span>
+        <span class="font-mono">Gemini</span>
       </button>
     </div>
   </div>

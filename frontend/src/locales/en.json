@@ -248,7 +248,7 @@
     },
     "slot": {
       "duplicateTitle": "Already exists, cannot insert",
-      "codexDisabled": "Codex doesn't support this",
+      "providerDisabled": "This provider doesn't support this",
       "pluginsLabel": "Plugins",
       "pluginsLoading": "Loading...",
       "pluginsBusyTooltip": "Task in progress, please wait.",

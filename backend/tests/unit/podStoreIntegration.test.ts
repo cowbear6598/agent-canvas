@@ -801,12 +801,13 @@ describe("PodStore - Provider / Model 驗證", () => {
     // 直接呼叫純函式，傳入 provider 字串
     expect(resolveProvider("claude")).toBe("claude");
     expect(resolveProvider("codex")).toBe("codex");
+    expect(resolveProvider("gemini")).toBe("gemini");
 
     expect(logger.warn).not.toHaveBeenCalled();
   });
 
   it("resolveProvider 傳入未知 provider 字串時應 fallback 為 claude 並呼叫 logger.warn 至少一次", () => {
-    const result = resolveProvider("gemini");
+    const result = resolveProvider("unknown-xyz");
 
     expect(result).toBe("claude");
     expect(logger.warn).toHaveBeenCalled();
@@ -815,7 +816,9 @@ describe("PodStore - Provider / Model 驗證", () => {
       logger.warn as unknown as { mock: { calls: unknown[][] } }
     ).mock.calls;
     const matched = warnCalls.some((call) =>
-      call.some((arg) => typeof arg === "string" && arg.includes("gemini")),
+      call.some(
+        (arg) => typeof arg === "string" && arg.includes("unknown-xyz"),
+      ),
     );
     expect(matched).toBe(true);
   });

@@ -129,6 +129,47 @@ function injectCapabilities() {
   store.loaded = true;
 }
 
+/**
+ * 注入 gemini capabilities（chat only），並同時保留 claude/codex，
+ * 模擬 Gemini 相關測試所需的 metadata 環境。
+ */
+function injectGeminiCapabilities() {
+  const store = useProviderCapabilityStore();
+  store.syncFromPayload([
+    {
+      name: "claude",
+      capabilities: {
+        chat: true,
+        plugin: true,
+        repository: true,
+        command: true,
+        mcp: true,
+      },
+    },
+    {
+      name: "codex",
+      capabilities: {
+        chat: true,
+        plugin: true,
+        repository: true,
+        command: true,
+        mcp: true,
+      },
+    },
+    {
+      name: "gemini",
+      capabilities: {
+        chat: true,
+        plugin: false,
+        repository: false,
+        command: false,
+        mcp: false,
+      },
+    },
+  ]);
+  store.loaded = true;
+}
+
 // ── 全域 beforeEach ────────────────────────────────────────────────────────
 
 beforeEach(() => {
@@ -462,8 +503,86 @@ describe("CanvasPod PodSlots 計數 props", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────
-// 10. handleModelChange
+// 10.5 Gemini provider — 漸層 class 與 capability disabled 行為
 // ─────────────────────────────────────────────────────────────────────────
+
+describe("CanvasPod Gemini provider", () => {
+  // B1：Pod provider 為 gemini 時，.pod-doodle 含 pod-provider-gemini
+  it("B1：provider 為 gemini 時 pod-doodle 應含 pod-provider-gemini class", async () => {
+    const pod = mkPod({ provider: "gemini" as Pod["provider"] });
+    // 需把 pod 寫入 podStore，usePodCapabilities 才能透過 getPodById 取得正確 provider
+    usePodStore().pods = [pod];
+    const wrapper = mountPod(pod);
+    injectGeminiCapabilities();
+    await nextTick();
+    expect(wrapper.find(".pod-doodle").classes()).toContain(
+      "pod-provider-gemini",
+    );
+    wrapper.unmount();
+  });
+
+  // B2：Pod provider 從 claude 切換為 gemini 後，class 由 pod-provider-claude 更新為 pod-provider-gemini
+  it("B2：provider 從 claude 切換為 gemini 後 class 應從 pod-provider-claude 更新為 pod-provider-gemini", async () => {
+    const pod = mkPod({ id: "pod-switch", provider: "claude" });
+    const podStore = usePodStore();
+    podStore.pods = [pod];
+
+    const wrapper = mountPod(pod);
+    injectCapabilities();
+    await nextTick();
+    expect(wrapper.find(".pod-doodle").classes()).toContain(
+      "pod-provider-claude",
+    );
+
+    // 更新 store 中的 pod provider 為 gemini，同時確保 gemini metadata 已注入
+    podStore.pods[0]!.provider = "gemini" as Pod["provider"];
+    injectGeminiCapabilities();
+    await nextTick();
+    expect(wrapper.find(".pod-doodle").classes()).not.toContain(
+      "pod-provider-claude",
+    );
+    expect(wrapper.find(".pod-doodle").classes()).toContain(
+      "pod-provider-gemini",
+    );
+    wrapper.unmount();
+  });
+
+  // B3：Gemini Pod 的 plugin / mcp / repository / command 插槽仍渲染，但收到 disabled 相關 props
+  it("B3：Gemini Pod 的四個插槽仍渲染，plugin/mcp capabilityDisabled=true、repository/command disabled=true，disabled-tooltip 為通用文案", async () => {
+    const pod = mkPod({ provider: "gemini" as Pod["provider"] });
+    // 需把 pod 寫入 podStore，usePodCapabilities 才能透過 getPodById 取得正確 provider
+    usePodStore().pods = [pod];
+    const wrapper = mountPod(pod);
+    injectGeminiCapabilities();
+    await nextTick();
+
+    // 四個插槽 DOM 仍存在
+    expect(wrapper.find(".pod-plugin-slot").exists()).toBe(true);
+    expect(wrapper.find(".pod-mcp-slot").exists()).toBe(true);
+    expect(wrapper.find(".pod-repository-slot").exists()).toBe(true);
+    expect(wrapper.find(".pod-command-slot").exists()).toBe(true);
+
+    // PodSlots 渲染後，透過 PodPluginSlot / PodMcpSlot 元件驗證 capability-disabled prop
+    const podSlots = wrapper.findComponent({ name: "PodSlots" });
+    const podPluginSlot = podSlots.findComponent({ name: "PodPluginSlot" });
+    const podMcpSlot = podSlots.findComponent({ name: "PodMcpSlot" });
+    expect(podPluginSlot.props("capabilityDisabled")).toBe(true);
+    expect(podMcpSlot.props("capabilityDisabled")).toBe(true);
+
+    // PodSingleBindSlot（repository 與 command）應收到 disabled=true
+    const singleBindSlots = podSlots.findAllComponents({
+      name: "PodSingleBindSlot",
+    });
+    expect(singleBindSlots.length).toBeGreaterThanOrEqual(2);
+    for (const slot of singleBindSlots) {
+      expect(slot.props("disabled")).toBe(true);
+      // disabled-tooltip 為通用文案
+      expect(slot.props("disabledTooltip")).toBe("此 Provider 不支援此功能");
+    }
+
+    wrapper.unmount();
+  });
+});
 
 describe("CanvasPod handleModelChange", () => {
   it("後端回傳成功應更新 podStore.providerConfig.model", async () => {

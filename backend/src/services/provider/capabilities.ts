@@ -50,3 +50,34 @@ export const CODEX_AVAILABLE_MODELS = Object.freeze([
 export const CODEX_AVAILABLE_MODEL_VALUES: ReadonlySet<string> = new Set(
   CODEX_AVAILABLE_MODELS.map((m) => m.value),
 );
+
+/** Gemini Provider 僅支援 chat，不支援 plugin / repository / command / mcp */
+export const GEMINI_CAPABILITIES: Readonly<ProviderCapabilities> =
+  Object.freeze({
+    chat: true,
+    plugin: false,
+    repository: false,
+    command: false,
+    mcp: false,
+  });
+
+/** Gemini Provider 支援的模型清單，供前端選擇器動態渲染 */
+export const GEMINI_AVAILABLE_MODELS = Object.freeze([
+  Object.freeze({ label: "2.5 Pro", value: "gemini-2.5-pro" }),
+  Object.freeze({ label: "2.5 Flash", value: "gemini-2.5-flash" }),
+  Object.freeze({ label: "2.5 Flash L", value: "gemini-2.5-flash-lite" }),
+  Object.freeze({ label: "3 Pro P", value: "gemini-3-pro-preview" }),
+  Object.freeze({ label: "3 Flash P", value: "gemini-3-flash-preview" }),
+  Object.freeze({
+    label: "3.1 Flash L/P",
+    value: "gemini-3.1-flash-lite-preview",
+  }),
+] as const);
+
+/**
+ * Gemini 合法 model value 的 Set，從 GEMINI_AVAILABLE_MODELS 衍生。
+ * 供 podStore 以 O(1) Set.has 驗證，避免每次呼叫都 .map().includes()。
+ */
+export const GEMINI_AVAILABLE_MODEL_VALUES: ReadonlySet<string> = new Set(
+  GEMINI_AVAILABLE_MODELS.map((m) => m.value),
+);

@@ -163,10 +163,7 @@ const selectModel = async (model: string): Promise<void> => {
 
 <template>
   <!-- 上方中央定位錨點 -->
-  <div
-    class="pod-model-slot"
-    @mouseleave="handleMouseLeave"
-  >
+  <div class="pod-model-slot" @mouseleave="handleMouseLeave">
     <!--
       model-cards-stack：垂直堆疊容器。
       flex-direction: column-reverse → sortedOptions[0]（active）視覺上固定在最底部貼近 Pod，
@@ -187,9 +184,6 @@ const selectModel = async (model: string): Promise<void> => {
           {
             active: option.value === currentModel,
             'card-single': isSingleOption,
-            'card-opus': option.value === 'opus',
-            'card-sonnet': option.value === 'sonnet',
-            'card-haiku': option.value === 'haiku',
           },
         ]"
         @mouseenter="option.value === currentModel && handleMouseEnter()"
@@ -351,23 +345,21 @@ const selectModel = async (model: string): Promise<void> => {
 /* --------------------------------
    Provider / Model 背景色
    --------------------------------
-   保留各 model 特色色彩；移除垂直文字時代的 letter-spacing hack。
+   每個 provider 用一個對應 Pod 色相的底色，所有該 provider 的 model 共用。
 */
-.card-opus {
-  background: var(--doodle-yellow);
-}
-
-.card-sonnet {
-  background: var(--doodle-light-blue);
-}
-
-.card-haiku {
-  background: oklch(0.85 0.1 150);
+/* Claude：磚紅背景，對齊 Pod 漸層色相 */
+.card-claude {
+  background: oklch(0.88 0.07 45);
 }
 
 /* Codex：中性灰色背景 */
 .card-codex {
   background: oklch(0.9 0.005 240);
+}
+
+/* Gemini：天空藍背景，對齊 Pod 漸層色相 */
+.card-gemini {
+  background: oklch(0.88 0.06 230);
 }
 
 /* --------------------------------

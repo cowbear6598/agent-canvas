@@ -13,7 +13,7 @@ export const modelTypeSchema = z.enum(["opus", "sonnet", "haiku"]);
  * provider 允許清單（白名單守門）：
  * 明確列舉避免未知 provider 進入業務邏輯，同時作為 DB 意外寫入時由 resolveProvider fallback 的依據。
  */
-export const providerSchema = z.enum(["claude", "codex"]);
+export const providerSchema = z.enum(["claude", "codex", "gemini"]);
 
 /** model 名稱 regex 與最大長度，同時套用於 providerConfigSchema 與 podSetModelSchema */
 const MODEL_PATTERN = /^[a-zA-Z0-9._-]+$/;

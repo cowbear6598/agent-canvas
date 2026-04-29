@@ -175,7 +175,7 @@ describe("PodSlots", () => {
 
       // disabled tooltip 使用 i18n key（t = identity）
       expect(singleSlots[0]!.attributes("data-disabled-tooltip")).toBe(
-        "pod.slot.codexDisabled",
+        "pod.slot.providerDisabled",
       );
 
       wrapper.unmount();

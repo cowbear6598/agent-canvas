@@ -37,6 +37,9 @@
      格式：--pod-provider-{provider}-top，方便未來擴增第三個 provider */
   --pod-provider-claude-top: oklch(0.9 0.07 45); /* 淡磚紅，Claude Pod 頂端色 */
   --pod-provider-codex-top: oklch(0.9 0.005 240); /* 淺灰，Codex Pod 頂端色 */
+  --pod-provider-gemini-top: oklch(
+    0.93 0.04 230
+  ); /* 淡天空藍，Gemini Pod 頂端色 */
   /* Doodle color palette - softer */
   --doodle-blue: oklch(0.62 0.12 200);
   --doodle-light-blue: oklch(0.85 0.08 220);
@@ -90,6 +93,9 @@
   --pod-provider-codex-top: oklch(
     0.38 0.01 240
   ); /* 暗模式 Codex Pod 頂端色：深灰藍，在暗底可見 */
+  --pod-provider-gemini-top: oklch(
+    0.55 0.07 230
+  ); /* 暗模式 Gemini Pod 頂端色：淡天空藍，在暗底可見 */
   /* Doodle color palette - dark mode */
   --doodle-blue: oklch(0.55 0.12 200);
   --doodle-light-blue: oklch(0.45 0.08 220);

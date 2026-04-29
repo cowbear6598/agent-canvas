@@ -19,7 +19,7 @@ import { toPodPublicView } from "../types/pod.js";
 
 /** REST API 的 model 便捷欄位：Claude provider 僅允許短名，方便向後相容 */
 const VALID_CLAUDE_MODELS = ["opus", "sonnet", "haiku"] as const;
-const VALID_PROVIDERS: ProviderName[] = ["claude", "codex"];
+const VALID_PROVIDERS: ProviderName[] = ["claude", "codex", "gemini"];
 /** providerConfig 允許的 key 白名單 */
 const PROVIDER_CONFIG_ALLOWED_KEYS = ["model"] as const;
 
