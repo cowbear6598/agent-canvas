@@ -38,6 +38,7 @@ export default [
         ReadableStream: "readonly",
         File: "readonly",
         FormData: "readonly",
+        TextDecoder: "readonly",
       },
     },
     plugins: {

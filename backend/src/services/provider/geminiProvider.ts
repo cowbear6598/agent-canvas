@@ -36,6 +36,13 @@ import type { RunContext } from "../../types/run.js";
 import { buildGeminiEnv, collectStderr } from "../gemini/geminiHelpers.js";
 import { isEnoentError } from "./utils.js";
 
+// ─── 共用 TextDecoder 實例（效能優化）────────────────────────────────────────
+/**
+ * 模組層級共用 TextDecoder，避免在每個 stdout chunk 中反覆建立實例。
+ * stream: true 模式可正確處理 multi-byte 字元（如 UTF-8）在 chunk 邊界被拆斷的情況。
+ */
+const TEXT_DECODER = new TextDecoder("utf-8");
+
 /**
  * Gemini provider 的執行時選項（執行時型別，由 buildOptions 輸出）。
  * 與 Pod.providerConfig（儲存型別 { model: string }）是兩個獨立概念。
@@ -60,7 +67,39 @@ const MODEL_RE = /^[a-zA-Z0-9._-]+$/;
 const SESSION_ID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// ─── stderr 敏感資料遮蔽 ─────────────────────────────────────────────────────
+
+/**
+ * 在記錄 stderr 前先遮蔽敏感關鍵字，並截斷超長內容。
+ *
+ * - 對含敏感關鍵字的行整行替換為 `[REDACTED]`（case-insensitive）
+ * - 超過 4096 chars 截斷並追加 `...[truncated]`
+ *
+ * @param text 原始 stderr 文字
+ * @returns 遮蔽與截斷後的安全文字
+ */
+export function redactStderr(text: string): string {
+  // 敏感關鍵字正則（case-insensitive）
+  const SENSITIVE_RE =
+    /token|api[_-]?key|apikey|secret|password|bearer|authorization|credential/i;
+
+  // 按行遮蔽敏感內容
+  const redacted = text
+    .split("\n")
+    .map((line) => (SENSITIVE_RE.test(line) ? "[REDACTED]" : line))
+    .join("\n");
+
+  // 超過 4096 chars 截斷
+  const MAX_STDERR_LOG_CHARS = 4096;
+  if (redacted.length > MAX_STDERR_LOG_CHARS) {
+    return redacted.slice(0, MAX_STDERR_LOG_CHARS) + "...[truncated]";
+  }
+
+  return redacted;
+}
+
 /** process.env 在 process 生命週期內不會改變，模組載入時快取一次 */
+// 白名單環境變數，已排除 process.env 中其他敏感資料
 const GEMINI_ENV = buildGeminiEnv();
 
 /**
@@ -93,6 +132,7 @@ function normalizeMessageToPromptText(
   return parts.join("\n");
 }
 
+// 安全警示：promptText 為未消毒的使用者輸入，必須保持陣列傳參給 Bun.spawn，禁止改為字串拼接（防止 CLI 旗標注入）
 /**
  * 組合新對話的 CLI 參數。
  * prompt 直接透過 --prompt flag 傳入，不用 stdin。
@@ -103,6 +143,7 @@ function buildNewSessionArgs(model: string, promptText: string): string[] {
     model,
     "--output-format",
     "stream-json",
+    // yolo 模式自動核准所有工具操作；安全防線由 macOS Seatbelt sandbox（-s flag）提供
     "--approval-mode",
     "yolo",
     "--skip-trust",
@@ -112,6 +153,7 @@ function buildNewSessionArgs(model: string, promptText: string): string[] {
   ];
 }
 
+// 安全警示：promptText 為未消毒的使用者輸入，必須保持陣列傳參給 Bun.spawn，禁止改為字串拼接（防止 CLI 旗標注入）
 /**
  * 組合恢復對話的 CLI 參數。
  * 使用 --resume <sessionId>（init event 取得的 UUID），比 latest 更穩定，多 Pod 不互踩。
@@ -131,6 +173,7 @@ function buildResumeArgs(
     model,
     "--output-format",
     "stream-json",
+    // yolo 模式自動核准所有工具操作；安全防線由 macOS Seatbelt sandbox（-s flag）提供
     "--approval-mode",
     "yolo",
     "--skip-trust",
@@ -165,16 +208,11 @@ function buildGeminiArgs(
       return buildResumeArgs(model, resumeSessionId, promptText);
     }
 
-    // resumeSessionId 格式不合法：記錄警告並 fallback 走新對話，防止 CLI 旗標注入
-    // sessionId 只保留前 8 碼並加 [MASKED]，避免洩漏完整值
-    const maskedId =
-      resumeSessionId.length > 8
-        ? `${resumeSessionId.substring(0, 8)}[MASKED]`
-        : "[MASKED]";
+    // resumeSessionId 格式不合法：整段替換為固定遮罩，不保留任何原字元，防止 CLI 旗標注入與值洩漏
     logger.warn(
       "Chat",
       "Warn",
-      `[GeminiProvider] resumeSessionId 格式不合法，fallback 走新對話（sessionId: ${maskedId}）`,
+      "[GeminiProvider] resumeSessionId 格式不合法，fallback 走新對話（sessionId: [INVALID_SESSION_ID_MASKED]）",
     );
   }
 
@@ -237,6 +275,47 @@ function classifyExitCode(exitCode: number): ExitCodeCategory {
 }
 
 /**
+ * 將 exit code 相關 log 細節集中在此函式輸出。
+ * hasTurnComplete=true 時用 warn；hasTurnComplete=false 時用 error。
+ */
+function logExitCodeDetails(
+  exitCode: number,
+  hasTurnComplete: boolean,
+  stderrText: string,
+  podId: string,
+): void {
+  if (hasTurnComplete) {
+    // 已完成一個 turn 但以非零 exit code 結束：記錄 warn（保留正常輸出）
+    logger.warn(
+      "Chat",
+      "Warn",
+      `[GeminiProvider] gemini 已完成一個 turn 但以非零 exit code 結束（exit code: ${exitCode}，podId: ${podId}），可能為正常退出行為`,
+    );
+    if (stderrText) {
+      logger.warn(
+        "Chat",
+        "Warn",
+        `[GeminiProvider] stderr: ${redactStderr(stderrText)}`,
+      );
+    }
+  } else {
+    // 未完成 turn 且非零 exit code → error 寫細節
+    logger.error(
+      "Chat",
+      "Error",
+      `[GeminiProvider] gemini 子程序以非零 exit code 結束（exit code: ${exitCode}，podId: ${podId}）${stderrText ? "，stderr 詳見下行" : "，無 stderr 輸出"}`,
+    );
+    if (stderrText) {
+      logger.error(
+        "Chat",
+        "Error",
+        `[GeminiProvider] stderr: ${redactStderr(stderrText)}`,
+      );
+    }
+  }
+}
+
+/**
  * 依 exit code 決定是否 yield error event 或 warn log。
  *
  * - exitCode 0 或 abortSignal.aborted → return（不做任何事）
@@ -256,28 +335,10 @@ async function* handleExitCode(
   const category = classifyExitCode(exitCode);
   if (category === "ok" || abortSignal.aborted) return;
 
-  if (hasTurnComplete) {
-    // 已完成一個 turn 但以非零 exit code 結束：記錄 warn 但不 yield error（保留正常輸出）
-    logger.warn(
-      "Chat",
-      "Warn",
-      `[GeminiProvider] gemini 已完成一個 turn 但以非零 exit code 結束（exit code: ${exitCode}，podId: ${podId}），可能為正常退出行為`,
-    );
-    if (stderrText) {
-      logger.warn("Chat", "Warn", `[GeminiProvider] stderr: ${stderrText}`);
-    }
-    return;
-  }
+  // log 細節集中在 logExitCodeDetails
+  logExitCodeDetails(exitCode, hasTurnComplete, stderrText, podId);
 
-  // 未完成 turn 且非零 exit code → logger.error 寫細節，再 yield 使用者友善訊息
-  logger.error(
-    "Chat",
-    "Error",
-    `[GeminiProvider] gemini 子程序以非零 exit code 結束（exit code: ${exitCode}，podId: ${podId}）${stderrText ? "，stderr 詳見下行" : "，無 stderr 輸出"}`,
-  );
-  if (stderrText) {
-    logger.error("Chat", "Error", `[GeminiProvider] stderr: ${stderrText}`);
-  }
+  if (hasTurnComplete) return;
 
   if (category === "login_required") {
     yield {
@@ -308,11 +369,12 @@ async function* processStdoutLines(
   for await (const chunk of stdout) {
     if (abortSignal.aborted) break;
 
-    buffer += Buffer.from(chunk as Uint8Array).toString("utf-8");
+    buffer += TEXT_DECODER.decode(chunk, { stream: true });
 
     const lines = buffer.split("\n");
     // 最後一段可能不完整，保留在 buffer
-    buffer = lines.pop() ?? "";
+    // split("\n") 至少回傳一個元素，pop() 永遠不會是 undefined
+    buffer = lines.pop()!;
 
     for (const line of lines) {
       const event = normalize(line);
@@ -394,6 +456,50 @@ type SubprocessFailure = {
 };
 
 /**
+ * 為已 spawn 的 subprocess 設置 abort signal 處理。
+ * 負責監聽 abort 事件並在觸發時呼叫 proc.kill()。
+ * 回傳 cleanup 函式（移除 listener），由呼叫端在 try-finally 中呼叫。
+ *
+ * @param proc 已啟動的 subprocess
+ * @param abortSignal abort 控制信號
+ * @returns cleanup 函式，必須在 try-finally 中呼叫以移除 listener
+ */
+function attachAbortHandler(
+  proc: Bun.Subprocess<"ignore", "pipe", "pipe">,
+  abortSignal: AbortSignal,
+): () => void {
+  const onAbort = (): void => {
+    try {
+      proc.kill();
+    } catch (err: unknown) {
+      // ESRCH：subprocess 已結束，屬正常情況直接忽略
+      if (
+        err instanceof Error &&
+        (err as NodeJS.ErrnoException).code === "ESRCH"
+      ) {
+        return;
+      }
+      logger.warn(
+        "Chat",
+        "Warn",
+        `[GeminiProvider] kill subprocess 時發生非預期錯誤：${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  };
+
+  abortSignal.addEventListener("abort", onAbort, { once: true });
+
+  // spawn 前已 abort：listener 不會自動觸發，需主動呼叫 onAbort
+  if (abortSignal.aborted) {
+    onAbort();
+  }
+
+  return (): void => {
+    abortSignal.removeEventListener("abort", onAbort);
+  };
+}
+
+/**
  * Spawn gemini subprocess 並設置 abort signal 處理。
  * 以 discriminated union 回傳結果，讓 chat() 以單一 if 分支處理失敗，不混 try-catch。
  * 成功時回傳 { ok: true, proc, cleanup }；失敗時回傳 { ok: false, errorEvent }。
@@ -436,37 +542,8 @@ function setupSubprocess(
     };
   }
 
-  // ── abort signal 處理 ──────────────────────────────────────────
-  const onAbort = (): void => {
-    try {
-      proc.kill();
-    } catch (err: unknown) {
-      // ESRCH：subprocess 已結束，屬正常情況直接忽略
-      if (
-        err instanceof Error &&
-        (err as NodeJS.ErrnoException).code === "ESRCH"
-      ) {
-        return;
-      }
-      logger.error(
-        "Chat",
-        "Warn",
-        "[GeminiProvider] kill subprocess 時發生非預期錯誤",
-        err,
-      );
-    }
-  };
-
-  abortSignal.addEventListener("abort", onAbort, { once: true });
-
-  // spawn 前已 abort：listener 不會自動觸發，需主動呼叫 onAbort
-  if (abortSignal.aborted) {
-    onAbort();
-  }
-
-  const cleanup = (): void => {
-    abortSignal.removeEventListener("abort", onAbort);
-  };
+  // ── abort signal 處理（委由 attachAbortHandler 統一管理）────────
+  const cleanup = attachAbortHandler(proc, abortSignal);
 
   return { ok: true, proc, cleanup };
 }
@@ -542,11 +619,18 @@ export const geminiProvider: AgentProvider<GeminiOptions> = {
     const { podId, abortSignal, options, message, resumeSessionId } = ctx;
 
     // ── model 驗證 ────────────────────────────────────────────────
-    const model = options?.model ?? DEFAULT_OPTIONS.model;
+    // buildOptions() 已保證 options 非空，直接取用不需可選鏈
+    const model = options!.model;
     if (!validateModel(model)) {
+      // 原始 model 值只記錄在 logger，不反射回前端（防止外部輸入洩漏）
+      logger.warn(
+        "Chat",
+        "Warn",
+        `[GeminiProvider] model 驗證失敗，不合法的 model 名稱：${model}`,
+      );
       yield {
         type: "error",
-        message: `不合法的 model 名稱：${model}`,
+        message: "不合法的 model 名稱",
         fatal: true,
       };
       return;
@@ -554,6 +638,15 @@ export const geminiProvider: AgentProvider<GeminiOptions> = {
 
     // ── 組合 prompt 與 CLI 參數 ───────────────────────────────────
     const promptText = normalizeMessageToPromptText(message);
+    // 防止 image-only 輸入產生空字串靜默流入 CLI
+    if (promptText === "") {
+      yield {
+        type: "error",
+        message: "訊息內容不可為空（Gemini 不支援純圖片訊息）",
+        fatal: true,
+      };
+      return;
+    }
     const geminiArgs = buildGeminiArgs(resumeSessionId, model, promptText);
 
     // ── Spawn subprocess + abort signal 設置 ──────────────────────

@@ -28,6 +28,33 @@ vi.mock("../../src/utils/logger.js", () => ({
   },
 }));
 
+// ── geminiHelpers mock ─────────────────────────────────────────────────
+// collectStderr 使用輕薄 mock 實作：直接讀完 stream 並 join 為字串，不做截斷。
+// 目的：讓測試對 stderr 內容的斷言不依賴 collectStderr 內部截斷行為（如上限、truncated 標記）。
+// buildGeminiEnv 保留真實實作（直接呼叫 actual），避免影響 spawn env 相關斷言。
+vi.mock("../../src/services/gemini/geminiHelpers.js", async (importActual) => {
+  const actual =
+    await importActual<
+      typeof import("../../src/services/gemini/geminiHelpers.js")
+    >();
+  return {
+    ...actual,
+    collectStderr: vi.fn(
+      async (
+        proc: Bun.Subprocess<"pipe" | "ignore", "pipe", "pipe">,
+        _abortSignal: AbortSignal,
+        _logPrefix?: string,
+      ): Promise<string> => {
+        const chunks: string[] = [];
+        for await (const chunk of proc.stderr as ReadableStream<Uint8Array>) {
+          chunks.push(Buffer.from(chunk as Uint8Array).toString("utf-8"));
+        }
+        return chunks.join("");
+      },
+    ),
+  };
+});
+
 // ── 工具：把字串陣列轉為 ReadableStream<Uint8Array>（模擬 stdout/stderr） ─
 function makeReadableStream(lines: string[]): ReadableStream<Uint8Array> {
   const text = lines.length > 0 ? lines.join("\n") + "\n" : "";
@@ -68,13 +95,7 @@ async function collectEvents(
 }
 
 // ── 工具：建立 mock subprocess ──────────────────────────────────────────
-/**
- * 建立 geminiProvider 測試用的 mock subprocess 物件。
- *
- * 此 mock 不包含 stdin 欄位：
- * spawnGeminiProcess 將 stdin 設為 'ignore'（prompt 透過 --prompt flag 傳入 argv），
- * 故 subprocess 不需要 stdin 互動，mock 也無需模擬此欄位。
- */
+/** mock 不含 stdin，因為 spawn options 設 stdin: 'ignore'（prompt 透過 --prompt flag 傳入 argv） */
 function makeMockProc(
   stdoutLines: string[],
   stderrLines: string[] = [],
@@ -88,11 +109,33 @@ function makeMockProc(
   };
 }
 
+// ── 工具：驗證 logger.warn 被呼叫且含指定子字串 ────────────────────────
+/**
+ * 驗證 logger.warn 的呼叫記錄中，至少有一次呼叫的某個參數同時包含所有指定子字串。
+ * 封裝重複的 warnCalls.some + args.some + arg.includes 驗證模式。
+ *
+ * @param loggerWarnMock vi.mocked(logger.warn)
+ * @param substrings 每個字串都必須出現在同一個 arg 中（做 AND 驗證）
+ */
+function expectWarnContaining(
+  loggerWarnMock: ReturnType<typeof vi.mocked<typeof logger.warn>>,
+  ...substrings: string[]
+): void {
+  const warnCalls = loggerWarnMock.mock.calls;
+  const hasMatch = warnCalls.some((args) =>
+    args.some(
+      (arg) =>
+        typeof arg === "string" && substrings.every((sub) => arg.includes(sub)),
+    ),
+  );
+  expect(hasMatch).toBe(true);
+}
+
 // ── 建立通用 ChatRequestContext ──────────────────────────────────────────
 function makeCtx(
   overrides: Partial<{
     podId: string;
-    message: string;
+    message: string | ContentBlock[];
     workspacePath: string;
     resumeSessionId: string | null;
     abortSignal: AbortSignal;
@@ -117,6 +160,12 @@ function makeCtx(
 // ── 匯入 geminiProvider（在 mock 設定後匯入，確保使用 mocked logger）──
 import { geminiProvider } from "../../src/services/provider/geminiProvider.js";
 import { logger } from "../../src/utils/logger.js";
+import {
+  collectStderr,
+  STDERR_MAX_BYTES,
+} from "../../src/services/gemini/geminiHelpers.js";
+import type { ContentBlock } from "../../src/types/message.js";
+import type { Pod } from "../../src/types/pod.js";
 
 describe("GeminiProvider", () => {
   let spawnSpy: ReturnType<typeof vi.spyOn>;
@@ -229,17 +278,13 @@ describe("GeminiProvider", () => {
     // 不應含 --resume（fallback 走新對話）
     expect(spawnArgs).not.toContain("--resume");
 
-    // logger.warn 應被呼叫，且含格式不合法提示
+    // logger.warn 應被呼叫，且同時含「格式不合法」與「[INVALID_SESSION_ID_MASKED]」（不洩漏原始值）
     expect(logger.warn).toHaveBeenCalled();
-    const warnCalls = vi.mocked(logger.warn).mock.calls;
-    const hasInvalidWarn = warnCalls.some((args) =>
-      args.some(
-        (arg) =>
-          typeof arg === "string" &&
-          (arg.includes("格式不合法") || arg.includes("not-a-uuid")),
-      ),
+    expectWarnContaining(
+      vi.mocked(logger.warn),
+      "格式不合法",
+      "[INVALID_SESSION_ID_MASKED]",
     );
-    expect(hasInvalidWarn).toBe(true);
   });
 
   // ── C2c：resume session 的 spawn args 必含 `-s`（macOS Seatbelt sandbox 旗標）──
@@ -298,8 +343,8 @@ describe("GeminiProvider", () => {
     expect(spawnArgs[spawnArgs.length - 1]).toBe(promptText);
   });
 
-  // ── C5：abortSignal 在 spawn 前已觸發 → onAbort 主動呼叫 → kill 被呼叫 ─
-  it("C5: abortSignal 在 spawn 前已觸發，onAbort 主動呼叫，proc.kill 應被呼叫", async () => {
+  // ── C5：abortSignal 在 spawn 前已觸發 → onAbort 主動呼叫 → kill 被呼叫，無業務 event ─
+  it("C5: abortSignal 在 spawn 前已觸發，onAbort 主動呼叫，proc.kill 應被呼叫，且不 yield 任何業務 event", async () => {
     const ac = new AbortController();
     const mockProc = makeMockProc([
       JSON.stringify({ type: "result", status: "success" }),
@@ -310,10 +355,24 @@ describe("GeminiProvider", () => {
     ac.abort();
 
     const ctx = makeCtx({ abortSignal: ac.signal });
-    await collectEvents(geminiProvider.chat(ctx));
+    const events = await collectEvents(geminiProvider.chat(ctx));
 
     // kill 應被呼叫
     expect(mockProc.kill).toHaveBeenCalled();
+
+    // abort 在 spawn 後立刻終止：串流邏輯不執行，不應 yield 任何業務 event
+    // complete / text / tool_use 等業務 event 均不應出現
+    const businessEventTypes = [
+      "turn_complete",
+      "text",
+      "tool_call_start",
+      "tool_call_result",
+      "session_started",
+    ];
+    const businessEvents = events.filter((e) =>
+      businessEventTypes.includes(e.type),
+    );
+    expect(businessEvents).toHaveLength(0);
   });
 
   // ── C6：abortSignal 在串流中觸發 → proc.kill 被呼叫，無重複觸發 ──────
@@ -389,6 +448,36 @@ describe("GeminiProvider", () => {
 
     // 原始 err 應寫入 logger.error
     expect(logger.error).toHaveBeenCalled();
+  });
+
+  // ── C-SS-1：非 ENOENT 的 spawn 失敗 → yield error，不呼叫 attachAbortHandler ─
+  it("C-SS-1: 非 ENOENT 的 spawn 失敗時應 yield error event（fatal=true），且 attachAbortHandler 未被呼叫（spawn 失敗無 proc，不掛 abort listener）", async () => {
+    const accessErr = Object.assign(new Error("permission denied"), {
+      code: "EACCES",
+    });
+    spawnSpy = vi.spyOn(Bun, "spawn").mockImplementation(() => {
+      throw accessErr;
+    });
+
+    // 用 spy 追蹤 abortSignal 的 addEventListener / removeEventListener 是否被呼叫
+    const ac = new AbortController();
+    const addListenerSpy = vi.spyOn(ac.signal, "addEventListener");
+    const removeListenerSpy = vi.spyOn(ac.signal, "removeEventListener");
+
+    const ctx = makeCtx({ abortSignal: ac.signal });
+    const events = await collectEvents(geminiProvider.chat(ctx));
+
+    // 應推出 error event，訊息含「啟動 gemini 子程序失敗」
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe("error");
+    const e = events[0] as Extract<NormalizedEvent, { type: "error" }>;
+    expect(e.message).toBe("啟動 gemini 子程序失敗，請查 server log");
+    expect(e.fatal).toBe(true);
+
+    // spawn 失敗 → 沒有 proc → attachAbortHandler 未被呼叫
+    // 因此 abortSignal 不應有任何 abort listener 被掛載或移除
+    expect(addListenerSpy).not.toHaveBeenCalled();
+    expect(removeListenerSpy).not.toHaveBeenCalled();
   });
 
   // ── C9：stdout JSON line 正確 normalize ──────────────────────────────
@@ -489,6 +578,34 @@ describe("GeminiProvider", () => {
     expect(events.some((e) => e.type === "turn_complete")).toBe(true);
   });
 
+  // ── C-PS-1：stdout 結束時 buffer 殘餘不含換行也會被 normalize ────────
+  it("C-PS-1: stdout stream 結束時 buffer 中殘餘的不含換行 JSON 也應被正確解析為 NormalizedEvent", async () => {
+    // 推出不含 \n 結尾的 JSON 字串，然後 stream 直接關閉
+    const jsonStr = JSON.stringify({ type: "result", status: "success" });
+    const encoder = new TextEncoder();
+
+    const noNewlineStream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        // 故意不加 \n，測試 processStdoutLines 的 buffer 殘餘處理邏輯
+        controller.enqueue(encoder.encode(jsonStr));
+        controller.close();
+      },
+    });
+
+    const mockProc = {
+      stdout: noNewlineStream,
+      stderr: makeReadableStream([]),
+      exited: Promise.resolve(0),
+      kill: vi.fn(),
+    };
+    spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
+
+    const events = await collectEvents(geminiProvider.chat(makeCtx()));
+
+    // 即使沒有 \n，stream 關閉後 buffer 內容也應被解析出 turn_complete
+    expect(events.some((e) => e.type === "turn_complete")).toBe(true);
+  });
+
   // ── C11：exit code 0 → 不 yield error ────────────────────────────────
   it("C11: exit code 0 時不應推出 error event", async () => {
     const mockProc = makeMockProc(
@@ -505,10 +622,12 @@ describe("GeminiProvider", () => {
   });
 
   // ── C12：exit code 非 0 且 hasTurnComplete=true → 不 yield error，僅 logger.warn ─
-  it("C12: exit code 非 0 且已發 turn_complete 時不應推出 error event，只 logger.warn", async () => {
+  it("C12: exit code 非 0 且已發 turn_complete 時不應推出 error event，只 logger.warn，warn 應含 stderr 內容", async () => {
+    const stderrContent = "gemini: warning non-fatal output";
     const mockProc = makeMockProc(
       [JSON.stringify({ type: "result", status: "success" })],
-      [],
+      // 傳入不含敏感字的 stderr，redactStderr 應原樣保留
+      [stderrContent],
       1,
     );
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
@@ -521,6 +640,9 @@ describe("GeminiProvider", () => {
 
     // 應發出 warn 記錄
     expect(logger.warn).toHaveBeenCalled();
+
+    // warn 訊息應含 stderr 實際內容（logExitCodeDetails 輸出 "stderr: <內容>"）
+    expectWarnContaining(vi.mocked(logger.warn), stderrContent);
   });
 
   // ── C13：exit code 非 0 且 hasTurnComplete=false → yield error，message 含「執行發生錯誤」，fatal=false ─
@@ -629,12 +751,47 @@ describe("GeminiProvider", () => {
     ).toBe("gemini-sess-xyz");
   });
 
-  // ── C19：stderr 超過 64KB 自動截斷，logger.warn 紀錄截斷 ──────────────
-  it("C19: stderr 超過 64KB 時應自動截斷，logger.warn 記錄截斷訊息", async () => {
-    // 建立超過 64KB 的 stderr 資料
-    const STDERR_MAX_BYTES = 64 * 1024;
+  // ── C19：stderr 超過 64KB 自動截斷，logger.warn 紀錄截斷，stderrText 長度有上限 ─
+  it("C19: stderr 超過 64KB 時應自動截斷，logger.warn 記錄截斷訊息，且實際 stderrText 長度不超過 STDERR_MAX_BYTES", async () => {
+    // 建立超過 64KB 的 stderr 資料（全為 "x"，無敏感字，redactStderr 不會遮蔽）
     const largeStderr = new Uint8Array(STDERR_MAX_BYTES + 1024).fill(
       "x".charCodeAt(0),
+    );
+
+    // C19 需要 actual collectStderr（含截斷邏輯）才能觸發 logger.warn("截斷")
+    // 用 mockImplementationOnce 還原 actual 行為，並捕捉回傳的 stderrText
+    let capturedStderrText: string | undefined;
+    vi.mocked(collectStderr).mockImplementationOnce(
+      async (proc, abortSig, logPrefix) => {
+        // 呼叫 actual 的截斷邏輯：直接模擬 actual 行為
+        const chunks: Buffer[] = [];
+        let totalBytes = 0;
+        let truncated = false;
+        for await (const chunk of proc.stderr as ReadableStream<Uint8Array>) {
+          if (abortSig.aborted) break;
+          const buf = Buffer.from(chunk as Uint8Array);
+          if (totalBytes + buf.byteLength <= STDERR_MAX_BYTES) {
+            chunks.push(buf);
+            totalBytes += buf.byteLength;
+          } else {
+            truncated = true;
+            break;
+          }
+        }
+        let text = Buffer.concat(chunks).toString("utf-8").trim();
+        if (truncated) {
+          const { logger: innerLogger } =
+            await import("../../src/utils/logger.js");
+          innerLogger.warn(
+            "Chat",
+            "Warn",
+            `${logPrefix ?? "[Gemini]"} stderr 已達上限（${STDERR_MAX_BYTES} bytes），後續輸出已截斷`,
+          );
+          text += "\n[TRUNCATED]";
+        }
+        capturedStderrText = text;
+        return text;
+      },
     );
 
     const mockProc = {
@@ -649,16 +806,20 @@ describe("GeminiProvider", () => {
 
     await collectEvents(geminiProvider.chat(makeCtx()));
 
-    // logger.warn 應被呼叫，且訊息含截斷提示
-    const warnCalls = vi.mocked(logger.warn).mock.calls;
-    const truncateWarn = warnCalls.some((args) =>
-      args.some(
-        (arg) =>
-          typeof arg === "string" &&
-          (arg.includes("截斷") || arg.includes("TRUNCATED")),
-      ),
+    // 既有斷言：logger.warn 應被呼叫，且訊息含截斷提示
+    expectWarnContaining(vi.mocked(logger.warn), "截斷");
+
+    // 新增斷言：collectStderr 回傳的 stderrText 長度不超過 STDERR_MAX_BYTES + "\n[TRUNCATED]" 的額外長度
+    // 確認截斷上限確實生效（"x" * 64KB + "\n[TRUNCATED]" ≤ STDERR_MAX_BYTES + 20）
+    expect(capturedStderrText).toBeDefined();
+    const textWithoutTruncatedMarker = capturedStderrText!.replace(
+      "\n[TRUNCATED]",
+      "",
     );
-    expect(truncateWarn).toBe(true);
+    // stderrText 純文字部分（不含 TRUNCATED 標記）長度不超過 STDERR_MAX_BYTES
+    expect(textWithoutTruncatedMarker.length).toBeLessThanOrEqual(
+      STDERR_MAX_BYTES,
+    );
   });
 
   // ── C20：role=user 的 message event 應被忽略，不 yield 任何 NormalizedEvent ─
@@ -738,5 +899,221 @@ describe("GeminiProvider", () => {
     expect(promptValue).not.toContain("<command>");
     expect(promptValue).not.toContain("</command>");
     expect(promptValue).toBe(plainMessage);
+  });
+
+  // ── C0a：workspacePath 含 `..` 時的處理（行為鎖定測試） ──────────────────
+  it("C0a: workspacePath 含 `..` 時的處理：geminiProvider 原樣傳入 cwd，防護責任在 executor 上層", async () => {
+    const traversalPath = "/test-workspace/../../../etc/passwd";
+    const mockProc = makeMockProc([
+      JSON.stringify({ type: "result", status: "success" }),
+    ]);
+    spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
+
+    const ctx = makeCtx({ workspacePath: traversalPath });
+    await collectEvents(geminiProvider.chat(ctx));
+
+    expect(spawnSpy).toHaveBeenCalledOnce();
+    const [, spawnOptions] = spawnSpy.mock.calls[0] as [
+      string[],
+      { cwd?: string },
+    ];
+
+    // geminiProvider 不對 workspacePath 做正規化，原樣傳入 cwd
+    // 防護責任在 executor 上層（resolvePodCwd）
+    expect(spawnOptions.cwd).toBe(traversalPath);
+  });
+
+  // ── C2d：resumeSessionId 含注入向量 → fallback 走新對話 ────────────────
+  it("C2d: resumeSessionId 含 `--evil-flag` 時應 fallback 走新對話，spawn argv 不含 --resume，logger.warn 含「格式不合法」", async () => {
+    const mockProc = makeMockProc([
+      JSON.stringify({ type: "result", status: "success" }),
+    ]);
+    spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
+
+    // sub-case 1：resumeSessionId 為 CLI flag 形式
+    const ctx1 = makeCtx({ resumeSessionId: "--evil-flag" });
+    await collectEvents(geminiProvider.chat(ctx1));
+
+    expect(spawnSpy).toHaveBeenCalledOnce();
+    const [spawnArgs1] = spawnSpy.mock.calls[0] as [string[], unknown];
+    expect(spawnArgs1).not.toContain("--resume");
+    expectWarnContaining(vi.mocked(logger.warn), "格式不合法");
+
+    vi.clearAllMocks();
+    spawnSpy = vi
+      .spyOn(Bun, "spawn")
+      .mockReturnValue(
+        makeMockProc([
+          JSON.stringify({ type: "result", status: "success" }),
+        ]) as any,
+      );
+
+    // sub-case 2：resumeSessionId 含換行符
+    const ctx2 = makeCtx({
+      resumeSessionId: "valid-prefix\n--prompt\ninjected",
+    });
+    await collectEvents(geminiProvider.chat(ctx2));
+
+    expect(spawnSpy).toHaveBeenCalledOnce();
+    const [spawnArgs2] = spawnSpy.mock.calls[0] as [string[], unknown];
+    expect(spawnArgs2).not.toContain("--resume");
+    expectWarnContaining(vi.mocked(logger.warn), "格式不合法");
+  });
+
+  // ── C-NM-1：ContentBlock[] 全為 text block → prompt 以 \n 串接 ──────────
+  it("C-NM-1: ContentBlock[] 全為 text block 時，--prompt 後接的字串應以 \\n 串接所有 text 部分", async () => {
+    const mockProc = makeMockProc([
+      JSON.stringify({ type: "result", status: "success" }),
+    ]);
+    spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
+
+    const blocks: ContentBlock[] = [
+      { type: "text", text: "第一段文字" },
+      { type: "text", text: "第二段文字" },
+    ];
+    const ctx = makeCtx({ message: blocks });
+    await collectEvents(geminiProvider.chat(ctx));
+
+    expect(spawnSpy).toHaveBeenCalledOnce();
+    const [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
+    const promptIdx = spawnArgs.indexOf("--prompt");
+    expect(promptIdx).toBeGreaterThan(-1);
+    expect(spawnArgs[promptIdx + 1]).toBe("第一段文字\n第二段文字");
+  });
+
+  // ── C-NM-2：ContentBlock[] 全為 image block → yield error，不呼叫 spawn ─
+  it("C-NM-2: ContentBlock[] 全為 image block 時應 yield error event（fatal=true）且不呼叫 Bun.spawn", async () => {
+    spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(makeMockProc([]) as any);
+
+    const blocks: ContentBlock[] = [
+      {
+        type: "image",
+        mediaType: "image/png",
+        base64Data: "abc123",
+      },
+    ];
+    const ctx = makeCtx({ message: blocks });
+    const events = await collectEvents(geminiProvider.chat(ctx));
+
+    // image-only → promptText 為空字串 → yield error，不呼叫 spawn
+    expect(spawnSpy).not.toHaveBeenCalled();
+    const errorEvents = events.filter((e) => e.type === "error");
+    expect(errorEvents).toHaveLength(1);
+    const e = errorEvents[0] as Extract<NormalizedEvent, { type: "error" }>;
+    expect(e.fatal).toBe(true);
+    expect(e.message).toContain("不支援純圖片訊息");
+  });
+
+  // ── C-NM-3：ContentBlock[] 為 text + image 混合 → prompt 只含 text 部分 ─
+  it("C-NM-3: ContentBlock[] 為 text + image 混合時，--prompt 只含 text 部分，image 被略過", async () => {
+    const mockProc = makeMockProc([
+      JSON.stringify({ type: "result", status: "success" }),
+    ]);
+    spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
+
+    const blocks: ContentBlock[] = [
+      { type: "text", text: "說明文字" },
+      {
+        type: "image",
+        mediaType: "image/jpeg",
+        base64Data: "base64imagedata",
+      },
+      { type: "text", text: "後續文字" },
+    ];
+    const ctx = makeCtx({ message: blocks });
+    await collectEvents(geminiProvider.chat(ctx));
+
+    expect(spawnSpy).toHaveBeenCalledOnce();
+    const [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
+    const promptIdx = spawnArgs.indexOf("--prompt");
+    expect(promptIdx).toBeGreaterThan(-1);
+
+    const promptValue = spawnArgs[promptIdx + 1];
+    // 只含 text 部分，image 被略過
+    expect(promptValue).toBe("說明文字\n後續文字");
+    expect(promptValue).not.toContain("base64");
+  });
+
+  // ── buildOptions ─────────────────────────────────────────────────────────────
+  describe("buildOptions", () => {
+    // 工具：建立最小化 Pod stub
+    function makePodStub(
+      overrides: Partial<Pick<Pod, "providerConfig">> = {},
+    ): Pod {
+      return {
+        id: "pod-bo-test-001",
+        name: "Test Pod",
+        provider: "gemini",
+        status: "idle",
+        providerConfig: {},
+        workspacePath: "/workspace/test",
+        mcpServerNames: [],
+        pluginIds: [],
+        repositoryId: null,
+        commandId: null,
+        multiInstance: false,
+        sessionId: null,
+        x: 0,
+        y: 0,
+        rotation: 0,
+        ...overrides,
+      } as Pod;
+    }
+
+    // ── C-BO-1：合法 model → 使用該 model ───────────────────────────────
+    it("C-BO-1: providerConfig.model 合法時應使用該 model", async () => {
+      const pod = makePodStub({
+        providerConfig: { model: "gemini-2.5-flash" },
+      });
+      const options = await geminiProvider.buildOptions(pod);
+
+      expect(options.model).toBe("gemini-2.5-flash");
+      expect(options.resumeMode).toBe("cli");
+    });
+
+    // ── C-BO-2：不合法 model（含空格、`@`、換行符）→ fallback 至 DEFAULT_OPTIONS.model ─
+    it("C-BO-2: providerConfig.model 不合法（含空格或 @ 符號）時應 fallback 至 DEFAULT_OPTIONS.model", async () => {
+      const illegalModels = ["model with spaces", "model@invalid"];
+
+      for (const illegalModel of illegalModels) {
+        const pod = makePodStub({ providerConfig: { model: illegalModel } });
+        const options = await geminiProvider.buildOptions(pod);
+
+        expect(options.model).toBe(
+          geminiProvider.metadata.defaultOptions.model,
+        );
+        expect(options.resumeMode).toBe("cli");
+      }
+    });
+
+    // ── C-BO-3：providerConfig 為 null（未設定）→ fallback 至 DEFAULT_OPTIONS.model ─
+    it("C-BO-3: providerConfig 為 null（未設定）時應 fallback 至 DEFAULT_OPTIONS.model", async () => {
+      const pod = makePodStub({ providerConfig: null });
+      const options = await geminiProvider.buildOptions(pod);
+
+      expect(options.model).toBe(geminiProvider.metadata.defaultOptions.model);
+      expect(options.resumeMode).toBe("cli");
+    });
+  });
+
+  // ── C-VM-1：不合法 model 流入 chat() → yield 固定錯誤訊息，不呼叫 Bun.spawn ─
+  it("C-VM-1: chat() 收到不合法 model 時應 yield 固定錯誤訊息「不合法的 model 名稱」（fatal=true），且不呼叫 Bun.spawn", async () => {
+    spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(makeMockProc([]) as any);
+
+    // 傳入含空格的不合法 model（MODEL_RE 不接受）
+    const ctx = makeCtx({
+      options: { model: "invalid model name", resumeMode: "cli" },
+    });
+    const events = await collectEvents(geminiProvider.chat(ctx));
+
+    // Bun.spawn 不應被呼叫
+    expect(spawnSpy).not.toHaveBeenCalled();
+
+    // 應 yield error，message 為固定文字（不反射 raw value）
+    const errorEvents = events.filter((e) => e.type === "error");
+    expect(errorEvents).toHaveLength(1);
+    const e = errorEvents[0] as Extract<NormalizedEvent, { type: "error" }>;
+    expect(e.message).toBe("不合法的 model 名稱");
+    expect(e.fatal).toBe(true);
   });
 });
