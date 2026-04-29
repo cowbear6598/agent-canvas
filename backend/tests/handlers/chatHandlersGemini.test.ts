@@ -133,7 +133,15 @@ vi.mock("../../src/utils/logger.js", () => ({
 // ─── imports ──────────────────────────────────────────────────────────────────
 
 import path from "path";
-import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  beforeAll,
+} from "vitest";
 import type { Mock } from "vitest";
 
 import { initTestDb, closeDb, getDb } from "../../src/database/index.js";
@@ -146,6 +154,12 @@ import * as commandServiceModule from "../../src/services/commandService.js";
 import { config } from "../../src/config/index.js";
 import { getProvider } from "../../src/services/provider/index.js";
 import { WebSocketResponseEvents } from "../../src/schemas/index.js";
+
+// ─── D/E 共用：真實 executeStreamingChat（一次性載入）─────────────────────────
+// vi.importActual 只執行一次，D-1a / D-1b / D-1c / E-1 均共用此參照。
+let realExecute:
+  | (typeof import("../../src/services/claude/streamingChatExecutor.js"))["executeStreamingChat"]
+  | null = null;
 
 function asMock(fn: unknown): Mock<any> {
   return fn as Mock<any>;
@@ -327,6 +341,42 @@ describe("C：Gemini Pod Command 展開整合層", () => {
   });
 });
 
+// ─── 共用 mock factory（D / E 共用）─────────────────────────────────────────
+
+/**
+ * 建立可重用的 Gemini provider mock。
+ * chatFn 負責捕捉 ctx 或驗證 provider.chat 是否被呼叫。
+ * 回傳 { mock } 讓呼叫端自行 asMock(getProvider).mockReturnValue(mock)。
+ */
+function buildProviderMock(
+  chatFn: (ctx: {
+    workspacePath: string;
+    message: string | unknown;
+  }) => AsyncGenerator<{ type: "turn_complete" }>,
+) {
+  const mock = {
+    chat: vi.fn(chatFn),
+    cancel: vi.fn(() => false),
+    buildOptions: vi
+      .fn()
+      .mockResolvedValue({ model: "gemini-2.5-pro", resumeMode: "cli" }),
+    metadata: {
+      availableModelValues: new Set(["gemini-2.5-pro", "gemini-2.5-flash"]),
+      defaultOptions: { model: "gemini-2.5-pro" },
+      availableModels: [
+        { label: "Gemini 2.5 Pro", value: "gemini-2.5-pro" },
+        { label: "Gemini 2.5 Flash", value: "gemini-2.5-flash" },
+      ],
+      capabilities: {
+        chat: true,
+        command: true,
+        repository: true,
+      },
+    },
+  };
+  return { mock };
+}
+
 // ─── D：resolvePodCwd — repositoryId 路徑解析 ────────────────────────────────
 
 describe("D：Gemini Pod resolvePodCwd 整合", () => {
@@ -335,61 +385,27 @@ describe("D：Gemini Pod resolvePodCwd 整合", () => {
    * 透過 mock getProvider 捕捉 ctx.workspacePath（等同驗證 Bun.spawn cwd），
    * 不需要真實 Gemini subprocess。
    */
-  function setupProviderSpy(): { capturedWorkspacePath: string[] } {
-    const captured: string[] = [];
-    asMock(getProvider).mockReturnValue({
-      chat: vi.fn(async function* (ctx: { workspacePath: string }) {
-        captured.push(ctx.workspacePath);
-        // 立即回傳 turn_complete，模擬正常完成
-        yield { type: "turn_complete" as const };
-      }),
-      cancel: vi.fn(() => false),
-      buildOptions: vi
-        .fn()
-        .mockResolvedValue({ model: "gemini-2.5-pro", resumeMode: "cli" }),
-      metadata: {
-        availableModelValues: new Set(["gemini-2.5-pro", "gemini-2.5-flash"]),
-        defaultOptions: { model: "gemini-2.5-pro" },
-        availableModels: [
-          { label: "Gemini 2.5 Pro", value: "gemini-2.5-pro" },
-          { label: "Gemini 2.5 Flash", value: "gemini-2.5-flash" },
-        ],
-        capabilities: {
-          chat: true,
-          command: true,
-          repository: true,
-        },
-      },
-    });
-    return { capturedWorkspacePath: captured };
-  }
 
-  beforeEach(() => {
-    // D 測試需要真正的 executeStreamingChat，解除模組層級 mock
-    asMock(executeStreamingChatModule.executeStreamingChat).mockImplementation(
-      async (
-        opts: Parameters<
-          typeof executeStreamingChatModule.executeStreamingChat
-        >[0],
-      ) => {
-        // 直接呼叫真實 executeStreamingChat 邏輯有困難，改用 provider spy 捕捉 workspacePath
-        // 真實 executeStreamingChat 已透過 getProvider spy 捕捉到 ctx.workspacePath
-        // 需要真實執行路徑：移除此 mock，改用 vi.importActual 動態導入
-        return {
-          messageId: "x",
-          content: "",
-          hasContent: false,
-          aborted: false,
-        };
-      },
-    );
-  });
-
-  it("D-1a: repositoryId = 'demo-repo' 時，provider.chat 收到的 workspacePath 為 repositoriesRoot/demo-repo", async () => {
-    // 取消 executeStreamingChat 的 mock，讓真實版本執行
-    const { executeStreamingChat: realExecute } = await vi.importActual<
+  beforeAll(async () => {
+    // 整個 D/E 群組只載入一次真實 executeStreamingChat，避免重複 importActual
+    const mod = await vi.importActual<
       typeof import("../../src/services/claude/streamingChatExecutor.js")
     >("../../src/services/claude/streamingChatExecutor.js");
+    realExecute = mod.executeStreamingChat;
+  });
+
+  function setupProviderSpy(): { capturedWorkspacePath: string[] } {
+    const capturedWorkspacePath: string[] = [];
+    const { mock } = buildProviderMock(async function* (ctx) {
+      capturedWorkspacePath.push(ctx.workspacePath);
+      yield { type: "turn_complete" as const };
+    });
+    asMock(getProvider).mockReturnValue(mock);
+    return { capturedWorkspacePath };
+  }
+
+  it("D-1a: repositoryId = 'demo-repo' 時，provider.chat 收到的 workspacePath 為 repositoriesRoot/demo-repo", async () => {
+    // 取消 executeStreamingChat 的 mock，讓真實版本執行（共用 beforeAll 載入的 realExecute）
     asMock(executeStreamingChatModule.executeStreamingChat).mockImplementation(
       (
         opts: Parameters<
@@ -398,7 +414,7 @@ describe("D：Gemini Pod resolvePodCwd 整合", () => {
         cbs?: Parameters<
           typeof executeStreamingChatModule.executeStreamingChat
         >[1],
-      ) => realExecute(opts, cbs),
+      ) => realExecute!(opts, cbs),
     );
 
     const { capturedWorkspacePath } = setupProviderSpy();
@@ -415,9 +431,6 @@ describe("D：Gemini Pod resolvePodCwd 整合", () => {
   });
 
   it("D-1b: repositoryId = null 時，provider.chat 收到的 workspacePath 為 pod.workspacePath", async () => {
-    const { executeStreamingChat: realExecute } = await vi.importActual<
-      typeof import("../../src/services/claude/streamingChatExecutor.js")
-    >("../../src/services/claude/streamingChatExecutor.js");
     asMock(executeStreamingChatModule.executeStreamingChat).mockImplementation(
       (
         opts: Parameters<
@@ -426,7 +439,7 @@ describe("D：Gemini Pod resolvePodCwd 整合", () => {
         cbs?: Parameters<
           typeof executeStreamingChatModule.executeStreamingChat
         >[1],
-      ) => realExecute(opts, cbs),
+      ) => realExecute!(opts, cbs),
     );
 
     const { capturedWorkspacePath } = setupProviderSpy();
@@ -447,10 +460,7 @@ describe("D：Gemini Pod resolvePodCwd 整合", () => {
     expect(capturedWorkspacePath[0]).toBe(path.resolve(customWorkspacePath));
   });
 
-  it("D-1c（邊界）: repositoryId = '../etc'（路徑穿越）時，resolvePodCwd 拋錯「非法的工作目錄路徑」，provider.chat 不被呼叫", async () => {
-    const { executeStreamingChat: realExecute } = await vi.importActual<
-      typeof import("../../src/services/claude/streamingChatExecutor.js")
-    >("../../src/services/claude/streamingChatExecutor.js");
+  it("D-1c（邊界）: repositoryId = '../etc'（路徑穿越）時，executeStreamingChat 攔截錯誤並透過 socketService.emitToCanvas 發送 POD_ERROR（code: INVALID_PATH），provider.chat 不被呼叫", async () => {
     asMock(executeStreamingChatModule.executeStreamingChat).mockImplementation(
       (
         opts: Parameters<
@@ -459,16 +469,50 @@ describe("D：Gemini Pod resolvePodCwd 整合", () => {
         cbs?: Parameters<
           typeof executeStreamingChatModule.executeStreamingChat
         >[1],
-      ) => realExecute(opts, cbs),
+      ) => realExecute!(opts, cbs),
     );
 
-    const chatSpy = vi.fn(async function* () {});
+    const { mock } = buildProviderMock(async function* () {});
+    asMock(getProvider).mockReturnValue(mock);
+
+    const podId = insertGeminiPodViaSQL({ repositoryId: "../etc" });
+
+    // 新行為：executeStreamingChat 在 try/catch 內攔截 resolvePodCwd 所拋出的「非法的工作目錄路徑」，
+    // 透過 socketService.emitToCanvas 發送 POD_ERROR（code: INVALID_PATH）給前端，不再向上拋錯。
+    await triggerChatSend(podId, "hello");
+
+    // 攔截後應透過 emitToCanvas 發送 POD_ERROR，code 為 INVALID_PATH
+    expect(socketService.emitToCanvas).toHaveBeenCalledWith(
+      CANVAS_ID,
+      WebSocketResponseEvents.POD_ERROR,
+      expect.objectContaining({
+        podId,
+        success: false,
+        code: "INVALID_PATH",
+      }),
+    );
+
+    // provider.chat 不應被呼叫（resolvePodCwd 在 executeStreamingChat 內部拋錯）
+    expect(mock.chat).not.toHaveBeenCalled();
+  });
+
+  it("D-1d（邊界）: provider.buildOptions 拋錯時，executeStreamingChat 攔截並透過 socketService.emitToCanvas 發送 POD_ERROR（code: PROVIDER_NOT_FOUND），provider.chat 不被呼叫", async () => {
+    asMock(executeStreamingChatModule.executeStreamingChat).mockImplementation(
+      (
+        opts: Parameters<
+          typeof executeStreamingChatModule.executeStreamingChat
+        >[0],
+        cbs?: Parameters<
+          typeof executeStreamingChatModule.executeStreamingChat
+        >[1],
+      ) => realExecute!(opts, cbs),
+    );
+
+    const chatMock = vi.fn(async function* () {});
     asMock(getProvider).mockReturnValue({
-      chat: chatSpy,
+      chat: chatMock,
       cancel: vi.fn(() => false),
-      buildOptions: vi
-        .fn()
-        .mockResolvedValue({ model: "gemini-2.5-pro", resumeMode: "cli" }),
+      buildOptions: vi.fn().mockRejectedValue(new Error("找不到 Provider")),
       metadata: {
         availableModelValues: new Set(["gemini-2.5-pro"]),
         defaultOptions: { model: "gemini-2.5-pro" },
@@ -477,23 +521,23 @@ describe("D：Gemini Pod resolvePodCwd 整合", () => {
       },
     });
 
-    const podId = insertGeminiPodViaSQL({ repositoryId: "../etc" });
+    const podId = insertGeminiPodViaSQL({});
 
-    // resolvePodCwd 拋出「非法的工作目錄路徑」，錯誤會沿著呼叫鏈向上傳遞
-    // handleChatSendNormal → executeStreamingChat → resolvePodCwd → throw
-    let thrownError: Error | null = null;
-    try {
-      await triggerChatSend(podId, "hello");
-    } catch (err) {
-      thrownError = err as Error;
-    }
+    // provider.buildOptions 拋錯，executeStreamingChat 應攔截並發送 POD_ERROR
+    await triggerChatSend(podId, "hello");
 
-    // 應拋出「非法的工作目錄路徑」錯誤
-    expect(thrownError).not.toBeNull();
-    expect(thrownError?.message).toBe("非法的工作目錄路徑");
+    expect(socketService.emitToCanvas).toHaveBeenCalledWith(
+      CANVAS_ID,
+      WebSocketResponseEvents.POD_ERROR,
+      expect.objectContaining({
+        podId,
+        success: false,
+        code: "PROVIDER_NOT_FOUND",
+      }),
+    );
 
-    // provider.chat 不應被呼叫（resolvePodCwd 在 executeStreamingChat 內部拋錯）
-    expect(chatSpy).not.toHaveBeenCalled();
+    // provider.chat 不應被呼叫（buildOptions 在 provider.chat 之前拋錯）
+    expect(chatMock).not.toHaveBeenCalled();
   });
 });
 
@@ -510,9 +554,6 @@ describe("E：Gemini Pod 同時綁定 commandId + repositoryId 綜合測試", ()
       markdown,
     );
 
-    const { executeStreamingChat: realExecute } = await vi.importActual<
-      typeof import("../../src/services/claude/streamingChatExecutor.js")
-    >("../../src/services/claude/streamingChatExecutor.js");
     asMock(executeStreamingChatModule.executeStreamingChat).mockImplementation(
       (
         opts: Parameters<
@@ -521,38 +562,21 @@ describe("E：Gemini Pod 同時綁定 commandId + repositoryId 綜合測試", ()
         cbs?: Parameters<
           typeof executeStreamingChatModule.executeStreamingChat
         >[1],
-      ) => realExecute(opts, cbs),
+      ) => realExecute!(opts, cbs),
     );
 
     const capturedCtxList: Array<{
       workspacePath: string;
       message: string | unknown;
     }> = [];
-    asMock(getProvider).mockReturnValue({
-      chat: vi.fn(async function* (ctx: {
-        workspacePath: string;
-        message: string | unknown;
-      }) {
-        capturedCtxList.push({
-          workspacePath: ctx.workspacePath,
-          message: ctx.message,
-        });
-        yield { type: "turn_complete" as const };
-      }),
-      cancel: vi.fn(() => false),
-      buildOptions: vi
-        .fn()
-        .mockResolvedValue({ model: "gemini-2.5-pro", resumeMode: "cli" }),
-      metadata: {
-        availableModelValues: new Set(["gemini-2.5-pro", "gemini-2.5-flash"]),
-        defaultOptions: { model: "gemini-2.5-pro" },
-        availableModels: [
-          { label: "Gemini 2.5 Pro", value: "gemini-2.5-pro" },
-          { label: "Gemini 2.5 Flash", value: "gemini-2.5-flash" },
-        ],
-        capabilities: { chat: true, command: true, repository: true },
-      },
+    const { mock: e1Mock } = buildProviderMock(async function* (ctx) {
+      capturedCtxList.push({
+        workspacePath: ctx.workspacePath,
+        message: ctx.message,
+      });
+      yield { type: "turn_complete" as const };
     });
+    asMock(getProvider).mockReturnValue(e1Mock);
 
     const podId = insertGeminiPodViaSQL({ commandId, repositoryId });
 

@@ -37,6 +37,23 @@ let runCounter = 0;
 let runPodInstanceCounter = 0;
 
 /**
+ * 重置所有 factory 計數器，確保跨測試檔案不互相污染 ID 值。
+ * 通常在 setupStoreTest 的 beforeEach 中呼叫。
+ */
+export function resetFactoryCounters(): void {
+  canvasCounter = 0;
+  podCounter = 0;
+  connectionCounter = 0;
+  messageCounter = 0;
+  noteCounter = 0;
+  scheduleCounter = 0;
+  repositoryCounter = 0;
+  groupCounter = 0;
+  runCounter = 0;
+  runPodInstanceCounter = 0;
+}
+
+/**
  * 建立 Mock Canvas
  */
 export function createMockCanvas(overrides?: Partial<Canvas>): Canvas {
@@ -67,18 +84,25 @@ export function createMockSchedule(overrides?: Partial<Schedule>): Schedule {
   };
 }
 
+/** 各 provider 的預設 providerConfig，與後端 capabilities.ts 保持同步 */
+const DEFAULT_PROVIDER_CONFIGS: Partial<
+  Record<Pod["provider"], Pod["providerConfig"]>
+> = {
+  claude: { model: "opus" },
+  codex: { model: "gpt-5.4" },
+  gemini: { model: "gemini-2.5-pro" },
+};
+
 /**
- * 建立 Mock Pod
- *
- * 預設 provider 為 "claude"，providerConfig.model 為 "opus"。
- * 若傳入 provider 非 "claude"，請同步傳入對應 provider 的合法 providerConfig，
- * 否則 providerConfig 仍會是 claude 的預設值，可能導致測試錯誤。
- *
- * 範例：
- *   createMockPod({ provider: "codex", providerConfig: { model: "gpt-5.4" } })
+ * 建立測試用 Mock Pod，預設 provider 為 "claude"。
+ * 傳入不同 provider 時，自動套用對應預設 providerConfig；可透過 overrides.providerConfig 覆蓋。
  */
 export function createMockPod(overrides?: Partial<Pod>): Pod {
   const id = `pod-${++podCounter}`;
+  const provider = overrides?.provider ?? "claude";
+  const defaultProviderConfig = DEFAULT_PROVIDER_CONFIGS[provider] ?? {
+    model: "opus",
+  };
   return {
     id,
     name: `Pod ${podCounter}`,
@@ -94,7 +118,7 @@ export function createMockPod(overrides?: Partial<Pod>): Pod {
     mcpServerNames: [],
     pluginIds: [],
     provider: "claude",
-    providerConfig: { model: "opus" },
+    providerConfig: defaultProviderConfig,
     ...overrides,
   };
 }

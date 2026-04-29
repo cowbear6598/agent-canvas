@@ -60,7 +60,7 @@ vi.mock("../../src/services/commandService.js", () => ({
 vi.mock("../../src/services/repositoryService.js", () => ({
   repositoryService: {
     exists: vi.fn().mockResolvedValue(true),
-    getRepositoryPath: vi.fn((id: string) => `/tmp/repos/${id}`),
+    getRepositoryPath: vi.fn((id: string) => `/test-repos/${id}`),
     getMetadata: vi.fn().mockReturnValue(undefined),
   },
 }));
@@ -158,7 +158,7 @@ function createTestPod(provider: "gemini" | "claude", name: string): string {
 vi.mock("../../src/services/canvasStore.js", () => ({
   canvasStore: {
     getActiveCanvas: vi.fn(() => CANVAS_ID),
-    getCanvasDir: vi.fn(() => "/tmp/test-canvas"),
+    getCanvasDir: vi.fn(() => "/test-canvas-dir"),
     getById: vi.fn((id: string) => ({
       id,
       name: "test-canvas",

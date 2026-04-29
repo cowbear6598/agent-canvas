@@ -616,7 +616,7 @@ describe("executeStreamingChat", () => {
       { label: "回傳 null", value: null },
       { label: "回傳 undefined", value: undefined },
     ])(
-      "getByIdGlobal $label → reject 帶「找不到 Pod」且 provider.chat 未被呼叫",
+      "getByIdGlobal $label → 透過 emitToCanvas 發送 POD_ERROR（code: POD_NOT_FOUND），provider.chat 未被呼叫",
       async ({ value }) => {
         const chatMock = vi.fn(async function* () {
           yield { type: "text" as const, content: "不應看到" };
@@ -636,16 +636,25 @@ describe("executeStreamingChat", () => {
           .spyOn(podStore, "getByIdGlobal")
           .mockReturnValue(value as any);
 
-        await expect(
-          executeStreamingChat({
-            canvasId,
-            podId: POD_ID,
-            message,
-            abortable: false,
-            strategy: makeStrategy(),
-          }),
-        ).rejects.toThrow(/找不到 Pod/);
+        // 新行為：executeStreamingChat 攔截錯誤，透過 emitToCanvas 回報給前端，不再向上拋錯
+        const result = await executeStreamingChat({
+          canvasId,
+          podId: POD_ID,
+          message,
+          abortable: false,
+          strategy: makeStrategy(),
+        });
 
+        expect(result.aborted).toBe(false);
+        expect(socketService.emitToCanvas).toHaveBeenCalledWith(
+          canvasId,
+          WebSocketResponseEvents.POD_ERROR,
+          expect.objectContaining({
+            podId: POD_ID,
+            success: false,
+            code: "POD_NOT_FOUND",
+          }),
+        );
         expect(chatMock).not.toHaveBeenCalled();
         spy.mockRestore();
       },
@@ -721,7 +730,7 @@ describe("executeStreamingChat", () => {
       });
     });
 
-    it("workspacePath 不在 canvasRoot 內時拋出「工作目錄不在允許範圍內」且 provider.chat 未被呼叫", async () => {
+    it("workspacePath 不在 canvasRoot 內時，透過 emitToCanvas 發送 POD_ERROR（code: INVALID_PATH）且 provider.chat 未被呼叫", async () => {
       // 直接插入帶非法 workspacePath 的 pod（繞過 canvasRoot 驗證，測試 resolvePodCwd 攔截）
       const pod = insertPodViaSQL({
         provider: "claude",
@@ -741,16 +750,25 @@ describe("executeStreamingChat", () => {
         },
       });
 
-      await expect(
-        executeStreamingChat({
-          canvasId,
-          podId: pod.id,
-          message,
-          abortable: false,
-          strategy: makeStrategy(),
-        }),
-      ).rejects.toThrow("工作目錄不在允許範圍內");
+      // 新行為：路徑穿越/非法路徑錯誤被 handleStreamError 攔截，透過 emitToCanvas 回報，不再拋出
+      const result = await executeStreamingChat({
+        canvasId,
+        podId: pod.id,
+        message,
+        abortable: false,
+        strategy: makeStrategy(),
+      });
 
+      expect(result.aborted).toBe(false);
+      expect(socketService.emitToCanvas).toHaveBeenCalledWith(
+        canvasId,
+        WebSocketResponseEvents.POD_ERROR,
+        expect.objectContaining({
+          podId: pod.id,
+          success: false,
+          code: "INVALID_PATH",
+        }),
+      );
       expect(chatMock).not.toHaveBeenCalled();
     });
   });
@@ -1146,7 +1164,7 @@ describe("executeStreamingChat", () => {
       );
     });
 
-    it("worktreePath 不在 repositoriesRoot 內時拋出「工作目錄驗證失敗」", async () => {
+    it("worktreePath 不在 repositoriesRoot 內時，透過 emitToCanvas 發送 POD_ERROR（code: INVALID_PATH）且 provider.chat 未被呼叫", async () => {
       const pod = insertClaudePod();
       vi.spyOn(runStore, "getPodInstance").mockReturnValue({
         worktreePath: "/tmp/evil-path",
@@ -1165,16 +1183,25 @@ describe("executeStreamingChat", () => {
         },
       });
 
-      await expect(
-        executeStreamingChat({
-          canvasId,
-          podId: pod.id,
-          message,
-          abortable: false,
-          strategy: makeRunStrategy(),
-        }),
-      ).rejects.toThrow("工作目錄驗證失敗");
+      // 新行為：worktreePath 非法錯誤被 handleStreamError 攔截，透過 emitToCanvas 回報，不再拋出
+      const result = await executeStreamingChat({
+        canvasId,
+        podId: pod.id,
+        message,
+        abortable: false,
+        strategy: makeRunStrategy(),
+      });
 
+      expect(result.aborted).toBe(false);
+      expect(socketService.emitToCanvas).toHaveBeenCalledWith(
+        canvasId,
+        WebSocketResponseEvents.POD_ERROR,
+        expect.objectContaining({
+          podId: pod.id,
+          success: false,
+          code: "INVALID_PATH",
+        }),
+      );
       expect(chatMock).not.toHaveBeenCalled();
     });
   });

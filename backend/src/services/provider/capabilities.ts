@@ -61,11 +61,20 @@ export const GEMINI_CAPABILITIES: Readonly<ProviderCapabilities> =
     mcp: false,
   });
 
-/** Gemini Provider 支援的模型清單，供前端選擇器動態渲染 */
+/**
+ * Gemini Provider 支援的模型清單，供前端選擇器動態渲染。
+ *
+ * 注意：gemini-3-pro-preview、gemini-3-flash-preview、gemini-3.1-flash-lite-preview
+ * 均為 preview 版本，可能隨時下架或變更行為。
+ * review 點：型別目前為 { label, value } object array（string[]），
+ * 若未來需標記 available/preview 狀態，需同步更新前端 providerCapabilityStore
+ * 與 PodModelSelector，屬破壞性變更，目前保守僅加註釋。
+ */
 export const GEMINI_AVAILABLE_MODELS = Object.freeze([
   Object.freeze({ label: "2.5 Pro", value: "gemini-2.5-pro" }),
   Object.freeze({ label: "2.5 Flash", value: "gemini-2.5-flash" }),
   Object.freeze({ label: "2.5 Flash L", value: "gemini-2.5-flash-lite" }),
+  // 以下三個為 preview 版本，API 可能隨時變更
   Object.freeze({ label: "3 Pro P", value: "gemini-3-pro-preview" }),
   Object.freeze({ label: "3 Flash P", value: "gemini-3-flash-preview" }),
   Object.freeze({

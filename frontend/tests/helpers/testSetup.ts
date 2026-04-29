@@ -3,6 +3,7 @@ import { setActivePinia } from "pinia";
 import { vi } from "vitest";
 import { setupTestPinia } from "./mockStoreFactory";
 import { resetMockWebSocket } from "./mockWebSocket";
+import { resetFactoryCounters } from "./factories";
 
 /**
  * 標準 store 測試 setup，封裝常見的 4 行 beforeEach 初始化邏輯。
@@ -28,6 +29,7 @@ export function setupStoreTest(extra?: () => void): void {
     const pinia = setupTestPinia();
     setActivePinia(pinia);
     resetMockWebSocket();
+    resetFactoryCounters();
     vi.clearAllMocks();
     extra?.();
   });

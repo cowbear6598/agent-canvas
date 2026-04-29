@@ -28,6 +28,9 @@ import { runStore } from "../runStore.js";
 import { isPathWithinDirectory } from "../../utils/pathValidator.js";
 import { config } from "../../config/index.js";
 import { resolvePodCwd } from "../shared/podPathResolver.js";
+import { socketService } from "../socketService.js";
+import { WebSocketResponseEvents } from "../../schemas/index.js";
+import { createI18nError } from "../../utils/i18nError.js";
 
 export interface StreamingChatExecutorOptions {
   canvasId: string;
@@ -331,13 +334,70 @@ async function handleStreamAbort(
   };
 }
 
+/**
+ * 嘗試將錯誤對應到具體的 WebSocket 錯誤碼與 i18n key。
+ *
+ * - 路徑穿越 / 工作目錄非法 → { code: "INVALID_PATH", i18nKey: ... }
+ * - Provider 不存在 / buildOptions 失敗 → { code: "PROVIDER_NOT_FOUND", i18nKey: ... }
+ * - 其他無法分類的錯誤 → null（由呼叫端決定如何處理）
+ */
+function classifyKnownError(error: unknown): {
+  code: string;
+  i18nKey: string;
+} | null {
+  const msg = error instanceof Error ? error.message : String(error);
+  if (
+    msg === "非法的工作目錄路徑" ||
+    msg === "工作目錄驗證失敗" ||
+    msg === "工作目錄不在允許範圍內"
+  ) {
+    return { code: "INVALID_PATH", i18nKey: "errors.invalidWorkspacePath" };
+  }
+  if (msg.includes("PROVIDER_NOT_FOUND") || msg.includes("找不到 Provider")) {
+    return {
+      code: "PROVIDER_NOT_FOUND",
+      i18nKey: "errors.providerNotFound",
+    };
+  }
+  return null;
+}
+
 async function handleStreamError(
   context: StreamContext,
   error: unknown,
   callbacks?: StreamingChatExecutorCallbacks,
-): Promise<never> {
-  const { canvasId, podId, strategy } = context;
+): Promise<StreamingChatExecutorResult> {
+  const { canvasId, podId, messageId, streamState, strategy } = context;
 
+  const classified = classifyKnownError(error);
+
+  if (classified) {
+    // 已知的業務錯誤（路徑穿越、Provider 不可用）：發送具體錯誤給前端，不再拋出
+    strategy.onStreamError(podId);
+
+    logger.error(
+      "Chat",
+      "Error",
+      `[handleStreamError] 已知業務錯誤（podId=${podId}, canvasId=${canvasId}, code=${classified.code}）：${error instanceof Error ? error.message : String(error)}`,
+    );
+
+    socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_ERROR, {
+      canvasId,
+      podId,
+      success: false,
+      error: createI18nError(classified.i18nKey),
+      code: classified.code,
+    });
+
+    return {
+      messageId,
+      content: streamState.accumulatedContent,
+      hasContent: hasAssistantContent(streamState),
+      aborted: false,
+    };
+  }
+
+  // 未分類錯誤（串流中斷、AbortError、其他預期外錯誤）：維持既有行為，向上拋出
   strategy.onStreamError(podId);
 
   if (callbacks?.onError) {
@@ -650,7 +710,19 @@ export async function executeStreamingChat(
       "Check",
       `[executeStreamingChat] 找不到 Pod（podId=${podId}, canvasId=${options.canvasId}）`,
     );
-    throw new Error("找不到 Pod");
+    socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_ERROR, {
+      canvasId,
+      podId,
+      success: false,
+      error: createI18nError("errors.podNotFound", { id: podId }),
+      code: "POD_NOT_FOUND",
+    });
+    return {
+      messageId,
+      content: "",
+      hasContent: false,
+      aborted: false,
+    };
   }
 
   const { pod } = podResult;

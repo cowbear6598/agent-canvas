@@ -41,24 +41,14 @@ describe("CLAUDE_AVAILABLE_MODELS model value 在 CLAUDE_AVAILABLE_MODEL_VALUES 
 });
 
 describe("GEMINI_CAPABILITIES smoke 測試", () => {
-  it("chat 為 true", () => {
-    expect(GEMINI_CAPABILITIES.chat).toBe(true);
-  });
-
-  it("plugin 為 false", () => {
-    expect(GEMINI_CAPABILITIES.plugin).toBe(false);
-  });
-
-  it("repository 為 true", () => {
-    expect(GEMINI_CAPABILITIES.repository).toBe(true);
-  });
-
-  it("command 為 true", () => {
-    expect(GEMINI_CAPABILITIES.command).toBe(true);
-  });
-
-  it("mcp 為 false", () => {
-    expect(GEMINI_CAPABILITIES.mcp).toBe(false);
+  it("GEMINI_CAPABILITIES 等於預期形狀", () => {
+    expect(GEMINI_CAPABILITIES).toEqual({
+      chat: true,
+      plugin: false,
+      repository: true,
+      command: true,
+      mcp: false,
+    });
   });
 });
 

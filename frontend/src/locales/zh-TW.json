@@ -727,7 +727,8 @@
     "attachmentWriteFailed": "檔案寫入失敗，請稍後再試",
     "uploadSessionNotFound": "找不到對應的上傳 session，可能已過期，請重新上傳",
     "uploadInvalidSessionId": "上傳 session ID 格式不合法",
-    "uploadNoFile": "請求中缺少檔案欄位，請重新選擇檔案上傳"
+    "uploadNoFile": "請求中缺少檔案欄位，請重新選擇檔案上傳",
+    "invalidWorkspacePath": "專案目錄無法使用，請重新選擇或解除 Repository 綁定"
   },
   "progress": {
     "preparingPull": "準備 Pull...",

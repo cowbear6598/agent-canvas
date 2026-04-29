@@ -727,7 +727,8 @@
     "attachmentWriteFailed": "ファイルの書き込みに失敗しました。しばらくしてから再試行してください",
     "uploadSessionNotFound": "アップロードセッションが見つからないか、期限切れです。再度アップロードしてください",
     "uploadInvalidSessionId": "アップロードセッション ID の形式が無効です",
-    "uploadNoFile": "リクエストにファイルが含まれていません。ファイルを選択して再試行してください"
+    "uploadNoFile": "リクエストにファイルが含まれていません。ファイルを選択して再試行してください",
+    "invalidWorkspacePath": "プロジェクトディレクトリにアクセスできません。Repository のバインドを解除するか、再設定してください"
   },
   "progress": {
     "preparingPull": "Pull を準備中...",

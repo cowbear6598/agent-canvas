@@ -727,7 +727,8 @@
     "attachmentWriteFailed": "Failed to write file. Please try again later.",
     "uploadSessionNotFound": "Upload session not found or expired. Please try uploading again.",
     "uploadInvalidSessionId": "The upload session ID is invalid.",
-    "uploadNoFile": "No file found in the request. Please select a file and try again."
+    "uploadNoFile": "No file found in the request. Please select a file and try again.",
+    "invalidWorkspacePath": "The project directory is unavailable. Please re-select or remove the Repository binding."
   },
   "progress": {
     "preparingPull": "Preparing pull...",

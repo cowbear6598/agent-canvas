@@ -110,7 +110,7 @@ const mountPod = (pod: Pod) =>
   mount(CanvasPod, { props: { pod }, attachTo: document.body });
 
 /** 注入 claude + codex capabilities，模擬後端 metadata 已載入（含 loaded=true） */
-function injectCapabilities() {
+function injectBaseCapabilities() {
   const store = useProviderCapabilityStore();
   store.syncFromPayload([
     {
@@ -170,8 +170,8 @@ function injectGeminiCapabilities() {
       capabilities: {
         chat: true,
         plugin: false,
-        repository: false,
-        command: false,
+        repository: true,
+        command: true,
         mcp: false,
       },
     },
@@ -257,7 +257,7 @@ describe("CanvasPod provider 漸層 class", () => {
       const wrapper = mountPod(
         mkPod({ provider: provider as Pod["provider"] }),
       );
-      injectCapabilities();
+      injectBaseCapabilities();
       await nextTick();
       expect(wrapper.find(".pod-doodle").classes()).toContain(expectedCls);
       wrapper.unmount();
@@ -266,7 +266,7 @@ describe("CanvasPod provider 漸層 class", () => {
 
   it("未知 provider → pod-doodle 不含任何 pod-provider-* class", async () => {
     const wrapper = mountPod(mkPod({ provider: "gone" as Pod["provider"] }));
-    injectCapabilities();
+    injectBaseCapabilities();
     await nextTick();
     expect(
       wrapper
@@ -287,7 +287,7 @@ describe("CanvasPod unknown provider", () => {
     const wrapper = mountPod(
       mkPod({ provider: "deprecated" as Pod["provider"] }),
     );
-    injectCapabilities();
+    injectBaseCapabilities();
     await nextTick();
     expect(
       wrapper.find("[data-testid='unknown-provider-badge']").exists(),
@@ -297,7 +297,7 @@ describe("CanvasPod unknown provider", () => {
 
   it("store 載入後 provider 已知（claude）時不顯示 badge", async () => {
     const wrapper = mountPod(mkPod({ provider: "claude" }));
-    injectCapabilities();
+    injectBaseCapabilities();
     await nextTick();
     expect(
       wrapper.find("[data-testid='unknown-provider-badge']").exists(),
@@ -309,7 +309,7 @@ describe("CanvasPod unknown provider", () => {
     const wrapper = mountPod(
       mkPod({ provider: "unknown-p" as Pod["provider"] }),
     );
-    // 不呼叫 injectCapabilities → loaded 維持 false
+    // 不呼叫 injectBaseCapabilities → loaded 維持 false
     await nextTick();
     expect(
       wrapper.find("[data-testid='unknown-provider-badge']").exists(),
@@ -321,7 +321,7 @@ describe("CanvasPod unknown provider", () => {
     const wrapper = mountPod(
       mkPod({ provider: "deprecated" as Pod["provider"] }),
     );
-    injectCapabilities();
+    injectBaseCapabilities();
     await nextTick();
     await wrapper.find(".pod-doodle").trigger("dblclick");
     // 未知 provider 雙擊應顯示 toast，因 vue-i18n 已 mock 為 t(key)=>key，直接比對 i18n key
@@ -342,7 +342,7 @@ describe("CanvasPod unknown provider", () => {
 describe("CanvasPod 拖曳高亮", () => {
   it("dragenter 後套用 pod-glow-drop-target，dragleave 後移除", async () => {
     const wrapper = mountPod(mkPod({ status: "idle" }));
-    injectCapabilities();
+    injectBaseCapabilities();
     await nextTick();
 
     wrapper.element.dispatchEvent(new Event("dragenter", { bubbles: true }));
@@ -386,7 +386,7 @@ describe("CanvasPod 上傳中互動封鎖", () => {
     };
   }
 
-  beforeEach(() => injectCapabilities());
+  beforeEach(() => injectBaseCapabilities());
 
   it("上傳中 PodActions 應收到 isUploading=true", async () => {
     const wrapper = mountPod(mkPod({ id: "pod-upload" }));
@@ -431,7 +431,7 @@ describe("CanvasPod 上傳中互動封鎖", () => {
 // ─────────────────────────────────────────────────────────────────────────
 
 describe("CanvasPod MCP / Plugin popover", () => {
-  beforeEach(() => injectCapabilities());
+  beforeEach(() => injectBaseCapabilities());
 
   it("點擊 .pod-mcp-slot 後 McpPopover 應渲染", async () => {
     const wrapper = mountPod(mkPod());
@@ -496,7 +496,7 @@ describe("CanvasPod MCP / Plugin popover", () => {
 
 describe("CanvasPod PodSlots 計數 props", () => {
   it("pod.mcpServerNames 有 2 個時 PodSlots 應收到 mcpActiveCount=2", () => {
-    injectCapabilities();
+    injectBaseCapabilities();
     const wrapper = mountPod(mkPod({ mcpServerNames: ["a", "b"] }));
     expect(
       wrapper.findComponent({ name: "PodSlots" }).props("mcpActiveCount"),
@@ -505,7 +505,7 @@ describe("CanvasPod PodSlots 計數 props", () => {
   });
 
   it("pod.pluginIds 有 3 個時 PodSlots 應收到 pluginActiveCount=3", () => {
-    injectCapabilities();
+    injectBaseCapabilities();
     const wrapper = mountPod(mkPod({ pluginIds: ["p1", "p2", "p3"] }));
     expect(
       wrapper.findComponent({ name: "PodSlots" }).props("pluginActiveCount"),
@@ -540,7 +540,7 @@ describe("CanvasPod Gemini provider", () => {
     podStore.pods = [pod];
 
     const wrapper = mountPod(pod);
-    injectCapabilities();
+    injectBaseCapabilities();
     await nextTick();
     expect(wrapper.find(".pod-doodle").classes()).toContain(
       "pod-provider-claude",
@@ -559,8 +559,9 @@ describe("CanvasPod Gemini provider", () => {
     wrapper.unmount();
   });
 
-  // B3：Gemini Pod 的 plugin / mcp / repository / command 插槽仍渲染，但收到 disabled 相關 props
-  it("B3：Gemini Pod 的四個插槽仍渲染，plugin/mcp capabilityDisabled=true、repository/command disabled=true，disabled-tooltip 為通用文案", async () => {
+  // B3：Gemini Pod 的四個插槽仍渲染：plugin/mcp capabilityDisabled=true，
+  //     repository/command 因後端 GEMINI_CAPABILITIES 支援，disabled=false
+  it("B3：Gemini Pod 的四個插槽仍渲染，plugin/mcp capabilityDisabled=true、repository/command disabled=false（後端真實閘門）", async () => {
     const pod = mkPod({ provider: "gemini" as Pod["provider"] });
     // 需把 pod 寫入 podStore，usePodCapabilities 才能透過 getPodById 取得正確 provider
     usePodStore().pods = [pod];
@@ -581,15 +582,14 @@ describe("CanvasPod Gemini provider", () => {
     expect(podPluginSlot.props("capabilityDisabled")).toBe(true);
     expect(podMcpSlot.props("capabilityDisabled")).toBe(true);
 
-    // PodSingleBindSlot（repository 與 command）應收到 disabled=true
+    // Gemini 支援 repository / command（GEMINI_CAPABILITIES.repository=true, command=true）
+    // PodSingleBindSlot 應收到 disabled=false，允許使用者拖入 Note
     const singleBindSlots = podSlots.findAllComponents({
       name: "PodSingleBindSlot",
     });
     expect(singleBindSlots.length).toBeGreaterThanOrEqual(2);
     for (const slot of singleBindSlots) {
-      expect(slot.props("disabled")).toBe(true);
-      // disabled-tooltip 使用 i18n key（t = identity，故斷言 key 本身）
-      expect(slot.props("disabledTooltip")).toBe("pod.slot.providerDisabled");
+      expect(slot.props("disabled")).toBe(false);
     }
 
     wrapper.unmount();
@@ -668,7 +668,7 @@ describe("CanvasPod handleModelChange", () => {
     mockCreateWebSocketRequest.mockResolvedValueOnce({
       pod: { providerConfig: { model: "haiku" } },
     });
-    injectCapabilities();
+    injectBaseCapabilities();
     const wrapper = mountPod(pod);
     await nextTick();
 

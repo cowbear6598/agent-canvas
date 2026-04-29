@@ -36,6 +36,8 @@ import type { Result } from "../../src/types/index.js";
 import { ok } from "../../src/types/index.js";
 
 /**
+ * @testonly 此 mock 僅供測試環境使用，不可被 production code 引用。
+ *
  * 測試用 mock：跳過真實加密以加速測試，不涵蓋加密失敗邊界。
  * 使用 Base64 模擬加密行為，讓 encrypt/decrypt 可驗算但不進行真實 AES 操作。
  */
@@ -44,6 +46,8 @@ vi.mock("../../src/services/encryptionService.js", () => ({
     encrypt: (text: string) => Buffer.from(text).toString("base64"),
     decrypt: (text: string) => Buffer.from(text, "base64").toString("utf8"),
     isEncrypted: (value: string) => {
+      // 測試專用：Base64 編碼後的加密字串無法被 JSON.parse 解析；
+      // 用此判斷代理「字串是否已加密」，不反映真實 AES 判斷邏輯。
       try {
         JSON.parse(value);
         return false;
@@ -123,6 +127,7 @@ describe("PodStore - Integration Binding", () => {
   let appId: string;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     initTestDb();
     resetStatements();
     clearPodStoreCache();
@@ -139,7 +144,7 @@ describe("PodStore - Integration Binding", () => {
     canvasId = setupTestCanvas();
 
     const result = integrationAppStore.create("slack", "Test Slack App", {
-      botToken: "xoxb-test",
+      botToken: "test-token-slack",
     });
     if (!result.success) throw new Error("Failed to create app");
     appId = result.data!.id;
@@ -194,8 +199,10 @@ describe("PodStore - Integration Binding", () => {
       });
 
       const found = podStore.getById(canvasId, pod.id);
-      const slackBindings =
-        found?.integrationBindings?.filter((b) => b.provider === "slack") ?? [];
+      // integrationBindings 為 optional 欄位，先以 ?? [] 展開再 filter，語意更清晰
+      const slackBindings = (found?.integrationBindings ?? []).filter(
+        (b) => b.provider === "slack",
+      );
       expect(slackBindings).toHaveLength(1);
       expect(slackBindings[0].resourceId).toBe("C22222");
     });
@@ -250,7 +257,7 @@ describe("PodStore - Integration Binding", () => {
       const telegramResult = integrationAppStore.create(
         "telegram",
         "Test Telegram App",
-        { botToken: "tg-token" },
+        { botToken: "test-token-telegram" },
       );
       const telegramAppId = telegramResult.data!.id;
 
@@ -289,7 +296,7 @@ describe("PodStore - Integration Binding", () => {
       const otherResult = integrationAppStore.create(
         "slack",
         "Other Slack App",
-        { botToken: "xoxb-other" },
+        { botToken: "test-token-slack-other" },
       );
       const otherAppId = otherResult.data!.id;
 
@@ -370,6 +377,7 @@ describe("PodStore - providerConfig 白名單過濾", () => {
   let canvasId: string;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     initTestDb();
     resetStatements();
     clearPodStoreCache();
@@ -492,6 +500,7 @@ describe("PodStore - resetAllBusyPods", () => {
   let canvasId: string;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     initTestDb();
     resetStatements();
     clearPodStoreCache();
@@ -561,6 +570,7 @@ describe("PodStore - hasName", () => {
   let canvasId: string;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     initTestDb();
     resetStatements();
     clearPodStoreCache();
@@ -636,6 +646,7 @@ describe("PodStore - create 回傳 integrationBindings", () => {
   let canvasId: string;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     initTestDb();
     resetStatements();
     clearPodStoreCache();
@@ -922,6 +933,7 @@ describe("Provider 切換保留 Note 綁定", () => {
   let canvasId: string;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     initTestDb();
     resetStatements();
     clearPodStoreCache();
@@ -1040,6 +1052,7 @@ describe("PodStore - mcpServerNames", () => {
   let canvasId: string;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     initTestDb();
     resetStatements();
     clearPodStoreCache();

@@ -106,7 +106,7 @@ function makeCtx(
   return {
     podId: "pod-gemini-test-001",
     message: "Hello, Gemini!",
-    workspacePath: "/workspace/test",
+    workspacePath: "/test-workspace/gemini-provider",
     resumeSessionId: null,
     abortSignal: new AbortController().signal,
     options: defaultOptions,
