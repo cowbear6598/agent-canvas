@@ -104,6 +104,11 @@ export async function executeDisposableChat(
     });
     return { ...result, resolvedModel };
   } else {
-    throw new Error(`不支援的 provider：${provider}`);
+    logger.error(
+      "Chat",
+      "Error",
+      `[DisposableChatService] 不支援的 provider（provider: ${provider}）`,
+    );
+    throw new Error("不支援的 provider");
   }
 }

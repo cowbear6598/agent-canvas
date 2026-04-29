@@ -361,7 +361,8 @@ describe("SummaryService", () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("沒有訊息記錄");
+      expect(result.error).toContain("來源 Pod 沒有可用訊息記錄");
+      expect(result.error).not.toContain("source-pod");
     });
 
     it("��有 runContext 時從 messageStore 讀取訊息", async () => {
@@ -396,7 +397,8 @@ describe("SummaryService", () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("找不到來源 Pod：nonexistent-source");
+      expect(result.error).toContain("來源 Pod 不存在");
+      expect(result.error).not.toContain("nonexistent-source");
     });
 
     it("Target Pod 不存在時回傳錯誤", async () => {
@@ -412,7 +414,8 @@ describe("SummaryService", () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("找不到目標 Pod：nonexistent-target");
+      expect(result.error).toContain("目標 Pod 不存在");
+      expect(result.error).not.toContain("nonexistent-target");
     });
 
     it("Source Pod 沒有訊息時回傳錯誤", async () => {
@@ -429,7 +432,8 @@ describe("SummaryService", () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("沒有訊息記錄");
+      expect(result.error).toContain("來源 Pod 沒有可用訊息記錄");
+      expect(result.error).not.toContain("source-pod");
     });
 
     it("disposableChat 失敗但有 fallback 訊息時，回傳 success:true 並使用 fallback 內容", async () => {
@@ -508,6 +512,76 @@ describe("SummaryService", () => {
 
       expect(result.success).toBe(true);
       expect(result.resolvedModel).toBeUndefined();
+    });
+  });
+
+  // --- runContext fallback 路徑 ---
+
+  describe("generateSummaryForTarget runContext fallback 路徑", () => {
+    it("case A：disposableChat 失敗 + runContext 存在 + run 內有 assistant 訊息 → success:true，content 為 run 的 assistant 訊息", async () => {
+      insertPodViaSQL(SOURCE_POD_ID, "Source Pod");
+      insertPodViaSQL(TARGET_POD_ID, "Target Pod");
+
+      const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "test");
+      insertRunMessages(run.id, SOURCE_POD_ID, true); // 含 assistant 訊息
+
+      asMock(disposableChatService.executeDisposableChat).mockResolvedValue({
+        success: false,
+        content: "",
+        resolvedModel: undefined,
+        error: "AI 呼叫失敗",
+      });
+
+      const runContext: RunContext = {
+        runId: run.id,
+        canvasId: CANVAS_ID,
+        sourcePodId: SOURCE_POD_ID,
+      };
+
+      const result = await summaryService.generateSummaryForTarget(
+        CANVAS_ID,
+        SOURCE_POD_ID,
+        TARGET_POD_ID,
+        "claude",
+        "sonnet",
+        runContext,
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.summary).toBe("run 模式分析結果");
+    });
+
+    it("case B：disposableChat 失敗 + runContext 存在 + run 內無 assistant 訊息 → success:false 含 zh-TW 錯誤", async () => {
+      insertPodViaSQL(SOURCE_POD_ID, "Source Pod");
+      insertPodViaSQL(TARGET_POD_ID, "Target Pod");
+
+      const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "test");
+      insertRunMessages(run.id, SOURCE_POD_ID, false); // 只有 user 訊息，無 assistant
+
+      asMock(disposableChatService.executeDisposableChat).mockResolvedValue({
+        success: false,
+        content: "",
+        resolvedModel: undefined,
+        error: "AI 呼叫失敗",
+      });
+
+      const runContext: RunContext = {
+        runId: run.id,
+        canvasId: CANVAS_ID,
+        sourcePodId: SOURCE_POD_ID,
+      };
+
+      const result = await summaryService.generateSummaryForTarget(
+        CANVAS_ID,
+        SOURCE_POD_ID,
+        TARGET_POD_ID,
+        "claude",
+        "sonnet",
+        runContext,
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBeTruthy();
     });
   });
 });

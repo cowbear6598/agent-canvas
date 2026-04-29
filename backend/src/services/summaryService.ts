@@ -45,6 +45,29 @@ async function buildSummaryContext(
 }
 
 class SummaryService {
+  /**
+   * 從 fallback 路徑取得最後一則 assistant 訊息。
+   * AI 呼叫失敗時使用，避免整個摘要流程中斷。
+   *
+   * @param sourcePodId - 來源 Pod ID
+   * @param messages - 已取得的訊息列表（避免重複 I/O）
+   * @param runContext - 若為 run 模式，從 run 訊息中取；否則從全域訊息取
+   */
+  private resolveFallbackSummary(
+    sourcePodId: string,
+    messages: PersistedMessage[],
+    runContext?: RunContext,
+  ): string | null {
+    if (runContext) {
+      const lastAssistant = messages
+        .slice()
+        .reverse()
+        .find((message: PersistedMessage) => message.role === "assistant");
+      return lastAssistant?.content ?? null;
+    }
+    return getLastAssistantMessage(sourcePodId);
+  }
+
   async generateSummaryForTarget(
     canvasId: string,
     sourcePodId: string,
@@ -55,21 +78,31 @@ class SummaryService {
   ): Promise<TargetSummaryResult> {
     const sourcePod = podStore.getById(canvasId, sourcePodId);
     if (!sourcePod) {
+      logger.error(
+        "Workflow",
+        "Error",
+        `[SummaryService] 來源 Pod 不存在（id: ${sourcePodId}）`,
+      );
       return {
         targetPodId,
         summary: "",
         success: false,
-        error: `找不到來源 Pod：${sourcePodId}`,
+        error: "來源 Pod 不存在",
       };
     }
 
     const targetPod = podStore.getById(canvasId, targetPodId);
     if (!targetPod) {
+      logger.error(
+        "Workflow",
+        "Error",
+        `[SummaryService] 目標 Pod 不存在（id: ${targetPodId}）`,
+      );
       return {
         targetPodId,
         summary: "",
         success: false,
-        error: `找不到目標 Pod：${targetPodId}`,
+        error: "目標 Pod 不存在",
       };
     }
 
@@ -77,11 +110,16 @@ class SummaryService {
       ? runStore.getRunMessages(runContext.runId, sourcePodId)
       : messageStore.getMessages(sourcePodId);
     if (messages.length === 0) {
+      logger.error(
+        "Workflow",
+        "Error",
+        `[SummaryService] 來源 Pod 沒有訊息記錄（id: ${sourcePodId}）`,
+      );
       return {
         targetPodId,
         summary: "",
         success: false,
-        error: `來源 Pod ${sourcePodId} 沒有訊息記錄`,
+        error: "來源 Pod 沒有可用訊息記錄",
       };
     }
 
@@ -98,26 +136,21 @@ class SummaryService {
     });
 
     if (!result.success) {
+      const rawError = result.error ?? "";
+      // 截斷到 512 字並將換行轉為 ↩，防止子服務錯誤詳情破版或洩漏過多資訊
+      const truncatedError = rawError.replace(/\r?\n/g, " ↩ ").slice(0, 512);
       logger.error(
         "Workflow",
         "Error",
-        `[SummaryService] 無法為目標 ${targetPodId} 生成摘要（provider: ${provider}，model: ${summaryModel}）：${result.error ?? ""}`,
+        `[SummaryService] 無法為目標 Pod 生成摘要（provider: ${provider}，model: ${summaryModel}，targetPodId: ${targetPodId}）：${truncatedError}`,
       );
 
-      // fallback 到上游最後一則 Assistant 訊息
-      let fallbackContent: string | null;
-      if (runContext) {
-        const runMessages = runStore.getRunMessages(
-          runContext.runId,
-          sourcePodId,
-        );
-        const lastAssistant = [...runMessages]
-          .reverse()
-          .find((message) => message.role === "assistant");
-        fallbackContent = lastAssistant?.content ?? null;
-      } else {
-        fallbackContent = getLastAssistantMessage(sourcePodId);
-      }
+      // fallback 到上游最後一則 Assistant 訊息（重用已取得的 messages，避免重複 I/O）
+      const fallbackContent = this.resolveFallbackSummary(
+        sourcePodId,
+        messages,
+        runContext,
+      );
 
       if (fallbackContent !== null) {
         return { targetPodId, summary: fallbackContent, success: true };
