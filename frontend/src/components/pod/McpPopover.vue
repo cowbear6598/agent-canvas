@@ -2,12 +2,13 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from "vue";
 import { useEscapeClose } from "@/composables/useEscapeClose";
 import { useI18n } from "vue-i18n";
-import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   listMcpServers,
   updatePodMcpServers as updatePodMcpServersApi,
 } from "@/services/mcpApi";
+import McpServerRow from "@/components/pod/McpServerRow.vue";
+import { logger } from "@/utils/logger";
 import { usePodStore } from "@/stores/pod";
 import { getActiveCanvasIdOrWarn } from "@/utils/canvasGuard";
 import { useOptimisticToggle } from "@/composables/pod/useOptimisticToggle";
@@ -86,7 +87,10 @@ onMounted(async () => {
   try {
     installedMcpServers.value = await listMcpServers(props.provider);
   } catch (err) {
-    console.warn("[McpPopover] Failed to load MCP servers:", err);
+    logger.warn(
+      "[McpPopover] Failed to load MCP servers:",
+      err instanceof Error ? err.message : String(err),
+    );
     loadFailed.value = true;
   } finally {
     loading.value = false;
@@ -217,28 +221,16 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
         <div v-if="isCodex">
           <ScrollArea class="pod-popover-scrollable">
             <div class="space-y-1">
-              <div
+              <McpServerRow
                 v-for="server in filteredMcpServers"
                 :key="server.name"
-                class="flex items-center justify-between gap-3 rounded px-2 py-1"
-              >
-                <p class="text-xs font-mono">
-                  {{ server.name }}
-                </p>
-                <div class="flex items-center gap-1">
-                  <span
-                    v-if="server.type"
-                    class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-mono text-muted-foreground bg-secondary"
-                  >
-                    {{ server.type }}
-                  </span>
-                  <span
-                    class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-mono text-green-600"
-                  >
-                    ✓
-                  </span>
-                </div>
-              </div>
+                :name="server.name"
+                :type="server.type"
+                :checked="localMcpServerNamesSet.has(server.name)"
+                :disabled="busy"
+                :readonly="true"
+                @toggle="handleToggle"
+              />
             </div>
           </ScrollArea>
           <!-- Codex hint 在 ScrollArea 外：固定顯示，不隨列表捲動 -->
@@ -247,59 +239,23 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
           </p>
         </div>
 
-        <!-- Gemini 模式：name + type chip + Switch，行為與 Claude 一致 -->
-        <ScrollArea v-else-if="isGemini" class="pod-popover-scrollable">
+        <!-- Gemini / Claude 模式：可 toggle（Gemini 額外顯示 type chip，由 McpServerRow 處理） -->
+        <ScrollArea
+          v-else
+          class="pod-popover-scrollable"
+          :title="busy ? t('pod.slot.mcpBusyTooltip') : undefined"
+        >
           <div class="space-y-1">
-            <div
+            <McpServerRow
               v-for="server in filteredMcpServers"
               :key="server.name"
-              class="group relative flex items-center justify-between gap-3 rounded px-2 py-1 hover:bg-secondary"
-              :title="busy ? t('pod.slot.mcpBusyTooltip') : undefined"
-            >
-              <p class="text-xs font-mono">
-                {{ server.name }}
-              </p>
-              <div class="flex items-center gap-1">
-                <span
-                  v-if="server.type"
-                  class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-mono text-muted-foreground bg-secondary"
-                >
-                  {{ server.type }}
-                </span>
-                <Switch
-                  :model-value="localMcpServerNamesSet.has(server.name)"
-                  :disabled="busy"
-                  @click.stop
-                  @update:model-value="
-                    (val: boolean) => handleToggle(server.name, val)
-                  "
-                />
-              </div>
-            </div>
-          </div>
-        </ScrollArea>
-
-        <!-- Claude 模式：ScrollArea 包列表，所有 server 均可 toggle -->
-        <ScrollArea v-else class="pod-popover-scrollable">
-          <div class="space-y-1">
-            <div
-              v-for="server in filteredMcpServers"
-              :key="server.name"
-              class="group relative flex items-center justify-between gap-3 rounded px-2 py-1 hover:bg-secondary"
-              :title="busy ? t('pod.slot.mcpBusyTooltip') : undefined"
-            >
-              <p class="text-xs font-mono">
-                {{ server.name }}
-              </p>
-              <Switch
-                :model-value="localMcpServerNamesSet.has(server.name)"
-                :disabled="busy"
-                @click.stop
-                @update:model-value="
-                  (val: boolean) => handleToggle(server.name, val)
-                "
-              />
-            </div>
+              :name="server.name"
+              :type="isGemini ? server.type : undefined"
+              :checked="localMcpServerNamesSet.has(server.name)"
+              :disabled="busy"
+              :readonly="false"
+              @toggle="handleToggle"
+            />
           </div>
         </ScrollArea>
       </template>

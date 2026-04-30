@@ -13,6 +13,27 @@ import { createI18nError } from "../utils/i18nError.js";
 import { emitError } from "../utils/websocketResponse.js";
 import { getCanvasId } from "../utils/handlerHelpers.js";
 import { logger } from "../utils/logger.js";
+import type { ProviderName } from "../services/provider/index.js";
+
+/**
+ * 依 provider 分派到對應的 reader，回傳可用的 MCP server 清單。
+ * - claude → readClaudeMcpServers（僅 user-scoped，name 欄位，無 type）
+ * - gemini → readGeminiMcpServers（回傳 { name, type }）
+ * - codex  → readCodexMcpServers（回傳 { name, type }）
+ */
+function resolveAvailableMcpServers(
+  provider: ProviderName,
+): Array<{ name: string; type?: "stdio" | "http" | "sse" }> {
+  if (provider === "claude") {
+    const servers = readClaudeMcpServers();
+    return servers.map(({ name }) => ({ name }));
+  } else if (provider === "gemini") {
+    return readGeminiMcpServers();
+  } else {
+    const servers = readCodexMcpServers();
+    return servers.map(({ name, type }) => ({ name, type }));
+  }
+}
 
 /**
  * handleMcpList：依 provider 分派到對應的 reader，回傳 MCP_LIST_RESULT。
@@ -28,23 +49,7 @@ export async function handleMcpList(
 ): Promise<void> {
   const { provider } = payload;
 
-  let items: Array<{
-    name: string;
-    type?: "stdio" | "http" | "sse";
-  }>;
-
-  if (provider === "claude") {
-    // Claude reader 讀取 user-scoped MCP servers，取前端需要的 name（type 不在 claude 格式中）
-    const servers = readClaudeMcpServers();
-    items = servers.map(({ name }) => ({ name }));
-  } else if (provider === "gemini") {
-    // Gemini reader 直接回傳 { name, type }，不需額外 map
-    items = readGeminiMcpServers();
-  } else {
-    // Codex reader 直接回傳 { name, type }
-    const servers = readCodexMcpServers();
-    items = servers.map(({ name, type }) => ({ name, type }));
-  }
+  const items = resolveAvailableMcpServers(provider);
 
   socketService.emitToConnection(
     connectionId,
@@ -111,20 +116,10 @@ export async function handlePodSetMcpServerNames(
 
   // self-healing：依 provider 讀取對應的可用 MCP server 清單，
   // 過濾掉已不存在的 name（例如使用者在外部刪除了 settings.json 中的 server）
-  let availableNameSet: Set<string>;
-  if (pod.provider === "gemini") {
-    // Gemini：讀取 ~/.gemini/settings.json root.mcpServers
-    const geminiServers = readGeminiMcpServers();
-    availableNameSet = new Set(geminiServers.map((s) => s.name));
-  } else if (pod.provider === "claude") {
-    // Claude：讀取 ~/.claude.json user-scoped MCP servers
-    const claudeServers = readClaudeMcpServers();
-    availableNameSet = new Set(claudeServers.map((s) => s.name));
-  } else {
-    // Codex：前端 popover 為唯讀，正常不會觸發此事件；
-    // 保留 fallback 以防意外呼叫，直接允許全部傳入的 name
-    availableNameSet = new Set(mcpServerNames);
-  }
+  // Codex popover 為唯讀，理論上不會觸發此事件；
+  // 仍統一走 resolveAvailableMcpServers 過濾，避免異常呼叫時繞過驗證
+  const availableServers = resolveAvailableMcpServers(pod.provider);
+  const availableNameSet = new Set(availableServers.map((s) => s.name));
 
   const invalidNames = mcpServerNames.filter((n) => !availableNameSet.has(n));
   if (invalidNames.length > 0) {

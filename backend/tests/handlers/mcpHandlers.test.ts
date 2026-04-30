@@ -99,6 +99,7 @@ import {
 } from "../../src/handlers/mcpHandlers.js";
 import { mcpHandlerGroup } from "../../src/handlers/groups/mcpHandlerGroup.js";
 import { resetGeminiMcpCache } from "../../src/services/mcp/geminiMcpReader.js";
+import { resetCodexMcpCache } from "../../src/services/mcp/codexMcpReader.js";
 import {
   WebSocketRequestEvents,
   WebSocketResponseEvents,
@@ -118,8 +119,7 @@ const REQUEST_ID_UUID = "00000000-0000-4000-8000-000000000001";
 // ─── 工具函式 ─────────────────────────────────────────────────────────────────
 
 function clearPodStoreCache(): void {
-  type PodStoreTestHooks = { stmtCache: Map<string, unknown> };
-  (podStore as unknown as PodStoreTestHooks).stmtCache.clear();
+  podStore.__clearCacheForTesting();
 }
 
 function insertCanvas(): void {
@@ -179,6 +179,23 @@ async function writeGeminiSettingsJson(
   return settingsPath;
 }
 
+/**
+ * 建立 Codex config.toml fixture，寫入 tmpDir。
+ * 回傳 config.toml 的完整路徑。
+ * serverNames 陣列中每個名稱都會建立一個 stdio 類型的 entry（含 command 欄位）。
+ */
+async function writeCodexConfigToml(
+  tmpDir: string,
+  serverNames: string[],
+): Promise<string> {
+  const configPath = join(tmpDir, "config.toml");
+  const entries = serverNames
+    .map((name) => `[mcp_servers.${name}]\ncommand = "npx"`)
+    .join("\n\n");
+  await writeFile(configPath, entries);
+  return configPath;
+}
+
 // ─── Setup / Teardown ─────────────────────────────────────────────────────────
 
 let tmpDir: string;
@@ -195,8 +212,9 @@ beforeEach(async () => {
   // 建立 tmp 目錄作為 Gemini settings fixture 的存放位置
   tmpDir = await createTmpDir("ccc-mcp-handler-test-");
 
-  // 清除 geminiMcpReader 的 TTL 快取，確保每個測試從乾淨狀態開始
+  // 清除 geminiMcpReader / codexMcpReader 的 TTL 快取，確保每個測試從乾淨狀態開始
   resetGeminiMcpCache();
+  resetCodexMcpCache();
 
   vi.clearAllMocks();
 });
@@ -206,8 +224,9 @@ afterEach(async () => {
   if (restoreEnv) {
     restoreEnv();
   }
-  // 清除 geminiMcpReader 的 TTL 快取，避免 fixture 污染後續測試
+  // 清除 geminiMcpReader / codexMcpReader 的 TTL 快取，避免 fixture 污染後續測試
   resetGeminiMcpCache();
+  resetCodexMcpCache();
   closeDb();
   clearPodStoreCache();
   await cleanupTmpDir(tmpDir);
@@ -501,15 +520,18 @@ describe("handlePodSetMcpServerNames — Gemini 分支", () => {
   });
 
   /**
-   * B5（回歸）：Codex provider 設定 mcpServerNames → 沿用 Codex 既有行為（全部允許）。
-   * 確認 Gemini 分支重構未影響 Codex。
+   * B5（回歸）：Codex provider 設定 mcpServerNames → self-healing 過濾，與 Gemini 行為一致。
+   * fixture 含 "valid-server"；傳入 "valid-server"（合法）+ "ghost-server"（不存在）。
+   * 預期：mcpServerNames 只含 "valid-server"，"ghost-server" 進入 ignoredNames。
    */
-  it("B5（回歸）：Codex Pod 設定 mcpServerNames → 全部允許（self-healing 不過濾 Codex），廣播成功", async () => {
-    // Codex 路徑不讀取 gemini settings.json，所以不需要設定 GEMINI_SETTINGS_PATH
-    // 但為了安全，確保不讀到任何 gemini 設定
+  it("B5（回歸）：Codex Pod 設定 mcpServerNames → self-healing 過濾，與 Gemini 行為一致", async () => {
+    // 建立 Codex config.toml fixture，僅包含 "valid-server"
+    const configPath = await writeCodexConfigToml(tmpDir, ["valid-server"]);
     restoreEnv = overrideEnv({
+      CODEX_CONFIG_PATH: configPath,
       GEMINI_SETTINGS_PATH: join(tmpDir, "nonexistent.json"),
     });
+    resetCodexMcpCache();
     resetGeminiMcpCache();
 
     const podId = insertPodViaSQL({ provider: "codex" });
@@ -520,7 +542,8 @@ describe("handlePodSetMcpServerNames — Gemini 分支", () => {
         requestId: REQUEST_ID,
         canvasId: CANVAS_ID,
         podId,
-        mcpServerNames: ["some-server", "another-server"],
+        // "valid-server" 存在於 fixture；"ghost-server" 不存在
+        mcpServerNames: ["valid-server", "ghost-server"],
       },
       REQUEST_ID,
     );
@@ -529,11 +552,13 @@ describe("handlePodSetMcpServerNames — Gemini 分支", () => {
     const [, event, payload] = mockEmitToCanvas.mock.calls[0];
     expect(event).toBe(WebSocketResponseEvents.POD_MCP_SERVER_NAMES_UPDATED);
     expect(payload.success).toBe(true);
-    // Codex fallback：直接允許全部傳入的 name
-    expect(payload.mcpServerNames).toEqual(
-      expect.arrayContaining(["some-server", "another-server"]),
-    );
-    expect(payload.mcpServerNames).toHaveLength(2);
-    expect(payload.ignoredNames).toEqual([]);
+    // self-healing：只有 fixture 中存在的 name 被寫入
+    expect(payload.mcpServerNames).toEqual(["valid-server"]);
+    // fixture 中不存在的 name 進入 ignoredNames
+    expect(payload.ignoredNames).toEqual(["ghost-server"]);
+
+    // 確認 podStore 也只寫入合法的 name
+    const pod = podStore.getById(CANVAS_ID, podId);
+    expect(pod?.mcpServerNames).toEqual(["valid-server"]);
   });
 });

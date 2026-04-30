@@ -98,6 +98,14 @@ class PodStore {
     ReturnType<Database["prepare"]>
   >();
 
+  /**
+   * 清除 PreparedStatement 快取。
+   * @internal 僅供測試使用，不應在生產程式碼中呼叫。
+   */
+  __clearCacheForTesting(): void {
+    this.stmtCache.clear();
+  }
+
   private get stmts(): ReturnType<typeof getStmts> {
     return getStmts();
   }

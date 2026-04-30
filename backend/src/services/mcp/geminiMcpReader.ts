@@ -34,6 +34,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { logger } from "../../utils/logger.js";
+import { MCP_SERVER_NAME_PATTERN } from "../../schemas/mcpSchemas.js";
 
 /**
  * 取得 ~/.gemini/settings.json 的讀取路徑。
@@ -84,12 +85,23 @@ interface GeminiSettingsFile {
 }
 
 /**
- * MCP server name 安全字元集：
- * - 首字元：英文字母、數字、底線（_）或點（.）
- * - 後續字元：英文字母、數字、底線（_）、點（.）或連字號（-）
- * 對齊 mcpSchemas.ts 中的 MCP_SERVER_NAME_PATTERN（module-private，無法直接匯入）。
+ * 依 entry 欄位推導 MCP server 連線類型。
+ * - command 為非空字串 → "stdio"
+ * - httpUrl 為非空字串 → "http"
+ * - url 為非空字串 → "sse"
+ * - 三者皆無 → null（呼叫端略過該筆）
  */
-const SAFE_SERVER_NAME_RE = /^[a-zA-Z0-9_.][a-zA-Z0-9_.-]*$/;
+function inferMcpServerType(entry: object): "stdio" | "http" | "sse" | null {
+  const e = entry as RawGeminiMcpEntry;
+  const hasCommand = typeof e.command === "string" && e.command.trim() !== "";
+  const hasHttpUrl = typeof e.httpUrl === "string" && e.httpUrl.trim() !== "";
+  const hasUrl = typeof e.url === "string" && e.url.trim() !== "";
+
+  if (hasCommand) return "stdio";
+  if (hasHttpUrl) return "http";
+  if (hasUrl) return "sse";
+  return null;
+}
 
 /**
  * 將 mcpServers 物件（Record<name, value>）轉換為 GeminiMcpServer 陣列。
@@ -105,8 +117,8 @@ function parseGeminiMcpServersRecord(
   const result: GeminiMcpServer[] = [];
 
   for (const [name, value] of Object.entries(record)) {
-    // 驗證 server name 字元集，含特殊字元者略過
-    if (!SAFE_SERVER_NAME_RE.test(name)) {
+    // 驗證 server name 字元集，含特殊字元者略過（規則與 MCP_SERVER_NAME_PATTERN 對齊）
+    if (!MCP_SERVER_NAME_PATTERN.test(name)) {
       logger.warn(
         "McpServer",
         "Warn",
@@ -119,20 +131,11 @@ function parseGeminiMcpServersRecord(
       continue;
     }
 
-    const entry = value as RawGeminiMcpEntry;
-
-    // type 推導：command → stdio；httpUrl → http；url → sse；三者皆無略過
-    if (typeof entry.command === "string" && entry.command.trim() !== "") {
-      result.push({ name, type: "stdio" });
-    } else if (
-      typeof entry.httpUrl === "string" &&
-      entry.httpUrl.trim() !== ""
-    ) {
-      result.push({ name, type: "http" });
-    } else if (typeof entry.url === "string" && entry.url.trim() !== "") {
-      result.push({ name, type: "sse" });
+    // 依 entry 欄位推導連線類型，三者皆無略過
+    const type = inferMcpServerType(value);
+    if (type !== null) {
+      result.push({ name, type });
     }
-    // 三者皆無：靜默略過
   }
 
   return result;
@@ -159,8 +162,17 @@ export function readGeminiMcpServers(): GeminiMcpServer[] {
   let fileContent: string;
   try {
     fileContent = fs.readFileSync(getGeminiSettingsPath(), "utf-8");
-  } catch {
-    // 檔案不存在（ENOENT）或無讀取權限時靜默回空
+  } catch (error) {
+    const isNotFound =
+      error instanceof Error && "code" in error && error.code === "ENOENT";
+    if (!isNotFound) {
+      // 非「檔案不存在」的錯誤才記錄 warn
+      logger.warn(
+        "McpServer",
+        "Warn",
+        `讀取 gemini settings.json 失敗：${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
     cache = { servers: [], expiresAt: now + CACHE_TTL_MS };
     return [];
   }

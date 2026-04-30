@@ -17,8 +17,17 @@ import type {
 import type { McpListItem } from "@/types/mcp";
 import type { PodProvider } from "@/types/pod";
 
+// ─── MCP server list cache helpers ────────────────────────────────────────────
+
 /** MCP server 清單快取 TTL（毫秒）；避免使用者頻繁開關 popover 反覆打 API */
 const MCP_SERVER_LIST_CACHE_TTL_MS = 30 * 1000;
+
+/**
+ * MCP server 清單快取最大容量。
+ * 目前最多 3 個 provider（claude / codex / gemini），保留餘裕設為 16。
+ * 超過上限時刪除最舊的 entry（Map 迭代順序 = 插入順序）。
+ */
+const MCP_SERVER_LIST_CACHE_MAX_SIZE = 16;
 
 /** McpListPayload 接受的已知 provider 字面量集合 */
 const KNOWN_MCP_PROVIDERS = new Set(["claude", "codex", "gemini"]);
@@ -54,6 +63,13 @@ export async function listMcpServers(
   });
 
   const data = result.items ?? [];
+
+  // 超過容量上限時，刪除最舊的 entry（Map 迭代順序 = 插入順序）
+  if (mcpServerListCache.size >= MCP_SERVER_LIST_CACHE_MAX_SIZE) {
+    const oldestKey = mcpServerListCache.keys().next().value;
+    if (oldestKey !== undefined) mcpServerListCache.delete(oldestKey);
+  }
+
   mcpServerListCache.set(provider, {
     data,
     expiresAt: Date.now() + MCP_SERVER_LIST_CACHE_TTL_MS,
@@ -73,6 +89,8 @@ export function invalidateMcpServersCache(provider?: PodProvider): void {
     mcpServerListCache.clear();
   }
 }
+
+// ─── Pod MCP server names update ──────────────────────────────────────────────
 
 /** 後端錯誤物件（i18n key 格式） */
 interface RawErrorObject {
@@ -94,6 +112,28 @@ interface RawUpdateResponse {
 }
 
 const DEFAULT_TIMEOUT_MS = 10_000;
+
+/**
+ * 將後端回傳的 rawError（string / i18nError 物件 / 其他）解析為 McpServerNamesError。
+ * - i18nError 格式（含 key）：reason = key，message = i18n 翻譯後字串
+ * - 字串格式：reason = message = 原字串
+ * - 其他：reason = "unknown"，message = 通用錯誤文案
+ */
+export function parseUpdateError(rawError: unknown): McpServerNamesError {
+  if (rawError && typeof rawError === "object" && "key" in rawError) {
+    const err = rawError as RawErrorObject;
+    const translated = t(err.key, err.params ?? {});
+    return {
+      reason: err.key,
+      message: translated === err.key ? t("common.error.unknown") : translated,
+    };
+  }
+  if (typeof rawError === "string") {
+    // 純字串不原樣傳遞，避免後端內部訊息洩漏到前端 toast
+    return { reason: "unknown", message: t("common.error.unknown") };
+  }
+  return { reason: "unknown", message: t("common.error.unknown") };
+}
 
 /**
  * 設定指定 Pod 的 MCP server 名稱清單。
@@ -130,28 +170,7 @@ export async function updatePodMcpServers(
       );
 
       if (raw.success === false) {
-        const rawError = raw.error;
-        let reason: string;
-        let message: string;
-
-        if (rawError && typeof rawError === "object" && "key" in rawError) {
-          // 後端回傳 i18nError 格式，保留 key 作為 reason 供呼叫端判斷
-          reason = rawError.key;
-          const translated = t(rawError.key, rawError.params ?? {});
-          message =
-            translated === rawError.key
-              ? t("common.error.unknown")
-              : translated;
-        } else if (typeof rawError === "string") {
-          reason = rawError;
-          message = rawError;
-        } else {
-          reason = "unknown";
-          message = t("common.error.unknown");
-        }
-
-        const err: McpServerNamesError = { reason, message };
-        reject(err);
+        reject(parseUpdateError(raw.error));
         return;
       }
 

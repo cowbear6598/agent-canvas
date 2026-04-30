@@ -436,7 +436,13 @@ export interface PodMcpServerNamesUpdatedPayload extends ResultPayload {
   canvasId: string;
   podId?: string;
   mcpServerNames?: string[];
-  /** self-healing 過濾掉的 MCP server name 清單（不存在於 ~/.claude.json） */
+  /**
+   * self-healing 過濾掉的 MCP server name 清單。
+   * 不存在於對應 provider 設定檔的 MCP server name 清單：
+   * - claude → ~/.claude.json
+   * - gemini → ~/.gemini/settings.json
+   * - codex  → ~/.codex/config.toml
+   */
   ignoredNames?: string[];
   pod?: Pod;
 }

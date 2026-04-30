@@ -3,12 +3,12 @@ import { requestIdSchema, canvasIdSchema, podIdSchema } from "./base.js";
 import { providerSchema } from "./podSchemas.js";
 
 /**
- * MCP server 名稱合法字元集規則：
+ * MCP server 名稱合法字元集規則（唯一真相，供 reader 模組 import）：
  * - 首字元：英文字母、數字、底線（_）或點（.）
  * - 後續字元：英文字母、數字、底線（_）、點（.）或連字號（-）
  * 設計理由：對齊常見 MCP server 命名慣例，排除空白與特殊符號，避免命令注入風險。
  */
-const MCP_SERVER_NAME_PATTERN = /^[a-zA-Z0-9_.][a-zA-Z0-9_.-]*$/;
+export const MCP_SERVER_NAME_PATTERN = /^[a-zA-Z0-9_.][a-zA-Z0-9_.-]*$/;
 
 /** MCP_LIST 請求 payload schema：指定要查詢的 provider */
 export const mcpListRequestSchema = z

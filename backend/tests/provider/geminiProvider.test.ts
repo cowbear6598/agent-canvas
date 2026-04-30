@@ -1450,11 +1450,11 @@ describe("GeminiProvider", () => {
       resetGeminiMcpCache();
     });
 
-    afterEach(() => {
+    afterEach(async () => {
       restoreEnv();
       restoreEnv = () => {};
-      // 清除快取，避免污染後續測試
-      import("../../src/services/mcp/geminiMcpReader.js").then(
+      // 清除快取，避免污染後續測試（await 確保清除完成再結束 afterEach）
+      await import("../../src/services/mcp/geminiMcpReader.js").then(
         ({ resetGeminiMcpCache }) => resetGeminiMcpCache(),
       );
     });

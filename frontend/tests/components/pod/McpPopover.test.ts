@@ -2,7 +2,10 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { nextTick } from "vue";
 import { setupStoreTest } from "../../helpers/testSetup";
-import { webSocketMockFactory } from "../../helpers/mockWebSocket";
+import {
+  webSocketMockFactory,
+  resetMockWebSocket,
+} from "../../helpers/mockWebSocket";
 import { usePodStore } from "@/stores/pod";
 
 // ── WS 邊界 mock ───────────────────────────────────────────────
@@ -130,6 +133,8 @@ describe("McpPopover", () => {
   afterEach(() => {
     for (const w of wrappers) w.unmount();
     wrappers = [];
+    // 清除 module 級 eventListeners / disconnectListeners，防止跨測試污染
+    resetMockWebSocket();
   });
 
   // ── Claude pod popover 顯示本機 MCP 列表 ──────────────────────

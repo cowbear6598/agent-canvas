@@ -20,6 +20,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { logger } from "../../utils/logger.js";
+import { MCP_SERVER_NAME_PATTERN } from "../../schemas/mcpSchemas.js";
 
 /**
  * 取得 Codex config.toml 的讀取路徑。
@@ -130,14 +131,11 @@ function parseCodexConfig(): CodexMcpServer[] {
   const mcpServers = config.mcp_servers as Record<string, unknown>;
   const result: CodexMcpServer[] = [];
 
-  /** 安全字元集：首字必須是字母、數字或底線；後續可含連字號，防止 -- 開頭的 CLI 旗標注入 */
-  const SAFE_SERVER_NAME_RE = /^[a-zA-Z0-9_][a-zA-Z0-9_-]*$/;
-
   for (const [serverName, serverConfig] of Object.entries(mcpServers)) {
     if (!serverConfig || typeof serverConfig !== "object") continue;
 
     // 驗證 server name 字元集，含 =、空格、換行、-- 等特殊字元者略過
-    if (!SAFE_SERVER_NAME_RE.test(serverName)) {
+    if (!MCP_SERVER_NAME_PATTERN.test(serverName)) {
       logger.warn(
         "McpServer",
         "Warn",

@@ -76,6 +76,13 @@ const SESSION_ID_RE =
 // ─── stderr 敏感資料遮蔽 ─────────────────────────────────────────────────────
 
 /**
+ * 敏感關鍵字正則（case-insensitive）。
+ * 提升至 module 頂層，避免每次呼叫 redactStderr 重複建立 RegExp 物件。
+ */
+const SENSITIVE_RE =
+  /token|api[_-]?key|apikey|secret|password|bearer|authorization|credential/i;
+
+/**
  * 在記錄 stderr 前先遮蔽敏感關鍵字，並截斷超長內容。
  *
  * - 對含敏感關鍵字的行整行替換為 `[REDACTED]`（case-insensitive）
@@ -85,10 +92,6 @@ const SESSION_ID_RE =
  * @returns 遮蔽與截斷後的安全文字
  */
 export function redactStderr(text: string): string {
-  // 敏感關鍵字正則（case-insensitive）
-  const SENSITIVE_RE =
-    /token|api[_-]?key|apikey|secret|password|bearer|authorization|credential/i;
-
   // 按行遮蔽敏感內容
   const redacted = text
     .split("\n")
@@ -608,6 +611,32 @@ function validateModel(model: string): boolean {
   return MODEL_RE.test(model);
 }
 
+/**
+ * 通用過濾函式：從 requested 清單中只保留 available 集合內存在的項目。
+ * 若有略過的項目，以 warnContext 記錄 warn log。
+ *
+ * @param requested 請求項目陣列（會去重）
+ * @param available 可用項目集合
+ * @param warnContext 用於 warn log 的上下文描述字串
+ */
+function filterByAvailableNames<T>(
+  requested: T[],
+  available: Set<T>,
+  warnContext: string,
+): T[] {
+  const deduped = Array.from(new Set(requested));
+  const result = deduped.filter((item) => available.has(item));
+  const skipped = deduped.length - result.length;
+  if (skipped > 0) {
+    logger.warn(
+      "Chat",
+      "Warn",
+      `[GeminiProvider] 略過 ${skipped} 個${warnContext}（已遮罩）`,
+    );
+  }
+  return result;
+}
+
 // ─── Provider 預設選項常數 ────────────────────────────────────────────────────
 
 const DEFAULT_MODEL = "gemini-2.5-pro";
@@ -659,16 +688,11 @@ export const geminiProvider: AgentProvider<GeminiOptions> = {
     if (pod.pluginIds.length > 0) {
       const scan = scanInstalledPlugins("gemini");
       const installedIds = new Set(scan.map((p) => p.id));
-      const requested = Array.from(new Set(pod.pluginIds));
-      plugins = requested.filter((id) => installedIds.has(id));
-      const skipped = requested.length - plugins.length;
-      if (skipped > 0) {
-        logger.warn(
-          "Chat",
-          "Warn",
-          `[GeminiProvider] 略過 ${skipped} 個不存在或不相容的 extension id（已遮罩）`,
-        );
-      }
+      plugins = filterByAvailableNames(
+        pod.pluginIds,
+        installedIds,
+        "不存在或不相容的 extension id",
+      );
     }
 
     // ── mcpServerNames 計算（self-healing：對齊最新 settings.json）─────────
@@ -677,16 +701,11 @@ export const geminiProvider: AgentProvider<GeminiOptions> = {
     if (pod.mcpServerNames.length > 0) {
       const existingServers = readGeminiMcpServers();
       const existingNames = new Set(existingServers.map((s) => s.name));
-      const requested = Array.from(new Set(pod.mcpServerNames));
-      mcpServerNames = requested.filter((name) => existingNames.has(name));
-      const skipped = requested.length - mcpServerNames.length;
-      if (skipped > 0) {
-        logger.warn(
-          "Chat",
-          "Warn",
-          `[GeminiProvider] 略過 ${skipped} 個已不存在於 settings.json 的 MCP server name（已遮罩）`,
-        );
-      }
+      mcpServerNames = filterByAvailableNames(
+        pod.mcpServerNames,
+        existingNames,
+        "已不存在於 settings.json 的 MCP server name",
+      );
     }
 
     return {
