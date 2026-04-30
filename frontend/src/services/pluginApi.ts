@@ -11,6 +11,9 @@ import type { PodProvider } from "@/types/pod";
 /** Plugin 清單快取 TTL（毫秒）；避免使用者頻繁開關 popover 反覆打 API */
 const PLUGIN_LIST_CACHE_TTL_MS = 30 * 1000;
 
+/** PluginListPayload 接受的已知 provider 字面量集合 */
+const KNOWN_PLUGIN_PROVIDERS = new Set(["claude", "codex", "gemini"]);
+
 interface PluginListCacheEntry {
   data: InstalledPlugin[];
   expiresAt: number;
@@ -26,13 +29,18 @@ export async function listPlugins(
     return cached.data;
   }
 
+  // 只傳送已知 provider，避免將任意字串送往後端
+  const knownProvider = KNOWN_PLUGIN_PROVIDERS.has(provider)
+    ? (provider as "claude" | "codex" | "gemini")
+    : undefined;
+
   const result = await createWebSocketRequest<
     PluginListPayload,
     PluginListResultPayload
   >({
     requestEvent: WebSocketRequestEvents.PLUGIN_LIST,
     responseEvent: WebSocketResponseEvents.PLUGIN_LIST_RESULT,
-    payload: { provider },
+    payload: { provider: knownProvider },
   });
 
   const data = result.plugins ?? [];

@@ -303,6 +303,10 @@ export interface MoveToGroupPayload {
 /** 查詢指定 Provider 的 MCP server 清單 */
 export interface McpListPayload {
   requestId: string;
+  /**
+   * 目前 mcp 不支援 gemini，本欄位刻意維持 `"claude" | "codex"`。
+   * 新增 gemini mcp 支援時需同步擴充此型別並更新後端對應的 handler。
+   */
   provider: "claude" | "codex";
 }
 
@@ -340,8 +344,8 @@ export interface PodSetPluginsPayload {
 
 export interface PluginListPayload {
   requestId: string;
-  /** 依 provider 過濾 plugin 清單；使用 PodProvider（string）支援任意 provider */
-  provider?: PodProvider;
+  /** 依 provider 過濾 plugin 清單；限制為已知 provider 字面量，獲得型別系統列舉約束 */
+  provider?: "claude" | "codex" | "gemini";
 }
 
 export interface RunDeletePayload {

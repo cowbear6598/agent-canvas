@@ -106,13 +106,6 @@ interface PluginManifest {
   description?: string;
 }
 
-/** Gemini extension manifest（gemini-extension.json）的型別定義，只解析需要的欄位 */
-export interface GeminiExtensionManifest {
-  name?: string;
-  version?: string;
-  description?: string;
-}
-
 function readManifest(manifestPath: string): PluginManifest | null {
   try {
     const content = fs.readFileSync(manifestPath, "utf-8");
@@ -252,6 +245,10 @@ function scanClaudeInstalledPlugins(): InstalledPlugin[] {
  *
  * 使用 readdirSync withFileTypes 直接透過 dirent.isDirectory() 過濾，
  * 避免對每個 entry 額外呼叫 statSync。
+ *
+ * @warning 僅適用於固定格式版本號（單位數版號）。
+ *   跨多位數版本（例如 1.10.0 vs 1.9.0）排序會錯，因為使用字典序（.sort()）而非語意版號比較。
+ *   若未來需支援多位數版號，應引入 semver 比較邏輯。
  */
 function resolveLatestVersion(
   pluginDir: string,
@@ -339,17 +336,17 @@ function scanCodexInstalledPlugins(): InstalledPlugin[] {
     const marketplaceDir = path.join(CODEX_PLUGINS_CACHE_DIR, marketplaceName);
 
     // 掃該 marketplace 底下的 plugins
-    let pluginDirs: string[];
+    let pluginDirents: fs.Dirent[];
     try {
-      const stat = fs.statSync(marketplaceDir);
-      if (!stat.isDirectory()) continue;
-      pluginDirs = fs.readdirSync(marketplaceDir);
+      pluginDirents = fs.readdirSync(marketplaceDir, { withFileTypes: true });
     } catch {
       continue;
     }
 
-    // 對每個 plugin 解析資料
-    for (const pluginName of pluginDirs) {
+    // 對每個 plugin 解析資料（僅處理目錄，略過檔案）
+    for (const dirent of pluginDirents) {
+      if (!dirent.isDirectory()) continue;
+      const pluginName = dirent.name;
       const pluginDir = path.join(marketplaceDir, pluginName);
       const plugin = scanCodexPlugin(marketplaceName, pluginName, pluginDir);
       if (plugin) result.push(plugin);
@@ -357,6 +354,74 @@ function scanCodexInstalledPlugins(): InstalledPlugin[] {
   }
 
   return result;
+}
+
+/** 截斷過長的目錄名稱，避免 log injection，最多保留 80 字元 */
+function truncateDirentName(name: string): string {
+  return name.length > 80 ? `${name.substring(0, 80)}…` : name;
+}
+
+/**
+ * 解析單一 Gemini extension 目錄，回傳 InstalledPlugin 或 null（不合法時）。
+ * 負責：manifest 讀取、name 驗證、plugin id 格式驗證、物件組裝。
+ */
+function parseGeminiExtensionEntry(
+  extRoot: string,
+  dirent: fs.Dirent,
+): InstalledPlugin | null {
+  const safeName = truncateDirentName(dirent.name);
+
+  const manifestPath = path.join(extRoot, dirent.name, "gemini-extension.json");
+
+  const manifest = readManifest(manifestPath);
+
+  if (!manifest) {
+    // readManifest 已對非 ENOENT 錯誤記錄 warn；ENOENT 時靜默，這裡補一條統一 warn
+    logger.warn(
+      "Run",
+      "Warn",
+      `[PluginScanner] 略過 Gemini extension 子目錄 "${safeName}"：manifest 不存在或解析失敗`,
+    );
+    return null;
+  }
+
+  if (!manifest.name) {
+    logger.warn(
+      "Run",
+      "Warn",
+      `[PluginScanner] 略過 Gemini extension 子目錄 "${safeName}"：manifest 缺少 name 欄位`,
+    );
+    return null;
+  }
+
+  const id = manifest.name;
+
+  if (!PLUGIN_ID_PATTERN.test(id)) {
+    logger.warn("Run", "Check", `略過不合法的 gemini extension id（已遮罩）`);
+    return null;
+  }
+
+  const installPath = path.join(extRoot, dirent.name) + "/";
+
+  // 防止路徑穿越攻擊：確認 installPath 在 gemini extensions 根目錄內，與 Claude 來源 L201 對齊
+  if (!isPathWithinDirectory(installPath, extRoot)) {
+    logger.warn(
+      "Run",
+      "Warn",
+      `[PluginScanner] 略過不在允許路徑範圍內的 Gemini extension installPath（目錄名稱已遮罩）`,
+    );
+    return null;
+  }
+
+  return {
+    id,
+    name: manifest.name,
+    version: manifest.version ?? "",
+    description: manifest.description ?? "",
+    installPath,
+    repo: "",
+    compatibleProviders: ["gemini"],
+  };
 }
 
 /**
@@ -383,48 +448,8 @@ function scanGeminiInstalledPlugins(): InstalledPlugin[] {
 
   for (const dirent of dirents) {
     if (!dirent.isDirectory()) continue;
-
-    const manifestPath = path.join(
-      geminiExtensionsRoot,
-      dirent.name,
-      "gemini-extension.json",
-    );
-
-    const manifest = readManifest(
-      manifestPath,
-    ) as GeminiExtensionManifest | null;
-
-    if (!manifest) {
-      // readManifest 已對非 ENOENT 錯誤記錄 warn；ENOENT 時靜默，這裡補一條統一 warn
-      console.warn(
-        `[PluginScanner] 略過 Gemini extension 子目錄 "${dirent.name}"：manifest 不存在或解析失敗`,
-      );
-      continue;
-    }
-
-    if (!manifest.name) {
-      console.warn(
-        `[PluginScanner] 略過 Gemini extension 子目錄 "${dirent.name}"：manifest 缺少 name 欄位`,
-      );
-      continue;
-    }
-
-    const id = manifest.name;
-
-    if (!PLUGIN_ID_PATTERN.test(id)) {
-      logger.warn("Run", "Check", `略過不合法的 gemini extension id（已遮罩）`);
-      continue;
-    }
-
-    result.push({
-      id,
-      name: manifest.name,
-      version: manifest.version ?? "",
-      description: manifest.description ?? "",
-      installPath: path.join(geminiExtensionsRoot, dirent.name) + "/",
-      repo: "",
-      compatibleProviders: ["gemini"],
-    });
+    const plugin = parseGeminiExtensionEntry(geminiExtensionsRoot, dirent);
+    if (plugin) result.push(plugin);
   }
 
   return result;

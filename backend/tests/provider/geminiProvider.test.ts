@@ -759,18 +759,15 @@ describe("GeminiProvider", () => {
   });
 
   // ── C19：stderr 超過 64KB 自動截斷，logger.warn 紀錄截斷，stderrText 長度有上限 ─
-  it("C19: stderr 超過 64KB 時應自動截斷，logger.warn 記錄截斷訊息，且實際 stderrText 長度不超過 STDERR_MAX_BYTES", async () => {
-    // 建立超過 64KB 的 stderr 資料（全為 "x"，無敏感字，redactStderr 不會遮蔽）
-    const largeStderr = new Uint8Array(STDERR_MAX_BYTES + 1024).fill(
-      "x".charCodeAt(0),
-    );
 
-    // C19 需要 actual collectStderr（含截斷邏輯）才能觸發 logger.warn("截斷")
-    // 用 mockImplementationOnce 還原 actual 行為，並捕捉回傳的 stderrText
+  /**
+   * 建立還原 actual collectStderr 截斷行為的 mockImplementationOnce。
+   * 同時捕捉 stderrText 以供後續斷言使用。
+   */
+  function setupC19TruncationMock(): { getCapture: () => string | undefined } {
     let capturedStderrText: string | undefined;
     vi.mocked(collectStderr).mockImplementationOnce(
       async (proc, abortSig, logPrefix) => {
-        // 呼叫 actual 的截斷邏輯：直接模擬 actual 行為
         const chunks: Buffer[] = [];
         let totalBytes = 0;
         let truncated = false;
@@ -800,6 +797,16 @@ describe("GeminiProvider", () => {
         return text;
       },
     );
+    return { getCapture: () => capturedStderrText };
+  }
+
+  it("C19a: stderr 超過 64KB 時，logger.warn 應含截斷提示", async () => {
+    // 建立超過 64KB 的 stderr 資料（全為 "x"，無敏感字，redactStderr 不會遮蔽）
+    const largeStderr = new Uint8Array(STDERR_MAX_BYTES + 1024).fill(
+      "x".charCodeAt(0),
+    );
+
+    setupC19TruncationMock();
 
     const mockProc = {
       stdout: makeReadableStream([
@@ -813,17 +820,37 @@ describe("GeminiProvider", () => {
 
     await collectEvents(geminiProvider.chat(makeCtx()));
 
-    // 既有斷言：logger.warn 應被呼叫，且訊息含截斷提示
+    // logger.warn 應被呼叫，且訊息含截斷提示
     expectWarnContaining(vi.mocked(logger.warn), "截斷");
+  });
 
-    // 新增斷言：collectStderr 回傳的 stderrText 長度不超過 STDERR_MAX_BYTES + "\n[TRUNCATED]" 的額外長度
-    // 確認截斷上限確實生效（"x" * 64KB + "\n[TRUNCATED]" ≤ STDERR_MAX_BYTES + 20）
+  it("C19b: stderr 超過 64KB 時，實際 stderrText 長度不超過 STDERR_MAX_BYTES", async () => {
+    // 建立超過 64KB 的 stderr 資料（全為 "x"，無敏感字，redactStderr 不會遮蔽）
+    const largeStderr = new Uint8Array(STDERR_MAX_BYTES + 1024).fill(
+      "x".charCodeAt(0),
+    );
+
+    const { getCapture } = setupC19TruncationMock();
+
+    const mockProc = {
+      stdout: makeReadableStream([
+        JSON.stringify({ type: "result", status: "success" }),
+      ]),
+      stderr: makeRawReadableStream(largeStderr),
+      exited: Promise.resolve(0),
+      kill: vi.fn(),
+    };
+    spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
+
+    await collectEvents(geminiProvider.chat(makeCtx()));
+
+    // stderrText 純文字部分（不含 TRUNCATED 標記）長度不超過 STDERR_MAX_BYTES
+    const capturedStderrText = getCapture();
     expect(capturedStderrText).toBeDefined();
     const textWithoutTruncatedMarker = capturedStderrText!.replace(
       "\n[TRUNCATED]",
       "",
     );
-    // stderrText 純文字部分（不含 TRUNCATED 標記）長度不超過 STDERR_MAX_BYTES
     expect(textWithoutTruncatedMarker.length).toBeLessThanOrEqual(
       STDERR_MAX_BYTES,
     );

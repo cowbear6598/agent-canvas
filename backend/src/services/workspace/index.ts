@@ -22,7 +22,7 @@ class WorkspaceService {
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       logger.error("Workspace", "Error", `建立工作區失敗：${message}`);
-      return err(`建立工作區失敗：${message}`);
+      return err("建立工作區失敗");
     }
   }
 

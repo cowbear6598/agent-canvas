@@ -624,7 +624,7 @@ export const geminiProvider: AgentProvider<GeminiOptions> = {
 
     // ── plugins 計算 ──────────────────────────────────────────────
     let plugins: string[] = [];
-    if (pod.pluginIds && pod.pluginIds.length > 0) {
+    if (pod.pluginIds.length > 0) {
       const scan = scanInstalledPlugins("gemini");
       const installedIds = new Set(scan.map((p) => p.id));
       const requested = Array.from(new Set(pod.pluginIds));
@@ -660,9 +660,19 @@ export const geminiProvider: AgentProvider<GeminiOptions> = {
   ): AsyncGenerator<NormalizedEvent> {
     const { podId, abortSignal, options, message, resumeSessionId } = ctx;
 
+    // ── options 型別收窄 ──────────────────────────────────────────
+    // 正常路徑下 buildOptions() 保證 options 非空；防禦性收窄讓後續可直接存取 options.*
+    if (options == null) {
+      yield {
+        type: "error",
+        message: "內部錯誤：chat options 不可為空",
+        fatal: true,
+      };
+      return;
+    }
+
     // ── model 驗證 ────────────────────────────────────────────────
-    // buildOptions() 已保證 options 非空，直接取用不需可選鏈
-    const model = options!.model;
+    const model = options.model;
     if (!validateModel(model)) {
       // 原始 model 值只記錄在 logger，不反射回前端（防止外部輸入洩漏）
       logger.warn(
@@ -689,7 +699,7 @@ export const geminiProvider: AgentProvider<GeminiOptions> = {
       };
       return;
     }
-    const plugins = options!.plugins;
+    const plugins = options.plugins;
     const geminiArgs = buildGeminiArgs(
       resumeSessionId,
       model,

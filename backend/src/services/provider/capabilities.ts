@@ -58,6 +58,7 @@ export const GEMINI_CAPABILITIES: Readonly<ProviderCapabilities> =
     plugin: true,
     repository: true,
     command: true,
+    // 目前 Gemini CLI 透過 extensions（plugin）管理 MCP，本 capability 維持 false，待後續評估直接 mcp 支援
     mcp: false,
   });
 

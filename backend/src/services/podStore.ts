@@ -117,7 +117,7 @@ class PodStore {
   }
 
   private toPodWithBindings(row: PodRow): Pod {
-    // 使用 rowsToPods 批次路徑（含 batchLoadRelations + batchLoadBindings），避免 N+1
+    // 走批次路徑避免 N+1
     const pods = this.rowsToPods([row]);
     return pods[0]!;
   }
@@ -615,6 +615,31 @@ class PodStore {
     return { updatedPod, sanitizedProviderConfigJson };
   }
 
+  /**
+   * 將 Pod 主表 update 操作提取為私有方法，供 update() 的 transaction 內呼叫。
+   */
+  private updatePodRow(
+    id: string,
+    pod: Pod,
+    sanitizedConfigJson: string | null,
+  ): void {
+    this.stmts.pod.update.run({
+      $id: id,
+      $name: pod.name,
+      $status: pod.status,
+      $x: pod.x,
+      $y: pod.y,
+      $rotation: pod.rotation,
+      $sessionId: pod.sessionId,
+      $repositoryId: pod.repositoryId,
+      $commandId: pod.commandId,
+      $multiInstance: pod.multiInstance ? 1 : 0,
+      $scheduleJson: serializeSchedule(pod.schedule),
+      $provider: pod.provider,
+      $providerConfigJson: sanitizedConfigJson,
+    });
+  }
+
   update(
     canvasId: string,
     id: string,
@@ -628,22 +653,7 @@ class PodStore {
 
     // 使用 transaction 確保主表 update 與 join table update 的原子性
     getDb().transaction(() => {
-      this.stmts.pod.update.run({
-        $id: id,
-        $name: updatedPod.name,
-        $status: updatedPod.status,
-        $x: updatedPod.x,
-        $y: updatedPod.y,
-        $rotation: updatedPod.rotation,
-        $sessionId: updatedPod.sessionId,
-        $repositoryId: updatedPod.repositoryId,
-        $commandId: updatedPod.commandId,
-        $multiInstance: updatedPod.multiInstance ? 1 : 0,
-        $scheduleJson: serializeSchedule(updatedPod.schedule),
-        $provider: updatedPod.provider,
-        $providerConfigJson: sanitizedProviderConfigJson,
-      });
-
+      this.updatePodRow(id, updatedPod, sanitizedProviderConfigJson);
       this.updateJoinTables(id, updates);
     })();
 

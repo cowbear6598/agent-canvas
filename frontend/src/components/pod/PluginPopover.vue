@@ -59,7 +59,7 @@ const localPluginIdsSet = computed(() => new Set(localPluginIds.value));
  * 僅在 provider === "codex" 時為 true，**不用於 Gemini**：
  * Gemini 走 `v-else` 可 toggle 分支（name + v{version} + Switch）。
  */
-const isCodex = computed(() => props.provider === "codex");
+const isCodexReadOnly = computed(() => props.provider === "codex");
 
 const rootRef = ref<HTMLElement | null>(null);
 
@@ -78,26 +78,38 @@ const handleMousedown = (event: MouseEvent): void => {
   }
 };
 
-onMounted(async () => {
-  // 同步初始 pluginIds
+/** 從 podStore 同步初始化本地 pluginIds（同步操作） */
+const initLocalPluginIds = (): void => {
   const pod = podStore.getPodById(props.podId);
   localPluginIds.value = [...(pod?.pluginIds ?? [])];
+};
 
-  // 載入 plugin 清單
+/** 載入已安裝的 plugin 清單（非同步 API + 狀態管理） */
+const loadPluginList = async (): Promise<void> => {
   loading.value = true;
   try {
     installedPlugins.value = await listPlugins(props.provider);
   } catch (err) {
-    console.warn("[PluginPopover] Failed to load plugins:", err);
+    console.warn(
+      "[PluginPopover] Failed to load plugins:",
+      err instanceof Error ? err.message : String(err),
+    );
     loadFailed.value = true;
   } finally {
     loading.value = false;
   }
+};
 
-  // 清單載入完成後等 DOM 更新，再將 focus 移至搜尋輸入框
+/** 等 DOM 更新後將 focus 移至搜尋輸入框（DOM 副作用） */
+const focusSearchInput = async (): Promise<void> => {
   await nextTick();
   searchInputRef.value?.focus();
+};
 
+onMounted(async () => {
+  initLocalPluginIds();
+  await loadPluginList();
+  await focusSearchInput();
   document.addEventListener("mousedown", handleMousedown, true);
 });
 
@@ -138,7 +150,7 @@ const handleToggle = async (
   enabled: boolean,
 ): Promise<void> => {
   // Codex 唯讀，跳過 toggle；Gemini / Claude 正常往下走
-  if (isCodex.value) return;
+  if (isCodexReadOnly.value) return;
 
   const nextIds = buildNextIds(localPluginIds.value, pluginId, enabled);
 
@@ -211,7 +223,7 @@ const handleToggle = async (
       <!-- Plugin 列表（Claude / Gemini：可 toggle；Codex：唯讀展示） -->
       <template v-else>
         <!-- Codex 唯讀展示分支：顯示 name vX.Y.Z + 已啟用勾勾標籤，不可 toggle -->
-        <div v-if="isCodex">
+        <div v-if="isCodexReadOnly">
           <ScrollArea class="pod-popover-scrollable">
             <div class="space-y-1">
               <div

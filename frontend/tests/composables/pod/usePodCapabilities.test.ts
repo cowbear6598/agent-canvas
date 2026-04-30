@@ -39,7 +39,7 @@ const CLAUDE_FULL_CAPABILITIES = {
 /** Phase 2 後，Gemini 的 capabilities（需由 syncFromPayload 注入）。與後端 GEMINI_CAPABILITIES 一致 */
 const GEMINI_CAPABILITIES = {
   chat: true,
-  plugin: false,
+  plugin: true,
   repository: true,
   command: true,
   mcp: false,
@@ -381,12 +381,12 @@ describe("usePodCapabilities", () => {
       expect(isCommandEnabled.value).toBe(true);
     });
 
-    it("metadata 已載入時 isPluginEnabled 應為 false（鎖死後端 GEMINI_CAPABILITIES）", () => {
+    it("metadata 已載入時 isPluginEnabled 應為 true（對齊後端 GEMINI_CAPABILITIES）", () => {
       injectAllCapabilities();
       const podId = setupPod("gemini");
       const { isPluginEnabled } = usePodCapabilities(podId);
 
-      expect(isPluginEnabled.value).toBe(false);
+      expect(isPluginEnabled.value).toBe(true);
     });
 
     it("metadata 已載入時 isMcpEnabled 應為 false（鎖死後端 GEMINI_CAPABILITIES）", () => {
