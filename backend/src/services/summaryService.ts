@@ -59,10 +59,13 @@ class SummaryService {
     runContext?: RunContext,
   ): string | null {
     if (runContext) {
-      const lastAssistant = messages
-        .slice()
-        .reverse()
-        .find((message: PersistedMessage) => message.role === "assistant");
+      let lastAssistant: PersistedMessage | undefined;
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].role === "assistant") {
+          lastAssistant = messages[i];
+          break;
+        }
+      }
       return lastAssistant?.content ?? null;
     }
     return getLastAssistantMessage(sourcePodId);
