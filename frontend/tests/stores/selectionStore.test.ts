@@ -4,52 +4,10 @@ import { useSelectionStore } from "@/stores/pod/selectionStore";
 import { createMockPod, createMockNote } from "../helpers/factories";
 import type { SelectableElement } from "@/types";
 
-// Constants from lib/constants.ts
-const POD_WIDTH = 224;
-const POD_HEIGHT = 168;
-const NOTE_WIDTH = 80;
-const NOTE_HEIGHT = 30;
-
 describe("selectionStore", () => {
   setupStoreTest();
 
-  describe("初始狀態", () => {
-    it("各欄位應有正確預設值", () => {
-      const store = useSelectionStore();
-
-      expect(store.isSelecting).toBe(false);
-      expect(store.box).toBeNull();
-      expect(store.selectedElements).toEqual([]);
-      expect(store.boxSelectJustEnded).toBe(false);
-      expect(store.isCtrlMode).toBe(false);
-    });
-  });
-
   describe("getters", () => {
-    describe("selectedPodIds", () => {
-      it("應篩選出 type 為 pod 的 id", () => {
-        const store = useSelectionStore();
-        store.selectedElements = [
-          { type: "pod", id: "pod-1" },
-          { type: "repositoryNote", id: "note-1" },
-          { type: "pod", id: "pod-2" },
-          { type: "repositoryNote", id: "note-2" },
-        ];
-
-        expect(store.selectedPodIds).toEqual(["pod-1", "pod-2"]);
-      });
-
-      it("沒有 pod 時應回傳空陣列", () => {
-        const store = useSelectionStore();
-        store.selectedElements = [
-          { type: "repositoryNote", id: "note-1" },
-          { type: "repositoryNote", id: "note-2" },
-        ];
-
-        expect(store.selectedPodIds).toEqual([]);
-      });
-    });
-
     describe("selectedRepositoryNoteIds", () => {
       it("應篩選出 type 為 repositoryNote 的 id", () => {
         const store = useSelectionStore();

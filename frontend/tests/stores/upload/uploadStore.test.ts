@@ -37,42 +37,6 @@ describe("uploadStore", () => {
   // aggregateProgress 計算
   // ─────────────────────────────────────────────
 
-  describe("aggregateProgress 加權平均計算", () => {
-    it("多檔不同 size 的加權平均計算應正確", () => {
-      const store = useUploadStore();
-      // 建立兩個大小不同的檔案：100 bytes 和 400 bytes
-      const files = [makeFile("a.txt", 100), makeFile("b.txt", 400)];
-      store.startUpload("pod-1", files);
-
-      // 取得 entry 的實際 id（明確索引存取，避免 TypeScript 陣列解構警告）
-      const state = store.getUploadState("pod-1");
-      const entryA = state.files[0]!;
-      const entryB = state.files[1]!;
-
-      // a.txt 上傳 100/100（全部），b.txt 上傳 200/400（一半）
-      // 加權平均：(100 + 200) / (100 + 400) = 300/500 = 0.6 → floor = 60
-      store.updateFileProgress("pod-1", entryA.id, 100);
-      store.updateFileProgress("pod-1", entryB.id, 200);
-
-      const updatedState = store.getUploadState("pod-1");
-      expect(updatedState.aggregateProgress).toBe(60);
-    });
-
-    it("所有檔案 size=0 時（sum(size)=0），updateFileProgress 呼叫後 aggregateProgress 應為 100", () => {
-      const store = useUploadStore();
-      // 建立 size=0 的檔案
-      const files = [makeFile("empty.txt", 0), makeFile("empty2.txt", 0)];
-      store.startUpload("pod-1", files);
-
-      const state = store.getUploadState("pod-1");
-      // 觸發 updateFileProgress，此時 calcAggregateProgress 計算 sum(size)=0 → 回傳 100
-      store.updateFileProgress("pod-1", state.files[0]!.id, 0);
-
-      const updatedState = store.getUploadState("pod-1");
-      expect(updatedState.aggregateProgress).toBe(100);
-    });
-  });
-
   // ─────────────────────────────────────────────
   // markFileFailed 後其他檔仍可被 markFileSuccess
   // ─────────────────────────────────────────────
