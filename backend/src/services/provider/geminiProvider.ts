@@ -36,6 +36,7 @@ import type { RunContext } from "../../types/run.js";
 import { buildGeminiEnv, collectStderr } from "../gemini/geminiHelpers.js";
 import { isEnoentError } from "./utils.js";
 import { scanInstalledPlugins } from "../pluginScanner.js";
+import { readGeminiMcpServers } from "../mcp/geminiMcpReader.js";
 
 // ─── 共用 TextDecoder 實例（效能優化）────────────────────────────────────────
 /**
@@ -55,6 +56,8 @@ export interface GeminiOptions {
   resumeMode: "cli";
   /** 已啟用且通過白名單後的 extension name 陣列 */
   plugins: string[];
+  /** 已啟用且存在於 settings.json 中的 MCP server name 陣列 */
+  mcpServerNames: string[];
 }
 
 /**
@@ -145,6 +148,19 @@ function buildExtensionArgs(plugins: string[]): string[] {
   return plugins.flatMap((name) => ["-e", name]);
 }
 
+/**
+ * 將 MCP server name 陣列轉換為 `--allowed-mcp-server-names` flag 參數。
+ *
+ * 此 flag 不可省略：
+ * - 省略 = Gemini CLI 反向開啟全部 MCP server（安全後門）
+ * - 空陣列 → 用哨兵值 `__none__` 強制 0 啟用（Gemini CLI 找不到該名稱的 server，等同不載入任何 server）
+ * - 非空陣列 → 以逗號串接所有允許的 server name
+ */
+function buildAllowedMcpServerNamesArg(names: string[]): string[] {
+  if (names.length === 0) return ["--allowed-mcp-server-names", "__none__"];
+  return ["--allowed-mcp-server-names", names.join(",")];
+}
+
 // 安全警示：promptText 為未消毒的使用者輸入，必須保持陣列傳參給 Bun.spawn，禁止改為字串拼接（防止 CLI 旗標注入）
 /**
  * 組合新對話的 CLI 參數。
@@ -154,6 +170,7 @@ function buildNewSessionArgs(
   model: string,
   promptText: string,
   plugins: string[],
+  mcpServerNames: string[],
 ): string[] {
   return [
     "--model",
@@ -166,6 +183,7 @@ function buildNewSessionArgs(
     "--skip-trust",
     "-s",
     ...buildExtensionArgs(plugins),
+    ...buildAllowedMcpServerNamesArg(mcpServerNames),
     "--prompt",
     promptText,
   ];
@@ -180,12 +198,15 @@ function buildNewSessionArgs(
  * @param model 模型名稱（已通過 MODEL_RE 驗證）
  * @param sessionId 欲恢復的 session UUID（已通過 SESSION_ID_RE 驗證）
  * @param promptText prompt 文字（直接放入 --prompt flag）
+ * @param plugins 已啟用的 extension name 陣列
+ * @param mcpServerNames 已啟用且存在的 MCP server name 陣列
  */
 function buildResumeArgs(
   model: string,
   sessionId: string,
   promptText: string,
   plugins: string[],
+  mcpServerNames: string[],
 ): string[] {
   return [
     "--model",
@@ -198,6 +219,7 @@ function buildResumeArgs(
     "--skip-trust",
     "-s",
     ...buildExtensionArgs(plugins),
+    ...buildAllowedMcpServerNamesArg(mcpServerNames),
     "--resume",
     sessionId,
     "--prompt",
@@ -216,6 +238,8 @@ function buildResumeArgs(
  * @param resumeSessionId Pod.sessionId 的現有值（init event 取得的 UUID）；null 表示首次對話
  * @param model 模型名稱（已通過 MODEL_RE 驗證）
  * @param promptText prompt 文字（直接放入 --prompt flag）
+ * @param plugins 已啟用的 extension name 陣列
+ * @param mcpServerNames 已啟用且存在的 MCP server name 陣列
  * @returns CLI 參數陣列（不含 "gemini" 本身）
  */
 function buildGeminiArgs(
@@ -223,10 +247,17 @@ function buildGeminiArgs(
   model: string,
   promptText: string,
   plugins: string[],
+  mcpServerNames: string[],
 ): string[] {
   if (resumeSessionId) {
     if (SESSION_ID_RE.test(resumeSessionId)) {
-      return buildResumeArgs(model, resumeSessionId, promptText, plugins);
+      return buildResumeArgs(
+        model,
+        resumeSessionId,
+        promptText,
+        plugins,
+        mcpServerNames,
+      );
     }
 
     // resumeSessionId 格式不合法：整段替換為固定遮罩，不保留任何原字元，防止 CLI 旗標注入與值洩漏
@@ -237,7 +268,7 @@ function buildGeminiArgs(
     );
   }
 
-  return buildNewSessionArgs(model, promptText, plugins);
+  return buildNewSessionArgs(model, promptText, plugins, mcpServerNames);
 }
 
 /**
@@ -585,6 +616,7 @@ const DEFAULT_OPTIONS: GeminiOptions = {
   model: DEFAULT_MODEL,
   resumeMode: "cli",
   plugins: [],
+  mcpServerNames: [],
 };
 
 // ─── Provider 匯出 ────────────────────────────────────────────────────────────
@@ -639,10 +671,29 @@ export const geminiProvider: AgentProvider<GeminiOptions> = {
       }
     }
 
+    // ── mcpServerNames 計算（self-healing：對齊最新 settings.json）─────────
+    // 取出 settings.json 中仍存在的 MCP server name 集合，過濾 Pod 舊勾選中已刪除的項目
+    let mcpServerNames: string[] = [];
+    if (pod.mcpServerNames.length > 0) {
+      const existingServers = readGeminiMcpServers();
+      const existingNames = new Set(existingServers.map((s) => s.name));
+      const requested = Array.from(new Set(pod.mcpServerNames));
+      mcpServerNames = requested.filter((name) => existingNames.has(name));
+      const skipped = requested.length - mcpServerNames.length;
+      if (skipped > 0) {
+        logger.warn(
+          "Chat",
+          "Warn",
+          `[GeminiProvider] 略過 ${skipped} 個已不存在於 settings.json 的 MCP server name（已遮罩）`,
+        );
+      }
+    }
+
     return {
       model,
       resumeMode: "cli",
       plugins,
+      mcpServerNames,
     };
   },
 
@@ -700,11 +751,13 @@ export const geminiProvider: AgentProvider<GeminiOptions> = {
       return;
     }
     const plugins = options.plugins;
+    const mcpServerNames = options.mcpServerNames;
     const geminiArgs = buildGeminiArgs(
       resumeSessionId,
       model,
       promptText,
       plugins,
+      mcpServerNames,
     );
 
     // ── Spawn subprocess + abort signal 設置 ──────────────────────

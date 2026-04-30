@@ -234,4 +234,35 @@ describe("geminiService.executeDisposableChat", () => {
 
     expect(result.success).toBe(false);
   });
+
+  // ── B-summary-1（回歸保護）────────────────────────────────────────────────
+  // 保護：未來若有人不小心把 MCP flag 加到 summary（disposable）路徑，CI 會立刻報錯。
+  // disposable summary 不應傳入 --allowed-mcp-server-names；
+  // --approval-mode 必須維持 plan（read-only 模式）。
+
+  it("B-summary-1: disposable summary spawn args 不含 --allowed-mcp-server-names 且 --approval-mode 為 plan", async () => {
+    const mockProc = makeMockProc([TEXT_LINE, TURN_COMPLETE_LINE], [], 0);
+    spawnSpy.mockReturnValue(mockProc as any);
+
+    await geminiService.executeDisposableChat(BASE_OPTIONS);
+
+    expect(spawnSpy).toHaveBeenCalledOnce();
+
+    // spawnSpy 的第一個呼叫的第一個參數為 args 陣列（["gemini", ...geminiArgs]）
+    const spawnArgs: string[] = spawnSpy.mock.calls[0][0] as string[];
+
+    // 不應包含 --allowed-mcp-server-names（MCP 隔離 flag 僅限 Pod 路徑使用）
+    expect(spawnArgs).not.toContain("--allowed-mcp-server-names");
+
+    // 不應包含 mcpServerNames 的任何字串值
+    const hasMcpServerNamesValue = spawnArgs.some((arg) =>
+      arg.includes("mcpServerNames"),
+    );
+    expect(hasMcpServerNamesValue).toBe(false);
+
+    // --approval-mode 必須維持 plan（read-only，summary 不需執行工具）
+    const approvalModeIdx = spawnArgs.indexOf("--approval-mode");
+    expect(approvalModeIdx).toBeGreaterThan(-1);
+    expect(spawnArgs[approvalModeIdx + 1]).toBe("plan");
+  });
 });

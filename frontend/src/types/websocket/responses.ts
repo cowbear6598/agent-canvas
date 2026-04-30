@@ -426,7 +426,7 @@ export interface CursorMovedPayload {
 
 /** MCP server 清單查詢結果 */
 export interface McpListResultPayload extends ResultPayload {
-  /** 與後端 providerSchema（"claude" | "codex" | "gemini"）對齊；gemini 目前不支援 mcp，但 schema 必須允許以便回傳空清單 */
+  /** 與後端 providerSchema（"claude" | "codex" | "gemini"）對齊；三個 provider 都會回傳實際清單 */
   provider?: "claude" | "codex" | "gemini";
   items?: McpListItem[];
 }

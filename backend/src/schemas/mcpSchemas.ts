@@ -21,11 +21,11 @@ export const mcpListRequestSchema = z
 /**
  * MCP 清單項目 schema：
  * - name：MCP server 名稱
- * - type：連線類型（stdio 或 http），未提供時由前端自行判斷
+ * - type：連線類型（stdio、http 或 sse），未提供時由前端自行判斷
  */
 export const mcpListItemSchema = z.object({
   name: z.string().min(1),
-  type: z.enum(["stdio", "http"]).optional(),
+  type: z.enum(["stdio", "http", "sse"]).optional(),
 });
 
 /** MCP_LIST_RESULT 回應 payload schema：帶回 provider 與對應的 MCP server 清單 */

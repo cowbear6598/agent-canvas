@@ -56,6 +56,9 @@ const localMcpServerNamesSet = computed(
 /** Codex provider 唯讀模式：MCP 只展示不可 toggle */
 const isCodex = computed(() => props.provider === "codex");
 
+/** Gemini provider：MCP 可 toggle（行為與 Claude 一致），但 row 需額外顯示 type chip */
+const isGemini = computed(() => props.provider === "gemini");
+
 const rootRef = ref<HTMLElement | null>(null);
 
 /** 點擊外部關閉（capture 階段攔截，避免內部 click 誤觸）
@@ -120,7 +123,7 @@ const resolveMcpErrorDescription = (_err: unknown): string =>
   t("pod.slot.mcpToggleFailed");
 
 const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
-  // Codex pod 不支援 toggle，防呆直接 return
+  // 僅 Codex 不可 toggle；Gemini / Claude 同行為，繼續往下走樂觀更新
   if (isCodex.value) return;
 
   const nextNames = buildNextNames(localMcpServerNames.value, name, enabled);
@@ -193,7 +196,9 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
           {{
             isCodex
               ? t("pod.slot.mcpCodexEmptyHint")
-              : t("pod.slot.mcpClaudeEmptyHint")
+              : isGemini
+                ? t("pod.slot.mcpGeminiEmptyHint")
+                : t("pod.slot.mcpClaudeEmptyHint")
           }}
         </p>
       </div>
@@ -206,7 +211,7 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
         {{ t("pod.slot.mcpSearchEmpty") }}
       </div>
 
-      <!-- MCP server 列表（Claude：可 toggle；Codex：唯讀展示） -->
+      <!-- MCP server 列表（Claude / Gemini：可 toggle；Codex：唯讀展示） -->
       <template v-else>
         <!-- Codex 唯讀模式：ScrollArea 包列表，Codex hint 固定在外部 -->
         <div v-if="isCodex">
@@ -241,6 +246,38 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
             {{ t("pod.slot.mcpCodexHint") }}
           </p>
         </div>
+
+        <!-- Gemini 模式：name + type chip + Switch，行為與 Claude 一致 -->
+        <ScrollArea v-else-if="isGemini" class="pod-popover-scrollable">
+          <div class="space-y-1">
+            <div
+              v-for="server in filteredMcpServers"
+              :key="server.name"
+              class="group relative flex items-center justify-between gap-3 rounded px-2 py-1 hover:bg-secondary"
+              :title="busy ? t('pod.slot.mcpBusyTooltip') : undefined"
+            >
+              <p class="text-xs font-mono">
+                {{ server.name }}
+              </p>
+              <div class="flex items-center gap-1">
+                <span
+                  v-if="server.type"
+                  class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-mono text-muted-foreground bg-secondary"
+                >
+                  {{ server.type }}
+                </span>
+                <Switch
+                  :model-value="localMcpServerNamesSet.has(server.name)"
+                  :disabled="busy"
+                  @click.stop
+                  @update:model-value="
+                    (val: boolean) => handleToggle(server.name, val)
+                  "
+                />
+              </div>
+            </div>
+          </div>
+        </ScrollArea>
 
         <!-- Claude 模式：ScrollArea 包列表，所有 server 均可 toggle -->
         <ScrollArea v-else class="pod-popover-scrollable">

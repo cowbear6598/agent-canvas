@@ -462,4 +462,154 @@ describe("McpPopover", () => {
       outsideEl.remove();
     });
   });
+
+  // ── Gemini pod popover ────────────────────────────────────────
+
+  /** 含 stdio / sse / http 三種 type 的 Gemini MCP fixture */
+  const GEMINI_MCP_SERVERS: McpListItem[] = [
+    { name: "gemini-stdio-server", type: "stdio" },
+    { name: "gemini-sse-server", type: "sse" },
+    { name: "gemini-http-server", type: "http" },
+  ];
+
+  describe("Gemini pod popover", () => {
+    // B8：掛載後呼叫 listMcpServers("gemini")
+    it("B8：掛載後應呼叫 listMcpServers 帶 gemini 參數", async () => {
+      mockListMcpServers.mockResolvedValue(GEMINI_MCP_SERVERS);
+      mountPopover({ provider: "gemini" });
+      await flushPromises();
+
+      expect(mockListMcpServers).toHaveBeenCalledWith("gemini");
+    });
+
+    // B1：Gemini pod 打開 popover 顯示 name + type chip + Switch 三段式 row
+    it("B1：顯示 name + type chip + Switch 三段式 row", async () => {
+      mockListMcpServers.mockResolvedValue(GEMINI_MCP_SERVERS);
+      mountPopover({ provider: "gemini" });
+      await flushPromises();
+
+      const popover = bodyQuery(".fixed.z-50");
+      // 三個 server name 都顯示
+      expect(popover!.textContent).toContain("gemini-stdio-server");
+      expect(popover!.textContent).toContain("gemini-sse-server");
+      expect(popover!.textContent).toContain("gemini-http-server");
+      // type chip 顯示
+      expect(popover!.textContent).toContain("stdio");
+      expect(popover!.textContent).toContain("sse");
+      expect(popover!.textContent).toContain("http");
+      // Switch 存在（可 toggle）
+      expect(bodyQuery(".switch-stub")).not.toBeNull();
+    });
+
+    // B2：Gemini popover 空狀態顯示 mcpEmpty + mcpGeminiEmptyHint
+    it("B2：空狀態顯示 mcpEmpty 與 mcpGeminiEmptyHint，不顯示 Switch", async () => {
+      mockListMcpServers.mockResolvedValue([]);
+      mountPopover({ provider: "gemini" });
+      await flushPromises();
+
+      const popover = bodyQuery(".fixed.z-50");
+      expect(popover!.textContent).toContain("pod.slot.mcpEmpty");
+      expect(popover!.textContent).toContain("pod.slot.mcpGeminiEmptyHint");
+      expect(bodyQuery(".switch-stub")).toBeNull();
+    });
+
+    // B3：Gemini popover 搜尋過濾，無結果時顯示 mcpSearchEmpty
+    it("B3：搜尋輸入後即時過濾，無結果時顯示 mcpSearchEmpty", async () => {
+      mockListMcpServers.mockResolvedValue(GEMINI_MCP_SERVERS);
+      mountPopover({ provider: "gemini" });
+      await flushPromises();
+
+      const input = bodyQuery(".pod-popover-search") as HTMLInputElement;
+      input.value = "zzz-not-exist";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      await nextTick();
+
+      expect(bodyQuery(".fixed.z-50")!.textContent).toContain(
+        "pod.slot.mcpSearchEmpty",
+      );
+    });
+
+    // B4：Gemini popover busy=true 時 Switch disabled，row title 顯示 busy tooltip
+    it("B4：busy=true 時 Switch disabled，row title 顯示 mcpBusyTooltip", async () => {
+      mockListMcpServers.mockResolvedValue(GEMINI_MCP_SERVERS);
+      mountPopover({ provider: "gemini", busy: true });
+      await flushPromises();
+
+      const switchBtn = bodyQuery(".switch-stub");
+      expect(switchBtn!.hasAttribute("disabled")).toBe(true);
+
+      const popover = bodyQuery(".fixed.z-50");
+      expect(
+        popover!.querySelector("[title='pod.slot.mcpBusyTooltip']"),
+      ).not.toBeNull();
+    });
+
+    // B5：Gemini popover 點擊 Switch 開：呼叫 updatePodMcpServers 並更新 podStore
+    it("B5：點擊 Switch 開：呼叫 API 帶新 server 名稱，podStore 更新", async () => {
+      mockListMcpServers.mockResolvedValue([GEMINI_MCP_SERVERS[0]]);
+      setupPod([]);
+      const podStore = usePodStore();
+      const spy = vi.spyOn(podStore, "updatePodMcpServers");
+
+      mountPopover({ provider: "gemini" });
+      await flushPromises();
+
+      bodyQuery(".switch-stub")!.dispatchEvent(
+        new MouseEvent("click", { bubbles: true }),
+      );
+      await nextTick();
+
+      expect(spy).toHaveBeenCalledWith("pod-1", ["gemini-stdio-server"]);
+
+      await flushPromises();
+      expect(mockUpdatePodMcpServersApi).toHaveBeenCalledWith(
+        "canvas-1",
+        "pod-1",
+        ["gemini-stdio-server"],
+      );
+    });
+
+    // B6：Gemini popover 點擊 Switch 關：呼叫 API 帶少掉該 server 的清單
+    it("B6：點擊 Switch 關：呼叫 API 帶少掉該 server 的清單", async () => {
+      mockListMcpServers.mockResolvedValue([GEMINI_MCP_SERVERS[0]]);
+      setupPod(["gemini-stdio-server"]);
+      const podStore = usePodStore();
+      const spy = vi.spyOn(podStore, "updatePodMcpServers");
+
+      mountPopover({ provider: "gemini" });
+      await flushPromises();
+
+      const switchBtn = bodyQuery(".switch-stub") as HTMLElement;
+      // 目前應為 checked
+      expect(switchBtn.getAttribute("data-checked")).toBe("true");
+
+      switchBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await nextTick();
+
+      expect(spy).toHaveBeenCalledWith("pod-1", []);
+    });
+
+    // B7：Gemini popover 取消所有勾選後呼叫 API 帶 []，podStore 本地 list 為空
+    it("B7：取消所有勾選後 API 帶 []，podStore 更新為空陣列", async () => {
+      mockListMcpServers.mockResolvedValue([GEMINI_MCP_SERVERS[0]]);
+      setupPod(["gemini-stdio-server"]);
+      const podStore = usePodStore();
+      const spy = vi.spyOn(podStore, "updatePodMcpServers");
+
+      mountPopover({ provider: "gemini" });
+      await flushPromises();
+
+      bodyQuery(".switch-stub")!.dispatchEvent(
+        new MouseEvent("click", { bubbles: true }),
+      );
+      await flushPromises();
+
+      expect(spy).toHaveBeenCalledWith("pod-1", []);
+      expect(mockUpdatePodMcpServersApi).toHaveBeenCalledWith(
+        "canvas-1",
+        "pod-1",
+        [],
+      );
+    });
+  });
 });

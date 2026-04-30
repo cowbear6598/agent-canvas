@@ -262,6 +262,7 @@
       "mcpEmpty": "No MCP server installed",
       "mcpClaudeEmptyHint": "Run `claude mcp add` to install",
       "mcpCodexEmptyHint": "Run `codex mcp add` to install",
+      "mcpGeminiEmptyHint": "Add your servers to the `mcpServers` block in `~/.gemini/settings.json` and reopen.",
       "mcpToggleFailed": "Failed to toggle MCP server",
       "mcpLoadFailed": "Failed to load",
       "mcpCodexHint": "Codex MCP servers are managed globally by codex",

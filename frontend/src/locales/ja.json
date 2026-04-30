@@ -262,6 +262,7 @@
       "mcpEmpty": "MCP server がインストールされていません",
       "mcpClaudeEmptyHint": "`claude mcp add` でインストールしてください",
       "mcpCodexEmptyHint": "`codex mcp add` でインストールしてください",
+      "mcpGeminiEmptyHint": "`~/.gemini/settings.json` の `mcpServers` ブロックに設定を追加して再度開いてください。",
       "mcpToggleFailed": "MCP server の切替に失敗しました",
       "mcpLoadFailed": "読み込み失敗",
       "mcpCodexHint": "Codex MCP server は codex でグローバル管理されます",

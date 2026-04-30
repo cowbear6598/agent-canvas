@@ -20,6 +20,9 @@ import type { PodProvider } from "@/types/pod";
 /** MCP server 清單快取 TTL（毫秒）；避免使用者頻繁開關 popover 反覆打 API */
 const MCP_SERVER_LIST_CACHE_TTL_MS = 30 * 1000;
 
+/** McpListPayload 接受的已知 provider 字面量集合 */
+const KNOWN_MCP_PROVIDERS = new Set(["claude", "codex", "gemini"]);
+
 interface McpServerListCacheEntry {
   data: McpListItem[];
   expiresAt: number;
@@ -36,13 +39,18 @@ export async function listMcpServers(
     return cached.data;
   }
 
+  // 只傳送已知 provider，避免將任意字串送往後端
+  if (!KNOWN_MCP_PROVIDERS.has(provider)) {
+    return [];
+  }
+
   const result = await createWebSocketRequest<
     McpListPayload,
     McpListResultPayload
   >({
     requestEvent: WebSocketRequestEvents.MCP_LIST,
     responseEvent: WebSocketResponseEvents.MCP_LIST_RESULT,
-    payload: { provider: provider as "claude" | "codex" },
+    payload: { provider: provider as "claude" | "codex" | "gemini" },
   });
 
   const data = result.items ?? [];

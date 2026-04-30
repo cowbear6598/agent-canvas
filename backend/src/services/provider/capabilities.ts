@@ -51,15 +51,15 @@ export const CODEX_AVAILABLE_MODEL_VALUES: ReadonlySet<string> = new Set(
   CODEX_AVAILABLE_MODELS.map((m) => m.value),
 );
 
-/** Gemini Provider 支援 chat、command、repository、plugin；尚未支援 mcp */
+/** Gemini Provider 支援所有功能，與 Claude / Codex 行為一致 */
 export const GEMINI_CAPABILITIES: Readonly<ProviderCapabilities> =
   Object.freeze({
     chat: true,
     plugin: true,
     repository: true,
     command: true,
-    // 目前 Gemini CLI 透過 extensions（plugin）管理 MCP，本 capability 維持 false，待後續評估直接 mcp 支援
-    mcp: false,
+    // 已透過 --allowed-mcp-server-names flag per-pod 隔離，可安全啟用
+    mcp: true,
   });
 
 /**

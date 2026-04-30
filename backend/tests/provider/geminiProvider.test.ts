@@ -15,7 +15,7 @@
  * - vi.mock("../../src/utils/logger.js") mock logger
  */
 
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import type { NormalizedEvent } from "../../src/services/provider/types.js";
 import type { GeminiOptions } from "../../src/services/provider/geminiProvider.js";
 
@@ -147,6 +147,8 @@ function makeCtx(
     resumeMode: "cli",
     // plugins 預設空陣列，對應 buildExtensionArgs 會產生 ["-e", "none"]
     plugins: [],
+    // mcpServerNames 預設空陣列，對應 buildAllowedMcpServerNamesArg 會產生 ["--allowed-mcp-server-names", "__none__"]
+    mcpServerNames: [],
   };
   return {
     podId: "pod-gemini-test-001",
@@ -187,7 +189,12 @@ describe("GeminiProvider", () => {
     const ctx = makeCtx({
       message: testMessage,
       resumeSessionId: null,
-      options: { model: "gemini-2.5-pro", resumeMode: "cli", plugins: [] },
+      options: {
+        model: "gemini-2.5-pro",
+        resumeMode: "cli",
+        plugins: [],
+        mcpServerNames: [],
+      },
     });
     await collectEvents(geminiProvider.chat(ctx));
 
@@ -1140,7 +1147,12 @@ describe("GeminiProvider", () => {
       spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
       const ctx = makeCtx({
-        options: { model: "gemini-2.5-pro", resumeMode: "cli", plugins: [] },
+        options: {
+          model: "gemini-2.5-pro",
+          resumeMode: "cli",
+          plugins: [],
+          mcpServerNames: [],
+        },
       });
       await collectEvents(geminiProvider.chat(ctx));
 
@@ -1174,6 +1186,7 @@ describe("GeminiProvider", () => {
           model: "gemini-2.5-pro",
           resumeMode: "cli",
           plugins: ["context7"],
+          mcpServerNames: [],
         },
       });
       await collectEvents(geminiProvider.chat(ctx));
@@ -1201,6 +1214,7 @@ describe("GeminiProvider", () => {
           model: "gemini-2.5-pro",
           resumeMode: "cli",
           plugins: ["context7", "stock-deep-analyzer"],
+          mcpServerNames: [],
         },
       });
       await collectEvents(geminiProvider.chat(ctx));
@@ -1234,6 +1248,7 @@ describe("GeminiProvider", () => {
           model: "gemini-2.5-pro",
           resumeMode: "cli",
           plugins: ["context7"],
+          mcpServerNames: [],
         },
       });
       await collectEvents(geminiProvider.chat(ctx));
@@ -1261,7 +1276,12 @@ describe("GeminiProvider", () => {
 
     // 傳入含空格的不合法 model（MODEL_RE 不接受）
     const ctx = makeCtx({
-      options: { model: "invalid model name", resumeMode: "cli" },
+      options: {
+        model: "invalid model name",
+        resumeMode: "cli",
+        plugins: [],
+        mcpServerNames: [],
+      },
     });
     const events = await collectEvents(geminiProvider.chat(ctx));
 
@@ -1274,5 +1294,241 @@ describe("GeminiProvider", () => {
     const e = errorEvents[0] as Extract<NormalizedEvent, { type: "error" }>;
     expect(e.message).toBe("不合法的 model 名稱");
     expect(e.fatal).toBe(true);
+  });
+
+  // ── --allowed-mcp-server-names flag 注入（B1–B4）────────────────────────────
+  describe("--allowed-mcp-server-names flag 注入", () => {
+    // B1：mcpServerNames 有值 → spawn args 含逗號串接的 flag
+    it("B1: mcpServerNames = ['git', 'fs'] 時 spawn args 應含 ['--allowed-mcp-server-names', 'git,fs']", async () => {
+      const mockProc = makeMockProc([
+        JSON.stringify({ type: "result", status: "success" }),
+      ]);
+      spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
+
+      const ctx = makeCtx({
+        options: {
+          model: "gemini-2.5-pro",
+          resumeMode: "cli",
+          plugins: [],
+          mcpServerNames: ["git", "fs"],
+        },
+      });
+      await collectEvents(geminiProvider.chat(ctx));
+
+      expect(spawnSpy).toHaveBeenCalledOnce();
+      const [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
+
+      // 應含 --allowed-mcp-server-names git,fs
+      const idx = spawnArgs.indexOf("--allowed-mcp-server-names");
+      expect(idx).toBeGreaterThan(-1);
+      expect(spawnArgs[idx + 1]).toBe("git,fs");
+    });
+
+    // B2：mcpServerNames 空陣列 → spawn args 含哨兵值 __none__
+    it("B2: mcpServerNames = [] 時 spawn args 應含 ['--allowed-mcp-server-names', '__none__']（強制 0 啟用）", async () => {
+      const mockProc = makeMockProc([
+        JSON.stringify({ type: "result", status: "success" }),
+      ]);
+      spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
+
+      const ctx = makeCtx({
+        options: {
+          model: "gemini-2.5-pro",
+          resumeMode: "cli",
+          plugins: [],
+          mcpServerNames: [],
+        },
+      });
+      await collectEvents(geminiProvider.chat(ctx));
+
+      expect(spawnSpy).toHaveBeenCalledOnce();
+      const [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
+
+      // 應含哨兵值 __none__（確保 Gemini CLI 不載入任何 MCP server）
+      const idx = spawnArgs.indexOf("--allowed-mcp-server-names");
+      expect(idx).toBeGreaterThan(-1);
+      expect(spawnArgs[idx + 1]).toBe("__none__");
+    });
+
+    // B3：resume 路徑也注入相同 flag
+    it("B3: resume 路徑（含有效 resumeSessionId）下 --allowed-mcp-server-names 一樣注入，與 --resume 共存", async () => {
+      const resumeUuid = "4abf7b33-6c20-4693-9e43-9715b97fb144";
+      const mockProc = makeMockProc([
+        JSON.stringify({ type: "result", status: "success" }),
+      ]);
+      spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
+
+      const ctx = makeCtx({
+        resumeSessionId: resumeUuid,
+        options: {
+          model: "gemini-2.5-pro",
+          resumeMode: "cli",
+          plugins: [],
+          mcpServerNames: ["context7"],
+        },
+      });
+      await collectEvents(geminiProvider.chat(ctx));
+
+      expect(spawnSpy).toHaveBeenCalledOnce();
+      const [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
+
+      // 應含 --resume <uuid>
+      const resumeIdx = spawnArgs.indexOf("--resume");
+      expect(resumeIdx).toBeGreaterThan(-1);
+      expect(spawnArgs[resumeIdx + 1]).toBe(resumeUuid);
+
+      // 應含 --allowed-mcp-server-names context7
+      const mcpIdx = spawnArgs.indexOf("--allowed-mcp-server-names");
+      expect(mcpIdx).toBeGreaterThan(-1);
+      expect(spawnArgs[mcpIdx + 1]).toBe("context7");
+    });
+
+    // B4：兩次獨立呼叫各帶不同 mcpServerNames → spawn args 互不污染（per-process 隔離）
+    it("B4: 兩次獨立呼叫各帶不同 mcpServerNames 時 spawn args 互不污染", async () => {
+      // 第一個 Pod：mcpServerNames = ["git", "fs"]
+      const mockProc1 = makeMockProc([
+        JSON.stringify({ type: "result", status: "success" }),
+      ]);
+      spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValueOnce(mockProc1 as any);
+
+      const ctx1 = makeCtx({
+        podId: "pod-A",
+        options: {
+          model: "gemini-2.5-pro",
+          resumeMode: "cli",
+          plugins: [],
+          mcpServerNames: ["git", "fs"],
+        },
+      });
+      await collectEvents(geminiProvider.chat(ctx1));
+
+      expect(spawnSpy).toHaveBeenCalledTimes(1);
+      const [spawnArgs1] = spawnSpy.mock.calls[0] as [string[], unknown];
+      const mcpIdx1 = spawnArgs1.indexOf("--allowed-mcp-server-names");
+      expect(mcpIdx1).toBeGreaterThan(-1);
+      expect(spawnArgs1[mcpIdx1 + 1]).toBe("git,fs");
+
+      // 第二個 Pod：mcpServerNames = ["context7"]
+      const mockProc2 = makeMockProc([
+        JSON.stringify({ type: "result", status: "success" }),
+      ]);
+      vi.spyOn(Bun, "spawn").mockReturnValueOnce(mockProc2 as any);
+
+      const ctx2 = makeCtx({
+        podId: "pod-B",
+        options: {
+          model: "gemini-2.5-pro",
+          resumeMode: "cli",
+          plugins: [],
+          mcpServerNames: ["context7"],
+        },
+      });
+      await collectEvents(geminiProvider.chat(ctx2));
+
+      // 取第二次 spawn 呼叫的 args（spawnSpy 仍是原 spy，mock.calls 含兩筆）
+      const allCalls = vi.mocked(Bun.spawn).mock.calls;
+      expect(allCalls).toHaveLength(2);
+      const [spawnArgs2] = allCalls[1] as [string[], unknown];
+      const mcpIdx2 = spawnArgs2.indexOf("--allowed-mcp-server-names");
+      expect(mcpIdx2).toBeGreaterThan(-1);
+      // pod-B 應只有 context7，不含 pod-A 的 git,fs
+      expect(spawnArgs2[mcpIdx2 + 1]).toBe("context7");
+      expect(spawnArgs2[mcpIdx2 + 1]).not.toContain("git");
+    });
+  });
+
+  // ── buildOptions mcpServerNames 路徑（B-buildOptions）──────────────────────
+  describe("buildOptions mcpServerNames 路徑", () => {
+    // 在此 describe 內使用 beforeEach/afterEach 管理 env override 與 cache 清除
+    let restoreEnv: () => void = () => {};
+
+    // 需要在每個測試前後 import 以確保取得最新 module（搭配 resetGeminiMcpCache）
+    beforeEach(async () => {
+      // 清除 geminiMcpReader TTL 快取，確保每個測試都重新讀 fixture 檔
+      const { resetGeminiMcpCache } =
+        await import("../../src/services/mcp/geminiMcpReader.js");
+      resetGeminiMcpCache();
+    });
+
+    afterEach(() => {
+      restoreEnv();
+      restoreEnv = () => {};
+      // 清除快取，避免污染後續測試
+      import("../../src/services/mcp/geminiMcpReader.js").then(
+        ({ resetGeminiMcpCache }) => resetGeminiMcpCache(),
+      );
+    });
+
+    /** 建立含 mcpServerNames 的 Pod stub */
+    function makeMcpPod(mcpServerNames: string[]): Pod {
+      return {
+        id: "pod-mcp-test-001",
+        name: "MCP Test Pod",
+        provider: "gemini",
+        status: "idle",
+        providerConfig: { model: "gemini-2.5-pro" },
+        workspacePath: "/workspace/test",
+        mcpServerNames,
+        pluginIds: [],
+        repositoryId: null,
+        commandId: null,
+        multiInstance: false,
+        sessionId: null,
+        x: 0,
+        y: 0,
+        rotation: 0,
+      } as Pod;
+    }
+
+    // B-buildOptions-1：pod.mcpServerNames 含已存在與已刪除的 server → self-healing 過濾
+    it("B-buildOptions-1: pod.mcpServerNames 含 settings.json 已刪除的 name 時，buildOptions 應 self-healing 過濾掉，只保留仍存在的 server", async () => {
+      // 建立只含 "context7" 的 fixture settings.json
+      const { createTmpDir, cleanupTmpDir, overrideEnv } =
+        await import("../helpers/tmpDirHelper.js");
+      const tmpDir = await createTmpDir("ccc-mcp-bo-test-");
+      const settingsPath = `${tmpDir}/settings.json`;
+      const fs = await import("fs/promises");
+      await fs.writeFile(
+        settingsPath,
+        JSON.stringify({
+          mcpServers: {
+            context7: { command: "npx", args: ["-y", "@upstash/context7-mcp"] },
+            // "git" 故意不在此，模擬使用者已從 settings.json 刪除
+          },
+        }),
+      );
+
+      restoreEnv = overrideEnv({ GEMINI_SETTINGS_PATH: settingsPath });
+
+      // 重置快取，確保讀到新 fixture
+      const { resetGeminiMcpCache } =
+        await import("../../src/services/mcp/geminiMcpReader.js");
+      resetGeminiMcpCache();
+
+      // pod.mcpServerNames 同時含 context7（存在）與 git（已刪除）
+      const pod = makeMcpPod(["context7", "git"]);
+      const options = await geminiProvider.buildOptions(pod);
+
+      // self-healing：只保留仍存在於 settings.json 的 context7，過濾掉 git
+      expect(options.mcpServerNames).toEqual(["context7"]);
+      expect(options.mcpServerNames).not.toContain("git");
+
+      await cleanupTmpDir(tmpDir);
+    });
+
+    // B-buildOptions-2：pod.mcpServerNames 為空 → GeminiOptions.mcpServerNames = []
+    it("B-buildOptions-2: pod.mcpServerNames = [] 時 buildOptions 應回傳 mcpServerNames = []（不讀 settings.json）", async () => {
+      // 故意設定一個不存在的 settings.json，確保 buildOptions 不會讀它
+      const { overrideEnv } = await import("../helpers/tmpDirHelper.js");
+      restoreEnv = overrideEnv({
+        GEMINI_SETTINGS_PATH: "/nonexistent/path/settings.json",
+      });
+
+      const pod = makeMcpPod([]);
+      const options = await geminiProvider.buildOptions(pod);
+
+      // 空陣列直接回傳，不觸發 readGeminiMcpServers
+      expect(options.mcpServerNames).toEqual([]);
+    });
   });
 });

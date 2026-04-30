@@ -42,7 +42,7 @@ let cacheExpiresAt = 0;
 /** 回傳型別：MCP server 名稱與連線類型 */
 export interface CodexMcpServer {
   name: string;
-  type: "stdio" | "http";
+  type: "stdio" | "http" | "sse";
 }
 
 /** 僅供測試使用：清除快取，讓下一次呼叫重新讀檔 */

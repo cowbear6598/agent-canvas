@@ -185,4 +185,44 @@ describe("PodMcpSlot", () => {
       wrapper.unmount();
     });
   });
+
+  // ── Gemini provider 變體 ──────────────────────────────────────────────────
+
+  describe("Gemini provider 變體", () => {
+    // B11：Gemini provider 時 label 顯示「MCP (n)」
+    it("B11：label 顯示 mcpLabel (activeCount) 格式", () => {
+      const wrapper = mountSlot({
+        provider: "gemini" as PodProvider,
+        activeCount: 4,
+      });
+      // t() mock 直接回傳 key，格式為 "pod.slot.mcpLabel (4)"
+      expect(wrapper.text()).toContain("pod.slot.mcpLabel");
+      expect(wrapper.text()).toContain("(4)");
+      wrapper.unmount();
+    });
+
+    // B12：Gemini activeCount > 0 時套用 pod-mcp-slot--active（不走 codex 路徑）
+    it("B12：activeCount > 0 時 button 有 pod-mcp-slot--active，無 pod-mcp-slot--codex", () => {
+      const wrapper = mountSlot({
+        provider: "gemini" as PodProvider,
+        activeCount: 2,
+      });
+      const button = wrapper.find("button");
+      expect(button.classes()).toContain("pod-mcp-slot--active");
+      expect(button.classes()).not.toContain("pod-mcp-slot--codex");
+      wrapper.unmount();
+    });
+
+    // B13：Gemini capabilityDisabled=true 時點擊不 emit click
+    it("B13：capabilityDisabled=true 時點擊不 emit click", async () => {
+      const wrapper = mountSlot({
+        provider: "gemini" as PodProvider,
+        capabilityDisabled: true,
+      });
+      const button = wrapper.find("button");
+      await button.trigger("click");
+      expect(wrapper.emitted("click")).toBeFalsy();
+      wrapper.unmount();
+    });
+  });
 });

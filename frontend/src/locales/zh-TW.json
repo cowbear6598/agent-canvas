@@ -262,6 +262,7 @@
       "mcpEmpty": "尚未安裝 MCP server",
       "mcpClaudeEmptyHint": "請使用 `claude mcp add` 安裝",
       "mcpCodexEmptyHint": "請使用 `codex mcp add` 安裝",
+      "mcpGeminiEmptyHint": "請在 `~/.gemini/settings.json` 的 `mcpServers` 區塊新增設定後重新開啟。",
       "mcpToggleFailed": "切換 MCP server 失敗",
       "mcpLoadFailed": "載入失敗",
       "mcpCodexHint": "Codex MCP server 由 codex 全域管理",

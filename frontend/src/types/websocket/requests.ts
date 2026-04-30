@@ -303,11 +303,8 @@ export interface MoveToGroupPayload {
 /** 查詢指定 Provider 的 MCP server 清單 */
 export interface McpListPayload {
   requestId: string;
-  /**
-   * 目前 mcp 不支援 gemini，本欄位刻意維持 `"claude" | "codex"`。
-   * 新增 gemini mcp 支援時需同步擴充此型別並更新後端對應的 handler。
-   */
-  provider: "claude" | "codex";
+  /** claude / codex / gemini 三個 provider 皆支援 MCP 清單查詢 */
+  provider: "claude" | "codex" | "gemini";
 }
 
 /** 設定指定 Pod 的 MCP server 名稱清單 */
