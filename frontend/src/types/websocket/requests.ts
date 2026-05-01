@@ -107,6 +107,8 @@ export interface ConnectionCreatePayload {
   sourceAnchor: AnchorPosition;
   targetPodId: string;
   targetAnchor: AnchorPosition;
+  /** 新建 Connection 時可帶入預設 Summary Provider；null 代表清除（重設為 fallback） */
+  summaryProvider?: PodProvider | null;
 }
 
 export interface ConnectionListPayload {
@@ -175,6 +177,8 @@ export interface ConnectionUpdatePayload {
   triggerMode?: "auto" | "ai-decide" | "direct";
   /** summaryModel 接受任意 provider 的模型名稱字串，不限於 Claude ModelType */
   summaryModel?: string;
+  /** Summary 功能獨立選用的 Provider；null 代表清除（重設為 fallback） */
+  summaryProvider?: PodProvider | null;
   aiDecideModel?: ModelType;
 }
 

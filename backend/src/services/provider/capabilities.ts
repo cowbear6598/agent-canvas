@@ -23,8 +23,8 @@ export const CODEX_CAPABILITIES: Readonly<ProviderCapabilities> = Object.freeze(
 
 /** Claude Provider 支援的模型清單，供前端選擇器動態渲染 */
 export const CLAUDE_AVAILABLE_MODELS = Object.freeze([
-  Object.freeze({ label: "Opus", value: "opus" }),
   Object.freeze({ label: "Sonnet", value: "sonnet" }),
+  Object.freeze({ label: "Opus", value: "opus" }),
   Object.freeze({ label: "Haiku", value: "haiku" }),
 ] as const);
 
@@ -72,8 +72,8 @@ export const GEMINI_CAPABILITIES: Readonly<ProviderCapabilities> =
  * 與 PodModelSelector，屬破壞性變更，目前保守僅加註釋。
  */
 export const GEMINI_AVAILABLE_MODELS = Object.freeze([
-  Object.freeze({ label: "2.5 Pro", value: "gemini-2.5-pro" }),
   Object.freeze({ label: "2.5 Flash", value: "gemini-2.5-flash" }),
+  Object.freeze({ label: "2.5 Pro", value: "gemini-2.5-pro" }),
   Object.freeze({ label: "2.5 Flash L", value: "gemini-2.5-flash-lite" }),
   // 以下三個為 preview 版本，API 可能隨時變更
   Object.freeze({ label: "3 Pro P", value: "gemini-3-pro-preview" }),

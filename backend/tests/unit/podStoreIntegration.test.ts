@@ -888,8 +888,8 @@ describe("PodStore - Provider / Model 驗證", () => {
     const rawConfig = JSON.parse("{}") as Record<string, unknown>;
     const cfg = resolveProviderConfig(rawConfig, "claude", "row-missing-model");
 
-    // claude 的 defaultOptions.model 為 "opus"
-    expect(cfg.model).toBe("opus");
+    // claude 的 defaultOptions.model 為 "sonnet"
+    expect(cfg.model).toBe("sonnet");
     // 不應因為補預設值觸發 warn（僅當 model 存在但非法才會 warn）
     expect(logger.warn).not.toHaveBeenCalled();
   });

@@ -138,8 +138,10 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
 
     const sourcePod = podStore.getById(canvasId, sourcePodId);
     const sourcePodName = sourcePod?.name ?? sourcePodId;
-    // provider 來自 sourcePod，若找不到則預設 "claude" 確保向下相容
-    const provider = sourcePod?.provider ?? "claude";
+    // summaryProvider 為 NULL 時 fallback 為 sourcePod.provider，保留升級前舊 Connection 的 summary 行為；
+    // sourcePod 找不到時再 fallback 為 "claude"，確保向下相容。
+    const provider =
+      connection.summaryProvider ?? sourcePod?.provider ?? "claude";
 
     logger.log(
       "Workflow",

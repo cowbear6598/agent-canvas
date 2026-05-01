@@ -155,6 +155,11 @@ export interface ConnectionPayloadItem {
   decideReason?: string | null;
   /** summaryModel 接受任意 provider 的模型名稱字串，不限於 Claude ModelType */
   summaryModel?: string;
+  /**
+   * Summary 功能獨立選用的 Provider。
+   * 後端 NULL 會以此欄位回傳；升級前 Connection 為 undefined，UI 渲染時會 fallback 至來源 Pod provider。
+   */
+  summaryProvider?: PodProvider | null;
   aiDecideModel?: ModelType;
 }
 

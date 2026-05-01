@@ -200,12 +200,12 @@ describe("buildClaudeOptions", () => {
       expect(result.model).toBe("sonnet");
     });
 
-    it("providerConfig.model 不存在時應 fallback 為 'opus'", async () => {
+    it("providerConfig.model 不存在時應 fallback 為 'sonnet'", async () => {
       const pod = createBasePod({ providerConfig: null });
 
       const result = await buildClaudeOptions(pod);
 
-      expect(result.model).toBe("opus");
+      expect(result.model).toBe("sonnet");
     });
   });
 

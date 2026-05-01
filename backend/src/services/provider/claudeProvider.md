@@ -103,7 +103,7 @@ for await (const sdkMessage of query({ prompt, options: sdkOptions })) {
 2. applyMcpServers（mcpServers）
 3. applyIntegrationToolOptions（追加 mcpServers + allowedTools）
 4. applyPlugins（plugins）
-5. model（來自 pod.providerConfig.model 或 "opus" fallback）
+5. model（來自 pod.providerConfig.model 或 "sonnet" fallback）
 ```
 
 注意：`ClaudeOptions.cwd` 在 `buildOptions` 階段為 `undefined`，由 `runClaudeQuery` 在組裝 SDK Options 時從 `ctx.workspacePath` 填入。
@@ -265,7 +265,7 @@ Run 模式下，executor 呼叫 `resolveWorkspacePath(pod, runContext)`：
 
 | 常數 | 值 | 說明 |
 |---|---|---|
-| `metadata.defaultOptions.model` | `"opus"` | Claude 預設模型 |
+| `metadata.defaultOptions.model` | `"sonnet"` | Claude 預設模型 |
 | `BASE_ALLOWED_TOOLS` | `["Read","Write","Edit","Bash","Glob","Grep","Skill","WebSearch"]` | Claude 預設允許的工具 |
 | `settingSources` | `["project"]` | SDK 設定來源（讀取專案 .claude 設定） |
 | `permissionMode` | `"bypassPermissions"` | SDK 權限模式（繞過工具使用確認） |

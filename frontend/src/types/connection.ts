@@ -1,4 +1,4 @@
-import type { ModelType } from "@/types/pod";
+import type { ModelType, PodProvider } from "@/types/pod";
 
 export type AnchorPosition = "top" | "bottom" | "left" | "right";
 
@@ -27,6 +27,11 @@ export interface Connection {
   decideReason?: string;
   /** summaryModel 接受任意 provider 的模型名稱字串，不限於 Claude ModelType */
   summaryModel?: string;
+  /**
+   * Summary 功能獨立選用的 Provider。
+   * 升級前 Connection 為 null/undefined，UI 渲染時會 fallback 至來源 Pod provider。
+   */
+  summaryProvider?: PodProvider | null;
   aiDecideModel?: ModelType;
 }
 

@@ -37,7 +37,7 @@ const MODEL_RE = /^[a-zA-Z0-9._-]+$/;
 /**
  * 預設模型，與 GeminiProvider.metadata.defaultOptions.model 對齊。
  */
-const DEFAULT_MODEL = "gemini-2.5-pro";
+const DEFAULT_MODEL = "gemini-2.5-flash";
 
 /** process.env 在 process 生命週期內不會改變，模組載入時快取一次 */
 const GEMINI_ENV = buildGeminiEnv();

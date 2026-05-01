@@ -429,7 +429,16 @@
       "aiDecideModelChanged": "AI decide model changed",
       "aiDecideModelChangeFailed": "Unable to change AI decide model",
       "modelSwitched": "Switched to {model}",
-      "loading": "Loading..."
+      "loading": "Loading...",
+      "summaryProvider": "Summary Provider",
+      "summaryProviderChanged": "Summary Provider switched",
+      "summaryProviderChangedDesc": "Provider: {provider}, Model: {model}",
+      "summaryProviderChangeFailed": "Failed to switch Summary Provider",
+      "providerLabel": {
+        "claude": "Claude",
+        "codex": "Codex",
+        "gemini": "Gemini"
+      }
     },
     "confirmDelete": {
       "cannotDelete": "Cannot delete",

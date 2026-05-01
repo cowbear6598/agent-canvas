@@ -38,7 +38,7 @@ import { logger } from "../../../utils/logger.js";
  * 承載 Claude 獨有能力：MCP / Plugins / Integration / Base SDK 設定
  */
 export interface ClaudeOptions {
-  /** 使用的 Claude 模型（預設為 "opus"） */
+  /** 使用的 Claude 模型（預設為 "sonnet"） */
   model: string;
   /** MCP Server 設定（來自 mcpServerNames 與 Integration Tool） */
   mcpServers?: Options["mcpServers"];
@@ -314,9 +314,9 @@ export async function buildClaudeOptions(
     runContext,
   );
 
-  // model：來自 pod.providerConfig.model（字串型別），否則 fallback 到 "opus"
+  // model：來自 pod.providerConfig.model（字串型別），否則 fallback 到 "sonnet"
   const rawModel = pod.providerConfig?.model;
-  const model = typeof rawModel === "string" && rawModel ? rawModel : "opus";
+  const model = typeof rawModel === "string" && rawModel ? rawModel : "sonnet";
 
   const baseOptions: Omit<ClaudeOptions, "model"> = {
     settingSources: ["project"],

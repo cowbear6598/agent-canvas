@@ -39,12 +39,12 @@ function makePod(overrides: Partial<Pick<Pod, "providerConfig">> = {}): Pod {
 
 describe("GeminiProvider.buildOptions()", () => {
   // ── B1：空 providerConfig → 回傳 metadata.defaultOptions ─────────────
-  it("B1: 空 providerConfig 應回傳 metadata.defaultOptions（model=gemini-2.5-pro，resumeMode=cli）", async () => {
+  it("B1: 空 providerConfig 應回傳 metadata.defaultOptions（model=gemini-2.5-flash，resumeMode=cli）", async () => {
     const pod = makePod({ providerConfig: {} });
     const options = await geminiProvider.buildOptions(pod);
 
     expect(options).toEqual(geminiProvider.metadata.defaultOptions);
-    expect(options.model).toBe("gemini-2.5-pro");
+    expect(options.model).toBe("gemini-2.5-flash");
     expect(options.resumeMode).toBe("cli");
   });
 

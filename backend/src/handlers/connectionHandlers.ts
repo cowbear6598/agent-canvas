@@ -17,6 +17,7 @@ import type {
   ConnectionDeletePayload,
   ConnectionUpdatePayload,
 } from "../schemas";
+import type { ProviderName } from "../services/provider/index.js";
 import { connectionStore } from "../services/connectionStore.js";
 import { podStore } from "../services/podStore.js";
 import { workflowStateService } from "../services/workflow";
@@ -109,6 +110,7 @@ export const handleConnectionCreate = withCanvasId<ConnectionCreatePayload>(
       targetPodId,
       targetAnchor,
       summaryModel,
+      summaryProvider,
       aiDecideModel,
     } = payload;
 
@@ -130,6 +132,7 @@ export const handleConnectionCreate = withCanvasId<ConnectionCreatePayload>(
       targetPodId,
       targetAnchor,
       ...(summaryModel !== undefined && { summaryModel }),
+      ...(summaryProvider !== undefined && { summaryProvider }),
       ...(aiDecideModel !== undefined && { aiDecideModel }),
     });
 
@@ -270,7 +273,13 @@ export const handleConnectionUpdate = withCanvasId<ConnectionUpdatePayload>(
     // 授權邊界說明：本工具為本地單使用者場景，不存在多使用者概念，
     // canvas membership 驗證由 withCanvasId 確保 canvasId 合法即可，
     // 無需額外的使用者身份驗證。
-    const { connectionId, triggerMode, summaryModel, aiDecideModel } = payload;
+    const {
+      connectionId,
+      triggerMode,
+      summaryModel,
+      summaryProvider,
+      aiDecideModel,
+    } = payload;
 
     const connection = findConnectionOrEmitError(
       wsConnectionId,
@@ -284,6 +293,7 @@ export const handleConnectionUpdate = withCanvasId<ConnectionUpdatePayload>(
     const updates: Partial<{
       triggerMode: TriggerMode;
       summaryModel: string;
+      summaryProvider: ProviderName;
       aiDecideModel: AiDecideModelType;
     }> = {};
     if (triggerMode !== undefined) {
@@ -291,6 +301,10 @@ export const handleConnectionUpdate = withCanvasId<ConnectionUpdatePayload>(
     }
     if (summaryModel !== undefined) {
       updates.summaryModel = summaryModel;
+    }
+    if (summaryProvider !== undefined) {
+      // 使用者透過右鍵選單切換 Summary Provider 時更新
+      updates.summaryProvider = summaryProvider;
     }
     if (aiDecideModel !== undefined) {
       updates.aiDecideModel = aiDecideModel;

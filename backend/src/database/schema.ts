@@ -357,6 +357,13 @@ function runMigrations(db: Database): void {
   runMigration(db, "DROP TABLE IF EXISTS mcp_server_notes", []);
   runMigration(db, "DROP TABLE IF EXISTS pod_mcp_server_ids", []);
   runMigration(db, "DROP TABLE IF EXISTS mcp_servers", []);
+
+  // Migration: connections 新增 summary_provider 欄位
+  // NULL 表示使用者尚未指定；runtime 由 connectionExecution 路由 fallback 為 sourcePod.provider
+  // 不做 backfill，以區分「未指定」與「明確指定為 sourcePod.provider」
+  runMigration(db, "ALTER TABLE connections ADD COLUMN summary_provider TEXT", [
+    "duplicate column",
+  ]);
 }
 
 export function createTables(db: Database): void {

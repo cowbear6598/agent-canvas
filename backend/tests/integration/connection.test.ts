@@ -357,4 +357,69 @@ describe("Connection 管理", () => {
       );
     });
   });
+
+  // -----------------------------------------------------------------------
+  // WS handler smoke：summaryProvider 欄位通過完整 WS validation pipeline
+  // -----------------------------------------------------------------------
+  describe("summaryProvider WS handler smoke", () => {
+    it("A-smoke: connection:create 帶 summaryProvider=gemini → 成功建立並回傳 summaryProvider=gemini", async () => {
+      const client = getClient();
+      const { podA, podB } = await createPodPair(client);
+      const canvasId = await getCanvasId(client);
+
+      const response = await emitAndWaitResponse<
+        ConnectionCreatePayload,
+        ConnectionCreatedPayload
+      >(
+        client,
+        WebSocketRequestEvents.CONNECTION_CREATE,
+        WebSocketResponseEvents.CONNECTION_CREATED,
+        {
+          requestId: uuidv4(),
+          canvasId,
+          sourcePodId: podA.id,
+          sourceAnchor: "right",
+          targetPodId: podB.id,
+          targetAnchor: "left",
+          summaryProvider: "gemini",
+        },
+      );
+
+      // 整條 WS validation pipeline 成功
+      expect(response.success).toBe(true);
+      expect(response.connection).toBeDefined();
+      // summaryProvider 欄位正確寫入並回傳
+      expect(response.connection!.summaryProvider).toBe("gemini");
+    });
+
+    it("A-smoke: connection:update 帶 summaryProvider=codex → 成功更新並回傳 summaryProvider=codex", async () => {
+      const client = getClient();
+      const { podA, podB } = await createPodPair(client);
+      // 先建立連線（summaryProvider 預設 NULL）
+      const conn = await createConnection(client, podA.id, podB.id);
+      expect(conn.summaryProvider).toBeNull();
+
+      const canvasId = await getCanvasId(client);
+      const response = await emitAndWaitResponse<
+        ConnectionUpdatePayload,
+        ConnectionUpdatedPayload
+      >(
+        client,
+        WebSocketRequestEvents.CONNECTION_UPDATE,
+        WebSocketResponseEvents.CONNECTION_UPDATED,
+        {
+          requestId: uuidv4(),
+          canvasId,
+          connectionId: conn.id,
+          summaryProvider: "codex",
+        },
+      );
+
+      // 整條 WS validation pipeline 成功
+      expect(response.success).toBe(true);
+      expect(response.connection).toBeDefined();
+      // summaryProvider 切換為 codex 並回傳
+      expect(response.connection!.summaryProvider).toBe("codex");
+    });
+  });
 });

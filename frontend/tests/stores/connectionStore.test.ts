@@ -2414,4 +2414,324 @@ describe("connectionStore", () => {
       expect(mockCreateWebSocketRequest).not.toHaveBeenCalled();
     });
   });
+
+  // ── updateConnectionSummaryProvider ──────────────────────────────────────
+  describe("updateConnectionSummaryProvider", () => {
+    it("WS payload 應同時包含 summaryProvider 與 summaryModel", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      const store = useConnectionStore();
+
+      mockCreateWebSocketRequest.mockResolvedValueOnce({
+        connection: {
+          id: "conn-1",
+          sourcePodId: "pod-a",
+          sourceAnchor: "bottom",
+          targetPodId: "pod-b",
+          targetAnchor: "top",
+          summaryProvider: "gemini",
+          summaryModel: "gemini-2.5-flash",
+        },
+      });
+
+      await store.updateConnectionSummaryProvider(
+        "conn-1",
+        "gemini",
+        "gemini-2.5-flash",
+      );
+
+      expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestEvent: "connection:update",
+          responseEvent: "connection:updated",
+          payload: expect.objectContaining({
+            connectionId: "conn-1",
+            summaryProvider: "gemini",
+            summaryModel: "gemini-2.5-flash",
+            canvasId: "canvas-1",
+          }),
+        }),
+      );
+    });
+
+    it("成功時應回傳正規化後的 Connection，含 summaryProvider 欄位", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      const store = useConnectionStore();
+
+      mockCreateWebSocketRequest.mockResolvedValueOnce({
+        connection: {
+          id: "conn-1",
+          sourcePodId: "pod-a",
+          sourceAnchor: "bottom",
+          targetPodId: "pod-b",
+          targetAnchor: "top",
+          summaryProvider: "codex",
+          summaryModel: "gpt-5.4",
+        },
+      });
+
+      const result = await store.updateConnectionSummaryProvider(
+        "conn-1",
+        "codex",
+        "gpt-5.4",
+      );
+
+      expect(result?.summaryProvider).toBe("codex");
+      expect(result?.summaryModel).toBe("gpt-5.4");
+    });
+
+    it("WS 回應無 connection 時應回傳 null", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      const store = useConnectionStore();
+
+      mockCreateWebSocketRequest.mockResolvedValueOnce({});
+
+      const result = await store.updateConnectionSummaryProvider(
+        "conn-1",
+        "gemini",
+        "gemini-2.5-flash",
+      );
+
+      expect(result).toBeNull();
+    });
+
+    it("無 activeCanvasId 時應回傳 null，不送 WS 請求", async () => {
+      const store = useConnectionStore();
+
+      const result = await store.updateConnectionSummaryProvider(
+        "conn-1",
+        "claude",
+        "sonnet",
+      );
+
+      expect(result).toBeNull();
+      expect(mockCreateWebSocketRequest).not.toHaveBeenCalled();
+    });
+
+    it("payload 不應包含 triggerMode 或 aiDecideModel 欄位", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      const store = useConnectionStore();
+
+      mockCreateWebSocketRequest.mockResolvedValueOnce({
+        connection: {
+          id: "conn-1",
+          sourceAnchor: "bottom",
+          targetPodId: "pod-b",
+          targetAnchor: "top",
+          summaryProvider: "gemini",
+          summaryModel: "gemini-2.5-flash",
+        },
+      });
+
+      await store.updateConnectionSummaryProvider(
+        "conn-1",
+        "gemini",
+        "gemini-2.5-flash",
+      );
+
+      const sentPayload =
+        mockCreateWebSocketRequest.mock.calls[0]?.[0]?.payload;
+      expect(sentPayload).not.toHaveProperty("triggerMode");
+      expect(sentPayload).not.toHaveProperty("aiDecideModel");
+    });
+  });
+
+  // ── updateConnectionSummaryModel（確認不帶 summaryProvider）──────────────
+  describe("updateConnectionSummaryModel 不帶 summaryProvider", () => {
+    it("WS payload 應只含 summaryModel，不含 summaryProvider", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      const store = useConnectionStore();
+
+      mockCreateWebSocketRequest.mockResolvedValueOnce({
+        connection: {
+          id: "conn-1",
+          sourceAnchor: "bottom",
+          targetPodId: "pod-b",
+          targetAnchor: "top",
+          summaryModel: "haiku",
+        },
+      });
+
+      await store.updateConnectionSummaryModel("conn-1", "haiku");
+
+      const sentPayload =
+        mockCreateWebSocketRequest.mock.calls[0]?.[0]?.payload;
+      expect(sentPayload).toHaveProperty("summaryModel", "haiku");
+      expect(sentPayload).not.toHaveProperty("summaryProvider");
+    });
+  });
+
+  // ── normalizeConnection summaryProvider 處理 ─────────────────────────────
+  describe("normalizeConnection summaryProvider 正規化", () => {
+    it("loadConnectionsFromBackend：raw 帶 summaryProvider 時應直接保留", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      const store = useConnectionStore();
+
+      mockCreateWebSocketRequest.mockResolvedValueOnce({
+        connections: [
+          {
+            id: "conn-1",
+            sourceAnchor: "bottom",
+            targetPodId: "pod-b",
+            targetAnchor: "top",
+            summaryProvider: "gemini",
+            summaryModel: "gemini-2.5-flash",
+          },
+        ],
+      });
+
+      await store.loadConnectionsFromBackend();
+
+      expect(store.connections[0]?.summaryProvider).toBe("gemini");
+    });
+
+    it("loadConnectionsFromBackend：raw 不帶 summaryProvider 時欄位應為 undefined", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      const store = useConnectionStore();
+
+      mockCreateWebSocketRequest.mockResolvedValueOnce({
+        connections: [
+          {
+            id: "conn-1",
+            sourceAnchor: "bottom",
+            targetPodId: "pod-b",
+            targetAnchor: "top",
+          },
+        ],
+      });
+
+      await store.loadConnectionsFromBackend();
+
+      // summaryProvider 未帶入時應為 undefined（非 null、非其他值）
+      expect(store.connections[0]?.summaryProvider).toBeUndefined();
+    });
+
+    it("loadConnectionsFromBackend：raw summaryProvider 為 null 時應保留 null", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      const store = useConnectionStore();
+
+      mockCreateWebSocketRequest.mockResolvedValueOnce({
+        connections: [
+          {
+            id: "conn-1",
+            sourceAnchor: "bottom",
+            targetPodId: "pod-b",
+            targetAnchor: "top",
+            summaryProvider: null,
+          },
+        ],
+      });
+
+      await store.loadConnectionsFromBackend();
+
+      expect(store.connections[0]?.summaryProvider).toBeNull();
+    });
+  });
+
+  // ── updateConnectionFromEvent summaryProvider 處理 ──────────────────────
+  describe("updateConnectionFromEvent summaryProvider 更新策略", () => {
+    it("broadcast 帶 summaryProvider 具體值時應覆蓋現有值", () => {
+      const store = useConnectionStore();
+      const existingConn = createMockConnection({
+        id: "conn-1",
+        summaryProvider: "claude",
+        summaryModel: "sonnet",
+      });
+      store.connections = [existingConn];
+
+      store.updateConnectionFromEvent({
+        id: "conn-1",
+        sourceAnchor: "bottom",
+        targetPodId: "pod-b",
+        targetAnchor: "top",
+        triggerMode: "auto",
+        summaryProvider: "gemini",
+        summaryModel: "gemini-2.5-flash",
+      });
+
+      expect(store.connections[0]?.summaryProvider).toBe("gemini");
+    });
+
+    it("broadcast 帶 summaryProvider null 時應寫入 null（而非保留既有值）", () => {
+      const store = useConnectionStore();
+      const existingConn = createMockConnection({
+        id: "conn-1",
+        summaryProvider: "codex",
+        summaryModel: "gpt-5.4",
+      });
+      store.connections = [existingConn];
+
+      store.updateConnectionFromEvent({
+        id: "conn-1",
+        sourceAnchor: "bottom",
+        targetPodId: "pod-b",
+        targetAnchor: "top",
+        triggerMode: "auto",
+        summaryProvider: null,
+      });
+
+      // null 應直接寫入，不視為「未帶欄位」
+      expect(store.connections[0]?.summaryProvider).toBeNull();
+    });
+
+    it("broadcast 不帶 summaryProvider 欄位時應保留既有值", () => {
+      const store = useConnectionStore();
+      const existingConn = createMockConnection({
+        id: "conn-1",
+        summaryProvider: "gemini",
+        summaryModel: "gemini-2.5-flash",
+      });
+      store.connections = [existingConn];
+
+      // 不帶 summaryProvider 屬性（undefined）
+      const eventWithoutProvider: Omit<
+        Parameters<typeof store.updateConnectionFromEvent>[0],
+        "summaryProvider"
+      > = {
+        id: "conn-1",
+        sourceAnchor: "bottom",
+        targetPodId: "pod-b",
+        targetAnchor: "top",
+        triggerMode: "auto",
+      };
+
+      store.updateConnectionFromEvent(
+        eventWithoutProvider as Parameters<
+          typeof store.updateConnectionFromEvent
+        >[0],
+      );
+
+      // 未帶入 summaryProvider 時保留既有的 gemini
+      expect(store.connections[0]?.summaryProvider).toBe("gemini");
+    });
+
+    it("broadcast 帶 summaryProvider 具體值時 summaryModel 應一併更新", () => {
+      const store = useConnectionStore();
+      const existingConn = createMockConnection({
+        id: "conn-1",
+        summaryProvider: "claude",
+        summaryModel: "sonnet",
+      });
+      store.connections = [existingConn];
+
+      store.updateConnectionFromEvent({
+        id: "conn-1",
+        sourceAnchor: "bottom",
+        targetPodId: "pod-b",
+        targetAnchor: "top",
+        triggerMode: "auto",
+        summaryProvider: "codex",
+        summaryModel: "gpt-5.4",
+      });
+
+      expect(store.connections[0]?.summaryModel).toBe("gpt-5.4");
+    });
+  });
 });

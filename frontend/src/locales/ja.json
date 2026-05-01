@@ -429,7 +429,16 @@
       "aiDecideModelChanged": "AI 判定モデルを変更しました",
       "aiDecideModelChangeFailed": "AI 判定モデルを変更できません",
       "modelSwitched": "{model} に切り替えました",
-      "loading": "読み込み中..."
+      "loading": "読み込み中...",
+      "summaryProvider": "Summary Provider",
+      "summaryProviderChanged": "Summary Provider を切り替えました",
+      "summaryProviderChangedDesc": "Provider：{provider}、Model：{model}",
+      "summaryProviderChangeFailed": "Summary Provider の切り替えに失敗しました",
+      "providerLabel": {
+        "claude": "Claude",
+        "codex": "Codex",
+        "gemini": "Gemini"
+      }
     },
     "confirmDelete": {
       "cannotDelete": "削除できません",

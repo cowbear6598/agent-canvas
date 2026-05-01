@@ -135,8 +135,8 @@ describe("claudeProvider.buildOptions()", () => {
     expect(options.permissionMode).toBe("bypassPermissions");
     expect(options.includePartialMessages).toBe(true);
 
-    // model 應為 default "opus"（空 providerConfig）
-    expect(options.model).toBe("opus");
+    // model 應為 default "sonnet"（空 providerConfig）
+    expect(options.model).toBe("sonnet");
 
     // allowedTools 應包含 BASE_ALLOWED_TOOLS
     for (const tool of BASE_ALLOWED_TOOLS) {

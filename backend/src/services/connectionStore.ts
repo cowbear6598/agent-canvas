@@ -10,7 +10,11 @@ import type {
 import { DEFAULT_AI_DECIDE_MODEL } from "../types/connection.js";
 import { getDb } from "../database/index.js";
 import { getStatements } from "../database/statements.js";
-import { getProvider, resolveModelWithFallback } from "./provider/index.js";
+import {
+  getProvider,
+  resolveModelWithFallback,
+  type ProviderName,
+} from "./provider/index.js";
 import { podStore } from "./podStore.js";
 import { logger } from "../utils/logger.js";
 
@@ -22,6 +26,8 @@ interface CreateConnectionData {
   triggerMode?: TriggerMode;
   /** summaryModel 接受任意非空模型名稱 */
   summaryModel?: string;
+  /** summaryProvider 指定摘要時使用的 provider；未提供則依 sourcePod.provider fallback */
+  summaryProvider?: ProviderName;
   aiDecideModel?: AiDecideModelType;
 }
 
@@ -43,6 +49,8 @@ interface ConnectionRow {
   decide_reason: string | null;
   connection_status: string;
   summary_model: string;
+  /** DB 欄位；NULL 代表舊資料（升級前未指定），由執行端 fallback */
+  summary_provider: string | null;
   ai_decide_model: string;
 }
 
@@ -58,6 +66,8 @@ function rowToConnection(row: ConnectionRow): Connection {
     decideReason: row.decide_reason,
     connectionStatus: row.connection_status as ConnectionStatus,
     summaryModel: row.summary_model,
+    // DB NULL 保留原意：未指定，由執行端 fallback 至 sourcePod.provider
+    summaryProvider: row.summary_provider as ProviderName | null,
     aiDecideModel: row.ai_decide_model as AiDecideModelType,
   };
 }
@@ -70,27 +80,29 @@ class ConnectionStore {
   create(canvasId: string, data: CreateConnectionData): Connection {
     const id = uuidv4();
 
-    // 從上游 Pod 取得 provider，用以決定 summaryModel 預設值與驗證合法性
+    // 決定摘要用 provider：客戶端指定 > sourcePod.provider > defensive fallback "claude"
     const sourcePod = podStore.getById(canvasId, data.sourcePodId);
-    const provider = sourcePod?.provider ?? "claude";
-    const providerMeta = getProvider(provider).metadata;
+    const resolvedSummaryProvider: ProviderName =
+      data.summaryProvider ?? sourcePod?.provider ?? "claude";
+
+    const providerMeta = getProvider(resolvedSummaryProvider).metadata;
     const defaultModel =
       (providerMeta.defaultOptions as { model?: string }).model ?? "sonnet";
 
     let resolvedSummaryModel: string;
     if (!data.summaryModel) {
-      // 客戶端未帶 summaryModel：使用上游 provider 的預設模型
+      // 客戶端未帶 summaryModel：使用 resolvedSummaryProvider 的預設模型
       resolvedSummaryModel = defaultModel;
     } else {
       const { resolved, didFallback } = resolveModelWithFallback(
-        provider,
+        resolvedSummaryProvider,
         data.summaryModel,
       );
       if (didFallback) {
         logger.warn(
           "Connection",
           "Warn",
-          `[ConnectionStore] summaryModel "${data.summaryModel}" 不在 ${provider} 合法清單內，fallback 到預設模型 "${resolved}"`,
+          `[ConnectionStore] summaryModel "${data.summaryModel}" 不在 ${resolvedSummaryProvider} 合法清單內，fallback 到預設模型 "${resolved}"`,
         );
       }
       resolvedSummaryModel = resolved;
@@ -108,6 +120,8 @@ class ConnectionStore {
       $decideReason: null,
       $connectionStatus: "idle",
       $summaryModel: resolvedSummaryModel,
+      // DB 儲存客戶端原意：未指定存 NULL，不把 sourcePod.provider 寫入
+      $summaryProvider: data.summaryProvider ?? null,
       $aiDecideModel: data.aiDecideModel ?? DEFAULT_AI_DECIDE_MODEL,
     });
 
@@ -165,6 +179,11 @@ class ConnectionStore {
       decideReason: string | null;
       /** summaryModel 接受任意非空模型名稱 */
       summaryModel: string;
+      /**
+       * summaryProvider 可明確設為 null（清除指定，讓執行端 fallback），
+       * 或指定新 provider；undefined 表示本次不修改。
+       */
+      summaryProvider: ProviderName | null;
       aiDecideModel: AiDecideModelType;
     }>,
   ): Connection | undefined {
@@ -176,6 +195,11 @@ class ConnectionStore {
     let newDecideReason = existing.decideReason;
     let newConnectionStatus = existing.connectionStatus;
     let newSummaryModel = existing.summaryModel;
+    // summaryProvider 寫回 DB：以 updates.summaryProvider 為準（沒提供就保留既有值）
+    let newSummaryProvider: ProviderName | null =
+      updates.summaryProvider !== undefined
+        ? updates.summaryProvider
+        : existing.summaryProvider;
     let newAiDecideModel = existing.aiDecideModel;
 
     if (updates.triggerMode !== undefined) {
@@ -195,31 +219,37 @@ class ConnectionStore {
       newDecideReason = updates.decideReason;
     }
 
-    if (updates.summaryModel !== undefined) {
-      // 與 create 路徑一致：驗證 summaryModel 合法性，不合法則 fallback 到 provider 預設模型
-      const sourcePod = podStore.getById(canvasId, existing.sourcePodId);
-      const provider = sourcePod?.provider ?? "claude";
-      const providerMeta = getProvider(provider).metadata;
-      const defaultModel =
-        (providerMeta.defaultOptions as { model?: string }).model ?? "sonnet";
+    // 決定摘要 provider（用於驗證 summaryModel 合法性）
+    const sourcePod = podStore.getById(canvasId, existing.sourcePodId);
+    const targetSummaryProvider: ProviderName =
+      updates.summaryProvider !== undefined
+        ? // 客戶端明確指定（含 null 的情況：null 時 fallback 至 sourcePod.provider 或 "claude"）
+          (updates.summaryProvider ?? sourcePod?.provider ?? "claude")
+        : // 本次未提供 summaryProvider：沿用既有值（或 fallback）
+          (existing.summaryProvider ?? sourcePod?.provider ?? "claude");
 
-      const isValidModel = providerMeta.availableModelValues.has(
+    if (
+      updates.summaryProvider !== undefined &&
+      updates.summaryModel === undefined
+    ) {
+      // 情境三：只切換 provider，未同時指定 model → 重設為新 provider 的預設模型
+      const providerMeta = getProvider(targetSummaryProvider).metadata;
+      newSummaryModel =
+        (providerMeta.defaultOptions as { model?: string }).model ?? "sonnet";
+    } else if (updates.summaryModel !== undefined) {
+      // 有明確提供 summaryModel：驗證合法性，不合法則 fallback
+      const { resolved, didFallback } = resolveModelWithFallback(
+        targetSummaryProvider,
         updates.summaryModel,
       );
-      if (isValidModel) {
-        newSummaryModel = updates.summaryModel;
-      } else {
-        const { resolved } = resolveModelWithFallback(
-          provider,
-          updates.summaryModel,
-        );
+      if (didFallback) {
         logger.warn(
           "Connection",
           "Warn",
-          `[ConnectionStore] update summaryModel "${updates.summaryModel}" 不在 ${provider} 合法清單內，fallback 到預設模型 "${defaultModel}"`,
+          `[ConnectionStore] update summaryModel "${updates.summaryModel}" 不在 ${targetSummaryProvider} 合法清單內，fallback 到預設模型 "${resolved}"`,
         );
-        newSummaryModel = resolved;
       }
+      newSummaryModel = resolved;
     }
 
     if (updates.aiDecideModel !== undefined) {
@@ -238,6 +268,7 @@ class ConnectionStore {
       $decideReason: newDecideReason,
       $connectionStatus: newConnectionStatus,
       $summaryModel: newSummaryModel,
+      $summaryProvider: newSummaryProvider,
       $aiDecideModel: newAiDecideModel,
     }) as ConnectionRow | undefined;
 

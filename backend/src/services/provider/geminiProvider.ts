@@ -388,9 +388,7 @@ function monitorGeminiStderr(
   });
 
   const done: Promise<string> = (async (): Promise<string> => {
-    const reader = (
-      proc.stderr as ReadableStream<Uint8Array>
-    ).getReader();
+    const reader = (proc.stderr as ReadableStream<Uint8Array>).getReader();
     const textDecoder = new TextDecoder("utf-8");
 
     try {
@@ -577,7 +575,9 @@ async function* processStdoutLines(
   let buffer = "";
   const reader = stdout.getReader();
   const STOP_READING = { stopped: true } as const;
-  type ReadOrStop = Awaited<ReturnType<typeof reader.read>> | typeof STOP_READING;
+  type ReadOrStop =
+    | Awaited<ReturnType<typeof reader.read>>
+    | typeof STOP_READING;
 
   try {
     while (!abortSignal.aborted) {
@@ -851,7 +851,7 @@ function filterByAvailableNames<T>(
 
 // ─── Provider 預設選項常數 ────────────────────────────────────────────────────
 
-const DEFAULT_MODEL = "gemini-2.5-pro";
+const DEFAULT_MODEL = "gemini-2.5-flash";
 
 const DEFAULT_OPTIONS: GeminiOptions = {
   model: DEFAULT_MODEL,

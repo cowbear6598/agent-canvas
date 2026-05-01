@@ -1,6 +1,6 @@
 import { useContextMenu } from "@/composables/canvas/useContextMenu";
 import type { TriggerMode } from "@/types";
-import type { ModelType } from "@/types/pod";
+import type { ModelType, PodProvider } from "@/types/pod";
 import { DEFAULT_SUMMARY_MODEL, DEFAULT_AI_DECIDE_MODEL } from "@/types/config";
 
 interface RepositoryContextMenuData {
@@ -16,6 +16,8 @@ interface ConnectionContextMenuData {
   /** summaryModel 接受任意 provider 的模型名稱字串，不限於 Claude ModelType */
   summaryModel: string;
   aiDecideModel: ModelType;
+  /** 目前 Summary 使用的 AI provider；null 表示尚未設定，undefined 表示舊資料 */
+  summaryProvider: PodProvider | null | undefined;
 }
 
 interface PodContextMenuData {
@@ -38,6 +40,8 @@ interface ConnectionStore {
     /** summaryModel 接受任意 provider 的模型名稱字串，不限於 Claude ModelType */
     summaryModel?: string;
     aiDecideModel?: ModelType;
+    /** 目前 Summary 使用的 AI provider */
+    summaryProvider?: PodProvider | null;
   }>;
 }
 
@@ -96,6 +100,7 @@ export function useCanvasContextMenus(options: UseCanvasContextMenusOptions): {
     triggerMode: "auto" as TriggerMode,
     summaryModel: DEFAULT_SUMMARY_MODEL,
     aiDecideModel: DEFAULT_AI_DECIDE_MODEL,
+    summaryProvider: undefined,
   });
 
   const {
@@ -142,6 +147,8 @@ export function useCanvasContextMenus(options: UseCanvasContextMenusOptions): {
       triggerMode: connection.triggerMode,
       summaryModel: connection.summaryModel ?? DEFAULT_SUMMARY_MODEL,
       aiDecideModel: connection.aiDecideModel ?? DEFAULT_AI_DECIDE_MODEL,
+      // 直接帶入 summaryProvider，UI 層自行處理 null/undefined 顯示邏輯
+      summaryProvider: connection.summaryProvider,
     });
   };
 

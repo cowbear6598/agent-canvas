@@ -1,3 +1,5 @@
+import type { ProviderName } from "../services/provider/index.js";
+
 export type AnchorPosition = "top" | "bottom" | "left" | "right";
 
 export type TriggerMode = "auto" | "ai-decide" | "direct";
@@ -39,6 +41,11 @@ export interface Connection {
   connectionStatus: ConnectionStatus;
   /** summaryModel 接受任意模型名稱（如 "sonnet"、"gpt-5.4"），由 service 層驗證 capability */
   summaryModel: string;
+  /**
+   * summaryProvider 指定本 Connection 摘要時使用的 provider。
+   * null 代表舊資料（升級前）：runtime 會 fallback 至 sourcePod.provider。
+   */
+  summaryProvider: ProviderName | null;
   /** aiDecideModel 僅允許 Claude 三選一 */
   aiDecideModel: AiDecideModelType;
 }

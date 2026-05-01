@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TriggerMode } from "@/types/connection";
-import type { ModelType } from "@/types/pod";
+import type { ModelType, PodProvider } from "@/types/pod";
 import { Zap, Brain, ArrowRight, ChevronRight } from "lucide-vue-next";
 import { ref, computed, onMounted, onUnmounted } from "vue";
 
@@ -13,6 +13,7 @@ import {
   DEFAULT_TOAST_DURATION_MS,
   SHORT_TOAST_DURATION_MS,
 } from "@/lib/constants";
+import { DEFAULT_SUMMARY_MODEL } from "@/types/config";
 
 interface Props {
   position: { x: number; y: number };
@@ -215,23 +216,124 @@ const AI_DECIDE_MODEL_OPTIONS: { value: ModelType; label: string }[] = [
 ];
 
 /**
- * 透過當前 connectionId 取得 connection，再查 sourcePodId 對應的上游 Pod，
- * 最後向 providerCapabilityStore 取上游 provider 的 availableModels，
- * 作為 Summary Model 子選單的動態按鈕資料來源。
+ * Summary Provider 子選單的選項清單。
+ * 刻意硬編碼三項而非從 providerCapabilityStore.allowedProviders 動態取得，
+ * 理由是後續若新增 provider，UI 顯示順序與 label 仍要人工確認，避免靜默變動 menu 內容。
  */
-const summaryModelOptions = computed(() => {
+const PROVIDER_OPTIONS: { value: PodProvider; label: string }[] = [
+  { value: "claude", label: "Claude" },
+  { value: "codex", label: "Codex" },
+  { value: "gemini", label: "Gemini" },
+];
+
+/**
+ * 當前 Summary 使用的 provider，優先取 connection.summaryProvider，
+ * 若為 null/undefined（舊 Connection）則 fallback 為來源 Pod 的 provider。
+ * connection 或 sourcePod 任一不存在時回傳 undefined，讓 template 顯示載入中。
+ */
+const currentProvider = computed((): PodProvider | undefined => {
   const connection = connectionStore.findConnectionById(props.connectionId);
-  if (!connection?.sourcePodId) return null;
+  if (!connection?.sourcePodId) return undefined;
 
   const sourcePod = podStore.getPodById(connection.sourcePodId);
-  if (!sourcePod) return null;
+  if (!sourcePod) return undefined;
 
-  const models = providerCapabilityStore.getAvailableModels(sourcePod.provider);
+  return connection.summaryProvider ?? sourcePod.provider;
+});
+
+/**
+ * 透過當前 connectionId 取得 connection，再查 sourcePodId 對應的上游 Pod，
+ * 最後向 providerCapabilityStore 取 currentProvider 的 availableModels，
+ * 作為 Summary Model 子選單的動態按鈕資料來源。
+ * 模型清單依 currentProvider 而非固定取上游 Pod provider，支援 Summary Provider 解耦。
+ */
+const summaryModelOptions = computed(() => {
+  const provider = currentProvider.value;
+  if (!provider) return null;
+
+  const models = providerCapabilityStore.getAvailableModels(provider);
   // 回傳 null（而非空陣列）是為了讓 template 能以單一條件判斷「資料尚未就緒」並顯示載入中
   if (models.length === 0) return null;
 
   return models;
 });
+
+/**
+ * 判斷 Summary Model 按鈕是否為 active 狀態的雙欄位比對邏輯。
+ * 對舊 Connection（connection.summaryProvider 為 null/undefined）：
+ *   active 僅比對 model，因為 currentProvider 此時來自來源 Pod，model 比對仍合理。
+ * 對已設定 summaryProvider 的 Connection：
+ *   active 需同時比對 provider 與 model，避免 provider 切換後舊 model 名稱仍被標亮。
+ */
+const isSummaryModelActive = (optionValue: string): boolean => {
+  const connection = connectionStore.findConnectionById(props.connectionId);
+
+  if (connection?.summaryProvider == null) {
+    // 舊 Connection：summaryProvider 未設定，僅以 model 值比對
+    return props.currentSummaryModel === optionValue;
+  }
+
+  // 新 Connection：需同時確認 currentProvider 與儲存的 summaryProvider 一致，再比對 model
+  return (
+    currentProvider.value === connection.summaryProvider &&
+    props.currentSummaryModel === optionValue
+  );
+};
+
+/** Summary Provider 子選單開關狀態 */
+const isProviderMenuOpen = ref(false);
+
+/**
+ * 切換 Summary Provider 的 handler。
+ * 若選擇與當前相同的 provider，直接關閉選單不送請求。
+ * 透過 getDefaultModel 取得新 provider 的預設模型，一併更新。
+ */
+const handleSetSummaryProvider = async (
+  targetProvider: PodProvider,
+): Promise<void> => {
+  if (targetProvider === currentProvider.value) {
+    emit("close");
+    return;
+  }
+
+  const defaultModel = providerCapabilityStore.getDefaultModel(targetProvider);
+  // getDefaultModel 可能回傳 undefined（metadata 尚未載入時），
+  // 此時 fallback 為系統預設的 summaryModel，由後端進一步驗證合法性
+  const summaryModel = defaultModel ?? DEFAULT_SUMMARY_MODEL;
+
+  const result = await connectionStore.updateConnectionSummaryProvider(
+    props.connectionId,
+    targetProvider,
+    summaryModel,
+  );
+
+  if (result) {
+    const providerLabel =
+      PROVIDER_OPTIONS.find((o) => o.value === targetProvider)?.label ??
+      targetProvider;
+    const modelLabel =
+      providerCapabilityStore
+        .getAvailableModels(targetProvider)
+        .find((m) => m.value === summaryModel)?.label ?? summaryModel;
+
+    toast({
+      title: t("canvas.connectionContextMenu.summaryProviderChanged"),
+      description: t(
+        "canvas.connectionContextMenu.summaryProviderChangedDesc",
+        { provider: providerLabel, model: modelLabel ?? "" },
+      ),
+      duration: SHORT_TOAST_DURATION_MS,
+    });
+    emit("summary-model-changed");
+    emit("close");
+  } else {
+    toast({
+      title: t("canvas.connectionContextMenu.changeFailed"),
+      description: t("canvas.connectionContextMenu.summaryModelChangeFailed"),
+      duration: DEFAULT_TOAST_DURATION_MS,
+    });
+  }
+};
 </script>
 
 <template>
@@ -332,6 +434,70 @@ const summaryModelOptions = computed(() => {
 
     <div class="border-t border-border my-1" />
 
+    <!-- Summary Provider 子選單觸發器（位於 Summary Model 子選單上方） -->
+    <div
+      class="relative"
+      @mouseenter="isProviderMenuOpen = true"
+      @mouseleave="isProviderMenuOpen = false"
+    >
+      <button
+        class="w-full flex items-center justify-between gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary"
+        :class="{ 'bg-secondary': isProviderMenuOpen }"
+      >
+        <span class="font-mono text-foreground">{{
+          $t("canvas.connectionContextMenu.summaryProvider")
+        }}</span>
+        <ChevronRight :size="12" class="text-muted-foreground" />
+      </button>
+
+      <!-- Summary Provider 子選單：硬編碼三項，不過濾認證狀態
+           移除 ml-1（4px gap），改在浮層加 pl-1 撐出等價的視覺空間，
+           確保滑鼠從觸發項移往子選單時不會觸發 mouseleave -->
+      <div
+        v-if="isProviderMenuOpen"
+        class="absolute left-full top-0 pl-1 z-50"
+        @mouseenter="isProviderMenuOpen = true"
+        @mouseleave="isProviderMenuOpen = false"
+      >
+        <div
+          class="bg-card border border-doodle-ink rounded-md p-1 min-w-[120px]"
+        >
+          <!-- currentProvider 尚未就緒時顯示載入中提示 -->
+          <div
+            v-if="currentProvider === undefined"
+            class="px-2 py-1 text-xs font-mono text-muted-foreground"
+          >
+            {{ $t("canvas.connectionContextMenu.loading") }}
+          </div>
+
+          <!-- 硬編碼三項 provider 選項，active 以 currentProvider 判定 -->
+          <button
+            v-for="option in PROVIDER_OPTIONS"
+            :key="option.value"
+            :class="[
+              'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary',
+              {
+                'bg-secondary border-l-2 border-l-primary':
+                  option.value === currentProvider,
+              },
+            ]"
+            @click="handleSetSummaryProvider(option.value)"
+          >
+            <span
+              :class="[
+                'font-mono',
+                option.value === currentProvider
+                  ? 'text-primary font-semibold'
+                  : 'text-foreground',
+              ]"
+            >
+              {{ option.label }}
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Summary Model 子選單觸發器 -->
     <div
       class="relative"
@@ -345,10 +511,7 @@ const summaryModelOptions = computed(() => {
         <span class="font-mono text-foreground">{{
           $t("canvas.connectionContextMenu.summaryModel")
         }}</span>
-        <ChevronRight
-          :size="12"
-          class="text-muted-foreground"
-        />
+        <ChevronRight :size="12" class="text-muted-foreground" />
       </button>
 
       <!-- Summary Model 子選單：根據上游 Pod provider 動態渲染
@@ -371,7 +534,7 @@ const summaryModelOptions = computed(() => {
             {{ $t("canvas.connectionContextMenu.loading") }}
           </div>
 
-          <!-- 動態渲染上游 provider 的可選模型清單 -->
+          <!-- 動態渲染 currentProvider 的可選模型清單，active 以雙欄位比對邏輯判定 -->
           <button
             v-for="option in summaryModelOptions ?? []"
             :key="option.value"
@@ -379,7 +542,7 @@ const summaryModelOptions = computed(() => {
               'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary',
               {
                 'bg-secondary border-l-2 border-l-primary':
-                  currentSummaryModel === option.value,
+                  isSummaryModelActive(option.value),
               },
             ]"
             @click="handleSetSummaryModel(option.value, option.label)"
@@ -387,7 +550,7 @@ const summaryModelOptions = computed(() => {
             <span
               :class="[
                 'font-mono',
-                currentSummaryModel === option.value
+                isSummaryModelActive(option.value)
                   ? 'text-primary font-semibold'
                   : 'text-foreground',
               ]"
@@ -415,10 +578,7 @@ const summaryModelOptions = computed(() => {
         <span class="font-mono text-foreground">{{
           $t("canvas.connectionContextMenu.aiModel")
         }}</span>
-        <ChevronRight
-          :size="12"
-          class="text-muted-foreground"
-        />
+        <ChevronRight :size="12" class="text-muted-foreground" />
       </button>
 
       <!-- 子選單：移除 ml-1（4px gap），改用 pl-1 撐出等價視覺空間 -->

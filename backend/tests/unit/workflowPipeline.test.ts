@@ -797,4 +797,118 @@ describe("WorkflowPipeline", () => {
       expect(socketService.emitToCanvas).not.toHaveBeenCalled();
     });
   });
+
+  // ----------------------------------------------------------------
+  // B7–B8：summaryProvider resolution 傳入 generateSummaryWithFallback
+  // ----------------------------------------------------------------
+  describe("B7–B8 summaryProvider resolution", () => {
+    // B7: connection.summaryProvider=null + sourcePod.provider=gemini
+    //     → generateSummaryWithFallback 的 provider 參數為 "gemini"
+    it("B7: connection.summaryProvider=null、sourcePod.provider=gemini → provider 傳入 gemini", async () => {
+      const mockStrategy = makeStrategy("auto");
+
+      // sourcePod 為 gemini provider
+      const geminiSourcePod = makePod({
+        id: SOURCE_POD_ID,
+        provider: "gemini" as any,
+        providerConfig: { model: "gemini-2.5-flash" } as any,
+      });
+      const geminiConnection = makeConnection({
+        summaryProvider: null, // NULL：未指定，由 runtime fallback
+      });
+      const geminiContext: PipelineContext = {
+        canvasId: CANVAS_ID,
+        sourcePodId: SOURCE_POD_ID,
+        connection: geminiConnection,
+        triggerMode: "auto",
+        decideResult: {
+          connectionId: CONNECTION_ID,
+          approved: true,
+          reason: null,
+        },
+      };
+
+      // podStore.getById：source 回 gemini pod，target 回原本的 mockTargetPod
+      vi.spyOn(podStore, "getById").mockImplementation(
+        (_cId: string, podId: string) => {
+          if (podId === SOURCE_POD_ID) return geminiSourcePod as any;
+          return mockTargetPod as any;
+        },
+      );
+      vi.spyOn(connectionStore, "findByTargetPodId").mockReturnValue([
+        geminiConnection,
+      ]);
+
+      await workflowPipeline.execute(geminiContext, mockStrategy);
+
+      // 驗證 generateSummaryWithFallback 收到的 provider 參數為 "gemini"
+      expect(
+        mockExecutionService.generateSummaryWithFallback,
+      ).toHaveBeenCalledWith(
+        CANVAS_ID,
+        SOURCE_POD_ID,
+        TARGET_POD_ID,
+        "gemini", // summaryProvider=null → fallback 為 sourcePod.provider=gemini
+        geminiConnection.summaryModel,
+        undefined,
+        expect.any(String), // pathway
+        undefined,
+      );
+    });
+
+    // B8: connection.summaryProvider=codex + sourcePod.provider=claude
+    //     → generateSummaryWithFallback 的 provider 參數為 "codex"（cross-provider 解耦）
+    it("B8: connection.summaryProvider=codex、sourcePod.provider=claude → provider 傳入 codex（cross-provider）", async () => {
+      const mockStrategy = makeStrategy("auto");
+
+      // sourcePod 為 claude provider
+      const claudeSourcePod = makePod({
+        id: SOURCE_POD_ID,
+        provider: "claude" as const,
+        providerConfig: { model: "sonnet" } as any,
+      });
+      // connection 明確指定 summaryProvider=codex（cross-provider）
+      const codexSummaryConnection = makeConnection({
+        summaryProvider: "codex" as any, // 明確指定 codex provider 做摘要
+        summaryModel: "gpt-5.4",
+      });
+      const codexSummaryContext: PipelineContext = {
+        canvasId: CANVAS_ID,
+        sourcePodId: SOURCE_POD_ID,
+        connection: codexSummaryConnection,
+        triggerMode: "auto",
+        decideResult: {
+          connectionId: CONNECTION_ID,
+          approved: true,
+          reason: null,
+        },
+      };
+
+      vi.spyOn(podStore, "getById").mockImplementation(
+        (_cId: string, podId: string) => {
+          if (podId === SOURCE_POD_ID) return claudeSourcePod as any;
+          return mockTargetPod as any;
+        },
+      );
+      vi.spyOn(connectionStore, "findByTargetPodId").mockReturnValue([
+        codexSummaryConnection,
+      ]);
+
+      await workflowPipeline.execute(codexSummaryContext, mockStrategy);
+
+      // 驗證 provider 參數為 "codex"，而非 sourcePod.provider="claude"
+      expect(
+        mockExecutionService.generateSummaryWithFallback,
+      ).toHaveBeenCalledWith(
+        CANVAS_ID,
+        SOURCE_POD_ID,
+        TARGET_POD_ID,
+        "codex", // summaryProvider 明確指定 codex，cross-provider 解耦
+        codexSummaryConnection.summaryModel,
+        undefined,
+        expect.any(String), // pathway
+        undefined,
+      );
+    });
+  });
 });

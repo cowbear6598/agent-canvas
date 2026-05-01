@@ -33,7 +33,7 @@ vi.mock("../../src/utils/logger.js", () => ({
 // ─────────────────────────────────────────────
 
 /** 建立最小化 Pod stub，只設 pluginIds 和 providerConfig */
-function makePod(pluginIds: string[], model = "gemini-2.5-pro"): Pod {
+function makePod(pluginIds: string[], model = "gemini-2.5-flash"): Pod {
   return {
     id: "pod-bo-test-001",
     name: "Test Pod",
@@ -56,6 +56,20 @@ function makePod(pluginIds: string[], model = "gemini-2.5-pro"): Pod {
 // ─────────────────────────────────────────────
 // 測試套件
 // ─────────────────────────────────────────────
+
+// B9：geminiProvider.metadata.defaultOptions.model 應為 "gemini-2.5-flash"
+// 保護：確保 Gemini default model 為 Flash，connectionStore.create 預設模型才會正確
+describe("geminiProvider.metadata — defaultOptions 回歸保護", () => {
+  it("B9: geminiProvider.metadata.defaultOptions.model 必須為 gemini-2.5-flash", async () => {
+    vi.resetModules();
+    const { geminiProvider } =
+      await import("../../src/services/provider/geminiProvider.js");
+    const defaultModel = (
+      geminiProvider.metadata.defaultOptions as { model?: string }
+    ).model;
+    expect(defaultModel).toBe("gemini-2.5-flash");
+  });
+});
 
 describe("geminiProvider.buildOptions() – plugins 計算", () => {
   let tmpHome: string;

@@ -47,7 +47,7 @@ export const claudeProvider: AgentProvider<ClaudeOptions> = {
     name: "claude",
     capabilities: CLAUDE_CAPABILITIES,
     defaultOptions: {
-      model: "opus",
+      model: "sonnet",
       allowedTools: [...BASE_ALLOWED_TOOLS],
       settingSources: ["project"],
       permissionMode: "bypassPermissions",

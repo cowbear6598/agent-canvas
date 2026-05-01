@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { requestIdSchema, podIdSchema, canvasIdSchema } from "./base.js";
-import { modelTypeSchema } from "./podSchemas.js";
+import { modelTypeSchema, providerSchema } from "./podSchemas.js";
 
 export const anchorPositionSchema = z.enum(["top", "bottom", "left", "right"]);
 
@@ -21,6 +21,8 @@ export const connectionCreateSchema = z.object({
   targetPodId: podIdSchema,
   targetAnchor: anchorPositionSchema,
   summaryModel: summaryModelSchema.optional(),
+  /** summaryProvider 可選；未提供時由服務層依 sourcePod.provider 決定預設值 */
+  summaryProvider: providerSchema.optional(),
   aiDecideModel: modelTypeSchema.optional(),
 });
 
@@ -41,6 +43,8 @@ export const connectionUpdateSchema = z.object({
   connectionId: z.uuid(),
   triggerMode: z.enum(["auto", "ai-decide", "direct"]).optional(),
   summaryModel: summaryModelSchema.optional(),
+  /** summaryProvider 可選；未提供時保留既有值（或 fallback 至 sourcePod.provider） */
+  summaryProvider: providerSchema.optional(),
   aiDecideModel: modelTypeSchema.optional(),
 });
 

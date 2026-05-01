@@ -429,7 +429,16 @@
       "aiDecideModelChanged": "AI 決策模型已變更",
       "aiDecideModelChangeFailed": "無法變更 AI 決策模型",
       "modelSwitched": "已切換為 {model}",
-      "loading": "載入中..."
+      "loading": "載入中...",
+      "summaryProvider": "Summary Provider",
+      "summaryProviderChanged": "Summary Provider 已切換",
+      "summaryProviderChangedDesc": "Provider：{provider}，Model：{model}",
+      "summaryProviderChangeFailed": "Summary Provider 切換失敗",
+      "providerLabel": {
+        "claude": "Claude",
+        "codex": "Codex",
+        "gemini": "Gemini"
+      }
     },
     "confirmDelete": {
       "cannotDelete": "無法刪除",

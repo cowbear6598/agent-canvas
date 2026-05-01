@@ -8,7 +8,7 @@ import type {
   TriggerMode,
   WorkflowRole,
 } from "@/types/connection";
-import type { ModelType } from "@/types/pod";
+import type { ModelType, PodProvider } from "@/types/pod";
 import { usePodStore } from "@/stores/pod/podStore";
 import { useSelectionStore } from "@/stores/pod/selectionStore";
 import {
@@ -47,6 +47,8 @@ interface RawConnection {
   triggerMode?: "auto" | "ai-decide" | "direct";
   /** summaryModel 接受任意 provider 的模型名稱字串，不限於 Claude ModelType */
   summaryModel?: string;
+  /** Summary 功能獨立選用的 Provider；升級前 Connection 為 null/undefined */
+  summaryProvider?: PodProvider | null;
   aiDecideModel?: ModelType;
   connectionStatus?: string;
   decideReason?: string | null;
@@ -65,6 +67,8 @@ function normalizeConnection(raw: RawConnection): Connection {
     ...raw,
     triggerMode: (raw.triggerMode ?? "auto") as TriggerMode,
     summaryModel: raw.summaryModel ?? DEFAULT_SUMMARY_MODEL,
+    // summaryProvider 直接帶入，不加 fallback；UI 層自行決定如何顯示 null/undefined
+    summaryProvider: raw.summaryProvider,
     aiDecideModel: raw.aiDecideModel ?? DEFAULT_AI_DECIDE_MODEL,
     status: (raw.connectionStatus ?? "idle") as ConnectionStatus,
     decideReason: raw.decideReason ?? undefined,
@@ -622,7 +626,7 @@ export const useConnectionStore = defineStore("connection", () => {
     connectionId: string,
     updates: Pick<
       ConnectionUpdatePayload,
-      "triggerMode" | "summaryModel" | "aiDecideModel"
+      "triggerMode" | "summaryModel" | "summaryProvider" | "aiDecideModel"
     >,
     errorMessage: string,
   ): Promise<Connection | null> {
@@ -665,6 +669,23 @@ export const useConnectionStore = defineStore("connection", () => {
     return executeConnectionUpdate(
       connectionId,
       { summaryModel },
+      t("store.connection.summaryModelUpdateFailed"),
+    );
+  }
+
+  /**
+   * 同時更新 summaryProvider 與 summaryModel，確保單一 WS 請求送出，
+   * 避免 provider/model 出現不一致的中間狀態。
+   * 呼叫端負責在呼叫前解析好對應 provider 的預設 model。
+   */
+  async function updateConnectionSummaryProvider(
+    connectionId: string,
+    summaryProvider: PodProvider,
+    summaryModel: string,
+  ): Promise<Connection | null> {
+    return executeConnectionUpdate(
+      connectionId,
+      { summaryProvider, summaryModel },
       t("store.connection.summaryModelUpdateFailed"),
     );
   }
@@ -735,6 +756,11 @@ export const useConnectionStore = defineStore("connection", () => {
         connection.summaryModel ??
         existingConnection.summaryModel ??
         DEFAULT_SUMMARY_MODEL,
+      // summaryProvider 未帶欄位（undefined）時保留既有值；帶入 null 或具體值則直接寫入
+      summaryProvider:
+        connection.summaryProvider !== undefined
+          ? connection.summaryProvider
+          : existingConnection.summaryProvider,
       aiDecideModel:
         connection.aiDecideModel ??
         existingConnection.aiDecideModel ??
@@ -832,6 +858,7 @@ export const useConnectionStore = defineStore("connection", () => {
     setConnectionStatus,
     updateConnectionTriggerMode,
     updateConnectionSummaryModel,
+    updateConnectionSummaryProvider,
     updateConnectionAiDecideModel,
     getWorkflowHandlers,
     setupWorkflowListeners,

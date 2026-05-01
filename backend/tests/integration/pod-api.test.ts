@@ -116,7 +116,7 @@ describe("POST /api/canvas/:id/pods", () => {
     expect(body.pod.y).toBe(200);
     expect(body.pod.rotation).toBe(0);
     // Pod.model 已移除，providerConfig.model 是唯一來源
-    expect(body.pod.providerConfig?.model).toBe("opus");
+    expect(body.pod.providerConfig?.model).toBe("sonnet");
   });
 
   it("成功建立 Pod 並指定 model 為 sonnet", async () => {

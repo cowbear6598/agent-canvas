@@ -68,4 +68,10 @@ describe("GEMINI_AVAILABLE_MODEL_VALUES smoke 測試", () => {
       expect(modelValues.has(v)).toBe(true);
     }
   });
+
+  // B10：GEMINI_AVAILABLE_MODELS[0].value 必須為 "gemini-2.5-flash"
+  // 保護：確保 Flash 在清單第一位，connectionStore.create 預設模型才能正確對應
+  it("B10: GEMINI_AVAILABLE_MODELS[0].value 必須為 gemini-2.5-flash（預設模型的清單順位）", () => {
+    expect(GEMINI_AVAILABLE_MODELS[0].value).toBe("gemini-2.5-flash");
+  });
 });

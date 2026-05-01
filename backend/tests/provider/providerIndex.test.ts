@@ -53,13 +53,14 @@ describe("getProvider().metadata.capabilities", () => {
 // getProvider().metadata.availableModels
 // ================================================================
 describe("getProvider().metadata.availableModels", () => {
-  it("claude 的 availableModels 應為 Opus / Sonnet / Haiku 三筆且 label + value 完全一致", () => {
+  it("claude 的 availableModels 應為 Sonnet / Opus / Haiku 三筆且 label + value 完全一致", () => {
     const models = getProvider("claude").metadata.availableModels;
 
     // 明確斷言長度與每筆內容，避免順序改動或缺漏未被捕捉
+    // Sonnet 為第一筆（前端 getDefaultModel 取 [0]，對齊 defaultOptions.model）
     expect(models).toHaveLength(3);
-    expect(models[0]).toEqual({ label: "Opus", value: "opus" });
-    expect(models[1]).toEqual({ label: "Sonnet", value: "sonnet" });
+    expect(models[0]).toEqual({ label: "Sonnet", value: "sonnet" });
+    expect(models[1]).toEqual({ label: "Opus", value: "opus" });
     expect(models[2]).toEqual({ label: "Haiku", value: "haiku" });
   });
 

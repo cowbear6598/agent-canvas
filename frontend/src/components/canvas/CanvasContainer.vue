@@ -436,6 +436,7 @@ const handleOpenModal = (payload: { type: string }): void => {
     :current-trigger-mode="connectionContextMenu.data.triggerMode"
     :current-summary-model="connectionContextMenu.data.summaryModel"
     :current-ai-decide-model="connectionContextMenu.data.aiDecideModel"
+    :current-summary-provider="connectionContextMenu.data.summaryProvider"
     @close="closeConnectionContextMenu"
     @trigger-mode-changed="closeConnectionContextMenu"
     @ai-decide-model-changed="closeConnectionContextMenu"

@@ -39,17 +39,31 @@ function mountMenu(props: Record<string, unknown> = {}) {
   });
 }
 
-/** 展開 Summary Model 子選單（hover 第一個 .relative 容器） */
+/**
+ * DOM 中 .relative 容器的順序（對應 template 宣告順序）：
+ *   [0] Summary Provider 子選單
+ *   [1] Summary Model 子選單
+ *   [2] AI Model 子選單
+ */
+
+/** 展開 Summary Provider 子選單（hover 第 0 個 .relative 容器） */
+async function openProviderMenu(wrapper: ReturnType<typeof mountMenu>) {
+  const providerWrapper = wrapper.findAll(".relative")[0]!;
+  await providerWrapper.trigger("mouseenter");
+  await wrapper.vm.$nextTick();
+}
+
+/** 展開 Summary Model 子選單（hover 第 1 個 .relative 容器） */
 async function openSummaryMenu(wrapper: ReturnType<typeof mountMenu>) {
-  const summaryWrapper = wrapper.find(".relative");
+  const summaryWrapper = wrapper.findAll(".relative")[1]!;
   await summaryWrapper.trigger("mouseenter");
   await wrapper.vm.$nextTick();
 }
 
-/** 展開 AI Model 子選單（hover 第二個 .relative 容器） */
+/** 展開 AI Model 子選單（hover 第 2 個 .relative 容器） */
 async function openAiModelMenu(wrapper: ReturnType<typeof mountMenu>) {
   const relativeWrappers = wrapper.findAll(".relative");
-  const aiModelWrapper = relativeWrappers[1]!;
+  const aiModelWrapper = relativeWrappers[2]!;
   await aiModelWrapper.trigger("mouseenter");
   await wrapper.vm.$nextTick();
 }
@@ -439,7 +453,7 @@ describe("ConnectionContextMenu", () => {
       async ({ currentTriggerMode }) => {
         const wrapper = mountMenu({ currentTriggerMode });
         const relativeWrappers = wrapper.findAll(".relative");
-        const aiModelWrapper = relativeWrappers[1]!;
+        const aiModelWrapper = relativeWrappers[2]!;
         expect(aiModelWrapper.classes()).toContain("opacity-50");
         await openAiModelMenu(wrapper);
         expect(aiModelWrapper.find(".absolute").exists()).toBe(false);
@@ -456,7 +470,7 @@ describe("ConnectionContextMenu", () => {
       });
       await openAiModelMenu(wrapper);
       const relativeWrappers = wrapper.findAll(".relative");
-      const aiModelWrapper = relativeWrappers[1]!;
+      const aiModelWrapper = relativeWrappers[2]!;
       const buttons = aiModelWrapper.findAll("button");
       const sonnetBtn = buttons.find((b) => b.text().includes("Sonnet"));
       expect(sonnetBtn?.classes()).toContain("bg-secondary");
@@ -470,7 +484,7 @@ describe("ConnectionContextMenu", () => {
       });
       await openAiModelMenu(wrapper);
       const relativeWrappers = wrapper.findAll(".relative");
-      const aiModelWrapper = relativeWrappers[1]!;
+      const aiModelWrapper = relativeWrappers[2]!;
       const buttons = aiModelWrapper.findAll("button");
       const haikuBtn = buttons.find((b) => b.text().includes("Haiku"));
       expect(haikuBtn?.classes()).toContain("bg-secondary");
@@ -484,7 +498,7 @@ describe("ConnectionContextMenu", () => {
       });
       await openAiModelMenu(wrapper);
       const relativeWrappers = wrapper.findAll(".relative");
-      const aiModelWrapper = relativeWrappers[1]!;
+      const aiModelWrapper = relativeWrappers[2]!;
       const buttons = aiModelWrapper.findAll("button");
       const opusBtn = buttons.find((b) => b.text().includes("Opus"));
       expect(opusBtn?.classes()).toContain("bg-secondary");
@@ -498,7 +512,7 @@ describe("ConnectionContextMenu", () => {
       });
       await openAiModelMenu(wrapper);
       const relativeWrappers = wrapper.findAll(".relative");
-      const aiModelWrapper = relativeWrappers[1]!;
+      const aiModelWrapper = relativeWrappers[2]!;
       const buttons = aiModelWrapper.findAll("button");
       const haikuBtn = buttons.find((b) => b.text().includes("Haiku"));
       expect(haikuBtn?.classes()).not.toContain("border-l-2");
@@ -527,7 +541,7 @@ describe("ConnectionContextMenu", () => {
       });
       await openAiModelMenu(wrapper);
       const relativeWrappers = wrapper.findAll(".relative");
-      const aiModelWrapper = relativeWrappers[1]!;
+      const aiModelWrapper = relativeWrappers[2]!;
       const buttons = aiModelWrapper.findAll("button");
       const haikuBtn = buttons.find((b) => b.text().includes("Haiku"));
       await haikuBtn?.trigger("click");
@@ -555,7 +569,7 @@ describe("ConnectionContextMenu", () => {
       });
       await openAiModelMenu(wrapper);
       const relativeWrappers = wrapper.findAll(".relative");
-      const aiModelWrapper = relativeWrappers[1]!;
+      const aiModelWrapper = relativeWrappers[2]!;
       const buttons = aiModelWrapper.findAll("button");
       const haikuBtn = buttons.find((b) => b.text().includes("Haiku"));
       await haikuBtn?.trigger("click");
@@ -573,7 +587,7 @@ describe("ConnectionContextMenu", () => {
       });
       await openAiModelMenu(wrapper);
       const relativeWrappers = wrapper.findAll(".relative");
-      const aiModelWrapper = relativeWrappers[1]!;
+      const aiModelWrapper = relativeWrappers[2]!;
       const buttons = aiModelWrapper.findAll("button");
       const haikuBtn = buttons.find((b) => b.text().includes("Haiku"));
       await haikuBtn?.trigger("click");
@@ -589,7 +603,7 @@ describe("ConnectionContextMenu", () => {
       });
       await openAiModelMenu(wrapper);
       const relativeWrappers = wrapper.findAll(".relative");
-      const aiModelWrapper = relativeWrappers[1]!;
+      const aiModelWrapper = relativeWrappers[2]!;
       const buttons = aiModelWrapper.findAll("button");
       const haikuBtn = buttons.find((b) => b.text().includes("Haiku"));
       await haikuBtn?.trigger("click");
@@ -611,7 +625,7 @@ describe("ConnectionContextMenu", () => {
       });
       await openAiModelMenu(wrapper);
       const relativeWrappers = wrapper.findAll(".relative");
-      const aiModelWrapper = relativeWrappers[1]!;
+      const aiModelWrapper = relativeWrappers[2]!;
       const buttons = aiModelWrapper.findAll("button");
       const sonnetBtn = buttons.find((b) => b.text().includes("Sonnet"));
       await sonnetBtn?.trigger("click");
@@ -627,7 +641,7 @@ describe("ConnectionContextMenu", () => {
       });
       await openAiModelMenu(wrapper);
       const relativeWrappers = wrapper.findAll(".relative");
-      const aiModelWrapper = relativeWrappers[1]!;
+      const aiModelWrapper = relativeWrappers[2]!;
       const buttons = aiModelWrapper.findAll("button");
       const haikuBtn = buttons.find((b) => b.text().includes("Haiku"));
       await haikuBtn?.trigger("click");
@@ -650,7 +664,7 @@ describe("ConnectionContextMenu", () => {
       });
       await openAiModelMenu(wrapper);
       const relativeWrappers = wrapper.findAll(".relative");
-      const aiModelWrapper = relativeWrappers[1]!;
+      const aiModelWrapper = relativeWrappers[2]!;
       const buttons = aiModelWrapper.findAll("button");
       const haikuBtn = buttons.find((b) => b.text().includes("Haiku"));
       await haikuBtn?.trigger("click");
@@ -671,7 +685,7 @@ describe("ConnectionContextMenu", () => {
       });
       await openAiModelMenu(wrapper);
       const relativeWrappers = wrapper.findAll(".relative");
-      const aiModelWrapper = relativeWrappers[1]!;
+      const aiModelWrapper = relativeWrappers[2]!;
       const buttons = aiModelWrapper.findAll("button");
       const haikuBtn = buttons.find((b) => b.text().includes("Haiku"));
       await haikuBtn?.trigger("click");
@@ -689,7 +703,7 @@ describe("ConnectionContextMenu", () => {
       });
       await openAiModelMenu(wrapper);
       const relativeWrappers = wrapper.findAll(".relative");
-      const aiModelWrapper = relativeWrappers[1]!;
+      const aiModelWrapper = relativeWrappers[2]!;
       const buttons = aiModelWrapper.findAll("button");
       const haikuBtn = buttons.find((b) => b.text().includes("Haiku"));
       await haikuBtn?.trigger("click");
@@ -844,7 +858,7 @@ describe("ConnectionContextMenu", () => {
       await openAiModelMenu(wrapper);
 
       const relativeWrappers = wrapper.findAll(".relative");
-      const aiModelWrapper = relativeWrappers[1]!;
+      const aiModelWrapper = relativeWrappers[2]!;
       const buttons = aiModelWrapper.findAll("button");
       const labels = buttons.map((b) => b.text());
       expect(labels.some((l) => l.includes("Haiku"))).toBe(true);
@@ -885,7 +899,7 @@ describe("ConnectionContextMenu", () => {
       await openAiModelMenu(wrapper);
 
       const relativeWrappers = wrapper.findAll(".relative");
-      const aiModelWrapper = relativeWrappers[1]!;
+      const aiModelWrapper = relativeWrappers[2]!;
       const buttons = aiModelWrapper.findAll("button");
       const labels = buttons.map((b) => b.text());
       // AI Decide Model 硬編碼 Claude 三選一，不受上游 provider 影響
@@ -1087,6 +1101,545 @@ describe("ConnectionContextMenu", () => {
       await flushPromises();
 
       expect(wrapper.emitted("close")).toBeFalsy();
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────
+  describe("Summary Provider 子選單渲染", () => {
+    it("應顯示 Summary Provider 標題文字", () => {
+      const wrapper = mountMenu();
+      expect(wrapper.text()).toContain("Summary Provider");
+    });
+
+    it("展開後應顯示 Claude / Codex / Gemini 三個 provider 選項", async () => {
+      const wrapper = mountMenu();
+      await openProviderMenu(wrapper);
+
+      const providerWrapper = wrapper.findAll(".relative")[0]!;
+      const buttons = providerWrapper.findAll("button");
+      const labels = buttons.map((b) => b.text());
+
+      expect(labels.some((l) => l.includes("Claude"))).toBe(true);
+      expect(labels.some((l) => l.includes("Codex"))).toBe(true);
+      expect(labels.some((l) => l.includes("Gemini"))).toBe(true);
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────
+  describe("Summary Provider currentProvider 計算邏輯", () => {
+    it("舊 Connection（summaryProvider 為 undefined）的 currentProvider 應 fallback 為來源 Pod provider", async () => {
+      // setupDefaultStoreState 注入的 connection 沒有 summaryProvider 欄位（undefined）
+      // 且上游 Pod provider 為 claude
+      const connectionStore = useConnectionStore();
+      // 確認 connection 沒有 summaryProvider
+      connectionStore.connections = [
+        {
+          id: "conn-123",
+          sourcePodId: "pod-upstream",
+          targetPodId: "pod-target",
+          sourceAnchor: "bottom",
+          targetAnchor: "top",
+          triggerMode: "auto",
+          summaryModel: "sonnet",
+          aiDecideModel: "sonnet",
+          status: "idle",
+          // summaryProvider 刻意不設定，模擬舊 Connection
+        },
+      ] as typeof connectionStore.connections;
+
+      const wrapper = mountMenu();
+      await openProviderMenu(wrapper);
+
+      const providerWrapper = wrapper.findAll(".relative")[0]!;
+      const buttons = providerWrapper.findAll("button");
+
+      // Claude 按鈕應有 active 樣式，代表 currentProvider = claude（來源 Pod provider）
+      const claudeBtn = buttons.find((b) => b.text().includes("Claude"));
+      expect(claudeBtn?.classes()).toContain("bg-secondary");
+      expect(claudeBtn?.classes()).toContain("border-l-2");
+    });
+
+    it("Connection summaryProvider 為 gemini 時 currentProvider 應優先取 gemini 而非 Pod provider", async () => {
+      const connectionStore = useConnectionStore();
+      connectionStore.connections = [
+        {
+          id: "conn-123",
+          sourcePodId: "pod-upstream",
+          targetPodId: "pod-target",
+          sourceAnchor: "bottom",
+          targetAnchor: "top",
+          triggerMode: "auto",
+          summaryModel: "gemini-2.5-flash",
+          summaryProvider: "gemini",
+          aiDecideModel: "sonnet",
+          status: "idle",
+        },
+      ] as typeof connectionStore.connections;
+
+      // 補上 Gemini capability 讓 summaryModelOptions 正常解析
+      const capabilityStore = useProviderCapabilityStore();
+      capabilityStore.syncFromPayload([
+        {
+          name: "claude",
+          capabilities: {
+            chat: true,
+            plugin: false,
+            repository: true,
+            command: true,
+            mcp: true,
+          },
+          availableModels: [
+            { value: "haiku", label: "Haiku" },
+            { value: "sonnet", label: "Sonnet" },
+            { value: "opus", label: "Opus" },
+          ],
+        },
+        {
+          name: "gemini",
+          capabilities: {
+            chat: true,
+            plugin: false,
+            repository: false,
+            command: false,
+            mcp: false,
+          },
+          availableModels: [
+            { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+            { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+          ],
+        },
+      ]);
+
+      const wrapper = mountMenu();
+      await openProviderMenu(wrapper);
+
+      const providerWrapper = wrapper.findAll(".relative")[0]!;
+      const buttons = providerWrapper.findAll("button");
+
+      // Gemini 按鈕應有 active 樣式
+      const geminiBtn = buttons.find((b) => b.text().includes("Gemini"));
+      expect(geminiBtn?.classes()).toContain("bg-secondary");
+      expect(geminiBtn?.classes()).toContain("border-l-2");
+
+      // Claude 按鈕不應有 active 樣式
+      const claudeBtn = buttons.find((b) => b.text().includes("Claude"));
+      expect(claudeBtn?.classes()).not.toContain("border-l-2");
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────
+  describe("summaryModelOptions 依 currentProvider 動態渲染", () => {
+    it("currentProvider 為 gemini 時，Summary Model 子選單應顯示 Gemini 模型", async () => {
+      const connectionStore = useConnectionStore();
+      connectionStore.connections = [
+        {
+          id: "conn-123",
+          sourcePodId: "pod-upstream",
+          targetPodId: "pod-target",
+          sourceAnchor: "bottom",
+          targetAnchor: "top",
+          triggerMode: "auto",
+          summaryModel: "gemini-2.5-flash",
+          summaryProvider: "gemini",
+          aiDecideModel: "sonnet",
+          status: "idle",
+        },
+      ] as typeof connectionStore.connections;
+
+      const capabilityStore = useProviderCapabilityStore();
+      capabilityStore.syncFromPayload([
+        {
+          name: "gemini",
+          capabilities: {
+            chat: true,
+            plugin: false,
+            repository: false,
+            command: false,
+            mcp: false,
+          },
+          availableModels: [
+            { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+            { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+          ],
+        },
+      ]);
+
+      const wrapper = mountMenu();
+      await openSummaryMenu(wrapper);
+
+      const buttons = wrapper.findAll("button");
+      const labels = buttons.map((b) => b.text());
+      expect(labels.some((l) => l.includes("Gemini 2.5 Flash"))).toBe(true);
+      expect(labels.some((l) => l.includes("Gemini 2.5 Pro"))).toBe(true);
+      // 不應顯示 Claude 模型
+      expect(labels.some((l) => l.includes("Haiku"))).toBe(false);
+      expect(labels.some((l) => l.includes("Sonnet"))).toBe(false);
+    });
+
+    it("connection summaryProvider 切換為 codex 後，Summary Model 子選單應顯示 Codex 模型", async () => {
+      const connectionStore = useConnectionStore();
+      connectionStore.connections = [
+        {
+          id: "conn-123",
+          sourcePodId: "pod-upstream",
+          targetPodId: "pod-target",
+          sourceAnchor: "bottom",
+          targetAnchor: "top",
+          triggerMode: "auto",
+          summaryModel: "gpt-5.4",
+          summaryProvider: "codex",
+          aiDecideModel: "sonnet",
+          status: "idle",
+        },
+      ] as typeof connectionStore.connections;
+
+      const capabilityStore = useProviderCapabilityStore();
+      capabilityStore.syncFromPayload([
+        {
+          name: "codex",
+          capabilities: {
+            chat: true,
+            plugin: false,
+            repository: false,
+            command: false,
+            mcp: false,
+          },
+          availableModels: [
+            { value: "gpt-5.4", label: "GPT-5.4" },
+            { value: "gpt-4.5", label: "GPT-4.5" },
+          ],
+        },
+      ]);
+
+      const wrapper = mountMenu();
+      await openSummaryMenu(wrapper);
+
+      const buttons = wrapper.findAll("button");
+      const labels = buttons.map((b) => b.text());
+      expect(labels.some((l) => l.includes("GPT-5.4"))).toBe(true);
+      expect(labels.some((l) => l.includes("GPT-4.5"))).toBe(true);
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────
+  describe("Summary Provider 點擊子選單項目 - 成功流程", () => {
+    it("點擊 Gemini（非當前 claude）應呼叫 updateConnectionSummaryProvider，含 provider 與該 provider 預設模型", async () => {
+      // 設定 Gemini capability，讓 getDefaultModel 能回傳正確預設模型
+      const capabilityStore = useProviderCapabilityStore();
+      capabilityStore.syncFromPayload([
+        {
+          name: "claude",
+          capabilities: {
+            chat: true,
+            plugin: false,
+            repository: true,
+            command: true,
+            mcp: true,
+          },
+          availableModels: [
+            { value: "haiku", label: "Haiku" },
+            { value: "sonnet", label: "Sonnet" },
+            { value: "opus", label: "Opus" },
+          ],
+        },
+        {
+          name: "gemini",
+          capabilities: {
+            chat: true,
+            plugin: false,
+            repository: false,
+            command: false,
+            mcp: false,
+          },
+          // 第一個模型作為 getDefaultModel 回傳值
+          availableModels: [
+            { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+            { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+          ],
+        },
+      ]);
+
+      mockCreateWebSocketRequest.mockResolvedValue({
+        connection: {
+          id: "conn-123",
+          sourcePodId: "pod-upstream",
+          sourceAnchor: "bottom",
+          targetPodId: "pod-target",
+          targetAnchor: "top",
+          summaryProvider: "gemini",
+          summaryModel: "gemini-2.5-flash",
+        },
+      });
+
+      const connectionStore = useConnectionStore();
+      const spy = vi.spyOn(connectionStore, "updateConnectionSummaryProvider");
+
+      const wrapper = mountMenu();
+      await openProviderMenu(wrapper);
+
+      const providerWrapper = wrapper.findAll(".relative")[0]!;
+      const buttons = providerWrapper.findAll("button");
+      const geminiBtn = buttons.find((b) => b.text().includes("Gemini"));
+      await geminiBtn?.trigger("click");
+      await flushPromises();
+
+      // 第一個模型 "gemini-2.5-flash" 為 getDefaultModel 回傳值
+      expect(spy).toHaveBeenCalledWith(
+        "conn-123",
+        "gemini",
+        "gemini-2.5-flash",
+      );
+    });
+
+    it("點擊 Codex（非當前 claude）應呼叫 updateConnectionSummaryProvider，含 codex 預設模型", async () => {
+      const capabilityStore = useProviderCapabilityStore();
+      capabilityStore.syncFromPayload([
+        {
+          name: "claude",
+          capabilities: {
+            chat: true,
+            plugin: false,
+            repository: true,
+            command: true,
+            mcp: true,
+          },
+          availableModels: [
+            { value: "haiku", label: "Haiku" },
+            { value: "sonnet", label: "Sonnet" },
+            { value: "opus", label: "Opus" },
+          ],
+        },
+        {
+          name: "codex",
+          capabilities: {
+            chat: true,
+            plugin: false,
+            repository: false,
+            command: false,
+            mcp: false,
+          },
+          availableModels: [
+            { value: "gpt-5.4", label: "GPT-5.4" },
+            { value: "gpt-4.5", label: "GPT-4.5" },
+          ],
+        },
+      ]);
+
+      mockCreateWebSocketRequest.mockResolvedValue({
+        connection: {
+          id: "conn-123",
+          sourcePodId: "pod-upstream",
+          sourceAnchor: "bottom",
+          targetPodId: "pod-target",
+          targetAnchor: "top",
+          summaryProvider: "codex",
+          summaryModel: "gpt-5.4",
+        },
+      });
+
+      const connectionStore = useConnectionStore();
+      const spy = vi.spyOn(connectionStore, "updateConnectionSummaryProvider");
+
+      const wrapper = mountMenu();
+      await openProviderMenu(wrapper);
+
+      const providerWrapper = wrapper.findAll(".relative")[0]!;
+      const buttons = providerWrapper.findAll("button");
+      const codexBtn = buttons.find((b) => b.text().includes("Codex"));
+      await codexBtn?.trigger("click");
+      await flushPromises();
+
+      expect(spy).toHaveBeenCalledWith("conn-123", "codex", "gpt-5.4");
+    });
+
+    it("切換 provider 成功後應顯示成功 toast，title 為 Summary Provider 已切換", async () => {
+      const capabilityStore = useProviderCapabilityStore();
+      capabilityStore.syncFromPayload([
+        {
+          name: "claude",
+          capabilities: {
+            chat: true,
+            plugin: false,
+            repository: true,
+            command: true,
+            mcp: true,
+          },
+          availableModels: [
+            { value: "haiku", label: "Haiku" },
+            { value: "sonnet", label: "Sonnet" },
+            { value: "opus", label: "Opus" },
+          ],
+        },
+        {
+          name: "gemini",
+          capabilities: {
+            chat: true,
+            plugin: false,
+            repository: false,
+            command: false,
+            mcp: false,
+          },
+          availableModels: [
+            { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+          ],
+        },
+      ]);
+
+      mockCreateWebSocketRequest.mockResolvedValue({
+        connection: {
+          id: "conn-123",
+          sourcePodId: "pod-upstream",
+          sourceAnchor: "bottom",
+          targetPodId: "pod-target",
+          targetAnchor: "top",
+          summaryProvider: "gemini",
+          summaryModel: "gemini-2.5-flash",
+        },
+      });
+
+      const { toasts } = useToast();
+      const wrapper = mountMenu();
+      await openProviderMenu(wrapper);
+
+      const providerWrapper = wrapper.findAll(".relative")[0]!;
+      const buttons = providerWrapper.findAll("button");
+      const geminiBtn = buttons.find((b) => b.text().includes("Gemini"));
+      await geminiBtn?.trigger("click");
+      await flushPromises();
+
+      expect(
+        toasts.value.some((t) => t.title === "Summary Provider 已切換"),
+      ).toBe(true);
+    });
+
+    it("切換 provider 成功後應 emit summary-model-changed（非透過 updateConnectionSummaryModel 路徑）", async () => {
+      const capabilityStore = useProviderCapabilityStore();
+      capabilityStore.syncFromPayload([
+        {
+          name: "claude",
+          capabilities: {
+            chat: true,
+            plugin: false,
+            repository: true,
+            command: true,
+            mcp: true,
+          },
+          availableModels: [{ value: "sonnet", label: "Sonnet" }],
+        },
+        {
+          name: "gemini",
+          capabilities: {
+            chat: true,
+            plugin: false,
+            repository: false,
+            command: false,
+            mcp: false,
+          },
+          availableModels: [
+            { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+          ],
+        },
+      ]);
+
+      mockCreateWebSocketRequest.mockResolvedValue({
+        connection: {
+          id: "conn-123",
+          sourcePodId: "pod-upstream",
+          sourceAnchor: "bottom",
+          targetPodId: "pod-target",
+          targetAnchor: "top",
+          summaryProvider: "gemini",
+          summaryModel: "gemini-2.5-flash",
+        },
+      });
+
+      const wrapper = mountMenu();
+      await openProviderMenu(wrapper);
+
+      const providerWrapper = wrapper.findAll(".relative")[0]!;
+      const buttons = providerWrapper.findAll("button");
+      const geminiBtn = buttons.find((b) => b.text().includes("Gemini"));
+      await geminiBtn?.trigger("click");
+      await flushPromises();
+
+      expect(wrapper.emitted("summary-model-changed")).toBeTruthy();
+      expect(wrapper.emitted("close")).toBeTruthy();
+    });
+
+    it("點擊已選中的 provider 不應呼叫 updateConnectionSummaryProvider，直接 emit close", async () => {
+      // 當前 connection 的 summaryProvider 為 claude（默認 setupDefaultStoreState）
+      const connectionStore = useConnectionStore();
+      const spy = vi.spyOn(connectionStore, "updateConnectionSummaryProvider");
+
+      const wrapper = mountMenu();
+      await openProviderMenu(wrapper);
+
+      const providerWrapper = wrapper.findAll(".relative")[0]!;
+      const buttons = providerWrapper.findAll("button");
+      const claudeBtn = buttons.find((b) => b.text().includes("Claude"));
+      await claudeBtn?.trigger("click");
+      await flushPromises();
+
+      expect(spy).not.toHaveBeenCalled();
+      expect(wrapper.emitted("close")).toBeTruthy();
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────
+  describe("Summary Provider 失敗流程", () => {
+    it("updateConnectionSummaryProvider 失敗時應顯示失敗 toast 且不 emit close", async () => {
+      // WS 回傳無 connection 欄位 → store action 回傳 null
+      mockCreateWebSocketRequest.mockResolvedValue({});
+      const { toasts } = useToast();
+
+      const wrapper = mountMenu();
+      await openProviderMenu(wrapper);
+
+      const providerWrapper = wrapper.findAll(".relative")[0]!;
+      const buttons = providerWrapper.findAll("button");
+      const geminiBtn = buttons.find((b) => b.text().includes("Gemini"));
+      await geminiBtn?.trigger("click");
+      await flushPromises();
+
+      expect(toasts.value.some((t) => t.title === "變更失敗")).toBe(true);
+      expect(wrapper.emitted("close")).toBeFalsy();
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────
+  describe("Summary Model 子選單（透過 updateConnectionSummaryModel 路徑，非 provider update）", () => {
+    it("點擊 Model 子選單項目應呼叫 updateConnectionSummaryModel，不經由 updateConnectionSummaryProvider", async () => {
+      const connectionStore = useConnectionStore();
+      const modelSpy = vi.spyOn(
+        connectionStore,
+        "updateConnectionSummaryModel",
+      );
+      const providerSpy = vi.spyOn(
+        connectionStore,
+        "updateConnectionSummaryProvider",
+      );
+
+      mockCreateWebSocketRequest.mockResolvedValue({
+        connection: {
+          id: "conn-123",
+          sourcePodId: "pod-upstream",
+          sourceAnchor: "bottom",
+          targetPodId: "pod-target",
+          targetAnchor: "top",
+          summaryModel: "haiku",
+        },
+      });
+
+      const wrapper = mountMenu({ currentSummaryModel: "sonnet" });
+      await openSummaryMenu(wrapper);
+
+      const buttons = wrapper.findAll("button");
+      const haikuBtn = buttons.find((b) => b.text().includes("Haiku"));
+      await haikuBtn?.trigger("click");
+      await flushPromises();
+
+      expect(modelSpy).toHaveBeenCalledWith("conn-123", "haiku");
+      expect(providerSpy).not.toHaveBeenCalled();
     });
   });
 });
