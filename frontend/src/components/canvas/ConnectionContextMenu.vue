@@ -227,18 +227,27 @@ const PROVIDER_OPTIONS: { value: PodProvider; label: string }[] = [
 ];
 
 /**
+ * 當前 connectionId 對應的 Connection 快照。
+ * 所有需要查 connection 欄位的 computed / 函式共用此結果，
+ * 避免 v-for 渲染時對 connections 陣列做多次線性掃描。
+ */
+const connection = computed(() =>
+  connectionStore.findConnectionById(props.connectionId),
+);
+
+/**
  * 當前 Summary 使用的 provider，優先取 connection.summaryProvider，
  * 若為 null/undefined（舊 Connection）則 fallback 為來源 Pod 的 provider。
  * connection 或 sourcePod 任一不存在時回傳 undefined，讓 template 顯示載入中。
  */
 const currentProvider = computed((): PodProvider | undefined => {
-  const connection = connectionStore.findConnectionById(props.connectionId);
-  if (!connection?.sourcePodId) return undefined;
+  const conn = connection.value;
+  if (!conn?.sourcePodId) return undefined;
 
-  const sourcePod = podStore.getPodById(connection.sourcePodId);
+  const sourcePod = podStore.getPodById(conn.sourcePodId);
   if (!sourcePod) return undefined;
 
-  return connection.summaryProvider ?? sourcePod.provider;
+  return conn.summaryProvider ?? sourcePod.provider;
 });
 
 /**
@@ -264,18 +273,19 @@ const summaryModelOptions = computed(() => {
  *   active 僅比對 model，因為 currentProvider 此時來自來源 Pod，model 比對仍合理。
  * 對已設定 summaryProvider 的 Connection：
  *   active 需同時比對 provider 與 model，避免 provider 切換後舊 model 名稱仍被標亮。
+ * 直接取 connection.value（shared computed），v-for 中 2 次呼叫不再重新掃描陣列。
  */
 const isSummaryModelActive = (optionValue: string): boolean => {
-  const connection = connectionStore.findConnectionById(props.connectionId);
+  const conn = connection.value;
 
-  if (connection?.summaryProvider == null) {
+  if (conn?.summaryProvider == null) {
     // 舊 Connection：summaryProvider 未設定，僅以 model 值比對
     return props.currentSummaryModel === optionValue;
   }
 
   // 新 Connection：需同時確認 currentProvider 與儲存的 summaryProvider 一致，再比對 model
   return (
-    currentProvider.value === connection.summaryProvider &&
+    currentProvider.value === conn.summaryProvider &&
     props.currentSummaryModel === optionValue
   );
 };

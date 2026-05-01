@@ -211,6 +211,106 @@ describe("ConnectionContextMenu", () => {
       const haikuBtn = buttons.find((b) => b.text().includes("Haiku"));
       expect(haikuBtn?.classes()).not.toContain("border-l-2");
     });
+
+    it("summaryProvider=gemini 且 currentSummaryModel=gemini-2.5-flash 時，Gemini 2.5 Flash 按鈕應有選中樣式，其他 Gemini 模型沒有", async () => {
+      // 安排 sourcePod 為 claude，但 connection.summaryProvider 為 gemini
+      const connectionStore = useConnectionStore();
+      connectionStore.connections = [
+        {
+          id: "conn-123",
+          sourcePodId: "pod-upstream",
+          targetPodId: "pod-target",
+          sourceAnchor: "bottom",
+          targetAnchor: "top",
+          triggerMode: "auto",
+          summaryModel: "gemini-2.5-flash",
+          summaryProvider: "gemini",
+          aiDecideModel: "sonnet",
+          status: "idle",
+        },
+      ] as typeof connectionStore.connections;
+
+      // 注入 Gemini capability
+      const capabilityStore = useProviderCapabilityStore();
+      capabilityStore.syncFromPayload([
+        {
+          name: "gemini",
+          capabilities: {
+            chat: true,
+            plugin: false,
+            repository: false,
+            command: false,
+            mcp: false,
+          },
+          availableModels: [
+            { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+            { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+          ],
+        },
+      ]);
+
+      const wrapper = mountMenu({ currentSummaryModel: "gemini-2.5-flash" });
+      await openSummaryMenu(wrapper);
+      const buttons = wrapper.findAll("button");
+
+      // Gemini 2.5 Flash 應有選中樣式
+      const flashBtn = buttons.find((b) =>
+        b.text().includes("Gemini 2.5 Flash"),
+      );
+      expect(flashBtn?.classes()).toContain("border-l-2");
+
+      // Gemini 2.5 Pro 不應有選中樣式
+      const proBtn = buttons.find((b) => b.text().includes("Gemini 2.5 Pro"));
+      expect(proBtn?.classes()).not.toContain("border-l-2");
+    });
+
+    it("summaryProvider=gemini 但 currentSummaryModel 為 claude 模型（跨 provider）時，沒有任何 model 按鈕應有選中樣式", async () => {
+      // summaryProvider=gemini，但 currentSummaryModel 帶入 claude 的 "sonnet"（跨 provider 錯位情境）
+      const connectionStore = useConnectionStore();
+      connectionStore.connections = [
+        {
+          id: "conn-123",
+          sourcePodId: "pod-upstream",
+          targetPodId: "pod-target",
+          sourceAnchor: "bottom",
+          targetAnchor: "top",
+          triggerMode: "auto",
+          summaryModel: "sonnet",
+          summaryProvider: "gemini",
+          aiDecideModel: "sonnet",
+          status: "idle",
+        },
+      ] as typeof connectionStore.connections;
+
+      // 注入 Gemini capability
+      const capabilityStore = useProviderCapabilityStore();
+      capabilityStore.syncFromPayload([
+        {
+          name: "gemini",
+          capabilities: {
+            chat: true,
+            plugin: false,
+            repository: false,
+            command: false,
+            mcp: false,
+          },
+          availableModels: [
+            { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+            { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+          ],
+        },
+      ]);
+
+      const wrapper = mountMenu({ currentSummaryModel: "sonnet" });
+      await openSummaryMenu(wrapper);
+      const buttons = wrapper.findAll("button");
+
+      // 確認選單中所有 model 按鈕都沒有 border-l-2（避免 claude 模型被誤標在 gemini 選單中）
+      const modelButtons = buttons.filter((b) => b.text().includes("Gemini"));
+      for (const btn of modelButtons) {
+        expect(btn.classes()).not.toContain("border-l-2");
+      }
+    });
   });
 
   // ──────────────────────────────────────────────────────────────

@@ -393,5 +393,38 @@ describe("connectionStore — summaryModel 驗證邏輯", () => {
       // summaryProvider 仍應為 NULL
       expect(updated?.summaryProvider).toBeNull();
     });
+
+    // B6.5: update 只改 summaryModel（既有 summaryProvider=gemini）→ 以 summaryProvider 做驗證，不改動 summaryProvider
+    it("B6.5: update 只改 summaryModel（summaryProvider=gemini）→ 以 summaryProvider=gemini 做驗證；合法時正常更新，不合法時 fallback 至 gemini 預設", () => {
+      insertPod("pod-src", "claude");
+      const conn = connectionStore.create(CANVAS_ID, {
+        sourcePodId: "pod-src",
+        sourceAnchor: "right",
+        targetPodId: "pod-dst",
+        targetAnchor: "left",
+        summaryProvider: "gemini",
+        summaryModel: "gemini-2.5-flash",
+      });
+      expect(conn.summaryProvider).toBe("gemini");
+      expect(conn.summaryModel).toBe("gemini-2.5-flash");
+
+      // 只帶 summaryModel（gemini 合法模型），summaryProvider 未傳入
+      const updated = connectionStore.update(CANVAS_ID, conn.id, {
+        summaryModel: "gemini-2.5-pro",
+      });
+
+      // summaryModel 應更新為新值，summaryProvider 維持 gemini
+      expect(updated?.summaryModel).toBe("gemini-2.5-pro");
+      expect(updated?.summaryProvider).toBe("gemini");
+
+      // 再次 update：帶入 Claude 模型（跨 provider 不合法）
+      const updatedCross = connectionStore.update(CANVAS_ID, conn.id, {
+        summaryModel: "sonnet", // Claude 模型，對 gemini 不合法
+      });
+
+      // 應 fallback 到 gemini 預設，summaryProvider 仍為 gemini
+      expect(updatedCross?.summaryModel).toBe("gemini-2.5-flash");
+      expect(updatedCross?.summaryProvider).toBe("gemini");
+    });
   });
 });

@@ -793,33 +793,53 @@ export const useConnectionStore = defineStore("connection", () => {
    */
   function getInvalidConnectionsForPod(
     podId: string,
-  ): Array<{ connectionId: string; newModel: string }> {
+  ): Array<{
+    connectionId: string;
+    newModel: string;
+    summaryProvider: PodProvider | null | undefined;
+  }> {
     const pod = podStore.getPodById(podId);
     if (!pod) return [];
-
-    const provider = pod.provider;
 
     return connections.value
       .filter((conn) => conn.sourcePodId === podId)
       .flatMap((conn) => {
+        // 驗證時優先使用 conn.summaryProvider，若未設定則 fallback 到 sourcePod.provider
+        const validationProvider = conn.summaryProvider ?? pod.provider;
         const currentModel = conn.summaryModel ?? DEFAULT_SUMMARY_MODEL;
         const isValid = providerCapabilityStore.isModelValidForProvider(
-          provider,
+          validationProvider,
           currentModel,
         );
         if (isValid) return [];
-        const newModel = providerCapabilityStore.getDefaultModel(provider);
+        // newModel 從對應的 summaryProvider 取預設，而非固定用 sourcePod provider
+        const newModel =
+          providerCapabilityStore.getDefaultModel(validationProvider);
         if (!newModel) return [];
-        return [{ connectionId: conn.id, newModel }];
+        return [
+          {
+            connectionId: conn.id,
+            newModel,
+            summaryProvider: conn.summaryProvider,
+          },
+        ];
       });
   }
 
   async function reconcileSummaryModelsForPod(podId: string): Promise<void> {
     const invalidConnections = getInvalidConnectionsForPod(podId);
     await Promise.all(
-      invalidConnections.map(({ connectionId, newModel }) =>
-        updateConnectionSummaryModel(connectionId, newModel),
-      ),
+      invalidConnections.map(({ connectionId, newModel, summaryProvider }) => {
+        // 若 connection 有明確設定 summaryProvider，需同時傳入確保不被清除
+        if (summaryProvider != null) {
+          return updateConnectionSummaryProvider(
+            connectionId,
+            summaryProvider,
+            newModel,
+          );
+        }
+        return updateConnectionSummaryModel(connectionId, newModel);
+      }),
     );
   }
 
