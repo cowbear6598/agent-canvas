@@ -29,48 +29,8 @@ vi.mock("../../src/utils/logger.js", () => ({
 }));
 
 // ── geminiHelpers mock ─────────────────────────────────────────────────
-// collectStderr 使用輕薄 mock 實作：直接讀完 stream 並 join 為字串，不做截斷。
-// 目的：讓測試對 stderr 內容的斷言不依賴 collectStderr 內部截斷行為（如上限、truncated 標記）。
-// buildGeminiEnv 保留真實實作（直接呼叫 actual），避免影響 spawn env 相關斷言。
-vi.mock("../../src/services/gemini/geminiHelpers.js", async (importActual) => {
-  const actual =
-    await importActual<
-      typeof import("../../src/services/gemini/geminiHelpers.js")
-    >();
-  return {
-    ...actual,
-    collectStderr: vi.fn(
-      async (
-        proc: Bun.Subprocess<"pipe" | "ignore", "pipe", "pipe">,
-        _abortSignal: AbortSignal,
-        options?: string | { logPrefix?: string; onLine?: (line: string) => void },
-      ): Promise<string> => {
-        const chunks: string[] = [];
-        let buffer = "";
-        const onLine =
-          typeof options === "object" && options !== null
-            ? options.onLine
-            : undefined;
-        for await (const chunk of proc.stderr as ReadableStream<Uint8Array>) {
-          const text = Buffer.from(chunk as Uint8Array).toString("utf-8");
-          chunks.push(text);
-          if (onLine) {
-            buffer += text;
-            const lines = buffer.split("\n");
-            buffer = lines.pop() ?? "";
-            for (const line of lines) {
-              onLine(line);
-            }
-          }
-        }
-        if (onLine && buffer.trim()) {
-          onLine(buffer);
-        }
-        return chunks.join("").trim();
-      },
-    ),
-  };
-});
+// geminiProvider.ts 已改用內部 monitorGeminiStderr，不再 import collectStderr。
+// buildGeminiEnv 與 STDERR_MAX_BYTES 使用真實實作，不需要額外 mock。
 
 // ── 工具：把字串陣列轉為 ReadableStream<Uint8Array>（模擬 stdout/stderr） ─
 function makeReadableStream(lines: string[]): ReadableStream<Uint8Array> {
@@ -773,7 +733,8 @@ describe("GeminiProvider", () => {
         .mock.calls.some((args) =>
           args.some(
             (arg) =>
-              typeof arg === "string" && arg.includes("[GeminiProvider] stderr:"),
+              typeof arg === "string" &&
+              arg.includes("[GeminiProvider] stderr:"),
           ),
         ),
     ).toBe(false);
@@ -796,10 +757,7 @@ describe("GeminiProvider", () => {
     vi.mocked(logger.warn).mockClear();
     const mockProc = makeMockProc(
       [JSON.stringify({ type: "result", status: "success" })],
-      [
-        "Warning: YOLO mode enabled.",
-        "Tip: terminal colors are available.",
-      ],
+      ["Warning: YOLO mode enabled.", "Tip: terminal colors are available."],
       0,
     );
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
@@ -814,8 +772,7 @@ describe("GeminiProvider", () => {
         .mock.calls.some((args) =>
           args.some(
             (arg) =>
-              typeof arg === "string" &&
-              arg.includes("提前中止 subprocess"),
+              typeof arg === "string" && arg.includes("提前中止 subprocess"),
           ),
         ),
     ).toBe(false);
@@ -957,10 +914,7 @@ describe("GeminiProvider", () => {
     const rawContent = errorEvent!.systemMessage?.metadata.rawContent;
     expect(rawContent).toBeDefined();
     // stderrText 純文字部分（不含 TRUNCATED 標記）長度不超過 STDERR_MAX_BYTES
-    const textWithoutTruncatedMarker = rawContent!.replace(
-      "\n[TRUNCATED]",
-      "",
-    );
+    const textWithoutTruncatedMarker = rawContent!.replace("\n[TRUNCATED]", "");
     expect(textWithoutTruncatedMarker.length).toBeLessThanOrEqual(
       STDERR_MAX_BYTES,
     );
