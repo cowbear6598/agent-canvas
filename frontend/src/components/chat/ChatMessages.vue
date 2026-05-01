@@ -60,6 +60,7 @@ watch(
             v-if="message.role === 'user'"
             :content="message.content"
             :role="message.role"
+            :metadata="message.metadata"
             :is-partial="message.isPartial"
             :is-summarized="message.isSummarized"
           />
@@ -73,6 +74,7 @@ watch(
                 :key="sub.id"
                 :content="sub.content"
                 :role="message.role"
+                :metadata="message.metadata"
                 :is-partial="sub.isPartial"
                 :tool-use="sub.toolUse"
                 :is-summarized="message.isSummarized"
@@ -83,11 +85,21 @@ watch(
               v-else
               :content="message.content"
               :role="message.role"
+              :metadata="message.metadata"
               :is-partial="message.isPartial"
               :tool-use="message.toolUse"
               :is-summarized="message.isSummarized"
             />
           </template>
+
+          <ChatMessageBubble
+            v-else
+            :content="message.content"
+            :role="message.role"
+            :metadata="message.metadata"
+            :is-partial="message.isPartial"
+            :is-summarized="message.isSummarized"
+          />
         </template>
 
         <div

@@ -237,4 +237,24 @@ describe('ChatMessageBubble', () => {
     const matchedButtons = buttons.filter((btn) => btn.text().includes(tool.toolName))
     expect(matchedButtons.length).toBe(1)
   })
+
+  it('system 訊息應顯示 severity、provider 與 code 標籤', () => {
+    const wrapper = mount(ChatMessageBubble, {
+      props: {
+        content: 'Authentication failed',
+        role: 'system',
+        metadata: {
+          provider: 'claude',
+          code: 'AUTH_ERROR',
+          severity: 'fatal',
+          rawContent: 'Authentication failed',
+        },
+      },
+    })
+
+    expect(wrapper.find('[data-testid="system-severity-tag"]').text()).toContain('Fatal')
+    expect(wrapper.find('[data-testid="system-provider-tag"]').text()).toBe('CLAUDE')
+    expect(wrapper.find('[data-testid="system-code-tag"]').text()).toBe('AUTH_ERROR')
+    expect(wrapper.text()).toContain('Authentication failed')
+  })
 })

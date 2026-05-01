@@ -204,6 +204,37 @@ describe('chatMessageActions', () => {
 
       expect(chatStore.accumulatedLengthByMessageId.get('msg-1')).toBe(11)
     })
+
+    it('system 訊息應保留 metadata 且不建立 assistant 專用 subMessages', () => {
+      const chatStore = useChatStore()
+      const payload: PodChatMessagePayload = {
+        podId: 'pod-1',
+        messageId: 'msg-system',
+        content: 'Authentication failed',
+        isPartial: false,
+        role: 'system',
+        metadata: {
+          provider: 'claude',
+          code: 'AUTH_ERROR',
+          severity: 'error',
+        },
+      }
+
+      chatStore.handleChatMessage(payload)
+
+      const messages = chatStore.messagesByPodId.get('pod-1')
+      expect(messages![0]).toMatchObject({
+        id: 'msg-system',
+        role: 'system',
+        content: 'Authentication failed',
+        metadata: {
+          provider: 'claude',
+          code: 'AUTH_ERROR',
+          severity: 'error',
+        },
+      })
+      expect(messages![0]!.subMessages).toBeUndefined()
+    })
   })
 
   describe('handleChatMessage - 更新訊息', () => {
@@ -1155,6 +1186,39 @@ describe('chatMessageActions', () => {
         id: 'msg-1',
         role: 'user',
         content: 'User message',
+        timestamp: '2024-01-01T00:00:00Z',
+        isPartial: false,
+      })
+      expect(result.subMessages).toBeUndefined()
+    })
+
+    it('system 訊息應保留 metadata 且不建立 subMessages', () => {
+      const chatStore = useChatStore()
+      const messageActions = chatStore.getMessageActions()
+
+      const persistedMessage: PersistedMessage = {
+        id: 'msg-system',
+        role: 'system',
+        content: 'Quota exceeded',
+        metadata: {
+          provider: 'codex',
+          code: 'RATE_LIMIT',
+          severity: 'error',
+        },
+        timestamp: '2024-01-01T00:00:00Z',
+      }
+
+      const result = messageActions.convertPersistedToMessage(persistedMessage)
+
+      expect(result).toMatchObject({
+        id: 'msg-system',
+        role: 'system',
+        content: 'Quota exceeded',
+        metadata: {
+          provider: 'codex',
+          code: 'RATE_LIMIT',
+          severity: 'error',
+        },
         timestamp: '2024-01-01T00:00:00Z',
         isPartial: false,
       })

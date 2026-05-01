@@ -64,6 +64,32 @@ const BASE64_RE = /^[A-Za-z0-9+/=]+$/;
 /** process.env 在 process 生命週期內不會改變，模組載入時快取一次 */
 const CODEX_ENV = buildCodexEnv();
 
+function buildCodexSystemError(params: {
+  content: string;
+  fatal: boolean;
+  code: string;
+  rawContent?: string;
+}): Extract<NormalizedEvent, { type: "error" }> {
+  const { content, fatal, code, rawContent } = params;
+
+  return {
+    type: "error",
+    message: content,
+    fatal,
+    code,
+    systemMessage: {
+      role: "system",
+      content,
+      metadata: {
+        provider: "codex",
+        code,
+        severity: fatal ? "fatal" : "error",
+        rawContent: rawContent ?? content,
+      },
+    },
+  };
+}
+
 /**
  * 將 ContentBlock[] 轉換為 codex 可接受的純文字 prompt。
  * 圖片附件以 base64 data URI 內聯（禁止使用 --image，因為 --image + --json 會 hang）。
@@ -280,11 +306,13 @@ async function* handleExitCode(
   if (stderrText) {
     logger.error("Chat", "Error", `[CodexProvider] stderr: ${stderrText}`);
   }
-  yield {
-    type: "error",
-    message: "執行發生錯誤，請查閱伺服器日誌",
+  const rawContent = stderrText || `codex exited with code ${exitCode}`;
+  yield buildCodexSystemError({
+    content: "執行發生錯誤，請查閱伺服器日誌",
     fatal: false,
-  };
+    code: "EXIT_CODE",
+    rawContent,
+  });
 }
 
 /**
@@ -408,22 +436,23 @@ function setupSubprocess(
     if (isEnoentError(err)) {
       return {
         ok: false,
-        errorEvent: {
-          type: "error",
-          message: "codex CLI 尚未安裝或不在 PATH 中，請執行 codex login",
+        errorEvent: buildCodexSystemError({
+          content: "codex CLI 尚未安裝或不在 PATH 中，請執行 codex login",
           fatal: true,
-        },
+          code: "CLI_NOT_FOUND",
+        }),
       };
     }
     // 非 ENOENT 的啟動失敗：原始訊息寫進 logger，不暴露給前端
     logger.error("Chat", "Error", "[CodexProvider] 啟動 codex 子程序失敗", err);
     return {
       ok: false,
-      errorEvent: {
-        type: "error",
-        message: "啟動 codex 子程序失敗，請查 server log",
+      errorEvent: buildCodexSystemError({
+        content: err instanceof Error ? err.message : "啟動 codex 子程序失敗",
         fatal: true,
-      },
+        code: "SPAWN_FAILED",
+        rawContent: err instanceof Error ? err.message : String(err),
+      }),
     };
   }
 
@@ -530,11 +559,16 @@ export class CodexProvider implements AgentProvider<CodexOptions> {
     const execution = this.prepareExecution(ctx);
     if (execution === null) {
       const model = options?.model ?? this.metadata.defaultOptions.model;
-      yield {
-        type: "error",
-        message: `不合法的 model 名稱：${model}`,
+      logger.warn(
+        "Chat",
+        "Warn",
+        `[CodexProvider] model 驗證失敗，不合法的 model 名稱：${model}`,
+      );
+      yield buildCodexSystemError({
+        content: "不合法的 model 名稱",
         fatal: true,
-      };
+        code: "INVALID_MODEL",
+      });
       return;
     }
 

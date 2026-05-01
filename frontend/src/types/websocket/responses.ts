@@ -17,6 +17,7 @@ import type {
   PathwayState,
 } from "../run";
 import type { McpListItem } from "../mcp";
+import type { MessageRole, SystemMessageMetadata } from "../chat";
 
 export interface ConnectionReadyPayload {
   socketId: string;
@@ -60,7 +61,8 @@ export interface PodChatMessagePayload {
   messageId: string;
   content: string;
   isPartial: boolean;
-  role?: "user" | "assistant";
+  role?: MessageRole;
+  metadata?: SystemMessageMetadata;
 }
 
 export interface PodChatToolUsePayload {
@@ -112,8 +114,9 @@ export interface PodStatusChangedPayload {
 
 export interface PersistedMessage {
   id: string;
-  role: "user" | "assistant";
+  role: MessageRole;
   content: string;
+  metadata?: SystemMessageMetadata;
   timestamp: string;
   subMessages?: Array<{
     id: string;
@@ -520,7 +523,8 @@ export interface RunMessagePayload {
   messageId: string;
   content: string;
   isPartial: boolean;
-  role?: "user" | "assistant";
+  role?: MessageRole;
+  metadata?: SystemMessageMetadata;
 }
 
 export interface RunChatCompletePayload {

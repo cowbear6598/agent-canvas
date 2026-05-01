@@ -56,6 +56,34 @@ describe("MessageStore", () => {
       if (!result.success) return;
       expect(result.data.subMessages).toBeUndefined();
     });
+
+    it("新增 system message 時應保留 metadata", async () => {
+      const result = await messageStore.addMessage(
+        CANVAS_ID,
+        POD_ID,
+        "system",
+        "rate limit exceeded",
+        undefined,
+        {
+          metadata: {
+            provider: "claude",
+            code: "RATE_LIMIT",
+            severity: "error",
+            rawContent: "rate limit exceeded",
+          },
+        },
+      );
+
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.data.role).toBe("system");
+      expect(result.data.metadata).toEqual({
+        provider: "claude",
+        code: "RATE_LIMIT",
+        severity: "error",
+        rawContent: "rate limit exceeded",
+      });
+    });
   });
 
   describe("getMessages", () => {
@@ -83,6 +111,32 @@ describe("MessageStore", () => {
 
       expect(messages).toHaveLength(1);
       expect(messages[0].content).toBe("屬於 pod-1");
+    });
+
+    it("應能從 DB 讀回 system message metadata", async () => {
+      await messageStore.addMessage(
+        CANVAS_ID,
+        POD_ID,
+        "system",
+        "auth failed",
+        undefined,
+        {
+          metadata: {
+            provider: "claude",
+            code: "AUTH_ERROR",
+            severity: "fatal",
+            rawContent: "auth failed",
+          },
+        },
+      );
+
+      const messages = messageStore.getMessages(POD_ID);
+
+      expect(messages).toHaveLength(1);
+      expect(messages[0].role).toBe("system");
+      expect(messages[0].metadata?.provider).toBe("claude");
+      expect(messages[0].metadata?.code).toBe("AUTH_ERROR");
+      expect(messages[0].metadata?.severity).toBe("fatal");
     });
   });
 

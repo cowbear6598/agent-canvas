@@ -55,7 +55,12 @@ ${SECURITY_NOTICE}`;
   formatConversationHistory(messages: PersistedMessage[]): string {
     return messages
       .map((message) => {
-        const role = message.role === "user" ? "User" : "Assistant";
+        const role =
+          message.role === "user"
+            ? "User"
+            : message.role === "assistant"
+              ? "Assistant"
+              : "System";
         return `[${role}]: ${message.content}`;
       })
       .join("\n\n");

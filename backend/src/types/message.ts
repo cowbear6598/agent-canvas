@@ -1,4 +1,13 @@
-export type MessageRole = 'user' | 'assistant';
+export type MessageRole = "user" | "assistant" | "system";
+
+export type SystemMessageSeverity = "info" | "warning" | "error" | "fatal";
+
+export interface SystemMessageMetadata {
+  provider: string;
+  code: string | null;
+  severity: SystemMessageSeverity;
+  rawContent: string;
+}
 
 export interface TextContentBlock {
   type: 'text';
@@ -25,6 +34,7 @@ export interface Message {
   podId: string;
   role: MessageRole;
   content: string;
+  metadata?: SystemMessageMetadata;
   toolUse: ToolUseInfo | null;
   createdAt: Date;
   sessionId?: string;

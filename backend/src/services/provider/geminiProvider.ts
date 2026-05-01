@@ -111,6 +111,32 @@ export function redactStderr(text: string): string {
 // 白名單環境變數，已排除 process.env 中其他敏感資料
 const GEMINI_ENV = buildGeminiEnv();
 
+function buildGeminiSystemError(params: {
+  content: string;
+  fatal: boolean;
+  code: string;
+  rawContent?: string;
+}): Extract<NormalizedEvent, { type: "error" }> {
+  const { content, fatal, code, rawContent } = params;
+
+  return {
+    type: "error",
+    message: content,
+    fatal,
+    code,
+    systemMessage: {
+      role: "system",
+      content,
+      metadata: {
+        provider: "gemini",
+        code,
+        severity: fatal ? "fatal" : "error",
+        rawContent: rawContent ?? content,
+      },
+    },
+  };
+}
+
 /**
  * 將 ContentBlock[] 轉換為 gemini 可接受的純文字 prompt。
  * Gemini stream-json 不接受 inline image base64，因此 image block 直接略過並 logger.warn。
@@ -396,17 +422,19 @@ async function* handleExitCode(
   if (hasTurnComplete) return;
 
   if (category === "login_required") {
-    yield {
-      type: "error",
-      message: OAUTH_LOGIN_REQUIRED_MESSAGE,
+    yield buildGeminiSystemError({
+      content: OAUTH_LOGIN_REQUIRED_MESSAGE,
       fatal: false,
-    };
+      code: "LOGIN_REQUIRED",
+    });
   } else {
-    yield {
-      type: "error",
-      message: "執行發生錯誤，請查閱伺服器日誌",
+    const rawContent = stderrText || `gemini exited with code ${exitCode}`;
+    yield buildGeminiSystemError({
+      content: "執行發生錯誤，請查閱伺服器日誌",
       fatal: false,
-    };
+      code: "EXIT_CODE",
+      rawContent,
+    });
   }
 }
 
@@ -572,12 +600,12 @@ function setupSubprocess(
     if (isEnoentError(err)) {
       return {
         ok: false,
-        errorEvent: {
-          type: "error",
-          message:
+        errorEvent: buildGeminiSystemError({
+          content:
             "Gemini CLI 尚未安裝，請執行 `npm install -g @google/gemini-cli`",
           fatal: true,
-        },
+          code: "CLI_NOT_FOUND",
+        }),
       };
     }
     // 非 ENOENT 的啟動失敗：原始訊息寫進 logger，不暴露給前端
@@ -589,11 +617,12 @@ function setupSubprocess(
     );
     return {
       ok: false,
-      errorEvent: {
-        type: "error",
-        message: "啟動 gemini 子程序失敗，請查 server log",
+      errorEvent: buildGeminiSystemError({
+        content: "啟動 gemini 子程序失敗，請查 server log",
         fatal: true,
-      },
+        code: "SPAWN_FAILED",
+        rawContent: err instanceof Error ? err.message : String(err),
+      }),
     };
   }
 
@@ -733,11 +762,11 @@ export const geminiProvider: AgentProvider<GeminiOptions> = {
     // ── options 型別收窄 ──────────────────────────────────────────
     // 正常路徑下 buildOptions() 保證 options 非空；防禦性收窄讓後續可直接存取 options.*
     if (options == null) {
-      yield {
-        type: "error",
-        message: "內部錯誤：chat options 不可為空",
+      yield buildGeminiSystemError({
+        content: "內部錯誤：chat options 不可為空",
         fatal: true,
-      };
+        code: "MISSING_OPTIONS",
+      });
       return;
     }
 
@@ -750,11 +779,11 @@ export const geminiProvider: AgentProvider<GeminiOptions> = {
         "Warn",
         `[GeminiProvider] model 驗證失敗，不合法的 model 名稱：${model}`,
       );
-      yield {
-        type: "error",
-        message: "不合法的 model 名稱",
+      yield buildGeminiSystemError({
+        content: "不合法的 model 名稱",
         fatal: true,
-      };
+        code: "INVALID_MODEL",
+      });
       return;
     }
 
@@ -762,11 +791,11 @@ export const geminiProvider: AgentProvider<GeminiOptions> = {
     const promptText = normalizeMessageToPromptText(message);
     // 防止 image-only 輸入產生空字串靜默流入 CLI
     if (promptText === "") {
-      yield {
-        type: "error",
-        message: "訊息內容不可為空（Gemini 不支援純圖片訊息）",
+      yield buildGeminiSystemError({
+        content: "訊息內容不可為空（Gemini 不支援純圖片訊息）",
         fatal: true,
-      };
+        code: "EMPTY_PROMPT",
+      });
       return;
     }
     const plugins = options.plugins;

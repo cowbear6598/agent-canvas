@@ -1,4 +1,9 @@
-import type { Message, ToolUseInfo } from "@/types/chat";
+import type {
+  Message,
+  MessageRole,
+  SystemMessageMetadata,
+  ToolUseInfo,
+} from "@/types/chat";
 import {
   appendToolToLastSubMessage,
   flushAndCreateNewSubMessage,
@@ -125,8 +130,9 @@ export function upsertMessage(
   messageId: string,
   content: string,
   isPartial: boolean,
-  role: string,
+  role: MessageRole,
   delta?: string,
+  metadata?: SystemMessageMetadata,
 ): void {
   const existingIndex = messages.findIndex((m) => m.id === messageId);
   if (existingIndex !== -1) {
@@ -143,6 +149,7 @@ export function upsertMessage(
         ...existing,
         // 有 subMessages 但 delta 不可用時，不更新 content，避免 content 與 subMessages 不同步
         ...(existing.subMessages && !shouldUpdateSub ? {} : { content }),
+        ...(metadata !== undefined ? { metadata } : {}),
         isPartial,
         ...subMessageUpdates,
       };
@@ -150,16 +157,16 @@ export function upsertMessage(
     return;
   }
 
-  const effectiveRole = role as "user" | "assistant";
   const baseMessage: Message = {
     id: messageId,
-    role: effectiveRole,
+    role,
     content,
+    metadata,
     isPartial,
   };
 
   const shape =
-    effectiveRole === "assistant"
+    role === "assistant"
       ? createAssistantMessageShape(messageId, content, isPartial, delta)
       : {};
 

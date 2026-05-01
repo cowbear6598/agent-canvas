@@ -136,22 +136,45 @@ export function createConnectionActions(store: ChatStoreInstance): {
     return t(error.key, error.params ?? {});
   };
 
+  const appendErrorToTranscript = (
+    podId: string,
+    content: string,
+    code?: string,
+  ): void => {
+    store.handleChatMessage({
+      podId,
+      messageId: crypto.randomUUID(),
+      content,
+      isPartial: false,
+      role: "system",
+      metadata: {
+        code: code ?? null,
+        severity: "error",
+        rawContent: content,
+      },
+    });
+  };
+
   const handleError = (payload: PodErrorPayload): void => {
     if (!websocketClient.isConnected.value) {
       store.connectionStatus = "error";
     }
+
+    const resolvedMessage = resolveErrorMessage(payload.error);
 
     if (payload.podId) {
       store.setTyping(payload.podId, false);
       // 後端回傳錯誤時，pod 可能已被樂觀更新為 chatting，需回滾為 idle
       const podStore = usePodStore();
       podStore.updatePodStatus(payload.podId, "idle");
+      appendErrorToTranscript(payload.podId, resolvedMessage, payload.code);
+      return;
     }
 
-    // 將後端錯誤訊息翻譯後以 toast 顯示，讓使用者能即時得知錯誤原因
+    // 只有沒有 transcript destination 的全域錯誤才保留 toast。
     const { toast } = useToast();
     toast({
-      title: resolveErrorMessage(payload.error),
+      title: resolvedMessage,
       variant: "destructive",
     });
   };

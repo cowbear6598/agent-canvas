@@ -1,7 +1,12 @@
 import { generateRequestId } from "@/services/utils";
 import { usePodStore } from "../pod/podStore";
 import type { Pod } from "@/types/pod";
-import type { Message, SubMessage } from "@/types/chat";
+import type {
+  Message,
+  MessageRole,
+  SubMessage,
+  SystemMessageMetadata,
+} from "@/types/chat";
 import { isValidToolUseStatus } from "@/types/chat";
 import type {
   PersistedMessage,
@@ -65,8 +70,9 @@ export interface ChatMessageActions {
     messageId: string,
     content: string,
     isPartial: boolean,
-    role?: "user" | "assistant",
+    role?: MessageRole,
     delta?: string,
+    metadata?: SystemMessageMetadata,
   ) => void;
   updateExistingChatMessage: (
     podId: string,
@@ -75,6 +81,7 @@ export interface ChatMessageActions {
     content: string,
     isPartial: boolean,
     delta: string,
+    metadata?: SystemMessageMetadata,
   ) => void;
   handleChatToolUse: (payload: PodChatToolUsePayload) => void;
   createMessageWithToolUse: (
@@ -166,7 +173,7 @@ export function createMessageActions(
   };
 
   const handleChatMessage = (payload: PodChatMessagePayload): void => {
-    const { podId, messageId, content, isPartial, role } = payload;
+    const { podId, messageId, content, isPartial, role, metadata } = payload;
     const messages = getMessages(store, podId);
     const messageIndex = findMessageIndex(messages, messageId);
 
@@ -175,7 +182,15 @@ export function createMessageActions(
     store.accumulatedLengthByMessageId.set(messageId, content.length);
 
     if (messageIndex === -1) {
-      addNewChatMessage(podId, messageId, content, isPartial, role, delta);
+      addNewChatMessage(
+        podId,
+        messageId,
+        content,
+        isPartial,
+        role,
+        delta,
+        metadata,
+      );
       return;
     }
 
@@ -186,20 +201,23 @@ export function createMessageActions(
       content,
       isPartial,
       delta,
+      metadata,
     );
   };
 
   function buildNewMessage(
     messageId: string,
-    effectiveRole: "user" | "assistant",
+    effectiveRole: MessageRole,
     content: string,
     isPartial: boolean,
     delta?: string,
+    metadata?: SystemMessageMetadata,
   ): Message {
     const baseMessage: Message = {
       id: messageId,
       role: effectiveRole,
       content,
+      metadata,
       isPartial,
       timestamp: new Date().toISOString(),
     };
@@ -217,8 +235,9 @@ export function createMessageActions(
     messageId: string,
     content: string,
     isPartial: boolean,
-    role?: "user" | "assistant",
+    role?: MessageRole,
     delta?: string,
+    metadata?: SystemMessageMetadata,
   ): void => {
     const messages = getMessages(store, podId);
     const effectiveRole = role ?? "assistant";
@@ -228,6 +247,7 @@ export function createMessageActions(
       content,
       isPartial,
       delta,
+      metadata,
     );
 
     store.messagesByPodId.set(podId, [...messages, newMessage]);
@@ -253,6 +273,7 @@ export function createMessageActions(
     content: string,
     isPartial: boolean,
     delta: string,
+    metadata?: SystemMessageMetadata,
   ): void => {
     const existingMessage = messages[messageIndex];
 
@@ -261,6 +282,9 @@ export function createMessageActions(
     // 直接對既有物件做屬性賦值，避免每個 chunk 都淺複製整個訊息陣列（O(n) 開銷）
     existingMessage.content = content;
     existingMessage.isPartial = isPartial;
+    if (metadata !== undefined) {
+      existingMessage.metadata = metadata;
+    }
 
     if (existingMessage.role === "assistant" && existingMessage.subMessages) {
       const { subMessages } = updateAssistantSubMessages(
@@ -330,6 +354,7 @@ export function createMessageActions(
       id: persistedMessage.id,
       role: persistedMessage.role,
       content: persistedMessage.content,
+      metadata: persistedMessage.metadata,
       timestamp: persistedMessage.timestamp,
       isPartial: false,
     };

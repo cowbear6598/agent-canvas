@@ -1,4 +1,15 @@
-export type MessageRole = 'user' | 'assistant'
+import type { PodProvider } from './pod'
+
+export type MessageRole = 'user' | 'assistant' | 'system'
+
+export type SystemMessageSeverity = 'info' | 'warning' | 'error' | 'fatal'
+
+export interface SystemMessageMetadata {
+  provider?: PodProvider
+  code?: string | null
+  severity: SystemMessageSeverity
+  rawContent?: string
+}
 
 export type HistoryLoadingStatus = 'idle' | 'loading' | 'loaded' | 'error'
 
@@ -29,6 +40,7 @@ export interface Message {
   id: string
   role: MessageRole
   content: string
+  metadata?: SystemMessageMetadata
   isPartial?: boolean
   toolUse?: ToolUseInfo[]
   timestamp?: string

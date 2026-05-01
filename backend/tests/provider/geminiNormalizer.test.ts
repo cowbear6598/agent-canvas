@@ -128,6 +128,16 @@ describe("GeminiNormalizer - normalize()", () => {
     const e = result as Extract<typeof result, { type: "error" }>;
     expect(e?.message).toBe("Something went wrong");
     expect(e?.fatal).toBe(false);
+    expect(e?.systemMessage).toMatchObject({
+      role: "system",
+      content: "Something went wrong",
+      metadata: {
+        provider: "gemini",
+        code: "STREAM_ERROR",
+        severity: "error",
+        rawContent: "Something went wrong",
+      },
+    });
   });
 
   // ── N9：result status=success → turn_complete ──────────────────────
@@ -153,6 +163,13 @@ describe("GeminiNormalizer - normalize()", () => {
     const e = result as Extract<typeof result, { type: "error" }>;
     expect(e?.message).toBe("Gemini API 回應錯誤");
     expect(e?.fatal).toBe(true);
+    expect(e?.systemMessage).toMatchObject({
+      metadata: {
+        provider: "gemini",
+        code: "RESULT_ERROR",
+        severity: "fatal",
+      },
+    });
   });
 
   // ── N11：空字串 / 純空白 → null ───────────────────────────────────

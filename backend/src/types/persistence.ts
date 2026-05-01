@@ -1,9 +1,11 @@
+import type { MessageRole, SystemMessageMetadata } from "./message.js";
+
 export interface PersistedToolUseInfo {
   toolUseId: string;
   toolName: string;
   input: Record<string, unknown>;
   output?: string;
-  status: 'completed' | 'error';
+  status: "completed" | "error";
 }
 
 export interface PersistedSubMessage {
@@ -14,9 +16,9 @@ export interface PersistedSubMessage {
 
 export interface PersistedMessage {
   id: string;
-  role: 'user' | 'assistant';
+  role: MessageRole;
   content: string;
   timestamp: string;
+  metadata?: SystemMessageMetadata;
   subMessages?: PersistedSubMessage[];
 }
-

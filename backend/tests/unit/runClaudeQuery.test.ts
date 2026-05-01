@@ -129,7 +129,7 @@ describe("runClaudeQuery", () => {
   });
 
   describe("handleResult：result/error subtype 的 yield + throw 行為", () => {
-    it("result/error 時應先 yield 錯誤文字，再 throw", async () => {
+    it("result/error 時應先 yield system error，再 throw", async () => {
       mockQueryGenerator = async function* () {
         yield {
           type: "result",
@@ -147,16 +147,16 @@ describe("runClaudeQuery", () => {
         }
       }).rejects.toThrow();
 
-      // 應先 yield text 事件（錯誤說明），再拋出
+      // 應先 yield error 事件，再拋出
       expect(events.length).toBeGreaterThanOrEqual(1);
-      const textEvent = events.find((e: any) => e.type === "text");
-      expect(textEvent).toBeDefined();
-      expect(textEvent.content).toContain("⚠️");
+      const errorEvent = events.find((e: any) => e.type === "error");
+      expect(errorEvent).toBeDefined();
+      expect(errorEvent.systemMessage?.metadata.provider).toBe("claude");
     });
   });
 
   describe("handleRateLimitEvent：shouldAbort=true 時應 throw", () => {
-    it("status=rejected 的 rate_limit_event 應先 yield text 再 throw", async () => {
+    it("status=rejected 的 rate_limit_event 應先 yield system error 再 throw", async () => {
       mockQueryGenerator = async function* () {
         yield {
           type: "rate_limit_event",
@@ -173,14 +173,14 @@ describe("runClaudeQuery", () => {
         }
       }).rejects.toThrow();
 
-      const textEvent = events.find((e: any) => e.type === "text");
-      expect(textEvent).toBeDefined();
-      expect(textEvent.content).toContain("⚠️");
+      const errorEvent = events.find((e: any) => e.type === "error");
+      expect(errorEvent).toBeDefined();
+      expect(errorEvent.code).toBe("RATE_LIMIT_REJECTED");
     });
   });
 
   describe("handleAuthStatus：shouldAbort=true 時應 throw", () => {
-    it("帶有 error 的 auth_status 應先 yield text 再 throw", async () => {
+    it("帶有 error 的 auth_status 應先 yield system error 再 throw", async () => {
       mockQueryGenerator = async function* () {
         yield {
           type: "auth_status",
@@ -197,9 +197,11 @@ describe("runClaudeQuery", () => {
         }
       }).rejects.toThrow();
 
-      const textEvent = events.find((e: any) => e.type === "text");
-      expect(textEvent).toBeDefined();
-      expect(textEvent.content).toContain("⚠️");
+      const errorEvent = events.find((e: any) => e.type === "error");
+      expect(errorEvent).toBeDefined();
+      expect(errorEvent.systemMessage?.metadata.code).toBe(
+        "authentication_failed",
+      );
     });
   });
 

@@ -136,7 +136,8 @@ function createBaseTables(db: Database): void {
       "role TEXT NOT NULL," +
       "content TEXT NOT NULL," +
       "timestamp TEXT NOT NULL," +
-      "sub_messages_json TEXT" +
+      "sub_messages_json TEXT," +
+      "metadata_json TEXT" +
       ")",
   );
   db.exec("CREATE INDEX IF NOT EXISTS idx_messages_pod_id ON messages(pod_id)");
@@ -244,7 +245,8 @@ function createBaseTables(db: Database): void {
       "role TEXT NOT NULL," +
       "content TEXT NOT NULL," +
       "timestamp TEXT NOT NULL," +
-      "sub_messages_json TEXT" +
+      "sub_messages_json TEXT," +
+      "metadata_json TEXT" +
       ")",
   );
   db.exec(
@@ -308,6 +310,16 @@ function runMigrations(db: Database): void {
 
   // Migration: pods 新增 provider_config_json 欄位
   runMigration(db, "ALTER TABLE pods ADD COLUMN provider_config_json TEXT", [
+    "duplicate column",
+  ]);
+
+  // Migration: messages 新增 system message metadata 欄位
+  runMigration(db, "ALTER TABLE messages ADD COLUMN metadata_json TEXT", [
+    "duplicate column",
+  ]);
+
+  // Migration: run_messages 新增 system message metadata 欄位
+  runMigration(db, "ALTER TABLE run_messages ADD COLUMN metadata_json TEXT", [
     "duplicate column",
   ]);
 

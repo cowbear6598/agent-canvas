@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import type { PersistedMessage, PersistedSubMessage } from "../types";
+import type { MessageRole, SystemMessageMetadata } from "../types/message.js";
 import { Result, ok } from "../types";
 import { getStmts } from "../database/stmtsHelper.js";
 import { safeJsonParse } from "../utils/safeJsonParse.js";
@@ -12,14 +13,22 @@ interface MessageRow {
   content: string;
   timestamp: string;
   sub_messages_json: string | null;
+  metadata_json: string | null;
 }
 
 function rowToMessage(row: MessageRow): PersistedMessage {
   return {
     id: row.id,
-    role: row.role as "user" | "assistant",
+    role: row.role as MessageRole,
     content: row.content,
     timestamp: row.timestamp,
+    ...(row.metadata_json
+      ? {
+          metadata:
+            safeJsonParse<SystemMessageMetadata>(row.metadata_json) ??
+            undefined,
+        }
+      : {}),
     ...(row.sub_messages_json
       ? {
           subMessages:
@@ -46,16 +55,18 @@ class MessageStore {
   async addMessage(
     canvasId: string,
     podId: string,
-    role: "user" | "assistant",
+    role: MessageRole,
     content: string,
     subMessages?: PersistedSubMessage[],
-    options?: { id?: string },
+    options?: { id?: string; metadata?: SystemMessageMetadata },
   ): Promise<Result<PersistedMessage>> {
+    const metadata = options?.metadata;
     const message: PersistedMessage = {
       id: options?.id ?? uuidv4(),
       role,
       content,
       timestamp: new Date().toISOString(),
+      ...(metadata ? { metadata } : {}),
       ...(subMessages && { subMessages }),
     };
 
@@ -67,6 +78,7 @@ class MessageStore {
       $content: content,
       $timestamp: message.timestamp,
       $subMessagesJson: subMessages ? JSON.stringify(subMessages) : null,
+      $metadataJson: metadata ? JSON.stringify(metadata) : null,
     });
 
     return ok(message);
@@ -97,6 +109,7 @@ class MessageStore {
       $subMessagesJson: message.subMessages
         ? JSON.stringify(message.subMessages)
         : null,
+      $metadataJson: message.metadata ? JSON.stringify(message.metadata) : null,
     });
   }
 }

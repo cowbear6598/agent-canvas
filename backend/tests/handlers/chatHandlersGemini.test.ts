@@ -460,7 +460,7 @@ describe("D：Gemini Pod resolvePodCwd 整合", () => {
     expect(capturedWorkspacePath[0]).toBe(path.resolve(customWorkspacePath));
   });
 
-  it("D-1c（邊界）: repositoryId = '../etc'（路徑穿越）時，executeStreamingChat 攔截錯誤並透過 socketService.emitToCanvas 發送 POD_ERROR（code: INVALID_PATH），provider.chat 不被呼叫", async () => {
+  it("D-1c（邊界）: repositoryId = '../etc'（路徑穿越）時，executeStreamingChat 攔截錯誤並改寫為 transcript system message，provider.chat 不被呼叫", async () => {
     asMock(executeStreamingChatModule.executeStreamingChat).mockImplementation(
       (
         opts: Parameters<
@@ -478,17 +478,21 @@ describe("D：Gemini Pod resolvePodCwd 整合", () => {
     const podId = insertGeminiPodViaSQL({ repositoryId: "../etc" });
 
     // 新行為：executeStreamingChat 在 try/catch 內攔截 resolvePodCwd 所拋出的「非法的工作目錄路徑」，
-    // 透過 socketService.emitToCanvas 發送 POD_ERROR（code: INVALID_PATH）給前端，不再向上拋錯。
+    // 直接走 transcript system message，不再回 POD_ERROR。
     await triggerChatSend(podId, "hello");
 
-    // 攔截後應透過 emitToCanvas 發送 POD_ERROR，code 為 INVALID_PATH
+    // 攔截後應透過 emitToCanvas 發送 system message，code 為 INVALID_PATH
     expect(socketService.emitToCanvas).toHaveBeenCalledWith(
       CANVAS_ID,
-      WebSocketResponseEvents.POD_ERROR,
+      WebSocketResponseEvents.POD_CLAUDE_CHAT_MESSAGE,
       expect.objectContaining({
         podId,
-        success: false,
-        code: "INVALID_PATH",
+        role: "system",
+        content: "非法的工作目錄路徑",
+        metadata: expect.objectContaining({
+          code: "INVALID_PATH",
+          severity: "fatal",
+        }),
       }),
     );
 
@@ -496,7 +500,7 @@ describe("D：Gemini Pod resolvePodCwd 整合", () => {
     expect(mock.chat).not.toHaveBeenCalled();
   });
 
-  it("D-1d（邊界）: provider.buildOptions 拋錯時，executeStreamingChat 攔截並透過 socketService.emitToCanvas 發送 POD_ERROR（code: PROVIDER_NOT_FOUND），provider.chat 不被呼叫", async () => {
+  it("D-1d（邊界）: provider.buildOptions 拋錯時，executeStreamingChat 攔截並改寫為 transcript system message，provider.chat 不被呼叫", async () => {
     asMock(executeStreamingChatModule.executeStreamingChat).mockImplementation(
       (
         opts: Parameters<
@@ -523,16 +527,20 @@ describe("D：Gemini Pod resolvePodCwd 整合", () => {
 
     const podId = insertGeminiPodViaSQL({});
 
-    // provider.buildOptions 拋錯，executeStreamingChat 應攔截並發送 POD_ERROR
+    // provider.buildOptions 拋錯，executeStreamingChat 應攔截並發送 transcript system message
     await triggerChatSend(podId, "hello");
 
     expect(socketService.emitToCanvas).toHaveBeenCalledWith(
       CANVAS_ID,
-      WebSocketResponseEvents.POD_ERROR,
+      WebSocketResponseEvents.POD_CLAUDE_CHAT_MESSAGE,
       expect.objectContaining({
         podId,
-        success: false,
-        code: "PROVIDER_NOT_FOUND",
+        role: "system",
+        content: "找不到 Provider",
+        metadata: expect.objectContaining({
+          code: "PROVIDER_NOT_FOUND",
+          severity: "fatal",
+        }),
       }),
     );
 

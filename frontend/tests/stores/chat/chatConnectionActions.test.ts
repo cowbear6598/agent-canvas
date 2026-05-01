@@ -361,6 +361,30 @@ describe("chatConnectionActions", () => {
       expect(store.isTypingByPodId.get("pod-1")).toBe(false);
     });
 
+    it("有 podId 時將錯誤寫入 transcript，不顯示 destructive toast", () => {
+      const store = useChatStore();
+      mockWebSocketClient.isConnected.value = true;
+
+      store.handleError({
+        error: "Authentication failed",
+        podId: "pod-1",
+        code: "AUTH_ERROR",
+      } as PodErrorPayload);
+
+      const messages = store.messagesByPodId.get("pod-1");
+      expect(messages).toHaveLength(1);
+      expect(messages?.[0]).toMatchObject({
+        role: "system",
+        content: "Authentication failed",
+        metadata: {
+          code: "AUTH_ERROR",
+          severity: "error",
+          rawContent: "Authentication failed",
+        },
+      });
+      expect(mockToast).not.toHaveBeenCalled();
+    });
+
     it("無 podId 時不影響 typing 狀態", () => {
       const store = useChatStore();
       mockWebSocketClient.isConnected.value = true;
@@ -381,6 +405,21 @@ describe("chatConnectionActions", () => {
       } as unknown as PodErrorPayload);
 
       expect(store.isTypingByPodId.get("pod-new")).toBe(false);
+    });
+
+    it("無 podId 時仍以 toast 顯示全域錯誤", () => {
+      const store = useChatStore();
+      mockWebSocketClient.isConnected.value = true;
+
+      store.handleError({
+        error: "Global error",
+        code: "GLOBAL_ERROR",
+      } as PodErrorPayload);
+
+      expect(mockToast).toHaveBeenCalledWith({
+        title: "Global error",
+        variant: "destructive",
+      });
     });
   });
 

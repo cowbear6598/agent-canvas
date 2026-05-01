@@ -1,10 +1,26 @@
-import type { ContentBlock } from "../../types/message.js";
+import type {
+  ContentBlock,
+  SystemMessageMetadata,
+} from "../../types/message.js";
 import type { Pod } from "../../types/pod.js";
 import type { RunContext } from "../../types/run.js";
 // ProviderName 由 index.ts 的 providerRegistry 推導後 re-export，
 // 此處以 import type 反向引用，避免 index.ts ↔ types.ts 產生循環 import 問題。
 import type { ProviderName } from "./index.js";
 export type { ProviderName };
+
+export type ProviderSystemMessageMetadata = Omit<
+  SystemMessageMetadata,
+  "provider"
+> & {
+  provider: ProviderName;
+};
+
+export interface ProviderSystemMessage {
+  role: "system";
+  content: string;
+  metadata: ProviderSystemMessageMetadata;
+}
 
 /**
  * Provider 自報的 metadata，包含名稱、能力矩陣與預設選項。
@@ -83,6 +99,11 @@ export type NormalizedEvent =
       fatal: boolean;
       /** 結構化錯誤代碼，供未來擴充使用；系統錯誤不帶 code。 */
       code?: string;
+      /**
+       * Provider 原文錯誤對應的 system message。
+       * 後續 phase 會以此取代把 provider error 假裝成 assistant 文字或 Toast。
+       */
+      systemMessage?: ProviderSystemMessage;
     };
 
 /**

@@ -804,6 +804,37 @@ describe("runStore", () => {
       const messages = store.runChatMessages.get("run-1:pod-1");
       expect(messages?.[0]?.content).toBe("Hi");
     });
+
+    it("system 訊息應保留 metadata 且不建立 assistant 專用 subMessages", () => {
+      const store = useRunStore();
+
+      store.appendRunChatMessage(
+        "run-1",
+        "pod-1",
+        "msg-system",
+        "Service temporarily unavailable",
+        false,
+        "system",
+        {
+          provider: "gemini",
+          code: "SERVICE_UNAVAILABLE",
+          severity: "error",
+        },
+      );
+
+      const messages = store.runChatMessages.get("run-1:pod-1");
+      expect(messages?.[0]).toMatchObject({
+        id: "msg-system",
+        role: "system",
+        content: "Service temporarily unavailable",
+        metadata: {
+          provider: "gemini",
+          code: "SERVICE_UNAVAILABLE",
+          severity: "error",
+        },
+      });
+      expect(messages?.[0]?.subMessages).toBeUndefined();
+    });
   });
 
   describe("handleRunChatToolUse", () => {

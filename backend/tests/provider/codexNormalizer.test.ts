@@ -126,6 +126,39 @@ describe("CodexNormalizer - normalize()", () => {
     const e = result as Extract<typeof result, { type: "error" }>;
     expect(e?.message).toBe("Something went wrong");
     expect(e?.fatal).toBe(true);
+    expect(e?.systemMessage).toMatchObject({
+      role: "system",
+      content: "Something went wrong",
+      metadata: {
+        provider: "codex",
+        code: "STREAM_ERROR",
+        severity: "fatal",
+        rawContent: "Something went wrong",
+      },
+    });
+  });
+
+  it("item.completed 且 item_type=error 應映射為 non-fatal system error", () => {
+    const line = toLine({
+      type: "item.completed",
+      item: {
+        id: "err-001",
+        type: "error",
+        message: "Command failed",
+      },
+    });
+    const result = normalize(line);
+
+    expect(result?.type).toBe("error");
+    const e = result as Extract<typeof result, { type: "error" }>;
+    expect(e?.fatal).toBe(false);
+    expect(e?.systemMessage).toMatchObject({
+      metadata: {
+        provider: "codex",
+        code: "ITEM_ERROR",
+        severity: "error",
+      },
+    });
   });
 
   // ── Case 8：不認得的 envelope type → null ────────────────────────

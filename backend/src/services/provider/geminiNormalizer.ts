@@ -73,6 +73,32 @@ type GeminiEvent =
 
 // ── 各 type 的獨立解析 helper ─────────────────────────────────────────
 
+function buildGeminiSystemError(params: {
+  content: string;
+  fatal: boolean;
+  code: string;
+  rawContent?: string;
+}): Extract<NormalizedEvent, { type: "error" }> {
+  const { content, fatal, code, rawContent } = params;
+
+  return {
+    type: "error",
+    message: content,
+    fatal,
+    code,
+    systemMessage: {
+      role: "system",
+      content,
+      metadata: {
+        provider: "gemini",
+        code,
+        severity: fatal ? "fatal" : "error",
+        rawContent: rawContent ?? content,
+      },
+    },
+  };
+}
+
 /** 解析 init 事件 → session_started */
 function parseInitEvent(e: GeminiInitEvent): NormalizedEvent {
   return {
@@ -126,11 +152,13 @@ function parseToolResultEvent(e: GeminiToolResultEvent): NormalizedEvent {
 
 /** 解析 error 事件 → error（fatal=false） */
 function parseErrorEvent(e: GeminiErrorEvent): NormalizedEvent {
-  return {
-    type: "error",
-    message: e.message ?? "Gemini 串流發生錯誤",
+  const rawContent = e.message ?? "Gemini 串流發生錯誤";
+  return buildGeminiSystemError({
+    content: rawContent,
     fatal: false,
-  };
+    code: "STREAM_ERROR",
+    rawContent,
+  });
 }
 
 /**
@@ -142,12 +170,13 @@ function parseResultEvent(e: GeminiResultEvent): NormalizedEvent {
   if (e.status === "success") {
     return { type: "turn_complete" };
   }
-  // status === "error"
-  return {
-    type: "error",
-    message: e.error?.message ?? "Gemini 執行失敗",
+  const rawContent = e.error?.message ?? "Gemini 執行失敗";
+  return buildGeminiSystemError({
+    content: rawContent,
     fatal: true,
-  };
+    code: "RESULT_ERROR",
+    rawContent,
+  });
 }
 
 // ── 主要解析函式 ──────────────────────────────────────────────────

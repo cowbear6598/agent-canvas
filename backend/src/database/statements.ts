@@ -441,9 +441,9 @@ function buildStatements(db: Database): {
     message: {
       insert: db.prepare(
         `INSERT INTO messages (
-          id, pod_id, canvas_id, role, content, timestamp, sub_messages_json
+          id, pod_id, canvas_id, role, content, timestamp, sub_messages_json, metadata_json
         ) VALUES (
-          $id, $podId, $canvasId, $role, $content, $timestamp, $subMessagesJson
+          $id, $podId, $canvasId, $role, $content, $timestamp, $subMessagesJson, $metadataJson
         )`,
       ),
       selectByPodId: db.prepare(
@@ -452,9 +452,9 @@ function buildStatements(db: Database): {
       selectById: db.prepare("SELECT * FROM messages WHERE id = ?"),
       upsert: db.prepare(
         `INSERT OR REPLACE INTO messages (
-          id, pod_id, canvas_id, role, content, timestamp, sub_messages_json
+          id, pod_id, canvas_id, role, content, timestamp, sub_messages_json, metadata_json
         ) VALUES (
-          $id, $podId, $canvasId, $role, $content, $timestamp, $subMessagesJson
+          $id, $podId, $canvasId, $role, $content, $timestamp, $subMessagesJson, $metadataJson
         )`,
       ),
       deleteByPodId: db.prepare("DELETE FROM messages WHERE pod_id = ?"),
@@ -608,9 +608,9 @@ function buildStatements(db: Database): {
     runMessage: {
       insert: db.prepare(
         `INSERT INTO run_messages (
-          id, run_id, pod_id, role, content, timestamp, sub_messages_json
+          id, run_id, pod_id, role, content, timestamp, sub_messages_json, metadata_json
         ) VALUES (
-          $id, $runId, $podId, $role, $content, $timestamp, $subMessagesJson
+          $id, $runId, $podId, $role, $content, $timestamp, $subMessagesJson, $metadataJson
         )`,
       ),
       selectByRunIdAndPodId: db.prepare(
@@ -620,9 +620,9 @@ function buildStatements(db: Database): {
       ),
       upsert: db.prepare(
         `INSERT OR REPLACE INTO run_messages (
-          id, run_id, pod_id, role, content, timestamp, sub_messages_json
+          id, run_id, pod_id, role, content, timestamp, sub_messages_json, metadata_json
         ) VALUES (
-          $id, $runId, $podId, $role, $content, $timestamp, $subMessagesJson
+          $id, $runId, $podId, $role, $content, $timestamp, $subMessagesJson, $metadataJson
         )`,
       ),
       deleteByRunId: db.prepare("DELETE FROM run_messages WHERE run_id = ?"),

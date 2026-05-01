@@ -74,6 +74,7 @@ export function toMessage(pm: PersistedMessage): Message {
     id: pm.id,
     role: pm.role,
     content: pm.content,
+    metadata: pm.metadata,
     isPartial: false,
   };
 

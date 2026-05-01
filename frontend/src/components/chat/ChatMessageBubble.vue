@@ -1,26 +1,59 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { FileText, Loader2, Check, AlertCircle } from "lucide-vue-next";
-import type { MessageRole, ToolUseInfo, ToolUseStatus } from "@/types/chat";
+import type {
+  MessageRole,
+  SystemMessageMetadata,
+  ToolUseInfo,
+  ToolUseStatus,
+} from "@/types/chat";
 import ToolOutputModal from "./ToolOutputModal.vue";
 
 const props = defineProps<{
   content: string;
   role: MessageRole;
+  metadata?: SystemMessageMetadata;
   isPartial?: boolean;
   toolUse?: ToolUseInfo[];
   isSummarized?: boolean;
 }>();
 
+const isSystemMessage = computed(() => props.role === "system");
+
 const messageAlignment = computed(() =>
   props.role === "user" ? "justify-end" : "justify-start",
 );
 
-const bubbleStyle = computed(() =>
-  props.role === "user"
-    ? "bg-doodle-blue text-card"
-    : "bg-card text-foreground",
+const bubbleStyle = computed(() => {
+  if (props.role === "user") {
+    return "bg-doodle-blue text-card";
+  }
+
+  if (isSystemMessage.value) {
+    return "border-amber-700 bg-amber-50 text-amber-950";
+  }
+
+  return "bg-card text-foreground";
+});
+
+const systemSeverityLabel = computed(() => {
+  switch (props.metadata?.severity) {
+    case "fatal":
+      return "Fatal";
+    case "warning":
+      return "Warning";
+    case "info":
+      return "Info";
+    default:
+      return "Error";
+  }
+});
+
+const systemProviderLabel = computed(() =>
+  props.metadata?.provider ? props.metadata.provider.toUpperCase() : null,
 );
+
+const systemCodeLabel = computed(() => props.metadata?.code ?? null);
 
 const uniqueToolUse = computed(() => {
   if (!props.toolUse || props.toolUse.length === 0) return [];
@@ -84,6 +117,32 @@ const closeToolModal = (): void => {
       :style="{ boxShadow: '2px 2px 0 var(--doodle-ink)' }"
     >
       <div class="p-3">
+        <div
+          v-if="isSystemMessage"
+          class="mb-2 flex flex-wrap items-center gap-1.5"
+        >
+          <span
+            data-testid="system-severity-tag"
+            class="rounded-full border border-amber-700/40 bg-amber-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-900"
+          >
+            {{ systemSeverityLabel }}
+          </span>
+          <span
+            v-if="systemProviderLabel"
+            data-testid="system-provider-tag"
+            class="rounded-full border border-amber-700/30 bg-white/70 px-2 py-0.5 text-[11px] font-mono text-amber-900"
+          >
+            {{ systemProviderLabel }}
+          </span>
+          <span
+            v-if="systemCodeLabel"
+            data-testid="system-code-tag"
+            class="rounded-full border border-amber-700/30 bg-white/70 px-2 py-0.5 text-[11px] font-mono text-amber-900"
+          >
+            {{ systemCodeLabel }}
+          </span>
+        </div>
+
         <div
           v-if="hasToolUse"
           class="mb-2 flex flex-wrap gap-1.5"

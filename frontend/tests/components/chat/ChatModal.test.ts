@@ -5,7 +5,7 @@ import { webSocketMockFactory } from "../../helpers/mockWebSocket";
 import { createMockPod, createMockConnection } from "../../helpers/factories";
 import { usePodStore } from "@/stores/pod";
 import { useConnectionStore } from "@/stores/connectionStore";
-import { resetChatActionsCache } from "@/stores/chat/chatStore";
+import { useChatStore, resetChatActionsCache } from "@/stores/chat/chatStore";
 import ChatModal from "@/components/chat/ChatModal.vue";
 
 // ── WS 邊界 mock ───────────────────────────────────────────────
@@ -382,5 +382,35 @@ describe("Multi-Instance 模式與 Integration Binding 互動", () => {
       false,
     );
     wrapper.unmount();
+  });
+});
+
+describe("聊天送出錯誤", () => {
+  setupStoreTest(() => {
+    resetChatActionsCache();
+    mockIsMultiInstanceSourcePod.mockReturnValue(false);
+  });
+
+  it("sendMessage 拋錯時，應改寫為 transcript system message", async () => {
+    const chatStore = useChatStore();
+    vi.spyOn(chatStore, "sendMessage").mockRejectedValue(
+      new Error("Authentication failed"),
+    );
+
+    const wrapper = mountChatModal();
+    wrapper.findComponent({ name: "ChatInput" }).vm.$emit("send", "hello");
+    await Promise.resolve();
+    await wrapper.vm.$nextTick();
+
+    const messages = chatStore.messagesByPodId.get("test-pod-1");
+    expect(messages).toHaveLength(1);
+    expect(messages?.[0]).toMatchObject({
+      role: "system",
+      content: "Authentication failed",
+      metadata: {
+        severity: "error",
+        rawContent: "Authentication failed",
+      },
+    });
   });
 });

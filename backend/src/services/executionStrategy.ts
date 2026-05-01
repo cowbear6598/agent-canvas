@@ -2,6 +2,7 @@ import type { PersistedMessage } from "../types/persistence.js";
 import type { PodStatus } from "../types/pod.js";
 import type { RunContext } from "../types/run.js";
 import type { ContentBlock } from "../types/index.js";
+import type { SystemMessageMetadata } from "../types/message.js";
 import { runStore } from "./runStore.js";
 import { runExecutionService } from "./workflow/runExecutionService.js";
 import { injectRunUserMessage } from "../utils/runChatHelpers.js";
@@ -38,6 +39,13 @@ export interface ChatEmitStrategy {
     podId: string;
     messageId: string;
     fullContent: string;
+  }): void;
+  emitSystemMessage(params: {
+    canvasId: string;
+    podId: string;
+    messageId: string;
+    content: string;
+    metadata: SystemMessageMetadata;
   }): void;
 }
 

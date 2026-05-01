@@ -730,7 +730,7 @@ describe("executeStreamingChat", () => {
       });
     });
 
-    it("workspacePath 不在 canvasRoot 內時，透過 emitToCanvas 發送 POD_ERROR（code: INVALID_PATH）且 provider.chat 未被呼叫", async () => {
+    it("workspacePath 不在 canvasRoot 內時，應改寫為 transcript system message 且 provider.chat 未被呼叫", async () => {
       // 直接插入帶非法 workspacePath 的 pod（繞過 canvasRoot 驗證，測試 resolvePodCwd 攔截）
       const pod = insertPodViaSQL({
         provider: "claude",
@@ -750,7 +750,7 @@ describe("executeStreamingChat", () => {
         },
       });
 
-      // 新行為：路徑穿越/非法路徑錯誤被 handleStreamError 攔截，透過 emitToCanvas 回報，不再拋出
+      // 新行為：路徑穿越/非法路徑錯誤被 handleStreamError 攔截，改走 transcript system message
       const result = await executeStreamingChat({
         canvasId,
         podId: pod.id,
@@ -762,11 +762,15 @@ describe("executeStreamingChat", () => {
       expect(result.aborted).toBe(false);
       expect(socketService.emitToCanvas).toHaveBeenCalledWith(
         canvasId,
-        WebSocketResponseEvents.POD_ERROR,
+        WebSocketResponseEvents.POD_CLAUDE_CHAT_MESSAGE,
         expect.objectContaining({
           podId: pod.id,
-          success: false,
-          code: "INVALID_PATH",
+          role: "system",
+          content: "工作目錄不在允許範圍內",
+          metadata: expect.objectContaining({
+            code: "INVALID_PATH",
+            severity: "fatal",
+          }),
         }),
       );
       expect(chatMock).not.toHaveBeenCalled();
@@ -911,7 +915,7 @@ describe("executeStreamingChat", () => {
       );
     });
 
-    it("error fatal=true 先廣播 ⚠️ 文字再拋出 Error", async () => {
+    it("error fatal=true 會先寫入 system message 再拋出 Error", async () => {
       const pod = insertCodexPod();
       const chatMock = vi.fn(() =>
         makeEventStream([
@@ -945,15 +949,17 @@ describe("executeStreamingChat", () => {
         }),
       ).rejects.toThrow("串流處理發生嚴重錯誤");
 
-      const textPayloads = collectedPayloads.filter(
+      const systemPayloads = collectedPayloads.filter(
         (p) =>
           typeof p === "object" &&
           p !== null &&
+          "role" in p &&
+          (p as { role?: string }).role === "system" &&
           "content" in p &&
           typeof (p as { content: unknown }).content === "string" &&
-          (p as { content: string }).content.includes("⚠️"),
+          (p as { content: string }).content.includes("某致命錯誤"),
       );
-      expect(textPayloads.length).toBeGreaterThan(0);
+      expect(systemPayloads.length).toBeGreaterThan(0);
     });
   });
 
@@ -1164,7 +1170,7 @@ describe("executeStreamingChat", () => {
       );
     });
 
-    it("worktreePath 不在 repositoriesRoot 內時，透過 emitToCanvas 發送 POD_ERROR（code: INVALID_PATH）且 provider.chat 未被呼叫", async () => {
+    it("worktreePath 不在 repositoriesRoot 內時，應改寫為 run transcript system message 且 provider.chat 未被呼叫", async () => {
       const pod = insertClaudePod();
       vi.spyOn(runStore, "getPodInstance").mockReturnValue({
         worktreePath: "/tmp/evil-path",
@@ -1183,7 +1189,7 @@ describe("executeStreamingChat", () => {
         },
       });
 
-      // 新行為：worktreePath 非法錯誤被 handleStreamError 攔截，透過 emitToCanvas 回報，不再拋出
+      // 新行為：worktreePath 非法錯誤被 handleStreamError 攔截，改走 run transcript system message
       const result = await executeStreamingChat({
         canvasId,
         podId: pod.id,
@@ -1195,19 +1201,23 @@ describe("executeStreamingChat", () => {
       expect(result.aborted).toBe(false);
       expect(socketService.emitToCanvas).toHaveBeenCalledWith(
         canvasId,
-        WebSocketResponseEvents.POD_ERROR,
+        WebSocketResponseEvents.RUN_MESSAGE,
         expect.objectContaining({
           podId: pod.id,
-          success: false,
-          code: "INVALID_PATH",
+          role: "system",
+          content: "工作目錄驗證失敗",
+          metadata: expect.objectContaining({
+            code: "INVALID_PATH",
+            severity: "fatal",
+          }),
         }),
       );
       expect(chatMock).not.toHaveBeenCalled();
     });
   });
 
-  describe("handleErrorEvent code 分派邏輯", () => {
-    it("無 code + fatal=false → 推送通用警告「⚠️ 發生錯誤，請稍後再試」，不洩漏原始訊息", async () => {
+  describe("provider error transcript 路由", () => {
+    it("無 code + fatal=false → 直接保留原文 system message", async () => {
       const pod = insertClaudePod();
 
       const collectedContents: string[] = [];
@@ -1238,12 +1248,7 @@ describe("executeStreamingChat", () => {
         strategy: new NormalModeExecutionStrategy(canvasId),
       });
 
-      const warningContents = collectedContents.filter((c) => c.includes("⚠️"));
-      expect(warningContents.length).toBeGreaterThan(0);
-      expect(
-        warningContents.some((c) => c.includes("發生錯誤，請稍後再試")),
-      ).toBe(true);
-      expect(warningContents.some((c) => c.includes("xxx"))).toBe(false);
+      expect(collectedContents).toContain("xxx");
     });
   });
 });

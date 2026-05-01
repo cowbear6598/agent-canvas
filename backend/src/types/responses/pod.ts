@@ -1,5 +1,5 @@
 import type { PodPublicView, PodStatus } from "../pod.js";
-import type { MessageRole } from "../message.js";
+import type { MessageRole, SystemMessageMetadata } from "../message.js";
 
 export interface PodCreatedPayload {
   requestId: string;
@@ -95,6 +95,7 @@ export interface PodChatMessagePayload {
   content: string;
   isPartial: boolean;
   role?: MessageRole;
+  metadata?: SystemMessageMetadata;
 }
 
 export interface PodChatToolUsePayload {
@@ -136,6 +137,7 @@ export interface PodChatHistoryResultPayload {
     role: MessageRole;
     content: string;
     timestamp: string;
+    metadata?: SystemMessageMetadata;
     subMessages?: Array<{
       id: string;
       content: string;

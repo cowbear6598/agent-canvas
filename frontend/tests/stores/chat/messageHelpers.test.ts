@@ -510,5 +510,35 @@ describe("messageHelpers", () => {
 
       expect(messages[0]?.isPartial).toBe(true);
     });
+
+    it("system 訊息應保留 metadata 且不建立 assistant 專用 subMessages", () => {
+      const messages: Message[] = [];
+
+      upsertMessage(
+        messages,
+        "msg-1",
+        "Rate limit exceeded",
+        false,
+        "system",
+        undefined,
+        {
+          provider: "claude",
+          code: "RATE_LIMIT",
+          severity: "error",
+        },
+      );
+
+      expect(messages[0]).toMatchObject({
+        id: "msg-1",
+        role: "system",
+        content: "Rate limit exceeded",
+        metadata: {
+          provider: "claude",
+          code: "RATE_LIMIT",
+          severity: "error",
+        },
+      });
+      expect(messages[0]?.subMessages).toBeUndefined();
+    });
   });
 });

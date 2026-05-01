@@ -23,6 +23,8 @@ import type {
   AgentProvider,
   ChatRequestContext,
   NormalizedEvent,
+  ProviderName,
+  ProviderSystemMessage,
 } from "../provider/types.js";
 import { runStore } from "../runStore.js";
 import { isPathWithinDirectory } from "../../utils/pathValidator.js";
@@ -31,6 +33,7 @@ import { resolvePodCwd } from "../shared/podPathResolver.js";
 import { socketService } from "../socketService.js";
 import { WebSocketResponseEvents } from "../../schemas/index.js";
 import { createI18nError } from "../../utils/i18nError.js";
+import { appendSystemMessage } from "../transcriptSystemMessage.js";
 
 export interface StreamingChatExecutorOptions {
   canvasId: string;
@@ -97,6 +100,7 @@ interface ThrottleContext {
 interface StreamContext {
   canvasId: string;
   podId: string;
+  providerName: ProviderName;
   /** Pod 顯示名稱，setupStreamContext 先以 podId 填入，executeStreamingChat 取得 pod 後覆寫為 pod.name */
   podName: string;
   messageId: string;
@@ -123,7 +127,6 @@ type TextStreamEvent = Extract<StreamEvent, { type: "text" }>;
 type ToolUseStreamEvent = Extract<StreamEvent, { type: "tool_use" }>;
 type ToolResultStreamEvent = Extract<StreamEvent, { type: "tool_result" }>;
 type CompleteStreamEvent = Extract<StreamEvent, { type: "complete" }>;
-type ErrorStreamEvent = Extract<StreamEvent, { type: "error" }>;
 
 function handleTextEvent(event: TextStreamEvent, context: StreamContext): void {
   const {
@@ -236,26 +239,67 @@ function handleCompleteEvent(
   });
 }
 
-function handleErrorEvent(
-  event: ErrorStreamEvent,
-  context: StreamContext,
-  streamingCallback: (event: StreamEvent) => void,
-): void {
-  const { canvasId, podId } = context;
+function flushPendingAssistantMessage(context: StreamContext): void {
+  const {
+    streamState,
+    flushCurrentSubMessage,
+    persistStreamingMessage,
+    throttleContext,
+  } = context;
 
-  // 原始錯誤訊息記入 server log，不暴露給前端
+  if (throttleContext.pendingTimer !== null) {
+    clearTimeout(throttleContext.pendingTimer);
+    throttleContext.pendingTimer = null;
+  }
+
+  flushCurrentSubMessage();
+
+  if (hasAssistantContent(streamState)) {
+    persistStreamingMessage();
+  }
+}
+
+function buildProviderErrorSystemMessage(
+  event: Extract<NormalizedEvent, { type: "error" }>,
+  providerName: ProviderName,
+): ProviderSystemMessage {
+  if (event.systemMessage) {
+    return event.systemMessage;
+  }
+
+  return {
+    role: "system",
+    content: event.message,
+    metadata: {
+      provider: providerName,
+      code: event.code ?? null,
+      severity: event.fatal ? "fatal" : "error",
+      rawContent: event.message,
+    },
+  };
+}
+
+function handleProviderErrorEvent(
+  event: Extract<NormalizedEvent, { type: "error" }>,
+  context: StreamContext,
+): void {
+  const { canvasId, podId, providerName, strategy } = context;
+  const systemMessage = buildProviderErrorSystemMessage(event, providerName);
+
   logger.error(
     "Chat",
     "Error",
-    `Provider 串流錯誤（podId=${podId}, canvasId=${canvasId}, fatal=${event.fatal}, code=${event.code ?? "無"}）：${event.error}`,
+    `Provider 串流錯誤（podId=${podId}, canvasId=${canvasId}, provider=${providerName}, fatal=${event.fatal}, code=${systemMessage.metadata.code ?? "無"}）：${systemMessage.metadata.rawContent}`,
   );
 
-  // 使用通用警告，不洩漏原始訊息給前端
-  const displayMessage = event.fatal
-    ? "\n\n⚠️ 發生嚴重錯誤，對話已中斷"
-    : "\n\n⚠️ 發生錯誤，請稍後再試";
-
-  streamingCallback({ type: "text", content: displayMessage });
+  flushPendingAssistantMessage(context);
+  appendSystemMessage({
+    canvasId,
+    podId,
+    content: systemMessage.content,
+    metadata: systemMessage.metadata,
+    strategy,
+  });
 
   if (event.fatal) {
     throw new Error("串流處理發生嚴重錯誤");
@@ -283,9 +327,6 @@ function createStreamingCallback(
         break;
       case "complete":
         handleCompleteEvent(event, context);
-        break;
-      case "error":
-        handleErrorEvent(event, context, callback);
         break;
     }
   };
@@ -381,12 +422,17 @@ async function handleStreamError(
       `[handleStreamError] 已知業務錯誤（podId=${podId}, canvasId=${canvasId}, code=${classified.code}）：${error instanceof Error ? error.message : String(error)}`,
     );
 
-    socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_ERROR, {
+    appendSystemMessage({
       canvasId,
       podId,
-      success: false,
-      error: createI18nError(classified.i18nKey),
-      code: classified.code,
+      content: error instanceof Error ? error.message : String(error),
+      metadata: {
+        provider: context.providerName,
+        code: classified.code,
+        severity: "fatal",
+        rawContent: error instanceof Error ? error.message : String(error),
+      },
+      strategy,
     });
 
     return {
@@ -477,6 +523,7 @@ function setupStreamContext(
   const context: StreamContext = {
     canvasId,
     podId,
+    providerName: "claude",
     // pod.name 尚未取得，先以 podId 填入；executeStreamingChat 取得 pod 後會覆寫
     podName: podId,
     messageId,
@@ -566,12 +613,7 @@ function normalizedEventToStreamEvent(ev: NormalizedEvent): StreamEvent | null {
     case "turn_complete":
       return { type: "complete" };
     case "error":
-      return {
-        type: "error",
-        error: ev.message,
-        fatal: ev.fatal,
-        code: ev.code,
-      };
+      return null;
     case "session_started":
       return null;
   }
@@ -580,6 +622,7 @@ function normalizedEventToStreamEvent(ev: NormalizedEvent): StreamEvent | null {
 /**
  * 處理單一正規化串流事件：
  *   - session_started → 寫入 streamContext.capturedSessionId，供 finalizeAfterStream 持久化
+ *   - error → 直接落成 transcript system message；fatal=true 時中斷串流
  *   - 其餘事件 → 透過 normalizedEventToStreamEvent 轉換後交由 streamingCallback 分派
  *
  * 此函式為 module-scope 純函式（無 side effect 以外的回傳值），
@@ -592,6 +635,11 @@ function processNormalizedEvent(
 ): void {
   if (ev.type === "session_started") {
     streamContext.capturedSessionId = ev.sessionId;
+    return;
+  }
+
+  if (ev.type === "error") {
+    handleProviderErrorEvent(ev, streamContext);
     return;
   }
 
@@ -729,6 +777,7 @@ export async function executeStreamingChat(
   // 取得 pod.name 後立即寫入 streamContext，讓後續 handler（例如 handleErrorEvent）直接從 context 讀取
   streamContext.podName = pod.name;
   const providerName = pod.provider ?? "claude";
+  streamContext.providerName = providerName;
   const provider = getProvider(providerName);
 
   const sessionId = strategy.getSessionId(podId);

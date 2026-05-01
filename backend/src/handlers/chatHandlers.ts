@@ -481,6 +481,7 @@ export const handleChatHistory = withCanvasId<ChatHistoryPayload>(
         role: message.role,
         content: message.content,
         timestamp: message.timestamp,
+        metadata: message.metadata,
         subMessages: message.subMessages,
       })),
     });

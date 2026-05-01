@@ -1,6 +1,6 @@
 import type { WorkflowRun, RunPodInstance } from "../services/runStore.js";
 import type { PersistedMessage } from "./persistence.js";
-import type { MessageRole } from "./message.js";
+import type { MessageRole, SystemMessageMetadata } from "./message.js";
 
 /** not-applicable: 該路徑不存在; pending: 尚未 settle; settled: 已完成 settle */
 export type PathwayState = "not-applicable" | "pending" | "settled";
@@ -57,6 +57,7 @@ export interface RunMessagePayload {
   content: string;
   isPartial: boolean;
   role: MessageRole;
+  metadata?: SystemMessageMetadata;
 }
 
 export interface RunChatCompletePayload {

@@ -7,6 +7,8 @@ export { isPodBusy, toPodPublicView } from "./pod.js";
 export type {
   Message,
   MessageRole,
+  SystemMessageMetadata,
+  SystemMessageSeverity,
   ToolUseInfo,
   ContentBlock,
   TextContentBlock,

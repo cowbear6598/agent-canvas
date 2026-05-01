@@ -14,7 +14,12 @@ import type {
   RunPodStatus,
   PathwayState,
 } from "@/types/run";
-import type { Message, ToolUseInfo } from "@/types/chat";
+import type {
+  Message,
+  MessageRole,
+  SystemMessageMetadata,
+  ToolUseInfo,
+} from "@/types/chat";
 import type {
   RunDeletePayload,
   RunLoadHistoryPayload,
@@ -267,7 +272,8 @@ export const useRunStore = defineStore("run", {
       messageId: string,
       content: string,
       isPartial: boolean,
-      role: "user" | "assistant",
+      role: MessageRole,
+      metadata?: SystemMessageMetadata,
     ): void {
       const key = buildRunPodCacheKey(runId, podId);
       const messages = this.runChatMessages.get(key) ?? [];
@@ -278,7 +284,15 @@ export const useRunStore = defineStore("run", {
         content.length < lastLength ? content : content.slice(lastLength);
       this.accumulatedLengthByMessageId.set(messageId, content.length);
 
-      upsertMessage(messages, messageId, content, isPartial, role, delta);
+      upsertMessage(
+        messages,
+        messageId,
+        content,
+        isPartial,
+        role,
+        delta,
+        metadata,
+      );
 
       this.runChatMessages.set(key, [...messages]);
     },

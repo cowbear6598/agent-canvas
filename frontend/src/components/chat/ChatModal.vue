@@ -10,9 +10,9 @@ import ChatIntegrationBlockedHint from "@/components/integration/ChatIntegration
 import ChatMultiInstanceInput from "./ChatMultiInstanceInput.vue";
 import { useChatStore } from "@/stores/chat";
 import { useConnectionStore } from "@/stores/connectionStore";
+import { usePodStore } from "@/stores/pod";
 import { useRunStore } from "@/stores/run/runStore";
 import { isMultiInstanceSourcePod } from "@/utils/multiInstanceGuard";
-import { useToast } from "@/composables/useToast";
 import { useEscapeClose } from "@/composables/useEscapeClose";
 
 const props = defineProps<{
@@ -25,8 +25,8 @@ const emit = defineEmits<{
 
 const chatStore = useChatStore();
 const connectionStore = useConnectionStore();
+const podStore = usePodStore();
 const runStore = useRunStore();
-const { showErrorToast } = useToast();
 
 const messages = computed(() => chatStore.getMessages(props.pod.id));
 const isTyping = computed(() => props.pod.status === "chatting");
@@ -61,8 +61,27 @@ const handleSend = async (
 
   try {
     await chatStore.sendMessage(props.pod.id, content, contentBlocks);
-  } catch {
-    showErrorToast("Pod", "訊息發送失敗");
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "訊息發送失敗";
+
+    chatStore.setTyping(props.pod.id, false);
+    if (!isMultiInstanceMode.value) {
+      podStore.updatePodStatus(props.pod.id, "idle");
+    }
+
+    chatStore.handleChatMessage({
+      podId: props.pod.id,
+      messageId: crypto.randomUUID(),
+      content: errorMessage,
+      isPartial: false,
+      role: "system",
+      metadata: {
+        code: null,
+        severity: "error",
+        rawContent: errorMessage,
+      },
+    });
   }
 };
 

@@ -397,6 +397,31 @@ describe("RunStore", () => {
       expect(message.subMessages).toEqual(subMessages);
     });
 
+    it("addRunMessage 應支援 system message metadata", () => {
+      const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, TRIGGER_MESSAGE);
+
+      const message = runStore.addRunMessage(
+        run.id,
+        "pod-1",
+        "system",
+        "quota exceeded",
+        undefined,
+        undefined,
+        {
+          provider: "codex",
+          code: "QUOTA_EXCEEDED",
+          severity: "error",
+          rawContent: "quota exceeded",
+        },
+      );
+
+      const fetched = runStore.getRunMessages(run.id, "pod-1");
+      expect(message.role).toBe("system");
+      expect(message.metadata?.provider).toBe("codex");
+      expect(fetched[0].metadata?.code).toBe("QUOTA_EXCEEDED");
+      expect(fetched[0].metadata?.severity).toBe("error");
+    });
+
     // ================================================================
     // 測試案例 9 — addRunMessage 傳入外部 id 與不傳兩種路徑
     // ================================================================

@@ -1,6 +1,7 @@
 import { WebSocketResponseEvents } from "../schemas/index.js";
 import { socketService } from "./socketService.js";
 import type { ChatEmitStrategy } from "./executionStrategy.js";
+import type { SystemMessageMetadata } from "../types/message.js";
 
 /**
  * 建立 Normal mode 的事件發送策略。
@@ -73,6 +74,33 @@ export function createNormalEmitStrategy(): ChatEmitStrategy {
           podId,
           messageId,
           fullContent,
+        },
+      );
+    },
+    emitSystemMessage({
+      canvasId,
+      podId,
+      messageId,
+      content,
+      metadata,
+    }: {
+      canvasId: string;
+      podId: string;
+      messageId: string;
+      content: string;
+      metadata: SystemMessageMetadata;
+    }): void {
+      socketService.emitToCanvas(
+        canvasId,
+        WebSocketResponseEvents.POD_CLAUDE_CHAT_MESSAGE,
+        {
+          canvasId,
+          podId,
+          messageId,
+          content,
+          isPartial: false,
+          role: "system",
+          metadata,
         },
       );
     },
@@ -154,6 +182,34 @@ export function createRunEmitStrategy(runId: string): ChatEmitStrategy {
           podId,
           messageId,
           fullContent,
+        },
+      );
+    },
+    emitSystemMessage({
+      canvasId,
+      podId,
+      messageId,
+      content,
+      metadata,
+    }: {
+      canvasId: string;
+      podId: string;
+      messageId: string;
+      content: string;
+      metadata: SystemMessageMetadata;
+    }): void {
+      socketService.emitToCanvas(
+        canvasId,
+        WebSocketResponseEvents.RUN_MESSAGE,
+        {
+          runId,
+          canvasId,
+          podId,
+          messageId,
+          content,
+          isPartial: false,
+          role: "system",
+          metadata,
         },
       );
     },

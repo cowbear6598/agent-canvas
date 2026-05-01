@@ -36,7 +36,6 @@ import {
   checkRateLimitEvent,
   checkAuthStatus,
   formatApiRetryMessage,
-  checkAssistantError,
 } from "../../claude/sdkErrorMapper.js";
 import { logger } from "../../../utils/logger.js";
 
@@ -72,6 +71,32 @@ interface QueryState {
   sessionId: string | null;
   fullContent: string;
   activeTools: Map<string, ActiveToolEntry>;
+}
+
+function buildClaudeSystemError(params: {
+  content: string;
+  code?: string | null;
+  fatal: boolean;
+  rawContent?: string;
+}): Extract<NormalizedEvent, { type: "error" }> {
+  const { content, code, fatal, rawContent } = params;
+
+  return {
+    type: "error",
+    message: content,
+    fatal,
+    ...(code ? { code } : {}),
+    systemMessage: {
+      role: "system",
+      content,
+      metadata: {
+        provider: "claude",
+        code: code ?? null,
+        severity: fatal ? "fatal" : "error",
+        rawContent: rawContent ?? content,
+      },
+    },
+  };
 }
 
 // ─── 工具函式 ─────────────────────────────────────────────────────────────────
@@ -153,13 +178,12 @@ function* handleAssistant(
   }
 
   if (sdkMessage.error) {
-    const result = checkAssistantError(sdkMessage.error);
-    const userMessage = result.shouldAbort
-      ? result.userMessage
-      : "與 Claude 通訊時發生錯誤，請稍後再試";
-    // 先送出錯誤文字，再拋出，讓上層感知到失敗；原始 SDK 錯誤只記 log，不暴露給前端
     logger.error("Chat", "Error", "assistant message 錯誤", sdkMessage.error);
-    yield { type: "text", content: `\n\n⚠️ ${userMessage}` };
+    yield buildClaudeSystemError({
+      content: sdkMessage.error,
+      code: sdkMessage.error,
+      fatal: true,
+    });
     throw new Error("Claude SDK 回傳 assistant 錯誤");
   }
 }
@@ -229,12 +253,15 @@ function* handleResult(
 
   // 原始 SDK errors 只記 log，不暴露給前端（避免洩漏內部細節）
   logger.error("Chat", "Error", "result/error 回傳錯誤", sdkMessage.errors);
-
-  // 先送出使用者友善警告文字，接著 throw，由呼叫鏈完整攔截並走通用錯誤路徑
-  yield {
-    type: "text",
-    content: "\n\n⚠️ 與 Claude 通訊時發生錯誤，請稍後再試",
-  };
+  const rawContent = Array.isArray(sdkMessage.errors)
+    ? sdkMessage.errors.join("\n")
+    : "Claude result error";
+  yield buildClaudeSystemError({
+    content: rawContent,
+    code: "RESULT_ERROR",
+    fatal: true,
+    rawContent,
+  });
   throw new Error("Claude SDK result 回傳錯誤");
 }
 
@@ -245,7 +272,13 @@ function* handleRateLimitEvent(
   const result = checkRateLimitEvent(sdkMessage.rate_limit_info);
   if (!result.shouldAbort) return;
 
-  yield { type: "text", content: `\n\n⚠️ ${result.userMessage}` };
+  const rawContent = JSON.stringify(sdkMessage.rate_limit_info);
+  yield buildClaudeSystemError({
+    content: rawContent,
+    code: "RATE_LIMIT_REJECTED",
+    fatal: true,
+    rawContent,
+  });
   throw new Error(`rate_limit_event rejected：帳戶用量已達上限`);
 }
 
@@ -256,9 +289,12 @@ function* handleAuthStatus(
   const result = checkAuthStatus(sdkMessage.error);
   if (!result.shouldAbort) return;
 
-  // 原始 SDK error 只記 log，不暴露給前端
   logger.error("Chat", "Error", "auth_status 錯誤", sdkMessage.error);
-  yield { type: "text", content: `\n\n⚠️ ${result.userMessage}` };
+  yield buildClaudeSystemError({
+    content: sdkMessage.error ?? "auth_status error",
+    code: sdkMessage.error ?? "AUTH_STATUS_ERROR",
+    fatal: true,
+  });
   throw new Error("Claude SDK auth_status 錯誤");
 }
 
@@ -334,11 +370,11 @@ export async function* runClaudeQuery(
   } = ctx;
 
   if (!options) {
-    yield {
-      type: "error",
-      message: "[runClaudeQuery] ClaudeOptions 未提供",
+    yield buildClaudeSystemError({
+      content: "[runClaudeQuery] ClaudeOptions 未提供",
+      code: "MISSING_OPTIONS",
       fatal: true,
-    };
+    });
     return;
   }
 

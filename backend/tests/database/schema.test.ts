@@ -435,30 +435,45 @@ describe("Database", () => {
         $content: "hello",
         $timestamp: "2024-01-01T00:00:00Z",
         $subMessagesJson: null,
+        $metadataJson: null,
       });
 
       stmts.message.insert.run({
         $id: "m2",
         $podId: "p1",
         $canvasId: "c1",
-        $role: "assistant",
+        $role: "system",
         $content: "hi",
         $timestamp: "2024-01-01T00:00:01Z",
         $subMessagesJson: JSON.stringify([{ id: "sub1", content: "sub" }]),
+        $metadataJson: JSON.stringify({
+          provider: "claude",
+          code: "AUTH_ERROR",
+          severity: "error",
+          rawContent: "hi",
+        }),
       });
 
       const messages = stmts.message.selectByPodId.all("p1") as {
         role: string;
         sub_messages_json: string;
+        metadata_json: string;
       }[];
       expect(messages).toHaveLength(2);
       expect(messages[0].role).toBe("user");
-      expect(messages[1].role).toBe("assistant");
+      expect(messages[1].role).toBe("system");
 
       const parsed = JSON.parse(messages[1].sub_messages_json) as {
         id: string;
       }[];
       expect(parsed[0].id).toBe("sub1");
+
+      const metadata = JSON.parse(messages[1].metadata_json) as {
+        provider: string;
+        code: string;
+      };
+      expect(metadata.provider).toBe("claude");
+      expect(metadata.code).toBe("AUTH_ERROR");
 
       // upsert 測試
       stmts.message.upsert.run({
@@ -469,6 +484,7 @@ describe("Database", () => {
         $content: "updated",
         $timestamp: "2024-01-01T00:00:00Z",
         $subMessagesJson: null,
+        $metadataJson: null,
       });
 
       const updated = stmts.message.selectById.get("m1") as { content: string };

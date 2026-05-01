@@ -41,6 +41,14 @@ interface CodexStreamErrorEvent {
   message: string;
 }
 
+interface CodexItemError {
+  id: string;
+  type: "error";
+  message?: string;
+  text?: string;
+  error?: string;
+}
+
 type CodexEvent =
   | CodexThreadStartedEvent
   | CodexItemStartedEvent
@@ -55,6 +63,7 @@ type CodexItemPayload =
   | CodexAgentMessageItem
   | CodexReasoningItem
   | CodexCommandExecutionItem
+  | CodexItemError
   | { id: string; type: string; [key: string]: unknown };
 
 interface CodexAgentMessageItem {
@@ -76,6 +85,32 @@ interface CodexCommandExecutionItem {
   aggregated_output?: string;
   exit_code?: number | null;
   status?: string;
+}
+
+function buildCodexSystemError(params: {
+  content: string;
+  fatal: boolean;
+  code: string;
+  rawContent?: string;
+}): Extract<NormalizedEvent, { type: "error" }> {
+  const { content, fatal, code, rawContent } = params;
+
+  return {
+    type: "error",
+    message: content,
+    fatal,
+    code,
+    systemMessage: {
+      role: "system",
+      content,
+      metadata: {
+        provider: "codex",
+        code,
+        severity: fatal ? "fatal" : "error",
+        rawContent: rawContent ?? content,
+      },
+    },
+  };
 }
 
 // ── 主要解析函式 ──────────────────────────────────────────────────
@@ -163,6 +198,19 @@ export function normalize(line: string): NormalizedEvent | null {
         };
       }
 
+      if (e.item.type === "error") {
+        const itemError = e.item as CodexItemError;
+        const rawContent =
+          itemError.message ?? itemError.error ?? itemError.text ?? "";
+        if (!rawContent) return null;
+        return buildCodexSystemError({
+          content: rawContent,
+          fatal: false,
+          code: "ITEM_ERROR",
+          rawContent,
+        });
+      }
+
       // 其他 item.completed 類型（file_change、mcp_tool_call 等）目前不映射
       return null;
     }
@@ -173,11 +221,13 @@ export function normalize(line: string): NormalizedEvent | null {
 
     case "error": {
       const e = event as CodexStreamErrorEvent;
-      return {
-        type: "error",
-        message: e.message ?? "Codex 串流發生不可恢復的錯誤",
+      const rawContent = e.message ?? "Codex 串流發生不可恢復的錯誤";
+      return buildCodexSystemError({
+        content: rawContent,
         fatal: true,
-      };
+        code: "STREAM_ERROR",
+        rawContent,
+      });
     }
 
     default:
