@@ -43,13 +43,30 @@ vi.mock("../../src/services/gemini/geminiHelpers.js", async (importActual) => {
       async (
         proc: Bun.Subprocess<"pipe" | "ignore", "pipe", "pipe">,
         _abortSignal: AbortSignal,
-        _logPrefix?: string,
+        options?: string | { logPrefix?: string; onLine?: (line: string) => void },
       ): Promise<string> => {
         const chunks: string[] = [];
+        let buffer = "";
+        const onLine =
+          typeof options === "object" && options !== null
+            ? options.onLine
+            : undefined;
         for await (const chunk of proc.stderr as ReadableStream<Uint8Array>) {
-          chunks.push(Buffer.from(chunk as Uint8Array).toString("utf-8"));
+          const text = Buffer.from(chunk as Uint8Array).toString("utf-8");
+          chunks.push(text);
+          if (onLine) {
+            buffer += text;
+            const lines = buffer.split("\n");
+            buffer = lines.pop() ?? "";
+            for (const line of lines) {
+              onLine(line);
+            }
+          }
         }
-        return chunks.join("");
+        if (onLine && buffer.trim()) {
+          onLine(buffer);
+        }
+        return chunks.join("").trim();
       },
     ),
   };
@@ -164,10 +181,7 @@ function makeCtx(
 // ── 匯入 geminiProvider（在 mock 設定後匯入，確保使用 mocked logger）──
 import { geminiProvider } from "../../src/services/provider/geminiProvider.js";
 import { logger } from "../../src/utils/logger.js";
-import {
-  collectStderr,
-  STDERR_MAX_BYTES,
-} from "../../src/services/gemini/geminiHelpers.js";
+import { STDERR_MAX_BYTES } from "../../src/services/gemini/geminiHelpers.js";
 import type { ContentBlock } from "../../src/types/message.js";
 import type { Pod } from "../../src/types/pod.js";
 
@@ -723,6 +737,91 @@ describe("GeminiProvider", () => {
     expect(errorEvents).toHaveLength(0);
   });
 
+  it("C16b: stderr 命中 Gemini quota/capacity 訊號時，應提早 kill subprocess 並回傳單一 fatal system error", async () => {
+    vi.mocked(logger.warn).mockClear();
+    vi.mocked(logger.error).mockClear();
+    const hangingStdout = new ReadableStream<Uint8Array>({
+      start() {
+        // 故意不 close，模擬 CLI 沒有正常結束 stdout 的卡死情境
+      },
+    });
+    const mockProc = {
+      stdout: hangingStdout,
+      stderr: makeReadableStream([
+        "Attempt 1 failed: You have exhausted your capacity on this model.",
+        "RetryableQuotaError: cause.code: 429",
+      ]),
+      exited: new Promise<number>(() => {
+        // 故意不 resolve，驗證 fail-fast 不應再等待 exited
+      }),
+      kill: vi.fn(),
+    };
+    spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
+
+    const events = await collectEvents(geminiProvider.chat(makeCtx()));
+
+    // 一次來自 stderr fail-fast，另一次來自 chat() finally cleanup。
+    expect(mockProc.kill).toHaveBeenCalledTimes(2);
+    expectWarnContaining(
+      vi.mocked(logger.warn),
+      "Gemini 配額/容量重試訊號",
+      "提前中止 subprocess",
+    );
+    expect(
+      vi
+        .mocked(logger.error)
+        .mock.calls.some((args) =>
+          args.some(
+            (arg) =>
+              typeof arg === "string" && arg.includes("[GeminiProvider] stderr:"),
+          ),
+        ),
+    ).toBe(false);
+
+    const errorEvents = events.filter((e) => e.type === "error");
+    expect(errorEvents).toHaveLength(1);
+
+    const e = errorEvents[0] as Extract<NormalizedEvent, { type: "error" }>;
+    expect(e.fatal).toBe(true);
+    expect(e.message).toBe(
+      "Gemini 目前回報模型配額或容量不足，已停止等待自動重試，請稍後再試或切換模型。",
+    );
+    expect(e.systemMessage?.metadata.code).toBe("GEMINI_QUOTA_EXHAUSTED");
+    expect(e.systemMessage?.metadata.rawContent).toContain(
+      "exhausted your capacity on this model",
+    );
+  });
+
+  it("C16c: 一般 stderr 雜訊不應誤觸 fail-fast", async () => {
+    vi.mocked(logger.warn).mockClear();
+    const mockProc = makeMockProc(
+      [JSON.stringify({ type: "result", status: "success" })],
+      [
+        "Warning: YOLO mode enabled.",
+        "Tip: terminal colors are available.",
+      ],
+      0,
+    );
+    spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
+
+    const events = await collectEvents(geminiProvider.chat(makeCtx()));
+
+    // 僅有 chat() finally cleanup 的單次 kill，不應有 fail-fast 額外 kill。
+    expect(mockProc.kill).toHaveBeenCalledTimes(1);
+    expect(
+      vi
+        .mocked(logger.warn)
+        .mock.calls.some((args) =>
+          args.some(
+            (arg) =>
+              typeof arg === "string" &&
+              arg.includes("提前中止 subprocess"),
+          ),
+        ),
+    ).toBe(false);
+    expect(events.some((e) => e.type === "turn_complete")).toBe(true);
+  });
+
   // ── C17：result status=error → yield error event，fatal=true（AI 終態錯誤），message 取 error.message ─
   it("C17: result status=error 應推出 error event，fatal=true，message 取 error.message", async () => {
     const stdoutLines = [
@@ -770,12 +869,17 @@ describe("GeminiProvider", () => {
     }
 
     const errorEvents = collected.filter((e) => e.type === "error");
-    // 只有一個 error event（RESULT_ERROR），沒有 EXIT_CODE 多餘訊息
+    // 只有一個 error event（GEMINI_QUOTA_EXHAUSTED），沒有 EXIT_CODE 多餘訊息
     expect(errorEvents).toHaveLength(1);
     const e = errorEvents[0] as Extract<NormalizedEvent, { type: "error" }>;
     expect(e.fatal).toBe(true);
-    expect(e.systemMessage?.metadata.code).toBe("RESULT_ERROR");
-    expect(e.message).toBe("You have exhausted your capacity on this model.");
+    expect(e.systemMessage?.metadata.code).toBe("GEMINI_QUOTA_EXHAUSTED");
+    expect(e.message).toBe(
+      "Gemini 目前回報模型配額或容量不足，已停止等待自動重試，請稍後再試或切換模型。",
+    );
+    expect(e.systemMessage?.metadata.rawContent).toBe(
+      "You have exhausted your capacity on this model.",
+    );
     // 確保沒有 EXIT_CODE 訊息
     const hasExitCode = errorEvents.some(
       (ev) =>
@@ -807,53 +911,11 @@ describe("GeminiProvider", () => {
 
   // ── C19：stderr 超過 64KB 自動截斷，logger.warn 紀錄截斷，stderrText 長度有上限 ─
 
-  /**
-   * 建立還原 actual collectStderr 截斷行為的 mockImplementationOnce。
-   * 同時捕捉 stderrText 以供後續斷言使用。
-   */
-  function setupC19TruncationMock(): { getCapture: () => string | undefined } {
-    let capturedStderrText: string | undefined;
-    vi.mocked(collectStderr).mockImplementationOnce(
-      async (proc, abortSig, logPrefix) => {
-        const chunks: Buffer[] = [];
-        let totalBytes = 0;
-        let truncated = false;
-        for await (const chunk of proc.stderr as ReadableStream<Uint8Array>) {
-          if (abortSig.aborted) break;
-          const buf = Buffer.from(chunk as Uint8Array);
-          if (totalBytes + buf.byteLength <= STDERR_MAX_BYTES) {
-            chunks.push(buf);
-            totalBytes += buf.byteLength;
-          } else {
-            truncated = true;
-            break;
-          }
-        }
-        let text = Buffer.concat(chunks).toString("utf-8").trim();
-        if (truncated) {
-          const { logger: innerLogger } =
-            await import("../../src/utils/logger.js");
-          innerLogger.warn(
-            "Chat",
-            "Warn",
-            `${logPrefix ?? "[Gemini]"} stderr 已達上限（${STDERR_MAX_BYTES} bytes），後續輸出已截斷`,
-          );
-          text += "\n[TRUNCATED]";
-        }
-        capturedStderrText = text;
-        return text;
-      },
-    );
-    return { getCapture: () => capturedStderrText };
-  }
-
   it("C19a: stderr 超過 64KB 時，logger.warn 應含截斷提示", async () => {
     // 建立超過 64KB 的 stderr 資料（全為 "x"，無敏感字，redactStderr 不會遮蔽）
     const largeStderr = new Uint8Array(STDERR_MAX_BYTES + 1024).fill(
       "x".charCodeAt(0),
     );
-
-    setupC19TruncationMock();
 
     const mockProc = {
       stdout: makeReadableStream([
@@ -877,24 +939,25 @@ describe("GeminiProvider", () => {
       "x".charCodeAt(0),
     );
 
-    const { getCapture } = setupC19TruncationMock();
-
     const mockProc = {
-      stdout: makeReadableStream([
-        JSON.stringify({ type: "result", status: "success" }),
-      ]),
+      stdout: makeReadableStream([]),
       stderr: makeRawReadableStream(largeStderr),
-      exited: Promise.resolve(0),
+      exited: Promise.resolve(1),
       kill: vi.fn(),
     };
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    await collectEvents(geminiProvider.chat(makeCtx()));
+    const events = await collectEvents(geminiProvider.chat(makeCtx()));
 
+    const errorEvent = events.find((e) => e.type === "error") as
+      | Extract<NormalizedEvent, { type: "error" }>
+      | undefined;
+    expect(errorEvent).toBeDefined();
+
+    const rawContent = errorEvent!.systemMessage?.metadata.rawContent;
+    expect(rawContent).toBeDefined();
     // stderrText 純文字部分（不含 TRUNCATED 標記）長度不超過 STDERR_MAX_BYTES
-    const capturedStderrText = getCapture();
-    expect(capturedStderrText).toBeDefined();
-    const textWithoutTruncatedMarker = capturedStderrText!.replace(
+    const textWithoutTruncatedMarker = rawContent!.replace(
       "\n[TRUNCATED]",
       "",
     );

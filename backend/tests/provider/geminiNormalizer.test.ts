@@ -140,6 +140,29 @@ describe("GeminiNormalizer - normalize()", () => {
     });
   });
 
+  it("N8b: error event 命中 Gemini quota/capacity 訊號時，應映射為 fatal system error", () => {
+    const rawMessage =
+      "RetryableQuotaError: You have exhausted your capacity on this model.";
+    const line = toLine({ type: "error", message: rawMessage });
+    const result = normalize(line);
+
+    expect(result).not.toBeNull();
+    expect(result?.type).toBe("error");
+    const e = result as Extract<typeof result, { type: "error" }>;
+    expect(e?.fatal).toBe(true);
+    expect(e?.message).toBe(
+      "Gemini 目前回報模型配額或容量不足，已停止等待自動重試，請稍後再試或切換模型。",
+    );
+    expect(e?.systemMessage).toMatchObject({
+      metadata: {
+        provider: "gemini",
+        code: "GEMINI_QUOTA_EXHAUSTED",
+        severity: "fatal",
+        rawContent: rawMessage,
+      },
+    });
+  });
+
   // ── N9：result status=success → turn_complete ──────────────────────
   it("N9: result (status=success) 應映射為 turn_complete", () => {
     const line = toLine({ type: "result", status: "success" });
@@ -150,7 +173,7 @@ describe("GeminiNormalizer - normalize()", () => {
   });
 
   // ── N10：result status=error → error（fatal=true，AI 終態錯誤）─────
-  it("N10: result (status=error) 應映射為 error，fatal=true，message 取 error.message", () => {
+  it("N10: 一般 result (status=error) 應映射為 error，fatal=true，message 取 error.message", () => {
     const line = toLine({
       type: "result",
       status: "error",
@@ -168,6 +191,33 @@ describe("GeminiNormalizer - normalize()", () => {
         provider: "gemini",
         code: "RESULT_ERROR",
         severity: "fatal",
+      },
+    });
+  });
+
+  it("N10b: quota/capacity 類型的 result (status=error) 應映射為統一的 Gemini system error", () => {
+    const rawMessage =
+      "Attempt 1 failed: You have exhausted your capacity on this model. cause.code: 429";
+    const line = toLine({
+      type: "result",
+      status: "error",
+      error: { message: rawMessage },
+    });
+    const result = normalize(line);
+
+    expect(result).not.toBeNull();
+    expect(result?.type).toBe("error");
+    const e = result as Extract<typeof result, { type: "error" }>;
+    expect(e?.fatal).toBe(true);
+    expect(e?.message).toBe(
+      "Gemini 目前回報模型配額或容量不足，已停止等待自動重試，請稍後再試或切換模型。",
+    );
+    expect(e?.systemMessage).toMatchObject({
+      metadata: {
+        provider: "gemini",
+        code: "GEMINI_QUOTA_EXHAUSTED",
+        severity: "fatal",
+        rawContent: rawMessage,
       },
     });
   });

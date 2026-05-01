@@ -241,6 +241,32 @@ describe("chatMessageActions", () => {
       });
       expect(messages![0]!.subMessages).toBeUndefined();
     });
+
+    it("fatal system 訊息到達時，應立刻停止 typing 並把 pod 狀態收斂為 idle", () => {
+      const chatStore = useChatStore();
+      const podStore = usePodStore();
+      podStore.pods = [createMockPod({ id: "pod-1", status: "chatting" })];
+      chatStore.setTyping("pod-1", true);
+
+      chatStore.handleChatMessage({
+        podId: "pod-1",
+        messageId: "msg-fatal-system",
+        content:
+          "Gemini 目前回報模型配額或容量不足，已停止等待自動重試，請稍後再試或切換模型。",
+        isPartial: false,
+        role: "system",
+        metadata: {
+          provider: "gemini",
+          code: "GEMINI_QUOTA_EXHAUSTED",
+          severity: "fatal",
+          rawContent:
+            "RetryableQuotaError: You have exhausted your capacity on this model.",
+        },
+      });
+
+      expect(chatStore.isTypingByPodId.get("pod-1")).toBe(false);
+      expect(podStore.pods[0]?.status).toBe("idle");
+    });
   });
 
   describe("handleChatMessage - 更新訊息", () => {

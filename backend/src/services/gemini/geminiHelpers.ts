@@ -43,6 +43,11 @@ export function buildGeminiEnv(): Record<string, string> {
 /** stderr 收集上限（64KB），避免長時間執行時記憶體爆掉 */
 export const STDERR_MAX_BYTES = 64 * 1024;
 
+export interface CollectStderrOptions {
+  logPrefix?: string;
+  onLine?: (line: string) => void;
+}
+
 /**
  * 並行收集 gemini subprocess 的 stderr，上限 STDERR_MAX_BYTES。
  * 必須在 stdout 消費「之前」啟動（或並行），避免 stderr buffer 滿導致 subprocess 卡住。
@@ -57,11 +62,16 @@ export async function collectStderr(
   // stdin 可以是 "pipe" 或 "ignore"，只需要 stderr 存在即可
   proc: Bun.Subprocess<"pipe" | "ignore", "pipe", "pipe">,
   abortSignal: AbortSignal,
-  logPrefix: string = "[Gemini]",
+  options: string | CollectStderrOptions = "[Gemini]",
 ): Promise<string> {
   const chunks: Buffer[] = [];
   let totalBytes = 0;
   let truncated = false;
+  let lineBuffer = "";
+  const textDecoder = new TextDecoder("utf-8");
+  const logPrefix =
+    typeof options === "string" ? options : (options.logPrefix ?? "[Gemini]");
+  const onLine = typeof options === "string" ? undefined : options.onLine;
 
   for await (const chunk of proc.stderr as ReadableStream<Uint8Array>) {
     if (abortSignal.aborted) break;
@@ -71,7 +81,27 @@ export async function collectStderr(
       totalBytes += buf.byteLength;
     } else {
       truncated = true;
-      break;
+      const remainingBytes = STDERR_MAX_BYTES - totalBytes;
+      if (remainingBytes > 0) {
+        chunks.push(buf.subarray(0, remainingBytes));
+        totalBytes += remainingBytes;
+      }
+    }
+
+    if (onLine) {
+      lineBuffer += textDecoder.decode(chunk as Uint8Array, { stream: true });
+      const lines = lineBuffer.split("\n");
+      lineBuffer = lines.pop() ?? "";
+      for (const line of lines) {
+        onLine(line);
+      }
+    }
+  }
+
+  if (onLine) {
+    lineBuffer += textDecoder.decode();
+    if (lineBuffer.trim()) {
+      onLine(lineBuffer);
     }
   }
 

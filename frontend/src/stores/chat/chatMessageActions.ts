@@ -223,6 +223,19 @@ function createMessageCreationActions(
     }
   }
 
+  function settleTerminalSystemMessage(
+    effectiveRole: MessageRole,
+    podId: string,
+    isPartial: boolean,
+    metadata?: SystemMessageMetadata,
+  ): void {
+    if (effectiveRole !== "system" || isPartial) return;
+    if (metadata?.severity !== "fatal") return;
+
+    setTyping(store, podId, false);
+    usePodStore().updatePodStatus(podId, "idle");
+  }
+
   const addNewChatMessage = (
     podId: string,
     messageId: string,
@@ -251,6 +264,7 @@ function createMessageCreationActions(
     }
 
     notifyPodOutputIfUser(effectiveRole, podId, content);
+    settleTerminalSystemMessage(effectiveRole, podId, isPartial, metadata);
   };
 
   const updateExistingChatMessage = (
@@ -288,6 +302,13 @@ function createMessageCreationActions(
     if (isPartial) {
       setTyping(store, podId, true);
     }
+
+    settleTerminalSystemMessage(
+      existingMessage.role,
+      podId,
+      isPartial,
+      existingMessage.metadata,
+    );
   };
 
   const handleChatMessage = (payload: PodChatMessagePayload): void => {

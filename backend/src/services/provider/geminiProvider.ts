@@ -34,10 +34,14 @@ import type {
 import { logger } from "../../utils/logger.js";
 import type { Pod } from "../../types/pod.js";
 import type { RunContext } from "../../types/run.js";
-import { buildGeminiEnv, collectStderr } from "../gemini/geminiHelpers.js";
+import { buildGeminiEnv, STDERR_MAX_BYTES } from "../gemini/geminiHelpers.js";
 import { isEnoentError } from "./utils.js";
 import { scanInstalledPlugins } from "../pluginScanner.js";
 import { readGeminiMcpServers } from "../mcp/geminiMcpReader.js";
+import {
+  classifyGeminiFailFastError,
+  type GeminiClassifiedError,
+} from "./geminiErrorClassifier.js";
 
 // ─── 共用 TextDecoder 實例（效能優化）────────────────────────────────────────
 /**
@@ -309,6 +313,13 @@ function spawnGeminiProcess(
 /** exit code 分類結果 */
 type ExitCodeCategory = "ok" | "login_required" | "generic_error";
 
+interface GeminiStderrMonitorResult {
+  done: Promise<string>;
+  whenFailFastTriggered: Promise<void>;
+  getStderrText: () => string;
+  getFailFastError: () => GeminiClassifiedError | null;
+}
+
 // ─── Google OAuth 認證相關 exit code 常數 ─────────────────────────────────────
 
 /**
@@ -338,6 +349,136 @@ function classifyExitCode(exitCode: number): ExitCodeCategory {
   if (exitCode === 0) return "ok";
   if (OAUTH_LOGIN_REQUIRED_EXIT_CODES.has(exitCode)) return "login_required";
   return "generic_error";
+}
+
+function killGeminiProcess(
+  proc: Bun.Subprocess<"ignore", "pipe", "pipe">,
+  signal: number | NodeJS.Signals = "SIGTERM",
+): void {
+  try {
+    proc.kill(signal);
+  } catch (err: unknown) {
+    if (
+      err instanceof Error &&
+      (err as NodeJS.ErrnoException).code === "ESRCH"
+    ) {
+      return;
+    }
+    logger.warn(
+      "Chat",
+      "Warn",
+      `[GeminiProvider] kill subprocess 時發生非預期錯誤：${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
+
+function monitorGeminiStderr(
+  proc: Bun.Subprocess<"ignore", "pipe", "pipe">,
+  abortSignal: AbortSignal,
+  podId: string,
+): GeminiStderrMonitorResult {
+  let failFastError: GeminiClassifiedError | null = null;
+  let stderrText = "";
+  let totalBytes = 0;
+  let truncated = false;
+  let lineBuffer = "";
+  let resolveFailFastTriggered!: () => void;
+  const whenFailFastTriggered = new Promise<void>((resolve) => {
+    resolveFailFastTriggered = resolve;
+  });
+
+  const done: Promise<string> = (async (): Promise<string> => {
+    const reader = (
+      proc.stderr as ReadableStream<Uint8Array>
+    ).getReader();
+    const textDecoder = new TextDecoder("utf-8");
+
+    try {
+      while (!abortSignal.aborted) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (!value) continue;
+
+        const buf = Buffer.from(value);
+        if (!truncated) {
+          const remainingBytes = STDERR_MAX_BYTES - totalBytes;
+          if (remainingBytes > 0) {
+            const accepted = buf.subarray(0, remainingBytes);
+            stderrText += accepted.toString("utf-8");
+            totalBytes += accepted.byteLength;
+          }
+          if (buf.byteLength > remainingBytes) {
+            truncated = true;
+          }
+        }
+
+        lineBuffer += textDecoder.decode(value, { stream: true });
+        const lines = lineBuffer.split("\n");
+        lineBuffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (failFastError !== null) break;
+
+          const classified = classifyGeminiFailFastError(line);
+          if (classified === null) continue;
+
+          failFastError = classified;
+          resolveFailFastTriggered();
+          logger.warn(
+            "Chat",
+            "Warn",
+            `[GeminiProvider] 偵測到 Gemini 配額/容量重試訊號，提前中止 subprocess（podId: ${podId}，code: ${classified.code}）`,
+          );
+          killGeminiProcess(proc, "SIGKILL");
+          break;
+        }
+
+        if (failFastError !== null) {
+          break;
+        }
+      }
+
+      lineBuffer += textDecoder.decode();
+      if (failFastError === null && lineBuffer.trim()) {
+        const classified = classifyGeminiFailFastError(lineBuffer);
+        if (classified !== null) {
+          failFastError = classified;
+          resolveFailFastTriggered();
+          logger.warn(
+            "Chat",
+            "Warn",
+            `[GeminiProvider] 偵測到 Gemini 配額/容量重試訊號，提前中止 subprocess（podId: ${podId}，code: ${classified.code}）`,
+          );
+          killGeminiProcess(proc, "SIGKILL");
+        }
+      }
+    } finally {
+      try {
+        await reader.cancel();
+      } catch {
+        // ignore stream cancel errors during teardown
+      }
+      reader.releaseLock();
+    }
+
+    stderrText = stderrText.trim();
+    if (truncated) {
+      logger.warn(
+        "Chat",
+        "Warn",
+        `[GeminiProvider] stderr 已達上限（${STDERR_MAX_BYTES} bytes），後續輸出已截斷`,
+      );
+      stderrText += "\n[TRUNCATED]";
+    }
+    return stderrText;
+  })();
+
+  return {
+    done,
+    whenFailFastTriggered,
+    getStderrText: () => stderrText.trim(),
+    getFailFastError: () => failFastError,
+  };
 }
 
 /**
@@ -431,21 +572,59 @@ async function* processStdoutLines(
   stdout: ReadableStream<Uint8Array>,
   abortSignal: AbortSignal,
   out: { hasTurnComplete: boolean },
+  stopSignal?: Promise<void>,
 ): AsyncGenerator<NormalizedEvent> {
   let buffer = "";
+  const reader = stdout.getReader();
+  const STOP_READING = { stopped: true } as const;
+  type ReadOrStop = Awaited<ReturnType<typeof reader.read>> | typeof STOP_READING;
 
-  for await (const chunk of stdout) {
-    if (abortSignal.aborted) break;
+  try {
+    while (!abortSignal.aborted) {
+      const readResult: ReadOrStop = stopSignal
+        ? await Promise.race([
+            reader.read(),
+            stopSignal.then(() => STOP_READING),
+          ])
+        : await reader.read();
 
-    buffer += TEXT_DECODER.decode(chunk, { stream: true });
+      if ("stopped" in readResult) {
+        try {
+          await reader.cancel();
+        } catch {
+          // ignore cancel errors during fail-fast teardown
+        }
+        return;
+      }
 
-    const lines = buffer.split("\n");
-    // 最後一段可能不完整，保留在 buffer
-    // split("\n") 至少回傳一個元素，pop() 永遠不會是 undefined
-    buffer = lines.pop()!;
+      if (readResult.done) {
+        break;
+      }
 
-    for (const line of lines) {
-      const event = normalize(line);
+      const chunk = readResult.value;
+      if (!chunk) continue;
+
+      buffer += TEXT_DECODER.decode(chunk, { stream: true });
+
+      const lines = buffer.split("\n");
+      // 最後一段可能不完整，保留在 buffer
+      // split("\n") 至少回傳一個元素，pop() 永遠不會是 undefined
+      buffer = lines.pop()!;
+
+      for (const line of lines) {
+        const event = normalize(line);
+        if (event !== null) {
+          if (event.type === "turn_complete") {
+            out.hasTurnComplete = true;
+          }
+          yield event;
+        }
+      }
+    }
+
+    // 處理 stdout 結束時剩餘的 buffer 內容
+    if (buffer.trim()) {
+      const event = normalize(buffer);
       if (event !== null) {
         if (event.type === "turn_complete") {
           out.hasTurnComplete = true;
@@ -453,17 +632,8 @@ async function* processStdoutLines(
         yield event;
       }
     }
-  }
-
-  // 處理 stdout 結束時剩餘的 buffer 內容
-  if (buffer.trim()) {
-    const event = normalize(buffer);
-    if (event !== null) {
-      if (event.type === "turn_complete") {
-        out.hasTurnComplete = true;
-      }
-      yield event;
-    }
+  } finally {
+    reader.releaseLock();
   }
 }
 
@@ -484,7 +654,7 @@ async function* streamGeminiOutput(
   podId: string,
 ): AsyncGenerator<NormalizedEvent> {
   // ── 並行啟動 stderr 收集（在 stdout 之前啟動避免 buffer 滿卡住） ──
-  const stderrPromise = collectStderr(proc, abortSignal, "[GeminiProvider]");
+  const stderrMonitor = monitorGeminiStderr(proc, abortSignal, podId);
 
   // ── 逐行讀取 stdout ─────────────────────────────────────────────
   const turnState = { hasTurnComplete: false };
@@ -492,10 +662,28 @@ async function* streamGeminiOutput(
     proc.stdout as ReadableStream<Uint8Array>,
     abortSignal,
     turnState,
+    stderrMonitor.whenFailFastTriggered,
   );
 
+  const failFastError = stderrMonitor.getFailFastError();
+  if (failFastError !== null && !abortSignal.aborted) {
+    const stderrText = await stderrMonitor.done;
+    logger.error(
+      "Chat",
+      "Error",
+      `[GeminiProvider] Gemini 因已分類錯誤提前停止（podId: ${podId}，code: ${failFastError.code}）`,
+    );
+    yield buildGeminiSystemError({
+      content: failFastError.content,
+      fatal: true,
+      code: failFastError.code,
+      rawContent: stderrText || failFastError.rawContent,
+    });
+    return;
+  }
+
   // ── 等待 stderr 收集完成 ────────────────────────────────────────
-  const stderrText = await stderrPromise;
+  const stderrText = await stderrMonitor.done;
 
   // ── exit code 檢查 ──────────────────────────────────────────────
   const exitCode = await proc.exited;

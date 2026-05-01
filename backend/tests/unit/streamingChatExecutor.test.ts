@@ -64,6 +64,7 @@ import { getProvider } from "../../src/services/provider/index.js";
 import type { NormalizedEvent } from "../../src/services/provider/types.js";
 import { abortRegistry } from "../../src/services/provider/abortRegistry.js";
 import { config } from "../../src/config/index.js";
+import { logger } from "../../src/utils/logger.js";
 
 function asMock(fn: unknown): Mock<any> {
   return fn as Mock<any>;
@@ -1288,6 +1289,74 @@ describe("executeStreamingChat", () => {
       });
 
       expect(collectedContents).toContain("xxx");
+    });
+
+    it("Gemini quota fatal error 會寫入明確的 transcript system message，且不額外發 POD_ERROR", async () => {
+      const pod = insertClaudePod();
+      const setStatusSpy = vi.spyOn(podStore, "setStatus");
+      vi.mocked(logger.error).mockClear();
+
+      setupProviderMock([
+        {
+          type: "error",
+          message:
+            "Gemini 目前回報模型配額或容量不足，已停止等待自動重試，請稍後再試或切換模型。",
+          fatal: true,
+          code: "GEMINI_QUOTA_EXHAUSTED",
+          systemMessage: {
+            role: "system",
+            content:
+              "Gemini 目前回報模型配額或容量不足，已停止等待自動重試，請稍後再試或切換模型。",
+            metadata: {
+              provider: "gemini",
+              code: "GEMINI_QUOTA_EXHAUSTED",
+              severity: "fatal",
+              rawContent:
+                "RetryableQuotaError: You have exhausted your capacity on this model.",
+            },
+          },
+        },
+      ]);
+
+      await executeStreamingChat({
+        canvasId,
+        podId: pod.id,
+        message,
+        abortable: false,
+        strategy: makeStrategy(),
+      });
+
+      expect(socketService.emitToCanvas).toHaveBeenCalledWith(
+        canvasId,
+        WebSocketResponseEvents.POD_CLAUDE_CHAT_MESSAGE,
+        expect.objectContaining({
+          podId: pod.id,
+          role: "system",
+          content:
+            "Gemini 目前回報模型配額或容量不足，已停止等待自動重試，請稍後再試或切換模型。",
+          metadata: expect.objectContaining({
+            provider: "gemini",
+            code: "GEMINI_QUOTA_EXHAUSTED",
+            severity: "fatal",
+          }),
+        }),
+      );
+      expect(setStatusSpy).toHaveBeenCalledWith(canvasId, pod.id, "idle");
+
+      const emittedPodError = vi.mocked(socketService.emitToCanvas).mock.calls
+        .filter(([, event]) => event === WebSocketResponseEvents.POD_ERROR);
+      expect(emittedPodError).toHaveLength(0);
+      expect(
+        vi
+          .mocked(logger.error)
+          .mock.calls.some((args) =>
+            args.some(
+              (arg) =>
+                typeof arg === "string" &&
+                arg.includes("RetryableQuotaError: You have exhausted your capacity on this model."),
+            ),
+          ),
+      ).toBe(false);
     });
   });
 });
