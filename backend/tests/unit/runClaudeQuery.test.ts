@@ -19,10 +19,8 @@ vi.mock("../../src/utils/logger.js", () => ({
   },
 }));
 
-vi.mock("../../src/services/claude/messageBuilder.js", () => ({
-  buildClaudeContentBlocks: vi.fn().mockReturnValue([]),
-  createUserMessageStream: vi.fn().mockReturnValue([]),
-}));
+// 注：buildClaudeContentBlocks 與 createUserMessageStream 為純函式，不需要 mock
+// 測試使用 string message（不是 ContentBlock[]），這兩個函式在測試路徑中不會被呼叫
 
 // ── Imports ──────────────────────────────────────────────────────────────────
 
@@ -128,8 +126,8 @@ describe("runClaudeQuery", () => {
     });
   });
 
-  describe("handleResult：result/error subtype 的 yield + throw 行為", () => {
-    it("result/error 時應先 yield system error，再 throw", async () => {
+  describe("handleResult：result/error subtype 的 yield 行為（不再 throw）", () => {
+    it("result/error 時應 yield fatal=true system error，且 generator 不 throw", async () => {
       mockQueryGenerator = async function* () {
         yield {
           type: "result",
@@ -140,47 +138,100 @@ describe("runClaudeQuery", () => {
 
       const ctx = createCtx();
 
-      const events: any[] = [];
-      await expect(async () => {
-        for await (const event of runClaudeQuery(ctx)) {
-          events.push(event);
-        }
-      }).rejects.toThrow();
+      // AI 終態錯誤標 fatal=true 但 generator 不再 throw（由 streamingChatExecutor 主迴圈 break），可直接 collect
+      const events = await collectEvents(runClaudeQuery(ctx));
 
-      // 應先 yield error 事件，再拋出
-      expect(events.length).toBeGreaterThanOrEqual(1);
-      const errorEvent = events.find((e: any) => e.type === "error");
-      expect(errorEvent).toBeDefined();
+      expect(events).toHaveLength(1);
+      const errorEvent = events[0] as any;
+      expect(errorEvent.type).toBe("error");
+      expect(errorEvent.fatal).toBe(true);
       expect(errorEvent.systemMessage?.metadata.provider).toBe("claude");
+      expect(errorEvent.code).toBe("RESULT_ERROR");
     });
   });
 
-  describe("handleRateLimitEvent：shouldAbort=true 時應 throw", () => {
-    it("status=rejected 的 rate_limit_event 應先 yield system error 再 throw", async () => {
+  describe("handleAssistant：error path（不再 throw）", () => {
+    it("assistant message 帶 error 時應 yield fatal=true system error，且 generator 不 throw", async () => {
       mockQueryGenerator = async function* () {
         yield {
-          type: "rate_limit_event",
-          rate_limit_info: { status: "rejected" },
+          type: "assistant",
+          message: { content: [] },
+          error: "some_assistant_error",
         };
       };
 
       const ctx = createCtx();
 
-      const events: any[] = [];
-      await expect(async () => {
-        for await (const event of runClaudeQuery(ctx)) {
-          events.push(event);
-        }
-      }).rejects.toThrow();
+      const events = await collectEvents(runClaudeQuery(ctx));
 
-      const errorEvent = events.find((e: any) => e.type === "error");
+      const errorEvent = events.find((e: any) => e.type === "error") as any;
       expect(errorEvent).toBeDefined();
-      expect(errorEvent.code).toBe("RATE_LIMIT_REJECTED");
+      expect(errorEvent.fatal).toBe(true);
+      expect(errorEvent.code).toBe("ASSISTANT_ERROR");
     });
   });
 
-  describe("handleAuthStatus：shouldAbort=true 時應 throw", () => {
-    it("帶有 error 的 auth_status 應先 yield system error 再 throw", async () => {
+  describe("handleRateLimitEvent：shouldAbort=true 時不再 throw 且 content 為人類可讀字串", () => {
+    it("status=rejected 應 yield fatal=true system error，content 為英文可讀字串而非 raw JSON", async () => {
+      mockQueryGenerator = async function* () {
+        yield {
+          type: "rate_limit_event",
+          rate_limit_info: {
+            status: "rejected",
+            rateLimitType: "five_hour",
+            utilization: 0.95,
+            resetsAt: 1700000000,
+          },
+        };
+      };
+
+      const ctx = createCtx();
+
+      const events = await collectEvents(runClaudeQuery(ctx));
+
+      const errorEvent = events.find((e: any) => e.type === "error") as any;
+      expect(errorEvent).toBeDefined();
+      expect(errorEvent.fatal).toBe(true);
+      expect(errorEvent.code).toBe("RATE_LIMIT_REJECTED");
+
+      // content 不再是 raw JSON
+      const content = errorEvent.message as string;
+      expect(content.startsWith("{")).toBe(false);
+      // 包含可讀的英文 status / type 描述
+      expect(content).toMatch(/Status|Rate limit/i);
+      expect(content).toContain("five_hour");
+
+      // rawContent 仍保留原始 JSON 字串（給 debug 用）
+      const rawContent = errorEvent.systemMessage?.metadata
+        .rawContent as string;
+      expect(rawContent.startsWith("{")).toBe(true);
+      expect(rawContent).toContain("rejected");
+    });
+
+    it("rate_limit_info 帶 message 欄位時優先使用 message 欄位作為 content", async () => {
+      mockQueryGenerator = async function* () {
+        yield {
+          type: "rate_limit_event",
+          rate_limit_info: {
+            status: "rejected",
+            message: "You have hit the rate limit. Please retry later.",
+          },
+        };
+      };
+
+      const ctx = createCtx();
+      const events = await collectEvents(runClaudeQuery(ctx));
+
+      const errorEvent = events.find((e: any) => e.type === "error") as any;
+      expect(errorEvent).toBeDefined();
+      expect(errorEvent.message).toBe(
+        "You have hit the rate limit. Please retry later.",
+      );
+    });
+  });
+
+  describe("handleAuthStatus：shouldAbort=true 時不再 throw", () => {
+    it("帶有 error 的 auth_status 應 yield fatal=true system error，且 generator 不 throw", async () => {
       mockQueryGenerator = async function* () {
         yield {
           type: "auth_status",
@@ -190,18 +241,13 @@ describe("runClaudeQuery", () => {
 
       const ctx = createCtx();
 
-      const events: any[] = [];
-      await expect(async () => {
-        for await (const event of runClaudeQuery(ctx)) {
-          events.push(event);
-        }
-      }).rejects.toThrow();
+      const events = await collectEvents(runClaudeQuery(ctx));
 
-      const errorEvent = events.find((e: any) => e.type === "error");
+      const errorEvent = events.find((e: any) => e.type === "error") as any;
       expect(errorEvent).toBeDefined();
-      expect(errorEvent.systemMessage?.metadata.code).toBe(
-        "authentication_failed",
-      );
+      expect(errorEvent.fatal).toBe(true);
+      // 原始 SDK error 字串不再作為 code，改用固定常數避免洩漏 SDK 內部細節
+      expect(errorEvent.systemMessage?.metadata.code).toBe("AUTH_STATUS_ERROR");
     });
   });
 

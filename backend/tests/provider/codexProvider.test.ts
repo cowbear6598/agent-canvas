@@ -269,6 +269,41 @@ describe("CodexProvider", () => {
     expect(e.fatal).toBe(false);
   });
 
+  // ── 回歸：normalizer fatal=true 後主迴圈 break，generator 不再 yield EXIT_CODE 多餘訊息 ─
+  it("type=error stream event + exit code 1，主迴圈 break 後應只有一個 STREAM_ERROR error event，不再 yield EXIT_CODE", async () => {
+    // 先吐 stream-level error（normalizer 標 fatal=true），子程序再以 exit code 1 退出
+    const stdoutLines = [
+      JSON.stringify({ type: "error", message: "usage limit exceeded" }),
+    ];
+    const mockProc = makeMockProc(stdoutLines, [], 1);
+    spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
+
+    const provider = new CodexProvider();
+
+    // 模擬 streamingChatExecutor 主迴圈：收到 fatal=true 後 break，generator 被 return
+    const collected: NormalizedEvent[] = [];
+    for await (const ev of provider.chat(makeCtx())) {
+      collected.push(ev);
+      if (ev.type === "error" && ev.fatal) {
+        break;
+      }
+    }
+
+    const errorEvents = collected.filter((e) => e.type === "error");
+    expect(errorEvents).toHaveLength(1);
+    const e = errorEvents[0] as Extract<NormalizedEvent, { type: "error" }>;
+    expect(e.fatal).toBe(true);
+    expect(e.systemMessage?.metadata.code).toBe("STREAM_ERROR");
+    expect(e.message).toBe("usage limit exceeded");
+    // 確保沒有 EXIT_CODE 訊息（不會 fall through 到 handleExitCode）
+    const hasExitCode = errorEvents.some(
+      (ev) =>
+        (ev as Extract<NormalizedEvent, { type: "error" }>).systemMessage
+          ?.metadata.code === "EXIT_CODE",
+    );
+    expect(hasExitCode).toBe(false);
+  });
+
   // ── 補充：exit code 非 0 但已發 turn_complete → 不推 error event ───
   it("exit code 非 0 但已發 turn_complete 時，不應額外推出 error event", async () => {
     const mockProc = makeMockProc(

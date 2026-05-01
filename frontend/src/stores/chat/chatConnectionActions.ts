@@ -139,6 +139,7 @@ export function createConnectionActions(store: ChatStoreInstance): {
   const appendErrorToTranscript = (
     podId: string,
     content: string,
+    provider: string,
     code?: string,
   ): void => {
     store.handleChatMessage({
@@ -148,6 +149,7 @@ export function createConnectionActions(store: ChatStoreInstance): {
       isPartial: false,
       role: "system",
       metadata: {
+        provider,
         code: code ?? null,
         severity: "error",
         rawContent: content,
@@ -167,7 +169,15 @@ export function createConnectionActions(store: ChatStoreInstance): {
       // 後端回傳錯誤時，pod 可能已被樂觀更新為 chatting，需回滾為 idle
       const podStore = usePodStore();
       podStore.updatePodStatus(payload.podId, "idle");
-      appendErrorToTranscript(payload.podId, resolvedMessage, payload.code);
+      // 從 podStore 取得 provider，未知來源時 fallback 為 "unknown"
+      const pod = podStore.pods.find((p) => p.id === payload.podId);
+      const provider = pod?.provider ?? "unknown";
+      appendErrorToTranscript(
+        payload.podId,
+        resolvedMessage,
+        provider,
+        payload.code,
+      );
       return;
     }
 

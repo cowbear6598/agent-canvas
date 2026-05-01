@@ -178,13 +178,15 @@ function* handleAssistant(
   }
 
   if (sdkMessage.error) {
+    // 原始 SDK error 字串只記 log，不暴露給前端（避免洩漏 SDK 內部細節）
     logger.error("Chat", "Error", "assistant message 錯誤", sdkMessage.error);
     yield buildClaudeSystemError({
-      content: sdkMessage.error,
-      code: sdkMessage.error,
+      content: "Claude SDK 回傳 assistant 錯誤，請稍後重試。",
+      code: "ASSISTANT_ERROR",
       fatal: true,
     });
-    throw new Error("Claude SDK 回傳 assistant 錯誤");
+    // AI 業務錯誤：只 yield 給上層 executor 寫入 transcript，後續 SDK message 由迴圈自然處理
+    return;
   }
 }
 
@@ -238,7 +240,7 @@ function* handleToolProgress(
   };
 }
 
-/** result/success → turn_complete NormalizedEvent；result/error → throw */
+/** result/success → turn_complete NormalizedEvent；result/error → yield system error（不 throw） */
 function* handleResult(
   sdkMessage: SDKResultMessage,
   state: QueryState,
@@ -262,10 +264,17 @@ function* handleResult(
     fatal: true,
     rawContent,
   });
-  throw new Error("Claude SDK result 回傳錯誤");
+  // AI 業務錯誤：result event 即代表本輪結束，generator 自然回到外層迴圈
+  return;
 }
 
-/** rate_limit_event → throw if rejected */
+/**
+ * rate_limit_event → yield 人類可讀的 system error（不 throw）。
+ *
+ * `rate_limit_info` 為 SDKRateLimitInfo（status / resetsAt / rateLimitType / utilization 等欄位）。
+ * `content` 由可用欄位組合成英文可讀字串，保留 provider 原語系；
+ * 完整原始 JSON 仍寫入 `rawContent` 供 debug。
+ */
 function* handleRateLimitEvent(
   sdkMessage: SDKRateLimitEvent,
 ): Generator<NormalizedEvent> {
@@ -273,29 +282,74 @@ function* handleRateLimitEvent(
   if (!result.shouldAbort) return;
 
   const rawContent = JSON.stringify(sdkMessage.rate_limit_info);
+  const content = formatRateLimitInfo(sdkMessage.rate_limit_info);
   yield buildClaudeSystemError({
-    content: rawContent,
+    content,
     code: "RATE_LIMIT_REJECTED",
     fatal: true,
     rawContent,
   });
-  throw new Error(`rate_limit_event rejected：帳戶用量已達上限`);
+  // AI 業務錯誤：上層 executor 已寫入 transcript，generator 結束讓外層迴圈繼續處理後續 SDK message
+  return;
 }
 
-/** auth_status → throw if error */
+/**
+ * 將 SDKRateLimitInfo 組合成人類可讀英文字串，保留 provider 原語系。
+ *
+ * 優先嘗試從物件中讀取 `message`（防呆：若 SDK 未來新增此欄位也能直接吃下）；
+ * 否則使用 `status` / `rateLimitType` / `resetsAt` / `utilization` 等已知欄位拼接。
+ */
+function formatRateLimitInfo(info: unknown): string {
+  if (typeof info !== "object" || info === null) {
+    return "Rate limit reached.";
+  }
+  const record = info as Record<string, unknown>;
+
+  // 優先使用 SDK 提供的 message 欄位（若有）
+  if (typeof record.message === "string" && record.message.trim()) {
+    return record.message;
+  }
+
+  const parts: string[] = [];
+  const status = typeof record.status === "string" ? record.status : null;
+  parts.push(status ? `Status: ${status}` : "Status: rejected");
+
+  if (typeof record.rateLimitType === "string") {
+    parts.push(`type: ${record.rateLimitType}`);
+  }
+
+  if (typeof record.utilization === "number") {
+    // utilization 通常為 0~1 的比例，乘 100 顯示百分比
+    parts.push(`utilization: ${(record.utilization * 100).toFixed(1)}%`);
+  }
+
+  // resetsAt 為 unix timestamp（秒），轉為 ISO 字串以便閱讀
+  if (typeof record.resetsAt === "number" && Number.isFinite(record.resetsAt)) {
+    const resetDate = new Date(record.resetsAt * 1000);
+    if (!Number.isNaN(resetDate.getTime())) {
+      parts.push(`resets at ${resetDate.toISOString()}`);
+    }
+  }
+
+  return `Rate limit reached. ${parts.join(", ")}.`;
+}
+
+/** auth_status → yield system error（不 throw）。AI 業務錯誤交由 transcript 呈現。 */
 function* handleAuthStatus(
   sdkMessage: SDKAuthStatusMessage,
 ): Generator<NormalizedEvent> {
   const result = checkAuthStatus(sdkMessage.error);
   if (!result.shouldAbort) return;
 
+  // 原始 SDK error 字串只記 log，不暴露給前端（避免洩漏 SDK 內部細節）
   logger.error("Chat", "Error", "auth_status 錯誤", sdkMessage.error);
   yield buildClaudeSystemError({
-    content: sdkMessage.error ?? "auth_status error",
-    code: sdkMessage.error ?? "AUTH_STATUS_ERROR",
+    content: "Claude 認證失敗，請確認 API Key 設定後重試。",
+    code: "AUTH_STATUS_ERROR",
     fatal: true,
   });
-  throw new Error("Claude SDK auth_status 錯誤");
+  // AI 業務錯誤：generator 自然繼續處理後續 SDK message
+  return;
 }
 
 /** system case 的內部子路由：依 subtype 分派至 handleSystemInit / handleApiRetry */

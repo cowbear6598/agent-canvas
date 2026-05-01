@@ -22,6 +22,7 @@ import {
   CODEX_CAPABILITIES,
 } from "./capabilities.js";
 import { normalize } from "./codexNormalizer.js";
+import { buildProviderSystemError } from "./types.js";
 import type {
   AgentProvider,
   ChatRequestContext,
@@ -55,39 +56,86 @@ const SESSION_ID_RE = /^[a-zA-Z0-9_-]+$/;
  */
 const MODEL_RE = /^[a-zA-Z0-9._-]+$/;
 
-/** 合法 attachment MIME 類型副檔名白名單 */
+/**
+ * 允許作為 Codex image attachment 的 MIME 副類型白名單。
+ * 只接受 Claude Codex CLI 支援的圖片格式；其他副類型（如 svg、tiff）一律略過。
+ */
 const ALLOWED_IMAGE_EXTS = new Set(["jpg", "png", "gif", "webp"]);
 
-/** 合法 base64 字元集（防止換行符造成 prompt injection） */
+/**
+ * 合法 base64 字元集正則。
+ * 用於驗證圖片 base64 資料，確保不含換行符（`\n`）或其他控制字元，
+ * 以防止 prompt injection 攻擊。
+ */
 const BASE64_RE = /^[A-Za-z0-9+/=]+$/;
+
+/**
+ * 合法 MIME 類型整體格式正則。
+ * 格式要求：`image/<subtype>`，subtype 只允許小寫英數字與 `.`、`+`、`-`。
+ * 拒絕含換行或控制字元的 MIME 字串，防止 HTTP header injection。
+ */
+const MIME_FORMAT_RE = /^image\/[a-z0-9.+-]+$/;
 
 /** process.env 在 process 生命週期內不會改變，模組載入時快取一次 */
 const CODEX_ENV = buildCodexEnv();
 
+/** Codex provider 專用的系統錯誤建立 helper（委派給共用 buildProviderSystemError） */
 function buildCodexSystemError(params: {
   content: string;
   fatal: boolean;
   code: string;
   rawContent?: string;
 }): Extract<NormalizedEvent, { type: "error" }> {
-  const { content, fatal, code, rawContent } = params;
+  return buildProviderSystemError("codex", params);
+}
 
-  return {
-    type: "error",
-    message: content,
-    fatal,
-    code,
-    systemMessage: {
-      role: "system",
-      content,
-      metadata: {
-        provider: "codex",
-        code,
-        severity: fatal ? "fatal" : "error",
-        rawContent: rawContent ?? content,
-      },
-    },
-  };
+/**
+ * 驗證圖片 ContentBlock 是否符合安全規範。
+ * 集中三段驗證邏輯：
+ *   1. MIME 類型整體格式（拒絕含換行或控制字元）
+ *   2. base64 字元合法性（防止換行符等造成 prompt injection）
+ *   3. MIME 副類型白名單（只允許 jpg/png/gif/webp）
+ *
+ * @returns true 表示驗證通過，false 表示應略過此 block
+ */
+function validateImageBlock(
+  block: import("../../types/message.js").ImageContentBlock,
+): boolean {
+  // 驗證 MIME 類型整體格式（拒絕含換行或控制字元）
+  if (!MIME_FORMAT_RE.test(block.mediaType)) {
+    logger.warn(
+      "Chat",
+      "Warn",
+      "[CodexProvider] 附件 MIME 類型格式不合法，已略過",
+    );
+    return false;
+  }
+
+  // 驗證 base64 格式，防止換行符等字元造成 prompt injection
+  if (!BASE64_RE.test(block.base64Data)) {
+    logger.warn(
+      "Chat",
+      "Warn",
+      "[CodexProvider] 附件 base64 格式不合法，已略過",
+    );
+    return false;
+  }
+
+  // 驗證 MIME 副類型白名單
+  const rawExt = block.mediaType
+    .split("/")[1]
+    ?.toLowerCase()
+    .replace("jpeg", "jpg");
+  if (!rawExt || !ALLOWED_IMAGE_EXTS.has(rawExt)) {
+    logger.warn(
+      "Chat",
+      "Warn",
+      "[CodexProvider] 附件 MIME 類型不在白名單內，已略過",
+    );
+    return false;
+  }
+
+  return true;
 }
 
 /**
@@ -108,40 +156,7 @@ function buildPromptText(
     }
 
     if (block.type === "image") {
-      // 驗證 MIME 類型整體格式（拒絕含換行或控制字元）
-      const MIME_FORMAT_RE = /^image\/[a-z0-9.+-]+$/;
-      if (!MIME_FORMAT_RE.test(block.mediaType)) {
-        logger.warn(
-          "Chat",
-          "Warn",
-          "[CodexProvider] 附件 MIME 類型格式不合法，已略過",
-        );
-        continue;
-      }
-
-      // 驗證 base64 格式，防止換行符等字元造成 prompt injection
-      if (!BASE64_RE.test(block.base64Data)) {
-        logger.warn(
-          "Chat",
-          "Warn",
-          "[CodexProvider] 附件 base64 格式不合法，已略過",
-        );
-        continue;
-      }
-
-      // 驗證 MIME 副類型白名單
-      const rawExt = block.mediaType
-        .split("/")[1]
-        ?.toLowerCase()
-        .replace("jpeg", "jpg");
-      if (!rawExt || !ALLOWED_IMAGE_EXTS.has(rawExt)) {
-        logger.warn(
-          "Chat",
-          "Warn",
-          "[CodexProvider] 附件 MIME 類型不在白名單內，已略過",
-        );
-        continue;
-      }
+      if (!validateImageBlock(block)) continue;
 
       parts.unshift(
         `[image: data:${block.mediaType};base64,${block.base64Data}]`,
@@ -153,20 +168,34 @@ function buildPromptText(
 }
 
 /**
+ * `-c` 旗標中的 MCP server name 安全格式：不允許 `.`，
+ * 因為 `mcp_servers.<name>.<field>` 語法中 `.` 是 TOML path 分隔符，
+ * 含 `.` 的 name 會使 codex CLI 誤將其解析為巢狀路徑，導致設定套用錯誤。
+ * 此正則與 schema 的 MCP_SERVER_NAME_PATTERN 獨立，不影響儲存層驗證。
+ */
+const MCP_AUTO_APPROVE_SAFE_NAME_RE = /^[a-zA-Z0-9_-]+$/;
+
+/**
  * 為每個使用者安裝的 MCP server 產生對應的 `-c mcp_servers.<name>.default_tools_approval_mode=approve` 旗標組。
  *
  * codex 在 sandbox=WorkspaceWrite + approval_policy=Never 下，MCP tool 仍會走 approval flow，
  * 但 spawn 時 stdin 是 pipe 無法取得使用者輸入，最終回 Cancel。
  * 透過 `-c` 覆寫各 server 的 default_tools_approval_mode=approve 可跳過 approval。
  *
- * 注意：server name 若含 `.` 會與 TOML path 產生歧義，此處直接傳入；
- * codex config.toml 的 [mcp_servers.<name>] 語法通常只允許 [a-zA-Z0-9_-]，
- * 邊緣情況由 codex CLI 自行處理。
+ * 含 `.` 的 server name 會與 TOML path 語意衝突，直接 skip 並記錄 warn。
  */
 function buildMcpAutoApproveArgs(): string[] {
   const servers = readCodexMcpServers();
   const result: string[] = [];
   for (const server of servers) {
+    if (!MCP_AUTO_APPROVE_SAFE_NAME_RE.test(server.name)) {
+      logger.warn(
+        "McpServer",
+        "Warn",
+        `[CodexProvider] server name 含不合法字元（含 '.' 或特殊符號），已略過 auto-approve 旗標：${server.name}`,
+      );
+      continue;
+    }
     result.push(
       "-c",
       `mcp_servers.${server.name}.default_tools_approval_mode=approve`,
@@ -176,7 +205,11 @@ function buildMcpAutoApproveArgs(): string[] {
 }
 
 /** 組合新對話的 CLI 參數（無 resumeSessionId 或 sessionId 不合法時使用）。 */
-function buildNewSessionArgs(model: string, repoPath: string): string[] {
+function buildNewSessionArgs(
+  model: string,
+  repoPath: string,
+  mcpAutoApproveArgs: string[],
+): string[] {
   return [
     "exec",
     "-",
@@ -188,7 +221,7 @@ function buildNewSessionArgs(model: string, repoPath: string): string[] {
     "-c",
     "sandbox_workspace_write.network_access=true",
     // 為每個使用者安裝的 MCP server 加入 auto-approve 旗標，避免 stdin pipe 無法回應時被 Cancel
-    ...buildMcpAutoApproveArgs(),
+    ...mcpAutoApproveArgs,
     "--model",
     model,
   ];
@@ -214,6 +247,9 @@ function buildCodexArgs(
   model: string,
   repoPath: string,
 ): string[] {
+  // MCP auto-approve 旗標只計算一次，兩條分支共用同一結果
+  const mcpAutoApproveArgs = buildMcpAutoApproveArgs();
+
   if (resumeSessionId) {
     if (!SESSION_ID_RE.test(resumeSessionId)) {
       // resumeSessionId 格式不合法，防止旗標注入，改走新對話
@@ -222,7 +258,7 @@ function buildCodexArgs(
         "Warn",
         `[CodexProvider] resumeSessionId 格式不合法，已略過並改為新對話：${resumeSessionId}`,
       );
-      return buildNewSessionArgs(model, repoPath);
+      return buildNewSessionArgs(model, repoPath, mcpAutoApproveArgs);
     }
 
     // 恢復對話模式：`codex exec resume` 不接受 --cd，僅依賴 Bun.spawn cwd 定錨工作目錄。
@@ -237,11 +273,11 @@ function buildCodexArgs(
       "-c",
       "sandbox_workspace_write.network_access=true",
       // 為每個使用者安裝的 MCP server 加入 auto-approve 旗標，避免 stdin pipe 無法回應時被 Cancel
-      ...buildMcpAutoApproveArgs(),
+      ...mcpAutoApproveArgs,
     ];
   }
 
-  return buildNewSessionArgs(model, repoPath);
+  return buildNewSessionArgs(model, repoPath, mcpAutoApproveArgs);
 }
 
 /**
@@ -457,7 +493,13 @@ function setupSubprocess(
   }
 
   // ── abort signal 處理 ──────────────────────────────────────────
-  const onAbort = (): void => {
+  // killProc 同時被 abort listener 與 cleanup() 呼叫；
+  // 用旗標去重避免實際 proc.kill() 被呼叫超過一次。
+  // 對已結束的子程序呼叫 kill 會觸發 ESRCH，視為正常情況直接忽略。
+  let killed = false;
+  const killProc = (): void => {
+    if (killed) return;
+    killed = true;
     try {
       proc.kill();
     } catch (err: unknown) {
@@ -477,15 +519,19 @@ function setupSubprocess(
     }
   };
 
-  abortSignal.addEventListener("abort", onAbort, { once: true });
+  abortSignal.addEventListener("abort", killProc, { once: true });
 
-  // spawn 前已 abort：listener 不會自動觸發，需主動呼叫 onAbort
+  // spawn 前已 abort：listener 不會自動觸發，需主動呼叫 killProc
   if (abortSignal.aborted) {
-    onAbort();
+    killProc();
   }
 
+  // cleanup() 會在 chat() 的 finally 區塊執行：
+  //   - generator 正常完成：proc 已自行退出，killProc 因 ESRCH 直接忽略
+  //   - generator 因主迴圈 break / abort 提前 return：必須主動 kill 才不會留下 zombie process
   const cleanup = (): void => {
-    abortSignal.removeEventListener("abort", onAbort);
+    abortSignal.removeEventListener("abort", killProc);
+    killProc();
   };
 
   return { ok: true, proc, cleanup };

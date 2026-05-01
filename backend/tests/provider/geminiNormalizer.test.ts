@@ -149,7 +149,7 @@ describe("GeminiNormalizer - normalize()", () => {
     expect(result?.type).toBe("turn_complete");
   });
 
-  // ── N10：result status=error → error（fatal=true）──────────────────
+  // ── N10：result status=error → error（fatal=true，AI 終態錯誤）─────
   it("N10: result (status=error) 應映射為 error，fatal=true，message 取 error.message", () => {
     const line = toLine({
       type: "result",

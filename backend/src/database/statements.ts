@@ -1,5 +1,11 @@
 import { Database } from "bun:sqlite";
 
+/**
+ * 需要在應用程式重啟時重設為 idle 的「忙碌中」Pod 狀態清單。
+ * 集中管理以確保 resetAllBusy SQL 與應用程式邏輯使用同一份狀態定義。
+ */
+const BUSY_STATUSES = ["chatting", "summarizing"] as const;
+
 // WeakMap 以 DB 實例為 key，避免多 DB 實例命中舊 cache
 const statementsCache = new WeakMap<
   Database,
@@ -254,7 +260,7 @@ function buildStatements(db: Database): {
         "SELECT schedule_json FROM pods WHERE canvas_id = $canvasId AND id = $id",
       ),
       resetAllBusy: db.prepare(
-        "UPDATE pods SET status = 'idle' WHERE status IN ('chatting', 'summarizing')",
+        `UPDATE pods SET status = 'idle' WHERE status IN (${BUSY_STATUSES.map((s) => `'${s}'`).join(", ")})`,
       ),
       deleteById: db.prepare("DELETE FROM pods WHERE id = ?"),
       deleteByCanvasId: db.prepare("DELETE FROM pods WHERE canvas_id = ?"),

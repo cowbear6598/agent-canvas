@@ -154,6 +154,7 @@ import * as commandServiceModule from "../../src/services/commandService.js";
 import { config } from "../../src/config/index.js";
 import { getProvider } from "../../src/services/provider/index.js";
 import { WebSocketResponseEvents } from "../../src/schemas/index.js";
+import { ProviderNotFoundError } from "../../src/utils/errorHelpers.js";
 
 // ─── D/E 共用：真實 executeStreamingChat（一次性載入）─────────────────────────
 // vi.importActual 只執行一次，D-1a / D-1b / D-1c / E-1 均共用此參照。
@@ -174,8 +175,7 @@ const REQUEST_ID = "req-gemini-chat-test";
 // ─── 工具函式 ─────────────────────────────────────────────────────────────────
 
 function clearPodStoreCache(): void {
-  type PodStoreTestHooks = { stmtCache: Map<string, unknown> };
-  (podStore as unknown as PodStoreTestHooks).stmtCache.clear();
+  podStore.__clearCacheForTesting();
 }
 
 function insertCanvas(): void {
@@ -488,7 +488,8 @@ describe("D：Gemini Pod resolvePodCwd 整合", () => {
       expect.objectContaining({
         podId,
         role: "system",
-        content: "非法的工作目錄路徑",
+        // 已知業務錯誤的 content 改為固定中文訊息，不再透傳 error.message
+        content: "工作目錄路徑無效或存取遭拒，請確認 Pod 設定後重試。",
         metadata: expect.objectContaining({
           code: "INVALID_PATH",
           severity: "fatal",
@@ -516,7 +517,9 @@ describe("D：Gemini Pod resolvePodCwd 整合", () => {
     asMock(getProvider).mockReturnValue({
       chat: chatMock,
       cancel: vi.fn(() => false),
-      buildOptions: vi.fn().mockRejectedValue(new Error("找不到 Provider")),
+      buildOptions: vi
+        .fn()
+        .mockRejectedValue(new ProviderNotFoundError("找不到 Provider")),
       metadata: {
         availableModelValues: new Set(["gemini-2.5-pro"]),
         defaultOptions: { model: "gemini-2.5-pro" },
@@ -536,7 +539,8 @@ describe("D：Gemini Pod resolvePodCwd 整合", () => {
       expect.objectContaining({
         podId,
         role: "system",
-        content: "找不到 Provider",
+        // 已知業務錯誤的 content 改為固定中文訊息，不再透傳 error.message
+        content: "找不到對應的 AI Provider，請確認 Pod 設定後重試。",
         metadata: expect.objectContaining({
           code: "PROVIDER_NOT_FOUND",
           severity: "fatal",

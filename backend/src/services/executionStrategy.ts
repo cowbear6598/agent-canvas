@@ -58,7 +58,12 @@ export interface ChatEmitStrategy {
 export interface ExecutionStrategy {
   /**
    * 寫入執行狀態。
-   * Normal: podStore.setStatus / Run: runExecutionService 相關方法
+   *
+   * - Normal mode：直接呼叫 `podStore.setStatus(canvasId, podId, status)`，
+   *   更新 pod 的全域狀態（`idle` / `chatting` / `summarizing` 等）。
+   * - Run mode：依 status 值分派到 `runExecutionService` 的對應方法
+   *   （`startPodInstance` / `summarizingPodInstance` / `errorPodInstance`）；
+   *   `idle` 在 Run mode 無意義，由 `onStreamComplete` / `onStreamAbort` 自行管理。
    */
   setStatus(podId: string, status: PodStatus): void;
 
@@ -69,8 +74,11 @@ export interface ExecutionStrategy {
   getSessionId(podId: string): string | undefined;
 
   /**
-   * 取得 activeQueries 的 key。
-   * Normal: podId / Run: `${runId}:${podId}`
+   * 取得 activeQueries 的查詢 key。
+   *
+   * - Normal mode：直接回傳 `podId`，因為同一 pod 在 Normal mode 下同時只能有一個查詢。
+   * - Run mode：回傳 `${runId}:${podId}`，允許同一 pod 在不同 Run 中並行執行查詢，
+   *   避免不同 Run 的查詢 key 互相覆蓋。
    */
   getQueryKey(podId: string): string;
 

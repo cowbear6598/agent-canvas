@@ -107,6 +107,44 @@ export type NormalizedEvent =
     };
 
 /**
+ * 統一建立 Provider 系統錯誤事件（NormalizedEvent error 型別）的 helper。
+ *
+ * 各 Provider 的 buildXxxSystemError 皆呼叫此函式，避免重複相同的 boilerplate 結構。
+ *
+ * @param provider - Provider 名稱，填入 metadata.provider
+ * @param params   - 錯誤內容、嚴重程度與代碼
+ * @returns 符合 NormalizedEvent error discriminant 的物件
+ */
+export function buildProviderSystemError(
+  provider: ProviderName,
+  params: {
+    content: string;
+    fatal: boolean;
+    code: string;
+    rawContent?: string;
+  },
+): Extract<NormalizedEvent, { type: "error" }> {
+  const { content, fatal, code, rawContent } = params;
+
+  return {
+    type: "error",
+    message: content,
+    fatal,
+    code,
+    systemMessage: {
+      role: "system",
+      content,
+      metadata: {
+        provider,
+        code,
+        severity: fatal ? "fatal" : "error",
+        rawContent: rawContent ?? content,
+      },
+    },
+  };
+}
+
+/**
  * Provider chat 呼叫的請求 Context
  *
  * - `options`：執行時型別（由 buildOptions 輸出、僅存在於記憶體中），

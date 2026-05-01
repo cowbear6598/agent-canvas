@@ -1,6 +1,10 @@
 import { v4 as uuidv4 } from "uuid";
 
-import { isAbortError } from "../../utils/errorHelpers.js";
+import {
+  isAbortError,
+  InvalidWorkspaceError,
+  ProviderNotFoundError,
+} from "../../utils/errorHelpers.js";
 import type { ContentBlock, PersistedSubMessage } from "../../types";
 import type { Pod } from "../../types/pod.js";
 import type { RunContext } from "../../types/run.js";
@@ -79,7 +83,11 @@ function hasAssistantContent(state: MutableStreamState): boolean {
   return state.accumulatedContent.length > 0 || state.subMessages.length > 0;
 }
 
-/** 串流節流窗口：200ms 上限延遲對 UX 可接受 */
+/**
+ * 串流節流窗口（ms）。
+ * 每秒最多 5 次 DB 寫入，平衡 UX 即時性（使用者感受 < 200ms 延遲）與 DB 寫入頻率，
+ * 避免高頻串流時造成 SQLite write lock 競爭。
+ */
 const THROTTLE_MS = 200;
 
 /**
@@ -279,10 +287,19 @@ function buildProviderErrorSystemMessage(
   };
 }
 
+/**
+ * 將 provider 串流錯誤事件寫入 transcript system message。
+ *
+ * 回傳值：
+ *   - `aborted=true` 代表 fatal event，呼叫端應中止 event 處理迴圈，
+ *     但**不**透過 throw — 改由 caller 走正常 finalize 收尾路徑，
+ *     避免錯誤冒泡到 wsMiddleware 觸發前端全域 toast。
+ *   - `aborted=false` 代表非 fatal，呼叫端應繼續處理後續事件。
+ */
 function handleProviderErrorEvent(
   event: Extract<NormalizedEvent, { type: "error" }>,
   context: StreamContext,
-): void {
+): { aborted: boolean } {
   const { canvasId, podId, providerName, strategy } = context;
   const systemMessage = buildProviderErrorSystemMessage(event, providerName);
 
@@ -293,17 +310,17 @@ function handleProviderErrorEvent(
   );
 
   flushPendingAssistantMessage(context);
+  // 傳入已建立的 emitStrategy（來自 StreamContext），避免重複呼叫 createEmitStrategy()
   appendSystemMessage({
     canvasId,
     podId,
     content: systemMessage.content,
     metadata: systemMessage.metadata,
     strategy,
+    emitStrategy: context.emitStrategy,
   });
 
-  if (event.fatal) {
-    throw new Error("串流處理發生嚴重錯誤");
-  }
+  return { aborted: event.fatal === true };
 }
 
 /**
@@ -376,28 +393,33 @@ async function handleStreamAbort(
 }
 
 /**
- * 嘗試將錯誤對應到具體的 WebSocket 錯誤碼與 i18n key。
+ * 嘗試將錯誤對應到具體的 WebSocket 錯誤碼、i18n key，以及對外顯示的固定中文訊息。
  *
- * - 路徑穿越 / 工作目錄非法 → { code: "INVALID_PATH", i18nKey: ... }
- * - Provider 不存在 / buildOptions 失敗 → { code: "PROVIDER_NOT_FOUND", i18nKey: ... }
+ * - InvalidWorkspaceError（路徑穿越 / 工作目錄非法）→ { code: "INVALID_PATH", ... }
+ * - ProviderNotFoundError（Provider 不存在 / buildOptions 失敗）→ { code: "PROVIDER_NOT_FOUND", ... }
  * - 其他無法分類的錯誤 → null（由呼叫端決定如何處理）
+ *
+ * content 為對外顯示的固定中文訊息，不透傳 error.message 以避免洩漏內部細節。
+ * 改用 instanceof 而非硬編碼字串比對，避免訊息修改導致分類失效。
  */
 function classifyKnownError(error: unknown): {
   code: string;
   i18nKey: string;
+  /** 對外顯示的固定中文訊息，不含原始 error.message */
+  content: string;
 } | null {
-  const msg = error instanceof Error ? error.message : String(error);
-  if (
-    msg === "非法的工作目錄路徑" ||
-    msg === "工作目錄驗證失敗" ||
-    msg === "工作目錄不在允許範圍內"
-  ) {
-    return { code: "INVALID_PATH", i18nKey: "errors.invalidWorkspacePath" };
+  if (error instanceof InvalidWorkspaceError) {
+    return {
+      code: "INVALID_PATH",
+      i18nKey: "errors.invalidWorkspacePath",
+      content: "工作目錄路徑無效或存取遭拒，請確認 Pod 設定後重試。",
+    };
   }
-  if (msg.includes("PROVIDER_NOT_FOUND") || msg.includes("找不到 Provider")) {
+  if (error instanceof ProviderNotFoundError) {
     return {
       code: "PROVIDER_NOT_FOUND",
       i18nKey: "errors.providerNotFound",
+      content: "找不到對應的 AI Provider，請確認 Pod 設定後重試。",
     };
   }
   return null;
@@ -416,23 +438,28 @@ async function handleStreamError(
     // 已知的業務錯誤（路徑穿越、Provider 不可用）：發送具體錯誤給前端，不再拋出
     strategy.onStreamError(podId);
 
+    // 原始 error.message 只進 logger，不洩漏給前端
     logger.error(
       "Chat",
       "Error",
       `[handleStreamError] 已知業務錯誤（podId=${podId}, canvasId=${canvasId}, code=${classified.code}）：${error instanceof Error ? error.message : String(error)}`,
     );
 
+    // 傳入已建立的 emitStrategy（來自 StreamContext），避免重複呼叫 createEmitStrategy()
     appendSystemMessage({
       canvasId,
       podId,
-      content: error instanceof Error ? error.message : String(error),
+      // 對外顯示固定中文訊息，不含 error.message 以避免洩漏內部細節
+      content: classified.content,
       metadata: {
         provider: context.providerName,
         code: classified.code,
         severity: "fatal",
+        // rawContent 僅供內部除錯用，不顯示於前端 UI
         rawContent: error instanceof Error ? error.message : String(error),
       },
       strategy,
+      emitStrategy: context.emitStrategy,
     });
 
     return {
@@ -488,6 +515,43 @@ function createThrottledPersist(
   return { persistThrottled, throttleContext };
 }
 
+/** createPersistenceContext 的回傳結構，包含 persistence/throttle 所需的所有元件 */
+interface PersistenceContext {
+  persistStreamingMessage: () => void;
+  persistThrottled: () => void;
+  throttleContext: ThrottleContext;
+}
+
+/**
+ * 負責建立 persistStreamingMessage closure 並組合節流機制，
+ * 回傳整合後的 persistence/throttle 元件。
+ * setupStreamContext 透過此函式取得 persist 相關元件，不直接接觸細節。
+ */
+function createPersistenceContext(
+  messageId: string,
+  subMessageState: ReturnType<typeof createSubMessageState>,
+  streamState: MutableStreamState,
+  strategy: StreamingChatExecutorOptions["strategy"],
+  podId: string,
+  throttleMs: number,
+): PersistenceContext {
+  const persistStreamingMessage = (): void => {
+    const persistedMsg = buildPersistedMessage(
+      messageId,
+      streamState.accumulatedContent,
+      subMessageState,
+    );
+    strategy.persistMessage(podId, persistedMsg);
+  };
+
+  const { persistThrottled, throttleContext } = createThrottledPersist(
+    persistStreamingMessage,
+    throttleMs,
+  );
+
+  return { persistStreamingMessage, persistThrottled, throttleContext };
+}
+
 function setupStreamContext(
   options: StreamingChatExecutorOptions,
 ): StreamContext {
@@ -504,21 +568,18 @@ function setupStreamContext(
     subMessageState,
   );
 
-  const persistStreamingMessage = (): void => {
-    const persistedMsg = buildPersistedMessage(
-      messageId,
-      streamState.accumulatedContent,
-      subMessageState,
-    );
-    strategy.persistMessage(podId, persistedMsg);
-  };
-
   const emitStrategy = strategy.createEmitStrategy();
 
-  const { persistThrottled, throttleContext } = createThrottledPersist(
-    persistStreamingMessage,
-    THROTTLE_MS,
-  );
+  // 由 createPersistenceContext 負責建立 persist closure 與 throttle 元件
+  const { persistStreamingMessage, persistThrottled, throttleContext } =
+    createPersistenceContext(
+      messageId,
+      subMessageState,
+      streamState,
+      strategy,
+      podId,
+      THROTTLE_MS,
+    );
 
   const context: StreamContext = {
     canvasId,
@@ -622,31 +683,31 @@ function normalizedEventToStreamEvent(ev: NormalizedEvent): StreamEvent | null {
 /**
  * 處理單一正規化串流事件：
  *   - session_started → 寫入 streamContext.capturedSessionId，供 finalizeAfterStream 持久化
- *   - error → 直接落成 transcript system message；fatal=true 時中斷串流
+ *   - error → 直接落成 transcript system message；fatal=true 時回傳 aborted=true 通知呼叫端中止
  *   - 其餘事件 → 透過 normalizedEventToStreamEvent 轉換後交由 streamingCallback 分派
  *
- * 此函式為 module-scope 純函式（無 side effect 以外的回傳值），
- * 由 executeStreamingChat 的 for-await 迴圈逐事件呼叫。
+ * 回傳值 `aborted=true` 代表收到 fatal error，由呼叫端 break 出迴圈走正常 finalize 路徑，
+ * 不再 throw 出 generator/executor，避免錯誤冒泡到 wsMiddleware 觸發前端全域 toast。
  */
 function processNormalizedEvent(
   ev: NormalizedEvent,
   streamContext: StreamContext,
   streamingCallback: (event: StreamEvent) => void,
-): void {
+): { aborted: boolean } {
   if (ev.type === "session_started") {
     streamContext.capturedSessionId = ev.sessionId;
-    return;
+    return { aborted: false };
   }
 
   if (ev.type === "error") {
-    handleProviderErrorEvent(ev, streamContext);
-    return;
+    return handleProviderErrorEvent(ev, streamContext);
   }
 
   const streamEvent = normalizedEventToStreamEvent(ev);
   if (streamEvent !== null) {
     streamingCallback(streamEvent);
   }
+  return { aborted: false };
 }
 
 /**
@@ -673,7 +734,7 @@ function resolveWorkspacePath(pod: Pod, runContext?: RunContext): string {
           "Check",
           `[resolveWorkspacePath] 工作目錄安全驗證失敗：worktreePath="${instance.worktreePath}" 不在允許範圍 repositoriesRoot="${config.repositoriesRoot}" 內（podId=${pod.id}, runId=${runContext.runId}）`,
         );
-        throw new Error("工作目錄驗證失敗");
+        throw new InvalidWorkspaceError("工作目錄驗證失敗");
       }
       return instance.worktreePath;
     }
@@ -717,7 +778,16 @@ async function runProviderStream(
   try {
     // 消費 provider.chat(ctx) 的 NormalizedEvent 串流（Claude 與 Codex 共用）
     for await (const ev of provider.chat(ctx)) {
-      processNormalizedEvent(ev, streamContext, streamingCallback);
+      const result = processNormalizedEvent(
+        ev,
+        streamContext,
+        streamingCallback,
+      );
+      if (result.aborted) {
+        // fatal error event：transcript system message 已寫入，
+        // 中止迴圈但不 throw，由呼叫端走正常 finalize 收尾。
+        break;
+      }
     }
   } finally {
     // 無論串流正常或異常結束，都清理 abortRegistry entry 防 Memory Leak
@@ -728,6 +798,74 @@ async function runProviderStream(
     return { aborted: true };
   }
   return { aborted: false };
+}
+
+/** resolveExecutionDependencies 回傳的執行所需元件 */
+interface ExecutionDependencies {
+  provider: AgentProvider;
+  queryKey: string;
+  ctxWithoutSignal: Omit<ChatRequestContext, "abortSignal">;
+}
+
+/**
+ * 發送 Pod 不存在的 WebSocket 錯誤事件。
+ * 不將 podId 暴露給 client，改記入 server log 供除錯追查。
+ */
+function emitPodNotFoundError(canvasId: string, podId: string): void {
+  logger.error(
+    "Chat",
+    "Check",
+    `[executeStreamingChat] 找不到 Pod（podId=${podId}, canvasId=${canvasId}）`,
+  );
+  socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_ERROR, {
+    canvasId,
+    podId,
+    success: false,
+    error: createI18nError("errors.podNotFound", { id: podId }),
+    code: "POD_NOT_FOUND",
+  });
+}
+
+/**
+ * 集中「查詢期」邏輯：取 provider → 取 sessionId/queryKey/runContext → 組 ctxWithoutSignal。
+ * Pod 已由 executeStreamingChat 確認存在後傳入，此函式只負責組裝執行所需元件。
+ * 同時將 pod 資訊寫入 streamContext，讓後續 handler 直接從 context 讀取。
+ * resolveWorkspacePath 與 provider.buildOptions 可能拋出錯誤，由呼叫端的 try-catch 統一交給 handleExecutionError。
+ */
+async function resolveExecutionDependencies(
+  options: StreamingChatExecutorOptions,
+  streamContext: StreamContext,
+  pod: Pod,
+): Promise<ExecutionDependencies> {
+  const { podId, message, strategy } = options;
+
+  // 取得 pod.name 後立即寫入 streamContext，讓後續 handler（例如 handleErrorEvent）直接從 context 讀取
+  streamContext.podName = pod.name;
+  const providerName = pod.provider ?? "claude";
+  streamContext.providerName = providerName;
+  const provider = getProvider(providerName);
+
+  const sessionId = strategy.getSessionId(podId);
+  const queryKey = strategy.getQueryKey(podId);
+  const runContext = strategy.getRunContext();
+
+  // 解析工作目錄（可能拋出錯誤，由呼叫端 try-catch 統一交給 handleExecutionError）
+  const workspacePath = resolveWorkspacePath(pod, runContext);
+
+  // 建構 Provider 執行時選項（可能拋出錯誤，同上）
+  const providerOptions = await provider.buildOptions(pod, runContext);
+
+  // 組裝 ChatRequestContext（不含 abortSignal，由 runProviderStream 內部注入）
+  const ctxWithoutSignal: Omit<ChatRequestContext, "abortSignal"> = {
+    podId,
+    message,
+    workspacePath,
+    resumeSessionId: sessionId ?? null,
+    runContext,
+    options: providerOptions,
+  };
+
+  return { provider, queryKey, ctxWithoutSignal };
 }
 
 /**
@@ -742,67 +880,33 @@ export async function executeStreamingChat(
   options: StreamingChatExecutorOptions,
   callbacks?: StreamingChatExecutorCallbacks,
 ): Promise<StreamingChatExecutorResult> {
-  const { podId, message, abortable, strategy } = options;
+  const { abortable, strategy } = options;
 
   // 設定串流上下文
   const streamContext = setupStreamContext(options);
-  const { canvasId, messageId, streamState } = streamContext;
+  const { canvasId, podId, messageId, streamState } = streamContext;
   const streamingCallback = createStreamingCallback(streamContext);
 
-  // 查詢 Pod 與 Provider
+  // Pod 不存在：直接 early return（不需要 onStreamStart / try-catch）
   const podResult = podStore.getByIdGlobal(podId);
   if (!podResult) {
-    // 不將 podId 暴露給 client，改記入 server log 供除錯追查
-    logger.error(
-      "Chat",
-      "Check",
-      `[executeStreamingChat] 找不到 Pod（podId=${podId}, canvasId=${options.canvasId}）`,
-    );
-    socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_ERROR, {
-      canvasId,
-      podId,
-      success: false,
-      error: createI18nError("errors.podNotFound", { id: podId }),
-      code: "POD_NOT_FOUND",
-    });
-    return {
-      messageId,
-      content: "",
-      hasContent: false,
-      aborted: false,
-    };
+    emitPodNotFoundError(canvasId, podId);
+    return { messageId, content: "", hasContent: false, aborted: false };
   }
-
-  const { pod } = podResult;
-  // 取得 pod.name 後立即寫入 streamContext，讓後續 handler（例如 handleErrorEvent）直接從 context 讀取
-  streamContext.podName = pod.name;
-  const providerName = pod.provider ?? "claude";
-  streamContext.providerName = providerName;
-  const provider = getProvider(providerName);
-
-  const sessionId = strategy.getSessionId(podId);
-  const queryKey = strategy.getQueryKey(podId);
-  const runContext = strategy.getRunContext();
 
   // 串流開始前置處理（Run mode 需在此註冊 active stream）
   strategy.onStreamStart(podId);
 
   try {
-    // 解析工作目錄
-    const workspacePath = resolveWorkspacePath(pod, runContext);
+    // 查詢期：解析執行所需的所有依賴（pod 已確認存在，此處執行 provider/session/ctxWithoutSignal 組裝）
+    // resolveWorkspacePath 與 provider.buildOptions 可能拋出錯誤，由外層 catch 統一交給 handleExecutionError
+    const depsResult = await resolveExecutionDependencies(
+      options,
+      streamContext,
+      podResult.pod,
+    );
 
-    // 建構 Provider 執行時選項
-    const providerOptions = await provider.buildOptions(pod, runContext);
-
-    // 組裝 ChatRequestContext（不含 abortSignal，由 runProviderStream 內部注入）
-    const ctxWithoutSignal: Omit<ChatRequestContext, "abortSignal"> = {
-      podId,
-      message,
-      workspacePath,
-      resumeSessionId: sessionId ?? null,
-      runContext,
-      options: providerOptions,
-    };
+    const { provider, queryKey, ctxWithoutSignal } = depsResult;
 
     const result = await runProviderStream(
       provider,

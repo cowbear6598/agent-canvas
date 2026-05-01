@@ -121,7 +121,8 @@ describe("runEventHandlers", () => {
   describe("unified handler - RUN_STATUS_CHANGED", () => {
     it("收到當前 canvas 的事件時應呼叫 updateRunStatus", () => {
       const runStore = useRunStore();
-      runStore.runs = [createMockRun()];
+      const run = createMockRun();
+      runStore.runsById.set(run.id, run);
       const updateSpy = vi.spyOn(runStore, "updateRunStatus");
 
       const listeners = getRunEventListeners();
@@ -165,7 +166,8 @@ describe("runEventHandlers", () => {
   describe("unified handler - RUN_POD_STATUS_CHANGED", () => {
     it("收到當前 canvas 的事件時應呼叫 updatePodInstanceStatus", () => {
       const runStore = useRunStore();
-      runStore.runs = [createMockRun()];
+      const run = createMockRun();
+      runStore.runsById.set(run.id, run);
       const updateSpy = vi.spyOn(runStore, "updatePodInstanceStatus");
 
       const listeners = getRunEventListeners();
@@ -195,7 +197,8 @@ describe("runEventHandlers", () => {
   describe("unified handler - RUN_DELETED", () => {
     it("收到當前 canvas 的事件時應呼叫 removeRun（不發 WebSocket）", () => {
       const runStore = useRunStore();
-      runStore.runs = [createMockRun()];
+      const run = createMockRun();
+      runStore.runsById.set(run.id, run);
       const removeSpy = vi.spyOn(runStore, "removeRun");
       const deleteRunSpy = vi.spyOn(runStore, "deleteRun");
 
@@ -210,7 +213,8 @@ describe("runEventHandlers", () => {
 
     it("收到其他 canvas 的事件時應略過", () => {
       const runStore = useRunStore();
-      runStore.runs = [createMockRun()];
+      const run = createMockRun();
+      runStore.runsById.set(run.id, run);
       const removeSpy = vi.spyOn(runStore, "removeRun");
 
       const listeners = getRunEventListeners();

@@ -723,7 +723,7 @@ describe("GeminiProvider", () => {
     expect(errorEvents).toHaveLength(0);
   });
 
-  // ── C17：result status=error → yield error event，fatal=true，message 取 error.message ─
+  // ── C17：result status=error → yield error event，fatal=true（AI 終態錯誤），message 取 error.message ─
   it("C17: result status=error 應推出 error event，fatal=true，message 取 error.message", async () => {
     const stdoutLines = [
       JSON.stringify({
@@ -742,7 +742,47 @@ describe("GeminiProvider", () => {
 
     const e = errorEvents[0] as Extract<NormalizedEvent, { type: "error" }>;
     expect(e.message).toBe("Gemini API 回應發生錯誤");
+    // AI 終態錯誤標 fatal=true，由 streamingChatExecutor 主迴圈 break
     expect(e.fatal).toBe(true);
+  });
+
+  // ── C17b：result status=error 後子程序以 exit code 1 退出，模擬主迴圈 break，
+  //         驗證僅 yield 一個 RESULT_ERROR error event，不再 fall through 到 EXIT_CODE 多餘訊息 ─
+  it("C17b: result status=error + exit code 1，主迴圈 break 後應只有一個 RESULT_ERROR error event，不再 yield EXIT_CODE", async () => {
+    const stdoutLines = [
+      JSON.stringify({
+        type: "result",
+        status: "error",
+        error: { message: "You have exhausted your capacity on this model." },
+      }),
+    ];
+    // 子程序以 exit code 1 退出（模擬 gemini CLI 配額耗盡情境）
+    const mockProc = makeMockProc(stdoutLines, [], 1);
+    spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
+
+    // 模擬 streamingChatExecutor 主迴圈：收到 fatal=true 後 break，generator 被 return
+    const collected: NormalizedEvent[] = [];
+    for await (const ev of geminiProvider.chat(makeCtx())) {
+      collected.push(ev);
+      if (ev.type === "error" && ev.fatal) {
+        break;
+      }
+    }
+
+    const errorEvents = collected.filter((e) => e.type === "error");
+    // 只有一個 error event（RESULT_ERROR），沒有 EXIT_CODE 多餘訊息
+    expect(errorEvents).toHaveLength(1);
+    const e = errorEvents[0] as Extract<NormalizedEvent, { type: "error" }>;
+    expect(e.fatal).toBe(true);
+    expect(e.systemMessage?.metadata.code).toBe("RESULT_ERROR");
+    expect(e.message).toBe("You have exhausted your capacity on this model.");
+    // 確保沒有 EXIT_CODE 訊息
+    const hasExitCode = errorEvents.some(
+      (ev) =>
+        (ev as Extract<NormalizedEvent, { type: "error" }>).systemMessage
+          ?.metadata.code === "EXIT_CODE",
+    );
+    expect(hasExitCode).toBe(false);
   });
 
   // ── C18：init event session_id 透過 session_started NormalizedEvent yield 出 ─

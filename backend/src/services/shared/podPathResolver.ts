@@ -10,6 +10,7 @@ import type { Pod } from "../../types/pod.js";
 import { config } from "../../config/index.js";
 import { isPathWithinDirectory } from "../../utils/pathValidator.js";
 import { logger } from "../../utils/logger.js";
+import { InvalidWorkspaceError } from "../../utils/errorHelpers.js";
 
 /**
  * 解析 Pod 的工作目錄。
@@ -34,7 +35,7 @@ export function resolvePodCwd(pod: Pod): string {
         "Error",
         `resolvePodCwd：repositoryId 路徑穿越，podId=${pod.id}，repositoryId=${safeRepoId}`,
       );
-      throw new Error("非法的工作目錄路徑");
+      throw new InvalidWorkspaceError("非法的工作目錄路徑");
     }
     return resolvedCwd;
   }
@@ -47,7 +48,7 @@ export function resolvePodCwd(pod: Pod): string {
       `resolvePodCwd：workspacePath 超出允許範圍，podId=${pod.id}`,
       pod.workspacePath,
     );
-    throw new Error("工作目錄不在允許範圍內");
+    throw new InvalidWorkspaceError("工作目錄不在允許範圍內");
   }
   return resolvedCwd;
 }

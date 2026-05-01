@@ -47,10 +47,18 @@ class MessageStore {
   /**
    * 新增一則訊息到 DB。
    *
+   * @param canvasId - 所屬 Canvas ID
+   * @param podId - 所屬 Pod ID
+   * @param role - 訊息角色（user / assistant / system）
+   * @param content - 訊息文字內容
+   * @param subMessages - 可選的子訊息陣列（assistant 的工具呼叫輪次）
    * @param options.id - 可選的外部 id。當 caller 需要讓「外部資源（如附件目錄）的路徑」
    *   與 message id 對齊時可傳入，例如拖檔觸發對話時由 handler 統一產生 chatMessageId，
    *   同時傳給 attachmentWriter 與此方法，確保 DB 中 message id 與 attachments dir id 一致。
    *   若未傳入，則維持原本內部 uuidv4() 行為。
+   * @param options.metadata - 可選的 system message metadata（provider / code / severity / rawContent）。
+   *   僅 role=system 的訊息才應設定此欄位；rawContent 儲存原始 SDK 錯誤字串供除錯用，
+   *   歷史回傳時應遮蔽以避免洩漏敏感資訊（見 handleChatHistory）。
    */
   async addMessage(
     canvasId: string,

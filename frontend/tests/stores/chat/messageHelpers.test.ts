@@ -6,70 +6,7 @@ import {
   mergeToolUseIntoMessage,
   upsertMessage,
 } from "@/stores/chat/messageHelpers";
-import {
-  appendToolToLastSubMessage,
-  flushAndCreateNewSubMessage,
-} from "@/stores/chat/subMessageHelpers";
-import type { Message, SubMessage, ToolUseInfo } from "@/types/chat";
-
-/**
- * 可變版本的 applyToolUseToMessage，僅供測試使用。
- * 直接 mutate message.subMessages，與生產程式碼的不可變風格不同。
- */
-function applyToolUseToMessage(
-  message: Message,
-  payload: {
-    toolUseId: string;
-    toolName: string;
-    input: Record<string, unknown>;
-  },
-): void {
-  const toolUseInfo: ToolUseInfo = {
-    toolUseId: payload.toolUseId,
-    toolName: payload.toolName,
-    input: payload.input,
-    status: "running",
-  };
-
-  const subMessages = message.subMessages;
-
-  // 尚無 subMessages 時，建立初始 subMessages
-  if (!subMessages || subMessages.length === 0) {
-    const newSubMessages: SubMessage[] = [];
-
-    // 若主訊息已有文字內容，先保留到第一個 subMessage，避免切換到 subMessages 渲染後文字消失
-    if (message.content.trim() !== "") {
-      newSubMessages.push({
-        id: `${message.id}-sub-0`,
-        content: message.content,
-        isPartial: false,
-      });
-    }
-
-    newSubMessages.push({
-      id: payload.toolUseId,
-      content: "",
-      toolUse: [toolUseInfo],
-    });
-
-    message.subMessages = newSubMessages;
-    return;
-  }
-
-  const lastSub = subMessages[subMessages.length - 1];
-
-  if (lastSub && lastSub.content.trim() === "") {
-    // 最後一個 subMessage content 為空，合併到同一個
-    message.subMessages = appendToolToLastSubMessage(subMessages, toolUseInfo);
-  } else {
-    // 最後一個 subMessage 有 content，建立新的 subMessage
-    message.subMessages = flushAndCreateNewSubMessage(
-      subMessages,
-      message.id,
-      toolUseInfo,
-    );
-  }
-}
+import type { Message, ToolUseInfo } from "@/types/chat";
 
 describe("messageHelpers", () => {
   describe("buildRunPodCacheKey", () => {
@@ -87,50 +24,43 @@ describe("messageHelpers", () => {
       expect(buildSubMessageId("msg-1", "tool-abc")).toBe("msg-1-tool-abc");
     });
 
-    it("toolUseId 為 undefined 時應使用 no-tool 作為 fallback", () => {
-      expect(buildSubMessageId("msg-1", undefined)).toBe("msg-1-no-tool");
+    it("toolUseId 為 undefined 時應使用 none 作為 fallback", () => {
+      // 已將 fallback 字串從 "no-tool" 改為 "none"（#30 重構）
+      expect(buildSubMessageId("msg-1", undefined)).toBe("msg-1-none");
     });
   });
 
-  describe("applyToolUseToMessage", () => {
-    it("message content 為空時應只建立工具 subMessage", () => {
-      const message: Message = { id: "msg-1", role: "assistant", content: "" };
-
-      applyToolUseToMessage(message, {
-        toolUseId: "tool-1",
-        toolName: "Bash",
-        input: { command: "ls" },
-      });
-
-      expect(message.subMessages).toHaveLength(1);
-      expect(message.subMessages?.[0]?.toolUse?.[0]?.toolName).toBe("Bash");
-      expect(message.subMessages?.[0]?.toolUse?.[0]?.status).toBe("running");
-    });
-
-    it("message 有 content 且首次 tool use 時，應先建立文字 subMessage 再建立工具 subMessage", () => {
-      const message: Message = {
-        id: "msg-1",
-        role: "assistant",
-        content: "我來幫你查一下",
+  describe("mergeToolUseIntoMessage（subMessages 路徑）", () => {
+    function makeTool(
+      id: string,
+      name: string,
+      overrides?: Partial<ToolUseInfo>,
+    ): ToolUseInfo {
+      return {
+        toolUseId: id,
+        toolName: name,
+        input: {},
+        status: "running",
+        ...overrides,
       };
+    }
 
-      applyToolUseToMessage(message, {
-        toolUseId: "tool-1",
-        toolName: "Bash",
-        input: { command: "ls" },
-      });
+    it("message content 為空且無 subMessages 時，toolUse 被加入且 subMessages 不自動建立", () => {
+      // mergeToolUseIntoMessage 在無 subMessages 時只更新 toolUse，不建立 subMessages
+      const message: Message = { id: "msg-1", role: "assistant", content: "" };
+      const result = mergeToolUseIntoMessage(
+        message,
+        makeTool("tool-1", "Bash"),
+      );
 
-      expect(message.subMessages).toHaveLength(2);
-      // 第一個 subMessage 保留原始文字
-      expect(message.subMessages?.[0]?.content).toBe("我來幫你查一下");
-      expect(message.subMessages?.[0]?.toolUse).toBeUndefined();
-      expect(message.subMessages?.[0]?.isPartial).toBe(false);
-      // 第二個 subMessage 是工具
-      expect(message.subMessages?.[1]?.content).toBe("");
-      expect(message.subMessages?.[1]?.toolUse?.[0]?.toolName).toBe("Bash");
+      expect(result).not.toBe(message);
+      expect(result.toolUse).toHaveLength(1);
+      expect(result.toolUse?.[0]?.toolName).toBe("Bash");
+      expect(result.toolUse?.[0]?.status).toBe("running");
+      expect(result.subMessages).toBeUndefined();
     });
 
-    it("已有 subMessages 且最後一個 content 不為空時，應建立新的 subMessage", () => {
+    it("有 subMessages 且最後一個 content 不為空時，應建立新的 subMessage", () => {
       const message: Message = {
         id: "msg-1",
         role: "assistant",
@@ -138,48 +68,51 @@ describe("messageHelpers", () => {
         subMessages: [{ id: "existing", content: "有內容的 subMessage" }],
       };
 
-      applyToolUseToMessage(message, {
-        toolUseId: "tool-2",
-        toolName: "Read",
-        input: { path: "/tmp" },
-      });
+      const result = mergeToolUseIntoMessage(
+        message,
+        makeTool("tool-2", "Read"),
+      );
 
-      expect(message.subMessages).toHaveLength(2);
-      expect(message.subMessages?.[1]?.toolUse?.[0]?.toolName).toBe("Read");
+      expect(result.subMessages).toHaveLength(2);
+      expect(result.subMessages?.[1]?.toolUse?.[0]?.toolName).toBe("Read");
+      // 原始不可變
+      expect(message.subMessages).toHaveLength(1);
     });
 
-    it("新加入的 toolUse input 應與 payload 相同", () => {
+    it("新加入的 toolUse input 應與傳入 toolUseInfo 相同", () => {
       const message: Message = { id: "msg-1", role: "assistant", content: "" };
       const input = { command: "echo hello" };
 
-      applyToolUseToMessage(message, {
+      const result = mergeToolUseIntoMessage(message, {
         toolUseId: "tool-1",
         toolName: "Bash",
         input,
+        status: "running",
       });
 
-      expect(message.subMessages?.[0]?.toolUse?.[0]?.input).toEqual(input);
+      expect(result.toolUse?.[0]?.input).toEqual(input);
     });
 
     it("連續 tool use 且前一個 subMessage content 為空時，應合併到同一個 subMessage", () => {
-      const message: Message = { id: "msg-1", role: "assistant", content: "" };
+      const message: Message = {
+        id: "msg-1",
+        role: "assistant",
+        content: "",
+        subMessages: [
+          { id: "sub-1", content: "", toolUse: [makeTool("tool-1", "Bash")] },
+        ],
+        toolUse: [makeTool("tool-1", "Bash")],
+      };
 
-      applyToolUseToMessage(message, {
-        toolUseId: "tool-1",
-        toolName: "Bash",
-        input: { command: "ls" },
-      });
+      const result = mergeToolUseIntoMessage(
+        message,
+        makeTool("tool-2", "Read"),
+      );
 
-      applyToolUseToMessage(message, {
-        toolUseId: "tool-2",
-        toolName: "Read",
-        input: { path: "/tmp" },
-      });
-
-      expect(message.subMessages).toHaveLength(1);
-      expect(message.subMessages?.[0]?.toolUse).toHaveLength(2);
-      expect(message.subMessages?.[0]?.toolUse?.[0]?.toolName).toBe("Bash");
-      expect(message.subMessages?.[0]?.toolUse?.[1]?.toolName).toBe("Read");
+      expect(result.subMessages).toHaveLength(1);
+      expect(result.subMessages?.[0]?.toolUse).toHaveLength(2);
+      expect(result.subMessages?.[0]?.toolUse?.[0]?.toolName).toBe("Bash");
+      expect(result.subMessages?.[0]?.toolUse?.[1]?.toolName).toBe("Read");
     });
 
     it("最後一個 subMessage content 為純空白字元時，應合併到同一個 subMessage", () => {
@@ -191,26 +124,19 @@ describe("messageHelpers", () => {
           {
             id: "sub-1",
             content: "  ",
-            toolUse: [
-              {
-                toolUseId: "tool-1",
-                toolName: "Bash",
-                input: {},
-                status: "running",
-              },
-            ],
+            toolUse: [makeTool("tool-1", "Bash")],
           },
         ],
+        toolUse: [makeTool("tool-1", "Bash")],
       };
 
-      applyToolUseToMessage(message, {
-        toolUseId: "tool-2",
-        toolName: "Read",
-        input: { path: "/tmp" },
-      });
+      const result = mergeToolUseIntoMessage(
+        message,
+        makeTool("tool-2", "Read"),
+      );
 
-      expect(message.subMessages).toHaveLength(1);
-      expect(message.subMessages?.[0]?.toolUse).toHaveLength(2);
+      expect(result.subMessages).toHaveLength(1);
+      expect(result.subMessages?.[0]?.toolUse).toHaveLength(2);
     });
 
     it("前一個 subMessage 有 content 時，應建立新 subMessage", () => {
@@ -222,27 +148,20 @@ describe("messageHelpers", () => {
           {
             id: "sub-1",
             content: "思考中...",
-            toolUse: [
-              {
-                toolUseId: "tool-1",
-                toolName: "Bash",
-                input: {},
-                status: "running",
-              },
-            ],
+            toolUse: [makeTool("tool-1", "Bash")],
           },
         ],
+        toolUse: [makeTool("tool-1", "Bash")],
       };
 
-      applyToolUseToMessage(message, {
-        toolUseId: "tool-2",
-        toolName: "Read",
-        input: { path: "/tmp" },
-      });
+      const result = mergeToolUseIntoMessage(
+        message,
+        makeTool("tool-2", "Read"),
+      );
 
-      expect(message.subMessages).toHaveLength(2);
-      expect(message.subMessages?.[0]?.content).toBe("思考中...");
-      expect(message.subMessages?.[1]?.toolUse?.[0]?.toolUseId).toBe("tool-2");
+      expect(result.subMessages).toHaveLength(2);
+      expect(result.subMessages?.[0]?.content).toBe("思考中...");
+      expect(result.subMessages?.[1]?.toolUse?.[0]?.toolUseId).toBe("tool-2");
     });
   });
 
@@ -525,6 +444,7 @@ describe("messageHelpers", () => {
           provider: "claude",
           code: "RATE_LIMIT",
           severity: "error",
+          rawContent: "Rate limit exceeded",
         },
       );
 

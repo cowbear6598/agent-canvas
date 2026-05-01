@@ -7,6 +7,7 @@ import { setupStoreTest } from "../../helpers/testSetup";
 import { useRunStore } from "@/stores/run/runStore";
 import { useCanvasStore } from "@/stores/canvasStore";
 import type { WorkflowRun, RunPodInstance } from "@/types/run";
+import type { Message } from "@/types/chat";
 
 // Mock WebSocket
 vi.mock("@/services/websocket", () => webSocketMockFactory());
@@ -57,6 +58,50 @@ function createMockRun(overrides?: Partial<WorkflowRun>): WorkflowRun {
   };
 }
 
+/** 測試輔助：批次設定 store.runsById（取代原本 store.runs = [...] 的直接陣列指派）。 */
+function setRuns(
+  store: ReturnType<typeof useRunStore>,
+  runs: WorkflowRun[],
+): void {
+  store.runsById.clear();
+  for (const run of runs) {
+    store.runsById.set(run.id, run);
+  }
+}
+
+/** 測試輔助：取得巢狀 runChatMessages 中指定 runId / podId 的訊息陣列。 */
+function getPodMessages(
+  store: ReturnType<typeof useRunStore>,
+  runId: string,
+  podId: string,
+): Message[] | undefined {
+  return store.runChatMessages.get(runId)?.get(podId);
+}
+
+/** 測試輔助：設定巢狀 runChatMessages 中指定 runId / podId 的訊息陣列。 */
+function setPodMessages(
+  store: ReturnType<typeof useRunStore>,
+  runId: string,
+  podId: string,
+  messages: Message[],
+): void {
+  let podMap = store.runChatMessages.get(runId);
+  if (!podMap) {
+    podMap = new Map();
+    store.runChatMessages.set(runId, podMap);
+  }
+  podMap.set(podId, messages);
+}
+
+/** 測試輔助：判斷巢狀 runChatMessages 中是否存在指定 runId / podId。 */
+function hasPodMessages(
+  store: ReturnType<typeof useRunStore>,
+  runId: string,
+  podId: string,
+): boolean {
+  return store.runChatMessages.get(runId)?.has(podId) ?? false;
+}
+
 describe("runStore", () => {
   setupStoreTest(() => {
     mockExecuteAction.mockResolvedValue({ success: false, error: "未知錯誤" });
@@ -66,6 +111,7 @@ describe("runStore", () => {
     it("各欄位應有正確預設值", () => {
       const store = useRunStore();
 
+      expect(store.runsById.size).toBe(0);
       expect(store.runs).toEqual([]);
       expect(store.isHistoryPanelOpen).toBe(false);
       expect(store.expandedRunIds.size).toBe(0);
@@ -91,7 +137,7 @@ describe("runStore", () => {
           id: "run-3",
           createdAt: "2024-01-02T10:00:00Z",
         });
-        store.runs = [run1, run2, run3];
+        setRuns(store, [run1, run2, run3]);
 
         const result = store.sortedRuns;
 
@@ -102,11 +148,14 @@ describe("runStore", () => {
 
       it("應限制最多 MAX_RUNS_PER_CANVAS 筆", () => {
         const store = useRunStore();
-        store.runs = Array.from({ length: 35 }, (_, i) =>
-          createMockRun({
-            id: `run-${i}`,
-            createdAt: new Date(i * 1000).toISOString(),
-          }),
+        setRuns(
+          store,
+          Array.from({ length: 35 }, (_, i) =>
+            createMockRun({
+              id: `run-${i}`,
+              createdAt: new Date(i * 1000).toISOString(),
+            }),
+          ),
         );
 
         expect(store.sortedRuns).toHaveLength(30);
@@ -116,18 +165,18 @@ describe("runStore", () => {
     describe("runningRunsCount", () => {
       it("應計算 status=running 的 run 數量", () => {
         const store = useRunStore();
-        store.runs = [
+        setRuns(store, [
           createMockRun({ id: "run-1", status: "running" }),
           createMockRun({ id: "run-2", status: "completed" }),
           createMockRun({ id: "run-3", status: "running" }),
-        ];
+        ]);
 
         expect(store.runningRunsCount).toBe(2);
       });
 
       it("無執行中 run 時應回傳 0", () => {
         const store = useRunStore();
-        store.runs = [createMockRun({ status: "completed" })];
+        setRuns(store, [createMockRun({ status: "completed" })]);
 
         expect(store.runningRunsCount).toBe(0);
       });
@@ -137,7 +186,7 @@ describe("runStore", () => {
       it("存在時應回傳對應 run", () => {
         const store = useRunStore();
         const run = createMockRun({ id: "run-abc" });
-        store.runs = [run];
+        setRuns(store, [run]);
 
         expect(store.getRunById("run-abc")).toEqual(run);
       });
@@ -163,7 +212,7 @@ describe("runStore", () => {
         const messages = [
           { id: "msg-1", role: "user" as const, content: "Hello" },
         ];
-        store.runChatMessages.set("run-1:pod-1", messages);
+        setPodMessages(store, "run-1", "pod-1", messages);
 
         expect(store.getActiveRunChatMessages).toEqual(messages);
       });
@@ -188,7 +237,8 @@ describe("runStore", () => {
 
       await store.loadRuns();
 
-      expect(store.runs).toEqual(runs);
+      expect(store.runsById.size).toBe(1);
+      expect(store.runsById.get("run-1")).toEqual(runs[0]);
     });
 
     it("無 activeCanvasId 時應 early return", async () => {
@@ -210,7 +260,7 @@ describe("runStore", () => {
 
       await store.loadRuns();
 
-      expect(store.runs).toEqual([]);
+      expect(store.runsById.size).toBe(0);
     });
 
     it("WebSocket 請求拋出錯誤時應靜默處理，不拋出例外", async () => {
@@ -221,86 +271,99 @@ describe("runStore", () => {
       mockCreateWebSocketRequest.mockRejectedValueOnce(new Error("請求超時"));
 
       await expect(store.loadRuns()).resolves.toBeUndefined();
-      expect(store.runs).toEqual([]);
+      expect(store.runsById.size).toBe(0);
     });
   });
 
   describe("addRun", () => {
-    it("應新增 run 到頂部", () => {
+    it("應新增 run 到 Map", () => {
       const store = useRunStore();
       const run1 = createMockRun({ id: "run-1" });
       const run2 = createMockRun({ id: "run-2" });
-      store.runs = [run1];
+      setRuns(store, [run1]);
 
       store.addRun(run2);
 
-      expect(store.runs[0]?.id).toBe("run-2");
-      expect(store.runs[1]?.id).toBe("run-1");
+      expect(store.runsById.has("run-1")).toBe(true);
+      expect(store.runsById.has("run-2")).toBe(true);
     });
 
     it("重複 id 應忽略", () => {
       const store = useRunStore();
       const run = createMockRun({ id: "run-1" });
-      store.runs = [run];
+      setRuns(store, [run]);
 
       store.addRun(createMockRun({ id: "run-1" }));
 
-      expect(store.runs).toHaveLength(1);
+      expect(store.runsById.size).toBe(1);
     });
 
     it("超過 MAX_RUNS_PER_CANVAS 時應移除最舊的", () => {
       const store = useRunStore();
-      store.runs = Array.from({ length: 30 }, (_, i) =>
-        createMockRun({ id: `run-${i}` }),
+      setRuns(
+        store,
+        Array.from({ length: 30 }, (_, i) =>
+          createMockRun({
+            id: `run-${i}`,
+            createdAt: new Date(i * 1000).toISOString(),
+          }),
+        ),
       );
 
-      store.addRun(createMockRun({ id: "run-new" }));
+      store.addRun(
+        createMockRun({
+          id: "run-new",
+          createdAt: new Date(99999999).toISOString(),
+        }),
+      );
 
-      expect(store.runs).toHaveLength(30);
-      expect(store.runs[0]?.id).toBe("run-new");
+      expect(store.runsById.size).toBe(30);
+      expect(store.runsById.has("run-new")).toBe(true);
     });
   });
 
   describe("updateRunStatus", () => {
     it("應更新 run 的 status", () => {
       const store = useRunStore();
-      store.runs = [createMockRun({ id: "run-1", status: "running" })];
+      setRuns(store, [createMockRun({ id: "run-1", status: "running" })]);
 
       store.updateRunStatus("run-1", "completed");
 
-      expect(store.runs[0]?.status).toBe("completed");
+      expect(store.runsById.get("run-1")?.status).toBe("completed");
     });
 
     it("有 completedAt 時應一併更新", () => {
       const store = useRunStore();
-      store.runs = [createMockRun({ id: "run-1", status: "running" })];
+      setRuns(store, [createMockRun({ id: "run-1", status: "running" })]);
 
       store.updateRunStatus("run-1", "completed", "2024-01-01T12:00:00Z");
 
-      expect(store.runs[0]?.completedAt).toBe("2024-01-01T12:00:00Z");
+      expect(store.runsById.get("run-1")?.completedAt).toBe(
+        "2024-01-01T12:00:00Z",
+      );
     });
 
     it("run 不存在時不應有任何變化", () => {
       const store = useRunStore();
-      store.runs = [createMockRun({ id: "run-1", status: "running" })];
+      setRuns(store, [createMockRun({ id: "run-1", status: "running" })]);
 
       store.updateRunStatus("non-existent", "completed");
 
-      expect(store.runs[0]?.status).toBe("running");
+      expect(store.runsById.get("run-1")?.status).toBe("running");
     });
   });
 
   describe("updatePodInstanceStatus", () => {
     it("應更新 pod instance 的 status", () => {
       const store = useRunStore();
-      store.runs = [
+      setRuns(store, [
         createMockRun({
           id: "run-1",
           podInstances: [
             createMockPodInstance({ podId: "pod-1", status: "pending" }),
           ],
         }),
-      ];
+      ]);
 
       store.updatePodInstanceStatus({
         runId: "run-1",
@@ -308,17 +371,19 @@ describe("runStore", () => {
         status: "running",
       });
 
-      expect(store.runs[0]?.podInstances[0]?.status).toBe("running");
+      expect(store.runsById.get("run-1")?.podInstances[0]?.status).toBe(
+        "running",
+      );
     });
 
     it("應更新 lastResponseSummary", () => {
       const store = useRunStore();
-      store.runs = [
+      setRuns(store, [
         createMockRun({
           id: "run-1",
           podInstances: [createMockPodInstance({ podId: "pod-1" })],
         }),
-      ];
+      ]);
 
       store.updatePodInstanceStatus({
         runId: "run-1",
@@ -327,14 +392,14 @@ describe("runStore", () => {
         lastResponseSummary: "完成了",
       });
 
-      expect(store.runs[0]?.podInstances[0]?.lastResponseSummary).toBe(
-        "完成了",
-      );
+      expect(
+        store.runsById.get("run-1")?.podInstances[0]?.lastResponseSummary,
+      ).toBe("完成了");
     });
 
     it("應更新 autoPathwaySettled", () => {
       const store = useRunStore();
-      store.runs = [
+      setRuns(store, [
         createMockRun({
           id: "run-1",
           podInstances: [
@@ -344,7 +409,7 @@ describe("runStore", () => {
             }),
           ],
         }),
-      ];
+      ]);
 
       store.updatePodInstanceStatus({
         runId: "run-1",
@@ -353,14 +418,14 @@ describe("runStore", () => {
         autoPathwaySettled: "settled",
       });
 
-      expect(store.runs[0]?.podInstances[0]?.autoPathwaySettled).toBe(
-        "settled",
-      );
+      expect(
+        store.runsById.get("run-1")?.podInstances[0]?.autoPathwaySettled,
+      ).toBe("settled");
     });
 
     it("應更新 directPathwaySettled", () => {
       const store = useRunStore();
-      store.runs = [
+      setRuns(store, [
         createMockRun({
           id: "run-1",
           podInstances: [
@@ -370,7 +435,7 @@ describe("runStore", () => {
             }),
           ],
         }),
-      ];
+      ]);
 
       store.updatePodInstanceStatus({
         runId: "run-1",
@@ -379,14 +444,14 @@ describe("runStore", () => {
         directPathwaySettled: "pending",
       });
 
-      expect(store.runs[0]?.podInstances[0]?.directPathwaySettled).toBe(
-        "pending",
-      );
+      expect(
+        store.runsById.get("run-1")?.podInstances[0]?.directPathwaySettled,
+      ).toBe("pending");
     });
 
     it("run 不存在時不應有任何變化", () => {
       const store = useRunStore();
-      store.runs = [createMockRun({ id: "run-1" })];
+      setRuns(store, [createMockRun({ id: "run-1" })]);
 
       store.updatePodInstanceStatus({
         runId: "non-existent",
@@ -394,19 +459,21 @@ describe("runStore", () => {
         status: "running",
       });
 
-      expect(store.runs[0]?.podInstances[0]?.status).toBe("pending");
+      expect(store.runsById.get("run-1")?.podInstances[0]?.status).toBe(
+        "pending",
+      );
     });
 
     it("pod instance 不存在時不應有任何變化", () => {
       const store = useRunStore();
-      store.runs = [
+      setRuns(store, [
         createMockRun({
           id: "run-1",
           podInstances: [
             createMockPodInstance({ podId: "pod-1", status: "pending" }),
           ],
         }),
-      ];
+      ]);
 
       store.updatePodInstanceStatus({
         runId: "run-1",
@@ -414,27 +481,29 @@ describe("runStore", () => {
         status: "running",
       });
 
-      expect(store.runs[0]?.podInstances[0]?.status).toBe("pending");
+      expect(store.runsById.get("run-1")?.podInstances[0]?.status).toBe(
+        "pending",
+      );
     });
   });
 
   describe("removeRun", () => {
-    it("應從 runs 移除對應 run", () => {
+    it("應從 runsById 移除對應 run", () => {
       const store = useRunStore();
-      store.runs = [
+      setRuns(store, [
         createMockRun({ id: "run-1" }),
         createMockRun({ id: "run-2" }),
-      ];
+      ]);
 
       store.removeRun("run-1");
 
-      expect(store.runs).toHaveLength(1);
-      expect(store.runs[0]?.id).toBe("run-2");
+      expect(store.runsById.has("run-1")).toBe(false);
+      expect(store.runsById.has("run-2")).toBe(true);
     });
 
     it("應從 expandedRunIds 移除", () => {
       const store = useRunStore();
-      store.runs = [createMockRun({ id: "run-1" })];
+      setRuns(store, [createMockRun({ id: "run-1" })]);
       store.expandedRunIds.add("run-1");
 
       store.removeRun("run-1");
@@ -444,7 +513,7 @@ describe("runStore", () => {
 
     it("activeRunChatModal 指向此 run 時應清除", () => {
       const store = useRunStore();
-      store.runs = [createMockRun({ id: "run-1" })];
+      setRuns(store, [createMockRun({ id: "run-1" })]);
       store.activeRunChatModal = { runId: "run-1", podId: "pod-1" };
 
       store.removeRun("run-1");
@@ -454,10 +523,10 @@ describe("runStore", () => {
 
     it("activeRunChatModal 指向其他 run 時不應清除", () => {
       const store = useRunStore();
-      store.runs = [
+      setRuns(store, [
         createMockRun({ id: "run-1" }),
         createMockRun({ id: "run-2" }),
-      ];
+      ]);
       store.activeRunChatModal = { runId: "run-2", podId: "pod-1" };
 
       store.removeRun("run-1");
@@ -468,18 +537,19 @@ describe("runStore", () => {
       });
     });
 
-    it("應清理 runChatMessages 中相關 entries", () => {
+    it("應清理 runChatMessages 中相關 entries（巢狀 Map 一次 delete）", () => {
       const store = useRunStore();
-      store.runs = [createMockRun({ id: "run-1" })];
-      store.runChatMessages.set("run-1:pod-1", []);
-      store.runChatMessages.set("run-1:pod-2", []);
-      store.runChatMessages.set("run-2:pod-1", []);
+      setRuns(store, [createMockRun({ id: "run-1" })]);
+      setPodMessages(store, "run-1", "pod-1", []);
+      setPodMessages(store, "run-1", "pod-2", []);
+      setPodMessages(store, "run-2", "pod-1", []);
 
       store.removeRun("run-1");
 
-      expect(store.runChatMessages.has("run-1:pod-1")).toBe(false);
-      expect(store.runChatMessages.has("run-1:pod-2")).toBe(false);
-      expect(store.runChatMessages.has("run-2:pod-1")).toBe(true);
+      expect(hasPodMessages(store, "run-1", "pod-1")).toBe(false);
+      expect(hasPodMessages(store, "run-1", "pod-2")).toBe(false);
+      expect(store.runChatMessages.has("run-1")).toBe(false);
+      expect(hasPodMessages(store, "run-2", "pod-1")).toBe(true);
     });
   });
 
@@ -488,23 +558,23 @@ describe("runStore", () => {
       const store = useRunStore();
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
-      store.runs = [createMockRun({ id: "run-1" })];
+      setRuns(store, [createMockRun({ id: "run-1" })]);
 
       store.deleteRun("run-1");
 
-      expect(store.runs).toHaveLength(0);
+      expect(store.runsById.has("run-1")).toBe(false);
     });
 
     it("無 activeCanvasId 時應 early return", () => {
       const store = useRunStore();
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = null;
-      store.runs = [createMockRun({ id: "run-1" })];
+      setRuns(store, [createMockRun({ id: "run-1" })]);
 
       store.deleteRun("run-1");
 
       // run 不應被移除
-      expect(store.runs).toHaveLength(1);
+      expect(store.runsById.has("run-1")).toBe(true);
     });
   });
 
@@ -590,7 +660,7 @@ describe("runStore", () => {
 
       await store.openRunChatModal("run-1", "pod-1");
 
-      const stored = store.runChatMessages.get("run-1:pod-1");
+      const stored = getPodMessages(store, "run-1", "pod-1");
       expect(stored).toHaveLength(1);
       expect(stored?.[0]?.content).toBe("Hello");
     });
@@ -664,7 +734,7 @@ describe("runStore", () => {
         "user",
       );
 
-      const messages = store.runChatMessages.get("run-1:pod-1");
+      const messages = getPodMessages(store, "run-1", "pod-1");
       expect(messages).toHaveLength(1);
       expect(messages?.[0]?.content).toBe("Hello");
     });
@@ -681,13 +751,13 @@ describe("runStore", () => {
         "assistant",
       );
 
-      const messages = store.runChatMessages.get("run-1:pod-1");
+      const messages = getPodMessages(store, "run-1", "pod-1");
       expect(messages?.[0]?.isPartial).toBe(true);
     });
 
     it("已存在同 messageId 時應更新 content", () => {
       const store = useRunStore();
-      store.runChatMessages.set("run-1:pod-1", [
+      setPodMessages(store, "run-1", "pod-1", [
         { id: "msg-1", role: "assistant", content: "Hel", isPartial: true },
       ]);
 
@@ -700,7 +770,7 @@ describe("runStore", () => {
         "assistant",
       );
 
-      const messages = store.runChatMessages.get("run-1:pod-1");
+      const messages = getPodMessages(store, "run-1", "pod-1");
       expect(messages).toHaveLength(1);
       expect(messages?.[0]?.content).toBe("Hello world");
     });
@@ -716,7 +786,7 @@ describe("runStore", () => {
         false,
         "user",
       );
-      const ref1 = store.runChatMessages.get("run-1:pod-1");
+      const ref1 = getPodMessages(store, "run-1", "pod-1");
 
       store.appendRunChatMessage(
         "run-1",
@@ -726,18 +796,18 @@ describe("runStore", () => {
         false,
         "assistant",
       );
-      const ref2 = store.runChatMessages.get("run-1:pod-1");
+      const ref2 = getPodMessages(store, "run-1", "pod-1");
 
       expect(ref1).not.toBe(ref2);
     });
 
     it("更新同一訊息時也應產生新的陣列引用", () => {
       const store = useRunStore();
-      store.runChatMessages.set("run-1:pod-1", [
+      setPodMessages(store, "run-1", "pod-1", [
         { id: "msg-1", role: "assistant", content: "partial", isPartial: true },
       ]);
 
-      const refBefore = store.runChatMessages.get("run-1:pod-1");
+      const refBefore = getPodMessages(store, "run-1", "pod-1");
 
       store.appendRunChatMessage(
         "run-1",
@@ -748,7 +818,7 @@ describe("runStore", () => {
         "assistant",
       );
 
-      const refAfter = store.runChatMessages.get("run-1:pod-1");
+      const refAfter = getPodMessages(store, "run-1", "pod-1");
       expect(refBefore).not.toBe(refAfter);
     });
 
@@ -773,7 +843,7 @@ describe("runStore", () => {
         "assistant",
       );
 
-      const messages = store.runChatMessages.get("run-1:pod-1");
+      const messages = getPodMessages(store, "run-1", "pod-1");
       // subMessages 最後一個 sub 的 content 應逐步累積
       const lastSub = messages?.[0]?.subMessages?.[0];
       expect(lastSub?.content).toBe("Hello world");
@@ -801,7 +871,7 @@ describe("runStore", () => {
         "assistant",
       );
 
-      const messages = store.runChatMessages.get("run-1:pod-1");
+      const messages = getPodMessages(store, "run-1", "pod-1");
       expect(messages?.[0]?.content).toBe("Hi");
     });
 
@@ -819,10 +889,11 @@ describe("runStore", () => {
           provider: "gemini",
           code: "SERVICE_UNAVAILABLE",
           severity: "error",
+          rawContent: "Service temporarily unavailable",
         },
       );
 
-      const messages = store.runChatMessages.get("run-1:pod-1");
+      const messages = getPodMessages(store, "run-1", "pod-1");
       expect(messages?.[0]).toMatchObject({
         id: "msg-system",
         role: "system",
@@ -840,7 +911,7 @@ describe("runStore", () => {
   describe("handleRunChatToolUse", () => {
     it("應追加 tool use 到對應訊息的 subMessage", () => {
       const store = useRunStore();
-      store.runChatMessages.set("run-1:pod-1", [
+      setPodMessages(store, "run-1", "pod-1", [
         {
           id: "msg-1",
           role: "assistant",
@@ -858,7 +929,7 @@ describe("runStore", () => {
         input: { command: "ls" },
       });
 
-      const messages = store.runChatMessages.get("run-1:pod-1");
+      const messages = getPodMessages(store, "run-1", "pod-1");
       // 空 content 的 sub 應被合併，tool 附加到同一個 sub
       expect(messages?.[0]?.subMessages).toHaveLength(1);
       expect(messages?.[0]?.subMessages?.[0]?.toolUse?.[0]?.toolName).toBe(
@@ -870,7 +941,7 @@ describe("runStore", () => {
 
     it("訊息尚不存在時應建立新的 assistant 訊息", () => {
       const store = useRunStore();
-      store.runChatMessages.set("run-1:pod-1", []);
+      setPodMessages(store, "run-1", "pod-1", []);
 
       store.handleRunChatToolUse({
         runId: "run-1",
@@ -881,7 +952,7 @@ describe("runStore", () => {
         input: { command: "ls" },
       });
 
-      const messages = store.runChatMessages.get("run-1:pod-1");
+      const messages = getPodMessages(store, "run-1", "pod-1");
       expect(messages).toHaveLength(1);
       expect(messages?.[0]?.id).toBe("msg-new");
       expect(messages?.[0]?.role).toBe("assistant");
@@ -899,7 +970,7 @@ describe("runStore", () => {
         content: "",
         subMessages: [{ id: "msg-1-sub-0", content: "", isPartial: true }],
       };
-      store.runChatMessages.set("run-1:pod-1", [originalMessage]);
+      setPodMessages(store, "run-1", "pod-1", [originalMessage]);
 
       store.handleRunChatToolUse({
         runId: "run-1",
@@ -910,14 +981,14 @@ describe("runStore", () => {
         input: {},
       });
 
-      const messages = store.runChatMessages.get("run-1:pod-1");
+      const messages = getPodMessages(store, "run-1", "pod-1");
       // 陣列中的 message 應為新物件，而非原本的引用
       expect(messages?.[0]).not.toBe(originalMessage);
     });
 
     it("message 有 content 時首次 tool use 應保留文字到 subMessage", () => {
       const store = useRunStore();
-      store.runChatMessages.set("run-1:pod-1", [
+      setPodMessages(store, "run-1", "pod-1", [
         {
           id: "msg-1",
           role: "assistant",
@@ -938,7 +1009,7 @@ describe("runStore", () => {
         input: { command: "ls" },
       });
 
-      const messages = store.runChatMessages.get("run-1:pod-1");
+      const messages = getPodMessages(store, "run-1", "pod-1");
       const subMessages = messages?.[0]?.subMessages;
       expect(subMessages).toHaveLength(2);
       // 第一個 subMessage 保留文字
@@ -950,7 +1021,7 @@ describe("runStore", () => {
 
     it("message content 為空時首次 tool use 不應產生額外的文字 subMessage", () => {
       const store = useRunStore();
-      store.runChatMessages.set("run-1:pod-1", [
+      setPodMessages(store, "run-1", "pod-1", [
         {
           id: "msg-1",
           role: "assistant",
@@ -968,7 +1039,7 @@ describe("runStore", () => {
         input: {},
       });
 
-      const messages = store.runChatMessages.get("run-1:pod-1");
+      const messages = getPodMessages(store, "run-1", "pod-1");
       // 空 content 的 sub 與 tool 合併到同一個 sub
       expect(messages?.[0]?.subMessages).toHaveLength(1);
       expect(messages?.[0]?.subMessages?.[0]?.toolUse?.[0]?.toolName).toBe(
@@ -978,7 +1049,7 @@ describe("runStore", () => {
 
     it("重複的 toolUseId 應被忽略", () => {
       const store = useRunStore();
-      store.runChatMessages.set("run-1:pod-1", [
+      setPodMessages(store, "run-1", "pod-1", [
         {
           id: "msg-1",
           role: "assistant",
@@ -1019,7 +1090,7 @@ describe("runStore", () => {
       });
 
       // toolUse 數量不應增加
-      const messages = store.runChatMessages.get("run-1:pod-1");
+      const messages = getPodMessages(store, "run-1", "pod-1");
       expect(messages?.[0]?.toolUse).toHaveLength(1);
     });
   });
@@ -1027,7 +1098,7 @@ describe("runStore", () => {
   describe("handleRunChatToolResult", () => {
     it("應更新對應 subMessage 的 output", () => {
       const store = useRunStore();
-      store.runChatMessages.set("run-1:pod-1", [
+      setPodMessages(store, "run-1", "pod-1", [
         {
           id: "msg-1",
           role: "assistant",
@@ -1066,9 +1137,8 @@ describe("runStore", () => {
         output: "file1.txt",
       });
 
-      const toolUse =
-        store.runChatMessages.get("run-1:pod-1")?.[0]?.subMessages?.[0]
-          ?.toolUse?.[0];
+      const toolUse = getPodMessages(store, "run-1", "pod-1")?.[0]
+        ?.subMessages?.[0]?.toolUse?.[0];
       expect(toolUse?.output).toBe("file1.txt");
       expect(toolUse?.status).toBe("completed");
     });
@@ -1102,7 +1172,7 @@ describe("runStore", () => {
           },
         ],
       };
-      store.runChatMessages.set("run-1:pod-1", [originalMessage]);
+      setPodMessages(store, "run-1", "pod-1", [originalMessage]);
 
       store.handleRunChatToolResult({
         runId: "run-1",
@@ -1113,7 +1183,7 @@ describe("runStore", () => {
         output: "result",
       });
 
-      const messages = store.runChatMessages.get("run-1:pod-1");
+      const messages = getPodMessages(store, "run-1", "pod-1");
       // 陣列中的 message 應為新物件，而非原本的引用
       expect(messages?.[0]).not.toBe(originalMessage);
     });
@@ -1135,7 +1205,7 @@ describe("runStore", () => {
 
     it("messageId 不存在時不應有任何變化", () => {
       const store = useRunStore();
-      store.runChatMessages.set("run-1:pod-1", [
+      setPodMessages(store, "run-1", "pod-1", [
         {
           id: "msg-1",
           role: "assistant",
@@ -1174,9 +1244,8 @@ describe("runStore", () => {
         output: "result",
       });
 
-      const toolUse =
-        store.runChatMessages.get("run-1:pod-1")?.[0]?.subMessages?.[0]
-          ?.toolUse?.[0];
+      const toolUse = getPodMessages(store, "run-1", "pod-1")?.[0]
+        ?.subMessages?.[0]?.toolUse?.[0];
       expect(toolUse?.status).toBe("running");
     });
   });
@@ -1184,30 +1253,30 @@ describe("runStore", () => {
   describe("handleRunChatComplete", () => {
     it("應更新 isPartial=false 並更新 content", () => {
       const store = useRunStore();
-      store.runChatMessages.set("run-1:pod-1", [
+      setPodMessages(store, "run-1", "pod-1", [
         { id: "msg-1", role: "assistant", content: "part", isPartial: true },
       ]);
 
       store.handleRunChatComplete("run-1", "pod-1", "msg-1", "full content");
 
-      const message = store.runChatMessages.get("run-1:pod-1")?.[0];
+      const message = getPodMessages(store, "run-1", "pod-1")?.[0];
       expect(message?.isPartial).toBe(false);
       expect(message?.content).toBe("full content");
     });
 
     it("訊息不存在時不應有任何變化", () => {
       const store = useRunStore();
-      store.runChatMessages.set("run-1:pod-1", []);
+      setPodMessages(store, "run-1", "pod-1", []);
 
       store.handleRunChatComplete("run-1", "pod-1", "non-existent", "content");
 
-      const messages = store.runChatMessages.get("run-1:pod-1");
+      const messages = getPodMessages(store, "run-1", "pod-1");
       expect(messages).toHaveLength(0);
     });
 
     it("complete 時應對 subMessages 做 finalizeSubMessages 合併", () => {
       const store = useRunStore();
-      store.runChatMessages.set("run-1:pod-1", [
+      setPodMessages(store, "run-1", "pod-1", [
         {
           id: "msg-1",
           role: "assistant",
@@ -1244,7 +1313,7 @@ describe("runStore", () => {
 
       store.handleRunChatComplete("run-1", "pod-1", "msg-1", "完成");
 
-      const message = store.runChatMessages.get("run-1:pod-1")?.[0];
+      const message = getPodMessages(store, "run-1", "pod-1")?.[0];
       expect(message?.subMessages).toHaveLength(1);
       expect(message?.subMessages?.[0]?.toolUse).toHaveLength(2);
       expect(
@@ -1256,7 +1325,7 @@ describe("runStore", () => {
 
     it("complete 時應正確設定 fullContent 和 isPartial", () => {
       const store = useRunStore();
-      store.runChatMessages.set("run-1:pod-1", [
+      setPodMessages(store, "run-1", "pod-1", [
         {
           id: "msg-1",
           role: "assistant",
@@ -1267,14 +1336,14 @@ describe("runStore", () => {
 
       store.handleRunChatComplete("run-1", "pod-1", "msg-1", "最終完整內容");
 
-      const message = store.runChatMessages.get("run-1:pod-1")?.[0];
+      const message = getPodMessages(store, "run-1", "pod-1")?.[0];
       expect(message?.content).toBe("最終完整內容");
       expect(message?.isPartial).toBe(false);
     });
 
     it("subMessages 為 undefined 時不應產生副作用", () => {
       const store = useRunStore();
-      store.runChatMessages.set("run-1:pod-1", [
+      setPodMessages(store, "run-1", "pod-1", [
         {
           id: "msg-1",
           role: "assistant",
@@ -1285,7 +1354,7 @@ describe("runStore", () => {
 
       store.handleRunChatComplete("run-1", "pod-1", "msg-1", "最終純文字內容");
 
-      const message = store.runChatMessages.get("run-1:pod-1")?.[0];
+      const message = getPodMessages(store, "run-1", "pod-1")?.[0];
       expect(message?.subMessages).toBeUndefined();
       expect(message?.content).toBe("最終純文字內容");
       expect(message?.isPartial).toBe(false);
@@ -1299,11 +1368,11 @@ describe("runStore", () => {
         content: "streaming...",
         isPartial: true,
       };
-      store.runChatMessages.set("run-1:pod-1", [originalMessage]);
+      setPodMessages(store, "run-1", "pod-1", [originalMessage]);
 
       store.handleRunChatComplete("run-1", "pod-1", "msg-1", "最終內容");
 
-      const messages = store.runChatMessages.get("run-1:pod-1");
+      const messages = getPodMessages(store, "run-1", "pod-1");
       // 陣列中的 message 應為新物件，而非原本的引用
       expect(messages?.[0]).not.toBe(originalMessage);
     });
@@ -1348,7 +1417,7 @@ describe("runStore", () => {
 
       await store.openRunChatModal("run-1", "pod-1");
 
-      const stored = store.runChatMessages.get("run-1:pod-1");
+      const stored = getPodMessages(store, "run-1", "pod-1");
       expect(stored?.[0]?.subMessages).toHaveLength(1);
       expect(stored?.[0]?.subMessages?.[0]?.content).toBe("純文字回覆");
       expect(stored?.[0]?.subMessages?.[0]?.isPartial).toBe(false);
@@ -1388,7 +1457,7 @@ describe("runStore", () => {
 
       await store.openRunChatModal("run-1", "pod-1");
 
-      const stored = store.runChatMessages.get("run-1:pod-1");
+      const stored = getPodMessages(store, "run-1", "pod-1");
       expect(stored?.[0]?.toolUse).toHaveLength(1);
       expect(stored?.[0]?.toolUse?.[0]?.toolName).toBe("Bash");
     });
@@ -1426,7 +1495,7 @@ describe("runStore", () => {
 
       await store.openRunChatModal("run-1", "pod-1");
 
-      const stored = store.runChatMessages.get("run-1:pod-1");
+      const stored = getPodMessages(store, "run-1", "pod-1");
       expect(stored?.[0]?.subMessages?.[0]?.toolUse?.[0]?.status).toBe(
         "completed",
       );
@@ -1436,16 +1505,16 @@ describe("runStore", () => {
   describe("resetOnCanvasSwitch", () => {
     it("應清空所有狀態（含 accumulatedLengthByMessageId）", () => {
       const store = useRunStore();
-      store.runs = [createMockRun({ id: "run-1" })];
+      setRuns(store, [createMockRun({ id: "run-1" })]);
       store.expandedRunIds.add("run-1");
       store.activeRunChatModal = { runId: "run-1", podId: "pod-1" };
-      store.runChatMessages.set("run-1:pod-1", []);
+      setPodMessages(store, "run-1", "pod-1", []);
       store.isHistoryPanelOpen = true;
       store.accumulatedLengthByMessageId.set("msg-1", 10);
 
       store.resetOnCanvasSwitch();
 
-      expect(store.runs).toEqual([]);
+      expect(store.runsById.size).toBe(0);
       expect(store.expandedRunIds.size).toBe(0);
       expect(store.activeRunChatModal).toBeNull();
       expect(store.runChatMessages.size).toBe(0);

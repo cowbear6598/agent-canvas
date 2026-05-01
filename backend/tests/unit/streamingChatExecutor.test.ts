@@ -103,8 +103,7 @@ const POD_ID = "test-pod";
 
 /** 清除 podStore 內部動態 PreparedStatement LRU 快取，防止跨測試 DB 污染 */
 function clearPodStoreCache(): void {
-  type PodStoreTestHooks = { stmtCache: Map<string, unknown> };
-  (podStore as unknown as PodStoreTestHooks).stmtCache.clear();
+  podStore.__clearCacheForTesting();
 }
 
 function insertCanvas(): void {
@@ -354,21 +353,58 @@ describe("executeStreamingChat", () => {
       );
     });
 
-    it("error event（fatal=true）拋出例外終止串流", async () => {
+    it("error event（fatal=true）寫入 system message 並中止串流，但不 throw", async () => {
       const pod = insertClaudePod();
+      const collectedPayloads: unknown[] = [];
+      vi.spyOn(socketService, "emitToCanvas").mockImplementation(
+        (_cId: string, _event: string, payload: unknown) => {
+          collectedPayloads.push(payload);
+        },
+      );
+
       setupProviderMock([
         { type: "error", message: "某致命錯誤", fatal: true },
+        // 後續事件不應被處理（fatal 中止後續 event 處理）
+        { type: "text", content: "不應出現" },
+        { type: "turn_complete" },
       ]);
 
-      await expect(
-        executeStreamingChat({
-          canvasId,
-          podId: pod.id,
-          message,
-          abortable: false,
-          strategy: makeStrategy(),
-        }),
-      ).rejects.toThrow("串流處理發生嚴重錯誤");
+      // 不再 throw：transcript 系統訊息寫入後走正常 finalize 收尾
+      const result = await executeStreamingChat({
+        canvasId,
+        podId: pod.id,
+        message,
+        abortable: false,
+        strategy: makeStrategy(),
+      });
+
+      expect(result.aborted).toBe(false);
+
+      // system message 已寫入該 pod transcript（podId 正確）
+      const systemPayloads = collectedPayloads.filter(
+        (p) =>
+          typeof p === "object" &&
+          p !== null &&
+          "role" in p &&
+          (p as { role?: string }).role === "system" &&
+          "podId" in p &&
+          (p as { podId?: string }).podId === pod.id &&
+          "content" in p &&
+          typeof (p as { content: unknown }).content === "string" &&
+          (p as { content: string }).content.includes("某致命錯誤"),
+      );
+      expect(systemPayloads.length).toBeGreaterThan(0);
+
+      // 後續 text/turn_complete 不應被處理（沒有 "不應出現" 文字 broadcast）
+      const hasUnexpectedText = collectedPayloads.some(
+        (p) =>
+          typeof p === "object" &&
+          p !== null &&
+          "content" in p &&
+          typeof (p as { content: unknown }).content === "string" &&
+          (p as { content: string }).content.includes("不應出現"),
+      );
+      expect(hasUnexpectedText).toBe(false);
     });
 
     it("error event（fatal=false）不拋出、繼續消費後續事件", async () => {
@@ -766,7 +802,8 @@ describe("executeStreamingChat", () => {
         expect.objectContaining({
           podId: pod.id,
           role: "system",
-          content: "工作目錄不在允許範圍內",
+          // 已知業務錯誤的 content 改為固定中文訊息，不再透傳 error.message
+          content: "工作目錄路徑無效或存取遭拒，請確認 Pod 設定後重試。",
           metadata: expect.objectContaining({
             code: "INVALID_PATH",
             severity: "fatal",
@@ -915,7 +952,7 @@ describe("executeStreamingChat", () => {
       );
     });
 
-    it("error fatal=true 會先寫入 system message 再拋出 Error", async () => {
+    it("error fatal=true 會寫入 system message 並中止串流，但不 throw", async () => {
       const pod = insertCodexPod();
       const chatMock = vi.fn(() =>
         makeEventStream([
@@ -939,15 +976,16 @@ describe("executeStreamingChat", () => {
         },
       );
 
-      await expect(
-        executeStreamingChat({
-          canvasId,
-          podId: pod.id,
-          message,
-          abortable: false,
-          strategy: makeStrategy(),
-        }),
-      ).rejects.toThrow("串流處理發生嚴重錯誤");
+      // 不再 throw 出去，走正常 finalize 收尾路徑
+      const result = await executeStreamingChat({
+        canvasId,
+        podId: pod.id,
+        message,
+        abortable: false,
+        strategy: makeStrategy(),
+      });
+
+      expect(result.aborted).toBe(false);
 
       const systemPayloads = collectedPayloads.filter(
         (p) =>
@@ -1205,7 +1243,8 @@ describe("executeStreamingChat", () => {
         expect.objectContaining({
           podId: pod.id,
           role: "system",
-          content: "工作目錄驗證失敗",
+          // 已知業務錯誤的 content 改為固定中文訊息，不再透傳 error.message
+          content: "工作目錄路徑無效或存取遭拒，請確認 Pod 設定後重試。",
           metadata: expect.objectContaining({
             code: "INVALID_PATH",
             severity: "fatal",

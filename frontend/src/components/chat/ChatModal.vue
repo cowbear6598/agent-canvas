@@ -77,6 +77,7 @@ const handleSend = async (
       isPartial: false,
       role: "system",
       metadata: {
+        provider: props.pod.provider ?? "unknown",
         code: null,
         severity: "error",
         rawContent: errorMessage,

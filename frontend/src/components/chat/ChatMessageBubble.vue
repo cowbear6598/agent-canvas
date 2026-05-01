@@ -143,14 +143,12 @@ const closeToolModal = (): void => {
           </span>
         </div>
 
-        <div
-          v-if="hasToolUse"
-          class="mb-2 flex flex-wrap gap-1.5"
-        >
+        <div v-if="hasToolUse" class="mb-2 flex flex-wrap gap-1.5">
           <component
             :is="isClickable(tool.status) ? 'button' : 'div'"
             v-for="tool in uniqueToolUse"
             :key="tool.toolUseId"
+            :data-testid="`tool-tag-state-${tool.status}`"
             :class="[
               'inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-mono border',
               getToolTagClass(tool.status),
@@ -176,10 +174,7 @@ const closeToolModal = (): void => {
           </component>
         </div>
 
-        <div
-          v-if="isSummarized"
-          class="message-summary-badge"
-        >
+        <div v-if="isSummarized" class="message-summary-badge">
           <FileText :size="10" />
           <span>{{ $t("chat.summarizedBadge") }}</span>
         </div>

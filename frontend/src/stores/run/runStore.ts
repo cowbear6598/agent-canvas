@@ -30,7 +30,6 @@ import type {
   RunPodMessagesResultPayload,
 } from "@/types/websocket/responses";
 import {
-  buildRunPodCacheKey,
   mergeToolResultIntoMessage,
   mergeToolUseIntoMessage,
   upsertMessage,
@@ -46,52 +45,68 @@ import {
 } from "@/stores/run/runStoreHelpers";
 import { useToast } from "@/composables/useToast";
 import { t } from "@/i18n";
+import { logger } from "@/utils/logger";
 
 interface RunState {
-  runs: WorkflowRun[];
+  /** #38 runs 改 Map：key 為 run.id，提供 O(1) 插入 / 刪除 / 查找。
+   *  對外透過 runs getter 取出陣列，對外 API 不變。 */
+  runsById: Map<string, WorkflowRun>;
   isHistoryPanelOpen: boolean;
   expandedRunIds: Set<string>;
   activeRunChatModal: { runId: string; podId: string } | null;
-  runChatMessages: Map<string, Message[]>;
+  /** #44 runChatMessages 改巢狀 Map：外層 key 為 runId，內層 key 為 podId。
+   *  removeRun 時只需 delete(runId)，不再需要遍歷所有 key。 */
+  runChatMessages: Map<string, Map<string, Message[]>>;
   isLoadingPodMessages: boolean;
   accumulatedLengthByMessageId: Map<string, number>;
+  /** 串流期間的 O(1) 定位快取：key 為 messageId，value 為陣列 index。
+   *  complete 時或訊息被刪除時需同步清除，避免 stale index。 */
+  messageIndexCache: Map<string, number>;
 }
 
 export const useRunStore = defineStore("run", {
   state: (): RunState => ({
-    runs: [],
+    runsById: new Map(),
     isHistoryPanelOpen: false,
     expandedRunIds: new Set(),
     activeRunChatModal: null,
     runChatMessages: new Map(),
     isLoadingPodMessages: false,
     accumulatedLengthByMessageId: new Map(),
+    messageIndexCache: new Map(),
   }),
 
   getters: {
+    /** runs 陣列（由 runsById Map 派生）。外層元件透過此 getter 取得陣列語意。 */
+    runs: (state): WorkflowRun[] => Array.from(state.runsById.values()),
+
     sortedRuns: (state): WorkflowRun[] => {
-      return [...state.runs]
-        .sort(
-          (a, b) =>
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-        )
-        .slice(0, MAX_RUNS_PER_CANVAS);
+      // Schwartzian transform：先將 createdAt 轉為時間戳，避免每次比較都重新建立 Date 物件
+      return Array.from(state.runsById.values())
+        .map((run) => ({ run, ts: new Date(run.createdAt).getTime() }))
+        .sort((a, b) => b.ts - a.ts)
+        .slice(0, MAX_RUNS_PER_CANVAS)
+        .map(({ run }) => run);
     },
 
     runningRunsCount: (state): number => {
-      return state.runs.filter((run) => run.status === "running").length;
+      let count = 0;
+      for (const run of state.runsById.values()) {
+        if (run.status === "running") count++;
+      }
+      return count;
     },
 
     getRunById:
       (state) =>
       (runId: string): WorkflowRun | undefined => {
-        return state.runs.find((run) => run.id === runId);
+        return state.runsById.get(runId);
       },
 
     getActiveRunChatMessages(state): Message[] {
       if (!state.activeRunChatModal) return [];
       const { runId, podId } = state.activeRunChatModal;
-      return state.runChatMessages.get(buildRunPodCacheKey(runId, podId)) ?? [];
+      return state.runChatMessages.get(runId)?.get(podId) ?? [];
     },
   },
 
@@ -111,22 +126,31 @@ export const useRunStore = defineStore("run", {
         });
 
         if (response.success && response.runs) {
-          this.runs = response.runs;
+          this.runsById = new Map(response.runs.map((r) => [r.id, r]));
         }
-      } catch {
+      } catch (e) {
+        logger.error("[RunStore] 載入 Run 歷史失敗", e);
         const { showErrorToast } = useToast();
         showErrorToast("Run", t("store.run.loadFailed"));
       }
     },
 
     addRun(run: WorkflowRun): void {
-      const exists = this.runs.some((r) => r.id === run.id);
-      if (exists) return;
+      // runsById Map 提供 O(1) 重複檢查
+      if (this.runsById.has(run.id)) return;
 
-      this.runs.unshift(run);
+      this.runsById.set(run.id, run);
 
-      if (this.runs.length > MAX_RUNS_PER_CANVAS) {
-        this.runs = this.runs.slice(0, MAX_RUNS_PER_CANVAS);
+      // 超過上限時移除最舊的 run（按 createdAt 升冪取末尾）
+      if (this.runsById.size > MAX_RUNS_PER_CANVAS) {
+        const sorted = Array.from(this.runsById.values()).sort(
+          (a, b) =>
+            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+        );
+        // 移除最舊的一筆（超出一筆就夠）
+        if (sorted[0]) {
+          this.runsById.delete(sorted[0].id);
+        }
       }
     },
 
@@ -135,7 +159,8 @@ export const useRunStore = defineStore("run", {
       status: RunStatus,
       completedAt?: string,
     ): void {
-      const run = this.runs.find((r) => r.id === runId);
+      // runsById Map 提供 O(1) 查找，直接修改物件（Pinia reactive Map 會追蹤屬性變更）
+      const run = this.runsById.get(runId);
       if (!run) return;
 
       run.status = status;
@@ -155,7 +180,8 @@ export const useRunStore = defineStore("run", {
       autoPathwaySettled?: PathwayState;
       directPathwaySettled?: PathwayState;
     }): void {
-      const run = this.runs.find((r) => r.id === payload.runId);
+      // runsById Map 提供 O(1) 查找
+      const run = this.runsById.get(payload.runId);
       if (!run) return;
 
       const podInstance = run.podInstances.find(
@@ -185,18 +211,16 @@ export const useRunStore = defineStore("run", {
     },
 
     removeRun(runId: string): void {
-      this.runs = this.runs.filter((r) => r.id !== runId);
+      // O(1) 刪除（Map），不再需要 filter 整個陣列
+      this.runsById.delete(runId);
       this.expandedRunIds.delete(runId);
 
       if (this.activeRunChatModal?.runId === runId) {
         this.activeRunChatModal = null;
       }
 
-      for (const key of this.runChatMessages.keys()) {
-        if (key.startsWith(`${runId}:`)) {
-          this.runChatMessages.delete(key);
-        }
-      }
+      // #44 巢狀 Map：一次 delete(runId) 清除該 run 所有 pod 的訊息
+      this.runChatMessages.delete(runId);
     },
 
     deleteRun(runId: string): void {
@@ -252,10 +276,13 @@ export const useRunStore = defineStore("run", {
         });
 
         if (response.success && response.messages) {
-          this.runChatMessages.set(
-            buildRunPodCacheKey(runId, podId),
-            response.messages.map(toMessage),
-          );
+          // #44 巢狀 Map：取得或建立 runId 子 Map 後寫入 podId 訊息
+          let podMap = this.runChatMessages.get(runId);
+          if (!podMap) {
+            podMap = new Map();
+            this.runChatMessages.set(runId, podMap);
+          }
+          podMap.set(podId, response.messages.map(toMessage));
         }
       } finally {
         this.isLoadingPodMessages = false;
@@ -275,14 +302,22 @@ export const useRunStore = defineStore("run", {
       role: MessageRole,
       metadata?: SystemMessageMetadata,
     ): void {
-      const key = buildRunPodCacheKey(runId, podId);
-      const messages = this.runChatMessages.get(key) ?? [];
+      // #44 巢狀 Map：取得 podId 層訊息陣列
+      let podMap = this.runChatMessages.get(runId);
+      if (!podMap) {
+        podMap = new Map();
+        this.runChatMessages.set(runId, podMap);
+      }
+      const messages = podMap.get(podId) ?? [];
 
       const lastLength = this.accumulatedLengthByMessageId.get(messageId) ?? 0;
       // 後端重傳導致 content 長度倒退時，重置累積長度並以整段 content 作為 delta
       const delta =
         content.length < lastLength ? content : content.slice(lastLength);
       this.accumulatedLengthByMessageId.set(messageId, content.length);
+
+      // messageIndexCache：串流期間提供 O(1) 定位，避免 findIndex 線性掃描
+      const knownIndex = this.messageIndexCache.get(messageId);
 
       upsertMessage(
         messages,
@@ -292,9 +327,18 @@ export const useRunStore = defineStore("run", {
         role,
         delta,
         metadata,
+        knownIndex,
       );
 
-      this.runChatMessages.set(key, [...messages]);
+      // 新訊息被 push 到陣列末尾，快取其 index
+      if (knownIndex === undefined) {
+        const newIndex = messages.findIndex((m) => m.id === messageId);
+        if (newIndex !== -1) {
+          this.messageIndexCache.set(messageId, newIndex);
+        }
+      }
+
+      podMap.set(podId, [...messages]);
     },
 
     handleRunChatToolUse(payload: {
@@ -305,8 +349,12 @@ export const useRunStore = defineStore("run", {
       toolName: string;
       input: Record<string, unknown>;
     }): void {
-      const key = buildRunPodCacheKey(payload.runId, payload.podId);
-      const messages = this.runChatMessages.get(key) ?? [];
+      let podMap = this.runChatMessages.get(payload.runId);
+      if (!podMap) {
+        podMap = new Map();
+        this.runChatMessages.set(payload.runId, podMap);
+      }
+      const messages = podMap.get(payload.podId) ?? [];
 
       const toolUseInfo: ToolUseInfo = {
         toolUseId: payload.toolUseId,
@@ -321,7 +369,7 @@ export const useRunStore = defineStore("run", {
 
       // 訊息尚不存在時（tool use 先於 text 到達），建立新 assistant 訊息
       if (messageIndex === -1) {
-        this.runChatMessages.set(key, [
+        podMap.set(payload.podId, [
           ...messages,
           createAssistantMessageWithTool(payload.messageId, toolUseInfo),
         ]);
@@ -341,7 +389,7 @@ export const useRunStore = defineStore("run", {
         message,
         toolUseInfo,
       );
-      this.runChatMessages.set(key, updatedMessages);
+      podMap.set(payload.podId, updatedMessages);
     },
 
     handleRunChatToolResult(payload: {
@@ -352,8 +400,8 @@ export const useRunStore = defineStore("run", {
       toolName: string;
       output: string;
     }): void {
-      const key = buildRunPodCacheKey(payload.runId, payload.podId);
-      const messages = this.runChatMessages.get(key);
+      const podMap = this.runChatMessages.get(payload.runId);
+      const messages = podMap?.get(payload.podId);
       if (!messages) return;
 
       const messageIndex = messages.findIndex(
@@ -370,7 +418,7 @@ export const useRunStore = defineStore("run", {
         payload.toolUseId,
         payload.output,
       );
-      this.runChatMessages.set(key, updatedMessages);
+      podMap!.set(payload.podId, updatedMessages);
     },
 
     handleRunChatComplete(
@@ -379,14 +427,16 @@ export const useRunStore = defineStore("run", {
       messageId: string,
       fullContent: string,
     ): void {
-      const key = buildRunPodCacheKey(runId, podId);
-      const messages = this.runChatMessages.get(key);
+      const podMap = this.runChatMessages.get(runId);
+      const messages = podMap?.get(podId);
       if (!messages) return;
 
       const messageIndex = messages.findIndex((m) => m.id === messageId);
       if (messageIndex === -1) return;
 
       this.accumulatedLengthByMessageId.delete(messageId);
+      // complete 後清除 index 快取，防止 stale 快取污染後續串流
+      this.messageIndexCache.delete(messageId);
 
       // findIndex 已確認 index 有效，斷言元素一定存在
       const message = messages[messageIndex] as Message;
@@ -400,11 +450,11 @@ export const useRunStore = defineStore("run", {
         updatedToolUse,
         finalizedSubMessages,
       );
-      this.runChatMessages.set(key, updatedMessages);
+      podMap!.set(podId, updatedMessages);
     },
 
     resetOnCanvasSwitch(): void {
-      this.runs = [];
+      this.runsById = new Map();
       this.expandedRunIds = new Set();
       this.activeRunChatModal = null;
       this.runChatMessages = new Map();

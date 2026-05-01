@@ -238,7 +238,7 @@ describe("claudeProvider.chat()", () => {
     expect(tcr.output).toBe("file1.ts\nfile2.ts");
   });
 
-  // ── Case 3：result/error → error event ──────────────────────────────
+  // ── Case 3：result/error → error event（fatal=true，AI 終態錯誤）───
   it("result/error 應產生 error event（fatal=true）", async () => {
     mockQueryImpl = async function* () {
       yield makeSystemInit();
@@ -251,6 +251,7 @@ describe("claudeProvider.chat()", () => {
     const errorEvent = events.find((e) => e.type === "error");
     expect(errorEvent).toBeDefined();
     const e = errorEvent as Extract<NormalizedEvent, { type: "error" }>;
+    // AI 終態錯誤標 fatal=true，由 streamingChatExecutor 主迴圈 break，transcript system message 已寫入
     expect(e.fatal).toBe(true);
   });
 

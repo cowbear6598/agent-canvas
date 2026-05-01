@@ -17,11 +17,14 @@ export function buildRunPodCacheKey(runId: string, podId: string): string {
   return `${runId}:${podId}`;
 }
 
+/** sub-message ID 分隔符，統一定義以避免散落的 magic string */
+const SUB_MESSAGE_ID_SEPARATOR = "-";
+
 export function buildSubMessageId(
   parentMessageId: string,
   toolUseId: string | undefined,
 ): string {
-  return `${parentMessageId}-${toolUseId ?? "no-tool"}`;
+  return `${parentMessageId}${SUB_MESSAGE_ID_SEPARATOR}${toolUseId ?? "none"}`;
 }
 
 /**
@@ -88,8 +91,30 @@ export function mergeToolResultIntoMessage(
 }
 
 /**
+ * #42 反向索引：以 toolUseId 為 key，快速定位 {subIndex, toolIndex}。
+ * 在 applyToolResultToMessage 中一次建立後作 O(1) 查找，取代雙層 findIndex。
+ */
+function buildToolReverseIndex(
+  subMessages: Message["subMessages"],
+): Map<string, { subIndex: number; toolIndex: number }> {
+  const index = new Map<string, { subIndex: number; toolIndex: number }>();
+  if (!subMessages) return index;
+  for (let si = 0; si < subMessages.length; si++) {
+    const toolUse = subMessages[si]?.toolUse;
+    if (!toolUse) continue;
+    for (let ti = 0; ti < toolUse.length; ti++) {
+      const id = toolUse[ti]?.toolUseId;
+      if (id) index.set(id, { subIndex: si, toolIndex: ti });
+    }
+  }
+  return index;
+}
+
+/**
  * 不可變地將 tool result 套用到 message 中對應的 toolUse entry。
  * 回傳新的 Message 物件；若找不到對應 toolUseId 或無 subMessages，回傳原始 message。
+ *
+ * 內部建立反向索引 Map<toolUseId, {subIndex, toolIndex}>，讓更新路徑為 O(1)。
  */
 export function applyToolResultToMessage(
   message: Message,
@@ -100,31 +125,33 @@ export function applyToolResultToMessage(
 ): Message {
   if (!message.subMessages) return message;
 
-  for (let i = 0; i < message.subMessages.length; i++) {
-    const subMessage = message.subMessages[i]!;
-    if (!subMessage.toolUse) continue;
+  // 一次性建立反向索引，O(n) 建立後 O(1) 查找
+  const reverseIndex = buildToolReverseIndex(message.subMessages);
+  const pos = reverseIndex.get(payload.toolUseId);
+  if (!pos) return message;
 
-    const toolIndex = subMessage.toolUse.findIndex(
-      (t) => t.toolUseId === payload.toolUseId,
-    );
-    if (toolIndex === -1) continue;
+  const { subIndex, toolIndex } = pos;
+  const subMessage = message.subMessages[subIndex]!;
 
-    const updatedToolUse = subMessage.toolUse.map((t, idx) =>
-      idx === toolIndex
-        ? { ...t, output: payload.output, status: "completed" as const }
-        : t,
-    );
+  const updatedToolUse = subMessage.toolUse!.map((t, idx) =>
+    idx === toolIndex
+      ? { ...t, output: payload.output, status: "completed" as const }
+      : t,
+  );
 
-    const updatedSubMessages = message.subMessages.map((sub, idx) =>
-      idx === i ? { ...sub, toolUse: updatedToolUse } : sub,
-    );
+  const updatedSubMessages = message.subMessages.map((sub, idx) =>
+    idx === subIndex ? { ...sub, toolUse: updatedToolUse } : sub,
+  );
 
-    return { ...message, subMessages: updatedSubMessages };
-  }
-
-  return message;
+  return { ...message, subMessages: updatedSubMessages };
 }
 
+/**
+ * 將訊息插入或更新 messages 陣列。
+ *
+ * @param knownIndex 已知的陣列 index 提示（串流期間由呼叫端維護 Map<messageId, index> 快取）；
+ *   若提供且 messages[knownIndex].id === messageId 則跳過 findIndex，達成 O(1) 定位。
+ */
 export function upsertMessage(
   messages: Message[],
   messageId: string,
@@ -133,8 +160,13 @@ export function upsertMessage(
   role: MessageRole,
   delta?: string,
   metadata?: SystemMessageMetadata,
+  knownIndex?: number,
 ): void {
-  const existingIndex = messages.findIndex((m) => m.id === messageId);
+  // 若呼叫端提供了快取 index 且仍有效，直接用來定位；否則回退 findIndex
+  const existingIndex =
+    knownIndex !== undefined && messages[knownIndex]?.id === messageId
+      ? knownIndex
+      : messages.findIndex((m) => m.id === messageId);
   if (existingIndex !== -1) {
     const existing = messages[existingIndex];
     if (existing) {

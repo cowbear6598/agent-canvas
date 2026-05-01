@@ -13,6 +13,7 @@
  *   {"type":"error","message":"..."}
  */
 
+import { buildProviderSystemError } from "./types.js";
 import type { NormalizedEvent } from "./types.js";
 
 // ── Codex JSON 事件原始型別 ────────────────────────────────────────
@@ -87,30 +88,14 @@ interface CodexCommandExecutionItem {
   status?: string;
 }
 
+/** Codex normalizer 專用的系統錯誤建立 helper（委派給共用 buildProviderSystemError） */
 function buildCodexSystemError(params: {
   content: string;
   fatal: boolean;
   code: string;
   rawContent?: string;
 }): Extract<NormalizedEvent, { type: "error" }> {
-  const { content, fatal, code, rawContent } = params;
-
-  return {
-    type: "error",
-    message: content,
-    fatal,
-    code,
-    systemMessage: {
-      role: "system",
-      content,
-      metadata: {
-        provider: "codex",
-        code,
-        severity: fatal ? "fatal" : "error",
-        rawContent: rawContent ?? content,
-      },
-    },
-  };
+  return buildProviderSystemError("codex", params);
 }
 
 // ── 主要解析函式 ──────────────────────────────────────────────────
@@ -125,7 +110,7 @@ function buildCodexSystemError(params: {
  * - `item.started`   + item_type=`command_execution` → `tool_call_start`
  * - `item.completed` + item_type=`command_execution` → `tool_call_result`
  * - `turn.completed`                              → `turn_complete`
- * - `error`                                       → `error`（fatal=true）
+ * - `error`                                       → `error`（fatal=true，AI 終態錯誤代表本輪結束，交由 transcript system message 呈現）
  * - 其他                                           → null（忽略）
  *
  * @param line - stdout 的一行字串

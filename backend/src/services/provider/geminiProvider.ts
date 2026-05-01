@@ -25,6 +25,7 @@ import {
   GEMINI_CAPABILITIES,
 } from "./capabilities.js";
 import { normalize } from "./geminiNormalizer.js";
+import { buildProviderSystemError } from "./types.js";
 import type {
   AgentProvider,
   ChatRequestContext,
@@ -111,30 +112,14 @@ export function redactStderr(text: string): string {
 // 白名單環境變數，已排除 process.env 中其他敏感資料
 const GEMINI_ENV = buildGeminiEnv();
 
+/** Gemini provider 專用的系統錯誤建立 helper（委派給共用 buildProviderSystemError） */
 function buildGeminiSystemError(params: {
   content: string;
   fatal: boolean;
   code: string;
   rawContent?: string;
 }): Extract<NormalizedEvent, { type: "error" }> {
-  const { content, fatal, code, rawContent } = params;
-
-  return {
-    type: "error",
-    message: content,
-    fatal,
-    code,
-    systemMessage: {
-      role: "system",
-      content,
-      metadata: {
-        provider: "gemini",
-        code,
-        severity: fatal ? "fatal" : "error",
-        rawContent: rawContent ?? content,
-      },
-    },
-  };
+  return buildProviderSystemError("gemini", params);
 }
 
 /**
@@ -541,17 +526,26 @@ type SubprocessFailure = {
 /**
  * 為已 spawn 的 subprocess 設置 abort signal 處理。
  * 負責監聽 abort 事件並在觸發時呼叫 proc.kill()。
- * 回傳 cleanup 函式（移除 listener），由呼叫端在 try-finally 中呼叫。
+ * 回傳 cleanup 函式（移除 listener 並 kill 子程序），由呼叫端在 try-finally 中呼叫。
+ *
+ * cleanup() 會在 chat() 的 finally 區塊執行：
+ *   - generator 正常完成：proc 已自行退出，killProc 因 ESRCH 直接忽略
+ *   - generator 因主迴圈 break / abort 提前 return：必須主動 kill 才不會留下 zombie process
  *
  * @param proc 已啟動的 subprocess
  * @param abortSignal abort 控制信號
- * @returns cleanup 函式，必須在 try-finally 中呼叫以移除 listener
+ * @returns cleanup 函式，必須在 try-finally 中呼叫以移除 listener 並 kill 子程序
  */
 function attachAbortHandler(
   proc: Bun.Subprocess<"ignore", "pipe", "pipe">,
   abortSignal: AbortSignal,
 ): () => void {
-  const onAbort = (): void => {
+  // 旗標去重：abort listener 與 cleanup() 都會呼叫 killProc，
+  // 必須避免實際 proc.kill() 被呼叫超過一次。
+  let killed = false;
+  const killProc = (): void => {
+    if (killed) return;
+    killed = true;
     try {
       proc.kill();
     } catch (err: unknown) {
@@ -570,15 +564,16 @@ function attachAbortHandler(
     }
   };
 
-  abortSignal.addEventListener("abort", onAbort, { once: true });
+  abortSignal.addEventListener("abort", killProc, { once: true });
 
-  // spawn 前已 abort：listener 不會自動觸發，需主動呼叫 onAbort
+  // spawn 前已 abort：listener 不會自動觸發，需主動呼叫 killProc
   if (abortSignal.aborted) {
-    onAbort();
+    killProc();
   }
 
   return (): void => {
-    abortSignal.removeEventListener("abort", onAbort);
+    abortSignal.removeEventListener("abort", killProc);
+    killProc();
   };
 }
 
@@ -713,6 +708,9 @@ export const geminiProvider: AgentProvider<GeminiOptions> = {
         : DEFAULT_OPTIONS.model;
 
     // ── plugins 計算 ──────────────────────────────────────────────
+    // per-request memo：scanInstalledPlugins / readGeminiMcpServers 在同一次 buildOptions
+    // 呼叫中各自只執行一次（分別由 pod.pluginIds.length / pod.mcpServerNames.length 條件守衛），
+    // 不需要跨請求快取。
     let plugins: string[] = [];
     if (pod.pluginIds.length > 0) {
       const scan = scanInstalledPlugins("gemini");

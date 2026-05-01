@@ -6,6 +6,7 @@ import type {
   MessageRole,
   SubMessage,
   SystemMessageMetadata,
+  ToolUseInfo,
 } from "@/types/chat";
 import { isValidToolUseStatus } from "@/types/chat";
 import type {
@@ -125,15 +126,23 @@ export interface ChatMessageActions {
   handleMessagesClearedEvent: (payload: PodMessagesClearedPayload) => void;
 }
 
-export function createMessageActions(
-  store: ChatStoreInstance,
-): ChatMessageActions {
-  const toolTrackingActions = createToolTrackingActions(store);
-  const messageCompletionActions = createMessageCompletionActions(
-    store,
-    (podId, isTyping) => setTyping(store, podId, isTyping),
-  );
+// ─── 訊息建立（Creation）────────────────────────────────────────────────────
 
+/**
+ * 負責 user message 建立與 streaming 新訊息的插入。
+ * 包含：addUserMessage、addRemoteUserMessage、handleChatMessage、
+ *       addNewChatMessage、updateExistingChatMessage。
+ */
+function createMessageCreationActions(
+  store: ChatStoreInstance,
+): Pick<
+  ChatMessageActions,
+  | "addUserMessage"
+  | "addRemoteUserMessage"
+  | "handleChatMessage"
+  | "addNewChatMessage"
+  | "updateExistingChatMessage"
+> {
   function appendUserMessageToStore(podId: string, message: Message): void {
     const podStore = usePodStore();
     const pod = podStore.pods.find((p) => p.id === podId);
@@ -172,39 +181,6 @@ export function createMessageActions(
     appendUserMessageToStore(podId, userMessage);
   };
 
-  const handleChatMessage = (payload: PodChatMessagePayload): void => {
-    const { podId, messageId, content, isPartial, role, metadata } = payload;
-    const messages = getMessages(store, podId);
-    const messageIndex = findMessageIndex(messages, messageId);
-
-    const lastLength = store.accumulatedLengthByMessageId.get(messageId) ?? 0;
-    const delta = content.slice(lastLength);
-    store.accumulatedLengthByMessageId.set(messageId, content.length);
-
-    if (messageIndex === -1) {
-      addNewChatMessage(
-        podId,
-        messageId,
-        content,
-        isPartial,
-        role,
-        delta,
-        metadata,
-      );
-      return;
-    }
-
-    updateExistingChatMessage(
-      podId,
-      messages,
-      messageIndex,
-      content,
-      isPartial,
-      delta,
-      metadata,
-    );
-  };
-
   function buildNewMessage(
     messageId: string,
     effectiveRole: MessageRole,
@@ -228,6 +204,23 @@ export function createMessageActions(
         : {};
 
     return { ...baseMessage, ...shape };
+  }
+
+  /**
+   * 當角色為 user 時，同步更新 Pod 的 output 摘要（副作用封裝）。
+   * assistant / system 角色不做任何事。
+   */
+  function notifyPodOutputIfUser(
+    effectiveRole: MessageRole,
+    podId: string,
+    content: string,
+  ): void {
+    if (effectiveRole !== "user") return;
+    const podStore = usePodStore();
+    const pod = podStore.pods.find((p) => p.id === podId);
+    if (pod) {
+      appendUserOutputToPod(pod, content);
+    }
   }
 
   const addNewChatMessage = (
@@ -257,13 +250,7 @@ export function createMessageActions(
       setTyping(store, podId, true);
     }
 
-    if (effectiveRole === "user") {
-      const podStore = usePodStore();
-      const pod = podStore.pods.find((p) => p.id === podId);
-      if (pod) {
-        appendUserOutputToPod(pod, content);
-      }
-    }
+    notifyPodOutputIfUser(effectiveRole, podId, content);
   };
 
   const updateExistingChatMessage = (
@@ -303,6 +290,121 @@ export function createMessageActions(
     }
   };
 
+  const handleChatMessage = (payload: PodChatMessagePayload): void => {
+    const { podId, messageId, content, isPartial, role, metadata } = payload;
+    const messages = getMessages(store, podId);
+    const messageIndex = findMessageIndex(messages, messageId);
+
+    const lastLength = store.accumulatedLengthByMessageId.get(messageId) ?? 0;
+    const delta = content.slice(lastLength);
+    store.accumulatedLengthByMessageId.set(messageId, content.length);
+
+    if (messageIndex === -1) {
+      addNewChatMessage(
+        podId,
+        messageId,
+        content,
+        isPartial,
+        role,
+        delta,
+        metadata,
+      );
+      return;
+    }
+
+    updateExistingChatMessage(
+      podId,
+      messages,
+      messageIndex,
+      content,
+      isPartial,
+      delta,
+      metadata,
+    );
+  };
+
+  return {
+    addUserMessage,
+    addRemoteUserMessage,
+    handleChatMessage,
+    addNewChatMessage,
+    updateExistingChatMessage,
+  };
+}
+
+// ─── 訊息更新與 Streaming（Update）──────────────────────────────────────────
+
+/**
+ * 負責工具追蹤（tool use/result）與串流完成（complete/aborted/finalize）。
+ * 組合 createToolTrackingActions 與 createMessageCompletionActions，
+ * 並提供 setTyping bound wrapper。
+ */
+function createMessageUpdateActions(
+  store: ChatStoreInstance,
+): Pick<
+  ChatMessageActions,
+  | "handleChatToolUse"
+  | "createMessageWithToolUse"
+  | "addToolUseToMessage"
+  | "handleChatToolResult"
+  | "updateToolUseResult"
+  | "handleChatComplete"
+  | "handleChatAborted"
+  | "finalizeStreaming"
+  | "completeMessage"
+  | "updatePodOutput"
+  | "setTyping"
+> {
+  const toolTrackingActions = createToolTrackingActions(store);
+  const messageCompletionActions = createMessageCompletionActions(
+    store,
+    (podId, isTyping) => setTyping(store, podId, isTyping),
+  );
+
+  const boundSetTyping = (podId: string, isTyping: boolean): void =>
+    setTyping(store, podId, isTyping);
+
+  return {
+    ...toolTrackingActions,
+    ...messageCompletionActions,
+    setTyping: boundSetTyping,
+  };
+}
+
+// ─── 歷史載入轉換（History）─────────────────────────────────────────────────
+
+/**
+ * 負責歷史訊息的轉換、Pod 訊息設定與清除。
+ * 包含：convertPersistedToMessage、setPodMessages、
+ *       clearMessagesByPodIds、handleMessagesClearedEvent。
+ */
+function createMessageHistoryActions(
+  store: ChatStoreInstance,
+): Pick<
+  ChatMessageActions,
+  | "convertPersistedToMessage"
+  | "setPodMessages"
+  | "clearMessagesByPodIds"
+  | "handleMessagesClearedEvent"
+> {
+  /**
+   * 將 PersistedMessage 中的 toolUse 陣列轉換為前端 ToolUseInfo[]。
+   * 負責低層工具狀態轉換，包含 isValidToolUseStatus 的合法性驗證（不合法時 fallback 為 "completed"）。
+   */
+  function convertPersistedToolUse(
+    toolUse: NonNullable<
+      NonNullable<PersistedMessage["subMessages"]>[number]["toolUse"]
+    >,
+  ): ToolUseInfo[] {
+    return toolUse.map((t) => ({
+      toolUseId: t.toolUseId,
+      toolName: t.toolName,
+      input: t.input,
+      output: t.output,
+      status: isValidToolUseStatus(t.status) ? t.status : "completed",
+    }));
+  }
+
   const convertSubMessages = (
     persistedMessage: PersistedMessage,
   ): Pick<Message, "subMessages" | "toolUse"> => {
@@ -330,13 +432,7 @@ export function createMessageActions(
         id: sub.id,
         content: sub.content,
         isPartial: false,
-        toolUse: sub.toolUse?.map((t) => ({
-          toolUseId: t.toolUseId,
-          toolName: t.toolName,
-          input: t.input,
-          output: t.output,
-          status: isValidToolUseStatus(t.status) ? t.status : "completed",
-        })),
+        toolUse: sub.toolUse ? convertPersistedToolUse(sub.toolUse) : undefined,
       })),
     };
 
@@ -384,21 +480,32 @@ export function createMessageActions(
     podStore.clearPodOutputsByIds([payload.podId]);
   };
 
-  const boundSetTyping = (podId: string, isTyping: boolean): void =>
-    setTyping(store, podId, isTyping);
-
   return {
-    addUserMessage,
-    addRemoteUserMessage,
-    handleChatMessage,
-    addNewChatMessage,
-    updateExistingChatMessage,
-    ...toolTrackingActions,
-    ...messageCompletionActions,
     convertPersistedToMessage,
     setPodMessages,
-    setTyping: boundSetTyping,
     clearMessagesByPodIds,
     handleMessagesClearedEvent,
+  };
+}
+
+// ─── 對外組合入口（保持 API 不變）──────────────────────────────────────────
+
+/**
+ * 組合三個子 actions 工廠並 re-export，保持對外 API 與行為不變。
+ * - createMessageCreationActions：訊息建立
+ * - createMessageUpdateActions：訊息更新/streaming（工具追蹤 + 完成）
+ * - createMessageHistoryActions：歷史載入轉換與清除
+ */
+export function createMessageActions(
+  store: ChatStoreInstance,
+): ChatMessageActions {
+  const creationActions = createMessageCreationActions(store);
+  const updateActions = createMessageUpdateActions(store);
+  const historyActions = createMessageHistoryActions(store);
+
+  return {
+    ...creationActions,
+    ...updateActions,
+    ...historyActions,
   };
 }

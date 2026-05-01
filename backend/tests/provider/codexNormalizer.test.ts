@@ -116,8 +116,8 @@ describe("CodexNormalizer - normalize()", () => {
     expect(result?.type).toBe("turn_complete");
   });
 
-  // ── Case 7：error envelope → error (fatal=true) ────────────────────
-  it("error envelope 應映射為 error，fatal=true", () => {
+  // ── Case 7：error envelope → error (fatal=true，AI 終態錯誤) ────────
+  it("error envelope 應映射為 error，fatal=true（AI 終態錯誤代表本輪結束）", () => {
     const line = toLine({ type: "error", message: "Something went wrong" });
     const result = normalize(line);
 

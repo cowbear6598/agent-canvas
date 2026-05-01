@@ -15,6 +15,7 @@
  *   {"type":"result","status":"error","error":{"message":"..."}}
  */
 
+import { buildProviderSystemError } from "./types.js";
 import type { NormalizedEvent } from "./types.js";
 
 // ── Gemini JSON 事件原始型別 ────────────────────────────────────────
@@ -73,30 +74,14 @@ type GeminiEvent =
 
 // ── 各 type 的獨立解析 helper ─────────────────────────────────────────
 
+/** Gemini normalizer 專用的系統錯誤建立 helper（委派給共用 buildProviderSystemError） */
 function buildGeminiSystemError(params: {
   content: string;
   fatal: boolean;
   code: string;
   rawContent?: string;
 }): Extract<NormalizedEvent, { type: "error" }> {
-  const { content, fatal, code, rawContent } = params;
-
-  return {
-    type: "error",
-    message: content,
-    fatal,
-    code,
-    systemMessage: {
-      role: "system",
-      content,
-      metadata: {
-        provider: "gemini",
-        code,
-        severity: fatal ? "fatal" : "error",
-        rawContent: rawContent ?? content,
-      },
-    },
-  };
+  return buildProviderSystemError("gemini", params);
 }
 
 /** 解析 init 事件 → session_started */
@@ -164,7 +149,7 @@ function parseErrorEvent(e: GeminiErrorEvent): NormalizedEvent {
 /**
  * 解析 result 事件。
  * - status=success → turn_complete
- * - status=error → error（fatal=true）
+ * - status=error → error（fatal=true，AI 終態錯誤代表本輪結束，交由 transcript system message 呈現）
  */
 function parseResultEvent(e: GeminiResultEvent): NormalizedEvent {
   if (e.status === "success") {
@@ -193,7 +178,7 @@ function parseResultEvent(e: GeminiResultEvent): NormalizedEvent {
  * - `tool_result`                                            → `tool_call_result`
  * - `error`                                                  → `error`（fatal=false）
  * - `result` + status=`success`                              → `turn_complete`
- * - `result` + status=`error`                                → `error`（fatal=true）
+ * - `result` + status=`error`                                → `error`（fatal=false，業務錯誤交由 transcript system message 呈現）
  * - 其他                                                      → null（忽略）
  *
  * @param line - stdout 的一行字串
