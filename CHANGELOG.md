@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.2.0] - 2026-05-02
+
+### 新增
+- Gemini Pod macOS Seatbelt 沙箱隔離，提升安全性與進程隔離
+- MCP 設定統一安全字元規則與三 provider 分派邏輯集中化
+- McpServerRow 子元件，三 provider popover 列表渲染共用
+
+### 修正
+- 修正 user-scoped MCP server 顯示與啟用流程的設定來源描述
+- 強化 chat 過程中 MCP 子程序錯誤訊息敏感資訊遮罩，避免 token 寫入 log
+- 修正每次 chat 都會重複同步寫 Claude sandbox launcher script 與 sandbox profile 導致啟動延遲與檔案互蓋
+- 修正 Run 沙盒 home 建立函式責任過重問題，pod 全域 seed 建立獨立化
+- 修正 repository 路徑找不到時伺服器絕對路徑經 WebSocket 事件外洩到前端的敏感資訊洩漏
+- 修正 Connection cross-provider summaryProvider 錯位導致 UI 與後端執行 provider 不一致
+- 修正 Provider 業務錯誤（usage limit、配額耗盡、認證失敗、rate limit）錯誤訊息處理，改為 Pod 內系統訊息而非全域 toast
+- 修正 Claude rate limit 訊息顯示為原始 JSON 物件的問題，改為人類可讀的中文格式
+- 修正 Gemini Pod 下游總結的 fallback 路徑記憶體優化，避免訊息量大時 O(n) 額外記憶體佔用
+- 修正 Gemini Pod 錯誤訊息洩漏 Pod ID 與絕對路徑等敏感資訊
+
+### 改進
+- 改善子程序生命週期管理，提早中止對話時正確 kill CLI 子程序避免遺留 zombie process
+- ConnectionContextMenu 選單渲染最佳化，hover 時 connection 數量增長不再出現多餘運算
+- Codex plugin 掃描改用單次 readdirSync withFileTypes，減少檔案系統呼叫
+- Gemini extension 載入補上路徑越界防護，與 Claude plugin 來源行為一致
+- Plugin 清單 API 與 MCP 訊息型別對齊（claude / codex / gemini 三選一）
+- Gemini provider chat 入口統一收窄 options，移除散落的 ! 非空斷言
+- 後端測試在 CI 沒裝 claude CLI 時 workflow-execution 整組 timeout 問題修復
+
 ## [1.1.5] - 2026-04-29
 
 ### 新增

@@ -1,6 +1,6 @@
 {
   "name": "agent-canvas-backend",
-  "version": "1.1.5",
+  "version": "1.2.0",
   "description": "Backend server for Agent Canvas",
   "main": "dist/index.js",
   "type": "module",
