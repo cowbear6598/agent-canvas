@@ -4,6 +4,10 @@ import path from "path";
 
 import { getClaudeCodePath } from "./claudePathResolver.js";
 
+// module-level cache：key = sandboxHomePath，value = 已解析的 launcher path
+// 避免相同 sandboxHomePath 重複執行 writeFileSync / chmodSync
+const launcherPathCache = new Map<string, string>();
+
 interface LauncherPaths {
   launcherPath: string;
   profilePath: string;
@@ -42,7 +46,7 @@ function getHostRuntimePaths(): HostRuntimePaths {
   const cacheRoot =
     process.platform === "darwin"
       ? path.join(hostHome, "Library", "Caches")
-      : process.env.XDG_CACHE_HOME ?? path.join(hostHome, ".cache");
+      : (process.env.XDG_CACHE_HOME ?? path.join(hostHome, ".cache"));
 
   return {
     claudeDirPath: path.join(hostHome, ".claude"),
@@ -72,8 +76,7 @@ function buildMacSandboxProfile(params: {
     buildMacSandboxRule(params.hostRuntimePaths.claudeDirPath),
     buildMacSandboxRule(params.hostRuntimePaths.claudeCachePath),
     buildMacSandboxRule(params.hostRuntimePaths.claudeJsonPath, "file"),
-  ]
-    .join("\n");
+  ].join("\n");
 
   return [
     "(version 1)",
@@ -106,7 +109,7 @@ function buildLauncherScript(params: {
   ].join("\n");
 
   const darwinExec = [
-    'if command -v sandbox-exec >/dev/null 2>&1; then',
+    "if command -v sandbox-exec >/dev/null 2>&1; then",
     `  exec sandbox-exec -f ${profile} ${realClaude} "$@"`,
     "fi",
     'echo "Claude sandbox requires sandbox-exec on macOS" >&2',
@@ -114,7 +117,7 @@ function buildLauncherScript(params: {
   ].join("\n");
 
   const linuxExec = [
-    'if command -v bwrap >/dev/null 2>&1; then',
+    "if command -v bwrap >/dev/null 2>&1; then",
     "  exec bwrap \\",
     "    --die-with-parent \\",
     "    --ro-bind / / \\",
@@ -160,6 +163,16 @@ export function resolveClaudeExecutablePath(params: {
     throw new Error("找不到 Claude Code 可執行檔，無法建立 sandbox launcher");
   }
 
+  // 快取命中：若 launcher 已存在則直接回傳，避免重複 writeFileSync / chmodSync
+  const cached = launcherPathCache.get(params.sandboxHomePath);
+  if (cached && fs.existsSync(cached)) {
+    return cached;
+  }
+  // cache 存在但檔案已被外部刪除，清除 cache 後重新產生
+  if (cached) {
+    launcherPathCache.delete(params.sandboxHomePath);
+  }
+
   ensureClaudeSandboxHomeSeeded(params.sandboxHomePath);
   const hostRuntimePaths = getHostRuntimePaths();
 
@@ -181,19 +194,26 @@ export function resolveClaudeExecutablePath(params: {
     );
   }
 
-  fs.writeFileSync(
-    launcherPath,
-    buildLauncherScript({
-      realClaudePath,
-      workspacePath: params.workspacePath,
-      sandboxHomePath: params.sandboxHomePath,
-      profilePath,
-      tmpDirPath,
-      hostRuntimePaths,
-    }),
-    "utf8",
-  );
-  fs.chmodSync(launcherPath, 0o755);
+  try {
+    fs.writeFileSync(
+      launcherPath,
+      buildLauncherScript({
+        realClaudePath,
+        workspacePath: params.workspacePath,
+        sandboxHomePath: params.sandboxHomePath,
+        profilePath,
+        tmpDirPath,
+        hostRuntimePaths,
+      }),
+      "utf8",
+    );
+    fs.chmodSync(launcherPath, 0o755);
+  } catch (err) {
+    // 寫檔或 chmod 失敗時不寫入 cache，讓下次呼叫重試
+    launcherPathCache.delete(params.sandboxHomePath);
+    throw err;
+  }
 
+  launcherPathCache.set(params.sandboxHomePath, launcherPath);
   return launcherPath;
 }

@@ -24,7 +24,10 @@ interface SharedWorkspaceResult {
   worktreePath: string | null;
 }
 
-function getSharedRepoSnapshotPath(runId: string, repositoryId: string): string {
+function getSharedRepoSnapshotPath(
+  runId: string,
+  repositoryId: string,
+): string {
   return path.resolve(
     path.join(config.runWorkspacesRoot, runId, `repository-${repositoryId}`),
   );
@@ -64,9 +67,6 @@ async function provisionRunSandboxHome(
   runId: string,
   podId: string,
 ): Promise<string> {
-  const podSandboxHomePath = getPodSandboxHomePath(podId);
-  ensureClaudeSandboxHomeSeeded(podSandboxHomePath);
-
   const runSandboxHomePath = getRunSandboxHomePath(runId, podId);
   await ensureEmptyDirectory(runSandboxHomePath);
 
@@ -91,7 +91,12 @@ async function provisionRepositoryWorkspace(
   );
 
   if (!(await pathExists(sourceRepoPath))) {
-    throw new Error(`找不到 repository 路徑：${sourceRepoPath}`);
+    logger.error(
+      "Run",
+      "Error",
+      `找不到 repository 路徑（repositoryId=${pod.repositoryId}, path=${sourceRepoPath}）`,
+    );
+    throw new Error("找不到 repository 路徑");
   }
 
   const isGitResult = await gitService.isGitRepository(sourceRepoPath);
@@ -162,6 +167,10 @@ export async function provisionRunExecutionResources(params: {
   const workspaceResult = pod.repositoryId
     ? await provisionRepositoryWorkspace(pod, runId, worktreeCache)
     : await provisionNonRepoWorkspace(pod, runId);
+
+  // pod-level seed 必須在建立 run-level sandbox home 之前完成
+  const podSandboxHomePath = getPodSandboxHomePath(pod.id);
+  ensureClaudeSandboxHomeSeeded(podSandboxHomePath);
 
   const sandboxHomePath = await provisionRunSandboxHome(runId, pod.id);
 

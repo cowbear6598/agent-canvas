@@ -65,7 +65,10 @@ import type { NormalizedEvent } from "../../src/services/provider/types.js";
 import { abortRegistry } from "../../src/services/provider/abortRegistry.js";
 import { config } from "../../src/config/index.js";
 import { logger } from "../../src/utils/logger.js";
-import { getRunSandboxHomePath } from "../../src/services/runtime/executionPaths.js";
+import {
+  getRunSandboxHomePath,
+  getPodSandboxHomePath,
+} from "../../src/services/runtime/executionPaths.js";
 
 function asMock(fn: unknown): Mock<any> {
   return fn as Mock<any>;
@@ -768,6 +771,39 @@ describe("executeStreamingChat", () => {
       });
     });
 
+    it("NormalModeExecutionStrategy 下，provider.chat 收到的 sandboxHomePath 等於 getPodSandboxHomePath(pod.id)", async () => {
+      const pod = insertClaudePod();
+
+      let capturedCtx: unknown;
+      const chatMock = vi.fn(async function* (ctx: unknown) {
+        capturedCtx = ctx;
+        yield { type: "turn_complete" as const };
+      });
+      asMock(getProvider).mockReturnValue({
+        chat: chatMock,
+        cancel: vi.fn(() => false),
+        buildOptions: vi.fn().mockResolvedValue({}),
+        metadata: {
+          availableModelValues: new Set(["opus", "sonnet", "haiku"]),
+          defaultOptions: { model: "opus" },
+        },
+      });
+
+      await executeStreamingChat({
+        canvasId,
+        podId: pod.id,
+        message,
+        abortable: false,
+        strategy: makeStrategy(),
+      });
+
+      expect(chatMock).toHaveBeenCalledTimes(1);
+      const expectedSandboxHomePath = getPodSandboxHomePath(pod.id);
+      expect(capturedCtx).toMatchObject({
+        sandboxHomePath: expectedSandboxHomePath,
+      });
+    });
+
     it("workspacePath 不在 canvasRoot 內時，應改寫為 transcript system message 且 provider.chat 未被呼叫", async () => {
       // 直接插入帶非法 workspacePath 的 pod（繞過 canvasRoot 驗證，測試 resolvePodCwd 攔截）
       const pod = insertPodViaSQL({
@@ -1347,8 +1383,11 @@ describe("executeStreamingChat", () => {
       );
       expect(setStatusSpy).toHaveBeenCalledWith(canvasId, pod.id, "idle");
 
-      const emittedPodError = vi.mocked(socketService.emitToCanvas).mock.calls
-        .filter(([, event]) => event === WebSocketResponseEvents.POD_ERROR);
+      const emittedPodError = vi
+        .mocked(socketService.emitToCanvas)
+        .mock.calls.filter(
+          ([, event]) => event === WebSocketResponseEvents.POD_ERROR,
+        );
       expect(emittedPodError).toHaveLength(0);
       expect(
         vi
@@ -1357,7 +1396,9 @@ describe("executeStreamingChat", () => {
             args.some(
               (arg) =>
                 typeof arg === "string" &&
-                arg.includes("RetryableQuotaError: You have exhausted your capacity on this model."),
+                arg.includes(
+                  "RetryableQuotaError: You have exhausted your capacity on this model.",
+                ),
             ),
           ),
       ).toBe(false);

@@ -217,13 +217,19 @@ describe("RunExecutionService", () => {
         worktreePath: null,
       });
 
-      const ctx = await runExecutionService.createRun(CANVAS_ID, pod.id, "測試");
+      const ctx = await runExecutionService.createRun(
+        CANVAS_ID,
+        pod.id,
+        "測試",
+      );
       const instance = runStore.getPodInstance(ctx.runId, pod.id);
 
       expect(instance?.workspacePath).toBeTruthy();
       expect(instance?.workspacePath).not.toBe(pod.workspacePath);
       expect(instance?.sandboxHomePath).toBeTruthy();
-      expect(runExecutionResources.provisionRunExecutionResources).toHaveBeenCalled();
+      expect(
+        runExecutionResources.provisionRunExecutionResources,
+      ).toHaveBeenCalled();
     });
   });
 
@@ -252,6 +258,25 @@ describe("RunExecutionService", () => {
         runExecutionService.startPodInstance(ctx, "pod-nonexistent"),
       ).not.toThrow();
       expect(logger.warn).toHaveBeenCalled();
+    });
+
+    it("instance 狀態為 terminal（error）時，status 不被更新為 running 且不發送 RUN_POD_STATUS_CHANGED", () => {
+      const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "測試");
+      const inst = runStore.createPodInstance(run.id, SOURCE_POD_ID);
+      // 將 instance 設為 terminal 狀態
+      runStore.updatePodInstanceStatus(inst.id, "error", "執行失敗");
+      vi.mocked(socketService.emitToCanvas).mockClear();
+      const ctx = makeRunContext({ runId: run.id });
+
+      runExecutionService.startPodInstance(ctx, SOURCE_POD_ID);
+
+      const updated = runStore.getPodInstance(run.id, SOURCE_POD_ID);
+      expect(updated!.status).toBe("error");
+      expect(socketService.emitToCanvas).not.toHaveBeenCalledWith(
+        CANVAS_ID,
+        WebSocketResponseEvents.RUN_POD_STATUS_CHANGED,
+        expect.anything(),
+      );
     });
   });
 
