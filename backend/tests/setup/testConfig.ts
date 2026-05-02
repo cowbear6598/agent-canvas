@@ -26,6 +26,14 @@ vi.mock("../../src/utils/logger.js", () => {
   };
 });
 
+// integration test 透過 vi.mock 攔截 SDK 的 query()，但 d2d1cf6a 之後 runClaudeQuery
+// 會在呼叫 query() 之前先解析 claude 沙箱可執行檔路徑（resolveClaudeExecutablePath →
+// getClaudeCodePath → Bun.which('claude')）。CI runner 沒裝 claude CLI 時會 throw，
+// 整個 chat 路徑根本走不到 mock。這裡跟既有 unit / provider 測試一致，回傳固定假路徑。
+vi.mock("../../src/services/claude/claudePathResolver.js", () => ({
+  getClaudeCodePath: () => "/usr/local/bin/claude",
+}));
+
 const timestamp = Date.now();
 
 export interface TestConfig {
