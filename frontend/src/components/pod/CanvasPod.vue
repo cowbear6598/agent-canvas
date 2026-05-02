@@ -252,7 +252,7 @@ const podUploadStatus = computed(
 
 // 合併成單一 CSS selector 字串，closest() 一次查詢取代原本最差 4 次 DOM 遍歷
 const SLOT_CLASSES =
-  ".pod-plugin-slot, .pod-repository-slot, .pod-command-slot, .pod-mcp-server-slot";
+  ".pod-plugin-slot, .pod-repository-slot, .pod-command-slot, .pod-mcp-server-slot, .pod-model-slot";
 
 const shouldBlockForSlot = (target: HTMLElement): boolean => {
   return target.closest(SLOT_CLASSES) !== null;
@@ -401,10 +401,7 @@ const handleContextMenu = (e: MouseEvent): void => {
     <!-- 光暈層：放在 pod-wrapper 之外，不受 transform: rotate 影響 -->
     <!-- 此層僅承載 chatting/summarizing 等需要完整包覆（不被截切）的光暈效果 -->
     <!-- selected/drag-over 狀態已移至 pod-wrapper 內層（pod-inner-highlight），跟著旋轉 -->
-    <div
-      class="pod-glow-layer"
-      :class="[podStatusClasses]"
-    />
+    <div class="pod-glow-layer" :class="[podStatusClasses]" />
 
     <div
       class="relative pod-wrapper pod-with-plugin-notch pod-with-mcp-notch pod-with-mcp-server-notch"

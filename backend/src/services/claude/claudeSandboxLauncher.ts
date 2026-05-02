@@ -18,6 +18,11 @@ interface HostRuntimePaths {
   claudeDirPath: string;
   claudeJsonPath: string;
   claudeCachePath: string;
+  // MCP runtime cache 路徑
+  npmCachePath: string;
+  uvCachePath: string;
+  uvDataPath: string;
+  bunInstallCachePath: string;
 }
 
 function shellQuote(value: string): string {
@@ -47,11 +52,20 @@ function getHostRuntimePaths(): HostRuntimePaths {
     process.platform === "darwin"
       ? path.join(hostHome, "Library", "Caches")
       : (process.env.XDG_CACHE_HOME ?? path.join(hostHome, ".cache"));
+  const dataRoot =
+    process.platform === "darwin"
+      ? path.join(hostHome, "Library", "Application Support")
+      : (process.env.XDG_DATA_HOME ?? path.join(hostHome, ".local", "share"));
 
   return {
     claudeDirPath: path.join(hostHome, ".claude"),
     claudeJsonPath: path.join(hostHome, ".claude.json"),
     claudeCachePath: path.join(cacheRoot, "claude-cli-nodejs"),
+    // MCP runtime cache 路徑（stdio MCP 子程序寫入所需）
+    npmCachePath: path.join(hostHome, ".npm"), // npx / Node.js MCP（context7、playwright 等）
+    uvCachePath: path.join(hostHome, ".cache", "uv"), // uvx Python MCP cache（mcp-server-time 等）
+    uvDataPath: path.join(dataRoot, "uv"), // uvx Python interpreter / installed tools
+    bunInstallCachePath: path.join(hostHome, ".bun", "install", "cache"), // bunx MCP
   };
 }
 
@@ -76,6 +90,11 @@ function buildMacSandboxProfile(params: {
     buildMacSandboxRule(params.hostRuntimePaths.claudeDirPath),
     buildMacSandboxRule(params.hostRuntimePaths.claudeCachePath),
     buildMacSandboxRule(params.hostRuntimePaths.claudeJsonPath, "file"),
+    // MCP runtime cache 路徑：stdio MCP 子程序寫入 cache 所需
+    buildMacSandboxRule(params.hostRuntimePaths.npmCachePath), // npx / Node.js MCP（context7、playwright 等）
+    buildMacSandboxRule(params.hostRuntimePaths.uvCachePath), // uvx Python MCP cache（mcp-server-time 等）
+    buildMacSandboxRule(params.hostRuntimePaths.uvDataPath), // uvx Python interpreter / installed tools
+    buildMacSandboxRule(params.hostRuntimePaths.bunInstallCachePath), // bunx MCP
   ].join("\n");
 
   return [
@@ -102,10 +121,18 @@ function buildLauncherScript(params: {
   const tmpDir = shellQuote(params.tmpDirPath);
   const hostClaudeDir = shellQuote(params.hostRuntimePaths.claudeDirPath);
   const hostClaudeCache = shellQuote(params.hostRuntimePaths.claudeCachePath);
+  // MCP runtime cache 路徑
+  const npmCache = shellQuote(params.hostRuntimePaths.npmCachePath);
+  const uvCache = shellQuote(params.hostRuntimePaths.uvCachePath);
+  const uvData = shellQuote(params.hostRuntimePaths.uvDataPath);
+  const bunInstallCache = shellQuote(
+    params.hostRuntimePaths.bunInstallCachePath,
+  );
 
   const envSetup = [
     `export TMPDIR=${tmpDir}`,
-    `mkdir -p ${sandboxHome} ${tmpDir} ${hostClaudeDir} ${hostClaudeCache}`,
+    // bwrap 對不存在路徑做 --bind 會啟動失敗，mkdir -p 確保路徑存在
+    `mkdir -p ${sandboxHome} ${tmpDir} ${hostClaudeDir} ${hostClaudeCache} ${npmCache} ${uvCache} ${uvData} ${bunInstallCache}`,
   ].join("\n");
 
   const darwinExec = [
@@ -129,6 +156,11 @@ function buildLauncherScript(params: {
     `    --bind ${hostClaudeCache} ${hostClaudeCache} \\`,
     "    --bind /tmp /tmp \\",
     `    --bind ${tmpDir} ${tmpDir} \\`,
+    // MCP runtime cache：stdio MCP 子程序寫入 cache 所需
+    `    --bind ${npmCache} ${npmCache} \\`,
+    `    --bind ${uvCache} ${uvCache} \\`,
+    `    --bind ${uvData} ${uvData} \\`,
+    `    --bind ${bunInstallCache} ${bunInstallCache} \\`,
     `    --chdir ${workspace} \\`,
     `    --setenv TMPDIR ${tmpDir} \\`,
     '    --setenv PATH "$PATH" \\',

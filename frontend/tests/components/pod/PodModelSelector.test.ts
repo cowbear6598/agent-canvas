@@ -241,8 +241,8 @@ describe("PodModelSelector - 測試 5：mouseleave debounce 收合", () => {
     await activeCard.trigger("mouseenter");
     expect(stack.classes()).toContain("expanded");
 
-    // 觸發 mouseleave（綁在 .pod-model-slot 上）
-    await wrapper.find(".pod-model-slot").trigger("mouseleave");
+    // 觸發 mouseleave（綁在 .model-cards-stack 上）
+    await stack.trigger("mouseleave");
 
     // debounce 尚未到期，仍展開
     expect(stack.classes()).toContain("expanded");

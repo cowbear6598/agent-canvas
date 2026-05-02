@@ -20,8 +20,8 @@ vi.mock("../../src/utils/logger.js", () => ({
 // 本測試透過 GEMINI_SETTINGS_PATH 直接指向 tmp dir 內的測試檔案，
 // 避免讀到真實使用者的 ~/.gemini/settings.json。
 //
-// 另外，geminiMcpReader 讀取 root-level mcpServers（不同於 claudeMcpReader
-// 的 projects[homedir].mcpServers），因此 JSON 結構較單純。
+// 另外，geminiMcpReader 讀取 root-level mcpServers（與 claudeMcpReader
+// 的 top-level mcpServers 相同層級），因此 JSON 結構較單純。
 // ─────────────────────────────────────────────
 
 describe("geminiMcpReader", () => {

@@ -174,17 +174,20 @@ const selectModel = async (model: string): Promise<void> => {
 
 <template>
   <!-- 上方中央定位錨點 -->
-  <div class="pod-model-slot" @mouseleave="handleMouseLeave">
+  <div class="pod-model-slot">
     <!--
       model-cards-stack：垂直堆疊容器。
       flex-direction: column-reverse → sortedOptions[0]（active）視覺上固定在最底部貼近 Pod，
       非 active 選項從上方依序堆疊，hover 時展開。
+      @mouseleave 移到此層：.pod-model-slot 為 pointer-events: none 不接收 mouse 事件，
+      展開時 stack 為 pointer-events: auto，可靠地偵測滑鼠移出整個 stack 範圍。
     -->
     <TransitionGroup
       name="stack-slide"
       tag="div"
       class="model-cards-stack"
       :class="{ expanded: isHovered, collapsing: isCollapsing }"
+      @mouseleave="handleMouseLeave"
     >
       <button
         v-for="option in sortedOptions"
@@ -225,8 +228,8 @@ const selectModel = async (model: string): Promise<void> => {
    讓卡片底部邊框與 Pod 上邊框微微重疊產生「插槽」視覺）。
    z-index: -1 讓 selector 插入 Pod 內（被 Pod 本體遮住底部），
    只露出上方部分，產生「插進 Pod」的視覺感。
-   pointer-events 由子元素 .model-cards-stack 與 .model-card 各自控制，
-   z-index 負值不影響 click 事件觸發。
+   pointer-events: none 讓未展開時 padding 容錯區可被 mousedown 穿透到 canvas，
+   避免造成死區（box-select 與 pod 拖曳均不受影響）。
    padding 向上與左右延伸作為 hover 容錯區（搭配 ::before 偽元素）。
 */
 .pod-model-slot {
@@ -238,6 +241,8 @@ const selectModel = async (model: string): Promise<void> => {
   /* 下推 2px 讓底邊與 Pod 邊框對齊 notch */
   margin-bottom: -2px;
   z-index: -1;
+  /* pointer-events: none 讓未展開時 padding 容錯區可被 mousedown 穿透到 canvas，避免死區 */
+  pointer-events: none;
   /* 向上與左右延伸 hover 容錯區，使 mouseleave 不在縫隙處誤觸 */
   padding: 8px 12px 0 12px;
 }
@@ -275,12 +280,14 @@ const selectModel = async (model: string): Promise<void> => {
   left: -16px;
   right: -16px;
   bottom: 0;
-  pointer-events: auto;
+  /* 偽元素僅作視覺占位/容錯區，不攔截滑鼠事件 */
+  pointer-events: none;
   background: transparent;
   z-index: -1;
 }
 
 /* 展開狀態：整體上提讓選項展開空間（從 2px 往上移到 -12px，共 14px 行程） */
+/* 展開時容器接事件，配合移到 stack 上的 @mouseleave 偵測整體離開以觸發收合 */
 .model-cards-stack.expanded {
   transform: translateY(-12px);
   pointer-events: auto;

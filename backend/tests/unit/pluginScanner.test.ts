@@ -210,7 +210,7 @@ describe("pluginScanner", () => {
       expect(result[0].compatibleProviders).toContain("claude");
     });
 
-    it("Claude plugin 同時有 .codex-plugin/plugin.json 時 compatibleProviders 應含兩者", async () => {
+    it("Claude plugin 同時有 .codex-plugin/plugin.json 時 compatibleProviders 仍只含 claude（以來源為界）", async () => {
       const installPath = join(claudeTestDir, "dual", "1.0.0");
       await mkdir(installPath, { recursive: true });
       await writeClaudePluginManifest(
@@ -244,7 +244,8 @@ describe("pluginScanner", () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].compatibleProviders).toContain("claude");
-      expect(result[0].compatibleProviders).toContain("codex");
+      // Claude 來源不偵測跨 provider，不應含 codex
+      expect(result[0].compatibleProviders).not.toContain("codex");
     });
 
     it("應正確從 plugin ID 解析 repo（@ 後面的部分）", async () => {
@@ -568,7 +569,7 @@ describe("pluginScanner", () => {
       expect(result[0].compatibleProviders).not.toContain("claude");
     });
 
-    it("Codex plugin 同時有 .claude-plugin/plugin.json 時 compatibleProviders 應含兩者", async () => {
+    it("Codex plugin 同時有 .claude-plugin/plugin.json 時 compatibleProviders 仍只含 codex（以來源為界）", async () => {
       const installPath = join(
         codexCacheDir,
         "marketplace",
@@ -588,7 +589,10 @@ describe("pluginScanner", () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].compatibleProviders).toContain("codex");
-      expect(result[0].compatibleProviders).toContain("claude");
+      // Codex 來源不偵測跨 provider，不應含 claude
+      expect(result[0].compatibleProviders).not.toContain("claude");
+      // name/description 直接取自 codexManifest（不再 fallback 到 claudeManifest）
+      expect(result[0].name).toBe("Dual");
     });
 
     it("Codex plugin 同 plugin 有多版本時應取字典序最大者", async () => {
@@ -1012,19 +1016,27 @@ describe("pluginScanner", () => {
   });
 
   describe("provider 過濾", () => {
-    it("傳入 provider='claude' 時只回傳含 claude 的 plugin", async () => {
-      // claude-only：同時有 .claude-plugin 和 .codex-plugin
-      const claudePath = join(
-        codexCacheDir,
-        "marketplace",
-        "claude-only",
-        "1.0.0",
-      );
+    it("傳入 provider='claude' 時只回傳 Claude 來源安裝的 plugin", async () => {
+      // Claude 來源：只有 .claude-plugin/plugin.json
+      const claudePath = join(claudeTestDir, "claude-only", "1.0.0");
       await mkdir(claudePath, { recursive: true });
-      await writeCodexPluginManifest(claudePath, "Claude Only", "Only claude");
       await writeClaudePluginManifest(claudePath, "Claude Only", "Only claude");
+      await writeFile(
+        installedPluginsPath,
+        makeInstalledPluginsJson({
+          "claude-only@repo": [
+            {
+              scope: "user",
+              installPath: claudePath,
+              version: "1.0.0",
+              installedAt: "",
+              lastUpdated: "",
+            },
+          ],
+        }),
+      );
 
-      // codex-only：只有 .codex-plugin
+      // Codex 來源：只有 .codex-plugin/plugin.json，不應出現在 claude 結果
       const codexPath = join(
         codexCacheDir,
         "marketplace",
@@ -1039,12 +1051,17 @@ describe("pluginScanner", () => {
 
       const claudeResult = scanInstalledPlugins("claude");
       expect(claudeResult).toHaveLength(1);
-      expect(claudeResult[0].id).toBe("claude-only@marketplace");
+      expect(claudeResult[0].id).toBe("claude-only@repo");
+      // Codex 來源的 plugin 不應出現在 claude 結果
+      expect(claudeResult.some((p) => p.id === "codex-only@marketplace")).toBe(
+        false,
+      );
 
       clearScanInstalledPluginsCache();
 
       const codexResult = scanInstalledPlugins("codex");
-      expect(codexResult).toHaveLength(2);
+      expect(codexResult).toHaveLength(1);
+      expect(codexResult[0].id).toBe("codex-only@marketplace");
     });
 
     it("不傳 provider 時回傳全集", async () => {
@@ -1076,7 +1093,7 @@ describe("pluginScanner", () => {
   });
 
   describe("Claude 與 Codex 來源同 id 合併", () => {
-    it("同 id 的 plugin 兩邊都有時應合併 compatibleProviders", async () => {
+    it("同 id 的 plugin 兩邊都有時，mergePlugins 聯集 compatibleProviders（各自宣告自己的 provider）", async () => {
       // Claude 來源：installPath 在 tmpHome/.claude/plugins/ 下（通過安全驗證）
       const claudeInstallPath = join(
         claudeTestDir,
@@ -1123,6 +1140,8 @@ describe("pluginScanner", () => {
       const { scanInstalledPlugins } = await reimportPluginScanner();
       const result = scanInstalledPlugins();
 
+      // 同 id 兩邊都有時，mergePlugins 以 id 去重，compatibleProviders 取聯集
+      // 這是合法情況：同 plugin 被 claude 和 codex 分別安裝，各自宣告自己的 provider
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe("shared-plugin@shared-marketplace");
       expect(result[0].compatibleProviders).toContain("claude");

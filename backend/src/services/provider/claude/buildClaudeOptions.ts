@@ -85,14 +85,15 @@ export const BASE_ALLOWED_TOOLS: readonly string[] = [
 /**
  * 套用 MCP Server 設定，回傳包含 mcpServers 的 partial options。
  *
- * 從 ~/.claude.json 的 projects[homedir].mcpServers 讀取 user-scoped MCP server，
+ * 從 ~/.claude.json top-level `mcpServers` 讀取 user-scoped MCP server，
  * 再以 pod.mcpServerNames 做 allowlist 過濾。
- * 若 pod.mcpServerNames 為空，或過濾後無符合項目，則回傳空物件，不寫入 mcpServers。
+ *
+ * 若 pod.mcpServerNames 為空，或過濾後無符合項目，則回傳空物件。
  */
 function applyMcpServers(pod: Pod): Pick<ClaudeOptions, "mcpServers"> {
   if (!pod.mcpServerNames.length) return {};
 
-  // 讀取 user-scoped MCP servers（projects[homedir].mcpServers）
+  // 讀取 user-scoped MCP servers（top-level mcpServers）
   const allowedSet = new Set(pod.mcpServerNames);
   const allServers = readClaudeMcpServers();
   const filtered = allServers.filter((s) => allowedSet.has(s.name));

@@ -57,9 +57,9 @@ function resolveGeminiExtensionsRoot(): string {
 
 // 30 秒 TTL 快取，避免每次 buildClaudeOptions 都重讀磁碟
 // per-source cache，key 為資料來源（"claude" / "codex" / "gemini"），
-// 注意：這裡的 key 代表「資料來源」，而不是「provider 過濾條件」。
-// scanInstalledPlugins(provider) 會掃描全部三個來源後再以 compatibleProviders 過濾，
-// 因為單一來源（例如 codex cache）內的 plugin 可能同時相容多個 provider。
+// 注意：每個來源的 plugin 只標記自己的 provider（以來源為界），
+// 因此 scanInstalledPlugins(provider) 掃全部三個來源後以 compatibleProviders 過濾，
+// 不會造成跨 provider 的 plugin 外洩。
 type PluginSource = "claude" | "codex" | "gemini";
 const CACHE_TTL_MS = 30000;
 const pluginCache = new Map<
@@ -135,29 +135,6 @@ function readPluginManifest(installPath: string): PluginManifest | null {
   return readManifest(path.join(installPath, ".claude-plugin", "plugin.json"));
 }
 
-/**
- * 偵測 installPath 下有哪些 provider 的 plugin.json 存在。
- * 若 caller 已讀過 claude manifest，可透過 existingClaudeManifest 傳入避免重複 I/O。
- */
-function detectCompatibleProviders(
-  installPath: string,
-  existingClaudeManifest?: PluginManifest | null,
-): ("claude" | "codex")[] {
-  const providers: ("claude" | "codex")[] = [];
-  // 若 caller 已有 claude manifest 快照，直接用，否則才讀取
-  const claudeManifest =
-    existingClaudeManifest !== undefined
-      ? existingClaudeManifest
-      : readManifest(path.join(installPath, ".claude-plugin", "plugin.json"));
-  if (claudeManifest) {
-    providers.push("claude");
-  }
-  if (readManifest(path.join(installPath, ".codex-plugin", "plugin.json"))) {
-    providers.push("codex");
-  }
-  return providers;
-}
-
 /** 掃描 Claude 來源（~/.claude/plugins/installed_plugins.json） */
 function scanClaudeInstalledPlugins(): InstalledPlugin[] {
   let fileContent: string;
@@ -209,20 +186,10 @@ function scanClaudeInstalledPlugins(): InstalledPlugin[] {
 
       seenPaths.add(entry.installPath);
 
-      // readPluginManifest 讀取 .claude-plugin/plugin.json 一次；
-      // 傳入 detectCompatibleProviders 避免重複讀同一檔案
+      // Claude 來源固定為 ["claude"]，不偵測跨 provider manifest
       const manifest = readPluginManifest(entry.installPath);
       const atIndex = pluginId.indexOf("@");
       const repo = atIndex !== -1 ? pluginId.substring(atIndex + 1) : "";
-      const compatibleProviders = detectCompatibleProviders(
-        entry.installPath,
-        manifest,
-      );
-
-      // Claude 來源至少包含 claude（installed_plugins.json 有記錄即代表已安裝 Claude plugin）
-      if (!compatibleProviders.includes("claude")) {
-        compatibleProviders.unshift("claude");
-      }
 
       result.push({
         id: pluginId,
@@ -231,7 +198,7 @@ function scanClaudeInstalledPlugins(): InstalledPlugin[] {
         description: manifest?.description ?? "",
         installPath: entry.installPath,
         repo,
-        compatibleProviders,
+        compatibleProviders: ["claude"],
       });
     }
   }
@@ -297,25 +264,15 @@ function scanCodexPlugin(
   );
   if (!codexManifest) return null;
 
-  const compatibleProviders: ("claude" | "codex")[] = ["codex"];
-  const claudeManifest = readManifest(
-    path.join(installPath, ".claude-plugin", "plugin.json"),
-  );
-  if (claudeManifest) {
-    compatibleProviders.push("claude");
-  }
-
-  // 優先使用 claude manifest 的 name/description（若有），否則 codex manifest
-  const manifest = claudeManifest ?? codexManifest;
-
+  // Codex 來源固定為 ["codex"]，不偵測跨 provider manifest
   return {
     id: pluginId,
-    name: manifest.name ?? pluginId,
+    name: codexManifest.name ?? pluginId,
     version: codexManifest.version ?? latestVersion,
-    description: manifest.description ?? "",
+    description: codexManifest.description ?? "",
     installPath,
     repo: marketplaceName,
-    compatibleProviders,
+    compatibleProviders: ["codex"],
   };
 }
 

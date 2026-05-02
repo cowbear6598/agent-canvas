@@ -273,4 +273,23 @@ describe("runClaudeQuery", () => {
       }).rejects.toMatchObject({ name: "AbortError" });
     });
   });
+
+  describe("sdkOptions.stderr callback", () => {
+    it("sdkOptions 傳入 SDK 時應含 stderr callback 函式", async () => {
+      const { query: mockQuery } =
+        await import("@anthropic-ai/claude-agent-sdk");
+
+      mockQueryGenerator = async function* () {
+        yield { type: "result", subtype: "success", result: "done" };
+      };
+
+      const ctx = createCtx();
+      await collectEvents(runClaudeQuery(ctx));
+
+      expect(mockQuery).toHaveBeenCalledOnce();
+      const calledOptions = (mockQuery as ReturnType<typeof vi.fn>).mock
+        .calls[0][0].options;
+      expect(typeof calledOptions.stderr).toBe("function");
+    });
+  });
 });

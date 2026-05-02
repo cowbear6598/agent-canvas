@@ -4,14 +4,16 @@
  * 主要 entry point：
  *   - {@link readClaudeMcpServers}
  *     → 讀取並解析 ~/.claude.json，套用 5 秒 TTL 快取後回傳 McpServerEntry[]。
- *     → 僅讀取 user-scoped（projects[homedir].mcpServers）。
+ *     → 僅讀取 user-scoped（top-level mcpServers）。
  *   - {@link resetClaudeMcpCache}（僅供測試使用）
  *     → 清除快取，強制下次呼叫重新讀檔。
  *
  * 資料來源：
- *   - ~/.claude.json（key: projects[os.homedir()].mcpServers，value: { command, args, env }）
- *   - 注意：Claude 實際寫入的 key 是 projects[homedir]，不是 top-level mcpServers，
- *     這是讀取正確來源的關鍵 bug fix。
+ *   - ~/.claude.json（key: top-level mcpServers，value: { command, args, env }）
+ *   - Claude 寫入規則：
+ *     - `claude mcp add -s user xxx` → 寫入 top-level mcpServers（user-scoped）
+ *     - `claude mcp add xxx`（預設）  → 寫入 projects[cwd].mcpServers（project-scoped）
+ *   - 本 reader 只讀 user-scoped（top-level mcpServers），不讀 project-scoped。
  */
 import fs from "fs";
 import os from "os";
@@ -69,6 +71,9 @@ interface RawProjectEntry {
 
 /** ~/.claude.json 的原始 JSON 結構（只取用到的欄位） */
 interface ClaudeJsonFile {
+  /** user-scoped MCP servers（`claude mcp add -s user` 寫入此處） */
+  mcpServers?: Record<string, RawMcpServerValue>;
+  /** project-scoped MCP servers（`claude mcp add` 預設寫入 projects[cwd]） */
   projects?: Record<string, RawProjectEntry>;
 }
 
@@ -141,7 +146,8 @@ function parseMcpServersRecord(
 /**
  * 讀取 ~/.claude.json 並回傳 user-scoped MCP server 清單。
  *
- * - 讀取 projects[homedir].mcpServers（bug fix：Claude 實際寫入的位置是這裡而非 top-level）
+ * - 讀取 top-level mcpServers（`claude mcp add -s user` 寫入 user-scoped 的位置）
+ * - project-scoped（projects[cwd].mcpServers）不在本 reader 讀取範圍內
  * - 5 秒內重複呼叫走快取，不重讀磁碟
  * - 檔案不存在、JSON 解析失敗時回傳空陣列（不拋例外）
  */
@@ -173,14 +179,11 @@ export function readClaudeMcpServers(): McpServerEntry[] {
     return [];
   }
 
-  const homedir = os.homedir();
-
-  // 讀取 user-scoped MCP servers（projects[homedir].mcpServers）
-  // 注意：Claude 實際將 mcpServers 寫入 projects[homedir]，不是 top-level，此為 bug fix 關鍵
-  const homeEntry = data.projects?.[homedir];
+  // 讀取 user-scoped MCP servers（top-level mcpServers）
+  // `claude mcp add -s user xxx` 寫入此處；project-scoped 寫在 projects[cwd].mcpServers
   const servers: McpServerEntry[] =
-    homeEntry?.mcpServers && typeof homeEntry.mcpServers === "object"
-      ? parseMcpServersRecord(homeEntry.mcpServers)
+    data.mcpServers && typeof data.mcpServers === "object"
+      ? parseMcpServersRecord(data.mcpServers)
       : [];
 
   cache = { servers, expiresAt: now + CACHE_TTL_MS };

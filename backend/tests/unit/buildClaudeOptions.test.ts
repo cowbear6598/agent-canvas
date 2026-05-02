@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import {
   createTmpDir,
@@ -28,9 +27,6 @@ import {
 // - Claude Agent SDK（@anthropic-ai/claude-agent-sdk）：保留 mock（外部 SDK 邊界）
 //
 // ─────────────────────────────────────────────────────────────────────────────
-
-// 取得真實 homedir（用於 claudeMcpReader 的 JSON key）
-const REAL_HOMEDIR = homedir();
 
 // ── 保留 Claude Agent SDK mock（外部 SDK 邊界）──────────────────────────────
 // SDK 的 tool / createSdkMcpServer 在測試環境不應實際建立 MCP 連線
@@ -101,13 +97,9 @@ function createBasePod(overrides: Partial<Pod> = {}): Pod {
   } as Pod;
 }
 
-/** 建立包含 projects[homedir].mcpServers 的 claude.json 內容 */
+/** 建立包含 top-level mcpServers 的 claude.json 內容（user-scoped） */
 function makeClaudeJson(mcpServers: Record<string, unknown>): string {
-  return JSON.stringify({
-    projects: {
-      [REAL_HOMEDIR]: { mcpServers },
-    },
-  });
+  return JSON.stringify({ mcpServers });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

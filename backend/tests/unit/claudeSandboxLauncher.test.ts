@@ -74,5 +74,31 @@ describe("claudeSandboxLauncher", () => {
     expect(profile).toContain(
       path.join(os.homedir(), "Library", "Caches", "claude-cli-nodejs"),
     );
+    // MCP runtime cache 路徑斷言
+    expect(profile).toContain(path.join(os.homedir(), ".npm"));
+    expect(profile).toContain(path.join(os.homedir(), ".cache", "uv"));
+    expect(profile).toContain(
+      path.join(os.homedir(), "Library", "Application Support", "uv"),
+    );
+    expect(profile).toContain(
+      path.join(os.homedir(), ".bun", "install", "cache"),
+    );
+  });
+
+  it("launcher script 應含 MCP cache 路徑的 mkdir -p 與 bwrap --bind", () => {
+    const sandboxHomePath = createSandboxHomePath();
+    const executablePath = resolveClaudeExecutablePath({
+      workspacePath: "/workspace/project",
+      sandboxHomePath,
+    });
+
+    const script = fs.readFileSync(executablePath!, "utf8");
+
+    // mkdir -p 確保路徑存在（bwrap 對不存在路徑做 --bind 會失敗）
+    expect(script).toContain(path.join(os.homedir(), ".npm"));
+    expect(script).toContain(path.join(os.homedir(), ".cache", "uv"));
+    expect(script).toContain(
+      path.join(os.homedir(), ".bun", "install", "cache"),
+    );
   });
 });

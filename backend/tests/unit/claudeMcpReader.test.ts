@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { writeFile, mkdir } from "node:fs/promises";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import {
   createTmpDir,
@@ -21,13 +20,9 @@ vi.mock("../../src/utils/logger.js", () => ({
 // 由於 Bun 的 os.homedir() 不受 process.env.HOME 動態改變影響，
 // 本測試改用 CLAUDE_JSON_PATH 直接指向 tmp dir 內的測試檔案。
 //
-// 另外，readClaudeMcpServers 讀取 projects[homedir].mcpServers，
-// 其中 homedir 是在呼叫時由 os.homedir() 取得的真實 home path。
-// 因此 JSON 內的 key 必須使用真實的 os.homedir() 值。
+// readClaudeMcpServers 讀取 top-level mcpServers（user-scoped）。
+// `claude mcp add -s user xxx` 會寫入此處。
 // ─────────────────────────────────────────────
-
-// 取得真實 homedir（Bun 不支援動態改變，用真實值作為 JSON key）
-const REAL_HOMEDIR = homedir();
 
 describe("claudeMcpReader", () => {
   let tmpHome: string;
@@ -57,13 +52,9 @@ describe("claudeMcpReader", () => {
     return import("../../src/services/mcp/claudeMcpReader.js");
   }
 
-  /** 建立包含 projects[homedir].mcpServers 的 claude.json 內容 */
+  /** 建立包含 top-level mcpServers 的 claude.json 內容（user-scoped） */
   function makeClaudeJson(mcpServers: Record<string, unknown>): string {
-    return JSON.stringify({
-      projects: {
-        [REAL_HOMEDIR]: { mcpServers },
-      },
-    });
+    return JSON.stringify({ mcpServers });
   }
 
   describe("檔案不存在時", () => {
@@ -95,7 +86,7 @@ describe("claudeMcpReader", () => {
     });
   });
 
-  describe("projects 欄位不存在時", () => {
+  describe("top-level mcpServers 欄位不存在時", () => {
     it("應回傳空陣列", async () => {
       await writeFile(
         claudeJsonPath,
@@ -106,15 +97,15 @@ describe("claudeMcpReader", () => {
       expect(result).toEqual([]);
     });
 
-    it("projects 為 null 時應回傳空陣列", async () => {
-      await writeFile(claudeJsonPath, JSON.stringify({ projects: null }));
+    it("mcpServers 為 null 時應回傳空陣列", async () => {
+      await writeFile(claudeJsonPath, JSON.stringify({ mcpServers: null }));
       const { readClaudeMcpServers } = await reimportClaudeMcpReader();
       const result = readClaudeMcpServers();
       expect(result).toEqual([]);
     });
   });
 
-  describe("user-scoped MCP server 解析（projects[homedir].mcpServers）", () => {
+  describe("user-scoped MCP server 解析（top-level mcpServers）", () => {
     it("應正確解析 command、args、env", async () => {
       await writeFile(
         claudeJsonPath,
@@ -217,18 +208,18 @@ describe("claudeMcpReader", () => {
       expect(names).toContain("server-b");
     });
 
-    it("top-level mcpServers 不影響結果（只讀 projects[homedir].mcpServers）", async () => {
-      // 驗證 bug fix：不應讀取 top-level mcpServers，而是讀 projects[homedir].mcpServers
+    it("project-scoped（projects[cwd].mcpServers）不影響結果（只讀 top-level mcpServers）", async () => {
+      // 驗證正確行為：應讀取 top-level mcpServers（user-scoped），不讀 projects[cwd].mcpServers
       await writeFile(
         claudeJsonPath,
         JSON.stringify({
           mcpServers: {
-            "top-level-server": { command: "node", args: [] },
+            "user-server": { command: "node", args: [] },
           },
           projects: {
-            [REAL_HOMEDIR]: {
+            "/some/project": {
               mcpServers: {
-                "user-server": { command: "python3", args: [] },
+                "project-server": { command: "python3", args: [] },
               },
             },
           },
@@ -240,6 +231,8 @@ describe("claudeMcpReader", () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].name).toBe("user-server");
+      // project-scoped 不應出現
+      expect(result.some((s) => s.name === "project-server")).toBe(false);
     });
 
     it("env 高風險 key（LD_*、DYLD_*、PATH）應被過濾", async () => {

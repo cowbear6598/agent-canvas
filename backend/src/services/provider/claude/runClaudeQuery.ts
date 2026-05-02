@@ -462,6 +462,9 @@ export async function* runClaudeQuery(
     allowedTools: options.allowedTools,
     model: options.model,
     abortController,
+    // MCP 子程序與 Claude CLI 的 stderr 輸出接到 logger，定位 sandbox 路徑問題的唯一線索
+    stderr: (chunk: string) =>
+      logger.warn("Chat", "Warn", `[claude-sdk stderr] ${chunk}`),
     ...(options.mcpServers ? { mcpServers: options.mcpServers } : {}),
     ...(options.plugins ? { plugins: options.plugins } : {}),
     ...(resumeSessionId ? { resume: resumeSessionId } : {}),
