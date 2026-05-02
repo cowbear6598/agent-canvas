@@ -130,7 +130,7 @@ function formatErrorMessage(
  * @param str 要清理的字串
  * @returns 清理後的字串
  */
-function sanitizeSensitiveInfo(str: string): string {
+export function sanitizeSensitiveInfo(str: string): string {
   // 隱藏敏感的認證令牌，避免日誌洩漏
   return str
     .replace(/https:\/\/[^@\s]+@github\.com/g, "https://***@github.com")

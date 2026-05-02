@@ -38,7 +38,7 @@ import {
   formatApiRetryMessage,
 } from "../../claude/sdkErrorMapper.js";
 import { resolveClaudeExecutablePath } from "../../claude/claudeSandboxLauncher.js";
-import { logger } from "../../../utils/logger.js";
+import { logger, sanitizeSensitiveInfo } from "../../../utils/logger.js";
 
 // ─── 型別定義 ────────────────────────────────────────────────────────────────
 
@@ -464,7 +464,11 @@ export async function* runClaudeQuery(
     abortController,
     // MCP 子程序與 Claude CLI 的 stderr 輸出接到 logger，定位 sandbox 路徑問題的唯一線索
     stderr: (chunk: string) =>
-      logger.warn("Chat", "Warn", `[claude-sdk stderr] ${chunk}`),
+      logger.warn(
+        "Chat",
+        "Warn",
+        `[claude-sdk stderr] ${sanitizeSensitiveInfo(chunk)}`,
+      ),
     ...(options.mcpServers ? { mcpServers: options.mcpServers } : {}),
     ...(options.plugins ? { plugins: options.plugins } : {}),
     ...(resumeSessionId ? { resume: resumeSessionId } : {}),

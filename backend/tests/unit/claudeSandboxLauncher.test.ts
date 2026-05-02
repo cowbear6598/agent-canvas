@@ -94,9 +94,18 @@ describe("claudeSandboxLauncher", () => {
 
     const script = fs.readFileSync(executablePath!, "utf8");
 
+    // uvDataPath 對應 getHostRuntimePaths() 的 dataRoot 邏輯
+    const dataRoot =
+      process.platform === "darwin"
+        ? path.join(os.homedir(), "Library", "Application Support")
+        : (process.env.XDG_DATA_HOME ??
+          path.join(os.homedir(), ".local", "share"));
+    const uvDataPath = path.join(dataRoot, "uv");
+
     // mkdir -p 確保路徑存在（bwrap 對不存在路徑做 --bind 會失敗）
     expect(script).toContain(path.join(os.homedir(), ".npm"));
     expect(script).toContain(path.join(os.homedir(), ".cache", "uv"));
+    expect(script).toContain(uvDataPath);
     expect(script).toContain(
       path.join(os.homedir(), ".bun", "install", "cache"),
     );

@@ -37,7 +37,7 @@ function resolveAvailableMcpServers(
 
 /**
  * handleMcpList：依 provider 分派到對應的 reader，回傳 MCP_LIST_RESULT。
- * - provider = "claude" → readClaudeMcpServers（僅 user-scoped，從 projects[homedir].mcpServers 讀取）
+ * - provider = "claude" → readClaudeMcpServers（僅 user-scoped，從 top-level mcpServers 讀取）
  * - provider = "codex"  → readCodexMcpServers（回傳 { name, type }[]）
  * - provider = "gemini" → readGeminiMcpServers（讀取 ~/.gemini/settings.json root.mcpServers）
  * 統一對應 mcpListItemSchema 格式後回傳。
