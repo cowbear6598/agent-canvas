@@ -12,8 +12,13 @@ console.warn = () => {};
 console.info = () => {};
 console.debug = () => {};
 
-// 必須在任何可能使用 logger 的模組載入之前執行，且必須完全覆蓋 Logger 類別的所有方法
-vi.mock("../../src/utils/logger.js", () => {
+// 必須在任何可能使用 logger 的模組載入之前執行
+// 透過 importOriginal 保留真實模組的所有 named export（例如純函式 sanitizeSensitiveInfo），
+// 只覆寫會產生副作用的 Logger 類別與 logger 實例，避免測試輸出被污染
+vi.mock("../../src/utils/logger.js", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../src/utils/logger.js")>();
+
   class MockLogger {
     log(): void {}
     warn(): void {}
@@ -21,6 +26,7 @@ vi.mock("../../src/utils/logger.js", () => {
   }
 
   return {
+    ...actual,
     Logger: MockLogger,
     logger: new MockLogger(),
   };
