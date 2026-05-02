@@ -14,7 +14,10 @@ export interface RunContext {
 }
 
 /** 前端使用的 RunPodInstance，去除內部路徑資訊並附加 Pod 名稱 */
-export type RunPodInstancePublic = Omit<RunPodInstance, "worktreePath"> & {
+export type RunPodInstancePublic = Omit<
+  RunPodInstance,
+  "worktreePath" | "workspacePath" | "sandboxHomePath"
+> & {
   podName: string;
 };
 

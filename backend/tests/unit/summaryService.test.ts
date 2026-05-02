@@ -67,6 +67,10 @@ import { podStore } from "../../src/services/podStore.js";
 import * as disposableChatService from "../../src/services/disposableChatService.js";
 import { config } from "../../src/config/index.js";
 import type { RunContext } from "../../src/types/run.js";
+import {
+  getRunSandboxHomePath,
+  getRunWorkspacePath,
+} from "../../src/services/runtime/executionPaths.js";
 
 function asMock(fn: unknown): Mock<any> {
   return fn as Mock<any>;
@@ -317,6 +321,12 @@ describe("SummaryService", () => {
       insertPodViaSQL(TARGET_POD_ID, "Target Pod");
 
       const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "test");
+      const runWorkspacePath = getRunWorkspacePath(run.id, SOURCE_POD_ID);
+      const runSandboxHomePath = getRunSandboxHomePath(run.id, SOURCE_POD_ID);
+      runStore.createPodInstance(run.id, SOURCE_POD_ID, "pending", "pending", {
+        workspacePath: runWorkspacePath,
+        sandboxHomePath: runSandboxHomePath,
+      });
       insertRunMessages(run.id, SOURCE_POD_ID);
 
       const runContext: RunContext = {
@@ -336,6 +346,12 @@ describe("SummaryService", () => {
 
       expect(result.success).toBe(true);
       expect(result.summary).toBe("Summary result");
+      expect(disposableChatService.executeDisposableChat).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workspacePath: runWorkspacePath,
+          sandboxHomePath: runSandboxHomePath,
+        }),
+      );
     });
 
     it("有 runContext 但 run 內無訊息時回傳錯誤", async () => {

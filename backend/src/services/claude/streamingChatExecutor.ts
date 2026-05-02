@@ -7,7 +7,6 @@ import {
 } from "../../utils/errorHelpers.js";
 import type { ContentBlock, PersistedSubMessage } from "../../types";
 import type { Pod } from "../../types/pod.js";
-import type { RunContext } from "../../types/run.js";
 
 import { abortRegistry } from "../provider/abortRegistry.js";
 import type { StreamEvent } from "./types.js";
@@ -30,14 +29,11 @@ import type {
   ProviderName,
   ProviderSystemMessage,
 } from "../provider/types.js";
-import { runStore } from "../runStore.js";
-import { isPathWithinDirectory } from "../../utils/pathValidator.js";
-import { config } from "../../config/index.js";
-import { resolvePodCwd } from "../shared/podPathResolver.js";
 import { socketService } from "../socketService.js";
 import { WebSocketResponseEvents } from "../../schemas/index.js";
 import { createI18nError } from "../../utils/i18nError.js";
 import { appendSystemMessage } from "../transcriptSystemMessage.js";
+import { resolveExecutionPaths } from "../runtime/executionPaths.js";
 
 export interface StreamingChatExecutorOptions {
   canvasId: string;
@@ -731,41 +727,6 @@ function processNormalizedEvent(
 }
 
 /**
- * 解析查詢的工作目錄（workspacePath）。
- *
- * 邏輯：
- *   - Run mode 且 instance 有 worktreePath → 使用 worktreePath（驗證在 repositoriesRoot 內）
- *   - 非 Run mode → 委由 resolvePodCwd(pod) 統一解析：
- *     - 有 repositoryId → 使用 repositoriesRoot / repositoryId（驗證路徑在 repositoriesRoot 內）
- *     - 否則 → 使用 pod.workspacePath（驗證在 canvasRoot 內）
- *
- * 路徑驗證失敗時直接拋錯，由上層回報錯誤給前端，不做 silent fallback。
- */
-function resolveWorkspacePath(pod: Pod, runContext?: RunContext): string {
-  // Run mode worktree 分支：沿用原本邏輯，驗證 worktreePath 在 repositoriesRoot 內
-  if (runContext) {
-    const instance = runStore.getPodInstance(runContext.runId, pod.id);
-    if (instance?.worktreePath) {
-      if (
-        !isPathWithinDirectory(instance.worktreePath, config.repositoriesRoot)
-      ) {
-        logger.error(
-          "Chat",
-          "Check",
-          `[resolveWorkspacePath] 工作目錄安全驗證失敗：worktreePath="${instance.worktreePath}" 不在允許範圍 repositoriesRoot="${config.repositoriesRoot}" 內（podId=${pod.id}, runId=${runContext.runId}）`,
-        );
-        throw new InvalidWorkspaceError("工作目錄驗證失敗");
-      }
-      return instance.worktreePath;
-    }
-  }
-
-  // 非 Run mode：cwd 由 resolvePodCwd 統一解析，
-  // repositoryId 路徑與 workspacePath 兩條分支皆由 helper 處理（含路徑安全驗證）。
-  return resolvePodCwd(pod);
-}
-
-/**
  * 執行 provider 串流的核心迴圈，並封裝 abort 生命週期管理。
  *
  * 職責：
@@ -869,8 +830,8 @@ async function resolveExecutionDependencies(
   const queryKey = strategy.getQueryKey(podId);
   const runContext = strategy.getRunContext();
 
-  // 解析工作目錄（可能拋出錯誤，由呼叫端 try-catch 統一交給 handleExecutionError）
-  const workspacePath = resolveWorkspacePath(pod, runContext);
+  // 解析執行路徑（可能拋出錯誤，由呼叫端 try-catch 統一交給 handleExecutionError）
+  const executionPaths = resolveExecutionPaths(pod, runContext);
 
   // 建構 Provider 執行時選項（可能拋出錯誤，同上）
   const providerOptions = await provider.buildOptions(pod, runContext);
@@ -879,7 +840,8 @@ async function resolveExecutionDependencies(
   const ctxWithoutSignal: Omit<ChatRequestContext, "abortSignal"> = {
     podId,
     message,
-    workspacePath,
+    workspacePath: executionPaths.workspacePath,
+    sandboxHomePath: executionPaths.sandboxHomePath,
     resumeSessionId: sessionId ?? null,
     runContext,
     options: providerOptions,

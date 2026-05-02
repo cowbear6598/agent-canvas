@@ -29,6 +29,12 @@ import { fireAndForget } from "../../utils/operationHelpers.js";
 import { config } from "../../config/index.js";
 import path from "path";
 import { getResultErrorString } from "../../types/result.js";
+import { promises as fs } from "fs";
+import { isPathWithinDirectory } from "../../utils/pathValidator.js";
+import {
+  provisionRunExecutionResources,
+  type ProvisionedRunExecutionResources,
+} from "../runtime/runExecutionResources.js";
 
 const MAX_RUNS_PER_CANVAS = 30;
 
@@ -141,10 +147,13 @@ class RunExecutionService {
     );
 
     const chainPodIds = this.collectChainPodIds(canvasId, sourcePodId);
-    // key: repositoryId，value: 已建立的 worktree 路徑（null 表示建立失敗或無需建立）
-    // 使用序列執行以避免並發時重複建立相同 repositoryId 的 worktree
-    const worktreeCache = new Map<string, string | null>();
+    // 同一 Run 內相同 repositoryId 的 Pod 共用同一份 repo-level workspace
+    const worktreeCache = new Map<
+      string,
+      { workspacePath: string; worktreePath: string | null }
+    >();
     const instances: ReturnType<typeof runStore.createPodInstance>[] = [];
+    const provisioningErrors: Array<{ podId: string; error: string }> = [];
     for (const podId of chainPodIds) {
       const pathways = this.calculatePathways(
         canvasId,
@@ -153,12 +162,52 @@ class RunExecutionService {
         chainPodIds,
       );
 
-      const worktreePath = await this.resolveWorktreePath(
-        canvasId,
-        podId,
-        workflowRun.id,
-        worktreeCache,
-      );
+      const pod = podStore.getById(canvasId, podId);
+      if (!pod) {
+        instances.push(
+          runStore.createPodInstance(
+            workflowRun.id,
+            podId,
+            pathways.autoPathwaySettled,
+            pathways.directPathwaySettled,
+          ),
+        );
+        logger.warn(
+          "Run",
+          "Warn",
+          `建立 Run 時找不到 pod，略過隔離資源配置（runId=${workflowRun.id}, podId=${podId})`,
+        );
+        continue;
+      }
+
+      let provisioned: ProvisionedRunExecutionResources;
+      try {
+        provisioned = await provisionRunExecutionResources({
+          pod,
+          runId: workflowRun.id,
+          worktreeCache,
+        });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "建立 run 隔離資源失敗";
+        logger.error(
+          "Run",
+          "Error",
+          `建立 run 隔離資源失敗（runId=${workflowRun.id}, podId=${podId}）：${message}`,
+        );
+        const instance = runStore.createPodInstance(
+          workflowRun.id,
+          podId,
+          pathways.autoPathwaySettled,
+          pathways.directPathwaySettled,
+        );
+        runStore.updatePodInstanceStatus(instance.id, "error", message);
+        provisioningErrors.push({ podId, error: message });
+        instances.push(
+          runStore.getPodInstance(workflowRun.id, podId) ?? instance,
+        );
+        continue;
+      }
 
       instances.push(
         runStore.createPodInstance(
@@ -166,13 +215,18 @@ class RunExecutionService {
           podId,
           pathways.autoPathwaySettled,
           pathways.directPathwaySettled,
-          worktreePath,
+          provisioned,
         ),
       );
     }
 
     const instancesWithNames = instances.map((instance) => {
-      const { worktreePath: _worktreePath, ...instanceData } = instance;
+      const {
+        worktreePath: _worktreePath,
+        workspacePath: _workspacePath,
+        sandboxHomePath: _sandboxHomePath,
+        ...instanceData
+      } = instance;
       const pod = podStore.getById(canvasId, instance.podId);
       return {
         ...instanceData,
@@ -195,75 +249,13 @@ class RunExecutionService {
       run: { ...workflowRun, podInstances: instancesWithNames, sourcePodName },
     } as RunCreatedPayload);
 
+    if (provisioningErrors.length > 0) {
+      this.evaluateRunStatus(workflowRun.id, canvasId);
+    }
+
     this.enforceRunLimit(canvasId);
 
     return { runId: workflowRun.id, canvasId, sourcePodId };
-  }
-
-  private async resolveWorktreePath(
-    canvasId: string,
-    podId: string,
-    runId: string,
-    worktreeCache: Map<string, string | null>,
-  ): Promise<string | null> {
-    const pod = podStore.getById(canvasId, podId);
-    if (!pod?.repositoryId) return null;
-
-    const { repositoryId } = pod;
-
-    // 同一 Run 內相同 repositoryId 的 Pod 共用一個 worktree
-    if (worktreeCache.has(repositoryId)) {
-      return worktreeCache.get(repositoryId) ?? null;
-    }
-
-    const repoPath = path.join(config.repositoriesRoot, repositoryId);
-    const isGitResult = await gitService.isGitRepository(repoPath);
-    if (!isGitResult.success || !isGitResult.data) {
-      worktreeCache.set(repositoryId, null);
-      return null;
-    }
-
-    // 空的 repo（尚無任何 commit）無法建立 worktree，直接回傳 null 不印錯誤
-    const hasCommitsResult = await gitService.hasCommits(repoPath);
-    if (!hasCommitsResult.success || !hasCommitsResult.data) {
-      worktreeCache.set(repositoryId, null);
-      return null;
-    }
-
-    // Run 啟動前同步 remote 最新版本
-    const syncResult = await gitService.syncToRemoteLatest(repoPath);
-    if (!syncResult.success) {
-      logger.error(
-        "Run",
-        "Error",
-        `同步 remote 最新版本失敗，中止該 repo 的 worktree 建立 (repositoryId=${repositoryId}): ${syncResult.error}`,
-      );
-      worktreeCache.set(repositoryId, null);
-      return null;
-    }
-
-    const worktreePath = path.join(
-      config.repositoriesRoot,
-      `${repositoryId}-run-${runId}`,
-    );
-
-    const createResult = await gitService.createDetachedWorktree(
-      repoPath,
-      worktreePath,
-    );
-
-    if (!createResult.success) {
-      logger.warn(
-        "Run",
-        "Warn",
-        `建立 Detached Worktree 失敗，fallback 到原始路徑 (repositoryId=${repositoryId}, runId=${runId}): ${createResult.error}`,
-      );
-      worktreeCache.set(repositoryId, null);
-      return null;
-    }
-
-    worktreeCache.set(repositoryId, worktreePath);
-    return worktreePath;
   }
 
   private collectChainPodIds(canvasId: string, sourcePodId: string): string[] {
@@ -338,6 +330,18 @@ class RunExecutionService {
   }
 
   startPodInstance(runContext: RunContext, podId: string): void {
+    const instance = runStore.getPodInstance(runContext.runId, podId);
+    if (!instance) {
+      logger.warn(
+        "Run",
+        "Warn",
+        `更新 pod instance 狀態失敗：找不到 instance (runId=${runContext.runId}, podId=${podId})`,
+      );
+      return;
+    }
+    if (TERMINAL_POD_STATUSES.has(instance.status)) {
+      return;
+    }
     this.updateAndEmitPodInstanceStatus(runContext, podId, "running");
   }
 
@@ -613,57 +617,96 @@ class RunExecutionService {
     }
   }
 
+  private async removeRunDirectory(dirPath: string, label: string): Promise<void> {
+    try {
+      await fs.rm(dirPath, { recursive: true, force: true });
+    } catch (error) {
+      logger.warn(
+        "Run",
+        "Warn",
+        `移除 ${label} 失敗（已忽略），path=${dirPath}: ${String(error)}`,
+      );
+    }
+  }
+
   /**
-   * 清理指定 Run 的所有 worktree。
-   * 冪等：worktree 已不存在時只 log warning，不拋出錯誤。
+   * 清理指定 Run 的所有隔離資源。
+   * 包含 detached worktree、snapshot workspace 與 run sandbox home。
    */
-  private async cleanupRunWorktrees(runId: string): Promise<void> {
-    const entries = runStore.getWorktreePathsByRunId(runId);
+  private async cleanupRunResources(runId: string): Promise<void> {
+    const entries = runStore.getExecutionPathsByRunId(runId);
     if (entries.length === 0) return;
 
-    // 去重：同一 Run 內共用相同 worktreePath 的 Pod 只清理一次，保留第一筆 entry
-    const seenPaths = new Set<string>();
-    const uniqueEntries = entries.filter((entry) => {
-      if (seenPaths.has(entry.worktreePath)) return false;
-      seenPaths.add(entry.worktreePath);
-      return true;
-    });
+    const uniqueWorktrees = new Map<string, string>();
+    const uniqueWorkspaces = new Set<string>();
+    const uniqueSandboxHomes = new Set<string>();
+
+    for (const entry of entries) {
+      if (entry.worktreePath) {
+        uniqueWorktrees.set(entry.worktreePath, entry.podId);
+      }
+      if (entry.workspacePath) {
+        uniqueWorkspaces.add(entry.workspacePath);
+      }
+      if (entry.sandboxHomePath) {
+        uniqueSandboxHomes.add(entry.sandboxHomePath);
+      }
+    }
 
     await Promise.all(
-      uniqueEntries.map(async (entry) => {
-        const podResult = podStore.getByIdGlobal(entry.podId);
-        if (!podResult) {
+      [...uniqueWorktrees.entries()].map(async ([worktreePath, podId]) => {
+        const podResult = podStore.getByIdGlobal(podId);
+        if (!podResult?.pod.repositoryId) {
           logger.warn(
             "Run",
             "Warn",
-            `清理 worktree 失敗：找不到 pod (podId=${entry.podId}, runId=${runId})`,
+            `清理 worktree 失敗：找不到 repository pod（podId=${podId}, runId=${runId}）`,
           );
           return;
         }
 
-        const pod = podResult.pod;
-        if (!pod.repositoryId) return;
-
         const parentRepoPath = path.join(
           config.repositoriesRoot,
-          pod.repositoryId,
+          podResult.pod.repositoryId,
         );
         const result = await gitService.removeWorktree(
           parentRepoPath,
-          entry.worktreePath,
+          worktreePath,
         );
-
         if (!result.success) {
           logger.warn(
             "Run",
             "Warn",
-            `移除 worktree 失敗（已忽略），runId=${runId}, podId=${entry.podId}, path=${entry.worktreePath}: ${getResultErrorString(result.error)}`,
+            `移除 worktree 失敗（已忽略），runId=${runId}, podId=${podId}, path=${worktreePath}: ${getResultErrorString(result.error)}`,
           );
         }
       }),
     );
 
-    runStore.clearWorktreePathsByRunId(runId);
+    await Promise.all(
+      [...uniqueWorkspaces]
+        .filter((workspacePath) =>
+          isPathWithinDirectory(workspacePath, path.resolve(config.runWorkspacesRoot)),
+        )
+        .map((workspacePath) =>
+          this.removeRunDirectory(workspacePath, "run workspace"),
+        ),
+    );
+
+    await Promise.all(
+      [...uniqueSandboxHomes]
+        .filter((sandboxHomePath) =>
+          isPathWithinDirectory(
+            sandboxHomePath,
+            path.resolve(config.claudeSandboxRoot),
+          ),
+        )
+        .map((sandboxHomePath) =>
+          this.removeRunDirectory(sandboxHomePath, "sandbox home"),
+        ),
+    );
+
+    runStore.clearExecutionPathsByRunId(runId);
   }
 
   /**
@@ -702,11 +745,11 @@ class RunExecutionService {
 
     logger.log("Run", "Complete", `Run ${runId} 狀態變更為 ${newStatus}`);
 
-    // Run 自然完成時立即回收所有 worktree
+    // Run 自然完成時立即回收所有 run 級隔離資源
     fireAndForget(
-      this.cleanupRunWorktrees(runId),
+      this.cleanupRunResources(runId),
       "Run",
-      "清理 Run worktree 失敗",
+      "清理 Run 隔離資源失敗",
     );
 
     socketService.emitToCanvas(
@@ -780,7 +823,7 @@ class RunExecutionService {
     const canvasId = run?.canvasId ?? "";
 
     // 防禦性清理：處理 Run 中途被砍、或 evaluateRunStatus 清理失敗的情況
-    await this.cleanupRunWorktrees(runId);
+    await this.cleanupRunResources(runId);
 
     runStore.deleteRun(runId);
     logger.log("Run", "Delete", `刪除 Run ${runId}`);

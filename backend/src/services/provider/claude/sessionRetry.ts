@@ -67,12 +67,32 @@ export async function* withSessionRetry(
   ctx: ChatRequestContext<ClaudeOptions>,
 ): AsyncIterable<NormalizedEvent> {
   const { podId } = ctx;
+  let shouldRetryFromFatalEvent = false;
 
   // 嘗試第一次執行
   try {
-    yield* runClaudeQuery(ctx);
-    // 第一次成功，直接結束
-    return;
+    for await (const event of runClaudeQuery(ctx)) {
+      if (
+        event.type === "error" &&
+        event.fatal &&
+        shouldRetrySession(event.message, ctx.resumeSessionId, false)
+      ) {
+        const message = getErrorMessage(event.message);
+        logger.log(
+          "Chat",
+          "Update",
+          `[withSessionRetry] Pod ${podId} Session 恢復失敗，清除 resumeSessionId 並重試：${message}`,
+        );
+        shouldRetryFromFatalEvent = true;
+        break;
+      }
+
+      yield event;
+    }
+    if (!shouldRetryFromFatalEvent) {
+      // 第一次成功，直接結束
+      return;
+    }
   } catch (error) {
     // AbortError：正常中止，向上拋出
     if (isAbortError(error)) {

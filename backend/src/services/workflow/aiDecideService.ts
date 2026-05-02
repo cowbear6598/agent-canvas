@@ -16,6 +16,7 @@ import type { RunContext } from "../../types/run.js";
 import { logger } from "../../utils/logger.js";
 import { getErrorMessage } from "../../utils/errorHelpers.js";
 import { getLastAssistantMessage } from "../../utils/messageHelper.js";
+import { resolveExecutionPaths } from "../runtime/executionPaths.js";
 
 export interface AiDecideResult {
   connectionId: string;
@@ -55,6 +56,7 @@ class AiDecideService {
     sourceSummary: string,
     targets: AiDecideTargetInfo[],
     model: AiDecideModelType,
+    runContext?: RunContext,
   ): Promise<DecisionResults | null> {
     const context = {
       sourcePodName: sourcePod.name,
@@ -90,6 +92,7 @@ class AiDecideService {
       name: "ai-decide",
       tools: [decideTriggersTool],
     });
+    const executionPaths = resolveExecutionPaths(sourcePod, runContext);
 
     const queryStream = claudeService.executeMcpChat({
       prompt: userPrompt,
@@ -97,7 +100,8 @@ class AiDecideService {
       mcpServers: { "ai-decide": customServer },
       allowedTools: ["mcp__ai-decide__decide_triggers"],
       model,
-      cwd: sourcePod.workspacePath,
+      cwd: executionPaths.workspacePath,
+      sandboxHomePath: executionPaths.sandboxHomePath,
     });
 
     for await (const _sdkMessage of queryStream) {
@@ -260,6 +264,7 @@ class AiDecideService {
           sourceSummary,
           targets,
           model,
+          runContext,
         );
       } catch (error) {
         logger.error(
@@ -356,12 +361,14 @@ class AiDecideService {
       podName: sourcePod.name,
       conversationHistory,
     });
+    const executionPaths = resolveExecutionPaths(sourcePod, runContext);
 
     const result = await executeDisposableChat({
       provider: "claude",
       systemPrompt,
       userMessage: userPrompt,
-      workspacePath: sourcePod.workspacePath,
+      workspacePath: executionPaths.workspacePath,
+      sandboxHomePath: executionPaths.sandboxHomePath,
       model: summaryModel ?? "sonnet",
     });
 

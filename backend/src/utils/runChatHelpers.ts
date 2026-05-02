@@ -63,6 +63,11 @@ async function handleCommandNotFound(params: {
   } = params;
   const triggerMsg = displayMessage ?? extractDisplayContent(message);
   const rc = await runExecutionService.createRun(canvasId, podId, triggerMsg);
+  const sourceInstance = runStore.getPodInstance(rc.runId, podId);
+  if (sourceInstance?.status === "error" || sourceInstance?.status === "skipped") {
+    onRunContextCreated?.(rc);
+    return rc;
+  }
   runExecutionService.startPodInstance(rc, podId);
   await injectRunUserMessage(rc, podId, displayMessage ?? message);
   onRunContextCreated?.(rc);
@@ -133,6 +138,11 @@ export async function launchMultiInstanceRun(
     podId,
     triggerMessage,
   );
+  const sourceInstance = runStore.getPodInstance(runContext.runId, podId);
+  if (sourceInstance?.status === "error" || sourceInstance?.status === "skipped") {
+    onRunContextCreated?.(runContext);
+    return runContext;
+  }
   runExecutionService.startPodInstance(runContext, podId);
   await injectRunUserMessage(
     runContext,

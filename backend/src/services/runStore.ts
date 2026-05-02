@@ -72,6 +72,14 @@ export interface RunPodInstance {
   autoPathwaySettled: PathwayState;
   directPathwaySettled: PathwayState;
   worktreePath: string | null;
+  workspacePath: string | null;
+  sandboxHomePath: string | null;
+}
+
+export interface RunPodInstancePaths {
+  worktreePath?: string | null;
+  workspacePath?: string | null;
+  sandboxHomePath?: string | null;
 }
 
 export interface RunMessage {
@@ -107,6 +115,8 @@ interface RunPodInstanceRow {
   auto_pathway_settled: number | null;
   direct_pathway_settled: number | null;
   worktree_path: string | null;
+  workspace_path: string | null;
+  sandbox_home_path: string | null;
 }
 
 interface RunMessageRow {
@@ -145,6 +155,8 @@ function rowToRunPodInstance(row: RunPodInstanceRow): RunPodInstance {
     autoPathwaySettled: sqliteIntToPathwayState(row.auto_pathway_settled),
     directPathwaySettled: sqliteIntToPathwayState(row.direct_pathway_settled),
     worktreePath: row.worktree_path,
+    workspacePath: row.workspace_path,
+    sandboxHomePath: row.sandbox_home_path,
   };
 }
 
@@ -263,8 +275,13 @@ class RunStore {
     podId: string,
     autoPathwaySettled: PathwayState = "not-applicable",
     directPathwaySettled: PathwayState = "not-applicable",
-    worktreePath: string | null = null,
+    paths: RunPodInstancePaths | string | null = {},
   ): RunPodInstance {
+    const normalizedPaths =
+      typeof paths === "string"
+        ? { worktreePath: paths }
+        : (paths ?? {});
+
     const instance: RunPodInstance = {
       id: randomUUID(),
       runId,
@@ -276,7 +293,9 @@ class RunStore {
       completedAt: null,
       autoPathwaySettled,
       directPathwaySettled,
-      worktreePath,
+      worktreePath: normalizedPaths.worktreePath ?? null,
+      workspacePath: normalizedPaths.workspacePath ?? null,
+      sandboxHomePath: normalizedPaths.sandboxHomePath ?? null,
     };
 
     this.stmts.runPodInstance.insert.run({
@@ -290,7 +309,9 @@ class RunStore {
       $completedAt: instance.completedAt,
       $autoPathwaySettled: pathwayStateToSqliteInt(autoPathwaySettled),
       $directPathwaySettled: pathwayStateToSqliteInt(directPathwaySettled),
-      $worktreePath: worktreePath,
+      $worktreePath: instance.worktreePath,
+      $workspacePath: instance.workspacePath,
+      $sandboxHomePath: instance.sandboxHomePath,
     });
 
     return instance;
@@ -319,12 +340,41 @@ class RunStore {
     }));
   }
 
+  getExecutionPathsByRunId(
+    runId: string,
+  ): Array<{
+    podId: string;
+    worktreePath: string | null;
+    workspacePath: string | null;
+    sandboxHomePath: string | null;
+  }> {
+    const rows = this.stmts.runPodInstance.selectExecutionPathsByRunId.all(
+      runId,
+    ) as Array<{
+      pod_id: string;
+      worktree_path: string | null;
+      workspace_path: string | null;
+      sandbox_home_path: string | null;
+    }>;
+
+    return rows.map((row) => ({
+      podId: row.pod_id,
+      worktreePath: row.worktree_path,
+      workspacePath: row.workspace_path,
+      sandboxHomePath: row.sandbox_home_path,
+    }));
+  }
+
   /**
    * 清除指定 Run 所有 pod instance 的 worktree_path。
    * 在 worktree 實際刪除成功後呼叫，防止二次清理。
    */
   clearWorktreePathsByRunId(runId: string): void {
     this.stmts.runPodInstance.clearWorktreePathsByRunId.run(runId);
+  }
+
+  clearExecutionPathsByRunId(runId: string): void {
+    this.stmts.runPodInstance.clearExecutionPathsByRunId.run(runId);
   }
 
   getPodInstance(runId: string, podId: string): RunPodInstance | undefined {

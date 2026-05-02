@@ -157,6 +157,7 @@ export interface ChatRequestContext<TOptions = unknown> {
   podId: string;
   message: string | ContentBlock[];
   workspacePath: string;
+  sandboxHomePath?: string;
   resumeSessionId: string | null;
   abortSignal: AbortSignal;
   runContext?: RunContext;

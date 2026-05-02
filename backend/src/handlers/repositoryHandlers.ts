@@ -12,6 +12,7 @@ import { podManifestService } from "../services/podManifestService.js";
 import { repositoryNoteStore } from "../services/noteStores.js";
 import { podStore } from "../services/podStore.js";
 import { socketService } from "../services/socketService.js";
+import { messageStore } from "../services/messageStore.js";
 import { gitService } from "../services/workspace/gitService.js";
 import { repositorySyncService } from "../services/repositorySyncService.js";
 import { commandService } from "../services/commandService.js";
@@ -119,6 +120,19 @@ async function cleanupPodWorkspaceResources(
   }
 }
 
+function resetPodConversationForWorkspaceChange(
+  canvasId: string,
+  podId: string,
+): void {
+  messageStore.clearMessages(podId);
+  podStore.resetClaudeSession(canvasId, podId);
+  socketService.emitToCanvas(
+    canvasId,
+    WebSocketResponseEvents.POD_MESSAGES_CLEARED,
+    { podId },
+  );
+}
+
 export const handlePodBindRepository = withCanvasId<PodBindRepositoryPayload>(
   WebSocketResponseEvents.POD_REPOSITORY_BOUND,
   async (
@@ -178,6 +192,8 @@ export const handlePodBindRepository = withCanvasId<PodBindRepositoryPayload>(
       return;
     }
 
+    // 工作目錄將切換到新的 repository，舊對話不可沿用。
+    resetPodConversationForWorkspaceChange(canvasId, podId);
     podStore.setRepositoryId(canvasId, podId, repositoryId);
 
     await repositorySyncService.syncRepositoryResources(repositoryId);
@@ -244,6 +260,10 @@ export const handlePodUnbindRepository =
 
       const oldRepositoryId = pod.repositoryId;
 
+      if (oldRepositoryId) {
+        // 解綁後 cwd 會從 repository 回到 pod workspace，必須清空舊對話。
+        resetPodConversationForWorkspaceChange(canvasId, podId);
+      }
       podStore.setRepositoryId(canvasId, podId, null);
 
       await unbindRepositoryCleanup(pod, oldRepositoryId);

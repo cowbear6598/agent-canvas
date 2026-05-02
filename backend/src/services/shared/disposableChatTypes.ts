@@ -8,6 +8,7 @@ export interface DisposableChatOptions {
   systemPrompt: string;
   userMessage: string;
   workspacePath: string;
+  sandboxHomePath?: string;
   model?: string;
 }
 

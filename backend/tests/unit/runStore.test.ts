@@ -531,4 +531,45 @@ describe("RunStore", () => {
       expect(paths).toHaveLength(0);
     });
   });
+
+  describe("execution path model", () => {
+    it("createPodInstance 帶 workspacePath 與 sandboxHomePath 後應正確持久化", () => {
+      const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, TRIGGER_MESSAGE);
+
+      runStore.createPodInstance(run.id, "pod-1", "pending", "pending", {
+        workspacePath: "/runtime/run-workspaces/run-1/pod-1",
+        sandboxHomePath: "/runtime/claude-sandbox/runs/run-1/pods/pod-1/home",
+      });
+
+      const instance = runStore.getPodInstance(run.id, "pod-1");
+      expect(instance?.workspacePath).toBe("/runtime/run-workspaces/run-1/pod-1");
+      expect(instance?.sandboxHomePath).toBe(
+        "/runtime/claude-sandbox/runs/run-1/pods/pod-1/home",
+      );
+    });
+
+    it("getExecutionPathsByRunId / clearExecutionPathsByRunId 應回傳並清除全部執行路徑", () => {
+      const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, TRIGGER_MESSAGE);
+
+      runStore.createPodInstance(run.id, "pod-1", "pending", "pending", {
+        worktreePath: "/repos/repo-1-run-1",
+        workspacePath: "/runtime/run-workspaces/run-1/repository-repo-1",
+        sandboxHomePath: "/runtime/claude-sandbox/runs/run-1/pods/pod-1/home",
+      });
+
+      expect(runStore.getExecutionPathsByRunId(run.id)).toEqual([
+        {
+          podId: "pod-1",
+          worktreePath: "/repos/repo-1-run-1",
+          workspacePath: "/runtime/run-workspaces/run-1/repository-repo-1",
+          sandboxHomePath:
+            "/runtime/claude-sandbox/runs/run-1/pods/pod-1/home",
+        },
+      ]);
+
+      runStore.clearExecutionPathsByRunId(run.id);
+
+      expect(runStore.getExecutionPathsByRunId(run.id)).toEqual([]);
+    });
+  });
 });

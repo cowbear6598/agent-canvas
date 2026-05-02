@@ -75,7 +75,12 @@ export const handleRunLoadHistory = withCanvasId<RunLoadHistoryPayload>(
       const sourcePodName = sourcePod?.name ?? run.sourcePodId;
 
       const podInstances = instances.map((instance) => {
-        const { worktreePath: _worktreePath, ...instanceData } = instance;
+        const {
+          worktreePath: _worktreePath,
+          workspacePath: _workspacePath,
+          sandboxHomePath: _sandboxHomePath,
+          ...instanceData
+        } = instance;
         const pod = podStore.getById(canvasId, instance.podId);
         return {
           ...instanceData,

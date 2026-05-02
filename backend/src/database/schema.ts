@@ -227,7 +227,9 @@ function createBaseTables(db: Database): void {
       "completed_at TEXT," +
       "auto_pathway_settled INTEGER," +
       "direct_pathway_settled INTEGER," +
-      "worktree_path TEXT" +
+      "worktree_path TEXT," +
+      "workspace_path TEXT," +
+      "sandbox_home_path TEXT" +
       ")",
   );
   db.exec(
@@ -284,6 +286,20 @@ function runMigrations(db: Database): void {
   runMigration(
     db,
     "ALTER TABLE run_pod_instances ADD COLUMN worktree_path TEXT",
+    ["duplicate column"],
+  );
+
+  // Migration: run_pod_instances 新增 workspace_path 欄位
+  runMigration(
+    db,
+    "ALTER TABLE run_pod_instances ADD COLUMN workspace_path TEXT",
+    ["duplicate column"],
+  );
+
+  // Migration: run_pod_instances 新增 sandbox_home_path 欄位
+  runMigration(
+    db,
+    "ALTER TABLE run_pod_instances ADD COLUMN sandbox_home_path TEXT",
     ["duplicate column"],
   );
 

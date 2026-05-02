@@ -65,6 +65,7 @@ import type { NormalizedEvent } from "../../src/services/provider/types.js";
 import { abortRegistry } from "../../src/services/provider/abortRegistry.js";
 import { config } from "../../src/config/index.js";
 import { logger } from "../../src/utils/logger.js";
+import { getRunSandboxHomePath } from "../../src/services/runtime/executionPaths.js";
 
 function asMock(fn: unknown): Mock<any> {
   return fn as Mock<any>;
@@ -1168,7 +1169,7 @@ describe("executeStreamingChat", () => {
       expect(upsertMessageSpy).not.toHaveBeenCalled();
     });
 
-    it("instance.worktreePath 合法時，provider.chat 收到的 workspacePath 為 worktreePath", async () => {
+    it("instance.worktreePath 合法時，provider.chat 收到的 workspacePath 與 sandboxHomePath 皆為 run-level 路徑", async () => {
       const pod = insertClaudePod();
       const validWorktreePath = path.join(
         config.repositoriesRoot,
@@ -1205,7 +1206,10 @@ describe("executeStreamingChat", () => {
       });
 
       expect(chatMock).toHaveBeenCalledWith(
-        expect.objectContaining({ workspacePath: validWorktreePath }),
+        expect.objectContaining({
+          workspacePath: validWorktreePath,
+          sandboxHomePath: getRunSandboxHomePath(runId, pod.id),
+        }),
       );
     });
 

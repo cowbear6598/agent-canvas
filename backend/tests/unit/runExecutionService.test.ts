@@ -11,6 +11,11 @@ import { logger } from "../../src/utils/logger.js";
 import { WebSocketResponseEvents } from "../../src/schemas/events.js";
 import type { RunContext } from "../../src/types/run.js";
 import { v4 as uuidv4 } from "uuid";
+import path from "path";
+import * as nodeFs from "fs";
+import * as runExecutionResources from "../../src/services/runtime/runExecutionResources.js";
+import { getRunSandboxHomePath } from "../../src/services/runtime/executionPaths.js";
+import { config } from "../../src/config/index.js";
 
 // --- 測試常數 ---
 const CANVAS_ID = "canvas-exec-1";
@@ -194,6 +199,31 @@ describe("RunExecutionService", () => {
       const remaining = runStore.getRunsByCanvasId(CANVAS_ID);
       // 清理後應 <= 30
       expect(remaining.length).toBeLessThanOrEqual(30);
+    });
+
+    it("non-repo pod 會配置 run-level workspace snapshot 與 sandbox home", async () => {
+      const { pod } = podStore.create(CANVAS_ID, {
+        name: "Isolated Pod",
+        x: 0,
+        y: 0,
+        rotation: 0,
+      });
+      vi.spyOn(
+        runExecutionResources,
+        "provisionRunExecutionResources",
+      ).mockResolvedValue({
+        workspacePath: path.join("/tmp", "run-workspaces", "isolated-pod"),
+        sandboxHomePath: getRunSandboxHomePath("run-mock", pod.id),
+        worktreePath: null,
+      });
+
+      const ctx = await runExecutionService.createRun(CANVAS_ID, pod.id, "測試");
+      const instance = runStore.getPodInstance(ctx.runId, pod.id);
+
+      expect(instance?.workspacePath).toBeTruthy();
+      expect(instance?.workspacePath).not.toBe(pod.workspacePath);
+      expect(instance?.sandboxHomePath).toBeTruthy();
+      expect(runExecutionResources.provisionRunExecutionResources).toHaveBeenCalled();
     });
   });
 
@@ -793,6 +823,36 @@ describe("RunExecutionService", () => {
       await runExecutionService.deleteRun(run.id);
 
       expect(abortSpy).not.toHaveBeenCalled();
+    });
+
+    it("刪除 run 時會清理 run-level workspace 與 sandbox home", async () => {
+      const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "測試");
+      const workspacePath = path.join(
+        config.runWorkspacesRoot,
+        "run-cleanup",
+        "pod-source",
+      );
+      const sandboxHomePath = getRunSandboxHomePath(run.id, SOURCE_POD_ID);
+      runStore.createPodInstance(run.id, SOURCE_POD_ID, "pending", "pending", {
+        workspacePath,
+        sandboxHomePath,
+      });
+
+      const rmSpy = vi
+        .spyOn(nodeFs.promises, "rm")
+        .mockResolvedValue(undefined);
+
+      await runExecutionService.deleteRun(run.id);
+
+      expect(rmSpy).toHaveBeenCalledWith(workspacePath, {
+        recursive: true,
+        force: true,
+      });
+      expect(rmSpy).toHaveBeenCalledWith(sandboxHomePath, {
+        recursive: true,
+        force: true,
+      });
+      expect(runStore.getExecutionPathsByRunId(run.id)).toEqual([]);
     });
   });
 });

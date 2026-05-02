@@ -37,6 +37,7 @@ import {
   checkAuthStatus,
   formatApiRetryMessage,
 } from "../../claude/sdkErrorMapper.js";
+import { resolveClaudeExecutablePath } from "../../claude/claudeSandboxLauncher.js";
 import { logger } from "../../../utils/logger.js";
 
 // ─── 型別定義 ────────────────────────────────────────────────────────────────
@@ -417,6 +418,7 @@ export async function* runClaudeQuery(
     podId,
     message,
     workspacePath,
+    sandboxHomePath,
     resumeSessionId,
     abortSignal,
     runContext,
@@ -451,7 +453,12 @@ export async function* runClaudeQuery(
     settingSources: options.settingSources,
     permissionMode: options.permissionMode,
     includePartialMessages: options.includePartialMessages,
-    pathToClaudeCodeExecutable: options.pathToClaudeCodeExecutable,
+    pathToClaudeCodeExecutable: sandboxHomePath
+      ? resolveClaudeExecutablePath({
+          workspacePath,
+          sandboxHomePath,
+        })
+      : options.pathToClaudeCodeExecutable,
     allowedTools: options.allowedTools,
     model: options.model,
     abortController,

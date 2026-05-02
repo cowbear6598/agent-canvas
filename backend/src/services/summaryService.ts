@@ -9,6 +9,7 @@ import { getLastAssistantMessage } from "../utils/messageHelper.js";
 import type { Pod, PersistedMessage } from "../types/index.js";
 import type { RunContext } from "../types/run.js";
 import type { ProviderName } from "./provider/index.js";
+import { resolveExecutionPaths } from "./runtime/executionPaths.js";
 
 interface TargetSummaryResult {
   targetPodId: string;
@@ -129,13 +130,15 @@ class SummaryService {
     const context = await buildSummaryContext(sourcePod, targetPod, messages);
     const systemPrompt = summaryPromptBuilder.buildSystemPrompt();
     const userPrompt = summaryPromptBuilder.buildUserPrompt(context);
+    const executionPaths = resolveExecutionPaths(sourcePod, runContext);
 
     const result = await executeDisposableChat({
       provider,
       model: summaryModel,
       systemPrompt,
       userMessage: userPrompt,
-      workspacePath: sourcePod.workspacePath,
+      workspacePath: executionPaths.workspacePath,
+      sandboxHomePath: executionPaths.sandboxHomePath,
     });
 
     if (!result.success) {
