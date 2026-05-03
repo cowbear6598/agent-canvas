@@ -496,8 +496,7 @@ function setupSubprocess(
         }),
       };
     }
-    // 非 ENOENT 的啟動失敗：原始訊息寫進 logger，不暴露給前端
-    logger.error("Chat", "Error", "[CodexProvider] 啟動 codex 子程序失敗", err);
+    // 非 ENOENT 的啟動失敗：err.message 直接帶到 errorEvent
     return {
       ok: false,
       errorEvent: buildCodexSystemError({

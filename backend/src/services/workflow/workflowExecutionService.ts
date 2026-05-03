@@ -128,7 +128,6 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
       };
     }
 
-    logger.error("Workflow", "Error", `生成摘要失敗：${summaryResult.error}`);
     const fallback = this.getLastAssistantFallback(sourcePodId, runContext);
 
     if (!fallback) {

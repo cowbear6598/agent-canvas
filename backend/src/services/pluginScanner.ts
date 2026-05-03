@@ -167,7 +167,6 @@ function scanClaudeInstalledPlugins(): InstalledPlugin[] {
     if (!Array.isArray(entries)) continue;
 
     if (!PLUGIN_ID_PATTERN.test(pluginId)) {
-      logger.warn("Run", "Check", `略過不合法的 plugin id（已遮罩）`);
       continue;
     }
 
@@ -249,7 +248,6 @@ function scanCodexPlugin(
   const pluginId = `${pluginName}@${marketplaceName}`;
 
   if (!PLUGIN_ID_PATTERN.test(pluginId)) {
-    logger.warn("Run", "Check", `略過不合法的 codex plugin id（已遮罩）`);
     return null;
   }
 
@@ -354,7 +352,6 @@ function parseGeminiExtensionEntry(
   const id = manifest.name;
 
   if (!PLUGIN_ID_PATTERN.test(id)) {
-    logger.warn("Run", "Check", `略過不合法的 gemini extension id（已遮罩）`);
     return null;
   }
 

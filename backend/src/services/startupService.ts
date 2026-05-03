@@ -189,27 +189,12 @@ class StartupService {
     if (migratedCount > 0) {
       // VACUUM 清除 DB 空閒頁面中殘留的明文資料
       getDb().exec("VACUUM");
-      logger.log(
-        "Encryption",
-        "Migrate",
-        "已執行 VACUUM 清除 DB 中殘留的明文資料",
-      );
 
-      // 清除備份 Git 歷史（舊 commit 可能包含明文 DB），僅忽略目錄不存在的情況
+      // 清除備份 Git 歷史（舊 commit 可能包含明文 DB），失敗不阻擋啟動
       const backupGitDir = path.join(config.appDataRoot, ".git");
-      try {
-        await fs.rm(backupGitDir, { recursive: true, force: true });
-        logger.log("Encryption", "Migrate", "已清除備份 Git 歷史");
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-          const errMsg = error instanceof Error ? error.message : String(error);
-          logger.warn(
-            "Encryption",
-            "Warn",
-            `清除備份 Git 歷史失敗，請手動確認：${errMsg}`,
-          );
-        }
-      }
+      await fs.rm(backupGitDir, { recursive: true, force: true }).catch(() => {
+        // 忽略：目錄不存在或清除失敗皆不阻擋啟動
+      });
     }
   }
 

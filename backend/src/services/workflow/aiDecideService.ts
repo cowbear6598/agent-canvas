@@ -199,11 +199,6 @@ class AiDecideService {
     | { valid: true; results: DecisionResults }
     | { valid: false; error: AiDecideBatchResult } {
     if (!results) {
-      logger.error(
-        "Workflow",
-        "Error",
-        "[AiDecideService] Custom Tool handler 未被呼叫",
-      );
       return {
         valid: false,
         error: this.buildDecisionErrors(connections, "AI 決策工具未被執行"),
@@ -211,7 +206,6 @@ class AiDecideService {
     }
 
     if (!results.decisions || !Array.isArray(results.decisions)) {
-      logger.error("Workflow", "Error", "[AiDecideService] 決策結果格式無效");
       return {
         valid: false,
         error: this.buildDecisionErrors(connections, "AI 決策結果格式無效"),

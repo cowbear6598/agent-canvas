@@ -27,13 +27,12 @@ class EncryptionService {
         );
       }
       this.key = keyBuffer;
-      logger.log("Encryption", "Init", "已載入既有加密金鑰");
+      logger.log("Encryption", "Init", "已載入加密金鑰");
     } catch (error: unknown) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
         const newKey = crypto.randomBytes(KEY_LENGTH);
         await fs.writeFile(this.keyFilePath, newKey, { mode: 0o600 });
         this.key = newKey;
-        logger.log("Encryption", "Init", "已產生並寫入新的加密金鑰");
       } else {
         throw error;
       }

@@ -116,7 +116,6 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
     const completedSummaries =
       pendingTargetStore.getCompletedSummaries(pendingKey);
     if (!completedSummaries) {
-      logger.error("Workflow", "Error", "無法取得已完成的摘要");
       return null;
     }
 

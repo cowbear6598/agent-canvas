@@ -1,8 +1,6 @@
 import { z } from "zod";
 import { ok, err } from "../../../types/index.js";
 import type { Result } from "../../../types/index.js";
-import { logger } from "../../../utils/logger.js";
-import { getErrorMessage } from "../../../utils/errorHelpers.js";
 import { integrationAppStore } from "../integrationAppStore.js";
 import { integrationEventPipeline } from "../integrationEventPipeline.js";
 import {
@@ -115,8 +113,6 @@ class TelegramProvider implements IntegrationProvider {
 
     integrationAppStore.updateStatus(appId, "disconnected");
     broadcastConnectionStatus("telegram", appId);
-
-    logger.log("Telegram", "Complete", `Telegram Bot ${appId} 已移除`);
   }
 
   destroyAll(): void {
@@ -125,8 +121,6 @@ class TelegramProvider implements IntegrationProvider {
     }
     this.pollingControllers.clear();
     this.pollingOffsets.clear();
-
-    logger.log("Telegram", "Complete", "已清除所有 Telegram Bot 連線");
   }
 
   async refreshResources(_appId: string): Promise<IntegrationResource[]> {
@@ -169,21 +163,11 @@ class TelegramProvider implements IntegrationProvider {
 
       const data = (await response.json()) as TelegramApiResponse;
       if (!data.ok) {
-        logger.error(
-          "Telegram",
-          "Error",
-          `[Telegram] 發送訊息失敗: [${data.error_code}] ${data.description}`,
-        );
         return err("發送訊息失敗");
       }
 
       return ok();
-    } catch (error) {
-      logger.error(
-        "Telegram",
-        "Error",
-        `發送訊息至 Chat ${resourceId} 失敗：${getErrorMessage(error)}`,
-      );
+    } catch {
       return err("發送訊息失敗");
     }
   }
@@ -236,33 +220,19 @@ class TelegramProvider implements IntegrationProvider {
   startPolling(appId: string, config: IntegrationAppConfig): void {
     const botToken = config["botToken"] as string | undefined;
     if (!botToken) {
-      logger.error(
-        "Telegram",
-        "Error",
-        `Telegram Bot ${appId} 缺少 botToken，無法啟動 polling`,
-      );
       return;
     }
 
     const existing = this.pollingControllers.get(appId);
     if (existing) {
       existing.abort();
-      logger.warn(
-        "Telegram",
-        "Warn",
-        `Telegram Bot ${appId} 已有 polling 迴圈，先停止舊的再啟動新的`,
-      );
     }
 
     const controller = new AbortController();
     this.pollingControllers.set(appId, controller);
 
-    this.runPollingLoop(appId, botToken, controller).catch((error) => {
-      logger.error(
-        "Telegram",
-        "Error",
-        `Telegram Bot ${appId} polling 迴圈發生意外錯誤：${getErrorMessage(error)}`,
-      );
+    this.runPollingLoop(appId, botToken, controller).catch(() => {
+      // polling 迴圈失敗時靜默吞掉
     });
   }
 
@@ -285,24 +255,11 @@ class TelegramProvider implements IntegrationProvider {
       }>;
 
       if (!data.ok) {
-        logger.error(
-          "Telegram",
-          "Error",
-          `Telegram Bot ${appId} 初始化失敗：Token 無效`,
-        );
         return null;
       }
 
       return data.result?.username ?? "";
-    } catch (error) {
-      // 過濾 error message 以避免 botToken 洩漏
-      const rawMessage = getErrorMessage(error);
-      const safeMessage = rawMessage.replace(botToken, "[REDACTED]");
-      logger.error(
-        "Telegram",
-        "Error",
-        `Telegram Bot ${appId} 初始化失敗：${safeMessage}`,
-      );
+    } catch {
       return null;
     }
   }
@@ -368,17 +325,9 @@ class TelegramProvider implements IntegrationProvider {
           this.processUpdate(appId, update);
           this.pollingOffsets.set(appId, update.update_id + 1);
         }
-      } catch (error) {
+      } catch {
         if (controller.signal.aborted) break;
 
-        // 過濾 error message 以避免 botToken 洩漏（fetch 失敗時 error 可能包含完整 URL）
-        const rawMessage = getErrorMessage(error);
-        const safeMessage = rawMessage.replace(botToken, "[REDACTED]");
-        logger.warn(
-          "Telegram",
-          "Warn",
-          `Telegram Bot ${appId} polling 失敗，${retryDelay}ms 後重試：${safeMessage}`,
-        );
         await new Promise((resolve) => setTimeout(resolve, retryDelay));
         // destroy 競態防禦：等待結束後再次確認 pollingOffsets 仍持有 appId 且訊號未中止，
         // 避免 destroy 已完成但 loop 仍進入下一輪重試
@@ -387,8 +336,6 @@ class TelegramProvider implements IntegrationProvider {
         retryDelay = Math.min(retryDelay * 2, MAX_RETRY_DELAY);
       }
     }
-
-    logger.log("Telegram", "Complete", `Telegram Bot ${appId} polling 已停止`);
   }
 }
 

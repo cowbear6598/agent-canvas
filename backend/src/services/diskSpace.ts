@@ -7,7 +7,6 @@
 import { execFile } from "child_process";
 import fs from "fs/promises";
 import { promisify } from "util";
-import { logger } from "../utils/logger.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -91,7 +90,6 @@ export async function checkDiskSpace(
     return { ok: true };
   } catch {
     // 兩條路徑都失敗，跳過檢查，不阻擋寫入
-    logger.warn("Cleanup", "Warn", "磁碟空間檢查失敗，跳過檢查");
     return { ok: true, skipped: true };
   }
 }

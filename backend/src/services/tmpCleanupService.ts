@@ -30,13 +30,13 @@ class TmpCleanupService {
    */
   start(): void {
     // 首次不 await，讓啟動流程不受阻擋
-    this.runOnce().catch((error) => {
-      logger.error("Cleanup", "Error", "首次 tmp 清理失敗", error);
+    this.runOnce().catch(() => {
+      // 清理失敗下次 cycle 會重試
     });
 
     this.timer = setInterval(() => {
-      this.runOnce().catch((error) => {
-        logger.error("Cleanup", "Error", "定期 tmp 清理失敗", error);
+      this.runOnce().catch(() => {
+        // 清理失敗下次 cycle 會重試
       });
     }, INTERVAL_MS);
 
@@ -74,7 +74,6 @@ class TmpCleanupService {
       if (isEnoent(error)) {
         return;
       }
-      logger.error("Cleanup", "Error", "讀取 tmp 目錄失敗", error);
       return;
     }
 
@@ -112,17 +111,14 @@ class TmpCleanupService {
             cleanedCount++;
           } catch {
             // 單一目錄失敗不影響其他目錄的清理
-            logger.warn(
-              "Cleanup",
-              "Warn",
-              `清理 tmp 目錄失敗，跳過：${entryPath}`,
-            );
           }
         }),
       );
     }
 
-    logger.log("Cleanup", "Complete", `清理 ${cleanedCount} 個過期 tmp 目錄`);
+    if (cleanedCount > 0) {
+      logger.log("Cleanup", "Complete", `清理 ${cleanedCount} 個過期 tmp 目錄`);
+    }
   }
 
   /**
@@ -142,16 +138,8 @@ class TmpCleanupService {
 
     try {
       sessionEntries = await fs.readdir(stagingPath);
-    } catch (error) {
-      // staging 目錄尚未建立（還沒有任何上傳），靜默略過
-      if (isEnoent(error)) {
-        return 0;
-      }
-      logger.warn(
-        "Cleanup",
-        "Warn",
-        `讀取 staging 目錄失敗，跳過：${stagingPath}`,
-      );
+    } catch {
+      // staging 目錄尚未建立或讀取失敗，靜默略過
       return 0;
     }
 
@@ -185,11 +173,6 @@ class TmpCleanupService {
             cleanedCount++;
           } catch {
             // 單一 session 目錄失敗不影響其他 session 的清理
-            logger.warn(
-              "Cleanup",
-              "Warn",
-              `清理 staging session 目錄失敗，跳過：${sessionPath}`,
-            );
           }
         }),
       );

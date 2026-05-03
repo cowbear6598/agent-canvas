@@ -284,7 +284,6 @@ function spawnCodexProcess(
       };
     }
 
-    logger.error("Chat", "Error", "[CodexService] 啟動 codex 子程序失敗", err);
     return {
       content: "",
       success: false,

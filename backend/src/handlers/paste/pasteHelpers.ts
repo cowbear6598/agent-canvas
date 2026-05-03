@@ -8,7 +8,6 @@ import type {
 import type { BaseNote } from "../../types/baseNote.js";
 import type { CanvasPastePayload, PastePodItem } from "../../schemas";
 import { podStore } from "../../services/podStore.js";
-import { getPodDisplayName } from "../../utils/handlerHelpers.js";
 import { workspaceService } from "../../services/workspace";
 import {
   repositoryNoteStore,
@@ -18,7 +17,6 @@ import { connectionStore } from "../../services/connectionStore.js";
 import { repositoryService } from "../../services/repositoryService.js";
 import { getErrorMessage } from "../../utils/websocketResponse.js";
 import { createI18nError, type I18nError } from "../../utils/i18nError.js";
-import { logger } from "../../utils/logger.js";
 import fs from "fs/promises";
 import path from "path";
 import crypto from "crypto";
@@ -67,15 +65,12 @@ function recordError(
   type: PasteError["type"],
   originalId: string,
   error: unknown,
-  context: string,
 ): void {
   // 精確判斷是否為 I18nError 物件（非 null 且具備 key 屬性）
   const isI18n = error !== null && typeof error === "object" && "key" in error;
   const i18nOrMsg = isI18n ? (error as I18nError) : getErrorMessage(error);
-  const logMessage = typeof i18nOrMsg === "string" ? i18nOrMsg : i18nOrMsg.key;
 
   errors.push({ type, originalId, error: i18nOrMsg });
-  logger.error("Paste", "Error", `${context}：${logMessage}`);
 }
 
 /**
@@ -276,7 +271,6 @@ export async function createPastedPods(
         "pod",
         podItem.originalId,
         createI18nError("errors.repoNotExists"),
-        "建立 Pod 失敗",
       );
       continue;
     }
@@ -286,20 +280,13 @@ export async function createPastedPods(
     );
 
     if (!createResult.success) {
-      recordError(
-        errors,
-        "pod",
-        podItem.originalId,
-        createResult.error,
-        "建立 Pod 失敗",
-      );
+      recordError(errors, "pod", podItem.originalId, createResult.error);
       continue;
     }
 
     const { pod, originalId } = createResult.data;
     createdPods.push(pod);
     podIdMapping[originalId] = pod.id;
-    logger.log("Paste", "Create", `已建立 Pod「${pod.name}」`);
   }
 
   return createdPods;
@@ -454,19 +441,12 @@ function createPastedNotes<
     const noteResult = safeExecute(() => config.store.create(canvasId, params));
     if (!noteResult.success) {
       const resourceId = config.getId(noteItem);
-      recordError(
-        errors,
-        config.type,
-        resourceId,
-        noteResult.error,
-        `建立${config.type}失敗`,
-      );
+      recordError(errors, config.type, resourceId, noteResult.error);
       continue;
     }
 
     const note = noteResult.data;
     createdNotes.push(note);
-    logger.log("Paste", "Create", `已建立${config.type}「${note.name}」`);
   }
 
   return { notes: createdNotes, errors };
@@ -498,17 +478,10 @@ export function createPastedConnections(
     );
 
     if (!connResult.success) {
-      logger.error("Paste", "Error", `建立連線失敗：${connResult.error}`);
       continue;
     }
 
     createdConnections.push(connResult.data);
-
-    logger.log(
-      "Paste",
-      "Create",
-      `已建立連線「${getPodDisplayName(canvasId, newSourcePodId)} → ${getPodDisplayName(canvasId, newTargetPodId)}」`,
-    );
   }
 
   return createdConnections;

@@ -617,7 +617,10 @@ class RunExecutionService {
     }
   }
 
-  private async removeRunDirectory(dirPath: string, label: string): Promise<void> {
+  private async removeRunDirectory(
+    dirPath: string,
+    label: string,
+  ): Promise<void> {
     try {
       await fs.rm(dirPath, { recursive: true, force: true });
     } catch (error) {
@@ -686,7 +689,10 @@ class RunExecutionService {
     await Promise.all(
       [...uniqueWorkspaces]
         .filter((workspacePath) =>
-          isPathWithinDirectory(workspacePath, path.resolve(config.runWorkspacesRoot)),
+          isPathWithinDirectory(
+            workspacePath,
+            path.resolve(config.runWorkspacesRoot),
+          ),
         )
         .map((workspacePath) =>
           this.removeRunDirectory(workspacePath, "run workspace"),
@@ -742,8 +748,6 @@ class RunExecutionService {
 
     runStore.updateRunStatus(runId, newStatus);
     const updatedRun = runStore.getRun(runId);
-
-    logger.log("Run", "Complete", `Run ${runId} 狀態變更為 ${newStatus}`);
 
     // Run 自然完成時立即回收所有 run 級隔離資源
     fireAndForget(
@@ -826,7 +830,6 @@ class RunExecutionService {
     await this.cleanupRunResources(runId);
 
     runStore.deleteRun(runId);
-    logger.log("Run", "Delete", `刪除 Run ${runId}`);
 
     if (canvasId) {
       socketService.emitToCanvas(
