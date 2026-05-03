@@ -19,6 +19,10 @@ export const providerSchema = z.enum(["claude", "codex", "gemini"]);
 const MODEL_PATTERN = /^[a-zA-Z0-9._-]+$/;
 const MAX_MODEL_LENGTH = 100;
 
+/** thinking level 安全字元白名單（僅小寫英文字母）與最大長度，套用於 providerConfigSchema 與 podSetThinkingLevelSchema */
+const THINKING_LEVEL_PATTERN = /^[a-z]+$/;
+const MAX_THINKING_LEVEL_LENGTH = 20;
+
 /**
  * provider 設定物件（.strict() 阻止多餘欄位靜默通過）：
  * 阻止 DB 舊格式 {provider, model} 或前端型別變動引入多餘欄位，曾真實發生 bug。
@@ -32,10 +36,14 @@ export const providerConfigSchema = z
       .max(MAX_MODEL_LENGTH)
       .optional(),
     /**
-     * thinking level（推理層級）值字串，最長 20 字元。
-     * 不限定 enum 值（與 server-side 不驗證一致），未知 key 仍由 .strict() 阻擋。
+     * thinking level（推理層級）值字串，僅做安全字元白名單（小寫英文字母），不做語意層 enum 驗證，最長 20 字元。
+     * 避免含 \n、=、空白、分號等字元被拼入 CLI 參數造成 config 注入；未知 key 仍由 .strict() 阻擋。
      */
-    thinkingLevel: z.string().max(20).optional(),
+    thinkingLevel: z
+      .string()
+      .regex(THINKING_LEVEL_PATTERN, "thinking level 包含不允許的字元")
+      .max(MAX_THINKING_LEVEL_LENGTH)
+      .optional(),
   })
   .strict();
 
@@ -92,13 +100,17 @@ export const podSetModelSchema = z.object({
 /**
  * pod:set-thinking-level 請求 schema：
  * WS payload 欄位名為 level（簡潔），對應內部寫入 providerConfig.thinkingLevel。
- * 不限定 enum 值（與 server-side 不驗證一致），僅限制最大長度 20 字元。
+ * 僅做安全字元白名單（小寫英文字母），不做語意層 enum 驗證，最長 20 字元。
+ * 避免含 \n、=、空白、分號等字元被拼入 CLI 參數造成 config 注入。
  */
 export const podSetThinkingLevelSchema = z.object({
   requestId: requestIdSchema,
   canvasId: canvasIdSchema,
   podId: podIdSchema,
-  level: z.string().max(20),
+  level: z
+    .string()
+    .regex(THINKING_LEVEL_PATTERN, "thinking level 包含不允許的字元")
+    .max(MAX_THINKING_LEVEL_LENGTH),
 });
 
 export const podSetScheduleSchema = z.object({
