@@ -47,13 +47,13 @@ vi.mock("@/components/pod/PodMcpSlot.vue", () => ({
       "podRotation",
       "activeCount",
       "provider",
-      "capabilityDisabled",
+      "disabled",
       "disabledTooltip",
     ],
     emits: ["click"],
     template:
       '<button class="pod-mcp-slot" ' +
-      ':data-capability-disabled="String(capabilityDisabled)" ' +
+      ':data-disabled="String(disabled)" ' +
       "@click=\"$emit('click', $event)\"></button>",
   },
 }));
@@ -76,13 +76,13 @@ vi.mock("@/components/pod/PodPluginSlot.vue", () => ({
       "podRotation",
       "activeCount",
       "provider",
-      "capabilityDisabled",
+      "disabled",
       "disabledTooltip",
     ],
     emits: ["click"],
     template:
       '<button class="pod-plugin-slot" ' +
-      ':data-capability-disabled="String(capabilityDisabled)" ' +
+      ':data-disabled="String(disabled)" ' +
       "@click=\"$emit('click', $event)\"></button>",
   },
 }));
@@ -160,7 +160,7 @@ describe("PodSlots", () => {
   setupStoreTest();
 
   describe("Codex provider：Command 以外 slot 為 disabled", () => {
-    it("Repository disabled=true、Command disabled=false；MCP capabilityDisabled=true", () => {
+    it("Repository disabled=true、Command disabled=false；MCP disabled=true", () => {
       const podStore = usePodStore();
       podStore.pods = [
         {
@@ -191,7 +191,7 @@ describe("PodSlots", () => {
       expect(singleSlots[1]!.attributes("data-disabled")).toBe("false"); // Command
 
       const mcpSlot = wrapper.find(".pod-mcp-slot");
-      expect(mcpSlot.attributes("data-capability-disabled")).toBe("true");
+      expect(mcpSlot.attributes("data-disabled")).toBe("true");
 
       // disabled tooltip 使用 i18n key（t = identity）
       expect(singleSlots[0]!.attributes("data-disabled-tooltip")).toBe(
@@ -203,7 +203,7 @@ describe("PodSlots", () => {
   });
 
   describe("Claude provider：全部 slot 為 enabled", () => {
-    it("所有 single-bind slot disabled=false；MCP capabilityDisabled=false", () => {
+    it("所有 single-bind slot disabled=false；MCP disabled=false", () => {
       const podStore = usePodStore();
       podStore.pods = [
         {
@@ -233,9 +233,9 @@ describe("PodSlots", () => {
       for (const slot of singleSlots) {
         expect(slot.attributes("data-disabled")).toBe("false");
       }
-      expect(
-        wrapper.find(".pod-mcp-slot").attributes("data-capability-disabled"),
-      ).toBe("false");
+      expect(wrapper.find(".pod-mcp-slot").attributes("data-disabled")).toBe(
+        "false",
+      );
 
       wrapper.unmount();
     });
@@ -322,8 +322,8 @@ describe("PodSlots", () => {
     });
   });
 
-  describe("Gemini provider：Repository 與 Command 為 enabled，Plugin 與 MCP 為 capabilityDisabled", () => {
-    it("Repository disabled=false、Command disabled=false；MCP capabilityDisabled=true、Plugin capabilityDisabled=true", () => {
+  describe("Gemini provider：Repository 與 Command 為 enabled，Plugin 與 MCP 為 disabled", () => {
+    it("Repository disabled=false、Command disabled=false；MCP disabled=true、Plugin disabled=true", () => {
       const podStore = usePodStore();
       podStore.pods = [
         {
@@ -353,12 +353,12 @@ describe("PodSlots", () => {
       expect(singleSlots[0]!.attributes("data-disabled")).toBe("false"); // Repository
       expect(singleSlots[1]!.attributes("data-disabled")).toBe("false"); // Command
 
-      expect(
-        wrapper.find(".pod-mcp-slot").attributes("data-capability-disabled"),
-      ).toBe("true");
-      expect(
-        wrapper.find(".pod-plugin-slot").attributes("data-capability-disabled"),
-      ).toBe("true");
+      expect(wrapper.find(".pod-mcp-slot").attributes("data-disabled")).toBe(
+        "true",
+      );
+      expect(wrapper.find(".pod-plugin-slot").attributes("data-disabled")).toBe(
+        "true",
+      );
 
       wrapper.unmount();
     });

@@ -8,9 +8,11 @@ const props = defineProps<{
   podRotation: number;
   activeCount: number;
   provider: PodProvider;
-  /** 僅 capability gate：當前 provider 完全不支援 MCP 才為 true。
-   *  Pod busy 不影響 notch click — busy 鎖只在 popover 內 Toggle 層級。 */
-  capabilityDisabled: boolean;
+  /** notch 是否禁用點擊（合併來源）：
+   *  1) capability gate — 當前 provider 完全不支援 MCP
+   *  2) 訊息鎖 — Pod 已有訊息，禁止再開啟 popover 變更 MCP
+   *  父元件負責合併兩種來源後傳入；對應的 tooltip 文字也由父元件決定優先序。 */
+  disabled: boolean;
   disabledTooltip: string;
 }>();
 
@@ -21,7 +23,7 @@ const emit = defineEmits<{
 const { t } = useI18n();
 
 const handleClick = (event: MouseEvent): void => {
-  if (props.capabilityDisabled) return;
+  if (props.disabled) return;
   emit("click", event);
 };
 
@@ -53,8 +55,8 @@ const buttonStyle = computed(() => ({
             : '',
       ]"
       :style="buttonStyle"
-      :aria-disabled="capabilityDisabled || undefined"
-      :title="capabilityDisabled ? disabledTooltip : undefined"
+      :aria-disabled="disabled || undefined"
+      :title="disabled ? disabledTooltip : undefined"
       @click="handleClick"
     >
       <span class="text-xs font-mono">

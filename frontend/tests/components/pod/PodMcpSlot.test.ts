@@ -15,7 +15,7 @@ const defaultProps = {
   podRotation: 0,
   activeCount: 3,
   provider: "claude" as PodProvider,
-  capabilityDisabled: false,
+  disabled: false,
   disabledTooltip: "pod.slot.providerDisabled",
 };
 
@@ -94,11 +94,11 @@ describe("PodMcpSlot", () => {
     });
   });
 
-  // ── capabilityDisabled ───────────────────────────────────────────────────
+  // ── disabled ───────────────────────────────────────────────────
 
-  describe("capabilityDisabled = true", () => {
+  describe("disabled = true", () => {
     it("button 應有 aria-disabled 屬性", () => {
-      const wrapper = mountSlot({ capabilityDisabled: true });
+      const wrapper = mountSlot({ disabled: true });
       const button = wrapper.find("button");
       expect(button.attributes("aria-disabled")).toBe("true");
       wrapper.unmount();
@@ -106,7 +106,7 @@ describe("PodMcpSlot", () => {
 
     it("tooltip（title）應套用 disabledTooltip 值", () => {
       const wrapper = mountSlot({
-        capabilityDisabled: true,
+        disabled: true,
         disabledTooltip: "pod.slot.providerDisabled",
       });
       const button = wrapper.find("button");
@@ -115,7 +115,7 @@ describe("PodMcpSlot", () => {
     });
 
     it("click 不應 emit（early return）", async () => {
-      const wrapper = mountSlot({ capabilityDisabled: true });
+      const wrapper = mountSlot({ disabled: true });
       const button = wrapper.find("button");
       await button.trigger("click");
       expect(wrapper.emitted("click")).toBeFalsy();
@@ -160,23 +160,23 @@ describe("PodMcpSlot", () => {
     });
   });
 
-  describe("capabilityDisabled = false", () => {
+  describe("disabled = false", () => {
     it("button 不應有 aria-disabled 屬性", () => {
-      const wrapper = mountSlot({ capabilityDisabled: false });
+      const wrapper = mountSlot({ disabled: false });
       const button = wrapper.find("button");
       expect(button.attributes("aria-disabled")).toBeUndefined();
       wrapper.unmount();
     });
 
     it("button 不應有 title 屬性", () => {
-      const wrapper = mountSlot({ capabilityDisabled: false });
+      const wrapper = mountSlot({ disabled: false });
       const button = wrapper.find("button");
       expect(button.attributes("title")).toBeUndefined();
       wrapper.unmount();
     });
 
     it("click 應 emit 'click' 並帶 MouseEvent", async () => {
-      const wrapper = mountSlot({ capabilityDisabled: false });
+      const wrapper = mountSlot({ disabled: false });
       const button = wrapper.find("button");
       await button.trigger("click");
       expect(wrapper.emitted("click")).toBeTruthy();
@@ -213,11 +213,11 @@ describe("PodMcpSlot", () => {
       wrapper.unmount();
     });
 
-    // B13：Gemini capabilityDisabled=true 時點擊不 emit click
-    it("B13：capabilityDisabled=true 時點擊不 emit click", async () => {
+    // B13：Gemini disabled=true 時點擊不 emit click
+    it("B13：disabled=true 時點擊不 emit click", async () => {
       const wrapper = mountSlot({
         provider: "gemini" as PodProvider,
-        capabilityDisabled: true,
+        disabled: true,
       });
       const button = wrapper.find("button");
       await button.trigger("click");

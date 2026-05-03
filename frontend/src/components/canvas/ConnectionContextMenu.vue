@@ -457,7 +457,10 @@ const handleSetSummaryProvider = async (
         <span class="font-mono text-foreground">{{
           $t("canvas.connectionContextMenu.summaryProvider")
         }}</span>
-        <ChevronRight :size="12" class="text-muted-foreground" />
+        <ChevronRight
+          :size="12"
+          class="text-muted-foreground"
+        />
       </button>
 
       <!-- Summary Provider 子選單：硬編碼三項，不過濾認證狀態
@@ -521,7 +524,10 @@ const handleSetSummaryProvider = async (
         <span class="font-mono text-foreground">{{
           $t("canvas.connectionContextMenu.summaryModel")
         }}</span>
-        <ChevronRight :size="12" class="text-muted-foreground" />
+        <ChevronRight
+          :size="12"
+          class="text-muted-foreground"
+        />
       </button>
 
       <!-- Summary Model 子選單：根據上游 Pod provider 動態渲染
@@ -588,7 +594,10 @@ const handleSetSummaryProvider = async (
         <span class="font-mono text-foreground">{{
           $t("canvas.connectionContextMenu.aiModel")
         }}</span>
-        <ChevronRight :size="12" class="text-muted-foreground" />
+        <ChevronRight
+          :size="12"
+          class="text-muted-foreground"
+        />
       </button>
 
       <!-- 子選單：移除 ml-1（4px gap），改用 pl-1 撐出等價視覺空間 -->

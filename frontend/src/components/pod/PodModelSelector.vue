@@ -1,12 +1,16 @@
 <script setup lang="ts">
-import { ref, computed, onUnmounted } from "vue";
+import { ref, computed, onUnmounted, watch } from "vue";
 import type { ModelOption, PodProvider } from "@/types/pod";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
 
+// disabled / disabledTooltip 來自 CanvasPod 上層的「capability OR 訊息鎖」合併判定，
+// 本元件僅負責 UI 鎖定（停用 hover 展開、停用點選、降透明度、顯示 tooltip）。
 const props = defineProps<{
   podId: string;
   currentModel: string;
   provider: PodProvider;
+  disabled?: boolean;
+  disabledTooltip?: string;
 }>();
 
 const emit = defineEmits<{
@@ -63,6 +67,24 @@ onUnmounted(() => {
   pendingTimers.value.clear();
 });
 
+// disabled 變 true 時強制重置展開狀態：因為 disabled 後 pointer-events 被拔掉，
+// @mouseleave 不再觸發，若使用者送訊息瞬間 selector 正展開，會卡在展開狀態無法收合。
+watch(
+  () => props.disabled,
+  (next) => {
+    if (!next) return;
+    if (hoverTimeoutId.value !== null) {
+      clearTimeout(hoverTimeoutId.value);
+      hoverTimeoutId.value = null;
+    }
+    pendingTimers.value.forEach(clearTimeout);
+    pendingTimers.value.clear();
+    isHovered.value = false;
+    isCollapsing.value = false;
+    isAnimating.value = false;
+  },
+);
+
 const providerCapabilityStore = useProviderCapabilityStore();
 
 /**
@@ -114,6 +136,8 @@ const sortedOptions = computed((): ModelOption[] => {
 });
 
 const handleMouseEnter = (): void => {
+  // disabled 時不展開動畫
+  if (props.disabled) return;
   // 單一選項仍允許展開動畫，但不允許切換
   if (isAnimating.value) return;
 
@@ -134,6 +158,8 @@ const handleMouseLeave = (): void => {
 };
 
 const selectModel = async (model: string): Promise<void> => {
+  // disabled 時不允許切換
+  if (props.disabled) return;
   // 單一選項時點擊不做任何事
   if (isSingleOption.value) return;
   if (isAnimating.value || isCollapsing.value) return;
@@ -174,7 +200,12 @@ const selectModel = async (model: string): Promise<void> => {
 
 <template>
   <!-- 上方中央定位錨點 -->
-  <div class="pod-model-slot">
+  <div
+    class="pod-model-slot"
+    :class="{ 'pod-model-slot--disabled': disabled }"
+    :aria-disabled="disabled || undefined"
+    :title="disabled ? disabledTooltip : undefined"
+  >
     <!--
       model-cards-stack：垂直堆疊容器。
       flex-direction: column-reverse → sortedOptions[0]（active）視覺上固定在最底部貼近 Pod，
@@ -358,6 +389,40 @@ const selectModel = async (model: string): Promise<void> => {
 /* 單一選項：cursor 提示無法切換，但仍允許 hover 事件 */
 .model-card.card-single {
   cursor: default;
+}
+
+/*
+  disabled 狀態：由 CanvasPod 上層依「capability OR 訊息鎖」合併決定。
+  - 對 model-card 套用降透明度與 not-allowed 游標，視覺上提示無法操作。
+  - 停用 pointer-events 阻止 hover 展開與點選；
+    active 卡片的 tooltip 由根層 .pod-model-slot 的 :title 接手顯示。
+*/
+/*
+  disabled 強制收合：覆蓋 .expanded 與 .model-card 的展開規則。
+  - active 卡片仍可見（opacity 0.5 表示鎖定），其他卡片強制 opacity 0、移出視覺。
+  - transition: none 避免清空對話 / 開始對話時的展開或收合動畫，瞬間切換。
+  - pointer-events: none 阻止 hover / click。
+*/
+.pod-model-slot--disabled .model-card {
+  cursor: not-allowed;
+  pointer-events: none;
+  transition: none;
+}
+
+.pod-model-slot--disabled .model-card.active {
+  opacity: 0.5;
+}
+
+.pod-model-slot--disabled .model-cards-stack,
+.pod-model-slot--disabled .model-cards-stack.expanded {
+  transform: translateY(2px);
+  pointer-events: none;
+  transition: none;
+}
+
+.pod-model-slot--disabled .model-cards-stack .model-card:not(.active) {
+  opacity: 0;
+  transform: translateY(8px);
 }
 
 /* --------------------------------

@@ -191,7 +191,7 @@ const handleToggle = async (
         type="text"
         :placeholder="t('pod.slot.searchPlaceholder')"
         @click.stop
-      />
+      >
 
       <!-- 載入中 -->
       <div
@@ -249,7 +249,10 @@ const handleToggle = async (
         </div>
 
         <!-- Claude / Gemini 可 toggle 分支：name + v{version} + Switch -->
-        <ScrollArea v-else class="pod-popover-scrollable">
+        <ScrollArea
+          v-else
+          class="pod-popover-scrollable"
+        >
           <div class="space-y-1">
             <div
               v-for="plugin in filteredPlugins"

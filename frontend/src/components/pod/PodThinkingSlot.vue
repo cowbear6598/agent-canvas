@@ -13,8 +13,8 @@ const props = defineProps<{
   currentLevel: string | undefined;
   currentModel: string;
   provider: PodProvider;
-  /** 僅 capability gate：當前 model 完全不支援 thinking 才為 true。 */
-  capabilityDisabled: boolean;
+  /** 任一鎖定條件成立即為 true（capability 不支援 或 已有訊息），用於阻擋互動並顯示斜線 overlay。 */
+  disabled: boolean;
   disabledTooltip: string;
 }>();
 
@@ -25,7 +25,7 @@ const emit = defineEmits<{
 const providerCapabilityStore = useProviderCapabilityStore();
 
 const handleClick = (event: MouseEvent): void => {
-  if (props.capabilityDisabled) return;
+  if (props.disabled) return;
   emit("click", event);
 };
 
@@ -61,11 +61,14 @@ const buttonStyle = computed(() => ({
       :class="['pod-thinking-slot', `pod-thinking-slot--${provider}`]"
       :style="buttonStyle"
       :aria-label="t('pod.slot.thinkingLabel')"
-      :aria-disabled="capabilityDisabled || undefined"
-      :title="capabilityDisabled ? disabledTooltip : undefined"
+      :aria-disabled="disabled || undefined"
+      :title="disabled ? disabledTooltip : undefined"
       @click="handleClick"
     >
-      <div class="thinking-water" aria-hidden="true" />
+      <div
+        class="thinking-water"
+        aria-hidden="true"
+      />
       <div
         v-if="fillRatio > 0 && fillRatio < 1"
         class="thinking-wave"
@@ -96,7 +99,7 @@ const buttonStyle = computed(() => ({
         <path d="M19.967 17.484A4 4 0 0 1 18 18" />
       </svg>
       <svg
-        v-if="capabilityDisabled"
+        v-if="disabled"
         class="thinking-disabled-overlay"
         viewBox="0 0 24 24"
         fill="none"
@@ -106,8 +109,17 @@ const buttonStyle = computed(() => ({
         stroke-linejoin="round"
         aria-hidden="true"
       >
-        <circle cx="12" cy="12" r="10" />
-        <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+        <circle
+          cx="12"
+          cy="12"
+          r="10"
+        />
+        <line
+          x1="4.93"
+          y1="4.93"
+          x2="19.07"
+          y2="19.07"
+        />
       </svg>
     </button>
   </div>

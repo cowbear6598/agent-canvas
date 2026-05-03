@@ -169,7 +169,7 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
         type="text"
         :placeholder="t('pod.slot.searchPlaceholder')"
         @click.stop
-      />
+      >
 
       <!-- 載入中 -->
       <div

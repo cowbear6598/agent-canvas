@@ -559,9 +559,9 @@ describe("CanvasPod Gemini provider", () => {
     wrapper.unmount();
   });
 
-  // B3：Gemini Pod 的四個插槽仍渲染：plugin/mcp capabilityDisabled=true，
+  // B3：Gemini Pod 的四個插槽仍渲染：plugin/mcp disabled=true，
   //     repository/command 因後端 GEMINI_CAPABILITIES 支援，disabled=false
-  it("B3：Gemini Pod 的四個插槽仍渲染，plugin/mcp capabilityDisabled=true、repository/command disabled=false（後端真實閘門）", async () => {
+  it("B3：Gemini Pod 的四個插槽仍渲染，plugin/mcp disabled=true、repository/command disabled=false（後端真實閘門）", async () => {
     const pod = mkPod({ provider: "gemini" as Pod["provider"] });
     // 需把 pod 寫入 podStore，usePodCapabilities 才能透過 getPodById 取得正確 provider
     usePodStore().pods = [pod];
@@ -575,12 +575,12 @@ describe("CanvasPod Gemini provider", () => {
     expect(wrapper.find(".pod-repository-slot").exists()).toBe(true);
     expect(wrapper.find(".pod-command-slot").exists()).toBe(true);
 
-    // PodSlots 渲染後，透過 PodPluginSlot / PodMcpSlot 元件驗證 capability-disabled prop
+    // PodSlots 渲染後，透過 PodPluginSlot / PodMcpSlot 元件驗證 disabled prop
     const podSlots = wrapper.findComponent({ name: "PodSlots" });
     const podPluginSlot = podSlots.findComponent({ name: "PodPluginSlot" });
     const podMcpSlot = podSlots.findComponent({ name: "PodMcpSlot" });
-    expect(podPluginSlot.props("capabilityDisabled")).toBe(true);
-    expect(podMcpSlot.props("capabilityDisabled")).toBe(true);
+    expect(podPluginSlot.props("disabled")).toBe(true);
+    expect(podMcpSlot.props("disabled")).toBe(true);
 
     // Gemini 支援 repository / command（GEMINI_CAPABILITIES.repository=true, command=true）
     // PodSingleBindSlot 應收到 disabled=false，允許使用者拖入 Note

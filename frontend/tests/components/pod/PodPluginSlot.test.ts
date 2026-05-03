@@ -15,7 +15,7 @@ const defaultProps = {
   podRotation: 0,
   activeCount: 3,
   provider: "claude" as PodProvider,
-  capabilityDisabled: false,
+  disabled: false,
   disabledTooltip: "pod.slot.providerDisabled",
 };
 
@@ -51,11 +51,11 @@ describe("PodPluginSlot", () => {
     wrapper.unmount();
   });
 
-  // ── capabilityDisabled = true ─────────────────────────────────────────────
+  // ── disabled = true ─────────────────────────────────────────────
 
-  describe("capabilityDisabled = true", () => {
+  describe("disabled = true", () => {
     it("button 應有 aria-disabled 屬性", () => {
-      const wrapper = mountSlot({ capabilityDisabled: true });
+      const wrapper = mountSlot({ disabled: true });
       const button = wrapper.find("button");
       expect(button.attributes("aria-disabled")).toBe("true");
       wrapper.unmount();
@@ -63,7 +63,7 @@ describe("PodPluginSlot", () => {
 
     it("tooltip（title）應套用 disabledTooltip 值", () => {
       const wrapper = mountSlot({
-        capabilityDisabled: true,
+        disabled: true,
         disabledTooltip: "pod.slot.providerDisabled",
       });
       const button = wrapper.find("button");
@@ -72,7 +72,7 @@ describe("PodPluginSlot", () => {
     });
 
     it("click 不應 emit（early return）", async () => {
-      const wrapper = mountSlot({ capabilityDisabled: true });
+      const wrapper = mountSlot({ disabled: true });
       const button = wrapper.find("button");
       await button.trigger("click");
       expect(wrapper.emitted("click")).toBeFalsy();
@@ -80,25 +80,25 @@ describe("PodPluginSlot", () => {
     });
   });
 
-  // ── capabilityDisabled = false ────────────────────────────────────────────
+  // ── disabled = false ────────────────────────────────────────────
 
-  describe("capabilityDisabled = false", () => {
+  describe("disabled = false", () => {
     it("button 不應有 aria-disabled 屬性", () => {
-      const wrapper = mountSlot({ capabilityDisabled: false });
+      const wrapper = mountSlot({ disabled: false });
       const button = wrapper.find("button");
       expect(button.attributes("aria-disabled")).toBeUndefined();
       wrapper.unmount();
     });
 
     it("button 不應有 title 屬性", () => {
-      const wrapper = mountSlot({ capabilityDisabled: false });
+      const wrapper = mountSlot({ disabled: false });
       const button = wrapper.find("button");
       expect(button.attributes("title")).toBeUndefined();
       wrapper.unmount();
     });
 
     it("click 應 emit 'click' 並帶 MouseEvent", async () => {
-      const wrapper = mountSlot({ capabilityDisabled: false });
+      const wrapper = mountSlot({ disabled: false });
       const button = wrapper.find("button");
       await button.trigger("click");
       expect(wrapper.emitted("click")).toBeTruthy();
@@ -118,12 +118,12 @@ describe("PodPluginSlot", () => {
       wrapper.unmount();
     });
 
-    // T-S2：Gemini + capabilityDisabled = true
-    describe("capabilityDisabled = true", () => {
+    // T-S2：Gemini + disabled = true
+    describe("disabled = true", () => {
       it("T-S2：button 應有 aria-disabled 屬性", () => {
         const wrapper = mountSlot({
           provider: "gemini",
-          capabilityDisabled: true,
+          disabled: true,
         });
         expect(wrapper.find("button").attributes("aria-disabled")).toBe("true");
         wrapper.unmount();
@@ -132,7 +132,7 @@ describe("PodPluginSlot", () => {
       it("T-S2：click 不應 emit（early return）", async () => {
         const wrapper = mountSlot({
           provider: "gemini",
-          capabilityDisabled: true,
+          disabled: true,
         });
         await wrapper.find("button").trigger("click");
         expect(wrapper.emitted("click")).toBeFalsy();
@@ -142,7 +142,7 @@ describe("PodPluginSlot", () => {
       it("T-S2：tooltip（title）應套用 disabledTooltip 值", () => {
         const wrapper = mountSlot({
           provider: "gemini",
-          capabilityDisabled: true,
+          disabled: true,
           disabledTooltip: "pod.slot.providerDisabled",
         });
         expect(wrapper.find("button").attributes("title")).toBe(

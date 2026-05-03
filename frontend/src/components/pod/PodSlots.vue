@@ -13,6 +13,7 @@ import PodThinkingSlot from "@/components/pod/PodThinkingSlot.vue";
 import { useRepositoryStore, useCommandStore } from "@/stores/note";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
 import { usePodCapabilities } from "@/composables/pod/usePodCapabilities";
+import { usePodHasMessages } from "@/composables/pod/usePodHasMessages";
 
 const props = defineProps<{
   podId: string;
@@ -52,22 +53,64 @@ const providerCapabilityStore = useProviderCapabilityStore();
 const { isPluginEnabled, isRepositoryEnabled, isCommandEnabled, isMcpEnabled } =
   usePodCapabilities(toRef(props, "podId"));
 
+/** 此 Pod 是否已有訊息（用於鎖定 notch 防止啟動對話後再變動設定） */
+const hasMessages = usePodHasMessages(toRef(props, "podId"));
+
 /** 不支援功能時顯示的 tooltip 文字（由 i18n 提供） */
 const DISABLED_TOOLTIP = computed(() => t("pod.slot.providerDisabled"));
 
-/** Plugin capability 關閉（目前兩個 provider plugin: true，恆為 false，保留以利擴充） */
-const pluginCapabilityDisabled = computed(() => !isPluginEnabled.value);
+/** 已有對話訊息鎖定時顯示的 tooltip 文字（由 i18n 提供） */
+const LOCKED_BY_MESSAGES_TOOLTIP = computed(() =>
+  t("pod.slot.lockedByMessages"),
+);
 
-/** MCP capability 關閉：當前 provider 不支援 MCP 才為 true */
-const mcpCapabilityDisabled = computed(() => !isMcpEnabled.value);
+// 合併版 disabled / tooltip：
+// - capability 不支援是「永久條件」，訊息鎖是「暫時條件」（清空對話後解鎖）
+// - 兩者任一成立都應 disable，故用 OR
+// - tooltip 顯示優先採用 capability 文案：永久條件對使用者較具資訊性，
+//   且 capability 不支援的 slot 即使清空對話也不會解鎖
 
-/** Thinking capability 關閉：當前 provider+model 不支援 thinking 才為 true */
-const thinkingCapabilityDisabled = computed(
+/** Plugin slot 是否 disable：capability 不支援 或 已有對話訊息 */
+const pluginDisabled = computed(
+  () => !isPluginEnabled.value || hasMessages.value,
+);
+
+/** Plugin slot tooltip：capability 優先 */
+const pluginDisabledTooltip = computed(() =>
+  !isPluginEnabled.value
+    ? DISABLED_TOOLTIP.value
+    : LOCKED_BY_MESSAGES_TOOLTIP.value,
+);
+
+/** MCP slot 是否 disable：capability 不支援 或 已有對話訊息 */
+const mcpDisabled = computed(() => !isMcpEnabled.value || hasMessages.value);
+
+/** MCP slot tooltip：capability 優先 */
+const mcpDisabledTooltip = computed(() =>
+  !isMcpEnabled.value
+    ? DISABLED_TOOLTIP.value
+    : LOCKED_BY_MESSAGES_TOOLTIP.value,
+);
+
+/** Thinking capability 是否不支援（當前 provider+model 不支援 thinking） */
+const thinkingCapabilityUnsupported = computed(
   () =>
     !providerCapabilityStore.isThinkingSupportedForModel(
       props.provider,
       props.currentModel,
     ),
+);
+
+/** Thinking slot 是否 disable：capability 不支援 或 已有對話訊息 */
+const thinkingDisabled = computed(
+  () => thinkingCapabilityUnsupported.value || hasMessages.value,
+);
+
+/** Thinking slot tooltip：capability 優先 */
+const thinkingDisabledTooltip = computed(() =>
+  thinkingCapabilityUnsupported.value
+    ? DISABLED_TOOLTIP.value
+    : LOCKED_BY_MESSAGES_TOOLTIP.value,
 );
 
 // -----------------------------------------------------------------------
@@ -116,8 +159,12 @@ function createRepositorySlotConfig(): SingleSlotConfig {
     label: "Repo",
     store: repositoryStore,
     boundNote: () => props.boundRepositoryNote,
-    disabled: !isRepositoryEnabled.value,
-    disabledTooltip: DISABLED_TOOLTIP.value,
+    // capability 不支援 或 已有對話訊息 → 鎖定 notch
+    disabled: !isRepositoryEnabled.value || hasMessages.value,
+    // capability 不支援優先（永久條件），否則顯示訊息鎖文案
+    disabledTooltip: !isRepositoryEnabled.value
+      ? DISABLED_TOOLTIP.value
+      : LOCKED_BY_MESSAGES_TOOLTIP.value,
     onDropped: (noteId: string): void => {
       if (!noteId) return;
       emit("repository-dropped", noteId);
@@ -133,8 +180,12 @@ function createCommandSlotConfig(): SingleSlotConfig {
     label: "Command",
     store: commandStore,
     boundNote: () => props.boundCommandNote,
-    disabled: !isCommandEnabled.value,
-    disabledTooltip: DISABLED_TOOLTIP.value,
+    // capability 不支援 或 已有對話訊息 → 鎖定 notch
+    disabled: !isCommandEnabled.value || hasMessages.value,
+    // capability 不支援優先（永久條件），否則顯示訊息鎖文案
+    disabledTooltip: !isCommandEnabled.value
+      ? DISABLED_TOOLTIP.value
+      : LOCKED_BY_MESSAGES_TOOLTIP.value,
     onDropped: (noteId: string): void => {
       if (!noteId) return;
       emit("command-dropped", noteId);
@@ -155,8 +206,8 @@ const slotConfigs = computed((): SlotConfig[] => [
     :pod-rotation="props.podRotation"
     :active-count="props.pluginActiveCount"
     :provider="props.provider"
-    :capability-disabled="pluginCapabilityDisabled"
-    :disabled-tooltip="DISABLED_TOOLTIP"
+    :disabled="pluginDisabled"
+    :disabled-tooltip="pluginDisabledTooltip"
     @click="(ev) => emit('plugin-clicked', ev)"
   />
   <PodMcpSlot
@@ -164,8 +215,8 @@ const slotConfigs = computed((): SlotConfig[] => [
     :pod-rotation="props.podRotation"
     :active-count="props.mcpActiveCount"
     :provider="props.provider"
-    :capability-disabled="mcpCapabilityDisabled"
-    :disabled-tooltip="DISABLED_TOOLTIP"
+    :disabled="mcpDisabled"
+    :disabled-tooltip="mcpDisabledTooltip"
     @click="(ev) => emit('mcp-clicked', ev)"
   />
   <PodThinkingSlot
@@ -174,11 +225,14 @@ const slotConfigs = computed((): SlotConfig[] => [
     :current-level="props.currentThinkingLevel"
     :current-model="props.currentModel"
     :provider="props.provider"
-    :capability-disabled="thinkingCapabilityDisabled"
-    :disabled-tooltip="DISABLED_TOOLTIP"
+    :disabled="thinkingDisabled"
+    :disabled-tooltip="thinkingDisabledTooltip"
     @click="(ev) => emit('thinking-clicked', ev)"
   />
-  <template v-for="slot in slotConfigs" :key="slot.slotClass">
+  <template
+    v-for="slot in slotConfigs"
+    :key="slot.slotClass"
+  >
     <div :class="slot.areaClass">
       <PodSingleBindSlot
         :pod-id="props.podId"

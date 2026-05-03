@@ -250,6 +250,7 @@
     "slot": {
       "duplicateTitle": "すでに存在しています",
       "providerDisabled": "このプロバイダーはこの機能をサポートしていません",
+      "lockedByMessages": "会話があるためロック中",
       "thinkingLabel": "Thinking",
       "thinkingDisabledTooltip": "現在のモデルは thinking レベルをサポートしていません",
       "pluginsLabel": "Plugins",

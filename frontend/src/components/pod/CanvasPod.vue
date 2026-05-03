@@ -22,6 +22,7 @@ import { usePodSchedule } from "@/composables/pod/usePodSchedule";
 import { usePodAnchorDrag } from "@/composables/pod/usePodAnchorDrag";
 import { usePodFileDrop } from "@/composables/pod/usePodFileDrop";
 import { usePodPopovers } from "@/composables/pod/usePodPopovers";
+import { usePodHasMessages } from "@/composables/pod/usePodHasMessages";
 import { useToast } from "@/composables/useToast";
 import { useI18n } from "vue-i18n";
 import {
@@ -146,6 +147,12 @@ const isWorkflowRunning = computed(() =>
 );
 
 const computedPodId = toRef(() => props.pod.id);
+
+// Model selector 在 Pod 已有訊息時鎖住（無 capability 概念，純粹依訊息存在與否）
+const modelSelectorDisabled = usePodHasMessages(computedPodId);
+const modelSelectorDisabledTooltip = computed(() =>
+  t("pod.slot.lockedByMessages"),
+);
 
 const {
   showScheduleModal,
@@ -429,7 +436,10 @@ const handleContextMenu = (e: MouseEvent): void => {
     <!-- 光暈層：放在 pod-wrapper 之外，不受 transform: rotate 影響 -->
     <!-- 此層僅承載 chatting/summarizing 等需要完整包覆（不被截切）的光暈效果 -->
     <!-- selected/drag-over 狀態已移至 pod-wrapper 內層（pod-inner-highlight），跟著旋轉 -->
-    <div class="pod-glow-layer" :class="[podStatusClasses]" />
+    <div
+      class="pod-glow-layer"
+      :class="[podStatusClasses]"
+    />
 
     <div
       class="relative pod-wrapper pod-with-plugin-notch pod-with-mcp-notch pod-with-mcp-server-notch pod-with-thinking-notch"
@@ -440,6 +450,8 @@ const handleContextMenu = (e: MouseEvent): void => {
         :pod-id="pod.id"
         :provider="pod.provider"
         :current-model="currentModel"
+        :disabled="modelSelectorDisabled"
+        :disabled-tooltip="modelSelectorDisabledTooltip"
         @update:model="handleModelChange"
       />
 

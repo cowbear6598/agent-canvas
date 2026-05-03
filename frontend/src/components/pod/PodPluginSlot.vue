@@ -8,10 +8,11 @@ const props = defineProps<{
   podRotation: number;
   activeCount: number;
   provider: PodProvider;
-  /** 僅 capability gate：當前 provider 完全不支援 plugin 才為 true。
-   *  Pod busy 不影響 notch click — busy 鎖只在 popover 內 Toggle 層級。
-   *  目前兩個 provider plugin: true，故實際恆為 false，保留欄位以利擴充。 */
-  capabilityDisabled: boolean;
+  /** notch 是否禁用，包含兩種來源：
+   *  1. capability gate：當前 provider 完全不支援 plugin（目前所有 provider 皆 plugin: true，理論上不會觸發，保留以利擴充）。
+   *  2. 訊息鎖：Pod 已有對話訊息後，禁止再變更 plugin 設定。
+   *  兩者皆走同一個 disabled flag，由父層決定優先順序與 tooltip 文案。 */
+  disabled: boolean;
   disabledTooltip: string;
 }>();
 
@@ -22,7 +23,7 @@ const emit = defineEmits<{
 const { t } = useI18n();
 
 const handleClick = (event: MouseEvent): void => {
-  if (props.capabilityDisabled) return;
+  if (props.disabled) return;
   emit("click", event);
 };
 
@@ -50,8 +51,8 @@ const pluginLabel = computed(() =>
             ? 'pod-plugin-slot--active'
             : '',
       ]"
-      :aria-disabled="capabilityDisabled || undefined"
-      :title="capabilityDisabled ? disabledTooltip : undefined"
+      :aria-disabled="disabled || undefined"
+      :title="disabled ? disabledTooltip : undefined"
       @click="handleClick"
     >
       <span class="text-xs font-mono">

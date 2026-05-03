@@ -33,7 +33,11 @@ withDefaults(defineProps<Props>(), {
         y2="12"
       >
         <stop stop-color="#08B962" />
-        <stop offset="1" stop-color="#08B962" stop-opacity="0" />
+        <stop
+          offset="1"
+          stop-color="#08B962"
+          stop-opacity="0"
+        />
       </linearGradient>
       <linearGradient
         id="g-1"
@@ -44,7 +48,11 @@ withDefaults(defineProps<Props>(), {
         y2="11"
       >
         <stop stop-color="#F94543" />
-        <stop offset="1" stop-color="#F94543" stop-opacity="0" />
+        <stop
+          offset="1"
+          stop-color="#F94543"
+          stop-opacity="0"
+        />
       </linearGradient>
       <linearGradient
         id="g-2"
@@ -55,12 +63,28 @@ withDefaults(defineProps<Props>(), {
         y2="12"
       >
         <stop stop-color="#FABC12" />
-        <stop offset=".46" stop-color="#FABC12" stop-opacity="0" />
+        <stop
+          offset=".46"
+          stop-color="#FABC12"
+          stop-opacity="0"
+        />
       </linearGradient>
     </defs>
-    <use href="#g-s" fill="#3186FF" />
-    <use href="#g-s" fill="url(#g-0)" />
-    <use href="#g-s" fill="url(#g-1)" />
-    <use href="#g-s" fill="url(#g-2)" />
+    <use
+      href="#g-s"
+      fill="#3186FF"
+    />
+    <use
+      href="#g-s"
+      fill="url(#g-0)"
+    />
+    <use
+      href="#g-s"
+      fill="url(#g-1)"
+    />
+    <use
+      href="#g-s"
+      fill="url(#g-2)"
+    />
   </svg>
 </template>

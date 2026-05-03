@@ -452,7 +452,8 @@
   position: absolute;
   left: 0;
   right: 0;
-  bottom: var(--thinking-fill-pct, 0%);
+  /* 往下重疊 1px 與水體接合，消除 sub-pixel rendering 在波谷處露出的縫隙 */
+  bottom: calc(var(--thinking-fill-pct, 0%) - 1px);
   height: 6px;
   background-color: var(--thinking-fill-color);
   pointer-events: none;
