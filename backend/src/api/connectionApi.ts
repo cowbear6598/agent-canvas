@@ -8,7 +8,6 @@ import {
 } from "./apiHelpers.js";
 import { socketService } from "../services/socketService.js";
 import { workflowStateService } from "../services/workflow/index.js";
-import { logger } from "../utils/logger.js";
 import { HTTP_STATUS } from "../constants.js";
 import { WebSocketResponseEvents } from "../schemas/index.js";
 import type { AnchorPosition, TriggerMode } from "../types/connection.js";
@@ -163,20 +162,8 @@ export async function handleCreateConnection(
         WebSocketResponseEvents.POD_SCHEDULE_SET,
         podSchedulePayload,
       );
-
-      logger.log(
-        "Connection",
-        "Create",
-        `已清除目標 Pod「${targetPod.name}」的排程（現為下游節點）`,
-      );
     }
   }
-
-  logger.log(
-    "Connection",
-    "Create",
-    `已建立連線「${sourcePod.name} → ${targetPod.name}」`,
-  );
 
   return jsonResponse({ connection }, HTTP_STATUS.CREATED);
 }
@@ -209,12 +196,6 @@ export async function handleDeleteConnection(
     canvas.id,
     WebSocketResponseEvents.CONNECTION_DELETED,
     connectionDeletedPayload,
-  );
-
-  logger.log(
-    "Connection",
-    "Delete",
-    `已刪除連線（connectionId: ${connectionId}）`,
   );
 
   return jsonResponse({ success: true }, HTTP_STATUS.OK);

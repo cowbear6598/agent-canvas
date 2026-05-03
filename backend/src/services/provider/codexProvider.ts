@@ -347,9 +347,6 @@ async function* handleExitCode(
       "Warn",
       `[CodexProvider] codex 已完成一個 turn 但以非零 exit code 結束（exit code: ${exitCode}，podId: ${podId}），可能為正常退出行為`,
     );
-    if (stderrText) {
-      logger.warn("Chat", "Warn", `[CodexProvider] stderr: ${stderrText}`);
-    }
     return;
   }
 

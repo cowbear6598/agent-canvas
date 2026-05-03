@@ -18,7 +18,6 @@ import { repositorySyncService } from "../services/repositorySyncService.js";
 import { commandService } from "../services/commandService.js";
 import { emitError } from "../utils/websocketResponse.js";
 import { createI18nError } from "../utils/i18nError.js";
-import { logger } from "../utils/logger.js";
 import { createNoteHandlers } from "./factories/createNoteHandlers.js";
 import { createListHandler } from "./factories/createResourceHandlers.js";
 import {
@@ -27,19 +26,9 @@ import {
   withCanvasId,
   emitPodUpdated,
   handleResultError,
-  getPodDisplayName,
   assertCapability,
 } from "../utils/handlerHelpers.js";
 import { validateRepositoryExists } from "../utils/validators.js";
-
-/**
- * 清理 git 錯誤訊息中的絕對路徑，避免內部路徑洩漏到 log 輸出。
- * 把符合絕對路徑格式的字段（以 / 開頭的多層路徑）替換為 <path>。
- */
-function sanitizeGitErrorMessage(msg: string): string {
-  // 替換以 / 開頭的絕對路徑（至少兩層），保留其他文字
-  return msg.replace(/\/[^\s'",:]+(?:\/[^\s'",:]+)+/g, "<path>");
-}
 
 export const repositoryNoteHandlers = createNoteHandlers({
   noteStore: repositoryNoteStore,
@@ -100,23 +89,16 @@ export async function handleRepositoryCreate(
     WebSocketResponseEvents.REPOSITORY_CREATED,
     response,
   );
-
-  logger.log("Repository", "Create", `已建立 Repository「${repository.name}」`);
 }
 
 async function cleanupPodWorkspaceResources(
   podWorkspacePath: string,
-  podId: string,
+  _podId: string,
 ): Promise<void> {
   try {
     await commandService.deleteCommandFromPath(podWorkspacePath);
-  } catch (err) {
-    logger.error(
-      "Repository",
-      "Bind",
-      `刪除 Pod ${podId} workspace 的 commands 失敗`,
-      err,
-    );
+  } catch {
+    // 忽略清理失敗
   }
 }
 
@@ -213,12 +195,6 @@ export const handlePodBindRepository = withCanvasId<PodBindRepositoryPayload>(
       requestId,
       WebSocketResponseEvents.POD_REPOSITORY_BOUND,
     );
-
-    logger.log(
-      "Repository",
-      "Bind",
-      `已將 Repository「${repositoryId}」綁定至 Pod「${getPodDisplayName(canvasId, podId)}」`,
-    );
   },
 );
 
@@ -274,12 +250,6 @@ export const handlePodUnbindRepository =
         requestId,
         WebSocketResponseEvents.POD_REPOSITORY_UNBOUND,
       );
-
-      logger.log(
-        "Repository",
-        "Unbind",
-        `已解除 Pod「${getPodDisplayName(canvasId, podId)}」的 Repository 綁定`,
-      );
     },
   );
 
@@ -290,11 +260,6 @@ async function cleanupWorktreeResources(
   const parentExists = await repositoryService.exists(metadata.parentRepoId);
 
   if (!parentExists) {
-    logger.log(
-      "Repository",
-      "Delete",
-      `Parent repository ${metadata.parentRepoId} 不存在，跳過 worktree 清理`,
-    );
     return;
   }
 
@@ -303,31 +268,11 @@ async function cleanupWorktreeResources(
   );
   const worktreePath = repositoryService.getRepositoryPath(repositoryId);
 
-  const removeResult = await gitService.removeWorktree(
-    parentRepoPath,
-    worktreePath,
-  );
-  if (!removeResult.success) {
-    logger.log(
-      "Repository",
-      "Delete",
-      `警告：移除 worktree 註冊失敗: ${sanitizeGitErrorMessage(String(removeResult.error ?? ""))}`,
-    );
-  }
+  await gitService.removeWorktree(parentRepoPath, worktreePath);
 
   if (!metadata.branchName) return;
 
-  const deleteResult = await gitService.deleteBranch(
-    parentRepoPath,
-    metadata.branchName,
-  );
-  if (!deleteResult.success) {
-    logger.log(
-      "Repository",
-      "Delete",
-      `警告：刪除分支失敗: ${sanitizeGitErrorMessage(String(deleteResult.error ?? ""))}`,
-    );
-  }
+  await gitService.deleteBranch(parentRepoPath, metadata.branchName);
 }
 
 export async function handleRepositoryDelete(

@@ -1,7 +1,6 @@
 import { repositoryService } from "./repositoryService.js";
 import { podStore } from "./podStore.js";
 import { podManifestService } from "./podManifestService.js";
-import { logger } from "../utils/logger.js";
 import { validatePodId } from "../utils/pathValidator.js";
 import { getStmts } from "../database/stmtsHelper.js";
 
@@ -28,13 +27,8 @@ class RepositorySyncService {
       return;
     }
 
-    const syncPromise = this.performSync(repositoryId).catch((error) => {
-      logger.error(
-        "Repository",
-        "Error",
-        `同步 repository ${repositoryId} 資源失敗`,
-        error,
-      );
+    const syncPromise = this.performSync(repositoryId).catch(() => {
+      // 忽略同步失敗
     });
     this.locks.set(repositoryId, syncPromise);
 
@@ -125,19 +119,6 @@ class RepositorySyncService {
 
     await this.cleanOrphanManifests(repositoryId, podResourcesMap);
     await this.writePodManifests(podResourcesMap, repositoryPath, repositoryId);
-
-    const totals = [...podResourcesMap.values()].reduce(
-      (acc, podResources) => ({
-        commands: acc.commands + podResources.commandIds.length,
-      }),
-      { commands: 0 },
-    );
-
-    logger.log(
-      "Repository",
-      "Update",
-      `已同步 Repository ${repositoryId}：${totals.commands} 個 Command`,
-    );
   }
 
   private async cleanOrphanManifests(
@@ -157,11 +138,6 @@ class RepositorySyncService {
       if (activePodResourcesMap.has(podId)) continue;
 
       if (!validatePodId(podId)) {
-        logger.warn(
-          "Repository",
-          "Warn",
-          `孤兒 manifest 的 podId 格式無效，跳過：${podId}`,
-        );
         continue;
       }
 

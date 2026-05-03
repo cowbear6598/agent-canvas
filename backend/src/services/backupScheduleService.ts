@@ -22,8 +22,6 @@ class BackupScheduleService {
     this.tickInterval = setInterval(() => {
       this.tick();
     }, TICK_INTERVAL_MS);
-
-    logger.log("Backup", "Create", "備份排程器已啟動");
   }
 
   stop(): void {
@@ -31,7 +29,6 @@ class BackupScheduleService {
       clearInterval(this.tickInterval);
       this.tickInterval = null;
     }
-    logger.log("Backup", "Delete", "備份排程器已停止");
   }
 
   reload(): void {
@@ -79,8 +76,8 @@ class BackupScheduleService {
       return;
     }
 
-    this.fireBackup(backupGitRemoteUrl).catch((error) => {
-      logger.error("Backup", "Error", "備份觸發失敗", error);
+    this.fireBackup(backupGitRemoteUrl).catch(() => {
+      // 失敗已由 fireBackup 內「自動備份失敗」log 記錄
     });
   }
 
@@ -115,7 +112,11 @@ class BackupScheduleService {
         error: getResultErrorString(result.error),
         timestamp: new Date().toISOString(),
       });
-      logger.error("Backup", "Error", `自動備份失敗：${getResultErrorString(result.error)}`);
+      logger.error(
+        "Backup",
+        "Error",
+        `自動備份失敗：${getResultErrorString(result.error)}`,
+      );
     }
   }
 }

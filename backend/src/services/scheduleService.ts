@@ -42,11 +42,6 @@ async function expandScheduleMessage(
   const expandResult = await tryExpandCommandMessage(pod, message, context);
 
   if (!expandResult.ok) {
-    logger.warn(
-      "Schedule",
-      "Update",
-      `Pod「${pod.id}」排程觸發：Command「${expandResult.commandId}」不存在，改用排程啟動語句觸發（context=${context}）`,
-    );
     return SCHEDULE_FALLBACK_MESSAGE;
   }
 
@@ -156,22 +151,18 @@ class ScheduleService {
 
   start(): void {
     if (this.tickInterval) {
-      logger.log("Schedule", "Update", "排程器已在運行中");
       return;
     }
 
     this.tickInterval = setInterval(() => {
       this.tick();
     }, TICK_INTERVAL_MS);
-
-    logger.log("Schedule", "Create", "排程器已啟動");
   }
 
   stop(): void {
     if (this.tickInterval) {
       clearInterval(this.tickInterval);
       this.tickInterval = null;
-      logger.log("Schedule", "Delete", "排程器已停止");
     }
   }
 
@@ -207,7 +198,6 @@ class ScheduleService {
   ): Promise<void> {
     const pod = podStore.getById(canvasId, podId);
     if (!pod) {
-      logger.log("Schedule", "Update", `找不到 Pod「${podId}」，跳過排程觸發`);
       return;
     }
     await this.fireSchedule(canvasId, pod, now);
@@ -219,7 +209,6 @@ class ScheduleService {
     now: Date,
   ): Promise<void> {
     if (pod.status !== "idle") {
-      logger.log("Schedule", "Update", `Pod「${pod.id}」正忙碌，跳過排程觸發`);
       return;
     }
 

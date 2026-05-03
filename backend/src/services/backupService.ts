@@ -56,8 +56,7 @@ class BackupService {
       }
       await this.ensureGitignore();
       return ok(undefined);
-    } catch (error) {
-      logger.error("Backup", "Error", "初始化備份 Git 倉庫失敗", error);
+    } catch {
       return err("初始化備份倉庫失敗");
     }
   }
@@ -79,8 +78,7 @@ class BackupService {
         }
       }
       return ok(undefined);
-    } catch (error) {
-      logger.error("Backup", "Error", "設定備份 Remote 失敗", error);
+    } catch {
       return err("設定備份遠端倉庫失敗");
     }
   }
@@ -113,21 +111,15 @@ class BackupService {
       const newContent =
         ensureNewlineSeparator(content) + missingEntries.join("\n") + "\n";
       await fs.writeFile(gitignorePath, newContent, "utf-8");
-      logger.log(
-        "Backup",
-        "Init",
-        `已將 ${missingEntries.join(", ")} 加入 .gitignore`,
-      );
     }
   }
 
   private async commitIfChanged(
     git: ReturnType<typeof simpleGit>,
-  ): Promise<Result<void>> {
+  ): Promise<void> {
     const timestamp = new Date().toISOString();
     try {
       await git.commit(`AgentCanvas 自動備份 ${timestamp}`);
-      return ok(undefined);
     } catch (commitError) {
       const commitMessage =
         commitError instanceof Error
@@ -138,11 +130,10 @@ class BackupService {
         commitMessage.includes("nothing to commit") ||
         commitMessage.includes("nothing added to commit")
       ) {
-        return ok(undefined);
+        return;
       }
-      // 其他 commit 失敗是真實錯誤，應阻止繼續 push
-      logger.error("Backup", "Error", "備份 commit 失敗", commitError);
-      return err("備份 commit 失敗");
+      // 其他 commit 失敗是真實錯誤，由上層 executeBackup 統一捕捉與記錄
+      throw commitError;
     }
   }
 
@@ -161,13 +152,12 @@ class BackupService {
 
       const git = simpleGit(this.backupDir);
       await git.add("-A");
-      const commitResult = await this.commitIfChanged(git);
-      if (!commitResult.success) return commitResult;
+      await this.commitIfChanged(git);
       await git.raw(["push", "--force-with-lease", "origin", "HEAD"]);
       return ok(undefined);
     } catch (error) {
       const errorMessage = parseBackupError(error);
-      logger.error("Backup", "Error", "備份推送失敗", error);
+      logger.error("Backup", "Error", "備份 git 操作失敗", error);
       return err(errorMessage);
     } finally {
       this.isRunning = false;

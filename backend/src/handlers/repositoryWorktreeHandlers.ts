@@ -6,7 +6,6 @@ import { socketService } from "../services/socketService.js";
 import { gitService } from "../services/workspace/gitService.js";
 import { emitError } from "../utils/websocketResponse.js";
 import { createI18nError, type I18nError } from "../utils/i18nError.js";
-import { logger } from "../utils/logger.js";
 import { getValidatedGitRepository } from "../utils/validators.js";
 import { isPathWithinDirectory } from "../utils/pathValidator.js";
 import { directoryExists } from "../services/shared/fileResourceHelpers.js";
@@ -160,11 +159,6 @@ export async function handleRepositoryWorktreeCreate(
     worktreeName,
   );
   if (!createResult.success) {
-    logger.error(
-      "Repository",
-      "Error",
-      `建立 Worktree 失敗：${createResult.error}`,
-    );
     emitError(
       connectionId,
       responseEvent,
@@ -197,10 +191,4 @@ export async function handleRepositoryWorktreeCreate(
   };
 
   socketService.emitToCanvas(payload.canvasId, responseEvent, response);
-
-  logger.log(
-    "Repository",
-    "Create",
-    `已從「${repositoryId}」建立 Worktree「${newRepositoryId}」`,
-  );
 }

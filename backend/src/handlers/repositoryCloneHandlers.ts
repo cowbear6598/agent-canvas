@@ -10,13 +10,12 @@ import type {
 import { repositoryService } from "../services/repositoryService.js";
 import { gitService } from "../services/workspace/gitService.js";
 import { emitSuccess, emitError } from "../utils/websocketResponse.js";
-import { logger } from "../utils/logger.js";
 import type { Result } from "../types";
 import { ok } from "../types";
 import { validateRepositoryExists } from "../utils/validators.js";
 import { handleResultError } from "../utils/handlerHelpers.js";
 import { createI18nError } from "../utils/i18nError.js";
-import { errI18n, getResultErrorString } from "../types/result.js";
+import { errI18n } from "../types/result.js";
 import { getGitStageMessage } from "../utils/operationHelpers.js";
 import { throttle } from "../utils/throttle.js";
 import {
@@ -164,11 +163,6 @@ export async function handleRepositoryGitClone(
     emitCloneProgress,
   );
   if (!cloneResult.success) {
-    logger.error(
-      "Repository",
-      "Error",
-      `複製儲存庫失敗：${getResultErrorString(cloneResult.error)}`,
-    );
     emitError(
       connectionId,
       WebSocketResponseEvents.REPOSITORY_GIT_CLONE_RESULT,
@@ -195,12 +189,6 @@ export async function handleRepositoryGitClone(
     connectionId,
     WebSocketResponseEvents.REPOSITORY_GIT_CLONE_RESULT,
     response,
-  );
-
-  logger.log(
-    "Repository",
-    "Create",
-    `成功 clone Repository「${repoName}」${branch ? `（分支：${branch}）` : ""}`,
   );
 }
 
@@ -245,12 +233,6 @@ export async function handleRepositoryCheckGit(
     success: true,
     isGit: result.data,
   };
-
-  logger.log(
-    "Repository",
-    "Check",
-    `Repository「${repositoryId}」是否為 Git Repo：${result.data}`,
-  );
 
   emitSuccess(
     connectionId,

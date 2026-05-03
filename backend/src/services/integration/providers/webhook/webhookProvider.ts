@@ -2,7 +2,6 @@ import { z } from "zod";
 import { randomBytes, timingSafeEqual, createHash } from "crypto";
 import { ok, err } from "../../../../types/index.js";
 import type { Result } from "../../../../types/index.js";
-import { logger } from "../../../../utils/logger.js";
 import { integrationAppStore } from "../../integrationAppStore.js";
 import { integrationEventPipeline } from "../../integrationEventPipeline.js";
 import { createDedupTracker } from "../../dedupHelper.js";
@@ -58,17 +57,15 @@ class WebhookProvider implements IntegrationProvider {
   async initialize(app: IntegrationApp): Promise<void> {
     integrationAppStore.updateStatus(app.id, "connected");
     broadcastConnectionStatus(this.name, app.id);
-    logger.log("Webhook", "Complete", `Webhook App ${app.id} 初始化成功`);
   }
 
   destroy(appId: string): void {
     integrationAppStore.updateStatus(appId, "disconnected");
     broadcastConnectionStatus(this.name, appId);
-    logger.log("Webhook", "Complete", `Webhook App ${appId} 已移除`);
   }
 
   destroyAll(): void {
-    logger.log("Webhook", "Complete", "已清除所有 Webhook App");
+    // 無狀態，無需特別清理
   }
 
   async refreshResources(_appId: string): Promise<IntegrationResource[]> {
@@ -100,14 +97,12 @@ class WebhookProvider implements IntegrationProvider {
     subPath?: string,
   ): Promise<Response> {
     if (!subPath || !NAME_PATTERN.test(subPath)) {
-      logger.warn("Webhook", "Error", "缺少或不合法的 appName 子路徑");
       return new Response("Not Found", { status: 404 });
     }
 
     const appName = subPath;
     const app = integrationAppStore.getByProviderAndName("webhook", appName);
     if (!app) {
-      logger.warn("Webhook", "Error", `找不到 Webhook App：${appName}`);
       return new Response("Not Found", { status: 404 });
     }
 
@@ -119,14 +114,12 @@ class WebhookProvider implements IntegrationProvider {
     // 驗證 Bearer Token
     const authHeader = req.headers.get("authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      logger.warn("Webhook", "Error", "缺少或格式不符的 Authorization header");
       return new Response("Unauthorized", { status: 401 });
     }
 
     const incomingToken = authHeader.slice("Bearer ".length);
     const storedToken = app.config.token;
     if (typeof storedToken !== "string" || storedToken.length === 0) {
-      logger.warn("Webhook", "Error", "App 缺少有效的 token 設定");
       return new Response("Unauthorized", { status: 401 });
     }
 
@@ -137,20 +130,17 @@ class WebhookProvider implements IntegrationProvider {
     const tokenValid = timingSafeEqual(hashedIncoming, hashedStored);
 
     if (!tokenValid) {
-      logger.warn("Webhook", "Error", "Bearer Token 驗證失敗");
       return new Response("Unauthorized", { status: 401 });
     }
 
     // 使用 rawBody hash 做去重
     const hash = createHash("sha256").update(rawBody).digest("hex");
     if (dedupTracker.isDuplicate(hash)) {
-      logger.log("Webhook", "Complete", "重複的 Webhook 請求，略過處理");
       return new Response("OK", { status: 200 });
     }
 
     const normalizedEvent = this.formatEventMessage(payload, app);
     if (!normalizedEvent) {
-      logger.warn("Webhook", "Error", "formatEventMessage 回傳 null，略過處理");
       return new Response("OK", { status: 200 });
     }
 

@@ -3,8 +3,6 @@ import { z } from "zod";
 import { WebClient } from "@slack/web-api";
 import { ok, err } from "../../../types/index.js";
 import type { Result } from "../../../types/index.js";
-import { logger } from "../../../utils/logger.js";
-import { getErrorMessage } from "../../../utils/errorHelpers.js";
 import { integrationAppStore } from "../integrationAppStore.js";
 import { integrationEventPipeline } from "../integrationEventPipeline.js";
 import { createDedupTracker } from "../dedupHelper.js";
@@ -89,21 +87,14 @@ function verifySignatureHeaders(
   const signature = req.headers.get("x-slack-signature");
 
   if (!timestamp) {
-    logger.warn(
-      "Integration",
-      "Error",
-      "缺少 x-slack-request-timestamp header",
-    );
     return new Response("Forbidden", { status: 403 });
   }
 
   if (!signature) {
-    logger.warn("Integration", "Error", "缺少 x-slack-signature header");
     return new Response("Forbidden", { status: 403 });
   }
 
   if (!isTimestampValid(timestamp)) {
-    logger.warn("Integration", "Error", "Slack 請求 timestamp 已過期");
     return new Response("Forbidden", { status: 403 });
   }
 
@@ -135,11 +126,6 @@ async function handleUrlVerification(
   const matchedApp = findMatchedApp(timestamp, rawBody, signature, apps);
 
   if (!matchedApp) {
-    logger.warn(
-      "Integration",
-      "Error",
-      "Slack 簽名驗證失敗（url_verification）",
-    );
     return new Response("Forbidden", { status: 403 });
   }
 
@@ -178,17 +164,11 @@ async function handleEventCallback(
   const app = findVerifiedApp(timestamp, rawBody, signature);
 
   if (!app) {
-    logger.warn("Integration", "Error", "Slack 簽名驗證失敗");
     return new Response("Forbidden", { status: 403 });
   }
 
   const parsed = slackEventPayloadSchema.safeParse(body);
   if (!parsed.success) {
-    logger.warn(
-      "Integration",
-      "Error",
-      `無效的事件格式: ${parsed.error.message}`,
-    );
     return new Response("無效的事件格式", { status: 400 });
   }
 
@@ -196,11 +176,6 @@ async function handleEventCallback(
   const { event_id, event } = eventPayload;
 
   if (dedupTracker.isDuplicate(event_id)) {
-    logger.log(
-      "Integration",
-      "Complete",
-      `重複的 event_id ${event_id}，略過處理`,
-    );
     return new Response("OK", { status: 200 });
   }
 
@@ -273,11 +248,6 @@ class SlackProvider implements IntegrationProvider {
       async () => {
         const botToken = app.config["botToken"];
         if (typeof botToken !== "string") {
-          logger.error(
-            "Integration",
-            "Error",
-            `Slack App ${app.id} 缺少 botToken`,
-          );
           return false;
         }
 
@@ -290,12 +260,7 @@ class SlackProvider implements IntegrationProvider {
               botUserId: authResult.user_id,
             });
           }
-        } catch (error) {
-          logger.error(
-            "Integration",
-            "Error",
-            `Slack App ${app.id} 初始化失敗：${getErrorMessage(error)}`,
-          );
+        } catch {
           return false;
         }
 
@@ -307,12 +272,8 @@ class SlackProvider implements IntegrationProvider {
         if (!client) return;
         try {
           await this.fetchAndUpdateChannels(app.id, client);
-        } catch (error) {
-          logger.warn(
-            "Integration",
-            "Warn",
-            `Slack App ${app.id} 取得頻道失敗，繼續初始化：${getErrorMessage(error)}`,
-          );
+        } catch {
+          // 取得頻道失敗時繼續初始化（非致命）
         }
       },
       "Slack",
@@ -330,17 +291,11 @@ class SlackProvider implements IntegrationProvider {
 
   destroyAll(): void {
     this.clients.clear();
-    logger.log("Integration", "Complete", "已清除所有 Slack WebClient");
   }
 
   async refreshResources(appId: string): Promise<IntegrationResource[]> {
     const client = this.clients.get(appId);
     if (!client) {
-      logger.warn(
-        "Integration",
-        "Warn",
-        `Slack App ${appId} 尚未初始化，無法重新整理頻道`,
-      );
       return [];
     }
 
@@ -379,12 +334,7 @@ class SlackProvider implements IntegrationProvider {
         thread_ts: finalThreadTs,
       });
       return ok(undefined);
-    } catch (error) {
-      logger.error(
-        "Integration",
-        "Error",
-        `發送訊息至頻道 ${resourceId} 失敗：${getErrorMessage(error)}`,
-      );
+    } catch {
       return err("發送訊息失敗");
     }
   }
@@ -456,11 +406,6 @@ class SlackProvider implements IntegrationProvider {
       return handleEventCallback(body, timestamp, rawBody, signature);
     }
 
-    logger.warn(
-      "Integration",
-      "Error",
-      `收到未知的 Slack 事件類型: ${body.type}`,
-    );
     return new Response("OK", { status: 200 });
   }
 
@@ -473,11 +418,6 @@ class SlackProvider implements IntegrationProvider {
     if (!forceRefresh) {
       const cached = this.channelCache.get(appId);
       if (cached && Date.now() < cached.expiresAt) {
-        logger.log(
-          "Integration",
-          "Complete",
-          `Slack App ${appId} 頻道清單命中快取（${cached.channels.length} 個頻道）`,
-        );
         return cached.channels;
       }
     }
@@ -506,11 +446,6 @@ class SlackProvider implements IntegrationProvider {
       expiresAt: Date.now() + SlackProvider.CHANNEL_CACHE_TTL_MS,
     });
     integrationAppStore.updateResources(appId, channels);
-    logger.log(
-      "Integration",
-      "Complete",
-      `Slack App ${appId} 取得 ${channels.length} 個頻道`,
-    );
 
     return channels;
   }

@@ -78,7 +78,7 @@ class PodManifestService {
     dirsToCheck: Set<string>,
   ): Promise<void> {
     if (!isPathWithinDirectory(absPath, repositoryPath)) {
-      logger.warn("Pod", "Delete", `偵測到不安全的路徑，跳過刪除: ${absPath}`);
+      // 偵測到不安全的路徑，跳過刪除
       return;
     }
 

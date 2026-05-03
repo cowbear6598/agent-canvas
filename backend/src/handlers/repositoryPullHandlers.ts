@@ -3,7 +3,6 @@ import type { RepositoryPullLatestResultPayload } from "../types";
 import type { RepositoryPullLatestPayload } from "../schemas";
 import { gitService } from "../services/workspace/gitService.js";
 import { emitSuccess, emitError } from "../utils/websocketResponse.js";
-import { logger } from "../utils/logger.js";
 import { handleResultError } from "../utils/handlerHelpers.js";
 import { createI18nError } from "../utils/i18nError.js";
 import type { I18nError } from "../utils/i18nError.js";
@@ -124,12 +123,6 @@ export const handleRepositoryPullLatest =
         connectionId,
         WebSocketResponseEvents.REPOSITORY_PULL_LATEST_RESULT,
         response,
-      );
-
-      logger.log(
-        "Repository",
-        "Update",
-        `已 Pull「${repositoryId}」的最新版本`,
       );
     },
     {

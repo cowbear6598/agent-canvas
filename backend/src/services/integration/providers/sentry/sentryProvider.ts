@@ -2,7 +2,6 @@ import { z } from "zod";
 import { createHmac, timingSafeEqual } from "crypto";
 import { ok, err } from "../../../../types/index.js";
 import type { Result } from "../../../../types/index.js";
-import { logger } from "../../../../utils/logger.js";
 import { escapeUserInput } from "../../../../utils/escapeInput.js";
 import { integrationAppStore } from "../../integrationAppStore.js";
 import { integrationEventPipeline } from "../../integrationEventPipeline.js";
@@ -112,17 +111,15 @@ class SentryProvider implements IntegrationProvider {
   async initialize(app: IntegrationApp): Promise<void> {
     integrationAppStore.updateStatus(app.id, "connected");
     broadcastConnectionStatus(this.name, app.id);
-    logger.log("Sentry", "Complete", `Sentry App ${app.id} 初始化成功`);
   }
 
   destroy(appId: string): void {
     integrationAppStore.updateStatus(appId, "disconnected");
     broadcastConnectionStatus(this.name, appId);
-    logger.log("Sentry", "Complete", `Sentry App ${appId} 已移除`);
   }
 
   destroyAll(): void {
-    logger.log("Sentry", "Complete", "已清除所有 Sentry App");
+    // 無狀態，無需特別清理
   }
 
   async refreshResources(_appId: string): Promise<IntegrationResource[]> {
@@ -166,14 +163,12 @@ class SentryProvider implements IntegrationProvider {
     subPath?: string,
   ): Promise<Response> {
     if (!subPath || !NAME_PATTERN.test(subPath)) {
-      logger.warn("Sentry", "Error", "缺少或不合法的 appName 子路徑");
       return new Response("Not Found", { status: 404 });
     }
 
     const appName = subPath;
     const app = integrationAppStore.getByProviderAndName("sentry", appName);
     if (!app) {
-      logger.warn("Sentry", "Error", `找不到 Sentry App：${appName}`);
       return new Response("Not Found", { status: 404 });
     }
 
@@ -184,7 +179,6 @@ class SentryProvider implements IntegrationProvider {
 
     const signatureHeader = req.headers.get("sentry-hook-signature");
     if (!signatureHeader) {
-      logger.warn("Sentry", "Error", "缺少 sentry-hook-signature header");
       return new Response("Forbidden", { status: 403 });
     }
 
@@ -194,49 +188,31 @@ class SentryProvider implements IntegrationProvider {
       clientSecret.length === 0 ||
       !verifySentrySignature(clientSecret, rawBody, signatureHeader)
     ) {
-      logger.warn("Sentry", "Error", "Sentry 簽章驗證失敗");
       return new Response("Forbidden", { status: 403 });
     }
 
     // 簽章驗證通過後，用 signature 做防重放（防止攻擊者重放已驗證的請求）
     if (dedupTracker.isDuplicate(signatureHeader)) {
-      logger.log("Sentry", "Complete", "重複的 Webhook 簽章，略過處理");
       return new Response("OK", { status: 200 });
     }
 
     const hookResource = req.headers.get("sentry-hook-resource");
     if (hookResource !== "issue") {
-      logger.log(
-        "Sentry",
-        "Complete",
-        `收到非 issue 類型的 Sentry 事件（${hookResource}），略過`,
-      );
       return new Response("OK", { status: 200 });
     }
 
     const schemaResult = sentryWebhookPayloadSchema.safeParse(rawPayload);
     if (!schemaResult.success) {
-      logger.warn(
-        "Sentry",
-        "Error",
-        `無效的 Webhook payload：${schemaResult.error.message}`,
-      );
       return new Response("OK", { status: 200 });
     }
 
     const webhookPayload = schemaResult.data;
     if (!SUPPORTED_ACTIONS.has(webhookPayload.action)) {
-      logger.log(
-        "Sentry",
-        "Complete",
-        `收到不支援的 Sentry action（${webhookPayload.action}），略過`,
-      );
       return new Response("OK", { status: 200 });
     }
 
     const normalizedEvent = this.formatEventMessage(webhookPayload, app);
     if (!normalizedEvent) {
-      logger.warn("Sentry", "Error", "formatEventMessage 回傳 null，略過處理");
       return new Response("OK", { status: 200 });
     }
 

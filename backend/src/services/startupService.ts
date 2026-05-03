@@ -62,7 +62,6 @@ class StartupService {
       );
     });
 
-    logger.log("Startup", "Complete", "伺服器初始化完成");
     return ok(undefined);
   }
 
@@ -125,19 +124,7 @@ class StartupService {
       .catch(() => false);
 
     if (oldExists && !newExists) {
-      logger.log(
-        "Startup",
-        "Migrate",
-        "偵測到舊資料目錄 ~/Documents/ClaudeCanvas，正在搬遷至 ~/Documents/AgentCanvas",
-      );
       await fs.rename(oldPath, newPath);
-      logger.log("Startup", "Migrate", "資料目錄搬遷完成");
-    } else if (oldExists && newExists) {
-      logger.warn(
-        "Startup",
-        "Warn",
-        "同時偵測到 ~/Documents/ClaudeCanvas 與 ~/Documents/AgentCanvas，已跳過自動搬遷。請手動處理",
-      );
     }
   }
 
@@ -178,30 +165,17 @@ class StartupService {
       }
 
       // pods.workspace_path
-      const podsResult = db
-        .prepare(
-          `UPDATE pods SET workspace_path = REPLACE(workspace_path, '${OLD_DATA_DIR_PATTERN}', '${NEW_DATA_DIR_PATTERN}') WHERE workspace_path LIKE '%${OLD_DATA_DIR_PATTERN}%'`,
-        )
-        .run();
+      db.prepare(
+        `UPDATE pods SET workspace_path = REPLACE(workspace_path, '${OLD_DATA_DIR_PATTERN}', '${NEW_DATA_DIR_PATTERN}') WHERE workspace_path LIKE '%${OLD_DATA_DIR_PATTERN}%'`,
+      ).run();
 
       // repository_metadata.path
-      const reposResult = db
-        .prepare(
-          `UPDATE repository_metadata SET path = REPLACE(path, '${OLD_DATA_DIR_PATTERN}', '${NEW_DATA_DIR_PATTERN}') WHERE path LIKE '%${OLD_DATA_DIR_PATTERN}%'`,
-        )
-        .run();
+      db.prepare(
+        `UPDATE repository_metadata SET path = REPLACE(path, '${OLD_DATA_DIR_PATTERN}', '${NEW_DATA_DIR_PATTERN}') WHERE path LIKE '%${OLD_DATA_DIR_PATTERN}%'`,
+      ).run();
 
       // 更新版本戳記，後續啟動將跳過此遷移
       db.exec(`PRAGMA user_version = ${DB_PATHS_MIGRATION_VERSION}`);
-
-      const totalUpdated = podsResult.changes + reposResult.changes;
-      if (totalUpdated > 0) {
-        logger.log(
-          "Startup",
-          "Migrate",
-          `已更新 SQLite 路徑：pods ${podsResult.changes} 筆、repository_metadata ${reposResult.changes} 筆（共 ${totalUpdated} 筆）`,
-        );
-      }
     } finally {
       db.close();
     }
@@ -242,7 +216,6 @@ class StartupService {
   private async ensureDefaultCanvas(): Promise<Result<void>> {
     const canvases = canvasStore.list();
     if (canvases.length === 0) {
-      logger.log("Startup", "Create", "未找到任何畫布，建立預設畫布");
       const defaultCanvasResult = await canvasStore.create("default");
       if (!defaultCanvasResult.success) {
         return err(`建立預設 Canvas 失敗: ${defaultCanvasResult.error}`);

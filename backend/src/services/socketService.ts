@@ -23,12 +23,10 @@ class SocketService {
 
   initialize(): void {
     if (this.initialized) {
-      logger.log("Startup", "Complete", "[WebSocket] 已初始化");
       return;
     }
 
     this.initialized = true;
-    logger.log("Startup", "Complete", "[WebSocket] 服務已初始化");
 
     this.startHeartbeat();
   }
@@ -68,11 +66,6 @@ class SocketService {
 
     const serialized = serialize(response);
     if (connection.webSocket.readyState !== WS_READY_STATE_OPEN) {
-      logger.log(
-        "Connection",
-        "Error",
-        `訊息傳送失敗，連線 ${connectionId}: WebSocket 未開啟 (readyState: ${connection.webSocket.readyState})`,
-      );
       return;
     }
     connection.webSocket.send(serialized);
@@ -157,8 +150,6 @@ class SocketService {
       () => this.pingAllConnections(),
       this.HEARTBEAT_INTERVAL,
     );
-
-    logger.log("Startup", "Complete", "[Heartbeat] 已啟動");
   }
 
   private sendHeartbeatPing(connectionId: string): void {
@@ -181,11 +172,6 @@ class SocketService {
 
     const serialized = serialize(response);
     if (connection.webSocket.readyState !== WS_READY_STATE_OPEN) {
-      logger.log(
-        "Connection",
-        "Error",
-        `心跳傳送失敗，連線 ${connectionId}: WebSocket 未開啟 (readyState: ${connection.webSocket.readyState})`,
-      );
       return;
     }
     connection.webSocket.send(serialized);
@@ -214,11 +200,6 @@ class SocketService {
     );
 
     if (missed >= this.MAX_MISSED_HEARTBEATS) {
-      logger.log(
-        "Connection",
-        "Delete",
-        `連線 ${connectionId} 因心跳逾時而斷線`,
-      );
       this.clearHeartbeatTimeout(connectionId);
       connection.webSocket.close(1000, "Heartbeat timeout");
     }
@@ -239,8 +220,6 @@ class SocketService {
 
     this.heartbeatTimeouts.forEach((timeout) => clearTimeout(timeout));
     this.heartbeatTimeouts.clear();
-
-    logger.log("Startup", "Complete", "[Heartbeat] 已停止");
   }
 }
 

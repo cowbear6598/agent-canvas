@@ -2,7 +2,6 @@ import { z } from "zod";
 import { createHmac, timingSafeEqual } from "crypto";
 import { ok, err } from "../../../types/index.js";
 import type { Result } from "../../../types/index.js";
-import { logger } from "../../../utils/logger.js";
 import { escapeUserInput } from "../../../utils/escapeInput.js";
 import { integrationAppStore } from "../integrationAppStore.js";
 import { integrationEventPipeline } from "../integrationEventPipeline.js";
@@ -185,17 +184,15 @@ class JiraProvider implements IntegrationProvider {
   async initialize(app: IntegrationApp): Promise<void> {
     integrationAppStore.updateStatus(app.id, "connected");
     broadcastConnectionStatus(this.name, app.id);
-    logger.log("Jira", "Complete", `Jira App ${app.id} 初始化成功`);
   }
 
   destroy(appId: string): void {
     integrationAppStore.updateStatus(appId, "disconnected");
     broadcastConnectionStatus(this.name, appId);
-    logger.log("Jira", "Complete", `Jira App ${appId} 已移除`);
   }
 
   destroyAll(): void {
-    logger.log("Jira", "Complete", "已清除所有 Jira App");
+    // 無狀態，無需特別清理
   }
 
   async refreshResources(_appId: string): Promise<IntegrationResource[]> {
@@ -241,14 +238,12 @@ class JiraProvider implements IntegrationProvider {
     subPath?: string,
   ): Promise<Response> {
     if (!subPath || !NAME_PATTERN.test(subPath)) {
-      logger.warn("Jira", "Error", "缺少或不合法的 appName 子路徑");
       return new Response("Not Found", { status: 404 });
     }
 
     const appName = subPath;
     const app = integrationAppStore.getByProviderAndName("jira", appName);
     if (!app) {
-      logger.warn("Jira", "Error", `找不到 Jira App：${appName}`);
       return new Response("Not Found", { status: 404 });
     }
 
@@ -259,7 +254,6 @@ class JiraProvider implements IntegrationProvider {
 
     const signatureHeader = req.headers.get("X-Hub-Signature");
     if (!signatureHeader) {
-      logger.warn("Jira", "Error", "缺少 X-Hub-Signature header");
       return new Response("Forbidden", { status: 403 });
     }
 
@@ -269,7 +263,6 @@ class JiraProvider implements IntegrationProvider {
       webhookSecret.length === 0 ||
       !verifyJiraSignature(webhookSecret, rawBody, signatureHeader)
     ) {
-      logger.warn("Jira", "Error", "Jira 簽名驗證失敗");
       return new Response("Forbidden", { status: 403 });
     }
 
@@ -283,27 +276,19 @@ class JiraProvider implements IntegrationProvider {
         ? rawPayloadObj["timestamp"]
         : null;
     if (timestampMs === null) {
-      logger.warn("Jira", "Error", "Jira webhook 缺少 timestamp 欄位");
       return new Response("Forbidden", { status: 403 });
     }
     if (Math.abs(Date.now() - timestampMs) > MAX_WEBHOOK_AGE_MS) {
-      logger.warn("Jira", "Error", "Jira Webhook timestamp 已過期，拒絕請求");
       return new Response("Forbidden", { status: 403 });
     }
 
     // 用 signature 做防重放（防止攻擊者重放已驗證的請求）
     if (dedupTracker.isDuplicate(signatureHeader)) {
-      logger.log("Jira", "Complete", "重複的 Webhook 簽章，略過處理");
       return new Response("OK", { status: 200 });
     }
 
     const schemaResult = jiraWebhookPayloadSchema.safeParse(rawPayload);
     if (!schemaResult.success) {
-      logger.warn(
-        "Jira",
-        "Error",
-        `無效的 Webhook payload：${schemaResult.error.message}`,
-      );
       return new Response("OK", { status: 200 });
     }
 
@@ -311,11 +296,6 @@ class JiraProvider implements IntegrationProvider {
     const { webhookEvent } = webhookPayload;
 
     if (!SUPPORTED_EVENTS.has(webhookEvent)) {
-      logger.log(
-        "Jira",
-        "Complete",
-        `收到不支援的 Jira 事件類型：${webhookEvent}，略過`,
-      );
       return new Response("OK", { status: 200 });
     }
 

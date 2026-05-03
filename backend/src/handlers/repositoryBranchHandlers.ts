@@ -16,7 +16,6 @@ import { repositoryService } from "../services/repositoryService.js";
 import { socketService } from "../services/socketService.js";
 import { gitService } from "../services/workspace/gitService.js";
 import { emitSuccess, emitError } from "../utils/websocketResponse.js";
-import { logger } from "../utils/logger.js";
 import { handleResultError } from "../utils/handlerHelpers.js";
 import { createI18nError } from "../utils/i18nError.js";
 import {
@@ -114,9 +113,7 @@ async function broadcastBranchChange(
 export const handleRepositoryGetLocalBranches =
   withValidatedGitRepository<RepositoryGetLocalBranchesPayload>(
     WebSocketResponseEvents.REPOSITORY_LOCAL_BRANCHES_RESULT,
-    async (connectionId, payload, requestId, repositoryPath) => {
-      const { repositoryId } = payload;
-
+    async (connectionId, _payload, requestId, repositoryPath) => {
       const branchesResult = await gitService.getLocalBranches(repositoryPath);
       if (
         handleResultError(
@@ -143,20 +140,13 @@ export const handleRepositoryGetLocalBranches =
         WebSocketResponseEvents.REPOSITORY_LOCAL_BRANCHES_RESULT,
         response,
       );
-      logger.log(
-        "Repository",
-        "List",
-        `已取得「${repositoryId}」的本地分支清單`,
-      );
     },
   );
 
 export const handleRepositoryCheckDirty =
   withValidatedGitRepository<RepositoryCheckDirtyPayload>(
     WebSocketResponseEvents.REPOSITORY_DIRTY_CHECK_RESULT,
-    async (connectionId, payload, requestId, repositoryPath) => {
-      const { repositoryId } = payload;
-
+    async (connectionId, _payload, requestId, repositoryPath) => {
       const dirtyResult =
         await gitService.hasUncommittedChanges(repositoryPath);
       if (
@@ -181,11 +171,6 @@ export const handleRepositoryCheckDirty =
         connectionId,
         WebSocketResponseEvents.REPOSITORY_DIRTY_CHECK_RESULT,
         response,
-      );
-      logger.log(
-        "Repository",
-        "Check",
-        `已檢查「${repositoryId}」的未提交狀態：${dirtyResult.data}`,
       );
     },
   );
@@ -224,12 +209,6 @@ export const handleRepositoryCheckoutBranch =
         branchName,
         checkoutResult.action,
       );
-
-      logger.log(
-        "Repository",
-        "Update",
-        `已切換「${repositoryId}」的分支至「${branchName}」（${checkoutResult.action}）`,
-      );
     },
     {
       rejectWorktree: {
@@ -242,7 +221,7 @@ export const handleRepositoryDeleteBranch =
   withValidatedGitRepository<RepositoryDeleteBranchPayload>(
     WebSocketResponseEvents.REPOSITORY_BRANCH_DELETED,
     async (connectionId, payload, requestId, repositoryPath) => {
-      const { repositoryId, branchName, force } = payload;
+      const { branchName, force } = payload;
 
       const deleteResult = await gitService.deleteBranch(
         repositoryPath,
@@ -271,12 +250,6 @@ export const handleRepositoryDeleteBranch =
         connectionId,
         WebSocketResponseEvents.REPOSITORY_BRANCH_DELETED,
         response,
-      );
-
-      logger.log(
-        "Repository",
-        "Update",
-        `已從「${repositoryId}」刪除分支「${branchName}」`,
       );
     },
   );

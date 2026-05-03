@@ -6,7 +6,6 @@ import { configStore } from "../services/configStore.js";
 import { socketService } from "../services/socketService.js";
 import { backupScheduleService } from "../services/backupScheduleService.js";
 import { config } from "../config/index.js";
-import { logger } from "../utils/logger.js";
 
 export async function handleConfigGet(
   connectionId: string,
@@ -78,10 +77,8 @@ export async function handleConfigUpdate(
     const backupGitDir = path.join(config.appDataRoot, ".git");
     try {
       await fs.rm(backupGitDir, { recursive: true, force: true });
-      logger.log("Backup", "Delete", "已刪除備份 .git 目錄");
-    } catch (err) {
-      logger.warn("Backup", "Delete", "刪除備份 .git 目錄失敗");
-      logger.error("Backup", "Error", "刪除備份 .git 目錄時發生錯誤", err);
+    } catch {
+      // 忽略刪除失敗
     }
   }
 }

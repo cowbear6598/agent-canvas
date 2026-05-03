@@ -5,7 +5,6 @@ import ignore from "ignore";
 import { requireCanvas, resolvePod } from "./apiHelpers.js";
 import { repositoryService } from "../services/repositoryService.js";
 import { HTTP_STATUS } from "../constants.js";
-import { logger } from "../utils/logger.js";
 import { isPathWithinDirectory } from "../utils/pathValidator.js";
 import { config } from "../config/index.js";
 
@@ -53,13 +52,8 @@ async function streamZipDirectory(
         const entry = new ZipDeflate(zipEntryPath, { level: 6 });
         zip.add(entry);
         entry.push(content, true);
-      } catch (fileErr) {
-        logger.error(
-          "Pod",
-          "Error",
-          `讀取檔案失敗，略過：${relativePath}`,
-          fileErr,
-        );
+      } catch {
+        // 單檔讀取失敗時略過該檔，繼續打包其他檔案
       }
     }
   }
@@ -73,11 +67,8 @@ async function loadGitignore(
   try {
     const gitignoreContent = await readFile(gitignorePath, "utf-8");
     ig.add(gitignoreContent);
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
-      logger.error("Pod", "Error", `讀取 .gitignore 失敗，略過`, err);
-    }
-    // ENOENT：.gitignore 不存在，靜默略過
+  } catch {
+    // 讀取 .gitignore 失敗時略過 ignore 規則（含 ENOENT 與其他錯誤）
   }
   return ig;
 }
@@ -109,7 +100,6 @@ function createZipStream(
           zip.end();
         }
       } catch (traversalErr) {
-        logger.error("Pod", "Error", "打包工作目錄失敗", traversalErr);
         zip.terminate();
         controller.error(traversalErr);
       }
@@ -160,7 +150,6 @@ export async function handleDownloadPodDirectory(
         headers: { "Content-Type": "application/json" },
       });
     }
-    logger.error("Pod", "Error", "無法存取目標目錄", err);
     return new Response(JSON.stringify({ error: "無法存取目標目錄" }), {
       status: HTTP_STATUS.INTERNAL_ERROR,
       headers: { "Content-Type": "application/json" },
@@ -181,8 +170,7 @@ export async function handleDownloadPodDirectory(
     });
 
     return new Response(readableStream, { status: HTTP_STATUS.OK, headers });
-  } catch (err) {
-    logger.error("Pod", "Error", "打包工作目錄失敗", err);
+  } catch {
     return new Response(
       JSON.stringify({ error: "打包工作目錄時發生錯誤，請稍後再試" }),
       {

@@ -69,9 +69,6 @@ async function startServer(): Promise<void> {
 
   const enableStaticFiles =
     config.nodeEnv === "production" && (await isStaticFilesAvailable());
-  if (enableStaticFiles) {
-    logger.log("Startup", "Complete", "已啟用前端靜態檔案服務");
-  }
 
   Bun.serve<{ connectionId: string }>({
     port: PORT,
@@ -133,8 +130,6 @@ async function startServer(): Promise<void> {
         socketService.emitConnectionReady(connectionId, {
           socketId: connectionId,
         });
-
-        logger.log("Connection", "Create", `新連線：${connectionId}`);
       },
       message(
         webSocket: ServerWebSocket<{ connectionId: string }>,
@@ -191,8 +186,6 @@ async function startServer(): Promise<void> {
 
         socketService.cleanupSocket(connectionId);
         canvasStore.removeSocket(connectionId);
-
-        logger.log("Connection", "Delete", `連線關閉：${connectionId}`);
       },
     },
   });

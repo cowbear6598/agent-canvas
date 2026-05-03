@@ -233,15 +233,11 @@ function evaluateExitResult(
 
   // 已完成 turn 但非零 exit code：記 warn，保留正常輸出
   if (exitCode !== 0 && hasTurnComplete) {
-    const safeStderr = maskSensitiveStderr(stderrText);
     logger.warn(
       "Chat",
       "Warn",
       `[GeminiService] gemini 已完成一個 turn 但以非零 exit code 結束（exit code: ${exitCode}），可能為正常退出行為`,
     );
-    if (safeStderr) {
-      logger.warn("Chat", "Warn", `[GeminiService] stderr: ${safeStderr}`);
-    }
   }
 
   return { content, success: true };

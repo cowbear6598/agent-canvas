@@ -278,7 +278,6 @@ export async function handleRenamePod(
   const result = podStore.update(canvas.id, pod.id, { name: trimmedName });
 
   if (!result) {
-    logger.error("Pod", "Error", "重新命名 Pod 失敗");
     return jsonResponse(
       { error: "重新命名 Pod 時發生內部錯誤" },
       HTTP_STATUS.INTERNAL_ERROR,
