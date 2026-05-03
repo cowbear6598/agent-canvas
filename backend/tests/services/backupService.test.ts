@@ -324,7 +324,7 @@ describe("BackupService", () => {
 
       expect(result.success).toBe(false);
       if (!result.success) {
-        expect(result.error).toBe("備份 commit 失敗");
+        expect(result.error).toBe("備份推送失敗");
       }
       // push 不應被呼叫
       expect(mockGit.raw).not.toHaveBeenCalledWith([
