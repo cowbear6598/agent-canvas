@@ -250,6 +250,8 @@
     "slot": {
       "duplicateTitle": "Already exists, cannot insert",
       "providerDisabled": "This provider doesn't support this",
+      "thinkingLabel": "Thinking",
+      "thinkingDisabledTooltip": "Current model doesn't support thinking levels",
       "pluginsLabel": "Plugins",
       "pluginsLoading": "Loading...",
       "pluginsBusyTooltip": "Task in progress, please wait.",

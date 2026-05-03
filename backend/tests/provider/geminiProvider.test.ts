@@ -1588,4 +1588,78 @@ describe("GeminiProvider", () => {
       expect(options.mcpServerNames).toEqual([]);
     });
   });
+
+  // ── [B18] Gemini 不支援 thinkingLevel：在 pod.providerConfig 設置任何 thinkingLevel
+  // 都不應改變 spawn args 或 spawn options ─────────────────────────────────────
+  describe("[B18] thinkingLevel 不影響 Gemini args / spawn options", () => {
+    let spawnSpyB18: ReturnType<typeof vi.spyOn>;
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("[B18] 對同一 model 設定 thinkingLevel='high' vs 不設，spawn args 與 spawn options 應一致", async () => {
+      // 先跑一次：不帶 thinkingLevel
+      let mockProc = makeMockProc([
+        JSON.stringify({ type: "result", status: "success" }),
+      ]);
+      spawnSpyB18 = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
+
+      const ctxNoThinking = makeCtx({
+        message: "hello",
+        resumeSessionId: null,
+        options: {
+          model: "gemini-2.5-pro",
+          resumeMode: "cli",
+          plugins: [],
+          mcpServerNames: [],
+        },
+      });
+      await collectEvents(geminiProvider.chat(ctxNoThinking));
+      const [argsNoThinking, optsNoThinking] = spawnSpyB18.mock.calls[0] as [
+        string[],
+        Record<string, unknown>,
+      ];
+
+      vi.restoreAllMocks();
+
+      // 再跑一次：傳入帶 thinkingLevel 的 GeminiOptions（即使 GeminiOptions 介面沒這欄，
+      // 以 type-cast 模擬若有人意外傳入也不會影響輸出）
+      mockProc = makeMockProc([
+        JSON.stringify({ type: "result", status: "success" }),
+      ]);
+      spawnSpyB18 = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
+
+      const ctxWithThinking = makeCtx({
+        message: "hello",
+        resumeSessionId: null,
+        options: {
+          model: "gemini-2.5-pro",
+          resumeMode: "cli",
+          plugins: [],
+          mcpServerNames: [],
+          // 故意夾帶 thinkingLevel：geminiProvider 不應對其有任何反應
+          thinkingLevel: "high",
+        } as unknown as GeminiOptions,
+      });
+      await collectEvents(geminiProvider.chat(ctxWithThinking));
+      const [argsWithThinking, optsWithThinking] = spawnSpyB18.mock
+        .calls[0] as [string[], Record<string, unknown>];
+
+      // args 應完全一致（不含任何 reasoning / thinking 旗標）
+      expect(argsWithThinking).toEqual(argsNoThinking);
+      // 反向驗證：args 中不應出現 model_reasoning_effort / thinking 等字眼
+      expect(
+        argsWithThinking.some(
+          (arg) =>
+            typeof arg === "string" &&
+            (arg.includes("model_reasoning_effort") ||
+              arg.includes("thinking")),
+        ),
+      ).toBe(false);
+
+      // spawn options（cwd / env / stdio）應一致
+      expect(optsWithThinking.cwd).toBe(optsNoThinking.cwd);
+    });
+  });
 });

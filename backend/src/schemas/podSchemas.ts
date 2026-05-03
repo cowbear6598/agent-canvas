@@ -31,6 +31,11 @@ export const providerConfigSchema = z
       .regex(MODEL_PATTERN, "model 名稱包含不允許的字元")
       .max(MAX_MODEL_LENGTH)
       .optional(),
+    /**
+     * thinking level（推理層級）值字串，最長 20 字元。
+     * 不限定 enum 值（與 server-side 不驗證一致），未知 key 仍由 .strict() 阻擋。
+     */
+    thinkingLevel: z.string().max(20).optional(),
   })
   .strict();
 
@@ -84,6 +89,18 @@ export const podSetModelSchema = z.object({
     .max(MAX_MODEL_LENGTH),
 });
 
+/**
+ * pod:set-thinking-level 請求 schema：
+ * WS payload 欄位名為 level（簡潔），對應內部寫入 providerConfig.thinkingLevel。
+ * 不限定 enum 值（與 server-side 不驗證一致），僅限制最大長度 20 字元。
+ */
+export const podSetThinkingLevelSchema = z.object({
+  requestId: requestIdSchema,
+  canvasId: canvasIdSchema,
+  podId: podIdSchema,
+  level: z.string().max(20),
+});
+
 export const podSetScheduleSchema = z.object({
   requestId: requestIdSchema,
   canvasId: canvasIdSchema,
@@ -117,6 +134,9 @@ export type PodGetPayload = z.infer<typeof podGetSchema>;
 export type PodMovePayload = z.infer<typeof podMoveSchema>;
 export type PodRenamePayload = z.infer<typeof podRenameSchema>;
 export type PodSetModelPayload = z.infer<typeof podSetModelSchema>;
+export type PodSetThinkingLevelPayload = z.infer<
+  typeof podSetThinkingLevelSchema
+>;
 export type PodSetSchedulePayload = z.infer<typeof podSetScheduleSchema>;
 export type PodDeletePayload = z.infer<typeof podDeleteSchema>;
 export type PodSetPluginsPayload = z.infer<typeof podSetPluginsSchema>;

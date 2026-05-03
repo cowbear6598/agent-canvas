@@ -8,7 +8,12 @@ import {
   WebSocketRequestEvents,
   WebSocketResponseEvents,
 } from "@/services/websocket";
-import type { PodSetModelPayload, PodModelSetPayload } from "@/types/websocket";
+import type {
+  PodSetModelPayload,
+  PodModelSetPayload,
+  PodSetThinkingLevelPayload,
+  PodThinkingLevelSetPayload,
+} from "@/types/websocket";
 import { useSendCanvasAction } from "@/composables/useSendCanvasAction";
 import { usePodDrag } from "@/composables/pod/usePodDrag";
 import { usePodNoteBinding } from "@/composables/pod/usePodNoteBinding";
@@ -37,6 +42,7 @@ import IntegrationStatusIcon from "@/components/integration/IntegrationStatusIco
 import ScheduleModal from "@/components/canvas/ScheduleModal.vue";
 import PluginPopover from "@/components/pod/PluginPopover.vue";
 import McpPopover from "@/components/pod/McpPopover.vue";
+import ThinkingPopover from "@/components/pod/ThinkingPopover.vue";
 
 const props = defineProps<{
   pod: Pod;
@@ -233,6 +239,9 @@ const {
   showMcpPopover,
   mcpAnchorRect,
   handleMcpClick,
+  showThinkingPopover,
+  thinkingAnchorRect,
+  handleThinkingClick,
 } = usePodPopovers();
 
 // MCP notch 相關狀態
@@ -366,6 +375,25 @@ const handleModelChange = async (model: string): Promise<void> => {
   );
 };
 
+const handleThinkingLevelChange = async (level: string): Promise<void> => {
+  const response = await sendCanvasAction<
+    PodSetThinkingLevelPayload,
+    PodThinkingLevelSetPayload
+  >({
+    requestEvent: WebSocketRequestEvents.POD_SET_THINKING_LEVEL,
+    responseEvent: WebSocketResponseEvents.POD_THINKING_LEVEL_SET,
+    payload: { podId: props.pod.id, level },
+  });
+
+  if (!response) return;
+  if (!response.pod) return;
+
+  podStore.updatePodThinkingLevel(
+    props.pod.id,
+    response.pod.providerConfig.thinkingLevel as string,
+  );
+};
+
 const handleToggleMultiInstance = async (): Promise<void> => {
   await podStore.setMultiInstanceWithBackend(
     props.pod.id,
@@ -404,7 +432,7 @@ const handleContextMenu = (e: MouseEvent): void => {
     <div class="pod-glow-layer" :class="[podStatusClasses]" />
 
     <div
-      class="relative pod-wrapper pod-with-plugin-notch pod-with-mcp-notch pod-with-mcp-server-notch"
+      class="relative pod-wrapper pod-with-plugin-notch pod-with-mcp-notch pod-with-mcp-server-notch pod-with-thinking-notch"
       :class="{ dragging: isDragging || isBatchDragging }"
       :style="{ '--pod-rotation': `${pod.rotation}deg` }"
     >
@@ -422,10 +450,13 @@ const handleContextMenu = (e: MouseEvent): void => {
         :plugin-active-count="pluginActiveCount"
         :mcp-active-count="podMcpActiveCount"
         :provider="pod.provider"
+        :current-model="currentModel"
+        :current-thinking-level="pod.providerConfig.thinkingLevel"
         :bound-repository-note="boundRepositoryNote"
         :bound-command-note="boundCommandNote"
         @plugin-clicked="handlePluginClick"
         @mcp-clicked="handleMcpClick"
+        @thinking-clicked="handleThinkingClick"
         @repository-dropped="(noteId) => handleNoteDrop('repository', noteId)"
         @repository-removed="() => handleNoteRemove('repository')"
         @command-dropped="(noteId) => handleNoteDrop('command', noteId)"
@@ -450,6 +481,7 @@ const handleContextMenu = (e: MouseEvent): void => {
           ]"
         />
         <div class="model-notch" />
+        <div class="thinking-notch" />
         <div class="mcp-notch" />
         <div class="mcp-server-notch" />
         <div class="repository-notch" />
@@ -559,6 +591,17 @@ const handleContextMenu = (e: MouseEvent): void => {
         :busy="isPodBusy"
         :provider="pod.provider"
         @close="showMcpPopover = false"
+      />
+
+      <ThinkingPopover
+        v-if="showThinkingPopover && thinkingAnchorRect"
+        :pod-id="pod.id"
+        :provider="pod.provider"
+        :current-model="currentModel"
+        :current-level="pod.providerConfig.thinkingLevel"
+        :anchor-rect="thinkingAnchorRect"
+        @select="handleThinkingLevelChange"
+        @close="showThinkingPopover = false"
       />
     </div>
   </div>

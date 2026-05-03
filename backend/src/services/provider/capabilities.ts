@@ -91,3 +91,75 @@ export const GEMINI_AVAILABLE_MODELS = Object.freeze([
 export const GEMINI_AVAILABLE_MODEL_VALUES: ReadonlySet<string> = new Set(
   GEMINI_AVAILABLE_MODELS.map((m) => m.value),
 );
+
+/** 各 provider 共用的 thinking level 型別 alias，供 pod 設定與型別引用 */
+export type ThinkingLevel = "low" | "medium" | "high" | "xhigh" | "max";
+
+/**
+ * Claude 各模型支援的 thinking levels 與預設值。
+ * haiku 不支援，levels 為空陣列、default 為 null。
+ */
+export const CLAUDE_MODEL_THINKING_LEVELS: Readonly<
+  Record<string, { levels: readonly string[]; default: string | null }>
+> = Object.freeze({
+  opus: Object.freeze({
+    levels: Object.freeze(["low", "medium", "high", "xhigh", "max"] as const),
+    default: "high",
+  }),
+  sonnet: Object.freeze({
+    levels: Object.freeze(["low", "medium", "high", "max"] as const),
+    default: "high",
+  }),
+  haiku: Object.freeze({
+    levels: Object.freeze([] as const),
+    default: null,
+  }),
+});
+
+/** Codex 各模型支援的 thinking levels 與預設值，三個 model 行為一致 */
+export const CODEX_MODEL_THINKING_LEVELS: Readonly<
+  Record<string, { levels: readonly string[]; default: string | null }>
+> = Object.freeze({
+  "gpt-5.4": Object.freeze({
+    levels: Object.freeze(["low", "medium", "high", "xhigh"] as const),
+    default: "medium",
+  }),
+  "gpt-5.5": Object.freeze({
+    levels: Object.freeze(["low", "medium", "high", "xhigh"] as const),
+    default: "medium",
+  }),
+  "gpt-5.4-mini": Object.freeze({
+    levels: Object.freeze(["low", "medium", "high", "xhigh"] as const),
+    default: "medium",
+  }),
+});
+
+/** Gemini 全系列暫不支援 thinking level，全部 model 都是空 levels + null default */
+export const GEMINI_MODEL_THINKING_LEVELS: Readonly<
+  Record<string, { levels: readonly string[]; default: string | null }>
+> = Object.freeze({
+  "gemini-2.5-flash": Object.freeze({
+    levels: Object.freeze([] as const),
+    default: null,
+  }),
+  "gemini-2.5-pro": Object.freeze({
+    levels: Object.freeze([] as const),
+    default: null,
+  }),
+  "gemini-2.5-flash-lite": Object.freeze({
+    levels: Object.freeze([] as const),
+    default: null,
+  }),
+  "gemini-3-pro-preview": Object.freeze({
+    levels: Object.freeze([] as const),
+    default: null,
+  }),
+  "gemini-3-flash-preview": Object.freeze({
+    levels: Object.freeze([] as const),
+    default: null,
+  }),
+  "gemini-3.1-flash-lite-preview": Object.freeze({
+    levels: Object.freeze([] as const),
+    default: null,
+  }),
+});

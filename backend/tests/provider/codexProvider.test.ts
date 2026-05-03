@@ -507,6 +507,68 @@ describe("CodexProvider", () => {
     expect(readCodexMcpServers).not.toHaveBeenCalled();
   });
 
+  // ── [B15] 新對話 + thinkingLevel：args 應含 -c model_reasoning_effort=<level> ──
+  it("[B15] 新對話 + options.thinkingLevel=high 時，args 應含 -c model_reasoning_effort=high", async () => {
+    const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
+    spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
+
+    const provider = new CodexProvider();
+    const ctx = makeCtx({
+      resumeSessionId: null,
+      options: { model: "gpt-5.5", resumeMode: "cli", thinkingLevel: "high" },
+    });
+    await collectEvents(provider.chat(ctx));
+
+    expect(spawnSpy).toHaveBeenCalledOnce();
+    const [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
+
+    const idx = spawnArgs.indexOf("model_reasoning_effort=high");
+    expect(idx).toBeGreaterThan(-1);
+    expect(spawnArgs[idx - 1]).toBe("-c");
+  });
+
+  // ── [B16] resume 模式 + thinkingLevel：args 應含 -c model_reasoning_effort=<level> ──
+  it("[B16] resume 模式 + options.thinkingLevel=xhigh 時，args 應含 -c model_reasoning_effort=xhigh", async () => {
+    const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
+    spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
+
+    const provider = new CodexProvider();
+    const ctx = makeCtx({
+      resumeSessionId: "session-thinking-xyz",
+      options: { model: "gpt-5.5", resumeMode: "cli", thinkingLevel: "xhigh" },
+    });
+    await collectEvents(provider.chat(ctx));
+
+    expect(spawnSpy).toHaveBeenCalledOnce();
+    const [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
+
+    // resume args 應含 model_reasoning_effort=xhigh，且不含 --cd
+    const idx = spawnArgs.indexOf("model_reasoning_effort=xhigh");
+    expect(idx).toBeGreaterThan(-1);
+    expect(spawnArgs[idx - 1]).toBe("-c");
+    expect(spawnArgs).not.toContain("--cd");
+  });
+
+  // ── [B17] 無 thinkingLevel 時：args 不應含 model_reasoning_effort ──
+  it("[B17] options.thinkingLevel 未提供時，args 不應含 model_reasoning_effort 旗標", async () => {
+    const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
+    spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
+
+    const provider = new CodexProvider();
+    // 預設 options 不含 thinkingLevel
+    const ctx = makeCtx({
+      resumeSessionId: null,
+      options: { model: "gpt-5.5", resumeMode: "cli" },
+    });
+    await collectEvents(provider.chat(ctx));
+
+    const [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
+    const hasReasoningFlag = spawnArgs.some((arg) =>
+      arg.startsWith("model_reasoning_effort"),
+    );
+    expect(hasReasoningFlag).toBe(false);
+  });
+
   // ── MCP auto-approve：無 MCP server 時 args 不含 default_tools_approval_mode ──
   it("無 MCP server 時 args 不應含任何 default_tools_approval_mode 旗標", async () => {
     // readCodexMcpServers 預設 mock 回傳空陣列

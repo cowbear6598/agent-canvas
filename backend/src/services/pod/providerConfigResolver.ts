@@ -11,7 +11,38 @@
 
 import type { ProviderName } from "../provider/types.js";
 import { getProvider, providerRegistry } from "../provider/index.js";
+import {
+  CLAUDE_MODEL_THINKING_LEVELS,
+  CODEX_MODEL_THINKING_LEVELS,
+  GEMINI_MODEL_THINKING_LEVELS,
+} from "../provider/capabilities.js";
 import { logger } from "../../utils/logger.js";
+
+/**
+ * 取得指定 provider + model 的 default thinking level。
+ * 找不到對應 record 或該 model 不支援 thinking level 時回傳 null。
+ */
+export function getDefaultThinkingLevel(
+  provider: ProviderName,
+  model: string,
+): string | null {
+  let table:
+    | Readonly<
+        Record<string, { levels: readonly string[]; default: string | null }>
+      >
+    | undefined;
+  if (provider === "claude") {
+    table = CLAUDE_MODEL_THINKING_LEVELS;
+  } else if (provider === "codex") {
+    table = CODEX_MODEL_THINKING_LEVELS;
+  } else if (provider === "gemini") {
+    table = GEMINI_MODEL_THINKING_LEVELS;
+  }
+  if (!table) return null;
+  const entry = table[model];
+  if (!entry) return null;
+  return entry.default;
+}
 
 /**
  * 白名單過濾 providerConfig，只保留合法欄位（目前僅 model）。
@@ -25,6 +56,9 @@ function sanitizeProviderConfig(
   const sanitized: Record<string, unknown> = {};
   if ("model" in raw) {
     sanitized.model = raw.model;
+  }
+  if ("thinkingLevel" in raw) {
+    sanitized.thinkingLevel = raw.thinkingLevel;
   }
   return sanitized;
 }
@@ -116,6 +150,20 @@ export function resolveProviderConfig(
   // 不驗證 model 是否在 availableModels 內，避免舊 pod 的歷史 model 值導致 Pod 打不開
   const sanitized = sanitizeProviderConfig(rawConfig);
   ensureModelField(sanitized, provider, podId);
+
+  // 既有 Pod（在 thinking level 功能上線前建立）DB 中沒有 thinkingLevel key，
+  // 在讀取路徑補入該 model 的 default，使 UI 上能直接顯示對應顏色；
+  // 若 default 為 null（model 不支援 thinking）則不寫入。
+  if (!("thinkingLevel" in sanitized)) {
+    const defaultLevel = getDefaultThinkingLevel(
+      provider,
+      sanitized.model as string,
+    );
+    if (defaultLevel !== null) {
+      sanitized.thinkingLevel = defaultLevel;
+    }
+  }
+
   return sanitized;
 }
 
@@ -140,6 +188,19 @@ export function sanitizeProviderConfigStrict(
     const defaultOptions = getProvider(provider).metadata
       .defaultOptions as Record<string, unknown>;
     sanitized.model = defaultOptions.model;
+  }
+
+  // 自動注入該 model 的 default thinkingLevel：
+  // 僅在使用者「未顯式傳入」（raw 中沒有 thinkingLevel key）且該 model 有 default 時補入；
+  // 若 default 為 null（model 不支援 thinking）則不寫入，避免 Haiku/Gemini 出現 thinkingLevel 欄位。
+  if (!("thinkingLevel" in raw)) {
+    const defaultLevel = getDefaultThinkingLevel(
+      provider,
+      sanitized.model as string,
+    );
+    if (defaultLevel !== null) {
+      sanitized.thinkingLevel = defaultLevel;
+    }
   }
 
   return sanitized;

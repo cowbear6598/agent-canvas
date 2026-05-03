@@ -1657,6 +1657,63 @@ describe("podStore", () => {
         "model",
       ]);
     });
+
+    // [B-3] regression：本地樂觀更新 model 時不應主動清空 thinkingLevel，
+    // 清空由後端 pod:model:set 事件回拋負責
+    it("[B-3] 切換 model 時應保留原 pod 已有的 thinkingLevel（不主動清空）", () => {
+      const store = usePodStore();
+      const pod = createMockPod({
+        id: "pod-1",
+        provider: "claude",
+        providerConfig: { model: "sonnet", thinkingLevel: "medium" },
+      });
+      store.pods = [pod];
+
+      store.updatePodProviderConfigModel("pod-1", "opus");
+
+      // model 應更新為新值
+      expect(store.pods[0]?.providerConfig?.model).toBe("opus");
+      // 但 thinkingLevel 不應被本地樂觀更新清空（由後端事件負責）
+      expect(store.pods[0]?.providerConfig?.thinkingLevel).toBe("medium");
+    });
+  });
+
+  describe("updatePodThinkingLevel", () => {
+    // [B-1] 寫入 thinkingLevel 後 model 應維持原值
+    it("[B-1] 寫入 thinkingLevel 後 model 應維持原值", () => {
+      const store = usePodStore();
+      const pod = createMockPod({
+        id: "pod-1",
+        provider: "claude",
+        providerConfig: { model: "sonnet" },
+      });
+      store.pods = [pod];
+
+      store.updatePodThinkingLevel("pod-1", "high");
+
+      expect(store.pods[0]?.providerConfig?.thinkingLevel).toBe("high");
+      // model 不應被改動
+      expect(store.pods[0]?.providerConfig?.model).toBe("sonnet");
+    });
+
+    // [B-2] 對未知 podId 不應改動 pods 陣列
+    it("[B-2] 對未知 podId 不應改動 pods 陣列", () => {
+      const store = usePodStore();
+      const pod = createMockPod({
+        id: "pod-1",
+        provider: "claude",
+        providerConfig: { model: "sonnet" },
+      });
+      store.pods = [pod];
+      const snapshotBefore = JSON.parse(JSON.stringify(store.pods));
+
+      expect(() =>
+        store.updatePodThinkingLevel("non-existent", "high"),
+      ).not.toThrow();
+
+      // pods 陣列內容應完全未變
+      expect(JSON.parse(JSON.stringify(store.pods))).toEqual(snapshotBefore);
+    });
   });
 
   describe("updatePodField", () => {

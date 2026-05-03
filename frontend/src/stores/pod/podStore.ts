@@ -394,7 +394,19 @@ export const usePodStore = defineStore("pod", () => {
       return;
     }
 
+    // 切 model 後 thinkingLevel 由後端 pod:model:set 事件覆蓋
     pod.providerConfig = { ...pod.providerConfig, model };
+  }
+
+  /**
+   * 將 thinkingLevel 寫入 providerConfig.thinkingLevel。
+   * 不做格式驗證：thinkingLevel 沒有 CLI 注入風險，後端回傳已是白名單枚舉。
+   */
+  function updatePodThinkingLevel(podId: string, level: string): void {
+    const pod = findPodById(podId);
+    if (!pod) return;
+
+    pod.providerConfig = { ...pod.providerConfig, thinkingLevel: level };
   }
 
   function updatePodRepository(
@@ -549,6 +561,7 @@ export const usePodStore = defineStore("pod", () => {
     clearPodOutputsByIds,
     updatePodProvider,
     updatePodProviderConfigModel,
+    updatePodThinkingLevel,
     updatePodRepository,
     updatePodCommand,
     updatePodPlugins,

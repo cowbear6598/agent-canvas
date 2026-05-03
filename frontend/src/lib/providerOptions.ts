@@ -37,6 +37,7 @@ export function getClaudeOptions(pod: Pod): ClaudeOptions {
   }
   return {
     model: pod.providerConfig.model,
+    thinkingLevel: pod.providerConfig.thinkingLevel,
   };
 }
 
@@ -54,5 +55,6 @@ export function getCodexOptions(pod: Pod): CodexOptions {
   }
   return {
     model: pod.providerConfig.model,
+    thinkingLevel: pod.providerConfig.thinkingLevel,
   };
 }

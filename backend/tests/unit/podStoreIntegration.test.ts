@@ -440,7 +440,7 @@ describe("PodStore - providerConfig 白名單過濾", () => {
     ).toBeUndefined();
   });
 
-  it("create 收到含 provider key 的 providerConfig 時，DB 寫入的 provider_config_json 只含 model", () => {
+  it("create 收到含 provider key 的 providerConfig 時，DB 寫入的 provider_config_json 不含 provider key（thinkingLevel 由 sanitize 自動補入該 model 的 default）", () => {
     const { pod } = podStore.create(canvasId, {
       name: "pod-create-sanitize",
       x: 0,
@@ -463,11 +463,14 @@ describe("PodStore - providerConfig 白名單過濾", () => {
       unknown
     >;
 
-    expect(parsed).toEqual({ model: "gpt-5.4" });
+    // sanitize 後白名單只保留 model + thinkingLevel；provider key 應被丟棄
+    expect(parsed.model).toBe("gpt-5.4");
     expect(parsed.provider).toBeUndefined();
+    // codex gpt-5.4 的 default thinkingLevel = "medium"（由 sanitizeProviderConfigStrict 自動注入）
+    expect(parsed.thinkingLevel).toBe("medium");
   });
 
-  it("update 收到含 provider key 的 providerConfig 時，DB 寫入的 provider_config_json 只含 model", () => {
+  it("update 收到含 provider key 的 providerConfig 時，DB 寫入的 provider_config_json 不含 provider key（thinkingLevel 由 sanitize 自動補入該 model 的 default）", () => {
     const { pod } = podStore.create(canvasId, {
       name: "pod-update-sanitize",
       x: 0,
@@ -491,8 +494,11 @@ describe("PodStore - providerConfig 白名單過濾", () => {
       unknown
     >;
 
-    expect(parsed).toEqual({ model: "sonnet" });
+    // sanitize 後白名單只保留 model + thinkingLevel；provider key 應被丟棄
+    expect(parsed.model).toBe("sonnet");
     expect(parsed.provider).toBeUndefined();
+    // claude sonnet 的 default thinkingLevel = "high"
+    expect(parsed.thinkingLevel).toBe("high");
   });
 });
 
@@ -760,7 +766,7 @@ describe("PodStore - Provider / Model 驗證", () => {
     expect(after).toEqual(before);
   });
 
-  it("create 傳入合法 model 時應成功建立並可從 DB 讀出", () => {
+  it("create 傳入合法 model 時應成功建立並可從 DB 讀出（codex gpt-5.5 應自動補入 thinkingLevel='medium'）", () => {
     const { pod } = podStore.create(canvasId, {
       name: "pod-create-valid-codex",
       x: 0,
@@ -773,14 +779,21 @@ describe("PodStore - Provider / Model 驗證", () => {
     const found = podStore.getById(canvasId, pod.id);
     expect(found).toBeDefined();
     expect(found!.provider).toBe("codex");
-    expect(found!.providerConfig).toEqual({ model: "gpt-5.5" });
+    // codex gpt-5.5 的 default thinkingLevel = "medium"
+    expect(found!.providerConfig).toEqual({
+      model: "gpt-5.5",
+      thinkingLevel: "medium",
+    });
 
     // DB 原始欄位亦應同步寫入
     const row = getDb()
       .prepare("SELECT provider, provider_config_json FROM pods WHERE id = ?")
       .get(pod.id) as { provider: string; provider_config_json: string };
     expect(row.provider).toBe("codex");
-    expect(JSON.parse(row.provider_config_json)).toEqual({ model: "gpt-5.5" });
+    expect(JSON.parse(row.provider_config_json)).toEqual({
+      model: "gpt-5.5",
+      thinkingLevel: "medium",
+    });
   });
 
   it("create 傳入 provider='gemini' 與合法 model 時應成功，pod.provider === 'gemini'", () => {
@@ -829,7 +842,7 @@ describe("PodStore - Provider / Model 驗證", () => {
     expect(row).toBeFalsy();
   });
 
-  it("update 傳入另一個合法 model 時應成功更新 DB", () => {
+  it("update 傳入另一個合法 model 時應成功更新 DB（claude sonnet 應自動補入 thinkingLevel='high'）", () => {
     const { pod } = podStore.create(canvasId, {
       name: "pod-update-valid-model",
       x: 0,
@@ -846,10 +859,17 @@ describe("PodStore - Provider / Model 驗證", () => {
     const row = getDb()
       .prepare("SELECT provider_config_json FROM pods WHERE id = ?")
       .get(pod.id) as { provider_config_json: string };
-    expect(JSON.parse(row.provider_config_json)).toEqual({ model: "sonnet" });
+    // claude sonnet 的 default thinkingLevel = "high"，由 sanitizeProviderConfigStrict 自動補入
+    expect(JSON.parse(row.provider_config_json)).toEqual({
+      model: "sonnet",
+      thinkingLevel: "high",
+    });
 
     const found = podStore.getById(canvasId, pod.id);
-    expect(found!.providerConfig).toEqual({ model: "sonnet" });
+    expect(found!.providerConfig).toEqual({
+      model: "sonnet",
+      thinkingLevel: "high",
+    });
   });
 
   // ─── resolveProvider ─────────────────────────────────────────────────────

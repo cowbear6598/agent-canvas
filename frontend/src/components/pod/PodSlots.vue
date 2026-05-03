@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 介面採扁平 props/emit 設計，每種 slot 類型獨立傳入與通知；
-// 新增 slot 類型需同步更新此元件 props、template、emits 與 CanvasPod 對應 listener。
+// 新增 slot 類型需同步更新此元件 props（如 currentModel / currentThinkingLevel）、
+// template（新增的 PodThinkingSlot）、emits（如 thinking-clicked）與 CanvasPod 對應 listener。
 import { computed, toRef } from "vue";
 import { useI18n } from "vue-i18n";
 import type { RepositoryNote, CommandNote } from "@/types";
@@ -8,7 +9,9 @@ import type { PodProvider } from "@/types/pod";
 import PodSingleBindSlot from "@/components/pod/PodSingleBindSlot.vue";
 import PodPluginSlot from "@/components/pod/PodPluginSlot.vue";
 import PodMcpSlot from "@/components/pod/PodMcpSlot.vue";
+import PodThinkingSlot from "@/components/pod/PodThinkingSlot.vue";
 import { useRepositoryStore, useCommandStore } from "@/stores/note";
+import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
 import { usePodCapabilities } from "@/composables/pod/usePodCapabilities";
 
 const props = defineProps<{
@@ -17,6 +20,8 @@ const props = defineProps<{
   pluginActiveCount: number;
   mcpActiveCount: number;
   provider: PodProvider;
+  currentModel: string;
+  currentThinkingLevel: string | undefined;
   boundRepositoryNote: RepositoryNote | undefined;
   boundCommandNote: CommandNote | undefined;
 }>();
@@ -28,6 +33,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   "plugin-clicked": [event: MouseEvent];
   "mcp-clicked": [event: MouseEvent];
+  "thinking-clicked": [event: MouseEvent];
   "repository-dropped": [noteId: string];
   "repository-removed": [];
   "command-dropped": [noteId: string];
@@ -40,6 +46,7 @@ const { t } = useI18n();
 // store 為 singleton，重複呼叫無額外成本。
 const repositoryStore = useRepositoryStore();
 const commandStore = useCommandStore();
+const providerCapabilityStore = useProviderCapabilityStore();
 
 // 讀取 Pod 對應 Provider 的 capability flags
 const { isPluginEnabled, isRepositoryEnabled, isCommandEnabled, isMcpEnabled } =
@@ -53,6 +60,15 @@ const pluginCapabilityDisabled = computed(() => !isPluginEnabled.value);
 
 /** MCP capability 關閉：當前 provider 不支援 MCP 才為 true */
 const mcpCapabilityDisabled = computed(() => !isMcpEnabled.value);
+
+/** Thinking capability 關閉：當前 provider+model 不支援 thinking 才為 true */
+const thinkingCapabilityDisabled = computed(
+  () =>
+    !providerCapabilityStore.isThinkingSupportedForModel(
+      props.provider,
+      props.currentModel,
+    ),
+);
 
 // -----------------------------------------------------------------------
 // Slot 設定陣列：每筆描述一個 slot 的型態、資料來源與 emit 對應
@@ -151,6 +167,16 @@ const slotConfigs = computed((): SlotConfig[] => [
     :capability-disabled="mcpCapabilityDisabled"
     :disabled-tooltip="DISABLED_TOOLTIP"
     @click="(ev) => emit('mcp-clicked', ev)"
+  />
+  <PodThinkingSlot
+    :pod-id="props.podId"
+    :pod-rotation="props.podRotation"
+    :current-level="props.currentThinkingLevel"
+    :current-model="props.currentModel"
+    :provider="props.provider"
+    :capability-disabled="thinkingCapabilityDisabled"
+    :disabled-tooltip="DISABLED_TOOLTIP"
+    @click="(ev) => emit('thinking-clicked', ev)"
   />
   <template v-for="slot in slotConfigs" :key="slot.slotClass">
     <div :class="slot.areaClass">

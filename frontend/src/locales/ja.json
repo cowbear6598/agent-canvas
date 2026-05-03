@@ -250,6 +250,8 @@
     "slot": {
       "duplicateTitle": "すでに存在しています",
       "providerDisabled": "このプロバイダーはこの機能をサポートしていません",
+      "thinkingLabel": "Thinking",
+      "thinkingDisabledTooltip": "現在のモデルは thinking レベルをサポートしていません",
       "pluginsLabel": "Plugins",
       "pluginsLoading": "読み込み中...",
       "pluginsBusyTooltip": "タスク実行中です。完了までお待ちください。",

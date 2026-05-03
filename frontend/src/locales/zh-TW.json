@@ -250,6 +250,8 @@
     "slot": {
       "duplicateTitle": "已存在，無法插入",
       "providerDisabled": "此 Provider 不支援此功能",
+      "thinkingLabel": "Thinking",
+      "thinkingDisabledTooltip": "目前 model 不支援 thinking 層級",
       "pluginsLabel": "Plugins",
       "pluginsLoading": "載入中...",
       "pluginsBusyTooltip": "任務進行中，請等待完成",

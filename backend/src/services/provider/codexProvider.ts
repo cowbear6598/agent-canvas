@@ -45,6 +45,8 @@ export interface CodexOptions {
   model: string;
   /** resume 模式固定為 "cli"（Codex 目前只支援 CLI resume 路徑） */
   resumeMode: "cli";
+  /** 思考深度等級（thinkingLevel），對應 codex 的 model_reasoning_effort；未設定時不傳 -c 旗標 */
+  thinkingLevel?: string;
 }
 
 /** 合法 resumeSessionId 格式（防止 CLI 旗標注入） */
@@ -209,6 +211,7 @@ function buildNewSessionArgs(
   model: string,
   repoPath: string,
   mcpAutoApproveArgs: string[],
+  thinkingLevel?: string,
 ): string[] {
   return [
     "exec",
@@ -218,6 +221,8 @@ function buildNewSessionArgs(
     "--cd",
     repoPath,
     "--full-auto",
+    // thinkingLevel 為非空字串時才插入 -c model_reasoning_effort，否則交由 CLI 預設
+    ...(thinkingLevel ? ["-c", `model_reasoning_effort=${thinkingLevel}`] : []),
     "-c",
     "sandbox_workspace_write.network_access=true",
     // 為每個使用者安裝的 MCP server 加入 auto-approve 旗標，避免 stdin pipe 無法回應時被 Cancel
@@ -246,6 +251,7 @@ function buildCodexArgs(
   resumeSessionId: string | null,
   model: string,
   repoPath: string,
+  thinkingLevel?: string,
 ): string[] {
   // MCP auto-approve 旗標只計算一次，兩條分支共用同一結果
   const mcpAutoApproveArgs = buildMcpAutoApproveArgs();
@@ -258,7 +264,12 @@ function buildCodexArgs(
         "Warn",
         `[CodexProvider] resumeSessionId 格式不合法，已略過並改為新對話：${resumeSessionId}`,
       );
-      return buildNewSessionArgs(model, repoPath, mcpAutoApproveArgs);
+      return buildNewSessionArgs(
+        model,
+        repoPath,
+        mcpAutoApproveArgs,
+        thinkingLevel,
+      );
     }
 
     // 恢復對話模式：`codex exec resume` 不接受 --cd，僅依賴 Bun.spawn cwd 定錨工作目錄。
@@ -270,6 +281,10 @@ function buildCodexArgs(
       "-",
       "--json",
       "--full-auto",
+      // thinkingLevel 為非空字串時才插入 -c model_reasoning_effort，否則交由 CLI 預設
+      ...(thinkingLevel
+        ? ["-c", `model_reasoning_effort=${thinkingLevel}`]
+        : []),
       "-c",
       "sandbox_workspace_write.network_access=true",
       // 為每個使用者安裝的 MCP server 加入 auto-approve 旗標，避免 stdin pipe 無法回應時被 Cancel
@@ -277,7 +292,12 @@ function buildCodexArgs(
     ];
   }
 
-  return buildNewSessionArgs(model, repoPath, mcpAutoApproveArgs);
+  return buildNewSessionArgs(
+    model,
+    repoPath,
+    mcpAutoApproveArgs,
+    thinkingLevel,
+  );
 }
 
 /**
@@ -570,10 +590,18 @@ export class CodexProvider implements AgentProvider<CodexOptions> {
         ? rawModel
         : this.metadata.defaultOptions.model;
 
-    return {
+    const result: CodexOptions = {
       model,
       resumeMode: "cli",
     };
+
+    // thinkingLevel 為非空字串時才寫入；不做格式驗證，由 CLI 端決定
+    const rawThinkingLevel = pod.providerConfig?.thinkingLevel;
+    if (typeof rawThinkingLevel === "string" && rawThinkingLevel.length > 0) {
+      result.thinkingLevel = rawThinkingLevel;
+    }
+
+    return result;
   }
 
   /**
@@ -590,7 +618,12 @@ export class CodexProvider implements AgentProvider<CodexOptions> {
       return null;
     }
 
-    const codexArgs = buildCodexArgs(resumeSessionId, model, workspacePath);
+    const codexArgs = buildCodexArgs(
+      resumeSessionId,
+      model,
+      workspacePath,
+      options?.thinkingLevel,
+    );
     const promptText = buildPromptText(message);
 
     return { codexArgs, promptText };

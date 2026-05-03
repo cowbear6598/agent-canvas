@@ -145,6 +145,8 @@ function mountPodSlots(podId: string, overrides: Record<string, unknown> = {}) {
       pluginActiveCount: 0,
       mcpActiveCount: 0,
       provider: "claude",
+      currentModel: "opus",
+      currentThinkingLevel: undefined,
       boundRepositoryNote: undefined,
       boundCommandNote: undefined,
       ...overrides,

@@ -8,7 +8,29 @@ import {
   getProvider,
   type ProviderName,
 } from "../services/provider/index.js";
+import {
+  CLAUDE_MODEL_THINKING_LEVELS,
+  CODEX_MODEL_THINKING_LEVELS,
+  GEMINI_MODEL_THINKING_LEVELS,
+} from "../services/provider/capabilities.js";
 import { socketService } from "../services/socketService.js";
+
+/**
+ * 各 provider 對應的 thinking levels 查表。
+ * 用 provider name 取對應常數，再以 model.value 查 levels / default。
+ */
+const THINKING_LEVELS_BY_PROVIDER: Readonly<
+  Record<
+    ProviderName,
+    Readonly<
+      Record<string, { levels: readonly string[]; default: string | null }>
+    >
+  >
+> = {
+  claude: CLAUDE_MODEL_THINKING_LEVELS,
+  codex: CODEX_MODEL_THINKING_LEVELS,
+  gemini: GEMINI_MODEL_THINKING_LEVELS,
+};
 
 /**
  * 處理 provider:list 請求
@@ -28,11 +50,22 @@ export async function handleProviderList(
         metadata.defaultOptions as Record<string, unknown> & {
           pathToClaudeCodeExecutable?: unknown;
         };
+      // 為每個 model 補上 thinking metadata；找不到對應常數時 fallback 為空 / null
+      const thinkingTable = THINKING_LEVELS_BY_PROVIDER[name];
+      const availableModels = metadata.availableModels.map((model) => {
+        const entry = thinkingTable[model.value];
+        return {
+          label: model.label,
+          value: model.value,
+          thinkingLevels: entry ? [...entry.levels] : [],
+          defaultThinkingLevel: entry ? entry.default : null,
+        };
+      });
       return {
         name,
         capabilities: metadata.capabilities,
         defaultOptions: safeDefaultOptions,
-        availableModels: metadata.availableModels,
+        availableModels,
       };
     },
   );

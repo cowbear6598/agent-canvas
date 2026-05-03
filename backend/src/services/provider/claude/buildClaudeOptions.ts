@@ -11,6 +11,8 @@
 import {
   type Options,
   type SdkPluginConfig,
+  type EffortLevel,
+  type ThinkingConfig,
   tool,
   createSdkMcpServer,
 } from "@anthropic-ai/claude-agent-sdk";
@@ -56,6 +58,10 @@ export interface ClaudeOptions {
   pathToClaudeCodeExecutable?: string;
   /** 工作目錄（chat 時從 ctx.workspacePath 取得，buildOptions 階段為 undefined） */
   cwd?: string;
+  /** 思考強度（來自 pod.providerConfig.thinkingLevel；undefined 代表走 CLI 預設） */
+  effort?: EffortLevel;
+  /** 思考設定（搭配 effort 使用，固定為 adaptive） */
+  thinking?: ThinkingConfig;
 }
 
 // ─── 基礎 Claude 工具清單 ────────────────────────────────────────────────────
@@ -330,6 +336,15 @@ export async function buildClaudeOptions(
     allowedTools: integrationResult.allowedTools,
   };
 
+  // thinkingLevel：sanitizeProviderConfigStrict 已注入該 model 的 default，
+  // 故支援 thinking 的 model 必有非空字串值；不支援的 model 為 undefined。
+  // 後端不驗證合法性，信賴前端傳入；undefined 代表不傳 effort/thinking 讓 CLI 走預設。
+  const rawThinkingLevel = pod.providerConfig?.thinkingLevel;
+  const thinkingLevel =
+    typeof rawThinkingLevel === "string" && rawThinkingLevel
+      ? rawThinkingLevel
+      : null;
+
   // 合併所有選項（mcpServers 已包含 MCP Server + Integration 兩者）
   const result: ClaudeOptions = {
     ...baseOptions,
@@ -339,6 +354,12 @@ export async function buildClaudeOptions(
       : {}),
     ...pluginOptions,
     model,
+    ...(thinkingLevel
+      ? {
+          effort: thinkingLevel as EffortLevel,
+          thinking: { type: "adaptive" } as ThinkingConfig,
+        }
+      : {}),
   };
 
   // sanitize pod.name：截前 50 字元 + 移除控制字元，避免 log injection

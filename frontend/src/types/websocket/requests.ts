@@ -53,6 +53,14 @@ export interface PodSetModelPayload {
   model: string;
 }
 
+export interface PodSetThinkingLevelPayload {
+  requestId: string;
+  canvasId: string;
+  podId: string;
+  /** thinking level 字串，後端依 provider 對應到 providerConfig.thinkingLevel */
+  level: string;
+}
+
 export interface PodSetSchedulePayload {
   requestId: string;
   canvasId: string;

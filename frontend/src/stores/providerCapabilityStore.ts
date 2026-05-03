@@ -33,6 +33,13 @@ const CONSERVATIVE_FALLBACK_CAPABILITIES: ProviderCapabilities = {
 const EMPTY_AVAILABLE_MODELS: ReadonlyArray<ModelOption> = Object.freeze([]);
 
 /**
+ * getSupportedThinkingLevels 找不到對應 provider/model 時的回傳值。
+ * 後端對不支援 thinking 的 model 輸出 `thinkingLevels: []`，前端不寫入 meta map，
+ * 查詢時統一回傳此 frozen 空陣列，避免每次呼叫產生新陣列。
+ */
+const EMPTY_THINKING_LEVELS: ReadonlyArray<string> = Object.freeze([]);
+
+/**
  * provider:list 回應的單一 Provider 資料結構。
  * 後端保證 defaultOptions 與 availableModels 均會帶入。
  */
@@ -112,6 +119,19 @@ export const useProviderCapabilityStore = defineStore(
      * 與 availableModelsByProvider 同步更新，由 syncFromPayload 維護。
      */
     const availableModelValuesByProvider = ref<Record<string, Set<string>>>({});
+
+    /**
+     * 各 Provider 各 Model 的 thinking metadata。
+     * 第一層 key 為 provider name，第二層 key 為 model value。
+     * 不支援 thinking 的 model（後端輸出 `thinkingLevels: []` + `defaultThinkingLevel: null`）
+     * 不會寫入此結構，讓查詢端用 `?.` 鏈直接得到 undefined。
+     */
+    const thinkingMetaByProviderModel = ref<
+      Record<
+        string,
+        Record<string, { levels: ReadonlyArray<string>; defaultLevel: string }>
+      >
+    >({});
 
     /** 是否已從後端成功載入一次 */
     const loaded = ref<boolean>(false);
@@ -210,6 +230,43 @@ export const useProviderCapabilityStore = defineStore(
     );
 
     /**
+     * 取得指定 provider+model 支援的 thinking levels 清單。
+     * 不支援 thinking 的 model 回傳同一份 frozen 空陣列（EMPTY_THINKING_LEVELS）。
+     */
+    const getSupportedThinkingLevels = computed(
+      () =>
+        (provider: PodProvider, model: string): ReadonlyArray<string> => {
+          return (
+            thinkingMetaByProviderModel.value[provider]?.[model]?.levels ??
+            EMPTY_THINKING_LEVELS
+          );
+        },
+    );
+
+    /**
+     * 取得指定 provider+model 的預設 thinking level。
+     * 不支援或尚未載入時回傳 undefined，呼叫端應自行判斷 fallback。
+     */
+    const getDefaultThinkingLevel = computed(
+      () =>
+        (provider: PodProvider, model: string): string | undefined => {
+          return thinkingMetaByProviderModel.value[provider]?.[model]
+            ?.defaultLevel;
+        },
+    );
+
+    /**
+     * 判斷指定 provider+model 是否支援 thinking。
+     * 以 levels 陣列長度判斷，避免在 ThinkingPopover / Pod notch 各自重複檢查。
+     */
+    const isThinkingSupportedForModel = computed(
+      () =>
+        (provider: PodProvider, model: string): boolean => {
+          return getSupportedThinkingLevels.value(provider, model).length > 0;
+        },
+    );
+
+    /**
      * 所有已知 provider 的 Set，供各 Pod 共用同一份參考（O(1) 查找）。
      * 集中在 store 計算，避免每個 Pod 元件各自重建 Set。
      */
@@ -242,6 +299,26 @@ export const useProviderCapabilityStore = defineStore(
         availableModelValuesByProvider.value[name] = new Set(
           frozenModels.map((m) => m.value),
         );
+        // 整理該 provider 的 thinking metadata。
+        // 業務語意：後端對不支援的 model 輸出 `thinkingLevels: []` + `defaultThinkingLevel: null`，
+        // 前端僅在「levels 陣列非空 + 帶 defaultLevel」時寫入，未支援者直接跳過讓查詢自動 fallback。
+        const thinkingMap: Record<
+          string,
+          { levels: ReadonlyArray<string>; defaultLevel: string }
+        > = {};
+        for (const model of frozenModels) {
+          if (
+            model.thinkingLevels &&
+            model.thinkingLevels.length > 0 &&
+            model.defaultThinkingLevel
+          ) {
+            thinkingMap[model.value] = {
+              levels: Object.freeze([...model.thinkingLevels]),
+              defaultLevel: model.defaultThinkingLevel,
+            };
+          }
+        }
+        thinkingMetaByProviderModel.value[name] = thinkingMap;
       }
     }
 
@@ -285,6 +362,7 @@ export const useProviderCapabilityStore = defineStore(
       capabilitiesByProvider,
       defaultOptionsByProvider,
       availableModelsByProvider,
+      thinkingMetaByProviderModel,
       loaded,
       allowedProviders,
       getCapabilities,
@@ -294,6 +372,9 @@ export const useProviderCapabilityStore = defineStore(
       getDefaultModel,
       isModelValidForProvider,
       isKnownProvider,
+      getSupportedThinkingLevels,
+      getDefaultThinkingLevel,
+      isThinkingSupportedForModel,
       syncFromPayload,
       loadFromBackend,
     };

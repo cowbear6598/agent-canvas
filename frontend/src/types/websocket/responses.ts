@@ -44,6 +44,10 @@ export interface PodModelSetPayload extends ResultPayload {
   pod?: Pod;
 }
 
+export interface PodThinkingLevelSetPayload extends ResultPayload {
+  pod?: Pod;
+}
+
 export interface PodScheduleSetPayload extends ResultPayload {
   pod?: Pod;
 }

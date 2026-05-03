@@ -16,11 +16,13 @@ import type {
   PodMovePayload,
   PodRenamePayload,
   PodSetModelPayload,
+  PodSetThinkingLevelPayload,
   PodSetSchedulePayload,
   PodDeletePayload,
   PodSetPluginsPayload,
 } from "../schemas";
 import { podStore } from "../services/podStore.js";
+import { getDefaultThinkingLevel } from "../services/pod/providerConfigResolver.js";
 import {
   createPodWithWorkspace,
   deletePodWithCleanup,
@@ -344,13 +346,20 @@ export const handlePodSetModel = withCanvasId<PodSetModelPayload>(
     );
     if (!existingPod) return;
 
-    // 白名單 merge：目前只保留 model；未來新增安全 key 時在此同步擴充
-    const safeProviderConfig: Record<string, unknown> = {
-      ...(existingPod.providerConfig?.model
-        ? { model: existingPod.providerConfig.model }
-        : {}),
-      model,
-    };
+    // 白名單 merge：目前保留 model 與 thinkingLevel；未來新增安全 key 時在此同步擴充
+    // model 切換時清空舊 thinkingLevel，改為新 model 的 default（不支援則不寫入）
+    // model 相同時保留 existing thinkingLevel，避免 idempotent 呼叫造成 thinking 漂移
+    const isModelChanged = existingPod.providerConfig?.model !== model;
+    const safeProviderConfig: Record<string, unknown> = { model };
+    if (isModelChanged) {
+      const defaultLevel = getDefaultThinkingLevel(existingPod.provider, model);
+      if (defaultLevel !== null) {
+        safeProviderConfig.thinkingLevel = defaultLevel;
+      }
+    } else if (existingPod.providerConfig?.thinkingLevel !== undefined) {
+      safeProviderConfig.thinkingLevel =
+        existingPod.providerConfig.thinkingLevel;
+    }
 
     handlePodUpdate(
       connectionId,
@@ -363,6 +372,46 @@ export const handlePodSetModel = withCanvasId<PodSetModelPayload>(
     );
   },
 );
+
+export const handlePodSetThinkingLevel =
+  withCanvasId<PodSetThinkingLevelPayload>(
+    WebSocketResponseEvents.POD_THINKING_LEVEL_SET,
+    async (
+      connectionId: string,
+      canvasId: string,
+      payload: PodSetThinkingLevelPayload,
+      requestId: string,
+    ): Promise<void> => {
+      const { podId, level } = payload;
+
+      // 讀取現有 providerConfig，以白名單 merge 後寫回，避免未知 key 污染
+      const existingPod = validatePod(
+        connectionId,
+        podId,
+        WebSocketResponseEvents.POD_THINKING_LEVEL_SET,
+        requestId,
+      );
+      if (!existingPod) return;
+
+      // 白名單 merge：保留 model，並寫入新的 thinkingLevel（payload.level）
+      const safeProviderConfig: Record<string, unknown> = {
+        ...(existingPod.providerConfig?.model
+          ? { model: existingPod.providerConfig.model }
+          : {}),
+        thinkingLevel: level,
+      };
+
+      handlePodUpdate(
+        connectionId,
+        canvasId,
+        podId,
+        { providerConfig: safeProviderConfig },
+        requestId,
+        WebSocketResponseEvents.POD_THINKING_LEVEL_SET,
+        (pod) => ({ requestId, canvasId, success: true, pod }),
+      );
+    },
+  );
 
 /**
  * 決定 lastTriggeredAt 的值。

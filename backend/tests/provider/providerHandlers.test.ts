@@ -92,7 +92,7 @@ describe("handleProviderList", () => {
     }
   });
 
-  it("每個 provider 的 availableModels 應與該 provider metadata.availableModels 完全一致", async () => {
+  it("每個 provider 的 availableModels 的 label/value 應與該 provider metadata.availableModels 完全一致", async () => {
     await handleProviderList(
       CONNECTION_ID,
       { requestId: REQUEST_ID },
@@ -101,12 +101,22 @@ describe("handleProviderList", () => {
 
     const [, , payload] = mockEmitToConnection.mock.calls[0];
 
-    // 逐一比對 payload.providers 與 registry 對應的 metadata.availableModels
+    // 逐一比對 payload.providers 與 registry 對應的 metadata.availableModels；
+    // payload.availableModels 內每個 model 多了 thinkingLevels / defaultThinkingLevel，
+    // 此處僅比對共通欄位 label / value 的內容與順序，避免被 thinking 欄位干擾。
     for (const provider of payload.providers) {
       const expected =
         providerRegistry[provider.name as keyof typeof providerRegistry]
           .metadata.availableModels;
-      expect(provider.availableModels).toEqual(expected);
+      const projected = provider.availableModels.map(
+        (m: { label: string; value: string }) => ({
+          label: m.label,
+          value: m.value,
+        }),
+      );
+      expect(projected).toEqual(
+        expected.map((m) => ({ label: m.label, value: m.value })),
+      );
     }
   });
 
@@ -211,5 +221,103 @@ describe("handleProviderList", () => {
 
     // requestId 必須與 request 帶入的值一致
     expect(payload.requestId).toBe(specificRequestId);
+  });
+
+  // ── B1/B2：thinkingLevels / defaultThinkingLevel 結構 ────────────────────
+  // 對照 plan 之 B1 / B2 編號
+
+  it("[B1] 每個 provider 的 availableModels 內每個 model 都應含 thinkingLevels 與 defaultThinkingLevel 欄位", async () => {
+    await handleProviderList(
+      CONNECTION_ID,
+      { requestId: REQUEST_ID },
+      REQUEST_ID,
+    );
+
+    const [, , payload] = mockEmitToConnection.mock.calls[0];
+
+    for (const provider of payload.providers) {
+      for (const model of provider.availableModels) {
+        expect(model).toHaveProperty("thinkingLevels");
+        expect(model).toHaveProperty("defaultThinkingLevel");
+        expect(Array.isArray(model.thinkingLevels)).toBe(true);
+      }
+    }
+  });
+
+  it("[B1] claude opus 應含 thinkingLevels=[low,medium,high,xhigh,max]，default=high；sonnet default=high；haiku=([], null)", async () => {
+    await handleProviderList(
+      CONNECTION_ID,
+      { requestId: REQUEST_ID },
+      REQUEST_ID,
+    );
+
+    const [, , payload] = mockEmitToConnection.mock.calls[0];
+    const claude = payload.providers.find(
+      (p: { name: string }) => p.name === "claude",
+    );
+    expect(claude).toBeDefined();
+
+    const findModel = (value: string) =>
+      claude.availableModels.find((m: { value: string }) => m.value === value);
+
+    const opus = findModel("opus");
+    expect(opus).toBeDefined();
+    expect(opus.thinkingLevels).toEqual([
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max",
+    ]);
+    expect(opus.defaultThinkingLevel).toBe("high");
+
+    const sonnet = findModel("sonnet");
+    expect(sonnet).toBeDefined();
+    expect(sonnet.thinkingLevels).toEqual(["low", "medium", "high", "max"]);
+    expect(sonnet.defaultThinkingLevel).toBe("high");
+
+    // [B2] haiku：不支援 thinking，levels=[]、default=null
+    const haiku = findModel("haiku");
+    expect(haiku).toBeDefined();
+    expect(haiku.thinkingLevels).toEqual([]);
+    expect(haiku.defaultThinkingLevel).toBeNull();
+  });
+
+  it("[B1] codex 三個 model 都應含 thinkingLevels=[low,medium,high,xhigh]，default=medium", async () => {
+    await handleProviderList(
+      CONNECTION_ID,
+      { requestId: REQUEST_ID },
+      REQUEST_ID,
+    );
+
+    const [, , payload] = mockEmitToConnection.mock.calls[0];
+    const codex = payload.providers.find(
+      (p: { name: string }) => p.name === "codex",
+    );
+    expect(codex).toBeDefined();
+
+    for (const model of codex.availableModels) {
+      expect(model.thinkingLevels).toEqual(["low", "medium", "high", "xhigh"]);
+      expect(model.defaultThinkingLevel).toBe("medium");
+    }
+  });
+
+  it("[B2] Gemini 全系列 model 都應為 thinkingLevels=[]、defaultThinkingLevel=null", async () => {
+    await handleProviderList(
+      CONNECTION_ID,
+      { requestId: REQUEST_ID },
+      REQUEST_ID,
+    );
+
+    const [, , payload] = mockEmitToConnection.mock.calls[0];
+    const gemini = payload.providers.find(
+      (p: { name: string }) => p.name === "gemini",
+    );
+    expect(gemini).toBeDefined();
+
+    for (const model of gemini.availableModels) {
+      expect(model.thinkingLevels).toEqual([]);
+      expect(model.defaultThinkingLevel).toBeNull();
+    }
   });
 });

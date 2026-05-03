@@ -53,6 +53,12 @@
   --doodle-cream: oklch(0.93 0.03 80);
   --doodle-ink: oklch(0.4 0.02 50);
   --doodle-sand: oklch(0.85 0.08 70);
+  /* Pod thinking slot 水位顏色（比 --pod-provider-{name}-top 略深一階，提高水體存在感）；
+     設計原則：色相沿用各 provider 識別色（Claude 磚紅 / Codex 中性灰 / Gemini 天空藍），
+     L 比 Pod 頂端低 0.06~0.10，C 略提以維持飽和；確保倒入卡片時看得到清楚水面。 */
+  --pod-thinking-fill-claude: oklch(0.82 0.1 45);
+  --pod-thinking-fill-codex: oklch(0.8 0.012 240);
+  --pod-thinking-fill-gemini: oklch(0.84 0.07 230);
 }
 
 .dark {
@@ -109,6 +115,11 @@
   --doodle-cream: oklch(0.75 0.03 80);
   --doodle-ink: oklch(0.7 0.02 50);
   --doodle-sand: oklch(0.55 0.06 70);
+  /* Pod thinking slot 水位顏色 - dark mode（同樣比 Pod 頂端略深一階：L 低 0.05~0.08）；
+     color 在深底（card L=0.22）上需要保持足夠可見度，故 C 也同步略提。 */
+  --pod-thinking-fill-claude: oklch(0.5 0.13 45);
+  --pod-thinking-fill-codex: oklch(0.46 0.018 240);
+  --pod-thinking-fill-gemini: oklch(0.62 0.1 230);
 }
 
 @theme inline {

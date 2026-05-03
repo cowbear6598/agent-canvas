@@ -634,6 +634,115 @@ describe("providerCapabilityStore", () => {
   });
 
   // ----------------------------------------------------------------
+  // thinking metadata（Phase 6 新增）
+  // ----------------------------------------------------------------
+  describe("thinking metadata getters", () => {
+    // [B-4] syncFromPayload 寫入帶 thinkingLevels + defaultThinkingLevel 的 model 後，
+    // getSupportedThinkingLevels 應回傳該陣列
+    it("[B-4] syncFromPayload 寫入支援 thinking 的 model 後 getSupportedThinkingLevels 應回傳對應陣列", () => {
+      const store = useProviderCapabilityStore();
+
+      store.syncFromPayload([
+        {
+          name: "claude",
+          capabilities: CLAUDE_TEST_CAPABILITIES,
+          availableModels: [
+            {
+              label: "Sonnet",
+              value: "sonnet",
+              thinkingLevels: ["low", "medium", "high"],
+              defaultThinkingLevel: "medium",
+            },
+          ],
+        },
+      ]);
+
+      expect(store.getSupportedThinkingLevels("claude", "sonnet")).toEqual([
+        "low",
+        "medium",
+        "high",
+      ]);
+    });
+
+    // [B-5] 一個 model 沒有 thinking 欄位時，getSupportedThinkingLevels 應回空陣列
+    it("[B-5] model 無 thinking 欄位時 getSupportedThinkingLevels 應回空陣列", () => {
+      const store = useProviderCapabilityStore();
+
+      store.syncFromPayload([
+        {
+          name: "claude",
+          capabilities: CLAUDE_TEST_CAPABILITIES,
+          availableModels: [
+            // 不帶 thinkingLevels / defaultThinkingLevel，模擬 Haiku 等不支援 thinking 的 model
+            { label: "Haiku", value: "haiku" },
+          ],
+        },
+      ]);
+
+      expect(store.getSupportedThinkingLevels("claude", "haiku")).toEqual([]);
+    });
+
+    // [B-6] getDefaultThinkingLevel 對支援的 model 回傳對應值，不支援的 model 回 undefined
+    it("[B-6] getDefaultThinkingLevel 應回傳對應值，不支援的 model 回 undefined", () => {
+      const store = useProviderCapabilityStore();
+
+      store.syncFromPayload([
+        {
+          name: "claude",
+          capabilities: CLAUDE_TEST_CAPABILITIES,
+          availableModels: [
+            {
+              label: "Sonnet",
+              value: "sonnet",
+              thinkingLevels: ["low", "medium", "high"],
+              defaultThinkingLevel: "medium",
+            },
+            // 不支援 thinking 的 model
+            { label: "Haiku", value: "haiku" },
+          ],
+        },
+      ]);
+
+      // 支援的 model 應回傳預設值
+      expect(store.getDefaultThinkingLevel("claude", "sonnet")).toBe("medium");
+      // 不支援 thinking 的 model 應回 undefined
+      expect(store.getDefaultThinkingLevel("claude", "haiku")).toBeUndefined();
+      // 未知 provider 也應回 undefined
+      expect(
+        store.getDefaultThinkingLevel("unknown", "sonnet"),
+      ).toBeUndefined();
+    });
+
+    // [B-7] isThinkingSupportedForModel 對支援的 model 回 true、不支援的 model 回 false
+    it("[B-7] isThinkingSupportedForModel 對支援的 model 回 true，不支援回 false", () => {
+      const store = useProviderCapabilityStore();
+
+      store.syncFromPayload([
+        {
+          name: "claude",
+          capabilities: CLAUDE_TEST_CAPABILITIES,
+          availableModels: [
+            {
+              label: "Sonnet",
+              value: "sonnet",
+              thinkingLevels: ["low", "medium", "high"],
+              defaultThinkingLevel: "medium",
+            },
+            { label: "Haiku", value: "haiku" },
+          ],
+        },
+      ]);
+
+      expect(store.isThinkingSupportedForModel("claude", "sonnet")).toBe(true);
+      expect(store.isThinkingSupportedForModel("claude", "haiku")).toBe(false);
+      // 未知 provider / model 也回 false
+      expect(store.isThinkingSupportedForModel("unknown", "sonnet")).toBe(
+        false,
+      );
+    });
+  });
+
+  // ----------------------------------------------------------------
   // 重連行為：state 覆蓋不累積；先成功再失敗時保留上次成功值
   // ----------------------------------------------------------------
   describe("重連行為", () => {

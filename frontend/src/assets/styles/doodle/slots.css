@@ -369,3 +369,161 @@
   border-radius: 4px 0 0 4px;
   z-index: -1;
 }
+
+/* ===================================
+   Thinking Slot（Pod 上方 thinking notch 對應按鈕）
+   =================================== */
+
+/* Thinking Slot 容器位置（POD 上方，對齊 thinking notch）
+   定位於 thinking notch 正上方：底邊與 Pod 上邊（即 notch 露出處）對齊。
+   寬度與 thinking notch 相同；button 自身略小於 notch 形成「插進 notch」視覺，
+   與 model notch / pod-model-slot 採 0.85 比例的設計一致。 */
+.pod-thinking-notch-area {
+  position: absolute;
+  /* bottom 多偏移 1px：與 model selector 的 active card 視覺頂邊對齊 */
+  bottom: calc(100% + 1px);
+  left: calc(50% + var(--model-notch-width) / 2 + 4px);
+  width: var(--pod-thinking-notch-width);
+  /* margin-bottom -2px：底邊壓進 Pod 邊框 2px，與 notch 視覺貼合 */
+  margin-bottom: -2px;
+  z-index: -1;
+  pointer-events: none;
+  display: flex;
+  justify-content: center;
+}
+
+/* Thinking Slot 按鈕本體（小型 icon-only tab，寬度 = notch × 0.85） */
+.pod-thinking-slot {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* notch 與 slot 永遠保持 15% 差距（與 model card 同規則） */
+  width: calc(var(--pod-thinking-notch-width) * 0.85);
+  height: 32px;
+  box-sizing: border-box;
+  padding: 0;
+  background: var(--card);
+  border: 2px solid var(--doodle-ink);
+  border-radius: 3px 3px 2px 2px;
+  cursor: pointer;
+  color: var(--doodle-ink);
+  box-shadow: 1.5px 1.5px 0 oklch(0.4 0.02 50 / 0.3);
+  /* 水體溢出（如波浪超出邊框）由 button overflow:hidden 切掉，避免覆蓋外框 */
+  overflow: hidden;
+  transition:
+    background-color 0.2s ease,
+    box-shadow 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
+  pointer-events: auto;
+}
+
+/* 水位顏色依 provider 切換（變數已涵蓋 light/dark mode） */
+.pod-thinking-slot--claude {
+  --thinking-fill-color: var(--pod-thinking-fill-claude);
+}
+
+.pod-thinking-slot--codex {
+  --thinking-fill-color: var(--pod-thinking-fill-codex);
+}
+
+.pod-thinking-slot--gemini {
+  --thinking-fill-color: var(--pod-thinking-fill-gemini);
+}
+
+/* 水體：絕對定位於 slot 內部由下往上長，高度 = --thinking-fill-pct，
+   transition height 提供 lerp 動畫（level 切換時 500ms 緩入）。 */
+.pod-thinking-slot .thinking-water {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--thinking-fill-pct, 0%);
+  background: var(--thinking-fill-color);
+  pointer-events: none;
+  transition: height 500ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 波浪：6px 高的橫條，bottom 對齊水面（= --thinking-fill-pct），向上延伸 6px 與水體交疊；
+   mask 讓波浪只在 SVG path 描出的「上緣 wave」區域顯影，背景色維持與水體同色。
+   水平動畫透過 mask-position-x 偏移一個 wave 寬度，循環無接縫。 */
+.pod-thinking-slot .thinking-wave {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: var(--thinking-fill-pct, 0%);
+  height: 6px;
+  background-color: var(--thinking-fill-color);
+  pointer-events: none;
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 6' preserveAspectRatio='none'><path d='M0 6 L0 3 C5 1 15 1 20 3 C25 5 35 5 40 3 L40 6 Z' fill='black'/></svg>");
+  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 6' preserveAspectRatio='none'><path d='M0 6 L0 3 C5 1 15 1 20 3 C25 5 35 5 40 3 L40 6 Z' fill='black'/></svg>");
+  -webkit-mask-repeat: repeat-x;
+  mask-repeat: repeat-x;
+  -webkit-mask-size: 20px 6px;
+  mask-size: 20px 6px;
+  -webkit-mask-position-x: 0;
+  mask-position-x: 0;
+  animation: thinking-wave-shift 2.4s linear infinite;
+  transition: bottom 500ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes thinking-wave-shift {
+  from {
+    -webkit-mask-position-x: 0;
+    mask-position-x: 0;
+  }
+  to {
+    -webkit-mask-position-x: -20px;
+    mask-position-x: -20px;
+  }
+}
+
+/* SVG icon 必須在水體之上，否則大腦會被水蓋住看不見 */
+.pod-thinking-slot .thinking-icon {
+  position: relative;
+  z-index: 1;
+}
+
+/* Disabled 時禁止符號也要在水體之上 */
+.pod-thinking-slot .thinking-disabled-overlay {
+  z-index: 2;
+}
+
+.pod-thinking-slot:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 2.5px 2.5px 0 oklch(0.4 0.02 50 / 0.4);
+}
+
+/* 內含 SVG icon 統一尺寸 */
+.pod-thinking-slot .thinking-icon {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+/* Disabled 狀態：cursor + 灰底；不在 hover 上抬。fillRatio 自動為 0 故 gradient 退回 card 色。 */
+.pod-thinking-slot[aria-disabled="true"] {
+  cursor: not-allowed;
+  background: var(--muted);
+  color: oklch(0.55 0.02 50);
+  box-shadow: none;
+}
+
+.pod-thinking-slot[aria-disabled="true"]:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+/* 禁止符號疊在 brain icon 上：紅色 ban，shape 為斜線圓圈 */
+.thinking-disabled-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 22px;
+  height: 22px;
+  color: oklch(0.55 0.2 25);
+  pointer-events: none;
+  display: block;
+}

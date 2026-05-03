@@ -40,6 +40,8 @@
   /* notch 與 card 寬度的單一真相來源；定義在此讓 PodModelSelector（兄弟層）
      與 .pod-doodle（子層）都能透過 CSS 繼承讀到此變數 */
   --model-notch-width: 110px;
+  /* thinking notch 寬度：定位在 model notch 右側並排 */
+  --pod-thinking-notch-width: 36px;
   position: relative;
   /* isolation: isolate 建立獨立的 stacking context，使 notch（z-index: -1）
      被限制在 pod-wrapper 內部，不會跌到外層的 .connection-layer（z-index: 5）之下，
@@ -70,6 +72,23 @@
   transform: translateX(-50%);
   /* 使用 .pod-doodle 上定義的 --model-notch-width；card 為 notch 的 95%，保持 5% 差距 */
   width: var(--model-notch-width);
+  height: 8px;
+  background: var(--card);
+  border: 2px solid var(--doodle-ink);
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  z-index: -1;
+}
+
+/* Thinking 凹槽（POD 上方，model notch 右側並排）
+   形狀同 model notch，但定位於 model notch 右側 + 4px 間隙。
+   寬度由 --pod-thinking-notch-width 控制（36px）。 */
+.pod-with-thinking-notch .thinking-notch {
+  position: absolute;
+  top: -6px;
+  /* 從 Pod 中線出發，跨過 model notch 一半寬，再加 4px 間隙 */
+  left: calc(50% + var(--model-notch-width) / 2 + 4px);
+  width: var(--pod-thinking-notch-width);
   height: 8px;
   background: var(--card);
   border: 2px solid var(--doodle-ink);

@@ -21,6 +21,7 @@ import {
   type PodMovePayload,
   type PodRenamePayload,
   type PodSetModelPayload,
+  type PodSetThinkingLevelPayload,
   type PodSetSchedulePayload,
   type PodDeletePayload,
   type ConnectionListPayload,
@@ -302,6 +303,35 @@ describe("Pod 管理", () => {
       expect(response.error).toEqual(
         expect.objectContaining({ key: expect.any(String) }),
       );
+    });
+
+    // [A1] pod:set-thinking-level smoke test：透過 WebSocket router 送一筆合法 payload，
+    // 驗證能進到 handler 並回 success（response shape 與 POD_MODEL_SET 同：requestId/canvasId/success/pod）
+    it("[A1] 成功透過 WebSocket 設定 Pod 的 thinkingLevel 為 max", async () => {
+      const client = getClient();
+      const pod = await createPod(client);
+      const canvasId = await getCanvasId(client);
+
+      // 先把 model 切成 opus，確保支援 thinking levels
+      await setPodModel(client, pod.id, "opus");
+
+      const response = await emitAndWaitResponse<
+        PodSetThinkingLevelPayload,
+        PodModelSetPayload
+      >(
+        client,
+        WebSocketRequestEvents.POD_SET_THINKING_LEVEL,
+        WebSocketResponseEvents.POD_THINKING_LEVEL_SET,
+        { requestId: uuidv4(), canvasId, podId: pod.id, level: "max" },
+      );
+
+      expect(response.success).toBe(true);
+      expect(response.pod).toBeDefined();
+      // providerConfig 應同時保留 model 與更新後的 thinkingLevel
+      expect(response.pod!.providerConfig).toEqual({
+        model: "opus",
+        thinkingLevel: "max",
+      });
     });
   });
 

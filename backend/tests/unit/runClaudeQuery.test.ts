@@ -292,4 +292,55 @@ describe("runClaudeQuery", () => {
       expect(typeof calledOptions.stderr).toBe("function");
     });
   });
+
+  // [B13] 帶 effort + thinking 時，SDK options 需含 effort 與 thinking 欄位
+  // [B14] 不帶 effort / thinking 時，SDK options 不應含這兩個 key
+  describe("[B13][B14] thinkingLevel 條件展開到 SDK options", () => {
+    it("[B13] options.effort='xhigh' + thinking={type:'adaptive'} 時，sdkOptions 應同時含這兩欄", async () => {
+      const { query: mockQuery } =
+        await import("@anthropic-ai/claude-agent-sdk");
+
+      mockQueryGenerator = async function* () {
+        yield { type: "result", subtype: "success", result: "done" };
+      };
+
+      const ctx = createCtx({
+        options: {
+          model: "opus",
+          allowedTools: ["Read"],
+          settingSources: ["project"],
+          permissionMode: "bypassPermissions",
+          includePartialMessages: true,
+          pathToClaudeCodeExecutable: "/usr/local/bin/claude",
+          effort: "xhigh",
+          thinking: { type: "adaptive" },
+        } as ChatRequestContext<ClaudeOptions>["options"],
+      });
+      await collectEvents(runClaudeQuery(ctx));
+
+      expect(mockQuery).toHaveBeenCalledOnce();
+      const calledOptions = (mockQuery as ReturnType<typeof vi.fn>).mock
+        .calls[0][0].options;
+      expect(calledOptions.effort).toBe("xhigh");
+      expect(calledOptions.thinking).toEqual({ type: "adaptive" });
+    });
+
+    it("[B14] 未帶 effort / thinking 時，sdkOptions 不應含這兩個 key（避免傳入 undefined 干擾 SDK）", async () => {
+      const { query: mockQuery } =
+        await import("@anthropic-ai/claude-agent-sdk");
+
+      mockQueryGenerator = async function* () {
+        yield { type: "result", subtype: "success", result: "done" };
+      };
+
+      // 預設 createCtx 的 options 不含 effort / thinking
+      const ctx = createCtx();
+      await collectEvents(runClaudeQuery(ctx));
+
+      const calledOptions = (mockQuery as ReturnType<typeof vi.fn>).mock
+        .calls[0][0].options;
+      expect("effort" in calledOptions).toBe(false);
+      expect("thinking" in calledOptions).toBe(false);
+    });
+  });
 });

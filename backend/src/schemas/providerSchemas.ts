@@ -22,8 +22,14 @@ export interface ProviderListResultPayload {
     defaultOptions: Record<string, unknown>;
     /**
      * Provider 聲告支援的模型清單，前端模型選擇器依此動態渲染選項。
-     * 每個元素為 { label, value } pair，label 供 UI 顯示、value 為實際 model id。
+     * 每個元素帶 label / value 與 thinking metadata；
+     * thinkingLevels 為空陣列、defaultThinkingLevel 為 null 表示該 model 不支援 thinking。
      */
-    availableModels: ReadonlyArray<{ label: string; value: string }>;
+    availableModels: ReadonlyArray<{
+      label: string;
+      value: string;
+      thinkingLevels: readonly string[];
+      defaultThinkingLevel: string | null;
+    }>;
   }>;
 }
