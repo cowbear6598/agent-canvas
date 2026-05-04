@@ -17,6 +17,7 @@ vi.mock("../../src/utils/logger.js", () => ({
     warn: vi.fn(),
     error: vi.fn(),
   },
+  sanitizeSensitiveInfo: vi.fn((value: string) => value),
 }));
 
 // 注：buildClaudeContentBlocks 與 createUserMessageStream 為純函式，不需要 mock
@@ -291,6 +292,52 @@ describe("runClaudeQuery", () => {
       const calledOptions = (mockQuery as ReturnType<typeof vi.fn>).mock
         .calls[0][0].options;
       expect(typeof calledOptions.stderr).toBe("function");
+    });
+  });
+
+  describe("stderr diagnostics", () => {
+    it("stderr 先於第一個 SDK message 到達時應先 yield 非 fatal 診斷事件，避免靜默卡住", async () => {
+      mockQueryGenerator = ({ options }: any) =>
+        (async function* () {
+          setTimeout(() => {
+            options.stderr?.("bwrap: cannot bind ~/.claude.json");
+          }, 0);
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          yield { type: "result", subtype: "success", result: "done" };
+        })();
+
+      const events = await collectEvents(runClaudeQuery(createCtx()));
+
+      expect(events[0]).toMatchObject({
+        type: "error",
+        fatal: false,
+        code: "STDERR_DIAGNOSTIC",
+      });
+      expect((events[0] as any).message).toContain(".claude.json");
+      expect(events.some((event: any) => event.type === "turn_complete")).toBe(
+        true,
+      );
+    });
+
+    it("多段 stderr 輸出時只應產生一次診斷事件，避免重複洗版", async () => {
+      mockQueryGenerator = ({ options }: any) =>
+        (async function* () {
+          setTimeout(() => {
+            options.stderr?.("first stderr chunk");
+          }, 0);
+          setTimeout(() => {
+            options.stderr?.("second stderr chunk");
+          }, 5);
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          yield { type: "result", subtype: "success", result: "done" };
+        })();
+
+      const events = await collectEvents(runClaudeQuery(createCtx()));
+      const stderrEvents = events.filter(
+        (event: any) => event.code === "STDERR_DIAGNOSTIC",
+      );
+
+      expect(stderrEvents).toHaveLength(1);
     });
   });
 

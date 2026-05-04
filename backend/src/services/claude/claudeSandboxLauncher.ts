@@ -120,6 +120,10 @@ function buildLauncherScript(params: {
   const profile = shellQuote(params.profilePath);
   const tmpDir = shellQuote(params.tmpDirPath);
   const hostClaudeDir = shellQuote(params.hostRuntimePaths.claudeDirPath);
+  const hostClaudeJson = shellQuote(params.hostRuntimePaths.claudeJsonPath);
+  const hostClaudeJsonDir = shellQuote(
+    path.dirname(params.hostRuntimePaths.claudeJsonPath),
+  );
   const hostClaudeCache = shellQuote(params.hostRuntimePaths.claudeCachePath);
   // MCP runtime cache 路徑
   const npmCache = shellQuote(params.hostRuntimePaths.npmCachePath);
@@ -132,7 +136,9 @@ function buildLauncherScript(params: {
   const envSetup = [
     `export TMPDIR=${tmpDir}`,
     // bwrap 對不存在路徑做 --bind 會啟動失敗，mkdir -p 確保路徑存在
-    `mkdir -p ${sandboxHome} ${tmpDir} ${hostClaudeDir} ${hostClaudeCache} ${npmCache} ${uvCache} ${uvData} ${bunInstallCache}`,
+    `mkdir -p ${sandboxHome} ${tmpDir} ${hostClaudeDir} ${hostClaudeJsonDir} ${hostClaudeCache} ${npmCache} ${uvCache} ${uvData} ${bunInstallCache}`,
+    // Claude CLI 會在對話期間讀寫 ~/.claude.json；Linux bwrap 需先確保 host 檔案存在才能 --bind
+    `[ -e ${hostClaudeJson} ] || : > ${hostClaudeJson}`,
   ].join("\n");
 
   const darwinExec = [
@@ -153,6 +159,7 @@ function buildLauncherScript(params: {
     `    --bind ${workspace} ${workspace} \\`,
     `    --bind ${sandboxHome} ${sandboxHome} \\`,
     `    --bind ${hostClaudeDir} ${hostClaudeDir} \\`,
+    `    --bind ${hostClaudeJson} ${hostClaudeJson} \\`,
     `    --bind ${hostClaudeCache} ${hostClaudeCache} \\`,
     "    --bind /tmp /tmp \\",
     `    --bind ${tmpDir} ${tmpDir} \\`,

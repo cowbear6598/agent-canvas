@@ -75,6 +75,8 @@ interface QueryState {
   activeTools: Map<string, ActiveToolEntry>;
 }
 
+const MAX_STDERR_DIAGNOSTIC_CHARS = 2000;
+
 function buildClaudeSystemError(params: {
   content: string;
   code?: string | null;
@@ -124,6 +126,25 @@ function isToolResultBlock(block: unknown): block is UserToolResultBlock {
   if (typeof block !== "object" || block === null) return false;
   const record = block as Record<string, unknown>;
   return record.type === "tool_result" && "tool_use_id" in record;
+}
+
+function buildClaudeStderrDiagnostic(
+  stderrText: string,
+): Extract<NormalizedEvent, { type: "error" }> | null {
+  const trimmed = stderrText.trim();
+  if (!trimmed) return null;
+
+  const truncated =
+    trimmed.length > MAX_STDERR_DIAGNOSTIC_CHARS
+      ? `${trimmed.slice(0, MAX_STDERR_DIAGNOSTIC_CHARS)}... [TRUNCATED]`
+      : trimmed;
+
+  return buildClaudeSystemError({
+    content: `Claude 執行診斷：${truncated}`,
+    code: "STDERR_DIAGNOSTIC",
+    fatal: false,
+    rawContent: truncated,
+  });
 }
 
 // ─── SDKMessage 處理器（各回傳 NormalizedEvent 或 null） ─────────────────────
@@ -435,6 +456,9 @@ export async function* runClaudeQuery(
   }
 
   const prompt = buildPrompt(message, resumeSessionId);
+  const pendingStderrChunks: string[] = [];
+  let hasYieldedStderrDiagnostic = false;
+  let resolveStderrSignal: (() => void) | null = null;
 
   // 建立 abortController，供 ctx.abortSignal 橋接
   const abortController = new AbortController();
@@ -448,6 +472,53 @@ export async function* runClaudeQuery(
   // 一次建構完整 sdkOptions，使用物件展開將 ClaudeOptions 映射到 SDK Options 格式；
   // 選填欄位（mcpServers / plugins / resume）只在有值時才包含，
   // 避免傳入 undefined 干擾 SDK 行為
+  const enqueueStderrDiagnostic = (chunk: string): void => {
+    const sanitizedChunk = sanitizeSensitiveInfo(chunk);
+    logger.warn("Chat", "Warn", `[claude-sdk stderr] ${sanitizedChunk}`);
+
+    if (hasYieldedStderrDiagnostic || sanitizedChunk.trim().length === 0) {
+      return;
+    }
+
+    pendingStderrChunks.push(sanitizedChunk);
+    if (resolveStderrSignal) {
+      resolveStderrSignal();
+      resolveStderrSignal = null;
+    }
+  };
+
+  const drainPendingStderrDiagnostic = (): Extract<
+    NormalizedEvent,
+    { type: "error" }
+  > | null => {
+    if (pendingStderrChunks.length === 0) return null;
+
+    const joined = pendingStderrChunks.splice(0).join("").trim();
+    if (!joined) return null;
+
+    if (hasYieldedStderrDiagnostic) {
+      return null;
+    }
+
+    const diagnosticEvent = buildClaudeStderrDiagnostic(joined);
+    if (!diagnosticEvent) return null;
+
+    hasYieldedStderrDiagnostic = true;
+    return diagnosticEvent;
+  };
+
+  const waitForStderrSignal = (): Promise<{ source: "stderr" }> => {
+    if (pendingStderrChunks.length > 0) {
+      return Promise.resolve({ source: "stderr" });
+    }
+
+    return new Promise<{ source: "stderr" }>((resolve) => {
+      resolveStderrSignal = (): void => {
+        resolve({ source: "stderr" });
+      };
+    });
+  };
+
   const sdkOptions: Options & { abortController: AbortController } = {
     cwd: workspacePath,
     settingSources: options.settingSources,
@@ -462,13 +533,8 @@ export async function* runClaudeQuery(
     allowedTools: options.allowedTools,
     model: options.model,
     abortController,
-    // MCP 子程序與 Claude CLI 的 stderr 輸出接到 logger，定位 sandbox 路徑問題的唯一線索
-    stderr: (chunk: string) =>
-      logger.warn(
-        "Chat",
-        "Warn",
-        `[claude-sdk stderr] ${sanitizeSensitiveInfo(chunk)}`,
-      ),
+    // stderr 除了寫入 backend log，也轉成 provider 診斷事件，避免 Linux sandbox 問題靜默卡住
+    stderr: enqueueStderrDiagnostic,
     ...(options.mcpServers ? { mcpServers: options.mcpServers } : {}),
     ...(options.plugins ? { plugins: options.plugins } : {}),
     ...(options.effort ? { effort: options.effort } : {}),
@@ -489,10 +555,40 @@ export async function* runClaudeQuery(
   );
 
   const queryStream: Query = query({ prompt, options: sdkOptions });
+  const iterator = queryStream[Symbol.asyncIterator]();
+  let nextResultPromise: Promise<IteratorResult<SDKMessage>> = iterator.next();
 
-  // 消費 SDK 串流，分派各 SDKMessage 並 yield NormalizedEvent
-  for await (const sdkMessage of queryStream) {
+  // 以 race 同時等待 SDK message 與 stderr 診斷，避免 Linux sandbox 只寫 stderr 時前端完全靜默
+  while (true) {
+    const stderrDiagnostic = drainPendingStderrDiagnostic();
+    if (stderrDiagnostic) {
+      yield stderrDiagnostic;
+      continue;
+    }
+
+    const winner = await Promise.race([
+      nextResultPromise.then((result) => ({ source: "sdk" as const, result })),
+      waitForStderrSignal(),
+    ]);
+
+    if (winner.source === "stderr") {
+      continue;
+    }
+
+    resolveStderrSignal = null;
+
+    if (winner.result.done) {
+      break;
+    }
+
+    nextResultPromise = iterator.next();
+    const sdkMessage = winner.result.value;
     yield* dispatchSDKMessage(sdkMessage, state);
+  }
+
+  const finalStderrDiagnostic = drainPendingStderrDiagnostic();
+  if (finalStderrDiagnostic) {
+    yield finalStderrDiagnostic;
   }
 
   // 防禦性檢查：若 abort signal 已觸發但未拋出 AbortError，手動拋出

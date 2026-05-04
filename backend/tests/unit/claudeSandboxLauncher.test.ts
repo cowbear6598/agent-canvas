@@ -49,6 +49,7 @@ describe("claudeSandboxLauncher", () => {
     expect(launcherScript).not.toContain("XDG_STATE_HOME");
     expect(launcherScript).not.toContain("XDG_CACHE_HOME");
     expect(launcherScript).toContain(path.join(os.homedir(), ".claude"));
+    expect(launcherScript).toContain(path.join(os.homedir(), ".claude.json"));
     expect(launcherScript).toContain("claude-cli-nodejs");
   });
 
@@ -109,5 +110,6 @@ describe("claudeSandboxLauncher", () => {
     expect(script).toContain(
       path.join(os.homedir(), ".bun", "install", "cache"),
     );
+    expect(script).toContain(path.join(os.homedir(), ".claude.json"));
   });
 });
