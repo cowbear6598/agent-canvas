@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.2.6] - 2026-05-04
+
+### 修正
+- 修正 release 流程造成 root / frontend / backend 版本號不一致的問題
+- release 腳本現在會同步更新 frontend `package.json`，並在執行前檢查三個 `package.json` 版本一致性
+
 ## [1.2.5] - 2026-05-04
 
 ### 修正
