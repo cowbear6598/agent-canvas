@@ -14,8 +14,6 @@ export const logger = {
   },
 
   error: (...args: unknown[]): void => {
-    if (isDev) {
-      console.error(...args);
-    }
+    console.error(...args);
   },
 };
