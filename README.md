@@ -2,7 +2,7 @@
 
 # Agent Canvas
 
-視覺化設計與執行 AI Agent 工作流程的畫布工具，串接 Claude Agent SDK 驅動 Agent 執行，也可支援團隊多人協作。
+視覺化設計與執行 AI Agent 工作流程的畫布工具，支援團隊多人協作。
 
 <video src="https://github.com/user-attachments/assets/58a82eb0-e629-46cc-a944-5ba891692b52" controls width="100%"></video>
 
@@ -25,11 +25,9 @@
 
 ## 注意事項
 
-- 建議在 **Local 環境** 使用，不建議部署到雲端（本工具目前沒有使用者認證機制）
-- 因為使用 **Claude Agent SDK**，請確保此服務啟動在**已登入 Claude 的環境**，暫時不支援 API Key
 - 目前在 **macOS / Linux** 上使用過，其他作業系統可能會有未知問題
-- 畫布資料會存放在 `~/Documents/AgentCanvas`（啟動時會自動將舊路徑 `~/Documents/ClaudeCanvas` 搬遷至新路徑）
-- 目前是以**最大權限**開放給 AI，請小心操作
+- 建議在 **Local 環境** 使用，不建議部署到雲端（本工具目前沒有使用者認證機制）
+- 只支援訂閱制的方式，不支援 API Key
 
 ## 安裝
 
@@ -93,18 +91,18 @@ agent-canvas config list
 
 ### 什麼是 POD？
 
-- 一個 Pod = Claude Code
-- 右鍵畫布 → Pod 即可建立
+- 一個 Pod = 一個 AI Agent
+- 右鍵畫布 → Pod → 選擇一個 AI Provider 即可建立
 
 ### 如何切換模型？
 
-- 移動到 Pod 上方的模型標籤，就可以選擇 Opus / Sonnet / Haiku
+- 移動到 Pod 上方的模型標籤，就可以選擇支援的模型
+- 大腦可以選擇 effort（有些模型不支援）
 
 ### Slot 說明
 
-- Skills / SubAgents / MCPs 可以放入多個
-- Style（Output Style）/ Command（Slash Command）/ Repo 只能單個
-- Command 會讓你的訊息前方自動加入，例如：`/command message`
+- Plugins / MCPs 採用 Toggle 的方式決定要開哪幾個做使用
+- Command 會自動在你訊息前加入 `<command> content </command>` 指令
 - Repo 會更改你的工作目錄，沒有放入則是 Pod 自己的目錄
 
 ### Connection Line
@@ -124,7 +122,7 @@ agent-canvas config list
 
 #### 模型設定
 
-右鍵 Connection Line 可以切換以下模型（預設皆為 Sonnet）：
+右鍵 Connection Line 可以切換以下模型：
 
 - **Summary Model**：用於產生摘要傳遞給下游 Pod 的模型
 - **AI Model**：用於 AI 判斷是否觸發下游 Pod 的模型（僅在 AI 模式下可用）

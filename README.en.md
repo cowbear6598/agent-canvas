@@ -2,7 +2,7 @@
 
 # Agent Canvas
 
-A canvas tool for visually designing and executing AI Agent workflows, powered by Claude Agent SDK for agent execution. Also supports team collaboration.
+A canvas tool for visually designing and executing AI Agent workflows, with team collaboration support.
 
 <video src="https://github.com/user-attachments/assets/58a82eb0-e629-46cc-a944-5ba891692b52" controls width="100%"></video>
 
@@ -25,11 +25,9 @@ A canvas tool for visually designing and executing AI Agent workflows, powered b
 
 ## Important Notes
 
-- Recommended for **local environment** use only, not recommended for cloud deployment (no user authentication is implemented).
-- Since it uses the **Claude Agent SDK**, make sure the service runs in an environment where **Claude is already logged in**. API Key is not supported.
 - Tested on **macOS / Linux**. Other operating systems may have unknown issues.
-- Canvas data is stored in `~/Documents/AgentCanvas` (on first launch, the old path `~/Documents/ClaudeCanvas` will be automatically migrated to the new path)
-- AI is currently granted **maximum permissions**. Please be careful with operations.
+- Recommended for **local environment** use only, not recommended for cloud deployment (no user authentication is implemented).
+- Only subscription-based authentication is supported. API Key is not supported.
 
 ## Installation
 
@@ -91,18 +89,18 @@ agent-canvas config list
 
 ### What is a POD?
 
-- A Pod = Claude Code
-- Right-click on the canvas → Pod to create one
+- A Pod = An AI Agent
+- Right-click on the canvas → Pod → Select an AI Provider to create one
 
 ### How to Switch Models?
 
-- Hover over the model label on top of the Pod to select Opus / Sonnet / Haiku
+- Hover over the model label on top of the Pod to select a supported model
+- Brain lets you choose the effort level (not supported by some models)
 
 ### Slot Overview
 
-- Skills / SubAgents / MCPs can hold multiple items
-- Style (Output Style) / Command (Slash Command) / Repo can only hold one
-- Command will automatically prepend to your message, e.g., `/command message`
+- Plugins / MCPs use Toggle to decide which ones to enable
+- Command automatically prepends `<command> content </command>` to your message
 - Repo changes the working directory; without one, the Pod uses its own directory
 
 ### Connection Line
@@ -122,7 +120,7 @@ When a Pod has multiple incoming Connection Lines:
 
 #### Model Settings
 
-Right-click a Connection Line to switch the following models (both default to Sonnet):
+Right-click a Connection Line to switch the following models:
 
 - **Summary Model**: The model used to generate summaries passed to downstream Pods
 - **AI Model**: The model used to decide whether to trigger downstream Pods (only available in AI mode)

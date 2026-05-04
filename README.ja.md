@@ -2,7 +2,7 @@
 
 # Agent Canvas
 
-AI Agent ワークフローを視覚的にデザインして実行するためのキャンバスツールです。Claude Agent SDK を使用して Agent の実行を駆動し、チームでの共同作業もサポートします。
+AI Agent ワークフローを視覚的にデザインして実行するためのキャンバスツールです。チームでの共同作業もサポートします。
 
 <video src="https://github.com/user-attachments/assets/67cceb64-1b02-41a0-8f31-7d41b05a9add" controls width="100%"></video>
 
@@ -25,11 +25,9 @@ AI Agent ワークフローを視覚的にデザインして実行するため�
 
 ## 注意事項
 
-- **ローカル環境**での使用を推奨します。クラウドへのデプロイは推奨しません（このツールには現在ユーザー認証機能がありません）
-- **Claude Agent SDK** を使用するため、このサービスは**すでに Claude にログインしている環境**で起動してください。現在 API Key には対応していません
 - **macOS / Linux** でテスト済みです。他のオペレーティングシステムでは未知の問題が発生する可能性があります
-- キャンバスのデータは `~/Documents/AgentCanvas` に保存されます（初回起動時、旧パス `~/Documents/ClaudeCanvas` が自動的に新パスへ移行されます）
-- 現在 AI に**最大権限**が付与されています。操作にはご注意ください
+- **ローカル環境**での使用を推奨します。クラウドへのデプロイは推奨しません（このツールには現在ユーザー認証機能がありません）
+- サブスクリプション方式のみ対応しており、API Key には対応していません
 
 ## インストール
 
@@ -93,18 +91,18 @@ agent-canvas config list
 
 ### POD とは何ですか？
 
-- 1つの Pod = Claude Code
-- キャンバスを右クリック → Pod で作成できます
+- 1つの Pod = 1つの AI Agent
+- キャンバスを右クリック → Pod → AI Provider を選択して作成できます
 
 ### モデルの切り替え方法
 
-- Pod 上部のモデルラベルにカーソルを合わせると、Opus / Sonnet / Haiku を選択できます
+- Pod 上部のモデルラベルにカーソルを合わせると、対応モデルを選択できます
+- Brain で effort を選択できます（一部のモデルは非対応）
 
 ### Slot の説明
 
-- Skills / SubAgents は複数入れることができます
-- Style（Output Style）/ Command（Slash Command）/ Repo は1つのみ
-- Command はメッセージの先頭に自動的に追加されます。例：`/command message`
+- Plugins / MCPs は Toggle で有効にするものを選択します
+- Command はメッセージの先頭に `<command> content </command>` を自動的に追加します
 - Repo は作業ディレクトリを変更します。入れない場合は Pod 自身のディレクトリが使われます
 
 ### Connection Line
@@ -124,7 +122,7 @@ Pod に複数の Connection Line が接続されている場合：
 
 #### モデル設定
 
-Connection Line を右クリックして、以下のモデルを切り替えることができます（デフォルトはどちらも Sonnet）：
+Connection Line を右クリックして、以下のモデルを切り替えることができます：
 
 - **Summary Model**：下流の Pod に渡す要約を生成するモデル
 - **AI Model**：下流の Pod をトリガーするかどうかを判断するモデル（AI モードでのみ利用可能）
