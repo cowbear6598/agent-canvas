@@ -64,10 +64,8 @@ class EncryptionService {
   decrypt(encrypted: string): string {
     const key = this.getKey();
 
-    // 支援新格式（有 prefix）與舊格式（純 base64）
-    const base64 = encrypted.startsWith(ENCRYPTION_PREFIX)
-      ? encrypted.slice(ENCRYPTION_PREFIX.length)
-      : encrypted;
+    // 僅支援新格式（必定帶有 enc1: 前綴）
+    const base64 = encrypted.slice(ENCRYPTION_PREFIX.length);
 
     const combined = Buffer.from(base64, "base64");
 
@@ -90,41 +88,7 @@ class EncryptionService {
   }
 
   isEncrypted(value: string): boolean {
-    // 新格式：有 prefix，直接判斷
-    if (value.startsWith(ENCRYPTION_PREFIX)) {
-      return true;
-    }
-
-    // 舊格式相容：JSON.parse 失敗 + base64 長度 >= 28 bytes
-    return this.isLegacyEncrypted(value);
-  }
-
-  /**
-   * 判斷是否為舊格式加密（無 prefix 的純 base64）
-   * 用於遷移時識別需要升級為新格式的資料
-   */
-  isLegacyEncrypted(value: string): boolean {
-    // 新格式不屬於舊格式
-    if (value.startsWith(ENCRYPTION_PREFIX)) {
-      return false;
-    }
-
-    try {
-      JSON.parse(value);
-      return false;
-    } catch {
-      // JSON.parse 失敗 → 可能是舊格式加密過的 base64
-    }
-
-    try {
-      const decoded = Buffer.from(value, "base64");
-      if (decoded.toString("base64") !== value) {
-        return false;
-      }
-      return decoded.length >= MIN_ENCRYPTED_LENGTH;
-    } catch {
-      return false;
-    }
+    return value.startsWith(ENCRYPTION_PREFIX);
   }
 }
 

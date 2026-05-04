@@ -174,49 +174,6 @@ class IntegrationAppStore {
     return this.rowToApp(row);
   }
 
-  migrateUnencryptedConfigs(): number {
-    const rows = this.stmts.selectAll.all() as IntegrationAppRow[];
-    let migratedCount = 0;
-
-    for (const row of rows) {
-      try {
-        const needsMigration =
-          !encryptionService.isEncrypted(row.config_json) ||
-          encryptionService.isLegacyEncrypted(row.config_json);
-
-        if (needsMigration) {
-          // 若為舊格式加密，先解密再以新格式重新加密；若為明文則直接加密
-          const plaintext = encryptionService.isLegacyEncrypted(row.config_json)
-            ? encryptionService.decrypt(row.config_json)
-            : row.config_json;
-          const encrypted = encryptionService.encrypt(plaintext);
-          this.stmts.updateConfigJson.run({
-            $configJson: encrypted,
-            $id: row.id,
-          });
-          migratedCount++;
-        }
-      } catch (error) {
-        logger.error(
-          "Encryption",
-          "Error",
-          `App ${row.id} (${row.provider}:${row.name}) 憑證遷移失敗`,
-          error,
-        );
-      }
-    }
-
-    if (migratedCount > 0) {
-      logger.log(
-        "Encryption",
-        "Migrate",
-        `已將 ${migratedCount} 筆 Integration App 憑證加密`,
-      );
-    }
-
-    return migratedCount;
-  }
-
   delete(id: string): boolean {
     const result = this.stmts.deleteById.run(id);
     this.runtimeState.delete(id);

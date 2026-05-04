@@ -116,26 +116,6 @@ describe("EncryptionService", () => {
       expect(encrypted.startsWith("enc1:")).toBe(true);
       expect(encryptionService.decrypt(encrypted)).toBe(plaintext);
     });
-
-    it("支援舊格式（無前綴純 base64）解密", () => {
-      // 模擬舊格式：直接用底層產生無 prefix 的加密資料
-      const key = (encryptionService as unknown as { key: Buffer }).key;
-      const crypto = require("crypto");
-      const IV_LENGTH = 12;
-      const iv = crypto.randomBytes(IV_LENGTH);
-      const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
-      const encrypted = Buffer.concat([
-        cipher.update("legacy plaintext", "utf8"),
-        cipher.final(),
-      ]);
-      const authTag = cipher.getAuthTag();
-      const combined = Buffer.concat([iv, authTag, encrypted]);
-      const legacyEncrypted = combined.toString("base64");
-
-      expect(encryptionService.decrypt(legacyEncrypted)).toBe(
-        "legacy plaintext",
-      );
-    });
   });
 
   describe("isEncrypted", () => {
@@ -155,52 +135,12 @@ describe("EncryptionService", () => {
       expect(encryptionService.isEncrypted(encrypted)).toBe(true);
     });
 
-    it("舊格式加密字串（無前綴純 base64，長度足夠）回傳 true", () => {
-      // 模擬舊格式加密資料：長度 >= 28 bytes 且非有效 JSON
-      const legacyData = Buffer.alloc(40, 0x42); // 40 bytes，非 JSON
-      expect(encryptionService.isEncrypted(legacyData.toString("base64"))).toBe(
-        true,
-      );
-    });
-
     it("隨意非 JSON 非有效加密的字串回傳 false", () => {
       expect(encryptionService.isEncrypted("just a plain string")).toBe(false);
     });
 
     it("enc1: 前綴字串直接回傳 true，不做啟發式判斷", () => {
       expect(encryptionService.isEncrypted("enc1:anyvalue")).toBe(true);
-    });
-  });
-
-  describe("isLegacyEncrypted", () => {
-    beforeEach(async () => {
-      await encryptionService.initializeKey();
-    });
-
-    it("新格式（enc1: 前綴）回傳 false", () => {
-      const encrypted = encryptionService.encrypt("test");
-      expect(encryptionService.isLegacyEncrypted(encrypted)).toBe(false);
-    });
-
-    it("明文 JSON 回傳 false", () => {
-      expect(
-        encryptionService.isLegacyEncrypted('{"botToken":"xoxb-test"}'),
-      ).toBe(false);
-    });
-
-    it("舊格式純 base64（長度足夠）回傳 true", () => {
-      const legacyData = Buffer.alloc(40, 0x42);
-      expect(
-        encryptionService.isLegacyEncrypted(legacyData.toString("base64")),
-      ).toBe(true);
-    });
-
-    it("短字串回傳 false", () => {
-      expect(
-        encryptionService.isLegacyEncrypted(
-          Buffer.from("short").toString("base64"),
-        ),
-      ).toBe(false);
     });
   });
 

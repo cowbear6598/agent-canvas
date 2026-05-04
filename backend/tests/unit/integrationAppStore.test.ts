@@ -3,7 +3,6 @@ import { z } from "zod";
 import os from "os";
 import path from "path";
 import { promises as fs } from "fs";
-import crypto from "crypto";
 
 // mock config，讓 encryptionService 的 keyFilePath 指向暫存目錄
 vi.mock("../../src/config/index.js", () => ({
@@ -448,105 +447,6 @@ describe("IntegrationAppStore", () => {
 
       expect(found?.connectionStatus).toBe("disconnected");
       expect(found?.resources).toEqual([]);
-    });
-  });
-
-  describe("migrateUnencryptedConfigs", () => {
-    it("將明文 config_json 遷移為密文", () => {
-      // 直接在 DB 插入明文 config_json（模擬舊資料）
-      const id = crypto.randomUUID();
-      const stmts = getStatements(getDb());
-      stmts.integrationApp.insert.run({
-        $id: id,
-        $provider: "slack",
-        $name: "Old App",
-        $configJson: '{"botToken":"xoxb-old"}',
-        $extraJson: null,
-      });
-
-      integrationAppStore.migrateUnencryptedConfigs();
-
-      const row = stmts.integrationApp.selectById.get(id) as {
-        config_json: string;
-      };
-      expect(encryptionService.isEncrypted(row.config_json)).toBe(true);
-      // 確認遷移後為新格式（含 enc1: 前綴）
-      expect(row.config_json.startsWith("enc1:")).toBe(true);
-
-      // 確認解密後能拿到原始資料
-      const app = integrationAppStore.getById(id);
-      expect(app?.config.botToken).toBe("xoxb-old");
-    });
-
-    it("新格式加密的資料不會被重新加密", () => {
-      const appConfig = { botToken: "xoxb-test" };
-      const created = integrationAppStore.create(
-        "slack",
-        "Slack App",
-        appConfig,
-      );
-      const stmts = getStatements(getDb());
-
-      const rowBefore = stmts.integrationApp.selectById.get(
-        created.data!.id,
-      ) as { config_json: string };
-      const encryptedBefore = rowBefore.config_json;
-      // 確認已是新格式
-      expect(encryptedBefore.startsWith("enc1:")).toBe(true);
-
-      integrationAppStore.migrateUnencryptedConfigs();
-
-      const rowAfter = stmts.integrationApp.selectById.get(
-        created.data!.id,
-      ) as { config_json: string };
-      // 新格式加密後的資料應與遷移前相同（未被重新加密）
-      expect(rowAfter.config_json).toBe(encryptedBefore);
-    });
-
-    it("舊格式加密的資料應被重新加密為新格式", () => {
-      // 模擬舊格式：直接用底層產生無 prefix 的加密資料
-      const key = (encryptionService as unknown as { key: Buffer }).key!;
-      const IV_LENGTH = 12;
-      const iv = crypto.randomBytes(IV_LENGTH);
-      const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
-      const encrypted = Buffer.concat([
-        cipher.update('{"botToken":"xoxb-legacy"}', "utf8"),
-        cipher.final(),
-      ]);
-      const authTag = cipher.getAuthTag();
-      const combined = Buffer.concat([iv, authTag, encrypted]);
-      const legacyEncrypted = combined.toString("base64");
-
-      const id = crypto.randomUUID();
-      const stmts = getStatements(getDb());
-      stmts.integrationApp.insert.run({
-        $id: id,
-        $provider: "slack",
-        $name: "Legacy App",
-        $configJson: legacyEncrypted,
-        $extraJson: null,
-      });
-
-      // 確認為舊格式
-      expect(encryptionService.isLegacyEncrypted(legacyEncrypted)).toBe(true);
-
-      integrationAppStore.migrateUnencryptedConfigs();
-
-      const rowAfter = stmts.integrationApp.selectById.get(id) as {
-        config_json: string;
-      };
-      // 遷移後應升級為新格式
-      expect(rowAfter.config_json.startsWith("enc1:")).toBe(true);
-
-      // 確認解密後能拿到原始資料
-      const app = integrationAppStore.getById(id);
-      expect(app?.config.botToken).toBe("xoxb-legacy");
-    });
-
-    it("無資料時不拋出錯誤", () => {
-      expect(() =>
-        integrationAppStore.migrateUnencryptedConfigs(),
-      ).not.toThrow();
     });
   });
 });
