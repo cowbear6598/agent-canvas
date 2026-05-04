@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.2.1] - 2026-05-04
+
+### 新增
+- Pod 訊息鎖定 Notch 功能：Pod 有對話訊息時，鎖住 Model Selector / Thinking / Plugin / MCP / Repository / Command 共 6 個 notch，支援 hover tooltip
+- Per-Pod Thinking Level 功能：每個 Pod 可獨立設定 LLM 推理層級（Claude / Codex 支援）
+
+### 修正
+- 修正備份服務測試期望值
+- 修正 CI vitest 執行時 logger mock 缺少 sanitizeSensitiveInfo export 導致的 unhandled error
+
+### 改進
+- 合併 Claude 查詢起始 log，精簡查詢日誌輸出
+- 大幅精簡後端 logger 雜訊：移除 116 筆例行操作 log，保留錯誤路徑與資源生命週期關鍵 log
+- 精簡 Workspace / Telegram / Paste 等模組 logger
+
 ## [1.2.0] - 2026-05-02
 
 ### 新增
