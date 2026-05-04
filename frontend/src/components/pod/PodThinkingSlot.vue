@@ -65,13 +65,12 @@ const buttonStyle = computed(() => ({
       :title="disabled ? disabledTooltip : undefined"
       @click="handleClick"
     >
+      <div class="thinking-water" aria-hidden="true" />
       <div
-        class="thinking-water"
-        aria-hidden="true"
-      />
-      <div
-        v-if="fillRatio > 0 && fillRatio < 1"
-        class="thinking-wave"
+        :class="[
+          'thinking-wave',
+          { 'is-hidden': fillRatio <= 0 || fillRatio >= 1 },
+        ]"
         aria-hidden="true"
       />
       <svg
@@ -109,17 +108,8 @@ const buttonStyle = computed(() => ({
         stroke-linejoin="round"
         aria-hidden="true"
       >
-        <circle
-          cx="12"
-          cy="12"
-          r="10"
-        />
-        <line
-          x1="4.93"
-          y1="4.93"
-          x2="19.07"
-          y2="19.07"
-        />
+        <circle cx="12" cy="12" r="10" />
+        <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
       </svg>
     </button>
   </div>
