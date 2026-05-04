@@ -31,7 +31,11 @@
 
 ## 安裝
 
-**前提條件：** [Claude Code](https://docs.anthropic.com/en/docs/claude-code) 已安裝並登入
+**前提條件：** 已安裝並登入至少一個支援的 AI Provider
+
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
+- [Codex CLI](https://developers.openai.com/codex/cli)
+- [Gemini CLI](https://geminicli.com/docs/get-started/installation/)
 
 **一鍵安裝（推薦）**
 

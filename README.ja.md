@@ -31,7 +31,11 @@ AI Agent ワークフローを視覚的にデザインして実行するため�
 
 ## インストール
 
-**前提条件：** [Claude Code](https://docs.anthropic.com/en/docs/claude-code) がインストールされてログイン済みであること
+**前提条件：** 対応する AI Provider のうち少なくとも1つがインストールされてログイン済みであること
+
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
+- [Codex CLI](https://developers.openai.com/codex/cli)
+- [Gemini CLI](https://geminicli.com/docs/get-started/installation/)
 
 **ワンクリックインストール（推奨）**
 

@@ -31,7 +31,11 @@ A canvas tool for visually designing and executing AI Agent workflows, with team
 
 ## Installation
 
-**Prerequisites:** [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed and logged in
+**Prerequisites:** At least one supported AI Provider installed and logged in
+
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
+- [Codex CLI](https://developers.openai.com/codex/cli)
+- [Gemini CLI](https://geminicli.com/docs/get-started/installation/)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/cowbear6598/agent-canvas/main/install.sh | sh
