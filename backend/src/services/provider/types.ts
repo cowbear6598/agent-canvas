@@ -155,6 +155,8 @@ export function buildProviderSystemError(
  */
 export interface ChatRequestContext<TOptions = unknown> {
   podId: string;
+  /** Pod 名稱（由 executor 從 pod.name 帶入），供 log 顯示使用，避免直接洩漏 podId */
+  podName: string;
   message: string | ContentBlock[];
   workspacePath: string;
   sandboxHomePath?: string;

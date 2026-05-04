@@ -32,6 +32,7 @@ import type {
   NormalizedEvent,
 } from "./types.js";
 import { logger } from "../../utils/logger.js";
+import { sanitizePodName } from "./podNameSanitizer.js";
 import type { Pod } from "../../types/pod.js";
 import type { RunContext } from "../../types/run.js";
 import { buildGeminiEnv, STDERR_MAX_BYTES } from "../gemini/geminiHelpers.js";
@@ -422,9 +423,9 @@ function monitorGeminiStderr(
 
           failFastError = classified;
           resolveFailFastTriggered();
-          logger.warn(
+          logger.error(
             "Chat",
-            "Warn",
+            "Error",
             `[GeminiProvider] 偵測到 Gemini 配額/容量重試訊號，提前中止 subprocess（podId: ${podId}，code: ${classified.code}）`,
           );
           killGeminiProcess(proc, "SIGKILL");
@@ -442,9 +443,9 @@ function monitorGeminiStderr(
         if (classified !== null) {
           failFastError = classified;
           resolveFailFastTriggered();
-          logger.warn(
+          logger.error(
             "Chat",
-            "Warn",
+            "Error",
             `[GeminiProvider] 偵測到 Gemini 配額/容量重試訊號，提前中止 subprocess（podId: ${podId}，code: ${classified.code}）`,
           );
           killGeminiProcess(proc, "SIGKILL");
@@ -668,11 +669,6 @@ async function* streamGeminiOutput(
   const failFastError = stderrMonitor.getFailFastError();
   if (failFastError !== null && !abortSignal.aborted) {
     const stderrText = await stderrMonitor.done;
-    logger.error(
-      "Chat",
-      "Error",
-      `[GeminiProvider] Gemini 因已分類錯誤提前停止（podId: ${podId}，code: ${failFastError.code}）`,
-    );
     yield buildGeminiSystemError({
       content: failFastError.content,
       fatal: true,
@@ -943,7 +939,8 @@ export const geminiProvider: AgentProvider<GeminiOptions> = {
   async *chat(
     ctx: ChatRequestContext<GeminiOptions>,
   ): AsyncGenerator<NormalizedEvent> {
-    const { podId, abortSignal, options, message, resumeSessionId } = ctx;
+    const { podId, podName, abortSignal, options, message, resumeSessionId } =
+      ctx;
 
     // ── options 型別收窄 ──────────────────────────────────────────
     // 正常路徑下 buildOptions() 保證 options 非空；防禦性收窄讓後續可直接存取 options.*
@@ -972,6 +969,12 @@ export const geminiProvider: AgentProvider<GeminiOptions> = {
       });
       return;
     }
+
+    logger.log(
+      "Chat",
+      "Update",
+      `[GeminiProvider] ${sanitizePodName(podName)} 開始查詢（model: ${model}）`,
+    );
 
     // ── 組合 prompt 與 CLI 參數 ───────────────────────────────────
     const promptText = normalizeMessageToPromptText(message);

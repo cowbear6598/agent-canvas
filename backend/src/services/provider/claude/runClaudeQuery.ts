@@ -39,6 +39,7 @@ import {
 } from "../../claude/sdkErrorMapper.js";
 import { resolveClaudeExecutablePath } from "../../claude/claudeSandboxLauncher.js";
 import { logger, sanitizeSensitiveInfo } from "../../../utils/logger.js";
+import { sanitizePodName } from "../podNameSanitizer.js";
 
 // ─── 型別定義 ────────────────────────────────────────────────────────────────
 
@@ -415,13 +416,12 @@ export async function* runClaudeQuery(
   ctx: ChatRequestContext<ClaudeOptions>,
 ): AsyncIterable<NormalizedEvent> {
   const {
-    podId,
+    podName,
     message,
     workspacePath,
     sandboxHomePath,
     resumeSessionId,
     abortSignal,
-    runContext,
     options,
   } = ctx;
 
@@ -482,14 +482,10 @@ export async function* runClaudeQuery(
     activeTools: new Map(),
   };
 
-  // resumeSessionId 遮蔽：僅顯示前 6 字，避免 session 識別符出現在 log 中
-  const maskedResume = resumeSessionId
-    ? `${resumeSessionId.slice(0, 6)}...`
-    : "null";
   logger.log(
     "Chat",
     "Update",
-    `[runClaudeQuery] Pod ${podId} 開始查詢，model=${options.model}，resume=${maskedResume}，runContext=${runContext?.runId ?? "null"}`,
+    `[ClaudeProvider] ${sanitizePodName(podName)} 開始查詢（model: ${options.model}，thinking: ${options.effort ?? "none"}）`,
   );
 
   const queryStream: Query = query({ prompt, options: sdkOptions });

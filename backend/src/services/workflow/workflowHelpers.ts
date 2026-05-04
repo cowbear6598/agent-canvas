@@ -100,7 +100,6 @@ ${isolatedContent}`;
 }
 
 export interface ConnectionLogInfo {
-  connectionId: string;
   sourceName: string | undefined;
   sourcePodId: string;
   targetName: string | undefined;
@@ -108,9 +107,8 @@ export interface ConnectionLogInfo {
 }
 
 export function formatConnectionLog(info: ConnectionLogInfo): string {
-  const { connectionId, sourceName, sourcePodId, targetName, targetPodId } =
-    info;
-  return `連線 ${connectionId}（「${sourceName ?? sourcePodId}」→「${targetName ?? targetPodId}」）`;
+  const { sourceName, sourcePodId, targetName, targetPodId } = info;
+  return `「${sourceName ?? sourcePodId}」→「${targetName ?? targetPodId}」`;
 }
 
 export function completeMultiInputConnections(

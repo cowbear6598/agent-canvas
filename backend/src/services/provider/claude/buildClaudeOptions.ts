@@ -362,15 +362,5 @@ export async function buildClaudeOptions(
       : {}),
   };
 
-  // sanitize pod.name：截前 50 字元 + 移除控制字元，避免 log injection
-  // eslint-disable-next-line no-control-regex
-  const safePodName = pod.name.slice(0, 50).replace(/[\x00-\x1f\x7f]/g, "");
-
-  logger.log(
-    "Chat",
-    "Update",
-    `[buildClaudeOptions] Pod ${safePodName} 選項建構完成：model=${model}，allowedTools=${result.allowedTools.length}，mcpServers=${Object.keys(result.mcpServers ?? {}).length}，plugins=${result.plugins?.length ?? 0}`,
-  );
-
   return result;
 }

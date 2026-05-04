@@ -312,7 +312,7 @@ class GeminiService {
     logger.log(
       "Chat",
       "Init",
-      `[GeminiService] 啟動一次性查詢（model: ${model}，workspacePath: ${shortenPath(realWorkspacePath)}）`,
+      `[GeminiService] 啟動一次性查詢（model: ${model}）`,
     );
 
     // 組合 prompt：使用 XML 風格 tag 結構化分隔 system 與 user，防止 prompt injection 偽造邊界。

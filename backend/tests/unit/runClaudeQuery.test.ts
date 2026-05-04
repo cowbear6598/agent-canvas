@@ -39,6 +39,7 @@ function createCtx(
 ): ChatRequestContext<ClaudeOptions> {
   return {
     podId: "pod-test",
+    podName: "Pod Test",
     message: "Hello",
     workspacePath: "/canvas/test",
     resumeSessionId: null,

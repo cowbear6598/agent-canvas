@@ -23,6 +23,7 @@ function createCtx(
 ): ChatRequestContext<ClaudeOptions> {
   return {
     podId: "pod-session-retry",
+    podName: "Pod Session Retry",
     message: "Hello",
     workspacePath: "/canvas/test",
     resumeSessionId: "session-before-retry",

@@ -83,6 +83,7 @@ function makeMockProc(
 function makeCtx(
   overrides: Partial<{
     podId: string;
+    podName: string;
     message: string;
     workspacePath: string;
     resumeSessionId: string | null;
@@ -96,6 +97,7 @@ function makeCtx(
   };
   return {
     podId: "pod-test-001",
+    podName: "Pod Codex Test",
     message: "Hello, Codex!",
     workspacePath: "/workspace/test",
     resumeSessionId: null,

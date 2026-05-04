@@ -174,12 +174,6 @@ export async function provisionRunExecutionResources(params: {
 
   const sandboxHomePath = await provisionRunSandboxHome(runId, pod.id);
 
-  logger.log(
-    "Run",
-    "Create",
-    `配置 run 資源完成（runId=${runId}, podId=${pod.id}, workspace=${workspaceResult.workspacePath}, sandboxHome=${sandboxHomePath})`,
-  );
-
   return {
     workspacePath: workspaceResult.workspacePath,
     sandboxHomePath,

@@ -288,7 +288,6 @@ class WorkflowAiDecideTriggerService
       connection.targetPodId,
     );
     return formatConnectionLog({
-      connectionId: connection.id,
       sourceName: sourcePod?.name,
       sourcePodId,
       targetName: targetPod?.name,

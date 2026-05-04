@@ -302,7 +302,7 @@ describe("WorkflowAiDecideTriggerService", () => {
       expect(logger.log).toHaveBeenCalledWith(
         "Workflow",
         "Create",
-        expect.stringContaining("AI Decide 核准連線 conn-ai-1"),
+        expect.stringContaining("AI Decide 核准"),
       );
     });
 
@@ -338,7 +338,7 @@ describe("WorkflowAiDecideTriggerService", () => {
       expect(logger.log).toHaveBeenCalledWith(
         "Workflow",
         "Update",
-        expect.stringContaining("AI Decide 拒絕連線 conn-ai-1"),
+        expect.stringContaining("AI Decide 拒絕"),
       );
     });
 

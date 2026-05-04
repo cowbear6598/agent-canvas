@@ -99,6 +99,7 @@ function makeCtx(
 ): ChatRequestContext<ClaudeOptions> {
   return {
     podId: "pod-claude-test",
+    podName: "Pod Claude Test",
     message: "Hello, Claude!",
     workspacePath: "/workspace/test",
     resumeSessionId: null,

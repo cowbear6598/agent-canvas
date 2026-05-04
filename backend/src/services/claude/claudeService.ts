@@ -152,6 +152,12 @@ export class ClaudeService {
       options;
 
     try {
+      logger.log(
+        "Chat",
+        "Init",
+        `[ClaudeService] 啟動一次性查詢（model: ${model ?? "default"}）`,
+      );
+
       const queryOptions: Options = {
         ...buildBaseOptions(workspacePath, sandboxHomePath),
         allowedTools: [],
@@ -199,10 +205,7 @@ export class ClaudeService {
    * 主要用於 aiDecideService 的決策流程。
    */
   public executeMcpChat(options: McpChatOptions): Query {
-    const baseOptions = buildBaseOptions(
-      options.cwd,
-      options.sandboxHomePath,
-    );
+    const baseOptions = buildBaseOptions(options.cwd, options.sandboxHomePath);
     return query({
       prompt: options.prompt,
       options: {

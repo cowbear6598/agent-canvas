@@ -304,21 +304,18 @@ describe("workflowHelpers", () => {
   describe("formatConnectionLog", () => {
     it("有 sourceName 和 targetName 時使用名稱格式", () => {
       const result = formatConnectionLog({
-        connectionId: "conn-1",
         sourceName: "Pod A",
         sourcePodId: "pod-a",
         targetName: "Pod B",
         targetPodId: "pod-b",
       });
 
-      expect(result).toContain("conn-1");
       expect(result).toContain("「Pod A」");
       expect(result).toContain("「Pod B」");
     });
 
     it("sourceName 為 undefined 時回退到 sourcePodId", () => {
       const result = formatConnectionLog({
-        connectionId: "conn-1",
         sourceName: undefined,
         sourcePodId: "pod-a",
         targetName: "Pod B",
@@ -330,7 +327,6 @@ describe("workflowHelpers", () => {
 
     it("targetName 為 undefined 時回退到 targetPodId", () => {
       const result = formatConnectionLog({
-        connectionId: "conn-1",
         sourceName: "Pod A",
         sourcePodId: "pod-a",
         targetName: undefined,

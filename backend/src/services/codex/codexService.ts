@@ -383,6 +383,12 @@ class CodexService {
       return { content: "", success: false, error: "查詢已被取消" };
     }
 
+    logger.log(
+      "Chat",
+      "Init",
+      `[CodexService] 啟動一次性查詢（model: ${model}）`,
+    );
+
     // 等待取得並行 slot，確保同時存在的 codex 子程序不超過 MAX_CONCURRENT_CODEX
     await acquireCodexSlot();
 

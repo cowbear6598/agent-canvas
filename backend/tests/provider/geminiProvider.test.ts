@@ -112,6 +112,7 @@ function expectWarnContaining(
 function makeCtx(
   overrides: Partial<{
     podId: string;
+    podName: string;
     message: string | ContentBlock[];
     workspacePath: string;
     resumeSessionId: string | null;
@@ -129,6 +130,7 @@ function makeCtx(
   };
   return {
     podId: "pod-gemini-test-001",
+    podName: "Pod Gemini Test",
     message: "Hello, Gemini!",
     workspacePath: "/test-workspace/gemini-provider",
     resumeSessionId: null,
@@ -722,11 +724,18 @@ describe("GeminiProvider", () => {
 
     // 一次來自 stderr fail-fast，另一次來自 chat() finally cleanup。
     expect(mockProc.kill).toHaveBeenCalledTimes(2);
-    expectWarnContaining(
-      vi.mocked(logger.warn),
-      "Gemini 配額/容量重試訊號",
-      "提前中止 subprocess",
-    );
+    expect(
+      vi
+        .mocked(logger.error)
+        .mock.calls.some((args) =>
+          args.some(
+            (arg) =>
+              typeof arg === "string" &&
+              arg.includes("Gemini 配額/容量重試訊號") &&
+              arg.includes("提前中止 subprocess"),
+          ),
+        ),
+    ).toBe(true);
     expect(
       vi
         .mocked(logger.error)

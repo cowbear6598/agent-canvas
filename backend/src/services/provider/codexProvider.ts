@@ -30,6 +30,7 @@ import type {
   ProviderMetadata,
 } from "./types.js";
 import { logger } from "../../utils/logger.js";
+import { sanitizePodName } from "./podNameSanitizer.js";
 import type { Pod } from "../../types/pod.js";
 import type { RunContext } from "../../types/run.js";
 import { readCodexMcpServers } from "../mcp/codexMcpReader.js";
@@ -628,7 +629,7 @@ export class CodexProvider implements AgentProvider<CodexOptions> {
   async *chat(
     ctx: ChatRequestContext<CodexOptions>,
   ): AsyncIterable<NormalizedEvent> {
-    const { podId, workspacePath, abortSignal, options } = ctx;
+    const { podId, podName, workspacePath, abortSignal, options } = ctx;
 
     // ── 準備執行（model 驗證 + CLI 參數 + prompt 轉換） ─────────────
     const execution = this.prepareExecution(ctx);
@@ -648,6 +649,12 @@ export class CodexProvider implements AgentProvider<CodexOptions> {
     }
 
     const { codexArgs, promptText } = execution;
+    const model = options?.model ?? this.metadata.defaultOptions.model;
+    logger.log(
+      "Chat",
+      "Update",
+      `[CodexProvider] ${sanitizePodName(podName)} 開始查詢（model: ${model}，thinking: ${options?.thinkingLevel ?? "none"}）`,
+    );
 
     // ── Spawn subprocess + abort signal 設置 ──────────────────────
     const subprocessResult = setupSubprocess(
