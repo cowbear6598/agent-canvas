@@ -283,6 +283,16 @@ function buildProviderErrorSystemMessage(
   };
 }
 
+const DETAILED_PROVIDER_ERROR_CODES = new Set([
+  "STREAM_ERROR",
+  "EXIT_CODE",
+  "RESULT_ERROR",
+]);
+
+function shouldLogProviderRawContent(code: string | null): boolean {
+  return code === null || DETAILED_PROVIDER_ERROR_CODES.has(code);
+}
+
 /**
  * 將 provider 串流錯誤事件寫入 transcript system message。
  *
@@ -296,11 +306,24 @@ function handleProviderErrorEvent(
   event: Extract<NormalizedEvent, { type: "error" }>,
   context: StreamContext,
 ): { aborted: boolean } {
-  const { canvasId, podId, strategy } = context;
-  const systemMessage = buildProviderErrorSystemMessage(
-    event,
-    context.providerName,
-  );
+  const { canvasId, podId, providerName, strategy } = context;
+  const systemMessage = buildProviderErrorSystemMessage(event, providerName);
+  const code = systemMessage.metadata.code ?? null;
+  const shouldLogRaw = shouldLogProviderRawContent(code);
+
+  if (shouldLogRaw) {
+    logger.error(
+      "Chat",
+      "Error",
+      `Provider 串流錯誤（podId=${podId}, canvasId=${canvasId}, provider=${providerName}, fatal=${event.fatal}, code=${code ?? "無"}）：${systemMessage.metadata.rawContent}`,
+    );
+  } else {
+    logger.error(
+      "Chat",
+      "Error",
+      `Provider 串流錯誤（podId=${podId}, canvasId=${canvasId}, provider=${providerName}, fatal=${event.fatal}, code=${code ?? "無"}）`,
+    );
+  }
 
   flushPendingAssistantMessage(context);
   // 傳入已建立的 emitStrategy（來自 StreamContext），避免重複呼叫 createEmitStrategy()
