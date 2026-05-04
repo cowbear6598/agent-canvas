@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.2.5] - 2026-05-04
+
+### 修正
+- Claude CLI 在 Linux sandbox 中讀寫設定檔並改進 stderr 診斷
+
 ## [1.2.4] - 2026-05-04
 
 ### 修正
