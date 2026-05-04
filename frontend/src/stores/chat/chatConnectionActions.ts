@@ -37,6 +37,10 @@ export function createConnectionActions(store: ChatStoreInstance): {
   handleSocketDisconnect: (code: string) => void;
   handleError: (payload: PodErrorPayload) => void;
 } {
+  // 追蹤斷線 toast 是否已彈出，避免重連期間每 3 秒重複通知使用者。
+  // 放在 closure 內確保每次 createConnectionActions 都是全新的旗標（與快取生命週期一致）。
+  let disconnectToastShown = false;
+
   const initWebSocket = (): void => {
     store.connectionStatus = "connecting";
     websocketClient.connect();
@@ -56,6 +60,9 @@ export function createConnectionActions(store: ChatStoreInstance): {
   ): Promise<void> => {
     store.connectionStatus = "connected";
     store.socketId = payload.socketId;
+
+    // 連線成功，重置斷線通知旗標，允許下一次斷線時再次彈 toast
+    disconnectToastShown = false;
 
     startHeartbeatCheck();
   };
@@ -77,15 +84,13 @@ export function createConnectionActions(store: ChatStoreInstance): {
       clearInterval(store.heartbeatCheckTimer);
     }
 
-    store.lastHeartbeatAt = null;
+    // 初始值設為目前時間，視同剛收到 heartbeat，消除連線建立後的偵測死區
+    store.lastHeartbeatAt = Date.now();
 
     store.heartbeatCheckTimer = window.setInterval(() => {
-      if (store.lastHeartbeatAt === null) {
-        return;
-      }
-
       const now = Date.now();
-      const elapsed = now - store.lastHeartbeatAt;
+      // startHeartbeatCheck 啟動時已初始化為 Date.now()，此處不會是 null
+      const elapsed = now - store.lastHeartbeatAt!;
 
       if (elapsed > HEARTBEAT_TIMEOUT_MS) {
         stopHeartbeatCheck();
@@ -118,11 +123,15 @@ export function createConnectionActions(store: ChatStoreInstance): {
 
     store.isTypingByPodId.clear();
 
-    const { toast } = useToast();
-    toast({
-      title: t("composable.chat.disconnected"),
-      description: getDisconnectMessage(code),
-    });
+    // 重連期間只彈一次 toast，避免每 3 秒重連失敗都噴通知
+    if (!disconnectToastShown) {
+      disconnectToastShown = true;
+      const { toast } = useToast();
+      toast({
+        title: t("composable.chat.disconnected"),
+        description: getDisconnectMessage(code),
+      });
+    }
   };
 
   /**

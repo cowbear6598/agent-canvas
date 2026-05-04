@@ -394,12 +394,12 @@ describe("WebSocketClient", () => {
       expect(mockWebSocketInstances.length).toBeGreaterThan(countBefore);
     });
 
-    it("Tab 回來但 socket 仍正常連線，不應觸發重連", () => {
+    it("Tab 回來時無論 readyState 為何都應觸發強制重連（防止 NAT 靜默斷線卡死）", () => {
       websocketClient.connect("http://localhost:3001");
       const firstInstance = mockWebSocketInstances[0]!;
       firstInstance.triggerOpen();
 
-      // 確保 readyState 為 OPEN
+      // 確保 readyState 為 OPEN（模擬 NAT idle timeout 後 readyState 看似正常的情況）
       expect(firstInstance.readyState).toBe(MockWebSocket.OPEN);
 
       const countBefore = mockWebSocketInstances.length;
@@ -411,8 +411,8 @@ describe("WebSocketClient", () => {
       });
       document.dispatchEvent(new Event("visibilitychange"));
 
-      // 不應建立新的 WebSocket 實例
-      expect(mockWebSocketInstances.length).toBe(countBefore);
+      // 即使 readyState 為 OPEN，也應強制重建連線（避免靜默斷線導致 UI 卡死）
+      expect(mockWebSocketInstances.length).toBeGreaterThan(countBefore);
     });
 
     it("disconnect() 後 visibility listener 應被移除，不再觸發重連", () => {

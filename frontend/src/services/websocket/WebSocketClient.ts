@@ -101,18 +101,11 @@ class WebSocketClient {
         return;
       }
 
-      // 連線正常，不需要重連
-      if (this.socket?.readyState === WebSocket.OPEN) {
-        return;
-      }
-
-      // 已有重連 timer 在進行，不重複觸發
-      if (this.reconnectTimer !== null) {
-        return;
-      }
-
-      logger.log("[WebSocket] 頁面重新顯示，偵測到斷線，啟動重連...");
-      this.startReconnect();
+      // 頁面回到前景時主動強制重連，不信任 readyState。
+      // 原因：NAT idle timeout 可能造成 TCP 靜默斷線，readyState 仍顯示 OPEN，
+      // 若僅依賴 readyState 判斷會導致 UI 卡死，必須強制重建連線。
+      logger.log("[WebSocket] 頁面重新顯示，主動強制重連...");
+      this.forceReconnect();
     };
 
     document.addEventListener("visibilitychange", handler);

@@ -188,16 +188,21 @@ describe("chatConnectionActions", () => {
       vi.useRealTimers();
     });
 
-    it("lastHeartbeatAt 為 null 時不判斷超時", async () => {
+    it("handleConnectionReady 後 lastHeartbeatAt 初始化為當前時間，連線建立起即有有效偵測基準", async () => {
       vi.useFakeTimers();
       const store = useChatStore();
 
+      const now = Date.now();
+      vi.spyOn(Date, "now").mockReturnValue(now);
+
       await store.handleConnectionReady({ socketId: "socket-123" });
 
-      expect(store.lastHeartbeatAt).toBeNull();
+      // 初始值應為 Date.now()，消除死區
+      expect(store.lastHeartbeatAt).toBe(now);
 
-      vi.advanceTimersByTime(25000);
-
+      // 在 HEARTBEAT_TIMEOUT_MS（20 秒）內不應觸發重連
+      vi.advanceTimersByTime(19000);
+      expect(mockWebSocketClient.forceReconnect).not.toHaveBeenCalled();
       expect(store.connectionStatus).toBe("connected");
       expect(mockToast).not.toHaveBeenCalled();
 
@@ -293,6 +298,7 @@ describe("chatConnectionActions", () => {
 
       for (const [code, expectedMessage] of Object.entries(knownCodes)) {
         vi.clearAllMocks();
+        resetChatActionsCache(); // 重置快取使每次迭代都得到新的 disconnectToastShown 旗標
         const store = useChatStore();
 
         store.handleSocketDisconnect(code);
@@ -439,15 +445,18 @@ describe("chatConnectionActions", () => {
       vi.useRealTimers();
     });
 
-    it("設定 lastHeartbeatAt 為 null", async () => {
+    it("設定 lastHeartbeatAt 為 Date.now()（消除偵測死區）", async () => {
       vi.useFakeTimers();
       const store = useChatStore();
-      store.lastHeartbeatAt = 12345;
+
+      const now = Date.now();
+      vi.spyOn(Date, "now").mockReturnValue(now);
 
       const connectionActions = store.getConnectionActions();
       connectionActions.startHeartbeatCheck();
 
-      expect(store.lastHeartbeatAt).toBeNull();
+      // 應設為 Date.now() 而非 null，確保連線建立後立即有有效的超時偵測基準
+      expect(store.lastHeartbeatAt).toBe(now);
 
       vi.useRealTimers();
     });
