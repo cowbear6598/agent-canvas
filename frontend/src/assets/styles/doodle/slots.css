@@ -43,6 +43,15 @@
   box-shadow: 3px 3px 0 oklch(0.4 0.02 50 / 0.4);
 }
 
+/* Disabled 狀態的 cursor 覆寫
+   pod-slot-has-item 設了 cursor: pointer，與 Tailwind cursor-not-allowed
+   specificity 相同（單 class），用雙 class 提高 specificity 確保 disabled 時
+   一定顯示禁止符號（不是手指） */
+.pod-slot-base.cursor-not-allowed,
+.pod-slot-has-item.cursor-not-allowed {
+  cursor: not-allowed;
+}
+
 /* Notch Area 基礎樣式 */
 .pod-notch-area-base {
   position: absolute;

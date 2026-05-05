@@ -73,28 +73,13 @@ const handleSlotClick = async (e: MouseEvent): Promise<void> => {
 </script>
 
 <template>
-  <!-- disabled 時包一層 wrapper 加 title tooltip；pointer-events-none 防止 drop 偵測 -->
+  <!--
+    單一 div 結構：disabled 切換不再造成 DOM 重建，避免已綁定 Note 的 slot
+    在 disabled=true 時退回虛線空槽樣式（pod-slot-has-item / has-note 仍維持）。
+    disabled 時透過 useSlotDropTarget 內 validateDrop 阻擋 drop，
+    handleSlotClick 內也已守門，因此不需要為 isInserting / isDropTarget / ejecting 額外加條件。
+  -->
   <div
-    v-if="disabled"
-    class="relative"
-    :title="disabledTooltip"
-  >
-    <div
-      class="pod-slot-base pointer-events-none opacity-50 cursor-not-allowed"
-      :class="[slotClass]"
-    >
-      <template v-if="boundNote">
-        <span class="text-xs font-mono">{{ boundNote.name }}</span>
-      </template>
-      <template v-else>
-        <span class="text-xs font-mono opacity-50">{{ label }}</span>
-      </template>
-    </div>
-  </div>
-
-  <!-- 正常狀態（Claude Pod 路徑，行為與改動前完全一致） -->
-  <div
-    v-else
     ref="slotRef"
     class="pod-slot-base"
     :class="[
@@ -105,8 +90,10 @@ const handleSlotClick = async (e: MouseEvent): Promise<void> => {
         'has-note': boundNote !== undefined,
         ejecting: isEjecting,
         inserting: isInserting,
+        'opacity-50 cursor-not-allowed': disabled,
       },
     ]"
+    :title="disabled ? disabledTooltip : undefined"
     @click="handleSlotClick"
   >
     <template v-if="boundNote">

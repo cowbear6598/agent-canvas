@@ -78,23 +78,12 @@ const { isDropTarget, isInserting } = useSlotDropTarget({
 </script>
 
 <template>
-  <!-- disabled 時包一層 wrapper 加 title tooltip；pointer-events-none 防止 drop 偵測 -->
+  <!--
+    單一 div 結構：disabled 切換不再造成 DOM 重建，避免已綁定 Note 的 slot
+    在 disabled=true 時退回虛線空槽樣式（pod-slot-has-item / has-notes 仍維持）。
+    disabled 時透過 useSlotDropTarget 內 validateDrop 阻擋 drop。
+  -->
   <div
-    v-if="disabled"
-    class="relative"
-    :title="disabledTooltip"
-  >
-    <div
-      class="pod-slot-base pointer-events-none opacity-50 cursor-not-allowed"
-      :class="[slotClass]"
-    >
-      <span class="text-xs font-mono opacity-50">{{ label }}</span>
-    </div>
-  </div>
-
-  <!-- 正常狀態（Claude Pod 路徑，行為與改動前完全一致） -->
-  <div
-    v-else
     ref="slotRef"
     class="pod-slot-base"
     :class="[
@@ -104,15 +93,14 @@ const { isDropTarget, isInserting } = useSlotDropTarget({
         'pod-slot-has-item': hasItems,
         'has-notes': hasItems,
         inserting: isInserting,
+        'opacity-50 cursor-not-allowed': disabled,
       },
     ]"
+    :title="disabled ? disabledTooltip : undefined"
     @mouseenter="showMenu = true"
     @mouseleave="showMenu = false"
   >
-    <span
-      class="text-xs font-mono"
-      :class="{ 'opacity-50': !hasItems }"
-    >
+    <span :class="['text-xs font-mono', { 'opacity-50': !hasItems }]">
       <template v-if="hasItems">({{ itemCount }}) </template>{{ label }}
     </span>
 
