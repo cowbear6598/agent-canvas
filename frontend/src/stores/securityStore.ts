@@ -59,6 +59,13 @@ export const useSecurityStore = defineStore("security", () => {
     unlockedCanvasIds.value = Array.from(new Set(canvasIds));
   };
 
+  const addUnlockedCanvasId = (canvasId: string): void => {
+    if (unlockedCanvasIds.value.includes(canvasId)) {
+      return;
+    }
+    unlockedCanvasIds.value = [...unlockedCanvasIds.value, canvasId];
+  };
+
   const removeUnlockedCanvasId = (canvasId: string): void => {
     unlockedCanvasIds.value = unlockedCanvasIds.value.filter(
       (id) => id !== canvasId,
@@ -284,6 +291,7 @@ export const useSecurityStore = defineStore("security", () => {
     ensureInitialCanvasSelection,
     isCanvasUnlocked,
     isCanvasAccessible,
+    addUnlockedCanvasId,
     registerSocketListeners,
     unregisterSocketListeners,
   };

@@ -11,7 +11,7 @@ vi.mock("@/components/ui/button", () => ({
     props: ["type", "variant"],
     emits: ["click"],
     template:
-      '<button :type="type ?? \'button\'" @click="$emit(\'click\')"><slot /></button>',
+      "<button :type=\"type ?? 'button'\" @click=\"$emit('click')\"><slot /></button>",
   },
 }));
 
@@ -50,7 +50,7 @@ describe("LockedCanvasView", () => {
     const requestCanvasAccessSpy = vi
       .spyOn(securityStore, "requestCanvasAccess")
       .mockResolvedValue();
-    const setSidebarOpenSpy = vi.spyOn(canvasStore, "setSidebarOpen");
+    const toggleSidebarSpy = vi.spyOn(canvasStore, "toggleSidebar");
 
     const wrapper = mount(LockedCanvasView);
 
@@ -67,7 +67,7 @@ describe("LockedCanvasView", () => {
     await sidebarButton!.trigger("click");
     await unlockButton!.trigger("click");
 
-    expect(setSidebarOpenSpy).toHaveBeenCalledWith(true);
+    expect(toggleSidebarSpy).toHaveBeenCalled();
     expect(requestCanvasAccessSpy).toHaveBeenCalledWith("locked-1");
 
     wrapper.unmount();

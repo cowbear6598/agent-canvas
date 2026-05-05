@@ -10,22 +10,14 @@
       <div
         class="flex items-center justify-between border-b border-border px-4 py-3"
       >
-        <h2 class="text-lg font-semibold">
-          Canvas
-        </h2>
-        <button
-          class="rounded-md p-1 hover:bg-accent"
-          @click="handleClose"
-        >
+        <h2 class="text-lg font-semibold">Canvas</h2>
+        <button class="rounded-md p-1 hover:bg-accent" @click="handleClose">
           <X class="h-5 w-5" />
         </button>
       </div>
 
       <div class="border-b border-border p-4">
-        <div
-          v-if="isCreating"
-          class="flex flex-col gap-2"
-        >
+        <div v-if="isCreating" class="flex flex-col gap-2">
           <input
             ref="createInputRef"
             v-model="newCanvasName"
@@ -35,7 +27,7 @@
             @keydown.enter="handleCreate"
             @keydown.escape="cancelCreate"
             @blur="cancelCreate"
-          >
+          />
         </div>
         <button
           v-else
@@ -98,15 +90,15 @@
                   @keydown.enter="handleRename(canvas.id)"
                   @keydown.escape="cancelRename"
                   @blur="cancelRename"
-                >
+                />
               </div>
-              <span
-                v-else
-                class="flex flex-1 items-center gap-2 text-sm"
-              >
+              <span v-else class="flex flex-1 items-center gap-2 text-sm">
                 <span>{{ canvas.name }}</span>
                 <Lock
-                  v-if="canvas.isProtected && !securityStore.isCanvasUnlocked(canvas.id)"
+                  v-if="
+                    canvas.isProtected &&
+                    !securityStore.isCanvasUnlocked(canvas.id)
+                  "
                   class="h-3.5 w-3.5 text-muted-foreground"
                 />
               </span>
@@ -141,10 +133,7 @@
     </div>
   </Transition>
 
-  <Dialog
-    :open="showDeleteDialog"
-    @update:open="showDeleteDialog = false"
-  >
+  <Dialog :open="showDeleteDialog" @update:open="showDeleteDialog = false">
     <DialogContent class="max-w-md">
       <DialogHeader>
         <DialogTitle>{{ $t("canvas.sidebar.confirmDelete") }}</DialogTitle>
@@ -158,19 +147,11 @@
       </DialogHeader>
 
       <DialogFooter>
-        <Button
-          variant="outline"
-          @click="showDeleteDialog = false"
-        >
+        <Button variant="outline" @click="showDeleteDialog = false">
           {{ $t("common.cancel") }}
         </Button>
-        <Button
-          variant="destructive"
-          @click="confirmDelete"
-        >
-          {{
-            $t("common.delete")
-          }}
+        <Button variant="destructive" @click="confirmDelete">
+          {{ $t("common.delete") }}
         </Button>
       </DialogFooter>
     </DialogContent>
@@ -332,8 +313,7 @@ const handleClickOutside = (event: MouseEvent): void => {
     return;
   }
 
-  const headerCanvasButton = document.querySelector("[data-canvas-toggle]");
-  if (headerCanvasButton?.contains(target)) {
+  if (target instanceof Element && target.closest("[data-canvas-toggle]")) {
     return;
   }
 

@@ -75,6 +75,9 @@ const handleSetPassword = async (): Promise<void> => {
     });
     if (result.canvas) {
       canvasStore.updateCanvasProtectionFromEvent(result.canvas);
+      if (result.canvas.isProtected) {
+        securityStore.addUnlockedCanvasId(selectedCanvas.value.id);
+      }
     }
     showSuccessToast("Canvas", t("security.canvas.saved"));
     handleClose();
@@ -106,6 +109,9 @@ const handleChangePassword = async (): Promise<void> => {
     });
     if (result.canvas) {
       canvasStore.updateCanvasProtectionFromEvent(result.canvas);
+      if (result.canvas.isProtected) {
+        securityStore.addUnlockedCanvasId(selectedCanvas.value.id);
+      }
     }
     showSuccessToast("Canvas", t("security.canvas.updated"));
     handleClose();
@@ -145,10 +151,7 @@ const handleRemovePassword = async (): Promise<void> => {
 </script>
 
 <template>
-  <Dialog
-    :open="open"
-    @update:open="handleClose"
-  >
+  <Dialog :open="open" @update:open="handleClose">
     <DialogContent class="max-w-md max-h-[85vh] overflow-hidden p-0">
       <div class="flex max-h-[85vh] flex-col">
         <DialogHeader class="px-6 pt-6">
@@ -166,10 +169,7 @@ const handleRemovePassword = async (): Promise<void> => {
               :description="t('security.transportWarning.description')"
             />
 
-            <div
-              v-if="selectedCanvas"
-              class="space-y-3"
-            >
+            <div v-if="selectedCanvas" class="space-y-3">
               <p class="text-sm text-muted-foreground">
                 {{
                   selectedCanvas.isProtected
@@ -197,10 +197,7 @@ const handleRemovePassword = async (): Promise<void> => {
                 :disabled="isSubmitting"
               />
 
-              <p
-                v-if="errorMessage"
-                class="text-sm text-destructive"
-              >
+              <p v-if="errorMessage" class="text-sm text-destructive">
                 {{ errorMessage }}
               </p>
             </div>
@@ -208,10 +205,7 @@ const handleRemovePassword = async (): Promise<void> => {
         </ScrollArea>
 
         <DialogFooter class="gap-2 border-t border-border px-6 py-4">
-          <Button
-            variant="outline"
-            @click="handleClose"
-          >
+          <Button variant="outline" @click="handleClose">
             {{ t("common.cancel") }}
           </Button>
           <Button

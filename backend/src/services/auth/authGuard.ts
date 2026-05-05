@@ -18,6 +18,9 @@ const WORKSPACE_EVENTS = new Set<string>([
   WebSocketRequestEvents.CONFIG_GET,
   WebSocketRequestEvents.CONFIG_UPDATE,
   WebSocketRequestEvents.AUTH_UPDATE_WORKSPACE_PASSWORD,
+  // canvas 密碼管理由 passwordService 用 currentPassword 驗證身份，
+  // 不應額外要求 session 已解鎖該 canvas（否則 reload/重啟後即使知道密碼也無法 change/remove）
+  WebSocketRequestEvents.CANVAS_SECURITY_UPDATE,
   WebSocketRequestEvents.INTEGRATION_APP_CREATE,
   WebSocketRequestEvents.INTEGRATION_APP_DELETE,
   WebSocketRequestEvents.INTEGRATION_APP_LIST,
@@ -34,7 +37,6 @@ const CANVAS_EVENTS = new Set<string>([
   WebSocketRequestEvents.CANVAS_SWITCH,
   WebSocketRequestEvents.CANVAS_RENAME,
   WebSocketRequestEvents.CANVAS_DELETE,
-  WebSocketRequestEvents.CANVAS_SECURITY_UPDATE,
   WebSocketRequestEvents.CURSOR_MOVE,
 ]);
 
