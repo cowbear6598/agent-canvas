@@ -86,7 +86,7 @@ describe("claudeSandboxLauncher", () => {
     );
   });
 
-  it("launcher script 應含 MCP cache 路徑的 mkdir -p 與 bwrap --bind", () => {
+  it("launcher script 應共用既有 host runtime，但不主動建立 host 路徑", () => {
     const sandboxHomePath = createSandboxHomePath();
     const executablePath = resolveClaudeExecutablePath({
       workspacePath: "/workspace/project",
@@ -103,7 +103,9 @@ describe("claudeSandboxLauncher", () => {
           path.join(os.homedir(), ".local", "share"));
     const uvDataPath = path.join(dataRoot, "uv");
 
-    // mkdir -p 確保路徑存在（bwrap 對不存在路徑做 --bind 會失敗）
+    expect(script).toContain("#!/usr/bin/env bash");
+    expect(script).toContain("mkdir -p --");
+    expect(script).not.toContain(": >");
     expect(script).toContain(path.join(os.homedir(), ".npm"));
     expect(script).toContain(path.join(os.homedir(), ".cache", "uv"));
     expect(script).toContain(uvDataPath);
@@ -111,5 +113,7 @@ describe("claudeSandboxLauncher", () => {
       path.join(os.homedir(), ".bun", "install", "cache"),
     );
     expect(script).toContain(path.join(os.homedir(), ".claude.json"));
+    expect(script).toContain("[[ -e");
+    expect(script).toContain("bwrap_args+=");
   });
 });

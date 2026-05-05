@@ -201,7 +201,7 @@ describe("RunExecutionService", () => {
       expect(remaining.length).toBeLessThanOrEqual(30);
     });
 
-    it("non-repo pod 會配置 run-level workspace snapshot 與 sandbox home", async () => {
+    it("non-repo pod 會直接使用原始 workspace，並配置 run-level sandbox home", async () => {
       const { pod } = podStore.create(CANVAS_ID, {
         name: "Isolated Pod",
         x: 0,
@@ -212,7 +212,7 @@ describe("RunExecutionService", () => {
         runExecutionResources,
         "provisionRunExecutionResources",
       ).mockResolvedValue({
-        workspacePath: path.join("/tmp", "run-workspaces", "isolated-pod"),
+        workspacePath: pod.workspacePath,
         sandboxHomePath: getRunSandboxHomePath("run-mock", pod.id),
         worktreePath: null,
       });
@@ -224,8 +224,7 @@ describe("RunExecutionService", () => {
       );
       const instance = runStore.getPodInstance(ctx.runId, pod.id);
 
-      expect(instance?.workspacePath).toBeTruthy();
-      expect(instance?.workspacePath).not.toBe(pod.workspacePath);
+      expect(instance?.workspacePath).toBe(pod.workspacePath);
       expect(instance?.sandboxHomePath).toBeTruthy();
       expect(
         runExecutionResources.provisionRunExecutionResources,
@@ -850,12 +849,12 @@ describe("RunExecutionService", () => {
       expect(abortSpy).not.toHaveBeenCalled();
     });
 
-    it("刪除 run 時會清理 run-level workspace 與 sandbox home", async () => {
+    it("刪除 run 時會清理 run-level sandbox home，但不碰原始 workspace", async () => {
       const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "測試");
       const workspacePath = path.join(
-        config.runWorkspacesRoot,
-        "run-cleanup",
-        "pod-source",
+        config.canvasRoot,
+        CANVAS_ID,
+        "pod-source-workspace",
       );
       const sandboxHomePath = getRunSandboxHomePath(run.id, SOURCE_POD_ID);
       runStore.createPodInstance(run.id, SOURCE_POD_ID, "pending", "pending", {
@@ -869,11 +868,11 @@ describe("RunExecutionService", () => {
 
       await runExecutionService.deleteRun(run.id);
 
-      expect(rmSpy).toHaveBeenCalledWith(workspacePath, {
+      expect(rmSpy).toHaveBeenCalledWith(sandboxHomePath, {
         recursive: true,
         force: true,
       });
-      expect(rmSpy).toHaveBeenCalledWith(sandboxHomePath, {
+      expect(rmSpy).not.toHaveBeenCalledWith(workspacePath, {
         recursive: true,
         force: true,
       });

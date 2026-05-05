@@ -1205,7 +1205,7 @@ describe("executeStreamingChat", () => {
       expect(upsertMessageSpy).not.toHaveBeenCalled();
     });
 
-    it("instance.worktreePath 合法時，provider.chat 收到的 workspacePath 與 sandboxHomePath 皆為 run-level 路徑", async () => {
+    it("instance.worktreePath 合法時，provider.chat 收到的 workspacePath 為 worktree，sandboxHomePath 為 run-level temp 路徑", async () => {
       const pod = insertClaudePod();
       const validWorktreePath = path.join(
         config.repositoriesRoot,

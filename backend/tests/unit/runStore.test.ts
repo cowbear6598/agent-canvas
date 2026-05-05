@@ -535,35 +535,39 @@ describe("RunStore", () => {
   describe("execution path model", () => {
     it("createPodInstance 帶 workspacePath 與 sandboxHomePath 後應正確持久化", () => {
       const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, TRIGGER_MESSAGE);
+      const workspacePath = "/canvas/default/pod-1";
+      const sandboxHomePath =
+        "/tmp/agent-canvas/claude-sandbox/runs/run-1/pods/pod-1/home";
 
       runStore.createPodInstance(run.id, "pod-1", "pending", "pending", {
-        workspacePath: "/runtime/run-workspaces/run-1/pod-1",
-        sandboxHomePath: "/runtime/claude-sandbox/runs/run-1/pods/pod-1/home",
+        workspacePath,
+        sandboxHomePath,
       });
 
       const instance = runStore.getPodInstance(run.id, "pod-1");
-      expect(instance?.workspacePath).toBe("/runtime/run-workspaces/run-1/pod-1");
-      expect(instance?.sandboxHomePath).toBe(
-        "/runtime/claude-sandbox/runs/run-1/pods/pod-1/home",
-      );
+      expect(instance?.workspacePath).toBe(workspacePath);
+      expect(instance?.sandboxHomePath).toBe(sandboxHomePath);
     });
 
     it("getExecutionPathsByRunId / clearExecutionPathsByRunId 應回傳並清除全部執行路徑", () => {
       const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, TRIGGER_MESSAGE);
+      const worktreePath = "/repos/repo-1-run-1";
+      const workspacePath = "/repos/repo-1-run-1";
+      const sandboxHomePath =
+        "/tmp/agent-canvas/claude-sandbox/runs/run-1/pods/pod-1/home";
 
       runStore.createPodInstance(run.id, "pod-1", "pending", "pending", {
-        worktreePath: "/repos/repo-1-run-1",
-        workspacePath: "/runtime/run-workspaces/run-1/repository-repo-1",
-        sandboxHomePath: "/runtime/claude-sandbox/runs/run-1/pods/pod-1/home",
+        worktreePath,
+        workspacePath,
+        sandboxHomePath,
       });
 
       expect(runStore.getExecutionPathsByRunId(run.id)).toEqual([
         {
           podId: "pod-1",
-          worktreePath: "/repos/repo-1-run-1",
-          workspacePath: "/runtime/run-workspaces/run-1/repository-repo-1",
-          sandboxHomePath:
-            "/runtime/claude-sandbox/runs/run-1/pods/pod-1/home",
+          worktreePath,
+          workspacePath,
+          sandboxHomePath,
         },
       ]);
 

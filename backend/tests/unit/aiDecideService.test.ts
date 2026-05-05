@@ -81,10 +81,7 @@ import * as disposableChatService from "../../src/services/disposableChatService
 import { config } from "../../src/config/index.js";
 import type { Connection } from "../../src/types";
 import type { RunContext } from "../../src/types/run.js";
-import {
-  getRunSandboxHomePath,
-  getRunWorkspacePath,
-} from "../../src/services/runtime/executionPaths.js";
+import { getRunSandboxHomePath } from "../../src/services/runtime/executionPaths.js";
 
 function asMock(fn: unknown): Mock<any> {
   return fn as Mock<any>;
@@ -477,7 +474,11 @@ describe("AiDecideService", () => {
       insertPodViaSQL(SOURCE_POD_ID, "Source Pod");
       insertPodViaSQL(TARGET_POD_ID, "Target Pod");
       const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "test");
-      const runWorkspacePath = getRunWorkspacePath(run.id, SOURCE_POD_ID);
+      const runWorkspacePath = path.join(
+        config.canvasRoot,
+        CANVAS_ID,
+        `pod-${SOURCE_POD_ID}`,
+      );
       const runSandboxHomePath = getRunSandboxHomePath(run.id, SOURCE_POD_ID);
       runStore.createPodInstance(run.id, SOURCE_POD_ID, "pending", "pending", {
         workspacePath: runWorkspacePath,

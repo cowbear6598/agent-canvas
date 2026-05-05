@@ -121,9 +121,6 @@ function buildLauncherScript(params: {
   const tmpDir = shellQuote(params.tmpDirPath);
   const hostClaudeDir = shellQuote(params.hostRuntimePaths.claudeDirPath);
   const hostClaudeJson = shellQuote(params.hostRuntimePaths.claudeJsonPath);
-  const hostClaudeJsonDir = shellQuote(
-    path.dirname(params.hostRuntimePaths.claudeJsonPath),
-  );
   const hostClaudeCache = shellQuote(params.hostRuntimePaths.claudeCachePath);
   // MCP runtime cache 路徑
   const npmCache = shellQuote(params.hostRuntimePaths.npmCachePath);
@@ -135,10 +132,7 @@ function buildLauncherScript(params: {
 
   const envSetup = [
     `export TMPDIR=${tmpDir}`,
-    // bwrap 對不存在路徑做 --bind 會啟動失敗，mkdir -p 確保路徑存在
-    `mkdir -p ${sandboxHome} ${tmpDir} ${hostClaudeDir} ${hostClaudeJsonDir} ${hostClaudeCache} ${npmCache} ${uvCache} ${uvData} ${bunInstallCache}`,
-    // Claude CLI 會在對話期間讀寫 ~/.claude.json；Linux bwrap 需先確保 host 檔案存在才能 --bind
-    `[ -e ${hostClaudeJson} ] || : > ${hostClaudeJson}`,
+    "mkdir -p -- " + `${sandboxHome} ${tmpDir}`,
   ].join("\n");
 
   const darwinExec = [
@@ -151,35 +145,35 @@ function buildLauncherScript(params: {
 
   const linuxExec = [
     "if command -v bwrap >/dev/null 2>&1; then",
-    "  exec bwrap \\",
-    "    --die-with-parent \\",
-    "    --ro-bind / / \\",
-    "    --dev /dev \\",
-    "    --proc /proc \\",
-    `    --bind ${workspace} ${workspace} \\`,
-    `    --bind ${sandboxHome} ${sandboxHome} \\`,
-    `    --bind ${hostClaudeDir} ${hostClaudeDir} \\`,
-    `    --bind ${hostClaudeJson} ${hostClaudeJson} \\`,
-    `    --bind ${hostClaudeCache} ${hostClaudeCache} \\`,
-    "    --bind /tmp /tmp \\",
-    `    --bind ${tmpDir} ${tmpDir} \\`,
-    // MCP runtime cache：stdio MCP 子程序寫入 cache 所需
-    `    --bind ${npmCache} ${npmCache} \\`,
-    `    --bind ${uvCache} ${uvCache} \\`,
-    `    --bind ${uvData} ${uvData} \\`,
-    `    --bind ${bunInstallCache} ${bunInstallCache} \\`,
-    `    --chdir ${workspace} \\`,
-    `    --setenv TMPDIR ${tmpDir} \\`,
-    '    --setenv PATH "$PATH" \\',
-    `    ${realClaude} "$@"`,
+    "  bwrap_args=(",
+    "    --die-with-parent",
+    "    --ro-bind / /",
+    "    --dev /dev",
+    "    --proc /proc",
+    `    --bind ${workspace} ${workspace}`,
+    `    --bind ${sandboxHome} ${sandboxHome}`,
+    "    --bind /tmp /tmp",
+    `    --bind ${tmpDir} ${tmpDir}`,
+    `    --chdir ${workspace}`,
+    `    --setenv TMPDIR ${tmpDir}`,
+    '    --setenv PATH "$PATH"',
+    "  )",
+    `  [[ -e ${hostClaudeDir} ]] && bwrap_args+=(--bind ${hostClaudeDir} ${hostClaudeDir})`,
+    `  [[ -e ${hostClaudeJson} ]] && bwrap_args+=(--bind ${hostClaudeJson} ${hostClaudeJson})`,
+    `  [[ -e ${hostClaudeCache} ]] && bwrap_args+=(--bind ${hostClaudeCache} ${hostClaudeCache})`,
+    `  [[ -e ${npmCache} ]] && bwrap_args+=(--bind ${npmCache} ${npmCache})`,
+    `  [[ -e ${uvCache} ]] && bwrap_args+=(--bind ${uvCache} ${uvCache})`,
+    `  [[ -e ${uvData} ]] && bwrap_args+=(--bind ${uvData} ${uvData})`,
+    `  [[ -e ${bunInstallCache} ]] && bwrap_args+=(--bind ${bunInstallCache} ${bunInstallCache})`,
+    `  exec bwrap "\${bwrap_args[@]}" ${realClaude} "$@"`,
     "fi",
     'echo "Claude sandbox requires bubblewrap (bwrap) on Linux" >&2',
     "exit 1",
   ].join("\n");
 
   return [
-    "#!/bin/sh",
-    "set -eu",
+    "#!/usr/bin/env bash",
+    "set -euo pipefail",
     envSetup,
     'case "$(uname -s)" in',
     `  Darwin)\n${darwinExec}\n    ;;`,

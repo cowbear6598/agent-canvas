@@ -21,9 +21,6 @@ class StartupService {
       config.appDataRoot,
       config.canvasRoot,
       config.repositoriesRoot,
-      config.runtimeRoot,
-      config.runWorkspacesRoot,
-      config.claudeSandboxRoot,
     ]);
     if (!dirResult.success) {
       return dirResult;

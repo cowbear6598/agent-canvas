@@ -5,13 +5,8 @@ import { config } from "../../config/index.js";
 import type { Pod } from "../../types/pod.js";
 import { logger } from "../../utils/logger.js";
 import { getResultErrorString } from "../../types/result.js";
-import { ensureClaudeSandboxHomeSeeded } from "../claude/claudeSandboxLauncher.js";
 import { gitService } from "../workspace/gitService.js";
-import {
-  getPodSandboxHomePath,
-  getRunSandboxHomePath,
-  getRunWorkspacePath,
-} from "./executionPaths.js";
+import { getRunSandboxHomePath } from "./executionPaths.js";
 
 export interface ProvisionedRunExecutionResources {
   workspacePath: string;
@@ -22,15 +17,6 @@ export interface ProvisionedRunExecutionResources {
 interface SharedWorkspaceResult {
   workspacePath: string;
   worktreePath: string | null;
-}
-
-function getSharedRepoSnapshotPath(
-  runId: string,
-  repositoryId: string,
-): string {
-  return path.resolve(
-    path.join(config.runWorkspacesRoot, runId, `repository-${repositoryId}`),
-  );
 }
 
 async function ensureEmptyDirectory(dirPath: string): Promise<void> {
@@ -45,18 +31,6 @@ async function pathExists(targetPath: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-async function copyWorkspaceSnapshot(
-  sourcePath: string,
-  targetPath: string,
-): Promise<void> {
-  await ensureEmptyDirectory(targetPath);
-  await fs.cp(sourcePath, targetPath, {
-    recursive: true,
-    force: true,
-    dereference: false,
-  });
 }
 
 async function ensureNonRepoSourceWorkspace(sourcePath: string): Promise<void> {
@@ -100,59 +74,61 @@ async function provisionRepositoryWorkspace(
   }
 
   const isGitResult = await gitService.isGitRepository(sourceRepoPath);
-  if (isGitResult.success && isGitResult.data) {
-    const hasCommitsResult = await gitService.hasCommits(sourceRepoPath);
-    if (hasCommitsResult.success && hasCommitsResult.data) {
-      const syncResult = await gitService.syncToRemoteLatest(sourceRepoPath);
-      if (!syncResult.success) {
-        throw new Error(
-          `同步 remote 最新版本失敗：${getResultErrorString(syncResult.error)}`,
-        );
-      }
-
-      const worktreePath = path.join(
-        config.repositoriesRoot,
-        `${pod.repositoryId}-run-${runId}`,
-      );
-      const createResult = await gitService.createDetachedWorktree(
-        sourceRepoPath,
-        worktreePath,
-      );
-
-      if (createResult.success) {
-        const provisioned = {
-          workspacePath: worktreePath,
-          worktreePath,
-        };
-        worktreeCache.set(cacheKey, provisioned);
-        return provisioned;
-      }
-    }
+  if (!isGitResult.success) {
+    throw new Error(
+      `檢查 repository git 狀態失敗：${getResultErrorString(isGitResult.error)}`,
+    );
+  }
+  if (!isGitResult.data) {
+    throw new Error("Repository 不是 Git repository，無法建立 detached worktree");
   }
 
-  const snapshotPath = getSharedRepoSnapshotPath(runId, pod.repositoryId);
-  await copyWorkspaceSnapshot(sourceRepoPath, snapshotPath);
+  const hasCommitsResult = await gitService.hasCommits(sourceRepoPath);
+  if (!hasCommitsResult.success) {
+    throw new Error(
+      `檢查 repository commit 狀態失敗：${getResultErrorString(hasCommitsResult.error)}`,
+    );
+  }
+  if (!hasCommitsResult.data) {
+    throw new Error("Repository 沒有任何 commit，無法建立 detached worktree");
+  }
+
+  const syncResult = await gitService.syncToRemoteLatest(sourceRepoPath);
+  if (!syncResult.success) {
+    throw new Error(
+      `同步 remote 最新版本失敗：${getResultErrorString(syncResult.error)}`,
+    );
+  }
+
+  const worktreePath = path.join(
+    config.repositoriesRoot,
+    `${pod.repositoryId}-run-${runId}`,
+  );
+  const createResult = await gitService.createDetachedWorktree(
+    sourceRepoPath,
+    worktreePath,
+  );
+
+  if (!createResult.success) {
+    throw new Error(
+      `建立 detached worktree 失敗：${getResultErrorString(createResult.error)}`,
+    );
+  }
 
   const provisioned = {
-    workspacePath: snapshotPath,
-    worktreePath: null,
+    workspacePath: worktreePath,
+    worktreePath,
   };
   worktreeCache.set(cacheKey, provisioned);
   return provisioned;
 }
 
-async function provisionNonRepoWorkspace(
-  pod: Pod,
-  runId: string,
-): Promise<SharedWorkspaceResult> {
+async function provisionNonRepoWorkspace(pod: Pod): Promise<SharedWorkspaceResult> {
   const sourceWorkspacePath = path.resolve(pod.workspacePath);
   await ensureNonRepoSourceWorkspace(sourceWorkspacePath);
 
-  const runWorkspacePath = getRunWorkspacePath(runId, pod.id);
-  await copyWorkspaceSnapshot(sourceWorkspacePath, runWorkspacePath);
-
   return {
-    workspacePath: runWorkspacePath,
+    workspacePath: sourceWorkspacePath,
     worktreePath: null,
   };
 }
@@ -166,11 +142,7 @@ export async function provisionRunExecutionResources(params: {
 
   const workspaceResult = pod.repositoryId
     ? await provisionRepositoryWorkspace(pod, runId, worktreeCache)
-    : await provisionNonRepoWorkspace(pod, runId);
-
-  // pod-level seed 必須在建立 run-level sandbox home 之前完成
-  const podSandboxHomePath = getPodSandboxHomePath(pod.id);
-  ensureClaudeSandboxHomeSeeded(podSandboxHomePath);
+    : await provisionNonRepoWorkspace(pod);
 
   const sandboxHomePath = await provisionRunSandboxHome(runId, pod.id);
 

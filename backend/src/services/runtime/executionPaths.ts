@@ -1,3 +1,4 @@
+import os from "os";
 import path from "path";
 
 import type { Pod } from "../../types/pod.js";
@@ -39,7 +40,6 @@ function resolveRunWorkspacePath(
   if (instance?.workspacePath) {
     const resolvedWorkspace = path.resolve(instance.workspacePath);
     const allowedRoots = [
-      config.runWorkspacesRoot,
       config.repositoriesRoot,
       config.canvasRoot,
     ].map((root) => path.resolve(root));
@@ -67,18 +67,18 @@ function resolveRunWorkspacePath(
   return resolvePodCwd(pod);
 }
 
+export function getClaudeSandboxRoot(): string {
+  return path.resolve(path.join(os.tmpdir(), "agent-canvas", "claude-sandbox"));
+}
+
 export function getPodSandboxHomePath(podId: string): string {
-  return path.resolve(path.join(config.claudeSandboxRoot, "pods", podId, "home"));
+  return path.resolve(path.join(getClaudeSandboxRoot(), "pods", podId, "home"));
 }
 
 export function getRunSandboxHomePath(runId: string, podId: string): string {
   return path.resolve(
-    path.join(config.claudeSandboxRoot, "runs", runId, "pods", podId, "home"),
+    path.join(getClaudeSandboxRoot(), "runs", runId, "pods", podId, "home"),
   );
-}
-
-export function getRunWorkspacePath(runId: string, podId: string): string {
-  return path.resolve(path.join(config.runWorkspacesRoot, runId, podId));
 }
 
 export function resolveExecutionPaths(
@@ -90,17 +90,17 @@ export function resolveExecutionPaths(
       workspacePath: resolvePodCwd(pod),
       sandboxHomePath: resolveWithinRoot(
         getPodSandboxHomePath(pod.id),
-        config.claudeSandboxRoot,
+        getClaudeSandboxRoot(),
       ),
     };
   }
 
   const instance = runStore.getPodInstance(runContext.runId, pod.id);
   const sandboxHomePath = instance?.sandboxHomePath
-    ? resolveWithinRoot(instance.sandboxHomePath, config.claudeSandboxRoot)
+    ? resolveWithinRoot(instance.sandboxHomePath, getClaudeSandboxRoot())
     : resolveWithinRoot(
         getRunSandboxHomePath(runContext.runId, pod.id),
-        config.claudeSandboxRoot,
+        getClaudeSandboxRoot(),
       );
 
   return {

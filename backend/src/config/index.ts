@@ -26,9 +26,6 @@ interface Config {
   appDataRoot: string;
   canvasRoot: string;
   repositoriesRoot: string;
-  runtimeRoot: string;
-  runWorkspacesRoot: string;
-  claudeSandboxRoot: string;
   /**
    * 暫存檔案根目錄（拖曳上傳的附件先落地於此，6h 後由 tmpCleanupService 清除）
    *
@@ -130,9 +127,6 @@ function loadConfig(): Config {
   const appDataRoot = dataRoot;
   const canvasRoot = path.join(dataRoot, "canvas");
   const repositoriesRoot = path.join(dataRoot, "repositories");
-  const runtimeRoot = path.join(dataRoot, "runtime");
-  const runWorkspacesRoot = path.join(runtimeRoot, "run-workspaces");
-  const claudeSandboxRoot = path.join(runtimeRoot, "claude-sandbox");
   const agentsPath = path.join(dataRoot, "agents");
   const commandsPath = path.join(dataRoot, "commands");
   // 暫存目錄：不在此建立，寫檔時由 attachmentWriter 以 mkdir -p 建立
@@ -150,9 +144,6 @@ function loadConfig(): Config {
     appDataRoot,
     canvasRoot,
     repositoriesRoot,
-    runtimeRoot,
-    runWorkspacesRoot,
-    claudeSandboxRoot,
     tmpRoot,
     stagingRoot,
     corsOrigin,

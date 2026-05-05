@@ -31,6 +31,7 @@ import path from "path";
 import { getResultErrorString } from "../../types/result.js";
 import { promises as fs } from "fs";
 import { isPathWithinDirectory } from "../../utils/pathValidator.js";
+import { getClaudeSandboxRoot } from "../runtime/executionPaths.js";
 import {
   provisionRunExecutionResources,
   type ProvisionedRunExecutionResources,
@@ -634,22 +635,18 @@ class RunExecutionService {
 
   /**
    * 清理指定 Run 的所有隔離資源。
-   * 包含 detached worktree、snapshot workspace 與 run sandbox home。
+   * 包含 detached worktree 與 run sandbox home。
    */
   private async cleanupRunResources(runId: string): Promise<void> {
     const entries = runStore.getExecutionPathsByRunId(runId);
     if (entries.length === 0) return;
 
     const uniqueWorktrees = new Map<string, string>();
-    const uniqueWorkspaces = new Set<string>();
     const uniqueSandboxHomes = new Set<string>();
 
     for (const entry of entries) {
       if (entry.worktreePath) {
         uniqueWorktrees.set(entry.worktreePath, entry.podId);
-      }
-      if (entry.workspacePath) {
-        uniqueWorkspaces.add(entry.workspacePath);
       }
       if (entry.sandboxHomePath) {
         uniqueSandboxHomes.add(entry.sandboxHomePath);
@@ -687,31 +684,17 @@ class RunExecutionService {
     );
 
     await Promise.all(
-      [...uniqueWorkspaces]
-        .filter((workspacePath) =>
-          isPathWithinDirectory(
-            workspacePath,
-            path.resolve(config.runWorkspacesRoot),
-          ),
-        )
-        .map((workspacePath) =>
-          this.removeRunDirectory(workspacePath, "run workspace"),
-        ),
-    );
-
-    await Promise.all(
       [...uniqueSandboxHomes]
         .filter((sandboxHomePath) =>
           isPathWithinDirectory(
             sandboxHomePath,
-            path.resolve(config.claudeSandboxRoot),
+            path.resolve(getClaudeSandboxRoot()),
           ),
         )
         .map((sandboxHomePath) =>
           this.removeRunDirectory(sandboxHomePath, "sandbox home"),
         ),
     );
-
     runStore.clearExecutionPathsByRunId(runId);
   }
 
