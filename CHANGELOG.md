@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.4.0] - 2026-05-05
+
+### 新增
+- 多 Pod 模式輸入框支援多行輸入，隨內容自動長高
+
+### 修正
+- 修復 Mac 注音輸入法在多 Pod 聊天輸入時誤觸送出的問題
+- 多 Pod 模式輸入框的捲軸樣式對齊專案 doodle 風格
+- 修復開始聊天後 Pod notch 上已綁定 Note 視覺退回空槽樣式的問題
+- 修復 Pod notch 在禁用狀態下 cursor 仍顯示手指（應為禁止符號）
+- 補上 PodSingleBindSlot / PodMultiBindSlot 在 disabled 狀態下的測試覆蓋
+- 全 Canvas 鎖定時點打開清單可正常開合，行為與 Header 按鈕一致
+- 設定或變更 Canvas 密碼後，當下不會再被要求輸入密碼
+- 解除 Canvas 密碼時不再誤回 Canvas password required
+- 補上 authGuard 測試保護門禁規則
+- 修復 workspace 重連期間可能短暫繞過鎖定畫面
+- 加入 TRUST_PROXY 白名單
+- workspace/canvas 解鎖加入失敗次數限制
+- reconnect grant 改用 HttpOnly cookie
+- 消除 canvas 事件守門重複檢查
+- 文檔更新，補充三個支援的 AI Provider
+- 簡化 README 文檔
+
 ## [1.3.0] - 2026-05-04
 
 ### 修正
