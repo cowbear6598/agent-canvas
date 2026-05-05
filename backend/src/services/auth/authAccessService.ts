@@ -60,6 +60,17 @@ class AuthAccessService {
       return false;
     }
 
+    return this.isCanvasAccessibleAssumingWorkspace(sessionId, canvasId);
+  }
+
+  /**
+   * 在已確認 workspace 可存取的前提下，判斷指定 canvas 是否可存取。
+   * 呼叫端必須先自行確認 workspace 可存取，以避免重複呼叫 isWorkspaceAccessible。
+   */
+  isCanvasAccessibleAssumingWorkspace(
+    sessionId: string | null,
+    canvasId: string,
+  ): boolean {
     const canvas = canvasStore.getById(canvasId);
     if (!canvas) {
       return false;
@@ -88,12 +99,23 @@ class AuthAccessService {
       return false;
     }
 
+    return this.requiresCanvasUnlockAssumingWorkspace(sessionId, canvasId);
+  }
+
+  /**
+   * 在已確認 workspace 可存取的前提下，判斷指定 canvas 是否需要解鎖。
+   * 呼叫端必須先自行確認 workspace 可存取，以避免重複呼叫 isWorkspaceAccessible。
+   */
+  requiresCanvasUnlockAssumingWorkspace(
+    sessionId: string | null,
+    canvasId: string,
+  ): boolean {
     const canvas = canvasStore.getById(canvasId);
     if (!canvas || !canvas.isProtected) {
       return false;
     }
 
-    return !this.isCanvasAccessible(sessionId, canvasId);
+    return !this.isCanvasAccessibleAssumingWorkspace(sessionId, canvasId);
   }
 
   getAccessibleUnlockedCanvasIds(sessionId: string | null): string[] {

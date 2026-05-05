@@ -80,7 +80,32 @@ class SessionStore {
     return grantId;
   }
 
-  consumeReconnectGrant(grantId: string | null | undefined): AuthSession | undefined {
+  /**
+   * 非消耗性驗證 grant 是否有效（存在且未過期且未使用）。
+   * 用於 REST endpoint 驗證 grant 合法性而不提前消耗它。
+   */
+  peekReconnectGrant(
+    grantId: string | null | undefined,
+  ): AuthSession | undefined {
+    if (!grantId) {
+      return undefined;
+    }
+
+    const grant = this.reconnectGrants.get(grantId);
+    if (!grant) {
+      return undefined;
+    }
+
+    if (grant.usedAt !== null || grant.expiresAt <= Date.now()) {
+      return undefined;
+    }
+
+    return this.getSession(grant.sessionId);
+  }
+
+  consumeReconnectGrant(
+    grantId: string | null | undefined,
+  ): AuthSession | undefined {
     if (!grantId) {
       return undefined;
     }
@@ -139,7 +164,10 @@ class SessionStore {
     return session;
   }
 
-  clearCanvasUnlock(sessionId: string, canvasId: string): AuthSession | undefined {
+  clearCanvasUnlock(
+    sessionId: string,
+    canvasId: string,
+  ): AuthSession | undefined {
     const session = this.getSession(sessionId);
     if (!session) {
       return undefined;

@@ -23,6 +23,7 @@ import {
 } from "./workflowApi.js";
 import { handleDownloadPodDirectory } from "./podDownloadApi.js";
 import { handleUpload } from "./uploadApi.js";
+import { handleRedeemReconnectGrant } from "./reconnectGrantApi.js";
 import { JSON_HEADERS } from "./constants.js";
 import { logger } from "../utils/logger.js";
 import { authAccessService } from "../services/auth/authAccessService.js";
@@ -161,6 +162,12 @@ const ROUTES: Route[] = [
     handler: handleUpload,
     scope: "public",
   },
+  {
+    method: "POST",
+    pattern: new URLPattern({ pathname: "/api/auth/redeem-reconnect-grant" }),
+    handler: handleRedeemReconnectGrant,
+    scope: "public",
+  },
 ];
 
 function matchRoute(
@@ -199,6 +206,7 @@ async function authorizeRoute(
   }
 
   const sessionId = handshakeAuthService.resolveRequestSessionId(req);
+  // workspace 可存取性只呼叫一次，避免 canvas 檢查時重複查詢
   if (!authAccessService.isWorkspaceAccessible(sessionId)) {
     return forbiddenResponse(
       "Workspace password required",
@@ -217,9 +225,13 @@ async function authorizeRoute(
   const resolvedCanvas = rawCanvasId ? resolveCanvas(rawCanvasId) : null;
   const canvasId = resolvedCanvas?.id ?? null;
 
+  // workspace 已確認可存取，直接使用 AssumingWorkspace 版本避免重複呼叫。
   // 只有在 canvas 存在且受密碼保護且尚未解鎖時才拒絕；
   // canvas 不存在或未受保護時讓 handler 自行回傳 404 或正常回應。
-  if (canvasId && authAccessService.requiresCanvasUnlock(sessionId, canvasId)) {
+  if (
+    canvasId &&
+    authAccessService.requiresCanvasUnlockAssumingWorkspace(sessionId, canvasId)
+  ) {
     return forbiddenResponse(
       "Canvas password required",
       "CANVAS_PASSWORD_REQUIRED",

@@ -29,11 +29,9 @@ class WebSocketClient {
   private socket: WebSocket | null = null;
   private reconnectTimer: ReturnType<typeof setInterval> | null = null;
   private wsUrl: string = "";
-  private pendingWorkspaceReconnectGrant: string | null = null;
   private eventListeners: Map<string, Set<EventHandler>> = new Map();
-  private disconnectListeners: Set<
-    (event: WebSocketDisconnectEvent) => void
-  > = new Set();
+  private disconnectListeners: Set<(event: WebSocketDisconnectEvent) => void> =
+    new Set();
   private visibilityChangeHandler: (() => void) | null = null;
   private visibilityListenerRegistered = false;
 
@@ -73,7 +71,6 @@ class WebSocketClient {
     this.teardownVisibilityChangeListener();
     this.stopReconnect();
     this.cleanupSocket();
-    this.pendingWorkspaceReconnectGrant = null;
   }
 
   // 強制重連：關閉舊 socket 並啟動重連，但不拆除 visibility listener
@@ -89,7 +86,24 @@ class WebSocketClient {
   }
 
   forceReconnectWithGrant(grant: string): void {
-    this.pendingWorkspaceReconnectGrant = grant;
+    // 先將 grant 換成短效 HttpOnly cookie，再重連；
+    // grant 不再出現在 WebSocket URL query string。
+    this.redeemGrantAndReconnect(grant).catch((err) => {
+      logger.error("[WebSocket] grant 換發失敗，直接重連:", err);
+      this.forceReconnect();
+    });
+  }
+
+  private async redeemGrantAndReconnect(grant: string): Promise<void> {
+    const apiBase = this.wsUrl ?? this.resolveDefaultWebSocketUrl();
+    const redeemUrl =
+      apiBase.replace(/^ws/, "http") + "/api/auth/redeem-reconnect-grant";
+    await fetch(redeemUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ grant }),
+    });
     this.forceReconnect();
   }
 
@@ -195,13 +209,6 @@ class WebSocketClient {
     const wsProtocol = this.wsUrl.replace(/^http/, "ws");
     const url = new URL(wsProtocol);
 
-    if (this.pendingWorkspaceReconnectGrant) {
-      url.searchParams.set(
-        "workspaceReconnectGrant",
-        this.pendingWorkspaceReconnectGrant,
-      );
-    }
-
     const pathname = url.pathname === "/" ? "" : url.pathname;
     const search = url.searchParams.toString();
 
@@ -213,7 +220,6 @@ class WebSocketClient {
     this.stopReconnect();
     this.disconnectReason.value = null;
     this.isConnected.value = true;
-    this.pendingWorkspaceReconnectGrant = null;
   }
 
   private handleClose(event: CloseEvent): void {

@@ -10,6 +10,7 @@ import { socketService } from "../services/socketService.js";
 import { authAccessService } from "../services/auth/authAccessService.js";
 import { passwordService } from "../services/auth/passwordService.js";
 import { sessionStore } from "../services/auth/sessionStore.js";
+import { unlockRateLimiter } from "../services/auth/unlockRateLimiter.js";
 
 export async function handleAuthBootstrap(
   connectionId: string,
@@ -17,7 +18,8 @@ export async function handleAuthBootstrap(
   requestId: string,
 ): Promise<void> {
   const sessionId = connectionManager.getSessionId(connectionId);
-  const transportSecurity = connectionManager.getTransportSecurity(connectionId);
+  const transportSecurity =
+    connectionManager.getTransportSecurity(connectionId);
 
   if (!transportSecurity) {
     socketService.emitToConnection(
@@ -53,11 +55,29 @@ export async function handleAuthUnlockWorkspace(
   payload: AuthUnlockWorkspacePayload,
   requestId: string,
 ): Promise<void> {
+  const remoteIp = connectionManager.getRemoteIp(connectionId);
+  const rateLimitResult = unlockRateLimiter.check(connectionId, remoteIp);
+  if (rateLimitResult.blocked) {
+    socketService.emitToConnection(
+      connectionId,
+      WebSocketResponseEvents.AUTH_WORKSPACE_UNLOCK_RESULT,
+      {
+        requestId,
+        success: false,
+        error: `嘗試次數過多，請稍後再試（剩餘 ${rateLimitResult.retryAfterSeconds} 秒）`,
+        errorCode: "AUTH_RATE_LIMITED",
+        retryAfterSeconds: rateLimitResult.retryAfterSeconds,
+      },
+    );
+    return;
+  }
+
   const verifyResult = await passwordService.verifyWorkspaceUnlock(
     payload.password,
   );
 
   if (!verifyResult.success) {
+    unlockRateLimiter.recordFailure(connectionId, remoteIp);
     socketService.emitToConnection(
       connectionId,
       WebSocketResponseEvents.AUTH_WORKSPACE_UNLOCK_RESULT,
@@ -69,6 +89,8 @@ export async function handleAuthUnlockWorkspace(
     );
     return;
   }
+
+  unlockRateLimiter.reset(connectionId, remoteIp);
 
   const workspacePasswordVersion = verifyResult.data.passwordVersion;
   let sessionId = connectionManager.getSessionId(connectionId);
@@ -85,7 +107,9 @@ export async function handleAuthUnlockWorkspace(
     sessionStore.markWorkspaceUnlocked(session.id, workspacePasswordVersion);
   }
 
-  const reconnectGrant = sessionStore.createReconnectGrant(sessionId ?? session.id);
+  const reconnectGrant = sessionStore.createReconnectGrant(
+    sessionId ?? session.id,
+  );
 
   socketService.emitToConnection(
     connectionId,
@@ -103,6 +127,23 @@ export async function handleAuthUnlockCanvas(
   payload: AuthUnlockCanvasPayload,
   requestId: string,
 ): Promise<void> {
+  const remoteIp = connectionManager.getRemoteIp(connectionId);
+  const rateLimitResult = unlockRateLimiter.check(connectionId, remoteIp);
+  if (rateLimitResult.blocked) {
+    socketService.emitToConnection(
+      connectionId,
+      WebSocketResponseEvents.AUTH_CANVAS_UNLOCK_RESULT,
+      {
+        requestId,
+        success: false,
+        error: `嘗試次數過多，請稍後再試（剩餘 ${rateLimitResult.retryAfterSeconds} 秒）`,
+        errorCode: "AUTH_RATE_LIMITED",
+        retryAfterSeconds: rateLimitResult.retryAfterSeconds,
+      },
+    );
+    return;
+  }
+
   const sessionId = connectionManager.getSessionId(connectionId);
   if (!authAccessService.isWorkspaceAccessible(sessionId)) {
     socketService.emitToConnection(
@@ -135,6 +176,7 @@ export async function handleAuthUnlockCanvas(
     payload.password,
   );
   if (!verifyResult.success) {
+    unlockRateLimiter.recordFailure(connectionId, remoteIp);
     socketService.emitToConnection(
       connectionId,
       WebSocketResponseEvents.AUTH_CANVAS_UNLOCK_RESULT,
@@ -146,6 +188,8 @@ export async function handleAuthUnlockCanvas(
     );
     return;
   }
+
+  unlockRateLimiter.reset(connectionId, remoteIp);
 
   sessionStore.unlockCanvas(
     sessionId,
@@ -160,9 +204,8 @@ export async function handleAuthUnlockCanvas(
       requestId,
       success: true,
       canvasId: payload.canvasId,
-      unlockedCanvasIds: authAccessService.getAccessibleUnlockedCanvasIds(
-        sessionId,
-      ),
+      unlockedCanvasIds:
+        authAccessService.getAccessibleUnlockedCanvasIds(sessionId),
     },
   );
 }
@@ -203,7 +246,10 @@ export async function handleAuthUpdateWorkspacePassword(
   }
 
   if (payload.passwordUpdate.action !== "remove" && sessionId) {
-    sessionStore.markWorkspaceUnlocked(sessionId, updateResult.data.passwordVersion);
+    sessionStore.markWorkspaceUnlocked(
+      sessionId,
+      updateResult.data.passwordVersion,
+    );
     authAccessService.resetWorkspaceAccess(
       "workspace-password-changed",
       sessionId,

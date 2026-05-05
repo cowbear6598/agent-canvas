@@ -502,16 +502,38 @@ describe("WebSocketClient", () => {
       expect(mockWebSocketInstances.length).toBe(2);
     });
 
-    it("forceReconnectWithGrant 應在下一次握手帶上 reconnect grant", () => {
+    it("forceReconnectWithGrant 應透過 fetch POST 換發 grant cookie 後再重連，URL 不帶 grant", async () => {
+      // mock global fetch：模擬 /api/auth/redeem-reconnect-grant 成功
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue(new Response("{}", { status: 200 }));
+      vi.stubGlobal("fetch", fetchMock);
+
       websocketClient.connect("http://localhost:3001");
       const instance = mockWebSocketInstances[0]!;
       instance.triggerOpen();
 
       websocketClient.forceReconnectWithGrant("grant-123");
 
-      expect(mockWebSocketInstances[1]!.url).toBe(
-        "ws://localhost:3001?workspaceReconnectGrant=grant-123",
+      // 等待 async redeemGrantAndReconnect 執行完畢
+      await vi.waitFor(() =>
+        expect(mockWebSocketInstances.length).toBeGreaterThan(1),
       );
+
+      // fetch 應被呼叫一次，帶上 grant
+      expect(fetchMock).toHaveBeenCalledOnce();
+      const [url, opts] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(url).toContain("/api/auth/redeem-reconnect-grant");
+      expect(JSON.parse(opts.body as string)).toMatchObject({
+        grant: "grant-123",
+      });
+
+      // 重連的 WS URL 不應包含 grant query parameter
+      const newUrl = mockWebSocketInstances[1]!.url;
+      expect(newUrl).not.toContain("workspaceReconnectGrant");
+      expect(newUrl).toBe("ws://localhost:3001");
+
+      vi.unstubAllGlobals();
     });
 
     it("應該在斷線時啟動重連機制", () => {

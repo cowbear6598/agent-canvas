@@ -183,14 +183,14 @@ export const useSecurityStore = defineStore("security", () => {
   };
 
   const clearAccessState = (): void => {
-    workspaceUnlocked.value = workspacePasswordEnabled.value ? false : true;
+    // 無條件重設為鎖定狀態，讓後續 bootstrapAccess() 重新確立正確狀態。
+    // 不依賴 workspacePasswordEnabled 當下值，避免 AUTH_SESSION_RESET
+    // 在 bootstrapAccess 完成前到達時短暫繞過 workspace 鎖定畫面。
+    workspaceUnlocked.value = false;
     unlockingCanvasId.value = null;
     unlockedCanvasIds.value = [];
     lastUnlockError.value = null;
-    bootStatus.value =
-      workspacePasswordEnabled.value && !workspaceUnlocked.value
-        ? "locked"
-        : "ready";
+    bootStatus.value = "locked";
   };
 
   const handleSessionReset = (_payload: AuthSessionResetPayload): void => {

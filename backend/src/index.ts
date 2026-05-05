@@ -31,7 +31,8 @@ function handleWebSocketUpgrade(
   req: Request,
   server: Server<ConnectionSocketData>,
 ): Response | undefined {
-  const upgradeAuth = handshakeAuthService.resolveUpgrade(req);
+  const remoteIp = server.requestIP(req)?.address ?? null;
+  const upgradeAuth = handshakeAuthService.resolveUpgrade(req, remoteIp);
   const success = server.upgrade(req, upgradeAuth);
   if (success) return undefined;
   return new Response("WebSocket 升級失敗", { status: 400 });

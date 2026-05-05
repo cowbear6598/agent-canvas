@@ -87,6 +87,7 @@ class AuthGuard {
     }
 
     const sessionId = connectionManager.getSessionId(connectionId);
+    // workspace 可存取性只呼叫一次，避免重複查詢
     if (!authAccessService.isWorkspaceAccessible(sessionId)) {
       throw new WebSocketError(
         "WORKSPACE_PASSWORD_REQUIRED",
@@ -99,11 +100,15 @@ class AuthGuard {
     }
 
     const canvasId = getCanvasIdFromPayload(event, payload, connectionId);
+    // workspace 已確認可存取，直接使用 AssumingWorkspace 版本避免重複呼叫。
     // 只有在 canvas 存在且受密碼保護且尚未解鎖時才拒絕；
     // canvas 不存在或未受保護時讓 handler 自行回傳錯誤。
     if (
       canvasId &&
-      authAccessService.requiresCanvasUnlock(sessionId, canvasId)
+      authAccessService.requiresCanvasUnlockAssumingWorkspace(
+        sessionId,
+        canvasId,
+      )
     ) {
       throw new WebSocketError(
         "CANVAS_PASSWORD_REQUIRED",
