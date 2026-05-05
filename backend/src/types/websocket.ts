@@ -1,4 +1,5 @@
 import type { ServerWebSocket } from 'bun';
+import type { TransportSecurityInfo } from '../services/auth/transportSecurityService.js';
 
 export interface WebSocketMessage {
 	type: string;
@@ -17,10 +18,18 @@ export interface WebSocketResponse {
 	ackId?: string;
 }
 
+export interface ConnectionSocketData {
+	connectionId: string;
+	sessionId: string | null;
+	transportSecurity: TransportSecurityInfo;
+}
+
 export interface ClientConnection {
 	id: string;
-	webSocket: ServerWebSocket<{ connectionId: string }>;
+	webSocket: ServerWebSocket<ConnectionSocketData>;
 	canvasId: string | null;
+	sessionId: string | null;
+	transportSecurity: TransportSecurityInfo;
 	lastHeartbeat: number;
 	missedHeartbeats: number;
 }

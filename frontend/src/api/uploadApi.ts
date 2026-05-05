@@ -58,6 +58,7 @@ export interface UploadResult {
  */
 export function uploadFile(
   file: File,
+  canvasId: string,
   uploadSessionId: string,
   onProgress: (e: UploadProgressEvent) => void,
 ): Promise<UploadResult> {
@@ -119,6 +120,7 @@ export function uploadFile(
     // 組裝 FormData 並送出請求
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("canvasId", canvasId);
     formData.append("uploadSessionId", uploadSessionId);
 
     xhr.open("POST", `${baseUrl}/api/upload`);

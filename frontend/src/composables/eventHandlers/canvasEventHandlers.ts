@@ -72,6 +72,17 @@ const handleCanvasReordered = createUnifiedHandler<
   { skipCanvasCheck: true },
 );
 
+const handleCanvasSecurityUpdated = createUnifiedHandler<
+  BasePayload & { canvas?: Canvas }
+>(
+  (payload) => {
+    if (payload.canvas) {
+      useCanvasStore().updateCanvasProtectionFromEvent(payload.canvas);
+    }
+  },
+  { skipCanvasCheck: true },
+);
+
 const handleCanvasPasted = createUnifiedHandler<
   BasePayload & {
     canvasId: string;
@@ -123,6 +134,10 @@ export function getCanvasEventListeners(): Array<{
     {
       event: WebSocketResponseEvents.CANVAS_REORDERED,
       handler: handleCanvasReordered as (payload: unknown) => void,
+    },
+    {
+      event: WebSocketResponseEvents.CANVAS_SECURITY_UPDATED,
+      handler: handleCanvasSecurityUpdated as (payload: unknown) => void,
     },
     {
       event: WebSocketResponseEvents.CANVAS_PASTE_RESULT,

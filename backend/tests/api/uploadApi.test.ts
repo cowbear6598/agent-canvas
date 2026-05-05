@@ -12,6 +12,7 @@
  * - 檔名包含路徑分隔符（../evil）回 400
  * - HTTP 上傳階段不檢查 pod busy（不依賴 pod 狀態）
  * - 錯誤回應 body 格式為 { errorCode, message }，message 為 zh-TW
+ * - canvas 受密碼保護且未解鎖時回 403
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -37,10 +38,40 @@ vi.mock("../../src/utils/logger.js", () => ({
 }));
 
 // ----------------------------------------------------------------
+// mock canvasStore：讓測試中的 canvasId 查詢可控
+// ----------------------------------------------------------------
+vi.mock("../../src/services/canvasStore.js", () => ({
+  canvasStore: {
+    getById: vi.fn(),
+  },
+}));
+
+// ----------------------------------------------------------------
+// mock authAccessService：讓 canvas 存取權限可控
+// ----------------------------------------------------------------
+vi.mock("../../src/services/auth/authAccessService.js", () => ({
+  authAccessService: {
+    isCanvasAccessible: vi.fn(),
+  },
+}));
+
+// ----------------------------------------------------------------
+// mock handshakeAuthService：不依賴 session 機制
+// ----------------------------------------------------------------
+vi.mock("../../src/services/auth/handshakeAuthService.js", () => ({
+  handshakeAuthService: {
+    resolveRequestSessionId: vi.fn().mockReturnValue(null),
+  },
+}));
+
+// ----------------------------------------------------------------
 // 動態 import（在 mock 設定後才 import，確保 mock 生效）
 // ----------------------------------------------------------------
 const { handleUpload } = await import("../../src/api/uploadApi.js");
 const { config } = await import("../../src/config/index.js");
+const { canvasStore } = await import("../../src/services/canvasStore.js");
+const { authAccessService } =
+  await import("../../src/services/auth/authAccessService.js");
 
 // ----------------------------------------------------------------
 // 測試常數
@@ -48,6 +79,9 @@ const { config } = await import("../../src/config/index.js");
 
 /** 合法的 uploadSessionId（UUID v4 格式） */
 const VALID_SESSION_ID = "550e8400-e29b-41d4-a716-446655440000";
+
+/** 合法的 canvasId（UUID v4 格式） */
+const VALID_CANVAS_ID = "aaaabbbb-cccc-4ddd-8eee-ffffffffffff";
 
 /** 單檔最大允許 bytes（10 MB） */
 const MAX_SINGLE_BYTES = 10 * 1024 * 1024;
@@ -73,6 +107,14 @@ beforeEach(async () => {
   // 將 config 指向 sandbox（型別斷言，因 config 在 mock 中為 mutable object）
   (config as { stagingRoot: string; tmpRoot: string }).stagingRoot = stagingDir;
   (config as { stagingRoot: string; tmpRoot: string }).tmpRoot = sandboxDir;
+
+  // 預設：VALID_CANVAS_ID 存在且可存取
+  (canvasStore.getById as ReturnType<typeof vi.fn>).mockImplementation(
+    (id: string) => (id === VALID_CANVAS_ID ? { id: VALID_CANVAS_ID } : null),
+  );
+  (
+    authAccessService.isCanvasAccessible as ReturnType<typeof vi.fn>
+  ).mockReturnValue(true);
 });
 
 afterEach(async () => {
@@ -86,16 +128,23 @@ afterEach(async () => {
 
 /**
  * 建立上傳用的 Request（multipart/form-data）。
+ * omitCanvasId：不帶 canvasId 欄位（測試缺欄位場景）
  * omitSessionId：不帶 uploadSessionId 欄位（測試缺欄位場景）
  * omitFile：不帶 file 欄位（測試缺欄位場景）
  */
 function makeUploadRequest(options: {
+  canvasId?: string;
+  omitCanvasId?: boolean;
   sessionId?: string;
   omitSessionId?: boolean;
   file?: File;
   omitFile?: boolean;
 }): Request {
   const formData = new FormData();
+
+  if (!options.omitCanvasId) {
+    formData.append("canvasId", options.canvasId ?? VALID_CANVAS_ID);
+  }
 
   if (!options.omitSessionId) {
     formData.append("uploadSessionId", options.sessionId ?? VALID_SESSION_ID);
@@ -190,6 +239,25 @@ describe("POST /api/upload — 成功案例", () => {
 });
 
 // ================================================================
+// 存取控制
+// ================================================================
+
+describe("POST /api/upload — 存取控制", () => {
+  // ── Case：canvas 受密碼保護且未解鎖時回 403 ──────────────────────
+  it("canvas 受密碼保護且未解鎖時應回 403", async () => {
+    // 模擬 canvas 存在但存取被拒（已鎖定）
+    (
+      authAccessService.isCanvasAccessible as ReturnType<typeof vi.fn>
+    ).mockReturnValue(false);
+
+    const req = makeUploadRequest({});
+    const res = await handleUpload(req);
+
+    expect(res.status).toBe(403);
+  });
+});
+
+// ================================================================
 // 錯誤案例 — uploadSessionId 欄位驗證
 // ================================================================
 
@@ -210,6 +278,7 @@ describe("POST /api/upload — uploadSessionId 驗證", () => {
   // ── Case 4b：uploadSessionId 為空字串回 400 ───────────────────
   it("uploadSessionId 為空字串應回 400，errorCode 為 UPLOAD_INVALID_SESSION_ID", async () => {
     const formData = new FormData();
+    formData.append("canvasId", VALID_CANVAS_ID);
     formData.append("uploadSessionId", "");
     formData.append("file", new File(["x"], "a.txt"));
 
@@ -270,6 +339,7 @@ describe("POST /api/upload — file 欄位驗證", () => {
   // ── Case 6b：file 欄位傳字串而非 File 物件回 400 ───────────────
   it("file 欄位傳純字串（非 File）應回 400，errorCode 為 UPLOAD_NO_FILE", async () => {
     const formData = new FormData();
+    formData.append("canvasId", VALID_CANVAS_ID);
     formData.append("uploadSessionId", VALID_SESSION_ID);
     formData.append("file", "not-a-file-object");
 

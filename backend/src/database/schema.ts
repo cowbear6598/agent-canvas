@@ -9,7 +9,9 @@ function createBaseTables(db: Database): void {
     "CREATE TABLE IF NOT EXISTS canvases (" +
       "id TEXT PRIMARY KEY," +
       "name TEXT NOT NULL UNIQUE," +
-      "sort_index INTEGER NOT NULL DEFAULT 0" +
+      "sort_index INTEGER NOT NULL DEFAULT 0," +
+      "password_hash TEXT," +
+      "password_version INTEGER NOT NULL DEFAULT 0" +
       ")",
   );
 
@@ -233,6 +235,35 @@ function createBaseTables(db: Database): void {
   );
 }
 
+function columnExists(
+  db: Database,
+  tableName: string,
+  columnName: string,
+): boolean {
+  const rows = db
+    .query(`PRAGMA table_info(${tableName})`)
+    .all() as Array<{ name: string }>;
+
+  return rows.some((row) => row.name === columnName);
+}
+
+function migrateCanvasPasswordColumns(db: Database): void {
+  if (!columnExists(db, "canvases", "password_hash")) {
+    db.exec("ALTER TABLE canvases ADD COLUMN password_hash TEXT");
+  }
+
+  if (!columnExists(db, "canvases", "password_version")) {
+    db.exec(
+      "ALTER TABLE canvases ADD COLUMN password_version INTEGER NOT NULL DEFAULT 0",
+    );
+  }
+
+  db.exec(
+    "UPDATE canvases SET password_version = 0 WHERE password_version IS NULL",
+  );
+}
+
 export function createTables(db: Database): void {
   createBaseTables(db);
+  migrateCanvasPasswordColumns(db);
 }

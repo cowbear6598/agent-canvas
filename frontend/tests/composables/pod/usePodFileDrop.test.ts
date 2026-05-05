@@ -193,6 +193,14 @@ function makeEntry(
 }
 
 const TEST_POD_ID = "pod-001";
+const TEST_CANVAS_ID = "canvas-001";
+
+function createOptions(disabled = false) {
+  return {
+    disabled: () => disabled,
+    getCanvasId: () => TEST_CANVAS_ID,
+  };
+}
 
 // ─────────────────────────────────────────────
 // 測試主體
@@ -231,7 +239,7 @@ describe("usePodFileDrop", () => {
 
   describe("handleDropEvent 驗證", () => {
     it("拖入 0 個檔案時，應顯示 errors.attachmentEmpty toast，不觸發上傳", async () => {
-      const { handleDropEvent } = usePodFileDrop({ disabled: () => false });
+      const { handleDropEvent } = usePodFileDrop(createOptions());
       const event = createDropEvent({ files: [] });
       await handleDropEvent(event, TEST_POD_ID);
 
@@ -242,7 +250,7 @@ describe("usePodFileDrop", () => {
     });
 
     it("拖入含資料夾條目時，應顯示 errors.attachmentFolderNotAllowed toast", async () => {
-      const { handleDropEvent } = usePodFileDrop({ disabled: () => false });
+      const { handleDropEvent } = usePodFileDrop(createOptions());
       const event = createDropEvent({ hasDirectory: true });
       await handleDropEvent(event, TEST_POD_ID);
 
@@ -253,7 +261,7 @@ describe("usePodFileDrop", () => {
     });
 
     it("單檔超過 MAX_POD_DROP_FILE_BYTES 時，應顯示 errors.attachmentTooLarge toast", async () => {
-      const { handleDropEvent } = usePodFileDrop({ disabled: () => false });
+      const { handleDropEvent } = usePodFileDrop(createOptions());
       const bigFile = createFile("big.bin", MAX_POD_DROP_FILE_BYTES + 1);
       const event = createDropEvent({ files: [bigFile] });
       await handleDropEvent(event, TEST_POD_ID);
@@ -265,7 +273,7 @@ describe("usePodFileDrop", () => {
     });
 
     it("disabled=true 時 drop 應直接 return，不觸發上傳", async () => {
-      const { handleDropEvent } = usePodFileDrop({ disabled: () => true });
+      const { handleDropEvent } = usePodFileDrop(createOptions(true));
       const files = [createFile("file.txt", 100)];
       const event = createDropEvent({ files });
       await handleDropEvent(event, TEST_POD_ID);
@@ -284,7 +292,7 @@ describe("usePodFileDrop", () => {
         aggregateProgress: 0,
       });
 
-      const { handleDropEvent } = usePodFileDrop({ disabled: () => false });
+      const { handleDropEvent } = usePodFileDrop(createOptions());
       const files = [createFile("test.txt", 100)];
       const event = createDropEvent({ files });
       await handleDropEvent(event, TEST_POD_ID);
@@ -307,7 +315,7 @@ describe("usePodFileDrop", () => {
     it("isUploading=true 時再次呼叫 handleDrop 應直接忽略", async () => {
       mockIsUploading.mockReturnValue(true);
 
-      const { handleDrop } = usePodFileDrop({ disabled: () => false });
+      const { handleDrop } = usePodFileDrop(createOptions());
       await handleDrop(TEST_POD_ID, [createFile("file.txt", 100)]);
 
       expect(mockStartUpload).not.toHaveBeenCalled();
@@ -332,7 +340,7 @@ describe("usePodFileDrop", () => {
         uploadSessionId: "session-123",
       });
 
-      const { handleDrop } = usePodFileDrop({ disabled: () => false });
+      const { handleDrop } = usePodFileDrop(createOptions());
       await handleDrop(TEST_POD_ID, [createFile("bad.txt", 100)]);
 
       expect(mockMarkFileFailed).toHaveBeenCalledWith(
@@ -367,7 +375,7 @@ describe("usePodFileDrop", () => {
         uploadSessionId: "session-123",
       });
 
-      const { handleDrop } = usePodFileDrop({ disabled: () => false });
+      const { handleDrop } = usePodFileDrop(createOptions());
       await handleDrop(TEST_POD_ID, [
         createFile("ok.txt", 100),
         createFile("bad.txt", 100),
@@ -391,7 +399,7 @@ describe("usePodFileDrop", () => {
         aggregateProgress: 0,
       });
 
-      const { handleDrop } = usePodFileDrop({ disabled: () => false });
+      const { handleDrop } = usePodFileDrop(createOptions());
       await handleDrop(TEST_POD_ID, [createFile("ok.txt", 100)]);
 
       expect(mockSendMessageWithUploadSession).toHaveBeenCalledWith(
@@ -414,7 +422,7 @@ describe("usePodFileDrop", () => {
         new Error("WS 斷線"),
       );
 
-      const { handleDrop } = usePodFileDrop({ disabled: () => false });
+      const { handleDrop } = usePodFileDrop(createOptions());
       await handleDrop(TEST_POD_ID, [createFile("ok.txt", 100)]);
 
       expect(mockToast).toHaveBeenCalledWith(
@@ -435,6 +443,7 @@ describe("usePodFileDrop", () => {
       mockUploadFile.mockImplementationOnce(
         (
           _file: File,
+          _canvasId: string,
           _sessionId: string,
           onProgress: (e: { loaded: number }) => void,
         ) => {
@@ -447,7 +456,7 @@ describe("usePodFileDrop", () => {
         },
       );
 
-      const { handleDrop } = usePodFileDrop({ disabled: () => false });
+      const { handleDrop } = usePodFileDrop(createOptions());
       await handleDrop(TEST_POD_ID, [createFile("progress.txt", 100)]);
 
       expect(mockUpdateFileProgress).toHaveBeenCalledWith(
@@ -464,30 +473,27 @@ describe("usePodFileDrop", () => {
 
   describe("isDragOver 狀態", () => {
     it("初始 isDragOver 應為 false", () => {
-      const { isDragOver } = usePodFileDrop({ disabled: () => false });
+      const { isDragOver } = usePodFileDrop(createOptions());
       expect(isDragOver.value).toBe(false);
     });
 
     it("handleDragEnter 後 isDragOver 應變為 true", () => {
-      const { isDragOver, handleDragEnter } = usePodFileDrop({
-        disabled: () => false,
-      });
+      const { isDragOver, handleDragEnter } = usePodFileDrop(createOptions());
       handleDragEnter(createDragEvent("dragenter"));
       expect(isDragOver.value).toBe(true);
     });
 
     it("disabled=true 時 dragenter 不應設定 isDragOver", () => {
-      const { isDragOver, handleDragEnter } = usePodFileDrop({
-        disabled: () => true,
-      });
+      const { isDragOver, handleDragEnter } = usePodFileDrop(
+        createOptions(true),
+      );
       handleDragEnter(createDragEvent("dragenter"));
       expect(isDragOver.value).toBe(false);
     });
 
     it("handleDragLeave 離開容器後 isDragOver 應恢復 false", () => {
-      const { isDragOver, handleDragEnter, handleDragLeave } = usePodFileDrop({
-        disabled: () => false,
-      });
+      const { isDragOver, handleDragEnter, handleDragLeave } =
+        usePodFileDrop(createOptions());
 
       handleDragEnter(createDragEvent("dragenter"));
       expect(isDragOver.value).toBe(true);
@@ -503,9 +509,8 @@ describe("usePodFileDrop", () => {
     });
 
     it("handleDragLeave relatedTarget 在容器內時，isDragOver 不應重置（子元素抖動防護）", () => {
-      const { isDragOver, handleDragEnter, handleDragLeave } = usePodFileDrop({
-        disabled: () => false,
-      });
+      const { isDragOver, handleDragEnter, handleDragLeave } =
+        usePodFileDrop(createOptions());
 
       handleDragEnter(createDragEvent("dragenter"));
       expect(isDragOver.value).toBe(true);
@@ -532,9 +537,8 @@ describe("usePodFileDrop", () => {
         aggregateProgress: 0,
       });
 
-      const { isDragOver, handleDragEnter, handleDropEvent } = usePodFileDrop({
-        disabled: () => false,
-      });
+      const { isDragOver, handleDragEnter, handleDropEvent } =
+        usePodFileDrop(createOptions());
 
       handleDragEnter(createDragEvent("dragenter"));
       expect(isDragOver.value).toBe(true);
@@ -552,7 +556,7 @@ describe("usePodFileDrop", () => {
 
   describe("handleDragOver 行為", () => {
     it("disabled=false 時，handleDragOver 應將 dropEffect 設為 'copy'", () => {
-      const { handleDragOver } = usePodFileDrop({ disabled: () => false });
+      const { handleDragOver } = usePodFileDrop(createOptions());
       const event = createDragEvent("dragover");
       const mockDataTransfer = { dropEffect: "none" as string };
       Object.defineProperty(event, "dataTransfer", {
@@ -566,9 +570,9 @@ describe("usePodFileDrop", () => {
     });
 
     it("disabled=true 時，handleDragOver 不拋例外，isDragOver 不改變", () => {
-      const { isDragOver, handleDragOver } = usePodFileDrop({
-        disabled: () => true,
-      });
+      const { isDragOver, handleDragOver } = usePodFileDrop(
+        createOptions(true),
+      );
       const event = createDragEvent("dragover");
 
       expect(() => handleDragOver(event)).not.toThrow();
@@ -589,7 +593,7 @@ describe("usePodFileDrop", () => {
         aggregateProgress: 100,
       });
 
-      const { retryFailed } = usePodFileDrop({ disabled: () => false });
+      const { retryFailed } = usePodFileDrop(createOptions());
       await retryFailed(TEST_POD_ID);
 
       expect(mockMarkRetrying).not.toHaveBeenCalled();
@@ -607,7 +611,7 @@ describe("usePodFileDrop", () => {
         aggregateProgress: 50,
       });
 
-      const { retryFailed } = usePodFileDrop({ disabled: () => false });
+      const { retryFailed } = usePodFileDrop(createOptions());
       await retryFailed(TEST_POD_ID);
 
       // 應只重試失敗的 entry
@@ -631,7 +635,7 @@ describe("usePodFileDrop", () => {
         uploadSessionId: "session-retry",
       });
 
-      const { retryFailed } = usePodFileDrop({ disabled: () => false });
+      const { retryFailed } = usePodFileDrop(createOptions());
       await retryFailed(TEST_POD_ID);
 
       expect(mockSendMessageWithUploadSession).toHaveBeenCalledWith(
@@ -659,7 +663,7 @@ describe("usePodFileDrop", () => {
         uploadSessionId: "session-retry",
       });
 
-      const { retryFailed } = usePodFileDrop({ disabled: () => false });
+      const { retryFailed } = usePodFileDrop(createOptions());
       await retryFailed(TEST_POD_ID);
 
       expect(mockSendMessageWithUploadSession).not.toHaveBeenCalled();
@@ -681,6 +685,7 @@ describe("usePodFileDrop", () => {
       mockUploadFile.mockImplementationOnce(
         (
           _file: File,
+          _canvasId: string,
           _sessionId: string,
           onProgress: (e: { loaded: number }) => void,
         ) => {
@@ -698,7 +703,7 @@ describe("usePodFileDrop", () => {
         uploadSessionId: "session-retry",
       });
 
-      const { retryFailed } = usePodFileDrop({ disabled: () => false });
+      const { retryFailed } = usePodFileDrop(createOptions());
       await retryFailed(TEST_POD_ID);
 
       // 重試流程只對失敗檔案呼叫 updateFileProgress
@@ -755,8 +760,8 @@ describe("usePodFileDrop", () => {
         .mockReturnValueOnce({ ok: true, uploadSessionId: "session-A" })
         .mockReturnValueOnce({ ok: true, uploadSessionId: "session-B" });
 
-      const composableA = usePodFileDrop({ disabled: () => false });
-      const composableB = usePodFileDrop({ disabled: () => false });
+      const composableA = usePodFileDrop(createOptions());
+      const composableB = usePodFileDrop(createOptions());
 
       // 同時啟動兩個 Pod 的上傳
       await Promise.all([

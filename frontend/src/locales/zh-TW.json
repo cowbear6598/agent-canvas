@@ -302,6 +302,7 @@
   },
   "layout": {
     "header": {
+      "canvasList": "Canvas 清單",
       "globalSettings": "全域設定",
       "integrations": "整合服務管理",
       "history": "歷程"
@@ -770,5 +771,58 @@
     "loadFailed": "載入失敗",
     "saveFailed": "儲存失敗",
     "saveSuccess": "儲存成功"
+  },
+  "security": {
+    "transportWarning": {
+      "title": "未加密的 LAN 傳輸",
+      "description": "密碼門禁仍然有效，但這個網路上的流量沒有加密。"
+    },
+    "workspace": {
+      "settingsTitle": "工作區安全",
+      "statusProtected": "這個工作區目前需要共用密碼才能進入。",
+      "statusOpen": "目前尚未設定工作區密碼。",
+      "currentPassword": "目前工作區密碼",
+      "newPassword": "新的工作區密碼",
+      "password": "工作區密碼",
+      "setPassword": "設定密碼",
+      "changePassword": "更改密碼",
+      "removePassword": "移除密碼",
+      "saved": "工作區密碼已儲存",
+      "updated": "工作區密碼已更新",
+      "removed": "工作區密碼已移除",
+      "unlockTitle": "工作區已受保護",
+      "unlockDescription": "請輸入工作區密碼以繼續。",
+      "unlockAction": "解鎖",
+      "reconnecting": "重新連線中..."
+    },
+    "canvas": {
+      "settingsTitle": "Canvas 安全",
+      "noSelection": "尚未選取 Canvas",
+      "statusProtected": "這張 Canvas 目前需要自己的密碼。",
+      "statusOpen": "這張 Canvas 目前對所有已解鎖工作區的人開放。",
+      "currentPassword": "目前 Canvas 密碼",
+      "newPassword": "新的 Canvas 密碼",
+      "password": "Canvas 密碼",
+      "setPassword": "設定密碼",
+      "changePassword": "更改密碼",
+      "removePassword": "移除密碼",
+      "saved": "Canvas 密碼已儲存",
+      "updated": "Canvas 密碼已更新",
+      "removed": "Canvas 密碼已移除",
+      "unlockTitle": "解鎖 Canvas",
+      "unlockDescription": "請輸入 {name} 的密碼",
+      "unlockAction": "解鎖",
+      "lockedState": {
+        "badge": "Canvas 存取已鎖定",
+        "title": "目前看得到的 Canvas 全都需要密碼。",
+        "description": "先解鎖任一張 Canvas，工作區才會重新掛上畫布、快捷鍵、游標同步與右鍵操作。",
+        "hint": "在至少解鎖一張受保護的 Canvas 之前，所有畫布互動都會暫停。",
+        "openSidebar": "打開 Canvas 清單",
+        "listTitle": "受保護的 Canvas",
+        "listDescription": "目前有 {count} 張 Canvas 正在等待解鎖。",
+        "itemHint": "輸入這張 Canvas 的密碼後即可恢復畫布。",
+        "unlockAction": "解鎖"
+      }
+    }
   }
 }

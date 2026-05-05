@@ -4,6 +4,7 @@ export interface CanvasDto {
 	id: string;
 	name: string;
 	sortIndex: number;
+	isProtected: boolean;
 }
 
 export function toCanvasDto(canvas: Canvas): CanvasDto {
@@ -11,5 +12,6 @@ export function toCanvasDto(canvas: Canvas): CanvasDto {
 		id: canvas.id,
 		name: canvas.name,
 		sortIndex: canvas.sortIndex,
+		isProtected: canvas.isProtected,
 	};
 }

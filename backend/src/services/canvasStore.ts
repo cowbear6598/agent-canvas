@@ -11,6 +11,8 @@ interface CanvasRow {
   id: string;
   name: string;
   sort_index: number;
+  password_hash: string | null;
+  password_version: number;
 }
 
 function rowToCanvas(row: CanvasRow): Canvas {
@@ -18,6 +20,8 @@ function rowToCanvas(row: CanvasRow): Canvas {
     id: row.id,
     name: row.name,
     sortIndex: row.sort_index,
+    isProtected: row.password_hash !== null,
+    passwordVersion: row.password_version,
   };
 }
 
@@ -103,7 +107,13 @@ class CanvasStore {
       $sortIndex: sortIndex,
     });
 
-    const canvas: Canvas = { id, name: trimmedName, sortIndex };
+    const canvas: Canvas = {
+      id,
+      name: trimmedName,
+      sortIndex,
+      isProtected: false,
+      passwordVersion: 0,
+    };
     logger.log("Canvas", "Create", `已建立畫布：${trimmedName}`);
 
     return ok(canvas);
@@ -228,6 +238,53 @@ class CanvasStore {
 
   removeSocket(socketId: string): void {
     this.activeCanvasMap.delete(socketId);
+  }
+
+  getPasswordInfo(
+    canvasId: string,
+  ): { passwordHash: string | null; passwordVersion: number } | undefined {
+    const row = this.stmts.canvas.selectById.get(canvasId) as
+      | CanvasRow
+      | undefined;
+
+    if (!row) {
+      return undefined;
+    }
+
+    return {
+      passwordHash: row.password_hash,
+      passwordVersion: row.password_version,
+    };
+  }
+
+  setPasswordHash(
+    canvasId: string,
+    passwordHash: string,
+    passwordVersion: number,
+  ): Canvas | undefined {
+    this.stmts.canvas.updatePassword.run({
+      $id: canvasId,
+      $passwordHash: passwordHash,
+      $passwordVersion: passwordVersion,
+    });
+
+    return this.getById(canvasId);
+  }
+
+  clearPasswordHash(
+    canvasId: string,
+    passwordVersion: number,
+  ): Canvas | undefined {
+    this.stmts.canvas.clearPassword.run({
+      $id: canvasId,
+      $passwordVersion: passwordVersion,
+    });
+
+    return this.getById(canvasId);
+  }
+
+  getPasswordVersion(canvasId: string): number | undefined {
+    return this.getPasswordInfo(canvasId)?.passwordVersion;
   }
 }
 

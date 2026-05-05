@@ -4,7 +4,9 @@ import { useChatStore } from '@/stores/chat'
 
 const chatStore = useChatStore()
 
-const connectionStatus = computed(() => chatStore.connectionStatus)
+const connectionStatus = computed(() =>
+  chatStore.isSilentReconnectInProgress ? 'connecting' : chatStore.connectionStatus
+)
 const disconnectReason = computed(() => chatStore.getDisconnectReason)
 
 const statusConfig = computed(() => {

@@ -57,6 +57,7 @@ const {
   commandStore,
   connectionStore,
   chatStore,
+  canvasStore,
 } = useCanvasContext();
 const runStore = useRunStore();
 const uploadStore = useUploadStore();
@@ -223,6 +224,7 @@ const {
   handleDropEvent,
 } = usePodFileDrop({
   disabled: () => isFileDropDisabled.value,
+  getCanvasId: () => canvasStore.activeCanvasId,
 });
 
 /**

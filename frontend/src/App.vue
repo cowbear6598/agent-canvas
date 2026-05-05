@@ -30,6 +30,10 @@ import { getAllProviders } from "@/integration/providerRegistry";
 import { useRunStore } from "@/stores/run/runStore";
 import { useConfigStore } from "@/stores/configStore";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
+import { useSecurityStore } from "@/stores/securityStore";
+import WorkspaceUnlockView from "@/components/security/WorkspaceUnlockView.vue";
+import CanvasUnlockDialog from "@/components/security/CanvasUnlockDialog.vue";
+import LockedCanvasView from "@/components/security/LockedCanvasView.vue";
 
 const {
   podStore,
@@ -45,6 +49,7 @@ const integrationStore = useIntegrationStore();
 const runStore = useRunStore();
 const configStore = useConfigStore();
 const providerCapabilityStore = useProviderCapabilityStore();
+const securityStore = useSecurityStore();
 
 const cursorStore = useCursorStore();
 
@@ -74,6 +79,22 @@ const { registerUnifiedListeners, unregisterUnifiedListeners } =
 const isInitialized = ref(false);
 const isLoading = ref(false);
 let loadingAbortController: AbortController | null = null;
+
+const showLockedCanvasView = computed(() => {
+  if (
+    !isInitialized.value ||
+    securityStore.isBootstrapping ||
+    securityStore.requiresWorkspaceUnlock ||
+    canvasStore.activeCanvasId ||
+    canvasStore.canvases.length === 0
+  ) {
+    return false;
+  }
+
+  return !canvasStore.canvases.some((canvas) =>
+    securityStore.isCanvasAccessible(canvas.id),
+  );
+});
 
 const loadCanvasData = async (): Promise<void> => {
   await podStore.loadPodsFromBackend();
@@ -177,8 +198,23 @@ const checkAbortedAndCleanup = (controller: AbortController): boolean => {
   return true;
 };
 
+const resetCanvasScopedState = (): void => {
+  cursorStore.clearAllCursors();
+  runStore.resetOnCanvasSwitch();
+  podStore.resetForCanvasSwitch();
+  connectionStore.resetForCanvasSwitch();
+  repositoryStore.resetForCanvasSwitch();
+  commandStore.resetForCanvasSwitch();
+  chatStore.resetForCanvasSwitch();
+};
+
 const loadAppData = async (): Promise<void> => {
-  if (isInitialized.value || isLoading.value) {
+  if (
+    isInitialized.value ||
+    isLoading.value ||
+    securityStore.requiresWorkspaceUnlock ||
+    securityStore.isBootstrapping
+  ) {
     return;
   }
 
@@ -200,6 +236,7 @@ const loadAppData = async (): Promise<void> => {
 
   logger.log("[App] Loading canvases...");
   await canvasStore.loadCanvases();
+  await providerCapabilityStore.loadFromBackend();
 
   if (checkAbortedAndCleanup(currentAbortController)) return;
 
@@ -219,8 +256,12 @@ const loadAppData = async (): Promise<void> => {
   if (checkAbortedAndCleanup(currentAbortController)) return;
 
   if (!canvasStore.activeCanvasId) {
-    logger.error("[App] No active canvas after initialization");
-    logger.error("[App] Available canvases:", canvasStore.canvases);
+    await securityStore.ensureInitialCanvasSelection();
+  }
+
+  if (!canvasStore.activeCanvasId) {
+    isInitialized.value = true;
+    logger.log("[App] No accessible canvas selected after initialization");
     if (currentAbortController === loadingAbortController) {
       isLoading.value = false;
       loadingAbortController = null;
@@ -263,9 +304,7 @@ watch(
     if (connected) {
       chatStore.unregisterListeners();
       chatStore.registerListeners();
-
-      // 連線就緒後（含 reconnect）立即拉一次 provider capabilities
-      providerCapabilityStore.loadFromBackend();
+      securityStore.registerSocketListeners();
     }
   },
   { flush: "sync" },
@@ -274,12 +313,13 @@ watch(
 watch(
   () => chatStore.connectionStatus,
   (newStatus) => {
-    if (
-      newStatus === "connected" &&
-      !chatStore.allHistoryLoaded &&
-      !isInitialized.value
-    ) {
-      loadAppData();
+    if (newStatus === "connected" && !chatStore.allHistoryLoaded) {
+      void (async (): Promise<void> => {
+        await securityStore.bootstrapAccess();
+        if (!securityStore.requiresWorkspaceUnlock && !isInitialized.value) {
+          await loadAppData();
+        }
+      })();
     }
 
     if (newStatus === "disconnected") {
@@ -308,18 +348,15 @@ watch(
 watch(
   () => canvasStore.activeCanvasId,
   async (newCanvasId, oldCanvasId) => {
-    if (!newCanvasId || newCanvasId === oldCanvasId || !isInitialized.value) {
+    if (newCanvasId === oldCanvasId || !isInitialized.value) {
       return;
     }
 
-    cursorStore.clearAllCursors();
-    runStore.resetOnCanvasSwitch();
+    resetCanvasScopedState();
 
-    podStore.resetForCanvasSwitch();
-    connectionStore.resetForCanvasSwitch();
-    repositoryStore.resetForCanvasSwitch();
-    commandStore.resetForCanvasSwitch();
-    chatStore.resetForCanvasSwitch();
+    if (!newCanvasId) {
+      return;
+    }
 
     await loadCanvasData();
   },
@@ -336,6 +373,7 @@ onUnmounted(() => {
   }
 
   chatStore.disconnectWebSocket();
+  securityStore.unregisterSocketListeners();
   websocketClient.off<PodStatusChangedPayload>(
     WebSocketResponseEvents.POD_STATUS_CHANGED,
     handlePodStatusChanged,
@@ -350,7 +388,21 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="h-screen bg-background overflow-hidden flex flex-col">
+  <WorkspaceUnlockView v-if="securityStore.shouldShowWorkspaceUnlock" />
+
+  <div
+    v-else-if="securityStore.isBootstrapping"
+    class="flex min-h-screen items-center justify-center bg-background"
+  >
+    <div class="text-sm text-muted-foreground">
+      Loading workspace...
+    </div>
+  </div>
+
+  <div
+    v-else
+    class="h-screen bg-background overflow-hidden flex flex-col"
+  >
     <AppHeader />
 
     <CanvasSidebar
@@ -363,8 +415,9 @@ onUnmounted(() => {
       @update:open="runStore.isHistoryPanelOpen = $event"
     />
 
-    <main class="flex-1 relative">
-      <CanvasContainer />
+    <main class="flex-1 relative overflow-hidden">
+      <LockedCanvasView v-if="showLockedCanvasView" />
+      <CanvasContainer v-else />
     </main>
 
     <ChatModal
@@ -385,5 +438,6 @@ onUnmounted(() => {
     <Toast />
 
     <DisconnectOverlay />
+    <CanvasUnlockDialog />
   </div>
 </template>

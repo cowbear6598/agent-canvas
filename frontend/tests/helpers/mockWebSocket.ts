@@ -2,7 +2,12 @@ import { vi } from "vitest";
 import { ref } from "vue";
 
 type EventCallback = (payload: unknown) => void;
-type DisconnectCallback = (reason: string) => void;
+interface MockDisconnectEvent {
+  reason: string;
+  silent?: boolean;
+  willReconnect?: boolean;
+}
+type DisconnectCallback = (event: MockDisconnectEvent) => void;
 
 interface EventListeners {
   callbacks: Set<EventCallback>;
@@ -18,6 +23,7 @@ export const mockWebSocketClient = {
   disconnect: vi.fn(),
   startReconnect: vi.fn(),
   forceReconnect: vi.fn(),
+  forceReconnectWithGrant: vi.fn(),
   emit: vi.fn(),
   on: vi.fn((event: string, callback: EventCallback) => {
     if (!eventListeners.has(event)) {
@@ -65,12 +71,17 @@ export function simulateEvent(eventName: string, payload: unknown): void {
 /**
  * 模擬觸發斷線事件
  */
-export function simulateDisconnect(reason: string): void {
+export function simulateDisconnect(
+  event: string | MockDisconnectEvent,
+): void {
+  const disconnectEvent =
+    typeof event === "string" ? { reason: event } : event;
+
   mockWebSocketClient.isConnected.value = false;
-  mockWebSocketClient.disconnectReason.value = reason;
+  mockWebSocketClient.disconnectReason.value = disconnectEvent.reason;
 
   disconnectListeners.forEach((callback) => {
-    callback(reason);
+    callback(disconnectEvent);
   });
 }
 
@@ -84,6 +95,7 @@ export function resetMockWebSocket(): void {
   mockWebSocketClient.disconnect.mockClear();
   mockWebSocketClient.startReconnect.mockClear();
   mockWebSocketClient.forceReconnect.mockClear();
+  mockWebSocketClient.forceReconnectWithGrant.mockClear();
   mockWebSocketClient.emit.mockClear();
   mockWebSocketClient.on.mockClear();
   mockWebSocketClient.off.mockClear();

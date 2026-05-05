@@ -1,5 +1,6 @@
 import type { WebSocketMessage } from '../types/websocket.js';
 import { logger } from '../utils/logger.js';
+import { authGuard } from './auth/authGuard.js';
 
 /**
  * 事件處理器類型
@@ -31,6 +32,7 @@ class EventRouter {
 			throw new Error(`未知的事件類型：${message.type}`);
 		}
 
+		authGuard.assertAccess(connectionId, message.type, message.payload);
 		await handler(connectionId, message.payload, message.requestId);
 	}
 }

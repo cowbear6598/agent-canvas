@@ -1,10 +1,11 @@
 import type { Server, ServerWebSocket } from 'bun';
 import { overrideConfig, testConfig } from './testConfig.js';
+import type { ConnectionSocketData } from '../../src/types/websocket.js';
 
 // 注意：不要在頂層 import 使用 config 的模組，這些模組需要在 overrideConfig() 之後動態 import
 
 export interface TestServerInstance {
-  server: Server<{ connectionId: string }>;
+  server: Server<ConnectionSocketData>;
   baseUrl: string;
   wsUrl: string;
   port: number;
@@ -32,6 +33,7 @@ export async function createTestServer(): Promise<TestServerInstance> {
   const { handleIntegrationWebhook } = await import('../../src/services/integration/integrationWebhookRouter.js');
   const { logger } = await import('../../src/utils/logger.js');
   const { WebSocketResponseEvents } = await import('../../src/schemas/index.js');
+  const { handshakeAuthService } = await import('../../src/services/auth/handshakeAuthService.js');
 
   const result = await startupService.initialize();
   if (!result.success) {
@@ -49,7 +51,7 @@ export async function createTestServer(): Promise<TestServerInstance> {
   socketService.initialize();
   registerAllHandlers();
 
-  const server = Bun.serve<{ connectionId: string }>({
+  const server = Bun.serve<ConnectionSocketData>({
     port: 0,
     hostname: '0.0.0.0',
     async fetch(req, server) {
@@ -72,23 +74,21 @@ export async function createTestServer(): Promise<TestServerInstance> {
         return apiResponse;
       }
 
-      const success = server.upgrade(req, {
-        data: { connectionId: '' },
-      });
+      const success = server.upgrade(req, handshakeAuthService.resolveUpgrade(req));
       if (success) return undefined;
 
       return new Response('Not Found', { status: 404 });
     },
     websocket: {
-      open(ws: ServerWebSocket<{ connectionId: string }>) {
+      open(ws: ServerWebSocket<ConnectionSocketData>) {
         const connectionId = connectionManager.add(ws);
-        ws.data = { connectionId };
+        ws.data = { ...ws.data, connectionId };
 
         socketService.emitConnectionReady(connectionId, { socketId: connectionId });
 
         logger.log('Connection', 'Create', `New connection: ${connectionId}`);
       },
-      message(ws: ServerWebSocket<{ connectionId: string }>, message: string | Buffer) {
+      message(ws: ServerWebSocket<ConnectionSocketData>, message: string | Buffer) {
         const connectionId = ws.data.connectionId;
 
         try {
@@ -123,7 +123,7 @@ export async function createTestServer(): Promise<TestServerInstance> {
           });
         }
       },
-      close(ws: ServerWebSocket<{ connectionId: string }>) {
+      close(ws: ServerWebSocket<ConnectionSocketData>) {
         const connectionId = ws.data.connectionId;
 
         // 必須在 cleanupSocket 前執行，否則 room 資訊已被清除

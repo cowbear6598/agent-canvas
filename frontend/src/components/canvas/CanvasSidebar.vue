@@ -102,12 +102,25 @@
               </div>
               <span
                 v-else
-                class="flex-1 text-sm"
-              >{{ canvas.name }}</span>
+                class="flex flex-1 items-center gap-2 text-sm"
+              >
+                <span>{{ canvas.name }}</span>
+                <Lock
+                  v-if="canvas.isProtected && !securityStore.isCanvasUnlocked(canvas.id)"
+                  class="h-3.5 w-3.5 text-muted-foreground"
+                />
+              </span>
 
               <div
                 class="flex items-center gap-1 opacity-0 group-hover:opacity-100"
               >
+                <button
+                  class="rounded-md p-1 hover:bg-accent-foreground/10"
+                  :title="$t('security.canvas.settingsTitle')"
+                  @click.stop="openCanvasSecurity(canvas.id)"
+                >
+                  <Lock class="h-4 w-4" />
+                </button>
                 <button
                   class="rounded-md p-1 hover:bg-accent-foreground/10"
                   @click.stop="startRename(canvas.id, canvas.name)"
@@ -162,12 +175,18 @@
       </DialogFooter>
     </DialogContent>
   </Dialog>
+
+  <CanvasSecurityModal
+    v-model:open="showCanvasSecurityModal"
+    :canvas-id="securityTargetCanvasId"
+  />
 </template>
 
 <script setup lang="ts">
 import { ref, watch, nextTick, onUnmounted } from "vue";
-import { X, Plus, Pencil, Trash2 } from "lucide-vue-next";
+import { X, Plus, Pencil, Trash2, Lock } from "lucide-vue-next";
 import { useCanvasStore } from "@/stores/canvasStore";
+import { useSecurityStore } from "@/stores/securityStore";
 import {
   Dialog,
   DialogContent,
@@ -178,6 +197,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import CanvasSecurityModal from "@/components/settings/CanvasSecurityModal.vue";
 import { useCanvasDragReorder } from "@/composables/canvas/useCanvasDragReorder";
 
 interface Props {
@@ -192,6 +212,7 @@ const props = defineProps<Props>();
 const emit = defineEmits<Emits>();
 
 const canvasStore = useCanvasStore();
+const securityStore = useSecurityStore();
 
 const sidebarRef = ref<HTMLElement | undefined>(undefined);
 const isCreating = ref(false);
@@ -207,6 +228,8 @@ const renameInputRef = ref<HTMLInputElement | HTMLInputElement[] | undefined>(
 const showDeleteDialog = ref(false);
 const deleteTargetId = ref<string | null>(null);
 const deleteTargetName = ref("");
+const showCanvasSecurityModal = ref(false);
+const securityTargetCanvasId = ref<string | null>(null);
 
 const {
   draggedIndex,
@@ -223,6 +246,11 @@ const {
 
 const handleClose = (): void => {
   emit("update:open", false);
+};
+
+const openCanvasSecurity = (canvasId: string): void => {
+  securityTargetCanvasId.value = canvasId;
+  showCanvasSecurityModal.value = true;
 };
 
 const startCreate = (): void => {
@@ -289,7 +317,7 @@ const confirmDelete = (): void => {
 const handleSwitchCanvas = (canvasId: string): void => {
   if (renamingCanvasId.value || isCreating.value) return;
 
-  canvasStore.switchCanvas(canvasId);
+  void securityStore.requestCanvasAccess(canvasId);
   emit("update:open", false);
 };
 
@@ -347,6 +375,12 @@ watch(
     }
   },
 );
+
+watch(showCanvasSecurityModal, (isOpen) => {
+  if (!isOpen) {
+    securityTargetCanvasId.value = null;
+  }
+});
 
 onUnmounted(() => {
   removeDocumentListeners();

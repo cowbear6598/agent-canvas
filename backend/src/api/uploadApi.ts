@@ -17,6 +17,9 @@ import {
 } from "../types/errorCodes.js";
 import { HTTP_STATUS } from "../constants.js";
 import { logger } from "../utils/logger.js";
+import { handshakeAuthService } from "../services/auth/handshakeAuthService.js";
+import { authAccessService } from "../services/auth/authAccessService.js";
+import { canvasStore } from "../services/canvasStore.js";
 
 /**
  * POST /api/upload
@@ -43,6 +46,47 @@ export async function handleUpload(req: Request): Promise<Response> {
         message: "無法解析上傳表單，請確認請求格式為 multipart/form-data",
       },
       HTTP_STATUS.BAD_REQUEST,
+    );
+  }
+
+  // 取得 uploadSessionId 欄位
+  const canvasId = formData.get("canvasId");
+  if (canvasId === null || canvasId === "") {
+    return jsonResponse(
+      {
+        errorCode: ERROR_CODE_UPLOAD_INVALID_SESSION_ID,
+        message: "缺少 canvasId 欄位",
+      },
+      HTTP_STATUS.BAD_REQUEST,
+    );
+  }
+  if (typeof canvasId !== "string") {
+    return jsonResponse(
+      {
+        errorCode: ERROR_CODE_UPLOAD_INVALID_SESSION_ID,
+        message: "canvasId 格式無效",
+      },
+      HTTP_STATUS.BAD_REQUEST,
+    );
+  }
+  if (!canvasStore.getById(canvasId)) {
+    return jsonResponse(
+      {
+        errorCode: ERROR_CODE_UPLOAD_INVALID_SESSION_ID,
+        message: "canvasId 不存在",
+      },
+      HTTP_STATUS.BAD_REQUEST,
+    );
+  }
+
+  const sessionId = handshakeAuthService.resolveRequestSessionId(req);
+  if (!authAccessService.isCanvasAccessible(sessionId, canvasId)) {
+    return jsonResponse(
+      {
+        errorCode: ERROR_CODE_UPLOAD_INVALID_SESSION_ID,
+        message: "Canvas password required",
+      },
+      HTTP_STATUS.FORBIDDEN,
     );
   }
 

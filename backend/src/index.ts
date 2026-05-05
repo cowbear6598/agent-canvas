@@ -24,12 +24,15 @@ import { podStore } from "./services/podStore.js";
 import { abortRegistry } from "./services/provider/abortRegistry.js";
 import { runStore } from "./services/runStore.js";
 import { runExecutionService } from "./services/workflow/runExecutionService.js";
+import { handshakeAuthService } from "./services/auth/handshakeAuthService.js";
+import type { ConnectionSocketData } from "./types/websocket.js";
 
 function handleWebSocketUpgrade(
   req: Request,
-  server: Server<{ connectionId: string }>,
+  server: Server<ConnectionSocketData>,
 ): Response | undefined {
-  const success = server.upgrade(req, { data: { connectionId: "" } });
+  const upgradeAuth = handshakeAuthService.resolveUpgrade(req);
+  const success = server.upgrade(req, upgradeAuth);
   if (success) return undefined;
   return new Response("WebSocket 升級失敗", { status: 400 });
 }
@@ -70,7 +73,7 @@ async function startServer(): Promise<void> {
   const enableStaticFiles =
     config.nodeEnv === "production" && (await isStaticFilesAvailable());
 
-  Bun.serve<{ connectionId: string }>({
+  Bun.serve<ConnectionSocketData>({
     port: PORT,
     hostname: "0.0.0.0",
     async fetch(req, server) {
@@ -123,16 +126,16 @@ async function startServer(): Promise<void> {
       return new Response("Not Found", { status: 404 });
     },
     websocket: {
-      open(webSocket: ServerWebSocket<{ connectionId: string }>) {
+      open(webSocket: ServerWebSocket<ConnectionSocketData>) {
         const connectionId = connectionManager.add(webSocket);
-        webSocket.data = { connectionId };
+        webSocket.data = { ...webSocket.data, connectionId };
 
         socketService.emitConnectionReady(connectionId, {
           socketId: connectionId,
         });
       },
       message(
-        webSocket: ServerWebSocket<{ connectionId: string }>,
+        webSocket: ServerWebSocket<ConnectionSocketData>,
         message: string | Buffer,
       ) {
         const connectionId = webSocket.data.connectionId;
@@ -178,7 +181,7 @@ async function startServer(): Promise<void> {
           });
         });
       },
-      close(webSocket: ServerWebSocket<{ connectionId: string }>) {
+      close(webSocket: ServerWebSocket<ConnectionSocketData>) {
         const connectionId = webSocket.data.connectionId;
 
         // 廣播游標離開事件（必須在 cleanupSocket 前執行，否則 room 資訊已被清除）

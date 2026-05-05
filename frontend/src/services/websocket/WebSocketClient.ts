@@ -9,6 +9,16 @@ const RECONNECT_INTERVAL_MS = 3000;
 
 type EventHandler = (payload: unknown) => void;
 
+export interface WebSocketDisconnectEvent {
+  reason: string;
+  silent?: boolean;
+  willReconnect?: boolean;
+}
+
+interface CleanupSocketOptions {
+  disconnectEvent?: WebSocketDisconnectEvent;
+}
+
 // EventCallback<T> 與 EventHandler 在 runtime 完全相同（都是接收單一參數的函式）。
 // 泛型 T 只在編譯期存在，不影響實際函式簽名，因此此轉換在 runtime 是安全的。
 function castToEventHandler<T>(callback: EventCallback<T>): EventHandler {
@@ -19,8 +29,11 @@ class WebSocketClient {
   private socket: WebSocket | null = null;
   private reconnectTimer: ReturnType<typeof setInterval> | null = null;
   private wsUrl: string = "";
+  private pendingWorkspaceReconnectGrant: string | null = null;
   private eventListeners: Map<string, Set<EventHandler>> = new Map();
-  private disconnectListeners: Set<(reason: string) => void> = new Set();
+  private disconnectListeners: Set<
+    (event: WebSocketDisconnectEvent) => void
+  > = new Set();
   private visibilityChangeHandler: (() => void) | null = null;
   private visibilityListenerRegistered = false;
 
@@ -41,9 +54,7 @@ class WebSocketClient {
     this.wsUrl =
       url ?? import.meta.env.VITE_WS_URL ?? this.resolveDefaultWebSocketUrl();
 
-    const wsProtocol = this.wsUrl.replace(/^http/, "ws");
-
-    this.socket = new WebSocket(wsProtocol);
+    this.socket = new WebSocket(this.createSocketUrl());
     this.setupSocketHandlers(this.socket);
   }
 
@@ -62,17 +73,40 @@ class WebSocketClient {
     this.teardownVisibilityChangeListener();
     this.stopReconnect();
     this.cleanupSocket();
+    this.pendingWorkspaceReconnectGrant = null;
   }
 
   // 強制重連：關閉舊 socket 並啟動重連，但不拆除 visibility listener
   forceReconnect(): void {
-    this.cleanupSocket();
+    this.cleanupSocket({
+      disconnectEvent: {
+        reason: "1000",
+        silent: true,
+        willReconnect: true,
+      },
+    });
     this.startReconnect();
   }
 
-  private cleanupSocket(): void {
+  forceReconnectWithGrant(grant: string): void {
+    this.pendingWorkspaceReconnectGrant = grant;
+    this.forceReconnect();
+  }
+
+  private notifyDisconnect(event: WebSocketDisconnectEvent): void {
+    this.disconnectReason.value = event.reason;
+    this.disconnectListeners.forEach((callback) => {
+      callback(event);
+    });
+  }
+
+  private cleanupSocket(options?: CleanupSocketOptions): void {
     if (!this.socket) {
       return;
+    }
+
+    if (options?.disconnectEvent && this.isConnected.value) {
+      this.notifyDisconnect(options.disconnectEvent);
     }
 
     this.socket.onopen = null;
@@ -153,10 +187,25 @@ class WebSocketClient {
 
   private reconnectOnce(): void {
     this.cleanupSocket();
-
-    const wsProtocol = this.wsUrl.replace(/^http/, "ws");
-    this.socket = new WebSocket(wsProtocol);
+    this.socket = new WebSocket(this.createSocketUrl());
     this.setupSocketHandlers(this.socket);
+  }
+
+  private createSocketUrl(): string {
+    const wsProtocol = this.wsUrl.replace(/^http/, "ws");
+    const url = new URL(wsProtocol);
+
+    if (this.pendingWorkspaceReconnectGrant) {
+      url.searchParams.set(
+        "workspaceReconnectGrant",
+        this.pendingWorkspaceReconnectGrant,
+      );
+    }
+
+    const pathname = url.pathname === "/" ? "" : url.pathname;
+    const search = url.searchParams.toString();
+
+    return `${url.protocol}//${url.host}${pathname}${search ? `?${search}` : ""}`;
   }
 
   private handleOpen(): void {
@@ -164,16 +213,18 @@ class WebSocketClient {
     this.stopReconnect();
     this.disconnectReason.value = null;
     this.isConnected.value = true;
+    this.pendingWorkspaceReconnectGrant = null;
   }
 
   private handleClose(event: CloseEvent): void {
     logger.log("[WebSocket] 連線關閉:", event.code, event.reason);
-    this.isConnected.value = false;
-    this.disconnectReason.value = String(event.code);
+    const disconnectEvent: WebSocketDisconnectEvent = {
+      reason: String(event.code),
+      willReconnect: true,
+    };
 
-    this.disconnectListeners.forEach((callback) => {
-      callback(String(event.code));
-    });
+    this.isConnected.value = false;
+    this.notifyDisconnect(disconnectEvent);
 
     this.startReconnect();
   }
@@ -262,11 +313,11 @@ class WebSocketClient {
     this.eventListeners.delete(event);
   }
 
-  onDisconnect(callback: (reason: string) => void): void {
+  onDisconnect(callback: (event: WebSocketDisconnectEvent) => void): void {
     this.disconnectListeners.add(callback);
   }
 
-  offDisconnect(callback: (reason: string) => void): void {
+  offDisconnect(callback: (event: WebSocketDisconnectEvent) => void): void {
     this.disconnectListeners.delete(callback);
   }
 }

@@ -23,11 +23,14 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2 } from "lucide-vue-next";
 import { getConfig, updateConfig } from "@/services/configApi";
+import { updateWorkspacePassword } from "@/services/securityApi";
 import { triggerBackup } from "@/services/backupApi";
 import { TIMEZONE_OPTIONS } from "@/types";
 import { useToast } from "@/composables/useToast";
 import { useWebSocketErrorHandler } from "@/composables/useWebSocketErrorHandler";
 import { useConfigStore } from "@/stores/configStore";
+import { useSecurityStore } from "@/stores/securityStore";
+import WarningBox from "@/components/ui/WarningBox.vue";
 
 interface Props {
   open: boolean;
@@ -44,6 +47,7 @@ const { showSuccessToast } = useToast();
 const { withErrorToast } = useWebSocketErrorHandler();
 
 const configStore = useConfigStore();
+const securityStore = useSecurityStore();
 
 const timezoneOffset = ref<string>("8");
 const isLoading = ref<boolean>(false);
@@ -59,9 +63,27 @@ const isBackingUp = computed<boolean>(
 );
 const backupUrlError = ref<boolean>(false);
 const backupError = ref<string | null>(null);
+const workspaceCurrentPassword = ref<string>("");
+const workspaceNewPassword = ref<string>("");
+const workspaceSecurityError = ref<string | null>(null);
+const isUpdatingWorkspacePassword = ref<boolean>(false);
 
 const isBackupActionsDisabled = computed<boolean>(
   () => !backupEnabled.value || backupGitRemoteUrl.value === "",
+);
+const canSetWorkspacePassword = computed<boolean>(
+  () => !isUpdatingWorkspacePassword.value && workspaceNewPassword.value.trim() !== "",
+);
+const canRemoveWorkspacePassword = computed<boolean>(
+  () =>
+    !isUpdatingWorkspacePassword.value &&
+    workspaceCurrentPassword.value.trim() !== "",
+);
+const canChangeWorkspacePassword = computed<boolean>(
+  () =>
+    !isUpdatingWorkspacePassword.value &&
+    workspaceCurrentPassword.value.trim() !== "" &&
+    workspaceNewPassword.value.trim() !== "",
 );
 
 const hourOptions = Array.from({ length: 24 }, (_, i) =>
@@ -159,11 +181,95 @@ const handleTriggerBackup = async (): Promise<void> => {
   }
 };
 
+const resetWorkspaceSecurityForm = (): void => {
+  workspaceCurrentPassword.value = "";
+  workspaceNewPassword.value = "";
+  workspaceSecurityError.value = null;
+};
+
+const handleSetWorkspacePassword = async (): Promise<void> => {
+  if (!workspaceNewPassword.value.trim()) {
+    return;
+  }
+
+  isUpdatingWorkspacePassword.value = true;
+  workspaceSecurityError.value = null;
+
+  try {
+    const result = await updateWorkspacePassword({
+      action: "set",
+      newPassword: workspaceNewPassword.value,
+    });
+    securityStore.workspacePasswordEnabled = result.hasWorkspacePassword ?? true;
+    showSuccessToast("Workspace", t("security.workspace.saved"));
+    resetWorkspaceSecurityForm();
+  } catch (error) {
+    workspaceSecurityError.value =
+      error instanceof Error ? error.message : t("settings.saveFailed");
+  } finally {
+    isUpdatingWorkspacePassword.value = false;
+  }
+};
+
+const handleChangeWorkspacePassword = async (): Promise<void> => {
+  if (
+    !workspaceCurrentPassword.value.trim() ||
+    !workspaceNewPassword.value.trim()
+  ) {
+    return;
+  }
+
+  isUpdatingWorkspacePassword.value = true;
+  workspaceSecurityError.value = null;
+
+  try {
+    const result = await updateWorkspacePassword({
+      action: "change",
+      currentPassword: workspaceCurrentPassword.value,
+      newPassword: workspaceNewPassword.value,
+    });
+    securityStore.workspacePasswordEnabled = result.hasWorkspacePassword ?? true;
+    showSuccessToast("Workspace", t("security.workspace.updated"));
+    resetWorkspaceSecurityForm();
+  } catch (error) {
+    workspaceSecurityError.value =
+      error instanceof Error ? error.message : t("settings.saveFailed");
+  } finally {
+    isUpdatingWorkspacePassword.value = false;
+  }
+};
+
+const handleRemoveWorkspacePassword = async (): Promise<void> => {
+  if (!workspaceCurrentPassword.value.trim()) {
+    return;
+  }
+
+  isUpdatingWorkspacePassword.value = true;
+  workspaceSecurityError.value = null;
+
+  try {
+    const result = await updateWorkspacePassword({
+      action: "remove",
+      currentPassword: workspaceCurrentPassword.value,
+    });
+    securityStore.workspacePasswordEnabled =
+      result.hasWorkspacePassword ?? false;
+    showSuccessToast("Workspace", t("security.workspace.removed"));
+    resetWorkspaceSecurityForm();
+  } catch (error) {
+    workspaceSecurityError.value =
+      error instanceof Error ? error.message : t("settings.saveFailed");
+  } finally {
+    isUpdatingWorkspacePassword.value = false;
+  }
+};
+
 watch(
   () => props.open,
   (newVal) => {
     if (newVal) {
       loadConfig();
+      resetWorkspaceSecurityForm();
     }
   },
   { immediate: true },
@@ -327,6 +433,80 @@ watch(
                   time: configStore.lastBackupTime,
                 })
               }}
+            </div>
+          </div>
+
+          <div class="border-t border-border" />
+
+          <div class="space-y-3">
+            <div>
+              <Label>{{ t("security.workspace.settingsTitle") }}</Label>
+              <p class="mt-1 text-xs text-muted-foreground">
+                {{
+                  securityStore.workspacePasswordEnabled
+                    ? t("security.workspace.statusProtected")
+                    : t("security.workspace.statusOpen")
+                }}
+              </p>
+            </div>
+
+            <WarningBox
+              v-if="securityStore.showTransportRiskWarning"
+              :title="t('security.transportWarning.title')"
+              :description="t('security.transportWarning.description')"
+            />
+
+            <Input
+              v-if="securityStore.workspacePasswordEnabled"
+              v-model="workspaceCurrentPassword"
+              type="password"
+              :placeholder="t('security.workspace.currentPassword')"
+              :disabled="isUpdatingWorkspacePassword"
+            />
+            <Input
+              v-model="workspaceNewPassword"
+              type="password"
+              :placeholder="
+                securityStore.workspacePasswordEnabled
+                  ? t('security.workspace.newPassword')
+                  : t('security.workspace.password')
+              "
+              :disabled="isUpdatingWorkspacePassword"
+            />
+
+            <p
+              v-if="workspaceSecurityError"
+              class="text-xs text-destructive"
+            >
+              {{ workspaceSecurityError }}
+            </p>
+
+            <div class="flex flex-wrap gap-2">
+              <Button
+                v-if="!securityStore.workspacePasswordEnabled"
+                type="button"
+                :disabled="!canSetWorkspacePassword"
+                @click="handleSetWorkspacePassword"
+              >
+                {{ t("security.workspace.setPassword") }}
+              </Button>
+              <Button
+                v-if="securityStore.workspacePasswordEnabled"
+                type="button"
+                variant="outline"
+                :disabled="!canRemoveWorkspacePassword"
+                @click="handleRemoveWorkspacePassword"
+              >
+                {{ t("security.workspace.removePassword") }}
+              </Button>
+              <Button
+                v-if="securityStore.workspacePasswordEnabled"
+                type="button"
+                :disabled="!canChangeWorkspacePassword"
+                @click="handleChangeWorkspacePassword"
+              >
+                {{ t("security.workspace.changePassword") }}
+              </Button>
             </div>
           </div>
         </div>

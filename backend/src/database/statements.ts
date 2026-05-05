@@ -21,6 +21,8 @@ function buildStatements(db: Database): {
     selectMaxSortIndex: ReturnType<Database["prepare"]>;
     updateName: ReturnType<Database["prepare"]>;
     updateSortIndex: ReturnType<Database["prepare"]>;
+    updatePassword: ReturnType<Database["prepare"]>;
+    clearPassword: ReturnType<Database["prepare"]>;
     deleteById: ReturnType<Database["prepare"]>;
   };
   pod: {
@@ -127,6 +129,7 @@ function buildStatements(db: Database): {
     selectByKey: ReturnType<Database["prepare"]>;
     upsert: ReturnType<Database["prepare"]>;
     selectAll: ReturnType<Database["prepare"]>;
+    deleteByKey: ReturnType<Database["prepare"]>;
   };
   integrationApp: {
     insert: ReturnType<Database["prepare"]>;
@@ -185,6 +188,12 @@ function buildStatements(db: Database): {
       updateName: db.prepare("UPDATE canvases SET name = $name WHERE id = $id"),
       updateSortIndex: db.prepare(
         "UPDATE canvases SET sort_index = $sortIndex WHERE id = $id",
+      ),
+      updatePassword: db.prepare(
+        "UPDATE canvases SET password_hash = $passwordHash, password_version = $passwordVersion WHERE id = $id",
+      ),
+      clearPassword: db.prepare(
+        "UPDATE canvases SET password_hash = NULL, password_version = $passwordVersion WHERE id = $id",
       ),
       deleteById: db.prepare("DELETE FROM canvases WHERE id = ?"),
     },
@@ -507,6 +516,7 @@ function buildStatements(db: Database): {
         "INSERT OR REPLACE INTO global_settings (key, value) VALUES ($key, $value)",
       ),
       selectAll: db.prepare("SELECT * FROM global_settings"),
+      deleteByKey: db.prepare("DELETE FROM global_settings WHERE key = ?"),
     },
 
     integrationApp: {

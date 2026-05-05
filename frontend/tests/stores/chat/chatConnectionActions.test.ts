@@ -234,7 +234,7 @@ describe("chatConnectionActions", () => {
     it("設定 disconnectReason", () => {
       const store = useChatStore();
 
-      store.handleSocketDisconnect("Server shutdown");
+      store.handleSocketDisconnect({ reason: "Server shutdown" });
 
       expect(store.disconnectReason).toBe("未知原因");
     });
@@ -243,7 +243,7 @@ describe("chatConnectionActions", () => {
       const store = useChatStore();
       store.connectionStatus = "connected";
 
-      store.handleSocketDisconnect("Connection lost");
+      store.handleSocketDisconnect({ reason: "Connection lost" });
 
       expect(store.connectionStatus).toBe("disconnected");
     });
@@ -256,7 +256,7 @@ describe("chatConnectionActions", () => {
       store.historyLoadingStatus.set("pod-1", "loaded");
       store.historyLoadingError.set("pod-1", "some error");
 
-      store.handleSocketDisconnect("Connection lost");
+      store.handleSocketDisconnect({ reason: "Connection lost" });
 
       expect(store.socketId).toBeNull();
       expect(store.lastHeartbeatAt).toBeNull();
@@ -268,7 +268,7 @@ describe("chatConnectionActions", () => {
     it("顯示斷線 Toast（已知 close code 顯示友善訊息）", () => {
       const store = useChatStore();
 
-      store.handleSocketDisconnect("1000");
+      store.handleSocketDisconnect({ reason: "1000" });
 
       expect(mockToast).toHaveBeenCalledWith({
         title: "連線中斷",
@@ -279,7 +279,7 @@ describe("chatConnectionActions", () => {
     it("顯示斷線 Toast（未知 close code 顯示未知原因）", () => {
       const store = useChatStore();
 
-      store.handleSocketDisconnect("9999");
+      store.handleSocketDisconnect({ reason: "9999" });
 
       expect(mockToast).toHaveBeenCalledWith({
         title: "連線中斷",
@@ -301,7 +301,7 @@ describe("chatConnectionActions", () => {
         resetChatActionsCache(); // 重置快取使每次迭代都得到新的 disconnectToastShown 旗標
         const store = useChatStore();
 
-        store.handleSocketDisconnect(code);
+        store.handleSocketDisconnect({ reason: code });
 
         expect(mockToast).toHaveBeenCalledWith({
           title: "連線中斷",
@@ -315,7 +315,7 @@ describe("chatConnectionActions", () => {
       store.isTypingByPodId.set("pod-1", true);
       store.isTypingByPodId.set("pod-2", true);
 
-      store.handleSocketDisconnect("1000");
+      store.handleSocketDisconnect({ reason: "1000" });
 
       expect(store.isTypingByPodId.size).toBe(0);
     });
@@ -325,11 +325,48 @@ describe("chatConnectionActions", () => {
       const store = useChatStore();
       store.heartbeatCheckTimer = 12345;
 
-      store.handleSocketDisconnect("Connection lost");
+      store.handleSocketDisconnect({ reason: "Connection lost" });
 
       expect(store.heartbeatCheckTimer).toBeNull();
 
       vi.useRealTimers();
+    });
+
+    it("silent reconnect 時重置狀態但不顯示 Toast", () => {
+      const store = useChatStore();
+      store.socketId = "socket-123";
+      store.lastHeartbeatAt = 12345;
+      store.allHistoryLoaded = true;
+      store.historyLoadingStatus.set("pod-1", "loaded");
+      store.isTypingByPodId.set("pod-1", true);
+
+      store.handleSocketDisconnect({
+        reason: "1000",
+        silent: true,
+        willReconnect: true,
+      });
+
+      expect(store.connectionStatus).toBe("disconnected");
+      expect(store.isSilentReconnectInProgress).toBe(true);
+      expect(store.disconnectReason).toBeNull();
+      expect(store.socketId).toBeNull();
+      expect(store.lastHeartbeatAt).toBeNull();
+      expect(store.allHistoryLoaded).toBe(false);
+      expect(store.historyLoadingStatus.size).toBe(0);
+      expect(store.isTypingByPodId.size).toBe(0);
+      expect(mockToast).not.toHaveBeenCalled();
+    });
+
+    it("重新連線成功後清掉 silent reconnect 狀態", async () => {
+      const store = useChatStore();
+      store.isSilentReconnectInProgress = true;
+      store.disconnectReason = "正常關閉";
+
+      await store.handleConnectionReady({ socketId: "socket-123" });
+
+      expect(store.connectionStatus).toBe("connected");
+      expect(store.isSilentReconnectInProgress).toBe(false);
+      expect(store.disconnectReason).toBeNull();
     });
   });
 

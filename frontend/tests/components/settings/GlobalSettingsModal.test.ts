@@ -127,6 +127,10 @@ function findSaveBtn(wrapper: ReturnType<typeof mount>) {
   return wrapper.findAll("button").find((b) => b.text().includes("儲存"))!;
 }
 
+function findBackupUrlInput(wrapper: ReturnType<typeof mount>) {
+  return wrapper.findAll(".input-mock")[0]!;
+}
+
 describe("GlobalSettingsModal", () => {
   // 使用真實 configStore + Pinia，不 mock store / useToast / useWebSocketErrorHandler
   setupStoreTest();
@@ -162,7 +166,7 @@ describe("GlobalSettingsModal", () => {
         backupTime: "04:30",
         backupEnabled: true,
       });
-      expect(wrapper.find(".input-mock").attributes("value")).toBe(
+      expect(findBackupUrlInput(wrapper).attributes("value")).toBe(
         "git@github.com:test/repo.git",
       );
       expect(
@@ -308,7 +312,7 @@ describe("GlobalSettingsModal", () => {
         aiDecideModel: "sonnet",
         backupEnabled: false,
       });
-      expect(wrapper.find(".input-mock").attributes("disabled")).toBeDefined();
+      expect(findBackupUrlInput(wrapper).attributes("disabled")).toBeDefined();
       const selects = wrapper.findAllComponents({ name: "Select" });
       // index 1 = backupHour, index 2 = backupMinute
       expect(selects[1]?.props("disabled")).toBe(true);

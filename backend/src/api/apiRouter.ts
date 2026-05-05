@@ -25,16 +25,27 @@ import { handleDownloadPodDirectory } from "./podDownloadApi.js";
 import { handleUpload } from "./uploadApi.js";
 import { JSON_HEADERS } from "./constants.js";
 import { logger } from "../utils/logger.js";
+import { authAccessService } from "../services/auth/authAccessService.js";
+import { handshakeAuthService } from "../services/auth/handshakeAuthService.js";
+import { resolveCanvas } from "./apiHelpers.js";
+import { HTTP_STATUS } from "../constants.js";
 
 type ApiHandler = (
   req: Request,
   params: Record<string, string>,
 ) => Response | Promise<Response>;
 
+type RouteScope = "public" | "workspace" | "canvas";
+
 interface Route {
   method: string;
   pattern: URLPattern;
   handler: ApiHandler;
+  scope: RouteScope;
+  resolveCanvasId?: (
+    req: Request,
+    params: Record<string, string>,
+  ) => Promise<string | null> | string | null;
 }
 
 const ROUTES: Route[] = [
@@ -42,26 +53,31 @@ const ROUTES: Route[] = [
     method: "GET",
     pattern: new URLPattern({ pathname: "/api/canvas/list" }),
     handler: handleListCanvases,
+    scope: "workspace",
   },
   {
     method: "POST",
     pattern: new URLPattern({ pathname: "/api/canvas" }),
     handler: handleCreateCanvas,
+    scope: "workspace",
   },
   {
     method: "GET",
     pattern: new URLPattern({ pathname: "/api/canvas/:id/pods" }),
     handler: handleListPods,
+    scope: "canvas",
   },
   {
     method: "POST",
     pattern: new URLPattern({ pathname: "/api/canvas/:id/pods" }),
     handler: handleCreatePod,
+    scope: "canvas",
   },
   {
     method: "DELETE",
     pattern: new URLPattern({ pathname: "/api/canvas/:id/pods/:podId" }),
     handler: handleDeletePod,
+    scope: "canvas",
   },
   {
     method: "DELETE",
@@ -69,6 +85,7 @@ const ROUTES: Route[] = [
       pathname: "/api/canvas/:id/connections/:connectionId",
     }),
     handler: handleDeleteConnection,
+    scope: "canvas",
   },
   {
     method: "PATCH",
@@ -76,36 +93,43 @@ const ROUTES: Route[] = [
       pathname: "/api/canvas/:id/connections/:connectionId",
     }),
     handler: handleUpdateConnection,
+    scope: "canvas",
   },
   {
     method: "GET",
     pattern: new URLPattern({ pathname: "/api/canvas/:id/connections" }),
     handler: handleListConnections,
+    scope: "canvas",
   },
   {
     method: "POST",
     pattern: new URLPattern({ pathname: "/api/canvas/:id/connections" }),
     handler: handleCreateConnection,
+    scope: "canvas",
   },
   {
     method: "DELETE",
     pattern: new URLPattern({ pathname: "/api/canvas/:id" }),
     handler: handleDeleteCanvas,
+    scope: "canvas",
   },
   {
     method: "PATCH",
     pattern: new URLPattern({ pathname: "/api/canvas/:id/pods/:podId" }),
     handler: handleRenamePod,
+    scope: "canvas",
   },
   {
     method: "PATCH",
     pattern: new URLPattern({ pathname: "/api/canvas/:id" }),
     handler: handleRenameCanvas,
+    scope: "canvas",
   },
   {
     method: "GET",
     pattern: new URLPattern({ pathname: "/api/canvas/:id/workflows" }),
     handler: handleListWorkflows,
+    scope: "canvas",
   },
   {
     method: "POST",
@@ -113,6 +137,7 @@ const ROUTES: Route[] = [
       pathname: "/api/canvas/:id/workflows/:podId/chat",
     }),
     handler: handleWorkflowChat,
+    scope: "canvas",
   },
   {
     method: "POST",
@@ -120,6 +145,7 @@ const ROUTES: Route[] = [
       pathname: "/api/canvas/:id/workflows/:podId/stop",
     }),
     handler: handleWorkflowStop,
+    scope: "canvas",
   },
   {
     method: "GET",
@@ -127,28 +153,77 @@ const ROUTES: Route[] = [
       pathname: "/api/canvas/:id/pods/:podId/download",
     }),
     handler: handleDownloadPodDirectory,
+    scope: "canvas",
   },
   {
     method: "POST",
     pattern: new URLPattern({ pathname: "/api/upload" }),
     handler: handleUpload,
+    scope: "public",
   },
 ];
 
 function matchRoute(
   method: string,
   pathname: string,
-): { handler: ApiHandler; params: Record<string, string> } | null {
+): { route: Route; params: Record<string, string> } | null {
   for (const route of ROUTES) {
     if (route.method !== method) continue;
 
     const result = route.pattern.exec({ pathname });
     if (result) {
       return {
-        handler: route.handler,
+        route,
         params: (result.pathname.groups ?? {}) as Record<string, string>,
       };
     }
+  }
+
+  return null;
+}
+
+function forbiddenResponse(error: string, code: string): Response {
+  return new Response(JSON.stringify({ error, code }), {
+    status: HTTP_STATUS.FORBIDDEN,
+    headers: JSON_HEADERS,
+  });
+}
+
+async function authorizeRoute(
+  req: Request,
+  route: Route,
+  params: Record<string, string>,
+): Promise<Response | null> {
+  if (route.scope === "public") {
+    return null;
+  }
+
+  const sessionId = handshakeAuthService.resolveRequestSessionId(req);
+  if (!authAccessService.isWorkspaceAccessible(sessionId)) {
+    return forbiddenResponse(
+      "Workspace password required",
+      "WORKSPACE_PASSWORD_REQUIRED",
+    );
+  }
+
+  if (route.scope !== "canvas") {
+    return null;
+  }
+
+  const rawCanvasId =
+    (await route.resolveCanvasId?.(req, params)) ?? params.id ?? null;
+
+  // 將 canvas name 或 UUID 解析成實際的 UUID，不存在時為 undefined
+  const resolvedCanvas = rawCanvasId ? resolveCanvas(rawCanvasId) : null;
+  const canvasId = resolvedCanvas?.id ?? null;
+
+  // 只有在 canvas 存在且受密碼保護且尚未解鎖時才拒絕；
+  // canvas 不存在或未受保護時讓 handler 自行回傳 404 或正常回應。
+  if (canvasId && authAccessService.requiresCanvasUnlock(sessionId, canvasId)) {
+    return forbiddenResponse(
+      "Canvas password required",
+      "CANVAS_PASSWORD_REQUIRED",
+    );
   }
 
   return null;
@@ -171,7 +246,12 @@ export async function handleApiRequest(req: Request): Promise<Response | null> {
   }
 
   try {
-    return await match.handler(req, match.params);
+    const authFailure = await authorizeRoute(req, match.route, match.params);
+    if (authFailure) {
+      return authFailure;
+    }
+
+    return await match.route.handler(req, match.params);
   } catch (error) {
     logger.error("Canvas", "Error", "處理 API 請求時發生錯誤", error);
     return new Response(JSON.stringify({ error: "伺服器內部錯誤" }), {

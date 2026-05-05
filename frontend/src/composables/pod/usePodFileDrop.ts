@@ -9,6 +9,7 @@ import {
 } from "@/api/uploadApi";
 import { useUploadStore } from "@/stores/upload/uploadStore";
 import { useChatStore } from "@/stores/chat/chatStore";
+import { getActiveCanvasIdOrWarn } from "@/utils/canvasGuard";
 
 type ValidateDropResult = { ok: true } | { ok: false; toastKey: string };
 
@@ -66,6 +67,8 @@ export function validateDropFiles(
 interface UsePodFileDropOptions {
   /** getter，回傳 true 時所有事件 early return */
   disabled: () => boolean;
+  /** 可注入的 canvas 解析器，預設使用目前 active canvas */
+  getCanvasId?: () => string | null;
 }
 
 interface UsePodFileDropReturn {
@@ -104,7 +107,7 @@ function resolveFailureReason(err: unknown): UploadFailureReason {
 export function usePodFileDrop(
   options: UsePodFileDropOptions,
 ): UsePodFileDropReturn {
-  const { disabled } = options;
+  const { disabled, getCanvasId = defaultGetCanvasId } = options;
   const { toast } = useToast();
 
   const isDragOver = ref(false);
@@ -152,6 +155,9 @@ export function usePodFileDrop(
   const handleDrop = async (podId: string, files: File[]): Promise<void> => {
     const uploadStore = useUploadStore();
     const chatStore = useChatStore();
+    const canvasId = getCanvasId();
+
+    if (!canvasId) return;
 
     // 上傳中再拖入時忽略，避免覆蓋進行中的狀態
     if (uploadStore.isUploading(podId)) return;
@@ -167,9 +173,14 @@ export function usePodFileDrop(
     await Promise.allSettled(
       fileEntries.map(async (entry) => {
         try {
-          await uploadFile(entry.file, uploadSessionId, ({ loaded }) => {
-            uploadStore.updateFileProgress(podId, entry.id, loaded);
-          });
+          await uploadFile(
+            entry.file,
+            canvasId,
+            uploadSessionId,
+            ({ loaded }) => {
+              uploadStore.updateFileProgress(podId, entry.id, loaded);
+            },
+          );
           uploadStore.markFileSuccess(podId, entry.id);
         } catch (err) {
           const reason = resolveFailureReason(err);
@@ -231,6 +242,9 @@ export function usePodFileDrop(
   const retryFailed = async (podId: string): Promise<void> => {
     const uploadStore = useUploadStore();
     const chatStore = useChatStore();
+    const canvasId = getCanvasId();
+
+    if (!canvasId) return;
 
     const podState = uploadStore.getUploadState(podId);
     const failedEntries = podState.files.filter((f) => f.status === "failed");
@@ -250,9 +264,14 @@ export function usePodFileDrop(
     await Promise.allSettled(
       failedEntries.map(async (entry) => {
         try {
-          await uploadFile(entry.file, uploadSessionId, ({ loaded }) => {
-            uploadStore.updateFileProgress(podId, entry.id, loaded);
-          });
+          await uploadFile(
+            entry.file,
+            canvasId,
+            uploadSessionId,
+            ({ loaded }) => {
+              uploadStore.updateFileProgress(podId, entry.id, loaded);
+            },
+          );
           uploadStore.markFileSuccess(podId, entry.id);
         } catch (err) {
           const reason = resolveFailureReason(err);
@@ -286,4 +305,8 @@ export function usePodFileDrop(
     handleDrop,
     retryFailed,
   };
+}
+
+function defaultGetCanvasId(): string | null {
+  return getActiveCanvasIdOrWarn("usePodFileDrop");
 }

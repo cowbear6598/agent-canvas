@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onUnmounted } from 'vue'
+import { computed, ref, watch, onUnmounted } from 'vue'
 import { useChatStore } from '@/stores/chat'
 
 const JITTER_REFRESH_INTERVAL_MS = 100
@@ -17,6 +17,12 @@ const pathData1 = ref('')
 const pathData2 = ref('')
 const pathData3 = ref('')
 let jitterInterval: ReturnType<typeof setInterval> | null = null
+
+const shouldShowDisconnectOverlay = computed(
+  () =>
+    chatStore.connectionStatus === 'disconnected' &&
+    !chatStore.isSilentReconnectInProgress
+)
 
 const generateJitterPath = (yOffset: number = 0): string => {
   const segments = 35
@@ -55,8 +61,8 @@ const stopJitter = (): void => {
   }
 }
 
-watch(() => chatStore.connectionStatus, (newStatus) => {
-  if (newStatus !== 'connected' && !showOverlay.value) {
+watch(shouldShowDisconnectOverlay, (shouldShow) => {
+  if (shouldShow && !showOverlay.value) {
     showOverlay.value = true
     isTurningOff.value = true
     startJitter()
@@ -64,7 +70,7 @@ watch(() => chatStore.connectionStatus, (newStatus) => {
     turnOffTimer = setTimeout(() => {
       isTurningOff.value = false
     }, TURN_OFF_ANIMATION_DURATION_MS)
-  } else if (newStatus === 'connected' && showOverlay.value) {
+  } else if (!shouldShow && showOverlay.value) {
     isTurningOn.value = true
     stopJitter()
     turnOnTimer = setTimeout(() => {

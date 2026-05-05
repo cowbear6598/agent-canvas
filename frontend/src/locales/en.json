@@ -302,6 +302,7 @@
   },
   "layout": {
     "header": {
+      "canvasList": "Canvas List",
       "globalSettings": "Global Settings",
       "integrations": "Integrations",
       "history": "History"
@@ -770,5 +771,58 @@
     "loadFailed": "Load failed",
     "saveFailed": "Save failed",
     "saveSuccess": "Saved successfully"
+  },
+  "security": {
+    "transportWarning": {
+      "title": "Unencrypted LAN transport",
+      "description": "Password gate works, but traffic is not encrypted on this network."
+    },
+    "workspace": {
+      "settingsTitle": "Workspace Security",
+      "statusProtected": "This workspace currently requires a shared password.",
+      "statusOpen": "No workspace password is currently set.",
+      "currentPassword": "Current workspace password",
+      "newPassword": "New workspace password",
+      "password": "Workspace password",
+      "setPassword": "Set Password",
+      "changePassword": "Change Password",
+      "removePassword": "Remove Password",
+      "saved": "Workspace password saved",
+      "updated": "Workspace password updated",
+      "removed": "Workspace password removed",
+      "unlockTitle": "Workspace Protected",
+      "unlockDescription": "Enter the workspace password to continue.",
+      "unlockAction": "Unlock",
+      "reconnecting": "Reconnecting..."
+    },
+    "canvas": {
+      "settingsTitle": "Canvas Security",
+      "noSelection": "No canvas selected",
+      "statusProtected": "This canvas currently requires its own password.",
+      "statusOpen": "This canvas is currently open to anyone who already unlocked the workspace.",
+      "currentPassword": "Current canvas password",
+      "newPassword": "New canvas password",
+      "password": "Canvas password",
+      "setPassword": "Set Password",
+      "changePassword": "Change Password",
+      "removePassword": "Remove Password",
+      "saved": "Canvas password saved",
+      "updated": "Canvas password updated",
+      "removed": "Canvas password removed",
+      "unlockTitle": "Unlock Canvas",
+      "unlockDescription": "Enter the password for {name}",
+      "unlockAction": "Unlock",
+      "lockedState": {
+        "badge": "Canvas Access Locked",
+        "title": "All visible canvases are currently locked.",
+        "description": "Unlock one canvas before the workspace can mount its board, shortcuts, cursor sync, and context actions again.",
+        "hint": "Canvas interactions stay suspended until at least one protected canvas is unlocked.",
+        "openSidebar": "Open Canvas List",
+        "listTitle": "Protected Canvases",
+        "listDescription": "{count} canvases are waiting for a password.",
+        "itemHint": "Enter the canvas password to restore this board.",
+        "unlockAction": "Unlock"
+      }
+    }
   }
 }

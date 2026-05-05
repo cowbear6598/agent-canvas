@@ -468,6 +468,12 @@ export interface ConfigGetResultPayload extends ResultPayload {
   backupGitRemoteUrl?: string;
   backupTime?: string;
   backupEnabled?: boolean;
+  hasWorkspacePassword?: boolean;
+  transportSecurity?: {
+    isTls: boolean;
+    showInsecureTransportWarning: boolean;
+    isLanHost: boolean;
+  };
 }
 
 export interface ConfigUpdatedPayload extends ResultPayload {
@@ -475,6 +481,40 @@ export interface ConfigUpdatedPayload extends ResultPayload {
   backupGitRemoteUrl?: string;
   backupTime?: string;
   backupEnabled?: boolean;
+  hasWorkspacePassword?: boolean;
+}
+
+export interface AuthBootstrapResultPayload extends ResultPayload {
+  hasWorkspacePassword?: boolean;
+  workspaceUnlocked?: boolean;
+  unlockedCanvasIds?: string[];
+  transportSecurity?: {
+    isTls: boolean;
+    showInsecureTransportWarning: boolean;
+    isLanHost: boolean;
+  };
+}
+
+export interface AuthUnlockWorkspaceResultPayload extends ResultPayload {
+  reconnectGrant?: string;
+}
+
+export interface AuthUnlockCanvasResultPayload extends ResultPayload {
+  canvasId?: string;
+  unlockedCanvasIds?: string[];
+}
+
+export interface WorkspacePasswordUpdatedPayload extends ResultPayload {
+  hasWorkspacePassword?: boolean;
+}
+
+export interface AuthSessionResetPayload {
+  reason: string;
+}
+
+export interface AuthCanvasAccessResetPayload {
+  canvasId: string;
+  reason: string;
 }
 
 /** Pod plugin 設定結果（discriminated union，以 success 欄位區分兩條路徑） */

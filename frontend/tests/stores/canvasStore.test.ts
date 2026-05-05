@@ -192,7 +192,7 @@ describe("canvasStore", () => {
       expect(store.canvases).toEqual([canvas2, canvas3, canvas1]);
     });
 
-    it("有 canvases 且無 activeCanvasId 時應自動切換到第一個", async () => {
+    it("有 canvases 且無 activeCanvasId 時不應自動切換", async () => {
       const store = useCanvasStore();
       const canvas1 = createMockCanvas({ id: "first-canvas", sortIndex: 0 });
       const canvas2 = createMockCanvas({ id: "second-canvas", sortIndex: 1 });
@@ -200,20 +200,11 @@ describe("canvasStore", () => {
       mockCreateWebSocketRequest.mockResolvedValueOnce({
         canvases: [canvas1, canvas2],
       });
-      mockCreateWebSocketRequest.mockResolvedValueOnce({
-        success: true,
-        canvasId: "first-canvas",
-      });
 
       await store.loadCanvases();
 
-      expect(mockCreateWebSocketRequest).toHaveBeenCalledTimes(2);
-      expect(mockCreateWebSocketRequest).toHaveBeenNthCalledWith(2, {
-        requestEvent: "canvas:switch",
-        responseEvent: "canvas:switched",
-        payload: { canvasId: "first-canvas" },
-      });
-      expect(store.activeCanvasId).toBe("first-canvas");
+      expect(mockCreateWebSocketRequest).toHaveBeenCalledTimes(1);
+      expect(store.activeCanvasId).toBeNull();
     });
 
     it("已有 activeCanvasId 時不應自動切換", async () => {
@@ -413,7 +404,7 @@ describe("canvasStore", () => {
         expect(store.canvases[0]).toEqual(canvas1);
       });
 
-      it("已存在的 Canvas 不應重複新增", () => {
+      it("已存在的 Canvas 應更新內容但不重複新增", () => {
         const store = useCanvasStore();
         const canvas1 = createMockCanvas({ id: "canvas-1", name: "Original" });
         store.canvases = [canvas1];
@@ -421,11 +412,13 @@ describe("canvasStore", () => {
         const duplicateCanvas = createMockCanvas({
           id: "canvas-1",
           name: "Duplicate",
+          isProtected: true,
         });
         store.addCanvasFromEvent(duplicateCanvas);
 
         expect(store.canvases).toHaveLength(1);
-        expect(store.canvases[0]?.name).toBe("Original");
+        expect(store.canvases[0]?.name).toBe("Duplicate");
+        expect(store.canvases[0]?.isProtected).toBe(true);
       });
     });
 

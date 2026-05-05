@@ -167,14 +167,17 @@ describe("Canvas/Pod 操作完整流程", () => {
       mockCreateWebSocketRequest.mockResolvedValueOnce({
         canvases: [canvas1, canvas2],
       });
+      await canvasStore.loadCanvases();
+
+      expect(canvasStore.activeCanvasId).toBeNull();
+      expect(canvasStore.canvases).toHaveLength(2);
+
       mockCreateWebSocketRequest.mockResolvedValueOnce({
         success: true,
         canvasId: canvas1.id,
       });
-      await canvasStore.loadCanvases();
-
+      await canvasStore.switchCanvas(canvas1.id);
       expect(canvasStore.activeCanvasId).toBe("canvas-1");
-      expect(canvasStore.canvases).toHaveLength(2);
 
       // 在 canvas-1 建立 pod-1
       const pod1 = createMockPod({ id: "pod-1", name: "Pod 1" });
@@ -218,7 +221,7 @@ describe("Canvas/Pod 操作完整流程", () => {
   });
 
   describe("驗證跨 Store 狀態一致性（canvasStore.activeCanvasId, podStore.pods）", () => {
-    it("loadCanvases 後 activeCanvasId 為第一個 Canvas，canvases 長度正確", async () => {
+    it("loadCanvases 後不自動設定 activeCanvasId，canvases 長度正確", async () => {
       const canvasStore = useCanvasStore();
 
       const canvas1 = createMockCanvas({ id: "canvas-1", name: "Canvas 1" });
@@ -227,14 +230,10 @@ describe("Canvas/Pod 操作完整流程", () => {
       mockCreateWebSocketRequest.mockResolvedValueOnce({
         canvases: [canvas1, canvas2],
       });
-      mockCreateWebSocketRequest.mockResolvedValueOnce({
-        success: true,
-        canvasId: canvas1.id,
-      });
 
       await canvasStore.loadCanvases();
 
-      expect(canvasStore.activeCanvasId).toBe("canvas-1");
+      expect(canvasStore.activeCanvasId).toBeNull();
       expect(canvasStore.canvases).toHaveLength(2);
     });
   });

@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useUploadStore } from "@/stores/upload/uploadStore";
+import { useCanvasStore } from "@/stores/canvasStore";
 import { usePodFileDrop } from "@/composables/pod/usePodFileDrop";
 
 // Props 定義
@@ -15,10 +16,14 @@ const { t } = useI18n();
 
 // 從 store 取得此 Pod 的上傳狀態
 const uploadStore = useUploadStore();
+const canvasStore = useCanvasStore();
 const uploadState = computed(() => uploadStore.getUploadState(props.podId));
 
 // 取 retryFailed（從 composable 拿，不直接呼 store）
-const { retryFailed } = usePodFileDrop({ disabled: () => false });
+const { retryFailed } = usePodFileDrop({
+  disabled: () => false,
+  getCanvasId: () => canvasStore.activeCanvasId,
+});
 
 // 上傳中或上傳失敗時才顯示覆蓋層
 const isVisible = computed(

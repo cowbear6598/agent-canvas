@@ -1,4 +1,5 @@
 import { websocketClient, WebSocketRequestEvents } from "@/services/websocket";
+import type { WebSocketDisconnectEvent } from "@/services/websocket/WebSocketClient";
 import { useToast } from "@/composables/useToast";
 import type {
   ConnectionReadyPayload,
@@ -34,7 +35,7 @@ export function createConnectionActions(store: ChatStoreInstance): {
   handleHeartbeatPing: (payload: HeartbeatPingPayload) => void;
   startHeartbeatCheck: () => void;
   stopHeartbeatCheck: () => void;
-  handleSocketDisconnect: (code: string) => void;
+  handleSocketDisconnect: (event: WebSocketDisconnectEvent) => void;
   handleError: (payload: PodErrorPayload) => void;
 } {
   // 追蹤斷線 toast 是否已彈出，避免重連期間每 3 秒重複通知使用者。
@@ -42,6 +43,7 @@ export function createConnectionActions(store: ChatStoreInstance): {
   let disconnectToastShown = false;
 
   const initWebSocket = (): void => {
+    store.isSilentReconnectInProgress = false;
     store.connectionStatus = "connecting";
     websocketClient.connect();
   };
@@ -51,14 +53,18 @@ export function createConnectionActions(store: ChatStoreInstance): {
     store.unregisterListeners();
     websocketClient.disconnect();
 
+    store.isSilentReconnectInProgress = false;
     store.connectionStatus = "disconnected";
+    store.disconnectReason = null;
     store.socketId = null;
   };
 
   const handleConnectionReady = async (
     payload: ConnectionReadyPayload,
   ): Promise<void> => {
+    store.isSilentReconnectInProgress = false;
     store.connectionStatus = "connected";
+    store.disconnectReason = null;
     store.socketId = payload.socketId;
 
     // 連線成功，重置斷線通知旗標，允許下一次斷線時再次彈 toast
@@ -115,13 +121,24 @@ export function createConnectionActions(store: ChatStoreInstance): {
     store.historyLoadingError.clear();
   };
 
-  const handleSocketDisconnect = (code: string): void => {
-    store.disconnectReason = getDisconnectMessage(code);
+  const handleSocketDisconnect = (
+    event: WebSocketDisconnectEvent,
+  ): void => {
+    const isSilentReconnect = Boolean(event.silent && event.willReconnect);
+
+    store.isSilentReconnectInProgress = isSilentReconnect;
+    store.disconnectReason = isSilentReconnect
+      ? null
+      : getDisconnectMessage(event.reason);
     store.connectionStatus = "disconnected";
     stopHeartbeatCheck();
     resetConnectionState();
 
     store.isTypingByPodId.clear();
+
+    if (isSilentReconnect) {
+      return;
+    }
 
     // 重連期間只彈一次 toast，避免每 3 秒重連失敗都噴通知
     if (!disconnectToastShown) {
@@ -129,7 +146,7 @@ export function createConnectionActions(store: ChatStoreInstance): {
       const { toast } = useToast();
       toast({
         title: t("composable.chat.disconnected"),
-        description: getDisconnectMessage(code),
+        description: getDisconnectMessage(event.reason),
       });
     }
   };

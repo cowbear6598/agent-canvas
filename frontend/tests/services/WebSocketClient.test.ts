@@ -476,8 +476,42 @@ describe("WebSocketClient", () => {
 
       instance.triggerClose(1006, "異常關閉");
 
-      expect(disconnectCallback).toHaveBeenCalledWith("1006");
+      expect(disconnectCallback).toHaveBeenCalledWith({
+        reason: "1006",
+        willReconnect: true,
+      });
       expect(websocketClient.disconnectReason.value).toBe("1006");
+    });
+
+    it("forceReconnect 應該發出 silent reconnect disconnect event", () => {
+      const disconnectCallback = vi.fn();
+
+      websocketClient.onDisconnect(disconnectCallback);
+      websocketClient.connect("http://localhost:3001");
+      const instance = mockWebSocketInstances[0]!;
+      instance.triggerOpen();
+
+      websocketClient.forceReconnect();
+
+      expect(disconnectCallback).toHaveBeenCalledWith({
+        reason: "1000",
+        silent: true,
+        willReconnect: true,
+      });
+      expect(websocketClient.isConnected.value).toBe(false);
+      expect(mockWebSocketInstances.length).toBe(2);
+    });
+
+    it("forceReconnectWithGrant 應在下一次握手帶上 reconnect grant", () => {
+      websocketClient.connect("http://localhost:3001");
+      const instance = mockWebSocketInstances[0]!;
+      instance.triggerOpen();
+
+      websocketClient.forceReconnectWithGrant("grant-123");
+
+      expect(mockWebSocketInstances[1]!.url).toBe(
+        "ws://localhost:3001?workspaceReconnectGrant=grant-123",
+      );
     });
 
     it("應該在斷線時啟動重連機制", () => {

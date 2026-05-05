@@ -4,6 +4,7 @@ import {
   WebSocketRequestEvents,
   WebSocketResponseEvents,
 } from "@/services/websocket";
+import type { WebSocketDisconnectEvent } from "@/services/websocket/WebSocketClient";
 import { generateRequestId } from "@/services/utils";
 import type { HistoryLoadingStatus, Message } from "@/types/chat";
 import type {
@@ -69,6 +70,7 @@ interface ChatState {
   isTypingByPodId: Map<string, boolean>;
   currentStreamingMessageId: string | null;
   connectionStatus: ConnectionStatus;
+  isSilentReconnectInProgress: boolean;
   socketId: string | null;
   historyLoadingStatus: Map<string, HistoryLoadingStatus>;
   historyLoadingError: Map<string, string>;
@@ -85,6 +87,7 @@ export const useChatStore = defineStore("chat", {
     isTypingByPodId: new Map(),
     currentStreamingMessageId: null,
     connectionStatus: "disconnected",
+    isSilentReconnectInProgress: false,
     socketId: null,
     historyLoadingStatus: new Map(),
     historyLoadingError: new Map(),
@@ -217,9 +220,9 @@ export const useChatStore = defineStore("chat", {
       connectionActions.handleHeartbeatPing(payload);
     },
 
-    handleSocketDisconnect(code: string): void {
+    handleSocketDisconnect(event: WebSocketDisconnectEvent): void {
       const connectionActions = this.getConnectionActions();
-      connectionActions.handleSocketDisconnect(code);
+      connectionActions.handleSocketDisconnect(event);
     },
 
     handleError(payload: PodErrorPayload): void {

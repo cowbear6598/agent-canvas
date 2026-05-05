@@ -13,6 +13,7 @@ export * from "./canvasSchemas.js";
 export * from "./groupSchemas.js";
 export * from "./cursorSchemas.js";
 export * from "./configSchemas.js";
+export * from "./authSchemas.js";
 export * from "./integrationSchemas.js";
 export * from "./runSchemas.js";
 export * from "./pluginSchemas.js";

@@ -86,13 +86,13 @@
         </button>
 
         <button
-          v-if="canvasStore.activeCanvas"
+          v-if="canvasStore.canvases.length > 0"
           data-canvas-toggle
           class="flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-accent"
           @click="canvasStore.toggleSidebar()"
         >
           <LayoutDashboard class="h-4 w-4" />
-          <span>{{ canvasStore.activeCanvas.name }}</span>
+          <span>{{ canvasStore.activeCanvas?.name ?? $t("layout.header.canvasList") }}</span>
         </button>
       </div>
     </div>

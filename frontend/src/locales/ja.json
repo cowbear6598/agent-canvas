@@ -302,6 +302,7 @@
   },
   "layout": {
     "header": {
+      "canvasList": "Canvas 一覧",
       "globalSettings": "グローバル設定",
       "integrations": "インテグレーション管理",
       "history": "実行履歴"
@@ -770,5 +771,58 @@
     "loadFailed": "読み込みに失敗しました",
     "saveFailed": "保存に失敗しました",
     "saveSuccess": "保存しました"
+  },
+  "security": {
+    "transportWarning": {
+      "title": "暗号化されていない LAN 通信",
+      "description": "パスワードによる制限は機能しますが、このネットワーク上の通信は暗号化されていません。"
+    },
+    "workspace": {
+      "settingsTitle": "ワークスペースのセキュリティ",
+      "statusProtected": "このワークスペースは現在共有パスワードで保護されています。",
+      "statusOpen": "ワークスペースのパスワードは現在設定されていません。",
+      "currentPassword": "現在のワークスペースパスワード",
+      "newPassword": "新しいワークスペースパスワード",
+      "password": "ワークスペースパスワード",
+      "setPassword": "パスワードを設定",
+      "changePassword": "パスワードを変更",
+      "removePassword": "パスワードを解除",
+      "saved": "ワークスペースパスワードを保存しました",
+      "updated": "ワークスペースパスワードを更新しました",
+      "removed": "ワークスペースパスワードを解除しました",
+      "unlockTitle": "ワークスペースは保護されています",
+      "unlockDescription": "続行するにはワークスペースのパスワードを入力してください。",
+      "unlockAction": "ロック解除",
+      "reconnecting": "再接続中..."
+    },
+    "canvas": {
+      "settingsTitle": "Canvas のセキュリティ",
+      "noSelection": "Canvas が選択されていません",
+      "statusProtected": "この Canvas には専用のパスワードが必要です。",
+      "statusOpen": "この Canvas は、すでにワークスペースを解錠した全員に公開されています。",
+      "currentPassword": "現在の Canvas パスワード",
+      "newPassword": "新しい Canvas パスワード",
+      "password": "Canvas パスワード",
+      "setPassword": "パスワードを設定",
+      "changePassword": "パスワードを変更",
+      "removePassword": "パスワードを解除",
+      "saved": "Canvas パスワードを保存しました",
+      "updated": "Canvas パスワードを更新しました",
+      "removed": "Canvas パスワードを解除しました",
+      "unlockTitle": "Canvas を解錠",
+      "unlockDescription": "{name} のパスワードを入力してください",
+      "unlockAction": "解錠",
+      "lockedState": {
+        "badge": "Canvas アクセスはロック中",
+        "title": "表示中の Canvas はすべてパスワード保護されています。",
+        "description": "いずれかの Canvas を解錠するまで、ボード、ショートカット、カーソル同期、コンテキスト操作は復帰しません。",
+        "hint": "少なくとも 1 つの保護された Canvas を解錠するまで、Canvas 操作は停止したままです。",
+        "openSidebar": "Canvas 一覧を開く",
+        "listTitle": "保護された Canvas",
+        "listDescription": "{count} 件の Canvas がパスワード待ちです。",
+        "itemHint": "この Canvas のパスワードを入力するとボードが復帰します。",
+        "unlockAction": "解錠"
+      }
+    }
   }
 }

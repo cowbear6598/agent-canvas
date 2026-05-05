@@ -81,10 +81,6 @@ export const useCanvasStore = defineStore("canvas", {
         (a, b) => a.sortIndex - b.sortIndex,
       );
 
-      if (this.canvases.length > 0 && !this.activeCanvasId) {
-        await this.switchToFirstCanvas();
-      }
-
       this.isLoading = false;
     },
 
@@ -215,7 +211,12 @@ export const useCanvasStore = defineStore("canvas", {
       );
       if (!existingCanvas) {
         this.canvases.push(canvas);
+        return;
       }
+
+      existingCanvas.name = canvas.name;
+      existingCanvas.sortIndex = canvas.sortIndex;
+      existingCanvas.isProtected = canvas.isProtected;
     },
 
     reorderCanvasesFromEvent(canvasIds: string[]): void {
@@ -241,6 +242,18 @@ export const useCanvasStore = defineStore("canvas", {
       }
     },
 
+    updateCanvasProtectionFromEvent(canvas: Canvas): void {
+      const existingCanvas = this.canvases.find((item) => item.id === canvas.id);
+      if (!existingCanvas) {
+        this.canvases.push(canvas);
+        return;
+      }
+
+      existingCanvas.isProtected = canvas.isProtected;
+      existingCanvas.name = canvas.name;
+      existingCanvas.sortIndex = canvas.sortIndex;
+    },
+
     async removeCanvasFromEvent(canvasId: string): Promise<void> {
       if (this.activeCanvasId === canvasId) {
         const deletedCanvas = this.canvases.find(
@@ -263,10 +276,17 @@ export const useCanvasStore = defineStore("canvas", {
     },
 
     async handleActiveCanvasDeletion(): Promise<void> {
+      this.activeCanvasId = null;
+
+      const firstUnprotectedCanvas = this.canvases.find(
+        (canvas) => !canvas.isProtected,
+      );
+      if (firstUnprotectedCanvas) {
+        await this.switchCanvas(firstUnprotectedCanvas.id);
+        return;
+      }
+
       if (this.canvases.length > 0) {
-        const firstCanvas = this.canvases[0];
-        if (!firstCanvas) return;
-        await this.switchCanvas(firstCanvas.id);
         return;
       }
 
@@ -274,6 +294,10 @@ export const useCanvasStore = defineStore("canvas", {
       if (defaultCanvas) {
         await this.switchCanvas(defaultCanvas.id);
       }
+    },
+
+    setActiveCanvasId(canvasId: string | null): void {
+      this.activeCanvasId = canvasId;
     },
 
     setDragging(isDragging: boolean, canvasId: string | null): void {

@@ -48,6 +48,12 @@ export interface ConfigGetResultPayload {
   backupGitRemoteUrl?: string;
   backupTime?: string;
   backupEnabled?: boolean;
+  hasWorkspacePassword?: boolean;
+  transportSecurity?: {
+    isTls: boolean;
+    showInsecureTransportWarning: boolean;
+    isLanHost: boolean;
+  };
   error?: string;
 }
 
@@ -58,5 +64,6 @@ export interface ConfigUpdatedPayload {
   backupGitRemoteUrl?: string;
   backupTime?: string;
   backupEnabled?: boolean;
+  hasWorkspacePassword?: boolean;
   error?: string;
 }

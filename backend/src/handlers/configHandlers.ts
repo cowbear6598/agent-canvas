@@ -6,13 +6,15 @@ import { configStore } from "../services/configStore.js";
 import { socketService } from "../services/socketService.js";
 import { backupScheduleService } from "../services/backupScheduleService.js";
 import { config } from "../config/index.js";
+import { connectionManager } from "../services/connectionManager.js";
 
 export async function handleConfigGet(
   connectionId: string,
-  payload: ConfigGetPayload,
+  _payload: ConfigGetPayload,
   requestId: string,
 ): Promise<void> {
   const config = configStore.getAll();
+  const transportSecurity = connectionManager.getTransportSecurity(connectionId);
 
   socketService.emitToConnection(
     connectionId,
@@ -24,6 +26,15 @@ export async function handleConfigGet(
       backupGitRemoteUrl: config.backupGitRemoteUrl,
       backupTime: config.backupTime,
       backupEnabled: config.backupEnabled,
+      hasWorkspacePassword: config.hasWorkspacePassword,
+      transportSecurity: transportSecurity
+        ? {
+            isTls: transportSecurity.isTls,
+            showInsecureTransportWarning:
+              transportSecurity.showInsecureTransportWarning,
+            isLanHost: transportSecurity.isLanHost,
+          }
+        : undefined,
     },
   );
 }
@@ -62,6 +73,7 @@ export async function handleConfigUpdate(
       backupGitRemoteUrl: updatedConfig.backupGitRemoteUrl,
       backupTime: updatedConfig.backupTime,
       backupEnabled: updatedConfig.backupEnabled,
+      hasWorkspacePassword: updatedConfig.hasWorkspacePassword,
     },
   );
 

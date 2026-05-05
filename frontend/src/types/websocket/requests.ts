@@ -344,6 +344,47 @@ export interface ConfigUpdatePayload {
   backupEnabled?: boolean;
 }
 
+export type PasswordUpdateActionPayload =
+  | {
+      action: "set";
+      newPassword: string;
+    }
+  | {
+      action: "change";
+      currentPassword: string;
+      newPassword: string;
+    }
+  | {
+      action: "remove";
+      currentPassword: string;
+    };
+
+export interface AuthBootstrapPayload {
+  requestId: string;
+}
+
+export interface AuthUnlockWorkspacePayload {
+  requestId: string;
+  password: string;
+}
+
+export interface AuthUnlockCanvasPayload {
+  requestId: string;
+  canvasId: string;
+  password: string;
+}
+
+export interface AuthUpdateWorkspacePasswordPayload {
+  requestId: string;
+  passwordUpdate: PasswordUpdateActionPayload;
+}
+
+export interface CanvasSecurityUpdatePayload {
+  requestId: string;
+  canvasId: string;
+  passwordUpdate: PasswordUpdateActionPayload;
+}
+
 export interface PodSetPluginsPayload {
   requestId: string;
   canvasId: string;
