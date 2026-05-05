@@ -2,6 +2,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { config } from "../../src/config/index.js";
 import type { Pod } from "../../src/types/pod.js";
 import { gitService } from "../../src/services/workspace/gitService.js";
 import { provisionRunExecutionResources } from "../../src/services/runtime/runExecutionResources.js";
@@ -66,6 +67,60 @@ describe("runExecutionResources", () => {
         worktreeCache: new Map(),
       }),
     ).rejects.toThrow("建立 detached worktree 失敗：boom");
+  });
+
+  it("repo pod 不是 git repository 時，應直接重用原始 repository cwd", async () => {
+    const pod = makePod({
+      id: "pod-repo-non-git",
+      repositoryId: "repo-plain-dir",
+      workspacePath: "/tmp/ignored",
+    });
+
+    vi.spyOn(fs, "access").mockResolvedValue(undefined);
+    vi.spyOn(gitService, "isGitRepository").mockResolvedValue({
+      success: true,
+      data: false,
+    } as any);
+
+    const result = await provisionRunExecutionResources({
+      pod,
+      runId: "run-plain-dir",
+      worktreeCache: new Map(),
+    });
+
+    expect(result.workspacePath).toBe(
+      path.resolve(path.join(config.repositoriesRoot, "repo-plain-dir")),
+    );
+    expect(result.worktreePath).toBeNull();
+  });
+
+  it("repo pod 沒有任何 commit 時，應直接重用原始 repository cwd", async () => {
+    const pod = makePod({
+      id: "pod-repo-empty",
+      repositoryId: "repo-empty",
+      workspacePath: "/tmp/ignored",
+    });
+
+    vi.spyOn(fs, "access").mockResolvedValue(undefined);
+    vi.spyOn(gitService, "isGitRepository").mockResolvedValue({
+      success: true,
+      data: true,
+    } as any);
+    vi.spyOn(gitService, "hasCommits").mockResolvedValue({
+      success: true,
+      data: false,
+    } as any);
+
+    const result = await provisionRunExecutionResources({
+      pod,
+      runId: "run-empty-repo",
+      worktreeCache: new Map(),
+    });
+
+    expect(result.workspacePath).toBe(
+      path.resolve(path.join(config.repositoriesRoot, "repo-empty")),
+    );
+    expect(result.worktreePath).toBeNull();
   });
 
   it("non-repo workspace 應直接重用 pod 自己的 cwd，允許多個 run 同時使用", async () => {

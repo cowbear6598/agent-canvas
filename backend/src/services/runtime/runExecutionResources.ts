@@ -19,6 +19,13 @@ interface SharedWorkspaceResult {
   worktreePath: string | null;
 }
 
+function createDirectWorkspaceResult(workspacePath: string): SharedWorkspaceResult {
+  return {
+    workspacePath,
+    worktreePath: null,
+  };
+}
+
 async function ensureEmptyDirectory(dirPath: string): Promise<void> {
   await fs.rm(dirPath, { recursive: true, force: true });
   await fs.mkdir(dirPath, { recursive: true });
@@ -80,7 +87,9 @@ async function provisionRepositoryWorkspace(
     );
   }
   if (!isGitResult.data) {
-    throw new Error("Repository 不是 Git repository，無法建立 detached worktree");
+    const provisioned = createDirectWorkspaceResult(sourceRepoPath);
+    worktreeCache.set(cacheKey, provisioned);
+    return provisioned;
   }
 
   const hasCommitsResult = await gitService.hasCommits(sourceRepoPath);
@@ -90,7 +99,9 @@ async function provisionRepositoryWorkspace(
     );
   }
   if (!hasCommitsResult.data) {
-    throw new Error("Repository 沒有任何 commit，無法建立 detached worktree");
+    const provisioned = createDirectWorkspaceResult(sourceRepoPath);
+    worktreeCache.set(cacheKey, provisioned);
+    return provisioned;
   }
 
   const syncResult = await gitService.syncToRemoteLatest(sourceRepoPath);
