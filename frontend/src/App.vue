@@ -323,6 +323,13 @@ watch(
     }
 
     if (newStatus === "disconnected") {
+      // 靜默重連（visibilitychange / heartbeat 觸發的 forceReconnect）期間不重置 UI 狀態，
+      // 避免 activeCanvasId、isSidebarOpen、HistoryPanel 等使用者狀態被連帶清除。
+      // 真正的斷線（連線錯誤、後端關閉）isSilentReconnectInProgress 為 false，仍會走完整 cleanup。
+      if (chatStore.isSilentReconnectInProgress) {
+        return;
+      }
+
       websocketClient.off<PodStatusChangedPayload>(
         WebSocketResponseEvents.POD_STATUS_CHANGED,
         handlePodStatusChanged,
