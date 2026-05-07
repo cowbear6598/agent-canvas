@@ -24,11 +24,14 @@ const DEFAULT_DOMAINS: string[] = [
   "*.sentry.io",
   "threads.net",
   "*.threads.net",
+  "*.threads.com",
   "graph.threads.net",
   "graph.facebook.com",
   "discord.com",
   "*.discord.com",
   "gitlab.com",
+  "*.youtube.com",
+  "*.googleapis.com",
 ];
 
 /**

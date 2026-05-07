@@ -35,19 +35,19 @@ describe("loadDomainWhitelist", () => {
       expect(fs.existsSync(file)).toBe(true);
     });
 
-    it("自動建立的檔案應包含 24 行預設 domain", () => {
+    it("自動建立的檔案應包含 27 行預設 domain", () => {
       loadDomainWhitelist(TMP_DIR);
       const file = path.join(TMP_DIR, "sandbox-whitelist.txt");
       const lines = fs
         .readFileSync(file, "utf-8")
         .split("\n")
         .filter((l) => l.trim() !== "");
-      expect(lines).toHaveLength(24);
+      expect(lines).toHaveLength(27);
     });
 
-    it("回傳值應包含 24 個預設 domain", () => {
+    it("回傳值應包含 27 個預設 domain", () => {
       const result = loadDomainWhitelist(TMP_DIR);
-      expect(result).toHaveLength(24);
+      expect(result).toHaveLength(27);
     });
   });
 
