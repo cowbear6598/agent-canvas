@@ -17,6 +17,7 @@ import { getClaudeCodePath } from "./claudePathResolver.js";
 import {
   buildClaudeSandboxAllowWrite,
   buildClaudeSandboxDenyWrite,
+  buildClaudeSandboxNetwork,
 } from "./claudeSandboxPaths.js";
 
 export type { StreamEvent, StreamCallback } from "./types.js";
@@ -72,6 +73,7 @@ function buildBaseOptions(
         allowWrite: buildClaudeSandboxAllowWrite(cwd, sandboxHomePath),
         denyWrite: buildClaudeSandboxDenyWrite(),
       },
+      network: buildClaudeSandboxNetwork(),
     },
   };
 }

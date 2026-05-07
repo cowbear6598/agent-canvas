@@ -40,6 +40,7 @@ import {
 import {
   buildClaudeSandboxAllowWrite,
   buildClaudeSandboxDenyWrite,
+  buildClaudeSandboxNetwork,
 } from "../../claude/claudeSandboxPaths.js";
 import { logger, sanitizeSensitiveInfo } from "../../../utils/logger.js";
 import { sanitizePodName } from "../podNameSanitizer.js";
@@ -537,6 +538,7 @@ export async function* runClaudeQuery(
       allowWrite: sandboxAllowWrite,
       denyWrite: buildClaudeSandboxDenyWrite(),
     },
+    network: buildClaudeSandboxNetwork(),
   };
 
   const sdkOptions: Options & { abortController: AbortController } = {

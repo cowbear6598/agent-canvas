@@ -389,6 +389,23 @@ describe("runClaudeQuery", () => {
       expect(denyWrite.some((p: string) => p.endsWith("/.bashrc"))).toBe(true);
     });
 
+    it("query() 呼叫時 sandbox.network.allowedDomains 預設為 ['*']", async () => {
+      const { query: mockQuery } =
+        await import("@anthropic-ai/claude-agent-sdk");
+
+      mockQueryGenerator = async function* () {
+        yield { type: "result", subtype: "success", result: "done" };
+      };
+
+      const ctx = createCtx();
+      await collectEvents(runClaudeQuery(ctx));
+
+      const calledOptions = (mockQuery as ReturnType<typeof vi.fn>).mock
+        .calls[0][0].options;
+
+      expect(calledOptions.sandbox.network.allowedDomains).toEqual(["*"]);
+    });
+
     it("呼叫端傳入 options.sandbox 時，query() 收到的 sandbox 應等於呼叫端傳入的物件", async () => {
       const { query: mockQuery } =
         await import("@anthropic-ai/claude-agent-sdk");

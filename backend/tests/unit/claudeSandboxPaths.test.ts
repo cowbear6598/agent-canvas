@@ -4,6 +4,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   buildClaudeSandboxAllowWrite,
   buildClaudeSandboxDenyWrite,
+  buildClaudeSandboxNetwork,
 } from "../../src/services/claude/claudeSandboxPaths.js";
 
 describe("buildClaudeSandboxAllowWrite", () => {
@@ -170,5 +171,48 @@ describe("buildClaudeSandboxDenyWrite", () => {
     expect(result).not.toContain(
       path.join("/home/testuser", ".bun", "install", "cache"),
     );
+  });
+});
+
+describe("buildClaudeSandboxNetwork", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("預設 allowedDomains 為 ['*']（網路全開）", () => {
+    vi.stubEnv("CLAUDE_SANDBOX_DENIED_DOMAINS", "");
+    const result = buildClaudeSandboxNetwork();
+    expect(result.allowedDomains).toEqual(["*"]);
+    expect(result.deniedDomains).toBeUndefined();
+  });
+
+  it("沒設環境變數時，deniedDomains 不存在", () => {
+    const result = buildClaudeSandboxNetwork();
+    expect(result.deniedDomains).toBeUndefined();
+  });
+
+  it("CLAUDE_SANDBOX_DENIED_DOMAINS 單一值", () => {
+    vi.stubEnv("CLAUDE_SANDBOX_DENIED_DOMAINS", "evil.com");
+    const result = buildClaudeSandboxNetwork();
+    expect(result.deniedDomains).toEqual(["evil.com"]);
+  });
+
+  it("CLAUDE_SANDBOX_DENIED_DOMAINS 逗號分隔多值，含空白會被 trim", () => {
+    vi.stubEnv(
+      "CLAUDE_SANDBOX_DENIED_DOMAINS",
+      "evil.com, *.bad.org , malware.io",
+    );
+    const result = buildClaudeSandboxNetwork();
+    expect(result.deniedDomains).toEqual([
+      "evil.com",
+      "*.bad.org",
+      "malware.io",
+    ]);
+  });
+
+  it("CLAUDE_SANDBOX_DENIED_DOMAINS 全空字串/全 whitespace 會被視為未設", () => {
+    vi.stubEnv("CLAUDE_SANDBOX_DENIED_DOMAINS", " , , ");
+    const result = buildClaudeSandboxNetwork();
+    expect(result.deniedDomains).toBeUndefined();
   });
 });

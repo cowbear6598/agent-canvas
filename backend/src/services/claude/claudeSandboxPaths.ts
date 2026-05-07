@@ -39,6 +39,32 @@ export function buildClaudeSandboxAllowWrite(
 }
 
 /**
+ * 計算 SDK 內建 sandbox 的 network 設定。
+ *
+ * 網路預設全開（allowedDomains: ["*"]），因為 Claude 在 Bash 工具裡會打各種第三方
+ * API（GitHub、Sentry、Slack、internal services...），維護白名單是反 pattern。
+ *
+ * 若特殊環境（例如 prod）要收緊，設環境變數 CLAUDE_SANDBOX_DENIED_DOMAINS
+ * （逗號分隔，支援 SDK 的 wildcard syntax，例如 "*.example.com"）即可逐項擋。
+ *
+ * 注意：sandbox 內部的網路限制邏輯與 permission 系統並非 1:1 對應 — Bash 工具跑的
+ * curl / python 走 OS socket，會被 sandbox 的 HTTP proxy 攔截，需在此層放行。
+ */
+export function buildClaudeSandboxNetwork(): {
+  allowedDomains: string[];
+  deniedDomains?: string[];
+} {
+  const denied = (process.env.CLAUDE_SANDBOX_DENIED_DOMAINS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return {
+    allowedDomains: ["*"],
+    ...(denied.length > 0 ? { deniedDomains: denied } : {}),
+  };
+}
+
+/**
  * 計算 SDK 內建 sandbox 的 filesystem.denyWrite 清單。
  *
  * SDK 預設 allow $HOME 整片可寫（讓 Claude 自己寫 ~/.claude.json），所以要靠
