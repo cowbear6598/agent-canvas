@@ -1,7 +1,10 @@
 import os from "os";
 import path from "path";
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { buildClaudeSandboxAllowWrite } from "../../src/services/claude/claudeSandboxPaths.js";
+import {
+  buildClaudeSandboxAllowWrite,
+  buildClaudeSandboxDenyWrite,
+} from "../../src/services/claude/claudeSandboxPaths.js";
 
 describe("buildClaudeSandboxAllowWrite", () => {
   afterEach(() => {
@@ -94,6 +97,77 @@ describe("buildClaudeSandboxAllowWrite", () => {
     expect(result).toContain(path.join("/home/testuser", ".npm"));
     expect(result).toContain(path.join("/home/testuser", ".cache", "uv"));
     expect(result).toContain(
+      path.join("/home/testuser", ".bun", "install", "cache"),
+    );
+  });
+});
+
+describe("buildClaudeSandboxDenyWrite", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("包含敏感 credential 目錄（~/.ssh、~/.aws、~/.gnupg、~/.config/gh）", () => {
+    vi.spyOn(os, "homedir").mockReturnValue("/home/testuser");
+
+    const result = buildClaudeSandboxDenyWrite();
+
+    expect(result).toContain(path.join("/home/testuser", ".ssh"));
+    expect(result).toContain(path.join("/home/testuser", ".aws"));
+    expect(result).toContain(path.join("/home/testuser", ".gnupg"));
+    expect(result).toContain(path.join("/home/testuser", ".config", "gh"));
+  });
+
+  it("包含含 token 的設定檔（~/.netrc、~/.npmrc、~/.docker/config.json）", () => {
+    vi.spyOn(os, "homedir").mockReturnValue("/home/testuser");
+
+    const result = buildClaudeSandboxDenyWrite();
+
+    expect(result).toContain(path.join("/home/testuser", ".netrc"));
+    expect(result).toContain(path.join("/home/testuser", ".npmrc"));
+    expect(result).toContain(
+      path.join("/home/testuser", ".docker", "config.json"),
+    );
+  });
+
+  it("包含 shell 設定檔（bash / zsh / profile 系列）", () => {
+    vi.spyOn(os, "homedir").mockReturnValue("/home/testuser");
+
+    const result = buildClaudeSandboxDenyWrite();
+
+    for (const file of [
+      ".bashrc",
+      ".bash_profile",
+      ".bash_login",
+      ".bash_logout",
+      ".zshrc",
+      ".zprofile",
+      ".zshenv",
+      ".zlogin",
+      ".zlogout",
+      ".profile",
+    ]) {
+      expect(result).toContain(path.join("/home/testuser", file));
+    }
+  });
+
+  it("不應包含 ~/.claude / ~/.claude.json，避免擋掉 Claude 自身認證寫入", () => {
+    vi.spyOn(os, "homedir").mockReturnValue("/home/testuser");
+
+    const result = buildClaudeSandboxDenyWrite();
+
+    expect(result).not.toContain(path.join("/home/testuser", ".claude"));
+    expect(result).not.toContain(path.join("/home/testuser", ".claude.json"));
+  });
+
+  it("不應包含 ~/.npm / ~/.cache/uv / ~/.bun/install/cache，避免擋掉 MCP cache 寫入", () => {
+    vi.spyOn(os, "homedir").mockReturnValue("/home/testuser");
+
+    const result = buildClaudeSandboxDenyWrite();
+
+    expect(result).not.toContain(path.join("/home/testuser", ".npm"));
+    expect(result).not.toContain(path.join("/home/testuser", ".cache", "uv"));
+    expect(result).not.toContain(
       path.join("/home/testuser", ".bun", "install", "cache"),
     );
   });

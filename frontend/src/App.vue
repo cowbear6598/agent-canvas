@@ -1,11 +1,20 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useCanvasContext } from "@/composables/canvas/useCanvasContext";
-import { websocketClient, WebSocketResponseEvents } from "@/services/websocket";
+import {
+  createWebSocketRequest,
+  websocketClient,
+  WebSocketRequestEvents,
+  WebSocketResponseEvents,
+} from "@/services/websocket";
 import type {
   PodStatusChangedPayload,
   ScheduleFiredPayload,
 } from "@/types/websocket";
+import type {
+  CanvasSwitchPayload,
+  CanvasSwitchedPayload,
+} from "@/types/canvas";
 import AppHeader from "@/components/layout/AppHeader.vue";
 import CanvasContainer from "@/components/canvas/CanvasContainer.vue";
 import CanvasSidebar from "@/components/canvas/CanvasSidebar.vue";
@@ -318,6 +327,34 @@ watch(
         await securityStore.bootstrapAccess();
         if (!securityStore.requiresWorkspaceUnlock && !isInitialized.value) {
           await loadAppData();
+        }
+      })();
+    }
+
+    if (
+      newStatus === "connected" &&
+      isInitialized.value &&
+      canvasStore.activeCanvasId
+    ) {
+      // 靜默重連（切換瀏覽器分頁觸發 forceReconnect）完成後，後端 activeCanvasMap 的舊紀錄
+      // 已隨舊 socket 刪除，新 connectionId 沒有任何 canvas 對應。
+      // 主動補送 CANVAS_SWITCH 讓後端重新建立記錄，否則任何走 getCanvasId() 的 handler
+      // 都會回傳「找不到使用中的 Canvas」。
+      // 注意：首次連線時 isInitialized 為 false，不會走這裡，不影響正常初始化流程。
+      const canvasIdToResync = canvasStore.activeCanvasId;
+      void (async (): Promise<void> => {
+        try {
+          await createWebSocketRequest<
+            CanvasSwitchPayload,
+            CanvasSwitchedPayload
+          >({
+            requestEvent: WebSocketRequestEvents.CANVAS_SWITCH,
+            responseEvent: WebSocketResponseEvents.CANVAS_SWITCHED,
+            payload: { canvasId: canvasIdToResync },
+          });
+        } catch (error) {
+          // 補送失敗只記 warn，避免打擾使用者；下次連線恢復時還會再試一次
+          logger.warn("[App] 靜默重連後補送 CANVAS_SWITCH 失敗", error);
         }
       })();
     }

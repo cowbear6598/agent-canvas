@@ -37,7 +37,10 @@ import {
   checkAuthStatus,
   formatApiRetryMessage,
 } from "../../claude/sdkErrorMapper.js";
-import { buildClaudeSandboxAllowWrite } from "../../claude/claudeSandboxPaths.js";
+import {
+  buildClaudeSandboxAllowWrite,
+  buildClaudeSandboxDenyWrite,
+} from "../../claude/claudeSandboxPaths.js";
 import { logger, sanitizeSensitiveInfo } from "../../../utils/logger.js";
 import { sanitizePodName } from "../podNameSanitizer.js";
 
@@ -532,6 +535,7 @@ export async function* runClaudeQuery(
     autoAllowBashIfSandboxed: true,
     filesystem: {
       allowWrite: sandboxAllowWrite,
+      denyWrite: buildClaudeSandboxDenyWrite(),
     },
   };
 

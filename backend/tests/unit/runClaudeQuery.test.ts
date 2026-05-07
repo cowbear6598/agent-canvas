@@ -367,6 +367,28 @@ describe("runClaudeQuery", () => {
       );
     });
 
+    it("query() 呼叫時 sandbox.filesystem.denyWrite 為陣列且包含敏感 credential 路徑", async () => {
+      const { query: mockQuery } =
+        await import("@anthropic-ai/claude-agent-sdk");
+
+      mockQueryGenerator = async function* () {
+        yield { type: "result", subtype: "success", result: "done" };
+      };
+
+      const ctx = createCtx();
+      await collectEvents(runClaudeQuery(ctx));
+
+      const calledOptions = (mockQuery as ReturnType<typeof vi.fn>).mock
+        .calls[0][0].options;
+      const denyWrite = calledOptions.sandbox.filesystem.denyWrite;
+
+      expect(Array.isArray(denyWrite)).toBe(true);
+      // 至少要包含 ~/.ssh 與 shell 設定檔，避免 credential 與 dotfile 被誤動
+      expect(denyWrite.some((p: string) => p.endsWith("/.ssh"))).toBe(true);
+      expect(denyWrite.some((p: string) => p.endsWith("/.zshrc"))).toBe(true);
+      expect(denyWrite.some((p: string) => p.endsWith("/.bashrc"))).toBe(true);
+    });
+
     it("呼叫端傳入 options.sandbox 時，query() 收到的 sandbox 應等於呼叫端傳入的物件", async () => {
       const { query: mockQuery } =
         await import("@anthropic-ai/claude-agent-sdk");

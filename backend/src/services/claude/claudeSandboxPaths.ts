@@ -37,3 +37,38 @@ export function buildClaudeSandboxAllowWrite(
     path.join(home, ".bun", "install", "cache"), // bunx MCP
   ];
 }
+
+/**
+ * 計算 SDK 內建 sandbox 的 filesystem.denyWrite 清單。
+ *
+ * SDK 預設 allow $HOME 整片可寫（讓 Claude 自己寫 ~/.claude.json），所以要靠
+ * denyWrite 把敏感的 credential 與 shell 設定檔擋掉，避免 Claude 在 Bash 工具中
+ * 誤動或被 prompt injection 操控去寫這些檔案。
+ *
+ * 不擋整個 $HOME，避免破壞 SDK 內部對 ~/.claude.json 的寫入流程。
+ */
+export function buildClaudeSandboxDenyWrite(): string[] {
+  const home = os.homedir();
+  return [
+    // Credential / 認證目錄
+    path.join(home, ".ssh"),
+    path.join(home, ".aws"),
+    path.join(home, ".gnupg"),
+    path.join(home, ".config", "gh"), // GitHub CLI
+    // Credential 檔案（含 token）
+    path.join(home, ".netrc"),
+    path.join(home, ".npmrc"),
+    path.join(home, ".docker", "config.json"),
+    // Shell 設定（避免被注入 alias / 環境變數）
+    path.join(home, ".bashrc"),
+    path.join(home, ".bash_profile"),
+    path.join(home, ".bash_login"),
+    path.join(home, ".bash_logout"),
+    path.join(home, ".zshrc"),
+    path.join(home, ".zprofile"),
+    path.join(home, ".zshenv"),
+    path.join(home, ".zlogin"),
+    path.join(home, ".zlogout"),
+    path.join(home, ".profile"),
+  ];
+}

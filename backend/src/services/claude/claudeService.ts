@@ -14,7 +14,10 @@ import {
 } from "../../utils/errorHelpers.js";
 import { logger } from "../../utils/logger.js";
 import { getClaudeCodePath } from "./claudePathResolver.js";
-import { buildClaudeSandboxAllowWrite } from "./claudeSandboxPaths.js";
+import {
+  buildClaudeSandboxAllowWrite,
+  buildClaudeSandboxDenyWrite,
+} from "./claudeSandboxPaths.js";
 
 export type { StreamEvent, StreamCallback } from "./types.js";
 export type {
@@ -67,6 +70,7 @@ function buildBaseOptions(
       autoAllowBashIfSandboxed: true,
       filesystem: {
         allowWrite: buildClaudeSandboxAllowWrite(cwd, sandboxHomePath),
+        denyWrite: buildClaudeSandboxDenyWrite(),
       },
     },
   };
