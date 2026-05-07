@@ -13,7 +13,8 @@ import {
   getErrorMessage,
 } from "../../utils/errorHelpers.js";
 import { logger } from "../../utils/logger.js";
-import { resolveClaudeExecutablePath } from "./claudeSandboxLauncher.js";
+import { getClaudeCodePath } from "./claudePathResolver.js";
+import { buildClaudeSandboxAllowWrite } from "./claudeSandboxPaths.js";
 
 export type { StreamEvent, StreamCallback } from "./types.js";
 export type {
@@ -54,15 +55,20 @@ function buildBaseOptions(
   cwd: string,
   sandboxHomePath?: string,
 ): Partial<Options> {
+  // SDK 內建 sandbox：隔離 Claude 執行 Bash 工具時跑的指令（非 Claude binary 本身）
   return {
     cwd,
     settingSources: ["project"],
     permissionMode: "bypassPermissions",
     includePartialMessages: true,
-    pathToClaudeCodeExecutable: resolveClaudeExecutablePath({
-      workspacePath: cwd,
-      sandboxHomePath,
-    }),
+    pathToClaudeCodeExecutable: getClaudeCodePath(),
+    sandbox: {
+      enabled: true,
+      autoAllowBashIfSandboxed: true,
+      filesystem: {
+        allowWrite: buildClaudeSandboxAllowWrite(cwd, sandboxHomePath),
+      },
+    },
   };
 }
 

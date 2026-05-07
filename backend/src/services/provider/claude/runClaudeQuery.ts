@@ -37,7 +37,7 @@ import {
   checkAuthStatus,
   formatApiRetryMessage,
 } from "../../claude/sdkErrorMapper.js";
-import { resolveClaudeExecutablePath } from "../../claude/claudeSandboxLauncher.js";
+import { buildClaudeSandboxAllowWrite } from "../../claude/claudeSandboxPaths.js";
 import { logger, sanitizeSensitiveInfo } from "../../../utils/logger.js";
 import { sanitizePodName } from "../podNameSanitizer.js";
 
@@ -519,20 +519,30 @@ export async function* runClaudeQuery(
     });
   };
 
+  // SDK 內建 sandbox 配置（取代自寫的 claudeSandboxLauncher）。
+  // 注意：此 sandbox 隔離的是 Claude 執行 Bash 工具時跑的指令，並非 Claude binary 本身；
+  // 因此 ~/.claude / ~/.claude.json 不需要列入 allowWrite（Claude 自身不在 sandbox 內）。
+  const sandboxAllowWrite = buildClaudeSandboxAllowWrite(
+    workspacePath,
+    sandboxHomePath,
+  );
+
   const sdkOptions: Options & { abortController: AbortController } = {
     cwd: workspacePath,
     settingSources: options.settingSources,
     permissionMode: options.permissionMode,
     includePartialMessages: options.includePartialMessages,
-    pathToClaudeCodeExecutable: sandboxHomePath
-      ? resolveClaudeExecutablePath({
-          workspacePath,
-          sandboxHomePath,
-        })
-      : options.pathToClaudeCodeExecutable,
+    pathToClaudeCodeExecutable: options.pathToClaudeCodeExecutable,
     allowedTools: options.allowedTools,
     model: options.model,
     abortController,
+    sandbox: {
+      enabled: true,
+      autoAllowBashIfSandboxed: true,
+      filesystem: {
+        allowWrite: sandboxAllowWrite,
+      },
+    },
     // stderr 除了寫入 backend log，也轉成 provider 診斷事件，避免 Linux sandbox 問題靜默卡住
     stderr: enqueueStderrDiagnostic,
     ...(options.mcpServers ? { mcpServers: options.mcpServers } : {}),

@@ -62,6 +62,14 @@ export interface ClaudeOptions {
   effort?: EffortLevel;
   /** 思考設定（搭配 effort 使用，固定為 adaptive） */
   thinking?: ThinkingConfig;
+  /**
+   * SDK 內建 sandbox 設定（取代自寫的 claudeSandboxLauncher）。
+   *
+   * filesystem.allowWrite 在執行階段才能組（需要 workspacePath / sandboxHomePath），
+   * 因此 buildClaudeOptions 階段不設 sandbox，由 runClaudeQuery / claudeService 於
+   * 已知 cwd 時動態組裝。
+   */
+  sandbox?: Options["sandbox"];
 }
 
 // ─── 基礎 Claude 工具清單 ────────────────────────────────────────────────────
