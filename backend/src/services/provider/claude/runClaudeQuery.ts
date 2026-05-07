@@ -527,6 +527,14 @@ export async function* runClaudeQuery(
     sandboxHomePath,
   );
 
+  const defaultSandbox = {
+    enabled: true,
+    autoAllowBashIfSandboxed: true,
+    filesystem: {
+      allowWrite: sandboxAllowWrite,
+    },
+  };
+
   const sdkOptions: Options & { abortController: AbortController } = {
     cwd: workspacePath,
     settingSources: options.settingSources,
@@ -536,13 +544,7 @@ export async function* runClaudeQuery(
     allowedTools: options.allowedTools,
     model: options.model,
     abortController,
-    sandbox: {
-      enabled: true,
-      autoAllowBashIfSandboxed: true,
-      filesystem: {
-        allowWrite: sandboxAllowWrite,
-      },
-    },
+    sandbox: options.sandbox ?? defaultSandbox,
     // stderr 除了寫入 backend log，也轉成 provider 診斷事件，避免 Linux sandbox 問題靜默卡住
     stderr: enqueueStderrDiagnostic,
     ...(options.mcpServers ? { mcpServers: options.mcpServers } : {}),

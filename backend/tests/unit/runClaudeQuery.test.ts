@@ -341,6 +341,60 @@ describe("runClaudeQuery", () => {
     });
   });
 
+  describe("sandbox 配置斷言", () => {
+    it("query() 呼叫時 sandbox.enabled 為 true、autoAllowBashIfSandboxed 為 true，且 allowWrite 包含 workspacePath", async () => {
+      const { query: mockQuery } =
+        await import("@anthropic-ai/claude-agent-sdk");
+
+      mockQueryGenerator = async function* () {
+        yield { type: "result", subtype: "success", result: "done" };
+      };
+
+      const ctx = createCtx();
+      await collectEvents(runClaudeQuery(ctx));
+
+      expect(mockQuery).toHaveBeenCalledOnce();
+      const calledOptions = (mockQuery as ReturnType<typeof vi.fn>).mock
+        .calls[0][0].options;
+
+      expect(calledOptions.sandbox.enabled).toBe(true);
+      expect(calledOptions.sandbox.autoAllowBashIfSandboxed).toBe(true);
+      expect(Array.isArray(calledOptions.sandbox.filesystem.allowWrite)).toBe(
+        true,
+      );
+      expect(calledOptions.sandbox.filesystem.allowWrite).toContain(
+        ctx.workspacePath,
+      );
+    });
+
+    it("呼叫端傳入 options.sandbox 時，query() 收到的 sandbox 應等於呼叫端傳入的物件", async () => {
+      const { query: mockQuery } =
+        await import("@anthropic-ai/claude-agent-sdk");
+
+      mockQueryGenerator = async function* () {
+        yield { type: "result", subtype: "success", result: "done" };
+      };
+
+      const customSandbox = { enabled: false };
+      const ctx = createCtx({
+        options: {
+          model: "opus",
+          allowedTools: ["Read"],
+          settingSources: ["project"],
+          permissionMode: "bypassPermissions",
+          includePartialMessages: true,
+          pathToClaudeCodeExecutable: "/usr/local/bin/claude",
+          sandbox: customSandbox,
+        } as ChatRequestContext<ClaudeOptions>["options"],
+      });
+      await collectEvents(runClaudeQuery(ctx));
+
+      const calledOptions = (mockQuery as ReturnType<typeof vi.fn>).mock
+        .calls[0][0].options;
+      expect(calledOptions.sandbox).toBe(customSandbox);
+    });
+  });
+
   // [B13] 帶 effort + thinking 時，SDK options 需含 effort 與 thinking 欄位
   // [B14] 不帶 effort / thinking 時，SDK options 不應含這兩個 key
   describe("[B13][B14] thinkingLevel 條件展開到 SDK options", () => {
