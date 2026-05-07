@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.4.4] - 2026-05-07
+
+### 修正
+- 開放 Claude sandbox 的網路存取，預設讓 Bash 工具能打第三方 API（Sentry、GitHub 等），解決原本 sandbox 內 curl / Python 出現 tunnel 403 的問題
+- 新增 CLAUDE_SANDBOX_DENIED_DOMAINS 環境變數，部署環境若需收緊可逐項擋特定 domain
+
 ## [1.4.3] - 2026-05-07
 
 ### 修正
