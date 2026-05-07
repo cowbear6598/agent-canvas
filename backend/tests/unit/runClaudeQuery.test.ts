@@ -20,6 +20,15 @@ vi.mock("../../src/utils/logger.js", () => ({
   sanitizeSensitiveInfo: vi.fn((value: string) => value),
 }));
 
+// 避免測試觸發真實 fs IO 寫入 ~/Documents/AgentCanvas/sandbox-whitelist.txt
+vi.mock("../../src/services/claude/sandboxDomainWhitelist.js", () => ({
+  loadDomainWhitelist: vi.fn(() => [
+    "registry.npmjs.org",
+    "*.atlassian.net",
+    "sentry.io",
+  ]),
+}));
+
 // 注：buildClaudeContentBlocks 與 createUserMessageStream 為純函式，不需要 mock
 // 測試使用 string message（不是 ContentBlock[]），這兩個函式在測試路徑中不會被呼叫
 
@@ -389,7 +398,7 @@ describe("runClaudeQuery", () => {
       expect(denyWrite.some((p: string) => p.endsWith("/.bashrc"))).toBe(true);
     });
 
-    it("query() 呼叫時 sandbox.network.allowedDomains 預設為 ['*']", async () => {
+    it("query() 呼叫時 sandbox.network.allowedDomains 來自 loadDomainWhitelist", async () => {
       const { query: mockQuery } =
         await import("@anthropic-ai/claude-agent-sdk");
 
@@ -403,7 +412,11 @@ describe("runClaudeQuery", () => {
       const calledOptions = (mockQuery as ReturnType<typeof vi.fn>).mock
         .calls[0][0].options;
 
-      expect(calledOptions.sandbox.network.allowedDomains).toEqual(["*"]);
+      expect(calledOptions.sandbox.network.allowedDomains).toEqual([
+        "registry.npmjs.org",
+        "*.atlassian.net",
+        "sentry.io",
+      ]);
     });
 
     it("呼叫端傳入 options.sandbox 時，query() 收到的 sandbox 應等於呼叫端傳入的物件", async () => {

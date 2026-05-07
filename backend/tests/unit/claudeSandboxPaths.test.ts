@@ -1,11 +1,16 @@
 import os from "os";
 import path from "path";
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import {
   buildClaudeSandboxAllowWrite,
   buildClaudeSandboxDenyWrite,
   buildClaudeSandboxNetwork,
 } from "../../src/services/claude/claudeSandboxPaths.js";
+import { loadDomainWhitelist } from "../../src/services/claude/sandboxDomainWhitelist.js";
+
+vi.mock("../../src/services/claude/sandboxDomainWhitelist.js", () => ({
+  loadDomainWhitelist: vi.fn(),
+}));
 
 describe("buildClaudeSandboxAllowWrite", () => {
   afterEach(() => {
@@ -175,44 +180,24 @@ describe("buildClaudeSandboxDenyWrite", () => {
 });
 
 describe("buildClaudeSandboxNetwork", () => {
-  afterEach(() => {
-    vi.unstubAllEnvs();
+  beforeEach(() => {
+    vi.mocked(loadDomainWhitelist).mockReset();
   });
 
-  it("預設 allowedDomains 為 ['*']（網路全開）", () => {
-    vi.stubEnv("CLAUDE_SANDBOX_DENIED_DOMAINS", "");
-    const result = buildClaudeSandboxNetwork();
-    expect(result.allowedDomains).toEqual(["*"]);
-    expect(result.deniedDomains).toBeUndefined();
-  });
-
-  it("沒設環境變數時，deniedDomains 不存在", () => {
-    const result = buildClaudeSandboxNetwork();
-    expect(result.deniedDomains).toBeUndefined();
-  });
-
-  it("CLAUDE_SANDBOX_DENIED_DOMAINS 單一值", () => {
-    vi.stubEnv("CLAUDE_SANDBOX_DENIED_DOMAINS", "evil.com");
-    const result = buildClaudeSandboxNetwork();
-    expect(result.deniedDomains).toEqual(["evil.com"]);
-  });
-
-  it("CLAUDE_SANDBOX_DENIED_DOMAINS 逗號分隔多值，含空白會被 trim", () => {
-    vi.stubEnv(
-      "CLAUDE_SANDBOX_DENIED_DOMAINS",
-      "evil.com, *.bad.org , malware.io",
-    );
-    const result = buildClaudeSandboxNetwork();
-    expect(result.deniedDomains).toEqual([
-      "evil.com",
-      "*.bad.org",
-      "malware.io",
+  it("回傳格式為 { allowedDomains: [...] }，內容來自 loadDomainWhitelist 的回傳值", () => {
+    vi.mocked(loadDomainWhitelist).mockReturnValue([
+      "api.anthropic.com",
+      "github.com",
     ]);
+    const result = buildClaudeSandboxNetwork();
+    expect(result).toEqual({
+      allowedDomains: ["api.anthropic.com", "github.com"],
+    });
   });
 
-  it("CLAUDE_SANDBOX_DENIED_DOMAINS 全空字串/全 whitespace 會被視為未設", () => {
-    vi.stubEnv("CLAUDE_SANDBOX_DENIED_DOMAINS", " , , ");
+  it("loadDomainWhitelist 回傳空陣列時，allowedDomains 仍為空陣列（行為觀察，無 fallback）", () => {
+    vi.mocked(loadDomainWhitelist).mockReturnValue([]);
     const result = buildClaudeSandboxNetwork();
-    expect(result.deniedDomains).toBeUndefined();
+    expect(result).toEqual({ allowedDomains: [] });
   });
 });

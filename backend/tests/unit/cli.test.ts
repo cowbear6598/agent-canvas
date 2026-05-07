@@ -14,6 +14,7 @@ import {
   VALID_CONFIG_KEYS,
   handleLogs,
   handleConfig,
+  handleDomain,
 } from "../../src/cli.js";
 
 const TMP_DIR = path.join(os.tmpdir(), `cli-test-${Date.now()}`);
@@ -506,6 +507,144 @@ describe("validatePort - 邊界值", () => {
 
   it("resolvePort 在 flags.port 為空字串時回傳 null", () => {
     expect(validatePort("")).toBeNull();
+  });
+});
+
+describe("handleDomain", () => {
+  // 每個測試使用獨立的 tmp 子目錄，避免測試間汙染
+  let domainTmpDir: string;
+
+  beforeEach(() => {
+    domainTmpDir = path.join(TMP_DIR, `domain-${Date.now()}`);
+    fs.mkdirSync(domainTmpDir, { recursive: true });
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(process, "exit").mockImplementation(
+      ((code?: number) => undefined) as never,
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  describe("C1: parseCommand 對 domain add example.com 的解析", () => {
+    it("解析為 command=domain、args=[add, example.com]", () => {
+      const result = parseCommand([
+        "bun",
+        "cli.ts",
+        "domain",
+        "add",
+        "example.com",
+      ]);
+      expect(result.command).toBe("domain");
+      expect(result.args).toEqual(["add", "example.com"]);
+    });
+  });
+
+  describe("C2: domain add 新增有效 domain", () => {
+    it("handleDomain add example.com 成功並印出「已新增 example.com」", () => {
+      handleDomain(["add", "example.com"], domainTmpDir);
+      expect(console.log).toHaveBeenCalledWith("已新增 example.com");
+      expect(process.exit).not.toHaveBeenCalledWith(1);
+    });
+  });
+
+  describe("C3: domain add 缺少 domain 參數", () => {
+    it("handleDomain add 無參數時印用法並 exit(1)", () => {
+      handleDomain(["add"], domainTmpDir);
+      expect(console.error).toHaveBeenCalledWith(
+        "使用方式：agent-canvas domain add <domain>",
+      );
+      expect(process.exit).toHaveBeenCalledWith(1);
+    });
+  });
+
+  describe("C4: domain add 格式不合法（含 https://）", () => {
+    it("handleDomain add https://x 印 validation 錯誤並 exit(1)", () => {
+      handleDomain(["add", "https://x"], domainTmpDir);
+      // validateDomain 對含 :// 的 domain 拋出包含協議的錯誤訊息
+      const calls = vi.mocked(console.error).mock.calls;
+      const hasProtocolError = calls.some((args) =>
+        String(args[0]).includes("://"),
+      );
+      expect(hasProtocolError).toBe(true);
+      expect(process.exit).toHaveBeenCalledWith(1);
+    });
+  });
+
+  describe("C5: domain remove 移除預設清單中存在的 domain", () => {
+    it("handleDomain remove registry.npmjs.org 印「已移除」並從檔案中移除該行", () => {
+      // 確認 tmp dir 一開始沒有白名單檔案
+      const whitelistFile = path.join(domainTmpDir, "sandbox-whitelist.txt");
+      expect(fs.existsSync(whitelistFile)).toBe(false);
+
+      // 執行 remove：內部會先 loadDomainWhitelist → 初始化 24 項預設清單
+      handleDomain(["remove", "registry.npmjs.org"], domainTmpDir);
+      expect(console.log).toHaveBeenCalledWith("已移除 registry.npmjs.org");
+      expect(process.exit).not.toHaveBeenCalledWith(1);
+
+      // 驗證檔案中不再包含 registry.npmjs.org
+      const content = fs.readFileSync(whitelistFile, "utf-8");
+      expect(content).not.toContain("registry.npmjs.org");
+    });
+  });
+
+  describe("C6: domain remove 不存在的 domain", () => {
+    it("handleDomain remove nonexist.com 印「不在白名單中」並 exit(1)", () => {
+      handleDomain(["remove", "nonexist.com"], domainTmpDir);
+      const calls = vi.mocked(console.error).mock.calls;
+      const hasNotInListError = calls.some((args) =>
+        String(args[0]).includes("不在白名單中"),
+      );
+      expect(hasNotInListError).toBe(true);
+      expect(process.exit).toHaveBeenCalledWith(1);
+    });
+  });
+
+  describe("C7: domain remove 缺少 domain 參數", () => {
+    it("handleDomain remove 無參數時印用法並 exit(1)", () => {
+      handleDomain(["remove"], domainTmpDir);
+      expect(console.error).toHaveBeenCalledWith(
+        "使用方式：agent-canvas domain remove <domain>",
+      );
+      expect(process.exit).toHaveBeenCalledWith(1);
+    });
+  });
+
+  describe("C8: domain list 列出每行一個 domain", () => {
+    it("handleDomain list 印出每個 domain 各一行", () => {
+      // 先 add 兩個 domain 建立檔案
+      handleDomain(["add", "alpha.com"], domainTmpDir);
+      handleDomain(["add", "beta.com"], domainTmpDir);
+      vi.mocked(console.log).mockClear();
+
+      handleDomain(["list"], domainTmpDir);
+
+      const loggedDomains = vi
+        .mocked(console.log)
+        .mock.calls.map((args) => args[0]);
+      expect(loggedDomains).toContain("alpha.com");
+      expect(loggedDomains).toContain("beta.com");
+    });
+  });
+
+  describe("C9: domain 沒有子命令", () => {
+    it("handleDomain [] 印子命令用法並 exit(1)", () => {
+      handleDomain([], domainTmpDir);
+      expect(console.error).toHaveBeenCalledWith(
+        "使用方式：agent-canvas domain <add|remove|list>",
+      );
+      expect(process.exit).toHaveBeenCalledWith(1);
+    });
+  });
+
+  describe("C10: domain 不支援的子命令", () => {
+    it("handleDomain foo 印「不支援的 domain 子命令」並 exit(1)", () => {
+      handleDomain(["foo"], domainTmpDir);
+      expect(console.error).toHaveBeenCalledWith("不支援的 domain 子命令：foo");
+      expect(process.exit).toHaveBeenCalledWith(1);
+    });
   });
 });
 

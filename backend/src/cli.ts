@@ -3,6 +3,11 @@ import path from "path";
 import os from "os";
 import pkg from "../../package.json";
 import { safeJsonParse } from "./utils/safeJsonParse.js";
+import {
+  addDomain,
+  removeDomain,
+  loadDomainWhitelist,
+} from "./services/claude/sandboxDomainWhitelist.js";
 
 const APP_DATA_DIR = path.join(os.homedir(), "Documents", "AgentCanvas");
 const PID_FILE = path.join(APP_DATA_DIR, "agent-canvas.pid");
@@ -37,6 +42,9 @@ const HELP_TEXT = `Agent Canvas - AI Agent 畫布工具
   config get <key>              查看配置
   config list                   列出所有配置
   logs [-n <number>]            查看最新日誌（預設 50 行）
+  domain add <domain>           新增網域到 sandbox 白名單
+  domain remove <domain>        從 sandbox 白名單移除網域
+  domain list                   列出所有 sandbox 白名單網域
 
 選項：
   -v, --version                 顯示版本號
@@ -387,6 +395,76 @@ function handleConfigList(): void {
   }
 }
 
+function handleDomainAdd(args: string[], dataDir = APP_DATA_DIR): void {
+  const domain = args[0];
+
+  if (!domain) {
+    console.error("使用方式：agent-canvas domain add <domain>");
+    process.exit(1);
+  }
+
+  try {
+    const { added } = addDomain(domain, dataDir);
+    if (added) {
+      console.log(`已新增 ${domain}`);
+    } else {
+      console.log(`${domain} 已存在`);
+    }
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  }
+}
+
+function handleDomainRemove(args: string[], dataDir = APP_DATA_DIR): void {
+  const domain = args[0];
+
+  if (!domain) {
+    console.error("使用方式：agent-canvas domain remove <domain>");
+    process.exit(1);
+  }
+
+  try {
+    removeDomain(domain, dataDir);
+    console.log(`已移除 ${domain}`);
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  }
+}
+
+function handleDomainList(dataDir = APP_DATA_DIR): void {
+  const domains = loadDomainWhitelist(dataDir);
+  for (const domain of domains) {
+    console.log(domain);
+  }
+}
+
+export function handleDomain(args: string[], dataDir = APP_DATA_DIR): void {
+  const subCommand = args[0];
+  const subArgs = args.slice(1);
+
+  if (subCommand === "add") {
+    handleDomainAdd(subArgs, dataDir);
+    return;
+  }
+  if (subCommand === "remove") {
+    handleDomainRemove(subArgs, dataDir);
+    return;
+  }
+  if (subCommand === "list") {
+    handleDomainList(dataDir);
+    return;
+  }
+
+  if (subCommand) {
+    console.error(`不支援的 domain 子命令：${subCommand}`);
+  } else {
+    console.error("使用方式：agent-canvas domain <add|remove|list>");
+  }
+  process.exit(1);
+}
+
 export function handleConfig(args: string[]): void {
   const subCommand = args[0];
   const subArgs = args.slice(1);
@@ -467,6 +545,7 @@ const COMMAND_HANDLERS: Record<
   stop: () => handleStop(),
   status: () => handleStatus(),
   config: (args) => handleConfig(args),
+  domain: (args) => handleDomain(args),
   logs: (_, flags) => handleLogs(flags),
 };
 
