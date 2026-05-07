@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.3] - 2026-05-07
+
+### 修正
+- 強化 sandbox 安全防護，擋住 SSH 金鑰、AWS / GitHub / Docker credential、shell 設定檔等敏感路徑的寫入
+- 修正切換瀏覽器分頁觸發靜默重連後，後端找不到使用中 Canvas 的問題
+- 修正 Claude sandbox 設定無法從呼叫端覆寫的問題
+- 補上 sandbox 路徑與配置的測試覆蓋
+
 ## [1.4.2] - 2026-05-06
 
 ### 修正
