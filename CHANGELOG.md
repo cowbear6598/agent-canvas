@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.4.5] - 2026-05-07
+
+### 新增
+- 新增 agent-canvas domain add/remove/list 子命令，管理 Claude sandbox 網路白名單
+- 第一次啟動或操作時自動建立 ~/Documents/AgentCanvas/sandbox-whitelist.txt，包含 24 項預設網域（npm、pypi、github、anthropic、atlassian、slack、sentry、threads、discord、gitlab 等）
+
+### 修正
+- 修正原本 sandbox 網路全開設定不被 SDK 接受導致 Sentry/Slack 等 integration 被擋的問題，改為由白名單管理
+- 移除 CLAUDE_SANDBOX_DENIED_DOMAINS 環境變數
+
 ## [1.4.4] - 2026-05-07
 
 ### 修正
