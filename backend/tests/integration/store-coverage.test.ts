@@ -189,6 +189,9 @@ describe("Store 覆蓋率測試", () => {
           sourceAnchor: "right",
           targetPodId: podB.id,
           targetAnchor: "left",
+          label: "default",
+          branchProvider: "claude",
+          branchModel: "sonnet",
         },
       );
 

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { requestIdSchema, podIdSchema, canvasIdSchema } from "./base.js";
-import { modelTypeSchema, providerSchema } from "./podSchemas.js";
+import { providerSchema } from "./podSchemas.js";
 
 export const anchorPositionSchema = z.enum(["top", "bottom", "left", "right"]);
 
@@ -13,18 +13,50 @@ const summaryModelSchema = z
   .max(200)
   .regex(/^[a-zA-Z0-9._-]+$/, "summaryModel 格式不合法");
 
-export const connectionCreateSchema = z.object({
-  requestId: requestIdSchema,
-  canvasId: canvasIdSchema,
-  sourcePodId: podIdSchema,
-  sourceAnchor: anchorPositionSchema,
-  targetPodId: podIdSchema,
-  targetAnchor: anchorPositionSchema,
-  summaryModel: summaryModelSchema.optional(),
-  /** summaryProvider 可選；未提供時由服務層依 sourcePod.provider 決定預設值 */
-  summaryProvider: providerSchema.optional(),
-  aiDecideModel: modelTypeSchema.optional(),
-});
+/** label 最大長度 32，與前端常數 BRANCH_LABEL_MAX_LENGTH 對齊 */
+export const labelSchema = z.string().min(1).max(32);
+
+/** description 最大長度 200，與前端常數 BRANCH_DESCRIPTION_MAX_LENGTH 對齊；選填 */
+export const descriptionSchema = z.string().max(200).optional();
+
+/** branchModel 格式規則與 summaryModel 相同 */
+const branchModelSchema = z
+  .string()
+  .min(1)
+  .max(200)
+  .regex(/^[a-zA-Z0-9._-]+$/, "branchModel 格式不合法");
+
+export const connectionCreateSchema = z
+  .object({
+    requestId: requestIdSchema,
+    canvasId: canvasIdSchema,
+    sourcePodId: podIdSchema,
+    sourceAnchor: anchorPositionSchema,
+    targetPodId: podIdSchema,
+    targetAnchor: anchorPositionSchema,
+    summaryModel: summaryModelSchema.optional(),
+    /** summaryProvider 可選；未提供時由服務層依 sourcePod.provider 決定預設值 */
+    summaryProvider: providerSchema.optional(),
+    /**
+     * label 為此連線在 branch 決策中的辨識名稱，不可為 "None"。
+     * 建立時為 optional：新連線預設 triggerMode === "auto"，使用者切換到 branch 後才補上 label。
+     */
+    label: labelSchema.optional(),
+    description: descriptionSchema,
+    /** branchProvider 建立時 optional；切換到 branch 模式時才需要 */
+    branchProvider: providerSchema.optional(),
+    /** branchModel 建立時 optional；切換到 branch 模式時才需要 */
+    branchModel: branchModelSchema.optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.label !== undefined && data.label.toLowerCase() === "none") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'label 不可為系統保留字 "None"',
+        path: ["label"],
+      });
+    }
+  });
 
 export const connectionListSchema = z.object({
   requestId: requestIdSchema,
@@ -37,16 +69,29 @@ export const connectionDeleteSchema = z.object({
   connectionId: z.uuid(),
 });
 
-export const connectionUpdateSchema = z.object({
-  requestId: requestIdSchema,
-  canvasId: canvasIdSchema,
-  connectionId: z.uuid(),
-  triggerMode: z.enum(["auto", "ai-decide", "direct"]).optional(),
-  summaryModel: summaryModelSchema.optional(),
-  /** summaryProvider 可選；未提供時保留既有值（或 fallback 至 sourcePod.provider） */
-  summaryProvider: providerSchema.optional(),
-  aiDecideModel: modelTypeSchema.optional(),
-});
+export const connectionUpdateSchema = z
+  .object({
+    requestId: requestIdSchema,
+    canvasId: canvasIdSchema,
+    connectionId: z.uuid(),
+    triggerMode: z.enum(["auto", "branch", "direct"]).optional(),
+    summaryModel: summaryModelSchema.optional(),
+    /** summaryProvider 可選；未提供時保留既有值（或 fallback 至 sourcePod.provider） */
+    summaryProvider: providerSchema.optional(),
+    label: labelSchema.optional(),
+    description: descriptionSchema,
+    branchProvider: providerSchema.optional(),
+    branchModel: branchModelSchema.optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.label !== undefined && data.label.toLowerCase() === "none") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'label 不可為系統保留字 "None"',
+        path: ["label"],
+      });
+    }
+  });
 
 export type ConnectionCreatePayload = z.infer<typeof connectionCreateSchema>;
 export type ConnectionListPayload = z.infer<typeof connectionListSchema>;

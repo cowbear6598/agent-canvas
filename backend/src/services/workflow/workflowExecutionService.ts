@@ -6,7 +6,7 @@ import type {
 import type {
   PipelineContext,
   PipelineMethods,
-  AiDecideMethods,
+  BranchTriggerMethods,
   AutoTriggerMethods,
   TriggerStrategy,
   TriggerWorkflowWithSummaryParams,
@@ -37,7 +37,7 @@ import { RunModeExecutionStrategy } from "../executionStrategy.js";
 
 interface ExecutionServiceDeps {
   pipeline: PipelineMethods;
-  aiDecideTriggerService: AiDecideMethods;
+  branchTriggerService: BranchTriggerMethods;
   autoTriggerService: AutoTriggerMethods;
   directTriggerService: TriggerStrategy;
 }
@@ -158,20 +158,20 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
       );
   }
 
-  private triggerAiDecideConnections(
+  private triggerBranchConnections(
     canvasId: string,
     sourcePodId: string,
     connections: Connection[],
     runContext?: RunContext,
   ): Promise<unknown> {
-    const aiDecideConnections = connections.filter(
-      (conn) => conn.triggerMode === "ai-decide",
+    const branchConnections = connections.filter(
+      (conn) => conn.triggerMode === "branch",
     );
-    if (aiDecideConnections.length === 0) return Promise.resolve();
-    return this.deps.aiDecideTriggerService.processAiDecideConnections(
+    if (branchConnections.length === 0) return Promise.resolve();
+    return this.deps.branchTriggerService.processBranchConnections(
       canvasId,
       sourcePodId,
-      aiDecideConnections,
+      branchConnections,
       runContext,
     );
   }
@@ -226,7 +226,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
         connections,
         runContext,
       ),
-      this.triggerAiDecideConnections(
+      this.triggerBranchConnections(
         canvasId,
         sourcePodId,
         connections,

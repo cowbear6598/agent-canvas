@@ -4,11 +4,17 @@ import type {
   AnchorPosition,
   Connection,
   ConnectionStatus,
+  DecideStatus,
   DraggingConnection,
   TriggerMode,
   WorkflowRole,
 } from "@/types/connection";
-import type { ModelType, PodProvider } from "@/types/pod";
+import {
+  BRANCH_LABEL_MAX_LENGTH,
+  BRANCH_DESCRIPTION_MAX_LENGTH,
+  BRANCH_RESERVED_LABEL,
+} from "@/types/connection";
+import type { PodProvider } from "@/types/pod";
 import { usePodStore } from "@/stores/pod/podStore";
 import { useSelectionStore } from "@/stores/pod/selectionStore";
 import {
@@ -22,7 +28,7 @@ import { useCanvasWebSocketAction } from "@/composables/useCanvasWebSocketAction
 import { t } from "@/i18n";
 import { getActiveCanvasIdOrWarn } from "@/utils/canvasGuard";
 import { DEFAULT_TOAST_DURATION_MS } from "@/lib/constants";
-import { DEFAULT_SUMMARY_MODEL, DEFAULT_AI_DECIDE_MODEL } from "@/types/config";
+import { DEFAULT_SUMMARY_MODEL } from "@/types/config";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
 import { createWorkflowEventHandlers } from "./workflowEventHandlers";
 import { removeById } from "@/lib/arrayHelpers";
@@ -44,14 +50,22 @@ interface RawConnection {
   sourceAnchor: AnchorPosition;
   targetPodId: string;
   targetAnchor: AnchorPosition;
-  triggerMode?: "auto" | "ai-decide" | "direct";
+  triggerMode?: "auto" | "branch" | "direct";
   /** summaryModel 接受任意 provider 的模型名稱字串，不限於 Claude ModelType */
   summaryModel?: string;
   /** Summary 功能獨立選用的 Provider；升級前 Connection 為 null/undefined */
   summaryProvider?: PodProvider | null;
-  aiDecideModel?: ModelType;
+  /** Branch 模式下的連線標籤 */
+  label?: string;
+  /** Branch 模式下的連線描述 */
+  description?: string;
+  /** Branch 模式使用的 AI Provider */
+  branchProvider?: PodProvider;
+  /** Branch 模式使用的模型字串 */
+  branchModel?: string;
   connectionStatus?: string;
   decideReason?: string | null;
+  decideStatus?: string;
 }
 
 type WorkflowHandlers = ReturnType<typeof createWorkflowEventHandlers>;
@@ -69,9 +83,15 @@ function normalizeConnection(raw: RawConnection): Connection {
     summaryModel: raw.summaryModel ?? DEFAULT_SUMMARY_MODEL,
     // summaryProvider 直接帶入，不加 fallback；UI 層自行決定如何顯示 null/undefined
     summaryProvider: raw.summaryProvider,
-    aiDecideModel: raw.aiDecideModel ?? DEFAULT_AI_DECIDE_MODEL,
+    // branch 欄位直接帶入，不加 fallback
+    label: raw.label,
+    description: raw.description,
+    branchProvider: raw.branchProvider,
+    branchModel: raw.branchModel,
     status: (raw.connectionStatus ?? "idle") as ConnectionStatus,
     decideReason: raw.decideReason ?? undefined,
+    // decideStatus：?? "none" 僅做型別 narrowing 用，BE 正規路徑必然帶值
+    decideStatus: (raw.decideStatus as DecideStatus) ?? "none",
   };
 }
 
@@ -79,22 +99,20 @@ const RUNNING_CONNECTION_STATUSES = new Set<ConnectionStatus>([
   "active",
   "queued",
   "waiting",
-  "ai-deciding",
-  "ai-approved",
 ]);
 
 const RUNNING_POD_STATUSES = new Set(["chatting", "summarizing"]);
 
 /**
- * 事件亂序保護：當 connection 正在 AI 決策中，不允許被 active 事件覆蓋。
- * 防止排程或其他觸發路徑的 active 事件在 ai-deciding 期間改變狀態，
+ * 事件亂序保護：當 connection 的 decideStatus 為 pending（AI 決策中），不允許被 active 事件覆蓋。
+ * 防止排程或其他觸發路徑的 active 事件在 AI 決策期間改變狀態，
  * 導致 AI 決策結果被忽略或狀態機進入不一致情況。
  */
 function isOutOfOrderUpdate(
-  currentStatus: ConnectionStatus | undefined,
+  currentDecideStatus: DecideStatus | undefined,
   incomingStatus: ConnectionStatus,
 ): boolean {
-  return currentStatus === "ai-deciding" && incomingStatus === "active";
+  return currentDecideStatus === "pending" && incomingStatus === "active";
 }
 
 function shouldUpdateConnection(
@@ -103,12 +121,9 @@ function shouldUpdateConnection(
   status: ConnectionStatus,
 ): boolean {
   if (connection.targetPodId !== targetPodId) return false;
-  if (
-    connection.triggerMode !== "auto" &&
-    connection.triggerMode !== "ai-decide"
-  )
+  if (connection.triggerMode !== "auto" && connection.triggerMode !== "branch")
     return false;
-  if (isOutOfOrderUpdate(connection.status, status)) return false;
+  if (isOutOfOrderUpdate(connection.decideStatus, status)) return false;
   return true;
 }
 
@@ -123,8 +138,9 @@ function isAnyNeighborRunning(
 ): boolean {
   for (const { neighborId, connection } of neighbors) {
     if (
-      connection.status !== undefined &&
-      RUNNING_CONNECTION_STATUSES.has(connection.status)
+      (connection.status !== undefined &&
+        RUNNING_CONNECTION_STATUSES.has(connection.status)) ||
+      connection.decideStatus === "pending"
     )
       return true;
     if (!visited.has(neighborId)) {
@@ -239,13 +255,13 @@ export const useConnectionStore = defineStore("connection", () => {
     );
   });
 
-  const getAiDecideConnectionsBySourcePodId = computed(
+  const getBranchConnectionsBySourcePodId = computed(
     () =>
       (sourcePodId: string): Connection[] => {
         return connections.value.filter(
           (connection) =>
             connection.sourcePodId === sourcePodId &&
-            connection.triggerMode === "ai-decide",
+            connection.triggerMode === "branch",
         );
       },
   );
@@ -374,7 +390,6 @@ export const useConnectionStore = defineStore("connection", () => {
   // 拿到的是同一份 handler reference，讓 websocketClient.off() 能正確移除監聽器。
   const workflowHandlers: WorkflowHandlers = createWorkflowEventHandlers({
     connections: connections.value,
-    findConnectionById,
     updateAutoGroupStatus,
     setConnectionStatus,
   });
@@ -389,24 +404,8 @@ export const useConnectionStore = defineStore("connection", () => {
       castHandler(workflowHandlers.handleWorkflowComplete),
     ],
     [
-      WebSocketResponseEvents.WORKFLOW_AI_DECIDE_PENDING,
-      castHandler(workflowHandlers.handleAiDecidePending),
-    ],
-    [
-      WebSocketResponseEvents.WORKFLOW_AI_DECIDE_RESULT,
-      castHandler(workflowHandlers.handleAiDecideResult),
-    ],
-    [
-      WebSocketResponseEvents.WORKFLOW_AI_DECIDE_ERROR,
-      castHandler(workflowHandlers.handleAiDecideError),
-    ],
-    [
-      WebSocketResponseEvents.WORKFLOW_AI_DECIDE_CLEAR,
-      castHandler(workflowHandlers.handleAiDecideClear),
-    ],
-    [
-      WebSocketResponseEvents.WORKFLOW_AI_DECIDE_TRIGGERED,
-      castHandler(workflowHandlers.handleWorkflowAiDecideTriggered),
+      WebSocketResponseEvents.WORKFLOW_BRANCH_TRIGGERED,
+      castHandler(workflowHandlers.handleWorkflowBranchTriggered),
     ],
     [
       WebSocketResponseEvents.WORKFLOW_DIRECT_TRIGGERED,
@@ -626,7 +625,13 @@ export const useConnectionStore = defineStore("connection", () => {
     connectionId: string,
     updates: Pick<
       ConnectionUpdatePayload,
-      "triggerMode" | "summaryModel" | "summaryProvider" | "aiDecideModel"
+      | "triggerMode"
+      | "summaryModel"
+      | "summaryProvider"
+      | "label"
+      | "description"
+      | "branchProvider"
+      | "branchModel"
     >,
     errorMessage: string,
   ): Promise<Connection | null> {
@@ -653,8 +658,10 @@ export const useConnectionStore = defineStore("connection", () => {
 
   async function updateConnectionTriggerMode(
     connectionId: string,
-    triggerMode: TriggerMode,
+    triggerMode: "auto" | "branch" | "direct",
   ): Promise<Connection | null> {
+    // 切換 triggerMode 時不在前端清空 branch 欄位；
+    // 後端會清除並透過 ConnectionUpdated 廣播最新狀態
     return executeConnectionUpdate(
       connectionId,
       { triggerMode },
@@ -690,21 +697,234 @@ export const useConnectionStore = defineStore("connection", () => {
     );
   }
 
-  async function updateConnectionAiDecideModel(
+  /**
+   * 驗證 branch label 是否合法。
+   * 回傳 { valid: true } 或 { valid: false, errorKey: string }，
+   * errorKey 為 i18n 的 key（不含前綴，呼叫端自行加 "store.connection." 前綴）。
+   */
+  function validateBranchLabel(
+    sourcePodId: string,
     connectionId: string,
-    aiDecideModel: string,
+    label: string,
+  ): { valid: true } | { valid: false; errorKey: string } {
+    // 規則 1：label 不可為空字串
+    if (label.trim() === "") {
+      return { valid: false, errorKey: "branchLabelEmpty" };
+    }
+
+    // 規則 2：label 長度 ≤ BRANCH_LABEL_MAX_LENGTH（32）
+    if (label.length > BRANCH_LABEL_MAX_LENGTH) {
+      return { valid: false, errorKey: "branchLabelTooLong" };
+    }
+
+    // 規則 3：label 不可等於 BRANCH_RESERVED_LABEL（"None"，大小寫不敏感）
+    if (label.toLowerCase() === BRANCH_RESERVED_LABEL.toLowerCase()) {
+      return { valid: false, errorKey: "branchLabelReserved" };
+    }
+
+    // 規則 4：同一個 sourcePodId 出去的 branch connections（排除自己）label 不可重複
+    const siblings = getBranchConnectionsBySourcePodId.value(sourcePodId);
+    const isDuplicate = siblings.some(
+      (conn) =>
+        conn.id !== connectionId &&
+        conn.label?.toLowerCase() === label.toLowerCase(),
+    );
+    if (isDuplicate) {
+      return { valid: false, errorKey: "branchLabelDuplicate" };
+    }
+
+    return { valid: true };
+  }
+
+  /**
+   * 驗證 branch description 是否合法。
+   * 回傳 { valid: true } 或 { valid: false, errorKey: string }。
+   */
+  function validateBranchDescription(
+    description: string,
+  ): { valid: true } | { valid: false; errorKey: string } {
+    if (description.length > BRANCH_DESCRIPTION_MAX_LENGTH) {
+      return { valid: false, errorKey: "branchDescriptionTooLong" };
+    }
+    return { valid: true };
+  }
+
+  /**
+   * 更新 branch label，先驗證再送出 WS 請求。
+   * 驗證失敗時顯示對應 toast 並回傳 null。
+   */
+  async function updateConnectionBranchLabel(
+    connectionId: string,
+    label: string,
   ): Promise<Connection | null> {
-    const MODEL_TYPES: ModelType[] = ["opus", "sonnet", "haiku"];
-    const validatedModel: ModelType = MODEL_TYPES.includes(
-      aiDecideModel as ModelType,
-    )
-      ? (aiDecideModel as ModelType)
-      : "sonnet";
+    const connection = findConnectionById(connectionId);
+    if (!connection?.sourcePodId) return null;
+
+    const result = validateBranchLabel(
+      connection.sourcePodId,
+      connectionId,
+      label,
+    );
+    if (!result.valid) {
+      toast({
+        title: t(`store.connection.${result.errorKey}`),
+        duration: DEFAULT_TOAST_DURATION_MS,
+        variant: "destructive",
+      });
+      return null;
+    }
+
     return executeConnectionUpdate(
       connectionId,
-      { aiDecideModel: validatedModel },
-      t("store.connection.aiDecideModelUpdateFailed"),
+      { label },
+      t("store.connection.updateFailed"),
     );
+  }
+
+  /**
+   * 更新 branch description，先驗證再送出 WS 請求。
+   * 驗證失敗時顯示對應 toast 並回傳 null。
+   */
+  async function updateConnectionBranchDescription(
+    connectionId: string,
+    description: string,
+  ): Promise<Connection | null> {
+    const result = validateBranchDescription(description);
+    if (!result.valid) {
+      toast({
+        title: t(`store.connection.${result.errorKey}`),
+        duration: DEFAULT_TOAST_DURATION_MS,
+        variant: "destructive",
+      });
+      return null;
+    }
+
+    return executeConnectionUpdate(
+      connectionId,
+      { description },
+      t("store.connection.updateFailed"),
+    );
+  }
+
+  /**
+   * Branch Modal 一次送出 triggerMode 切換 + label + description 的合併更新。
+   * 將原本三次 WS 請求合併為一次，避免 modal 儲存時的中間狀態。
+   * sourcePodId 由呼叫端從 connection 取出傳入，避免 store 內再查一次。
+   */
+  async function updateConnectionBranchSettings(
+    connectionId: string,
+    sourcePodId: string,
+    payload: {
+      switchToBranch: boolean;
+      label: string;
+      description: string;
+    },
+  ): Promise<Connection | null> {
+    const labelResult = validateBranchLabel(
+      sourcePodId,
+      connectionId,
+      payload.label,
+    );
+    if (!labelResult.valid) {
+      toast({
+        title: t(`store.connection.${labelResult.errorKey}`),
+        duration: DEFAULT_TOAST_DURATION_MS,
+        variant: "destructive",
+      });
+      return null;
+    }
+
+    const descResult = validateBranchDescription(payload.description);
+    if (!descResult.valid) {
+      toast({
+        title: t(`store.connection.${descResult.errorKey}`),
+        duration: DEFAULT_TOAST_DURATION_MS,
+        variant: "destructive",
+      });
+      return null;
+    }
+
+    const updates: Pick<
+      ConnectionUpdatePayload,
+      "triggerMode" | "label" | "description"
+    > = {
+      label: payload.label,
+      description: payload.description,
+    };
+    if (payload.switchToBranch) {
+      updates.triggerMode = "branch";
+    }
+
+    return executeConnectionUpdate(
+      connectionId,
+      updates,
+      t("store.connection.updateFailed"),
+    );
+  }
+
+  /**
+   * 取得需要同步的 branch sibling connection ID 清單。
+   *
+   * 同一 sourcePodId 下所有 triggerMode='branch' 的連線共用一個決策模型，
+   * 因為後端 branchDecisionService 實際只用 branchConnections[0] 的 provider/model
+   * 做決策；UI 若讓各條獨立設定會與後端行為不一致。
+   * 故任一條被改動時，需同步寫入同 source 的所有 branch sibling 與目標連線本身。
+   */
+  function collectBranchSiblingIds(connectionId: string): string[] {
+    const target = connections.value.find((c) => c.id === connectionId);
+    if (!target) return [connectionId];
+
+    const ids = new Set<string>([connectionId]);
+    for (const c of connections.value) {
+      if (c.sourcePodId === target.sourcePodId && c.triggerMode === "branch") {
+        ids.add(c.id);
+      }
+    }
+    return Array.from(ids);
+  }
+
+  /**
+   * 同時更新 branchProvider 與 branchModel，確保單一 WS 請求送出，
+   * 避免 provider/model 出現不一致的中間狀態。
+   * 同 sourcePod 下所有 branch sibling 一起同步（見 collectBranchSiblingIds 註解）。
+   */
+  async function updateConnectionBranchProvider(
+    connectionId: string,
+    branchProvider: PodProvider,
+    branchModel: string,
+  ): Promise<Connection | null> {
+    const ids = collectBranchSiblingIds(connectionId);
+    const results = await Promise.all(
+      ids.map((id) =>
+        executeConnectionUpdate(
+          id,
+          { branchProvider, branchModel },
+          t("store.connection.updateFailed"),
+        ),
+      ),
+    );
+    return results.find((r) => r?.id === connectionId) ?? null;
+  }
+
+  /**
+   * 更新 branch model（不變更 provider）。
+   * 同 sourcePod 下所有 branch sibling 一起同步（見 collectBranchSiblingIds 註解）。
+   */
+  async function updateConnectionBranchModel(
+    connectionId: string,
+    branchModel: string,
+  ): Promise<Connection | null> {
+    const ids = collectBranchSiblingIds(connectionId);
+    const results = await Promise.all(
+      ids.map((id) =>
+        executeConnectionUpdate(
+          id,
+          { branchModel },
+          t("store.connection.updateFailed"),
+        ),
+      ),
+    );
+    return results.find((r) => r?.id === connectionId) ?? null;
   }
 
   function setupWorkflowListeners(): void {
@@ -719,10 +939,6 @@ export const useConnectionStore = defineStore("connection", () => {
     });
   }
 
-  function clearAiDecideStatusByConnectionIds(connectionIds: string[]): void {
-    getWorkflowHandlers().clearAiDecideStatusByConnectionIds(connectionIds);
-  }
-
   function addConnectionFromEvent(
     connection: Omit<Connection, "status">,
   ): void {
@@ -730,6 +946,7 @@ export const useConnectionStore = defineStore("connection", () => {
       ...connection,
       triggerMode: connection.triggerMode ?? "auto",
       status: "idle" as ConnectionStatus,
+      decideStatus: "none" as DecideStatus,
     };
 
     const exists = connections.value.some(
@@ -761,11 +978,17 @@ export const useConnectionStore = defineStore("connection", () => {
         connection.summaryProvider !== undefined
           ? connection.summaryProvider
           : existingConnection.summaryProvider,
-      aiDecideModel:
-        connection.aiDecideModel ??
-        existingConnection.aiDecideModel ??
-        DEFAULT_AI_DECIDE_MODEL,
+      // branch 欄位直接以後端回傳值覆寫（包含 undefined → 視為清空）
+      label: connection.label,
+      description: connection.description,
+      branchProvider: connection.branchProvider,
+      branchModel: connection.branchModel,
       status: existingConnection.status,
+      // decideStatus：incoming 有值則覆寫，undefined 則保留既有值
+      decideStatus:
+        connection.decideStatus !== undefined
+          ? connection.decideStatus
+          : existingConnection.decideStatus,
       decideReason: connection.decideReason ?? existingConnection.decideReason,
     };
 
@@ -791,9 +1014,7 @@ export const useConnectionStore = defineStore("connection", () => {
    * 純函數：回傳所有 summaryModel 不合法的 connection 及其對應的修正 model。
    * 不發出任何更新，供 reconcileSummaryModelsForPod 使用。
    */
-  function getInvalidConnectionsForPod(
-    podId: string,
-  ): Array<{
+  function getInvalidConnectionsForPod(podId: string): Array<{
     connectionId: string;
     newModel: string;
     summaryProvider: PodProvider | null | undefined;
@@ -859,7 +1080,7 @@ export const useConnectionStore = defineStore("connection", () => {
     selectedConnection,
     isSourcePod,
     hasUpstreamConnections,
-    getAiDecideConnectionsBySourcePodId,
+    getBranchConnectionsBySourcePodId,
     getPodWorkflowRole,
     isPartOfRunningWorkflow,
     isWorkflowRunning,
@@ -879,11 +1100,16 @@ export const useConnectionStore = defineStore("connection", () => {
     updateConnectionTriggerMode,
     updateConnectionSummaryModel,
     updateConnectionSummaryProvider,
-    updateConnectionAiDecideModel,
+    validateBranchLabel,
+    validateBranchDescription,
+    updateConnectionBranchLabel,
+    updateConnectionBranchDescription,
+    updateConnectionBranchSettings,
+    updateConnectionBranchProvider,
+    updateConnectionBranchModel,
     getWorkflowHandlers,
     setupWorkflowListeners,
     cleanupWorkflowListeners,
-    clearAiDecideStatusByConnectionIds,
     addConnectionFromEvent,
     updateConnectionFromEvent,
     removeConnectionFromEvent,

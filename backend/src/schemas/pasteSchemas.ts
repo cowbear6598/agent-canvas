@@ -6,7 +6,11 @@ import {
   createPasteNoteItemSchema,
   resourceIdSchema,
 } from "./base.js";
-import { anchorPositionSchema } from "./connectionSchemas.js";
+import {
+  anchorPositionSchema,
+  labelSchema,
+  descriptionSchema,
+} from "./connectionSchemas.js";
 import { providerSchema, providerConfigSchema } from "./podSchemas.js";
 
 export const pastePodItemSchema = z
@@ -63,7 +67,20 @@ export const pasteConnectionItemSchema = z
     sourceAnchor: anchorPositionSchema,
     originalTargetPodId: z.uuid(),
     targetAnchor: anchorPositionSchema,
-    triggerMode: z.enum(["auto", "ai-decide", "direct"]).optional(),
+    triggerMode: z.enum(["auto", "branch", "direct"]).optional(),
+    /** paste 時保留 branch 連線的 label（若有） */
+    label: labelSchema.optional(),
+    /** paste 時保留 branch 連線的描述（若有） */
+    description: descriptionSchema,
+    /** paste 時保留 branch 連線的 provider（若有） */
+    branchProvider: providerSchema.optional(),
+    /** paste 時保留 branch 連線的模型（若有） */
+    branchModel: z
+      .string()
+      .min(1)
+      .max(200)
+      .regex(/^[a-zA-Z0-9._-]+$/, "branchModel 格式不合法")
+      .optional(),
   })
   .strict();
 

@@ -193,7 +193,7 @@ const {
   handleClearWorkflow,
   handleConfirmClear,
   handleCancelClear,
-} = useWorkflowClear(computedPodId, { chatStore, podStore, connectionStore });
+} = useWorkflowClear(computedPodId, { chatStore, podStore });
 
 // Plugin notch 相關狀態
 const pluginActiveCount = computed(() => props.pod.pluginIds?.length ?? 0);
@@ -438,10 +438,7 @@ const handleContextMenu = (e: MouseEvent): void => {
     <!-- 光暈層：放在 pod-wrapper 之外，不受 transform: rotate 影響 -->
     <!-- 此層僅承載 chatting/summarizing 等需要完整包覆（不被截切）的光暈效果 -->
     <!-- selected/drag-over 狀態已移至 pod-wrapper 內層（pod-inner-highlight），跟著旋轉 -->
-    <div
-      class="pod-glow-layer"
-      :class="[podStatusClasses]"
-    />
+    <div class="pod-glow-layer" :class="[podStatusClasses]" />
 
     <div
       class="relative pod-wrapper pod-with-plugin-notch pod-with-mcp-notch pod-with-mcp-server-notch pod-with-thinking-notch"

@@ -418,26 +418,33 @@
     "connectionContextMenu": {
       "triggerModeAuto": "自動觸發 (Auto)",
       "triggerModeDirect": "直接觸發 (Direct)",
-      "triggerModeAiDecide": "AI 判斷 (AI Decide)",
+      "triggerModeBranch": "Branch 判斷 (Branch)",
       "summaryModel": "Summary Model",
-      "aiModel": "AI Model",
+      "branchModel": "Branch Model",
       "triggerModeChanged": "觸發模式已變更",
       "triggerModeChangedDesc": "已切換為{mode}模式",
       "triggerModeAutoLabel": "自動觸發",
       "triggerModeDirectLabel": "直接觸發",
-      "triggerModeAiDecideLabel": "AI 判斷",
+      "triggerModeBranchLabel": "Branch 判斷",
       "changeFailed": "變更失敗",
       "triggerModeChangeFailed": "無法變更觸發模式",
       "summaryModelChanged": "總結模型已變更",
       "summaryModelChangeFailed": "無法變更總結模型",
-      "aiDecideModelChanged": "AI 決策模型已變更",
-      "aiDecideModelChangeFailed": "無法變更 AI 決策模型",
+      "branchModelChanged": "Branch 模型已變更",
+      "branchModelChangeFailed": "無法變更 Branch 模型",
       "modelSwitched": "已切換為 {model}",
       "loading": "載入中...",
       "summaryProvider": "Summary Provider",
       "summaryProviderChanged": "Summary Provider 已切換",
       "summaryProviderChangedDesc": "Provider：{provider}，Model：{model}",
       "summaryProviderChangeFailed": "Summary Provider 切換失敗",
+      "branchLabel": "Branch Label",
+      "branchLabelPlaceholder": "請輸入 Branch Label",
+      "branchDescription": "Branch Description",
+      "branchDescriptionPlaceholder": "請輸入 Branch Description（選填）",
+      "branchProvider": "Branch Provider",
+      "branchProviderChanged": "Branch Provider 已切換",
+      "branchProviderChangedDesc": "Provider：{provider}，Model：{model}",
       "providerLabel": {
         "claude": "Claude",
         "codex": "Codex",
@@ -456,6 +463,11 @@
       "namePlaceholder": "名稱",
       "contentPlaceholder": "內容",
       "editTitleWithType": "編輯 {type}"
+    },
+    "branchEditModal": {
+      "title": "Branch 連線設定",
+      "description": "為這條 branch 連線命名與描述，AI 會以這些資訊判斷哪條路該觸發。",
+      "confirmSwitch": "切換並儲存"
     },
     "scheduleModal": {
       "createTitle": "設定排程",
@@ -513,7 +525,12 @@
       "deleteFailed": "連線刪除失敗",
       "updateFailed": "連線更新失敗",
       "summaryModelUpdateFailed": "連線摘要模型更新失敗",
-      "aiDecideModelUpdateFailed": "連線 AI 決策模型更新失敗"
+      "branchLabelEmpty": "Branch label 不可為空",
+      "branchLabelTooLong": "Branch label 長度不可超過 {max} 字元",
+      "branchLabelReserved": "None 為系統保留字，請使用其他名稱",
+      "branchLabelDuplicate": "label 已存在於同一組 branch，請使用不同名稱",
+      "branchDescriptionTooLong": "Branch description 長度不可超過 {max} 字元",
+      "branchUpdateFailed": "Branch 連線更新失敗"
     },
     "pod": {
       "createFailed": "Pod 建立失敗",
@@ -823,6 +840,12 @@
         "itemHint": "輸入這張 Canvas 的密碼後即可恢復畫布。",
         "unlockAction": "解鎖"
       }
+    }
+  },
+  "shared": {
+    "providerModelSelector": {
+      "providerLabel": "Provider",
+      "modelLabel": "Model"
     }
   }
 }

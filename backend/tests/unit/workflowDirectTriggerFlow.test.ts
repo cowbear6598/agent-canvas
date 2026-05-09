@@ -105,9 +105,6 @@ function setupBasicSpies(conn: Connection) {
   vi.spyOn(workflowEventEmitter, "emitWorkflowQueued").mockImplementation(
     () => {},
   );
-  vi.spyOn(workflowEventEmitter, "emitAiDecidePending").mockImplementation(
-    () => {},
-  );
   vi.spyOn(
     workflowEventEmitter,
     "emitWorkflowAutoTriggered",

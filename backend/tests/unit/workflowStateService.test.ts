@@ -77,7 +77,7 @@ describe("WorkflowStateService", () => {
         makeConnection({ id: "c1", triggerMode: "auto", sourcePodId: "src-1" }),
         makeConnection({
           id: "c2",
-          triggerMode: "ai-decide",
+          triggerMode: "branch",
           sourcePodId: "src-2",
         }),
       ]);
@@ -124,7 +124,7 @@ describe("WorkflowStateService", () => {
         }),
         makeConnection({
           id: "c3",
-          triggerMode: "ai-decide",
+          triggerMode: "branch",
           sourcePodId: "src-3",
         }),
       ]);
@@ -202,11 +202,11 @@ describe("WorkflowStateService", () => {
       expect(count).toBe(0);
     });
 
-    it("不計算 ai-decide 連線", () => {
+    it("不計算 branch 連線（branch 走 auto-triggerable，不算 direct）", () => {
       vi.spyOn(connectionStore, "findByTargetPodId").mockReturnValue([
         makeConnection({
           id: "c1",
-          triggerMode: "ai-decide",
+          triggerMode: "branch",
           sourcePodId: "src-1",
         }),
         makeConnection({
@@ -519,10 +519,10 @@ describe("WorkflowStateService", () => {
         expect(removeFromPendingSpy).not.toHaveBeenCalled();
       });
 
-      it("ai-decide 連線也走 auto-triggerable 分支", () => {
+      it("branch 連線也走 auto-triggerable 分支", () => {
         const aiDecideConnection = makeConnection({
           id: CONNECTION_ID,
-          triggerMode: "ai-decide",
+          triggerMode: "branch",
           sourcePodId: SOURCE_POD_ID,
           targetPodId: TARGET_POD_ID,
         });

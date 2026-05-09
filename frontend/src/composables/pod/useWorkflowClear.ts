@@ -1,84 +1,88 @@
-import type { Ref } from 'vue'
-import { ref } from 'vue'
-import { useWebSocketErrorHandler } from '@/composables/useWebSocketErrorHandler'
-import { createWebSocketRequest, WebSocketRequestEvents, WebSocketResponseEvents } from '@/services/websocket'
+import type { Ref } from "vue";
+import { ref } from "vue";
+import { useWebSocketErrorHandler } from "@/composables/useWebSocketErrorHandler";
+import {
+  createWebSocketRequest,
+  WebSocketRequestEvents,
+  WebSocketResponseEvents,
+} from "@/services/websocket";
 import type {
   WorkflowGetDownstreamPodsResultPayload,
   WorkflowClearResultPayload,
   WorkflowGetDownstreamPodsPayload,
-  WorkflowClearPayload
-} from '@/types/websocket'
-import { getActiveCanvasIdOrWarn } from '@/utils/canvasGuard'
+  WorkflowClearPayload,
+} from "@/types/websocket";
+import { getActiveCanvasIdOrWarn } from "@/utils/canvasGuard";
 
 interface ClearStores {
   chatStore: {
-    clearMessagesByPodIds: (podIds: string[]) => void
-  }
+    clearMessagesByPodIds: (podIds: string[]) => void;
+  };
   podStore: {
-    clearPodOutputsByIds: (podIds: string[]) => void
-  }
-  connectionStore: {
-    getAiDecideConnectionsBySourcePodId: (podId: string) => { id: string }[]
-    clearAiDecideStatusByConnectionIds: (connectionIds: string[]) => void
-  }
+    clearPodOutputsByIds: (podIds: string[]) => void;
+  };
 }
 
 interface UseWorkflowClearReturn {
-  showClearDialog: Ref<boolean>
-  downstreamPods: Ref<Array<{ id: string; name: string }>>
-  isLoadingDownstream: Ref<boolean>
-  isClearing: Ref<boolean>
-  handleClearWorkflow: () => Promise<void>
-  handleConfirmClear: () => Promise<void>
-  handleCancelClear: () => void
+  showClearDialog: Ref<boolean>;
+  downstreamPods: Ref<Array<{ id: string; name: string }>>;
+  isLoadingDownstream: Ref<boolean>;
+  isClearing: Ref<boolean>;
+  handleClearWorkflow: () => Promise<void>;
+  handleConfirmClear: () => Promise<void>;
+  handleCancelClear: () => void;
 }
 
 export function useWorkflowClear(
   podId: Ref<string>,
-  stores: ClearStores
+  stores: ClearStores,
 ): UseWorkflowClearReturn {
-  const { chatStore, podStore, connectionStore } = stores
+  const { chatStore, podStore } = stores;
 
-  const showClearDialog = ref(false)
-  const downstreamPods = ref<Array<{ id: string; name: string }>>([])
-  const isLoadingDownstream = ref(false)
-  const isClearing = ref(false)
+  const showClearDialog = ref(false);
+  const downstreamPods = ref<Array<{ id: string; name: string }>>([]);
+  const isLoadingDownstream = ref(false);
+  const isClearing = ref(false);
 
   const handleClearWorkflow = async (): Promise<void> => {
-    const canvasId = getActiveCanvasIdOrWarn('useWorkflowClear')
-    if (!canvasId) return
+    const canvasId = getActiveCanvasIdOrWarn("useWorkflowClear");
+    if (!canvasId) return;
 
-    isLoadingDownstream.value = true
+    isLoadingDownstream.value = true;
 
-    const { wrapWebSocketRequest } = useWebSocketErrorHandler()
+    const { wrapWebSocketRequest } = useWebSocketErrorHandler();
 
     const response = await wrapWebSocketRequest(
-      createWebSocketRequest<WorkflowGetDownstreamPodsPayload, WorkflowGetDownstreamPodsResultPayload>({
+      createWebSocketRequest<
+        WorkflowGetDownstreamPodsPayload,
+        WorkflowGetDownstreamPodsResultPayload
+      >({
         requestEvent: WebSocketRequestEvents.WORKFLOW_GET_DOWNSTREAM_PODS,
-        responseEvent: WebSocketResponseEvents.WORKFLOW_GET_DOWNSTREAM_PODS_RESULT,
+        responseEvent:
+          WebSocketResponseEvents.WORKFLOW_GET_DOWNSTREAM_PODS_RESULT,
         payload: {
           canvasId,
-          sourcePodId: podId.value
-        }
-      })
-    )
+          sourcePodId: podId.value,
+        },
+      }),
+    );
 
-    isLoadingDownstream.value = false
+    isLoadingDownstream.value = false;
 
-    if (!response) return
-    if (!response.pods) return
+    if (!response) return;
+    if (!response.pods) return;
 
-    downstreamPods.value = response.pods
-    showClearDialog.value = true
-  }
+    downstreamPods.value = response.pods;
+    showClearDialog.value = true;
+  };
 
   const handleConfirmClear = async (): Promise<void> => {
-    const canvasId = getActiveCanvasIdOrWarn('useWorkflowClear')
-    if (!canvasId) return
+    const canvasId = getActiveCanvasIdOrWarn("useWorkflowClear");
+    if (!canvasId) return;
 
-    isClearing.value = true
+    isClearing.value = true;
 
-    const { wrapWebSocketRequest } = useWebSocketErrorHandler()
+    const { wrapWebSocketRequest } = useWebSocketErrorHandler();
 
     const response = await wrapWebSocketRequest(
       createWebSocketRequest<WorkflowClearPayload, WorkflowClearResultPayload>({
@@ -86,37 +90,30 @@ export function useWorkflowClear(
         responseEvent: WebSocketResponseEvents.WORKFLOW_CLEAR_RESULT,
         payload: {
           canvasId,
-          sourcePodId: podId.value
-        }
-      })
-    )
+          sourcePodId: podId.value,
+        },
+      }),
+    );
 
-    isClearing.value = false
+    isClearing.value = false;
 
-    if (!response) return
-    if (!response.clearedPodIds) return
+    if (!response) return;
+    if (!response.clearedPodIds) return;
 
-    chatStore.clearMessagesByPodIds(response.clearedPodIds)
-    podStore.clearPodOutputsByIds(response.clearedPodIds)
+    chatStore.clearMessagesByPodIds(response.clearedPodIds);
+    podStore.clearPodOutputsByIds(response.clearedPodIds);
 
-    const downstreamAiDecideConnectionIds: string[] = []
-    response.clearedPodIds.forEach(clearedPodId => {
-      const connections = connectionStore.getAiDecideConnectionsBySourcePodId(clearedPodId)
-      downstreamAiDecideConnectionIds.push(...connections.map(connection => connection.id))
-    })
+    // connection 的 decideStatus 清除由後端廣播的 CONNECTION_UPDATED（decideStatus: "none"）自動處理，
+    // 前端不再手動呼叫 clearAiDecideStatusByConnectionIds。
 
-    if (downstreamAiDecideConnectionIds.length > 0) {
-      connectionStore.clearAiDecideStatusByConnectionIds(downstreamAiDecideConnectionIds)
-    }
-
-    showClearDialog.value = false
-    downstreamPods.value = []
-  }
+    showClearDialog.value = false;
+    downstreamPods.value = [];
+  };
 
   const handleCancelClear = (): void => {
-    showClearDialog.value = false
-    downstreamPods.value = []
-  }
+    showClearDialog.value = false;
+    downstreamPods.value = [];
+  };
 
   return {
     showClearDialog,
@@ -125,6 +122,6 @@ export function useWorkflowClear(
     isClearing,
     handleClearWorkflow,
     handleConfirmClear,
-    handleCancelClear
-  }
+    handleCancelClear,
+  };
 }

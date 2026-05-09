@@ -4,9 +4,10 @@ export { workflowExecutionService } from "./workflowExecutionService.js";
 export { workflowAutoTriggerService } from "./workflowAutoTriggerService.js";
 export { workflowMultiInputService } from "./workflowMultiInputService.js";
 export { workflowDirectTriggerService } from "./workflowDirectTriggerService.js";
-export { workflowAiDecideTriggerService } from "./workflowAiDecideTriggerService.js";
-export { aiDecideService } from "./aiDecideService.js";
-export { aiDecidePromptBuilder } from "./aiDecidePromptBuilder.js";
+// Phase 3C 新增：BranchDecisionService singleton
+export { branchDecisionService } from "./branchDecisionService.js";
+// Phase 3D 新增：WorkflowBranchTriggerService singleton
+export { workflowBranchTriggerService } from "./workflowBranchTriggerService.js";
 export { workflowQueueService } from "./workflowQueueService.js";
 export { runQueueService } from "./runQueueService.js";
 export { workflowPipeline } from "./workflowPipeline.js";
@@ -15,7 +16,7 @@ export type * from "./types.js";
 
 import { workflowPipeline } from "./workflowPipeline.js";
 import { workflowAutoTriggerService } from "./workflowAutoTriggerService.js";
-import { workflowAiDecideTriggerService } from "./workflowAiDecideTriggerService.js";
+import { workflowBranchTriggerService } from "./workflowBranchTriggerService.js";
 import { workflowDirectTriggerService } from "./workflowDirectTriggerService.js";
 import { workflowMultiInputService } from "./workflowMultiInputService.js";
 import { workflowExecutionService } from "./workflowExecutionService.js";
@@ -24,7 +25,7 @@ import { runQueueService } from "./runQueueService.js";
 import { runExecutionService } from "./runExecutionService.js";
 import { workflowStateService } from "./workflowStateService.js";
 import { workflowEventEmitter } from "./workflowEventEmitter.js";
-import { aiDecideService } from "./aiDecideService.js";
+import { branchDecisionService } from "./branchDecisionService.js";
 import { connectionStore } from "../connectionStore.js";
 import { podStore } from "../podStore.js";
 import { pendingTargetStore } from "../pendingTargetStore.js";
@@ -32,7 +33,7 @@ export function initWorkflowServices(): void {
   const sharedStrategies = {
     auto: workflowAutoTriggerService,
     direct: workflowDirectTriggerService,
-    "ai-decide": workflowAiDecideTriggerService,
+    branch: workflowBranchTriggerService,
   };
 
   workflowPipeline.init({
@@ -43,8 +44,8 @@ export function initWorkflowServices(): void {
 
   workflowAutoTriggerService.init({ pipeline: workflowPipeline });
 
-  workflowAiDecideTriggerService.init({
-    aiDecideService,
+  workflowBranchTriggerService.init({
+    branchDecisionService,
     eventEmitter: workflowEventEmitter,
     connectionStore,
     podStore,
@@ -75,7 +76,7 @@ export function initWorkflowServices(): void {
 
   workflowExecutionService.init({
     pipeline: workflowPipeline,
-    aiDecideTriggerService: workflowAiDecideTriggerService,
+    branchTriggerService: workflowBranchTriggerService,
     autoTriggerService: workflowAutoTriggerService,
     directTriggerService: workflowDirectTriggerService,
   });

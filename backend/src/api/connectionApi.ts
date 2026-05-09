@@ -20,7 +20,7 @@ import type {
 import { toPodPublicView } from "../types/pod.js";
 
 const VALID_ANCHORS: AnchorPosition[] = ["top", "bottom", "left", "right"];
-const VALID_TRIGGER_MODES: TriggerMode[] = ["auto", "ai-decide", "direct"];
+const VALID_TRIGGER_MODES: TriggerMode[] = ["auto", "branch", "direct"];
 
 interface ValidatedCreateConnectionBody {
   sourcePodId: string;

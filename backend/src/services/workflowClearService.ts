@@ -1,16 +1,16 @@
-import { connectionStore } from './connectionStore.js';
-import { podStore } from './podStore.js';
-import { messageStore } from './messageStore.js';
-import { pendingTargetStore } from './pendingTargetStore.js';
-import { directTriggerStore } from './directTriggerStore.js';
-import { logger } from '../utils/logger.js';
-import { safeExecuteAsync } from '../utils/operationHelpers.js';
-import type { Connection } from '../types/index.js';
+import { connectionStore } from "./connectionStore.js";
+import { podStore } from "./podStore.js";
+import { messageStore } from "./messageStore.js";
+import { pendingTargetStore } from "./pendingTargetStore.js";
+import { directTriggerStore } from "./directTriggerStore.js";
+import { logger } from "../utils/logger.js";
+import { safeExecuteAsync } from "../utils/operationHelpers.js";
+import type { Connection } from "../types/index.js";
 
 function enqueueUnvisitedTargets(
   connections: Connection[],
   visited: Set<string>,
-  queue: string[]
+  queue: string[],
 ): void {
   for (const connection of connections) {
     const targetPodId = connection.targetPodId;
@@ -43,14 +43,20 @@ class WorkflowClearService {
     while (queue.length > 0) {
       const currentId = queue.shift();
       if (!currentId) break;
-      const connections = connectionStore.findBySourcePodId(canvasId, currentId);
+      const connections = connectionStore.findBySourcePodId(
+        canvasId,
+        currentId,
+      );
       enqueueUnvisitedTargets(connections, visited, queue);
     }
 
     return Array.from(visited);
   }
 
-  getDownstreamPods(canvasId: string, sourcePodId: string): Array<{ id: string; name: string }> {
+  getDownstreamPods(
+    canvasId: string,
+    sourcePodId: string,
+  ): Array<{ id: string; name: string }> {
     const podIds = this.getDownstreamPodIds(canvasId, sourcePodId);
     const pods: Array<{ id: string; name: string }> = [];
 
@@ -67,15 +73,24 @@ class WorkflowClearService {
     return pods;
   }
 
-  async clearWorkflow(canvasId: string, sourcePodId: string): Promise<ClearResult> {
+  async clearWorkflow(
+    canvasId: string,
+    sourcePodId: string,
+  ): Promise<ClearResult> {
     const podIds = this.getDownstreamPodIds(canvasId, sourcePodId);
     const clearedPodNames: string[] = [];
     const clearedConnectionIds: string[] = [];
 
     for (const podId of podIds) {
-      const clearResult = await safeExecuteAsync(() => this.clearSinglePod(canvasId, podId));
+      const clearResult = await safeExecuteAsync(() =>
+        this.clearSinglePod(canvasId, podId),
+      );
       if (!clearResult.success) {
-        logger.error('Workflow', 'Error', `[WorkflowClear] 清除 Pod ${podId} 失敗：${clearResult.error}`);
+        logger.error(
+          "Workflow",
+          "Error",
+          `[WorkflowClear] 清除 Pod ${podId} 失敗：${clearResult.error}`,
+        );
         continue;
       }
 
@@ -104,7 +119,7 @@ class WorkflowClearService {
     messageStore.clearMessages(podId);
     podStore.resetClaudeSession(canvasId, podId);
 
-    const clearedConnectionIds = this.clearAiDecideConnections(canvasId, podId);
+    const clearedConnectionIds = this.clearBranchConnections(canvasId, podId);
 
     pendingTargetStore.clearPendingTarget(podId);
     directTriggerStore.clearDirectPending(podId);
@@ -112,14 +127,17 @@ class WorkflowClearService {
     return { podName: pod.name, clearedConnectionIds };
   }
 
-  private clearAiDecideConnections(canvasId: string, podId: string): string[] {
-    const outgoingConnections = connectionStore.findBySourcePodId(canvasId, podId);
+  private clearBranchConnections(canvasId: string, podId: string): string[] {
+    const outgoingConnections = connectionStore.findBySourcePodId(
+      canvasId,
+      podId,
+    );
     const clearedConnectionIds: string[] = [];
 
     for (const conn of outgoingConnections) {
-      if (conn.triggerMode === 'ai-decide' && conn.decideStatus !== 'none') {
-        connectionStore.updateDecideStatus(canvasId, conn.id, 'none', null);
-        connectionStore.updateConnectionStatus(canvasId, conn.id, 'idle');
+      if (conn.triggerMode === "branch" && conn.decideStatus !== "none") {
+        connectionStore.updateDecideStatus(canvasId, conn.id, "none", null);
+        connectionStore.updateConnectionStatus(canvasId, conn.id, "idle");
         clearedConnectionIds.push(conn.id);
       }
     }

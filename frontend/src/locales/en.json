@@ -418,26 +418,33 @@
     "connectionContextMenu": {
       "triggerModeAuto": "Auto Trigger (Auto)",
       "triggerModeDirect": "Direct Trigger (Direct)",
-      "triggerModeAiDecide": "AI Decide (AI Decide)",
+      "triggerModeBranch": "Branch (Branch)",
       "summaryModel": "Summary Model",
-      "aiModel": "AI Model",
+      "branchModel": "Branch Model",
       "triggerModeChanged": "Trigger mode changed",
       "triggerModeChangedDesc": "Switched to {mode} mode",
       "triggerModeAutoLabel": "Auto Trigger",
       "triggerModeDirectLabel": "Direct Trigger",
-      "triggerModeAiDecideLabel": "AI Decide",
+      "triggerModeBranchLabel": "Branch",
       "changeFailed": "Change failed",
       "triggerModeChangeFailed": "Unable to change trigger mode",
       "summaryModelChanged": "Summary model changed",
       "summaryModelChangeFailed": "Unable to change summary model",
-      "aiDecideModelChanged": "AI decide model changed",
-      "aiDecideModelChangeFailed": "Unable to change AI decide model",
+      "branchModelChanged": "Branch model changed",
+      "branchModelChangeFailed": "Unable to change Branch model",
       "modelSwitched": "Switched to {model}",
       "loading": "Loading...",
       "summaryProvider": "Summary Provider",
       "summaryProviderChanged": "Summary Provider switched",
       "summaryProviderChangedDesc": "Provider: {provider}, Model: {model}",
       "summaryProviderChangeFailed": "Failed to switch Summary Provider",
+      "branchLabel": "Branch Label",
+      "branchLabelPlaceholder": "Enter Branch Label",
+      "branchDescription": "Branch Description",
+      "branchDescriptionPlaceholder": "Enter Branch Description (optional)",
+      "branchProvider": "Branch Provider",
+      "branchProviderChanged": "Branch Provider switched",
+      "branchProviderChangedDesc": "Provider: {provider}, Model: {model}",
       "providerLabel": {
         "claude": "Claude",
         "codex": "Codex",
@@ -456,6 +463,11 @@
       "namePlaceholder": "Name",
       "contentPlaceholder": "Content",
       "editTitleWithType": "Edit {type}"
+    },
+    "branchEditModal": {
+      "title": "Branch Connection",
+      "description": "Name and describe this branch so the AI can choose which path to trigger.",
+      "confirmSwitch": "Switch & Save"
     },
     "scheduleModal": {
       "createTitle": "Set Schedule",
@@ -513,7 +525,12 @@
       "deleteFailed": "Failed to delete connection",
       "updateFailed": "Failed to update connection",
       "summaryModelUpdateFailed": "Failed to update connection summary model",
-      "aiDecideModelUpdateFailed": "Failed to update connection AI decide model"
+      "branchLabelEmpty": "Branch label cannot be empty",
+      "branchLabelTooLong": "Branch label must not exceed {max} characters",
+      "branchLabelReserved": "\"None\" is a reserved word, please use a different name",
+      "branchLabelDuplicate": "Label already exists in the same branch group, please use a different name",
+      "branchDescriptionTooLong": "Branch description must not exceed {max} characters",
+      "branchUpdateFailed": "Failed to update Branch connection"
     },
     "pod": {
       "createFailed": "Pod creation failed",
@@ -823,6 +840,12 @@
         "itemHint": "Enter the canvas password to restore this board.",
         "unlockAction": "Unlock"
       }
+    }
+  },
+  "shared": {
+    "providerModelSelector": {
+      "providerLabel": "Provider",
+      "modelLabel": "Model"
     }
   }
 }

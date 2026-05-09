@@ -11,6 +11,7 @@ describe("PendingTargetStore", () => {
     pendingTargetStore.clearPendingTarget(targetPodId);
     pendingTargetStore.clearPendingTarget("target-pod-2");
     pendingTargetStore.clearPendingTarget("target-pod-3");
+    pendingTargetStore.clearPendingTarget("lazy-target-pod");
   });
 
   describe("recordSourceRejection 正確記錄被拒絕的來源", () => {
@@ -184,6 +185,56 @@ describe("PendingTargetStore", () => {
 
       expect(allSourcesResponded).toBe(true);
       expect(pendingTargetStore.hasAnyRejectedSource(targetPodId)).toBe(true);
+    });
+  });
+
+  // ─── Bug A 驗收：recordSourceRejection 早到時的 lazy init 行為 ────────────────
+
+  describe("recordSourceRejection 早到時的 lazy init 行為（Bug A 回歸測試）", () => {
+    const lazyTargetPodId = "lazy-target-pod";
+
+    beforeEach(() => {
+      pendingTargetStore.clearPendingTarget(lazyTargetPodId);
+    });
+
+    it("Case 1：未呼叫 initializePendingTarget 直接呼叫 recordSourceRejection（帶 requiredSourcePodIds）可正常 lazy init", () => {
+      // 不事先呼叫 initializePendingTarget
+      expect(pendingTargetStore.hasPendingTarget(lazyTargetPodId)).toBe(false);
+
+      pendingTargetStore.recordSourceRejection(
+        lazyTargetPodId,
+        sourcePodId1,
+        "早到的 rejection",
+        [sourcePodId1, sourcePodId2],
+      );
+
+      // lazy init 後應可查到 rejectedSources
+      const rejections = pendingTargetStore.getRejectedSources(lazyTargetPodId);
+      expect(rejections?.size).toBe(1);
+
+      // hasPendingTarget 應回傳 true（已 lazy init）
+      expect(pendingTargetStore.hasPendingTarget(lazyTargetPodId)).toBe(true);
+    });
+
+    it("Case 2：承接 Case 1，recordSourceCompletion 第二個 source 後回傳 { allSourcesResponded: true, hasRejection: true }", () => {
+      // 先 lazy init（模擬 Case 1 的狀態）
+      pendingTargetStore.recordSourceRejection(
+        lazyTargetPodId,
+        sourcePodId1,
+        "早到的 rejection",
+        [sourcePodId1, sourcePodId2],
+      );
+
+      // 第二個 source 晚到，呼叫 recordSourceCompletion
+      const result = pendingTargetStore.recordSourceCompletion(
+        lazyTargetPodId,
+        sourcePodId2,
+        "第二個 source 的摘要",
+      );
+
+      // 所有 sources 都回應了，且有 rejection
+      expect(result.allSourcesResponded).toBe(true);
+      expect(result.hasRejection).toBe(true);
     });
   });
 });

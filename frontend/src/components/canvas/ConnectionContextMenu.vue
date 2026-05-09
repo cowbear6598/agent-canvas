@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TriggerMode } from "@/types/connection";
-import type { ModelType, PodProvider } from "@/types/pod";
+import type { PodProvider } from "@/types/pod";
 import { Zap, Brain, ArrowRight, ChevronRight } from "lucide-vue-next";
 import { ref, computed, onMounted, onUnmounted } from "vue";
 
@@ -21,7 +21,10 @@ interface Props {
   currentTriggerMode: TriggerMode;
   /** currentSummaryModel 接受任意 provider 的模型名稱字串，不限於 Claude ModelType */
   currentSummaryModel: string;
-  currentAiDecideModel: ModelType;
+  /** Branch 模式使用的 AI Provider */
+  currentBranchProvider?: PodProvider;
+  /** Branch 模式使用的模型字串 */
+  currentBranchModel?: string;
 }
 
 const props = defineProps<Props>();
@@ -30,7 +33,9 @@ const emit = defineEmits<{
   close: [];
   "trigger-mode-changed": [];
   "summary-model-changed": [];
-  "ai-decide-model-changed": [];
+  "branch-mode-clicked": [];
+  "branch-provider-changed": [];
+  "branch-model-changed": [];
 }>();
 
 const connectionStore = useConnectionStore();
@@ -53,7 +58,7 @@ const handleSetTriggerMode = async (targetMode: TriggerMode): Promise<void> => {
   if (result) {
     const triggerModeLabels: Record<TriggerMode, string> = {
       auto: t("canvas.connectionContextMenu.triggerModeAutoLabel"),
-      "ai-decide": t("canvas.connectionContextMenu.triggerModeAiDecideLabel"),
+      branch: t("canvas.connectionContextMenu.triggerModeBranchLabel"),
       direct: t("canvas.connectionContextMenu.triggerModeDirectLabel"),
     };
     toast({
@@ -91,7 +96,7 @@ interface SetModelOptions {
   updateFn: (connectionId: string, model: string) => Promise<unknown>;
   successTitle: string;
   failDesc: string;
-  changedEvent: "summary-model-changed" | "ai-decide-model-changed";
+  changedEvent: "summary-model-changed";
   displayLabel?: string;
 }
 
@@ -115,12 +120,7 @@ const handleSetModel = async (options: SetModelOptions): Promise<void> => {
 
   if (result) {
     showModelChangeToast(successTitle, displayLabel ?? targetModel);
-    // 透過分支縮窄 changedEvent union type，讓 TypeScript emit overload 能正確解析
-    if (changedEvent === "summary-model-changed") {
-      emit("summary-model-changed");
-    } else if (changedEvent === "ai-decide-model-changed") {
-      emit("ai-decide-model-changed");
-    }
+    emit(changedEvent);
     emit("close");
   } else {
     toast({
@@ -150,20 +150,6 @@ const handleSetSummaryModel = (
     displayLabel,
   });
 
-const handleSetAiDecideModel = (option: {
-  value: ModelType;
-  label: string;
-}): Promise<void> =>
-  handleSetModel({
-    targetModel: option.value,
-    currentModel: props.currentAiDecideModel,
-    updateFn: connectionStore.updateConnectionAiDecideModel,
-    successTitle: t("canvas.connectionContextMenu.aiDecideModelChanged"),
-    failDesc: t("canvas.connectionContextMenu.aiDecideModelChangeFailed"),
-    changedEvent: "ai-decide-model-changed",
-    displayLabel: option.label,
-  });
-
 const menuRef = ref<HTMLElement | null>(null);
 
 const handleOutsideClick = (event: MouseEvent): void => {
@@ -189,31 +175,6 @@ onUnmounted(() => {
 });
 
 const isSummaryMenuOpen = ref(false);
-const isAiModelMenuOpen = ref(false);
-
-/** ai-model 觸發器區塊的 mouseenter handler */
-const handleAiModelMenuEnter = (): void => {
-  if (props.currentTriggerMode === "ai-decide") {
-    isAiModelMenuOpen.value = true;
-  }
-};
-
-/** ai-model 觸發器區塊的 mouseleave handler */
-const handleAiModelMenuLeave = (): void => {
-  if (props.currentTriggerMode === "ai-decide") {
-    isAiModelMenuOpen.value = false;
-  }
-};
-
-/**
- * AI Decide Model 子選單專用：硬編碼 Claude 三選一。
- * 不受上游 provider 影響，始終顯示此固定清單。
- */
-const AI_DECIDE_MODEL_OPTIONS: { value: ModelType; label: string }[] = [
-  { value: "haiku", label: "Haiku" },
-  { value: "sonnet", label: "Sonnet" },
-  { value: "opus", label: "Opus" },
-];
 
 /**
  * Summary Provider 子選單的選項清單。
@@ -344,6 +305,125 @@ const handleSetSummaryProvider = async (
     });
   }
 };
+
+// ─── Branch 設定區塊 ──────────────────────────────────────────────────────────
+
+/** Branch 按鈕點擊：永遠 emit branch-mode-clicked，由 host 開啟 modal 與切換 trigger mode */
+const handleBranchClick = (): void => {
+  emit("branch-mode-clicked");
+  emit("close");
+};
+
+/** Branch Provider 子選單開關狀態 */
+const isBranchProviderMenuOpen = ref(false);
+
+/** Branch Model 子選單開關狀態 */
+const isBranchModelMenuOpen = ref(false);
+
+/**
+ * 當前 Branch Provider 的 effective 值；舊資料未指定時 fallback 為 "claude"，
+ * 與後端 connectionStore.rowToConnection 的 fallback 行為對齊。
+ */
+const currentBranchProviderEffective = computed((): PodProvider => {
+  return props.currentBranchProvider ?? "claude";
+});
+
+/**
+ * Branch Model 子選單依當前 Branch Provider 動態列出可選模型。
+ * capability 尚未載入時回傳 null，template 顯示載入中提示。
+ */
+const branchModelOptions = computed(() => {
+  const provider = currentBranchProviderEffective.value;
+  const models = providerCapabilityStore.getAvailableModels(provider);
+  if (models.length === 0) return null;
+  return models;
+});
+
+/** 判斷 Branch Model 按鈕是否為 active；模型清單已由 effective provider 過濾，比對 model 即可 */
+const isBranchModelActive = (optionValue: string): boolean => {
+  return props.currentBranchModel === optionValue;
+};
+
+/**
+ * 切換 Branch Provider；同步更新 model 為新 provider 的預設模型，
+ * 避免 provider/model 不一致的中間狀態（與 Summary Provider 行為一致）。
+ */
+const handleSetBranchProvider = async (
+  targetProvider: PodProvider,
+): Promise<void> => {
+  if (targetProvider === currentBranchProviderEffective.value) {
+    emit("close");
+    return;
+  }
+
+  const defaultModel = providerCapabilityStore.getDefaultModel(targetProvider);
+  // getDefaultModel 在 metadata 尚未載入時回傳 undefined，fallback 至 DEFAULT_SUMMARY_MODEL（與 Summary 同樣處理）
+  const branchModel = defaultModel ?? DEFAULT_SUMMARY_MODEL;
+
+  const result = await connectionStore.updateConnectionBranchProvider(
+    props.connectionId,
+    targetProvider,
+    branchModel,
+  );
+
+  if (result) {
+    const providerLabel =
+      PROVIDER_OPTIONS.find((o) => o.value === targetProvider)?.label ??
+      targetProvider;
+    const modelLabel =
+      providerCapabilityStore
+        .getAvailableModels(targetProvider)
+        .find((m) => m.value === branchModel)?.label ?? branchModel;
+
+    toast({
+      title: t("canvas.connectionContextMenu.branchProviderChanged"),
+      description: t("canvas.connectionContextMenu.branchProviderChangedDesc", {
+        provider: providerLabel,
+        model: modelLabel,
+      }),
+      duration: SHORT_TOAST_DURATION_MS,
+    });
+    emit("branch-provider-changed");
+    emit("close");
+  } else {
+    toast({
+      title: t("canvas.connectionContextMenu.changeFailed"),
+      description: t("canvas.connectionContextMenu.branchModelChangeFailed"),
+      duration: DEFAULT_TOAST_DURATION_MS,
+    });
+  }
+};
+
+/** 切換 Branch Model（不變更 provider） */
+const handleSetBranchModel = async (
+  targetValue: string,
+  displayLabel: string,
+): Promise<void> => {
+  if (targetValue === props.currentBranchModel) {
+    emit("close");
+    return;
+  }
+
+  const result = await connectionStore.updateConnectionBranchModel(
+    props.connectionId,
+    targetValue,
+  );
+
+  if (result) {
+    showModelChangeToast(
+      t("canvas.connectionContextMenu.branchModelChanged"),
+      displayLabel,
+    );
+    emit("branch-model-changed");
+    emit("close");
+  } else {
+    toast({
+      title: t("canvas.connectionContextMenu.changeFailed"),
+      description: t("canvas.connectionContextMenu.branchModelChangeFailed"),
+      duration: DEFAULT_TOAST_DURATION_MS,
+    });
+  }
+};
 </script>
 
 <template>
@@ -417,30 +497,146 @@ const handleSetSummaryProvider = async (
         'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary',
         {
           'bg-secondary border-l-2 border-l-primary':
-            currentTriggerMode === 'ai-decide',
+            currentTriggerMode === 'branch',
         },
       ]"
-      @click="handleSetTriggerMode('ai-decide')"
+      @click="handleBranchClick"
     >
       <Brain
         :size="14"
         :class="
-          currentTriggerMode === 'ai-decide'
-            ? 'text-primary'
-            : 'text-foreground'
+          currentTriggerMode === 'branch' ? 'text-primary' : 'text-foreground'
         "
       />
       <span
         :class="[
           'font-mono',
-          currentTriggerMode === 'ai-decide'
+          currentTriggerMode === 'branch'
             ? 'text-primary font-semibold'
             : 'text-foreground',
         ]"
       >
-        {{ $t("canvas.connectionContextMenu.triggerModeAiDecide") }}
+        {{ $t("canvas.connectionContextMenu.triggerModeBranch") }}
       </span>
     </button>
+
+    <!-- Branch Provider / Model 子選單：僅在 branch 模式下顯示，外觀同 Summary -->
+    <template v-if="currentTriggerMode === 'branch'">
+      <div class="border-t border-border my-1" />
+
+      <!-- Branch Provider 子選單觸發器 -->
+      <div
+        class="relative"
+        @mouseenter="isBranchProviderMenuOpen = true"
+        @mouseleave="isBranchProviderMenuOpen = false"
+      >
+        <button
+          class="w-full flex items-center justify-between gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary"
+          :class="{ 'bg-secondary': isBranchProviderMenuOpen }"
+        >
+          <span class="font-mono text-foreground">{{
+            $t("canvas.connectionContextMenu.branchProvider")
+          }}</span>
+          <ChevronRight :size="12" class="text-muted-foreground" />
+        </button>
+
+        <!-- 浮層加 pl-1 撐出視覺空間，避免滑鼠移動時 mouseleave 觸發誤關 -->
+        <div
+          v-if="isBranchProviderMenuOpen"
+          class="absolute left-full top-0 pl-1 z-50"
+          @mouseenter="isBranchProviderMenuOpen = true"
+          @mouseleave="isBranchProviderMenuOpen = false"
+        >
+          <div
+            class="bg-card border border-doodle-ink rounded-md p-1 min-w-[120px]"
+          >
+            <button
+              v-for="option in PROVIDER_OPTIONS"
+              :key="option.value"
+              :class="[
+                'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary',
+                {
+                  'bg-secondary border-l-2 border-l-primary':
+                    option.value === currentBranchProviderEffective,
+                },
+              ]"
+              @click="handleSetBranchProvider(option.value)"
+            >
+              <span
+                :class="[
+                  'font-mono',
+                  option.value === currentBranchProviderEffective
+                    ? 'text-primary font-semibold'
+                    : 'text-foreground',
+                ]"
+              >
+                {{ option.label }}
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Branch Model 子選單觸發器 -->
+      <div
+        class="relative"
+        @mouseenter="isBranchModelMenuOpen = true"
+        @mouseleave="isBranchModelMenuOpen = false"
+      >
+        <button
+          class="w-full flex items-center justify-between gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary"
+          :class="{ 'bg-secondary': isBranchModelMenuOpen }"
+        >
+          <span class="font-mono text-foreground">{{
+            $t("canvas.connectionContextMenu.branchModel")
+          }}</span>
+          <ChevronRight :size="12" class="text-muted-foreground" />
+        </button>
+
+        <div
+          v-if="isBranchModelMenuOpen"
+          class="absolute left-full top-0 pl-1 z-50"
+          @mouseenter="isBranchModelMenuOpen = true"
+          @mouseleave="isBranchModelMenuOpen = false"
+        >
+          <div
+            class="bg-card border border-doodle-ink rounded-md p-1 min-w-[120px]"
+          >
+            <!-- capability 尚未載入時顯示載入中提示 -->
+            <div
+              v-if="branchModelOptions === null"
+              class="px-2 py-1 text-xs font-mono text-muted-foreground"
+            >
+              {{ $t("canvas.connectionContextMenu.loading") }}
+            </div>
+
+            <button
+              v-for="option in branchModelOptions ?? []"
+              :key="option.value"
+              :class="[
+                'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary',
+                {
+                  'bg-secondary border-l-2 border-l-primary':
+                    isBranchModelActive(option.value),
+                },
+              ]"
+              @click="handleSetBranchModel(option.value, option.label)"
+            >
+              <span
+                :class="[
+                  'font-mono',
+                  isBranchModelActive(option.value)
+                    ? 'text-primary font-semibold'
+                    : 'text-foreground',
+                ]"
+              >
+                {{ option.label }}
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </template>
 
     <div class="border-t border-border my-1" />
 
@@ -457,10 +653,7 @@ const handleSetSummaryProvider = async (
         <span class="font-mono text-foreground">{{
           $t("canvas.connectionContextMenu.summaryProvider")
         }}</span>
-        <ChevronRight
-          :size="12"
-          class="text-muted-foreground"
-        />
+        <ChevronRight :size="12" class="text-muted-foreground" />
       </button>
 
       <!-- Summary Provider 子選單：硬編碼三項，不過濾認證狀態
@@ -524,10 +717,7 @@ const handleSetSummaryProvider = async (
         <span class="font-mono text-foreground">{{
           $t("canvas.connectionContextMenu.summaryModel")
         }}</span>
-        <ChevronRight
-          :size="12"
-          class="text-muted-foreground"
-        />
+        <ChevronRight :size="12" class="text-muted-foreground" />
       </button>
 
       <!-- Summary Model 子選單：根據上游 Pod provider 動態渲染
@@ -567,66 +757,6 @@ const handleSetSummaryProvider = async (
               :class="[
                 'font-mono',
                 isSummaryModelActive(option.value)
-                  ? 'text-primary font-semibold'
-                  : 'text-foreground',
-              ]"
-            >
-              {{ option.label }}
-            </span>
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- AI Model 子選單觸發器 -->
-    <div
-      class="relative"
-      :class="{
-        'opacity-50 pointer-events-none': currentTriggerMode !== 'ai-decide',
-      }"
-      @mouseenter="handleAiModelMenuEnter"
-      @mouseleave="handleAiModelMenuLeave"
-    >
-      <button
-        class="w-full flex items-center justify-between gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary"
-        :class="{ 'bg-secondary': isAiModelMenuOpen }"
-      >
-        <span class="font-mono text-foreground">{{
-          $t("canvas.connectionContextMenu.aiModel")
-        }}</span>
-        <ChevronRight
-          :size="12"
-          class="text-muted-foreground"
-        />
-      </button>
-
-      <!-- 子選單：移除 ml-1（4px gap），改用 pl-1 撐出等價視覺空間 -->
-      <div
-        v-if="isAiModelMenuOpen"
-        class="absolute left-full top-0 pl-1 z-50"
-        @mouseenter="isAiModelMenuOpen = true"
-        @mouseleave="isAiModelMenuOpen = false"
-      >
-        <div
-          class="bg-card border border-doodle-ink rounded-md p-1 min-w-[120px]"
-        >
-          <!-- AI Decide Model 子選單：始終硬編碼 Claude 三選一，不受上游 provider 影響 -->
-          <button
-            v-for="option in AI_DECIDE_MODEL_OPTIONS"
-            :key="option.value"
-            :class="[
-              'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary',
-              {
-                'bg-secondary border-l-2 border-l-primary':
-                  currentAiDecideModel === option.value,
-              },
-            ]"
-            @click="handleSetAiDecideModel(option)"
-          >
-            <span
-              :class="[
-                'font-mono',
-                currentAiDecideModel === option.value
                   ? 'text-primary font-semibold'
                   : 'text-foreground',
               ]"

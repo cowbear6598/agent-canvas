@@ -1,10 +1,4 @@
-import type {
-  Pod,
-  PodStatus,
-  ModelType,
-  PodProvider,
-  ProviderCapabilities,
-} from "../pod";
+import type { Pod, PodStatus, PodProvider, ProviderCapabilities } from "../pod";
 import type { Repository, RepositoryNote } from "@/types";
 import type { CommandNote } from "@/types";
 import type { AnchorPosition } from "@/types";
@@ -145,17 +139,9 @@ export interface ConnectionPayloadItem {
   sourceAnchor: AnchorPosition;
   targetPodId: string;
   targetAnchor: AnchorPosition;
-  triggerMode?: "auto" | "ai-decide" | "direct";
+  triggerMode?: "auto" | "branch" | "direct";
   decideStatus?: "none" | "pending" | "approved" | "rejected" | "error";
-  connectionStatus?:
-    | "idle"
-    | "active"
-    | "queued"
-    | "waiting"
-    | "ai-deciding"
-    | "ai-approved"
-    | "ai-rejected"
-    | "ai-error";
+  connectionStatus?: "idle" | "active" | "queued" | "waiting";
   decideReason?: string | null;
   /** summaryModel 接受任意 provider 的模型名稱字串，不限於 Claude ModelType */
   summaryModel?: string;
@@ -164,7 +150,14 @@ export interface ConnectionPayloadItem {
    * 後端 NULL 會以此欄位回傳；升級前 Connection 為 undefined，UI 渲染時會 fallback 至來源 Pod provider。
    */
   summaryProvider?: PodProvider | null;
-  aiDecideModel?: ModelType;
+  /** Branch 模式下的連線標籤 */
+  label?: string;
+  /** Branch 模式下的連線描述 */
+  description?: string;
+  /** Branch 模式使用的 AI Provider */
+  branchProvider?: PodProvider;
+  /** Branch 模式使用的模型字串 */
+  branchModel?: string;
 }
 
 export interface ConnectionCreatedPayload extends ResultPayload {
@@ -194,7 +187,7 @@ export interface WorkflowAutoTriggeredPayload {
 export interface WorkflowCompletePayload extends ResultPayload {
   connectionId: string;
   targetPodId: string;
-  triggerMode?: "auto" | "ai-decide" | "direct";
+  triggerMode?: "auto" | "branch" | "direct";
 }
 
 export interface WorkflowGetDownstreamPodsResultPayload {
@@ -359,22 +352,21 @@ export interface MovedToGroupPayload extends ResultPayload {
   groupId?: string | null;
 }
 
-export interface WorkflowAiDecidePendingPayload {
+export interface WorkflowBranchPendingPayload {
   canvasId: string;
   connectionIds: string[];
   sourcePodId: string;
 }
 
-export interface WorkflowAiDecideResultPayload {
+export interface WorkflowBranchResultPayload {
   canvasId: string;
   connectionId: string;
   sourcePodId: string;
   targetPodId: string;
-  shouldTrigger: boolean;
-  reason: string;
+  selectedLabel: string | null;
 }
 
-export interface WorkflowAiDecideErrorPayload {
+export interface WorkflowBranchErrorPayload {
   canvasId: string;
   connectionId: string;
   sourcePodId: string;
@@ -382,12 +374,12 @@ export interface WorkflowAiDecideErrorPayload {
   error: string;
 }
 
-export interface WorkflowAiDecideClearPayload {
+export interface WorkflowBranchClearPayload {
   canvasId: string;
   connectionIds: string[];
 }
 
-export interface WorkflowAiDecideTriggeredPayload {
+export interface WorkflowBranchTriggeredPayload {
   canvasId: string;
   connectionId: string;
   sourcePodId: string;
@@ -417,7 +409,7 @@ export interface WorkflowQueuedPayload {
   targetPodId: string;
   position: number;
   queueSize: number;
-  triggerMode: "auto" | "ai-decide" | "direct";
+  triggerMode: "auto" | "branch" | "direct";
 }
 
 export interface WorkflowQueueProcessedPayload {
@@ -426,7 +418,7 @@ export interface WorkflowQueueProcessedPayload {
   sourcePodId: string;
   targetPodId: string;
   remainingQueueSize: number;
-  triggerMode: "auto" | "ai-decide" | "direct";
+  triggerMode: "auto" | "branch" | "direct";
 }
 
 export interface CursorMovedPayload {

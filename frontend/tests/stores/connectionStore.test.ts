@@ -18,14 +18,11 @@ import type {
   Connection,
   TriggerMode,
   ConnectionStatus,
+  DecideStatus,
 } from "@/types/connection";
 import type {
   WorkflowAutoTriggeredPayload,
   WorkflowCompletePayload,
-  WorkflowAiDecidePendingPayload,
-  WorkflowAiDecideResultPayload,
-  WorkflowAiDecideErrorPayload,
-  WorkflowAiDecideClearPayload,
   WorkflowDirectTriggeredPayload,
   WorkflowDirectWaitingPayload,
   WorkflowQueuedPayload,
@@ -244,13 +241,13 @@ describe("connectionStore", () => {
       });
     });
 
-    describe("getAiDecideConnectionsBySourcePodId", () => {
+    describe("getBranchConnectionsBySourcePodId", () => {
       it("應篩選 sourcePodId + ai-decide", () => {
         const store = useConnectionStore();
         const conn1 = createMockConnection({
           id: "conn-1",
           sourcePodId: "pod-a",
-          triggerMode: "ai-decide",
+          triggerMode: "branch",
         });
         const conn2 = createMockConnection({
           id: "conn-2",
@@ -260,16 +257,16 @@ describe("connectionStore", () => {
         const conn3 = createMockConnection({
           id: "conn-3",
           sourcePodId: "pod-b",
-          triggerMode: "ai-decide",
+          triggerMode: "branch",
         });
         const conn4 = createMockConnection({
           id: "conn-4",
           sourcePodId: "pod-a",
-          triggerMode: "ai-decide",
+          triggerMode: "branch",
         });
         store.connections = [conn1, conn2, conn3, conn4];
 
-        const result = store.getAiDecideConnectionsBySourcePodId("pod-a");
+        const result = store.getBranchConnectionsBySourcePodId("pod-a");
 
         expect(result).toHaveLength(2);
         expect(result).toContainEqual(conn1);
@@ -435,7 +432,7 @@ describe("connectionStore", () => {
       expect(result).toBeNull();
     });
 
-    it("後端回傳 connectionStatus 時應直接使用", async () => {
+    it("後端回傳 connectionStatus 與 decideStatus 時應直接使用", async () => {
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
       const store = useConnectionStore();
@@ -447,8 +444,9 @@ describe("connectionStore", () => {
           sourceAnchor: "bottom",
           targetPodId: "pod-b",
           targetAnchor: "top",
-          triggerMode: "ai-decide",
-          connectionStatus: "ai-approved",
+          triggerMode: "branch",
+          connectionStatus: "active",
+          decideStatus: "approved",
         },
       });
 
@@ -459,7 +457,8 @@ describe("connectionStore", () => {
         "top",
       );
 
-      expect(result?.status).toBe("ai-approved");
+      expect(result?.status).toBe("active");
+      expect(result?.decideStatus).toBe("approved");
     });
 
     it("後端未回傳 connectionStatus 時應 fallback 為 idle", async () => {
@@ -771,7 +770,7 @@ describe("connectionStore", () => {
 
       const updatedConnection = createMockConnection({
         id: "conn-1",
-        triggerMode: "ai-decide",
+        triggerMode: "branch",
       });
 
       mockCreateWebSocketRequest.mockResolvedValueOnce({
@@ -780,7 +779,7 @@ describe("connectionStore", () => {
 
       const result = await store.updateConnectionTriggerMode(
         "conn-1",
-        "ai-decide",
+        "branch",
       );
 
       expect(result).toEqual(updatedConnection);
@@ -790,7 +789,7 @@ describe("connectionStore", () => {
           responseEvent: "connection:updated",
           payload: expect.objectContaining({
             connectionId: "conn-1",
-            triggerMode: "ai-decide",
+            triggerMode: "branch",
             canvasId: "canvas-1",
           }),
         }),
@@ -826,7 +825,7 @@ describe("connectionStore", () => {
       expect(result).toBeNull();
     });
 
-    it("後端回傳 connectionStatus 時應直接使用", async () => {
+    it("後端回傳 connectionStatus 與 decideStatus 時應直接使用", async () => {
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
       const store = useConnectionStore();
@@ -838,18 +837,20 @@ describe("connectionStore", () => {
           sourceAnchor: "bottom",
           targetPodId: "pod-b",
           targetAnchor: "top",
-          triggerMode: "ai-decide",
-          connectionStatus: "ai-rejected",
+          triggerMode: "branch",
+          connectionStatus: "idle",
+          decideStatus: "rejected",
           decideReason: "不符合條件",
         },
       });
 
       const result = await store.updateConnectionTriggerMode(
         "conn-1",
-        "ai-decide",
+        "branch",
       );
 
-      expect(result?.status).toBe("ai-rejected");
+      expect(result?.status).toBe("idle");
+      expect(result?.decideStatus).toBe("rejected");
     });
 
     it("後端未回傳 connectionStatus 時應 fallback 為 idle", async () => {
@@ -964,7 +965,7 @@ describe("connectionStore", () => {
         const conn2 = createMockConnection({
           id: "conn-2",
           targetPodId: "pod-target",
-          triggerMode: "ai-decide",
+          triggerMode: "branch",
           status: "idle",
         });
         const conn3 = createMockConnection({
@@ -990,13 +991,14 @@ describe("connectionStore", () => {
         expect(conn3.status).toBe("idle"); // direct 不受影響
       });
 
-      it("應將 ai-approved 的 Connection 更新為 active", () => {
+      it("應將 decideStatus approved 的 Connection 更新為 active", () => {
         const store = useConnectionStore();
         const conn1 = createMockConnection({
           id: "conn-1",
           targetPodId: "pod-target",
-          triggerMode: "ai-decide",
-          status: "ai-approved",
+          triggerMode: "branch",
+          status: "idle",
+          decideStatus: "approved" as DecideStatus,
         });
         const conn2 = createMockConnection({
           id: "conn-2",
@@ -1033,7 +1035,7 @@ describe("connectionStore", () => {
         const conn2 = createMockConnection({
           id: "conn-2",
           targetPodId: "pod-target",
-          triggerMode: "ai-decide",
+          triggerMode: "branch",
           status: "active",
         });
         store.connections = [conn1, conn2];
@@ -1127,144 +1129,6 @@ describe("connectionStore", () => {
       });
     });
 
-    describe("handleAiDecidePending", () => {
-      it("批量 connectionIds 應設為 ai-deciding、清除 decideReason", () => {
-        const store = useConnectionStore();
-        const conn1 = createMockConnection({
-          id: "conn-1",
-          status: "idle",
-          decideReason: "old reason",
-        });
-        const conn2 = createMockConnection({
-          id: "conn-2",
-          status: "idle",
-          decideReason: "old reason",
-        });
-        const conn3 = createMockConnection({ id: "conn-3", status: "idle" });
-        store.connections = [conn1, conn2, conn3];
-
-        const payload: WorkflowAiDecidePendingPayload = {
-          canvasId: "canvas-1",
-          connectionIds: ["conn-1", "conn-2"],
-          sourcePodId: "pod-a",
-        };
-
-        store.getWorkflowHandlers().handleAiDecidePending(payload);
-
-        expect(conn1.status).toBe("ai-deciding");
-        expect(conn1.decideReason).toBeUndefined();
-        expect(conn2.status).toBe("ai-deciding");
-        expect(conn2.decideReason).toBeUndefined();
-        expect(conn3.status).toBe("idle");
-      });
-    });
-
-    describe("handleAiDecideResult", () => {
-      it("shouldTrigger true 時應設為 ai-approved、清除 decideReason", () => {
-        const store = useConnectionStore();
-        const conn = createMockConnection({
-          id: "conn-1",
-          status: "ai-deciding",
-        });
-        store.connections = [conn];
-
-        const payload: WorkflowAiDecideResultPayload = {
-          canvasId: "canvas-1",
-          connectionId: "conn-1",
-          sourcePodId: "pod-a",
-          targetPodId: "pod-b",
-          shouldTrigger: true,
-          reason: "approved",
-        };
-
-        store.getWorkflowHandlers().handleAiDecideResult(payload);
-
-        expect(conn.status).toBe("ai-approved");
-        expect(conn.decideReason).toBeUndefined();
-      });
-
-      it("shouldTrigger false 時應設為 ai-rejected + decideReason", () => {
-        const store = useConnectionStore();
-        const conn = createMockConnection({
-          id: "conn-1",
-          status: "ai-deciding",
-        });
-        store.connections = [conn];
-
-        const payload: WorkflowAiDecideResultPayload = {
-          canvasId: "canvas-1",
-          connectionId: "conn-1",
-          sourcePodId: "pod-a",
-          targetPodId: "pod-b",
-          shouldTrigger: false,
-          reason: "not relevant",
-        };
-
-        store.getWorkflowHandlers().handleAiDecideResult(payload);
-
-        expect(conn.status).toBe("ai-rejected");
-        expect(conn.decideReason).toBe("not relevant");
-      });
-    });
-
-    describe("handleAiDecideError", () => {
-      it("應設為 ai-error + decideReason", () => {
-        const store = useConnectionStore();
-        const conn = createMockConnection({
-          id: "conn-1",
-          status: "ai-deciding",
-        });
-        store.connections = [conn];
-
-        const payload: WorkflowAiDecideErrorPayload = {
-          canvasId: "canvas-1",
-          connectionId: "conn-1",
-          sourcePodId: "pod-a",
-          targetPodId: "pod-b",
-          error: "AI service error",
-        };
-
-        store.getWorkflowHandlers().handleAiDecideError(payload);
-
-        expect(conn.status).toBe("ai-error");
-        expect(conn.decideReason).toBe("AI service error");
-      });
-    });
-
-    describe("handleAiDecideClear", () => {
-      it("批量設為 idle + 清除 decideReason", () => {
-        const store = useConnectionStore();
-        const conn1 = createMockConnection({
-          id: "conn-1",
-          status: "ai-rejected",
-          decideReason: "rejected reason",
-        });
-        const conn2 = createMockConnection({
-          id: "conn-2",
-          status: "ai-approved",
-        });
-        const conn3 = createMockConnection({
-          id: "conn-3",
-          status: "ai-error",
-          decideReason: "error reason",
-        });
-        store.connections = [conn1, conn2, conn3];
-
-        const payload: WorkflowAiDecideClearPayload = {
-          canvasId: "canvas-1",
-          connectionIds: ["conn-1", "conn-2"],
-        };
-
-        store.getWorkflowHandlers().handleAiDecideClear(payload);
-
-        expect(conn1.status).toBe("idle");
-        expect(conn1.decideReason).toBeUndefined();
-        expect(conn2.status).toBe("idle");
-        expect(conn2.decideReason).toBeUndefined();
-        expect(conn3.status).toBe("ai-error");
-      });
-    });
-
     describe("handleWorkflowQueued", () => {
       it("auto/ai-decide triggerMode 時應設為 queued", () => {
         const store = useConnectionStore();
@@ -1277,7 +1141,7 @@ describe("connectionStore", () => {
         const conn2 = createMockConnection({
           id: "conn-2",
           targetPodId: "pod-target",
-          triggerMode: "ai-decide",
+          triggerMode: "branch",
           status: "idle",
         });
         const conn3 = createMockConnection({
@@ -1340,7 +1204,7 @@ describe("connectionStore", () => {
         const conn2 = createMockConnection({
           id: "conn-2",
           targetPodId: "pod-target",
-          triggerMode: "ai-decide",
+          triggerMode: "branch",
           status: "queued",
         });
         store.connections = [conn1, conn2];
@@ -1381,6 +1245,35 @@ describe("connectionStore", () => {
         expect(conn2.status).toBe("queued");
       });
     });
+
+    describe("isOutOfOrderUpdate — 事件亂序保護", () => {
+      it("decideStatus 為 pending 時，incoming status = active 應被拒（connection.status 保持原值）", () => {
+        // Arrange：建立一條 decideStatus: pending 的 connection
+        const store = useConnectionStore();
+        const conn = createMockConnection({
+          id: "conn-pending",
+          sourcePodId: "pod-source",
+          targetPodId: "pod-target",
+          triggerMode: "auto",
+          status: "idle",
+          decideStatus: "pending" as DecideStatus,
+        });
+        store.connections = [conn];
+
+        // Act：透過 handleWorkflowAutoTriggered 觸發 updateAutoGroupStatus 嘗試設為 active
+        const payload: WorkflowAutoTriggeredPayload = {
+          connectionId: "conn-pending",
+          sourcePodId: "pod-source",
+          targetPodId: "pod-target",
+          transferredContent: "test",
+          isSummarized: false,
+        };
+        store.getWorkflowHandlers().handleWorkflowAutoTriggered(payload);
+
+        // Assert：decideStatus pending 保護生效，status 不被改為 active
+        expect(store.connections[0]?.status).toBe("idle");
+      });
+    });
   });
 
   describe("事件處理", () => {
@@ -1395,6 +1288,7 @@ describe("connectionStore", () => {
           targetPodId: "pod-b",
           targetAnchor: "top" as const,
           triggerMode: "auto" as TriggerMode,
+          decideStatus: "none" as DecideStatus,
         };
 
         store.addConnectionFromEvent(connEvent);
@@ -1420,6 +1314,7 @@ describe("connectionStore", () => {
           targetPodId: "pod-b",
           targetAnchor: "top" as const,
           triggerMode: "auto" as TriggerMode,
+          decideStatus: "none" as DecideStatus,
         };
 
         store.addConnectionFromEvent(connEvent);
@@ -1461,6 +1356,7 @@ describe("connectionStore", () => {
           targetPodId: "pod-b",
           targetAnchor: "right" as const,
           triggerMode: "direct" as TriggerMode,
+          decideStatus: "none" as DecideStatus,
         };
 
         store.updateConnectionFromEvent(connEvent);
@@ -1484,6 +1380,7 @@ describe("connectionStore", () => {
           targetPodId: "pod-b",
           targetAnchor: "top" as const,
           triggerMode: "auto" as TriggerMode,
+          decideStatus: "none" as DecideStatus,
         };
 
         expect(() => store.updateConnectionFromEvent(connEvent)).not.toThrow();
@@ -1494,7 +1391,8 @@ describe("connectionStore", () => {
         const store = useConnectionStore();
         const existingConn = createMockConnection({
           id: "conn-1",
-          status: "ai-rejected",
+          status: "idle",
+          decideStatus: "rejected" as DecideStatus,
           decideReason: "old reason",
         });
         store.connections = [existingConn];
@@ -1504,13 +1402,69 @@ describe("connectionStore", () => {
           sourceAnchor: "bottom" as const,
           targetPodId: "pod-b",
           targetAnchor: "top" as const,
-          triggerMode: "ai-decide" as TriggerMode,
+          triggerMode: "branch" as TriggerMode,
+          decideStatus: "none" as DecideStatus,
           decideReason: "new reason",
         };
 
         store.updateConnectionFromEvent(connEvent);
 
         expect(store.connections[0]?.decideReason).toBe("new reason");
+      });
+
+      it("收到 decideStatus: approved → connection.decideStatus 更新", () => {
+        // Arrange：store 中有 decideStatus: none 的 connection
+        const store = useConnectionStore();
+        const existingConn = createMockConnection({
+          id: "conn-1",
+          sourcePodId: "pod-a",
+          targetPodId: "pod-b",
+          triggerMode: "branch",
+          status: "idle",
+          decideStatus: "none" as DecideStatus,
+        });
+        store.connections = [existingConn];
+
+        // Act：收到帶 decideStatus: approved 的事件
+        store.updateConnectionFromEvent({
+          id: "conn-1",
+          sourcePodId: "pod-a",
+          sourceAnchor: "bottom",
+          targetPodId: "pod-b",
+          targetAnchor: "top",
+          triggerMode: "branch" as TriggerMode,
+          decideStatus: "approved" as DecideStatus,
+        });
+
+        // Assert：decideStatus 更新為 approved
+        expect(store.connections[0]?.decideStatus).toBe("approved");
+      });
+
+      it("收到不含 decideStatus 的 payload → 保留現有 decideStatus（不被清掉）", () => {
+        // Arrange：store 中有 decideStatus: pending 的 connection
+        const store = useConnectionStore();
+        const existingConn = createMockConnection({
+          id: "conn-1",
+          sourcePodId: "pod-a",
+          targetPodId: "pod-b",
+          triggerMode: "branch",
+          status: "idle",
+          decideStatus: "pending" as DecideStatus,
+        });
+        store.connections = [existingConn];
+
+        // Act：收到不帶 decideStatus 的事件（undefined）
+        store.updateConnectionFromEvent({
+          id: "conn-1",
+          sourcePodId: "pod-a",
+          sourceAnchor: "bottom",
+          targetPodId: "pod-b",
+          targetAnchor: "top",
+          triggerMode: "branch" as TriggerMode,
+        } as Parameters<typeof store.updateConnectionFromEvent>[0]);
+
+        // Assert：現有 decideStatus pending 保留，不被清掉
+        expect(store.connections[0]?.decideStatus).toBe("pending");
       });
     });
 
@@ -1530,7 +1484,7 @@ describe("connectionStore", () => {
   });
 
   describe("loadConnectionsFromBackend", () => {
-    it("成功時應設定 connections、triggerMode 預設 auto、status 直接使用 connectionStatus", async () => {
+    it("成功時應設定 connections、triggerMode 預設 auto、status 與 decideStatus 直接使用後端回傳值", async () => {
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
       const store = useConnectionStore();
@@ -1545,6 +1499,7 @@ describe("connectionStore", () => {
             targetAnchor: "top",
             triggerMode: "auto",
             connectionStatus: "idle",
+            decideStatus: "none",
           },
           {
             id: "conn-2",
@@ -1552,7 +1507,8 @@ describe("connectionStore", () => {
             sourceAnchor: "bottom",
             targetPodId: "pod-c",
             targetAnchor: "top",
-            connectionStatus: "ai-approved",
+            connectionStatus: "active",
+            decideStatus: "approved",
           },
         ],
       });
@@ -1564,11 +1520,13 @@ describe("connectionStore", () => {
         id: "conn-1",
         triggerMode: "auto",
         status: "idle",
+        decideStatus: "none",
       });
       expect(store.connections[1]).toMatchObject({
         id: "conn-2",
         triggerMode: "auto", // 預設
-        status: "ai-approved", // 直接使用後端回傳的 connectionStatus
+        status: "active",
+        decideStatus: "approved",
       });
     });
 
@@ -1606,7 +1564,7 @@ describe("connectionStore", () => {
       expect(store.connections[0]?.status).toBe("idle");
     });
 
-    it("connectionStatus 為 ai-deciding 時應正確設定", async () => {
+    it("decideStatus pending 時應正確設定", async () => {
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
       const store = useConnectionStore();
@@ -1618,14 +1576,16 @@ describe("connectionStore", () => {
             sourceAnchor: "bottom",
             targetPodId: "pod-b",
             targetAnchor: "top",
-            connectionStatus: "ai-deciding",
+            connectionStatus: "idle",
+            decideStatus: "pending",
           },
         ],
       });
 
       await store.loadConnectionsFromBackend();
 
-      expect(store.connections[0]?.status).toBe("ai-deciding");
+      expect(store.connections[0]?.status).toBe("idle");
+      expect(store.connections[0]?.decideStatus).toBe("pending");
     });
 
     it("decideReason 應正確設定", async () => {
@@ -1640,7 +1600,8 @@ describe("connectionStore", () => {
             sourceAnchor: "bottom",
             targetPodId: "pod-b",
             targetAnchor: "top",
-            connectionStatus: "ai-rejected",
+            connectionStatus: "idle",
+            decideStatus: "rejected",
             decideReason: "Not relevant",
           },
         ],
@@ -1648,7 +1609,7 @@ describe("connectionStore", () => {
 
       await store.loadConnectionsFromBackend();
 
-      expect(store.connections[0]?.status).toBe("ai-rejected");
+      expect(store.connections[0]?.decideStatus).toBe("rejected");
       expect(store.connections[0]?.decideReason).toBe("Not relevant");
     });
   });
@@ -1739,7 +1700,7 @@ describe("connectionStore", () => {
       expect(store.isWorkflowRunning("pod-source")).toBe(true);
     });
 
-    it("任一下游 connection 為 ai-deciding 時回傳 true", () => {
+    it("任一下游 connection 為 decideStatus pending 時回傳 true", () => {
       const store = useConnectionStore();
       const podStore = usePodStore();
       podStore.pods = [createMockPod({ id: "pod-target", status: "idle" })];
@@ -1747,14 +1708,15 @@ describe("connectionStore", () => {
         createMockConnection({
           sourcePodId: "pod-source",
           targetPodId: "pod-target",
-          status: "ai-deciding",
+          status: "idle",
+          decideStatus: "pending" as DecideStatus,
         }),
       ];
 
       expect(store.isWorkflowRunning("pod-source")).toBe(true);
     });
 
-    it("任一下游 connection 為 ai-approved 時回傳 true", () => {
+    it("下游 connection 為 decideStatus approved 時回傳 false（決策已完成，等待觸發）", () => {
       const store = useConnectionStore();
       const podStore = usePodStore();
       podStore.pods = [createMockPod({ id: "pod-target", status: "idle" })];
@@ -1762,29 +1724,15 @@ describe("connectionStore", () => {
         createMockConnection({
           sourcePodId: "pod-source",
           targetPodId: "pod-target",
-          status: "ai-approved",
-        }),
-      ];
-
-      expect(store.isWorkflowRunning("pod-source")).toBe(true);
-    });
-
-    it("下游 connection 為 ai-rejected 時回傳 false（該分支已結束）", () => {
-      const store = useConnectionStore();
-      const podStore = usePodStore();
-      podStore.pods = [createMockPod({ id: "pod-target", status: "idle" })];
-      store.connections = [
-        createMockConnection({
-          sourcePodId: "pod-source",
-          targetPodId: "pod-target",
-          status: "ai-rejected",
+          status: "idle",
+          decideStatus: "approved" as DecideStatus,
         }),
       ];
 
       expect(store.isWorkflowRunning("pod-source")).toBe(false);
     });
 
-    it("下游 connection 為 ai-error 時回傳 false（該分支已結束）", () => {
+    it("下游 connection 為 decideStatus rejected 時回傳 false（該分支已結束）", () => {
       const store = useConnectionStore();
       const podStore = usePodStore();
       podStore.pods = [createMockPod({ id: "pod-target", status: "idle" })];
@@ -1792,7 +1740,24 @@ describe("connectionStore", () => {
         createMockConnection({
           sourcePodId: "pod-source",
           targetPodId: "pod-target",
-          status: "ai-error",
+          status: "idle",
+          decideStatus: "rejected" as DecideStatus,
+        }),
+      ];
+
+      expect(store.isWorkflowRunning("pod-source")).toBe(false);
+    });
+
+    it("下游 connection 為 decideStatus error 時回傳 false（該分支已結束）", () => {
+      const store = useConnectionStore();
+      const podStore = usePodStore();
+      podStore.pods = [createMockPod({ id: "pod-target", status: "idle" })];
+      store.connections = [
+        createMockConnection({
+          sourcePodId: "pod-source",
+          targetPodId: "pod-target",
+          status: "idle",
+          decideStatus: "error" as DecideStatus,
         }),
       ];
 
@@ -1900,7 +1865,7 @@ describe("connectionStore", () => {
       expect(store.isWorkflowRunning("pod-source")).toBe(true);
     });
 
-    it("混合情境：一條分支 ai-rejected，另一條分支 active -> 回傳 true", () => {
+    it("混合情境：一條分支 rejected，另一條分支 active -> 回傳 true", () => {
       const store = useConnectionStore();
       const podStore = usePodStore();
       podStore.pods = [
@@ -1911,7 +1876,8 @@ describe("connectionStore", () => {
         createMockConnection({
           sourcePodId: "pod-source",
           targetPodId: "pod-target-a",
-          status: "ai-rejected",
+          status: "idle",
+          decideStatus: "rejected" as DecideStatus,
         }),
         createMockConnection({
           sourcePodId: "pod-source",
@@ -1923,7 +1889,7 @@ describe("connectionStore", () => {
       expect(store.isWorkflowRunning("pod-source")).toBe(true);
     });
 
-    it("混合情境：所有分支都已結束（ai-rejected + idle）-> 回傳 false", () => {
+    it("混合情境：所有分支都已結束（rejected + idle）-> 回傳 false", () => {
       const store = useConnectionStore();
       const podStore = usePodStore();
       podStore.pods = [
@@ -1934,7 +1900,8 @@ describe("connectionStore", () => {
         createMockConnection({
           sourcePodId: "pod-source",
           targetPodId: "pod-target-a",
-          status: "ai-rejected",
+          status: "idle",
+          decideStatus: "rejected" as DecideStatus,
         }),
         createMockConnection({
           sourcePodId: "pod-source",
@@ -2004,6 +1971,84 @@ describe("connectionStore", () => {
       ];
 
       expect(store.isWorkflowRunning("pod-source")).toBe(false);
+    });
+
+    it("branch connection decideStatus === pending 時橡皮擦應 disabled（回傳 true）", () => {
+      // Arrange：head pod + branch connection（status: idle, decideStatus: pending）+ downstream pod
+      const store = useConnectionStore();
+      const podStore = usePodStore();
+      podStore.pods = [
+        createMockPod({ id: "head-pod", status: "idle" }),
+        createMockPod({ id: "downstream-pod", status: "idle" }),
+      ];
+      store.connections = [
+        createMockConnection({
+          id: "branch-conn",
+          sourcePodId: "head-pod",
+          targetPodId: "downstream-pod",
+          triggerMode: "branch",
+          status: "idle",
+          decideStatus: "pending" as DecideStatus,
+        }),
+      ];
+
+      // Act + Assert：decideStatus pending 代表 AI 正在決策中，工作流仍在執行
+      expect(store.isWorkflowRunning("head-pod")).toBe(true);
+    });
+
+    it("所有 connection status=idle 且 decideStatus=none 時應回 false（橡皮擦 enabled）", () => {
+      // Arrange：head pod + connection（status: idle, decideStatus: none）+ downstream pod
+      const store = useConnectionStore();
+      const podStore = usePodStore();
+      podStore.pods = [
+        createMockPod({ id: "head-pod", status: "idle" }),
+        createMockPod({ id: "downstream-pod", status: "idle" }),
+      ];
+      store.connections = [
+        createMockConnection({
+          id: "conn-1",
+          sourcePodId: "head-pod",
+          targetPodId: "downstream-pod",
+          status: "idle",
+          decideStatus: "none" as DecideStatus,
+        }),
+      ];
+
+      // Act + Assert：所有狀態都已結束，橡皮擦應可使用
+      expect(store.isWorkflowRunning("head-pod")).toBe(false);
+    });
+
+    it("multi-input 一條 approved 一條 rejected 且 downstream pod idle → 橡皮擦 enabled（回傳 false）", () => {
+      // 修正 Bug B：rejected 與 approved 不再讓 isWorkflowRunning 卡在 true
+      // Arrange：head pod → conn-1（decideStatus: approved）
+      //          head2 pod → conn-2（decideStatus: rejected）
+      //          共同 downstream pod（status: idle）
+      const store = useConnectionStore();
+      const podStore = usePodStore();
+      podStore.pods = [
+        createMockPod({ id: "head-pod", status: "idle" }),
+        createMockPod({ id: "head2-pod", status: "idle" }),
+        createMockPod({ id: "downstream-pod", status: "idle" }),
+      ];
+      store.connections = [
+        createMockConnection({
+          id: "conn-1",
+          sourcePodId: "head-pod",
+          targetPodId: "downstream-pod",
+          status: "idle",
+          decideStatus: "approved" as DecideStatus,
+        }),
+        createMockConnection({
+          id: "conn-2",
+          sourcePodId: "head2-pod",
+          targetPodId: "downstream-pod",
+          status: "idle",
+          decideStatus: "rejected" as DecideStatus,
+        }),
+      ];
+
+      // Act + Assert：決策已完成（approved/rejected 均非執行中），應回傳 false
+      expect(store.isWorkflowRunning("head-pod")).toBe(false);
     });
   });
 
@@ -2654,6 +2699,7 @@ describe("connectionStore", () => {
         triggerMode: "auto",
         summaryProvider: "gemini",
         summaryModel: "gemini-2.5-flash",
+        decideStatus: "none" as DecideStatus,
       });
 
       expect(store.connections[0]?.summaryProvider).toBe("gemini");
@@ -2675,6 +2721,7 @@ describe("connectionStore", () => {
         targetAnchor: "top",
         triggerMode: "auto",
         summaryProvider: null,
+        decideStatus: "none" as DecideStatus,
       });
 
       // null 應直接寫入，不視為「未帶欄位」
@@ -2700,6 +2747,7 @@ describe("connectionStore", () => {
         targetPodId: "pod-b",
         targetAnchor: "top",
         triggerMode: "auto",
+        decideStatus: "none" as DecideStatus,
       };
 
       store.updateConnectionFromEvent(
@@ -2729,9 +2777,212 @@ describe("connectionStore", () => {
         triggerMode: "auto",
         summaryProvider: "codex",
         summaryModel: "gpt-5.4",
+        decideStatus: "none" as DecideStatus,
       });
 
       expect(store.connections[0]?.summaryModel).toBe("gpt-5.4");
+    });
+  });
+
+  // ── updateConnectionTriggerMode("branch") wire-up smoke ──────────────────
+  describe("updateConnectionTriggerMode branch wire-up smoke", () => {
+    it("呼叫後 mock websocketClient 收到帶 triggerMode: branch 的 connection:update 請求", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      const store = useConnectionStore();
+
+      mockCreateWebSocketRequest.mockResolvedValueOnce({
+        connection: createMockConnection({
+          id: "conn-branch",
+          triggerMode: "branch",
+        }),
+      });
+
+      await store.updateConnectionTriggerMode("conn-branch", "branch");
+
+      expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestEvent: "connection:update",
+          payload: expect.objectContaining({
+            connectionId: "conn-branch",
+            triggerMode: "branch",
+          }),
+        }),
+      );
+    });
+  });
+
+  // ── updateConnectionBranchLabel wire-up smoke ─────────────────────────────
+  describe("updateConnectionBranchLabel", () => {
+    it("wire-up smoke：呼叫後 mock websocketClient 收到帶 label 的 connection:update 請求", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      const store = useConnectionStore();
+
+      // 預先注入 connection（validateBranchLabel 需要 sourcePodId）
+      const conn = createMockConnection({
+        id: "conn-label-1",
+        sourcePodId: "pod-src",
+        triggerMode: "branch",
+      });
+      store.connections = [conn];
+
+      mockCreateWebSocketRequest.mockResolvedValueOnce({
+        connection: { ...conn, label: "Checklist" },
+      });
+
+      await store.updateConnectionBranchLabel("conn-label-1", "Checklist");
+
+      expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestEvent: "connection:update",
+          payload: expect.objectContaining({
+            connectionId: "conn-label-1",
+            label: "Checklist",
+          }),
+        }),
+      );
+    });
+
+    // ── sad case B1：label 重複（同 source Pod 已有相同 label） ──────────────
+    it("B1 sad case：同 source Pod 已有 label=Checklist 的 branch → 不發 WS 且 toast 帶 branchLabelDuplicate", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      const store = useConnectionStore();
+
+      // conn-1 已有 label="Checklist"，conn-2 為欲更新的目標
+      const conn1 = createMockConnection({
+        id: "conn-1",
+        sourcePodId: "pod-src",
+        triggerMode: "branch",
+        label: "Checklist",
+      });
+      const conn2 = createMockConnection({
+        id: "conn-2",
+        sourcePodId: "pod-src",
+        triggerMode: "branch",
+        label: "Other",
+      });
+      store.connections = [conn1, conn2];
+
+      // 嘗試將 conn-2 的 label 改成已存在的 "Checklist"
+      const result = await store.updateConnectionBranchLabel(
+        "conn-2",
+        "Checklist",
+      );
+
+      expect(result).toBeNull();
+      expect(mockCreateWebSocketRequest).not.toHaveBeenCalled();
+      // mockToast 已在頂層 mock，確認呼叫時 title 包含 branchLabelDuplicate 對應文字
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          variant: "destructive",
+        }),
+      );
+    });
+
+    // ── sad case B2：label="None"（保留字） ──────────────────────────────────
+    it("B2 sad case：label=None → 不發 WS 且 toast 帶 branchLabelReserved 錯誤", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      const store = useConnectionStore();
+
+      const conn = createMockConnection({
+        id: "conn-reserved",
+        sourcePodId: "pod-src",
+        triggerMode: "branch",
+      });
+      store.connections = [conn];
+
+      const result = await store.updateConnectionBranchLabel(
+        "conn-reserved",
+        "None",
+      );
+
+      expect(result).toBeNull();
+      expect(mockCreateWebSocketRequest).not.toHaveBeenCalled();
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({ variant: "destructive" }),
+      );
+    });
+
+    // ── sad case B3：label="" ──────────────────────────────────────────────
+    it("B3 sad case：label 為空字串 → 不發 WS 且 toast 帶 branchLabelEmpty 錯誤", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      const store = useConnectionStore();
+
+      const conn = createMockConnection({
+        id: "conn-empty",
+        sourcePodId: "pod-src",
+        triggerMode: "branch",
+      });
+      store.connections = [conn];
+
+      const result = await store.updateConnectionBranchLabel("conn-empty", "");
+
+      expect(result).toBeNull();
+      expect(mockCreateWebSocketRequest).not.toHaveBeenCalled();
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({ variant: "destructive" }),
+      );
+    });
+
+    // ── sad case B4：label 長度 33（超過上限 32） ─────────────────────────────
+    it("B4 sad case：label 長度 33 → 不發 WS 且 toast 帶 branchLabelTooLong 錯誤", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      const store = useConnectionStore();
+
+      const conn = createMockConnection({
+        id: "conn-long",
+        sourcePodId: "pod-src",
+        triggerMode: "branch",
+      });
+      store.connections = [conn];
+
+      // 長度 33 的字串（超出上限 32）
+      const tooLongLabel = "a".repeat(33);
+      const result = await store.updateConnectionBranchLabel(
+        "conn-long",
+        tooLongLabel,
+      );
+
+      expect(result).toBeNull();
+      expect(mockCreateWebSocketRequest).not.toHaveBeenCalled();
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({ variant: "destructive" }),
+      );
+    });
+  });
+
+  // ── updateConnectionBranchDescription sad case ────────────────────────────
+  describe("updateConnectionBranchDescription", () => {
+    // ── sad case B5：description 長度 201（超過上限 200） ────────────────────
+    it("B5 sad case：description 長度 201 → 不發 WS 且 toast 帶 branchDescriptionTooLong 錯誤", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      const store = useConnectionStore();
+
+      const conn = createMockConnection({
+        id: "conn-desc-long",
+        sourcePodId: "pod-src",
+        triggerMode: "branch",
+      });
+      store.connections = [conn];
+
+      // 長度 201 的字串（超出上限 200）
+      const tooLongDescription = "b".repeat(201);
+      const result = await store.updateConnectionBranchDescription(
+        "conn-desc-long",
+        tooLongDescription,
+      );
+
+      expect(result).toBeNull();
+      expect(mockCreateWebSocketRequest).not.toHaveBeenCalled();
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({ variant: "destructive" }),
+      );
     });
   });
 });

@@ -30,7 +30,7 @@ function insertConnection(
   canvasId: string,
   sourcePodId: string,
   targetPodId: string,
-  triggerMode: "auto" | "direct" | "ai-decide" = "auto",
+  triggerMode: "auto" | "direct" | "branch" = "auto",
   id?: string,
 ): string {
   const connId = id ?? uuidv4();
@@ -90,9 +90,9 @@ describe("calculatePathways（透過 createRun 測試）", () => {
     expect(instance!.directPathwaySettled).toBe("not-applicable");
   });
 
-  it("只有 ai-decide connections → target auto=pending, direct=not-applicable", async () => {
+  it("只有 branch connections → target auto=pending, direct=not-applicable", async () => {
     const targetPod = "pod-target";
-    insertConnection(CANVAS_ID, SOURCE_POD_ID, targetPod, "ai-decide");
+    insertConnection(CANVAS_ID, SOURCE_POD_ID, targetPod, "branch");
 
     const ctx = await runExecutionService.createRun(
       CANVAS_ID,
@@ -102,7 +102,7 @@ describe("calculatePathways（透過 createRun 測試）", () => {
     const instance = runStore.getPodInstance(ctx.runId, targetPod);
 
     expect(instance).toBeDefined();
-    // ai-decide 歸類為 auto-triggerable
+    // branch 歸類為 auto-triggerable
     expect(instance!.autoPathwaySettled).toBe("pending");
     expect(instance!.directPathwaySettled).toBe("not-applicable");
   });

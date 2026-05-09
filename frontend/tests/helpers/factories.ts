@@ -10,6 +10,7 @@ import type {
   Connection,
   TriggerMode,
   ConnectionStatus,
+  DecideStatus,
   AnchorPosition,
 } from "@/types/connection";
 import type {
@@ -138,8 +139,8 @@ export function createMockConnection(
     targetAnchor: "top" as AnchorPosition,
     triggerMode: "auto" as TriggerMode,
     status: "idle" as ConnectionStatus,
+    decideStatus: "none" as DecideStatus,
     summaryModel: "sonnet" as ModelType,
-    aiDecideModel: "sonnet" as ModelType,
     ...overrides,
   };
 }

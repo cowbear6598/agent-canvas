@@ -3,6 +3,7 @@ import { computed, ref, onMounted, nextTick, watch } from "vue";
 import type {
   Connection,
   ConnectionStatus,
+  DecideStatus,
   TriggerMode,
 } from "@/types/connection";
 import type { Pod } from "@/types/pod";
@@ -19,12 +20,16 @@ const props = withDefaults(
     isSelected: boolean;
     status?: ConnectionStatus;
     triggerMode?: TriggerMode;
+    decideStatus?: DecideStatus;
     decideReason?: string;
+    label?: string;
   }>(),
   {
     status: "idle",
     triggerMode: "auto",
+    decideStatus: "none",
     decideReason: undefined,
+    label: undefined,
   },
 );
 
@@ -80,19 +85,19 @@ const pathData = computed(() => {
   });
 });
 
-const AI_DECIDE_COLOR_DEFAULT = "oklch(0.65 0.12 300 / 0.7)";
+const BRANCH_STATUS_COLOR_DEFAULT = "oklch(0.65 0.12 300 / 0.7)";
 
-const AI_DECIDE_COLOR_MAP: Record<string, string> = {
-  "ai-deciding": "oklch(0.65 0.14 300 / 0.8)",
-  "ai-rejected": "oklch(0.65 0.15 20)",
-  "ai-error": "oklch(0.7 0.15 60 / 0.8)",
-  "ai-approved": AI_DECIDE_COLOR_DEFAULT,
+const BRANCH_STATUS_COLOR_MAP: Record<string, string> = {
+  pending: "oklch(0.65 0.14 300 / 0.8)",
+  rejected: "oklch(0.65 0.15 20)",
+  error: "oklch(0.7 0.15 60 / 0.8)",
+  approved: BRANCH_STATUS_COLOR_DEFAULT,
   active: "oklch(0.7 0.15 50)",
   queued: "oklch(0.7 0.12 230 / 0.8)",
 };
 
-function getAiDecideColor(status: string): string {
-  return AI_DECIDE_COLOR_MAP[status] ?? AI_DECIDE_COLOR_DEFAULT;
+function getBranchStatusColor(decideStatus: string): string {
+  return BRANCH_STATUS_COLOR_MAP[decideStatus] ?? BRANCH_STATUS_COLOR_DEFAULT;
 }
 
 function getStatusColor(status: string): string {
@@ -101,7 +106,8 @@ function getStatusColor(status: string): string {
 }
 
 const lineColor = computed(() => {
-  if (props.triggerMode === "ai-decide") return getAiDecideColor(props.status);
+  if (props.triggerMode === "branch")
+    return getBranchStatusColor(props.decideStatus ?? "none");
   if (props.status === "queued") return "oklch(0.7 0.12 230 / 0.8)";
   if (props.status === "waiting") return "oklch(0.7 0.15 155 / 0.8)";
   return getStatusColor(props.status);
@@ -114,38 +120,39 @@ const MID_LABEL_DIRECT: MidLabelEntry = {
   text: "D",
   class: "direct-label",
 };
-const MID_LABEL_AI_DEFAULT: MidLabelEntry = {
-  type: "ai",
-  text: "AI",
-  class: "ai-label",
-};
 
-const AI_DECIDE_STATUS_LABEL_MAP: Record<string, MidLabelEntry> = {
-  "ai-deciding": { type: "deciding", text: "", class: "deciding-label" },
-  "ai-rejected": null,
-  "ai-error": { type: "error", text: "!", class: "error-label" },
+// branch 模式下特殊狀態 label 覆寫表（rejected 不覆寫，保留使用者命名的 label）
+const BRANCH_STATUS_LABEL_MAP: Record<string, MidLabelEntry> = {
+  pending: { type: "deciding", text: "", class: "deciding-label" },
+  error: { type: "error", text: "!", class: "error-label" },
 };
 
 const midLabel = computed((): MidLabelEntry => {
   if (props.triggerMode === "auto") return null;
   if (props.triggerMode === "direct") return MID_LABEL_DIRECT;
 
-  const statusKey = props.status;
-  return statusKey in AI_DECIDE_STATUS_LABEL_MAP
-    ? (AI_DECIDE_STATUS_LABEL_MAP[statusKey] ?? null)
-    : MID_LABEL_AI_DEFAULT;
+  // branch 模式：pending / error 用特殊 label 覆寫；其餘狀態（含 rejected）顯示使用者命名的 label
+  const decideKey = props.decideStatus ?? "none";
+  if (decideKey in BRANCH_STATUS_LABEL_MAP) {
+    return BRANCH_STATUS_LABEL_MAP[decideKey] ?? null;
+  }
+  return {
+    type: "branch-label",
+    text: props.label ?? "",
+    class: "branch-label",
+  };
 });
 
 const tooltipText = computed(() => {
   if (!props.decideReason) return undefined;
 
-  if (props.status === "ai-rejected") {
+  if (props.decideStatus === "rejected") {
     return t("canvas.connectionLine.aiRejectedReason", {
       reason: props.decideReason,
     });
   }
 
-  if (props.status === "ai-error") {
+  if (props.decideStatus === "error") {
     return t("canvas.connectionLine.aiErrorReason", {
       reason: props.decideReason,
     });
@@ -199,7 +206,7 @@ const arrowPositions = computed(() => {
 });
 
 const useXMarker = computed(() => {
-  return props.triggerMode === "ai-decide" && props.status === "ai-rejected";
+  return props.triggerMode === "branch" && props.decideStatus === "rejected";
 });
 
 const pathRef = ref<SVGPathElement | null>(null);
@@ -279,11 +286,11 @@ const handleContextMenu = (e: MouseEvent): void => {
         idle: status === 'idle',
         queued: status === 'queued',
         waiting: status === 'waiting',
-        'ai-decide': triggerMode === 'ai-decide',
-        'ai-deciding': status === 'ai-deciding',
-        'ai-approved': status === 'ai-approved',
-        'ai-rejected': status === 'ai-rejected',
-        'ai-error': status === 'ai-error',
+        branch: triggerMode === 'branch',
+        deciding: decideStatus === 'pending',
+        approved: decideStatus === 'approved',
+        rejected: decideStatus === 'rejected',
+        error: decideStatus === 'error',
         direct: triggerMode === 'direct',
       },
     ]"
@@ -320,8 +327,8 @@ const handleContextMenu = (e: MouseEvent): void => {
         (status === 'idle' ||
           status === 'queued' ||
           status === 'waiting' ||
-          status === 'ai-approved') &&
-          !useXMarker
+          decideStatus === 'approved') &&
+        !useXMarker
       "
       :key="`static-${index}`"
       class="arrow"
@@ -331,7 +338,7 @@ const handleContextMenu = (e: MouseEvent): void => {
     />
 
     <template
-      v-if="(status === 'active' || status === 'ai-deciding') && !useXMarker"
+      v-if="(status === 'active' || decideStatus === 'pending') && !useXMarker"
     >
       <polygon
         v-for="i in 3"
@@ -386,18 +393,17 @@ const handleContextMenu = (e: MouseEvent): void => {
 
     <foreignObject
       v-if="midLabel"
-      :x="pathData.midPoint.x - 16"
+      :x="pathData.midPoint.x - 100"
       :y="pathData.midPoint.y - 10"
-      width="32"
+      width="200"
       height="20"
       :title="tooltipText"
     >
-      <div :class="['connection-mid-label', midLabel.class]">
-        <Loader2
-          v-if="midLabel.type === 'deciding'"
-          :size="12"
-        />
-        <span v-else>{{ midLabel.text }}</span>
+      <div class="connection-mid-label-wrapper">
+        <div :class="['connection-mid-label', midLabel.class]">
+          <Loader2 v-if="midLabel.type === 'deciding'" :size="12" />
+          <span v-else>{{ midLabel.text }}</span>
+        </div>
       </div>
     </foreignObject>
   </g>

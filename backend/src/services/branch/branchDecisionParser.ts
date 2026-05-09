@@ -1,0 +1,92 @@
+/**
+ * branchDecisionParser
+ *
+ * 純函式模組：負責解析 AI 回傳的 branch 決策原始字串。
+ * - stripMarkdownCodeBlock：剝除 ```json / ``` 包裝
+ * - parseBranchDecision：完整解析流程（strip → JSON.parse → zod → label 驗證）
+ */
+
+import { z } from "zod";
+
+// ─── 錯誤分類 ─────────────────────────────────────────────────────────────────
+
+/** AI 回應解析失敗的錯誤類型 */
+export const BranchDecisionParseError = {
+  /** JSON 解析失敗 */
+  PARSE_FAIL: "PARSE_FAIL",
+  /** zod schema 驗證失敗 */
+  SCHEMA_FAIL: "SCHEMA_FAIL",
+  /** selectedLabel 不在合法清單內，也非 "None" */
+  LABEL_HALLUCINATION: "LABEL_HALLUCINATION",
+} as const;
+
+export type BranchDecisionParseErrorType =
+  (typeof BranchDecisionParseError)[keyof typeof BranchDecisionParseError];
+
+// ─── zod schema ───────────────────────────────────────────────────────────────
+
+const branchDecisionSchema = z.object({
+  selectedLabel: z.string(),
+});
+
+// ─── 公開函式 ─────────────────────────────────────────────────────────────────
+
+/**
+ * 剝除 AI 回應中可能包裹的 markdown code block（```json / ```）。
+ * 同時 trim 開頭結尾空白。
+ */
+export function stripMarkdownCodeBlock(raw: string): string {
+  // 移除開頭的 ```json 或 ``` 以及結尾的 ```
+  const stripped = raw
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
+  return stripped;
+}
+
+/**
+ * 解析 AI 回傳的 branch 決策字串。
+ *
+ * 流程：
+ * 1. stripMarkdownCodeBlock
+ * 2. JSON.parse（失敗 → PARSE_FAIL）
+ * 3. zod schema 驗證（失敗 → SCHEMA_FAIL）
+ * 4. 檢查 selectedLabel 是否為 "None" 或在 validLabels 內（否 → LABEL_HALLUCINATION）
+ *
+ * @param raw - AI 原始回傳字串
+ * @param validLabels - 合法的 branch label 列表（不含 "None"，函式內部自動允許）
+ */
+export function parseBranchDecision(
+  raw: string,
+  validLabels: string[],
+):
+  | { ok: true; selectedLabel: string }
+  | { ok: false; reason: BranchDecisionParseErrorType } {
+  // 步驟 1：剝除 markdown
+  const cleaned = stripMarkdownCodeBlock(raw);
+
+  // 步驟 2：JSON.parse
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch {
+    return { ok: false, reason: BranchDecisionParseError.PARSE_FAIL };
+  }
+
+  // 步驟 3：zod schema 驗證
+  const result = branchDecisionSchema.safeParse(parsed);
+  if (!result.success) {
+    return { ok: false, reason: BranchDecisionParseError.SCHEMA_FAIL };
+  }
+
+  const { selectedLabel } = result.data;
+
+  // 步驟 4：label 合法性檢查（允許 "None" 或 validLabels 內的值）
+  if (selectedLabel !== "None" && !validLabels.includes(selectedLabel)) {
+    return { ok: false, reason: BranchDecisionParseError.LABEL_HALLUCINATION };
+  }
+
+  return { ok: true, selectedLabel };
+}

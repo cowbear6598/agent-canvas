@@ -2,6 +2,7 @@ import { WebSocketResponseEvents } from "../schemas";
 import type {
   WorkflowGetDownstreamPodsResultPayload,
   WorkflowClearResultPayload,
+  ConnectionUpdatedPayload,
 } from "../types";
 import type {
   WorkflowGetDownstreamPodsPayload,
@@ -9,8 +10,8 @@ import type {
 } from "../schemas";
 import { workflowClearService } from "../services/workflowClearService.js";
 import { podStore } from "../services/podStore.js";
+import { connectionStore } from "../services/connectionStore.js";
 import { socketService } from "../services/socketService.js";
-import { workflowEventEmitter } from "../services/workflow";
 import {
   emitSuccess,
   emitError,
@@ -143,11 +144,21 @@ export const handleWorkflowClear = withCanvasId<WorkflowClearPayload>(
       response,
     );
 
-    if (result.clearedConnectionIds.length > 0) {
-      workflowEventEmitter.emitAiDecideClear(
-        canvasId,
-        result.clearedConnectionIds,
-      );
+    for (const connId of result.clearedConnectionIds) {
+      const conn = connectionStore.getById(canvasId, connId);
+      if (conn) {
+        const connUpdatedPayload: ConnectionUpdatedPayload = {
+          requestId: "",
+          canvasId,
+          success: true,
+          connection: conn,
+        };
+        socketService.emitToCanvas(
+          canvasId,
+          WebSocketResponseEvents.CONNECTION_UPDATED,
+          connUpdatedPayload,
+        );
+      }
     }
   },
 );

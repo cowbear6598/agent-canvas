@@ -27,6 +27,7 @@ import CreateRepositoryModal from "./CreateRepositoryModal.vue";
 import CloneRepositoryModal from "./CloneRepositoryModal.vue";
 import ConfirmDeleteModal from "./ConfirmDeleteModal.vue";
 import CreateEditModal from "./CreateEditModal.vue";
+import BranchEditModal from "./BranchEditModal.vue";
 import IntegrationConnectModal from "@/components/integration/IntegrationConnectModal.vue";
 import type { Pod, PodTypeConfig, Position } from "@/types";
 import type { PodProvider, ProviderConfig } from "@/types/pod";
@@ -332,6 +333,79 @@ const handleOpenModal = (payload: { type: string }): void => {
     handleOpenCloneRepositoryModal();
   }
 };
+
+// ─── BranchEditModal：點擊「Branch」項目時開啟 ──────────────────────────────
+
+const branchEditModal = ref<{
+  visible: boolean;
+  connectionId: string;
+  sourcePodId: string;
+  isAlreadyBranch: boolean;
+  initialLabel: string;
+  initialDescription: string;
+}>({
+  visible: false,
+  connectionId: "",
+  sourcePodId: "",
+  isAlreadyBranch: false,
+  initialLabel: "",
+  initialDescription: "",
+});
+
+/** ConnectionContextMenu 點擊 Branch 項目時觸發；用 menu data 為 modal 預填初始值 */
+const handleBranchModeClicked = (): void => {
+  const data = connectionContextMenu.value.data;
+  if (!data?.connectionId) return;
+
+  // sourcePodId 從 connection store 取（context menu data 沒帶）
+  const connection = connectionStore.connections.find(
+    (c) => c.id === data.connectionId,
+  );
+  if (!connection?.sourcePodId) return;
+
+  branchEditModal.value = {
+    visible: true,
+    connectionId: data.connectionId,
+    sourcePodId: connection.sourcePodId,
+    isAlreadyBranch: data.triggerMode === "branch",
+    initialLabel: data.label ?? "",
+    initialDescription: data.description ?? "",
+  };
+};
+
+const handleBranchModalUpdateOpen = (open: boolean): void => {
+  branchEditModal.value.visible = open;
+};
+
+/** Modal Save：呼叫合併 store action 一次更新 triggerMode + label + description */
+const handleBranchModalSubmit = async (payload: {
+  label: string;
+  description: string;
+}): Promise<void> => {
+  const { connectionId, sourcePodId, isAlreadyBranch } = branchEditModal.value;
+  const result = await connectionStore.updateConnectionBranchSettings(
+    connectionId,
+    sourcePodId,
+    {
+      switchToBranch: !isAlreadyBranch,
+      label: payload.label,
+      description: payload.description,
+    },
+  );
+
+  // 失敗時 store 已顯示 toast，保持 modal 開啟讓使用者重試
+  if (result) {
+    branchEditModal.value.visible = false;
+  }
+};
+
+const handleBranchProviderChanged = (): void => {
+  // store action 已完成；host 不需額外行為
+};
+
+const handleBranchModelChanged = (): void => {
+  // store action 已完成；host 不需額外行為
+};
 </script>
 
 <template>
@@ -435,11 +509,25 @@ const handleOpenModal = (payload: { type: string }): void => {
     :connection-id="connectionContextMenu.data.connectionId"
     :current-trigger-mode="connectionContextMenu.data.triggerMode"
     :current-summary-model="connectionContextMenu.data.summaryModel"
-    :current-ai-decide-model="connectionContextMenu.data.aiDecideModel"
     :current-summary-provider="connectionContextMenu.data.summaryProvider"
+    :current-branch-provider="connectionContextMenu.data.branchProvider"
+    :current-branch-model="connectionContextMenu.data.branchModel"
     @close="closeConnectionContextMenu"
     @trigger-mode-changed="closeConnectionContextMenu"
-    @ai-decide-model-changed="closeConnectionContextMenu"
+    @branch-mode-clicked="handleBranchModeClicked"
+    @branch-provider-changed="handleBranchProviderChanged"
+    @branch-model-changed="handleBranchModelChanged"
+  />
+
+  <BranchEditModal
+    :open="branchEditModal.visible"
+    :connection-id="branchEditModal.connectionId"
+    :source-pod-id="branchEditModal.sourcePodId"
+    :is-already-branch="branchEditModal.isAlreadyBranch"
+    :initial-label="branchEditModal.initialLabel"
+    :initial-description="branchEditModal.initialDescription"
+    @update:open="handleBranchModalUpdateOpen"
+    @submit="handleBranchModalSubmit"
   />
 
   <CreateRepositoryModal

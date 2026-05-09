@@ -1,20 +1,19 @@
-import type { ModelType, PodProvider } from "@/types/pod";
+import type { PodProvider } from "@/types/pod";
 
 export type AnchorPosition = "top" | "bottom" | "left" | "right";
 
-export type TriggerMode = "auto" | "ai-decide" | "direct";
+export type TriggerMode = "auto" | "branch" | "direct";
 
 export type WorkflowRole = "head" | "tail" | "middle" | "independent";
 
-export type ConnectionStatus =
-  | "idle"
-  | "active"
-  | "queued"
-  | "waiting"
-  | "ai-deciding"
-  | "ai-approved"
-  | "ai-rejected"
-  | "ai-error";
+export type ConnectionStatus = "idle" | "active" | "queued" | "waiting";
+
+export type DecideStatus =
+  | "none"
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "error";
 
 export interface Connection {
   id: string;
@@ -23,6 +22,7 @@ export interface Connection {
   targetPodId: string;
   targetAnchor: AnchorPosition;
   status?: ConnectionStatus;
+  decideStatus: DecideStatus;
   triggerMode: TriggerMode;
   decideReason?: string;
   /** summaryModel 接受任意 provider 的模型名稱字串，不限於 Claude ModelType */
@@ -32,7 +32,14 @@ export interface Connection {
    * 升級前 Connection 為 null/undefined，UI 渲染時會 fallback 至來源 Pod provider。
    */
   summaryProvider?: PodProvider | null;
-  aiDecideModel?: ModelType;
+  /** Branch 模式下的連線標籤，最多 32 字元，不可為保留字 "None" */
+  label?: string;
+  /** Branch 模式下的連線描述，最多 200 字元 */
+  description?: string;
+  /** Branch 模式使用的 AI Provider */
+  branchProvider?: PodProvider;
+  /** Branch 模式使用的模型字串 */
+  branchModel?: string;
 }
 
 export interface DraggingConnection {
@@ -48,3 +55,12 @@ export interface AnchorPoint {
   x: number;
   y: number;
 }
+
+/** Branch 連線 label 最大字元數 */
+export const BRANCH_LABEL_MAX_LENGTH = 32;
+
+/** Branch 連線 description 最大字元數 */
+export const BRANCH_DESCRIPTION_MAX_LENGTH = 200;
+
+/** Branch label 保留字，store 驗證時禁止使用 */
+export const BRANCH_RESERVED_LABEL = "None";

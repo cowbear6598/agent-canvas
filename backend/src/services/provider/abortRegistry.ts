@@ -74,6 +74,15 @@ class AbortRegistry {
   }
 
   /**
+   * 取得指定 key 的 AbortController，若不存在則回傳 undefined。
+   * 與 register() 的差異：不建立新的 controller，不觸發 abort，純粹讀取。
+   * 主要供 branch decider 等需要「共用現有 signal」的場景使用。
+   */
+  get(key: string): AbortController | undefined {
+    return this.controllers.get(key);
+  }
+
+  /**
    * 檢查指定 key 是否存在於 map 中。
    * 主要供測試使用。
    */

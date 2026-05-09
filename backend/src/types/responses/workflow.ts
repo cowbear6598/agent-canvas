@@ -1,4 +1,4 @@
-import type { TriggerMode } from '../connection.js';
+import type { TriggerMode } from "../connection.js";
 
 export interface WorkflowAutoTriggeredPayload {
   connectionId: string;
@@ -42,35 +42,7 @@ export interface WorkflowClearResultPayload {
   error?: string;
 }
 
-export interface WorkflowAiDecidePendingPayload {
-  canvasId: string;
-  connectionIds: string[];
-  sourcePodId: string;
-}
-
-export interface WorkflowAiDecideResultPayload {
-  canvasId: string;
-  connectionId: string;
-  sourcePodId: string;
-  targetPodId: string;
-  shouldTrigger: boolean;
-  reason: string;
-}
-
-export interface WorkflowAiDecideErrorPayload {
-  canvasId: string;
-  connectionId: string;
-  sourcePodId: string;
-  targetPodId: string;
-  error: string;
-}
-
-export interface WorkflowAiDecideClearPayload {
-  canvasId: string;
-  connectionIds: string[];
-}
-
-export interface WorkflowAiDecideTriggeredPayload {
+export interface WorkflowBranchTriggeredPayload {
   canvasId: string;
   connectionId: string;
   sourcePodId: string;

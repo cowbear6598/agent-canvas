@@ -7,7 +7,7 @@ import type { RunContext } from "../../types/run.js";
 import type { WorkflowStatusDelegate } from "./workflowStatusDelegate.js";
 import type { ProviderName } from "../provider/index.js";
 
-/** settle 階段的路徑類別。ai-decide 在 settle 時歸類為 'auto' */
+/** settle 階段的路徑類別。branch settle 時歸類為 'auto' */
 export type SettlementPathway = "auto" | "direct";
 
 export interface TriggerDecideContext {
@@ -192,8 +192,8 @@ export interface PipelineMethods {
   execute(context: PipelineContext, strategy: TriggerStrategy): Promise<void>;
 }
 
-export interface AiDecideMethods {
-  processAiDecideConnections(
+export interface BranchTriggerMethods {
+  processBranchConnections(
     canvasId: string,
     sourcePodId: string,
     connections: Connection[],

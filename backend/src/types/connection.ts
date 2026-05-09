@@ -2,9 +2,9 @@ import type { ProviderName } from "../services/provider/index.js";
 
 export type AnchorPosition = "top" | "bottom" | "left" | "right";
 
-export type TriggerMode = "auto" | "ai-decide" | "direct";
+export type TriggerMode = "auto" | "branch" | "direct";
 
-export type AutoTriggerMode = Extract<TriggerMode, "auto" | "ai-decide">;
+export type AutoTriggerMode = Extract<TriggerMode, "auto" | "branch">;
 
 export type DecideStatus =
   | "none"
@@ -13,21 +13,7 @@ export type DecideStatus =
   | "rejected"
   | "error";
 
-export type ConnectionStatus =
-  | "idle"
-  | "active"
-  | "queued"
-  | "waiting"
-  | "ai-deciding"
-  | "ai-approved"
-  | "ai-rejected"
-  | "ai-error";
-
-/** aiDecideModel 硬性鎖定 Claude 三選一（不接受第三方模型） */
-export type AiDecideModelType = "opus" | "sonnet" | "haiku";
-
-/** aiDecideModel 預設值，避免字面值 "sonnet" 散落各處 */
-export const DEFAULT_AI_DECIDE_MODEL: AiDecideModelType = "sonnet";
+export type ConnectionStatus = "idle" | "active" | "queued" | "waiting";
 
 export interface Connection {
   id: string;
@@ -46,6 +32,15 @@ export interface Connection {
    * null 代表舊資料（升級前）：runtime 會 fallback 至 sourcePod.provider。
    */
   summaryProvider: ProviderName | null;
-  /** aiDecideModel 僅允許 Claude 三選一 */
-  aiDecideModel: AiDecideModelType;
+  /**
+   * label 為 Branch 模式下的連線名稱，不可為 "None"（大小寫不敏感）。
+   * 同一 sourcePod 內的所有連線 label 必須唯一（由 service 層驗證）。
+   */
+  label: string;
+  /** description 為 Branch 模式下的連線描述，選填 */
+  description?: string;
+  /** branchProvider 指定 branch 決策時使用的 provider */
+  branchProvider: ProviderName;
+  /** branchModel 指定 branch 決策時使用的模型名稱 */
+  branchModel: string;
 }

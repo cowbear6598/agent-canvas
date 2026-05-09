@@ -1,10 +1,10 @@
-import { v4 as uuidv4 } from 'uuid';
-import type { TriggerMode } from '../../types/index.js';
-import type { TriggerStrategy, ExecutionServiceMethods } from './types.js';
-import type { RunContext } from '../../types/run.js';
-import { podStore } from '../podStore.js';
-import { LazyInitializable } from './lazyInitializable.js';
-import { logger } from '../../utils/logger.js';
+import { v4 as uuidv4 } from "uuid";
+import type { TriggerMode } from "../../types/index.js";
+import type { TriggerStrategy, ExecutionServiceMethods } from "./types.js";
+import type { RunContext } from "../../types/run.js";
+import { podStore } from "../podStore.js";
+import { LazyInitializable } from "./lazyInitializable.js";
+import { logger } from "../../utils/logger.js";
 
 const MAX_QUEUE_SIZE = 50;
 
@@ -24,7 +24,11 @@ export interface QueueItem {
 
 interface QueueServiceDeps {
   executionService: ExecutionServiceMethods;
-  strategies: { auto: TriggerStrategy; direct: TriggerStrategy; 'ai-decide': TriggerStrategy };
+  strategies: {
+    auto: TriggerStrategy;
+    direct: TriggerStrategy;
+    branch: TriggerStrategy;
+  };
 }
 
 class WorkflowQueueService extends LazyInitializable<QueueServiceDeps> {
@@ -34,16 +38,27 @@ class WorkflowQueueService extends LazyInitializable<QueueServiceDeps> {
     return this.deps.strategies[triggerMode];
   }
 
-  enqueue(item: Omit<QueueItem, 'id' | 'enqueuedAt'>): { position: number; queueSize: number } {
+  enqueue(item: Omit<QueueItem, "id" | "enqueuedAt">): {
+    position: number;
+    queueSize: number;
+  } {
     // run mode 下不應進入佇列，直接回傳防禦性結果
     if (item.runContext) {
-      logger.warn('Workflow', 'Warn', `[Queue] Run mode 不應呼叫 enqueue (runId: ${item.runContext.runId}, targetPodId: ${item.targetPodId})`);
+      logger.warn(
+        "Workflow",
+        "Warn",
+        `[Queue] Run mode 不應呼叫 enqueue (runId: ${item.runContext.runId}, targetPodId: ${item.targetPodId})`,
+      );
       return { position: 0, queueSize: 0 };
     }
 
     const existingQueue = this.queues.get(item.targetPodId) ?? [];
     if (existingQueue.length >= MAX_QUEUE_SIZE) {
-      logger.warn('Workflow', 'Warn', `[WorkflowQueueService] 佇列已達上限 ${MAX_QUEUE_SIZE}，拒絕加入 (targetPodId=${item.targetPodId})`);
+      logger.warn(
+        "Workflow",
+        "Warn",
+        `[WorkflowQueueService] 佇列已達上限 ${MAX_QUEUE_SIZE}，拒絕加入 (targetPodId=${item.targetPodId})`,
+      );
       return { position: 0, queueSize: existingQueue.length };
     }
 
@@ -69,7 +84,9 @@ class WorkflowQueueService extends LazyInitializable<QueueServiceDeps> {
       position,
       queueSize,
       triggerMode: item.triggerMode,
-      participatingConnectionIds: item.participatingConnectionIds ?? [item.connectionId],
+      participatingConnectionIds: item.participatingConnectionIds ?? [
+        item.connectionId,
+      ],
     });
 
     return { position, queueSize };
@@ -94,13 +111,16 @@ class WorkflowQueueService extends LazyInitializable<QueueServiceDeps> {
     return queue ? queue.length : 0;
   }
 
-  async processNextInQueue(canvasId: string, targetPodId: string): Promise<void> {
+  async processNextInQueue(
+    canvasId: string,
+    targetPodId: string,
+  ): Promise<void> {
     const targetPod = podStore.getById(canvasId, targetPodId);
     if (!targetPod) {
       return;
     }
 
-    if (targetPod.status !== 'idle') {
+    if (targetPod.status !== "idle") {
       return;
     }
 
@@ -119,7 +139,9 @@ class WorkflowQueueService extends LazyInitializable<QueueServiceDeps> {
       targetPodId,
       remainingQueueSize,
       triggerMode: item.triggerMode,
-      participatingConnectionIds: item.participatingConnectionIds ?? [item.connectionId],
+      participatingConnectionIds: item.participatingConnectionIds ?? [
+        item.connectionId,
+      ],
     });
 
     await this.deps.executionService.triggerWorkflowWithSummary({

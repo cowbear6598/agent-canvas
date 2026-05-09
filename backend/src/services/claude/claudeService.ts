@@ -214,7 +214,7 @@ export class ClaudeService {
 
   /**
    * 以 MCP Server 模式執行 Claude 查詢，回傳 Query（AsyncIterable）供呼叫端串流處理。
-   * 主要用於 aiDecideService 的決策流程。
+   * 主要用於 branchDecisionService 的決策流程。
    */
   public executeMcpChat(options: McpChatOptions): Query {
     const baseOptions = buildBaseOptions(options.cwd, options.sandboxHomePath);

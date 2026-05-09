@@ -322,7 +322,11 @@ describe("Database", () => {
         $decideReason: null,
         $connectionStatus: "idle",
         $summaryModel: "sonnet",
-        $aiDecideModel: "sonnet",
+        $summaryProvider: null,
+        $label: "test-label",
+        $description: null,
+        $branchProvider: null,
+        $branchModel: null,
       });
 
       const conn = stmts.connection.selectById.get("c1", "conn1") as {

@@ -339,11 +339,13 @@ function buildStatements(db: Database): {
         `INSERT INTO connections (
           id, canvas_id, source_pod_id, source_anchor, target_pod_id, target_anchor,
           trigger_mode, decide_status, decide_reason, connection_status,
-          summary_model, summary_provider, ai_decide_model
+          summary_model, summary_provider,
+          label, description, branch_provider, branch_model
         ) VALUES (
           $id, $canvasId, $sourcePodId, $sourceAnchor, $targetPodId, $targetAnchor,
           $triggerMode, $decideStatus, $decideReason, $connectionStatus,
-          $summaryModel, $summaryProvider, $aiDecideModel
+          $summaryModel, $summaryProvider,
+          $label, $description, $branchProvider, $branchModel
         )`,
       ),
       selectByCanvasId: db.prepare(
@@ -359,7 +361,8 @@ function buildStatements(db: Database): {
           trigger_mode = $triggerMode, decide_status = $decideStatus,
           decide_reason = $decideReason, connection_status = $connectionStatus,
           summary_model = $summaryModel, summary_provider = $summaryProvider,
-          ai_decide_model = $aiDecideModel
+          label = $label, description = $description,
+          branch_provider = $branchProvider, branch_model = $branchModel
         WHERE canvas_id = $canvasId AND id = $id`,
       ),
       // RETURNING 版本：UPDATE 後直接回傳更新後的行，免去額外 SELECT
@@ -370,7 +373,8 @@ function buildStatements(db: Database): {
           trigger_mode = $triggerMode, decide_status = $decideStatus,
           decide_reason = $decideReason, connection_status = $connectionStatus,
           summary_model = $summaryModel, summary_provider = $summaryProvider,
-          ai_decide_model = $aiDecideModel
+          label = $label, description = $description,
+          branch_provider = $branchProvider, branch_model = $branchModel
         WHERE canvas_id = $canvasId AND id = $id
         RETURNING *`,
       ),

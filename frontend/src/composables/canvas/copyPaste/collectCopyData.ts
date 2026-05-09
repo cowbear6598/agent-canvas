@@ -7,6 +7,7 @@ import type {
   AnchorPosition,
   TriggerMode,
   Pod,
+  PodProvider,
 } from "@/types";
 
 type NoteWithIndexSignature = {
@@ -313,6 +314,10 @@ export function collectRelatedConnections(
     sourceAnchor: AnchorPosition;
     targetAnchor: AnchorPosition;
     triggerMode: TriggerMode;
+    label?: string;
+    description?: string;
+    branchProvider?: PodProvider;
+    branchModel?: string;
   }[],
 ): CopiedConnection[] {
   const copiedConnections: CopiedConnection[] = [];
@@ -329,6 +334,10 @@ export function collectRelatedConnections(
         targetPodId: connection.targetPodId,
         targetAnchor: connection.targetAnchor,
         triggerMode: connection.triggerMode,
+        label: connection.label,
+        description: connection.description,
+        branchProvider: connection.branchProvider,
+        branchModel: connection.branchModel,
       });
     }
   }

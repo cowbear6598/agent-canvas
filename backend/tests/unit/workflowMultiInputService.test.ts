@@ -2,11 +2,13 @@ import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { workflowMultiInputService } from "../../src/services/workflow/workflowMultiInputService.js";
 import { podStore } from "../../src/services/podStore.js";
 import { pendingTargetStore } from "../../src/services/pendingTargetStore.js";
+import { connectionStore } from "../../src/services/connectionStore.js";
 import { runStore } from "../../src/services/runStore.js";
 import { workflowQueueService } from "../../src/services/workflow/workflowQueueService.js";
 import { runQueueService } from "../../src/services/workflow/runQueueService.js";
 import { socketService } from "../../src/services/socketService.js";
 import { logger } from "../../src/utils/logger.js";
+import { WebSocketResponseEvents } from "../../src/schemas/events.js";
 import type { TriggerStrategy } from "../../src/services/workflow/types.js";
 import type { WorkflowStatusDelegate } from "../../src/services/workflow/workflowStatusDelegate.js";
 import type { Connection } from "../../src/types/index.js";
@@ -360,11 +362,29 @@ describe("WorkflowMultiInputService", () => {
   // ─── 有拒絕來源 ────────────────────────────────────────────────────────────
 
   describe("handleMultiInputForConnection - 所有來源回應完畢有拒絕時", () => {
-    it("所有來源回應完畢且有拒絕時不應觸發 workflow", async () => {
+    it("所有來源回應完畢且有拒絕時不應觸發 workflow，且 approved 連線狀態收回 idle 並廣播 CONNECTION_UPDATED", async () => {
       pendingRecordSpy.mockReturnValue({
         allSourcesResponded: true,
         hasRejection: true,
       });
+
+      // 設定 group 中有一條 approved 連線（來自同一個 source pod 的 branch）
+      const approvedConn = makeConnection({
+        id: "conn-approved-1",
+        decideStatus: "approved",
+        connectionStatus: "active",
+      });
+
+      vi.spyOn(connectionStore, "findByTargetPodId").mockReturnValue([
+        approvedConn,
+      ]);
+      const updateConnectionStatusSpy = vi
+        .spyOn(connectionStore, "updateConnectionStatus")
+        .mockReturnValue(undefined);
+      vi.spyOn(connectionStore, "getById").mockReturnValue({
+        ...approvedConn,
+        connectionStatus: "idle",
+      } as Connection);
 
       await workflowMultiInputService.handleMultiInputForConnection({
         canvasId: CANVAS_ID,
@@ -374,9 +394,29 @@ describe("WorkflowMultiInputService", () => {
         triggerMode: "auto",
       });
 
+      // 不觸發 workflow
       expect(
         mockExecutionService.triggerWorkflowWithSummary,
       ).not.toHaveBeenCalled();
+
+      // approved 連線的 connectionStatus 收回 idle
+      expect(updateConnectionStatusSpy).toHaveBeenCalledWith(
+        CANVAS_ID,
+        "conn-approved-1",
+        "idle",
+      );
+
+      // 廣播 CONNECTION_UPDATED
+      expect(socketEmitSpy).toHaveBeenCalledWith(
+        CANVAS_ID,
+        WebSocketResponseEvents.CONNECTION_UPDATED,
+        expect.objectContaining({
+          requestId: "",
+          canvasId: CANVAS_ID,
+          success: true,
+          connection: expect.objectContaining({ id: "conn-approved-1" }),
+        }),
+      );
     });
   });
 
@@ -464,6 +504,115 @@ describe("WorkflowMultiInputService", () => {
         }),
       );
       expect(podSetStatusSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── Bug B 驗收：rejected 路徑 approved connection 狀態收尾 ────────────────
+
+  describe("rejected 路徑：approved connection 狀態收尾（Bug B 回歸測試）", () => {
+    let updateConnectionStatusSpy: ReturnType<typeof vi.spyOn>;
+    let findByTargetPodIdSpy: ReturnType<typeof vi.spyOn>;
+    let getByIdSpy: ReturnType<typeof vi.spyOn>;
+
+    const approvedConn = makeConnection({
+      id: "conn-approved-bugb",
+      decideStatus: "approved",
+      connectionStatus: "active",
+    });
+
+    beforeEach(() => {
+      // 設定 group 包含一條 approved 連線
+      findByTargetPodIdSpy = vi
+        .spyOn(connectionStore, "findByTargetPodId")
+        .mockReturnValue([approvedConn]);
+
+      updateConnectionStatusSpy = vi
+        .spyOn(connectionStore, "updateConnectionStatus")
+        .mockReturnValue(undefined);
+
+      getByIdSpy = vi.spyOn(connectionStore, "getById").mockReturnValue({
+        ...approvedConn,
+        connectionStatus: "idle",
+      } as Connection);
+
+      // 設定 recordSourceCompletion 回傳 hasRejection: true（所有來源都回應了）
+      pendingRecordSpy.mockReturnValue({
+        allSourcesResponded: true,
+        hasRejection: true,
+      });
+    });
+
+    it("hasRejection=true 時：approved 連線 connectionStatus 收回 idle", async () => {
+      await workflowMultiInputService.handleMultiInputForConnection({
+        canvasId: CANVAS_ID,
+        sourcePodId: SOURCE_POD_ID,
+        connection: mockConnection,
+        summary: "Some summary",
+        triggerMode: "auto",
+      });
+
+      expect(updateConnectionStatusSpy).toHaveBeenCalledWith(
+        CANVAS_ID,
+        "conn-approved-bugb",
+        "idle",
+      );
+    });
+
+    it("hasRejection=true 時：廣播 CONNECTION_UPDATED 事件", async () => {
+      await workflowMultiInputService.handleMultiInputForConnection({
+        canvasId: CANVAS_ID,
+        sourcePodId: SOURCE_POD_ID,
+        connection: mockConnection,
+        summary: "Some summary",
+        triggerMode: "auto",
+      });
+
+      expect(socketEmitSpy).toHaveBeenCalledWith(
+        CANVAS_ID,
+        WebSocketResponseEvents.CONNECTION_UPDATED,
+        expect.objectContaining({
+          requestId: "",
+          canvasId: CANVAS_ID,
+          success: true,
+          connection: expect.objectContaining({ id: "conn-approved-bugb" }),
+        }),
+      );
+    });
+
+    it("hasRejection=true 時：不觸發 triggerWorkflowWithSummary", async () => {
+      await workflowMultiInputService.handleMultiInputForConnection({
+        canvasId: CANVAS_ID,
+        sourcePodId: SOURCE_POD_ID,
+        connection: mockConnection,
+        summary: "Some summary",
+        triggerMode: "auto",
+      });
+
+      expect(
+        mockExecutionService.triggerWorkflowWithSummary,
+      ).not.toHaveBeenCalled();
+    });
+
+    it("group 中沒有 approved 連線時：不呼叫 updateConnectionStatus 也不廣播 CONNECTION_UPDATED", async () => {
+      // 覆寫：group 中只有 none 狀態的連線
+      findByTargetPodIdSpy.mockReturnValue([
+        makeConnection({ id: "conn-none-1", decideStatus: "none" }),
+      ]);
+
+      await workflowMultiInputService.handleMultiInputForConnection({
+        canvasId: CANVAS_ID,
+        sourcePodId: SOURCE_POD_ID,
+        connection: mockConnection,
+        summary: "Some summary",
+        triggerMode: "auto",
+      });
+
+      expect(updateConnectionStatusSpy).not.toHaveBeenCalled();
+      expect(socketEmitSpy).not.toHaveBeenCalledWith(
+        CANVAS_ID,
+        WebSocketResponseEvents.CONNECTION_UPDATED,
+        expect.anything(),
+      );
     });
   });
 });

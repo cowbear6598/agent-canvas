@@ -163,6 +163,9 @@ describe("Connection 管理", () => {
           sourceAnchor: "right",
           targetPodId: pod.id,
           targetAnchor: "left",
+          label: "test-label",
+          branchProvider: "claude",
+          branchModel: "sonnet",
         },
       );
 
@@ -191,6 +194,9 @@ describe("Connection 管理", () => {
           sourceAnchor: "right",
           targetPodId: FAKE_UUID,
           targetAnchor: "left",
+          label: "test-label",
+          branchProvider: "claude",
+          branchModel: "sonnet",
         },
       );
 
@@ -300,12 +306,12 @@ describe("Connection 管理", () => {
           requestId: uuidv4(),
           canvasId,
           connectionId: conn.id,
-          triggerMode: "ai-decide",
+          triggerMode: "branch",
         },
       );
 
       expect(response.success).toBe(true);
-      expect(response.connection!.triggerMode).toBe("ai-decide");
+      expect(response.connection!.triggerMode).toBe("branch");
     });
 
     it("成功更新連線的觸發模式為 direct", async () => {
@@ -382,6 +388,9 @@ describe("Connection 管理", () => {
           targetPodId: podB.id,
           targetAnchor: "left",
           summaryProvider: "gemini",
+          label: "test-gemini",
+          branchProvider: "claude",
+          branchModel: "sonnet",
         },
       );
 

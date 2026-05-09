@@ -5,20 +5,20 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("../../src/services/workflow/workflowEventEmitter.js", () => ({
   workflowEventEmitter: {
     emitWorkflowAutoTriggered: vi.fn(),
-    emitAiDecidePending: vi.fn(),
-    emitAiDecideResult: vi.fn(),
-    emitAiDecideError: vi.fn(),
+    emitBranchPending: vi.fn(),
+    emitBranchResult: vi.fn(),
+    emitBranchError: vi.fn(),
     emitWorkflowQueued: vi.fn(),
     emitWorkflowComplete: vi.fn(),
     emitWorkflowPending: vi.fn(),
     emitWorkflowSourcesMerged: vi.fn(),
-    emitAiDecideClear: vi.fn(),
+    emitBranchClear: vi.fn(),
     emitDirectTriggered: vi.fn(),
     emitDirectWaiting: vi.fn(),
     emitWorkflowQueueProcessed: vi.fn(),
     emitDirectCountdown: vi.fn(),
     emitDirectMerged: vi.fn(),
-    emitWorkflowAiDecideTriggered: vi.fn(),
+    emitBranchTriggered: vi.fn(),
   },
 }));
 
@@ -131,7 +131,7 @@ describe("workflowHelpers", () => {
   describe("emitQueueProcessed", () => {
     it("呼叫 workflowEventEmitter.emitWorkflowQueueProcessed 帶入正確參數", () => {
       const context = makeQueueProcessedContext({
-        triggerMode: "ai-decide",
+        triggerMode: "branch",
         remainingQueueSize: 5,
       });
 
@@ -145,7 +145,7 @@ describe("workflowHelpers", () => {
         connectionId: "conn-1",
         sourcePodId: "source-pod",
         remainingQueueSize: 5,
-        triggerMode: "ai-decide",
+        triggerMode: "branch",
       });
     });
   });
@@ -362,8 +362,8 @@ describe("workflowHelpers", () => {
       expect(isAutoTriggerable("auto")).toBe(true);
     });
 
-    it("triggerMode 為 ai-decide 時回傳 true", () => {
-      expect(isAutoTriggerable("ai-decide")).toBe(true);
+    it("triggerMode 為 branch 時回傳 true", () => {
+      expect(isAutoTriggerable("branch")).toBe(true);
     });
 
     it("triggerMode 為 manual 時回傳 false", () => {

@@ -85,7 +85,10 @@ function makeConnection(overrides?: Partial<Connection>): Connection {
     decideReason: null,
     connectionStatus: "idle",
     summaryModel: "sonnet",
-    aiDecideModel: "sonnet",
+    label: "Checklist",
+    description: undefined,
+    branchProvider: "claude",
+    branchModel: "sonnet",
     ...overrides,
   } as Connection;
 }
@@ -108,7 +111,7 @@ function makeMessages(): PersistedMessage[] {
 }
 
 function makeStrategy(
-  mode: "auto" | "direct" | "ai-decide",
+  mode: "auto" | "direct" | "branch",
   overrides?: Partial<TriggerStrategy>,
 ): TriggerStrategy {
   return {
@@ -175,18 +178,6 @@ function setupCommonSpies(
     workflowEventEmitter,
     "emitWorkflowSourcesMerged",
   ).mockImplementation(() => {});
-  vi.spyOn(workflowEventEmitter, "emitAiDecidePending").mockImplementation(
-    () => {},
-  );
-  vi.spyOn(workflowEventEmitter, "emitAiDecideResult").mockImplementation(
-    () => {},
-  );
-  vi.spyOn(workflowEventEmitter, "emitAiDecideError").mockImplementation(
-    () => {},
-  );
-  vi.spyOn(workflowEventEmitter, "emitAiDecideClear").mockImplementation(
-    () => {},
-  );
   vi.spyOn(workflowEventEmitter, "emitDirectTriggered").mockImplementation(
     () => {},
   );
@@ -309,7 +300,7 @@ describe("WorkflowQueueFlow - Queue 處理、混合場景、錯誤恢復", () =>
     mockMessages = makeMessages();
     mockAutoStrategy = makeStrategy("auto");
     mockDirectStrategy = makeStrategy("direct");
-    mockAiDecideStrategy = makeStrategy("ai-decide");
+    mockAiDecideStrategy = makeStrategy("branch");
 
     const customPodGetter = (_cId: string, podId: string): Pod | undefined => {
       if (podId === SOURCE_POD_ID) return { ...mockSourcePod };
@@ -325,7 +316,7 @@ describe("WorkflowQueueFlow - Queue 處理、混合場景、錯誤恢復", () =>
       strategies: {
         auto: mockAutoStrategy,
         direct: mockDirectStrategy,
-        "ai-decide": mockAiDecideStrategy,
+        branch: mockAiDecideStrategy,
       },
     });
     clearAllQueues([TARGET_POD_ID, "target-pod-2", "target-pod-3"]);

@@ -1,37 +1,37 @@
-import type { TestWebSocketClient } from '../setup';
-import { v4 as uuidv4 } from 'uuid';
-import { emitAndWaitResponse } from '../setup';
+import type { TestWebSocketClient } from "../setup";
+import { v4 as uuidv4 } from "uuid";
+import { emitAndWaitResponse } from "../setup";
 import {
   WebSocketRequestEvents,
   WebSocketResponseEvents,
   type ConnectionCreatePayload,
   type ConnectionUpdatePayload,
-} from '../../src/schemas';
+} from "../../src/schemas";
 import {
   type ConnectionCreatedPayload,
   type ConnectionUpdatedPayload,
   type Connection,
-} from '../../src/types';
+} from "../../src/types";
 
 interface CreateConnectionOptions extends Partial<ConnectionCreatePayload> {
-  triggerMode?: 'auto' | 'ai-decide' | 'direct';
+  triggerMode?: "auto" | "branch" | "direct";
 }
 
 export async function createConnection(
   client: TestWebSocketClient,
   sourcePodId: string,
   targetPodId: string,
-  options?: CreateConnectionOptions
+  options?: CreateConnectionOptions,
 ): Promise<Connection> {
   if (!client.id) {
-    throw new Error('Socket not connected');
+    throw new Error("Socket not connected");
   }
 
-  const canvasModule = await import('../../src/services/canvasStore.js');
+  const canvasModule = await import("../../src/services/canvasStore.js");
   const canvasId = canvasModule.canvasStore.getActiveCanvas(client.id);
 
   if (!canvasId) {
-    throw new Error('No active canvas for socket');
+    throw new Error("No active canvas for socket");
   }
 
   const { triggerMode, ...createOverrides } = options || {};
@@ -40,17 +40,24 @@ export async function createConnection(
     requestId: uuidv4(),
     canvasId,
     sourcePodId,
-    sourceAnchor: 'right',
+    sourceAnchor: "right",
     targetPodId,
-    targetAnchor: 'left',
+    targetAnchor: "left",
+    // label、branchProvider、branchModel 為新必填欄位，提供測試預設值
+    label: "default",
+    branchProvider: "claude",
+    branchModel: "sonnet",
     ...createOverrides,
   };
 
-  const response = await emitAndWaitResponse<ConnectionCreatePayload, ConnectionCreatedPayload>(
+  const response = await emitAndWaitResponse<
+    ConnectionCreatePayload,
+    ConnectionCreatedPayload
+  >(
     client,
     WebSocketRequestEvents.CONNECTION_CREATE,
     WebSocketResponseEvents.CONNECTION_CREATED,
-    payload
+    payload,
   );
 
   const connection = response.connection!;
@@ -63,11 +70,14 @@ export async function createConnection(
       triggerMode,
     };
 
-    const updateResponse = await emitAndWaitResponse<ConnectionUpdatePayload, ConnectionUpdatedPayload>(
+    const updateResponse = await emitAndWaitResponse<
+      ConnectionUpdatePayload,
+      ConnectionUpdatedPayload
+    >(
       client,
       WebSocketRequestEvents.CONNECTION_UPDATE,
       WebSocketResponseEvents.CONNECTION_UPDATED,
-      updatePayload
+      updatePayload,
     );
 
     return updateResponse.connection!;

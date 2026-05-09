@@ -188,6 +188,10 @@ function transformConnections(
     originalTargetPodId: connection.targetPodId,
     targetAnchor: connection.targetAnchor,
     triggerMode: connection.triggerMode,
+    label: connection.label,
+    description: connection.description,
+    branchProvider: connection.branchProvider,
+    branchModel: connection.branchModel,
   }));
 }
 

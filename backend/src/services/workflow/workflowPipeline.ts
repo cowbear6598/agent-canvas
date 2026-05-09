@@ -371,10 +371,10 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
       getMultiInputGroupConnections(canvasId, targetPodId).length > 1;
 
     if (isMultiInput) {
-      // multi-input 路徑僅允許 "auto" 與 "ai-decide"，
+      // multi-input 路徑僅允許 "auto" 與 "branch"，
       // "direct" 不應進入此分支（direct 有自己的 collectSources 路徑）。
       // 以 if 守門縮窄型別，避免強制斷言。
-      if (triggerMode !== "auto" && triggerMode !== "ai-decide") {
+      if (triggerMode !== "auto" && triggerMode !== "branch") {
         logger.warn(
           "Workflow",
           "Pipeline",

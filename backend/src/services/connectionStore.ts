@@ -5,9 +5,7 @@ import type {
   TriggerMode,
   DecideStatus,
   ConnectionStatus,
-  AiDecideModelType,
 } from "../types";
-import { DEFAULT_AI_DECIDE_MODEL } from "../types/connection.js";
 import { getDb } from "../database/index.js";
 import { getStatements } from "../database/statements.js";
 import {
@@ -28,13 +26,15 @@ interface CreateConnectionData {
   summaryModel?: string;
   /** summaryProvider 指定摘要時使用的 provider；未提供則依 sourcePod.provider fallback */
   summaryProvider?: ProviderName;
-  aiDecideModel?: AiDecideModelType;
+  label?: string;
+  description?: string;
+  branchProvider?: ProviderName;
+  branchModel?: string;
 }
 
 function shouldResetDecideState(oldMode: string, newMode: string): boolean {
-  return (
-    oldMode === "ai-decide" && (newMode === "auto" || newMode === "direct")
-  );
+  // 從 branch 切換到其他模式時需要 reset decide state
+  return oldMode === "branch" && (newMode === "auto" || newMode === "direct");
 }
 
 interface ConnectionRow {
@@ -51,7 +51,10 @@ interface ConnectionRow {
   summary_model: string;
   /** DB 欄位；NULL 代表舊資料（升級前未指定），由執行端 fallback */
   summary_provider: string | null;
-  ai_decide_model: string;
+  label: string;
+  description: string | null;
+  branch_provider: string | null;
+  branch_model: string | null;
 }
 
 function rowToConnection(row: ConnectionRow): Connection {
@@ -68,7 +71,12 @@ function rowToConnection(row: ConnectionRow): Connection {
     summaryModel: row.summary_model,
     // DB NULL 保留原意：未指定，由執行端 fallback 至 sourcePod.provider
     summaryProvider: row.summary_provider as ProviderName | null,
-    aiDecideModel: row.ai_decide_model as AiDecideModelType,
+    label: row.label,
+    // DB NULL 轉為 undefined（符合 Connection 介面的選填定義）
+    description: row.description ?? undefined,
+    // DB NULL 時 fallback 至 "claude"（向後相容舊資料）
+    branchProvider: (row.branch_provider as ProviderName | null) ?? "claude",
+    branchModel: row.branch_model ?? "sonnet",
   };
 }
 
@@ -108,6 +116,28 @@ class ConnectionStore {
       resolvedSummaryModel = resolved;
     }
 
+    // branch 模式下驗證 label
+    const triggerMode = data.triggerMode ?? "auto";
+    if (triggerMode === "branch") {
+      const trimmedLabel = (data.label ?? "").trim();
+      if (!trimmedLabel) {
+        throw new Error("label 必填");
+      }
+      if (trimmedLabel.toLowerCase() === "none") {
+        throw new Error("label 不可為保留字 None");
+      }
+      // 同一 source 內 label 唯一性檢查
+      const existing = this.findBySourcePodId(canvasId, data.sourcePodId);
+      const isDuplicate = existing.some(
+        (conn) =>
+          conn.triggerMode === "branch" &&
+          conn.label.toLowerCase() === trimmedLabel.toLowerCase(),
+      );
+      if (isDuplicate) {
+        throw new Error("label 已存在於同一組 branch");
+      }
+    }
+
     this.stmts.insert.run({
       $id: id,
       $canvasId: canvasId,
@@ -115,14 +145,17 @@ class ConnectionStore {
       $sourceAnchor: data.sourceAnchor,
       $targetPodId: data.targetPodId,
       $targetAnchor: data.targetAnchor,
-      $triggerMode: data.triggerMode ?? "auto",
+      $triggerMode: triggerMode,
       $decideStatus: "none",
       $decideReason: null,
       $connectionStatus: "idle",
       $summaryModel: resolvedSummaryModel,
       // DB 儲存客戶端原意：未指定存 NULL，不把 sourcePod.provider 寫入
       $summaryProvider: data.summaryProvider ?? null,
-      $aiDecideModel: data.aiDecideModel ?? DEFAULT_AI_DECIDE_MODEL,
+      $label: data.label ?? "",
+      $description: data.description ?? null,
+      $branchProvider: data.branchProvider ?? null,
+      $branchModel: data.branchModel ?? null,
     });
 
     return this.getById(canvasId, id) as Connection;
@@ -184,7 +217,10 @@ class ConnectionStore {
        * 或指定新 provider；undefined 表示本次不修改。
        */
       summaryProvider: ProviderName | null;
-      aiDecideModel: AiDecideModelType;
+      label: string;
+      description: string | null;
+      branchProvider: ProviderName | null;
+      branchModel: string | null;
     }>,
   ): Connection | undefined {
     const existing = this.getById(canvasId, id);
@@ -200,13 +236,26 @@ class ConnectionStore {
       updates.summaryProvider !== undefined
         ? updates.summaryProvider
         : existing.summaryProvider;
-    let newAiDecideModel = existing.aiDecideModel;
+    let newLabel = existing.label;
+    let newDescription: string | null = existing.description ?? null;
+    let newBranchProvider: ProviderName | null = existing.branchProvider;
+    let newBranchModel: string | null = existing.branchModel ?? null;
 
     if (updates.triggerMode !== undefined) {
       if (shouldResetDecideState(existing.triggerMode, updates.triggerMode)) {
         newDecideStatus = "none";
         newDecideReason = null;
         newConnectionStatus = "idle";
+      }
+      // 切換離開 branch 時清空 branch 相關欄位
+      if (
+        existing.triggerMode === "branch" &&
+        updates.triggerMode !== "branch"
+      ) {
+        newLabel = "";
+        newDescription = null;
+        newBranchProvider = null;
+        newBranchModel = null;
       }
       newTriggerMode = updates.triggerMode;
     }
@@ -252,8 +301,42 @@ class ConnectionStore {
       newSummaryModel = resolved;
     }
 
-    if (updates.aiDecideModel !== undefined) {
-      newAiDecideModel = updates.aiDecideModel;
+    if (updates.label !== undefined) {
+      const trimmedLabel = updates.label.trim();
+      // 任何時候 label === "None"（大小寫不敏感）都不允許
+      if (trimmedLabel.toLowerCase() === "none") {
+        throw new Error("label 不可為保留字 None");
+      }
+      // 切換到或維持在 branch 模式時，若帶有 label 則做唯一性檢查（排除自己）
+      const targetMode = updates.triggerMode ?? existing.triggerMode;
+      if (targetMode === "branch") {
+        if (!trimmedLabel) {
+          throw new Error("label 必填");
+        }
+        const siblings = this.findBySourcePodId(canvasId, existing.sourcePodId);
+        const isDuplicate = siblings.some(
+          (conn) =>
+            conn.id !== id &&
+            conn.triggerMode === "branch" &&
+            conn.label.toLowerCase() === trimmedLabel.toLowerCase(),
+        );
+        if (isDuplicate) {
+          throw new Error("label 已存在於同一組 branch");
+        }
+      }
+      newLabel = updates.label;
+    }
+
+    if (updates.description !== undefined) {
+      newDescription = updates.description;
+    }
+
+    if (updates.branchProvider !== undefined) {
+      newBranchProvider = updates.branchProvider;
+    }
+
+    if (updates.branchModel !== undefined) {
+      newBranchModel = updates.branchModel;
     }
 
     const updatedRow = this.stmts.updateReturning.get({
@@ -269,7 +352,10 @@ class ConnectionStore {
       $connectionStatus: newConnectionStatus,
       $summaryModel: newSummaryModel,
       $summaryProvider: newSummaryProvider,
-      $aiDecideModel: newAiDecideModel,
+      $label: newLabel,
+      $description: newDescription,
+      $branchProvider: newBranchProvider,
+      $branchModel: newBranchModel,
     }) as ConnectionRow | undefined;
 
     if (!updatedRow) return undefined;
@@ -329,6 +415,11 @@ class ConnectionStore {
       $triggerMode: triggerMode,
     }) as ConnectionRow[];
     return rows.map(rowToConnection);
+  }
+
+  /** 取得某 source Pod 出去且 triggerMode === "branch" 的所有連線（per-source branch group） */
+  findBranchGroup(canvasId: string, sourcePodId: string): Connection[] {
+    return this.findByTriggerMode(canvasId, sourcePodId, "branch");
   }
 }
 

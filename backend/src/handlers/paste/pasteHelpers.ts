@@ -474,6 +474,10 @@ export function createPastedConnections(
         targetPodId: newTargetPodId,
         targetAnchor: connItem.targetAnchor,
         triggerMode: connItem.triggerMode ?? "auto",
+        label: connItem.label,
+        description: connItem.description,
+        branchProvider: connItem.branchProvider,
+        branchModel: connItem.branchModel,
       }),
     );
 

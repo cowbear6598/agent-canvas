@@ -133,7 +133,7 @@ describe("貼上功能", () => {
     });
 
     describe("connection triggerMode 驗證", () => {
-      const triggerModes = ["auto", "ai-decide", "direct"] as const;
+      const triggerModes = ["auto", "direct"] as const;
 
       it.each(triggerModes)(
         "貼上 connection 時帶 triggerMode: %s 能成功",
@@ -176,6 +176,48 @@ describe("貼上功能", () => {
           expect(response.createdConnections).toHaveLength(1);
         },
       );
+
+      it("貼上 connection 時帶 triggerMode: branch 與 label 能成功", async () => {
+        const client = getClient();
+        const podId1 = uuidv4();
+        const podId2 = uuidv4();
+
+        const pods: PastePodItem[] = [
+          { originalId: podId1, name: "Pod 1", x: 0, y: 0, rotation: 0 },
+          { originalId: podId2, name: "Pod 2", x: 100, y: 100, rotation: 0 },
+        ];
+
+        const connections: PasteConnectionItem[] = [
+          {
+            originalSourcePodId: podId1,
+            sourceAnchor: "right",
+            originalTargetPodId: podId2,
+            targetAnchor: "left",
+            triggerMode: "branch",
+            label: "Checklist",
+          },
+        ];
+
+        const payload: CanvasPastePayload = {
+          ...(await emptyPastePayload()),
+          pods,
+          connections,
+        };
+
+        const response = await emitAndWaitResponse<
+          CanvasPastePayload,
+          CanvasPasteResultPayload
+        >(
+          client,
+          WebSocketRequestEvents.CANVAS_PASTE,
+          WebSocketResponseEvents.CANVAS_PASTE_RESULT,
+          payload,
+        );
+
+        expect(response.createdConnections).toHaveLength(1);
+        expect(response.createdConnections[0].triggerMode).toBe("branch");
+        expect(response.createdConnections[0].label).toBe("Checklist");
+      });
 
       it("貼上 connection 時不帶 triggerMode 能成功", async () => {
         const client = getClient();

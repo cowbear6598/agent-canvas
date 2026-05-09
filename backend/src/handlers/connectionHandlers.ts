@@ -8,7 +8,6 @@ import type {
   Connection,
   Pod,
   TriggerMode,
-  AiDecideModelType,
 } from "../types";
 import { toPodPublicView } from "../types/index.js";
 import type {
@@ -111,7 +110,10 @@ export const handleConnectionCreate = withCanvasId<ConnectionCreatePayload>(
       targetAnchor,
       summaryModel,
       summaryProvider,
-      aiDecideModel,
+      label,
+      description,
+      branchProvider,
+      branchModel,
     } = payload;
 
     const pods = findPodsOrEmitError(
@@ -126,15 +128,32 @@ export const handleConnectionCreate = withCanvasId<ConnectionCreatePayload>(
 
     const { sourcePod, targetPod } = pods;
 
-    const connection = connectionStore.create(canvasId, {
-      sourcePodId,
-      sourceAnchor,
-      targetPodId,
-      targetAnchor,
-      ...(summaryModel !== undefined && { summaryModel }),
-      ...(summaryProvider !== undefined && { summaryProvider }),
-      ...(aiDecideModel !== undefined && { aiDecideModel }),
-    });
+    let connection: ReturnType<typeof connectionStore.create>;
+    try {
+      connection = connectionStore.create(canvasId, {
+        sourcePodId,
+        sourceAnchor,
+        targetPodId,
+        targetAnchor,
+        ...(summaryModel !== undefined && { summaryModel }),
+        ...(summaryProvider !== undefined && { summaryProvider }),
+        label,
+        description,
+        branchProvider,
+        branchModel,
+      });
+    } catch (err) {
+      emitError(
+        connectionId,
+        WebSocketResponseEvents.CONNECTION_CREATED,
+        err instanceof Error ? err : new Error(String(err)),
+        canvasId,
+        requestId,
+        undefined,
+        "VALIDATION_ERROR",
+      );
+      return;
+    }
 
     const response: ConnectionCreatedPayload = {
       requestId,
@@ -278,7 +297,10 @@ export const handleConnectionUpdate = withCanvasId<ConnectionUpdatePayload>(
       triggerMode,
       summaryModel,
       summaryProvider,
-      aiDecideModel,
+      label,
+      description,
+      branchProvider,
+      branchModel,
     } = payload;
 
     const connection = findConnectionOrEmitError(
@@ -294,7 +316,10 @@ export const handleConnectionUpdate = withCanvasId<ConnectionUpdatePayload>(
       triggerMode: TriggerMode;
       summaryModel: string;
       summaryProvider: ProviderName;
-      aiDecideModel: AiDecideModelType;
+      label: string;
+      description: string | null;
+      branchProvider: ProviderName | null;
+      branchModel: string | null;
     }> = {};
     if (triggerMode !== undefined) {
       updates.triggerMode = triggerMode;
@@ -306,15 +331,38 @@ export const handleConnectionUpdate = withCanvasId<ConnectionUpdatePayload>(
       // 使用者透過右鍵選單切換 Summary Provider 時更新
       updates.summaryProvider = summaryProvider;
     }
-    if (aiDecideModel !== undefined) {
-      updates.aiDecideModel = aiDecideModel;
+    if (label !== undefined) {
+      updates.label = label;
+    }
+    if (description !== undefined) {
+      updates.description = description ?? null;
+    }
+    if (branchProvider !== undefined) {
+      updates.branchProvider = branchProvider;
+    }
+    if (branchModel !== undefined) {
+      updates.branchModel = branchModel;
     }
 
-    const updatedConnection = connectionStore.update(
-      canvasId,
-      connectionId,
-      updates,
-    );
+    let updatedConnection: ReturnType<typeof connectionStore.update>;
+    try {
+      updatedConnection = connectionStore.update(
+        canvasId,
+        connectionId,
+        updates,
+      );
+    } catch (err) {
+      emitError(
+        wsConnectionId,
+        WebSocketResponseEvents.CONNECTION_UPDATED,
+        err instanceof Error ? err : new Error(String(err)),
+        canvasId,
+        requestId,
+        undefined,
+        "VALIDATION_ERROR",
+      );
+      return;
+    }
 
     if (!updatedConnection) {
       emitError(

@@ -3,6 +3,7 @@ import type {
   WorkflowSourcesMergedPayload,
   Connection,
   AutoTriggerMode,
+  ConnectionUpdatedPayload,
 } from "../../types/index.js";
 import { isPodBusy } from "../../types/index.js";
 import type {
@@ -14,6 +15,7 @@ import type { RunContext } from "../../types/run.js";
 import { podStore } from "../podStore.js";
 import { runStore } from "../runStore.js";
 import { socketService } from "../socketService.js";
+import { connectionStore } from "../connectionStore.js";
 import { pendingTargetStore } from "../pendingTargetStore.js";
 import { workflowQueueService } from "./workflowQueueService.js";
 import { runQueueService } from "./runQueueService.js";
@@ -34,7 +36,7 @@ interface MultiInputServiceDeps {
   strategies: {
     auto: TriggerStrategy;
     direct: TriggerStrategy;
-    "ai-decide": TriggerStrategy;
+    branch: TriggerStrategy;
   };
 }
 
@@ -193,7 +195,37 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
       summary,
       runContext,
     );
-    if (readiness !== "ready") return;
+    if (readiness !== "ready") {
+      // Bug B 收尾：整組 multi-input 被 rejected 時，
+      // 將已 approved 連線的 connectionStatus 收回 idle，
+      // 避免 FE isWorkflowRunning BFS 認為仍在執行導致橡皮擦卡 disabled
+      if (readiness === "rejected") {
+        const groupConnections = getMultiInputGroupConnections(
+          canvasId,
+          connection.targetPodId,
+        );
+        for (const conn of groupConnections) {
+          if (conn.decideStatus === "approved") {
+            connectionStore.updateConnectionStatus(canvasId, conn.id, "idle");
+            const updated = connectionStore.getById(canvasId, conn.id);
+            if (updated) {
+              const payload: ConnectionUpdatedPayload = {
+                requestId: "",
+                canvasId,
+                success: true,
+                connection: updated,
+              };
+              socketService.emitToCanvas(
+                canvasId,
+                WebSocketResponseEvents.CONNECTION_UPDATED,
+                payload,
+              );
+            }
+          }
+        }
+      }
+      return;
+    }
 
     const merged = this.getMergedContentOrNull(
       canvasId,

@@ -29,7 +29,7 @@ export function buildRunQueueKey(runId: string, podId: string): string {
 }
 
 export function isAutoTriggerable(triggerMode: string): boolean {
-  return triggerMode === "auto" || triggerMode === "ai-decide";
+  return triggerMode === "auto" || triggerMode === "branch";
 }
 
 export function resolveSettlementPathway(
@@ -61,7 +61,7 @@ export function forEachMultiInputGroupConnection(
     logger.warn(
       "Workflow",
       "Warn",
-      `[forEachMultiInputGroupConnection] 未找到 targetPod ${targetPodId} 的 auto/ai-decide 連線`,
+      `[forEachMultiInputGroupConnection] 未找到 targetPod ${targetPodId} 的 auto/branch 連線`,
     );
     return;
   }

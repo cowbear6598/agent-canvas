@@ -67,10 +67,13 @@ function createBaseTables(db: Database): void {
       "decide_reason TEXT," +
       "connection_status TEXT NOT NULL DEFAULT 'idle'," +
       "summary_model TEXT NOT NULL DEFAULT 'sonnet'," +
-      "ai_decide_model TEXT NOT NULL DEFAULT 'sonnet'," +
       // summary_provider 不設 NOT NULL：NULL 代表使用者未指定，
       // runtime 由 connectionExecution 路由 fallback 為 sourcePod.provider。
-      "summary_provider TEXT" +
+      "summary_provider TEXT," +
+      "label TEXT NOT NULL DEFAULT ''," +
+      "description TEXT," +
+      "branch_provider TEXT," +
+      "branch_model TEXT" +
       ")",
   );
   db.exec(
@@ -240,9 +243,9 @@ function columnExists(
   tableName: string,
   columnName: string,
 ): boolean {
-  const rows = db
-    .query(`PRAGMA table_info(${tableName})`)
-    .all() as Array<{ name: string }>;
+  const rows = db.query(`PRAGMA table_info(${tableName})`).all() as Array<{
+    name: string;
+  }>;
 
   return rows.some((row) => row.name === columnName);
 }
@@ -263,7 +266,68 @@ function migrateCanvasPasswordColumns(db: Database): void {
   );
 }
 
+/**
+ * 對既有 DB 的 connections 表補上 Branch 模式所需欄位。
+ * SQLite 的 CREATE TABLE IF NOT EXISTS 對既有表不會自動加欄位，所以走 ALTER TABLE。
+ */
+function migrateConnectionBranchColumns(db: Database): void {
+  if (!columnExists(db, "connections", "label")) {
+    db.exec(
+      "ALTER TABLE connections ADD COLUMN label TEXT NOT NULL DEFAULT ''",
+    );
+  }
+
+  if (!columnExists(db, "connections", "description")) {
+    db.exec("ALTER TABLE connections ADD COLUMN description TEXT");
+  }
+
+  if (!columnExists(db, "connections", "branch_provider")) {
+    db.exec("ALTER TABLE connections ADD COLUMN branch_provider TEXT");
+  }
+
+  if (!columnExists(db, "connections", "branch_model")) {
+    db.exec("ALTER TABLE connections ADD COLUMN branch_model TEXT");
+  }
+}
+
+/**
+ * 清除舊版 trigger_mode = 'ai-decide' 的 connection 資料。
+ * 回傳刪除筆數，方便測試驗證。
+ */
+export function cleanupLegacyAiDecideRows(db: Database): number {
+  const result = db
+    .prepare("DELETE FROM connections WHERE trigger_mode = 'ai-decide'")
+    .run();
+  const deleted = result.changes;
+  if (deleted > 0) {
+    console.log(`[DB cleanup] 已刪除 ${deleted} 筆舊版 ai-decide connection`);
+  }
+  return deleted;
+}
+
+/**
+ * 將 connection_status 中殘存的 ai-* 值遷移為 idle。
+ * 回傳受影響筆數，方便測試驗證。
+ */
+export function migrateConnectionStatusAiValues(db: Database): number {
+  const result = db
+    .prepare(
+      "UPDATE connections SET connection_status = 'idle' WHERE connection_status LIKE 'ai-%'",
+    )
+    .run();
+  const updated = result.changes;
+  if (updated > 0) {
+    console.log(
+      `[DB migration] 已將 ${updated} 筆 ai-* connection_status 遷移為 idle`,
+    );
+  }
+  return updated;
+}
+
 export function createTables(db: Database): void {
   createBaseTables(db);
   migrateCanvasPasswordColumns(db);
+  migrateConnectionBranchColumns(db);
+  cleanupLegacyAiDecideRows(db);
+  migrateConnectionStatusAiValues(db);
 }

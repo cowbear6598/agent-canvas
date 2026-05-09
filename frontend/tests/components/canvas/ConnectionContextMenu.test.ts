@@ -29,7 +29,8 @@ const defaultProps = {
   connectionId: "conn-123",
   currentTriggerMode: "auto" as const,
   currentSummaryModel: "sonnet",
-  currentAiDecideModel: "sonnet" as const,
+  currentBranchProvider: "claude" as const,
+  currentBranchModel: "sonnet",
 };
 
 function mountMenu(props: Record<string, unknown> = {}) {
@@ -40,10 +41,11 @@ function mountMenu(props: Record<string, unknown> = {}) {
 }
 
 /**
- * DOM 中 .relative 容器的順序（對應 template 宣告順序）：
+ * DOM 中 .relative 容器的順序（Phase 3B 重構後）：
  *   [0] Summary Provider 子選單
  *   [1] Summary Model 子選單
- *   [2] AI Model 子選單
+ * 注意：原本的第 [2] AI Model 子選單已於 Phase 3B 移除，
+ * branchModel 現在透過 ProviderModelSelector 元件管理（branch 面板內）。
  */
 
 /** 展開 Summary Provider 子選單（hover 第 0 個 .relative 容器） */
@@ -60,11 +62,20 @@ async function openSummaryMenu(wrapper: ReturnType<typeof mountMenu>) {
   await wrapper.vm.$nextTick();
 }
 
-/** 展開 AI Model 子選單（hover 第 2 個 .relative 容器） */
-async function openAiModelMenu(wrapper: ReturnType<typeof mountMenu>) {
-  const relativeWrappers = wrapper.findAll(".relative");
-  const aiModelWrapper = relativeWrappers[2]!;
-  await aiModelWrapper.trigger("mouseenter");
+/**
+ * 展開 Branch Model 子選單；triggerMode === "branch" 時 .relative 順序為：
+ *   [0] Branch Provider, [1] Branch Model, [2] Summary Provider, [3] Summary Model。
+ */
+async function openBranchModelMenu(wrapper: ReturnType<typeof mountMenu>) {
+  const branchModelWrapper = wrapper.findAll(".relative")[1]!;
+  await branchModelWrapper.trigger("mouseenter");
+  await wrapper.vm.$nextTick();
+}
+
+/** 展開 Branch Provider 子選單（branch mode 下 .relative[0]） */
+async function openBranchProviderMenu(wrapper: ReturnType<typeof mountMenu>) {
+  const branchProviderWrapper = wrapper.findAll(".relative")[0]!;
+  await branchProviderWrapper.trigger("mouseenter");
   await wrapper.vm.$nextTick();
 }
 
@@ -125,7 +136,6 @@ function setupDefaultStoreState() {
       targetAnchor: "top",
       triggerMode: "auto",
       summaryModel: "sonnet",
-      aiDecideModel: "sonnet",
       status: "idle",
     },
   ] as typeof connectionStore.connections;
@@ -145,7 +155,6 @@ describe("ConnectionContextMenu", () => {
         targetAnchor: "top",
         triggerMode: "auto",
         summaryModel: "sonnet",
-        aiDecideModel: "sonnet",
       },
     });
   });
@@ -225,7 +234,6 @@ describe("ConnectionContextMenu", () => {
           triggerMode: "auto",
           summaryModel: "gemini-2.5-flash",
           summaryProvider: "gemini",
-          aiDecideModel: "sonnet",
           status: "idle",
         },
       ] as typeof connectionStore.connections;
@@ -277,7 +285,6 @@ describe("ConnectionContextMenu", () => {
           triggerMode: "auto",
           summaryModel: "sonnet",
           summaryProvider: "gemini",
-          aiDecideModel: "sonnet",
           status: "idle",
         },
       ] as typeof connectionStore.connections;
@@ -527,103 +534,96 @@ describe("ConnectionContextMenu", () => {
   });
 
   // ──────────────────────────────────────────────────────────────
-  describe("AI Model 區塊渲染", () => {
-    it("應顯示 AI Model 標題文字", () => {
-      const wrapper = mountMenu();
-      expect(wrapper.text()).toContain("AI Model");
+  // Phase 3B 重構說明：
+  // 舊版的「AI Model」子選單（作為第三個 .relative 容器）已被移除。
+  // branchModel 現在透過 ProviderModelSelector 元件在 Branch 設定面板中管理。
+  // Branch 設定面板只在 currentTriggerMode === 'branch' 時顯示。
+  // 以下測試已依新架構對齊。
+
+  describe("Branch 設定面板 - Provider/Model 子選單渲染", () => {
+    it("triggerMode 為 branch 時，hover Branch Model 子選單應顯示 Claude 的模型選項", async () => {
+      const wrapper = mountMenu({
+        currentTriggerMode: "branch",
+        currentBranchProvider: "claude",
+        currentBranchModel: "sonnet",
+      });
+      await openBranchModelMenu(wrapper);
+      const text = wrapper.text();
+      expect(text).toContain("Haiku");
+      expect(text).toContain("Sonnet");
+      expect(text).toContain("Opus");
     });
 
-    it("triggerMode 為 ai-decide 時，hover 後子選單應出現並顯示 Haiku/Sonnet/Opus 選項", async () => {
-      const wrapper = mountMenu({ currentTriggerMode: "ai-decide" });
-      await openAiModelMenu(wrapper);
-      const buttons = wrapper.findAll("button");
-      const haikuBtn = buttons.find((b) => b.text().includes("Haiku"));
-      const sonnetBtn = buttons.find((b) => b.text().includes("Sonnet"));
-      const opusBtn = buttons.find((b) => b.text().includes("Opus"));
-      expect(haikuBtn?.exists()).toBe(true);
-      expect(sonnetBtn?.exists()).toBe(true);
-      expect(opusBtn?.exists()).toBe(true);
+    it("triggerMode 為 auto 時，Branch 設定面板不應顯示", () => {
+      const wrapper = mountMenu({ currentTriggerMode: "auto" });
+      expect(wrapper.text()).not.toContain("Branch Provider");
     });
 
-    it.each([
-      { currentTriggerMode: "auto" as const },
-      { currentTriggerMode: "direct" as const },
-    ])(
-      "triggerMode 為 $currentTriggerMode 時，AI Model 區塊應有 opacity-50 disabled 樣式且子選單不出現",
-      async ({ currentTriggerMode }) => {
-        const wrapper = mountMenu({ currentTriggerMode });
-        const relativeWrappers = wrapper.findAll(".relative");
-        const aiModelWrapper = relativeWrappers[2]!;
-        expect(aiModelWrapper.classes()).toContain("opacity-50");
-        await openAiModelMenu(wrapper);
-        expect(aiModelWrapper.find(".absolute").exists()).toBe(false);
-      },
-    );
+    it("triggerMode 為 direct 時，Branch 設定面板不應顯示", () => {
+      const wrapper = mountMenu({ currentTriggerMode: "direct" });
+      expect(wrapper.text()).not.toContain("Branch Provider");
+    });
   });
 
   // ──────────────────────────────────────────────────────────────
-  describe("AI Model 選中狀態標記", () => {
-    it("currentAiDecideModel 為 sonnet 時，Sonnet 按鈕應有選中樣式", async () => {
+  describe("Branch Model 選中狀態標記（透過 hover 子選單）", () => {
+    it("currentBranchModel 為 sonnet 時，Sonnet 按鈕應有選中樣式", async () => {
       const wrapper = mountMenu({
-        currentTriggerMode: "ai-decide",
-        currentAiDecideModel: "sonnet",
+        currentTriggerMode: "branch",
+        currentBranchProvider: "claude",
+        currentBranchModel: "sonnet",
       });
-      await openAiModelMenu(wrapper);
-      const relativeWrappers = wrapper.findAll(".relative");
-      const aiModelWrapper = relativeWrappers[2]!;
-      const buttons = aiModelWrapper.findAll("button");
+      await openBranchModelMenu(wrapper);
+      const buttons = wrapper.findAll("button");
       const sonnetBtn = buttons.find((b) => b.text().includes("Sonnet"));
       expect(sonnetBtn?.classes()).toContain("bg-secondary");
       expect(sonnetBtn?.classes()).toContain("border-l-2");
     });
 
-    it("currentAiDecideModel 為 haiku 時，Haiku 按鈕應有選中樣式", async () => {
+    it("currentBranchModel 為 haiku 時，Haiku 按鈕應有選中樣式", async () => {
       const wrapper = mountMenu({
-        currentTriggerMode: "ai-decide",
-        currentAiDecideModel: "haiku",
+        currentTriggerMode: "branch",
+        currentBranchProvider: "claude",
+        currentBranchModel: "haiku",
       });
-      await openAiModelMenu(wrapper);
-      const relativeWrappers = wrapper.findAll(".relative");
-      const aiModelWrapper = relativeWrappers[2]!;
-      const buttons = aiModelWrapper.findAll("button");
+      await openBranchModelMenu(wrapper);
+      const buttons = wrapper.findAll("button");
       const haikuBtn = buttons.find((b) => b.text().includes("Haiku"));
       expect(haikuBtn?.classes()).toContain("bg-secondary");
       expect(haikuBtn?.classes()).toContain("border-l-2");
     });
 
-    it("currentAiDecideModel 為 opus 時，Opus 按鈕應有選中樣式", async () => {
+    it("currentBranchModel 為 opus 時，Opus 按鈕應有選中樣式", async () => {
       const wrapper = mountMenu({
-        currentTriggerMode: "ai-decide",
-        currentAiDecideModel: "opus",
+        currentTriggerMode: "branch",
+        currentBranchProvider: "claude",
+        currentBranchModel: "opus",
       });
-      await openAiModelMenu(wrapper);
-      const relativeWrappers = wrapper.findAll(".relative");
-      const aiModelWrapper = relativeWrappers[2]!;
-      const buttons = aiModelWrapper.findAll("button");
+      await openBranchModelMenu(wrapper);
+      const buttons = wrapper.findAll("button");
       const opusBtn = buttons.find((b) => b.text().includes("Opus"));
       expect(opusBtn?.classes()).toContain("bg-secondary");
       expect(opusBtn?.classes()).toContain("border-l-2");
     });
 
-    it("currentAiDecideModel 為 sonnet 時，Haiku 按鈕不應有選中樣式", async () => {
+    it("currentBranchModel 為 sonnet 時，Haiku 按鈕不應有選中樣式", async () => {
       const wrapper = mountMenu({
-        currentTriggerMode: "ai-decide",
-        currentAiDecideModel: "sonnet",
+        currentTriggerMode: "branch",
+        currentBranchProvider: "claude",
+        currentBranchModel: "sonnet",
       });
-      await openAiModelMenu(wrapper);
-      const relativeWrappers = wrapper.findAll(".relative");
-      const aiModelWrapper = relativeWrappers[2]!;
-      const buttons = aiModelWrapper.findAll("button");
+      await openBranchModelMenu(wrapper);
+      const buttons = wrapper.findAll("button");
       const haikuBtn = buttons.find((b) => b.text().includes("Haiku"));
       expect(haikuBtn?.classes()).not.toContain("border-l-2");
     });
   });
 
   // ──────────────────────────────────────────────────────────────
-  describe("AI Model 點擊不同模型 - 成功流程", () => {
-    it("點擊 Haiku（非當前）應呼叫 updateConnectionAiDecideModel 並帶正確參數", async () => {
+  describe("Branch Model 點擊不同模型 - 成功流程", () => {
+    it("點擊 Haiku（非當前）應呼叫 updateConnectionBranchModel 並帶正確參數", async () => {
       const connectionStore = useConnectionStore();
-      const spy = vi.spyOn(connectionStore, "updateConnectionAiDecideModel");
+      const spy = vi.spyOn(connectionStore, "updateConnectionBranchModel");
       mockCreateWebSocketRequest.mockResolvedValue({
         connection: {
           id: "conn-123",
@@ -631,18 +631,16 @@ describe("ConnectionContextMenu", () => {
           sourceAnchor: "bottom",
           targetPodId: "pod-target",
           targetAnchor: "top",
-          aiDecideModel: "haiku",
         },
       });
 
       const wrapper = mountMenu({
-        currentTriggerMode: "ai-decide",
-        currentAiDecideModel: "sonnet",
+        currentTriggerMode: "branch",
+        currentBranchProvider: "claude",
+        currentBranchModel: "sonnet",
       });
-      await openAiModelMenu(wrapper);
-      const relativeWrappers = wrapper.findAll(".relative");
-      const aiModelWrapper = relativeWrappers[2]!;
-      const buttons = aiModelWrapper.findAll("button");
+      await openBranchModelMenu(wrapper);
+      const buttons = wrapper.findAll("button");
       const haikuBtn = buttons.find((b) => b.text().includes("Haiku"));
       await haikuBtn?.trigger("click");
       await flushPromises();
@@ -650,7 +648,7 @@ describe("ConnectionContextMenu", () => {
       expect(spy).toHaveBeenCalledWith("conn-123", "haiku");
     });
 
-    it("切換模型成功後應顯示 title 為 AI 決策模型已變更 的 toast", async () => {
+    it("切換模型成功後應 emit branch-model-changed", async () => {
       mockCreateWebSocketRequest.mockResolvedValue({
         connection: {
           id: "conn-123",
@@ -658,158 +656,62 @@ describe("ConnectionContextMenu", () => {
           sourceAnchor: "bottom",
           targetPodId: "pod-target",
           targetAnchor: "top",
-          aiDecideModel: "haiku",
         },
       });
-      const { toasts } = useToast();
 
       const wrapper = mountMenu({
-        currentTriggerMode: "ai-decide",
-        currentAiDecideModel: "sonnet",
+        currentTriggerMode: "branch",
+        currentBranchProvider: "claude",
+        currentBranchModel: "sonnet",
       });
-      await openAiModelMenu(wrapper);
-      const relativeWrappers = wrapper.findAll(".relative");
-      const aiModelWrapper = relativeWrappers[2]!;
-      const buttons = aiModelWrapper.findAll("button");
+      await openBranchModelMenu(wrapper);
+      const buttons = wrapper.findAll("button");
       const haikuBtn = buttons.find((b) => b.text().includes("Haiku"));
       await haikuBtn?.trigger("click");
       await flushPromises();
 
-      expect(toasts.value.some((t) => t.title === "AI 決策模型已變更")).toBe(
-        true,
-      );
-    });
-
-    it("切換模型成功後應 emit ai-decide-model-changed", async () => {
-      const wrapper = mountMenu({
-        currentTriggerMode: "ai-decide",
-        currentAiDecideModel: "sonnet",
-      });
-      await openAiModelMenu(wrapper);
-      const relativeWrappers = wrapper.findAll(".relative");
-      const aiModelWrapper = relativeWrappers[2]!;
-      const buttons = aiModelWrapper.findAll("button");
-      const haikuBtn = buttons.find((b) => b.text().includes("Haiku"));
-      await haikuBtn?.trigger("click");
-      await flushPromises();
-
-      expect(wrapper.emitted("ai-decide-model-changed")).toBeTruthy();
-    });
-
-    it("切換模型成功後應 emit close", async () => {
-      const wrapper = mountMenu({
-        currentTriggerMode: "ai-decide",
-        currentAiDecideModel: "sonnet",
-      });
-      await openAiModelMenu(wrapper);
-      const relativeWrappers = wrapper.findAll(".relative");
-      const aiModelWrapper = relativeWrappers[2]!;
-      const buttons = aiModelWrapper.findAll("button");
-      const haikuBtn = buttons.find((b) => b.text().includes("Haiku"));
-      await haikuBtn?.trigger("click");
-      await flushPromises();
-
-      expect(wrapper.emitted("close")).toBeTruthy();
+      expect(wrapper.emitted("branch-model-changed")).toBeTruthy();
     });
   });
 
   // ──────────────────────────────────────────────────────────────
-  describe("AI Model 點擊已選中的模型 - 直接關閉", () => {
-    it("點擊已選中的模型不應呼叫 updateConnectionAiDecideModel", async () => {
+  describe("Branch Model 點擊已選中的模型 - 不呼叫 store", () => {
+    it("點擊已選中的模型不應呼叫 updateConnectionBranchModel", async () => {
       const connectionStore = useConnectionStore();
-      const spy = vi.spyOn(connectionStore, "updateConnectionAiDecideModel");
+      const spy = vi.spyOn(connectionStore, "updateConnectionBranchModel");
 
       const wrapper = mountMenu({
-        currentTriggerMode: "ai-decide",
-        currentAiDecideModel: "sonnet",
+        currentTriggerMode: "branch",
+        currentBranchProvider: "claude",
+        currentBranchModel: "sonnet",
       });
-      await openAiModelMenu(wrapper);
-      const relativeWrappers = wrapper.findAll(".relative");
-      const aiModelWrapper = relativeWrappers[2]!;
-      const buttons = aiModelWrapper.findAll("button");
+      await openBranchModelMenu(wrapper);
+      const buttons = wrapper.findAll("button");
       const sonnetBtn = buttons.find((b) => b.text().includes("Sonnet"));
       await sonnetBtn?.trigger("click");
       await flushPromises();
 
       expect(spy).not.toHaveBeenCalled();
     });
-
-    it("點擊已選中的模型應直接 emit close", async () => {
-      const wrapper = mountMenu({
-        currentTriggerMode: "ai-decide",
-        currentAiDecideModel: "haiku",
-      });
-      await openAiModelMenu(wrapper);
-      const relativeWrappers = wrapper.findAll(".relative");
-      const aiModelWrapper = relativeWrappers[2]!;
-      const buttons = aiModelWrapper.findAll("button");
-      const haikuBtn = buttons.find((b) => b.text().includes("Haiku"));
-      await haikuBtn?.trigger("click");
-      await flushPromises();
-
-      expect(wrapper.emitted("close")).toBeTruthy();
-    });
   });
 
   // ──────────────────────────────────────────────────────────────
-  describe("AI Model 切換模型失敗", () => {
-    it("updateConnectionAiDecideModel 回傳 null 時應顯示失敗 toast", async () => {
-      // WS 回傳無 connection 欄位 → store action 回傳 null
+  describe("Branch Model 切換模型失敗", () => {
+    it("updateConnectionBranchModel 回傳 null 時不應 emit branch-model-changed", async () => {
       mockCreateWebSocketRequest.mockResolvedValue({});
-      const { toasts } = useToast();
 
       const wrapper = mountMenu({
-        currentTriggerMode: "ai-decide",
-        currentAiDecideModel: "sonnet",
+        currentTriggerMode: "branch",
+        currentBranchProvider: "claude",
+        currentBranchModel: "sonnet",
       });
-      await openAiModelMenu(wrapper);
-      const relativeWrappers = wrapper.findAll(".relative");
-      const aiModelWrapper = relativeWrappers[2]!;
-      const buttons = aiModelWrapper.findAll("button");
+      await openBranchModelMenu(wrapper);
+      const buttons = wrapper.findAll("button");
       const haikuBtn = buttons.find((b) => b.text().includes("Haiku"));
       await haikuBtn?.trigger("click");
       await flushPromises();
 
-      expect(toasts.value.some((t) => t.title === "變更失敗")).toBe(true);
-      expect(
-        toasts.value.some((t) => t.description?.includes("AI 決策模型")),
-      ).toBe(true);
-    });
-
-    it("updateConnectionAiDecideModel 失敗時不應 emit ai-decide-model-changed", async () => {
-      mockCreateWebSocketRequest.mockResolvedValue({});
-
-      const wrapper = mountMenu({
-        currentTriggerMode: "ai-decide",
-        currentAiDecideModel: "sonnet",
-      });
-      await openAiModelMenu(wrapper);
-      const relativeWrappers = wrapper.findAll(".relative");
-      const aiModelWrapper = relativeWrappers[2]!;
-      const buttons = aiModelWrapper.findAll("button");
-      const haikuBtn = buttons.find((b) => b.text().includes("Haiku"));
-      await haikuBtn?.trigger("click");
-      await flushPromises();
-
-      expect(wrapper.emitted("ai-decide-model-changed")).toBeFalsy();
-    });
-
-    it("updateConnectionAiDecideModel 失敗時不應 emit close", async () => {
-      mockCreateWebSocketRequest.mockResolvedValue({});
-
-      const wrapper = mountMenu({
-        currentTriggerMode: "ai-decide",
-        currentAiDecideModel: "sonnet",
-      });
-      await openAiModelMenu(wrapper);
-      const relativeWrappers = wrapper.findAll(".relative");
-      const aiModelWrapper = relativeWrappers[2]!;
-      const buttons = aiModelWrapper.findAll("button");
-      const haikuBtn = buttons.find((b) => b.text().includes("Haiku"));
-      await haikuBtn?.trigger("click");
-      await flushPromises();
-
-      expect(wrapper.emitted("close")).toBeFalsy();
+      expect(wrapper.emitted("branch-model-changed")).toBeFalsy();
     });
   });
 
@@ -953,32 +855,40 @@ describe("ConnectionContextMenu", () => {
       expect(spy).toHaveBeenCalledWith("conn-123", "gpt-5.5");
     });
 
-    it("AI Decide Model 子選單在上游是 Claude 時仍只顯示 Claude 三個模型", async () => {
-      const wrapper = mountMenu({ currentTriggerMode: "ai-decide" });
-      await openAiModelMenu(wrapper);
-
-      const relativeWrappers = wrapper.findAll(".relative");
-      const aiModelWrapper = relativeWrappers[2]!;
-      const buttons = aiModelWrapper.findAll("button");
+    it("Branch Provider=claude 時，hover Branch Model 子選單應顯示 Claude 三個模型", async () => {
+      const wrapper = mountMenu({
+        currentTriggerMode: "branch",
+        currentBranchProvider: "claude",
+        currentBranchModel: "sonnet",
+      });
+      await openBranchModelMenu(wrapper);
+      const buttons = wrapper.findAll("button");
       const labels = buttons.map((b) => b.text());
       expect(labels.some((l) => l.includes("Haiku"))).toBe(true);
       expect(labels.some((l) => l.includes("Sonnet"))).toBe(true);
       expect(labels.some((l) => l.includes("Opus"))).toBe(true);
-      // 不應有 Codex 模型
       expect(labels.some((l) => l.includes("GPT"))).toBe(false);
     });
 
-    it("AI Decide Model 子選單在上游是 Codex 時仍只顯示 Claude 三個模型（不受 provider 影響）", async () => {
-      const podStore = usePodStore();
-      podStore.pods = [
-        {
-          id: "pod-upstream",
-          provider: "codex",
-        } as (typeof podStore.pods)[0],
-      ] as typeof podStore.pods;
-
+    it("Branch Provider=codex 時，hover Branch Model 子選單應顯示 Codex 模型", async () => {
+      // Phase 3B 後 branchProvider 可獨立選擇（不再鎖定 Claude）
       const capabilityStore = useProviderCapabilityStore();
       capabilityStore.syncFromPayload([
+        {
+          name: "claude",
+          capabilities: {
+            chat: true,
+            plugin: false,
+            repository: true,
+            command: true,
+            mcp: true,
+          },
+          availableModels: [
+            { value: "haiku", label: "Haiku" },
+            { value: "sonnet", label: "Sonnet" },
+            { value: "opus", label: "Opus" },
+          ],
+        },
         {
           name: "codex",
           capabilities: {
@@ -995,19 +905,16 @@ describe("ConnectionContextMenu", () => {
         },
       ]);
 
-      const wrapper = mountMenu({ currentTriggerMode: "ai-decide" });
-      await openAiModelMenu(wrapper);
-
-      const relativeWrappers = wrapper.findAll(".relative");
-      const aiModelWrapper = relativeWrappers[2]!;
-      const buttons = aiModelWrapper.findAll("button");
+      const wrapper = mountMenu({
+        currentTriggerMode: "branch",
+        currentBranchProvider: "codex",
+        currentBranchModel: "gpt-5.4",
+      });
+      await openBranchModelMenu(wrapper);
+      const buttons = wrapper.findAll("button");
       const labels = buttons.map((b) => b.text());
-      // AI Decide Model 硬編碼 Claude 三選一，不受上游 provider 影響
-      expect(labels.some((l) => l.includes("Haiku"))).toBe(true);
-      expect(labels.some((l) => l.includes("Sonnet"))).toBe(true);
-      expect(labels.some((l) => l.includes("Opus"))).toBe(true);
-      // 不應有 Codex 模型
-      expect(labels.some((l) => l.includes("GPT"))).toBe(false);
+      expect(labels.some((l) => l.includes("GPT-5.4"))).toBe(true);
+      expect(labels.some((l) => l.includes("GPT-5.5"))).toBe(true);
     });
   });
 
@@ -1038,29 +945,25 @@ describe("ConnectionContextMenu", () => {
       expect(spy).toHaveBeenCalledWith("conn-123", "direct");
     });
 
-    it("點擊 ai-decide（非當前 auto）應呼叫 updateConnectionTriggerMode 並帶正確參數", async () => {
+    it("I1 - 點擊 Branch 應 emit branch-mode-clicked（不直接切換 triggerMode，由 modal 流程處理）", async () => {
       const connectionStore = useConnectionStore();
-      const spy = vi.spyOn(connectionStore, "updateConnectionTriggerMode");
-      mockCreateWebSocketRequest.mockResolvedValue({
-        connection: {
-          id: "conn-123",
-          sourcePodId: "pod-upstream",
-          sourceAnchor: "bottom",
-          targetPodId: "pod-target",
-          targetAnchor: "top",
-          triggerMode: "ai-decide",
-        },
-      });
+      const triggerSpy = vi.spyOn(
+        connectionStore,
+        "updateConnectionTriggerMode",
+      );
 
       const wrapper = mountMenu({ currentTriggerMode: "auto" });
       const buttons = wrapper.findAll("button");
-      const aiDecideBtn = buttons.find((b) =>
-        b.text().includes("AI 判斷 (AI Decide)"),
+      const branchBtn = buttons.find((b) =>
+        b.text().includes("Branch 判斷 (Branch)"),
       );
-      await aiDecideBtn?.trigger("click");
+      await branchBtn?.trigger("click");
       await flushPromises();
 
-      expect(spy).toHaveBeenCalledWith("conn-123", "ai-decide");
+      // 點擊 Branch 不應直接呼叫 updateConnectionTriggerMode（改由 BranchEditModal 提交時送出合併更新）
+      expect(triggerSpy).not.toHaveBeenCalled();
+      // 應 emit branch-mode-clicked 讓 host 開啟 BranchEditModal
+      expect(wrapper.emitted("branch-mode-clicked")).toBeTruthy();
     });
 
     it("切換 trigger mode 成功後應顯示成功 toast", async () => {
@@ -1142,12 +1045,12 @@ describe("ConnectionContextMenu", () => {
     it("點擊已選中的 mode 不應顯示 toast", async () => {
       const { toasts } = useToast();
 
-      const wrapper = mountMenu({ currentTriggerMode: "ai-decide" });
+      const wrapper = mountMenu({ currentTriggerMode: "branch" });
       const buttons = wrapper.findAll("button");
-      const aiDecideBtn = buttons.find((b) =>
-        b.text().includes("AI 判斷 (AI Decide)"),
+      const branchDecideBtn = buttons.find((b) =>
+        b.text().includes("Branch 判斷 (Branch)"),
       );
-      await aiDecideBtn?.trigger("click");
+      await branchDecideBtn?.trigger("click");
       await flushPromises();
 
       expect(toasts.value).toHaveLength(0);
@@ -1241,7 +1144,6 @@ describe("ConnectionContextMenu", () => {
           targetAnchor: "top",
           triggerMode: "auto",
           summaryModel: "sonnet",
-          aiDecideModel: "sonnet",
           status: "idle",
           // summaryProvider 刻意不設定，模擬舊 Connection
         },
@@ -1271,7 +1173,6 @@ describe("ConnectionContextMenu", () => {
           triggerMode: "auto",
           summaryModel: "gemini-2.5-flash",
           summaryProvider: "gemini",
-          aiDecideModel: "sonnet",
           status: "idle",
         },
       ] as typeof connectionStore.connections;
@@ -1341,7 +1242,6 @@ describe("ConnectionContextMenu", () => {
           triggerMode: "auto",
           summaryModel: "gemini-2.5-flash",
           summaryProvider: "gemini",
-          aiDecideModel: "sonnet",
           status: "idle",
         },
       ] as typeof connectionStore.connections;
@@ -1388,7 +1288,6 @@ describe("ConnectionContextMenu", () => {
           triggerMode: "auto",
           summaryModel: "gpt-5.4",
           summaryProvider: "codex",
-          aiDecideModel: "sonnet",
           status: "idle",
         },
       ] as typeof connectionStore.connections;

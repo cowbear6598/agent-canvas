@@ -1,3 +1,3 @@
 export function isAutoTriggerable(triggerMode: string | undefined): boolean {
-    return triggerMode === 'auto' || triggerMode === 'ai-decide'
+  return triggerMode === "auto" || triggerMode === "branch";
 }

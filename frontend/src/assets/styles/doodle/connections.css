@@ -22,7 +22,9 @@
 
 .connection-line .line {
   stroke-width: 3px;
-  transition: stroke-width 0.2s ease, filter 0.2s ease;
+  transition:
+    stroke-width 0.2s ease,
+    filter 0.2s ease;
 }
 
 .connection-line:hover .line {
@@ -35,7 +37,9 @@
 }
 
 .connection-line .arrow {
-  transition: opacity 0.2s ease, fill 0.3s ease;
+  transition:
+    opacity 0.2s ease,
+    fill 0.3s ease;
 }
 
 .connection-line:hover .arrow {
@@ -94,36 +98,45 @@
   background: oklch(0.7 0.15 155 / 0.8);
 }
 
-/* AI Decide Connection Styles */
-/* AI Decide 永遠都是虛線 */
-.connection-line.ai-decide .line {
+/* Branch Connection Styles */
+/* Branch 模式永遠都是虛線 */
+.connection-line.branch .line {
   stroke-dasharray: 8, 4;
 }
 
-.connection-line.ai-deciding .line {
+.connection-line.deciding .line {
   stroke: oklch(0.7 0.1 300 / 0.7);
-  animation: ai-decide-flow 2s linear infinite;
+  animation: branch-flow 2s linear infinite;
   stroke-width: 4px;
 }
 
-.connection-line.ai-approved .line {
+.connection-line.approved .line {
   stroke: oklch(0.65 0.12 300 / 0.7);
   animation: none;
   stroke-width: 3px;
   stroke-dashoffset: 0;
 }
 
-.connection-line.ai-rejected .line {
+.connection-line.rejected .line {
   stroke: oklch(0.65 0.15 20);
 }
 
-.connection-line.ai-error .line {
+.connection-line.error .line {
   stroke: oklch(0.7 0.15 60 / 0.8);
 }
 
 /* Connection Mid Label */
-.connection-mid-label {
+/* wrapper：在 foreignObject 內水平置中 pill，並讓 pill 依文字長度自動調整寬度 */
+.connection-mid-label-wrapper {
   display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.connection-mid-label {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 4px;
@@ -132,11 +145,24 @@
   pointer-events: auto;
   user-select: none;
   padding: 2px 6px;
+  max-width: 100%;
+  white-space: nowrap;
 }
 
-.connection-mid-label.ai-label {
-  background: oklch(0.7 0.1 300);
-  color: white;
+/* branch-label：白底・border・圓角・文字截斷 */
+.connection-mid-label.branch-label {
+  background: white;
+  color: oklch(0.3 0.05 300);
+  border: 1px solid oklch(0.65 0.12 300 / 0.6);
+  border-radius: 4px;
+  max-width: 188px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: center;
+  line-height: 16px;
+  padding: 0 6px;
+  font-weight: 600;
 }
 
 .connection-mid-label.rejected-label {
@@ -189,7 +215,7 @@
   }
 }
 
-@keyframes ai-decide-flow {
+@keyframes branch-flow {
   to {
     stroke-dashoffset: -12;
   }

@@ -5,9 +5,9 @@ import { podStore } from "../../src/services/podStore.js";
 import { summaryService } from "../../src/services/summaryService.js";
 import { workflowEventEmitter } from "../../src/services/workflow";
 import { workflowQueueService } from "../../src/services/workflow";
-import { aiDecideService } from "../../src/services/workflow";
+import { branchDecisionService } from "../../src/services/workflow";
 import { workflowAutoTriggerService } from "../../src/services/workflow";
-import { workflowAiDecideTriggerService } from "../../src/services/workflow";
+import { workflowBranchTriggerService } from "../../src/services/workflow";
 import { runExecutionService } from "../../src/services/workflow/runExecutionService.js";
 import { logger } from "../../src/utils/logger.js";
 import type { Connection } from "../../src/types";
@@ -36,7 +36,10 @@ function makeConnection(overrides?: Partial<Connection>): Connection {
     decideReason: null,
     connectionStatus: "idle",
     summaryModel: "sonnet",
-    aiDecideModel: "sonnet",
+    label: "Checklist",
+    description: undefined,
+    branchProvider: "claude",
+    branchModel: "sonnet",
     ...overrides,
   } as Connection;
 }
@@ -61,7 +64,7 @@ function makePod(id: string, status: "idle" | "chatting" = "idle") {
 }
 
 function makeStrategy(
-  mode: "auto" | "direct" | "ai-decide",
+  mode: "auto" | "direct" | "branch",
   overrides?: Partial<TriggerStrategy>,
 ): TriggerStrategy {
   const base: Partial<TriggerStrategy> = {
@@ -114,15 +117,6 @@ function setupBasicSpies() {
     undefined,
   );
   vi.spyOn(connectionStore, "updateDecideStatus").mockReturnValue(undefined);
-  vi.spyOn(workflowEventEmitter, "emitAiDecidePending").mockImplementation(
-    () => {},
-  );
-  vi.spyOn(workflowEventEmitter, "emitAiDecideResult").mockImplementation(
-    () => {},
-  );
-  vi.spyOn(workflowEventEmitter, "emitAiDecideError").mockImplementation(
-    () => {},
-  );
   vi.spyOn(workflowEventEmitter, "emitWorkflowQueued").mockImplementation(
     () => {},
   );
@@ -133,10 +127,9 @@ function setupBasicSpies() {
     workflowEventEmitter,
     "emitWorkflowAutoTriggered",
   ).mockImplementation(() => {});
-  vi.spyOn(
-    workflowEventEmitter,
-    "emitWorkflowAiDecideTriggered",
-  ).mockImplementation(() => {});
+  vi.spyOn(workflowEventEmitter, "emitBranchTriggered").mockImplementation(
+    () => {},
+  );
 }
 
 // ─── 測試 ─────────────────────────────────────────────────────────────────────
@@ -154,42 +147,36 @@ describe("WorkflowExecutionService", () => {
   // checkAndTriggerWorkflows - 路由分發
   // ============================================================
   describe("checkAndTriggerWorkflows - 路由分發", () => {
-    it("混合 auto + ai-decide connection 時，分別呼叫對應的服務", async () => {
+    it("混合 auto + branch connection 時，分別呼叫對應的服務", async () => {
       const autoConn = makeConnection({
         id: "conn-auto-1",
         triggerMode: "auto",
       });
-      const aiConn = makeConnection({
-        id: "conn-ai-1",
+      const branchConn = makeConnection({
+        id: "conn-branch-1",
         targetPodId: "target-pod-2",
-        triggerMode: "ai-decide",
+        triggerMode: "branch",
       });
 
       vi.spyOn(connectionStore, "findBySourcePodId").mockReturnValue([
         autoConn,
-        aiConn,
+        branchConn,
       ]);
       vi.spyOn(connectionStore, "getById").mockImplementation(((
         _cId: string,
         id: string,
       ) => {
         if (id === "conn-auto-1") return autoConn;
-        if (id === "conn-ai-1") return aiConn;
+        if (id === "conn-branch-1") return branchConn;
         return null;
       }) as any);
-      vi.spyOn(aiDecideService, "decideConnections").mockResolvedValue({
-        results: [
-          { connectionId: "conn-ai-1", shouldTrigger: true, reason: "相關" },
-        ],
-        errors: [],
-      });
 
       // 用 spy 驗證兩個路徑都被啟動
       const autoSpy = vi
         .spyOn(workflowAutoTriggerService, "processAutoTriggerConnection")
         .mockResolvedValue(undefined);
-      const aiSpy = vi
-        .spyOn(workflowAiDecideTriggerService, "processAiDecideConnections")
+      const branchSpy = vi
+        .spyOn(workflowBranchTriggerService, "processBranchConnections")
         .mockResolvedValue(undefined);
 
       await workflowExecutionService.checkAndTriggerWorkflows(
@@ -203,10 +190,10 @@ describe("WorkflowExecutionService", () => {
         autoConn,
         undefined,
       );
-      expect(aiSpy).toHaveBeenCalledWith(
+      expect(branchSpy).toHaveBeenCalledWith(
         CANVAS_ID,
         SOURCE_POD_ID,
-        [aiConn],
+        [branchConn],
         undefined,
       );
     });
@@ -272,7 +259,7 @@ describe("WorkflowExecutionService", () => {
 
     it.each([
       {
-        label: "auto 模式：設定同群所有 auto/ai-decide 連線為 active",
+        label: "auto 模式：設定同群所有 auto/branch 連線為 active",
         triggerMode: "auto" as const,
         connections: [
           { id: "conn-auto-1", triggerMode: "auto" as const },
@@ -285,13 +272,13 @@ describe("WorkflowExecutionService", () => {
         expectedActiveCount: 2,
       },
       {
-        label: "ai-decide 模式：設定同群所有 auto/ai-decide 連線為 active",
-        triggerMode: "ai-decide" as const,
+        label: "branch 模式：設定同群所有 auto/branch 連線為 active",
+        triggerMode: "branch" as const,
         connections: [
-          { id: "conn-ai-1", triggerMode: "ai-decide" as const },
+          { id: "conn-branch-1", triggerMode: "branch" as const },
           {
-            id: "conn-ai-2",
-            triggerMode: "ai-decide" as const,
+            id: "conn-branch-2",
+            triggerMode: "branch" as const,
             sourcePodId: "other-source",
           },
         ],
@@ -363,25 +350,21 @@ describe("WorkflowExecutionService", () => {
   });
 
   // ============================================================
-  // ai-decide 判斷流程（通過 workflowAiDecideTriggerService）
+  // branch 判斷流程（通過 workflowBranchTriggerService）
   // ============================================================
-  describe("ai-decide 判斷流程", () => {
-    it("ai-decide approved → 觸發 workflow（通過 aiDecideTriggerService）", async () => {
-      const aiConn = makeConnection({
-        id: "conn-ai-1",
+  describe("branch 判斷流程", () => {
+    it("branch connection → 觸發 workflow（通過 branchTriggerService）", async () => {
+      const branchConn = makeConnection({
+        id: "conn-branch-1",
         targetPodId: "target-pod-2",
-        triggerMode: "ai-decide",
+        triggerMode: "branch",
       });
 
-      vi.spyOn(connectionStore, "findBySourcePodId").mockReturnValue([aiConn]);
-      vi.spyOn(aiDecideService, "decideConnections").mockResolvedValue({
-        results: [
-          { connectionId: "conn-ai-1", shouldTrigger: true, reason: "相關" },
-        ],
-        errors: [],
-      });
+      vi.spyOn(connectionStore, "findBySourcePodId").mockReturnValue([
+        branchConn,
+      ]);
       const processSpy = vi
-        .spyOn(workflowAiDecideTriggerService, "processAiDecideConnections")
+        .spyOn(workflowBranchTriggerService, "processBranchConnections")
         .mockResolvedValue(undefined);
 
       await workflowExecutionService.checkAndTriggerWorkflows(
@@ -392,7 +375,7 @@ describe("WorkflowExecutionService", () => {
       expect(processSpy).toHaveBeenCalledWith(
         CANVAS_ID,
         SOURCE_POD_ID,
-        [aiConn],
+        [branchConn],
         undefined,
       );
     });
@@ -427,7 +410,7 @@ describe("WorkflowExecutionService.generateSummaryWithFallback runContext 狀態
 
     workflowExecutionService.init({
       pipeline: { execute: vi.fn().mockResolvedValue(undefined) } as any,
-      aiDecideTriggerService: { processAiDecideConnections: vi.fn() } as any,
+      branchTriggerService: { processBranchConnections: vi.fn() } as any,
       autoTriggerService: mockAutoTriggerServiceForFallback as any,
       directTriggerService: makeStrategy("direct"),
     });

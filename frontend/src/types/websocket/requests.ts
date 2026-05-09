@@ -1,4 +1,4 @@
-import type { ModelType, Schedule, PodProvider, ProviderConfig } from "../pod";
+import type { Schedule, PodProvider, ProviderConfig } from "../pod";
 import type { AnchorPosition } from "@/types";
 
 export type ImageMediaType =
@@ -117,6 +117,15 @@ export interface ConnectionCreatePayload {
   targetAnchor: AnchorPosition;
   /** 新建 Connection 時可帶入預設 Summary Provider；null 代表清除（重設為 fallback） */
   summaryProvider?: PodProvider | null;
+  triggerMode?: "auto" | "branch" | "direct";
+  /** Branch 模式下的連線標籤 */
+  label?: string;
+  /** Branch 模式下的連線描述 */
+  description?: string;
+  /** Branch 模式使用的 AI Provider */
+  branchProvider?: PodProvider;
+  /** Branch 模式使用的模型字串 */
+  branchModel?: string;
 }
 
 export interface ConnectionListPayload {
@@ -172,22 +181,36 @@ export interface PasteConnectionItem {
   sourceAnchor: AnchorPosition;
   originalTargetPodId: string;
   targetAnchor: AnchorPosition;
-  triggerMode?: "auto" | "ai-decide" | "direct";
+  triggerMode?: "auto" | "branch" | "direct";
   /** summaryModel 接受任意 provider 的模型名稱字串，不限於 Claude ModelType */
   summaryModel?: string;
-  aiDecideModel?: ModelType;
+  /** Branch 模式下的連線標籤 */
+  label?: string;
+  /** Branch 模式下的連線描述 */
+  description?: string;
+  /** Branch 模式使用的 AI Provider */
+  branchProvider?: PodProvider;
+  /** Branch 模式使用的模型字串 */
+  branchModel?: string;
 }
 
 export interface ConnectionUpdatePayload {
   requestId: string;
   canvasId: string;
   connectionId: string;
-  triggerMode?: "auto" | "ai-decide" | "direct";
+  triggerMode?: "auto" | "branch" | "direct";
   /** summaryModel 接受任意 provider 的模型名稱字串，不限於 Claude ModelType */
   summaryModel?: string;
   /** Summary 功能獨立選用的 Provider；null 代表清除（重設為 fallback） */
   summaryProvider?: PodProvider | null;
-  aiDecideModel?: ModelType;
+  /** Branch 模式下的連線標籤 */
+  label?: string;
+  /** Branch 模式下的連線描述 */
+  description?: string;
+  /** Branch 模式使用的 AI Provider */
+  branchProvider?: PodProvider;
+  /** Branch 模式使用的模型字串 */
+  branchModel?: string;
 }
 
 export interface CanvasPastePayload {

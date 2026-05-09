@@ -27,7 +27,7 @@ interface RunQueueServiceDeps {
   strategies: {
     auto: TriggerStrategy;
     direct: TriggerStrategy;
-    "ai-decide": TriggerStrategy;
+    branch: TriggerStrategy;
   };
   queuedPodInstance: (runContext: RunContext, podId: string) => void;
   hasActiveStream: (runId: string, podId: string) => boolean;
