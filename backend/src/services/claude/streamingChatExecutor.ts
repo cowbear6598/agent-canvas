@@ -279,6 +279,7 @@ function buildProviderErrorSystemMessage(
       code: event.code ?? null,
       severity: event.fatal ? "fatal" : "error",
       rawContent: event.message,
+      reasonDetail: undefined,
     },
   };
 }

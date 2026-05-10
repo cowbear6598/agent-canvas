@@ -12,6 +12,7 @@ import { createI18nError } from "../utils/i18nError.js";
 import { withCanvasId } from "../utils/handlerHelpers.js";
 import { fireAndForget } from "../utils/operationHelpers.js";
 import type { WorkflowRun } from "../services/runStore.js";
+import { sanitizePersistedMessageForClient } from "../services/systemMessageMetadata.js";
 
 function findRunOrEmitNotFound(
   connectionId: string,
@@ -123,7 +124,7 @@ export const handleRunLoadPodMessages = withCanvasId<RunLoadPodMessagesPayload>(
     emitSuccess(connectionId, WebSocketResponseEvents.RUN_POD_MESSAGES_LOADED, {
       requestId,
       success: true,
-      messages,
+      messages: messages.map((message) => sanitizePersistedMessageForClient(message)),
     });
   },
 );

@@ -208,6 +208,41 @@ describe('chatHistoryActions', () => {
       expect(chatStore.getMessages('pod-1')).toEqual([])
     })
 
+    it('system history 訊息應保留 reasonDetail', async () => {
+      const canvasStore = useCanvasStore()
+      canvasStore.activeCanvasId = 'canvas-1'
+      const chatStore = useChatStore()
+
+      const payload: PodChatHistoryResultPayload = {
+        requestId: 'req-1',
+        success: true,
+        messages: [
+          {
+            id: 'msg-system',
+            role: 'system',
+            content: 'Gemini 暫時回報速率限制，這次請求未完成，請稍後再試。',
+            timestamp: new Date().toISOString(),
+            metadata: {
+              provider: 'gemini',
+              code: 'GEMINI_RATE_LIMITED',
+              severity: 'fatal',
+              rawContent: '',
+              reasonDetail: '這次失敗是暫時性的速率限制，不代表帳號額度已用完。',
+            },
+          },
+        ],
+      }
+
+      mockCreateWebSocketRequest.mockResolvedValueOnce(payload)
+
+      await chatStore.loadPodChatHistory('pod-1')
+
+      const messages = chatStore.getMessages('pod-1')
+      expect(messages[0]?.metadata?.reasonDetail).toBe(
+        '這次失敗是暫時性的速率限制，不代表帳號額度已用完。'
+      )
+    })
+
     it('messages 為 undefined 時應正確處理', async () => {
       const canvasStore = useCanvasStore()
       canvasStore.activeCanvasId = 'canvas-1'

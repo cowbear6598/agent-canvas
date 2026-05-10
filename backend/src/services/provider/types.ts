@@ -122,9 +122,10 @@ export function buildProviderSystemError(
     fatal: boolean;
     code: string;
     rawContent?: string;
+    reasonDetail?: string;
   },
 ): Extract<NormalizedEvent, { type: "error" }> {
-  const { content, fatal, code, rawContent } = params;
+  const { content, fatal, code, rawContent, reasonDetail } = params;
 
   return {
     type: "error",
@@ -139,6 +140,7 @@ export function buildProviderSystemError(
         code,
         severity: fatal ? "fatal" : "error",
         rawContent: rawContent ?? content,
+        reasonDetail,
       },
     },
   };

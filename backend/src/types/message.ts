@@ -7,6 +7,7 @@ export interface SystemMessageMetadata {
   code: string | null;
   severity: SystemMessageSeverity;
   rawContent: string;
+  reasonDetail?: string;
 }
 
 export interface TextContentBlock {

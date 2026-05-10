@@ -17,7 +17,7 @@
 
 import { buildProviderSystemError } from "./types.js";
 import type { NormalizedEvent } from "./types.js";
-import { classifyGeminiFailFastError } from "./geminiErrorClassifier.js";
+import { classifyGeminiTerminalError } from "./geminiErrorClassifier.js";
 
 // ── Gemini JSON 事件原始型別 ────────────────────────────────────────
 
@@ -81,6 +81,7 @@ function buildGeminiSystemError(params: {
   fatal: boolean;
   code: string;
   rawContent?: string;
+  reasonDetail?: string;
 }): Extract<NormalizedEvent, { type: "error" }> {
   return buildProviderSystemError("gemini", params);
 }
@@ -139,13 +140,14 @@ function parseToolResultEvent(e: GeminiToolResultEvent): NormalizedEvent {
 /** 解析 error 事件 → error（fatal=false） */
 function parseErrorEvent(e: GeminiErrorEvent): NormalizedEvent {
   const rawContent = e.message ?? "Gemini 串流發生錯誤";
-  const classified = classifyGeminiFailFastError(rawContent);
+  const classified = classifyGeminiTerminalError(rawContent);
   if (classified) {
     return buildGeminiSystemError({
       content: classified.content,
       fatal: true,
       code: classified.code,
       rawContent: classified.rawContent,
+      reasonDetail: classified.reasonDetail,
     });
   }
 
@@ -167,13 +169,14 @@ function parseResultEvent(e: GeminiResultEvent): NormalizedEvent {
     return { type: "turn_complete" };
   }
   const rawContent = e.error?.message ?? "Gemini 執行失敗";
-  const classified = classifyGeminiFailFastError(rawContent);
+  const classified = classifyGeminiTerminalError(rawContent);
   if (classified) {
     return buildGeminiSystemError({
       content: classified.content,
       fatal: true,
       code: classified.code,
       rawContent: classified.rawContent,
+      reasonDetail: classified.reasonDetail,
     });
   }
 

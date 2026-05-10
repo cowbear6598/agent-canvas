@@ -5,6 +5,7 @@ import type {
 } from "./executionStrategy.js";
 import type { PersistedMessage } from "../types/persistence.js";
 import type { SystemMessageMetadata } from "../types/message.js";
+import { sanitizeSystemMessageMetadataForClient } from "./systemMessageMetadata.js";
 
 export function buildSystemMessage(params: {
   content: string;
@@ -49,7 +50,7 @@ export function appendSystemMessage(params: {
     podId,
     messageId: message.id,
     content: message.content,
-    metadata,
+    metadata: sanitizeSystemMessageMetadataForClient(metadata) ?? metadata,
   });
 
   return message;

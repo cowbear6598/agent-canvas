@@ -269,4 +269,24 @@ describe("ChatMessageBubble", () => {
     );
     expect(wrapper.text()).toContain("Authentication failed");
   });
+
+  it("system 訊息帶有 reasonDetail 時應顯示補充診斷資訊", () => {
+    const wrapper = mount(ChatMessageBubble, {
+      props: {
+        content: "Gemini 暫時回報速率限制，這次請求未完成，請稍後再試。",
+        role: "system",
+        metadata: {
+          provider: "gemini",
+          code: "GEMINI_RATE_LIMITED",
+          severity: "fatal",
+          rawContent: "",
+          reasonDetail: "這次失敗是暫時性的速率限制，不代表帳號額度已用完。",
+        },
+      },
+    });
+
+    expect(wrapper.find('[data-testid="system-reason-detail"]').text()).toBe(
+      "這次失敗是暫時性的速率限制，不代表帳號額度已用完。",
+    );
+  });
 });

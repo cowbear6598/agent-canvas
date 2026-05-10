@@ -15,11 +15,11 @@ import type { Mock } from "vitest";
 // SDK boundary mock（保留：getProvider 是外部 SDK 邊界；providerRegistry 保留真實值供 resolveProvider 使用）
 // metadata 必須一起提供，否則 providerConfigResolver.warnIfModelOutOfRange / ensureModelField
 // 在 buildPodFromRow 讀取路徑上也會呼叫 getProvider(provider).metadata 而丟出 TypeError
-vi.mock("../../src/services/provider/index.js", async (importOriginal) => {
+vi.mock("../../src/services/provider/index.js", async () => {
   const actual =
-    await importOriginal<
-      typeof import("../../src/services/provider/index.js")
-    >();
+    await vi.importActual<typeof import("../../src/services/provider/index.js")>(
+      "../../src/services/provider/index.js",
+    );
   return {
     ...actual,
     getProvider: vi.fn(() => ({
@@ -1334,25 +1334,26 @@ describe("executeStreamingChat", () => {
     it("Gemini quota fatal error 會寫入明確的 transcript system message，且不額外發 POD_ERROR", async () => {
       const pod = insertClaudePod();
       const setStatusSpy = vi.spyOn(podStore, "setStatus");
-      vi.mocked(logger.error).mockClear();
+      asMock(logger.error).mockClear();
 
       setupProviderMock([
         {
           type: "error",
           message:
-            "Gemini 目前回報模型配額或容量不足，已停止等待自動重試，請稍後再試或切換模型。",
+            "Gemini 目前回報模型容量不足，這次請求未完成，請稍後再試或切換模型。",
           fatal: true,
-          code: "GEMINI_QUOTA_EXHAUSTED",
+          code: "GEMINI_CAPACITY_EXHAUSTED",
           systemMessage: {
             role: "system",
             content:
-              "Gemini 目前回報模型配額或容量不足，已停止等待自動重試，請稍後再試或切換模型。",
+              "Gemini 目前回報模型容量不足，這次請求未完成，請稍後再試或切換模型。",
             metadata: {
               provider: "gemini",
-              code: "GEMINI_QUOTA_EXHAUSTED",
+              code: "GEMINI_CAPACITY_EXHAUSTED",
               severity: "fatal",
-              rawContent:
-                "RetryableQuotaError: You have exhausted your capacity on this model.",
+              rawContent: "",
+              reasonDetail:
+                "這次失敗是模型當下容量不足，與帳號配額不足不同。",
             },
           },
         },
@@ -1373,11 +1374,13 @@ describe("executeStreamingChat", () => {
           podId: pod.id,
           role: "system",
           content:
-            "Gemini 目前回報模型配額或容量不足，已停止等待自動重試，請稍後再試或切換模型。",
+            "Gemini 目前回報模型容量不足，這次請求未完成，請稍後再試或切換模型。",
           metadata: expect.objectContaining({
             provider: "gemini",
-            code: "GEMINI_QUOTA_EXHAUSTED",
+            code: "GEMINI_CAPACITY_EXHAUSTED",
             severity: "fatal",
+            reasonDetail:
+              "這次失敗是模型當下容量不足，與帳號配額不足不同。",
           }),
         }),
       );
@@ -1390,17 +1393,15 @@ describe("executeStreamingChat", () => {
         );
       expect(emittedPodError).toHaveLength(0);
       expect(
-        vi
-          .mocked(logger.error)
-          .mock.calls.some((args) =>
-            args.some(
-              (arg) =>
-                typeof arg === "string" &&
-                arg.includes(
-                  "RetryableQuotaError: You have exhausted your capacity on this model.",
-                ),
-            ),
+        asMock(logger.error).mock.calls.some((args) =>
+          args.some(
+            (arg) =>
+              typeof arg === "string" &&
+              arg.includes(
+                "RetryableQuotaError: You have exhausted your capacity on this model.",
+              ),
           ),
+        ),
       ).toBe(false);
     });
   });

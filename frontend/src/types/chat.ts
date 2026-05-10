@@ -12,6 +12,8 @@ export interface SystemMessageMetadata {
   severity: SystemMessageSeverity;
   /** Provider 原始錯誤文字（必填），與後端契約一致 */
   rawContent: string;
+  /** 前端可安全顯示的補充診斷資訊 */
+  reasonDetail?: string;
 }
 
 export type HistoryLoadingStatus = "idle" | "loading" | "loaded" | "error";

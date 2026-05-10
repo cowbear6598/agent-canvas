@@ -151,14 +151,15 @@ describe("GeminiNormalizer - normalize()", () => {
     const e = result as Extract<typeof result, { type: "error" }>;
     expect(e?.fatal).toBe(true);
     expect(e?.message).toBe(
-      "Gemini 目前回報模型配額或容量不足，已停止等待自動重試，請稍後再試或切換模型。",
+      "Gemini 目前回報模型容量不足，這次請求未完成，請稍後再試或切換模型。",
     );
     expect(e?.systemMessage).toMatchObject({
       metadata: {
         provider: "gemini",
-        code: "GEMINI_QUOTA_EXHAUSTED",
+        code: "GEMINI_CAPACITY_EXHAUSTED",
         severity: "fatal",
         rawContent: rawMessage,
+        reasonDetail: "這次失敗是模型當下容量不足，與帳號配額不足不同。",
       },
     });
   });
@@ -210,14 +211,63 @@ describe("GeminiNormalizer - normalize()", () => {
     const e = result as Extract<typeof result, { type: "error" }>;
     expect(e?.fatal).toBe(true);
     expect(e?.message).toBe(
-      "Gemini 目前回報模型配額或容量不足，已停止等待自動重試，請稍後再試或切換模型。",
+      "Gemini 目前回報模型容量不足，這次請求未完成，請稍後再試或切換模型。",
     );
     expect(e?.systemMessage).toMatchObject({
       metadata: {
         provider: "gemini",
-        code: "GEMINI_QUOTA_EXHAUSTED",
+        code: "GEMINI_CAPACITY_EXHAUSTED",
         severity: "fatal",
         rawContent: rawMessage,
+        reasonDetail: "這次失敗是模型當下容量不足，與帳號配額不足不同。",
+      },
+    });
+  });
+
+  it("N10c: rate limit 類型的 result (status=error) 應映射為 GEMINI_RATE_LIMITED", () => {
+    const rawMessage = "Rate limit reached. Please retry later.";
+    const line = toLine({
+      type: "result",
+      status: "error",
+      error: { message: rawMessage },
+    });
+    const result = normalize(line);
+
+    expect(result).not.toBeNull();
+    expect(result?.type).toBe("error");
+    const e = result as Extract<typeof result, { type: "error" }>;
+    expect(e?.message).toBe(
+      "Gemini 暫時回報速率限制，這次請求未完成，請稍後再試。",
+    );
+    expect(e?.systemMessage).toMatchObject({
+      metadata: {
+        provider: "gemini",
+        code: "GEMINI_RATE_LIMITED",
+        reasonDetail: "這次失敗是暫時性的速率限制，不代表帳號額度已用完。",
+      },
+    });
+  });
+
+  it("N10d: quota exceeded 類型的 result (status=error) 應映射為 GEMINI_QUOTA_EXCEEDED", () => {
+    const rawMessage = "Quota exceeded for this account.";
+    const line = toLine({
+      type: "result",
+      status: "error",
+      error: { message: rawMessage },
+    });
+    const result = normalize(line);
+
+    expect(result).not.toBeNull();
+    expect(result?.type).toBe("error");
+    const e = result as Extract<typeof result, { type: "error" }>;
+    expect(e?.message).toBe(
+      "Gemini 目前回報帳號配額不足，這次請求未完成，請稍後再試或切換模型。",
+    );
+    expect(e?.systemMessage).toMatchObject({
+      metadata: {
+        provider: "gemini",
+        code: "GEMINI_QUOTA_EXCEEDED",
+        reasonDetail: "這次失敗是帳號配額不足，不是單純暫時塞車。",
       },
     });
   });

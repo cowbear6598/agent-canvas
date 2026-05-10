@@ -28,6 +28,7 @@ import {
 } from "../services/commandExpander.js";
 import { socketService } from "../services/socketService.js";
 import { promoteStagingToFinal } from "../services/attachmentWriter.js";
+import { sanitizePersistedMessageForClient } from "../services/systemMessageMetadata.js";
 import {
   AttachmentTooLargeError,
   AttachmentDiskFullError,
@@ -483,18 +484,7 @@ export const handleChatHistory = withCanvasId<ChatHistoryPayload>(
     emitSuccess(connectionId, WebSocketResponseEvents.POD_CHAT_HISTORY_RESULT, {
       requestId,
       success: true,
-      messages: messages.map((message) => ({
-        id: message.id,
-        role: message.role,
-        content: message.content,
-        timestamp: message.timestamp,
-        // 歷史回傳前對 rawContent 做遮蔽，避免敏感的原始 SDK 錯誤字串洩漏給前端。
-        // rawContent 欄位仍保留（型別契約要求必填），以空字串取代原始內容。
-        metadata: message.metadata
-          ? { ...message.metadata, rawContent: "" }
-          : undefined,
-        subMessages: message.subMessages,
-      })),
+      messages: messages.map((message) => sanitizePersistedMessageForClient(message)),
     });
   },
 );

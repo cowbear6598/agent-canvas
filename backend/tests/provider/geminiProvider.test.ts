@@ -15,7 +15,15 @@
  * - vi.mock("../../src/utils/logger.js") mock logger
  */
 
-import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  afterEach,
+  beforeEach,
+  type Mock,
+} from "vitest";
 import type { NormalizedEvent } from "../../src/services/provider/types.js";
 import type { GeminiOptions } from "../../src/services/provider/geminiProvider.js";
 
@@ -91,11 +99,11 @@ function makeMockProc(
  * 驗證 logger.warn 的呼叫記錄中，至少有一次呼叫的某個參數同時包含所有指定子字串。
  * 封裝重複的 warnCalls.some + args.some + arg.includes 驗證模式。
  *
- * @param loggerWarnMock vi.mocked(logger.warn)
+ * @param loggerWarnMock mocked logger.warn
  * @param substrings 每個字串都必須出現在同一個 arg 中（做 AND 驗證）
  */
 function expectWarnContaining(
-  loggerWarnMock: ReturnType<typeof vi.mocked<typeof logger.warn>>,
+  loggerWarnMock: Mock,
   ...substrings: string[]
 ): void {
   const warnCalls = loggerWarnMock.mock.calls;
@@ -106,6 +114,10 @@ function expectWarnContaining(
     ),
   );
   expect(hasMatch).toBe(true);
+}
+
+function asMock(fn: unknown): Mock {
+  return fn as Mock;
 }
 
 // ── 建立通用 ChatRequestContext ──────────────────────────────────────────
@@ -271,7 +283,7 @@ describe("GeminiProvider", () => {
     // logger.warn 應被呼叫，且同時含「格式不合法」與「[INVALID_SESSION_ID_MASKED]」（不洩漏原始值）
     expect(logger.warn).toHaveBeenCalled();
     expectWarnContaining(
-      vi.mocked(logger.warn),
+      asMock(logger.warn),
       "格式不合法",
       "[INVALID_SESSION_ID_MASKED]",
     );
@@ -632,7 +644,7 @@ describe("GeminiProvider", () => {
     expect(logger.warn).toHaveBeenCalled();
 
     // warn 訊息應含 stderr 實際內容（logExitCodeDetails 輸出 "stderr: <內容>"）
-    expectWarnContaining(vi.mocked(logger.warn), stderrContent);
+    expectWarnContaining(asMock(logger.warn), stderrContent);
   });
 
   // ── C13：exit code 非 0 且 hasTurnComplete=false → yield error，message 含「執行發生錯誤」，fatal=false ─
@@ -648,6 +660,30 @@ describe("GeminiProvider", () => {
     const e = errorEvents[0] as Extract<NormalizedEvent, { type: "error" }>;
     expect(e.message).toBe("執行發生錯誤，請查閱伺服器日誌");
     expect(e.fatal).toBe(false);
+  });
+
+  it("C13b: exit code 非 0 且 stderr 命中 capacity 訊號時，應輸出 GEMINI_CAPACITY_EXHAUSTED", async () => {
+    const mockProc = makeMockProc(
+      [],
+      ["Attempt 1 failed: You have exhausted your capacity on this model."],
+      1,
+    );
+    spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
+
+    const events = await collectEvents(geminiProvider.chat(makeCtx()));
+
+    const errorEvents = events.filter((e) => e.type === "error");
+    expect(errorEvents).toHaveLength(1);
+
+    const e = errorEvents[0] as Extract<NormalizedEvent, { type: "error" }>;
+    expect(e.fatal).toBe(true);
+    expect(e.message).toBe(
+      "Gemini 目前回報模型容量不足，這次請求未完成，請稍後再試或切換模型。",
+    );
+    expect(e.systemMessage?.metadata.code).toBe("GEMINI_CAPACITY_EXHAUSTED");
+    expect(e.systemMessage?.metadata.reasonDetail).toBe(
+      "這次失敗是模型當下容量不足，與帳號配額不足不同。",
+    );
   });
 
   // ── C14：exit code 41 且 hasTurnComplete=false → 登入提示 error ───────
@@ -699,71 +735,29 @@ describe("GeminiProvider", () => {
     expect(errorEvents).toHaveLength(0);
   });
 
-  it("C16b: stderr 命中 Gemini quota/capacity 訊號時，應提早 kill subprocess 並回傳單一 fatal system error", async () => {
-    vi.mocked(logger.warn).mockClear();
-    vi.mocked(logger.error).mockClear();
-    const hangingStdout = new ReadableStream<Uint8Array>({
-      start() {
-        // 故意不 close，模擬 CLI 沒有正常結束 stdout 的卡死情境
-      },
-    });
-    const mockProc = {
-      stdout: hangingStdout,
-      stderr: makeReadableStream([
+  it("C16b: stderr 命中 Gemini retryable 訊號但最終成功時，不應誤判為 fatal system error", async () => {
+    asMock(logger.warn).mockClear();
+    asMock(logger.error).mockClear();
+    const mockProc = makeMockProc(
+      [JSON.stringify({ type: "result", status: "success" })],
+      [
         "Attempt 1 failed: You have exhausted your capacity on this model.",
         "RetryableQuotaError: cause.code: 429",
-      ]),
-      exited: new Promise<number>(() => {
-        // 故意不 resolve，驗證 fail-fast 不應再等待 exited
-      }),
-      kill: vi.fn(),
-    };
+      ],
+      0,
+    );
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
     const events = await collectEvents(geminiProvider.chat(makeCtx()));
 
-    // 一次來自 stderr fail-fast，另一次來自 chat() finally cleanup。
-    expect(mockProc.kill).toHaveBeenCalledTimes(2);
-    expect(
-      vi
-        .mocked(logger.error)
-        .mock.calls.some((args) =>
-          args.some(
-            (arg) =>
-              typeof arg === "string" &&
-              arg.includes("Gemini 配額/容量重試訊號") &&
-              arg.includes("提前中止 subprocess"),
-          ),
-        ),
-    ).toBe(true);
-    expect(
-      vi
-        .mocked(logger.error)
-        .mock.calls.some((args) =>
-          args.some(
-            (arg) =>
-              typeof arg === "string" &&
-              arg.includes("[GeminiProvider] stderr:"),
-          ),
-        ),
-    ).toBe(false);
-
-    const errorEvents = events.filter((e) => e.type === "error");
-    expect(errorEvents).toHaveLength(1);
-
-    const e = errorEvents[0] as Extract<NormalizedEvent, { type: "error" }>;
-    expect(e.fatal).toBe(true);
-    expect(e.message).toBe(
-      "Gemini 目前回報模型配額或容量不足，已停止等待自動重試，請稍後再試或切換模型。",
-    );
-    expect(e.systemMessage?.metadata.code).toBe("GEMINI_QUOTA_EXHAUSTED");
-    expect(e.systemMessage?.metadata.rawContent).toContain(
-      "exhausted your capacity on this model",
-    );
+    expect(events.some((e) => e.type === "turn_complete")).toBe(true);
+    expect(events.filter((e) => e.type === "error")).toHaveLength(0);
+    expect(mockProc.kill).toHaveBeenCalledTimes(1);
+    expect(asMock(logger.error).mock.calls).toHaveLength(0);
   });
 
-  it("C16c: 一般 stderr 雜訊不應誤觸 fail-fast", async () => {
-    vi.mocked(logger.warn).mockClear();
+  it("C16c: 一般 stderr 雜訊不應誤判為 Gemini terminal error", async () => {
+    asMock(logger.warn).mockClear();
     const mockProc = makeMockProc(
       [JSON.stringify({ type: "result", status: "success" })],
       ["Warning: YOLO mode enabled.", "Tip: terminal colors are available."],
@@ -773,18 +767,7 @@ describe("GeminiProvider", () => {
 
     const events = await collectEvents(geminiProvider.chat(makeCtx()));
 
-    // 僅有 chat() finally cleanup 的單次 kill，不應有 fail-fast 額外 kill。
     expect(mockProc.kill).toHaveBeenCalledTimes(1);
-    expect(
-      vi
-        .mocked(logger.warn)
-        .mock.calls.some((args) =>
-          args.some(
-            (arg) =>
-              typeof arg === "string" && arg.includes("提前中止 subprocess"),
-          ),
-        ),
-    ).toBe(false);
     expect(events.some((e) => e.type === "turn_complete")).toBe(true);
   });
 
@@ -835,13 +818,13 @@ describe("GeminiProvider", () => {
     }
 
     const errorEvents = collected.filter((e) => e.type === "error");
-    // 只有一個 error event（GEMINI_QUOTA_EXHAUSTED），沒有 EXIT_CODE 多餘訊息
+    // 只有一個 error event（GEMINI_CAPACITY_EXHAUSTED），沒有 EXIT_CODE 多餘訊息
     expect(errorEvents).toHaveLength(1);
     const e = errorEvents[0] as Extract<NormalizedEvent, { type: "error" }>;
     expect(e.fatal).toBe(true);
-    expect(e.systemMessage?.metadata.code).toBe("GEMINI_QUOTA_EXHAUSTED");
+    expect(e.systemMessage?.metadata.code).toBe("GEMINI_CAPACITY_EXHAUSTED");
     expect(e.message).toBe(
-      "Gemini 目前回報模型配額或容量不足，已停止等待自動重試，請稍後再試或切換模型。",
+      "Gemini 目前回報模型容量不足，這次請求未完成，請稍後再試或切換模型。",
     );
     expect(e.systemMessage?.metadata.rawContent).toBe(
       "You have exhausted your capacity on this model.",
@@ -896,7 +879,7 @@ describe("GeminiProvider", () => {
     await collectEvents(geminiProvider.chat(makeCtx()));
 
     // logger.warn 應被呼叫，且訊息含截斷提示
-    expectWarnContaining(vi.mocked(logger.warn), "截斷");
+    expectWarnContaining(asMock(logger.warn), "截斷");
   });
 
   it("C19b: stderr 超過 64KB 時，實際 stderrText 長度不超過 STDERR_MAX_BYTES", async () => {
@@ -1044,7 +1027,7 @@ describe("GeminiProvider", () => {
     expect(spawnSpy).toHaveBeenCalledOnce();
     const [spawnArgs1] = spawnSpy.mock.calls[0] as [string[], unknown];
     expect(spawnArgs1).not.toContain("--resume");
-    expectWarnContaining(vi.mocked(logger.warn), "格式不合法");
+    expectWarnContaining(asMock(logger.warn), "格式不合法");
 
     vi.clearAllMocks();
     spawnSpy = vi
@@ -1064,7 +1047,7 @@ describe("GeminiProvider", () => {
     expect(spawnSpy).toHaveBeenCalledOnce();
     const [spawnArgs2] = spawnSpy.mock.calls[0] as [string[], unknown];
     expect(spawnArgs2).not.toContain("--resume");
-    expectWarnContaining(vi.mocked(logger.warn), "格式不合法");
+    expectWarnContaining(asMock(logger.warn), "格式不合法");
   });
 
   // ── C-NM-1：ContentBlock[] 全為 text block → prompt 以 \n 串接 ──────────
@@ -1492,7 +1475,7 @@ describe("GeminiProvider", () => {
       await collectEvents(geminiProvider.chat(ctx2));
 
       // 取第二次 spawn 呼叫的 args（spawnSpy 仍是原 spy，mock.calls 含兩筆）
-      const allCalls = vi.mocked(Bun.spawn).mock.calls;
+      const allCalls = asMock(Bun.spawn).mock.calls;
       expect(allCalls).toHaveLength(2);
       const [spawnArgs2] = allCalls[1] as [string[], unknown];
       const mcpIdx2 = spawnArgs2.indexOf("--allowed-mcp-server-names");

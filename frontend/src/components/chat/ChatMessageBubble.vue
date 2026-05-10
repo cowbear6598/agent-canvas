@@ -55,6 +55,11 @@ const systemProviderLabel = computed(() =>
 
 const systemCodeLabel = computed(() => props.metadata?.code ?? null);
 
+const systemReasonDetail = computed(() => {
+  const detail = props.metadata?.reasonDetail?.trim();
+  return detail ? detail : null;
+});
+
 const uniqueToolUse = computed(() => {
   if (!props.toolUse || props.toolUse.length === 0) return [];
 
@@ -184,6 +189,14 @@ const closeToolModal = (): void => {
           <FileText :size="10" />
           <span>{{ $t("chat.summarizedBadge") }}</span>
         </div>
+
+        <p
+          v-if="systemReasonDetail"
+          data-testid="system-reason-detail"
+          class="mb-2 text-xs leading-relaxed text-amber-900/80"
+        >
+          {{ systemReasonDetail }}
+        </p>
 
         <p class="font-mono text-sm whitespace-pre-wrap break-all">
           {{ content }}

@@ -35,14 +35,15 @@ import { logger } from "../../utils/logger.js";
 import { sanitizePodName } from "./podNameSanitizer.js";
 import type { Pod } from "../../types/pod.js";
 import type { RunContext } from "../../types/run.js";
-import { buildGeminiEnv, STDERR_MAX_BYTES } from "../gemini/geminiHelpers.js";
+import { STDERR_MAX_BYTES } from "../gemini/geminiHelpers.js";
 import { isEnoentError } from "./utils.js";
 import { scanInstalledPlugins } from "../pluginScanner.js";
 import { readGeminiMcpServers } from "../mcp/geminiMcpReader.js";
+import { classifyGeminiTerminalError } from "./geminiErrorClassifier.js";
 import {
-  classifyGeminiFailFastError,
-  type GeminiClassifiedError,
-} from "./geminiErrorClassifier.js";
+  spawnGeminiCliProcess,
+  type GeminiCliProcess,
+} from "./geminiCliProcessRunner.js";
 
 // ─── 共用 TextDecoder 實例（效能優化）────────────────────────────────────────
 /**
@@ -113,16 +114,13 @@ export function redactStderr(text: string): string {
   return redacted;
 }
 
-/** process.env 在 process 生命週期內不會改變，模組載入時快取一次 */
-// 白名單環境變數，已排除 process.env 中其他敏感資料
-const GEMINI_ENV = buildGeminiEnv();
-
 /** Gemini provider 專用的系統錯誤建立 helper（委派給共用 buildProviderSystemError） */
 function buildGeminiSystemError(params: {
   content: string;
   fatal: boolean;
   code: string;
   rawContent?: string;
+  reasonDetail?: string;
 }): Extract<NormalizedEvent, { type: "error" }> {
   return buildProviderSystemError("gemini", params);
 }
@@ -290,35 +288,11 @@ function buildGeminiArgs(
   return buildNewSessionArgs(model, promptText, plugins, mcpServerNames);
 }
 
-/**
- * 啟動 gemini subprocess。
- * 不在此處做 ENOENT 包裝——改由 setupSubprocess 使用 isEnoentError 統一處理。
- *
- * @param args CLI 參數（不含 "gemini"）
- * @param cwd 工作目錄路徑
- * @returns Bun.Subprocess
- */
-function spawnGeminiProcess(
-  args: string[],
-  cwd: string,
-): Bun.Subprocess<"ignore", "pipe", "pipe"> {
-  return Bun.spawn(["gemini", ...args], {
-    cwd,
-    stdin: "ignore",
-    stdout: "pipe",
-    stderr: "pipe",
-    env: GEMINI_ENV,
-  });
-}
-
 /** exit code 分類結果 */
 type ExitCodeCategory = "ok" | "login_required" | "generic_error";
 
 interface GeminiStderrMonitorResult {
   done: Promise<string>;
-  whenFailFastTriggered: Promise<void>;
-  getStderrText: () => string;
-  getFailFastError: () => GeminiClassifiedError | null;
 }
 
 // ─── Google OAuth 認證相關 exit code 常數 ─────────────────────────────────────
@@ -352,45 +326,16 @@ function classifyExitCode(exitCode: number): ExitCodeCategory {
   return "generic_error";
 }
 
-function killGeminiProcess(
-  proc: Bun.Subprocess<"ignore", "pipe", "pipe">,
-  signal: number | NodeJS.Signals = "SIGTERM",
-): void {
-  try {
-    proc.kill(signal);
-  } catch (err: unknown) {
-    if (
-      err instanceof Error &&
-      (err as NodeJS.ErrnoException).code === "ESRCH"
-    ) {
-      return;
-    }
-    logger.warn(
-      "Chat",
-      "Warn",
-      `[GeminiProvider] kill subprocess 時發生非預期錯誤：${err instanceof Error ? err.message : String(err)}`,
-    );
-  }
-}
-
 function monitorGeminiStderr(
-  proc: Bun.Subprocess<"ignore", "pipe", "pipe">,
+  proc: GeminiCliProcess,
   abortSignal: AbortSignal,
-  podId: string,
 ): GeminiStderrMonitorResult {
-  let failFastError: GeminiClassifiedError | null = null;
   let stderrText = "";
   let totalBytes = 0;
   let truncated = false;
-  let lineBuffer = "";
-  let resolveFailFastTriggered!: () => void;
-  const whenFailFastTriggered = new Promise<void>((resolve) => {
-    resolveFailFastTriggered = resolve;
-  });
 
   const done: Promise<string> = (async (): Promise<string> => {
-    const reader = (proc.stderr as ReadableStream<Uint8Array>).getReader();
-    const textDecoder = new TextDecoder("utf-8");
+    const reader = proc.stderr.getReader();
 
     try {
       while (!abortSignal.aborted) {
@@ -409,46 +354,6 @@ function monitorGeminiStderr(
           if (buf.byteLength > remainingBytes) {
             truncated = true;
           }
-        }
-
-        lineBuffer += textDecoder.decode(value, { stream: true });
-        const lines = lineBuffer.split("\n");
-        lineBuffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          if (failFastError !== null) break;
-
-          const classified = classifyGeminiFailFastError(line);
-          if (classified === null) continue;
-
-          failFastError = classified;
-          resolveFailFastTriggered();
-          logger.error(
-            "Chat",
-            "Error",
-            `[GeminiProvider] 偵測到 Gemini 配額/容量重試訊號，提前中止 subprocess（podId: ${podId}，code: ${classified.code}）`,
-          );
-          killGeminiProcess(proc, "SIGKILL");
-          break;
-        }
-
-        if (failFastError !== null) {
-          break;
-        }
-      }
-
-      lineBuffer += textDecoder.decode();
-      if (failFastError === null && lineBuffer.trim()) {
-        const classified = classifyGeminiFailFastError(lineBuffer);
-        if (classified !== null) {
-          failFastError = classified;
-          resolveFailFastTriggered();
-          logger.error(
-            "Chat",
-            "Error",
-            `[GeminiProvider] 偵測到 Gemini 配額/容量重試訊號，提前中止 subprocess（podId: ${podId}，code: ${classified.code}）`,
-          );
-          killGeminiProcess(proc, "SIGKILL");
         }
       }
     } finally {
@@ -474,9 +379,6 @@ function monitorGeminiStderr(
 
   return {
     done,
-    whenFailFastTriggered,
-    getStderrText: () => stderrText.trim(),
-    getFailFastError: () => failFastError,
   };
 }
 
@@ -553,6 +455,18 @@ async function* handleExitCode(
       code: "LOGIN_REQUIRED",
     });
   } else {
+    const classified = classifyGeminiTerminalError(stderrText);
+    if (classified) {
+      yield buildGeminiSystemError({
+        content: classified.content,
+        fatal: true,
+        code: classified.code,
+        rawContent: classified.rawContent,
+        reasonDetail: classified.reasonDetail,
+      });
+      return;
+    }
+
     const rawContent = stderrText || `gemini exited with code ${exitCode}`;
     yield buildGeminiSystemError({
       content: "執行發生錯誤，請查閱伺服器日誌",
@@ -571,32 +485,13 @@ async function* processStdoutLines(
   stdout: ReadableStream<Uint8Array>,
   abortSignal: AbortSignal,
   out: { hasTurnComplete: boolean },
-  stopSignal?: Promise<void>,
 ): AsyncGenerator<NormalizedEvent> {
   let buffer = "";
   const reader = stdout.getReader();
-  const STOP_READING = { stopped: true } as const;
-  type ReadOrStop =
-    | Awaited<ReturnType<typeof reader.read>>
-    | typeof STOP_READING;
 
   try {
     while (!abortSignal.aborted) {
-      const readResult: ReadOrStop = stopSignal
-        ? await Promise.race([
-            reader.read(),
-            stopSignal.then(() => STOP_READING),
-          ])
-        : await reader.read();
-
-      if ("stopped" in readResult) {
-        try {
-          await reader.cancel();
-        } catch {
-          // ignore cancel errors during fail-fast teardown
-        }
-        return;
-      }
+      const readResult = await reader.read();
 
       if (readResult.done) {
         break;
@@ -650,33 +545,16 @@ async function* processStdoutLines(
  * @param podId 僅用於 log 顯示
  */
 async function* streamGeminiOutput(
-  proc: Bun.Subprocess<"ignore", "pipe", "pipe">,
+  proc: GeminiCliProcess,
   abortSignal: AbortSignal,
   podId: string,
 ): AsyncGenerator<NormalizedEvent> {
   // ── 並行啟動 stderr 收集（在 stdout 之前啟動避免 buffer 滿卡住） ──
-  const stderrMonitor = monitorGeminiStderr(proc, abortSignal, podId);
+  const stderrMonitor = monitorGeminiStderr(proc, abortSignal);
 
   // ── 逐行讀取 stdout ─────────────────────────────────────────────
   const turnState = { hasTurnComplete: false };
-  yield* processStdoutLines(
-    proc.stdout as ReadableStream<Uint8Array>,
-    abortSignal,
-    turnState,
-    stderrMonitor.whenFailFastTriggered,
-  );
-
-  const failFastError = stderrMonitor.getFailFastError();
-  if (failFastError !== null && !abortSignal.aborted) {
-    const stderrText = await stderrMonitor.done;
-    yield buildGeminiSystemError({
-      content: failFastError.content,
-      fatal: true,
-      code: failFastError.code,
-      rawContent: stderrText || failFastError.rawContent,
-    });
-    return;
-  }
+  yield* processStdoutLines(proc.stdout, abortSignal, turnState);
 
   // ── 等待 stderr 收集完成 ────────────────────────────────────────
   const stderrText = await stderrMonitor.done;
@@ -696,7 +574,7 @@ async function* streamGeminiOutput(
 /** setupSubprocess 成功結果 */
 type SubprocessSuccess = {
   ok: true;
-  proc: Bun.Subprocess<"ignore", "pipe", "pipe">;
+  proc: GeminiCliProcess;
   /** 必須在 try-finally 中呼叫，確保 abort listener 被移除 */
   cleanup: () => void;
 };
@@ -721,7 +599,7 @@ type SubprocessFailure = {
  * @returns cleanup 函式，必須在 try-finally 中呼叫以移除 listener 並 kill 子程序
  */
 function attachAbortHandler(
-  proc: Bun.Subprocess<"ignore", "pipe", "pipe">,
+  proc: GeminiCliProcess,
   abortSignal: AbortSignal,
 ): () => void {
   // 旗標去重：abort listener 與 cleanup() 都會呼叫 killProc，
@@ -772,9 +650,9 @@ function setupSubprocess(
   abortSignal: AbortSignal,
 ): SubprocessSuccess | SubprocessFailure {
   // ── Spawn subprocess ───────────────────────────────────────────
-  let proc: Bun.Subprocess<"ignore", "pipe", "pipe">;
+  let proc: GeminiCliProcess;
   try {
-    proc = spawnGeminiProcess(args, cwd);
+    proc = spawnGeminiCliProcess(args, cwd);
   } catch (err: unknown) {
     if (isEnoentError(err)) {
       return {
