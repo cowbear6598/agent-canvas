@@ -68,6 +68,33 @@ function makeRawReadableStream(data: Uint8Array): ReadableStream<Uint8Array> {
   });
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
+function makeClosableReadableStream(): {
+  stream: ReadableStream<Uint8Array>;
+  close: () => void;
+} {
+  let controller: ReadableStreamDefaultController<Uint8Array> | null = null;
+
+  return {
+    stream: new ReadableStream<Uint8Array>({
+      start(ctrl) {
+        controller = ctrl;
+      },
+    }),
+    close() {
+      controller?.close();
+      controller = null;
+    },
+  };
+}
+
 // ── 工具：收集 AsyncIterable 成陣列 ────────────────────────────────────
 async function collectEvents(
   iterable: AsyncIterable<NormalizedEvent>,
@@ -91,6 +118,21 @@ function makeMockProc(
     stderr: makeReadableStream(stderrLines),
     exited: Promise.resolve(exitCode),
     kill: vi.fn(),
+  };
+}
+
+function makeHangingProc(stderrLines: string[], exitCode = 1) {
+  const stdout = makeClosableReadableStream();
+  const exited = createDeferred<number>();
+
+  return {
+    stdout: stdout.stream,
+    stderr: makeReadableStream(stderrLines),
+    exited: exited.promise,
+    kill: vi.fn(() => {
+      stdout.close();
+      exited.resolve(exitCode);
+    }),
   };
 }
 
@@ -769,6 +811,40 @@ describe("GeminiProvider", () => {
 
     expect(mockProc.kill).toHaveBeenCalledTimes(1);
     expect(events.some((e) => e.type === "turn_complete")).toBe(true);
+  });
+
+  it("C16d: stderr 命中 terminal error 且長時間無 stdout 進度時，應主動結束 subprocess 並輸出 fatal system error", async () => {
+    const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout").mockImplementation(
+      ((callback: TimerHandler, delay?: number) => {
+        expect(delay).toBe(15_000);
+        Promise.resolve().then(() => {
+          if (typeof callback === "function") {
+            callback();
+          }
+        });
+        return 1 as unknown as ReturnType<typeof setTimeout>;
+      }) as typeof setTimeout,
+    );
+    const mockProc = makeHangingProc(
+      ["RESOURCE_EXHAUSTED: 429 quota exceeded for this account"],
+      1,
+    );
+    spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
+
+    const events = await collectEvents(geminiProvider.chat(makeCtx()));
+
+    expect(setTimeoutSpy).toHaveBeenCalledTimes(1);
+    expect(mockProc.kill).toHaveBeenCalledTimes(1);
+
+    const errorEvents = events.filter((e) => e.type === "error");
+    expect(errorEvents).toHaveLength(1);
+
+    const e = errorEvents[0] as Extract<NormalizedEvent, { type: "error" }>;
+    expect(e.fatal).toBe(true);
+    expect(e.message).toBe(
+      "Gemini 目前回報帳號配額不足，這次請求未完成，請稍後再試或切換模型。",
+    );
+    expect(e.systemMessage?.metadata.code).toBe("GEMINI_QUOTA_EXCEEDED");
   });
 
   // ── C17：result status=error → yield error event，fatal=true（AI 終態錯誤），message 取 error.message ─

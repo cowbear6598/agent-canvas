@@ -140,7 +140,7 @@ describe("GeminiNormalizer - normalize()", () => {
     });
   });
 
-  it("N8b: error event 命中 Gemini quota/capacity 訊號時，應映射為 fatal system error", () => {
+  it("N8b: error event 同時帶 quota 與 capacity wording 時，應優先映射為 GEMINI_QUOTA_EXCEEDED", () => {
     const rawMessage =
       "RetryableQuotaError: You have exhausted your capacity on this model.";
     const line = toLine({ type: "error", message: rawMessage });
@@ -151,15 +151,15 @@ describe("GeminiNormalizer - normalize()", () => {
     const e = result as Extract<typeof result, { type: "error" }>;
     expect(e?.fatal).toBe(true);
     expect(e?.message).toBe(
-      "Gemini 目前回報模型容量不足，這次請求未完成，請稍後再試或切換模型。",
+      "Gemini 目前回報帳號配額不足，這次請求未完成，請稍後再試或切換模型。",
     );
     expect(e?.systemMessage).toMatchObject({
       metadata: {
         provider: "gemini",
-        code: "GEMINI_CAPACITY_EXHAUSTED",
+        code: "GEMINI_QUOTA_EXCEEDED",
         severity: "fatal",
         rawContent: rawMessage,
-        reasonDetail: "這次失敗是模型當下容量不足，與帳號配額不足不同。",
+        reasonDetail: "這次失敗是帳號配額不足，不是單純暫時塞車。",
       },
     });
   });

@@ -39,7 +39,10 @@ import { STDERR_MAX_BYTES } from "../gemini/geminiHelpers.js";
 import { isEnoentError } from "./utils.js";
 import { scanInstalledPlugins } from "../pluginScanner.js";
 import { readGeminiMcpServers } from "../mcp/geminiMcpReader.js";
-import { classifyGeminiTerminalError } from "./geminiErrorClassifier.js";
+import {
+  classifyGeminiTerminalError,
+  type GeminiClassifiedError,
+} from "./geminiErrorClassifier.js";
 import {
   spawnGeminiCliProcess,
   type GeminiCliProcess,
@@ -293,6 +296,7 @@ type ExitCodeCategory = "ok" | "login_required" | "generic_error";
 
 interface GeminiStderrMonitorResult {
   done: Promise<string>;
+  cleanup: () => void;
 }
 
 // ─── Google OAuth 認證相關 exit code 常數 ─────────────────────────────────────
@@ -310,6 +314,13 @@ const OAUTH_LOGIN_REQUIRED_EXIT_CODES = new Set([41, 52]);
  */
 const OAUTH_LOGIN_REQUIRED_MESSAGE =
   "Gemini 尚未登入，請在終端執行 `gemini` 完成 Google OAuth 登入";
+
+/**
+ * stderr 已明確命中 terminal error 後，最多再等待這麼久的 stdout 進度。
+ * 若期間完全沒有新 stdout chunk，代表 Gemini CLI 很可能卡在 retry loop，
+ * 需要主動結束 subprocess，避免前端無限顯示 running/typing。
+ */
+const GEMINI_TERMINAL_STDERR_STALL_MS = 15_000;
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -329,10 +340,62 @@ function classifyExitCode(exitCode: number): ExitCodeCategory {
 function monitorGeminiStderr(
   proc: GeminiCliProcess,
   abortSignal: AbortSignal,
+  getStdoutActivityVersion: () => number,
+  killProc: () => void,
 ): GeminiStderrMonitorResult {
   let stderrText = "";
+  let stderrLineBuffer = "";
   let totalBytes = 0;
   let truncated = false;
+  let terminalKillTimer: ReturnType<typeof setTimeout> | null = null;
+  let armedStdoutActivityVersion: number | null = null;
+
+  const clearTerminalKillTimer = (): void => {
+    if (terminalKillTimer !== null) {
+      clearTimeout(terminalKillTimer);
+      terminalKillTimer = null;
+    }
+    armedStdoutActivityVersion = null;
+  };
+
+  const armTerminalKillTimer = (classified: GeminiClassifiedError): void => {
+    const currentStdoutActivityVersion = getStdoutActivityVersion();
+
+    if (
+      terminalKillTimer !== null &&
+      armedStdoutActivityVersion === currentStdoutActivityVersion
+    ) {
+      return;
+    }
+
+    clearTerminalKillTimer();
+    armedStdoutActivityVersion = currentStdoutActivityVersion;
+    terminalKillTimer = setTimeout(() => {
+      terminalKillTimer = null;
+      if (abortSignal.aborted) return;
+      if (getStdoutActivityVersion() !== currentStdoutActivityVersion) return;
+
+      logger.warn(
+        "Chat",
+        "Warn",
+        `[GeminiProvider] stderr 命中 ${classified.code}，且 ${GEMINI_TERMINAL_STDERR_STALL_MS}ms 內無 stdout 進度，主動結束 gemini 子程序以避免卡在 retry loop`,
+      );
+      killProc();
+    }, GEMINI_TERMINAL_STDERR_STALL_MS);
+  };
+
+  const inspectStderrText = (text: string): void => {
+    stderrLineBuffer += text;
+    const lines = stderrLineBuffer.split("\n");
+    stderrLineBuffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      const classified = classifyGeminiTerminalError(line.trim());
+      if (classified) {
+        armTerminalKillTimer(classified);
+      }
+    }
+  };
 
   const done: Promise<string> = (async (): Promise<string> => {
     const reader = proc.stderr.getReader();
@@ -348,7 +411,9 @@ function monitorGeminiStderr(
           const remainingBytes = STDERR_MAX_BYTES - totalBytes;
           if (remainingBytes > 0) {
             const accepted = buf.subarray(0, remainingBytes);
-            stderrText += accepted.toString("utf-8");
+            const acceptedText = accepted.toString("utf-8");
+            stderrText += acceptedText;
+            inspectStderrText(acceptedText);
             totalBytes += accepted.byteLength;
           }
           if (buf.byteLength > remainingBytes) {
@@ -365,6 +430,14 @@ function monitorGeminiStderr(
       reader.releaseLock();
     }
 
+    const trailingLine = stderrLineBuffer.trim();
+    if (trailingLine) {
+      const classified = classifyGeminiTerminalError(trailingLine);
+      if (classified) {
+        armTerminalKillTimer(classified);
+      }
+    }
+
     stderrText = stderrText.trim();
     if (truncated) {
       logger.warn(
@@ -379,6 +452,7 @@ function monitorGeminiStderr(
 
   return {
     done,
+    cleanup: clearTerminalKillTimer,
   };
 }
 
@@ -485,6 +559,7 @@ async function* processStdoutLines(
   stdout: ReadableStream<Uint8Array>,
   abortSignal: AbortSignal,
   out: { hasTurnComplete: boolean },
+  onStdoutActivity: () => void,
 ): AsyncGenerator<NormalizedEvent> {
   let buffer = "";
   const reader = stdout.getReader();
@@ -500,6 +575,7 @@ async function* processStdoutLines(
       const chunk = readResult.value;
       if (!chunk) continue;
 
+      onStdoutActivity();
       buffer += TEXT_DECODER.decode(chunk, { stream: true });
 
       const lines = buffer.split("\n");
@@ -548,33 +624,55 @@ async function* streamGeminiOutput(
   proc: GeminiCliProcess,
   abortSignal: AbortSignal,
   podId: string,
+  killProc: () => void,
 ): AsyncGenerator<NormalizedEvent> {
+  let stdoutActivityVersion = 0;
+  const getStdoutActivityVersion = (): number => stdoutActivityVersion;
+  const onStdoutActivity = (): void => {
+    stdoutActivityVersion += 1;
+  };
+
   // ── 並行啟動 stderr 收集（在 stdout 之前啟動避免 buffer 滿卡住） ──
-  const stderrMonitor = monitorGeminiStderr(proc, abortSignal);
-
-  // ── 逐行讀取 stdout ─────────────────────────────────────────────
-  const turnState = { hasTurnComplete: false };
-  yield* processStdoutLines(proc.stdout, abortSignal, turnState);
-
-  // ── 等待 stderr 收集完成 ────────────────────────────────────────
-  const stderrText = await stderrMonitor.done;
-
-  // ── exit code 檢查 ──────────────────────────────────────────────
-  const exitCode = await proc.exited;
-
-  yield* handleExitCode(
-    exitCode,
+  const stderrMonitor = monitorGeminiStderr(
+    proc,
     abortSignal,
-    turnState.hasTurnComplete,
-    stderrText,
-    podId,
+    getStdoutActivityVersion,
+    killProc,
   );
+
+  try {
+    // ── 逐行讀取 stdout ───────────────────────────────────────────
+    const turnState = { hasTurnComplete: false };
+    yield* processStdoutLines(
+      proc.stdout,
+      abortSignal,
+      turnState,
+      onStdoutActivity,
+    );
+
+    // ── 等待 stderr 收集完成 ──────────────────────────────────────
+    const stderrText = await stderrMonitor.done;
+
+    // ── exit code 檢查 ────────────────────────────────────────────
+    const exitCode = await proc.exited;
+
+    yield* handleExitCode(
+      exitCode,
+      abortSignal,
+      turnState.hasTurnComplete,
+      stderrText,
+      podId,
+    );
+  } finally {
+    stderrMonitor.cleanup();
+  }
 }
 
 /** setupSubprocess 成功結果 */
 type SubprocessSuccess = {
   ok: true;
   proc: GeminiCliProcess;
+  killProc: () => void;
   /** 必須在 try-finally 中呼叫，確保 abort listener 被移除 */
   cleanup: () => void;
 };
@@ -599,15 +697,29 @@ type SubprocessFailure = {
  * @returns cleanup 函式，必須在 try-finally 中呼叫以移除 listener 並 kill 子程序
  */
 function attachAbortHandler(
-  proc: GeminiCliProcess,
+  killProc: () => void,
   abortSignal: AbortSignal,
 ): () => void {
-  // 旗標去重：abort listener 與 cleanup() 都會呼叫 killProc，
-  // 必須避免實際 proc.kill() 被呼叫超過一次。
+  abortSignal.addEventListener("abort", killProc, { once: true });
+
+  // spawn 前已 abort：listener 不會自動觸發，需主動呼叫 killProc
+  if (abortSignal.aborted) {
+    killProc();
+  }
+
+  return (): void => {
+    abortSignal.removeEventListener("abort", killProc);
+    killProc();
+  };
+}
+
+function createKillProc(proc: GeminiCliProcess): () => void {
   let killed = false;
-  const killProc = (): void => {
+
+  return (): void => {
     if (killed) return;
     killed = true;
+
     try {
       proc.kill();
     } catch (err: unknown) {
@@ -624,18 +736,6 @@ function attachAbortHandler(
         `[GeminiProvider] kill subprocess 時發生非預期錯誤：${err instanceof Error ? err.message : String(err)}`,
       );
     }
-  };
-
-  abortSignal.addEventListener("abort", killProc, { once: true });
-
-  // spawn 前已 abort：listener 不會自動觸發，需主動呼叫 killProc
-  if (abortSignal.aborted) {
-    killProc();
-  }
-
-  return (): void => {
-    abortSignal.removeEventListener("abort", killProc);
-    killProc();
   };
 }
 
@@ -684,9 +784,10 @@ function setupSubprocess(
   }
 
   // ── abort signal 處理（委由 attachAbortHandler 統一管理）────────
-  const cleanup = attachAbortHandler(proc, abortSignal);
+  const killProc = createKillProc(proc);
+  const cleanup = attachAbortHandler(killProc, abortSignal);
 
-  return { ok: true, proc, cleanup };
+  return { ok: true, proc, killProc, cleanup };
 }
 
 /**
@@ -887,7 +988,7 @@ export const geminiProvider: AgentProvider<GeminiOptions> = {
       return;
     }
 
-    const { proc, cleanup } = subprocessResult;
+    const { proc, killProc, cleanup } = subprocessResult;
     if (abortSignal.aborted) {
       cleanup();
       return;
@@ -895,7 +996,7 @@ export const geminiProvider: AgentProvider<GeminiOptions> = {
 
     // ── 串流輸出 ───────────────────────────────────────────────────
     try {
-      yield* streamGeminiOutput(proc, abortSignal, podId);
+      yield* streamGeminiOutput(proc, abortSignal, podId, killProc);
     } finally {
       cleanup();
     }
