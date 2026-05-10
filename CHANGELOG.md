@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.5.0] - 2026-05-11
+
+### 新增
+- sandbox 白名單預設清單新增 *.threads.com、*.youtube.com、*.googleapis.com 三個常用網域
+
+### 修正
+- 修補 branch label 在 AI prompt 內未被 sanitize 的安全漏洞，入口 schema 補上字元白名單
+- 修正 multi-input branch 部分被拒時，已被選中的連線在前端卡 running 樣式的問題
+- 修正最上游 Pod 橡皮擦無法 enable 的問題
+- 清掉前端 12 個 vue template 排版 warning
+- 將 AI 決策邏輯從 workflow service 分離至獨立的 branch service，重組並簡化分支決策服務
+- 重構 workflow trigger 相關服務，提升可維護性
+- 清理前端純渲染與 trivial 互動測試、後端 const→const 與命名慣例測試共 14 檔，並刪除 backend tests 內 54 個 temp-test 殘留目錄
+
 ## [1.4.5] - 2026-05-07
 
 ### 新增
