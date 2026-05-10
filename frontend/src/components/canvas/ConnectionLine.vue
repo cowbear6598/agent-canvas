@@ -328,7 +328,7 @@ const handleContextMenu = (e: MouseEvent): void => {
           status === 'queued' ||
           status === 'waiting' ||
           decideStatus === 'approved') &&
-        !useXMarker
+          !useXMarker
       "
       :key="`static-${index}`"
       class="arrow"
@@ -401,7 +401,10 @@ const handleContextMenu = (e: MouseEvent): void => {
     >
       <div class="connection-mid-label-wrapper">
         <div :class="['connection-mid-label', midLabel.class]">
-          <Loader2 v-if="midLabel.type === 'deciding'" :size="12" />
+          <Loader2
+            v-if="midLabel.type === 'deciding'"
+            :size="12"
+          />
           <span v-else>{{ midLabel.text }}</span>
         </div>
       </div>

@@ -42,6 +42,7 @@ import type {
   ConnectionListPayload,
   ConnectionListResultPayload,
   ConnectionUpdatePayload,
+  ConnectionPayloadItem,
 } from "@/types/websocket";
 
 interface RawConnection {
@@ -957,9 +958,7 @@ export const useConnectionStore = defineStore("connection", () => {
     }
   }
 
-  function updateConnectionFromEvent(
-    connection: Omit<Connection, "status">,
-  ): void {
+  function updateConnectionFromEvent(connection: ConnectionPayloadItem): void {
     const index = connections.value.findIndex(
       (existing) => existing.id === connection.id,
     );
@@ -967,8 +966,15 @@ export const useConnectionStore = defineStore("connection", () => {
 
     const existingConnection = connections.value[index]!;
     const enrichedConnection: Connection = {
-      ...connection,
-      triggerMode: connection.triggerMode ?? "auto",
+      ...existingConnection,
+      id: connection.id,
+      sourcePodId: connection.sourcePodId ?? existingConnection.sourcePodId,
+      sourceAnchor: connection.sourceAnchor,
+      targetPodId: connection.targetPodId,
+      targetAnchor: connection.targetAnchor,
+      triggerMode:
+        (connection.triggerMode as TriggerMode) ??
+        existingConnection.triggerMode,
       summaryModel:
         connection.summaryModel ??
         existingConnection.summaryModel ??
@@ -981,13 +987,16 @@ export const useConnectionStore = defineStore("connection", () => {
       // branch 欄位直接以後端回傳值覆寫（包含 undefined → 視為清空）
       label: connection.label,
       description: connection.description,
-      branchProvider: connection.branchProvider,
+      branchProvider: connection.branchProvider as PodProvider | undefined,
       branchModel: connection.branchModel,
-      status: existingConnection.status,
+      // connectionStatus 有帶值則覆寫；未帶則保留既有 status（避免 multi-input rejected 後 status 卡住）
+      status: connection.connectionStatus
+        ? (connection.connectionStatus as ConnectionStatus)
+        : existingConnection.status,
       // decideStatus：incoming 有值則覆寫，undefined 則保留既有值
       decideStatus:
         connection.decideStatus !== undefined
-          ? connection.decideStatus
+          ? (connection.decideStatus as DecideStatus)
           : existingConnection.decideStatus,
       decideReason: connection.decideReason ?? existingConnection.decideReason,
     };

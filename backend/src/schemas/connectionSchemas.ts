@@ -13,8 +13,14 @@ const summaryModelSchema = z
   .max(200)
   .regex(/^[a-zA-Z0-9._-]+$/, "summaryModel 格式不合法");
 
-/** label 最大長度 32，與前端常數 BRANCH_LABEL_MAX_LENGTH 對齊 */
-export const labelSchema = z.string().min(1).max(32);
+/** label 最大長度 32，與前端常數 BRANCH_LABEL_MAX_LENGTH 對齊。
+ * 禁止換行符（\n、\r）與角括號（<、>），於入口層攔截可疑字元以防 prompt injection。
+ */
+export const labelSchema = z
+  .string()
+  .min(1)
+  .max(32)
+  .regex(/^[^\n\r<>]+$/, "label 不可包含換行符或角括號（< >）");
 
 /** description 最大長度 200，與前端常數 BRANCH_DESCRIPTION_MAX_LENGTH 對齊；選填 */
 export const descriptionSchema = z.string().max(200).optional();

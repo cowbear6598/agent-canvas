@@ -537,7 +537,10 @@ const handleSetBranchModel = async (
           <span class="font-mono text-foreground">{{
             $t("canvas.connectionContextMenu.branchProvider")
           }}</span>
-          <ChevronRight :size="12" class="text-muted-foreground" />
+          <ChevronRight
+            :size="12"
+            class="text-muted-foreground"
+          />
         </button>
 
         <!-- 浮層加 pl-1 撐出視覺空間，避免滑鼠移動時 mouseleave 觸發誤關 -->
@@ -590,7 +593,10 @@ const handleSetBranchModel = async (
           <span class="font-mono text-foreground">{{
             $t("canvas.connectionContextMenu.branchModel")
           }}</span>
-          <ChevronRight :size="12" class="text-muted-foreground" />
+          <ChevronRight
+            :size="12"
+            class="text-muted-foreground"
+          />
         </button>
 
         <div
@@ -653,7 +659,10 @@ const handleSetBranchModel = async (
         <span class="font-mono text-foreground">{{
           $t("canvas.connectionContextMenu.summaryProvider")
         }}</span>
-        <ChevronRight :size="12" class="text-muted-foreground" />
+        <ChevronRight
+          :size="12"
+          class="text-muted-foreground"
+        />
       </button>
 
       <!-- Summary Provider 子選單：硬編碼三項，不過濾認證狀態
@@ -717,7 +726,10 @@ const handleSetBranchModel = async (
         <span class="font-mono text-foreground">{{
           $t("canvas.connectionContextMenu.summaryModel")
         }}</span>
-        <ChevronRight :size="12" class="text-muted-foreground" />
+        <ChevronRight
+          :size="12"
+          class="text-muted-foreground"
+        />
       </button>
 
       <!-- Summary Model 子選單：根據上游 Pod provider 動態渲染

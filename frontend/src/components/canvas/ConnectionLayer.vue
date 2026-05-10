@@ -54,7 +54,10 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <svg class="connection-layer" @click="handleCanvasClick">
+  <svg
+    class="connection-layer"
+    @click="handleCanvasClick"
+  >
     <ConnectionLine
       v-for="connection in connectionStore.connections"
       :key="connection.id"
@@ -70,7 +73,10 @@ onUnmounted(() => {
       @contextmenu="handleConnectionContextMenu"
     />
 
-    <g v-if="connectionStore.draggingConnection" class="dragging-line">
+    <g
+      v-if="connectionStore.draggingConnection"
+      class="dragging-line"
+    >
       <path
         :d="draggingPathData"
         stroke="oklch(0.6 0.02 50)"

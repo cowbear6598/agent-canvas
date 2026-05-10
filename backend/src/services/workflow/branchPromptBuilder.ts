@@ -53,7 +53,7 @@ Security rules:
     // 可選 branch 列表
     const branchListText = context.branches
       .map((branch) => {
-        let line = `- Label：${branch.label}，目標 Pod：${sanitizeForPrompt(branch.targetPodName)}`;
+        let line = `- Label：${sanitizeForPrompt(branch.label)}，目標 Pod：${sanitizeForPrompt(branch.targetPodName)}`;
         if (branch.description) {
           line += `，說明：${sanitizeForPrompt(branch.description)}`;
         }
@@ -61,7 +61,9 @@ Security rules:
       })
       .join("\n");
 
-    const validLabels = context.branches.map((b) => b.label).join("、");
+    const validLabels = context.branches
+      .map((b) => sanitizeForPrompt(b.label))
+      .join("、");
 
     return `# 來源 Pod
 

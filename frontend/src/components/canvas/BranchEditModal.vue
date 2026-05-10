@@ -107,7 +107,10 @@ const handleKeyDown = (e: KeyboardEvent): void => {
 </script>
 
 <template>
-  <Dialog :open="open" @update:open="handleClose">
+  <Dialog
+    :open="open"
+    @update:open="handleClose"
+  >
     <DialogContent class="max-w-md">
       <DialogHeader>
         <DialogTitle>
@@ -133,7 +136,7 @@ const handleKeyDown = (e: KeyboardEvent): void => {
             "
             class="w-full px-3 py-2 text-sm font-mono rounded border-2 border-doodle-ink bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-doodle-ink/50"
             @keydown="handleKeyDown"
-          />
+          >
           <div
             v-if="labelValidationError"
             class="text-xs text-destructive font-mono"
@@ -167,7 +170,10 @@ const handleKeyDown = (e: KeyboardEvent): void => {
       </div>
 
       <DialogFooter>
-        <Button variant="outline" @click="handleClose">
+        <Button
+          variant="outline"
+          @click="handleClose"
+        >
           {{ $t("common.cancel") }}
         </Button>
         <Button
