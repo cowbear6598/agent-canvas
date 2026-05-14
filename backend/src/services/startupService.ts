@@ -14,6 +14,7 @@ import {
 import "./integration/providers/index.js";
 import { getDb } from "../database/index.js";
 import { encryptionService } from "./encryptionService.js";
+import { scanAndLogOrphanRunRepoDirectories } from "./runtime/orphanRunRepoScanner.js";
 
 class StartupService {
   async initialize(): Promise<Result<void>> {
@@ -46,6 +47,17 @@ class StartupService {
         error,
       );
     });
+
+    // 掃描孤兒 run repo 目錄並記錄 warn 日誌（不刪除、不阻斷啟動）
+    try {
+      await scanAndLogOrphanRunRepoDirectories();
+    } catch (error) {
+      logger.warn(
+        "Run",
+        "Orphan",
+        `[StartupService] 掃描孤兒 run repo 目錄時發生錯誤：${error}`,
+      );
+    }
 
     return ok(undefined);
   }

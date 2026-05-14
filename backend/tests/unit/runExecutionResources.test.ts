@@ -196,4 +196,38 @@ describe("runExecutionResources", () => {
 
     expect(third.workspacePath).toBe(sharedWorkspace);
   });
+
+  it("syncToRemoteLatest 失敗時應 throw，訊息包含「同步 remote 最新版本失敗」", async () => {
+    const pod = makePod({
+      id: "pod-repo-sync-fail",
+      repositoryId: "repo-sync-fail",
+      workspacePath: "/tmp/ignored",
+    });
+
+    vi.spyOn(fs, "access").mockResolvedValue(undefined);
+    vi.spyOn(gitService, "isGitRepository").mockResolvedValue({
+      success: true,
+      data: true,
+    } as any);
+    vi.spyOn(gitService, "hasCommits").mockResolvedValue({
+      success: true,
+      data: true,
+    } as any);
+    vi.spyOn(gitService, "hasOriginRemote").mockResolvedValue({
+      success: true,
+      data: true,
+    } as any);
+    vi.spyOn(gitService, "syncToRemoteLatest").mockResolvedValue({
+      success: false,
+      error: "fetch-fail",
+    } as any);
+
+    await expect(
+      provisionRunExecutionResources({
+        pod,
+        runId: "run-sync-fail",
+        runRepoCache: new Map(),
+      }),
+    ).rejects.toThrow("同步 remote 最新版本失敗");
+  });
 });

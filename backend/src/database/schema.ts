@@ -366,9 +366,8 @@ function migrateRunPodInstancesRunRepoPathColumn(db: Database): void {
         `ALTER TABLE run_pod_instances RENAME COLUMN ${legacyCol} TO run_repo_path`,
       );
     } catch (e) {
-      console.warn(
-        `[DB migration] 重新命名 run_pod_instances.${legacyCol} → run_repo_path 失敗：`,
-        e,
+      throw new Error(
+        `[DB migration] 重新命名 run_pod_instances.${legacyCol} → run_repo_path 失敗：${e}`,
       );
     }
   }

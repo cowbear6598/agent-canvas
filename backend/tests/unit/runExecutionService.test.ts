@@ -878,5 +878,50 @@ describe("RunExecutionService", () => {
       });
       expect(runStore.getExecutionPathsByRunId(run.id)).toEqual([]);
     });
+
+    it("deleteRun 時 runRepoPath 在 repositoriesRoot 內，應呼叫 fs.rm 清理", async () => {
+      const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "測試");
+      const runRepoPath = path.join(
+        config.repositoriesRoot,
+        `repo-1-run-${run.id}`,
+      );
+      runStore.createPodInstance(run.id, SOURCE_POD_ID, "pending", "pending", {
+        runRepoPath,
+        sandboxHomePath: null,
+      });
+
+      const rmSpy = vi
+        .spyOn(nodeFs.promises, "rm")
+        .mockResolvedValue(undefined);
+
+      await runExecutionService.deleteRun(run.id);
+
+      expect(rmSpy).toHaveBeenCalledWith(
+        path.resolve(runRepoPath),
+        expect.objectContaining({ recursive: true, force: true }),
+      );
+    });
+
+    it("deleteRun 時 runRepoPath 在 repositoriesRoot 之外（越界），不呼叫 fs.rm 且 logger.warn 被呼叫", async () => {
+      const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "測試");
+      const outOfBoundsPath = "/tmp/evil-path/repo";
+      runStore.createPodInstance(run.id, SOURCE_POD_ID, "pending", "pending", {
+        runRepoPath: outOfBoundsPath,
+        sandboxHomePath: null,
+      });
+
+      const rmSpy = vi
+        .spyOn(nodeFs.promises, "rm")
+        .mockResolvedValue(undefined);
+      const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+      await runExecutionService.deleteRun(run.id);
+
+      expect(rmSpy).not.toHaveBeenCalledWith(
+        outOfBoundsPath,
+        expect.anything(),
+      );
+      expect(warnSpy).toHaveBeenCalled();
+    });
   });
 });
