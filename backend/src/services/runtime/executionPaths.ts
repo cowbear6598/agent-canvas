@@ -31,18 +31,14 @@ function resolveWithinRoot(candidatePath: string, rootPath: string): string {
   return resolvedCandidate;
 }
 
-function resolveRunWorkspacePath(
-  pod: Pod,
-  runContext: RunContext,
-): string {
+function resolveRunWorkspacePath(pod: Pod, runContext: RunContext): string {
   const instance = runStore.getPodInstance(runContext.runId, pod.id);
 
   if (instance?.workspacePath) {
     const resolvedWorkspace = path.resolve(instance.workspacePath);
-    const allowedRoots = [
-      config.repositoriesRoot,
-      config.canvasRoot,
-    ].map((root) => path.resolve(root));
+    const allowedRoots = [config.repositoriesRoot, config.canvasRoot].map(
+      (root) => path.resolve(root),
+    );
 
     if (
       !allowedRoots.some((root) =>
@@ -60,8 +56,8 @@ function resolveRunWorkspacePath(
     return resolvedWorkspace;
   }
 
-  if (instance?.worktreePath) {
-    return resolveWithinRoot(instance.worktreePath, config.repositoriesRoot);
+  if (instance?.runRepoPath) {
+    return resolveWithinRoot(instance.runRepoPath, config.repositoriesRoot);
   }
 
   return resolvePodCwd(pod);

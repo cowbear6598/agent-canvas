@@ -1,9 +1,9 @@
-import type { RepositoryNote } from '../repositoryNote.js';
+import type { RepositoryNote } from "../repositoryNote.js";
 
 export interface RepositoryListResultPayload {
   requestId: string;
   success: boolean;
-  repositories?: Array<{ id: string; name: string; parentRepoId?: string; branchName?: string; currentBranch?: string }>;
+  repositories?: Array<{ id: string; name: string; currentBranch?: string }>;
   error?: string;
 }
 
@@ -70,20 +70,11 @@ export interface RepositoryCheckGitResultPayload {
   error?: string;
 }
 
-export interface RepositoryWorktreeCreatedPayload {
-  requestId: string;
-  canvasId: string;
-  success: boolean;
-  repository?: { id: string; name: string; parentRepoId?: string; branchName?: string };
-  error?: string;
-}
-
 export interface RepositoryLocalBranchesResultPayload {
   requestId: string;
   success: boolean;
   branches?: string[];
   currentBranch?: string;
-  worktreeBranches?: string[];
   error?: string;
 }
 
@@ -106,7 +97,7 @@ export interface RepositoryBranchCheckedOutPayload {
   success: boolean;
   repositoryId?: string;
   branchName?: string;
-  action?: 'switched' | 'fetched' | 'created';
+  action?: "switched" | "fetched" | "created";
   error?: string;
 }
 

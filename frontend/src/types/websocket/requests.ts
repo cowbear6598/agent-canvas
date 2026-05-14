@@ -268,13 +268,6 @@ export interface RepositoryCheckGitPayload {
   repositoryId: string;
 }
 
-export interface RepositoryWorktreeCreatePayload {
-  requestId: string;
-  canvasId: string;
-  repositoryId: string;
-  worktreeName: string;
-}
-
 export interface RepositoryGetLocalBranchesPayload {
   requestId: string;
   canvasId: string;

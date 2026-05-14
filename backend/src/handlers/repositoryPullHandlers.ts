@@ -125,9 +125,4 @@ export const handleRepositoryPullLatest =
         response,
       );
     },
-    {
-      rejectWorktree: {
-        errorMessage: createI18nError("errors.worktreePullNotAllowed"),
-      },
-    },
   );

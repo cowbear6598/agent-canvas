@@ -16,10 +16,9 @@ import type { Mock } from "vitest";
 // metadata 必須一起提供，否則 providerConfigResolver.warnIfModelOutOfRange / ensureModelField
 // 在 buildPodFromRow 讀取路徑上也會呼叫 getProvider(provider).metadata 而丟出 TypeError
 vi.mock("../../src/services/provider/index.js", async () => {
-  const actual =
-    await vi.importActual<typeof import("../../src/services/provider/index.js")>(
-      "../../src/services/provider/index.js",
-    );
+  const actual = await vi.importActual<
+    typeof import("../../src/services/provider/index.js")
+  >("../../src/services/provider/index.js");
   return {
     ...actual,
     getProvider: vi.fn(() => ({
@@ -1205,16 +1204,15 @@ describe("executeStreamingChat", () => {
       expect(upsertMessageSpy).not.toHaveBeenCalled();
     });
 
-    it("instance.worktreePath 合法時，provider.chat 收到的 workspacePath 為 worktree，sandboxHomePath 為 run-level temp 路徑", async () => {
+    it("instance.runRepoPath 合法時，provider.chat 收到的 workspacePath 為 run repo，sandboxHomePath 為 run-level temp 路徑", async () => {
       const pod = insertClaudePod();
       const validWorktreePath = path.join(
         config.repositoriesRoot,
-        "some-repo",
-        "worktree-branch",
+        "some-repo-run-abc",
       );
 
       vi.spyOn(runStore, "getPodInstance").mockReturnValue({
-        worktreePath: validWorktreePath,
+        runRepoPath: validWorktreePath,
       } as any);
 
       const capturedCtxList: unknown[] = [];
@@ -1249,10 +1247,10 @@ describe("executeStreamingChat", () => {
       );
     });
 
-    it("worktreePath 不在 repositoriesRoot 內時，應改寫為 run transcript system message 且 provider.chat 未被呼叫", async () => {
+    it("runRepoPath 不在 repositoriesRoot 內時，應改寫為 run transcript system message 且 provider.chat 未被呼叫", async () => {
       const pod = insertClaudePod();
       vi.spyOn(runStore, "getPodInstance").mockReturnValue({
-        worktreePath: "/tmp/evil-path",
+        runRepoPath: "/tmp/evil-path",
       } as any);
 
       const chatMock = vi.fn(async function* () {
@@ -1268,7 +1266,7 @@ describe("executeStreamingChat", () => {
         },
       });
 
-      // 新行為：worktreePath 非法錯誤被 handleStreamError 攔截，改走 run transcript system message
+      // 新行為：runRepoPath 非法錯誤被 handleStreamError 攔截，改走 run transcript system message
       const result = await executeStreamingChat({
         canvasId,
         podId: pod.id,
@@ -1352,8 +1350,7 @@ describe("executeStreamingChat", () => {
               code: "GEMINI_CAPACITY_EXHAUSTED",
               severity: "fatal",
               rawContent: "",
-              reasonDetail:
-                "這次失敗是模型當下容量不足，與帳號配額不足不同。",
+              reasonDetail: "這次失敗是模型當下容量不足，與帳號配額不足不同。",
             },
           },
         },
@@ -1379,8 +1376,7 @@ describe("executeStreamingChat", () => {
             provider: "gemini",
             code: "GEMINI_CAPACITY_EXHAUSTED",
             severity: "fatal",
-            reasonDetail:
-              "這次失敗是模型當下容量不足，與帳號配額不足不同。",
+            reasonDetail: "這次失敗是模型當下容量不足，與帳號配額不足不同。",
           }),
         }),
       );

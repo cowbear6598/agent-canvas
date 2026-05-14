@@ -71,13 +71,13 @@ export interface RunPodInstance {
   completedAt: string | null;
   autoPathwaySettled: PathwayState;
   directPathwaySettled: PathwayState;
-  worktreePath: string | null;
+  runRepoPath: string | null;
   workspacePath: string | null;
   sandboxHomePath: string | null;
 }
 
 export interface RunPodInstancePaths {
-  worktreePath?: string | null;
+  runRepoPath?: string | null;
   workspacePath?: string | null;
   sandboxHomePath?: string | null;
 }
@@ -114,7 +114,7 @@ interface RunPodInstanceRow {
   completed_at: string | null;
   auto_pathway_settled: number | null;
   direct_pathway_settled: number | null;
-  worktree_path: string | null;
+  run_repo_path: string | null;
   workspace_path: string | null;
   sandbox_home_path: string | null;
 }
@@ -154,7 +154,7 @@ function rowToRunPodInstance(row: RunPodInstanceRow): RunPodInstance {
     completedAt: row.completed_at,
     autoPathwaySettled: sqliteIntToPathwayState(row.auto_pathway_settled),
     directPathwaySettled: sqliteIntToPathwayState(row.direct_pathway_settled),
-    worktreePath: row.worktree_path,
+    runRepoPath: row.run_repo_path,
     workspacePath: row.workspace_path,
     sandboxHomePath: row.sandbox_home_path,
   };
@@ -278,9 +278,7 @@ class RunStore {
     paths: RunPodInstancePaths | string | null = {},
   ): RunPodInstance {
     const normalizedPaths =
-      typeof paths === "string"
-        ? { worktreePath: paths }
-        : (paths ?? {});
+      typeof paths === "string" ? { runRepoPath: paths } : (paths ?? {});
 
     const instance: RunPodInstance = {
       id: randomUUID(),
@@ -293,7 +291,7 @@ class RunStore {
       completedAt: null,
       autoPathwaySettled,
       directPathwaySettled,
-      worktreePath: normalizedPaths.worktreePath ?? null,
+      runRepoPath: normalizedPaths.runRepoPath ?? null,
       workspacePath: normalizedPaths.workspacePath ?? null,
       sandboxHomePath: normalizedPaths.sandboxHomePath ?? null,
     };
@@ -309,7 +307,7 @@ class RunStore {
       $completedAt: instance.completedAt,
       $autoPathwaySettled: pathwayStateToSqliteInt(autoPathwaySettled),
       $directPathwaySettled: pathwayStateToSqliteInt(directPathwaySettled),
-      $worktreePath: instance.worktreePath,
+      $runRepoPath: instance.runRepoPath,
       $workspacePath: instance.workspacePath,
       $sandboxHomePath: instance.sandboxHomePath,
     });
@@ -325,26 +323,24 @@ class RunStore {
     this.stmts.runPodInstance.settleDirectPathway.run({ $id: instanceId });
   }
 
-  getWorktreePathsByRunId(
+  getRunRepoPathsByRunId(
     runId: string,
-  ): Array<{ podId: string; worktreePath: string }> {
-    const rows = this.stmts.runPodInstance.selectWorktreePathsByRunId.all(
+  ): Array<{ podId: string; runRepoPath: string }> {
+    const rows = this.stmts.runPodInstance.selectRunRepoPathsByRunId.all(
       runId,
     ) as Array<{
       pod_id: string;
-      worktree_path: string;
+      run_repo_path: string;
     }>;
     return rows.map((r) => ({
       podId: r.pod_id,
-      worktreePath: r.worktree_path,
+      runRepoPath: r.run_repo_path,
     }));
   }
 
-  getExecutionPathsByRunId(
-    runId: string,
-  ): Array<{
+  getExecutionPathsByRunId(runId: string): Array<{
     podId: string;
-    worktreePath: string | null;
+    runRepoPath: string | null;
     workspacePath: string | null;
     sandboxHomePath: string | null;
   }> {
@@ -352,25 +348,25 @@ class RunStore {
       runId,
     ) as Array<{
       pod_id: string;
-      worktree_path: string | null;
+      run_repo_path: string | null;
       workspace_path: string | null;
       sandbox_home_path: string | null;
     }>;
 
     return rows.map((row) => ({
       podId: row.pod_id,
-      worktreePath: row.worktree_path,
+      runRepoPath: row.run_repo_path,
       workspacePath: row.workspace_path,
       sandboxHomePath: row.sandbox_home_path,
     }));
   }
 
   /**
-   * 清除指定 Run 所有 pod instance 的 worktree_path。
-   * 在 worktree 實際刪除成功後呼叫，防止二次清理。
+   * 清除指定 Run 所有 pod instance 的 run_repo_path。
+   * 在 run repo 實際刪除成功後呼叫，防止二次清理。
    */
-  clearWorktreePathsByRunId(runId: string): void {
-    this.stmts.runPodInstance.clearWorktreePathsByRunId.run(runId);
+  clearRunRepoPathsByRunId(runId: string): void {
+    this.stmts.runPodInstance.clearRunRepoPathsByRunId.run(runId);
   }
 
   clearExecutionPathsByRunId(runId: string): void {

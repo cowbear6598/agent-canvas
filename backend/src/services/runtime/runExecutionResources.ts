@@ -11,18 +11,20 @@ import { getRunSandboxHomePath } from "./executionPaths.js";
 export interface ProvisionedRunExecutionResources {
   workspacePath: string;
   sandboxHomePath: string;
-  worktreePath: string | null;
+  runRepoPath: string | null;
 }
 
 interface SharedWorkspaceResult {
   workspacePath: string;
-  worktreePath: string | null;
+  runRepoPath: string | null;
 }
 
-function createDirectWorkspaceResult(workspacePath: string): SharedWorkspaceResult {
+function createDirectWorkspaceResult(
+  workspacePath: string,
+): SharedWorkspaceResult {
   return {
     workspacePath,
-    worktreePath: null,
+    runRepoPath: null,
   };
 }
 
@@ -57,14 +59,14 @@ async function provisionRunSandboxHome(
 async function provisionRepositoryWorkspace(
   pod: Pod,
   runId: string,
-  worktreeCache: Map<string, SharedWorkspaceResult>,
+  runRepoCache: Map<string, SharedWorkspaceResult>,
 ): Promise<SharedWorkspaceResult> {
   if (!pod.repositoryId) {
     throw new Error("repositoryId 不存在，無法配置 repo run workspace");
   }
 
   const cacheKey = pod.repositoryId;
-  const cached = worktreeCache.get(cacheKey);
+  const cached = runRepoCache.get(cacheKey);
   if (cached) return cached;
 
   const sourceRepoPath = path.resolve(
@@ -88,7 +90,7 @@ async function provisionRepositoryWorkspace(
   }
   if (!isGitResult.data) {
     const provisioned = createDirectWorkspaceResult(sourceRepoPath);
-    worktreeCache.set(cacheKey, provisioned);
+    runRepoCache.set(cacheKey, provisioned);
     return provisioned;
   }
 
@@ -100,7 +102,19 @@ async function provisionRepositoryWorkspace(
   }
   if (!hasCommitsResult.data) {
     const provisioned = createDirectWorkspaceResult(sourceRepoPath);
-    worktreeCache.set(cacheKey, provisioned);
+    runRepoCache.set(cacheKey, provisioned);
+    return provisioned;
+  }
+
+  const hasOriginResult = await gitService.hasOriginRemote(sourceRepoPath);
+  if (!hasOriginResult.success) {
+    throw new Error(
+      `檢查 origin remote 失敗：${getResultErrorString(hasOriginResult.error)}`,
+    );
+  }
+  if (!hasOriginResult.data) {
+    const provisioned = createDirectWorkspaceResult(sourceRepoPath);
+    runRepoCache.set(cacheKey, provisioned);
     return provisioned;
   }
 
@@ -111,48 +125,50 @@ async function provisionRepositoryWorkspace(
     );
   }
 
-  const worktreePath = path.join(
+  const runRepoPath = path.join(
     config.repositoriesRoot,
     `${pod.repositoryId}-run-${runId}`,
   );
-  const createResult = await gitService.createDetachedWorktree(
+  const createResult = await gitService.createLocalClone(
     sourceRepoPath,
-    worktreePath,
+    runRepoPath,
   );
 
   if (!createResult.success) {
     throw new Error(
-      `建立 detached worktree 失敗：${getResultErrorString(createResult.error)}`,
+      `建立 run repo clone 失敗：${getResultErrorString(createResult.error)}`,
     );
   }
 
   const provisioned = {
-    workspacePath: worktreePath,
-    worktreePath,
+    workspacePath: runRepoPath,
+    runRepoPath,
   };
-  worktreeCache.set(cacheKey, provisioned);
+  runRepoCache.set(cacheKey, provisioned);
   return provisioned;
 }
 
-async function provisionNonRepoWorkspace(pod: Pod): Promise<SharedWorkspaceResult> {
+async function provisionNonRepoWorkspace(
+  pod: Pod,
+): Promise<SharedWorkspaceResult> {
   const sourceWorkspacePath = path.resolve(pod.workspacePath);
   await ensureNonRepoSourceWorkspace(sourceWorkspacePath);
 
   return {
     workspacePath: sourceWorkspacePath,
-    worktreePath: null,
+    runRepoPath: null,
   };
 }
 
 export async function provisionRunExecutionResources(params: {
   pod: Pod;
   runId: string;
-  worktreeCache: Map<string, SharedWorkspaceResult>;
+  runRepoCache: Map<string, SharedWorkspaceResult>;
 }): Promise<ProvisionedRunExecutionResources> {
-  const { pod, runId, worktreeCache } = params;
+  const { pod, runId, runRepoCache } = params;
 
   const workspaceResult = pod.repositoryId
-    ? await provisionRepositoryWorkspace(pod, runId, worktreeCache)
+    ? await provisionRepositoryWorkspace(pod, runId, runRepoCache)
     : await provisionNonRepoWorkspace(pod);
 
   const sandboxHomePath = await provisionRunSandboxHome(runId, pod.id);
@@ -160,6 +176,6 @@ export async function provisionRunExecutionResources(params: {
   return {
     workspacePath: workspaceResult.workspacePath,
     sandboxHomePath,
-    worktreePath: workspaceResult.worktreePath,
+    runRepoPath: workspaceResult.runRepoPath,
   };
 }

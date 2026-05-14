@@ -10,14 +10,10 @@ interface RepositoryMetadataRow {
   id: string;
   name: string;
   path: string;
-  parent_repo_id: string | null;
-  branch_name: string | null;
   current_branch: string | null;
 }
 
 interface RepositoryMetadata {
-  parentRepoId?: string;
-  branchName?: string;
   currentBranch?: string;
 }
 
@@ -34,8 +30,6 @@ class RepositoryService {
     Array<{
       id: string;
       name: string;
-      parentRepoId?: string;
-      branchName?: string;
       currentBranch?: string;
     }>
   > {
@@ -47,8 +41,6 @@ class RepositoryService {
     const repositories: Array<{
       id: string;
       name: string;
-      parentRepoId?: string;
-      branchName?: string;
       currentBranch?: string;
     }> = [];
 
@@ -63,8 +55,6 @@ class RepositoryService {
       repositories.push({
         id: entry.name,
         name: entry.name,
-        ...(row?.parent_repo_id && { parentRepoId: row.parent_repo_id }),
-        ...(row?.branch_name && { branchName: row.branch_name }),
         ...(row?.current_branch && { currentBranch: row.current_branch }),
       });
     }
@@ -72,10 +62,7 @@ class RepositoryService {
     return repositories;
   }
 
-  async create(
-    name: string,
-    options?: { parentRepoId?: string; branchName?: string },
-  ): Promise<{ id: string; name: string }> {
+  async create(name: string): Promise<{ id: string; name: string }> {
     // 字元白名單驗證：僅允許字母、數字、底線、連字號、點，且不能以 `..` 開頭
     if (!/^[a-zA-Z0-9_\-.]+$/.test(name)) {
       throw new Error(
@@ -94,17 +81,6 @@ class RepositoryService {
 
     await fs.mkdir(repositoryPath, { recursive: true });
 
-    if (options?.parentRepoId || options?.branchName) {
-      this.stmts.upsert.run({
-        $id: name,
-        $name: name,
-        $path: repositoryPath,
-        $parentRepoId: options.parentRepoId ?? null,
-        $branchName: options.branchName ?? null,
-        $currentBranch: null,
-      });
-    }
-
     return { id: name, name };
   }
 
@@ -116,8 +92,6 @@ class RepositoryService {
     if (!row) return undefined;
 
     return {
-      ...(row.parent_repo_id && { parentRepoId: row.parent_repo_id }),
-      ...(row.branch_name && { branchName: row.branch_name }),
       ...(row.current_branch && { currentBranch: row.current_branch }),
     };
   }
@@ -131,8 +105,6 @@ class RepositoryService {
       $id: repositoryId,
       $name: repositoryId,
       $path: repositoryPath,
-      $parentRepoId: metadata.parentRepoId ?? null,
-      $branchName: metadata.branchName ?? null,
       $currentBranch: metadata.currentBranch ?? null,
     });
     return Promise.resolve();

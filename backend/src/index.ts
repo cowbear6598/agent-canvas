@@ -222,7 +222,7 @@ const shutdown = async (signal: string): Promise<void> => {
     );
   }
 
-  // 步驟 3：刪除所有 running 狀態的 Run（含 worktree 清理）
+  // 步驟 3：刪除所有 running 狀態的 Run（含 run repo 清理）
   const runningRuns = runStore.getRunningRuns();
   if (runningRuns.length > 0) {
     logger.log(

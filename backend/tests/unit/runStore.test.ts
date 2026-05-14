@@ -478,10 +478,10 @@ describe("RunStore", () => {
     });
   });
 
-  describe("getWorktreePathsByRunId / clearWorktreePathsByRunId", () => {
-    it("createPodInstance 帶 worktreePath 後 getWorktreePathsByRunId 應回傳正確清單", () => {
+  describe("getRunRepoPathsByRunId / clearRunRepoPathsByRunId", () => {
+    it("createPodInstance 帶 runRepoPath 後 getRunRepoPathsByRunId 應回傳正確清單", () => {
       const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, TRIGGER_MESSAGE);
-      // 建立兩個 pod instance，一個有 worktreePath，一個沒有
+      // 建立兩個 pod instance，一個有 runRepoPath，一個沒有
       runStore.createPodInstance(
         run.id,
         "pod-1",
@@ -497,17 +497,17 @@ describe("RunStore", () => {
         null,
       );
 
-      const paths = runStore.getWorktreePathsByRunId(run.id);
+      const paths = runStore.getRunRepoPathsByRunId(run.id);
 
-      // 只有 worktreePath 不為 null 的 pod 才會出現
+      // 只有 runRepoPath 不為 null 的 pod 才會出現
       expect(paths).toHaveLength(1);
       expect(paths[0]).toMatchObject({
         podId: "pod-1",
-        worktreePath: "/repos/worktree-pod-1",
+        runRepoPath: "/repos/worktree-pod-1",
       });
     });
 
-    it("clearWorktreePathsByRunId 後 getWorktreePathsByRunId 應回傳空陣列", () => {
+    it("clearRunRepoPathsByRunId 後 getRunRepoPathsByRunId 應回傳空陣列", () => {
       const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, TRIGGER_MESSAGE);
       runStore.createPodInstance(
         run.id,
@@ -524,10 +524,10 @@ describe("RunStore", () => {
         "/repos/worktree-pod-2",
       );
 
-      // 清除後所有 worktreePath 應為 null
-      runStore.clearWorktreePathsByRunId(run.id);
+      // 清除後所有 runRepoPath 應為 null
+      runStore.clearRunRepoPathsByRunId(run.id);
 
-      const paths = runStore.getWorktreePathsByRunId(run.id);
+      const paths = runStore.getRunRepoPathsByRunId(run.id);
       expect(paths).toHaveLength(0);
     });
   });
@@ -551,13 +551,13 @@ describe("RunStore", () => {
 
     it("getExecutionPathsByRunId / clearExecutionPathsByRunId 應回傳並清除全部執行路徑", () => {
       const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, TRIGGER_MESSAGE);
-      const worktreePath = "/repos/repo-1-run-1";
+      const runRepoPath = "/repos/repo-1-run-1";
       const workspacePath = "/repos/repo-1-run-1";
       const sandboxHomePath =
         "/tmp/agent-canvas/claude-sandbox/runs/run-1/pods/pod-1/home";
 
       runStore.createPodInstance(run.id, "pod-1", "pending", "pending", {
-        worktreePath,
+        runRepoPath,
         workspacePath,
         sandboxHomePath,
       });
@@ -565,7 +565,7 @@ describe("RunStore", () => {
       expect(runStore.getExecutionPathsByRunId(run.id)).toEqual([
         {
           podId: "pod-1",
-          worktreePath,
+          runRepoPath,
           workspacePath,
           sandboxHomePath,
         },

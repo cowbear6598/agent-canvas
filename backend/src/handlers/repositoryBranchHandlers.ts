@@ -132,7 +132,6 @@ export const handleRepositoryGetLocalBranches =
         success: true,
         branches: branchesResult.data.branches,
         currentBranch: branchesResult.data.current,
-        worktreeBranches: branchesResult.data.worktreeBranches,
       };
 
       emitSuccess(
@@ -209,11 +208,6 @@ export const handleRepositoryCheckoutBranch =
         branchName,
         checkoutResult.action,
       );
-    },
-    {
-      rejectWorktree: {
-        errorMessage: createI18nError("errors.worktreeCheckoutNotAllowed"),
-      },
     },
   );
 

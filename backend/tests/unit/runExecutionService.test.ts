@@ -214,7 +214,7 @@ describe("RunExecutionService", () => {
       ).mockResolvedValue({
         workspacePath: pod.workspacePath,
         sandboxHomePath: getRunSandboxHomePath("run-mock", pod.id),
-        worktreePath: null,
+        runRepoPath: null,
       });
 
       const ctx = await runExecutionService.createRun(

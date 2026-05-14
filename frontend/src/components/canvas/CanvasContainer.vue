@@ -497,9 +497,7 @@ const handleBranchModelChanged = (): void => {
     :repository-id="repositoryContextMenu.data.repositoryId"
     :repository-name="repositoryContextMenu.data.repositoryName"
     :note-position="repositoryContextMenu.data.notePosition"
-    :is-worktree="repositoryContextMenu.data.isWorktree"
     @close="closeRepositoryContextMenu"
-    @worktree-created="closeRepositoryContextMenu"
     @pull-started="handlePullStarted"
   />
 

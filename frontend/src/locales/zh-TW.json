@@ -361,18 +361,9 @@
       "inputPlaceholder": "輸入分支名稱",
       "switchButton": "切換",
       "currentLabel": "(目前)",
-      "worktreeOccupied": "已被 Worktree 佔用",
       "nameRequired": "請輸入分支名稱",
       "nameInvalid": "只能包含英文字母、數字、底線、連字號和斜線",
       "nameFormatError": "分支名稱格式錯誤"
-    },
-    "worktree": {
-      "createTitle": "建立 Worktree",
-      "createDescription": "從 {name} 建立新的 Worktree",
-      "nameLabel": "Worktree 名稱",
-      "namePlaceholder": "例如：feature1、bugfix-123",
-      "nameRequired": "請輸入 Worktree 名稱",
-      "nameInvalid": "名稱只能包含英文字母、數字、底線和連字號"
     },
     "repository": {
       "createTitle": "新建資料夾",
@@ -404,7 +395,6 @@
       "confirmButton": "確認 Pull"
     },
     "repositoryContextMenu": {
-      "createWorktree": "建立 Worktree",
       "switchBranch": "切換分支",
       "pullLatest": "Pull 至最新版本"
     },
@@ -558,14 +548,12 @@
     },
     "repository": {
       "createFailed": "建立資料夾失敗",
-      "worktreeCreateFailed": "建立 Worktree 失敗",
       "checkGitFailed": "檢查 Git 狀態失敗",
       "getBranchesFailed": "取得分支列表失敗",
       "checkDirtyFailed": "檢查修改狀態失敗",
       "deleteBranchFailed": "刪除分支失敗",
       "deleteBranchSuccess": "刪除分支成功",
-      "createSuccess": "建立成功",
-      "worktreeCreateSuccess": "Worktree 建立成功"
+      "createSuccess": "建立成功"
     },
     "resource": {
       "createFailed": "建立失敗",
@@ -632,7 +620,6 @@
       "canvasCreated": "Canvas 建立成功",
       "canvasRenamed": "Canvas 重命名成功",
       "pasted": "貼上成功",
-      "worktreeCreated": "Worktree 建立成功",
       "repositoryDeleted": "Repository 已刪除",
       "commandDeleted": "Command 已刪除"
     },
@@ -716,18 +703,13 @@
     "gitCheckFailed": "檢查 Git Repository 失敗",
     "repoPullInProgress": "此 Repository 已有 Pull 操作進行中",
     "pullFailed": "Pull 失敗",
-    "worktreePullNotAllowed": "Worktree 無法執行 Pull",
     "getBranchesFailed": "取得本地分支失敗",
     "checkDirtyFailed": "檢查未提交變更失敗",
     "checkoutFailed": "切換分支失敗",
-    "worktreeCheckoutNotAllowed": "Worktree 無法切換分支",
     "deleteBranchFailed": "刪除分支失敗",
-    "repoNoCommits": "Repository 沒有任何 commit，無法建立 Worktree",
     "invalidRepoIdFormat": "無效的 Repository ID 格式",
-    "invalidWorktreePath": "無效的 worktree 路徑",
     "directoryExists": "資料夾已存在：{name}",
     "branchExists": "分支已存在：{name}",
-    "worktreeCreateFailed": "建立 Worktree 失敗",
     "runNotFound": "找不到指定的 Run",
     "noteUpdateFailed": "更新 Note 失敗：{id}",
     "noteDeleteFailed": "從 Store 刪除 Note 失敗：{id}",

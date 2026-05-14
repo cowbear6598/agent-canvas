@@ -1,5 +1,4 @@
 import { WebSocketResponseEvents } from "../schemas";
-import { repositoryService } from "../services/repositoryService.js";
 import { socketService } from "../services/socketService.js";
 import { getValidatedGitRepository } from "../utils/validators.js";
 import { emitError } from "../utils/websocketResponse.js";
@@ -65,10 +64,6 @@ export async function validateRepositoryIsGit(
   return result.data.repositoryPath;
 }
 
-export interface WithValidatedGitRepositoryOptions {
-  rejectWorktree?: { errorMessage: string | I18nError };
-}
-
 export function withValidatedGitRepository<T extends { repositoryId: string }>(
   responseEvent: WebSocketResponseEvents,
   handler: (
@@ -77,7 +72,6 @@ export function withValidatedGitRepository<T extends { repositoryId: string }>(
     requestId: string,
     repositoryPath: string,
   ) => Promise<void>,
-  options?: WithValidatedGitRepositoryOptions,
 ) {
   return async (
     connectionId: string,
@@ -92,42 +86,8 @@ export function withValidatedGitRepository<T extends { repositoryId: string }>(
     );
     if (!repositoryPath) return;
 
-    if (options?.rejectWorktree) {
-      const isValid = validateNotWorktree(
-        connectionId,
-        payload.repositoryId,
-        responseEvent,
-        requestId,
-        options.rejectWorktree.errorMessage,
-      );
-      if (!isValid) return;
-    }
-
     await handler(connectionId, payload, requestId, repositoryPath);
   };
-}
-
-export function validateNotWorktree(
-  connectionId: string,
-  repositoryId: string,
-  responseEvent: WebSocketResponseEvents,
-  requestId: string,
-  errorMessage: string | I18nError,
-): boolean {
-  const metadata = repositoryService.getMetadata(repositoryId);
-  if (metadata?.parentRepoId) {
-    emitError(
-      connectionId,
-      responseEvent,
-      errorMessage,
-      null,
-      requestId,
-      undefined,
-      "INVALID_STATE",
-    );
-    return false;
-  }
-  return true;
 }
 
 export function createProgressEmitter(

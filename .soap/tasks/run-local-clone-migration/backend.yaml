@@ -1,0 +1,462 @@
+feature: run-local-clone-migration
+side: backend
+approved: true
+
+phases:
+  - id: P1
+    title: gitService 核心 API 改造（新增 createLocalClone、syncToRemoteLatest 改 fetch-all + per-repo mutex、移除 worktree methods、移除 worktreeBranches 欄位）
+    parallel: false
+    verification:
+      - cd backend && bun run style
+      - cd backend && bun run test -- tests/unit/gitServiceClone.test.ts
+      - test -f backend/src/services/workspace/gitService.ts
+      - test -f backend/tests/unit/gitServiceClone.test.ts
+      - "! test -f backend/tests/unit/gitServiceWorktree.test.ts"
+    done: true
+    items:
+      - id: P1.A
+        title: 在 gitService 新增 createLocalClone 與 per-repo fetch 去重機制
+        tasks:
+          - id: P1.A.t1
+            text: 在 `backend/src/services/workspace/gitService.ts` 的 `GitService` class 內新增 `createLocalClone(sourceRepoPath, runDir)` 方法。實作：用 `simpleGit().clone(sourceRepoPath, runDir, ["--local"])` 建立隔離工作目錄；clone 完成後讀取主 repo（sourceRepoPath）的 `origin` remote URL，再對 runDir 執行 `git remote set-url origin <主 repo 的真實 origin URL>`，使 AI 在 runDir 內可直接 push 至真實遠端。runDir 路徑必須通過 `isPathWithinDirectory(runDir, config.repositoriesRoot)` 安全檢查。回傳 `Result<void>`。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/services/workspace/gitService.ts
+          - id: P1.A.t2
+            text: 在 `GitService` class 內新增 `private repoFetchPromises: Map<string, Promise<Result<void>>>` 欄位。改寫 `syncToRemoteLatest(workspacePath)`：以 `path.resolve(workspacePath)` 作為 key，若 Map 內已有同 key 的進行中 Promise 則直接 await 回傳同一個結果（同 repo 多 Run 並發只 fetch 一次）；否則建立 promise 寫入 Map，promise 完成後（無論成功失敗）以 `finally` 從 Map 移除。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/services/workspace/gitService.ts
+          - id: P1.A.t3
+            text: 將 `syncToRemoteLatest` 內部的 fetch 邏輯由「只 fetch 當前 branch」改為「fetch all branches」：保留「無 origin remote 時靜默 ok」的既有判斷，但 fetch 步驟改成執行 `git fetch origin --prune`（不再帶 `<branchName>` 參數，也不再執行 reset --hard）。改完語意：將主 repo 的所有遠端 branches 同步到本地，提供後續 clone --local 給 Run 使用，但不變動主 repo 的工作樹狀態。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/services/workspace/gitService.ts
+
+      - id: P1.B
+        title: 移除 worktree 相關方法與 worktreeBranches 欄位
+        tasks:
+          - id: P1.B.t1
+            text: 在 `backend/src/services/workspace/gitService.ts` 中刪除 `createDetachedWorktree` 方法、`removeWorktree` 方法、`getWorktreeBranches` 方法、檔案頂部的 `parseWorktreeLine` helper。同步移除已不再被使用的 import（若有）。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/services/workspace/gitService.ts
+          - id: P1.B.t2
+            text: 在 `gitService.ts` 的 `getLocalBranches` 回傳型別與實作中移除 `worktreeBranches` 欄位：回傳改為 `Result<{ branches: string[]; current: string }>`，內部不再呼叫 `getWorktreeBranches`。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/services/workspace/gitService.ts
+
+      - id: P1.C
+        title: 改寫 gitService worktree 測試為 gitServiceClone 測試
+        tasks:
+          - id: P1.C.t1
+            text: 刪除 `backend/tests/unit/gitServiceWorktree.test.ts`，新增 `backend/tests/unit/gitServiceClone.test.ts` 並涵蓋以下案例：(1) 成功流程 — 對一個 git init + commit + 設好 origin 的暫存來源 repo 呼叫 `createLocalClone`，驗證 runDir 內存在 `.git`、`git remote get-url origin` 回傳的是原本來源 repo 的 origin URL（非 sourceRepoPath）。(2) 安全檢查 — 傳入位於 `config.repositoriesRoot` 之外的 runDir，回傳 err。(3) `syncToRemoteLatest` per-repo 去重 — 對同一 workspacePath 並發呼叫 3 次，驗證底層 fetch 只被觸發 1 次（用 testdouble 攔截 simple-git 的 fetch）。(4) `syncToRemoteLatest` fetch all — 驗證底層執行的是 `git fetch origin --prune`，且不執行 reset --hard。(5) `getLocalBranches` 回傳值不再含 `worktreeBranches` 欄位。Mock 邊界：不 mock `gitService` 自身、只在必要處 mock simple-git 的呼叫；其餘走真實檔案系統暫存目錄。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/tests/unit/gitServiceClone.test.ts
+              - backend/tests/unit/gitServiceWorktree.test.ts
+
+  - id: P2
+    title: DB schema migration — worktree_path 改名 run_repo_path
+    parallel: false
+    verification:
+      - cd backend && bun run style
+      - cd backend && bun run test -- tests/unit/runStore.test.ts
+    done: true
+    items:
+      - id: P2.A
+        title: schema.ts 新增 ALTER TABLE migration（worktree_path → run_repo_path）
+        tasks:
+          - id: P2.A.t1
+            text: 在 `backend/src/database/schema.ts` 的 `createBaseTables` 內，將 `run_pod_instances` 的 CREATE TABLE 欄位由 `worktree_path TEXT` 改為 `run_repo_path TEXT`（新 DB 直接落新欄位名）。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/database/schema.ts
+          - id: P2.A.t2
+            text: 在 `schema.ts` 新增 `migrateRunPodInstancesRunRepoPathColumn(db)` 函式：依現有 `columnExists` 慣例檢查 `run_pod_instances` 表，若仍存在舊欄位 `worktree_path` 則執行 `ALTER TABLE run_pod_instances RENAME COLUMN worktree_path TO run_repo_path`。在 `createTables(db)` 內、`createBaseTables(db)` 之後呼叫此函式，與其他 migration 函式同列。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/database/schema.ts
+
+      - id: P2.B
+        title: statements.ts 與 runStore.ts 全部欄位／方法改名 run_repo_path / runRepoPath
+        tasks:
+          - id: P2.B.t1
+            text: 在 `backend/src/database/statements.ts` 的 `runPodInstance` block 內：將 `INSERT INTO run_pod_instances` 的欄位列表與 placeholder 中 `worktree_path` / `$worktreePath` 改為 `run_repo_path` / `$runRepoPath`；將 `selectWorktreePathsByRunId` 與 `selectExecutionPathsByRunId` 的 SQL 中 `worktree_path` 全部改為 `run_repo_path`；將 `clearWorktreePathsByRunId` 與 `clearExecutionPathsByRunId` 的 UPDATE 語句中 `worktree_path = NULL` 改為 `run_repo_path = NULL`。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/database/statements.ts
+          - id: P2.B.t2
+            text: 在 `backend/src/services/runStore.ts` 中將 `RunPodInstance` interface 的 `worktreePath` 欄位改名 `runRepoPath`；將 `RunPodInstancePaths` interface 的 `worktreePath` 改名 `runRepoPath`；將 `RunPodInstanceRow` interface 的 `worktree_path` 改名 `run_repo_path`；同步更新 `rowToRunPodInstance`、`createPodInstance`（含 `normalizedPaths` 字串相容路徑、`$worktreePath` 等 prepared statement 參數鍵）、`getWorktreePathsByRunId`（改名 `getRunRepoPathsByRunId`，回傳 `{ podId; runRepoPath }`）、`getExecutionPathsByRunId`（回傳欄位 `worktreePath` 改 `runRepoPath`）、`clearWorktreePathsByRunId`（改名 `clearRunRepoPathsByRunId`）。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/services/runStore.ts
+          - id: P2.B.t3
+            text: 在 `backend/src/types/run.ts` 中將 `"worktreePath" | "workspacePath" | "sandboxHomePath"` Omit 列表內的 `worktreePath` 改為 `runRepoPath`。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/types/run.ts
+          - id: P2.B.t4
+            text: 在 `backend/tests/unit/runStore.test.ts` 中將原本對 `worktreePath` 欄位、`getWorktreePathsByRunId`、`clearWorktreePathsByRunId` 的測試案例（Q4 已答應修改 mock 即可）更新為新名稱 `runRepoPath` / `getRunRepoPathsByRunId` / `clearRunRepoPathsByRunId`，斷言內容不變。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/tests/unit/runStore.test.ts
+
+  - id: P3
+    title: runtime / workflow service 改用 local clone（runExecutionResources + runExecutionService cleanup）
+    parallel: false
+    verification:
+      - cd backend && bun run style
+      - cd backend && bun run test -- tests/unit/runExecutionResources.test.ts
+      - cd backend && bun run test -- tests/unit/runExecutionService.test.ts
+    done: true
+    items:
+      - id: P3.A
+        title: runExecutionResources 改成呼叫 createLocalClone（保留現有 fallback）
+        tasks:
+          - id: P3.A.t1
+            text: 在 `backend/src/services/runtime/runExecutionResources.ts` 中將 `ProvisionedRunExecutionResources` 與 `SharedWorkspaceResult` 的 `worktreePath` 欄位改名 `runRepoPath`，同步更新 `createDirectWorkspaceResult` 與所有回傳結構。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/services/runtime/runExecutionResources.ts
+          - id: P3.A.t2
+            text: 在 `runExecutionResources.ts` 的 `provisionRepositoryWorkspace` 內，於既有「`isGitRepository` 失敗 → sourceRepoPath」「`hasCommits` 為 false → sourceRepoPath」兩個 fallback 之後、`syncToRemoteLatest` 之前，新增一段「檢查 sourceRepoPath 是否設定 origin remote」的判斷：若無 origin（依照 Q7 答案 C），直接回傳 `createDirectWorkspaceResult(sourceRepoPath)` 並寫入 worktreeCache（沿用 sourceRepoPath，多 Run 共享）。檢查方式：在 `gitService` 新增（或直接使用既有方法）回傳 origin 是否存在的判斷，呼叫處放在這裡。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/services/workspace/gitService.ts
+              - backend/src/services/runtime/runExecutionResources.ts
+          - id: P3.A.t3
+            text: 在 `runExecutionResources.ts` 將原本呼叫 `gitService.createDetachedWorktree(sourceRepoPath, worktreePath)` 的段落（檔案內 114-134 行）改為呼叫 `gitService.createLocalClone(sourceRepoPath, runRepoPath)`。變數名 `worktreePath` 改名 `runRepoPath`；錯誤訊息「建立 detached worktree 失敗」改成「建立 run repo clone 失敗」。回傳結構由 `{ workspacePath: worktreePath, worktreePath }` 改為 `{ workspacePath: runRepoPath, runRepoPath }`；變數命名統一 `worktreeCache` 改名 `runRepoCache`，型別 `SharedWorkspaceResult` 中 `worktreePath: string | null` 改 `runRepoPath: string | null`。同步把 `provisionRunExecutionResources` 的參數 `worktreeCache` 改名 `runRepoCache`、回傳結構的 `worktreePath` 改 `runRepoPath`。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/services/runtime/runExecutionResources.ts
+              - backend/src/services/workflow/runExecutionService.ts
+          - id: P3.A.t4
+            text: 在 `backend/src/services/runtime/executionPaths.ts` 的 `resolveRunWorkspacePath` 中，將 `instance?.worktreePath` 判斷改為 `instance?.runRepoPath`，並用 `resolveWithinRoot(instance.runRepoPath, config.repositoriesRoot)` 回傳。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+
+      - id: P3.B
+        title: runExecutionService cleanup 改成 removeRunRepoDirectory（含路徑邊界檢查）
+        tasks:
+          - id: P3.B.t1
+            text: 在 `backend/src/services/workflow/runExecutionService.ts` 新增 `private async removeRunRepoDirectory(dirPath: string): Promise<void>`：先用 `isPathWithinDirectory(path.resolve(dirPath), path.resolve(config.repositoriesRoot))` 檢查，未通過則 warn log 後 return；通過則委派給既有 `removeRunDirectory(dirPath, "run repo")`。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/services/workflow/runExecutionService.ts
+          - id: P3.B.t2
+            text: 改寫 `runExecutionService.ts` 的 `cleanupRunResources`（檔案內 640-699 行）：將 `uniqueWorktrees` 改名 `uniqueRunRepos`、key 來源由 `entry.worktreePath` 改 `entry.runRepoPath`；移除「依 podId 查 pod、取 parentRepoPath、呼叫 `gitService.removeWorktree`」整段邏輯，改為直接呼叫 `this.removeRunRepoDirectory(runRepoPath)`（不再需要 podId 參數）。保留 `uniqueSandboxHomes` 與 `clearExecutionPathsByRunId` 既有流程不變。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/services/workflow/runExecutionService.ts
+          - id: P3.B.t3
+            text: 在 `runExecutionService.ts:154` 將 `createRun` 內的 `const worktreeCache = new Map<string, { workspacePath: string; worktreePath: string | null }>()` 改名 `runRepoCache` 並把欄位名 `worktreePath` 改 `runRepoPath`，呼叫 `provisionRunExecutionResources({ runRepoCache })`。同步更新 `instancesWithNames` 內 destructuring 的 `worktreePath: _worktreePath` 改 `runRepoPath: _runRepoPath`。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P3.B.t4
+            text: 在 `backend/src/handlers/runHandlers.ts:80` destructuring 處將 `worktreePath: _worktreePath` 改 `runRepoPath: _runRepoPath`，確保 emit 給前端的 Run 結構不含內部隔離路徑欄位。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+
+      - id: P3.C
+        title: 修正 / 重寫相關後端測試
+        tasks:
+          - id: P3.C.t1
+            text: 修改 `backend/tests/unit/runExecutionResources.test.ts` 案例 1（依 Q4 答案）：原本 mock `createDetachedWorktree` 失敗的測試改為 mock `createLocalClone` 失敗，斷言錯誤訊息改為「建立 run repo clone 失敗」；其他既有測試案例同步把 `worktreePath` 欄位斷言改名 `runRepoPath`、`worktreeCache` 變數名改 `runRepoCache`。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/tests/unit/runExecutionResources.test.ts
+          - id: P3.C.t2
+            text: 在 `backend/tests/unit/runExecutionResources.test.ts` 新增測試案例：「Repository 無 origin remote 時 fallback 回 sourceRepoPath」— 準備一個有 git + 有 commit 但無 origin 的暫存 repo，呼叫 `provisionRunExecutionResources`，驗證回傳 `workspacePath === sourceRepoPath` 且 `runRepoPath === null`，且 `createLocalClone` 未被呼叫。Mock 邊界：mock `gitService.createLocalClone`、`gitService.syncToRemoteLatest`；不 mock 檔案系統。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/tests/unit/runExecutionResources.test.ts
+          - id: P3.C.t3
+            text: 在 `backend/tests/unit/runExecutionService.test.ts` 新增「cleanupRunResources 路徑邊界檢查」測試案例：當 DB 內 `run_repo_path` 指向 `config.repositoriesRoot` 外部時（直接塞入測試資料），呼叫 cleanup 後該 runDir 不會被刪除且 log 出 warn；正常情況下 runDir 被刪除（用 testdouble 攔截 fs.rm）。Mock 邊界：用 testdouble 攔截 `fs.rm`；不 mock `runStore` 與 `isPathWithinDirectory`。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/tests/unit/runExecutionService.test.ts
+
+  - id: P4
+    title: 砍掉 manual worktree 後端（handlers、events、schemas、types）
+    parallel: true
+    verification:
+      - cd backend && bun run style
+      - "! test -f backend/src/handlers/repositoryWorktreeHandlers.ts"
+      - "! grep -n 'REPOSITORY_WORKTREE' backend/src/schemas/events.ts"
+      - "! grep -n 'worktreeBranches' backend/src/types/responses/repository.ts"
+    done: true
+    items:
+      - id: P4.A
+        title: 移除 manual worktree handler / event / schema / type
+        tasks:
+          - id: P4.A.t1
+            text: 刪除整個檔案 `backend/src/handlers/repositoryWorktreeHandlers.ts`。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/handlers/repositoryWorktreeHandlers.ts
+          - id: P4.A.t2
+            text: 在 `backend/src/handlers/groups/repositoryHandlerGroup.ts` 中移除 `repositoryWorktreeCreateSchema` import、`handleRepositoryWorktreeCreate` import，以及 handlers 陣列內 `REPOSITORY_WORKTREE_CREATE` 對應的整個 handler entry（檔案內 111-115 行）。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/handlers/groups/repositoryHandlerGroup.ts
+          - id: P4.A.t3
+            text: 在 `backend/src/schemas/events.ts` 移除 `REPOSITORY_WORKTREE_CREATE` 與 `REPOSITORY_WORKTREE_CREATED` 兩個 enum 值。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/schemas/events.ts
+          - id: P4.A.t4
+            text: 在 `backend/src/schemas/repositorySchemas.ts` 移除 `repositoryWorktreeCreateSchema`（含 `RESERVED_NAMES` 常數若已無其他用途則一併移除）與其 `RepositoryWorktreeCreatePayload` 型別 export。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/schemas/repositorySchemas.ts
+          - id: P4.A.t5
+            text: 在 `backend/src/types/responses/repository.ts` 移除 `RepositoryWorktreeCreatedPayload` interface 與 `RepositoryLocalBranchesResultPayload` 的 `worktreeBranches?: string[]` 欄位。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/types/responses/repository.ts
+
+      - id: P4.B
+        title: 移除 repositoryHandlers 的 cleanupWorktreeResources、調整 repositoryBranchHandlers 回傳值
+        tasks:
+          - id: P4.B.t1
+            text: 在 `backend/src/handlers/repositoryHandlers.ts` 移除 `cleanupWorktreeResources` 函式（檔案內 256-276 行）與 `handleRepositoryDelete` 內 `if (metadata?.parentRepoId)` 那段呼叫（檔案內 298-303 行）。砍掉 manual worktree 後不會再有新 `parentRepoId` 寫入；既有舊資料的 cleanup 一併捨棄。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/handlers/repositoryHandlers.ts
+          - id: P4.B.t2
+            text: 在 `backend/src/handlers/repositoryBranchHandlers.ts` 的 `handleRepositoryGetLocalBranches`（檔案內 113-144 行）回傳 payload 中移除 `worktreeBranches: branchesResult.data.worktreeBranches` 這一行，因為 `getLocalBranches` 已不再回傳該欄位。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+
+      - id: P4.C
+        title: 整合測試 — 砍掉 manual worktree 段落 + 移除 worktreeBranches 段落
+        tasks:
+          - id: P4.C.t1
+            text: 在 `backend/tests/integration/repository.test.ts` 移除「manual worktree 建立 / metadata / 刪除清理」相關段落（依 Q4 答案直接整段砍，不另寫 clone 版替代）。保留其餘 repository CRUD / clone 等案例不動。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/tests/integration/repository.test.ts
+          - id: P4.C.t2
+            text: 在 `backend/tests/integration/repository-git-operations.test.ts` 移除「分支獲取 worktreeBranches 欄位」相關案例（Q4 答案標示為案例 2-3）。保留 parentRepoId 限制檢查、其他 git 操作（案例 1/4/5-6/7）不變。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/tests/integration/repository-git-operations.test.ts
+
+  - id: P5
+    title: backend 啟動時掃描孤兒 runDir 並 warn log（不自動刪）
+    parallel: false
+    verification:
+      - cd backend && bun run style
+      - cd backend && bun run test -- tests/unit/orphanRunRepoScanner.test.ts
+      - test -f backend/src/services/runtime/orphanRunRepoScanner.ts
+      - test -f backend/tests/unit/orphanRunRepoScanner.test.ts
+    done: true
+    items:
+      - id: P5.A
+        title: 新增孤兒 runDir 掃描模組
+        tasks:
+          - id: P5.A.t1
+            text: 新增檔案 `backend/src/services/runtime/orphanRunRepoScanner.ts`，export `async function scanAndLogOrphanRunRepoDirectories(): Promise<void>`。實作：讀取 `config.repositoriesRoot` 目錄底下的子項目，篩出符合命名 `{repositoryId}-run-{anything}` 的資料夾；同時從 `runStore.getRunningRuns()` 取得 active runId 清單；針對每個篩出的 runDir 解析其 runId 部分，若不在 active runId 集合內，則 `logger.warn("Run", "Orphan", \`偵測到孤兒 run 隔離目錄：${dirPath}\`)`。不執行任何刪除動作（依 Q10 答案）。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/services/runtime/orphanRunRepoScanner.ts
+              - backend/src/utils/logger.ts
+          - id: P5.A.t2
+            text: 在 `backend/src/index.ts` 的 `startServer` 內、`socketService.initialize()` + `registerAllHandlers()` 之後、`Bun.serve` 之前，呼叫 `await scanAndLogOrphanRunRepoDirectories()`。import 新模組。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/index.ts
+          - id: P5.A.t3
+            text: 新增 `backend/tests/unit/orphanRunRepoScanner.test.ts` 涵蓋以下案例：(1) `repositoriesRoot` 內存在 `repo1-run-aaa`、`repo1-run-bbb` 兩個資料夾，且 `runStore.getRunningRuns` 回傳 runId 為 `aaa` 的清單 → 只 warn `repo1-run-bbb` 為孤兒。(2) 沒有任何匹配命名的資料夾 → 完全不 warn。(3) 命名不符 pattern 的資料夾（如 `repo1`、`some-random-folder`）→ 完全不 warn。Mock 邊界：mock `runStore.getRunningRuns`、`logger.warn`；用真實檔案系統暫存目錄做 `config.repositoriesRoot`。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/tests/unit/orphanRunRepoScanner.test.ts
+
+  - id: P6
+    title: 清除 parentRepoId / branchName 殘留 dead code（DB column + type + service + handler）
+    parallel: false
+    verification:
+      - cd backend && bun run style
+      - cd backend && bun run test -- tests/unit/repositoryService.test.ts
+      - "! grep -rn 'parentRepoId\\|parent_repo_id' backend/src --include='*.ts'"
+      - "! grep -rn 'branchName\\|branch_name' backend/src/services/repositoryService.ts backend/src/handlers/repositoryHandlers.ts backend/src/handlers/repositoryGitHelpers.ts"
+    done: true
+    items:
+      - id: P6.A
+        title: DB schema 砍 parent_repo_id / branch_name 欄位（保留 current_branch）
+        tasks:
+          - id: P6.A.t1
+            text: 在 `backend/src/database/schema.ts` 的 `repository_metadata` CREATE TABLE 中移除 `parent_repo_id TEXT` 與 `branch_name TEXT` 兩個欄位（新 DB 直接落新 schema）。保留 `current_branch` 欄位（與 worktree 無關，純粹用於當前 branch cache）。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/database/schema.ts
+          - id: P6.A.t2
+            text: 在 `schema.ts` 新增 `migrateRepositoryMetadataDropWorktreeColumns(db)` 函式：用 `columnExists` 慣例檢查 `repository_metadata` 表，若存在舊欄位 `parent_repo_id` 或 `branch_name` 則執行 `ALTER TABLE repository_metadata DROP COLUMN parent_repo_id` / `ALTER TABLE repository_metadata DROP COLUMN branch_name`（SQLite 3.35+ 支援 DROP COLUMN，搭配既有 try/catch ALTER TABLE migration 模式）。在 `createTables(db)` 內呼叫此函式。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/database/schema.ts
+
+      - id: P6.B
+        title: 清除 types / responses 內 parentRepoId / branchName 欄位
+        tasks:
+          - id: P6.B.t1
+            text: 在 `backend/src/types/repository.ts` 的 `Repository` interface 移除 `parentRepoId?: string` 欄位。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/types/repository.ts
+          - id: P6.B.t2
+            text: 在 `backend/src/types/responses/repository.ts` 中移除兩處 inline type（L6 與 L77 附近）的 `parentRepoId?: string; branchName?: string;` 欄位。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/types/responses/repository.ts
+
+      - id: P6.C
+        title: 清除 service 與 handler 內 parentRepoId / branchName 讀寫
+        tasks:
+          - id: P6.C.t1
+            text: 在 `backend/src/services/repositoryService.ts` 移除所有 `parentRepoId` / `branchName` 參數與邏輯（L19 / L37 / L50 / L66 / L77 / L97 / L102 / L119 / L134 附近）：方法簽名移除 options 內 `parentRepoId` / `branchName`、`registerMetadata` 簽名移除這兩個 field、`rowToRepository` 不再從 `parent_repo_id` / `branch_name` row 欄位映射、INSERT prepared statement 不再帶這兩個 placeholder。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/services/repositoryService.ts
+          - id: P6.C.t2
+            text: 在 `backend/src/database/statements.ts` 的 repository INSERT 與 metadata UPSERT prepared statements 中移除 `$parentRepoId` / `$branchName` placeholder 及對應欄位列表。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/database/statements.ts
+          - id: P6.C.t3
+            text: 在 `backend/src/handlers/repositoryHandlers.ts` 移除 `cleanupWorktreeResources` 函式簽名所引用的 metadata.parentRepoId 與 branchName 型別（若該函式於 P4.B.t1 已被刪除則本任務無事可做、留為 noop）。同時確認 `handleRepositoryDelete` 內不再有任何 `metadata?.parentRepoId` 判斷殘留。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/handlers/repositoryHandlers.ts
+          - id: P6.C.t4
+            text: 在 `backend/src/handlers/repositoryGitHelpers.ts:118` 附近移除 `if (metadata?.parentRepoId) {...}` 整段判斷（該判斷用於阻止 worktree repository 做某些 git 操作，砍 manual worktree 後不再需要）。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/handlers/repositoryGitHelpers.ts
+
+  - id: P7
+    title: 整合驗證 — 全量 lint / type / test 一次跑完
+    parallel: false
+    verification:
+      - cd backend && bun run style
+      - cd backend && bun run test
+    done: true
+    items:
+      - id: P7.A
+        title: 全量驗證
+        tasks:
+          - id: P7.A.t1
+            text: 跑完整 `cd backend && bun run style` 與 `cd backend && bun run test`。若有遺漏的 worktree / worktreePath / worktreeBranches / parentRepoId / branchName 參照尚未替換，依錯誤訊息逐一修正並重跑直到全綠。本 phase 不允許新增業務邏輯，只能補既有 P1-P6 範圍的漏網之魚。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/services/workspace/gitService.ts
+              - backend/src/services/runtime/runExecutionResources.ts
+              - backend/src/services/workflow/runExecutionService.ts
+              - backend/src/services/runStore.ts
+              - backend/src/database/statements.ts
+              - backend/src/database/schema.ts
+              - backend/src/types/run.ts
+              - backend/src/types/responses/repository.ts
+              - backend/src/handlers/repositoryBranchHandlers.ts
+              - backend/src/handlers/runHandlers.ts
+              - backend/src/handlers/repositoryHandlers.ts
+              - backend/src/handlers/repositoryGitHelpers.ts
+              - backend/src/handlers/groups/repositoryHandlerGroup.ts
+              - backend/src/schemas/events.ts
+              - backend/src/schemas/repositorySchemas.ts
+              - backend/src/services/runtime/executionPaths.ts
+              - backend/tests/unit/runExecutionResources.test.ts
+              - backend/tests/unit/runExecutionService.test.ts
+              - backend/tests/unit/runStore.test.ts
+              - backend/tests/integration/repository.test.ts
+              - backend/tests/integration/repository-git-operations.test.ts

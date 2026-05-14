@@ -34,36 +34,9 @@ describe("noteEventHandlers", () => {
   describe("getNoteEventListeners", () => {
     it("應回傳正確數量的 listener", () => {
       const result = getNoteEventListeners();
-      // repository/command 各類 CRUD + deleted + worktree created + branch changed
+      // repository/command 各類 CRUD + deleted + branch changed
       // TODO Phase 4: mcpServer 重構後調整預期數量
-      expect(result.length).toBeGreaterThanOrEqual(7);
-    });
-  });
-
-  describe("handleRepositoryWorktreeCreated（canvasId 防護）", () => {
-    it("canvasId 匹配且 repository 有效時應呼叫 addItemFromEvent", () => {
-      const store = useRepositoryStore();
-      const spy = vi.spyOn(store, "addItemFromEvent");
-      const repository = { id: "repo-1", name: "my-repo" };
-
-      findHandler("repository:worktree:created")({
-        canvasId: "canvas-1",
-        repository,
-      });
-
-      expect(spy).toHaveBeenCalledWith(repository);
-    });
-
-    it("canvasId 不匹配時不應執行", () => {
-      const store = useRepositoryStore();
-      const spy = vi.spyOn(store, "addItemFromEvent");
-
-      findHandler("repository:worktree:created")({
-        canvasId: "other-canvas",
-        repository: { id: "repo-1", name: "my-repo" },
-      });
-
-      expect(spy).not.toHaveBeenCalled();
+      expect(result.length).toBeGreaterThanOrEqual(6);
     });
   });
 

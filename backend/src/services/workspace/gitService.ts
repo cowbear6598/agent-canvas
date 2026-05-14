@@ -86,11 +86,8 @@ function getBranchDeletionError(
 }
 
 function getCheckoutError(errorMessage: string, branchName: string): string {
-  if (
-    errorMessage.includes("is already checked out at") ||
-    errorMessage.includes("is already used by worktree at")
-  ) {
-    return `無法切換到分支「${branchName}」，該分支已被 Worktree 使用`;
+  if (errorMessage.includes("is already checked out at")) {
+    return `無法切換到分支「${branchName}」，該分支已被其他工作目錄佔用`;
   }
   return "切換分支失敗";
 }
@@ -214,23 +211,9 @@ function buildCheckoutArgs(branchName: string, force?: boolean): string[] {
   return force ? [branchName, "--force"] : [branchName];
 }
 
-function parseWorktreeLine(
-  line: string,
-  realWorkspacePath: string,
-): string | null {
-  const pathMatch = line.match(/^(.+?)\s+/);
-  if (!pathMatch) return null;
-
-  const worktreePath = path.normalize(pathMatch[1]);
-  if (worktreePath === realWorkspacePath) return null;
-
-  const branchMatch = line.match(/\[(.+?)]/);
-  if (!branchMatch || !branchMatch[1]) return null;
-
-  return branchMatch[1];
-}
-
 class GitService {
+  private repoFetchPromises = new Map<string, Promise<Result<void>>>();
+
   async clone(
     repoUrl: string,
     targetPath: string,
@@ -271,6 +254,55 @@ class GitService {
     }
   }
 
+  async createLocalClone(
+    sourceRepoPath: string,
+    runDir: string,
+  ): Promise<Result<void>> {
+    if (!isPathWithinDirectory(runDir, config.repositoriesRoot)) {
+      return err("runDir 路徑不在允許的範圍內");
+    }
+
+    try {
+      const git = simpleGit();
+      await git.clone(sourceRepoPath, runDir, ["--local"]);
+
+      // 取得主 repo 的真實 origin URL，設定給 runDir 的 origin
+      const sourceGit = simpleGit(sourceRepoPath);
+      const remotes = await sourceGit.getRemotes(true);
+      const originRemote = remotes.find((r) => r.name === "origin");
+      if (originRemote?.refs?.fetch) {
+        const runGit = simpleGit(runDir);
+        await runGit.raw([
+          "remote",
+          "set-url",
+          "origin",
+          originRemote.refs.fetch,
+        ]);
+      }
+
+      return ok(undefined);
+    } catch (error) {
+      logger.error(
+        "Git",
+        "Error",
+        `[Git] 建立 run repo clone 失敗`,
+        maskTokenInError(error),
+      );
+      return err("建立 run repo clone 失敗");
+    }
+  }
+
+  async hasOriginRemote(workspacePath: string): Promise<Result<boolean>> {
+    return gitOperationWithPath(
+      workspacePath,
+      async (git) => {
+        const remotes = await git.getRemotes();
+        return remotes.some((remote) => remote.name === "origin");
+      },
+      "檢查 origin remote 失敗",
+    );
+  }
+
   async getCurrentBranch(workspacePath: string): Promise<Result<string>> {
     return gitOperationWithPath(
       workspacePath,
@@ -284,7 +316,6 @@ class GitService {
 
   async isGitRepository(workspacePath: string): Promise<Result<boolean>> {
     const gitPath = path.join(workspacePath, ".git");
-    // 一般 repo 的 .git 是目錄，worktree 的 .git 是指向主 repo 的檔案
     const stat = await fs.stat(gitPath).catch(() => null);
     return ok(stat !== null);
   }
@@ -320,62 +351,6 @@ class GitService {
         return branches.all.includes(branchName);
       },
       "檢查分支失敗",
-    );
-  }
-
-  async createWorktree(
-    workspacePath: string,
-    worktreePath: string,
-    branchName: string,
-  ): Promise<Result<void>> {
-    if (!isPathWithinDirectory(worktreePath, config.repositoriesRoot)) {
-      return err("無效的 worktree 路徑");
-    }
-
-    if (!isValidBranchName(branchName)) {
-      return err("無效的分支名稱格式");
-    }
-
-    return gitOperationWithPath(
-      workspacePath,
-      async (git) => {
-        await git.raw(["worktree", "add", "-b", branchName, worktreePath]);
-      },
-      "建立 Worktree 失敗",
-    );
-  }
-
-  async createDetachedWorktree(
-    parentRepoPath: string,
-    worktreePath: string,
-  ): Promise<Result<void>> {
-    if (!isPathWithinDirectory(worktreePath, config.repositoriesRoot)) {
-      return err("無效的 worktree 路徑");
-    }
-
-    return gitOperationWithPath(
-      parentRepoPath,
-      async (git) => {
-        await git.raw(["worktree", "add", "--detach", worktreePath, "HEAD"]);
-      },
-      "建立 Detached Worktree 失敗",
-    );
-  }
-
-  async removeWorktree(
-    parentRepoPath: string,
-    worktreePath: string,
-  ): Promise<Result<void>> {
-    if (!isPathWithinDirectory(worktreePath, config.repositoriesRoot)) {
-      return err("無效的 worktree 路徑");
-    }
-
-    return gitOperationWithPath(
-      parentRepoPath,
-      async (git) => {
-        await git.raw(["worktree", "remove", "--force", worktreePath]);
-      },
-      "移除 Worktree 失敗",
     );
   }
 
@@ -462,30 +437,10 @@ class GitService {
     }
   }
 
-  async getWorktreeBranches(workspacePath: string): Promise<Result<string[]>> {
-    return gitOperationWithPath(
-      workspacePath,
-      async (git) => {
-        const worktreeList = await git.raw(["worktree", "list"]);
-
-        const lines = worktreeList.trim().split("\n");
-
-        // macOS 上 /tmp 是 /private/tmp 的 symlink，需要解析真實路徑才能正確比較
-        const realWorkspacePath = await fs.realpath(workspacePath);
-
-        return lines
-          .map((line) => parseWorktreeLine(line, realWorkspacePath))
-          .filter((branch): branch is string => branch !== null);
-      },
-      "取得 Worktree 分支列表失敗",
-    );
-  }
-
   async getLocalBranches(workspacePath: string): Promise<
     Result<{
       branches: string[];
       current: string;
-      worktreeBranches: string[];
     }>
   > {
     return gitOperationWithPath(
@@ -497,16 +452,9 @@ class GitService {
           (branch) => !branch.startsWith("remotes/"),
         );
 
-        const worktreeBranchesResult =
-          await this.getWorktreeBranches(workspacePath);
-        const worktreeBranches: string[] = worktreeBranchesResult.success
-          ? worktreeBranchesResult.data
-          : [];
-
         return {
           branches: localBranches,
           current: branchSummary.current,
-          worktreeBranches,
         };
       },
       "取得本地分支列表失敗",
@@ -640,6 +588,20 @@ class GitService {
    * - 失敗時回傳 err 但不拋出例外
    */
   async syncToRemoteLatest(workspacePath: string): Promise<Result<void>> {
+    const cacheKey = path.resolve(workspacePath);
+    const existing = this.repoFetchPromises.get(cacheKey);
+    if (existing) return existing;
+
+    const promise = this._doSyncToRemoteLatest(workspacePath).finally(() => {
+      this.repoFetchPromises.delete(cacheKey);
+    });
+    this.repoFetchPromises.set(cacheKey, promise);
+    return promise;
+  }
+
+  private async _doSyncToRemoteLatest(
+    workspacePath: string,
+  ): Promise<Result<void>> {
     // 檢查是否有 origin remote
     const hasRemoteResult = await gitOperationWithPath(
       workspacePath,
@@ -662,20 +624,12 @@ class GitService {
       return ok(undefined);
     }
 
-    // 取得當前分支名稱
-    const branchResult = await this.validateCurrentBranch(workspacePath);
-    if (!branchResult.success) {
-      return err(`同步失敗：${branchResult.error}`);
-    }
-
-    const currentBranch = branchResult.data;
-
-    // 執行 fetch + reset --hard（不執行 clean -fd，避免刪除 .claude/ 等動態管理的 untracked 檔案）
+    // 執行 fetch origin --prune，同步所有遠端 branches 到本地
+    // 不執行 reset --hard，避免改動主 repo 的工作樹狀態
     return gitOperationWithPath(
       workspacePath,
       async (git) => {
-        await git.fetch(["origin", currentBranch]);
-        await git.reset(["--hard", `origin/${currentBranch}`]);
+        await git.fetch(["origin", "--prune"]);
       },
       "同步 remote 最新版本失敗",
     );

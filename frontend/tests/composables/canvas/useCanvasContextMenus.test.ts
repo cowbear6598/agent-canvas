@@ -13,7 +13,6 @@ function createRepositoryStore(
     typedAvailableItems: Array<{
       id: string;
       name: string;
-      parentRepoId?: string | null;
     }>;
   }> = {},
 ) {
@@ -71,9 +70,7 @@ describe("useCanvasContextMenus", () => {
     it("正常查到 note 和 repository 時，應開啟右鍵選單", () => {
       const repositoryStore = createRepositoryStore({
         typedNotes: [{ id: "note-1", repositoryId: "repo-1", x: 10, y: 20 }],
-        typedAvailableItems: [
-          { id: "repo-1", name: "my-repo", parentRepoId: null },
-        ],
+        typedAvailableItems: [{ id: "repo-1", name: "my-repo" }],
       });
 
       const { repositoryContextMenu, handleRepositoryContextMenu } =
@@ -109,54 +106,18 @@ describe("useCanvasContextMenus", () => {
 
       expect(repositoryContextMenu.value.visible).toBe(false);
     });
-
-    it("parentRepoId 存在時 isWorktree 應為 true", () => {
-      const repositoryStore = createRepositoryStore({
-        typedNotes: [{ id: "note-1", repositoryId: "repo-2", x: 0, y: 0 }],
-        typedAvailableItems: [
-          {
-            id: "repo-2",
-            name: "worktree-repo",
-            parentRepoId: "parent-repo-1",
-          },
-        ],
-      });
-
-      const { repositoryContextMenu, handleRepositoryContextMenu } =
-        createComposable({ repositoryStore });
-
-      handleRepositoryContextMenu({
-        noteId: "note-1",
-        event: createMouseEvent(),
-      });
-
-      expect(repositoryContextMenu.value.data.isWorktree).toBe(true);
-    });
-
-    it("parentRepoId 為 null 時 isWorktree 應為 false", () => {
-      const repositoryStore = createRepositoryStore({
-        typedNotes: [{ id: "note-1", repositoryId: "repo-1", x: 0, y: 0 }],
-        typedAvailableItems: [
-          { id: "repo-1", name: "main-repo", parentRepoId: null },
-        ],
-      });
-
-      const { repositoryContextMenu, handleRepositoryContextMenu } =
-        createComposable({ repositoryStore });
-
-      handleRepositoryContextMenu({
-        noteId: "note-1",
-        event: createMouseEvent(),
-      });
-
-      expect(repositoryContextMenu.value.data.isWorktree).toBe(false);
-    });
   });
 
   describe("handleConnectionContextMenu", () => {
     it("正常查到 connection 時，應開啟右鍵選單", () => {
       const connectionStore = createConnectionStore({
-        connections: [{ id: "conn-1", triggerMode: "auto" as TriggerMode, summaryModel: "sonnet" as ModelType }],
+        connections: [
+          {
+            id: "conn-1",
+            triggerMode: "auto" as TriggerMode,
+            summaryModel: "sonnet" as ModelType,
+          },
+        ],
       });
 
       const { connectionContextMenu, handleConnectionContextMenu } =

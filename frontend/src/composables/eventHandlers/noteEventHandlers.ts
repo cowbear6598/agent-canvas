@@ -46,68 +46,12 @@ function createNoteHandlers<TNote>(config: NoteHandlerConfig<TNote>): {
   };
 }
 
-function isValidStringField(value: unknown): boolean {
-  return typeof value === "string" && value.trim() !== "";
-}
-
-function validateIdAndName(
-  id: unknown,
-  name: unknown,
-  context: string,
-): boolean {
-  if (!isValidStringField(id)) {
-    console.error(`[Security] 無效的 ${context}.id 格式`);
-    return false;
-  }
-
-  if (!isValidStringField(name)) {
-    console.error(`[Security] 無效的 ${context}.name 格式`);
-    return false;
-  }
-
-  return true;
-}
-
-function containsXssPattern(name: string): boolean {
-  return /<script|javascript:|on\w+=/i.test(name);
-}
-
-type RepositoryItem = {
-  id: string;
-  name: string;
-  parentRepoId?: string;
-  branchName?: string;
-};
-
-const validateRepositoryItem = (repository: RepositoryItem): boolean => {
-  if (!validateIdAndName(repository.id, repository.name, "repository"))
-    return false;
-
-  if (containsXssPattern(repository.name)) {
-    console.error("[Security] 潛在惡意的 repository.name:", repository.name);
-    return false;
-  }
-
-  return true;
-};
-
 const repositoryNoteHandlers = createNoteHandlers<RepositoryNote>({
   getStore: useRepositoryStore,
 });
 const commandNoteHandlers = createNoteHandlers<CommandNote>({
   getStore: useCommandStore,
 });
-
-const handleRepositoryWorktreeCreated = createUnifiedHandler<
-  BasePayload & { repository?: RepositoryItem; canvasId: string }
->(
-  (payload) => {
-    if (payload.repository && validateRepositoryItem(payload.repository)) {
-      useRepositoryStore().addItemFromEvent(payload.repository);
-    }
-  },
-  { toastMessage: () => t("composable.eventHandler.worktreeCreated") },
-);
 
 const handleRepositoryDeleted = createUnifiedHandler<
   BasePayload & {
@@ -161,10 +105,6 @@ export function getNoteEventListeners(): Array<{
   handler: (payload: unknown) => void;
 }> {
   return [
-    {
-      event: WebSocketResponseEvents.REPOSITORY_WORKTREE_CREATED,
-      handler: handleRepositoryWorktreeCreated as (payload: unknown) => void,
-    },
     {
       event: WebSocketResponseEvents.REPOSITORY_DELETED,
       handler: handleRepositoryDeleted as (payload: unknown) => void,

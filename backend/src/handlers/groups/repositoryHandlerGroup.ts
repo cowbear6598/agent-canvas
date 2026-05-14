@@ -11,7 +11,6 @@ import {
   repositoryDeleteSchema,
   repositoryGitCloneSchema,
   repositoryCheckGitSchema,
-  repositoryWorktreeCreateSchema,
   repositoryGetLocalBranchesSchema,
   repositoryCheckDirtySchema,
   repositoryCheckoutBranchSchema,
@@ -30,7 +29,6 @@ import {
   handleRepositoryGitClone,
   handleRepositoryCheckGit,
 } from "../repositoryCloneHandlers.js";
-import { handleRepositoryWorktreeCreate } from "../repositoryWorktreeHandlers.js";
 import {
   handleRepositoryGetLocalBranches,
   handleRepositoryCheckDirty,
@@ -106,12 +104,6 @@ export const repositoryHandlerGroup = createHandlerGroup({
       handler: handleRepositoryCheckGit,
       schema: repositoryCheckGitSchema,
       responseEvent: WebSocketResponseEvents.REPOSITORY_CHECK_GIT_RESULT,
-    },
-    {
-      event: WebSocketRequestEvents.REPOSITORY_WORKTREE_CREATE,
-      handler: handleRepositoryWorktreeCreate,
-      schema: repositoryWorktreeCreateSchema,
-      responseEvent: WebSocketResponseEvents.REPOSITORY_WORKTREE_CREATED,
     },
     {
       event: WebSocketRequestEvents.REPOSITORY_GET_LOCAL_BRANCHES,

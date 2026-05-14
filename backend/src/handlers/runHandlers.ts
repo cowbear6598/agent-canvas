@@ -77,7 +77,7 @@ export const handleRunLoadHistory = withCanvasId<RunLoadHistoryPayload>(
 
       const podInstances = instances.map((instance) => {
         const {
-          worktreePath: _worktreePath,
+          runRepoPath: _runRepoPath,
           workspacePath: _workspacePath,
           sandboxHomePath: _sandboxHomePath,
           ...instanceData
@@ -124,7 +124,9 @@ export const handleRunLoadPodMessages = withCanvasId<RunLoadPodMessagesPayload>(
     emitSuccess(connectionId, WebSocketResponseEvents.RUN_POD_MESSAGES_LOADED, {
       requestId,
       success: true,
-      messages: messages.map((message) => sanitizePersistedMessageForClient(message)),
+      messages: messages.map((message) =>
+        sanitizePersistedMessageForClient(message),
+      ),
     });
   },
 );

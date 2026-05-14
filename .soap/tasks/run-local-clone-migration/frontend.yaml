@@ -1,0 +1,445 @@
+feature: run-local-clone-migration
+side: frontend
+approved: true
+
+phases:
+  - id: P1
+    title: 砍 Component 層（CreateWorktreeModal 整檔 + RepositoryContextMenu / BranchSelectModal worktree 相關段落）
+    parallel: false
+    verification:
+      - test ! -f frontend/src/components/canvas/CreateWorktreeModal.vue
+      - cd frontend && bun run style
+    done: true
+    items:
+      - id: P1.A
+        title: 移除 CreateWorktreeModal 整檔
+        tasks:
+          - id: P1.A.t1
+            text: 刪除 `frontend/src/components/canvas/CreateWorktreeModal.vue` 整個檔案
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/canvas/CreateWorktreeModal.vue
+
+      - id: P1.B
+        title: 清理 RepositoryContextMenu 內的 Create Worktree 相關段落
+        tasks:
+          - id: P1.B.t1
+            text: 在 `frontend/src/components/canvas/RepositoryContextMenu.vue` 移除 `CreateWorktreeModal` 的 import 語句（L8 附近）
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/canvas/RepositoryContextMenu.vue
+          - id: P1.B.t2
+            text: 在 `frontend/src/components/canvas/RepositoryContextMenu.vue` 移除 `showWorktree` ref / state 宣告（L49 附近）
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/canvas/RepositoryContextMenu.vue
+          - id: P1.B.t3
+            text: 在 `frontend/src/components/canvas/RepositoryContextMenu.vue` 移除 `dataState.worktreeBranches` 初始化（L59 附近）
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/canvas/RepositoryContextMenu.vue
+          - id: P1.B.t4
+            text: 在 `frontend/src/components/canvas/RepositoryContextMenu.vue` 移除 worktree modal close handler（L103 附近）
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/canvas/RepositoryContextMenu.vue
+          - id: P1.B.t5
+            text: 在 `frontend/src/components/canvas/RepositoryContextMenu.vue` 移除 `handleCreateWorktreeClick` 函式（L111-115 附近）
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/canvas/RepositoryContextMenu.vue
+          - id: P1.B.t6
+            text: 在 `frontend/src/components/canvas/RepositoryContextMenu.vue` 移除 `handleWorktreeSubmit` 函式（L117-128 附近）
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/canvas/RepositoryContextMenu.vue
+          - id: P1.B.t7
+            text: 在 `frontend/src/components/canvas/RepositoryContextMenu.vue` 移除 `worktreeBranches` 賦值與重新載入的相關邏輯（L145 與 L216 附近）
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/canvas/RepositoryContextMenu.vue
+          - id: P1.B.t8
+            text: 在 `frontend/src/components/canvas/RepositoryContextMenu.vue` template 內移除「Create Worktree」按鈕 UI 區塊（L250-267 附近）
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/canvas/RepositoryContextMenu.vue
+          - id: P1.B.t9
+            text: 在 `frontend/src/components/canvas/RepositoryContextMenu.vue` template 內移除 `CreateWorktreeModal` Teleport 區塊（L321-326 附近）
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/canvas/RepositoryContextMenu.vue
+          - id: P1.B.t10
+            text: 在 `frontend/src/components/canvas/RepositoryContextMenu.vue` 移除傳入 `BranchSelectModal` 的 `worktreeBranches` prop（L333 附近）
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/canvas/RepositoryContextMenu.vue
+
+      - id: P1.C
+        title: 清理 BranchSelectModal 內的 worktree 分隔區
+        tasks:
+          - id: P1.C.t1
+            text: 在 `frontend/src/components/canvas/BranchSelectModal.vue` 移除 `worktreeBranches` prop 宣告（L25 附近）
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/canvas/BranchSelectModal.vue
+          - id: P1.C.t2
+            text: 在 `frontend/src/components/canvas/BranchSelectModal.vue` 移除 `normalBranches` 與 `hasWorktreeBranches` computed（L54-65 附近），所有 branch 直接用原本完整列表渲染
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/canvas/BranchSelectModal.vue
+          - id: P1.C.t3
+            text: 在 `frontend/src/components/canvas/BranchSelectModal.vue` template 內移除「Worktree 佔用」分隔區整段 UI（L186-202 附近）
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/canvas/BranchSelectModal.vue
+
+  - id: P2
+    title: 砍 Store / Composable / Event Handler 層
+    parallel: true
+    verification:
+      - cd frontend && bun run style
+    done: true
+    items:
+      - id: P2.A
+        title: 清理 repositoryStore 內的 worktree 相關 state / action
+        tasks:
+          - id: P2.A.t1
+            text: 在 `frontend/src/stores/note/repositoryStore.ts` 移除 `createWorktree` 的型別 signature 宣告（L41-45 附近）
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/stores/note/repositoryStore.ts
+          - id: P2.A.t2
+            text: 在 `frontend/src/stores/note/repositoryStore.ts` 移除 `worktreeBranches` 相關 type 與 state 欄位（L50 / L214 / L240 附近）
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/stores/note/repositoryStore.ts
+          - id: P2.A.t3
+            text: 在 `frontend/src/stores/note/repositoryStore.ts` 移除 `createWorktree` 函式整段實作（L154-205 附近）
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/stores/note/repositoryStore.ts
+
+      - id: P2.B
+        title: 清理 noteEventHandlers 內的 worktree event 註冊
+        tasks:
+          - id: P2.B.t1
+            text: 在 `frontend/src/composables/eventHandlers/noteEventHandlers.ts` 移除 `handleRepositoryWorktreeCreated` 函式（L101-110 附近）
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/composables/eventHandlers/noteEventHandlers.ts
+          - id: P2.B.t2
+            text: 在 `frontend/src/composables/eventHandlers/noteEventHandlers.ts` 移除 `REPOSITORY_WORKTREE_CREATED` 事件的註冊段落（L165-167 附近）
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/composables/eventHandlers/noteEventHandlers.ts
+
+  - id: P3
+    title: 砍 Type / Event / Schema 層
+    parallel: true
+    verification:
+      - cd frontend && bun run style
+    done: true
+    items:
+      - id: P3.A
+        title: 清理 WebSocket events enum
+        tasks:
+          - id: P3.A.t1
+            text: 在 `frontend/src/types/websocket/events.ts` 移除 `REPOSITORY_WORKTREE_CREATE` enum（L25 附近）與 `REPOSITORY_WORKTREE_CREATED` enum（L138 附近）
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/types/websocket/events.ts
+
+      - id: P3.B
+        title: 清理 WebSocket requests payload
+        tasks:
+          - id: P3.B.t1
+            text: 在 `frontend/src/types/websocket/requests.ts` 移除 `RepositoryWorktreeCreatePayload` 型別宣告整段（L271-276 附近）
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/types/websocket/requests.ts
+
+      - id: P3.C
+        title: 清理 WebSocket responses payload
+        tasks:
+          - id: P3.C.t1
+            text: 在 `frontend/src/types/websocket/responses.ts` 移除 `RepositoryWorktreeCreatedPayload` 型別宣告整段（L283-285 附近）
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/types/websocket/responses.ts
+          - id: P3.C.t2
+            text: 在 `frontend/src/types/websocket/responses.ts` 移除 `RepositoryLocalBranchesResultPayload` 內的 `worktreeBranches?: string[]` 欄位（L290 附近）
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/types/websocket/responses.ts
+
+  - id: P4
+    title: 砍 i18n keys（en / zh-TW / ja 三個語言檔同步）
+    parallel: true
+    verification:
+      - cd frontend && bun run style
+    done: true
+    items:
+      - id: P4.A
+        title: 清理 en.json 內 worktree 相關 keys
+        tasks:
+          - id: P4.A.t1
+            text: 在 `frontend/src/locales/en.json` 移除 `canvas.worktree.*` 整個 namespace
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/locales/en.json
+          - id: P4.A.t2
+            text: 在 `frontend/src/locales/en.json` 移除 `canvas.repositoryContextMenu.createWorktree` key
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/locales/en.json
+          - id: P4.A.t3
+            text: 在 `frontend/src/locales/en.json` 移除 `canvas.branchSelect.worktreeOccupied` key
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/locales/en.json
+          - id: P4.A.t4
+            text: 在 `frontend/src/locales/en.json` 移除 `store.repository.worktreeCreateFailed` 與 `store.repository.worktreeCreateSuccess` keys
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/locales/en.json
+          - id: P4.A.t5
+            text: 在 `frontend/src/locales/en.json` 移除 `composable.eventHandler.worktreeCreated` key
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/locales/en.json
+
+      - id: P4.B
+        title: 清理 zh-TW.json 內 worktree 相關 keys
+        tasks:
+          - id: P4.B.t1
+            text: 在 `frontend/src/locales/zh-TW.json` 移除 `canvas.worktree.*` 整個 namespace
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/locales/zh-TW.json
+          - id: P4.B.t2
+            text: 在 `frontend/src/locales/zh-TW.json` 移除 `canvas.repositoryContextMenu.createWorktree` key
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/locales/zh-TW.json
+          - id: P4.B.t3
+            text: 在 `frontend/src/locales/zh-TW.json` 移除 `canvas.branchSelect.worktreeOccupied` key
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/locales/zh-TW.json
+          - id: P4.B.t4
+            text: 在 `frontend/src/locales/zh-TW.json` 移除 `store.repository.worktreeCreateFailed` 與 `store.repository.worktreeCreateSuccess` keys
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/locales/zh-TW.json
+          - id: P4.B.t5
+            text: 在 `frontend/src/locales/zh-TW.json` 移除 `composable.eventHandler.worktreeCreated` key
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/locales/zh-TW.json
+
+      - id: P4.C
+        title: 清理 ja.json 內 worktree 相關 keys
+        tasks:
+          - id: P4.C.t1
+            text: 在 `frontend/src/locales/ja.json` 移除 `canvas.worktree.*` 整個 namespace
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/locales/ja.json
+          - id: P4.C.t2
+            text: 在 `frontend/src/locales/ja.json` 移除 `canvas.repositoryContextMenu.createWorktree` key
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/locales/ja.json
+          - id: P4.C.t3
+            text: 在 `frontend/src/locales/ja.json` 移除 `canvas.branchSelect.worktreeOccupied` key
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/locales/ja.json
+          - id: P4.C.t4
+            text: 在 `frontend/src/locales/ja.json` 移除 `store.repository.worktreeCreateFailed` 與 `store.repository.worktreeCreateSuccess` keys
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/locales/ja.json
+          - id: P4.C.t5
+            text: 在 `frontend/src/locales/ja.json` 移除 `composable.eventHandler.worktreeCreated` key
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/locales/ja.json
+
+  - id: P5
+    title: 測試清理（移除 worktree 相關測試案例）
+    parallel: true
+    verification:
+      - cd frontend && bun run style
+      - cd frontend && bun run test
+    done: true
+    items:
+      - id: P5.A
+        title: 清理 repositoryStore 測試
+        tasks:
+          - id: P5.A.t1
+            text: 在 `frontend/tests/stores/note/repositoryStore.test.ts` 移除所有與 `createWorktree` action 相關的測試案例與 setup
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P5.A.t2
+            text: 在 `frontend/tests/stores/note/repositoryStore.test.ts` 移除所有與 `worktreeBranches` state 相關的斷言或 fixture
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+
+      - id: P5.B
+        title: 清理 RepositoryContextMenu 測試
+        tasks:
+          - id: P5.B.t1
+            text: 在 `frontend/tests/components/canvas/RepositoryContextMenu.test.ts` 移除 Create Worktree 按鈕、`CreateWorktreeModal` 互動相關所有測試案例
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/tests/components/canvas/RepositoryContextMenu.test.ts
+          - id: P5.B.t2
+            text: 在 `frontend/tests/components/canvas/RepositoryContextMenu.test.ts` 移除任何 `worktreeBranches` 相關的 fixture 與 prop 設置
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/tests/components/canvas/RepositoryContextMenu.test.ts
+
+  - id: P6
+    title: 清除 parentRepoId / isWorktree 殘留 dead code（type + store + composable + component）
+    parallel: false
+    verification:
+      - cd frontend && bun run style
+      - cd frontend && bun run test
+      - "! grep -rn 'parentRepoId\\|isWorktree' frontend/src --include='*.ts' --include='*.vue'"
+    done: true
+    items:
+      - id: P6.A
+        title: 清除 type / store 內 parentRepoId 與 isWorktree
+        tasks:
+          - id: P6.A.t1
+            text: 在 `frontend/src/types/repository.ts` 的 `Repository` interface 移除 `parentRepoId?: string` 欄位（L16 附近）。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/types/repository.ts
+          - id: P6.A.t2
+            text: 在 `frontend/src/composables/eventHandlers/noteEventHandlers.ts:78` 附近的 `RepositoryItem` 內部型別移除 `parentRepoId?: string` 欄位。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P6.A.t3
+            text: 在 `frontend/src/stores/note/repositoryStore.ts` 移除 `isWorktree(repositoryId: string): boolean` 介面 signature（L66 附近）與整段實作（L373-385 附近）。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/stores/note/repositoryStore.ts
+              - frontend/tests/stores/note/repositoryStore.test.ts
+
+      - id: P6.B
+        title: 清除 composable / component 內 isWorktree 計算與條件渲染
+        tasks:
+          - id: P6.B.t1
+            text: 在 `frontend/src/composables/canvas/useCanvasContextMenus.ts` 移除 `isWorktree: boolean` 欄位（L10 附近）、`parentRepoId?: string | null` 欄位（L39 附近）、`isWorktree: false` 初始化（L105 附近）、L143-145 的 `isWorktree` 計算邏輯。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/composables/canvas/useCanvasContextMenus.ts
+              - frontend/tests/composables/canvas/useCanvasContextMenus.test.ts
+          - id: P6.B.t2
+            text: 在 `frontend/src/components/canvas/RepositoryContextMenu.vue` 移除 `isWorktree: boolean` props 宣告（L19 附近）、L131 `props.isWorktree` 條件、L270 與 L292 的 `v-if="!isWorktree"` 條件渲染（按鈕一律顯示）。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/canvas/RepositoryContextMenu.vue
+          - id: P6.B.t3
+            text: 在 `frontend/src/components/canvas/CanvasContainer.vue:500` 附近移除 `:is-worktree="repositoryContextMenu.data.isWorktree"` prop 傳遞。
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/canvas/CanvasContainer.vue

@@ -22,13 +22,11 @@ import {
   WebSocketRequestEvents,
   WebSocketResponseEvents,
   type RepositoryGetLocalBranchesPayload,
-  type RepositoryWorktreeCreatePayload,
   type RepositoryPullLatestPayload,
   type RepositoryCheckoutBranchPayload,
 } from "../../src/schemas";
 import {
   type RepositoryLocalBranchesResultPayload,
-  type RepositoryWorktreeCreatedPayload,
   type RepositoryPullLatestResultPayload,
   type RepositoryPullLatestProgressPayload,
   type RepositoryBranchCheckedOutPayload,
@@ -85,8 +83,8 @@ describe("Repository Git 操作", () => {
       return repoPath;
     }
 
-    it("無 worktree 時取得分支", async () => {
-      const repo = await createRepository(client, `branches-no-wt-${uuidv4()}`);
+    it("取得本地分支", async () => {
+      const repo = await createRepository(client, `branches-basic-${uuidv4()}`);
       await initGitRepoForWebSocket(repo.id);
 
       const canvasId = await getCanvasId(client);
@@ -103,105 +101,7 @@ describe("Repository Git 操作", () => {
       expect(response.success).toBe(true);
       expect(response.branches).toBeDefined();
       expect(response.currentBranch).toBeDefined();
-      expect(response.worktreeBranches).toBeDefined();
       expect(Array.isArray(response.branches)).toBe(true);
-      expect(Array.isArray(response.worktreeBranches)).toBe(true);
-    });
-
-    it("有 worktree 時取得分支", async () => {
-      const repo = await createRepository(
-        client,
-        `branches-with-wt-${uuidv4()}`,
-      );
-      await initGitRepoForWebSocket(repo.id);
-
-      const worktreeName = "feature-branch";
-      const canvasId = await getCanvasId(client);
-
-      const createResponse = await emitAndWaitResponse<
-        RepositoryWorktreeCreatePayload,
-        RepositoryWorktreeCreatedPayload
-      >(
-        client,
-        WebSocketRequestEvents.REPOSITORY_WORKTREE_CREATE,
-        WebSocketResponseEvents.REPOSITORY_WORKTREE_CREATED,
-        { requestId: uuidv4(), canvasId, repositoryId: repo.id, worktreeName },
-      );
-
-      expect(createResponse.success).toBe(true);
-
-      const response = await emitAndWaitResponse<
-        RepositoryGetLocalBranchesPayload,
-        RepositoryLocalBranchesResultPayload
-      >(
-        client,
-        WebSocketRequestEvents.REPOSITORY_GET_LOCAL_BRANCHES,
-        WebSocketResponseEvents.REPOSITORY_LOCAL_BRANCHES_RESULT,
-        { requestId: uuidv4(), canvasId, repositoryId: repo.id },
-      );
-
-      expect(response.success).toBe(true);
-      expect(response.branches).toContain(worktreeName);
-      expect(response.worktreeBranches).toContain(worktreeName);
-    });
-
-    it("多個 worktree", async () => {
-      const repo = await createRepository(
-        client,
-        `branches-multi-wt-${uuidv4()}`,
-      );
-      await initGitRepoForWebSocket(repo.id);
-
-      const worktreeName1 = "feature-1";
-      const worktreeName2 = "feature-2";
-      const canvasId = await getCanvasId(client);
-
-      await emitAndWaitResponse<
-        RepositoryWorktreeCreatePayload,
-        RepositoryWorktreeCreatedPayload
-      >(
-        client,
-        WebSocketRequestEvents.REPOSITORY_WORKTREE_CREATE,
-        WebSocketResponseEvents.REPOSITORY_WORKTREE_CREATED,
-        {
-          requestId: uuidv4(),
-          canvasId,
-          repositoryId: repo.id,
-          worktreeName: worktreeName1,
-        },
-      );
-
-      await emitAndWaitResponse<
-        RepositoryWorktreeCreatePayload,
-        RepositoryWorktreeCreatedPayload
-      >(
-        client,
-        WebSocketRequestEvents.REPOSITORY_WORKTREE_CREATE,
-        WebSocketResponseEvents.REPOSITORY_WORKTREE_CREATED,
-        {
-          requestId: uuidv4(),
-          canvasId,
-          repositoryId: repo.id,
-          worktreeName: worktreeName2,
-        },
-      );
-
-      const response = await emitAndWaitResponse<
-        RepositoryGetLocalBranchesPayload,
-        RepositoryLocalBranchesResultPayload
-      >(
-        client,
-        WebSocketRequestEvents.REPOSITORY_GET_LOCAL_BRANCHES,
-        WebSocketResponseEvents.REPOSITORY_LOCAL_BRANCHES_RESULT,
-        { requestId: uuidv4(), canvasId, repositoryId: repo.id },
-      );
-
-      expect(response.success).toBe(true);
-      expect(response.branches).toContain(worktreeName1);
-      expect(response.branches).toContain(worktreeName2);
-      expect(response.worktreeBranches).toContain(worktreeName1);
-      expect(response.worktreeBranches).toContain(worktreeName2);
-      expect(response.worktreeBranches!.length).toBe(2);
     });
 
     it("不存在的 repository 失敗", async () => {
@@ -368,48 +268,6 @@ describe("Repository Git 操作", () => {
 
       expect(response.success).toBe(false);
     });
-
-    it("Worktree repository 無法 Pull", async () => {
-      const { config } = await import("../../src/config/index.js");
-      const repo = await createRepository(client, `pull-wt-${uuidv4()}`);
-      const repoPath = path.join(config.repositoriesRoot, repo.id);
-      await initGitRepo(repoPath);
-
-      const canvasId = await getCanvasId(client);
-
-      const worktreeResponse = await emitAndWaitResponse<
-        RepositoryWorktreeCreatePayload,
-        RepositoryWorktreeCreatedPayload
-      >(
-        client,
-        WebSocketRequestEvents.REPOSITORY_WORKTREE_CREATE,
-        WebSocketResponseEvents.REPOSITORY_WORKTREE_CREATED,
-        {
-          requestId: uuidv4(),
-          canvasId,
-          repositoryId: repo.id,
-          worktreeName: "pull-wt-branch",
-        },
-      );
-
-      expect(worktreeResponse.success).toBe(true);
-      const worktreeRepoId = worktreeResponse.repository!.id;
-
-      const response = await emitAndWaitResponse<
-        RepositoryPullLatestPayload,
-        RepositoryPullLatestResultPayload
-      >(
-        client,
-        WebSocketRequestEvents.REPOSITORY_PULL_LATEST,
-        WebSocketResponseEvents.REPOSITORY_PULL_LATEST_RESULT,
-        { requestId: uuidv4(), canvasId, repositoryId: worktreeRepoId },
-      );
-
-      expect(response.success).toBe(false);
-      expect(response.error).toEqual(
-        expect.objectContaining({ key: expect.any(String) }),
-      );
-    });
   });
 
   describe("切換分支 (handleRepositoryCheckoutBranch)", () => {
@@ -535,53 +393,6 @@ describe("Repository Git 操作", () => {
           requestId: uuidv4(),
           canvasId,
           repositoryId: repo.id,
-          branchName: "main",
-          force: false,
-        },
-      );
-
-      expect(response.success).toBe(false);
-      expect(response.error).toEqual(
-        expect.objectContaining({ key: expect.any(String) }),
-      );
-    });
-
-    it("Worktree repository 無法切換分支", async () => {
-      const repo = await createRepository(client, `checkout-wt-${uuidv4()}`);
-      const repoPath = await getRepoPath(repo.id);
-      await initGitRepo(repoPath);
-
-      const canvasId = await getCanvasId(client);
-
-      const worktreeResponse = await emitAndWaitResponse<
-        RepositoryWorktreeCreatePayload,
-        RepositoryWorktreeCreatedPayload
-      >(
-        client,
-        WebSocketRequestEvents.REPOSITORY_WORKTREE_CREATE,
-        WebSocketResponseEvents.REPOSITORY_WORKTREE_CREATED,
-        {
-          requestId: uuidv4(),
-          canvasId,
-          repositoryId: repo.id,
-          worktreeName: "wt-branch",
-        },
-      );
-
-      expect(worktreeResponse.success).toBe(true);
-      const worktreeRepoId = worktreeResponse.repository!.id;
-
-      const response = await emitAndWaitResponse<
-        RepositoryCheckoutBranchPayload,
-        RepositoryBranchCheckedOutPayload
-      >(
-        client,
-        WebSocketRequestEvents.REPOSITORY_CHECKOUT_BRANCH,
-        WebSocketResponseEvents.REPOSITORY_BRANCH_CHECKED_OUT,
-        {
-          requestId: uuidv4(),
-          canvasId,
-          repositoryId: worktreeRepoId,
           branchName: "main",
           force: false,
         },

@@ -162,9 +162,9 @@ function buildStatements(db: Database): {
     deleteByRunId: ReturnType<Database["prepare"]>;
     settleAutoPathway: ReturnType<Database["prepare"]>;
     settleDirectPathway: ReturnType<Database["prepare"]>;
-    selectWorktreePathsByRunId: ReturnType<Database["prepare"]>;
+    selectRunRepoPathsByRunId: ReturnType<Database["prepare"]>;
     selectExecutionPathsByRunId: ReturnType<Database["prepare"]>;
-    clearWorktreePathsByRunId: ReturnType<Database["prepare"]>;
+    clearRunRepoPathsByRunId: ReturnType<Database["prepare"]>;
     clearExecutionPathsByRunId: ReturnType<Database["prepare"]>;
   };
   runMessage: {
@@ -487,9 +487,9 @@ function buildStatements(db: Database): {
     repositoryMetadata: {
       upsert: db.prepare(
         `INSERT OR REPLACE INTO repository_metadata (
-          id, name, path, parent_repo_id, branch_name, current_branch
+          id, name, path, current_branch
         ) VALUES (
-          $id, $name, $path, $parentRepoId, $branchName, $currentBranch
+          $id, $name, $path, $currentBranch
         )`,
       ),
       selectById: db.prepare("SELECT * FROM repository_metadata WHERE id = ?"),
@@ -584,11 +584,11 @@ function buildStatements(db: Database): {
         `INSERT INTO run_pod_instances (
           id, run_id, pod_id, status, session_id, error_message,
           triggered_at, completed_at, auto_pathway_settled,
-          direct_pathway_settled, worktree_path, workspace_path, sandbox_home_path
+          direct_pathway_settled, run_repo_path, workspace_path, sandbox_home_path
         ) VALUES (
           $id, $runId, $podId, $status, $sessionId, $errorMessage,
           $triggeredAt, $completedAt, $autoPathwaySettled,
-          $directPathwaySettled, $worktreePath, $workspacePath, $sandboxHomePath
+          $directPathwaySettled, $runRepoPath, $workspacePath, $sandboxHomePath
         )`,
       ),
       selectByRunId: db.prepare(
@@ -621,25 +621,25 @@ function buildStatements(db: Database): {
       settleDirectPathway: db.prepare(
         "UPDATE run_pod_instances SET direct_pathway_settled = 1 WHERE id = $id", // 1 = settled（已結算）
       ),
-      selectWorktreePathsByRunId: db.prepare(
-        "SELECT pod_id, worktree_path FROM run_pod_instances WHERE run_id = ? AND worktree_path IS NOT NULL",
+      selectRunRepoPathsByRunId: db.prepare(
+        "SELECT pod_id, run_repo_path FROM run_pod_instances WHERE run_id = ? AND run_repo_path IS NOT NULL",
       ),
       selectExecutionPathsByRunId: db.prepare(
-        `SELECT pod_id, worktree_path, workspace_path, sandbox_home_path
+        `SELECT pod_id, run_repo_path, workspace_path, sandbox_home_path
         FROM run_pod_instances
         WHERE run_id = ?
           AND (
-            worktree_path IS NOT NULL OR
+            run_repo_path IS NOT NULL OR
             workspace_path IS NOT NULL OR
             sandbox_home_path IS NOT NULL
           )`,
       ),
-      clearWorktreePathsByRunId: db.prepare(
-        "UPDATE run_pod_instances SET worktree_path = NULL WHERE run_id = ?",
+      clearRunRepoPathsByRunId: db.prepare(
+        "UPDATE run_pod_instances SET run_repo_path = NULL WHERE run_id = ?",
       ),
       clearExecutionPathsByRunId: db.prepare(
         `UPDATE run_pod_instances
-        SET worktree_path = NULL,
+        SET run_repo_path = NULL,
             workspace_path = NULL,
             sandbox_home_path = NULL
         WHERE run_id = ?`,

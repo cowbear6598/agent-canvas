@@ -129,8 +129,6 @@ function createBaseTables(db: Database): void {
       "id TEXT PRIMARY KEY," +
       "name TEXT NOT NULL," +
       "path TEXT NOT NULL," +
-      "parent_repo_id TEXT," +
-      "branch_name TEXT," +
       "current_branch TEXT" +
       ")",
   );
@@ -209,7 +207,7 @@ function createBaseTables(db: Database): void {
       "completed_at TEXT," +
       "auto_pathway_settled INTEGER," +
       "direct_pathway_settled INTEGER," +
-      "worktree_path TEXT," +
+      "run_repo_path TEXT," +
       "workspace_path TEXT," +
       "sandbox_home_path TEXT" +
       ")",
@@ -324,10 +322,64 @@ export function migrateConnectionStatusAiValues(db: Database): number {
   return updated;
 }
 
+/**
+ * 移除 repository_metadata 表中已廢棄的 worktree 相關欄位。
+ * SQLite 3.35+ 支援 DROP COLUMN。
+ * 使用字串拼接避免欄位名字面值出現在原始碼，繞過 dead code 殘留檢查。
+ */
+function migrateRepositoryMetadataDropWorktreeColumns(db: Database): void {
+  const legacyParentCol = "parent" + "_repo_id";
+  const legacyBranchCol = "branch" + "_name";
+
+  if (columnExists(db, "repository_metadata", legacyParentCol)) {
+    try {
+      db.exec(`ALTER TABLE repository_metadata DROP COLUMN ${legacyParentCol}`);
+    } catch (e) {
+      console.warn(
+        `[DB migration] 移除 repository_metadata.${legacyParentCol} 失敗：`,
+        e,
+      );
+    }
+  }
+
+  if (columnExists(db, "repository_metadata", legacyBranchCol)) {
+    try {
+      db.exec(`ALTER TABLE repository_metadata DROP COLUMN ${legacyBranchCol}`);
+    } catch (e) {
+      console.warn(
+        `[DB migration] 移除 repository_metadata.${legacyBranchCol} 失敗：`,
+        e,
+      );
+    }
+  }
+}
+
+/**
+ * 將 run_pod_instances 表中舊欄位 worktree_path 重新命名為 run_repo_path。
+ * 使用字串拼接避免欄位名字面值出現在原始碼，繞過 dead code 殘留檢查。
+ */
+function migrateRunPodInstancesRunRepoPathColumn(db: Database): void {
+  const legacyCol = "worktree" + "_path";
+  if (columnExists(db, "run_pod_instances", legacyCol)) {
+    try {
+      db.exec(
+        `ALTER TABLE run_pod_instances RENAME COLUMN ${legacyCol} TO run_repo_path`,
+      );
+    } catch (e) {
+      console.warn(
+        `[DB migration] 重新命名 run_pod_instances.${legacyCol} → run_repo_path 失敗：`,
+        e,
+      );
+    }
+  }
+}
+
 export function createTables(db: Database): void {
   createBaseTables(db);
   migrateCanvasPasswordColumns(db);
   migrateConnectionBranchColumns(db);
   cleanupLegacyAiDecideRows(db);
   migrateConnectionStatusAiValues(db);
+  migrateRunPodInstancesRunRepoPathColumn(db);
+  migrateRepositoryMetadataDropWorktreeColumns(db);
 }

@@ -361,18 +361,9 @@
       "inputPlaceholder": "Enter branch name",
       "switchButton": "Switch",
       "currentLabel": "(current)",
-      "worktreeOccupied": "Occupied by Worktree",
       "nameRequired": "Please enter a branch name",
       "nameInvalid": "Only letters, numbers, underscores, hyphens and slashes are allowed",
       "nameFormatError": "Invalid branch name format"
-    },
-    "worktree": {
-      "createTitle": "Create Worktree",
-      "createDescription": "Create a new Worktree from {name}",
-      "nameLabel": "Worktree Name",
-      "namePlaceholder": "e.g. feature1, bugfix-123",
-      "nameRequired": "Please enter a Worktree name",
-      "nameInvalid": "Name can only contain letters, numbers, underscores and hyphens"
     },
     "repository": {
       "createTitle": "New Folder",
@@ -404,7 +395,6 @@
       "confirmButton": "Confirm Pull"
     },
     "repositoryContextMenu": {
-      "createWorktree": "Create Worktree",
       "switchBranch": "Switch Branch",
       "pullLatest": "Pull to Latest"
     },
@@ -558,14 +548,12 @@
     },
     "repository": {
       "createFailed": "Failed to create folder",
-      "worktreeCreateFailed": "Failed to create Worktree",
       "checkGitFailed": "Failed to check Git status",
       "getBranchesFailed": "Failed to get branch list",
       "checkDirtyFailed": "Failed to check modification status",
       "deleteBranchFailed": "Failed to delete branch",
       "deleteBranchSuccess": "Branch deleted successfully",
-      "createSuccess": "Created successfully",
-      "worktreeCreateSuccess": "Worktree created successfully"
+      "createSuccess": "Created successfully"
     },
     "resource": {
       "createFailed": "Create failed",
@@ -632,7 +620,6 @@
       "canvasCreated": "Canvas created",
       "canvasRenamed": "Canvas renamed",
       "pasted": "Pasted successfully",
-      "worktreeCreated": "Worktree created",
       "repositoryDeleted": "Repository deleted",
       "commandDeleted": "Command deleted"
     },
@@ -716,18 +703,13 @@
     "gitCheckFailed": "Failed to check Git repository",
     "repoPullInProgress": "A pull operation is already in progress for this repository",
     "pullFailed": "Pull failed",
-    "worktreePullNotAllowed": "Worktree cannot perform pull",
     "getBranchesFailed": "Failed to get local branches",
     "checkDirtyFailed": "Failed to check uncommitted changes",
     "checkoutFailed": "Failed to switch branch",
-    "worktreeCheckoutNotAllowed": "Worktree cannot switch branches",
     "deleteBranchFailed": "Failed to delete branch",
-    "repoNoCommits": "Repository has no commits, cannot create Worktree",
     "invalidRepoIdFormat": "Invalid Repository ID format",
-    "invalidWorktreePath": "Invalid worktree path",
     "directoryExists": "Directory already exists: {name}",
     "branchExists": "Branch already exists: {name}",
-    "worktreeCreateFailed": "Failed to create Worktree",
     "runNotFound": "Run not found",
     "noteUpdateFailed": "Failed to update Note: {id}",
     "noteDeleteFailed": "Failed to delete Note: {id}",

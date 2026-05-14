@@ -280,14 +280,9 @@ export interface RepositoryCheckGitResultPayload extends ResultPayload {
   isGit: boolean;
 }
 
-export interface RepositoryWorktreeCreatedPayload extends ResultPayload {
-  repository?: Repository;
-}
-
 export interface RepositoryLocalBranchesResultPayload extends ResultPayload {
   branches?: string[];
   currentBranch?: string;
-  worktreeBranches?: string[];
 }
 
 export interface RepositoryDirtyCheckResultPayload extends ResultPayload {

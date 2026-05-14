@@ -31,11 +31,12 @@ function makePod(overrides: Partial<Pod> = {}): Pod {
 
 describe("runExecutionResources", () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
     vi.spyOn(fs, "rm").mockResolvedValue(undefined);
     vi.spyOn(fs, "mkdir").mockResolvedValue(undefined);
   });
 
-  it("repo pod 建立 detached worktree 失敗時應直接報錯，不回退到原始 repo cwd", async () => {
+  it("repo pod 建立 run repo clone 失敗時應直接報錯，不回退到原始 repo cwd", async () => {
     const pod = makePod({
       id: "pod-repo",
       repositoryId: "repo-1",
@@ -51,11 +52,15 @@ describe("runExecutionResources", () => {
       success: true,
       data: true,
     } as any);
+    vi.spyOn(gitService, "hasOriginRemote").mockResolvedValue({
+      success: true,
+      data: true,
+    } as any);
     vi.spyOn(gitService, "syncToRemoteLatest").mockResolvedValue({
       success: true,
       data: undefined,
     } as any);
-    vi.spyOn(gitService, "createDetachedWorktree").mockResolvedValue({
+    vi.spyOn(gitService, "createLocalClone").mockResolvedValue({
       success: false,
       error: "boom",
     } as any);
@@ -64,9 +69,9 @@ describe("runExecutionResources", () => {
       provisionRunExecutionResources({
         pod,
         runId: "run-1",
-        worktreeCache: new Map(),
+        runRepoCache: new Map(),
       }),
-    ).rejects.toThrow("建立 detached worktree 失敗：boom");
+    ).rejects.toThrow("建立 run repo clone 失敗：boom");
   });
 
   it("repo pod 不是 git repository 時，應直接重用原始 repository cwd", async () => {
@@ -85,13 +90,13 @@ describe("runExecutionResources", () => {
     const result = await provisionRunExecutionResources({
       pod,
       runId: "run-plain-dir",
-      worktreeCache: new Map(),
+      runRepoCache: new Map(),
     });
 
     expect(result.workspacePath).toBe(
       path.resolve(path.join(config.repositoriesRoot, "repo-plain-dir")),
     );
-    expect(result.worktreePath).toBeNull();
+    expect(result.runRepoPath).toBeNull();
   });
 
   it("repo pod 沒有任何 commit 時，應直接重用原始 repository cwd", async () => {
@@ -114,13 +119,54 @@ describe("runExecutionResources", () => {
     const result = await provisionRunExecutionResources({
       pod,
       runId: "run-empty-repo",
-      worktreeCache: new Map(),
+      runRepoCache: new Map(),
     });
 
     expect(result.workspacePath).toBe(
       path.resolve(path.join(config.repositoriesRoot, "repo-empty")),
     );
-    expect(result.worktreePath).toBeNull();
+    expect(result.runRepoPath).toBeNull();
+  });
+
+  it("repository 無 origin remote 時 fallback 回 sourceRepoPath", async () => {
+    const pod = makePod({
+      id: "pod-repo-no-origin",
+      repositoryId: "repo-no-origin",
+      workspacePath: "/tmp/ignored",
+    });
+
+    vi.spyOn(fs, "access").mockResolvedValue(undefined);
+    vi.spyOn(gitService, "isGitRepository").mockResolvedValue({
+      success: true,
+      data: true,
+    } as any);
+    vi.spyOn(gitService, "hasCommits").mockResolvedValue({
+      success: true,
+      data: true,
+    } as any);
+    vi.spyOn(gitService, "hasOriginRemote").mockResolvedValue({
+      success: true,
+      data: false,
+    } as any);
+    const createLocalCloneSpy = vi
+      .spyOn(gitService, "createLocalClone")
+      .mockResolvedValue({ success: true, data: undefined } as any);
+    const syncSpy = vi
+      .spyOn(gitService, "syncToRemoteLatest")
+      .mockResolvedValue({ success: true, data: undefined } as any);
+
+    const result = await provisionRunExecutionResources({
+      pod,
+      runId: "run-no-origin",
+      runRepoCache: new Map(),
+    });
+
+    expect(result.workspacePath).toBe(
+      path.resolve(path.join(config.repositoriesRoot, "repo-no-origin")),
+    );
+    expect(result.runRepoPath).toBeNull();
+    expect(createLocalCloneSpy).not.toHaveBeenCalled();
+    expect(syncSpy).not.toHaveBeenCalled();
   });
 
   it("non-repo workspace 應直接重用 pod 自己的 cwd，允許多個 run 同時使用", async () => {
@@ -137,7 +183,7 @@ describe("runExecutionResources", () => {
     const first = await provisionRunExecutionResources({
       pod: firstPod,
       runId: "run-1",
-      worktreeCache: new Map(),
+      runRepoCache: new Map(),
     });
 
     expect(first.workspacePath).toBe(sharedWorkspace);
@@ -145,7 +191,7 @@ describe("runExecutionResources", () => {
     const third = await provisionRunExecutionResources({
       pod: secondPod,
       runId: "run-2",
-      worktreeCache: new Map(),
+      runRepoCache: new Map(),
     });
 
     expect(third.workspacePath).toBe(sharedWorkspace);

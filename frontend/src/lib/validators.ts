@@ -7,7 +7,7 @@ export const RESOURCE_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
 export const BRANCH_NAME_PATTERN = /^[a-zA-Z0-9_\-/]+$/;
 
 /**
- * 驗證資源名稱（Repository、Worktree 等）
+ * 驗證資源名稱（Repository 等）
  * @param name 名稱字串
  * @param emptyMessage 空值時的錯誤訊息
  * @param invalidMessage 格式錯誤時的錯誤訊息

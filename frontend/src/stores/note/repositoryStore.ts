@@ -16,8 +16,6 @@ import type {
   RepositoryCreatedPayload,
   RepositoryCheckGitPayload,
   RepositoryCheckGitResultPayload,
-  RepositoryWorktreeCreatePayload,
-  RepositoryWorktreeCreatedPayload,
   RepositoryGetLocalBranchesPayload,
   RepositoryLocalBranchesResultPayload,
   RepositoryCheckDirtyPayload,
@@ -38,16 +36,10 @@ interface RepositoryStoreCustomActions {
   deleteRepository(repositoryId: string): Promise<void>;
   loadRepositories(): Promise<void>;
   checkIsGit(repositoryId: string): Promise<boolean>;
-  createWorktree(
-    repositoryId: string,
-    worktreeName: string,
-    sourceNotePosition: { x: number; y: number },
-  ): Promise<{ success: boolean; error?: string }>;
   getLocalBranches(repositoryId: string): Promise<{
     success: boolean;
     branches?: string[];
     currentBranch?: string;
-    worktreeBranches?: string[];
     error?: string;
   }>;
   checkDirty(
@@ -63,7 +55,6 @@ interface RepositoryStoreCustomActions {
     branchName: string,
   ): Promise<{ success: boolean; branchName?: string; error?: string }>;
   pullLatest(repositoryId: string): Promise<{ requestId: string }>;
-  isWorktree(repositoryId: string): boolean;
 }
 
 function createRepositoryCustomActions(): RepositoryStoreCustomActions {
@@ -151,59 +142,6 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
       return result.data.isGit;
     },
 
-    async createWorktree(
-      this: NoteStoreContext<Repository>,
-      repositoryId: string,
-      worktreeName: string,
-      sourceNotePosition: { x: number; y: number },
-    ): Promise<{ success: boolean; error?: string }> {
-      const result = await executeRepositoryAction<
-        RepositoryWorktreeCreatePayload,
-        RepositoryWorktreeCreatedPayload
-      >(
-        {
-          requestEvent: WebSocketRequestEvents.REPOSITORY_WORKTREE_CREATE,
-          responseEvent: WebSocketResponseEvents.REPOSITORY_WORKTREE_CREATED,
-          payload: { repositoryId, worktreeName },
-        },
-        {
-          errorCategory: "Repository",
-          errorAction: t("store.repository.worktreeCreateFailed"),
-          errorMessage: t("store.repository.worktreeCreateFailed"),
-        },
-      );
-
-      if (!result.success) return result;
-
-      if (!result.data.success) {
-        const error =
-          result.data.error || t("store.repository.worktreeCreateFailed");
-        showErrorToast(
-          "Repository",
-          t("store.repository.worktreeCreateFailed"),
-          error,
-        );
-        return { success: false, error };
-      }
-
-      if (result.data.repository) {
-        this.availableItems.push(result.data.repository);
-
-        await this.createNote(
-          result.data.repository.id,
-          sourceNotePosition.x + 150,
-          sourceNotePosition.y + 80,
-        );
-      }
-
-      showSuccessToast(
-        "Repository",
-        t("store.repository.worktreeCreateSuccess"),
-        worktreeName,
-      );
-      return { success: true };
-    },
-
     async getLocalBranches(
       this: NoteStoreContext<Repository>,
       repositoryId: string,
@@ -211,7 +149,6 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
       success: boolean;
       branches?: string[];
       currentBranch?: string;
-      worktreeBranches?: string[];
       error?: string;
     }> {
       const result = await executeRepositoryAction<
@@ -237,7 +174,6 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
         success: result.data.success,
         branches: result.data.branches,
         currentBranch: result.data.currentBranch,
-        worktreeBranches: result.data.worktreeBranches,
         error: result.data.error,
       };
     },
@@ -368,20 +304,6 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
       if (item) {
         item.currentBranch = branchName;
       }
-    },
-
-    isWorktree(
-      this: NoteStoreContext<Repository>,
-      repositoryId: string,
-    ): boolean {
-      const repository = this.availableItems.find(
-        (item: Repository) => item.id === repositoryId,
-      );
-      return (
-        repository?.parentRepoId !== undefined &&
-        repository?.parentRepoId !== null &&
-        repository?.parentRepoId !== ""
-      );
     },
   };
 }

@@ -13,7 +13,6 @@ import { repositoryNoteStore } from "../services/noteStores.js";
 import { podStore } from "../services/podStore.js";
 import { socketService } from "../services/socketService.js";
 import { messageStore } from "../services/messageStore.js";
-import { gitService } from "../services/workspace/gitService.js";
 import { repositorySyncService } from "../services/repositorySyncService.js";
 import { commandService } from "../services/commandService.js";
 import { emitError } from "../utils/websocketResponse.js";
@@ -253,36 +252,12 @@ export const handlePodUnbindRepository =
     },
   );
 
-async function cleanupWorktreeResources(
-  metadata: { parentRepoId: string; branchName?: string },
-  repositoryId: string,
-): Promise<void> {
-  const parentExists = await repositoryService.exists(metadata.parentRepoId);
-
-  if (!parentExists) {
-    return;
-  }
-
-  const parentRepoPath = repositoryService.getRepositoryPath(
-    metadata.parentRepoId,
-  );
-  const worktreePath = repositoryService.getRepositoryPath(repositoryId);
-
-  await gitService.removeWorktree(parentRepoPath, worktreePath);
-
-  if (!metadata.branchName) return;
-
-  await gitService.deleteBranch(parentRepoPath, metadata.branchName);
-}
-
 export async function handleRepositoryDelete(
   connectionId: string,
   payload: RepositoryDeletePayload,
   requestId: string,
 ): Promise<void> {
   const { repositoryId } = payload;
-
-  const metadata = repositoryService.getMetadata(repositoryId);
 
   await handleResourceDelete({
     connectionId,
@@ -296,13 +271,6 @@ export async function handleRepositoryDelete(
     deleteNotes: (canvasId: string) =>
       repositoryNoteStore.deleteByForeignKey(canvasId, repositoryId),
     deleteResource: async () => {
-      if (metadata?.parentRepoId) {
-        await cleanupWorktreeResources(
-          metadata as { parentRepoId: string; branchName?: string },
-          repositoryId,
-        );
-      }
-
       await repositoryService.delete(repositoryId);
     },
   });

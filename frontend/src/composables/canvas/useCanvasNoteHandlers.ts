@@ -116,7 +116,7 @@ export function useCanvasNoteHandlers(options: UseCanvasNoteHandlersOptions): {
   ): string | undefined => {
     // 改用 itemById Map（O(1) 查找），取代 Array.find 線性掃描
     const repository = repositoryStore.itemById.get(repositoryId);
-    return repository?.currentBranch ?? repository?.branchName;
+    return repository?.currentBranch;
   };
 
   const { handleNoteDoubleClick } = useNoteDoubleClick(

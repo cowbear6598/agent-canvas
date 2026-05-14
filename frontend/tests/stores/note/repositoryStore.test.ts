@@ -245,149 +245,14 @@ describe("repositoryStore", () => {
     });
   });
 
-  describe("createWorktree", () => {
-    it("成功時應新增 repository 並建立 Note", async () => {
-      const store = useRepositoryStore();
-      const parentRepo = createMockRepository({
-        id: "repo-1",
-        name: "Parent Repo",
-      });
-      store.availableItems = [parentRepo];
-
-      const worktreeRepo = createMockRepository({
-        id: "repo-2",
-        name: "worktree-branch",
-        parentRepoId: "repo-1",
-        branchName: "worktree-branch",
-      });
-
-      const worktreeNote = createMockRepositoryNote({
-        id: "note-1",
-        repositoryId: "repo-2",
-        x: 350,
-        y: 280,
-      });
-
-      mockCreateWebSocketRequest
-        .mockResolvedValueOnce({
-          success: true,
-          repository: worktreeRepo,
-        })
-        .mockResolvedValueOnce({
-          success: true,
-          note: worktreeNote,
-        });
-
-      const result = await store.createWorktree("repo-1", "worktree-branch", {
-        x: 200,
-        y: 200,
-      });
-
-      expect(mockCreateWebSocketRequest).toHaveBeenNthCalledWith(1, {
-        requestEvent: "repository:worktree:create",
-        responseEvent: "repository:worktree:created",
-        payload: {
-          canvasId: "canvas-1",
-          repositoryId: "repo-1",
-          worktreeName: "worktree-branch",
-        },
-      });
-
-      expect(mockCreateWebSocketRequest).toHaveBeenNthCalledWith(2, {
-        requestEvent: "repository-note:create",
-        responseEvent: "repository-note:created",
-        payload: {
-          canvasId: "canvas-1",
-          repositoryId: "repo-2",
-          name: "worktree-branch",
-          x: 350,
-          y: 280,
-          boundToPodId: null,
-          originalPosition: null,
-        },
-      });
-
-      expect(store.availableItems).toHaveLength(2);
-      expect(store.availableItems[1]).toEqual(worktreeRepo);
-      expect(mockShowSuccessToast).toHaveBeenCalledWith(
-        "Repository",
-        "Worktree 建立成功",
-        "worktree-branch",
-      );
-      expect(result.success).toBe(true);
-    });
-
-    it("success: false 時應顯示錯誤 Toast", async () => {
-      const store = useRepositoryStore();
-
-      mockCreateWebSocketRequest.mockResolvedValueOnce({
-        success: false,
-        error: "分支已存在",
-      });
-
-      const result = await store.createWorktree("repo-1", "existing-branch", {
-        x: 200,
-        y: 200,
-      });
-
-      expect(mockShowErrorToast).toHaveBeenCalledWith(
-        "Repository",
-        "建立 Worktree 失敗",
-        "分支已存在",
-      );
-      expect(result.success).toBe(false);
-      expect(result.error).toBe("分支已存在");
-    });
-
-    it("回應為 null 時應顯示錯誤 Toast", async () => {
-      const store = useRepositoryStore();
-
-      mockCreateWebSocketRequest.mockResolvedValueOnce(null);
-
-      const result = await store.createWorktree("repo-1", "branch", {
-        x: 200,
-        y: 200,
-      });
-
-      expect(mockShowErrorToast).toHaveBeenCalledWith(
-        "Repository",
-        "建立 Worktree 失敗",
-      );
-      expect(result.success).toBe(false);
-      expect(result.error).toBe("建立 Worktree 失敗");
-    });
-
-    it("回應無 repository 時應顯示錯誤 Toast", async () => {
-      const store = useRepositoryStore();
-
-      mockCreateWebSocketRequest.mockResolvedValueOnce({
-        success: true,
-      });
-
-      const result = await store.createWorktree("repo-1", "branch", {
-        x: 200,
-        y: 200,
-      });
-
-      expect(mockShowSuccessToast).toHaveBeenCalledWith(
-        "Repository",
-        "Worktree 建立成功",
-        "branch",
-      );
-      expect(result.success).toBe(true);
-      expect(mockCreateWebSocketRequest).toHaveBeenCalledTimes(1); // 不應建立 Note
-    });
-  });
-
   describe("getLocalBranches", () => {
-    it("成功時應回傳 branches, currentBranch, worktreeBranches", async () => {
+    it("成功時應回傳 branches 與 currentBranch", async () => {
       const store = useRepositoryStore();
 
       mockCreateWebSocketRequest.mockResolvedValueOnce({
         success: true,
         branches: ["main", "develop", "feature-1"],
         currentBranch: "main",
-        worktreeBranches: ["feature-1"],
       });
 
       const result = await store.getLocalBranches("repo-1");
@@ -404,7 +269,6 @@ describe("repositoryStore", () => {
         success: true,
         branches: ["main", "develop", "feature-1"],
         currentBranch: "main",
-        worktreeBranches: ["feature-1"],
         error: undefined,
       });
     });
@@ -436,7 +300,6 @@ describe("repositoryStore", () => {
         success: false,
         branches: undefined,
         currentBranch: undefined,
-        worktreeBranches: undefined,
         error: "不是 Git Repository",
       });
     });
@@ -703,53 +566,6 @@ describe("repositoryStore", () => {
 
       expect(mockShowSuccessToast).not.toHaveBeenCalled();
       expect(mockShowErrorToast).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("isWorktree", () => {
-    it("有 parentRepoId 時應回傳 true", () => {
-      const store = useRepositoryStore();
-      const worktreeRepo = createMockRepository({
-        id: "repo-1",
-        parentRepoId: "parent-repo",
-      });
-      store.availableItems = [worktreeRepo];
-
-      const result = store.isWorktree("repo-1");
-
-      expect(result).toBe(true);
-    });
-
-    it("無 parentRepoId 時應回傳 false", () => {
-      const store = useRepositoryStore();
-      const normalRepo = createMockRepository({ id: "repo-1" });
-      store.availableItems = [normalRepo];
-
-      const result = store.isWorktree("repo-1");
-
-      expect(result).toBe(false);
-    });
-
-    it("parentRepoId 為空字串時應回傳 false", () => {
-      const store = useRepositoryStore();
-      const repo = createMockRepository({
-        id: "repo-1",
-        parentRepoId: "",
-      });
-      store.availableItems = [repo];
-
-      const result = store.isWorktree("repo-1");
-
-      expect(result).toBe(false);
-    });
-
-    it("repository 不存在時應回傳 false", () => {
-      const store = useRepositoryStore();
-      store.availableItems = [];
-
-      const result = store.isWorktree("non-existent");
-
-      expect(result).toBe(false);
     });
   });
 

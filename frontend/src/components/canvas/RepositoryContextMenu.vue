@@ -5,7 +5,6 @@ import { GitBranch, Download } from "lucide-vue-next";
 import { useRepositoryStore } from "@/stores/note/repositoryStore";
 import { useToast } from "@/composables/useToast";
 import { useI18n } from "vue-i18n";
-import CreateWorktreeModal from "./CreateWorktreeModal.vue";
 import BranchSelectModal from "./BranchSelectModal.vue";
 import ForceCheckoutModal from "./ForceCheckoutModal.vue";
 import DeleteBranchModal from "./DeleteBranchModal.vue";
@@ -16,14 +15,12 @@ interface Props {
   repositoryId: string;
   repositoryName: string;
   notePosition: { x: number; y: number };
-  isWorktree: boolean;
 }
 
 const props = defineProps<Props>();
 
 const emit = defineEmits<{
   close: [];
-  "worktree-created": [];
   "branch-switched": [];
   "pull-started": [
     payload: {
@@ -46,7 +43,6 @@ const uiState = reactive({
 });
 
 const modalState = reactive({
-  showWorktree: false,
   showBranch: false,
   showForceCheckout: false,
   showDeleteBranch: false,
@@ -56,7 +52,6 @@ const modalState = reactive({
 const dataState = reactive({
   localBranches: [] as string[],
   currentBranch: "",
-  worktreeBranches: [] as string[],
   targetBranch: "",
   branchToDelete: "",
 });
@@ -100,7 +95,6 @@ const createModalCloseHandler =
     if (!open) emit("close");
   };
 
-const handleWorktreeModalClose = createModalCloseHandler("showWorktree");
 const handleBranchModalClose = createModalCloseHandler("showBranch");
 const handleForceCheckoutModalClose =
   createModalCloseHandler("showForceCheckout");
@@ -108,27 +102,8 @@ const handleDeleteBranchModalClose =
   createModalCloseHandler("showDeleteBranch");
 const handlePullConfirmModalClose = createModalCloseHandler("showPullConfirm");
 
-const handleCreateWorktreeClick = (): void => {
-  if (!uiState.isGit) return;
-  uiState.menuVisible = false;
-  modalState.showWorktree = true;
-};
-
-const handleWorktreeSubmit = async (worktreeName: string): Promise<void> => {
-  const result = await repositoryStore.createWorktree(
-    props.repositoryId,
-    worktreeName,
-    props.notePosition,
-  );
-
-  if (result.success) {
-    emit("worktree-created");
-    emit("close");
-  }
-};
-
 const handleSwitchBranchClick = async (): Promise<void> => {
-  if (!uiState.isGit || props.isWorktree || uiState.isLoadingBranches) return;
+  if (!uiState.isGit || uiState.isLoadingBranches) return;
 
   uiState.menuVisible = false;
   uiState.isLoadingBranches = true;
@@ -142,7 +117,6 @@ const handleSwitchBranchClick = async (): Promise<void> => {
 
   dataState.localBranches = result.branches;
   dataState.currentBranch = result.currentBranch ?? "";
-  dataState.worktreeBranches = result.worktreeBranches ?? [];
   modalState.showBranch = true;
 };
 
@@ -213,7 +187,6 @@ const reloadBranchList = async (): Promise<void> => {
   if (result.success && result.branches) {
     dataState.localBranches = result.branches;
     dataState.currentBranch = result.currentBranch || "";
-    dataState.worktreeBranches = result.worktreeBranches || [];
     modalState.showBranch = true;
   }
 };
@@ -248,26 +221,6 @@ const handlePullLatestConfirm = async (): Promise<void> => {
     @contextmenu.prevent
   >
     <button
-      :disabled="!uiState.isGit || uiState.isCheckingGit"
-      :class="[
-        'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs',
-        uiState.isGit && !uiState.isCheckingGit
-          ? 'hover:bg-secondary'
-          : 'opacity-50 cursor-not-allowed',
-      ]"
-      @click="handleCreateWorktreeClick"
-    >
-      <GitBranch
-        :size="14"
-        class="text-foreground"
-      />
-      <span class="font-mono text-foreground">{{
-        $t("canvas.repositoryContextMenu.createWorktree")
-      }}</span>
-    </button>
-
-    <button
-      v-if="!isWorktree"
       :disabled="
         !uiState.isGit || uiState.isCheckingGit || uiState.isLoadingBranches
       "
@@ -289,7 +242,6 @@ const handlePullLatestConfirm = async (): Promise<void> => {
     </button>
 
     <button
-      v-if="!isWorktree"
       :disabled="!uiState.isGit || uiState.isCheckingGit"
       :class="[
         'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs',
@@ -318,19 +270,11 @@ const handlePullLatestConfirm = async (): Promise<void> => {
 
   <!-- 使用 Teleport 將 Modal 移到 body，避免父組件銷毀時 Modal 也消失 -->
   <Teleport to="body">
-    <CreateWorktreeModal
-      :open="modalState.showWorktree"
-      :repository-name="repositoryName"
-      @update:open="handleWorktreeModalClose"
-      @submit="handleWorktreeSubmit"
-    />
-
     <BranchSelectModal
       :open="modalState.showBranch"
       :branches="dataState.localBranches"
       :current-branch="dataState.currentBranch"
       :repository-name="repositoryName"
-      :worktree-branches="dataState.worktreeBranches"
       @update:open="handleBranchModalClose"
       @select="handleBranchSelect"
       @delete="handleBranchDelete"

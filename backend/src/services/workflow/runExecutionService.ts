@@ -24,11 +24,9 @@ import type {
   RunPodStatusChangedPayload,
   RunDeletedPayload,
 } from "../../types/run.js";
-import { gitService } from "../workspace/gitService.js";
 import { fireAndForget } from "../../utils/operationHelpers.js";
 import { config } from "../../config/index.js";
 import path from "path";
-import { getResultErrorString } from "../../types/result.js";
 import { promises as fs } from "fs";
 import { isPathWithinDirectory } from "../../utils/pathValidator.js";
 import { getClaudeSandboxRoot } from "../runtime/executionPaths.js";
@@ -149,9 +147,9 @@ class RunExecutionService {
 
     const chainPodIds = this.collectChainPodIds(canvasId, sourcePodId);
     // 同一 Run 內相同 repositoryId 的 Pod 共用同一份 repo-level workspace
-    const worktreeCache = new Map<
+    const runRepoCache = new Map<
       string,
-      { workspacePath: string; worktreePath: string | null }
+      { workspacePath: string; runRepoPath: string | null }
     >();
     const instances: ReturnType<typeof runStore.createPodInstance>[] = [];
     const provisioningErrors: Array<{ podId: string; error: string }> = [];
@@ -186,7 +184,7 @@ class RunExecutionService {
         provisioned = await provisionRunExecutionResources({
           pod,
           runId: workflowRun.id,
-          worktreeCache,
+          runRepoCache,
         });
       } catch (error) {
         const message =
@@ -223,7 +221,7 @@ class RunExecutionService {
 
     const instancesWithNames = instances.map((instance) => {
       const {
-        worktreePath: _worktreePath,
+        runRepoPath: _runRepoPath,
         workspacePath: _workspacePath,
         sandboxHomePath: _sandboxHomePath,
         ...instanceData
@@ -634,19 +632,39 @@ class RunExecutionService {
   }
 
   /**
+   * 將 runDir 安全地從檔案系統刪除：先檢查路徑邊界，通過再委派給 removeRunDirectory。
+   */
+  private async removeRunRepoDirectory(dirPath: string): Promise<void> {
+    if (
+      !isPathWithinDirectory(
+        path.resolve(dirPath),
+        path.resolve(config.repositoriesRoot),
+      )
+    ) {
+      logger.warn(
+        "Run",
+        "Warn",
+        `清理 run repo 失敗：路徑越界（path=${dirPath}）`,
+      );
+      return;
+    }
+    await this.removeRunDirectory(dirPath, "run repo");
+  }
+
+  /**
    * 清理指定 Run 的所有隔離資源。
-   * 包含 detached worktree 與 run sandbox home。
+   * 包含 per-Run repo clone 與 run sandbox home。
    */
   private async cleanupRunResources(runId: string): Promise<void> {
     const entries = runStore.getExecutionPathsByRunId(runId);
     if (entries.length === 0) return;
 
-    const uniqueWorktrees = new Map<string, string>();
+    const uniqueRunRepos = new Set<string>();
     const uniqueSandboxHomes = new Set<string>();
 
     for (const entry of entries) {
-      if (entry.worktreePath) {
-        uniqueWorktrees.set(entry.worktreePath, entry.podId);
+      if (entry.runRepoPath) {
+        uniqueRunRepos.add(entry.runRepoPath);
       }
       if (entry.sandboxHomePath) {
         uniqueSandboxHomes.add(entry.sandboxHomePath);
@@ -654,33 +672,9 @@ class RunExecutionService {
     }
 
     await Promise.all(
-      [...uniqueWorktrees.entries()].map(async ([worktreePath, podId]) => {
-        const podResult = podStore.getByIdGlobal(podId);
-        if (!podResult?.pod.repositoryId) {
-          logger.warn(
-            "Run",
-            "Warn",
-            `清理 worktree 失敗：找不到 repository pod（podId=${podId}, runId=${runId}）`,
-          );
-          return;
-        }
-
-        const parentRepoPath = path.join(
-          config.repositoriesRoot,
-          podResult.pod.repositoryId,
-        );
-        const result = await gitService.removeWorktree(
-          parentRepoPath,
-          worktreePath,
-        );
-        if (!result.success) {
-          logger.warn(
-            "Run",
-            "Warn",
-            `移除 worktree 失敗（已忽略），runId=${runId}, podId=${podId}, path=${worktreePath}: ${getResultErrorString(result.error)}`,
-          );
-        }
-      }),
+      [...uniqueRunRepos].map((runRepoPath) =>
+        this.removeRunRepoDirectory(runRepoPath),
+      ),
     );
 
     await Promise.all(

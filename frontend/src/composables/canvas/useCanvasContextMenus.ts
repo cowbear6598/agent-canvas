@@ -7,7 +7,6 @@ interface RepositoryContextMenuData {
   repositoryId: string;
   repositoryName: string;
   notePosition: { x: number; y: number };
-  isWorktree: boolean;
 }
 
 interface ConnectionContextMenuData {
@@ -36,7 +35,6 @@ interface RepositoryStore {
   typedAvailableItems: Array<{
     id: string;
     name: string;
-    parentRepoId?: string | null;
   }>;
 }
 
@@ -102,7 +100,6 @@ export function useCanvasContextMenus(options: UseCanvasContextMenusOptions): {
     repositoryId: "",
     repositoryName: "",
     notePosition: { x: 0, y: 0 },
-    isWorktree: false,
   });
 
   const {
@@ -140,9 +137,6 @@ export function useCanvasContextMenus(options: UseCanvasContextMenusOptions): {
       repositoryId: repository.id,
       repositoryName: repository.name,
       notePosition: { x: note.x, y: note.y },
-      isWorktree:
-        repository.parentRepoId !== undefined &&
-        repository.parentRepoId !== null,
     });
   };
 

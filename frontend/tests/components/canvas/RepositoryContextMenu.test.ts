@@ -30,24 +30,10 @@ vi.mock("lucide-vue-next", () => ({
   GitBranch: { name: "GitBranch", template: "<svg />" },
   Download: { name: "Download", template: "<svg />" },
 }));
-vi.mock("@/components/canvas/CreateWorktreeModal.vue", () => ({
-  default: {
-    name: "CreateWorktreeModal",
-    props: ["open", "repositoryName"],
-    emits: ["update:open", "submit"],
-    template: "<div />",
-  },
-}));
 vi.mock("@/components/canvas/BranchSelectModal.vue", () => ({
   default: {
     name: "BranchSelectModal",
-    props: [
-      "open",
-      "branches",
-      "currentBranch",
-      "repositoryName",
-      "worktreeBranches",
-    ],
+    props: ["open", "branches", "currentBranch", "repositoryName"],
     emits: ["update:open", "select", "delete"],
     template: "<div />",
   },
@@ -83,7 +69,6 @@ const defaultProps = {
   repositoryId: "repo-123",
   repositoryName: "test-repo",
   notePosition: { x: 50, y: 50 },
-  isWorktree: false,
 };
 
 function mountMenu(props = {}) {
@@ -341,7 +326,6 @@ describe("RepositoryContextMenu", () => {
           success: true,
           branches: ["main"],
           currentBranch: "main",
-          worktreeBranches: [],
         }); // getLocalBranches
 
       const wrapper = mountMenu();
@@ -391,18 +375,6 @@ describe("RepositoryContextMenu", () => {
   });
 
   describe("Modal close handlers — 使用者取消時 emit close", () => {
-    it("使用者取消 WorktreeModal 時應 emit close", async () => {
-      const wrapper = mountMenu();
-      await wrapper.vm.$nextTick();
-
-      const vm = wrapper.vm as unknown as {
-        handleWorktreeModalClose: (open: boolean) => void;
-      };
-      vm.handleWorktreeModalClose(false);
-
-      expect(wrapper.emitted("close")).toBeTruthy();
-    });
-
     it("使用者取消 BranchModal 時應 emit close", async () => {
       const wrapper = mountMenu();
       await wrapper.vm.$nextTick();
@@ -456,9 +428,9 @@ describe("RepositoryContextMenu", () => {
       await wrapper.vm.$nextTick();
 
       const vm = wrapper.vm as unknown as {
-        handleWorktreeModalClose: (open: boolean) => void;
+        handleBranchModalClose: (open: boolean) => void;
       };
-      vm.handleWorktreeModalClose(true);
+      vm.handleBranchModalClose(true);
 
       expect(wrapper.emitted("close")).toBeFalsy();
     });

@@ -361,18 +361,9 @@
       "inputPlaceholder": "ブランチ名を入力",
       "switchButton": "切り替え",
       "currentLabel": "(現在)",
-      "worktreeOccupied": "Worktree に使用中",
       "nameRequired": "ブランチ名を入力してください",
       "nameInvalid": "英数字、アンダースコア、ハイフン、スラッシュのみ使用できます",
       "nameFormatError": "ブランチ名の形式が正しくありません"
-    },
-    "worktree": {
-      "createTitle": "Worktree を作成",
-      "createDescription": "{name} から新しい Worktree を作成",
-      "nameLabel": "Worktree 名",
-      "namePlaceholder": "例：feature1、bugfix-123",
-      "nameRequired": "Worktree 名を入力してください",
-      "nameInvalid": "名前は英数字、アンダースコア、ハイフンのみ使用できます"
     },
     "repository": {
       "createTitle": "新規フォルダー",
@@ -404,7 +395,6 @@
       "confirmButton": "Pull を確認"
     },
     "repositoryContextMenu": {
-      "createWorktree": "Worktree を作成",
       "switchBranch": "ブランチを切り替える",
       "pullLatest": "最新版に Pull"
     },
@@ -558,14 +548,12 @@
     },
     "repository": {
       "createFailed": "フォルダーの作成に失敗しました",
-      "worktreeCreateFailed": "Worktree の作成に失敗しました",
       "checkGitFailed": "Git の状態確認に失敗しました",
       "getBranchesFailed": "ブランチ一覧の取得に失敗しました",
       "checkDirtyFailed": "変更状態の確認に失敗しました",
       "deleteBranchFailed": "ブランチの削除に失敗しました",
       "deleteBranchSuccess": "ブランチを削除しました",
-      "createSuccess": "作成しました",
-      "worktreeCreateSuccess": "Worktree を作成しました"
+      "createSuccess": "作成しました"
     },
     "resource": {
       "createFailed": "作成に失敗しました",
@@ -632,7 +620,6 @@
       "canvasCreated": "Canvas を作成しました",
       "canvasRenamed": "Canvas の名前を変更しました",
       "pasted": "貼り付けました",
-      "worktreeCreated": "Worktree を作成しました",
       "repositoryDeleted": "Repository を削除しました",
       "commandDeleted": "Command を削除しました"
     },
@@ -716,18 +703,13 @@
     "gitCheckFailed": "Git リポジトリの確認に失敗しました",
     "repoPullInProgress": "このリポジトリでは既に Pull 操作が進行中です",
     "pullFailed": "Pull に失敗しました",
-    "worktreePullNotAllowed": "Worktree では Pull を実行できません",
     "getBranchesFailed": "ローカルブランチの取得に失敗しました",
     "checkDirtyFailed": "コミットされていない変更の確認に失敗しました",
     "checkoutFailed": "ブランチの切り替えに失敗しました",
-    "worktreeCheckoutNotAllowed": "Worktree ではブランチを切り替えられません",
     "deleteBranchFailed": "ブランチの削除に失敗しました",
-    "repoNoCommits": "リポジトリにコミットがないため、Worktree を作成できません",
     "invalidRepoIdFormat": "無効なリポジトリ ID 形式です",
-    "invalidWorktreePath": "無効な Worktree パスです",
     "directoryExists": "ディレクトリは既に存在します：{name}",
     "branchExists": "ブランチは既に存在します：{name}",
-    "worktreeCreateFailed": "Worktree の作成に失敗しました",
     "runNotFound": "指定された Run が見つかりません",
     "noteUpdateFailed": "Note の更新に失敗しました：{id}",
     "noteDeleteFailed": "Note の削除に失敗しました：{id}",

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { watch, computed } from "vue";
+import { watch } from "vue";
 import {
   Dialog,
   DialogContent,
@@ -22,7 +22,6 @@ interface Props {
   branches: string[];
   currentBranch: string;
   repositoryName: string;
-  worktreeBranches?: string[];
 }
 
 const props = defineProps<Props>();
@@ -49,19 +48,6 @@ const { inputValue: inputBranchName, resetForm } = useModalForm<string>({
     return null;
   },
   onClose: () => emit("update:open", false),
-});
-
-const normalBranches = computed(() => {
-  if (!props.worktreeBranches || props.worktreeBranches.length === 0) {
-    return props.branches;
-  }
-  return props.branches.filter(
-    (branch) => !props.worktreeBranches!.includes(branch),
-  );
-});
-
-const hasWorktreeBranches = computed(() => {
-  return props.worktreeBranches && props.worktreeBranches.length > 0;
 });
 
 watch(
@@ -147,7 +133,7 @@ const handleDeleteClick = (event: Event, branchName: string): void => {
       <ScrollArea class="max-h-60 pr-4">
         <div class="space-y-1">
           <div
-            v-for="branch in normalBranches"
+            v-for="branch in branches"
             :key="branch"
             :class="[
               'w-full flex items-center gap-2 px-3 py-2 font-mono text-sm rounded-md transition-colors group',
@@ -182,24 +168,6 @@ const handleDeleteClick = (event: Event, branchName: string): void => {
               />
             </button>
           </div>
-
-          <template v-if="hasWorktreeBranches">
-            <div class="flex items-center gap-2 py-2">
-              <div class="flex-1 border-t border-border" />
-              <span class="text-xs text-muted-foreground">{{
-                $t("canvas.branchSelect.worktreeOccupied")
-              }}</span>
-              <div class="flex-1 border-t border-border" />
-            </div>
-
-            <div
-              v-for="branch in worktreeBranches"
-              :key="`worktree-${branch}`"
-              class="w-full flex items-center gap-2 px-3 py-2 font-mono text-sm rounded-md text-muted-foreground opacity-50 cursor-not-allowed"
-            >
-              <span class="flex-1">{{ branch }}</span>
-            </div>
-          </template>
         </div>
       </ScrollArea>
 
