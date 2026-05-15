@@ -201,9 +201,8 @@ const slotConfigs = computed((): SlotConfig[] => [
 </script>
 
 <template>
-  <!-- plugin capability 為 false 時完全不渲染 slot，避免對不支援 plugin 的 provider（如 opencode）顯示無意義的 notch -->
+  <!-- plugin capability 為 false（如 opencode）時，slot 仍渲染但以 disabled 視覺呈現，與 Repo/Command/Thinking 一致 -->
   <PodPluginSlot
-    v-if="isPluginEnabled"
     :pod-id="props.podId"
     :pod-rotation="props.podRotation"
     :active-count="props.pluginActiveCount"
@@ -233,10 +232,7 @@ const slotConfigs = computed((): SlotConfig[] => [
     :disabled-tooltip="thinkingDisabledTooltip"
     @click="(ev) => emit('thinking-clicked', ev)"
   />
-  <template
-    v-for="slot in slotConfigs"
-    :key="slot.slotClass"
-  >
+  <template v-for="slot in slotConfigs" :key="slot.slotClass">
     <div :class="slot.areaClass">
       <PodSingleBindSlot
         :pod-id="props.podId"

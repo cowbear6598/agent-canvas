@@ -559,9 +559,9 @@ describe("CanvasPod Gemini provider", () => {
     wrapper.unmount();
   });
 
-  // B3：Gemini Pod — plugin/mcp capability=false 時對應 slot 完全不渲染，
-  //     repository/command 因後端 GEMINI_CAPABILITIES 支援，disabled=false
-  it("B3：Gemini Pod — plugin/mcp slot 不渲染（capability=false），repository/command slot 存在且 disabled=false", async () => {
+  // B3：Gemini Pod — mcp capability=false 時 slot 完全不渲染、plugin capability=false
+  //     時 slot 渲染但 disabled；repository/command 因後端 GEMINI_CAPABILITIES 支援，disabled=false
+  it("B3：Gemini Pod — mcp slot 不渲染、plugin slot 渲染但 disabled，repository/command slot 存在且 disabled=false", async () => {
     const pod = mkPod({ provider: "gemini" as Pod["provider"] });
     // 需把 pod 寫入 podStore，usePodCapabilities 才能透過 getPodById 取得正確 provider
     usePodStore().pods = [pod];
@@ -569,9 +569,11 @@ describe("CanvasPod Gemini provider", () => {
     injectGeminiCapabilities();
     await nextTick();
 
-    // plugin=false、mcp=false → 對應 slot 完全不渲染（v-if=false）
-    expect(wrapper.find(".pod-plugin-slot").exists()).toBe(false);
+    // mcp=false → slot 完全不渲染（v-if=false）；plugin=false → 渲染但 disabled
     expect(wrapper.find(".pod-mcp-slot").exists()).toBe(false);
+    expect(wrapper.find(".pod-plugin-slot").exists()).toBe(true);
+    const pluginSlotComp = wrapper.findComponent({ name: "PodPluginSlot" });
+    expect(pluginSlotComp.props("disabled")).toBe(true);
 
     // repository/command slot 仍存在
     expect(wrapper.find(".pod-repository-slot").exists()).toBe(true);
@@ -704,7 +706,7 @@ describe("CanvasPod opencode provider — capability 顯隱", () => {
   }
 
   // B 類業務規則：opencode Pod 依 capabilities 正確顯隱各 slot
-  it("opencode Pod — PodPluginSlot 不渲染（plugin=false），PodMcpSlot 與兩個 PodSingleBindSlot 存在", async () => {
+  it("opencode Pod — PodPluginSlot 渲染但 disabled（plugin=false），PodMcpSlot 與兩個 PodSingleBindSlot 存在", async () => {
     const pod = mkPod({ provider: "opencode" as Pod["provider"] });
     // usePodCapabilities 透過 getPodById 取得 provider，需把 pod 寫入 podStore
     usePodStore().pods = [pod];
@@ -714,10 +716,10 @@ describe("CanvasPod opencode provider — capability 顯隱", () => {
 
     const podSlots = wrapper.findComponent({ name: "PodSlots" });
 
-    // plugin=false → PodPluginSlot 不渲染
-    expect(podSlots.findComponent({ name: "PodPluginSlot" }).exists()).toBe(
-      false,
-    );
+    // plugin=false → PodPluginSlot 仍渲染，但 disabled=true（與 Repo/Command/Thinking 一致）
+    const pluginSlotComp = podSlots.findComponent({ name: "PodPluginSlot" });
+    expect(pluginSlotComp.exists()).toBe(true);
+    expect(pluginSlotComp.props("disabled")).toBe(true);
 
     // mcp=true → PodMcpSlot 存在
     expect(podSlots.findComponent({ name: "PodMcpSlot" }).exists()).toBe(true);

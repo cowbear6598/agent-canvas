@@ -159,8 +159,8 @@ function mountPodSlots(podId: string, overrides: Record<string, unknown> = {}) {
 describe("PodSlots", () => {
   setupStoreTest();
 
-  describe("Codex provider：Command 以外 slot 為 disabled，plugin/mcp slot 不渲染", () => {
-    it("Repository disabled=true、Command disabled=false；MCP/Plugin slot 不渲染（mcp=false, plugin=false）", () => {
+  describe("Codex provider：Command 以外 slot 為 disabled，mcp slot 不渲染、plugin slot disabled 呈現", () => {
+    it("Repository disabled=true、Command disabled=false；MCP slot 不渲染、Plugin slot 渲染但 disabled=true（mcp=false, plugin=false）", () => {
       const podStore = usePodStore();
       podStore.pods = [
         {
@@ -190,9 +190,11 @@ describe("PodSlots", () => {
       expect(singleSlots[0]!.attributes("data-disabled")).toBe("true"); // Repository
       expect(singleSlots[1]!.attributes("data-disabled")).toBe("false"); // Command
 
-      // mcp=false, plugin=false → slot 完全不渲染（v-if=false）
+      // mcp=false → slot 完全不渲染（v-if=false）；plugin=false → 渲染但 disabled
       expect(wrapper.find(".pod-mcp-slot").exists()).toBe(false);
-      expect(wrapper.find(".pod-plugin-slot").exists()).toBe(false);
+      const pluginSlot = wrapper.find(".pod-plugin-slot");
+      expect(pluginSlot.exists()).toBe(true);
+      expect(pluginSlot.attributes("data-disabled")).toBe("true");
 
       // disabled tooltip 使用 i18n key（t = identity）
       expect(singleSlots[0]!.attributes("data-disabled-tooltip")).toBe(
@@ -323,8 +325,8 @@ describe("PodSlots", () => {
     });
   });
 
-  describe("Gemini provider：Repository 與 Command 為 enabled，Plugin 與 MCP slot 不渲染", () => {
-    it("Repository disabled=false、Command disabled=false；MCP slot 不渲染、Plugin slot 不渲染", () => {
+  describe("Gemini provider：Repository 與 Command 為 enabled，MCP slot 不渲染、Plugin slot disabled 呈現", () => {
+    it("Repository disabled=false、Command disabled=false；MCP slot 不渲染、Plugin slot 渲染但 disabled=true", () => {
       const podStore = usePodStore();
       podStore.pods = [
         {
@@ -354,9 +356,11 @@ describe("PodSlots", () => {
       expect(singleSlots[0]!.attributes("data-disabled")).toBe("false"); // Repository
       expect(singleSlots[1]!.attributes("data-disabled")).toBe("false"); // Command
 
-      // plugin=false、mcp=false → 對應 slot 完全不渲染（v-if=false）
+      // mcp=false → slot 完全不渲染（v-if=false）；plugin=false → 渲染但 disabled
       expect(wrapper.find(".pod-mcp-slot").exists()).toBe(false);
-      expect(wrapper.find(".pod-plugin-slot").exists()).toBe(false);
+      const pluginSlot = wrapper.find(".pod-plugin-slot");
+      expect(pluginSlot.exists()).toBe(true);
+      expect(pluginSlot.attributes("data-disabled")).toBe("true");
 
       wrapper.unmount();
     });
