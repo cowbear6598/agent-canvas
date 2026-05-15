@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onUnmounted, watch } from "vue";
+import type { ComponentPublicInstance } from "vue";
 import { useI18n } from "vue-i18n";
 import type { ModelOption, PodProvider } from "@/types/pod";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
@@ -18,8 +19,6 @@ const emit = defineEmits<{
   "update:model": [model: string];
 }>();
 
-/** hover 展開 debounce 延遲（毫秒）：防止滑鼠短暫經過時觸發展開動畫，150ms 為可感知的最小延遲 */
-const HOVER_DEBOUNCE_MS = 150;
 /** 收合動畫總時長（毫秒）：與 CSS transition 0.3s 對齊，確保動畫完全結束後才重設狀態 */
 const COLLAPSE_ANIMATION_MS = 300;
 /** 選取 feedback 等待時間（毫秒）：讓使用者看到選取視覺回饋後再觸發收合動畫，400ms 為自然停頓感 */
@@ -30,6 +29,13 @@ const isAnimating = ref(false);
 const isCollapsing = ref(false);
 const hoverTimeoutId = ref<ReturnType<typeof setTimeout> | null>(null);
 const pendingTimers = ref<Set<ReturnType<typeof setTimeout>>>(new Set());
+
+/**
+ * TransitionGroup 的 component ref，用來取得 stack root DOM
+ * 以便在 mouseleave 時將 scrollTop 重置回視覺底部（column-reverse 的 0），
+ * 避免移除 max-height 時 active 卡片從中段「跳」回貼 Pod 底部。
+ */
+const stackComp = ref<ComponentPublicInstance | null>(null);
 
 /**
  * 建立一個受追蹤的計時器，並回傳 Promise。
@@ -109,12 +115,12 @@ const isOpencodeEmpty = computed(
 );
 
 /**
- * opencode provider 且 availableModels > 4 時，套用捲動限高 class，
- * 防止選項過多時 stack 超出可視區域。
+ * 任意 provider 的 availableModels > 4 時，套用捲動限高 class +
+ * 顯示頂部呼吸箭頭。實務上 claude / codex / gemini 是寫死的小清單通常 ≤ 4 個，
+ * 只有 opencode 動態載入時會超過；但邏輯不綁 provider，純看數量更乾淨，
+ * 未來 provider 模型清單變多也能自動套用。
  */
-const isOpencodeScrollable = computed(
-  (): boolean => props.provider === "opencode" && allOptions.value.length > 4,
-);
+const isScrollable = computed((): boolean => allOptions.value.length > 4);
 
 /**
  * Fallback 用的 effectiveOptions：
@@ -165,16 +171,39 @@ const handleMouseEnter = (): void => {
     clearTimeout(hoverTimeoutId.value);
     hoverTimeoutId.value = null;
   }
+  // 滑回時若 mouseleave 後還在 collapse 動畫期間，立即解除 collapsing 狀態，
+  // 避免 .collapsing 樣式蓋住 .expanded 的展開規則導致卡片不展開。
+  isCollapsing.value = false;
   isHovered.value = true;
 };
 
-const handleMouseLeave = (): void => {
+const handleMouseLeave = async (): Promise<void> => {
   if (isAnimating.value) return;
 
-  hoverTimeoutId.value = setTimeout(() => {
-    isHovered.value = false;
+  // 清掉任何 pending hover timer（保留以防競態，目前已無 debounce 但結構保留）
+  if (hoverTimeoutId.value !== null) {
+    clearTimeout(hoverTimeoutId.value);
     hoverTimeoutId.value = null;
-  }, HOVER_DEBOUNCE_MS);
+  }
+
+  // 收合前把 stack scroll 位置滾回視覺底部（column-reverse 下 scrollTop=0 即底部），
+  // 用 smooth scroll 與接下來的 collapse 動畫同步滑動，不會「跳一下」。
+  const stackEl = stackComp.value?.$el as HTMLElement | undefined;
+  if (stackEl && stackEl.scrollTop !== 0) {
+    stackEl.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  // mouseleave 立即觸發收合，不再 debounce —— 否則 user 感覺箭頭與卡片
+  // 延遲消失。stack 邊緣的容錯由 ::before 偽元素的擴展區處理。
+  isHovered.value = false;
+  isCollapsing.value = true;
+  await sleep(COLLAPSE_ANIMATION_MS);
+  if (isUnmounted) return;
+  // mouseenter 期間已被 handleMouseEnter 重置時 isHovered=true，這裡不再覆寫；
+  // 否則正常解除 collapsing。
+  if (!isHovered.value) {
+    isCollapsing.value = false;
+  }
 };
 
 const selectModel = async (model: string): Promise<void> => {
@@ -252,16 +281,17 @@ const selectModel = async (model: string): Promise<void> => {
     -->
     <TransitionGroup
       v-else
+      ref="stackComp"
       name="stack-slide"
       tag="div"
       class="model-cards-stack"
       :class="{
         expanded: isHovered,
         collapsing: isCollapsing,
-        'overflow-y-auto': isOpencodeScrollable,
-        'model-cards-stack--scrollable': isOpencodeScrollable,
+        'model-cards-stack--scrollable': isScrollable,
       }"
       @mouseleave="handleMouseLeave"
+      @wheel.stop.passive
     >
       <button
         v-for="option in sortedOptions"
@@ -280,6 +310,39 @@ const selectModel = async (model: string): Promise<void> => {
         {{ option.label }}
       </button>
     </TransitionGroup>
+
+    <!--
+      模型數 > 4 個且展開時，stack 上方顯示呼吸塗鴉箭頭提示「還可往上捲」。
+      位置：定位於 .pod-model-slot 的 padding 區之外（top 為負值），不蓋到任何 model card。
+      樣式：飽滿塗鴉箭頭（fill + 粗描邊 + 圓角邊），呼應 doodle 風格。
+      Transition 包覆：避免 mouseleave 瞬間 v-if 直接 unmount 造成「啵」的視覺跳動。
+      pointer-events: none 不攔截滑鼠，aria-hidden 對 SR 友善（重複資訊）。
+    -->
+    <Transition name="scroll-hint-fade">
+      <div
+        v-if="isScrollable && isHovered"
+        class="model-cards-stack__scroll-hint"
+        aria-hidden="true"
+      >
+        <!--
+          塗鴉風飽滿箭頭：三角頭 + 短柄組合 + 暖黃填色 + 深色粗描邊。
+          路徑邊角微歪、用 Q 二次貝茲做圓滑頂點，模擬手繪不規則感。
+        -->
+        <svg
+          viewBox="0 0 32 22"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M16 2.8 Q16.6 2.6 17.2 3.2 L28.6 14.6 Q29.4 15.4 28.4 16.1 L21 16.1 L21 18.6 Q21 19.8 19.8 19.8 L12.2 19.8 Q11 19.8 11 18.6 L11 16.1 L3.6 16.1 Q2.6 15.4 3.4 14.6 L14.8 3.2 Q15.4 2.6 16 2.8 Z"
+            fill="oklch(0.82 0.16 80)"
+            stroke="oklch(0.28 0.04 50)"
+            stroke-width="2.2"
+            stroke-linejoin="round"
+            stroke-linecap="round"
+          />
+        </svg>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -494,15 +557,97 @@ const selectModel = async (model: string): Promise<void> => {
 }
 
 /* --------------------------------
-   opencode 超過 4 個選項時的捲動限高
+   模型數 > 4 時的捲動限高（任意 provider 都套用）
    --------------------------------
    --pod-model-selector-max-h：貼合 4 張卡片的高度
    （每張約 26px 含 gap 4px，合計約 120px；加上 stack padding 2px）。
-   .model-cards-stack--scrollable：套用限高並啟用垂直捲軸。
+   .model-cards-stack--scrollable：套用限高 + overflow，並完全隱藏 scrollbar
+   （改用上方的呼吸箭頭做為「還可往上捲」提示，避免 scrollbar 視覺被 Pod 邊壓到）。
+   設計決策：max-height 永遠生效（不依賴 .expanded / .collapsing），
+   原因是若只在展開/收合時生效，collapse 動畫結束的瞬間 max-height 會從
+   120px → unset，stack 自然高度撐到 ~156px，雖然非 active 卡片 opacity:0
+   不可見，但 column-reverse layout 重排會讓 model 卡片視覺殘影像「重新插入」。
+   永遠維持 max-height 後，hover 切換不會造成任何 layout 跳動。
+   未 hover 時 active 在 stack 視覺底部，上方卡片 opacity:0 + overflow 裁切，
+   視覺上跟原本「自然高度」一模一樣，但 layout 穩定。
 */
 .model-cards-stack--scrollable {
   --pod-model-selector-max-h: 120px;
   max-height: var(--pod-model-selector-max-h);
+  overflow-y: auto;
+  /* Firefox：隱藏 scrollbar */
+  scrollbar-width: none;
+}
+
+/* WebKit / Blink：隱藏 scrollbar */
+.model-cards-stack--scrollable::-webkit-scrollbar {
+  display: none;
+}
+
+/* --------------------------------
+   頂部呼吸 chevron：提示「上方還有更多選項可捲動」
+   --------------------------------
+   定位：top: -14px 把 chevron 移出 .pod-model-slot 的 padding 區（padding-top: 8px），
+   避免與第一張 model card 視覺重疊。
+   樣式：SVG 手繪 chevron（QBezier 弧線 + round linecap）+ 微傾斜 + drop-shadow，
+   呼應 doodle 風格，不再是冷硬的 mono ↑ 字元。
+   呼吸動畫：opacity + y 偏移雙軸，1.4s 循環，不刺激。
+*/
+.model-cards-stack__scroll-hint {
+  position: absolute;
+  /* 推遠離 .pod-model-slot 的 padding 區，徹底避開 model card 視覺範圍 */
+  top: -32px;
+  /* 水平置中：left: 50% + margin-left: -width/2，
+     不依賴 transform 做置中，這樣 keyframe 取消 animation 時不會丟失 translateX 而往右偏。 */
+  left: 50%;
+  width: 32px;
+  height: 22px;
+  margin-left: -16px;
+  pointer-events: none;
+  user-select: none;
+  filter: drop-shadow(1.5px 1.5px 0 oklch(0.3 0.02 50 / 0.35));
+  animation: scroll-hint-breath 1.3s ease-in-out infinite;
+}
+
+.model-cards-stack__scroll-hint svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* 微傾斜，加強手繪感 */
+  transform: rotate(-3deg);
+}
+
+/*
+  呼吸動畫只控制 Y 軸位移（上下飄動），不做 scale、不改 opacity。
+  注意：不能在 keyframe 控制 opacity —— CSS animation 的 opacity 優先級高於 transition，
+  會讓 .scroll-hint-fade-leave-active 的 fade 失效，箭頭卡在呼吸狀態永不消失。
+*/
+@keyframes scroll-hint-breath {
+  0%,
+  100% {
+    transform: translateY(2px);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+/* mouseleave 時的 fade 轉場：避免直接 unmount 的視覺跳動 */
+.scroll-hint-fade-enter-active {
+  transition: opacity 0.18s ease-out;
+}
+
+.scroll-hint-fade-leave-active {
+  /* 離開時 animation 繼續跑（transform 不會瞬間歸位），
+     opacity 由此 transition 從 base 1 平滑淡到 0。
+     0.3s：對齊 .model-card 的 collapse transition，箭頭與卡片同時開始/結束。
+     注意：keyframe 不能控制 opacity，否則 animation 會壓過 transition 導致 fade 無效。 */
+  transition: opacity 0.3s ease;
+}
+
+.scroll-hint-fade-enter-from,
+.scroll-hint-fade-leave-to {
+  opacity: 0;
 }
 
 /* --------------------------------

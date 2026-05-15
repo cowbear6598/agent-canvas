@@ -219,10 +219,10 @@ describe("PodModelSelector - 測試 4：點擊 active 選項不 emit，進入 co
 });
 
 // -----------------------------------------------------------------------
-// 測試 5：mouseleave 後經 HOVER_DEBOUNCE_MS 收合
+// 測試 5：mouseleave 立即觸發收合動畫
 // -----------------------------------------------------------------------
 
-describe("PodModelSelector - 測試 5：mouseleave debounce 收合", () => {
+describe("PodModelSelector - 測試 5：mouseleave 立即收合", () => {
   beforeEach(() => {
     setupPinia();
     vi.useFakeTimers();
@@ -232,7 +232,7 @@ describe("PodModelSelector - 測試 5：mouseleave debounce 收合", () => {
     vi.useRealTimers();
   });
 
-  it("mouseleave 後推進 HOVER_DEBOUNCE_MS 毫秒，stack 應失去 expanded class", async () => {
+  it("mouseleave 後 collapsing 狀態會在動畫完成後清除，expanded 立即移除", async () => {
     seedModels("claude", CLAUDE_MODELS);
 
     const wrapper = mountSelector();
@@ -241,19 +241,27 @@ describe("PodModelSelector - 測試 5：mouseleave debounce 收合", () => {
 
     // 展開
     await activeCard.trigger("mouseenter");
+    await wrapper.vm.$nextTick();
     expect(stack.classes()).toContain("expanded");
 
     // 觸發 mouseleave（綁在 .model-cards-stack 上）
-    await stack.trigger("mouseleave");
-
-    // debounce 尚未到期，仍展開
-    expect(stack.classes()).toContain("expanded");
-
-    // 推進時間
-    vi.advanceTimersByTime(HOVER_DEBOUNCE_MS);
+    // handleMouseLeave 是異步的，trigger 會開始執行但不等待完成
+    const mouseLeavePromise = stack.trigger("mouseleave");
     await wrapper.vm.$nextTick();
 
+    // mouseleave 事件處理器已開始，但 sleep(COLLAPSE_ANIMATION_MS) 還在等待
     expect(stack.classes()).not.toContain("expanded");
+
+    // 推進到動畫完成時間，觸發 sleep 的 resolve
+    vi.advanceTimersByTime(COLLAPSE_ANIMATION_MS);
+    await wrapper.vm.$nextTick();
+    // 此時 handleMouseLeave 的 await sleep 應已完成，並設置 isCollapsing = false
+
+    // 完整推進所有 pending timer 確保後續所有 microtask 完成
+    await vi.runAllTimersAsync();
+    await wrapper.vm.$nextTick();
+
+    expect(stack.classes()).not.toContain("collapsing");
 
     wrapper.unmount();
   });
@@ -699,12 +707,12 @@ describe("PodModelSelector - 測試 11（P4.A）：opencode availableModels 為�
 //   providerCapabilityStore.getAvailableModels("opencode") 回傳 5 筆，
 //   不 mock 元件內部 timer 邏輯。
 
-describe("PodModelSelector - 測試 12（P4.A）：opencode availableModels === 5 → overflow-y-auto", () => {
+describe("PodModelSelector - 測試 12（P4.A）：opencode availableModels === 5 → 捲動限高", () => {
   beforeEach(() => {
     setupPinia();
   });
 
-  it("5 個 opencode alias 時，model-cards-stack 有 overflow-y-auto class", () => {
+  it("5 個 opencode alias 時，model-cards-stack 有 model-cards-stack--scrollable class", () => {
     const aliases = [
       makeAlias("a1", "Alias-1", 0),
       makeAlias("a2", "Alias-2", 1),
@@ -721,7 +729,7 @@ describe("PodModelSelector - 測試 12（P4.A）：opencode availableModels === 
 
     const stack = wrapper.find(".model-cards-stack");
     expect(stack.exists()).toBe(true);
-    expect(stack.classes()).toContain("overflow-y-auto");
+    expect(stack.classes()).toContain("model-cards-stack--scrollable");
 
     wrapper.unmount();
   });

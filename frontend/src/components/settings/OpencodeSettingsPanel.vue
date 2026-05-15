@@ -343,7 +343,7 @@ const handleAliasDragEnd = (): void => {
             v-model="draftRows[provider.id]!.alias"
             :placeholder="t('llmProvider.opencode.aliases.aliasPlaceholder')"
             class="w-full rounded-md border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-          />
+          >
         </div>
 
         <!-- 儲存 / 取消 -->
@@ -372,7 +372,7 @@ const handleAliasDragEnd = (): void => {
         <p
           v-if="
             opencodeAliasStore.aliasesByProvider(provider.id).length === 0 &&
-            !draftRows[provider.id]
+              !draftRows[provider.id]
           "
           class="text-xs text-muted-foreground py-1"
         >
@@ -422,7 +422,10 @@ const handleAliasDragEnd = (): void => {
     </div>
 
     <!-- 搜尋框（loaded 且有 provider 時顯示） -->
-    <div v-if="loadState === 'loaded' && providers.length > 0" class="relative">
+    <div
+      v-if="loadState === 'loaded' && providers.length > 0"
+      class="relative"
+    >
       <Search
         class="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
       />
@@ -441,7 +444,11 @@ const handleAliasDragEnd = (): void => {
       <p class="text-sm text-destructive">
         {{ t("llmProvider.opencode.providerList.loadError") }}
       </p>
-      <Button variant="outline" size="sm" @click="loadFromBackend">
+      <Button
+        variant="outline"
+        size="sm"
+        @click="loadFromBackend"
+      >
         {{ t("llmProvider.opencode.providerList.retry") }}
       </Button>
     </div>
@@ -482,7 +489,10 @@ const handleAliasDragEnd = (): void => {
         </span>
 
         <!-- 未登入提示 -->
-        <span v-else class="text-xs text-muted-foreground">
+        <span
+          v-else
+          class="text-xs text-muted-foreground"
+        >
           {{
             t("llmProvider.opencode.providerList.disabledHint", {
               id: provider.id,
@@ -494,7 +504,10 @@ const handleAliasDragEnd = (): void => {
   </div>
 
   <!-- 刪除確認 Dialog -->
-  <Dialog :open="deleteConfirmOpen" @update:open="deleteConfirmOpen = false">
+  <Dialog
+    :open="deleteConfirmOpen"
+    @update:open="deleteConfirmOpen = false"
+  >
     <DialogContent class="max-w-sm">
       <DialogHeader>
         <DialogTitle>
@@ -509,10 +522,16 @@ const handleAliasDragEnd = (): void => {
         </DialogDescription>
       </DialogHeader>
       <DialogFooter>
-        <Button variant="outline" @click="deleteConfirmOpen = false">
+        <Button
+          variant="outline"
+          @click="deleteConfirmOpen = false"
+        >
           {{ t("common.cancel") }}
         </Button>
-        <Button variant="destructive" @click="handleDeleteConfirm">
+        <Button
+          variant="destructive"
+          @click="handleDeleteConfirm"
+        >
           {{ t("common.delete") }}
         </Button>
       </DialogFooter>

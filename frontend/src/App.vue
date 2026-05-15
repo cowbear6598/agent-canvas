@@ -441,10 +441,15 @@ onUnmounted(() => {
     v-else-if="securityStore.isBootstrapping"
     class="flex min-h-screen items-center justify-center bg-background"
   >
-    <div class="text-sm text-muted-foreground">Loading workspace...</div>
+    <div class="text-sm text-muted-foreground">
+      Loading workspace...
+    </div>
   </div>
 
-  <div v-else class="h-screen bg-background overflow-hidden flex flex-col">
+  <div
+    v-else
+    class="h-screen bg-background overflow-hidden flex flex-col"
+  >
     <AppHeader />
 
     <CanvasSidebar
@@ -462,7 +467,11 @@ onUnmounted(() => {
       <CanvasContainer v-else />
     </main>
 
-    <ChatModal v-if="selectedPod" :pod="selectedPod" @close="handleCloseChat" />
+    <ChatModal
+      v-if="selectedPod"
+      :pod="selectedPod"
+      @close="handleCloseChat"
+    />
 
     <RunChatModal
       v-if="runStore.activeRunChatModal"

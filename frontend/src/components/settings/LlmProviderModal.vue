@@ -44,7 +44,10 @@ const handleBack = (): void => {
 </script>
 
 <template>
-  <Dialog :open="open" @update:open="handleClose">
+  <Dialog
+    :open="open"
+    @update:open="handleClose"
+  >
     <DialogContent class="max-w-lg">
       <DialogHeader>
         <DialogTitle>{{ t("llmProvider.modal.title") }}</DialogTitle>
@@ -54,7 +57,10 @@ const handleBack = (): void => {
       </DialogHeader>
 
       <!-- 首頁：列出 provider card -->
-      <div v-if="step === 'home'" class="space-y-3 py-2">
+      <div
+        v-if="step === 'home'"
+        class="space-y-3 py-2"
+      >
         <!-- opencode card -->
         <button
           class="w-full rounded-lg border border-border bg-card p-4 text-left transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"

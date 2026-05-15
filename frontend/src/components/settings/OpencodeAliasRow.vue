@@ -171,7 +171,7 @@ const handleDragEnd = (): void => {
             v-model="editAlias"
             :placeholder="t('llmProvider.opencode.aliases.aliasPlaceholder')"
             class="w-full rounded-md border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-          />
+          >
         </div>
 
         <!-- 儲存 / 取消按鈕 -->
@@ -184,7 +184,11 @@ const handleDragEnd = (): void => {
           >
             {{ t("common.cancel") }}
           </Button>
-          <Button size="sm" class="h-7 px-2" @click="handleSave">
+          <Button
+            size="sm"
+            class="h-7 px-2"
+            @click="handleSave"
+          >
             {{ t("common.save") }}
           </Button>
         </div>
