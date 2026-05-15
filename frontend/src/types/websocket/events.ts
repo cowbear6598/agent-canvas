@@ -84,6 +84,18 @@ export const WebSocketRequestEvents = {
   BACKUP_TRIGGER: "backup:trigger",
   /** 查詢可用 Provider 列表 */
   PROVIDER_LIST: "provider:list",
+  /** 查詢 opencode provider 列表 */
+  OPENCODE_PROVIDER_LIST: "opencode:provider:list",
+  /** 查詢 opencode model 別稱列表 */
+  OPENCODE_ALIASES_LIST: "opencode:aliases:list",
+  /** 新增 opencode model 別稱 */
+  OPENCODE_ALIASES_CREATE: "opencode:aliases:create",
+  /** 更新 opencode model 別稱 */
+  OPENCODE_ALIASES_UPDATE: "opencode:aliases:update",
+  /** 刪除 opencode model 別稱 */
+  OPENCODE_ALIASES_DELETE: "opencode:aliases:delete",
+  /** 重排 opencode model 別稱順序 */
+  OPENCODE_ALIASES_REORDER: "opencode:aliases:reorder",
 } as const;
 
 export type WebSocketRequestEvents =
@@ -218,6 +230,20 @@ export const WebSocketResponseEvents = {
   BACKUP_FAILED: "backup:failed",
   /** Provider 列表查詢結果 */
   PROVIDER_LIST_RESULT: "provider:list:result",
+  /** opencode provider 列表查詢結果 */
+  OPENCODE_PROVIDER_LIST_RESULT: "opencode:provider:list:result",
+  /** opencode model 別稱列表查詢結果 */
+  OPENCODE_ALIASES_LIST_RESULT: "opencode:aliases:list:result",
+  /** opencode model 別稱新增結果 */
+  OPENCODE_ALIASES_CREATE_RESULT: "opencode:aliases:create:result",
+  /** opencode model 別稱更新結果 */
+  OPENCODE_ALIASES_UPDATE_RESULT: "opencode:aliases:update:result",
+  /** opencode model 別稱刪除結果 */
+  OPENCODE_ALIASES_DELETE_RESULT: "opencode:aliases:delete:result",
+  /** opencode model 別稱重排結果 */
+  OPENCODE_ALIASES_REORDER_RESULT: "opencode:aliases:reorder:result",
+  /** opencode model 別稱已更新（push 事件） */
+  OPENCODE_ALIASES_UPDATED: "opencode:aliases:updated",
 } as const;
 
 export type WebSocketResponseEvents =

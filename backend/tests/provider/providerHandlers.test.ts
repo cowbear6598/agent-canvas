@@ -17,6 +17,19 @@ vi.mock("../../src/schemas/index.js", () => ({
   },
 }));
 
+// mock database/index：此測試只驗證 claude/codex/gemini 的 metadata 轉換，
+// opencode 的動態 availableModels 由 providerHandlersOpencode.test.ts 負責。
+// 回傳空 rows 使 opencode availableModels=[]，與 metadata.availableModels=[] 一致。
+vi.mock("../../src/database/index.js", () => ({
+  getStmts: () => ({
+    modelAlias: {
+      selectByProviderId: {
+        all: () => [],
+      },
+    },
+  }),
+}));
+
 // mock provider index：使用真實的 providerRegistry + getProvider（不 mock）
 // 理由：handler 的職責是將 registry 的 metadata 轉換為 response payload；
 // 若 mock 掉 getProvider 回傳假資料，則無法驗證 capabilities / defaultOptions 的正確性，

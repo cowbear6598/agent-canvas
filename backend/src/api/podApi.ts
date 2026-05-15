@@ -21,7 +21,12 @@ import { toPodPublicView } from "../types/pod.js";
 const VALID_CLAUDE_MODELS = ["opus", "sonnet", "haiku"] as const;
 /** 同一 Canvas 下 Pod 名稱重複時統一回傳的錯誤訊息（預檢與 UNIQUE 約束共用） */
 const POD_NAME_CONFLICT_MESSAGE = "同一 Canvas 下已存在相同名稱的 Pod";
-const VALID_PROVIDERS: ProviderName[] = ["claude", "codex", "gemini"];
+const VALID_PROVIDERS: ProviderName[] = [
+  "claude",
+  "codex",
+  "gemini",
+  "opencode",
+];
 /** providerConfig 允許的 key 白名單 */
 const PROVIDER_CONFIG_ALLOWED_KEYS = ["model"] as const;
 

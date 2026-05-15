@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onUnmounted, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import type { ModelOption, PodProvider } from "@/types/pod";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
 
@@ -85,6 +86,8 @@ watch(
   },
 );
 
+const { t } = useI18n();
+
 const providerCapabilityStore = useProviderCapabilityStore();
 
 /**
@@ -95,6 +98,23 @@ const providerCapabilityStore = useProviderCapabilityStore();
 const allOptions = computed((): ReadonlyArray<ModelOption> => {
   return providerCapabilityStore.getAvailableModels(props.provider);
 });
+
+/**
+ * opencode provider 且 availableModels 為空時，顯示 placeholder 並停用 selector。
+ * 此狀態下 selector 呈現 disabled 樣式（沿用 .pod-model-slot--disabled），
+ * 不展開、不 emit。
+ */
+const isOpencodeEmpty = computed(
+  (): boolean => props.provider === "opencode" && allOptions.value.length === 0,
+);
+
+/**
+ * opencode provider 且 availableModels > 4 時，套用捲動限高 class，
+ * 防止選項過多時 stack 超出可視區域。
+ */
+const isOpencodeScrollable = computed(
+  (): boolean => props.provider === "opencode" && allOptions.value.length > 4,
+);
 
 /**
  * Fallback 用的 effectiveOptions：
@@ -202,22 +222,45 @@ const selectModel = async (model: string): Promise<void> => {
   <!-- 上方中央定位錨點 -->
   <div
     class="pod-model-slot"
-    :class="{ 'pod-model-slot--disabled': disabled }"
-    :aria-disabled="disabled || undefined"
-    :title="disabled ? disabledTooltip : undefined"
+    :class="{ 'pod-model-slot--disabled': disabled || isOpencodeEmpty }"
+    :aria-disabled="disabled || isOpencodeEmpty || undefined"
+    :title="
+      isOpencodeEmpty
+        ? t('pod.modelSelector.opencode.emptyPlaceholder')
+        : disabled
+          ? disabledTooltip
+          : undefined
+    "
   >
+    <!--
+      opencode 且 availableModels 為空：顯示 placeholder 文字，沿用 disabled 樣式鎖定。
+    -->
+    <div
+      v-if="isOpencodeEmpty"
+      class="model-card model-card--placeholder card-opencode active"
+    >
+      {{ t("pod.modelSelector.opencode.emptyPlaceholder") }}
+    </div>
+
     <!--
       model-cards-stack：垂直堆疊容器。
       flex-direction: column-reverse → sortedOptions[0]（active）視覺上固定在最底部貼近 Pod，
       非 active 選項從上方依序堆疊，hover 時展開。
       @mouseleave 移到此層：.pod-model-slot 為 pointer-events: none 不接收 mouse 事件，
       展開時 stack 為 pointer-events: auto，可靠地偵測滑鼠移出整個 stack 範圍。
+      opencode 且 availableModels > 4：套用 max-h + overflow-y-auto 限制捲動高度。
     -->
     <TransitionGroup
+      v-else
       name="stack-slide"
       tag="div"
       class="model-cards-stack"
-      :class="{ expanded: isHovered, collapsing: isCollapsing }"
+      :class="{
+        expanded: isHovered,
+        collapsing: isCollapsing,
+        'overflow-y-auto': isOpencodeScrollable,
+        'model-cards-stack--scrollable': isOpencodeScrollable,
+      }"
       @mouseleave="handleMouseLeave"
     >
       <button
@@ -443,6 +486,23 @@ const selectModel = async (model: string): Promise<void> => {
 /* Gemini：天空藍背景，對齊 Pod 漸層色相 */
 .card-gemini {
   background: oklch(0.88 0.06 230);
+}
+
+/* Opencode：淺橄欖綠背景 */
+.card-opencode {
+  background: oklch(0.9 0.04 130);
+}
+
+/* --------------------------------
+   opencode 超過 4 個選項時的捲動限高
+   --------------------------------
+   --pod-model-selector-max-h：貼合 4 張卡片的高度
+   （每張約 26px 含 gap 4px，合計約 120px；加上 stack padding 2px）。
+   .model-cards-stack--scrollable：套用限高並啟用垂直捲軸。
+*/
+.model-cards-stack--scrollable {
+  --pod-model-selector-max-h: 120px;
+  max-height: var(--pod-model-selector-max-h);
 }
 
 /* --------------------------------

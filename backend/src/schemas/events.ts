@@ -82,6 +82,12 @@ export enum WebSocketRequestEvents {
   BACKUP_TRIGGER = "backup:trigger",
   BACKUP_TEST_CONNECTION = "backup:test-connection",
   PROVIDER_LIST = "provider:list",
+  OPENCODE_PROVIDER_LIST = "opencode:provider:list",
+  OPENCODE_ALIASES_LIST = "opencode:aliases:list",
+  OPENCODE_ALIASES_CREATE = "opencode:aliases:create",
+  OPENCODE_ALIASES_UPDATE = "opencode:aliases:update",
+  OPENCODE_ALIASES_DELETE = "opencode:aliases:delete",
+  OPENCODE_ALIASES_REORDER = "opencode:aliases:reorder",
 }
 
 export enum WebSocketResponseEvents {
@@ -209,4 +215,11 @@ export enum WebSocketResponseEvents {
   BACKUP_FAILED = "backup:failed",
   BACKUP_TEST_CONNECTION_RESULT = "backup:test-connection:result",
   PROVIDER_LIST_RESULT = "provider:list:result",
+  OPENCODE_PROVIDER_LIST_RESULT = "opencode:provider:list:result",
+  OPENCODE_ALIASES_LIST_RESULT = "opencode:aliases:list:result",
+  OPENCODE_ALIASES_CREATE_RESULT = "opencode:aliases:create:result",
+  OPENCODE_ALIASES_UPDATE_RESULT = "opencode:aliases:update:result",
+  OPENCODE_ALIASES_DELETE_RESULT = "opencode:aliases:delete:result",
+  OPENCODE_ALIASES_REORDER_RESULT = "opencode:aliases:reorder:result",
+  OPENCODE_ALIASES_UPDATED = "opencode:aliases:updated",
 }

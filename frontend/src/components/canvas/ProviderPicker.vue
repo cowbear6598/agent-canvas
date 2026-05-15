@@ -4,6 +4,7 @@
 import AnthropicLogo from "@/components/icons/AnthropicLogo.vue";
 import OpenAILogo from "@/components/icons/OpenAILogo.vue";
 import GeminiLogo from "@/components/icons/GeminiLogo.vue";
+import { Cpu } from "lucide-vue-next";
 import type { PodProvider, ProviderConfig } from "@/types/pod";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
 import { useToast } from "@/composables/useToast";
@@ -19,9 +20,16 @@ const emit = defineEmits<{
 
 /**
  * 從 store 取得指定 provider 的 model 字串。
- * 若 metadata 尚未載入（getDefaultOptions 回 undefined）或 defaultOptions 無 model 欄位，回傳 undefined。
+ * - opencode：沒有靜態 defaultOptions.model，取 getAvailableModels 第一筆 alias 的 value（"providerID/modelID"）
+ * - 其他 provider：取 defaultOptions.model
+ * metadata 尚未載入或 opencode 尚無 alias 對應時回傳 undefined。
  */
 function resolveModel(provider: PodProvider): string | undefined {
+  if (provider === "opencode") {
+    const models = providerStore.getAvailableModels(provider);
+    if (models.length === 0) return undefined;
+    return models[0]!.value;
+  }
   const opts = providerStore.getDefaultOptions(provider);
   if (
     opts === undefined ||
@@ -35,19 +43,26 @@ function resolveModel(provider: PodProvider): string | undefined {
 
 /**
  * 指定 provider 的按鈕是否應 disabled：metadata 尚未載入時 disable。
- * 以 provider 動態查詢，未來新增 provider 只需更新模板，不需複製 computed。
+ * 例外：opencode 在無 alias 時不 disable button，仍可點以觸發 toast 引導，
+ *       避免使用者覺得「點不了」而忽略提示。
  */
 function isProviderDisabled(provider: PodProvider): boolean {
+  if (provider === "opencode") return false;
   return resolveModel(provider) === undefined;
 }
 
 /**
- * 顯示「Provider 載入中」提示 toast（metadata 尚未就緒時使用）。
+ * 顯示 disabled 原因 toast。
+ * - opencode 無 alias 對應 → 引導使用者去 LLM Provider 設定新增
+ * - 其他 provider metadata 未就緒 → 顯示「Provider 載入中」
  */
-function showLoadingToast(): void {
+function showDisabledToast(provider: PodProvider): void {
   toast({
     title: "Provider",
-    description: t("pod.provider.loadingHint"),
+    description:
+      provider === "opencode"
+        ? t("pod.modelSelector.opencode.emptyPlaceholder")
+        : t("pod.provider.loadingHint"),
     variant: "default",
   });
 }
@@ -60,7 +75,7 @@ function showLoadingToast(): void {
 function handleSelectProvider(provider: PodProvider): void {
   const model = resolveModel(provider);
   if (model === undefined) {
-    showLoadingToast();
+    showDisabledToast(provider);
     return;
   }
   emit("select", {
@@ -71,10 +86,7 @@ function handleSelectProvider(provider: PodProvider): void {
 </script>
 
 <template>
-  <div
-    class="pod-menu-submenu"
-    @contextmenu.prevent
-  >
+  <div class="pod-menu-submenu" @contextmenu.prevent>
     <!-- 外層 div 代理 click：disabled button 不觸發 click，需在 wrapper 上聽 -->
     <div @click="() => handleSelectProvider('claude')">
       <button
@@ -98,10 +110,7 @@ function handleSelectProvider(provider: PodProvider): void {
         <span
           class="w-8 h-8 rounded-full flex items-center justify-center border border-doodle-ink bg-white flex-shrink-0"
         >
-          <OpenAILogo
-            :size="16"
-            class="text-black"
-          />
+          <OpenAILogo :size="16" class="text-black" />
         </span>
         <span class="font-mono">Codex</span>
       </button>
@@ -118,6 +127,20 @@ function handleSelectProvider(provider: PodProvider): void {
           <GeminiLogo :size="16" />
         </span>
         <span class="font-mono">Gemini</span>
+      </button>
+    </div>
+
+    <div @click="() => handleSelectProvider('opencode')">
+      <button
+        class="pod-menu-submenu-item flex items-center gap-3"
+        :disabled="isProviderDisabled('opencode')"
+      >
+        <span
+          class="w-8 h-8 rounded-full flex items-center justify-center border border-doodle-ink bg-white flex-shrink-0"
+        >
+          <Cpu :size="16" />
+        </span>
+        <span class="font-mono">Opencode</span>
       </button>
     </div>
   </div>

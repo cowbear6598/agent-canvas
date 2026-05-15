@@ -1,0 +1,392 @@
+feature: opencode-integration
+side: frontend
+approved: true
+phases:
+  - id: P1
+    title: 基礎建設（型別、i18n、WebSocket 事件常數、API 服務層）
+    parallel: true
+    verification:
+      - cd frontend && bun run style
+    done: true
+    items:
+      - id: P1.A
+        title: opencode 對應表型別定義
+        tasks:
+          - id: P1.A.t1
+            text: 在 `frontend/src/types/` 新增 `opencode.ts`，匯出 `OpencodeProviderInfo`（含 id、name、models[]：{ id, name } 子型別）、`OpencodeProviderListResult`（all、default、connected 三欄位）、`OpencodeModelAlias`（id、providerID、modelID、alias、sortOrder 五欄位）三個 interface
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/types/opencode.ts
+          - id: P1.A.t2
+            text: 在 `frontend/src/types/index.ts` 補上 `export * from "./opencode"` 讓新型別可從 `@/types` 入口取用
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/types/index.ts
+
+      - id: P1.B
+        title: WebSocket 事件常數擴充
+        tasks:
+          - id: P1.B.t1
+            text: 在 `frontend/src/types/websocket/events.ts` 的 `WebSocketRequestEvents` 加入 `OPENCODE_PROVIDER_LIST: "opencode:provider:list"`、`OPENCODE_ALIASES_LIST: "opencode:aliases:list"`、`OPENCODE_ALIASES_CREATE: "opencode:aliases:create"`、`OPENCODE_ALIASES_UPDATE: "opencode:aliases:update"`、`OPENCODE_ALIASES_DELETE: "opencode:aliases:delete"`、`OPENCODE_ALIASES_REORDER: "opencode:aliases:reorder"` 六個事件常數（event 字串一律走複數 `aliases`，與後端 handler 命名一致）
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/types/websocket/events.ts
+          - id: P1.B.t2
+            text: 在同檔 `WebSocketResponseEvents` 加入對應的六個結果事件常數（`OPENCODE_PROVIDER_LIST_RESULT: "opencode:provider:list:result"`、`OPENCODE_ALIASES_LIST_RESULT: "opencode:aliases:list:result"`、`OPENCODE_ALIASES_CREATE_RESULT: "opencode:aliases:create:result"`、`OPENCODE_ALIASES_UPDATE_RESULT: "opencode:aliases:update:result"`、`OPENCODE_ALIASES_DELETE_RESULT: "opencode:aliases:delete:result"`、`OPENCODE_ALIASES_REORDER_RESULT: "opencode:aliases:reorder:result"`）以及 push 事件 `OPENCODE_ALIASES_UPDATED: "opencode:aliases:updated"`
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/types/websocket/events.ts
+
+      - id: P1.C
+        title: opencode API 服務層
+        tasks:
+          - id: P1.C.t1
+            text: 在 `frontend/src/services/` 新增 `opencodeApi.ts`，使用 `createWebSocketRequest` 包出 `listOpencodeProviders()`：發 `opencode:provider:list`、回 `OpencodeProviderListResult`
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/services/opencodeApi.ts
+          - id: P1.C.t2
+            text: 在 `opencodeApi.ts` 補上 `listAliases()` / `createAlias(payload)` / `updateAlias(payload)` / `deleteAlias(id)` / `reorderAliases(idsInOrder)` 五個函式，分別對應 P1.B 定義的 `OPENCODE_ALIASES_*` request/response 事件常數；request payload 與回傳 DTO 用 `OpencodeModelAlias` 型別
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/services/opencodeApi.ts
+
+      - id: P1.D
+        title: i18n 文案
+        tasks:
+          - id: P1.D.t1
+            text: 在 `frontend/src/locales/zh-TW.json`、`en.json`、`ja.json` 三檔同步新增 `layout.header.llmProvider`（按鈕 tooltip）、`llmProvider.modal.title`、`llmProvider.modal.backButton`、`llmProvider.card.opencode.title`、`llmProvider.card.opencode.description` 文案；zh-TW 用「LLM Provider」「opencode」「返回」等用語
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/locales/zh-TW.json
+              - frontend/src/locales/en.json
+              - frontend/src/locales/ja.json
+          - id: P1.D.t2
+            text: 在同三檔新增 `llmProvider.opencode.providerList.title`、`llmProvider.opencode.providerList.refresh`（重新整理）、`llmProvider.opencode.providerList.connected`（已登入）、`llmProvider.opencode.providerList.disabledHint`（「請在 terminal 執行 opencode auth login {id} 後重新整理」，使用 i18n 插值）、`llmProvider.opencode.providerList.loadError`（載入失敗）、`llmProvider.opencode.providerList.retry`（重試）、`llmProvider.opencode.providerList.empty`（清單為空時的提示）等文案
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/locales/zh-TW.json
+              - frontend/src/locales/en.json
+              - frontend/src/locales/ja.json
+          - id: P1.D.t3
+            text: 在同三檔新增 model 對應表用文案：`llmProvider.opencode.aliases.title`、`llmProvider.opencode.aliases.addButton`（新增 model）、`llmProvider.opencode.aliases.modelIdLabel`（真實 model id）、`llmProvider.opencode.aliases.modelIdPlaceholder`、`llmProvider.opencode.aliases.aliasLabel`（別稱）、`llmProvider.opencode.aliases.aliasPlaceholder`、`llmProvider.opencode.aliases.aliasDuplicateError`（同 provider 內別稱不可重複）、`llmProvider.opencode.aliases.deleteConfirmTitle`、`llmProvider.opencode.aliases.deleteConfirmMessage`、`llmProvider.opencode.aliases.reorderHint`、`llmProvider.opencode.aliases.actionFailed`（「操作失敗：{reason}」i18n 插值，供 CRUD 拋錯時 toast 顯示用）
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/locales/zh-TW.json
+              - frontend/src/locales/en.json
+              - frontend/src/locales/ja.json
+          - id: P1.D.t4
+            text: 在同三檔新增 Pod 端文案：`pod.modelSelector.opencode.emptyPlaceholder`（「請先到 LLM Provider 設定新增 model 對應」）、`pod.modelSelector.opencode.disabledTooltip`（opencode server 啟不起來時 PodModelSelector 的 tooltip）、`pod.chat.opencode.providerNotLoggedIn`（「請在 terminal 執行 opencode auth login {provider} 後重新整理」，使用 i18n 插值，作為送 prompt 時 Pod 內顯示的系統提示）
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/locales/zh-TW.json
+              - frontend/src/locales/en.json
+              - frontend/src/locales/ja.json
+
+  - id: P2
+    title: providerCapabilityStore 擴充 + opencode aliases store
+    parallel: false
+    verification:
+      - cd frontend && bun run style
+      - cd frontend && bun run test:run
+    done: true
+    items:
+      - id: P2.A
+        title: providerCapabilityStore 支援動態 availableModels
+        tasks:
+          - id: P2.A.t1
+            text: 在 `frontend/src/stores/providerCapabilityStore.ts` 的 `getAvailableModels(provider)` 邏輯擴充：當 provider === "opencode" 時，改從新 store `opencodeAliasStore` 的 aliases[] 動態組裝回傳；每筆 row 轉成 `ModelOption`，label = `alias`、value = `"{providerID}/{modelID}"` 組合字串；其他 provider 行為維持不變
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/stores/providerCapabilityStore.ts
+              - frontend/src/stores/opencodeAliasStore.ts
+          - id: P2.A.t2
+            text: 在同檔的 `syncFromPayload`：opencode 那一筆 payload 收到後忽略其 availableModels 欄位（後端可送空陣列），不污染 store 內部狀態；其他 provider 維持原行為
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/stores/providerCapabilityStore.ts
+          - id: P2.A.t3
+            text: 撰寫 `frontend/src/stores/providerCapabilityStore.spec.ts` 新增測試案例：（1）`getAvailableModels("opencode")` 在 opencodeAliasStore 有兩筆 alias 時，回傳兩筆 ModelOption、label 為 alias、value 為 `providerID/modelID` 組合字串；（2）alias store 變動後 `getAvailableModels("opencode")` 立刻反映新值（reactive 行為）
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/tests/stores/providerCapabilityStore.test.ts
+
+      - id: P2.B
+        title: 新增 opencodeAliasStore
+        tasks:
+          - id: P2.B.t1
+            text: 在 `frontend/src/stores/` 新增 `opencodeAliasStore.ts`，state 含 `aliases: OpencodeModelAlias[]`、`loaded: boolean`；action 提供 `loadFromBackend()`（呼叫 `opencodeApi.listAliases`、成功時寫入 state，**失敗時用 try-catch 保留現有 aliases 與 loaded 不變**、log 錯誤即可，沿用既有 providerCapabilityStore 失敗保留風格）、`addAlias(payload)`、`editAlias(payload)`、`removeAlias(id)`、`reorder(idsInOrder)`，**四個 mutate action 在 await api 呼叫時遇到拋錯不本地更新 state、直接 rethrow 讓 UI 元件層 toast；成功時才同步本地 state**
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/stores/opencodeAliasStore.ts
+          - id: P2.B.t2
+            text: 在 `opencodeAliasStore.ts` 新增 getter `aliasesByProvider(providerID)`，依 providerID 過濾並依 sortOrder 升冪排序回傳；`isAliasUnique(providerID, alias, excludeId?)` 用於新增 / 編輯時的本地唯一性檢查
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/stores/opencodeAliasStore.ts
+          - id: P2.B.t3
+            text: 在 `frontend/src/stores/workflowEventHandlers.ts`（或既有 WebSocket push event handler 入口）註冊 `opencode:aliases:updated` 事件 handler，收到時呼叫 `opencodeAliasStore.loadFromBackend()` 重拉最新清單
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/composables/eventHandlers/opencodeEventHandlers.ts
+              - frontend/src/composables/useUnifiedEventListeners.ts
+          - id: P2.B.t4
+            text: 在 `App.vue` 既有的 `providerCapabilityStore.loadFromBackend()` 旁邊新增 `opencodeAliasStore.loadFromBackend()` 呼叫，確保應用啟動時就把 alias 清單拉好
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/App.vue
+          - id: P2.B.t5
+            text: 撰寫 `frontend/src/stores/opencodeAliasStore.spec.ts` 測試案例：（1）`addAlias` 成功後本地 state 多一筆 row；（2）`editAlias` 後對應 row 的 alias 欄位更新；（3）`removeAlias` 後該 row 從 state 消失；（4）`reorder` 後 aliases 順序與傳入 idsInOrder 一致；（5）`isAliasUnique` 同 providerID 內偵測到重複時回傳 false、跨 providerID 同名回傳 true；（6）`aliasesByProvider` 依 sortOrder 升冪；（7）mocked `opencodeApi.listAliases` 拋錯時 `loadFromBackend()` 不改動既有 aliases、loaded 值不變；（8）mocked `opencodeApi.createAlias` 拋錯時 `addAlias()` rethrow 錯誤且本地 aliases 未新增
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/tests/stores/opencodeAliasStore.spec.ts
+
+  - id: P3
+    title: LLM Provider modal 與 opencode 設定畫面
+    parallel: false
+    verification:
+      - cd frontend && bun run style
+      - cd frontend && bun run test:run
+    done: true
+    items:
+      - id: P3.A
+        title: AppHeader 入口按鈕
+        tasks:
+          - id: P3.A.t1
+            text: 在 `frontend/src/components/layout/AppHeader.vue` 既有 Settings / KeyRound 按鈕旁新增一顆「LLM Provider」按鈕（用 lucide-vue-next 的合適 icon，例如 `Cpu` 或 `Bot`），tooltip 取 `layout.header.llmProvider`；點擊時 toggle 一個 `showLlmProviderModal` ref，並掛載新元件 `LlmProviderModal`
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/layout/AppHeader.vue
+
+      - id: P3.B
+        title: LlmProviderModal 容器（多步切換）
+        tasks:
+          - id: P3.B.t1
+            text: 在 `frontend/src/components/settings/` 新增 `LlmProviderModal.vue`，使用既有 Shadcn Dialog / Modal 元件當外層；內部 state `step: "home" | "opencode"`，初始為 "home"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/settings/LlmProviderModal.vue
+          - id: P3.B.t2
+            text: 在 `LlmProviderModal.vue` 的 "home" 步驟列出 provider card 清單，目前只放一張「opencode」card；點擊 card 時將 step 設為 "opencode"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/settings/LlmProviderModal.vue
+          - id: P3.B.t3
+            text: 在 `LlmProviderModal.vue` 的 "opencode" 步驟頂部放一顆「返回」按鈕（icon + label 用 `llmProvider.modal.backButton`），點擊時將 step 切回 "home"；下方掛載新元件 `OpencodeSettingsPanel`
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/settings/LlmProviderModal.vue
+
+      - id: P3.C
+        title: OpencodeSettingsPanel — provider 列表區塊
+        tasks:
+          - id: P3.C.t1
+            text: 在 `frontend/src/components/settings/` 新增 `OpencodeSettingsPanel.vue`，掛載時呼叫 `opencodeApi.listOpencodeProviders()` 取得 `{ all, default, connected }`；維護 local state `providers`、`connected`、`loadState: "loading" | "loaded" | "error"`
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/settings/OpencodeSettingsPanel.vue
+          - id: P3.C.t2
+            text: 在 `OpencodeSettingsPanel.vue` 上半部渲染「provider 列表」區塊：標題用 `llmProvider.opencode.providerList.title`、列出 all[] 的每個 provider 為一張 row，row 內顯示 provider name；若該 provider id 在 connected[] 內，row 標「已登入」(`llmProvider.opencode.providerList.connected`)；否則 row 顯示 disabled 樣式 + 提示文字 `llmProvider.opencode.providerList.disabledHint`（用 provider id 做 i18n 插值）
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/settings/OpencodeSettingsPanel.vue
+          - id: P3.C.t3
+            text: 在 `OpencodeSettingsPanel.vue` 列表標題列右側加「重新整理」按鈕（label 用 `llmProvider.opencode.providerList.refresh`），點擊時重新呼叫 `opencodeApi.listOpencodeProviders()` 並更新 local state；按鈕在 loadState === "loading" 時 disabled
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/settings/OpencodeSettingsPanel.vue
+          - id: P3.C.t4
+            text: 在 `OpencodeSettingsPanel.vue` 當 loadState === "error" 時，整個列表區塊改顯示「載入失敗」訊息（`llmProvider.opencode.providerList.loadError`）+「重試」按鈕（`llmProvider.opencode.providerList.retry`）；按鈕點擊行為與「重新整理」相同
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/settings/OpencodeSettingsPanel.vue
+          - id: P3.C.t5
+            text: 撰寫 `frontend/src/components/settings/OpencodeSettingsPanel.spec.ts` 測試案例（B 類業務規則）：（1）mock `opencodeApi.listOpencodeProviders` 回 `{ all: [anthropic, openai], connected: [anthropic] }` 時，anthropic row 標「已登入」、openai row 標 disabled；（2）`listOpencodeProviders` 拒絕時 loadState 轉為 error、顯示重試按鈕；（3）點重試按鈕後重新呼叫 API。Mock 邊界：mock `opencodeApi`（自家 wrapper）；不 mock `createWebSocketRequest` 內部
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/tests/components/settings/OpencodeSettingsPanel.test.ts
+
+      - id: P3.D
+        title: OpencodeSettingsPanel — model 對應表 CRUD
+        tasks:
+          - id: P3.D.t1
+            text: 在 `OpencodeSettingsPanel.vue` 下半部新增「model 對應表」區塊：標題用 `llmProvider.opencode.aliases.title`、依目前選中的 provider（從上半列表選一個 connected provider）顯示對應的 alias rows；每個 connected provider 對應一個摺疊區，內含「新增 model」按鈕與 row list
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/settings/OpencodeSettingsPanel.vue
+          - id: P3.D.t2
+            text: 新增子元件 `frontend/src/components/settings/OpencodeAliasRow.vue`，props 含 alias、provider.models、editing；非編輯態顯示 alias、modelID、編輯/刪除按鈕；編輯態顯示 modelID 下拉（option 取自 provider.models）、alias input、儲存/取消按鈕；emit `save`、`delete`、`startEdit`、`cancelEdit`
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/settings/OpencodeAliasRow.vue
+          - id: P3.D.t3
+            text: 在 `OpencodeSettingsPanel.vue` 點「新增 model」按鈕時在該 provider 區塊頂端插入一筆 draft row（local state，尚未送 API）；儲存時 try-catch 包 `opencodeAliasStore.addAlias` 呼叫，**拋錯時用 useToast 顯示 `llmProvider.opencode.aliases.actionFailed`（用 error.message 做插值）、draft row 保留方便使用者重試**；成功時移除 draft row。取消按鈕直接移除 draft row
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/settings/OpencodeSettingsPanel.vue
+          - id: P3.D.t4
+            text: 在 `OpencodeSettingsPanel.vue` 編輯 row 儲存時，先用 `opencodeAliasStore.isAliasUnique(providerID, alias, excludeId)` 檢查同 provider 內別稱唯一性；不唯一時顯示 `llmProvider.opencode.aliases.aliasDuplicateError`、不送 API；唯一時 try-catch 包 `opencodeAliasStore.editAlias`，**拋錯時 useToast `actionFailed`、編輯態保留**；成功時退出編輯態
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/settings/OpencodeSettingsPanel.vue
+          - id: P3.D.t5
+            text: 在 `OpencodeSettingsPanel.vue` 點「刪除」按鈕時彈出確認對話（用 `llmProvider.opencode.aliases.deleteConfirmTitle` 與 `deleteConfirmMessage`，後者用 alias 做插值），確認後 try-catch 包 `opencodeAliasStore.removeAlias`，**拋錯時 useToast `actionFailed`**
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/settings/OpencodeSettingsPanel.vue
+          - id: P3.D.t6
+            text: 在 `OpencodeSettingsPanel.vue` 為每個 provider 區塊的 row list 加入拖曳重排互動（沿用專案已存在的拖曳模式，例如查 `useSubmenuDragDrop` 或既有 drag handler；若無可重用模式，使用 HTML5 drag/drop attribute 寫一個 row 級別的拖曳）；拖放後計算新順序，try-catch 包 `opencodeAliasStore.reorder(idsInOrder)`，**拋錯時 useToast `actionFailed`、UI 還原成 reorder 前的順序**
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/settings/OpencodeSettingsPanel.vue
+          - id: P3.D.t7
+            text: 擴充 `frontend/src/components/settings/OpencodeSettingsPanel.spec.ts`（B 類業務規則）：（1）新增 row 儲存時呼叫 `opencodeAliasStore.addAlias` 一次、payload 含正確 providerID、modelID、alias；（2）儲存時若同 provider 已有同名 alias，顯示重複錯誤、不呼叫 API；（3）刪除確認後呼叫 `removeAlias` 一次、id 正確；（4）拖曳重排後呼叫 `reorder` 一次、idsInOrder 反映新順序。Mock 邊界：mock `opencodeAliasStore` action（自家 store action），不 mock 子元件 `OpencodeAliasRow`
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/tests/components/settings/OpencodeSettingsPanel.test.ts
+
+  - id: P4
+    title: Pod 端整合（PodModelSelector、CanvasPod capability 顯隱、chat 錯誤訊息）
+    parallel: false
+    verification:
+      - cd frontend && bun run style
+      - cd frontend && bun run test:run
+    done: true
+    items:
+      - id: P4.A
+        title: PodModelSelector 適配 opencode
+        tasks:
+          - id: P4.A.t1
+            text: 在 `frontend/src/components/pod/PodModelSelector.vue` 取得 `availableModels` 後判斷：當 provider === "opencode" 且 availableModels 為空時，模板分支改為顯示 placeholder 文字 `pod.modelSelector.opencode.emptyPlaceholder` 並使整個 selector 不可點選（沿用既有 disabled 樣式）
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/pod/PodModelSelector.vue
+          - id: P4.A.t2
+            text: 在 `PodModelSelector.vue` 展開卡片的容器 element 增加 conditional class：當 provider === "opencode" 且 availableModels.length > 4 時，套用 `max-h-[var(--pod-model-selector-max-h)] overflow-y-auto`（在 `pod.css` 或元件 scoped style 內定義 `--pod-model-selector-max-h` 為適合的高度，例如貼合 4 張卡片視覺）；其他 provider 不套
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/pod/PodModelSelector.vue
+          - id: P4.A.t3
+            text: 撰寫 `frontend/src/components/pod/PodModelSelector.spec.ts`（B 類業務規則）：（1）provider 為 opencode 且 availableModels 為空時，渲染 placeholder 文字、selector 點擊不會 emit `update:model`；（2）provider 為 opencode 且 availableModels.length === 5 時，容器 element 有 `overflow-y-auto` class；（3）provider 為 opencode 且 availableModels.length === 4 時無 `overflow-y-auto` class。Mock 邊界：mock `useProviderCapabilityStore` 的 `getAvailableModels`，不 mock 元件內部 timer 邏輯
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/tests/components/pod/PodModelSelector.test.ts
+
+      - id: P4.B
+        title: CanvasPod capability 顯隱（plugin slot 不出現）
+        tasks:
+          - id: P4.B.t1
+            text: 確認 `frontend/src/components/pod/PodSlots.vue` 與 `CanvasPod.vue` 對 plugin / mcp / repository / command 的顯隱判定全部走 `providerCapabilityStore.getCapabilities(provider)` 的對應欄位；若有任何元件用 hardcode provider 判斷而非 capabilities，改成走 store。此 task 完成後 opencode provider（plugin=false、mcp=true、repository=true、command=true）就會自動正確顯隱
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/pod/PodSlots.vue
+              - frontend/tests/components/pod/PodSlots.test.ts
+              - frontend/tests/components/pod/CanvasPod.test.ts
+          - id: P4.B.t2
+            text: 撰寫 `frontend/src/components/pod/CanvasPod.spec.ts`（或在既有 spec 內補測；B 類業務規則）：mock store 讓 provider 為 "opencode" 且 capabilities 為 `{ chat: true, plugin: false, repository: true, command: true, mcp: true }` 時，渲染結果包含 `PodMcpSlot`、`PodSingleBindSlot`（repository / command 兩處），不包含 `PodPluginSlot`
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/tests/components/pod/CanvasPod.test.ts
+
+      - id: P4.C
+        title: opencode chat 錯誤訊息與 server 啟動失敗顯示
+        tasks:
+          - id: P4.C.t1
+            text: 在處理 Pod chat 串流訊息的入口（查 `frontend/src/stores/chat/` 或 `frontend/src/composables/eventHandlers/` 內既有的 chat error event handler）擴充：當收到後端標記為「opencode provider 未登入」的錯誤 event（後端會帶結構化 code 例如 `opencode_provider_not_logged_in` 與 providerID）時，將該訊息以系統提示形式注入該 Pod chat history，文案用 `pod.chat.opencode.providerNotLoggedIn` 配 providerID 做 i18n 插值
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/stores/chat/chatMessageActions.ts
+          - id: P4.C.t2
+            text: 在 `PodModelSelector.vue` 或上層 `CanvasPod.vue` 既有的 `disabled` / `disabledTooltip` 合併判定中，新增條件：當 provider === "opencode" 且 `providerCapabilityStore.getCapabilities("opencode").chat === false` 時，設 disabled=true、disabledTooltip 取 `pod.modelSelector.opencode.disabledTooltip`。後端在 opencode server spawn 失敗時會把 opencode capabilities.chat 設為 false，前端即自動鎖
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/src/components/pod/CanvasPod.vue
+          - id: P4.C.t3
+            text: 撰寫對應測試（B 類業務規則）：（1）chat event handler 收到 `opencode_provider_not_logged_in` 結構化錯誤、providerID 為 "openai" 時，注入 Pod 的訊息文字包含 "openai" 與「opencode auth login」字樣；（2）provider 為 opencode 且 capabilities.chat === false 時 PodModelSelector 處於 disabled、tooltip 文字為對應 i18n key 內容
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - frontend/tests/stores/chat/opencodeErrorHandling.test.ts

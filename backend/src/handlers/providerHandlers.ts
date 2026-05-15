@@ -14,6 +14,7 @@ import {
   GEMINI_MODEL_THINKING_LEVELS,
 } from "../services/provider/capabilities.js";
 import { socketService } from "../services/socketService.js";
+import { getStmts } from "../database/index.js";
 
 /**
  * 各 provider 對應的 thinking levels 查表。
@@ -30,7 +31,81 @@ const THINKING_LEVELS_BY_PROVIDER: Readonly<
   claude: CLAUDE_MODEL_THINKING_LEVELS,
   codex: CODEX_MODEL_THINKING_LEVELS,
   gemini: GEMINI_MODEL_THINKING_LEVELS,
+  // opencode 不支援 thinking levels（由 opencode 後端內部處理 reasoning），保留空表
+  opencode: {},
 };
+
+/** DB row 形狀（model_aliases 表） */
+interface ModelAliasRow {
+  id: string;
+  provider_id: string;
+  real_provider: string;
+  real_model: string;
+  alias: string;
+  order_idx: number;
+}
+
+/**
+ * 組裝整份 provider:list payload（providers 陣列）。
+ *
+ * - claude / codex / gemini：取各自 metadata.availableModels，補 thinking metadata
+ * - opencode：從 DB 的 model_aliases 表動態組裝 availableModels
+ *
+ * 此函式被 handleProviderList 與 broadcastProviderList 共用。
+ */
+export function buildProviderListPayload(): ProviderListResultPayload["providers"] {
+  const stmts = getStmts();
+
+  return (Object.keys(providerRegistry) as ProviderName[]).map((name) => {
+    const { metadata } = getProvider(name);
+    // 移除 pathToClaudeCodeExecutable：此為伺服器絕對路徑，不應洩漏給前端
+    const { pathToClaudeCodeExecutable: _stripped, ...safeDefaultOptions } =
+      metadata.defaultOptions as Record<string, unknown> & {
+        pathToClaudeCodeExecutable?: unknown;
+      };
+
+    let availableModels: Array<{
+      label: string;
+      value: string;
+      thinkingLevels: readonly string[];
+      defaultThinkingLevel: string | null;
+    }>;
+
+    if (name === "opencode") {
+      // opencode：從 DB 動態取出 alias rows，按 order_idx 升序組成 ModelOption
+      const rows = stmts.modelAlias.selectByProviderId.all({
+        $providerId: "opencode",
+      }) as ModelAliasRow[];
+
+      availableModels = rows.map((r) => ({
+        label: r.alias,
+        value: r.real_provider + "/" + r.real_model,
+        // opencode 不支援 thinking levels
+        thinkingLevels: [],
+        defaultThinkingLevel: null,
+      }));
+    } else {
+      // claude / codex / gemini：沿用 metadata.availableModels，補 thinking metadata
+      const thinkingTable = THINKING_LEVELS_BY_PROVIDER[name];
+      availableModels = metadata.availableModels.map((model) => {
+        const entry = thinkingTable[model.value];
+        return {
+          label: model.label,
+          value: model.value,
+          thinkingLevels: entry ? [...entry.levels] : [],
+          defaultThinkingLevel: entry ? entry.default : null,
+        };
+      });
+    }
+
+    return {
+      name,
+      capabilities: metadata.capabilities,
+      defaultOptions: safeDefaultOptions,
+      availableModels,
+    };
+  });
+}
 
 /**
  * 處理 provider:list 請求
@@ -41,34 +116,7 @@ export async function handleProviderList(
   payload: ProviderListPayload,
   requestId: string,
 ): Promise<void> {
-  // 從 providerRegistry 建立 providers 列表，每個 provider 附帶 capabilities、defaultOptions 與 availableModels
-  const providers = (Object.keys(providerRegistry) as ProviderName[]).map(
-    (name) => {
-      const { metadata } = getProvider(name);
-      // 移除 pathToClaudeCodeExecutable：此為伺服器絕對路徑，不應洩漏給前端
-      const { pathToClaudeCodeExecutable: _stripped, ...safeDefaultOptions } =
-        metadata.defaultOptions as Record<string, unknown> & {
-          pathToClaudeCodeExecutable?: unknown;
-        };
-      // 為每個 model 補上 thinking metadata；找不到對應常數時 fallback 為空 / null
-      const thinkingTable = THINKING_LEVELS_BY_PROVIDER[name];
-      const availableModels = metadata.availableModels.map((model) => {
-        const entry = thinkingTable[model.value];
-        return {
-          label: model.label,
-          value: model.value,
-          thinkingLevels: entry ? [...entry.levels] : [],
-          defaultThinkingLevel: entry ? entry.default : null,
-        };
-      });
-      return {
-        name,
-        capabilities: metadata.capabilities,
-        defaultOptions: safeDefaultOptions,
-        availableModels,
-      };
-    },
-  );
+  const providers = buildProviderListPayload();
 
   const response: ProviderListResultPayload = {
     requestId,

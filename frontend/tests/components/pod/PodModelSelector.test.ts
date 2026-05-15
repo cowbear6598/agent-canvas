@@ -4,7 +4,9 @@ import { createTestingPinia } from "@pinia/testing";
 import { setActivePinia } from "pinia";
 import PodModelSelector from "@/components/pod/PodModelSelector.vue";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
+import { useOpencodeAliasStore } from "@/stores/opencodeAliasStore";
 import type { ModelOption, PodProvider } from "@/types/pod";
+import type { OpencodeModelAlias } from "@/types/opencode";
 
 // -----------------------------------------------------------------------
 // 輔助常數（與 component 保持一致）
@@ -612,6 +614,149 @@ describe("PodModelSelector - 測試 10：provider 未知字串時 fallback 為 c
     expect(cards[0]!.classes()).toContain("card-single");
     // 同時是 active 卡片
     expect(cards[0]!.classes()).toContain("active");
+
+    wrapper.unmount();
+  });
+});
+
+// -----------------------------------------------------------------------
+// 輔助：建立 opencode alias 條目
+// -----------------------------------------------------------------------
+
+function makeAlias(
+  id: string,
+  alias: string,
+  sortOrder: number,
+): OpencodeModelAlias {
+  return {
+    id,
+    providerID: "openai",
+    modelID: `model-${id}`,
+    alias,
+    sortOrder,
+  };
+}
+
+// -----------------------------------------------------------------------
+// 測試 11（P4.A）：opencode + availableModels 為空 → placeholder 顯示，不 emit
+// -----------------------------------------------------------------------
+//
+// 業務規則（F8）：
+// - provider 為 opencode 且 alias store 無任何 alias 時，
+//   元件渲染 placeholder 文字，整個 selector 呈 disabled 狀態。
+// - 點擊 placeholder card 不應 emit update:model。
+//
+// Mock 邊界：透過 useOpencodeAliasStore().setAliases([]) 讓
+//   providerCapabilityStore.getAvailableModels("opencode") 回傳空陣列，
+//   不 mock 元件內部 timer 邏輯。
+
+describe("PodModelSelector - 測試 11（P4.A）：opencode availableModels 為空時渲染 placeholder", () => {
+  beforeEach(() => {
+    setupPinia();
+  });
+
+  it("placeholder 文字存在，selector 套用 disabled class，點擊不 emit update:model", async () => {
+    // alias store 為空 → getAvailableModels("opencode") 回傳 []
+    useOpencodeAliasStore().setAliases([]);
+
+    const wrapper = mountSelector({
+      provider: "opencode" as PodProvider,
+      currentModel: "openai/gpt-4o",
+    });
+
+    // 不應渲染 model-cards-stack（v-else 分支被跳過）
+    expect(wrapper.find(".model-cards-stack").exists()).toBe(false);
+
+    // placeholder 卡片存在
+    const placeholder = wrapper.find(".model-card--placeholder");
+    expect(placeholder.exists()).toBe(true);
+
+    // placeholder 文字為 i18n key 對應的翻譯（全域 setup.ts 已掛載真實 i18n）
+    // 測試只斷言文字非空、且包含「model」關鍵字（zh-TW 翻譯為「請先到 LLM Provider 設定新增 model 對應」）
+    expect(placeholder.text()).toContain("model");
+
+    // selector 根容器應有 disabled class
+    const slot = wrapper.find(".pod-model-slot");
+    expect(slot.classes()).toContain("pod-model-slot--disabled");
+
+    // 點擊 placeholder 不應 emit update:model
+    await placeholder.trigger("click");
+    expect(wrapper.emitted("update:model")).toBeFalsy();
+
+    wrapper.unmount();
+  });
+});
+
+// -----------------------------------------------------------------------
+// 測試 12（P4.A）：opencode + availableModels.length === 5 → overflow-y-auto class 存在
+// -----------------------------------------------------------------------
+//
+// 業務規則（F7/t2）：
+// - opencode provider 且 availableModels > 4 時，
+//   model-cards-stack 容器帶有 overflow-y-auto class。
+//
+// Mock 邊界：透過 useOpencodeAliasStore().setAliases(...5筆) 讓
+//   providerCapabilityStore.getAvailableModels("opencode") 回傳 5 筆，
+//   不 mock 元件內部 timer 邏輯。
+
+describe("PodModelSelector - 測試 12（P4.A）：opencode availableModels === 5 → overflow-y-auto", () => {
+  beforeEach(() => {
+    setupPinia();
+  });
+
+  it("5 個 opencode alias 時，model-cards-stack 有 overflow-y-auto class", () => {
+    const aliases = [
+      makeAlias("a1", "Alias-1", 0),
+      makeAlias("a2", "Alias-2", 1),
+      makeAlias("a3", "Alias-3", 2),
+      makeAlias("a4", "Alias-4", 3),
+      makeAlias("a5", "Alias-5", 4),
+    ];
+    useOpencodeAliasStore().setAliases(aliases);
+
+    const wrapper = mountSelector({
+      provider: "opencode" as PodProvider,
+      currentModel: "openai/model-a1",
+    });
+
+    const stack = wrapper.find(".model-cards-stack");
+    expect(stack.exists()).toBe(true);
+    expect(stack.classes()).toContain("overflow-y-auto");
+
+    wrapper.unmount();
+  });
+});
+
+// -----------------------------------------------------------------------
+// 測試 13（P4.A）：opencode + availableModels.length === 4 → 無 overflow-y-auto
+// -----------------------------------------------------------------------
+//
+// 業務規則（F7/t2）：
+// - opencode provider 且 availableModels <= 4 時，
+//   model-cards-stack 容器「不」帶有 overflow-y-auto class。
+
+describe("PodModelSelector - 測試 13（P4.A）：opencode availableModels === 4 → 無 overflow-y-auto", () => {
+  beforeEach(() => {
+    setupPinia();
+  });
+
+  it("4 個 opencode alias 時，model-cards-stack 不含 overflow-y-auto class", () => {
+    const aliases = [
+      makeAlias("b1", "Alias-1", 0),
+      makeAlias("b2", "Alias-2", 1),
+      makeAlias("b3", "Alias-3", 2),
+      makeAlias("b4", "Alias-4", 3),
+    ];
+    useOpencodeAliasStore().setAliases(aliases);
+
+    const wrapper = mountSelector({
+      provider: "opencode" as PodProvider,
+      currentModel: "openai/model-b1",
+    });
+
+    const stack = wrapper.find(".model-cards-stack");
+    expect(stack.exists()).toBe(true);
+    expect(stack.classes()).not.toContain("overflow-y-auto");
 
     wrapper.unmount();
   });

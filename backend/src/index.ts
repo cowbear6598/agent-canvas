@@ -22,6 +22,10 @@ import { scheduleService } from "./services/scheduleService.js";
 import { getResultErrorString } from "./types/result.js";
 import { podStore } from "./services/podStore.js";
 import { abortRegistry } from "./services/provider/abortRegistry.js";
+import {
+  startOpencodeServer,
+  stopOpencodeServer,
+} from "./services/provider/opencodeServer.js";
 import { runStore } from "./services/runStore.js";
 import { runExecutionService } from "./services/workflow/runExecutionService.js";
 import { handshakeAuthService } from "./services/auth/handshakeAuthService.js";
@@ -65,6 +69,12 @@ async function startServer(): Promise<void> {
     );
     process.exit(1);
   }
+
+  // 啟動 opencode 伺服器（不阻擋後端啟動：失敗時保留 "failed" 狀態，
+  // opencode chat 由 capabilities 標記 chat=false 阻擋）
+  await startOpencodeServer().catch((error) => {
+    console.error("[Startup] startOpencodeServer 發生非預期錯誤：", error);
+  });
 
   socketService.initialize();
   registerAllHandlers();
@@ -250,12 +260,16 @@ const shutdown = async (signal: string): Promise<void> => {
   socketService.stopHeartbeat();
   replyContextStore.dispose();
 
+  // 停止 opencode 伺服器子程序
+  stopOpencodeServer();
+
   logger.log("Shutdown", "Complete", "伺服器已成功關閉");
   process.exit(0);
 };
 
 process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("beforeExit", () => stopOpencodeServer());
 
 // 全域錯誤處理：防止 SDK 內部的未捕獲錯誤 crash 整個應用程式
 process.on("uncaughtException", (error) => {

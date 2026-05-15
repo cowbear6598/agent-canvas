@@ -19,6 +19,7 @@ import { pluginHandlerGroup } from "./groups/pluginHandlerGroup.js";
 import { backupHandlerGroup } from "./groups/backupHandlerGroup.js";
 import { providerHandlerGroup } from "./groups/providerHandlerGroup.js";
 import { mcpHandlerGroup } from "./groups/mcpHandlerGroup.js";
+import { opencodeSettingsHandlerGroup } from "./groups/opencodeSettingsHandlerGroup.js";
 
 const registry = new HandlerRegistry();
 
@@ -42,6 +43,7 @@ registry.registerGroup(pluginHandlerGroup);
 registry.registerGroup(backupHandlerGroup);
 registry.registerGroup(providerHandlerGroup);
 registry.registerGroup(mcpHandlerGroup);
+registry.registerGroup(opencodeSettingsHandlerGroup);
 
 export function registerAllHandlers(): void {
   registry.registerToRouter();

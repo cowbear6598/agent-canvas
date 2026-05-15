@@ -40,6 +40,7 @@ describe("Database", () => {
         "integration_apps",
         "integration_bindings",
         "messages",
+        "model_aliases",
         "notes",
         "pod_manifests",
         "pod_mcp_server_names",

@@ -559,9 +559,9 @@ describe("CanvasPod Gemini provider", () => {
     wrapper.unmount();
   });
 
-  // B3：Gemini Pod 的四個插槽仍渲染：plugin/mcp disabled=true，
+  // B3：Gemini Pod — plugin/mcp capability=false 時對應 slot 完全不渲染，
   //     repository/command 因後端 GEMINI_CAPABILITIES 支援，disabled=false
-  it("B3：Gemini Pod 的四個插槽仍渲染，plugin/mcp disabled=true、repository/command disabled=false（後端真實閘門）", async () => {
+  it("B3：Gemini Pod — plugin/mcp slot 不渲染（capability=false），repository/command slot 存在且 disabled=false", async () => {
     const pod = mkPod({ provider: "gemini" as Pod["provider"] });
     // 需把 pod 寫入 podStore，usePodCapabilities 才能透過 getPodById 取得正確 provider
     usePodStore().pods = [pod];
@@ -569,21 +569,17 @@ describe("CanvasPod Gemini provider", () => {
     injectGeminiCapabilities();
     await nextTick();
 
-    // 四個插槽 DOM 仍存在
-    expect(wrapper.find(".pod-plugin-slot").exists()).toBe(true);
-    expect(wrapper.find(".pod-mcp-slot").exists()).toBe(true);
+    // plugin=false、mcp=false → 對應 slot 完全不渲染（v-if=false）
+    expect(wrapper.find(".pod-plugin-slot").exists()).toBe(false);
+    expect(wrapper.find(".pod-mcp-slot").exists()).toBe(false);
+
+    // repository/command slot 仍存在
     expect(wrapper.find(".pod-repository-slot").exists()).toBe(true);
     expect(wrapper.find(".pod-command-slot").exists()).toBe(true);
 
-    // PodSlots 渲染後，透過 PodPluginSlot / PodMcpSlot 元件驗證 disabled prop
-    const podSlots = wrapper.findComponent({ name: "PodSlots" });
-    const podPluginSlot = podSlots.findComponent({ name: "PodPluginSlot" });
-    const podMcpSlot = podSlots.findComponent({ name: "PodMcpSlot" });
-    expect(podPluginSlot.props("disabled")).toBe(true);
-    expect(podMcpSlot.props("disabled")).toBe(true);
-
     // Gemini 支援 repository / command（GEMINI_CAPABILITIES.repository=true, command=true）
     // PodSingleBindSlot 應收到 disabled=false，允許使用者拖入 Note
+    const podSlots = wrapper.findComponent({ name: "PodSlots" });
     const singleBindSlots = podSlots.findAllComponents({
       name: "PodSingleBindSlot",
     });
@@ -680,6 +676,58 @@ describe("CanvasPod handleModelChange", () => {
     await nextTick();
 
     expect(podStore.getPodById("pod-m")?.providerConfig.model).toBe("haiku");
+    wrapper.unmount();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// 11. opencode provider — plugin slot 不顯示，mcp / repository / command slot 顯示
+// ─────────────────────────────────────────────────────────────────────────
+
+describe("CanvasPod opencode provider — capability 顯隱", () => {
+  /** 注入 opencode capabilities：plugin=false、mcp=true、repository=true、command=true */
+  function injectOpencodeCapabilities() {
+    const store = useProviderCapabilityStore();
+    store.syncFromPayload([
+      {
+        name: "opencode",
+        capabilities: {
+          chat: true,
+          plugin: false,
+          repository: true,
+          command: true,
+          mcp: true,
+        },
+      },
+    ]);
+    store.loaded = true;
+  }
+
+  // B 類業務規則：opencode Pod 依 capabilities 正確顯隱各 slot
+  it("opencode Pod — PodPluginSlot 不渲染（plugin=false），PodMcpSlot 與兩個 PodSingleBindSlot 存在", async () => {
+    const pod = mkPod({ provider: "opencode" as Pod["provider"] });
+    // usePodCapabilities 透過 getPodById 取得 provider，需把 pod 寫入 podStore
+    usePodStore().pods = [pod];
+    const wrapper = mountPod(pod);
+    injectOpencodeCapabilities();
+    await nextTick();
+
+    const podSlots = wrapper.findComponent({ name: "PodSlots" });
+
+    // plugin=false → PodPluginSlot 不渲染
+    expect(podSlots.findComponent({ name: "PodPluginSlot" }).exists()).toBe(
+      false,
+    );
+
+    // mcp=true → PodMcpSlot 存在
+    expect(podSlots.findComponent({ name: "PodMcpSlot" }).exists()).toBe(true);
+
+    // repository=true、command=true → 兩個 PodSingleBindSlot 存在
+    const singleBindSlots = podSlots.findAllComponents({
+      name: "PodSingleBindSlot",
+    });
+    expect(singleBindSlots.length).toBeGreaterThanOrEqual(2);
+
     wrapper.unmount();
   });
 });

@@ -6,6 +6,7 @@ import type {
 import { readClaudeMcpServers } from "../services/mcp/claudeMcpReader.js";
 import { readCodexMcpServers } from "../services/mcp/codexMcpReader.js";
 import { readGeminiMcpServers } from "../services/mcp/geminiMcpReader.js";
+import { readOpencodeMcpServers } from "../services/mcp/opencodeMcpReader.js";
 import { podStore } from "../services/podStore.js";
 import { socketService } from "../services/socketService.js";
 import { isPodBusy } from "../types/index.js";
@@ -17,9 +18,10 @@ import type { ProviderName } from "../services/provider/index.js";
 
 /**
  * 依 provider 分派到對應的 reader，回傳可用的 MCP server 清單。
- * - claude → readClaudeMcpServers（僅 user-scoped，name 欄位，無 type）
- * - gemini → readGeminiMcpServers（回傳 { name, type }）
- * - codex  → readCodexMcpServers（回傳 { name, type }）
+ * - claude    → readClaudeMcpServers（僅 user-scoped，name 欄位，無 type）
+ * - gemini    → readGeminiMcpServers（回傳 { name, type }）
+ * - codex     → readCodexMcpServers（回傳 { name, type }）
+ * - opencode  → readOpencodeMcpServers（回傳 { name, type }）
  */
 function resolveAvailableMcpServers(
   provider: ProviderName,
@@ -29,6 +31,8 @@ function resolveAvailableMcpServers(
     return servers.map(({ name }) => ({ name }));
   } else if (provider === "gemini") {
     return readGeminiMcpServers();
+  } else if (provider === "opencode") {
+    return readOpencodeMcpServers();
   } else {
     const servers = readCodexMcpServers();
     return servers.map(({ name, type }) => ({ name, type }));
@@ -37,9 +41,10 @@ function resolveAvailableMcpServers(
 
 /**
  * handleMcpList：依 provider 分派到對應的 reader，回傳 MCP_LIST_RESULT。
- * - provider = "claude" → readClaudeMcpServers（僅 user-scoped，從 top-level mcpServers 讀取）
- * - provider = "codex"  → readCodexMcpServers（回傳 { name, type }[]）
- * - provider = "gemini" → readGeminiMcpServers（讀取 ~/.gemini/settings.json root.mcpServers）
+ * - provider = "claude"    → readClaudeMcpServers（僅 user-scoped，從 top-level mcpServers 讀取）
+ * - provider = "codex"     → readCodexMcpServers（回傳 { name, type }[]）
+ * - provider = "gemini"    → readGeminiMcpServers（讀取 ~/.gemini/settings.json root.mcpServers）
+ * - provider = "opencode"  → readOpencodeMcpServers（讀取 ~/.config/opencode/opencode.json mcp 區塊）
  * 統一對應 mcpListItemSchema 格式後回傳。
  */
 export async function handleMcpList(

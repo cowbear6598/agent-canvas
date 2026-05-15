@@ -208,6 +208,12 @@
     }
   },
   "pod": {
+    "modelSelector": {
+      "opencode": {
+        "emptyPlaceholder": "請先到 LLM Provider 設定新增 model 對應",
+        "disabledTooltip": "opencode server 無法啟動"
+      }
+    },
     "multiInstance": {
       "readonlyHint": "此 Pod 屬於 Multi-Instance 流程，請從歷程查看"
     },
@@ -285,6 +291,9 @@
     }
   },
   "chat": {
+    "opencode": {
+      "providerNotLoggedIn": "請在 terminal 執行 opencode auth login {provider} 後重新整理"
+    },
     "loadingHistory": "正在載入對話歷史...",
     "inputPlaceholder": "輸入訊息...",
     "summarizedBadge": "摘要",
@@ -305,7 +314,46 @@
       "canvasList": "Canvas 清單",
       "globalSettings": "全域設定",
       "integrations": "整合服務管理",
-      "history": "歷程"
+      "history": "歷程",
+      "llmProvider": "LLM Provider 設定"
+    }
+  },
+  "llmProvider": {
+    "modal": {
+      "title": "LLM Provider",
+      "backButton": "返回"
+    },
+    "card": {
+      "opencode": {
+        "title": "opencode",
+        "description": "使用 opencode 管理 LLM Provider 與 model 對應"
+      }
+    },
+    "opencode": {
+      "providerList": {
+        "title": "Provider 清單",
+        "refresh": "重新整理",
+        "connected": "已登入",
+        "disabledHint": "請在 terminal 執行 opencode auth login {id} 後重新整理",
+        "loadError": "載入失敗",
+        "retry": "重試",
+        "empty": "目前沒有可用的 Provider",
+        "searchPlaceholder": "搜尋 Provider...",
+        "noMatch": "找不到符合的 Provider"
+      },
+      "aliases": {
+        "title": "Model 對應表",
+        "addButton": "新增 model",
+        "modelIdLabel": "真實 model id",
+        "modelIdPlaceholder": "請輸入真實 model id",
+        "aliasLabel": "別稱",
+        "aliasPlaceholder": "請輸入別稱",
+        "aliasDuplicateError": "同 provider 內別稱不可重複",
+        "deleteConfirmTitle": "確認刪除",
+        "deleteConfirmMessage": "確定要刪除此 model 對應嗎？",
+        "reorderHint": "可拖曳以重新排序",
+        "actionFailed": "操作失敗：{reason}"
+      }
     }
   },
   "error": {

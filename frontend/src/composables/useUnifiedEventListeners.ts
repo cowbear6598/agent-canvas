@@ -16,6 +16,7 @@ import {
   getRunStandaloneListeners,
 } from "./eventHandlers/runEventHandlers";
 import { getBackupStandaloneListeners } from "./eventHandlers/backupEventHandlers";
+import { getOpencodeStandaloneListeners } from "./eventHandlers/opencodeEventHandlers";
 
 const isListenerRegistered = ref(false);
 
@@ -43,6 +44,7 @@ const standaloneListeners: Array<{
   },
   ...getRunStandaloneListeners(),
   ...getBackupStandaloneListeners(),
+  ...getOpencodeStandaloneListeners(),
 ];
 
 export function registerUnifiedListeners(): void {

@@ -5,6 +5,7 @@ import {
 } from "../helpers/mockWebSocket";
 import { setupStoreTest } from "../helpers/testSetup";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
+import { useOpencodeAliasStore } from "@/stores/opencodeAliasStore";
 
 // Mock WebSocket（保留真實事件常數）
 vi.mock("@/services/websocket", () => webSocketMockFactory());
@@ -817,6 +818,124 @@ describe("providerCapabilityStore", () => {
       expect(store.loaded).toBe(true);
       // availableModelsByProvider 保留上次成功的值，不因失敗而被清空
       expect(store.getAvailableModels("claude")).toEqual(claudeModels);
+    });
+  });
+
+  // ----------------------------------------------------------------
+  // opencode 動態 availableModels（P2.A 新增）
+  // ----------------------------------------------------------------
+  describe("getAvailableModels('opencode') — 動態來源", () => {
+    it("opencodeAliasStore 有兩筆 alias 時，回傳兩筆 ModelOption，label 為 alias，value 為 providerID/modelID", () => {
+      const store = useProviderCapabilityStore();
+      const aliasStore = useOpencodeAliasStore();
+
+      aliasStore.setAliases([
+        {
+          id: "alias-1",
+          providerID: "openai",
+          modelID: "gpt-4o",
+          alias: "GPT-4o",
+          sortOrder: 0,
+        },
+        {
+          id: "alias-2",
+          providerID: "anthropic",
+          modelID: "claude-opus-4-5",
+          alias: "Claude Opus",
+          sortOrder: 1,
+        },
+      ]);
+
+      const models = store.getAvailableModels("opencode");
+
+      expect(models).toHaveLength(2);
+      expect(models[0]).toEqual({ label: "GPT-4o", value: "openai/gpt-4o" });
+      expect(models[1]).toEqual({
+        label: "Claude Opus",
+        value: "anthropic/claude-opus-4-5",
+      });
+    });
+
+    it("alias store 變動後 getAvailableModels('opencode') 立刻反映新值（reactive 行為）", () => {
+      const store = useProviderCapabilityStore();
+      const aliasStore = useOpencodeAliasStore();
+
+      const aliasA = {
+        id: "alias-1",
+        providerID: "openai",
+        modelID: "gpt-4o",
+        alias: "GPT-4o",
+        sortOrder: 0,
+      };
+      const aliasB = {
+        id: "alias-2",
+        providerID: "anthropic",
+        modelID: "claude-sonnet-4-5",
+        alias: "Claude Sonnet",
+        sortOrder: 1,
+      };
+
+      // 初始：空清單
+      expect(store.getAvailableModels("opencode")).toEqual([]);
+
+      // 直接以 setAliases 模擬 alias store 變動（避免依賴非同步 API mutate action）
+      aliasStore.setAliases([aliasA]);
+
+      // 立刻反映
+      expect(store.getAvailableModels("opencode")).toHaveLength(1);
+      expect(store.getAvailableModels("opencode")[0]).toEqual({
+        label: "GPT-4o",
+        value: "openai/gpt-4o",
+      });
+
+      // 再新增一筆
+      aliasStore.setAliases([aliasA, aliasB]);
+      expect(store.getAvailableModels("opencode")).toHaveLength(2);
+
+      // 刪除第一筆（只剩 alias-2）
+      aliasStore.setAliases([aliasB]);
+      expect(store.getAvailableModels("opencode")).toHaveLength(1);
+      expect(store.getAvailableModels("opencode")[0]).toEqual({
+        label: "Claude Sonnet",
+        value: "anthropic/claude-sonnet-4-5",
+      });
+    });
+
+    it("syncFromPayload 傳入 opencode 時，忽略其 availableModels，不污染 store 內部狀態", () => {
+      const store = useProviderCapabilityStore();
+
+      // 後端送來 opencode 含 availableModels
+      store.syncFromPayload([
+        {
+          name: "opencode",
+          capabilities: {
+            chat: true,
+            plugin: false,
+            repository: false,
+            command: false,
+            mcp: false,
+          },
+          availableModels: [
+            { label: "後端送的選項", value: "should-not-appear" },
+          ],
+        },
+      ]);
+
+      // availableModelsByProvider 不應被寫入 opencode 的資料
+      expect(
+        store.availableModelsByProvider[
+          "opencode" as keyof typeof store.availableModelsByProvider
+        ],
+      ).toBeUndefined();
+
+      // getAvailableModels 依然從 alias store 取資料（此時為空）
+      expect(store.getAvailableModels("opencode")).toEqual([]);
+    });
+
+    it("opencode alias store 為空時，getAvailableModels('opencode') 回空陣列", () => {
+      const store = useProviderCapabilityStore();
+      // 未設定任何 alias，alias store 應為空
+      expect(store.getAvailableModels("opencode")).toEqual([]);
     });
   });
 });

@@ -173,6 +173,14 @@ function buildStatements(db: Database): {
     upsert: ReturnType<Database["prepare"]>;
     deleteByRunId: ReturnType<Database["prepare"]>;
   };
+  modelAlias: {
+    insert: ReturnType<Database["prepare"]>;
+    selectByProviderId: ReturnType<Database["prepare"]>;
+    updateAliasAndOrderIdx: ReturnType<Database["prepare"]>;
+    updateAliasAndModelId: ReturnType<Database["prepare"]>;
+    deleteById: ReturnType<Database["prepare"]>;
+    selectMaxOrderIdxByProviderId: ReturnType<Database["prepare"]>;
+  };
 } {
   return {
     canvas: {
@@ -667,6 +675,35 @@ function buildStatements(db: Database): {
         )`,
       ),
       deleteByRunId: db.prepare("DELETE FROM run_messages WHERE run_id = ?"),
+    },
+
+    modelAlias: {
+      // 新增一筆 model alias 記錄
+      insert: db.prepare(
+        `INSERT INTO model_aliases (
+          id, provider_id, real_provider, real_model, alias, order_idx, created_at, updated_at
+        ) VALUES (
+          $id, $providerId, $realProvider, $realModel, $alias, $orderIdx, $createdAt, $updatedAt
+        )`,
+      ),
+      // 依 provider_id 查詢，並以 order_idx 升序排列（供 PodModelSelector 顯示）
+      selectByProviderId: db.prepare(
+        "SELECT * FROM model_aliases WHERE provider_id = $providerId ORDER BY order_idx ASC",
+      ),
+      // 更新 alias 顯示別稱與排序位置（供 reorder handler 使用）
+      updateAliasAndOrderIdx: db.prepare(
+        "UPDATE model_aliases SET alias = $alias, order_idx = $orderIdx, updated_at = $updatedAt WHERE id = $id",
+      ),
+      // 更新 alias 顯示別稱與真實 model 對應（供編輯 handler 使用，不動 order_idx）
+      updateAliasAndModelId: db.prepare(
+        "UPDATE model_aliases SET alias = $alias, real_model = $realModel, updated_at = $updatedAt WHERE id = $id",
+      ),
+      // 依 id 刪除單筆 alias
+      deleteById: db.prepare("DELETE FROM model_aliases WHERE id = ?"),
+      // 查詢指定 provider_id 內目前最大的 order_idx，供 append 時計算下一個位置
+      selectMaxOrderIdxByProviderId: db.prepare(
+        "SELECT COALESCE(MAX(order_idx), -1) as max_order_idx FROM model_aliases WHERE provider_id = $providerId",
+      ),
     },
   };
 }

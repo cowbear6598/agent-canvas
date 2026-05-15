@@ -179,9 +179,14 @@ export function sanitizeProviderConfigStrict(
   const sanitized = sanitizeProviderConfig(raw);
 
   if ("model" in sanitized) {
-    const { availableModelValues } = getProvider(provider).metadata;
-    if (!availableModelValues.has(sanitized.model as string)) {
-      throw new Error(`Provider ${provider} 不支援此 model`);
+    // opencode 的 model 為 "{providerID}/{modelID}"，可選清單由使用者建立的 alias 動態組成，
+    // 無法用 static availableModelValues 驗證；字元與長度檢查已在 podSchemas 完成，
+    // 此處對 opencode 跳過 strict 範圍檢查。
+    if (provider !== "opencode") {
+      const { availableModelValues } = getProvider(provider).metadata;
+      if (!availableModelValues.has(sanitized.model as string)) {
+        throw new Error(`Provider ${provider} 不支援此 model`);
+      }
     }
   } else {
     // 補填預設 model：寫入路徑若未指定 model，自動補入 provider 預設值

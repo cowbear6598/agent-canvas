@@ -28,6 +28,35 @@ import {
 import { createToolTrackingActions } from "./toolTrackingActions";
 import { createMessageCompletionActions } from "./messageCompletionActions";
 import { getMessages, findMessageIndex, setTyping } from "./chatStoreHelpers";
+import { t } from "@/i18n";
+
+/**
+ * 從 opencode auth missing 錯誤訊息中解析 providerID。
+ * 後端 content 格式為：`opencode auth login {providerID}` 開頭的一段文字。
+ * 解析失敗時回傳 "unknown"。
+ */
+function extractOpencodeProviderID(content: string): string {
+  const match = content.match(/opencode auth login (\S+)/);
+  return match?.[1] ?? "unknown";
+}
+
+/**
+ * 當收到 opencode_auth_missing 或 opencode_server_unreachable 錯誤代碼時，
+ * 將後端原始訊息替換為前端 i18n 文案，確保多語系一致。
+ * - opencode_auth_missing：提示使用者執行 opencode auth login {providerID}
+ * - opencode_server_unreachable：原始內容已夠清楚，直接使用後端訊息
+ */
+function resolveOpencodeErrorContent(
+  content: string,
+  metadata?: SystemMessageMetadata,
+): string {
+  const code = metadata?.code;
+  if (code === "opencode_auth_missing") {
+    const providerID = extractOpencodeProviderID(content);
+    return t("chat.opencode.providerNotLoggedIn", { provider: providerID });
+  }
+  return content;
+}
 
 function appendUserOutputToPod(pod: Pod, content: string): void {
   const podStore = usePodStore();
@@ -316,15 +345,18 @@ function createMessageCreationActions(
     const messages = getMessages(store, podId);
     const messageIndex = findMessageIndex(messages, messageId);
 
+    // 對 opencode 特定錯誤代碼做 i18n 替換，確保前端顯示語系一致
+    const resolvedContent = resolveOpencodeErrorContent(content, metadata);
+
     const lastLength = store.accumulatedLengthByMessageId.get(messageId) ?? 0;
-    const delta = content.slice(lastLength);
-    store.accumulatedLengthByMessageId.set(messageId, content.length);
+    const delta = resolvedContent.slice(lastLength);
+    store.accumulatedLengthByMessageId.set(messageId, resolvedContent.length);
 
     if (messageIndex === -1) {
       addNewChatMessage(
         podId,
         messageId,
-        content,
+        resolvedContent,
         isPartial,
         role,
         delta,
@@ -337,7 +369,7 @@ function createMessageCreationActions(
       podId,
       messages,
       messageIndex,
-      content,
+      resolvedContent,
       isPartial,
       delta,
       metadata,

@@ -1,0 +1,329 @@
+feature: opencode-integration
+side: backend
+approved: true
+phases:
+  - id: P1
+    title: 依賴與 DB schema（model_aliases 表）
+    parallel: true
+    verification:
+      - cd backend && bun run style
+      - cd backend && bun run test
+    done: true
+    items:
+      - id: P1.A
+        title: 新增 opencode runtime 依賴
+        tasks:
+          - id: P1.A.t1
+            text: 在 `backend/package.json` 的 `dependencies` 區塊新增 `@opencode-ai/sdk` 與 `opencode-ai`，兩者使用相同版本號（鎖定同一個 minor / patch，例如皆使用 `1.14.50`），執行 `bun install` 讓 `bun.lock` 更新，確認 `node_modules/.bin/opencode` 透過 `opencode-ai` 的 platform postinstall 被拉下來
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/package.json
+              - backend/bun.lock
+      - id: P1.B
+        title: model_aliases 表 schema 與 prepared statements
+        tasks:
+          - id: P1.B.t1
+            text: 在 `backend/src/database/schema.ts` 的 `createTables` 函式內，新增一條 `CREATE TABLE IF NOT EXISTS model_aliases (id TEXT PRIMARY KEY, provider_id TEXT NOT NULL, real_provider TEXT NOT NULL, real_model TEXT NOT NULL, alias TEXT NOT NULL, order_idx INTEGER NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE(provider_id, real_provider, alias))` 語句；註解使用 zh-TW 說明 provider_id 預留多 provider 擴充（首期固定為 "opencode"）、real_provider / real_model 為 opencode session.prompt 用的真實 providerID/modelID、alias 為使用者顯示別稱、order_idx 控制 PodModelSelector 顯示順序
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/database/schema.ts
+          - id: P1.B.t2
+            text: 在 `backend/src/database/statements.ts` 內補上 `model_aliases` 的 prepared statements（list by provider_id 並依 order_idx 升序、insert 一筆、update alias 與 order_idx、delete by id、查 max(order_idx) by provider_id 供 append 用），命名與既有 statements 風格一致並輸出供 handler 使用
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/database/statements.ts
+              - backend/src/database/index.ts
+          - id: P1.B.t3
+            text: 在 `backend/tests` 對應位置新增 model_aliases CRUD 整合測試：以真實 SQLite 測試資料庫（不可 mock statements）驗證 (1) insert 後依 order_idx 升序 list 出來、(2) update alias 與 order_idx 後 list 結果對應更新、(3) delete 後 list 少一筆、(4) 同一 provider_id 內 alias 重複時 DB 拋 UNIQUE 違反錯誤
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/tests/database/model-aliases.test.ts
+              - backend/tests/database/schema.test.ts
+
+  - id: P2
+    title: opencode server lifecycle 與 MCP reader
+    parallel: true
+    verification:
+      - cd backend && bun run style
+      - cd backend && bun run test
+    done: true
+    items:
+      - id: P2.A
+        title: opencode server singleton（bootstrap / shutdown / 狀態查詢）
+        tasks:
+          - id: P2.A.t1
+            text: 新增 `backend/src/services/provider/opencodeServer.ts`，匯出 `startOpencodeServer()` / `getOpencodeServerState()` / `stopOpencodeServer()` 三個函式；內部持有 module-level singleton state 結構，欄位包含 `baseUrl: string | null`、`status: "idle" | "starting" | "ready" | "failed"`、`failureReason: string | null`、以及 `server: ReturnType<createOpencodeServer>` reference。`startOpencodeServer()` 呼叫 `createOpencodeServer({ timeout: 拉大到 30000, config: 注入空物件或必要 base config（讓 opencode 走 ~/.config/opencode/opencode.json）})`，成功時將 baseUrl 寫入 state、status 設 "ready"；失敗時 status 設 "failed"、`failureReason` 記錄 error.message（zh-TW 包一層說明），並在 console.error 印詳細原因。`stopOpencodeServer()` 呼叫 server.close() 後重置 state
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/services/provider/opencodeServer.ts
+          - id: P2.A.t2
+            text: 在 `backend/src/index.ts` 的 server bootstrap 流程內，在 DB migration 完成、WebSocket 升級開啟之前呼叫 `startOpencodeServer()`（不阻擋整個後端啟動：若失敗只走 console.error + state 保留 "failed"，後端仍正常起來，opencode chat 由 capabilities 標記 chat=false 阻擋）。並在 process 的 `SIGTERM` / `SIGINT` / `beforeExit` 處理器內呼叫 `stopOpencodeServer()`
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/index.ts
+          - id: P2.A.t3
+            text: 為 `opencodeServer.ts` 補測試：mock `@opencode-ai/sdk` 的 `createOpencodeServer` wrapper（**只 mock 自己寫的 wrapper interface，不 mock SDK 內部**；若目前直接呼叫 SDK，先抽 `OpencodeServerLauncher` interface 再 mock），驗證 (1) launcher resolve 後 state 為 ready、baseUrl 寫入正確、(2) launcher reject 後 state 為 failed 且 failureReason 含原始錯誤訊息、(3) `stopOpencodeServer()` 呼叫 close() 並重置 state
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/tests/provider/opencodeServer.test.ts
+      - id: P2.B
+        title: opencodeMcpReader 與 mcpHandlers 整合
+        tasks:
+          - id: P2.B.t1
+            text: 新增 `backend/src/services/mcp/opencodeMcpReader.ts`，匯出 `readOpencodeMcpServers(): Promise<{ name: string; type?: "stdio" | "http" | "sse" }[]>`。實作讀 `~/.config/opencode/opencode.json`、parse 後取 `mcp` 區塊、把每個 entry 轉成 `{ name, type }`：opencode entry 的 `type === "local"` → `stdio`；`type === "remote"` 時看 `url` 欄位 scheme，`http://` / `https://` → `http`，其他（如 `sse://` 或 docs 明文指定 sse 的）→ `sse`。介面對齊現有三家 reader。**self-healing：檔案不存在 / 無 mcp 區塊時靜默回空陣列、不向上拋錯（與 readClaudeMcpServers / readGeminiMcpServers 同模式）**
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/services/mcp/opencodeMcpReader.ts
+          - id: P2.B.t2
+            text: 修改 `backend/src/handlers/mcpHandlers.ts` 的 `resolveAvailableMcpServers` 函式：在現有 claude / codex / gemini 分支後加上 `opencode` 分支，分支內呼叫 `readOpencodeMcpServers()`；對應的 import 也補上
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/handlers/mcpHandlers.ts
+          - id: P2.B.t3
+            text: 為 `opencodeMcpReader.ts` 補測試：mock fs wrapper（**只 mock 自己寫的 file reader wrapper，不 mock node:fs 內部**；若 reader 直接用 fs，先抽 `OpencodeConfigReader` interface 再 mock），驗證 (1) local entry 轉成 stdio、(2) remote http url 轉成 http、(3) remote 非 http url 轉成 sse、(4) 同時包含多種 entry 時順序與名稱正確、(5) **檔案不存在時回空陣列、不拋錯**、(6) **JSON parse 失敗或無 mcp 區塊時回空陣列、不拋錯**
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/tests/unit/opencodeMcpReader.test.ts
+
+  - id: P3
+    title: opencodeProvider 實作與 registry 接入
+    parallel: false
+    verification:
+      - cd backend && bun run style
+      - cd backend && bun run test
+    done: true
+    items:
+      - id: P3.A
+        title: opencodeProvider 主檔（metadata / buildOptions / chat / event 對應 / abort）
+        tasks:
+          - id: P3.A.t1
+            text: 新增 `backend/src/services/provider/opencodeProvider.ts`，匯出 `opencodeProvider: AgentProvider<{ providerID: string; modelID: string; mcpServerNames: string[] }>`。`metadata.name = "opencode"`、`metadata.capabilities = OPENCODE_CAPABILITIES`、`metadata.defaultOptions = { providerID: "", modelID: "", mcpServerNames: [] }`、`metadata.availableModels = []` 初始空陣列（真正內容在 providerHandlers 動態組）、`metadata.availableModelValues = new Set()` 同樣初始空（providerHandlers 動態組時不走 metadata，後端 buildOptions 不靠 Set.has 驗證，因 alias 表 row 即正確性保證）
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/services/provider/opencodeProvider.ts
+              - backend/src/services/provider/capabilities.ts
+          - id: P3.A.t2
+            text: 在 `opencodeProvider.ts` 實作 `buildOptions(pod, runContext?)`：先把 `pod.providerConfig.model`（"{providerID}/{modelID}" 組合字串）以第一個 "/" 為界拆成 providerID / modelID 兩段；再讀 pod 的 mcpServerNames（既有 pod_mcp_server_names 表查詢）；回傳 `{ providerID, modelID, mcpServerNames }`
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/services/provider/opencodeProvider.ts
+          - id: P3.A.t3
+            text: 在 `opencodeProvider.ts` 實作 `async function* chat(ctx)`：先從 `getOpencodeServerState()` 取 baseUrl；用 `createOpencodeClient({ baseUrl })` 建 client；若 `ctx.resumeSessionId` 為 null 則呼 `client.session.create({ query: { directory: ctx.workspacePath } })`（注意：cwd 在 query 不在 body）取得 sessionId 並 yield `{ type: "session_started", sessionId }`，否則直接沿用 resumeSessionId
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/services/provider/opencodeProvider.ts
+          - id: P3.A.t4
+            text: 接續 chat()：呼 `client.event.subscribe()` 取 SSE stream，並在另一個 task 內呼 `client.session.prompt({ path: { id: sessionId }, body: { model: { providerID: ctx.options.providerID, modelID: ctx.options.modelID }, tools: <子集化結果>, parts: [{ type: "text", text: ctx.message as string }] } })`。tools 子集化：先呼 opencode 的 tool list endpoint（依 SDK 對應 method，名稱以 SDK runtime 實際提供為準；若 SDK 提供 `client.experimental.tool.list()` 或 `client.tool.list()` 任一就用該方法）取得所有 tool 名稱，過濾 `mcp__<server>__*` prefix 的條目：對 `ctx.options.mcpServerNames` 內出現的 server 對應 tool 設 true、其餘 mcp__* 設 false、非 mcp__ 開頭的內建 tool 不放入 tools 物件（保持 opencode 預設）。Pod 沒勾任何 MCP server 時：所有 mcp__* tool 全 false。**Fallback：tool list endpoint 呼叫拋錯時 try-catch 補捉、用 logger.warn 記錄錯誤訊息、`session.prompt` 改成不傳 tools 欄位（讓 opencode 走預設全開），對話流程不中斷**
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/services/provider/opencodeProvider.ts
+          - id: P3.A.t5
+            text: 接續 chat()：`for await` 跑 SSE stream，把 31 種 event 轉成 NormalizedEvent 並 yield。對應表：`session.created` → `session_started`（若已在前一步 yield 過則略過避免重複）；`message.part.updated` 且 part.type === "text" → `{ type: "text", content: part.text }`；`message.part.updated` 且 part.type === "reasoning" → `{ type: "thinking", content: part.text }`；`message.part.updated` 且 part.type === "tool" 且 step === "start"（依 SDK 實際欄位名命中）→ `{ type: "tool_call_start", toolUseId, toolName, input }`；`message.part.updated` 且 part.type === "tool" 且 step === "finish" → `{ type: "tool_call_result", toolUseId, toolName, output }`；`session.idle` → `{ type: "turn_complete" }` 並 break；`session.error` → 走下一個 task 的錯誤分類
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/services/provider/opencodeProvider.ts
+          - id: P3.A.t6
+            text: 接續 chat()：處理 `ctx.abortSignal`。在 `for await` 開始前掛 `abortSignal.addEventListener("abort", () => { client.session.abort({ path: { id: sessionId } }); })`；abort 觸發後 server 端會發 `session.idle`，chat() 在收到 idle 時正常結束 generator，不需另外清理。若 chat() 啟動時 `abortSignal.aborted` 已為 true 則先呼 abort 再進 loop。**對應 userflow F11（Pod 刪除時取消 chat）：既有 `backend/src/services/podService.ts:71` 的 `deletePodWithCleanup` 透過 AbortController 觸發 abortSignal，opencode session 即被取消；工作目錄清理沿用既有 cleanup hook，opencodeProvider 不需自寫清理邏輯**
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/services/provider/opencodeProvider.ts
+          - id: P3.A.t7
+            text: 接續 chat()：把 `session.error` event 走 `buildProviderSystemError("opencode", { ... })` helper 包成 NormalizedEvent error。錯誤碼分類：訊息字串包含 "No auth credentials found" 或 "API key" → code `opencode_auth_missing`、content 用 zh-TW「請在 terminal 執行 `opencode auth login <provider id>` 後再試一次」（providerID 從 ctx.options.providerID 帶入內插）；訊息字串包含 connection refused / fetch failed / ECONNREFUSED → code `opencode_server_unreachable`、content「opencode server 連線失敗，請重啟後端」；其他 session.error → code `opencode_session_failed`、content 用「opencode session 發生錯誤：<原始訊息>」。三種都 yield 後 generator 結束
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/services/provider/opencodeProvider.ts
+          - id: P3.A.t8
+            text: 為 `opencodeProvider.ts` 補測試（B 類業務規則）：mock `OpencodeClient` wrapper（**只 mock 自己寫的 client wrapper、不 mock SDK 內部**；若 chat() 直接呼叫 SDK，先抽 `OpencodeClientPort` interface 再 mock，並一併把 server lookup 抽成 `OpencodeServerStatePort`）。測試案例：(1) resumeSessionId 為 null 時 chat 第一個 yield 為 session_started 且 sessionId 等於 mocked session.create 回傳；(2) text part 流入時 yield text NormalizedEvent；(3) tool start part 流入時 yield tool_call_start；(4) session.idle 流入時 yield turn_complete 並結束；(5) session.error 訊息含 "No auth credentials found" 時 yield error.code === "opencode_auth_missing" 且 content 用 zh-TW 並內插 providerID；(6) abortSignal 觸發後 mocked client.session.abort 被呼叫且 path.id 等於 sessionId
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/tests/provider/opencodeProvider.test.ts
+      - id: P3.B
+        title: registry / capabilities / VALID_PROVIDERS 接入
+        tasks:
+          - id: P3.B.t1
+            text: 在 `backend/src/services/provider/capabilities.ts` 新增 `OPENCODE_CAPABILITIES: Readonly<ProviderCapabilities> = Object.freeze({ chat: true, plugin: false, repository: true, command: true, mcp: true })`，並在檔尾 `export type` re-export 區補上對應註解（zh-TW）
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/services/provider/capabilities.ts
+          - id: P3.B.t2
+            text: 在 `backend/src/services/provider/index.ts` 的 `providerRegistry` 物件加 `opencode: opencodeProvider` entry，同時在檔尾 re-export 區追加 `OPENCODE_CAPABILITIES`
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/services/provider/index.ts
+              - backend/src/handlers/mcpHandlers.ts
+              - backend/src/handlers/providerHandlers.ts
+          - id: P3.B.t3
+            text: 在 `backend/src/api/podApi.ts` 把 `VALID_PROVIDERS` 從 `["claude", "codex", "gemini"]` 擴展為 `["claude", "codex", "gemini", "opencode"]`
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/api/podApi.ts
+
+  - id: P4
+    title: opencode 設定 WebSocket handlers（provider list / aliases CRUD / reorder / 廣播）
+    parallel: false
+    verification:
+      - cd backend && bun run style
+      - cd backend && bun run test
+    done: true
+    items:
+      - id: P4.A
+        title: opencode:provider:list handler（轉發 opencode GET /provider）
+        tasks:
+          - id: P4.A.t1
+            text: 新增 `backend/src/handlers/opencodeSettingsHandlers.ts`，匯出 handler group。第一個 handler 註冊 event `opencode:provider:list`：handler 內從 `getOpencodeServerState()` 取 baseUrl，若 state 不是 "ready" 則回 `{ ok: false, error: { code: "opencode_server_not_ready", message: "opencode server 尚未啟動，請稍候或重啟後端" } }`；ready 時用 createOpencodeClient 呼叫 `client.provider.list()`（對應 GET /provider 的 SDK method）取得 `{ all, default, connected }`，並 respond `{ ok: true, all, default, connected }`
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/schemas/opencodeSettingsSchemas.ts
+              - backend/src/handlers/opencodeSettingsHandlers.ts
+              - backend/src/schemas/events.ts
+              - backend/src/schemas/index.ts
+          - id: P4.A.t2
+            text: 在 `backend/src/handlers/registry.ts` 或對應註冊入口（沿用 providerHandlers / mcpHandlers 既有註冊方式）匯入並註冊 `opencodeSettingsHandlers` 群組，確保 server 啟動時這些 event 被 router 接管
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/handlers/groups/opencodeSettingsHandlerGroup.ts
+              - backend/src/handlers/index.ts
+          - id: P4.A.t3
+            text: 為 `opencode:provider:list` handler 補測試（A 類 wire-up smoke test，僅 1 個；B 類業務規則 sad case）：透過 framework 的 event dispatch 入口（**不可直接 schema.parse**）。案例：(1) state ready 時 mocked client.provider.list 回 { all, default, connected }，handler response.ok === true 且資料原樣回傳；(2) state failed 時 response.ok === false 且 error.code === "opencode_server_not_ready"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/tests/handlers/opencodeSettingsHandlers.test.ts
+      - id: P4.B
+        title: opencode:aliases 的 list / create / update / delete / reorder 與廣播
+        tasks:
+          - id: P4.B.t1
+            text: 在 `opencodeSettingsHandlers.ts` 註冊 `opencode:aliases:list` handler：呼叫 P1.B.t2 加的 list statement（provider_id = "opencode"，order_idx 升序），respond `{ ok: true, items: [{ id, providerID: real_provider, modelID: real_model, alias, orderIdx: order_idx }, ...] }`
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/handlers/opencodeSettingsHandlers.ts
+              - backend/src/schemas/opencodeSettingsSchemas.ts
+              - backend/src/schemas/events.ts
+          - id: P4.B.t2
+            text: 在 `opencodeSettingsHandlers.ts` 註冊 `opencode:aliases:create` handler：接收 `{ providerID, modelID, alias }`、產 uuid 為 id、查詢同 provider_id 內目前 max(order_idx) + 1 作為新 order_idx（首筆時為 0）、寫入 created_at = updated_at = Date.now()、insert。回傳新建 row 的完整資料。完成後呼叫 P5.A.t2 提供的廣播函式（同 WS 訊息 `opencode:aliases:updated` + 推 `provider:list:result`）
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/handlers/opencodeSettingsHandlers.ts
+              - backend/src/schemas/opencodeSettingsSchemas.ts
+              - backend/src/schemas/events.ts
+              - backend/src/services/provider/providerListBroadcaster.ts
+          - id: P4.B.t3
+            text: 註冊 `opencode:aliases:update` handler：接收 `{ id, alias, orderIdx }`，更新對應 row 的 alias、order_idx、updated_at，再回傳更新後的 row；完成後同樣觸發廣播
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/handlers/opencodeSettingsHandlers.ts
+              - backend/src/schemas/opencodeSettingsSchemas.ts
+              - backend/src/schemas/events.ts
+          - id: P4.B.t4
+            text: 註冊 `opencode:aliases:delete` handler：接收 `{ id }`、刪除對應 row，respond `{ ok: true, id }`；完成後觸發廣播
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/handlers/opencodeSettingsHandlers.ts
+              - backend/src/schemas/opencodeSettingsSchemas.ts
+              - backend/src/schemas/events.ts
+          - id: P4.B.t5
+            text: 註冊 `opencode:aliases:reorder` handler：接收 `{ orderedIds: string[] }`，在單一 DB transaction 內依陣列順序把每個 id 的 order_idx 設成其 index（0、1、2、…）、同時更新 updated_at。respond `{ ok: true }`；完成後觸發廣播
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/handlers/opencodeSettingsHandlers.ts
+              - backend/src/schemas/opencodeSettingsSchemas.ts
+              - backend/src/schemas/events.ts
+          - id: P4.B.t6
+            text: 補測試（B 類業務規則 + 1 個 A 類 wire-up smoke test per endpoint）：用真實 SQLite 測試 DB（**不 mock statements 與 DB**，僅 mock WebSocket broadcast wrapper）。案例：(1) create 後 list 查得到新 row 且 orderIdx 為當前 max+1；(2) create 同 provider 同 alias 第二次拋 UNIQUE 錯誤（B 類：DB 約束的業務錯誤轉換層測試）；(3) update 後 list 顯示新 alias 與 orderIdx；(4) delete 後 list 少一筆；(5) reorder 後 list 順序與 orderedIds 對應；(6) 每個 mutate handler 完成後 mocked broadcast 被呼叫一次（包含 opencode:aliases:updated 與 provider:list:result）
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/tests/handlers/opencodeAliasesHandlers.test.ts
+              - backend/src/handlers/groups/opencodeSettingsHandlerGroup.ts
+
+  - id: P5
+    title: providerHandlers 對 opencode 動態 availableModels + 廣播工具
+    parallel: false
+    verification:
+      - cd backend && bun run style
+      - cd backend && bun run test
+    done: true
+    items:
+      - id: P5.A
+        title: provider:list 對 opencode 動態組裝 availableModels 與廣播 helper
+        tasks:
+          - id: P5.A.t1
+            text: 修改 `backend/src/handlers/providerHandlers.ts` 的 provider:list handler：在組裝每個 provider 的 entry 時，遇到 `opencode` 改不從 metadata.availableModels 取，而是呼叫 P1.B.t2 的 list statement 取出該 provider_id 的 alias rows，組成 `availableModels: rows.map(r => ({ label: r.alias, value: r.real_provider + "/" + r.real_model }))`；其餘三家 provider 保持原本行為不動
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/handlers/providerHandlers.ts
+          - id: P5.A.t2
+            text: 在 providerHandlers 或一個 shared service（例如 `backend/src/services/provider/providerListBroadcaster.ts`）抽一個 `broadcastProviderList()` 函式，內容為「重新組 provider:list payload 並透過 WebSocket 廣播 event `provider:list:result` 給所有連線」；同檔再加一個 `broadcastOpencodeAliasesUpdated()` 函式廣播 `opencode:aliases:updated`，payload 內含當前 alias 列表。供 P4.B 的 mutate handlers 呼叫
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/src/services/provider/providerListBroadcaster.ts
+          - id: P5.A.t3
+            text: 為 provider:list handler 補測試：用真實 SQLite 測試 DB（**不 mock statements**），驗證 (1) opencode 對應 entry 的 availableModels 等於 DB 內 alias rows 按 order_idx 升序組出的 `{ label: alias, value: "providerID/modelID" }`；(2) 其他三家 provider 的 availableModels 仍是各自 metadata 寫死的內容、未受 opencode 改動影響
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed:
+              - backend/tests/provider/providerHandlersOpencode.test.ts
+              - backend/tests/provider/providerHandlers.test.ts

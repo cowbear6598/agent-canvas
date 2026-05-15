@@ -201,7 +201,9 @@ const slotConfigs = computed((): SlotConfig[] => [
 </script>
 
 <template>
+  <!-- plugin capability 為 false 時完全不渲染 slot，避免對不支援 plugin 的 provider（如 opencode）顯示無意義的 notch -->
   <PodPluginSlot
+    v-if="isPluginEnabled"
     :pod-id="props.podId"
     :pod-rotation="props.podRotation"
     :active-count="props.pluginActiveCount"
@@ -210,7 +212,9 @@ const slotConfigs = computed((): SlotConfig[] => [
     :disabled-tooltip="pluginDisabledTooltip"
     @click="(ev) => emit('plugin-clicked', ev)"
   />
+  <!-- mcp capability 為 false 時完全不渲染 slot，避免對不支援 MCP 的 provider（如 codex）顯示無意義的 notch -->
   <PodMcpSlot
+    v-if="isMcpEnabled"
     :pod-id="props.podId"
     :pod-rotation="props.podRotation"
     :active-count="props.mcpActiveCount"
@@ -229,10 +233,7 @@ const slotConfigs = computed((): SlotConfig[] => [
     :disabled-tooltip="thinkingDisabledTooltip"
     @click="(ev) => emit('thinking-clicked', ev)"
   />
-  <template
-    v-for="slot in slotConfigs"
-    :key="slot.slotClass"
-  >
+  <template v-for="slot in slotConfigs" :key="slot.slotClass">
     <div :class="slot.areaClass">
       <PodSingleBindSlot
         :pod-id="props.podId"

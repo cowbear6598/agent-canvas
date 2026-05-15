@@ -1,0 +1,172 @@
+feature: opencode-integration
+approved: true
+scenarios:
+  - id: F1
+    scenario: 使用者首次打開 LLM Provider 設定
+    given:
+      - 使用者已打開應用
+      - 使用者尚未在 terminal 跑過 opencode auth login
+      - 後端 opencode server 已正常啟動
+    when:
+      - 點擊 App header 上的「LLM Provider」按鈕
+      - 在 modal 首頁點擊「opencode」card
+    then:
+      - modal 切換到 opencode 設定畫面
+      - 列出 opencode 認得的所有 provider（anthropic / openai / google / openrouter / …）
+      - 全部 provider 標為「未登入」disabled 狀態
+      - 每個 disabled provider 顯示提示「請在 terminal 執行 opencode auth login <id> 後重新整理」
+
+  - id: F2
+    scenario: 使用者在 terminal 登入 provider 後重新整理
+    given:
+      - LLM Provider modal 已開
+      - 使用者在另一個 terminal 視窗完成 opencode auth login anthropic
+      - modal 內 anthropic 仍顯示 disabled
+    when:
+      - 點擊 modal 內的「重新整理」按鈕
+    then:
+      - anthropic 變成「已登入」狀態
+      - anthropic 區塊變成可操作
+      - 其他未登入 provider 仍維持 disabled
+
+  - id: F3
+    scenario: 使用者新增第一筆 model 對應
+    given:
+      - LLM Provider modal 內的 opencode 設定畫面已開啟
+      - anthropic 已標為「已登入」
+      - 該 provider 的 model 對應表為空
+    when:
+      - 點擊 anthropic 區塊的「新增 model」按鈕
+      - 從「真實 model id」下拉選擇 anthropic/claude-sonnet-4-5
+      - 在「別稱」欄位填入「Claude Sonnet」
+      - 點擊「儲存」
+    then:
+      - 對應表新增一筆 row
+      - 該別稱可在 opencode Pod 的 PodModelSelector 內被選到
+
+  - id: F4
+    scenario: 使用者編輯既有 model 別稱
+    given:
+      - 對應表已有一筆 anthropic/claude-sonnet-4-5 → 別稱「Claude Sonnet」
+      - 已有一個 opencode Pod 選中該別稱
+    when:
+      - 在對應表內點擊該 row 的「編輯」
+      - 將別稱改為「Claude」
+      - 點擊「儲存」
+    then:
+      - 對應表 row 顯示更新後的別稱
+      - 該 Pod 上 PodModelSelector 顯示也跟著更新為「Claude」
+      - Pod 上正在進行的 chat 不被中斷
+
+  - id: F5
+    scenario: 使用者刪除一筆正在被 Pod 使用的 model 對應
+    given:
+      - 對應表有兩筆別稱
+      - 某 opencode Pod 選中其中一筆別稱
+    when:
+      - 在對應表內點擊該 row 的「刪除」
+      - 在確認對話框點擊確認
+    then:
+      - 對應表少一筆 row
+      - 該 Pod 上 PodModelSelector 該選項消失
+      - 該 Pod 回到「請先到 LLM Provider 設定新增 model 對應」placeholder 狀態
+
+  - id: F6
+    scenario: 使用者重排 model 對應的顯示順序
+    given:
+      - 對應表有四筆別稱
+    when:
+      - 將第三筆拖曳到第一位
+    then:
+      - 對應表 row 順序更新
+      - opencode Pod 上 PodModelSelector 卡片堆疊順序跟著更新
+
+  - id: F7
+    scenario: 使用者建立 opencode Pod 並開始對話
+    given:
+      - 對應表至少有一筆「Claude Sonnet」別稱
+      - 對應的 provider anthropic 已登入
+      - 使用者在畫布上
+    when:
+      - 建立 Pod，provider 選 opencode、model 選別稱「Claude Sonnet」
+      - 在 Pod 內輸入 prompt 並送出
+    then:
+      - Pod 上顯示別稱「Claude Sonnet」
+      - Pod 上同時看得到 repository / command / mcp 三個 binding slot
+      - Pod 上看不到 plugin slot
+      - LLM 回覆以串流方式顯示在 Pod 內
+
+  - id: F8
+    scenario: 使用者建立 opencode Pod 但對應表為空
+    given:
+      - 對應表為空
+      - 使用者在畫布上
+    when:
+      - 建立 Pod 並把 provider 設為 opencode
+      - 點擊 Pod 上的 PodModelSelector
+    then:
+      - PodModelSelector 顯示「請先到 LLM Provider 設定新增 model 對應」placeholder
+      - 無法選取任何 model
+
+  - id: F9
+    scenario: 使用者選到一個未登入 provider 的 model 後送出 prompt
+    given:
+      - 對應表有一筆 openai/gpt-5 → 別稱「GPT」
+      - 使用者尚未跑 opencode auth login openai
+      - 某 opencode Pod 選中該別稱
+    when:
+      - 在該 Pod 輸入 prompt 並送出
+    then:
+      - Pod 內顯示錯誤訊息「請在 terminal 執行 opencode auth login openai 後重新整理」
+      - 該訊息為系統提示而非 LLM 回覆
+
+  - id: F10
+    scenario: 使用者勾選 MCP server 並讓 opencode Pod 使用
+    given:
+      - 使用者的 opencode.json 已設定 filesystem 與 git 兩個 MCP server
+      - 某 opencode Pod 已建立且已選 model
+    when:
+      - 點擊 Pod 上的 PodMcpSlot
+      - 從列出的 MCP server 清單只勾選 filesystem
+      - 送出 prompt 要求模型讀取一個檔案
+    then:
+      - 模型在這次對話內可以呼叫 filesystem 的 tool
+      - 模型在這次對話內無法呼叫 git 的 tool
+
+  - id: F11
+    scenario: 使用者刪除正在跑 chat 的 opencode Pod
+    given:
+      - 某 opencode Pod 正在跑 chat
+      - 模型還在串流輸出
+    when:
+      - 在畫布上刪除該 Pod
+    then:
+      - 該 Pod 的 opencode session 立即被取消
+      - Pod 從畫布上移除
+      - 後端工作目錄被清理乾淨
+      - 不留下孤兒目錄或 zombie process
+
+  - id: F12
+    scenario: opencode binary 未安裝導致後端啟動 server 失敗
+    given:
+      - 使用者環境的 PATH 內沒有 opencode binary
+      - 應用剛啟動，後端嘗試 createOpencodeServer
+    when:
+      - 後端 spawn 失敗
+    then:
+      - 後端 toast 顯示 server 啟動失敗訊息
+      - 訊息提示使用者安裝 opencode binary
+      - PodModelSelector 內 opencode provider 顯示 disabled 不可選
+      - 三大家 provider 不受影響繼續可用
+
+  - id: F13
+    scenario: opencode 設定 modal 載入 GET /provider 失敗
+    given:
+      - 後端 opencode server 已啟動但 /provider 端點暫時無回應
+      - 使用者打開 LLM Provider modal
+    when:
+      - 點擊「opencode」card 進入設定畫面
+    then:
+      - 畫面顯示空 provider 清單
+      - 顯示「載入失敗」訊息與「重試」按鈕
+      - 點擊重試後重新呼叫 GET /provider

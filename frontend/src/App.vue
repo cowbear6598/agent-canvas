@@ -39,6 +39,7 @@ import { getAllProviders } from "@/integration/providerRegistry";
 import { useRunStore } from "@/stores/run/runStore";
 import { useConfigStore } from "@/stores/configStore";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
+import { useOpencodeAliasStore } from "@/stores/opencodeAliasStore";
 import { useSecurityStore } from "@/stores/securityStore";
 import WorkspaceUnlockView from "@/components/security/WorkspaceUnlockView.vue";
 import CanvasUnlockDialog from "@/components/security/CanvasUnlockDialog.vue";
@@ -58,6 +59,7 @@ const integrationStore = useIntegrationStore();
 const runStore = useRunStore();
 const configStore = useConfigStore();
 const providerCapabilityStore = useProviderCapabilityStore();
+const opencodeAliasStore = useOpencodeAliasStore();
 const securityStore = useSecurityStore();
 
 const cursorStore = useCursorStore();
@@ -246,6 +248,7 @@ const loadAppData = async (): Promise<void> => {
   logger.log("[App] Loading canvases...");
   await canvasStore.loadCanvases();
   await providerCapabilityStore.loadFromBackend();
+  await opencodeAliasStore.loadFromBackend();
 
   if (checkAbortedAndCleanup(currentAbortController)) return;
 
@@ -438,15 +441,10 @@ onUnmounted(() => {
     v-else-if="securityStore.isBootstrapping"
     class="flex min-h-screen items-center justify-center bg-background"
   >
-    <div class="text-sm text-muted-foreground">
-      Loading workspace...
-    </div>
+    <div class="text-sm text-muted-foreground">Loading workspace...</div>
   </div>
 
-  <div
-    v-else
-    class="h-screen bg-background overflow-hidden flex flex-col"
-  >
+  <div v-else class="h-screen bg-background overflow-hidden flex flex-col">
     <AppHeader />
 
     <CanvasSidebar
@@ -464,11 +462,7 @@ onUnmounted(() => {
       <CanvasContainer v-else />
     </main>
 
-    <ChatModal
-      v-if="selectedPod"
-      :pod="selectedPod"
-      @close="handleCloseChat"
-    />
+    <ChatModal v-if="selectedPod" :pod="selectedPod" @close="handleCloseChat" />
 
     <RunChatModal
       v-if="runStore.activeRunChatModal"

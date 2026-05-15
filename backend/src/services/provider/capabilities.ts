@@ -92,6 +92,19 @@ export const GEMINI_AVAILABLE_MODEL_VALUES: ReadonlySet<string> = new Set(
   GEMINI_AVAILABLE_MODELS.map((m) => m.value),
 );
 
+/**
+ * Opencode Provider 能力矩陣。
+ * 支援 chat、repository、command、mcp；不支援 plugin（opencode 不走 Claude plugin 機制）。
+ */
+export const OPENCODE_CAPABILITIES: Readonly<ProviderCapabilities> =
+  Object.freeze({
+    chat: true,
+    plugin: false,
+    repository: true,
+    command: true,
+    mcp: true,
+  });
+
 /** 各 provider 共用的 thinking level 型別 alias，供 pod 設定與型別引用 */
 export type ThinkingLevel = "low" | "medium" | "high" | "xhigh" | "max";
 

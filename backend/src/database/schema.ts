@@ -234,6 +234,28 @@ function createBaseTables(db: Database): void {
   db.exec(
     "CREATE INDEX IF NOT EXISTS idx_run_messages_run_pod ON run_messages(run_id, pod_id)",
   );
+
+  // model_aliases：opencode provider 的模型別稱設定表
+  // - provider_id：預留多 provider 擴充，首期固定為 "opencode"
+  // - real_provider / real_model：opencode session.prompt 所需的真實 providerID / modelID
+  // - alias：使用者顯示別稱（顯示於 PodModelSelector 等 UI 元件）
+  // - order_idx：控制 PodModelSelector 顯示順序（升序排列）
+  db.exec(
+    "CREATE TABLE IF NOT EXISTS model_aliases (" +
+      "id TEXT PRIMARY KEY," +
+      "provider_id TEXT NOT NULL," +
+      "real_provider TEXT NOT NULL," +
+      "real_model TEXT NOT NULL," +
+      "alias TEXT NOT NULL," +
+      "order_idx INTEGER NOT NULL," +
+      "created_at INTEGER NOT NULL," +
+      "updated_at INTEGER NOT NULL," +
+      "UNIQUE(provider_id, real_provider, alias)" +
+      ")",
+  );
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_model_aliases_provider_id ON model_aliases(provider_id, order_idx)",
+  );
 }
 
 function columnExists(

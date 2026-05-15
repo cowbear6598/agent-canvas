@@ -18,10 +18,7 @@
         <ConnectionStatus />
 
         <!-- 語言切換按鈕 -->
-        <div
-          ref="localeMenuRef"
-          class="relative"
-        >
+        <div ref="localeMenuRef" class="relative">
           <button
             class="flex items-center gap-1 rounded-md px-2 py-2 hover:bg-accent text-xs font-mono"
             :title="currentLocaleLabel"
@@ -77,6 +74,14 @@
         </button>
 
         <button
+          class="flex items-center justify-center rounded-md p-2 hover:bg-accent"
+          :title="$t('layout.header.llmProvider')"
+          @click="showLlmProviderModal = !showLlmProviderModal"
+        >
+          <Cpu class="h-4 w-4" />
+        </button>
+
+        <button
           data-history-toggle
           class="flex items-center justify-center rounded-md p-2 hover:bg-accent"
           :title="$t('layout.header.history')"
@@ -92,7 +97,9 @@
           @click="canvasStore.toggleSidebar()"
         >
           <LayoutDashboard class="h-4 w-4" />
-          <span>{{ canvasStore.activeCanvas?.name ?? $t("layout.header.canvasList") }}</span>
+          <span>{{
+            canvasStore.activeCanvas?.name ?? $t("layout.header.canvasList")
+          }}</span>
         </button>
       </div>
     </div>
@@ -108,6 +115,7 @@
     @update:open="selectedProvider = null"
   />
   <GlobalSettingsModal v-model:open="showSettingsModal" />
+  <LlmProviderModal v-model:open="showLlmProviderModal" />
 </template>
 
 <script setup lang="ts">
@@ -119,11 +127,13 @@ import {
   Settings,
   History,
   Globe,
+  Cpu,
 } from "lucide-vue-next";
 import ConnectionStatus from "@/components/ui/ConnectionStatus.vue";
 import IntegrationSelectModal from "@/components/integration/IntegrationSelectModal.vue";
 import IntegrationAppsModal from "@/components/integration/IntegrationAppsModal.vue";
 import GlobalSettingsModal from "@/components/settings/GlobalSettingsModal.vue";
+import LlmProviderModal from "@/components/settings/LlmProviderModal.vue";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { useRunStore } from "@/stores/run/runStore";
 import { i18n, setLocale } from "@/i18n";
@@ -133,6 +143,7 @@ const runStore = useRunStore();
 const showIntegrationModal = ref<boolean>(false);
 const selectedProvider = ref<string | null>(null);
 const showSettingsModal = ref<boolean>(false);
+const showLlmProviderModal = ref<boolean>(false);
 
 const handleIntegrationSelect = (category: string): void => {
   selectedProvider.value = category;

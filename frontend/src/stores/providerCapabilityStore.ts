@@ -5,6 +5,7 @@ import type {
   PodProvider,
   ProviderCapabilities,
 } from "@/types/pod";
+import { useOpencodeAliasStore } from "@/stores/opencodeAliasStore";
 import {
   createWebSocketRequest,
   WebSocketRequestEvents,
@@ -189,12 +190,24 @@ export const useProviderCapabilityStore = defineStore(
 
     /**
      * 取得指定 Provider 的可選模型清單。
-     * 後端資料尚未載入或 provider 未聲告時回傳空陣列（EMPTY_AVAILABLE_MODELS），
-     * 呼叫端應自行判斷是否 fallback 至僅顯示 currentModel 的行為。
+     * - opencode：從 opencodeAliasStore.aliases 動態組裝，label = alias、value = "providerID/modelID"
+     * - 其他 provider：沿用 availableModelsByProvider 靜態清單
+     * 後端資料尚未載入或 provider 未聲告時回傳空陣列（EMPTY_AVAILABLE_MODELS）。
      */
     const getAvailableModels = computed(
       () =>
         (provider: PodProvider): ReadonlyArray<ModelOption> => {
+          if (provider === "opencode") {
+            const aliasStore = useOpencodeAliasStore();
+            const aliases = aliasStore.aliases;
+            if (aliases.length === 0) return EMPTY_AVAILABLE_MODELS;
+            return aliases.map(
+              (a): ModelOption => ({
+                label: a.alias,
+                value: `${a.providerID}/${a.modelID}`,
+              }),
+            );
+          }
           return (
             availableModelsByProvider.value[provider] ?? EMPTY_AVAILABLE_MODELS
           );
@@ -292,6 +305,9 @@ export const useProviderCapabilityStore = defineStore(
       } of providers) {
         capabilitiesByProvider.value[name] = { ...capabilities };
         defaultOptionsByProvider.value[name] = { ...(defaultOptions ?? {}) };
+        // opencode 的 availableModels 由 opencodeAliasStore 動態提供，
+        // 忽略後端送來的 availableModels 欄位，不污染 store 內部狀態。
+        if (name === "opencode") continue;
         // Object.freeze 一次性凍結陣列，防止外部引用意外修改 store 內部狀態
         const frozenModels = Object.freeze([...(availableModels ?? [])]);
         availableModelsByProvider.value[name] = frozenModels;

@@ -55,6 +55,7 @@ export function resetDb(): void {
   database.exec("DELETE FROM canvases");
   database.exec("DELETE FROM integration_apps");
   database.exec("DELETE FROM repository_metadata");
+  database.exec("DELETE FROM model_aliases");
 }
 
 export function initTestDb(): Database {

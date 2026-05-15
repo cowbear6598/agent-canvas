@@ -13,10 +13,13 @@ export const modelTypeSchema = z.enum(["opus", "sonnet", "haiku"]);
  * provider 允許清單（白名單守門）：
  * 明確列舉避免未知 provider 進入業務邏輯，同時作為 DB 意外寫入時由 resolveProvider fallback 的依據。
  */
-export const providerSchema = z.enum(["claude", "codex", "gemini"]);
+export const providerSchema = z.enum(["claude", "codex", "gemini", "opencode"]);
 
-/** model 名稱 regex 與最大長度，同時套用於 providerConfigSchema 與 podSetModelSchema */
-const MODEL_PATTERN = /^[a-zA-Z0-9._-]+$/;
+/**
+ * model 名稱 regex 與最大長度，同時套用於 providerConfigSchema 與 podSetModelSchema。
+ * 允許 `/` 字元以支援 opencode 的 "{providerID}/{modelID}" 格式（例：anthropic/claude-sonnet-4）。
+ */
+const MODEL_PATTERN = /^[a-zA-Z0-9._/-]+$/;
 const MAX_MODEL_LENGTH = 100;
 
 /** thinking level 安全字元白名單（僅小寫英文字母）與最大長度，套用於 providerConfigSchema 與 podSetThinkingLevelSchema */

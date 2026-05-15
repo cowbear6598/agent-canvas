@@ -208,6 +208,12 @@
     }
   },
   "pod": {
+    "modelSelector": {
+      "opencode": {
+        "emptyPlaceholder": "先に LLM Provider 設定で model エイリアスを追加してください",
+        "disabledTooltip": "opencode server を起動できません"
+      }
+    },
     "multiInstance": {
       "readonlyHint": "この Pod は Multi-Instance ワークフローの一部です。詳細は実行履歴からご確認ください。"
     },
@@ -285,6 +291,9 @@
     }
   },
   "chat": {
+    "opencode": {
+      "providerNotLoggedIn": "terminal で opencode auth login {provider} を実行してから更新してください"
+    },
     "loadingHistory": "会話履歴を読み込み中...",
     "inputPlaceholder": "メッセージを入力...",
     "summarizedBadge": "要約",
@@ -305,7 +314,46 @@
       "canvasList": "Canvas 一覧",
       "globalSettings": "グローバル設定",
       "integrations": "インテグレーション管理",
-      "history": "実行履歴"
+      "history": "実行履歴",
+      "llmProvider": "LLM Provider 設定"
+    }
+  },
+  "llmProvider": {
+    "modal": {
+      "title": "LLM Provider",
+      "backButton": "戻る"
+    },
+    "card": {
+      "opencode": {
+        "title": "opencode",
+        "description": "opencode を使って LLM Provider と model エイリアスを管理"
+      }
+    },
+    "opencode": {
+      "providerList": {
+        "title": "Provider 一覧",
+        "refresh": "更新",
+        "connected": "ログイン済み",
+        "disabledHint": "terminal で opencode auth login {id} を実行してから更新してください",
+        "loadError": "読み込みに失敗しました",
+        "retry": "再試行",
+        "empty": "利用可能な Provider がありません",
+        "searchPlaceholder": "Provider を検索...",
+        "noMatch": "一致する Provider がありません"
+      },
+      "aliases": {
+        "title": "Model エイリアス",
+        "addButton": "model を追加",
+        "modelIdLabel": "実際の model id",
+        "modelIdPlaceholder": "実際の model id を入力",
+        "aliasLabel": "エイリアス",
+        "aliasPlaceholder": "エイリアスを入力",
+        "aliasDuplicateError": "同じ provider 内でエイリアスは重複できません",
+        "deleteConfirmTitle": "削除の確認",
+        "deleteConfirmMessage": "この model エイリアスを削除してもよろしいですか？",
+        "reorderHint": "ドラッグして並び替え",
+        "actionFailed": "操作に失敗しました：{reason}"
+      }
     }
   },
   "error": {
