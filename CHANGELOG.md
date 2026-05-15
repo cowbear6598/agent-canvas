@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.6.0] - 2026-05-15
+
+### 新增
+- 後端啟動時掃描並記錄殘留孤兒 runDir
+
+### 修正
+- 修正 DB 升版失敗時立刻中止啟動並顯示真正的錯誤原因
+- 補齊 Run 刪除時清理工作目錄的測試覆蓋
+- 補齊 Run 啟動同步主 repo 失敗時應中止的測試覆蓋
+- 後端 schema、handlers、services、types、utilities、tests 進行重構整理
+- 前端 components、composables、stores、types、locales、tests 進行重構整理
+- 移除 worktree 相關功能與測試
+
 ## [1.5.0] - 2026-05-11
 
 ### 新增
