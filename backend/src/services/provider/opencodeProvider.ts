@@ -51,7 +51,7 @@ export interface OpencodeClientPort {
     abort(options: { path: { id: string } }): Promise<unknown>;
     messages(options: {
       path: { id: string };
-      query?: { directory?: string };
+      query?: { directory?: string; limit?: number };
     }): Promise<{
       data?: Array<{
         info: { id: string; role: string };
@@ -313,11 +313,20 @@ async function* yieldToolPartsForTurn(
   let messages: Awaited<
     ReturnType<OpencodeClientPort["session"]["messages"]>
   >["data"];
+  const messageLimit = Math.max(currentMessageIds.size, 50);
   try {
-    const result = await client.session.messages({
-      path: { id: sessionId },
-      query: { directory: workspacePath },
-    });
+    const result = await Promise.race([
+      client.session.messages({
+        path: { id: sessionId },
+        query: { directory: workspacePath, limit: messageLimit },
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error("opencode session.messages timeout")),
+          10_000,
+        ),
+      ),
+    ]);
     messages = result.data ?? undefined;
   } catch (err) {
     logger.warn(
