@@ -1597,13 +1597,15 @@ describe("podStore", () => {
       });
       store.pods = [pod];
 
-      // "../etc/passwd" 含有 "/" 不符合 isValidModelName 規則，應被拒絕
-      store.updatePodProviderConfigModel("pod-1", "../etc/passwd");
+      // "evil model;rm" 含有空白與分號，不符合 isValidModelName 規則，應被拒絕
+      // 註：斜線本身已合法（opencode 需要 "{providerID}/{modelID}" 格式），
+      // 路徑遍歷防護由 opencode provider 在 split('/') 後對 providerID/modelID 各自驗證負責。
+      store.updatePodProviderConfigModel("pod-1", "evil model;rm");
 
       // model 不應被更新
       expect(store.pods[0]?.providerConfig?.model).toBe("gpt-5.4");
       expect(console.warn).toHaveBeenCalledWith(
-        "[PodStore] model 不合法，已拒絕更新：../etc/passwd",
+        "[PodStore] model 不合法，已拒絕更新：evil model;rm",
       );
     });
 

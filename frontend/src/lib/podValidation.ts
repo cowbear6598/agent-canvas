@@ -66,12 +66,13 @@ function resolveProviderConfig(
 
 /**
  * 驗證 provider 的 model 名稱是否合法。
- * 規則：長度 1-100、只允許英數字、點、底線、連字號，與後端 MODEL_RE 對齊。
+ * 規則：長度 1-100、只允許英數字、點、底線、連字號、斜線，與後端 podSchemas.MODEL_PATTERN 對齊。
+ * 斜線為支援 opencode 的 "{providerID}/{modelID}" 格式（例：opencode/minimax-m2.5-free）。
  */
 export function isValidModelName(model: string): boolean {
   if (typeof model !== "string" || model.length < 1 || model.length > 100)
     return false;
-  return /^[a-zA-Z0-9._-]+$/.test(model);
+  return /^[a-zA-Z0-9._/-]+$/.test(model);
 }
 
 /**
