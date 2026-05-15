@@ -83,6 +83,7 @@ vi.mock("@/components/pod/PodPluginSlot.vue", () => ({
     template:
       '<button class="pod-plugin-slot" ' +
       ':data-disabled="String(disabled)" ' +
+      ':data-disabled-tooltip="disabledTooltip" ' +
       "@click=\"$emit('click', $event)\"></button>",
   },
 }));
@@ -195,6 +196,9 @@ describe("PodSlots", () => {
       const pluginSlot = wrapper.find(".pod-plugin-slot");
       expect(pluginSlot.exists()).toBe(true);
       expect(pluginSlot.attributes("data-disabled")).toBe("true");
+      expect(pluginSlot.attributes("data-disabled-tooltip")).toBe(
+        "pod.slot.providerDisabled",
+      );
 
       // disabled tooltip 使用 i18n key（t = identity）
       expect(singleSlots[0]!.attributes("data-disabled-tooltip")).toBe(
@@ -361,6 +365,9 @@ describe("PodSlots", () => {
       const pluginSlot = wrapper.find(".pod-plugin-slot");
       expect(pluginSlot.exists()).toBe(true);
       expect(pluginSlot.attributes("data-disabled")).toBe("true");
+      expect(pluginSlot.attributes("data-disabled-tooltip")).toBe(
+        "pod.slot.providerDisabled",
+      );
 
       wrapper.unmount();
     });
