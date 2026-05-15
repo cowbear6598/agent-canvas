@@ -41,6 +41,7 @@ export interface OpencodeClientPort {
     }): Promise<{ data?: { id?: string } | null; error?: unknown }>;
     prompt(options: {
       path: { id: string };
+      query?: { directory?: string };
       body: {
         model?: { providerID: string; modelID: string };
         tools?: { [key: string]: boolean };
@@ -48,6 +49,27 @@ export interface OpencodeClientPort {
       };
     }): Promise<unknown>;
     abort(options: { path: { id: string } }): Promise<unknown>;
+    messages(options: {
+      path: { id: string };
+      query?: { directory?: string };
+    }): Promise<{
+      data?: Array<{
+        info: { id: string; role: string };
+        parts: Array<{
+          id: string;
+          type: string;
+          callID?: string;
+          tool?: string;
+          state?: {
+            status?: string;
+            input?: Record<string, unknown>;
+            output?: string;
+            error?: string;
+          };
+        }>;
+      }> | null;
+      error?: unknown;
+    }>;
   };
   tool: {
     ids(options?: {
@@ -225,10 +247,14 @@ function extractErrorMessage(error: unknown): string {
 async function buildToolsSubset(
   client: OpencodeClientPort,
   mcpServerNames: string[],
+  workspacePath: string,
 ): Promise<{ [key: string]: boolean } | undefined> {
   let toolIds: string[];
   try {
-    const result = await client.tool.ids();
+    // tool.ids 也要帶 directory，否則拿到的是 opencode server 預設 cwd 的 tool 清單
+    const result = await client.tool.ids({
+      query: { directory: workspacePath },
+    });
     if (!result.data) return undefined;
     toolIds = result.data;
   } catch (err) {
@@ -244,7 +270,13 @@ async function buildToolsSubset(
   const tools: { [key: string]: boolean } = {};
 
   for (const toolId of toolIds) {
-    if (!toolId.startsWith("mcp__")) continue;
+    if (!toolId.startsWith("mcp__")) {
+      // 內建 tool（read / grep / edit / write / bash 等）一律設為 true，
+      // 否則 opencode 收到 partial tools dict 會把沒列出的視為禁用，
+      // 造成 model 雖然有 built-in tool 卻收到「無工具可用」的訊號。
+      tools[toolId] = true;
+      continue;
+    }
 
     // mcp__<server>__<name> 格式：取第二段為 server name
     const parts = toolId.split("__");
@@ -253,6 +285,98 @@ async function buildToolsSubset(
   }
 
   return tools;
+}
+
+/**
+ * 在 session.idle 階段補 tool call event。
+ *
+ * 新版 opencode SDK streaming 只發 message.part.delta（field=text），不發 message.part.updated
+ * 帶 ToolPart，因此 tool 呼叫資訊只能在 turn 結束時透過 session.messages API 取得。
+ * 流程：
+ *   1. 呼叫 client.session.messages 拉所有 messages
+ *   2. 對 currentMessageIds 內的 assistant message，遍歷 ToolPart
+ *   3. 對狀態為 completed / error 的 ToolPart yield tool_call_start + tool_call_result
+ *
+ * Tool tag 因此會在所有 text 之後 emit，視覺上是「文字 → tool tags」的順序，
+ * 而非 streaming 中插入；如需精確順序，需改用 GET messages polling 或等 SDK 補上 part.updated。
+ *
+ * 失敗時 try/catch 記 warn，不中斷 turn 流程。
+ */
+async function* yieldToolPartsForTurn(
+  client: OpencodeClientPort,
+  sessionId: string,
+  workspacePath: string,
+  currentMessageIds: ReadonlySet<string>,
+): AsyncGenerator<NormalizedEvent> {
+  if (currentMessageIds.size === 0) return;
+
+  let messages: Awaited<
+    ReturnType<OpencodeClientPort["session"]["messages"]>
+  >["data"];
+  try {
+    const result = await client.session.messages({
+      path: { id: sessionId },
+      query: { directory: workspacePath },
+    });
+    messages = result.data ?? undefined;
+  } catch (err) {
+    logger.warn(
+      "Chat",
+      "Warn",
+      `[OpencodeProvider] session.messages 查詢失敗，跳過 tool tag 補發：${err instanceof Error ? err.message : String(err)}`,
+    );
+    return;
+  }
+
+  if (!messages) return;
+
+  for (const msg of messages) {
+    if (msg.info.role !== "assistant") continue;
+    if (!currentMessageIds.has(msg.info.id)) continue;
+
+    for (const part of msg.parts) {
+      if (part.type !== "tool") continue;
+
+      const callID = part.callID ?? "";
+      const toolName = part.tool ?? "";
+      const state = part.state;
+      const input = (state?.input as Record<string, unknown>) ?? {};
+
+      if (state?.status === "completed") {
+        yield {
+          type: "tool_call_start",
+          toolUseId: callID,
+          toolName,
+          input,
+        };
+        yield {
+          type: "tool_call_result",
+          toolUseId: callID,
+          toolName,
+          output: state.output ?? "",
+        };
+        continue;
+      }
+
+      if (state?.status === "error") {
+        yield {
+          type: "tool_call_start",
+          toolUseId: callID,
+          toolName,
+          input,
+        };
+        yield {
+          type: "tool_call_result",
+          toolUseId: callID,
+          toolName,
+          output: `[Error] ${state.error ?? "tool failed"}`,
+        };
+        continue;
+      }
+
+      // pending / running 狀態跳過：本 turn 已結束（session.idle），這類狀態屬於異常或還沒完成
+    }
+  }
 }
 
 // ================================================================
@@ -361,10 +485,14 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
     );
 
     // ── 建立或沿用 session ──────────────────────────────────────────
+    // 用 truthy 判斷而非嚴格 === null：
+    // 上層 normalExecutionStrategy.getSessionId 用 `?? undefined`，pod.sessionId 為空字串時
+    // 不會 fallback，會把 "" 一路傳下來；若用 === null 會誤走 resume 流程並送出 sessionId=""
+    // 給 opencode server，導致 prompt 被靜默丟棄、SSE 只回 heartbeat。
     let sessionId: string;
     let alreadyYieldedSessionStarted = false;
 
-    if (resumeSessionId === null) {
+    if (!resumeSessionId) {
       let createResult: { data?: { id?: string } | null; error?: unknown };
       try {
         createResult = await client.session.create({
@@ -413,11 +541,19 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
       doAbort();
     }
 
+    // 本 turn 觀察到的 messageID 集合：session.idle 時用來限定 ToolPart 範圍，
+    // 避免 resume session 把歷史 turn 的 tool 重新 yield 一次。
+    const currentMessageIds = new Set<string>();
+
     try {
       // ── 訂閱 SSE stream ────────────────────────────────────────────
+      // 帶上 directory query param 對應到該 Pod 的 workspace，
+      // 否則 opencode 會 fallback 到 server 啟動時的 cwd（後端工程目錄）。
       let sseResult: { stream: AsyncGenerator<unknown> };
       try {
-        sseResult = await client.event.subscribe();
+        sseResult = await client.event.subscribe({
+          query: { directory: workspacePath },
+        });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         yield classifySessionError(msg, options.providerID);
@@ -428,6 +564,7 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
       const toolsSubset = await buildToolsSubset(
         client,
         options.mcpServerNames,
+        workspacePath,
       );
 
       // ── 送出 prompt（非同步，不等待回傳） ──────────────────────────
@@ -458,6 +595,8 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
       client.session
         .prompt({
           path: { id: sessionId },
+          // directory 與 session.create 一致，opencode tool 才會跑在這個 Pod 的 workspace
+          query: { directory: workspacePath },
           body: promptBody,
         })
         .catch((err: unknown) => {
@@ -489,6 +628,32 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
             yield { type: "session_started", sessionId: createdSessionId };
             alreadyYieldedSessionStarted = true;
           }
+          continue;
+        }
+
+        // message.part.delta → 增量 chunk（新版 opencode SDK 走 streaming）
+        // payload: { sessionID, messageID, partID, field: "text"|"reasoning", delta: string }
+        // 後端 text event 的 content 視為 append（streamEventProcessor.processTextEvent），
+        // 因此把 delta 字串直接以 text/thinking yield 即可。
+        // 同時收集 messageID 給 session.idle 階段拉 tool parts 時過濾用。
+        if (type === "message.part.delta") {
+          const messageID = props.messageID as string | undefined;
+          if (messageID) currentMessageIds.add(messageID);
+
+          const field = props.field as string | undefined;
+          const delta = props.delta;
+          if (typeof delta !== "string" || delta.length === 0) continue;
+
+          if (field === "text") {
+            yield { type: "text", content: delta };
+            continue;
+          }
+
+          if (field === "reasoning") {
+            yield { type: "thinking", content: delta };
+            continue;
+          }
+
           continue;
         }
 
@@ -549,8 +714,18 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
           continue;
         }
 
-        // session.idle → turn_complete，結束 loop
+        // session.idle → 補 tool call 後 turn_complete，結束 loop
+        // 新版 opencode SDK 在 streaming 階段只發 message.part.delta（field=text），
+        // 不發 message.part.updated 帶 ToolPart，所以 tool 呼叫資訊只能透過拉完整 messages 取得。
+        // 在 idle 時呼叫 session.messages，把本 turn 出現過的 messageID 對應的 ToolPart 補成
+        // tool_call_start + tool_call_result yield 出去，前端才能顯示 tool tag。
         if (type === "session.idle") {
+          yield* yieldToolPartsForTurn(
+            client,
+            sessionId,
+            workspacePath,
+            currentMessageIds,
+          );
           yield { type: "turn_complete" };
           break;
         }

@@ -66,6 +66,10 @@ function sanitizeProviderConfig(
 /**
  * 讀取路徑下的 warn log：若 DB 中的 model 不在 provider 的 availableModels 內，
  * 記錄一次 warn log 但不丟棄原值（不影響 Pod 載入）。
+ *
+ * 注意：opencode 的 model 為 "{providerID}/{modelID}"，可選清單由使用者建立的 alias
+ * 動態組成（model_aliases 表），metadata.availableModelValues 永遠為空，因此跳過此檢查
+ * 以避免每次讀 opencode Pod 都產生雜訊 warn（與 sanitizeProviderConfigStrict 保持一致）。
  */
 function warnIfModelOutOfRange(
   model: unknown,
@@ -80,6 +84,7 @@ function warnIfModelOutOfRange(
     );
     return;
   }
+  if (provider === "opencode") return;
   const { availableModelValues } = getProvider(provider).metadata;
   if (!availableModelValues.has(model)) {
     logger.warn(
