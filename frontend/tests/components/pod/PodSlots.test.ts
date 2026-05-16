@@ -38,7 +38,7 @@ vi.mock("@/components/pod/PodSingleBindSlot.vue", () => ({
 vi.mock("@/components/pod/PodGoalSlot.vue", () => ({
   default: {
     name: "PodGoalSlot",
-    props: ["podId", "goalStatus", "todoCount", "disabled", "disabledTooltip"],
+    props: ["podId", "todoCount", "disabled", "disabledTooltip"],
     emits: ["click"],
     template:
       '<button class="pod-goal-slot" :data-disabled="String(disabled)" @click="$emit(\'click\', $event)"></button>',
@@ -140,7 +140,6 @@ function mountPodSlots(podId: string, overrides: Record<string, unknown> = {}) {
       currentModel: "opus",
       currentThinkingLevel: undefined,
       boundRepositoryNote: undefined,
-      goalStatus: "ready",
       goalTodoCount: 2,
       ...overrides,
     },
@@ -160,8 +159,6 @@ describe("PodSlots", () => {
         rotation: 0,
         repositoryId: null,
         goal: { todos: [{ id: "goal-1", text: "ship it" }] },
-        goalStatus: "ready",
-        canExecute: true,
         schedule: null,
         mcpServerNames: [],
         pluginIds: [],
@@ -191,8 +188,6 @@ describe("PodSlots", () => {
         rotation: 0,
         repositoryId: null,
         goal: { todos: [{ id: "goal-1", text: "ship it" }] },
-        goalStatus: "ready",
-        canExecute: true,
         schedule: null,
         mcpServerNames: [],
         pluginIds: [],
@@ -221,8 +216,6 @@ describe("PodSlots", () => {
         rotation: 0,
         repositoryId: null,
         goal: { todos: [{ id: "goal-1", text: "ship it" }] },
-        goalStatus: "ready",
-        canExecute: true,
         schedule: null,
         mcpServerNames: [],
         pluginIds: [],

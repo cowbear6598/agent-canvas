@@ -13,8 +13,6 @@ export interface PodGoal {
   todos: GoalTodoItem[];
 }
 
-export type PodGoalStatus = "unset" | "ready";
-
 export function normalizePodGoal(
   goal: PodGoal | null | undefined,
 ): PodGoal | null {
@@ -28,10 +26,6 @@ export function normalizePodGoal(
     .filter((todo) => todo.id.length > 0 && todo.text.length > 0);
 
   return todos.length > 0 ? { todos } : null;
-}
-
-export function derivePodGoalStatus(goal: PodGoal | null): PodGoalStatus {
-  return goal ? "ready" : "unset";
 }
 
 export interface Pod {
@@ -49,8 +43,6 @@ export interface Pod {
   providerConfig: Record<string, unknown> | null;
   repositoryId: string | null;
   goal?: PodGoal | null;
-  goalStatus?: PodGoalStatus;
-  canExecute?: boolean;
   schedule?: ScheduleConfig;
   integrationBindings?: IntegrationBinding[];
 }

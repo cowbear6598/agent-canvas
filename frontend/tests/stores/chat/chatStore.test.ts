@@ -19,8 +19,6 @@ function createExecutablePod(overrides = {}) {
     goal: {
       todos: [{ id: "goal-1", text: "Ship it" }],
     },
-    goalStatus: "ready",
-    canExecute: true,
     ...overrides,
   });
 }
@@ -180,7 +178,7 @@ describe("chatStore", () => {
       );
     });
 
-    it("Pod 沒有 Goal 時應阻止送出", async () => {
+    it("Pod 沒有 Goal 時仍應正常送出（Goal 已改為可選）", async () => {
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
       const podStore = usePodStore();
@@ -188,17 +186,14 @@ describe("chatStore", () => {
         createMockPod({
           id: "pod-1",
           goal: null,
-          goalStatus: "unset",
-          canExecute: false,
         }),
       ];
       const store = useChatStore();
       store.connectionStatus = "connected";
 
-      await expect(store.sendMessage("pod-1", "Hello")).rejects.toThrow(
-        "請先設定 Goal 再執行這個 Pod",
-      );
-      expect(mockWebSocketClient.emit).not.toHaveBeenCalled();
+      await store.sendMessage("pod-1", "Hello");
+
+      expect(mockWebSocketClient.emit).toHaveBeenCalled();
     });
 
     it("Codex Pod message 為原始文字", async () => {

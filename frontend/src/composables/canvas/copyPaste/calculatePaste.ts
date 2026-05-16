@@ -146,7 +146,6 @@ export function transformPods(
       pluginIds: pod.pluginIds,
       repositoryId: pod.repositoryId,
       goal: pod.goal ?? null,
-      goalStatus: pod.goalStatus,
     };
   });
 }

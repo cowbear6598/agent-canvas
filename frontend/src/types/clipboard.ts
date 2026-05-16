@@ -1,9 +1,4 @@
-import type {
-  PodProvider,
-  ProviderConfig,
-  PodGoal,
-  PodGoalStatus,
-} from "./pod";
+import type { PodProvider, ProviderConfig, PodGoal } from "./pod";
 import type { AnchorPosition, TriggerMode } from "./connection";
 
 export interface CopiedPod {
@@ -20,7 +15,6 @@ export interface CopiedPod {
   pluginIds?: string[];
   repositoryId?: string | null;
   goal?: PodGoal | null;
-  goalStatus?: PodGoalStatus;
 }
 
 export interface CopiedRepositoryNote {

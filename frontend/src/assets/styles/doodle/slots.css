@@ -150,26 +150,13 @@
 .pod-goal-slot {
   box-sizing: border-box;
   cursor: pointer;
-}
-
-.pod-goal-slot--ready {
   background: var(--doodle-mint);
   border-color: var(--doodle-ink);
   box-shadow: 2px 2px 0 oklch(0.4 0.02 50 / 0.3);
 }
 
-.pod-goal-slot--ready:hover {
+.pod-goal-slot:hover {
   box-shadow: 3px 3px 0 oklch(0.4 0.02 50 / 0.4);
-}
-
-.pod-goal-slot--unset {
-  background: oklch(0.95 0.04 85);
-  border-style: solid;
-  border-color: oklch(0.75 0.08 85);
-}
-
-.pod-goal-slot--unset:hover {
-  background: oklch(0.93 0.05 85);
 }
 
 .goal-notch {

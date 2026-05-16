@@ -21,7 +21,9 @@ function cloneGoalTodos(goal: PodGoal | null | undefined): GoalEditorTodo[] {
   }));
 }
 
-export function useGoalEditorForm(sourceGoal: () => PodGoal | null | undefined): {
+export function useGoalEditorForm(
+  sourceGoal: () => PodGoal | null | undefined,
+): {
   todos: Ref<GoalEditorTodo[]>;
   validationMessage: Ref<string>;
   canClear: ComputedRef<boolean>;
@@ -75,10 +77,11 @@ export function useGoalEditorForm(sourceGoal: () => PodGoal | null | undefined):
       text: todo.text.trim(),
     }));
 
+    // 全部空白視為清空 Goal（Goal 已改為可選，無待辦時等同於 null）
     const hasAnyText = normalizedTodos.some((todo) => todo.text.length > 0);
     if (!hasAnyText) {
-      validationMessage.value = t("pod.goal.editor.validation.required");
-      return false;
+      validationMessage.value = "";
+      return null;
     }
 
     if (normalizedTodos.some((todo) => todo.text.length === 0)) {

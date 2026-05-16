@@ -7,13 +7,8 @@ export type {
   ModelType,
   GoalTodoItem,
   PodGoal,
-  PodGoalStatus,
 } from "./pod.js";
-export {
-  toPodPublicView,
-  normalizePodGoal,
-  derivePodGoalStatus,
-} from "./pod.js";
+export { toPodPublicView, normalizePodGoal } from "./pod.js";
 
 export type {
   Message,

@@ -1,10 +1,4 @@
-import type {
-  Schedule,
-  PodProvider,
-  ProviderConfig,
-  PodGoal,
-  PodGoalStatus,
-} from "../pod";
+import type { Schedule, PodProvider, ProviderConfig, PodGoal } from "../pod";
 import type { AnchorPosition } from "@/types";
 
 export type ImageMediaType =
@@ -161,7 +155,6 @@ export interface PastePodItem {
   pluginIds?: string[];
   repositoryId?: string | null;
   goal?: PodGoal | null;
-  goalStatus?: PodGoalStatus;
 }
 
 export interface PasteRepositoryNoteItem {

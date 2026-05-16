@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
-import type { PodGoalStatus } from "@/types";
 
 const props = defineProps<{
   podId: string;
-  goalStatus: PodGoalStatus | undefined;
   todoCount: number;
   disabled: boolean;
   disabledTooltip: string;
@@ -17,10 +15,10 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 
-const isReady = computed(() => props.goalStatus === "ready");
+const hasTodos = computed(() => props.todoCount > 0);
 
 const goalLabel = computed(() => {
-  if (!isReady.value) return t("pod.goal.slot.unset");
+  if (!hasTodos.value) return t("pod.goal.slot.unset");
   return `${t("pod.goal.slot.ready")} (${props.todoCount})`;
 });
 
@@ -36,7 +34,6 @@ const handleClick = (event: MouseEvent): void => {
       :class="[
         'pod-slot-base',
         'pod-goal-slot',
-        isReady ? 'pod-goal-slot--ready' : 'pod-goal-slot--unset',
         { 'opacity-50 cursor-not-allowed': disabled },
       ]"
       :title="disabled ? disabledTooltip : undefined"

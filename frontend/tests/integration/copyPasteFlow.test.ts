@@ -31,7 +31,6 @@ function toCopiedPod(pod: Pod): CopiedPod {
     providerConfig: pod.providerConfig,
     repositoryId: pod.repositoryId,
     goal: pod.goal ?? null,
-    goalStatus: pod.goalStatus,
   };
 }
 
@@ -111,7 +110,6 @@ describe("copyPasteFlow", () => {
       providerConfig: { model: "gpt-5.4" },
       repositoryId: "repo-1",
       goal: { todos: [{ id: "todo-1", text: "Ship it" }] },
-      goalStatus: "ready",
     });
 
     clipboardStore.setCopy([toCopiedPod(pod)], [], []);
@@ -121,7 +119,6 @@ describe("copyPasteFlow", () => {
         provider: "codex",
         providerConfig: { model: "gpt-5.4" },
         repositoryId: "repo-1",
-        goalStatus: "ready",
       }),
     );
     expect(clipboardStore.copiedPods[0]?.goal?.todos).toHaveLength(1);

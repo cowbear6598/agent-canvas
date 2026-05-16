@@ -12,8 +12,6 @@ export interface GoalRuntimeState {
   handoffSummary: string | null;
 }
 
-export const GOAL_REQUIRED_MESSAGE = "請先設定 Goal 再執行這個 Pod";
-
 function getGoalTodoMap(goal: PodGoal): Map<string, GoalTodoItem> {
   return new Map(goal.todos.map((todo) => [todo.id, todo]));
 }
@@ -77,7 +75,9 @@ export function serializeGoalForPrompt(
 ): string | null {
   if (!goal?.todos.length) return null;
 
-  return goal.todos.map((todo, index) => `${index + 1}. ${todo.text}`).join("\n");
+  return goal.todos
+    .map((todo, index) => `${index + 1}. ${todo.text}`)
+    .join("\n");
 }
 
 function buildGoalExecutionHeader(

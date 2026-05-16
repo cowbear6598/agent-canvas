@@ -95,8 +95,6 @@ function mkPod(overrides: Partial<Pod> = {}): Pod {
     y: 0,
     rotation: 0,
     goal: { todos: [{ id: "goal-1", text: "Ship it" }] },
-    goalStatus: "ready",
-    canExecute: true,
     provider: "claude",
     providerConfig: { model: "claude-sonnet-4-5" },
     ...overrides,
@@ -443,24 +441,10 @@ describe("CanvasPod PodSlots 計數 props", () => {
 describe("CanvasPod Goal 狀態", () => {
   beforeEach(() => injectBaseCapabilities());
 
-  it("沒有 Goal 時應顯示未設定 badge", async () => {
-    const pod = mkPod({ goal: null, goalStatus: "unset", canExecute: false });
-    usePodStore().pods = [pod];
-    const wrapper = mountPod(pod);
-
-    await nextTick();
-
-    expect(wrapper.find("[data-testid='goal-unset-badge']").exists()).toBe(
-      true,
-    );
-  });
-
-  it("沒有 Goal 時雙擊應開啟 Goal editor，而不是 emit select", async () => {
+  it("沒有 Goal 時雙擊仍應 emit select（Goal 已改為可選）", async () => {
     const pod = mkPod({
       id: "pod-goal",
       goal: null,
-      goalStatus: "unset",
-      canExecute: false,
     });
     const podStore = usePodStore();
     podStore.pods = [pod];
@@ -468,14 +452,8 @@ describe("CanvasPod Goal 狀態", () => {
 
     await wrapper.find(".pod-doodle").trigger("dblclick");
 
-    expect(podStore.goalEditorPodId).toBe("pod-goal");
-    expect(wrapper.emitted("select")).toBeFalsy();
-    expect(mockToast).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: "pod.goal.title",
-        description: "pod.goal.requiredDescription",
-      }),
-    );
+    expect(wrapper.emitted("select")).toBeTruthy();
+    expect(podStore.goalEditorPodId).toBeNull();
   });
 
   it("點擊 goal slot 應開啟 Goal editor", async () => {

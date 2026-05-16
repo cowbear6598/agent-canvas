@@ -223,8 +223,6 @@
     },
     "goal": {
       "title": "Goal",
-      "unsetBadge": "Goal not set",
-      "requiredDescription": "Set a Goal before running this Pod",
       "saveFailed": "Failed to save Goal",
       "saveSuccess": "Goal saved",
       "clearSuccess": "Goal cleared",
@@ -242,7 +240,6 @@
         "moveDown": "Move down",
         "removeTodo": "Remove todo",
         "validation": {
-          "required": "Add at least one Goal todo",
           "noEmptyRows": "Fill in blank todos or remove them"
         }
       }

@@ -62,7 +62,7 @@ const handleSend = async (): Promise<void> => {
       description:
         error instanceof Error
           ? error.message
-          : t("pod.goal.requiredDescription"),
+          : t("composable.chat.podDropSendFailed"),
       variant: "destructive",
     });
     return;
@@ -103,10 +103,7 @@ useEscapeClose(() => {
 
 <template>
   <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
-    <div
-      class="absolute inset-0 modal-overlay"
-      @click="handleClose"
-    />
+    <div class="absolute inset-0 modal-overlay" @click="handleClose" />
 
     <div
       v-if="firstIntegrationProvider || isMiddlePod"
@@ -147,10 +144,7 @@ useEscapeClose(() => {
           :style="{ boxShadow: '2px 2px 0 var(--doodle-ink)' }"
           @click="handleSend"
         >
-          <Send
-            :size="20"
-            class="text-card"
-          />
+          <Send :size="20" class="text-card" />
         </button>
       </div>
     </div>

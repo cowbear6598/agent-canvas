@@ -26,7 +26,6 @@ import { useI18n } from "vue-i18n";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
 import { useRunStore } from "@/stores/run/runStore";
 import { useUploadStore } from "@/stores/upload/uploadStore";
-import { isPodReadyToExecute } from "@/lib/podValidation";
 import PodHeader from "@/components/pod/PodHeader.vue";
 import PodUploadOverlay from "@/components/pod/PodUploadOverlay.vue";
 import PodSlots from "@/components/pod/PodSlots.vue";
@@ -84,8 +83,51 @@ const showScheduleButton = computed(
   () => isSourcePod.value || !hasUpstreamConnection.value,
 );
 const currentModel = computed(() => props.pod.providerConfig.model);
-const hasGoal = computed(() => isPodReadyToExecute(props.pod));
 const goalTodoCount = computed(() => props.pod.goal?.todos.length ?? 0);
+
+/**
+ * Divider wavy path：用 pod.id 當 seed 生成獨特但穩定的手繪波形。
+ * 同一個 pod 每次渲染拿到一樣的路徑（id 是 PRNG seed），不同 pod 拿到不一樣的波形。
+ * viewBox 為 0 0 200 6；端點 y ≈ 3（中線），peak/valley 控制點在 0.2-1.1 / 4.9-5.8 之間隨機抖動。
+ */
+function hashPodIdToSeed(id: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < id.length; i++) {
+    hash ^= id.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function createSeededRandom(seed: number): () => number {
+  let state = seed || 1;
+  return () => {
+    state = (state + 0x6d2b79f5) | 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const dividerPath = computed(() => {
+  const rng = createSeededRandom(hashPodIdToSeed(props.pod.id));
+  const parts: string[] = [];
+
+  parts.push(`M0,${(2.7 + rng() * 0.6).toFixed(2)}`);
+
+  const SEGMENTS = 20;
+  const SEG_WIDTH = 10;
+  for (let i = 0; i < SEGMENTS; i++) {
+    const ctrlX = i * SEG_WIDTH + SEG_WIDTH / 2;
+    const endX = (i + 1) * SEG_WIDTH;
+    const isPeak = i % 2 === 0;
+    const ctrlY = isPeak ? 0.2 + rng() * 0.9 : 4.9 + rng() * 0.9;
+    const endY = 2.7 + rng() * 0.6;
+    parts.push(`Q${ctrlX},${ctrlY.toFixed(2)} ${endX},${endY.toFixed(2)}`);
+  }
+
+  return parts.join(" ");
+});
 
 // isElementSelected 內部使用 selectedElementSet（Set<string>），O(1) 查找
 const isSelected = computed(() =>
@@ -313,14 +355,6 @@ const isEditBlocked = (
 const handleDblClick = (e: MouseEvent): void => {
   const { blocked, reason } = isEditBlocked(e.target as Element | null);
   if (!blocked) {
-    if (!hasGoal.value) {
-      handleGoalClick();
-      toast({
-        title: t("pod.goal.title"),
-        description: t("pod.goal.requiredDescription"),
-      });
-      return;
-    }
     handleSelectPod();
     return;
   }
@@ -429,7 +463,6 @@ const handleContextMenu = (e: MouseEvent): void => {
         :current-model="currentModel"
         :current-thinking-level="pod.providerConfig.thinkingLevel"
         :bound-repository-note="boundRepositoryNote"
-        :goal-status="pod.goalStatus"
         :goal-todo-count="goalTodoCount"
         @plugin-clicked="handlePluginClick"
         @mcp-clicked="handleMcpClick"
@@ -474,8 +507,10 @@ const handleContextMenu = (e: MouseEvent): void => {
 
         <IntegrationStatusIcon :bindings="pod.integrationBindings ?? []" />
 
-        <!-- 聊天區容器：加 relative 使 PodUploadOverlay 的 absolute inset-0 可正確定位 -->
-        <div class="p-3 relative">
+        <!-- 聊天區容器：加 relative 使 PodUploadOverlay 的 absolute inset-0 可正確定位
+             flex flex-col：禁用 child 之間的 margin collapse，讓 divider 與 button group
+             的垂直間距精確等於設定值 -->
+        <div class="p-3 relative flex flex-col">
           <PodHeader
             :name="pod.name"
             :is-editing="isEditing"
@@ -484,16 +519,15 @@ const handleContextMenu = (e: MouseEvent): void => {
             @rename="handleRename"
           />
 
-          <div
-            v-if="!hasGoal"
-            class="goal-unset-badge"
-            data-testid="goal-unset-badge"
+          <!-- Doodle 分隔線：手繪 wavy SVG，分隔 header 與 body -->
+          <svg
+            class="pod-doodle-divider"
+            preserveAspectRatio="none"
+            viewBox="0 0 200 6"
+            aria-hidden="true"
           >
-            <span class="goal-unset-badge__dot" />
-            <span class="goal-unset-badge__text">
-              {{ $t("pod.goal.unsetBadge") }}
-            </span>
-          </div>
+            <path :d="dividerPath" vector-effect="non-scaling-stroke" />
+          </svg>
 
           <!-- 未知 Provider fallback badge：
                store 已載入後仍找不到此 provider，表示已下線或尚未支援。
@@ -518,25 +552,27 @@ const handleContextMenu = (e: MouseEvent): void => {
             :pod-id="pod.id"
           />
         </div>
-      </div>
 
-      <!-- is-uploading 傳入,讓刪除按鈕在上傳中 disabled + tooltip -->
-      <PodActions
-        :pod-name="pod.name"
-        :show-schedule-button="showScheduleButton"
-        :show-delete-dialog="showDeleteDialog"
-        :has-schedule="hasSchedule"
-        :schedule-enabled="scheduleEnabled"
-        :schedule-tooltip="scheduleTooltip"
-        :is-schedule-fired-animating="isScheduleFiredAnimating"
-        :is-uploading="isPodUploading"
-        @open-schedule-modal="handleOpenScheduleModal"
-        @update:show-delete-dialog="showDeleteDialog = $event"
-        @delete="handleDelete"
-        @confirm-delete="handleDelete"
-        @cancel-delete="showDeleteDialog = false"
-        @clear-schedule-fired-animation="handleClearScheduleFiredAnimation"
-      />
+        <!-- PodActions 放在 pod-doodle 內部，讓 button-group 的 absolute 定位
+             錨點為 pod-doodle 本體（min-height 102），避免被 pod-wrapper 的 slot
+             子元素影響到參考座標。is-uploading 傳入讓刪除按鈕在上傳中 disabled + tooltip -->
+        <PodActions
+          :pod-name="pod.name"
+          :show-schedule-button="showScheduleButton"
+          :show-delete-dialog="showDeleteDialog"
+          :has-schedule="hasSchedule"
+          :schedule-enabled="scheduleEnabled"
+          :schedule-tooltip="scheduleTooltip"
+          :is-schedule-fired-animating="isScheduleFiredAnimating"
+          :is-uploading="isPodUploading"
+          @open-schedule-modal="handleOpenScheduleModal"
+          @update:show-delete-dialog="showDeleteDialog = $event"
+          @delete="handleDelete"
+          @confirm-delete="handleDelete"
+          @cancel-delete="showDeleteDialog = false"
+          @clear-schedule-fired-animation="handleClearScheduleFiredAnimation"
+        />
+      </div>
 
       <ScheduleModal
         v-model:open="showScheduleModal"

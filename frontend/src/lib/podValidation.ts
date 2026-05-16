@@ -1,10 +1,4 @@
-import type {
-  Pod,
-  PodProvider,
-  ProviderConfig,
-  PodGoal,
-  PodGoalStatus,
-} from "@/types";
+import type { Pod, PodProvider, ProviderConfig, PodGoal } from "@/types";
 import { validatePodName } from "@/lib/sanitize";
 import { resolvePodProvider } from "@/lib/providerOptions";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
@@ -32,19 +26,6 @@ function normalizeGoal(goal: PodGoal | null | undefined): PodGoal | null {
     .filter((todo) => todo.id.length > 0 && todo.text.length > 0);
 
   return todos.length > 0 ? { todos } : null;
-}
-
-function deriveGoalStatus(goal: PodGoal | null): PodGoalStatus {
-  return goal ? "ready" : "unset";
-}
-
-export function isPodReadyToExecute(
-  pod: Pick<Pod, "canExecute" | "goalStatus" | "goal"> | null | undefined,
-): boolean {
-  if (!pod) return true;
-  if (typeof pod.canExecute === "boolean") return pod.canExecute;
-  if (pod.goalStatus !== undefined) return pod.goalStatus === "ready";
-  return normalizeGoal(pod.goal) !== null;
 }
 
 /**
@@ -105,8 +86,6 @@ export function enrichPod(pod: Pod): Pod {
     y: pod.y ?? 150,
     rotation: pod.rotation ?? Math.random() * 2 - 1,
     goal,
-    goalStatus: deriveGoalStatus(goal),
-    canExecute: goal !== null,
     schedule: pod.schedule ?? null,
     pluginIds: pod.pluginIds ?? [],
     provider,

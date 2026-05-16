@@ -67,15 +67,15 @@ describe("GoalEditorModal", () => {
     ]);
   });
 
-  it("完全空白時儲存應顯示必填驗證且不 emit submit", async () => {
+  it("完全空白時儲存應 emit submit(null)（Goal 已改為可選）", async () => {
     const wrapper = mountGoalEditor({ goal: null });
 
     await wrapper.find('[data-testid="goal-editor-save"]').trigger("click");
 
-    expect(wrapper.find('[data-testid="goal-editor-validation"]').exists()).toBe(
-      true,
-    );
-    expect(wrapper.emitted("submit")).toBeFalsy();
+    expect(wrapper.emitted("submit")?.[0]).toEqual([null]);
+    expect(
+      wrapper.find('[data-testid="goal-editor-validation"]').exists(),
+    ).toBe(false);
   });
 
   it("存在空白 row 時儲存應顯示驗證且不 emit submit", async () => {
@@ -87,9 +87,9 @@ describe("GoalEditorModal", () => {
     await wrapper.find('[data-testid="goal-editor-add"]').trigger("click");
     await wrapper.find('[data-testid="goal-editor-save"]').trigger("click");
 
-    expect(wrapper.find('[data-testid="goal-editor-validation"]').exists()).toBe(
-      true,
-    );
+    expect(
+      wrapper.find('[data-testid="goal-editor-validation"]').exists(),
+    ).toBe(true);
     expect(wrapper.emitted("submit")).toBeFalsy();
   });
 

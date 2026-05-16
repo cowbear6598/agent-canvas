@@ -26,8 +26,6 @@ import { createConnectionActions } from "./chatConnectionActions";
 import { abortSafetyTimers } from "./abortSafetyTimers";
 import { getActiveCanvasIdOrWarn } from "@/utils/canvasGuard";
 import { t } from "@/i18n";
-import { usePodStore } from "@/stores/pod/podStore";
-import { isPodReadyToExecute } from "@/lib/podValidation";
 import {
   MAX_CONTENT_BLOCK_SIZE_BYTES,
   MAX_CONTENT_BLOCKS_TOTAL_BYTES,
@@ -56,13 +54,6 @@ function hasMessageContent(
   contentBlocks: ContentBlock[] | undefined,
 ): boolean {
   return !!contentBlocks?.length || content.trim().length > 0;
-}
-
-function assertPodCanExecute(podId: string): void {
-  const pod = usePodStore().getPodById(podId);
-  if (!pod) return;
-  if (isPodReadyToExecute(pod)) return;
-  throw new Error(t("pod.goal.requiredDescription"));
 }
 
 export type ChatStoreInstance = ReturnType<typeof useChatStore>;
@@ -200,7 +191,6 @@ export const useChatStore = defineStore("chat", {
       }
 
       if (!hasMessageContent(content, contentBlocks)) return;
-      assertPodCanExecute(podId);
 
       // contentBlocks 大小驗證：單 block < 5MB，總計 < 20MB（decoded bytes 估算）
       if (contentBlocks && contentBlocks.length > 0) {
@@ -250,7 +240,6 @@ export const useChatStore = defineStore("chat", {
       if (!this.isConnected) {
         throw new Error(t("composable.chat.websocketNotConnected"));
       }
-      assertPodCanExecute(podId);
 
       const canvasId = getActiveCanvasIdOrWarn("ChatStore");
       if (!canvasId) return;

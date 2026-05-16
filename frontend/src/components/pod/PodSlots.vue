@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, toRef } from "vue";
 import { useI18n } from "vue-i18n";
-import type { RepositoryNote, PodGoalStatus } from "@/types";
+import type { RepositoryNote } from "@/types";
 import type { PodProvider } from "@/types/pod";
 import PodSingleBindSlot from "@/components/pod/PodSingleBindSlot.vue";
 import PodPluginSlot from "@/components/pod/PodPluginSlot.vue";
@@ -21,7 +21,6 @@ const props = defineProps<{
   currentModel: string;
   currentThinkingLevel: string | undefined;
   boundRepositoryNote: RepositoryNote | undefined;
-  goalStatus: PodGoalStatus | undefined;
   goalTodoCount: number;
 }>();
 
@@ -93,7 +92,6 @@ const thinkingDisabled = computed(() => thinkingCapabilityUnsupported.value);
 
   <PodGoalSlot
     :pod-id="props.podId"
-    :goal-status="props.goalStatus"
     :todo-count="props.goalTodoCount"
     :disabled="goalDisabled"
     :disabled-tooltip="disabledTooltip"

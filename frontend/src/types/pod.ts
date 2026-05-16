@@ -12,8 +12,6 @@ export interface PodGoal {
   todos: GoalTodoItem[];
 }
 
-export type PodGoalStatus = "unset" | "ready";
-
 /**
  * Pod 所屬的 Provider 名稱。
  * 刻意保持寬鬆 string，不使用 "claude" | "codex" literal union，原因如下：
@@ -123,8 +121,6 @@ export interface Pod {
   pluginIds?: string[];
   repositoryId?: string | null;
   goal?: PodGoal | null;
-  goalStatus?: PodGoalStatus;
-  canExecute?: boolean;
   schedule?: Schedule | null;
   integrationBindings?: IntegrationBinding[];
   provider: PodProvider;

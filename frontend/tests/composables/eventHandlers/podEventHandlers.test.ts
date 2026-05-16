@@ -133,8 +133,6 @@ describe("podEventHandlers", () => {
       const pod = createMockPod({
         id: "pod-1",
         goal: { todos: [{ id: "goal-1", text: "Ship it" }] },
-        goalStatus: "ready",
-        canExecute: true,
       });
 
       findHandler("pod:goal:set")({ canvasId: "canvas-1", pod });

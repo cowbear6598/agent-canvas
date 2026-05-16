@@ -4,7 +4,7 @@ import * as fsPath from "path";
 import type { Pod, CreatePodRequest, ScheduleConfig, PodGoal } from "../types";
 import type { IntegrationBinding } from "../types/integration.js";
 import type { ProviderName } from "./provider/types.js";
-import { derivePodGoalStatus, normalizePodGoal } from "../types/pod.js";
+import { normalizePodGoal } from "../types/pod.js";
 import {
   resolveProvider as resolveProviderName,
   resolveProviderConfig,
@@ -350,8 +350,6 @@ class PodStore {
       goal: this.parseGoal(row.goal_json),
       integrationBindings: bindingsMap.get(row.id) ?? [],
     };
-    pod.goalStatus = derivePodGoalStatus(pod.goal ?? null);
-    pod.canExecute = pod.goalStatus === "ready";
     if (row.schedule_json) {
       pod.schedule = this.parseSchedule(row.schedule_json);
     }
@@ -468,8 +466,6 @@ class PodStore {
       provider,
       providerConfig,
     );
-    pod.goalStatus = derivePodGoalStatus(pod.goal ?? null);
-    pod.canExecute = pod.goalStatus === "ready";
 
     // 步驟三：原子寫入 DB
     getDb().transaction(() => {
@@ -588,8 +584,6 @@ class PodStore {
       id: _id,
       workspacePath: _wp,
       schedule: _sched,
-      goalStatus: _goalStatus,
-      canExecute: _canExecute,
       ...safeUpdates
     } = updates as PodUpdates & Partial<Pod>;
     const updatedPod = {
@@ -598,8 +592,6 @@ class PodStore {
       schedule: this.mergeSchedule(pod, updates),
     };
     updatedPod.goal = normalizePodGoal(updatedPod.goal ?? null);
-    updatedPod.goalStatus = derivePodGoalStatus(updatedPod.goal);
-    updatedPod.canExecute = updatedPod.goalStatus === "ready";
     return updatedPod;
   }
 

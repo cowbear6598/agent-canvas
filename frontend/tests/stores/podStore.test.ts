@@ -1043,8 +1043,6 @@ describe("podStore", () => {
       const updatedPod = createMockPod({
         id: "pod-1",
         goal,
-        goalStatus: "ready",
-        canExecute: true,
       });
 
       mockCreateWebSocketRequest.mockResolvedValueOnce({
@@ -1068,8 +1066,6 @@ describe("podStore", () => {
       );
       expect(result).toEqual(updatedPod);
       expect(store.getPodById("pod-1")?.goal).toEqual(goal);
-      expect(store.getPodById("pod-1")?.goalStatus).toBe("ready");
-      expect(store.getPodById("pod-1")?.canExecute).toBe(true);
       expect(mockShowSuccessToast).toHaveBeenCalledWith(
         "Pod",
         "儲存成功",
@@ -1077,7 +1073,7 @@ describe("podStore", () => {
       );
     });
 
-    it("goal 為 null 時應顯示清空成功 Toast 並把 pod 變回不可執行", async () => {
+    it("goal 為 null 時應顯示清空成功 Toast", async () => {
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
       const store = usePodStore();
@@ -1085,16 +1081,12 @@ describe("podStore", () => {
         createMockPod({
           id: "pod-1",
           goal: { todos: [{ id: "goal-1", text: "Existing" }] },
-          goalStatus: "ready",
-          canExecute: true,
         }),
       ];
 
       const updatedPod = createMockPod({
         id: "pod-1",
         goal: null,
-        goalStatus: "unset",
-        canExecute: false,
       });
 
       mockCreateWebSocketRequest.mockResolvedValueOnce({
@@ -1107,8 +1099,6 @@ describe("podStore", () => {
 
       expect(result).toEqual(updatedPod);
       expect(store.getPodById("pod-1")?.goal).toBeNull();
-      expect(store.getPodById("pod-1")?.goalStatus).toBe("unset");
-      expect(store.getPodById("pod-1")?.canExecute).toBe(false);
       expect(mockShowSuccessToast).toHaveBeenCalledWith(
         "Pod",
         "儲存成功",

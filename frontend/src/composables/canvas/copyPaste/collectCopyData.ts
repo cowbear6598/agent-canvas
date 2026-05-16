@@ -95,7 +95,7 @@ function createOriginalBoundNoteMapper<
     ({
       ...extractNoteBaseFields(note),
       [idField]: note[idField] as string,
-  boundToOriginalPodId: note.boundToPodId,
+      boundToOriginalPodId: note.boundToPodId,
     }) as unknown as T;
 }
 
@@ -151,7 +151,6 @@ export function collectSelectedPods(
           pluginIds: pod.pluginIds,
           repositoryId: pod.repositoryId,
           goal: pod.goal ?? null,
-          goalStatus: pod.goalStatus,
         },
       ];
     });
@@ -207,7 +206,9 @@ function collectBoundNotesByPodIds(
   podIds: Set<string>,
   stores: NoteStores,
 ): CollectedNoteArrays {
-  const repositoryBoundMap = buildBoundNotesByPodMap(stores.repositoryStore.notes);
+  const repositoryBoundMap = buildBoundNotesByPodMap(
+    stores.repositoryStore.notes,
+  );
 
   const arrays: CollectedNoteArrays = {
     repositoryNote: [],

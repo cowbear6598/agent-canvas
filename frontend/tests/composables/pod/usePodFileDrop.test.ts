@@ -24,8 +24,6 @@ const { mockToast } = vi.hoisted(() => ({
 const mockGetPodById = vi.fn(() => ({
   id: "pod-001",
   goal: { todos: [{ id: "goal-1", text: "Ship it" }] },
-  goalStatus: "ready",
-  canExecute: true,
 }));
 
 vi.mock("@/composables/useToast", () => ({
@@ -225,8 +223,6 @@ describe("usePodFileDrop", () => {
     mockGetPodById.mockReturnValue({
       id: TEST_POD_ID,
       goal: { todos: [{ id: "goal-1", text: "Ship it" }] },
-      goalStatus: "ready",
-      canExecute: true,
     });
     // 預設：未上傳中
     mockIsUploading.mockReturnValue(false);

@@ -524,7 +524,7 @@ describe("PodStore - Goal persistence", () => {
     closeDb();
   });
 
-  it("create 後應序列化 goal，reload 時回傳 ready / canExecute", () => {
+  it("create 後應序列化 goal，reload 時回傳一致的 todos", () => {
     const goal = {
       todos: [
         { id: "11111111-1111-4111-8111-111111111111", text: "First task" },
@@ -541,8 +541,6 @@ describe("PodStore - Goal persistence", () => {
     });
 
     expect(pod.goal).toEqual(goal);
-    expect(pod.goalStatus).toBe("ready");
-    expect(pod.canExecute).toBe(true);
 
     const storedRow = getDb()
       .prepare("SELECT goal_json FROM pods WHERE id = ?")
@@ -553,8 +551,6 @@ describe("PodStore - Goal persistence", () => {
 
     const reloaded = podStore.getById(canvasId, pod.id);
     expect(reloaded?.goal).toEqual(goal);
-    expect(reloaded?.goalStatus).toBe("ready");
-    expect(reloaded?.canExecute).toBe(true);
   });
 
   it("update 後應覆寫 goal，reload 與 list 都回傳最新結果", () => {
@@ -571,9 +567,7 @@ describe("PodStore - Goal persistence", () => {
     });
 
     const updatedGoal = {
-      todos: [
-        { id: "44444444-4444-4444-8444-444444444444", text: "New task" },
-      ],
+      todos: [{ id: "44444444-4444-4444-8444-444444444444", text: "New task" }],
     };
 
     podStore.update(canvasId, pod.id, { goal: updatedGoal });
@@ -585,16 +579,12 @@ describe("PodStore - Goal persistence", () => {
 
     const reloaded = podStore.getById(canvasId, pod.id);
     expect(reloaded?.goal).toEqual(updatedGoal);
-    expect(reloaded?.goalStatus).toBe("ready");
-    expect(reloaded?.canExecute).toBe(true);
 
     const listed = podStore.list(canvasId).find((item) => item.id === pod.id);
     expect(listed?.goal).toEqual(updatedGoal);
-    expect(listed?.goalStatus).toBe("ready");
-    expect(listed?.canExecute).toBe(true);
   });
 
-  it("invalid / empty goal 應在讀寫路徑被正規化成 unset", () => {
+  it("invalid / empty goal 應在讀寫路徑被正規化成 null", () => {
     const { pod } = podStore.create(canvasId, {
       name: "pod-goal-normalize",
       x: 0,
@@ -606,8 +596,6 @@ describe("PodStore - Goal persistence", () => {
     });
 
     expect(pod.goal).toBeNull();
-    expect(pod.goalStatus).toBe("unset");
-    expect(pod.canExecute).toBe(false);
 
     const storedRow = getDb()
       .prepare("SELECT goal_json FROM pods WHERE id = ?")
@@ -620,8 +608,6 @@ describe("PodStore - Goal persistence", () => {
 
     const reloaded = podStore.getById(canvasId, pod.id);
     expect(reloaded?.goal).toBeNull();
-    expect(reloaded?.goalStatus).toBe("unset");
-    expect(reloaded?.canExecute).toBe(false);
   });
 });
 

@@ -223,8 +223,6 @@
     },
     "goal": {
       "title": "Goal",
-      "unsetBadge": "Goal が未設定です",
-      "requiredDescription": "この Pod を実行する前に Goal を設定してください",
       "saveFailed": "Goal の保存に失敗しました",
       "saveSuccess": "Goal を保存しました",
       "clearSuccess": "Goal をクリアしました",
@@ -242,7 +240,6 @@
         "moveDown": "下へ移動",
         "removeTodo": "Todo を削除",
         "validation": {
-          "required": "Goal には少なくとも 1 件の Todo が必要です",
           "noEmptyRows": "空の Todo は入力するか削除してください"
         }
       }

@@ -173,15 +173,13 @@ describe("enrichPod", () => {
     });
   });
 
-  describe("Goal 執行狀態", () => {
-    it("沒有 goal 時應標記為不可執行", () => {
+  describe("Goal 正規化", () => {
+    it("沒有 goal 時應正規化為 null", () => {
       const enriched = enrichPod(makeRawPod());
       expect(enriched.goal).toBeNull();
-      expect(enriched.goalStatus).toBe("unset");
-      expect(enriched.canExecute).toBe(false);
     });
 
-    it("有合法 goal 時應標記為可執行", () => {
+    it("有合法 goal 時應保留 todos", () => {
       const enriched = enrichPod(
         makeRawPod({
           goal: {
@@ -189,8 +187,8 @@ describe("enrichPod", () => {
           },
         } as any),
       );
-      expect(enriched.goalStatus).toBe("ready");
-      expect(enriched.canExecute).toBe(true);
+      expect(enriched.goal).not.toBeNull();
+      expect(enriched.goal?.todos).toHaveLength(1);
     });
   });
 

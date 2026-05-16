@@ -89,11 +89,10 @@ function mountMenu(props = {}) {
   });
 }
 
-function findButtonByText(
-  wrapper: ReturnType<typeof mountMenu>,
-  text: string,
-) {
-  return wrapper.findAll("button").find((button) => button.text().includes(text));
+function findButtonByText(wrapper: ReturnType<typeof mountMenu>, text: string) {
+  return wrapper
+    .findAll("button")
+    .find((button) => button.text().includes(text));
 }
 
 describe("PodContextMenu", () => {
@@ -124,7 +123,7 @@ describe("PodContextMenu", () => {
     it("沒有 Goal 時應顯示「設定 Goal」按鈕", () => {
       mockGetPodById.mockReturnValue({
         id: "pod-123",
-        goalStatus: "unset",
+        goal: null,
         integrationBindings: [],
       });
 
@@ -321,7 +320,7 @@ describe("PodContextMenu", () => {
     it("點擊「編輯 Goal」應 emit open-goal-editor", async () => {
       mockGetPodById.mockReturnValue({
         id: "pod-123",
-        goalStatus: "ready",
+        goal: { todos: [{ id: "goal-1", text: "Ship it" }] },
         integrationBindings: [],
       });
 

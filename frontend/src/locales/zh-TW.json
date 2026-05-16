@@ -223,8 +223,6 @@
     },
     "goal": {
       "title": "Goal",
-      "unsetBadge": "尚未設定 Goal",
-      "requiredDescription": "請先設定 Goal 再執行這個 Pod",
       "saveFailed": "Goal 儲存失敗",
       "saveSuccess": "Goal 已儲存",
       "clearSuccess": "Goal 已清空",
@@ -242,7 +240,6 @@
         "moveDown": "下移",
         "removeTodo": "刪除待辦",
         "validation": {
-          "required": "至少要有一條 Goal 待辦",
           "noEmptyRows": "請填完空白待辦，或把它刪掉"
         }
       }

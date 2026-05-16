@@ -22,9 +22,10 @@
   cursor: pointer;
   position: relative;
   /* 移除小螢幕後 Pod 內容只剩 header + badge，會塌成不到 80px；
-     設 min-height 讓 Pod 至少能容納左右兩排 notch（top 68 + height 32 = 100）
-     並留一點底部空間，避免 slot 從 Pod 下緣穿出 */
-  min-height: 112px;
+     設 min-height 讓 Pod 至少能容納左右兩排 notch（top 58 + height 32 = 90）
+     並留 12px 緩衝給右下角的 schedule/delete 按鈕（bottom: 10 + 28 高 + 上方 ~10 間距）。
+     min-height 102：搭配 divider 與按鈕 bottom:10，讓按鈕上下間距視覺對等。*/
+  min-height: 102px;
 }
 
 .pod-doodle:hover {
@@ -223,11 +224,26 @@
   transition: color 0.2s ease;
 }
 
-/* 右下角按鈕群組容器 */
+/* Doodle 分隔線：用於 PodHeader 與 body 之間的手繪 wavy 線 */
+.pod-doodle-divider {
+  display: block;
+  width: 100%;
+  height: 6px;
+  margin: 4px 0 8px;
+  stroke: var(--doodle-ink);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  fill: none;
+  opacity: 0.55;
+}
+
+/* 右下角按鈕群組（貼在 pod body 內部右下角）
+   bottom: 8 搭配 body 用 flex flex-col 禁用 margin collapse，使
+   header → divider → 按鈕的上下間距視覺對等 */
 .pod-action-buttons-group {
   position: absolute;
-  bottom: -14px;
-  right: -14px;
+  bottom: 10px;
+  right: 10px;
   display: flex;
   gap: 6px;
   z-index: 60;
@@ -429,6 +445,15 @@
   );
 }
 
+/* Opencode Pod：淺橄欖綠 → 奶油白（--pod-provider-gradient-stop 終止） */
+.pod-provider-opencode {
+  background: linear-gradient(
+    to bottom,
+    var(--pod-provider-opencode-top) 0,
+    var(--card) var(--pod-provider-gradient-stop)
+  );
+}
+
 /* =============================================
    未知 Provider fallback badge（Phase 6 A）
 
@@ -466,30 +491,4 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.goal-unset-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  margin-bottom: 4px;
-  border-radius: 999px;
-  background: oklch(0.96 0.04 85);
-  border: 1px solid oklch(0.82 0.07 85);
-}
-
-.goal-unset-badge__dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: oklch(0.7 0.12 85);
-  flex-shrink: 0;
-}
-
-.goal-unset-badge__text {
-  font-size: 0.65rem;
-  color: oklch(0.42 0.09 85);
-  font-weight: 600;
-  line-height: 1.2;
 }
