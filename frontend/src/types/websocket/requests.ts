@@ -1,4 +1,10 @@
-import type { Schedule, PodProvider, ProviderConfig } from "../pod";
+import type {
+  Schedule,
+  PodProvider,
+  ProviderConfig,
+  PodGoal,
+  PodGoalStatus,
+} from "../pod";
 import type { AnchorPosition } from "@/types";
 
 export type ImageMediaType =
@@ -18,6 +24,7 @@ export interface PodCreatePayload {
   provider: PodProvider;
   /** Provider 對應的設定（含 model 等參數） */
   providerConfig: ProviderConfig;
+  goal?: PodGoal | null;
 }
 
 /** 查詢可用 Provider 列表 */
@@ -43,6 +50,13 @@ export interface PodRenamePayload {
   canvasId: string;
   podId: string;
   name: string;
+}
+
+export interface PodSetGoalPayload {
+  requestId: string;
+  canvasId: string;
+  podId: string;
+  goal: PodGoal | null;
 }
 
 export interface PodSetModelPayload {
@@ -146,7 +160,8 @@ export interface PastePodItem {
   mcpServerNames?: string[];
   pluginIds?: string[];
   repositoryId?: string | null;
-  commandId?: string | null;
+  goal?: PodGoal | null;
+  goalStatus?: PodGoalStatus;
 }
 
 export interface PasteRepositoryNoteItem {
@@ -200,7 +215,6 @@ export interface CanvasPastePayload {
   canvasId: string;
   pods: PastePodItem[];
   repositoryNotes: PasteRepositoryNoteItem[];
-  commandNotes: PasteCommandNoteItem[];
   connections: PasteConnectionItem[];
 }
 
@@ -215,26 +229,6 @@ export interface RepositoryGitClonePayload {
   canvasId: string;
   repoUrl: string;
   branch?: string;
-}
-
-export interface CommandNoteCreatePayload {
-  requestId: string;
-  canvasId: string;
-  commandId: string;
-  name: string;
-  x: number;
-  y: number;
-  boundToPodId: string | null;
-  originalPosition: { x: number; y: number } | null;
-}
-
-export interface PasteCommandNoteItem {
-  commandId: string;
-  name: string;
-  x: number;
-  y: number;
-  boundToOriginalPodId: string | null;
-  originalPosition: { x: number; y: number } | null;
 }
 
 export interface RepositoryCheckGitPayload {
@@ -277,37 +271,11 @@ export interface RepositoryPullLatestPayload {
   repositoryId: string;
 }
 
-export interface GroupCreatePayload {
-  requestId: string;
-  canvasId: string;
-  name: string;
-  type: "command";
-}
-
-export interface GroupListPayload {
-  requestId: string;
-  canvasId: string;
-  type: "command";
-}
-
-export interface GroupDeletePayload {
-  requestId: string;
-  canvasId: string;
-  groupId: string;
-}
-
-export interface MoveToGroupPayload {
-  requestId: string;
-  canvasId: string;
-  itemId: string;
-  groupId: string | null;
-}
-
 /** 查詢指定 Provider 的 MCP server 清單 */
 export interface McpListPayload {
   requestId: string;
-  /** claude / codex / gemini 三個 provider 皆支援 MCP 清單查詢 */
-  provider: "claude" | "codex" | "gemini";
+  /** claude / codex / opencode 三個 provider 皆支援 MCP 清單查詢 */
+  provider: "claude" | "codex" | "opencode";
 }
 
 /** 設定指定 Pod 的 MCP server 名稱清單 */
@@ -386,7 +354,7 @@ export interface PodSetPluginsPayload {
 export interface PluginListPayload {
   requestId: string;
   /** 依 provider 過濾 plugin 清單；限制為已知 provider 字面量，獲得型別系統列舉約束 */
-  provider?: "claude" | "codex" | "gemini";
+  provider?: "claude" | "codex";
 }
 
 export interface RunDeletePayload {

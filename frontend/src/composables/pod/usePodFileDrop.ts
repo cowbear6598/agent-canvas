@@ -9,7 +9,9 @@ import {
 } from "@/api/uploadApi";
 import { useUploadStore } from "@/stores/upload/uploadStore";
 import { useChatStore } from "@/stores/chat/chatStore";
+import { usePodStore } from "@/stores/pod/podStore";
 import { getActiveCanvasIdOrWarn } from "@/utils/canvasGuard";
+import { isPodReadyToExecute } from "@/lib/podValidation";
 
 type ValidateDropResult = { ok: true } | { ok: false; toastKey: string };
 
@@ -155,9 +157,18 @@ export function usePodFileDrop(
   const handleDrop = async (podId: string, files: File[]): Promise<void> => {
     const uploadStore = useUploadStore();
     const chatStore = useChatStore();
+    const podStore = usePodStore();
     const canvasId = getCanvasId();
 
     if (!canvasId) return;
+    if (!isPodReadyToExecute(podStore.getPodById(podId))) {
+      toast({
+        title: t("pod.goal.title"),
+        description: t("pod.goal.requiredDescription"),
+        variant: "destructive",
+      });
+      return;
+    }
 
     // 上傳中再拖入時忽略，避免覆蓋進行中的狀態
     if (uploadStore.isUploading(podId)) return;
@@ -196,9 +207,12 @@ export function usePodFileDrop(
       // 全部成功：送 WS 訊息，由後端根據 uploadSessionId 組裝附件
       try {
         await chatStore.sendMessageWithUploadSession(podId, uploadSessionId);
-      } catch {
+      } catch (error) {
         toast({
-          title: t("composable.chat.podDropSendFailed"),
+          title:
+            error instanceof Error
+              ? error.message
+              : t("composable.chat.podDropSendFailed"),
           variant: "destructive",
         });
       }

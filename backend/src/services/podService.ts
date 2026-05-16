@@ -4,9 +4,7 @@ import { canvasStore } from "./canvasStore.js";
 import { socketService } from "./socketService.js";
 import { workflowStateService } from "./workflow/index.js";
 import { connectionStore } from "./connectionStore.js";
-import { repositorySyncService } from "./repositorySyncService.js";
-import { podManifestService } from "./podManifestService.js";
-import { repositoryNoteStore, commandNoteStore } from "./noteStores.js";
+import { repositoryNoteStore } from "./noteStores.js";
 import { WebSocketResponseEvents } from "../schemas/index.js";
 import type { PodDeletedPayload } from "../types/index.js";
 import type { CreatePodRequest } from "../types/api.js";
@@ -33,7 +31,6 @@ export function deleteAllPodNotes(
     key: keyof NonNullable<PodDeletedPayload["deletedNoteIds"]>;
   }> = [
     { store: repositoryNoteStore, key: "repositoryNote" },
-    { store: commandNoteStore, key: "commandNote" },
   ];
 
   const result: PodDeletedPayload["deletedNoteIds"] = {};
@@ -46,25 +43,6 @@ export function deleteAllPodNotes(
   }
 
   return result;
-}
-
-async function cleanupRepositoryResources(
-  repositoryId: string | null | undefined,
-  podId: string,
-): Promise<void> {
-  if (!repositoryId) {
-    return;
-  }
-  await podManifestService.deleteManagedFiles(repositoryId, podId);
-}
-
-async function syncRepositoryAfterDelete(
-  repositoryId: string | null | undefined,
-): Promise<void> {
-  if (!repositoryId) {
-    return;
-  }
-  await repositorySyncService.syncRepositoryResources(repositoryId);
 }
 
 export async function deletePodWithCleanup(
@@ -97,15 +75,10 @@ export async function deletePodWithCleanup(
   const deletedNoteIdsPayload = deleteAllPodNotes(canvasId, podId);
   connectionStore.deleteByPodId(canvasId, podId);
 
-  await cleanupRepositoryResources(pod.repositoryId, podId);
-
   const deleted = podStore.delete(canvasId, podId);
   if (!deleted) {
     return err(createI18nError("errors.podDeleteFailed"));
   }
-
-  await syncRepositoryAfterDelete(pod.repositoryId);
-
   const hasDeletedNotes =
     deletedNoteIdsPayload !== undefined &&
     Object.keys(deletedNoteIdsPayload).length > 0;

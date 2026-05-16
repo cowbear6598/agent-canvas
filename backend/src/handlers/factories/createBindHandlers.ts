@@ -2,7 +2,6 @@ import type { WebSocketResponseEvents } from "../../schemas";
 import type { Pod } from "../../types/pod.js";
 import type { ProviderCapabilities } from "../../services/provider/index.js";
 import { toPodPublicView } from "../../types/index.js";
-import { repositorySyncService } from "../../services/repositorySyncService.js";
 import { emitSuccess, emitError } from "../../utils/websocketResponse.js";
 import { createI18nError } from "../../utils/i18nError.js";
 import { logger, type LogCategory } from "../../utils/logger.js";
@@ -19,7 +18,7 @@ export interface BindResourceConfig<
 > {
   resourceName: string;
   idField: TIdField;
-  /** true: 陣列模式如 mcpServerNames，false: 單一值模式如 commandId */
+  /** true: 陣列模式如 mcpServerNames，false: 單一值模式如 repositoryId */
   isMultiBind: boolean;
   service: TService;
   podStoreMethod: {
@@ -27,7 +26,7 @@ export interface BindResourceConfig<
     unbind?: (canvasId: string, podId: string) => void;
   };
   getPodResourceIds: (pod: {
-    commandId: string | null;
+    repositoryId: string | null;
     mcpServerNames: string[];
   }) => string[] | string | null;
   /** 某些資源綁定後需要複製檔案到 Pod 工作目錄 */
@@ -35,7 +34,6 @@ export interface BindResourceConfig<
   /** 某些資源解綁後需要從 Pod 工作目錄刪除檔案 */
   deleteResourceFromPath?: (workspacePath: string) => Promise<void>;
   skipConflictCheck?: boolean;
-  skipRepositorySync?: boolean;
   /** 守門：bind 時要求 pod.provider 具備此 capability，不支援的 provider 會收到 CAPABILITY_NOT_SUPPORTED 錯誤 */
   requiredCapability?: keyof ProviderCapabilities;
   events: {
@@ -147,10 +145,6 @@ async function performBind<TService, TIdField extends string>(
   }
 
   config.podStoreMethod.bind(canvasId, podId, resourceId);
-
-  if (!config.skipRepositorySync && pod.repositoryId) {
-    await repositorySyncService.syncRepositoryResources(pod.repositoryId);
-  }
 
   emitPodUpdated(canvasId, podId, requestId, config.events.bound);
 
@@ -282,10 +276,6 @@ export function createUnbindHandler<TService, TIdField extends string>(
       }
 
       config.podStoreMethod.unbind!(canvasId, podId);
-
-      if (!config.skipRepositorySync && pod.repositoryId) {
-        await repositorySyncService.syncRepositoryResources(pod.repositoryId);
-      }
 
       emitPodUpdated(canvasId, podId, requestId, config.events.unbound!);
 

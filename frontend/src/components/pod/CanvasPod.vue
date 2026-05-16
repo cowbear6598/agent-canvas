@@ -26,9 +26,9 @@ import { useI18n } from "vue-i18n";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
 import { useRunStore } from "@/stores/run/runStore";
 import { useUploadStore } from "@/stores/upload/uploadStore";
+import { isPodReadyToExecute } from "@/lib/podValidation";
 import PodHeader from "@/components/pod/PodHeader.vue";
 import PodUploadOverlay from "@/components/pod/PodUploadOverlay.vue";
-import PodMiniScreen from "@/components/pod/PodMiniScreen.vue";
 import PodSlots from "@/components/pod/PodSlots.vue";
 import PodAnchors from "@/components/pod/PodAnchors.vue";
 import PodActions from "@/components/pod/PodActions.vue";
@@ -48,7 +48,6 @@ const {
   viewportStore,
   selectionStore,
   repositoryStore,
-  commandStore,
   connectionStore,
   canvasStore,
 } = useCanvasContext();
@@ -77,9 +76,6 @@ const isActive = computed(() => props.pod.id === podStore.activePodId);
 const boundRepositoryNote = computed(
   () => repositoryStore.getNotesByPodId(props.pod.id)[0],
 );
-const boundCommandNote = computed(
-  () => commandStore.getNotesByPodId(props.pod.id)[0],
-);
 const isSourcePod = computed(() => connectionStore.isSourcePod(props.pod.id));
 const hasUpstreamConnection = computed(() =>
   connectionStore.hasUpstreamConnections(props.pod.id),
@@ -88,6 +84,8 @@ const showScheduleButton = computed(
   () => isSourcePod.value || !hasUpstreamConnection.value,
 );
 const currentModel = computed(() => props.pod.providerConfig.model);
+const hasGoal = computed(() => isPodReadyToExecute(props.pod));
+const goalTodoCount = computed(() => props.pod.goal?.todos.length ?? 0);
 
 // isElementSelected 內部使用 selectedElementSet（Set<string>），O(1) 查找
 const isSelected = computed(() =>
@@ -165,7 +163,6 @@ const { isDragging, startSingleDrag } = usePodDrag(
 
 const { handleNoteDrop, handleNoteRemove } = usePodNoteBinding(computedPodId, {
   repositoryStore,
-  commandStore,
   podStore,
 });
 
@@ -233,7 +230,7 @@ const podUploadStatus = computed(
 
 // 合併成單一 CSS selector 字串，closest() 一次查詢取代原本最差 4 次 DOM 遍歷
 const SLOT_CLASSES =
-  ".pod-plugin-slot, .pod-repository-slot, .pod-command-slot, .pod-mcp-server-slot, .pod-model-slot";
+  ".pod-plugin-slot, .pod-repository-slot, .pod-goal-slot, .pod-mcp-server-slot, .pod-model-slot";
 
 const shouldBlockForSlot = (target: HTMLElement): boolean => {
   return target.closest(SLOT_CLASSES) !== null;
@@ -283,6 +280,10 @@ const handleSelectPod = (): void => {
   emit("select", props.pod.id);
 };
 
+const handleGoalClick = (): void => {
+  podStore.openGoalEditor(props.pod.id);
+};
+
 /**
  * 判斷雙擊是否被封鎖，並回傳封鎖原因。
  * blocked=false 表示可繼續進入對話；blocked=true 表示應終止。
@@ -312,6 +313,14 @@ const isEditBlocked = (
 const handleDblClick = (e: MouseEvent): void => {
   const { blocked, reason } = isEditBlocked(e.target as Element | null);
   if (!blocked) {
+    if (!hasGoal.value) {
+      handleGoalClick();
+      toast({
+        title: t("pod.goal.title"),
+        description: t("pod.goal.requiredDescription"),
+      });
+      return;
+    }
     handleSelectPod();
     return;
   }
@@ -420,14 +429,14 @@ const handleContextMenu = (e: MouseEvent): void => {
         :current-model="currentModel"
         :current-thinking-level="pod.providerConfig.thinkingLevel"
         :bound-repository-note="boundRepositoryNote"
-        :bound-command-note="boundCommandNote"
+        :goal-status="pod.goalStatus"
+        :goal-todo-count="goalTodoCount"
         @plugin-clicked="handlePluginClick"
         @mcp-clicked="handleMcpClick"
         @thinking-clicked="handleThinkingClick"
+        @goal-clicked="handleGoalClick"
         @repository-dropped="(noteId) => handleNoteDrop('repository', noteId)"
         @repository-removed="() => handleNoteRemove('repository')"
-        @command-dropped="(noteId) => handleNoteDrop('command', noteId)"
-        @command-removed="() => handleNoteRemove('command')"
       />
 
       <div
@@ -452,7 +461,7 @@ const handleContextMenu = (e: MouseEvent): void => {
         <div class="mcp-notch" />
         <div class="mcp-server-notch" />
         <div class="repository-notch" />
-        <div class="command-notch" />
+        <div class="goal-notch" />
 
         <!-- 上傳中隱藏連線把手，避免誤建立連線；放行 Pod 拖移（標題列邏輯未動） -->
         <PodAnchors
@@ -475,6 +484,17 @@ const handleContextMenu = (e: MouseEvent): void => {
             @rename="handleRename"
           />
 
+          <div
+            v-if="!hasGoal"
+            class="goal-unset-badge"
+            data-testid="goal-unset-badge"
+          >
+            <span class="goal-unset-badge__dot" />
+            <span class="goal-unset-badge__text">
+              {{ $t("pod.goal.unsetBadge") }}
+            </span>
+          </div>
+
           <!-- 未知 Provider fallback badge：
                store 已載入後仍找不到此 provider，表示已下線或尚未支援。
                僅插入提示 badge，保留下方 output 歷史可見，不遮蓋整個 Pod。 -->
@@ -488,8 +508,6 @@ const handleContextMenu = (e: MouseEvent): void => {
               {{ $t("pod.provider.unknownDescription") }}
             </span>
           </div>
-
-          <PodMiniScreen :output="pod.output" />
 
           <!-- 上傳中 / 上傳失敗 overlay：
                absolute inset-0 蓋住聊天區（輸入區 + 訊息區），封鎖所有點擊。

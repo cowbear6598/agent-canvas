@@ -14,6 +14,17 @@ vi.mock("@/services/websocket", () => webSocketMockFactory());
 
 vi.mock("@/composables/useToast", () => mockToastFactory());
 
+function createExecutablePod(overrides = {}) {
+  return createMockPod({
+    goal: {
+      todos: [{ id: "goal-1", text: "Ship it" }],
+    },
+    goalStatus: "ready",
+    canExecute: true,
+    ...overrides,
+  });
+}
+
 describe("chatStore", () => {
   setupStoreTest(() => {
     resetChatActionsCache();
@@ -42,7 +53,7 @@ describe("chatStore", () => {
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
       const podStore = usePodStore();
-      const pod = createMockPod({ id: "pod-1", commandId: null });
+      const pod = createExecutablePod({ id: "pod-1" });
       podStore.pods = [pod];
       const store = useChatStore();
       store.connectionStatus = "connected";
@@ -58,11 +69,11 @@ describe("chatStore", () => {
       expect(store.isTypingByPodId.get("pod-1")).toBe(true);
     });
 
-    it("綁定 Command 時 message 不再加 /{commandName} 前綴", async () => {
+    it("送出純文字時 message 維持原樣", async () => {
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
       const podStore = usePodStore();
-      const pod = createMockPod({ id: "pod-1", commandId: "cmd-1" });
+      const pod = createExecutablePod({ id: "pod-1" });
       podStore.pods = [pod];
       const store = useChatStore();
       store.connectionStatus = "connected";
@@ -81,7 +92,7 @@ describe("chatStore", () => {
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
       const podStore = usePodStore();
-      const pod = createMockPod({ id: "pod-1", commandId: null });
+      const pod = createExecutablePod({ id: "pod-1" });
       podStore.pods = [pod];
       const store = useChatStore();
       store.connectionStatus = "connected";
@@ -101,11 +112,11 @@ describe("chatStore", () => {
       });
     });
 
-    it("contentBlocks 含 text 且綁定 Command 時，第一個 text block 不再加前綴", async () => {
+    it("contentBlocks 含 text 時，第一個 text block 維持原樣", async () => {
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
       const podStore = usePodStore();
-      const pod = createMockPod({ id: "pod-1", commandId: "cmd-1" });
+      const pod = createExecutablePod({ id: "pod-1" });
       podStore.pods = [pod];
       const store = useChatStore();
       store.connectionStatus = "connected";
@@ -126,7 +137,7 @@ describe("chatStore", () => {
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = null;
       const podStore = usePodStore();
-      const pod = createMockPod({ id: "pod-1", commandId: null });
+      const pod = createExecutablePod({ id: "pod-1" });
       podStore.pods = [pod];
       const store = useChatStore();
       store.connectionStatus = "connected";
@@ -169,14 +180,34 @@ describe("chatStore", () => {
       );
     });
 
-    it("Codex Pod 綁定 Command 時 message 為原始文字", async () => {
+    it("Pod 沒有 Goal 時應阻止送出", async () => {
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
       const podStore = usePodStore();
-      const pod = createMockPod({
+      podStore.pods = [
+        createMockPod({
+          id: "pod-1",
+          goal: null,
+          goalStatus: "unset",
+          canExecute: false,
+        }),
+      ];
+      const store = useChatStore();
+      store.connectionStatus = "connected";
+
+      await expect(store.sendMessage("pod-1", "Hello")).rejects.toThrow(
+        "請先設定 Goal 再執行這個 Pod",
+      );
+      expect(mockWebSocketClient.emit).not.toHaveBeenCalled();
+    });
+
+    it("Codex Pod message 為原始文字", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      const podStore = usePodStore();
+      const pod = createExecutablePod({
         id: "pod-1",
         provider: "codex",
-        commandId: "cmd-1",
         providerConfig: { model: "gpt-5.4" },
       });
       podStore.pods = [pod];
@@ -193,11 +224,11 @@ describe("chatStore", () => {
       });
     });
 
-    it('Pod 未綁 Command 但使用者輸入 "/foo 請幫我" 時 message 照原樣送出', async () => {
+    it('使用者輸入 "/foo 請幫我" 時 message 照原樣送出', async () => {
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
       const podStore = usePodStore();
-      const pod = createMockPod({ id: "pod-1", commandId: null });
+      const pod = createExecutablePod({ id: "pod-1" });
       podStore.pods = [pod];
       const store = useChatStore();
       store.connectionStatus = "connected";

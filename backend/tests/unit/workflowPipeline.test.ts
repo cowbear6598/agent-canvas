@@ -34,7 +34,6 @@ function makePod(overrides?: Partial<Pod>): Pod {
     sessionId: null,
     repositoryId: null,
     workspacePath: path.join(config.canvasRoot, CANVAS_ID, "pod-test"),
-    commandId: null,
     status: "idle" as const,
     x: 0,
     y: 0,
@@ -752,65 +751,9 @@ describe("WorkflowPipeline", () => {
   });
 
   // ----------------------------------------------------------------
-  // B7–B8：summaryProvider resolution 傳入 generateSummaryWithFallback
+  // B8：summaryProvider resolution 傳入 generateSummaryWithFallback
   // ----------------------------------------------------------------
-  describe("B7–B8 summaryProvider resolution", () => {
-    // B7: connection.summaryProvider=null + sourcePod.provider=gemini
-    //     → generateSummaryWithFallback 的 provider 參數為 "gemini"
-    it("B7: connection.summaryProvider=null、sourcePod.provider=gemini → provider 傳入 gemini", async () => {
-      const mockStrategy = makeStrategy("auto");
-
-      // sourcePod 為 gemini provider
-      const geminiSourcePod = makePod({
-        id: SOURCE_POD_ID,
-        provider: "gemini" as any,
-        providerConfig: { model: "gemini-2.5-flash" } as any,
-      });
-      const geminiConnection = makeConnection({
-        summaryProvider: null, // NULL：未指定，由 runtime fallback
-      });
-      const geminiContext: PipelineContext = {
-        canvasId: CANVAS_ID,
-        sourcePodId: SOURCE_POD_ID,
-        connection: geminiConnection,
-        triggerMode: "auto",
-        decideResult: {
-          connectionId: CONNECTION_ID,
-          approved: true,
-          reason: null,
-        },
-      };
-
-      // podStore.getById：source 回 gemini pod，target 回原本的 mockTargetPod
-      vi.spyOn(podStore, "getById").mockImplementation(
-        (_cId: string, podId: string) => {
-          if (podId === SOURCE_POD_ID) return geminiSourcePod as any;
-          return mockTargetPod as any;
-        },
-      );
-      vi.spyOn(connectionStore, "findByTargetPodId").mockReturnValue([
-        geminiConnection,
-      ]);
-
-      await workflowPipeline.execute(geminiContext, mockStrategy);
-
-      // 驗證 generateSummaryWithFallback 收到的 provider 參數為 "gemini"
-      expect(
-        mockExecutionService.generateSummaryWithFallback,
-      ).toHaveBeenCalledWith(
-        CANVAS_ID,
-        SOURCE_POD_ID,
-        TARGET_POD_ID,
-        "gemini", // summaryProvider=null → fallback 為 sourcePod.provider=gemini
-        geminiConnection.summaryModel,
-        undefined,
-        expect.any(String), // pathway
-        undefined,
-      );
-    });
-
-    // B8: connection.summaryProvider=codex + sourcePod.provider=claude
-    //     → generateSummaryWithFallback 的 provider 參數為 "codex"（cross-provider 解耦）
+  describe("B8 summaryProvider resolution", () => {
     it("B8: connection.summaryProvider=codex、sourcePod.provider=claude → provider 傳入 codex（cross-provider）", async () => {
       const mockStrategy = makeStrategy("auto");
 

@@ -368,7 +368,7 @@ describe("Connection 管理", () => {
   // WS handler smoke：summaryProvider 欄位通過完整 WS validation pipeline
   // -----------------------------------------------------------------------
   describe("summaryProvider WS handler smoke", () => {
-    it("A-smoke: connection:create 帶 summaryProvider=gemini → 成功建立並回傳 summaryProvider=gemini", async () => {
+    it("A-smoke: connection:create 帶 summaryProvider=claude → 成功建立並回傳 summaryProvider=claude", async () => {
       const client = getClient();
       const { podA, podB } = await createPodPair(client);
       const canvasId = await getCanvasId(client);
@@ -387,8 +387,8 @@ describe("Connection 管理", () => {
           sourceAnchor: "right",
           targetPodId: podB.id,
           targetAnchor: "left",
-          summaryProvider: "gemini",
-          label: "test-gemini",
+          summaryProvider: "claude",
+          label: "test-claude",
           branchProvider: "claude",
           branchModel: "sonnet",
         },
@@ -398,7 +398,7 @@ describe("Connection 管理", () => {
       expect(response.success).toBe(true);
       expect(response.connection).toBeDefined();
       // summaryProvider 欄位正確寫入並回傳
-      expect(response.connection!.summaryProvider).toBe("gemini");
+      expect(response.connection!.summaryProvider).toBe("claude");
     });
 
     it("A-smoke: connection:update 帶 summaryProvider=codex → 成功更新並回傳 summaryProvider=codex", async () => {

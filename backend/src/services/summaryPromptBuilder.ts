@@ -4,7 +4,7 @@ import { sanitizeForPrompt } from "../utils/promptSanitizer.js";
 interface SummaryPromptContext {
   sourcePodName: string;
   targetPodName: string;
-  targetPodCommand: string | null;
+  targetPodGoal: string | null;
   conversationHistory: string;
 }
 
@@ -26,7 +26,7 @@ ${SECURITY_NOTICE}`;
     const {
       sourcePodName,
       targetPodName,
-      targetPodCommand,
+      targetPodGoal,
       conversationHistory,
     } = context;
 
@@ -36,12 +36,12 @@ ${SECURITY_NOTICE}`;
       `以下是來自「<user_data>${sanitizeForPrompt(sourcePodName)}</user_data>」的完整對話記錄：\n\n---\n<user_data>\n${sanitizeForPrompt(conversationHistory)}\n</user_data>\n---`,
     );
 
-    if (targetPodCommand && targetPodCommand.trim()) {
+    if (targetPodGoal && targetPodGoal.trim()) {
       parts.push(
-        `下一個處理者「<user_data>${sanitizeForPrompt(targetPodName)}</user_data>」的指令內容如下：\n\n---\n<user_data>\n${sanitizeForPrompt(targetPodCommand)}\n</user_data>\n---`,
+        `下一個處理者「<user_data>${sanitizeForPrompt(targetPodName)}</user_data>」的 Goal 內容如下：\n\n---\n<user_data>\n${sanitizeForPrompt(targetPodGoal)}\n</user_data>\n---`,
       );
       parts.push(
-        "請根據此指令內容，從對話記錄中擷取相關資訊並進行精簡摘要。\n只輸出摘要內容，不要加上任何解釋或前綴。",
+        "請根據此 Goal 內容，從對話記錄中擷取下一個處理者真正需要的資訊，整理成精簡摘要。\n只輸出摘要內容，不要加上任何解釋或前綴。",
       );
     } else {
       parts.push(

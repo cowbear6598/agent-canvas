@@ -40,7 +40,6 @@ vi.mock("../../src/services/podStore.js", () => ({
       provider: "claude",
       providerConfig: { model: "opus" },
       repositoryId: null,
-      commandId: null,
       integrationBindings: [], // 無 integration binding，validateIntegrationBindings 直接通過
     })),
   },
@@ -257,7 +256,7 @@ describe("F3：連續兩次 handleChatSend → launchRun 被呼叫兩次（無 b
     });
   });
 
-  it("F3-3：兩次 launchRun 均帶 commandNotFoundBehavior: skip（chat send 路徑）", async () => {
+  it("F3-3：兩次 launchRun 均不再帶 commandNotFoundBehavior，僅保留執行必要欄位", async () => {
     await handleChatSend(
       CONNECTION_ID,
       {
@@ -281,7 +280,9 @@ describe("F3：連續兩次 handleChatSend → launchRun 被呼叫兩次（無 b
     );
 
     const calls = asMock(runChatHelpersModule.launchRun).mock.calls;
-    expect(calls[0][0]).toMatchObject({ commandNotFoundBehavior: "skip" });
-    expect(calls[1][0]).toMatchObject({ commandNotFoundBehavior: "skip" });
+    expect(calls[0][0]).not.toHaveProperty("commandNotFoundBehavior");
+    expect(calls[1][0]).not.toHaveProperty("commandNotFoundBehavior");
+    expect(calls[0][0]).toMatchObject({ abortable: true });
+    expect(calls[1][0]).toMatchObject({ abortable: true });
   });
 });

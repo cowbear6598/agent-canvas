@@ -1,7 +1,6 @@
 import type { AgentProvider } from "./types.js";
 import { claudeProvider } from "./claudeProvider.js";
 import { codexProvider } from "./codexProvider.js";
-import { geminiProvider } from "./geminiProvider.js";
 import { opencodeProvider } from "./opencodeProvider.js";
 
 // ─── Registry ─────────────────────────────────────────────────────────────────
@@ -16,7 +15,6 @@ import { opencodeProvider } from "./opencodeProvider.js";
 export const providerRegistry = {
   claude: claudeProvider,
   codex: codexProvider,
-  gemini: geminiProvider,
   opencode: opencodeProvider,
 } as const;
 
@@ -82,7 +80,6 @@ export type {
 export {
   CLAUDE_CAPABILITIES,
   CODEX_CAPABILITIES,
-  GEMINI_CAPABILITIES,
   /** Opencode Provider 能力常數，供上層服務判斷功能支援狀況 */
   OPENCODE_CAPABILITIES,
 } from "./capabilities.js";

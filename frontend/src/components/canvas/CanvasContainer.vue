@@ -4,7 +4,6 @@ import { useCanvasContext } from "@/composables/canvas/useCanvasContext";
 import { useDeleteSelection } from "@/composables/canvas";
 import { useRemoteCursors } from "@/composables/canvas/useRemoteCursors";
 import { useCursorTracker } from "@/composables/canvas/useCursorTracker";
-import { useEditModal } from "@/composables/canvas/useEditModal";
 import { useDeleteResource } from "@/composables/canvas/useDeleteResource";
 import { useCanvasProgressTasks } from "@/composables/canvas/useCanvasProgressTasks";
 import { useCanvasContextMenus } from "@/composables/canvas/useCanvasContextMenus";
@@ -26,7 +25,6 @@ import PodContextMenu from "./PodContextMenu.vue";
 import CreateRepositoryModal from "./CreateRepositoryModal.vue";
 import CloneRepositoryModal from "./CloneRepositoryModal.vue";
 import ConfirmDeleteModal from "./ConfirmDeleteModal.vue";
-import CreateEditModal from "./CreateEditModal.vue";
 import BranchEditModal from "./BranchEditModal.vue";
 import IntegrationConnectModal from "@/components/integration/IntegrationConnectModal.vue";
 import type { Pod, PodTypeConfig, Position } from "@/types";
@@ -46,7 +44,6 @@ const {
   viewportStore,
   selectionStore,
   repositoryStore,
-  commandStore,
   connectionStore,
 } = useCanvasContext();
 
@@ -74,23 +71,13 @@ const integrationConnectModal = ref<{
 });
 
 const {
-  editModal,
-  handleOpenCreateModal,
-  handleOpenCreateGroupModal,
-  handleOpenEditModal,
-  handleCreateEditSubmit,
-} = useEditModal({ commandStore, viewportStore }, lastMenuPosition);
-
-const {
   showDeleteModal,
   deleteTarget,
   isDeleteTargetInUse,
   handleOpenDeleteModal,
-  handleOpenDeleteGroupModal,
   handleConfirmDelete: handleDeleteConfirm,
 } = useDeleteResource({
   repositoryStore,
-  commandStore,
 });
 
 const { allProgressTasks, handleCloneStarted, handlePullStarted } =
@@ -114,16 +101,12 @@ const {
   isTrashHighlighted,
   isCanvasEmpty,
   handleCreateRepositoryNote,
-  handleCreateCommandNote,
   getRepositoryBranchName,
-  handleNoteDoubleClick,
 } = useCanvasNoteHandlers({
   podStore,
   viewportStore,
   repositoryStore,
-  commandStore,
   trashZoneRef,
-  handleOpenEditModal,
 });
 
 /**
@@ -192,7 +175,6 @@ const handleCanvasClick = (e: MouseEvent): void => {
     ".connection-line",
     ".pod-doodle",
     ".repository-note",
-    ".command-note",
   ];
   if (ignoredSelectors.some((selector) => target.closest(selector))) {
     return;
@@ -224,7 +206,6 @@ const handleSelectType = async (
     name: podStore.getNextPodName(),
     x: canvasX - POD_MENU_X_OFFSET,
     y: canvasY - POD_MENU_Y_OFFSET,
-    output: [],
     rotation: Math.round(rotation * 10) / 10,
     provider,
     providerConfig,
@@ -277,6 +258,10 @@ const handleDisconnectIntegration = async (
   await useIntegrationStore().unbindFromPod(provider, podId);
 };
 
+const handleOpenGoalEditor = (podId: string): void => {
+  podStore.openGoalEditor(podId);
+};
+
 const handleOpenCreateRepositoryModal = (): void => {
   lastMenuPosition.value = podStore.typeMenu.position;
   showCreateRepositoryModal.value = true;
@@ -300,27 +285,10 @@ const handleRepositoryCreated = (repository: {
   repositoryStore.createNote(repository.id, x, y);
 };
 
-const withMenuPosition = <T extends (...args: never[]) => unknown>(
-  fn: T,
-): T => {
-  return ((...args: Parameters<T>) => {
-    lastMenuPosition.value = podStore.typeMenu.position;
-    return fn(...args);
-  }) as T;
-};
-
-const wrappedHandleOpenCreateModal = withMenuPosition(handleOpenCreateModal);
-const wrappedHandleOpenCreateGroupModal = withMenuPosition(
-  handleOpenCreateGroupModal,
-);
-const wrappedHandleOpenEditModal = withMenuPosition(handleOpenEditModal);
-
 /** 處理 PodTypeMenu 的統一 create-note 事件，依 type 分派至對應的 note 建立函式 */
 const handleCreateNote = (payload: { type: string; id: string }): void => {
   if (payload.type === "repository") {
     handleCreateRepositoryNote(payload.id);
-  } else if (payload.type === "command") {
-    handleCreateCommandNote(payload.id);
   }
 };
 
@@ -434,23 +402,11 @@ const handleBranchModelChanged = (): void => {
       v-for="note in repositoryStore.getUnboundNotes"
       :key="note.id"
       :note="note"
-      note-type="repository"
       :branch-name="getRepositoryBranchName(note.repositoryId as string)"
       @drag-end="noteHandlerMap.repository.handleDragEnd"
       @drag-move="noteHandlerMap.repository.handleDragMove"
       @drag-complete="noteHandlerMap.repository.handleDragComplete"
       @contextmenu="handleRepositoryContextMenu"
-    />
-
-    <GenericNote
-      v-for="note in commandStore.getUnboundNotes"
-      :key="note.id"
-      :note="note"
-      note-type="command"
-      @drag-end="noteHandlerMap.command.handleDragEnd"
-      @drag-move="noteHandlerMap.command.handleDragMove"
-      @drag-complete="noteHandlerMap.command.handleDragComplete"
-      @dblclick="handleNoteDoubleClick"
     />
 
     <EmptyState v-if="isCanvasEmpty" />
@@ -467,11 +423,7 @@ const handleBranchModelChanged = (): void => {
     @create-note="handleCreateNote"
     @open-modal="handleOpenModal"
     @clone-started="handleCloneStarted"
-    @open-create-modal="wrappedHandleOpenCreateModal"
-    @open-create-group-modal="wrappedHandleOpenCreateGroupModal"
-    @open-edit-modal="wrappedHandleOpenEditModal"
     @open-delete-modal="handleOpenDeleteModal"
-    @open-delete-group-modal="handleOpenDeleteGroupModal"
     @close="podStore.hideTypeMenu"
   />
 
@@ -486,6 +438,7 @@ const handleBranchModelChanged = (): void => {
     :position="podContextMenu.position"
     :pod-id="podContextMenu.data.podId"
     @close="closePodContextMenu"
+    @open-goal-editor="handleOpenGoalEditor"
     @connect-integration="handleConnectIntegration"
     @disconnect-integration="handleDisconnectIntegration"
   />
@@ -544,18 +497,6 @@ const handleBranchModelChanged = (): void => {
     :item-type="deleteTarget?.type ?? 'repository'"
     @confirm="handleDeleteConfirm"
   />
-
-  <CreateEditModal
-    v-model:open="editModal.visible"
-    :mode="editModal.mode"
-    :title="editModal.title"
-    :initial-name="editModal.initialName"
-    :initial-content="editModal.initialContent"
-    :name-editable="editModal.mode === 'create'"
-    :show-content="editModal.showContent"
-    @submit="handleCreateEditSubmit"
-  />
-
   <IntegrationConnectModal
     v-model:open="integrationConnectModal.visible"
     :pod-id="integrationConnectModal.podId"

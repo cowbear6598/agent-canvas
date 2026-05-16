@@ -1,3 +1,4 @@
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { PersistedMessage } from "../../src/types";
 
 let summaryPromptBuilder: any;
@@ -27,11 +28,11 @@ describe("SummaryPromptBuilder", () => {
   const conversationHistory = "[User]: Hello\n\n[Assistant]: Hi there!";
 
   describe("buildUserPrompt 優先權規則", () => {
-    it("有 targetPodCommand 時，使用 Command 內容篩選", () => {
+    it("有 targetPodGoal 時，使用 Goal 內容聚焦摘要", () => {
       const context = {
         sourcePodName: "Source Pod",
         targetPodName: "Target Pod",
-        targetPodCommand: "Review the code for bugs.",
+        targetPodGoal: "1. Review the code for bugs.",
         conversationHistory,
       };
 
@@ -40,14 +41,14 @@ describe("SummaryPromptBuilder", () => {
       expect(result).toContain("Source Pod");
       expect(result).toContain("Target Pod");
       expect(result).toContain("Review the code for bugs.");
-      expect(result).toContain("指令內容");
+      expect(result).toContain("Goal 內容");
     });
 
-    it("沒有 targetPodCommand 時，使用預設完整摘要", () => {
+    it("沒有 targetPodGoal 時，使用預設完整摘要", () => {
       const context = {
         sourcePodName: "Source Pod",
         targetPodName: "Target Pod",
-        targetPodCommand: null,
+        targetPodGoal: null,
         conversationHistory,
       };
 
@@ -58,11 +59,11 @@ describe("SummaryPromptBuilder", () => {
       expect(result).not.toContain("指令內容");
     });
 
-    it("targetPodCommand 為空字串時，視為沒有 Command，走預設完整摘要", () => {
+    it("targetPodGoal 為空字串時，視為沒有 Goal，走預設完整摘要", () => {
       const context = {
         sourcePodName: "Source Pod",
         targetPodName: "Target Pod",
-        targetPodCommand: "   ",
+        targetPodGoal: "   ",
         conversationHistory,
       };
 

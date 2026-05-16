@@ -221,6 +221,32 @@
       "loadFailedDescription": "無法取得 provider capabilities，部分功能可能不正常",
       "loadingHint": "Provider 載入中，請稍候"
     },
+    "goal": {
+      "title": "Goal",
+      "unsetBadge": "尚未設定 Goal",
+      "requiredDescription": "請先設定 Goal 再執行這個 Pod",
+      "saveFailed": "Goal 儲存失敗",
+      "saveSuccess": "Goal 已儲存",
+      "clearSuccess": "Goal 已清空",
+      "slot": {
+        "ready": "Goal",
+        "unset": "設定 Goal"
+      },
+      "editor": {
+        "title": "編輯 {name} 的 Goal",
+        "description": "把這個 Pod 這次要完成的待辦拆成可排序的清單。",
+        "todoPlaceholder": "待辦 {index}",
+        "addTodo": "新增待辦",
+        "clearGoal": "清空 Goal",
+        "moveUp": "上移",
+        "moveDown": "下移",
+        "removeTodo": "刪除待辦",
+        "validation": {
+          "required": "至少要有一條 Goal 待辦",
+          "noEmptyRows": "請填完空白待辦，或把它刪掉"
+        }
+      }
+    },
     "delete": {
       "title": "刪除 Pod",
       "description": "確定要刪除「{name}」嗎？此操作無法復原。",
@@ -248,6 +274,7 @@
     "slot": {
       "duplicateTitle": "已存在，無法插入",
       "providerDisabled": "此 Provider 不支援此功能",
+      "repositoryLabel": "Repo",
       "thinkingLabel": "Thinking",
       "thinkingDisabledTooltip": "目前 model 不支援 thinking 層級",
       "pluginsLabel": "Plugins",
@@ -259,12 +286,14 @@
       "mcpLabel": "MCPs",
       "mcpLoading": "載入中…",
       "mcpEmpty": "尚未安裝 MCP server",
+      "mcpUserEmpty": "尚未安裝使用者 MCP server",
       "mcpClaudeEmptyHint": "請使用 `claude mcp add` 安裝",
       "mcpCodexEmptyHint": "請使用 `codex mcp add` 安裝",
-      "mcpGeminiEmptyHint": "請在 `~/.gemini/settings.json` 的 `mcpServers` 區塊新增設定後重新開啟。",
       "mcpToggleFailed": "切換 MCP server 失敗",
       "mcpLoadFailed": "載入失敗",
       "mcpCodexHint": "Codex MCP server 由 codex 全域管理",
+      "goalMcpLabel": "Goal Runtime",
+      "builtinBadge": "內建",
       "searchPlaceholder": "搜尋…",
       "pluginsSearchEmpty": "找不到符合的 plugin",
       "mcpSearchEmpty": "找不到符合的 MCP server"
@@ -286,7 +315,7 @@
     },
     "loadingHistory": "正在載入對話歷史...",
     "inputPlaceholder": "輸入訊息...",
-    "launchHint": "輸入指令後送出，將啟動一次新的 Run",
+    "launchHint": "輸入訊息後送出，將啟動一次新的 Run",
     "summarizedBadge": "摘要",
     "workflowBlockedHint": "此 Pod 在 Workflow 中，僅頭尾 Pod 可輸入",
     "integrationBlockedHint": "此 Pod 已連接 {label}，訊息由 {label} 驅動",
@@ -437,6 +466,8 @@
       "pullLatest": "Pull 至最新版本"
     },
     "podContextMenu": {
+      "setGoal": "設定 Goal",
+      "editGoal": "編輯 Goal",
       "downloadDirectory": "下載工作目錄（zip）",
       "connect": "連接 {label}",
       "disconnect": "斷開 {label}",
@@ -475,8 +506,7 @@
       "branchProviderChangedDesc": "Provider：{provider}，Model：{model}",
       "providerLabel": {
         "claude": "Claude",
-        "codex": "Codex",
-        "gemini": "Gemini"
+        "codex": "Codex"
       }
     },
     "confirmDelete": {
@@ -533,10 +563,7 @@
       "aiRejectedReason": "不觸發原因：{reason}",
       "aiErrorReason": "錯誤：{reason}"
     },
-    "podTypeMenu": {
-      "newCommand": "新增 Command",
-      "newCommandGroup": "新增 Command 群組"
-    }
+    "podTypeMenu": {}
   },
   "store": {
     "canvas": {
@@ -656,8 +683,7 @@
       "canvasCreated": "Canvas 建立成功",
       "canvasRenamed": "Canvas 重命名成功",
       "pasted": "貼上成功",
-      "repositoryDeleted": "Repository 已刪除",
-      "commandDeleted": "Command 已刪除"
+      "repositoryDeleted": "Repository 已刪除"
     },
     "deleteSelection": {
       "partialFailed": "刪除部分失敗",

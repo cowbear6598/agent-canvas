@@ -1,10 +1,9 @@
 import { WebSocketResponseEvents } from "@/services/websocket";
 import { useRepositoryStore } from "@/stores/note/repositoryStore";
-import { useCommandStore } from "@/stores/note/commandStore";
-import type { RepositoryNote, CommandNote } from "@/types";
+import type { RepositoryNote } from "@/types";
 import { createUnifiedHandler } from "./sharedHandlerUtils";
-import { t } from "@/i18n";
 import type { BasePayload } from "./sharedHandlerUtils";
+import { t } from "@/i18n";
 
 interface NoteHandlerConfig<TNote> {
   getStore: () => {
@@ -49,9 +48,6 @@ function createNoteHandlers<TNote>(config: NoteHandlerConfig<TNote>): {
 const repositoryNoteHandlers = createNoteHandlers<RepositoryNote>({
   getStore: useRepositoryStore,
 });
-const commandNoteHandlers = createNoteHandlers<CommandNote>({
-  getStore: useCommandStore,
-});
 
 const handleRepositoryDeleted = createUnifiedHandler<
   BasePayload & {
@@ -84,22 +80,6 @@ const handleRepositoryBranchChanged = createUnifiedHandler<
   { skipCanvasCheck: true },
 );
 
-const handleCommandDeleted = createUnifiedHandler<
-  BasePayload & {
-    commandId: string;
-    deletedNoteIds?: string[];
-    canvasId: string;
-  }
->(
-  (payload) => {
-    useCommandStore().removeItemFromEvent(
-      payload.commandId,
-      payload.deletedNoteIds,
-    );
-  },
-  { toastMessage: () => t("composable.eventHandler.commandDeleted") },
-);
-
 export function getNoteEventListeners(): Array<{
   event: string;
   handler: (payload: unknown) => void;
@@ -124,22 +104,6 @@ export function getNoteEventListeners(): Array<{
     {
       event: WebSocketResponseEvents.REPOSITORY_NOTE_DELETED,
       handler: repositoryNoteHandlers.deleted as (payload: unknown) => void,
-    },
-    {
-      event: WebSocketResponseEvents.COMMAND_DELETED,
-      handler: handleCommandDeleted as (payload: unknown) => void,
-    },
-    {
-      event: WebSocketResponseEvents.COMMAND_NOTE_CREATED,
-      handler: commandNoteHandlers.created as (payload: unknown) => void,
-    },
-    {
-      event: WebSocketResponseEvents.COMMAND_NOTE_UPDATED,
-      handler: commandNoteHandlers.updated as (payload: unknown) => void,
-    },
-    {
-      event: WebSocketResponseEvents.COMMAND_NOTE_DELETED,
-      handler: commandNoteHandlers.deleted as (payload: unknown) => void,
     },
   ];
 }

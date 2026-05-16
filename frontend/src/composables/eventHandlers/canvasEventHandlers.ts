@@ -2,15 +2,8 @@ import { WebSocketResponseEvents } from "@/services/websocket";
 import { usePodStore } from "@/stores/pod/podStore";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useRepositoryStore } from "@/stores/note/repositoryStore";
-import { useCommandStore } from "@/stores/note/commandStore";
 import { useCanvasStore } from "@/stores/canvasStore";
-import type {
-  Pod,
-  RepositoryNote,
-  CommandNote,
-  Canvas,
-  Connection,
-} from "@/types";
+import type { Pod, RepositoryNote, Canvas, Connection } from "@/types";
 import { createUnifiedHandler } from "./sharedHandlerUtils";
 import type { BasePayload } from "./sharedHandlerUtils";
 import { t } from "@/i18n";
@@ -88,7 +81,6 @@ const handleCanvasPasted = createUnifiedHandler<
     canvasId: string;
     createdPods?: Pod[];
     createdRepositoryNotes?: RepositoryNote[];
-    createdCommandNotes?: CommandNote[];
     createdConnections?: RawConnectionFromEvent[];
   }
 >(
@@ -96,16 +88,12 @@ const handleCanvasPasted = createUnifiedHandler<
     const podStore = usePodStore();
     const connectionStore = useConnectionStore();
     const repositoryStore = useRepositoryStore();
-    const commandStore = useCommandStore();
 
     addCreatedItems(payload.createdPods, (pod) =>
       podStore.addPodFromEvent(pod),
     );
     addCreatedItems(payload.createdRepositoryNotes, (note) =>
       repositoryStore.addNoteFromEvent(note),
-    );
-    addCreatedItems(payload.createdCommandNotes, (note) =>
-      commandStore.addNoteFromEvent(note),
     );
     addCreatedItems(payload.createdConnections, (connection) =>
       connectionStore.addConnectionFromEvent(connection),

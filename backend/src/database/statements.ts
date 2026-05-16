@@ -29,12 +29,9 @@ function buildStatements(db: Database): {
     update: ReturnType<Database["prepare"]>;
     updateSessionId: ReturnType<Database["prepare"]>;
     updateRepositoryId: ReturnType<Database["prepare"]>;
-    updateCommandId: ReturnType<Database["prepare"]>;
     updateScheduleJson: ReturnType<Database["prepare"]>;
     selectWithSchedule: ReturnType<Database["prepare"]>;
     selectByRepositoryId: ReturnType<Database["prepare"]>;
-    selectByCommandId: ReturnType<Database["prepare"]>;
-    selectByCommandIdAndCanvas: ReturnType<Database["prepare"]>;
     selectByRepositoryIdAndCanvas: ReturnType<Database["prepare"]>;
     selectScheduleInfo: ReturnType<Database["prepare"]>;
     selectScheduleJsonByCanvasAndId: ReturnType<Database["prepare"]>;
@@ -193,12 +190,12 @@ function buildStatements(db: Database): {
       insert: db.prepare(
         `INSERT INTO pods (
           id, canvas_id, name, x, y, rotation, workspace_path,
-          session_id, repository_id, command_id,
-          schedule_json, provider, provider_config_json
+          session_id, repository_id, goal_json, schedule_json,
+          provider, provider_config_json
         ) VALUES (
           $id, $canvasId, $name, $x, $y, $rotation, $workspacePath,
-          $sessionId, $repositoryId, $commandId,
-          $scheduleJson, $provider, $providerConfigJson
+          $sessionId, $repositoryId, $goalJson, $scheduleJson,
+          $provider, $providerConfigJson
         )`,
       ),
       selectByCanvasId: db.prepare("SELECT * FROM pods WHERE canvas_id = ?"),
@@ -216,8 +213,8 @@ function buildStatements(db: Database): {
         `UPDATE pods SET
           name = $name, x = $x, y = $y, rotation = $rotation,
           session_id = $sessionId, repository_id = $repositoryId,
-          command_id = $commandId,
-          schedule_json = $scheduleJson, provider = $provider,
+          goal_json = $goalJson, schedule_json = $scheduleJson,
+          provider = $provider,
           provider_config_json = $providerConfigJson
         WHERE id = $id`,
       ),
@@ -227,9 +224,6 @@ function buildStatements(db: Database): {
       updateRepositoryId: db.prepare(
         "UPDATE pods SET repository_id = $repositoryId WHERE id = $id",
       ),
-      updateCommandId: db.prepare(
-        "UPDATE pods SET command_id = $commandId WHERE id = $id",
-      ),
       updateScheduleJson: db.prepare(
         "UPDATE pods SET schedule_json = $scheduleJson WHERE id = $id",
       ),
@@ -238,10 +232,6 @@ function buildStatements(db: Database): {
       ),
       selectByRepositoryId: db.prepare(
         "SELECT * FROM pods WHERE repository_id = ?",
-      ),
-      selectByCommandId: db.prepare("SELECT * FROM pods WHERE command_id = ?"),
-      selectByCommandIdAndCanvas: db.prepare(
-        "SELECT * FROM pods WHERE command_id = ? AND canvas_id = ?",
       ),
       selectByRepositoryIdAndCanvas: db.prepare(
         "SELECT * FROM pods WHERE repository_id = ? AND canvas_id = ?",

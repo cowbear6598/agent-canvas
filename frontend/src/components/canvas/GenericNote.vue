@@ -5,11 +5,8 @@ import { useCanvasContext } from "@/composables/canvas/useCanvasContext";
 import { useBatchDrag } from "@/composables/canvas";
 import { isCtrlOrCmdPressed } from "@/utils/keyboardHelpers";
 
-type NoteType = "repository" | "command";
-
 interface Props {
   note: BaseNote;
-  noteType: NoteType;
   branchName?: string;
 }
 
@@ -27,42 +24,26 @@ const emit = defineEmits<{
     },
   ];
   contextmenu: [data: { noteId: string; event: MouseEvent }];
-  dblclick: [data: { noteId: string; noteType: NoteType }];
 }>();
 
 const {
   viewportStore,
   selectionStore,
   repositoryStore,
-  commandStore,
   connectionStore,
 } = useCanvasContext();
 const { startBatchDrag, isElementSelected } = useBatchDrag();
 
-const NOTE_TYPE_CONFIG = {
-  repository: {
-    store: repositoryStore,
-    selectionType: "repositoryNote" as const,
-    cssClass: "repository-note",
-  },
-  command: {
-    store: commandStore,
-    selectionType: "commandNote" as const,
-    cssClass: "command-note",
-  },
-} as const;
-
-const noteStore = computed(() => NOTE_TYPE_CONFIG[props.noteType].store);
+const noteStore = computed(() => repositoryStore);
 
 const isDragging = ref(false);
 const isAnimating = computed(() =>
   noteStore.value.isNoteAnimating(props.note.id),
 );
 
-const isSelected = computed(() => {
-  const selectionType = NOTE_TYPE_CONFIG[props.noteType].selectionType;
-  return selectionStore.isElementSelected(selectionType, props.note.id);
-});
+const isSelected = computed(() =>
+  selectionStore.isElementSelected("repositoryNote", props.note.id),
+);
 
 const dragRef = ref<{
   startX: number;
@@ -132,23 +113,20 @@ const onMouseUp = (): void => {
 };
 
 const handleCtrlClick = (): void => {
-  const selectionType = NOTE_TYPE_CONFIG[props.noteType].selectionType;
-  selectionStore.toggleElement({ type: selectionType, id: props.note.id });
+  selectionStore.toggleElement({ type: "repositoryNote", id: props.note.id });
 };
 
 const tryStartBatchDragOrSelect = (e: MouseEvent): boolean => {
-  const selectionType = NOTE_TYPE_CONFIG[props.noteType].selectionType;
-
   if (
-    isElementSelected(selectionType, props.note.id) &&
+    isElementSelected("repositoryNote", props.note.id) &&
     selectionStore.selectedElements.length > 1
   ) {
     return startBatchDrag(e);
   }
 
-  if (!isElementSelected(selectionType, props.note.id)) {
+  if (!isElementSelected("repositoryNote", props.note.id)) {
     selectionStore.setSelectedElements([
-      { type: selectionType, id: props.note.id },
+      { type: "repositoryNote", id: props.note.id },
     ]);
   }
 
@@ -194,10 +172,7 @@ const handleMouseDown = (e: MouseEvent): void => {
   startSingleDrag(e);
 };
 
-const cssClass = computed(() => [
-  "note-base",
-  NOTE_TYPE_CONFIG[props.noteType].cssClass,
-]);
+const cssClass = computed(() => ["note-base", "repository-note"]);
 
 const handleContextMenu = (e: MouseEvent): void => {
   e.preventDefault();
@@ -205,23 +180,11 @@ const handleContextMenu = (e: MouseEvent): void => {
 };
 
 const displayName = computed(() => {
-  if (props.noteType === "repository" && props.branchName) {
+  if (props.branchName) {
     return `${props.note.name} (${props.branchName})`;
   }
   return props.note.name;
 });
-
-/**
- * 處理雙擊事件
- * command 類型可編輯
- */
-const handleDoubleClick = (): void => {
-  const editableTypes: NoteType[] = ["command"];
-
-  if (editableTypes.includes(props.noteType)) {
-    emit("dblclick", { noteId: props.note.id, noteType: props.noteType });
-  }
-};
 </script>
 
 <template>
@@ -236,7 +199,6 @@ const handleDoubleClick = (): void => {
     }"
     @mousedown="handleMouseDown"
     @contextmenu="handleContextMenu"
-    @dblclick="handleDoubleClick"
   >
     <div class="note-text-base">
       {{ displayName }}

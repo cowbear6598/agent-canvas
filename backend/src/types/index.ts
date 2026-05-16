@@ -1,8 +1,19 @@
 export type { Result } from "./result.js";
 export { ok, err, errI18n, getResultErrorString } from "./result.js";
 
-export type { Pod, PodPublicView, ModelType } from "./pod.js";
-export { toPodPublicView } from "./pod.js";
+export type {
+  Pod,
+  PodPublicView,
+  ModelType,
+  GoalTodoItem,
+  PodGoal,
+  PodGoalStatus,
+} from "./pod.js";
+export {
+  toPodPublicView,
+  normalizePodGoal,
+  derivePodGoalStatus,
+} from "./pod.js";
 
 export type {
   Message,
@@ -15,16 +26,9 @@ export type {
   ImageContentBlock,
 } from "./message.js";
 
-export type { Command } from "./command.js";
-
-export type { CommandNote } from "./commandNote.js";
-
 export type { Repository } from "./repository.js";
 
 export type { RepositoryNote } from "./repositoryNote.js";
-
-export type { Group, GroupType } from "./group.js";
-export { GROUP_TYPES } from "./group.js";
 
 export type {
   Connection,

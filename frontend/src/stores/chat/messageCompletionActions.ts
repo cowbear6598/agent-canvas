@@ -1,122 +1,108 @@
-import type {Message, SubMessage} from '@/types/chat'
-import type {PodChatAbortedPayload, PodChatCompletePayload} from '@/types/websocket'
-import {RESPONSE_PREVIEW_LENGTH, OUTPUT_LINES_PREVIEW_COUNT} from '@/lib/constants'
-import {truncateContent} from './chatUtils'
-import type {ChatStoreInstance} from './chatStore'
-import {finalizeSubMessages, finalizeToolUse, updateMainMessageState} from './subMessageHelpers'
-import {getMessages, findMessageIndex} from './chatStoreHelpers'
-import {usePodStore} from '../pod/podStore'
-
-function extractSubMessageLines(subMessages: SubMessage[] | undefined): string[] {
-    if (!subMessages || subMessages.length === 0) return []
-    return subMessages
-        .filter(sub => sub.content)
-        .map(sub => truncateContent(sub.content, RESPONSE_PREVIEW_LENGTH))
-}
+import type { Message } from "@/types/chat";
+import type {
+  PodChatAbortedPayload,
+  PodChatCompletePayload,
+} from "@/types/websocket";
+import type { ChatStoreInstance } from "./chatStore";
+import {
+  finalizeSubMessages,
+  finalizeToolUse,
+  updateMainMessageState,
+} from "./subMessageHelpers";
+import { getMessages, findMessageIndex } from "./chatStoreHelpers";
 
 export function createMessageCompletionActions(
-    store: ChatStoreInstance,
-    setTyping: (podId: string, isTyping: boolean) => void
+  store: ChatStoreInstance,
+  setTyping: (podId: string, isTyping: boolean) => void,
 ): {
-    handleChatComplete: (payload: PodChatCompletePayload) => void
-    handleChatAborted: (payload: PodChatAbortedPayload) => void
-    finalizeStreaming: (podId: string, messageId: string) => void
-    completeMessage: (podId: string, messages: Message[], messageIndex: number, fullContent: string, messageId: string) => void
-    updatePodOutput: (podId: string) => void
+  handleChatComplete: (payload: PodChatCompletePayload) => void;
+  handleChatAborted: (payload: PodChatAbortedPayload) => void;
+  finalizeStreaming: (podId: string, messageId: string) => void;
+  completeMessage: (
+    podId: string,
+    messages: Message[],
+    messageIndex: number,
+    fullContent: string,
+    messageId: string,
+  ) => void;
 } {
-    const updatePodOutput = (podId: string): void => {
-        const podStore = usePodStore()
-        const pod = podStore.pods.find(pod => pod.id === podId)
+  const finalizeStreaming = (podId: string, messageId: string): void => {
+    setTyping(podId, false);
 
-        if (!pod) return
+    if (store.currentStreamingMessageId === messageId) {
+      store.currentStreamingMessageId = null;
+    }
+  };
 
-        const messages = getMessages(store, podId)
-        const recentMessages = messages.slice(-OUTPUT_LINES_PREVIEW_COUNT * 2)
-        const outputLines: string[] = []
+  const completeMessage = (
+    podId: string,
+    messages: Message[],
+    messageIndex: number,
+    fullContent: string,
+    messageId: string,
+  ): void => {
+    const updatedMessages = [...messages];
+    const existingMessage = updatedMessages[messageIndex];
 
-        for (const message of recentMessages) {
-            if (message.role === 'user') {
-                const userContent = message.content
-                outputLines.push(`> ${truncateContent(userContent, RESPONSE_PREVIEW_LENGTH)}`)
-            } else if (message.role === 'assistant') {
-                outputLines.push(...extractSubMessageLines(message.subMessages))
-            }
-        }
+    if (!existingMessage) return;
 
-        podStore.updatePod({
-            ...pod,
-            output: outputLines.slice(-OUTPUT_LINES_PREVIEW_COUNT)
-        })
+    const updatedToolUse = finalizeToolUse(existingMessage.toolUse);
+    const finalizedSubMessages = finalizeSubMessages(
+      existingMessage.subMessages,
+    );
+
+    updatedMessages[messageIndex] = updateMainMessageState(
+      existingMessage,
+      fullContent,
+      updatedToolUse,
+      finalizedSubMessages,
+    );
+
+    store.messagesByPodId.set(podId, updatedMessages);
+
+    finalizeStreaming(podId, messageId);
+  };
+
+  const handleChatComplete = (payload: PodChatCompletePayload): void => {
+    const { podId, messageId, fullContent } = payload;
+    const messages = getMessages(store, podId);
+    const messageIndex = findMessageIndex(messages, messageId);
+
+    store.accumulatedLengthByMessageId.delete(messageId);
+
+    if (messageIndex === -1) {
+      finalizeStreaming(podId, messageId);
+      return;
     }
 
-    const finalizeStreaming = (podId: string, messageId: string): void => {
-        setTyping(podId, false)
+    completeMessage(podId, messages, messageIndex, fullContent, messageId);
+  };
 
-        if (store.currentStreamingMessageId === messageId) {
-            store.currentStreamingMessageId = null
-        }
+  const handleChatAborted = (payload: PodChatAbortedPayload): void => {
+    const { podId, messageId } = payload;
+
+    store.accumulatedLengthByMessageId.delete(messageId);
+
+    const messages = getMessages(store, podId);
+    const messageIndex = findMessageIndex(messages, messageId);
+
+    if (messageIndex !== -1) {
+      completeMessage(
+        podId,
+        messages,
+        messageIndex,
+        messages[messageIndex]!.content,
+        messageId,
+      );
+    } else {
+      finalizeStreaming(podId, messageId);
     }
+  };
 
-    const completeMessage = (podId: string, messages: Message[], messageIndex: number, fullContent: string, messageId: string): void => {
-        const updatedMessages = [...messages]
-        const existingMessage = updatedMessages[messageIndex]
-
-        if (!existingMessage) return
-
-        const updatedToolUse = finalizeToolUse(existingMessage.toolUse)
-        const finalizedSubMessages = finalizeSubMessages(existingMessage.subMessages)
-
-        updatedMessages[messageIndex] = updateMainMessageState(
-            existingMessage,
-            fullContent,
-            updatedToolUse,
-            finalizedSubMessages
-        )
-
-        store.messagesByPodId.set(podId, updatedMessages)
-
-        if (existingMessage.role === 'assistant') {
-            updatePodOutput(podId)
-        }
-
-        finalizeStreaming(podId, messageId)
-    }
-
-    const handleChatComplete = (payload: PodChatCompletePayload): void => {
-        const {podId, messageId, fullContent} = payload
-        const messages = getMessages(store, podId)
-        const messageIndex = findMessageIndex(messages, messageId)
-
-        store.accumulatedLengthByMessageId.delete(messageId)
-
-        if (messageIndex === -1) {
-            finalizeStreaming(podId, messageId)
-            return
-        }
-
-        completeMessage(podId, messages, messageIndex, fullContent, messageId)
-    }
-
-    const handleChatAborted = (payload: PodChatAbortedPayload): void => {
-        const {podId, messageId} = payload
-
-        store.accumulatedLengthByMessageId.delete(messageId)
-
-        const messages = getMessages(store, podId)
-        const messageIndex = findMessageIndex(messages, messageId)
-
-        if (messageIndex !== -1) {
-            completeMessage(podId, messages, messageIndex, messages[messageIndex]!.content, messageId)
-        } else {
-            finalizeStreaming(podId, messageId)
-        }
-    }
-
-    return {
-        handleChatComplete,
-        handleChatAborted,
-        finalizeStreaming,
-        completeMessage,
-        updatePodOutput,
-    }
+  return {
+    handleChatComplete,
+    handleChatAborted,
+    finalizeStreaming,
+    completeMessage,
+  };
 }

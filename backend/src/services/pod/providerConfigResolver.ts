@@ -14,7 +14,6 @@ import { getProvider, providerRegistry } from "../provider/index.js";
 import {
   CLAUDE_MODEL_THINKING_LEVELS,
   CODEX_MODEL_THINKING_LEVELS,
-  GEMINI_MODEL_THINKING_LEVELS,
 } from "../provider/capabilities.js";
 import { logger } from "../../utils/logger.js";
 
@@ -35,8 +34,6 @@ export function getDefaultThinkingLevel(
     table = CLAUDE_MODEL_THINKING_LEVELS;
   } else if (provider === "codex") {
     table = CODEX_MODEL_THINKING_LEVELS;
-  } else if (provider === "gemini") {
-    table = GEMINI_MODEL_THINKING_LEVELS;
   }
   if (!table) return null;
   const entry = table[model];

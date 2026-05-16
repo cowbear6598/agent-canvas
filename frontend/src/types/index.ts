@@ -7,7 +7,6 @@ export * from "./note";
 export * from "./connection";
 export * from "./clipboard";
 export * from "./repository";
-export * from "./command";
 export * from "./group";
 export * from "./config";
 export * from "./run";

@@ -7,7 +7,7 @@ import {
   NOTE_HEIGHT,
 } from "@/lib/constants";
 
-export type NoteType = "repositoryNote" | "commandNote";
+export type NoteType = "repositoryNote";
 
 type SelectionBox = { minX: number; maxX: number; minY: number; maxY: number };
 
@@ -121,12 +121,6 @@ export const useSelectionStore = defineStore("selection", {
      */
     selectedRepositoryNoteIds: (state): string[] =>
       selectIdsByType(state.selectedElements, "repositoryNote"),
-
-    /**
-     * 取得選中的 CommandNote ID 列表
-     */
-    selectedCommandNoteIds: (state): string[] =>
-      selectIdsByType(state.selectedElements, "commandNote"),
 
     /**
      * 是否有選中的元素

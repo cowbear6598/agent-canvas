@@ -8,12 +8,24 @@ import {
 import { scheduleConfigSchema } from "./scheduleSchemas.js";
 
 export const modelTypeSchema = z.enum(["opus", "sonnet", "haiku"]);
+const goalTodoItemSchema = z
+  .object({
+    id: z.uuid(),
+    text: z.string().trim().min(1).max(500),
+  })
+  .strict();
+
+export const podGoalSchema = z
+  .object({
+    todos: z.array(goalTodoItemSchema).min(1).max(100),
+  })
+  .strict();
 
 /**
  * provider 允許清單（白名單守門）：
  * 明確列舉避免未知 provider 進入業務邏輯，同時作為 DB 意外寫入時由 resolveProvider fallback 的依據。
  */
-export const providerSchema = z.enum(["claude", "codex", "gemini", "opencode"]);
+export const providerSchema = z.enum(["claude", "codex", "opencode"]);
 
 /**
  * model 名稱 regex 與最大長度，同時套用於 providerConfigSchema 與 podSetModelSchema。
@@ -61,6 +73,7 @@ export const podCreateSchema = z.object({
   provider: providerSchema.optional(),
   /** provider 的設定物件，僅允許已知欄位（.strict() 拒絕未知 key） */
   providerConfig: providerConfigSchema.optional(),
+  goal: podGoalSchema.nullable().optional(),
 });
 
 export const podListSchema = z.object({
@@ -87,6 +100,13 @@ export const podRenameSchema = z.object({
   canvasId: canvasIdSchema,
   podId: podIdSchema,
   name: z.string().min(1).max(100),
+});
+
+export const podSetGoalSchema = z.object({
+  requestId: requestIdSchema,
+  canvasId: canvasIdSchema,
+  podId: podIdSchema,
+  goal: podGoalSchema.nullable(),
 });
 
 export const podSetModelSchema = z.object({
@@ -148,6 +168,7 @@ export type PodListPayload = z.infer<typeof podListSchema>;
 export type PodGetPayload = z.infer<typeof podGetSchema>;
 export type PodMovePayload = z.infer<typeof podMoveSchema>;
 export type PodRenamePayload = z.infer<typeof podRenameSchema>;
+export type PodSetGoalPayload = z.infer<typeof podSetGoalSchema>;
 export type PodSetModelPayload = z.infer<typeof podSetModelSchema>;
 export type PodSetThinkingLevelPayload = z.infer<
   typeof podSetThinkingLevelSchema

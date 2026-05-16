@@ -28,7 +28,6 @@ function makePod(overrides: Partial<Pick<Pod, "providerConfig">> = {}): Pod {
     integrationBindings: [],
 
     repositoryId: null,
-    commandId: null,
     multiInstance: false,
     sessionId: null,
     x: 0,

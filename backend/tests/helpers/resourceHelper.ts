@@ -8,11 +8,11 @@ import {
   WebSocketRequestEvents,
   WebSocketResponseEvents,
   type RepositoryCreatePayload,
-  type CommandCreatePayload,
+  type RepositoryNoteCreatePayload,
 } from "../../src/schemas";
 import {
   type RepositoryCreatedPayload,
-  type CommandCreatedPayload,
+  type RepositoryNoteCreatedPayload,
 } from "../../src/types";
 
 export async function createSkillFile(
@@ -54,12 +54,10 @@ export async function createRepository(
   return response.repository!;
 }
 
-export async function createCommand(
+export async function createRepositoryNote(
   client: TestWebSocketClient,
-  name: string,
-  content: string,
-  overrides?: Partial<CommandCreatePayload>,
-): Promise<{ id: string; name: string }> {
+  repositoryId: string,
+): Promise<{ id: string; repositoryId: string; x: number; y: number }> {
   if (!client.id) {
     throw new Error("Socket not connected");
   }
@@ -72,14 +70,23 @@ export async function createCommand(
   }
 
   const response = await emitAndWaitResponse<
-    CommandCreatePayload,
-    CommandCreatedPayload
+    RepositoryNoteCreatePayload,
+    RepositoryNoteCreatedPayload
   >(
     client,
-    WebSocketRequestEvents.COMMAND_CREATE,
-    WebSocketResponseEvents.COMMAND_CREATED,
-    { requestId: uuidv4(), canvasId, name, content, ...overrides },
+    WebSocketRequestEvents.REPOSITORY_NOTE_CREATE,
+    WebSocketResponseEvents.REPOSITORY_NOTE_CREATED,
+    {
+      requestId: uuidv4(),
+      canvasId,
+      repositoryId,
+      name: `repo-note-${uuidv4()}`,
+      x: 10,
+      y: 20,
+      boundToPodId: null,
+      originalPosition: null,
+    },
   );
 
-  return response.command!;
+  return response.note!;
 }

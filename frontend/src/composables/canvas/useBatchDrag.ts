@@ -20,29 +20,25 @@ type StoreConfigEntry = {
 interface BatchDragStores {
   podStore: ReturnType<typeof useCanvasContext>["podStore"];
   repositoryStore: NoteStore;
-  commandStore: NoteStore;
 }
 
 interface MovedElementSets {
   movedPodIds: Set<string>;
   movedRepositoryNoteIds: Set<string>;
-  movedCommandNoteIds: Set<string>;
 }
 
 function createStoreConfigMap(
   stores: BatchDragStores,
   movedSets: MovedElementSets,
 ): Record<string, StoreConfigEntry> {
-  const { podStore, repositoryStore, commandStore } = stores;
-  const { movedPodIds, movedRepositoryNoteIds, movedCommandNoteIds } =
-    movedSets;
+  const { podStore, repositoryStore } = stores;
+  const { movedPodIds, movedRepositoryNoteIds } = movedSets;
 
   // 預建 Map 查找表，將每個 store 的 items 轉為 O(1) 查找，避免每幀拖曳的 O(n) Array.find
   const podMap = new Map(podStore.pods.map((p) => [p.id, p]));
   const repositoryMap = new Map(
     repositoryStore.notes.map((n) => [n.id ?? "", n]),
   );
-  const commandMap = new Map(commandStore.notes.map((n) => [n.id ?? "", n]));
 
   return {
     pod: {
@@ -59,63 +55,41 @@ function createStoreConfigMap(
       getItem: (id: string) => repositoryMap.get(id),
       isPod: false,
     },
-    commandNote: {
-      movedSet: movedCommandNoteIds,
-      moveItem: (id: string, x: number, y: number) =>
-        commandStore.updateNotePositionLocal(id, x, y),
-      getItem: (id: string) => commandMap.get(id),
-      isPod: false,
-    },
   };
 }
 
 export function useBatchDrag(): {
   isBatchDragging: import("vue").Ref<boolean>;
   startBatchDrag: (e: MouseEvent) => boolean;
-  isElementSelected: (
-    type: "pod" | "repositoryNote" | "commandNote",
-    id: string,
-  ) => boolean;
+  isElementSelected: (type: "pod" | "repositoryNote", id: string) => boolean;
 } {
-  const {
-    podStore,
-    viewportStore,
-    selectionStore,
-    repositoryStore,
-    commandStore,
-  } = useCanvasContext();
+  const { podStore, viewportStore, selectionStore, repositoryStore } =
+    useCanvasContext();
 
   const dragState = {
     startX: 0,
     startY: 0,
     movedPodIds: new Set<string>(),
     movedRepositoryNoteIds: new Set<string>(),
-    movedCommandNoteIds: new Set<string>(),
-    // 拖曳開始時預建一次，避免每幀重建四份 Map（效能優化）
+    // 拖曳開始時預建一次，避免每幀重建多份 Map（效能優化）
     storeConfigMap: null as ReturnType<typeof createStoreConfigMap> | null,
   };
 
   const clearDragState = (): void => {
     dragState.movedPodIds.clear();
     dragState.movedRepositoryNoteIds.clear();
-    dragState.movedCommandNoteIds.clear();
     dragState.storeConfigMap = null;
   };
 
   const noteMovedSets: {
     set: Set<string>;
-    configKey: "repositoryNote" | "commandNote";
+    configKey: "repositoryNote";
     store: NoteStore;
   }[] = [
     {
       set: dragState.movedRepositoryNoteIds,
       configKey: "repositoryNote",
       store: repositoryStore,
-    },
-    {
-      set: dragState.movedCommandNoteIds,
-      configKey: "commandNote",
-      store: commandStore,
     },
   ];
 
@@ -148,11 +122,10 @@ export function useBatchDrag(): {
 
     // 拖曳開始時預建 storeConfigMap，整次拖曳只建一次，避免每幀重建四份 Map
     dragState.storeConfigMap = createStoreConfigMap(
-      { podStore, repositoryStore, commandStore },
+      { podStore, repositoryStore },
       {
         movedPodIds: dragState.movedPodIds,
         movedRepositoryNoteIds: dragState.movedRepositoryNoteIds,
-        movedCommandNoteIds: dragState.movedCommandNoteIds,
       },
     );
 
@@ -201,7 +174,7 @@ export function useBatchDrag(): {
 
   const syncNotesByType = async (
     movedNoteIds: Set<string>,
-    configKey: "repositoryNote" | "commandNote",
+    configKey: "repositoryNote",
     store: {
       updateNotePosition: (
         noteId: string,
@@ -235,7 +208,7 @@ export function useBatchDrag(): {
   };
 
   const isElementSelected = (
-    type: "pod" | "repositoryNote" | "commandNote",
+    type: "pod" | "repositoryNote",
     id: string,
   ): boolean => {
     // selectionStore.isElementSelected 內部使用 Set，O(1) 查找

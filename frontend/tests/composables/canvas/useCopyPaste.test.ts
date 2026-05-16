@@ -13,7 +13,7 @@ import {
 } from "../../helpers/factories";
 import { useCopyPaste } from "@/composables/canvas/useCopyPaste";
 import { usePodStore, useViewportStore, useSelectionStore } from "@/stores/pod";
-import { useRepositoryStore, useCommandStore } from "@/stores/note";
+import { useRepositoryStore } from "@/stores/note";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useClipboardStore } from "@/stores/clipboardStore";
 import { useCanvasStore } from "@/stores/canvasStore";
@@ -21,10 +21,13 @@ import {
   WebSocketRequestEvents,
   WebSocketResponseEvents,
 } from "@/services/websocket";
-import type { SelectableElement, CanvasPasteResultPayload } from "@/types";
+import type {
+  SelectableElement,
+  CanvasPasteResultPayload,
+  RepositoryNote,
+} from "@/types";
 import type { CopiedConnection } from "@/types/clipboard";
 
-// Mock functions using vi.hoisted
 const {
   mockShowSuccessToast,
   mockShowErrorToast,
@@ -41,10 +44,8 @@ const {
   mockWrapWebSocketRequest: vi.fn(),
 }));
 
-// Mock WebSocket
 vi.mock("@/services/websocket", () => webSocketMockFactory());
 
-// Mock useToast
 vi.mock("@/composables/useToast", () => ({
   useToast: () => ({
     showSuccessToast: mockShowSuccessToast,
@@ -52,7 +53,6 @@ vi.mock("@/composables/useToast", () => ({
   }),
 }));
 
-// Mock domHelpers
 vi.mock("@/utils/domHelpers", () => ({
   isEditingElement: mockIsEditingElement,
   hasTextSelection: mockHasTextSelection,
@@ -60,37 +60,22 @@ vi.mock("@/utils/domHelpers", () => ({
   getPlatformModifierKey: () => "ctrlKey" as const,
 }));
 
-// Mock useWebSocketErrorHandler
 vi.mock("@/composables/useWebSocketErrorHandler", () => ({
   useWebSocketErrorHandler: () => ({
     wrapWebSocketRequest: mockWrapWebSocketRequest,
   }),
 }));
 
-// Mock useCanvasContext
 vi.mock("@/composables/canvas/useCanvasContext", () => ({
-  useCanvasContext: () => {
-    const podStore = usePodStore();
-    const viewportStore = useViewportStore();
-    const selectionStore = useSelectionStore();
-    const repositoryStore = useRepositoryStore();
-    const commandStore = useCommandStore();
-    const connectionStore = useConnectionStore();
-    const clipboardStore = useClipboardStore();
-    const canvasStore = useCanvasStore();
-
-    return {
-      podStore,
-      viewportStore,
-      selectionStore,
-      repositoryStore,
-      commandStore,
-      // TODO Phase 4: mcpServerStore 重構後補回
-      connectionStore,
-      clipboardStore,
-      canvasStore,
-    };
-  },
+  useCanvasContext: () => ({
+    podStore: usePodStore(),
+    viewportStore: useViewportStore(),
+    selectionStore: useSelectionStore(),
+    repositoryStore: useRepositoryStore(),
+    connectionStore: useConnectionStore(),
+    clipboardStore: useClipboardStore(),
+    canvasStore: useCanvasStore(),
+  }),
 }));
 
 const TestComponent = defineComponent({
@@ -106,8 +91,6 @@ describe("useCopyPaste", () => {
   let viewportStore: ReturnType<typeof useViewportStore>;
   let selectionStore: ReturnType<typeof useSelectionStore>;
   let repositoryStore: ReturnType<typeof useRepositoryStore>;
-  let commandStore: ReturnType<typeof useCommandStore>;
-  // TODO Phase 4: mcpServerStore 重構後補回
   let connectionStore: ReturnType<typeof useConnectionStore>;
   let clipboardStore: ReturnType<typeof useClipboardStore>;
   let canvasStore: ReturnType<typeof useCanvasStore>;
@@ -123,15 +106,11 @@ describe("useCopyPaste", () => {
     viewportStore = useViewportStore();
     selectionStore = useSelectionStore();
     repositoryStore = useRepositoryStore();
-    commandStore = useCommandStore();
-    // TODO Phase 4: mcpServerStore 重構後補回
     connectionStore = useConnectionStore();
     clipboardStore = useClipboardStore();
     canvasStore = useCanvasStore();
 
     canvasStore.activeCanvasId = "canvas-1";
-
-    // Mock viewportStore.screenToCanvas
     (viewportStore as any).screenToCanvas = vi.fn(
       (screenX: number, screenY: number) => ({
         x: screenX,
@@ -146,724 +125,207 @@ describe("useCopyPaste", () => {
     wrapper.unmount();
   });
 
-  describe("複製 (handleCopy)", () => {
-    it("無選中元素時不複製，回傳 false", () => {
-      selectionStore.selectedElements = [];
-
-      const event = new KeyboardEvent("keydown", { key: "c", ctrlKey: true });
-      document.dispatchEvent(event);
-
-      expect(clipboardStore.isEmpty).toBe(true);
+  it("複製選中 pod 與 connection", () => {
+    const pod1 = createMockPod({ id: "pod-1", x: 100, y: 100 });
+    const pod2 = createMockPod({ id: "pod-2", x: 200, y: 200 });
+    const conn = createMockConnection({
+      id: "conn-1",
+      sourcePodId: "pod-1",
+      targetPodId: "pod-2",
     });
+    podStore.pods = [pod1, pod2];
+    connectionStore.connections = [conn];
+    selectionStore.selectedElements = [
+      { type: "pod", id: "pod-1" },
+      { type: "pod", id: "pod-2" },
+    ] as SelectableElement[];
 
-    it("收集選中的 Pod 資料", () => {
-      const pod1 = createMockPod({
-        id: "pod-1",
-        name: "Pod 1",
-        x: 100,
-        y: 100,
-      });
-      const pod2 = createMockPod({
-        id: "pod-2",
-        name: "Pod 2",
-        x: 200,
-        y: 200,
-      });
-      podStore.pods = [pod1, pod2];
+    const event = new KeyboardEvent("keydown", { key: "c", ctrlKey: true });
+    Object.defineProperty(event, "preventDefault", { value: vi.fn() });
+    document.dispatchEvent(event);
 
-      const selectedElements: SelectableElement[] = [
-        { type: "pod", id: "pod-1" },
-        { type: "pod", id: "pod-2" },
-      ];
-      selectionStore.selectedElements = selectedElements;
-
-      const event = new KeyboardEvent("keydown", { key: "c", ctrlKey: true });
-      Object.defineProperty(event, "preventDefault", { value: vi.fn() });
-      document.dispatchEvent(event);
-
-      const copiedData = clipboardStore.getCopiedData();
-      expect(copiedData.pods).toHaveLength(2);
-      expect(copiedData.pods[0]!.id).toBe("pod-1");
-      expect(copiedData.pods[1]!.id).toBe("pod-2");
-    });
-
-    it("收集選中 Pod 綁定的 Repository Note", () => {
-      const pod1 = createMockPod({ id: "pod-1" });
-      podStore.pods = [pod1];
-
-      const boundNote = createMockNote("repository", {
-        id: "note-1",
-        boundToPodId: "pod-1",
-        x: 10,
-        y: 10,
-      });
-      repositoryStore.notes = [boundNote] as any[];
-
-      selectionStore.selectedElements = [{ type: "pod", id: "pod-1" }];
-
-      const event = new KeyboardEvent("keydown", { key: "c", ctrlKey: true });
-      Object.defineProperty(event, "preventDefault", { value: vi.fn() });
-      document.dispatchEvent(event);
-
-      const copiedData = clipboardStore.getCopiedData();
-      expect(copiedData.repositoryNotes).toHaveLength(1);
-      expect(copiedData.repositoryNotes[0]!.boundToOriginalPodId).toBe("pod-1");
-    });
-
-    it("收集選中 Pod 綁定的 Command Note", () => {
-      const pod1 = createMockPod({ id: "pod-1" });
-      podStore.pods = [pod1];
-
-      const boundNote = createMockNote("command", {
-        id: "note-1",
-        boundToPodId: "pod-1",
-        x: 10,
-        y: 10,
-      });
-      commandStore.notes = [boundNote] as any[];
-
-      selectionStore.selectedElements = [{ type: "pod", id: "pod-1" }];
-
-      const event = new KeyboardEvent("keydown", { key: "c", ctrlKey: true });
-      Object.defineProperty(event, "preventDefault", { value: vi.fn() });
-      document.dispatchEvent(event);
-
-      const copiedData = clipboardStore.getCopiedData();
-      expect(copiedData.commandNotes).toHaveLength(1);
-      expect(copiedData.commandNotes[0]!.boundToOriginalPodId).toBe("pod-1");
-    });
-
-    // TODO Phase 4: 「收集選中 Pod 綁定的 MCP Server Note」測試重構後補回
-
-    it("收集選中的未綁定 Repository Note", () => {
-      const unboundNote = createMockNote("repository", {
-        id: "note-1",
-        boundToPodId: null,
-        x: 100,
-        y: 100,
-      });
-      repositoryStore.notes = [unboundNote] as any[];
-
-      selectionStore.selectedElements = [
-        { type: "repositoryNote", id: "note-1" },
-      ];
-
-      const event = new KeyboardEvent("keydown", { key: "c", ctrlKey: true });
-      Object.defineProperty(event, "preventDefault", { value: vi.fn() });
-      document.dispatchEvent(event);
-
-      const copiedData = clipboardStore.getCopiedData();
-      expect(copiedData.repositoryNotes).toHaveLength(1);
-      expect(copiedData.repositoryNotes[0]!.boundToOriginalPodId).toBeNull();
-    });
-
-    it("收集選中的未綁定 Command Note", () => {
-      const unboundNote = createMockNote("command", {
-        id: "note-1",
-        boundToPodId: null,
-        x: 100,
-        y: 100,
-      });
-      commandStore.notes = [unboundNote] as any[];
-
-      selectionStore.selectedElements = [{ type: "commandNote", id: "note-1" }];
-
-      const event = new KeyboardEvent("keydown", { key: "c", ctrlKey: true });
-      Object.defineProperty(event, "preventDefault", { value: vi.fn() });
-      document.dispatchEvent(event);
-
-      const copiedData = clipboardStore.getCopiedData();
-      expect(copiedData.commandNotes).toHaveLength(1);
-      expect(copiedData.commandNotes[0]!.boundToOriginalPodId).toBeNull();
-    });
-
-    // TODO Phase 4: 「收集選中的未綁定 MCP Server Note」測試重構後補回
-
-    it("只收集兩端都在選中範圍內的 Connection", () => {
-      const pod1 = createMockPod({ id: "pod-1" });
-      const pod2 = createMockPod({ id: "pod-2" });
-      const pod3 = createMockPod({ id: "pod-3" });
-      podStore.pods = [pod1, pod2, pod3];
-
-      const conn1 = createMockConnection({
-        id: "conn-1",
+    const copiedData = clipboardStore.getCopiedData();
+    expect(copiedData.pods).toHaveLength(2);
+    expect(copiedData.connections).toEqual([
+      expect.objectContaining({
         sourcePodId: "pod-1",
         targetPodId: "pod-2",
-      });
-      const conn2 = createMockConnection({
-        id: "conn-2",
-        sourcePodId: "pod-1",
-        targetPodId: "pod-3",
-      });
-      connectionStore.connections = [conn1, conn2];
+      }),
+    ]);
+  });
 
-      selectionStore.selectedElements = [
-        { type: "pod", id: "pod-1" },
-        { type: "pod", id: "pod-2" },
-      ];
+  it("複製選中 pod 時會一起收集綁定與未綁定 repository note", () => {
+    const pod = createMockPod({ id: "pod-1" });
+    const boundNote = createMockNote("repository", {
+      id: "note-1",
+      boundToPodId: "pod-1",
+      x: 10,
+      y: 10,
+    }) as RepositoryNote;
+    const unboundNote = createMockNote("repository", {
+      id: "note-2",
+      boundToPodId: null,
+      x: 100,
+      y: 120,
+    }) as RepositoryNote;
+    podStore.pods = [pod];
+    repositoryStore.notes = [boundNote, unboundNote] as any[];
+    selectionStore.selectedElements = [
+      { type: "pod", id: "pod-1" },
+      { type: "repositoryNote", id: "note-2" },
+    ];
 
-      const event = new KeyboardEvent("keydown", { key: "c", ctrlKey: true });
-      Object.defineProperty(event, "preventDefault", { value: vi.fn() });
-      document.dispatchEvent(event);
+    const event = new KeyboardEvent("keydown", { key: "c", ctrlKey: true });
+    Object.defineProperty(event, "preventDefault", { value: vi.fn() });
+    document.dispatchEvent(event);
 
-      const copiedData = clipboardStore.getCopiedData();
-      expect(copiedData.connections).toHaveLength(1);
-      expect(copiedData.connections[0]!.sourcePodId).toBe("pod-1");
-      expect(copiedData.connections[0]!.targetPodId).toBe("pod-2");
-    });
+    const copiedData = clipboardStore.getCopiedData();
+    expect(copiedData.repositoryNotes).toHaveLength(2);
+    expect(copiedData.repositoryNotes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ repositoryId: boundNote.repositoryId }),
+        expect.objectContaining({ repositoryId: unboundNote.repositoryId }),
+      ]),
+    );
+  });
 
-    it("呼叫 clipboardStore.setCopy 儲存複製資料", () => {
-      const pod1 = createMockPod({ id: "pod-1" });
-      podStore.pods = [pod1];
-      selectionStore.selectedElements = [{ type: "pod", id: "pod-1" }];
+  it("copy 時 setCopy 只帶 pods/repositoryNotes/connections 三段資料", () => {
+    const pod = createMockPod({ id: "pod-1" });
+    podStore.pods = [pod];
+    selectionStore.selectedElements = [{ type: "pod", id: "pod-1" }];
+    const setCopySpy = vi.spyOn(clipboardStore, "setCopy");
 
-      const setCopySpy = vi.spyOn(clipboardStore, "setCopy");
+    const event = new KeyboardEvent("keydown", { key: "c", ctrlKey: true });
+    Object.defineProperty(event, "preventDefault", { value: vi.fn() });
+    document.dispatchEvent(event);
 
-      const event = new KeyboardEvent("keydown", { key: "c", ctrlKey: true });
-      Object.defineProperty(event, "preventDefault", { value: vi.fn() });
-      document.dispatchEvent(event);
+    expect(setCopySpy).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.any(Array),
+      expect.any(Array),
+    );
+  });
 
-      expect(setCopySpy).toHaveBeenCalledOnce();
-      expect(setCopySpy).toHaveBeenCalledWith(
-        expect.any(Array),
-        expect.any(Array),
-        expect.any(Array),
-        expect.any(Array),
-      );
+  it("貼上時只送出 pods/repositoryNotes/connections payload", async () => {
+    const pod = createMockPod({ id: "pod-1", x: 100, y: 100 });
+    clipboardStore.setCopy([pod], [], []);
+    mockWrapWebSocketRequest.mockResolvedValue({
+      createdPods: [],
+      createdRepositoryNotes: [],
+      createdConnections: [],
+      podIdMapping: {},
+      errors: [],
+      success: true,
+      requestId: "req-1",
+    } satisfies CanvasPasteResultPayload);
+
+    const event = new KeyboardEvent("keydown", { key: "v", ctrlKey: true });
+    Object.defineProperty(event, "preventDefault", { value: vi.fn() });
+    document.dispatchEvent(event);
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mockCreateWebSocketRequest).toHaveBeenCalledWith({
+      requestEvent: WebSocketRequestEvents.CANVAS_PASTE,
+      responseEvent: WebSocketResponseEvents.CANVAS_PASTE_RESULT,
+      payload: expect.objectContaining({
+        canvasId: "canvas-1",
+        pods: expect.any(Array),
+        repositoryNotes: expect.any(Array),
+        connections: expect.any(Array),
+      }),
+      timeout: 10000,
     });
   });
 
-  describe("貼上 (handlePaste)", () => {
-    it("clipboard 為空時不貼上，回傳 false", async () => {
-      clipboardStore.clear();
-
-      const event = new KeyboardEvent("keydown", { key: "v", ctrlKey: true });
-      document.dispatchEvent(event);
-
-      await new Promise((resolve) => setTimeout(resolve, 0));
-
-      expect(mockWrapWebSocketRequest).not.toHaveBeenCalled();
-    });
-
-    it("計算貼上位置（基於滑鼠座標轉換為畫布座標）", async () => {
-      const pod1 = createMockPod({ id: "pod-1", x: 100, y: 100 });
-      clipboardStore.setCopy([pod1], [], [], []);
-
-      const mouseMoveEvent = new MouseEvent("mousemove", {
-        clientX: 500,
-        clientY: 300,
-      });
-      document.dispatchEvent(mouseMoveEvent);
-      (viewportStore as any).screenToCanvas = vi.fn(() => ({ x: 600, y: 400 }));
-
-      mockWrapWebSocketRequest.mockResolvedValue({
-        createdPods: [],
-
-        createdRepositoryNotes: [],
-        createdCommandNotes: [],
-        createdConnections: [],
-      });
-
-      const event = new KeyboardEvent("keydown", { key: "v", ctrlKey: true });
-      Object.defineProperty(event, "preventDefault", { value: vi.fn() });
-      document.dispatchEvent(event);
-
-      await new Promise((resolve) => setTimeout(resolve, 0));
-
-      expect(viewportStore.screenToCanvas).toHaveBeenCalledWith(500, 300);
-    });
-
-    it("發送 CANVAS_PASTE WebSocket 請求", async () => {
-      const pod1 = createMockPod({ id: "pod-1", x: 100, y: 100 });
-      clipboardStore.setCopy([pod1], [], [], []);
-
-      mockWrapWebSocketRequest.mockResolvedValue({
-        createdPods: [],
-
-        createdRepositoryNotes: [],
-        createdCommandNotes: [],
-        createdConnections: [],
-      });
-
-      const event = new KeyboardEvent("keydown", { key: "v", ctrlKey: true });
-      Object.defineProperty(event, "preventDefault", { value: vi.fn() });
-      document.dispatchEvent(event);
-
-      await new Promise((resolve) => setTimeout(resolve, 0));
-
-      expect(mockWrapWebSocketRequest).toHaveBeenCalledOnce();
-      expect(mockCreateWebSocketRequest).toHaveBeenCalledWith({
-        requestEvent: WebSocketRequestEvents.CANVAS_PASTE,
-        responseEvent: WebSocketResponseEvents.CANVAS_PASTE_RESULT,
-        payload: expect.objectContaining({
-          canvasId: "canvas-1",
-          pods: expect.any(Array),
-        }),
-        timeout: 10000,
-      });
-    });
-
-    it("成功後設定新建元素為選中狀態", async () => {
-      const pod1 = createMockPod({ id: "pod-1", x: 100, y: 100 });
-      clipboardStore.setCopy([pod1], [], [], []);
-
-      const mockResponse: CanvasPasteResultPayload = {
-        requestId: "",
-        success: true,
-        podIdMapping: {},
-        errors: [],
-        createdPods: [{ ...pod1, id: "new-pod-1" }],
-
-        createdRepositoryNotes: [],
-        createdCommandNotes: [],
-        createdConnections: [],
-      };
-
-      mockWrapWebSocketRequest.mockResolvedValue(mockResponse);
-
-      const setSelectedElementsSpy = vi.spyOn(
-        selectionStore,
-        "setSelectedElements",
-      );
-
-      const event = new KeyboardEvent("keydown", { key: "v", ctrlKey: true });
-      Object.defineProperty(event, "preventDefault", { value: vi.fn() });
-      document.dispatchEvent(event);
-
-      await new Promise((resolve) => setTimeout(resolve, 0));
-
-      expect(setSelectedElementsSpy).toHaveBeenCalledWith([
-        { type: "pod", id: "new-pod-1" },
-      ]);
-    });
-
-    it("WebSocket 請求失敗時回傳 false", async () => {
-      const pod1 = createMockPod({ id: "pod-1", x: 100, y: 100 });
-      clipboardStore.setCopy([pod1], [], [], []);
-
-      mockWrapWebSocketRequest.mockResolvedValue(null);
-
-      const event = new KeyboardEvent("keydown", { key: "v", ctrlKey: true });
-      Object.defineProperty(event, "preventDefault", { value: vi.fn() });
-      document.dispatchEvent(event);
-
-      await new Promise((resolve) => setTimeout(resolve, 0));
-
-      expect(mockWrapWebSocketRequest).toHaveBeenCalledOnce();
-    });
-  });
-
-  describe("位置計算", () => {
-    describe("calculateBoundingBox", () => {
-      it("計算所有 Pod 的包圍框", async () => {
-        const pod1 = createMockPod({ id: "pod-1", x: 100, y: 100 });
-        const pod2 = createMockPod({ id: "pod-2", x: 300, y: 200 });
-        clipboardStore.setCopy([pod1, pod2], [], [], []);
-
-        mockWrapWebSocketRequest.mockResolvedValue({
-          createdPods: [],
-
-          createdRepositoryNotes: [],
-          createdCommandNotes: [],
-          createdConnections: [],
-        });
-        (viewportStore as any).screenToCanvas = vi.fn(() => ({
-          x: 400,
-          y: 300,
-        }));
-
-        const event = new KeyboardEvent("keydown", { key: "v", ctrlKey: true });
-        Object.defineProperty(event, "preventDefault", { value: vi.fn() });
-        document.dispatchEvent(event);
-
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        expect(mockCreateWebSocketRequest).toHaveBeenCalled();
-        const payload = mockCreateWebSocketRequest.mock.calls[0]![0]!.payload;
-        expect(payload.pods).toHaveLength(2);
-      });
-
-      it("計算未綁定 Note 的包圍框", async () => {
-        const note1 = createMockNote("repository", {
-          id: "note-1",
+  it("貼上成功後選中新建立的 pod 與未綁定 repository note", async () => {
+    const pod = createMockPod({ id: "pod-1", x: 100, y: 100 });
+    clipboardStore.setCopy([pod], [], []);
+    mockWrapWebSocketRequest.mockResolvedValue({
+      requestId: "",
+      success: true,
+      podIdMapping: {},
+      errors: [],
+      createdPods: [{ ...pod, id: "new-pod-1" }],
+      createdRepositoryNotes: [
+        {
+          id: "new-note-1",
+          repositoryId: "repo-1",
+          name: "Repo 1",
+          x: 0,
+          y: 0,
           boundToPodId: null,
-          x: 150,
-          y: 150,
-        }) as any;
-        clipboardStore.setCopy([], [note1], [], []);
+          originalPosition: null,
+        },
+      ],
+      createdConnections: [],
+    } satisfies CanvasPasteResultPayload);
 
-        mockWrapWebSocketRequest.mockResolvedValue({
-          createdPods: [],
+    const setSelectedElementsSpy = vi.spyOn(
+      selectionStore,
+      "setSelectedElements",
+    );
 
-          createdRepositoryNotes: [],
-          createdCommandNotes: [],
-          createdConnections: [],
-        });
-        (viewportStore as any).screenToCanvas = vi.fn(() => ({
-          x: 400,
-          y: 300,
-        }));
+    const event = new KeyboardEvent("keydown", { key: "v", ctrlKey: true });
+    Object.defineProperty(event, "preventDefault", { value: vi.fn() });
+    document.dispatchEvent(event);
 
-        const event = new KeyboardEvent("keydown", { key: "v", ctrlKey: true });
-        Object.defineProperty(event, "preventDefault", { value: vi.fn() });
-        document.dispatchEvent(event);
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        expect(mockCreateWebSocketRequest).toHaveBeenCalled();
-      });
-
-      it("已綁定 Note 不計入包圍框", async () => {
-        const pod1 = createMockPod({ id: "pod-1", x: 100, y: 100 });
-        const boundNote = createMockNote("repository", {
-          id: "note-1",
-          boundToPodId: "pod-1",
-          x: 50,
-          y: 50,
-        }) as any;
-        clipboardStore.setCopy([pod1], [boundNote], [], []);
-
-        mockWrapWebSocketRequest.mockResolvedValue({
-          createdPods: [],
-
-          createdRepositoryNotes: [],
-          createdCommandNotes: [],
-          createdConnections: [],
-        });
-        (viewportStore as any).screenToCanvas = vi.fn(() => ({
-          x: 400,
-          y: 300,
-        }));
-
-        const event = new KeyboardEvent("keydown", { key: "v", ctrlKey: true });
-        Object.defineProperty(event, "preventDefault", { value: vi.fn() });
-        document.dispatchEvent(event);
-
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        expect(mockCreateWebSocketRequest).toHaveBeenCalled();
-      });
-    });
-
-    describe("calculateOffsets", () => {
-      it("計算原始中心到目標位置的偏移量", async () => {
-        const pod1 = createMockPod({ id: "pod-1", x: 100, y: 100 });
-        clipboardStore.setCopy([pod1], [], [], []);
-
-        mockWrapWebSocketRequest.mockResolvedValue({
-          createdPods: [],
-
-          createdRepositoryNotes: [],
-          createdCommandNotes: [],
-          createdConnections: [],
-        });
-        (viewportStore as any).screenToCanvas = vi.fn(() => ({
-          x: 500,
-          y: 400,
-        }));
-
-        const event = new KeyboardEvent("keydown", { key: "v", ctrlKey: true });
-        Object.defineProperty(event, "preventDefault", { value: vi.fn() });
-        document.dispatchEvent(event);
-
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        expect(mockCreateWebSocketRequest).toHaveBeenCalled();
-        const payload = mockCreateWebSocketRequest.mock.calls[0]![0]!.payload;
-        expect(payload.pods[0].x).not.toBe(100);
-        expect(payload.pods[0].y).not.toBe(100);
-      });
-    });
-
-    describe("transformPods", () => {
-      it("應用偏移量到 Pod 座標", async () => {
-        const pod1 = createMockPod({ id: "pod-1", x: 100, y: 100 });
-        const pod2 = createMockPod({ id: "pod-2", x: 200, y: 200 });
-        clipboardStore.setCopy([pod1, pod2], [], [], []);
-
-        mockWrapWebSocketRequest.mockResolvedValue({
-          createdPods: [],
-
-          createdRepositoryNotes: [],
-          createdCommandNotes: [],
-          createdConnections: [],
-        });
-        (viewportStore as any).screenToCanvas = vi.fn(() => ({
-          x: 500,
-          y: 400,
-        }));
-
-        const event = new KeyboardEvent("keydown", { key: "v", ctrlKey: true });
-        Object.defineProperty(event, "preventDefault", { value: vi.fn() });
-        document.dispatchEvent(event);
-
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const payload = mockCreateWebSocketRequest.mock.calls[0]![0]!.payload;
-        expect(payload.pods).toHaveLength(2);
-        expect(payload.pods[0].originalId).toBe("pod-1");
-        expect(payload.pods[1].originalId).toBe("pod-2");
-      });
-    });
-
-    describe("transformNotes", () => {
-      it("未綁定 RepositoryNote 應用偏移量", async () => {
-        const unboundNote = createMockNote("repository", {
-          id: "note-1",
-          boundToPodId: null,
-          x: 100,
-          y: 100,
-        }) as any;
-        clipboardStore.setCopy([], [unboundNote], [], []);
-
-        mockWrapWebSocketRequest.mockResolvedValue({
-          createdPods: [],
-
-          createdRepositoryNotes: [],
-          createdCommandNotes: [],
-          createdConnections: [],
-        });
-        (viewportStore as any).screenToCanvas = vi.fn(() => ({
-          x: 500,
-          y: 400,
-        }));
-
-        const event = new KeyboardEvent("keydown", { key: "v", ctrlKey: true });
-        Object.defineProperty(event, "preventDefault", { value: vi.fn() });
-        document.dispatchEvent(event);
-
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const payload = mockCreateWebSocketRequest.mock.calls[0]![0]!.payload;
-        expect(payload.repositoryNotes[0].x).not.toBe(100);
-        expect(payload.repositoryNotes[0].y).not.toBe(100);
-      });
-
-      it("已綁定 RepositoryNote 座標設為 0", async () => {
-        const pod1 = createMockPod({ id: "pod-1", x: 100, y: 100 });
-        const boundNote = createMockNote("repository", {
-          id: "note-1",
-          boundToPodId: "pod-1",
-          x: 150,
-          y: 150,
-        }) as any;
-        clipboardStore.setCopy([pod1], [boundNote], [], []);
-
-        mockWrapWebSocketRequest.mockResolvedValue({
-          createdPods: [],
-
-          createdRepositoryNotes: [],
-          createdCommandNotes: [],
-          createdConnections: [],
-        });
-        (viewportStore as any).screenToCanvas = vi.fn(() => ({
-          x: 500,
-          y: 400,
-        }));
-
-        const event = new KeyboardEvent("keydown", { key: "v", ctrlKey: true });
-        Object.defineProperty(event, "preventDefault", { value: vi.fn() });
-        document.dispatchEvent(event);
-
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const payload = mockCreateWebSocketRequest.mock.calls[0]![0]!.payload;
-        expect(payload.repositoryNotes[0].x).toBe(0);
-        expect(payload.repositoryNotes[0].y).toBe(0);
-      });
-    });
-
-    describe("transformConnections", () => {
-      it("轉換 Connection 格式", async () => {
-        const pod1 = createMockPod({ id: "pod-1", x: 100, y: 100 });
-        const pod2 = createMockPod({ id: "pod-2", x: 200, y: 200 });
-        const conn = createMockConnection({
-          id: "conn-1",
-          sourcePodId: "pod-1",
-          targetPodId: "pod-2",
-          sourceAnchor: "bottom",
-          targetAnchor: "top",
-        });
-        clipboardStore.setCopy([pod1, pod2], [], [], [
-          conn,
-        ] as unknown as CopiedConnection[]);
-
-        mockWrapWebSocketRequest.mockResolvedValue({
-          createdPods: [],
-
-          createdRepositoryNotes: [],
-          createdCommandNotes: [],
-          createdConnections: [],
-        });
-        (viewportStore as any).screenToCanvas = vi.fn(() => ({
-          x: 500,
-          y: 400,
-        }));
-
-        const event = new KeyboardEvent("keydown", { key: "v", ctrlKey: true });
-        Object.defineProperty(event, "preventDefault", { value: vi.fn() });
-        document.dispatchEvent(event);
-
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const payload = mockCreateWebSocketRequest.mock.calls[0]![0]!.payload;
-        expect(payload.connections).toHaveLength(1);
-        expect(payload.connections[0].originalSourcePodId).toBe("pod-1");
-        expect(payload.connections[0].originalTargetPodId).toBe("pod-2");
-        expect(payload.connections[0].sourceAnchor).toBe("bottom");
-        expect(payload.connections[0].targetAnchor).toBe("top");
-      });
-    });
+    expect(setSelectedElementsSpy).toHaveBeenCalledWith([
+      { type: "pod", id: "new-pod-1" },
+      { type: "repositoryNote", id: "new-note-1" },
+    ]);
   });
 
-  describe("鍵盤事件", () => {
-    it("Ctrl+C 觸發複製", () => {
-      const pod1 = createMockPod({ id: "pod-1" });
-      podStore.pods = [pod1];
-      selectionStore.selectedElements = [{ type: "pod", id: "pod-1" }];
+  it("clipboard 為空時不貼上", async () => {
+    clipboardStore.clear();
 
-      const setCopySpy = vi.spyOn(clipboardStore, "setCopy");
+    const event = new KeyboardEvent("keydown", { key: "v", ctrlKey: true });
+    document.dispatchEvent(event);
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
-      const event = new KeyboardEvent("keydown", { key: "c", ctrlKey: true });
-      Object.defineProperty(event, "preventDefault", { value: vi.fn() });
-      document.dispatchEvent(event);
-
-      expect(setCopySpy).toHaveBeenCalled();
-    });
-
-    it("Ctrl+V 觸發貼上", async () => {
-      const pod1 = createMockPod({ id: "pod-1", x: 100, y: 100 });
-      clipboardStore.setCopy([pod1], [], [], []);
-
-      mockWrapWebSocketRequest.mockResolvedValue({
-        createdPods: [],
-
-        createdRepositoryNotes: [],
-        createdCommandNotes: [],
-        createdConnections: [],
-      });
-
-      const event = new KeyboardEvent("keydown", { key: "v", ctrlKey: true });
-      Object.defineProperty(event, "preventDefault", { value: vi.fn() });
-      document.dispatchEvent(event);
-
-      await new Promise((resolve) => setTimeout(resolve, 0));
-
-      expect(mockWrapWebSocketRequest).toHaveBeenCalled();
-    });
-
-    it("在編輯元素中不觸發複製", () => {
-      mockIsEditingElement.mockReturnValue(true);
-
-      const pod1 = createMockPod({ id: "pod-1" });
-      podStore.pods = [pod1];
-      selectionStore.selectedElements = [{ type: "pod", id: "pod-1" }];
-
-      const setCopySpy = vi.spyOn(clipboardStore, "setCopy");
-
-      const event = new KeyboardEvent("keydown", { key: "c", ctrlKey: true });
-      document.dispatchEvent(event);
-
-      expect(setCopySpy).not.toHaveBeenCalled();
-    });
-
-    it("在編輯元素中不觸發貼上", async () => {
-      mockIsEditingElement.mockReturnValue(true);
-
-      const pod1 = createMockPod({ id: "pod-1", x: 100, y: 100 });
-      clipboardStore.setCopy([pod1], [], [], []);
-
-      mockWrapWebSocketRequest.mockResolvedValue({
-        createdPods: [],
-
-        createdRepositoryNotes: [],
-        createdCommandNotes: [],
-        createdConnections: [],
-      });
-
-      const event = new KeyboardEvent("keydown", { key: "v", ctrlKey: true });
-      document.dispatchEvent(event);
-
-      await new Promise((resolve) => setTimeout(resolve, 0));
-
-      expect(mockWrapWebSocketRequest).not.toHaveBeenCalled();
-    });
-
-    it("有文字選取時 Ctrl+C 不觸發", () => {
-      mockHasTextSelection.mockReturnValue(true);
-
-      const pod1 = createMockPod({ id: "pod-1" });
-      podStore.pods = [pod1];
-      selectionStore.selectedElements = [{ type: "pod", id: "pod-1" }];
-
-      const setCopySpy = vi.spyOn(clipboardStore, "setCopy");
-
-      const event = new KeyboardEvent("keydown", { key: "c", ctrlKey: true });
-      document.dispatchEvent(event);
-
-      expect(setCopySpy).not.toHaveBeenCalled();
-    });
-
-    it("非 Ctrl/Cmd 鍵不觸發複製", () => {
-      mockIsModifierKeyPressed.mockReturnValue(false);
-
-      const pod1 = createMockPod({ id: "pod-1" });
-      podStore.pods = [pod1];
-      selectionStore.selectedElements = [{ type: "pod", id: "pod-1" }];
-
-      const setCopySpy = vi.spyOn(clipboardStore, "setCopy");
-
-      const event = new KeyboardEvent("keydown", { key: "c" });
-      document.dispatchEvent(event);
-
-      expect(setCopySpy).not.toHaveBeenCalled();
-    });
-
-    it("非 Ctrl/Cmd 鍵不觸發貼上", async () => {
-      mockIsModifierKeyPressed.mockReturnValue(false);
-
-      const pod1 = createMockPod({ id: "pod-1", x: 100, y: 100 });
-      clipboardStore.setCopy([pod1], [], [], []);
-
-      const event = new KeyboardEvent("keydown", { key: "v" });
-      document.dispatchEvent(event);
-
-      await new Promise((resolve) => setTimeout(resolve, 0));
-
-      expect(mockWrapWebSocketRequest).not.toHaveBeenCalled();
-    });
+    expect(mockWrapWebSocketRequest).not.toHaveBeenCalled();
   });
 
-  describe("生命週期", () => {
-    it("onMounted 時註冊事件監聽器", () => {
-      const addEventListenerSpy = vi.spyOn(document, "addEventListener");
+  it("有文字選取時不觸發 copy", () => {
+    mockHasTextSelection.mockReturnValue(true);
+    const setCopySpy = vi.spyOn(clipboardStore, "setCopy");
 
-      mount(TestComponent);
+    const pod = createMockPod({ id: "pod-1" });
+    podStore.pods = [pod];
+    selectionStore.selectedElements = [{ type: "pod", id: "pod-1" }];
 
-      expect(addEventListenerSpy).toHaveBeenCalledWith(
-        "keydown",
-        expect.any(Function),
-      );
-      expect(addEventListenerSpy).toHaveBeenCalledWith(
-        "mousemove",
-        expect.any(Function),
-      );
-    });
+    const event = new KeyboardEvent("keydown", { key: "c", ctrlKey: true });
+    document.dispatchEvent(event);
 
-    it("onUnmounted 時移除事件監聽器", () => {
-      const removeEventListenerSpy = vi.spyOn(document, "removeEventListener");
-      const testWrapper = mount(TestComponent);
+    expect(setCopySpy).not.toHaveBeenCalled();
+  });
 
-      testWrapper.unmount();
+  it("非 modifier 鍵時不觸發貼上", async () => {
+    mockIsModifierKeyPressed.mockReturnValue(false);
+    const pod = createMockPod({ id: "pod-1", x: 100, y: 100 });
+    clipboardStore.setCopy([pod], [], []);
 
-      expect(removeEventListenerSpy).toHaveBeenCalledWith(
-        "keydown",
-        expect.any(Function),
-      );
-      expect(removeEventListenerSpy).toHaveBeenCalledWith(
-        "mousemove",
-        expect.any(Function),
-      );
-    });
+    const event = new KeyboardEvent("keydown", { key: "v" });
+    document.dispatchEvent(event);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mockWrapWebSocketRequest).not.toHaveBeenCalled();
+  });
+
+  it("保留 copied connection 的 provider-independent 結構", () => {
+    const copiedConnection: CopiedConnection = {
+      sourcePodId: "pod-1",
+      sourceAnchor: "bottom",
+      targetPodId: "pod-2",
+      targetAnchor: "top",
+    };
+
+    clipboardStore.setCopy([], [], [copiedConnection]);
+
+    expect(clipboardStore.getCopiedData().connections).toEqual([
+      copiedConnection,
+    ]);
   });
 });

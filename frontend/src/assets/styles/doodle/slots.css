@@ -119,7 +119,7 @@
 /* Repository Slot 容器位置（POD 右側） */
 .pod-repository-notch-area {
   right: 0;
-  top: 84px;
+  top: 60px;
   transform: translateX(100%);
 }
 
@@ -127,7 +127,7 @@
 .repository-notch {
   position: absolute;
   right: -6px;
-  top: 82px;
+  top: 58px;
   width: 8px;
   height: 32px;
   background: var(--card);
@@ -138,39 +138,44 @@
 }
 
 /* ===================================
-   Command Slot
+   Goal Slot
    =================================== */
 
-/* Pod Command Slot（位於 POD 右側，水平書寫） */
-.pod-command-slot {
-  box-sizing: border-box;
-}
-
-.pod-command-slot.has-note {
-  background: var(--doodle-mint);
-  transform: translateX(-50%);
-}
-
-.pod-command-slot.has-note:hover {
-  transform: translateX(-50%) translate(0.5px, -0.5px);
-}
-
-.pod-command-slot.ejecting {
-  animation: eject-from-slot-right 0.3s ease-out forwards;
-}
-
-/* Command Slot 容器位置（POD 右側） */
-.pod-command-notch-area {
+.pod-goal-notch-area {
   right: 0;
-  top: 44px;
+  top: 20px;
   transform: translateX(100%);
 }
 
-/* Command 凹槽視覺效果（POD 右側） */
-.command-notch {
+.pod-goal-slot {
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+.pod-goal-slot--ready {
+  background: var(--doodle-mint);
+  border-color: var(--doodle-ink);
+  box-shadow: 2px 2px 0 oklch(0.4 0.02 50 / 0.3);
+}
+
+.pod-goal-slot--ready:hover {
+  box-shadow: 3px 3px 0 oklch(0.4 0.02 50 / 0.4);
+}
+
+.pod-goal-slot--unset {
+  background: oklch(0.95 0.04 85);
+  border-style: solid;
+  border-color: oklch(0.75 0.08 85);
+}
+
+.pod-goal-slot--unset:hover {
+  background: oklch(0.93 0.05 85);
+}
+
+.goal-notch {
   position: absolute;
   right: -6px;
-  top: 42px;
+  top: 18px;
   width: 8px;
   height: 32px;
   background: var(--card);
@@ -245,7 +250,7 @@
 .pod-plugin-notch-area {
   position: absolute;
   left: 0;
-  top: 44px;
+  top: 20px;
   transform: translateX(-100%);
   z-index: -1;
   pointer-events: none;
@@ -347,7 +352,7 @@
 .pod-mcp-notch-area {
   position: absolute;
   left: 0;
-  top: 84px;
+  top: 60px;
   transform: translateX(-100%);
   z-index: -1;
   pointer-events: none;
@@ -356,7 +361,7 @@
 /* MCP Server Slot 容器位置（POD 左側） */
 .pod-mcp-server-notch-area {
   left: 0;
-  top: 84px;
+  top: 60px;
   transform: translateX(-100%);
 }
 
@@ -369,7 +374,7 @@
 .pod-with-mcp-server-notch .pod-doodle .mcp-server-notch {
   position: absolute;
   left: -6px;
-  top: 82px;
+  top: 58px;
   width: 8px;
   height: 32px;
   background: var(--card);
@@ -435,10 +440,6 @@
 
 .pod-thinking-slot--codex {
   --thinking-fill-color: var(--pod-thinking-fill-codex);
-}
-
-.pod-thinking-slot--gemini {
-  --thinking-fill-color: var(--pod-thinking-fill-gemini);
 }
 
 /* 水體：絕對定位於 slot 內部由下往上長，高度 = --thinking-fill-pct，

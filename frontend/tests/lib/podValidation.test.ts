@@ -13,7 +13,6 @@ function makeRawPod(overrides: Partial<Pod> = {}): Pod {
     x: 100,
     y: 150,
     rotation: 0,
-    output: [],
     provider: "claude",
     providerConfig: { model: "claude-opus-4-5" },
     ...overrides,
@@ -35,6 +34,12 @@ describe("enrichPod", () => {
       const enriched = enrichPod(raw);
       expect(enriched.provider).toBe("claude");
     });
+
+    it("legacy gemini 應在 enrich 後收斂成 claude", () => {
+      const raw = makeRawPod({ provider: "gemini" as any });
+      const enriched = enrichPod(raw);
+      expect(enriched.provider).toBe("claude");
+    });
   });
 
   // --- case 2：store 已載入 defaultOptions → enrichPod 對 Claude Pod 套用 store default ---
@@ -48,7 +53,6 @@ describe("enrichPod", () => {
             chat: true,
             plugin: false,
             repository: true,
-            command: true,
             mcp: true,
           },
           defaultOptions: { model: "claude-opus-4-5" },
@@ -73,7 +77,6 @@ describe("enrichPod", () => {
             chat: true,
             plugin: false,
             repository: false,
-            command: false,
             mcp: false,
           },
           defaultOptions: { model: "gpt-5.4" },
@@ -102,7 +105,6 @@ describe("enrichPod", () => {
             chat: true,
             plugin: false,
             repository: true,
-            command: true,
             mcp: true,
           },
           // 刻意不帶 defaultOptions，syncFromPayload 會寫入 {}
@@ -168,6 +170,27 @@ describe("enrichPod", () => {
       });
       const enriched = enrichPod(raw);
       expect(enriched.providerConfig).toEqual(customConfig);
+    });
+  });
+
+  describe("Goal 執行狀態", () => {
+    it("沒有 goal 時應標記為不可執行", () => {
+      const enriched = enrichPod(makeRawPod());
+      expect(enriched.goal).toBeNull();
+      expect(enriched.goalStatus).toBe("unset");
+      expect(enriched.canExecute).toBe(false);
+    });
+
+    it("有合法 goal 時應標記為可執行", () => {
+      const enriched = enrichPod(
+        makeRawPod({
+          goal: {
+            todos: [{ id: "11111111-1111-4111-8111-111111111111", text: "A" }],
+          },
+        } as any),
+      );
+      expect(enriched.goalStatus).toBe("ready");
+      expect(enriched.canExecute).toBe(true);
     });
   });
 

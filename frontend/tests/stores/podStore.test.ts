@@ -46,6 +46,7 @@ describe("podStore", () => {
       expect(store.pods).toEqual([]);
       expect(store.selectedPodId).toBeNull();
       expect(store.activePodId).toBeNull();
+      expect(store.goalEditorPodId).toBeNull();
       expect(store.typeMenu.visible).toBe(false);
       expect(store.typeMenu.position).toBeNull();
       expect(store.scheduleFiredPodIds).toBeInstanceOf(Set);
@@ -194,7 +195,6 @@ describe("podStore", () => {
         x: 100,
         y: 200,
         rotation: 0.5,
-        output: ["line1", "line2"],
       });
 
       expect(store.isValidPod(pod)).toBe(true);
@@ -255,20 +255,6 @@ describe("podStore", () => {
 
       expect(store.isValidPod(pod)).toBe(false);
     });
-
-    it("output 非陣列時應回傳 false", () => {
-      const store = usePodStore();
-      const pod = createMockPod({ output: "not-an-array" as any });
-
-      expect(store.isValidPod(pod)).toBe(false);
-    });
-
-    it("output 含非字串元素時應回傳 false", () => {
-      const store = usePodStore();
-      const pod = createMockPod({ output: ["valid", 123, "valid"] as any });
-
-      expect(store.isValidPod(pod)).toBe(false);
-    });
   });
 
   describe("isValidPod 邊界案例", () => {
@@ -282,13 +268,6 @@ describe("podStore", () => {
     it("y 為 NaN 時應回傳 false", () => {
       const store = usePodStore();
       const pod = createMockPod({ y: NaN });
-
-      expect(store.isValidPod(pod)).toBe(false);
-    });
-
-    it("output 為 null 時應回傳 false", () => {
-      const store = usePodStore();
-      const pod = createMockPod({ output: null as any });
 
       expect(store.isValidPod(pod)).toBe(false);
     });
@@ -306,10 +285,8 @@ describe("podStore", () => {
 
       expect(result.x).toBe(100);
       expect(result.y).toBe(150);
-      expect(result.output).toEqual([]);
       // store 未載入 defaultOptions 時，enrichPod 回傳 placeholder { model: "" }
       expect(result.providerConfig?.model).toBe("");
-      expect(result.commandId).toBeNull();
       expect(result.schedule).toBeNull();
     });
 
@@ -320,9 +297,7 @@ describe("podStore", () => {
         x: 500,
         y: 600,
         rotation: 1.5,
-        output: ["existing"],
         providerConfig: { model: "sonnet" },
-        commandId: "cmd-1",
         schedule,
       });
 
@@ -331,9 +306,7 @@ describe("podStore", () => {
       expect(result.x).toBe(500);
       expect(result.y).toBe(600);
       expect(result.rotation).toBe(1.5);
-      expect(result.output).toEqual(["existing"]);
       expect(result.providerConfig.model).toBe("sonnet");
-      expect(result.commandId).toBe("cmd-1");
       expect(result.schedule).toEqual(schedule);
     });
 
@@ -353,36 +326,6 @@ describe("podStore", () => {
         expect(rotation).toBeGreaterThanOrEqual(-1);
         expect(rotation).toBeLessThanOrEqual(1);
       }
-    });
-
-    it("有 existingOutput 時應使用 existingOutput", () => {
-      const store = usePodStore();
-      const pod = createMockPod({ output: ["will-be-replaced"] });
-
-      const result = store.enrichPod(pod, [
-        "preserved-line-1",
-        "preserved-line-2",
-      ]);
-
-      expect(result.output).toEqual(["preserved-line-1", "preserved-line-2"]);
-    });
-
-    it("existingOutput 為空陣列時應使用空陣列", () => {
-      const store = usePodStore();
-      const pod = createMockPod({ output: ["will-be-replaced"] });
-
-      const result = store.enrichPod(pod, []);
-
-      expect(result.output).toEqual([]);
-    });
-
-    it("existingOutput 非陣列時應回退到 pod.output", () => {
-      const store = usePodStore();
-      const pod = createMockPod({ output: ["original"] });
-
-      const result = store.enrichPod(pod, "invalid" as any);
-
-      expect(result.output).toEqual(["original"]);
     });
   });
 
@@ -471,37 +414,6 @@ describe("podStore", () => {
         "[PodStore] updatePod 驗證失敗，已忽略更新",
       );
     });
-
-    it("updatePod 應保留 existing output", () => {
-      const store = usePodStore();
-      const originalPod = createMockPod({
-        id: "pod-1",
-        output: ["line1", "line2"],
-      });
-      store.pods = [originalPod];
-
-      const updatedPod = {
-        ...createMockPod({ id: "pod-1", name: "Updated" }),
-        output: undefined,
-      } as any;
-      store.updatePod(updatedPod);
-
-      expect(store.pods[0]?.output).toEqual(["line1", "line2"]);
-    });
-
-    it("updatePod 明確提供 output 時應覆蓋", () => {
-      const store = usePodStore();
-      const originalPod = createMockPod({
-        id: "pod-1",
-        output: ["line1", "line2"],
-      });
-      store.pods = [originalPod];
-
-      const updatedPod = createMockPod({ id: "pod-1", output: ["new-line"] });
-      store.updatePod(updatedPod);
-
-      expect(store.pods[0]?.output).toEqual(["new-line"]);
-    });
   });
 
   describe("createPodWithBackend", () => {
@@ -514,9 +426,7 @@ describe("podStore", () => {
         x: 100,
         y: 100,
         rotation: 0,
-        output: [],
         repositoryId: null,
-        commandId: null,
         schedule: null,
         provider: "claude",
         providerConfig: { model: "opus" },
@@ -977,6 +887,38 @@ describe("podStore", () => {
     });
   });
 
+  describe("goal editor state", () => {
+    it("openGoalEditor 應設定 goalEditorPodId 與 goalEditorPod", () => {
+      const store = usePodStore();
+      const pod = createMockPod({ id: "pod-1" });
+      store.pods = [pod];
+
+      store.openGoalEditor("pod-1");
+
+      expect(store.goalEditorPodId).toBe("pod-1");
+      expect(store.goalEditorPod).toEqual(pod);
+    });
+
+    it("closeGoalEditor 應清除 goal editor state", () => {
+      const store = usePodStore();
+      store.goalEditorPodId = "pod-1";
+
+      store.closeGoalEditor();
+
+      expect(store.goalEditorPodId).toBeNull();
+      expect(store.goalEditorPod).toBeNull();
+    });
+
+    it("openGoalEditor 遇到不存在的 pod 時應忽略", () => {
+      const store = usePodStore();
+
+      store.openGoalEditor("missing-pod");
+
+      expect(store.goalEditorPodId).toBeNull();
+      expect(store.goalEditorPod).toBeNull();
+    });
+  });
+
   describe("setScheduleWithBackend", () => {
     it("成功時應回傳更新的 Pod、顯示成功 Toast（更新）", async () => {
       const canvasStore = useCanvasStore();
@@ -1085,6 +1027,104 @@ describe("podStore", () => {
       const result = await store.setScheduleWithBackend("pod-1", null);
 
       expect(result).toBeNull();
+    });
+  });
+
+  describe("setGoalWithBackend", () => {
+    it("成功時應回傳更新的 Pod、同步 goal 並顯示成功 Toast", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      const store = usePodStore();
+      store.pods = [createMockPod({ id: "pod-1", goal: null })];
+
+      const goal = {
+        todos: [{ id: "goal-1", text: "Ship it" }],
+      };
+      const updatedPod = createMockPod({
+        id: "pod-1",
+        goal,
+        goalStatus: "ready",
+        canExecute: true,
+      });
+
+      mockCreateWebSocketRequest.mockResolvedValueOnce({
+        requestId: "req-1",
+        success: true,
+        pod: updatedPod,
+      });
+
+      const result = await store.setGoalWithBackend("pod-1", goal);
+
+      expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestEvent: "pod:set-goal",
+          responseEvent: "pod:goal:set",
+          payload: expect.objectContaining({
+            canvasId: "canvas-1",
+            podId: "pod-1",
+            goal,
+          }),
+        }),
+      );
+      expect(result).toEqual(updatedPod);
+      expect(store.getPodById("pod-1")?.goal).toEqual(goal);
+      expect(store.getPodById("pod-1")?.goalStatus).toBe("ready");
+      expect(store.getPodById("pod-1")?.canExecute).toBe(true);
+      expect(mockShowSuccessToast).toHaveBeenCalledWith(
+        "Pod",
+        "儲存成功",
+        "Goal 已儲存",
+      );
+    });
+
+    it("goal 為 null 時應顯示清空成功 Toast 並把 pod 變回不可執行", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      const store = usePodStore();
+      store.pods = [
+        createMockPod({
+          id: "pod-1",
+          goal: { todos: [{ id: "goal-1", text: "Existing" }] },
+          goalStatus: "ready",
+          canExecute: true,
+        }),
+      ];
+
+      const updatedPod = createMockPod({
+        id: "pod-1",
+        goal: null,
+        goalStatus: "unset",
+        canExecute: false,
+      });
+
+      mockCreateWebSocketRequest.mockResolvedValueOnce({
+        requestId: "req-1",
+        success: true,
+        pod: updatedPod,
+      });
+
+      const result = await store.setGoalWithBackend("pod-1", null);
+
+      expect(result).toEqual(updatedPod);
+      expect(store.getPodById("pod-1")?.goal).toBeNull();
+      expect(store.getPodById("pod-1")?.goalStatus).toBe("unset");
+      expect(store.getPodById("pod-1")?.canExecute).toBe(false);
+      expect(mockShowSuccessToast).toHaveBeenCalledWith(
+        "Pod",
+        "儲存成功",
+        "Goal 已清空",
+      );
+    });
+
+    it("無 activeCanvasId 時應回傳 null", async () => {
+      const store = usePodStore();
+
+      const result = await store.setGoalWithBackend("pod-1", {
+        todos: [{ id: "goal-1", text: "Ship it" }],
+      });
+
+      expect(result).toBeNull();
+      expect(mockCreateWebSocketRequest).not.toHaveBeenCalled();
     });
   });
 
@@ -1317,36 +1357,6 @@ describe("podStore", () => {
       });
     });
 
-    describe("updatePodCommand", () => {
-      it("應更新 Pod 的 commandId", () => {
-        const store = usePodStore();
-        const pod = createMockPod({ id: "pod-1", commandId: null });
-        store.pods = [pod];
-
-        store.updatePodCommand("pod-1", "cmd-1");
-
-        expect(store.pods[0]?.commandId).toBe("cmd-1");
-      });
-
-      it("可以清除 commandId", () => {
-        const store = usePodStore();
-        const pod = createMockPod({ id: "pod-1", commandId: "cmd-1" });
-        store.pods = [pod];
-
-        store.updatePodCommand("pod-1", null);
-
-        expect(store.pods[0]?.commandId).toBeNull();
-      });
-
-      it("Pod 不存在時應 early return", () => {
-        const store = usePodStore();
-
-        expect(() =>
-          store.updatePodCommand("non-existent", "cmd-1"),
-        ).not.toThrow();
-      });
-    });
-
     describe("updatePodPlugins", () => {
       it("應更新 Pod 的 pluginIds", () => {
         const store = usePodStore();
@@ -1389,43 +1399,6 @@ describe("podStore", () => {
           store.updatePodPlugins("non-existent", ["plugin-a"]),
         ).not.toThrow();
         expect(store.pods).toHaveLength(0);
-      });
-    });
-
-    describe("clearPodOutputsByIds", () => {
-      it("應清空指定多個 Pod 的 output", () => {
-        const store = usePodStore();
-        const pod1 = createMockPod({ id: "pod-1", output: ["line1", "line2"] });
-        const pod2 = createMockPod({ id: "pod-2", output: ["line3"] });
-        const pod3 = createMockPod({ id: "pod-3", output: ["line4"] });
-        store.pods = [pod1, pod2, pod3];
-
-        store.clearPodOutputsByIds(["pod-1", "pod-2"]);
-
-        expect(store.pods[0]?.output).toEqual([]);
-        expect(store.pods[1]?.output).toEqual([]);
-        expect(store.pods[2]?.output).toEqual(["line4"]);
-      });
-
-      it("空陣列時不應清空任何 output", () => {
-        const store = usePodStore();
-        const pod = createMockPod({ id: "pod-1", output: ["line1"] });
-        store.pods = [pod];
-
-        store.clearPodOutputsByIds([]);
-
-        expect(store.pods[0]?.output).toEqual(["line1"]);
-      });
-
-      it("不存在的 podId 應不報錯", () => {
-        const store = usePodStore();
-        const pod = createMockPod({ id: "pod-1", output: ["line1"] });
-        store.pods = [pod];
-
-        expect(() =>
-          store.clearPodOutputsByIds(["pod-1", "non-existent"]),
-        ).not.toThrow();
-        expect(store.pods[0]?.output).toEqual([]);
       });
     });
   });
@@ -1635,24 +1608,24 @@ describe("podStore", () => {
   });
 
   describe("updatePodField", () => {
-    it("Pod 存在時應成功更新 commandId 欄位", () => {
+    it("Pod 存在時應成功更新 repositoryId 欄位", () => {
       const store = usePodStore();
-      const pod = createMockPod({ id: "pod-1", commandId: null });
+      const pod = createMockPod({ id: "pod-1", repositoryId: null });
       store.pods = [pod];
 
-      store.updatePodField("pod-1", "commandId", "cmd-abc");
+      store.updatePodField("pod-1", "repositoryId", "repo-abc");
 
-      expect(store.pods[0]?.commandId).toBe("cmd-abc");
+      expect(store.pods[0]?.repositoryId).toBe("repo-abc");
     });
 
-    it("Pod 存在時應成功更新 commandId 至另一個值", () => {
+    it("Pod 存在時應成功更新 repositoryId 至另一個值", () => {
       const store = usePodStore();
-      const pod = createMockPod({ id: "pod-1", commandId: "cmd-old" });
+      const pod = createMockPod({ id: "pod-1", repositoryId: "repo-old" });
       store.pods = [pod];
 
-      store.updatePodField("pod-1", "commandId", "cmd-new");
+      store.updatePodField("pod-1", "repositoryId", "repo-new");
 
-      expect(store.pods[0]?.commandId).toBe("cmd-new");
+      expect(store.pods[0]?.repositoryId).toBe("repo-new");
     });
 
     it("Pod 不存在時應靜默忽略不拋錯", () => {
@@ -1660,7 +1633,7 @@ describe("podStore", () => {
       store.pods = [];
 
       expect(() =>
-        store.updatePodField("non-existent", "commandId", null),
+        store.updatePodField("non-existent", "repositoryId", null),
       ).not.toThrow();
       expect(store.pods).toHaveLength(0);
     });

@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 import { webSocketMockFactory } from "../../helpers/mockWebSocket";
 import { setupStoreTest } from "../../helpers/testSetup";
+import { createMockPod } from "../../helpers/factories";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { usePodStore } from "@/stores/pod/podStore";
 import { useRepositoryStore } from "@/stores/note/repositoryStore";
-import { useCommandStore } from "@/stores/note/commandStore";
 import {
   getPodEventListeners,
   removeDeletedNotes,
@@ -37,7 +37,7 @@ describe("podEventHandlers", () => {
   describe("getPodEventListeners", () => {
     it("應回傳正確數量的 listener", () => {
       const result = getPodEventListeners();
-      expect(result.length).toBe(12);
+      expect(result.length).toBe(11);
     });
 
     it("應包含主要的 pod 事件", () => {
@@ -126,6 +126,23 @@ describe("podEventHandlers", () => {
     });
   });
 
+  describe("handlePodGoalSet", () => {
+    it("canvasId 匹配且 pod 存在時應呼叫 updatePod", () => {
+      const podStore = usePodStore();
+      const spy = vi.spyOn(podStore, "updatePod");
+      const pod = createMockPod({
+        id: "pod-1",
+        goal: { todos: [{ id: "goal-1", text: "Ship it" }] },
+        goalStatus: "ready",
+        canExecute: true,
+      });
+
+      findHandler("pod:goal:set")({ canvasId: "canvas-1", pod });
+
+      expect(spy).toHaveBeenCalledWith(pod);
+    });
+  });
+
   describe("handlePodDeleted", () => {
     it("canvasId 匹配時應呼叫 removePod", () => {
       const podStore = usePodStore();
@@ -162,25 +179,13 @@ describe("podEventHandlers", () => {
       expect(spy).toHaveBeenCalledWith("repo-note-2");
     });
 
-    it("commandNote ids 存在時應呼叫 commandStore.removeNoteFromEvent", () => {
-      const commandStore = useCommandStore();
-      const spy = vi.spyOn(commandStore, "removeNoteFromEvent");
-
-      removeDeletedNotes({ commandNote: ["cmd-note-1"] });
-
-      expect(spy).toHaveBeenCalledWith("cmd-note-1");
-    });
-
     it("ids 為空陣列時不應呼叫 removeNoteFromEvent", () => {
       const repositoryStore = useRepositoryStore();
-      const commandStore = useCommandStore();
       const repoSpy = vi.spyOn(repositoryStore, "removeNoteFromEvent");
-      const cmdSpy = vi.spyOn(commandStore, "removeNoteFromEvent");
 
-      removeDeletedNotes({ repositoryNote: [], commandNote: [] });
+      removeDeletedNotes({ repositoryNote: [] });
 
       expect(repoSpy).not.toHaveBeenCalled();
-      expect(cmdSpy).not.toHaveBeenCalled();
     });
   });
 
@@ -290,7 +295,6 @@ describe("podEventHandlers", () => {
         output: [],
         rotation: 0,
         repositoryId: null,
-        commandId: null,
         schedule: { frequency: "every-day", enabled: true } as any,
         mcpServerNames: [],
         pluginIds: [],
@@ -320,26 +324,22 @@ describe("podEventHandlers", () => {
     it("payload 含 deletedNoteIds 時應同時刪除 pod 及對應 notes", () => {
       const podStore = usePodStore();
       const repositoryStore = useRepositoryStore();
-      const commandStore = useCommandStore();
       const removePodSpy = vi.spyOn(podStore, "removePod");
       const removeRepoNoteSpy = vi.spyOn(
         repositoryStore,
         "removeNoteFromEvent",
       );
-      const removeCmdNoteSpy = vi.spyOn(commandStore, "removeNoteFromEvent");
 
       findHandler("pod:deleted")({
         canvasId: "canvas-1",
         podId: "pod-1",
         deletedNoteIds: {
           repositoryNote: ["repo-note-1"],
-          commandNote: ["cmd-note-1"],
         },
       });
 
       expect(removePodSpy).toHaveBeenCalledWith("pod-1");
       expect(removeRepoNoteSpy).toHaveBeenCalledWith("repo-note-1");
-      expect(removeCmdNoteSpy).toHaveBeenCalledWith("cmd-note-1");
     });
   });
 });

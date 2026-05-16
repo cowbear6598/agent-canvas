@@ -24,7 +24,6 @@ const TEST_CAPABILITIES = {
   chat: true,
   plugin: false,
   repository: false,
-  command: false,
   mcp: false,
   integration: false,
 };

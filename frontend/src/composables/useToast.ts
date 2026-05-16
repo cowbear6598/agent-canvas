@@ -13,7 +13,6 @@ export type ToastCategory =
   | "Workspace"
   | "Workflow"
   | "Git"
-  | "Command"
   | "Note"
   | "Schedule"
   | "Paste"

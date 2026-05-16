@@ -7,7 +7,7 @@
  * provider 白名單（未在清單內的 provider 會 throw，不會 silent fallthrough）：
  * - provider === "claude"  → claudeService.executeDisposableChat
  * - provider === "codex"   → codexService.executeDisposableChat
- * - provider === "gemini"  → geminiService.executeDisposableChat
+ * - provider === "opencode" 目前不支援 disposable chat
  * - 其他 provider          → 直接 throw「不支援的 provider」錯誤
  *
  * - 不合法的 model 會 fallback 到 provider 預設模型，並透過 resolvedModel 回傳實際使用值
@@ -17,7 +17,6 @@ import { resolveModelWithFallback } from "./provider/index.js";
 import type { ProviderName } from "./provider/index.js";
 import { claudeService } from "./claude/claudeService.js";
 import { codexService } from "./codex/codexService.js";
-import { geminiService } from "./gemini/geminiService.js";
 import { logger } from "../utils/logger.js";
 
 // ─── 公開介面 ────────────────────────────────────────────────────────────────
@@ -92,14 +91,6 @@ export async function executeDisposableChat(
     return { ...result, resolvedModel };
   } else if (provider === "codex") {
     const result = await codexService.executeDisposableChat({
-      systemPrompt,
-      userMessage,
-      workspacePath,
-      model: resolvedModel,
-    });
-    return { ...result, resolvedModel };
-  } else if (provider === "gemini") {
-    const result = await geminiService.executeDisposableChat({
       systemPrompt,
       userMessage,
       workspacePath,

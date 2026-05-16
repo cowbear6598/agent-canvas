@@ -92,7 +92,6 @@ function setupClaudeCapability() {
         chat: true,
         plugin: false,
         repository: true,
-        command: true,
         mcp: true,
       },
       availableModels: [
@@ -136,6 +135,7 @@ function setupDefaultStoreState() {
       targetAnchor: "top",
       triggerMode: "auto",
       summaryModel: "sonnet",
+      summaryProvider: "claude",
       status: "idle",
     },
   ] as typeof connectionStore.connections;
@@ -221,8 +221,7 @@ describe("ConnectionContextMenu", () => {
       expect(haikuBtn?.classes()).not.toContain("border-l-2");
     });
 
-    it("summaryProvider=gemini 且 currentSummaryModel=gemini-2.5-flash 時，Gemini 2.5 Flash 按鈕應有選中樣式，其他 Gemini 模型沒有", async () => {
-      // 安排 sourcePod 為 claude，但 connection.summaryProvider 為 gemini
+    it("summaryProvider=codex 且 currentSummaryModel=gpt-5.4 時，GPT-5.4 按鈕應有選中樣式，其他 Codex 模型沒有", async () => {
       const connectionStore = useConnectionStore();
       connectionStore.connections = [
         {
@@ -232,48 +231,42 @@ describe("ConnectionContextMenu", () => {
           sourceAnchor: "bottom",
           targetAnchor: "top",
           triggerMode: "auto",
-          summaryModel: "gemini-2.5-flash",
-          summaryProvider: "gemini",
+          summaryModel: "gpt-5.4",
+          summaryProvider: "codex",
           status: "idle",
         },
       ] as typeof connectionStore.connections;
 
-      // 注入 Gemini capability
       const capabilityStore = useProviderCapabilityStore();
       capabilityStore.syncFromPayload([
         {
-          name: "gemini",
+          name: "codex",
           capabilities: {
             chat: true,
             plugin: false,
             repository: false,
-            command: false,
             mcp: false,
+            goal: true,
           },
           availableModels: [
-            { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
-            { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+            { value: "gpt-5.4", label: "GPT-5.4" },
+            { value: "gpt-4.5", label: "GPT-4.5" },
           ],
         },
       ]);
 
-      const wrapper = mountMenu({ currentSummaryModel: "gemini-2.5-flash" });
+      const wrapper = mountMenu({ currentSummaryModel: "gpt-5.4" });
       await openSummaryMenu(wrapper);
       const buttons = wrapper.findAll("button");
 
-      // Gemini 2.5 Flash 應有選中樣式
-      const flashBtn = buttons.find((b) =>
-        b.text().includes("Gemini 2.5 Flash"),
-      );
-      expect(flashBtn?.classes()).toContain("border-l-2");
+      const currentBtn = buttons.find((b) => b.text().includes("GPT-5.4"));
+      expect(currentBtn?.classes()).toContain("border-l-2");
 
-      // Gemini 2.5 Pro 不應有選中樣式
-      const proBtn = buttons.find((b) => b.text().includes("Gemini 2.5 Pro"));
-      expect(proBtn?.classes()).not.toContain("border-l-2");
+      const otherBtn = buttons.find((b) => b.text().includes("GPT-4.5"));
+      expect(otherBtn?.classes()).not.toContain("border-l-2");
     });
 
-    it("summaryProvider=gemini 但 currentSummaryModel 為 claude 模型（跨 provider）時，沒有任何 model 按鈕應有選中樣式", async () => {
-      // summaryProvider=gemini，但 currentSummaryModel 帶入 claude 的 "sonnet"（跨 provider 錯位情境）
+    it("summaryProvider=codex 但 currentSummaryModel 為 claude 模型（跨 provider）時，沒有任何 Codex model 按鈕應有選中樣式", async () => {
       const connectionStore = useConnectionStore();
       connectionStore.connections = [
         {
@@ -284,26 +277,25 @@ describe("ConnectionContextMenu", () => {
           targetAnchor: "top",
           triggerMode: "auto",
           summaryModel: "sonnet",
-          summaryProvider: "gemini",
+          summaryProvider: "codex",
           status: "idle",
         },
       ] as typeof connectionStore.connections;
 
-      // 注入 Gemini capability
       const capabilityStore = useProviderCapabilityStore();
       capabilityStore.syncFromPayload([
         {
-          name: "gemini",
+          name: "codex",
           capabilities: {
             chat: true,
             plugin: false,
             repository: false,
-            command: false,
             mcp: false,
+            goal: true,
           },
           availableModels: [
-            { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
-            { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+            { value: "gpt-5.4", label: "GPT-5.4" },
+            { value: "gpt-4.5", label: "GPT-4.5" },
           ],
         },
       ]);
@@ -312,8 +304,7 @@ describe("ConnectionContextMenu", () => {
       await openSummaryMenu(wrapper);
       const buttons = wrapper.findAll("button");
 
-      // 確認選單中所有 model 按鈕都沒有 border-l-2（避免 claude 模型被誤標在 gemini 選單中）
-      const modelButtons = buttons.filter((b) => b.text().includes("Gemini"));
+      const modelButtons = buttons.filter((b) => b.text().includes("GPT-"));
       for (const btn of modelButtons) {
         expect(btn.classes()).not.toContain("border-l-2");
       }
@@ -738,7 +729,6 @@ describe("ConnectionContextMenu", () => {
             chat: true,
             plugin: false,
             repository: true,
-            command: true,
             mcp: true,
           },
           availableModels: [],
@@ -784,7 +774,6 @@ describe("ConnectionContextMenu", () => {
             chat: true,
             plugin: false,
             repository: false,
-            command: false,
             mcp: false,
           },
           availableModels: [
@@ -794,6 +783,21 @@ describe("ConnectionContextMenu", () => {
           ],
         },
       ]);
+
+      const connectionStore = useConnectionStore();
+      connectionStore.connections = [
+        {
+          id: "conn-123",
+          sourcePodId: "pod-upstream",
+          targetPodId: "pod-target",
+          sourceAnchor: "bottom",
+          targetAnchor: "top",
+          triggerMode: "auto",
+          summaryModel: "gpt-5.4",
+          summaryProvider: "codex",
+          status: "idle",
+        },
+      ] as typeof connectionStore.connections;
 
       const wrapper = mountMenu();
       await openSummaryMenu(wrapper);
@@ -822,7 +826,6 @@ describe("ConnectionContextMenu", () => {
             chat: true,
             plugin: false,
             repository: false,
-            command: false,
             mcp: false,
           },
           availableModels: [
@@ -833,6 +836,19 @@ describe("ConnectionContextMenu", () => {
       ]);
 
       const connectionStore = useConnectionStore();
+      connectionStore.connections = [
+        {
+          id: "conn-123",
+          sourcePodId: "pod-upstream",
+          targetPodId: "pod-target",
+          sourceAnchor: "bottom",
+          targetAnchor: "top",
+          triggerMode: "auto",
+          summaryModel: "gpt-5.4",
+          summaryProvider: "codex",
+          status: "idle",
+        },
+      ] as typeof connectionStore.connections;
       const spy = vi.spyOn(connectionStore, "updateConnectionSummaryModel");
       mockCreateWebSocketRequest.mockResolvedValue({
         connection: {
@@ -880,7 +896,6 @@ describe("ConnectionContextMenu", () => {
             chat: true,
             plugin: false,
             repository: true,
-            command: true,
             mcp: true,
           },
           availableModels: [
@@ -895,7 +910,6 @@ describe("ConnectionContextMenu", () => {
             chat: true,
             plugin: false,
             repository: false,
-            command: false,
             mcp: false,
           },
           availableModels: [
@@ -1114,7 +1128,7 @@ describe("ConnectionContextMenu", () => {
       expect(wrapper.text()).toContain("Summary Provider");
     });
 
-    it("展開後應顯示 Claude / Codex / Gemini 三個 provider 選項", async () => {
+    it("展開後應顯示 Claude / Codex 兩個 provider 選項", async () => {
       const wrapper = mountMenu();
       await openProviderMenu(wrapper);
 
@@ -1124,17 +1138,14 @@ describe("ConnectionContextMenu", () => {
 
       expect(labels.some((l) => l.includes("Claude"))).toBe(true);
       expect(labels.some((l) => l.includes("Codex"))).toBe(true);
-      expect(labels.some((l) => l.includes("Gemini"))).toBe(true);
+      expect(labels.some((l) => l.includes("Gemini"))).toBe(false);
     });
   });
 
   // ──────────────────────────────────────────────────────────────
   describe("Summary Provider currentProvider 計算邏輯", () => {
-    it("舊 Connection（summaryProvider 為 undefined）的 currentProvider 應 fallback 為來源 Pod provider", async () => {
-      // setupDefaultStoreState 注入的 connection 沒有 summaryProvider 欄位（undefined）
-      // 且上游 Pod provider 為 claude
+    it("舊 Connection（summaryProvider 為 undefined）時不再 UI fallback，應顯示未就緒狀態", async () => {
       const connectionStore = useConnectionStore();
-      // 確認 connection 沒有 summaryProvider
       connectionStore.connections = [
         {
           id: "conn-123",
@@ -1154,14 +1165,14 @@ describe("ConnectionContextMenu", () => {
 
       const providerWrapper = wrapper.findAll(".relative")[0]!;
       const buttons = providerWrapper.findAll("button");
+      expect(providerWrapper.text()).toContain("載入中");
 
-      // Claude 按鈕應有 active 樣式，代表 currentProvider = claude（來源 Pod provider）
       const claudeBtn = buttons.find((b) => b.text().includes("Claude"));
-      expect(claudeBtn?.classes()).toContain("bg-secondary");
-      expect(claudeBtn?.classes()).toContain("border-l-2");
+      expect(claudeBtn?.classes()).not.toContain("bg-secondary");
+      expect(claudeBtn?.classes()).not.toContain("border-l-2");
     });
 
-    it("Connection summaryProvider 為 gemini 時 currentProvider 應優先取 gemini 而非 Pod provider", async () => {
+    it("Connection summaryProvider 為 codex 時 currentProvider 應優先取 codex 而非 Pod provider", async () => {
       const connectionStore = useConnectionStore();
       connectionStore.connections = [
         {
@@ -1171,13 +1182,12 @@ describe("ConnectionContextMenu", () => {
           sourceAnchor: "bottom",
           targetAnchor: "top",
           triggerMode: "auto",
-          summaryModel: "gemini-2.5-flash",
-          summaryProvider: "gemini",
+          summaryModel: "gpt-5.4",
+          summaryProvider: "codex",
           status: "idle",
         },
       ] as typeof connectionStore.connections;
 
-      // 補上 Gemini capability 讓 summaryModelOptions 正常解析
       const capabilityStore = useProviderCapabilityStore();
       capabilityStore.syncFromPayload([
         {
@@ -1186,7 +1196,6 @@ describe("ConnectionContextMenu", () => {
             chat: true,
             plugin: false,
             repository: true,
-            command: true,
             mcp: true,
           },
           availableModels: [
@@ -1196,17 +1205,17 @@ describe("ConnectionContextMenu", () => {
           ],
         },
         {
-          name: "gemini",
+          name: "codex",
           capabilities: {
             chat: true,
             plugin: false,
             repository: false,
-            command: false,
             mcp: false,
+            goal: true,
           },
           availableModels: [
-            { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
-            { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+            { value: "gpt-5.4", label: "GPT-5.4" },
+            { value: "gpt-4.5", label: "GPT-4.5" },
           ],
         },
       ]);
@@ -1217,10 +1226,9 @@ describe("ConnectionContextMenu", () => {
       const providerWrapper = wrapper.findAll(".relative")[0]!;
       const buttons = providerWrapper.findAll("button");
 
-      // Gemini 按鈕應有 active 樣式
-      const geminiBtn = buttons.find((b) => b.text().includes("Gemini"));
-      expect(geminiBtn?.classes()).toContain("bg-secondary");
-      expect(geminiBtn?.classes()).toContain("border-l-2");
+      const codexBtn = buttons.find((b) => b.text().includes("Codex"));
+      expect(codexBtn?.classes()).toContain("bg-secondary");
+      expect(codexBtn?.classes()).toContain("border-l-2");
 
       // Claude 按鈕不應有 active 樣式
       const claudeBtn = buttons.find((b) => b.text().includes("Claude"));
@@ -1230,7 +1238,7 @@ describe("ConnectionContextMenu", () => {
 
   // ──────────────────────────────────────────────────────────────
   describe("summaryModelOptions 依 currentProvider 動態渲染", () => {
-    it("currentProvider 為 gemini 時，Summary Model 子選單應顯示 Gemini 模型", async () => {
+    it("currentProvider 為 codex 時，Summary Model 子選單應顯示 Codex 模型", async () => {
       const connectionStore = useConnectionStore();
       connectionStore.connections = [
         {
@@ -1240,8 +1248,8 @@ describe("ConnectionContextMenu", () => {
           sourceAnchor: "bottom",
           targetAnchor: "top",
           triggerMode: "auto",
-          summaryModel: "gemini-2.5-flash",
-          summaryProvider: "gemini",
+          summaryModel: "gpt-5.4",
+          summaryProvider: "codex",
           status: "idle",
         },
       ] as typeof connectionStore.connections;
@@ -1249,17 +1257,17 @@ describe("ConnectionContextMenu", () => {
       const capabilityStore = useProviderCapabilityStore();
       capabilityStore.syncFromPayload([
         {
-          name: "gemini",
+          name: "codex",
           capabilities: {
             chat: true,
             plugin: false,
             repository: false,
-            command: false,
             mcp: false,
+            goal: true,
           },
           availableModels: [
-            { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
-            { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+            { value: "gpt-5.4", label: "GPT-5.4" },
+            { value: "gpt-4.5", label: "GPT-4.5" },
           ],
         },
       ]);
@@ -1269,8 +1277,8 @@ describe("ConnectionContextMenu", () => {
 
       const buttons = wrapper.findAll("button");
       const labels = buttons.map((b) => b.text());
-      expect(labels.some((l) => l.includes("Gemini 2.5 Flash"))).toBe(true);
-      expect(labels.some((l) => l.includes("Gemini 2.5 Pro"))).toBe(true);
+      expect(labels.some((l) => l.includes("GPT-5.4"))).toBe(true);
+      expect(labels.some((l) => l.includes("GPT-4.5"))).toBe(true);
       // 不應顯示 Claude 模型
       expect(labels.some((l) => l.includes("Haiku"))).toBe(false);
       expect(labels.some((l) => l.includes("Sonnet"))).toBe(false);
@@ -1300,7 +1308,6 @@ describe("ConnectionContextMenu", () => {
             chat: true,
             plugin: false,
             repository: false,
-            command: false,
             mcp: false,
           },
           availableModels: [
@@ -1322,74 +1329,6 @@ describe("ConnectionContextMenu", () => {
 
   // ──────────────────────────────────────────────────────────────
   describe("Summary Provider 點擊子選單項目 - 成功流程", () => {
-    it("點擊 Gemini（非當前 claude）應呼叫 updateConnectionSummaryProvider，含 provider 與該 provider 預設模型", async () => {
-      // 設定 Gemini capability，讓 getDefaultModel 能回傳正確預設模型
-      const capabilityStore = useProviderCapabilityStore();
-      capabilityStore.syncFromPayload([
-        {
-          name: "claude",
-          capabilities: {
-            chat: true,
-            plugin: false,
-            repository: true,
-            command: true,
-            mcp: true,
-          },
-          availableModels: [
-            { value: "haiku", label: "Haiku" },
-            { value: "sonnet", label: "Sonnet" },
-            { value: "opus", label: "Opus" },
-          ],
-        },
-        {
-          name: "gemini",
-          capabilities: {
-            chat: true,
-            plugin: false,
-            repository: false,
-            command: false,
-            mcp: false,
-          },
-          // 第一個模型作為 getDefaultModel 回傳值
-          availableModels: [
-            { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
-            { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
-          ],
-        },
-      ]);
-
-      mockCreateWebSocketRequest.mockResolvedValue({
-        connection: {
-          id: "conn-123",
-          sourcePodId: "pod-upstream",
-          sourceAnchor: "bottom",
-          targetPodId: "pod-target",
-          targetAnchor: "top",
-          summaryProvider: "gemini",
-          summaryModel: "gemini-2.5-flash",
-        },
-      });
-
-      const connectionStore = useConnectionStore();
-      const spy = vi.spyOn(connectionStore, "updateConnectionSummaryProvider");
-
-      const wrapper = mountMenu();
-      await openProviderMenu(wrapper);
-
-      const providerWrapper = wrapper.findAll(".relative")[0]!;
-      const buttons = providerWrapper.findAll("button");
-      const geminiBtn = buttons.find((b) => b.text().includes("Gemini"));
-      await geminiBtn?.trigger("click");
-      await flushPromises();
-
-      // 第一個模型 "gemini-2.5-flash" 為 getDefaultModel 回傳值
-      expect(spy).toHaveBeenCalledWith(
-        "conn-123",
-        "gemini",
-        "gemini-2.5-flash",
-      );
-    });
-
     it("點擊 Codex（非當前 claude）應呼叫 updateConnectionSummaryProvider，含 codex 預設模型", async () => {
       const capabilityStore = useProviderCapabilityStore();
       capabilityStore.syncFromPayload([
@@ -1399,7 +1338,6 @@ describe("ConnectionContextMenu", () => {
             chat: true,
             plugin: false,
             repository: true,
-            command: true,
             mcp: true,
           },
           availableModels: [
@@ -1414,8 +1352,8 @@ describe("ConnectionContextMenu", () => {
             chat: true,
             plugin: false,
             repository: false,
-            command: false,
             mcp: false,
+            goal: true,
           },
           availableModels: [
             { value: "gpt-5.4", label: "GPT-5.4" },
@@ -1460,7 +1398,6 @@ describe("ConnectionContextMenu", () => {
             chat: true,
             plugin: false,
             repository: true,
-            command: true,
             mcp: true,
           },
           availableModels: [
@@ -1470,17 +1407,15 @@ describe("ConnectionContextMenu", () => {
           ],
         },
         {
-          name: "gemini",
+          name: "codex",
           capabilities: {
             chat: true,
             plugin: false,
             repository: false,
-            command: false,
             mcp: false,
+            goal: true,
           },
-          availableModels: [
-            { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
-          ],
+          availableModels: [{ value: "gpt-5.4", label: "GPT-5.4" }],
         },
       ]);
 
@@ -1491,8 +1426,8 @@ describe("ConnectionContextMenu", () => {
           sourceAnchor: "bottom",
           targetPodId: "pod-target",
           targetAnchor: "top",
-          summaryProvider: "gemini",
-          summaryModel: "gemini-2.5-flash",
+          summaryProvider: "codex",
+          summaryModel: "gpt-5.4",
         },
       });
 
@@ -1502,8 +1437,8 @@ describe("ConnectionContextMenu", () => {
 
       const providerWrapper = wrapper.findAll(".relative")[0]!;
       const buttons = providerWrapper.findAll("button");
-      const geminiBtn = buttons.find((b) => b.text().includes("Gemini"));
-      await geminiBtn?.trigger("click");
+      const codexBtn = buttons.find((b) => b.text().includes("Codex"));
+      await codexBtn?.trigger("click");
       await flushPromises();
 
       expect(
@@ -1520,23 +1455,20 @@ describe("ConnectionContextMenu", () => {
             chat: true,
             plugin: false,
             repository: true,
-            command: true,
             mcp: true,
           },
           availableModels: [{ value: "sonnet", label: "Sonnet" }],
         },
         {
-          name: "gemini",
+          name: "codex",
           capabilities: {
             chat: true,
             plugin: false,
             repository: false,
-            command: false,
             mcp: false,
+            goal: true,
           },
-          availableModels: [
-            { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
-          ],
+          availableModels: [{ value: "gpt-5.4", label: "GPT-5.4" }],
         },
       ]);
 
@@ -1547,8 +1479,8 @@ describe("ConnectionContextMenu", () => {
           sourceAnchor: "bottom",
           targetPodId: "pod-target",
           targetAnchor: "top",
-          summaryProvider: "gemini",
-          summaryModel: "gemini-2.5-flash",
+          summaryProvider: "codex",
+          summaryModel: "gpt-5.4",
         },
       });
 
@@ -1557,8 +1489,8 @@ describe("ConnectionContextMenu", () => {
 
       const providerWrapper = wrapper.findAll(".relative")[0]!;
       const buttons = providerWrapper.findAll("button");
-      const geminiBtn = buttons.find((b) => b.text().includes("Gemini"));
-      await geminiBtn?.trigger("click");
+      const codexBtn = buttons.find((b) => b.text().includes("Codex"));
+      await codexBtn?.trigger("click");
       await flushPromises();
 
       expect(wrapper.emitted("summary-model-changed")).toBeTruthy();
@@ -1596,8 +1528,8 @@ describe("ConnectionContextMenu", () => {
 
       const providerWrapper = wrapper.findAll(".relative")[0]!;
       const buttons = providerWrapper.findAll("button");
-      const geminiBtn = buttons.find((b) => b.text().includes("Gemini"));
-      await geminiBtn?.trigger("click");
+      const codexBtn = buttons.find((b) => b.text().includes("Codex"));
+      await codexBtn?.trigger("click");
       await flushPromises();
 
       expect(toasts.value.some((t) => t.title === "變更失敗")).toBe(true);

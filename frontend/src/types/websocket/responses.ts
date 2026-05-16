@@ -1,6 +1,5 @@
 import type { Pod, PodProvider, ProviderCapabilities } from "../pod";
 import type { Repository, RepositoryNote } from "@/types";
-import type { CommandNote } from "@/types";
 import type { AnchorPosition } from "@/types";
 import type { InstalledPlugin } from "../plugin";
 import type { ResultPayload } from "./index";
@@ -34,6 +33,10 @@ export interface PodRenamedPayload extends ResultPayload {
   pod?: Pod;
 }
 
+export interface PodGoalSetPayload extends ResultPayload {
+  pod?: Pod;
+}
+
 export interface PodModelSetPayload extends ResultPayload {
   pod?: Pod;
 }
@@ -50,7 +53,6 @@ export interface PodDeletedPayload extends ResultPayload {
   podId?: string;
   deletedNoteIds?: {
     repositoryNote?: string[];
-    commandNote?: string[];
   };
 }
 
@@ -181,7 +183,7 @@ export interface WorkflowCompletePayload extends ResultPayload {
 }
 
 export interface PasteError {
-  type: "pod" | "repositoryNote" | "commandNote";
+  type: "pod" | "repositoryNote";
   originalId: string;
   error: string;
 }
@@ -189,7 +191,6 @@ export interface PasteError {
 export interface CanvasPasteResultPayload extends ResultPayload {
   createdPods: Pod[];
   createdRepositoryNotes: RepositoryNote[];
-  createdCommandNotes: CommandNote[];
   createdConnections: ConnectionPayloadItem[];
   podIdMapping: Record<string, string>;
   errors: PasteError[];
@@ -214,31 +215,6 @@ export interface RepositoryGitCloneResultPayload {
 
 export interface PodMessagesClearedPayload {
   podId: string;
-}
-
-export interface CommandCreatedPayload {
-  requestId: string;
-  success: boolean;
-  command?: { id: string; name: string };
-  error?: string;
-}
-
-export interface CommandUpdatedPayload {
-  requestId: string;
-  success: boolean;
-  command?: { id: string; name: string };
-  error?: string;
-}
-
-export interface CommandReadResultPayload {
-  requestId: string;
-  success: boolean;
-  command?: { id: string; name: string; content: string };
-  error?: string;
-}
-
-export interface CommandNoteCreatedPayload extends ResultPayload {
-  note?: CommandNote;
 }
 
 export interface ScheduleFiredPayload {
@@ -288,37 +264,6 @@ export interface RepositoryPullLatestProgressPayload {
 
 export interface RepositoryPullLatestResultPayload extends ResultPayload {
   repositoryId?: string;
-}
-
-export interface GroupCreatedPayload {
-  requestId: string;
-  success: boolean;
-  group?: {
-    id: string;
-    name: string;
-    type: "command";
-  };
-  error?: string;
-}
-
-export interface GroupListResultPayload {
-  requestId: string;
-  success: boolean;
-  groups?: Array<{
-    id: string;
-    name: string;
-    type: "command";
-  }>;
-  error?: string;
-}
-
-export interface GroupDeletedPayload extends ResultPayload {
-  groupId?: string;
-}
-
-export interface MovedToGroupPayload extends ResultPayload {
-  itemId?: string;
-  groupId?: string | null;
 }
 
 export interface WorkflowBranchPendingPayload {
@@ -399,8 +344,8 @@ export interface CursorMovedPayload {
 
 /** MCP server 清單查詢結果 */
 export interface McpListResultPayload extends ResultPayload {
-  /** 與後端 providerSchema（"claude" | "codex" | "gemini"）對齊；三個 provider 都會回傳實際清單 */
-  provider?: "claude" | "codex" | "gemini";
+  /** 與後端 MCP allowlist 對齊；僅 claude / codex / opencode 會回傳實際清單 */
+  provider?: "claude" | "codex" | "opencode";
   items?: McpListItem[];
 }
 
@@ -413,8 +358,8 @@ export interface PodMcpServerNamesUpdatedPayload extends ResultPayload {
    * self-healing 過濾掉的 MCP server name 清單。
    * 不存在於對應 provider 設定檔的 MCP server name 清單：
    * - claude → ~/.claude.json
-   * - gemini → ~/.gemini/settings.json
    * - codex  → ~/.codex/config.toml
+   * - opencode → ~/.config/opencode/opencode.json
    */
   ignoredNames?: string[];
   pod?: Pod;

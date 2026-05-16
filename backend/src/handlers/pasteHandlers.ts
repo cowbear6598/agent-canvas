@@ -3,8 +3,6 @@ import type {
   CanvasPasteResultPayload,
   PasteError,
   RepositoryNote,
-  CommandNote,
-  Pod,
 } from "../types";
 import { toPodPublicView } from "../types/index.js";
 import type { CanvasPastePayload } from "../schemas";
@@ -16,40 +14,6 @@ import {
   createPastedNotesByType,
   createPastedConnections,
 } from "./paste/pasteHelpers.js";
-import { podStore } from "../services/podStore.js";
-
-/**
- * 批次同步 bound notes 到對應的 Pod。
- * 先收集所有不重複的 boundToPodId，一次 getByIds 查回所有 Pod，
- * 建立 Map 後對每個 note 做 O(1) 查找，避免 N 次 DB 查詢。
- */
-function syncBoundNotesToPod<TNote extends { boundToPodId: string | null }>(
-  canvasId: string,
-  notes: TNote[],
-  getResourceId: (note: TNote) => string,
-  shouldUpdate: (pod: Pod, resourceId: string) => boolean,
-  updatePod: (canvasId: string, podId: string, resourceId: string) => void,
-): void {
-  // 收集去重後的 podId 列表
-  const podIds = [
-    ...new Set(
-      notes
-        .map((note) => note.boundToPodId)
-        .filter((id): id is string => id !== null),
-    ),
-  ];
-
-  // 一次批次查詢，避免 N 次 getById
-  const podMap = podStore.getByIds(canvasId, podIds);
-
-  for (const note of notes) {
-    if (!note.boundToPodId) continue;
-    const pod = podMap.get(note.boundToPodId);
-    if (pod && shouldUpdate(pod, getResourceId(note))) {
-      updatePod(canvasId, note.boundToPodId, getResourceId(note));
-    }
-  }
-}
 
 export const handleCanvasPaste = withCanvasId<CanvasPastePayload>(
   WebSocketResponseEvents.CANVAS_PASTE_RESULT,
@@ -59,7 +23,7 @@ export const handleCanvasPaste = withCanvasId<CanvasPastePayload>(
     payload: CanvasPastePayload,
     requestId: string,
   ): Promise<void> => {
-    const { pods, repositoryNotes, commandNotes, connections } = payload;
+    const { pods, repositoryNotes, connections } = payload;
 
     const podIdMapping: Record<string, string> = {};
     const errors: PasteError[] = [];
@@ -78,12 +42,6 @@ export const handleCanvasPaste = withCanvasId<CanvasPastePayload>(
         repositoryNotes,
         podIdMapping,
       ),
-      command: createPastedNotesByType(
-        "command",
-        canvasId,
-        commandNotes ?? [],
-        podIdMapping,
-      ),
     };
 
     errors.push(...Object.values(noteResultMap).flatMap((r) => r.errors));
@@ -94,14 +52,6 @@ export const handleCanvasPaste = withCanvasId<CanvasPastePayload>(
       podIdMapping,
     );
 
-    syncBoundNotesToPod(
-      canvasId,
-      noteResultMap.command.notes as CommandNote[],
-      (note) => note.commandId,
-      (pod) => !pod.commandId,
-      (cId, pId, cmdId) => podStore.setCommandId(cId, pId, cmdId),
-    );
-
     const response: CanvasPasteResultPayload = {
       canvasId,
       requestId,
@@ -109,7 +59,6 @@ export const handleCanvasPaste = withCanvasId<CanvasPastePayload>(
       createdPods: createdPods.map(toPodPublicView),
       createdRepositoryNotes: noteResultMap.repository
         .notes as RepositoryNote[],
-      createdCommandNotes: noteResultMap.command.notes as CommandNote[],
       createdConnections,
       podIdMapping,
       errors,
@@ -129,8 +78,6 @@ export const handleCanvasPaste = withCanvasId<CanvasPastePayload>(
     if (createdPods.length > 0) pasteItems.push(`${createdPods.length} pod`);
     if (response.createdRepositoryNotes.length > 0)
       pasteItems.push(`${response.createdRepositoryNotes.length} repository`);
-    if (response.createdCommandNotes.length > 0)
-      pasteItems.push(`${response.createdCommandNotes.length} command`);
     if (createdConnections.length > 0)
       pasteItems.push(`${createdConnections.length} connection`);
     if (errors.length > 0) pasteItems.push(`${errors.length} 個錯誤`);

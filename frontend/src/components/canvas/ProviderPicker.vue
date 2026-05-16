@@ -3,7 +3,6 @@
 // providerConfig 改由 providerCapabilityStore.getDefaultOptions 提供，不再 hardcode 預設 model
 import AnthropicLogo from "@/components/icons/AnthropicLogo.vue";
 import OpenAILogo from "@/components/icons/OpenAILogo.vue";
-import GeminiLogo from "@/components/icons/GeminiLogo.vue";
 import { Cpu } from "lucide-vue-next";
 import type { PodProvider, ProviderConfig } from "@/types/pod";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
@@ -119,20 +118,6 @@ function handleSelectProvider(provider: PodProvider): void {
           />
         </span>
         <span class="font-mono">Codex</span>
-      </button>
-    </div>
-
-    <div @click="() => handleSelectProvider('gemini')">
-      <button
-        class="pod-menu-submenu-item flex items-center gap-3"
-        :disabled="isProviderDisabled('gemini')"
-      >
-        <span
-          class="w-8 h-8 rounded-full flex items-center justify-center border border-doodle-ink bg-white flex-shrink-0"
-        >
-          <GeminiLogo :size="16" />
-        </span>
-        <span class="font-mono">Gemini</span>
       </button>
     </div>
 

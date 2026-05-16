@@ -1,5 +1,5 @@
 import { createNoteStore } from "./GenericNoteStore.js";
-import type { RepositoryNote, CommandNote } from "../types";
+import type { RepositoryNote } from "../types";
 
 export const repositoryNoteStore = createNoteStore<
   RepositoryNote,
@@ -8,10 +8,4 @@ export const repositoryNoteStore = createNoteStore<
   noteType: "repository",
   foreignKeyField: "repositoryId",
   storeName: "RepositoryNoteStore",
-});
-
-export const commandNoteStore = createNoteStore<CommandNote, "commandId">({
-  noteType: "command",
-  foreignKeyField: "commandId",
-  storeName: "CommandNoteStore",
 });

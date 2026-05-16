@@ -1,11 +1,10 @@
 import type { Ref } from "vue";
 import type { UnbindBehavior } from "@/stores/note/noteBindingActions";
 
-export type NoteType = "repository" | "command";
+export type NoteType = "repository";
 
 interface NoteItem {
   repositoryId?: string;
-  commandId?: string;
 }
 
 export interface BaseBindableNoteStore {
@@ -26,12 +25,8 @@ interface NoteStores {
   repositoryStore: BaseBindableNoteStore & {
     unbindFromPod: (podId: string, behavior: UnbindBehavior) => Promise<void>;
   };
-  commandStore: BaseBindableNoteStore & {
-    unbindFromPod: (podId: string, behavior: UnbindBehavior) => Promise<void>;
-  };
   podStore: {
     updatePodRepository: (podId: string, itemId: string | null) => void;
-    updatePodCommand: (podId: string, itemId: string | null) => void;
   };
 }
 
@@ -58,7 +53,7 @@ export function usePodNoteBinding(
   podId: Ref<string>,
   stores: NoteStores,
 ): UsePodNoteBindingReturn {
-  const { repositoryStore, commandStore, podStore } = stores;
+  const { repositoryStore, podStore } = stores;
 
   const noteStoreMap: Record<NoteType, NoteStoreMapping> = {
     repository: {
@@ -69,14 +64,6 @@ export function usePodNoteBinding(
       getItemId: (note) => note.repositoryId,
       updatePodField: (pid, itemId) =>
         podStore.updatePodRepository(pid, itemId),
-    },
-    command: {
-      bindToPod: (noteId, pid) => commandStore.bindToPod(noteId, pid),
-      getNoteById: (noteId) => commandStore.getNoteById(noteId),
-      unbindFromPod: (pid, behavior) =>
-        commandStore.unbindFromPod(pid, behavior),
-      getItemId: (note) => note.commandId,
-      updatePodField: (pid, itemId) => podStore.updatePodCommand(pid, itemId),
     },
   };
 

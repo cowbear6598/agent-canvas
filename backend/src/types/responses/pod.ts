@@ -49,6 +49,14 @@ export interface PodModelSetPayload {
   error?: string;
 }
 
+export interface PodGoalSetPayload {
+  requestId: string;
+  canvasId: string;
+  success: boolean;
+  pod?: PodPublicView;
+  error?: string;
+}
+
 export interface PodScheduleSetPayload {
   requestId: string;
   canvasId: string;
@@ -83,7 +91,6 @@ export interface PodDeletedPayload {
   podId?: string;
   deletedNoteIds?: {
     repositoryNote?: string[];
-    commandNote?: string[];
   };
   error?: string;
 }
@@ -177,22 +184,6 @@ export interface PodRepositoryUnboundPayload {
 }
 
 export interface PodMultiInstanceSetPayload {
-  requestId: string;
-  canvasId: string;
-  success: boolean;
-  pod?: PodPublicView;
-  error?: string;
-}
-
-export interface PodCommandBoundPayload {
-  requestId: string;
-  canvasId: string;
-  success: boolean;
-  pod?: PodPublicView;
-  error?: string;
-}
-
-export interface PodCommandUnboundPayload {
   requestId: string;
   canvasId: string;
   success: boolean;

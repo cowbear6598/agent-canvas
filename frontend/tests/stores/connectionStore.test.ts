@@ -289,7 +289,6 @@ describe("connectionStore", () => {
             chat: true,
             plugin: false,
             repository: true,
-            command: true,
             mcp: true,
           },
           availableModels: [
@@ -303,7 +302,6 @@ describe("connectionStore", () => {
             chat: true,
             plugin: true,
             repository: false,
-            command: true,
             mcp: false,
           },
           availableModels: [
@@ -337,7 +335,12 @@ describe("connectionStore", () => {
         "top",
       );
 
-      expect(result).toEqual(newConnection);
+      expect(result).toEqual(
+        expect.objectContaining({
+          ...newConnection,
+          summaryProvider: "claude",
+        }),
+      );
       expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
         expect.objectContaining({
           requestEvent: "connection:create",
@@ -782,7 +785,12 @@ describe("connectionStore", () => {
         "branch",
       );
 
-      expect(result).toEqual(updatedConnection);
+      expect(result).toEqual(
+        expect.objectContaining({
+          ...updatedConnection,
+          summaryProvider: "claude",
+        }),
+      );
       expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
         expect.objectContaining({
           requestEvent: "connection:update",
@@ -2137,7 +2145,6 @@ describe("connectionStore", () => {
             chat: true,
             plugin: false,
             repository: true,
-            command: true,
             mcp: true,
           },
           availableModels: [
@@ -2152,7 +2159,6 @@ describe("connectionStore", () => {
             chat: true,
             plugin: false,
             repository: false,
-            command: false,
             mcp: false,
           },
           availableModels: [
@@ -2323,15 +2329,15 @@ describe("connectionStore", () => {
           sourceAnchor: "bottom",
           targetPodId: "pod-b",
           targetAnchor: "top",
-          summaryProvider: "gemini",
-          summaryModel: "gemini-2.5-flash",
+          summaryProvider: "claude",
+          summaryModel: "sonnet",
         },
       });
 
       await store.updateConnectionSummaryProvider(
         "conn-1",
-        "gemini",
-        "gemini-2.5-flash",
+        "claude",
+        "sonnet",
       );
 
       expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
@@ -2340,8 +2346,8 @@ describe("connectionStore", () => {
           responseEvent: "connection:updated",
           payload: expect.objectContaining({
             connectionId: "conn-1",
-            summaryProvider: "gemini",
-            summaryModel: "gemini-2.5-flash",
+            summaryProvider: "claude",
+            summaryModel: "sonnet",
             canvasId: "canvas-1",
           }),
         }),
@@ -2384,8 +2390,8 @@ describe("connectionStore", () => {
 
       const result = await store.updateConnectionSummaryProvider(
         "conn-1",
-        "gemini",
-        "gemini-2.5-flash",
+        "claude",
+        "sonnet",
       );
 
       expect(result).toBeNull();
@@ -2415,15 +2421,15 @@ describe("connectionStore", () => {
           sourceAnchor: "bottom",
           targetPodId: "pod-b",
           targetAnchor: "top",
-          summaryProvider: "gemini",
-          summaryModel: "gemini-2.5-flash",
+          summaryProvider: "claude",
+          summaryModel: "sonnet",
         },
       });
 
       await store.updateConnectionSummaryProvider(
         "conn-1",
-        "gemini",
-        "gemini-2.5-flash",
+        "claude",
+        "sonnet",
       );
 
       const sentPayload =
@@ -2461,7 +2467,7 @@ describe("connectionStore", () => {
 
   // ── normalizeConnection summaryProvider 處理 ─────────────────────────────
   describe("normalizeConnection summaryProvider 正規化", () => {
-    it("loadConnectionsFromBackend：raw 帶 summaryProvider 時應直接保留", async () => {
+    it("loadConnectionsFromBackend：legacy gemini summaryProvider 應收斂為 claude", async () => {
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
       const store = useConnectionStore();
@@ -2481,18 +2487,22 @@ describe("connectionStore", () => {
 
       await store.loadConnectionsFromBackend();
 
-      expect(store.connections[0]?.summaryProvider).toBe("gemini");
+      expect(store.connections[0]?.summaryProvider).toBe("claude");
+      expect(store.connections[0]?.summaryModel).toBe("sonnet");
     });
 
-    it("loadConnectionsFromBackend：raw 不帶 summaryProvider 時欄位應為 undefined", async () => {
+    it("loadConnectionsFromBackend：raw 不帶 summaryProvider 時應從 source provider 收斂", async () => {
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
       const store = useConnectionStore();
+      const podStore = usePodStore();
+      podStore.pods = [createMockPod({ id: "pod-a", provider: "codex" })];
 
       mockCreateWebSocketRequest.mockResolvedValueOnce({
         connections: [
           {
             id: "conn-1",
+            sourcePodId: "pod-a",
             sourceAnchor: "bottom",
             targetPodId: "pod-b",
             targetAnchor: "top",
@@ -2502,19 +2512,21 @@ describe("connectionStore", () => {
 
       await store.loadConnectionsFromBackend();
 
-      // summaryProvider 未帶入時應為 undefined（非 null、非其他值）
-      expect(store.connections[0]?.summaryProvider).toBeUndefined();
+      expect(store.connections[0]?.summaryProvider).toBe("codex");
     });
 
-    it("loadConnectionsFromBackend：raw summaryProvider 為 null 時應保留 null", async () => {
+    it("loadConnectionsFromBackend：raw summaryProvider 為 null 時應從 source provider 收斂", async () => {
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
       const store = useConnectionStore();
+      const podStore = usePodStore();
+      podStore.pods = [createMockPod({ id: "pod-a", provider: "codex" })];
 
       mockCreateWebSocketRequest.mockResolvedValueOnce({
         connections: [
           {
             id: "conn-1",
+            sourcePodId: "pod-a",
             sourceAnchor: "bottom",
             targetPodId: "pod-b",
             targetAnchor: "top",
@@ -2525,13 +2537,13 @@ describe("connectionStore", () => {
 
       await store.loadConnectionsFromBackend();
 
-      expect(store.connections[0]?.summaryProvider).toBeNull();
+      expect(store.connections[0]?.summaryProvider).toBe("codex");
     });
   });
 
   // ── updateConnectionFromEvent summaryProvider 處理 ──────────────────────
   describe("updateConnectionFromEvent summaryProvider 更新策略", () => {
-    it("broadcast 帶 summaryProvider 具體值時應覆蓋現有值", () => {
+    it("broadcast 帶 legacy gemini summaryProvider 時應正規化為 claude", () => {
       const store = useConnectionStore();
       const existingConn = createMockConnection({
         id: "conn-1",
@@ -2551,13 +2563,17 @@ describe("connectionStore", () => {
         decideStatus: "none" as DecideStatus,
       });
 
-      expect(store.connections[0]?.summaryProvider).toBe("gemini");
+      expect(store.connections[0]?.summaryProvider).toBe("claude");
+      expect(store.connections[0]?.summaryModel).toBe("gemini-2.5-flash");
     });
 
-    it("broadcast 帶 summaryProvider null 時應寫入 null（而非保留既有值）", () => {
+    it("broadcast 帶 summaryProvider null 時應從 source provider 收斂為 concrete 值", () => {
       const store = useConnectionStore();
+      const podStore = usePodStore();
+      podStore.pods = [createMockPod({ id: "pod-a", provider: "codex" })];
       const existingConn = createMockConnection({
         id: "conn-1",
+        sourcePodId: "pod-a",
         summaryProvider: "codex",
         summaryModel: "gpt-5.4",
       });
@@ -2573,16 +2589,15 @@ describe("connectionStore", () => {
         decideStatus: "none" as DecideStatus,
       });
 
-      // null 應直接寫入，不視為「未帶欄位」
-      expect(store.connections[0]?.summaryProvider).toBeNull();
+      expect(store.connections[0]?.summaryProvider).toBe("codex");
     });
 
     it("broadcast 不帶 summaryProvider 欄位時應保留既有值", () => {
       const store = useConnectionStore();
       const existingConn = createMockConnection({
         id: "conn-1",
-        summaryProvider: "gemini",
-        summaryModel: "gemini-2.5-flash",
+        summaryProvider: "codex",
+        summaryModel: "gpt-5.4",
       });
       store.connections = [existingConn];
 
@@ -2605,8 +2620,7 @@ describe("connectionStore", () => {
         >[0],
       );
 
-      // 未帶入 summaryProvider 時保留既有的 gemini
-      expect(store.connections[0]?.summaryProvider).toBe("gemini");
+      expect(store.connections[0]?.summaryProvider).toBe("codex");
     });
 
     it("broadcast 帶 summaryProvider 具體值時 summaryModel 應一併更新", () => {

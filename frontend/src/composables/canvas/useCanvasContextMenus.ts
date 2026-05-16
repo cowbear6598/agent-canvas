@@ -110,7 +110,7 @@ export function useCanvasContextMenus(options: UseCanvasContextMenusOptions): {
     connectionId: "",
     triggerMode: "auto" as TriggerMode,
     summaryModel: DEFAULT_SUMMARY_MODEL,
-    summaryProvider: undefined,
+    summaryProvider: "claude",
   });
 
   const {
@@ -153,8 +153,7 @@ export function useCanvasContextMenus(options: UseCanvasContextMenusOptions): {
       connectionId: connection.id,
       triggerMode: connection.triggerMode,
       summaryModel: connection.summaryModel ?? DEFAULT_SUMMARY_MODEL,
-      // 直接帶入 summaryProvider，UI 層自行處理 null/undefined 顯示邏輯
-      summaryProvider: connection.summaryProvider,
+      summaryProvider: connection.summaryProvider ?? "claude",
       label: connection.label,
       description: connection.description,
       branchProvider: connection.branchProvider,

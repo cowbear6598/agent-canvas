@@ -13,5 +13,4 @@ export { useProgressTracker } from "./useProgressTracker";
 export { useNoteEventHandlers } from "./useNoteEventHandlers";
 export { useRemoteCursors } from "./useRemoteCursors";
 export { useCursorTracker } from "./useCursorTracker";
-export { useEditModal } from "./useEditModal";
 export { useDeleteResource } from "./useDeleteResource";

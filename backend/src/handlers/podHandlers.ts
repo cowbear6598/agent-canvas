@@ -3,6 +3,7 @@ import type {
   PodListResultPayload,
   PodGetResultPayload,
   PodScheduleSetPayload,
+  PodGoalSetPayload,
   PodPluginsSetPayload,
   Pod,
   PodPublicView,
@@ -15,6 +16,7 @@ import type {
   PodGetPayload,
   PodMovePayload,
   PodRenamePayload,
+  PodSetGoalPayload,
   PodSetModelPayload,
   PodSetThinkingLevelPayload,
   PodSetSchedulePayload,
@@ -47,11 +49,11 @@ export const handlePodCreate = withCanvasId<PodCreatePayload>(
     payload: PodCreatePayload,
     requestId: string,
   ): Promise<void> => {
-    const { name, x, y, rotation, provider, providerConfig } = payload;
+    const { name, x, y, rotation, provider, providerConfig, goal } = payload;
 
     const result = await createPodWithWorkspace(
       canvasId,
-      { name, x, y, rotation, provider, providerConfig },
+      { name, x, y, rotation, provider, providerConfig, goal },
       requestId,
     );
 
@@ -199,6 +201,28 @@ export const handlePodMove = withCanvasId<PodMovePayload>(
       requestId,
       WebSocketResponseEvents.POD_MOVED,
       (pod) => ({ requestId, canvasId, success: true, pod }),
+    );
+  },
+);
+
+export const handlePodSetGoal = withCanvasId<PodSetGoalPayload>(
+  WebSocketResponseEvents.POD_GOAL_SET,
+  async (
+    connectionId: string,
+    canvasId: string,
+    payload: PodSetGoalPayload,
+    requestId: string,
+  ): Promise<void> => {
+    const { podId, goal } = payload;
+
+    handlePodUpdate(
+      connectionId,
+      canvasId,
+      podId,
+      { goal },
+      requestId,
+      WebSocketResponseEvents.POD_GOAL_SET,
+      (pod): PodGoalSetPayload => ({ requestId, canvasId, success: true, pod }),
     );
   },
 );

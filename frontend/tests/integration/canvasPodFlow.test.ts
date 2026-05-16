@@ -49,9 +49,7 @@ function createTestPodPayload(
     x: 100,
     y: 100,
     rotation: 0,
-    output: [],
     repositoryId: null,
-    commandId: null,
     schedule: null,
     provider: "claude",
     providerConfig: { model: "opus" },
@@ -279,7 +277,6 @@ describe("Canvas/Pod 操作完整流程", () => {
             chat: true,
             plugin: false,
             repository: false,
-            command: false,
             mcp: false,
           },
           availableModels: [

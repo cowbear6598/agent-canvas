@@ -4,23 +4,16 @@ import {
   providerRegistry,
   resolveModelWithFallback,
 } from "../../src/services/provider/index.js";
-import {
-  CODEX_AVAILABLE_MODELS,
-  GEMINI_AVAILABLE_MODELS,
-} from "../../src/services/provider/capabilities.js";
+import { CODEX_AVAILABLE_MODELS } from "../../src/services/provider/capabilities.js";
 
 // ================================================================
 // providerRegistry
 // ================================================================
 describe("providerRegistry", () => {
-  it("應包含 claude 與 codex", () => {
+  it("應包含 claude、codex 與 opencode", () => {
     expect(Object.keys(providerRegistry)).toContain("claude");
     expect(Object.keys(providerRegistry)).toContain("codex");
-  });
-
-  it("應包含 gemini", () => {
-    expect(Object.keys(providerRegistry)).toContain("gemini");
-    expect(providerRegistry.gemini).toBeDefined();
+    expect(Object.keys(providerRegistry)).toContain("opencode");
   });
 });
 
@@ -34,17 +27,15 @@ describe("getProvider().metadata.capabilities", () => {
     expect(caps.chat).toBe(true);
     expect(caps.plugin).toBe(true);
     expect(caps.repository).toBe(true);
-    expect(caps.command).toBe(true);
     expect(caps.mcp).toBe(true);
   });
 
-  it("codex 的 capabilities 中 chat=true、command=true、repository=true、plugin=true、mcp=true", () => {
+  it("codex 的 capabilities 中 chat=true、repository=true、plugin=true、mcp=true", () => {
     const caps = getProvider("codex").metadata.capabilities;
 
     expect(caps.chat).toBe(true);
     expect(caps.plugin).toBe(true);
     expect(caps.repository).toBe(true);
-    expect(caps.command).toBe(true);
     expect(caps.mcp).toBe(true);
   });
 });
@@ -109,38 +100,34 @@ describe("getProvider", () => {
     expect(first).toBe(second);
   });
 
-  it("getProvider('gemini') 應回傳 metadata.name === 'gemini' 的 GeminiProvider 實例", () => {
-    const provider = getProvider("gemini");
+  it("getProvider('opencode') 應回傳 metadata.name === 'opencode' 的 OpencodeProvider 實例", () => {
+    const provider = getProvider("opencode");
 
     expect(provider).toBeDefined();
-    expect(provider.metadata.name).toBe("gemini");
+    expect(provider.metadata.name).toBe("opencode");
   });
 });
 
-// ================================================================
-// resolveModelWithFallback — gemini
-// ================================================================
-describe("resolveModelWithFallback — gemini", () => {
-  it("gemini 傳入合法 model 時應原值回傳，didFallback=false", () => {
-    const validModel = GEMINI_AVAILABLE_MODELS[0].value;
-    const result = resolveModelWithFallback("gemini", validModel);
+describe("resolveModelWithFallback — claude / codex", () => {
+  it("claude 傳入合法 model 時應原值回傳，didFallback=false", () => {
+    const result = resolveModelWithFallback("claude", "sonnet");
 
-    expect(result.resolved).toBe(validModel);
+    expect(result.resolved).toBe("sonnet");
     expect(result.didFallback).toBe(false);
   });
 
-  it("gemini 傳入合法 model 'gemini-2.5-pro' 時 resolved === 'gemini-2.5-pro'", () => {
-    const result = resolveModelWithFallback("gemini", "gemini-2.5-pro");
+  it("codex 傳入合法 model 'gpt-5.4' 時 resolved === 'gpt-5.4'", () => {
+    const result = resolveModelWithFallback("codex", "gpt-5.4");
 
-    expect(result.resolved).toBe("gemini-2.5-pro");
+    expect(result.resolved).toBe("gpt-5.4");
     expect(result.didFallback).toBe(false);
   });
 
-  it("gemini 傳入非法 model 時應 fallback 為 geminiProvider 預設 model", () => {
-    const defaultModel = getProvider("gemini").metadata.defaultOptions as {
+  it("claude 傳入非法 model 時應 fallback 為 claude 預設 model", () => {
+    const defaultModel = getProvider("claude").metadata.defaultOptions as {
       model: string;
     };
-    const result = resolveModelWithFallback("gemini", "invalid model");
+    const result = resolveModelWithFallback("claude", "invalid model");
 
     expect(result.resolved).toBe(defaultModel.model);
     expect(result.didFallback).toBe(true);

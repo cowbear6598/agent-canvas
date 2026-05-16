@@ -1,4 +1,9 @@
-import type { PodProvider, ProviderConfig } from "./pod";
+import type {
+  PodProvider,
+  ProviderConfig,
+  PodGoal,
+  PodGoalStatus,
+} from "./pod";
 import type { AnchorPosition, TriggerMode } from "./connection";
 
 export interface CopiedPod {
@@ -14,20 +19,12 @@ export interface CopiedPod {
   mcpServerNames?: string[];
   pluginIds?: string[];
   repositoryId?: string | null;
-  commandId?: string | null;
+  goal?: PodGoal | null;
+  goalStatus?: PodGoalStatus;
 }
 
 export interface CopiedRepositoryNote {
   repositoryId: string;
-  name: string;
-  x: number;
-  y: number;
-  boundToOriginalPodId: string | null;
-  originalPosition: { x: number; y: number } | null;
-}
-
-export interface CopiedCommandNote {
-  commandId: string;
   name: string;
   x: number;
   y: number;

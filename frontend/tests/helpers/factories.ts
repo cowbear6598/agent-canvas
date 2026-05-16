@@ -15,7 +15,6 @@ import type {
 } from "@/types/chat";
 import type { BaseNote } from "@/types/note";
 import type { Repository, RepositoryNote } from "@/types/repository";
-import type { CommandNote } from "@/types/command";
 import type { Group } from "@/types/group";
 import type { WorkflowRun, RunPodInstance } from "@/types/run";
 
@@ -104,10 +103,8 @@ export function createMockPod(overrides?: Partial<Pod>): Pod {
     name: `Pod ${podCounter}`,
     x: 100 * podCounter,
     y: 100 * podCounter,
-    output: [],
     rotation: 0,
     repositoryId: null,
-    commandId: null,
     schedule: null,
     mcpServerNames: [],
     pluginIds: [],
@@ -179,9 +176,9 @@ export function createMockAssistantMessage(
  * TODO Phase 6: canvas paste 重構後補回 mcpServer 型別
  */
 export function createMockNote(
-  type: "repository" | "command" | "mcpServer",
+  type: "repository" | "mcpServer",
   overrides?: Partial<BaseNote>,
-): RepositoryNote | CommandNote | (BaseNote & { mcpServerId: string }) {
+): RepositoryNote | (BaseNote & { mcpServerId: string }) {
   const baseNote: BaseNote = {
     id: `note-${++noteCounter}`,
     name: `Note ${noteCounter}`,
@@ -198,12 +195,6 @@ export function createMockNote(
         ...baseNote,
         repositoryId: `repository-${noteCounter}`,
       } as RepositoryNote;
-
-    case "command":
-      return {
-        ...baseNote,
-        commandId: `command-${noteCounter}`,
-      } as CommandNote;
 
     case "mcpServer":
       // TODO Phase 6: canvas paste 重構後補回 McpServerNote 型別

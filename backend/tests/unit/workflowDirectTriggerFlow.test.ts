@@ -48,7 +48,6 @@ function makePod(id: string, status: "idle" | "chatting" = "idle") {
     sessionId: null,
     repositoryId: null,
     workspacePath: path.join(config.canvasRoot, CANVAS_ID, `pod-${id}`),
-    commandId: null,
     status,
     x: 0,
     y: 0,

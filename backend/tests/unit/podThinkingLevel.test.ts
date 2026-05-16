@@ -2,7 +2,7 @@
  * Pod thinkingLevel 行為測試（Phase 5：B3–B12）
  *
  * 涵蓋：
- *  - [B3][B4][B5][B6] Pod 建立時 thinkingLevel 預設值寫入行為（透過 podStore.create + DB 重讀）
+ *  - [B3][B4][B5] Pod 建立時 thinkingLevel 預設值寫入行為（透過 podStore.create + DB 重讀）
  *  - [B7][B8][B9][B10] handlePodSetModel 切 model 時 thinkingLevel 清空 / 寫入新 default 行為
  *  - [B11][B12] handlePodSetThinkingLevel 寫入 DB + emit pod public view payload
  *
@@ -202,26 +202,6 @@ describe("Pod 建立預設 thinkingLevel 寫入", () => {
     expect("thinkingLevel" in parsed).toBe(false);
   });
 
-  it("[B6] Gemini Pod 建立後 providerConfig 不應含 thinkingLevel key", () => {
-    const { pod } = podStore.create(TEST_CANVAS_ID, {
-      name: "pod-b6-gemini",
-      x: 0,
-      y: 0,
-      rotation: 0,
-      provider: "gemini",
-      providerConfig: { model: "gemini-2.5-pro" },
-    });
-
-    const row = getDb()
-      .prepare("SELECT provider_config_json FROM pods WHERE id = ?")
-      .get(pod.id) as { provider_config_json: string };
-    const parsed = JSON.parse(row.provider_config_json) as Record<
-      string,
-      unknown
-    >;
-    expect(parsed.model).toBe("gemini-2.5-pro");
-    expect("thinkingLevel" in parsed).toBe(false);
-  });
 });
 
 // ════════════════════════════════════════════════════════════════════════

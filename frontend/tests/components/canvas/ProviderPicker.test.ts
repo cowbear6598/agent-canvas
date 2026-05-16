@@ -12,9 +12,6 @@ vi.mock("@/components/icons/AnthropicLogo.vue", () => ({
 vi.mock("@/components/icons/OpenAILogo.vue", () => ({
   default: { name: "OpenAILogo", template: "<svg />" },
 }));
-vi.mock("@/components/icons/GeminiLogo.vue", () => ({
-  default: { name: "GeminiLogo", template: "<svg />" },
-}));
 
 // mock useToast，讓測試中可以驗證 toast 呼叫
 const mockToast = vi.fn();
@@ -33,10 +30,9 @@ vi.mock("@/services/websocket", () => ({
   WebSocketResponseEvents: { PROVIDER_LIST_RESULT: "provider:list:result" },
 }));
 
-/** 測試用的 claude / codex / gemini defaultOptions */
+/** 測試用的 claude / codex defaultOptions */
 const CLAUDE_TEST_MODEL = "claude-opus-4-5";
 const CODEX_TEST_MODEL = "gpt-5.4";
-const GEMINI_TEST_MODEL = "gemini-2.5-pro";
 
 // ─── Store 注入 helpers ──────────────────────────────────────────────────────
 
@@ -46,18 +42,17 @@ const GEMINI_TEST_MODEL = "gemini-2.5-pro";
  * 為字串時注入對應 model。
  */
 function injectProviderMetadata(
-  provider: "claude" | "codex" | "gemini",
+  provider: "claude" | "codex",
   model: string | undefined,
 ): void {
   const store = useProviderCapabilityStore();
 
   const capabilitiesMap: Record<
-    "claude" | "codex" | "gemini",
+    "claude" | "codex",
     {
       chat: boolean;
       plugin: boolean;
       repository: boolean;
-      command: boolean;
       mcp: boolean;
     }
   > = {
@@ -65,21 +60,12 @@ function injectProviderMetadata(
       chat: true,
       plugin: true,
       repository: true,
-      command: true,
       mcp: true,
     },
     codex: {
       chat: true,
       plugin: false,
       repository: false,
-      command: false,
-      mcp: false,
-    },
-    gemini: {
-      chat: true,
-      plugin: false,
-      repository: false,
-      command: false,
       mcp: false,
     },
   };
@@ -107,7 +93,6 @@ function mountPicker() {
 function mountPickerWithDefaults(options?: {
   claudeModel?: string | null;
   codexModel?: string | null;
-  geminiModel?: string | null;
 }) {
   // claudeModel 為 null → 不注入；undefined → 注入預設值；字串 → 注入該值
   if (options?.claudeModel !== null) {
@@ -123,14 +108,6 @@ function mountPickerWithDefaults(options?: {
     injectProviderMetadata(
       "codex",
       options?.codexModel !== undefined ? options.codexModel : CODEX_TEST_MODEL,
-    );
-  }
-
-  // geminiModel 為 undefined 表示不注入；為 null 表示注入空 defaultOptions；為字串則注入該 model
-  if (options?.geminiModel !== undefined) {
-    injectProviderMetadata(
-      "gemini",
-      options.geminiModel !== null ? options.geminiModel : undefined,
     );
   }
 
@@ -242,59 +219,12 @@ describe("ProviderPicker", () => {
     });
   });
 
-  describe("選擇 Gemini 時的 emit payload", () => {
-    // A1：metadata 已載入（含 gemini）時，渲染 Gemini 按鈕且為可點狀態
-    it("A1：metadata 已含 gemini 時，Gemini 按鈕應為啟用狀態（非 disabled）", async () => {
-      injectProviderMetadata("claude", CLAUDE_TEST_MODEL);
-      injectProviderMetadata("codex", CODEX_TEST_MODEL);
-      injectProviderMetadata("gemini", GEMINI_TEST_MODEL);
-      const wrapper = mountPicker();
+  describe("Gemini 入口已移除", () => {
+    it("不應渲染 Gemini 按鈕", () => {
+      const wrapper = mountPickerWithDefaults();
+      const labels = wrapper.findAll("button").map((button) => button.text());
 
-      const buttons = wrapper.findAll("button");
-      // buttons[2] 為 Gemini（Claude=0, Codex=1, Gemini=2）
-      expect(buttons[2]!.attributes("disabled")).toBeUndefined();
-      wrapper.unmount();
-    });
-
-    // A2：gemini defaultOptions 缺 model 時，Gemini 按鈕為 disabled，點擊外層觸發 toast
-    it("A2：gemini defaultOptions 無 model 時，Gemini 按鈕應為 disabled，點擊外層應觸發 toast", async () => {
-      injectProviderMetadata("claude", CLAUDE_TEST_MODEL);
-      injectProviderMetadata("codex", CODEX_TEST_MODEL);
-      // gemini 注入空 defaultOptions，模擬 metadata 未就緒
-      injectProviderMetadata("gemini", undefined);
-      const wrapper = mountPicker();
-
-      const buttons = wrapper.findAll("button");
-      expect(buttons[2]!.attributes("disabled")).toBeDefined();
-
-      // 點擊外層 div（事件代理），驗證 showLoadingToast 被呼叫
-      const geminiWrapper = wrapper.findAll("div.pod-menu-submenu > div")[2]!;
-      await geminiWrapper.trigger("click");
-      expect(mockToast).toHaveBeenCalledWith(
-        expect.objectContaining({ title: "Provider" }),
-      );
-      wrapper.unmount();
-    });
-
-    // A3：點擊 Gemini 按鈕 emit select，payload 含正確 provider 與 providerConfig
-    it("A3：點擊 Gemini 按鈕應 emit select，payload 包含 provider='gemini' 與正確 model", async () => {
-      injectProviderMetadata("claude", CLAUDE_TEST_MODEL);
-      injectProviderMetadata("codex", CODEX_TEST_MODEL);
-      injectProviderMetadata("gemini", GEMINI_TEST_MODEL);
-      const wrapper = mountPicker();
-
-      const buttons = wrapper.findAll("button");
-      await buttons[2]!.trigger("click");
-
-      const emitted = wrapper.emitted("select");
-      expect(emitted).toBeTruthy();
-
-      const payload = (emitted as unknown[][])[0]![0] as {
-        provider: string;
-        providerConfig: { model: string };
-      };
-      expect(payload.provider).toBe("gemini");
-      expect(payload.providerConfig).toEqual({ model: GEMINI_TEST_MODEL });
+      expect(labels.some((label) => label.includes("Gemini"))).toBe(false);
       wrapper.unmount();
     });
   });

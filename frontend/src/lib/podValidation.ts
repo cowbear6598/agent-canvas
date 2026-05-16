@@ -1,4 +1,10 @@
-import type { Pod, PodProvider, ProviderConfig } from "@/types";
+import type {
+  Pod,
+  PodProvider,
+  ProviderConfig,
+  PodGoal,
+  PodGoalStatus,
+} from "@/types";
 import { validatePodName } from "@/lib/sanitize";
 import { resolvePodProvider } from "@/lib/providerOptions";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
@@ -11,24 +17,34 @@ function hasValidPosition(pod: Pod): boolean {
   return isFinite(pod.x) && isFinite(pod.y) && isFinite(pod.rotation);
 }
 
-function hasValidOutput(pod: Pod): boolean {
-  return (
-    Array.isArray(pod.output) &&
-    pod.output.every((item) => typeof item === "string")
-  );
-}
-
 export function isValidPod(pod: Pod): boolean {
-  return hasValidIdentity(pod) && hasValidPosition(pod) && hasValidOutput(pod);
+  return hasValidIdentity(pod) && hasValidPosition(pod);
 }
 
-function pickOutputArray(
-  preservedOutput: string[] | undefined,
-  podOutput: string[] | undefined,
-): string[] {
-  if (Array.isArray(preservedOutput)) return preservedOutput;
-  if (Array.isArray(podOutput)) return podOutput;
-  return [];
+function normalizeGoal(goal: PodGoal | null | undefined): PodGoal | null {
+  if (!goal || !Array.isArray(goal.todos)) return null;
+
+  const todos = goal.todos
+    .map((todo) => ({
+      id: String(todo.id ?? "").trim(),
+      text: String(todo.text ?? "").trim(),
+    }))
+    .filter((todo) => todo.id.length > 0 && todo.text.length > 0);
+
+  return todos.length > 0 ? { todos } : null;
+}
+
+function deriveGoalStatus(goal: PodGoal | null): PodGoalStatus {
+  return goal ? "ready" : "unset";
+}
+
+export function isPodReadyToExecute(
+  pod: Pick<Pod, "canExecute" | "goalStatus" | "goal"> | null | undefined,
+): boolean {
+  if (!pod) return true;
+  if (typeof pod.canExecute === "boolean") return pod.canExecute;
+  if (pod.goalStatus !== undefined) return pod.goalStatus === "ready";
+  return normalizeGoal(pod.goal) !== null;
 }
 
 /**
@@ -77,21 +93,20 @@ export function isValidModelName(model: string): boolean {
 
 /**
  * 補全 Pod 缺少的欄位
- * @param pod Pod 物件
- * @param preservedOutput 現有的 output（用於保留）
- * @returns 補全後的 Pod
  */
-export function enrichPod(pod: Pod, preservedOutput?: string[]): Pod {
-  // 缺 provider 時視為舊有的 Claude Pod
+export function enrichPod(pod: Pod): Pod {
+  // 缺 provider 或 legacy Gemini 時一律收斂成目前仍支援的 provider。
   const provider: PodProvider = resolvePodProvider(pod);
+  const goal = normalizeGoal(pod.goal);
 
   return {
     ...pod,
     x: pod.x ?? 100,
     y: pod.y ?? 150,
     rotation: pod.rotation ?? Math.random() * 2 - 1,
-    output: pickOutputArray(preservedOutput, pod.output),
-    commandId: pod.commandId ?? null,
+    goal,
+    goalStatus: deriveGoalStatus(goal),
+    canExecute: goal !== null,
     schedule: pod.schedule ?? null,
     pluginIds: pod.pluginIds ?? [],
     provider,

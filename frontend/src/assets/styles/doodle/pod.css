@@ -21,6 +21,10 @@
     transform 0.15s ease;
   cursor: pointer;
   position: relative;
+  /* 移除小螢幕後 Pod 內容只剩 header + badge，會塌成不到 80px；
+     設 min-height 讓 Pod 至少能容納左右兩排 notch（top 68 + height 32 = 100）
+     並留一點底部空間，避免 slot 從 Pod 下緣穿出 */
+  min-height: 112px;
 }
 
 .pod-doodle:hover {
@@ -102,7 +106,7 @@
   content: "";
   position: absolute;
   left: -6px;
-  top: 42px;
+  top: 18px;
   width: 8px;
   height: 32px;
   background: var(--card);
@@ -116,7 +120,7 @@
 .pod-with-mcp-notch .mcp-notch {
   position: absolute;
   left: -6px;
-  top: 82px;
+  top: 58px;
   width: 8px;
   height: 32px;
   background: var(--card);
@@ -425,23 +429,14 @@
   );
 }
 
-/* Gemini Pod：淡天空藍 → 奶油白（--pod-provider-gradient-stop 終止） */
-.pod-provider-gemini {
-  background: linear-gradient(
-    to bottom,
-    var(--pod-provider-gemini-top) 0,
-    var(--card) var(--pod-provider-gradient-stop)
-  );
-}
-
 /* =============================================
    未知 Provider fallback badge（Phase 6 A）
 
    顯示條件：providerCapabilityStore.loaded = true
              且 isKnownProvider(pod.provider) = false
    設計原則：
-   - 插入在 PodHeader 下方、PodMiniScreen 上方
-   - 不遮蓋 output 歷史（無遮罩/overlay）
+   - 插入在 PodHeader 下方
+   - 不遮蓋下方內容（無遮罩/overlay）
    - 視覺語言：小型警示 badge，帶紅點 + 灰文字
    ============================================= */
 .unknown-provider-badge {
@@ -471,4 +466,30 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.goal-unset-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  margin-bottom: 4px;
+  border-radius: 999px;
+  background: oklch(0.96 0.04 85);
+  border: 1px solid oklch(0.82 0.07 85);
+}
+
+.goal-unset-badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: oklch(0.7 0.12 85);
+  flex-shrink: 0;
+}
+
+.goal-unset-badge__text {
+  font-size: 0.65rem;
+  color: oklch(0.42 0.09 85);
+  font-weight: 600;
+  line-height: 1.2;
 }

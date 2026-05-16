@@ -4,7 +4,6 @@ export * from "./resourceHelper.js";
 export * from "./testConstants.js";
 export * from "./messageHelper.js";
 export * from "./canvasHelper.js";
-export * from "./noteHelper.js";
 export * from "./gitTestHelper.js";
 export * from "./crudTestFactory.js";
 export * from "./noteTestFactory.js";

@@ -21,6 +21,13 @@ const { mockToast } = vi.hoisted(() => ({
   mockToast: vi.fn(),
 }));
 
+const mockGetPodById = vi.fn(() => ({
+  id: "pod-001",
+  goal: { todos: [{ id: "goal-1", text: "Ship it" }] },
+  goalStatus: "ready",
+  canExecute: true,
+}));
+
 vi.mock("@/composables/useToast", () => ({
   useToast: () => ({ toast: mockToast }),
 }));
@@ -56,6 +63,12 @@ const mockSendMessageWithUploadSession = vi.fn().mockResolvedValue(undefined);
 vi.mock("@/stores/chat/chatStore", () => ({
   useChatStore: () => ({
     sendMessageWithUploadSession: mockSendMessageWithUploadSession,
+  }),
+}));
+
+vi.mock("@/stores/pod/podStore", () => ({
+  usePodStore: () => ({
+    getPodById: mockGetPodById,
   }),
 }));
 
@@ -209,6 +222,12 @@ function createOptions(disabled = false) {
 describe("usePodFileDrop", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetPodById.mockReturnValue({
+      id: TEST_POD_ID,
+      goal: { todos: [{ id: "goal-1", text: "Ship it" }] },
+      goalStatus: "ready",
+      canExecute: true,
+    });
     // 預設：未上傳中
     mockIsUploading.mockReturnValue(false);
     // 預設：startUpload 回傳 sessionId

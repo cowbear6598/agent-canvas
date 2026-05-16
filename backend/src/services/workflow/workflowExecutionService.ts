@@ -1,8 +1,4 @@
-import type {
-  TriggerMode,
-  Connection,
-  ContentBlock,
-} from "../../types/index.js";
+import type { TriggerMode, Connection } from "../../types/index.js";
 import type {
   PipelineContext,
   PipelineMethods,
@@ -19,7 +15,7 @@ import { summaryService } from "../summaryService.js";
 import { logger } from "../../utils/logger.js";
 import { fireAndForget } from "../../utils/operationHelpers.js";
 import { executeStreamingChat } from "../claude/streamingChatExecutor.js";
-import { tryExpandCommandMessage } from "../commandExpander.js";
+import { prependGoalExecutionContext } from "../goalRuntime.js";
 import {
   buildTransferMessage,
   forEachMultiInputGroupConnection,
@@ -469,30 +465,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
 
     // targetPod 已於外層 triggerWorkflowWithSummary 驗證存在，此處直接取用
     const targetPod = podStore.getById(canvasId, targetPodId)!;
-    let resolvedMessage: string | ContentBlock[] = baseMessage;
-    const expandResult = await tryExpandCommandMessage(
-      targetPod,
-      baseMessage,
-      "workflow.executeClaudeQuery",
-    );
-    if (!expandResult.ok) {
-      // Command 不存在：與其他 caller 對齊，中斷本次執行並透過 delegate 標記錯誤
-      // 讓 workflow 調度器得以繼續處理佇列中其他節點，不靜默忽略展開失敗
-      logger.warn(
-        "Workflow",
-        "Warn",
-        `Pod「${targetPodId}」workflow 路徑：Command「${expandResult.commandId}」不存在，中止本次執行`,
-      );
-      await this.onWorkflowChatError(
-        params,
-        // WorkflowUserError 使訊息安全地傳至客戶端
-        new WorkflowUserError(
-          `Command「${expandResult.commandId}」不存在，請至 Pod 設定重新選擇或解除綁定`,
-        ),
-      );
-      return;
-    }
-    resolvedMessage = expandResult.message;
+    const resolvedMessage = prependGoalExecutionContext(targetPod, baseMessage);
 
     await execStrategy.addUserMessage(targetPodId, resolvedMessage);
 

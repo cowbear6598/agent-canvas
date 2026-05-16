@@ -45,7 +45,6 @@ describe("collectCopyData", () => {
           rotation: 0,
 
           repositoryId: null,
-          commandId: null,
           provider: "claude" as const,
           providerConfig: { model: "opus" },
         },
@@ -71,7 +70,6 @@ describe("collectCopyData", () => {
           rotation: 0,
 
           repositoryId: null,
-          commandId: null,
           provider: "codex" as const,
           providerConfig: { model: "gpt-5.4" },
         },
@@ -99,7 +97,6 @@ describe("collectCopyData", () => {
           rotation: 0,
 
           repositoryId: null,
-          commandId: null,
           provider: "claude" as const,
           providerConfig: { model: customModel },
         },
@@ -126,7 +123,6 @@ describe("collectCopyData", () => {
           rotation: 0,
 
           repositoryId: null,
-          commandId: null,
           provider: "claude" as const,
           providerConfig: { model: "opus" },
         },
@@ -138,7 +134,6 @@ describe("collectCopyData", () => {
           rotation: 0,
 
           repositoryId: null,
-          commandId: null,
           provider: "codex" as const,
           providerConfig: { model: "gpt-5.4" },
         },

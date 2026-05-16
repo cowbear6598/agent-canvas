@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { getClaudeOptions, getCodexOptions } from "@/lib/providerOptions";
+import {
+  getClaudeOptions,
+  getCodexOptions,
+  normalizePodProvider,
+} from "@/lib/providerOptions";
 import type { Pod } from "@/types";
 
 /** 建立最小合法的 Claude Pod */
@@ -10,7 +14,6 @@ function makeClaudePod(overrides: Partial<Pod> = {}): Pod {
     x: 100,
     y: 150,
     rotation: 0,
-    output: [],
     provider: "claude",
     providerConfig: { model: "claude-sonnet-4-5" },
     ...overrides,
@@ -25,7 +28,6 @@ function makeCodexPod(overrides: Partial<Pod> = {}): Pod {
     x: 200,
     y: 250,
     rotation: 0,
-    output: [],
     provider: "codex",
     providerConfig: { model: "codex-mini-latest" },
     ...overrides,
@@ -33,6 +35,16 @@ function makeCodexPod(overrides: Partial<Pod> = {}): Pod {
 }
 
 describe("providerOptions", () => {
+  describe("normalizePodProvider", () => {
+    it("legacy gemini 應正規化成 claude", () => {
+      expect(normalizePodProvider("gemini")).toBe("claude");
+    });
+
+    it("空值應 fallback 成 claude", () => {
+      expect(normalizePodProvider(undefined)).toBe("claude");
+    });
+  });
+
   // --- 情境 1：Claude Pod → getClaudeOptions 回 ClaudeOptions 且 model 正確 ---
   describe("getClaudeOptions", () => {
     it("Claude Pod 應回傳 ClaudeOptions 且 model 正確", () => {

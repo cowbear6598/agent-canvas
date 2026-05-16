@@ -29,7 +29,7 @@ export interface Connection {
   summaryModel?: string;
   /**
    * Summary 功能獨立選用的 Provider。
-   * 升級前 Connection 為 null/undefined，UI 渲染時會 fallback 至來源 Pod provider。
+   * 升級後前端會將舊資料收斂為具體 provider，不再 fallback 至來源 Pod provider。
    */
   summaryProvider?: PodProvider | null;
   /** Branch 模式下的連線標籤，最多 32 字元，不可為保留字 "None" */

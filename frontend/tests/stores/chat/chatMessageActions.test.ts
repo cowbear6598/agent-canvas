@@ -15,10 +15,6 @@ import type {
   PersistedMessage,
 } from "@/types/websocket";
 import type { Message, SubMessage, ToolUseInfo } from "@/types/chat";
-import {
-  CONTENT_PREVIEW_LENGTH,
-  RESPONSE_PREVIEW_LENGTH,
-} from "@/lib/constants";
 
 // Mock WebSocket
 vi.mock("@/services/websocket", () => webSocketMockFactory());
@@ -40,7 +36,7 @@ describe("chatMessageActions", () => {
     it("應新增 user 訊息到 messagesByPodId", async () => {
       const chatStore = useChatStore();
       const podStore = usePodStore();
-      const pod = createMockPod({ id: "pod-1", output: [] });
+      const pod = createMockPod({ id: "pod-1" });
       podStore.pods = [pod];
 
       await chatStore.addUserMessage("pod-1", "Hello World");
@@ -55,26 +51,10 @@ describe("chatMessageActions", () => {
       expect(messages![0]!.timestamp).toBeDefined();
     });
 
-    it('應更新 Pod 的 output（含截斷的內容預覽，30 字元 + "> " prefix）', async () => {
-      const chatStore = useChatStore();
-      const podStore = usePodStore();
-      const pod = createMockPod({ id: "pod-1", output: [] });
-      podStore.pods = [pod];
-
-      const longContent = "a".repeat(50);
-      await chatStore.addUserMessage("pod-1", longContent);
-
-      const updatedPod = podStore.pods.find((p) => p.id === "pod-1");
-      expect(updatedPod!.output).toHaveLength(1);
-      expect(updatedPod!.output[0]).toBe(
-        `> ${"a".repeat(CONTENT_PREVIEW_LENGTH)}...`,
-      );
-    });
-
     it("應追加訊息到現有 messages 陣列", async () => {
       const chatStore = useChatStore();
       const podStore = usePodStore();
-      const pod = createMockPod({ id: "pod-1", output: [] });
+      const pod = createMockPod({ id: "pod-1" });
       podStore.pods = [pod];
 
       await chatStore.addUserMessage("pod-1", "First message");
@@ -86,7 +66,7 @@ describe("chatMessageActions", () => {
       expect(messages![1]!.content).toBe("Second message");
     });
 
-    it("Pod 不存在時不應新增訊息也不應更新 output", async () => {
+    it("Pod 不存在時不應新增訊息", async () => {
       const chatStore = useChatStore();
       const podStore = usePodStore();
 
@@ -94,20 +74,6 @@ describe("chatMessageActions", () => {
 
       expect(chatStore.messagesByPodId.has("non-existent")).toBe(false);
       expect(podStore.pods).toHaveLength(0);
-    });
-
-    it("應保留 Pod 既有的 output", async () => {
-      const chatStore = useChatStore();
-      const podStore = usePodStore();
-      const pod = createMockPod({ id: "pod-1", output: ["existing line"] });
-      podStore.pods = [pod];
-
-      await chatStore.addUserMessage("pod-1", "New message");
-
-      const updatedPod = podStore.pods.find((p) => p.id === "pod-1");
-      expect(updatedPod!.output).toHaveLength(2);
-      expect(updatedPod!.output[0]).toBe("existing line");
-      expect(updatedPod!.output[1]).toMatch(/^> New message/);
     });
   });
 
@@ -439,55 +405,6 @@ describe("chatMessageActions", () => {
 
       expect(subMessages).toHaveLength(1);
       expect(subMessages[0]!.content).toBe("Hello World!");
-    });
-  });
-
-  describe("handleChatMessage - user role 訊息", () => {
-    it("role 為 user 時應更新 Pod output", async () => {
-      const chatStore = useChatStore();
-      const podStore = usePodStore();
-      const pod = createMockPod({ id: "pod-1", output: [] });
-      podStore.pods = [pod];
-
-      chatStore.handleChatMessage({
-        podId: "pod-1",
-        messageId: "msg-1",
-        content: "User message",
-        isPartial: false,
-        role: "user",
-      });
-
-      await vi.waitFor(() => {
-        const updatedPod = podStore.pods.find((p) => p.id === "pod-1");
-        expect(updatedPod!.output).toHaveLength(1);
-      });
-
-      const updatedPod = podStore.pods.find((p) => p.id === "pod-1");
-      expect(updatedPod!.output[0]).toBe("> User message");
-    });
-
-    it("應避免重複追加相同內容", async () => {
-      const chatStore = useChatStore();
-      const podStore = usePodStore();
-      const pod = createMockPod({ id: "pod-1", output: ["> User message"] });
-      podStore.pods = [pod];
-
-      chatStore.handleChatMessage({
-        podId: "pod-1",
-        messageId: "msg-1",
-        content: "User message",
-        isPartial: false,
-        role: "user",
-      });
-
-      await vi.waitFor(() => {
-        const updatedPod = podStore.pods.find((p) => p.id === "pod-1");
-        expect(updatedPod!.output).toHaveLength(1);
-      });
-
-      const updatedPod = podStore.pods.find((p) => p.id === "pod-1");
-      expect(updatedPod!.output).toHaveLength(1);
-      expect(updatedPod!.output[0]).toBe("> User message");
     });
   });
 
@@ -1010,34 +927,6 @@ describe("chatMessageActions", () => {
       expect(chatStore.accumulatedLengthByMessageId.has("msg-1")).toBe(false);
     });
 
-    it("應更新 Pod output（assistant 訊息）", async () => {
-      const chatStore = useChatStore();
-      const podStore = usePodStore();
-      const pod = createMockPod({ id: "pod-1", output: [] });
-      podStore.pods = [pod];
-
-      chatStore.handleChatMessage({
-        podId: "pod-1",
-        messageId: "msg-1",
-        content: "Assistant response",
-        isPartial: true,
-      });
-
-      chatStore.handleChatComplete({
-        podId: "pod-1",
-        messageId: "msg-1",
-        fullContent: "Assistant response",
-      });
-
-      await vi.waitFor(() => {
-        const updatedPod = podStore.pods.find((p) => p.id === "pod-1");
-        expect(updatedPod!.output.length).toBeGreaterThan(0);
-      });
-
-      const updatedPod = podStore.pods.find((p) => p.id === "pod-1");
-      expect(updatedPod!.output[0]).toBe("Assistant response");
-    });
-
     it("應 finalize 所有 running 的 toolUse 為 completed", () => {
       const chatStore = useChatStore();
 
@@ -1212,22 +1101,6 @@ describe("chatMessageActions", () => {
 
       const messages = chatStore.messagesByPodId.get("pod-1");
       expect(messages).toBeUndefined();
-    });
-
-    it("應清除 Pod 的 output", async () => {
-      const chatStore = useChatStore();
-      const podStore = usePodStore();
-      const pod = createMockPod({ id: "pod-1", output: ["line1", "line2"] });
-      podStore.pods = [pod];
-
-      const payload: PodMessagesClearedPayload = {
-        podId: "pod-1",
-      };
-
-      await chatStore.handleMessagesClearedEvent(payload);
-
-      const updatedPod = podStore.pods.find((p) => p.id === "pod-1");
-      expect(updatedPod!.output).toEqual([]);
     });
   });
 
@@ -1647,124 +1520,6 @@ describe("chatMessageActions", () => {
     });
   });
 
-  describe("updatePodOutput 整合測試", () => {
-    it("應從多個 subMessages 中提取 output", async () => {
-      const chatStore = useChatStore();
-      const podStore = usePodStore();
-      const pod = createMockPod({ id: "pod-1", output: [] });
-      podStore.pods = [pod];
-
-      const messages: Message[] = [
-        {
-          id: "msg-1",
-          role: "user",
-          content: "User question",
-          timestamp: new Date().toISOString(),
-        },
-        {
-          id: "msg-2",
-          role: "assistant",
-          content: "Block1Block2",
-          isPartial: false,
-          timestamp: new Date().toISOString(),
-          subMessages: [
-            {
-              id: "msg-2-sub-0",
-              content: "Block1",
-              isPartial: false,
-            },
-            {
-              id: "msg-2-sub-1",
-              content: "Block2",
-              isPartial: false,
-            },
-          ],
-        },
-      ];
-
-      chatStore.messagesByPodId.set("pod-1", messages);
-      const messageActions = chatStore.getMessageActions();
-      await messageActions.updatePodOutput("pod-1");
-
-      const updatedPod = podStore.pods.find((p) => p.id === "pod-1");
-      expect(updatedPod!.output).toHaveLength(3);
-      expect(updatedPod!.output[0]).toBe("> User question");
-      expect(updatedPod!.output[1]).toBe("Block1");
-      expect(updatedPod!.output[2]).toBe("Block2");
-    });
-
-    it("應截斷超長的 response content（40 字元）", async () => {
-      const chatStore = useChatStore();
-      const podStore = usePodStore();
-      const pod = createMockPod({ id: "pod-1", output: [] });
-      podStore.pods = [pod];
-
-      const longContent = "a".repeat(60);
-      const messages: Message[] = [
-        {
-          id: "msg-1",
-          role: "assistant",
-          content: longContent,
-          isPartial: false,
-          timestamp: new Date().toISOString(),
-          subMessages: [
-            {
-              id: "msg-1-sub-0",
-              content: longContent,
-              isPartial: false,
-            },
-          ],
-        },
-      ];
-
-      chatStore.messagesByPodId.set("pod-1", messages);
-      const messageActions = chatStore.getMessageActions();
-      await messageActions.updatePodOutput("pod-1");
-
-      const updatedPod = podStore.pods.find((p) => p.id === "pod-1");
-      expect(updatedPod!.output[0]).toBe(
-        `${"a".repeat(RESPONSE_PREVIEW_LENGTH)}...`,
-      );
-    });
-
-    it("空 subMessage content 不應加入 output", async () => {
-      const chatStore = useChatStore();
-      const podStore = usePodStore();
-      const pod = createMockPod({ id: "pod-1", output: [] });
-      podStore.pods = [pod];
-
-      const messages: Message[] = [
-        {
-          id: "msg-1",
-          role: "assistant",
-          content: "Content",
-          isPartial: false,
-          timestamp: new Date().toISOString(),
-          subMessages: [
-            {
-              id: "msg-1-sub-0",
-              content: "",
-              isPartial: false,
-            },
-            {
-              id: "msg-1-sub-1",
-              content: "Valid content",
-              isPartial: false,
-            },
-          ],
-        },
-      ];
-
-      chatStore.messagesByPodId.set("pod-1", messages);
-      const messageActions = chatStore.getMessageActions();
-      await messageActions.updatePodOutput("pod-1");
-
-      const updatedPod = podStore.pods.find((p) => p.id === "pod-1");
-      expect(updatedPod!.output).toHaveLength(1);
-      expect(updatedPod!.output[0]).toBe("Valid content");
-    });
-  });
-
   describe("createAssistantMessageShape", () => {
     it("應回傳包含 subMessages 的 Message（不含 expectingNewBlock）", () => {
       const shape = createAssistantMessageShape(
@@ -1812,7 +1567,7 @@ describe("chatMessageActions", () => {
     it("user 訊息應不含 subMessages 和 expectingNewBlock", async () => {
       const chatStore = useChatStore();
       const podStore = usePodStore();
-      podStore.pods = [createMockPod({ id: "pod-1", output: [] })];
+      podStore.pods = [createMockPod({ id: "pod-1" })];
       const messageActions = chatStore.getMessageActions();
 
       await messageActions.addNewChatMessage(
@@ -1826,25 +1581,6 @@ describe("chatMessageActions", () => {
       const messages = chatStore.messagesByPodId.get("pod-1");
       expect(messages![0]!.subMessages).toBeUndefined();
       expect(messages![0]).not.toHaveProperty("expectingNewBlock");
-    });
-
-    it("user 訊息應呼叫 appendUserOutputToPod", async () => {
-      const chatStore = useChatStore();
-      const podStore = usePodStore();
-      podStore.pods = [createMockPod({ id: "pod-1", output: [] })];
-      const messageActions = chatStore.getMessageActions();
-
-      await messageActions.addNewChatMessage(
-        "pod-1",
-        "msg-1",
-        "User input",
-        false,
-        "user",
-      );
-
-      const updatedPod = podStore.pods.find((p) => p.id === "pod-1");
-      expect(updatedPod!.output).toHaveLength(1);
-      expect(updatedPod!.output[0]).toMatch(/^> User input/);
     });
   });
 
@@ -1913,7 +1649,7 @@ describe("chatMessageActions", () => {
     it("遠端使用者訊息應被加入 messagesByPodId", () => {
       const chatStore = useChatStore();
       const podStore = usePodStore();
-      const pod = createMockPod({ id: "pod-1", output: [] });
+      const pod = createMockPod({ id: "pod-1" });
       podStore.pods = [pod];
 
       chatStore.addRemoteUserMessage(
@@ -1934,7 +1670,7 @@ describe("chatMessageActions", () => {
     it("應使用傳入的 messageId 和 timestamp", () => {
       const chatStore = useChatStore();
       const podStore = usePodStore();
-      const pod = createMockPod({ id: "pod-1", output: [] });
+      const pod = createMockPod({ id: "pod-1" });
       podStore.pods = [pod];
 
       chatStore.addRemoteUserMessage(

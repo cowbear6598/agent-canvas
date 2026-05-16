@@ -9,7 +9,7 @@ import type {
 } from "@/types/websocket";
 import type { ToastCategory } from "@/composables/useToast";
 
-// 各資源的 WebSocket payload 欄位不同（如 commandId 等），無法以單一靜態型別表達
+// 各資源的 WebSocket payload 欄位不同，無法以單一靜態型別表達
 export type ResourcePayload = Record<string, unknown>;
 
 // TItem 可能包含比 { id, name } 更多的欄位，因此需要 as unknown as TItem 斷言。

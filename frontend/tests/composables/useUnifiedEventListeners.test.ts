@@ -20,18 +20,11 @@ import { resetChatActionsCache } from "@/stores/chat/chatStore";
 import { usePodStore } from "@/stores/pod/podStore";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useRepositoryStore } from "@/stores/note/repositoryStore";
-import { useCommandStore } from "@/stores/note/commandStore";
 // TODO Phase 4: useMcpServerStore 重構後補回
 // import { useMcpServerStore } from "@/stores/note/mcpServerStore";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { useIntegrationStore } from "@/stores/integrationStore";
-import type {
-  Pod,
-  Connection,
-  RepositoryNote,
-  CommandNote,
-  Canvas,
-} from "@/types";
+import type { Pod, Connection, RepositoryNote, Canvas } from "@/types";
 import type { IntegrationApp } from "@/types/integration";
 
 vi.mock("@/services/websocket", () => webSocketMockFactory());
@@ -518,83 +511,14 @@ describe("useUnifiedEventListeners", () => {
     });
   });
 
-  describe("Command Note 事件處理", () => {
-    it("command:deleted 應移除 command 和相關 notes", () => {
-      const { registerUnifiedListeners } = useUnifiedEventListeners();
-      const commandStore = useCommandStore();
-      commandStore.availableItems = [{ id: "cmd-1", name: "Test" }];
-      const note = createMockNote("command", {
-        id: "cmd-note-1",
-      }) as CommandNote;
-      commandStore.notes = [note] as any[];
+  describe("Command Note 事件處理已移除", () => {
+    it("不再註冊 command note listeners", () => {
+      const events = listeners.map((listener) => listener.event);
 
-      registerUnifiedListeners();
-
-      simulateEvent("command:deleted", {
-        canvasId: "canvas-1",
-        commandId: "cmd-1",
-        deletedNoteIds: ["cmd-note-1"],
-      });
-
-      expect(
-        commandStore.availableItems.some((c) => (c as any).id === "cmd-1"),
-      ).toBe(false);
-      expect(commandStore.notes.some((n) => n.id === "cmd-note-1")).toBe(false);
-    });
-
-    it("command-note:created 應新增 note", () => {
-      const { registerUnifiedListeners } = useUnifiedEventListeners();
-      const commandStore = useCommandStore();
-
-      registerUnifiedListeners();
-
-      const note = createMockNote("command", {
-        id: "cmd-note-1",
-      }) as CommandNote;
-      simulateEvent("command-note:created", {
-        canvasId: "canvas-1",
-        note,
-      });
-
-      expect(commandStore.notes.some((n) => n.id === "cmd-note-1")).toBe(true);
-    });
-
-    it("command-note:updated 應更新 note", () => {
-      const { registerUnifiedListeners } = useUnifiedEventListeners();
-      const commandStore = useCommandStore();
-      const note = createMockNote("command", {
-        id: "cmd-note-1",
-        name: "Old",
-      }) as CommandNote;
-      commandStore.notes = [note] as any[];
-
-      registerUnifiedListeners();
-
-      simulateEvent("command-note:updated", {
-        canvasId: "canvas-1",
-        note: { ...note, name: "New" },
-      });
-
-      const updated = commandStore.notes.find((n) => n.id === "cmd-note-1");
-      expect(updated?.name).toBe("New");
-    });
-
-    it("command-note:deleted 應移除 note", () => {
-      const { registerUnifiedListeners } = useUnifiedEventListeners();
-      const commandStore = useCommandStore();
-      const note = createMockNote("command", {
-        id: "cmd-note-1",
-      }) as CommandNote;
-      commandStore.notes = [note] as any[];
-
-      registerUnifiedListeners();
-
-      simulateEvent("command-note:deleted", {
-        canvasId: "canvas-1",
-        noteId: "cmd-note-1",
-      });
-
-      expect(commandStore.notes.some((n) => n.id === "cmd-note-1")).toBe(false);
+      expect(events).not.toContain("command:deleted");
+      expect(events).not.toContain("command-note:created");
+      expect(events).not.toContain("command-note:updated");
+      expect(events).not.toContain("command-note:deleted");
     });
   });
 
@@ -691,18 +615,14 @@ describe("useUnifiedEventListeners", () => {
   });
 
   describe("removeDeletedNotes 批次刪除", () => {
-    it("應移除 repository 和 command notes", () => {
+    it("應移除 repository notes", () => {
       const { registerUnifiedListeners } = useUnifiedEventListeners();
       const podStore = usePodStore();
       const repositoryStore = useRepositoryStore();
-      const commandStore = useCommandStore();
       // TODO Phase 4: mcpServerStore 重構後補回
 
       repositoryStore.notes = [
         createMockNote("repository", { id: "repo-note-1" }) as RepositoryNote,
-      ] as any[];
-      commandStore.notes = [
-        createMockNote("command", { id: "cmd-note-1" }) as CommandNote,
       ] as any[];
 
       const pod = createMockPod({ id: "pod-1" });
@@ -715,12 +635,10 @@ describe("useUnifiedEventListeners", () => {
         podId: "pod-1",
         deletedNoteIds: {
           repositoryNote: ["repo-note-1"],
-          commandNote: ["cmd-note-1"],
         },
       });
 
       expect(repositoryStore.notes.length).toBe(0);
-      expect(commandStore.notes.length).toBe(0);
     });
   });
 

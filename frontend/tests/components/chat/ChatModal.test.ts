@@ -24,6 +24,11 @@ vi.mock("@/components/integration/ChatIntegrationBlockedHint.vue", () => ({
   },
 }));
 
+const toastSpy = vi.fn();
+vi.mock("@/composables/useToast", () => ({
+  useToast: () => ({ toast: toastSpy }),
+}));
+
 const openHistoryPanelSpy = vi.fn();
 vi.mock("@/stores/run/runStore", () => ({
   useRunStore: () => ({ openHistoryPanel: openHistoryPanelSpy }),
@@ -50,6 +55,7 @@ describe("ChatModal ESC 鍵行為", () => {
   setupStoreTest(() => {
     resetChatActionsCache();
     openHistoryPanelSpy.mockClear();
+    toastSpy.mockClear();
   });
 
   afterEach(() => {
@@ -210,6 +216,32 @@ describe("送出訊息 → 啟動 Run 流程", () => {
     await wrapper.vm.$nextTick();
 
     expect(sendSpy).not.toHaveBeenCalled();
+    expect(openHistoryPanelSpy).not.toHaveBeenCalled();
+    expect(wrapper.emitted("close")).toBeFalsy();
+    wrapper.unmount();
+  });
+
+  it("sendMessage 失敗時應顯示 toast 並保持 modal 開啟", async () => {
+    const chatStore = useChatStore();
+    const sendSpy = vi
+      .spyOn(chatStore, "sendMessage")
+      .mockRejectedValueOnce(new Error("請先設定 Goal 再執行這個 Pod"));
+
+    const wrapper = mountChatModal();
+    await wrapper
+      .find<HTMLTextAreaElement>('[data-testid="chat-launch-textarea"]')
+      .setValue("hello");
+    await wrapper.find('[data-testid="chat-launch-send"]').trigger("click");
+    await Promise.resolve();
+    await wrapper.vm.$nextTick();
+
+    expect(sendSpy).toHaveBeenCalledWith("test-pod-1", "hello");
+    expect(toastSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: "請先設定 Goal 再執行這個 Pod",
+        variant: "destructive",
+      }),
+    );
     expect(openHistoryPanelSpy).not.toHaveBeenCalled();
     expect(wrapper.emitted("close")).toBeFalsy();
     wrapper.unmount();

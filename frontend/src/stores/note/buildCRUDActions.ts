@@ -32,15 +32,14 @@ interface CRUDActions {
 /**
  * 根據 crudConfig.methodPrefix 動態產生命名方法，以符合各 store 的語意慣例。
  *
- * 對應規則（以 methodPrefix = 'command' 為例）：
- *   - createCommand  → 建立資源
- *   - updateCommand  → 更新資源
- *   - readCommand    → 讀取單一資源內容
- *   - deleteCommand  → 刪除資源（委派給 deleteItem）
- *   - loadCommands   → 載入所有資源（委派給 loadItems）
+ * 對應規則（以 methodPrefix = 'repository' 為例）：
+ *   - createRepository → 建立資源
+ *   - updateRepository → 更新資源內容
+ *   - readRepository   → 讀取單一資源內容
+ *   - deleteRepository → 刪除資源（委派給 deleteItem）
+ *   - loadRepositorys  → 載入所有資源（委派給 loadItems）
  *
  * 目前使用此機制的 store：
- *   - commandStore  (methodPrefix: 'command')
  *   - repositoryStore (methodPrefix: 'repository')
  */
 export function buildCRUDActions<TItem>(

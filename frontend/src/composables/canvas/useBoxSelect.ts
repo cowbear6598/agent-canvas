@@ -14,7 +14,6 @@ export function useBoxSelect(): {
     selectionStore,
     podStore,
     repositoryStore,
-    commandStore,
   } = useCanvasContext();
 
   const isBoxSelecting = ref(false);
@@ -96,7 +95,6 @@ export function useBoxSelect(): {
     // 建立 noteGroups 快照，後續 onMove 直接重用，不再每幀重組陣列
     noteGroupsSnapshot = [
       { notes: repositoryStore.notes, type: "repositoryNote" as const },
-      { notes: commandStore.notes, type: "commandNote" as const },
     ];
 
     startDrag(event);

@@ -1,7 +1,6 @@
 import type {
   Pod,
   RepositoryNote,
-  CommandNote,
   Connection,
   PasteError,
 } from "../../types";
@@ -9,10 +8,7 @@ import type { BaseNote } from "../../types/baseNote.js";
 import type { CanvasPastePayload, PastePodItem } from "../../schemas";
 import { podStore } from "../../services/podStore.js";
 import { workspaceService } from "../../services/workspace";
-import {
-  repositoryNoteStore,
-  commandNoteStore,
-} from "../../services/noteStores.js";
+import { repositoryNoteStore } from "../../services/noteStores.js";
 import { connectionStore } from "../../services/connectionStore.js";
 import { repositoryService } from "../../services/repositoryService.js";
 import { getErrorMessage } from "../../utils/websocketResponse.js";
@@ -182,7 +178,7 @@ async function createSinglePod(
     mcpServerNames: podItem.mcpServerNames ?? [],
     pluginIds: podItem.pluginIds ?? [],
     repositoryId: finalRepositoryId,
-    commandId: podItem.commandId ?? null,
+    goal: podItem.goal ?? null,
   });
 
   const wsResult = await workspaceService.createWorkspace(pod.workspacePath);
@@ -393,19 +389,16 @@ const NOTE_PASTE_CONFIGS = {
     repositoryNoteStore,
     "repositoryNote",
   ),
-  command: makeNoteConfig("commandId", commandNoteStore, "commandNote"),
 } as const;
 
 export type NotePasteType = keyof typeof NOTE_PASTE_CONFIGS;
 
 interface NoteItemMap {
   repository: NoteItemWithId<"repositoryId">;
-  command: NoteItemWithId<"commandId">;
 }
 
 interface NoteMap {
   repository: RepositoryNote;
-  command: CommandNote;
 }
 
 type NoteItemForType<K extends NotePasteType> = NoteItemMap[K];

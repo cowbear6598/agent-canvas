@@ -39,11 +39,23 @@ const searchQuery = ref<string>("");
 /** 搜尋框 input 元素 ref，用於自動 focus */
 const searchInputRef = ref<HTMLInputElement | null>(null);
 
+const goalBuiltinMcp = computed<McpListItem>(() => ({
+  name: t("pod.slot.goalMcpLabel"),
+  type: "stdio",
+  system: true,
+  locked: true,
+}));
+
+const mergedMcpServers = computed<McpListItem[]>(() => [
+  goalBuiltinMcp.value,
+  ...installedMcpServers.value,
+]);
+
 /** 依 searchQuery 過濾 MCP server 清單（不分大小寫比對名稱） */
 const filteredMcpServers = computed<McpListItem[]>(() => {
   const query = searchQuery.value.toLowerCase();
-  if (!query) return installedMcpServers.value;
-  return installedMcpServers.value.filter((server) =>
+  if (!query) return mergedMcpServers.value;
+  return mergedMcpServers.value.filter((server) =>
     server.name.toLowerCase().includes(query),
   );
 });
@@ -55,9 +67,6 @@ const localMcpServerNamesSet = computed(
 
 /** Codex provider 唯讀模式：MCP 只展示不可 toggle */
 const isCodex = computed(() => props.provider === "codex");
-
-/** Gemini provider：MCP 可 toggle（行為與 Claude 一致），但 row 需額外顯示 type chip */
-const isGemini = computed(() => props.provider === "gemini");
 
 const rootRef = ref<HTMLElement | null>(null);
 
@@ -126,8 +135,8 @@ const resolveMcpErrorDescription = (_err: unknown): string =>
   t("pod.slot.mcpToggleFailed");
 
 const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
-  // 僅 Codex 不可 toggle；Gemini / Claude 同行為，繼續往下走樂觀更新
-  if (isCodex.value) return;
+  // 僅 Codex / built-in Goal 不可 toggle；其餘 provider 走樂觀更新
+  if (isCodex.value || name === goalBuiltinMcp.value.name) return;
 
   const nextNames = buildNextNames(localMcpServerNames.value, name, enabled);
 
@@ -189,23 +198,6 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
         {{ t("pod.slot.mcpLoadFailed") }}
       </div>
 
-      <!-- 空狀態（無 MCP server） -->
-      <div
-        v-else-if="installedMcpServers.length === 0"
-        class="px-2 py-1 text-xs font-mono text-muted-foreground whitespace-pre-wrap"
-      >
-        <p>{{ t("pod.slot.mcpEmpty") }}</p>
-        <p class="mt-1">
-          {{
-            isCodex
-              ? t("pod.slot.mcpCodexEmptyHint")
-              : isGemini
-                ? t("pod.slot.mcpGeminiEmptyHint")
-                : t("pod.slot.mcpClaudeEmptyHint")
-          }}
-        </p>
-      </div>
-
       <!-- 搜尋無結果：有安裝但過濾後無符合項目 -->
       <div
         v-else-if="filteredMcpServers.length === 0"
@@ -214,8 +206,22 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
         {{ t("pod.slot.mcpSearchEmpty") }}
       </div>
 
-      <!-- MCP server 列表（Claude / Gemini：可 toggle；Codex：唯讀展示） -->
+      <!-- MCP server 列表（built-in Goal + user MCP） -->
       <template v-else>
+        <div
+          v-if="installedMcpServers.length === 0"
+          class="px-2 pb-1 text-xs font-mono text-muted-foreground whitespace-pre-wrap"
+        >
+          <p>{{ t("pod.slot.mcpUserEmpty") }}</p>
+          <p class="mt-1">
+            {{
+              isCodex
+                ? t("pod.slot.mcpCodexEmptyHint")
+                : t("pod.slot.mcpClaudeEmptyHint")
+            }}
+          </p>
+        </div>
+
         <!-- Codex 唯讀模式：ScrollArea 包列表，Codex hint 固定在外部 -->
         <div v-if="isCodex">
           <ScrollArea class="pod-popover-scrollable">
@@ -225,9 +231,11 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
                 :key="server.name"
                 :name="server.name"
                 :type="server.type"
-                :checked="localMcpServerNamesSet.has(server.name)"
+                :checked="server.locked || localMcpServerNamesSet.has(server.name)"
                 :disabled="false"
                 :readonly="true"
+                :locked="server.locked"
+                :badge-label="t('pod.slot.builtinBadge')"
                 @toggle="handleToggle"
               />
             </div>
@@ -238,7 +246,7 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
           </p>
         </div>
 
-        <!-- Gemini / Claude 模式：可 toggle（Gemini 額外顯示 type chip，由 McpServerRow 處理） -->
+        <!-- Claude / Opencode 模式：Goal built-in 固定啟用，user MCP 可 toggle -->
         <ScrollArea
           v-else
           class="pod-popover-scrollable"
@@ -248,10 +256,12 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
               v-for="server in filteredMcpServers"
               :key="server.name"
               :name="server.name"
-              :type="isGemini ? server.type : undefined"
-              :checked="localMcpServerNamesSet.has(server.name)"
-              :disabled="false"
+              :type="server.type"
+              :checked="server.locked || localMcpServerNamesSet.has(server.name)"
+              :disabled="server.locked === true"
               :readonly="false"
+              :locked="server.locked"
+              :badge-label="t('pod.slot.builtinBadge')"
               @toggle="handleToggle"
             />
           </div>

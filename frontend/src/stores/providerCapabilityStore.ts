@@ -5,6 +5,10 @@ import type {
   PodProvider,
   ProviderCapabilities,
 } from "@/types/pod";
+import {
+  isSupportedPodProvider,
+  normalizePodProvider,
+} from "@/lib/providerOptions";
 import { useOpencodeAliasStore } from "@/stores/opencodeAliasStore";
 import {
   createWebSocketRequest,
@@ -22,8 +26,8 @@ const CONSERVATIVE_FALLBACK_CAPABILITIES: ProviderCapabilities = {
   chat: true,
   plugin: false,
   repository: false,
-  command: false,
   mcp: false,
+  goal: false,
 };
 
 /**
@@ -297,22 +301,36 @@ export const useProviderCapabilityStore = defineStore(
      * 避免所有只關心 capabilities 的測試都要補齊非必填欄位。
      */
     function syncFromPayload(providers: SyncProviderItem[]): void {
+      const normalizedSeen = new Set<string>();
+
       for (const {
         name,
         capabilities,
         defaultOptions,
         availableModels,
       } of providers) {
-        capabilitiesByProvider.value[name] = { ...capabilities };
-        defaultOptionsByProvider.value[name] = { ...(defaultOptions ?? {}) };
+        const normalizedName = normalizePodProvider(name);
+        if (!isSupportedPodProvider(normalizedName)) continue;
+        if (name !== normalizedName && normalizedSeen.has(normalizedName)) {
+          continue;
+        }
+
+        normalizedSeen.add(normalizedName);
+        capabilitiesByProvider.value[normalizedName] = {
+          ...capabilities,
+          goal: capabilities.goal ?? true,
+        };
+        defaultOptionsByProvider.value[normalizedName] = {
+          ...(defaultOptions ?? {}),
+        };
         // opencode 的 availableModels 由 opencodeAliasStore 動態提供，
         // 忽略後端送來的 availableModels 欄位，不污染 store 內部狀態。
-        if (name === "opencode") continue;
+        if (normalizedName === "opencode") continue;
         // Object.freeze 一次性凍結陣列，防止外部引用意外修改 store 內部狀態
         const frozenModels = Object.freeze([...(availableModels ?? [])]);
-        availableModelsByProvider.value[name] = frozenModels;
+        availableModelsByProvider.value[normalizedName] = frozenModels;
         // 同步建立 value Set，供 isModelValidForProvider O(1) 查詢
-        availableModelValuesByProvider.value[name] = new Set(
+        availableModelValuesByProvider.value[normalizedName] = new Set(
           frozenModels.map((m) => m.value),
         );
         // 整理該 provider 的 thinking metadata。
@@ -334,7 +352,7 @@ export const useProviderCapabilityStore = defineStore(
             };
           }
         }
-        thinkingMetaByProviderModel.value[name] = thinkingMap;
+        thinkingMetaByProviderModel.value[normalizedName] = thinkingMap;
       }
     }
 

@@ -11,7 +11,11 @@ import {
   labelSchema,
   descriptionSchema,
 } from "./connectionSchemas.js";
-import { providerSchema, providerConfigSchema } from "./podSchemas.js";
+import {
+  providerSchema,
+  providerConfigSchema,
+  podGoalSchema,
+} from "./podSchemas.js";
 
 export const pastePodItemSchema = z
   .object({
@@ -49,16 +53,12 @@ export const pastePodItemSchema = z
       )
       .optional(),
     repositoryId: resourceIdSchema.nullable().optional(),
-    commandId: resourceIdSchema.nullable().optional(),
+    goal: podGoalSchema.nullable().optional(),
   })
   .strict();
 
 export const pasteRepositoryNoteItemSchema = createPasteNoteItemSchema({
   repositoryId: resourceIdSchema,
-}).strict();
-
-export const pasteCommandNoteItemSchema = createPasteNoteItemSchema({
-  commandId: resourceIdSchema,
 }).strict();
 
 export const pasteConnectionItemSchema = z
@@ -90,7 +90,6 @@ export const canvasPasteSchema = z
     canvasId: canvasIdSchema,
     pods: z.array(pastePodItemSchema).max(50),
     repositoryNotes: z.array(pasteRepositoryNoteItemSchema).max(50),
-    commandNotes: z.array(pasteCommandNoteItemSchema).max(50).optional(),
     connections: z.array(pasteConnectionItemSchema).max(100).optional(),
   })
   .strict();
@@ -100,5 +99,4 @@ export type CanvasPastePayload = z.infer<typeof canvasPasteSchema>;
 export type PasteRepositoryNoteItem = z.infer<
   typeof pasteRepositoryNoteItemSchema
 >;
-export type PasteCommandNoteItem = z.infer<typeof pasteCommandNoteItemSchema>;
 export type PasteConnectionItem = z.infer<typeof pasteConnectionItemSchema>;

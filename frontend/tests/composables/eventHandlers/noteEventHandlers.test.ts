@@ -3,7 +3,6 @@ import { webSocketMockFactory } from "../../helpers/mockWebSocket";
 import { setupStoreTest } from "../../helpers/testSetup";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { useRepositoryStore } from "@/stores/note/repositoryStore";
-import { useCommandStore } from "@/stores/note/commandStore";
 // TODO Phase 4: useMcpServerStore 重構後補回
 import { getNoteEventListeners } from "@/composables/eventHandlers/noteEventHandlers";
 
@@ -34,9 +33,7 @@ describe("noteEventHandlers", () => {
   describe("getNoteEventListeners", () => {
     it("應回傳正確數量的 listener", () => {
       const result = getNoteEventListeners();
-      // repository/command 各類 CRUD + deleted + branch changed
-      // TODO Phase 4: mcpServer 重構後調整預期數量
-      expect(result.length).toBeGreaterThanOrEqual(6);
+      expect(result.length).toBe(5);
     });
   });
 
@@ -84,16 +81,12 @@ describe("noteEventHandlers", () => {
       expect(spy).not.toHaveBeenCalled();
     });
 
-    it("command:note:created - canvasId 不匹配時不應執行", () => {
-      const store = useCommandStore();
-      const spy = vi.spyOn(store, "addNoteFromEvent");
+    it("command note listeners 已移除", () => {
+      const listeners = getNoteEventListeners();
 
-      findHandler("command-note:created")({
-        canvasId: "other-canvas",
-        note: { id: "cmd-1" },
-      });
-
-      expect(spy).not.toHaveBeenCalled();
+      expect(listeners.some((l) => l.event === "command-note:created")).toBe(
+        false,
+      );
     });
 
     // TODO Phase 4: mcp-server:note:created canvasId 防護測試重構後補回

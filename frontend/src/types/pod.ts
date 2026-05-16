@@ -3,6 +3,17 @@ import type { IntegrationBinding } from "./integration";
 
 export type ModelType = "opus" | "sonnet" | "haiku";
 
+export interface GoalTodoItem {
+  id: string;
+  text: string;
+}
+
+export interface PodGoal {
+  todos: GoalTodoItem[];
+}
+
+export type PodGoalStatus = "unset" | "ready";
+
 /**
  * Pod 所屬的 Provider 名稱。
  * 刻意保持寬鬆 string，不使用 "claude" | "codex" literal union，原因如下：
@@ -26,7 +37,7 @@ export type PodProvider = string;
  * 並透過 providerOptions.ts 的 narrow helper 取得強型別。
  *
  * `thinkingLevel` 為當前 model 的 reasoning level，model 切換時必須由後端
- * 清空再重新填入；不支援 thinking 的 model（Haiku、Gemini 全系列）此欄位
+ * 清空再重新填入；不支援 thinking 的 model（例如 Haiku）此欄位
  * 為 undefined。
  *
  * 鏡射自後端 backend/src/services/provider/types.ts（ChatRequestContext.providerConfig）；
@@ -64,7 +75,7 @@ export interface CodexOptions {
  *
  * `thinkingLevels` 與 `defaultThinkingLevel` 鏡射自後端 provider:list payload
  * 中 `availableModels` 元素新增的 thinking 相關欄位；不支援 thinking 的 model
- * （Haiku、Gemini 全系列）不會帶入此兩欄位。
+ * （例如 Haiku）不會帶入此兩欄位。
  */
 export interface ModelOption {
   label: string;
@@ -78,8 +89,8 @@ export interface ProviderCapabilities {
   chat: boolean;
   plugin: boolean;
   repository: boolean;
-  command: boolean;
   mcp: boolean;
+  goal?: boolean;
 }
 
 export type FrequencyType =
@@ -106,14 +117,14 @@ export interface Pod {
   name: string;
   x: number;
   y: number;
-  /** 僅存在於前端狀態，由 chatMessageActions 動態建構，後端不持久化此欄位 */
-  output: string[];
   rotation: number;
   workspacePath?: string;
   mcpServerNames?: string[];
   pluginIds?: string[];
   repositoryId?: string | null;
-  commandId?: string | null;
+  goal?: PodGoal | null;
+  goalStatus?: PodGoalStatus;
+  canExecute?: boolean;
   schedule?: Schedule | null;
   integrationBindings?: IntegrationBinding[];
   provider: PodProvider;

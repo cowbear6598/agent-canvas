@@ -71,7 +71,6 @@ function makePod(id: string) {
     sessionId: null,
     repositoryId: null,
     workspacePath: path.join(config.canvasRoot, CANVAS_ID, `pod-${id}`),
-    commandId: null,
     status: "idle" as const,
     x: 0,
     y: 0,

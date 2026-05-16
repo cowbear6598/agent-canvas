@@ -104,7 +104,6 @@ function makePod(overrides: Partial<Pod> = {}): Pod {
     integrationBindings: [],
 
     repositoryId: null,
-    commandId: null,
     multiInstance: false,
     sessionId: null,
     x: 0,

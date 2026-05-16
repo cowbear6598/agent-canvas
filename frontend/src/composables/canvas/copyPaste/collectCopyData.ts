@@ -2,7 +2,6 @@ import type {
   SelectableElement,
   CopiedPod,
   CopiedRepositoryNote,
-  CopiedCommandNote,
   CopiedConnection,
   AnchorPosition,
   TriggerMode,
@@ -15,7 +14,7 @@ type NoteWithIndexSignature = {
   [key: string]: unknown;
 };
 
-type AnyNote = CopiedRepositoryNote | CopiedCommandNote;
+type AnyNote = CopiedRepositoryNote;
 
 type StoreWithNotes<
   TNote extends NoteWithIndexSignature = NoteWithIndexSignature,
@@ -96,42 +95,33 @@ function createOriginalBoundNoteMapper<
     ({
       ...extractNoteBaseFields(note),
       [idField]: note[idField] as string,
-      boundToOriginalPodId: note.boundToPodId,
+  boundToOriginalPodId: note.boundToPodId,
     }) as unknown as T;
 }
 
 const mapToRepositoryNote =
   createOriginalBoundNoteMapper<CopiedRepositoryNote>("repositoryId");
-const mapToCommandNote =
-  createOriginalBoundNoteMapper<CopiedCommandNote>("commandId");
 
 export interface NoteStores {
   repositoryStore: StoreWithNotes;
-  commandStore: StoreWithNotes;
 }
 
 interface NoteStoreConfig {
   key: string;
-  getStore: (noteStores: NoteStores) => StoreWithNotes;
+  getStore: (stores: NoteStores) => StoreWithNotes;
   mapFn: (note: NoteWithIndexSignature) => AnyNote;
 }
 
 const NOTE_STORE_CONFIGS: NoteStoreConfig[] = [
   {
     key: "repositoryNote",
-    getStore: (noteStores) => noteStores.repositoryStore,
+    getStore: (stores) => stores.repositoryStore,
     mapFn: mapToRepositoryNote,
-  },
-  {
-    key: "commandNote",
-    getStore: (noteStores) => noteStores.commandStore,
-    mapFn: mapToCommandNote,
   },
 ];
 
 type CollectedNoteArrays = {
   repositoryNote: CopiedRepositoryNote[];
-  commandNote: CopiedCommandNote[];
 };
 
 export function collectSelectedPods(
@@ -160,7 +150,8 @@ export function collectSelectedPods(
           mcpServerNames: pod.mcpServerNames,
           pluginIds: pod.pluginIds,
           repositoryId: pod.repositoryId,
-          commandId: pod.commandId,
+          goal: pod.goal ?? null,
+          goalStatus: pod.goalStatus,
         },
       ];
     });
@@ -216,14 +207,10 @@ function collectBoundNotesByPodIds(
   podIds: Set<string>,
   stores: NoteStores,
 ): CollectedNoteArrays {
-  const repositoryBoundMap = buildBoundNotesByPodMap(
-    stores.repositoryStore.notes,
-  );
-  const commandBoundMap = buildBoundNotesByPodMap(stores.commandStore.notes);
+  const repositoryBoundMap = buildBoundNotesByPodMap(stores.repositoryStore.notes);
 
   const arrays: CollectedNoteArrays = {
     repositoryNote: [],
-    commandNote: [],
   };
 
   for (const podId of podIds) {
@@ -233,9 +220,6 @@ function collectBoundNotesByPodIds(
         repositoryBoundMap,
         mapToRepositoryNote,
       ),
-    );
-    arrays.commandNote.push(
-      ...collectBoundNotesFromMap(podId, commandBoundMap, mapToCommandNote),
     );
   }
 
@@ -293,7 +277,6 @@ export function collectSelectedNotes(
   noteStores: NoteStores,
 ): {
   repositoryNotes: CopiedRepositoryNote[];
-  commandNotes: CopiedCommandNote[];
 } {
   // 高階組裝：bound notes（Pod 相關） + unbound notes（element 相關）
   const arrays = collectBoundNotesByPodIds(selectedPodIds, noteStores);
@@ -301,7 +284,6 @@ export function collectSelectedNotes(
 
   return {
     repositoryNotes: arrays.repositoryNote,
-    commandNotes: arrays.commandNote,
   };
 }
 

@@ -502,6 +502,129 @@ describe("PodStore - providerConfig 白名單過濾", () => {
   });
 });
 
+describe("PodStore - Goal persistence", () => {
+  let canvasId: string;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    initTestDb();
+    resetStatements();
+    clearPodStoreCache();
+
+    const stmts = getStatements(getDb());
+    canvasId = "test-canvas-goal-persistence";
+    stmts.canvas.insert.run({
+      $id: canvasId,
+      $name: "test-canvas-goal-persistence",
+      $sortIndex: 0,
+    });
+  });
+
+  afterEach(() => {
+    closeDb();
+  });
+
+  it("create 後應序列化 goal，reload 時回傳 ready / canExecute", () => {
+    const goal = {
+      todos: [
+        { id: "11111111-1111-4111-8111-111111111111", text: "First task" },
+        { id: "22222222-2222-4222-8222-222222222222", text: "Second task" },
+      ],
+    };
+
+    const { pod } = podStore.create(canvasId, {
+      name: "pod-goal-create",
+      x: 0,
+      y: 0,
+      rotation: 0,
+      goal,
+    });
+
+    expect(pod.goal).toEqual(goal);
+    expect(pod.goalStatus).toBe("ready");
+    expect(pod.canExecute).toBe(true);
+
+    const storedRow = getDb()
+      .prepare("SELECT goal_json FROM pods WHERE id = ?")
+      .get(pod.id) as {
+      goal_json: string;
+    };
+    expect(JSON.parse(storedRow.goal_json)).toEqual(goal);
+
+    const reloaded = podStore.getById(canvasId, pod.id);
+    expect(reloaded?.goal).toEqual(goal);
+    expect(reloaded?.goalStatus).toBe("ready");
+    expect(reloaded?.canExecute).toBe(true);
+  });
+
+  it("update 後應覆寫 goal，reload 與 list 都回傳最新結果", () => {
+    const { pod } = podStore.create(canvasId, {
+      name: "pod-goal-update",
+      x: 0,
+      y: 0,
+      rotation: 0,
+      goal: {
+        todos: [
+          { id: "33333333-3333-4333-8333-333333333333", text: "Old task" },
+        ],
+      },
+    });
+
+    const updatedGoal = {
+      todos: [
+        { id: "44444444-4444-4444-8444-444444444444", text: "New task" },
+      ],
+    };
+
+    podStore.update(canvasId, pod.id, { goal: updatedGoal });
+
+    const row = getDb()
+      .prepare("SELECT goal_json FROM pods WHERE id = ?")
+      .get(pod.id) as { goal_json: string };
+    expect(JSON.parse(row.goal_json)).toEqual(updatedGoal);
+
+    const reloaded = podStore.getById(canvasId, pod.id);
+    expect(reloaded?.goal).toEqual(updatedGoal);
+    expect(reloaded?.goalStatus).toBe("ready");
+    expect(reloaded?.canExecute).toBe(true);
+
+    const listed = podStore.list(canvasId).find((item) => item.id === pod.id);
+    expect(listed?.goal).toEqual(updatedGoal);
+    expect(listed?.goalStatus).toBe("ready");
+    expect(listed?.canExecute).toBe(true);
+  });
+
+  it("invalid / empty goal 應在讀寫路徑被正規化成 unset", () => {
+    const { pod } = podStore.create(canvasId, {
+      name: "pod-goal-normalize",
+      x: 0,
+      y: 0,
+      rotation: 0,
+      goal: {
+        todos: [{ id: "", text: "   " }],
+      } as never,
+    });
+
+    expect(pod.goal).toBeNull();
+    expect(pod.goalStatus).toBe("unset");
+    expect(pod.canExecute).toBe(false);
+
+    const storedRow = getDb()
+      .prepare("SELECT goal_json FROM pods WHERE id = ?")
+      .get(pod.id) as { goal_json: string | null };
+    expect(storedRow.goal_json).toBeNull();
+
+    getDb()
+      .prepare("UPDATE pods SET goal_json = ? WHERE id = ?")
+      .run('{"todos":[{"id":"","text":"  "}]}', pod.id);
+
+    const reloaded = podStore.getById(canvasId, pod.id);
+    expect(reloaded?.goal).toBeNull();
+    expect(reloaded?.goalStatus).toBe("unset");
+    expect(reloaded?.canExecute).toBe(false);
+  });
+});
+
 describe("PodStore - hasName", () => {
   let canvasId: string;
 
@@ -726,52 +849,6 @@ describe("PodStore - Provider / Model 驗證", () => {
     });
   });
 
-  it("create 傳入 provider='gemini' 與合法 model 時應成功，pod.provider === 'gemini'", () => {
-    const { pod } = podStore.create(canvasId, {
-      name: "pod-create-valid-gemini",
-      x: 0,
-      y: 0,
-      rotation: 0,
-      provider: "gemini",
-      providerConfig: { model: "gemini-2.5-pro" },
-    });
-
-    const found = podStore.getById(canvasId, pod.id);
-    expect(found).toBeDefined();
-    expect(found!.provider).toBe("gemini");
-    expect(found!.providerConfig).toEqual({ model: "gemini-2.5-pro" });
-
-    // DB 原始欄位亦應同步寫入
-    const row = getDb()
-      .prepare("SELECT provider, provider_config_json FROM pods WHERE id = ?")
-      .get(pod.id) as { provider: string; provider_config_json: string };
-    expect(row.provider).toBe("gemini");
-    expect(JSON.parse(row.provider_config_json)).toEqual({
-      model: "gemini-2.5-pro",
-    });
-  });
-
-  it("create 傳入 provider='gemini' 與非法 model 時應 throw，且 DB 不應寫入新紀錄", () => {
-    const podName = "pod-gemini-invalid-model";
-
-    expect(() =>
-      podStore.create(canvasId, {
-        name: podName,
-        x: 0,
-        y: 0,
-        rotation: 0,
-        provider: "gemini",
-        providerConfig: { model: "not-a-gemini-model" },
-      }),
-    ).toThrow(/gemini/);
-
-    // create 失敗時不應有殘留資料
-    const row = getDb()
-      .prepare("SELECT id FROM pods WHERE canvas_id = ? AND name = ?")
-      .get(canvasId, podName);
-    expect(row).toBeFalsy();
-  });
-
   it("update 傳入另一個合法 model 時應成功更新 DB（claude sonnet 應自動補入 thinkingLevel='high'）", () => {
     const { pod } = podStore.create(canvasId, {
       name: "pod-update-valid-model",
@@ -808,7 +885,7 @@ describe("PodStore - Provider / Model 驗證", () => {
     // 直接呼叫純函式，傳入 provider 字串
     expect(resolveProvider("claude")).toBe("claude");
     expect(resolveProvider("codex")).toBe("codex");
-    expect(resolveProvider("gemini")).toBe("gemini");
+    expect(resolveProvider("opencode")).toBe("opencode");
 
     expect(logger.warn).not.toHaveBeenCalled();
   });
@@ -873,125 +950,6 @@ describe("PodStore - Provider / Model 驗證", () => {
       ),
     );
     expect(matched).toBe(true);
-  });
-});
-
-// ================================================================
-// PodStore - Provider 切換保留 Note 綁定
-// ================================================================
-describe("Provider 切換保留 Note 綁定", () => {
-  let canvasId: string;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    initTestDb();
-    resetStatements();
-    clearPodStoreCache();
-
-    const stmts = getStatements(getDb());
-    canvasId = "test-canvas-provider-switch";
-    stmts.canvas.insert.run({
-      $id: canvasId,
-      $name: "test-canvas-provider-switch",
-      $sortIndex: 0,
-    });
-  });
-
-  afterEach(() => {
-    closeDb();
-  });
-
-  function createPodWithNoteBindings(opts: {
-    name: string;
-    provider: string;
-    commandId?: string;
-    repositoryId?: string;
-  }) {
-    const { pod } = podStore.create(canvasId, {
-      name: opts.name,
-      x: 0,
-      y: 0,
-      rotation: 0,
-      provider: opts.provider as never,
-    });
-
-    // 直接設定 commandId / repositoryId
-    if (opts.commandId !== undefined) {
-      podStore.setCommandId(canvasId, pod.id, opts.commandId);
-    }
-    if (opts.repositoryId !== undefined) {
-      podStore.setRepositoryId(canvasId, pod.id, opts.repositoryId);
-    }
-    return pod;
-  }
-
-  it("claude → gemini：commandId 保留", () => {
-    const pod = createPodWithNoteBindings({
-      name: "pod-switch-cmd-claude-gemini",
-      provider: "claude",
-      commandId: "X",
-    });
-
-    // 切換 provider 時需同步帶入目標 provider 的合法 model
-    podStore.update(canvasId, pod.id, {
-      provider: "gemini" as never,
-      providerConfig: { model: "gemini-2.5-pro" },
-    });
-
-    const found = podStore.getById(canvasId, pod.id);
-    expect(found?.provider).toBe("gemini");
-    expect(found?.commandId).toBe("X");
-  });
-
-  it("claude → gemini：repositoryId 保留", () => {
-    const pod = createPodWithNoteBindings({
-      name: "pod-switch-repo-claude-gemini",
-      provider: "claude",
-      repositoryId: "repo-abc",
-    });
-
-    podStore.update(canvasId, pod.id, {
-      provider: "gemini" as never,
-      providerConfig: { model: "gemini-2.5-pro" },
-    });
-
-    const found = podStore.getById(canvasId, pod.id);
-    expect(found?.provider).toBe("gemini");
-    expect(found?.repositoryId).toBe("repo-abc");
-  });
-
-  it("gemini → claude：commandId 保留", () => {
-    const pod = createPodWithNoteBindings({
-      name: "pod-switch-cmd-gemini-claude",
-      provider: "gemini",
-      commandId: "Y",
-    });
-
-    podStore.update(canvasId, pod.id, {
-      provider: "claude" as never,
-      providerConfig: { model: "opus" },
-    });
-
-    const found = podStore.getById(canvasId, pod.id);
-    expect(found?.provider).toBe("claude");
-    expect(found?.commandId).toBe("Y");
-  });
-
-  it("gemini → claude：repositoryId 保留", () => {
-    const pod = createPodWithNoteBindings({
-      name: "pod-switch-repo-gemini-claude",
-      provider: "gemini",
-      repositoryId: "repo-xyz",
-    });
-
-    podStore.update(canvasId, pod.id, {
-      provider: "claude" as never,
-      providerConfig: { model: "opus" },
-    });
-
-    const found = podStore.getById(canvasId, pod.id);
-    expect(found?.provider).toBe("claude");
-    expect(found?.repositoryId).toBe("repo-xyz");
   });
 });
 

@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { Switch } from "@/components/ui/switch";
 
-/** MCP server 列表中的單一行元件，支援三種 provider 的顯示模式：
+/** MCP server 列表中的單一行元件，支援三種顯示模式：
  * - readonly=true（Codex）：只展示名稱與 type chip，無 Switch
- * - readonly=false（Gemini）：名稱 + type chip + Switch
- * - readonly=false（Claude）：名稱 + Switch（無 type chip）
+ * - locked=true（Goal built-in）：固定啟用，顯示 badge，不可切換
+ * - readonly=false：名稱 + 可選 type chip + Switch
  */
 const props = defineProps<{
   name: string;
@@ -12,6 +12,8 @@ const props = defineProps<{
   checked: boolean;
   disabled: boolean;
   readonly: boolean;
+  locked?: boolean;
+  badgeLabel?: string;
 }>();
 
 const emit = defineEmits<{
@@ -43,7 +45,7 @@ const emit = defineEmits<{
     </div>
   </div>
 
-  <!-- 可互動模式（Claude / Gemini）：名稱 + 可選 type chip + Switch -->
+  <!-- 可互動模式：名稱 + 可選 type chip + Switch / Built-in badge -->
   <div
     v-else
     class="group relative flex items-center justify-between gap-3 rounded px-2 py-1 hover:bg-secondary"
@@ -58,7 +60,14 @@ const emit = defineEmits<{
       >
         {{ props.type }}
       </span>
+      <span
+        v-if="props.locked"
+        class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-mono text-primary bg-secondary"
+      >
+        {{ props.badgeLabel }}
+      </span>
       <Switch
+        v-else
         :model-value="props.checked"
         :disabled="props.disabled"
         @click.stop

@@ -152,7 +152,6 @@ async function handleChatSendWithUploadSession(
     podId,
     message: llmTriggerText,
     abortable: true,
-    commandNotFoundBehavior: "skip",
     userMessageId: chatMessageId,
     onComplete: (runContext) => onRunChatComplete(runContext, canvasId, podId),
     onAborted: (abortedCanvasId, abortedPodId, messageId) =>
@@ -178,7 +177,6 @@ async function handleChatSendPlain(
     podId,
     message,
     abortable: true,
-    commandNotFoundBehavior: "skip",
     onComplete: (runContext) => onRunChatComplete(runContext, canvasId, podId),
     onAborted: (abortedCanvasId, abortedPodId, messageId) =>
       onChatAborted(abortedCanvasId, abortedPodId, messageId, podName),

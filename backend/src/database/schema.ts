@@ -1,4 +1,10 @@
 import { Database } from "bun:sqlite";
+import { safeJsonParse } from "../utils/safeJsonParse.js";
+
+const CLAUDE_SONNET_PROVIDER_CONFIG_JSON = JSON.stringify({
+  model: "sonnet",
+  thinkingLevel: "high",
+});
 
 /**
  * 建立所有資料表（CREATE TABLE IF NOT EXISTS）。
@@ -26,7 +32,7 @@ function createBaseTables(db: Database): void {
       "workspace_path TEXT NOT NULL," +
       "session_id TEXT," +
       "repository_id TEXT," +
-      "command_id TEXT," +
+      "goal_json TEXT," +
       "schedule_json TEXT," +
       "provider TEXT NOT NULL DEFAULT 'claude'," +
       "provider_config_json TEXT," +
@@ -270,6 +276,129 @@ function migrateCanvasPasswordColumns(db: Database): void {
   );
 }
 
+function migratePodsGoalColumn(db: Database): void {
+  if (!columnExists(db, "pods", "goal_json")) {
+    db.exec("ALTER TABLE pods ADD COLUMN goal_json TEXT");
+  }
+}
+
+function migratePodsGeminiProviderToClaude(db: Database): void {
+  const result = db
+    .prepare(
+      "UPDATE pods SET provider = 'claude', provider_config_json = ? WHERE provider = 'gemini'",
+    )
+    .run(CLAUDE_SONNET_PROVIDER_CONFIG_JSON);
+
+  if (result.changes > 0) {
+    console.log(
+      `[DB migration] 已將 ${result.changes} 筆 gemini pod 遷移為 claude/sonnet`,
+    );
+  }
+}
+
+function migrateConnectionsGeminiSummaryToClaude(db: Database): void {
+  const result = db
+    .prepare(
+      "UPDATE connections " +
+        "SET summary_provider = CASE " +
+        "  WHEN summary_provider = 'gemini' THEN 'claude' " +
+        "  ELSE summary_provider " +
+        "END, " +
+        "summary_model = CASE " +
+        "  WHEN summary_provider = 'gemini' OR summary_model LIKE 'gemini-%' THEN 'sonnet' " +
+        "  ELSE summary_model " +
+        "END " +
+        "WHERE summary_provider = 'gemini' OR summary_model LIKE 'gemini-%'",
+    )
+    .run();
+
+  if (result.changes > 0) {
+    console.log(
+      `[DB migration] 已將 ${result.changes} 筆 gemini summary 設定遷移為 claude/sonnet`,
+    );
+  }
+}
+
+function migratePodsDropCommandColumn(db: Database): void {
+  const colName = "command" + "_id";
+  if (!columnExists(db, "pods", colName)) return;
+
+  // SQLite 的 DROP COLUMN 會重建表並重跑所有 CREATE INDEX；
+  // 若有舊索引仍引用該欄位，重跑時會失敗。先把這些舊索引砍掉。
+  const legacyIndexes = db
+    .query(
+      "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'pods' AND sql LIKE ?",
+    )
+    .all(`%${colName}%`) as Array<{ name: string }>;
+
+  for (const idx of legacyIndexes) {
+    try {
+      db.exec(`DROP INDEX IF EXISTS ${idx.name}`);
+    } catch (e) {
+      console.warn(`[DB migration] 移除舊索引 ${idx.name} 失敗：`, e);
+    }
+  }
+
+  try {
+    db.exec(`ALTER TABLE pods DROP COLUMN ${colName}`);
+    console.log(`[DB migration] 已移除 pods.${colName} 欄位`);
+  } catch (e) {
+    console.warn(`[DB migration] 移除 pods.${colName} 失敗：`, e);
+  }
+}
+
+function migrateDeleteCommandNotes(db: Database): void {
+  const result = db.prepare("DELETE FROM notes WHERE type = 'command'").run();
+
+  if (result.changes > 0) {
+    console.log(`[DB migration] 已刪除 ${result.changes} 筆 command note`);
+  }
+}
+
+function migratePodManifestCommandFiles(db: Database): void {
+  const rows = db
+    .query("SELECT pod_id, repository_id, files_json FROM pod_manifests")
+    .all() as Array<{
+    pod_id: string;
+    repository_id: string;
+    files_json: string;
+  }>;
+
+  const updateStmt = db.prepare(
+    "UPDATE pod_manifests SET files_json = ? WHERE pod_id = ? AND repository_id = ?",
+  );
+  const deleteStmt = db.prepare(
+    "DELETE FROM pod_manifests WHERE pod_id = ? AND repository_id = ?",
+  );
+
+  let changedRows = 0;
+  for (const row of rows) {
+    const parsed = safeJsonParse<string[]>(row.files_json);
+    if (!Array.isArray(parsed)) continue;
+
+    const filtered = parsed.filter(
+      (file) =>
+        typeof file === "string" && !file.startsWith(".claude/commands/"),
+    );
+
+    if (filtered.length === parsed.length) continue;
+
+    changedRows++;
+    if (filtered.length === 0) {
+      deleteStmt.run(row.pod_id, row.repository_id);
+      continue;
+    }
+
+    updateStmt.run(JSON.stringify(filtered), row.pod_id, row.repository_id);
+  }
+
+  if (changedRows > 0) {
+    console.log(
+      `[DB migration] 已清理 ${changedRows} 筆 command manifest 參照`,
+    );
+  }
+}
+
 /**
  * 對既有 DB 的 connections 表補上 Branch 模式所需欄位。
  * SQLite 的 CREATE TABLE IF NOT EXISTS 對既有表不會自動加欄位，所以走 ALTER TABLE。
@@ -420,6 +549,12 @@ function migratePodsDropStatus(db: Database): void {
 export function createTables(db: Database): void {
   createBaseTables(db);
   migrateCanvasPasswordColumns(db);
+  migratePodsGoalColumn(db);
+  migratePodsGeminiProviderToClaude(db);
+  migrateConnectionsGeminiSummaryToClaude(db);
+  migratePodsDropCommandColumn(db);
+  migrateDeleteCommandNotes(db);
+  migratePodManifestCommandFiles(db);
   migrateConnectionBranchColumns(db);
   cleanupLegacyAiDecideRows(db);
   migrateConnectionStatusAiValues(db);

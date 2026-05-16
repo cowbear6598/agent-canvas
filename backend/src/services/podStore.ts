@@ -1,11 +1,12 @@
 import { randomUUID } from "crypto";
 import { Database } from "bun:sqlite";
 import * as fsPath from "path";
-import type { Pod, CreatePodRequest, ScheduleConfig } from "../types";
+import type { Pod, CreatePodRequest, ScheduleConfig, PodGoal } from "../types";
 import type { IntegrationBinding } from "../types/integration.js";
 import type { ProviderName } from "./provider/types.js";
+import { derivePodGoalStatus, normalizePodGoal } from "../types/pod.js";
 import {
-  resolveProvider,
+  resolveProvider as resolveProviderName,
   resolveProviderConfig,
   sanitizeProviderConfigStrict,
 } from "./pod/providerConfigResolver.js";
@@ -48,7 +49,7 @@ interface PodRow {
   workspace_path: string;
   session_id: string | null;
   repository_id: string | null;
-  command_id: string | null;
+  goal_json: string | null;
   schedule_json: string | null;
   provider: string;
   provider_config_json: string | null;
@@ -299,6 +300,11 @@ class PodStore {
     return resolveProviderConfig(raw, provider, row.id);
   }
 
+  private parseGoal(goalJson: string | null): PodGoal | null {
+    const parsed = safeJsonParse<PodGoal>(goalJson ?? "");
+    return normalizePodGoal(parsed ?? null);
+  }
+
   /**
    * 反序列化 DB 儲存的 schedule JSON 字串為 ScheduleConfig，
    * 轉換 lastTriggeredAt 字串為 Date 物件。
@@ -326,7 +332,7 @@ class PodStore {
     },
     bindingsMap: Map<string, IntegrationBinding[]>,
   ): Pod {
-    const provider = resolveProvider(row.provider);
+    const provider = resolveProviderName(row.provider);
     const providerConfig = this.resolveProviderConfigFromRow(row, provider);
     const pod: Pod = {
       id: row.id,
@@ -341,9 +347,11 @@ class PodStore {
       provider,
       providerConfig,
       repositoryId: row.repository_id,
-      commandId: row.command_id,
+      goal: this.parseGoal(row.goal_json),
       integrationBindings: bindingsMap.get(row.id) ?? [],
     };
+    pod.goalStatus = derivePodGoalStatus(pod.goal ?? null);
+    pod.canExecute = pod.goalStatus === "ready";
     if (row.schedule_json) {
       pod.schedule = this.parseSchedule(row.schedule_json);
     }
@@ -412,7 +420,7 @@ class PodStore {
       provider,
       providerConfig,
       repositoryId: data.repositoryId ?? null,
-      commandId: data.commandId ?? null,
+      goal: normalizePodGoal(data.goal ?? null),
       // create 路徑直接回傳空陣列，與 getById/list（走 batchLoadBindings 路徑）保持結構一致
       integrationBindings: [],
     };
@@ -432,7 +440,7 @@ class PodStore {
       $workspacePath: pod.workspacePath,
       $sessionId: pod.sessionId,
       $repositoryId: pod.repositoryId,
-      $commandId: pod.commandId,
+      $goalJson: pod.goal ? JSON.stringify(pod.goal) : null,
       $scheduleJson: null,
       $provider: pod.provider,
       $providerConfigJson: JSON.stringify(pod.providerConfig),
@@ -460,6 +468,8 @@ class PodStore {
       provider,
       providerConfig,
     );
+    pod.goalStatus = derivePodGoalStatus(pod.goal ?? null);
+    pod.canExecute = pod.goalStatus === "ready";
 
     // 步驟三：原子寫入 DB
     getDb().transaction(() => {
@@ -578,13 +588,19 @@ class PodStore {
       id: _id,
       workspacePath: _wp,
       schedule: _sched,
+      goalStatus: _goalStatus,
+      canExecute: _canExecute,
       ...safeUpdates
     } = updates as PodUpdates & Partial<Pod>;
-    return {
+    const updatedPod = {
       ...pod,
       ...safeUpdates,
       schedule: this.mergeSchedule(pod, updates),
     };
+    updatedPod.goal = normalizePodGoal(updatedPod.goal ?? null);
+    updatedPod.goalStatus = derivePodGoalStatus(updatedPod.goal);
+    updatedPod.canExecute = updatedPod.goalStatus === "ready";
+    return updatedPod;
   }
 
   /**
@@ -624,7 +640,7 @@ class PodStore {
       $rotation: pod.rotation,
       $sessionId: pod.sessionId,
       $repositoryId: pod.repositoryId,
-      $commandId: pod.commandId,
+      $goalJson: pod.goal ? JSON.stringify(pod.goal) : null,
       $scheduleJson: serializeSchedule(pod.schedule),
       $provider: pod.provider,
       $providerConfigJson: sanitizedConfigJson,
@@ -698,14 +714,6 @@ class PodStore {
     }
   }
 
-  findByCommandId(canvasId: string, commandId: string): Pod[] {
-    const rows = this.stmts.pod.selectByCommandIdAndCanvas.all(
-      commandId,
-      canvasId,
-    ) as PodRow[];
-    return this.rowsToPods(rows);
-  }
-
   findByRepositoryId(canvasId: string, repositoryId: string): Pod[] {
     const rows = this.stmts.pod.selectByRepositoryIdAndCanvas.all(
       repositoryId,
@@ -739,14 +747,6 @@ class PodStore {
       $repositoryId: repositoryId,
       $id: id,
     });
-  }
-
-  setCommandId(
-    canvasId: string,
-    podId: string,
-    commandId: string | null,
-  ): void {
-    this.stmts.pod.updateCommandId.run({ $commandId: commandId, $id: podId });
   }
 
   /**

@@ -1,15 +1,11 @@
 import { computed } from "vue";
 import type { ComputedRef, Ref } from "vue";
 import { useNoteEventHandlers } from "@/composables/canvas/useNoteEventHandlers";
-import { useNoteDoubleClick } from "@/composables/canvas/useNoteDoubleClick";
 import { screenToCanvasPosition } from "@/lib/canvasCoordinateUtils";
 import type { usePodStore } from "@/stores/pod";
 import type { useViewportStore } from "@/stores/pod";
-import type { useRepositoryStore, useCommandStore } from "@/stores/note";
+import type { useRepositoryStore } from "@/stores/note";
 import TrashZone from "@/components/canvas/TrashZone.vue";
-
-// EditableNoteType 供 UseCanvasNoteHandlersOptions.handleOpenEditModal 型別引用
-type EditableNoteType = "command";
 
 interface NoteStoreBase {
   isDraggingNote: boolean;
@@ -30,41 +26,25 @@ interface UseCanvasNoteHandlersOptions {
   podStore: ReturnType<typeof usePodStore>;
   viewportStore: ReturnType<typeof useViewportStore>;
   repositoryStore: ReturnType<typeof useRepositoryStore>;
-  commandStore: ReturnType<typeof useCommandStore>;
   trashZoneRef: Ref<InstanceType<typeof TrashZone> | null>;
-  handleOpenEditModal: (
-    type: EditableNoteType,
-    id: string,
-  ) => Promise<void> | void;
 }
 
-type NoteType = "repository" | "command";
+type NoteHandlerMap = {
+  repository: ReturnType<typeof useNoteEventHandlers>;
+};
 
 export function useCanvasNoteHandlers(options: UseCanvasNoteHandlersOptions): {
-  noteHandlerMap: Record<NoteType, ReturnType<typeof useNoteEventHandlers>>;
+  noteHandlerMap: NoteHandlerMap;
   showTrashZone: ComputedRef<boolean>;
   isTrashHighlighted: ComputedRef<boolean>;
   isCanvasEmpty: ComputedRef<boolean>;
   handleCreateRepositoryNote: (itemId: string) => void;
-  handleCreateCommandNote: (itemId: string) => void;
   getRepositoryBranchName: (repositoryId: string) => string | undefined;
-  handleNoteDoubleClick: (data: {
-    noteId: string;
-    noteType: NoteType;
-  }) => Promise<void>;
 } {
-  const {
-    podStore,
-    viewportStore,
-    repositoryStore,
-    commandStore,
-    trashZoneRef,
-    handleOpenEditModal,
-  } = options;
+  const { podStore, viewportStore, repositoryStore, trashZoneRef } = options;
 
   const noteConfigs = [
     { store: repositoryStore as NoteStoreBase, type: "repository" as const },
-    { store: commandStore as NoteStoreBase, type: "command" as const },
   ] as const;
 
   const allNoteStores = noteConfigs.map((config) => config.store);
@@ -84,12 +64,11 @@ export function useCanvasNoteHandlers(options: UseCanvasNoteHandlersOptions): {
       allNoteStores.every((store) => store.notes.length === 0),
   );
 
-  const noteHandlerMap = Object.fromEntries(
-    noteConfigs.map((config) => [
-      config.type,
-      useNoteEventHandlers({ store: config.store, trashZoneRef }),
-    ]),
-  ) as Record<NoteType, ReturnType<typeof useNoteEventHandlers>>;
+  const noteHandlerEntries = noteConfigs.map((config) => [
+    config.type,
+    useNoteEventHandlers({ store: config.store, trashZoneRef }),
+  ]);
+  const noteHandlerMap = Object.fromEntries(noteHandlerEntries) as NoteHandlerMap;
 
   const createNoteHandler = (store: NoteStoreBase) => {
     return (itemId: string): void => {
@@ -107,9 +86,6 @@ export function useCanvasNoteHandlers(options: UseCanvasNoteHandlersOptions): {
   const handleCreateRepositoryNote = createNoteHandler(
     repositoryStore as NoteStoreBase,
   );
-  const handleCreateCommandNote = createNoteHandler(
-    commandStore as NoteStoreBase,
-  );
 
   const getRepositoryBranchName = (
     repositoryId: string,
@@ -119,19 +95,12 @@ export function useCanvasNoteHandlers(options: UseCanvasNoteHandlersOptions): {
     return repository?.currentBranch;
   };
 
-  const { handleNoteDoubleClick } = useNoteDoubleClick(
-    { commandStore },
-    handleOpenEditModal,
-  );
-
   return {
     noteHandlerMap,
     showTrashZone,
     isTrashHighlighted,
     isCanvasEmpty,
     handleCreateRepositoryNote,
-    handleCreateCommandNote,
     getRepositoryBranchName,
-    handleNoteDoubleClick,
   };
 }

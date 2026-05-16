@@ -76,7 +76,6 @@ const makePod = (overrides?: Partial<Pod>): Pod => ({
   provider: "claude",
   providerConfig: { model: "sonnet" },
   repositoryId: null,
-  commandId: null,
   multiInstance: false,
   ...overrides,
 });

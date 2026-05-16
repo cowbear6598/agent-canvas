@@ -24,7 +24,6 @@ const POD_NAME_CONFLICT_MESSAGE = "同一 Canvas 下已存在相同名稱的 Pod
 const VALID_PROVIDERS: ProviderName[] = [
   "claude",
   "codex",
-  "gemini",
   "opencode",
 ];
 /** providerConfig 允許的 key 白名單 */

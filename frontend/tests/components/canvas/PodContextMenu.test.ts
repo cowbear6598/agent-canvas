@@ -52,6 +52,7 @@ vi.mock("@/stores", async (importOriginal) => {
 
 vi.mock("lucide-vue-next", () => ({
   Download: { name: "Download", template: "<svg />" },
+  Target: { name: "Target", template: "<svg />" },
   Unplug: { name: "Unplug", template: "<svg />" },
   Puzzle: { name: "Puzzle", template: "<svg />" },
   ChevronRight: { name: "ChevronRight", template: "<svg />" },
@@ -88,6 +89,13 @@ function mountMenu(props = {}) {
   });
 }
 
+function findButtonByText(
+  wrapper: ReturnType<typeof mountMenu>,
+  text: string,
+) {
+  return wrapper.findAll("button").find((button) => button.text().includes(text));
+}
+
 describe("PodContextMenu", () => {
   setupStoreTest(() => {
     mockGetActiveCanvasIdOrWarn.mockReturnValue("canvas-1");
@@ -108,9 +116,21 @@ describe("PodContextMenu", () => {
     it("應顯示「下載工作目錄」按鈕", () => {
       const wrapper = mountMenu();
 
-      const button = wrapper.find("button");
-      expect(button.exists()).toBe(true);
-      expect(button.text()).toContain("下載工作目錄（zip）");
+      const button = findButtonByText(wrapper, "下載工作目錄（zip）");
+      expect(button?.exists()).toBe(true);
+      expect(button?.text()).toContain("下載工作目錄（zip）");
+    });
+
+    it("沒有 Goal 時應顯示「設定 Goal」按鈕", () => {
+      mockGetPodById.mockReturnValue({
+        id: "pod-123",
+        goalStatus: "unset",
+        integrationBindings: [],
+      });
+
+      const wrapper = mountMenu();
+
+      expect(findButtonByText(wrapper, "設定 Goal")?.exists()).toBe(true);
     });
 
     it("不應渲染全螢幕背景遮罩", () => {
@@ -162,8 +182,8 @@ describe("PodContextMenu", () => {
       mockDownloadPodDirectory.mockResolvedValue(undefined);
 
       const wrapper = mountMenu();
-      const button = wrapper.find("button");
-      await button.trigger("click");
+      const button = findButtonByText(wrapper, "下載工作目錄（zip）");
+      await button?.trigger("click");
       await wrapper.vm.$nextTick();
 
       expect(wrapper.emitted("close")).toBeTruthy();
@@ -173,8 +193,8 @@ describe("PodContextMenu", () => {
       mockDownloadPodDirectory.mockRejectedValue(new Error("下載失敗"));
 
       const wrapper = mountMenu();
-      const button = wrapper.find("button");
-      await button.trigger("click");
+      const button = findButtonByText(wrapper, "下載工作目錄（zip）");
+      await button?.trigger("click");
       // 等待背景 promise reject
       await new Promise((resolve) => setTimeout(resolve, 0));
       await wrapper.vm.$nextTick();
@@ -186,8 +206,8 @@ describe("PodContextMenu", () => {
       mockDownloadPodDirectory.mockRejectedValue(new Error("下載失敗"));
 
       const wrapper = mountMenu();
-      const button = wrapper.find("button");
-      await button.trigger("click");
+      const button = findButtonByText(wrapper, "下載工作目錄（zip）");
+      await button?.trigger("click");
       await wrapper.vm.$nextTick();
 
       expect(wrapper.emitted("close")).toBeTruthy();
@@ -197,8 +217,8 @@ describe("PodContextMenu", () => {
       mockGetActiveCanvasIdOrWarn.mockReturnValue(null);
 
       const wrapper = mountMenu();
-      const button = wrapper.find("button");
-      await button.trigger("click");
+      const button = findButtonByText(wrapper, "下載工作目錄（zip）");
+      await button?.trigger("click");
       await wrapper.vm.$nextTick();
 
       expect(mockDownloadPodDirectory).not.toHaveBeenCalled();
@@ -293,6 +313,24 @@ describe("PodContextMenu", () => {
         "pod-123",
         "slack",
       ]);
+      expect(wrapper.emitted("close")).toBeTruthy();
+    });
+  });
+
+  describe("Goal 按鈕", () => {
+    it("點擊「編輯 Goal」應 emit open-goal-editor", async () => {
+      mockGetPodById.mockReturnValue({
+        id: "pod-123",
+        goalStatus: "ready",
+        integrationBindings: [],
+      });
+
+      const wrapper = mountMenu();
+      const button = findButtonByText(wrapper, "編輯 Goal");
+
+      await button?.trigger("click");
+
+      expect(wrapper.emitted("open-goal-editor")?.[0]).toEqual(["pod-123"]);
       expect(wrapper.emitted("close")).toBeTruthy();
     });
   });

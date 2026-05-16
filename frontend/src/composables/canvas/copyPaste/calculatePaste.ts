@@ -8,11 +8,9 @@ import {
 import type {
   CopiedPod,
   CopiedRepositoryNote,
-  CopiedCommandNote,
   CopiedConnection,
   PastePodItem,
   PasteRepositoryNoteItem,
-  PasteCommandNoteItem,
   PasteConnectionItem,
 } from "@/types";
 
@@ -64,15 +62,13 @@ function updateBoundsForUnboundNotes(
   }
 }
 
-function calculateBoundingBox<TR extends HasPosition, TC extends HasPosition>(
+function calculateBoundingBox<TR extends HasPosition>(
   pods: CopiedPod[],
   notes: {
     repositoryNotes: TR[];
-    commandNotes: TC[];
   },
   getBoundKeys: {
     repositoryNote: (n: TR) => string | null;
-    commandNote: (n: TC) => string | null;
   },
 ): BoundingBox {
   const bounds = createInitialBounds();
@@ -83,7 +79,6 @@ function calculateBoundingBox<TR extends HasPosition, TC extends HasPosition>(
 
   updateBoundsForUnboundNotes(bounds, [
     toUnboundNoteEntry(notes.repositoryNotes, getBoundKeys.repositoryNote),
-    toUnboundNoteEntry(notes.commandNotes, getBoundKeys.commandNote),
   ]);
 
   return bounds;
@@ -150,7 +145,8 @@ export function transformPods(
       mcpServerNames: pod.mcpServerNames,
       pluginIds: pod.pluginIds,
       repositoryId: pod.repositoryId,
-      commandId: pod.commandId,
+      goal: pod.goal ?? null,
+      goalStatus: pod.goalStatus,
     };
   });
 }
@@ -198,11 +194,10 @@ function transformConnections(
 type ClipboardData = {
   pods: CopiedPod[];
   repositoryNotes: CopiedRepositoryNote[];
-  commandNotes: CopiedCommandNote[];
   connections: CopiedConnection[];
 };
 
-type CopiedNote = CopiedRepositoryNote | CopiedCommandNote;
+type CopiedNote = CopiedRepositoryNote;
 
 type NoteTransformConfig<TSource extends CopiedNote, TResult> = {
   notes: TSource[];
@@ -211,12 +206,8 @@ type NoteTransformConfig<TSource extends CopiedNote, TResult> = {
 };
 
 function isEmptyClipboard(clipboardData: ClipboardData): boolean {
-  const { pods, repositoryNotes, commandNotes } = clipboardData;
-  return (
-    pods.length === 0 &&
-    repositoryNotes.length === 0 &&
-    commandNotes.length === 0
-  );
+  const { pods, repositoryNotes } = clipboardData;
+  return pods.length === 0 && repositoryNotes.length === 0;
 }
 
 export function calculatePastePositions(
@@ -226,16 +217,14 @@ export function calculatePastePositions(
 ): {
   pods: PastePodItem[];
   repositoryNotes: PasteRepositoryNoteItem[];
-  commandNotes: PasteCommandNoteItem[];
   connections: PasteConnectionItem[];
 } {
-  const { pods, repositoryNotes, commandNotes, connections } = clipboardData;
+  const { pods, repositoryNotes, connections } = clipboardData;
 
   if (isEmptyClipboard(clipboardData)) {
     return {
       pods: [],
       repositoryNotes: [],
-      commandNotes: [],
       connections: [],
     };
   }
@@ -244,11 +233,9 @@ export function calculatePastePositions(
     pods,
     {
       repositoryNotes,
-      commandNotes,
     },
     {
       repositoryNote: (note) => note.boundToOriginalPodId,
-      commandNote: (note) => note.boundToOriginalPodId,
     },
   );
 
@@ -275,18 +262,6 @@ export function calculatePastePositions(
       getBoundKey: (note) => note.boundToOriginalPodId,
       mapFn: (note, position) => ({
         repositoryId: note.repositoryId,
-        name: note.name,
-        x: position.x,
-        y: position.y,
-        boundToOriginalPodId: note.boundToOriginalPodId,
-        originalPosition: note.originalPosition,
-      }),
-    }),
-    commandNotes: applyTransform<CopiedCommandNote, PasteCommandNoteItem>({
-      notes: commandNotes,
-      getBoundKey: (note) => note.boundToOriginalPodId,
-      mapFn: (note, position) => ({
-        commandId: note.commandId,
         name: note.name,
         x: position.x,
         y: position.y,

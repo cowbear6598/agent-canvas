@@ -1,6 +1,5 @@
 import { WebSocketResponseEvents } from "../schemas";
 import type { RepositoryCreatedPayload } from "../types";
-import type { Pod } from "../types/index.js";
 import type {
   RepositoryCreatePayload,
   PodBindRepositoryPayload,
@@ -8,12 +7,9 @@ import type {
   RepositoryDeletePayload,
 } from "../schemas";
 import { repositoryService } from "../services/repositoryService.js";
-import { podManifestService } from "../services/podManifestService.js";
 import { repositoryNoteStore } from "../services/noteStores.js";
 import { podStore } from "../services/podStore.js";
 import { socketService } from "../services/socketService.js";
-import { repositorySyncService } from "../services/repositorySyncService.js";
-import { commandService } from "../services/commandService.js";
 import { emitError } from "../utils/websocketResponse.js";
 import { createI18nError } from "../utils/i18nError.js";
 import { createNoteHandlers } from "./factories/createNoteHandlers.js";
@@ -89,17 +85,6 @@ export async function handleRepositoryCreate(
   );
 }
 
-async function cleanupPodWorkspaceResources(
-  podWorkspacePath: string,
-  _podId: string,
-): Promise<void> {
-  try {
-    await commandService.deleteCommandFromPath(podWorkspacePath);
-  } catch {
-    // 忽略清理失敗
-  }
-}
-
 export const handlePodBindRepository = withCanvasId<PodBindRepositoryPayload>(
   WebSocketResponseEvents.POD_REPOSITORY_BOUND,
   async (
@@ -161,17 +146,6 @@ export const handlePodBindRepository = withCanvasId<PodBindRepositoryPayload>(
 
     podStore.setRepositoryId(canvasId, podId, repositoryId);
 
-    await repositorySyncService.syncRepositoryResources(repositoryId);
-
-    if (oldRepositoryId && oldRepositoryId !== repositoryId) {
-      await podManifestService.deleteManagedFiles(oldRepositoryId, podId);
-      await repositorySyncService.syncRepositoryResources(oldRepositoryId);
-    }
-
-    if (!oldRepositoryId) {
-      await cleanupPodWorkspaceResources(pod.workspacePath, podId);
-    }
-
     emitPodUpdated(
       canvasId,
       podId,
@@ -180,21 +154,6 @@ export const handlePodBindRepository = withCanvasId<PodBindRepositoryPayload>(
     );
   },
 );
-
-/**
- * 解除 Repository 綁定後的資源清理：
- * 1. 刪除該 Pod 在舊 repository 的 managed files
- * 2. 重新同步舊 repository 的資源
- */
-async function unbindRepositoryCleanup(
-  pod: Pod,
-  oldRepositoryId: string | null,
-): Promise<void> {
-  if (oldRepositoryId) {
-    await podManifestService.deleteManagedFiles(oldRepositoryId, pod.id);
-    await repositorySyncService.syncRepositoryResources(oldRepositoryId);
-  }
-}
 
 export const handlePodUnbindRepository =
   withCanvasId<PodUnbindRepositoryPayload>(
@@ -216,12 +175,7 @@ export const handlePodUnbindRepository =
       if (!pod) {
         return;
       }
-
-      const oldRepositoryId = pod.repositoryId;
-
       podStore.setRepositoryId(canvasId, podId, null);
-
-      await unbindRepositoryCleanup(pod, oldRepositoryId);
 
       emitPodUpdated(
         canvasId,

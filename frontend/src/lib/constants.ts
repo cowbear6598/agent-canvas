@@ -3,12 +3,9 @@ export const POD_MENU_Y_OFFSET = 50;
 export const HEADER_HEIGHT = 64;
 
 export const MAX_MESSAGE_LENGTH = 10000;
-export const CONTENT_PREVIEW_LENGTH = 30;
-export const RESPONSE_PREVIEW_LENGTH = 40;
 
 export const TEXTAREA_MAX_HEIGHT = 124;
 
-export const OUTPUT_LINES_PREVIEW_COUNT = 4;
 export const DEFAULT_POD_ROTATION_RANGE = 2;
 export const MAX_POD_NAME_LENGTH = 50;
 
@@ -17,7 +14,8 @@ export const MOUSE_BUTTON = { LEFT: 0, MIDDLE: 1, RIGHT: 2 } as const;
 export const GRID_SIZE = 20;
 
 export const POD_WIDTH = 224;
-export const POD_HEIGHT = 168;
+/** Pod 視覺高度（與 .pod-doodle 的 min-height 同步；移除小螢幕後縮為 112） */
+export const POD_HEIGHT = 112;
 
 export const NOTE_WIDTH = 80;
 export const NOTE_HEIGHT = 30;

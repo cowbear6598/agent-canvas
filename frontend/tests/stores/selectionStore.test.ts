@@ -21,19 +21,6 @@ describe("selectionStore", () => {
       });
     });
 
-    describe("selectedCommandNoteIds", () => {
-      it("應篩選出 type 為 commandNote 的 id", () => {
-        const store = useSelectionStore();
-        store.selectedElements = [
-          { type: "commandNote", id: "note-1" },
-          { type: "pod", id: "pod-1" },
-          { type: "commandNote", id: "note-2" },
-        ];
-
-        expect(store.selectedCommandNoteIds).toEqual(["note-1", "note-2"]);
-      });
-    });
-
     describe("hasSelection", () => {
       it("有元素時應為 true", () => {
         const store = useSelectionStore();
@@ -290,27 +277,6 @@ describe("selectionStore", () => {
 
         expect(store.selectedElements).toEqual([
           { type: "repositoryNote", id: "note-1" },
-        ]);
-      });
-
-      it("CommandNote 與框選範圍相交時應被選中", () => {
-        const store = useSelectionStore();
-        const note = createMockNote("command", {
-          id: "note-1",
-          x: 100,
-          y: 100,
-        });
-
-        store.startSelection(50, 50);
-        store.updateSelection(150, 150);
-
-        store.calculateSelectedElements({
-          pods: [],
-          noteGroups: [{ notes: [note], type: "commandNote" }],
-        });
-
-        expect(store.selectedElements).toEqual([
-          { type: "commandNote", id: "note-1" },
         ]);
       });
 

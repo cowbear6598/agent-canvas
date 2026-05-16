@@ -24,13 +24,13 @@ const MCP_SERVER_LIST_CACHE_TTL_MS = 30 * 1000;
 
 /**
  * MCP server 清單快取最大容量。
- * 目前最多 3 個 provider（claude / codex / gemini），保留餘裕設為 16。
+ * 目前最多 3 個 provider（claude / codex / opencode），保留餘裕設為 16。
  * 超過上限時刪除最舊的 entry（Map 迭代順序 = 插入順序）。
  */
 const MCP_SERVER_LIST_CACHE_MAX_SIZE = 16;
 
 /** McpListPayload 接受的已知 provider 字面量集合 */
-const KNOWN_MCP_PROVIDERS = new Set(["claude", "codex", "gemini"]);
+const KNOWN_MCP_PROVIDERS = new Set(["claude", "codex", "opencode"]);
 
 interface McpServerListCacheEntry {
   data: McpListItem[];
@@ -59,7 +59,7 @@ export async function listMcpServers(
   >({
     requestEvent: WebSocketRequestEvents.MCP_LIST,
     responseEvent: WebSocketResponseEvents.MCP_LIST_RESULT,
-    payload: { provider: provider as "claude" | "codex" | "gemini" },
+    payload: { provider: provider as "claude" | "codex" | "opencode" },
   });
 
   const data = result.items ?? [];

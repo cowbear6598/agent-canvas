@@ -143,7 +143,6 @@ describe("PodModelSelector opencode server 失敗時呈現 disabled", () => {
           chat: chatEnabled,
           plugin: false,
           repository: false,
-          command: false,
           mcp: false,
         },
       },

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted } from "vue";
-import { Download, Unplug } from "lucide-vue-next";
+import { Download, Target, Unplug } from "lucide-vue-next";
 import { useI18n } from "vue-i18n";
 import { downloadPodDirectory } from "@/services/podApi";
 import { getActiveCanvasIdOrWarn } from "@/utils/canvasGuard";
@@ -18,6 +18,7 @@ const props = defineProps<Props>();
 
 const emit = defineEmits<{
   close: [];
+  "open-goal-editor": [podId: string];
   "connect-integration": [podId: string, provider: string];
   "disconnect-integration": [podId: string, provider: string];
 }>();
@@ -26,6 +27,7 @@ const { t } = useI18n();
 
 const pod = computed(() => usePodStore().getPodById(props.podId));
 const bindings = computed(() => pod.value?.integrationBindings ?? []);
+const hasGoal = computed(() => pod.value?.goalStatus === "ready");
 const providers = getAllProviders();
 
 const downloadProgress = useDownloadProgress();
@@ -86,6 +88,11 @@ const handleDownloadDirectory = (): void => {
     });
 };
 
+const handleOpenGoalEditor = (): void => {
+  emit("open-goal-editor", props.podId);
+  emit("close");
+};
+
 const handleConnect = (provider: string): void => {
   emit("connect-integration", props.podId, provider);
   emit("close");
@@ -107,6 +114,18 @@ const handleDisconnect = (provider: string): void => {
     }"
     @contextmenu.prevent
   >
+    <button
+      class="w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary"
+      @click="handleOpenGoalEditor"
+    >
+      <Target :size="14" />
+      <span class="font-mono">{{
+        hasGoal
+          ? $t("canvas.podContextMenu.editGoal")
+          : $t("canvas.podContextMenu.setGoal")
+      }}</span>
+    </button>
+
     <button
       class="w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary"
       @click="handleDownloadDirectory"

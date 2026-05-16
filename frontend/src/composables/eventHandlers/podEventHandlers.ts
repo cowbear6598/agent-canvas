@@ -1,7 +1,6 @@
 import { WebSocketResponseEvents } from "@/services/websocket";
 import { usePodStore } from "@/stores/pod/podStore";
 import { useRepositoryStore } from "@/stores/note/repositoryStore";
-import { useCommandStore } from "@/stores/note/commandStore";
 import type { Pod } from "@/types";
 import { createUnifiedHandler } from "./sharedHandlerUtils";
 import type { BasePayload } from "./sharedHandlerUtils";
@@ -9,7 +8,6 @@ import { t } from "@/i18n";
 
 type DeletedNoteIds = {
   repositoryNote?: string[];
-  commandNote?: string[];
 };
 
 const noteTypeHandlers: {
@@ -17,7 +15,6 @@ const noteTypeHandlers: {
   getStore: () => { removeNoteFromEvent: (id: string) => void };
 }[] = [
   { noteType: "repositoryNote", getStore: () => useRepositoryStore() },
-  { noteType: "commandNote", getStore: () => useCommandStore() },
 ];
 
 export const removeDeletedNotes = (
@@ -167,6 +164,10 @@ export function getPodEventListeners(): Array<{
       handler: handlePodRenamed as (payload: unknown) => void,
     },
     {
+      event: WebSocketResponseEvents.POD_GOAL_SET,
+      handler: handlePodStateUpdated as (payload: unknown) => void,
+    },
+    {
       event: WebSocketResponseEvents.POD_MODEL_SET,
       handler: handlePodModelSet as (payload: unknown) => void,
     },
@@ -184,14 +185,6 @@ export function getPodEventListeners(): Array<{
     },
     {
       event: WebSocketResponseEvents.POD_REPOSITORY_UNBOUND,
-      handler: handlePodStateUpdated as (payload: unknown) => void,
-    },
-    {
-      event: WebSocketResponseEvents.POD_COMMAND_BOUND,
-      handler: handlePodStateUpdated as (payload: unknown) => void,
-    },
-    {
-      event: WebSocketResponseEvents.POD_COMMAND_UNBOUND,
       handler: handlePodStateUpdated as (payload: unknown) => void,
     },
     {

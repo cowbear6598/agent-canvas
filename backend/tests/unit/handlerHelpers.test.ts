@@ -68,7 +68,7 @@ function insertPod(name: string): void {
     .prepare(
       `INSERT INTO pods
              (id, canvas_id, name, x, y, rotation, workspace_path,
-              session_id, repository_id, command_id,
+              session_id, repository_id, goal_json,
               schedule_json, provider, provider_config_json)
              VALUES (?, ?, ?, 0, 0, 0, '/tmp/handler-pod', NULL, NULL, NULL, NULL, 'claude',
              '{"model":"sonnet"}')`,

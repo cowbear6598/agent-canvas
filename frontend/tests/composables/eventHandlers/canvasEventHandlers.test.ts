@@ -5,7 +5,6 @@ import { useCanvasStore } from "@/stores/canvasStore";
 import { usePodStore } from "@/stores/pod/podStore";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useRepositoryStore } from "@/stores/note/repositoryStore";
-import { useCommandStore } from "@/stores/note/commandStore";
 // TODO Phase 4: useMcpServerStore 重構後補回
 import { getCanvasEventListeners } from "@/composables/eventHandlers/canvasEventHandlers";
 
@@ -79,13 +78,11 @@ describe("canvasEventHandlers", () => {
       const podStore = usePodStore();
       const connectionStore = useConnectionStore();
       const repositoryStore = useRepositoryStore();
-      const commandStore = useCommandStore();
       // TODO Phase 4: mcpServerStore spy 重構後補回
 
       const podSpy = vi.spyOn(podStore, "addPodFromEvent");
       const connSpy = vi.spyOn(connectionStore, "addConnectionFromEvent");
       const repoSpy = vi.spyOn(repositoryStore, "addNoteFromEvent");
-      const commandSpy = vi.spyOn(commandStore, "addNoteFromEvent");
 
       const pod = { id: "pod-1", name: "Pod 1", x: 0, y: 0 };
       const connection = {
@@ -102,14 +99,12 @@ describe("canvasEventHandlers", () => {
         createdPods: [pod],
         createdConnections: [connection],
         createdRepositoryNotes: [{ id: "rp-1" }],
-        createdCommandNotes: [{ id: "cmd-1" }],
         // TODO Phase 4: createdMcpServerNotes 重構後補回
       });
 
       expect(podSpy).toHaveBeenCalledWith(pod);
       expect(connSpy).toHaveBeenCalledWith(connection);
       expect(repoSpy).toHaveBeenCalledWith({ id: "rp-1" });
-      expect(commandSpy).toHaveBeenCalledWith({ id: "cmd-1" });
     });
   });
 });

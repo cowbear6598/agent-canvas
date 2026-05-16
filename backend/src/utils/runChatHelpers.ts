@@ -3,8 +3,13 @@ import type { RunContext } from "../types/run.js";
 import type { ContentBlock } from "../types/index.js";
 import { WebSocketResponseEvents } from "../schemas/index.js";
 import { runStore } from "../services/runStore.js";
-import { socketService } from "../services/socketService.js";
 import { runExecutionService } from "../services/workflow/runExecutionService.js";
+import { prependGoalExecutionContext } from "../services/goalRuntime.js";
+import { socketService } from "../services/socketService.js";
+import { executeStreamingChat } from "../services/claude/streamingChatExecutor.js";
+import { ChatExecutionStrategy } from "../services/executionStrategy.js";
+import { podStore } from "../services/podStore.js";
+import { logger } from "./logger.js";
 
 export function extractDisplayContent(
   message: string | ContentBlock[],
@@ -15,11 +20,6 @@ export function extractDisplayContent(
     .map((block) => (block.type === "text" ? block.text : "[image]"))
     .join("");
 }
-import { executeStreamingChat } from "../services/claude/streamingChatExecutor.js";
-import { ChatExecutionStrategy } from "../services/executionStrategy.js";
-import { podStore } from "../services/podStore.js";
-import { tryExpandCommandMessage } from "../services/commandExpander.js";
-import { logger } from "./logger.js";
 
 export interface LaunchRunParams {
   canvasId: string;
@@ -31,77 +31,10 @@ export interface LaunchRunParams {
   onAborted?: (canvasId: string, podId: string, messageId: string) => void;
   onRunContextCreated?: (runContext: RunContext) => void;
   /**
-   * Command 不存在時的處理策略：
-   * - "skip"：建立 Run 骨架 + 注入原始訊息後提早結束，不呼叫 Claude
-   * - "fallback"：warn + 以原始訊息繼續執行（預設，適用於已在上游完成展開的路徑）
-   */
-  commandNotFoundBehavior?: "skip" | "fallback";
-  /**
    * 可選的外部 user message id，用於對齊附件目錄與 DB run message id。
    * 傳入時會作為 injectRunUserMessage 的 id，確保兩者一致。
    */
   userMessageId?: string;
-}
-
-/**
- * skip 策略：Command 不存在時，建立 Run 骨架並注入原始訊息後提早結束。
- * 直接透過 socketService 發送錯誤提示至前端，不呼叫 Claude。
- */
-async function handleCommandNotFound(params: {
-  canvasId: string;
-  podId: string;
-  message: string | ContentBlock[];
-  displayMessage?: string;
-  onRunContextCreated?: (runContext: RunContext) => void;
-  commandId: string;
-}): Promise<RunContext> {
-  const {
-    canvasId,
-    podId,
-    message,
-    displayMessage,
-    onRunContextCreated,
-    commandId,
-  } = params;
-  const triggerMsg = displayMessage ?? extractDisplayContent(message);
-  const rc = await runExecutionService.createRun(canvasId, podId, triggerMsg);
-  const sourceInstance = runStore.getPodInstance(rc.runId, podId);
-  if (
-    sourceInstance?.status === "error" ||
-    sourceInstance?.status === "skipped"
-  ) {
-    onRunContextCreated?.(rc);
-    return rc;
-  }
-  runExecutionService.startPodInstance(rc, podId);
-  await injectRunUserMessage(rc, podId, displayMessage ?? message);
-  onRunContextCreated?.(rc);
-
-  // 直接發送找不到 Command 的錯誤提示至前端（不依賴 caller callback）
-  const messageId = uuidv4();
-  socketService.emitToCanvas(rc.canvasId, WebSocketResponseEvents.RUN_MESSAGE, {
-    runId: rc.runId,
-    canvasId: rc.canvasId,
-    podId,
-    messageId,
-    content: `找不到指定的 Command「${commandId}」，請確認 Command 是否存在後重試`,
-    isPartial: false,
-    role: "system",
-  });
-
-  return rc;
-}
-
-/**
- * fallback 策略：Command 不存在時，僅記錄 warn 並以原始訊息繼續執行。
- * 適用於上游（如 scheduleService）已完成展開的路徑。
- */
-function handleCommandFallback(commandId: string, podId: string): void {
-  logger.warn(
-    "Run",
-    "Check",
-    `[launchRun] Command 不存在（commandId=${commandId}, podId=${podId}），以原始訊息繼續執行`,
-  );
 }
 
 export async function launchRun(params: LaunchRunParams): Promise<RunContext> {
@@ -114,7 +47,6 @@ export async function launchRun(params: LaunchRunParams): Promise<RunContext> {
     onComplete,
     onAborted,
     onRunContextCreated,
-    commandNotFoundBehavior = "fallback",
     userMessageId,
   } = params;
 
@@ -122,26 +54,7 @@ export async function launchRun(params: LaunchRunParams): Promise<RunContext> {
 
   const podResult = podStore.getByIdGlobal(podId);
   if (podResult) {
-    const expandResult = await tryExpandCommandMessage(
-      podResult.pod,
-      message,
-      "launchRun",
-    );
-    if (!expandResult.ok) {
-      if (commandNotFoundBehavior === "skip") {
-        return await handleCommandNotFound({
-          canvasId,
-          podId,
-          message,
-          displayMessage,
-          onRunContextCreated,
-          commandId: expandResult.commandId,
-        });
-      }
-      handleCommandFallback(expandResult.commandId, podId);
-    } else {
-      resolvedMessage = expandResult.message;
-    }
+    resolvedMessage = prependGoalExecutionContext(podResult.pod, message);
   }
 
   // triggerMessage 僅用於 Run 標題顯示，固定使用純文字（displayMessage 或從 ContentBlock[] 提取文字）
@@ -182,8 +95,6 @@ export async function launchRun(params: LaunchRunParams): Promise<RunContext> {
     {
       onComplete: () => onComplete(runContext),
       onError: (_canvasId, _podId, error) => {
-        // 原始 error.message 可能含內部技術細節（SDK 錯誤、API 路徑等），
-        // 僅記錄到 server log，不直接送往前端以避免資訊洩漏
         logger.error("Run", "Error", `Pod ${podId} 執行失敗: ${error.message}`);
         runExecutionService.errorPodInstance(runContext, podId, "執行發生錯誤");
       },

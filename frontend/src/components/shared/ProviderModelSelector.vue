@@ -27,7 +27,6 @@ const providerCapabilityStore = useProviderCapabilityStore();
 const PROVIDER_OPTIONS: { value: PodProvider; label: string }[] = [
   { value: "claude", label: "Claude" },
   { value: "codex", label: "Codex" },
-  { value: "gemini", label: "Gemini" },
 ];
 
 /**

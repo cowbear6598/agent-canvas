@@ -22,7 +22,6 @@ function makePod(overrides: Partial<Pod> = {}): Pod {
     provider: "claude",
     providerConfig: null,
     repositoryId: null,
-    commandId: null,
     multiInstance: true,
     integrationBindings: [],
     ...overrides,

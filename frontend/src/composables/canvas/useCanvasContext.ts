@@ -1,5 +1,5 @@
 import { usePodStore, useViewportStore, useSelectionStore } from "@/stores/pod";
-import { useRepositoryStore, useCommandStore } from "@/stores/note";
+import { useRepositoryStore } from "@/stores/note";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useClipboardStore } from "@/stores/clipboardStore";
 import { useChatStore } from "@/stores/chat";
@@ -11,7 +11,6 @@ export function useCanvasContext(): {
   viewportStore: ReturnType<typeof useViewportStore>;
   selectionStore: ReturnType<typeof useSelectionStore>;
   repositoryStore: ReturnType<typeof useRepositoryStore>;
-  commandStore: ReturnType<typeof useCommandStore>;
   connectionStore: ReturnType<typeof useConnectionStore>;
   clipboardStore: ReturnType<typeof useClipboardStore>;
   chatStore: ReturnType<typeof useChatStore>;
@@ -22,7 +21,6 @@ export function useCanvasContext(): {
   const viewportStore = useViewportStore();
   const selectionStore = useSelectionStore();
   const repositoryStore = useRepositoryStore();
-  const commandStore = useCommandStore();
   const connectionStore = useConnectionStore();
   const clipboardStore = useClipboardStore();
   const chatStore = useChatStore();
@@ -34,7 +32,6 @@ export function useCanvasContext(): {
     viewportStore,
     selectionStore,
     repositoryStore,
-    commandStore,
     connectionStore,
     clipboardStore,
     chatStore,

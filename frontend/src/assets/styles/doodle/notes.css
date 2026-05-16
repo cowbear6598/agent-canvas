@@ -68,17 +68,6 @@
   border-color: oklch(0.55 0.15 170);
 }
 
-/* Command Note - 水平卡片（薄荷綠） */
-.command-note {
-  background: var(--doodle-mint);
-  box-sizing: border-box;
-}
-
-.command-note.selected {
-  box-shadow: 0 0 0 2px oklch(0.65 0.15 170 / 0.6);
-  border-color: oklch(0.55 0.15 170);
-}
-
 /* Skill Note */
 .skill-note {
   background: var(--doodle-light-blue);

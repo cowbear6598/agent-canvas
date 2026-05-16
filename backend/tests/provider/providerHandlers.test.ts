@@ -17,7 +17,7 @@ vi.mock("../../src/schemas/index.js", () => ({
   },
 }));
 
-// mock database/index：此測試只驗證 claude/codex/gemini 的 metadata 轉換，
+// mock database/index：此測試只驗證 claude/codex/opencode 的 metadata 轉換，
 // opencode 的動態 availableModels 由 providerHandlersOpencode.test.ts 負責。
 // 回傳空 rows 使 opencode availableModels=[]，與 metadata.availableModels=[] 一致。
 vi.mock("../../src/database/index.js", () => ({
@@ -133,7 +133,7 @@ describe("handleProviderList", () => {
     }
   });
 
-  it("claude 的 capabilities 全部為 true", async () => {
+  it("claude 的 capabilities 為 chat/plugin/repository/mcp 全部 true", async () => {
     await handleProviderList(
       CONNECTION_ID,
       { requestId: REQUEST_ID },
@@ -149,15 +149,14 @@ describe("handleProviderList", () => {
     expect(claude).toBeDefined();
 
     const caps = claude.capabilities;
-    // 所有能力欄位皆應為 true（runMode 已移除）
+    // 所有現存能力欄位皆應為 true
     expect(caps.chat).toBe(true);
     expect(caps.plugin).toBe(true);
     expect(caps.repository).toBe(true);
-    expect(caps.command).toBe(true);
     expect(caps.mcp).toBe(true);
   });
 
-  it("codex 的 capabilities 中 chat=true、command=true、repository=true、plugin=true、mcp=true", async () => {
+  it("codex 的 capabilities 中 chat/repository/plugin/mcp 皆為 true", async () => {
     await handleProviderList(
       CONNECTION_ID,
       { requestId: REQUEST_ID },
@@ -173,11 +172,10 @@ describe("handleProviderList", () => {
     expect(codex).toBeDefined();
 
     const caps = codex.capabilities;
-    // chat、command、repository、plugin、mcp 為 true；runMode 已移除
+    // chat、repository、plugin、mcp 為 true；runMode 已移除
     expect(caps.chat).toBe(true);
     expect(caps.plugin).toBe(true);
     expect(caps.repository).toBe(true);
-    expect(caps.command).toBe(true);
     expect(caps.mcp).toBe(true);
   });
 
@@ -315,7 +313,7 @@ describe("handleProviderList", () => {
     }
   });
 
-  it("[B2] Gemini 全系列 model 都應為 thinkingLevels=[]、defaultThinkingLevel=null", async () => {
+  it("[B2] opencode 全系列 model 都應為 thinkingLevels=[]、defaultThinkingLevel=null", async () => {
     await handleProviderList(
       CONNECTION_ID,
       { requestId: REQUEST_ID },
@@ -323,12 +321,12 @@ describe("handleProviderList", () => {
     );
 
     const [, , payload] = mockEmitToConnection.mock.calls[0];
-    const gemini = payload.providers.find(
-      (p: { name: string }) => p.name === "gemini",
+    const opencode = payload.providers.find(
+      (p: { name: string }) => p.name === "opencode",
     );
-    expect(gemini).toBeDefined();
+    expect(opencode).toBeDefined();
 
-    for (const model of gemini.availableModels) {
+    for (const model of opencode.availableModels) {
       expect(model.thinkingLevels).toEqual([]);
       expect(model.defaultThinkingLevel).toBeNull();
     }

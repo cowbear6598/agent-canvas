@@ -6,7 +6,7 @@
  * 驗證：
  *   (1) opencode entry 的 availableModels 等於 DB 內 alias rows 按 order_idx 升序組出的
  *       { label: alias, value: "real_provider/real_model", thinkingLevels: [], defaultThinkingLevel: null }
- *   (2) 其他三家 provider（claude / codex / gemini）的 availableModels
+ *   (2) 其他 provider（claude / codex）的 availableModels
  *       仍是各自 metadata 寫死的內容，未受 opencode 改動影響
  *   (3) alias 表為空時 opencode entry 的 availableModels 為空陣列（F8 placeholder）
  */
@@ -174,7 +174,7 @@ describe("provider:list — opencode 動態 availableModels（真實 SQLite DB�
 
 // ─── 測試：非 opencode provider 不受 DB 影響 ─────────────────────────────────
 
-describe("provider:list — claude / codex / gemini availableModels 不受 opencode DB 影響", () => {
+describe("provider:list — claude / codex availableModels 不受 opencode DB 影響", () => {
   it("claude 的 availableModels 仍是 metadata 寫死的 sonnet / opus / haiku，未受 DB 影響", async () => {
     // 在 DB 插入 opencode alias，確認 claude 不受影響
     insertAlias("id-1", "Sonnet", 0, "anthropic", "claude-sonnet-4-5");
@@ -208,27 +208,12 @@ describe("provider:list — claude / codex / gemini availableModels 不受 openc
     expect(values).not.toContain("openai/gpt-5");
   });
 
-  it("gemini 的 availableModels 仍是 metadata 寫死的內容（不含 opencode alias）", async () => {
-    insertAlias("id-1", "Gemini Flash", 0, "google", "gemini-2.5-flash");
-
-    const payload = await callHandlerAndGetPayload();
-
-    const gemini = payload.providers.find((p) => p.name === "gemini");
-    expect(gemini).toBeDefined();
-
-    const values = gemini!.availableModels.map((m) => m.value);
-    expect(values).toContain("gemini-2.5-flash");
-    // 不應包含 opencode alias 的 "google/gemini-2.5-flash" 格式
-    expect(values).not.toContain("google/gemini-2.5-flash");
-  });
-
-  it("四個 provider 都應出現在 providers 陣列內", async () => {
+  it("三個 provider 都應出現在 providers 陣列內", async () => {
     const payload = await callHandlerAndGetPayload();
 
     const names = payload.providers.map((p) => p.name);
     expect(names).toContain("claude");
     expect(names).toContain("codex");
-    expect(names).toContain("gemini");
     expect(names).toContain("opencode");
   });
 });

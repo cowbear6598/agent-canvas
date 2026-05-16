@@ -187,7 +187,6 @@ export async function handleWorkflowChat(
         podId,
         message: typedMessage,
         abortable: true,
-        commandNotFoundBehavior: "skip",
         onComplete: (runContext) =>
           onRunChatComplete(runContext, canvasId, podId),
       });

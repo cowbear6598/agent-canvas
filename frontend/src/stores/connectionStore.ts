@@ -33,6 +33,7 @@ import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
 import { createWorkflowEventHandlers } from "./workflowEventHandlers";
 import { removeById } from "@/lib/arrayHelpers";
 import { logger } from "@/utils/logger";
+import { normalizePodProvider } from "@/lib/providerOptions";
 import type {
   ConnectionCreatedPayload,
   ConnectionUpdatedPayload,
@@ -77,13 +78,29 @@ function castHandler<T>(
   return handler as (payload: unknown) => void;
 }
 
-function normalizeConnection(raw: RawConnection): Connection {
+function normalizeConnection(
+  raw: RawConnection,
+  sourceProvider?: PodProvider,
+): Connection {
+  const normalizedExplicitProvider =
+    raw.summaryProvider == null
+      ? null
+      : normalizePodProvider(raw.summaryProvider);
+  const summaryProvider =
+    normalizedExplicitProvider ??
+    (raw.summaryModel?.startsWith("gemini-") === true
+      ? "claude"
+      : (normalizePodProvider(sourceProvider ?? "claude") ?? "claude"));
+  const summaryModel =
+    raw.summaryModel?.startsWith("gemini-") === true
+      ? DEFAULT_SUMMARY_MODEL
+      : (raw.summaryModel ?? DEFAULT_SUMMARY_MODEL);
+
   return {
     ...raw,
     triggerMode: (raw.triggerMode ?? "auto") as TriggerMode,
-    summaryModel: raw.summaryModel ?? DEFAULT_SUMMARY_MODEL,
-    // summaryProvider 直接帶入，不加 fallback；UI 層自行決定如何顯示 null/undefined
-    summaryProvider: raw.summaryProvider,
+    summaryModel,
+    summaryProvider,
     // branch 欄位直接帶入，不加 fallback
     label: raw.label,
     description: raw.description,
@@ -448,7 +465,12 @@ export const useConnectionStore = defineStore("connection", () => {
 
     if (response.connections) {
       connections.value = response.connections.map((connection) =>
-        normalizeConnection(connection),
+        normalizeConnection(
+          connection,
+          connection.sourcePodId
+            ? podStore.getPodById(connection.sourcePodId)?.provider
+            : undefined,
+        ),
       );
     }
   }
@@ -537,7 +559,10 @@ export const useConnectionStore = defineStore("connection", () => {
       rawConnection.summaryModel = resolvedSummaryModel;
     }
 
-    return normalizeConnection(rawConnection);
+    return normalizeConnection(
+      rawConnection,
+      sourcePod?.provider,
+    );
   }
 
   async function deleteConnection(connectionId: string): Promise<void> {
@@ -651,7 +676,12 @@ export const useConnectionStore = defineStore("connection", () => {
 
     if (!result.success || !result.data.connection) return null;
 
-    return normalizeConnection(result.data.connection);
+    return normalizeConnection(
+      result.data.connection,
+      result.data.connection.sourcePodId
+        ? podStore.getPodById(result.data.connection.sourcePodId)?.provider
+        : undefined,
+    );
   }
 
   async function updateConnectionTriggerMode(
@@ -976,10 +1006,16 @@ export const useConnectionStore = defineStore("connection", () => {
         connection.summaryModel ??
         existingConnection.summaryModel ??
         DEFAULT_SUMMARY_MODEL,
-      // summaryProvider 未帶欄位（undefined）時保留既有值；帶入 null 或具體值則直接寫入
       summaryProvider:
         connection.summaryProvider !== undefined
-          ? connection.summaryProvider
+          ? (connection.summaryProvider == null
+              ? existingConnection.sourcePodId
+                ? normalizePodProvider(
+                    podStore.getPodById(existingConnection.sourcePodId)
+                      ?.provider ?? "claude",
+                  ) ?? "claude"
+                : "claude"
+              : (normalizePodProvider(connection.summaryProvider) ?? "claude"))
           : existingConnection.summaryProvider,
       // branch 欄位直接以後端回傳值覆寫（包含 undefined → 視為清空）
       label: connection.label,
@@ -1031,8 +1067,9 @@ export const useConnectionStore = defineStore("connection", () => {
     return connections.value
       .filter((conn) => conn.sourcePodId === podId)
       .flatMap((conn) => {
-        // 驗證時優先使用 conn.summaryProvider，若未設定則 fallback 到 sourcePod.provider
-        const validationProvider = conn.summaryProvider ?? pod.provider;
+        const validationProvider =
+          normalizePodProvider(conn.summaryProvider ?? pod.provider) ??
+          "claude";
         const currentModel = conn.summaryModel ?? DEFAULT_SUMMARY_MODEL;
         const isValid = providerCapabilityStore.isModelValidForProvider(
           validationProvider,
@@ -1047,7 +1084,7 @@ export const useConnectionStore = defineStore("connection", () => {
           {
             connectionId: conn.id,
             newModel,
-            summaryProvider: conn.summaryProvider,
+            summaryProvider: conn.summaryProvider ?? validationProvider,
           },
         ];
       });

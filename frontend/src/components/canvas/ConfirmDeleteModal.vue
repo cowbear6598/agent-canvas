@@ -12,14 +12,12 @@ import { Button } from "@/components/ui/button";
 import { useI18n } from "vue-i18n";
 
 type ItemType = "repository" | "command";
-type GroupType = "commandGroup";
-type ExtendedItemType = ItemType | GroupType;
 
 interface Props {
   open: boolean;
   itemName: string;
   isInUse: boolean;
-  itemType: ExtendedItemType;
+  itemType: ItemType;
 }
 
 const props = defineProps<Props>();

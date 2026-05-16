@@ -22,8 +22,8 @@ function mountSelector(props: Record<string, unknown> = {}) {
 }
 
 /**
- * 注入三個 provider 的測試 capability 清單。
- * claude 預設模型為 sonnet（第一個）；codex 為 gpt-5.4；gemini 為 gemini-2.5-flash。
+ * 注入兩個 provider 的測試 capability 清單。
+ * claude 預設模型為 sonnet（第一個）；codex 為 gpt-5.4。
  */
 function setupFakeProviders() {
   const capabilityStore = useProviderCapabilityStore();
@@ -34,7 +34,6 @@ function setupFakeProviders() {
         chat: true,
         plugin: false,
         repository: true,
-        command: true,
         mcp: true,
       },
       availableModels: [
@@ -49,26 +48,11 @@ function setupFakeProviders() {
         chat: true,
         plugin: true,
         repository: false,
-        command: true,
         mcp: false,
       },
       availableModels: [
         { value: "gpt-5.4", label: "GPT-5.4" },
         { value: "gpt-5.5", label: "GPT-5.5" },
-      ],
-    },
-    {
-      name: "gemini",
-      capabilities: {
-        chat: true,
-        plugin: false,
-        repository: false,
-        command: false,
-        mcp: false,
-      },
-      availableModels: [
-        { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
-        { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
       ],
     },
   ]);
@@ -106,30 +90,6 @@ describe("ProviderModelSelector", () => {
       expect(modelEmits?.[0]).toEqual(["gpt-5.4"]);
     });
 
-    it("從 claude 切換到 gemini → emit update:provider 為 gemini", async () => {
-      const wrapper = mountSelector({ provider: "claude", model: "sonnet" });
-
-      const buttons = wrapper.findAll("button");
-      const geminiBtn = buttons.find((b) => b.text().includes("Gemini"));
-      await geminiBtn?.trigger("click");
-
-      const providerEmits = wrapper.emitted("update:provider");
-      expect(providerEmits).toBeTruthy();
-      expect(providerEmits?.[0]).toEqual(["gemini"]);
-    });
-
-    it("從 claude 切換到 gemini → emit update:model 為 gemini 的預設模型（gemini-2.5-flash）", async () => {
-      const wrapper = mountSelector({ provider: "claude", model: "sonnet" });
-
-      const buttons = wrapper.findAll("button");
-      const geminiBtn = buttons.find((b) => b.text().includes("Gemini"));
-      await geminiBtn?.trigger("click");
-
-      const modelEmits = wrapper.emitted("update:model");
-      expect(modelEmits).toBeTruthy();
-      expect(modelEmits?.[0]).toEqual(["gemini-2.5-flash"]);
-    });
-
     it("切換到已選中的相同 provider → 不 emit 任何事件", async () => {
       const wrapper = mountSelector({ provider: "claude", model: "sonnet" });
 
@@ -161,6 +121,13 @@ describe("ProviderModelSelector", () => {
       expect(text).toContain("GPT-5.5");
     });
 
+    it("provider 選單不應顯示 Gemini", () => {
+      const wrapper = mountSelector({ provider: "claude", model: "sonnet" });
+      const text = wrapper.text();
+
+      expect(text).not.toContain("Gemini");
+    });
+
     it("capability 尚未載入時應顯示載入中", () => {
       // 清空 capability 讓 availableModels 回傳 null
       const capabilityStore = useProviderCapabilityStore();
@@ -171,7 +138,6 @@ describe("ProviderModelSelector", () => {
             chat: true,
             plugin: false,
             repository: true,
-            command: true,
             mcp: true,
           },
           availableModels: [],

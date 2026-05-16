@@ -29,7 +29,7 @@ const handleClick = (event: MouseEvent): void => {
 
 /**
  * 僅 codex 走唯讀 label（不顯示數字，有啟用就算啟用，細節點開 popover 看）；
- * 其他 provider（含 gemini）顯示 (activeCount)，讓使用者在 notch 上就能看到啟用數。
+ * 其他仍支援的 provider 顯示 (activeCount)，讓使用者在 notch 上就能看到啟用數。
  */
 const pluginLabel = computed(() =>
   props.provider === "codex"
@@ -43,8 +43,7 @@ const pluginLabel = computed(() =>
     <button
       :class="[
         'pod-plugin-slot',
-        // Codex 專屬唯讀樣式，Gemini / Claude 不套用；
-        // Gemini / Claude 依 activeCount 決定是否套 pod-plugin-slot--active。
+        // Codex 專屬唯讀樣式；其他 provider 依 activeCount 決定是否套 pod-plugin-slot--active。
         provider === 'codex'
           ? 'pod-plugin-slot--codex'
           : activeCount > 0

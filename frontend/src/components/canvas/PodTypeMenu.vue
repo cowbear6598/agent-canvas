@@ -8,7 +8,7 @@ import {
   watchEffect,
   type Component,
 } from "vue";
-import { FolderOpen, Github, FolderPlus, FilePlus } from "lucide-vue-next";
+import { FolderOpen, Github, FolderPlus } from "lucide-vue-next";
 import type { Position, PodTypeConfig, Repository } from "@/types";
 import type { PodProvider, ProviderConfig } from "@/types/pod";
 import { podTypes } from "@/data/podTypes";
@@ -16,7 +16,6 @@ import { useCanvasContext } from "@/composables/canvas/useCanvasContext";
 import { useMenuPosition } from "@/composables/useMenuPosition";
 import PodTypeMenuSubmenu from "./PodTypeMenuSubmenu.vue";
 import ProviderPicker from "./ProviderPicker.vue";
-import { useI18n } from "vue-i18n";
 
 interface Props {
   position: Position;
@@ -24,15 +23,10 @@ interface Props {
 
 const props = defineProps<Props>();
 
-type ItemType = "repository" | "command";
-type ResourceType = "command";
-type GroupType = "commandGroup";
-type OpenMenuType = "repository" | "command" | "pod";
+type ItemType = "repository";
+type OpenMenuType = "repository" | "pod";
 
-/** 建立 Note 的 discriminated union，統一 create-*-note 事件為一個事件 */
-type CreateNotePayload =
-  | { type: "repository"; id: string }
-  | { type: "command"; id: string };
+type CreateNotePayload = { type: "repository"; id: string };
 
 /** 開啟 Modal 的 discriminated union，統一多個 open-*-modal 事件 */
 type OpenModalPayload =
@@ -50,22 +44,14 @@ const emit = defineEmits<{
   "create-note": [payload: CreateNotePayload];
   /** clone 開始（進度任務通知） */
   "clone-started": [payload: { requestId: string; repoName: string }];
-  /** 開啟 create/edit 資源 Modal */
-  "open-create-modal": [resourceType: ResourceType, title: string];
-  "open-edit-modal": [resourceType: ResourceType, id: string];
   /** 開啟 delete 資源 Modal */
   "open-delete-modal": [type: ItemType, id: string, name: string];
-  /** 開啟 create/delete group Modal */
-  "open-create-group-modal": [title: string];
-  "open-delete-group-modal": [groupId: string, name: string];
   /** 開啟各種 Modal（repository 建立/clone、MCP Server Modal） */
   "open-modal": [payload: OpenModalPayload];
   close: [];
 }>();
 
-const { repositoryStore, commandStore, podStore } = useCanvasContext();
-
-const { t } = useI18n();
+const { repositoryStore, podStore } = useCanvasContext();
 
 const menuRef = ref<HTMLElement | null>(null);
 const openMenuType = ref<OpenMenuType | null>(null);
@@ -86,12 +72,7 @@ const handleOutsideMouseDown = (event: MouseEvent): void => {
 
 onMounted(async () => {
   document.addEventListener("mousedown", handleOutsideMouseDown, true);
-
-  await Promise.all([
-    repositoryStore.loadRepositories(),
-    commandStore.loadCommands(),
-    commandStore.loadGroups(),
-  ]);
+  await repositoryStore.loadRepositories();
 });
 
 onUnmounted(() => {
@@ -114,12 +95,6 @@ const handleRepositorySelect = (repository: Repository): void => {
   emit("close");
 };
 
-const handleCommandSelect = (command: { id: string; name: string }): void => {
-  openMenuType.value = null;
-  emit("create-note", { type: "command", id: command.id });
-  emit("close");
-};
-
 const handleDeleteClick = (
   type: ItemType,
   id: string,
@@ -132,15 +107,6 @@ const handleDeleteClick = (
   emit("close");
 };
 
-const openCreateModal = (resourceType: ResourceType, title: string): void => {
-  openMenuType.value = null;
-  emit("open-create-modal", resourceType, title);
-  emit("close");
-};
-
-const handleNewCommand = (): void =>
-  openCreateModal("command", t("canvas.podTypeMenu.newCommand"));
-
 const handleNewRepository = (): void => {
   openMenuType.value = null;
   emit("open-modal", { type: "createRepository" });
@@ -151,48 +117,6 @@ const handleCloneRepository = (): void => {
   openMenuType.value = null;
   emit("open-modal", { type: "cloneRepository" });
   emit("close");
-};
-
-const openEditModal = (
-  resourceType: ResourceType,
-  id: string,
-  event: Event,
-): void => {
-  event.stopPropagation();
-  openMenuType.value = null;
-  emit("open-edit-modal", resourceType, id);
-  emit("close");
-};
-
-const handleCommandEdit = (id: string, _name: string, event: Event): void =>
-  openEditModal("command", id, event);
-
-const openCreateGroupModal = (title: string): void => {
-  openMenuType.value = null;
-  emit("open-create-group-modal", title);
-  emit("close");
-};
-
-const handleNewCommandGroup = (): void =>
-  openCreateGroupModal(t("canvas.podTypeMenu.newCommandGroup"));
-
-const handleGroupDelete = (
-  _groupType: GroupType,
-  groupId: string,
-  name: string,
-  event: Event,
-): void => {
-  event.stopPropagation();
-  openMenuType.value = null;
-  emit("open-delete-group-modal", groupId, name);
-  emit("close");
-};
-
-const handleCommandDropToGroup = (
-  itemId: string,
-  groupId: string | null,
-): void => {
-  commandStore.moveItemToGroup(itemId, groupId);
 };
 
 interface FooterAction {
@@ -271,33 +195,6 @@ const buildMenuSection = (config: SectionConfig): MenuSection => ({
  * 由 watchEffect 驅動 buildMenuSection 轉換，避免在 template 中直接呼叫 getter 閉包。
  */
 const SECTION_CONFIGS: SectionConfig[] = [
-  {
-    type: "command",
-    label: "Commands >",
-    iconColor: "var(--doodle-mint)",
-    icon: null,
-    iconSlot: "/",
-    getItems: () => commandStore.typedAvailableItems,
-    getGroups: () => commandStore.groups,
-    getExpandedGroupIds: () => commandStore.expandedGroupIds,
-    onSelect: (item) =>
-      handleCommandSelect(item as { id: string; name: string }),
-    onEdit: handleCommandEdit,
-    onDelete: (id, name, event) =>
-      handleDeleteClick("command", id, name, event),
-    onToggleGroup: (groupId) => commandStore.toggleGroupExpand(groupId),
-    onGroupDelete: (groupId, name, event) =>
-      handleGroupDelete("commandGroup", groupId, name, event),
-    onDropToGroup: handleCommandDropToGroup,
-    footerActions: [
-      { icon: FilePlus, label: "New File...", handler: handleNewCommand },
-      {
-        icon: FolderPlus,
-        label: "New Group...",
-        handler: handleNewCommandGroup,
-      },
-    ],
-  },
   {
     type: "repository",
     label: "Repository >",

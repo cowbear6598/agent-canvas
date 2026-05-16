@@ -5,6 +5,7 @@ import { useI18n } from "vue-i18n";
 import type { Pod } from "@/types";
 import ChatWorkflowBlockedHint from "./ChatWorkflowBlockedHint.vue";
 import ChatIntegrationBlockedHint from "@/components/integration/ChatIntegrationBlockedHint.vue";
+import { useToast } from "@/composables/useToast";
 import { useChatStore } from "@/stores/chat";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useRunStore } from "@/stores/run/runStore";
@@ -22,6 +23,7 @@ const { t } = useI18n();
 const chatStore = useChatStore();
 const connectionStore = useConnectionStore();
 const runStore = useRunStore();
+const { toast } = useToast();
 
 const firstIntegrationProvider = computed<string | null>(
   () => props.pod.integrationBindings?.[0]?.provider ?? null,
@@ -52,7 +54,19 @@ const handleClose = (): void => {
 const handleSend = async (): Promise<void> => {
   const content = inputText.value.trim();
   if (!content) return;
-  await chatStore.sendMessage(props.pod.id, content);
+  try {
+    await chatStore.sendMessage(props.pod.id, content);
+  } catch (error) {
+    toast({
+      title: t("pod.goal.title"),
+      description:
+        error instanceof Error
+          ? error.message
+          : t("pod.goal.requiredDescription"),
+      variant: "destructive",
+    });
+    return;
+  }
   inputText.value = "";
   runStore.openHistoryPanel();
   emit("close");

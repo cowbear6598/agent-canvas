@@ -11,7 +11,6 @@ import {
 import {
   CLAUDE_MODEL_THINKING_LEVELS,
   CODEX_MODEL_THINKING_LEVELS,
-  GEMINI_MODEL_THINKING_LEVELS,
 } from "../services/provider/capabilities.js";
 import { socketService } from "../services/socketService.js";
 import { getStmts } from "../database/index.js";
@@ -30,7 +29,6 @@ const THINKING_LEVELS_BY_PROVIDER: Readonly<
 > = {
   claude: CLAUDE_MODEL_THINKING_LEVELS,
   codex: CODEX_MODEL_THINKING_LEVELS,
-  gemini: GEMINI_MODEL_THINKING_LEVELS,
   // opencode 不支援 thinking levels（由 opencode 後端內部處理 reasoning），保留空表
   opencode: {},
 };
@@ -48,7 +46,7 @@ interface ModelAliasRow {
 /**
  * 組裝整份 provider:list payload（providers 陣列）。
  *
- * - claude / codex / gemini：取各自 metadata.availableModels，補 thinking metadata
+ * - claude / codex：取各自 metadata.availableModels，補 thinking metadata
  * - opencode：從 DB 的 model_aliases 表動態組裝 availableModels
  *
  * 此函式被 handleProviderList 與 broadcastProviderList 共用。
@@ -85,7 +83,7 @@ export function buildProviderListPayload(): ProviderListResultPayload["providers
         defaultThinkingLevel: null,
       }));
     } else {
-      // claude / codex / gemini：沿用 metadata.availableModels，補 thinking metadata
+      // claude / codex：沿用 metadata.availableModels，補 thinking metadata
       const thinkingTable = THINKING_LEVELS_BY_PROVIDER[name];
       availableModels = metadata.availableModels.map((model) => {
         const entry = thinkingTable[model.value];

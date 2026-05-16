@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import { emitAndWaitResponse, setupIntegrationTest } from "../setup";
-import { createRepository, createCommand, getCanvasId } from "../helpers";
+import { createRepository, getCanvasId } from "../helpers";
 import {
   WebSocketRequestEvents,
   WebSocketResponseEvents,
@@ -8,7 +8,6 @@ import {
   type PastePodItem,
   type PasteConnectionItem,
   type PasteRepositoryNoteItem,
-  type PasteCommandNoteItem,
 } from "../../src/schemas";
 import { type CanvasPasteResultPayload } from "../../src/types";
 import { codexProvider } from "../../src/services/provider/codexProvider.js";
@@ -26,7 +25,6 @@ describe("貼上功能", () => {
       canvasId,
       pods: [],
       repositoryNotes: [],
-      commandNotes: [],
       connections: [],
     };
   }
@@ -294,229 +292,6 @@ describe("貼上功能", () => {
       );
     });
 
-    it("成功貼上並建立綁定 Pod 的指令註記", async () => {
-      const client = getClient();
-      const command = await createCommand(
-        client,
-        `command-${uuidv4()}`,
-        "# Test Command",
-      );
-      const originalPodId = uuidv4();
-
-      const pods: PastePodItem[] = [
-        {
-          originalId: originalPodId,
-          name: "Command Pod",
-          x: 0,
-          y: 0,
-          rotation: 0,
-        },
-      ];
-
-      const commandNotes: PasteCommandNoteItem[] = [
-        {
-          commandId: command.id,
-          name: "Command Note",
-          x: 10,
-          y: 10,
-          boundToOriginalPodId: originalPodId,
-          originalPosition: { x: 10, y: 10 },
-        },
-      ];
-
-      const payload: CanvasPastePayload = {
-        ...(await emptyPastePayload()),
-        pods,
-        commandNotes,
-      };
-
-      const response = await emitAndWaitResponse<
-        CanvasPastePayload,
-        CanvasPasteResultPayload
-      >(
-        client,
-        WebSocketRequestEvents.CANVAS_PASTE,
-        WebSocketResponseEvents.CANVAS_PASTE_RESULT,
-        payload,
-      );
-
-      expect(response.createdCommandNotes).toHaveLength(1);
-      expect(response.createdPods).toHaveLength(1);
-
-      const newPodId = response.podIdMapping[originalPodId];
-      expect(response.createdCommandNotes[0].boundToPodId).toBe(newPodId);
-
-      const canvasId = await getCanvasId(client);
-      const { podStore } = await import("../../src/services/podStore.js");
-      const pod = podStore.getById(canvasId, newPodId);
-      expect(pod?.commandId).toBe(command.id);
-    });
-
-    it("Command Note 未綁定 Pod 時可獨立貼上，且不建立任何 Pod", async () => {
-      const client = getClient();
-      const command = await createCommand(
-        client,
-        `command-unbound-${uuidv4()}`,
-        "# Test Command",
-      );
-
-      const commandNotes: PasteCommandNoteItem[] = [
-        {
-          commandId: command.id,
-          name: "Unbound Command Note",
-          x: 10,
-          y: 10,
-          boundToOriginalPodId: null,
-          originalPosition: { x: 10, y: 10 },
-        },
-      ];
-
-      const payload: CanvasPastePayload = {
-        ...(await emptyPastePayload()),
-        commandNotes,
-      };
-
-      const response = await emitAndWaitResponse<
-        CanvasPastePayload,
-        CanvasPasteResultPayload
-      >(
-        client,
-        WebSocketRequestEvents.CANVAS_PASTE,
-        WebSocketResponseEvents.CANVAS_PASTE_RESULT,
-        payload,
-      );
-
-      expect(response.createdCommandNotes).toHaveLength(1);
-      expect(response.createdCommandNotes[0].boundToPodId).toBeNull();
-      expect(response.createdPods).toHaveLength(0);
-    });
-
-    it("貼上 Command Note 時，若 Pod 已有 commandId，不覆蓋原本的 commandId", async () => {
-      const client = getClient();
-      const command1 = await createCommand(
-        client,
-        `command-existing-${uuidv4()}`,
-        "# Existing Command",
-      );
-      const command2 = await createCommand(
-        client,
-        `command-new-${uuidv4()}`,
-        "# New Command",
-      );
-      const originalPodId = uuidv4();
-
-      // 先貼上一個 Pod，並綁定 command1
-      const pods: PastePodItem[] = [
-        {
-          originalId: originalPodId,
-          name: "Command Pod",
-          x: 0,
-          y: 0,
-          rotation: 0,
-        },
-      ];
-      const firstCommandNotes: PasteCommandNoteItem[] = [
-        {
-          commandId: command1.id,
-          name: "Command Note 1",
-          x: 10,
-          y: 10,
-          boundToOriginalPodId: originalPodId,
-          originalPosition: { x: 10, y: 10 },
-        },
-      ];
-      const firstPayload: CanvasPastePayload = {
-        ...(await emptyPastePayload()),
-        pods,
-        commandNotes: firstCommandNotes,
-      };
-      const firstResponse = await emitAndWaitResponse<
-        CanvasPastePayload,
-        CanvasPasteResultPayload
-      >(
-        client,
-        WebSocketRequestEvents.CANVAS_PASTE,
-        WebSocketResponseEvents.CANVAS_PASTE_RESULT,
-        firstPayload,
-      );
-
-      const newPodId = firstResponse.podIdMapping[originalPodId];
-      const canvasId = await getCanvasId(client);
-      const { podStore } = await import("../../src/services/podStore.js");
-
-      const podAfterFirst = podStore.getById(canvasId, newPodId);
-      expect(podAfterFirst?.commandId).toBe(command1.id);
-
-      // 再貼上一個 commandNote（綁定到已建立的 Pod），commandId 為 command2
-      // Pod 已有 commandId（command1），不應被覆蓋
-      const secondCommandNotes: PasteCommandNoteItem[] = [
-        {
-          commandId: command2.id,
-          name: "Command Note 2",
-          x: 20,
-          y: 20,
-          boundToOriginalPodId: newPodId,
-          originalPosition: { x: 20, y: 20 },
-        },
-      ];
-      const secondPayload: CanvasPastePayload = {
-        ...(await emptyPastePayload()),
-        commandNotes: secondCommandNotes,
-      };
-
-      await emitAndWaitResponse<CanvasPastePayload, CanvasPasteResultPayload>(
-        client,
-        WebSocketRequestEvents.CANVAS_PASTE,
-        WebSocketResponseEvents.CANVAS_PASTE_RESULT,
-        secondPayload,
-      );
-
-      const podAfterSecond = podStore.getById(canvasId, newPodId);
-      expect(podAfterSecond?.commandId).toBe(command1.id);
-    });
-
-    it("Pod 帶有 non-UUID 格式的 commandId 可以成功 paste", async () => {
-      const client = getClient();
-      // non-UUID 格式的 commandId（名稱即為 id）
-      const nonUuidCommandId = `my-command-v2-${uuidv4().replace(/-/g, "").slice(0, 8)}`;
-      await createCommand(client, nonUuidCommandId, "# Non-UUID Command");
-      const originalPodId = uuidv4();
-
-      const pods: PastePodItem[] = [
-        {
-          originalId: originalPodId,
-          name: "Non-UUID Command Pod",
-          x: 0,
-          y: 0,
-          rotation: 0,
-          commandId: nonUuidCommandId,
-        },
-      ];
-
-      const payload: CanvasPastePayload = {
-        ...(await emptyPastePayload()),
-        pods,
-      };
-
-      const response = await emitAndWaitResponse<
-        CanvasPastePayload,
-        CanvasPasteResultPayload
-      >(
-        client,
-        WebSocketRequestEvents.CANVAS_PASTE,
-        WebSocketResponseEvents.CANVAS_PASTE_RESULT,
-        payload,
-      );
-
-      expect(response.createdPods).toHaveLength(1);
-
-      const newPodId = response.podIdMapping[originalPodId];
-      const canvasId = await getCanvasId(client);
-      const { podStore } = await import("../../src/services/podStore.js");
-      const pod = podStore.getById(canvasId, newPodId);
-      expect(pod?.commandId).toBe(nonUuidCommandId);
-    });
-
     it("Pod 的 repositoryId 指向不存在的 UUID 時，回報錯誤且不建立該 Pod", async () => {
       const client = getClient();
       const nonExistentRepositoryId = uuidv4();
@@ -661,7 +436,6 @@ describe("貼上功能", () => {
           },
         ],
         repositoryNotes: [],
-        commandNotes: [],
         connections: [],
       };
 
@@ -689,7 +463,6 @@ describe("貼上功能", () => {
           { originalId: uuidv4(), name: "Pod 1", x: 0, y: 0, rotation: 0 },
         ],
         repositoryNotes: [],
-        commandNotes: [],
         connections: [],
       };
 
@@ -708,7 +481,6 @@ describe("貼上功能", () => {
           { originalId: uuidv4(), name: "Pod 1", x: 50, y: 50, rotation: 0 },
         ],
         repositoryNotes: [],
-        commandNotes: [],
         connections: [],
       };
 

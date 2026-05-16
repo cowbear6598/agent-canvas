@@ -58,8 +58,6 @@ export interface ProviderCapabilities {
   plugin: boolean;
   /** 是否支援 Repository */
   repository: boolean;
-  /** 是否支援 Command */
-  command: boolean;
   /** 是否支援 MCP */
   mcp: boolean;
 }

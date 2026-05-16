@@ -11,7 +11,7 @@ export interface UsePodCapabilitiesReturn {
   isCodex: ComputedRef<boolean>;
   isPluginEnabled: ComputedRef<boolean>;
   isRepositoryEnabled: ComputedRef<boolean>;
-  isCommandEnabled: ComputedRef<boolean>;
+  isGoalEnabled: ComputedRef<boolean>;
   isMcpEnabled: ComputedRef<boolean>;
 }
 
@@ -46,8 +46,8 @@ export function usePodCapabilities(
     (): boolean => capabilities.value.repository,
   );
 
-  /** Command slot 是否啟用 */
-  const isCommandEnabled = computed((): boolean => capabilities.value.command);
+  /** Goal slot 是否啟用 */
+  const isGoalEnabled = computed((): boolean => capabilities.value.goal ?? true);
 
   /** MCP slot 是否啟用 */
   const isMcpEnabled = computed((): boolean => capabilities.value.mcp);
@@ -57,7 +57,7 @@ export function usePodCapabilities(
     isCodex,
     isPluginEnabled,
     isRepositoryEnabled,
-    isCommandEnabled,
+    isGoalEnabled,
     isMcpEnabled,
   };
 }

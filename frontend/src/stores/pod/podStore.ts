@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
-import type { Pod, Position, Schedule, TypeMenuState } from "@/types";
+import type { Pod, Position, Schedule, TypeMenuState, PodGoal } from "@/types";
 import { initialPods } from "@/data/initialPods";
 import { generateRequestId } from "@/services/utils";
 import {
@@ -17,9 +17,11 @@ import type {
   PodListPayload,
   PodListResultPayload,
   PodMovePayload,
+  PodGoalSetPayload,
   PodRenamedPayload,
   PodRenamePayload,
   PodScheduleSetPayload,
+  PodSetGoalPayload,
   PodSetSchedulePayload,
 } from "@/types/websocket";
 import { updatePodMcpServers as updatePodMcpServersApi } from "@/services/mcpApi";
@@ -53,6 +55,7 @@ export const usePodStore = defineStore("pod", () => {
     visible: false,
     position: null,
   });
+  const goalEditorPodId = ref<string | null>(null);
   const scheduleFiredPodIds = ref<Set<string>>(new Set());
 
   /**
@@ -72,6 +75,10 @@ export const usePodStore = defineStore("pod", () => {
   );
 
   const podCount = computed((): number => pods.value.length);
+
+  const goalEditorPod = computed(
+    (): Pod | null => podMap.value.get(goalEditorPodId.value ?? "") ?? null,
+  );
 
   const getPodById = computed(() => (id: string): Pod | undefined => {
     return podMap.value.get(id);
@@ -94,8 +101,8 @@ export const usePodStore = defineStore("pod", () => {
     return podMap.value.get(podId);
   }
 
-  function enrichPod(pod: Pod, existingOutput?: string[]): Pod {
-    return enrichPodFn(pod, existingOutput);
+  function enrichPod(pod: Pod): Pod {
+    return enrichPodFn(pod);
   }
 
   function isValidPod(pod: Pod): boolean {
@@ -114,17 +121,11 @@ export const usePodStore = defineStore("pod", () => {
     );
     if (index === -1) return;
 
-    const existing = pods.value[index]!;
-    const mergedPod = {
-      ...pod,
-      output: pod.output !== undefined ? pod.output : existing.output,
-    };
-
-    if (!isValidPod(mergedPod)) {
+    if (!isValidPod(pod)) {
       logger.warn("[PodStore] updatePod 驗證失敗，已忽略更新");
       return;
     }
-    pods.value.splice(index, 1, mergedPod);
+    pods.value.splice(index, 1, pod);
   }
 
   async function createPodWithBackend(
@@ -141,6 +142,7 @@ export const usePodStore = defineStore("pod", () => {
           rotation: pod.rotation,
           provider: pod.provider,
           providerConfig: pod.providerConfig,
+          goal: pod.goal ?? null,
         },
       },
       {
@@ -165,7 +167,6 @@ export const usePodStore = defineStore("pod", () => {
       x: pod.x,
       y: pod.y,
       rotation: pod.rotation,
-      output: pod.output,
     };
   }
 
@@ -310,12 +311,50 @@ export const usePodStore = defineStore("pod", () => {
     return result.data.pod;
   }
 
+  async function setGoalWithBackend(
+    podId: string,
+    goal: PodGoal | null,
+  ): Promise<Pod | null> {
+    const result = await executeAction<PodSetGoalPayload, PodGoalSetPayload>(
+      {
+        requestEvent: WebSocketRequestEvents.POD_SET_GOAL,
+        responseEvent: WebSocketResponseEvents.POD_GOAL_SET,
+        payload: { podId, goal },
+      },
+      {
+        errorCategory: "Pod",
+        errorAction: t("common.error.save"),
+        errorMessage: t("pod.goal.saveFailed"),
+      },
+    );
+
+    if (!result.success || !result.data.success || !result.data.pod) {
+      return null;
+    }
+
+    updatePodGoal(podId, result.data.pod.goal ?? null);
+
+    const action =
+      goal === null ? t("pod.goal.clearSuccess") : t("pod.goal.saveSuccess");
+    showSuccessToast("Pod", t("common.success.save"), action);
+    return result.data.pod;
+  }
+
   function selectPod(podId: string | null): void {
     selectedPodId.value = podId;
   }
 
   function setActivePod(podId: string | null): void {
     activePodId.value = podId;
+  }
+
+  function openGoalEditor(podId: string): void {
+    if (!findPodById(podId)) return;
+    goalEditorPodId.value = podId;
+  }
+
+  function closeGoalEditor(): void {
+    goalEditorPodId.value = null;
   }
 
   function showTypeMenu(position: Position): void {
@@ -340,12 +379,6 @@ export const usePodStore = defineStore("pod", () => {
     const pod = findPodById(podId);
     if (!pod) return;
     pod[field] = value;
-  }
-
-  function clearPodOutputsByIds(podIds: string[]): void {
-    for (const podId of podIds) {
-      updatePodField(podId, "output", []);
-    }
   }
 
   /**
@@ -401,8 +434,15 @@ export const usePodStore = defineStore("pod", () => {
     updatePodField(podId, "repositoryId", repositoryId);
   }
 
-  function updatePodCommand(podId: string, commandId: string | null): void {
-    updatePodField(podId, "commandId", commandId);
+  function updatePodGoal(podId: string, goal: PodGoal | null): void {
+    const pod = findPodById(podId);
+    if (!pod) return;
+
+    const enrichedPod = enrichPod({
+      ...pod,
+      goal,
+    });
+    updatePod(enrichedPod);
   }
 
   function updatePodPlugins(podId: string, pluginIds: string[]): void {
@@ -484,6 +524,7 @@ export const usePodStore = defineStore("pod", () => {
     pods.value = [];
     selectedPodId.value = null;
     activePodId.value = null;
+    goalEditorPodId.value = null;
   }
 
   return {
@@ -491,9 +532,11 @@ export const usePodStore = defineStore("pod", () => {
     selectedPodId,
     activePodId,
     typeMenu,
+    goalEditorPodId,
     scheduleFiredPodIds,
     selectedPod,
     podCount,
+    goalEditorPod,
     getPodById,
     getNextPodName,
     isScheduleFiredAnimating,
@@ -510,17 +553,19 @@ export const usePodStore = defineStore("pod", () => {
     syncPodPosition,
     renamePodWithBackend,
     setScheduleWithBackend,
+    setGoalWithBackend,
     selectPod,
     setActivePod,
+    openGoalEditor,
+    closeGoalEditor,
     showTypeMenu,
     hideTypeMenu,
     updatePodField,
-    clearPodOutputsByIds,
     updatePodProvider,
     updatePodProviderConfigModel,
     updatePodThinkingLevel,
     updatePodRepository,
-    updatePodCommand,
+    updatePodGoal,
     updatePodPlugins,
     updatePodMcpServers,
     setMcpServersWithBackend,

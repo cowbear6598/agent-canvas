@@ -14,13 +14,46 @@
 
 import type { ClaudeOptions, CodexOptions, Pod, PodProvider } from "@/types";
 
+export const SUPPORTED_POD_PROVIDERS = Object.freeze([
+  "claude",
+  "codex",
+  "opencode",
+] as const);
+
+export type SupportedPodProvider = (typeof SUPPORTED_POD_PROVIDERS)[number];
+
+const LEGACY_PROVIDER_MIGRATIONS: Readonly<
+  Partial<Record<PodProvider, SupportedPodProvider>>
+> = Object.freeze({
+  gemini: "claude",
+});
+
+/**
+ * 將 legacy / 缺值 provider 正規化成目前前端仍支援的 provider 名稱。
+ * - undefined / null / 空字串 → claude
+ * - gemini → claude（升級後 Gemini 設定收斂到 Claude）
+ * - 其他值 → 原樣保留，讓呼叫端可自行判斷是否為未知 provider
+ */
+export function normalizePodProvider(
+  provider: PodProvider | null | undefined,
+): PodProvider {
+  if (!provider) return "claude";
+  return LEGACY_PROVIDER_MIGRATIONS[provider] ?? provider;
+}
+
+export function isSupportedPodProvider(
+  provider: string,
+): provider is SupportedPodProvider {
+  return SUPPORTED_POD_PROVIDERS.includes(provider as SupportedPodProvider);
+}
+
 /**
  * 從 Pod（或可能為 undefined 的 Pod）中取得 provider 名稱。
  * Pod 不存在或未設定 provider 時 fallback 到 "claude"。
  * 統一管理 `pod?.provider ?? "claude"` 字面值，避免分散於各檔案。
  */
 export function resolvePodProvider(pod: Pod | undefined | null): PodProvider {
-  return pod?.provider ?? "claude";
+  return normalizePodProvider(pod?.provider);
 }
 
 /**

@@ -221,6 +221,32 @@
       "loadFailedDescription": "Provider capabilities を取得できませんでした。一部の機能が正常に動作しない場合があります。",
       "loadingHint": "Provider を読み込み中です。しばらくお待ちください"
     },
+    "goal": {
+      "title": "Goal",
+      "unsetBadge": "Goal が未設定です",
+      "requiredDescription": "この Pod を実行する前に Goal を設定してください",
+      "saveFailed": "Goal の保存に失敗しました",
+      "saveSuccess": "Goal を保存しました",
+      "clearSuccess": "Goal をクリアしました",
+      "slot": {
+        "ready": "Goal",
+        "unset": "Goal を設定"
+      },
+      "editor": {
+        "title": "{name} の Goal を編集",
+        "description": "この Pod が今回完了すべき作業を、順序付きのチェックリストに分解します。",
+        "todoPlaceholder": "Todo {index}",
+        "addTodo": "Todo を追加",
+        "clearGoal": "Goal をクリア",
+        "moveUp": "上へ移動",
+        "moveDown": "下へ移動",
+        "removeTodo": "Todo を削除",
+        "validation": {
+          "required": "Goal には少なくとも 1 件の Todo が必要です",
+          "noEmptyRows": "空の Todo は入力するか削除してください"
+        }
+      }
+    },
     "delete": {
       "title": "Pod を削除",
       "description": "「{name}」を削除してもよろしいですか？この操作は元に戻せません。",
@@ -248,6 +274,7 @@
     "slot": {
       "duplicateTitle": "すでに存在しています",
       "providerDisabled": "このプロバイダーはこの機能をサポートしていません",
+      "repositoryLabel": "Repo",
       "thinkingLabel": "Thinking",
       "thinkingDisabledTooltip": "現在のモデルは thinking レベルをサポートしていません",
       "pluginsLabel": "Plugins",
@@ -259,12 +286,14 @@
       "mcpLabel": "MCP",
       "mcpLoading": "読み込み中…",
       "mcpEmpty": "MCP server がインストールされていません",
+      "mcpUserEmpty": "ユーザー MCP server がインストールされていません",
       "mcpClaudeEmptyHint": "`claude mcp add` でインストールしてください",
       "mcpCodexEmptyHint": "`codex mcp add` でインストールしてください",
-      "mcpGeminiEmptyHint": "`~/.gemini/settings.json` の `mcpServers` ブロックに設定を追加して再度開いてください。",
       "mcpToggleFailed": "MCP server の切替に失敗しました",
       "mcpLoadFailed": "読み込み失敗",
       "mcpCodexHint": "Codex MCP server は codex でグローバル管理されます",
+      "goalMcpLabel": "Goal Runtime",
+      "builtinBadge": "Built-in",
       "searchPlaceholder": "検索…",
       "pluginsSearchEmpty": "該当する plugin が見つかりません",
       "mcpSearchEmpty": "該当する MCP server が見つかりません"
@@ -437,6 +466,8 @@
       "pullLatest": "最新版に Pull"
     },
     "podContextMenu": {
+      "setGoal": "Goal を設定",
+      "editGoal": "Goal を編集",
       "downloadDirectory": "作業ディレクトリをダウンロード（zip）",
       "connect": "{label} を接続",
       "disconnect": "{label} を切断",
@@ -475,8 +506,7 @@
       "branchProviderChangedDesc": "Provider：{provider}、Model：{model}",
       "providerLabel": {
         "claude": "Claude",
-        "codex": "Codex",
-        "gemini": "Gemini"
+        "codex": "Codex"
       }
     },
     "confirmDelete": {
@@ -533,10 +563,7 @@
       "aiRejectedReason": "トリガーしない理由：{reason}",
       "aiErrorReason": "エラー：{reason}"
     },
-    "podTypeMenu": {
-      "newCommand": "Command を追加",
-      "newCommandGroup": "Command グループを追加"
-    }
+    "podTypeMenu": {}
   },
   "store": {
     "canvas": {
@@ -656,8 +683,7 @@
       "canvasCreated": "Canvas を作成しました",
       "canvasRenamed": "Canvas の名前を変更しました",
       "pasted": "貼り付けました",
-      "repositoryDeleted": "Repository を削除しました",
-      "commandDeleted": "Command を削除しました"
+      "repositoryDeleted": "Repository を削除しました"
     },
     "deleteSelection": {
       "partialFailed": "一部の削除に失敗しました",

@@ -27,7 +27,7 @@ const handleClick = (event: MouseEvent): void => {
   emit("click", event);
 };
 
-/** Codex：不顯示數字（有就是啟用，數量點開 popover 看）；Claude：顯示啟用數 */
+/** Codex：不顯示數字（有就是啟用，數量點開 popover 看）；其他 provider：顯示使用者自選 MCP 數量 */
 const mcpLabel = computed(() =>
   props.provider === "codex"
     ? t("pod.slot.mcpLabel")

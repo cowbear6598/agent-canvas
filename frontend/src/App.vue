@@ -8,6 +8,7 @@ import {
   WebSocketResponseEvents,
 } from "@/services/websocket";
 import type { ScheduleFiredPayload } from "@/types/websocket";
+import type { PodGoal } from "@/types";
 import type {
   CanvasSwitchPayload,
   CanvasSwitchedPayload,
@@ -16,6 +17,7 @@ import AppHeader from "@/components/layout/AppHeader.vue";
 import CanvasContainer from "@/components/canvas/CanvasContainer.vue";
 import CanvasSidebar from "@/components/canvas/CanvasSidebar.vue";
 import ChatModal from "@/components/chat/ChatModal.vue";
+import GoalEditorModal from "@/components/pod/GoalEditorModal.vue";
 import HistoryPanel from "@/components/run/HistoryPanel.vue";
 import RunChatModal from "@/components/run/RunChatModal.vue";
 import { Toast } from "@/components/ui/toast";
@@ -41,7 +43,6 @@ const {
   viewportStore,
   chatStore,
   repositoryStore,
-  commandStore,
   connectionStore,
   canvasStore,
 } = useCanvasContext();
@@ -56,6 +57,7 @@ const securityStore = useSecurityStore();
 const cursorStore = useCursorStore();
 
 const selectedPod = computed(() => podStore.selectedPod);
+const goalEditorPod = computed(() => podStore.goalEditorPod);
 
 const activeRunChatPodName = computed(() => {
   if (!runStore.activeRunChatModal) return "";
@@ -108,10 +110,6 @@ const loadCanvasData = async (): Promise<void> => {
       await repositoryStore.loadRepositories();
       await repositoryStore.loadNotesFromBackend();
     })(),
-    (async (): Promise<void> => {
-      await commandStore.loadCommands();
-      await commandStore.loadNotesFromBackend();
-    })(),
     connectionStore.loadConnectionsFromBackend(),
     ...getAllProviders().map((provider) =>
       integrationStore.loadApps(provider.name),
@@ -125,6 +123,16 @@ const loadCanvasData = async (): Promise<void> => {
 
 const handleCloseChat = (): void => {
   podStore.selectPod(null);
+};
+
+const handleGoalEditorSubmit = async (goal: PodGoal | null): Promise<void> => {
+  const pod = goalEditorPod.value;
+  if (!pod) return;
+
+  const updatedPod = await podStore.setGoalWithBackend(pod.id, goal);
+  if (!updatedPod) return;
+
+  podStore.closeGoalEditor();
 };
 
 const handleScheduleFired = (payload: ScheduleFiredPayload): void => {
@@ -150,7 +158,6 @@ const resetCanvasScopedState = (): void => {
   podStore.resetForCanvasSwitch();
   connectionStore.resetForCanvasSwitch();
   repositoryStore.resetForCanvasSwitch();
-  commandStore.resetForCanvasSwitch();
   chatStore.resetForCanvasSwitch();
 };
 
@@ -394,6 +401,14 @@ onUnmounted(() => {
       v-if="selectedPod"
       :pod="selectedPod"
       @close="handleCloseChat"
+    />
+
+    <GoalEditorModal
+      v-if="goalEditorPod"
+      :open="true"
+      :pod="goalEditorPod"
+      @update:open="podStore.closeGoalEditor()"
+      @submit="handleGoalEditorSubmit"
     />
 
     <RunChatModal

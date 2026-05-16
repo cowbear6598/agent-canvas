@@ -1,4 +1,4 @@
-import { Pod } from "./pod.js";
+import { Pod, type PodGoal } from "./pod.js";
 import type { ProviderName } from "../services/provider/types.js";
 
 export interface CreatePodRequest {
@@ -11,7 +11,7 @@ export interface CreatePodRequest {
   provider?: ProviderName;
   providerConfig?: Record<string, unknown>;
   repositoryId?: string | null;
-  commandId?: string | null;
+  goal?: PodGoal | null;
 }
 
 export interface CreatePodResponse {

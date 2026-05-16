@@ -5,7 +5,6 @@ import { Zap, Brain, ArrowRight, ChevronRight } from "lucide-vue-next";
 import { ref, computed, onMounted, onUnmounted } from "vue";
 
 import { useConnectionStore } from "@/stores/connectionStore";
-import { usePodStore } from "@/stores/pod/podStore";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
 import { useToast } from "@/composables/useToast";
 import { useI18n } from "vue-i18n";
@@ -39,7 +38,6 @@ const emit = defineEmits<{
 }>();
 
 const connectionStore = useConnectionStore();
-const podStore = usePodStore();
 const providerCapabilityStore = useProviderCapabilityStore();
 const { toast } = useToast();
 const { t } = useI18n();
@@ -178,13 +176,12 @@ const isSummaryMenuOpen = ref(false);
 
 /**
  * Summary Provider 子選單的選項清單。
- * 刻意硬編碼三項而非從 providerCapabilityStore.allowedProviders 動態取得，
+ * 刻意硬編碼選項而非從 providerCapabilityStore.allowedProviders 動態取得，
  * 理由是後續若新增 provider，UI 顯示順序與 label 仍要人工確認，避免靜默變動 menu 內容。
  */
 const PROVIDER_OPTIONS: { value: PodProvider; label: string }[] = [
   { value: "claude", label: "Claude" },
   { value: "codex", label: "Codex" },
-  { value: "gemini", label: "Gemini" },
 ];
 
 /**
@@ -196,32 +193,19 @@ const connection = computed(() =>
   connectionStore.findConnectionById(props.connectionId),
 );
 
-/**
- * 當前 Summary 使用的 provider，優先取 connection.summaryProvider，
- * 若為 null/undefined（舊 Connection）則 fallback 為來源 Pod 的 provider。
- * connection 或 sourcePod 任一不存在時回傳 undefined，讓 template 顯示載入中。
- */
+/** Summary provider 由 connection hydration 後的 concrete 值決定；找不到 connection 時維持未就緒。 */
 const currentProvider = computed((): PodProvider | undefined => {
-  const conn = connection.value;
-  if (!conn?.sourcePodId) return undefined;
-
-  const sourcePod = podStore.getPodById(conn.sourcePodId);
-  if (!sourcePod) return undefined;
-
-  return conn.summaryProvider ?? sourcePod.provider;
+  return connection.value?.summaryProvider ?? undefined;
 });
 
 /**
- * 透過當前 connectionId 取得 connection，再查 sourcePodId 對應的上游 Pod，
- * 最後向 providerCapabilityStore 取 currentProvider 的 availableModels，
- * 作為 Summary Model 子選單的動態按鈕資料來源。
- * 模型清單依 currentProvider 而非固定取上游 Pod provider，支援 Summary Provider 解耦。
+ * 依 connection.summaryProvider 對應的 provider 動態列出 summary model。
  */
 const summaryModelOptions = computed(() => {
-  const provider = currentProvider.value;
-  if (!provider) return null;
-
-  const models = providerCapabilityStore.getAvailableModels(provider);
+  if (!currentProvider.value) return null;
+  const models = providerCapabilityStore.getAvailableModels(
+    currentProvider.value,
+  );
   // 回傳 null（而非空陣列）是為了讓 template 能以單一條件判斷「資料尚未就緒」並顯示載入中
   if (models.length === 0) return null;
 
@@ -229,24 +213,11 @@ const summaryModelOptions = computed(() => {
 });
 
 /**
- * 判斷 Summary Model 按鈕是否為 active 狀態的雙欄位比對邏輯。
- * 對舊 Connection（connection.summaryProvider 為 null/undefined）：
- *   active 僅比對 model，因為 currentProvider 此時來自來源 Pod，model 比對仍合理。
- * 對已設定 summaryProvider 的 Connection：
- *   active 需同時比對 provider 與 model，避免 provider 切換後舊 model 名稱仍被標亮。
- * 直接取 connection.value（shared computed），v-for 中 2 次呼叫不再重新掃描陣列。
+ * Summary model active 狀態只依目前 summaryProvider + model 比對。
  */
 const isSummaryModelActive = (optionValue: string): boolean => {
-  const conn = connection.value;
-
-  if (conn?.summaryProvider == null) {
-    // 舊 Connection：summaryProvider 未設定，僅以 model 值比對
-    return props.currentSummaryModel === optionValue;
-  }
-
-  // 新 Connection：需同時確認 currentProvider 與儲存的 summaryProvider 一致，再比對 model
   return (
-    currentProvider.value === conn.summaryProvider &&
+    currentProvider.value === (connection.value?.summaryProvider ?? "claude") &&
     props.currentSummaryModel === optionValue
   );
 };
@@ -665,7 +636,7 @@ const handleSetBranchModel = async (
         />
       </button>
 
-      <!-- Summary Provider 子選單：硬編碼三項，不過濾認證狀態
+      <!-- Summary Provider 子選單：硬編碼選項，不過濾認證狀態
            移除 ml-1（4px gap），改在浮層加 pl-1 撐出等價的視覺空間，
            確保滑鼠從觸發項移往子選單時不會觸發 mouseleave -->
       <div
@@ -685,7 +656,7 @@ const handleSetBranchModel = async (
             {{ $t("canvas.connectionContextMenu.loading") }}
           </div>
 
-          <!-- 硬編碼三項 provider 選項，active 以 currentProvider 判定 -->
+          <!-- 硬編碼 provider 選項，active 以 currentProvider 判定 -->
           <button
             v-for="option in PROVIDER_OPTIONS"
             :key="option.value"

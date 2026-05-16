@@ -21,7 +21,7 @@ interface NoteItem {
   originalPosition?: Position | null;
 }
 
-// 允許透過 config.itemIdField（如 'commandId'）進行動態 key 查找
+// 允許透過 config.itemIdField 進行動態 key 查找
 // 與 NoteItem 分離，避免 index signature 擴散到使用 NoteItem 的介面
 interface NoteItemWithDynamicKey extends NoteItem {
   [key: string]: unknown;

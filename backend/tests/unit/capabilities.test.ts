@@ -4,9 +4,6 @@ import {
   CODEX_AVAILABLE_MODEL_VALUES,
   CLAUDE_AVAILABLE_MODELS,
   CLAUDE_AVAILABLE_MODEL_VALUES,
-  GEMINI_AVAILABLE_MODELS,
-  GEMINI_AVAILABLE_MODEL_VALUES,
-  GEMINI_CAPABILITIES,
 } from "../../src/services/provider/capabilities.js";
 
 describe("CODEX_AVAILABLE_MODELS model value 在 CODEX_AVAILABLE_MODEL_VALUES 中", () => {
@@ -37,41 +34,5 @@ describe("CLAUDE_AVAILABLE_MODELS model value 在 CLAUDE_AVAILABLE_MODEL_VALUES 
     for (const model of CLAUDE_AVAILABLE_MODELS) {
       expect(CLAUDE_AVAILABLE_MODEL_VALUES.has(model.value)).toBe(true);
     }
-  });
-});
-
-// ── A1（wire-up 回歸保護）──────────────────────────────────────────────────────
-// 保護：確認 GEMINI_CAPABILITIES.mcp === true，即 Gemini Pod 已正確宣告 MCP 支援。
-// 若未來有人誤將 mcp 改為 false 或刪除此欄位，CI 會立刻報錯。
-describe("GEMINI_CAPABILITIES capability 回歸測試", () => {
-  it("A1: GEMINI_CAPABILITIES.mcp 必須為 true（已透過 --allowed-mcp-server-names per-pod 隔離）", () => {
-    expect(GEMINI_CAPABILITIES.mcp).toBe(true);
-  });
-});
-
-describe("GEMINI_AVAILABLE_MODEL_VALUES smoke 測試", () => {
-  it("大小與 GEMINI_AVAILABLE_MODELS.length 一致", () => {
-    expect(GEMINI_AVAILABLE_MODEL_VALUES.size).toBe(
-      GEMINI_AVAILABLE_MODELS.length,
-    );
-  });
-
-  it("GEMINI_AVAILABLE_MODELS 的每個 value 都在 GEMINI_AVAILABLE_MODEL_VALUES Set 中", () => {
-    for (const model of GEMINI_AVAILABLE_MODELS) {
-      expect(GEMINI_AVAILABLE_MODEL_VALUES.has(model.value)).toBe(true);
-    }
-  });
-
-  it("GEMINI_AVAILABLE_MODEL_VALUES 的每個 value 都在 GEMINI_AVAILABLE_MODELS 中", () => {
-    const modelValues = new Set(GEMINI_AVAILABLE_MODELS.map((m) => m.value));
-    for (const v of GEMINI_AVAILABLE_MODEL_VALUES) {
-      expect(modelValues.has(v)).toBe(true);
-    }
-  });
-
-  // B10：GEMINI_AVAILABLE_MODELS[0].value 必須為 "gemini-2.5-flash"
-  // 保護：確保 Flash 在清單第一位，connectionStore.create 預設模型才能正確對應
-  it("B10: GEMINI_AVAILABLE_MODELS[0].value 必須為 gemini-2.5-flash（預設模型的清單順位）", () => {
-    expect(GEMINI_AVAILABLE_MODELS[0].value).toBe("gemini-2.5-flash");
   });
 });

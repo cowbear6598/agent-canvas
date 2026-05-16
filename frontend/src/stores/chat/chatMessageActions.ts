@@ -1,6 +1,5 @@
 import { generateRequestId } from "@/services/utils";
 import { usePodStore } from "../pod/podStore";
-import type { Pod } from "@/types/pod";
 import type {
   Message,
   MessageRole,
@@ -18,8 +17,6 @@ import type {
   PodChatToolUsePayload,
   PodMessagesClearedPayload,
 } from "@/types/websocket";
-import { CONTENT_PREVIEW_LENGTH } from "@/lib/constants";
-import { truncateContent } from "./chatUtils";
 import type { ChatStoreInstance } from "./chatStore";
 import {
   updateAssistantSubMessages,
@@ -56,18 +53,6 @@ function resolveOpencodeErrorContent(
     return t("chat.opencode.providerNotLoggedIn", { provider: providerID });
   }
   return content;
-}
-
-function appendUserOutputToPod(pod: Pod, content: string): void {
-  const podStore = usePodStore();
-  const truncatedContent = `> ${truncateContent(content, CONTENT_PREVIEW_LENGTH)}`;
-  const lastOutput = pod.output[pod.output.length - 1];
-  if (lastOutput === truncatedContent) return;
-
-  podStore.updatePod({
-    ...pod,
-    output: [...pod.output, truncatedContent],
-  });
 }
 
 export function createAssistantMessageShape(
@@ -147,7 +132,6 @@ export interface ChatMessageActions {
     fullContent: string,
     messageId: string,
   ) => void;
-  updatePodOutput: (podId: string) => void;
   convertPersistedToMessage: (persistedMessage: PersistedMessage) => Message;
   setPodMessages: (podId: string, messages: Message[]) => void;
   setTyping: (podId: string, isTyping: boolean) => void;
@@ -179,8 +163,6 @@ function createMessageCreationActions(
 
     const messages = getMessages(store, podId);
     store.messagesByPodId.set(podId, [...messages, message]);
-
-    appendUserOutputToPod(pod, message.content);
   }
 
   const addUserMessage = (podId: string, content: string): void => {
@@ -235,23 +217,6 @@ function createMessageCreationActions(
     return { ...baseMessage, ...shape };
   }
 
-  /**
-   * 當角色為 user 時，同步更新 Pod 的 output 摘要（副作用封裝）。
-   * assistant / system 角色不做任何事。
-   */
-  function notifyPodOutputIfUser(
-    effectiveRole: MessageRole,
-    podId: string,
-    content: string,
-  ): void {
-    if (effectiveRole !== "user") return;
-    const podStore = usePodStore();
-    const pod = podStore.pods.find((p) => p.id === podId);
-    if (pod) {
-      appendUserOutputToPod(pod, content);
-    }
-  }
-
   function settleTerminalSystemMessage(
     effectiveRole: MessageRole,
     podId: string,
@@ -291,7 +256,6 @@ function createMessageCreationActions(
       setTyping(store, podId, true);
     }
 
-    notifyPodOutputIfUser(effectiveRole, podId, content);
     settleTerminalSystemMessage(effectiveRole, podId, isPartial, metadata);
   };
 
@@ -404,7 +368,6 @@ function createMessageUpdateActions(
   | "handleChatAborted"
   | "finalizeStreaming"
   | "completeMessage"
-  | "updatePodOutput"
   | "setTyping"
 > {
   const toolTrackingActions = createToolTrackingActions(store);
@@ -527,9 +490,6 @@ function createMessageHistoryActions(
     payload: PodMessagesClearedPayload,
   ): void => {
     clearMessagesByPodIds([payload.podId]);
-
-    const podStore = usePodStore();
-    podStore.clearPodOutputsByIds([payload.podId]);
   };
 
   return {

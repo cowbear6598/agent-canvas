@@ -25,8 +25,8 @@ const CLAUDE_TEST_CAPABILITIES = {
   chat: true,
   plugin: false,
   repository: true,
-  command: true,
   mcp: true,
+  goal: true,
 };
 
 /** 測試用 Codex capabilities（chat + command + plugin 開啟） */
@@ -34,8 +34,8 @@ const CODEX_TEST_CAPABILITIES = {
   chat: true,
   plugin: true,
   repository: false,
-  command: true,
   mcp: false,
+  goal: true,
 };
 
 /** 保守 fallback（找不到 provider 時應回傳的值） */
@@ -43,8 +43,8 @@ const CONSERVATIVE_FALLBACK = {
   chat: true,
   plugin: false,
   repository: false,
-  command: false,
   mcp: false,
+  goal: false,
 };
 
 describe("providerCapabilityStore", () => {
@@ -912,7 +912,6 @@ describe("providerCapabilityStore", () => {
             chat: true,
             plugin: false,
             repository: false,
-            command: false,
             mcp: false,
           },
           availableModels: [

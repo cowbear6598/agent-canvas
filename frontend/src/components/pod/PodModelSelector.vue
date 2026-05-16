@@ -116,7 +116,7 @@ const isOpencodeEmpty = computed(
 
 /**
  * 任意 provider 的 availableModels > 4 時，套用捲動限高 class +
- * 顯示頂部呼吸箭頭。實務上 claude / codex / gemini 是寫死的小清單通常 ≤ 4 個，
+ * 顯示頂部呼吸箭頭。實務上 claude / codex / opencode 是寫死的小清單通常 ≤ 4 個，
  * 只有 opencode 動態載入時會超過；但邏輯不綁 provider，純看數量更乾淨，
  * 未來 provider 模型清單變多也能自動套用。
  */
@@ -544,11 +544,6 @@ const selectModel = async (model: string): Promise<void> => {
 /* Codex：中性灰色背景 */
 .card-codex {
   background: oklch(0.9 0.005 240);
-}
-
-/* Gemini：天空藍背景，對齊 Pod 漸層色相 */
-.card-gemini {
-  background: oklch(0.88 0.06 230);
 }
 
 /* Opencode：淺橄欖綠背景 */

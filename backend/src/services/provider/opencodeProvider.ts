@@ -145,7 +145,7 @@ export function setOpencodeServerStateFactory(
  * 重置 client 工廠為預設值（測試 teardown 使用）
  */
 export function resetOpencodeClientFactory(): void {
-  _createClient = (options) =>
+  _createClient = (options): OpencodeClientPort =>
     createOpencodeClient({
       baseUrl: options.baseUrl,
     }) as unknown as OpencodeClientPort;
@@ -155,7 +155,8 @@ export function resetOpencodeClientFactory(): void {
  * 重置 server state 查詢為預設值（測試 teardown 使用）
  */
 export function resetOpencodeServerStateFactory(): void {
-  _getServerState = () => getOpencodeServerState();
+  _getServerState = (): { baseUrl: string | null; status: string } =>
+    getOpencodeServerState();
 }
 
 // ================================================================

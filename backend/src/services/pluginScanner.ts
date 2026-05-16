@@ -1,9 +1,9 @@
 /**
- * PluginScanner 模組：掃描 Claude、Codex 與 Gemini 已安裝的 plugin / extension 清單，
+ * PluginScanner 模組：掃描 Claude 與 Codex 已安裝的 plugin 清單，
  * 回傳 InstalledPlugin[]。
  *
  * 主要 entry point：
- *   - {@link scanInstalledPlugins}（provider?: "claude" | "codex" | "gemini"）
+ *   - {@link scanInstalledPlugins}（provider?: "claude" | "codex"）
  *     → 依 provider 掃描對應來源，套用 30 秒 per-provider TTL 快取後回傳清單。
  *   - {@link clearScanInstalledPluginsCache}（僅供測試使用）
  *     → 清除所有 per-provider 快取，強制下次呼叫重新讀檔。
@@ -11,7 +11,6 @@
  * 資料來源：
  *   - Claude：~/.claude/plugins/installed_plugins.json（version 2 格式）
  *   - Codex：~/.codex/plugins/cache/<marketplace>/<pluginName>/<version>/
- *   - Gemini：~/.gemini/extensions/<name>/gemini-extension.json
  */
 import fs from "fs";
 import os from "os";
@@ -41,26 +40,12 @@ function resolveClaudePluginsRoot(): string {
   );
 }
 
-/**
- * 解析 Gemini extensions 根目錄路徑。
- * 優先讀取測試專用 env var GEMINI_EXTENSIONS_ROOT_OVERRIDE，
- * 沒設時 fallback 為 os.homedir()/.gemini/extensions（預設行為不變）。
- * 使用 function pattern 讓測試在每次 reimport 後透過 env var 動態切換路徑，
- * 比照 resolveClaudePluginsRoot 的設計。
- */
-function resolveGeminiExtensionsRoot(): string {
-  return (
-    process.env.GEMINI_EXTENSIONS_ROOT_OVERRIDE ??
-    path.join(os.homedir(), ".gemini", "extensions")
-  );
-}
-
 // 30 秒 TTL 快取，避免每次 buildClaudeOptions 都重讀磁碟
-// per-source cache，key 為資料來源（"claude" / "codex" / "gemini"），
+// per-source cache，key 為資料來源（"claude" / "codex"），
 // 注意：每個來源的 plugin 只標記自己的 provider（以來源為界），
-// 因此 scanInstalledPlugins(provider) 掃全部三個來源後以 compatibleProviders 過濾，
+// 因此 scanInstalledPlugins(provider) 掃全部來源後以 compatibleProviders 過濾，
 // 不會造成跨 provider 的 plugin 外洩。
-type PluginSource = "claude" | "codex" | "gemini";
+type PluginSource = "claude" | "codex";
 const CACHE_TTL_MS = 30000;
 const pluginCache = new Map<
   PluginSource,
@@ -82,7 +67,7 @@ export interface InstalledPlugin {
   description: string;
   installPath: string;
   repo: string;
-  compatibleProviders: ("claude" | "codex" | "gemini")[];
+  compatibleProviders: ("claude" | "codex")[];
 }
 
 interface PluginEntry {
@@ -311,104 +296,6 @@ function scanCodexInstalledPlugins(): InstalledPlugin[] {
   return result;
 }
 
-/** 截斷過長的目錄名稱，避免 log injection，最多保留 80 字元 */
-function truncateDirentName(name: string): string {
-  return name.length > 80 ? `${name.substring(0, 80)}…` : name;
-}
-
-/**
- * 解析單一 Gemini extension 目錄，回傳 InstalledPlugin 或 null（不合法時）。
- * 負責：manifest 讀取、name 驗證、plugin id 格式驗證、物件組裝。
- */
-function parseGeminiExtensionEntry(
-  extRoot: string,
-  dirent: fs.Dirent,
-): InstalledPlugin | null {
-  const safeName = truncateDirentName(dirent.name);
-
-  const manifestPath = path.join(extRoot, dirent.name, "gemini-extension.json");
-
-  const manifest = readManifest(manifestPath);
-
-  if (!manifest) {
-    // readManifest 已對非 ENOENT 錯誤記錄 warn；ENOENT 時靜默，這裡補一條統一 warn
-    logger.warn(
-      "Run",
-      "Warn",
-      `[PluginScanner] 略過 Gemini extension 子目錄 "${safeName}"：manifest 不存在或解析失敗`,
-    );
-    return null;
-  }
-
-  if (!manifest.name) {
-    logger.warn(
-      "Run",
-      "Warn",
-      `[PluginScanner] 略過 Gemini extension 子目錄 "${safeName}"：manifest 缺少 name 欄位`,
-    );
-    return null;
-  }
-
-  const id = manifest.name;
-
-  if (!PLUGIN_ID_PATTERN.test(id)) {
-    return null;
-  }
-
-  const installPath = path.join(extRoot, dirent.name) + "/";
-
-  // 防止路徑穿越攻擊：確認 installPath 在 gemini extensions 根目錄內，與 Claude 來源 L201 對齊
-  if (!isPathWithinDirectory(installPath, extRoot)) {
-    logger.warn(
-      "Run",
-      "Warn",
-      `[PluginScanner] 略過不在允許路徑範圍內的 Gemini extension installPath（目錄名稱已遮罩）`,
-    );
-    return null;
-  }
-
-  return {
-    id,
-    name: manifest.name,
-    version: manifest.version ?? "",
-    description: manifest.description ?? "",
-    installPath,
-    repo: "",
-    compatibleProviders: ["gemini"],
-  };
-}
-
-/**
- * 掃描 Gemini extensions（~/.gemini/extensions/<name>/gemini-extension.json）。
- * 根目錄不存在時回傳 []，不丟錯。
- */
-function scanGeminiInstalledPlugins(): InstalledPlugin[] {
-  const geminiExtensionsRoot = resolveGeminiExtensionsRoot();
-
-  // 根目錄不存在（ENOENT）→ 靜默回空；其他系統錯誤不吞，讓上層感知
-  let dirents: fs.Dirent[];
-  try {
-    dirents = fs.readdirSync(geminiExtensionsRoot, { withFileTypes: true });
-  } catch (error) {
-    const isNotFound =
-      error instanceof Error && "code" in error && error.code === "ENOENT";
-    if (isNotFound) {
-      return [];
-    }
-    throw error;
-  }
-
-  const result: InstalledPlugin[] = [];
-
-  for (const dirent of dirents) {
-    if (!dirent.isDirectory()) continue;
-    const plugin = parseGeminiExtensionEntry(geminiExtensionsRoot, dirent);
-    if (plugin) result.push(plugin);
-  }
-
-  return result;
-}
-
 /** 合併 N 個來源結果，以 id 為 key 去重；同 id 出現多次時合併 compatibleProviders */
 function mergePlugins(...sources: InstalledPlugin[][]): InstalledPlugin[] {
   const map = new Map<string, InstalledPlugin>();
@@ -423,7 +310,7 @@ function mergePlugins(...sources: InstalledPlugin[][]): InstalledPlugin[] {
             ...existing.compatibleProviders,
             ...plugin.compatibleProviders,
           ]),
-        ) as ("claude" | "codex" | "gemini")[];
+        ) as ("claude" | "codex")[];
         map.set(plugin.id, { ...existing, compatibleProviders: merged });
       } else {
         map.set(plugin.id, plugin);
@@ -438,12 +325,11 @@ function mergePlugins(...sources: InstalledPlugin[][]): InstalledPlugin[] {
 export const PLUGIN_SUPPORTED_PROVIDERS = new Set<string>([
   "claude",
   "codex",
-  "gemini",
 ]);
 
 /**
  * 取得單一來源的掃描結果（套用 30 秒 TTL 快取）。
- * 來源 key 為 "claude" / "codex" / "gemini"，僅代表「掃描入口」，
+ * 來源 key 為 "claude" / "codex"，僅代表「掃描入口」，
  * 不代表回傳結果中 plugin 的 compatibleProviders 限制。
  */
 function getSourcePlugins(source: PluginSource): InstalledPlugin[] {
@@ -456,10 +342,8 @@ function getSourcePlugins(source: PluginSource): InstalledPlugin[] {
   let plugins: InstalledPlugin[];
   if (source === "claude") {
     plugins = scanClaudeInstalledPlugins();
-  } else if (source === "codex") {
-    plugins = scanCodexInstalledPlugins();
   } else {
-    plugins = scanGeminiInstalledPlugins();
+    plugins = scanCodexInstalledPlugins();
   }
 
   pluginCache.set(source, { plugins, expiresAt: now + CACHE_TTL_MS });
@@ -472,11 +356,10 @@ export function scanInstalledPlugins(provider?: string): InstalledPlugin[] {
     return [];
   }
 
-  // 全集：合併三個來源（per-source 快取由 getSourcePlugins 負責）
+  // 全集：合併所有來源（per-source 快取由 getSourcePlugins 負責）
   const merged = mergePlugins(
     getSourcePlugins("claude"),
     getSourcePlugins("codex"),
-    getSourcePlugins("gemini"),
   );
 
   if (provider === undefined) {
@@ -487,7 +370,7 @@ export function scanInstalledPlugins(provider?: string): InstalledPlugin[] {
   // 確保「裝在 Codex cache 但同時宣告相容 claude」的 plugin 也會被列入 claude 結果。
   return merged.filter((plugin) =>
     plugin.compatibleProviders.includes(
-      provider as "claude" | "codex" | "gemini",
+      provider as "claude" | "codex",
     ),
   );
 }

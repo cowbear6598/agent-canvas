@@ -175,6 +175,214 @@ describe("migratePodsDropMultiInstance：移除 pods.multi_instance 舊欄位", 
   });
 });
 
+describe("migratePodsGoalColumn：補上 pods.goal_json 欄位", () => {
+  let db: Database;
+
+  beforeEach(() => {
+    db = new Database(":memory:");
+    db.exec("PRAGMA foreign_keys = OFF");
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it("舊 DB 不含 goal_json 時，migration 後應補上欄位", () => {
+    db.exec(
+      "CREATE TABLE pods (" +
+        "id TEXT PRIMARY KEY," +
+        "canvas_id TEXT NOT NULL," +
+        "name TEXT NOT NULL," +
+        "x REAL NOT NULL DEFAULT 0," +
+        "y REAL NOT NULL DEFAULT 0," +
+        "rotation REAL NOT NULL DEFAULT 0," +
+        "workspace_path TEXT NOT NULL," +
+        "session_id TEXT," +
+        "repository_id TEXT," +
+        "command_id TEXT," +
+        "schedule_json TEXT," +
+        "provider TEXT NOT NULL DEFAULT 'claude'," +
+        "provider_config_json TEXT," +
+        "UNIQUE (canvas_id, name)" +
+        ")",
+    );
+
+    expect(getColumnNames(db, "pods")).not.toContain("goal_json");
+
+    createTables(db);
+
+    expect(getColumnNames(db, "pods")).toContain("goal_json");
+  });
+});
+
+describe("replace-command-with-goal Phase 1 migration", () => {
+  let db: Database;
+
+  beforeEach(() => {
+    db = new Database(":memory:");
+    db.exec("PRAGMA foreign_keys = OFF");
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it("應清空舊 command 綁定並將 gemini / summary 設定遷移到 claude sonnet", () => {
+    db.exec(
+      "CREATE TABLE canvases (" +
+        "id TEXT PRIMARY KEY," +
+        "name TEXT NOT NULL UNIQUE," +
+        "sort_index INTEGER NOT NULL DEFAULT 0" +
+        ")",
+    );
+    db.exec(
+      "CREATE TABLE pods (" +
+        "id TEXT PRIMARY KEY," +
+        "canvas_id TEXT NOT NULL," +
+        "name TEXT NOT NULL," +
+        "x REAL NOT NULL DEFAULT 0," +
+        "y REAL NOT NULL DEFAULT 0," +
+        "rotation REAL NOT NULL DEFAULT 0," +
+        "workspace_path TEXT NOT NULL," +
+        "session_id TEXT," +
+        "repository_id TEXT," +
+        "command_id TEXT," +
+        "schedule_json TEXT," +
+        "provider TEXT NOT NULL DEFAULT 'claude'," +
+        "provider_config_json TEXT," +
+        "UNIQUE (canvas_id, name)" +
+        ")",
+    );
+    db.exec(
+      "CREATE TABLE connections (" +
+        "id TEXT PRIMARY KEY," +
+        "canvas_id TEXT NOT NULL," +
+        "source_pod_id TEXT NOT NULL," +
+        "source_anchor TEXT NOT NULL," +
+        "target_pod_id TEXT NOT NULL," +
+        "target_anchor TEXT NOT NULL," +
+        "trigger_mode TEXT NOT NULL DEFAULT 'auto'," +
+        "decide_status TEXT NOT NULL DEFAULT 'none'," +
+        "decide_reason TEXT," +
+        "connection_status TEXT NOT NULL DEFAULT 'idle'," +
+        "summary_model TEXT NOT NULL DEFAULT 'sonnet'," +
+        "summary_provider TEXT" +
+        ")",
+    );
+    db.exec(
+      "CREATE TABLE notes (" +
+        "id TEXT PRIMARY KEY," +
+        "canvas_id TEXT NOT NULL," +
+        "type TEXT NOT NULL," +
+        "name TEXT NOT NULL," +
+        "x REAL NOT NULL DEFAULT 0," +
+        "y REAL NOT NULL DEFAULT 0," +
+        "bound_to_pod_id TEXT," +
+        "original_position_json TEXT," +
+        "foreign_key_id TEXT" +
+        ")",
+    );
+    db.exec(
+      "CREATE TABLE pod_manifests (" +
+        "pod_id TEXT NOT NULL," +
+        "repository_id TEXT NOT NULL," +
+        "files_json TEXT NOT NULL DEFAULT '[]'," +
+        "PRIMARY KEY (pod_id, repository_id)" +
+        ")",
+    );
+
+    db.exec(
+      "INSERT INTO canvases (id, name, sort_index) VALUES ('c1', 'canvas', 0)",
+    );
+    db.exec(
+      "INSERT INTO pods (" +
+        "id, canvas_id, name, workspace_path, command_id, provider, provider_config_json" +
+        ") VALUES (" +
+        "'p1', 'c1', 'Legacy Gemini Pod', '/tmp/p1', 'cmd-legacy', 'gemini', '{\"model\":\"gemini-2.5-pro\"}'" +
+        ")",
+    );
+    db.exec(
+      "INSERT INTO connections (" +
+        "id, canvas_id, source_pod_id, source_anchor, target_pod_id, target_anchor, summary_model, summary_provider" +
+        ") VALUES (" +
+        "'conn-1', 'c1', 'p1', 'right', 'p1', 'left', 'gemini-2.5-pro', 'gemini'" +
+        ")",
+    );
+    db.exec(
+      "INSERT INTO connections (" +
+        "id, canvas_id, source_pod_id, source_anchor, target_pod_id, target_anchor, summary_model, summary_provider" +
+        ") VALUES (" +
+        "'conn-2', 'c1', 'p1', 'bottom', 'p1', 'top', 'gemini-2.5-flash', NULL" +
+        ")",
+    );
+    db.exec(
+      "INSERT INTO notes (id, canvas_id, type, name) VALUES ('note-1', 'c1', 'command', 'legacy command note')",
+    );
+    db.exec(
+      "INSERT INTO pod_manifests (pod_id, repository_id, files_json) VALUES (" +
+        "'p1', 'repo-1', '[\".claude/commands/cmd-legacy.md\",\".claude/skills/keep.md\"]'" +
+        ")",
+    );
+
+    createTables(db);
+
+    const migratedPod = db
+      .query(
+        "SELECT provider, provider_config_json, goal_json FROM pods WHERE id = 'p1'",
+      )
+      .get() as {
+      provider: string;
+      provider_config_json: string;
+      goal_json: string | null;
+    };
+
+    expect(migratedPod.provider).toBe("claude");
+    expect(JSON.parse(migratedPod.provider_config_json)).toEqual({
+      model: "sonnet",
+      thinkingLevel: "high",
+    });
+    expect("goal_json" in migratedPod).toBe(true);
+    expect(getColumnNames(db, "pods")).not.toContain("command_id");
+
+    const migratedConnections = db
+      .query(
+        "SELECT id, summary_model, summary_provider FROM connections ORDER BY id ASC",
+      )
+      .all() as Array<{
+      id: string;
+      summary_model: string;
+      summary_provider: string | null;
+    }>;
+
+    expect(migratedConnections).toEqual([
+      {
+        id: "conn-1",
+        summary_model: "sonnet",
+        summary_provider: "claude",
+      },
+      {
+        id: "conn-2",
+        summary_model: "sonnet",
+        summary_provider: null,
+      },
+    ]);
+
+    const commandNotes = db
+      .query("SELECT COUNT(*) as cnt FROM notes WHERE type = 'command'")
+      .get() as { cnt: number };
+    expect(commandNotes.cnt).toBe(0);
+
+    const manifestRow = db
+      .query(
+        "SELECT files_json FROM pod_manifests WHERE pod_id = 'p1' AND repository_id = 'repo-1'",
+      )
+      .get() as { files_json: string };
+    expect(JSON.parse(manifestRow.files_json)).toEqual([
+      ".claude/skills/keep.md",
+    ]);
+  });
+});
+
 // ─── migrateDropMessagesTable ────────────────────────────────────────────────
 
 describe("migrateDropMessagesTable：移除舊 messages 表與 index", () => {

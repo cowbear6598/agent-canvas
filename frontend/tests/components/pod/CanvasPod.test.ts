@@ -25,11 +25,7 @@ import { usePodStore } from "@/stores/pod/podStore";
 import { useSelectionStore } from "@/stores/pod/selectionStore";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
 import { useUploadStore } from "@/stores/upload/uploadStore";
-import { useRepositoryStore } from "@/stores/note/repositoryStore";
-import { useCommandStore } from "@/stores/note/commandStore";
 import type { Pod } from "@/types";
-import type { RepositoryNote } from "@/types/repository";
-import type { CommandNote } from "@/types/command";
 
 // ── 邊界 mock：WS 與 Toast ─────────────────────────────────────────────────
 // 使用 vi.hoisted 確保 mock factory 能在模組初始化前取得 spy 實例
@@ -97,8 +93,10 @@ function mkPod(overrides: Partial<Pod> = {}): Pod {
     name: "Test Pod",
     x: 0,
     y: 0,
-    output: [],
     rotation: 0,
+    goal: { todos: [{ id: "goal-1", text: "Ship it" }] },
+    goalStatus: "ready",
+    canExecute: true,
     provider: "claude",
     providerConfig: { model: "claude-sonnet-4-5" },
     ...overrides,
@@ -118,8 +116,8 @@ function injectBaseCapabilities() {
         chat: true,
         plugin: true,
         repository: true,
-        command: true,
         mcp: true,
+        goal: true,
       },
     },
     {
@@ -128,53 +126,12 @@ function injectBaseCapabilities() {
         chat: true,
         plugin: true,
         repository: true,
-        command: true,
         mcp: true,
+        goal: true,
       },
     },
   ]);
   // syncFromPayload 本身不設 loaded，手動設定以模擬 loadFromBackend 完成
-  store.loaded = true;
-}
-
-/**
- * 注入 gemini capabilities（chat only），並同時保留 claude/codex，
- * 模擬 Gemini 相關測試所需的 metadata 環境。
- */
-function injectGeminiCapabilities() {
-  const store = useProviderCapabilityStore();
-  store.syncFromPayload([
-    {
-      name: "claude",
-      capabilities: {
-        chat: true,
-        plugin: true,
-        repository: true,
-        command: true,
-        mcp: true,
-      },
-    },
-    {
-      name: "codex",
-      capabilities: {
-        chat: true,
-        plugin: true,
-        repository: true,
-        command: true,
-        mcp: true,
-      },
-    },
-    {
-      name: "gemini",
-      capabilities: {
-        chat: true,
-        plugin: false,
-        repository: true,
-        command: true,
-        mcp: false,
-      },
-    },
-  ]);
   store.loaded = true;
 }
 
@@ -480,142 +437,56 @@ describe("CanvasPod PodSlots 計數 props", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────
-// 10.5 Gemini provider — 漸層 class 與 capability disabled 行為
+// 10.5 Goal 狀態與入口
 // ─────────────────────────────────────────────────────────────────────────
 
-describe("CanvasPod Gemini provider", () => {
-  // B1：Pod provider 為 gemini 時，.pod-doodle 含 pod-provider-gemini
-  it("B1：provider 為 gemini 時 pod-doodle 應含 pod-provider-gemini class", async () => {
-    const pod = mkPod({ provider: "gemini" as Pod["provider"] });
-    // 需把 pod 寫入 podStore，usePodCapabilities 才能透過 getPodById 取得正確 provider
+describe("CanvasPod Goal 狀態", () => {
+  beforeEach(() => injectBaseCapabilities());
+
+  it("沒有 Goal 時應顯示未設定 badge", async () => {
+    const pod = mkPod({ goal: null, goalStatus: "unset", canExecute: false });
     usePodStore().pods = [pod];
     const wrapper = mountPod(pod);
-    injectGeminiCapabilities();
+
     await nextTick();
-    expect(wrapper.find(".pod-doodle").classes()).toContain(
-      "pod-provider-gemini",
+
+    expect(wrapper.find("[data-testid='goal-unset-badge']").exists()).toBe(
+      true,
     );
-    wrapper.unmount();
   });
 
-  // B2：Pod provider 從 claude 切換為 gemini 後，class 由 pod-provider-claude 更新為 pod-provider-gemini
-  it("B2：provider 從 claude 切換為 gemini 後 class 應從 pod-provider-claude 更新為 pod-provider-gemini", async () => {
-    const pod = mkPod({ id: "pod-switch", provider: "claude" });
+  it("沒有 Goal 時雙擊應開啟 Goal editor，而不是 emit select", async () => {
+    const pod = mkPod({
+      id: "pod-goal",
+      goal: null,
+      goalStatus: "unset",
+      canExecute: false,
+    });
     const podStore = usePodStore();
     podStore.pods = [pod];
-
     const wrapper = mountPod(pod);
-    injectBaseCapabilities();
-    await nextTick();
-    expect(wrapper.find(".pod-doodle").classes()).toContain(
-      "pod-provider-claude",
-    );
 
-    // 更新 store 中的 pod provider 為 gemini，同時確保 gemini metadata 已注入
-    podStore.pods[0]!.provider = "gemini" as Pod["provider"];
-    injectGeminiCapabilities();
-    await nextTick();
-    expect(wrapper.find(".pod-doodle").classes()).not.toContain(
-      "pod-provider-claude",
+    await wrapper.find(".pod-doodle").trigger("dblclick");
+
+    expect(podStore.goalEditorPodId).toBe("pod-goal");
+    expect(wrapper.emitted("select")).toBeFalsy();
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "pod.goal.title",
+        description: "pod.goal.requiredDescription",
+      }),
     );
-    expect(wrapper.find(".pod-doodle").classes()).toContain(
-      "pod-provider-gemini",
-    );
-    wrapper.unmount();
   });
 
-  // B3：Gemini Pod — mcp capability=false 時 slot 完全不渲染、plugin capability=false
-  //     時 slot 渲染但 disabled；repository/command 因後端 GEMINI_CAPABILITIES 支援，disabled=false
-  it("B3：Gemini Pod — mcp slot 不渲染、plugin slot 渲染但 disabled，repository/command slot 存在且 disabled=false", async () => {
-    const pod = mkPod({ provider: "gemini" as Pod["provider"] });
-    // 需把 pod 寫入 podStore，usePodCapabilities 才能透過 getPodById 取得正確 provider
-    usePodStore().pods = [pod];
+  it("點擊 goal slot 應開啟 Goal editor", async () => {
+    const pod = mkPod({ id: "pod-goal-slot" });
+    const podStore = usePodStore();
+    podStore.pods = [pod];
     const wrapper = mountPod(pod);
-    injectGeminiCapabilities();
-    await nextTick();
 
-    // mcp=false → slot 完全不渲染（v-if=false）；plugin=false → 渲染但 disabled
-    expect(wrapper.find(".pod-mcp-slot").exists()).toBe(false);
-    expect(wrapper.find(".pod-plugin-slot").exists()).toBe(true);
-    const pluginSlotComp = wrapper.findComponent({ name: "PodPluginSlot" });
-    expect(pluginSlotComp.props("disabled")).toBe(true);
+    await wrapper.find(".pod-goal-slot").trigger("click");
 
-    // repository/command slot 仍存在
-    expect(wrapper.find(".pod-repository-slot").exists()).toBe(true);
-    expect(wrapper.find(".pod-command-slot").exists()).toBe(true);
-
-    // Gemini 支援 repository / command（GEMINI_CAPABILITIES.repository=true, command=true）
-    // PodSingleBindSlot 應收到 disabled=false，允許使用者拖入 Note
-    const podSlots = wrapper.findComponent({ name: "PodSlots" });
-    const singleBindSlots = podSlots.findAllComponents({
-      name: "PodSingleBindSlot",
-    });
-    expect(singleBindSlots.length).toBeGreaterThanOrEqual(2);
-    for (const slot of singleBindSlots) {
-      expect(slot.props("disabled")).toBe(false);
-    }
-
-    wrapper.unmount();
-  });
-
-  // T12：Gemini Pod 同時綁定 Repository Note 與 Command Note 時，PodSlots 兩個 prop 皆非 undefined
-  it("T12：gemini Pod 同時綁定 repositoryNote 與 commandNote 時，PodSlots 兩個 boundNote prop 皆非 undefined", async () => {
-    const podId = "pod-gemini-bound";
-    const pod = mkPod({ id: podId, provider: "gemini" as Pod["provider"] });
-    usePodStore().pods = [pod];
-
-    const repositoryNote: RepositoryNote = {
-      id: "repo-note-1",
-      name: "Repo Note",
-      x: 0,
-      y: 0,
-      boundToPodId: podId,
-      originalPosition: null,
-      repositoryId: "repo-1",
-    };
-    const commandNote: CommandNote = {
-      id: "cmd-note-1",
-      name: "Cmd Note",
-      x: 0,
-      y: 0,
-      boundToPodId: podId,
-      originalPosition: null,
-      commandId: "cmd-1",
-    };
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    useRepositoryStore().notes = [repositoryNote] as any;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    useCommandStore().notes = [commandNote] as any;
-
-    const wrapper = mountPod(pod);
-    injectGeminiCapabilities();
-    await nextTick();
-
-    const podSlots = wrapper.findComponent({ name: "PodSlots" });
-    expect(podSlots.props("boundRepositoryNote")).not.toBeUndefined();
-    expect(podSlots.props("boundCommandNote")).not.toBeUndefined();
-    wrapper.unmount();
-  });
-
-  // T15/T16：兩個 store 都回傳 undefined 時，PodSlots 兩個 boundNote prop 皆為 undefined
-  it("T15/T16：gemini Pod 兩個 store 均無綁定 note 時，PodSlots 兩個 boundNote prop 皆為 undefined", async () => {
-    const podId = "pod-gemini-empty";
-    const pod = mkPod({ id: podId, provider: "gemini" as Pod["provider"] });
-    usePodStore().pods = [pod];
-
-    // store 中無任何 note（或 note 未綁定此 pod）
-    useRepositoryStore().notes = [];
-    useCommandStore().notes = [];
-
-    const wrapper = mountPod(pod);
-    injectGeminiCapabilities();
-    await nextTick();
-
-    const podSlots = wrapper.findComponent({ name: "PodSlots" });
-    expect(podSlots.props("boundRepositoryNote")).toBeUndefined();
-    expect(podSlots.props("boundCommandNote")).toBeUndefined();
-    wrapper.unmount();
+    expect(podStore.goalEditorPodId).toBe("pod-goal-slot");
   });
 });
 
@@ -648,11 +519,11 @@ describe("CanvasPod handleModelChange", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────
-// 11. opencode provider — plugin slot 不顯示，mcp / repository / command slot 顯示
+// 11. opencode provider — plugin slot disabled，mcp / repository / goal slot 顯示
 // ─────────────────────────────────────────────────────────────────────────
 
 describe("CanvasPod opencode provider — capability 顯隱", () => {
-  /** 注入 opencode capabilities：plugin=false、mcp=true、repository=true、command=true */
+  /** 注入 opencode capabilities：plugin=false、mcp=true、repository=true、goal=true */
   function injectOpencodeCapabilities() {
     const store = useProviderCapabilityStore();
     store.syncFromPayload([
@@ -662,8 +533,8 @@ describe("CanvasPod opencode provider — capability 顯隱", () => {
           chat: true,
           plugin: false,
           repository: true,
-          command: true,
           mcp: true,
+          goal: true,
         },
       },
     ]);
@@ -671,7 +542,7 @@ describe("CanvasPod opencode provider — capability 顯隱", () => {
   }
 
   // B 類業務規則：opencode Pod 依 capabilities 正確顯隱各 slot
-  it("opencode Pod — PodPluginSlot 渲染但 disabled（plugin=false），PodMcpSlot 與兩個 PodSingleBindSlot 存在", async () => {
+  it("opencode Pod — PodPluginSlot 渲染但 disabled（plugin=false），PodMcpSlot、GoalSlot 與 Repository slot 存在", async () => {
     const pod = mkPod({ provider: "opencode" as Pod["provider"] });
     // usePodCapabilities 透過 getPodById 取得 provider，需把 pod 寫入 podStore
     usePodStore().pods = [pod];
@@ -689,11 +560,12 @@ describe("CanvasPod opencode provider — capability 顯隱", () => {
     // mcp=true → PodMcpSlot 存在
     expect(podSlots.findComponent({ name: "PodMcpSlot" }).exists()).toBe(true);
 
-    // repository=true、command=true → 兩個 PodSingleBindSlot 存在
+    // repository=true → 單一 Repository slot；Goal 為獨立按鈕
     const singleBindSlots = podSlots.findAllComponents({
       name: "PodSingleBindSlot",
     });
-    expect(singleBindSlots.length).toBeGreaterThanOrEqual(2);
+    expect(singleBindSlots.length).toBe(1);
+    expect(podSlots.findComponent({ name: "PodGoalSlot" }).exists()).toBe(true);
 
     wrapper.unmount();
   });

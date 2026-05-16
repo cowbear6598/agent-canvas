@@ -4,6 +4,36 @@ import type { ProviderName } from "../services/provider/types.js";
 
 export type ModelType = "opus" | "sonnet" | "haiku";
 
+export interface GoalTodoItem {
+  id: string;
+  text: string;
+}
+
+export interface PodGoal {
+  todos: GoalTodoItem[];
+}
+
+export type PodGoalStatus = "unset" | "ready";
+
+export function normalizePodGoal(
+  goal: PodGoal | null | undefined,
+): PodGoal | null {
+  if (!goal || !Array.isArray(goal.todos)) return null;
+
+  const todos = goal.todos
+    .map((todo) => ({
+      id: String(todo.id ?? "").trim(),
+      text: String(todo.text ?? "").trim(),
+    }))
+    .filter((todo) => todo.id.length > 0 && todo.text.length > 0);
+
+  return todos.length > 0 ? { todos } : null;
+}
+
+export function derivePodGoalStatus(goal: PodGoal | null): PodGoalStatus {
+  return goal ? "ready" : "unset";
+}
+
 export interface Pod {
   id: string;
   name: string;
@@ -18,7 +48,9 @@ export interface Pod {
   /** providerConfig.model 是 model 的唯一來源（Claude 用短名如 "opus"，Codex 用完整名如 "gpt-5.4"） */
   providerConfig: Record<string, unknown> | null;
   repositoryId: string | null;
-  commandId: string | null;
+  goal?: PodGoal | null;
+  goalStatus?: PodGoalStatus;
+  canExecute?: boolean;
   schedule?: ScheduleConfig;
   integrationBindings?: IntegrationBinding[];
 }
