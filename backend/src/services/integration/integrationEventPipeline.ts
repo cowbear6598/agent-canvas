@@ -7,6 +7,8 @@ import type { NormalizedEvent } from "./types.js";
 import { shouldFilterJiraEvent } from "./providers/jiraProvider.js";
 import { launchRun } from "../../utils/runChatHelpers.js";
 import { onRunChatComplete } from "../../utils/chatCallbacks.js";
+import { socketService } from "../socketService.js";
+import { WebSocketResponseEvents } from "../../schemas/events.js";
 import {
   replyContextStore,
   buildReplyContextKey,
@@ -108,23 +110,40 @@ class IntegrationEventPipeline {
       pods.map(({ canvasId, pod }) =>
         this.processBoundPod(canvasId, pod, event),
       ),
-      pods.map(({ pod }) => pod),
+      pods,
     );
   }
 
   private async settleAndLogErrors(
     tasks: Promise<void>[],
-    pods: Pod[],
+    pods: Array<{ canvasId: string; pod: Pod }>,
   ): Promise<void> {
     const results = await Promise.allSettled(tasks);
     for (let i = 0; i < results.length; i++) {
       const result = results[i];
       if (result.status === "rejected") {
+        const { canvasId, pod } = pods[i];
+        const errorMessage =
+          result.reason instanceof Error
+            ? result.reason.message
+            : String(result.reason);
         logger.error(
           "Integration",
           "Error",
-          `[IntegrationEventPipeline] Pod「${pods[i].name}」處理 Integration 訊息失敗`,
+          `[IntegrationEventPipeline] Pod「${pod.name}」處理 Integration 訊息失敗`,
           result.reason,
+        );
+        // 透過 WebSocket 廣播個別 Pod 的失敗事件，讓前端能做對應 UI 提示
+        socketService.emitToCanvas(
+          canvasId,
+          WebSocketResponseEvents.POD_ERROR,
+          {
+            canvasId,
+            podId: pod.id,
+            success: false,
+            error: errorMessage,
+            code: "INTEGRATION_RUN_ERROR",
+          },
         );
       }
     }

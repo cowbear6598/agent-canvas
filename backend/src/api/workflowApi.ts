@@ -19,6 +19,8 @@ import {
 } from "../schemas/chatSchemas.js";
 import { z } from "zod";
 import { launchRun } from "../utils/runChatHelpers.js";
+import { socketService } from "../services/socketService.js";
+import { WebSocketResponseEvents } from "../schemas/events.js";
 
 /**
  * 安全解碼 URL 中的 podId 參數，並驗證格式是否合法（UUID 或 pod 名稱）。
@@ -196,6 +198,17 @@ export async function handleWorkflowChat(
         `Pod「${podName}」REST API 發送訊息失敗`,
         err,
       );
+      // 啟動失敗時透過 WebSocket 廣播錯誤事件，讓前端能收到失敗訊號
+      socketService.emitToCanvas(canvasId, WebSocketResponseEvents.POD_ERROR, {
+        canvasId,
+        podId,
+        success: false,
+        error:
+          err instanceof Error
+            ? err.message
+            : `Pod「${podName}」啟動失敗，請稍後再試`,
+        code: "RUN_LAUNCH_ERROR",
+      });
     }
   })();
 

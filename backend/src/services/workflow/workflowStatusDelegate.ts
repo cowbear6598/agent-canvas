@@ -3,8 +3,8 @@ import type { TriggerMode } from "../../types/index.js";
 import type { SettlementPathway } from "./types.js";
 import { runStore } from "../runStore.js";
 import { runExecutionService } from "./runExecutionService.js";
+import { runQueueService } from "./runQueueService.js";
 import { fireAndForget } from "../../utils/operationHelpers.js";
-import { logger } from "../../utils/logger.js";
 
 export interface EnqueueItem {
   canvasId: string;
@@ -113,40 +113,16 @@ class RunDelegate implements WorkflowStatusDelegate {
   }
 
   enqueue(item: EnqueueItem): void {
-    // 延遲 import 避免循環依賴
-    import("./runQueueService.js")
-      .then(({ runQueueService }) => {
-        if (!item.runContext) return;
-        runQueueService.enqueue({ ...item, runContext: item.runContext });
-      })
-      .catch((error) => {
-        logger.error(
-          "Run",
-          "Error",
-          "[RunDelegate] 載入 runQueueService 失敗",
-          error,
-        );
-      });
+    if (!item.runContext) return;
+    runQueueService.enqueue({ ...item, runContext: item.runContext });
   }
 
   scheduleNextInQueue(canvasId: string, targetPodId: string): void {
-    // 延遲 import 避免循環依賴
-    import("./runQueueService.js")
-      .then(({ runQueueService }) => {
-        fireAndForget(
-          runQueueService.processNext(canvasId, targetPodId, this.runContext),
-          "Run",
-          "[RunDelegate] 處理 Run 佇列下一項時發生錯誤",
-        );
-      })
-      .catch((error) => {
-        logger.error(
-          "Run",
-          "Error",
-          "[RunDelegate] 載入 runQueueService 失敗",
-          error,
-        );
-      });
+    fireAndForget(
+      runQueueService.processNext(canvasId, targetPodId, this.runContext),
+      "Run",
+      "[RunDelegate] 處理 Run 佇列下一項時發生錯誤",
+    );
   }
 
   settleAndSkipPath(
