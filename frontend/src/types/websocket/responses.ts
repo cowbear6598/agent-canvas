@@ -1,4 +1,4 @@
-import type { Pod, PodStatus, PodProvider, ProviderCapabilities } from "../pod";
+import type { Pod, PodProvider, ProviderCapabilities } from "../pod";
 import type { Repository, RepositoryNote } from "@/types";
 import type { CommandNote } from "@/types";
 import type { AnchorPosition } from "@/types";
@@ -104,12 +104,6 @@ export interface PodErrorPayload {
   code: string;
 }
 
-export interface PodStatusChangedPayload {
-  podId: string;
-  status: PodStatus;
-  previousStatus: PodStatus;
-}
-
 export interface PersistedMessage {
   id: string;
   role: MessageRole;
@@ -127,10 +121,6 @@ export interface PersistedMessage {
       status: string;
     }>;
   }>;
-}
-
-export interface PodChatHistoryResultPayload extends ResultPayload {
-  messages?: PersistedMessage[];
 }
 
 export interface ConnectionPayloadItem {
@@ -190,18 +180,6 @@ export interface WorkflowCompletePayload extends ResultPayload {
   triggerMode?: "auto" | "branch" | "direct";
 }
 
-export interface WorkflowGetDownstreamPodsResultPayload {
-  requestId: string;
-  success: boolean;
-  pods?: Array<{ id: string; name: string }>;
-  error?: string;
-}
-
-export interface WorkflowClearResultPayload extends ResultPayload {
-  clearedPodIds?: string[];
-  clearedPodNames?: string[];
-}
-
 export interface PasteError {
   type: "pod" | "repositoryNote" | "commandNote";
   originalId: string;
@@ -236,10 +214,6 @@ export interface RepositoryGitCloneResultPayload {
 
 export interface PodMessagesClearedPayload {
   podId: string;
-}
-
-export interface PodMultiInstanceSetPayload extends ResultPayload {
-  pod?: Pod;
 }
 
 export interface CommandCreatedPayload {

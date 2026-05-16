@@ -99,7 +99,6 @@ function mkPod(overrides: Partial<Pod> = {}): Pod {
     y: 0,
     output: [],
     rotation: 0,
-    multiInstance: false,
     provider: "claude",
     providerConfig: { model: "claude-sonnet-4-5" },
     ...overrides,
@@ -202,30 +201,6 @@ describe("CanvasPod render smoke", () => {
 // ─────────────────────────────────────────────────────────────────────────
 // 2. podStatusClass 白名單
 // ─────────────────────────────────────────────────────────────────────────
-
-describe("CanvasPod podStatusClass 白名單", () => {
-  it.each([
-    { status: "chatting", cls: "pod-status-chatting" },
-    { status: "summarizing", cls: "pod-status-summarizing" },
-    { status: "error", cls: "pod-status-error" },
-    { status: "idle", cls: "pod-status-idle" },
-  ])('status="$status" → pod-glow-layer 含 $cls', ({ status, cls }) => {
-    const wrapper = mountPod(mkPod({ status: status as Pod["status"] }));
-    expect(wrapper.find(".pod-glow-layer").classes()).toContain(cls);
-    wrapper.unmount();
-  });
-
-  it("未知 status 不應套用任何 pod-status-* class", () => {
-    const wrapper = mountPod(mkPod({ status: "unknown" as Pod["status"] }));
-    expect(
-      wrapper
-        .find(".pod-glow-layer")
-        .classes()
-        .some((c) => c.startsWith("pod-status-")),
-    ).toBe(false);
-    wrapper.unmount();
-  });
-});
 
 // ─────────────────────────────────────────────────────────────────────────
 // 3. pod-glow-selected
@@ -341,7 +316,7 @@ describe("CanvasPod unknown provider", () => {
 
 describe("CanvasPod 拖曳高亮", () => {
   it("dragenter 後套用 pod-glow-drop-target，dragleave 後移除", async () => {
-    const wrapper = mountPod(mkPod({ status: "idle" }));
+    const wrapper = mountPod(mkPod());
     injectBaseCapabilities();
     await nextTick();
 
@@ -457,16 +432,6 @@ describe("CanvasPod MCP / Plugin popover", () => {
     const stub = wrapper.find(".mcp-popover-stub");
     expect(stub.attributes("data-pod-id")).toBe("pod-mcp");
     expect(stub.attributes("data-provider")).toBe("claude");
-    wrapper.unmount();
-  });
-
-  it("Pod busy（chatting）時 McpPopover busy 應為 true", async () => {
-    const wrapper = mountPod(mkPod({ status: "chatting" as Pod["status"] }));
-    await nextTick();
-    await wrapper.find(".pod-mcp-slot").trigger("click");
-    expect(wrapper.find(".mcp-popover-stub").attributes("data-busy")).toBe(
-      "true",
-    );
     wrapper.unmount();
   });
 

@@ -214,20 +214,12 @@
         "disabledTooltip": "opencode server cannot start"
       }
     },
-    "multiInstance": {
-      "readonlyHint": "This Pod is part of a Multi-Instance workflow. View details in run history."
-    },
+    "downstreamChainHint": "This Pod is part of a Run workflow. View details in run history.",
     "provider": {
       "title": "Provider",
       "unknownDescription": "This Provider is offline or not yet supported. Chat is unavailable.",
       "loadFailedDescription": "Unable to load provider capabilities. Some features may not work.",
       "loadingHint": "Provider is loading, please wait"
-    },
-    "clearWorkflow": {
-      "title": "Clear Workflow",
-      "description": "The following PODs will have all messages cleared:",
-      "confirm": "Confirm Clear",
-      "clearing": "Clearing..."
     },
     "delete": {
       "title": "Delete Pod",
@@ -256,7 +248,6 @@
     "slot": {
       "duplicateTitle": "Already exists, cannot insert",
       "providerDisabled": "This provider doesn't support this",
-      "lockedByMessages": "Locked: pod has messages",
       "thinkingLabel": "Thinking",
       "thinkingDisabledTooltip": "Current model doesn't support thinking levels",
       "pluginsLabel": "Plugins",
@@ -267,7 +258,6 @@
       "pluginsCodexHint": "Codex plugins are globally managed by codex",
       "mcpLabel": "MCPs",
       "mcpLoading": "Loading…",
-      "mcpBusyTooltip": "Cannot toggle while pod is busy",
       "mcpEmpty": "No MCP server installed",
       "mcpClaudeEmptyHint": "Run `claude mcp add` to install",
       "mcpCodexEmptyHint": "Run `codex mcp add` to install",
@@ -296,10 +286,10 @@
     },
     "loadingHistory": "Loading conversation history...",
     "inputPlaceholder": "Type a message...",
+    "launchHint": "Send a message to launch a new Run",
     "summarizedBadge": "Summary",
     "workflowBlockedHint": "This Pod is in a Workflow. Only the first and last Pod can send messages.",
     "integrationBlockedHint": "This Pod is connected to {label}. Messages are driven by {label}.",
-    "multiInstanceHint": "This Pod has Multi-Instance enabled. Each message will create a new Run.",
     "toolOutput": {
       "errorTitle": "{toolName} Error",
       "resultTitle": "{toolName} Result",
@@ -576,8 +566,7 @@
       "deleteFailed": "Pod deletion failed",
       "renameFailed": "Pod rename failed",
       "renamed": "Renamed successfully",
-      "scheduleFailed": "Schedule configuration failed",
-      "multiInstanceFailed": "Pod configuration failed"
+      "scheduleFailed": "Schedule configuration failed"
     },
     "integration": {
       "createFailed": "Create failed",
@@ -662,7 +651,6 @@
       "podModelSet": "Model configured",
       "podScheduleSet": "Schedule configured",
       "podDeleted": "Pod deleted",
-      "workflowCleared": "Messages cleared",
       "connectionCreated": "Connection created",
       "connectionDeleted": "Connection deleted",
       "canvasCreated": "Canvas created",
@@ -722,7 +710,6 @@
     "unknownError": "An unknown error occurred",
     "notFound": "{entity} not found: {id}",
     "podIntegrationBound": "Pod \"{name}\" is connected to an external service, manual messaging is not allowed",
-    "podBusy": "Pod {id} is currently {status}, please try again later",
     "podNotChatting": "Pod {id} is not in a conversation, cannot abort",
     "noActiveQuery": "No active query found for Pod {id}",
     "podNotFound": "Pod not found: {id}",

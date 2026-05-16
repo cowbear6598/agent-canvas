@@ -4,15 +4,24 @@ import type { ContentBlock } from "../types/index.js";
 import { WebSocketResponseEvents } from "../schemas/index.js";
 import { runStore } from "../services/runStore.js";
 import { socketService } from "../services/socketService.js";
-import { extractDisplayContent } from "./chatHelpers.js";
 import { runExecutionService } from "../services/workflow/runExecutionService.js";
+
+export function extractDisplayContent(
+  message: string | ContentBlock[],
+): string {
+  if (typeof message === "string") return message;
+
+  return message
+    .map((block) => (block.type === "text" ? block.text : "[image]"))
+    .join("");
+}
 import { executeStreamingChat } from "../services/claude/streamingChatExecutor.js";
-import { RunModeExecutionStrategy } from "../services/executionStrategy.js";
+import { ChatExecutionStrategy } from "../services/executionStrategy.js";
 import { podStore } from "../services/podStore.js";
 import { tryExpandCommandMessage } from "../services/commandExpander.js";
 import { logger } from "./logger.js";
 
-export interface LaunchMultiInstanceRunParams {
+export interface LaunchRunParams {
   canvasId: string;
   podId: string;
   message: string | ContentBlock[];
@@ -23,15 +32,10 @@ export interface LaunchMultiInstanceRunParams {
   onRunContextCreated?: (runContext: RunContext) => void;
   /**
    * Command 不存在時的處理策略：
-   * - "skip"：建立 Run 骨架 + 注入原始訊息後提早結束，不呼叫 Claude（需同時提供 onCommandNotFound callback）
+   * - "skip"：建立 Run 骨架 + 注入原始訊息後提早結束，不呼叫 Claude
    * - "fallback"：warn + 以原始訊息繼續執行（預設，適用於已在上游完成展開的路徑）
    */
   commandNotFoundBehavior?: "skip" | "fallback";
-  /**
-   * "skip" 模式下 Command 不存在時觸發，用於向前端推送錯誤提示。
-   * commandNotFoundBehavior 為 "fallback" 時忽略此 callback。
-   */
-  onCommandNotFound?: (commandId: string) => void;
   /**
    * 可選的外部 user message id，用於對齊附件目錄與 DB run message id。
    * 傳入時會作為 injectRunUserMessage 的 id，確保兩者一致。
@@ -41,7 +45,7 @@ export interface LaunchMultiInstanceRunParams {
 
 /**
  * skip 策略：Command 不存在時，建立 Run 骨架並注入原始訊息後提早結束。
- * 由 caller 透過 onCommandNotFound callback 負責向前端推送錯誤提示，不呼叫 Claude。
+ * 直接透過 socketService 發送錯誤提示至前端，不呼叫 Claude。
  */
 async function handleCommandNotFound(params: {
   canvasId: string;
@@ -49,7 +53,6 @@ async function handleCommandNotFound(params: {
   message: string | ContentBlock[];
   displayMessage?: string;
   onRunContextCreated?: (runContext: RunContext) => void;
-  onCommandNotFound?: (commandId: string) => void;
   commandId: string;
 }): Promise<RunContext> {
   const {
@@ -58,20 +61,34 @@ async function handleCommandNotFound(params: {
     message,
     displayMessage,
     onRunContextCreated,
-    onCommandNotFound,
     commandId,
   } = params;
   const triggerMsg = displayMessage ?? extractDisplayContent(message);
   const rc = await runExecutionService.createRun(canvasId, podId, triggerMsg);
   const sourceInstance = runStore.getPodInstance(rc.runId, podId);
-  if (sourceInstance?.status === "error" || sourceInstance?.status === "skipped") {
+  if (
+    sourceInstance?.status === "error" ||
+    sourceInstance?.status === "skipped"
+  ) {
     onRunContextCreated?.(rc);
     return rc;
   }
   runExecutionService.startPodInstance(rc, podId);
   await injectRunUserMessage(rc, podId, displayMessage ?? message);
   onRunContextCreated?.(rc);
-  onCommandNotFound?.(commandId);
+
+  // 直接發送找不到 Command 的錯誤提示至前端（不依賴 caller callback）
+  const messageId = uuidv4();
+  socketService.emitToCanvas(rc.canvasId, WebSocketResponseEvents.RUN_MESSAGE, {
+    runId: rc.runId,
+    canvasId: rc.canvasId,
+    podId,
+    messageId,
+    content: `找不到指定的 Command「${commandId}」，請確認 Command 是否存在後重試`,
+    isPartial: false,
+    role: "system",
+  });
+
   return rc;
 }
 
@@ -83,13 +100,11 @@ function handleCommandFallback(commandId: string, podId: string): void {
   logger.warn(
     "Run",
     "Check",
-    `[launchMultiInstanceRun] Command 不存在（commandId=${commandId}, podId=${podId}），以原始訊息繼續執行`,
+    `[launchRun] Command 不存在（commandId=${commandId}, podId=${podId}），以原始訊息繼續執行`,
   );
 }
 
-export async function launchMultiInstanceRun(
-  params: LaunchMultiInstanceRunParams,
-): Promise<RunContext> {
+export async function launchRun(params: LaunchRunParams): Promise<RunContext> {
   const {
     canvasId,
     podId,
@@ -100,7 +115,6 @@ export async function launchMultiInstanceRun(
     onAborted,
     onRunContextCreated,
     commandNotFoundBehavior = "fallback",
-    onCommandNotFound,
     userMessageId,
   } = params;
 
@@ -111,7 +125,7 @@ export async function launchMultiInstanceRun(
     const expandResult = await tryExpandCommandMessage(
       podResult.pod,
       message,
-      "launchMultiInstanceRun",
+      "launchRun",
     );
     if (!expandResult.ok) {
       if (commandNotFoundBehavior === "skip") {
@@ -121,7 +135,6 @@ export async function launchMultiInstanceRun(
           message,
           displayMessage,
           onRunContextCreated,
-          onCommandNotFound,
           commandId: expandResult.commandId,
         });
       }
@@ -139,7 +152,10 @@ export async function launchMultiInstanceRun(
     triggerMessage,
   );
   const sourceInstance = runStore.getPodInstance(runContext.runId, podId);
-  if (sourceInstance?.status === "error" || sourceInstance?.status === "skipped") {
+  if (
+    sourceInstance?.status === "error" ||
+    sourceInstance?.status === "skipped"
+  ) {
     onRunContextCreated?.(runContext);
     return runContext;
   }
@@ -153,7 +169,7 @@ export async function launchMultiInstanceRun(
 
   onRunContextCreated?.(runContext);
 
-  const strategy = new RunModeExecutionStrategy(canvasId, runContext);
+  const strategy = new ChatExecutionStrategy(canvasId, runContext);
 
   await executeStreamingChat(
     {

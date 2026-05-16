@@ -132,7 +132,7 @@ export interface ExecutionServiceMethods {
     targetPodId: string,
     provider: ProviderName,
     summaryModel: string,
-    runContext?: RunContext,
+    runContext: RunContext,
     pathway?: SettlementPathway,
     delegate?: WorkflowStatusDelegate,
   ): Promise<{
@@ -210,6 +210,6 @@ export interface AutoTriggerMethods {
   ): Promise<void>;
   getLastAssistantMessage(
     sourcePodId: string,
-    runContext?: RunContext,
+    runContext: RunContext,
   ): string | null;
 }

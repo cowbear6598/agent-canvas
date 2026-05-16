@@ -532,6 +532,28 @@ describe("RunStore", () => {
     });
   });
 
+  describe("hasActiveRunForPod", () => {
+    it("有 active（running）instance 時回傳 true", () => {
+      const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, TRIGGER_MESSAGE);
+      const instance = runStore.createPodInstance(run.id, SOURCE_POD_ID);
+      runStore.updatePodInstanceStatus(instance.id, "running");
+
+      expect(runStore.hasActiveRunForPod(SOURCE_POD_ID)).toBe(true);
+    });
+
+    it("instance 為 completed 時回傳 false", () => {
+      const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, TRIGGER_MESSAGE);
+      const instance = runStore.createPodInstance(run.id, SOURCE_POD_ID);
+      runStore.updatePodInstanceStatus(instance.id, "completed");
+
+      expect(runStore.hasActiveRunForPod(SOURCE_POD_ID)).toBe(false);
+    });
+
+    it("無任何 instance 時回傳 false", () => {
+      expect(runStore.hasActiveRunForPod("pod-no-instances")).toBe(false);
+    });
+  });
+
   describe("execution path model", () => {
     it("createPodInstance 帶 workspacePath 與 sandboxHomePath 後應正確持久化", () => {
       const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, TRIGGER_MESSAGE);

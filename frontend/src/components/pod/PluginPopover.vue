@@ -15,7 +15,6 @@ import type { PodProvider } from "@/types/pod";
 const props = defineProps<{
   podId: string;
   anchorRect: DOMRect;
-  busy: boolean;
   provider: PodProvider;
 }>();
 
@@ -258,7 +257,6 @@ const handleToggle = async (
               v-for="plugin in filteredPlugins"
               :key="plugin.id"
               class="group relative flex items-center justify-between gap-3 rounded px-2 py-1 hover:bg-secondary"
-              :title="busy ? t('pod.slot.pluginsBusyTooltip') : undefined"
             >
               <div>
                 <p class="text-xs font-mono">
@@ -270,7 +268,7 @@ const handleToggle = async (
               </div>
               <Switch
                 :model-value="localPluginIdsSet.has(plugin.id)"
-                :disabled="busy"
+                :disabled="false"
                 @click.stop
                 @update:model-value="
                   (val: boolean) => handleToggle(plugin.id, val)

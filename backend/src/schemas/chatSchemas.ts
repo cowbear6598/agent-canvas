@@ -80,12 +80,6 @@ export const chatSendSchema = z
     }
   });
 
-export const chatHistorySchema = z.object({
-  requestId: requestIdSchema,
-  canvasId: canvasIdSchema,
-  podId: podIdSchema,
-});
-
 export const chatAbortSchema = z.object({
   requestId: requestIdSchema,
   canvasId: canvasIdSchema,
@@ -93,5 +87,4 @@ export const chatAbortSchema = z.object({
 });
 
 export type ChatSendPayload = z.infer<typeof chatSendSchema>;
-export type ChatHistoryPayload = z.infer<typeof chatHistorySchema>;
 export type ChatAbortPayload = z.infer<typeof chatAbortSchema>;

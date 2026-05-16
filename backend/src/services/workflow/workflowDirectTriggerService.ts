@@ -1,261 +1,363 @@
 import type {
-    WorkflowDirectWaitingPayload,
-    Connection,
-} from '../../types/index.js';
+  WorkflowDirectWaitingPayload,
+  Connection,
+} from "../../types/index.js";
 import type {
-    TriggerStrategy,
-    TriggerDecideContext,
-    TriggerDecideResult,
-    CollectSourcesContext,
-    CollectSourcesResult,
-    TriggerLifecycleContext,
-    CompletionContext,
-    QueuedContext,
-    QueueProcessedContext,
-} from './types.js';
-import type { RunContext } from '../../types/run.js';
-import {podStore} from '../podStore.js';
-import {directTriggerStore} from '../directTriggerStore.js';
-import {workflowStateService} from './workflowStateService.js';
-import {workflowEventEmitter} from './workflowEventEmitter.js';
-import {logger} from '../../utils/logger.js';
-import {formatMergedSummaries, buildQueuedPayload, buildQueueProcessedPayload, resolvePendingKey} from './workflowHelpers.js';
-import {connectionStore} from '../connectionStore.js';
-import {createStatusDelegate} from './workflowStatusDelegate.js';
-import {MERGED_CONTENT_PREVIEW_MAX_LENGTH} from './constants.js';
+  TriggerStrategy,
+  TriggerDecideContext,
+  TriggerDecideResult,
+  CollectSourcesContext,
+  CollectSourcesResult,
+  TriggerLifecycleContext,
+  CompletionContext,
+  QueuedContext,
+  QueueProcessedContext,
+} from "./types.js";
+import type { RunContext } from "../../types/run.js";
+import { podStore } from "../podStore.js";
+import { directTriggerStore } from "../directTriggerStore.js";
+import { workflowStateService } from "./workflowStateService.js";
+import { workflowEventEmitter } from "./workflowEventEmitter.js";
+import { logger } from "../../utils/logger.js";
+import {
+  formatMergedSummaries,
+  buildQueuedPayload,
+  buildQueueProcessedPayload,
+  resolvePendingKey,
+} from "./workflowHelpers.js";
+import { connectionStore } from "../connectionStore.js";
+import { createStatusDelegate } from "./workflowStatusDelegate.js";
+import { MERGED_CONTENT_PREVIEW_MAX_LENGTH } from "./constants.js";
 
 // 等待 10 秒讓多個 direct 輸入合併為一次觸發，避免重複執行
 const MULTI_DIRECT_MERGE_WINDOW_MS = 10000;
 
 class WorkflowDirectTriggerService implements TriggerStrategy {
-    readonly mode = 'direct' as const;
+  readonly mode = "direct" as const;
 
-    private pendingResolvers: Map<string, (result: CollectSourcesResult) => void> = new Map();
+  private pendingResolvers: Map<
+    string,
+    (result: CollectSourcesResult) => void
+  > = new Map();
 
-    async decide(context: TriggerDecideContext): Promise<TriggerDecideResult[]> {
-        return context.connections.map((connection) => ({
-            connectionId: connection.id,
-            approved: true,
-            reason: null,
-            isError: false,
-        }));
+  async decide(context: TriggerDecideContext): Promise<TriggerDecideResult[]> {
+    return context.connections.map((connection) => ({
+      connectionId: connection.id,
+      approved: true,
+      reason: null,
+      isError: false,
+    }));
+  }
+
+  async collectSources(
+    context: CollectSourcesContext,
+  ): Promise<CollectSourcesResult> {
+    const { canvasId, sourcePodId, connection, summary, runContext } = context;
+    const targetPodId = connection.targetPodId;
+
+    const directCount = workflowStateService.getDirectConnectionCount(
+      canvasId,
+      targetPodId,
+    );
+
+    if (directCount === 1) {
+      return this.handleSingleDirectTrigger(connection.id);
     }
 
-    async collectSources(context: CollectSourcesContext): Promise<CollectSourcesResult> {
-        const {canvasId, sourcePodId, connection, summary, runContext} = context;
-        const targetPodId = connection.targetPodId;
+    return this.handleMultiDirectTrigger(
+      canvasId,
+      sourcePodId,
+      targetPodId,
+      connection,
+      summary,
+      runContext,
+    );
+  }
 
-        const directCount = workflowStateService.getDirectConnectionCount(canvasId, targetPodId);
+  private handleSingleDirectTrigger(
+    connectionId: string,
+  ): CollectSourcesResult {
+    return { ready: true, participatingConnectionIds: [connectionId] };
+  }
 
-        if (directCount === 1) {
-            return this.handleSingleDirectTrigger(connection.id);
-        }
+  private handleMultiDirectTrigger(
+    canvasId: string,
+    sourcePodId: string,
+    targetPodId: string,
+    connection: Connection,
+    summary: string,
+    runContext?: RunContext,
+  ): Promise<CollectSourcesResult> {
+    const storeKey = resolvePendingKey(targetPodId, runContext);
 
-        return this.handleMultiDirectTrigger(canvasId, sourcePodId, targetPodId, connection, summary, runContext);
+    if (!directTriggerStore.hasDirectPending(storeKey)) {
+      directTriggerStore.initializeDirectPending(storeKey);
     }
 
-    private handleSingleDirectTrigger(connectionId: string): CollectSourcesResult {
-        return {ready: true, participatingConnectionIds: [connectionId]};
+    directTriggerStore.recordDirectReady(storeKey, sourcePodId, summary);
+
+    const delegate = createStatusDelegate(runContext);
+    delegate.markWaiting(canvasId, targetPodId);
+
+    const directWaitingPayload: WorkflowDirectWaitingPayload = {
+      canvasId,
+      connectionId: connection.id,
+      sourcePodId,
+      targetPodId,
+    };
+    if (!runContext) {
+      workflowEventEmitter.emitDirectWaiting(canvasId, directWaitingPayload);
     }
 
-    private handleMultiDirectTrigger(
-        canvasId: string,
-        sourcePodId: string,
-        targetPodId: string,
-        connection: Connection,
-        summary: string,
-        runContext?: RunContext
-    ): Promise<CollectSourcesResult> {
-        const storeKey = resolvePendingKey(targetPodId, runContext);
+    if (this.pendingResolvers.has(storeKey)) {
+      this.startCountdownTimer(canvasId, targetPodId, storeKey, runContext);
+      return Promise.resolve({ ready: false });
+    }
 
-        if (!directTriggerStore.hasDirectPending(storeKey)) {
-            directTriggerStore.initializeDirectPending(storeKey);
-        }
+    return new Promise<CollectSourcesResult>((resolve) => {
+      this.pendingResolvers.set(storeKey, resolve);
+      this.startCountdownTimer(canvasId, targetPodId, storeKey, runContext);
+    });
+  }
 
-        directTriggerStore.recordDirectReady(storeKey, sourcePodId, summary);
+  private startCountdownTimer(
+    canvasId: string,
+    targetPodId: string,
+    storeKey = targetPodId,
+    runContext?: RunContext,
+  ): void {
+    if (directTriggerStore.hasActiveTimer(storeKey)) {
+      directTriggerStore.clearTimer(storeKey);
+    }
 
-        const delegate = createStatusDelegate(runContext);
-        if (delegate.isRunMode()) {
-            delegate.markWaiting(canvasId, targetPodId);
-        } else {
-            connectionStore.updateConnectionStatus(canvasId, connection.id, 'waiting');
-        }
+    const timer = setTimeout(() => {
+      this.onTimerExpired(canvasId, targetPodId, storeKey, runContext);
+    }, MULTI_DIRECT_MERGE_WINDOW_MS);
 
-        const directWaitingPayload: WorkflowDirectWaitingPayload = {
-            canvasId,
-            connectionId: connection.id,
-            sourcePodId,
-            targetPodId,
-        };
-        if (!runContext) {
-            workflowEventEmitter.emitDirectWaiting(canvasId, directWaitingPayload);
-        }
+    directTriggerStore.setTimer(storeKey, timer);
+  }
 
-        if (this.pendingResolvers.has(storeKey)) {
-            this.startCountdownTimer(canvasId, targetPodId, storeKey, runContext);
-            return Promise.resolve({ready: false});
-        }
+  cancelPendingResolver(storeKey: string): void {
+    const resolver = this.pendingResolvers.get(storeKey);
+    if (!resolver) {
+      return;
+    }
 
-        return new Promise<CollectSourcesResult>((resolve) => {
-            this.pendingResolvers.set(storeKey, resolve);
-            this.startCountdownTimer(canvasId, targetPodId, storeKey, runContext);
+    resolver({ ready: false });
+    this.pendingResolvers.delete(storeKey);
+    logger.log(
+      "Workflow",
+      "Delete",
+      `已取消目標 ${storeKey} 的 pending resolver - 連線已刪除`,
+    );
+  }
+
+  private onTimerExpired(
+    canvasId: string,
+    targetPodId: string,
+    storeKey = targetPodId,
+    runContext?: RunContext,
+  ): void {
+    const resolver = this.pendingResolvers.get(storeKey);
+    if (!resolver) {
+      return;
+    }
+
+    const result = this.processTimerResult(
+      canvasId,
+      targetPodId,
+      storeKey,
+      runContext,
+    );
+    resolver(result);
+
+    this.pendingResolvers.delete(storeKey);
+    directTriggerStore.clearDirectPending(storeKey);
+  }
+
+  private findConnectionIdsBySourcePodIds(
+    canvasId: string,
+    targetPodId: string,
+    sourcePodIds: string[],
+  ): string[] {
+    const allConnections = connectionStore.findByTargetPodId(
+      canvasId,
+      targetPodId,
+    );
+    return allConnections
+      .filter(
+        (conn) =>
+          conn.triggerMode === "direct" &&
+          sourcePodIds.includes(conn.sourcePodId),
+      )
+      .map((conn) => conn.id);
+  }
+
+  private processTimerResult(
+    canvasId: string,
+    targetPodId: string,
+    storeKey: string,
+    runContext?: RunContext,
+  ): CollectSourcesResult {
+    const readySummaries = directTriggerStore.getReadySummaries(storeKey);
+    if (!readySummaries || readySummaries.size === 0) {
+      return { ready: false };
+    }
+
+    const sourcePodIds = Array.from(readySummaries.keys());
+    const participatingConnectionIds = this.findConnectionIdsBySourcePodIds(
+      canvasId,
+      targetPodId,
+      sourcePodIds,
+    );
+
+    if (sourcePodIds.length === 1) {
+      return { ready: true, participatingConnectionIds };
+    }
+
+    const mergedContent = formatMergedSummaries(readySummaries, (podId) =>
+      podStore.getById(canvasId, podId),
+    );
+
+    if (!runContext) {
+      const mergedPayload = {
+        canvasId,
+        targetPodId,
+        sourcePodIds,
+        mergedContentPreview: mergedContent.substring(
+          0,
+          MERGED_CONTENT_PREVIEW_MAX_LENGTH,
+        ),
+        countdownSeconds: 0,
+      };
+      workflowEventEmitter.emitDirectMerged(canvasId, mergedPayload);
+    }
+
+    return {
+      ready: true,
+      mergedContent,
+      isSummarized: true,
+      participatingConnectionIds,
+    };
+  }
+
+  private getConnectionsToIterate(
+    canvasId: string,
+    participatingConnectionIds: string[],
+  ): Connection[] {
+    return participatingConnectionIds
+      .map((id) => connectionStore.getById(canvasId, id))
+      .filter((conn): conn is Connection => conn !== undefined);
+  }
+
+  private forEachParticipatingConnection(
+    canvasId: string,
+    participatingConnectionIds: string[],
+    callback: (conn: Connection) => void,
+  ): void {
+    const connections = this.getConnectionsToIterate(
+      canvasId,
+      participatingConnectionIds,
+    );
+    for (const conn of connections) {
+      callback(conn);
+    }
+  }
+
+  onTrigger(context: TriggerLifecycleContext): void {
+    if (context.runContext) return;
+
+    this.forEachParticipatingConnection(
+      context.canvasId,
+      context.participatingConnectionIds,
+      (conn) => {
+        workflowEventEmitter.emitDirectTriggered(context.canvasId, {
+          canvasId: context.canvasId,
+          connectionId: conn.id,
+          sourcePodId: conn.sourcePodId,
+          targetPodId: context.targetPodId,
+          transferredContent: context.summary,
+          isSummarized: context.isSummarized,
         });
-    }
+      },
+    );
+  }
 
-    private startCountdownTimer(canvasId: string, targetPodId: string, storeKey = targetPodId, runContext?: RunContext): void {
-        if (directTriggerStore.hasActiveTimer(storeKey)) {
-            directTriggerStore.clearTimer(storeKey);
-        }
+  onComplete(
+    context: CompletionContext,
+    success: boolean,
+    error?: string,
+  ): void {
+    if (context.runContext) return;
 
-        const timer = setTimeout(() => {
-            this.onTimerExpired(canvasId, targetPodId, storeKey, runContext);
-        }, MULTI_DIRECT_MERGE_WINDOW_MS);
-
-        directTriggerStore.setTimer(storeKey, timer);
-    }
-
-    cancelPendingResolver(storeKey: string): void {
-        const resolver = this.pendingResolvers.get(storeKey);
-        if (!resolver) {
-            return;
-        }
-
-        resolver({ready: false});
-        this.pendingResolvers.delete(storeKey);
-        logger.log('Workflow', 'Delete', `已取消目標 ${storeKey} 的 pending resolver - 連線已刪除`);
-    }
-
-    private onTimerExpired(canvasId: string, targetPodId: string, storeKey = targetPodId, runContext?: RunContext): void {
-        const resolver = this.pendingResolvers.get(storeKey);
-        if (!resolver) {
-            return;
-        }
-
-        const result = this.processTimerResult(canvasId, targetPodId, storeKey, runContext);
-        resolver(result);
-
-        this.pendingResolvers.delete(storeKey);
-        directTriggerStore.clearDirectPending(storeKey);
-    }
-
-    private findConnectionIdsBySourcePodIds(canvasId: string, targetPodId: string, sourcePodIds: string[]): string[] {
-        const allConnections = connectionStore.findByTargetPodId(canvasId, targetPodId);
-        return allConnections
-            .filter(conn => conn.triggerMode === 'direct' && sourcePodIds.includes(conn.sourcePodId))
-            .map(conn => conn.id);
-    }
-
-    private processTimerResult(canvasId: string, targetPodId: string, storeKey: string, runContext?: RunContext): CollectSourcesResult {
-        const readySummaries = directTriggerStore.getReadySummaries(storeKey);
-        if (!readySummaries || readySummaries.size === 0) {
-            return {ready: false};
-        }
-
-        const sourcePodIds = Array.from(readySummaries.keys());
-        const participatingConnectionIds = this.findConnectionIdsBySourcePodIds(canvasId, targetPodId, sourcePodIds);
-
-        if (sourcePodIds.length === 1) {
-            return {ready: true, participatingConnectionIds};
-        }
-
-        const mergedContent = formatMergedSummaries(
-            readySummaries,
-            (podId) => podStore.getById(canvasId, podId)
+    this.forEachParticipatingConnection(
+      context.canvasId,
+      context.participatingConnectionIds,
+      (conn) => {
+        workflowEventEmitter.emitWorkflowComplete({
+          canvasId: context.canvasId,
+          connectionId: conn.id,
+          sourcePodId: conn.sourcePodId,
+          targetPodId: context.targetPodId,
+          success,
+          error,
+          triggerMode: context.triggerMode,
+        });
+        connectionStore.updateConnectionStatus(
+          context.canvasId,
+          conn.id,
+          "idle",
         );
+      },
+    );
+  }
 
-        if (!runContext) {
-            const mergedPayload = {
-                canvasId,
-                targetPodId,
-                sourcePodIds,
-                mergedContentPreview: mergedContent.substring(0, MERGED_CONTENT_PREVIEW_MAX_LENGTH),
-                countdownSeconds: 0,
-            };
-            workflowEventEmitter.emitDirectMerged(canvasId, mergedPayload);
-        }
+  onError(context: CompletionContext, errorMessage: string): void {
+    this.onComplete(context, false, errorMessage);
+  }
 
-        return {ready: true, mergedContent, isSummarized: true, participatingConnectionIds};
-    }
+  onQueued(context: QueuedContext): void {
+    if (context.runContext) return;
 
-    private getConnectionsToIterate(canvasId: string, participatingConnectionIds: string[]): Connection[] {
-        return participatingConnectionIds
-            .map(id => connectionStore.getById(canvasId, id))
-            .filter((conn): conn is Connection => conn !== undefined);
-    }
+    this.forEachParticipatingConnection(
+      context.canvasId,
+      context.participatingConnectionIds,
+      (conn) => {
+        connectionStore.updateConnectionStatus(
+          context.canvasId,
+          conn.id,
+          "queued",
+        );
+        workflowEventEmitter.emitWorkflowQueued(
+          context.canvasId,
+          buildQueuedPayload(context, conn.id, conn.sourcePodId),
+        );
+      },
+    );
+  }
 
-    private forEachParticipatingConnection(
-        canvasId: string,
-        participatingConnectionIds: string[],
-        callback: (conn: Connection) => void
-    ): void {
-        const connections = this.getConnectionsToIterate(canvasId, participatingConnectionIds);
-        for (const conn of connections) {
-            callback(conn);
-        }
-    }
+  /**
+   * 僅發送 WORKFLOW_QUEUE_PROCESSED 事件，不設定 connection 為 active。
+   * active 狀態由 triggerWorkflowWithSummary 統一設定。
+   */
+  onQueueProcessed(context: QueueProcessedContext): void {
+    if (context.runContext) return;
 
-    onTrigger(context: TriggerLifecycleContext): void {
-        if (context.runContext) return;
-
-        this.forEachParticipatingConnection(context.canvasId, context.participatingConnectionIds, (conn) => {
-            workflowEventEmitter.emitDirectTriggered(context.canvasId, {
-                canvasId: context.canvasId,
-                connectionId: conn.id,
-                sourcePodId: conn.sourcePodId,
-                targetPodId: context.targetPodId,
-                transferredContent: context.summary,
-                isSummarized: context.isSummarized,
-            });
-        });
-    }
-
-    onComplete(context: CompletionContext, success: boolean, error?: string): void {
-        if (context.runContext) return;
-
-        this.forEachParticipatingConnection(context.canvasId, context.participatingConnectionIds, (conn) => {
-            workflowEventEmitter.emitWorkflowComplete({
-                canvasId: context.canvasId,
-                connectionId: conn.id,
-                sourcePodId: conn.sourcePodId,
-                targetPodId: context.targetPodId,
-                success,
-                error,
-                triggerMode: context.triggerMode,
-            });
-            connectionStore.updateConnectionStatus(context.canvasId, conn.id, 'idle');
-        });
-    }
-
-    onError(context: CompletionContext, errorMessage: string): void {
-        this.onComplete(context, false, errorMessage);
-    }
-
-    onQueued(context: QueuedContext): void {
-        if (context.runContext) return;
-
-        this.forEachParticipatingConnection(context.canvasId, context.participatingConnectionIds, (conn) => {
-            connectionStore.updateConnectionStatus(context.canvasId, conn.id, 'queued');
-            workflowEventEmitter.emitWorkflowQueued(
-                context.canvasId,
-                buildQueuedPayload(context, conn.id, conn.sourcePodId)
-            );
-        });
-    }
-
-    /**
-     * 僅發送 WORKFLOW_QUEUE_PROCESSED 事件，不設定 connection 為 active。
-     * active 狀態由 triggerWorkflowWithSummary 統一設定。
-     */
-    onQueueProcessed(context: QueueProcessedContext): void {
-        if (context.runContext) return;
-
-        this.forEachParticipatingConnection(context.canvasId, context.participatingConnectionIds, (conn) => {
-            workflowEventEmitter.emitWorkflowQueueProcessed(
-                context.canvasId,
-                buildQueueProcessedPayload({...context, connectionId: conn.id, sourcePodId: conn.sourcePodId})
-            );
-        });
-    }
+    this.forEachParticipatingConnection(
+      context.canvasId,
+      context.participatingConnectionIds,
+      (conn) => {
+        workflowEventEmitter.emitWorkflowQueueProcessed(
+          context.canvasId,
+          buildQueueProcessedPayload({
+            ...context,
+            connectionId: conn.id,
+            sourcePodId: conn.sourcePodId,
+          }),
+        );
+      },
+    );
+  }
 }
 
 export const workflowDirectTriggerService = new WorkflowDirectTriggerService();

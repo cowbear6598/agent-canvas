@@ -115,14 +115,12 @@ describe("PluginPopover", () => {
         x: 0,
         y: 0,
         rotation: 0,
-        status: "idle",
         output: [],
         repositoryId: null,
         commandId: null,
         schedule: null,
         mcpServerNames: [],
         pluginIds: [],
-        multiInstance: false,
         provider: "claude",
         providerConfig: { model: "opus" },
       },
@@ -210,21 +208,6 @@ describe("PluginPopover", () => {
       expect(mockToast).toHaveBeenCalledWith(
         expect.objectContaining({ variant: "destructive" }),
       );
-    });
-  });
-
-  // ── busy = true 時 Toggle disabled ────────────────────────────
-
-  describe("busy = true", () => {
-    it("Switch 應為 disabled 狀態", async () => {
-      mockListPlugins.mockResolvedValue([MOCK_PLUGIN]);
-
-      mountPopover({ busy: true });
-      await flushPromises();
-
-      const switchBtn = bodyQuery(".switch-stub");
-      expect(switchBtn).not.toBeNull();
-      expect(switchBtn!.hasAttribute("disabled")).toBe(true);
     });
   });
 
@@ -413,14 +396,12 @@ describe("PluginPopover", () => {
           x: 0,
           y: 0,
           rotation: 0,
-          status: "idle",
           output: [],
           repositoryId: null,
           commandId: null,
           schedule: null,
           mcpServerNames: [],
           pluginIds: ["gemini-plugin-1"],
-          multiInstance: false,
           provider: "gemini",
           providerConfig: { model: "gemini-2.5-pro" },
         },
@@ -471,14 +452,12 @@ describe("PluginPopover", () => {
           x: 0,
           y: 0,
           rotation: 0,
-          status: "idle",
           output: [],
           repositoryId: null,
           commandId: null,
           schedule: null,
           mcpServerNames: [],
           pluginIds: ["gemini-plugin-1"],
-          multiInstance: false,
           provider: "gemini",
           providerConfig: { model: "gemini-2.5-pro" },
         },
@@ -510,17 +489,6 @@ describe("PluginPopover", () => {
       const popover = bodyQuery(".fixed.z-50");
       expect(popover).not.toBeNull();
       expect(popover!.textContent).toContain("pod.slot.pluginsEmpty");
-    });
-
-    // T-P6：Gemini + busy = true → Switch disabled
-    it("T-P6：busy = true 時 Switch 為 disabled 狀態", async () => {
-      mockListPlugins.mockResolvedValue([GEMINI_PLUGIN]);
-      mountPopover({ provider: "gemini", busy: true });
-      await flushPromises();
-
-      const switchBtn = bodyQuery(".switch-stub");
-      expect(switchBtn).not.toBeNull();
-      expect(switchBtn!.hasAttribute("disabled")).toBe(true);
     });
 
     // T-P7：Gemini + listPlugins reject → 顯示 pluginsEmpty 空狀態

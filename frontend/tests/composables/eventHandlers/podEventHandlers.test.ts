@@ -3,12 +3,10 @@ import { webSocketMockFactory } from "../../helpers/mockWebSocket";
 import { setupStoreTest } from "../../helpers/testSetup";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { usePodStore } from "@/stores/pod/podStore";
-import { useChatStore } from "@/stores/chat/chatStore";
 import { useRepositoryStore } from "@/stores/note/repositoryStore";
 import { useCommandStore } from "@/stores/note/commandStore";
 import {
   getPodEventListeners,
-  getStandalonePodListeners,
   removeDeletedNotes,
 } from "@/composables/eventHandlers/podEventHandlers";
 
@@ -39,7 +37,7 @@ describe("podEventHandlers", () => {
   describe("getPodEventListeners", () => {
     it("應回傳正確數量的 listener", () => {
       const result = getPodEventListeners();
-      expect(result.length).toBe(14);
+      expect(result.length).toBe(12);
     });
 
     it("應包含主要的 pod 事件", () => {
@@ -145,61 +143,6 @@ describe("podEventHandlers", () => {
       findHandler("pod:deleted")({ canvasId: "other-canvas", podId: "pod-1" });
 
       expect(spy).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("handleWorkflowClearResult", () => {
-    it("canvasId 匹配且有 clearedPodIds 時應清空對應訊息與輸出", () => {
-      const chatStore = useChatStore();
-      const podStore = usePodStore();
-      const chatSpy = vi.spyOn(chatStore, "clearMessagesByPodIds");
-      const podSpy = vi.spyOn(podStore, "clearPodOutputsByIds");
-
-      findHandler("workflow:clear:result")({
-        canvasId: "canvas-1",
-        clearedPodIds: ["pod-1", "pod-2"],
-      });
-
-      expect(chatSpy).toHaveBeenCalledWith(["pod-1", "pod-2"]);
-      expect(podSpy).toHaveBeenCalledWith(["pod-1", "pod-2"]);
-    });
-
-    it("canvasId 不匹配時不應執行", () => {
-      const chatStore = useChatStore();
-      const chatSpy = vi.spyOn(chatStore, "clearMessagesByPodIds");
-
-      findHandler("workflow:clear:result")({
-        canvasId: "other-canvas",
-        clearedPodIds: ["pod-1"],
-      });
-
-      expect(chatSpy).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("handlePodChatUserMessage（standalone）", () => {
-    it("應呼叫 chatStore.addRemoteUserMessage", () => {
-      const chatStore = useChatStore();
-      const spy = vi.spyOn(chatStore, "addRemoteUserMessage");
-
-      const standaloneListeners = getStandalonePodListeners();
-      const handler = standaloneListeners.find(
-        (l) => l.event === "pod:chat:user-message",
-      )!.handler;
-
-      handler({
-        podId: "pod-1",
-        messageId: "msg-1",
-        content: "使用者訊息",
-        timestamp: "2024-01-01T00:00:00Z",
-      });
-
-      expect(spy).toHaveBeenCalledWith(
-        "pod-1",
-        "msg-1",
-        "使用者訊息",
-        "2024-01-01T00:00:00Z",
-      );
     });
   });
 
@@ -346,9 +289,7 @@ describe("podEventHandlers", () => {
         y: 0,
         output: [],
         rotation: 0,
-        status: "idle",
         repositoryId: null,
-        multiInstance: false,
         commandId: null,
         schedule: { frequency: "every-day", enabled: true } as any,
         mcpServerNames: [],

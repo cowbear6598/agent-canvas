@@ -1,8 +1,8 @@
 export type { Result } from "./result.js";
 export { ok, err, errI18n, getResultErrorString } from "./result.js";
 
-export type { Pod, PodPublicView, PodStatus, ModelType } from "./pod.js";
-export { isPodBusy, toPodPublicView } from "./pod.js";
+export type { Pod, PodPublicView, ModelType } from "./pod.js";
+export { toPodPublicView } from "./pod.js";
 
 export type {
   Message,

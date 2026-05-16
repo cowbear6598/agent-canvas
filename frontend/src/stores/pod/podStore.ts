@@ -1,12 +1,6 @@
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
-import type {
-  Pod,
-  PodStatus,
-  Position,
-  Schedule,
-  TypeMenuState,
-} from "@/types";
+import type { Pod, Position, Schedule, TypeMenuState } from "@/types";
 import { initialPods } from "@/data/initialPods";
 import { generateRequestId } from "@/services/utils";
 import {
@@ -16,7 +10,6 @@ import {
   WebSocketResponseEvents,
 } from "@/services/websocket";
 import type {
-  PodMultiInstanceSetPayload,
   PodCreatedPayload,
   PodCreatePayload,
   PodDeletedPayload,
@@ -27,7 +20,6 @@ import type {
   PodRenamedPayload,
   PodRenamePayload,
   PodScheduleSetPayload,
-  PodSetMultiInstancePayload,
   PodSetSchedulePayload,
 } from "@/types/websocket";
 import { updatePodMcpServers as updatePodMcpServersApi } from "@/services/mcpApi";
@@ -230,13 +222,6 @@ export const usePodStore = defineStore("pod", () => {
 
     if (response.pods) {
       syncPodsFromBackend(response.pods);
-    }
-  }
-
-  function updatePodStatus(id: string, status: PodStatus): void {
-    const pod = findPodById(id);
-    if (pod) {
-      pod.status = status;
     }
   }
 
@@ -444,33 +429,6 @@ export const usePodStore = defineStore("pod", () => {
     updatePodMcpServers(podId, names);
   }
 
-  async function setMultiInstanceWithBackend(
-    podId: string,
-    multiInstance: boolean,
-  ): Promise<Pod | null> {
-    const result = await executeAction<
-      PodSetMultiInstancePayload,
-      PodMultiInstanceSetPayload
-    >(
-      {
-        requestEvent: WebSocketRequestEvents.POD_SET_MULTI_INSTANCE,
-        responseEvent: WebSocketResponseEvents.POD_MULTI_INSTANCE_SET,
-        payload: { podId, multiInstance },
-      },
-      {
-        errorCategory: "Pod",
-        errorAction: t("common.error.operation"),
-        errorMessage: t("store.pod.multiInstanceFailed"),
-      },
-    );
-
-    if (!result.success || !result.data.success || !result.data.pod)
-      return null;
-
-    showSuccessToast("Pod", t("common.success.update"));
-    return result.data.pod;
-  }
-
   function addPodFromEvent(pod: Pod): void {
     const enrichedPod = enrichPod(pod);
 
@@ -548,7 +506,6 @@ export const usePodStore = defineStore("pod", () => {
     deletePodWithBackend,
     syncPodsFromBackend,
     loadPodsFromBackend,
-    updatePodStatus,
     movePod,
     syncPodPosition,
     renamePodWithBackend,
@@ -567,7 +524,6 @@ export const usePodStore = defineStore("pod", () => {
     updatePodPlugins,
     updatePodMcpServers,
     setMcpServersWithBackend,
-    setMultiInstanceWithBackend,
     addPodFromEvent,
     removePod,
     updatePodPosition,

@@ -61,10 +61,10 @@ function insertPod(podId: string): void {
   getDb()
     .prepare(
       `INSERT INTO pods
-         (id, canvas_id, name, status, x, y, rotation, workspace_path,
-          session_id, repository_id, command_id, multi_instance,
+         (id, canvas_id, name, x, y, rotation, workspace_path,
+          session_id, repository_id, command_id,
           schedule_json, provider, provider_config_json)
-         VALUES (?, ?, ?, 'idle', 0, 0, 0, '/tmp/test-pod', NULL, NULL, NULL, 0, NULL, 'claude',
+         VALUES (?, ?, ?, 0, 0, 0, '/tmp/test-pod', NULL, NULL, NULL, NULL, 'claude',
          '{"model":"sonnet"}')`,
     )
     .run(podId, CANVAS_ID, `Pod-${podId}`);

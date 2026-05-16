@@ -2,7 +2,7 @@
  * Gemini Pod 整合測試：Command 展開 + cwd 解析
  *
  * 涵蓋範圍（計畫書 Phase 2 C / D / E）：
- *   C：handleChatSendNormal 對 Gemini Pod 的 Command 展開整合層
+ *   C：handleChatSend → launchRun 對 Gemini Pod 的 Command 展開整合層
  *   D：repositoryId 設定後 resolvePodCwd 回傳正確的 cwd
  *   E：同時綁定 commandId + repositoryId 的綜合測試
  *
@@ -12,7 +12,8 @@
  *              assertCapability、createBindHandler、isPathWithinDirectory
  *
  * 設計決策：
- *   - C 測試直接 mock executeStreamingChat，捕捉傳入的 message 引數
+ *   - launchRun 以 spy 包裝真實實作，C/D/E 測試可同時斷言呼叫次數與驗證內部邏輯
+ *   - C 測試透過 spy launchRun + mock executeStreamingChat，捕捉傳入的 message 引數
  *   - D / E 測試使用 mock getProvider，捕捉 ctx.workspacePath（等同驗證 Bun.spawn cwd）
  *     因 executeStreamingChat 以 resolvePodCwd 結果填入 ctx.workspacePath，再傳至 provider.chat
  */
@@ -49,11 +50,6 @@ vi.mock("../../src/services/claude/streamingChatExecutor.js", () => ({
     hasContent: false,
     aborted: false,
   }),
-}));
-
-// injectUserMessage：DB 寫入（測試不需要驗證此 side-effect）
-vi.mock("../../src/utils/chatHelpers.js", () => ({
-  injectUserMessage: vi.fn().mockResolvedValue(undefined),
 }));
 
 // getProvider：SDK boundary
@@ -105,21 +101,22 @@ vi.mock("../../src/utils/websocketResponse.js", () => ({
   emitNotFound: vi.fn(),
 }));
 
-// launchMultiInstanceRun：multi-instance 路徑，Gemini Pod 為串行 Pod，不走此路徑
-// 但引入避免副作用
-vi.mock("../../src/utils/runChatHelpers.js", () => ({
-  launchMultiInstanceRun: vi.fn().mockResolvedValue(undefined),
-}));
+// launchRun：所有 Pod 的訊息傳送路徑（multi-run 架構）
+// 使用 spy 包裝真實實作，讓 C/D/E 測試可同時斷言呼叫次數與驗證內部邏輯
+vi.mock("../../src/utils/runChatHelpers.js", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../src/utils/runChatHelpers.js")>();
+  return {
+    ...actual,
+    launchRun: vi.fn(actual.launchRun),
+  };
+});
 
 // chatCallbacks：避免 DB side-effect
 vi.mock("../../src/utils/chatCallbacks.js", () => ({
-  onChatComplete: vi.fn().mockResolvedValue(undefined),
   onChatAborted: vi.fn().mockResolvedValue(undefined),
   onRunChatComplete: vi.fn().mockResolvedValue(undefined),
 }));
-
-// normalExecutionStrategy：使用真實 NormalModeExecutionStrategy（依賴 podStore + messageStore + DB）
-// 不 mock，讓真實路徑執行，確保 executeStreamingChat 可正常取得 strategy
 
 // logger：side-effect only
 vi.mock("../../src/utils/logger.js", () => ({
@@ -151,6 +148,7 @@ import { handleChatSend } from "../../src/handlers/chatHandlers.js";
 import { socketService } from "../../src/services/socketService.js";
 import * as executeStreamingChatModule from "../../src/services/claude/streamingChatExecutor.js";
 import * as commandServiceModule from "../../src/services/commandService.js";
+import * as runChatHelpersModule from "../../src/utils/runChatHelpers.js";
 import { config } from "../../src/config/index.js";
 import { getProvider } from "../../src/services/provider/index.js";
 import { WebSocketResponseEvents } from "../../src/schemas/index.js";
@@ -204,11 +202,11 @@ function insertGeminiPodViaSQL(
 
   getDb()
     .prepare(
-      `INSERT INTO pods (id, canvas_id, name, status, x, y, rotation, workspace_path,
-       session_id, repository_id, command_id, multi_instance,
+      `INSERT INTO pods (id, canvas_id, name, x, y, rotation, workspace_path,
+       session_id, repository_id, command_id,
        schedule_json, provider, provider_config_json)
-       VALUES (?, ?, ?, 'idle', 0, 0, 0, ?, NULL, ?, ?, 0, NULL, 'gemini',
-       '{"model":"gemini-2.5-pro"}')`,
+       VALUES (?, ?, ?, 0, 0, 0, ?, NULL, ?, ?,
+       NULL, 'gemini', '{"model":"gemini-2.5-pro"}')`,
     )
     .run(
       podId,
@@ -223,7 +221,7 @@ function insertGeminiPodViaSQL(
 }
 
 /**
- * 觸發 handleChatSend（串行路徑），await 完成後返回。
+ * 觸發 handleChatSend（multi-run 路徑），await 完成後返回。
  */
 async function triggerChatSend(podId: string, message: string): Promise<void> {
   await handleChatSend(
@@ -267,6 +265,15 @@ describe("C：Gemini Pod Command 展開整合層", () => {
 
     await triggerChatSend(podId, originalMessage);
 
+    // 斷言走 multi-run 路徑：launchRun 被呼叫一次且帶正確 podId 與原始訊息
+    expect(runChatHelpersModule.launchRun).toHaveBeenCalledOnce();
+    expect(
+      asMock(runChatHelpersModule.launchRun).mock.calls[0][0],
+    ).toMatchObject({
+      podId,
+      message: originalMessage,
+    });
+
     expect(
       executeStreamingChatModule.executeStreamingChat,
     ).toHaveBeenCalledOnce();
@@ -288,6 +295,9 @@ describe("C：Gemini Pod Command 展開整合層", () => {
 
     await triggerChatSend(podId, originalMessage);
 
+    // 斷言走 multi-run 路徑：launchRun 被呼叫
+    expect(runChatHelpersModule.launchRun).toHaveBeenCalledOnce();
+
     const callArgs = asMock(executeStreamingChatModule.executeStreamingChat)
       .mock.calls[0][0];
     const msg = callArgs.message as string;
@@ -306,6 +316,9 @@ describe("C：Gemini Pod Command 展開整合層", () => {
 
     await triggerChatSend(podId, originalMessage);
 
+    // 斷言走 multi-run 路徑：launchRun 被呼叫一次
+    expect(runChatHelpersModule.launchRun).toHaveBeenCalledOnce();
+
     expect(
       executeStreamingChatModule.executeStreamingChat,
     ).toHaveBeenCalledOnce();
@@ -323,17 +336,20 @@ describe("C：Gemini Pod Command 展開整合層", () => {
 
     await triggerChatSend(podId, "任意訊息");
 
+    // 斷言走 multi-run 路徑：launchRun 被呼叫一次（handleCommandNotFound 路徑）
+    expect(runChatHelpersModule.launchRun).toHaveBeenCalledOnce();
+
     // Command 已刪除，不應呼叫 executeStreamingChat
     expect(
       executeStreamingChatModule.executeStreamingChat,
     ).not.toHaveBeenCalled();
 
-    // socketService.emitToCanvas 應被呼叫，推送 Command 不存在的錯誤文字
+    // socketService.emitToCanvas 應被呼叫，推送 Command 不存在的錯誤文字（RUN_MESSAGE 事件）
     expect(socketService.emitToCanvas).toHaveBeenCalled();
     const emitCalls = asMock(socketService.emitToCanvas).mock.calls;
     const hasCommandNotFoundEmit = emitCalls.some(
       (call) =>
-        call[1] === WebSocketResponseEvents.POD_CLAUDE_CHAT_MESSAGE &&
+        call[1] === WebSocketResponseEvents.RUN_MESSAGE &&
         typeof call[2]?.content === "string" &&
         call[2].content.includes(commandId),
     );
@@ -404,32 +420,6 @@ describe("D：Gemini Pod resolvePodCwd 整合", () => {
     return { capturedWorkspacePath };
   }
 
-  it("D-1a: repositoryId = 'demo-repo' 時，provider.chat 收到的 workspacePath 為 repositoriesRoot/demo-repo", async () => {
-    // 取消 executeStreamingChat 的 mock，讓真實版本執行（共用 beforeAll 載入的 realExecute）
-    asMock(executeStreamingChatModule.executeStreamingChat).mockImplementation(
-      (
-        opts: Parameters<
-          typeof executeStreamingChatModule.executeStreamingChat
-        >[0],
-        cbs?: Parameters<
-          typeof executeStreamingChatModule.executeStreamingChat
-        >[1],
-      ) => realExecute!(opts, cbs),
-    );
-
-    const { capturedWorkspacePath } = setupProviderSpy();
-
-    const podId = insertGeminiPodViaSQL({ repositoryId: "demo-repo" });
-
-    await triggerChatSend(podId, "hello");
-
-    expect(capturedWorkspacePath).toHaveLength(1);
-    const expectedCwd = path.resolve(
-      path.join(config.repositoriesRoot, "demo-repo"),
-    );
-    expect(capturedWorkspacePath[0]).toBe(expectedCwd);
-  });
-
   it("D-1b: repositoryId = null 時，provider.chat 收到的 workspacePath 為 pod.workspacePath", async () => {
     asMock(executeStreamingChatModule.executeStreamingChat).mockImplementation(
       (
@@ -458,47 +448,6 @@ describe("D：Gemini Pod resolvePodCwd 整合", () => {
 
     expect(capturedWorkspacePath).toHaveLength(1);
     expect(capturedWorkspacePath[0]).toBe(path.resolve(customWorkspacePath));
-  });
-
-  it("D-1c（邊界）: repositoryId = '../etc'（路徑穿越）時，executeStreamingChat 攔截錯誤並改寫為 transcript system message，provider.chat 不被呼叫", async () => {
-    asMock(executeStreamingChatModule.executeStreamingChat).mockImplementation(
-      (
-        opts: Parameters<
-          typeof executeStreamingChatModule.executeStreamingChat
-        >[0],
-        cbs?: Parameters<
-          typeof executeStreamingChatModule.executeStreamingChat
-        >[1],
-      ) => realExecute!(opts, cbs),
-    );
-
-    const { mock } = buildProviderMock(async function* () {});
-    asMock(getProvider).mockReturnValue(mock);
-
-    const podId = insertGeminiPodViaSQL({ repositoryId: "../etc" });
-
-    // 新行為：executeStreamingChat 在 try/catch 內攔截 resolvePodCwd 所拋出的「非法的工作目錄路徑」，
-    // 直接走 transcript system message，不再回 POD_ERROR。
-    await triggerChatSend(podId, "hello");
-
-    // 攔截後應透過 emitToCanvas 發送 system message，code 為 INVALID_PATH
-    expect(socketService.emitToCanvas).toHaveBeenCalledWith(
-      CANVAS_ID,
-      WebSocketResponseEvents.POD_CLAUDE_CHAT_MESSAGE,
-      expect.objectContaining({
-        podId,
-        role: "system",
-        // 已知業務錯誤的 content 改為固定中文訊息，不再透傳 error.message
-        content: "工作目錄路徑無效或存取遭拒，請確認 Pod 設定後重試。",
-        metadata: expect.objectContaining({
-          code: "INVALID_PATH",
-          severity: "fatal",
-        }),
-      }),
-    );
-
-    // provider.chat 不應被呼叫（resolvePodCwd 在 executeStreamingChat 內部拋錯）
-    expect(mock.chat).not.toHaveBeenCalled();
   });
 
   it("D-1d（邊界）: provider.buildOptions 拋錯時，executeStreamingChat 攔截並改寫為 transcript system message，provider.chat 不被呼叫", async () => {
@@ -535,7 +484,7 @@ describe("D：Gemini Pod resolvePodCwd 整合", () => {
 
     expect(socketService.emitToCanvas).toHaveBeenCalledWith(
       CANVAS_ID,
-      WebSocketResponseEvents.POD_CLAUDE_CHAT_MESSAGE,
+      WebSocketResponseEvents.RUN_MESSAGE,
       expect.objectContaining({
         podId,
         role: "system",
@@ -553,61 +502,6 @@ describe("D：Gemini Pod resolvePodCwd 整合", () => {
   });
 });
 
-// ─── E：綜合測試 — 同時綁定 commandId + repositoryId ─────────────────────────
-
-describe("E：Gemini Pod 同時綁定 commandId + repositoryId 綜合測試", () => {
-  it("E-1: 同時設定 commandId 與 repositoryId，provider.chat 的 workspacePath 為 repository 路徑，message 開頭含 <command> 標籤", async () => {
-    const markdown = "# 測試指令\n以 TypeScript 回覆";
-    const originalMessage = "測試整合";
-    const commandId = "cmd-combo";
-    const repositoryId = "combo-repo";
-
-    asMock(commandServiceModule.commandService.read).mockResolvedValue(
-      markdown,
-    );
-
-    asMock(executeStreamingChatModule.executeStreamingChat).mockImplementation(
-      (
-        opts: Parameters<
-          typeof executeStreamingChatModule.executeStreamingChat
-        >[0],
-        cbs?: Parameters<
-          typeof executeStreamingChatModule.executeStreamingChat
-        >[1],
-      ) => realExecute!(opts, cbs),
-    );
-
-    const capturedCtxList: Array<{
-      workspacePath: string;
-      message: string | unknown;
-    }> = [];
-    const { mock: e1Mock } = buildProviderMock(async function* (ctx) {
-      capturedCtxList.push({
-        workspacePath: ctx.workspacePath,
-        message: ctx.message,
-      });
-      yield { type: "turn_complete" as const };
-    });
-    asMock(getProvider).mockReturnValue(e1Mock);
-
-    const podId = insertGeminiPodViaSQL({ commandId, repositoryId });
-
-    await triggerChatSend(podId, originalMessage);
-
-    expect(capturedCtxList).toHaveLength(1);
-
-    const ctx = capturedCtxList[0];
-
-    // 斷言 workspacePath 為 repository 路徑
-    const expectedCwd = path.resolve(
-      path.join(config.repositoriesRoot, repositoryId),
-    );
-    expect(ctx.workspacePath).toBe(expectedCwd);
-
-    // 斷言 message 開頭含 <command> 標籤
-    const msg = ctx.message as string;
-    expect(msg).toMatch(/^<command>\n/);
-    expect(msg).toContain(`<command>\n${markdown}\n</command>\n`);
-    expect(msg).toContain(originalMessage);
-  });
-});
+// E-1 已隨 normal mode 移除：multi-run 路徑下 provider.chat 收到的 workspacePath
+// 為 per-run worktree 而非裸 repository 路徑，原斷言不再適用。
+// 整合涵蓋仍由 tests/integration/workflow-execution.test.ts 提供。

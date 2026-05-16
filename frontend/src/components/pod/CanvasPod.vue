@@ -17,18 +17,12 @@ import type {
 import { useSendCanvasAction } from "@/composables/useSendCanvasAction";
 import { usePodDrag } from "@/composables/pod/usePodDrag";
 import { usePodNoteBinding } from "@/composables/pod/usePodNoteBinding";
-import { useWorkflowClear } from "@/composables/pod/useWorkflowClear";
 import { usePodSchedule } from "@/composables/pod/usePodSchedule";
 import { usePodAnchorDrag } from "@/composables/pod/usePodAnchorDrag";
 import { usePodFileDrop } from "@/composables/pod/usePodFileDrop";
 import { usePodPopovers } from "@/composables/pod/usePodPopovers";
-import { usePodHasMessages } from "@/composables/pod/usePodHasMessages";
 import { useToast } from "@/composables/useToast";
 import { useI18n } from "vue-i18n";
-import {
-  isMultiInstanceChainPod,
-  isMultiInstanceSourcePod,
-} from "@/utils/multiInstanceGuard";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
 import { useRunStore } from "@/stores/run/runStore";
 import { useUploadStore } from "@/stores/upload/uploadStore";
@@ -56,7 +50,6 @@ const {
   repositoryStore,
   commandStore,
   connectionStore,
-  chatStore,
   canvasStore,
 } = useCanvasContext();
 const runStore = useRunStore();
@@ -101,22 +94,6 @@ const isSelected = computed(() =>
   selectionStore.isElementSelected("pod", props.pod.id),
 );
 
-// PodStatus 白名單（對應 types/pod.ts 的 PodStatus union）；
-// 未知 status 不注入任意 class，回傳空字串。
-// 此為靜態常數（不依賴 store），刻意定義在 script setup 頂層而非 computed 內，
-// 確保每次渲染不重新建立 Set，也方便日後新增 status 時集中維護。
-const ALLOWED_STATUSES = new Set<string>([
-  "idle",
-  "chatting",
-  "summarizing",
-  "error",
-]);
-
-const podStatusClasses = computed(() => {
-  const status = props.pod.status;
-  return status && ALLOWED_STATUSES.has(status) ? `pod-status-${status}` : "";
-});
-
 // 依 provider 動態套用漸層 class，方便未來擴增更多 provider
 const podProviderClasses = computed(() =>
   providerCapabilityStore.allowedProviders.has(props.pod.provider)
@@ -136,25 +113,17 @@ const emit = defineEmits<{
 const isEditing = ref(false);
 const showDeleteDialog = ref(false);
 
-const isMultiInstanceEnabled = computed(() => props.pod.multiInstance);
-const isDownstreamMultiInstance = computed(
+const isDownstreamChainPod = computed(
   () =>
-    isMultiInstanceChainPod(props.pod.id) &&
-    !isMultiInstanceSourcePod(props.pod.id),
-);
-
-const isWorkflowRunning = computed(() =>
-  connectionStore.isWorkflowRunning(props.pod.id),
+    connectionStore.hasUpstreamConnections(props.pod.id) &&
+    !connectionStore.isSourcePod(props.pod.id),
 );
 
 const computedPodId = toRef(() => props.pod.id);
 
-// Model selector 在 Pod 已有訊息時鎖住（無 capability 概念，純粹依訊息存在與否）
-const hasMessages = usePodHasMessages(computedPodId);
-
 /**
- * opencode server 啟動失敗時後端將 capabilities.chat 設為 false，
- * 此條件成立時鎖住 model selector 並顯示對應提示，通知使用者 opencode 無法使用。
+ * opencode server 啟動失敗時後端將 capabilities.chat 設為 false,
+ * 此條件成立時鎖住 model selector 並顯示對應提示,通知使用者 opencode 無法使用。
  */
 const isOpencodeServerDown = computed(
   () =>
@@ -162,17 +131,13 @@ const isOpencodeServerDown = computed(
     !providerCapabilityStore.getCapabilities("opencode").chat,
 );
 
-/** 合併「訊息鎖」與「opencode server 失敗」兩個 disabled 條件 */
-const modelSelectorDisabled = computed(
-  () => hasMessages.value || isOpencodeServerDown.value,
-);
+const modelSelectorDisabled = computed(() => isOpencodeServerDown.value);
 
-const modelSelectorDisabledTooltip = computed(() => {
-  if (isOpencodeServerDown.value) {
-    return t("pod.modelSelector.opencode.disabledTooltip");
-  }
-  return t("pod.slot.lockedByMessages");
-});
+const modelSelectorDisabledTooltip = computed(() =>
+  isOpencodeServerDown.value
+    ? t("pod.modelSelector.opencode.disabledTooltip")
+    : "",
+);
 
 const {
   showScheduleModal,
@@ -204,35 +169,16 @@ const { handleNoteDrop, handleNoteRemove } = usePodNoteBinding(computedPodId, {
   podStore,
 });
 
-const {
-  showClearDialog,
-  downstreamPods,
-  isLoadingDownstream,
-  isClearing,
-  handleClearWorkflow,
-  handleConfirmClear,
-  handleCancelClear,
-} = useWorkflowClear(computedPodId, { chatStore, podStore });
-
 // Plugin notch 相關狀態
 const pluginActiveCount = computed(() => props.pod.pluginIds?.length ?? 0);
 
-// error 狀態仍允許切換 plugin，故不含 'error'
-const isPodBusy = computed(
-  () => props.pod.status === "chatting" || props.pod.status === "summarizing",
-);
-
 /**
  * 以下任一為真時禁用 file drop：
- * - pod 正在 chatting / summarizing（busy）
- * - 為 multi-instance chain 下游 pod（target），使用者已決策由來源觸發
+ * - 為 chain 下游 pod（target），使用者已決策由來源觸發
  * - 未知 provider，封鎖所有對話入口
  */
 const isFileDropDisabled = computed(
-  () =>
-    isPodBusy.value ||
-    isDownstreamMultiInstance.value ||
-    isUnknownProvider.value,
+  () => isDownstreamChainPod.value || isUnknownProvider.value,
 );
 
 const {
@@ -249,13 +195,11 @@ const {
 /**
  * 包裝 handleDropEvent，綁定當前 pod.id。
  * 模板中 `@drop` 只傳 DragEvent，podId 由此閉包注入。
- * 上傳流程結束後，若為 multi-instance source pod 則自動開啟 history panel。
+ * 上傳流程結束後，source pod 送出後自動開啟 history panel。
  */
 const handleDrop = async (event: DragEvent): Promise<void> => {
   await handleDropEvent(event, props.pod.id);
-  // multi-instance source pod 送出後自動開啟 history panel，
-  // 行為與 ChatModal.handleMultiInstanceSend 一致
-  if (isMultiInstanceSourcePod(props.pod.id)) {
+  if (connectionStore.isSourcePod(props.pod.id)) {
     runStore.openHistoryPanel();
   }
 };
@@ -348,7 +292,7 @@ const isEditBlocked = (
   target: Element | null,
 ): {
   blocked: boolean;
-  reason?: "dragging" | "input" | "unknownProvider" | "downstreamMultiInstance";
+  reason?: "dragging" | "input" | "unknownProvider" | "downstreamChainPod";
 } => {
   if (isEditing.value || isDragging.value)
     return { blocked: true, reason: "dragging" };
@@ -359,8 +303,8 @@ const isEditBlocked = (
 
   if (isUnknownProvider.value)
     return { blocked: true, reason: "unknownProvider" };
-  if (isDownstreamMultiInstance.value)
-    return { blocked: true, reason: "downstreamMultiInstance" };
+  if (isDownstreamChainPod.value)
+    return { blocked: true, reason: "downstreamChainPod" };
 
   return { blocked: false };
 };
@@ -376,10 +320,10 @@ const handleDblClick = (e: MouseEvent): void => {
       title: t("pod.provider.title"),
       description: t("pod.provider.unknownDescription"),
     });
-  } else if (reason === "downstreamMultiInstance") {
+  } else if (reason === "downstreamChainPod") {
     toast({
       title: "Pod",
-      description: t("pod.multiInstance.readonlyHint"),
+      description: t("pod.downstreamChainHint"),
     });
   }
 };
@@ -422,13 +366,6 @@ const handleThinkingLevelChange = async (level: string): Promise<void> => {
   );
 };
 
-const handleToggleMultiInstance = async (): Promise<void> => {
-  await podStore.setMultiInstanceWithBackend(
-    props.pod.id,
-    !isMultiInstanceEnabled.value,
-  );
-};
-
 const handleContextMenu = (e: MouseEvent): void => {
   // 上傳中封鎖右鍵選單，避免誤觸刪除或其他操作
   if (isPodUploading.value) {
@@ -457,10 +394,7 @@ const handleContextMenu = (e: MouseEvent): void => {
     <!-- 光暈層：放在 pod-wrapper 之外，不受 transform: rotate 影響 -->
     <!-- 此層僅承載 chatting/summarizing 等需要完整包覆（不被截切）的光暈效果 -->
     <!-- selected/drag-over 狀態已移至 pod-wrapper 內層（pod-inner-highlight），跟著旋轉 -->
-    <div
-      class="pod-glow-layer"
-      :class="[podStatusClasses]"
-    />
+    <div class="pod-glow-layer" />
 
     <div
       class="relative pod-wrapper pod-with-plugin-notch pod-with-mcp-notch pod-with-mcp-server-notch pod-with-thinking-notch"
@@ -568,32 +502,19 @@ const handleContextMenu = (e: MouseEvent): void => {
         </div>
       </div>
 
-      <!-- is-uploading 傳入，讓刪除按鈕在上傳中 disabled + tooltip -->
+      <!-- is-uploading 傳入,讓刪除按鈕在上傳中 disabled + tooltip -->
       <PodActions
-        :pod-id="pod.id"
         :pod-name="pod.name"
-        :is-source-pod="isSourcePod"
         :show-schedule-button="showScheduleButton"
-        :is-multi-instance-enabled="isMultiInstanceEnabled"
-        :is-loading-downstream="isLoadingDownstream"
-        :is-clearing="isClearing"
-        :downstream-pods="downstreamPods"
-        :show-clear-dialog="showClearDialog"
         :show-delete-dialog="showDeleteDialog"
         :has-schedule="hasSchedule"
         :schedule-enabled="scheduleEnabled"
         :schedule-tooltip="scheduleTooltip"
         :is-schedule-fired-animating="isScheduleFiredAnimating"
-        :is-workflow-running="isWorkflowRunning"
         :is-uploading="isPodUploading"
         @open-schedule-modal="handleOpenScheduleModal"
-        @update:show-clear-dialog="showClearDialog = $event"
         @update:show-delete-dialog="showDeleteDialog = $event"
         @delete="handleDelete"
-        @clear-workflow="handleClearWorkflow"
-        @toggle-multi-instance="handleToggleMultiInstance"
-        @confirm-clear="handleConfirmClear"
-        @cancel-clear="handleCancelClear"
         @confirm-delete="handleDelete"
         @cancel-delete="showDeleteDialog = false"
         @clear-schedule-fired-animation="handleClearScheduleFiredAnimation"
@@ -612,7 +533,6 @@ const handleContextMenu = (e: MouseEvent): void => {
         v-if="showPluginPopover && pluginAnchorRect"
         :pod-id="pod.id"
         :anchor-rect="pluginAnchorRect"
-        :busy="isPodBusy"
         :provider="pod.provider"
         @close="showPluginPopover = false"
       />
@@ -621,7 +541,6 @@ const handleContextMenu = (e: MouseEvent): void => {
         v-if="showMcpPopover && mcpAnchorRect"
         :pod-id="pod.id"
         :anchor-rect="mcpAnchorRect"
-        :busy="isPodBusy"
         :provider="pod.provider"
         @close="showMcpPopover = false"
       />

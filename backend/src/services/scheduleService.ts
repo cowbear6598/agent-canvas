@@ -2,19 +2,15 @@ import { WebSocketResponseEvents } from "../schemas";
 import type { Pod, ScheduleConfig, ContentBlock } from "../types";
 import { podStore } from "./podStore.js";
 import { socketService } from "./socketService.js";
-import { workflowExecutionService } from "./workflow";
 import { logger } from "../utils/logger.js";
 import { fireAndForget } from "../utils/operationHelpers.js";
-import { executeStreamingChat } from "./claude/streamingChatExecutor.js";
-import { launchMultiInstanceRun } from "../utils/runChatHelpers.js";
+import { launchRun } from "../utils/runChatHelpers.js";
 import { onRunChatComplete } from "../utils/chatCallbacks.js";
-import { injectUserMessage } from "../utils/chatHelpers.js";
 import {
   toOffsettedParts,
   isSameDayWithOffset,
 } from "../utils/timezoneUtils.js";
 import { configStore } from "./configStore.js";
-import { NormalModeExecutionStrategy } from "./normalExecutionStrategy.js";
 import { tryExpandCommandMessage } from "./commandExpander.js";
 
 /**
@@ -208,10 +204,6 @@ class ScheduleService {
     pod: Pod,
     now: Date,
   ): Promise<void> {
-    if (pod.status !== "idle") {
-      return;
-    }
-
     podStore.setScheduleLastTriggeredAt(canvasId, pod.id, now);
 
     socketService.emitToCanvas(
@@ -225,72 +217,22 @@ class ScheduleService {
 
     logger.log("Schedule", "Update", `Pod「${pod.id}」排程已觸發`);
 
-    if (pod.multiInstance === true) {
-      // 排程路徑透過 expandScheduleMessage 統一處理 Command 展開與空字串 fallback。
-      // launchMultiInstanceRun 會自行處理展開（無 commandId 時為 no-op）；此處傳入已展開後字串即可。
-      const runMessage = await expandScheduleMessage(
-        pod,
-        "",
-        "schedule/multiInstance",
-      );
-
-      await launchMultiInstanceRun({
-        canvasId,
-        podId: pod.id,
-        message: runMessage,
-        abortable: false,
-        onComplete: (runContext) =>
-          onRunChatComplete(runContext, canvasId, pod.id),
-      });
-    } else {
-      await this.sendScheduleMessage(canvasId, pod);
-    }
-  }
-
-  private async sendScheduleMessage(canvasId: string, pod: Pod): Promise<void> {
-    const podId = pod.id;
-
     // 排程路徑透過 expandScheduleMessage 統一處理 Command 展開與空字串 fallback。
-    const message = await expandScheduleMessage(
+    // launchRun 會自行處理展開（無 commandId 時為 no-op）；此處傳入已展開後字串即可。
+    const runMessage = await expandScheduleMessage(
       pod,
       "",
-      "schedule/sendScheduleMessage",
+      "schedule/multiInstance",
     );
 
-    // 統一透過 injectUserMessage 處理：設置 pod status、寫入 messageStore、
-    // 並推送 POD_CHAT_USER_MESSAGE WS 事件，使前端顯示與 DB 儲存一致為展開後內容。
-    await injectUserMessage({
+    await launchRun({
       canvasId,
-      podId,
-      content: message,
+      podId: pod.id,
+      message: runMessage,
+      abortable: false,
+      onComplete: (runContext) =>
+        onRunChatComplete(runContext, canvasId, pod.id),
     });
-
-    const onScheduleChatComplete = async (
-      completedCanvasId: string,
-      completedPodId: string,
-    ): Promise<void> => {
-      fireAndForget(
-        workflowExecutionService.checkAndTriggerWorkflows(
-          completedCanvasId,
-          completedPodId,
-        ),
-        "Schedule",
-        `檢查 Pod「${completedPodId}」自動觸發 Workflow 失敗`,
-      );
-    };
-
-    const strategy = new NormalModeExecutionStrategy(canvasId);
-
-    await executeStreamingChat(
-      {
-        canvasId,
-        podId,
-        message,
-        abortable: false,
-        strategy,
-      },
-      { onComplete: onScheduleChatComplete },
-    );
   }
 }
 

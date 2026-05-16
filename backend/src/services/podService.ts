@@ -13,11 +13,10 @@ import type { CreatePodRequest } from "../types/api.js";
 import type { Result } from "../types/index.js";
 import { ok, err } from "../types/index.js";
 import type { Pod } from "../types/pod.js";
-import { isPodBusy, toPodPublicView } from "../types/pod.js";
+import { toPodPublicView } from "../types/pod.js";
 import { logger } from "../utils/logger.js";
 import { createI18nError } from "../utils/i18nError.js";
 import { abortRegistry } from "./provider/abortRegistry.js";
-import { runExecutionService } from "./workflow/runExecutionService.js";
 
 interface CreatePodResult {
   pod: Pod;
@@ -78,17 +77,8 @@ export async function deletePodWithCleanup(
     return err(createI18nError("errors.podNotFound", { id: podId }));
   }
 
-  // 若 Pod 正在執行查詢，先中止以避免記憶體洩漏
-  if (isPodBusy(pod.status)) {
-    // abort 只回傳 boolean，不會拋例外，直接呼叫即可
-    abortRegistry.abort(podId);
-
-    // 中止 Run 模式的查詢（key 格式為 ${runId}:${podId}）
-    const activeRunIds = runExecutionService.getActiveRunIdsForPod(podId);
-    for (const runId of activeRunIds) {
-      abortRegistry.abort(`${runId}:${podId}`);
-    }
-  }
+  // 若 Pod 有正在執行的查詢，先中止以避免記憶體洩漏（含 Run 模式的多個並行查詢）
+  abortRegistry.abortByPodId(podId);
 
   workflowStateService.handleSourceDeletion(canvasId, podId);
 

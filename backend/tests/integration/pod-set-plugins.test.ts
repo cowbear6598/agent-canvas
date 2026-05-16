@@ -58,54 +58,5 @@ describe("Pod set-plugins", () => {
     });
   });
 
-  describe("busy 狀態", () => {
-    it("chatting 狀態時回傳 success: false, reason: pod-busy", async () => {
-      const client = getClient();
-      const pod = await createPod(client);
-      const canvasId = await getCanvasId(client);
-
-      // 直接操作 podStore 設定為 busy 狀態
-      const { podStore } = await import("../../src/services/podStore.js");
-      podStore.setStatus(canvasId, pod.id, "chatting");
-
-      const response = await emitAndWaitResponse<
-        PodSetPluginsPayload,
-        PodPluginsSetPayload
-      >(
-        client,
-        WebSocketRequestEvents.POD_SET_PLUGINS,
-        WebSocketResponseEvents.POD_PLUGINS_SET,
-        { requestId: uuidv4(), canvasId, podId: pod.id, pluginIds: [] },
-      );
-
-      expect(response.success).toBe(false);
-      expect(response.reason).toBe("pod-busy");
-
-      podStore.setStatus(canvasId, pod.id, "idle");
-    });
-
-    it("summarizing 狀態時回傳 success: false, reason: pod-busy", async () => {
-      const client = getClient();
-      const pod = await createPod(client);
-      const canvasId = await getCanvasId(client);
-
-      const { podStore } = await import("../../src/services/podStore.js");
-      podStore.setStatus(canvasId, pod.id, "summarizing");
-
-      const response = await emitAndWaitResponse<
-        PodSetPluginsPayload,
-        PodPluginsSetPayload
-      >(
-        client,
-        WebSocketRequestEvents.POD_SET_PLUGINS,
-        WebSocketResponseEvents.POD_PLUGINS_SET,
-        { requestId: uuidv4(), canvasId, podId: pod.id, pluginIds: [] },
-      );
-
-      expect(response.success).toBe(false);
-      expect(response.reason).toBe("pod-busy");
-
-      podStore.setStatus(canvasId, pod.id, "idle");
-    });
-  });
+  // busy 狀態 — pod.status 概念已移除，此 describe 整段刪除
 });

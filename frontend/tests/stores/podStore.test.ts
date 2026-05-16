@@ -309,7 +309,6 @@ describe("podStore", () => {
       expect(result.output).toEqual([]);
       // store 未載入 defaultOptions 時，enrichPod 回傳 placeholder { model: "" }
       expect(result.providerConfig?.model).toBe("");
-      expect(result.multiInstance).toBe(false);
       expect(result.commandId).toBeNull();
       expect(result.schedule).toBeNull();
     });
@@ -323,7 +322,6 @@ describe("podStore", () => {
         rotation: 1.5,
         output: ["existing"],
         providerConfig: { model: "sonnet" },
-        multiInstance: true,
         commandId: "cmd-1",
         schedule,
       });
@@ -335,7 +333,6 @@ describe("podStore", () => {
       expect(result.rotation).toBe(1.5);
       expect(result.output).toEqual(["existing"]);
       expect(result.providerConfig.model).toBe("sonnet");
-      expect(result.multiInstance).toBe(true);
       expect(result.commandId).toBe("cmd-1");
       expect(result.schedule).toEqual(schedule);
     });
@@ -518,9 +515,7 @@ describe("podStore", () => {
         y: 100,
         rotation: 0,
         output: [],
-        status: "idle",
         repositoryId: null,
-        multiInstance: false,
         commandId: null,
         schedule: null,
         provider: "claude",
@@ -1432,85 +1427,6 @@ describe("podStore", () => {
         ).not.toThrow();
         expect(store.pods[0]?.output).toEqual([]);
       });
-    });
-  });
-
-  describe("setMultiInstanceWithBackend", () => {
-    it("成功時應回傳更新的 Pod、顯示成功 Toast", async () => {
-      const canvasStore = useCanvasStore();
-      canvasStore.activeCanvasId = "canvas-1";
-      const store = usePodStore();
-
-      const updatedPod = createMockPod({ id: "pod-1", multiInstance: true });
-
-      // createWebSocketRequest 回傳後端原始回應
-      mockCreateWebSocketRequest.mockResolvedValueOnce({
-        requestId: "req-1",
-        success: true,
-        pod: updatedPod,
-      });
-
-      const result = await store.setMultiInstanceWithBackend("pod-1", true);
-
-      // 驗證 createWebSocketRequest 被呼叫的事件與 payload（含 canvasId）
-      expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
-        expect.objectContaining({
-          requestEvent: "pod:set-multi-instance",
-          responseEvent: "pod:multi-instance:set",
-          payload: expect.objectContaining({
-            canvasId: "canvas-1",
-            podId: "pod-1",
-            multiInstance: true,
-          }),
-        }),
-      );
-      expect(mockShowSuccessToast).toHaveBeenCalledWith("Pod", "更新成功");
-      expect(result).toEqual(updatedPod);
-    });
-
-    it("WebSocket 請求失敗時應回傳 null", async () => {
-      const canvasStore = useCanvasStore();
-      canvasStore.activeCanvasId = "canvas-1";
-      const store = usePodStore();
-
-      // createWebSocketRequest 拋出例外（後端錯誤或逾時）
-      mockCreateWebSocketRequest.mockRejectedValueOnce(
-        new Error("Pod 設定失敗"),
-      );
-
-      const result = await store.setMultiInstanceWithBackend("pod-1", false);
-
-      expect(result).toBeNull();
-    });
-
-    it("後端回應 success: false 時應回傳 null", async () => {
-      const canvasStore = useCanvasStore();
-      canvasStore.activeCanvasId = "canvas-1";
-      const store = usePodStore();
-
-      // 後端回傳 success:false 時 createWebSocketRequest 會 reject
-      mockCreateWebSocketRequest.mockRejectedValueOnce(new Error("操作失敗"));
-
-      const result = await store.setMultiInstanceWithBackend("pod-1", false);
-
-      expect(result).toBeNull();
-    });
-
-    it("回應無 pod 時應回傳 null", async () => {
-      const canvasStore = useCanvasStore();
-      canvasStore.activeCanvasId = "canvas-1";
-      const store = usePodStore();
-
-      // 後端回應成功但未包含 pod 欄位
-      mockCreateWebSocketRequest.mockResolvedValueOnce({
-        requestId: "req-1",
-        success: true,
-        // 沒有 pod 欄位
-      });
-
-      const result = await store.setMultiInstanceWithBackend("pod-1", true);
-
-      expect(result).toBeNull();
     });
   });
 

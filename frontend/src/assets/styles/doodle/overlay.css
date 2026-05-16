@@ -4,22 +4,6 @@
   backdrop-filter: blur(4px);
 }
 
-/* Long Press Progress Indicator - Doodle Style（從 interactions.css 遷入） */
-.long-press-indicator {
-  position: fixed;
-  pointer-events: none;
-  z-index: 10000;
-  transform: translate(-50%, -50%);
-}
-
-.long-press-ring {
-  filter: drop-shadow(2px 2px 0 oklch(0.4 0.02 50 / 0.5));
-}
-
-.long-press-ring circle:last-child {
-  transition: stroke-dashoffset 0.05s linear;
-}
-
 /* Trash Zone */
 .trash-zone {
   position: fixed;

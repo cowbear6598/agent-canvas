@@ -5,7 +5,6 @@ import type {
   AutoTriggerMode,
   ConnectionUpdatedPayload,
 } from "../../types/index.js";
-import { isPodBusy } from "../../types/index.js";
 import type {
   ExecutionServiceMethods,
   TriggerStrategy,
@@ -41,13 +40,6 @@ interface MultiInputServiceDeps {
 }
 
 class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps> {
-  private isTargetPodBusy(
-    targetPod: ReturnType<typeof podStore.getById>,
-  ): boolean {
-    if (targetPod === undefined) return false;
-    return isPodBusy(targetPod.status);
-  }
-
   private enqueueIfBusy(
     canvasId: string,
     connection: Connection,
@@ -235,8 +227,7 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
     if (!merged) return;
 
     if (!runContext) {
-      const targetPod = podStore.getById(canvasId, connection.targetPodId);
-      if (this.isTargetPodBusy(targetPod)) {
+      if (runStore.hasActiveRunForPod(connection.targetPodId)) {
         this.enqueueIfBusy(
           canvasId,
           connection,
@@ -281,10 +272,6 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
     if (!merged) return;
 
     const { completedSummaries, mergedContent } = merged;
-
-    if (!runContext) {
-      podStore.setStatus(canvasId, connection.targetPodId, "chatting");
-    }
 
     const mergedPreview = mergedContent.substring(
       0,

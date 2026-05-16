@@ -11,7 +11,6 @@
  */
 
 import { podStore } from "../podStore.js";
-import { messageStore } from "../messageStore.js";
 import { runStore } from "../runStore.js";
 import { branchDecider } from "../branch/index.js";
 import { resolveExecutionPaths } from "../runtime/executionPaths.js";
@@ -40,7 +39,7 @@ class BranchDecisionService {
     canvasId: string,
     sourcePodId: string,
     branchConnections: Connection[],
-    runContext?: RunContext,
+    runContext: RunContext,
     abortSignal?: AbortSignal,
   ): Promise<{
     selectedConnectionId: string | null;
@@ -60,10 +59,7 @@ class BranchDecisionService {
     }
 
     // 步驟 2：讀取最近 RECENT_MESSAGES_COUNT 段訊息
-    // runContext 存在時從 runStore 讀取，否則從 messageStore 讀取
-    const allMessages = runContext
-      ? runStore.getRunMessages(runContext.runId, sourcePodId)
-      : messageStore.getMessages(sourcePodId);
+    const allMessages = runStore.getRunMessages(runContext.runId, sourcePodId);
     const recentMessages = allMessages.slice(-RECENT_MESSAGES_COUNT);
 
     // 步驟 3：取得執行路徑（workspacePath / sandboxHomePath）

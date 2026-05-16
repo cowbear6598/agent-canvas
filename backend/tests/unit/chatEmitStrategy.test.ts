@@ -6,10 +6,7 @@
 
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 
-import {
-  createNormalEmitStrategy,
-  createRunEmitStrategy,
-} from "../../src/services/chatEmitStrategy.js";
+import { createChatEmitStrategy } from "../../src/services/chatEmitStrategy.js";
 import { socketService } from "../../src/services/socketService.js";
 import { WebSocketResponseEvents } from "../../src/schemas/index.js";
 
@@ -26,102 +23,11 @@ describe("chatEmitStrategy", () => {
     vi.restoreAllMocks();
   });
 
-  describe("createNormalEmitStrategy", () => {
-    it("emitText 應呼叫 emitToCanvas 帶 POD_CLAUDE_CHAT_MESSAGE", () => {
-      const strategy = createNormalEmitStrategy();
-      strategy.emitText({ canvasId, podId, messageId, content: "Hello" });
-
-      expect(socketService.emitToCanvas).toHaveBeenCalledWith(
-        canvasId,
-        WebSocketResponseEvents.POD_CLAUDE_CHAT_MESSAGE,
-        expect.objectContaining({
-          canvasId,
-          podId,
-          messageId,
-          content: "Hello",
-          isPartial: true,
-          role: "assistant",
-        }),
-      );
-    });
-
-    it("emitToolUse 應呼叫 emitToCanvas 帶 POD_CHAT_TOOL_USE", () => {
-      const strategy = createNormalEmitStrategy();
-      strategy.emitToolUse({
-        canvasId,
-        podId,
-        messageId,
-        toolUseId: "tool-1",
-        toolName: "Read",
-        input: { path: "/test" },
-      });
-
-      expect(socketService.emitToCanvas).toHaveBeenCalledWith(
-        canvasId,
-        WebSocketResponseEvents.POD_CHAT_TOOL_USE,
-        expect.objectContaining({
-          canvasId,
-          podId,
-          messageId,
-          toolUseId: "tool-1",
-          toolName: "Read",
-          input: { path: "/test" },
-        }),
-      );
-    });
-
-    it("emitToolResult 應呼叫 emitToCanvas 帶 POD_CHAT_TOOL_RESULT", () => {
-      const strategy = createNormalEmitStrategy();
-      strategy.emitToolResult({
-        canvasId,
-        podId,
-        messageId,
-        toolUseId: "tool-1",
-        toolName: "Read",
-        output: "file content",
-      });
-
-      expect(socketService.emitToCanvas).toHaveBeenCalledWith(
-        canvasId,
-        WebSocketResponseEvents.POD_CHAT_TOOL_RESULT,
-        expect.objectContaining({
-          canvasId,
-          podId,
-          messageId,
-          toolUseId: "tool-1",
-          toolName: "Read",
-          output: "file content",
-        }),
-      );
-    });
-
-    it("emitComplete 應呼叫 emitToCanvas 帶 POD_CHAT_COMPLETE", () => {
-      const strategy = createNormalEmitStrategy();
-      strategy.emitComplete({
-        canvasId,
-        podId,
-        messageId,
-        fullContent: "完整內容",
-      });
-
-      expect(socketService.emitToCanvas).toHaveBeenCalledWith(
-        canvasId,
-        WebSocketResponseEvents.POD_CHAT_COMPLETE,
-        expect.objectContaining({
-          canvasId,
-          podId,
-          messageId,
-          fullContent: "完整內容",
-        }),
-      );
-    });
-  });
-
-  describe("createRunEmitStrategy", () => {
+  describe("createChatEmitStrategy", () => {
     const runId = "test-run";
 
     it("emitText 應呼叫 emitToCanvas 帶 RUN_MESSAGE，payload 含 runId", () => {
-      const strategy = createRunEmitStrategy(runId);
+      const strategy = createChatEmitStrategy(runId);
       strategy.emitText({ canvasId, podId, messageId, content: "Run 訊息" });
 
       expect(socketService.emitToCanvas).toHaveBeenCalledWith(
@@ -140,7 +46,7 @@ describe("chatEmitStrategy", () => {
     });
 
     it("emitToolUse 應呼叫 emitToCanvas 帶 RUN_CHAT_TOOL_USE，payload 含 runId", () => {
-      const strategy = createRunEmitStrategy(runId);
+      const strategy = createChatEmitStrategy(runId);
       strategy.emitToolUse({
         canvasId,
         podId,
@@ -165,7 +71,7 @@ describe("chatEmitStrategy", () => {
     });
 
     it("emitToolResult 應呼叫 emitToCanvas 帶 RUN_CHAT_TOOL_RESULT，payload 含 runId", () => {
-      const strategy = createRunEmitStrategy(runId);
+      const strategy = createChatEmitStrategy(runId);
       strategy.emitToolResult({
         canvasId,
         podId,
@@ -191,7 +97,7 @@ describe("chatEmitStrategy", () => {
     });
 
     it("emitComplete 應呼叫 emitToCanvas 帶 RUN_CHAT_COMPLETE，payload 含 runId", () => {
-      const strategy = createRunEmitStrategy(runId);
+      const strategy = createChatEmitStrategy(runId);
       strategy.emitComplete({
         canvasId,
         podId,

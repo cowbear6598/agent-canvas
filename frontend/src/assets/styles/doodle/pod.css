@@ -265,47 +265,6 @@
   color: oklch(0.3 0.15 25);
 }
 
-/* 群組內的橡皮擦按鈕樣式（繼承原樣式但移除定位） */
-.workflow-clear-button-in-group {
-  background: oklch(0.92 0.04 180);
-  position: relative;
-}
-
-.workflow-clear-button-in-group:hover {
-  background: oklch(0.85 0.06 180);
-}
-
-.workflow-clear-button-in-group:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.workflow-clear-button-in-group svg {
-  color: oklch(0.35 0.02 50);
-}
-
-.workflow-clear-button-in-group:hover svg {
-  color: oklch(0.25 0.02 50);
-}
-
-/* Multi Instance 圖標樣式 */
-.multi-instance-icon-m {
-  font-family: monospace;
-  font-size: 16px;
-  font-weight: bold;
-  color: oklch(0.45 0.01 50);
-  line-height: 1;
-}
-
-/* Multi Instance 啟用狀態 */
-.workflow-clear-button-in-group.multi-instance-enabled {
-  background: oklch(0.85 0.08 150);
-}
-
-.workflow-clear-button-in-group.multi-instance-enabled:hover {
-  background: oklch(0.78 0.1 150);
-}
-
 /* ===========================================
    POD Status Glow Layer（光暈層）
 

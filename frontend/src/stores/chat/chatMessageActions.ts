@@ -262,7 +262,6 @@ function createMessageCreationActions(
     if (metadata?.severity !== "fatal") return;
 
     setTyping(store, podId, false);
-    usePodStore().updatePodStatus(podId, "idle");
   }
 
   const addNewChatMessage = (

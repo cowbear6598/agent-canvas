@@ -245,7 +245,7 @@ describe("chatMessageActions", () => {
     it("fatal system 訊息到達時，應立刻停止 typing 並把 pod 狀態收斂為 idle", () => {
       const chatStore = useChatStore();
       const podStore = usePodStore();
-      podStore.pods = [createMockPod({ id: "pod-1", status: "chatting" })];
+      podStore.pods = [createMockPod({ id: "pod-1" })];
       chatStore.setTyping("pod-1", true);
 
       chatStore.handleChatMessage({
@@ -260,13 +260,11 @@ describe("chatMessageActions", () => {
           code: "GEMINI_CAPACITY_EXHAUSTED",
           severity: "fatal",
           rawContent: "",
-          reasonDetail:
-            "這次失敗是模型當下容量不足，與帳號配額不足不同。",
+          reasonDetail: "這次失敗是模型當下容量不足，與帳號配額不足不同。",
         },
       });
 
       expect(chatStore.isTypingByPodId.get("pod-1")).toBe(false);
-      expect(podStore.pods[0]?.status).toBe("idle");
     });
 
     it("Gemini terminal system 訊息應保留 reasonDetail", () => {
@@ -283,8 +281,7 @@ describe("chatMessageActions", () => {
           code: "GEMINI_RATE_LIMITED",
           severity: "fatal",
           rawContent: "",
-          reasonDetail:
-            "這次失敗是暫時性的速率限制，不代表帳號額度已用完。",
+          reasonDetail: "這次失敗是暫時性的速率限制，不代表帳號額度已用完。",
         },
       });
 

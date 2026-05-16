@@ -486,6 +486,17 @@ class RunStore {
     }) as RunMessageRow[];
     return rows.map(rowToRunMessage);
   }
+
+  /**
+   * 查詢 run_pod_instances 表，判斷指定 pod 是否有任何 active 狀態的 instance。
+   * 用於取代原本 pod.status busy 概念，判斷 pod 是否正在執行中。
+   */
+  hasActiveRunForPod(podId: string): boolean {
+    const row = this.stmts.runPodInstance.selectActiveByPodId.get(podId) as {
+      id: string;
+    } | null;
+    return row !== null;
+  }
 }
 
 export const runStore = new RunStore();

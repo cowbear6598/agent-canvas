@@ -14,7 +14,6 @@ function makeRawPod(overrides: Partial<Pod> = {}): Pod {
     y: 150,
     rotation: 0,
     output: [],
-    multiInstance: false,
     provider: "claude",
     providerConfig: { model: "claude-opus-4-5" },
     ...overrides,

@@ -20,45 +20,6 @@ describe("chatStore", () => {
   });
 
   describe("getters", () => {
-    describe("isHistoryLoading", () => {
-      it("狀態為 loading 時應回傳 true", () => {
-        const store = useChatStore();
-        store.historyLoadingStatus.set("pod-1", "loading");
-
-        expect(store.isHistoryLoading("pod-1")).toBe(true);
-      });
-
-      it("狀態為 idle 時應回傳 false", () => {
-        const store = useChatStore();
-        store.historyLoadingStatus.set("pod-1", "idle");
-
-        expect(store.isHistoryLoading("pod-1")).toBe(false);
-      });
-
-      it("狀態為 loaded 時應回傳 false", () => {
-        const store = useChatStore();
-        store.historyLoadingStatus.set("pod-1", "loaded");
-
-        expect(store.isHistoryLoading("pod-1")).toBe(false);
-      });
-    });
-
-    describe("isAllHistoryLoaded", () => {
-      it("allHistoryLoaded 為 true 時應回傳 true", () => {
-        const store = useChatStore();
-        store.allHistoryLoaded = true;
-
-        expect(store.isAllHistoryLoaded).toBe(true);
-      });
-
-      it("allHistoryLoaded 為 false 時應回傳 false", () => {
-        const store = useChatStore();
-        store.allHistoryLoaded = false;
-
-        expect(store.isAllHistoryLoaded).toBe(false);
-      });
-    });
-
     describe("getDisconnectReason", () => {
       it("應回傳 disconnectReason", () => {
         const store = useChatStore();
@@ -250,29 +211,6 @@ describe("chatStore", () => {
         message: "/foo 請幫我",
       });
     });
-
-    // -----------------------------------------------------------------------
-    // 案例 11b：sendMessage 副作用 — podStore.updatePodStatus 應被呼叫為 chatting
-    //          （非 multi-instance source pod 路徑）
-    // -----------------------------------------------------------------------
-    it("案例 11b：sendMessage 成功後，podStore.updatePodStatus 應以 chatting 更新 pod 狀態", async () => {
-      const canvasStore = useCanvasStore();
-      canvasStore.activeCanvasId = "canvas-1";
-      const podStore = usePodStore();
-      const pod = createMockPod({ id: "pod-1", commandId: null });
-      podStore.pods = [pod];
-      const store = useChatStore();
-      store.connectionStatus = "connected";
-
-      const updateStatusSpy = vi.spyOn(podStore, "updatePodStatus");
-
-      await store.sendMessage("pod-1", "Hello");
-
-      // isTyping 應設為 true
-      expect(store.isTypingByPodId.get("pod-1")).toBe(true);
-      // podStore.updatePodStatus 應以 chatting 更新（非 multi-instance source pod）
-      expect(updateStatusSpy).toHaveBeenCalledWith("pod-1", "chatting");
-    });
   });
 
   describe("abortChat", () => {
@@ -459,25 +397,19 @@ describe("chatStore", () => {
   });
 
   describe("resetForCanvasSwitch", () => {
-    it("應清空所有五個 Map（messagesByPodId / isTypingByPodId / historyLoadingStatus / historyLoadingError / accumulatedLengthByMessageId）", () => {
+    it("應清空所有 Map（messagesByPodId / isTypingByPodId / accumulatedLengthByMessageId）", () => {
       const store = useChatStore();
 
-      // 各 Map 預先填入資料
       store.messagesByPodId.set("pod-1", [
         { id: "msg-1", role: "user", content: "Hi", timestamp: "" },
       ]);
       store.isTypingByPodId.set("pod-1", true);
-      store.historyLoadingStatus.set("pod-1", "loaded");
-      store.historyLoadingError.set("pod-1", "載入錯誤");
       store.accumulatedLengthByMessageId.set("msg-1", 100);
 
       store.resetForCanvasSwitch();
 
-      // 所有 Map 應全部清空
       expect(store.messagesByPodId.size).toBe(0);
       expect(store.isTypingByPodId.size).toBe(0);
-      expect(store.historyLoadingStatus.size).toBe(0);
-      expect(store.historyLoadingError.size).toBe(0);
       expect(store.accumulatedLengthByMessageId.size).toBe(0);
     });
   });
@@ -515,32 +447,6 @@ describe("chatStore", () => {
       expect(store.isTypingByPodId.has("pod-3")).toBe(true);
     });
 
-    it("應清除 historyLoadingStatus", () => {
-      const store = useChatStore();
-      store.historyLoadingStatus.set("pod-1", "loaded");
-      store.historyLoadingStatus.set("pod-2", "loading");
-      store.historyLoadingStatus.set("pod-3", "loaded");
-
-      store.clearMessagesByPodIds(["pod-1", "pod-2"]);
-
-      expect(store.historyLoadingStatus.has("pod-1")).toBe(false);
-      expect(store.historyLoadingStatus.has("pod-2")).toBe(false);
-      expect(store.historyLoadingStatus.has("pod-3")).toBe(true);
-    });
-
-    it("應清除 historyLoadingError", () => {
-      const store = useChatStore();
-      store.historyLoadingError.set("pod-1", "Error 1");
-      store.historyLoadingError.set("pod-2", "Error 2");
-      store.historyLoadingError.set("pod-3", "Error 3");
-
-      store.clearMessagesByPodIds(["pod-1", "pod-2"]);
-
-      expect(store.historyLoadingError.has("pod-1")).toBe(false);
-      expect(store.historyLoadingError.has("pod-2")).toBe(false);
-      expect(store.historyLoadingError.has("pod-3")).toBe(true);
-    });
-
     it("空陣列時不應清除任何資料", () => {
       const store = useChatStore();
       store.messagesByPodId.set("pod-1", [
@@ -566,31 +472,11 @@ describe("chatStore", () => {
         expect.any(Function),
       );
       expect(mockWebSocketClient.on).toHaveBeenCalledWith(
-        "pod:claude:chat:message",
-        expect.any(Function),
-      );
-      expect(mockWebSocketClient.on).toHaveBeenCalledWith(
-        "pod:chat:tool_use",
-        expect.any(Function),
-      );
-      expect(mockWebSocketClient.on).toHaveBeenCalledWith(
-        "pod:chat:tool_result",
-        expect.any(Function),
-      );
-      expect(mockWebSocketClient.on).toHaveBeenCalledWith(
-        "pod:chat:complete",
-        expect.any(Function),
-      );
-      expect(mockWebSocketClient.on).toHaveBeenCalledWith(
         "pod:chat:aborted",
         expect.any(Function),
       );
       expect(mockWebSocketClient.on).toHaveBeenCalledWith(
         "pod:error",
-        expect.any(Function),
-      );
-      expect(mockWebSocketClient.on).toHaveBeenCalledWith(
-        "pod:messages:cleared",
         expect.any(Function),
       );
       expect(mockWebSocketClient.on).toHaveBeenCalledWith(
@@ -625,24 +511,9 @@ describe("chatStore", () => {
         "connection:ready",
       );
       expect(mockWebSocketClient.offAll).toHaveBeenCalledWith(
-        "pod:claude:chat:message",
-      );
-      expect(mockWebSocketClient.offAll).toHaveBeenCalledWith(
-        "pod:chat:tool_use",
-      );
-      expect(mockWebSocketClient.offAll).toHaveBeenCalledWith(
-        "pod:chat:tool_result",
-      );
-      expect(mockWebSocketClient.offAll).toHaveBeenCalledWith(
-        "pod:chat:complete",
-      );
-      expect(mockWebSocketClient.offAll).toHaveBeenCalledWith(
         "pod:chat:aborted",
       );
       expect(mockWebSocketClient.offAll).toHaveBeenCalledWith("pod:error");
-      expect(mockWebSocketClient.offAll).toHaveBeenCalledWith(
-        "pod:messages:cleared",
-      );
       expect(mockWebSocketClient.offAll).toHaveBeenCalledWith("heartbeat:ping");
       expect(mockWebSocketClient.offDisconnect).toHaveBeenCalledWith(
         expect.any(Function),

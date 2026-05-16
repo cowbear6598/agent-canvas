@@ -1,28 +1,17 @@
 import type { Pod } from "../../types/index.js";
 import { podStore } from "../podStore.js";
-import { executeStreamingChat } from "../claude/streamingChatExecutor.js";
 import { logger } from "../../utils/logger.js";
 import { fireAndForget } from "../../utils/operationHelpers.js";
-import { workflowExecutionService } from "../workflow/index.js";
-import {
-  shouldSendBusyReply,
-  BUSY_REPLY_COOLDOWN_MS,
-} from "../../utils/busyChatManager.js";
-import { isWorkflowChainBusy } from "../../utils/workflowChainTraversal.js";
 import { integrationRegistry } from "./integrationRegistry.js";
 import type { NormalizedEvent } from "./types.js";
 import { shouldFilterJiraEvent } from "./providers/jiraProvider.js";
-import { isPodBusy } from "../../types/index.js";
-import { injectUserMessage } from "../../utils/chatHelpers.js";
-import { launchMultiInstanceRun } from "../../utils/runChatHelpers.js";
+import { launchRun } from "../../utils/runChatHelpers.js";
 import { onRunChatComplete } from "../../utils/chatCallbacks.js";
-import { tryExpandCommandMessage } from "../commandExpander.js";
 import {
   replyContextStore,
   buildReplyContextKey,
   setReplyContextIfPresent,
 } from "./replyContextStore.js";
-import { NormalModeExecutionStrategy } from "../normalExecutionStrategy.js";
 
 /**
  * Integration event.text 長度上限（字元數）。
@@ -52,8 +41,6 @@ function filterPodsByProvider(
 }
 
 class IntegrationEventPipeline {
-  private busyReplyCooldowns = new Map<string, number>();
-
   safeProcessEvent(
     providerName: string,
     appId: string,
@@ -95,55 +82,23 @@ class IntegrationEventPipeline {
 
     if (filteredPods.length === 0) return;
 
-    const multiInstancePods = filteredPods.filter(
-      ({ pod }) => pod.multiInstance === true,
-    );
-    const normalPods = filteredPods.filter(
-      ({ pod }) => pod.multiInstance !== true,
-    );
+    // 固定回覆「已接收到命令」
+    this.replyAckOrBusy(provider, appId, event);
 
-    // 回覆確認或忙碌訊息
-    this.replyAckOrBusy(provider, appId, event, normalPods, multiInstancePods);
-
-    // 分流執行：multiInstance 不受忙碌狀態影響，normal 需檢查忙碌狀態
-    // 兩者可同時啟動，透過 Promise.all 並行等待
-    await Promise.all([
-      this.executeMultiInstancePods(multiInstancePods, event),
-      this.executeNormalPods(normalPods, appId, event),
-    ]);
+    // 所有 pod 一律走 multi-instance 路徑，parallel 執行
+    await this.executeMultiInstancePods(filteredPods, event);
   }
 
-  /** 根據忙碌狀態回覆 ack 或 busy 訊息 */
+  /** 固定回覆「已接收到命令」 */
   private replyAckOrBusy(
     provider: string,
     appId: string,
     event: NormalizedEvent,
-    normalPods: Array<{ canvasId: string; pod: Pod }>,
-    multiInstancePods: Array<{ canvasId: string; pod: Pod }>,
   ): void {
-    if (this.shouldReplyBusy(normalPods, multiInstancePods)) {
-      const cooldownKey = `${appId}:${event.resourceId}`;
-      // 順手清除已過期的 cooldown key，防止 Map 無限成長
-      this.evictExpiredCooldowns();
-      if (shouldSendBusyReply(this.busyReplyCooldowns, cooldownKey)) {
-        this.sendAckReply(provider, appId, event, "目前忙碌中，請稍後再試");
-      }
-    } else {
-      this.sendAckReply(provider, appId, event, "已接收到命令");
-    }
+    this.sendAckReply(provider, appId, event, "已接收到命令");
   }
 
-  /** 清除 busyReplyCooldowns 中所有超過冷卻期的 key，避免 Map 無限成長 */
-  private evictExpiredCooldowns(): void {
-    const now = Date.now();
-    for (const [key, lastReplyTime] of this.busyReplyCooldowns) {
-      if (now - lastReplyTime >= BUSY_REPLY_COOLDOWN_MS) {
-        this.busyReplyCooldowns.delete(key);
-      }
-    }
-  }
-
-  /** 執行 multiInstance pods，不受忙碌狀態影響 */
+  /** 執行所有 pods，不受忙碌狀態影響 */
   private async executeMultiInstancePods(
     pods: Array<{ canvasId: string; pod: Pod }>,
     event: NormalizedEvent,
@@ -154,37 +109,6 @@ class IntegrationEventPipeline {
         this.processBoundPod(canvasId, pod, event),
       ),
       pods.map(({ pod }) => pod),
-    );
-  }
-
-  /** 執行 normal pods，全部忙碌時跳過 */
-  private async executeNormalPods(
-    pods: Array<{ canvasId: string; pod: Pod }>,
-    appId: string,
-    event: NormalizedEvent,
-  ): Promise<void> {
-    if (pods.length === 0) return;
-    if (this.isResourceBusy(appId, event.resourceId, pods)) return;
-    await this.settleAndLogErrors(
-      pods.map(({ canvasId, pod }) =>
-        this.processBoundPod(canvasId, pod, event),
-      ),
-      pods.map(({ pod }) => pod),
-    );
-  }
-
-  private shouldReplyBusy(
-    normalPods: Array<{ canvasId: string; pod: Pod }>,
-    multiInstancePods: Array<{ canvasId: string; pod: Pod }>,
-  ): boolean {
-    const hasAnyNormalBusy = normalPods.some(
-      ({ canvasId, pod }) =>
-        isPodBusy(pod.status) || isWorkflowChainBusy(canvasId, pod.id),
-    );
-    return (
-      normalPods.length > 0 &&
-      hasAnyNormalBusy &&
-      multiInstancePods.length === 0
     );
   }
 
@@ -234,60 +158,20 @@ class IntegrationEventPipeline {
     });
   }
 
-  private isResourceBusy(
-    appId: string,
-    resourceId: string,
-    pods?: Array<{ canvasId: string; pod: Pod }>,
-  ): boolean {
-    const targetPods =
-      pods ?? podStore.findByIntegrationAppAndResource(appId, resourceId);
-    return targetPods.some(
-      ({ canvasId, pod }) =>
-        isPodBusy(pod.status) || isWorkflowChainBusy(canvasId, pod.id),
-    );
-  }
-
   private async processBoundPod(
     canvasId: string,
     pod: Pod,
     event: NormalizedEvent,
   ): Promise<void> {
-    if (pod.multiInstance === true) {
-      await this.injectMessageAsRun(canvasId, pod.id, event);
-      return;
-    }
-
-    if (isPodBusy(pod.status)) return;
-
-    if (pod.status === "error") {
-      podStore.setStatus(canvasId, pod.id, "idle");
-    }
-
-    await this.injectMessage(canvasId, pod.id, event);
+    await this.injectMessageAsRun(canvasId, pod.id, event);
   }
 
-  private async injectMessage(
+  private async injectMessageAsRun(
     canvasId: string,
     podId: string,
     event: NormalizedEvent,
   ): Promise<void> {
-    // 二次確認 Pod 狀態，防止並發事件穿透
-    const currentPod = podStore.getById(canvasId, podId);
-    if (currentPod && isPodBusy(currentPod.status)) {
-      logger.log(
-        "Integration",
-        "Complete",
-        `Pod「${currentPod.name}」已在忙碌中，跳過注入`,
-      );
-      return;
-    }
-
-    if (!currentPod) return;
-
-    const podName = currentPod.name;
-
     // 長度上限檢查：超過 MAX_EVENT_TEXT_LENGTH 時截斷並記 warn，避免惡意長訊息灌版。
-    // 注意：必須先截斷再展開 Command，否則 <command> 標籤可能被截斷切爛。
     let textToInject = event.text;
     if (textToInject.length > MAX_EVENT_TEXT_LENGTH) {
       logger.warn(
@@ -298,86 +182,13 @@ class IntegrationEventPipeline {
       textToInject = textToInject.slice(0, MAX_EVENT_TEXT_LENGTH);
     }
 
-    // 在 inject 與 executeStreamingChat 之前先展開 Command，
-    // 確保歷史記錄與送進 LLM 的訊息一致（不一致為原 bug）。
-    const expandResult = await tryExpandCommandMessage(
-      currentPod,
-      textToInject,
-      "integrationEventPipeline",
-    );
-    if (!expandResult.ok) {
-      // 背景觸發路徑無 UI 推送通道，僅記 warn 並終止本次 inject 流程
-      logger.warn(
-        "Integration",
-        "Warn",
-        `[IntegrationEventPipeline] Pod「${podName}」綁定的 Command「${expandResult.commandId}」不存在，跳過此次注入（provider=${event.provider}, podId=${podId}）`,
-      );
-      return;
-    }
-
-    // tryExpandCommandMessage 對 string 輸入回傳 string，型別在此已收斂
-    const resolvedMessage = expandResult.message;
-
-    await injectUserMessage({ canvasId, podId, content: resolvedMessage });
-
-    logger.log(
-      "Integration",
-      "Complete",
-      `[IntegrationEventPipeline] 注入 ${event.provider} 訊息至 Pod「${podName}」`,
-    );
-
-    const replyKey = buildReplyContextKey(undefined, podId);
-    setReplyContextIfPresent(replyKey, event);
-
-    const onComplete = async (
-      canvasId: string,
-      podId: string,
-    ): Promise<void> => {
-      fireAndForget(
-        workflowExecutionService.checkAndTriggerWorkflows(canvasId, podId),
-        "Integration",
-        `檢查 Pod「${podId}」自動觸發 Workflow 失敗`,
-      );
-    };
-
-    const strategy = new NormalModeExecutionStrategy(canvasId);
-
-    try {
-      await executeStreamingChat(
-        {
-          canvasId,
-          podId,
-          message: resolvedMessage,
-          abortable: false,
-          strategy,
-        },
-        { onComplete },
-      );
-    } catch (error) {
-      logger.error(
-        "Integration",
-        "Error",
-        `[IntegrationEventPipeline] Pod「${podName}」注入 ${event.provider} 訊息失敗`,
-        error,
-      );
-      throw error;
-    } finally {
-      replyContextStore.delete(replyKey);
-    }
-  }
-
-  private async injectMessageAsRun(
-    canvasId: string,
-    podId: string,
-    event: NormalizedEvent,
-  ): Promise<void> {
     let replyKey: string | undefined;
 
     try {
-      await launchMultiInstanceRun({
+      await launchRun({
         canvasId,
         podId,
-        message: event.text,
+        message: textToInject,
         abortable: false,
         onRunContextCreated: (runContext) => {
           replyKey = buildReplyContextKey(runContext, podId);

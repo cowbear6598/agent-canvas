@@ -62,12 +62,6 @@ describe("Pod 管理", () => {
       expect((pod as Record<string, unknown>).workspacePath).toBeUndefined();
       expect((pod as Record<string, unknown>).sessionId).toBeUndefined();
     });
-
-    it("新建立的 Pod 預設狀態為 idle", async () => {
-      const client = getClient();
-      const pod = await createPod(client);
-      expect(pod.status).toBe("idle");
-    });
   });
 
   describe("Pod 列表", () => {

@@ -20,7 +20,6 @@ import { replyContextStore } from "./services/integration/replyContextStore.js";
 import { integrationRegistry } from "./services/integration/index.js";
 import { scheduleService } from "./services/scheduleService.js";
 import { getResultErrorString } from "./types/result.js";
-import { podStore } from "./services/podStore.js";
 import { abortRegistry } from "./services/provider/abortRegistry.js";
 import {
   startOpencodeServer,
@@ -222,17 +221,7 @@ const shutdown = async (signal: string): Promise<void> => {
     logger.log("Shutdown", "Complete", `已中止 ${abortedCount} 個活躍的查詢`);
   }
 
-  // 步驟 2：重設所有 busy 狀態的 Pod 為 idle（僅更新 DB，不廣播）
-  const resetCount = podStore.resetAllBusyPods();
-  if (resetCount > 0) {
-    logger.log(
-      "Shutdown",
-      "Complete",
-      `已重設 ${resetCount} 個 busy Pod 為 idle`,
-    );
-  }
-
-  // 步驟 3：刪除所有 running 狀態的 Run（含 run repo 清理）
+  // 步驟 2：刪除所有 running 狀態的 Run（含 run repo 清理）
   const runningRuns = runStore.getRunningRuns();
   if (runningRuns.length > 0) {
     logger.log(

@@ -96,12 +96,6 @@ export interface PodChatSendPayload {
   uploadSessionId?: string;
 }
 
-export interface PodChatHistoryPayload {
-  requestId: string;
-  canvasId: string;
-  podId: string;
-}
-
 export interface PodChatAbortPayload {
   requestId: string;
   canvasId: string;
@@ -137,18 +131,6 @@ export interface ConnectionDeletePayload {
   requestId: string;
   canvasId: string;
   connectionId: string;
-}
-
-export interface WorkflowGetDownstreamPodsPayload {
-  requestId: string;
-  canvasId: string;
-  sourcePodId: string;
-}
-
-export interface WorkflowClearPayload {
-  requestId: string;
-  canvasId: string;
-  sourcePodId: string;
 }
 
 export interface PastePodItem {
@@ -233,13 +215,6 @@ export interface RepositoryGitClonePayload {
   canvasId: string;
   repoUrl: string;
   branch?: string;
-}
-
-export interface PodSetMultiInstancePayload {
-  requestId: string;
-  canvasId: string;
-  podId: string;
-  multiInstance: boolean;
 }
 
 export interface CommandNoteCreatePayload {

@@ -214,20 +214,12 @@
         "disabledTooltip": "opencode server 無法啟動"
       }
     },
-    "multiInstance": {
-      "readonlyHint": "此 Pod 屬於 Multi-Instance 流程，請從歷程查看"
-    },
+    "downstreamChainHint": "此 Pod 屬於 Run 流程，請從歷程查看",
     "provider": {
       "title": "Provider",
       "unknownDescription": "此 Provider 已下線或尚未支援，無法開啟對話",
       "loadFailedDescription": "無法取得 provider capabilities，部分功能可能不正常",
       "loadingHint": "Provider 載入中，請稍候"
-    },
-    "clearWorkflow": {
-      "title": "清理 Workflow",
-      "description": "即將清空以下 POD 的所有訊息：",
-      "confirm": "確認清理",
-      "clearing": "清理中..."
     },
     "delete": {
       "title": "刪除 Pod",
@@ -256,7 +248,6 @@
     "slot": {
       "duplicateTitle": "已存在，無法插入",
       "providerDisabled": "此 Provider 不支援此功能",
-      "lockedByMessages": "已有對話，無法變動",
       "thinkingLabel": "Thinking",
       "thinkingDisabledTooltip": "目前 model 不支援 thinking 層級",
       "pluginsLabel": "Plugins",
@@ -267,7 +258,6 @@
       "pluginsCodexHint": "Codex plugin 由 codex 全域管理",
       "mcpLabel": "MCPs",
       "mcpLoading": "載入中…",
-      "mcpBusyTooltip": "Pod 執行中無法切換",
       "mcpEmpty": "尚未安裝 MCP server",
       "mcpClaudeEmptyHint": "請使用 `claude mcp add` 安裝",
       "mcpCodexEmptyHint": "請使用 `codex mcp add` 安裝",
@@ -296,10 +286,10 @@
     },
     "loadingHistory": "正在載入對話歷史...",
     "inputPlaceholder": "輸入訊息...",
+    "launchHint": "輸入指令後送出，將啟動一次新的 Run",
     "summarizedBadge": "摘要",
     "workflowBlockedHint": "此 Pod 在 Workflow 中，僅頭尾 Pod 可輸入",
     "integrationBlockedHint": "此 Pod 已連接 {label}，訊息由 {label} 驅動",
-    "multiInstanceHint": "此 Pod 已啟用 Multi-Instance，每次送出訊息將建立新的 Run",
     "toolOutput": {
       "errorTitle": "{toolName} 錯誤資訊",
       "resultTitle": "{toolName} 執行結果",
@@ -576,8 +566,7 @@
       "deleteFailed": "Pod 刪除失敗",
       "renameFailed": "Pod 重新命名失敗",
       "renamed": "重新命名成功",
-      "scheduleFailed": "Schedule 設定失敗",
-      "multiInstanceFailed": "Pod 設定失敗"
+      "scheduleFailed": "Schedule 設定失敗"
     },
     "integration": {
       "createFailed": "建立失敗",
@@ -662,7 +651,6 @@
       "podModelSet": "模型設定成功",
       "podScheduleSet": "排程設定成功",
       "podDeleted": "Pod 已刪除",
-      "workflowCleared": "已清空訊息",
       "connectionCreated": "連線建立成功",
       "connectionDeleted": "連線已刪除",
       "canvasCreated": "Canvas 建立成功",
@@ -722,7 +710,6 @@
     "unknownError": "發生未知錯誤",
     "notFound": "{entity} 找不到：{id}",
     "podIntegrationBound": "Pod「{name}」已連接外部服務，無法手動發送訊息",
-    "podBusy": "Pod {id} 目前正在 {status}，請稍後再試",
     "podNotChatting": "Pod {id} 目前不在對話中，無法中斷",
     "noActiveQuery": "找不到 Pod {id} 的活躍查詢",
     "podNotFound": "找不到 Pod：{id}",

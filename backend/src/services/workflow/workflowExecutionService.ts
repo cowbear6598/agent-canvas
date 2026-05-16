@@ -32,8 +32,7 @@ import {
   type WorkflowStatusDelegate,
   createStatusDelegate,
 } from "./workflowStatusDelegate.js";
-import { NormalModeExecutionStrategy } from "../normalExecutionStrategy.js";
-import { RunModeExecutionStrategy } from "../executionStrategy.js";
+import { ChatExecutionStrategy } from "../executionStrategy.js";
 
 interface ExecutionServiceDeps {
   pipeline: PipelineMethods;
@@ -81,7 +80,7 @@ type LastAssistantFallback = { content: string; isSummarized: boolean };
 class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
   private getLastAssistantFallback(
     sourcePodId: string,
-    runContext?: RunContext,
+    runContext: RunContext,
   ): LastAssistantFallback | null {
     const fallback = this.deps.autoTriggerService.getLastAssistantMessage(
       sourcePodId,
@@ -96,7 +95,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     targetPodId: string,
     provider: ProviderName,
     summaryModel: string,
-    runContext?: RunContext,
+    runContext: RunContext,
     pathway?: SettlementPathway,
     delegate?: WorkflowStatusDelegate,
   ): Promise<{
@@ -461,14 +460,12 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
   private async executeClaudeQuery(
     params: WorkflowChatContext & { content: string },
   ): Promise<void> {
-    const { canvasId, targetPodId, content, runContext, delegate } = params;
+    const { canvasId, targetPodId, content, runContext } = params;
     const baseMessage = buildTransferMessage(content);
 
-    // 依據是否為 Run mode 建立對應的 strategy，並透過 strategy 注入使用者訊息
-    const execStrategy =
-      runContext && delegate.isRunMode()
-        ? new RunModeExecutionStrategy(canvasId, runContext)
-        : new NormalModeExecutionStrategy(canvasId);
+    // 依 runContext 建立 ChatExecutionStrategy，並透過 strategy 注入使用者訊息
+    // runContext 在 workflow 執行路徑中必定存在（由上游 launchRun 建立）
+    const execStrategy = new ChatExecutionStrategy(canvasId, runContext!);
 
     // targetPod 已於外層 triggerWorkflowWithSummary 驗證存在，此處直接取用
     const targetPod = podStore.getById(canvasId, targetPodId)!;

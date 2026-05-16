@@ -2,15 +2,10 @@ import { WebSocketResponseEvents } from "@/services/websocket";
 import { usePodStore } from "@/stores/pod/podStore";
 import { useRepositoryStore } from "@/stores/note/repositoryStore";
 import { useCommandStore } from "@/stores/note/commandStore";
-import { useChatStore } from "@/stores/chat/chatStore";
 import type { Pod } from "@/types";
 import { createUnifiedHandler } from "./sharedHandlerUtils";
 import type { BasePayload } from "./sharedHandlerUtils";
 import { t } from "@/i18n";
-import { logger } from "@/utils/logger";
-
-/** 聊天訊息內容最大長度（超過視為異常資料，不寫入 store） */
-const MAX_CHAT_CONTENT_LENGTH = 100_000;
 
 type DeletedNoteIds = {
   repositoryNote?: string[];
@@ -115,21 +110,6 @@ const handlePodStateUpdated = createUnifiedHandler<
   }
 });
 
-const handleWorkflowClearResult = createUnifiedHandler<
-  BasePayload & { canvasId: string; clearedPodIds?: string[] }
->(
-  (payload) => {
-    if (payload.clearedPodIds) {
-      const chatStore = useChatStore();
-      chatStore.clearMessagesByPodIds(payload.clearedPodIds);
-
-      const podStore = usePodStore();
-      podStore.clearPodOutputsByIds(payload.clearedPodIds);
-    }
-  },
-  { toastMessage: () => t("composable.eventHandler.workflowCleared") },
-);
-
 /**
  * 多人協作同步：當其他 client 切換 Pod 的 Plugin 時，
  * 更新本地 podStore 狀態，避免各 client 之間狀態不同步。
@@ -168,48 +148,6 @@ const handlePodMcpServerNamesUpdated = createUnifiedHandler<
     return;
   usePodStore().updatePodMcpServers(payload.podId, payload.mcpServerNames);
 });
-
-const handlePodChatUserMessage = (payload: {
-  podId: string;
-  messageId: string;
-  content: string;
-  timestamp: string;
-}): void => {
-  if (
-    typeof payload.content !== "string" ||
-    payload.content.trim().length === 0
-  ) {
-    logger.warn(
-      "[podEventHandlers] handlePodChatUserMessage：content 為空或非字串，已略過",
-    );
-    return;
-  }
-  if (payload.content.length > MAX_CHAT_CONTENT_LENGTH) {
-    logger.warn(
-      `[podEventHandlers] handlePodChatUserMessage：content 超過上限（${payload.content.length} > ${MAX_CHAT_CONTENT_LENGTH}），已略過`,
-    );
-    return;
-  }
-  const chatStore = useChatStore();
-  chatStore.addRemoteUserMessage(
-    payload.podId,
-    payload.messageId,
-    payload.content,
-    payload.timestamp,
-  );
-};
-
-export function getStandalonePodListeners(): Array<{
-  event: string;
-  handler: (payload: unknown) => void;
-}> {
-  return [
-    {
-      event: WebSocketResponseEvents.POD_CHAT_USER_MESSAGE,
-      handler: handlePodChatUserMessage as (payload: unknown) => void,
-    },
-  ];
-}
 
 export function getPodEventListeners(): Array<{
   event: string;
@@ -255,14 +193,6 @@ export function getPodEventListeners(): Array<{
     {
       event: WebSocketResponseEvents.POD_COMMAND_UNBOUND,
       handler: handlePodStateUpdated as (payload: unknown) => void,
-    },
-    {
-      event: WebSocketResponseEvents.POD_MULTI_INSTANCE_SET,
-      handler: handlePodStateUpdated as (payload: unknown) => void,
-    },
-    {
-      event: WebSocketResponseEvents.WORKFLOW_CLEAR_RESULT,
-      handler: handleWorkflowClearResult as (payload: unknown) => void,
     },
     {
       event: WebSocketResponseEvents.POD_MCP_SERVER_NAMES_UPDATED,

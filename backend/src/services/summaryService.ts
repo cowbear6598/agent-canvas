@@ -1,11 +1,9 @@
 import { executeDisposableChat } from "./disposableChatService.js";
 import { summaryPromptBuilder } from "./summaryPromptBuilder.js";
 import { podStore } from "./podStore.js";
-import { messageStore } from "./messageStore.js";
 import { runStore } from "./runStore.js";
 import { commandService } from "./commandService.js";
 import { logger } from "../utils/logger.js";
-import { getLastAssistantMessage } from "../utils/messageHelper.js";
 import type { Pod, PersistedMessage } from "../types/index.js";
 import type { RunContext } from "../types/run.js";
 import type { ProviderName } from "./provider/index.js";
@@ -50,26 +48,17 @@ class SummaryService {
    * 從 fallback 路徑取得最後一則 assistant 訊息。
    * AI 呼叫失敗時使用，避免整個摘要流程中斷。
    *
-   * @param sourcePodId - 來源 Pod ID
    * @param messages - 已取得的訊息列表（避免重複 I/O）
-   * @param runContext - 若為 run 模式，從 run 訊息中取；否則從全域訊息取
    */
-  private resolveFallbackSummary(
-    sourcePodId: string,
-    messages: PersistedMessage[],
-    runContext?: RunContext,
-  ): string | null {
-    if (runContext) {
-      let lastAssistant: PersistedMessage | undefined;
-      for (let i = messages.length - 1; i >= 0; i--) {
-        if (messages[i].role === "assistant") {
-          lastAssistant = messages[i];
-          break;
-        }
+  private resolveFallbackSummary(messages: PersistedMessage[]): string | null {
+    let lastAssistant: PersistedMessage | undefined;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "assistant") {
+        lastAssistant = messages[i];
+        break;
       }
-      return lastAssistant?.content ?? null;
     }
-    return getLastAssistantMessage(sourcePodId);
+    return lastAssistant?.content ?? null;
   }
 
   async generateSummaryForTarget(
@@ -78,7 +67,7 @@ class SummaryService {
     targetPodId: string,
     provider: ProviderName,
     summaryModel: string,
-    runContext?: RunContext,
+    runContext: RunContext,
   ): Promise<TargetSummaryResult> {
     const sourcePod = podStore.getById(canvasId, sourcePodId);
     if (!sourcePod) {
@@ -110,9 +99,7 @@ class SummaryService {
       };
     }
 
-    const messages = runContext
-      ? runStore.getRunMessages(runContext.runId, sourcePodId)
-      : messageStore.getMessages(sourcePodId);
+    const messages = runStore.getRunMessages(runContext.runId, sourcePodId);
     if (messages.length === 0) {
       logger.error(
         "Workflow",
@@ -152,11 +139,7 @@ class SummaryService {
       );
 
       // fallback 到上游最後一則 Assistant 訊息（重用已取得的 messages，避免重複 I/O）
-      const fallbackContent = this.resolveFallbackSummary(
-        sourcePodId,
-        messages,
-        runContext,
-      );
+      const fallbackContent = this.resolveFallbackSummary(messages);
 
       if (fallbackContent !== null) {
         return { targetPodId, summary: fallbackContent, success: true };

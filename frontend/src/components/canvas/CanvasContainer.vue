@@ -226,7 +226,6 @@ const handleSelectType = async (
     y: canvasY - POD_MENU_Y_OFFSET,
     output: [],
     rotation: Math.round(rotation * 10) / 10,
-    multiInstance: false,
     provider,
     providerConfig,
   };

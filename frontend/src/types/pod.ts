@@ -3,13 +3,6 @@ import type { IntegrationBinding } from "./integration";
 
 export type ModelType = "opus" | "sonnet" | "haiku";
 
-export type PodStatus =
-  | "idle"
-  | "chatting"
-  | "summarizing"
-  | "error"
-  | "uploading";
-
 /**
  * Pod 所屬的 Provider 名稱。
  * 刻意保持寬鬆 string，不使用 "claude" | "codex" literal union，原因如下：
@@ -116,12 +109,10 @@ export interface Pod {
   /** 僅存在於前端狀態，由 chatMessageActions 動態建構，後端不持久化此欄位 */
   output: string[];
   rotation: number;
-  status?: PodStatus;
   workspacePath?: string;
   mcpServerNames?: string[];
   pluginIds?: string[];
   repositoryId?: string | null;
-  multiInstance: boolean;
   commandId?: string | null;
   schedule?: Schedule | null;
   integrationBindings?: IntegrationBinding[];

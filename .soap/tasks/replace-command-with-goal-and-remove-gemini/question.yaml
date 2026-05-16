@@ -1,0 +1,69 @@
+feature: replace-command-with-goal-and-remove-gemini
+created: "2026-05-16"
+approved: true
+questions:
+  - id: Q1
+    text: 現有 codebase 中，Command 現在實際扮演哪些角色，替換範圍有多大？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      Command 目前不是單純 UI 名稱，而是「獨立資源 + Pod 綁定 + 執行前 prompt 注入 +
+      summary 聚焦規則 + repository/manifest sync」的整套流程。它存在於 pod schema、
+      command CRUD、frontend command store、Pod slot 綁定、chat/run/workflow/schedule/integration
+      的執行前展開，以及 summary 讀 target pod command 的邏輯。若改成 Goal，
+      需要同步改資料模型、前端 Pod 設定 UI、執行注入、summary prompt 與 provider capability。
+
+  - id: Q2
+    text: 以目前 codebase 而言，Goal 若要改成 Pod-native checklist 並作為內建 MCP 互動，哪些技術方向是可行的？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      可行方向是把 Goal 變成 Pod-native 設定，而不是外部 note resource。執行時由 backend
+      的 Goal state machine 決定 active todo，再把 built-in Goal MCP 一起送進 provider。
+      Claude 可直接 runtime inject MCP server；Codex 可透過臨時 config overlay 接入；
+      Opencode 可透過 server startup config 內建。Goal 真正的進度應存在 run-time state，
+      不存在 Pod 靜態資料內。MCP 只負責結構化回報完成/阻塞，真正推進下一條 todo 的權限
+      在 backend executor，不交給 LLM 自行決定。
+
+  - id: Q3
+    text: Goal 的產品規格目前已確認到什麼程度？
+    type: user-input
+    completed: true
+    answer: |
+      Goal 是 Pod level 設定，不動 connection level。一個 Pod 對應一份 Goal，
+      Goal 不需要 title，內容是 todo list 陣列。Goal 是必填，沒有 Goal 的 Pod 不能運作。
+      產品方向以 run mode only 設計，不再考慮 normal mode。每次執行要一次自動跑完整份
+      todo list。Goal MCP 需要和 Pod 自己選的 MCP 一起被送進 LLM。
+
+  - id: Q4
+    text: Command 與 Gemini 的大方向退場策略已確認到什麼程度？
+    type: user-input
+    completed: true
+    answer: |
+      Command 要完全退出，不保留相容層，也不再沿用「command.md 拼接 prompt」的舊模型。
+      新方向是把原本 Command 的位置改成實體 Goal editor。Gemini 這次一起移除，
+      不再作為持續支援的 provider；summaryProvider 與相關 UI/API/schema 也要一併清理。
+
+  - id: Q5
+    text: 如果這次完整移除 Gemini，現有資料與前後端哪些面向一定會被波及？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      Gemini 不只存在於 provider registry，還存在於 disposable summary chat、schema allowlist、
+      pod/provider 驗證、frontend provider 選單、MCP/plugin API allowlist、文案與測試。
+      另外 connection.summaryProvider 與既有 pods.provider 也可能存有 gemini 值，
+      若不做資料遷移或 fallback，後續 provider 驗證、summary 執行與 UI 選單都會壞掉。
+
+  - id: Q6
+    text: 現有已綁定的 Command 資料要怎麼處理？是自動轉成初始 Goal todos、保留為唯讀資料供人工搬移，還是直接刪除不遷移？
+    type: user-input
+    completed: true
+    answer: |
+      直接刪除，不做自動轉換，也不保留唯讀相容資料。
+
+  - id: Q7
+    text: 現有資料若有 pods.provider='gemini' 或 connections.summaryProvider='gemini'，你要它們如何收斂？是自動改成 claude/sonnet、只清掉 summaryProvider 讓它 fallback、還是直接標示為需要人工重選？
+    type: user-input
+    completed: true
+    answer: |
+      自動改成 claude/sonnet，包含 summary 相關設定也一起收斂到 claude/sonnet。

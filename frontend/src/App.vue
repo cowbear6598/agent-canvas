@@ -7,10 +7,7 @@ import {
   WebSocketRequestEvents,
   WebSocketResponseEvents,
 } from "@/services/websocket";
-import type {
-  PodStatusChangedPayload,
-  ScheduleFiredPayload,
-} from "@/types/websocket";
+import type { ScheduleFiredPayload } from "@/types/websocket";
 import type {
   CanvasSwitchPayload,
   CanvasSwitchedPayload,
@@ -25,12 +22,6 @@ import { Toast } from "@/components/ui/toast";
 import DisconnectOverlay from "@/components/ui/DisconnectOverlay.vue";
 import { useCopyPaste } from "@/composables/canvas";
 import { useUnifiedEventListeners } from "@/composables/useUnifiedEventListeners";
-import {
-  CONTENT_PREVIEW_LENGTH,
-  RESPONSE_PREVIEW_LENGTH,
-  OUTPUT_LINES_PREVIEW_COUNT,
-} from "@/lib/constants";
-import { truncateContent } from "@/stores/chat/chatUtils";
 import { useCursorStore } from "@/stores/cursorStore";
 import { logger } from "@/utils/logger";
 
@@ -129,73 +120,17 @@ const loadCanvasData = async (): Promise<void> => {
 
   connectionStore.setupWorkflowListeners();
 
-  const podIds = podStore.pods.map((pod) => pod.id);
-  if (podIds.length > 0) {
-    await chatStore.loadAllPodsHistory(podIds);
-    syncHistoryToPodOutput();
-  }
-
   await runStore.loadRuns();
-};
-
-const syncHistoryToPodOutput = (): void => {
-  for (const pod of podStore.pods) {
-    const messages = chatStore.getMessages(pod.id);
-
-    if (messages.length === 0) continue;
-
-    const recentMessages = messages.slice(-OUTPUT_LINES_PREVIEW_COUNT * 2);
-
-    const output: string[] = [];
-    for (const message of recentMessages) {
-      if (message.role === "user") {
-        output.push(
-          `> ${truncateContent(message.content, CONTENT_PREVIEW_LENGTH)}`,
-        );
-      } else if (message.role === "assistant" && !message.isPartial) {
-        if (message.subMessages && message.subMessages.length > 0) {
-          for (const sub of message.subMessages) {
-            if (sub.content) {
-              output.push(
-                truncateContent(sub.content, RESPONSE_PREVIEW_LENGTH),
-              );
-            }
-          }
-        } else {
-          output.push(
-            truncateContent(message.content, RESPONSE_PREVIEW_LENGTH),
-          );
-        }
-      }
-    }
-
-    if (output.length > 0) {
-      const previewOutput = output.slice(-OUTPUT_LINES_PREVIEW_COUNT);
-      podStore.updatePod({
-        ...pod,
-        output: previewOutput,
-      });
-    }
-  }
 };
 
 const handleCloseChat = (): void => {
   podStore.selectPod(null);
 };
 
-const handlePodStatusChanged = (payload: PodStatusChangedPayload): void => {
-  podStore.updatePodStatus(payload.podId, payload.status);
-};
-
 const handleScheduleFired = (payload: ScheduleFiredPayload): void => {
   const pod = podStore.getPodById(payload.podId);
   if (pod) {
     podStore.triggerScheduleFiredAnimation(payload.podId);
-
-    // multi-instance pod 不需要在 canvas mini screen 顯示訊息
-    if (pod.multiInstance === true) {
-      return;
-    }
   }
 };
 
@@ -287,10 +222,6 @@ const loadAppData = async (): Promise<void> => {
 
   if (checkAbortedAndCleanup(currentAbortController)) return;
 
-  websocketClient.on<PodStatusChangedPayload>(
-    WebSocketResponseEvents.POD_STATUS_CHANGED,
-    handlePodStatusChanged,
-  );
   websocketClient.on<ScheduleFiredPayload>(
     WebSocketResponseEvents.SCHEDULE_FIRED,
     handleScheduleFired,
@@ -325,7 +256,7 @@ watch(
 watch(
   () => chatStore.connectionStatus,
   (newStatus) => {
-    if (newStatus === "connected" && !chatStore.allHistoryLoaded) {
+    if (newStatus === "connected" && !isInitialized.value) {
       void (async (): Promise<void> => {
         await securityStore.bootstrapAccess();
         if (!securityStore.requiresWorkspaceUnlock && !isInitialized.value) {
@@ -370,10 +301,6 @@ watch(
         return;
       }
 
-      websocketClient.off<PodStatusChangedPayload>(
-        WebSocketResponseEvents.POD_STATUS_CHANGED,
-        handlePodStatusChanged,
-      );
       websocketClient.off<ScheduleFiredPayload>(
         WebSocketResponseEvents.SCHEDULE_FIRED,
         handleScheduleFired,
@@ -421,10 +348,6 @@ onUnmounted(() => {
 
   chatStore.disconnectWebSocket();
   securityStore.unregisterSocketListeners();
-  websocketClient.off<PodStatusChangedPayload>(
-    WebSocketResponseEvents.POD_STATUS_CHANGED,
-    handlePodStatusChanged,
-  );
   websocketClient.off<ScheduleFiredPayload>(
     WebSocketResponseEvents.SCHEDULE_FIRED,
     handleScheduleFired,

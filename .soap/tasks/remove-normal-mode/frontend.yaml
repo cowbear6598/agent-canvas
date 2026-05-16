@@ -1,0 +1,541 @@
+feature: remove-normal-mode
+side: frontend
+approved: true
+
+phases:
+  - id: P1
+    title: 移除一般模式核心邏輯（型別、Store、Events、UI、CSS、i18n）
+    parallel: false
+    verification:
+      - cd frontend && bun run style
+    done: true
+    items:
+      - id: P1.A
+        title: Pod 型別與資料補全層
+        tasks:
+          - id: P1.A.t1
+            text: "修改 `frontend/src/types/pod.ts`：刪除 `Pod` interface 第 124 行的 `multiInstance: boolean` 欄位"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/types/pod.ts"]
+          - id: P1.A.t2
+            text: "修改 `frontend/src/lib/podValidation.ts`：刪除 `enrichPod` 中第 94 行 `multiInstance: pod.multiInstance ?? false,` 這一行"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/lib/podValidation.ts"]
+          - id: P1.A.t3
+            text: "修改 `frontend/src/components/canvas/CanvasContainer.vue`：刪除 `newPod` 物件中 `multiInstance: false` 屬性（第 229 行附近）"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/components/canvas/CanvasContainer.vue"]
+          - id: P1.A.t4
+            text: "修改 `frontend/src/App.vue`：刪除 `handleScheduleFired` 內第 195-198 行針對 `pod.multiInstance === true` 的提早 return 區塊（連同上方的 zh-TW 註解一併拿掉，不留下死碼註解）"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/App.vue"]
+
+      - id: P1.B
+        title: WebSocket events 與 payload 型別
+        tasks:
+          - id: P1.B.t1
+            text: "修改 `frontend/src/types/websocket/events.ts`：刪除 `WebSocketRequestEvents.POD_SET_MULTI_INSTANCE`（第 37 行）與 `WebSocketResponseEvents.POD_MULTI_INSTANCE_SET`（第 166 行）兩個 constant"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/types/websocket/events.ts"]
+          - id: P1.B.t2
+            text: "修改 `frontend/src/types/websocket/requests.ts`：刪除 `PodSetMultiInstancePayload` interface（第 238-243 行）；如有從 `index.ts` 或 barrel 檔再 export 也一併移除"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/types/websocket/requests.ts"]
+          - id: P1.B.t3
+            text: "全域搜尋 `frontend/src/types/websocket/` 下是否還有 `PodMultiInstanceSetPayload` 等對應 response payload 型別；若存在則刪除其定義與所有 re-export"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/types/websocket/responses.ts"]
+
+      - id: P1.C
+        title: PodStore 後端動作與 event listener 清理
+        tasks:
+          - id: P1.C.t1
+            text: "修改 `frontend/src/stores/pod/podStore.ts`：刪除 `setMultiInstanceWithBackend` 函式整段（第 447-472 行），以及 store return 物件中第 570 行的 `setMultiInstanceWithBackend` export"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/stores/pod/podStore.ts"]
+          - id: P1.C.t2
+            text: "修改 `frontend/src/stores/pod/podStore.ts`：移除 `PodSetMultiInstancePayload` / `PodMultiInstanceSetPayload` 的 type import 與 `WebSocketRequestEvents.POD_SET_MULTI_INSTANCE` / `WebSocketResponseEvents.POD_MULTI_INSTANCE_SET` 的引用"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/stores/pod/podStore.ts"]
+          - id: P1.C.t3
+            text: "修改 `frontend/src/composables/eventHandlers/podEventHandlers.ts`：刪除第 259-262 行 `POD_MULTI_INSTANCE_SET` 對應的 listener 註冊區塊"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/composables/eventHandlers/podEventHandlers.ts"]
+
+      - id: P1.D
+        title: multiInstanceGuard 整檔移除與既有 caller 收尾
+        tasks:
+          - id: P1.D.t1
+            text: "修改 `frontend/src/stores/chat/chatStore.ts`：刪除第 30 行 `isMultiInstanceSourcePod` 的 import；移除 `sendMessage`（第 283 行）與 `sendMessageWithUploadSession`（第 317 行）內 `if (!isMultiInstanceSourcePod(podId))` 條件**以及條件內的 `podStore.updatePodStatus(podId, 'chatting')` 呼叫整段**（pod 全域 status 概念在本 task 一併移除，見 P1.I）；同步刪掉前面 zh-TW 提示註解"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/stores/chat/chatStore.ts"]
+          - id: P1.D.t2
+            text: "修改 `frontend/src/components/pod/CanvasPod.vue`：刪除第 28-31 行 `isMultiInstanceChainPod` / `isMultiInstanceSourcePod` 的 import；將 `isDownstreamMultiInstance` computed（第 140-144 行）改為以 `connectionStore.hasUpstreamConnections(props.pod.id) && !connectionStore.isSourcePod(props.pod.id)` 計算下游 chain pod 判定,並將 computed 改名為 `isDownstreamChainPod`（同步更新第 234、362 行的引用）"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/components/pod/CanvasPod.vue"]
+          - id: P1.D.t3
+            text: "修改 `frontend/src/components/pod/CanvasPod.vue`：刪除第 139 行 `isMultiInstanceEnabled` computed；刪除第 425-430 行 `handleToggleMultiInstance` 函式；刪除 PodActions 模板第 577 行 `:is-multi-instance-enabled` prop 傳遞與第 594 行 `@toggle-multi-instance` listener"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/components/pod/CanvasPod.vue"]
+          - id: P1.D.t4
+            text: "修改 `frontend/src/components/pod/CanvasPod.vue`：將 `handleDrop` 第 258 行 `isMultiInstanceSourcePod(props.pod.id)` 條件改為改用 `connectionStore.isSourcePod(props.pod.id)`（一律視 source pod 上傳完畢都要開 history panel,因為現在所有 source pod 都走 run 流程）；同步移除上方 zh-TW 註解中 'multi-instance' 字眼"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/components/pod/CanvasPod.vue"]
+          - id: P1.D.t5
+            text: "修改 `frontend/src/components/pod/CanvasPod.vue`：將 isEditBlocked 內第 362-363 行 `if (isDownstreamMultiInstance.value)` 與 reason 字串 `downstreamMultiInstance` 改名為 `downstreamChainPod`（reason 字串對應 handleDblClick 內 toast 分支也要同步改）；toast description 改用新的 i18n key（見 P1.G.t1）"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/components/pod/CanvasPod.vue"]
+          - id: P1.D.t6
+            text: "刪除整檔 `frontend/src/utils/multiInstanceGuard.ts`"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/utils/multiInstanceGuard.ts"]
+          - id: P1.D.t7
+            text: "全域搜尋 `frontend/src/` 下是否仍有殘留的 `isMultiInstanceSourcePod` / `isMultiInstanceChainPod` / `getMultiInstanceSourcePodId` / `multiInstanceGuard` 引用；若有,依語意改用 `connectionStore.isSourcePod` / `connectionStore.hasUpstreamConnections` 取代或直接刪除"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/components/chat/ChatModal.vue"]
+
+      - id: P1.E
+        title: PodActions 長按 toggle 邏輯與相關 UI 拆除
+        tasks:
+          - id: P1.E.t1
+            text: "修改 `frontend/src/components/pod/PodActions.vue`：刪除 props 中第 21 行 `isMultiInstanceEnabled: boolean`；刪除 emits 中第 45 行 `toggle-multi-instance` 事件定義"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/components/pod/PodActions.vue"]
+          - id: P1.E.t2
+            text: "修改 `frontend/src/components/pod/PodActions.vue`：刪除 `LONG_PRESS_DURATION_MS`（第 64 行）與 `TOGGLE_DEBOUNCE_GUARD_MS`（第 59 行）常數；刪除 `longPressTimer` / `isLongPress` / `isToggling` / `isLongPressing` / `longPressProgress` / `mousePosition` / `progressAnimationFrame` / `longPressStartTime` 等所有長按相關 ref / 變數（第 61-70 行附近）"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/components/pod/PodActions.vue"]
+          - id: P1.E.t3
+            text: "修改 `frontend/src/components/pod/PodActions.vue`：刪除 `cleanupLongPress`（第 80-91 行）與 `handleEraserMouseLeave`（第 134-136 行）函式；簡化 `handleEraserMouseDown` 為只保留 `event.stopPropagation()`；簡化 `handleEraserMouseUp` 為直接 emit clear-workflow（移除 `!isLongPress` 條件）"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/components/pod/PodActions.vue"]
+          - id: P1.E.t4
+            text: "修改 `frontend/src/components/pod/PodActions.vue`：刪除第 168-173 行 watch `props.isMultiInstanceEnabled` 的 effect；`onUnmounted` 內第 161 行 `cleanupLongPress()` 呼叫也一併刪除；`isEraserDisabled` computed 中第 76 行的 `isToggling.value` 條件刪除"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/components/pod/PodActions.vue"]
+          - id: P1.E.t5
+            text: "修改 `frontend/src/components/pod/PodActions.vue`：刪除模板第 218 行的 `multi-instance-enabled` class binding；刪除第 224-231 行 M 字母 span 與 v-else 的 Eraser 條件結構，改為直接渲染 Eraser 圖標；同時移除模板上 `@mouseleave` binding"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/components/pod/PodActions.vue"]
+          - id: P1.E.t6
+            text: "修改 `frontend/src/components/pod/PodActions.vue`：刪除整段 Teleport 進度圈 SVG（第 311-364 行 Teleport 包覆的 long-press-indicator 區塊）"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/components/pod/PodActions.vue"]
+
+      - id: P1.F
+        title: ChatModal 與 ChatMultiInstanceInput 收斂
+        tasks:
+          - id: P1.F.t1
+            text: "修改 `frontend/src/components/chat/ChatModal.vue`：刪除第 10 行 `ChatMultiInstanceInput` import 與第 15 行 `isMultiInstanceSourcePod` import；刪除 `isMultiInstanceMode` computed（第 36-38 行）；刪除 `handleMultiInstanceSend` 函式（第 97-101 行）；刪除模板第 124-129 行 ChatMultiInstanceInput 條件渲染區塊,並把外層 `<template v-else>` 拆掉,讓 ChatMessages / ChatIntegrationBlockedHint / ChatWorkflowBlockedHint / ChatInput 變成直接層級"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/components/chat/ChatModal.vue"]
+          - id: P1.F.t2
+            text: "修改 `frontend/src/components/chat/ChatModal.vue`：簡化 `handleSend` 的 catch 區塊（第 62-86 行）— 因為 `isMultiInstanceMode` 已不存在,刪除第 69-71 行條件；**且因 pod.status 一併移除,整個 catch 內 `podStore.updatePodStatus(props.pod.id, 'idle')` 路徑刪除**（錯誤處理改為純 UI feedback,例如顯示 toast）；同步檢查 `runStore` 是否其他地方還用到,沒用則移除其 import"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/components/chat/ChatModal.vue"]
+          - id: P1.F.t3
+            text: "刪除整檔 `frontend/src/components/chat/ChatMultiInstanceInput.vue`"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/components/chat/ChatMultiInstanceInput.vue"]
+
+      - id: P1.G
+        title: i18n 文案清理（zh-TW、en、ja 三語系一致）
+        tasks:
+          - id: P1.G.t1
+            text: "修改 `frontend/src/locales/zh-TW.json`、`en.json`、`ja.json`：將 `pod.multiInstance.readonlyHint` 整段 object（含父 key `multiInstance`）改名為新的扁平 key `pod.downstreamChainHint`（zh-TW: 『此 Pod 屬於 Run 流程,請從歷程查看』；en: 『This Pod is part of a Run workflow. View details in run history.』；ja: 『この Pod は Run ワークフローの一部です。詳細は実行履歴からご確認ください。』）,不再使用 Multi-Instance 字眼；CanvasPod.vue 內 toast description 同步改為 t('pod.downstreamChainHint')"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/locales/zh-TW.json", "frontend/src/locales/en.json", "frontend/src/locales/ja.json"]
+          - id: P1.G.t2
+            text: "修改三語系 locale 檔：刪除 `chat.multiInstanceHint` key 整行"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/locales/zh-TW.json", "frontend/src/locales/en.json", "frontend/src/locales/ja.json"]
+          - id: P1.G.t3
+            text: "修改三語系 locale 檔：刪除 `store.pod.multiInstanceFailed` key 整行"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/locales/zh-TW.json", "frontend/src/locales/en.json", "frontend/src/locales/ja.json"]
+          - id: P1.G.t4
+            text: "全域搜尋三語系 locale 檔,確認沒有殘留 Multi-Instance / multi-instance / MultiInstance / multiInstance 字串；如有未被前述步驟覆蓋的條目（例如其他位置的描述句）,一併修正文案、保持與『Run 流程』語意一致"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+
+      - id: P1.H
+        title: CSS 規則清理
+        tasks:
+          - id: P1.H.t1
+            text: "修改 `frontend/src/assets/styles/doodle/pod.css`：刪除第 291-307 行 `.multi-instance-icon-m`、`.workflow-clear-button-in-group.multi-instance-enabled`、`.workflow-clear-button-in-group.multi-instance-enabled:hover` 三條規則（含上方 zh-TW 註解）"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/assets/styles/doodle/pod.css"]
+          - id: P1.H.t2
+            text: "修改 `frontend/src/assets/styles/doodle/overlay.css`：刪除第 7-21 行 `.long-press-indicator`、`.long-press-ring`、`.long-press-ring circle:last-child` 三條規則（含上方 zh-TW 註解）"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/assets/styles/doodle/overlay.css"]
+
+      - id: P1.J
+        title: POD-* 一般模式 WebSocket events 與對應 listener / request 移除
+        tasks:
+          - id: P1.J.t1
+            text: "修改 `frontend/src/types/websocket/events.ts`：刪除 7 個一般模式 POD_* event constants（POD_CHAT_HISTORY/POD_CLAUDE_CHAT_MESSAGE/POD_CHAT_TOOL_USE/POD_CHAT_TOOL_RESULT/POD_CHAT_COMPLETE/POD_CHAT_HISTORY_RESULT/POD_MESSAGES_CLEARED/POD_CHAT_USER_MESSAGE）"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/types/websocket/events.ts"]
+          - id: P1.J.t2
+            text: "修改 `frontend/src/stores/chat/chatHistoryActions.ts`：刪除整檔；caller（包含 ChatModal、chatStore、chatConnectionActions、App.vue 等）一併移除呼叫；對應 payload 型別也清掉"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/stores/chat/chatHistoryActions.ts", "frontend/src/stores/chat/chatStore.ts", "frontend/src/stores/chat/chatConnectionActions.ts", "frontend/src/App.vue", "frontend/src/types/websocket/requests.ts", "frontend/src/types/websocket/responses.ts", "frontend/src/types/chat.ts"]
+          - id: P1.J.t3
+            text: "修改 `frontend/src/composables/eventHandlers/podEventHandlers.ts`：刪除 POD_CHAT_USER_MESSAGE listener 註冊區塊與其 handler 函式；clean useUnifiedEventListeners 中的 import"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/composables/eventHandlers/podEventHandlers.ts", "frontend/src/composables/useUnifiedEventListeners.ts"]
+          - id: P1.J.t4
+            text: "修改 `frontend/src/stores/chat/chatStore.ts`：刪除 5 個 listener 註冊區塊（POD_CLAUDE_CHAT_MESSAGE/POD_CHAT_TOOL_USE/POD_CHAT_TOOL_RESULT/POD_CHAT_COMPLETE/POD_MESSAGES_CLEARED）；移除對應 handler 函式；ChatModal/ChatMessages 內 isLoadingHistory 相關 prop 也清掉"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/stores/chat/chatStore.ts", "frontend/src/components/chat/ChatModal.vue", "frontend/src/components/chat/ChatMessages.vue"]
+          - id: P1.J.t5
+            text: "全域掃描 frontend/src/ 確認無殘留引用；移除 PodChatHistoryPayload / PodChatHistoryResultPayload / HistoryLoadingStatus 等僅服務被移除功能的 payload 型別"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/types/websocket/requests.ts", "frontend/src/types/websocket/responses.ts", "frontend/src/types/chat.ts"]
+
+      - id: P1.I
+        title: Pod 全域 status 概念移除（前端）
+        tasks:
+          - id: P1.I.t1
+            text: "修改 `frontend/src/types/pod.ts`：刪除 `PodStatus` type 與 Pod interface 的 status 欄位"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/types/pod.ts"]
+          - id: P1.I.t2
+            text: "修改 `frontend/src/stores/pod/podStore.ts`：刪除 `updatePodStatus` 方法與 export"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/stores/pod/podStore.ts"]
+          - id: P1.I.t3
+            text: "修改 `frontend/src/stores/chat/chatConnectionActions.ts`：刪除錯誤回滾路徑的 updatePodStatus 呼叫"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/stores/chat/chatConnectionActions.ts"]
+          - id: P1.I.t4
+            text: "修改 `frontend/src/stores/chat/chatMessageActions.ts`：刪除 settleTerminalSystemMessage 中的 updatePodStatus 呼叫"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/stores/chat/chatMessageActions.ts"]
+          - id: P1.I.t5
+            text: "修改 `frontend/src/types/websocket/events.ts`：刪除 POD_STATUS_CHANGED 常數"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/types/websocket/events.ts"]
+          - id: P1.I.t6
+            text: "全域搜尋移除所有 POD_STATUS_CHANGED listener 註冊（位於 App.vue 等檔案）"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/App.vue"]
+          - id: P1.I.t7
+            text: "修改 `frontend/src/stores/connectionStore.ts`：採簡化路徑——刪除 RUNNING_POD_STATUSES 常數，buildIsRunningPod 改為始終回傳 false"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/stores/connectionStore.ts"]
+          - id: P1.I.t8
+            text: "修改三語系 locale 檔：刪除 pod.podBusy 與 pod.slot.mcpBusyTooltip 字串"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/locales/zh-TW.json", "frontend/src/locales/en.json", "frontend/src/locales/ja.json"]
+          - id: P1.I.t9
+            text: "全域移除剩餘 pod.status 引用：CanvasPod / ChatModal / McpPopover / PluginPopover / chatStore / responses.ts"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/src/components/pod/CanvasPod.vue", "frontend/src/components/chat/ChatModal.vue", "frontend/src/components/pod/McpPopover.vue", "frontend/src/components/pod/PluginPopover.vue", "frontend/src/stores/chat/chatStore.ts", "frontend/src/types/websocket/responses.ts"]
+
+  - id: P2
+    title: 測試更新與重寫
+    parallel: true
+    verification:
+      - cd frontend && bun run style
+      - cd frontend && bun run test:run
+    done: true
+    items:
+      - id: P2.A
+        title: multiInstanceGuard 測試移除
+        tasks:
+          - id: P2.A.t1
+            text: "刪除整檔 `frontend/tests/utils/multiInstanceGuard.test.ts`"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/tests/utils/multiInstanceGuard.test.ts"]
+
+      - id: P2.B
+        title: PodActions 測試重寫（保留短按 clear、移除長按 toggle）
+        tasks:
+          - id: P2.B.t1
+            text: "修改 PodActions.test.ts defaultProps 移除 isMultiInstanceEnabled（P1.E sub-agent 已先清理）"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/tests/components/pod/PodActions.test.ts"]
+          - id: P2.B.t2
+            text: "刪除 Eraser 按鈕顯示邏輯 describe 中 isMultiInstanceEnabled 相關 it，只保留 isSourcePod=false 不顯示橡皮擦這條"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/tests/components/pod/PodActions.test.ts"]
+          - id: P2.B.t3
+            text: "刪除 isWorkflowRunning=true 時長按橡皮擦不應 emit toggle-multi-instance 的 it（已隨 P1.E 一併移除）"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/tests/components/pod/PodActions.test.ts"]
+          - id: P2.B.t4
+            text: "新增測試：短按橡皮擦 emit clear-workflow（mousedown → mouseup）"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/tests/components/pod/PodActions.test.ts"]
+          - id: P2.B.t5
+            text: "新增測試：mousedown 後 600ms 不 emit toggle-multi-instance、不出現 .long-press-indicator DOM"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/tests/components/pod/PodActions.test.ts"]
+
+      - id: P2.C
+        title: PodStore 測試更新（移除 setMultiInstanceWithBackend 與 multiInstance 預設值斷言）
+        tasks:
+          - id: P2.C.t1
+            text: "刪除 podStore.test.ts 中 setMultiInstanceWithBackend describe 整段（4 個 it）"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/tests/stores/podStore.test.ts"]
+          - id: P2.C.t2
+            text: "移除 podStore.test.ts 內 multiInstance 斷言與 createMockPod 的 multiInstance 參數"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/tests/stores/podStore.test.ts"]
+
+      - id: P2.D
+        title: ChatModal 測試重寫
+        tasks:
+          - id: P2.D.t1
+            text: "刪除 ChatMultiInstanceInput mock 與 multiInstanceGuard mock 區塊"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/tests/components/chat/ChatModal.test.ts"]
+          - id: P2.D.t2
+            text: "刪除整個 Multi-Instance 模式與 Integration Binding 互動 describe（含 3 個 it）"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/tests/components/chat/ChatModal.test.ts"]
+          - id: P2.D.t3
+            text: "新增測試：integration binding 存在時顯示 ChatIntegrationBlockedHint，不顯示 ChatInput"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/tests/components/chat/ChatModal.test.ts"]
+          - id: P2.D.t4
+            text: "新增測試：無 integration binding 且 isMiddlePod=true 顯示 ChatWorkflowBlockedHint"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/tests/components/chat/ChatModal.test.ts"]
+
+      - id: P2.E
+        title: ChatMultiInstanceInput 測試移除
+        tasks:
+          - id: P2.E.t1
+            text: "刪除整檔 `frontend/tests/components/chat/ChatMultiInstanceInput.test.ts`（對應元件已刪）"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/tests/components/chat/ChatMultiInstanceInput.test.ts"]
+
+      - id: P2.F
+        title: 其餘 mock factories 與測試的 multiInstance 欄位清理
+        tasks:
+          - id: P2.F.t1
+            text: "刪除 factories.ts createMockPod 中 multiInstance 預設"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/tests/helpers/factories.ts"]
+          - id: P2.F.t2
+            text: "刪除 canvasPodMocks multiInstance"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/tests/components/pod/__setup__/canvasPodMocks.ts"]
+          - id: P2.F.t3
+            text: "刪除 CanvasPod.test.ts multiInstance"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/tests/components/pod/CanvasPod.test.ts"]
+          - id: P2.F.t4
+            text: "刪除 PodSlots.test.ts 共 6 處 multiInstance"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/tests/components/pod/PodSlots.test.ts"]
+          - id: P2.F.t5
+            text: "刪除 McpPopover.test.ts multiInstance"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/tests/components/pod/McpPopover.test.ts"]
+          - id: P2.F.t6
+            text: "刪除 PluginPopover.test.ts 共 3 處 multiInstance"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/tests/components/pod/PluginPopover.test.ts"]
+          - id: P2.F.t7
+            text: "刪除 podEventHandlers.test.ts multiInstance"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/tests/composables/eventHandlers/podEventHandlers.test.ts"]
+          - id: P2.F.t8
+            text: "刪除 canvasPodFlow.test.ts multiInstance"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/tests/integration/canvasPodFlow.test.ts"]
+          - id: P2.F.t9
+            text: "刪除 podValidation.test.ts multiInstance"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/tests/lib/podValidation.test.ts"]
+          - id: P2.F.t10
+            text: "刪除 providerOptions.test.ts 共 2 處 multiInstance"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/tests/lib/providerOptions.test.ts"]
+
+      - id: P2.G
+        title: chatStore.sendMessage 路徑行為測試更新
+        tasks:
+          - id: P2.G.t1
+            text: "從 canvasPodMocks.ts 移除 podStore mock 的 updatePodStatus stub（chatStore.test.ts 已無 multiInstanceGuard mock 需處理）"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/tests/components/pod/__setup__/canvasPodMocks.ts"]
+
+      - id: P2.H
+        title: Pod.status 移除相關測試更新
+        tasks:
+          - id: P2.H.t1
+            text: "刪除 chatStore.test.ts 案例 11b 整段 it（updatePodStatus('chatting')）"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/tests/stores/chat/chatStore.test.ts"]
+          - id: P2.H.t2
+            text: "刪除 chatMessageActions.test.ts pod.status 斷言與 createMockPod status override"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/tests/stores/chat/chatMessageActions.test.ts"]
+          - id: P2.H.t3
+            text: "connectionStore.test.ts：刪除 isWorkflowRunning / isPartOfRunningWorkflow 中 9 個依賴 pod.status 的 it 並移除 createMockPod 的 status 欄位"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/tests/stores/connectionStore.test.ts"]
+          - id: P2.H.t4
+            text: "canvasPodFlow.test.ts：刪除「建立連接並觸發工作流」describe 兩個 it 與 unused import"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/tests/integration/canvasPodFlow.test.ts"]
+          - id: P2.H.t5
+            text: "全域清理 factories.ts / connectionStore.test.ts / chatMessageActions.test.ts 殘留 PodStatus / status 欄位"
+            completed: true
+            attempts: 0
+            last_failure: null
+            last_files_changed: ["frontend/tests/helpers/factories.ts", "frontend/tests/stores/connectionStore.test.ts", "frontend/tests/stores/chat/chatMessageActions.test.ts"]

@@ -324,53 +324,6 @@ describe("WorkflowPipeline", () => {
     });
   });
 
-  describe("checkQueue 階段", () => {
-    it("目標 Pod 忙碌時加入佇列", async () => {
-      const mockStrategy = makeStrategy("auto");
-
-      vi.spyOn(podStore, "getById").mockReturnValue({
-        ...mockTargetPod,
-        status: "chatting",
-      } as any);
-
-      await workflowPipeline.execute(baseContext, mockStrategy);
-
-      expect(mockQueueService.enqueue).toHaveBeenCalledWith({
-        canvasId: CANVAS_ID,
-        connectionId: CONNECTION_ID,
-        sourcePodId: SOURCE_POD_ID,
-        targetPodId: TARGET_POD_ID,
-        summary: "摘要",
-        isSummarized: true,
-        triggerMode: "auto",
-        participatingConnectionIds: undefined,
-        runContext: undefined,
-      });
-
-      expect(
-        mockExecutionService.triggerWorkflowWithSummary,
-      ).not.toHaveBeenCalled();
-    });
-
-    it("目標 Pod 忙碌時 enqueue 後立即呼叫一次 processNextInQueue", async () => {
-      const mockStrategy = makeStrategy("auto");
-
-      vi.spyOn(podStore, "getById").mockReturnValue({
-        ...mockTargetPod,
-        status: "chatting",
-      } as any);
-
-      await workflowPipeline.execute(baseContext, mockStrategy);
-
-      expect(mockQueueService.enqueue).toHaveBeenCalled();
-      expect(mockQueueService.processNextInQueue).toHaveBeenCalledTimes(1);
-      expect(mockQueueService.processNextInQueue).toHaveBeenCalledWith(
-        CANVAS_ID,
-        TARGET_POD_ID,
-      );
-    });
-  });
-
   describe("generateSummary 階段", () => {
     it("generateSummary 失敗時不繼續流程", async () => {
       const mockStrategy = makeStrategy("auto", {

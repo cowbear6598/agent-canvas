@@ -35,7 +35,6 @@ export function createCanvasContextMock(spies: {
       setActivePod: vi.fn(),
       updatePodProviderConfigModel: mockUpdatePodProviderConfigModel,
       setMultiInstanceWithBackend: vi.fn(),
-      updatePodStatus: vi.fn(),
     },
     viewportStore: { zoom: 1 },
     selectionStore: {
@@ -53,7 +52,6 @@ export function createCanvasContextMock(spies: {
     connectionStore: {
       isSourcePod: vi.fn().mockReturnValue(false),
       hasUpstreamConnections: vi.fn().mockReturnValue(false),
-      isWorkflowRunning: vi.fn().mockReturnValue(false),
       selectConnection: vi.fn(),
     },
     clipboardStore: {},
@@ -78,19 +76,6 @@ export function createUsePodScheduleMock() {
     handleScheduleDelete: vi.fn(),
     handleScheduleToggle: vi.fn(),
     handleClearScheduleFiredAnimation: vi.fn(),
-  };
-}
-
-/** 建立 useWorkflowClear mock 回傳值 */
-export function createUseWorkflowClearMock() {
-  return {
-    showClearDialog: ref(false),
-    downstreamPods: ref([]),
-    isLoadingDownstream: ref(false),
-    isClearing: ref(false),
-    handleClearWorkflow: vi.fn(),
-    handleConfirmClear: vi.fn(),
-    handleCancelClear: vi.fn(),
   };
 }
 
@@ -146,7 +131,6 @@ export function createMockPod(overrides: Partial<Pod> = {}): Pod {
     y: 0,
     output: [],
     rotation: 0,
-    multiInstance: false,
     provider: "claude",
     providerConfig: { model: "claude-sonnet-4-5" },
     ...overrides,

@@ -50,14 +50,12 @@ import { initTestDb, closeDb, getDb } from "../../src/database/index.js";
 import { resetStatements } from "../../src/database/statements.js";
 import { executeStreamingChat } from "../../src/services/claude/streamingChatExecutor.js";
 import { socketService } from "../../src/services/socketService.js";
-import { messageStore } from "../../src/services/messageStore.js";
 import { podStore } from "../../src/services/podStore.js";
 import { runStore } from "../../src/services/runStore.js";
 import { runExecutionService } from "../../src/services/workflow/runExecutionService.js";
 import { WebSocketResponseEvents } from "../../src/schemas";
 import { AbortError } from "@anthropic-ai/claude-agent-sdk";
-import { NormalModeExecutionStrategy } from "../../src/services/normalExecutionStrategy.js";
-import { RunModeExecutionStrategy } from "../../src/services/executionStrategy.js";
+import { ChatExecutionStrategy } from "../../src/services/executionStrategy.js";
 import type { RunContext } from "../../src/types/run.js";
 import { getProvider } from "../../src/services/provider/index.js";
 import type { NormalizedEvent } from "../../src/services/provider/types.js";
@@ -127,17 +125,16 @@ function insertPodViaSQL(opts: {
   providerConfigJson?: string;
   workspacePath?: string;
   repositoryId?: string | null;
-  multiInstance?: boolean;
 }) {
   const id = randomUUID();
   const workspacePath =
     opts.workspacePath ?? path.join(config.canvasRoot, CANVAS_ID, `pod-${id}`);
   getDb()
     .prepare(
-      `INSERT INTO pods (id, canvas_id, name, status, x, y, rotation, workspace_path,
-       session_id, repository_id, command_id, multi_instance,
+      `INSERT INTO pods (id, canvas_id, name, x, y, rotation, workspace_path,
+       session_id, repository_id, command_id,
        schedule_json, provider, provider_config_json)
-       VALUES (?, ?, ?, 'idle', 0, 0, 0, ?, NULL, ?, NULL, ?, NULL, ?, ?)`,
+       VALUES (?, ?, ?, 0, 0, 0, ?, NULL, ?, NULL, NULL, ?, ?)`,
     )
     .run(
       id,
@@ -145,7 +142,6 @@ function insertPodViaSQL(opts: {
       `${opts.provider}-pod-${id.slice(0, 8)}`,
       workspacePath,
       opts.repositoryId ?? null,
-      opts.multiInstance ? 1 : 0,
       opts.provider,
       opts.providerConfigJson ??
         (opts.provider === "claude" ? JSON.stringify({ model: "opus" }) : null),
@@ -171,8 +167,14 @@ describe("executeStreamingChat", () => {
   const canvasId = CANVAS_ID;
   const message = "test message";
 
+  const defaultRunContext: RunContext = {
+    runId: "default-run-id",
+    canvasId,
+    sourcePodId: "default-source-pod",
+  };
+
   function makeStrategy() {
-    return new NormalModeExecutionStrategy(canvasId);
+    return new ChatExecutionStrategy(canvasId, defaultRunContext);
   }
 
   beforeEach(() => {
@@ -246,7 +248,7 @@ describe("executeStreamingChat", () => {
       expect(socketService.emitToCanvas).toHaveBeenNthCalledWith(
         1,
         canvasId,
-        WebSocketResponseEvents.POD_CLAUDE_CHAT_MESSAGE,
+        WebSocketResponseEvents.RUN_MESSAGE,
         expect.objectContaining({
           canvasId,
           podId: pod.id,
@@ -258,7 +260,7 @@ describe("executeStreamingChat", () => {
       expect(socketService.emitToCanvas).toHaveBeenNthCalledWith(
         2,
         canvasId,
-        WebSocketResponseEvents.POD_CLAUDE_CHAT_MESSAGE,
+        WebSocketResponseEvents.RUN_MESSAGE,
         expect.objectContaining({
           content: "Hello World",
           isPartial: true,
@@ -281,7 +283,7 @@ describe("executeStreamingChat", () => {
           },
           { type: "turn_complete" as const },
         ],
-        expectedEvent: WebSocketResponseEvents.POD_CHAT_TOOL_USE,
+        expectedEvent: WebSocketResponseEvents.RUN_CHAT_TOOL_USE,
         expectedPayload: {
           toolUseId: "tu1",
           toolName: "Read",
@@ -305,7 +307,7 @@ describe("executeStreamingChat", () => {
           },
           { type: "turn_complete" as const },
         ],
-        expectedEvent: WebSocketResponseEvents.POD_CHAT_TOOL_RESULT,
+        expectedEvent: WebSocketResponseEvents.RUN_CHAT_TOOL_RESULT,
         expectedPayload: { toolUseId: "tu1", output: "file content" },
       },
     ])("$label", async ({ events, expectedEvent, expectedPayload }) => {
@@ -348,7 +350,7 @@ describe("executeStreamingChat", () => {
 
       expect(socketService.emitToCanvas).toHaveBeenCalledWith(
         canvasId,
-        WebSocketResponseEvents.POD_CHAT_COMPLETE,
+        WebSocketResponseEvents.RUN_CHAT_COMPLETE,
         expect.objectContaining({
           canvasId,
           podId: pod.id,
@@ -433,32 +435,6 @@ describe("executeStreamingChat", () => {
   });
 
   describe("成功完成", () => {
-    it("完成後 upsertMessage 寫入 DB 且 podStore.setStatus 設為 idle", async () => {
-      const pod = insertClaudePod();
-      const upsertSpy = vi.spyOn(messageStore, "upsertMessage");
-      const setStatusSpy = vi.spyOn(podStore, "setStatus");
-
-      setupProviderMock([
-        { type: "text", content: "Hello" },
-        { type: "turn_complete" },
-      ]);
-
-      await executeStreamingChat({
-        canvasId,
-        podId: pod.id,
-        message,
-        abortable: false,
-        strategy: makeStrategy(),
-      });
-
-      expect(upsertSpy).toHaveBeenCalledWith(
-        canvasId,
-        pod.id,
-        expect.objectContaining({ role: "assistant", content: "Hello" }),
-      );
-      expect(setStatusSpy).toHaveBeenCalledWith(canvasId, pod.id, "idle");
-    });
-
     it("完成後正確呼叫 onComplete callback", async () => {
       const pod = insertClaudePod();
       setupProviderMock([
@@ -479,25 +455,6 @@ describe("executeStreamingChat", () => {
       );
 
       expect(onComplete).toHaveBeenCalledWith(canvasId, pod.id);
-    });
-
-    it("無 assistant content 時不呼叫 upsertMessage 但仍設 idle", async () => {
-      const pod = insertClaudePod();
-      const upsertSpy = vi.spyOn(messageStore, "upsertMessage");
-      const setStatusSpy = vi.spyOn(podStore, "setStatus");
-
-      setupProviderMock([{ type: "turn_complete" }]);
-
-      await executeStreamingChat({
-        canvasId,
-        podId: pod.id,
-        message,
-        abortable: false,
-        strategy: makeStrategy(),
-      });
-
-      expect(upsertSpy).not.toHaveBeenCalled();
-      expect(setStatusSpy).toHaveBeenCalledWith(canvasId, pod.id, "idle");
     });
   });
 
@@ -577,12 +534,11 @@ describe("executeStreamingChat", () => {
 
     it("break-style abort（signal.aborted 但不拋 AbortError）走 handleStreamAbort 路徑", async () => {
       const pod = insertClaudePod();
-      const setStatusSpy = vi.spyOn(podStore, "setStatus");
       const setSessionIdSpy = vi.spyOn(podStore, "setSessionId");
 
       const chatMock = vi.fn(async function* () {
         yield { type: "text" as const, content: "部分回應" };
-        abortRegistry.abort(pod.id);
+        abortRegistry.abortByPodId(pod.id);
         return;
       });
       asMock(getProvider).mockReturnValue({
@@ -607,7 +563,6 @@ describe("executeStreamingChat", () => {
 
       expect(result.aborted).toBe(true);
       expect(result.content).toBe("部分回應");
-      expect(setStatusSpy).toHaveBeenCalledWith(canvasId, pod.id, "idle");
       expect(onAborted).toHaveBeenCalledWith(
         canvasId,
         pod.id,
@@ -770,7 +725,7 @@ describe("executeStreamingChat", () => {
       });
     });
 
-    it("NormalModeExecutionStrategy 下，provider.chat 收到的 sandboxHomePath 等於 getPodSandboxHomePath(pod.id)", async () => {
+    it("ChatExecutionStrategy 下，provider.chat 收到的 sandboxHomePath 等於 getRunSandboxHomePath(runId)", async () => {
       const pod = insertClaudePod();
 
       let capturedCtx: unknown;
@@ -797,7 +752,10 @@ describe("executeStreamingChat", () => {
       });
 
       expect(chatMock).toHaveBeenCalledTimes(1);
-      const expectedSandboxHomePath = getPodSandboxHomePath(pod.id);
+      const expectedSandboxHomePath = getRunSandboxHomePath(
+        defaultRunContext.runId,
+        pod.id,
+      );
       expect(capturedCtx).toMatchObject({
         sandboxHomePath: expectedSandboxHomePath,
       });
@@ -835,7 +793,7 @@ describe("executeStreamingChat", () => {
       expect(result.aborted).toBe(false);
       expect(socketService.emitToCanvas).toHaveBeenCalledWith(
         canvasId,
-        WebSocketResponseEvents.POD_CLAUDE_CHAT_MESSAGE,
+        WebSocketResponseEvents.RUN_MESSAGE,
         expect.objectContaining({
           podId: pod.id,
           role: "system",
@@ -852,9 +810,8 @@ describe("executeStreamingChat", () => {
   });
 
   describe("一般錯誤處理", () => {
-    it("一般錯誤時呼叫 onError callback 並 re-throw，podStore.setStatus 設為 idle", async () => {
+    it("一般錯誤時呼叫 onError callback 並 re-throw", async () => {
       const pod = insertClaudePod();
-      const setStatusSpy = vi.spyOn(podStore, "setStatus");
 
       const testError = new Error("Claude API 錯誤");
       const chatMock = vi.fn(async function* () {
@@ -884,7 +841,6 @@ describe("executeStreamingChat", () => {
         ),
       ).rejects.toThrow("Claude API 錯誤");
 
-      expect(setStatusSpy).toHaveBeenCalledWith(canvasId, pod.id, "idle");
       expect(onError).toHaveBeenCalledWith(
         canvasId,
         pod.id,
@@ -982,7 +938,7 @@ describe("executeStreamingChat", () => {
 
       expect(socketService.emitToCanvas).toHaveBeenCalledWith(
         canvasId,
-        WebSocketResponseEvents.POD_CLAUDE_CHAT_MESSAGE,
+        WebSocketResponseEvents.RUN_MESSAGE,
         expect.objectContaining({
           content: expect.stringContaining("思考中..."),
         }),
@@ -1038,7 +994,7 @@ describe("executeStreamingChat", () => {
     });
   });
 
-  describe("Run mode (RunModeExecutionStrategy)", () => {
+  describe("Run mode (ChatExecutionStrategy)", () => {
     const runId = "test-run-id";
     const runContext: RunContext = {
       runId,
@@ -1047,7 +1003,7 @@ describe("executeStreamingChat", () => {
     };
 
     function makeRunStrategy() {
-      return new RunModeExecutionStrategy(canvasId, runContext);
+      return new ChatExecutionStrategy(canvasId, runContext);
     }
 
     it("正常串流完成：registerActiveStream → chat → unregisterActiveStream", async () => {
@@ -1148,7 +1104,7 @@ describe("executeStreamingChat", () => {
       expect(runExecutionService.errorPodInstance).not.toHaveBeenCalled();
     });
 
-    it("text event 廣播 RUN_MESSAGE 而非 POD_CLAUDE_CHAT_MESSAGE", async () => {
+    it("text event 廣播 RUN_MESSAGE", async () => {
       const pod = insertClaudePod();
       setupProviderMock([
         { type: "text", content: "Run 文字" },
@@ -1173,16 +1129,10 @@ describe("executeStreamingChat", () => {
           content: "Run 文字",
         }),
       );
-      expect(socketService.emitToCanvas).not.toHaveBeenCalledWith(
-        canvasId,
-        WebSocketResponseEvents.POD_CLAUDE_CHAT_MESSAGE,
-        expect.anything(),
-      );
     });
 
-    it("persistMessage 呼叫 runStore.upsertRunMessage 而非 messageStore.upsertMessage", async () => {
+    it("persistMessage 呼叫 runStore.upsertRunMessage", async () => {
       const pod = insertClaudePod();
-      const upsertMessageSpy = vi.spyOn(messageStore, "upsertMessage");
       setupProviderMock([
         { type: "text", content: "Run 內容" },
         { type: "turn_complete" },
@@ -1201,7 +1151,6 @@ describe("executeStreamingChat", () => {
         pod.id,
         expect.objectContaining({ role: "assistant" }),
       );
-      expect(upsertMessageSpy).not.toHaveBeenCalled();
     });
 
     it("instance.runRepoPath 合法時，provider.chat 收到的 workspacePath 為 run repo，sandboxHomePath 為 run-level temp 路徑", async () => {
@@ -1302,7 +1251,7 @@ describe("executeStreamingChat", () => {
       vi.spyOn(socketService, "emitToCanvas").mockImplementation(
         (_cId: string, event: string, payload: unknown) => {
           if (
-            event === WebSocketResponseEvents.POD_CLAUDE_CHAT_MESSAGE &&
+            event === WebSocketResponseEvents.RUN_MESSAGE &&
             typeof payload === "object" &&
             payload !== null &&
             "content" in payload &&
@@ -1323,7 +1272,7 @@ describe("executeStreamingChat", () => {
         podId: pod.id,
         message,
         abortable: false,
-        strategy: new NormalModeExecutionStrategy(canvasId),
+        strategy: new ChatExecutionStrategy(canvasId, defaultRunContext),
       });
 
       expect(collectedContents).toContain("xxx");
@@ -1331,7 +1280,6 @@ describe("executeStreamingChat", () => {
 
     it("Gemini quota fatal error 會寫入明確的 transcript system message，且不額外發 POD_ERROR", async () => {
       const pod = insertClaudePod();
-      const setStatusSpy = vi.spyOn(podStore, "setStatus");
       asMock(logger.error).mockClear();
 
       setupProviderMock([
@@ -1366,7 +1314,7 @@ describe("executeStreamingChat", () => {
 
       expect(socketService.emitToCanvas).toHaveBeenCalledWith(
         canvasId,
-        WebSocketResponseEvents.POD_CLAUDE_CHAT_MESSAGE,
+        WebSocketResponseEvents.RUN_MESSAGE,
         expect.objectContaining({
           podId: pod.id,
           role: "system",
@@ -1380,7 +1328,6 @@ describe("executeStreamingChat", () => {
           }),
         }),
       );
-      expect(setStatusSpy).toHaveBeenCalledWith(canvasId, pod.id, "idle");
 
       const emittedPodError = vi
         .mocked(socketService.emitToCanvas)

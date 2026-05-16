@@ -137,31 +137,22 @@ function insertCanvas(): void {
 function insertPodViaSQL(
   opts: {
     provider?: "gemini" | "claude" | "codex";
-    status?: string;
     workspacePath?: string;
   } = {},
 ): string {
   const podId = `pod-mcp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const provider = opts.provider ?? "gemini";
-  const status = opts.status ?? "idle";
   const workspacePath = opts.workspacePath ?? `/tmp/mcp-pod-${podId}`;
 
   getDb()
     .prepare(
-      `INSERT INTO pods (id, canvas_id, name, status, x, y, rotation, workspace_path,
-       session_id, repository_id, command_id, multi_instance,
+      `INSERT INTO pods (id, canvas_id, name, x, y, rotation, workspace_path,
+       session_id, repository_id, command_id,
        schedule_json, provider, provider_config_json)
-       VALUES (?, ?, ?, ?, 0, 0, 0, ?, NULL, NULL, NULL, 0, NULL, ?,
+       VALUES (?, ?, ?, 0, 0, 0, ?, NULL, NULL, NULL, NULL, ?,
        '{"model":"gemini-2.5-pro"}')`,
     )
-    .run(
-      podId,
-      CANVAS_ID,
-      `pod-${podId.slice(-8)}`,
-      status,
-      workspacePath,
-      provider,
-    );
+    .run(podId, CANVAS_ID, `pod-${podId.slice(-8)}`, workspacePath, provider);
 
   return podId;
 }
@@ -435,38 +426,7 @@ describe("handlePodSetMcpServerNames — Gemini 分支", () => {
     expect(pod?.mcpServerNames).toEqual(["figma"]);
   });
 
-  /**
-   * B3：Gemini Pod 為 busy 狀態 → 拒絕並 emit POD_BUSY i18nError。
-   */
-  it("B3：Gemini Pod 為 busy（chatting）狀態 → 拒絕並 emit POD_BUSY i18nError", async () => {
-    const settingsPath = await writeGeminiSettingsJson(tmpDir, {
-      figma: { httpUrl: "https://mcp.figma.com/mcp" },
-    });
-    restoreEnv = overrideEnv({ GEMINI_SETTINGS_PATH: settingsPath });
-    resetGeminiMcpCache();
-
-    const podId = insertPodViaSQL({ provider: "gemini", status: "chatting" });
-
-    await handlePodSetMcpServerNames(
-      CONNECTION_ID,
-      {
-        requestId: REQUEST_ID,
-        canvasId: CANVAS_ID,
-        podId,
-        mcpServerNames: ["figma"],
-      },
-      REQUEST_ID,
-    );
-
-    // 應拒絕：不廣播到 canvas
-    expect(mockEmitToCanvas).not.toHaveBeenCalled();
-
-    // 應透過 emitToConnection 傳回 POD_BUSY 錯誤
-    expect(mockEmitToConnection).toHaveBeenCalledOnce();
-    const [, , errorPayload] = mockEmitToConnection.mock.calls[0];
-    expect(errorPayload.success).toBe(false);
-    expect(errorPayload.code).toBe("POD_BUSY");
-  });
+  // B3：Pod busy 拒絕已隨 pod.status 概念移除，此測試刪除。
 
   /**
    * B4：Gemini Pod 設定 0 筆 name（清空）

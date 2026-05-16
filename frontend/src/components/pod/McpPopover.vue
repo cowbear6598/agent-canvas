@@ -18,7 +18,6 @@ import type { PodProvider } from "@/types/pod";
 const props = defineProps<{
   podId: string;
   anchorRect: DOMRect;
-  busy: boolean;
   provider: PodProvider;
 }>();
 
@@ -227,7 +226,7 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
                 :name="server.name"
                 :type="server.type"
                 :checked="localMcpServerNamesSet.has(server.name)"
-                :disabled="busy"
+                :disabled="false"
                 :readonly="true"
                 @toggle="handleToggle"
               />
@@ -243,7 +242,6 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
         <ScrollArea
           v-else
           class="pod-popover-scrollable"
-          :title="busy ? t('pod.slot.mcpBusyTooltip') : undefined"
         >
           <div class="space-y-1">
             <McpServerRow
@@ -252,7 +250,7 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
               :name="server.name"
               :type="isGemini ? server.type : undefined"
               :checked="localMcpServerNamesSet.has(server.name)"
-              :disabled="busy"
+              :disabled="false"
               :readonly="false"
               @toggle="handleToggle"
             />

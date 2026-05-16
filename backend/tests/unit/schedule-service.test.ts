@@ -4,7 +4,7 @@
  * 保留合理 boundary mock：
  *   - getProvider（SDK boundary：buildPodFromRow → resolveProviderConfig 需要 metadata）
  *   - executeStreamingChat（Claude/Codex SDK 入口）
- *   - launchMultiInstanceRun（multi-instance SDK 入口）
+ *   - launchRun（multi-run SDK 入口）
  *   - workflowExecutionService.checkAndTriggerWorkflows（非同步 side-effect，非本測試範疇）
  *   - commandService.read（filesystem 邊界）
  *   - fireAndForget（讓 workflow callback 同步執行，避免非同步洩漏）
@@ -48,9 +48,9 @@ vi.mock("../../src/services/claude/streamingChatExecutor.js", () => ({
   executeStreamingChat: vi.fn().mockResolvedValue(undefined),
 }));
 
-// launchMultiInstanceRun：multi-instance SDK 入口
+// launchRun：multi-run SDK 入口
 vi.mock("../../src/utils/runChatHelpers.js", () => ({
-  launchMultiInstanceRun: vi.fn().mockResolvedValue({
+  launchRun: vi.fn().mockResolvedValue({
     runId: "run-1",
     canvasId: "canvas-1",
     sourcePodId: "pod-1",
@@ -107,7 +107,7 @@ import {
   shouldFireCheckers,
 } from "../../src/services/scheduleService.js";
 import * as executeStreamingChatModule from "../../src/services/claude/streamingChatExecutor.js";
-import * as launchMultiInstanceRunModule from "../../src/utils/runChatHelpers.js";
+import * as launchRunModule from "../../src/utils/runChatHelpers.js";
 import * as commandServiceModule from "../../src/services/commandService.js";
 import { WebSocketResponseEvents } from "../../src/schemas/index.js";
 import {
@@ -171,8 +171,6 @@ function insertCanvas(): void {
 function insertPodViaSQL(opts: {
   podId?: string;
   canvasId?: string;
-  status?: string;
-  multiInstance?: boolean;
   commandId?: string | null;
   scheduleJson?: string | null;
   workspacePath?: string;
@@ -186,20 +184,18 @@ function insertPodViaSQL(opts: {
   getDb()
     .prepare(
       `INSERT INTO pods
-       (id, canvas_id, name, status, x, y, rotation, workspace_path,
-        session_id, repository_id, command_id, multi_instance,
+       (id, canvas_id, name, x, y, rotation, workspace_path,
+        session_id, repository_id, command_id,
         schedule_json, provider, provider_config_json)
-       VALUES (?, ?, ?, ?, 0, 0, 0, ?, NULL, NULL, ?, ?, ?, 'claude',
+       VALUES (?, ?, ?, 0, 0, 0, ?, NULL, NULL, ?, ?, 'claude',
        '{"model":"opus"}')`,
     )
     .run(
       podId,
       canvasId,
       `pod-name-${podId}`,
-      opts.status ?? "idle",
       workspacePath,
       opts.commandId ?? null,
-      opts.multiInstance ? 1 : 0,
       opts.scheduleJson ?? null,
     );
   return podId;
@@ -641,378 +637,3 @@ describe("shouldFireCheckers 時區修正 - every-week", () => {
   });
 });
 
-// ============================================================
-// Section 4：fireSchedule 整合測試（真 podStore + 真 messageStore）
-// ============================================================
-
-describe("scheduleService.fireSchedule 整合測試", () => {
-  let emitSpy: ReturnType<typeof vi.spyOn>;
-  let getTimezoneOffsetSpy: ReturnType<typeof vi.spyOn>;
-
-  beforeEach(() => {
-    // 初始化真實 in-memory DB
-    clearPodStoreCache();
-    initTestDb();
-    insertCanvas();
-
-    // spy socketService.emitToCanvas（不整體 mock）
-    emitSpy = vi
-      .spyOn(socketService, "emitToCanvas")
-      .mockImplementation(() => {});
-
-    // spy configStore.getTimezoneOffset（固定回傳 0，不需要整體 mock）
-    getTimezoneOffsetSpy = vi
-      .spyOn(configStore, "getTimezoneOffset")
-      .mockReturnValue(0);
-
-    // 清除所有 SDK boundary mock 的呼叫紀錄
-    vi.clearAllMocks();
-
-    // 重新設定 spy（clearAllMocks 會清除 mock，需重新設定）
-    emitSpy = vi
-      .spyOn(socketService, "emitToCanvas")
-      .mockImplementation(() => {});
-    getTimezoneOffsetSpy = vi
-      .spyOn(configStore, "getTimezoneOffset")
-      .mockReturnValue(0);
-
-    // SDK mock 的預設行為
-    asMock(executeStreamingChatModule.executeStreamingChat).mockResolvedValue(
-      undefined,
-    );
-    asMock(
-      launchMultiInstanceRunModule.launchMultiInstanceRun,
-    ).mockResolvedValue({
-      runId: "run-1",
-      canvasId: CANVAS_ID,
-      sourcePodId: POD_ID,
-    });
-    asMock(commandServiceModule.commandService.read).mockResolvedValue(null);
-  });
-
-  afterEach(() => {
-    clearPodStoreCache();
-    closeDb();
-    resetStatements();
-    vi.restoreAllMocks();
-  });
-
-  // ---- 一般模式（multiInstance=false） ----
-
-  it("一般模式：無 commandId 時 message 使用排程啟動語句觸發 executeStreamingChat", async () => {
-    insertPodViaSQL({
-      scheduleJson: BASE_SCHEDULE_JSON,
-      multiInstance: false,
-      commandId: null,
-    });
-    // 無 commandId 時 tryExpandCommandMessage 不呼叫 commandService.read，直接回傳原始訊息（空字串）
-    // expandScheduleMessage 偵測到空字串後改用 SCHEDULE_FALLBACK_MESSAGE
-    asMock(commandServiceModule.commandService.read).mockResolvedValue(null);
-
-    const pod = podStore.getById(CANVAS_ID, POD_ID)!;
-    expect(pod).toBeDefined();
-
-    await (scheduleService as any).fireSchedule(CANVAS_ID, pod, new Date());
-
-    expect(
-      executeStreamingChatModule.executeStreamingChat,
-    ).toHaveBeenCalledWith(
-      expect.objectContaining({
-        canvasId: CANVAS_ID,
-        podId: POD_ID,
-        message: "排程啟動，完成以下任務：",
-        abortable: false,
-      }),
-      expect.any(Object),
-    );
-    expect(
-      launchMultiInstanceRunModule.launchMultiInstanceRun,
-    ).not.toHaveBeenCalled();
-  });
-
-  it("一般模式：有 commandId 且展開成功時應呼叫 executeStreamingChat 帶展開後內容", async () => {
-    const COMMAND_CONTENT = "my-command-markdown";
-    insertPodViaSQL({
-      scheduleJson: BASE_SCHEDULE_JSON,
-      multiInstance: false,
-      commandId: "cmd-1",
-    });
-    asMock(commandServiceModule.commandService.read).mockResolvedValue(
-      COMMAND_CONTENT,
-    );
-
-    const pod = podStore.getById(CANVAS_ID, POD_ID)!;
-    await (scheduleService as any).fireSchedule(CANVAS_ID, pod, new Date());
-
-    expect(
-      executeStreamingChatModule.executeStreamingChat,
-    ).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: expect.stringContaining(COMMAND_CONTENT),
-        abortable: false,
-      }),
-      expect.any(Object),
-    );
-    expect(
-      launchMultiInstanceRunModule.launchMultiInstanceRun,
-    ).not.toHaveBeenCalled();
-  });
-
-  it("一般模式：commandId 存在但 command 已被刪除時 message 使用排程啟動語句", async () => {
-    insertPodViaSQL({
-      scheduleJson: BASE_SCHEDULE_JSON,
-      multiInstance: false,
-      commandId: "deleted-cmd",
-    });
-    asMock(commandServiceModule.commandService.read).mockResolvedValue(null);
-
-    const pod = podStore.getById(CANVAS_ID, POD_ID)!;
-    await (scheduleService as any).fireSchedule(CANVAS_ID, pod, new Date());
-
-    expect(
-      executeStreamingChatModule.executeStreamingChat,
-    ).toHaveBeenCalledWith(
-      expect.objectContaining({ message: "排程啟動，完成以下任務：" }),
-      expect.any(Object),
-    );
-  });
-
-  it("一般模式：觸發後 podStore.setScheduleLastTriggeredAt 更新 DB，DB 內 lastTriggeredAt 不再為 null", async () => {
-    insertPodViaSQL({ scheduleJson: BASE_SCHEDULE_JSON, multiInstance: false });
-    const pod = podStore.getById(CANVAS_ID, POD_ID)!;
-    const now = new Date("2026-04-02T10:00:00Z");
-
-    await (scheduleService as any).fireSchedule(CANVAS_ID, pod, now);
-
-    // 從 DB 重新讀取，確認 schedule_json 的 lastTriggeredAt 已更新
-    const updated = podStore.getById(CANVAS_ID, POD_ID)!;
-    expect(updated.schedule?.lastTriggeredAt).toBeInstanceOf(Date);
-    expect(updated.schedule?.lastTriggeredAt!.toISOString()).toBe(
-      now.toISOString(),
-    );
-  });
-
-  it("一般模式：觸發後 socketService.emitToCanvas 發出 SCHEDULE_FIRED 事件", async () => {
-    insertPodViaSQL({ scheduleJson: BASE_SCHEDULE_JSON, multiInstance: false });
-    const pod = podStore.getById(CANVAS_ID, POD_ID)!;
-    const now = new Date();
-
-    await (scheduleService as any).fireSchedule(CANVAS_ID, pod, now);
-
-    expect(emitSpy).toHaveBeenCalledWith(
-      CANVAS_ID,
-      WebSocketResponseEvents.SCHEDULE_FIRED,
-      expect.objectContaining({ podId: POD_ID }),
-    );
-  });
-
-  it("一般模式：injectUserMessage 寫入 messageStore 並 emit POD_CHAT_USER_MESSAGE", async () => {
-    const COMMAND_CONTENT = "cmd-content";
-    insertPodViaSQL({
-      scheduleJson: BASE_SCHEDULE_JSON,
-      multiInstance: false,
-      commandId: "cmd-1",
-    });
-    asMock(commandServiceModule.commandService.read).mockResolvedValue(
-      COMMAND_CONTENT,
-    );
-
-    const pod = podStore.getById(CANVAS_ID, POD_ID)!;
-    await (scheduleService as any).fireSchedule(CANVAS_ID, pod, new Date());
-
-    // messageStore.addMessage 應寫入含展開內容的字串（getMessages 只接受 podId）
-    const messages = messageStore.getMessages(POD_ID);
-    expect(messages.length).toBeGreaterThan(0);
-    expect(messages[0].role).toBe("user");
-    expect(messages[0].content).toContain(COMMAND_CONTENT);
-
-    // socketService.emitToCanvas 應 emit POD_CHAT_USER_MESSAGE
-    expect(emitSpy).toHaveBeenCalledWith(
-      CANVAS_ID,
-      WebSocketResponseEvents.POD_CHAT_USER_MESSAGE,
-      expect.objectContaining({
-        podId: POD_ID,
-        content: expect.stringContaining(COMMAND_CONTENT),
-      }),
-    );
-  });
-
-  it("一般模式：Pod 狀態為 busy 時跳過觸發", async () => {
-    insertPodViaSQL({
-      scheduleJson: BASE_SCHEDULE_JSON,
-      multiInstance: false,
-      status: "chatting",
-    });
-    const pod = podStore.getById(CANVAS_ID, POD_ID)!;
-
-    await (scheduleService as any).fireSchedule(CANVAS_ID, pod, new Date());
-
-    expect(
-      executeStreamingChatModule.executeStreamingChat,
-    ).not.toHaveBeenCalled();
-    expect(emitSpy).not.toHaveBeenCalled();
-  });
-
-  // ---- multi-instance 模式 ----
-
-  it("multi-instance 模式：無 commandId 時 message 使用排程啟動語句觸發 launchMultiInstanceRun", async () => {
-    insertPodViaSQL({
-      scheduleJson: BASE_SCHEDULE_JSON,
-      multiInstance: true,
-      commandId: null,
-    });
-    asMock(commandServiceModule.commandService.read).mockResolvedValue(null);
-
-    const pod = podStore.getById(CANVAS_ID, POD_ID)!;
-    await (scheduleService as any).fireSchedule(CANVAS_ID, pod, new Date());
-
-    expect(
-      launchMultiInstanceRunModule.launchMultiInstanceRun,
-    ).toHaveBeenCalledWith(
-      expect.objectContaining({
-        canvasId: CANVAS_ID,
-        podId: POD_ID,
-        message: "排程啟動，完成以下任務：",
-        abortable: false,
-      }),
-    );
-    expect(
-      executeStreamingChatModule.executeStreamingChat,
-    ).not.toHaveBeenCalled();
-  });
-
-  it("multi-instance 模式：有 commandId 且展開成功時呼叫 launchMultiInstanceRun 帶展開後內容", async () => {
-    const COMMAND_CONTENT = "multi-instance-cmd";
-    insertPodViaSQL({
-      scheduleJson: BASE_SCHEDULE_JSON,
-      multiInstance: true,
-      commandId: "cmd-mi",
-    });
-    asMock(commandServiceModule.commandService.read).mockResolvedValue(
-      COMMAND_CONTENT,
-    );
-
-    const pod = podStore.getById(CANVAS_ID, POD_ID)!;
-    await (scheduleService as any).fireSchedule(CANVAS_ID, pod, new Date());
-
-    expect(
-      launchMultiInstanceRunModule.launchMultiInstanceRun,
-    ).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: expect.stringContaining(COMMAND_CONTENT),
-        abortable: false,
-      }),
-    );
-    expect(
-      executeStreamingChatModule.executeStreamingChat,
-    ).not.toHaveBeenCalled();
-    // multi-instance 路徑不走 messageStore.addMessage（由 launchMultiInstanceRun 內部處理）
-    expect(messageStore.getMessages(CANVAS_ID, POD_ID)).toHaveLength(0);
-  });
-
-  it("multi-instance 模式：commandId 存在但 command 已被刪除時 message 使用排程啟動語句", async () => {
-    insertPodViaSQL({
-      scheduleJson: BASE_SCHEDULE_JSON,
-      multiInstance: true,
-      commandId: "deleted-cmd",
-    });
-    asMock(commandServiceModule.commandService.read).mockResolvedValue(null);
-
-    const pod = podStore.getById(CANVAS_ID, POD_ID)!;
-    await (scheduleService as any).fireSchedule(CANVAS_ID, pod, new Date());
-
-    expect(
-      launchMultiInstanceRunModule.launchMultiInstanceRun,
-    ).toHaveBeenCalledWith(
-      expect.objectContaining({ message: "排程啟動，完成以下任務：" }),
-    );
-  });
-
-  it("multi-instance 模式：觸發後 DB 內 lastTriggeredAt 已更新", async () => {
-    insertPodViaSQL({ scheduleJson: BASE_SCHEDULE_JSON, multiInstance: true });
-    const pod = podStore.getById(CANVAS_ID, POD_ID)!;
-    const now = new Date("2026-04-02T10:00:00Z");
-
-    await (scheduleService as any).fireSchedule(CANVAS_ID, pod, now);
-
-    const updated = podStore.getById(CANVAS_ID, POD_ID)!;
-    expect(updated.schedule?.lastTriggeredAt?.toISOString()).toBe(
-      now.toISOString(),
-    );
-  });
-
-  it("multi-instance 模式：觸發後 socketService.emitToCanvas 發出 SCHEDULE_FIRED 事件", async () => {
-    insertPodViaSQL({ scheduleJson: BASE_SCHEDULE_JSON, multiInstance: true });
-    const pod = podStore.getById(CANVAS_ID, POD_ID)!;
-
-    await (scheduleService as any).fireSchedule(CANVAS_ID, pod, new Date());
-
-    expect(emitSpy).toHaveBeenCalledWith(
-      CANVAS_ID,
-      WebSocketResponseEvents.SCHEDULE_FIRED,
-      expect.objectContaining({ podId: POD_ID }),
-    );
-  });
-
-  // ---- fireScheduleById（getById 路徑） ----
-
-  it("fireScheduleById：找不到 Pod 時應跳過（不呼叫任何 SDK 入口）", async () => {
-    // 不插入任何 pod
-    await (scheduleService as any).fireScheduleById(
-      CANVAS_ID,
-      "nonexistent-pod",
-      new Date(),
-    );
-
-    expect(
-      executeStreamingChatModule.executeStreamingChat,
-    ).not.toHaveBeenCalled();
-    expect(
-      launchMultiInstanceRunModule.launchMultiInstanceRun,
-    ).not.toHaveBeenCalled();
-  });
-
-  it("fireScheduleById：找到 Pod 後正確呼叫 fireSchedule 流程", async () => {
-    insertPodViaSQL({ scheduleJson: BASE_SCHEDULE_JSON, multiInstance: false });
-
-    await (scheduleService as any).fireScheduleById(
-      CANVAS_ID,
-      POD_ID,
-      new Date(),
-    );
-
-    expect(
-      executeStreamingChatModule.executeStreamingChat,
-    ).toHaveBeenCalledTimes(1);
-  });
-
-  // ---- listScheduleInfo 驗證 ----
-
-  it("listScheduleInfo：有排程的 Pod 被列出，無排程的 Pod 不被列出", () => {
-    insertPodViaSQL({
-      podId: "pod-with-schedule",
-      scheduleJson: BASE_SCHEDULE_JSON,
-    });
-    insertPodViaSQL({ podId: "pod-no-schedule", scheduleJson: null });
-
-    const list = podStore.listScheduleInfo();
-    const ids = list.map((x) => x.podId);
-
-    expect(ids).toContain("pod-with-schedule");
-    expect(ids).not.toContain("pod-no-schedule");
-  });
-
-  it("listScheduleInfo：disabled 排程不被列出", () => {
-    const disabledScheduleJson = JSON.stringify({
-      ...JSON.parse(BASE_SCHEDULE_JSON),
-      enabled: false,
-    });
-    insertPodViaSQL({
-      podId: "pod-disabled",
-      scheduleJson: disabledScheduleJson,
-    });
-
-    const list = podStore.listScheduleInfo();
-    expect(list.map((x) => x.podId)).not.toContain("pod-disabled");
-  });
-});

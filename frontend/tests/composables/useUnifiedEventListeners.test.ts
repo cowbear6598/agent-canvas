@@ -24,7 +24,6 @@ import { useCommandStore } from "@/stores/note/commandStore";
 // TODO Phase 4: useMcpServerStore 重構後補回
 // import { useMcpServerStore } from "@/stores/note/mcpServerStore";
 import { useCanvasStore } from "@/stores/canvasStore";
-import { useChatStore } from "@/stores/chat/chatStore";
 import { useIntegrationStore } from "@/stores/integrationStore";
 import type {
   Pod,
@@ -688,90 +687,6 @@ describe("useUnifiedEventListeners", () => {
       expect(connectionStore.connections.some((c) => c.id === "conn-1")).toBe(
         true,
       );
-    });
-  });
-
-  describe("workflow:clear:result 批次清空", () => {
-    it("應清空多個 Pod 的訊息和輸出", () => {
-      const { registerUnifiedListeners } = useUnifiedEventListeners();
-      const podStore = usePodStore();
-      const chatStore = useChatStore();
-
-      const pod1 = createMockPod({ id: "pod-1", output: ["line1", "line2"] });
-      const pod2 = createMockPod({ id: "pod-2", output: ["line3"] });
-      podStore.pods = [pod1, pod2];
-
-      chatStore.messagesByPodId.set("pod-1", [
-        { id: "msg-1", role: "user", content: "test", timestamp: "2024-01-01" },
-      ]);
-
-      registerUnifiedListeners();
-
-      simulateEvent("workflow:clear:result", {
-        canvasId: "canvas-1",
-        clearedPodIds: ["pod-1", "pod-2"],
-      });
-
-      expect(podStore.getPodById("pod-1")?.output).toEqual([]);
-      expect(podStore.getPodById("pod-2")?.output).toEqual([]);
-      const messages = chatStore.messagesByPodId.get("pod-1");
-      expect(messages === undefined || messages.length === 0).toBe(true);
-    });
-  });
-
-  describe("pod:chat:user-message 特殊處理", () => {
-    it("應新增使用者訊息到 chatStore 並更新 Pod output", () => {
-      const { registerUnifiedListeners } = useUnifiedEventListeners();
-      const chatStore = useChatStore();
-      const podStore = usePodStore();
-
-      const pod = createMockPod({ id: "pod-1", output: [] });
-      podStore.pods = [pod];
-
-      registerUnifiedListeners();
-
-      simulateEvent("pod:chat:user-message", {
-        podId: "pod-1",
-        messageId: "msg-1",
-        content: "Hello, this is a test message",
-        timestamp: "2024-01-01T00:00:00.000Z",
-      });
-
-      const messages = chatStore.messagesByPodId.get("pod-1");
-      expect(messages).toHaveLength(1);
-      expect(messages?.[0]).toMatchObject({
-        id: "msg-1",
-        role: "user",
-        content: "Hello, this is a test message",
-      });
-
-      const updatedPod = podStore.getPodById("pod-1");
-      expect(updatedPod?.output[0]).toContain(
-        "> Hello, this is a test message",
-      );
-    });
-
-    it("應截斷過長的訊息內容（200字元）", () => {
-      const { registerUnifiedListeners } = useUnifiedEventListeners();
-      const chatStore = useChatStore();
-      const podStore = usePodStore();
-
-      const pod = createMockPod({ id: "pod-1", output: [] });
-      podStore.pods = [pod];
-
-      registerUnifiedListeners();
-
-      const longContent = "a".repeat(250);
-      simulateEvent("pod:chat:user-message", {
-        podId: "pod-1",
-        messageId: "msg-1",
-        content: longContent,
-        timestamp: "2024-01-01T00:00:00.000Z",
-      });
-
-      const updatedPod = podStore.getPodById("pod-1");
-      const output = updatedPod?.output[0] || "";
-      expect(output).toMatch(/^> a{30,}\.\.\.$/);
     });
   });
 

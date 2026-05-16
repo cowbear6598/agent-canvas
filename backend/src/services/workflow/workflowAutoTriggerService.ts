@@ -1,4 +1,7 @@
-import type { Connection, WorkflowAutoTriggeredPayload } from '../../types/index.js';
+import type {
+  Connection,
+  WorkflowAutoTriggeredPayload,
+} from "../../types/index.js";
 import type {
   TriggerStrategy,
   TriggerDecideContext,
@@ -8,22 +11,26 @@ import type {
   CompletionContext,
   QueuedContext,
   QueueProcessedContext,
-} from './types.js';
-import { podStore } from '../podStore.js';
-import { messageStore } from '../messageStore.js';
-import { runStore } from '../runStore.js';
-import { connectionStore } from '../connectionStore.js';
-import { workflowEventEmitter } from './workflowEventEmitter.js';
-import { forEachMultiInputGroupConnection, buildQueuedPayload, createMultiInputCompletionHandlers, emitQueueProcessed } from './workflowHelpers.js';
-import { logger } from '../../utils/logger.js';
-import type { RunContext } from '../../types/run.js';
+} from "./types.js";
+import { podStore } from "../podStore.js";
+import { runStore } from "../runStore.js";
+import { connectionStore } from "../connectionStore.js";
+import { workflowEventEmitter } from "./workflowEventEmitter.js";
+import {
+  forEachMultiInputGroupConnection,
+  buildQueuedPayload,
+  createMultiInputCompletionHandlers,
+  emitQueueProcessed,
+} from "./workflowHelpers.js";
+import { logger } from "../../utils/logger.js";
+import type { RunContext } from "../../types/run.js";
 
 interface Pipeline {
   execute(context: PipelineContext, strategy: TriggerStrategy): Promise<void>;
 }
 
 class WorkflowAutoTriggerService implements TriggerStrategy {
-  readonly mode = 'auto' as const;
+  readonly mode = "auto" as const;
   private pipeline?: Pipeline;
 
   init(deps: { pipeline: Pipeline }): void {
@@ -39,24 +46,21 @@ class WorkflowAutoTriggerService implements TriggerStrategy {
     }));
   }
 
-  getLastAssistantMessage(sourcePodId: string, runContext?: RunContext): string | null {
-    if (runContext) {
-      const messages = runStore.getRunMessages(runContext.runId, sourcePodId);
-      const assistantMessages = messages.filter((message) => message.role === 'assistant');
-
-      if (assistantMessages.length === 0) {
-        logger.error('Workflow', 'Error', `找不到 assistant 訊息作為備用內容 (Run: ${runContext.runId})`);
-        return null;
-      }
-
-      return assistantMessages[assistantMessages.length - 1].content;
-    }
-
-    const messages = messageStore.getMessages(sourcePodId);
-    const assistantMessages = messages.filter((message) => message.role === 'assistant');
+  getLastAssistantMessage(
+    sourcePodId: string,
+    runContext: RunContext,
+  ): string | null {
+    const messages = runStore.getRunMessages(runContext.runId, sourcePodId);
+    const assistantMessages = messages.filter(
+      (message) => message.role === "assistant",
+    );
 
     if (assistantMessages.length === 0) {
-      logger.error('Workflow', 'Error', '找不到 assistant 訊息作為備用內容');
+      logger.error(
+        "Workflow",
+        "Error",
+        `找不到 assistant 訊息作為備用內容 (Run: ${runContext.runId})`,
+      );
       return null;
     }
 
@@ -67,15 +71,19 @@ class WorkflowAutoTriggerService implements TriggerStrategy {
     canvasId: string,
     sourcePodId: string,
     connection: Connection,
-    runContext?: RunContext
+    runContext?: RunContext,
   ): Promise<void> {
     if (!this.pipeline) {
-      throw new Error('AutoTriggerService 尚未初始化，請先呼叫 init()');
+      throw new Error("AutoTriggerService 尚未初始化，請先呼叫 init()");
     }
 
     const targetPod = podStore.getById(canvasId, connection.targetPodId);
     if (!targetPod) {
-      logger.log('Workflow', 'Error', `目標 Pod ${connection.targetPodId} 不存在，跳過自動觸發`);
+      logger.log(
+        "Workflow",
+        "Error",
+        `目標 Pod ${connection.targetPodId} 不存在，跳過自動觸發`,
+      );
       return;
     }
 
@@ -83,7 +91,7 @@ class WorkflowAutoTriggerService implements TriggerStrategy {
       canvasId,
       sourcePodId,
       connection,
-      triggerMode: 'auto',
+      triggerMode: "auto",
       decideResult: {
         connectionId: connection.id,
         approved: true,
@@ -110,7 +118,11 @@ class WorkflowAutoTriggerService implements TriggerStrategy {
 
   private readonly completionHandlers = createMultiInputCompletionHandlers();
 
-  onComplete(context: CompletionContext, success: boolean, error?: string): void {
+  onComplete(
+    context: CompletionContext,
+    success: boolean,
+    error?: string,
+  ): void {
     this.completionHandlers.onComplete(context, success, error);
   }
 
@@ -120,12 +132,20 @@ class WorkflowAutoTriggerService implements TriggerStrategy {
 
   onQueued(context: QueuedContext): void {
     if (context.runContext) return;
-    forEachMultiInputGroupConnection(context.canvasId, context.targetPodId, (conn) => {
-      connectionStore.updateConnectionStatus(context.canvasId, conn.id, 'queued');
-    });
+    forEachMultiInputGroupConnection(
+      context.canvasId,
+      context.targetPodId,
+      (conn) => {
+        connectionStore.updateConnectionStatus(
+          context.canvasId,
+          conn.id,
+          "queued",
+        );
+      },
+    );
     workflowEventEmitter.emitWorkflowQueued(
       context.canvasId,
-      buildQueuedPayload(context, context.connectionId, context.sourcePodId)
+      buildQueuedPayload(context, context.connectionId, context.sourcePodId),
     );
   }
 

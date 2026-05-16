@@ -8,7 +8,7 @@ import type {
   PodPublicView,
   ScheduleConfig,
 } from "../types";
-import { isPodBusy, toPodPublicView } from "../types/index.js";
+import { toPodPublicView } from "../types/index.js";
 import type {
   PodCreatePayload,
   PodListPayload,
@@ -22,6 +22,7 @@ import type {
   PodSetPluginsPayload,
 } from "../schemas";
 import { podStore } from "../services/podStore.js";
+import { runStore } from "../services/runStore.js";
 import { getDefaultThinkingLevel } from "../services/pod/providerConfigResolver.js";
 import {
   createPodWithWorkspace,
@@ -561,7 +562,7 @@ export const handlePodSetPlugins = withCanvasId<PodSetPluginsPayload>(
       return;
     }
 
-    if (isPodBusy(existingPod.status)) {
+    if (runStore.hasActiveRunForPod(podId)) {
       const busyResponse: PodPluginsSetPayload = {
         requestId,
         canvasId,

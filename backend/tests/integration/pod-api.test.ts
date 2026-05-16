@@ -58,7 +58,6 @@ describe("GET /api/canvas/:id/pods", () => {
 
     expect(pod.id).toBeDefined();
     expect(pod.name).toBeDefined();
-    expect(pod.status).toBeDefined();
     expect(Array.isArray(pod.mcpServerNames)).toBe(true);
   });
 
@@ -301,7 +300,6 @@ describe("POST /api/canvas/:id/pods", () => {
 
     expect(typeof pod.id).toBe("string");
     expect(typeof pod.name).toBe("string");
-    expect(pod.status).toBe("idle");
     expect(typeof pod.workspacePath).toBe("string");
     expect(typeof pod.x).toBe("number");
     expect(typeof pod.y).toBe("number");
@@ -310,7 +308,6 @@ describe("POST /api/canvas/:id/pods", () => {
     expect(typeof pod.providerConfig?.model).toBe("string");
 
     expect(Array.isArray(pod.mcpServerNames)).toBe(true);
-    expect(typeof pod.multiInstance).toBe("boolean");
   });
 });
 

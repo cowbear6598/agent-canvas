@@ -116,14 +116,9 @@ export function createConnectionActions(store: ChatStoreInstance): {
   const resetConnectionState = (): void => {
     store.socketId = null;
     store.lastHeartbeatAt = null;
-    store.allHistoryLoaded = false;
-    store.historyLoadingStatus.clear();
-    store.historyLoadingError.clear();
   };
 
-  const handleSocketDisconnect = (
-    event: WebSocketDisconnectEvent,
-  ): void => {
+  const handleSocketDisconnect = (event: WebSocketDisconnectEvent): void => {
     const isSilentReconnect = Boolean(event.silent && event.willReconnect);
 
     store.isSilentReconnectInProgress = isSilentReconnect;
@@ -192,10 +187,8 @@ export function createConnectionActions(store: ChatStoreInstance): {
 
     if (payload.podId) {
       store.setTyping(payload.podId, false);
-      // 後端回傳錯誤時，pod 可能已被樂觀更新為 chatting，需回滾為 idle
-      const podStore = usePodStore();
-      podStore.updatePodStatus(payload.podId, "idle");
       // 從 podStore 取得 provider，未知來源時 fallback 為 "unknown"
+      const podStore = usePodStore();
       const pod = podStore.pods.find((p) => p.id === payload.podId);
       const provider = pod?.provider ?? "unknown";
       appendErrorToTranscript(

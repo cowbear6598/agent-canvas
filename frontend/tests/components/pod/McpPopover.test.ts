@@ -108,14 +108,12 @@ function setupPod(mcpServerNames: string[] = []) {
       x: 0,
       y: 0,
       rotation: 0,
-      status: "idle",
       output: [],
       repositoryId: null,
       commandId: null,
       schedule: null,
       mcpServerNames,
       pluginIds: [],
-      multiInstance: false,
       provider: "claude",
       providerConfig: { model: "opus" },
     },
@@ -236,37 +234,6 @@ describe("McpPopover", () => {
       const switchBtn = bodyQuery(".switch-stub") as HTMLElement;
       expect(switchBtn).not.toBeNull();
       expect(switchBtn.getAttribute("data-checked")).toBe("false");
-    });
-  });
-
-  // ── busy 狀態 ─────────────────────────────────────────────────
-
-  describe("busy 狀態", () => {
-    it("busy=true 時 Switch disabled，並顯示 mcpBusyTooltip", async () => {
-      mockListMcpServers.mockResolvedValue([MOCK_MCP_SERVER]);
-      mountPopover({ busy: true });
-      await flushPromises();
-
-      const switchBtn = bodyQuery(".switch-stub");
-      expect(switchBtn!.hasAttribute("disabled")).toBe(true);
-
-      const popover = bodyQuery(".fixed.z-50");
-      expect(
-        popover!.querySelector("[title='pod.slot.mcpBusyTooltip']"),
-      ).not.toBeNull();
-    });
-
-    it("busy=true 時 click 不觸發 updatePodMcpServersApi", async () => {
-      mockListMcpServers.mockResolvedValue([MOCK_MCP_SERVER]);
-      mountPopover({ busy: true });
-      await flushPromises();
-
-      bodyQuery(".switch-stub")!.dispatchEvent(
-        new MouseEvent("click", { bubbles: true }),
-      );
-      await flushPromises();
-
-      expect(mockUpdatePodMcpServersApi).not.toHaveBeenCalled();
     });
   });
 
@@ -532,21 +499,6 @@ describe("McpPopover", () => {
       expect(bodyQuery(".fixed.z-50")!.textContent).toContain(
         "pod.slot.mcpSearchEmpty",
       );
-    });
-
-    // B4：Gemini popover busy=true 時 Switch disabled，row title 顯示 busy tooltip
-    it("B4：busy=true 時 Switch disabled，row title 顯示 mcpBusyTooltip", async () => {
-      mockListMcpServers.mockResolvedValue(GEMINI_MCP_SERVERS);
-      mountPopover({ provider: "gemini", busy: true });
-      await flushPromises();
-
-      const switchBtn = bodyQuery(".switch-stub");
-      expect(switchBtn!.hasAttribute("disabled")).toBe(true);
-
-      const popover = bodyQuery(".fixed.z-50");
-      expect(
-        popover!.querySelector("[title='pod.slot.mcpBusyTooltip']"),
-      ).not.toBeNull();
     });
 
     // B5：Gemini popover 點擊 Switch 開：呼叫 updatePodMcpServers 並更新 podStore

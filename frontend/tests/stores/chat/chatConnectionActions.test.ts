@@ -248,21 +248,15 @@ describe("chatConnectionActions", () => {
       expect(store.connectionStatus).toBe("disconnected");
     });
 
-    it("重置連線狀態（socketId, historyLoadingStatus 等）", () => {
+    it("重置連線狀態（socketId, lastHeartbeatAt）", () => {
       const store = useChatStore();
       store.socketId = "socket-123";
       store.lastHeartbeatAt = 12345;
-      store.allHistoryLoaded = true;
-      store.historyLoadingStatus.set("pod-1", "loaded");
-      store.historyLoadingError.set("pod-1", "some error");
 
       store.handleSocketDisconnect({ reason: "Connection lost" });
 
       expect(store.socketId).toBeNull();
       expect(store.lastHeartbeatAt).toBeNull();
-      expect(store.allHistoryLoaded).toBe(false);
-      expect(store.historyLoadingStatus.size).toBe(0);
-      expect(store.historyLoadingError.size).toBe(0);
     });
 
     it("顯示斷線 Toast（已知 close code 顯示友善訊息）", () => {
@@ -336,8 +330,6 @@ describe("chatConnectionActions", () => {
       const store = useChatStore();
       store.socketId = "socket-123";
       store.lastHeartbeatAt = 12345;
-      store.allHistoryLoaded = true;
-      store.historyLoadingStatus.set("pod-1", "loaded");
       store.isTypingByPodId.set("pod-1", true);
 
       store.handleSocketDisconnect({
@@ -351,8 +343,6 @@ describe("chatConnectionActions", () => {
       expect(store.disconnectReason).toBeNull();
       expect(store.socketId).toBeNull();
       expect(store.lastHeartbeatAt).toBeNull();
-      expect(store.allHistoryLoaded).toBe(false);
-      expect(store.historyLoadingStatus.size).toBe(0);
       expect(store.isTypingByPodId.size).toBe(0);
       expect(mockToast).not.toHaveBeenCalled();
     });

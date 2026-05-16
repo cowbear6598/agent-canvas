@@ -163,44 +163,6 @@ describe("Direct Trigger Flow", () => {
     });
   });
 
-  describe("A2: 單一 direct - target busy → 進 queue", () => {
-    it("Target Pod 只有 1 條 direct 連線，target 狀態為 chatting，應進入 queue", async () => {
-      vi.spyOn(
-        workflowStateService,
-        "getDirectConnectionCount",
-      ).mockReturnValue(1);
-      vi.spyOn(podStore, "getById").mockImplementation(((
-        _cId: string,
-        podId: string,
-      ) => {
-        if (podId === SOURCE_POD_ID) return makePod(SOURCE_POD_ID);
-        if (podId === TARGET_POD_ID) return makePod(TARGET_POD_ID, "chatting");
-        return undefined;
-      }) as any);
-
-      const enqueueSpy = vi
-        .spyOn(workflowQueueService, "enqueue")
-        .mockImplementation(() => ({ position: 1, queueSize: 1 }));
-
-      await workflowExecutionService.checkAndTriggerWorkflows(
-        CANVAS_ID,
-        SOURCE_POD_ID,
-      );
-
-      expect(enqueueSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          canvasId: CANVAS_ID,
-          connectionId: mockDirectConnection.id,
-          sourcePodId: SOURCE_POD_ID,
-          targetPodId: TARGET_POD_ID,
-          summary: TEST_SUMMARY,
-          isSummarized: true,
-          triggerMode: "direct",
-        }),
-      );
-    });
-  });
-
   // ============================================================
   // B：多 direct 連線 collectSources 流程
   // ============================================================

@@ -26,22 +26,6 @@ export interface WorkflowSourcesMergedPayload {
   mergedContentPreview: string;
 }
 
-export interface WorkflowGetDownstreamPodsResultPayload {
-  requestId: string;
-  success: boolean;
-  pods?: Array<{ id: string; name: string }>;
-  error?: string;
-}
-
-export interface WorkflowClearResultPayload {
-  requestId: string;
-  canvasId: string;
-  success: boolean;
-  clearedPodIds?: string[];
-  clearedPodNames?: string[];
-  error?: string;
-}
-
 export interface WorkflowBranchTriggeredPayload {
   canvasId: string;
   connectionId: string;

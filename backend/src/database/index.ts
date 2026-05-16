@@ -47,7 +47,6 @@ export function resetDb(): void {
   database.exec("DELETE FROM run_pod_instances");
   database.exec("DELETE FROM workflow_runs");
   database.exec("DELETE FROM pod_manifests");
-  database.exec("DELETE FROM messages");
   database.exec("DELETE FROM notes");
   database.exec("DELETE FROM connections");
   database.exec("DELETE FROM integration_bindings");

@@ -1,0 +1,113 @@
+feature: remove-normal-mode
+approved: true
+
+scenarios:
+  - id: F1
+    scenario: 使用者在新建立的 pod 送出訊息
+    given:
+      - 使用者打開畫布並新建一個 pod
+      - 該 pod 尚無對話歷史
+    when:
+      - 在 pod 的對話框輸入訊息
+      - 點擊送出
+    then:
+      - 系統建立一筆新的 Run
+      - 對話內容呈現在 Run 歷程中
+      - pod 本身不顯示對話歷史
+
+  - id: F2
+    scenario: 升級後使用者在原本是一般模式的 pod 送出訊息
+    given:
+      - 升級前該 pod 是一般模式 pod 並累積過多則訊息
+      - 升級後該 pod 仍存在於畫布上
+    when:
+      - 使用者在升級後第一次送出訊息
+    then:
+      - 系統建立一筆新的 Run
+      - 對話內容呈現在 Run 歷程中
+      - 升級前累積的舊訊息已不存在
+      - 介面不再提供瀏覽舊一般模式訊息的入口
+
+  - id: F3
+    scenario: 使用者連續快速送出多則訊息
+    given:
+      - 使用者打開一個 pod
+      - 前一則訊息尚未完成處理
+    when:
+      - 使用者再次送出新的訊息
+    then:
+      - 系統再建立一筆新的 Run
+      - 兩筆 Run 同時平行進行
+      - 任一 Run 不會因另一 Run 仍在執行而被跳過或排隊
+
+  - id: F4
+    scenario: 使用者短按橡皮擦清空對話入口
+    given:
+      - pod 上有橡皮擦按鈕
+      - 使用者目前在畫布上操作
+    when:
+      - 使用者短按橡皮擦
+    then:
+      - 觸發 clear 對話的行為
+      - 行為與升級前的短按結果一致
+
+  - id: F5
+    scenario: 使用者觀察 pod 的視覺呈現
+    given:
+      - 畫布上有多個 pod
+      - 使用者掃視 pod 區塊
+    when:
+      - 使用者觀察 pod 視覺
+    then:
+      - 沒有任何 pod 顯示 M 字母圖標
+      - 沒有任何 pod 顯示原本 multi-instance 啟用的藍色背景
+      - 沒有任何 pod 顯示與 multi-instance 切換相關的提示文案
+
+  - id: F6
+    scenario: 使用者長按 pod 上的橡皮擦
+    given:
+      - 升級前長按橡皮擦會切換 multi-instance 並顯示進度圈
+      - 升級後使用者照舊長按
+    when:
+      - 使用者長按橡皮擦超過原本切換的秒數
+    then:
+      - 不再顯示長按進度圈
+      - 不再切換任何狀態
+      - 釋放按鈕後與一般點擊的清空行為一致
+
+  - id: F7
+    scenario: 使用者設定 cron 排程定時觸發 pod
+    given:
+      - pod 已設定排程
+      - 該 pod 可能正在處理另一筆 Run
+    when:
+      - 排程時間到
+    then:
+      - 系統建立一筆新的 Run
+      - 不會因為 pod 上有其他 Run 在執行而被跳過
+      - 排程觸發的對話內容呈現在新建立的 Run 歷程中
+
+  - id: F8
+    scenario: 外部系統透過 integration webhook 觸發 pod
+    given:
+      - pod 已綁定 integration 並接收外部 webhook
+      - 短時間內該 webhook 連續觸發多次
+    when:
+      - 每一次 webhook 進入
+    then:
+      - 系統為每一次 webhook 建立一筆新的 Run
+      - 多筆 Run 可同時平行進行
+      - 沒有任何一次 webhook 因為 pod 忙碌被忽略
+
+  - id: F9
+    scenario: 使用者點選 multi-instance 流程中的下游 pod
+    given:
+      - 畫布上有一條 multi-instance 流程
+      - 該流程的源頭 pod 已送過多筆 Run
+      - 使用者點選的是這條流程中的下游 pod
+    when:
+      - 使用者點選下游 pod 嘗試打開對話
+    then:
+      - 介面顯示需要從 Run 歷程查看的提示
+      - 沒有提供下游 pod 的直接對話入口
+      - 提示文案不再使用「Multi-Instance」字眼

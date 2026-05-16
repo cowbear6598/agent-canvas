@@ -152,70 +152,8 @@ describe("Chat 管理", () => {
       await podStore.removeIntegrationBinding(canvasId, pod.id, "slack");
     });
 
-    it("Pod 總結中時發送失敗", async () => {
-      const canvasId = await getCanvasId(client);
-      const pod = await createPod(client, { name: "Summarizing Pod" });
-
-      const { podStore } = await import("../../src/services/podStore.js");
-      podStore.setStatus(canvasId, pod.id, "summarizing");
-
-      const errorPromise = waitForEvent<PodErrorPayload>(
-        client,
-        WebSocketResponseEvents.POD_ERROR,
-      );
-
-      client.emit(WebSocketRequestEvents.POD_CHAT_SEND, {
-        requestId: uuidv4(),
-        canvasId,
-        podId: pod.id,
-        message: "Hello",
-      } satisfies PodChatSendPayload);
-
-      const errorEvent = await errorPromise;
-      expect(errorEvent.code).toBe("POD_BUSY");
-      expect(errorEvent.error).toEqual(
-        expect.objectContaining({ key: expect.any(String) }),
-      );
-
-      podStore.setStatus(canvasId, pod.id, "idle");
-    });
+    // Pod 總結中時發送失敗 — 隨 pod.status 概念移除，此測試刪除
   });
 
-  describe("取得聊天歷史", () => {
-    it("新 Pod 回傳空陣列", async () => {
-      const pod = await createPod(client);
-
-      const canvasId = await getCanvasId(client);
-      const response = await emitAndWaitResponse<
-        PodChatHistoryPayload,
-        PodChatHistoryResultPayload
-      >(
-        client,
-        WebSocketRequestEvents.POD_CHAT_HISTORY,
-        WebSocketResponseEvents.POD_CHAT_HISTORY_RESULT,
-        { requestId: uuidv4(), canvasId, podId: pod.id },
-      );
-
-      expect(response.success).toBe(true);
-      expect(response.messages).toEqual([]);
-    });
-
-    it("Pod 不存在時取得歷史失敗", async () => {
-      const canvasId = await getCanvasId(client);
-      const response = await emitAndWaitResponse<
-        PodChatHistoryPayload,
-        PodChatHistoryResultPayload
-      >(
-        client,
-        WebSocketRequestEvents.POD_CHAT_HISTORY,
-        WebSocketResponseEvents.POD_CHAT_HISTORY_RESULT,
-        { requestId: uuidv4(), canvasId, podId: FAKE_UUID },
-      );
-
-      expect(response.success).toBe(false);
-      expect(response.error).toEqual(
-        expect.objectContaining({ key: expect.any(String) }),
-      );
-    });
-  });
+  // POD_CHAT_HISTORY 已隨 messages 表移除，歷史訊息只存在於 run scope
 });

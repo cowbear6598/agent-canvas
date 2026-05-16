@@ -8,8 +8,8 @@ import { readCodexMcpServers } from "../services/mcp/codexMcpReader.js";
 import { readGeminiMcpServers } from "../services/mcp/geminiMcpReader.js";
 import { readOpencodeMcpServers } from "../services/mcp/opencodeMcpReader.js";
 import { podStore } from "../services/podStore.js";
+import { runStore } from "../services/runStore.js";
 import { socketService } from "../services/socketService.js";
-import { isPodBusy } from "../types/index.js";
 import { createI18nError } from "../utils/i18nError.js";
 import { emitError } from "../utils/websocketResponse.js";
 import { getCanvasId } from "../utils/handlerHelpers.js";
@@ -105,8 +105,8 @@ export async function handlePodSetMcpServerNames(
     return;
   }
 
-  // pod busy 時拒絕變更
-  if (isPodBusy(pod.status)) {
+  // pod 有 active run 時拒絕變更
+  if (runStore.hasActiveRunForPod(podId)) {
     emitError(
       connectionId,
       WebSocketResponseEvents.POD_MCP_SERVER_NAMES_UPDATED,

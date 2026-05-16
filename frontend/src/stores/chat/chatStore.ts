@@ -6,7 +6,7 @@ import {
 } from "@/services/websocket";
 import type { WebSocketDisconnectEvent } from "@/services/websocket/WebSocketClient";
 import { generateRequestId } from "@/services/utils";
-import type { HistoryLoadingStatus, Message } from "@/types/chat";
+import type { Message } from "@/types/chat";
 import type {
   ConnectionReadyPayload,
   ContentBlock,
@@ -23,11 +23,8 @@ import type {
 } from "@/types/websocket";
 import { createMessageActions } from "./chatMessageActions";
 import { createConnectionActions } from "./chatConnectionActions";
-import { createHistoryActions } from "./chatHistoryActions";
 import { abortSafetyTimers } from "./abortSafetyTimers";
-import { usePodStore } from "../pod/podStore";
 import { getActiveCanvasIdOrWarn } from "@/utils/canvasGuard";
-import { isMultiInstanceSourcePod } from "@/utils/multiInstanceGuard";
 import { t } from "@/i18n";
 import {
   MAX_CONTENT_BLOCK_SIZE_BYTES,
@@ -40,7 +37,6 @@ const ABORT_TIMEOUT_MS = 10_000;
 let cachedConnectionActions: ReturnType<typeof createConnectionActions> | null =
   null;
 let cachedMessageActions: ReturnType<typeof createMessageActions> | null = null;
-let cachedHistoryActions: ReturnType<typeof createHistoryActions> | null = null;
 
 /** 清除 actions 快取，由 store lifecycle（disconnectWebSocket）自動觸發。
  * 僅在測試的 beforeEach 中允許直接呼叫，生產端不需手動調用。
@@ -48,7 +44,6 @@ let cachedHistoryActions: ReturnType<typeof createHistoryActions> | null = null;
 export function resetChatActionsCache(): void {
   cachedConnectionActions = null;
   cachedMessageActions = null;
-  cachedHistoryActions = null;
 }
 
 /** 內部別名，供 store lifecycle 使用，語意更明確 */
@@ -72,9 +67,6 @@ interface ChatState {
   connectionStatus: ConnectionStatus;
   isSilentReconnectInProgress: boolean;
   socketId: string | null;
-  historyLoadingStatus: Map<string, HistoryLoadingStatus>;
-  historyLoadingError: Map<string, string>;
-  allHistoryLoaded: boolean;
   disconnectReason: string | null;
   lastHeartbeatAt: number | null;
   heartbeatCheckTimer: number | null;
@@ -89,9 +81,6 @@ export const useChatStore = defineStore("chat", {
     connectionStatus: "disconnected",
     isSilentReconnectInProgress: false,
     socketId: null,
-    historyLoadingStatus: new Map(),
-    historyLoadingError: new Map(),
-    allHistoryLoaded: false,
     disconnectReason: null,
     lastHeartbeatAt: null,
     heartbeatCheckTimer: null,
@@ -113,22 +102,6 @@ export const useChatStore = defineStore("chat", {
 
     isConnected: (state): boolean => {
       return state.connectionStatus === "connected";
-    },
-
-    getHistoryLoadingStatus: (state) => {
-      return (podId: string): HistoryLoadingStatus => {
-        return state.historyLoadingStatus.get(podId) ?? "idle";
-      };
-    },
-
-    isHistoryLoading: (state) => {
-      return (podId: string): boolean => {
-        return state.historyLoadingStatus.get(podId) === "loading";
-      };
-    },
-
-    isAllHistoryLoaded: (state): boolean => {
-      return state.allHistoryLoaded;
     },
 
     getDisconnectReason: (state): string | null => {
@@ -159,34 +132,12 @@ export const useChatStore = defineStore("chat", {
           handler: this.handleConnectionReady as (payload: unknown) => void,
         },
         {
-          event: WebSocketResponseEvents.POD_CLAUDE_CHAT_MESSAGE,
-          handler: this.handleChatMessage as (payload: unknown) => void,
-        },
-        {
-          event: WebSocketResponseEvents.POD_CHAT_TOOL_USE,
-          handler: this.handleChatToolUse as (payload: unknown) => void,
-        },
-        {
-          event: WebSocketResponseEvents.POD_CHAT_TOOL_RESULT,
-          handler: this.handleChatToolResult as (payload: unknown) => void,
-        },
-        {
-          event: WebSocketResponseEvents.POD_CHAT_COMPLETE,
-          handler: this.handleChatComplete as (payload: unknown) => void,
-        },
-        {
           event: WebSocketResponseEvents.POD_CHAT_ABORTED,
           handler: this.handleChatAborted as (payload: unknown) => void,
         },
         {
           event: WebSocketResponseEvents.POD_ERROR,
           handler: this.handleError as (payload: unknown) => void,
-        },
-        {
-          event: WebSocketResponseEvents.POD_MESSAGES_CLEARED,
-          handler: this.handleMessagesClearedEvent as (
-            payload: unknown,
-          ) => void,
         },
         {
           event: WebSocketResponseEvents.HEARTBEAT_PING,
@@ -263,7 +214,6 @@ export const useChatStore = defineStore("chat", {
       const messagePayload: string | ContentBlock[] =
         contentBlocks && contentBlocks.length > 0 ? contentBlocks : content;
 
-      const podStore = usePodStore();
       const canvasId = getActiveCanvasIdOrWarn("ChatStore");
       if (!canvasId) return;
 
@@ -278,11 +228,6 @@ export const useChatStore = defineStore("chat", {
       );
 
       this.setTyping(podId, true);
-      // 前端發送時立即更新，不等待 WebSocket 事件來回
-      // multi-instance run 模式下源頭 pod 狀態由 run 流程管控，不應覆蓋為 chatting
-      if (!isMultiInstanceSourcePod(podId)) {
-        podStore.updatePodStatus(podId, "chatting");
-      }
     },
 
     /** 拖曳上傳流程專用的發送方法。
@@ -296,7 +241,6 @@ export const useChatStore = defineStore("chat", {
         throw new Error(t("composable.chat.websocketNotConnected"));
       }
 
-      const podStore = usePodStore();
       const canvasId = getActiveCanvasIdOrWarn("ChatStore");
       if (!canvasId) return;
 
@@ -313,10 +257,6 @@ export const useChatStore = defineStore("chat", {
       );
 
       this.setTyping(podId, true);
-      // multi-instance run 模式下源頭 pod 狀態由 run 流程管控，不應覆蓋為 chatting
-      if (!isMultiInstanceSourcePod(podId)) {
-        podStore.updatePodStatus(podId, "chatting");
-      }
     },
 
     addUserMessage(podId: string, content: string): void {
@@ -352,6 +292,11 @@ export const useChatStore = defineStore("chat", {
     handleChatComplete(payload: PodChatCompletePayload): void {
       const messageActions = this.getMessageActions();
       messageActions.handleChatComplete(payload);
+    },
+
+    handleMessagesClearedEvent(payload: PodMessagesClearedPayload): void {
+      const messageActions = this.getMessageActions();
+      messageActions.handleMessagesClearedEvent(payload);
     },
 
     async abortChat(podId: string): Promise<void> {
@@ -399,26 +344,6 @@ export const useChatStore = defineStore("chat", {
     clearMessagesByPodIds(podIds: string[]): void {
       const messageActions = this.getMessageActions();
       messageActions.clearMessagesByPodIds(podIds);
-
-      podIds.forEach((podId) => {
-        this.historyLoadingStatus.delete(podId);
-        this.historyLoadingError.delete(podId);
-      });
-    },
-
-    handleMessagesClearedEvent(payload: PodMessagesClearedPayload): void {
-      const messageActions = this.getMessageActions();
-      messageActions.handleMessagesClearedEvent(payload);
-    },
-
-    loadPodChatHistory(podId: string): Promise<void> {
-      const historyActions = this.getHistoryActions();
-      return historyActions.loadPodChatHistory(podId);
-    },
-
-    loadAllPodsHistory(podIds: string[]): Promise<void> {
-      const historyActions = this.getHistoryActions();
-      return historyActions.loadAllPodsHistory(podIds);
     },
 
     getConnectionActions() {
@@ -435,20 +360,10 @@ export const useChatStore = defineStore("chat", {
       return cachedMessageActions;
     },
 
-    getHistoryActions() {
-      if (!cachedHistoryActions) {
-        const messageActions = this.getMessageActions();
-        cachedHistoryActions = createHistoryActions(this, messageActions);
-      }
-      return cachedHistoryActions;
-    },
-
     // 切換 canvas 時重設 chat 相關狀態
     resetForCanvasSwitch(): void {
       this.messagesByPodId.clear();
       this.isTypingByPodId.clear();
-      this.historyLoadingStatus.clear();
-      this.historyLoadingError.clear();
       // 清除累積長度追蹤，避免跨 canvas 的舊 messageId 殘留導致計算錯誤
       this.accumulatedLengthByMessageId.clear();
     },

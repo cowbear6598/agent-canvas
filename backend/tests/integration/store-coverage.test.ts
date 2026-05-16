@@ -6,10 +6,7 @@ import {
   WebSocketResponseEvents,
   type ConnectionCreatePayload,
 } from "../../src/schemas";
-import {
-  type PodStatusChangedPayload,
-  type ConnectionCreatedPayload,
-} from "../../src/types";
+import { type ConnectionCreatedPayload } from "../../src/types";
 // 注意：podStore 和 connectionStore 使用動態 import，避免在測試配置覆蓋前載入
 
 describe("Store 覆蓋率測試", () => {
@@ -38,53 +35,6 @@ describe("Store 覆蓋率測試", () => {
 
       expect(Array.isArray(pods)).toBe(true);
       expect(pods).toHaveLength(0);
-    });
-
-    it("相同狀態時跳過更新", async () => {
-      const client = getClient();
-      const server = getServer();
-      const pod = await createPod(client);
-      const canvasId = server.canvasId;
-
-      const statusChanges: PodStatusChangedPayload[] = [];
-      const listener = (payload: PodStatusChangedPayload): void => {
-        statusChanges.push(payload);
-      };
-
-      client.on(WebSocketResponseEvents.POD_STATUS_CHANGED, listener);
-
-      podStore.setStatus(canvasId, pod.id, "idle");
-
-      await new Promise((resolve) => setTimeout(resolve, 100));
-
-      expect(statusChanges).toHaveLength(0);
-
-      client.off(WebSocketResponseEvents.POD_STATUS_CHANGED, listener);
-    });
-
-    it("不同狀態時觸發事件", async () => {
-      const client = getClient();
-      const server = getServer();
-      const pod = await createPod(client);
-      const canvasId = server.canvasId;
-
-      const statusChanges: PodStatusChangedPayload[] = [];
-      const listener = (payload: PodStatusChangedPayload): void => {
-        statusChanges.push(payload);
-      };
-
-      client.on(WebSocketResponseEvents.POD_STATUS_CHANGED, listener);
-
-      podStore.setStatus(canvasId, pod.id, "chatting");
-
-      await new Promise((resolve) => setTimeout(resolve, 100));
-
-      expect(statusChanges).toHaveLength(1);
-      expect(statusChanges[0].podId).toBe(pod.id);
-      expect(statusChanges[0].status).toBe("chatting");
-      expect(statusChanges[0].previousStatus).toBe("idle");
-
-      client.off(WebSocketResponseEvents.POD_STATUS_CHANGED, listener);
     });
 
     it("Canvas 找不到時拋出錯誤", () => {

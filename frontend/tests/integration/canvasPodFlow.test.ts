@@ -11,12 +11,10 @@ import {
 import {
   createMockCanvas,
   createMockPod,
-  createMockConnection,
   createMockSchedule,
 } from "../helpers/factories";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { usePodStore } from "@/stores/pod/podStore";
-import { useConnectionStore } from "@/stores/connectionStore";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
 import type { Pod } from "@/types";
 import PodModelSelector from "@/components/pod/PodModelSelector.vue";
@@ -52,9 +50,7 @@ function createTestPodPayload(
     y: 100,
     rotation: 0,
     output: [],
-    status: "idle",
     repositoryId: null,
-    multiInstance: false,
     commandId: null,
     schedule: null,
     provider: "claude",
@@ -250,113 +246,6 @@ describe("Canvas/Pod 操作完整流程", () => {
 
       podStore.updatePodProviderConfigModel("pod-1", "sonnet");
       expect(podStore.getPodById("pod-1")?.providerConfig.model).toBe("sonnet");
-    });
-  });
-
-  describe("建立連接並觸發工作流", () => {
-    it("建立 2 個 Pod -> 建立 Connection -> 模擬 Auto Trigger", async () => {
-      const canvasStore = useCanvasStore();
-      const podStore = usePodStore();
-      const connectionStore = useConnectionStore();
-
-      canvasStore.activeCanvasId = "canvas-1";
-
-      const pod1 = createMockPod({ id: "pod-1", name: "Pod 1" });
-      const pod2 = createMockPod({ id: "pod-2", name: "Pod 2" });
-      podStore.pods = [pod1, pod2];
-
-      const newConnection = createMockConnection({
-        id: "conn-1",
-        sourcePodId: "pod-1",
-        targetPodId: "pod-2",
-        triggerMode: "auto",
-        status: "idle",
-      });
-
-      mockCreateWebSocketRequest.mockResolvedValueOnce({
-        connection: {
-          ...newConnection,
-        },
-      });
-
-      const connection = await connectionStore.createConnection(
-        "pod-1",
-        "bottom",
-        "pod-2",
-        "top",
-      );
-
-      expect(connection).toBeTruthy();
-      expect(connection?.sourcePodId).toBe("pod-1");
-      expect(connection?.targetPodId).toBe("pod-2");
-      expect(connection?.triggerMode).toBe("auto");
-      expect(connection?.status).toBe("idle");
-
-      connectionStore.addConnectionFromEvent({
-        ...newConnection,
-      });
-      connectionStore.getWorkflowHandlers().handleWorkflowAutoTriggered({
-        connectionId: "conn-1",
-        sourcePodId: "pod-1",
-        targetPodId: "pod-2",
-        transferredContent: "test content",
-        isSummarized: false,
-      });
-
-      const activeConnection = connectionStore.connections.find(
-        (c) => c.id === "conn-1",
-      );
-      expect(activeConnection?.status).toBe("active");
-
-      connectionStore.getWorkflowHandlers().handleWorkflowComplete({
-        requestId: "req-1",
-        connectionId: "conn-1",
-        targetPodId: "pod-2",
-        success: true,
-        triggerMode: "auto",
-      });
-
-      // Assert - Connection 狀態從 active -> idle
-      const idleConnection = connectionStore.connections.find(
-        (c) => c.id === "conn-1",
-      );
-      expect(idleConnection?.status).toBe("idle");
-    });
-
-    it("驗證 Connection 狀態從 idle -> active -> idle", () => {
-      const connectionStore = useConnectionStore();
-
-      // Arrange
-      const conn = createMockConnection({
-        id: "conn-1",
-        sourcePodId: "pod-a",
-        targetPodId: "pod-b",
-        triggerMode: "auto",
-        status: "idle",
-      });
-      connectionStore.connections = [conn];
-
-      expect(connectionStore.connections[0]?.status).toBe("idle");
-
-      connectionStore.getWorkflowHandlers().handleWorkflowAutoTriggered({
-        connectionId: "conn-1",
-        sourcePodId: "pod-a",
-        targetPodId: "pod-b",
-        transferredContent: "content",
-        isSummarized: false,
-      });
-
-      expect(connectionStore.connections[0]?.status).toBe("active");
-
-      connectionStore.getWorkflowHandlers().handleWorkflowComplete({
-        requestId: "req-1",
-        connectionId: "conn-1",
-        targetPodId: "pod-b",
-        success: true,
-        triggerMode: "auto",
-      });
-
-      expect(connectionStore.connections[0]?.status).toBe("idle");
     });
   });
 

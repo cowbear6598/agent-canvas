@@ -16,8 +16,6 @@ export interface SystemMessageMetadata {
   reasonDetail?: string;
 }
 
-export type HistoryLoadingStatus = "idle" | "loading" | "loaded" | "error";
-
 export type ToolUseStatus = "pending" | "running" | "completed" | "error";
 
 const VALID_TOOL_USE_STATUSES: ToolUseStatus[] = [

@@ -1,167 +1,93 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
-import { createTestingPinia } from '@pinia/testing'
-import { Eraser } from 'lucide-vue-next'
-import PodActions from '@/components/pod/PodActions.vue'
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { mount } from "@vue/test-utils";
+import { createTestingPinia } from "@pinia/testing";
+import PodActions from "@/components/pod/PodActions.vue";
 
-vi.mock('@/components/ui/dialog', () => ({
-  Dialog: { name: 'Dialog', template: '<div><slot /></div>', props: ['open'] },
-  DialogContent: { name: 'DialogContent', template: '<div><slot /></div>' },
-  DialogHeader: { name: 'DialogHeader', template: '<div><slot /></div>' },
-  DialogTitle: { name: 'DialogTitle', template: '<div><slot /></div>' },
-  DialogDescription: { name: 'DialogDescription', template: '<div><slot /></div>' },
-  DialogFooter: { name: 'DialogFooter', template: '<div><slot /></div>' },
-}))
+vi.mock("@/components/ui/dialog", () => ({
+  Dialog: { name: "Dialog", template: "<div><slot /></div>", props: ["open"] },
+  DialogContent: { name: "DialogContent", template: "<div><slot /></div>" },
+  DialogHeader: { name: "DialogHeader", template: "<div><slot /></div>" },
+  DialogTitle: { name: "DialogTitle", template: "<div><slot /></div>" },
+  DialogDescription: {
+    name: "DialogDescription",
+    template: "<div><slot /></div>",
+  },
+  DialogFooter: { name: "DialogFooter", template: "<div><slot /></div>" },
+}));
 
-vi.mock('@/components/ui/button', () => ({
-  Button: { name: 'Button', template: '<button><slot /></button>', props: ['variant', 'disabled'] },
-}))
+vi.mock("@/components/ui/button", () => ({
+  Button: {
+    name: "Button",
+    template: "<button><slot /></button>",
+    props: ["variant", "disabled"],
+  },
+}));
 
 const defaultProps = {
-  podId: 'pod-1',
-  podName: '測試 Pod',
-  isSourcePod: true,
+  podName: "測試 Pod",
   showScheduleButton: false,
-  isMultiInstanceEnabled: false,
-  isLoadingDownstream: false,
-  isClearing: false,
-  isWorkflowRunning: false,
-  downstreamPods: [],
-  showClearDialog: false,
   showDeleteDialog: false,
   hasSchedule: false,
   scheduleEnabled: false,
-  scheduleTooltip: '',
-}
+  scheduleTooltip: "",
+};
 
 function mountPodActions(propsOverrides: Partial<typeof defaultProps> = {}) {
   return mount(PodActions, {
     props: { ...defaultProps, ...propsOverrides },
     global: {
-      plugins: [
-        createTestingPinia({ createSpy: vi.fn, stubActions: true }),
-      ],
+      plugins: [createTestingPinia({ createSpy: vi.fn, stubActions: true })],
     },
     attachTo: document.body,
-  })
+  });
 }
 
-function findEraserButton(wrapper: ReturnType<typeof mountPodActions>) {
-  return wrapper.find('.workflow-clear-button-in-group')
-}
-
-describe('PodActions Eraser 按鈕顯示邏輯', () => {
+describe("PodActions 刪除按鈕", () => {
   beforeEach(() => {
-    vi.clearAllMocks()
-  })
+    vi.clearAllMocks();
+  });
 
-  it('isMultiInstanceEnabled=false + isSourcePod=true 時顯示 Eraser 圖標', () => {
-    const wrapper = mountPodActions({ isMultiInstanceEnabled: false, isSourcePod: true })
-    const eraser = findEraserButton(wrapper)
+  it("isUploading=true 時刪除按鈕應 disabled 並帶上 tooltip", () => {
+    const wrapper = mountPodActions({ isUploading: true } as never);
+    const deleteBtn = wrapper.find(".pod-delete-button");
+    expect(deleteBtn.attributes("disabled")).toBeDefined();
+    expect(deleteBtn.attributes("title")).toBeTruthy();
+    wrapper.unmount();
+  });
 
-    expect(eraser.exists()).toBe(true)
-    expect(wrapper.findComponent(Eraser).exists()).toBe(true)
-    expect(wrapper.find('.multi-instance-icon-m').exists()).toBe(false)
-    wrapper.unmount()
-  })
+  it("isUploading=false 時刪除按鈕應正常可用", () => {
+    const wrapper = mountPodActions();
+    const deleteBtn = wrapper.find(".pod-delete-button");
+    expect(deleteBtn.attributes("disabled")).toBeUndefined();
+    wrapper.unmount();
+  });
 
-  it('isMultiInstanceEnabled=true + isSourcePod=true 時顯示 M 字母', () => {
-    const wrapper = mountPodActions({ isMultiInstanceEnabled: true, isSourcePod: true })
-    const iconM = wrapper.find('.multi-instance-icon-m')
+  it("點擊刪除按鈕應 emit update:show-delete-dialog=true", async () => {
+    const wrapper = mountPodActions();
+    await wrapper.find(".pod-delete-button").trigger("click");
+    expect(wrapper.emitted("update:show-delete-dialog")).toBeTruthy();
+    expect(wrapper.emitted("update:show-delete-dialog")![0]).toEqual([true]);
+    wrapper.unmount();
+  });
+});
 
-    expect(iconM.exists()).toBe(true)
-    expect(iconM.text()).toBe('M')
-    expect(wrapper.findComponent(Eraser).exists()).toBe(false)
-    wrapper.unmount()
-  })
-
-  it('isMultiInstanceEnabled=true 時 eraser 按鈕應帶有 multi-instance-enabled class', () => {
-    const wrapper = mountPodActions({ isMultiInstanceEnabled: true, isSourcePod: true })
-    const eraser = findEraserButton(wrapper)
-
-    expect(eraser.classes()).toContain('multi-instance-enabled')
-    wrapper.unmount()
-  })
-
-  it('isMultiInstanceEnabled=false 時 eraser 按鈕不應帶有 multi-instance-enabled class', () => {
-    const wrapper = mountPodActions({ isMultiInstanceEnabled: false, isSourcePod: true })
-    const eraser = findEraserButton(wrapper)
-
-    expect(eraser.classes()).not.toContain('multi-instance-enabled')
-    wrapper.unmount()
-  })
-
-  it('isSourcePod=false 時不應出現 .workflow-clear-button-in-group 按鈕', () => {
-    const wrapper = mountPodActions({ isSourcePod: false })
-    const eraser = findEraserButton(wrapper)
-
-    expect(eraser.exists()).toBe(false)
-    wrapper.unmount()
-  })
-})
-
-describe('PodActions 橡皮擦按鈕 isWorkflowRunning 行為', () => {
+describe("PodActions 排程按鈕", () => {
   beforeEach(() => {
-    vi.clearAllMocks()
-  })
+    vi.clearAllMocks();
+  });
 
-  describe('[High] isWorkflowRunning=true 時橡皮擦按鈕應被禁用', () => {
-    it('isWorkflowRunning=true 時橡皮擦按鈕應有 disabled attribute', () => {
-      const wrapper = mountPodActions({ isWorkflowRunning: true })
-      const eraser = findEraserButton(wrapper)
+  it("showScheduleButton=false 時不應出現 .schedule-button", () => {
+    const wrapper = mountPodActions({ showScheduleButton: false });
+    expect(wrapper.find(".schedule-button").exists()).toBe(false);
+    wrapper.unmount();
+  });
 
-      expect(eraser.attributes('disabled')).toBeDefined()
-      wrapper.unmount()
-    })
-
-    it('isWorkflowRunning=true 時按下橡皮擦不應 emit clear-workflow', async () => {
-      const wrapper = mountPodActions({ isWorkflowRunning: true })
-      const eraser = findEraserButton(wrapper)
-
-      await eraser.trigger('mousedown', { clientX: 0, clientY: 0 })
-      await eraser.trigger('mouseup')
-
-      expect(wrapper.emitted('clear-workflow')).toBeFalsy()
-      wrapper.unmount()
-    })
-
-    it('isWorkflowRunning=true 時長按橡皮擦不應 emit toggle-multi-instance', async () => {
-      vi.useFakeTimers()
-      const wrapper = mountPodActions({ isWorkflowRunning: true })
-      const eraser = findEraserButton(wrapper)
-
-      await eraser.trigger('mousedown', { clientX: 0, clientY: 0 })
-      vi.advanceTimersByTime(600)
-      await wrapper.vm.$nextTick()
-
-      expect(wrapper.emitted('toggle-multi-instance')).toBeFalsy()
-
-      vi.useRealTimers()
-      wrapper.unmount()
-    })
-  })
-
-  describe('[High] isWorkflowRunning=false 時橡皮擦按鈕正常可用', () => {
-    it('isWorkflowRunning=false 時橡皮擦按鈕不應被 disabled', () => {
-      const wrapper = mountPodActions({ isWorkflowRunning: false })
-      const eraser = findEraserButton(wrapper)
-
-      expect(eraser.attributes('disabled')).toBeUndefined()
-      wrapper.unmount()
-    })
-  })
-
-  describe('[Medium] isWorkflowRunning 狀態變化', () => {
-    it('isWorkflowRunning 從 true 變為 false 後橡皮擦應恢復可用', async () => {
-      const wrapper = mountPodActions({ isWorkflowRunning: true })
-      const eraser = findEraserButton(wrapper)
-
-      expect(eraser.attributes('disabled')).toBeDefined()
-
-      await wrapper.setProps({ isWorkflowRunning: false })
-
-      expect(eraser.attributes('disabled')).toBeUndefined()
-      wrapper.unmount()
-    })
-  })
-})
+  it("showScheduleButton=true 時應出現 .schedule-button,點擊 emit open-schedule-modal", async () => {
+    const wrapper = mountPodActions({ showScheduleButton: true });
+    const btn = wrapper.find(".schedule-button");
+    expect(btn.exists()).toBe(true);
+    await btn.trigger("click");
+    expect(wrapper.emitted("open-schedule-modal")).toBeTruthy();
+    wrapper.unmount();
+  });
+});

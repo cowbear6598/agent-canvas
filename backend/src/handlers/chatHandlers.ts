@@ -1,34 +1,14 @@
 import { v4 as uuidv4 } from "uuid";
 import { WebSocketResponseEvents } from "../schemas";
 import type { Pod } from "../types";
-import { isPodBusy } from "../types/index.js";
-import type {
-  ChatSendPayload,
-  ChatHistoryPayload,
-  ChatAbortPayload,
-} from "../schemas";
-import { podStore } from "../services/podStore.js";
-import { messageStore } from "../services/messageStore.js";
-import { emitError, emitSuccess } from "../utils/websocketResponse.js";
+import type { ChatSendPayload, ChatAbortPayload } from "../schemas";
+import { emitError } from "../utils/websocketResponse.js";
 import { abortRegistry } from "../services/provider/abortRegistry.js";
 import { createI18nError } from "../utils/i18nError.js";
-import {
-  onChatComplete,
-  onChatAborted,
-  onRunChatComplete,
-} from "../utils/chatCallbacks.js";
+import { onChatAborted, onRunChatComplete } from "../utils/chatCallbacks.js";
 import { validatePod, withCanvasId } from "../utils/handlerHelpers.js";
-import { executeStreamingChat } from "../services/claude/streamingChatExecutor.js";
-import { injectUserMessage } from "../utils/chatHelpers.js";
-import { launchMultiInstanceRun } from "../utils/runChatHelpers.js";
-import { NormalModeExecutionStrategy } from "../services/normalExecutionStrategy.js";
-import {
-  buildCommandNotFoundMessage,
-  tryExpandCommandMessage,
-} from "../services/commandExpander.js";
-import { socketService } from "../services/socketService.js";
+import { launchRun } from "../utils/runChatHelpers.js";
 import { promoteStagingToFinal } from "../services/attachmentWriter.js";
-import { sanitizePersistedMessageForClient } from "../services/systemMessageMetadata.js";
 import {
   AttachmentTooLargeError,
   AttachmentDiskFullError,
@@ -52,27 +32,6 @@ function validateIntegrationBindings(
       requestId,
       pod.id,
       "INTEGRATION_BOUND",
-    );
-    return false;
-  }
-  return true;
-}
-
-function validatePodNotBusy(
-  connectionId: string,
-  canvasId: string,
-  pod: Pod,
-  requestId: string,
-): boolean {
-  if (isPodBusy(pod.status)) {
-    emitError(
-      connectionId,
-      WebSocketResponseEvents.POD_ERROR,
-      createI18nError("errors.podBusy", { id: pod.id, status: pod.status }),
-      canvasId,
-      requestId,
-      pod.id,
-      "POD_BUSY",
     );
     return false;
   }
@@ -151,7 +110,7 @@ function emitAttachmentError(
 }
 
 /**
- * 處理帶有 uploadSessionId 的聊天訊息（multi-instance 與串行兩條路徑）。
+ * 處理帶有 uploadSessionId 的聊天訊息（multi-instance 路徑）。
  * 呼叫 promoteStagingToFinal 將 staging 目錄 atomic rename 為正式附件目錄，
  * 失敗時 emit 對應錯誤並 early return，不建立 chat message。
  */
@@ -166,14 +125,6 @@ async function handleChatSendWithUploadSession(
   const uploadSessionId = payload.uploadSessionId!;
   const podName = pod.name;
 
-  // 串行 pod：先確認 pod 不忙碌，busy 直接拒絕。
-  // 注意：busy 時不主動清除 staging，留給 6h tmpCleanup 定時清理（YAGNI）。
-  if (pod.multiInstance !== true) {
-    if (!validatePodNotBusy(connectionId, canvasId, pod, requestId)) return;
-    // busy check 通過後同步佔位，避免 await promoteStagingToFinal 期間 concurrent 請求繞過 busy check
-    podStore.setStatus(canvasId, podId, "chatting");
-  }
-
   // 預先產生 chatMessageId，與 promoteStagingToFinal 目標目錄名稱一致
   const chatMessageId = uuidv4();
 
@@ -182,10 +133,6 @@ async function handleChatSendWithUploadSession(
   try {
     promoteResult = await promoteStagingToFinal(uploadSessionId, chatMessageId);
   } catch (err) {
-    // 附件寫入失敗：回滾 pod 狀態為 idle，避免 pod 永遠卡在 chatting
-    if (pod.multiInstance !== true) {
-      podStore.setStatus(canvasId, podId, "idle");
-    }
     emitAttachmentError(err, connectionId, canvasId, podId, requestId);
     return;
   }
@@ -196,174 +143,46 @@ async function handleChatSendWithUploadSession(
   // llmTriggerText：僅傳給 LLM，包含絕對路徑以讓 agent 能以 Read tool 讀取附件目錄。
   // 安全 trade-off：LLM 仍會收到絕對路徑，此為讓 agent 正常讀取附件的必要設計。
   // 若未來改為 per-pod workspace symlink 方案，可消除此洩漏，但需重構 tmpRoot 管理邏輯。
-  const dbTriggerText = `我提供了下列檔案（附件 ID：${chatMessageId}）：${fileList}`;
   const llmTriggerText = `我提供了下列檔案在 \`${promoteResult.dir}\`：${fileList}`;
 
-  if (pod.multiInstance === true) {
-    // multi-instance pod：建新 Run，userMessageId 透傳確保落地一致
-    // multi-instance 路徑由 Run 自行管理訊息儲存，此處傳 llmTriggerText 供 LLM 讀取附件
-    await launchMultiInstanceRun({
-      canvasId,
-      podId,
-      message: llmTriggerText,
-      abortable: true,
-      commandNotFoundBehavior: "skip",
-      userMessageId: chatMessageId,
-      onCommandNotFound: (commandId) =>
-        handleCommandNotFound(canvasId, podId, commandId),
-      onComplete: (runContext) =>
-        onRunChatComplete(runContext, canvasId, podId),
-      onAborted: (abortedCanvasId, abortedPodId, messageId) =>
-        onChatAborted(abortedCanvasId, abortedPodId, messageId, podName),
-    });
-    return;
-  }
-
-  // 串行 pod：展開 Command（若訊息含 Command 語法）
-  // 用 llmTriggerText 做 Command 展開（LLM 需知道實際路徑）
-  const expandResult = await tryExpandCommandMessage(
-    pod,
-    llmTriggerText,
-    "handleChatSend",
-  );
-
-  if (!expandResult.ok) {
-    // Command 不存在：注入去路徑化訊息到 DB，推送錯誤文字，不呼叫 Claude
-    await injectUserMessage({
-      canvasId,
-      podId,
-      content: dbTriggerText,
-      id: chatMessageId,
-    });
-    handleCommandNotFound(canvasId, podId, expandResult.commandId);
-    return;
-  }
-
-  // resolvedTrigger 為 LLM 用（含絕對路徑）；DB 儲存使用 dbTriggerText（不含路徑）
-  const resolvedTrigger = expandResult.message;
-
-  // 寫入 DB（chatMessageId 對齊 attachments dir），內容使用去路徑化版本
-  await injectUserMessage({
+  // multi-instance pod：建新 Run，userMessageId 透傳確保落地一致
+  // multi-instance 路徑由 Run 自行管理訊息儲存，此處傳 llmTriggerText 供 LLM 讀取附件
+  await launchRun({
     canvasId,
     podId,
-    content: dbTriggerText,
-    id: chatMessageId,
+    message: llmTriggerText,
+    abortable: true,
+    commandNotFoundBehavior: "skip",
+    userMessageId: chatMessageId,
+    onComplete: (runContext) => onRunChatComplete(runContext, canvasId, podId),
+    onAborted: (abortedCanvasId, abortedPodId, messageId) =>
+      onChatAborted(abortedCanvasId, abortedPodId, messageId, podName),
   });
-
-  const attachStrategy = new NormalModeExecutionStrategy(canvasId);
-
-  // 送給 LLM 的訊息使用含絕對路徑版本，讓 agent 能讀取附件
-  await executeStreamingChat(
-    {
-      canvasId,
-      podId,
-      message: resolvedTrigger,
-      abortable: true,
-      strategy: attachStrategy,
-    },
-    {
-      onComplete: onChatComplete,
-      onAborted: (abortedCanvasId, abortedPodId, messageId) =>
-        onChatAborted(abortedCanvasId, abortedPodId, messageId, podName),
-    },
-  );
 }
 
 /**
- * 處理一般（無 attachments）的聊天訊息（multi-instance 與串行兩條路徑）。
+ * 處理一般（無 attachments）的聊天訊息（multi-instance 路徑）。
  */
-async function handleChatSendNormal(
-  connectionId: string,
+async function handleChatSendPlain(
+  _connectionId: string,
   canvasId: string,
   payload: ChatSendPayload,
-  requestId: string,
+  _requestId: string,
   pod: Pod,
 ): Promise<void> {
   const { podId, message } = payload;
   const podName = pod.name;
 
-  if (pod.multiInstance === true) {
-    await launchMultiInstanceRun({
-      canvasId,
-      podId,
-      message,
-      abortable: true,
-      commandNotFoundBehavior: "skip",
-      onCommandNotFound: (commandId) =>
-        handleCommandNotFound(canvasId, podId, commandId),
-      onComplete: (runContext) =>
-        onRunChatComplete(runContext, canvasId, podId),
-      onAborted: (abortedCanvasId, abortedPodId, messageId) =>
-        onChatAborted(abortedCanvasId, abortedPodId, messageId, podName),
-    });
-    return;
-  }
-
-  if (!validatePodNotBusy(connectionId, canvasId, pod, requestId)) return;
-  // busy check 通過後同步佔位，避免 await tryExpandCommandMessage 期間 concurrent 請求繞過 busy check
-  podStore.setStatus(canvasId, podId, "chatting");
-
-  // 在注入歷史記錄前先展開 Command，確保歷史與送給 Claude 的訊息一致
-  const expandResult = await tryExpandCommandMessage(
-    pod,
-    message,
-    "handleChatSend",
-  );
-
-  if (!expandResult.ok) {
-    // Command 不存在：注入原始訊息、推送錯誤文字給前端，不呼叫 Claude
-    // handleCommandNotFound 內部會設定 pod 狀態為 idle，不需額外回滾
-    await injectUserMessage({ canvasId, podId, content: message });
-    handleCommandNotFound(canvasId, podId, expandResult.commandId);
-    return;
-  }
-
-  const resolvedMessage = expandResult.message;
-
-  // 歷史記錄與 Claude 都使用展開版訊息
-  await injectUserMessage({ canvasId, podId, content: resolvedMessage });
-
-  const strategy = new NormalModeExecutionStrategy(canvasId);
-
-  await executeStreamingChat(
-    {
-      canvasId,
-      podId,
-      message: resolvedMessage,
-      abortable: true,
-      strategy,
-    },
-    {
-      onComplete: onChatComplete,
-      onAborted: (abortedCanvasId, abortedPodId, messageId) =>
-        onChatAborted(abortedCanvasId, abortedPodId, messageId, podName),
-    },
-  );
-}
-
-/**
- * 處理 Command 不存在的情況：推送錯誤文字至前端，並將 Pod 狀態重設為 idle。
- * commandId 為 Command 的檔名（即展示用名稱），直接顯示給使用者是合適的。
- */
-function handleCommandNotFound(
-  canvasId: string,
-  podId: string,
-  commandId: string,
-): void {
-  const errorText = buildCommandNotFoundMessage(commandId);
-  socketService.emitToCanvas(
+  await launchRun({
     canvasId,
-    WebSocketResponseEvents.POD_CLAUDE_CHAT_MESSAGE,
-    {
-      canvasId,
-      podId,
-      messageId: uuidv4(),
-      content: `\n\n⚠️ ${errorText}`,
-      isPartial: false,
-      role: "assistant",
-    },
-  );
-  podStore.setStatus(canvasId, podId, "idle");
+    podId,
+    message,
+    abortable: true,
+    commandNotFoundBehavior: "skip",
+    onComplete: (runContext) => onRunChatComplete(runContext, canvasId, podId),
+    onAborted: (abortedCanvasId, abortedPodId, messageId) =>
+      onChatAborted(abortedCanvasId, abortedPodId, messageId, podName),
+  });
 }
 
 export const handleChatSend = withCanvasId<ChatSendPayload>(
@@ -396,7 +215,7 @@ export const handleChatSend = withCanvasId<ChatSendPayload>(
         pod,
       );
     } else {
-      await handleChatSendNormal(
+      await handleChatSendPlain(
         connectionId,
         canvasId,
         payload,
@@ -425,23 +244,8 @@ export const handleChatAbort = withCanvasId<ChatAbortPayload>(
     );
     if (!pod) return;
 
-    if (pod.status !== "chatting") {
-      emitError(
-        connectionId,
-        WebSocketResponseEvents.POD_ERROR,
-        createI18nError("errors.podNotChatting", { id: podId }),
-        canvasId,
-        requestId,
-        podId,
-        "POD_NOT_CHATTING",
-      );
-      return;
-    }
-
-    const aborted = abortRegistry.abort(podId);
+    const aborted = abortRegistry.abortByPodId(podId);
     if (!aborted) {
-      // abort 失敗但 pod 狀態是 chatting，重設為 idle 避免卡死
-      podStore.setStatus(canvasId, podId, "idle");
       emitError(
         connectionId,
         WebSocketResponseEvents.POD_ERROR,
@@ -453,38 +257,6 @@ export const handleChatAbort = withCanvasId<ChatAbortPayload>(
       );
       return;
     }
-  },
-);
-
-export const handleChatHistory = withCanvasId<ChatHistoryPayload>(
-  WebSocketResponseEvents.POD_CHAT_HISTORY_RESULT,
-  async (
-    connectionId: string,
-    canvasId: string,
-    payload: ChatHistoryPayload,
-    requestId: string,
-  ): Promise<void> => {
-    const { podId } = payload;
-
-    const pod = podStore.getById(canvasId, podId);
-    if (!pod) {
-      emitError(
-        connectionId,
-        WebSocketResponseEvents.POD_CHAT_HISTORY_RESULT,
-        createI18nError("errors.podNotFound", { id: podId }),
-        canvasId,
-        requestId,
-        podId,
-        "NOT_FOUND",
-      );
-      return;
-    }
-
-    const messages = messageStore.getMessages(podId);
-    emitSuccess(connectionId, WebSocketResponseEvents.POD_CHAT_HISTORY_RESULT, {
-      requestId,
-      success: true,
-      messages: messages.map((message) => sanitizePersistedMessageForClient(message)),
-    });
+    // POD_CHAT_ABORTED 事件由 streamingChatExecutor 的 onAborted callback（即 onChatAborted）負責發送
   },
 );

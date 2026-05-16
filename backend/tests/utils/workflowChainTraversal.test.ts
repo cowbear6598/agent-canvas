@@ -162,36 +162,6 @@ describe("traverseWorkflowChain", () => {
 });
 
 describe("isWorkflowChainBusy", () => {
-  it("鏈中存在 status 為 chatting 的 Pod 時應回傳 true", () => {
-    const canvasId = "canvas-1";
-
-    // A→B
-    mockList.mockReturnValue([makeConnection("A", "B")]);
-
-    // B 的狀態為 chatting
-    mockGetById.mockImplementation((cid, podId) => {
-      if (podId === "B") return { id: "B", status: "chatting" };
-      return undefined;
-    });
-
-    const result = isWorkflowChainBusy(canvasId, "A");
-    expect(result).toBe(true);
-  });
-
-  it("鏈中存在 status 為 summarizing 的 Pod 時應回傳 true", () => {
-    const canvasId = "canvas-1";
-
-    mockList.mockReturnValue([makeConnection("A", "B")]);
-
-    mockGetById.mockImplementation((cid, podId) => {
-      if (podId === "B") return { id: "B", status: "summarizing" };
-      return undefined;
-    });
-
-    const result = isWorkflowChainBusy(canvasId, "A");
-    expect(result).toBe(true);
-  });
-
   it("所有 Pod 為 idle 時 isWorkflowChainBusy 應回傳 false", () => {
     const canvasId = "canvas-1";
 

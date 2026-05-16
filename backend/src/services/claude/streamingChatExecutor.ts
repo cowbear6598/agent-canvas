@@ -746,12 +746,14 @@ async function runProviderStream(
   provider: AgentProvider,
   ctxWithoutSignal: Omit<ChatRequestContext, "abortSignal">,
   queryKey: string,
+  podId: string,
   abortable: boolean,
   streamContext: StreamContext,
   streamingCallback: (event: StreamEvent) => void,
 ): Promise<{ aborted: boolean }> {
   // abortRegistry 建立 controller，供外部 abort 呼叫（透過 registry 觸發 signal）
-  const abortController = abortRegistry.register(queryKey);
+  // 同時傳入 podId 以建立二級索引，支援 abortByPodId
+  const abortController = abortRegistry.register(queryKey, podId);
   const ctx: ChatRequestContext = {
     ...ctxWithoutSignal,
     abortSignal: abortController.signal,
@@ -773,7 +775,7 @@ async function runProviderStream(
     }
   } finally {
     // 無論串流正常或異常結束，都清理 abortRegistry entry 防 Memory Leak
-    abortRegistry.unregister(queryKey);
+    abortRegistry.unregister(queryKey, podId);
   }
 
   if (abortController.signal.aborted && abortable) {
@@ -853,7 +855,7 @@ async function resolveExecutionDependencies(
 }
 
 /**
- * 統一的串流聊天執行器，透過 ExecutionStrategy 區分 Normal mode 與 Run mode 的差異。
+ * 統一的串流聊天執行器，透過 ExecutionStrategy 管理 Run mode 的執行行為。
  *
  * Phase 5A 更新：
  *   - 移除 if (provider === "codex") 分流與 executeCodexStream / withCodexAbort
@@ -896,6 +898,7 @@ export async function executeStreamingChat(
       provider,
       ctxWithoutSignal,
       queryKey,
+      podId,
       abortable,
       streamContext,
       streamingCallback,

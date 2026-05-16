@@ -158,7 +158,7 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
         targetPodId,
         provider,
         connection.summaryModel,
-        runContext,
+        runContext!,
         pathway,
         delegate,
       );
@@ -208,8 +208,15 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
     if (delegate) {
       if (this.enqueueForRunMode(delegate, enqueueParams)) return;
     } else {
-      // Normal mode（無 delegate）：透過 queueService 處理排隊
-      if (this.enqueueForNormalMode(targetPod.status, enqueueParams)) return;
+      // 無 delegate 時：以 hasActiveRunForPod 判斷是否忙碌，透過 queueService 處理排隊
+      const targetPodBusy = runStore.hasActiveRunForPod(targetPod.id);
+      if (
+        this.enqueueForNormalMode(
+          targetPodBusy ? "busy" : "idle",
+          enqueueParams,
+        )
+      )
+        return;
     }
 
     await this.deps.executionService.triggerWorkflowWithSummary({
@@ -228,7 +235,7 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
    * Run mode 佇列邏輯（delegate 存在時）。
    *
    * Run mode 下，delegate 依 Pod instance 的 running 狀態判斷是否忙碌，
-   * 並透過 RunModeDelegate 或 NormalModeDelegate 各自的佇列實作排隊。
+   * 並透過 RunDelegate 的佇列實作排隊。
    * 回傳 true 表示已加入佇列，呼叫方應立即 return。
    */
   private enqueueForRunMode(

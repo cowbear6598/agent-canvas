@@ -122,7 +122,7 @@ class WorkflowBranchTriggerService
           canvasId,
           sourcePodId,
           connections,
-          runContext,
+          runContext!,
         );
 
       logger.log(
@@ -434,7 +434,7 @@ class WorkflowBranchTriggerService
         canvasId,
         sourcePodId,
         connections,
-        runContext,
+        runContext!,
         abortSignal,
       );
       selectedConnectionId = result.selectedConnectionId;

@@ -1,0 +1,252 @@
+feature: remove-normal-mode
+created: "2026-05-16"
+approved: true
+
+questions:
+  - id: Q1
+    text: |
+      資料策略決定 — DB 層的 `pods.multi_instance` 欄位、`messages` 表（一般模式訊息儲存）
+      以及相關附件表，要完全刪除（含 migration drop）還是保留 schema 但程式碼不再讀寫？
+      影響：完全刪除＝乾淨但不可逆且既有訊息會消失；保留＝可向後查詢但 codebase 留死欄位。
+    type: user-input
+    completed: true
+    answer: |
+      完全刪除（drop migration）。寫一支 migration drop 掉 `pods.multi_instance` 欄位與
+      `messages` 表（含相關 prepared statements）；code 一併清乾淨。
+
+  - id: Q2
+    text: |
+      既有 `multiInstance=false` 的 pod 與其歷史訊息（messages 表）要如何處理？
+      候選方案：
+      (a) 直接刪除歷史訊息，但 pod 本身保留並視為 multi-run pod
+      (b) 寫 migration 把舊 messages 搬到 run_messages（建立一筆對應的 historical run）
+      (c) 完全清除（含 pod 一起刪）
+      (d) 只清訊息，視為「過去歷史就沒了，從這之後都是 run」
+    type: user-input
+    completed: true
+    answer: |
+      只刪訊息，pod 保留視為 multi-run pod。messages 表整個 drop，舊歷史訊息直接消失；
+      既有 pod 不刪，未來都走 run 邏輯。
+
+  - id: Q3
+    text: |
+      UI 層的「橡皮擦長按切換 multi-instance」入口、`multi-instance-icon-m` 視覺指示
+      （PodActions.vue 中的 toggle-multi-instance 行為與顯示），要全部拿掉嗎？
+      預期：移除後一般模式沒了，pod 一律 multi-run，所以這些 toggle 與 icon 應該都失去意義。
+    type: user-input
+    completed: true
+    answer: |
+      全部拿掉。橡皮擦 long-press toggle 邏輯、`multi-instance-icon-m`、`multi-instance-enabled`
+      class、相關 i18n 文案、長按進度圈 SVG 全部移除。短按 clear chat 行為保留（已確認獨立性）。
+    text: |
+      `multiInstance` 這個屬性與相關 helper（multiInstanceGuard.ts、isMultiInstanceSourcePod、
+      isMultiInstanceChainPod、launchMultiInstanceRun、POD_SET_MULTI_INSTANCE 事件等）要不要趁
+      這次一併改名 / 重構？例如：因為 multi 變預設行為，這些 helper 可能直接內聯掉 / 改成 run 相關命名。
+      影響：一起改＝乾淨但 diff 大；分階段＝先移除一般模式邏輯，命名留下次。
+    type: user-input
+    completed: true
+    answer: |
+      趁這次一併重構命名。具體方向（rename target）由 Q11 進一步釐清。
+
+  - id: Q5
+    text: |
+      README.md、README.en.md、README.ja.md、CHANGELOG.md、tutorials/、prds/ 中關於「一般模式 vs
+      Multi-Instance 模式」的說明（README 行 134-148 等）要在這次一起更新嗎？或這次只動 code，
+      文件留下一個獨立 task？
+    type: user-input
+    completed: true
+    answer: |
+      只動 code，所有文件留下個 task。本次只處理 code 與測試；README zh/en/ja、CHANGELOG、
+      tutorials/、prds/ 一律另開 task 處理。注意：README 說明與實際行為會有一段時間不一致。
+
+  - id: Q6
+    text: |
+      `scheduleService` 在「一般模式忙碌時跳過」、`integrationEventPipeline` 在「normalPods busy
+      check」上有特殊處理（pipeline 行 98-113、161-174；schedule 行 245-294）。移除一般模式後，
+      schedule 與 integration 事件就只剩 multi-run 路徑：multi-run 預設不受 busy 影響、直接建立
+      新 Run。請確認這個行為變更是否可接受？（影響：schedule cron 觸發若使用者連續觸發會建立多個
+      Run；integration webhook 也一樣。）
+    type: user-input
+    completed: true
+    answer: |
+      可接受。schedule 與 integration 都直接走 multi-run 邏輯，連續觸發會建立多個 Run。
+      原本「busy 時跳過」的程式碼一併移除（integrationEventPipeline 行 98-113, 161-174、
+      scheduleService 行 245-294 一般模式分支）。
+
+  - id: Q7
+    text: |
+      完整盤點所有讀寫 `pod.multiInstance` 屬性、所有引用 `NormalExecutionStrategy` /
+      `NormalModeDelegate` / `createNormalEmitStrategy` 的位置（前後端），含檔案路徑與行號,
+      作為實作時的 surface area 參考。
+    type: codebase-investigation
+    completed: true
+    answer: |
+      Surface area 盤點（精簡版，詳見實作時 grep 確認）：
+
+      (A) Pod.multiInstance 前端讀寫:
+        - frontend/src/types/pod.ts:124（interface 定義）
+        - frontend/src/lib/podValidation.ts:94（enrichPod 預設值）
+        - frontend/src/stores/pod/podStore.ts:447-472, 570（setMultiInstanceWithBackend）
+
+      (B) Pod.multi_instance 後端 DB 讀寫:
+        - backend/src/database/schema.ts:31（欄位定義）
+        - backend/src/database/statements.ts:41, 213, 239, 257（prepared statements）
+        - backend/src/services/podStore.ts:60, 355, 428, 450, 644, 791-796
+
+      (C) NormalModeExecutionStrategy（要刪整檔）import / 實例化:
+        - backend/src/services/normalExecutionStrategy.ts（整檔刪）
+        - backend/src/api/workflowApi.ts:24, 216
+        - backend/src/handlers/chatHandlers.ts:24, 253, 326
+        - backend/src/services/scheduleService.ts:17, 282
+        - backend/src/services/integration/integrationEventPipeline.ts:25, 343
+        - backend/src/services/workflow/workflowExecutionService.ts:35, 471
+
+      (D) NormalModeDelegate（要刪 class）:
+        - backend/src/services/workflow/workflowStatusDelegate.ts:39, 80, 182
+        - workflowPipeline.ts:231（註解）
+
+      (E) createNormalEmitStrategy（要刪函式）:
+        - backend/src/services/chatEmitStrategy.ts:10-108
+        - 測試：backend/tests/unit/chatEmitStrategy.test.ts:29-117
+
+      (F) POD_SET_MULTI_INSTANCE / POD_MULTI_INSTANCE_SET events（要刪事件）:
+        - frontend/src/types/websocket/events.ts:37, 166
+        - frontend/src/stores/pod/podStore.ts:456-457
+        - frontend/src/composables/eventHandlers/podEventHandlers.ts:260
+        - backend/src/schemas/events.ts:30, 136
+        - backend/src/handlers/multiInstanceHandlers.ts（整檔刪）
+        - backend/src/handlers/groups/multiInstanceHandlerGroup.ts（整檔刪）
+        - backend/tests/integration/multi-instance.test.ts（整檔刪或重寫）
+        - backend/tests/integration/command.test.ts:793-794
+
+      (G) multiInstance === true / === false 條件分支（要刪/簡化）:
+        - backend/src/handlers/chatHandlers.ts:202, 285
+        - backend/src/services/scheduleService.ts:228
+        - backend/src/services/integration/integrationEventPipeline.ts:99, 255
+
+      (H) launchMultiInstanceRun（保留，但會在 Q11 評估改名）:
+        - backend/src/utils/runChatHelpers.ts:86, 90, 114
+        - 被 chatHandlers.ts:23, 205, 286 / scheduleService.ts:9, 230, 237 /
+          integrationEventPipeline.ts:17, 377 引用
+
+      (I) multiInstanceGuard helpers（保留邏輯但需 Q11 重新命名）:
+        - frontend/src/utils/multiInstanceGuard.ts（整檔考慮）
+        - 被 frontend/src/stores/chat/chatStore.ts:30, 283, 317 引用
+
+  - id: Q8
+    text: |
+      `messageStore` 服務與 `messages` 表的所有 callers 完整盤點（含 read 與 write），確認是否
+      有任何 run 模式流程仍會讀寫此表，以及是否有純粹「展示歷史訊息」的入口會因此失效。
+    type: codebase-investigation
+    completed: true
+    answer: |
+      messageStore caller 盤點 + 結論：
+
+      Read callers:
+        - backend/src/utils/messageHelper.ts:4（getLastAssistantMessage）
+        - backend/src/handlers/chatHandlers.ts:483（POD_CHAT_HISTORY handler）
+        - backend/src/services/summaryService.ts:115（runContext 不存在時的 fallback）
+        - backend/src/services/workflow/workflowAutoTriggerService.ts:55
+        - backend/src/services/workflow/branchDecisionService.ts:66
+
+      Write callers:
+        - backend/src/utils/chatHelpers.ts:32, 41（injectUserMessage）
+        - backend/src/services/normalExecutionStrategy.ts:40（upsertMessage）
+
+      Clear callers:
+        - backend/src/handlers/repositoryHandlers.ts:108
+        - backend/src/handlers/repository/repositoryBindHelpers.ts:16
+        - backend/src/services/workflowClearService.ts:119
+
+      DB statements（statements.ts:473-492）: insert / selectByPodId / selectById /
+      upsert / deleteByPodId / deleteByCanvasId
+
+      關鍵結論：
+      1. Run mode 完全與 messages 表脫鉤 — Run mode 使用 runStore + run_messages 表
+      2. summaryService, workflowAutoTriggerService, branchDecisionService 三個服務在
+         runContext 不存在時會 fallback 到 messageStore；移除一般模式後這些 fallback
+         分支可一併移除（或改為「只有 run mode」的單一路徑）
+      3. POD_CHAT_HISTORY WebSocket event 與其 result event 可整組刪除
+      4. messageStore 整個服務檔案可刪除
+      5. messages 表可 drop（已在 Q1 確認）
+      6. 附件對齊機制：用 message id 作為目錄名稱（chatHelpers.ts:30-39），改 run mode
+         需確認 run_messages 是否有同樣 id 對齊機制（實作時要驗證）
+
+  - id: Q9
+    text: |
+      既有測試（frontend `tests/**`、backend `tests/**`）中對一般模式（multiInstance=false /
+      normal mode）的覆蓋盤點：列出每個測試檔的相關 describe / it，分類為「直接刪除」「需重寫成
+      multi 版」「保持不動」，以利實作時直接對照。
+    type: codebase-investigation
+    completed: true
+    answer: |
+      測試影響盤點：
+
+      應刪整檔的測試（純測一般模式邏輯）：
+        - backend/tests/unit/normalExecutionStrategy.test.ts
+        - backend/tests/integration/multi-instance.test.ts（純測 set-multi-instance 事件）
+
+      需重寫（刪除一般模式分支，保留 multi 版）:
+        - backend/tests/unit/chatEmitStrategy.test.ts:29-117（createNormalEmitStrategy
+          describe 區塊整段刪）
+        - backend/tests/unit/streamingChatExecutor.test.ts:59, 175, 1326（將
+          NormalModeExecutionStrategy 改為 RunModeExecutionStrategy）
+        - backend/tests/unit/schedule-service.test.ts:700-854（7 個一般模式 it 區塊刪除;
+          L780-793, L795-807, L809-838 可改寫成 mode-無關通用邏輯；L702-778, L840-854 刪）
+        - backend/tests/handlers/chatHandlersGemini.test.ts:108-121（移除一般模式 mock）
+        - frontend/tests/components/pod/PodActions.test.ts:58-66, 86-92, 128-142
+          （刪一般模式 UI 行為 + long-press toggle 測試）
+        - frontend/tests/utils/multiInstanceGuard.test.ts（檔案是否整個刪掉視 Q11 結果）
+
+      涉及 multiInstance=false 但屬於通用配置（評估後決定）:
+        - frontend/tests/stores/podStore.test.ts（多處 mock pod 用到 multiInstance: false;
+          移除屬性後測試需更新型別）
+        - frontend/tests/components/chat/ChatModal.test.ts（multi-instance 條件分支測試;
+          移除後需確認是否還有 chat input 條件邏輯需測）
+        - frontend/tests/components/pod/PodSlots.test.ts、McpPopover.test.ts、
+          CanvasPod.test.ts、PluginPopover.test.ts（涉及 multiInstance 預設值的 mock,
+          只需更新型別）
+
+      保留不動:
+        - backend/tests/unit/messageStore.test.ts（測 messageStore 通用 CRUD;
+          但會隨 messageStore 一起刪）
+        - backend/tests/unit/runExecutionStrategy.test.ts（純測 run mode）
+        - backend/tests/unit/integrationEventPipeline.test.ts（測通用 pipeline 邏輯;
+          但 multiInstance 分支測試需重寫）
+
+  - id: Q10
+    text: |
+      `PodActions.vue` 中「短按橡皮擦＝clear chat」「長按橡皮擦＝toggle multi-instance」目前的
+      互動細節（含 long-press 偵測時間、視覺 feedback、disabled state 等），以利評估拿掉 toggle
+      後，短按 clear 行為與視覺是否需要調整。
+    type: codebase-investigation
+    completed: true
+    answer: |
+      PodActions long-press 互動細節：
+
+      - 短按：mouseup → emit `clear-workflow` → 由 CanvasPod 接收（handleEraserMouseUp,
+        PodActions.vue:127-132）
+      - 長按 threshold: 500ms（LONG_PRESS_DURATION_MS, PodActions.vue:64）
+      - 長按觸發 → emit `toggle-multi-instance` → 進入 5000ms debounce
+        (TOGGLE_DEBOUNCE_GUARD_MS, PodActions.vue:59, 115-124)
+      - 視覺 feedback：Teleport SVG 長按進度圈（PodActions.vue:311-364, overlay.css:8-21）
+      - 圖標切換：multiInstance=true 時 Eraser icon → "M" 字母（PodActions.vue:224-227）
+      - CSS class：`multi-instance-icon-m`（pod.css:292-298, monospace 16px bold 灰）;
+        `multi-instance-enabled`（pod.css:301-307, 淺青藍背景）
+      - 短按 clear 行為無 multiInstance 特殊處理（mouseup handler 無檢查
+        isMultiInstanceEnabled, isEraserDisabled computed 也無 multiInstance 項）
+      - 短按 clear 邏輯與長按 toggle 邏輯完全獨立，移除長按後保留短按完全 OK
+
+      要刪除的部分：
+      - LONG_PRESS_DURATION_MS, TOGGLE_DEBOUNCE_GUARD_MS 常數
+      - longPressTimer / isLongPress / isLongPressing / longPressProgress /
+        progressAnimationFrame / longPressStartTime / cleanupLongPress 等 ref / 函式
+      - handleEraserMouseDown 內的進度計算與 timeout（簡化為 stopPropagation only）
+      - handleEraserMouseUp 內的 `if (!isLongPress)` 判定（直接 emit clear-workflow）
+      - handleEraserMouseLeave
+      - Teleport SVG 進度圈 template 區塊（PodActions.vue:311-364）
+      - `multi-instance-icon-m` 與 `multi-instance-enabled` CSS rules（pod.css:292-307）
+      - long-press-indicator / long-press-ring CSS（overlay.css:8-21）
+      - `toggle-multi-instance` emit 定義（PodActions.vue:45）
+      - CanvasPod.vue 端 handleToggleMultiInstance（CanvasPod.vue:425-430）與
+        `@toggle-multi-instance` listener（CanvasPod.vue:594）

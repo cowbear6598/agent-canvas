@@ -214,20 +214,12 @@
         "disabledTooltip": "opencode server を起動できません"
       }
     },
-    "multiInstance": {
-      "readonlyHint": "この Pod は Multi-Instance ワークフローの一部です。詳細は実行履歴からご確認ください。"
-    },
+    "downstreamChainHint": "この Pod は Run ワークフローの一部です。詳細は実行履歴からご確認ください。",
     "provider": {
       "title": "Provider",
       "unknownDescription": "この Provider はオフラインまたは未サポートです。チャットは利用できません。",
       "loadFailedDescription": "Provider capabilities を取得できませんでした。一部の機能が正常に動作しない場合があります。",
       "loadingHint": "Provider を読み込み中です。しばらくお待ちください"
-    },
-    "clearWorkflow": {
-      "title": "ワークフローをクリア",
-      "description": "以下の POD のすべてのメッセージがクリアされます：",
-      "confirm": "クリアを確認",
-      "clearing": "クリア中..."
     },
     "delete": {
       "title": "Pod を削除",
@@ -256,7 +248,6 @@
     "slot": {
       "duplicateTitle": "すでに存在しています",
       "providerDisabled": "このプロバイダーはこの機能をサポートしていません",
-      "lockedByMessages": "会話があるためロック中",
       "thinkingLabel": "Thinking",
       "thinkingDisabledTooltip": "現在のモデルは thinking レベルをサポートしていません",
       "pluginsLabel": "Plugins",
@@ -267,7 +258,6 @@
       "pluginsCodexHint": "Codex プラグインは codex でグローバル管理されています",
       "mcpLabel": "MCP",
       "mcpLoading": "読み込み中…",
-      "mcpBusyTooltip": "Pod 実行中は切り替え不可",
       "mcpEmpty": "MCP server がインストールされていません",
       "mcpClaudeEmptyHint": "`claude mcp add` でインストールしてください",
       "mcpCodexEmptyHint": "`codex mcp add` でインストールしてください",
@@ -296,10 +286,10 @@
     },
     "loadingHistory": "会話履歴を読み込み中...",
     "inputPlaceholder": "メッセージを入力...",
+    "launchHint": "メッセージを送信して新しい Run を開始",
     "summarizedBadge": "要約",
     "workflowBlockedHint": "この Pod はワークフロー内にあります。最初と最後の Pod のみ送信できます。",
     "integrationBlockedHint": "この Pod は {label} に接続されています。メッセージは {label} によって送信されます。",
-    "multiInstanceHint": "この Pod は Multi-Instance が有効です。メッセージを送信するたびに新しい Run が作成されます。",
     "toolOutput": {
       "errorTitle": "{toolName} エラー情報",
       "resultTitle": "{toolName} 実行結果",
@@ -576,8 +566,7 @@
       "deleteFailed": "Pod の削除に失敗しました",
       "renameFailed": "Pod の名前変更に失敗しました",
       "renamed": "名前を変更しました",
-      "scheduleFailed": "スケジュールの設定に失敗しました",
-      "multiInstanceFailed": "Pod の設定に失敗しました"
+      "scheduleFailed": "スケジュールの設定に失敗しました"
     },
     "integration": {
       "createFailed": "作成に失敗しました",
@@ -662,7 +651,6 @@
       "podModelSet": "モデルを設定しました",
       "podScheduleSet": "スケジュールを設定しました",
       "podDeleted": "Pod を削除しました",
-      "workflowCleared": "メッセージをクリアしました",
       "connectionCreated": "接続を作成しました",
       "connectionDeleted": "接続を削除しました",
       "canvasCreated": "Canvas を作成しました",
@@ -722,7 +710,6 @@
     "unknownError": "不明なエラーが発生しました",
     "notFound": "{entity} が見つかりません：{id}",
     "podIntegrationBound": "Pod「{name}」は外部サービスに接続されているため、手動でメッセージを送信できません",
-    "podBusy": "Pod {id} は現在 {status} 中です。しばらくしてからもう一度お試しください",
     "podNotChatting": "Pod {id} は会話中ではないため、中断できません",
     "noActiveQuery": "Pod {id} のアクティブなクエリが見つかりません",
     "podNotFound": "Pod が見つかりません：{id}",

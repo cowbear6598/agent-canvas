@@ -1,5 +1,5 @@
 /**
- * RunModeExecutionStrategy 單元測試
+ * ChatExecutionStrategy 單元測試
  *
  * 移除自家 store / service mock，改用 initTestDb + 真實 store + vi.spyOn 觀察呼叫。
  * 僅保留必要的 spyOn：
@@ -12,7 +12,7 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { initTestDb, closeDb, getDb } from "../../src/database/index.js";
 import { resetStatements } from "../../src/database/statements.js";
-import { RunModeExecutionStrategy } from "../../src/services/executionStrategy.js";
+import { ChatExecutionStrategy } from "../../src/services/executionStrategy.js";
 import { runStore } from "../../src/services/runStore.js";
 import { runExecutionService } from "../../src/services/workflow/runExecutionService.js";
 import { socketService } from "../../src/services/socketService.js";
@@ -44,7 +44,7 @@ function insertCanvas(): void {
     .run(CANVAS_ID, `canvas-${CANVAS_ID}`, 0);
 }
 
-describe("RunModeExecutionStrategy", () => {
+describe("ChatExecutionStrategy", () => {
   beforeEach(() => {
     closeDb();
     clearPodStoreCache();
@@ -85,51 +85,9 @@ describe("RunModeExecutionStrategy", () => {
     clearPodStoreCache();
   });
 
-  function makeStrategy(): RunModeExecutionStrategy {
-    return new RunModeExecutionStrategy(CANVAS_ID, runContext);
+  function makeStrategy(): ChatExecutionStrategy {
+    return new ChatExecutionStrategy(CANVAS_ID, runContext);
   }
-
-  describe("setStatus", () => {
-    it("狀態為 chatting 時應呼叫 runExecutionService.startPodInstance", () => {
-      const strategy = makeStrategy();
-      strategy.setStatus("pod-1", "chatting");
-
-      expect(runExecutionService.startPodInstance).toHaveBeenCalledWith(
-        runContext,
-        "pod-1",
-      );
-    });
-
-    it("狀態為 summarizing 時應呼叫 runExecutionService.summarizingPodInstance", () => {
-      const strategy = makeStrategy();
-      strategy.setStatus("pod-1", "summarizing");
-
-      expect(runExecutionService.summarizingPodInstance).toHaveBeenCalledWith(
-        runContext,
-        "pod-1",
-      );
-    });
-
-    it("狀態為 error 時應呼叫 runExecutionService.errorPodInstance", () => {
-      const strategy = makeStrategy();
-      strategy.setStatus("pod-1", "error");
-
-      expect(runExecutionService.errorPodInstance).toHaveBeenCalledWith(
-        runContext,
-        "pod-1",
-        "執行發生錯誤",
-      );
-    });
-
-    it("狀態為 idle 時應為 no-op（不呼叫任何 service 方法）", () => {
-      const strategy = makeStrategy();
-      strategy.setStatus("pod-1", "idle");
-
-      expect(runExecutionService.startPodInstance).not.toHaveBeenCalled();
-      expect(runExecutionService.summarizingPodInstance).not.toHaveBeenCalled();
-      expect(runExecutionService.errorPodInstance).not.toHaveBeenCalled();
-    });
-  });
 
   describe("getSessionId", () => {
     it("Pod instance 不存在時應回傳 undefined", () => {

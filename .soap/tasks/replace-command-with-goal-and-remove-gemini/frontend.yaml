@@ -1,0 +1,191 @@
+feature: replace-command-with-goal-and-remove-gemini
+side: frontend
+approved: true
+phases:
+  - id: P1
+    title: 前端資料契約與 provider 基線收斂
+    parallel: true
+    verification:
+      - bun run style
+    done: false
+    items:
+      - id: P1.A
+        title: Pod 與連線型別改成 Goal 模式
+        tasks:
+          - id: P1.A.t1
+            text: 更新 `frontend/src/types/pod.ts` 與相關共用型別，移除 `commandId` 與 `command` capability，新增 Pod-native Goal 結構與「Goal 未設定」狀態所需欄位，讓 Pod 狀態可直接表達是否可執行。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P1.A.t2
+            text: 更新 `frontend/src/types/websocket/requests.ts`、`frontend/src/types/websocket/responses.ts`、`frontend/src/types/websocket/events.ts` 與 `frontend/src/types/websocket/index.ts`，把 command note/resource payload 改成 Goal 與遷移後的 pod/connection contract，並清掉 Gemini 相關 provider 字面值與 summary provider 舊欄位註解。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P1.A.t3
+            text: 更新 `frontend/src/composables/canvas/copyPaste/collectCopyData.ts`、`frontend/src/composables/canvas/copyPaste/calculatePaste.ts`、`frontend/src/composables/canvas/useCopyPaste.ts` 的資料映射，讓複製貼上的 Pod 只攜帶 Goal、repository、plugin、MCP 與遷移後 provider 資料，不再讀寫 command note 陣列。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+      - id: P1.B
+        title: Provider 與 API 字面值清理
+        tasks:
+          - id: P1.B.t1
+            text: 更新 `frontend/src/stores/providerCapabilityStore.ts`、`frontend/src/lib/podValidation.ts` 與 `frontend/src/lib/providerOptions.ts`，移除 Gemini 與 Command capability 分支，保留 Claude、Codex、Opencode 與 Goal 所需的 capability 判斷。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P1.B.t2
+            text: 更新 `frontend/src/services/mcpApi.ts` 與 `frontend/src/services/pluginApi.ts` 的已知 provider allowlist，讓前端只送出仍支援的 provider，並為 Goal built-in MCP 與使用者自選 MCP 共存預留一致的查詢入口。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P1.B.t3
+            text: 新增或更新 provider/type 契約測試，驗證舊資料進入前端狀態時不再產生 `gemini` 或 `commandId` 依賴；mock WebSocket payload builder 與 API wrapper，勿 mock `providerCapabilityStore` 的實際 selector 邏輯。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+  - id: P2
+    title: Pod-native Goal editor 與執行 gate
+    parallel: false
+    verification:
+      - bun run style
+      - bun run test:run
+    done: false
+    items:
+      - id: P2.A
+        title: Goal editor 取代 Command 編輯流程
+        tasks:
+          - id: P2.A.t1
+            text: 建立 Pod 專用 Goal editor 元件與編輯狀態，放在 `frontend/src/components/pod` 與對應 composable/store 邊界，讓使用者可直接在 Pod 上新增、排序、刪除 todo 項目，且資料儲存在 Pod 本身而不是獨立 note resource。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P2.A.t2
+            text: 更新 `frontend/src/components/pod/CanvasPod.vue`、`frontend/src/components/pod/PodSlots.vue` 與相關開啟 modal 的 canvas 互動，移除 Command slot / bind / unbind 行為，改成顯示 Goal 已設定或未設定的 Pod-native 入口與摘要狀態。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P2.A.t3
+            text: 更新 `frontend/src/components/canvas/CreateEditModal.vue`、`frontend/src/composables/canvas/useEditModal.ts` 與呼叫端，將僅服務 Command 的通用 modal 流程收斂為 Goal editor 所需的互動，避免保留已無用途的 command resource CRUD 路徑。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+      - id: P2.B
+        title: Goal 必填與執行前阻擋
+        tasks:
+          - id: P2.B.t1
+            text: 更新 `frontend/src/stores/chat/chatStore.ts`、Pod 執行入口與 workflow 觸發路徑，當 Pod 沒有 Goal 時在前端先阻止送出執行請求，並統一顯示「先設定 Goal」提示。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P2.B.t2
+            text: 更新 Pod 視覺狀態、context menu 與可點擊 affordance，讓沒有 Goal 的 Pod 在畫布上能明確顯示未完成設定，並在使用者補齊 Goal 後立即恢復可執行狀態。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P2.B.t3
+            text: 新增 Goal editor 與執行 gate 測試，覆蓋 user flow F1 與 F2；mock Pod 更新 action 與 chat send API wrapper，不 mock Goal editor 內部 todo 編輯與必填驗證邏輯，直接用真實元件互動驗證。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+  - id: P3
+    title: Goal MCP 共存與 connection summary 收斂
+    parallel: true
+    verification:
+      - bun run style
+      - bun run test:run
+    done: false
+    items:
+      - id: P3.A
+        title: Goal built-in MCP 與使用者 MCP 共存
+        tasks:
+          - id: P3.A.t1
+            text: 更新 `frontend/src/components/pod/McpPopover.vue`、`frontend/src/components/pod/McpServerRow.vue`、`frontend/src/components/pod/PodMcpSlot.vue` 與相關狀態來源，讓 Goal built-in MCP 以固定存在的系統項目呈現，並與使用者手動啟用的 MCP server 同時顯示在同一套 UI 中。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P3.A.t2
+            text: 調整 MCP 列表摘要與 Pod 顯示規則，讓 built-in Goal MCP 不會被誤當成可關閉的使用者選項，同時保留使用者自選 MCP 的切換、數量統計與送出 payload。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P3.A.t3
+            text: 新增 MCP 共存測試，覆蓋 user flow F3；mock MCP list API 與 Pod save action，勿 mock `McpPopover` 內部 computed，直接驗證 built-in 與 user-selected 項目能同時渲染且 payload 不互相覆蓋。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+      - id: P3.B
+        title: Summary provider 與模型 UI 收斂
+        tasks:
+          - id: P3.B.t1
+            text: 更新 `frontend/src/components/canvas/ConnectionContextMenu.vue`、`frontend/src/composables/canvas/useCanvasContextMenus.ts` 與相關 connection store 讀寫流程，移除 Gemini summary provider 選項，改成顯示遷移後的 Claude Sonnet 狀態，並避免舊資料仍走 `summaryProvider ?? sourcePod.provider` 的隱性展示分支。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P3.B.t2
+            text: 更新 `frontend/src/components/shared/ProviderModelSelector.vue`、`frontend/src/components/canvas/ProviderPicker.vue` 與 Pod provider 相關元件，移除 Gemini 選單、Logo、樣式與文案，確保新建 Pod、切換模型與重新打開舊畫布時只出現仍支援的 provider。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P3.B.t3
+            text: 新增 connection summary/provider 遷移測試，覆蓋 user flow F4 與 F5；mock connection store hydration 與 provider metadata 載入，不 mock `ConnectionContextMenu` 的 model option 計算，直接驗證舊畫布會收斂成 Claude Sonnet 且不再出現 Gemini UI。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+  - id: P4
+    title: Command 與 Gemini 前端殘留刪除
+    parallel: false
+    verification:
+      - bun run style
+      - bun run test:coverage
+    done: false
+    items:
+      - id: P4.A
+        title: 移除 Command resource 與畫布殘留
+        tasks:
+          - id: P4.A.t1
+            text: 從 `frontend/src/App.vue`、`frontend/src/stores/note/commandStore.ts`、`frontend/src/composables/eventHandlers`、`frontend/src/composables/canvas`、`frontend/src/components/canvas` 與 `frontend/src/components/pod` 移除 command store 啟動、command note render、drag/drop、delete、selection、copy/paste、group 與事件訂閱路徑。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P4.A.t2
+            text: 更新 `frontend/src/components/canvas/PodTypeMenu.vue`、`frontend/src/components/canvas/GenericNote.vue`、`frontend/src/components/canvas/CanvasContainer.vue` 與相關共用型別，刪除新增 Command、編輯 Command、Command Group 與 command note 專用 UI 入口。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+      - id: P4.B
+        title: Gemini 文案樣式與資產清理
+        tasks:
+          - id: P4.B.t1
+            text: 清理 `frontend/src/assets/styles`、`frontend/src/components/icons/GeminiLogo.vue`、`frontend/src/locales/en.json`、`frontend/src/locales/zh-TW.json`、`frontend/src/locales/ja.json` 內所有 Gemini 與 Command 文案、色票、slot 樣式與已無效 hint，補上 Goal editor、Goal 必填與 summary 收斂後需要的新文案。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P4.B.t2
+            text: 新增前端回歸測試，驗證 command 與 gemini 入口被移除後，畫布仍可正常載入 Pod、connection、Goal editor 與 provider 選單；mock WebSocket 初始資料與 provider list wrapper，不 mock畫布元件組裝流程。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []

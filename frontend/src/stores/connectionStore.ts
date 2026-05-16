@@ -102,8 +102,6 @@ const RUNNING_CONNECTION_STATUSES = new Set<ConnectionStatus>([
   "waiting",
 ]);
 
-const RUNNING_POD_STATUSES = new Set(["chatting", "summarizing"]);
-
 /**
  * 事件亂序保護：當 connection 的 decideStatus 為 pending（AI 決策中），不允許被 active 事件覆蓋。
  * 防止排程或其他觸發路徑的 active 事件在 AI 決策期間改變狀態，
@@ -184,16 +182,15 @@ function runBFS(
   return false;
 }
 
+/**
+ * Pod 全域 status 概念已移除（P1.I）。
+ * 簡化路徑：connection BFS 不再依賴 pod.status 判斷 running 狀態，
+ * 始終回傳 false，避免引入複雜的 runStore active run 同步機制。
+ */
 function buildIsRunningPod(
-  podStore: ReturnType<typeof usePodStore>,
+  _podStore: ReturnType<typeof usePodStore>,
 ): (podId: string) => boolean {
-  return (podId: string) => {
-    const pod = podStore.getPodById(podId);
-    return (
-      pod !== undefined &&
-      (pod.status ? RUNNING_POD_STATUSES.has(pod.status) : false)
-    );
-  };
+  return (_podId: string) => false;
 }
 
 export const useConnectionStore = defineStore("connection", () => {

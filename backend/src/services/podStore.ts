@@ -1,13 +1,7 @@
 import { randomUUID } from "crypto";
 import { Database } from "bun:sqlite";
 import * as fsPath from "path";
-import { WebSocketResponseEvents } from "../schemas";
-import type {
-  Pod,
-  PodStatus,
-  CreatePodRequest,
-  ScheduleConfig,
-} from "../types";
+import type { Pod, CreatePodRequest, ScheduleConfig } from "../types";
 import type { IntegrationBinding } from "../types/integration.js";
 import type { ProviderName } from "./provider/types.js";
 import {
@@ -15,7 +9,6 @@ import {
   resolveProviderConfig,
   sanitizeProviderConfigStrict,
 } from "./pod/providerConfigResolver.js";
-import { socketService } from "./socketService.js";
 import { canvasStore } from "./canvasStore.js";
 import { getStmts } from "../database/stmtsHelper.js";
 import { getDb } from "../database/index.js";
@@ -49,7 +42,6 @@ interface PodRow {
   id: string;
   canvas_id: string;
   name: string;
-  status: string;
   x: number;
   y: number;
   rotation: number;
@@ -57,7 +49,6 @@ interface PodRow {
   session_id: string | null;
   repository_id: string | null;
   command_id: string | null;
-  multi_instance: number;
   schedule_json: string | null;
   provider: string;
   provider_config_json: string | null;
@@ -340,7 +331,6 @@ class PodStore {
     const pod: Pod = {
       id: row.id,
       name: row.name,
-      status: row.status as PodStatus,
       workspacePath: row.workspace_path,
       x: row.x,
       y: row.y,
@@ -352,7 +342,6 @@ class PodStore {
       providerConfig,
       repositoryId: row.repository_id,
       commandId: row.command_id,
-      multiInstance: row.multi_instance === 1,
       integrationBindings: bindingsMap.get(row.id) ?? [],
     };
     if (row.schedule_json) {
@@ -413,7 +402,6 @@ class PodStore {
     return {
       id,
       name: data.name,
-      status: "idle",
       workspacePath: fsPath.join(canvasDir, `pod-${id}`),
       x: data.x,
       y: data.y,
@@ -425,7 +413,6 @@ class PodStore {
       providerConfig,
       repositoryId: data.repositoryId ?? null,
       commandId: data.commandId ?? null,
-      multiInstance: false,
       // create 路徑直接回傳空陣列，與 getById/list（走 batchLoadBindings 路徑）保持結構一致
       integrationBindings: [],
     };
@@ -439,7 +426,6 @@ class PodStore {
       $id: id,
       $canvasId: canvasId,
       $name: pod.name,
-      $status: pod.status,
       $x: pod.x,
       $y: pod.y,
       $rotation: pod.rotation,
@@ -447,7 +433,6 @@ class PodStore {
       $sessionId: pod.sessionId,
       $repositoryId: pod.repositoryId,
       $commandId: pod.commandId,
-      $multiInstance: 0,
       $scheduleJson: null,
       $provider: pod.provider,
       $providerConfigJson: JSON.stringify(pod.providerConfig),
@@ -634,14 +619,12 @@ class PodStore {
     this.stmts.pod.update.run({
       $id: id,
       $name: pod.name,
-      $status: pod.status,
       $x: pod.x,
       $y: pod.y,
       $rotation: pod.rotation,
       $sessionId: pod.sessionId,
       $repositoryId: pod.repositoryId,
       $commandId: pod.commandId,
-      $multiInstance: pod.multiInstance ? 1 : 0,
       $scheduleJson: serializeSchedule(pod.schedule),
       $provider: pod.provider,
       $providerConfigJson: sanitizedConfigJson,
@@ -671,36 +654,6 @@ class PodStore {
   delete(canvasId: string, id: string): boolean {
     const result = this.stmts.pod.deleteById.run(id) as { changes: number };
     return result.changes > 0;
-  }
-
-  /**
-   * 輕量查詢：只取 status 欄位，不載入關聯資料，供高頻場景使用。
-   */
-  getStatusById(canvasId: string, podId: string): PodStatus | undefined {
-    const row = this.stmts.pod.selectStatusByCanvasIdAndId.get(
-      canvasId,
-      podId,
-    ) as { status: string } | undefined;
-    return row?.status as PodStatus | undefined;
-  }
-
-  setStatus(canvasId: string, id: string, status: PodStatus): void {
-    const previousStatus = this.getStatusById(canvasId, id);
-    if (previousStatus === undefined) return;
-    if (previousStatus === status) return;
-
-    this.stmts.pod.updateStatus.run({ $id: id, $status: status });
-
-    socketService.emitToCanvas(
-      canvasId,
-      WebSocketResponseEvents.POD_STATUS_CHANGED,
-      {
-        canvasId,
-        podId: id,
-        status,
-        previousStatus,
-      },
-    );
   }
 
   setSessionId(canvasId: string, id: string, sessionId: string): void {
@@ -784,13 +737,6 @@ class PodStore {
   ): void {
     this.stmts.pod.updateRepositoryId.run({
       $repositoryId: repositoryId,
-      $id: id,
-    });
-  }
-
-  setMultiInstance(canvasId: string, id: string, multiInstance: boolean): void {
-    this.stmts.pod.updateMultiInstance.run({
-      $multiInstance: multiInstance ? 1 : 0,
       $id: id,
     });
   }
@@ -951,15 +897,6 @@ class PodStore {
     }
 
     return result;
-  }
-
-  /**
-   * 將所有 chatting 或 summarizing 狀態的 Pod 重設為 idle（僅更新 DB，不廣播 WebSocket）
-   * 用於 graceful shutdown 時清理 busy 狀態的 Pod
-   */
-  resetAllBusyPods(): number {
-    const result = this.stmts.pod.resetAllBusy.run() as { changes: number };
-    return result.changes;
   }
 }
 

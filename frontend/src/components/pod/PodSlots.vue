@@ -13,7 +13,6 @@ import PodThinkingSlot from "@/components/pod/PodThinkingSlot.vue";
 import { useRepositoryStore, useCommandStore } from "@/stores/note";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
 import { usePodCapabilities } from "@/composables/pod/usePodCapabilities";
-import { usePodHasMessages } from "@/composables/pod/usePodHasMessages";
 
 const props = defineProps<{
   podId: string;
@@ -53,46 +52,18 @@ const providerCapabilityStore = useProviderCapabilityStore();
 const { isPluginEnabled, isRepositoryEnabled, isCommandEnabled, isMcpEnabled } =
   usePodCapabilities(toRef(props, "podId"));
 
-/** 此 Pod 是否已有訊息（用於鎖定 notch 防止啟動對話後再變動設定） */
-const hasMessages = usePodHasMessages(toRef(props, "podId"));
-
 /** 不支援功能時顯示的 tooltip 文字（由 i18n 提供） */
 const DISABLED_TOOLTIP = computed(() => t("pod.slot.providerDisabled"));
 
-/** 已有對話訊息鎖定時顯示的 tooltip 文字（由 i18n 提供） */
-const LOCKED_BY_MESSAGES_TOOLTIP = computed(() =>
-  t("pod.slot.lockedByMessages"),
-);
+// multi-run 模式下,每個 run 啟動時設定已 snapshot 到 run 內,
+// 改 pod 上的 notch 只會影響下一個 run,因此不再鎖定 notch。
 
-// 合併版 disabled / tooltip：
-// - capability 不支援是「永久條件」，訊息鎖是「暫時條件」（清空對話後解鎖）
-// - 兩者任一成立都應 disable，故用 OR
-// - tooltip 顯示優先採用 capability 文案：永久條件對使用者較具資訊性，
-//   且 capability 不支援的 slot 即使清空對話也不會解鎖
+const pluginDisabled = computed(() => !isPluginEnabled.value);
+const pluginDisabledTooltip = computed(() => DISABLED_TOOLTIP.value);
 
-/** Plugin slot 是否 disable：capability 不支援 或 已有對話訊息 */
-const pluginDisabled = computed(
-  () => !isPluginEnabled.value || hasMessages.value,
-);
+const mcpDisabled = computed(() => !isMcpEnabled.value);
+const mcpDisabledTooltip = computed(() => DISABLED_TOOLTIP.value);
 
-/** Plugin slot tooltip：capability 優先 */
-const pluginDisabledTooltip = computed(() =>
-  !isPluginEnabled.value
-    ? DISABLED_TOOLTIP.value
-    : LOCKED_BY_MESSAGES_TOOLTIP.value,
-);
-
-/** MCP slot 是否 disable：capability 不支援 或 已有對話訊息 */
-const mcpDisabled = computed(() => !isMcpEnabled.value || hasMessages.value);
-
-/** MCP slot tooltip：capability 優先 */
-const mcpDisabledTooltip = computed(() =>
-  !isMcpEnabled.value
-    ? DISABLED_TOOLTIP.value
-    : LOCKED_BY_MESSAGES_TOOLTIP.value,
-);
-
-/** Thinking capability 是否不支援（當前 provider+model 不支援 thinking） */
 const thinkingCapabilityUnsupported = computed(
   () =>
     !providerCapabilityStore.isThinkingSupportedForModel(
@@ -100,18 +71,8 @@ const thinkingCapabilityUnsupported = computed(
       props.currentModel,
     ),
 );
-
-/** Thinking slot 是否 disable：capability 不支援 或 已有對話訊息 */
-const thinkingDisabled = computed(
-  () => thinkingCapabilityUnsupported.value || hasMessages.value,
-);
-
-/** Thinking slot tooltip：capability 優先 */
-const thinkingDisabledTooltip = computed(() =>
-  thinkingCapabilityUnsupported.value
-    ? DISABLED_TOOLTIP.value
-    : LOCKED_BY_MESSAGES_TOOLTIP.value,
-);
+const thinkingDisabled = computed(() => thinkingCapabilityUnsupported.value);
+const thinkingDisabledTooltip = computed(() => DISABLED_TOOLTIP.value);
 
 // -----------------------------------------------------------------------
 // Slot 設定陣列：每筆描述一個 slot 的型態、資料來源與 emit 對應
@@ -159,12 +120,8 @@ function createRepositorySlotConfig(): SingleSlotConfig {
     label: "Repo",
     store: repositoryStore,
     boundNote: () => props.boundRepositoryNote,
-    // capability 不支援 或 已有對話訊息 → 鎖定 notch
-    disabled: !isRepositoryEnabled.value || hasMessages.value,
-    // capability 不支援優先（永久條件），否則顯示訊息鎖文案
-    disabledTooltip: !isRepositoryEnabled.value
-      ? DISABLED_TOOLTIP.value
-      : LOCKED_BY_MESSAGES_TOOLTIP.value,
+    disabled: !isRepositoryEnabled.value,
+    disabledTooltip: DISABLED_TOOLTIP.value,
     onDropped: (noteId: string): void => {
       if (!noteId) return;
       emit("repository-dropped", noteId);
@@ -180,12 +137,8 @@ function createCommandSlotConfig(): SingleSlotConfig {
     label: "Command",
     store: commandStore,
     boundNote: () => props.boundCommandNote,
-    // capability 不支援 或 已有對話訊息 → 鎖定 notch
-    disabled: !isCommandEnabled.value || hasMessages.value,
-    // capability 不支援優先（永久條件），否則顯示訊息鎖文案
-    disabledTooltip: !isCommandEnabled.value
-      ? DISABLED_TOOLTIP.value
-      : LOCKED_BY_MESSAGES_TOOLTIP.value,
+    disabled: !isCommandEnabled.value,
+    disabledTooltip: DISABLED_TOOLTIP.value,
     onDropped: (noteId: string): void => {
       if (!noteId) return;
       emit("command-dropped", noteId);

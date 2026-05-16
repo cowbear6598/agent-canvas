@@ -3,6 +3,7 @@ import type { TriggerMode } from "../../types/index.js";
 import type { TriggerStrategy, ExecutionServiceMethods } from "./types.js";
 import type { RunContext } from "../../types/run.js";
 import { podStore } from "../podStore.js";
+import { runStore } from "../runStore.js";
 import { LazyInitializable } from "./lazyInitializable.js";
 import { logger } from "../../utils/logger.js";
 
@@ -120,7 +121,7 @@ class WorkflowQueueService extends LazyInitializable<QueueServiceDeps> {
       return;
     }
 
-    if (targetPod.status !== "idle") {
+    if (runStore.hasActiveRunForPod(targetPodId)) {
       return;
     }
 

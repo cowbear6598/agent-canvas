@@ -1,11 +1,5 @@
 import type { Canvas } from "@/types/canvas";
-import type {
-  Pod,
-  Schedule,
-  ModelType,
-  PodStatus,
-  FrequencyType,
-} from "@/types/pod";
+import type { Pod, Schedule, ModelType, FrequencyType } from "@/types/pod";
 import type {
   Connection,
   TriggerMode,
@@ -112,9 +106,7 @@ export function createMockPod(overrides?: Partial<Pod>): Pod {
     y: 100 * podCounter,
     output: [],
     rotation: 0,
-    status: "idle" as PodStatus,
     repositoryId: null,
-    multiInstance: false,
     commandId: null,
     schedule: null,
     mcpServerNames: [],

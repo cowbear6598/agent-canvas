@@ -1,11 +1,5 @@
 import { Database } from "bun:sqlite";
 
-/**
- * 需要在應用程式重啟時重設為 idle 的「忙碌中」Pod 狀態清單。
- * 集中管理以確保 resetAllBusy SQL 與應用程式邏輯使用同一份狀態定義。
- */
-const BUSY_STATUSES = ["chatting", "summarizing"] as const;
-
 // WeakMap 以 DB 實例為 key，避免多 DB 實例命中舊 cache
 const statementsCache = new WeakMap<
   Database,
@@ -30,15 +24,12 @@ function buildStatements(db: Database): {
     selectByCanvasId: ReturnType<Database["prepare"]>;
     selectById: ReturnType<Database["prepare"]>;
     selectByCanvasIdAndId: ReturnType<Database["prepare"]>;
-    selectStatusByCanvasIdAndId: ReturnType<Database["prepare"]>;
     selectByCanvasIdAndName: ReturnType<Database["prepare"]>;
     countByCanvasIdAndName: ReturnType<Database["prepare"]>;
     update: ReturnType<Database["prepare"]>;
-    updateStatus: ReturnType<Database["prepare"]>;
     updateSessionId: ReturnType<Database["prepare"]>;
     updateRepositoryId: ReturnType<Database["prepare"]>;
     updateCommandId: ReturnType<Database["prepare"]>;
-    updateMultiInstance: ReturnType<Database["prepare"]>;
     updateScheduleJson: ReturnType<Database["prepare"]>;
     selectWithSchedule: ReturnType<Database["prepare"]>;
     selectByRepositoryId: ReturnType<Database["prepare"]>;
@@ -47,7 +38,6 @@ function buildStatements(db: Database): {
     selectByRepositoryIdAndCanvas: ReturnType<Database["prepare"]>;
     selectScheduleInfo: ReturnType<Database["prepare"]>;
     selectScheduleJsonByCanvasAndId: ReturnType<Database["prepare"]>;
-    resetAllBusy: ReturnType<Database["prepare"]>;
     deleteById: ReturnType<Database["prepare"]>;
     deleteByCanvasId: ReturnType<Database["prepare"]>;
   };
@@ -104,14 +94,6 @@ function buildStatements(db: Database): {
     deleteByForeignKeyId: ReturnType<Database["prepare"]>;
     selectByForeignKeyId: ReturnType<Database["prepare"]>;
   };
-  message: {
-    insert: ReturnType<Database["prepare"]>;
-    selectByPodId: ReturnType<Database["prepare"]>;
-    selectById: ReturnType<Database["prepare"]>;
-    upsert: ReturnType<Database["prepare"]>;
-    deleteByPodId: ReturnType<Database["prepare"]>;
-    deleteByCanvasId: ReturnType<Database["prepare"]>;
-  };
   repositoryMetadata: {
     upsert: ReturnType<Database["prepare"]>;
     selectById: ReturnType<Database["prepare"]>;
@@ -159,6 +141,7 @@ function buildStatements(db: Database): {
     updateStatus: ReturnType<Database["prepare"]>;
     updateSessionId: ReturnType<Database["prepare"]>;
     selectRunningByRunId: ReturnType<Database["prepare"]>;
+    selectActiveByPodId: ReturnType<Database["prepare"]>;
     deleteByRunId: ReturnType<Database["prepare"]>;
     settleAutoPathway: ReturnType<Database["prepare"]>;
     settleDirectPathway: ReturnType<Database["prepare"]>;
@@ -209,12 +192,12 @@ function buildStatements(db: Database): {
     pod: {
       insert: db.prepare(
         `INSERT INTO pods (
-          id, canvas_id, name, status, x, y, rotation, workspace_path,
-          session_id, repository_id, command_id, multi_instance,
+          id, canvas_id, name, x, y, rotation, workspace_path,
+          session_id, repository_id, command_id,
           schedule_json, provider, provider_config_json
         ) VALUES (
-          $id, $canvasId, $name, $status, $x, $y, $rotation, $workspacePath,
-          $sessionId, $repositoryId, $commandId, $multiInstance,
+          $id, $canvasId, $name, $x, $y, $rotation, $workspacePath,
+          $sessionId, $repositoryId, $commandId,
           $scheduleJson, $provider, $providerConfigJson
         )`,
       ),
@@ -222,9 +205,6 @@ function buildStatements(db: Database): {
       selectById: db.prepare("SELECT * FROM pods WHERE id = ?"),
       selectByCanvasIdAndId: db.prepare(
         "SELECT * FROM pods WHERE canvas_id = ? AND id = ?",
-      ),
-      selectStatusByCanvasIdAndId: db.prepare(
-        "SELECT status FROM pods WHERE canvas_id = ? AND id = ?",
       ),
       selectByCanvasIdAndName: db.prepare(
         "SELECT * FROM pods WHERE canvas_id = ? AND name = ?",
@@ -234,15 +214,12 @@ function buildStatements(db: Database): {
       ),
       update: db.prepare(
         `UPDATE pods SET
-          name = $name, status = $status, x = $x, y = $y, rotation = $rotation,
+          name = $name, x = $x, y = $y, rotation = $rotation,
           session_id = $sessionId, repository_id = $repositoryId,
-          command_id = $commandId, multi_instance = $multiInstance,
+          command_id = $commandId,
           schedule_json = $scheduleJson, provider = $provider,
           provider_config_json = $providerConfigJson
         WHERE id = $id`,
-      ),
-      updateStatus: db.prepare(
-        "UPDATE pods SET status = $status WHERE id = $id",
       ),
       updateSessionId: db.prepare(
         "UPDATE pods SET session_id = $sessionId WHERE id = $id",
@@ -252,9 +229,6 @@ function buildStatements(db: Database): {
       ),
       updateCommandId: db.prepare(
         "UPDATE pods SET command_id = $commandId WHERE id = $id",
-      ),
-      updateMultiInstance: db.prepare(
-        "UPDATE pods SET multi_instance = $multiInstance WHERE id = $id",
       ),
       updateScheduleJson: db.prepare(
         "UPDATE pods SET schedule_json = $scheduleJson WHERE id = $id",
@@ -277,9 +251,6 @@ function buildStatements(db: Database): {
       ),
       selectScheduleJsonByCanvasAndId: db.prepare(
         "SELECT schedule_json FROM pods WHERE canvas_id = $canvasId AND id = $id",
-      ),
-      resetAllBusy: db.prepare(
-        `UPDATE pods SET status = 'idle' WHERE status IN (${BUSY_STATUSES.map((s) => `'${s}'`).join(", ")})`,
       ),
       deleteById: db.prepare("DELETE FROM pods WHERE id = ?"),
       deleteByCanvasId: db.prepare("DELETE FROM pods WHERE canvas_id = ?"),
@@ -469,29 +440,6 @@ function buildStatements(db: Database): {
       ),
     },
 
-    message: {
-      insert: db.prepare(
-        `INSERT INTO messages (
-          id, pod_id, canvas_id, role, content, timestamp, sub_messages_json, metadata_json
-        ) VALUES (
-          $id, $podId, $canvasId, $role, $content, $timestamp, $subMessagesJson, $metadataJson
-        )`,
-      ),
-      selectByPodId: db.prepare(
-        "SELECT * FROM messages WHERE pod_id = ? ORDER BY timestamp ASC",
-      ),
-      selectById: db.prepare("SELECT * FROM messages WHERE id = ?"),
-      upsert: db.prepare(
-        `INSERT OR REPLACE INTO messages (
-          id, pod_id, canvas_id, role, content, timestamp, sub_messages_json, metadata_json
-        ) VALUES (
-          $id, $podId, $canvasId, $role, $content, $timestamp, $subMessagesJson, $metadataJson
-        )`,
-      ),
-      deleteByPodId: db.prepare("DELETE FROM messages WHERE pod_id = ?"),
-      deleteByCanvasId: db.prepare("DELETE FROM messages WHERE canvas_id = ?"),
-    },
-
     repositoryMetadata: {
       upsert: db.prepare(
         `INSERT OR REPLACE INTO repository_metadata (
@@ -619,6 +567,12 @@ function buildStatements(db: Database): {
         `SELECT * FROM run_pod_instances
         WHERE run_id = ?
           AND status IN ('pending', 'running', 'summarizing', 'deciding', 'queued', 'waiting')`,
+      ),
+      selectActiveByPodId: db.prepare(
+        `SELECT id FROM run_pod_instances
+        WHERE pod_id = ?
+          AND status IN ('running', 'pending', 'summarizing', 'deciding', 'queued', 'waiting')
+        LIMIT 1`,
       ),
       deleteByRunId: db.prepare(
         "DELETE FROM run_pod_instances WHERE run_id = ?",

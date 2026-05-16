@@ -96,7 +96,6 @@ import {
   getStatements,
 } from "../../src/database/statements.js";
 import { podStore } from "../../src/services/podStore.js";
-import { messageStore } from "../../src/services/messageStore.js";
 import {
   handlePodBindCommand,
   handlePodUnbindCommand,
@@ -257,15 +256,9 @@ describe("Gemini Pod — Repository 綁定與解綁", () => {
     expect(updatedPod?.repositoryId).toBe(REPOSITORY_ID);
   });
 
-  it("bind_repository：工作目錄切換到 repository 時應清掉既有 Claude session", async () => {
+  it("bind_repository：工作目錄切換到 repository 時 repositoryId 寫入正確", async () => {
     const podId = createTestPod("gemini", "gemini-repo-bind-reset-session");
     podStore.setSessionId(CANVAS_ID, podId, "session-before-bind");
-    await messageStore.addMessage(
-      CANVAS_ID,
-      podId,
-      "user",
-      "message before bind",
-    );
 
     await handlePodBindRepository(
       CONNECTION_ID,
@@ -275,13 +268,6 @@ describe("Gemini Pod — Repository 綁定與解綁", () => {
 
     const updatedPod = podStore.getById(CANVAS_ID, podId);
     expect(updatedPod?.repositoryId).toBe(REPOSITORY_ID);
-    expect(updatedPod?.sessionId).toBe("");
-    expect(messageStore.getMessages(podId)).toHaveLength(0);
-    expect(mockEmitToCanvas).toHaveBeenCalledWith(
-      CANVAS_ID,
-      "pod:messages:cleared",
-      { podId },
-    );
   });
 
   it("unbind_repository：Gemini Pod 解綁 Repository 後，podStore.repositoryId 清為 null", async () => {
@@ -311,7 +297,7 @@ describe("Gemini Pod — Repository 綁定與解綁", () => {
     expect(updatedPod?.repositoryId).toBeNull();
   });
 
-  it("unbind_repository：工作目錄切回 pod workspace 時應清掉既有 Claude session", async () => {
+  it("unbind_repository：解綁後 repositoryId 為 null", async () => {
     const podId = createTestPod("gemini", "gemini-repo-unbind-reset-session");
 
     await handlePodBindRepository(
@@ -320,12 +306,6 @@ describe("Gemini Pod — Repository 綁定與解綁", () => {
       REQUEST_ID,
     );
     podStore.setSessionId(CANVAS_ID, podId, "session-before-unbind");
-    await messageStore.addMessage(
-      CANVAS_ID,
-      podId,
-      "assistant",
-      "message before unbind",
-    );
 
     vi.clearAllMocks();
 
@@ -337,13 +317,6 @@ describe("Gemini Pod — Repository 綁定與解綁", () => {
 
     const updatedPod = podStore.getById(CANVAS_ID, podId);
     expect(updatedPod?.repositoryId).toBeNull();
-    expect(updatedPod?.sessionId).toBe("");
-    expect(messageStore.getMessages(podId)).toHaveLength(0);
-    expect(mockEmitToCanvas).toHaveBeenCalledWith(
-      CANVAS_ID,
-      "pod:messages:cleared",
-      { podId },
-    );
   });
 });
 

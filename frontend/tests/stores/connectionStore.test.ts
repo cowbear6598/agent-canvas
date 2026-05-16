@@ -1643,7 +1643,7 @@ describe("connectionStore", () => {
     it("所有下游 connection 皆為 idle 時回傳 false", () => {
       const store = useConnectionStore();
       const podStore = usePodStore();
-      podStore.pods = [createMockPod({ id: "pod-target", status: "idle" })];
+      podStore.pods = [createMockPod({ id: "pod-target" })];
       store.connections = [
         createMockConnection({
           sourcePodId: "pod-source",
@@ -1658,7 +1658,7 @@ describe("connectionStore", () => {
     it("任一下游 connection 為 active 時回傳 true", () => {
       const store = useConnectionStore();
       const podStore = usePodStore();
-      podStore.pods = [createMockPod({ id: "pod-target", status: "idle" })];
+      podStore.pods = [createMockPod({ id: "pod-target" })];
       store.connections = [
         createMockConnection({
           sourcePodId: "pod-source",
@@ -1673,7 +1673,7 @@ describe("connectionStore", () => {
     it("任一下游 connection 為 queued 時回傳 true", () => {
       const store = useConnectionStore();
       const podStore = usePodStore();
-      podStore.pods = [createMockPod({ id: "pod-target", status: "idle" })];
+      podStore.pods = [createMockPod({ id: "pod-target" })];
       store.connections = [
         createMockConnection({
           sourcePodId: "pod-source",
@@ -1688,7 +1688,7 @@ describe("connectionStore", () => {
     it("任一下游 connection 為 waiting 時回傳 true", () => {
       const store = useConnectionStore();
       const podStore = usePodStore();
-      podStore.pods = [createMockPod({ id: "pod-target", status: "idle" })];
+      podStore.pods = [createMockPod({ id: "pod-target" })];
       store.connections = [
         createMockConnection({
           sourcePodId: "pod-source",
@@ -1703,7 +1703,7 @@ describe("connectionStore", () => {
     it("任一下游 connection 為 decideStatus pending 時回傳 true", () => {
       const store = useConnectionStore();
       const podStore = usePodStore();
-      podStore.pods = [createMockPod({ id: "pod-target", status: "idle" })];
+      podStore.pods = [createMockPod({ id: "pod-target" })];
       store.connections = [
         createMockConnection({
           sourcePodId: "pod-source",
@@ -1719,7 +1719,7 @@ describe("connectionStore", () => {
     it("下游 connection 為 decideStatus approved 時回傳 false（決策已完成，等待觸發）", () => {
       const store = useConnectionStore();
       const podStore = usePodStore();
-      podStore.pods = [createMockPod({ id: "pod-target", status: "idle" })];
+      podStore.pods = [createMockPod({ id: "pod-target" })];
       store.connections = [
         createMockConnection({
           sourcePodId: "pod-source",
@@ -1735,7 +1735,7 @@ describe("connectionStore", () => {
     it("下游 connection 為 decideStatus rejected 時回傳 false（該分支已結束）", () => {
       const store = useConnectionStore();
       const podStore = usePodStore();
-      podStore.pods = [createMockPod({ id: "pod-target", status: "idle" })];
+      podStore.pods = [createMockPod({ id: "pod-target" })];
       store.connections = [
         createMockConnection({
           sourcePodId: "pod-source",
@@ -1751,7 +1751,7 @@ describe("connectionStore", () => {
     it("下游 connection 為 decideStatus error 時回傳 false（該分支已結束）", () => {
       const store = useConnectionStore();
       const podStore = usePodStore();
-      podStore.pods = [createMockPod({ id: "pod-target", status: "idle" })];
+      podStore.pods = [createMockPod({ id: "pod-target" })];
       store.connections = [
         createMockConnection({
           sourcePodId: "pod-source",
@@ -1764,44 +1764,12 @@ describe("connectionStore", () => {
       expect(store.isWorkflowRunning("pod-source")).toBe(false);
     });
 
-    it("任一下游 pod 為 chatting 時回傳 true", () => {
-      const store = useConnectionStore();
-      const podStore = usePodStore();
-      podStore.pods = [createMockPod({ id: "pod-target", status: "chatting" })];
-      store.connections = [
-        createMockConnection({
-          sourcePodId: "pod-source",
-          targetPodId: "pod-target",
-          status: "idle",
-        }),
-      ];
-
-      expect(store.isWorkflowRunning("pod-source")).toBe(true);
-    });
-
-    it("任一下游 pod 為 summarizing 時回傳 true", () => {
-      const store = useConnectionStore();
-      const podStore = usePodStore();
-      podStore.pods = [
-        createMockPod({ id: "pod-target", status: "summarizing" }),
-      ];
-      store.connections = [
-        createMockConnection({
-          sourcePodId: "pod-source",
-          targetPodId: "pod-target",
-          status: "idle",
-        }),
-      ];
-
-      expect(store.isWorkflowRunning("pod-source")).toBe(true);
-    });
-
     it("下游 pod 為 idle 或 error 時回傳 false", () => {
       const store = useConnectionStore();
       const podStore = usePodStore();
       podStore.pods = [
-        createMockPod({ id: "pod-target-a", status: "idle" }),
-        createMockPod({ id: "pod-target-b", status: "error" }),
+        createMockPod({ id: "pod-target-a" }),
+        createMockPod({ id: "pod-target-b" }),
       ];
       store.connections = [
         createMockConnection({
@@ -1823,8 +1791,8 @@ describe("connectionStore", () => {
       const store = useConnectionStore();
       const podStore = usePodStore();
       podStore.pods = [
-        createMockPod({ id: "pod-mid", status: "idle" }),
-        createMockPod({ id: "pod-end", status: "idle" }),
+        createMockPod({ id: "pod-mid" }),
+        createMockPod({ id: "pod-end" }),
       ];
       store.connections = [
         createMockConnection({
@@ -1842,35 +1810,12 @@ describe("connectionStore", () => {
       expect(store.isWorkflowRunning("pod-source")).toBe(true);
     });
 
-    it("BFS 多層遍歷：第二層 pod 為 chatting 時回傳 true", () => {
-      const store = useConnectionStore();
-      const podStore = usePodStore();
-      podStore.pods = [
-        createMockPod({ id: "pod-mid", status: "idle" }),
-        createMockPod({ id: "pod-end", status: "chatting" }),
-      ];
-      store.connections = [
-        createMockConnection({
-          sourcePodId: "pod-source",
-          targetPodId: "pod-mid",
-          status: "idle",
-        }),
-        createMockConnection({
-          sourcePodId: "pod-mid",
-          targetPodId: "pod-end",
-          status: "idle",
-        }),
-      ];
-
-      expect(store.isWorkflowRunning("pod-source")).toBe(true);
-    });
-
     it("混合情境：一條分支 rejected，另一條分支 active -> 回傳 true", () => {
       const store = useConnectionStore();
       const podStore = usePodStore();
       podStore.pods = [
-        createMockPod({ id: "pod-target-a", status: "idle" }),
-        createMockPod({ id: "pod-target-b", status: "idle" }),
+        createMockPod({ id: "pod-target-a" }),
+        createMockPod({ id: "pod-target-b" }),
       ];
       store.connections = [
         createMockConnection({
@@ -1893,8 +1838,8 @@ describe("connectionStore", () => {
       const store = useConnectionStore();
       const podStore = usePodStore();
       podStore.pods = [
-        createMockPod({ id: "pod-target-a", status: "idle" }),
-        createMockPod({ id: "pod-target-b", status: "idle" }),
+        createMockPod({ id: "pod-target-a" }),
+        createMockPod({ id: "pod-target-b" }),
       ];
       store.connections = [
         createMockConnection({
@@ -1917,8 +1862,8 @@ describe("connectionStore", () => {
       const store = useConnectionStore();
       const podStore = usePodStore();
       podStore.pods = [
-        createMockPod({ id: "pod-a", status: "idle" }),
-        createMockPod({ id: "pod-b", status: "idle" }),
+        createMockPod({ id: "pod-a" }),
+        createMockPod({ id: "pod-b" }),
       ];
       store.connections = [
         createMockConnection({
@@ -1937,30 +1882,12 @@ describe("connectionStore", () => {
       expect(store.isWorkflowRunning("pod-a")).toBe(false);
     });
 
-    it("source pod 自身 status 為 chatting 時回傳 true", () => {
-      const store = useConnectionStore();
-      const podStore = usePodStore();
-      podStore.pods = [createMockPod({ id: "pod-source", status: "chatting" })];
-
-      expect(store.isWorkflowRunning("pod-source")).toBe(true);
-    });
-
-    it("source pod 自身 status 為 summarizing 時回傳 true", () => {
-      const store = useConnectionStore();
-      const podStore = usePodStore();
-      podStore.pods = [
-        createMockPod({ id: "pod-source", status: "summarizing" }),
-      ];
-
-      expect(store.isWorkflowRunning("pod-source")).toBe(true);
-    });
-
     it("source pod 自身 status 為 idle 且無下游活動時回傳 false", () => {
       const store = useConnectionStore();
       const podStore = usePodStore();
       podStore.pods = [
-        createMockPod({ id: "pod-source", status: "idle" }),
-        createMockPod({ id: "pod-target", status: "idle" }),
+        createMockPod({ id: "pod-source" }),
+        createMockPod({ id: "pod-target" }),
       ];
       store.connections = [
         createMockConnection({
@@ -1978,8 +1905,8 @@ describe("connectionStore", () => {
       const store = useConnectionStore();
       const podStore = usePodStore();
       podStore.pods = [
-        createMockPod({ id: "head-pod", status: "idle" }),
-        createMockPod({ id: "downstream-pod", status: "idle" }),
+        createMockPod({ id: "head-pod" }),
+        createMockPod({ id: "downstream-pod" }),
       ];
       store.connections = [
         createMockConnection({
@@ -2001,8 +1928,8 @@ describe("connectionStore", () => {
       const store = useConnectionStore();
       const podStore = usePodStore();
       podStore.pods = [
-        createMockPod({ id: "head-pod", status: "idle" }),
-        createMockPod({ id: "downstream-pod", status: "idle" }),
+        createMockPod({ id: "head-pod" }),
+        createMockPod({ id: "downstream-pod" }),
       ];
       store.connections = [
         createMockConnection({
@@ -2026,9 +1953,9 @@ describe("connectionStore", () => {
       const store = useConnectionStore();
       const podStore = usePodStore();
       podStore.pods = [
-        createMockPod({ id: "head-pod", status: "idle" }),
-        createMockPod({ id: "head2-pod", status: "idle" }),
-        createMockPod({ id: "downstream-pod", status: "idle" }),
+        createMockPod({ id: "head-pod" }),
+        createMockPod({ id: "head2-pod" }),
+        createMockPod({ id: "downstream-pod" }),
       ];
       store.connections = [
         createMockConnection({
@@ -2057,8 +1984,8 @@ describe("connectionStore", () => {
       const store = useConnectionStore();
       const podStore = usePodStore();
       podStore.pods = [
-        createMockPod({ id: "pod-head", status: "idle" }),
-        createMockPod({ id: "pod-tail", status: "idle" }),
+        createMockPod({ id: "pod-head" }),
+        createMockPod({ id: "pod-tail" }),
       ];
       store.connections = [
         createMockConnection({
@@ -2071,30 +1998,12 @@ describe("connectionStore", () => {
       expect(store.isPartOfRunningWorkflow("pod-head")).toBe(false);
     });
 
-    it("下游 Pod 在 chatting 時回傳 true（從頭 Pod 往下查）", () => {
-      const store = useConnectionStore();
-      const podStore = usePodStore();
-      podStore.pods = [
-        createMockPod({ id: "pod-head", status: "idle" }),
-        createMockPod({ id: "pod-tail", status: "chatting" }),
-      ];
-      store.connections = [
-        createMockConnection({
-          sourcePodId: "pod-head",
-          targetPodId: "pod-tail",
-          status: "idle",
-        }),
-      ];
-
-      expect(store.isPartOfRunningWorkflow("pod-head")).toBe(true);
-    });
-
     it("上游連線是 active 時回傳 true（從尾 Pod 往上查）", () => {
       const store = useConnectionStore();
       const podStore = usePodStore();
       podStore.pods = [
-        createMockPod({ id: "pod-head", status: "idle" }),
-        createMockPod({ id: "pod-tail", status: "idle" }),
+        createMockPod({ id: "pod-head" }),
+        createMockPod({ id: "pod-tail" }),
       ];
       store.connections = [
         createMockConnection({
@@ -2107,48 +2016,12 @@ describe("connectionStore", () => {
       expect(store.isPartOfRunningWorkflow("pod-tail")).toBe(true);
     });
 
-    it("自己 Pod 在 chatting 時應回傳 true", () => {
-      const store = useConnectionStore();
-      const podStore = usePodStore();
-      podStore.pods = [
-        createMockPod({ id: "pod-a", status: "chatting" }),
-        createMockPod({ id: "pod-b", status: "idle" }),
-      ];
-      store.connections = [
-        createMockConnection({
-          sourcePodId: "pod-a",
-          targetPodId: "pod-b",
-          status: "idle",
-        }),
-      ];
-
-      expect(store.isPartOfRunningWorkflow("pod-a")).toBe(true);
-    });
-
-    it("自己 Pod 在 summarizing 時應回傳 true", () => {
-      const store = useConnectionStore();
-      const podStore = usePodStore();
-      podStore.pods = [
-        createMockPod({ id: "pod-a", status: "summarizing" }),
-        createMockPod({ id: "pod-b", status: "idle" }),
-      ];
-      store.connections = [
-        createMockConnection({
-          sourcePodId: "pod-a",
-          targetPodId: "pod-b",
-          status: "idle",
-        }),
-      ];
-
-      expect(store.isPartOfRunningWorkflow("pod-a")).toBe(true);
-    });
-
     it("連線 status 為 queued 時應回傳 true", () => {
       const store = useConnectionStore();
       const podStore = usePodStore();
       podStore.pods = [
-        createMockPod({ id: "pod-a", status: "idle" }),
-        createMockPod({ id: "pod-b", status: "idle" }),
+        createMockPod({ id: "pod-a" }),
+        createMockPod({ id: "pod-b" }),
       ];
       store.connections = [
         createMockConnection({
@@ -2165,38 +2038,14 @@ describe("connectionStore", () => {
       const store = useConnectionStore();
       const podStore = usePodStore();
       podStore.pods = [
-        createMockPod({ id: "pod-a", status: "idle" }),
-        createMockPod({ id: "pod-b", status: "idle" }),
+        createMockPod({ id: "pod-a" }),
+        createMockPod({ id: "pod-b" }),
       ];
       store.connections = [
         createMockConnection({
           sourcePodId: "pod-a",
           targetPodId: "pod-b",
           status: "waiting",
-        }),
-      ];
-
-      expect(store.isPartOfRunningWorkflow("pod-a")).toBe(true);
-    });
-
-    it("三層 BFS（A->B->C）從 A 查到 C 在 chatting 應回傳 true", () => {
-      const store = useConnectionStore();
-      const podStore = usePodStore();
-      podStore.pods = [
-        createMockPod({ id: "pod-a", status: "idle" }),
-        createMockPod({ id: "pod-b", status: "idle" }),
-        createMockPod({ id: "pod-c", status: "chatting" }),
-      ];
-      store.connections = [
-        createMockConnection({
-          sourcePodId: "pod-a",
-          targetPodId: "pod-b",
-          status: "idle",
-        }),
-        createMockConnection({
-          sourcePodId: "pod-b",
-          targetPodId: "pod-c",
-          status: "idle",
         }),
       ];
 

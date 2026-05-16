@@ -1,4 +1,4 @@
-import type { PodPublicView, PodStatus } from "../pod.js";
+import type { PodPublicView } from "../pod.js";
 import type { MessageRole, SystemMessageMetadata } from "../message.js";
 
 export interface PodCreatedPayload {
@@ -198,12 +198,6 @@ export interface PodCommandUnboundPayload {
   success: boolean;
   pod?: PodPublicView;
   error?: string;
-}
-
-export interface PodStatusChangedPayload {
-  podId: string;
-  status: PodStatus;
-  previousStatus: PodStatus;
 }
 
 export interface PodMessagesClearedPayload {
