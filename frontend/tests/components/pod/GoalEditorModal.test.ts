@@ -103,6 +103,21 @@ describe("GoalEditorModal", () => {
     ).toBe(false);
   });
 
+  it("子 Modal 輸入純空白後點 save 不應新增 card，外層儲存應 emit submit(null)", async () => {
+    const wrapper = mountGoalEditor({ goal: null });
+
+    await openSubModalAdd(wrapper);
+    await submitSubModal(wrapper, "   \n  \n");
+
+    expect(wrapper.findAll('[data-testid="goal-card-preview"]')).toHaveLength(
+      0,
+    );
+
+    await wrapper.find('[data-testid="goal-editor-save"]').trigger("click");
+
+    expect(wrapper.emitted("submit")?.[0]).toEqual([null]);
+  });
+
   it("可透過子 Modal 編輯既有 todo 並保留順序", async () => {
     const wrapper = mountGoalEditor({
       goal: {

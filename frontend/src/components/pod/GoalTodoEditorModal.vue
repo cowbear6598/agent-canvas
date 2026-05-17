@@ -39,7 +39,7 @@ watch(
 const handleSave = (): void => {
   const trimmed = localText.value.trim();
   if (trimmed.length === 0) return;
-  emit("save", localText.value);
+  emit("save", trimmed);
   emit("update:open", false);
 };
 
