@@ -227,9 +227,11 @@ function buildGoalRuntimeBootstrapPrompt(rawMessage: string): string {
 function buildOpencodePromptText(
   message: string | import("../../types/message.js").ContentBlock[],
   goalMcpServer?: GoalRuntimeMcpServerConfig | null,
+  resumeSessionId?: string | null,
 ): string {
   const promptText = buildPromptText(message);
-  if (!goalMcpServer) {
+  // resume 時（gate retry 第 2 輪以後）不再注入 bootstrap，避免覆蓋 nudge 指示
+  if (!goalMcpServer || resumeSessionId) {
     return promptText;
   }
   return buildGoalRuntimeBootstrapPrompt(promptText);
@@ -452,6 +454,77 @@ async function* yieldToolPartsForTurn(
 }
 
 // ================================================================
+// Run-scoped transient server 快取
+// ================================================================
+
+/**
+ * Run 期間每個 (runId, podId) 組合共用同一個 transient opencode server，
+ * 避免 gate retry 每輪都付出 server 冷啟動成本。
+ * Run 結束時由 cleanupOpencodeRunServers 統一關閉並清除。
+ */
+const runScopedOpencodeServerCache = new Map<
+  string,
+  { close(): void; url: string }
+>();
+
+/**
+ * 組合快取 key。
+ */
+function buildServerCacheKey(runId: string, podId: string): string {
+  return `${runId}:${podId}`;
+}
+
+/**
+ * 取得或建立 Run 期間的 transient opencode server。
+ * 同一 runId + podId 只建立一次；後續 chat 直接復用。
+ */
+async function getOrCreateRunScopedServer(
+  runId: string,
+  podId: string,
+  goalMcpServer: GoalRuntimeMcpServerConfig,
+): Promise<{ close(): void; url: string }> {
+  const key = buildServerCacheKey(runId, podId);
+  const cached = runScopedOpencodeServerCache.get(key);
+  if (cached) return cached;
+
+  const server = await _createServer({
+    port: 0,
+    timeout: 30000,
+    config: {
+      mcp: {
+        [goalMcpServer.name]: {
+          type: "local",
+          command: [goalMcpServer.command, ...goalMcpServer.args],
+          environment: goalMcpServer.env,
+          enabled: true,
+        },
+      },
+    },
+  });
+
+  runScopedOpencodeServerCache.set(key, server);
+  return server;
+}
+
+/**
+ * Run 結束時統一關閉所有屬於該 runId 的 transient server 並清除快取。
+ * 由 runExecutionService 的生命週期 hook 呼叫。
+ */
+export function cleanupOpencodeRunServers(runId: string): void {
+  const prefix = `${runId}:`;
+  for (const [key, server] of runScopedOpencodeServerCache) {
+    if (key.startsWith(prefix)) {
+      try {
+        server.close();
+      } catch {
+        // 忽略已關閉的 server
+      }
+      runScopedOpencodeServerCache.delete(key);
+    }
+  }
+}
+
+// ================================================================
 // Provider 實作
 // ================================================================
 
@@ -526,12 +599,14 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
     ctx: ChatRequestContext<OpencodeOptions>,
   ): AsyncIterable<NormalizedEvent> {
     const {
+      podId,
       podName,
       message,
       workspacePath,
       resumeSessionId,
       abortSignal,
       options,
+      runContext,
     } = ctx;
 
     // ── options 防禦性收窄 ──────────────────────────────────────────
@@ -546,327 +621,365 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
 
     // ── 取得 baseUrl ────────────────────────────────────────────────
     let transientServer: { close(): void; url: string } | null = null;
-    let baseUrl: string | null = null;
+    let serverClosed = false;
 
-    if (options.goalMcpServer) {
-      try {
-        transientServer = await _createServer({
-          // 使用 ephemeral port，避免與既有全域 opencode server 的 4096 衝突
-          port: 0,
-          timeout: 30000,
-          config: {
-            mcp: {
-              [options.goalMcpServer.name]: {
-                type: "local",
-                command: [
-                  options.goalMcpServer.command,
-                  ...options.goalMcpServer.args,
-                ],
-                environment: options.goalMcpServer.env,
-                enabled: true,
-              },
-            },
-          },
-        });
-        baseUrl = transientServer.url;
-      } catch (err) {
-        yield buildOpencodeSystemError({
-          content: "opencode server 連線失敗，請重啟後端",
-          fatal: true,
-          code: "opencode_server_unreachable",
-          rawContent: err instanceof Error ? err.message : String(err),
-        });
-        return;
+    // idempotent close：避免多路徑重複呼叫 close()
+    const closeTransientServer = (): void => {
+      if (!serverClosed && transientServer) {
+        serverClosed = true;
+        transientServer.close();
+        transientServer = null;
       }
-    } else {
-      const serverState = _getServerState();
-      if (!serverState.baseUrl) {
-        yield buildOpencodeSystemError({
-          content: "opencode server 連線失敗，請重啟後端",
-          fatal: true,
-          code: "opencode_server_unreachable",
-        });
-        return;
-      }
-      baseUrl = serverState.baseUrl;
-    }
-
-    if (!baseUrl) {
-      yield buildOpencodeSystemError({
-        content: "opencode server 連線失敗，請重啟後端",
-        fatal: true,
-        code: "opencode_server_unreachable",
-      });
-      return;
-    }
-
-    const client = _createClient({ baseUrl });
-
-    logger.log(
-      "Chat",
-      "Update",
-      `[OpencodeProvider] ${sanitizePodName(podName)} 開始查詢（provider: ${options.providerID}，model: ${options.modelID}）`,
-    );
-
-    // ── 建立或沿用 session ──────────────────────────────────────────
-    // 用 truthy 判斷而非嚴格 === null：
-    // 上層 normalExecutionStrategy.getSessionId 用 `?? undefined`，pod.sessionId 為空字串時
-    // 不會 fallback，會把 "" 一路傳下來；若用 === null 會誤走 resume 流程並送出 sessionId=""
-    // 給 opencode server，導致 prompt 被靜默丟棄、SSE 只回 heartbeat。
-    let sessionId: string;
-    let alreadyYieldedSessionStarted = false;
-
-    if (!resumeSessionId) {
-      let createResult: { data?: { id?: string } | null; error?: unknown };
-      try {
-        createResult = await client.session.create({
-          query: { directory: workspacePath },
-        });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        yield classifySessionError(msg, options.providerID);
-        return;
-      }
-
-      const createdId = createResult?.data?.id;
-      if (!createdId) {
-        yield buildOpencodeSystemError({
-          content: "opencode session 建立失敗：未取得 session ID",
-          fatal: true,
-          code: "opencode_session_failed",
-        });
-        return;
-      }
-
-      sessionId = createdId;
-      yield { type: "session_started", sessionId };
-      alreadyYieldedSessionStarted = true;
-    } else {
-      sessionId = resumeSessionId;
-    }
-
-    // ── abort 處理 ──────────────────────────────────────────────────
-    const doAbort = (): void => {
-      client.session
-        .abort({ path: { id: sessionId } })
-        .catch((err: unknown) => {
-          logger.warn(
-            "Chat",
-            "Warn",
-            `[OpencodeProvider] session.abort 失敗：${err instanceof Error ? err.message : String(err)}`,
-          );
-        });
     };
 
-    abortSignal.addEventListener("abort", doAbort, { once: true });
-
-    // 已 abort：立刻呼叫 abort
-    if (abortSignal.aborted) {
-      doAbort();
-    }
-
-    // 本 turn 觀察到的 messageID 集合：session.idle 時用來限定 ToolPart 範圍，
-    // 避免 resume session 把歷史 turn 的 tool 重新 yield 一次。
-    const currentMessageIds = new Set<string>();
-
+    // transientServer 建立之後到 method 結束全部包在同一個 try/finally，
+    // 確保 session 建立失敗、session ID 為空、abort 提前觸發等所有路徑都會 close
     try {
-      // ── 訂閱 SSE stream ────────────────────────────────────────────
-      // 帶上 directory query param 對應到該 Pod 的 workspace，
-      // 否則 opencode 會 fallback 到 server 啟動時的 cwd（後端工程目錄）。
-      let sseResult: { stream: AsyncGenerator<unknown> };
-      try {
-        sseResult = await client.event.subscribe({
-          query: { directory: workspacePath },
+      let baseUrl: string | null = null;
+
+      if (options.goalMcpServer) {
+        try {
+          if (runContext) {
+            // Run 期間同一 (runId, podId) 復用同一個 transient server，
+            // 避免 gate retry 每輪都付出 server 冷啟動成本。
+            // 快取的 server 由 cleanupOpencodeRunServers 在 Run 結束時統一關閉，
+            // 此處 transientServer 保持 null（不走 closeTransientServer 關閉）。
+            const cached = await getOrCreateRunScopedServer(
+              runContext.runId,
+              podId,
+              options.goalMcpServer,
+            );
+            baseUrl = cached.url;
+          } else {
+            // 無 runContext（單次對話模式）：建立 request-scoped transient server，
+            // 由外層 finally 的 closeTransientServer 負責關閉。
+            transientServer = await _createServer({
+              // 使用 ephemeral port，避免與既有全域 opencode server 的 4096 衝突
+              port: 0,
+              timeout: 30000,
+              config: {
+                mcp: {
+                  [options.goalMcpServer.name]: {
+                    type: "local",
+                    command: [
+                      options.goalMcpServer.command,
+                      ...options.goalMcpServer.args,
+                    ],
+                    environment: options.goalMcpServer.env,
+                    enabled: true,
+                  },
+                },
+              },
+            });
+            baseUrl = transientServer.url;
+          }
+        } catch (err) {
+          yield buildOpencodeSystemError({
+            content: "opencode server 連線失敗，請重啟後端",
+            fatal: true,
+            code: "opencode_server_unreachable",
+            rawContent: err instanceof Error ? err.message : String(err),
+          });
+          return;
+        }
+      } else {
+        const serverState = _getServerState();
+        if (!serverState.baseUrl) {
+          yield buildOpencodeSystemError({
+            content: "opencode server 連線失敗，請重啟後端",
+            fatal: true,
+            code: "opencode_server_unreachable",
+          });
+          return;
+        }
+        baseUrl = serverState.baseUrl;
+      }
+
+      if (!baseUrl) {
+        yield buildOpencodeSystemError({
+          content: "opencode server 連線失敗，請重啟後端",
+          fatal: true,
+          code: "opencode_server_unreachable",
         });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        yield classifySessionError(msg, options.providerID);
         return;
       }
 
-      // ── tools 子集化 ───────────────────────────────────────────────
-      const toolsSubset = await buildToolsSubset(
-        client,
-        options.mcpServerNames,
-        workspacePath,
+      const client = _createClient({ baseUrl });
+
+      logger.log(
+        "Chat",
+        "Update",
+        `[OpencodeProvider] ${sanitizePodName(podName)} 開始查詢（provider: ${options.providerID}，model: ${options.modelID}）`,
       );
 
-      // ── 送出 prompt（非同步，不等待回傳） ──────────────────────────
-      const promptBody: {
-        model?: { providerID: string; modelID: string };
-        tools?: { [key: string]: boolean };
-        parts: Array<{ type: "text"; text: string }>;
-      } = {
-        parts: [
-          {
-            type: "text",
-            text: buildOpencodePromptText(message, options.goalMcpServer),
-          },
-        ],
+      // ── 建立或沿用 session ──────────────────────────────────────────
+      // 用 truthy 判斷而非嚴格 === null：
+      // 上層 normalExecutionStrategy.getSessionId 用 `?? undefined`，pod.sessionId 為空字串時
+      // 不會 fallback，會把 "" 一路傳下來；若用 === null 會誤走 resume 流程並送出 sessionId=""
+      // 給 opencode server，導致 prompt 被靜默丟棄、SSE 只回 heartbeat。
+      let sessionId: string;
+      let alreadyYieldedSessionStarted = false;
+
+      if (!resumeSessionId) {
+        let createResult: { data?: { id?: string } | null; error?: unknown };
+        try {
+          createResult = await client.session.create({
+            query: { directory: workspacePath },
+          });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          yield classifySessionError(msg, options.providerID);
+          return;
+        }
+
+        const createdId = createResult?.data?.id;
+        if (!createdId) {
+          yield buildOpencodeSystemError({
+            content: "opencode session 建立失敗：未取得 session ID",
+            fatal: true,
+            code: "opencode_session_failed",
+          });
+          return;
+        }
+
+        sessionId = createdId;
+        yield { type: "session_started", sessionId };
+        alreadyYieldedSessionStarted = true;
+      } else {
+        sessionId = resumeSessionId;
+      }
+
+      // ── abort 處理 ──────────────────────────────────────────────────
+      const doAbort = (): void => {
+        // abort 觸發時同時關閉 transient server，避免 abort 後 server 還留著
+        closeTransientServer();
+        client.session
+          .abort({ path: { id: sessionId } })
+          .catch((err: unknown) => {
+            logger.warn(
+              "Chat",
+              "Warn",
+              `[OpencodeProvider] session.abort 失敗：${err instanceof Error ? err.message : String(err)}`,
+            );
+          });
       };
 
-      if (options.providerID || options.modelID) {
-        promptBody.model = {
-          providerID: options.providerID,
-          modelID: options.modelID,
-        };
+      abortSignal.addEventListener("abort", doAbort, { once: true });
+
+      // 已 abort：立刻呼叫 abort
+      if (abortSignal.aborted) {
+        doAbort();
       }
 
-      if (toolsSubset !== undefined) {
-        promptBody.tools = toolsSubset;
-      }
+      // 本 turn 觀察到的 messageID 集合：session.idle 時用來限定 ToolPart 範圍，
+      // 避免 resume session 把歷史 turn 的 tool 重新 yield 一次。
+      const currentMessageIds = new Set<string>();
 
-      client.session
-        .prompt({
-          path: { id: sessionId },
-          // directory 與 session.create 一致，opencode tool 才會跑在這個 Pod 的 workspace
-          query: { directory: workspacePath },
-          body: promptBody,
-        })
-        .catch((err: unknown) => {
-          logger.warn(
-            "Chat",
-            "Warn",
-            `[OpencodeProvider] session.prompt 發生錯誤：${err instanceof Error ? err.message : String(err)}`,
-          );
-        });
-
-      // ── for-await SSE stream ───────────────────────────────────────
-      for await (const rawEvent of sseResult.stream) {
-        if (abortSignal.aborted) break;
-
-        const event = rawEvent as {
-          type?: string;
-          properties?: Record<string, unknown>;
-        };
-        if (!event || !event.type) continue;
-
-        const type = event.type;
-        const props = event.properties ?? {};
-
-        // session.created → session_started（避免重複 yield）
-        if (type === "session.created") {
-          if (!alreadyYieldedSessionStarted) {
-            const info = props.info as { id?: string } | undefined;
-            const createdSessionId = info?.id ?? sessionId;
-            yield { type: "session_started", sessionId: createdSessionId };
-            alreadyYieldedSessionStarted = true;
-          }
-          continue;
+      try {
+        // ── 訂閱 SSE stream ────────────────────────────────────────────
+        // 帶上 directory query param 對應到該 Pod 的 workspace，
+        // 否則 opencode 會 fallback 到 server 啟動時的 cwd（後端工程目錄）。
+        let sseResult: { stream: AsyncGenerator<unknown> };
+        try {
+          sseResult = await client.event.subscribe({
+            query: { directory: workspacePath },
+          });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          yield classifySessionError(msg, options.providerID);
+          return;
         }
 
-        // message.part.delta → 增量 chunk（新版 opencode SDK 走 streaming）
-        // payload: { sessionID, messageID, partID, field: "text"|"reasoning", delta: string }
-        // 後端 text event 的 content 視為 append（streamEventProcessor.processTextEvent），
-        // 因此把 delta 字串直接以 text/thinking yield 即可。
-        // 同時收集 messageID 給 session.idle 階段拉 tool parts 時過濾用。
-        if (type === "message.part.delta") {
-          const messageID = props.messageID as string | undefined;
-          if (messageID) currentMessageIds.add(messageID);
+        // ── tools 子集化 ───────────────────────────────────────────────
+        const toolsSubset = await buildToolsSubset(
+          client,
+          options.mcpServerNames,
+          workspacePath,
+        );
 
-          const field = props.field as string | undefined;
-          const delta = props.delta;
-          if (typeof delta !== "string" || delta.length === 0) continue;
+        // ── 送出 prompt（非同步，不等待回傳） ──────────────────────────
+        const promptBody: {
+          model?: { providerID: string; modelID: string };
+          tools?: { [key: string]: boolean };
+          parts: Array<{ type: "text"; text: string }>;
+        } = {
+          parts: [
+            {
+              type: "text",
+              text: buildOpencodePromptText(
+                message,
+                options.goalMcpServer,
+                resumeSessionId,
+              ),
+            },
+          ],
+        };
 
-          if (field === "text") {
-            yield { type: "text", content: delta };
+        if (options.providerID || options.modelID) {
+          promptBody.model = {
+            providerID: options.providerID,
+            modelID: options.modelID,
+          };
+        }
+
+        if (toolsSubset !== undefined) {
+          promptBody.tools = toolsSubset;
+        }
+
+        client.session
+          .prompt({
+            path: { id: sessionId },
+            // directory 與 session.create 一致，opencode tool 才會跑在這個 Pod 的 workspace
+            query: { directory: workspacePath },
+            body: promptBody,
+          })
+          .catch((err: unknown) => {
+            logger.warn(
+              "Chat",
+              "Warn",
+              `[OpencodeProvider] session.prompt 發生錯誤：${err instanceof Error ? err.message : String(err)}`,
+            );
+          });
+
+        // ── for-await SSE stream ───────────────────────────────────────
+        for await (const rawEvent of sseResult.stream) {
+          if (abortSignal.aborted) break;
+
+          const event = rawEvent as {
+            type?: string;
+            properties?: Record<string, unknown>;
+          };
+          if (!event || !event.type) continue;
+
+          const type = event.type;
+          const props = event.properties ?? {};
+
+          // session.created → session_started（避免重複 yield）
+          if (type === "session.created") {
+            if (!alreadyYieldedSessionStarted) {
+              const info = props.info as { id?: string } | undefined;
+              const createdSessionId = info?.id ?? sessionId;
+              yield { type: "session_started", sessionId: createdSessionId };
+              alreadyYieldedSessionStarted = true;
+            }
             continue;
           }
 
-          if (field === "reasoning") {
-            yield { type: "thinking", content: delta };
+          // message.part.delta → 增量 chunk（新版 opencode SDK 走 streaming）
+          // payload: { sessionID, messageID, partID, field: "text"|"reasoning", delta: string }
+          // 後端 text event 的 content 視為 append（streamEventProcessor.processTextEvent），
+          // 因此把 delta 字串直接以 text/thinking yield 即可。
+          // 同時收集 messageID 給 session.idle 階段拉 tool parts 時過濾用。
+          if (type === "message.part.delta") {
+            const messageID = props.messageID as string | undefined;
+            if (messageID) currentMessageIds.add(messageID);
+
+            const field = props.field as string | undefined;
+            const delta = props.delta;
+            if (typeof delta !== "string" || delta.length === 0) continue;
+
+            if (field === "text") {
+              yield { type: "text", content: delta };
+              continue;
+            }
+
+            if (field === "reasoning") {
+              yield { type: "thinking", content: delta };
+              continue;
+            }
+
             continue;
           }
 
-          continue;
-        }
+          // message.part.updated → 依 part.type 分發
+          if (type === "message.part.updated") {
+            const part = props.part as
+              | {
+                  type?: string;
+                  text?: string;
+                  callID?: string;
+                  tool?: string;
+                  state?: {
+                    status?: string;
+                    input?: Record<string, unknown>;
+                    output?: string;
+                  };
+                }
+              | undefined;
 
-        // message.part.updated → 依 part.type 分發
-        if (type === "message.part.updated") {
-          const part = props.part as
-            | {
-                type?: string;
-                text?: string;
-                callID?: string;
-                tool?: string;
-                state?: {
-                  status?: string;
-                  input?: Record<string, unknown>;
-                  output?: string;
+            if (!part) continue;
+
+            if (part.type === "text" && typeof part.text === "string") {
+              yield { type: "text", content: part.text };
+              continue;
+            }
+
+            if (part.type === "reasoning" && typeof part.text === "string") {
+              yield { type: "thinking", content: part.text };
+              continue;
+            }
+
+            if (part.type === "tool") {
+              const state = part.state;
+              const callID = part.callID ?? "";
+              const toolName = part.tool ?? "";
+
+              if (state?.status === "running" || state?.status === "pending") {
+                yield {
+                  type: "tool_call_start",
+                  toolUseId: callID,
+                  toolName,
+                  input: (state.input as Record<string, unknown>) ?? {},
                 };
+                continue;
               }
-            | undefined;
 
-          if (!part) continue;
+              if (state?.status === "completed") {
+                yield {
+                  type: "tool_call_result",
+                  toolUseId: callID,
+                  toolName,
+                  output: state.output ?? "",
+                };
+                continue;
+              }
+            }
 
-          if (part.type === "text" && typeof part.text === "string") {
-            yield { type: "text", content: part.text };
             continue;
           }
 
-          if (part.type === "reasoning" && typeof part.text === "string") {
-            yield { type: "thinking", content: part.text };
-            continue;
+          // session.idle → 補 tool call 後 turn_complete，結束 loop
+          // 新版 opencode SDK 在 streaming 階段只發 message.part.delta（field=text），
+          // 不發 message.part.updated 帶 ToolPart，所以 tool 呼叫資訊只能透過拉完整 messages 取得。
+          // 在 idle 時呼叫 session.messages，把本 turn 出現過的 messageID 對應的 ToolPart 補成
+          // tool_call_start + tool_call_result yield 出去，前端才能顯示 tool tag。
+          if (type === "session.idle") {
+            yield* yieldToolPartsForTurn(
+              client,
+              sessionId,
+              workspacePath,
+              currentMessageIds,
+            );
+            yield { type: "turn_complete" };
+            break;
           }
 
-          if (part.type === "tool") {
-            const state = part.state;
-            const callID = part.callID ?? "";
-            const toolName = part.tool ?? "";
-
-            if (state?.status === "running" || state?.status === "pending") {
-              yield {
-                type: "tool_call_start",
-                toolUseId: callID,
-                toolName,
-                input: (state.input as Record<string, unknown>) ?? {},
-              };
-              continue;
-            }
-
-            if (state?.status === "completed") {
-              yield {
-                type: "tool_call_result",
-                toolUseId: callID,
-                toolName,
-                output: state.output ?? "",
-              };
-              continue;
-            }
+          // session.error → 分類錯誤並結束
+          if (type === "session.error") {
+            const error = props.error;
+            const rawMessage = extractErrorMessage(error);
+            yield classifySessionError(rawMessage, options.providerID);
+            break;
           }
 
-          continue;
+          // 其他 event 忽略
         }
-
-        // session.idle → 補 tool call 後 turn_complete，結束 loop
-        // 新版 opencode SDK 在 streaming 階段只發 message.part.delta（field=text），
-        // 不發 message.part.updated 帶 ToolPart，所以 tool 呼叫資訊只能透過拉完整 messages 取得。
-        // 在 idle 時呼叫 session.messages，把本 turn 出現過的 messageID 對應的 ToolPart 補成
-        // tool_call_start + tool_call_result yield 出去，前端才能顯示 tool tag。
-        if (type === "session.idle") {
-          yield* yieldToolPartsForTurn(
-            client,
-            sessionId,
-            workspacePath,
-            currentMessageIds,
-          );
-          yield { type: "turn_complete" };
-          break;
-        }
-
-        // session.error → 分類錯誤並結束
-        if (type === "session.error") {
-          const error = props.error;
-          const rawMessage = extractErrorMessage(error);
-          yield classifySessionError(rawMessage, options.providerID);
-          break;
-        }
-
-        // 其他 event 忽略
+      } finally {
+        abortSignal.removeEventListener("abort", doAbort);
       }
     } finally {
-      abortSignal.removeEventListener("abort", doAbort);
-      transientServer?.close();
+      // 所有路徑（session 建立失敗、abort、正常結束）都在此統一 close transient server
+      closeTransientServer();
     }
   },
 };

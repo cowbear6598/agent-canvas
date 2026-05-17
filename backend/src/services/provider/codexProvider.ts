@@ -189,9 +189,11 @@ function buildGoalRuntimeBootstrapPrompt(rawMessage: string): string {
 function buildCodexPromptText(
   message: string | import("../../types/message.js").ContentBlock[],
   goalMcpServer?: GoalRuntimeMcpServerConfig | null,
+  resumeSessionId?: string | null,
 ): string {
   const promptText = buildPromptText(message);
-  if (!goalMcpServer) {
+  // resume 時（gate retry 第 2 輪以後）不再注入 bootstrap，避免覆蓋 nudge 指示
+  if (!goalMcpServer || resumeSessionId) {
     return promptText;
   }
   return buildGoalRuntimeBootstrapPrompt(promptText);
@@ -712,7 +714,11 @@ export class CodexProvider implements AgentProvider<CodexOptions> {
       options?.goalMcpServer,
       options?.thinkingLevel,
     );
-    const promptText = buildCodexPromptText(message, options?.goalMcpServer);
+    const promptText = buildCodexPromptText(
+      message,
+      options?.goalMcpServer,
+      resumeSessionId,
+    );
 
     return { codexArgs, promptText };
   }

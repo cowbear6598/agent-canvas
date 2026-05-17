@@ -116,22 +116,22 @@ function buildPrompt(
   resumeSessionId: string | null,
   shouldBootstrapGoalRuntime: boolean,
 ): string | AsyncIterable<SDKUserMessage> {
+  // resume 時（gate retry 第 2 輪以後）不再注入 bootstrap，避免覆蓋 nudge 指示
+  const doBootstrap = shouldBootstrapGoalRuntime && !resumeSessionId;
+
   if (typeof message === "string") {
     // 空白訊息 fallback：使用語意明確的中間變數，避免三元運算式在閱讀時語意模糊
     const trimmed = message.trim();
     const prompt = trimmed.length === 0 ? "請開始執行" : trimmed;
-    if (!shouldBootstrapGoalRuntime) {
+    if (!doBootstrap) {
       return prompt;
     }
     return buildGoalRuntimeBootstrapPrompt(prompt);
   }
 
   const contentArray = buildClaudeContentBlocks(message);
-  const finalContentArray = shouldBootstrapGoalRuntime
-    ? [
-        buildGoalRuntimeBootstrapContentBlock(),
-        ...contentArray,
-      ]
+  const finalContentArray = doBootstrap
+    ? [buildGoalRuntimeBootstrapContentBlock(), ...contentArray]
     : contentArray;
   const sessionId = resumeSessionId ?? "";
   return createUserMessageStream(finalContentArray, sessionId);

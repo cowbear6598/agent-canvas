@@ -34,6 +34,8 @@ import {
   provisionRunExecutionResources,
   type ProvisionedRunExecutionResources,
 } from "../runtime/runExecutionResources.js";
+import { removeGoalRuntimeRun } from "../goalRuntime.js";
+import { cleanupOpencodeRunServers } from "../provider/opencodeProvider.js";
 
 const MAX_RUNS_PER_CANVAS = 30;
 
@@ -653,9 +655,14 @@ class RunExecutionService {
 
   /**
    * 清理指定 Run 的所有隔離資源。
-   * 包含 per-Run repo clone 與 run sandbox home。
+   * 包含 per-Run repo clone、run sandbox home、Goal Runtime tmp 目錄、opencode 快取 server。
    */
   private async cleanupRunResources(runId: string): Promise<void> {
+    // Goal Runtime tmp 目錄與 opencode Run-scoped server 快取：
+    // 優先在 repo/sandbox 清理之前執行，確保 server 在目錄刪除前已關閉
+    cleanupOpencodeRunServers(runId);
+    removeGoalRuntimeRun(runId);
+
     const entries = runStore.getExecutionPathsByRunId(runId);
     if (entries.length === 0) return;
 

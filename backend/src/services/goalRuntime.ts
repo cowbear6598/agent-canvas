@@ -222,11 +222,26 @@ export function ensureGoalRuntime(
 ): GoalRuntimeSnapshot | null {
   if (!runContext) return null;
 
+  const statePath = getGoalRuntimeStatePath(runContext, pod.id);
+  const existing = readGoalRuntimeSnapshot(statePath);
+
+  // 若已有 snapshot 且 goal 的 todo 清單順序一致，代表狀態仍有效，直接復用
+  // 避免每次 buildOptions 呼叫都覆寫掉 consumeGoalRuntimeToolResult 更新過的進度
+  if (existing) {
+    const currentTodoOrder = normalizeGoalRuntimeGoal(pod.goal).todos.map(
+      (t) => t.id,
+    );
+    const existingTodoOrder = existing.state.todoOrder;
+    const isSameGoal =
+      currentTodoOrder.length === existingTodoOrder.length &&
+      currentTodoOrder.every((id, i) => id === existingTodoOrder[i]);
+
+    if (isSameGoal) return existing;
+  }
+
+  // snapshot 不存在或 goal 結構已改變（外部重設），建立新的初始 snapshot
   const snapshot = createGoalRuntimeSnapshot(pod, runContext);
-  writeGoalRuntimeSnapshot(
-    getGoalRuntimeStatePath(runContext, pod.id),
-    snapshot,
-  );
+  writeGoalRuntimeSnapshot(statePath, snapshot);
 
   return snapshot;
 }
