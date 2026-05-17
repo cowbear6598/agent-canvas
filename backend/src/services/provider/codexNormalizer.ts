@@ -15,6 +15,7 @@
 
 import { buildProviderSystemError } from "./types.js";
 import type { NormalizedEvent } from "./types.js";
+import { canonicalizeGoalRuntimeToolName } from "../goalRuntime.js";
 
 // ── Codex JSON 事件原始型別 ────────────────────────────────────────
 
@@ -64,6 +65,7 @@ type CodexItemPayload =
   | CodexAgentMessageItem
   | CodexReasoningItem
   | CodexCommandExecutionItem
+  | CodexMcpToolCallItem
   | CodexItemError
   | { id: string; type: string; [key: string]: unknown };
 
@@ -88,6 +90,18 @@ interface CodexCommandExecutionItem {
   status?: string;
 }
 
+interface CodexMcpToolCallItem {
+  id: string;
+  type: "mcp_tool_call";
+  server_name?: string;
+  tool_name?: string;
+  name?: string;
+  arguments?: Record<string, unknown>;
+  input?: Record<string, unknown>;
+  output?: string;
+  result?: string;
+}
+
 /** Codex normalizer 專用的系統錯誤建立 helper（委派給共用 buildProviderSystemError） */
 function buildCodexSystemError(params: {
   content: string;
@@ -96,6 +110,78 @@ function buildCodexSystemError(params: {
   rawContent?: string;
 }): Extract<NormalizedEvent, { type: "error" }> {
   return buildProviderSystemError("codex", params);
+}
+
+function buildMcpToolName(item: CodexMcpToolCallItem): string {
+  // Codex CLI 可能回傳 generic wrapper 名稱 `mcp__mcp_tool`；
+  // 若已有結構化欄位，應優先使用 server_name/tool_name 還原真正的 MCP tool name。
+  if (
+    typeof item.server_name === "string" &&
+    item.server_name.length > 0 &&
+    typeof item.tool_name === "string" &&
+    item.tool_name.length > 0
+  ) {
+    return `mcp__${item.server_name}__${item.tool_name}`;
+  }
+
+  if (typeof item.name === "string" && item.name.length > 0) {
+    return item.name;
+  }
+
+  const serverName = item.server_name ?? "mcp";
+  const toolName = item.tool_name ?? "tool";
+  return `mcp__${serverName}__${toolName}`;
+}
+
+function buildMcpToolInput(
+  item: CodexMcpToolCallItem,
+): Record<string, unknown> {
+  if (item.input && typeof item.input === "object") {
+    return item.input;
+  }
+  if (item.arguments && typeof item.arguments === "object") {
+    return item.arguments;
+  }
+  return {};
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function serializeMcpToolOutputValue(value: unknown): string | null {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  if (value.structured_content !== undefined) {
+    return JSON.stringify(value.structured_content);
+  }
+
+  const content = value.content;
+  if (Array.isArray(content)) {
+    const textBlocks = content
+      .filter((block): block is Record<string, unknown> => isRecord(block))
+      .map((block) => (typeof block.text === "string" ? block.text : ""))
+      .filter((text) => text.length > 0);
+    if (textBlocks.length > 0) {
+      return textBlocks.join("\n");
+    }
+  }
+
+  return JSON.stringify(value);
+}
+
+function buildMcpToolOutput(item: CodexMcpToolCallItem): string {
+  return (
+    serializeMcpToolOutputValue(item.output) ??
+    serializeMcpToolOutputValue(item.result) ??
+    ""
+  );
 }
 
 // ── 主要解析函式 ──────────────────────────────────────────────────
@@ -148,6 +234,20 @@ export function normalize(line: string): NormalizedEvent | null {
           input: { command: cmd.command },
         };
       }
+      if (e.item.type === "mcp_tool_call") {
+        const item = e.item as CodexMcpToolCallItem;
+        const input = buildMcpToolInput(item);
+        return {
+          type: "tool_call_start",
+          toolUseId: item.id,
+          toolName: canonicalizeGoalRuntimeToolName(
+            buildMcpToolName(item),
+            input,
+            null,
+          ),
+          input,
+        };
+      }
       // 其他 item.started 類型目前不映射
       return null;
     }
@@ -183,6 +283,22 @@ export function normalize(line: string): NormalizedEvent | null {
         };
       }
 
+      if (e.item.type === "mcp_tool_call") {
+        const item = e.item as CodexMcpToolCallItem;
+        const input = buildMcpToolInput(item);
+        const output = buildMcpToolOutput(item);
+        return {
+          type: "tool_call_result",
+          toolUseId: item.id,
+          toolName: canonicalizeGoalRuntimeToolName(
+            buildMcpToolName(item),
+            input,
+            item.output ?? item.result ?? null,
+          ),
+          output,
+        };
+      }
+
       if (e.item.type === "error") {
         const itemError = e.item as CodexItemError;
         const rawContent =
@@ -196,7 +312,7 @@ export function normalize(line: string): NormalizedEvent | null {
         });
       }
 
-      // 其他 item.completed 類型（file_change、mcp_tool_call 等）目前不映射
+      // 其他 item.completed 類型（file_change 等）目前不映射
       return null;
     }
 

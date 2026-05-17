@@ -1,0 +1,64 @@
+feature: goal-mcp-refactor
+approved: true
+scenarios:
+  - id: F1
+    scenario: 使用者執行一個已設定 Goal 的 Pod
+    given:
+      - 該 Pod 已設定 Goal
+      - 該 Pod 已啟用需要的 MCP 工具
+    when:
+      - 觸發該 Pod 執行
+    then:
+      - 系統會把 Goal Runtime 以真正的 MCP 方式提供給模型
+      - 該 Pod 已啟用的 MCP 工具仍可同時使用
+      - 執行結果會依 Goal 的內容推進
+
+  - id: F2
+    scenario: 使用者執行一個沒有 Goal 的 Pod
+    given:
+      - 該 Pod 沒有設定 Goal
+      - 該 Pod 已啟用其他可用工具
+    when:
+      - 觸發該 Pod 執行
+    then:
+      - 系統仍允許該 Pod 執行
+      - 該 Pod 不會帶入 Goal Runtime
+      - 該 Pod 其他已啟用的工具仍可使用
+
+  - id: F3
+    scenario: 使用者在同一個 Pod 上同時使用 Goal Runtime 與自選 MCP
+    given:
+      - 該 Pod 已設定 Goal
+      - 該 Pod 已手動選取一個以上的 MCP 工具
+    when:
+      - 開始執行該 Pod
+    then:
+      - Goal Runtime 不會覆蓋或取代使用者自選的 MCP
+      - 模型可同時看見 Goal Runtime 與使用者自選 MCP
+      - 使用者原本的 MCP 設定會保持不變
+
+  - id: F4
+    scenario: 工作流把結果交給下一個有 Goal 的 Pod
+    given:
+      - 上游 Pod 已完成執行
+      - 下游 Pod 已設定 Goal
+      - 兩個 Pod 之間有連線
+    when:
+      - 工作流把上游結果傳給下游 Pod
+    then:
+      - 下游 Pod 會以 Goal Runtime 的方式接收自己的目標上下文
+      - 傳遞內容會聚焦在下游 Goal 需要的資訊
+      - 下游 Pod 執行時不再依賴舊的 prompt-based Goal header
+
+  - id: F5
+    scenario: 使用者在升級後重新執行既有畫布
+    given:
+      - 使用者有一個已經改成 Goal 模型的既有畫布
+      - 畫布中的 Pod 可能有 Goal
+      - 畫布中的 Pod 可能沒有 Goal
+    when:
+      - 使用者在升級後重新執行這些 Pod
+    then:
+      - 有 Goal 的 Pod 會改走真正的 Goal Runtime MCP
+      - 沒有 Goal 的 Pod 仍可正常執行
+      - 系統不再使用舊的 prompt-based Goal fallback

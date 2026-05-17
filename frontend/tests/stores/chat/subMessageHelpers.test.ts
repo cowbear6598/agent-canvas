@@ -450,6 +450,36 @@ describe("updateSubMessagesToolUseResult", () => {
     expect(result[0]!.toolUse![0]!.output).toBeUndefined();
   });
 
+  it("有提供較準確的 toolName 時，應在寫入 result 時同步升級名稱", () => {
+    const subMessages: SubMessage[] = [
+      {
+        id: "sub-0",
+        content: "執行中",
+        isPartial: true,
+        toolUse: [
+          {
+            toolUseId: "tool-1",
+            toolName: "mcp__mcp__tool",
+            status: "running",
+            input: {},
+          },
+        ],
+      },
+    ];
+
+    const result = updateSubMessagesToolUseResult(
+      subMessages,
+      "tool-1",
+      "執行結果",
+      "mcp__agent_canvas_goal__get_goal_status",
+    );
+
+    expect(result[0]!.toolUse![0]!.toolName).toBe(
+      "mcp__agent_canvas_goal__get_goal_status",
+    );
+    expect(result[0]!.toolUse![0]!.output).toBe("執行結果");
+  });
+
   it("多個 subMessages 時只更新包含該 toolUseId 的", () => {
     const subMessages: SubMessage[] = [
       {

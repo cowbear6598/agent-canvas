@@ -66,6 +66,13 @@ import {
   getRunSandboxHomePath,
   getPodSandboxHomePath,
 } from "../../src/services/runtime/executionPaths.js";
+import {
+  ensureGoalRuntime,
+  getGoalRuntimeStatePath,
+  GOAL_MCP_SERVER_NAME,
+  readGoalRuntimeSnapshot,
+  removeGoalRuntimeRun,
+} from "../../src/services/goalRuntime.js";
 
 function asMock(fn: unknown): Mock<any> {
   return fn as Mock<any>;
@@ -125,6 +132,7 @@ function insertPodViaSQL(opts: {
   providerConfigJson?: string;
   workspacePath?: string;
   repositoryId?: string | null;
+  goalJson?: string | null;
 }) {
   const id = randomUUID();
   const workspacePath =
@@ -134,7 +142,7 @@ function insertPodViaSQL(opts: {
       `INSERT INTO pods (id, canvas_id, name, x, y, rotation, workspace_path,
        session_id, repository_id, goal_json,
        schedule_json, provider, provider_config_json)
-       VALUES (?, ?, ?, 0, 0, 0, ?, NULL, ?, NULL, NULL, ?, ?)`,
+       VALUES (?, ?, ?, 0, 0, 0, ?, NULL, ?, ?, NULL, ?, ?)`,
     )
     .run(
       id,
@@ -142,6 +150,7 @@ function insertPodViaSQL(opts: {
       `${opts.provider}-pod-${id.slice(0, 8)}`,
       workspacePath,
       opts.repositoryId ?? null,
+      opts.goalJson ?? null,
       opts.provider,
       opts.providerConfigJson ??
         (opts.provider === "claude" ? JSON.stringify({ model: "opus" }) : null),
@@ -151,9 +160,18 @@ function insertPodViaSQL(opts: {
 }
 
 function insertClaudePod(
-  overrides: { workspacePath?: string; repositoryId?: string } = {},
+  overrides: {
+    workspacePath?: string;
+    repositoryId?: string;
+    goal?: { todos: Array<{ id: string; text: string }> };
+  } = {},
 ) {
-  return insertPodViaSQL({ provider: "claude", ...overrides });
+  return insertPodViaSQL({
+    provider: "claude",
+    workspacePath: overrides.workspacePath,
+    repositoryId: overrides.repositoryId,
+    goalJson: overrides.goal ? JSON.stringify(overrides.goal) : null,
+  });
 }
 
 function insertCodexPod() {
@@ -200,6 +218,16 @@ describe("executeStreamingChat", () => {
     vi.spyOn(runStore, "updatePodInstanceSessionId").mockImplementation(
       () => {},
     );
+    // gate retry 會透過 strategy.addUserMessage → injectRunUserMessage 寫 run message；
+    // 測試環境沒有對應的 run row，直接 spy 掉避免 FK 錯誤。
+    vi.spyOn(runStore, "addRunMessage").mockImplementation(
+      (_runId, _podId, role, content) => ({
+        id: "mock-run-message-id",
+        role,
+        content,
+        timestamp: new Date().toISOString(),
+      }),
+    );
 
     asMock(getProvider).mockClear();
     // metadata 必須一起提供，否則 providerConfigResolver（buildPodFromRow 讀取路徑）
@@ -224,6 +252,7 @@ describe("executeStreamingChat", () => {
     vi.restoreAllMocks();
     closeDb();
     clearPodStoreCache();
+    removeGoalRuntimeRun(defaultRunContext.runId);
   });
 
   describe("streaming event 處理（Claude 路徑）", () => {
@@ -455,6 +484,349 @@ describe("executeStreamingChat", () => {
       );
 
       expect(onComplete).toHaveBeenCalledWith(canvasId, pod.id);
+    });
+  });
+
+  describe("Goal Runtime event handling", () => {
+    it("Goal MCP tool result 應更新 runtime snapshot 與 handoff summary", async () => {
+      const goal = {
+        todos: [
+          { id: "todo-1", text: "Inspect current task state" },
+          { id: "todo-2", text: "Complete remaining work" },
+        ],
+      };
+      const pod = insertClaudePod({ goal });
+
+      expect(ensureGoalRuntime(pod, defaultRunContext)).not.toBeNull();
+
+      // 兩個 todo 都在同一輪內被回報完成，gate 直接 proceed，不會 retry
+      setupProviderMock([
+        {
+          type: "tool_call_result",
+          toolUseId: "goal-tool-1",
+          toolName: `mcp__${GOAL_MCP_SERVER_NAME}__complete_goal_todo`,
+          output: JSON.stringify({
+            status: "running",
+            activeTodoId: "todo-2",
+            activeTodoText: "Complete remaining work",
+            nextTodoId: "todo-2",
+            nextTodoText: "Complete remaining work",
+            completedTodoIds: ["todo-1"],
+            blockedReason: null,
+            handoffSummary: "First task completed",
+            completedCount: 1,
+            totalCount: 2,
+          }),
+        },
+        {
+          type: "tool_call_result",
+          toolUseId: "goal-tool-2",
+          toolName: `mcp__${GOAL_MCP_SERVER_NAME}__complete_goal_todo`,
+          output: JSON.stringify({
+            status: "completed",
+            activeTodoId: null,
+            activeTodoText: null,
+            nextTodoId: null,
+            nextTodoText: null,
+            completedTodoIds: ["todo-1", "todo-2"],
+            blockedReason: null,
+            handoffSummary: "All tasks done",
+            completedCount: 2,
+            totalCount: 2,
+          }),
+        },
+        { type: "turn_complete" },
+      ]);
+
+      await executeStreamingChat({
+        canvasId,
+        podId: pod.id,
+        message,
+        abortable: false,
+        strategy: makeStrategy(),
+      });
+
+      const snapshot = readGoalRuntimeSnapshot(
+        getGoalRuntimeStatePath(defaultRunContext, pod.id),
+      );
+
+      expect(snapshot?.state.status).toBe("completed");
+      expect(snapshot?.state.activeTodoId).toBeNull();
+      expect(snapshot?.state.completedTodoIds).toEqual(["todo-1", "todo-2"]);
+      expect(snapshot?.state.handoffSummary).toBe("All tasks done");
+    });
+
+    it("無 Goal 的 Pod 收到 Goal MCP tool result 時仍應建立空的 runtime snapshot", async () => {
+      const pod = insertClaudePod();
+      const statePath = getGoalRuntimeStatePath(defaultRunContext, pod.id);
+
+      setupProviderMock([
+        {
+          type: "tool_call_result",
+          toolUseId: "goal-tool-2",
+          toolName: `mcp__${GOAL_MCP_SERVER_NAME}__block_goal_progress`,
+          output: JSON.stringify({
+            status: "blocked",
+            activeTodoId: null,
+            activeTodoText: null,
+            nextTodoId: null,
+            nextTodoText: null,
+            completedTodoIds: [],
+            blockedReason: "Waiting on review",
+            handoffSummary: "Need approval",
+            completedCount: 0,
+            totalCount: 0,
+          }),
+        },
+        { type: "turn_complete" },
+      ]);
+
+      await executeStreamingChat({
+        canvasId,
+        podId: pod.id,
+        message,
+        abortable: false,
+        strategy: makeStrategy(),
+      });
+
+      expect(readGoalRuntimeSnapshot(statePath)).toMatchObject({
+        goal: { todos: [] },
+        state: {
+          status: "blocked",
+          activeTodoId: null,
+          completedTodoIds: [],
+          blockedReason: "Waiting on review",
+          handoffSummary: "Need approval",
+        },
+      });
+    });
+  });
+
+  describe("Goal 完成 gate", () => {
+    it("Goal 未完成時應自動 nudge 重試直到完成", async () => {
+      const goal = {
+        todos: [
+          { id: "todo-1", text: "第一步" },
+          { id: "todo-2", text: "第二步" },
+        ],
+      };
+      const pod = insertClaudePod({ goal });
+      ensureGoalRuntime(pod, defaultRunContext);
+
+      // 第一輪：LLM 只完成 todo-1 就停下；第二輪（gate nudge 後）：補完 todo-2
+      const chatMock = vi
+        .fn()
+        .mockImplementationOnce(() =>
+          makeEventStream([
+            {
+              type: "tool_call_result",
+              toolUseId: "t1",
+              toolName: `mcp__${GOAL_MCP_SERVER_NAME}__complete_goal_todo`,
+              output: JSON.stringify({
+                status: "running",
+                activeTodoId: "todo-2",
+                activeTodoText: "第二步",
+                nextTodoId: "todo-2",
+                nextTodoText: "第二步",
+                completedTodoIds: ["todo-1"],
+                blockedReason: null,
+                handoffSummary: null,
+                completedCount: 1,
+                totalCount: 2,
+              }),
+            },
+            { type: "turn_complete" },
+          ]),
+        )
+        .mockImplementationOnce(() =>
+          makeEventStream([
+            {
+              type: "tool_call_result",
+              toolUseId: "t2",
+              toolName: `mcp__${GOAL_MCP_SERVER_NAME}__complete_goal_todo`,
+              output: JSON.stringify({
+                status: "completed",
+                activeTodoId: null,
+                activeTodoText: null,
+                nextTodoId: null,
+                nextTodoText: null,
+                completedTodoIds: ["todo-1", "todo-2"],
+                blockedReason: null,
+                handoffSummary: "全部完成",
+                completedCount: 2,
+                totalCount: 2,
+              }),
+            },
+            { type: "turn_complete" },
+          ]),
+        );
+      asMock(getProvider).mockReturnValue({
+        chat: chatMock,
+        cancel: vi.fn(() => false),
+        buildOptions: vi.fn().mockResolvedValue({}),
+        metadata: {
+          availableModelValues: new Set(["opus", "sonnet", "haiku"]),
+          defaultOptions: { model: "opus" },
+          availableModels: [
+            { label: "Opus", value: "opus" },
+            { label: "Sonnet", value: "sonnet" },
+            { label: "Haiku", value: "haiku" },
+          ],
+        },
+      });
+
+      await executeStreamingChat({
+        canvasId,
+        podId: pod.id,
+        message,
+        abortable: false,
+        strategy: makeStrategy(),
+      });
+
+      // 應該跑了兩輪 chat，且有注入一次 nudge user message
+      expect(chatMock).toHaveBeenCalledTimes(2);
+      expect(runStore.addRunMessage).toHaveBeenCalledTimes(1);
+
+      const snapshot = readGoalRuntimeSnapshot(
+        getGoalRuntimeStatePath(defaultRunContext, pod.id),
+      );
+      expect(snapshot?.state.status).toBe("completed");
+      expect(snapshot?.state.completedTodoIds).toEqual(["todo-1", "todo-2"]);
+    });
+
+    it("連續未推進達上限應自動 force_block 並放行下游", async () => {
+      const goal = {
+        todos: [
+          { id: "todo-1", text: "永遠不會被完成" },
+          { id: "todo-2", text: "永遠不會被完成 2" },
+        ],
+      };
+      const pod = insertClaudePod({ goal });
+      ensureGoalRuntime(pod, defaultRunContext);
+
+      // 每一輪都只回 text，不呼叫 complete_goal_todo → completedTodoIds 永遠是空陣列
+      const chatMock = vi.fn(() =>
+        makeEventStream([
+          { type: "text", content: "我看看..." },
+          { type: "turn_complete" },
+        ]),
+      );
+      asMock(getProvider).mockReturnValue({
+        chat: chatMock,
+        cancel: vi.fn(() => false),
+        buildOptions: vi.fn().mockResolvedValue({}),
+        metadata: {
+          availableModelValues: new Set(["opus", "sonnet", "haiku"]),
+          defaultOptions: { model: "opus" },
+          availableModels: [
+            { label: "Opus", value: "opus" },
+            { label: "Sonnet", value: "sonnet" },
+            { label: "Haiku", value: "haiku" },
+          ],
+        },
+      });
+
+      const onComplete = vi.fn();
+      await executeStreamingChat(
+        {
+          canvasId,
+          podId: pod.id,
+          message,
+          abortable: false,
+          strategy: makeStrategy(),
+        },
+        { onComplete },
+      );
+
+      // 第一輪 + 連續 noProgressLimit (2) 輪 retry = 共 3 輪 chat
+      expect(chatMock).toHaveBeenCalledTimes(3);
+
+      const snapshot = readGoalRuntimeSnapshot(
+        getGoalRuntimeStatePath(defaultRunContext, pod.id),
+      );
+      expect(snapshot?.state.status).toBe("blocked");
+      expect(snapshot?.state.blockedReason).toContain("未推進");
+      // 即使 force_block，下游 workflow 仍會被觸發（blocked 視為完成的一種）
+      expect(onComplete).toHaveBeenCalledWith(canvasId, pod.id);
+    });
+
+    it("第一輪收到 fatal provider error 時應直接 break，不再 retry", async () => {
+      const goal = {
+        todos: [
+          { id: "todo-1", text: "永遠無法執行" },
+          { id: "todo-2", text: "永遠無法執行 2" },
+        ],
+      };
+      const pod = insertClaudePod({ goal });
+      ensureGoalRuntime(pod, defaultRunContext);
+
+      // 第一輪：provider 立刻吐 fatal error（如 usage limit）
+      const chatMock = vi.fn(() =>
+        makeEventStream([
+          {
+            type: "error",
+            message: "usage limit",
+            fatal: true,
+            code: "STREAM_ERROR",
+          },
+        ]),
+      );
+      asMock(getProvider).mockReturnValue({
+        chat: chatMock,
+        cancel: vi.fn(() => false),
+        buildOptions: vi.fn().mockResolvedValue({}),
+        metadata: {
+          availableModelValues: new Set(["opus", "sonnet", "haiku"]),
+          defaultOptions: { model: "opus" },
+          availableModels: [
+            { label: "Opus", value: "opus" },
+            { label: "Sonnet", value: "sonnet" },
+            { label: "Haiku", value: "haiku" },
+          ],
+        },
+      });
+
+      const onComplete = vi.fn();
+      await executeStreamingChat(
+        {
+          canvasId,
+          podId: pod.id,
+          message,
+          abortable: false,
+          strategy: makeStrategy(),
+        },
+        { onComplete },
+      );
+
+      // fatal error 後 gate 應該直接 break，不應 retry
+      expect(chatMock).toHaveBeenCalledTimes(1);
+      expect(runStore.addRunMessage).not.toHaveBeenCalled();
+      // onComplete 仍會被呼叫（transcript 已寫入錯誤訊息，下游 workflow 可自行判定）
+      expect(onComplete).toHaveBeenCalledTimes(1);
+    });
+
+    it("沒有 Goal 的 Pod 應跳過 gate，第一輪結束直接 onComplete", async () => {
+      const pod = insertClaudePod(); // 無 goal
+      setupProviderMock([
+        { type: "text", content: "ok" },
+        { type: "turn_complete" },
+      ]);
+
+      const onComplete = vi.fn();
+      await executeStreamingChat(
+        {
+          canvasId,
+          podId: pod.id,
+          message,
+          abortable: false,
+          strategy: makeStrategy(),
+        },
+        { onComplete },
+      );
+
+      // 沒有 nudge 注入，addRunMessage 不應被呼叫
+      expect(runStore.addRunMessage).not.toHaveBeenCalled();
+      expect(onComplete).toHaveBeenCalledTimes(1);
     });
   });
 

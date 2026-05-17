@@ -22,6 +22,7 @@ import {
   createMultiInputCompletionHandlers,
   emitQueueProcessed,
 } from "./workflowHelpers.js";
+import { createStatusDelegate } from "./workflowStatusDelegate.js";
 import { logger } from "../../utils/logger.js";
 import type { RunContext } from "../../types/run.js";
 
@@ -99,6 +100,9 @@ class WorkflowAutoTriggerService implements TriggerStrategy {
         isError: false,
       },
       runContext,
+      // Run mode 必須帶 delegate；否則 pipeline 會 fallback 到 normal mode 的
+      // hasActiveRunForPod 判定，把所有 pre-registered 的 pending instance 都當忙碌
+      delegate: runContext ? createStatusDelegate(runContext) : undefined,
     };
 
     await this.pipeline.execute(pipelineContext, this);

@@ -415,6 +415,20 @@ describe("CanvasPod MCP / Plugin popover", () => {
 // ─────────────────────────────────────────────────────────────────────────
 
 describe("CanvasPod PodSlots 計數 props", () => {
+  it("Pod 有 Goal Runtime 但沒有 user MCP 時，PodSlots 仍應收到 mcpActiveCount=0", () => {
+    injectBaseCapabilities();
+    const wrapper = mountPod(
+      mkPod({
+        goal: { todos: [{ id: "goal-1", text: "Ship it" }] },
+        mcpServerNames: [],
+      }),
+    );
+    expect(
+      wrapper.findComponent({ name: "PodSlots" }).props("mcpActiveCount"),
+    ).toBe(0);
+    wrapper.unmount();
+  });
+
   it("pod.mcpServerNames 有 2 個時 PodSlots 應收到 mcpActiveCount=2", () => {
     injectBaseCapabilities();
     const wrapper = mountPod(mkPod({ mcpServerNames: ["a", "b"] }));

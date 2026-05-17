@@ -417,6 +417,7 @@ export const useRunStore = defineStore("run", {
         message,
         payload.toolUseId,
         payload.output,
+        payload.toolName,
       );
       podMap!.set(payload.podId, updatedMessages);
     },

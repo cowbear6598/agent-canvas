@@ -1,7 +1,26 @@
-import type { ContentBlock } from "../types/message.js";
+import fs from "fs";
+import os from "os";
+import path from "path";
+import { fileURLToPath } from "url";
 import type { GoalTodoItem, Pod, PodGoal } from "../types/pod.js";
+import type { RunContext } from "../types/run.js";
 
 export type GoalRuntimeStatus = "running" | "blocked" | "completed";
+
+export const GOAL_MCP_SERVER_NAME = "agent_canvas_goal";
+export const GOAL_MCP_TOOL_NAMES = {
+  GET_STATUS: "get_goal_status",
+  COMPLETE_TODO: "complete_goal_todo",
+  BLOCK_PROGRESS: "block_goal_progress",
+} as const;
+
+export type GoalRuntimeToolName =
+  (typeof GOAL_MCP_TOOL_NAMES)[keyof typeof GOAL_MCP_TOOL_NAMES];
+
+const GOAL_RUNTIME_GENERIC_WRAPPER_TOOL_NAMES = new Set([
+  "mcp__mcp_tool",
+  "mcp__mcp__tool",
+]);
 
 export interface GoalRuntimeState {
   todoOrder: string[];
@@ -10,25 +29,79 @@ export interface GoalRuntimeState {
   status: GoalRuntimeStatus;
   blockedReason: string | null;
   handoffSummary: string | null;
+  updatedAt: string;
+}
+
+export interface GoalRuntimeSnapshot {
+  runId: string;
+  podId: string;
+  podName: string;
+  goal: PodGoal;
+  state: GoalRuntimeState;
+}
+
+export interface GoalRuntimeToolResult {
+  status: GoalRuntimeStatus;
+  activeTodoId: string | null;
+  activeTodoText: string | null;
+  nextTodoId: string | null;
+  nextTodoText: string | null;
+  completedTodoIds: string[];
+  blockedReason: string | null;
+  handoffSummary: string | null;
+  completedCount: number;
+  totalCount: number;
+}
+
+export interface GoalRuntimeMcpMetadata extends GoalRuntimeToolResult {
+  system: true;
+  locked: true;
+  name: string;
+  type: "stdio";
+  description: string;
+}
+
+export interface GoalRuntimeMcpServerConfig {
+  name: typeof GOAL_MCP_SERVER_NAME;
+  command: string;
+  args: string[];
+  env: Record<string, string>;
+}
+
+function normalizeGoalRuntimeGoal(goal: PodGoal | null | undefined): PodGoal {
+  return {
+    todos: Array.isArray(goal?.todos) ? [...goal.todos] : [],
+  };
 }
 
 function getGoalTodoMap(goal: PodGoal): Map<string, GoalTodoItem> {
   return new Map(goal.todos.map((todo) => [todo.id, todo]));
 }
 
+export function hasGoalRuntime(goal: PodGoal | null | undefined): boolean {
+  return goal == null || Array.isArray(goal.todos);
+}
+
 export function createGoalRuntimeState(
   goal: PodGoal | null | undefined,
-): GoalRuntimeState | null {
-  if (!goal?.todos.length) return null;
-
-  const todoOrder = goal.todos.map((todo) => todo.id);
+): GoalRuntimeState {
+  const normalizedGoal = normalizeGoalRuntimeGoal(goal);
+  const todoOrder = normalizedGoal.todos.map((todo) => todo.id);
   return {
     todoOrder,
     activeTodoId: todoOrder[0] ?? null,
     completedTodoIds: [],
-    status: "running",
+    status: todoOrder.length > 0 ? "running" : "completed",
     blockedReason: null,
     handoffSummary: null,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function withUpdatedAt(state: GoalRuntimeState): GoalRuntimeState {
+  return {
+    ...state,
+    updatedAt: new Date().toISOString(),
   };
 }
 
@@ -39,7 +112,7 @@ export function completeGoalTodo(
   handoffSummary: string | null = null,
 ): GoalRuntimeState {
   const todoMap = getGoalTodoMap(goal);
-  if (!todoMap.has(todoId)) return state;
+  if (!todoMap.has(todoId)) return withUpdatedAt(state);
 
   const completedTodoIds = state.completedTodoIds.includes(todoId)
     ? state.completedTodoIds
@@ -47,14 +120,14 @@ export function completeGoalTodo(
   const activeTodoId =
     state.todoOrder.find((id) => !completedTodoIds.includes(id)) ?? null;
 
-  return {
+  return withUpdatedAt({
     ...state,
     activeTodoId,
     completedTodoIds,
     status: activeTodoId ? "running" : "completed",
     blockedReason: null,
     handoffSummary,
-  };
+  });
 }
 
 export function blockGoalRuntime(
@@ -62,15 +135,15 @@ export function blockGoalRuntime(
   blockedReason: string,
   handoffSummary: string | null = null,
 ): GoalRuntimeState {
-  return {
+  return withUpdatedAt({
     ...state,
     status: "blocked",
     blockedReason,
     handoffSummary,
-  };
+  });
 }
 
-export function serializeGoalForPrompt(
+export function formatGoalTodos(
   goal: PodGoal | null | undefined,
 ): string | null {
   if (!goal?.todos.length) return null;
@@ -80,52 +153,379 @@ export function serializeGoalForPrompt(
     .join("\n");
 }
 
-function buildGoalExecutionHeader(
-  pod: Pick<Pod, "name" | "goal">,
-): string | null {
-  const serializedGoal = serializeGoalForPrompt(pod.goal);
-  if (!serializedGoal) return null;
-
-  const runtimeState = createGoalRuntimeState(pod.goal);
-  const activeTodoText =
-    runtimeState?.activeTodoId &&
-    pod.goal?.todos.find((todo) => todo.id === runtimeState.activeTodoId)?.text;
-
-  const lines = [
-    "<goal_runtime>",
-    `Pod「${pod.name}」本次執行的 Goal：`,
-    serializedGoal,
-    activeTodoText
-      ? `請先從目前 active todo 開始：${activeTodoText}`
-      : "若 Goal 已全部完成，請整理結果並清楚回報。",
-    "請依序推進 todos；若被阻塞，請明確說明阻塞原因與下一步建議。",
-    "</goal_runtime>",
-    "",
-  ];
-
-  return lines.join("\n");
+export function getGoalRuntimeRootDir(): string {
+  return path.join(os.tmpdir(), "agent-canvas-goal-runtime");
 }
 
-export function prependGoalExecutionContext(
-  pod: Pick<Pod, "name" | "goal">,
-  message: string | ContentBlock[],
-): string | ContentBlock[] {
-  const goalHeader = buildGoalExecutionHeader(pod);
-  if (!goalHeader) return message;
+export function getGoalRuntimeRunDir(runId: string): string {
+  return path.join(getGoalRuntimeRootDir(), runId);
+}
 
-  if (typeof message === "string") {
-    return goalHeader + message;
-  }
+export function getGoalRuntimeStatePath(
+  runContext: RunContext,
+  podId: string,
+): string {
+  return path.join(getGoalRuntimeRunDir(runContext.runId), `${podId}.json`);
+}
 
-  const firstTextIndex = message.findIndex((block) => block.type === "text");
-  if (firstTextIndex === -1) {
-    return [{ type: "text", text: goalHeader }, ...message];
-  }
+function createGoalRuntimeSnapshot(
+  pod: Pick<Pod, "id" | "name" | "goal">,
+  runContext: RunContext,
+): GoalRuntimeSnapshot {
+  const goal = normalizeGoalRuntimeGoal(pod.goal);
+  const state = createGoalRuntimeState(goal);
 
-  return message.map((block, index) => {
-    if (index === firstTextIndex && block.type === "text") {
-      return { ...block, text: goalHeader + block.text };
+  return {
+    runId: runContext.runId,
+    podId: pod.id,
+    podName: pod.name,
+    goal,
+    state,
+  };
+}
+
+function ensureGoalRuntimeDir(statePath: string): void {
+  fs.mkdirSync(path.dirname(statePath), { recursive: true });
+}
+
+export function writeGoalRuntimeSnapshot(
+  statePath: string,
+  snapshot: GoalRuntimeSnapshot,
+): void {
+  ensureGoalRuntimeDir(statePath);
+  fs.writeFileSync(statePath, JSON.stringify(snapshot, null, 2), "utf-8");
+}
+
+export function readGoalRuntimeSnapshot(
+  statePath: string,
+): GoalRuntimeSnapshot | null {
+  try {
+    const raw = fs.readFileSync(statePath, "utf-8");
+    const parsed = JSON.parse(raw) as GoalRuntimeSnapshot;
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      !Array.isArray(parsed.goal?.todos) ||
+      !parsed.state
+    ) {
+      return null;
     }
-    return block;
-  });
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function ensureGoalRuntime(
+  pod: Pick<Pod, "id" | "name" | "goal">,
+  runContext?: RunContext,
+): GoalRuntimeSnapshot | null {
+  if (!runContext) return null;
+
+  const snapshot = createGoalRuntimeSnapshot(pod, runContext);
+  writeGoalRuntimeSnapshot(
+    getGoalRuntimeStatePath(runContext, pod.id),
+    snapshot,
+  );
+
+  return snapshot;
+}
+
+function getGoalTodoText(goal: PodGoal, todoId: string | null): string | null {
+  if (!todoId) return null;
+  return goal.todos.find((todo) => todo.id === todoId)?.text ?? null;
+}
+
+export function buildGoalRuntimeToolResult(
+  snapshot: GoalRuntimeSnapshot,
+): GoalRuntimeToolResult {
+  const { goal, state } = snapshot;
+  return {
+    status: state.status,
+    activeTodoId: state.activeTodoId,
+    activeTodoText: getGoalTodoText(goal, state.activeTodoId),
+    nextTodoId: state.activeTodoId,
+    nextTodoText: getGoalTodoText(goal, state.activeTodoId),
+    completedTodoIds: [...state.completedTodoIds],
+    blockedReason: state.blockedReason,
+    handoffSummary: state.handoffSummary,
+    completedCount: state.completedTodoIds.length,
+    totalCount: goal.todos.length,
+  };
+}
+
+export function buildGoalRuntimeMcpMetadata(
+  snapshot: GoalRuntimeSnapshot,
+): GoalRuntimeMcpMetadata {
+  const hasTodos = snapshot.goal.todos.length > 0;
+  return {
+    ...buildGoalRuntimeToolResult(snapshot),
+    name: GOAL_MCP_SERVER_NAME,
+    type: "stdio",
+    system: true,
+    locked: true,
+    description: !hasTodos
+      ? "Goal Runtime 可用，但目前尚未設定 goal"
+      : snapshot.state.status === "completed"
+        ? "Goal Runtime 已完成目前 Pod 的所有 todo"
+        : snapshot.state.activeTodoId
+          ? `目前 active todo：${getGoalTodoText(snapshot.goal, snapshot.state.activeTodoId) ?? snapshot.state.activeTodoId}`
+          : "Goal Runtime 可用，但目前沒有 active todo",
+  };
+}
+
+export function buildGoalRuntimeMcpListItem(
+  pod: Pick<Pod, "id" | "name" | "goal">,
+): GoalRuntimeMcpMetadata {
+  const goal = normalizeGoalRuntimeGoal(pod.goal);
+  const snapshot: GoalRuntimeSnapshot = {
+    runId: "preview",
+    podId: pod.id,
+    podName: pod.name,
+    goal,
+    state: createGoalRuntimeState(goal),
+  };
+
+  return buildGoalRuntimeMcpMetadata(snapshot);
+}
+
+function getGoalMcpBridgePath(): string {
+  return path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "mcp",
+    "goalMcpBridge.ts",
+  );
+}
+
+export function buildGoalRuntimeMcpServerConfig(
+  runContext: RunContext,
+  pod: Pick<Pod, "id" | "name" | "goal">,
+): GoalRuntimeMcpServerConfig | null {
+  const snapshot = ensureGoalRuntime(pod, runContext);
+  if (!snapshot) return null;
+
+  return {
+    name: GOAL_MCP_SERVER_NAME,
+    command: process.execPath || "bun",
+    args: [getGoalMcpBridgePath()],
+    env: {
+      AGENT_CANVAS_GOAL_STATE_PATH: getGoalRuntimeStatePath(runContext, pod.id),
+    },
+  };
+}
+
+export function extractGoalRuntimeToolName(
+  toolName: string,
+): GoalRuntimeToolName | null {
+  if (!toolName.includes(GOAL_MCP_SERVER_NAME)) return null;
+
+  if (toolName.includes(GOAL_MCP_TOOL_NAMES.GET_STATUS)) {
+    return GOAL_MCP_TOOL_NAMES.GET_STATUS;
+  }
+  if (toolName.includes(GOAL_MCP_TOOL_NAMES.COMPLETE_TODO)) {
+    return GOAL_MCP_TOOL_NAMES.COMPLETE_TODO;
+  }
+  if (toolName.includes(GOAL_MCP_TOOL_NAMES.BLOCK_PROGRESS)) {
+    return GOAL_MCP_TOOL_NAMES.BLOCK_PROGRESS;
+  }
+
+  return null;
+}
+
+export function isGoalRuntimeToolName(toolName: string): boolean {
+  return extractGoalRuntimeToolName(toolName) !== null;
+}
+
+export function buildGoalRuntimeToolFullName(
+  toolName: GoalRuntimeToolName,
+): string {
+  return `mcp__${GOAL_MCP_SERVER_NAME}__${toolName}`;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function isGoalRuntimeToolResult(
+  value: unknown,
+): value is GoalRuntimeToolResult {
+  return Boolean(
+    value &&
+    typeof value === "object" &&
+    "status" in value &&
+    "completedTodoIds" in value,
+  );
+}
+
+export function parseGoalRuntimeToolResult(
+  output: unknown,
+): GoalRuntimeToolResult | null {
+  if (typeof output === "string") {
+    const trimmed = output.trim();
+    if (!trimmed) return null;
+
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      if (isGoalRuntimeToolResult(parsed)) {
+        return parsed;
+      }
+    } catch {
+      // ignore
+    }
+    return null;
+  }
+
+  if (!isRecord(output)) return null;
+
+  const structuredContent = output.structured_content;
+  if (isGoalRuntimeToolResult(structuredContent)) {
+    return structuredContent;
+  }
+
+  const content = output.content;
+  if (Array.isArray(content)) {
+    for (const block of content) {
+      if (isRecord(block) && typeof block.text === "string") {
+        const parsed = parseGoalRuntimeToolResult(block.text);
+        if (parsed) return parsed;
+      }
+    }
+  }
+
+  return null;
+}
+
+function inferGoalRuntimeToolNameFromInput(
+  input: Record<string, unknown>,
+): GoalRuntimeToolName | null {
+  if (
+    typeof input.blockedReason === "string" &&
+    input.blockedReason.length > 0
+  ) {
+    return GOAL_MCP_TOOL_NAMES.BLOCK_PROGRESS;
+  }
+  if (
+    typeof input.todoId === "string" ||
+    typeof input.handoffSummary === "string"
+  ) {
+    return GOAL_MCP_TOOL_NAMES.COMPLETE_TODO;
+  }
+  return null;
+}
+
+export function canonicalizeGoalRuntimeToolName(
+  toolName: string,
+  input: Record<string, unknown>,
+  output: unknown,
+): string {
+  const explicit = extractGoalRuntimeToolName(toolName);
+  if (explicit) {
+    return buildGoalRuntimeToolFullName(explicit);
+  }
+
+  if (!GOAL_RUNTIME_GENERIC_WRAPPER_TOOL_NAMES.has(toolName)) {
+    return toolName;
+  }
+
+  const inferredFromInput = inferGoalRuntimeToolNameFromInput(input);
+  if (inferredFromInput) {
+    return buildGoalRuntimeToolFullName(inferredFromInput);
+  }
+
+  const parsedOutput = parseGoalRuntimeToolResult(output);
+  if (parsedOutput) {
+    return buildGoalRuntimeToolFullName(GOAL_MCP_TOOL_NAMES.GET_STATUS);
+  }
+
+  return toolName;
+}
+
+export function consumeGoalRuntimeToolResult(
+  runContext: RunContext | undefined,
+  pod: Pick<Pod, "id" | "name" | "goal">,
+  toolName: string,
+  output: string,
+): GoalRuntimeSnapshot | null {
+  if (!runContext || !isGoalRuntimeToolName(toolName)) {
+    return null;
+  }
+
+  const statePath = getGoalRuntimeStatePath(runContext, pod.id);
+  const existing = readGoalRuntimeSnapshot(statePath);
+  const parsed = parseGoalRuntimeToolResult(output);
+  const goal = normalizeGoalRuntimeGoal(pod.goal);
+
+  if (parsed) {
+    const baseSnapshot =
+      existing ??
+      ensureGoalRuntime(
+        {
+          ...pod,
+          goal,
+        },
+        runContext,
+      );
+    if (!baseSnapshot) return null;
+
+    const snapshot: GoalRuntimeSnapshot = {
+      ...baseSnapshot,
+      goal,
+      podName: pod.name,
+      state: {
+        ...baseSnapshot.state,
+        activeTodoId: parsed.activeTodoId,
+        completedTodoIds: [...parsed.completedTodoIds],
+        status: parsed.status,
+        blockedReason: parsed.blockedReason,
+        handoffSummary: parsed.handoffSummary,
+        updatedAt: new Date().toISOString(),
+      },
+    };
+    writeGoalRuntimeSnapshot(statePath, snapshot);
+    return snapshot;
+  }
+
+  if (existing) return existing;
+
+  return ensureGoalRuntime(pod, runContext);
+}
+
+export function forceBlockGoalRuntime(
+  runContext: RunContext | undefined,
+  pod: Pick<Pod, "id" | "name" | "goal">,
+  reason: string,
+): GoalRuntimeSnapshot | null {
+  if (!runContext) return null;
+
+  const statePath = getGoalRuntimeStatePath(runContext, pod.id);
+  const existing = readGoalRuntimeSnapshot(statePath);
+  const goal = normalizeGoalRuntimeGoal(pod.goal);
+
+  const baseSnapshot =
+    existing ??
+    ensureGoalRuntime(
+      {
+        ...pod,
+        goal,
+      },
+      runContext,
+    );
+  if (!baseSnapshot) return null;
+
+  const snapshot: GoalRuntimeSnapshot = {
+    ...baseSnapshot,
+    goal,
+    podName: pod.name,
+    state: blockGoalRuntime(
+      baseSnapshot.state,
+      reason,
+      baseSnapshot.state.handoffSummary,
+    ),
+  };
+  writeGoalRuntimeSnapshot(statePath, snapshot);
+  return snapshot;
+}
+
+export function removeGoalRuntimeRun(runId: string): void {
+  fs.rmSync(getGoalRuntimeRunDir(runId), { recursive: true, force: true });
 }

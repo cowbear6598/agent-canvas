@@ -119,7 +119,7 @@ describe("CodexProvider", () => {
   });
 
   // ── Case 1：首次對話 spawn 指令 ───────────────────────────────────
-  it("首次對話時 spawn 指令應包含必要的 CLI 參數（--json、--cd、--full-auto、--model 等）", async () => {
+  it("首次對話時 spawn 指令應包含必要的 CLI 參數（--json、--cd、--sandbox workspace-write、--model 等）", async () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
@@ -141,7 +141,8 @@ describe("CodexProvider", () => {
       "--skip-git-repo-check",
       "--cd",
       ctx.workspacePath,
-      "--full-auto",
+      "--sandbox",
+      "workspace-write",
       "-c",
       "sandbox_workspace_write.network_access=true",
       "--model",
@@ -149,10 +150,10 @@ describe("CodexProvider", () => {
     ]);
   });
 
-  // ── Case 2：resume 時 spawn 指令包含 resume <id>，不含 --cd ─────────
-  // `codex exec resume` 不接受 --cd flag（會導致 "unexpected argument" 錯誤），
-  // 工作目錄改由 Bun.spawn cwd 定錨。
-  it("resumeSessionId 存在時 spawn 指令應包含 exec resume <id> 及必要的 CLI 參數，且不含 --cd", async () => {
+  // ── Case 2：resume 時 spawn 指令包含 resume <id>，不含 --cd 與 --sandbox ─────────
+  // `codex exec resume` 不接受 --cd 與 --sandbox flag（會導致 "unexpected argument" 錯誤），
+  // 工作目錄改由 Bun.spawn cwd 定錨，sandbox 設定改用 -c sandbox_mode 帶入。
+  it("resumeSessionId 存在時 spawn 指令應包含 exec resume <id> 及必要的 CLI 參數，且不含 --cd 與 --sandbox", async () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
@@ -170,14 +171,71 @@ describe("CodexProvider", () => {
       "session-abc123",
       "-",
       "--json",
-      "--full-auto",
+      "-c",
+      "sandbox_mode=workspace-write",
       "-c",
       "sandbox_workspace_write.network_access=true",
     ]);
-    // resume 模式不應含 --cd（codex exec resume 不接受此 flag）
+    // resume 模式不應含 --cd 與 --sandbox（codex exec resume 不接受這兩個 flag）
     expect(spawnArgs).not.toContain("--cd");
+    expect(spawnArgs).not.toContain("--sandbox");
     // resume 模式由 session 決定 model，不應含 --model 旗標
     expect(spawnArgs).not.toContain("--model");
+  });
+
+  it("有 Goal MCP 時，應一律 bootstrap 成先讀 Goal Runtime 的提示", async () => {
+    const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
+    spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
+
+    const provider = new CodexProvider();
+    const ctx = makeCtx({
+      message: "fix the failing test",
+      options: {
+        model: "gpt-5.4",
+        resumeMode: "cli",
+        mcpServerNames: ["agent_canvas_goal"],
+        goalMcpServer: {
+          name: "agent_canvas_goal",
+          command: process.execPath,
+          args: ["/tmp/goalMcpBridge.ts"],
+          env: {
+            AGENT_CANVAS_GOAL_STATE_PATH: "/tmp/goal-runtime.json",
+          },
+        },
+      },
+    });
+
+    await collectEvents(provider.chat(ctx));
+
+    expect(mockProc.stdin.write).toHaveBeenCalledOnce();
+    const [promptText] = mockProc.stdin.write.mock.calls[0] as [string];
+    expect(promptText).toContain("User request: fix the failing test");
+    expect(promptText).toContain(
+      "Start by calling Goal Runtime to inspect the current status and active todo.",
+    );
+    expect(promptText).toContain(
+      "Then continue with the current active todo instead of asking for a new task.",
+    );
+  });
+
+  it("沒有 Goal MCP 時，不應改寫使用者原始 prompt", async () => {
+    const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
+    spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
+
+    const provider = new CodexProvider();
+    const ctx = makeCtx({
+      message: "fix the failing test",
+      options: {
+        model: "gpt-5.4",
+        resumeMode: "cli",
+        mcpServerNames: [],
+        goalMcpServer: null,
+      },
+    });
+
+    await collectEvents(provider.chat(ctx));
+
+    expect(mockProc.stdin.write).toHaveBeenCalledWith("fix the failing test");
   });
 
   // ── Case 3：abortSignal 觸發後 subprocess.kill() 被呼叫 ───────────
@@ -483,6 +541,42 @@ describe("CodexProvider", () => {
 
     // resume 模式不含 --cd
     expect(spawnArgs).not.toContain("--cd");
+  });
+
+  it("傳入 Goal MCP 時，args 應以 command 字串與 args 陣列分開注入 config override", async () => {
+    const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
+    spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
+
+    const provider = new CodexProvider();
+    const ctx = makeCtx({
+      resumeSessionId: null,
+      options: {
+        model: "gpt-5.4",
+        resumeMode: "cli",
+        mcpServerNames: ["agent_canvas_goal"],
+        goalMcpServer: {
+          name: "agent_canvas_goal",
+          command: process.execPath,
+          args: ["/tmp/goalMcpBridge.ts"],
+          env: {
+            AGENT_CANVAS_GOAL_STATE_PATH: "/tmp/goal-runtime.json",
+          },
+        },
+      },
+    });
+
+    await collectEvents(provider.chat(ctx));
+
+    const [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
+    expect(spawnArgs).toContain(
+      `mcp_servers.agent_canvas_goal.command=${JSON.stringify(process.execPath)}`,
+    );
+    expect(spawnArgs).toContain(
+      `mcp_servers.agent_canvas_goal.args=${JSON.stringify(["/tmp/goalMcpBridge.ts"])}`,
+    );
+    expect(spawnArgs).toContain(
+      `mcp_servers.agent_canvas_goal.env.AGENT_CANVAS_GOAL_STATE_PATH=${JSON.stringify("/tmp/goal-runtime.json")}`,
+    );
   });
 
   // ── 補充：model 不合法時 prepareExecution 直接 yield error，不走 spawn / readCodexMcpServers ──

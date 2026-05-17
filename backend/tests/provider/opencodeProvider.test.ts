@@ -20,11 +20,17 @@ import {
   opencodeProvider,
   setOpencodeClientFactory,
   resetOpencodeClientFactory,
+  setOpencodeServerFactory,
+  resetOpencodeServerFactory,
   setOpencodeServerStateFactory,
   resetOpencodeServerStateFactory,
 } from "../../src/services/provider/opencodeProvider.js";
 import type { ChatRequestContext } from "../../src/services/provider/types.js";
 import type { OpencodeOptions } from "../../src/services/provider/opencodeProvider.js";
+import {
+  GOAL_MCP_SERVER_NAME,
+  removeGoalRuntimeRun,
+} from "../../src/services/goalRuntime.js";
 
 // ── logger mock ────────────────────────────────────────────────────────
 vi.mock("../../src/utils/logger.js", () => ({
@@ -107,6 +113,39 @@ function makeCtx(
   };
 }
 
+function makeBuildOptionsPod(
+  overrides: Partial<{
+    providerConfig: { model: string };
+    mcpServerNames: string[];
+    goal: { todos: Array<{ id: string; text: string }> } | null;
+  }> = {},
+) {
+  return {
+    id: "opencode-buildopts-pod",
+    name: "Opencode Goal Pod",
+    provider: "opencode",
+    status: "idle",
+    providerConfig: overrides.providerConfig ?? {
+      model: "anthropic/claude-sonnet-4-5",
+    },
+    workspacePath: "/tmp/opencode-buildopts",
+    skillIds: [],
+    mcpServerNames: overrides.mcpServerNames ?? [],
+    pluginIds: [],
+    integrationBindings: [],
+    repositoryId: null,
+    multiInstance: false,
+    sessionId: null,
+    x: 0,
+    y: 0,
+    rotation: 0,
+    goal:
+      overrides.goal === undefined
+        ? null
+        : overrides.goal,
+  } as any;
+}
+
 // ================================================================
 // Setup / Teardown
 // ================================================================
@@ -121,8 +160,66 @@ beforeEach(() => {
 
 afterEach(() => {
   resetOpencodeClientFactory();
+  resetOpencodeServerFactory();
   resetOpencodeServerStateFactory();
+  removeGoalRuntimeRun("run-opencode-goal");
   vi.restoreAllMocks();
+});
+
+describe("buildOptions", () => {
+  it("有 runContext 且 Pod 有 Goal 時應保留 user MCP 並注入 Goal MCP", async () => {
+    const pod = makeBuildOptionsPod({
+      mcpServerNames: ["team-server"],
+      goal: {
+        todos: [{ id: "todo-1", text: "Finish Goal Runtime handoff" }],
+      },
+    });
+
+    const options = await opencodeProvider.buildOptions(pod, {
+      runId: "run-opencode-goal",
+      canvasId: "canvas-opencode-goal",
+      sourcePodId: pod.id,
+    });
+
+    expect(options.providerID).toBe("anthropic");
+    expect(options.modelID).toBe("claude-sonnet-4-5");
+    expect(options.mcpServerNames).toEqual([
+      "team-server",
+      GOAL_MCP_SERVER_NAME,
+    ]);
+    expect(options.goalMcpServer?.name).toBe(GOAL_MCP_SERVER_NAME);
+  });
+
+  it("有 runContext 且無 Goal 時仍應注入 Goal MCP", async () => {
+    const pod = makeBuildOptionsPod({
+      mcpServerNames: ["team-server"],
+      goal: null,
+    });
+
+    const options = await opencodeProvider.buildOptions(pod, {
+      runId: "run-opencode-no-goal",
+      canvasId: "canvas-opencode-no-goal",
+      sourcePodId: pod.id,
+    });
+
+    expect(options.mcpServerNames).toEqual([
+      "team-server",
+      GOAL_MCP_SERVER_NAME,
+    ]);
+    expect(options.goalMcpServer?.name).toBe(GOAL_MCP_SERVER_NAME);
+  });
+
+  it("沒有 runContext 時不應注入 Goal MCP", async () => {
+    const pod = makeBuildOptionsPod({
+      mcpServerNames: ["team-server"],
+      goal: null,
+    });
+
+    const options = await opencodeProvider.buildOptions(pod);
+
+    expect(options.mcpServerNames).toEqual(["team-server"]);
+    expect(options.goalMcpServer).toBeNull();
+  });
 });
 
 // ================================================================
@@ -163,6 +260,120 @@ describe("chat — (1) resumeSessionId=null → session_started 且 sessionId �
       (firstEvent as Extract<NormalizedEvent, { type: "session_started" }>)
         .sessionId,
     ).toBe(mockSessionId);
+  });
+});
+
+describe("chat — Goal MCP transient server", () => {
+  it("有 Goal MCP 時應使用 transient server、port=0，並帶正確 local MCP config", async () => {
+    const createServerMock = vi.fn().mockResolvedValue({
+      url: "http://127.0.0.1:63314",
+      close: vi.fn(),
+    });
+    setOpencodeServerFactory(createServerMock as typeof createServerMock);
+
+    const mockClient = makeMockClient({
+      event: {
+        subscribe: vi.fn().mockResolvedValue({
+          stream: eventsToStream([
+            {
+              type: "session.idle",
+              properties: { sessionID: "goal-session-id" },
+            },
+          ]),
+        }),
+      },
+    });
+    setOpencodeClientFactory(() => mockClient);
+
+    const ctx = makeCtx({
+      options: {
+        providerID: "anthropic",
+        modelID: "claude-sonnet-4-5",
+        mcpServerNames: ["team-server", GOAL_MCP_SERVER_NAME],
+        goalMcpServer: {
+          name: GOAL_MCP_SERVER_NAME,
+          command: process.execPath,
+          args: ["/tmp/goalMcpBridge.ts"],
+          env: {
+            AGENT_CANVAS_GOAL_STATE_PATH: "/tmp/goal-runtime.json",
+          },
+        },
+      },
+    });
+
+    await collectEvents(opencodeProvider.chat(ctx));
+
+    expect(createServerMock).toHaveBeenCalledWith({
+      port: 0,
+      timeout: 30000,
+      config: {
+        mcp: {
+          [GOAL_MCP_SERVER_NAME]: {
+            type: "local",
+            command: [process.execPath, "/tmp/goalMcpBridge.ts"],
+            environment: {
+              AGENT_CANVAS_GOAL_STATE_PATH: "/tmp/goal-runtime.json",
+            },
+            enabled: true,
+          },
+        },
+      },
+    });
+  });
+
+  it("有 Goal MCP 時應 bootstrap prompt，先要求模型讀取 Goal Runtime", async () => {
+    const promptMock = vi.fn().mockResolvedValue({ data: {} });
+    const mockClient = makeMockClient({
+      session: {
+        create: vi.fn().mockResolvedValue({ data: { id: "goal-session-id" } }),
+        prompt: promptMock,
+        abort: vi.fn().mockResolvedValue({ data: true }),
+      },
+      event: {
+        subscribe: vi.fn().mockResolvedValue({
+          stream: eventsToStream([
+            {
+              type: "session.idle",
+              properties: { sessionID: "goal-session-id" },
+            },
+          ]),
+        }),
+      },
+      tool: {
+        ids: vi.fn().mockResolvedValue({ data: [] }),
+      },
+    });
+    setOpencodeClientFactory(() => mockClient);
+
+    const ctx = makeCtx({
+      message: "go",
+      options: {
+        providerID: "anthropic",
+        modelID: "claude-sonnet-4-5",
+        mcpServerNames: [GOAL_MCP_SERVER_NAME],
+        goalMcpServer: {
+          name: GOAL_MCP_SERVER_NAME,
+          command: process.execPath,
+          args: ["/tmp/goalMcpBridge.ts"],
+          env: {
+            AGENT_CANVAS_GOAL_STATE_PATH: "/tmp/goal-runtime.json",
+          },
+        },
+      },
+    });
+
+    await collectEvents(opencodeProvider.chat(ctx));
+
+    const promptArg = promptMock.mock.calls[0]?.[0] as {
+      body: { parts: Array<{ type: "text"; text: string }> };
+    };
+    expect(promptArg.body.parts[0]?.text).toContain("User request: go");
+    expect(promptArg.body.parts[0]?.text).toContain(
+      "Start by calling Goal Runtime to inspect the current status and active todo.",
+    );
+    expect(promptArg.body.parts[0]?.text).toContain(
+      "Then continue with the current active todo instead of asking for a new task.",
+    );
   });
 });
 

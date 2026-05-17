@@ -34,6 +34,7 @@ export function createToolTrackingActions(store: ChatStoreInstance): {
     messageIndex: number,
     toolUseId: string,
     output: string,
+    toolName: string,
   ) => void;
 } {
   const createMessageWithToolUse = (
@@ -140,6 +141,7 @@ export function createToolTrackingActions(store: ChatStoreInstance): {
     messageIndex: number,
     toolUseId: string,
     output: string,
+    toolName: string,
   ): void => {
     const updatedMessages = [...messages];
     const message = updatedMessages[messageIndex];
@@ -150,13 +152,14 @@ export function createToolTrackingActions(store: ChatStoreInstance): {
       message,
       toolUseId,
       output,
+      toolName,
     );
 
     store.messagesByPodId.set(podId, updatedMessages);
   };
 
   const handleChatToolResult = (payload: PodChatToolResultPayload): void => {
-    const { podId, messageId, toolUseId, output } = payload;
+    const { podId, messageId, toolUseId, output, toolName } = payload;
     const messages = getMessages(store, podId);
     const messageIndex = findMessageIndex(messages, messageId);
 
@@ -165,7 +168,14 @@ export function createToolTrackingActions(store: ChatStoreInstance): {
     const message = messages[messageIndex];
     if (!message?.toolUse) return;
 
-    updateToolUseResult(podId, messages, messageIndex, toolUseId, output);
+    updateToolUseResult(
+      podId,
+      messages,
+      messageIndex,
+      toolUseId,
+      output,
+      toolName,
+    );
   };
 
   return {

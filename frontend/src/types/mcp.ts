@@ -13,4 +13,15 @@ export interface McpListItem {
   type?: "stdio" | "http" | "sse";
   system?: boolean;
   locked?: boolean;
+  description?: string;
+  status?: "running" | "blocked" | "completed";
+  activeTodoId?: string | null;
+  activeTodoText?: string | null;
+  nextTodoId?: string | null;
+  nextTodoText?: string | null;
+  blockedReason?: string | null;
+  handoffSummary?: string | null;
+  completedTodoIds?: string[];
+  completedCount?: number;
+  totalCount?: number;
 }

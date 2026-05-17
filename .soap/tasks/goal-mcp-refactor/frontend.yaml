@@ -1,0 +1,115 @@
+feature: goal-mcp-refactor
+side: frontend
+approved: true
+phases:
+  - id: P1
+    title: Pod-aware MCP 清單 contract
+    parallel: false
+    verification:
+      - bun run style
+      - bun run test:run
+    done: true
+    items:
+      - id: P1.A
+        title: MCP list request 與型別調整
+        tasks:
+          - id: P1.A.t1
+            text: 將前端 `MCP_LIST` 呼叫改成帶入 Pod 識別，讓同一個 provider 的不同 Pod 可以取得不同的 built-in MCP 清單
+            completed: true
+            last_files_changed:
+              - frontend/src/types/websocket/requests.ts
+              - frontend/src/services/mcpApi.ts
+          - id: P1.A.t2
+            text: 擴充前端 `McpListItem` 與 websocket response 型別，正式接收後端回傳的 `system`、`locked` 與 Goal Runtime metadata，不再由 component 本地硬編
+            completed: true
+            last_files_changed:
+              - frontend/src/types/mcp.ts
+              - frontend/src/services/mcpApi.ts
+          - id: P1.A.t3
+            text: 調整 `mcpApi` 的 cache key 與 invalidation，避免把「有 Goal 的 Pod」與「無 Goal 的 Pod」共用同一份 MCP 清單
+            completed: true
+            last_files_changed:
+              - frontend/src/services/mcpApi.ts
+              - frontend/src/stores/pod/podStore.ts
+          - id: P1.A.t4
+            text: 補 `frontend/tests/services/mcpApi.test.ts`，覆蓋 pod-aware MCP list 與 built-in Goal Runtime metadata 的正規化流程
+            completed: true
+            last_files_changed:
+              - frontend/tests/services/mcpApi.test.ts
+
+  - id: P2
+    title: McpPopover 改吃真實 Goal Runtime
+    parallel: false
+    verification:
+      - bun run style
+      - bun run test:run
+    done: true
+    items:
+      - id: P2.A
+        title: Popover 與 slot 呈現
+        tasks:
+          - id: P2.A.t1
+            text: 重構 `frontend/src/components/pod/McpPopover.vue` 移除 `goalBuiltinMcp` 假資料，改由後端回傳的 item 決定是否顯示 Goal Runtime
+            completed: true
+            last_files_changed:
+              - frontend/src/components/pod/McpPopover.vue
+          - id: P2.A.t2
+            text: 保留 Claude 與 Opencode 的 user MCP toggle、Codex 的唯讀模式，並確保 system/locked item 一律不可切換
+            completed: true
+            last_files_changed:
+              - frontend/src/components/pod/McpPopover.vue
+              - frontend/src/components/pod/McpServerRow.vue
+          - id: P2.A.t3
+            text: 調整 badge、空清單與搜尋文案，讓「無 Goal」與「有 Goal 但沒有其他 MCP」的畫面語意正確
+            completed: true
+            last_files_changed:
+              - frontend/src/components/pod/McpPopover.vue
+          - id: P2.A.t4
+            text: 補 `frontend/tests/components/pod/McpPopover.test.ts`，覆蓋有 Goal、無 Goal、Goal 加 user MCP、Codex readonly 四種呈現
+            completed: true
+            last_files_changed:
+              - frontend/tests/components/pod/McpPopover.test.ts
+      - id: P2.B
+        title: Goal 編輯後同步與顯示邊界
+        tasks:
+          - id: P2.B.t1
+            text: 讓 Goal 編輯後重新開啟 MCP popover 時能拿到最新 built-in Goal Runtime 清單，不殘留舊 cache
+            completed: true
+            last_files_changed:
+              - frontend/src/stores/pod/podStore.ts
+              - frontend/tests/stores/podStore.test.ts
+          - id: P2.B.t2
+            text: 檢查 `CanvasPod` 與 pod store 相關顯示邏輯，確保 built-in Goal Runtime 不會寫回 `pod.mcpServerNames` 或污染 MCP active count
+            completed: true
+            last_files_changed:
+              - frontend/src/stores/pod/podStore.ts
+              - frontend/tests/components/pod/CanvasPod.test.ts
+          - id: P2.B.t3
+            text: 補 `frontend/tests/components/pod/CanvasPod.test.ts` 與相鄰 store 測試，驗證 Goal Runtime 只作為系統掛載，不改動使用者設定
+            completed: true
+            last_files_changed:
+              - frontend/tests/components/pod/CanvasPod.test.ts
+              - frontend/tests/stores/podStore.test.ts
+
+  - id: P3
+    title: Goal optional 流程回歸
+    parallel: false
+    verification:
+      - bun run style
+      - bun run test:run
+    done: true
+    items:
+      - id: P3.A
+        title: 執行與共存回歸案例
+        tasks:
+          - id: P3.A.t1
+            text: 補 `frontend/tests/integration/canvasPodFlow.test.ts` 或相鄰整合測試，覆蓋有 Goal 的 Pod 顯示 built-in Goal Runtime、無 Goal 的 Pod 不顯示但仍可執行
+            completed: true
+            last_files_changed:
+              - frontend/tests/integration/canvasPodFlow.test.ts
+          - id: P3.A.t2
+            text: 補 `frontend/tests/components/pod/PodMcpSlot.test.ts` 與 `frontend/tests/services/mcpApi.test.ts` 的回歸案例，確認 Goal Runtime 與使用者自選 MCP 共存且互不覆蓋
+            completed: true
+            last_files_changed:
+              - frontend/tests/components/pod/PodMcpSlot.test.ts
+              - frontend/tests/services/mcpApi.test.ts

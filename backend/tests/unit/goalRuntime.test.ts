@@ -1,10 +1,21 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
+  GOAL_MCP_SERVER_NAME,
+  GOAL_MCP_TOOL_NAMES,
   blockGoalRuntime,
+  buildGoalRuntimeMcpListItem,
+  buildGoalRuntimeMcpServerConfig,
+  buildGoalRuntimeToolFullName,
+  canonicalizeGoalRuntimeToolName,
   completeGoalTodo,
+  consumeGoalRuntimeToolResult,
   createGoalRuntimeState,
-  prependGoalExecutionContext,
-  serializeGoalForPrompt,
+  ensureGoalRuntime,
+  forceBlockGoalRuntime,
+  formatGoalTodos,
+  getGoalRuntimeStatePath,
+  readGoalRuntimeSnapshot,
+  removeGoalRuntimeRun,
 } from "../../src/services/goalRuntime.js";
 
 const goal = {
@@ -14,15 +25,51 @@ const goal = {
   ],
 };
 
+const pod = {
+  id: "pod-goal-001",
+  name: "Planner",
+  goal,
+};
+
+const noGoalPod = {
+  id: "pod-no-goal-001",
+  name: "Executor",
+  goal: null,
+};
+
+const runContext = {
+  runId: "run-goal-runtime-test",
+  canvasId: "canvas-001",
+  sourcePodId: "pod-goal-001",
+};
+
+afterEach(() => {
+  removeGoalRuntimeRun(runContext.runId);
+});
+
 describe("goalRuntime", () => {
   it("createGoalRuntimeState 應以第一個 todo 作為 active", () => {
     const state = createGoalRuntimeState(goal);
 
-    expect(state).toEqual({
+    expect(state).toMatchObject({
       todoOrder: ["todo-1", "todo-2"],
       activeTodoId: "todo-1",
       completedTodoIds: [],
       status: "running",
+      blockedReason: null,
+      handoffSummary: null,
+    });
+    expect(state?.updatedAt).toEqual(expect.any(String));
+  });
+
+  it("createGoalRuntimeState 在沒有 Goal 時應回傳空的 completed 狀態", () => {
+    const state = createGoalRuntimeState(null);
+
+    expect(state).toMatchObject({
+      todoOrder: [],
+      activeTodoId: null,
+      completedTodoIds: [],
+      status: "completed",
       blockedReason: null,
       handoffSummary: null,
     });
@@ -52,19 +99,150 @@ describe("goalRuntime", () => {
     expect(blocked.activeTodoId).toBe("todo-1");
   });
 
-  it("serializeGoalForPrompt / prependGoalExecutionContext 應產生 Goal 導向 prompt", () => {
-    expect(serializeGoalForPrompt(goal)).toBe(
+  it("formatGoalTodos 應回傳給摘要服務使用的純文字 goal", () => {
+    expect(formatGoalTodos(goal)).toBe(
       "1. Collect requirements\n2. Implement changes",
     );
+  });
 
-    const prompt = prependGoalExecutionContext(
-      { name: "Planner", goal },
-      "Please start now",
-    ) as string;
+  it("buildGoalRuntimeMcpServerConfig 應建立固定名稱的內建 Goal MCP bridge", () => {
+    const config = buildGoalRuntimeMcpServerConfig(runContext, pod);
 
-    expect(prompt).toContain("<goal_runtime>");
-    expect(prompt).toContain("Collect requirements");
-    expect(prompt).toContain("Implement changes");
-    expect(prompt).toContain("Please start now");
+    expect(config).not.toBeNull();
+    expect(config?.name).toBe(GOAL_MCP_SERVER_NAME);
+    expect(config?.command.length).toBeGreaterThan(0);
+    expect(config?.args.some((arg) => arg.endsWith("goalMcpBridge.ts"))).toBe(
+      true,
+    );
+    expect(config?.env.AGENT_CANVAS_GOAL_STATE_PATH).toBe(
+      getGoalRuntimeStatePath(runContext, pod.id),
+    );
+  });
+
+  it("buildGoalRuntimeMcpListItem 應回傳 system/locked 與 active todo metadata", () => {
+    const item = buildGoalRuntimeMcpListItem(pod);
+
+    expect(item).toMatchObject({
+      name: GOAL_MCP_SERVER_NAME,
+      type: "stdio",
+      system: true,
+      locked: true,
+      status: "running",
+      activeTodoId: "todo-1",
+      activeTodoText: "Collect requirements",
+      completedCount: 0,
+      totalCount: 2,
+    });
+  });
+
+  it("沒有 Goal 時仍應建立 Goal Runtime MCP metadata，並回報空狀態", () => {
+    const item = buildGoalRuntimeMcpListItem(noGoalPod);
+
+    expect(item).toMatchObject({
+      name: GOAL_MCP_SERVER_NAME,
+      type: "stdio",
+      system: true,
+      locked: true,
+      status: "completed",
+      activeTodoId: null,
+      activeTodoText: null,
+      completedCount: 0,
+      totalCount: 0,
+      description: "Goal Runtime 可用，但目前尚未設定 goal",
+    });
+  });
+
+  it("沒有 Goal 時也應建立 run-scoped Goal MCP bridge", () => {
+    const config = buildGoalRuntimeMcpServerConfig(runContext, noGoalPod);
+
+    expect(config?.name).toBe(GOAL_MCP_SERVER_NAME);
+    expect(config?.env.AGENT_CANVAS_GOAL_STATE_PATH).toBe(
+      getGoalRuntimeStatePath(runContext, noGoalPod.id),
+    );
+  });
+
+  it("consumeGoalRuntimeToolResult 應用 tool output 後，run-scoped 狀態檔應被更新", () => {
+    ensureGoalRuntime(pod, runContext);
+
+    const snapshot = consumeGoalRuntimeToolResult(
+      runContext,
+      pod,
+      `mcp__${GOAL_MCP_SERVER_NAME}__${GOAL_MCP_TOOL_NAMES.COMPLETE_TODO}`,
+      JSON.stringify({
+        status: "running",
+        activeTodoId: "todo-2",
+        activeTodoText: "Implement changes",
+        nextTodoId: "todo-2",
+        nextTodoText: "Implement changes",
+        completedTodoIds: ["todo-1"],
+        blockedReason: null,
+        handoffSummary: "Need implementation",
+        completedCount: 1,
+        totalCount: 2,
+      }),
+    );
+
+    expect(snapshot?.state.activeTodoId).toBe("todo-2");
+    expect(snapshot?.state.completedTodoIds).toEqual(["todo-1"]);
+    expect(snapshot?.state.handoffSummary).toBe("Need implementation");
+
+    const persisted = readGoalRuntimeSnapshot(
+      getGoalRuntimeStatePath(runContext, pod.id),
+    );
+    expect(persisted?.state.activeTodoId).toBe("todo-2");
+    expect(persisted?.state.completedTodoIds).toEqual(["todo-1"]);
+  });
+
+  it("generic mcp wrapper + blockedReason input 應 canonicalize 為 block_goal_progress", () => {
+    expect(
+      canonicalizeGoalRuntimeToolName(
+        "mcp__mcp__tool",
+        { blockedReason: "Missing file" },
+        null,
+      ),
+    ).toBe(buildGoalRuntimeToolFullName(GOAL_MCP_TOOL_NAMES.BLOCK_PROGRESS));
+  });
+
+  it("forceBlockGoalRuntime 應把現有 snapshot 改為 blocked 並保留 handoffSummary", () => {
+    const snapshot = ensureGoalRuntime(pod, runContext);
+    if (!snapshot) throw new Error("snapshot 應存在");
+
+    const blocked = forceBlockGoalRuntime(runContext, pod, "達到 retry 上限");
+
+    expect(blocked).not.toBeNull();
+    expect(blocked?.state.status).toBe("blocked");
+    expect(blocked?.state.blockedReason).toBe("達到 retry 上限");
+
+    const persisted = readGoalRuntimeSnapshot(
+      getGoalRuntimeStatePath(runContext, pod.id),
+    );
+    expect(persisted?.state.status).toBe("blocked");
+  });
+
+  it("forceBlockGoalRuntime 在無 runContext 時應回 null", () => {
+    expect(forceBlockGoalRuntime(undefined, pod, "any")).toBeNull();
+  });
+
+  it("generic mcp wrapper + structured output 應 canonicalize 為 get_goal_status", () => {
+    expect(
+      canonicalizeGoalRuntimeToolName(
+        "mcp__mcp__tool",
+        {},
+        {
+          structured_content: {
+            status: "running",
+            activeTodoId: "todo-1",
+            activeTodoText: "Collect requirements",
+            nextTodoId: "todo-1",
+            nextTodoText: "Collect requirements",
+            completedTodoIds: [],
+            blockedReason: null,
+            handoffSummary: null,
+            completedCount: 0,
+            totalCount: 2,
+          },
+        },
+      ),
+    ).toBe(buildGoalRuntimeToolFullName(GOAL_MCP_TOOL_NAMES.GET_STATUS));
   });
 });

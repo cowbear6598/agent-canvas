@@ -70,15 +70,18 @@ function findToolInSubMessages(subMessages: PersistedSubMessage[], toolUseId: st
 export function processToolResultEvent(
     toolUseId: string,
     output: string,
+    toolName: string,
     state: SubMessageState
 ): void {
     const persistedTool = findToolInSubMessages(state.subMessages, toolUseId);
     if (persistedTool) {
+        persistedTool.toolName = toolName;
         persistedTool.output = output;
     }
 
     const currentTool = state.currentSubToolUse.find(t => t.toolUseId === toolUseId);
     if (currentTool) {
+        currentTool.toolName = toolName;
         currentTool.output = output;
     }
 }

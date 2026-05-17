@@ -69,10 +69,16 @@ export function mergeToolResultIntoMessage(
   message: Message,
   toolUseId: string,
   output: string,
+  toolName?: string,
 ): Message {
   if (!message.toolUse) return message;
 
-  const updatedToolUse = markToolWithOutput(message.toolUse, toolUseId, output);
+  const updatedToolUse = markToolWithOutput(
+    message.toolUse,
+    toolUseId,
+    output,
+    toolName,
+  );
 
   const updatedMessage: Message = {
     ...message,
@@ -84,6 +90,7 @@ export function mergeToolResultIntoMessage(
       message.subMessages,
       toolUseId,
       output,
+      toolName,
     );
   }
 

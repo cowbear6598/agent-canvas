@@ -34,6 +34,13 @@ import { WebSocketResponseEvents } from "../../schemas/index.js";
 import { createI18nError } from "../../utils/i18nError.js";
 import { appendSystemMessage } from "../transcriptSystemMessage.js";
 import { resolveExecutionPaths } from "../runtime/executionPaths.js";
+import { consumeGoalRuntimeToolResult } from "../goalRuntime.js";
+import {
+  autoForceBlock,
+  evaluateGoalGate,
+  GOAL_GATE_LIMITS,
+  nextNoProgressCount,
+} from "../goalCompletionGate.js";
 
 export interface StreamingChatExecutorOptions {
   canvasId: string;
@@ -125,6 +132,13 @@ interface StreamContext {
    * 供 finalizeAfterStream 持久化 session。
    */
   capturedSessionId: string | undefined;
+  /**
+   * 本輪是否發生 fatal provider error（usage limit、CLI exit code 等）。
+   * 由 handleProviderErrorEvent 在收到 fatal=true 的 error event 時設為 true。
+   * Goal 完成 gate 偵測到此 flag 後會直接放行（不再 retry），
+   * 避免在 provider 不可用時連續引發同樣錯誤。
+   */
+  hadFatalProviderError: boolean;
 }
 
 type TextStreamEvent = Extract<StreamEvent, { type: "text" }>;
@@ -206,7 +220,12 @@ function handleToolResultEvent(
     emitStrategy,
   } = context;
 
-  processToolResultEvent(event.toolUseId, event.output, subMessageState);
+  processToolResultEvent(
+    event.toolUseId,
+    event.output,
+    event.toolName,
+    subMessageState,
+  );
 
   emitStrategy.emitToolResult({
     canvasId,
@@ -337,7 +356,11 @@ function handleProviderErrorEvent(
     emitStrategy: context.emitStrategy,
   });
 
-  return { aborted: event.fatal === true };
+  const fatal = event.fatal === true;
+  if (fatal) {
+    context.hadFatalProviderError = true;
+  }
+  return { aborted: fatal };
 }
 
 /**
@@ -615,6 +638,8 @@ function setupStreamContext(
     strategy,
     // session_started 事件由 processNormalizedEvent 寫入；初始值 undefined
     capturedSessionId: undefined,
+    // handleProviderErrorEvent 收到 fatal error 時設為 true
+    hadFatalProviderError: false,
   };
 
   return context;
@@ -718,6 +743,14 @@ function processNormalizedEvent(
 
   if (ev.type === "error") {
     return handleProviderErrorEvent(ev, streamContext);
+  }
+
+  if (ev.type === "tool_call_result") {
+    const runContext = streamContext.strategy.getRunContext();
+    const pod = podStore.getByIdGlobal(streamContext.podId)?.pod;
+    if (pod) {
+      consumeGoalRuntimeToolResult(runContext, pod, ev.toolName, ev.output);
+    }
   }
 
   const streamEvent = normalizedEventToStreamEvent(ev);
@@ -855,43 +888,50 @@ async function resolveExecutionDependencies(
 }
 
 /**
- * 統一的串流聊天執行器，透過 ExecutionStrategy 管理 Run mode 的執行行為。
- *
- * Phase 5A 更新：
- *   - 移除 if (provider === "codex") 分流與 executeCodexStream / withCodexAbort
- *   - Claude 與 Codex 統一走 provider.buildOptions + provider.chat(ctx) 單一路徑
- *   - claudeService.sendMessage 已不再被呼叫（Phase 5B 才刪除 claudeService 本體）
+ * 單一輪 chat turn 的結果。
+ *   - completed：turn 正常結束，可進入 gate 判定
+ *   - aborted_or_errored：abort 或 error，已由 handleStreamAbort/handleExecutionError 處理；
+ *     呼叫端應直接 return result，不再進 gate loop
+ *   - completed_with_fatal_error：turn 結束但收到了 fatal provider error
+ *     （如 usage limit、CLI exit code）；transcript 已寫入系統訊息，
+ *     但 provider 不可用、retry 只會引發相同錯誤，gate loop 應直接 break 並走 onComplete
  */
-export async function executeStreamingChat(
-  options: StreamingChatExecutorOptions,
-  callbacks?: StreamingChatExecutorCallbacks,
-): Promise<StreamingChatExecutorResult> {
-  const { abortable, strategy } = options;
+interface ChatTurnOutcome {
+  result: StreamingChatExecutorResult;
+  finished: "completed" | "aborted_or_errored" | "completed_with_fatal_error";
+}
 
-  // 設定串流上下文
-  const streamContext = setupStreamContext(options);
-  const { canvasId, podId, messageId, streamState } = streamContext;
+/**
+ * 執行單一 chat turn：自行建立 streamContext、註冊 stream、跑 provider 串流、收尾。
+ * 對 abort / 已知錯誤負責呼叫對應 handler；未知錯誤往上 throw。
+ *
+ * 每個 retry turn 都會呼叫此 helper 一次，因此每 turn 會有獨立的 messageId
+ * 與 transcript 訊息，避免不同輪的內容互相覆寫。
+ */
+async function executeChatTurn(
+  options: StreamingChatExecutorOptions,
+  pod: Pod,
+  turnMessage: StreamingChatExecutorOptions["message"],
+  callbacks?: StreamingChatExecutorCallbacks,
+): Promise<ChatTurnOutcome> {
+  const turnOptions: StreamingChatExecutorOptions = {
+    ...options,
+    message: turnMessage,
+  };
+  const { abortable, strategy, podId } = turnOptions;
+
+  const streamContext = setupStreamContext(turnOptions);
+  const { messageId, streamState } = streamContext;
   const streamingCallback = createStreamingCallback(streamContext);
 
-  // Pod 不存在：直接 early return（不需要 onStreamStart / try-catch）
-  const podResult = podStore.getByIdGlobal(podId);
-  if (!podResult) {
-    emitPodNotFoundError(canvasId, podId);
-    return { messageId, content: "", hasContent: false, aborted: false };
-  }
-
-  // 串流開始前置處理（Run mode 需在此註冊 active stream）
   strategy.onStreamStart(podId);
 
   try {
-    // 查詢期：解析執行所需的所有依賴（pod 已確認存在，此處執行 provider/session/ctxWithoutSignal 組裝）
-    // resolveWorkspacePath 與 provider.buildOptions 可能拋出錯誤，由外層 catch 統一交給 handleExecutionError
     const depsResult = await resolveExecutionDependencies(
-      options,
+      turnOptions,
       streamContext,
-      podResult.pod,
+      pod,
     );
-
     const { provider, queryKey, ctxWithoutSignal } = depsResult;
 
     const result = await runProviderStream(
@@ -905,23 +945,124 @@ export async function executeStreamingChat(
     );
 
     if (result.aborted) {
-      return handleStreamAbort(streamContext, callbacks);
+      const abortResult = await handleStreamAbort(streamContext, callbacks);
+      return { result: abortResult, finished: "aborted_or_errored" };
     }
 
-    // 串流正常結束後收尾處理（含 session ID 持久化）
     await finalizeAfterStream(streamContext, streamContext.capturedSessionId);
 
-    if (callbacks?.onComplete) {
-      await callbacks.onComplete(canvasId, podId);
-    }
-
     return {
-      messageId,
-      content: streamState.accumulatedContent,
-      hasContent: hasAssistantContent(streamState),
-      aborted: false,
+      result: {
+        messageId,
+        content: streamState.accumulatedContent,
+        hasContent: hasAssistantContent(streamState),
+        aborted: false,
+      },
+      finished: streamContext.hadFatalProviderError
+        ? "completed_with_fatal_error"
+        : "completed",
     };
   } catch (error) {
-    return handleExecutionError(error, streamContext, abortable, callbacks);
+    const handled = await handleExecutionError(
+      error,
+      streamContext,
+      abortable,
+      callbacks,
+    );
+    return { result: handled, finished: "aborted_or_errored" };
   }
+}
+
+/**
+ * 統一的串流聊天執行器，透過 ExecutionStrategy 管理 Run mode 的執行行為。
+ *
+ * 流程：
+ *   1. 第一輪 turn 帶 caller 傳入的 message
+ *   2. 進入 Goal 完成 gate loop：
+ *      - proceed → 跳出，呼叫 callbacks.onComplete
+ *      - retry   → 透過 strategy.addUserMessage 注入 nudge，再跑一輪
+ *      - force_block → 自動標記剩餘 todo 為 blocked 後放行下游
+ *   3. abort 或 error 在 turn 內部就已處理；gate loop 不會被執行
+ *
+ * onComplete callback 只會在 gate 放行後呼叫一次，下游 workflow 觸發以此為準。
+ */
+export async function executeStreamingChat(
+  options: StreamingChatExecutorOptions,
+  callbacks?: StreamingChatExecutorCallbacks,
+): Promise<StreamingChatExecutorResult> {
+  const { canvasId, podId, strategy } = options;
+
+  const podResult = podStore.getByIdGlobal(podId);
+  if (!podResult) {
+    emitPodNotFoundError(canvasId, podId);
+    return { messageId: "", content: "", hasContent: false, aborted: false };
+  }
+
+  // 第一輪 turn：使用 caller 傳入的 message
+  let turnOutcome = await executeChatTurn(
+    options,
+    podResult.pod,
+    options.message,
+    callbacks,
+  );
+  if (turnOutcome.finished === "aborted_or_errored") {
+    return turnOutcome.result;
+  }
+
+  // Goal 完成 gate loop：只有當 runContext 存在且 Goal Runtime 有 active todo 時才會進迴圈
+  const runContext = strategy.getRunContext();
+  let retryCount = 0;
+  let noProgressCount = 0;
+
+  while (true) {
+    // Fatal provider error（usage limit、CLI exit code 等）：retry 只會引發相同錯誤，
+    // transcript 已寫入錯誤訊息，直接 break 走 onComplete 即可
+    if (turnOutcome.finished === "completed_with_fatal_error") break;
+
+    const decision = evaluateGoalGate(runContext, podId, {
+      retryCount,
+      noProgressCount,
+    });
+
+    if (decision.action === "proceed") break;
+
+    if (decision.action === "force_block") {
+      if (runContext) {
+        autoForceBlock(runContext, podResult.pod, decision.reason);
+      }
+      break;
+    }
+
+    // decision.action === "retry"
+    await strategy.addUserMessage(podId, decision.nudgeMessage);
+    turnOutcome = await executeChatTurn(
+      options,
+      podResult.pod,
+      decision.nudgeMessage,
+      callbacks,
+    );
+    if (turnOutcome.finished === "aborted_or_errored") {
+      return turnOutcome.result;
+    }
+
+    if (runContext) {
+      noProgressCount = nextNoProgressCount(
+        runContext,
+        podId,
+        decision.completedCountBefore,
+        noProgressCount,
+      );
+    }
+    retryCount++;
+
+    // 防呆：理論上 evaluateGoalGate 會在 retryCount >= hardRetryLimit 時回 force_block；
+    // 此處再次檢查避免任何遞增邏輯改動造成意外無限迴圈
+    if (retryCount > GOAL_GATE_LIMITS.hardRetryLimit) break;
+  }
+
+  if (callbacks?.onComplete) {
+    await callbacks.onComplete(canvasId, podId);
+  }
+
+  return turnOutcome.result;
 }

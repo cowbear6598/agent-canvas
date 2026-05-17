@@ -4,11 +4,9 @@ import type { ContentBlock } from "../types/index.js";
 import { WebSocketResponseEvents } from "../schemas/index.js";
 import { runStore } from "../services/runStore.js";
 import { runExecutionService } from "../services/workflow/runExecutionService.js";
-import { prependGoalExecutionContext } from "../services/goalRuntime.js";
 import { socketService } from "../services/socketService.js";
 import { executeStreamingChat } from "../services/claude/streamingChatExecutor.js";
 import { ChatExecutionStrategy } from "../services/executionStrategy.js";
-import { podStore } from "../services/podStore.js";
 import { logger } from "./logger.js";
 
 export function extractDisplayContent(
@@ -50,12 +48,7 @@ export async function launchRun(params: LaunchRunParams): Promise<RunContext> {
     userMessageId,
   } = params;
 
-  let resolvedMessage: string | ContentBlock[] = message;
-
-  const podResult = podStore.getByIdGlobal(podId);
-  if (podResult) {
-    resolvedMessage = prependGoalExecutionContext(podResult.pod, message);
-  }
+  const resolvedMessage: string | ContentBlock[] = message;
 
   // triggerMessage 僅用於 Run 標題顯示，固定使用純文字（displayMessage 或從 ContentBlock[] 提取文字）
   const triggerMessage = displayMessage ?? extractDisplayContent(message);

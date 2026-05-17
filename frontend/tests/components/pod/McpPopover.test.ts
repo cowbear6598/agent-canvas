@@ -56,7 +56,7 @@ vi.mock("@/components/ui/switch", () => ({
 
 import McpPopover from "@/components/pod/McpPopover.vue";
 import type { McpListItem } from "@/types/mcp";
-import type { PodProvider } from "@/types/pod";
+import type { Pod, PodProvider } from "@/types/pod";
 
 const ANCHOR_RECT = {
   top: 100,
@@ -73,10 +73,36 @@ const ANCHOR_RECT = {
 const DEFAULT_PROPS = {
   podId: "pod-1",
   anchorRect: ANCHOR_RECT,
-  busy: false,
   provider: "claude" as PodProvider,
 };
 
+const GOAL = {
+  todos: [{ id: "goal-1", text: "Ship it" }],
+};
+const GOAL_RUNTIME_ITEM: McpListItem = {
+  name: "agent_canvas_goal",
+  type: "stdio",
+  system: true,
+  locked: true,
+  status: "running",
+  activeTodoId: "goal-1",
+  activeTodoText: "Ship it",
+  completedTodoIds: [],
+  completedCount: 0,
+  totalCount: 1,
+};
+const EMPTY_GOAL_RUNTIME_ITEM: McpListItem = {
+  name: "agent_canvas_goal",
+  type: "stdio",
+  system: true,
+  locked: true,
+  status: "completed",
+  activeTodoId: null,
+  activeTodoText: null,
+  completedTodoIds: [],
+  completedCount: 0,
+  totalCount: 0,
+};
 const MOCK_MCP_SERVER: McpListItem = { name: "test-mcp-server" };
 const MOCK_CODEX_MCP_SERVER: McpListItem = {
   name: "codex-mcp-server",
@@ -99,7 +125,15 @@ function bodyQuery(selector: string): Element | null {
 }
 
 /** 初始化 pod store，讓 getPodById 可找到 pod-1 */
-function setupPod(mcpServerNames: string[] = []) {
+function setupPod({
+  mcpServerNames = [],
+  goal = null,
+  provider = "claude",
+}: {
+  mcpServerNames?: string[];
+  goal?: Pod["goal"];
+  provider?: PodProvider;
+} = {}) {
   const podStore = usePodStore();
   podStore.pods = [
     {
@@ -112,7 +146,8 @@ function setupPod(mcpServerNames: string[] = []) {
       schedule: null,
       mcpServerNames,
       pluginIds: [],
-      provider: "claude",
+      goal,
+      provider,
       providerConfig: { model: "opus" },
     },
   ];
@@ -141,10 +176,24 @@ describe("McpPopover", () => {
       mountPopover({ provider: "claude" });
       await flushPromises();
 
-      expect(mockListMcpServers).toHaveBeenCalledWith("claude");
+      expect(mockListMcpServers).toHaveBeenCalledWith("claude", "pod-1");
       const popover = bodyQuery(".fixed.z-50");
       expect(popover!.textContent).toContain("test-mcp-server");
       expect(bodyQuery(".switch-stub")).not.toBeNull();
+    });
+
+    it("有 Goal 時應顯示 Goal Runtime 與 user MCP，但只保留 user MCP 的 Switch", async () => {
+      setupPod({ goal: GOAL });
+      mockListMcpServers.mockResolvedValue([GOAL_RUNTIME_ITEM, MOCK_MCP_SERVER]);
+
+      mountPopover({ provider: "claude" });
+      await flushPromises();
+
+      const popover = bodyQuery(".fixed.z-50");
+      expect(popover!.textContent).toContain("pod.slot.goalMcpLabel");
+      expect(popover!.textContent).toContain("pod.slot.builtinBadge");
+      expect(popover!.textContent).toContain("test-mcp-server");
+      expect(document.body.querySelectorAll(".switch-stub")).toHaveLength(1);
     });
   });
 
@@ -153,7 +202,7 @@ describe("McpPopover", () => {
   describe("toggle MCP server", () => {
     it("點 Toggle 立即更新 podStore.updatePodMcpServers（樂觀更新），並呼叫 API", async () => {
       mockListMcpServers.mockResolvedValue([MOCK_MCP_SERVER]);
-      setupPod([]);
+      setupPod();
       const podStore = usePodStore();
       const spy = vi.spyOn(podStore, "updatePodMcpServers");
 
@@ -177,7 +226,7 @@ describe("McpPopover", () => {
 
     it("已啟用的 server 點 Toggle 後應從清單移除", async () => {
       mockListMcpServers.mockResolvedValue([MOCK_MCP_SERVER]);
-      setupPod(["test-mcp-server"]);
+      setupPod({ mcpServerNames: ["test-mcp-server"] });
       const podStore = usePodStore();
       const spy = vi.spyOn(podStore, "updatePodMcpServers");
 
@@ -197,7 +246,9 @@ describe("McpPopover", () => {
   // ── 空狀態 ────────────────────────────────────────────────────
 
   describe("空狀態", () => {
-    it("Claude 空狀態顯示 built-in Goal MCP、user empty 與 claude hint，不顯示 Switch", async () => {
+    it("無 Goal 的 Claude 空狀態應顯示 Goal Runtime、user empty 與 claude hint", async () => {
+      mockListMcpServers.mockResolvedValue([EMPTY_GOAL_RUNTIME_ITEM]);
+
       mountPopover({ provider: "claude" });
       await flushPromises();
 
@@ -209,12 +260,31 @@ describe("McpPopover", () => {
       expect(bodyQuery(".switch-stub")).toBeNull();
     });
 
-    it("Codex 空狀態顯示 built-in Goal MCP、user empty 與 codex hint，不顯示 Switch", async () => {
+    it("有 Goal 但沒有 user MCP 時，應顯示 Goal Runtime、user empty 與 claude hint", async () => {
+      setupPod({ goal: GOAL });
+      mockListMcpServers.mockResolvedValue([GOAL_RUNTIME_ITEM]);
+
+      mountPopover({ provider: "claude" });
+      await flushPromises();
+
+      const popover = bodyQuery(".fixed.z-50");
+      expect(popover!.textContent).toContain("pod.slot.goalMcpLabel");
+      expect(popover!.textContent).toContain("pod.slot.builtinBadge");
+      expect(popover!.textContent).toContain("pod.slot.mcpUserEmpty");
+      expect(popover!.textContent).toContain("pod.slot.mcpClaudeEmptyHint");
+      expect(bodyQuery(".switch-stub")).toBeNull();
+    });
+
+    it("Codex 有 Goal 且無 user MCP 時應顯示 Goal Runtime、user empty 與 codex hint", async () => {
+      setupPod({ goal: GOAL, provider: "codex" });
+      mockListMcpServers.mockResolvedValue([GOAL_RUNTIME_ITEM]);
+
       mountPopover({ provider: "codex" });
       await flushPromises();
 
       const popover = bodyQuery(".fixed.z-50");
       expect(popover!.textContent).toContain("pod.slot.goalMcpLabel");
+      expect(popover!.textContent).toContain("pod.slot.builtinBadge");
       expect(popover!.textContent).toContain("pod.slot.mcpUserEmpty");
       expect(popover!.textContent).toContain("pod.slot.mcpCodexEmptyHint");
       expect(popover!.textContent).toContain("pod.slot.mcpCodexHint");
@@ -227,7 +297,7 @@ describe("McpPopover", () => {
   describe("外部移除已啟用 server", () => {
     it("後端清單不含先前啟用的 server 時，Switch 應存在但 data-checked=false", async () => {
       // pod 啟用了 ghost-server，但後端清單只有 test-mcp-server
-      setupPod(["ghost-server"]);
+      setupPod({ mcpServerNames: ["ghost-server"] });
       mockListMcpServers.mockResolvedValue([MOCK_MCP_SERVER]);
 
       mountPopover({ provider: "claude" });
@@ -243,13 +313,18 @@ describe("McpPopover", () => {
 
   describe("Codex 唯讀模式", () => {
     it("不渲染 Switch，顯示 name、type、mcpCodexHint", async () => {
-      mockListMcpServers.mockResolvedValue([MOCK_CODEX_MCP_SERVER]);
+      setupPod({ goal: GOAL, provider: "codex" });
+      mockListMcpServers.mockResolvedValue([
+        GOAL_RUNTIME_ITEM,
+        MOCK_CODEX_MCP_SERVER,
+      ]);
       mountPopover({ provider: "codex" });
       await flushPromises();
 
       expect(bodyQuery(".switch-stub")).toBeNull();
 
       const popover = bodyQuery(".fixed.z-50");
+      expect(popover!.textContent).toContain("pod.slot.goalMcpLabel");
       expect(popover!.textContent).toContain("codex-mcp-server");
       expect(popover!.textContent).toContain("stdio");
       expect(popover!.textContent).toContain("pod.slot.mcpCodexHint");
@@ -449,10 +524,11 @@ describe("McpPopover", () => {
   describe("Opencode pod popover", () => {
     it("B8：掛載後應呼叫 listMcpServers 帶 opencode 參數", async () => {
       mockListMcpServers.mockResolvedValue(OPENCODE_MCP_SERVERS);
+      setupPod({ provider: "opencode" });
       mountPopover({ provider: "opencode" });
       await flushPromises();
 
-      expect(mockListMcpServers).toHaveBeenCalledWith("opencode");
+      expect(mockListMcpServers).toHaveBeenCalledWith("opencode", "pod-1");
     });
 
     it("B1：顯示 name + type chip + Switch 三段式 row", async () => {
@@ -470,8 +546,9 @@ describe("McpPopover", () => {
       expect(bodyQuery(".switch-stub")).not.toBeNull();
     });
 
-    it("B2：空狀態顯示 built-in Goal MCP、user empty 與 non-codex hint，不顯示 Switch", async () => {
-      mockListMcpServers.mockResolvedValue([]);
+    it("B2：無 user MCP 時仍顯示 built-in Goal MCP、user empty 與 non-codex hint，不顯示 Switch", async () => {
+      setupPod({ provider: "opencode" });
+      mockListMcpServers.mockResolvedValue([EMPTY_GOAL_RUNTIME_ITEM]);
       mountPopover({ provider: "opencode" });
       await flushPromises();
 
@@ -500,7 +577,7 @@ describe("McpPopover", () => {
 
     it("B5：點擊 Switch 開：呼叫 API 帶新 server 名稱，podStore 更新", async () => {
       mockListMcpServers.mockResolvedValue([OPENCODE_MCP_SERVERS[0]]);
-      setupPod([]);
+      setupPod({ provider: "opencode" });
       const podStore = usePodStore();
       const spy = vi.spyOn(podStore, "updatePodMcpServers");
 
@@ -524,7 +601,10 @@ describe("McpPopover", () => {
 
     it("B6：點擊 Switch 關：呼叫 API 帶少掉該 server 的清單", async () => {
       mockListMcpServers.mockResolvedValue([OPENCODE_MCP_SERVERS[0]]);
-      setupPod(["opencode-stdio-server"]);
+      setupPod({
+        mcpServerNames: ["opencode-stdio-server"],
+        provider: "opencode",
+      });
       const podStore = usePodStore();
       const spy = vi.spyOn(podStore, "updatePodMcpServers");
 
@@ -542,7 +622,10 @@ describe("McpPopover", () => {
 
     it("B7：取消所有勾選後 API 帶 []，podStore 更新為空陣列", async () => {
       mockListMcpServers.mockResolvedValue([OPENCODE_MCP_SERVERS[0]]);
-      setupPod(["opencode-stdio-server"]);
+      setupPod({
+        mcpServerNames: ["opencode-stdio-server"],
+        provider: "opencode",
+      });
       const podStore = usePodStore();
       const spy = vi.spyOn(podStore, "updatePodMcpServers");
 

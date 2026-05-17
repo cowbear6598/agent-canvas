@@ -11,7 +11,6 @@ import {
   isSameDayWithOffset,
 } from "../utils/timezoneUtils.js";
 import { configStore } from "./configStore.js";
-import { prependGoalExecutionContext } from "./goalRuntime.js";
 
 /**
  * 排程觸發但 Command 不存在 / 訊息為空時的 fallback 字串。
@@ -20,14 +19,13 @@ import { prependGoalExecutionContext } from "./goalRuntime.js";
 const SCHEDULE_FALLBACK_MESSAGE = "排程啟動，完成以下任務：";
 
 function buildScheduleMessage(
-  pod: Pod,
+  _pod: Pod,
   message: string | ContentBlock[],
 ): string | ContentBlock[] {
-  const expanded = prependGoalExecutionContext(pod, message);
-  if (typeof expanded === "string" && expanded === "") {
+  if (typeof message === "string" && message === "") {
     return SCHEDULE_FALLBACK_MESSAGE;
   }
-  return expanded;
+  return message;
 }
 
 const TICK_INTERVAL_MS = 1000;

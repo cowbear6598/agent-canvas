@@ -5,7 +5,7 @@
  * - 空 providerConfig → 回傳 metadata.defaultOptions
  * - providerConfig.model 合法 → 採用之
  * - providerConfig.model 不合法 → fallback 為 default
- * - 傳入 runContext → 不影響輸出（本 Phase 不使用）
+ * - 傳入 runContext + Goal → 注入 request-scoped Goal MCP
  */
 
 import { describe, it, expect } from "vitest";
@@ -14,7 +14,7 @@ import { CodexProvider } from "../../src/services/provider/codexProvider.js";
 import type { Pod } from "../../src/types/pod.js";
 
 // ── 工具：建立最小化 Pod stub ────────────────────────────────────────────
-function makePod(overrides: Partial<Pick<Pod, "providerConfig">> = {}): Pod {
+function makePod(overrides: Partial<Pod> = {}): Pod {
   return {
     id: "pod-buildopts-001",
     name: "Test Pod",
@@ -48,6 +48,8 @@ describe("CodexProvider.buildOptions()", () => {
     expect(options).toEqual(provider.metadata.defaultOptions);
     expect(options.model).toBe(provider.metadata.defaultOptions.model);
     expect(options.resumeMode).toBe("cli");
+    expect(options.mcpServerNames).toEqual([]);
+    expect(options.goalMcpServer).toBeNull();
   });
 
   // ── Case 2：合法 model → 採用之 ──────────────────────────────────────
@@ -57,6 +59,7 @@ describe("CodexProvider.buildOptions()", () => {
 
     expect(options.model).toBe("gpt-5.4-pro");
     expect(options.resumeMode).toBe("cli");
+    expect(options.mcpServerNames).toEqual([]);
   });
 
   // ── Case 3：不合法 model → fallback 為 default ───────────────────────
@@ -88,16 +91,47 @@ describe("CodexProvider.buildOptions()", () => {
   });
 
   // ── Case 5：runContext 傳入時不影響輸出 ──────────────────────────────
-  it("傳入 runContext 時，輸出結果不應受影響（本 Phase 不使用 runContext）", async () => {
-    const pod = makePod({ providerConfig: { model: "gpt-5.4-pro" } });
-    // 傳入一個 mock runContext，確認不影響 model 選取
-    const fakeRunContext = { runId: "run-001", instanceId: "inst-001" } as any;
+  it("傳入 runContext 且 Pod 有 Goal 時應注入 Goal MCP", async () => {
+    const pod = makePod({
+      providerConfig: { model: "gpt-5.4-pro" },
+      goal: {
+        todos: [{ id: "todo-1", text: "Implement Goal MCP" }],
+      } as any,
+    } as any);
+    const fakeRunContext = {
+      runId: "run-001",
+      canvasId: "canvas-001",
+      sourcePodId: "pod-buildopts-001",
+    } as any;
 
-    const withoutContext = await provider.buildOptions(pod);
     const withContext = await provider.buildOptions(pod, fakeRunContext);
 
-    expect(withContext).toEqual(withoutContext);
     expect(withContext.model).toBe("gpt-5.4-pro");
     expect(withContext.resumeMode).toBe("cli");
+    expect(withContext.mcpServerNames).toContain("agent_canvas_goal");
+    expect(withContext.goalMcpServer?.name).toBe("agent_canvas_goal");
+    expect(withContext.goalMcpServer?.env.AGENT_CANVAS_GOAL_STATE_PATH).toContain(
+      "run-001",
+    );
+  });
+
+  it("傳入 runContext 且 Pod 無 Goal 時仍應注入 Goal MCP", async () => {
+    const pod = makePod({
+      providerConfig: { model: "gpt-5.4-pro" },
+      goal: null,
+    } as any);
+    const fakeRunContext = {
+      runId: "run-001",
+      canvasId: "canvas-001",
+      sourcePodId: "pod-buildopts-001",
+    } as any;
+
+    const withContext = await provider.buildOptions(pod, fakeRunContext);
+
+    expect(withContext.mcpServerNames).toContain("agent_canvas_goal");
+    expect(withContext.goalMcpServer?.name).toBe("agent_canvas_goal");
+    expect(withContext.goalMcpServer?.env.AGENT_CANVAS_GOAL_STATE_PATH).toContain(
+      "run-001",
+    );
   });
 });

@@ -30,7 +30,10 @@ const MCP_SERVER_LIST_CACHE_TTL_MS = 30 * 1000;
 const MCP_SERVER_LIST_CACHE_MAX_SIZE = 16;
 
 /** McpListPayload 接受的已知 provider 字面量集合 */
-const KNOWN_MCP_PROVIDERS = new Set(["claude", "codex", "opencode"]);
+const KNOWN_MCP_PROVIDERS = new Set(["claude", "codex", "opencode"] as const);
+const MCP_SERVER_TYPES = new Set(["stdio", "http", "sse"] as const);
+
+type KnownMcpProvider = "claude" | "codex" | "opencode";
 
 interface McpServerListCacheEntry {
   data: McpListItem[];
@@ -39,18 +42,93 @@ interface McpServerListCacheEntry {
 
 const mcpServerListCache = new Map<string, McpServerListCacheEntry>();
 
+function buildMcpServerListCacheKey(
+  provider: KnownMcpProvider,
+  podId: string,
+): string {
+  return `${provider}::${podId}`;
+}
+
+function normalizeMcpListItem(item: unknown): McpListItem | null {
+  if (!item || typeof item !== "object") return null;
+
+  const raw = item as Record<string, unknown>;
+  const name = typeof raw.name === "string" ? raw.name.trim() : "";
+  if (!name) return null;
+
+  const type = MCP_SERVER_TYPES.has(raw.type as never)
+    ? (raw.type as McpListItem["type"])
+    : undefined;
+
+  return {
+    name,
+    ...(type ? { type } : {}),
+    ...(typeof raw.system === "boolean" ? { system: raw.system } : {}),
+    ...(typeof raw.locked === "boolean" ? { locked: raw.locked } : {}),
+    ...(typeof raw.description === "string"
+      ? { description: raw.description }
+      : {}),
+    ...(raw.status === "running" ||
+    raw.status === "blocked" ||
+    raw.status === "completed"
+      ? { status: raw.status }
+      : {}),
+    ...(typeof raw.activeTodoId === "string" || raw.activeTodoId === null
+      ? { activeTodoId: raw.activeTodoId as string | null }
+      : {}),
+    ...(typeof raw.activeTodoText === "string" || raw.activeTodoText === null
+      ? { activeTodoText: raw.activeTodoText as string | null }
+      : {}),
+    ...(typeof raw.nextTodoId === "string" || raw.nextTodoId === null
+      ? { nextTodoId: raw.nextTodoId as string | null }
+      : {}),
+    ...(typeof raw.nextTodoText === "string" || raw.nextTodoText === null
+      ? { nextTodoText: raw.nextTodoText as string | null }
+      : {}),
+    ...(typeof raw.blockedReason === "string" || raw.blockedReason === null
+      ? { blockedReason: raw.blockedReason as string | null }
+      : {}),
+    ...(typeof raw.handoffSummary === "string" || raw.handoffSummary === null
+      ? { handoffSummary: raw.handoffSummary as string | null }
+      : {}),
+    ...(Array.isArray(raw.completedTodoIds) &&
+    raw.completedTodoIds.every((id) => typeof id === "string")
+      ? { completedTodoIds: [...raw.completedTodoIds] }
+      : {}),
+    ...(typeof raw.completedCount === "number"
+      ? { completedCount: raw.completedCount }
+      : {}),
+    ...(typeof raw.totalCount === "number" ? { totalCount: raw.totalCount } : {}),
+  };
+}
+
+function normalizeMcpListItems(items: unknown): McpListItem[] {
+  if (!Array.isArray(items)) return [];
+
+  return items
+    .map((item) => normalizeMcpListItem(item))
+    .filter((item): item is McpListItem => item !== null);
+}
+
 /** 查詢指定 Provider 的 MCP server 清單（30 秒 TTL 快取） */
 export async function listMcpServers(
   provider: PodProvider,
+  podId: string,
 ): Promise<McpListItem[]> {
-  const cached = mcpServerListCache.get(provider);
-  if (cached && Date.now() < cached.expiresAt) {
-    return cached.data;
+  const normalizedPodId = podId.trim();
+  if (!normalizedPodId) return [];
+
+  if (!KNOWN_MCP_PROVIDERS.has(provider as KnownMcpProvider)) {
+    return [];
   }
 
-  // 只傳送已知 provider，避免將任意字串送往後端
-  if (!KNOWN_MCP_PROVIDERS.has(provider)) {
-    return [];
+  const cacheKey = buildMcpServerListCacheKey(
+    provider as KnownMcpProvider,
+    normalizedPodId,
+  );
+  const cached = mcpServerListCache.get(cacheKey);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.data;
   }
 
   const result = await createWebSocketRequest<
@@ -59,10 +137,13 @@ export async function listMcpServers(
   >({
     requestEvent: WebSocketRequestEvents.MCP_LIST,
     responseEvent: WebSocketResponseEvents.MCP_LIST_RESULT,
-    payload: { provider: provider as "claude" | "codex" | "opencode" },
+    payload: {
+      provider: provider as KnownMcpProvider,
+      podId: normalizedPodId,
+    },
   });
 
-  const data = result.items ?? [];
+  const data = normalizeMcpListItems(result.items);
 
   // 超過容量上限時，刪除最舊的 entry（Map 迭代順序 = 插入順序）
   if (mcpServerListCache.size >= MCP_SERVER_LIST_CACHE_MAX_SIZE) {
@@ -70,7 +151,7 @@ export async function listMcpServers(
     if (oldestKey !== undefined) mcpServerListCache.delete(oldestKey);
   }
 
-  mcpServerListCache.set(provider, {
+  mcpServerListCache.set(cacheKey, {
     data,
     expiresAt: Date.now() + MCP_SERVER_LIST_CACHE_TTL_MS,
   });
@@ -82,11 +163,31 @@ export async function listMcpServers(
  * 讓指定 provider（或全部）的 MCP server 清單快取失效。
  * 供「使用者主動刷新」等情境呼叫。
  */
-export function invalidateMcpServersCache(provider?: PodProvider): void {
-  if (provider) {
-    mcpServerListCache.delete(provider);
-  } else {
+export function invalidateMcpServersCache(
+  provider?: PodProvider,
+  podId?: string,
+): void {
+  if (!provider) {
     mcpServerListCache.clear();
+    return;
+  }
+
+  if (!KNOWN_MCP_PROVIDERS.has(provider as KnownMcpProvider)) {
+    return;
+  }
+
+  if (podId) {
+    mcpServerListCache.delete(
+      buildMcpServerListCacheKey(provider as KnownMcpProvider, podId),
+    );
+    return;
+  }
+
+  const prefix = `${provider}::`;
+  for (const key of mcpServerListCache.keys()) {
+    if (key.startsWith(prefix)) {
+      mcpServerListCache.delete(key);
+    }
   }
 }
 

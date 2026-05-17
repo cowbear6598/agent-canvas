@@ -7,11 +7,11 @@
  * 實作 AgentProvider 介面，支援基本聊天（chat=true）。
  *
  * CLI 指令組合：
- *   - 新對話：`codex exec - --json --skip-git-repo-check --cd <repoPath> --full-auto -c sandbox_workspace_write.network_access=true --model <model>`
- *   - 恢復對話：`codex exec resume <id> - --json --full-auto -c sandbox_workspace_write.network_access=true`
- *     （`exec resume` 不接受 `--cd`，工作目錄改由 Bun.spawn cwd 定錨）
+ *   - 新對話：`codex exec - --json --skip-git-repo-check --cd <repoPath> --sandbox workspace-write -c sandbox_workspace_write.network_access=true --model <model>`
+ *   - 恢復對話：`codex exec resume <id> - --json -c sandbox_mode=workspace-write -c sandbox_workspace_write.network_access=true`
+ *     （`exec resume` 不接受 `--cd` 與 `--sandbox`，工作目錄改由 Bun.spawn cwd 定錨，sandbox 改用 -c 帶入）
  *   - `-` 表示從 stdin 讀取 prompt
- *   - `--full-auto` 取代舊版 `--yolo`，保留 OS-level workspace 寫入限制
+ *   - `--sandbox workspace-write` 保留 OS-level workspace 寫入限制
  *   - `--cd <repoPath>` 明確錨定 sandbox boundary，與 Bun.spawn cwd 雙保險
  *   - `-c sandbox_workspace_write.network_access=true` 允許 npm install / git push 等網路需求
  */
@@ -33,6 +33,10 @@ import { logger } from "../../utils/logger.js";
 import { sanitizePodName } from "./podNameSanitizer.js";
 import type { Pod } from "../../types/pod.js";
 import type { RunContext } from "../../types/run.js";
+import {
+  buildGoalRuntimeMcpServerConfig,
+  type GoalRuntimeMcpServerConfig,
+} from "../goalRuntime.js";
 import { readCodexMcpServers } from "../mcp/codexMcpReader.js";
 import { buildCodexEnv, collectStderr } from "../codex/codexHelpers.js";
 import { isEnoentError } from "./utils.js";
@@ -48,6 +52,10 @@ export interface CodexOptions {
   resumeMode: "cli";
   /** 思考深度等級（thinkingLevel），對應 codex 的 model_reasoning_effort；未設定時不傳 -c 旗標 */
   thinkingLevel?: string;
+  /** 執行當下實際可用的 MCP server name 清單（含系統 Goal MCP） */
+  mcpServerNames: string[];
+  /** 執行當下動態注入的 Goal MCP 設定 */
+  goalMcpServer?: GoalRuntimeMcpServerConfig | null;
 }
 
 /** 合法 resumeSessionId 格式（防止 CLI 旗標注入） */
@@ -78,9 +86,6 @@ const BASE64_RE = /^[A-Za-z0-9+/=]+$/;
  * 拒絕含換行或控制字元的 MIME 字串，防止 HTTP header injection。
  */
 const MIME_FORMAT_RE = /^image\/[a-z0-9.+-]+$/;
-
-/** process.env 在 process 生命週期內不會改變，模組載入時快取一次 */
-const CODEX_ENV = buildCodexEnv();
 
 /** Codex provider 專用的系統錯誤建立 helper（委派給共用 buildProviderSystemError） */
 function buildCodexSystemError(params: {
@@ -170,6 +175,28 @@ function buildPromptText(
   return parts.join("\n");
 }
 
+function buildGoalRuntimeBootstrapPrompt(rawMessage: string): string {
+  return [
+    `User request: ${rawMessage.trim()}`,
+    "",
+    "A Goal Runtime MCP is available for this Pod.",
+    "Start by calling Goal Runtime to inspect the current status and active todo.",
+    "Then continue with the current active todo instead of asking for a new task.",
+    "Only ask for clarification if Goal Runtime shows no actionable todo or the work is blocked.",
+  ].join("\n");
+}
+
+function buildCodexPromptText(
+  message: string | import("../../types/message.js").ContentBlock[],
+  goalMcpServer?: GoalRuntimeMcpServerConfig | null,
+): string {
+  const promptText = buildPromptText(message);
+  if (!goalMcpServer) {
+    return promptText;
+  }
+  return buildGoalRuntimeBootstrapPrompt(promptText);
+}
+
 /**
  * `-c` 旗標中的 MCP server name 安全格式：不允許 `.`，
  * 因為 `mcp_servers.<name>.<field>` 語法中 `.` 是 TOML path 分隔符，
@@ -187,24 +214,68 @@ const MCP_AUTO_APPROVE_SAFE_NAME_RE = /^[a-zA-Z0-9_-]+$/;
  *
  * 含 `.` 的 server name 會與 TOML path 語意衝突，直接 skip 並記錄 warn。
  */
-function buildMcpAutoApproveArgs(): string[] {
-  const servers = readCodexMcpServers();
+function buildMcpAutoApproveArgs(
+  goalMcpServer?: GoalRuntimeMcpServerConfig | null,
+): string[] {
   const result: string[] = [];
-  for (const server of servers) {
-    if (!MCP_AUTO_APPROVE_SAFE_NAME_RE.test(server.name)) {
+  const seen = new Set<string>();
+
+  const pushServerName = (serverName: string): void => {
+    if (seen.has(serverName)) return;
+    seen.add(serverName);
+
+    if (!MCP_AUTO_APPROVE_SAFE_NAME_RE.test(serverName)) {
       logger.warn(
         "McpServer",
         "Warn",
-        `[CodexProvider] server name 含不合法字元（含 '.' 或特殊符號），已略過 auto-approve 旗標：${server.name}`,
+        `[CodexProvider] server name 含不合法字元（含 '.' 或特殊符號），已略過 auto-approve 旗標：${serverName}`,
       );
-      continue;
+      return;
     }
     result.push(
       "-c",
-      `mcp_servers.${server.name}.default_tools_approval_mode=approve`,
+      `mcp_servers.${serverName}.default_tools_approval_mode=approve`,
+    );
+  };
+
+  for (const server of readCodexMcpServers()) {
+    pushServerName(server.name);
+  }
+  if (goalMcpServer) {
+    pushServerName(goalMcpServer.name);
+  }
+
+  return result;
+}
+
+function buildGoalMcpConfigArgs(
+  goalMcpServer: GoalRuntimeMcpServerConfig | null | undefined,
+): string[] {
+  if (!goalMcpServer) return [];
+  if (!MCP_AUTO_APPROVE_SAFE_NAME_RE.test(goalMcpServer.name)) {
+    logger.warn(
+      "McpServer",
+      "Warn",
+      `[CodexProvider] Goal MCP server name 不合法，已略過動態注入：${goalMcpServer.name}`,
+    );
+    return [];
+  }
+
+  const args = [
+    "-c",
+    `mcp_servers.${goalMcpServer.name}.command=${JSON.stringify(goalMcpServer.command)}`,
+    "-c",
+    `mcp_servers.${goalMcpServer.name}.args=${JSON.stringify(goalMcpServer.args)}`,
+  ];
+
+  for (const [key, value] of Object.entries(goalMcpServer.env)) {
+    args.push(
+      "-c",
+      `mcp_servers.${goalMcpServer.name}.env.${key}=${JSON.stringify(value)}`,
     );
   }
-  return result;
+
+  return args;
 }
 
 /** 組合新對話的 CLI 參數（無 resumeSessionId 或 sessionId 不合法時使用）。 */
@@ -212,6 +283,7 @@ function buildNewSessionArgs(
   model: string,
   repoPath: string,
   mcpAutoApproveArgs: string[],
+  goalMcpConfigArgs: string[],
   thinkingLevel?: string,
 ): string[] {
   return [
@@ -221,11 +293,13 @@ function buildNewSessionArgs(
     "--skip-git-repo-check",
     "--cd",
     repoPath,
-    "--full-auto",
+    "--sandbox",
+    "workspace-write",
     // thinkingLevel 為非空字串時才插入 -c model_reasoning_effort，否則交由 CLI 預設
     ...(thinkingLevel ? ["-c", `model_reasoning_effort=${thinkingLevel}`] : []),
     "-c",
     "sandbox_workspace_write.network_access=true",
+    ...goalMcpConfigArgs,
     // 為每個使用者安裝的 MCP server 加入 auto-approve 旗標，避免 stdin pipe 無法回應時被 Cancel
     ...mcpAutoApproveArgs,
     "--model",
@@ -252,10 +326,12 @@ function buildCodexArgs(
   resumeSessionId: string | null,
   model: string,
   repoPath: string,
+  goalMcpServer?: GoalRuntimeMcpServerConfig | null,
   thinkingLevel?: string,
 ): string[] {
   // MCP auto-approve 旗標只計算一次，兩條分支共用同一結果
-  const mcpAutoApproveArgs = buildMcpAutoApproveArgs();
+  const mcpAutoApproveArgs = buildMcpAutoApproveArgs(goalMcpServer);
+  const goalMcpConfigArgs = buildGoalMcpConfigArgs(goalMcpServer);
 
   if (resumeSessionId) {
     if (!SESSION_ID_RE.test(resumeSessionId)) {
@@ -269,11 +345,13 @@ function buildCodexArgs(
         model,
         repoPath,
         mcpAutoApproveArgs,
+        goalMcpConfigArgs,
         thinkingLevel,
       );
     }
 
-    // 恢復對話模式：`codex exec resume` 不接受 --cd，僅依賴 Bun.spawn cwd 定錨工作目錄。
+    // 恢復對話模式：`codex exec resume` 不接受 --cd 也不接受 --sandbox，
+    // 工作目錄由 Bun.spawn cwd 定錨；sandbox 設定改用 -c sandbox_mode 帶入。
     // --model 由 session 決定，不傳入。
     return [
       "exec",
@@ -281,13 +359,15 @@ function buildCodexArgs(
       resumeSessionId,
       "-",
       "--json",
-      "--full-auto",
+      "-c",
+      "sandbox_mode=workspace-write",
       // thinkingLevel 為非空字串時才插入 -c model_reasoning_effort，否則交由 CLI 預設
       ...(thinkingLevel
         ? ["-c", `model_reasoning_effort=${thinkingLevel}`]
         : []),
       "-c",
       "sandbox_workspace_write.network_access=true",
+      ...goalMcpConfigArgs,
       // 為每個使用者安裝的 MCP server 加入 auto-approve 旗標，避免 stdin pipe 無法回應時被 Cancel
       ...mcpAutoApproveArgs,
     ];
@@ -297,6 +377,7 @@ function buildCodexArgs(
     model,
     repoPath,
     mcpAutoApproveArgs,
+    goalMcpConfigArgs,
     thinkingLevel,
   );
 }
@@ -321,7 +402,7 @@ function spawnCodexProcess(
     stdin: "pipe",
     stdout: "pipe",
     stderr: "pipe",
-    env: CODEX_ENV,
+    env: buildCodexEnv(),
   });
 }
 
@@ -564,6 +645,8 @@ export class CodexProvider implements AgentProvider<CodexOptions> {
     defaultOptions: {
       model: "gpt-5.4",
       resumeMode: "cli",
+      mcpServerNames: [],
+      goalMcpServer: null,
     },
     availableModels: CODEX_AVAILABLE_MODELS,
     availableModelValues: CODEX_AVAILABLE_MODEL_VALUES,
@@ -577,19 +660,26 @@ export class CodexProvider implements AgentProvider<CodexOptions> {
    * - resumeMode 固定為 "cli"（Codex 目前只支援 CLI resume 路徑）。
    * - runContext 本 Phase 不使用（但簽名必須收），以符合 AgentProvider 介面規範。
    */
-  async buildOptions(
-    pod: Pod,
-    _runContext?: RunContext,
-  ): Promise<CodexOptions> {
+  async buildOptions(pod: Pod, runContext?: RunContext): Promise<CodexOptions> {
     const rawModel = pod.providerConfig?.model;
     const model =
       typeof rawModel === "string" && MODEL_RE.test(rawModel)
         ? rawModel
         : this.metadata.defaultOptions.model;
 
+    const goalMcpServer = runContext
+      ? buildGoalRuntimeMcpServerConfig(runContext, pod)
+      : null;
+    const mcpServerNames = [...pod.mcpServerNames];
+    if (goalMcpServer) {
+      mcpServerNames.push(goalMcpServer.name);
+    }
+
     const result: CodexOptions = {
       model,
       resumeMode: "cli",
+      mcpServerNames,
+      goalMcpServer,
     };
 
     // thinkingLevel 為非空字串時才寫入；不做格式驗證，由 CLI 端決定
@@ -619,9 +709,10 @@ export class CodexProvider implements AgentProvider<CodexOptions> {
       resumeSessionId,
       model,
       workspacePath,
+      options?.goalMcpServer,
       options?.thinkingLevel,
     );
-    const promptText = buildPromptText(message);
+    const promptText = buildCodexPromptText(message, options?.goalMcpServer);
 
     return { codexArgs, promptText };
   }

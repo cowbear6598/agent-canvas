@@ -6,6 +6,7 @@ import type {
 import { readClaudeMcpServers } from "../services/mcp/claudeMcpReader.js";
 import { readCodexMcpServers } from "../services/mcp/codexMcpReader.js";
 import { readOpencodeMcpServers } from "../services/mcp/opencodeMcpReader.js";
+import { buildGoalRuntimeMcpListItem } from "../services/goalRuntime.js";
 import { podStore } from "../services/podStore.js";
 import { runStore } from "../services/runStore.js";
 import { socketService } from "../services/socketService.js";
@@ -23,15 +24,43 @@ import type { ProviderName } from "../services/provider/index.js";
  */
 function resolveAvailableMcpServers(
   provider: ProviderName,
-): Array<{ name: string; type?: "stdio" | "http" | "sse" }> {
+  podId?: string,
+): Array<{
+  name: string;
+  type?: "stdio" | "http" | "sse";
+  system?: boolean;
+  locked?: boolean;
+  description?: string;
+  status?: "running" | "blocked" | "completed";
+  activeTodoId?: string | null;
+  activeTodoText?: string | null;
+  nextTodoId?: string | null;
+  nextTodoText?: string | null;
+  blockedReason?: string | null;
+  handoffSummary?: string | null;
+  completedTodoIds?: string[];
+  completedCount?: number;
+  totalCount?: number;
+}> {
+  const pod = podId ? podStore.getByIdGlobal(podId)?.pod : null;
+  const builtinGoal = pod ? buildGoalRuntimeMcpListItem(pod) : null;
+
+  const builtinItems = builtinGoal ? [builtinGoal] : [];
+
   if (provider === "claude") {
     const servers = readClaudeMcpServers();
-    return servers.map(({ name }) => ({ name }));
+    return [
+      ...builtinItems,
+      ...servers.map(({ name }) => ({ name })),
+    ];
   } else if (provider === "opencode") {
-    return readOpencodeMcpServers();
+    return [...builtinItems, ...readOpencodeMcpServers()];
   } else {
     const servers = readCodexMcpServers();
-    return servers.map(({ name, type }) => ({ name, type }));
+    return [
+      ...builtinItems,
+      ...servers.map(({ name, type }) => ({ name, type })),
+    ];
   }
 }
 
@@ -48,8 +77,9 @@ export async function handleMcpList(
   requestId: string,
 ): Promise<void> {
   const { provider } = payload;
+  const podId = typeof payload.podId === "string" ? payload.podId : undefined;
 
-  const items = resolveAvailableMcpServers(provider);
+  const items = resolveAvailableMcpServers(provider, podId);
 
   socketService.emitToConnection(
     connectionId,
@@ -119,7 +149,11 @@ export async function handlePodSetMcpServerNames(
   // Codex popover 為唯讀，理論上不會觸發此事件；
   // 仍統一走 resolveAvailableMcpServers 過濾，避免異常呼叫時繞過驗證
   const availableServers = resolveAvailableMcpServers(pod.provider);
-  const availableNameSet = new Set(availableServers.map((s) => s.name));
+  const availableNameSet = new Set(
+    availableServers
+      .filter((server) => !server.system && !server.locked)
+      .map((s) => s.name),
+  );
 
   const invalidNames = mcpServerNames.filter((n) => !availableNameSet.has(n));
   if (invalidNames.length > 0) {

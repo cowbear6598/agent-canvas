@@ -24,7 +24,10 @@ import type {
   PodSetGoalPayload,
   PodSetSchedulePayload,
 } from "@/types/websocket";
-import { updatePodMcpServers as updatePodMcpServersApi } from "@/services/mcpApi";
+import {
+  invalidateMcpServersCache,
+  updatePodMcpServers as updatePodMcpServersApi,
+} from "@/services/mcpApi";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useToast } from "@/composables/useToast";
 import { t } from "@/i18n";
@@ -43,6 +46,21 @@ const POD_FALLBACK_INITIAL_X = 100;
 const POD_FALLBACK_X_SPACING = 300;
 const POD_FALLBACK_INITIAL_Y = 150;
 const POD_FALLBACK_Y_STAGGER = 100;
+
+function areGoalsEqual(
+  left: PodGoal | null | undefined,
+  right: PodGoal | null | undefined,
+): boolean {
+  const leftTodos = left?.todos ?? [];
+  const rightTodos = right?.todos ?? [];
+
+  if (leftTodos.length !== rightTodos.length) return false;
+
+  return leftTodos.every((todo, index) => {
+    const other = rightTodos[index];
+    return other && todo.id === other.id && todo.text === other.text;
+  });
+}
 
 export const usePodStore = defineStore("pod", () => {
   const { executeAction } = useCanvasWebSocketAction();
@@ -120,11 +138,24 @@ export const usePodStore = defineStore("pod", () => {
       (existingPod) => existingPod.id === pod.id,
     );
     if (index === -1) return;
+    const existingPod = pods.value[index];
+    if (!existingPod) return;
 
     if (!isValidPod(pod)) {
       logger.warn("[PodStore] updatePod 驗證失敗，已忽略更新");
       return;
     }
+
+    if (
+      existingPod.provider !== pod.provider ||
+      !areGoalsEqual(existingPod.goal ?? null, pod.goal ?? null)
+    ) {
+      invalidateMcpServersCache(existingPod.provider, existingPod.id);
+      if (existingPod.provider !== pod.provider) {
+        invalidateMcpServersCache(pod.provider, pod.id);
+      }
+    }
+
     pods.value.splice(index, 1, pod);
   }
 
@@ -193,6 +224,7 @@ export const usePodStore = defineStore("pod", () => {
   }
 
   function syncPodsFromBackend(podsData: Pod[]): void {
+    invalidateMcpServersCache();
     const enrichedPods = podsData.map((pod, index) => {
       const enriched = enrichPod(pod);
       return {
@@ -394,6 +426,11 @@ export const usePodStore = defineStore("pod", () => {
     const pod = findPodById(podId);
     if (!pod) return;
 
+    if (pod.provider !== provider) {
+      invalidateMcpServersCache(pod.provider, pod.id);
+      invalidateMcpServersCache(provider, pod.id);
+    }
+
     pod.provider = provider;
     pod.providerConfig = providerConfig as Pod["providerConfig"];
 
@@ -478,6 +515,11 @@ export const usePodStore = defineStore("pod", () => {
   }
 
   function removePod(podId: string): void {
+    const pod = findPodById(podId);
+    if (pod) {
+      invalidateMcpServersCache(pod.provider, pod.id);
+    }
+
     pods.value = pods.value.filter((pod) => pod.id !== podId);
 
     if (selectedPodId.value === podId) {
@@ -521,6 +563,7 @@ export const usePodStore = defineStore("pod", () => {
 
   // 切換 canvas 時重設 pod 相關狀態
   function resetForCanvasSwitch(): void {
+    invalidateMcpServersCache();
     pods.value = [];
     selectedPodId.value = null;
     activePodId.value = null;

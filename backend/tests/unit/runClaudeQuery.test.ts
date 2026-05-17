@@ -38,6 +38,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { runClaudeQuery } from "../../src/services/provider/claude/runClaudeQuery.js";
 import type { ClaudeOptions } from "../../src/services/provider/claude/buildClaudeOptions.js";
 import type { ChatRequestContext } from "../../src/services/provider/types.js";
+import { GOAL_MCP_SERVER_NAME } from "../../src/services/goalRuntime.js";
 
 // ── 輔助函式 ─────────────────────────────────────────────────────────────────
 
@@ -134,6 +135,103 @@ describe("runClaudeQuery", () => {
       // options undefined → 只 yield error，不走 buildPrompt
       expect(events).toHaveLength(1);
       expect(events[0]).toMatchObject({ type: "error" });
+    });
+  });
+
+  describe("Goal Runtime bootstrap", () => {
+    it("無 Goal MCP 時應保留原始 string prompt，不注入 Goal Runtime bootstrap", async () => {
+      const { query: mockQuery } =
+        await import("@anthropic-ai/claude-agent-sdk");
+
+      mockQueryGenerator = async function* () {
+        yield { type: "result", subtype: "success", result: "done" };
+      };
+
+      const ctx = createCtx({ message: "Hello" });
+      await collectEvents(runClaudeQuery(ctx));
+
+      const calledPrompt = (mockQuery as ReturnType<typeof vi.fn>).mock.calls[0][0]
+        .prompt;
+      expect(calledPrompt).toBe("Hello");
+    });
+
+    it("有 Goal MCP 時應將 string prompt 包成 request-level Goal Runtime bootstrap", async () => {
+      const { query: mockQuery } =
+        await import("@anthropic-ai/claude-agent-sdk");
+
+      mockQueryGenerator = async function* () {
+        yield { type: "result", subtype: "success", result: "done" };
+      };
+
+      const ctx = createCtx({
+        message: "go",
+        options: {
+          model: "opus",
+          allowedTools: ["Read", "Write"],
+          settingSources: ["project"],
+          permissionMode: "bypassPermissions",
+          includePartialMessages: true,
+          pathToClaudeCodeExecutable: "/usr/local/bin/claude",
+          mcpServers: {
+            [GOAL_MCP_SERVER_NAME]: {
+              command: "node",
+              args: ["/tmp/goalMcpBridge.ts"],
+              env: {},
+            },
+          },
+        },
+      });
+      await collectEvents(runClaudeQuery(ctx));
+
+      const called = (mockQuery as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(called.prompt).toContain("User request: go");
+      expect(called.prompt).toContain(
+        "Start by calling Goal Runtime to inspect the current status and active todo.",
+      );
+      expect("systemPrompt" in called.options).toBe(false);
+    });
+
+    it("有 Goal MCP 且 message 為 ContentBlock[] 時，應在第一個 content block 注入 bootstrap，保留原始內容", async () => {
+      const { query: mockQuery } =
+        await import("@anthropic-ai/claude-agent-sdk");
+
+      mockQueryGenerator = async function* () {
+        yield { type: "result", subtype: "success", result: "done" };
+      };
+
+      const ctx = createCtx({
+        message: [{ type: "text", text: "read package.json" }],
+        options: {
+          model: "opus",
+          allowedTools: ["Read", "Write"],
+          settingSources: ["project"],
+          permissionMode: "bypassPermissions",
+          includePartialMessages: true,
+          pathToClaudeCodeExecutable: "/usr/local/bin/claude",
+          mcpServers: {
+            [GOAL_MCP_SERVER_NAME]: {
+              command: "node",
+              args: ["/tmp/goalMcpBridge.ts"],
+              env: {},
+            },
+          },
+        },
+      });
+      await collectEvents(runClaudeQuery(ctx));
+
+      const calledPrompt = (mockQuery as ReturnType<typeof vi.fn>).mock.calls[0][0]
+        .prompt as AsyncIterable<any>;
+      const firstMessage = await calledPrompt[Symbol.asyncIterator]().next();
+      expect(firstMessage.value.message.content[0]).toMatchObject({
+        type: "text",
+        text: expect.stringContaining(
+          "Start by calling Goal Runtime to inspect the current status and active todo.",
+        ),
+      });
+      expect(firstMessage.value.message.content[1]).toMatchObject({
+        type: "text",
+        text: "read package.json",
+      });
     });
   });
 

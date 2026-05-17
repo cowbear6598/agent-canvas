@@ -2,7 +2,7 @@ import { executeDisposableChat } from "./disposableChatService.js";
 import { summaryPromptBuilder } from "./summaryPromptBuilder.js";
 import { podStore } from "./podStore.js";
 import { runStore } from "./runStore.js";
-import { serializeGoalForPrompt } from "./goalRuntime.js";
+import { formatGoalTodos } from "./goalRuntime.js";
 import { logger } from "../utils/logger.js";
 import type { Pod, PersistedMessage } from "../types/index.js";
 import type { RunContext } from "../types/run.js";
@@ -34,7 +34,7 @@ async function buildSummaryContext(
   return {
     sourcePodName: sourcePod.name,
     targetPodName: targetPod.name,
-    targetPodGoal: serializeGoalForPrompt(targetPod.goal),
+    targetPodGoal: formatGoalTodos(targetPod.goal),
     conversationHistory,
   };
 }

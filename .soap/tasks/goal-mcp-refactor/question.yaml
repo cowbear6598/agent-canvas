@@ -1,0 +1,52 @@
+feature: goal-mcp-refactor
+created: "2026-05-17"
+approved: true
+questions:
+  - id: Q1
+    text: 最近幾個 commit 與目前 codebase，已經把 Goal / Command / Gemini / run mode 做到哪裡？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      `28786b14` 已經把主系統切到 `command -> goal`、移除 Gemini、移除 normal mode，
+      目前 Pod / DB / schema / summary / 前端 Goal editor 都已經改成 Goal 模型。`9d80fb75`
+      又把 Goal 從原本的必填 gate 改成非必填，所以現在 Goal 是可選執行上下文，不會阻擋
+      chat、file drop、copy/paste。舊 Command 與 Gemini 主路徑已移除，剩下多是 migration /
+      compat 與少數 `command` / `gemini` 殘留命名或文件。
+
+  - id: Q2
+    text: 目前 Goal 真正的執行模型是不是 MCP 版本？如果不是，現在的缺口是什麼？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      不是。現在的 Goal runtime 仍然是 `prependGoalExecutionContext()` 把
+      `<goal_runtime>...</goal_runtime>` 文字 prepend 到 message 的 prompt 版本。
+      前端 MCP popover 雖然顯示 `Goal Runtime`，但那只是 UI 固定列，不是真正由後端提供的
+      MCP server / tool。缺口是：沒有真實 Goal MCP discovery、沒有 tool schema / handler、
+      沒有 provider-side 注入，也沒有把 Goal state 以 MCP surface 暴露給
+      Claude / Codex / Opencode。
+
+  - id: Q3
+    text: 目前三個仍支援的 provider（Claude / Codex / Opencode）各自怎麼接 MCP，這對 Goal MCP 重構有什麼限制？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      Claude 目前是唯一真正做 per-pod 顯式 MCP injection 的 provider；它會把
+      `pod.mcpServerNames` 交集後直接組進 Claude SDK `mcpServers`。Codex 目前仍是
+      host-native MCP，runtime 只有全域 auto-approve，沒有 pod-level MCP injection。
+      Opencode 則是 native config source 加上 per-pod tool subset gating。這代表
+      Goal MCP 重構不能只改前端 UI 或 prompt，至少要動 Claude provider injection、
+      Codex 的 runtime 注入方式、以及 Opencode 的 server/tool subset 組裝。
+
+  - id: Q4
+    text: 目前 codebase 已把 Goal 改成非必填。這次改成真正的 MCP version 時，是否維持「Goal 可選」這個產品行為？
+    type: user-input
+    completed: true
+    answer: |
+      維持可選。沒有 Goal 的 Pod 仍可聊天或執行，只是不會帶入 Goal MCP context。
+
+  - id: Q5
+    text: 目前的 prompt-based `<goal_runtime>` 路徑要怎麼處理？是完全移除並只留真正的 Goal MCP，還是短期保留 fallback？
+    type: user-input
+    completed: true
+    answer: |
+      完全移除。新的 Goal runtime 只保留真正的 Goal MCP 版本，不再保留 prompt-based fallback。

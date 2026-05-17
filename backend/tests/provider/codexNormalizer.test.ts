@@ -107,6 +107,140 @@ describe("CodexNormalizer - normalize()", () => {
     expect(e?.output).toBe("# My Project\n");
   });
 
+  it("item.started 且 item_type=mcp_tool_call 應映射為 Goal MCP 的 tool_call_start", () => {
+    const line = toLine({
+      type: "item.started",
+      item: {
+        id: "mcp-001",
+        type: "mcp_tool_call",
+        server_name: "agent_canvas_goal",
+        tool_name: "complete_goal_todo",
+        arguments: { todoId: "todo-1" },
+      },
+    });
+
+    const result = normalize(line);
+
+    expect(result?.type).toBe("tool_call_start");
+    const e = result as Extract<typeof result, { type: "tool_call_start" }>;
+    expect(e.toolUseId).toBe("mcp-001");
+    expect(e.toolName).toBe(
+      "mcp__agent_canvas_goal__complete_goal_todo",
+    );
+    expect(e.input).toEqual({ todoId: "todo-1" });
+  });
+
+  it("item.started 的 generic name=mcp__mcp__tool 時，應優先使用 server_name/tool_name 還原真實 MCP tool name", () => {
+    const line = toLine({
+      type: "item.started",
+      item: {
+        id: "mcp-001b",
+        type: "mcp_tool_call",
+        name: "mcp__mcp__tool",
+        server_name: "agent_canvas_goal",
+        tool_name: "get_goal_status",
+        arguments: {},
+      },
+    });
+
+    const result = normalize(line);
+
+    expect(result?.type).toBe("tool_call_start");
+    const e = result as Extract<typeof result, { type: "tool_call_start" }>;
+    expect(e.toolUseId).toBe("mcp-001b");
+    expect(e.toolName).toBe("mcp__agent_canvas_goal__get_goal_status");
+    expect(e.input).toEqual({});
+  });
+
+  it("item.completed 且 item_type=mcp_tool_call 應映射為 Goal MCP 的 tool_call_result", () => {
+    const line = toLine({
+      type: "item.completed",
+      item: {
+        id: "mcp-002",
+        type: "mcp_tool_call",
+        server_name: "agent_canvas_goal",
+        tool_name: "block_goal_progress",
+        output: "{\"status\":\"blocked\"}",
+      },
+    });
+
+    const result = normalize(line);
+
+    expect(result?.type).toBe("tool_call_result");
+    const e = result as Extract<typeof result, { type: "tool_call_result" }>;
+    expect(e.toolUseId).toBe("mcp-002");
+    expect(e.toolName).toBe("mcp__agent_canvas_goal__block_goal_progress");
+    expect(e.output).toBe("{\"status\":\"blocked\"}");
+  });
+
+  it("item.completed 的 generic name=mcp__mcp__tool 時，應優先使用 server_name/tool_name 還原真實 MCP tool name", () => {
+    const line = toLine({
+      type: "item.completed",
+      item: {
+        id: "mcp-002b",
+        type: "mcp_tool_call",
+        name: "mcp__mcp__tool",
+        server_name: "agent_canvas_goal",
+        tool_name: "complete_goal_todo",
+        output: "{\"status\":\"running\"}",
+      },
+    });
+
+    const result = normalize(line);
+
+    expect(result?.type).toBe("tool_call_result");
+    const e = result as Extract<typeof result, { type: "tool_call_result" }>;
+    expect(e.toolUseId).toBe("mcp-002b");
+    expect(e.toolName).toBe("mcp__agent_canvas_goal__complete_goal_todo");
+    expect(e.output).toBe("{\"status\":\"running\"}");
+  });
+
+  it("item.completed 的 generic name=mcp__mcp__tool 且只有 structured output 時，應還原為 get_goal_status 並輸出 JSON 字串", () => {
+    const line = toLine({
+      type: "item.completed",
+      item: {
+        id: "mcp-002c",
+        type: "mcp_tool_call",
+        name: "mcp__mcp__tool",
+        input: {},
+        output: {
+          structured_content: {
+            status: "running",
+            activeTodoId: "todo-1",
+            activeTodoText: "Inspect workspace",
+            nextTodoId: "todo-1",
+            nextTodoText: "Inspect workspace",
+            completedTodoIds: [],
+            blockedReason: null,
+            handoffSummary: null,
+            completedCount: 0,
+            totalCount: 3,
+          },
+        },
+      },
+    });
+
+    const result = normalize(line);
+
+    expect(result?.type).toBe("tool_call_result");
+    const e = result as Extract<typeof result, { type: "tool_call_result" }>;
+    expect(e.toolName).toBe("mcp__agent_canvas_goal__get_goal_status");
+    expect(e.output).toBe(
+      JSON.stringify({
+        status: "running",
+        activeTodoId: "todo-1",
+        activeTodoText: "Inspect workspace",
+        nextTodoId: "todo-1",
+        nextTodoText: "Inspect workspace",
+        completedTodoIds: [],
+        blockedReason: null,
+        handoffSummary: null,
+        completedCount: 0,
+        totalCount: 3,
+      }),
+    );
+  });
+
   // ── Case 6：turn.completed → turn_complete ────────────────────────
   it("turn.completed 應映射為 turn_complete", () => {
     const line = toLine({ type: "turn.completed" });

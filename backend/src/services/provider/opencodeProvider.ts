@@ -12,7 +12,7 @@
  *   3. abort：透過 abortSignal 觸發 session.abort（F11 Pod 刪除場景）
  */
 
-import { createOpencodeClient } from "@opencode-ai/sdk";
+import { createOpencodeClient, createOpencodeServer } from "@opencode-ai/sdk";
 import { OPENCODE_CAPABILITIES } from "./capabilities.js";
 import { buildProviderSystemError } from "./types.js";
 import type {
@@ -25,6 +25,10 @@ import { logger } from "../../utils/logger.js";
 import { sanitizePodName } from "./podNameSanitizer.js";
 import type { Pod } from "../../types/pod.js";
 import type { RunContext } from "../../types/run.js";
+import {
+  buildGoalRuntimeMcpServerConfig,
+  type GoalRuntimeMcpServerConfig,
+} from "../goalRuntime.js";
 import { getOpencodeServerState } from "./opencodeServer.js";
 
 // ================================================================
@@ -105,6 +109,8 @@ export interface OpencodeOptions {
   modelID: string;
   /** 已勾選的 MCP server name 陣列 */
   mcpServerNames: string[];
+  /** request-scoped Goal Runtime MCP 設定 */
+  goalMcpServer?: GoalRuntimeMcpServerConfig | null;
 }
 
 // ================================================================
@@ -119,6 +125,10 @@ let _createClient: (options: { baseUrl: string }) => OpencodeClientPort = (
     baseUrl: options.baseUrl,
   }) as unknown as OpencodeClientPort;
 
+/** 建立 transient server 的工廠函式（測試可替換） */
+let _createServer: typeof createOpencodeServer = (options) =>
+  createOpencodeServer(options);
+
 /** server state 查詢（測試可替換） */
 let _getServerState: () => { baseUrl: string | null; status: string } = () =>
   getOpencodeServerState();
@@ -130,6 +140,15 @@ export function setOpencodeClientFactory(
   factory: (options: { baseUrl: string }) => OpencodeClientPort,
 ): void {
   _createClient = factory;
+}
+
+/**
+ * 替換 transient server 工廠（僅測試使用）
+ */
+export function setOpencodeServerFactory(
+  factory: typeof createOpencodeServer,
+): void {
+  _createServer = factory;
 }
 
 /**
@@ -152,6 +171,13 @@ export function resetOpencodeClientFactory(): void {
 }
 
 /**
+ * 重置 transient server 工廠為預設值（測試 teardown 使用）
+ */
+export function resetOpencodeServerFactory(): void {
+  _createServer = createOpencodeServer;
+}
+
+/**
  * 重置 server state 查詢為預設值（測試 teardown 使用）
  */
 export function resetOpencodeServerStateFactory(): void {
@@ -171,6 +197,42 @@ function buildOpencodeSystemError(params: {
   rawContent?: string;
 }): Extract<NormalizedEvent, { type: "error" }> {
   return buildProviderSystemError("opencode", params);
+}
+
+function buildPromptText(
+  message: string | import("../../types/message.js").ContentBlock[],
+): string {
+  if (typeof message === "string") return message;
+
+  return message
+    .filter(
+      (block): block is import("../../types/message.js").TextContentBlock =>
+        block.type === "text",
+    )
+    .map((block) => block.text)
+    .join("\n");
+}
+
+function buildGoalRuntimeBootstrapPrompt(rawMessage: string): string {
+  return [
+    `User request: ${rawMessage.trim()}`,
+    "",
+    "A Goal Runtime MCP is available for this Pod.",
+    "Start by calling Goal Runtime to inspect the current status and active todo.",
+    "Then continue with the current active todo instead of asking for a new task.",
+    "Only ask for clarification if Goal Runtime shows no actionable todo or the work is blocked.",
+  ].join("\n");
+}
+
+function buildOpencodePromptText(
+  message: string | import("../../types/message.js").ContentBlock[],
+  goalMcpServer?: GoalRuntimeMcpServerConfig | null,
+): string {
+  const promptText = buildPromptText(message);
+  if (!goalMcpServer) {
+    return promptText;
+  }
+  return buildGoalRuntimeBootstrapPrompt(promptText);
 }
 
 /**
@@ -404,6 +466,7 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
       providerID: "",
       modelID: "",
       mcpServerNames: [],
+      goalMcpServer: null,
     },
     availableModels: [],
     availableModelValues: new Set<string>(),
@@ -417,7 +480,7 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
    */
   async buildOptions(
     pod: Pod,
-    _runContext?: RunContext,
+    runContext?: RunContext,
   ): Promise<OpencodeOptions> {
     const rawModel =
       typeof pod.providerConfig?.model === "string"
@@ -437,9 +500,15 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
       modelID = rawModel.slice(slashIndex + 1);
     }
 
+    const goalMcpServer = runContext
+      ? buildGoalRuntimeMcpServerConfig(runContext, pod)
+      : null;
     const mcpServerNames = [...pod.mcpServerNames];
+    if (goalMcpServer) {
+      mcpServerNames.push(goalMcpServer.name);
+    }
 
-    return { providerID, modelID, mcpServerNames };
+    return { providerID, modelID, mcpServerNames, goalMcpServer };
   },
 
   /**
@@ -476,8 +545,53 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
     }
 
     // ── 取得 baseUrl ────────────────────────────────────────────────
-    const serverState = _getServerState();
-    if (!serverState.baseUrl) {
+    let transientServer: { close(): void; url: string } | null = null;
+    let baseUrl: string | null = null;
+
+    if (options.goalMcpServer) {
+      try {
+        transientServer = await _createServer({
+          // 使用 ephemeral port，避免與既有全域 opencode server 的 4096 衝突
+          port: 0,
+          timeout: 30000,
+          config: {
+            mcp: {
+              [options.goalMcpServer.name]: {
+                type: "local",
+                command: [
+                  options.goalMcpServer.command,
+                  ...options.goalMcpServer.args,
+                ],
+                environment: options.goalMcpServer.env,
+                enabled: true,
+              },
+            },
+          },
+        });
+        baseUrl = transientServer.url;
+      } catch (err) {
+        yield buildOpencodeSystemError({
+          content: "opencode server 連線失敗，請重啟後端",
+          fatal: true,
+          code: "opencode_server_unreachable",
+          rawContent: err instanceof Error ? err.message : String(err),
+        });
+        return;
+      }
+    } else {
+      const serverState = _getServerState();
+      if (!serverState.baseUrl) {
+        yield buildOpencodeSystemError({
+          content: "opencode server 連線失敗，請重啟後端",
+          fatal: true,
+          code: "opencode_server_unreachable",
+        });
+        return;
+      }
+      baseUrl = serverState.baseUrl;
+    }
+
+    if (!baseUrl) {
       yield buildOpencodeSystemError({
         content: "opencode server 連線失敗，請重啟後端",
         fatal: true,
@@ -486,7 +600,7 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
       return;
     }
 
-    const client = _createClient({ baseUrl: serverState.baseUrl });
+    const client = _createClient({ baseUrl });
 
     logger.log(
       "Chat",
@@ -586,7 +700,7 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
         parts: [
           {
             type: "text",
-            text: typeof message === "string" ? message : "",
+            text: buildOpencodePromptText(message, options.goalMcpServer),
           },
         ],
       };
@@ -752,6 +866,7 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
       }
     } finally {
       abortSignal.removeEventListener("abort", doAbort);
+      transientServer?.close();
     }
   },
 };

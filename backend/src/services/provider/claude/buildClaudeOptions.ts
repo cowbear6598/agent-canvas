@@ -25,6 +25,7 @@ import {
   replyContextStore,
   buildReplyContextKey,
 } from "../../integration/replyContextStore.js";
+import { buildGoalRuntimeMcpServerConfig } from "../../goalRuntime.js";
 import { getClaudeCodePath } from "../../claude/claudePathResolver.js";
 import type { Pod } from "../../../types/pod.js";
 import type { RunContext } from "../../../types/run.js";
@@ -329,6 +330,21 @@ export async function buildClaudeOptions(
     runContext,
   );
 
+  const goalRuntimeMcp = runContext
+    ? buildGoalRuntimeMcpServerConfig(runContext, pod)
+    : null;
+  const mergedMcpServers: NonNullable<Options["mcpServers"]> = {
+    ...(integrationResult.mcpServers ?? {}),
+  };
+
+  if (goalRuntimeMcp) {
+    mergedMcpServers[goalRuntimeMcp.name] = {
+      command: goalRuntimeMcp.command,
+      args: goalRuntimeMcp.args,
+      env: goalRuntimeMcp.env,
+    };
+  }
+
   // model：來自 pod.providerConfig.model（字串型別），否則 fallback 到 "sonnet"
   const rawModel = pod.providerConfig?.model;
   const model = typeof rawModel === "string" && rawModel ? rawModel : "sonnet";
@@ -356,9 +372,8 @@ export async function buildClaudeOptions(
   // 合併所有選項（mcpServers 已包含 MCP Server + Integration 兩者）
   const result: ClaudeOptions = {
     ...baseOptions,
-    ...(integrationResult.mcpServers &&
-    Object.keys(integrationResult.mcpServers).length > 0
-      ? { mcpServers: integrationResult.mcpServers }
+    ...(Object.keys(mergedMcpServers).length > 0
+      ? { mcpServers: mergedMcpServers }
       : {}),
     ...pluginOptions,
     model,

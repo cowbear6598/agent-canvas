@@ -33,32 +33,67 @@ const installedMcpServers = ref<McpListItem[]>([]);
 const localMcpServerNames = ref<string[]>([]);
 const loading = ref<boolean>(false);
 const loadFailed = ref<boolean>(false);
+const GOAL_RUNTIME_SERVER_NAME = "agent_canvas_goal";
 
 /** 搜尋框輸入字串 */
 const searchQuery = ref<string>("");
 /** 搜尋框 input 元素 ref，用於自動 focus */
 const searchInputRef = ref<HTMLInputElement | null>(null);
 
-const goalBuiltinMcp = computed<McpListItem>(() => ({
-  name: t("pod.slot.goalMcpLabel"),
-  type: "stdio",
-  system: true,
-  locked: true,
-}));
+function isSystemLockedServer(server: McpListItem): boolean {
+  return Boolean(server.system || server.locked);
+}
 
-const mergedMcpServers = computed<McpListItem[]>(() => [
-  goalBuiltinMcp.value,
-  ...installedMcpServers.value,
-]);
+function isGoalRuntimeServer(server: McpListItem): boolean {
+  return server.system === true && server.name === GOAL_RUNTIME_SERVER_NAME;
+}
+
+function resolveServerLabel(server: McpListItem): string {
+  return isGoalRuntimeServer(server) ? t("pod.slot.goalMcpLabel") : server.name;
+}
+
+const hasGoalRuntime = computed(() =>
+  installedMcpServers.value.some((server) => isGoalRuntimeServer(server)),
+);
+
+const userMcpServers = computed(() =>
+  installedMcpServers.value.filter((server) => !isSystemLockedServer(server)),
+);
 
 /** 依 searchQuery 過濾 MCP server 清單（不分大小寫比對名稱） */
 const filteredMcpServers = computed<McpListItem[]>(() => {
-  const query = searchQuery.value.toLowerCase();
-  if (!query) return mergedMcpServers.value;
-  return mergedMcpServers.value.filter((server) =>
+  const query = searchQuery.value.trim().toLowerCase();
+  if (!query) return installedMcpServers.value;
+  return installedMcpServers.value.filter((server) =>
+    resolveServerLabel(server).toLowerCase().includes(query) ||
     server.name.toLowerCase().includes(query),
   );
 });
+
+const showSearchEmpty = computed(
+  () =>
+    !loading.value &&
+    !loadFailed.value &&
+    searchQuery.value.trim().length > 0 &&
+    filteredMcpServers.value.length === 0,
+);
+
+const showEmptyState = computed(
+  () =>
+    !loading.value &&
+    !loadFailed.value &&
+    searchQuery.value.trim().length === 0 &&
+    installedMcpServers.value.length === 0,
+);
+
+const showUserEmptyHint = computed(
+  () =>
+    !loading.value &&
+    !loadFailed.value &&
+    searchQuery.value.trim().length === 0 &&
+    hasGoalRuntime.value &&
+    userMcpServers.value.length === 0,
+);
 
 /** 將 localMcpServerNames 轉成 Set，讓 template v-for 中的查找從 O(n) 降為 O(1) */
 const localMcpServerNamesSet = computed(
@@ -93,7 +128,7 @@ onMounted(async () => {
   // 載入 MCP server 清單
   loading.value = true;
   try {
-    installedMcpServers.value = await listMcpServers(props.provider);
+    installedMcpServers.value = await listMcpServers(props.provider, props.podId);
   } catch (err) {
     logger.warn(
       "[McpPopover] Failed to load MCP servers:",
@@ -135,8 +170,10 @@ const resolveMcpErrorDescription = (_err: unknown): string =>
   t("pod.slot.mcpToggleFailed");
 
 const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
-  // 僅 Codex / built-in Goal 不可 toggle；其餘 provider 走樂觀更新
-  if (isCodex.value || name === goalBuiltinMcp.value.name) return;
+  const targetServer = installedMcpServers.value.find((server) => server.name === name);
+  if (isCodex.value || (targetServer && isSystemLockedServer(targetServer))) {
+    return;
+  }
 
   const nextNames = buildNextNames(localMcpServerNames.value, name, enabled);
 
@@ -200,16 +237,30 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
 
       <!-- 搜尋無結果：有安裝但過濾後無符合項目 -->
       <div
-        v-else-if="filteredMcpServers.length === 0"
+        v-else-if="showSearchEmpty"
         class="px-2 py-1 text-xs font-mono text-muted-foreground"
       >
         {{ t("pod.slot.mcpSearchEmpty") }}
       </div>
 
+      <div
+        v-else-if="showEmptyState"
+        class="px-2 py-1 text-xs font-mono text-muted-foreground whitespace-pre-wrap"
+      >
+        <p>{{ t("pod.slot.mcpEmpty") }}</p>
+        <p class="mt-1">
+          {{
+            isCodex
+              ? t("pod.slot.mcpCodexEmptyHint")
+              : t("pod.slot.mcpClaudeEmptyHint")
+          }}
+        </p>
+      </div>
+
       <!-- MCP server 列表（built-in Goal + user MCP） -->
       <template v-else>
         <div
-          v-if="installedMcpServers.length === 0"
+          v-if="showUserEmptyHint"
           class="px-2 pb-1 text-xs font-mono text-muted-foreground whitespace-pre-wrap"
         >
           <p>{{ t("pod.slot.mcpUserEmpty") }}</p>
@@ -230,12 +281,20 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
                 v-for="server in filteredMcpServers"
                 :key="server.name"
                 :name="server.name"
+                :label="resolveServerLabel(server)"
                 :type="server.type"
-                :checked="server.locked || localMcpServerNamesSet.has(server.name)"
+                :checked="
+                  isSystemLockedServer(server) ||
+                    localMcpServerNamesSet.has(server.name)
+                "
                 :disabled="false"
                 :readonly="true"
-                :locked="server.locked"
-                :badge-label="t('pod.slot.builtinBadge')"
+                :locked="isSystemLockedServer(server)"
+                :badge-label="
+                  isSystemLockedServer(server)
+                    ? t('pod.slot.builtinBadge')
+                    : undefined
+                "
                 @toggle="handleToggle"
               />
             </div>
@@ -256,12 +315,20 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
               v-for="server in filteredMcpServers"
               :key="server.name"
               :name="server.name"
+              :label="resolveServerLabel(server)"
               :type="server.type"
-              :checked="server.locked || localMcpServerNamesSet.has(server.name)"
-              :disabled="server.locked === true"
-              :readonly="false"
-              :locked="server.locked"
-              :badge-label="t('pod.slot.builtinBadge')"
+              :checked="
+                isSystemLockedServer(server) ||
+                  localMcpServerNamesSet.has(server.name)
+              "
+              :disabled="false"
+              :readonly="isSystemLockedServer(server)"
+              :locked="isSystemLockedServer(server)"
+              :badge-label="
+                isSystemLockedServer(server)
+                  ? t('pod.slot.builtinBadge')
+                  : undefined
+              "
               @toggle="handleToggle"
             />
           </div>

@@ -269,6 +269,8 @@ export interface McpListPayload {
   requestId: string;
   /** claude / codex / opencode 三個 provider 皆支援 MCP 清單查詢 */
   provider: "claude" | "codex" | "opencode";
+  /** 同 provider 的不同 Pod 可能帶不同 built-in MCP */
+  podId: string;
 }
 
 /** 設定指定 Pod 的 MCP server 名稱清單 */

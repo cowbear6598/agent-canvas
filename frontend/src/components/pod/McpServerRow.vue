@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
  */
 const props = defineProps<{
   name: string;
+  label?: string;
   type?: "stdio" | "http" | "sse";
   checked: boolean;
   disabled: boolean;
@@ -28,7 +29,7 @@ const emit = defineEmits<{
     class="flex items-center justify-between gap-3 rounded px-2 py-1"
   >
     <p class="text-xs font-mono">
-      {{ props.name }}
+      {{ props.label ?? props.name }}
     </p>
     <div class="flex items-center gap-1">
       <span
@@ -36,6 +37,12 @@ const emit = defineEmits<{
         class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-mono text-muted-foreground bg-secondary"
       >
         {{ props.type }}
+      </span>
+      <span
+        v-if="props.locked"
+        class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-mono text-primary bg-secondary"
+      >
+        {{ props.badgeLabel }}
       </span>
       <span
         class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-mono text-green-600"
@@ -51,7 +58,7 @@ const emit = defineEmits<{
     class="group relative flex items-center justify-between gap-3 rounded px-2 py-1 hover:bg-secondary"
   >
     <p class="text-xs font-mono">
-      {{ props.name }}
+      {{ props.label ?? props.name }}
     </p>
     <div class="flex items-center gap-1">
       <span

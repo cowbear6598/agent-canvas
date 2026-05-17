@@ -15,7 +15,6 @@ import { summaryService } from "../summaryService.js";
 import { logger } from "../../utils/logger.js";
 import { fireAndForget } from "../../utils/operationHelpers.js";
 import { executeStreamingChat } from "../claude/streamingChatExecutor.js";
-import { prependGoalExecutionContext } from "../goalRuntime.js";
 import {
   buildTransferMessage,
   forEachMultiInputGroupConnection,
@@ -177,6 +176,9 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     connections: Connection[],
     runContext?: RunContext,
   ): Promise<unknown>[] {
+    // Run mode 必須帶 delegate；否則 pipeline 會 fallback 到 normal mode 的
+    // hasActiveRunForPod 判定，把所有 pre-registered 的 pending instance 都當忙碌
+    const delegate = runContext ? createStatusDelegate(runContext) : undefined;
     return connections
       .filter((conn) => conn.triggerMode === "direct")
       .map((connection) => {
@@ -192,6 +194,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
             isError: false,
           },
           runContext,
+          delegate,
         };
         return this.deps.pipeline.execute(
           pipelineContext,
@@ -463,9 +466,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     // runContext 在 workflow 執行路徑中必定存在（由上游 launchRun 建立）
     const execStrategy = new ChatExecutionStrategy(canvasId, runContext!);
 
-    // targetPod 已於外層 triggerWorkflowWithSummary 驗證存在，此處直接取用
-    const targetPod = podStore.getById(canvasId, targetPodId)!;
-    const resolvedMessage = prependGoalExecutionContext(targetPod, baseMessage);
+    const resolvedMessage = baseMessage;
 
     await execStrategy.addUserMessage(targetPodId, resolvedMessage);
 

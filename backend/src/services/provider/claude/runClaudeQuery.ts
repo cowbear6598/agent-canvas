@@ -32,6 +32,7 @@ import {
   createUserMessageStream,
   type SDKUserMessage,
 } from "../../claude/messageBuilder.js";
+import { GOAL_MCP_SERVER_NAME } from "../../goalRuntime.js";
 import {
   checkRateLimitEvent,
   checkAuthStatus,
@@ -113,17 +114,55 @@ function buildClaudeSystemError(params: {
 function buildPrompt(
   message: string | import("../../../types/message.js").ContentBlock[],
   resumeSessionId: string | null,
+  shouldBootstrapGoalRuntime: boolean,
 ): string | AsyncIterable<SDKUserMessage> {
   if (typeof message === "string") {
     // 空白訊息 fallback：使用語意明確的中間變數，避免三元運算式在閱讀時語意模糊
     const trimmed = message.trim();
     const prompt = trimmed.length === 0 ? "請開始執行" : trimmed;
-    return prompt;
+    if (!shouldBootstrapGoalRuntime) {
+      return prompt;
+    }
+    return buildGoalRuntimeBootstrapPrompt(prompt);
   }
 
   const contentArray = buildClaudeContentBlocks(message);
+  const finalContentArray = shouldBootstrapGoalRuntime
+    ? [
+        buildGoalRuntimeBootstrapContentBlock(),
+        ...contentArray,
+      ]
+    : contentArray;
   const sessionId = resumeSessionId ?? "";
-  return createUserMessageStream(contentArray, sessionId);
+  return createUserMessageStream(finalContentArray, sessionId);
+}
+
+const GOAL_RUNTIME_BOOTSTRAP_LINES = [
+  "A Goal Runtime MCP is available for this Pod.",
+  "Start by calling Goal Runtime to inspect the current status and active todo.",
+  "Then continue with the current active todo instead of asking for a new task.",
+  "Only ask for clarification if Goal Runtime shows no actionable todo or the work is blocked.",
+];
+
+function buildGoalRuntimeBootstrapPrompt(rawMessage: string): string {
+  return [
+    `User request: ${rawMessage.trim()}`,
+    "",
+    ...GOAL_RUNTIME_BOOTSTRAP_LINES,
+  ].join("\n");
+}
+
+function buildGoalRuntimeBootstrapContentBlock(): {
+  type: "text";
+  text: string;
+} {
+  return {
+    type: "text",
+    text: [
+      ...GOAL_RUNTIME_BOOTSTRAP_LINES,
+      "The user's request follows in the remaining content blocks of this message.",
+    ].join("\n"),
+  };
 }
 
 function isToolResultBlock(block: unknown): block is UserToolResultBlock {
@@ -459,7 +498,11 @@ export async function* runClaudeQuery(
     return;
   }
 
-  const prompt = buildPrompt(message, resumeSessionId);
+  const prompt = buildPrompt(
+    message,
+    resumeSessionId,
+    Boolean(options.mcpServers?.[GOAL_MCP_SERVER_NAME]),
+  );
   const pendingStderrChunks: string[] = [];
   let hasYieldedStderrDiagnostic = false;
   let resolveStderrSignal: (() => void) | null = null;

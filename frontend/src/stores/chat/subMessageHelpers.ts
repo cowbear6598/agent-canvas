@@ -102,10 +102,15 @@ export function markToolWithOutput(
   toolUse: ToolUseInfo[],
   toolUseId: string,
   output: string,
+  toolName?: string,
 ): ToolUseInfo[] {
   return toolUse.map((tool) =>
     tool.toolUseId === toolUseId
-      ? { ...markToolCompleted(tool), output }
+      ? {
+          ...markToolCompleted(tool),
+          output,
+          ...(toolName ? { toolName } : {}),
+        }
       : tool,
   );
 }
@@ -114,10 +119,16 @@ function updateSingleSubToolUse(
   sub: SubMessage,
   toolUseId: string,
   output: string,
+  toolName?: string,
 ): SubMessage {
   if (!sub.toolUse) return sub;
 
-  const updatedSubToolUse = markToolWithOutput(sub.toolUse, toolUseId, output);
+  const updatedSubToolUse = markToolWithOutput(
+    sub.toolUse,
+    toolUseId,
+    output,
+    toolName,
+  );
 
   const allToolsCompleted = updatedSubToolUse.every(
     (tool) => tool.status === "completed" || tool.status === "error",
@@ -139,9 +150,10 @@ export function updateSubMessagesToolUseResult(
   subMessages: SubMessage[],
   toolUseId: string,
   output: string,
+  toolName?: string,
 ): SubMessage[] {
   return subMessages.map((sub) =>
-    updateSingleSubToolUse(sub, toolUseId, output),
+    updateSingleSubToolUse(sub, toolUseId, output, toolName),
   );
 }
 

@@ -61,10 +61,9 @@ vi.mock("../../src/config/index.js", () => ({
 }));
 
 // SDK mock：createSdkMcpServer 回傳 stub 物件供測試驗證
-vi.mock("@anthropic-ai/claude-agent-sdk", async () => {
-  const actual = (await vi.importActual(
-    "@anthropic-ai/claude-agent-sdk",
-  )) as any;
+vi.mock("@anthropic-ai/claude-agent-sdk", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@anthropic-ai/claude-agent-sdk")>();
   return {
     ...actual,
     createSdkMcpServer: vi.fn((options: { name: string; tools?: any[] }) => ({
@@ -86,7 +85,9 @@ import { readClaudeMcpServers } from "../../src/services/mcp/claudeMcpReader.js"
 import { scanInstalledPlugins } from "../../src/services/pluginScanner.js";
 import { integrationRegistry } from "../../src/services/integration/index.js";
 import { BASE_ALLOWED_TOOLS } from "../../src/services/provider/claude/buildClaudeOptions.js";
+import { GOAL_MCP_SERVER_NAME } from "../../src/services/goalRuntime.js";
 import type { Pod } from "../../src/types/pod.js";
+import type { RunContext } from "../../src/types/run.js";
 
 // ── 工具：建立最小化 Pod stub ────────────────────────────────────────────────
 
@@ -111,6 +112,15 @@ function makePod(overrides: Partial<Pod> = {}): Pod {
     rotation: 0,
     ...overrides,
   } as Pod;
+}
+
+function makeRunContext(overrides: Partial<RunContext> = {}): RunContext {
+  return {
+    runId: "run-goal-001",
+    canvasId: "canvas-goal-001",
+    sourcePodId: "source-pod-001",
+    ...overrides,
+  };
 }
 
 // ── 測試套件 ──────────────────────────────────────────────────────────────────
@@ -186,6 +196,48 @@ describe("claudeProvider.buildOptions()", () => {
     const options = await claudeProvider.buildOptions(pod);
 
     expect(options.mcpServers).toBeUndefined();
+  });
+
+  it("傳入 runContext 且 Pod 有 Goal 時應注入 Goal MCP", async () => {
+    const pod = makePod({
+      goal: {
+        todos: [
+          { id: "todo-1", text: "Inspect current task state" },
+          { id: "todo-2", text: "Complete remaining work" },
+        ],
+      },
+    });
+
+    const options = await claudeProvider.buildOptions(pod, makeRunContext());
+
+    expect(options.mcpServers?.[GOAL_MCP_SERVER_NAME]).toBeDefined();
+    expect(options.mcpServers?.[GOAL_MCP_SERVER_NAME]).toMatchObject({
+      command: process.execPath,
+      env: {
+        AGENT_CANVAS_GOAL_STATE_PATH: expect.stringContaining(
+          "run-goal-001/pod-build-001.json",
+        ),
+      },
+    });
+    expect(options.mcpServers?.[GOAL_MCP_SERVER_NAME]?.args).toEqual([
+      expect.stringContaining("goalMcpBridge.ts"),
+    ]);
+  });
+
+  it("傳入 runContext 且 Pod 無 Goal 時仍應注入 Goal MCP", async () => {
+    const pod = makePod({ goal: null });
+
+    const options = await claudeProvider.buildOptions(pod, makeRunContext());
+
+    expect(options.mcpServers?.[GOAL_MCP_SERVER_NAME]).toBeDefined();
+    expect(options.mcpServers?.[GOAL_MCP_SERVER_NAME]).toMatchObject({
+      command: process.execPath,
+      env: {
+        AGENT_CANVAS_GOAL_STATE_PATH: expect.stringContaining(
+          "run-goal-001/pod-build-001.json",
+        ),
+      },
+    });
   });
 
   // ── Case 5：pod.pluginIds → plugins 被填入 ────────────────────────────

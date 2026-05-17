@@ -15,6 +15,7 @@ export const mcpListRequestSchema = z
   .object({
     requestId: requestIdSchema,
     provider: providerSchema,
+    podId: podIdSchema.optional(),
   })
   .strict();
 
@@ -26,6 +27,19 @@ export const mcpListRequestSchema = z
 export const mcpListItemSchema = z.object({
   name: z.string().min(1),
   type: z.enum(["stdio", "http", "sse"]).optional(),
+  system: z.boolean().optional(),
+  locked: z.boolean().optional(),
+  description: z.string().optional(),
+  status: z.enum(["running", "blocked", "completed"]).optional(),
+  activeTodoId: z.string().nullable().optional(),
+  activeTodoText: z.string().nullable().optional(),
+  nextTodoId: z.string().nullable().optional(),
+  nextTodoText: z.string().nullable().optional(),
+  blockedReason: z.string().nullable().optional(),
+  handoffSummary: z.string().nullable().optional(),
+  completedTodoIds: z.array(z.string()).optional(),
+  completedCount: z.number().int().nonnegative().optional(),
+  totalCount: z.number().int().nonnegative().optional(),
 });
 
 /** MCP_LIST_RESULT 回應 payload schema：帶回 provider 與對應的 MCP server 清單 */

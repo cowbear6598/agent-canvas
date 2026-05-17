@@ -16,11 +16,16 @@ import {
 import { useCanvasStore } from "@/stores/canvasStore";
 import { usePodStore } from "@/stores/pod/podStore";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
+import { invalidateMcpServersCache, listMcpServers } from "@/services/mcpApi";
 import type { Pod } from "@/types";
 import PodModelSelector from "@/components/pod/PodModelSelector.vue";
 
 // Mock WebSocket
 vi.mock("@/services/websocket", () => webSocketMockFactory());
+vi.mock("@/services/websocket/createWebSocketRequest", () => ({
+  createWebSocketRequest: (...args: unknown[]) =>
+    mockCreateWebSocketRequest(...args),
+}));
 
 // Mock useToast
 const mockShowSuccessToast = vi.fn();
@@ -244,6 +249,51 @@ describe("Canvas/Pod 操作完整流程", () => {
 
       podStore.updatePodProviderConfigModel("pod-1", "sonnet");
       expect(podStore.getPodById("pod-1")?.providerConfig.model).toBe("sonnet");
+    });
+  });
+
+  describe("Goal-aware MCP list", () => {
+    beforeEach(() => {
+      invalidateMcpServersCache();
+    });
+
+    it("有 Goal 與無 Goal 的 Pod 都會拿到 built-in Goal Runtime，且不共用同一份清單", async () => {
+      mockCreateWebSocketRequest
+        .mockResolvedValueOnce({
+          items: [
+            {
+              name: "agent_canvas_goal",
+              type: "stdio",
+              system: true,
+              locked: true,
+            },
+            { name: "context7", type: "stdio" },
+          ],
+        })
+        .mockResolvedValueOnce({
+          items: [
+            {
+              name: "agent_canvas_goal",
+              type: "stdio",
+              system: true,
+              locked: true,
+              status: "completed",
+              totalCount: 0,
+            },
+            { name: "context7", type: "stdio" },
+          ],
+        });
+
+      const withGoal = await listMcpServers("claude", "pod-with-goal");
+      const withoutGoal = await listMcpServers("claude", "pod-without-goal");
+
+      expect(withGoal.some((item) => item.name === "agent_canvas_goal")).toBe(
+        true,
+      );
+      expect(
+        withoutGoal.some((item) => item.name === "agent_canvas_goal"),
+      ).toBe(true);
+      expect(mockCreateWebSocketRequest).toHaveBeenCalledTimes(2);
     });
   });
 

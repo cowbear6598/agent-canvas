@@ -121,6 +121,7 @@ export interface ChatMessageActions {
     messageIndex: number,
     toolUseId: string,
     output: string,
+    toolName: string,
   ) => void;
   handleChatComplete: (payload: PodChatCompletePayload) => void;
   handleChatAborted: (payload: PodChatAbortedPayload) => void;

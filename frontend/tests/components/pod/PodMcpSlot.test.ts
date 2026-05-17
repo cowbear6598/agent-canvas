@@ -79,6 +79,14 @@ describe("PodMcpSlot", () => {
       wrapper.unmount();
     });
 
+    it("內建 Goal Runtime 單獨存在時，不應讓 Claude slot 進入 active 狀態", () => {
+      const wrapper = mountSlot({ provider: "claude", activeCount: 0 });
+      const button = wrapper.find("button");
+      expect(wrapper.text()).toContain("(0)");
+      expect(button.classes()).not.toContain("pod-mcp-slot--active");
+      wrapper.unmount();
+    });
+
     it("Codex provider：button 應有 pod-mcp-slot--codex class（不論 activeCount）", () => {
       const wrapper = mountSlot({ provider: "codex", activeCount: 5 });
       const button = wrapper.find("button");
