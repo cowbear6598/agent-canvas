@@ -1,0 +1,100 @@
+feature: managed-mcp-registry
+created: "2026-05-17"
+approved: true
+questions:
+  - id: Q1
+    text: 目前 codebase 的 MCP source of truth、清單載入方式與 runtime 注入方式是什麼？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      目前 MCP 仍是 provider-owned。前端 `frontend/src/services/mcpApi.ts` 透過
+      `mcp:list` / `pod:set-mcp-server-names` 讀寫 Pod MCP 狀態，但候選清單來自
+      `backend/src/handlers/mcpHandlers.ts` 的 provider-specific reader：
+      Claude 讀 `readClaudeMcpServers()`、Codex 讀 `readCodexMcpServers()`、
+      Opencode 讀 `readOpencodeMcpServers()`。Runtime 端也尚未統一：Claude 會把
+      `pod.mcpServerNames` 與 `~/.claude.json` 交集後直接組進 SDK `mcpServers`；
+      Codex 仍依賴 host-native MCP config，只額外注入 Goal MCP；
+      Opencode 則是先從 host 取得 tool list，再用 `pod.mcpServerNames` 做 subset gating。
+
+  - id: Q2
+    text: 目前 Pod 層的 MCP 狀態儲存在哪裡，它的語意是什麼？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      `backend/src/types/pod.ts` 內的 `pod.mcpServerNames: string[]` 是既有 Pod-level
+      source of truth，資料落在 `pod_mcp_server_names` join table，由
+      `podStore.setMcpServerNames()` 全量覆寫。現況語意是「Pod 允許使用哪些 provider-native
+      MCP server name」。既有 PRD `prds/agentcanvas-managed-mcp-registry.md`
+      已明確指出這個欄位可以沿用，但其語意要改成 AgentCanvas-managed registry 的穩定
+      name 或 id。
+
+  - id: Q3
+    text: 目前是否已存在全域 MCP 管理入口與對應 UI？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      沒有。`frontend/src/components/layout/AppHeader.vue` 目前只有語言、全域設定、
+      Integrations、LLM Provider、History、Canvas List 幾個按鈕；沒有 MCP 全域管理入口。
+      現有 MCP UI 只存在於 Pod 左側的 `PodMcpSlot` / `McpPopover`，屬於 per-pod toggle。
+
+  - id: Q4
+    text: 這次改動的核心方向，是否要把 Pod 的 MCP 選擇從各 provider 自己的設定檔收回到 AgentCanvas 伺服器管理？
+    type: user-input
+    completed: true
+    answer: |
+      是。Pod 上面的選擇不再吃自己的 provider 設定，而是把主動權拿回來，改由
+      AgentCanvas 伺服器持有 registry、啟動 MCP，Pod 再套用這份全域來源。
+
+  - id: Q5
+    text: Header 上的全域 MCP 入口，V1 要做成獨立的 MCP 管理 modal，還是併入現有 Global Settings Modal？
+    type: user-input
+    completed: true
+    answer: |
+      做成獨立的一顆按鈕，由該按鈕開啟全域 MCP 管理入口，不併入現有 Global Settings Modal。
+
+  - id: Q6
+    text: V1 的 provider 範圍要一次涵蓋目前仍支援的全部 provider（Claude、Codex、Opencode），還是先落地在部分 provider？
+    type: user-input
+    completed: true
+    answer: |
+      V1 一次涵蓋全部 provider：Claude、Codex、Opencode 都要接到統一後的 AgentCanvas-managed MCP 路徑。
+
+  - id: Q7
+    text: `pod.mcpServerNames` 在 V1 要繼續存 registry 的穩定 name，還是這次就改成存 registry id？
+    type: user-input
+    completed: true
+    answer: |
+      V1 先沿用 registry 的穩定 name。既有資料結構與欄位名稱已經是 `mcpServerNames`，
+      且預期 registry 內不會出現重複 name，因此先不把資料鍵改成 id。
+
+  - id: Q8
+    text: 伺服器啟動與管理的 child MCP transport，V1 要直接支援 stdio、http、sse 三種，還是先限制範圍？
+    type: user-input
+    completed: true
+    answer: |
+      V1 直接支援 stdio、http、sse 三種 transport，不再額外縮小範圍。
+
+  - id: Q9
+    text: Pod 套用全域 MCP registry 的方式，V1 要維持「每個 Pod 自己挑 subset」還是改成「全域啟用就自動套到所有 Pod」？
+    type: user-input
+    completed: true
+    answer: |
+      維持 per-pod 模式。每個 Pod 自己挑要套用哪一組 MCP subset，不採用全域啟用後自動套到所有 Pod。
+
+  - id: Q10
+    text: 伺服器對 host 暴露的 AgentCanvas-managed MCP surface，V1 要偏向 per-pod instance 還是 per-run instance？
+    type: user-input
+    completed: true
+    answer: |
+      V1 採 per-run MCP surface。每次 run 啟動時，由伺服器依該 Pod 當下選取的
+      MCP subset 臨時組一顆只給該次 run 使用的 aggregated MCP surface，再注入對應的
+      provider。
+
+  - id: Q11
+    text: 若採用 per-run MCP surface，child MCP server 的 lifecycle 要不要跨 run 重用，以避免每次 run 都全量重啟造成 latency？
+    type: user-input
+    completed: true
+    answer: |
+      要跨 run 重用 child MCP server。surface 本身採 per-run，但底層 child MCP 由伺服器
+      long-lived 維持；只有設定變更、程序不存在、或健康檢查失敗時才重啟，避免每次 run
+      都付出完整 spawn / handshake 成本。

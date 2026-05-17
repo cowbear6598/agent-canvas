@@ -1,16 +1,19 @@
 <script setup lang="ts">
+import { ref } from "vue";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { ArrowDown, ArrowUp, Plus, Target, Trash2 } from "lucide-vue-next";
+import { GripVertical, Plus, Target, Trash2 } from "lucide-vue-next";
+import { VueDraggable } from "vue-draggable-plus";
 import type { Pod, PodGoal } from "@/types";
 import { useGoalEditorForm } from "@/composables/pod/useGoalEditorForm";
+import type { GoalEditorTodo } from "@/composables/pod/useGoalEditorForm";
+import GoalTodoEditorModal from "@/components/pod/GoalTodoEditorModal.vue";
 import { useI18n } from "vue-i18n";
 
 const props = defineProps<{
@@ -28,13 +31,17 @@ const { t } = useI18n();
 const {
   todos,
   validationMessage,
-  canClear,
-  addTodo,
-  moveTodo,
   removeTodo,
   reset,
   buildSubmitGoal,
+  appendTodo,
+  updateTodo,
 } = useGoalEditorForm(() => props.pod.goal ?? null);
+
+const subModalOpen = ref(false);
+const subModalMode = ref<"add" | "edit">("add");
+const subModalInitialText = ref("");
+const editingTodoId = ref<string | null>(null);
 
 const handleClose = (): void => {
   reset();
@@ -47,16 +54,34 @@ const handleSubmit = (): void => {
   emit("submit", goal);
 };
 
-const handleClear = (): void => {
-  emit("submit", null);
+const handleOpenAdd = (): void => {
+  subModalMode.value = "add";
+  subModalInitialText.value = "";
+  editingTodoId.value = null;
+  subModalOpen.value = true;
 };
+
+const handleOpenEdit = (todo: GoalEditorTodo): void => {
+  subModalMode.value = "edit";
+  subModalInitialText.value = todo.text;
+  editingTodoId.value = todo.id;
+  subModalOpen.value = true;
+};
+
+const handleSubModalSave = (text: string): void => {
+  if (subModalMode.value === "add") {
+    appendTodo(text);
+  } else if (editingTodoId.value) {
+    updateTodo(editingTodoId.value, text);
+  }
+  subModalOpen.value = false;
+};
+
+const previewLine = (text: string): string => text.split("\n")[0] ?? "";
 </script>
 
 <template>
-  <Dialog
-    :open="open"
-    @update:open="handleClose"
-  >
+  <Dialog :open="open" @update:open="handleClose">
     <DialogContent class="max-w-2xl">
       <DialogHeader>
         <DialogTitle class="flex items-center gap-2">
@@ -65,55 +90,45 @@ const handleClear = (): void => {
             {{ t("pod.goal.editor.title", { name: pod.name }) }}
           </span>
         </DialogTitle>
-        <DialogDescription>
-          {{ t("pod.goal.editor.description") }}
-        </DialogDescription>
       </DialogHeader>
 
       <div class="space-y-3">
-        <div
-          v-for="(todo, index) in todos"
-          :key="todo.id"
-          class="goal-editor-row"
+        <VueDraggable
+          v-model="todos"
+          handle=".goal-card__handle"
+          :animation="180"
+          ghost-class="sortable-ghost"
+          chosen-class="sortable-chosen"
+          class="goal-editor-list"
         >
-          <span class="goal-editor-row__index">
-            {{ index + 1 }}
-          </span>
-          <input
-            v-model="todo.text"
-            data-testid="goal-editor-input"
-            :placeholder="t('pod.goal.editor.todoPlaceholder', { index: index + 1 })"
-            class="goal-editor-row__input"
+          <div
+            v-for="todo in todos"
+            :key="todo.id"
+            class="goal-card"
+            data-testid="goal-card-preview"
+            @click="handleOpenEdit(todo)"
           >
-          <div class="goal-editor-row__actions">
             <button
               type="button"
-              class="goal-editor-row__icon-btn"
-              :disabled="index === 0"
-              :title="t('pod.goal.editor.moveUp')"
-              @click="moveTodo(index, 'up')"
+              class="goal-card__handle"
+              :title="t('pod.goal.editor.dragHandle')"
+              @click.stop
             >
-              <ArrowUp :size="14" />
+              <GripVertical :size="16" />
             </button>
+            <span class="goal-card__preview">
+              {{ previewLine(todo.text) }}
+            </span>
             <button
               type="button"
-              class="goal-editor-row__icon-btn"
-              :disabled="index === todos.length - 1"
-              :title="t('pod.goal.editor.moveDown')"
-              @click="moveTodo(index, 'down')"
-            >
-              <ArrowDown :size="14" />
-            </button>
-            <button
-              type="button"
-              class="goal-editor-row__icon-btn"
+              class="goal-card__delete"
               :title="t('pod.goal.editor.removeTodo')"
-              @click="removeTodo(todo.id)"
+              @click.stop="removeTodo(todo.id)"
             >
               <Trash2 :size="14" />
             </button>
           </div>
-        </div>
+        </VueDraggable>
 
         <p
           v-if="validationMessage"
@@ -128,29 +143,16 @@ const handleClear = (): void => {
             type="button"
             class="goal-editor-add-btn"
             data-testid="goal-editor-add"
-            @click="addTodo"
+            @click="handleOpenAdd"
           >
             <Plus :size="14" />
             <span>{{ t("pod.goal.editor.addTodo") }}</span>
-          </button>
-
-          <button
-            type="button"
-            class="goal-editor-clear-btn"
-            :disabled="!canClear"
-            data-testid="goal-editor-clear"
-            @click="handleClear"
-          >
-            {{ t("pod.goal.editor.clearGoal") }}
           </button>
         </div>
       </div>
 
       <DialogFooter class="gap-2">
-        <Button
-          variant="outline"
-          @click="handleClose"
-        >
+        <Button variant="outline" @click="handleClose">
           {{ t("common.cancel") }}
         </Button>
         <Button
@@ -161,82 +163,102 @@ const handleClear = (): void => {
           {{ t("common.save") }}
         </Button>
       </DialogFooter>
+
+      <GoalTodoEditorModal
+        :open="subModalOpen"
+        :mode="subModalMode"
+        :initial-text="subModalInitialText"
+        @update:open="(value: boolean) => (subModalOpen = value)"
+        @save="handleSubModalSave"
+        @cancel="subModalOpen = false"
+      />
     </DialogContent>
   </Dialog>
 </template>
 
 <style scoped>
-.goal-editor-row {
+.goal-editor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.goal-card {
   display: grid;
-  grid-template-columns: 2rem minmax(0, 1fr) auto;
-  gap: 0.75rem;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-}
-
-.goal-editor-row__index {
-  font-family: var(--font-mono), monospace, sans-serif;
-  font-size: 0.75rem;
-  color: var(--muted-foreground);
-  text-align: center;
-}
-
-.goal-editor-row__input {
-  width: 100%;
-  min-width: 0;
-  padding: 0.75rem 0.875rem;
-  background: var(--card);
+  gap: 0.5rem;
+  padding: 0.625rem 0.75rem;
   border: 2px solid var(--doodle-ink);
   border-radius: 0.5rem;
+  background: var(--card);
+  transition: background 0.15s ease;
+  cursor: pointer;
+}
+
+.goal-card:hover {
+  background: var(--doodle-sand);
+}
+
+.goal-card__handle,
+.goal-card__delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 2px solid var(--doodle-ink);
+  background: var(--card);
+  border-radius: 0.5rem;
+}
+
+.goal-card__delete {
+  cursor: pointer;
+}
+
+.goal-card__handle {
+  cursor: grab;
+}
+
+.goal-card__handle:active {
+  cursor: grabbing;
+}
+
+.goal-card__preview {
+  display: block;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-family: var(--font-mono), monospace, sans-serif;
   font-size: 0.875rem;
-  outline: none;
+  padding: 0.375rem 0.5rem;
+  min-width: 0;
 }
 
-.goal-editor-row__input:focus {
-  box-shadow: 0 0 0 2px oklch(0.75 0.07 90 / 0.35);
+.goal-card.sortable-ghost {
+  opacity: 0.4;
+  background: var(--doodle-sand);
 }
 
-.goal-editor-row__actions {
-  display: inline-flex;
-  gap: 0.375rem;
+.goal-card.sortable-chosen {
+  box-shadow: 2px 3px 0 0 var(--doodle-ink);
 }
 
-.goal-editor-row__icon-btn,
-.goal-editor-add-btn,
-.goal-editor-clear-btn {
+.goal-editor-add-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.375rem;
   border: 2px solid var(--doodle-ink);
-  background: var(--card);
+  background: var(--doodle-sand);
   border-radius: 0.5rem;
   font-family: var(--font-mono), monospace, sans-serif;
   font-size: 0.75rem;
-}
-
-.goal-editor-row__icon-btn {
-  width: 2rem;
-  height: 2rem;
-}
-
-.goal-editor-add-btn,
-.goal-editor-clear-btn {
   padding: 0.5rem 0.75rem;
-}
-
-.goal-editor-add-btn {
-  background: var(--doodle-sand);
-}
-
-.goal-editor-clear-btn {
-  color: oklch(0.45 0.12 25);
-}
-
-.goal-editor-row__icon-btn:disabled,
-.goal-editor-clear-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
 }
 
 .goal-editor-validation {

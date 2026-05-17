@@ -1,0 +1,76 @@
+feature: managed-mcp-registry
+approved: true
+scenarios:
+  - id: F1
+    scenario: 使用者從 Header 開啟全域 MCP 管理入口
+    given:
+      - 使用者正在 AgentCanvas 畫布中操作
+      - 系統已提供獨立的 MCP 按鈕
+    when:
+      - 點擊 Header 上的 MCP 按鈕
+    then:
+      - 開啟全域 MCP 管理介面
+      - 顯示目前已註冊的 MCP 清單
+      - 顯示每個 MCP 的目前狀態
+
+  - id: F2
+    scenario: 使用者儲存全域 MCP 設定
+    given:
+      - 使用者已開啟全域 MCP 管理介面
+      - 使用者要管理某個 MCP 服務
+    when:
+      - 填寫 MCP 設定內容
+      - 儲存變更
+    then:
+      - MCP 清單更新為最新內容
+      - 顯示該 MCP 的連線類型
+      - 顯示該 MCP 的目前狀態
+
+  - id: F3
+    scenario: 使用者在 Pod 上挑選要使用的 MCP
+    given:
+      - 使用者已建立一個 Pod
+      - 全域 MCP 清單中已有可用的 MCP
+    when:
+      - 開啟該 Pod 的 MCP 選擇介面
+      - 調整該 Pod 的 MCP 勾選狀態
+    then:
+      - 該 Pod 只保留自己選取的 MCP
+      - 畫面顯示這個 Pod 目前可使用的 MCP 狀態
+      - 不能使用的 MCP 會顯示原因
+
+  - id: F4
+    scenario: 使用者查看 MCP 服務的執行狀態
+    given:
+      - 全域 MCP 清單中已有 MCP
+      - 其中至少一個 MCP 曾被啟動或連線
+    when:
+      - 在全域 MCP 管理介面查看某個 MCP
+    then:
+      - 可以看到該 MCP 是否健康
+      - 可以看到該 MCP 是否正在啟動
+      - 可以看到最近一次失敗原因
+
+  - id: F5
+    scenario: 使用者啟動 Pod 執行時只套用該 Pod 選取的 MCP
+    given:
+      - 使用者已為某個 Pod 選取一組 MCP
+      - 另一個 Pod 可選擇不同的 MCP 組合
+    when:
+      - 啟動其中一個 Pod 的執行
+    then:
+      - 該次執行只套用這個 Pod 已選取的 MCP
+      - 沒有被這個 Pod 選取的 MCP 不會出現在該次執行
+      - 不同 Pod 的 MCP 使用範圍彼此分開
+
+  - id: F6
+    scenario: 使用者在全域 MCP 變動後重新查看 Pod 的可用狀態
+    given:
+      - 某個 Pod 已經選過 MCP
+      - 使用者之後修改了全域 MCP 設定
+    when:
+      - 重新開啟該 Pod 的 MCP 選擇介面
+    then:
+      - Pod 看到的是最新的全域 MCP 可用狀態
+      - 已失效的 MCP 會被標示出來
+      - 系統不會讓 Pod 繼續套用無效的 MCP

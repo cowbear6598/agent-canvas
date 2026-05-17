@@ -232,13 +232,15 @@
       },
       "editor": {
         "title": "編輯 {name} 的 Goal",
-        "description": "把這個 Pod 這次要完成的待辦拆成可排序的清單。",
         "todoPlaceholder": "待辦 {index}",
         "addTodo": "新增待辦",
-        "clearGoal": "清空 Goal",
-        "moveUp": "上移",
-        "moveDown": "下移",
         "removeTodo": "刪除待辦",
+        "dragHandle": "拖曳排序",
+        "subModal": {
+          "titleAdd": "新增 Todo",
+          "titleEdit": "編輯 Todo",
+          "placeholder": "請輸入這條 todo 的內容"
+        },
         "validation": {
           "noEmptyRows": "請填完空白待辦，或把它刪掉"
         }

@@ -20,8 +20,17 @@ vi.mock("@/components/ui/button", () => ({
   Button: {
     name: "Button",
     props: ["variant", "disabled"],
+    emits: ["click"],
     template:
       '<button :disabled="disabled" @click="$emit(\'click\', $event)"><slot /></button>',
+  },
+}));
+
+vi.mock("vue-draggable-plus", () => ({
+  VueDraggable: {
+    name: "VueDraggable",
+    props: ["modelValue"],
+    template: "<div><slot /></div>",
   },
 }));
 
@@ -37,22 +46,38 @@ function mountGoalEditor(podOverrides = {}) {
   });
 }
 
+async function openSubModalAdd(wrapper: ReturnType<typeof mountGoalEditor>) {
+  await wrapper.find('[data-testid="goal-editor-add"]').trigger("click");
+}
+
+async function openSubModalEditByIndex(
+  wrapper: ReturnType<typeof mountGoalEditor>,
+  index: number,
+) {
+  const previews = wrapper.findAll('[data-testid="goal-card-preview"]');
+  await previews[index]!.trigger("click");
+}
+
+async function submitSubModal(
+  wrapper: ReturnType<typeof mountGoalEditor>,
+  text: string,
+) {
+  const textarea = wrapper.find<HTMLTextAreaElement>(
+    '[data-testid="goal-todo-editor-textarea"]',
+  );
+  await textarea.setValue(text);
+  await wrapper.find('[data-testid="goal-todo-editor-save"]').trigger("click");
+}
+
 describe("GoalEditorModal", () => {
-  it("可新增多條 todo 並儲存到 Pod goal", async () => {
+  it("可透過子 Modal 新增多條 todo 並儲存到 Pod goal", async () => {
     const wrapper = mountGoalEditor({ goal: null });
 
-    const initialInput = wrapper.findAll<HTMLInputElement>(
-      '[data-testid="goal-editor-input"]',
-    )[0];
-    expect(initialInput).toBeDefined();
+    await openSubModalAdd(wrapper);
+    await submitSubModal(wrapper, "First task");
 
-    await initialInput!.setValue("First task");
-    await wrapper.find('[data-testid="goal-editor-add"]').trigger("click");
-
-    const inputs = wrapper.findAll<HTMLInputElement>(
-      '[data-testid="goal-editor-input"]',
-    );
-    await inputs[1]!.setValue("Second task");
+    await openSubModalAdd(wrapper);
+    await submitSubModal(wrapper, "Second task");
 
     await wrapper.find('[data-testid="goal-editor-save"]').trigger("click");
 
@@ -78,35 +103,32 @@ describe("GoalEditorModal", () => {
     ).toBe(false);
   });
 
-  it("存在空白 row 時儲存應顯示驗證且不 emit submit", async () => {
-    const wrapper = mountGoalEditor({ goal: null });
-
-    await wrapper
-      .findAll<HTMLInputElement>('[data-testid="goal-editor-input"]')[0]!
-      .setValue("First task");
-    await wrapper.find('[data-testid="goal-editor-add"]').trigger("click");
-    await wrapper.find('[data-testid="goal-editor-save"]').trigger("click");
-
-    expect(
-      wrapper.find('[data-testid="goal-editor-validation"]').exists(),
-    ).toBe(true);
-    expect(wrapper.emitted("submit")).toBeFalsy();
-  });
-
-  it("可清空既有 Goal", async () => {
+  it("可透過子 Modal 編輯既有 todo 並保留順序", async () => {
     const wrapper = mountGoalEditor({
       goal: {
-        todos: [{ id: "goal-1", text: "Existing task" }],
+        todos: [
+          { id: "goal-1", text: "Original A" },
+          { id: "goal-2", text: "Original B" },
+        ],
       },
     });
 
-    const clearButton = wrapper.find<HTMLButtonElement>(
-      '[data-testid="goal-editor-clear"]',
-    );
-    expect(clearButton.attributes("disabled")).toBeUndefined();
+    await openSubModalEditByIndex(wrapper, 0);
+    await submitSubModal(wrapper, "Updated A");
 
-    await clearButton.trigger("click");
+    await wrapper.find('[data-testid="goal-editor-save"]').trigger("click");
 
-    expect(wrapper.emitted("submit")?.[0]).toEqual([null]);
+    const submitPayload = wrapper.emitted("submit")?.[0]?.[0] as
+      | { todos: Array<{ id: string; text: string }> }
+      | undefined;
+    expect(submitPayload).toBeTruthy();
+    expect(submitPayload?.todos.map((todo) => todo.id)).toEqual([
+      "goal-1",
+      "goal-2",
+    ]);
+    expect(submitPayload?.todos.map((todo) => todo.text)).toEqual([
+      "Updated A",
+      "Original B",
+    ]);
   });
 });

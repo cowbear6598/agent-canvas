@@ -232,13 +232,15 @@
       },
       "editor": {
         "title": "Edit Goal for {name}",
-        "description": "Break this Pod's work into an ordered checklist.",
         "todoPlaceholder": "Todo {index}",
         "addTodo": "Add Todo",
-        "clearGoal": "Clear Goal",
-        "moveUp": "Move up",
-        "moveDown": "Move down",
         "removeTodo": "Remove todo",
+        "dragHandle": "Drag to reorder",
+        "subModal": {
+          "titleAdd": "Add Todo",
+          "titleEdit": "Edit Todo",
+          "placeholder": "Enter the content of this todo"
+        },
         "validation": {
           "noEmptyRows": "Fill in blank todos or remove them"
         }

@@ -232,13 +232,15 @@
       },
       "editor": {
         "title": "{name} の Goal を編集",
-        "description": "この Pod が今回完了すべき作業を、順序付きのチェックリストに分解します。",
         "todoPlaceholder": "Todo {index}",
         "addTodo": "Todo を追加",
-        "clearGoal": "Goal をクリア",
-        "moveUp": "上へ移動",
-        "moveDown": "下へ移動",
         "removeTodo": "Todo を削除",
+        "dragHandle": "ドラッグで並べ替え",
+        "subModal": {
+          "titleAdd": "Todo を追加",
+          "titleEdit": "Todo を編集",
+          "placeholder": "この Todo の内容を入力してください"
+        },
         "validation": {
           "noEmptyRows": "空の Todo は入力するか削除してください"
         }
