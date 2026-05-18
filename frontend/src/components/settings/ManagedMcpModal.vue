@@ -389,7 +389,10 @@ watch(
 </script>
 
 <template>
-  <Dialog :open="open" @update:open="handleClose">
+  <Dialog
+    :open="open"
+    @update:open="handleClose"
+  >
     <DialogContent class="max-w-5xl">
       <DialogHeader>
         <DialogTitle>{{ t("managedMcp.modal.title") }}</DialogTitle>
@@ -444,8 +447,8 @@ watch(
           <div
             v-if="
               managedMcpStore.loading &&
-              pendingAction === 'refresh' &&
-              managedMcpStore.registry.length === 0
+                pendingAction === 'refresh' &&
+                managedMcpStore.registry.length === 0
             "
             class="px-4 py-6 text-sm text-muted-foreground"
           >
@@ -467,7 +470,10 @@ watch(
             </p>
           </div>
 
-          <ScrollArea v-else class="h-[18rem] lg:h-[32rem]">
+          <ScrollArea
+            v-else
+            class="h-[18rem] lg:h-[32rem]"
+          >
             <div class="space-y-2 p-3">
               <div
                 v-for="item in managedMcpStore.registry"
@@ -561,7 +567,7 @@ watch(
                   v-model="draft.enabled"
                   type="checkbox"
                   class="h-4 w-4 rounded border-input text-primary"
-                />
+                >
                 <span>{{ t("managedMcp.form.enabled") }}</span>
               </label>
             </div>
@@ -660,7 +666,10 @@ watch(
               </label>
             </div>
 
-            <div v-if="draft.transport === 'stdio'" class="mt-4 space-y-4">
+            <div
+              v-if="draft.transport === 'stdio'"
+              class="mt-4 space-y-4"
+            >
               <label class="space-y-2">
                 <span class="text-sm font-medium">
                   {{ t("managedMcp.form.command") }}
@@ -779,7 +788,10 @@ watch(
               </div>
             </div>
 
-            <label v-else class="mt-4 block space-y-2">
+            <label
+              v-else
+              class="mt-4 block space-y-2"
+            >
               <span class="text-sm font-medium">
                 {{ t("managedMcp.form.url") }}
               </span>
