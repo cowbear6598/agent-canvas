@@ -526,7 +526,10 @@ const handleContextMenu = (e: MouseEvent): void => {
             viewBox="0 0 200 6"
             aria-hidden="true"
           >
-            <path :d="dividerPath" vector-effect="non-scaling-stroke" />
+            <path
+              :d="dividerPath"
+              vector-effect="non-scaling-stroke"
+            />
           </svg>
 
           <!-- 未知 Provider fallback badge：

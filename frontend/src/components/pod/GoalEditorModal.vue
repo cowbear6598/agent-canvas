@@ -81,7 +81,10 @@ const previewLine = (text: string): string => text.split("\n")[0] ?? "";
 </script>
 
 <template>
-  <Dialog :open="open" @update:open="handleClose">
+  <Dialog
+    :open="open"
+    @update:open="handleClose"
+  >
     <DialogContent class="max-w-2xl">
       <DialogHeader>
         <DialogTitle class="flex items-center gap-2">
@@ -152,7 +155,10 @@ const previewLine = (text: string): string => text.split("\n")[0] ?? "";
       </div>
 
       <DialogFooter class="gap-2">
-        <Button variant="outline" @click="handleClose">
+        <Button
+          variant="outline"
+          @click="handleClose"
+        >
           {{ t("common.cancel") }}
         </Button>
         <Button

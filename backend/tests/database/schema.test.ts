@@ -39,6 +39,7 @@ describe("Database", () => {
         "global_settings",
         "integration_apps",
         "integration_bindings",
+        "managed_mcp_servers",
         "model_aliases",
         "notes",
         "pod_manifests",

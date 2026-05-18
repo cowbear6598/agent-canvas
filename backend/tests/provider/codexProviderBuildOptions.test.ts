@@ -5,10 +5,21 @@
  * - 空 providerConfig → 回傳 metadata.defaultOptions
  * - providerConfig.model 合法 → 採用之
  * - providerConfig.model 不合法 → fallback 為 default
- * - 傳入 runContext + Goal → 注入 request-scoped Goal MCP
+ * - 傳入 runContext → 注入 request-scoped managed surface
  */
 
-import { describe, it, expect } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { mockManagedMcpSurfaceService } = vi.hoisted(() => ({
+  mockManagedMcpSurfaceService: {
+    ensureSurface: vi.fn(),
+  },
+}));
+
+vi.mock("../../src/services/mcp/managedMcpSurfaceService.js", () => ({
+  AGENT_CANVAS_MANAGED_SURFACE_NAME: "agent_canvas_managed_surface",
+  managedMcpSurfaceService: mockManagedMcpSurfaceService,
+}));
 
 import { CodexProvider } from "../../src/services/provider/codexProvider.js";
 import type { Pod } from "../../src/types/pod.js";
@@ -40,6 +51,28 @@ function makePod(overrides: Partial<Pod> = {}): Pod {
 describe("CodexProvider.buildOptions()", () => {
   const provider = new CodexProvider();
 
+  beforeEach(() => {
+    mockManagedMcpSurfaceService.ensureSurface.mockResolvedValue({
+      runId: "run-001",
+      podId: "pod-buildopts-001",
+      provider: "codex",
+      sourceNames: ["team-server"],
+      targetNames: ["agent_canvas_goal", "team-server"],
+      ignoredTargets: [],
+      hasGoalRuntime: true,
+      statePath: "/tmp/managed-surface/run-001/pod-buildopts-001.json",
+      mcpServer: {
+        name: "agent_canvas_managed_surface",
+        command: process.execPath,
+        args: ["/tmp/managedMcpSurfaceBridge.ts"],
+        env: {
+          AGENT_CANVAS_MANAGED_MCP_SURFACE_PATH:
+            "/tmp/managed-surface/run-001/pod-buildopts-001.json",
+        },
+      },
+    });
+  });
+
   // ── Case 1：空 providerConfig → 回傳 metadata.defaultOptions ─────────
   it("空 providerConfig 應回傳 metadata.defaultOptions", async () => {
     const pod = makePod({ providerConfig: {} });
@@ -50,6 +83,8 @@ describe("CodexProvider.buildOptions()", () => {
     expect(options.resumeMode).toBe("cli");
     expect(options.mcpServerNames).toEqual([]);
     expect(options.goalMcpServer).toBeNull();
+    expect(options.managedSurface).toBeNull();
+    expect(options.goalPromptEnabled).toBe(false);
   });
 
   // ── Case 2：合法 model → 採用之 ──────────────────────────────────────
@@ -91,7 +126,7 @@ describe("CodexProvider.buildOptions()", () => {
   });
 
   // ── Case 5：runContext 傳入時不影響輸出 ──────────────────────────────
-  it("傳入 runContext 且 Pod 有 Goal 時應注入 Goal MCP", async () => {
+  it("傳入 runContext 時應改為注入 managed surface", async () => {
     const pod = makePod({
       providerConfig: { model: "gpt-5.4-pro" },
       goal: {
@@ -108,14 +143,21 @@ describe("CodexProvider.buildOptions()", () => {
 
     expect(withContext.model).toBe("gpt-5.4-pro");
     expect(withContext.resumeMode).toBe("cli");
-    expect(withContext.mcpServerNames).toContain("agent_canvas_goal");
-    expect(withContext.goalMcpServer?.name).toBe("agent_canvas_goal");
-    expect(withContext.goalMcpServer?.env.AGENT_CANVAS_GOAL_STATE_PATH).toContain(
-      "run-001",
+    expect(mockManagedMcpSurfaceService.ensureSurface).toHaveBeenCalledWith(
+      fakeRunContext,
+      pod,
     );
+    expect(withContext.mcpServerNames).toEqual([
+      "agent_canvas_managed_surface",
+    ]);
+    expect(withContext.goalMcpServer).toBeNull();
+    expect(withContext.managedSurface?.name).toBe(
+      "agent_canvas_managed_surface",
+    );
+    expect(withContext.goalPromptEnabled).toBe(true);
   });
 
-  it("傳入 runContext 且 Pod 無 Goal 時仍應注入 Goal MCP", async () => {
+  it("傳入 runContext 且 Pod 無 Goal 時仍應注入 managed surface", async () => {
     const pod = makePod({
       providerConfig: { model: "gpt-5.4-pro" },
       goal: null,
@@ -128,10 +170,13 @@ describe("CodexProvider.buildOptions()", () => {
 
     const withContext = await provider.buildOptions(pod, fakeRunContext);
 
-    expect(withContext.mcpServerNames).toContain("agent_canvas_goal");
-    expect(withContext.goalMcpServer?.name).toBe("agent_canvas_goal");
-    expect(withContext.goalMcpServer?.env.AGENT_CANVAS_GOAL_STATE_PATH).toContain(
-      "run-001",
+    expect(withContext.mcpServerNames).toEqual([
+      "agent_canvas_managed_surface",
+    ]);
+    expect(withContext.goalMcpServer).toBeNull();
+    expect(withContext.managedSurface?.name).toBe(
+      "agent_canvas_managed_surface",
     );
+    expect(withContext.goalPromptEnabled).toBe(true);
   });
 });

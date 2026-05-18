@@ -16,7 +16,10 @@ import {
 import { useCanvasStore } from "@/stores/canvasStore";
 import { usePodStore } from "@/stores/pod/podStore";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
-import { invalidateMcpServersCache, listMcpServers } from "@/services/mcpApi";
+import {
+  invalidatePodMcpAvailabilityCache,
+  listPodMcpAvailability,
+} from "@/services/managedMcpApi";
 import type { Pod } from "@/types";
 import PodModelSelector from "@/components/pod/PodModelSelector.vue";
 
@@ -254,7 +257,7 @@ describe("Canvas/Pod 操作完整流程", () => {
 
   describe("Goal-aware MCP list", () => {
     beforeEach(() => {
-      invalidateMcpServersCache();
+      invalidatePodMcpAvailabilityCache();
     });
 
     it("有 Goal 與無 Goal 的 Pod 都會拿到 built-in Goal Runtime，且不共用同一份清單", async () => {
@@ -284,8 +287,11 @@ describe("Canvas/Pod 操作完整流程", () => {
           ],
         });
 
-      const withGoal = await listMcpServers("claude", "pod-with-goal");
-      const withoutGoal = await listMcpServers("claude", "pod-without-goal");
+      const withGoal = await listPodMcpAvailability("pod-with-goal", "claude");
+      const withoutGoal = await listPodMcpAvailability(
+        "pod-without-goal",
+        "claude",
+      );
 
       expect(withGoal.some((item) => item.name === "agent_canvas_goal")).toBe(
         true,

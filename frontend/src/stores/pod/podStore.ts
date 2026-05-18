@@ -24,10 +24,8 @@ import type {
   PodSetGoalPayload,
   PodSetSchedulePayload,
 } from "@/types/websocket";
-import {
-  invalidateMcpServersCache,
-  updatePodMcpServers as updatePodMcpServersApi,
-} from "@/services/mcpApi";
+import { updatePodMcpServers as updatePodMcpServersApi } from "@/services/mcpApi";
+import { invalidatePodMcpAvailabilityCache } from "@/services/managedMcpApi";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useToast } from "@/composables/useToast";
 import { t } from "@/i18n";
@@ -150,9 +148,9 @@ export const usePodStore = defineStore("pod", () => {
       existingPod.provider !== pod.provider ||
       !areGoalsEqual(existingPod.goal ?? null, pod.goal ?? null)
     ) {
-      invalidateMcpServersCache(existingPod.provider, existingPod.id);
+      invalidatePodMcpAvailabilityCache(existingPod.provider, existingPod.id);
       if (existingPod.provider !== pod.provider) {
-        invalidateMcpServersCache(pod.provider, pod.id);
+        invalidatePodMcpAvailabilityCache(pod.provider, pod.id);
       }
     }
 
@@ -224,7 +222,7 @@ export const usePodStore = defineStore("pod", () => {
   }
 
   function syncPodsFromBackend(podsData: Pod[]): void {
-    invalidateMcpServersCache();
+    invalidatePodMcpAvailabilityCache();
     const enrichedPods = podsData.map((pod, index) => {
       const enriched = enrichPod(pod);
       return {
@@ -427,8 +425,8 @@ export const usePodStore = defineStore("pod", () => {
     if (!pod) return;
 
     if (pod.provider !== provider) {
-      invalidateMcpServersCache(pod.provider, pod.id);
-      invalidateMcpServersCache(provider, pod.id);
+      invalidatePodMcpAvailabilityCache(pod.provider, pod.id);
+      invalidatePodMcpAvailabilityCache(provider, pod.id);
     }
 
     pod.provider = provider;
@@ -517,7 +515,7 @@ export const usePodStore = defineStore("pod", () => {
   function removePod(podId: string): void {
     const pod = findPodById(podId);
     if (pod) {
-      invalidateMcpServersCache(pod.provider, pod.id);
+      invalidatePodMcpAvailabilityCache(pod.provider, pod.id);
     }
 
     pods.value = pods.value.filter((pod) => pod.id !== podId);
@@ -563,7 +561,7 @@ export const usePodStore = defineStore("pod", () => {
 
   // 切換 canvas 時重設 pod 相關狀態
   function resetForCanvasSwitch(): void {
-    invalidateMcpServersCache();
+    invalidatePodMcpAvailabilityCache();
     pods.value = [];
     selectedPodId.value = null;
     activePodId.value = null;

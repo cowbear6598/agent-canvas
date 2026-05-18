@@ -41,6 +41,17 @@ vi.mock("../../src/services/claude/claudePathResolver.js", () => ({
   getClaudeCodePath: vi.fn(() => "/usr/local/bin/claude"),
 }));
 
+const { mockManagedMcpSurfaceService } = vi.hoisted(() => ({
+  mockManagedMcpSurfaceService: {
+    ensureSurface: vi.fn(),
+  },
+}));
+
+vi.mock("../../src/services/mcp/managedMcpSurfaceService.js", () => ({
+  AGENT_CANVAS_MANAGED_SURFACE_NAME: "agent_canvas_managed_surface",
+  managedMcpSurfaceService: mockManagedMcpSurfaceService,
+}));
+
 vi.mock("../../src/utils/logger.js", () => ({
   logger: {
     log: vi.fn(),
@@ -85,7 +96,6 @@ import { readClaudeMcpServers } from "../../src/services/mcp/claudeMcpReader.js"
 import { scanInstalledPlugins } from "../../src/services/pluginScanner.js";
 import { integrationRegistry } from "../../src/services/integration/index.js";
 import { BASE_ALLOWED_TOOLS } from "../../src/services/provider/claude/buildClaudeOptions.js";
-import { GOAL_MCP_SERVER_NAME } from "../../src/services/goalRuntime.js";
 import type { Pod } from "../../src/types/pod.js";
 import type { RunContext } from "../../src/types/run.js";
 
@@ -132,6 +142,25 @@ describe("claudeProvider.buildOptions()", () => {
     vi.mocked(readClaudeMcpServers).mockReturnValue([]);
     vi.mocked(scanInstalledPlugins).mockReturnValue([]);
     vi.mocked(integrationRegistry.get).mockReturnValue(undefined);
+    mockManagedMcpSurfaceService.ensureSurface.mockResolvedValue({
+      runId: "run-goal-001",
+      podId: "pod-build-001",
+      provider: "claude",
+      sourceNames: ["my-mcp-server"],
+      targetNames: ["agent_canvas_goal", "my-mcp-server"],
+      ignoredTargets: [],
+      hasGoalRuntime: true,
+      statePath: "/tmp/managed-surface/run-goal-001/pod-build-001.json",
+      mcpServer: {
+        name: "agent_canvas_managed_surface",
+        command: process.execPath,
+        args: ["/tmp/managedMcpSurfaceBridge.ts"],
+        env: {
+          AGENT_CANVAS_MANAGED_MCP_SURFACE_PATH:
+            "/tmp/managed-surface/run-goal-001/pod-build-001.json",
+        },
+      },
+    });
   });
 
   // ── Case 1：空 Pod → 等於 defaultOptions + pod model ─────────────────
@@ -198,7 +227,7 @@ describe("claudeProvider.buildOptions()", () => {
     expect(options.mcpServers).toBeUndefined();
   });
 
-  it("傳入 runContext 且 Pod 有 Goal 時應注入 Goal MCP", async () => {
+  it("Claude 只注入一顆 managed surface", async () => {
     const pod = makePod({
       goal: {
         todos: [
@@ -210,31 +239,34 @@ describe("claudeProvider.buildOptions()", () => {
 
     const options = await claudeProvider.buildOptions(pod, makeRunContext());
 
-    expect(options.mcpServers?.[GOAL_MCP_SERVER_NAME]).toBeDefined();
-    expect(options.mcpServers?.[GOAL_MCP_SERVER_NAME]).toMatchObject({
+    expect(mockManagedMcpSurfaceService.ensureSurface).toHaveBeenCalledWith(
+      makeRunContext(),
+      pod,
+    );
+    expect(readClaudeMcpServers).not.toHaveBeenCalled();
+    expect(options.mcpServers?.agent_canvas_managed_surface).toMatchObject({
       command: process.execPath,
       env: {
-        AGENT_CANVAS_GOAL_STATE_PATH: expect.stringContaining(
-          "run-goal-001/pod-build-001.json",
+        AGENT_CANVAS_MANAGED_MCP_SURFACE_PATH: expect.stringContaining(
+          "pod-build-001.json",
         ),
       },
     });
-    expect(options.mcpServers?.[GOAL_MCP_SERVER_NAME]?.args).toEqual([
-      expect.stringContaining("goalMcpBridge.ts"),
+    expect(options.mcpServers?.agent_canvas_managed_surface?.args).toEqual([
+      expect.stringContaining("managedMcpSurfaceBridge.ts"),
     ]);
   });
 
-  it("傳入 runContext 且 Pod 無 Goal 時仍應注入 Goal MCP", async () => {
+  it("傳入 runContext 且 Pod 無 Goal 時仍應注入 managed surface", async () => {
     const pod = makePod({ goal: null });
 
     const options = await claudeProvider.buildOptions(pod, makeRunContext());
 
-    expect(options.mcpServers?.[GOAL_MCP_SERVER_NAME]).toBeDefined();
-    expect(options.mcpServers?.[GOAL_MCP_SERVER_NAME]).toMatchObject({
+    expect(options.mcpServers?.agent_canvas_managed_surface).toMatchObject({
       command: process.execPath,
       env: {
-        AGENT_CANVAS_GOAL_STATE_PATH: expect.stringContaining(
-          "run-goal-001/pod-build-001.json",
+        AGENT_CANVAS_MANAGED_MCP_SURFACE_PATH: expect.stringContaining(
+          "pod-build-001.json",
         ),
       },
     });

@@ -14,6 +14,7 @@ import {
 } from "./eventHandlers/runEventHandlers";
 import { getBackupStandaloneListeners } from "./eventHandlers/backupEventHandlers";
 import { getOpencodeStandaloneListeners } from "./eventHandlers/opencodeEventHandlers";
+import { getManagedMcpEventListeners } from "./eventHandlers/managedMcpEventHandlers";
 
 const isListenerRegistered = ref(false);
 
@@ -24,6 +25,7 @@ export const listeners = [
   ...getCanvasEventListeners(),
   ...getIntegrationEventListeners(),
   ...getRunEventListeners(),
+  ...getManagedMcpEventListeners(),
 ];
 
 // standalone 事件的 payload 不需經過 createUnifiedHandler 的 requestId / Toast 機制，因此維持獨立註冊。

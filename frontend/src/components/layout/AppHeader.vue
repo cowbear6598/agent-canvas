@@ -69,6 +69,15 @@
         </button>
 
         <button
+          data-managed-mcp-toggle
+          class="flex items-center justify-center rounded-md p-2 hover:bg-accent"
+          :title="$t('layout.header.managedMcp')"
+          @click="showManagedMcpModal = true"
+        >
+          <Bot class="h-4 w-4" />
+        </button>
+
+        <button
           class="flex items-center justify-center rounded-md p-2 hover:bg-accent"
           :title="$t('layout.header.integrations')"
           @click="showIntegrationModal = true"
@@ -117,6 +126,7 @@
     :provider="selectedProvider ?? ''"
     @update:open="selectedProvider = null"
   />
+  <ManagedMcpModal v-model:open="showManagedMcpModal" />
   <GlobalSettingsModal v-model:open="showSettingsModal" />
   <LlmProviderModal v-model:open="showLlmProviderModal" />
 </template>
@@ -126,6 +136,7 @@ import { ref, computed, onMounted, onUnmounted } from "vue";
 import {
   Sparkles,
   LayoutDashboard,
+  Bot,
   KeyRound,
   Settings,
   History,
@@ -136,6 +147,7 @@ import ConnectionStatus from "@/components/ui/ConnectionStatus.vue";
 import IntegrationSelectModal from "@/components/integration/IntegrationSelectModal.vue";
 import IntegrationAppsModal from "@/components/integration/IntegrationAppsModal.vue";
 import GlobalSettingsModal from "@/components/settings/GlobalSettingsModal.vue";
+import ManagedMcpModal from "@/components/settings/ManagedMcpModal.vue";
 import LlmProviderModal from "@/components/settings/LlmProviderModal.vue";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { useRunStore } from "@/stores/run/runStore";
@@ -146,6 +158,7 @@ const runStore = useRunStore();
 const showIntegrationModal = ref<boolean>(false);
 const selectedProvider = ref<string | null>(null);
 const showSettingsModal = ref<boolean>(false);
+const showManagedMcpModal = ref<boolean>(false);
 const showLlmProviderModal = ref<boolean>(false);
 
 const handleIntegrationSelect = (category: string): void => {

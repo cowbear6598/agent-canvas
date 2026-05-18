@@ -1,5 +1,6 @@
 import type { Schedule, PodProvider, ProviderConfig, PodGoal } from "../pod";
 import type { AnchorPosition } from "@/types";
+import type { ManagedMcpRegistryInput } from "../mcp";
 
 export type ImageMediaType =
   | "image/jpeg"
@@ -271,6 +272,31 @@ export interface McpListPayload {
   provider: "claude" | "codex" | "opencode";
   /** 同 provider 的不同 Pod 可能帶不同 built-in MCP */
   podId: string;
+}
+
+export interface ManagedMcpRegistryListPayload {
+  requestId: string;
+}
+
+export interface ManagedMcpRegistrySavePayload {
+  requestId: string;
+  registry: ManagedMcpRegistryInput;
+}
+
+export interface ManagedMcpRegistryDeletePayload {
+  requestId: string;
+  registryId: string;
+}
+
+export interface PodMcpAvailabilityListPayload {
+  requestId: string;
+  podId: string;
+  /**
+   * compatibility 用欄位：
+   * 目前 caller 仍會帶 provider 進來做 cache key 與舊介面轉接，
+   * 後端可忽略此欄位，直接依 podId 查 provider。
+   */
+  provider?: PodProvider;
 }
 
 /** 設定指定 Pod 的 MCP server 名稱清單 */

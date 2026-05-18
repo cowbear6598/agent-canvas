@@ -290,6 +290,7 @@
       "mcpCodexEmptyHint": "`codex mcp add` でインストールしてください",
       "mcpToggleFailed": "MCP server の切替に失敗しました",
       "mcpLoadFailed": "読み込み失敗",
+      "mcpManagedHint": "Header の MCP パネルからグローバル MCP を追加してください",
       "mcpCodexHint": "Codex MCP server は codex でグローバル管理されます",
       "goalMcpLabel": "Goal Runtime",
       "builtinBadge": "Built-in",
@@ -331,9 +332,79 @@
     "header": {
       "canvasList": "Canvas 一覧",
       "globalSettings": "グローバル設定",
+      "managedMcp": "Managed MCP",
       "integrations": "インテグレーション管理",
       "history": "実行履歴",
       "llmProvider": "LLM Provider 設定"
+    }
+  },
+  "managedMcp": {
+    "modal": {
+      "title": "Managed MCP",
+      "description": "グローバル MCP registry と runtime 状態を管理"
+    },
+    "list": {
+      "title": "Registry",
+      "description": "グローバル MCP はここで管理し、Pod 側では使う subset だけを選択します。"
+    },
+    "empty": {
+      "title": "まだ MCP が登録されていません",
+      "description": "最初の managed MCP を作成すると、Pod が availability から選べるようになります。"
+    },
+    "actions": {
+      "create": "MCP を追加",
+      "save": "変更を保存",
+      "delete": "MCP を削除",
+      "refresh": "更新"
+    },
+    "badge": {
+      "configDisabled": "設定無効"
+    },
+    "transport": {
+      "stdio": "STDIO",
+      "http": "HTTP",
+      "sse": "SSE"
+    },
+    "status": {
+      "healthy": "Healthy",
+      "starting": "Starting",
+      "error": "Error",
+      "idle": "Idle",
+      "disabled": "Disabled",
+      "unknown": "Unknown",
+      "running": "Running",
+      "blocked": "Blocked",
+      "completed": "Completed"
+    },
+    "form": {
+      "createTitle": "新しい MCP を作成",
+      "createDescription": "transport と接続情報を保存すると、この MCP がグローバル registry に追加されます。",
+      "editTitle": "MCP 設定を編集",
+      "editDescription": "選択中の MCP について、registry 設定と最新の runtime 状態を表示します。",
+      "enabled": "有効",
+      "name": "名前",
+      "namePlaceholder": "例：linear-sync",
+      "transport": "Transport",
+      "status": "状態",
+      "command": "Command",
+      "commandPlaceholder": "例：uvx mcp-server-filesystem",
+      "cwd": "Working Directory",
+      "cwdPlaceholder": "例：/Users/me/projects",
+      "args": "Args",
+      "argsPlaceholder": "Argument",
+      "argsHint": "STDIO モードでは各エントリが 1 つの argument として送られます。",
+      "env": "Environment",
+      "envPlaceholder": "KEY=value",
+      "envKeyPlaceholder": "KEY",
+      "envValuePlaceholder": "Value",
+      "envHint": "各エントリが 1 組の KEY=value になります。空の key は無視されます。",
+      "url": "URL",
+      "urlPlaceholder": "例：https://mcp.example.com/sse",
+      "lastError": "直近の失敗理由"
+    },
+    "validation": {
+      "commandRequired": "STDIO モードでは command の入力が必要です",
+      "urlRequired": "HTTP / SSE モードでは URL の入力が必要です"
     }
   },
   "llmProvider": {

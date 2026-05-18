@@ -35,7 +35,7 @@ import {
   type ProvisionedRunExecutionResources,
 } from "../runtime/runExecutionResources.js";
 import { removeGoalRuntimeRun } from "../goalRuntime.js";
-import { cleanupOpencodeRunServers } from "../provider/opencodeProvider.js";
+import { managedMcpSurfaceService } from "../mcp/managedMcpSurfaceService.js";
 
 const MAX_RUNS_PER_CANVAS = 30;
 
@@ -148,6 +148,11 @@ class RunExecutionService {
     );
 
     const chainPodIds = this.collectChainPodIds(canvasId, sourcePodId);
+    const runContext: RunContext = {
+      runId: workflowRun.id,
+      canvasId,
+      sourcePodId,
+    };
     // 同一 Run 內相同 repositoryId 的 Pod 共用同一份 repo-level workspace
     const runRepoCache = new Map<
       string,
@@ -210,6 +215,30 @@ class RunExecutionService {
         continue;
       }
 
+      try {
+        await managedMcpSurfaceService.ensureSurface(runContext, pod);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "建立 managed MCP surface 失敗";
+        logger.error(
+          "Run",
+          "Error",
+          `建立 managed MCP surface 失敗（runId=${workflowRun.id}, podId=${podId}）：${message}`,
+        );
+        const instance = runStore.createPodInstance(
+          workflowRun.id,
+          podId,
+          pathways.autoPathwaySettled,
+          pathways.directPathwaySettled,
+        );
+        runStore.updatePodInstanceStatus(instance.id, "error", message);
+        provisioningErrors.push({ podId, error: message });
+        instances.push(
+          runStore.getPodInstance(workflowRun.id, podId) ?? instance,
+        );
+        continue;
+      }
+
       instances.push(
         runStore.createPodInstance(
           workflowRun.id,
@@ -256,7 +285,7 @@ class RunExecutionService {
 
     this.enforceRunLimit(canvasId);
 
-    return { runId: workflowRun.id, canvasId, sourcePodId };
+    return runContext;
   }
 
   private collectChainPodIds(canvasId: string, sourcePodId: string): string[] {
@@ -655,12 +684,12 @@ class RunExecutionService {
 
   /**
    * 清理指定 Run 的所有隔離資源。
-   * 包含 per-Run repo clone、run sandbox home、Goal Runtime tmp 目錄、opencode 快取 server。
+   * 包含 per-Run MCP surface、repo clone、run sandbox home 與 Goal Runtime tmp 目錄。
    */
   private async cleanupRunResources(runId: string): Promise<void> {
-    // Goal Runtime tmp 目錄與 opencode Run-scoped server 快取：
-    // 優先在 repo/sandbox 清理之前執行，確保 server 在目錄刪除前已關閉
-    cleanupOpencodeRunServers(runId);
+    // 先刪除 surface descriptor，再刪 Goal Runtime / repo / sandbox，
+    // 避免後續 bridge 或 provider retry 再讀到過期 state file。
+    await managedMcpSurfaceService.cleanupRunSurfaces(runId);
     removeGoalRuntimeRun(runId);
 
     const entries = runStore.getExecutionPathsByRunId(runId);

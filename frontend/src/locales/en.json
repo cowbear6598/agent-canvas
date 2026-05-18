@@ -290,6 +290,7 @@
       "mcpCodexEmptyHint": "Run `codex mcp add` to install",
       "mcpToggleFailed": "Failed to toggle MCP server",
       "mcpLoadFailed": "Failed to load",
+      "mcpManagedHint": "Add a global MCP from the header MCP panel",
       "mcpCodexHint": "Codex MCP servers are managed globally by codex",
       "goalMcpLabel": "Goal Runtime",
       "builtinBadge": "Built-in",
@@ -331,9 +332,79 @@
     "header": {
       "canvasList": "Canvas List",
       "globalSettings": "Global Settings",
+      "managedMcp": "Managed MCP",
       "integrations": "Integrations",
       "history": "History",
       "llmProvider": "LLM Provider Settings"
+    }
+  },
+  "managedMcp": {
+    "modal": {
+      "title": "Managed MCP",
+      "description": "Manage global MCP registry entries and runtime status"
+    },
+    "list": {
+      "title": "Registry",
+      "description": "Global MCP servers live here. Pods only choose the subset they want to use."
+    },
+    "empty": {
+      "title": "No MCP registered yet",
+      "description": "Create your first managed MCP entry so Pods can pick it from availability."
+    },
+    "actions": {
+      "create": "Create MCP",
+      "save": "Save changes",
+      "delete": "Delete MCP",
+      "refresh": "Refresh"
+    },
+    "badge": {
+      "configDisabled": "Config disabled"
+    },
+    "transport": {
+      "stdio": "STDIO",
+      "http": "HTTP",
+      "sse": "SSE"
+    },
+    "status": {
+      "healthy": "Healthy",
+      "starting": "Starting",
+      "error": "Error",
+      "idle": "Idle",
+      "disabled": "Disabled",
+      "unknown": "Unknown",
+      "running": "Running",
+      "blocked": "Blocked",
+      "completed": "Completed"
+    },
+    "form": {
+      "createTitle": "Create a new MCP entry",
+      "createDescription": "Once the transport and connection details are saved, this MCP becomes available globally.",
+      "editTitle": "Edit MCP entry",
+      "editDescription": "This view shows the registry config plus the latest runtime status for the selected MCP.",
+      "enabled": "Enabled",
+      "name": "Name",
+      "namePlaceholder": "e.g. linear-sync",
+      "transport": "Transport",
+      "status": "Status",
+      "command": "Command",
+      "commandPlaceholder": "e.g. uvx mcp-server-filesystem",
+      "cwd": "Working Directory",
+      "cwdPlaceholder": "e.g. /Users/me/projects",
+      "args": "Args",
+      "argsPlaceholder": "Argument",
+      "argsHint": "Each entry is sent as one argument for stdio transport.",
+      "env": "Environment",
+      "envPlaceholder": "KEY=value",
+      "envKeyPlaceholder": "KEY",
+      "envValuePlaceholder": "Value",
+      "envHint": "Each entry becomes one KEY=value pair. Empty keys are ignored.",
+      "url": "URL",
+      "urlPlaceholder": "e.g. https://mcp.example.com/sse",
+      "lastError": "Last error"
+    },
+    "validation": {
+      "commandRequired": "Command is required for stdio transport",
+      "urlRequired": "URL is required for HTTP / SSE transport"
     }
   },
   "llmProvider": {

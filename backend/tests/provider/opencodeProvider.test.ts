@@ -16,6 +16,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { NormalizedEvent } from "../../src/services/provider/types.js";
 import type { OpencodeClientPort } from "../../src/services/provider/opencodeProvider.js";
+
+const { mockManagedMcpSurfaceService } = vi.hoisted(() => ({
+  mockManagedMcpSurfaceService: {
+    ensureSurface: vi.fn(),
+  },
+}));
+
+vi.mock("../../src/services/mcp/managedMcpSurfaceService.js", () => ({
+  AGENT_CANVAS_MANAGED_SURFACE_NAME: "agent_canvas_managed_surface",
+  managedMcpSurfaceService: mockManagedMcpSurfaceService,
+}));
+
 import {
   opencodeProvider,
   setOpencodeClientFactory,
@@ -156,6 +168,25 @@ beforeEach(() => {
     baseUrl: "http://127.0.0.1:4096",
     status: "ready",
   }));
+  mockManagedMcpSurfaceService.ensureSurface.mockResolvedValue({
+    runId: "run-opencode-goal",
+    podId: "opencode-buildopts-pod",
+    provider: "opencode",
+    sourceNames: ["team-server"],
+    targetNames: ["agent_canvas_goal", "team-server"],
+    ignoredTargets: [],
+    hasGoalRuntime: true,
+    statePath: "/tmp/managed-surface/run-opencode-goal/opencode-buildopts-pod.json",
+    mcpServer: {
+      name: "agent_canvas_managed_surface",
+      command: process.execPath,
+      args: ["/tmp/managedMcpSurfaceBridge.ts"],
+      env: {
+        AGENT_CANVAS_MANAGED_MCP_SURFACE_PATH:
+          "/tmp/managed-surface/run-opencode-goal/opencode-buildopts-pod.json",
+      },
+    },
+  });
 });
 
 afterEach(() => {
@@ -167,7 +198,7 @@ afterEach(() => {
 });
 
 describe("buildOptions", () => {
-  it("有 runContext 且 Pod 有 Goal 時應保留 user MCP 並注入 Goal MCP", async () => {
+  it("有 runContext 時應改為注入 managed surface", async () => {
     const pod = makeBuildOptionsPod({
       mcpServerNames: ["team-server"],
       goal: {
@@ -183,14 +214,18 @@ describe("buildOptions", () => {
 
     expect(options.providerID).toBe("anthropic");
     expect(options.modelID).toBe("claude-sonnet-4-5");
+    expect(mockManagedMcpSurfaceService.ensureSurface).toHaveBeenCalled();
     expect(options.mcpServerNames).toEqual([
-      "team-server",
-      GOAL_MCP_SERVER_NAME,
+      "agent_canvas_managed_surface",
     ]);
-    expect(options.goalMcpServer?.name).toBe(GOAL_MCP_SERVER_NAME);
+    expect(options.goalMcpServer).toBeNull();
+    expect(options.managedSurface?.name).toBe(
+      "agent_canvas_managed_surface",
+    );
+    expect(options.goalPromptEnabled).toBe(true);
   });
 
-  it("有 runContext 且無 Goal 時仍應注入 Goal MCP", async () => {
+  it("有 runContext 且無 Goal 時仍應注入 managed surface", async () => {
     const pod = makeBuildOptionsPod({
       mcpServerNames: ["team-server"],
       goal: null,
@@ -203,10 +238,13 @@ describe("buildOptions", () => {
     });
 
     expect(options.mcpServerNames).toEqual([
-      "team-server",
-      GOAL_MCP_SERVER_NAME,
+      "agent_canvas_managed_surface",
     ]);
-    expect(options.goalMcpServer?.name).toBe(GOAL_MCP_SERVER_NAME);
+    expect(options.goalMcpServer).toBeNull();
+    expect(options.managedSurface?.name).toBe(
+      "agent_canvas_managed_surface",
+    );
+    expect(options.goalPromptEnabled).toBe(true);
   });
 
   it("沒有 runContext 時不應注入 Goal MCP", async () => {
@@ -373,6 +411,91 @@ describe("chat — Goal MCP transient server", () => {
     );
     expect(promptArg.body.parts[0]?.text).toContain(
       "Then continue with the current active todo instead of asking for a new task.",
+    );
+  });
+});
+
+describe("chat — managed surface", () => {
+  it("Opencode 的 MCP 可見性改由 managed surface 決定", async () => {
+    const createServerMock = vi.fn().mockResolvedValue({
+      url: "http://127.0.0.1:63315",
+      close: vi.fn(),
+    });
+    setOpencodeServerFactory(createServerMock as typeof createServerMock);
+
+    const promptMock = vi.fn().mockResolvedValue({ data: {} });
+    const toolIdsMock = vi.fn().mockResolvedValue({
+      data: ["mcp__legacy-server__search_docs", "Read"],
+    });
+    const mockClient = makeMockClient({
+      session: {
+        create: vi
+          .fn()
+          .mockResolvedValue({ data: { id: "surface-session-id" } }),
+        prompt: promptMock,
+        abort: vi.fn().mockResolvedValue({ data: true }),
+      },
+      tool: {
+        ids: toolIdsMock,
+      },
+      event: {
+        subscribe: vi.fn().mockResolvedValue({
+          stream: eventsToStream([
+            {
+              type: "session.idle",
+              properties: { sessionID: "surface-session-id" },
+            },
+          ]),
+        }),
+      },
+    });
+    setOpencodeClientFactory(() => mockClient);
+
+    const ctx = makeCtx({
+      options: {
+        providerID: "anthropic",
+        modelID: "claude-sonnet-4-5",
+        mcpServerNames: ["agent_canvas_managed_surface"],
+        goalMcpServer: null,
+        managedSurface: {
+          name: "agent_canvas_managed_surface",
+          command: process.execPath,
+          args: ["/tmp/managedMcpSurfaceBridge.ts"],
+          env: {
+            AGENT_CANVAS_MANAGED_MCP_SURFACE_PATH:
+              "/tmp/managed-surface.json",
+          },
+        },
+        goalPromptEnabled: true,
+      },
+    });
+
+    await collectEvents(opencodeProvider.chat(ctx));
+
+    expect(createServerMock).toHaveBeenCalledWith({
+      port: 0,
+      timeout: 30000,
+      config: {
+        mcp: {
+          agent_canvas_managed_surface: {
+            type: "local",
+            command: [process.execPath, "/tmp/managedMcpSurfaceBridge.ts"],
+            environment: {
+              AGENT_CANVAS_MANAGED_MCP_SURFACE_PATH:
+                "/tmp/managed-surface.json",
+            },
+            enabled: true,
+          },
+        },
+      },
+    });
+    expect(toolIdsMock).not.toHaveBeenCalled();
+    expect(promptMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.not.objectContaining({
+          tools: expect.anything(),
+        }),
+      }),
     );
   });
 });

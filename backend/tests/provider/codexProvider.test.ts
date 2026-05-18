@@ -238,6 +238,48 @@ describe("CodexProvider", () => {
     expect(mockProc.stdin.write).toHaveBeenCalledWith("fix the failing test");
   });
 
+  it("Codex 不再依賴 readCodexMcpServers 作為 run path source of truth", async () => {
+    const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
+    spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
+    vi.mocked(readCodexMcpServers).mockReturnValue([
+      { name: "legacy-installed", type: "stdio" } as any,
+    ]);
+    vi.mocked(readCodexMcpServers).mockClear();
+
+    const provider = new CodexProvider();
+    const ctx = makeCtx({
+      options: {
+        model: "gpt-5.4",
+        resumeMode: "cli",
+        mcpServerNames: ["agent_canvas_managed_surface"],
+        goalMcpServer: null,
+        managedSurface: {
+          name: "agent_canvas_managed_surface",
+          command: process.execPath,
+          args: ["/tmp/managedMcpSurfaceBridge.ts"],
+          env: {
+            AGENT_CANVAS_MANAGED_MCP_SURFACE_PATH: "/tmp/managed-surface.json",
+          },
+        },
+        goalPromptEnabled: true,
+      },
+    });
+
+    await collectEvents(provider.chat(ctx));
+
+    expect(readCodexMcpServers).not.toHaveBeenCalled();
+    const [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
+    expect(spawnArgs).toContain(
+      `mcp_servers.agent_canvas_managed_surface.command=${JSON.stringify(process.execPath)}`,
+    );
+    expect(spawnArgs).toContain(
+      `mcp_servers.agent_canvas_managed_surface.args=${JSON.stringify(["/tmp/managedMcpSurfaceBridge.ts"])}`,
+    );
+    expect(spawnArgs).not.toContain(
+      "mcp_servers.legacy-installed.default_tools_approval_mode=approve",
+    );
+  });
+
   // ── Case 3：abortSignal 觸發後 subprocess.kill() 被呼叫 ───────────
   it("abortSignal 觸發後應呼叫 subprocess.kill()", async () => {
     const ac = new AbortController();

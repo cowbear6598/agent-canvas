@@ -15,6 +15,7 @@ import "./integration/providers/index.js";
 import { getDb } from "../database/index.js";
 import { encryptionService } from "./encryptionService.js";
 import { scanAndLogOrphanRunRepoDirectories } from "./runtime/orphanRunRepoScanner.js";
+import { managedMcpRuntimeService } from "./mcp/managedMcpRuntimeService.js";
 
 class StartupService {
   async initialize(): Promise<Result<void>> {
@@ -28,6 +29,7 @@ class StartupService {
     }
 
     getDb();
+    managedMcpRuntimeService.restoreInitialStatuses();
 
     // 初始化加密金鑰（仍需在每次啟動時載入金鑰）
     await encryptionService.initializeKey();

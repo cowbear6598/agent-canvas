@@ -197,8 +197,13 @@ describe("RunExecutionService", () => {
       await runExecutionService.createRun(CANVAS_ID, SOURCE_POD_ID, "觸發清理");
 
       const remaining = runStore.getRunsByCanvasId(CANVAS_ID);
-      // 清理後應 <= 30
-      expect(remaining.length).toBeLessThanOrEqual(30);
+      if (remaining.length > 30) {
+        await vi.waitFor(() => {
+          expect(
+            runStore.getRunsByCanvasId(CANVAS_ID).length,
+          ).toBeLessThanOrEqual(30);
+        });
+      }
     });
 
     it("non-repo pod 會直接使用原始 workspace，並配置 run-level sandbox home", async () => {

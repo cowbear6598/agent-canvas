@@ -3,16 +3,14 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from "vue";
 import { useEscapeClose } from "@/composables/useEscapeClose";
 import { useI18n } from "vue-i18n";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  listMcpServers,
-  updatePodMcpServers as updatePodMcpServersApi,
-} from "@/services/mcpApi";
+import { updatePodMcpServers as updatePodMcpServersApi } from "@/services/mcpApi";
+import { listPodMcpAvailability } from "@/services/managedMcpApi";
 import McpServerRow from "@/components/pod/McpServerRow.vue";
 import { logger } from "@/utils/logger";
 import { usePodStore } from "@/stores/pod";
 import { getActiveCanvasIdOrWarn } from "@/utils/canvasGuard";
 import { useOptimisticToggle } from "@/composables/pod/useOptimisticToggle";
-import type { McpListItem } from "@/types/mcp";
+import type { PodMcpAvailabilityItem } from "@/types/mcp";
 import type { PodProvider } from "@/types/pod";
 
 const props = defineProps<{
@@ -29,7 +27,7 @@ const { t } = useI18n();
 const podStore = usePodStore();
 const { runToggle } = useOptimisticToggle();
 
-const installedMcpServers = ref<McpListItem[]>([]);
+const availableMcpServers = ref<PodMcpAvailabilityItem[]>([]);
 const localMcpServerNames = ref<string[]>([]);
 const loading = ref<boolean>(false);
 const loadFailed = ref<boolean>(false);
@@ -40,31 +38,31 @@ const searchQuery = ref<string>("");
 /** 搜尋框 input 元素 ref，用於自動 focus */
 const searchInputRef = ref<HTMLInputElement | null>(null);
 
-function isSystemLockedServer(server: McpListItem): boolean {
+function isSystemLockedServer(server: PodMcpAvailabilityItem): boolean {
   return Boolean(server.system || server.locked);
 }
 
-function isGoalRuntimeServer(server: McpListItem): boolean {
+function isGoalRuntimeServer(server: PodMcpAvailabilityItem): boolean {
   return server.system === true && server.name === GOAL_RUNTIME_SERVER_NAME;
 }
 
-function resolveServerLabel(server: McpListItem): string {
+function resolveServerLabel(server: PodMcpAvailabilityItem): string {
   return isGoalRuntimeServer(server) ? t("pod.slot.goalMcpLabel") : server.name;
 }
 
 const hasGoalRuntime = computed(() =>
-  installedMcpServers.value.some((server) => isGoalRuntimeServer(server)),
+  availableMcpServers.value.some((server) => isGoalRuntimeServer(server)),
 );
 
 const userMcpServers = computed(() =>
-  installedMcpServers.value.filter((server) => !isSystemLockedServer(server)),
+  availableMcpServers.value.filter((server) => !isSystemLockedServer(server)),
 );
 
 /** 依 searchQuery 過濾 MCP server 清單（不分大小寫比對名稱） */
-const filteredMcpServers = computed<McpListItem[]>(() => {
+const filteredMcpServers = computed<PodMcpAvailabilityItem[]>(() => {
   const query = searchQuery.value.trim().toLowerCase();
-  if (!query) return installedMcpServers.value;
-  return installedMcpServers.value.filter((server) =>
+  if (!query) return availableMcpServers.value;
+  return availableMcpServers.value.filter((server) =>
     resolveServerLabel(server).toLowerCase().includes(query) ||
     server.name.toLowerCase().includes(query),
   );
@@ -83,7 +81,7 @@ const showEmptyState = computed(
     !loading.value &&
     !loadFailed.value &&
     searchQuery.value.trim().length === 0 &&
-    installedMcpServers.value.length === 0,
+    availableMcpServers.value.length === 0,
 );
 
 const showUserEmptyHint = computed(
@@ -99,9 +97,6 @@ const showUserEmptyHint = computed(
 const localMcpServerNamesSet = computed(
   () => new Set(localMcpServerNames.value),
 );
-
-/** Codex provider 唯讀模式：MCP 只展示不可 toggle */
-const isCodex = computed(() => props.provider === "codex");
 
 const rootRef = ref<HTMLElement | null>(null);
 
@@ -125,13 +120,16 @@ onMounted(async () => {
   const pod = podStore.getPodById(props.podId);
   localMcpServerNames.value = [...(pod?.mcpServerNames ?? [])];
 
-  // 載入 MCP server 清單
+  // 載入 pod-scoped MCP availability 清單
   loading.value = true;
   try {
-    installedMcpServers.value = await listMcpServers(props.provider, props.podId);
+    availableMcpServers.value = await listPodMcpAvailability(
+      props.podId,
+      props.provider,
+    );
   } catch (err) {
     logger.warn(
-      "[McpPopover] Failed to load MCP servers:",
+      "[McpPopover] Failed to load MCP availability:",
       err instanceof Error ? err.message : String(err),
     );
     loadFailed.value = true;
@@ -169,9 +167,27 @@ const buildNextNames = (
 const resolveMcpErrorDescription = (_err: unknown): string =>
   t("pod.slot.mcpToggleFailed");
 
+function isServerChecked(server: PodMcpAvailabilityItem): boolean {
+  return (
+    isSystemLockedServer(server) ||
+    localMcpServerNamesSet.value.has(server.name) ||
+    server.selected === true
+  );
+}
+
+function isServerDisabled(server: PodMcpAvailabilityItem): boolean {
+  return server.selectable === false || server.locked === true;
+}
+
 const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
-  const targetServer = installedMcpServers.value.find((server) => server.name === name);
-  if (isCodex.value || (targetServer && isSystemLockedServer(targetServer))) {
+  const targetServer = availableMcpServers.value.find(
+    (server) => server.name === name,
+  );
+  if (
+    !targetServer ||
+    targetServer.selectable === false ||
+    isSystemLockedServer(targetServer)
+  ) {
     return;
   }
 
@@ -249,11 +265,7 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
       >
         <p>{{ t("pod.slot.mcpEmpty") }}</p>
         <p class="mt-1">
-          {{
-            isCodex
-              ? t("pod.slot.mcpCodexEmptyHint")
-              : t("pod.slot.mcpClaudeEmptyHint")
-          }}
+          {{ t("pod.slot.mcpManagedHint") }}
         </p>
       </div>
 
@@ -265,49 +277,11 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
         >
           <p>{{ t("pod.slot.mcpUserEmpty") }}</p>
           <p class="mt-1">
-            {{
-              isCodex
-                ? t("pod.slot.mcpCodexEmptyHint")
-                : t("pod.slot.mcpClaudeEmptyHint")
-            }}
+            {{ t("pod.slot.mcpManagedHint") }}
           </p>
         </div>
 
-        <!-- Codex 唯讀模式：ScrollArea 包列表，Codex hint 固定在外部 -->
-        <div v-if="isCodex">
-          <ScrollArea class="pod-popover-scrollable">
-            <div class="space-y-1">
-              <McpServerRow
-                v-for="server in filteredMcpServers"
-                :key="server.name"
-                :name="server.name"
-                :label="resolveServerLabel(server)"
-                :type="server.type"
-                :checked="
-                  isSystemLockedServer(server) ||
-                    localMcpServerNamesSet.has(server.name)
-                "
-                :disabled="false"
-                :readonly="true"
-                :locked="isSystemLockedServer(server)"
-                :badge-label="
-                  isSystemLockedServer(server)
-                    ? t('pod.slot.builtinBadge')
-                    : undefined
-                "
-                @toggle="handleToggle"
-              />
-            </div>
-          </ScrollArea>
-          <!-- Codex hint 在 ScrollArea 外：固定顯示，不隨列表捲動 -->
-          <p class="mt-1 px-2 text-xs font-mono text-muted-foreground">
-            {{ t("pod.slot.mcpCodexHint") }}
-          </p>
-        </div>
-
-        <!-- Claude / Opencode 模式：Goal built-in 固定啟用，user MCP 可 toggle -->
         <ScrollArea
-          v-else
           class="pod-popover-scrollable"
         >
           <div class="space-y-1">
@@ -316,19 +290,14 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
               :key="server.name"
               :name="server.name"
               :label="resolveServerLabel(server)"
-              :type="server.type"
-              :checked="
-                isSystemLockedServer(server) ||
-                  localMcpServerNamesSet.has(server.name)
-              "
-              :disabled="false"
+              :transport="server.transport"
+              :status="server.status"
+              :checked="isServerChecked(server)"
+              :disabled="isServerDisabled(server)"
               :readonly="isSystemLockedServer(server)"
               :locked="isSystemLockedServer(server)"
-              :badge-label="
-                isSystemLockedServer(server)
-                  ? t('pod.slot.builtinBadge')
-                  : undefined
-              "
+              :locked-label="t('pod.slot.builtinBadge')"
+              :disabled-reason="server.disabledReason"
               @toggle="handleToggle"
             />
           </div>

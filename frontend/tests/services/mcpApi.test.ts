@@ -1,88 +1,93 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { listMcpServers, invalidateMcpServersCache } from "@/services/mcpApi";
-import { createWebSocketRequest } from "@/services/websocket/createWebSocketRequest";
+import {
+  mockWebSocketClient,
+  resetMockWebSocket,
+  simulateEvent,
+} from "../helpers/mockWebSocket";
+import {
+  parseUpdateError,
+  updatePodMcpServers,
+} from "@/services/mcpApi";
 
-vi.mock("@/services/websocket/createWebSocketRequest", () => ({
-  createWebSocketRequest: vi.fn(),
+const mockInvalidatePodMcpAvailabilityCache = vi.fn();
+
+vi.mock("@/services/websocket/WebSocketClient", () => ({
+  websocketClient: mockWebSocketClient,
+}));
+
+vi.mock("@/services/utils", () => ({
+  generateRequestId: vi.fn(() => "req-mcp-update"),
+}));
+
+vi.mock("@/services/managedMcpApi", () => ({
+  invalidatePodMcpAvailabilityCache: (...args: unknown[]) =>
+    mockInvalidatePodMcpAvailabilityCache(...args),
+}));
+
+vi.mock("@/i18n", () => ({
+  t: (key: string) => key,
 }));
 
 describe("mcpApi", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    invalidateMcpServersCache();
+    resetMockWebSocket();
+    mockWebSocketClient.isConnected.value = true;
+    mockInvalidatePodMcpAvailabilityCache.mockReset();
   });
 
-  it("legacy gemini provider 不應送出 MCP 查詢", async () => {
-    const result = await listMcpServers("gemini", "pod-gemini");
-
-    expect(result).toEqual([]);
-    expect(createWebSocketRequest).not.toHaveBeenCalled();
-  });
-
-  it("支援的 provider 應送出 pod-aware payload，並保留 Goal Runtime metadata", async () => {
-    vi.mocked(createWebSocketRequest).mockResolvedValue({
-      items: [
-        {
-          name: "agent_canvas_goal",
-          type: "stdio",
-          system: true,
-          locked: true,
-          status: "running",
-          activeTodoText: "Ship it",
-          completedTodoIds: ["goal-1"],
-          completedCount: 1,
-          totalCount: 2,
-        },
-        { name: "context7", type: "stdio" },
-      ],
-    } as never);
-
-    const result = await listMcpServers("opencode", "pod-opencode");
-
-    expect(result).toEqual([
-      {
-        name: "agent_canvas_goal",
-        type: "stdio",
-        system: true,
-        locked: true,
-        status: "running",
-        activeTodoText: "Ship it",
-        completedTodoIds: ["goal-1"],
-        completedCount: 1,
-        totalCount: 2,
-      },
-      { name: "context7", type: "stdio" },
+  it("成功更新 pod mcp names 後會失效該 pod 的 availability cache", async () => {
+    const requestPromise = updatePodMcpServers("canvas-1", "pod-1", [
+      "context7",
     ]);
-    expect(createWebSocketRequest).toHaveBeenCalledWith(
+
+    expect(mockWebSocketClient.emit).toHaveBeenCalledWith(
+      "pod:set-mcp-server-names",
       expect.objectContaining({
-        payload: { provider: "opencode", podId: "pod-opencode" },
+        canvasId: "canvas-1",
+        podId: "pod-1",
+        mcpServerNames: ["context7"],
+        requestId: "req-mcp-update",
       }),
+    );
+
+    simulateEvent("pod:mcp-server-names:updated", {
+      requestId: "req-mcp-update",
+      success: true,
+    });
+
+    await expect(requestPromise).resolves.toBeUndefined();
+    expect(mockInvalidatePodMcpAvailabilityCache).toHaveBeenCalledWith(
+      undefined,
+      "pod-1",
     );
   });
 
-  it("同 provider 不同 podId 應使用不同 cache key", async () => {
-    vi.mocked(createWebSocketRequest)
-      .mockResolvedValueOnce({ items: [{ name: "a" }] } as never)
-      .mockResolvedValueOnce({ items: [{ name: "b" }] } as never);
+  it("後端回傳錯誤時應 reject 並回傳 sanitized message", async () => {
+    const requestPromise = updatePodMcpServers("canvas-1", "pod-1", [
+      "context7",
+    ]);
 
-    const podA = await listMcpServers("claude", "pod-a");
-    const podB = await listMcpServers("claude", "pod-b");
+    simulateEvent("pod:mcp-server-names:updated", {
+      requestId: "req-mcp-update",
+      success: false,
+      error: "internal message should not leak",
+    });
 
-    expect(podA).toEqual([{ name: "a" }]);
-    expect(podB).toEqual([{ name: "b" }]);
-    expect(createWebSocketRequest).toHaveBeenCalledTimes(2);
+    await expect(requestPromise).rejects.toEqual({
+      reason: "unknown",
+      message: "common.error.unknown",
+    });
   });
 
-  it("指定 podId invalidation 後應重新抓取該 pod 的 MCP 清單", async () => {
-    vi.mocked(createWebSocketRequest)
-      .mockResolvedValueOnce({ items: [{ name: "context7" }] } as never)
-      .mockResolvedValueOnce({ items: [{ name: "fresh-context7" }] } as never);
-
-    await listMcpServers("claude", "pod-1");
-    invalidateMcpServersCache("claude", "pod-1");
-    const refreshed = await listMcpServers("claude", "pod-1");
-
-    expect(refreshed).toEqual([{ name: "fresh-context7" }]);
-    expect(createWebSocketRequest).toHaveBeenCalledTimes(2);
+  it("parseUpdateError 遇到 i18nError payload 時應保留 reason key", () => {
+    expect(
+      parseUpdateError({
+        key: "pod.error.busy",
+        params: { podName: "Pod 1" },
+      }),
+    ).toEqual({
+      reason: "pod.error.busy",
+      message: "common.error.unknown",
+    });
   });
 });

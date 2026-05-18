@@ -53,6 +53,15 @@ function buildStatements(db: Database): {
     selectByPodId: ReturnType<Database["prepare"]>;
     deleteByPodId: ReturnType<Database["prepare"]>;
   };
+  managedMcp: {
+    insert: ReturnType<Database["prepare"]>;
+    selectAll: ReturnType<Database["prepare"]>;
+    selectById: ReturnType<Database["prepare"]>;
+    selectByName: ReturnType<Database["prepare"]>;
+    update: ReturnType<Database["prepare"]>;
+    updateRuntimeState: ReturnType<Database["prepare"]>;
+    deleteById: ReturnType<Database["prepare"]>;
+  };
   podPluginIds: {
     insert: ReturnType<Database["prepare"]>;
     selectByPodId: ReturnType<Database["prepare"]>;
@@ -285,6 +294,46 @@ function buildStatements(db: Database): {
       deleteByPodId: db.prepare(
         "DELETE FROM pod_mcp_server_names WHERE pod_id = ?",
       ),
+    },
+
+    managedMcp: {
+      insert: db.prepare(
+        `INSERT INTO managed_mcp_servers (
+          id, name, transport, command, args_json, cwd, env_json, url,
+          enabled, created_at, updated_at, last_known_status, last_error
+        ) VALUES (
+          $id, $name, $transport, $command, $argsJson, $cwd, $envJson, $url,
+          $enabled, $createdAt, $updatedAt, $lastKnownStatus, $lastError
+        )`,
+      ),
+      selectAll: db.prepare(
+        "SELECT * FROM managed_mcp_servers ORDER BY name COLLATE NOCASE ASC",
+      ),
+      selectById: db.prepare("SELECT * FROM managed_mcp_servers WHERE id = ?"),
+      selectByName: db.prepare(
+        "SELECT * FROM managed_mcp_servers WHERE name = ?",
+      ),
+      update: db.prepare(
+        `UPDATE managed_mcp_servers SET
+          name = $name,
+          transport = $transport,
+          command = $command,
+          args_json = $argsJson,
+          cwd = $cwd,
+          env_json = $envJson,
+          url = $url,
+          enabled = $enabled,
+          updated_at = $updatedAt
+        WHERE id = $id`,
+      ),
+      updateRuntimeState: db.prepare(
+        `UPDATE managed_mcp_servers SET
+          last_known_status = $lastKnownStatus,
+          last_error = $lastError,
+          updated_at = $updatedAt
+        WHERE name = $name`,
+      ),
+      deleteById: db.prepare("DELETE FROM managed_mcp_servers WHERE id = ?"),
     },
 
     podPluginIds: {

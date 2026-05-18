@@ -29,6 +29,7 @@ import { runStore } from "./services/runStore.js";
 import { runExecutionService } from "./services/workflow/runExecutionService.js";
 import { handshakeAuthService } from "./services/auth/handshakeAuthService.js";
 import type { ConnectionSocketData } from "./types/websocket.js";
+import { managedMcpRuntimeService } from "./services/mcp/managedMcpRuntimeService.js";
 
 function handleWebSocketUpgrade(
   req: Request,
@@ -248,6 +249,7 @@ const shutdown = async (signal: string): Promise<void> => {
   scheduleService.stop();
   socketService.stopHeartbeat();
   replyContextStore.dispose();
+  await managedMcpRuntimeService.shutdownAll();
 
   // 停止 opencode 伺服器子程序
   stopOpencodeServer();
@@ -258,7 +260,10 @@ const shutdown = async (signal: string): Promise<void> => {
 
 process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("beforeExit", () => stopOpencodeServer());
+process.on("beforeExit", () => {
+  void managedMcpRuntimeService.shutdownAll();
+  stopOpencodeServer();
+});
 
 // 全域錯誤處理：防止 SDK 內部的未捕獲錯誤 crash 整個應用程式
 process.on("uncaughtException", (error) => {

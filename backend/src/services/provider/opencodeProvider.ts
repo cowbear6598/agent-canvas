@@ -26,9 +26,12 @@ import { sanitizePodName } from "./podNameSanitizer.js";
 import type { Pod } from "../../types/pod.js";
 import type { RunContext } from "../../types/run.js";
 import {
-  buildGoalRuntimeMcpServerConfig,
   type GoalRuntimeMcpServerConfig,
 } from "../goalRuntime.js";
+import {
+  managedMcpSurfaceService,
+  type ManagedMcpSurfaceServerConfig,
+} from "../mcp/managedMcpSurfaceService.js";
 import { getOpencodeServerState } from "./opencodeServer.js";
 
 // ================================================================
@@ -107,10 +110,14 @@ export interface OpencodeOptions {
   providerID: string;
   /** opencode 的 model ID（如 "claude-sonnet-4-5"） */
   modelID: string;
-  /** 已勾選的 MCP server name 陣列 */
+  /** Legacy MCP server name 陣列，僅保留給非 managed surface 過渡路徑 */
   mcpServerNames: string[];
-  /** request-scoped Goal Runtime MCP 設定 */
+  /** Legacy Goal Runtime MCP 設定，僅保留給非 managed surface 過渡路徑 */
   goalMcpServer?: GoalRuntimeMcpServerConfig | null;
+  /** Run-scoped managed surface，provider runtime path 以此為 source of truth */
+  managedSurface?: ManagedMcpSurfaceServerConfig | null;
+  /** Goal Runtime 是否已併入 managed surface，用於 bootstrap prompt */
+  goalPromptEnabled?: boolean;
 }
 
 // ================================================================
@@ -226,12 +233,12 @@ function buildGoalRuntimeBootstrapPrompt(rawMessage: string): string {
 
 function buildOpencodePromptText(
   message: string | import("../../types/message.js").ContentBlock[],
-  goalMcpServer?: GoalRuntimeMcpServerConfig | null,
+  goalRuntimeAvailable?: boolean,
   resumeSessionId?: string | null,
 ): string {
   const promptText = buildPromptText(message);
   // resume 時（gate retry 第 2 輪以後）不再注入 bootstrap，避免覆蓋 nudge 指示
-  if (!goalMcpServer || resumeSessionId) {
+  if (!goalRuntimeAvailable || resumeSessionId) {
     return promptText;
   }
   return buildGoalRuntimeBootstrapPrompt(promptText);
@@ -481,7 +488,12 @@ function buildServerCacheKey(runId: string, podId: string): string {
 async function getOrCreateRunScopedServer(
   runId: string,
   podId: string,
-  goalMcpServer: GoalRuntimeMcpServerConfig,
+  managedServer: {
+    name: string;
+    command: string;
+    args: string[];
+    env: Record<string, string>;
+  },
 ): Promise<{ close(): void; url: string }> {
   const key = buildServerCacheKey(runId, podId);
   const cached = runScopedOpencodeServerCache.get(key);
@@ -492,10 +504,10 @@ async function getOrCreateRunScopedServer(
     timeout: 30000,
     config: {
       mcp: {
-        [goalMcpServer.name]: {
+        [managedServer.name]: {
           type: "local",
-          command: [goalMcpServer.command, ...goalMcpServer.args],
-          environment: goalMcpServer.env,
+          command: [managedServer.command, ...managedServer.args],
+          environment: managedServer.env,
           enabled: true,
         },
       },
@@ -540,6 +552,8 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
       modelID: "",
       mcpServerNames: [],
       goalMcpServer: null,
+      managedSurface: null,
+      goalPromptEnabled: false,
     },
     availableModels: [],
     availableModelValues: new Set<string>(),
@@ -549,7 +563,8 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
    * 從 Pod 設定建構 opencode 執行時選項。
    *
    * - pod.providerConfig.model 格式為 "{providerID}/{modelID}"，以第一個 "/" 拆分
-   * - mcpServerNames 從 pod.mcpServerNames 取得
+   * - Run 模式改由 managed surface 決定 MCP 可見性；
+   *   非 Run 模式保留 legacy 欄位作為過渡用途
    */
   async buildOptions(
     pod: Pod,
@@ -573,15 +588,23 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
       modelID = rawModel.slice(slashIndex + 1);
     }
 
-    const goalMcpServer = runContext
-      ? buildGoalRuntimeMcpServerConfig(runContext, pod)
-      : null;
-    const mcpServerNames = [...pod.mcpServerNames];
-    if (goalMcpServer) {
-      mcpServerNames.push(goalMcpServer.name);
+    const result: OpencodeOptions = {
+      providerID,
+      modelID,
+      mcpServerNames: runContext ? [] : [...pod.mcpServerNames],
+      goalMcpServer: null,
+      managedSurface: null,
+      goalPromptEnabled: false,
+    };
+
+    if (runContext) {
+      const surface = await managedMcpSurfaceService.ensureSurface(runContext, pod);
+      result.managedSurface = surface.mcpServer;
+      result.goalPromptEnabled = surface.hasGoalRuntime;
+      result.mcpServerNames = [surface.mcpServer.name];
     }
 
-    return { providerID, modelID, mcpServerNames, goalMcpServer };
+    return result;
   },
 
   /**
@@ -636,8 +659,12 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
     // 確保 session 建立失敗、session ID 為空、abort 提前觸發等所有路徑都會 close
     try {
       let baseUrl: string | null = null;
+      const runtimeManagedServer = options.managedSurface ?? options.goalMcpServer ?? null;
+      const goalRuntimeAvailable = options.managedSurface
+        ? options.goalPromptEnabled !== false
+        : Boolean(options.goalMcpServer);
 
-      if (options.goalMcpServer) {
+      if (runtimeManagedServer) {
         try {
           if (runContext) {
             // Run 期間同一 (runId, podId) 復用同一個 transient server，
@@ -647,7 +674,7 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
             const cached = await getOrCreateRunScopedServer(
               runContext.runId,
               podId,
-              options.goalMcpServer,
+              runtimeManagedServer,
             );
             baseUrl = cached.url;
           } else {
@@ -659,13 +686,13 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
               timeout: 30000,
               config: {
                 mcp: {
-                  [options.goalMcpServer.name]: {
+                  [runtimeManagedServer.name]: {
                     type: "local",
                     command: [
-                      options.goalMcpServer.command,
-                      ...options.goalMcpServer.args,
+                      runtimeManagedServer.command,
+                      ...runtimeManagedServer.args,
                     ],
-                    environment: options.goalMcpServer.env,
+                    environment: runtimeManagedServer.env,
                     enabled: true,
                   },
                 },
@@ -790,12 +817,15 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
           return;
         }
 
-        // ── tools 子集化 ───────────────────────────────────────────────
-        const toolsSubset = await buildToolsSubset(
-          client,
-          options.mcpServerNames,
-          workspacePath,
-        );
+        // managed surface 已將可見性收斂成單一 server；
+        // 只有 legacy 非 run 路徑才需要再做 tools 子集化。
+        const toolsSubset = options.managedSurface
+          ? undefined
+          : await buildToolsSubset(
+              client,
+              options.mcpServerNames,
+              workspacePath,
+            );
 
         // ── 送出 prompt（非同步，不等待回傳） ──────────────────────────
         const promptBody: {
@@ -808,7 +838,7 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
               type: "text",
               text: buildOpencodePromptText(
                 message,
-                options.goalMcpServer,
+                goalRuntimeAvailable,
                 resumeSessionId,
               ),
             },

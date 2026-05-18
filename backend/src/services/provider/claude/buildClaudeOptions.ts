@@ -25,12 +25,12 @@ import {
   replyContextStore,
   buildReplyContextKey,
 } from "../../integration/replyContextStore.js";
-import { buildGoalRuntimeMcpServerConfig } from "../../goalRuntime.js";
 import { getClaudeCodePath } from "../../claude/claudePathResolver.js";
 import type { Pod } from "../../../types/pod.js";
 import type { RunContext } from "../../../types/run.js";
 import { getResultErrorString } from "../../../types/result.js";
 import { logger } from "../../../utils/logger.js";
+import { managedMcpSurfaceService } from "../../mcp/managedMcpSurfaceService.js";
 
 // ─── ClaudeOptions 介面定義 ──────────────────────────────────────────────────
 
@@ -100,12 +100,28 @@ export const BASE_ALLOWED_TOOLS: readonly string[] = [
 /**
  * 套用 MCP Server 設定，回傳包含 mcpServers 的 partial options。
  *
- * 從 ~/.claude.json top-level `mcpServers` 讀取 user-scoped MCP server，
- * 再以 pod.mcpServerNames 做 allowlist 過濾。
+ * Run 模式下注入單一 AgentCanvas managed surface；
+ * 非 Run 模式才退回 ~/.claude.json 的 user-scoped MCP server allowlist。
  *
  * 若 pod.mcpServerNames 為空，或過濾後無符合項目，則回傳空物件。
  */
-function applyMcpServers(pod: Pod): Pick<ClaudeOptions, "mcpServers"> {
+async function applyMcpServers(
+  pod: Pod,
+  runContext?: RunContext,
+): Promise<Pick<ClaudeOptions, "mcpServers">> {
+  if (runContext) {
+    const surface = await managedMcpSurfaceService.ensureSurface(runContext, pod);
+    return {
+      mcpServers: {
+        [surface.mcpServer.name]: {
+          command: surface.mcpServer.command,
+          args: surface.mcpServer.args,
+          env: surface.mcpServer.env,
+        },
+      },
+    };
+  }
+
   if (!pod.mcpServerNames.length) return {};
 
   // 讀取 user-scoped MCP servers（top-level mcpServers）
@@ -317,7 +333,7 @@ export async function buildClaudeOptions(
   pod: Pod,
   runContext?: RunContext,
 ): Promise<ClaudeOptions> {
-  const mcpServerOptions = applyMcpServers(pod);
+  const mcpServerOptions = await applyMcpServers(pod, runContext);
   const pluginOptions = applyPlugins(pod);
 
   // Integration Tool：整合 MCP servers 與 allowedTools
@@ -329,21 +345,9 @@ export async function buildClaudeOptions(
     },
     runContext,
   );
-
-  const goalRuntimeMcp = runContext
-    ? buildGoalRuntimeMcpServerConfig(runContext, pod)
-    : null;
   const mergedMcpServers: NonNullable<Options["mcpServers"]> = {
     ...(integrationResult.mcpServers ?? {}),
   };
-
-  if (goalRuntimeMcp) {
-    mergedMcpServers[goalRuntimeMcp.name] = {
-      command: goalRuntimeMcp.command,
-      args: goalRuntimeMcp.args,
-      env: goalRuntimeMcp.env,
-    };
-  }
 
   // model：來自 pod.providerConfig.model（字串型別），否則 fallback 到 "sonnet"
   const rawModel = pod.providerConfig?.model;

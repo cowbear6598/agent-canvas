@@ -5,6 +5,7 @@ import type { Pod } from "@/types";
 import { createUnifiedHandler } from "./sharedHandlerUtils";
 import type { BasePayload } from "./sharedHandlerUtils";
 import { t } from "@/i18n";
+import { invalidatePodMcpAvailabilityCache } from "@/services/managedMcpApi";
 
 type DeletedNoteIds = {
   repositoryNote?: string[];
@@ -143,6 +144,7 @@ const handlePodMcpServerNamesUpdated = createUnifiedHandler<
     !payload.mcpServerNames.every((n) => typeof n === "string")
   )
     return;
+  invalidatePodMcpAvailabilityCache(undefined, payload.podId);
   usePodStore().updatePodMcpServers(payload.podId, payload.mcpServerNames);
 });
 

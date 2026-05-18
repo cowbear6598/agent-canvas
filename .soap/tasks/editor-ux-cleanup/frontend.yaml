@@ -1,0 +1,300 @@
+feature: editor-ux-cleanup
+side: frontend
+approved: true
+phases:
+  - id: P1
+    title: Goal Clipboard 狀態層（擴充既有 clipboardStore）
+    parallel: false
+    verification:
+      - cd frontend && bun run style
+    done: false
+    items:
+      - id: P1.A
+        title: clipboardStore 新增 goalTodos slice
+        tasks:
+          - id: P1.A.t1
+            text: |
+              在 `frontend/src/stores/clipboardStore.ts` 既有 `ClipboardState` 內新增
+              `copiedGoalTodos: GoalTodoItem[]` 欄位（沿用 `@/types` 內既有
+              `GoalTodoItem` 型別，不另開新型別），預設值為 `[]`。本案不另開
+              新的 store 檔案，跟既有 pods / repositoryNotes / connections 共用同一
+              個 pinia store，跨 Pod 開關 modal 時資料不會消失。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P1.A.t2
+            text: |
+              在 `clipboardStore.ts` 新增 action `setGoalTodos(todos: GoalTodoItem[])`：
+              接收結構化 `GoalTodoItem[]`，整批覆蓋 `copiedGoalTodos`。
+              不做去重、不重新生成 id；id 與 text 由呼叫端的 GoalEditorModal 決定。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P1.A.t3
+            text: |
+              在 `clipboardStore.ts` 新增 getter `hasCopiedGoalTodos`（boolean），
+              當 `copiedGoalTodos.length > 0` 時回傳 true。GoalEditorModal 會用這個
+              getter 決定「貼上」按鈕是否 disabled，避免讓 modal 直接讀 state 陣列長度。
+              同時更新既有 `isEmpty` getter，把 `copiedGoalTodos` 也納入空狀態判斷。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P1.A.t4
+            text: |
+              在 `clipboardStore.ts` 既有 `clear()` action 內補上清除
+              `copiedGoalTodos = []`，維持「整個 clipboard 一鍵清空」的語意一致。
+              不新增另一個 `clearGoalTodos()`，避免使用方混淆。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+
+  - id: P2
+    title: GoalEditorModal 複製貼上 + Todo 子 modal 留空驗證
+    parallel: true
+    verification:
+      - cd frontend && bun run style
+      - cd frontend && bun run test:run tests/integration/goalCopyPasteFlow.test.ts
+      - cd frontend && bun run test:run tests/components/pod/GoalEditorModal.test.ts
+    done: false
+    items:
+      - id: P2.A
+        title: GoalEditorModal 主列表新增「複製 / 貼上」按鈕
+        tasks:
+          - id: P2.A.t1
+            text: |
+              在 `frontend/src/components/pod/GoalEditorModal.vue` template 的
+              「新增待辦」按鈕旁邊（既有 `goal-editor-add-btn` 那行的 flex 容器內）
+              加上兩顆 doodle 風格的按鈕：「複製」與「貼上」。沿用既有
+              `goal-editor-add-btn` 的 class 風格；新增 testid
+              `goal-editor-copy` 與 `goal-editor-paste`，方便 integration test 鎖定。
+              icon 用 lucide-vue-next 的 `Copy` 與 `ClipboardPaste`。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P2.A.t2
+            text: |
+              在 `GoalEditorModal.vue` script setup 內 import `useClipboardStore` 並
+              建立 `clipboardStore = useClipboardStore()`。新增 handler
+              `handleCopyTodos()`：把目前 `todos.value` 透過
+              `JSON.parse(JSON.stringify(...))` 深拷貝後呼叫
+              `clipboardStore.setGoalTodos(...)`，避免後續主 modal 內編輯反向汙染
+              clipboard 狀態。複製完不關 modal。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P2.A.t3
+            text: |
+              在 `GoalEditorModal.vue` script setup 內新增 handler
+              `handlePasteTodos()`：讀取 `clipboardStore.copiedGoalTodos`，對每一筆
+              呼叫 `appendTodo(todo.text)`（沿用 `useGoalEditorForm` 既有 appendTodo，
+              讓它內部自動生成新的 id，避免 id 衝突）。維持來源順序，依序 append 到
+              既有 `todos.value` 後方。貼上後不關 modal、不自動儲存。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P2.A.t4
+            text: |
+              `GoalEditorModal.vue` 內把「貼上」按鈕的 `:disabled` 綁到
+              `!clipboardStore.hasCopiedGoalTodos`。clipboard 為空時按鈕灰掉、
+              滑鼠互動視覺一致；複製過任意 todos 後 disabled 解除。複製按鈕
+              本身不做 disabled（即便 todos 為空也允許複製空陣列，這部分由
+              使用者行為自然約束，無需額外 UI 限制）。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P2.A.t5
+            text: |
+              在 `frontend/src/locales/zh-TW.json` 既有 `pod.goal.editor` 階層下
+              新增 keys：`copyTodos`（value：「複製」）與 `pasteTodos`
+              （value：「貼上」）。GoalEditorModal template 內用 `t(...)` 引用。
+              不新增其他語系檔（本專案 i18n 僅 zh-TW）。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+
+      - id: P2.B
+        title: GoalTodoEditorModal 留空驗證訊息
+        tasks:
+          - id: P2.B.t1
+            text: |
+              在 `frontend/src/components/pod/GoalTodoEditorModal.vue` script setup
+              內新增 `validationMessage = ref("")`。修改 `handleSave()`：trim
+              後 length 為 0 時不再 silent return，改為設定
+              `validationMessage.value = t("pod.goal.editor.subModal.validation.noEmpty")`
+              後 return；非空時清空 `validationMessage.value` 再 emit save。
+              不 disable 儲存按鈕（沿用既有 GoalEditorModal validation pattern）。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P2.B.t2
+            text: |
+              `GoalTodoEditorModal.vue` template：在 `textarea` 下方加上一段
+              `<p v-if="validationMessage" class="goal-todo-editor__validation"
+              data-testid="goal-todo-editor-validation">{{ validationMessage }}</p>`，
+              文字樣式沿用主 GoalEditorModal 的 `oklch(0.52 0.18 25)`（透過 scoped
+              style 補一條 `.goal-todo-editor__validation` 規則，font-family / font-size
+              / color 與主 modal 的 `.goal-editor-validation` 對齊）。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P2.B.t3
+            text: |
+              `GoalTodoEditorModal.vue`：在 textarea 上動態綁定 class
+              `:class="{ 'goal-todo-editor__textarea--invalid': validationMessage }"`；
+              在 scoped style 新增 `.goal-todo-editor__textarea--invalid` 規則，
+              border-color 改為 `oklch(0.52 0.18 25)`（與訊息字色同色，紅框語意），
+              focus 狀態優先順序維持既有 box-shadow 不被覆蓋。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P2.B.t4
+            text: |
+              `GoalTodoEditorModal.vue` script setup：在既有 `watch(props.open, ...)`
+              重置 `localText` 的 callback 內，同步把 `validationMessage.value` 清空
+              （只在 modal 重新打開時 reset；不在 textarea 打字過程主動清除）。
+              如此符合 Q7「按下儲存才顯示」的 contract：驗證訊息的出現與消失
+              都由 `handleSave` 正向重算決定（trim 後空字串 → 設訊息；非空 →
+              清訊息），typing 過程不動 validationMessage。modal 重新打開時
+              的 reset 是為了讓上一輪的紅字不殘留到下一個 todo 的編輯 session。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P2.B.t5
+            text: |
+              在 `frontend/src/locales/zh-TW.json` 既有
+              `pod.goal.editor.subModal` 階層下新增 `validation.noEmpty`，
+              value：「禁止留空」。GoalTodoEditorModal 內用
+              `t("pod.goal.editor.subModal.validation.noEmpty")` 取用。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+
+      - id: P2.C
+        title: 補上 user flow F1-F5 的 integration test
+        tasks:
+          - id: P2.C.t1
+            text: |
+              新建 `frontend/tests/integration/goalCopyPasteFlow.test.ts`，使用
+              `@vue/test-utils` + `@pinia/testing`（沿用 helpers/testSetup.ts 與
+              factories.ts，跟既有 copyPasteFlow.test.ts 風格一致）。
+              Mock 邊界：
+                - 可 mock：`@/services/websocket`（沿用 helpers/mockWebSocket）；
+                  pinia useClipboardStore / usePodStore 透過 createTestingPinia
+                  自動 stub action。
+                - 不可 mock：GoalEditorModal、GoalTodoEditorModal 內部 reactive
+                  state；useGoalEditorForm composable；clipboardStore 的 setGoalTodos
+                  / hasCopiedGoalTodos 必須走真實實作（這次新加的邏輯主體）。
+              Test cases（一個 it 一條 user flow）：
+                - F1：同 Pod 內複製整列 todos 後貼上 → 既有 todos 後方新增等量 todos，
+                  順序與文字一致。
+                - F2：在 Pod A 點複製後關 modal、開 Pod B 的 GoalEditorModal、
+                  點貼上 → Pod B 既有 todos 後方新增 Pod A 的 todos。
+                - F3：clipboard 為空時開 modal → 貼上按鈕的 disabled 屬性為 true。
+                - F4：在 GoalTodoEditorModal 把 textarea 清空後點儲存 →
+                  `data-testid="goal-todo-editor-validation"` 出現且文字為「禁止留空」，
+                  textarea 帶有 `goal-todo-editor__textarea--invalid` class，
+                  modal 維持開啟（`update:open` 未被 emit false）。
+                - F5：F4 之後重新輸入非空文字並點儲存 → 驗證訊息 DOM 消失、
+                  emit `save` 帶 trim 後文字、emit `update:open` false。
+              不另寫 component 層 DOM 結構單元測試（避免無邏輯測試）。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+
+  - id: P3
+    title: 清理前端無意義測試（候選清單，逐項由使用者確認再刪）
+    parallel: true
+    verification:
+      - cd frontend && bun run style
+      - cd frontend && bun run test:run
+    done: false
+    items:
+      - id: P3.A
+        title: 純工具 / 純資料邊界類測試（候選刪除）
+        tasks:
+          - id: P3.A.t1
+            text: |
+              候選刪除：`frontend/tests/utils/safeJsonParse.test.ts`。
+              歸類：純邊界 — 測 `JSON.parse` wrapper 對合法 / 不合法字串的回傳值，
+              無業務邏輯，完全是 std API 形狀驗證。
+              code-implement 階段須先請使用者點頭再 `rm`；若使用者否決則
+              本 task 直接標 completed: true 並在 last_failure 記錄「使用者保留」。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P3.A.t2
+            text: |
+              候選刪除：`frontend/tests/utils/errorSanitizer.test.ts`。
+              歸類：純邊界 — 測 `sanitizeErrorForUser` 對 Error / string / 物件 /
+              null / undefined 等型別的回傳值，全是 typeof 形狀分支，無業務語意。
+              code-implement 階段須先請使用者點頭再 `rm`。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P3.A.t3
+            text: |
+              候選刪除：`frontend/tests/utils/throttle.test.ts`。
+              歸類：純邊界 — 測自實作 throttle 的 leading-call / interval 等
+              fake-timer 行為，屬於 utility primitive 形狀驗證，不對應任何
+              user flow。
+              code-implement 階段須先請使用者點頭再 `rm`。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P3.A.t4
+            text: |
+              候選刪除：`frontend/tests/utils/domHelpers.test.ts`。
+              歸類：純 DOM 結構 — 測 INPUT / TEXTAREA focus 狀態判斷與
+              platform modifier key，等同瀏覽器 API 行為驗證，沒有業務邏輯。
+              code-implement 階段須先請使用者點頭再 `rm`。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P3.A.t5
+            text: |
+              候選刪除：`frontend/tests/composables/useMenuPosition.test.ts`。
+              歸類：純 UI 幾何 — 測 menu 依 window.innerHeight 與 y 座標決定向上 /
+              向下展開的數值計算，純樣式 layout primitive，跟任何 user flow
+              無直接關聯。
+              code-implement 階段須先請使用者點頭再 `rm`。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+
+      - id: P3.B
+        title: 與 integration 重複類測試（候選刪除）
+        tasks:
+          - id: P3.B.t1
+            text: |
+              候選刪除：`frontend/tests/stores/clipboardStore.test.ts`。
+              歸類：與 integration 重複 — 內容為 `initialState`、`setCopy` /
+              `clear` 等 CRUD getter / setter 形狀驗證，user flow 層面的複製貼上
+              行為已由 `tests/integration/copyPasteFlow.test.ts` 與本案新增的
+              `goalCopyPasteFlow.test.ts` 覆蓋。
+              code-implement 階段須先請使用者點頭再 `rm`；若使用者擔心 store
+              新加的 `setGoalTodos / hasCopiedGoalTodos` 沒有測試，answer 是
+              「已被新加的 goalCopyPasteFlow integration test 覆蓋」。
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []

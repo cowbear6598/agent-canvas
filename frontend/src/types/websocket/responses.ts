@@ -9,7 +9,11 @@ import type {
   RunPodStatus,
   PathwayState,
 } from "../run";
-import type { McpListItem } from "../mcp";
+import type {
+  ManagedMcpRegistryItem,
+  McpListItem,
+  PodMcpAvailabilityItem,
+} from "../mcp";
 import type { MessageRole, SystemMessageMetadata } from "../chat";
 
 export interface ConnectionReadyPayload {
@@ -347,6 +351,29 @@ export interface McpListResultPayload extends ResultPayload {
   /** 與後端 MCP allowlist 對齊；僅 claude / codex / opencode 會回傳實際清單 */
   provider?: "claude" | "codex" | "opencode";
   items?: McpListItem[];
+}
+
+export interface ManagedMcpRegistryListResultPayload extends ResultPayload {
+  items?: ManagedMcpRegistryItem[];
+}
+
+export interface ManagedMcpRegistrySavedPayload extends ResultPayload {
+  item?: ManagedMcpRegistryItem;
+}
+
+export interface ManagedMcpRegistryDeletedPayload extends ResultPayload {
+  registryId?: string;
+}
+
+export interface ManagedMcpRegistryUpdatedPayload extends ResultPayload {
+  action?: "saved" | "deleted";
+  registryId?: string;
+  item?: ManagedMcpRegistryItem;
+}
+
+export interface PodMcpAvailabilityListResultPayload extends ResultPayload {
+  podId?: string;
+  items?: PodMcpAvailabilityItem[];
 }
 
 /** Pod 的 MCP server 名稱清單已更新 */

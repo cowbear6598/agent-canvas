@@ -51,6 +51,27 @@ function createBaseTables(db: Database): void {
   );
 
   db.exec(
+    "CREATE TABLE IF NOT EXISTS managed_mcp_servers (" +
+      "id TEXT PRIMARY KEY," +
+      "name TEXT NOT NULL UNIQUE," +
+      "transport TEXT NOT NULL," +
+      "command TEXT," +
+      "args_json TEXT NOT NULL DEFAULT '[]'," +
+      "cwd TEXT," +
+      "env_json TEXT NOT NULL DEFAULT '{}'," +
+      "url TEXT," +
+      "enabled INTEGER NOT NULL DEFAULT 1," +
+      "created_at TEXT NOT NULL," +
+      "updated_at TEXT NOT NULL," +
+      "last_known_status TEXT NOT NULL DEFAULT 'unknown'," +
+      "last_error TEXT" +
+      ")",
+  );
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_managed_mcp_servers_name ON managed_mcp_servers(name)",
+  );
+
+  db.exec(
     "CREATE TABLE IF NOT EXISTS pod_plugin_ids (" +
       "pod_id TEXT NOT NULL REFERENCES pods(id) ON DELETE CASCADE," +
       "plugin_id TEXT NOT NULL," +

@@ -12,9 +12,27 @@ import {
 
 vi.mock("@/services/websocket", () => webSocketMockFactory());
 
+const {
+  mockUpdatePodMcpServersApi,
+  mockInvalidatePodMcpAvailabilityCache,
+} = vi.hoisted(() => ({
+  mockUpdatePodMcpServersApi: vi.fn(),
+  mockInvalidatePodMcpAvailabilityCache: vi.fn(),
+}));
+
 vi.mock("@/services/websocket/createWebSocketRequest", () => ({
   tryResolvePendingRequest: vi.fn().mockReturnValue(false),
   createWebSocketRequest: vi.fn(),
+}));
+
+vi.mock("@/services/mcpApi", () => ({
+  updatePodMcpServers: (...args: unknown[]) =>
+    mockUpdatePodMcpServersApi(...args),
+}));
+
+vi.mock("@/services/managedMcpApi", () => ({
+  invalidatePodMcpAvailabilityCache: (...args: unknown[]) =>
+    mockInvalidatePodMcpAvailabilityCache(...args),
 }));
 
 vi.mock("@/composables/useToast", () => ({
@@ -27,6 +45,8 @@ describe("podEventHandlers", () => {
   setupStoreTest(() => {
     const canvasStore = useCanvasStore();
     canvasStore.activeCanvasId = "canvas-1";
+    mockUpdatePodMcpServersApi.mockReset();
+    mockInvalidatePodMcpAvailabilityCache.mockReset();
   });
 
   function findHandler(event: string) {
@@ -139,6 +159,23 @@ describe("podEventHandlers", () => {
 
       expect(spy).toHaveBeenCalledWith(pod);
     });
+
+    it("Goal 變動時應失效該 pod 的 availability cache", () => {
+      const podStore = usePodStore();
+      podStore.pods = [createMockPod({ id: "pod-1", provider: "claude" })];
+      const pod = createMockPod({
+        id: "pod-1",
+        provider: "claude",
+        goal: { todos: [{ id: "goal-1", text: "Ship it" }] },
+      });
+
+      findHandler("pod:goal:set")({ canvasId: "canvas-1", pod });
+
+      expect(mockInvalidatePodMcpAvailabilityCache).toHaveBeenCalledWith(
+        "claude",
+        "pod-1",
+      );
+    });
   });
 
   describe("handlePodDeleted", () => {
@@ -242,7 +279,7 @@ describe("podEventHandlers", () => {
   });
 
   describe("handlePodMcpServerNamesUpdated", () => {
-    it("成功路徑應呼叫 updatePodMcpServers", () => {
+    it("POD_MCP_SERVER_NAMES_UPDATED 仍會更新 podStore active count", () => {
       const podStore = usePodStore();
       const spy = vi.spyOn(podStore, "updatePodMcpServers");
 
@@ -253,6 +290,10 @@ describe("podEventHandlers", () => {
       });
 
       expect(spy).toHaveBeenCalledWith("pod-1", ["server-a", "server-b"]);
+      expect(mockInvalidatePodMcpAvailabilityCache).toHaveBeenCalledWith(
+        undefined,
+        "pod-1",
+      );
     });
 
     it("podId 缺失時不應呼叫 updatePodMcpServers", () => {
@@ -315,6 +356,25 @@ describe("podEventHandlers", () => {
       });
 
       expect(spy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("handlePodModelSet", () => {
+    it("provider 切換或 Goal 變動時 availability cache 會失效", () => {
+      const podStore = usePodStore();
+      podStore.pods = [createMockPod({ id: "pod-1", provider: "claude" })];
+      const pod = createMockPod({ id: "pod-1", provider: "codex" });
+
+      findHandler("pod:model:set")({ canvasId: "canvas-1", pod });
+
+      expect(mockInvalidatePodMcpAvailabilityCache).toHaveBeenCalledWith(
+        "claude",
+        "pod-1",
+      );
+      expect(mockInvalidatePodMcpAvailabilityCache).toHaveBeenCalledWith(
+        "codex",
+        "pod-1",
+      );
     });
   });
 

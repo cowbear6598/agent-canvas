@@ -1,0 +1,83 @@
+feature: editor-ux-cleanup
+side: backend
+approved: true
+phases:
+  - id: P1
+    title: 後端無意義測試候選逐項刪除
+    parallel: true
+    verification:
+      - cd backend && bun run test
+      - cd backend && bun run style
+    done: false
+    items:
+      - id: P1.A
+        title: 純常數 / 純形狀 / 純 schema 驗證類候選
+        tasks:
+          - id: P1.A.t1
+            text: "刪除 backend/tests/unit/capabilities.test.ts（屬於『純常數形狀驗證』類）— 全檔在驗證 CODEX_AVAILABLE_MODELS / CLAUDE_AVAILABLE_MODELS 與對應 *_VALUES Set 之間 size、has(value) 一致，等同重複 assert 同一份寫死常數，無業務行為。"
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P1.A.t2
+            text: "刪除 backend/tests/unit/providerTypes.test.ts（屬於『純常數形狀驗證』類）— 測 providerRegistry.claude.metadata / codex.metadata 與 CLAUDE_AVAILABLE_MODELS / CODEX_AVAILABLE_MODELS 是否相等，但 metadata 本身就是直接 reference 同一份常數，等同 a === a 自證循環，與 capabilities.test.ts 在不同檔名下做同件事。"
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P1.A.t3
+            text: "刪除 backend/tests/unit/chatSendSchema.test.ts（屬於『純 schema 邊界』類，違反 plan-guide A 類『不規劃逐欄位（必填、型別、長度、邊界）測試』）— 整檔直接呼叫 chatSendSchema.safeParse() 跑逐欄位（requestId 必填 / message 空白 / 10001 字超長 / uploadSessionId UUID 格式）邊界，沒有通過任何 handler / framework pipeline，等同測 zod 自己。"
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P1.A.t4
+            text: "刪除 backend/tests/unit/backupSchemas.test.ts（屬於『純 schema 邊界』類，違反 plan-guide A 類）— backupTriggerSchema / backupTestConnectionSchema / configUpdateSchema 全部直接 .safeParse() 跑必填 / URL 格式 / backupTime 24h 邊界，等同測 zod 自己。"
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+
+      - id: P1.B
+        title: 純 fallback / 純 wrapper / 不測自家程式碼類候選
+        tasks:
+          - id: P1.B.t1
+            text: "刪除 backend/tests/unit/errorHelpers.test.ts（屬於『純邊界 / 純型別 fallback』類）— getErrorMessage / isAbortError 全部測 null / undefined / 字串 / 數字 / 物件 unknown 型別窮舉，且 getErrorMessage 的『非 Error 回傳預設訊息』本身就是型別系統已保證的 fallback 防衛，無業務 assertion。"
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P1.B.t2
+            text: "刪除 backend/tests/utils/operationHelpers.test.ts（屬於『純 try-catch wrapper 自驗』類）— safeExecute / safeExecuteAsync 是把 try-catch 包成 { success, data | error } 的純 wrapper，測試只在驗 try-catch 本身會把 Error.message 抓出來，沒測任何業務情境。"
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P1.B.t3
+            text: "刪除 backend/tests/utils/safeJsonParse.test.ts（屬於『純邊界 + try-catch wrapper』類）— safeJsonParse 是 JSON.parse + try-catch + 回 null 的純 wrapper，測試只在驗合法 / 不合法 JSON 兩條路徑，等同測 JSON.parse 本身。"
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P1.B.t4
+            text: "刪除 backend/tests/utils/config.test.ts（屬於『不測自己程式碼』類）— 整檔測 process.env.GITLAB_URL 與 native URL constructor，沒有任何一行真的 import 並呼叫 src/ 內的程式碼，等同在測 Node.js 內建。"
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+
+      - id: P1.C
+        title: 純資料容器 CRUD 類候選
+        tasks:
+          - id: P1.C.t1
+            text: "刪除 backend/tests/unit/configStore.test.ts（屬於『純資料容器 CRUD』類）— 只在驗『update(timezoneOffset) 寫進 DB → getAll() 拿出來一樣』『更新 A 欄位不影響 B 欄位』等典型 KV 寫讀對映，沒有任何狀態機 / 業務規則。schema / 時區計算邏輯由 backupSchemas（已列刪）與 schedule-timezone-utils（保留）覆蓋。"
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []
+          - id: P1.C.t2
+            text: "刪除 backend/tests/unit/directTriggerStore.test.ts（屬於『純資料容器 CRUD』類）— 只兩個 case：clearDirectPending() 清除 / setTimer + hasActiveTimer。前者是 Map.delete wrapper，後者只在驗『setTimeout 拿到 timer ref 後丟給 setter，再用 getter 拿回來判 truthy』，沒有 timer 觸發業務、沒有狀態機；真實 direct trigger 業務由 workflowDirectTriggerFlow / triggerSettlement（保留）覆蓋。"
+            completed: false
+            attempts: 0
+            last_failure: null
+            last_files_changed: []

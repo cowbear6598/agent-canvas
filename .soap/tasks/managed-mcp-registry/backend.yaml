@@ -6,112 +6,139 @@ phases:
     title: Managed MCP registry 持久化與 WebSocket 契約
     parallel: false
     verification: []
-    done: false
+    done: true
     items:
       - id: P1.A
         title: 建立 registry 資料模型與存取層
         tasks:
           - id: P1.A.t1
             text: 在 `backend/src/database/schema.ts` 與 `backend/src/database/statements.ts` 新增 `managed_mcp_servers` 專用資料表與 statements，欄位至少包含 `id`、`name`、`transport`、`command`、`args_json`、`cwd`、`env_json`、`url`、`enabled`、`created_at`、`updated_at`、`last_known_status`、`last_error`，並保留 `name` 的唯一性讓 `pod.mcpServerNames` 可以直接沿用穩定名稱
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - backend/src/database/schema.ts
+              - backend/src/database/statements.ts
           - id: P1.A.t2
             text: 建立 `backend/src/services/mcp/managedMcpStore.ts`，負責 managed MCP entry 的 CRUD、transport-specific 欄位序列化、`last_known_status` / `last_error` 回寫，以及「以 name 查詢」供 Pod 選擇與 runtime resolver 共用
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - backend/src/services/mcp/managedMcpStore.ts
           - id: P1.A.t3
             text: 新增針對 store 的測試，案例名稱至少包含「建立 stdio entry 成功」「更新 http/sse entry 保留同一個 name」「重複 name 被拒絕」「刪除 entry 後 list 不再回傳」；測試使用真實 SQLite schema 與 statements，不 mock `managedMcpStore` 內部邏輯
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - backend/tests/unit/managedMcpStore.test.ts
 
       - id: P1.B
         title: 建立 registry 與 Pod availability 的事件契約
         tasks:
           - id: P1.B.t1
             text: 擴充 `backend/src/schemas/events.ts`、`backend/src/schemas/mcpSchemas.ts` 與對應型別，新增 managed MCP registry 的 list/save/delete 事件與 `pod:mcp-availability:list` 事件，並定義兩種 payload：一種給 Header modal 使用的 registry item，一種給 Pod popover 使用的 availability item（含 `selected`、`selectable`、`disabledReason`、`status`）
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - backend/src/schemas/events.ts
+              - backend/src/schemas/mcpSchemas.ts
           - id: P1.B.t2
             text: 更新 `backend/src/handlers/mcpHandlers.ts` 與 `backend/src/handlers/groups/mcpHandlerGroup.ts`，讓後端能回傳全域 registry 清單、儲存與刪除 registry entry、廣播 registry 變更事件，並保留 `pod:set-mcp-server-names` 作為 Pod subset 寫入入口
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - backend/src/handlers/mcpHandlers.ts
+              - backend/src/handlers/groups/mcpHandlerGroup.ts
           - id: P1.B.t3
             text: 新增 handlers 的單元與整合測試，案例名稱至少包含「registry list 回傳 persisted entries」「save 後廣播 registry updated」「delete 後清單移除該 entry」「Pod 寫入不存在的 name 會被過濾」；測試只 mock `socketService` 這類外部傳輸邊界，不 mock schema 驗證流程與 store 內部邏輯
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - backend/tests/unit/mcpHandlers.test.ts
+              - backend/tests/integration/managedMcpHandlers.test.ts
 
   - id: P2
     title: Child MCP runtime 與 Pod availability resolver
     parallel: false
     verification: []
-    done: false
+    done: true
     items:
       - id: P2.A
         title: 建立 long-lived child MCP runtime manager
         tasks:
           - id: P2.A.t1
             text: 建立 `backend/src/services/mcp/managedMcpRuntimeService.ts` 與必要的 transport helper，提供 `ensureReady(name)`、`markConfigDirty(name)`、`getRuntimeSnapshot(name)`、`shutdownAll()` 這類介面，統一處理 stdio child process、http 連線與 sse 連線的啟動、重用、失敗狀態與錯誤訊息記錄
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - backend/src/services/mcp/managedMcpRuntimeService.ts
           - id: P2.A.t2
             text: 將 runtime manager 接到 `backend/src/services/startupService.ts` 與伺服器關閉流程，啟動時先把 persisted status 恢復為可辨識的初始狀態，關閉時回收所有 long-lived child handle，避免 run 結束後殘留程序
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - backend/src/services/startupService.ts
+              - backend/src/index.ts
           - id: P2.A.t3
             text: 新增 runtime manager 的單元測試，案例名稱至少包含「已健康的 child 會跨 run 重用」「設定改動後會標記 dirty 並在下次 ensureReady 重建」「stdio 啟動失敗會寫入 last_error」「http/sse 連線失敗會反映為非 healthy 狀態」；測試的 mock 邊界落在 `McpProcessLauncher`、`McpRemoteConnector` 這類 wrapper，不 mock runtime manager 自身決策流程
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - backend/tests/unit/managedMcpRuntimeService.test.ts
 
       - id: P2.B
         title: 建立 Pod 可用性 resolver 與選擇驗證
         tasks:
           - id: P2.B.t1
             text: 建立 `backend/src/services/mcp/managedMcpAvailabilityService.ts`，把 registry entries、runtime status、`pod.mcpServerNames`、provider 能力與 Goal built-in MCP 合併成 pod-scoped availability 清單，讓 Pod UI 不必再直接猜 provider-native 設定
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - backend/src/services/mcp/managedMcpAvailabilityService.ts
           - id: P2.B.t2
             text: 將 `pod:set-mcp-server-names` 的驗證邏輯改為依 managed registry name 檢查，而不是依 `readClaudeMcpServers` / `readCodexMcpServers` / `readOpencodeMcpServers` 掃到的結果過濾；保留 busy pod 拒絕變更與 `ignoredNames` 回傳，讓舊的 Pod selection UX 還能工作
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - backend/src/handlers/mcpHandlers.ts
           - id: P2.B.t3
             text: 新增 availability resolver 測試，案例名稱至少包含「已選取且 healthy 的 entry 可切換」「已從 registry 移除的 name 會標示為無效」「Goal built-in 仍固定顯示為 locked」「不同 provider 看到的 selectable 狀態不同」；不要 mock resolver 自己的合併邏輯，只 mock store 讀取與 runtime snapshot wrapper
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - backend/tests/unit/managedMcpAvailabilityService.test.ts
 
   - id: P3
     title: Per-run aggregated surface 與 provider 注入
     parallel: false
     verification: []
-    done: false
+    done: true
     items:
       - id: P3.A
         title: 建立 per-run MCP surface lifecycle
         tasks:
           - id: P3.A.t1
             text: 建立 `backend/src/services/mcp/managedMcpSurfaceService.ts`，在 run 啟動時依 Pod 當下選取的 registry names 解析出該次 run 要使用的全部 MCP，呼叫 runtime manager 取得可重用 child handle，並把 Goal built-in MCP 併入同一顆 aggregated surface descriptor
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - backend/src/services/mcp/managedMcpSurfaceService.ts
           - id: P3.A.t2
             text: 把 per-run surface 的建立與回收接進 `backend/src/handlers/chatHandlers.ts`、`backend/src/services/workflow/runExecutionService.ts` 與 Goal runtime 清理路徑，讓每次 Pod 執行只拿到自己的 MCP subset，但 run 結束時只回收 surface、不強制殺掉 healthy child server
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - backend/src/services/workflow/runExecutionService.ts
           - id: P3.A.t3
             text: 新增 run-level 整合測試，案例名稱至少包含「兩個 Pod 選不同 subset 時各自只看到自己的 MCP」「registry 更新後下一次 run 會使用新 surface」「run 結束後 surface 被回收但 child runtime 仍可重用」；測試可 mock runtime transport wrapper，但不要 mock run lifecycle 本身
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - backend/tests/integration/managedMcpSurfaceService.test.ts
 
       - id: P3.B
         title: 將三個 provider 改為吃 managed surface
         tasks:
           - id: P3.B.t1
             text: 更新 `backend/src/services/provider/claude/buildClaudeOptions.ts`，停止直接從 `readClaudeMcpServers()` 讀 user-scoped servers，改為注入單一 managed surface 對應的 `mcpServers` 設定，讓 Claude 只認 AgentCanvas 組好的 surface
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - backend/src/services/provider/claude/buildClaudeOptions.ts
           - id: P3.B.t2
             text: 更新 `backend/src/services/provider/codexProvider.ts` 與 `backend/src/services/provider/opencodeProvider.ts`，停止把 `pod.mcpServerNames` 直接對映到 provider-native readers 或 tool subset；改為吃 per-run surface descriptor，讓 Codex 與 Opencode 也只連到 AgentCanvas-managed MCP 路徑
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - backend/src/services/provider/codexProvider.ts
+              - backend/src/services/provider/opencodeProvider.ts
           - id: P3.B.t3
             text: 調整現有 provider 測試，案例名稱至少包含「Claude 只注入一顆 managed surface」「Codex 不再依賴 readCodexMcpServers 作為 run path source of truth」「Opencode 的 MCP 可見性改由 managed surface 決定」；若舊 reader 還保留，應把它們限制在非 runtime 過渡用途，不再讓 managed path 直接依賴
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - backend/tests/provider/claudeProviderBuildOptions.test.ts
+              - backend/tests/provider/codexProviderBuildOptions.test.ts
+              - backend/tests/provider/codexProvider.test.ts
+              - backend/tests/provider/opencodeProvider.test.ts

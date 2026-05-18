@@ -34,10 +34,13 @@ import { sanitizePodName } from "./podNameSanitizer.js";
 import type { Pod } from "../../types/pod.js";
 import type { RunContext } from "../../types/run.js";
 import {
-  buildGoalRuntimeMcpServerConfig,
   type GoalRuntimeMcpServerConfig,
 } from "../goalRuntime.js";
 import { readCodexMcpServers } from "../mcp/codexMcpReader.js";
+import {
+  managedMcpSurfaceService,
+  type ManagedMcpSurfaceServerConfig,
+} from "../mcp/managedMcpSurfaceService.js";
 import { buildCodexEnv, collectStderr } from "../codex/codexHelpers.js";
 import { isEnoentError } from "./utils.js";
 
@@ -52,10 +55,14 @@ export interface CodexOptions {
   resumeMode: "cli";
   /** 思考深度等級（thinkingLevel），對應 codex 的 model_reasoning_effort；未設定時不傳 -c 旗標 */
   thinkingLevel?: string;
-  /** 執行當下實際可用的 MCP server name 清單（含系統 Goal MCP） */
+  /** Legacy MCP server name 清單，僅保留給非 run-scoped 過渡路徑 */
   mcpServerNames: string[];
-  /** 執行當下動態注入的 Goal MCP 設定 */
+  /** Legacy Goal MCP 設定，僅保留給非 managed surface 過渡路徑 */
   goalMcpServer?: GoalRuntimeMcpServerConfig | null;
+  /** Run-scoped managed surface，provider runtime path 以此為 source of truth */
+  managedSurface?: ManagedMcpSurfaceServerConfig | null;
+  /** Goal Runtime 是否已併入 managed surface，用於 bootstrap prompt */
+  goalPromptEnabled?: boolean;
 }
 
 /** 合法 resumeSessionId 格式（防止 CLI 旗標注入） */
@@ -188,12 +195,12 @@ function buildGoalRuntimeBootstrapPrompt(rawMessage: string): string {
 
 function buildCodexPromptText(
   message: string | import("../../types/message.js").ContentBlock[],
-  goalMcpServer?: GoalRuntimeMcpServerConfig | null,
+  goalRuntimeAvailable?: boolean,
   resumeSessionId?: string | null,
 ): string {
   const promptText = buildPromptText(message);
   // resume 時（gate retry 第 2 輪以後）不再注入 bootstrap，避免覆蓋 nudge 指示
-  if (!goalMcpServer || resumeSessionId) {
+  if (!goalRuntimeAvailable || resumeSessionId) {
     return promptText;
   }
   return buildGoalRuntimeBootstrapPrompt(promptText);
@@ -216,9 +223,7 @@ const MCP_AUTO_APPROVE_SAFE_NAME_RE = /^[a-zA-Z0-9_-]+$/;
  *
  * 含 `.` 的 server name 會與 TOML path 語意衝突，直接 skip 並記錄 warn。
  */
-function buildMcpAutoApproveArgs(
-  goalMcpServer?: GoalRuntimeMcpServerConfig | null,
-): string[] {
+function buildMcpAutoApproveArgs(serverNames: string[]): string[] {
   const result: string[] = [];
   const seen = new Set<string>();
 
@@ -240,41 +245,48 @@ function buildMcpAutoApproveArgs(
     );
   };
 
-  for (const server of readCodexMcpServers()) {
-    pushServerName(server.name);
-  }
-  if (goalMcpServer) {
-    pushServerName(goalMcpServer.name);
+  for (const serverName of serverNames) {
+    pushServerName(serverName);
   }
 
   return result;
 }
 
-function buildGoalMcpConfigArgs(
-  goalMcpServer: GoalRuntimeMcpServerConfig | null | undefined,
+interface CodexRuntimeMcpConfig {
+  name: string;
+  command: string;
+  args: string[];
+  env: Record<string, string>;
+}
+
+function buildRuntimeMcpConfigArgs(
+  runtimeMcpServers: CodexRuntimeMcpConfig[],
 ): string[] {
-  if (!goalMcpServer) return [];
-  if (!MCP_AUTO_APPROVE_SAFE_NAME_RE.test(goalMcpServer.name)) {
-    logger.warn(
-      "McpServer",
-      "Warn",
-      `[CodexProvider] Goal MCP server name 不合法，已略過動態注入：${goalMcpServer.name}`,
-    );
-    return [];
-  }
+  const args: string[] = [];
 
-  const args = [
-    "-c",
-    `mcp_servers.${goalMcpServer.name}.command=${JSON.stringify(goalMcpServer.command)}`,
-    "-c",
-    `mcp_servers.${goalMcpServer.name}.args=${JSON.stringify(goalMcpServer.args)}`,
-  ];
+  for (const runtimeMcpServer of runtimeMcpServers) {
+    if (!MCP_AUTO_APPROVE_SAFE_NAME_RE.test(runtimeMcpServer.name)) {
+      logger.warn(
+        "McpServer",
+        "Warn",
+        `[CodexProvider] MCP server name 不合法，已略過動態注入：${runtimeMcpServer.name}`,
+      );
+      continue;
+    }
 
-  for (const [key, value] of Object.entries(goalMcpServer.env)) {
     args.push(
       "-c",
-      `mcp_servers.${goalMcpServer.name}.env.${key}=${JSON.stringify(value)}`,
+      `mcp_servers.${runtimeMcpServer.name}.command=${JSON.stringify(runtimeMcpServer.command)}`,
+      "-c",
+      `mcp_servers.${runtimeMcpServer.name}.args=${JSON.stringify(runtimeMcpServer.args)}`,
     );
+
+    for (const [key, value] of Object.entries(runtimeMcpServer.env)) {
+      args.push(
+        "-c",
+        `mcp_servers.${runtimeMcpServer.name}.env.${key}=${JSON.stringify(value)}`,
+      );
+    }
   }
 
   return args;
@@ -328,12 +340,24 @@ function buildCodexArgs(
   resumeSessionId: string | null,
   model: string,
   repoPath: string,
-  goalMcpServer?: GoalRuntimeMcpServerConfig | null,
+  options?: CodexOptions,
   thinkingLevel?: string,
 ): string[] {
+  const runtimeMcpServers = options?.managedSurface
+    ? [options.managedSurface]
+    : options?.goalMcpServer
+      ? [options.goalMcpServer]
+      : [];
+  const autoApproveServerNames = options?.managedSurface
+    ? [options.managedSurface.name]
+    : [
+        ...readCodexMcpServers().map((server) => server.name),
+        ...(options?.goalMcpServer ? [options.goalMcpServer.name] : []),
+      ];
+
   // MCP auto-approve 旗標只計算一次，兩條分支共用同一結果
-  const mcpAutoApproveArgs = buildMcpAutoApproveArgs(goalMcpServer);
-  const goalMcpConfigArgs = buildGoalMcpConfigArgs(goalMcpServer);
+  const mcpAutoApproveArgs = buildMcpAutoApproveArgs(autoApproveServerNames);
+  const runtimeMcpConfigArgs = buildRuntimeMcpConfigArgs(runtimeMcpServers);
 
   if (resumeSessionId) {
     if (!SESSION_ID_RE.test(resumeSessionId)) {
@@ -347,7 +371,7 @@ function buildCodexArgs(
         model,
         repoPath,
         mcpAutoApproveArgs,
-        goalMcpConfigArgs,
+        runtimeMcpConfigArgs,
         thinkingLevel,
       );
     }
@@ -369,7 +393,7 @@ function buildCodexArgs(
         : []),
       "-c",
       "sandbox_workspace_write.network_access=true",
-      ...goalMcpConfigArgs,
+      ...runtimeMcpConfigArgs,
       // 為每個使用者安裝的 MCP server 加入 auto-approve 旗標，避免 stdin pipe 無法回應時被 Cancel
       ...mcpAutoApproveArgs,
     ];
@@ -379,7 +403,7 @@ function buildCodexArgs(
     model,
     repoPath,
     mcpAutoApproveArgs,
-    goalMcpConfigArgs,
+    runtimeMcpConfigArgs,
     thinkingLevel,
   );
 }
@@ -649,6 +673,8 @@ export class CodexProvider implements AgentProvider<CodexOptions> {
       resumeMode: "cli",
       mcpServerNames: [],
       goalMcpServer: null,
+      managedSurface: null,
+      goalPromptEnabled: false,
     },
     availableModels: CODEX_AVAILABLE_MODELS,
     availableModelValues: CODEX_AVAILABLE_MODEL_VALUES,
@@ -660,7 +686,8 @@ export class CodexProvider implements AgentProvider<CodexOptions> {
    * - 讀取 `pod.providerConfig?.model`：若為合法字串（通過 MODEL_RE 驗證）則使用之，
    *   否則回傳 metadata.defaultOptions.model。
    * - resumeMode 固定為 "cli"（Codex 目前只支援 CLI resume 路徑）。
-   * - runContext 本 Phase 不使用（但簽名必須收），以符合 AgentProvider 介面規範。
+   * - Run 模式改由 managed surface 作為 MCP source of truth；
+   *   非 Run 模式保留 legacy 欄位作為過渡用途。
    */
   async buildOptions(pod: Pod, runContext?: RunContext): Promise<CodexOptions> {
     const rawModel = pod.providerConfig?.model;
@@ -669,20 +696,23 @@ export class CodexProvider implements AgentProvider<CodexOptions> {
         ? rawModel
         : this.metadata.defaultOptions.model;
 
-    const goalMcpServer = runContext
-      ? buildGoalRuntimeMcpServerConfig(runContext, pod)
-      : null;
-    const mcpServerNames = [...pod.mcpServerNames];
-    if (goalMcpServer) {
-      mcpServerNames.push(goalMcpServer.name);
-    }
-
     const result: CodexOptions = {
       model,
       resumeMode: "cli",
-      mcpServerNames,
-      goalMcpServer,
+      mcpServerNames: runContext ? [] : [...pod.mcpServerNames],
+      goalMcpServer: null,
+      managedSurface: null,
+      goalPromptEnabled: false,
     };
+
+    if (runContext) {
+      const surface = await managedMcpSurfaceService.ensureSurface(runContext, pod);
+      result.managedSurface = surface.mcpServer;
+      result.goalPromptEnabled = surface.hasGoalRuntime;
+      result.mcpServerNames = [surface.mcpServer.name];
+    } else {
+      result.goalMcpServer = null;
+    }
 
     // thinkingLevel 為非空字串時才寫入；不做格式驗證，由 CLI 端決定
     const rawThinkingLevel = pod.providerConfig?.thinkingLevel;
@@ -711,12 +741,15 @@ export class CodexProvider implements AgentProvider<CodexOptions> {
       resumeSessionId,
       model,
       workspacePath,
-      options?.goalMcpServer,
+      options,
       options?.thinkingLevel,
     );
+    const goalRuntimeAvailable = options?.managedSurface
+      ? options.goalPromptEnabled !== false
+      : Boolean(options?.goalMcpServer);
     const promptText = buildCodexPromptText(
       message,
-      options?.goalMcpServer,
+      goalRuntimeAvailable,
       resumeSessionId,
     );
 

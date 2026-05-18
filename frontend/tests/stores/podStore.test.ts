@@ -37,12 +37,15 @@ vi.mock("@/composables/useToast", () => ({
 vi.mock("@/utils/errorSanitizer", () => mockErrorSanitizerFactory());
 
 const mockUpdatePodMcpServersApi = vi.fn().mockResolvedValue(undefined);
-const mockInvalidateMcpServersCache = vi.fn();
+const mockInvalidatePodMcpAvailabilityCache = vi.fn();
 vi.mock("@/services/mcpApi", () => ({
   updatePodMcpServers: (...args: unknown[]) =>
     mockUpdatePodMcpServersApi(...args),
-  invalidateMcpServersCache: (...args: unknown[]) =>
-    mockInvalidateMcpServersCache(...args),
+}));
+
+vi.mock("@/services/managedMcpApi", () => ({
+  invalidatePodMcpAvailabilityCache: (...args: unknown[]) =>
+    mockInvalidatePodMcpAvailabilityCache(...args),
 }));
 
 describe("podStore", () => {
@@ -50,7 +53,7 @@ describe("podStore", () => {
 
   beforeEach(() => {
     mockUpdatePodMcpServersApi.mockClear();
-    mockInvalidateMcpServersCache.mockClear();
+    mockInvalidatePodMcpAvailabilityCache.mockClear();
   });
 
   describe("初始狀態", () => {
@@ -1080,7 +1083,7 @@ describe("podStore", () => {
       );
       expect(result).toEqual(updatedPod);
       expect(store.getPodById("pod-1")?.goal).toEqual(goal);
-      expect(mockInvalidateMcpServersCache).toHaveBeenCalledWith(
+      expect(mockInvalidatePodMcpAvailabilityCache).toHaveBeenCalledWith(
         "claude",
         "pod-1",
       );
@@ -1117,7 +1120,7 @@ describe("podStore", () => {
 
       expect(result).toEqual(updatedPod);
       expect(store.getPodById("pod-1")?.goal).toBeNull();
-      expect(mockInvalidateMcpServersCache).toHaveBeenCalledWith(
+      expect(mockInvalidatePodMcpAvailabilityCache).toHaveBeenCalledWith(
         "claude",
         "pod-1",
       );

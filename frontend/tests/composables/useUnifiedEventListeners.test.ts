@@ -24,6 +24,7 @@ import { useRepositoryStore } from "@/stores/note/repositoryStore";
 // import { useMcpServerStore } from "@/stores/note/mcpServerStore";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { useIntegrationStore } from "@/stores/integrationStore";
+import { useManagedMcpStore } from "@/stores/managedMcpStore";
 import type { Pod, Connection, RepositoryNote, Canvas } from "@/types";
 import type { IntegrationApp } from "@/types/integration";
 
@@ -38,10 +39,28 @@ const { sharedMockToast } = vi.hoisted(() => ({
   sharedMockToast: vi.fn(),
 }));
 
+const {
+  mockListManagedMcpRegistry,
+  mockInvalidateManagedMcpRegistryCache,
+  mockInvalidatePodMcpAvailabilityCache,
+} = vi.hoisted(() => ({
+  mockListManagedMcpRegistry: vi.fn(),
+  mockInvalidateManagedMcpRegistryCache: vi.fn(),
+  mockInvalidatePodMcpAvailabilityCache: vi.fn(),
+}));
+
 vi.mock("@/composables/useToast", () => ({
   useToast: () => ({
     toast: sharedMockToast,
   }),
+}));
+
+vi.mock("@/services/managedMcpApi", () => ({
+  listManagedMcpRegistry: mockListManagedMcpRegistry,
+  saveManagedMcpRegistry: vi.fn(),
+  deleteManagedMcpRegistry: vi.fn(),
+  invalidateManagedMcpRegistryCache: mockInvalidateManagedMcpRegistryCache,
+  invalidatePodMcpAvailabilityCache: mockInvalidatePodMcpAvailabilityCache,
 }));
 
 describe("useUnifiedEventListeners", () => {
@@ -60,6 +79,9 @@ describe("useUnifiedEventListeners", () => {
       createWebSocketRequestModule.tryResolvePendingRequest,
     );
     mockTryResolvePendingRequest.mockReturnValue(false);
+    mockListManagedMcpRegistry.mockReset();
+    mockInvalidateManagedMcpRegistryCache.mockReset();
+    mockInvalidatePodMcpAvailabilityCache.mockReset();
     sharedMockToast.mockClear();
   });
 
@@ -778,6 +800,49 @@ describe("useUnifiedEventListeners", () => {
       });
 
       expect(spy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("managed-mcp:registry:updated 事件處理", () => {
+    it("registry updated 事件會觸發 cache invalidation", async () => {
+      const { registerUnifiedListeners } = useUnifiedEventListeners();
+      const managedMcpStore = useManagedMcpStore();
+      managedMcpStore.loaded = true;
+      mockListManagedMcpRegistry.mockResolvedValueOnce([
+        {
+          id: "registry-1",
+          name: "context7",
+          transport: "stdio",
+          enabled: true,
+          command: "npx",
+          args: [],
+          cwd: null,
+          env: {},
+          url: null,
+          status: "healthy",
+          lastError: null,
+          createdAt: "2025-01-01T00:00:00.000Z",
+          updatedAt: "2025-01-01T00:00:00.000Z",
+        },
+      ]);
+
+      registerUnifiedListeners();
+
+      simulateEvent("managed-mcp:registry:updated", {
+        requestId: "req-managed-mcp",
+        success: true,
+        action: "saved",
+        registryId: "registry-1",
+      });
+
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(mockInvalidateManagedMcpRegistryCache).toHaveBeenCalledOnce();
+      expect(mockInvalidatePodMcpAvailabilityCache).toHaveBeenCalledOnce();
+      expect(managedMcpStore.registry).toEqual([
+        expect.objectContaining({ name: "context7" }),
+      ]);
     });
   });
 

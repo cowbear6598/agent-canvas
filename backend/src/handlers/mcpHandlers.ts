@@ -1,17 +1,28 @@
 import { WebSocketResponseEvents } from "../schemas/index.js";
 import type {
+  ManagedMcpRegistryDeleteRequest,
+  ManagedMcpRegistryInput,
+  ManagedMcpRegistryListRequest,
+  ManagedMcpRegistrySaveRequest,
   McpListRequest,
+  PodMcpAvailabilityListRequest,
   PodSetMcpServerNamesPayload,
 } from "../schemas/mcpSchemas.js";
 import { readClaudeMcpServers } from "../services/mcp/claudeMcpReader.js";
 import { readCodexMcpServers } from "../services/mcp/codexMcpReader.js";
 import { readOpencodeMcpServers } from "../services/mcp/opencodeMcpReader.js";
+import {
+  managedMcpStore,
+  type ManagedMcpServerRecord,
+} from "../services/mcp/managedMcpStore.js";
+import { managedMcpRuntimeService } from "../services/mcp/managedMcpRuntimeService.js";
+import { managedMcpAvailabilityService } from "../services/mcp/managedMcpAvailabilityService.js";
 import { buildGoalRuntimeMcpListItem } from "../services/goalRuntime.js";
 import { podStore } from "../services/podStore.js";
 import { runStore } from "../services/runStore.js";
 import { socketService } from "../services/socketService.js";
 import { createI18nError } from "../utils/i18nError.js";
-import { emitError } from "../utils/websocketResponse.js";
+import { emitError, emitNotFound } from "../utils/websocketResponse.js";
 import { getCanvasId } from "../utils/handlerHelpers.js";
 import { logger } from "../utils/logger.js";
 import type { ProviderName } from "../services/provider/index.js";
@@ -64,6 +75,38 @@ function resolveAvailableMcpServers(
   }
 }
 
+function toManagedMcpRegistryItem(entry: ManagedMcpServerRecord): {
+  id: string;
+  name: string;
+  transport: string;
+  enabled: boolean;
+  command: string | null;
+  args: string[];
+  cwd: string | null;
+  env: Record<string, string>;
+  url: string | null;
+  status: string;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+} {
+  return {
+    id: entry.id,
+    name: entry.name,
+    transport: entry.transport,
+    enabled: entry.enabled,
+    command: entry.command,
+    args: entry.args,
+    cwd: entry.cwd,
+    env: entry.env,
+    url: entry.url,
+    status: entry.lastKnownStatus,
+    lastError: entry.lastError,
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt,
+  };
+}
+
 /**
  * handleMcpList：依 provider 分派到對應的 reader，回傳 MCP_LIST_RESULT。
  * - provider = "claude"    → readClaudeMcpServers（僅 user-scoped，從 top-level mcpServers 讀取）
@@ -88,6 +131,153 @@ export async function handleMcpList(
       requestId,
       success: true,
       provider,
+      items,
+    },
+  );
+}
+
+export async function handleManagedMcpRegistryList(
+  connectionId: string,
+  _payload: ManagedMcpRegistryListRequest,
+  requestId: string,
+): Promise<void> {
+  const items = managedMcpStore.list().map((entry) => toManagedMcpRegistryItem(entry));
+
+  socketService.emitToConnection(
+    connectionId,
+    WebSocketResponseEvents.MANAGED_MCP_REGISTRY_LIST_RESULT,
+    {
+      requestId,
+      success: true,
+      items,
+    },
+  );
+}
+
+export async function handleManagedMcpRegistrySave(
+  connectionId: string,
+  payload: ManagedMcpRegistrySaveRequest,
+  requestId: string,
+): Promise<void> {
+  try {
+    const previous = payload.registry.id
+      ? managedMcpStore.getById(payload.registry.id)
+      : undefined;
+    const saved = managedMcpStore.save(
+      payload.registry as ManagedMcpRegistryInput,
+    );
+    if (previous?.name) {
+      await managedMcpRuntimeService.markConfigDirty(previous.name);
+    }
+    await managedMcpRuntimeService.markConfigDirty(saved.name);
+
+    const item = toManagedMcpRegistryItem(
+      managedMcpStore.getById(saved.id) ?? saved,
+    );
+
+    socketService.emitToConnection(
+      connectionId,
+      WebSocketResponseEvents.MANAGED_MCP_REGISTRY_SAVED,
+      {
+        requestId,
+        success: true,
+        item,
+      },
+    );
+    socketService.emitToAll(
+      WebSocketResponseEvents.MANAGED_MCP_REGISTRY_UPDATED,
+      {
+        requestId,
+        success: true,
+        action: "saved",
+        registryId: item.id,
+        item,
+      },
+    );
+  } catch (error) {
+    emitError(
+      connectionId,
+      WebSocketResponseEvents.MANAGED_MCP_REGISTRY_SAVED,
+      error instanceof Error ? error : new Error("managed MCP save failed"),
+      null,
+      requestId,
+      undefined,
+      "MANAGED_MCP_SAVE_FAILED",
+    );
+  }
+}
+
+export async function handleManagedMcpRegistryDelete(
+  connectionId: string,
+  payload: ManagedMcpRegistryDeleteRequest,
+  requestId: string,
+): Promise<void> {
+  const existing = managedMcpStore.getById(payload.registryId);
+  if (!existing) {
+    emitNotFound(
+      connectionId,
+      WebSocketResponseEvents.MANAGED_MCP_REGISTRY_DELETED,
+      "ManagedMcpRegistry",
+      payload.registryId,
+      requestId,
+      null,
+    );
+    return;
+  }
+
+  managedMcpStore.delete(payload.registryId);
+  await managedMcpRuntimeService.markConfigDirty(existing.name);
+
+  socketService.emitToConnection(
+    connectionId,
+    WebSocketResponseEvents.MANAGED_MCP_REGISTRY_DELETED,
+    {
+      requestId,
+      success: true,
+      registryId: payload.registryId,
+    },
+  );
+  socketService.emitToAll(
+    WebSocketResponseEvents.MANAGED_MCP_REGISTRY_UPDATED,
+    {
+      requestId,
+      success: true,
+      action: "deleted",
+      registryId: payload.registryId,
+    },
+  );
+}
+
+export async function handlePodMcpAvailabilityList(
+  connectionId: string,
+  payload: PodMcpAvailabilityListRequest,
+  requestId: string,
+): Promise<void> {
+  const podRef = podStore.getByIdGlobal(payload.podId);
+  if (!podRef) {
+    emitNotFound(
+      connectionId,
+      WebSocketResponseEvents.POD_MCP_AVAILABILITY_LIST_RESULT,
+      "Pod",
+      payload.podId,
+      requestId,
+      null,
+    );
+    return;
+  }
+
+  const items = managedMcpAvailabilityService.listForPod(
+    podRef.pod,
+    payload.provider,
+  );
+
+  socketService.emitToConnection(
+    connectionId,
+    WebSocketResponseEvents.POD_MCP_AVAILABILITY_LIST_RESULT,
+    {
+      requestId,
+      success: true,
+      podId: payload.podId,
       items,
     },
   );
@@ -148,11 +338,11 @@ export async function handlePodSetMcpServerNames(
   // 過濾掉已不存在的 name（例如使用者在外部刪除了 settings.json 中的 server）
   // Codex popover 為唯讀，理論上不會觸發此事件；
   // 仍統一走 resolveAvailableMcpServers 過濾，避免異常呼叫時繞過驗證
-  const availableServers = resolveAvailableMcpServers(pod.provider);
   const availableNameSet = new Set(
-    availableServers
-      .filter((server) => !server.system && !server.locked)
-      .map((s) => s.name),
+    managedMcpAvailabilityService
+      .listForPod(pod, pod.provider)
+      .filter((item) => !item.system && !item.locked && item.selectable)
+      .map((item) => item.name),
   );
 
   const invalidNames = mcpServerNames.filter((n) => !availableNameSet.has(n));
