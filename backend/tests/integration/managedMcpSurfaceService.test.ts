@@ -4,8 +4,7 @@ import { initTestDb } from "../../src/database/index.js";
 import { resetStatements } from "../../src/database/statements.js";
 import {
   createManagedMcpRuntimeService,
-  type McpProcessLauncher,
-  type McpRemoteConnector,
+  type McpProbe,
 } from "../../src/services/mcp/managedMcpRuntimeService.js";
 import { managedMcpStore } from "../../src/services/mcp/managedMcpStore.js";
 import {
@@ -17,7 +16,9 @@ import type { Pod } from "../../src/types/pod.js";
 import type { RunContext } from "../../src/types/run.js";
 
 function createPod(
-  overrides: Partial<Pick<Pod, "id" | "name" | "provider" | "goal" | "mcpServerNames">> = {},
+  overrides: Partial<
+    Pick<Pod, "id" | "name" | "provider" | "goal" | "mcpServerNames">
+  > = {},
 ): Pick<Pod, "id" | "name" | "provider" | "goal" | "mcpServerNames"> {
   return {
     id: overrides.id ?? "pod-1",
@@ -28,9 +29,7 @@ function createPod(
   };
 }
 
-function createRunContext(
-  overrides: Partial<RunContext> = {},
-): RunContext {
+function createRunContext(overrides: Partial<RunContext> = {}): RunContext {
   return {
     runId: overrides.runId ?? "run-managed-surface-1",
     canvasId: overrides.canvasId ?? "canvas-managed-surface-1",
@@ -60,20 +59,12 @@ describe("ManagedMcpSurfaceService", () => {
       enabled: true,
     });
 
-    const processLauncher: McpProcessLauncher = {
-      launch: vi
-        .fn()
-        .mockResolvedValue({ pid: 1111, close: vi.fn() })
-        .mockResolvedValueOnce({ pid: 1111, close: vi.fn() })
-        .mockResolvedValueOnce({ pid: 2222, close: vi.fn() }),
-    };
-    const remoteConnector: McpRemoteConnector = {
-      connect: vi.fn(),
+    const probe: McpProbe = {
+      probe: vi.fn().mockResolvedValue(undefined),
     };
     const runtimeService = createManagedMcpRuntimeService({
       store: managedMcpStore,
-      processLauncher,
-      remoteConnector,
+      probe,
     });
     const surfaceService = createManagedMcpSurfaceService({
       store: managedMcpStore,
@@ -121,20 +112,12 @@ describe("ManagedMcpSurfaceService", () => {
       enabled: true,
     });
 
-    const processLauncher: McpProcessLauncher = {
-      launch: vi
-        .fn()
-        .mockResolvedValue({ pid: 3001, close: vi.fn() })
-        .mockResolvedValueOnce({ pid: 3001, close: vi.fn() })
-        .mockResolvedValueOnce({ pid: 3002, close: vi.fn() }),
-    };
-    const remoteConnector: McpRemoteConnector = {
-      connect: vi.fn(),
+    const probe: McpProbe = {
+      probe: vi.fn().mockResolvedValue(undefined),
     };
     const runtimeService = createManagedMcpRuntimeService({
       store: managedMcpStore,
-      processLauncher,
-      remoteConnector,
+      probe,
     });
     const surfaceService = createManagedMcpSurfaceService({
       store: managedMcpStore,
@@ -183,12 +166,11 @@ describe("ManagedMcpSurfaceService", () => {
         ?.command,
     ).toBe("node");
     expect(
-      secondState?.targets.find((target) => target.name === "filesystem")
-        ?.args,
+      secondState?.targets.find((target) => target.name === "filesystem")?.args,
     ).toEqual(["new-filesystem-server.js"]);
   });
 
-  it("run 結束後 surface 被回收但 child runtime 仍可重用", async () => {
+  it("run 結束後 surface 被回收，已 probe 過的 entry 不會被重複 probe", async () => {
     managedMcpStore.save({
       name: "context7",
       transport: "stdio",
@@ -197,16 +179,12 @@ describe("ManagedMcpSurfaceService", () => {
       enabled: true,
     });
 
-    const processLauncher: McpProcessLauncher = {
-      launch: vi.fn().mockResolvedValue({ pid: 4001, close: vi.fn() }),
-    };
-    const remoteConnector: McpRemoteConnector = {
-      connect: vi.fn(),
+    const probe: McpProbe = {
+      probe: vi.fn().mockResolvedValue(undefined),
     };
     const runtimeService = createManagedMcpRuntimeService({
       store: managedMcpStore,
-      processLauncher,
-      remoteConnector,
+      probe,
     });
     const surfaceService = createManagedMcpSurfaceService({
       store: managedMcpStore,
@@ -225,9 +203,7 @@ describe("ManagedMcpSurfaceService", () => {
     const firstSurface = await surfaceService.ensureSurface(firstRun, pod);
     await surfaceService.cleanupRunSurfaces(firstRun.runId);
 
-    expect(
-      await readManagedMcpSurfaceState(firstSurface.statePath),
-    ).toBeNull();
+    expect(await readManagedMcpSurfaceState(firstSurface.statePath)).toBeNull();
 
     const secondRun = createRunContext({
       runId: "run-surface-cleanup-2",
@@ -235,6 +211,6 @@ describe("ManagedMcpSurfaceService", () => {
     });
     await surfaceService.ensureSurface(secondRun, pod);
 
-    expect(processLauncher.launch).toHaveBeenCalledTimes(1);
+    expect(probe.probe).toHaveBeenCalledTimes(1);
   });
 });

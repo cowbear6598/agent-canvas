@@ -15,10 +15,14 @@ import {
   type Tool,
 } from "@modelcontextprotocol/sdk/types.js";
 
+import { promises as fs } from "fs";
+
 import {
+  getManagedMcpSurfaceErrorsPath,
   readManagedMcpSurfaceState,
   type ManagedMcpSurfaceState,
   type ManagedMcpSurfaceTarget,
+  type ManagedMcpSurfaceTargetError,
 } from "./managedMcpSurfaceService.js";
 
 interface SurfaceToolRoute {
@@ -28,10 +32,7 @@ interface SurfaceToolRoute {
   tool: Tool;
 }
 
-function buildSurfaceToolName(
-  targetName: string,
-  toolName: string,
-): string {
+function buildSurfaceToolName(targetName: string, toolName: string): string {
   return `${targetName}__${toolName}`;
 }
 
@@ -39,7 +40,9 @@ function parseSurfaceStatePath(): string {
   return process.env.AGENT_CANVAS_MANAGED_MCP_SURFACE_PATH ?? "";
 }
 
-async function connectTargetClient(target: ManagedMcpSurfaceTarget): Promise<Client> {
+async function connectTargetClient(
+  target: ManagedMcpSurfaceTarget,
+): Promise<Client> {
   const client = new Client({
     name: "agent-canvas-managed-mcp-surface-bridge",
     version: "1.0.0",
@@ -69,6 +72,7 @@ async function connectTargetClient(target: ManagedMcpSurfaceTarget): Promise<Cli
 
 async function buildToolRoutes(
   state: ManagedMcpSurfaceState,
+  errors: ManagedMcpSurfaceTargetError[],
 ): Promise<Map<string, SurfaceToolRoute>> {
   const routes = new Map<string, SurfaceToolRoute>();
 
@@ -91,11 +95,28 @@ async function buildToolRoutes(
         console.error(
           `[managed-mcp-surface] target "${target.name}" skipped: ${message}`,
         );
+        errors.push({ name: target.name, message });
       }
     }),
   );
 
   return routes;
+}
+
+async function writeBridgeErrors(
+  statePath: string,
+  errors: ManagedMcpSurfaceTargetError[],
+): Promise<void> {
+  if (errors.length === 0) return;
+  const errorsPath = getManagedMcpSurfaceErrorsPath(statePath);
+  try {
+    await fs.writeFile(errorsPath, JSON.stringify(errors, null, 2), "utf-8");
+  } catch (err) {
+    // 寫入失敗只記 stderr，不阻止 bridge 啟動。
+    console.error(
+      `[managed-mcp-surface] failed to write errors file: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 }
 
 function toSurfaceTools(routes: Map<string, SurfaceToolRoute>): Tool[] {
@@ -105,7 +126,9 @@ function toSurfaceTools(routes: Map<string, SurfaceToolRoute>): Tool[] {
   }));
 }
 
-async function closeClients(routes: Map<string, SurfaceToolRoute>): Promise<void> {
+async function closeClients(
+  routes: Map<string, SurfaceToolRoute>,
+): Promise<void> {
   const uniqueClients = new Set<Client>();
   for (const route of routes.values()) {
     uniqueClients.add(route.client);
@@ -124,7 +147,11 @@ async function main(): Promise<void> {
     throw new Error(`managed MCP surface state not found: ${statePath}`);
   }
 
-  const routes = await buildToolRoutes(state);
+  const bridgeErrors: ManagedMcpSurfaceTargetError[] = [];
+  const routes = await buildToolRoutes(state, bridgeErrors);
+  // 在啟動 stdio server 前先把 per-target 失敗寫到 errors.json，
+  // 由 surface cleanup 階段把錯誤回寫 managedMcpStore.lastError。
+  await writeBridgeErrors(statePath, bridgeErrors);
   const server = new Server(
     {
       name: "agent-canvas-managed-mcp-surface",

@@ -4,10 +4,14 @@ import { promises as fs } from "fs";
 import { fileURLToPath } from "url";
 
 import { buildGoalRuntimeMcpServerConfig } from "../goalRuntime.js";
+import { socketService } from "../socketService.js";
+import { WebSocketResponseEvents } from "../../schemas/events.js";
+import { logger } from "../../utils/logger.js";
 import type { Pod } from "../../types/pod.js";
 import type { RunContext } from "../../types/run.js";
 import {
   managedMcpStore,
+  type ManagedMcpRuntimeStatus,
   type ManagedMcpServerRecord,
   type ManagedMcpTransport,
 } from "./managedMcpStore.js";
@@ -16,8 +20,7 @@ import {
   type ManagedMcpRuntimeService,
 } from "./managedMcpRuntimeService.js";
 
-export const AGENT_CANVAS_MANAGED_SURFACE_NAME =
-  "agent_canvas_managed_surface";
+export const AGENT_CANVAS_MANAGED_SURFACE_NAME = "agent_canvas_managed_surface";
 
 type SupportedProvider = "claude" | "codex" | "opencode";
 
@@ -73,6 +76,11 @@ export interface ManagedMcpSurfaceDescriptor {
 
 interface ManagedMcpStoreLike {
   getByName(name: string): ManagedMcpServerRecord | undefined;
+  updateRuntimeState(
+    name: string,
+    status: ManagedMcpRuntimeStatus,
+    lastError?: string | null,
+  ): ManagedMcpServerRecord | undefined;
 }
 
 interface ManagedMcpSurfaceServiceDeps {
@@ -106,7 +114,26 @@ export function getManagedMcpSurfaceStatePath(
   runContext: RunContext,
   podId: string,
 ): string {
-  return path.join(getManagedMcpSurfaceRunDir(runContext.runId), `${podId}.json`);
+  return path.join(
+    getManagedMcpSurfaceRunDir(runContext.runId),
+    `${podId}.json`,
+  );
+}
+
+/**
+ * 由 state file 路徑換算對應的 errors file 路徑。
+ * bridge 在 connect/listTools 失敗時會把 per-target 錯誤寫進此檔，
+ * surface cleanup 時讀取並把錯誤回寫 managedMcpStore.lastError，
+ * 讓使用者在 Header modal 看得到原因。
+ */
+export function getManagedMcpSurfaceErrorsPath(statePath: string): string {
+  return statePath.replace(/\.json$/, ".errors.json");
+}
+
+/** bridge 寫入的 per-target 錯誤紀錄。 */
+export interface ManagedMcpSurfaceTargetError {
+  name: string;
+  message: string;
 }
 
 async function ensureSurfaceDir(statePath: string): Promise<void> {
@@ -142,7 +169,9 @@ export async function readManagedMcpSurfaceState(
   }
 }
 
-function toSurfaceTarget(entry: ManagedMcpServerRecord): ManagedMcpSurfaceTarget {
+function toSurfaceTarget(
+  entry: ManagedMcpServerRecord,
+): ManagedMcpSurfaceTarget {
   return {
     name: entry.name,
     transport: entry.transport,
@@ -253,6 +282,22 @@ export class ManagedMcpSurfaceService {
     };
 
     this.descriptors.set(key, descriptor);
+
+    // 通知前端：本次 ensureSurface 略過了哪些 selected MCP（含原因），
+    // 讓使用者在 chat / run 啟動時看見「我選了但沒生效」的清單。
+    if (ignoredTargets.length > 0) {
+      socketService.emitToAll(
+        WebSocketResponseEvents.MANAGED_MCP_SURFACE_TARGETS_IGNORED,
+        {
+          success: true,
+          runId: runContext.runId,
+          podId: pod.id,
+          podName: pod.name,
+          ignored: ignoredTargets,
+        },
+      );
+    }
+
     return descriptor;
   }
 
@@ -266,9 +311,14 @@ export class ManagedMcpSurfaceService {
       this.descriptors.delete(key);
     }
 
+    // 在刪掉 state file 之前先把 bridge 寫的 per-target 錯誤回寫 store，
+    // 否則 lastError 永遠停在 bridge 啟動前的舊狀態，使用者看不到原因。
+    const errorsApplied = await this.applyBridgeErrors(statePaths);
+
     await Promise.all(
       statePaths.map(async (statePath) => {
         await fs.rm(statePath, { force: true });
+        await fs.rm(getManagedMcpSurfaceErrorsPath(statePath), { force: true });
       }),
     );
 
@@ -276,6 +326,71 @@ export class ManagedMcpSurfaceService {
       recursive: true,
       force: true,
     });
+
+    if (errorsApplied) {
+      // 廣播 registry updated，讓前端 cache 失效並重抓最新 lastError。
+      socketService.emitToAll(
+        WebSocketResponseEvents.MANAGED_MCP_REGISTRY_UPDATED,
+        {
+          success: true,
+          action: "diagnostics",
+          runId,
+        },
+      );
+    }
+  }
+
+  /**
+   * 讀取 bridge 寫進每個 statePath 對應 errors.json 的 per-target 錯誤，
+   * 將其回寫到 managedMcpStore.lastKnownStatus / lastError。
+   * 回傳 true 表示至少更新了一筆，呼叫端可據此決定是否廣播。
+   */
+  private async applyBridgeErrors(statePaths: string[]): Promise<boolean> {
+    let touched = false;
+
+    for (const statePath of statePaths) {
+      const errorsPath = getManagedMcpSurfaceErrorsPath(statePath);
+      let raw: string;
+      try {
+        raw = await fs.readFile(errorsPath, "utf-8");
+      } catch {
+        continue; // bridge 沒寫錯誤檔代表全部 target connect 成功
+      }
+
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(raw);
+      } catch (err) {
+        logger.warn(
+          "McpServer",
+          "Warn",
+          `managed MCP surface errors.json 解析失敗：${err instanceof Error ? err.message : String(err)}`,
+        );
+        continue;
+      }
+
+      if (!Array.isArray(parsed)) continue;
+
+      for (const item of parsed as ManagedMcpSurfaceTargetError[]) {
+        if (
+          !item ||
+          typeof item.name !== "string" ||
+          typeof item.message !== "string"
+        ) {
+          continue;
+        }
+        // Goal Runtime built-in 不存在於 registry，更新會 no-op；
+        // 一般 entry 才會真的被回寫。
+        const updated = this.deps.store.updateRuntimeState(
+          item.name,
+          "error",
+          item.message,
+        );
+        if (updated) touched = true;
+      }
+    }
+
+    return touched;
   }
 }
 

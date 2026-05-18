@@ -36,6 +36,7 @@ import {
 } from "../runtime/runExecutionResources.js";
 import { removeGoalRuntimeRun } from "../goalRuntime.js";
 import { managedMcpSurfaceService } from "../mcp/managedMcpSurfaceService.js";
+import { cleanupOpencodeRunServers } from "../provider/opencodeProvider.js";
 
 const MAX_RUNS_PER_CANVAS = 30;
 
@@ -219,7 +220,9 @@ class RunExecutionService {
         await managedMcpSurfaceService.ensureSurface(runContext, pod);
       } catch (error) {
         const message =
-          error instanceof Error ? error.message : "建立 managed MCP surface 失敗";
+          error instanceof Error
+            ? error.message
+            : "建立 managed MCP surface 失敗";
         logger.error(
           "Run",
           "Error",
@@ -690,6 +693,9 @@ class RunExecutionService {
     // 先刪除 surface descriptor，再刪 Goal Runtime / repo / sandbox，
     // 避免後續 bridge 或 provider retry 再讀到過期 state file。
     await managedMcpSurfaceService.cleanupRunSurfaces(runId);
+    // 關閉本 Run 期間 opencode provider 建立的 transient server 快取；
+    // 否則 transient server 會殘留到後端重啟。
+    cleanupOpencodeRunServers(runId);
     removeGoalRuntimeRun(runId);
 
     const entries = runStore.getExecutionPathsByRunId(runId);

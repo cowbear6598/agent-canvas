@@ -9,11 +9,7 @@ import type {
   RunPodStatus,
   PathwayState,
 } from "../run";
-import type {
-  ManagedMcpRegistryItem,
-  McpListItem,
-  PodMcpAvailabilityItem,
-} from "../mcp";
+import type { ManagedMcpRegistryItem, PodMcpAvailabilityItem } from "../mcp";
 import type { MessageRole, SystemMessageMetadata } from "../chat";
 
 export interface ConnectionReadyPayload {
@@ -346,13 +342,6 @@ export interface CursorMovedPayload {
   color: string;
 }
 
-/** MCP server 清單查詢結果 */
-export interface McpListResultPayload extends ResultPayload {
-  /** 與後端 MCP allowlist 對齊；僅 claude / codex / opencode 會回傳實際清單 */
-  provider?: "claude" | "codex" | "opencode";
-  items?: McpListItem[];
-}
-
 export interface ManagedMcpRegistryListResultPayload extends ResultPayload {
   items?: ManagedMcpRegistryItem[];
 }
@@ -365,10 +354,29 @@ export interface ManagedMcpRegistryDeletedPayload extends ResultPayload {
   registryId?: string;
 }
 
-export interface ManagedMcpRegistryUpdatedPayload extends ResultPayload {
-  action?: "saved" | "deleted";
+export interface ManagedMcpRegistryTestResultPayload extends ResultPayload {
   registryId?: string;
+  status?: string;
+  lastError?: string | null;
+}
+
+export interface ManagedMcpRegistryUpdatedPayload extends ResultPayload {
+  action?: "saved" | "deleted" | "diagnostics";
+  registryId?: string;
+  runId?: string;
   item?: ManagedMcpRegistryItem;
+}
+
+export interface ManagedMcpSurfaceIgnoredTargetPayload {
+  name: string;
+  reason: string;
+}
+
+export interface ManagedMcpSurfaceTargetsIgnoredPayload extends ResultPayload {
+  runId: string;
+  podId: string;
+  podName?: string;
+  ignored: ManagedMcpSurfaceIgnoredTargetPayload[];
 }
 
 export interface PodMcpAvailabilityListResultPayload extends ResultPayload {

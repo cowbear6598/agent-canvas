@@ -23,7 +23,8 @@ export type ToastCategory =
   | "Config"
   | "Jira"
   | "Integration"
-  | "Run";
+  | "Run"
+  | "Mcp";
 
 interface ToastOptions {
   title: string;

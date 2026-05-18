@@ -355,7 +355,12 @@
       "create": "新增 MCP",
       "save": "儲存變更",
       "delete": "刪除 MCP",
-      "refresh": "重新整理"
+      "refresh": "重新整理",
+      "test": "測試連線",
+      "testing": "測試中...",
+      "testSuccess": "MCP 連線成功",
+      "testFailed": "MCP 連線失敗",
+      "testUnknownError": "未取得錯誤訊息"
     },
     "badge": {
       "configDisabled": "設定停用"
@@ -400,7 +405,8 @@
       "envHint": "每個列項都會轉成一組 KEY=value，空白 key 會被忽略。",
       "url": "URL",
       "urlPlaceholder": "例如：https://mcp.example.com/sse",
-      "lastError": "最近一次失敗原因"
+      "lastError": "最近一次失敗原因",
+      "securityWarning": "註冊的 MCP 會以 backend 使用者身分執行任意程式碼，請只加入來自信任來源的 server。"
     },
     "validation": {
       "commandRequired": "STDIO 模式必須填寫 command",

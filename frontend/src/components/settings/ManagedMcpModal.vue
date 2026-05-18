@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { Plus, RefreshCw, Trash2 } from "lucide-vue-next";
+import { Plug, Plus, RefreshCw, Trash2 } from "lucide-vue-next";
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Switch } from "@/components/ui/switch";
 import { useManagedMcpStore } from "@/stores/managedMcpStore";
+import { useToast } from "@/composables/useToast";
 import type {
   ManagedMcpRegistryInput,
   ManagedMcpRegistryItem,
@@ -24,7 +26,7 @@ interface Props {
   open: boolean;
 }
 
-type PendingAction = "refresh" | "save" | "delete" | null;
+type PendingAction = "refresh" | "save" | "delete" | "test" | null;
 
 interface ManagedMcpFormState {
   id?: string;
@@ -64,6 +66,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const managedMcpStore = useManagedMcpStore();
+const { showSuccessToast, showErrorToast } = useToast();
 
 const selectedId = ref<string | null>(null);
 const pendingAction = ref<PendingAction>(null);
@@ -161,6 +164,13 @@ function buildSavePayload(): ManagedMcpRegistryInput {
     transport: draft.value.transport,
     url: draft.value.url.trim(),
   };
+}
+
+const LAST_ERROR_MAX_LENGTH = 800;
+
+function truncateLastError(message: string): string {
+  if (message.length <= LAST_ERROR_MAX_LENGTH) return message;
+  return `${message.slice(0, LAST_ERROR_MAX_LENGTH)}…（已截斷）`;
 }
 
 function statusBadgeClass(status: McpDisplayStatus): string {
@@ -280,6 +290,63 @@ async function handleSave(): Promise<void> {
   }
 }
 
+async function handleTest(): Promise<void> {
+  const id = selectedId.value;
+  if (!id) return;
+
+  pendingAction.value = "test";
+  try {
+    const outcome = await managedMcpStore.testRegistryConnection(id);
+    if (outcome.status === "healthy") {
+      showSuccessToast("Mcp", t("managedMcp.actions.testSuccess"));
+    } else {
+      showErrorToast(
+        "Mcp",
+        t("managedMcp.actions.testFailed"),
+        outcome.lastError ?? t("managedMcp.actions.testUnknownError"),
+      );
+    }
+  } catch (err) {
+    showErrorToast(
+      "Mcp",
+      t("managedMcp.actions.testFailed"),
+      err instanceof Error ? err.message : undefined,
+    );
+  } finally {
+    pendingAction.value = null;
+  }
+}
+
+async function handleQuickToggle(
+  item: ManagedMcpRegistryItem,
+  enabled: boolean,
+): Promise<void> {
+  if (item.enabled === enabled) return;
+
+  const basePayload = { id: item.id, name: item.name, enabled };
+  const payload: ManagedMcpRegistryInput =
+    item.transport === "stdio"
+      ? {
+          ...basePayload,
+          transport: "stdio",
+          command: item.command ?? "",
+          args: item.args,
+          cwd: item.cwd,
+          env: item.env,
+        }
+      : {
+          ...basePayload,
+          transport: item.transport,
+          url: item.url ?? "",
+        };
+
+  try {
+    await managedMcpStore.saveRegistry(payload);
+  } catch {
+    // 錯誤訊息由 store.error 承接，避免 toggle 時 throw 影響 UI
+  }
+}
+
 async function handleDelete(): Promise<void> {
   if (!selectedId.value) return;
 
@@ -322,10 +389,7 @@ watch(
 </script>
 
 <template>
-  <Dialog
-    :open="open"
-    @update:open="handleClose"
-  >
+  <Dialog :open="open" @update:open="handleClose">
     <DialogContent class="max-w-5xl">
       <DialogHeader>
         <DialogTitle>{{ t("managedMcp.modal.title") }}</DialogTitle>
@@ -341,7 +405,9 @@ watch(
         <aside
           class="flex min-h-[18rem] flex-col rounded-xl border border-doodle-ink/20 bg-muted/20 lg:w-[20rem]"
         >
-          <div class="flex items-start justify-between gap-3 border-b px-4 py-3">
+          <div
+            class="flex items-start justify-between gap-3 border-b px-4 py-3"
+          >
             <div>
               <p class="text-sm font-semibold">
                 {{ t("managedMcp.list.title") }}
@@ -378,8 +444,8 @@ watch(
           <div
             v-if="
               managedMcpStore.loading &&
-                pendingAction === 'refresh' &&
-                managedMcpStore.registry.length === 0
+              pendingAction === 'refresh' &&
+              managedMcpStore.registry.length === 0
             "
             class="px-4 py-6 text-sm text-muted-foreground"
           >
@@ -387,7 +453,9 @@ watch(
           </div>
 
           <div
-            v-else-if="managedMcpStore.loaded && managedMcpStore.registry.length === 0"
+            v-else-if="
+              managedMcpStore.loaded && managedMcpStore.registry.length === 0
+            "
             data-testid="managed-mcp-empty"
             class="px-4 py-6 text-sm text-muted-foreground"
           >
@@ -399,22 +467,23 @@ watch(
             </p>
           </div>
 
-          <ScrollArea
-            v-else
-            class="h-[18rem] lg:h-[32rem]"
-          >
+          <ScrollArea v-else class="h-[18rem] lg:h-[32rem]">
             <div class="space-y-2 p-3">
-              <button
+              <div
                 v-for="item in managedMcpStore.registry"
                 :key="item.id"
                 :data-testid="`managed-mcp-entry-${item.id}`"
+                role="button"
+                tabindex="0"
                 :class="[
-                  'w-full rounded-xl border px-3 py-3 text-left transition',
+                  'w-full cursor-pointer rounded-xl border px-3 py-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
                   selectedId === item.id
                     ? 'border-primary bg-primary/5 shadow-sm'
                     : 'border-doodle-ink/15 bg-card hover:border-doodle-ink/30 hover:bg-accent/30',
                 ]"
                 @click="selectRegistryItem(item)"
+                @keydown.enter.prevent="selectRegistryItem(item)"
+                @keydown.space.prevent="selectRegistryItem(item)"
               >
                 <div class="flex items-start justify-between gap-3">
                   <div class="min-w-0">
@@ -443,6 +512,15 @@ watch(
                       </span>
                     </div>
                   </div>
+                  <Switch
+                    :model-value="item.enabled"
+                    :data-testid="`managed-mcp-quick-toggle-${item.id}`"
+                    :aria-label="t('managedMcp.form.enabled')"
+                    @click.stop
+                    @update:model-value="
+                      (val: boolean) => handleQuickToggle(item, val)
+                    "
+                  />
                 </div>
 
                 <p
@@ -451,7 +529,7 @@ watch(
                 >
                   {{ item.lastError }}
                 </p>
-              </button>
+              </div>
             </div>
           </ScrollArea>
         </aside>
@@ -483,13 +561,19 @@ watch(
                   v-model="draft.enabled"
                   type="checkbox"
                   class="h-4 w-4 rounded border-input text-primary"
-                >
+                />
                 <span>{{ t("managedMcp.form.enabled") }}</span>
               </label>
             </div>
           </div>
 
           <div class="flex-1 overflow-y-auto px-5 py-4">
+            <div
+              class="mb-4 rounded-md border border-amber-500/40 bg-amber-50/60 px-3 py-2 text-xs text-amber-900 dark:bg-amber-900/20 dark:text-amber-200"
+              data-testid="managed-mcp-security-warning"
+            >
+              {{ t("managedMcp.form.securityWarning") }}
+            </div>
             <div
               v-if="selectedEntry"
               class="mb-4 rounded-xl border border-doodle-ink/15 bg-muted/20 p-4"
@@ -512,7 +596,7 @@ watch(
                 </span>
               </div>
 
-              <p
+              <div
                 v-if="selectedEntry.lastError"
                 data-testid="managed-mcp-last-error"
                 class="mt-3 text-sm text-rose-700"
@@ -520,8 +604,12 @@ watch(
                 <span class="font-medium">
                   {{ t("managedMcp.form.lastError") }}:
                 </span>
-                {{ selectedEntry.lastError }}
-              </p>
+                <p
+                  class="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap break-words rounded border border-rose-100 bg-rose-50/40 px-2 py-1 font-mono text-xs"
+                >
+                  {{ truncateLastError(selectedEntry.lastError) }}
+                </p>
+              </div>
             </div>
 
             <div
@@ -572,10 +660,7 @@ watch(
               </label>
             </div>
 
-            <div
-              v-if="draft.transport === 'stdio'"
-              class="mt-4 space-y-4"
-            >
+            <div v-if="draft.transport === 'stdio'" class="mt-4 space-y-4">
               <label class="space-y-2">
                 <span class="text-sm font-medium">
                   {{ t("managedMcp.form.command") }}
@@ -694,10 +779,7 @@ watch(
               </div>
             </div>
 
-            <label
-              v-else
-              class="mt-4 block space-y-2"
-            >
+            <label v-else class="mt-4 block space-y-2">
               <span class="text-sm font-medium">
                 {{ t("managedMcp.form.url") }}
               </span>
@@ -710,6 +792,20 @@ watch(
           </div>
 
           <div class="flex items-center justify-end gap-2 border-t px-5 py-4">
+            <Button
+              v-if="isEditingExisting"
+              data-testid="managed-mcp-test"
+              variant="outline"
+              :disabled="managedMcpStore.loading || pendingAction !== null"
+              @click="handleTest"
+            >
+              <Plug class="h-4 w-4" />
+              {{
+                pendingAction === "test"
+                  ? t("managedMcp.actions.testing")
+                  : t("managedMcp.actions.test")
+              }}
+            </Button>
             <Button
               v-if="isEditingExisting"
               data-testid="managed-mcp-delete"

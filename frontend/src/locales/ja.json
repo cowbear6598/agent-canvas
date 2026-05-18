@@ -355,7 +355,12 @@
       "create": "MCP を追加",
       "save": "変更を保存",
       "delete": "MCP を削除",
-      "refresh": "更新"
+      "refresh": "更新",
+      "test": "接続テスト",
+      "testing": "テスト中...",
+      "testSuccess": "MCP 接続成功",
+      "testFailed": "MCP 接続失敗",
+      "testUnknownError": "エラー情報を取得できませんでした"
     },
     "badge": {
       "configDisabled": "設定無効"
@@ -400,7 +405,8 @@
       "envHint": "各エントリが 1 組の KEY=value になります。空の key は無視されます。",
       "url": "URL",
       "urlPlaceholder": "例：https://mcp.example.com/sse",
-      "lastError": "直近の失敗理由"
+      "lastError": "直近の失敗理由",
+      "securityWarning": "登録した MCP は backend ユーザー権限で任意コードを実行します。信頼できるソースのみ追加してください。"
     },
     "validation": {
       "commandRequired": "STDIO モードでは command の入力が必要です",

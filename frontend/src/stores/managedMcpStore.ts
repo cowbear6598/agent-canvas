@@ -4,6 +4,8 @@ import {
   deleteManagedMcpRegistry,
   listManagedMcpRegistry,
   saveManagedMcpRegistry,
+  testManagedMcpRegistry,
+  type ManagedMcpRegistryTestOutcome,
 } from "@/services/managedMcpApi";
 import type {
   ManagedMcpRegistryInput,
@@ -75,6 +77,23 @@ export const useManagedMcpStore = defineStore("managedMcp", () => {
     }
   }
 
+  /**
+   * 手動觸發後端 probe；廣播 MANAGED_MCP_REGISTRY_UPDATED 會由事件 handler 順帶 refresh registry，
+   * 因此此處不另呼叫 refresh，避免在同一個 tick 內重複 list 請求。
+   */
+  async function testRegistryConnection(
+    registryId: string,
+  ): Promise<ManagedMcpRegistryTestOutcome> {
+    try {
+      const outcome = await testManagedMcpRegistry(registryId);
+      error.value = null;
+      return outcome;
+    } catch (err) {
+      error.value = normalizeManagedMcpError(err);
+      throw err;
+    }
+  }
+
   async function deleteRegistryById(registryId: string): Promise<void> {
     loading.value = true;
     try {
@@ -97,6 +116,7 @@ export const useManagedMcpStore = defineStore("managedMcp", () => {
     setRegistry,
     refresh,
     saveRegistry,
+    testRegistryConnection,
     deleteRegistryById,
   };
 });

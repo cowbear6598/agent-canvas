@@ -1,8 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createManagedMcpRuntimeService,
-  type McpProcessLauncher,
-  type McpRemoteConnector,
+  type McpProbe,
 } from "../../src/services/mcp/managedMcpRuntimeService.js";
 import type {
   ManagedMcpRuntimeStatus,
@@ -40,7 +39,7 @@ function createMockStore(entries: ManagedMcpServerRecord[]): {
   entryMap: Map<string, ManagedMcpServerRecord>;
 } {
   const entryMap = new Map(entries.map((entry) => [entry.name, entry]));
-  const store = {
+  const store: MockStore = {
     list: vi.fn(() => [...entryMap.values()]),
     getByName: vi.fn((name: string) => entryMap.get(name)),
     updateRuntimeState: vi.fn(
@@ -66,75 +65,44 @@ function createMockStore(entries: ManagedMcpServerRecord[]): {
 }
 
 describe("ManagedMcpRuntimeService", () => {
-  it("已健康的 child 會跨 run 重用", async () => {
+  it("probe 成功後快取 healthy 狀態，下一次 ensureReady 不再重複 probe", async () => {
     const { store } = createMockStore([createEntry()]);
-    const processHandle = { pid: 4321, close: vi.fn() };
-    const processLauncher: McpProcessLauncher = {
-      launch: vi.fn().mockResolvedValue(processHandle),
+    const probe: McpProbe = {
+      probe: vi.fn().mockResolvedValue(undefined),
     };
-    const remoteConnector: McpRemoteConnector = {
-      connect: vi.fn(),
-    };
-    const service = createManagedMcpRuntimeService({
-      store,
-      processLauncher,
-      remoteConnector,
-    });
+    const service = createManagedMcpRuntimeService({ store, probe });
 
     const first = await service.ensureReady("context7");
     const second = await service.ensureReady("context7");
 
     expect(first.status).toBe("healthy");
     expect(second.status).toBe("healthy");
-    expect(first.pid).toBe(4321);
-    expect(second.pid).toBe(4321);
-    expect(processLauncher.launch).toHaveBeenCalledTimes(1);
+    expect(probe.probe).toHaveBeenCalledTimes(1);
   });
 
-  it("設定改動後會標記 dirty 並在下次 ensureReady 重建", async () => {
+  it("設定改動 markConfigDirty 後下一次 ensureReady 會重新 probe", async () => {
     const { store } = createMockStore([createEntry()]);
-    const firstHandle = { pid: 1111, close: vi.fn() };
-    const secondHandle = { pid: 2222, close: vi.fn() };
-    const processLauncher: McpProcessLauncher = {
-      launch: vi
-        .fn()
-        .mockResolvedValueOnce(firstHandle)
-        .mockResolvedValueOnce(secondHandle),
+    const probe: McpProbe = {
+      probe: vi.fn().mockResolvedValue(undefined),
     };
-    const remoteConnector: McpRemoteConnector = {
-      connect: vi.fn(),
-    };
-    const service = createManagedMcpRuntimeService({
-      store,
-      processLauncher,
-      remoteConnector,
-    });
+    const service = createManagedMcpRuntimeService({ store, probe });
 
     await service.ensureReady("context7");
     await service.markConfigDirty("context7");
     const rebuilt = await service.ensureReady("context7");
 
-    expect(firstHandle.close).toHaveBeenCalledTimes(1);
-    expect(processLauncher.launch).toHaveBeenCalledTimes(2);
-    expect(rebuilt.pid).toBe(2222);
+    expect(probe.probe).toHaveBeenCalledTimes(2);
     expect(rebuilt.status).toBe("healthy");
   });
 
-  it("stdio 啟動失敗會寫入 last_error", async () => {
+  it("stdio probe 失敗會寫入 last_error", async () => {
     const { store } = createMockStore([
       createEntry({ name: "broken-stdio", command: "missing-binary" }),
     ]);
-    const processLauncher: McpProcessLauncher = {
-      launch: vi.fn().mockRejectedValue(new Error("spawn failed")),
+    const probe: McpProbe = {
+      probe: vi.fn().mockRejectedValue(new Error("spawn failed")),
     };
-    const remoteConnector: McpRemoteConnector = {
-      connect: vi.fn(),
-    };
-    const service = createManagedMcpRuntimeService({
-      store,
-      processLauncher,
-      remoteConnector,
-    });
+    const service = createManagedMcpRuntimeService({ store, probe });
 
     const snapshot = await service.ensureReady("broken-stdio");
 
@@ -147,7 +115,7 @@ describe("ManagedMcpRuntimeService", () => {
     );
   });
 
-  it("http/sse 連線失敗會反映為非 healthy 狀態", async () => {
+  it("http/sse probe 失敗會反映為非 healthy 狀態", async () => {
     const { store } = createMockStore([
       createEntry({
         name: "remote-http",
@@ -169,20 +137,13 @@ describe("ManagedMcpRuntimeService", () => {
         url: "https://remote-sse.example.com/mcp",
       }),
     ]);
-    const processLauncher: McpProcessLauncher = {
-      launch: vi.fn(),
-    };
-    const remoteConnector: McpRemoteConnector = {
-      connect: vi
+    const probe: McpProbe = {
+      probe: vi
         .fn()
         .mockRejectedValueOnce(new Error("http unavailable"))
         .mockRejectedValueOnce(new Error("sse unavailable")),
     };
-    const service = createManagedMcpRuntimeService({
-      store,
-      processLauncher,
-      remoteConnector,
-    });
+    const service = createManagedMcpRuntimeService({ store, probe });
 
     const httpSnapshot = await service.ensureReady("remote-http");
     const sseSnapshot = await service.ensureReady("remote-sse");

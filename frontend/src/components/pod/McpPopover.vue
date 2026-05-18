@@ -28,10 +28,22 @@ const podStore = usePodStore();
 const { runToggle } = useOptimisticToggle();
 
 const availableMcpServers = ref<PodMcpAvailabilityItem[]>([]);
-const localMcpServerNames = ref<string[]>([]);
 const loading = ref<boolean>(false);
 const loadFailed = ref<boolean>(false);
 const GOAL_RUNTIME_SERVER_NAME = "agent_canvas_goal";
+
+/**
+ * 取得 pod 目前選定的 MCP server 名稱清單。
+ *
+ * 為什麼用 podStore 作為唯一來源：
+ * - availability fetch 是一次性的，server.selected 為 fetch 時的快照，後續 toggle 不會更新；
+ * - 過去額外維護 localMcpServerNames 與 server.selected 一起 OR 判斷，
+ *   會在 toggle off 後仍因 server.selected=true 而顯示為勾選。
+ * 改為一律從 podStore 衍生狀態，optimistic update 透過 podStore.updatePodMcpServers 流入。
+ */
+const podMcpServerNames = computed<string[]>(
+  () => podStore.getPodById(props.podId)?.mcpServerNames ?? [],
+);
 
 /** 搜尋框輸入字串 */
 const searchQuery = ref<string>("");
@@ -62,9 +74,10 @@ const userMcpServers = computed(() =>
 const filteredMcpServers = computed<PodMcpAvailabilityItem[]>(() => {
   const query = searchQuery.value.trim().toLowerCase();
   if (!query) return availableMcpServers.value;
-  return availableMcpServers.value.filter((server) =>
-    resolveServerLabel(server).toLowerCase().includes(query) ||
-    server.name.toLowerCase().includes(query),
+  return availableMcpServers.value.filter(
+    (server) =>
+      resolveServerLabel(server).toLowerCase().includes(query) ||
+      server.name.toLowerCase().includes(query),
   );
 });
 
@@ -93,10 +106,8 @@ const showUserEmptyHint = computed(
     userMcpServers.value.length === 0,
 );
 
-/** 將 localMcpServerNames 轉成 Set，讓 template v-for 中的查找從 O(n) 降為 O(1) */
-const localMcpServerNamesSet = computed(
-  () => new Set(localMcpServerNames.value),
-);
+/** podStore 的 mcpServerNames 轉成 Set，讓 v-for 中的查找從 O(n) 降為 O(1) */
+const mcpServerNamesSet = computed(() => new Set(podMcpServerNames.value));
 
 const rootRef = ref<HTMLElement | null>(null);
 
@@ -116,11 +127,7 @@ const handleMousedown = (event: MouseEvent): void => {
 };
 
 onMounted(async () => {
-  // 同步初始 mcpServerNames
-  const pod = podStore.getPodById(props.podId);
-  localMcpServerNames.value = [...(pod?.mcpServerNames ?? [])];
-
-  // 載入 pod-scoped MCP availability 清單
+  // 載入 pod-scoped MCP availability 清單；勾選狀態由 podStore 衍生，不再 copy 一份到 local。
   loading.value = true;
   try {
     availableMcpServers.value = await listPodMcpAvailability(
@@ -169,9 +176,7 @@ const resolveMcpErrorDescription = (_err: unknown): string =>
 
 function isServerChecked(server: PodMcpAvailabilityItem): boolean {
   return (
-    isSystemLockedServer(server) ||
-    localMcpServerNamesSet.value.has(server.name) ||
-    server.selected === true
+    isSystemLockedServer(server) || mcpServerNamesSet.value.has(server.name)
   );
 }
 
@@ -191,17 +196,16 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
     return;
   }
 
-  const nextNames = buildNextNames(localMcpServerNames.value, name, enabled);
+  const nextNames = buildNextNames(podMcpServerNames.value, name, enabled);
 
   // 取得 canvasId，取不到直接 return（不進入樂觀更新）
   const canvasId = getActiveCanvasIdOrWarn("McpPopover");
   if (!canvasId) return;
 
   await runToggle(nextNames, {
-    getCurrent: () => [...localMcpServerNames.value],
-    setLocal: (items) => {
-      localMcpServerNames.value = items;
-    },
+    getCurrent: () => [...podMcpServerNames.value],
+    // 唯一來源是 podStore，本元件不再持有 local 狀態，setLocal 為 no-op
+    setLocal: () => {},
     setStore: (items) => podStore.updatePodMcpServers(props.podId, items),
     callApi: (items) => updatePodMcpServersApi(canvasId, props.podId, items),
     resolveError: resolveMcpErrorDescription,
@@ -230,7 +234,7 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
         type="text"
         :placeholder="t('pod.slot.searchPlaceholder')"
         @click.stop
-      >
+      />
 
       <!-- 載入中 -->
       <div
@@ -281,9 +285,7 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
           </p>
         </div>
 
-        <ScrollArea
-          class="pod-popover-scrollable"
-        >
+        <ScrollArea class="pod-popover-scrollable">
           <div class="space-y-1">
             <McpServerRow
               v-for="server in filteredMcpServers"

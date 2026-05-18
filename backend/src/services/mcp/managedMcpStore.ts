@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import { getDb } from "../../database/index.js";
 import { getStmts } from "../../database/stmtsHelper.js";
 import { safeJsonParse } from "../../utils/safeJsonParse.js";
 
@@ -86,7 +87,9 @@ function normalizeEnv(raw: unknown): Record<string, string> {
   );
 }
 
-function normalizeNullableString(value: string | undefined | null): string | null {
+function normalizeNullableString(
+  value: string | undefined | null,
+): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
@@ -160,14 +163,16 @@ class ManagedMcpStore {
   }
 
   getById(id: string): ManagedMcpServerRecord | undefined {
-    const row = this.stmts.selectById.get(id) as ManagedMcpServerRow | undefined;
+    const row = this.stmts.selectById.get(id) as
+      | ManagedMcpServerRow
+      | undefined;
     return row ? this.rowToRecord(row) : undefined;
   }
 
   getByName(name: string): ManagedMcpServerRecord | undefined {
-    const row = this.stmts.selectByName.get(
-      name,
-    ) as ManagedMcpServerRow | undefined;
+    const row = this.stmts.selectByName.get(name) as
+      | ManagedMcpServerRow
+      | undefined;
     return row ? this.rowToRecord(row) : undefined;
   }
 
@@ -177,20 +182,40 @@ class ManagedMcpStore {
       throw new Error("managed MCP name 不可為空");
     }
 
-    const timestamps = {
-      now: nowIsoString(),
-    };
     const serialized = this.buildSerializedFields(input);
+    const now = nowIsoString();
 
-    if (input.id) {
-      const existing = this.getById(input.id);
-      if (!existing) {
-        throw new Error(`managed MCP 不存在：${input.id}`);
+    // 用 transaction 包住 assertUniqueName + insert/update：
+    // 與 DB 層 name UNIQUE 索引搭配，避免兩個並發 save 在 check 與 write 之間互相穿插；
+    // 若 race 還是穿透，UNIQUE 索引會兜底 rollback。
+    return getDb().transaction((): ManagedMcpServerRecord => {
+      if (input.id) {
+        const existing = this.getById(input.id);
+        if (!existing) {
+          throw new Error(`managed MCP 不存在：${input.id}`);
+        }
+        this.assertUniqueName(name, existing.id);
+
+        this.stmts.update.run({
+          $id: existing.id,
+          $name: name,
+          $transport: input.transport,
+          $command: serialized.command,
+          $argsJson: serialized.argsJson,
+          $cwd: serialized.cwd,
+          $envJson: serialized.envJson,
+          $url: serialized.url,
+          $enabled: input.enabled ? 1 : 0,
+          $updatedAt: now,
+        });
+        return this.getById(existing.id)!;
       }
-      this.assertUniqueName(name, existing.id);
 
-      this.stmts.update.run({
-        $id: existing.id,
+      this.assertUniqueName(name);
+
+      const id = randomUUID();
+      this.stmts.insert.run({
+        $id: id,
         $name: name,
         $transport: input.transport,
         $command: serialized.command,
@@ -199,31 +224,14 @@ class ManagedMcpStore {
         $envJson: serialized.envJson,
         $url: serialized.url,
         $enabled: input.enabled ? 1 : 0,
-        $updatedAt: timestamps.now,
+        $createdAt: now,
+        $updatedAt: now,
+        $lastKnownStatus: "unknown",
+        $lastError: null,
       });
-      return this.getById(existing.id)!;
-    }
 
-    this.assertUniqueName(name);
-
-    const id = randomUUID();
-    this.stmts.insert.run({
-      $id: id,
-      $name: name,
-      $transport: input.transport,
-      $command: serialized.command,
-      $argsJson: serialized.argsJson,
-      $cwd: serialized.cwd,
-      $envJson: serialized.envJson,
-      $url: serialized.url,
-      $enabled: input.enabled ? 1 : 0,
-      $createdAt: timestamps.now,
-      $updatedAt: timestamps.now,
-      $lastKnownStatus: "unknown",
-      $lastError: null,
-    });
-
-    return this.getById(id)!;
+      return this.getById(id)!;
+    })();
   }
 
   updateRuntimeState(

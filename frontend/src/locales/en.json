@@ -355,7 +355,12 @@
       "create": "Create MCP",
       "save": "Save changes",
       "delete": "Delete MCP",
-      "refresh": "Refresh"
+      "refresh": "Refresh",
+      "test": "Test connection",
+      "testing": "Testing...",
+      "testSuccess": "MCP connection succeeded",
+      "testFailed": "MCP connection failed",
+      "testUnknownError": "No error message returned"
     },
     "badge": {
       "configDisabled": "Config disabled"
@@ -400,7 +405,8 @@
       "envHint": "Each entry becomes one KEY=value pair. Empty keys are ignored.",
       "url": "URL",
       "urlPlaceholder": "e.g. https://mcp.example.com/sse",
-      "lastError": "Last error"
+      "lastError": "Last error",
+      "securityWarning": "Registered MCP servers run arbitrary code as the backend user. Only add servers from trusted sources."
     },
     "validation": {
       "commandRequired": "Command is required for stdio transport",

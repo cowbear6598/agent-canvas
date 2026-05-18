@@ -4,20 +4,16 @@ import type {
   ManagedMcpRegistryInput,
   ManagedMcpRegistryListRequest,
   ManagedMcpRegistrySaveRequest,
-  McpListRequest,
+  ManagedMcpRegistryTestRequest,
   PodMcpAvailabilityListRequest,
   PodSetMcpServerNamesPayload,
 } from "../schemas/mcpSchemas.js";
-import { readClaudeMcpServers } from "../services/mcp/claudeMcpReader.js";
-import { readCodexMcpServers } from "../services/mcp/codexMcpReader.js";
-import { readOpencodeMcpServers } from "../services/mcp/opencodeMcpReader.js";
 import {
   managedMcpStore,
   type ManagedMcpServerRecord,
 } from "../services/mcp/managedMcpStore.js";
 import { managedMcpRuntimeService } from "../services/mcp/managedMcpRuntimeService.js";
 import { managedMcpAvailabilityService } from "../services/mcp/managedMcpAvailabilityService.js";
-import { buildGoalRuntimeMcpListItem } from "../services/goalRuntime.js";
 import { podStore } from "../services/podStore.js";
 import { runStore } from "../services/runStore.js";
 import { socketService } from "../services/socketService.js";
@@ -25,55 +21,6 @@ import { createI18nError } from "../utils/i18nError.js";
 import { emitError, emitNotFound } from "../utils/websocketResponse.js";
 import { getCanvasId } from "../utils/handlerHelpers.js";
 import { logger } from "../utils/logger.js";
-import type { ProviderName } from "../services/provider/index.js";
-
-/**
- * 依 provider 分派到對應的 reader，回傳可用的 MCP server 清單。
- * - claude    → readClaudeMcpServers（僅 user-scoped，name 欄位，無 type）
- * - codex     → readCodexMcpServers（回傳 { name, type }）
- * - opencode  → readOpencodeMcpServers（回傳 { name, type }）
- */
-function resolveAvailableMcpServers(
-  provider: ProviderName,
-  podId?: string,
-): Array<{
-  name: string;
-  type?: "stdio" | "http" | "sse";
-  system?: boolean;
-  locked?: boolean;
-  description?: string;
-  status?: "running" | "blocked" | "completed";
-  activeTodoId?: string | null;
-  activeTodoText?: string | null;
-  nextTodoId?: string | null;
-  nextTodoText?: string | null;
-  blockedReason?: string | null;
-  handoffSummary?: string | null;
-  completedTodoIds?: string[];
-  completedCount?: number;
-  totalCount?: number;
-}> {
-  const pod = podId ? podStore.getByIdGlobal(podId)?.pod : null;
-  const builtinGoal = pod ? buildGoalRuntimeMcpListItem(pod) : null;
-
-  const builtinItems = builtinGoal ? [builtinGoal] : [];
-
-  if (provider === "claude") {
-    const servers = readClaudeMcpServers();
-    return [
-      ...builtinItems,
-      ...servers.map(({ name }) => ({ name })),
-    ];
-  } else if (provider === "opencode") {
-    return [...builtinItems, ...readOpencodeMcpServers()];
-  } else {
-    const servers = readCodexMcpServers();
-    return [
-      ...builtinItems,
-      ...servers.map(({ name, type }) => ({ name, type })),
-    ];
-  }
-}
 
 function toManagedMcpRegistryItem(entry: ManagedMcpServerRecord): {
   id: string;
@@ -107,41 +54,14 @@ function toManagedMcpRegistryItem(entry: ManagedMcpServerRecord): {
   };
 }
 
-/**
- * handleMcpList：依 provider 分派到對應的 reader，回傳 MCP_LIST_RESULT。
- * - provider = "claude"    → readClaudeMcpServers（僅 user-scoped，從 top-level mcpServers 讀取）
- * - provider = "codex"     → readCodexMcpServers（回傳 { name, type }[]）
- * - provider = "opencode"  → readOpencodeMcpServers（讀取 ~/.config/opencode/opencode.json mcp 區塊）
- * 統一對應 mcpListItemSchema 格式後回傳。
- */
-export async function handleMcpList(
-  connectionId: string,
-  payload: McpListRequest,
-  requestId: string,
-): Promise<void> {
-  const { provider } = payload;
-  const podId = typeof payload.podId === "string" ? payload.podId : undefined;
-
-  const items = resolveAvailableMcpServers(provider, podId);
-
-  socketService.emitToConnection(
-    connectionId,
-    WebSocketResponseEvents.MCP_LIST_RESULT,
-    {
-      requestId,
-      success: true,
-      provider,
-      items,
-    },
-  );
-}
-
 export async function handleManagedMcpRegistryList(
   connectionId: string,
   _payload: ManagedMcpRegistryListRequest,
   requestId: string,
 ): Promise<void> {
-  const items = managedMcpStore.list().map((entry) => toManagedMcpRegistryItem(entry));
+  const items = managedMcpStore
+    .list()
+    .map((entry) => toManagedMcpRegistryItem(entry));
 
   socketService.emitToConnection(
     connectionId,
@@ -248,6 +168,72 @@ export async function handleManagedMcpRegistryDelete(
   );
 }
 
+/**
+ * 手動觸發 entry probe（test connection 按鈕）。
+ *
+ * 流程：
+ * 1. 找出 entry（不存在則 notFound）
+ * 2. markConfigDirty → 強制下一次 ensureReady 重新 probe
+ * 3. ensureReady：實際做 connect → listTools，回傳結果 snapshot
+ * 4. 回傳 result 給觸發者；同時廣播 registry updated 讓其他 client 同步 lastError
+ */
+export async function handleManagedMcpRegistryTest(
+  connectionId: string,
+  payload: ManagedMcpRegistryTestRequest,
+  requestId: string,
+): Promise<void> {
+  const entry = managedMcpStore.getById(payload.registryId);
+  if (!entry) {
+    emitNotFound(
+      connectionId,
+      WebSocketResponseEvents.MANAGED_MCP_REGISTRY_TEST_RESULT,
+      "ManagedMcpRegistry",
+      payload.registryId,
+      requestId,
+      null,
+    );
+    return;
+  }
+
+  try {
+    await managedMcpRuntimeService.markConfigDirty(entry.name);
+    const snapshot = await managedMcpRuntimeService.ensureReady(entry.name);
+
+    socketService.emitToConnection(
+      connectionId,
+      WebSocketResponseEvents.MANAGED_MCP_REGISTRY_TEST_RESULT,
+      {
+        requestId,
+        success: snapshot.status === "healthy",
+        registryId: entry.id,
+        status: snapshot.status,
+        lastError: snapshot.lastError,
+      },
+    );
+
+    // 廣播 registry updated → 其他 client 重新拉 list 取得最新 status / lastError
+    socketService.emitToAll(
+      WebSocketResponseEvents.MANAGED_MCP_REGISTRY_UPDATED,
+      {
+        requestId,
+        success: true,
+        action: "diagnostics",
+        registryId: entry.id,
+      },
+    );
+  } catch (error) {
+    emitError(
+      connectionId,
+      WebSocketResponseEvents.MANAGED_MCP_REGISTRY_TEST_RESULT,
+      error instanceof Error ? error : new Error("managed MCP test failed"),
+      null,
+      requestId,
+      undefined,
+      "MANAGED_MCP_TEST_FAILED",
+    );
+  }
+}
+
 export async function handlePodMcpAvailabilityList(
   connectionId: string,
   payload: PodMcpAvailabilityListRequest,
@@ -287,7 +273,7 @@ export async function handlePodMcpAvailabilityList(
  * handlePodSetMcpServerNames：設定指定 pod 的 MCP server 名稱清單。
  * - pod 不存在 → i18nError
  * - pod busy → 拒絕並 i18nError
- * - self-healing：過濾掉 ~/.claude.json 不存在的 name
+ * - self-healing：依 managed registry 過濾掉不存在 / 不可選的 name
  * - 寫入並廣播 POD_MCP_SERVER_NAMES_UPDATED
  */
 export async function handlePodSetMcpServerNames(
@@ -334,10 +320,8 @@ export async function handlePodSetMcpServerNames(
     return;
   }
 
-  // self-healing：依 provider 讀取對應的可用 MCP server 清單，
-  // 過濾掉已不存在的 name（例如使用者在外部刪除了 settings.json 中的 server）
-  // Codex popover 為唯讀，理論上不會觸發此事件；
-  // 仍統一走 resolveAvailableMcpServers 過濾，避免異常呼叫時繞過驗證
+  // self-healing：依 managed registry 過濾掉不可選的 name（已從 registry 刪除、被 disable、
+  // 或當前 provider 不支援其 transport），避免異常呼叫時繞過驗證。
   const availableNameSet = new Set(
     managedMcpAvailabilityService
       .listForPod(pod, pod.provider)

@@ -80,29 +80,3 @@ export interface PodMcpAvailabilityItem {
   completedCount?: number;
   totalCount?: number;
 }
-
-/**
- * 舊版 McpPopover 仍使用 type 欄位，暫時保留 compatibility 形狀；
- * 後續改成直接吃 PodMcpAvailabilityItem 時可移除此 alias 轉換。
- */
-export interface McpListItem {
-  name: string;
-  type?: McpTransport;
-  system?: boolean;
-  locked?: boolean;
-  description?: string;
-  status?: McpDisplayStatus;
-  selected?: boolean;
-  selectable?: boolean;
-  disabledReason?: string | null;
-  lastError?: string | null;
-  activeTodoId?: string | null;
-  activeTodoText?: string | null;
-  nextTodoId?: string | null;
-  nextTodoText?: string | null;
-  blockedReason?: string | null;
-  handoffSummary?: string | null;
-  completedTodoIds?: string[];
-  completedCount?: number;
-  totalCount?: number;
-}

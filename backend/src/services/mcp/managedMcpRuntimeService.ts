@@ -1,3 +1,8 @@
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+
 import { getErrorMessage } from "../../utils/errorHelpers.js";
 import {
   managedMcpStore,
@@ -6,23 +11,7 @@ import {
   type ManagedMcpTransport,
 } from "./managedMcpStore.js";
 
-export interface ManagedMcpProcessHandle {
-  pid: number | null;
-  close(): Promise<void> | void;
-}
-
-export interface ManagedMcpRemoteHandle {
-  endpointUrl: string;
-  close(): Promise<void> | void;
-}
-
-export interface McpProcessLauncher {
-  launch(entry: ManagedMcpServerRecord): Promise<ManagedMcpProcessHandle>;
-}
-
-export interface McpRemoteConnector {
-  connect(entry: ManagedMcpServerRecord): Promise<ManagedMcpRemoteHandle>;
-}
+const PROBE_TIMEOUT_MS = 5000;
 
 export interface ManagedMcpRuntimeSnapshot {
   name: string;
@@ -31,8 +20,17 @@ export interface ManagedMcpRuntimeSnapshot {
   status: ManagedMcpRuntimeStatus;
   lastError: string | null;
   dirty: boolean;
-  pid: number | null;
-  endpointUrl: string | null;
+}
+
+/**
+ * Probe interface：對 entry 做 connect → listTools → close 的 alive check。
+ *
+ * 不持有 long-lived handle：實際 Run 期間的 MCP client 由 surface bridge 各自連線；
+ * runtime service 的職責是 probe + 狀態追蹤 + 快取 probe 結果，
+ * 避免同設定下被重複 probe（每個 Run 都要 ensureSurface）。
+ */
+export interface McpProbe {
+  probe(entry: ManagedMcpServerRecord): Promise<void>;
 }
 
 interface ManagedMcpStoreLike {
@@ -52,98 +50,84 @@ interface ManagedMcpRuntimeRecord {
   status: ManagedMcpRuntimeStatus;
   lastError: string | null;
   dirty: boolean;
-  pid: number | null;
-  endpointUrl: string | null;
-  handle: ManagedMcpProcessHandle | ManagedMcpRemoteHandle | null;
 }
 
 interface ManagedMcpRuntimeServiceDeps {
   store: ManagedMcpStoreLike;
-  processLauncher: McpProcessLauncher;
-  remoteConnector: McpRemoteConnector;
+  probe: McpProbe;
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-class BunMcpProcessLauncher implements McpProcessLauncher {
-  async launch(entry: ManagedMcpServerRecord): Promise<ManagedMcpProcessHandle> {
-    if (entry.transport !== "stdio" || !entry.command) {
-      throw new Error(`${entry.name} is not a stdio MCP entry`);
-    }
-
-    const proc = Bun.spawn([entry.command, ...entry.args], {
-      cwd: entry.cwd ?? undefined,
-      env: { ...process.env, ...entry.env },
-      stdin: "ignore",
-      stdout: "ignore",
-      stderr: "ignore",
-    });
-
-    const quickExit = await Promise.race([
-      proc.exited.then((exitCode) => exitCode),
-      delay(75).then(() => null),
-    ]);
-
-    if (typeof quickExit === "number") {
-      try {
-        proc.kill();
-      } catch {
-        // process 已退出時忽略 kill 例外
-      }
-      throw new Error(
-        `stdio MCP exited before ready (exit code ${quickExit})`,
-      );
-    }
-
-    return {
-      pid: proc.pid ?? null,
-      close(): void {
-        try {
-          proc.kill();
-        } catch {
-          // 關閉時忽略已退出進程
-        }
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  message: string,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
       },
-    };
-  }
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
 }
 
-class FetchMcpRemoteConnector implements McpRemoteConnector {
-  async connect(entry: ManagedMcpServerRecord): Promise<ManagedMcpRemoteHandle> {
-    if ((entry.transport === "http" || entry.transport === "sse") && !entry.url) {
-      throw new Error(`${entry.name} is missing remote MCP url`);
-    }
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3000);
+export class SdkMcpProbe implements McpProbe {
+  async probe(entry: ManagedMcpServerRecord): Promise<void> {
+    const client = new Client(
+      { name: "agent-canvas-managed-mcp-probe", version: "1.0.0" },
+      { capabilities: {} },
+    );
+    const transport = this.createTransport(entry);
 
     try {
-      const response = await fetch(entry.url!, {
-        method: "GET",
-        signal: controller.signal,
-        headers:
-          entry.transport === "sse"
-            ? { Accept: "text/event-stream" }
-            : undefined,
-      });
-
-      if (!response.ok) {
-        throw new Error(`remote MCP responded with HTTP ${response.status}`);
-      }
-
-      await response.body?.cancel().catch(() => undefined);
-
-      return {
-        endpointUrl: entry.url!,
-        close(): void {
-          controller.abort();
-        },
-      };
+      await withTimeout(
+        client.connect(transport),
+        PROBE_TIMEOUT_MS,
+        `${entry.name} probe connect 逾時（${PROBE_TIMEOUT_MS}ms）`,
+      );
+      await withTimeout(
+        client.listTools(),
+        PROBE_TIMEOUT_MS,
+        `${entry.name} probe listTools 逾時（${PROBE_TIMEOUT_MS}ms）`,
+      );
     } finally {
-      clearTimeout(timeout);
+      await client.close().catch(() => undefined);
     }
+  }
+
+  private createTransport(
+    entry: ManagedMcpServerRecord,
+  ): StdioClientTransport | SSEClientTransport | StreamableHTTPClientTransport {
+    if (entry.transport === "stdio") {
+      if (!entry.command) {
+        throw new Error(`${entry.name} 缺少 stdio command`);
+      }
+      return new StdioClientTransport({
+        command: entry.command,
+        args: entry.args,
+        env: {
+          ...(process.env as Record<string, string>),
+          ...entry.env,
+        },
+        cwd: entry.cwd ?? undefined,
+        stderr: "ignore",
+      });
+    }
+
+    if (!entry.url) {
+      throw new Error(`${entry.name} 缺少 ${entry.transport} url`);
+    }
+    const url = new URL(entry.url);
+    if (entry.transport === "sse") {
+      return new SSEClientTransport(url);
+    }
+    return new StreamableHTTPClientTransport(url);
   }
 }
 
@@ -155,12 +139,18 @@ export class ManagedMcpRuntimeService {
   private persistAndSnapshot(
     record: ManagedMcpRuntimeRecord,
   ): ManagedMcpRuntimeSnapshot {
-    this.deps.store.updateRuntimeState(record.name, record.status, record.lastError);
+    this.deps.store.updateRuntimeState(
+      record.name,
+      record.status,
+      record.lastError,
+    );
     this.runtimes.set(record.name, record);
     return this.toSnapshot(record);
   }
 
-  private toSnapshot(record: ManagedMcpRuntimeRecord): ManagedMcpRuntimeSnapshot {
+  private toSnapshot(
+    record: ManagedMcpRuntimeRecord,
+  ): ManagedMcpRuntimeSnapshot {
     return {
       name: record.name,
       transport: record.transport,
@@ -168,8 +158,6 @@ export class ManagedMcpRuntimeService {
       status: record.status,
       lastError: record.lastError,
       dirty: record.dirty,
-      pid: record.pid,
-      endpointUrl: record.endpointUrl,
     };
   }
 
@@ -184,58 +172,18 @@ export class ManagedMcpRuntimeService {
       status: entry.enabled ? "idle" : "disabled",
       lastError: entry.lastError,
       dirty: false,
-      pid: null,
-      endpointUrl: null,
-      handle: null,
       ...overrides,
     };
-  }
-
-  private async closeRuntimeHandle(name: string): Promise<void> {
-    const runtime = this.runtimes.get(name);
-    if (!runtime?.handle) return;
-    await runtime.handle.close();
-    runtime.handle = null;
-    runtime.pid = null;
-    runtime.endpointUrl = null;
-  }
-
-  private createProcessRuntime(
-    entry: ManagedMcpServerRecord,
-    handle: ManagedMcpProcessHandle,
-  ): ManagedMcpRuntimeRecord {
-    return this.buildRuntimeRecord(entry, {
-      status: "healthy",
-      lastError: null,
-      dirty: false,
-      pid: handle.pid,
-      handle,
-    });
-  }
-
-  private createRemoteRuntime(
-    entry: ManagedMcpServerRecord,
-    handle: ManagedMcpRemoteHandle,
-  ): ManagedMcpRuntimeRecord {
-    return this.buildRuntimeRecord(entry, {
-      status: "healthy",
-      lastError: null,
-      dirty: false,
-      endpointUrl: handle.endpointUrl,
-      handle,
-    });
   }
 
   async ensureReady(name: string): Promise<ManagedMcpRuntimeSnapshot> {
     const entry = this.deps.store.getByName(name);
     if (!entry) {
-      await this.closeRuntimeHandle(name);
       this.runtimes.delete(name);
       throw new Error(`managed MCP not found: ${name}`);
     }
 
     if (!entry.enabled) {
-      await this.closeRuntimeHandle(name);
       return this.persistAndSnapshot(
         this.buildRuntimeRecord(entry, {
           status: "disabled",
@@ -244,12 +192,12 @@ export class ManagedMcpRuntimeService {
       );
     }
 
+    // 已 probe 過且未 dirty → 直接重用快取，不重複 connect。
     const existing = this.runtimes.get(name);
     if (existing && !existing.dirty && existing.status === "healthy") {
       return this.toSnapshot(existing);
     }
 
-    await this.closeRuntimeHandle(name);
     this.persistAndSnapshot(
       this.buildRuntimeRecord(entry, {
         status: "starting",
@@ -258,18 +206,14 @@ export class ManagedMcpRuntimeService {
     );
 
     try {
-      const runtime =
-        entry.transport === "stdio"
-          ? this.createProcessRuntime(
-              entry,
-              await this.deps.processLauncher.launch(entry),
-            )
-          : this.createRemoteRuntime(
-              entry,
-              await this.deps.remoteConnector.connect(entry),
-            );
-
-      return this.persistAndSnapshot(runtime);
+      await this.deps.probe.probe(entry);
+      return this.persistAndSnapshot(
+        this.buildRuntimeRecord(entry, {
+          status: "healthy",
+          lastError: null,
+          dirty: false,
+        }),
+      );
     } catch (error) {
       return this.persistAndSnapshot(
         this.buildRuntimeRecord(entry, {
@@ -283,8 +227,6 @@ export class ManagedMcpRuntimeService {
 
   async markConfigDirty(name: string): Promise<void> {
     const entry = this.deps.store.getByName(name);
-    await this.closeRuntimeHandle(name);
-
     if (!entry) {
       this.runtimes.delete(name);
       return;
@@ -300,9 +242,7 @@ export class ManagedMcpRuntimeService {
 
   getRuntimeSnapshot(name: string): ManagedMcpRuntimeSnapshot | null {
     const runtime = this.runtimes.get(name);
-    if (runtime) {
-      return this.toSnapshot(runtime);
-    }
+    if (runtime) return this.toSnapshot(runtime);
 
     const entry = this.deps.store.getByName(name);
     if (!entry) return null;
@@ -325,9 +265,7 @@ export class ManagedMcpRuntimeService {
   }
 
   async shutdownAll(): Promise<void> {
-    const runtimeNames = [...this.runtimes.keys()];
-    await Promise.all(runtimeNames.map((name) => this.closeRuntimeHandle(name)));
-
+    // 沒有 long-lived handle 需要回收，僅 reset DB / 記憶體狀態。
     for (const entry of this.deps.store.list()) {
       this.deps.store.updateRuntimeState(
         entry.name,
@@ -335,7 +273,6 @@ export class ManagedMcpRuntimeService {
         entry.lastError,
       );
     }
-
     this.runtimes.clear();
   }
 }
@@ -345,8 +282,7 @@ export function createManagedMcpRuntimeService(
 ): ManagedMcpRuntimeService {
   return new ManagedMcpRuntimeService({
     store: deps?.store ?? managedMcpStore,
-    processLauncher: deps?.processLauncher ?? new BunMcpProcessLauncher(),
-    remoteConnector: deps?.remoteConnector ?? new FetchMcpRemoteConnector(),
+    probe: deps?.probe ?? new SdkMcpProbe(),
   });
 }
 

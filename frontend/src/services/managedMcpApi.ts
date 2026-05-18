@@ -7,12 +7,14 @@ import type {
   ManagedMcpRegistryDeletePayload,
   ManagedMcpRegistryListPayload,
   ManagedMcpRegistrySavePayload,
+  ManagedMcpRegistryTestPayload,
   PodMcpAvailabilityListPayload,
 } from "@/types/websocket/requests";
 import type {
   ManagedMcpRegistryDeletedPayload,
   ManagedMcpRegistryListResultPayload,
   ManagedMcpRegistrySavedPayload,
+  ManagedMcpRegistryTestResultPayload,
   PodMcpAvailabilityListResultPayload,
 } from "@/types/websocket/responses";
 import type {
@@ -200,7 +202,9 @@ function normalizePodMcpAvailabilityItem(
     ...(typeof raw.completedCount === "number"
       ? { completedCount: raw.completedCount }
       : {}),
-    ...(typeof raw.totalCount === "number" ? { totalCount: raw.totalCount } : {}),
+    ...(typeof raw.totalCount === "number"
+      ? { totalCount: raw.totalCount }
+      : {}),
   };
 }
 
@@ -275,6 +279,32 @@ export async function deleteManagedMcpRegistry(
   invalidatePodMcpAvailabilityCache();
 }
 
+export interface ManagedMcpRegistryTestOutcome {
+  status: McpDisplayStatus;
+  lastError: string | null;
+}
+
+export async function testManagedMcpRegistry(
+  registryId: string,
+): Promise<ManagedMcpRegistryTestOutcome> {
+  const result = await createWebSocketRequest<
+    ManagedMcpRegistryTestPayload,
+    ManagedMcpRegistryTestResultPayload
+  >({
+    requestEvent: WebSocketRequestEvents.MANAGED_MCP_REGISTRY_TEST,
+    responseEvent: WebSocketResponseEvents.MANAGED_MCP_REGISTRY_TEST_RESULT,
+    payload: { registryId },
+  });
+
+  invalidateManagedMcpRegistryCache();
+  invalidatePodMcpAvailabilityCache();
+
+  return {
+    status: normalizeStatus(result.status) ?? "unknown",
+    lastError: normalizeNullableString(result.lastError ?? null),
+  };
+}
+
 export async function listPodMcpAvailability(
   podId: string,
   provider?: PodProvider,
@@ -310,9 +340,7 @@ export async function listPodMcpAvailability(
 
   const data = normalizePodMcpAvailabilityItems(result.items);
 
-  if (
-    podMcpAvailabilityCache.size >= MANAGED_MCP_AVAILABILITY_CACHE_MAX_SIZE
-  ) {
+  if (podMcpAvailabilityCache.size >= MANAGED_MCP_AVAILABILITY_CACHE_MAX_SIZE) {
     const oldestKey = podMcpAvailabilityCache.keys().next().value;
     if (oldestKey !== undefined) {
       podMcpAvailabilityCache.delete(oldestKey);

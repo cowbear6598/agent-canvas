@@ -6,7 +6,7 @@ import {
   managedMcpRegistryDeleteRequestSchema,
   managedMcpRegistryListRequestSchema,
   managedMcpRegistrySaveRequestSchema,
-  mcpListRequestSchema,
+  managedMcpRegistryTestRequestSchema,
   podMcpAvailabilityListRequestSchema,
   podSetMcpServerNamesSchema,
 } from "../../schemas/mcpSchemas.js";
@@ -14,7 +14,7 @@ import {
   handleManagedMcpRegistryDelete,
   handleManagedMcpRegistryList,
   handleManagedMcpRegistrySave,
-  handleMcpList,
+  handleManagedMcpRegistryTest,
   handlePodMcpAvailabilityList,
   handlePodSetMcpServerNames,
 } from "../mcpHandlers.js";
@@ -23,12 +23,6 @@ import { createHandlerGroup } from "./createHandlerGroup.js";
 export const mcpHandlerGroup = createHandlerGroup({
   name: "mcp",
   handlers: [
-    {
-      event: WebSocketRequestEvents.MCP_LIST,
-      handler: handleMcpList,
-      schema: mcpListRequestSchema,
-      responseEvent: WebSocketResponseEvents.MCP_LIST_RESULT,
-    },
     {
       event: WebSocketRequestEvents.MANAGED_MCP_REGISTRY_LIST,
       handler: handleManagedMcpRegistryList,
@@ -46,6 +40,12 @@ export const mcpHandlerGroup = createHandlerGroup({
       handler: handleManagedMcpRegistryDelete,
       schema: managedMcpRegistryDeleteRequestSchema,
       responseEvent: WebSocketResponseEvents.MANAGED_MCP_REGISTRY_DELETED,
+    },
+    {
+      event: WebSocketRequestEvents.MANAGED_MCP_REGISTRY_TEST,
+      handler: handleManagedMcpRegistryTest,
+      schema: managedMcpRegistryTestRequestSchema,
+      responseEvent: WebSocketResponseEvents.MANAGED_MCP_REGISTRY_TEST_RESULT,
     },
     {
       event: WebSocketRequestEvents.POD_MCP_AVAILABILITY_LIST,

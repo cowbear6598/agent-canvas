@@ -288,6 +288,11 @@ export interface ManagedMcpRegistryDeletePayload {
   registryId: string;
 }
 
+export interface ManagedMcpRegistryTestPayload {
+  requestId: string;
+  registryId: string;
+}
+
 export interface PodMcpAvailabilityListPayload {
   requestId: string;
   podId: string;

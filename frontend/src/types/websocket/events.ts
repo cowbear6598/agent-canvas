@@ -32,14 +32,14 @@ export const WebSocketRequestEvents = {
   REPOSITORY_NOTE_DELETE: "repository-note:delete",
   POD_BIND_REPOSITORY: "pod:bind-repository",
   POD_UNBIND_REPOSITORY: "pod:unbind-repository",
-  /** 查詢指定 Provider 的 MCP server 清單 */
-  MCP_LIST: "mcp:list",
   /** 查詢 managed MCP registry 清單 */
   MANAGED_MCP_REGISTRY_LIST: "managed-mcp:registry:list",
   /** 儲存 managed MCP registry entry */
   MANAGED_MCP_REGISTRY_SAVE: "managed-mcp:registry:save",
   /** 刪除 managed MCP registry entry */
   MANAGED_MCP_REGISTRY_DELETE: "managed-mcp:registry:delete",
+  /** 對 managed MCP registry entry 手動觸發 probe（test connection） */
+  MANAGED_MCP_REGISTRY_TEST: "managed-mcp:registry:test",
   /** 查詢指定 Pod 的 MCP availability 清單 */
   POD_MCP_AVAILABILITY_LIST: "pod:mcp-availability:list",
   /** 設定指定 Pod 的 MCP server 名稱清單 */
@@ -145,8 +145,6 @@ export const WebSocketResponseEvents = {
   REPOSITORY_NOTE_DELETED: "repository-note:deleted",
   POD_REPOSITORY_BOUND: "pod:repository:bound",
   POD_REPOSITORY_UNBOUND: "pod:repository:unbound",
-  /** MCP server 清單查詢結果 */
-  MCP_LIST_RESULT: "mcp:list:result",
   /** managed MCP registry 清單查詢結果 */
   MANAGED_MCP_REGISTRY_LIST_RESULT: "managed-mcp:registry:list:result",
   /** managed MCP registry entry 已儲存 */
@@ -155,6 +153,10 @@ export const WebSocketResponseEvents = {
   MANAGED_MCP_REGISTRY_DELETED: "managed-mcp:registry:deleted",
   /** managed MCP registry 已更新（broadcast） */
   MANAGED_MCP_REGISTRY_UPDATED: "managed-mcp:registry:updated",
+  /** managed MCP registry entry probe 結果 */
+  MANAGED_MCP_REGISTRY_TEST_RESULT: "managed-mcp:registry:test:result",
+  /** ensureSurface 略過某些選定的 MCP（broadcast） */
+  MANAGED_MCP_SURFACE_TARGETS_IGNORED: "managed-mcp:surface:targets-ignored",
   /** Pod MCP availability 清單查詢結果 */
   POD_MCP_AVAILABILITY_LIST_RESULT: "pod:mcp-availability:list:result",
   /** Pod 的 MCP server 名稱清單已更新 */
