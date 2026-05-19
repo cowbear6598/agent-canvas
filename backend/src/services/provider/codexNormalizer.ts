@@ -90,16 +90,32 @@ interface CodexCommandExecutionItem {
   status?: string;
 }
 
+interface CodexMcpToolCallItemResult {
+  content?: unknown[];
+  structured_content?: unknown;
+  _meta?: unknown;
+}
+
+interface CodexMcpToolCallItemError {
+  message?: string;
+}
+
+/**
+ * 對齊 codex-rs/exec/src/exec_events.rs::McpToolCallItem 的真實 wire shape：
+ * - server / tool 是直接的字串欄位（早期我們誤以為是 server_name / tool_name）
+ * - arguments 是任意 JSON
+ * - result 是 { content: MCP content blocks[], structured_content?, _meta? } | null
+ * - error 是 { message } | null（失敗時 result 為 null）
+ */
 interface CodexMcpToolCallItem {
   id: string;
   type: "mcp_tool_call";
-  server_name?: string;
-  tool_name?: string;
-  name?: string;
-  arguments?: Record<string, unknown>;
-  input?: Record<string, unknown>;
-  output?: string;
-  result?: string;
+  server?: string;
+  tool?: string;
+  arguments?: unknown;
+  result?: CodexMcpToolCallItemResult | null;
+  error?: CodexMcpToolCallItemError | null;
+  status?: string;
 }
 
 /** Codex normalizer 專用的系統錯誤建立 helper（委派給共用 buildProviderSystemError） */
@@ -113,34 +129,28 @@ function buildCodexSystemError(params: {
 }
 
 function buildMcpToolName(item: CodexMcpToolCallItem): string {
-  // Codex CLI 可能回傳 generic wrapper 名稱 `mcp__mcp_tool`；
-  // 若已有結構化欄位，應優先使用 server_name/tool_name 還原真正的 MCP tool name。
   if (
-    typeof item.server_name === "string" &&
-    item.server_name.length > 0 &&
-    typeof item.tool_name === "string" &&
-    item.tool_name.length > 0
+    typeof item.server === "string" &&
+    item.server.length > 0 &&
+    typeof item.tool === "string" &&
+    item.tool.length > 0
   ) {
-    return `mcp__${item.server_name}__${item.tool_name}`;
+    return `mcp__${item.server}__${item.tool}`;
   }
 
-  if (typeof item.name === "string" && item.name.length > 0) {
-    return item.name;
-  }
-
-  const serverName = item.server_name ?? "mcp";
-  const toolName = item.tool_name ?? "tool";
-  return `mcp__${serverName}__${toolName}`;
+  // 防呆兜底：理論上 codex 必送 server + tool；若 schema 變動則退回 generic 名以利診斷
+  return `mcp__${item.server ?? "mcp"}__${item.tool ?? "tool"}`;
 }
 
 function buildMcpToolInput(
   item: CodexMcpToolCallItem,
 ): Record<string, unknown> {
-  if (item.input && typeof item.input === "object") {
-    return item.input;
-  }
-  if (item.arguments && typeof item.arguments === "object") {
-    return item.arguments;
+  if (
+    item.arguments &&
+    typeof item.arguments === "object" &&
+    !Array.isArray(item.arguments)
+  ) {
+    return item.arguments as Record<string, unknown>;
   }
   return {};
 }
@@ -158,7 +168,13 @@ function serializeMcpToolOutputValue(value: unknown): string | null {
     return null;
   }
 
-  if (value.structured_content !== undefined) {
+  // structured_content 在 codex Rust 端是 Option<JsonValue> 且未標 skip_serializing_if，
+  // 故 None 會 serialize 成顯式 null（不是省略）。只在「真的有 structured 值」時才用它，
+  // 否則 fallback 走下面的 content[].text。
+  if (
+    value.structured_content !== undefined &&
+    value.structured_content !== null
+  ) {
     return JSON.stringify(value.structured_content);
   }
 
@@ -177,11 +193,16 @@ function serializeMcpToolOutputValue(value: unknown): string | null {
 }
 
 function buildMcpToolOutput(item: CodexMcpToolCallItem): string {
-  return (
-    serializeMcpToolOutputValue(item.output) ??
-    serializeMcpToolOutputValue(item.result) ??
-    ""
-  );
+  // 失敗的 tool call：result 為 null，錯誤訊息在 error.message
+  if (
+    item.error &&
+    typeof item.error === "object" &&
+    typeof item.error.message === "string" &&
+    item.error.message.length > 0
+  ) {
+    return item.error.message;
+  }
+  return serializeMcpToolOutputValue(item.result) ?? "";
 }
 
 // ── 主要解析函式 ──────────────────────────────────────────────────
@@ -293,7 +314,7 @@ export function normalize(line: string): NormalizedEvent | null {
           toolName: canonicalizeGoalRuntimeToolName(
             buildMcpToolName(item),
             input,
-            item.output ?? item.result ?? null,
+            item.result ?? null,
           ),
           output,
         };

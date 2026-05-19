@@ -3,13 +3,11 @@ import { buildGoalRuntimeMcpListItem } from "../goalRuntime.js";
 import {
   managedMcpStore,
   type ManagedMcpServerRecord,
-  type ManagedMcpTransport,
 } from "./managedMcpStore.js";
 import {
   managedMcpRuntimeService,
   type ManagedMcpRuntimeSnapshot,
 } from "./managedMcpRuntimeService.js";
-import type { ProviderName } from "../provider/index.js";
 import type { Pod } from "../../types/pod.js";
 
 interface ManagedMcpStoreLike {
@@ -24,13 +22,6 @@ interface AvailabilityDeps {
   store: ManagedMcpStoreLike;
   runtimeService: ManagedMcpRuntimeServiceLike;
 }
-
-const TRANSPORT_SUPPORT: Record<ProviderName, ReadonlySet<ManagedMcpTransport>> =
-  {
-    claude: new Set(["stdio"]),
-    codex: new Set(["stdio", "http"]),
-    opencode: new Set(["stdio", "http", "sse"]),
-  };
 
 function buildGoalAvailabilityItem(
   pod: Pick<Pod, "id" | "name" | "goal">,
@@ -59,18 +50,10 @@ function buildGoalAvailabilityItem(
   };
 }
 
-function resolveDisabledReason(
-  provider: ProviderName,
-  entry: ManagedMcpServerRecord,
-): string | null {
+function resolveDisabledReason(entry: ManagedMcpServerRecord): string | null {
   if (!entry.enabled) {
     return "registry entry disabled";
   }
-
-  if (!TRANSPORT_SUPPORT[provider].has(entry.transport)) {
-    return `${provider} does not support ${entry.transport} transport`;
-  }
-
   return null;
 }
 
@@ -78,13 +61,13 @@ export class ManagedMcpAvailabilityService {
   constructor(private readonly deps: AvailabilityDeps) {}
 
   listForPod(
-    pod: Pick<Pod, "id" | "name" | "goal" | "provider" | "mcpServerNames">,
-    providerOverride?: ProviderName,
+    pod: Pick<Pod, "id" | "name" | "goal" | "mcpServerNames">,
   ): PodMcpAvailabilityItem[] {
-    const provider = providerOverride ?? pod.provider;
     const selectedNames = new Set(pod.mcpServerNames);
     const registry = this.deps.store.list();
-    const registryByName = new Map(registry.map((entry) => [entry.name, entry]));
+    const registryByName = new Map(
+      registry.map((entry) => [entry.name, entry]),
+    );
 
     const items: PodMcpAvailabilityItem[] = [
       buildGoalAvailabilityItem(pod),
@@ -92,14 +75,14 @@ export class ManagedMcpAvailabilityService {
         const runtimeSnapshot = this.deps.runtimeService.getRuntimeSnapshot(
           entry.name,
         );
-        const disabledReason = resolveDisabledReason(provider, entry);
+        const disabledReason = resolveDisabledReason(entry);
         return {
           name: entry.name,
           transport: entry.transport,
           status:
             disabledReason === "registry entry disabled"
               ? "disabled"
-              : runtimeSnapshot?.status ?? entry.lastKnownStatus,
+              : (runtimeSnapshot?.status ?? entry.lastKnownStatus),
           selected: selectedNames.has(entry.name),
           selectable: disabledReason === null,
           disabledReason,

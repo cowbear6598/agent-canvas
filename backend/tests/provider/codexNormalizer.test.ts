@@ -113,8 +113,8 @@ describe("CodexNormalizer - normalize()", () => {
       item: {
         id: "mcp-001",
         type: "mcp_tool_call",
-        server_name: "agent_canvas_goal",
-        tool_name: "complete_goal_todo",
+        server: "agent_canvas_goal",
+        tool: "complete_goal_todo",
         arguments: { todoId: "todo-1" },
       },
     });
@@ -124,32 +124,8 @@ describe("CodexNormalizer - normalize()", () => {
     expect(result?.type).toBe("tool_call_start");
     const e = result as Extract<typeof result, { type: "tool_call_start" }>;
     expect(e.toolUseId).toBe("mcp-001");
-    expect(e.toolName).toBe(
-      "mcp__agent_canvas_goal__complete_goal_todo",
-    );
+    expect(e.toolName).toBe("mcp__agent_canvas_goal__complete_goal_todo");
     expect(e.input).toEqual({ todoId: "todo-1" });
-  });
-
-  it("item.started 的 generic name=mcp__mcp__tool 時，應優先使用 server_name/tool_name 還原真實 MCP tool name", () => {
-    const line = toLine({
-      type: "item.started",
-      item: {
-        id: "mcp-001b",
-        type: "mcp_tool_call",
-        name: "mcp__mcp__tool",
-        server_name: "agent_canvas_goal",
-        tool_name: "get_goal_status",
-        arguments: {},
-      },
-    });
-
-    const result = normalize(line);
-
-    expect(result?.type).toBe("tool_call_start");
-    const e = result as Extract<typeof result, { type: "tool_call_start" }>;
-    expect(e.toolUseId).toBe("mcp-001b");
-    expect(e.toolName).toBe("mcp__agent_canvas_goal__get_goal_status");
-    expect(e.input).toEqual({});
   });
 
   it("item.completed 且 item_type=mcp_tool_call 應映射為 Goal MCP 的 tool_call_result", () => {
@@ -158,9 +134,11 @@ describe("CodexNormalizer - normalize()", () => {
       item: {
         id: "mcp-002",
         type: "mcp_tool_call",
-        server_name: "agent_canvas_goal",
-        tool_name: "block_goal_progress",
-        output: "{\"status\":\"blocked\"}",
+        server: "agent_canvas_goal",
+        tool: "block_goal_progress",
+        result: {
+          content: [{ type: "text", text: '{"status":"blocked"}' }],
+        },
       },
     });
 
@@ -170,19 +148,24 @@ describe("CodexNormalizer - normalize()", () => {
     const e = result as Extract<typeof result, { type: "tool_call_result" }>;
     expect(e.toolUseId).toBe("mcp-002");
     expect(e.toolName).toBe("mcp__agent_canvas_goal__block_goal_progress");
-    expect(e.output).toBe("{\"status\":\"blocked\"}");
+    expect(e.output).toBe('{"status":"blocked"}');
   });
 
-  it("item.completed 的 generic name=mcp__mcp__tool 時，應優先使用 server_name/tool_name 還原真實 MCP tool name", () => {
+  it("item.completed 的 result.structured_content 顯式為 null 時，應 fallback 到 content[].text 而非輸出字串 'null'", () => {
+    // codex Rust 端 structured_content: Option<JsonValue> 未標 skip_serializing_if，
+    // 故 None 會 serialize 成顯式 null；不該被當成有結構化輸出。
     const line = toLine({
       type: "item.completed",
       item: {
-        id: "mcp-002b",
+        id: "mcp-002e",
         type: "mcp_tool_call",
-        name: "mcp__mcp__tool",
-        server_name: "agent_canvas_goal",
-        tool_name: "complete_goal_todo",
-        output: "{\"status\":\"running\"}",
+        server: "everything-sse",
+        tool: "get_sum",
+        arguments: { a: 19, b: 23 },
+        result: {
+          content: [{ type: "text", text: "42" }],
+          structured_content: null,
+        },
       },
     });
 
@@ -190,20 +173,20 @@ describe("CodexNormalizer - normalize()", () => {
 
     expect(result?.type).toBe("tool_call_result");
     const e = result as Extract<typeof result, { type: "tool_call_result" }>;
-    expect(e.toolUseId).toBe("mcp-002b");
-    expect(e.toolName).toBe("mcp__agent_canvas_goal__complete_goal_todo");
-    expect(e.output).toBe("{\"status\":\"running\"}");
+    expect(e.output).toBe("42");
   });
 
-  it("item.completed 的 generic name=mcp__mcp__tool 且只有 structured output 時，應還原為 get_goal_status 並輸出 JSON 字串", () => {
+  it("item.completed 的 result 只有 structured_content 時也能解析為 get_goal_status", () => {
     const line = toLine({
       type: "item.completed",
       item: {
         id: "mcp-002c",
         type: "mcp_tool_call",
-        name: "mcp__mcp__tool",
-        input: {},
-        output: {
+        server: "agent_canvas_goal",
+        tool: "get_goal_status",
+        arguments: {},
+        result: {
+          content: [],
           structured_content: {
             status: "running",
             activeTodoId: "todo-1",
@@ -239,6 +222,29 @@ describe("CodexNormalizer - normalize()", () => {
         totalCount: 3,
       }),
     );
+  });
+
+  it("item.completed 的 mcp_tool_call 失敗時，output 應為 error.message", () => {
+    const line = toLine({
+      type: "item.completed",
+      item: {
+        id: "mcp-002d",
+        type: "mcp_tool_call",
+        server: "everything-sse",
+        tool: "get_sum",
+        arguments: { a: 1, b: 2 },
+        result: null,
+        error: { message: "connection refused" },
+        status: "failed",
+      },
+    });
+
+    const result = normalize(line);
+
+    expect(result?.type).toBe("tool_call_result");
+    const e = result as Extract<typeof result, { type: "tool_call_result" }>;
+    expect(e.toolName).toBe("mcp__everything-sse__get_sum");
+    expect(e.output).toBe("connection refused");
   });
 
   // ── Case 6：turn.completed → turn_complete ────────────────────────

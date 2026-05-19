@@ -119,7 +119,9 @@ describe("ManagedMcpAvailabilityService", () => {
     });
 
     const availability = service.listForPod(createPod());
-    const goalItem = availability.find((entry) => entry.name === GOAL_MCP_SERVER_NAME);
+    const goalItem = availability.find(
+      (entry) => entry.name === GOAL_MCP_SERVER_NAME,
+    );
 
     expect(goalItem).toEqual(
       expect.objectContaining({
@@ -131,7 +133,7 @@ describe("ManagedMcpAvailabilityService", () => {
     );
   });
 
-  it("不同 provider 看到的 selectable 狀態不同", () => {
+  it("所有 provider 都可選 http/sse entry（proxy bridge 補齊原生不支援的 transport）", () => {
     const sseEntry = createEntry({
       name: "remote-sse",
       transport: "sse",
@@ -157,24 +159,16 @@ describe("ManagedMcpAvailabilityService", () => {
       },
     });
 
-    const claudeItem = service
-      .listForPod(createPod({ provider: "claude" }))
-      .find((entry) => entry.name === "remote-sse");
-    const opencodeItem = service
-      .listForPod(createPod({ provider: "opencode" }))
-      .find((entry) => entry.name === "remote-sse");
-
-    expect(claudeItem).toEqual(
-      expect.objectContaining({
-        selectable: false,
-        disabledReason: "claude does not support sse transport",
-      }),
-    );
-    expect(opencodeItem).toEqual(
-      expect.objectContaining({
-        selectable: true,
-        disabledReason: null,
-      }),
-    );
+    for (const provider of ["claude", "codex", "opencode"] as const) {
+      const item = service
+        .listForPod(createPod({ provider }))
+        .find((entry) => entry.name === "remote-sse");
+      expect(item, `${provider} 應該可選 sse entry`).toEqual(
+        expect.objectContaining({
+          selectable: true,
+          disabledReason: null,
+        }),
+      );
+    }
   });
 });

@@ -251,10 +251,7 @@ export async function handlePodMcpAvailabilityList(
     return;
   }
 
-  const items = managedMcpAvailabilityService.listForPod(
-    podRef.pod,
-    payload.provider,
-  );
+  const items = managedMcpAvailabilityService.listForPod(podRef.pod);
 
   socketService.emitToConnection(
     connectionId,
@@ -309,11 +306,11 @@ export async function handlePodSetMcpServerNames(
     return;
   }
 
-  // self-healing：依 managed registry 過濾掉不可選的 name（已從 registry 刪除、被 disable、
-  // 或當前 provider 不支援其 transport），避免異常呼叫時繞過驗證。
+  // self-healing：依 managed registry 過濾掉不可選的 name（已從 registry 刪除或被 disable），
+  // 避免異常呼叫時繞過驗證。
   const availableNameSet = new Set(
     managedMcpAvailabilityService
-      .listForPod(pod, pod.provider)
+      .listForPod(pod)
       .filter((item) => !item.system && !item.locked && item.selectable)
       .map((item) => item.name),
   );

@@ -378,7 +378,7 @@ describe("McpPopover", () => {
     });
   });
 
-  it("Codex 改用 managed availability，只有不支援的 transport 會 disabled", async () => {
+  it("backend 回傳 selectable:false 的 row 會灰掉並顯示 disabledReason", async () => {
     setupPod({ provider: "codex" });
     mockListPodMcpAvailability.mockResolvedValue([
       GOAL_RUNTIME_ITEM,
@@ -393,10 +393,10 @@ describe("McpPopover", () => {
       {
         name: "docs-sse",
         transport: "sse",
-        status: "starting",
+        status: "disabled",
         selected: false,
         selectable: false,
-        disabledReason: "codex does not support sse transport",
+        disabledReason: "registry entry disabled",
       },
     ]);
     const podStore = usePodStore();
@@ -408,7 +408,7 @@ describe("McpPopover", () => {
     const switches = bodyQueryAll(".switch-stub") as HTMLElement[];
     expect(switches).toHaveLength(2);
     expect(bodyQuery(".fixed.z-50")!.textContent).toContain(
-      "codex does not support sse transport",
+      "registry entry disabled",
     );
     expect(switches[1]?.hasAttribute("disabled")).toBe(true);
 

@@ -73,12 +73,12 @@ const filteredMcpServers = computed<PodMcpAvailabilityItem[]>(() => {
   );
 });
 
-/** 內建 MCP（系統鎖定，例如 Goal Runtime）：顯示於分隔線上方 */
+/** 內建 MCP（系統鎖定，例如 Goal Runtime）：顯示於分隔線下方 */
 const systemMcpServers = computed<PodMcpAvailabilityItem[]>(() =>
   filteredMcpServers.value.filter((server) => isSystemLockedServer(server)),
 );
 
-/** 使用者建立的 MCP（從 Header 管理面板新增）：顯示於分隔線下方 */
+/** 使用者建立的 MCP（從 Header 管理面板新增）：顯示於分隔線上方 */
 const userMcpServers = computed<PodMcpAvailabilityItem[]>(() =>
   filteredMcpServers.value.filter((server) => !isSystemLockedServer(server)),
 );
@@ -271,14 +271,14 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
         </p>
       </div>
 
-      <!-- MCP server 列表：內建（Goal 等系統 MCP）→ divider → 使用者 MCP -->
+      <!-- MCP server 列表：使用者 MCP → divider → 內建（Goal 等系統 MCP） -->
       <ScrollArea
         v-else
         class="pod-popover-scrollable"
       >
         <div class="space-y-1">
           <McpServerRow
-            v-for="server in systemMcpServers"
+            v-for="server in userMcpServers"
             :key="server.name"
             :name="server.name"
             :label="resolveServerLabel(server)"
@@ -297,7 +297,7 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
             class="my-1 border-t border-dashed border-doodle-ink/40"
           />
           <McpServerRow
-            v-for="server in userMcpServers"
+            v-for="server in systemMcpServers"
             :key="server.name"
             :name="server.name"
             :label="resolveServerLabel(server)"

@@ -458,35 +458,6 @@ watch(
             class="h-[18rem] lg:h-[32rem]"
           >
             <div class="space-y-2 p-3">
-              <!-- 內建 Goal Runtime：固定顯示於最上方，純展示不可選 -->
-              <div
-                data-testid="managed-mcp-builtin-goal"
-                class="w-full rounded-xl border border-doodle-ink/15 bg-card px-3 py-3"
-              >
-                <p class="truncate text-sm font-semibold text-foreground">
-                  {{ t("pod.slot.goalMcpLabel") }}
-                </p>
-                <div class="mt-2 flex flex-wrap gap-2">
-                  <span
-                    class="inline-flex items-center rounded-full border border-doodle-ink/15 bg-background px-2 py-0.5 text-[11px] font-mono uppercase tracking-wide text-muted-foreground"
-                  >
-                    {{ transportLabel("stdio") }}
-                  </span>
-                  <span
-                    class="inline-flex items-center rounded-full border border-doodle-ink/15 bg-secondary px-2 py-0.5 text-[11px] font-mono text-primary"
-                  >
-                    {{ t("pod.slot.builtinBadge") }}
-                  </span>
-                </div>
-              </div>
-
-              <!-- divider：僅在使用者已建立 MCP 時顯示，避免空 list 出現孤立分隔線 -->
-              <div
-                v-if="managedMcpStore.registry.length > 0"
-                data-testid="managed-mcp-group-divider"
-                class="my-1 border-t border-dashed border-doodle-ink/40"
-              />
-
               <div
                 v-for="item in managedMcpStore.registry"
                 :key="item.id"
@@ -494,7 +465,7 @@ watch(
                 role="button"
                 tabindex="0"
                 :class="[
-                  'w-full cursor-pointer rounded-xl border px-3 py-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
+                  'w-full cursor-pointer rounded-xl border px-3 py-2 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
                   selectedId === item.id
                     ? 'border-primary bg-primary/5 shadow-sm'
                     : 'border-doodle-ink/15 bg-card hover:border-doodle-ink/30 hover:bg-accent/30',
@@ -503,33 +474,20 @@ watch(
                 @keydown.enter.prevent="selectRegistryItem(item)"
                 @keydown.space.prevent="selectRegistryItem(item)"
               >
-                <div class="flex items-start justify-between gap-3">
-                  <div class="min-w-0">
-                    <p class="truncate text-sm font-semibold text-foreground">
-                      {{ item.name }}
-                    </p>
-                    <div class="mt-2 flex flex-wrap gap-2">
-                      <span
-                        class="inline-flex items-center rounded-full border border-doodle-ink/15 bg-background px-2 py-0.5 text-[11px] font-mono uppercase tracking-wide text-muted-foreground"
-                      >
-                        {{ transportLabel(item.transport) }}
-                      </span>
-                      <span
-                        :class="[
-                          'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-mono',
-                          statusBadgeClass(item.status),
-                        ]"
-                      >
-                        {{ statusLabel(item.status) }}
-                      </span>
-                      <span
-                        v-if="!item.enabled"
-                        class="inline-flex items-center rounded-full border border-zinc-200 bg-zinc-100 px-2 py-0.5 text-[11px] font-mono text-zinc-700"
-                      >
-                        {{ t("managedMcp.badge.configDisabled") }}
-                      </span>
-                    </div>
-                  </div>
+                <div class="flex items-center gap-2">
+                  <p
+                    class="min-w-0 flex-1 truncate text-sm font-semibold text-foreground"
+                  >
+                    {{ item.name }}
+                  </p>
+                  <span
+                    :class="[
+                      'inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-mono',
+                      statusBadgeClass(item.status),
+                    ]"
+                  >
+                    {{ statusLabel(item.status) }}
+                  </span>
                   <Switch
                     :model-value="item.enabled"
                     :data-testid="`managed-mcp-quick-toggle-${item.id}`"
@@ -543,10 +501,36 @@ watch(
 
                 <p
                   v-if="item.lastError"
-                  class="mt-2 line-clamp-2 text-xs text-rose-700"
+                  class="mt-1.5 line-clamp-2 text-xs text-rose-700"
                 >
                   {{ item.lastError }}
                 </p>
+              </div>
+
+              <!-- divider：僅在使用者已建立 MCP 時顯示，避免空 list 出現孤立分隔線 -->
+              <div
+                v-if="managedMcpStore.registry.length > 0"
+                data-testid="managed-mcp-group-divider"
+                class="my-1 border-t border-dashed border-doodle-ink/40"
+              />
+
+              <!-- 內建 Goal Runtime：固定顯示於最下方，純展示不可選 -->
+              <div
+                data-testid="managed-mcp-builtin-goal"
+                class="w-full rounded-xl border border-doodle-ink/15 bg-card px-3 py-2"
+              >
+                <div class="flex items-center gap-2">
+                  <p
+                    class="min-w-0 flex-1 truncate text-sm font-semibold text-foreground"
+                  >
+                    {{ t("pod.slot.goalMcpLabel") }}
+                  </p>
+                  <span
+                    class="inline-flex shrink-0 items-center rounded-full border border-doodle-ink/15 bg-secondary px-2 py-0.5 text-[11px] font-mono text-primary"
+                  >
+                    {{ t("pod.slot.builtinBadge") }}
+                  </span>
+                </div>
               </div>
             </div>
           </ScrollArea>
