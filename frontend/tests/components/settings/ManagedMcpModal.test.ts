@@ -62,6 +62,27 @@ vi.mock("@/components/ui/scroll-area", () => ({
   ScrollArea: { name: "ScrollArea", template: "<div><slot /></div>" },
 }));
 
+vi.mock("@/components/ui/select", () => ({
+  Select: {
+    name: "Select",
+    props: ["modelValue"],
+    emits: ["update:modelValue"],
+    template: "<div><slot /></div>",
+  },
+  SelectTrigger: { name: "SelectTrigger", template: "<div><slot /></div>" },
+  SelectValue: {
+    name: "SelectValue",
+    props: ["placeholder"],
+    template: "<span></span>",
+  },
+  SelectContent: { name: "SelectContent", template: "<div><slot /></div>" },
+  SelectItem: {
+    name: "SelectItem",
+    props: ["value"],
+    template: '<div :data-value="value"><slot /></div>',
+  },
+}));
+
 function createRegistryItem(
   overrides: Partial<ManagedMcpRegistryItem> = {},
 ): ManagedMcpRegistryItem {
@@ -94,6 +115,47 @@ function mountModal() {
 
 describe("ManagedMcpModal", () => {
   setupStoreTest();
+
+  it("registry 為空也顯示內建 Goal Runtime 列且無 divider", async () => {
+    mockListManagedMcpRegistry.mockResolvedValue([]);
+
+    const wrapper = mountModal();
+    await flushPromises();
+
+    expect(
+      wrapper.find('[data-testid="managed-mcp-builtin-goal"]').exists(),
+    ).toBe(true);
+    // 純展示不可點：沒有 cursor-pointer / role="button" / Switch
+    const goalRow = wrapper.get('[data-testid="managed-mcp-builtin-goal"]');
+    expect(goalRow.classes()).not.toContain("cursor-pointer");
+    expect(goalRow.attributes("role")).toBeUndefined();
+    expect(
+      wrapper.find('[data-testid="managed-mcp-group-divider"]').exists(),
+    ).toBe(false);
+
+    wrapper.unmount();
+  });
+
+  it("registry 有資料時 Goal Runtime 與使用者 MCP 之間出現 divider", async () => {
+    mockListManagedMcpRegistry.mockResolvedValue([
+      createRegistryItem({ id: "mcp-1", name: "alpha" }),
+    ]);
+
+    const wrapper = mountModal();
+    await flushPromises();
+
+    expect(
+      wrapper.find('[data-testid="managed-mcp-builtin-goal"]').exists(),
+    ).toBe(true);
+    expect(
+      wrapper.find('[data-testid="managed-mcp-group-divider"]').exists(),
+    ).toBe(true);
+    expect(
+      wrapper.find('[data-testid="managed-mcp-entry-mcp-1"]').exists(),
+    ).toBe(true);
+
+    wrapper.unmount();
+  });
 
   it("列出 registry entries", async () => {
     mockListManagedMcpRegistry.mockResolvedValue([
@@ -129,7 +191,9 @@ describe("ManagedMcpModal", () => {
     expect(wrapper.find('[data-testid="managed-mcp-command"]').exists()).toBe(
       true,
     );
-    expect(wrapper.find('[data-testid="managed-mcp-url"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="managed-mcp-url"]').exists()).toBe(
+      false,
+    );
     expect(wrapper.find('[data-testid="managed-mcp-arg-add"]').exists()).toBe(
       true,
     );
@@ -137,9 +201,10 @@ describe("ManagedMcpModal", () => {
       true,
     );
 
+    // shadcn Select 在 jsdom 下無法走原生 <select> 互動，改直接 emit
     await wrapper
-      .get('[data-testid="managed-mcp-transport"]')
-      .setValue("http");
+      .findComponent({ name: "Select" })
+      .vm.$emit("update:modelValue", "http");
     await flushPromises();
 
     expect(wrapper.find('[data-testid="managed-mcp-command"]').exists()).toBe(
@@ -222,9 +287,9 @@ describe("ManagedMcpModal", () => {
     const wrapper = mountModal();
     await flushPromises();
 
-    expect(wrapper.get('[data-testid="managed-mcp-last-error"]').text()).toContain(
-      "Connection refused",
-    );
+    expect(
+      wrapper.get('[data-testid="managed-mcp-last-error"]').text(),
+    ).toContain("Connection refused");
 
     wrapper.unmount();
   });

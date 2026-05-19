@@ -285,7 +285,6 @@
       "mcpLabel": "MCPs",
       "mcpLoading": "載入中…",
       "mcpEmpty": "尚未安裝 MCP server",
-      "mcpUserEmpty": "尚未安裝使用者 MCP server",
       "mcpClaudeEmptyHint": "請使用 `claude mcp add` 安裝",
       "mcpToggleFailed": "切換 MCP server 失敗",
       "mcpLoadFailed": "載入失敗",
@@ -330,7 +329,7 @@
     "header": {
       "canvasList": "Canvas 清單",
       "globalSettings": "全域設定",
-      "managedMcp": "Managed MCP",
+      "managedMcp": "MCP 管理",
       "integrations": "整合服務管理",
       "history": "歷程",
       "llmProvider": "LLM Provider 設定"
@@ -338,16 +337,11 @@
   },
   "managedMcp": {
     "modal": {
-      "title": "Managed MCP",
+      "title": "MCP 管理",
       "description": "管理全域 MCP registry 與 runtime 狀態"
     },
     "list": {
-      "title": "Registry",
-      "description": "全域 MCP 會由 Header 管理，Pod 只挑選自己要用的子集合。"
-    },
-    "empty": {
-      "title": "尚未註冊任何 MCP",
-      "description": "建立第一筆 managed MCP 後，Pod 才能從可用清單中挑選它。"
+      "title": "MCP 列表"
     },
     "actions": {
       "create": "新增 MCP",
@@ -381,7 +375,6 @@
     },
     "form": {
       "createTitle": "建立新的 MCP 設定",
-      "createDescription": "填完 transport 與連線資訊後，這筆 MCP 就會出現在全域 registry。",
       "editTitle": "編輯 MCP 設定",
       "editDescription": "這裡顯示全域 registry entry 的 transport 與最近一次 runtime 狀態。",
       "enabled": "啟用",
@@ -395,16 +388,15 @@
       "cwdPlaceholder": "例如：/Users/me/projects",
       "args": "Args",
       "argsPlaceholder": "Argument",
-      "argsHint": "STDIO 模式下每個列項都會被視為一個 argument。",
+      "argsHint": "例如：\n-y\nmcp-server-filesystem\n/path/to/dir",
       "env": "Environment",
       "envPlaceholder": "KEY=value",
       "envKeyPlaceholder": "KEY",
       "envValuePlaceholder": "Value",
-      "envHint": "每個列項都會轉成一組 KEY=value，空白 key 會被忽略。",
+      "envHint": "例如：\nLOG_LEVEL=debug\nNODE_ENV=production\nAPI_TOKEN=sk-xxx",
       "url": "URL",
       "urlPlaceholder": "例如：https://mcp.example.com/sse",
-      "lastError": "最近一次失敗原因",
-      "securityWarning": "註冊的 MCP 會以 backend 使用者身分執行任意程式碼，請只加入來自信任來源的 server。"
+      "lastError": "最近一次失敗原因"
     },
     "validation": {
       "commandRequired": "STDIO 模式必須填寫 command",

@@ -285,7 +285,6 @@
       "mcpLabel": "MCPs",
       "mcpLoading": "Loading…",
       "mcpEmpty": "No MCP server installed",
-      "mcpUserEmpty": "No user MCP server installed",
       "mcpClaudeEmptyHint": "Run `claude mcp add` to install",
       "mcpToggleFailed": "Failed to toggle MCP server",
       "mcpLoadFailed": "Failed to load",
@@ -330,7 +329,7 @@
     "header": {
       "canvasList": "Canvas List",
       "globalSettings": "Global Settings",
-      "managedMcp": "Managed MCP",
+      "managedMcp": "MCP Manager",
       "integrations": "Integrations",
       "history": "History",
       "llmProvider": "LLM Provider Settings"
@@ -338,16 +337,11 @@
   },
   "managedMcp": {
     "modal": {
-      "title": "Managed MCP",
+      "title": "MCP Manager",
       "description": "Manage global MCP registry entries and runtime status"
     },
     "list": {
-      "title": "Registry",
-      "description": "Global MCP servers live here. Pods only choose the subset they want to use."
-    },
-    "empty": {
-      "title": "No MCP registered yet",
-      "description": "Create your first managed MCP entry so Pods can pick it from availability."
+      "title": "MCP List"
     },
     "actions": {
       "create": "Create MCP",
@@ -381,7 +375,6 @@
     },
     "form": {
       "createTitle": "Create a new MCP entry",
-      "createDescription": "Once the transport and connection details are saved, this MCP becomes available globally.",
       "editTitle": "Edit MCP entry",
       "editDescription": "This view shows the registry config plus the latest runtime status for the selected MCP.",
       "enabled": "Enabled",
@@ -395,16 +388,15 @@
       "cwdPlaceholder": "e.g. /Users/me/projects",
       "args": "Args",
       "argsPlaceholder": "Argument",
-      "argsHint": "Each entry is sent as one argument for stdio transport.",
+      "argsHint": "e.g.\n-y\nmcp-server-filesystem\n/path/to/dir",
       "env": "Environment",
       "envPlaceholder": "KEY=value",
       "envKeyPlaceholder": "KEY",
       "envValuePlaceholder": "Value",
-      "envHint": "Each entry becomes one KEY=value pair. Empty keys are ignored.",
+      "envHint": "e.g.\nLOG_LEVEL=debug\nNODE_ENV=production\nAPI_TOKEN=sk-xxx",
       "url": "URL",
       "urlPlaceholder": "e.g. https://mcp.example.com/sse",
-      "lastError": "Last error",
-      "securityWarning": "Registered MCP servers run arbitrary code as the backend user. Only add servers from trusted sources."
+      "lastError": "Last error"
     },
     "validation": {
       "commandRequired": "Command is required for stdio transport",

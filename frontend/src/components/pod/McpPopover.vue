@@ -62,14 +62,6 @@ function resolveServerLabel(server: PodMcpAvailabilityItem): string {
   return isGoalRuntimeServer(server) ? t("pod.slot.goalMcpLabel") : server.name;
 }
 
-const hasGoalRuntime = computed(() =>
-  availableMcpServers.value.some((server) => isGoalRuntimeServer(server)),
-);
-
-const userMcpServers = computed(() =>
-  availableMcpServers.value.filter((server) => !isSystemLockedServer(server)),
-);
-
 /** 依 searchQuery 過濾 MCP server 清單（不分大小寫比對名稱） */
 const filteredMcpServers = computed<PodMcpAvailabilityItem[]>(() => {
   const query = searchQuery.value.trim().toLowerCase();
@@ -80,6 +72,21 @@ const filteredMcpServers = computed<PodMcpAvailabilityItem[]>(() => {
       server.name.toLowerCase().includes(query),
   );
 });
+
+/** 內建 MCP（系統鎖定，例如 Goal Runtime）：顯示於分隔線上方 */
+const systemMcpServers = computed<PodMcpAvailabilityItem[]>(() =>
+  filteredMcpServers.value.filter((server) => isSystemLockedServer(server)),
+);
+
+/** 使用者建立的 MCP（從 Header 管理面板新增）：顯示於分隔線下方 */
+const userMcpServers = computed<PodMcpAvailabilityItem[]>(() =>
+  filteredMcpServers.value.filter((server) => !isSystemLockedServer(server)),
+);
+
+/** 兩組皆有資料時才畫 divider，避免單組時出現孤立分隔線 */
+const showGroupDivider = computed<boolean>(
+  () => systemMcpServers.value.length > 0 && userMcpServers.value.length > 0,
+);
 
 const showSearchEmpty = computed(
   () =>
@@ -95,15 +102,6 @@ const showEmptyState = computed(
     !loadFailed.value &&
     searchQuery.value.trim().length === 0 &&
     availableMcpServers.value.length === 0,
-);
-
-const showUserEmptyHint = computed(
-  () =>
-    !loading.value &&
-    !loadFailed.value &&
-    searchQuery.value.trim().length === 0 &&
-    hasGoalRuntime.value &&
-    userMcpServers.value.length === 0,
 );
 
 /** podStore 的 mcpServerNames 轉成 Set，讓 v-for 中的查找從 O(n) 降為 O(1) */
@@ -273,37 +271,47 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
         </p>
       </div>
 
-      <!-- MCP server 列表（built-in Goal + user MCP） -->
-      <template v-else>
-        <div
-          v-if="showUserEmptyHint"
-          class="px-2 pb-1 text-xs font-mono text-muted-foreground whitespace-pre-wrap"
-        >
-          <p>{{ t("pod.slot.mcpUserEmpty") }}</p>
-          <p class="mt-1">
-            {{ t("pod.slot.mcpManagedHint") }}
-          </p>
+      <!-- MCP server 列表：內建（Goal 等系統 MCP）→ divider → 使用者 MCP -->
+      <ScrollArea
+        v-else
+        class="pod-popover-scrollable"
+      >
+        <div class="space-y-1">
+          <McpServerRow
+            v-for="server in systemMcpServers"
+            :key="server.name"
+            :name="server.name"
+            :label="resolveServerLabel(server)"
+            :transport="server.transport"
+            :checked="isServerChecked(server)"
+            :disabled="isServerDisabled(server)"
+            :readonly="isSystemLockedServer(server)"
+            :locked="isSystemLockedServer(server)"
+            :locked-label="t('pod.slot.builtinBadge')"
+            :disabled-reason="server.disabledReason"
+            @toggle="handleToggle"
+          />
+          <div
+            v-if="showGroupDivider"
+            data-testid="mcp-group-divider"
+            class="my-1 border-t border-dashed border-doodle-ink/40"
+          />
+          <McpServerRow
+            v-for="server in userMcpServers"
+            :key="server.name"
+            :name="server.name"
+            :label="resolveServerLabel(server)"
+            :transport="server.transport"
+            :checked="isServerChecked(server)"
+            :disabled="isServerDisabled(server)"
+            :readonly="isSystemLockedServer(server)"
+            :locked="isSystemLockedServer(server)"
+            :locked-label="t('pod.slot.builtinBadge')"
+            :disabled-reason="server.disabledReason"
+            @toggle="handleToggle"
+          />
         </div>
-
-        <ScrollArea class="pod-popover-scrollable">
-          <div class="space-y-1">
-            <McpServerRow
-              v-for="server in filteredMcpServers"
-              :key="server.name"
-              :name="server.name"
-              :label="resolveServerLabel(server)"
-              :transport="server.transport"
-              :checked="isServerChecked(server)"
-              :disabled="isServerDisabled(server)"
-              :readonly="isSystemLockedServer(server)"
-              :locked="isSystemLockedServer(server)"
-              :locked-label="t('pod.slot.builtinBadge')"
-              :disabled-reason="server.disabledReason"
-              @toggle="handleToggle"
-            />
-          </div>
-        </ScrollArea>
-      </template>
+      </ScrollArea>
     </div>
   </Teleport>
 </template>

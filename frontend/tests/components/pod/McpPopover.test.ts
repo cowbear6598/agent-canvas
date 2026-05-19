@@ -209,8 +209,20 @@ describe("McpPopover", () => {
     expect(popover!.textContent).toContain("pod.slot.builtinBadge");
     expect(popover!.textContent).toContain("test-mcp-server");
     expect(document.body.querySelectorAll(".switch-stub")).toHaveLength(1);
+    // 內建與使用者 MCP 同時存在時應出現 divider
+    expect(bodyQuery('[data-testid="mcp-group-divider"]')).not.toBeNull();
     // status chip 已從 popover 移除（不再以 probe 結果作為 toggle 旁的訊號）
     expect(bodyQuery('[data-testid="mcp-status-badge"]')).toBeNull();
+  });
+
+  it("只有使用者 MCP 時不應顯示 divider", async () => {
+    mockListPodMcpAvailability.mockResolvedValue([MOCK_MCP_SERVER]);
+
+    mountPopover({ provider: "claude" });
+    await flushPromises();
+
+    expect(bodyQuery(".fixed.z-50")!.textContent).toContain("test-mcp-server");
+    expect(bodyQuery('[data-testid="mcp-group-divider"]')).toBeNull();
   });
 
   describe("toggle MCP server", () => {
@@ -350,7 +362,7 @@ describe("McpPopover", () => {
   });
 
   describe("空狀態", () => {
-    it("沒有 user MCP 時應顯示 Goal Runtime、user empty 與 managed hint", async () => {
+    it("只有 Goal Runtime 時只顯示內建列，不再出現 user empty 提示文案與 divider", async () => {
       mockListPodMcpAvailability.mockResolvedValue([EMPTY_GOAL_RUNTIME_ITEM]);
 
       mountPopover({ provider: "claude" });
@@ -359,8 +371,9 @@ describe("McpPopover", () => {
       const popover = bodyQuery(".fixed.z-50");
       expect(popover!.textContent).toContain("pod.slot.goalMcpLabel");
       expect(popover!.textContent).toContain("pod.slot.builtinBadge");
-      expect(popover!.textContent).toContain("pod.slot.mcpUserEmpty");
-      expect(popover!.textContent).toContain("pod.slot.mcpManagedHint");
+      expect(popover!.textContent).not.toContain("pod.slot.mcpUserEmpty");
+      expect(popover!.textContent).not.toContain("pod.slot.mcpManagedHint");
+      expect(bodyQuery('[data-testid="mcp-group-divider"]')).toBeNull();
       expect(bodyQuery(".switch-stub")).toBeNull();
     });
   });

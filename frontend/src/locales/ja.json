@@ -285,7 +285,6 @@
       "mcpLabel": "MCP",
       "mcpLoading": "読み込み中…",
       "mcpEmpty": "MCP server がインストールされていません",
-      "mcpUserEmpty": "ユーザー MCP server がインストールされていません",
       "mcpClaudeEmptyHint": "`claude mcp add` でインストールしてください",
       "mcpToggleFailed": "MCP server の切替に失敗しました",
       "mcpLoadFailed": "読み込み失敗",
@@ -330,7 +329,7 @@
     "header": {
       "canvasList": "Canvas 一覧",
       "globalSettings": "グローバル設定",
-      "managedMcp": "Managed MCP",
+      "managedMcp": "MCP 管理",
       "integrations": "インテグレーション管理",
       "history": "実行履歴",
       "llmProvider": "LLM Provider 設定"
@@ -338,16 +337,11 @@
   },
   "managedMcp": {
     "modal": {
-      "title": "Managed MCP",
+      "title": "MCP 管理",
       "description": "グローバル MCP registry と runtime 状態を管理"
     },
     "list": {
-      "title": "Registry",
-      "description": "グローバル MCP はここで管理し、Pod 側では使う subset だけを選択します。"
-    },
-    "empty": {
-      "title": "まだ MCP が登録されていません",
-      "description": "最初の managed MCP を作成すると、Pod が availability から選べるようになります。"
+      "title": "MCP 一覧"
     },
     "actions": {
       "create": "MCP を追加",
@@ -381,7 +375,6 @@
     },
     "form": {
       "createTitle": "新しい MCP を作成",
-      "createDescription": "transport と接続情報を保存すると、この MCP がグローバル registry に追加されます。",
       "editTitle": "MCP 設定を編集",
       "editDescription": "選択中の MCP について、registry 設定と最新の runtime 状態を表示します。",
       "enabled": "有効",
@@ -395,16 +388,15 @@
       "cwdPlaceholder": "例：/Users/me/projects",
       "args": "Args",
       "argsPlaceholder": "Argument",
-      "argsHint": "STDIO モードでは各エントリが 1 つの argument として送られます。",
+      "argsHint": "例：\n-y\nmcp-server-filesystem\n/path/to/dir",
       "env": "Environment",
       "envPlaceholder": "KEY=value",
       "envKeyPlaceholder": "KEY",
       "envValuePlaceholder": "Value",
-      "envHint": "各エントリが 1 組の KEY=value になります。空の key は無視されます。",
+      "envHint": "例：\nLOG_LEVEL=debug\nNODE_ENV=production\nAPI_TOKEN=sk-xxx",
       "url": "URL",
       "urlPlaceholder": "例：https://mcp.example.com/sse",
-      "lastError": "直近の失敗理由",
-      "securityWarning": "登録した MCP は backend ユーザー権限で任意コードを実行します。信頼できるソースのみ追加してください。"
+      "lastError": "直近の失敗理由"
     },
     "validation": {
       "commandRequired": "STDIO モードでは command の入力が必要です",

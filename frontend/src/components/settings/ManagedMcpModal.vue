@@ -12,6 +12,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useManagedMcpStore } from "@/stores/managedMcpStore";
 import { useToast } from "@/composables/useToast";
@@ -32,7 +39,6 @@ interface ManagedMcpFormState {
   id?: string;
   name: string;
   transport: McpTransport;
-  enabled: boolean;
   command: string;
   args: Array<{ id: string; value: string }>;
   cwd: string;
@@ -84,7 +90,6 @@ function createEmptyForm(): ManagedMcpFormState {
   return {
     name: "",
     transport: "stdio",
-    enabled: true,
     command: "",
     args: [],
     cwd: "",
@@ -98,7 +103,6 @@ function createFormFromItem(item: ManagedMcpRegistryItem): ManagedMcpFormState {
     id: item.id,
     name: item.name,
     transport: item.transport,
-    enabled: item.enabled,
     command: item.command ?? "",
     args: item.args.map((arg) => createArgRow(arg)),
     cwd: item.cwd ?? "",
@@ -142,10 +146,12 @@ function removeEnvRow(id: string): void {
 }
 
 function buildSavePayload(): ManagedMcpRegistryInput {
+  // enabled 改由左側列表 Switch 控管；form 儲存時沿用 selectedEntry 當下狀態，
+  // 新增則預設 true，避免 form 端持有 stale 副本而蓋掉 Switch 的最新切換結果
   const basePayload = {
     ...(draft.value.id ? { id: draft.value.id } : {}),
     name: draft.value.name.trim(),
-    enabled: draft.value.enabled,
+    enabled: selectedEntry.value?.enabled ?? true,
   };
 
   if (draft.value.transport === "stdio") {
@@ -408,18 +414,10 @@ watch(
         <aside
           class="flex min-h-[18rem] flex-col rounded-xl border border-doodle-ink/20 bg-muted/20 lg:w-[20rem]"
         >
-          <div
-            class="flex items-start justify-between gap-3 border-b px-4 py-3"
-          >
-            <div>
-              <p class="text-sm font-semibold">
-                {{ t("managedMcp.list.title") }}
-              </p>
-              <p class="mt-1 text-xs text-muted-foreground">
-                {{ t("managedMcp.list.description") }}
-              </p>
-            </div>
-
+          <div class="flex items-center justify-between gap-2 px-3 py-2">
+            <span class="text-sm font-semibold">
+              {{ t("managedMcp.list.title") }}
+            </span>
             <div class="flex items-center gap-2">
               <button
                 data-testid="managed-mcp-new"
@@ -455,26 +453,40 @@ watch(
             {{ t("common.loading") }}
           </div>
 
-          <div
-            v-else-if="
-              managedMcpStore.loaded && managedMcpStore.registry.length === 0
-            "
-            data-testid="managed-mcp-empty"
-            class="px-4 py-6 text-sm text-muted-foreground"
-          >
-            <p class="font-medium text-foreground">
-              {{ t("managedMcp.empty.title") }}
-            </p>
-            <p class="mt-1">
-              {{ t("managedMcp.empty.description") }}
-            </p>
-          </div>
-
           <ScrollArea
             v-else
             class="h-[18rem] lg:h-[32rem]"
           >
             <div class="space-y-2 p-3">
+              <!-- 內建 Goal Runtime：固定顯示於最上方，純展示不可選 -->
+              <div
+                data-testid="managed-mcp-builtin-goal"
+                class="w-full rounded-xl border border-doodle-ink/15 bg-card px-3 py-3"
+              >
+                <p class="truncate text-sm font-semibold text-foreground">
+                  {{ t("pod.slot.goalMcpLabel") }}
+                </p>
+                <div class="mt-2 flex flex-wrap gap-2">
+                  <span
+                    class="inline-flex items-center rounded-full border border-doodle-ink/15 bg-background px-2 py-0.5 text-[11px] font-mono uppercase tracking-wide text-muted-foreground"
+                  >
+                    {{ transportLabel("stdio") }}
+                  </span>
+                  <span
+                    class="inline-flex items-center rounded-full border border-doodle-ink/15 bg-secondary px-2 py-0.5 text-[11px] font-mono text-primary"
+                  >
+                    {{ t("pod.slot.builtinBadge") }}
+                  </span>
+                </div>
+              </div>
+
+              <!-- divider：僅在使用者已建立 MCP 時顯示，避免空 list 出現孤立分隔線 -->
+              <div
+                v-if="managedMcpStore.registry.length > 0"
+                data-testid="managed-mcp-group-divider"
+                class="my-1 border-t border-dashed border-doodle-ink/40"
+              />
+
               <div
                 v-for="item in managedMcpStore.registry"
                 :key="item.id"
@@ -544,264 +556,255 @@ watch(
           class="flex min-h-[24rem] flex-1 flex-col rounded-xl border border-doodle-ink/20 bg-card"
         >
           <div class="border-b px-5 py-4">
-            <div class="flex items-start justify-between gap-4">
-              <div>
-                <p class="text-base font-semibold">
-                  {{
-                    isEditingExisting
-                      ? t("managedMcp.form.editTitle")
-                      : t("managedMcp.form.createTitle")
-                  }}
-                </p>
-                <p class="mt-1 text-sm text-muted-foreground">
-                  {{
-                    isEditingExisting
-                      ? t("managedMcp.form.editDescription")
-                      : t("managedMcp.form.createDescription")
-                  }}
-                </p>
-              </div>
-
-              <label class="inline-flex items-center gap-2 text-xs font-mono">
-                <input
-                  v-model="draft.enabled"
-                  type="checkbox"
-                  class="h-4 w-4 rounded border-input text-primary"
-                >
-                <span>{{ t("managedMcp.form.enabled") }}</span>
-              </label>
-            </div>
+            <p class="text-base font-semibold">
+              {{
+                isEditingExisting
+                  ? t("managedMcp.form.editTitle")
+                  : t("managedMcp.form.createTitle")
+              }}
+            </p>
+            <p
+              v-if="isEditingExisting"
+              class="mt-1 text-sm text-muted-foreground"
+            >
+              {{ t("managedMcp.form.editDescription") }}
+            </p>
           </div>
 
-          <div class="flex-1 overflow-y-auto px-5 py-4">
-            <div
-              class="mb-4 rounded-md border border-amber-500/40 bg-amber-50/60 px-3 py-2 text-xs text-amber-900 dark:bg-amber-900/20 dark:text-amber-200"
-              data-testid="managed-mcp-security-warning"
-            >
-              {{ t("managedMcp.form.securityWarning") }}
-            </div>
-            <div
-              v-if="selectedEntry"
-              class="mb-4 rounded-xl border border-doodle-ink/15 bg-muted/20 p-4"
-            >
-              <div class="flex flex-wrap gap-2">
-                <span
-                  class="inline-flex items-center rounded-full border border-doodle-ink/15 bg-background px-2 py-1 text-xs font-mono text-muted-foreground"
+          <ScrollArea class="min-h-0 flex-1">
+            <div class="px-5 py-4">
+              <div
+                v-if="selectedEntry"
+                class="mb-4 rounded-md border border-doodle-ink/15 bg-muted/20 p-4"
+              >
+                <div class="flex flex-wrap gap-2">
+                  <span
+                    class="inline-flex items-center rounded-full border border-doodle-ink/15 bg-background px-2 py-1 text-xs font-mono text-muted-foreground"
+                  >
+                    {{ t("managedMcp.form.transport") }}:
+                    {{ transportLabel(selectedEntry.transport) }}
+                  </span>
+                  <span
+                    :class="[
+                      'inline-flex items-center rounded-full border px-2 py-1 text-xs font-mono',
+                      statusBadgeClass(selectedEntry.status),
+                    ]"
+                  >
+                    {{ t("managedMcp.form.status") }}:
+                    {{ statusLabel(selectedEntry.status) }}
+                  </span>
+                </div>
+
+                <div
+                  v-if="selectedEntry.lastError"
+                  data-testid="managed-mcp-last-error"
+                  class="mt-3 text-sm text-rose-700"
                 >
-                  {{ t("managedMcp.form.transport") }}:
-                  {{ transportLabel(selectedEntry.transport) }}
-                </span>
-                <span
-                  :class="[
-                    'inline-flex items-center rounded-full border px-2 py-1 text-xs font-mono',
-                    statusBadgeClass(selectedEntry.status),
-                  ]"
-                >
-                  {{ t("managedMcp.form.status") }}:
-                  {{ statusLabel(selectedEntry.status) }}
-                </span>
+                  <span class="font-medium">
+                    {{ t("managedMcp.form.lastError") }}:
+                  </span>
+                  <p
+                    class="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap break-words rounded-md border border-rose-100 bg-rose-50/40 px-2 py-1 font-mono text-xs"
+                  >
+                    {{ truncateLastError(selectedEntry.lastError) }}
+                  </p>
+                </div>
               </div>
 
               <div
-                v-if="selectedEntry.lastError"
-                data-testid="managed-mcp-last-error"
-                class="mt-3 text-sm text-rose-700"
+                v-if="managedMcpStore.error"
+                class="mb-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
               >
-                <span class="font-medium">
-                  {{ t("managedMcp.form.lastError") }}:
-                </span>
-                <p
-                  class="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap break-words rounded border border-rose-100 bg-rose-50/40 px-2 py-1 font-mono text-xs"
-                >
-                  {{ truncateLastError(selectedEntry.lastError) }}
-                </p>
+                {{ managedMcpStore.error }}
               </div>
-            </div>
 
-            <div
-              v-if="managedMcpStore.error"
-              class="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
-            >
-              {{ managedMcpStore.error }}
-            </div>
+              <div
+                v-if="validationError"
+                class="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
+              >
+                {{ validationError }}
+              </div>
 
-            <div
-              v-if="validationError"
-              class="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
-            >
-              {{ validationError }}
-            </div>
+              <div class="grid gap-4 md:grid-cols-2">
+                <label class="block space-y-2">
+                  <span class="text-sm font-medium">
+                    {{ t("managedMcp.form.name") }}
+                  </span>
+                  <Input
+                    v-model="draft.name"
+                    data-testid="managed-mcp-name"
+                    :placeholder="t('managedMcp.form.namePlaceholder')"
+                  />
+                </label>
 
-            <div class="grid gap-4 md:grid-cols-2">
-              <label class="space-y-2">
-                <span class="text-sm font-medium">
-                  {{ t("managedMcp.form.name") }}
-                </span>
-                <Input
-                  v-model="draft.name"
-                  data-testid="managed-mcp-name"
-                  :placeholder="t('managedMcp.form.namePlaceholder')"
-                />
-              </label>
-
-              <label class="space-y-2">
-                <span class="text-sm font-medium">
-                  {{ t("managedMcp.form.transport") }}
-                </span>
-                <select
-                  v-model="draft.transport"
-                  data-testid="managed-mcp-transport"
-                  class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:border-ring"
-                >
-                  <option value="stdio">
-                    {{ transportLabel("stdio") }}
-                  </option>
-                  <option value="http">
-                    {{ transportLabel("http") }}
-                  </option>
-                  <option value="sse">
-                    {{ transportLabel("sse") }}
-                  </option>
-                </select>
-              </label>
-            </div>
-
-            <div
-              v-if="draft.transport === 'stdio'"
-              class="mt-4 space-y-4"
-            >
-              <label class="space-y-2">
-                <span class="text-sm font-medium">
-                  {{ t("managedMcp.form.command") }}
-                </span>
-                <Input
-                  v-model="draft.command"
-                  data-testid="managed-mcp-command"
-                  :placeholder="t('managedMcp.form.commandPlaceholder')"
-                />
-              </label>
-
-              <label class="space-y-2">
-                <span class="text-sm font-medium">
-                  {{ t("managedMcp.form.cwd") }}
-                </span>
-                <Input
-                  v-model="draft.cwd"
-                  data-testid="managed-mcp-cwd"
-                  :placeholder="t('managedMcp.form.cwdPlaceholder')"
-                />
-              </label>
-
-              <div class="grid gap-4 lg:grid-cols-2">
-                <div class="space-y-2">
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-sm font-medium">
-                      {{ t("managedMcp.form.args") }}
-                    </span>
-                    <button
-                      type="button"
-                      data-testid="managed-mcp-arg-add"
-                      class="inline-flex items-center rounded-md border border-doodle-ink/20 bg-card px-2 py-1 text-xs font-mono transition hover:bg-accent"
-                      @click="addArgRow"
-                    >
-                      {{ t("common.add") }}
-                    </button>
-                  </div>
-                  <div
-                    v-if="draft.args.length === 0"
-                    class="rounded-md border border-dashed border-doodle-ink/20 px-3 py-2 text-xs text-muted-foreground"
+                <label class="block space-y-2">
+                  <span class="text-sm font-medium">
+                    {{ t("managedMcp.form.transport") }}
+                  </span>
+                  <Select
+                    v-model="draft.transport"
+                    data-testid="managed-mcp-transport"
                   >
-                    {{ t("managedMcp.form.argsHint") }}
-                  </div>
-                  <div
-                    v-for="arg in draft.args"
-                    :key="arg.id"
-                    class="flex items-center gap-2"
-                  >
-                    <Input
-                      v-model="arg.value"
-                      data-testid="managed-mcp-arg-input"
-                      :placeholder="t('managedMcp.form.argsPlaceholder')"
-                    />
-                    <button
-                      type="button"
-                      data-testid="managed-mcp-arg-remove"
-                      class="inline-flex items-center rounded-md border border-doodle-ink/20 bg-card px-2 py-2 text-xs font-mono transition hover:bg-accent"
-                      @click="removeArgRow(arg.id)"
-                    >
-                      {{ t("common.delete") }}
-                    </button>
-                  </div>
-                  <p class="text-xs text-muted-foreground">
-                    {{ t("managedMcp.form.argsHint") }}
-                  </p>
-                </div>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent position="popper">
+                      <SelectItem value="stdio">
+                        {{ transportLabel("stdio") }}
+                      </SelectItem>
+                      <SelectItem value="http">
+                        {{ transportLabel("http") }}
+                      </SelectItem>
+                      <SelectItem value="sse">
+                        {{ transportLabel("sse") }}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </label>
+              </div>
 
-                <div class="space-y-2">
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-sm font-medium">
-                      {{ t("managedMcp.form.env") }}
-                    </span>
-                    <button
-                      type="button"
-                      data-testid="managed-mcp-env-add"
-                      class="inline-flex items-center rounded-md border border-doodle-ink/20 bg-card px-2 py-1 text-xs font-mono transition hover:bg-accent"
-                      @click="addEnvRow"
+              <div
+                v-if="draft.transport === 'stdio'"
+                class="mt-4 space-y-4"
+              >
+                <label class="block space-y-2">
+                  <span class="text-sm font-medium">
+                    {{ t("managedMcp.form.command") }}
+                  </span>
+                  <Input
+                    v-model="draft.command"
+                    data-testid="managed-mcp-command"
+                    :placeholder="t('managedMcp.form.commandPlaceholder')"
+                  />
+                </label>
+
+                <label class="block space-y-2">
+                  <span class="text-sm font-medium">
+                    {{ t("managedMcp.form.cwd") }}
+                  </span>
+                  <Input
+                    v-model="draft.cwd"
+                    data-testid="managed-mcp-cwd"
+                    :placeholder="t('managedMcp.form.cwdPlaceholder')"
+                  />
+                </label>
+
+                <div class="grid gap-4 lg:grid-cols-2">
+                  <div class="space-y-2">
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-sm font-medium">
+                        {{ t("managedMcp.form.args") }}
+                      </span>
+                      <button
+                        type="button"
+                        data-testid="managed-mcp-arg-add"
+                        class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-doodle-ink/20 bg-card text-foreground transition hover:bg-accent"
+                        :title="t('common.add')"
+                        :aria-label="t('common.add')"
+                        @click="addArgRow"
+                      >
+                        <Plus class="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div
+                      v-if="draft.args.length === 0"
+                      class="whitespace-pre-line rounded-md border border-dashed border-doodle-ink/20 px-3 py-2 font-mono text-xs text-muted-foreground"
                     >
-                      {{ t("common.add") }}
-                    </button>
-                  </div>
-                  <div
-                    v-if="draft.envRows.length === 0"
-                    class="rounded-md border border-dashed border-doodle-ink/20 px-3 py-2 text-xs text-muted-foreground"
-                  >
-                    {{ t("managedMcp.form.envHint") }}
-                  </div>
-                  <div
-                    v-for="entry in draft.envRows"
-                    :key="entry.id"
-                    class="flex items-center gap-2"
-                  >
-                    <Input
-                      v-model="entry.key"
-                      data-testid="managed-mcp-env-key-input"
-                      :placeholder="t('managedMcp.form.envKeyPlaceholder')"
-                    />
-                    <Input
-                      v-model="entry.value"
-                      data-testid="managed-mcp-env-value-input"
-                      :placeholder="t('managedMcp.form.envValuePlaceholder')"
-                    />
-                    <button
-                      type="button"
-                      data-testid="managed-mcp-env-remove"
-                      class="inline-flex items-center rounded-md border border-doodle-ink/20 bg-card px-2 py-2 text-xs font-mono transition hover:bg-accent"
-                      @click="removeEnvRow(entry.id)"
+                      {{ t("managedMcp.form.argsHint") }}
+                    </div>
+                    <div
+                      v-for="arg in draft.args"
+                      :key="arg.id"
+                      class="flex items-center gap-2"
                     >
-                      {{ t("common.delete") }}
-                    </button>
+                      <Input
+                        v-model="arg.value"
+                        data-testid="managed-mcp-arg-input"
+                        class="h-8"
+                        :placeholder="t('managedMcp.form.argsPlaceholder')"
+                      />
+                      <button
+                        type="button"
+                        data-testid="managed-mcp-arg-remove"
+                        class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-doodle-ink/20 bg-card text-foreground transition hover:bg-accent"
+                        :title="t('common.delete')"
+                        :aria-label="t('common.delete')"
+                        @click="removeArgRow(arg.id)"
+                      >
+                        <Trash2 class="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
-                  <p class="text-xs text-muted-foreground">
-                    {{ t("managedMcp.form.envHint") }}
-                  </p>
+
+                  <div class="space-y-2">
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-sm font-medium">
+                        {{ t("managedMcp.form.env") }}
+                      </span>
+                      <button
+                        type="button"
+                        data-testid="managed-mcp-env-add"
+                        class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-doodle-ink/20 bg-card text-foreground transition hover:bg-accent"
+                        :title="t('common.add')"
+                        :aria-label="t('common.add')"
+                        @click="addEnvRow"
+                      >
+                        <Plus class="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div
+                      v-if="draft.envRows.length === 0"
+                      class="whitespace-pre-line rounded-md border border-dashed border-doodle-ink/20 px-3 py-2 font-mono text-xs text-muted-foreground"
+                    >
+                      {{ t("managedMcp.form.envHint") }}
+                    </div>
+                    <div
+                      v-for="entry in draft.envRows"
+                      :key="entry.id"
+                      class="flex items-center gap-2"
+                    >
+                      <Input
+                        v-model="entry.key"
+                        data-testid="managed-mcp-env-key-input"
+                        class="h-8"
+                        :placeholder="t('managedMcp.form.envKeyPlaceholder')"
+                      />
+                      <Input
+                        v-model="entry.value"
+                        data-testid="managed-mcp-env-value-input"
+                        class="h-8"
+                        :placeholder="t('managedMcp.form.envValuePlaceholder')"
+                      />
+                      <button
+                        type="button"
+                        data-testid="managed-mcp-env-remove"
+                        class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-doodle-ink/20 bg-card text-foreground transition hover:bg-accent"
+                        :title="t('common.delete')"
+                        :aria-label="t('common.delete')"
+                        @click="removeEnvRow(entry.id)"
+                      >
+                        <Trash2 class="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <label
-              v-else
-              class="mt-4 block space-y-2"
-            >
-              <span class="text-sm font-medium">
-                {{ t("managedMcp.form.url") }}
-              </span>
-              <Input
-                v-model="draft.url"
-                data-testid="managed-mcp-url"
-                :placeholder="t('managedMcp.form.urlPlaceholder')"
-              />
-            </label>
-          </div>
+              <label
+                v-else
+                class="mt-4 block space-y-2"
+              >
+                <span class="text-sm font-medium">
+                  {{ t("managedMcp.form.url") }}
+                </span>
+                <Input
+                  v-model="draft.url"
+                  data-testid="managed-mcp-url"
+                  :placeholder="t('managedMcp.form.urlPlaceholder')"
+                />
+              </label>
+            </div>
+          </ScrollArea>
 
           <div class="flex items-center justify-end gap-2 border-t px-5 py-4">
             <Button
