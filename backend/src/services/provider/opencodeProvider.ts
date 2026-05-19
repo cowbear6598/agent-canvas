@@ -1,7 +1,7 @@
 /**
- * OpencodeProvider
+ * OpencodeProvider（SDK v2 API + 1.14 binary 行為調適）
  *
- * 透過 opencode SDK 串接 opencode 本地伺服器，
+ * 透過 opencode SDK v2 串接 opencode 本地伺服器，
  * 將 SSE 事件串流轉換為標準化 NormalizedEvent。
  *
  * 實作 AgentProvider<OpencodeOptions> 介面。
@@ -9,15 +9,39 @@
  * 流程：
  *   1. buildOptions：從 Pod 設定取出 providerID / modelID / mcpServerNames
  *   2. chat：建立或恢復 session → subscribe SSE → prompt → yield NormalizedEvent
- *   3. abort：透過 abortSignal 觸發 session.abort（F11 Pod 刪除場景）
+ *   3. abort：透過 abortSignal 觸發 session.abort（Pod 刪除場景）
+ *
+ * SDK v2 API 變更（相對 v1）：
+ *   - session.create / prompt / abort / messages 使用平鋪參數形狀
+ *     （sessionID、directory 頂層化，不再放在 path / query 子物件）
+ *
+ * 事件處理（opencode 1.14 binary 行為調適）：
+ *   - 1.14 binary 在 streaming 階段只發 message.part.delta（field=text / reasoning），
+ *     不發 session.next.*、也不在 streaming 中發 message.part.updated 帶 ToolPart；
+ *     工具資訊只能透過 session.messages API 拉。
+ *   - 為了讓工具能與文字 interleave 顯示（不是全擠到 turn 結尾），本檔利用
+ *     message.part.delta 的 partID 變動作為 section 邊界：
+ *       1. 同一 partID 連續 delta → 同一段文字 / reasoning
+ *       2. partID 改變 → 兩個 text part 之間必有其他 part（多半是 tool）介入；
+ *          觸發 session.messages 查詢，把該段「中間 part」中所有已完成的 ToolPart
+ *          yield 出來（tool_call_start + tool_call_result），再繼續處理新 partID 的 delta
+ *       3. session.idle → 補拉最後一段（最後 tool 之後沒有再跟著 text 的情境）
+ *   - yieldedToolCallIDs Set 全程記錄已 yield 過的 tool callID，避免 partID 多次切換
+ *     或 idle 補拉造成重複。
+ *   - currentMessageIds Set 紀錄本 turn 的 assistant messageID，限制 session.messages
+ *     只取本 turn 內的 message（過濾舊 turn 殘留）。
+ *   - active session 過濾：workspace 廣播事件依 properties.sessionID 過濾，
+ *     忽略屬於其他 session 的事件。
+ *   - Goal Runtime bootstrap prompt 只在新 session 第一輪注入，
+ *     resume session 時不注入（避免覆蓋 gate retry 的 nudge 指示）。
  */
 
 import {
-  createOpencodeClient,
   createOpencodeServer,
   type McpLocalConfig,
   type McpRemoteConfig,
 } from "@opencode-ai/sdk";
+import { createOpencodeClient as createOpencodeClientV2 } from "@opencode-ai/sdk/v2";
 import { OPENCODE_CAPABILITIES } from "./capabilities.js";
 import { buildProviderSystemError } from "./types.js";
 import type {
@@ -41,53 +65,80 @@ import { getOpencodeServerState } from "./opencodeServer.js";
 // ================================================================
 
 /**
- * opencode client 操作介面（供測試可以 mock）
+ * opencode v2 client 的 session.prompt 請求 body 形狀。
+ */
+export interface OpencodeV2PromptInput {
+  model?: { providerID: string; modelID: string };
+  tools?: { [key: string]: boolean };
+  /** v2 支援透過 system 欄位注入 Goal Runtime bootstrap prompt */
+  system?: string;
+  parts: Array<{ type: "text"; text: string }>;
+}
+
+/**
+ * session.messages 回傳的 message 項目形狀（v2 相容）。
+ */
+export interface OpencodeMessageItem {
+  info: { id: string; role: string };
+  parts: Array<{
+    id: string;
+    type: string;
+    callID?: string;
+    tool?: string;
+    state?: {
+      status?: string;
+      input?: Record<string, unknown>;
+      output?: string;
+      error?: string;
+    };
+  }>;
+}
+
+/**
+ * opencode client 操作介面（供測試可以 mock）。
+ *
+ * 參數形狀對齊 SDK v2 OpencodeClient（Session2 class）：
+ * - session.create：使用頂層 directory / workspace，不再放在 query 子物件
+ * - session.prompt：以 sessionID（string）取代 path.id，body 欄位平鋪至頂層
+ * - session.abort：以 sessionID 取代 path.id
+ * - session.messages：以 sessionID 取代 path.id，query 參數平鋪至頂層
+ * - event.subscribe：directory 平鋪至頂層（不再放在 query）
+ * - tool.ids：directory 平鋪至頂層
  */
 export interface OpencodeClientPort {
   session: {
-    create(options: {
-      query?: { directory?: string };
+    create(parameters?: {
+      directory?: string;
     }): Promise<{ data?: { id?: string } | null; error?: unknown }>;
-    prompt(options: {
-      path: { id: string };
-      query?: { directory?: string };
-      body: {
-        model?: { providerID: string; modelID: string };
-        tools?: { [key: string]: boolean };
-        parts: Array<{ type: "text"; text: string }>;
-      };
+    prompt(parameters: {
+      sessionID: string;
+      directory?: string;
+      model?: { providerID: string; modelID: string };
+      tools?: { [key: string]: boolean };
+      system?: string;
+      parts: Array<{ type: "text"; text: string }>;
     }): Promise<unknown>;
-    abort(options: { path: { id: string } }): Promise<unknown>;
-    messages(options: {
-      path: { id: string };
-      query?: { directory?: string; limit?: number };
+    abort(parameters: {
+      sessionID: string;
+      directory?: string;
+    }): Promise<unknown>;
+    messages(parameters: {
+      sessionID: string;
+      directory?: string;
+      limit?: number;
     }): Promise<{
-      data?: Array<{
-        info: { id: string; role: string };
-        parts: Array<{
-          id: string;
-          type: string;
-          callID?: string;
-          tool?: string;
-          state?: {
-            status?: string;
-            input?: Record<string, unknown>;
-            output?: string;
-            error?: string;
-          };
-        }>;
-      }> | null;
+      data?: Array<OpencodeMessageItem> | null;
       error?: unknown;
     }>;
   };
   tool: {
-    ids(options?: {
-      query?: { directory?: string };
+    ids(parameters?: {
+      directory?: string;
     }): Promise<{ data?: string[] | null; error?: unknown }>;
   };
   event: {
-    subscribe(options?: {
-      query?: { directory?: string };
+    subscribe(parameters?: {
+      directory?: string;
     }): Promise<{ stream: AsyncGenerator<unknown> }>;
   };
 }
@@ -126,13 +177,84 @@ export interface OpencodeOptions {
 // 注入點（測試可替換）
 // ================================================================
 
+/**
+ * 將 v2 SDK OpencodeClient 包裝成 OpencodeClientPort。
+ *
+ * v2 SDK 的 session.create / prompt / abort / messages 使用平鋪參數形狀，
+ * 與舊版 v1 的 { path: { id }, query: {}, body: {} } 結構不同。
+ * 此函式橋接兩者，讓主程式邏輯只需面對 OpencodeClientPort 介面。
+ */
+function buildOpencodeClientPort(baseUrl: string): OpencodeClientPort {
+  const v2 = createOpencodeClientV2({ baseUrl });
+
+  return {
+    session: {
+      async create(
+        parameters,
+      ): Promise<{ data?: { id?: string } | null; error?: unknown }> {
+        const result = await v2.session.create(parameters);
+        // v2 RequestResult 回傳 { data, error, request, response }
+        // Session 物件直接有 .id 欄位
+        const data = (result as { data?: { id?: string } | null }).data ?? null;
+        const error = (result as { error?: unknown }).error;
+        return { data, error };
+      },
+      async prompt(parameters): Promise<unknown> {
+        const { sessionID, directory, model, tools, system, parts } =
+          parameters;
+        return v2.session.prompt({
+          sessionID,
+          directory,
+          model,
+          tools,
+          system,
+          parts,
+        });
+      },
+      async abort(parameters): Promise<unknown> {
+        return v2.session.abort(parameters);
+      },
+      async messages(parameters): Promise<{
+        data?: Array<OpencodeMessageItem> | null;
+        error?: unknown;
+      }> {
+        const result = await v2.session.messages(parameters);
+        const rawData = (result as { data?: unknown }).data;
+        const error = (result as { error?: unknown }).error;
+
+        // v2 messages 回傳 Array<{ info: Message, parts: Part[] }>
+        // 其中 Message = UserMessage | AssistantMessage，info.id 與 info.role 與介面相容
+        const data = Array.isArray(rawData)
+          ? (rawData as Array<OpencodeMessageItem>)
+          : null;
+
+        return { data, error };
+      },
+    },
+    tool: {
+      async ids(
+        parameters,
+      ): Promise<{ data?: string[] | null; error?: unknown }> {
+        const result = await v2.tool.ids(parameters);
+        const data = (result as { data?: string[] | null }).data ?? null;
+        const error = (result as { error?: unknown }).error;
+        return { data, error };
+      },
+    },
+    event: {
+      async subscribe(
+        parameters,
+      ): Promise<{ stream: AsyncGenerator<unknown> }> {
+        return v2.event.subscribe(parameters);
+      },
+    },
+  };
+}
+
 /** 建立 client 的工廠函式（測試可替換） */
 let _createClient: (options: { baseUrl: string }) => OpencodeClientPort = (
   options,
-) =>
-  createOpencodeClient({
-    baseUrl: options.baseUrl,
-  }) as unknown as OpencodeClientPort;
+) => buildOpencodeClientPort(options.baseUrl);
 
 /** 建立 transient server 的工廠函式（測試可替換） */
 let _createServer: typeof createOpencodeServer = (options) =>
@@ -174,9 +296,7 @@ export function setOpencodeServerStateFactory(
  */
 export function resetOpencodeClientFactory(): void {
   _createClient = (options): OpencodeClientPort =>
-    createOpencodeClient({
-      baseUrl: options.baseUrl,
-    }) as unknown as OpencodeClientPort;
+    buildOpencodeClientPort(options.baseUrl);
 }
 
 /**
@@ -292,6 +412,63 @@ function classifySessionError(
   });
 }
 
+// ================================================================
+// v2 tool output 序列化
+// ================================================================
+
+/**
+ * v2 tool success content 項目的聯合型別（對應 SDK ToolTextContent | ToolFileContent）。
+ */
+type V2ToolContentItem =
+  | { type: "text"; text: string }
+  | { type: "file"; uri: string; mime: string; name?: string };
+
+/**
+ * 將 v2 tool success 的 content 陣列序列化成可寫入 transcript 的字串。
+ *
+ * 規則：
+ * - "text" 項目：直接取 .text 內容，多筆以 "\n" 串接
+ * - "file" 項目：格式化成 "[file: <name|uri> (<mime>)]"
+ * - 陣列為空：回傳空字串
+ *
+ * 目的是讓 tool_call_result 的 output 欄位統一為字串，
+ * 可直接寫入既有的 transcript stream（NormalizedEvent.tool_call_result.output）。
+ */
+export function serializeV2ToolSuccessContent(
+  content: ReadonlyArray<V2ToolContentItem>,
+): string {
+  if (content.length === 0) return "";
+
+  return content
+    .map((item) => {
+      if (item.type === "text") return item.text;
+      // file 型別：顯示名稱（優先 name，否則 uri）及 MIME
+      const label = item.name ?? item.uri;
+      return `[file: ${label} (${item.mime})]`;
+    })
+    .join("\n");
+}
+
+/**
+ * 將 v2 tool failure 的 error 物件序列化成可寫入 transcript 的字串。
+ *
+ * 規則：
+ * - error.message 存在時使用 "[Error] <message>"
+ * - 其他情況 fallback 到 "[Error] tool failed"
+ */
+export function serializeV2ToolFailureError(error: unknown): string {
+  if (error && typeof error === "object") {
+    const obj = error as Record<string, unknown>;
+    if (typeof obj.message === "string" && obj.message.length > 0) {
+      return `[Error] ${obj.message}`;
+    }
+  }
+  if (typeof error === "string" && error.length > 0) {
+    return `[Error] ${error}`;
+  }
+  return "[Error] tool failed";
+}
+
 /**
  * 從 session.error event 的 error 物件取出字串訊息。
  */
@@ -311,25 +488,40 @@ function extractErrorMessage(error: unknown): string {
 }
 
 /**
- * 在 session.idle 階段補 tool call event。
+ * session.next.tool.called 暫存：callID → { toolName, input }。
+ * session.next.tool.success / failed 只帶 callID，缺 tool name；此 Map 在收到
+ * tool.called 時暫存，讓 success / failed handler 能組出完整 NormalizedEvent。
  *
- * 新版 opencode SDK streaming 只發 message.part.delta（field=text），不發 message.part.updated
- * 帶 ToolPart，因此 tool 呼叫資訊只能在 turn 結束時透過 session.messages API 取得。
- * 流程：
- *   1. 呼叫 client.session.messages 拉所有 messages
- *   2. 對 currentMessageIds 內的 assistant message，遍歷 ToolPart
- *   3. 對狀態為 completed / error 的 ToolPart yield tool_call_start + tool_call_result
+ * 1.14 binary 沒有發 session.next.* 事件，此 Map 在當前 binary 下不會被使用；
+ * 保留是為了未來 binary 升級後支援 v2 streaming tool 事件。
+ */
+interface PendingToolCall {
+  toolName: string;
+  input: Record<string, unknown>;
+}
+
+/**
+ * 拉 session.messages 並把本 turn 內、尚未 yield 過的已完成 ToolPart 轉成
+ * tool_call_start + tool_call_result yield 出去。
  *
- * Tool tag 因此會在所有 text 之後 emit，視覺上是「文字 → tool tags」的順序，
- * 而非 streaming 中插入；如需精確順序，需改用 GET messages polling 或等 SDK 補上 part.updated。
+ * 由兩個地方呼叫：
+ *   1. message.part.delta 偵測到 partID 切換時 → 中間插入該段 tool；
+ *      讓 chat UI 能呈現 text → tool → text → tool 的真實順序，而不是
+ *      所有 tool 全擠到 turn 結尾（opencode 1.14 binary 本身沒有 streaming
+ *      tool 事件，這是唯一能即時拿到 tool 資訊的途徑）。
+ *   2. session.idle → 補拉最後一段（最後一次 tool 之後沒有再跟著 text 的情況）。
+ *
+ * yieldedToolCallIDs 在此 turn 範圍內全程持有，重複 callID 不會再次 yield。
+ * 只 yield status=completed / error 的 tool；尚未完成的 tool 留到下次再查。
  *
  * 失敗時 try/catch 記 warn，不中斷 turn 流程。
  */
-async function* yieldToolPartsForTurn(
+async function* yieldPendingToolParts(
   client: OpencodeClientPort,
   sessionId: string,
   workspacePath: string,
   currentMessageIds: ReadonlySet<string>,
+  yieldedToolCallIDs: Set<string>,
 ): AsyncGenerator<NormalizedEvent> {
   if (currentMessageIds.size === 0) return;
 
@@ -340,8 +532,9 @@ async function* yieldToolPartsForTurn(
   try {
     const result = await Promise.race([
       client.session.messages({
-        path: { id: sessionId },
-        query: { directory: workspacePath, limit: messageLimit },
+        sessionID: sessionId,
+        directory: workspacePath,
+        limit: messageLimit,
       }),
       new Promise<never>((_, reject) =>
         setTimeout(
@@ -370,17 +563,15 @@ async function* yieldToolPartsForTurn(
       if (part.type !== "tool") continue;
 
       const callID = part.callID ?? "";
+      if (!callID || yieldedToolCallIDs.has(callID)) continue;
+
       const toolName = part.tool ?? "";
       const state = part.state;
       const input = (state?.input as Record<string, unknown>) ?? {};
 
       if (state?.status === "completed") {
-        yield {
-          type: "tool_call_start",
-          toolUseId: callID,
-          toolName,
-          input,
-        };
+        yieldedToolCallIDs.add(callID);
+        yield { type: "tool_call_start", toolUseId: callID, toolName, input };
         yield {
           type: "tool_call_result",
           toolUseId: callID,
@@ -391,12 +582,8 @@ async function* yieldToolPartsForTurn(
       }
 
       if (state?.status === "error") {
-        yield {
-          type: "tool_call_start",
-          toolUseId: callID,
-          toolName,
-          input,
-        };
+        yieldedToolCallIDs.add(callID);
+        yield { type: "tool_call_start", toolUseId: callID, toolName, input };
         yield {
           type: "tool_call_result",
           toolUseId: callID,
@@ -405,8 +592,7 @@ async function* yieldToolPartsForTurn(
         };
         continue;
       }
-
-      // pending / running 狀態跳過：本 turn 已結束（session.idle），這類狀態屬於異常或還沒完成
+      // running / pending 狀態先跳過，下次 partID 切換或 session.idle 再來補
     }
   }
 }
@@ -697,10 +883,12 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
       let alreadyYieldedSessionStarted = false;
 
       if (!resumeSessionId) {
+        // 新對話：建立新 session
         let createResult: { data?: { id?: string } | null; error?: unknown };
         try {
+          // v2 SDK: directory 平鋪至頂層，不再放在 query 子物件
           createResult = await client.session.create({
-            query: { directory: workspacePath },
+            directory: workspacePath,
           });
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
@@ -722,6 +910,7 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
         yield { type: "session_started", sessionId };
         alreadyYieldedSessionStarted = true;
       } else {
+        // 續聊：沿用既有 session，不建立新 session、不再 yield session_started
         sessionId = resumeSessionId;
       }
 
@@ -729,8 +918,9 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
       const doAbort = (): void => {
         // abort 觸發時同時關閉 transient server，避免 abort 後 server 還留著
         closeTransientServer();
+        // v2 SDK: 使用 sessionID（string）取代 path.id
         client.session
-          .abort({ path: { id: sessionId } })
+          .abort({ sessionID: sessionId, directory: workspacePath })
           .catch((err: unknown) => {
             logger.warn(
               "Chat",
@@ -747,18 +937,33 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
         doAbort();
       }
 
-      // 本 turn 觀察到的 messageID 集合：session.idle 時用來限定 ToolPart 範圍，
-      // 避免 resume session 把歷史 turn 的 tool 重新 yield 一次。
+      // 本 turn 出現過的 assistant messageID 集合
+      // 用於 session.messages 查詢時，限定只取本 turn 內的 message。
       const currentMessageIds = new Set<string>();
+
+      // 本 turn 已 yield 過的 tool callID。
+      // 由「v1 partID 切換 inline 補拉」「session.idle 補拉」以及「v2 session.next.tool.*」
+      // 三個路徑共用，避免重複 yield 同一個 tool。
+      const yieldedToolCallIDs = new Set<string>();
+
+      // 上一次 message.part.delta 的 partID。
+      // partID 變動代表前一個 text/reasoning part 已結束、之間可能有 tool 介入，
+      // 觸發 session.messages 查詢補拉那段 tool。
+      let currentPartID: string | undefined = undefined;
+
+      // v2 session.next.tool.called 暫存（給後續 success/failed 配對 tool name）。
+      // 1.14 binary 不發此事件，但保留以兼容未來 binary 升級。
+      const pendingToolCalls = new Map<string, PendingToolCall>();
 
       try {
         // ── 訂閱 SSE stream ────────────────────────────────────────────
-        // 帶上 directory query param 對應到該 Pod 的 workspace，
+        // 帶上 directory 對應到該 Pod 的 workspace，
         // 否則 opencode 會 fallback 到 server 啟動時的 cwd（後端工程目錄）。
+        // v2 SDK: directory 平鋪至頂層，不再放在 query 子物件。
         let sseResult: { stream: AsyncGenerator<unknown> };
         try {
           sseResult = await client.event.subscribe({
-            query: { directory: workspacePath },
+            directory: workspacePath,
           });
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
@@ -772,11 +977,18 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
         const toolsSubset: { [key: string]: boolean } | undefined = undefined;
 
         // ── 送出 prompt（非同步，不等待回傳） ──────────────────────────
-        const promptBody: {
+        // v2 SDK: session.prompt 使用平鋪參數形狀（sessionID + 各欄位）。
+        // Goal Runtime bootstrap prompt 只在新 session（非 resume）第一輪注入，
+        // resume session 時 resumeSessionId 為 truthy，buildOpencodePromptText 不會注入。
+        const promptParams: {
+          sessionID: string;
+          directory: string;
           model?: { providerID: string; modelID: string };
           tools?: { [key: string]: boolean };
           parts: Array<{ type: "text"; text: string }>;
         } = {
+          sessionID: sessionId,
+          directory: workspacePath,
           parts: [
             {
               type: "text",
@@ -790,30 +1002,23 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
         };
 
         if (options.providerID || options.modelID) {
-          promptBody.model = {
+          promptParams.model = {
             providerID: options.providerID,
             modelID: options.modelID,
           };
         }
 
         if (toolsSubset !== undefined) {
-          promptBody.tools = toolsSubset;
+          promptParams.tools = toolsSubset;
         }
 
-        client.session
-          .prompt({
-            path: { id: sessionId },
-            // directory 與 session.create 一致，opencode tool 才會跑在這個 Pod 的 workspace
-            query: { directory: workspacePath },
-            body: promptBody,
-          })
-          .catch((err: unknown) => {
-            logger.warn(
-              "Chat",
-              "Warn",
-              `[OpencodeProvider] session.prompt 發生錯誤：${err instanceof Error ? err.message : String(err)}`,
-            );
-          });
+        client.session.prompt(promptParams).catch((err: unknown) => {
+          logger.warn(
+            "Chat",
+            "Warn",
+            `[OpencodeProvider] session.prompt 發生錯誤：${err instanceof Error ? err.message : String(err)}`,
+          );
+        });
 
         // ── for-await SSE stream ───────────────────────────────────────
         for await (const rawEvent of sseResult.stream) {
@@ -828,25 +1033,62 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
           const type = event.type;
           const props = event.properties ?? {};
 
+          // ── active session 過濾 ──────────────────────────────────────
+          // opencode event stream 是 workspace 層級的廣播，同一 workspace 內
+          // 所有 session 的事件都會推送過來。只處理屬於本次 sessionId 的事件，
+          // 避免把其他 session（例如同 workspace 另一個 Pod）的事件寫入當前對話。
+          //
+          // session.created / session.error / session.idle 均有 properties.sessionID；
+          // session.next.* 系列事件同樣帶 sessionID。
+          // 無 sessionID 欄位的系統事件（如 server.connected）不做過濾，直接忽略即可。
+          //
+          // sessionId 在訂閱 SSE stream 之前已透過 session.create API 確定，
+          // 因此可安全用於過濾所有帶 sessionID 的事件（含 session.created）。
+          const eventSessionID = props.sessionID as string | undefined;
+          if (eventSessionID !== undefined && eventSessionID !== sessionId) {
+            continue;
+          }
+
           // session.created → session_started（避免重複 yield）
+          // v2 SDK: properties.sessionID 直接是字串，取代舊版的 properties.info.id
           if (type === "session.created") {
             if (!alreadyYieldedSessionStarted) {
-              const info = props.info as { id?: string } | undefined;
-              const createdSessionId = info?.id ?? sessionId;
+              const createdSessionId =
+                (props.sessionID as string | undefined) ?? sessionId;
               yield { type: "session_started", sessionId: createdSessionId };
               alreadyYieldedSessionStarted = true;
             }
             continue;
           }
 
-          // message.part.delta → 增量 chunk（新版 opencode SDK 走 streaming）
-          // payload: { sessionID, messageID, partID, field: "text"|"reasoning", delta: string }
-          // 後端 text event 的 content 視為 append（streamEventProcessor.processTextEvent），
-          // 因此把 delta 字串直接以 text/thinking yield 即可。
-          // 同時收集 messageID 給 session.idle 階段拉 tool parts 時過濾用。
+          // message.part.delta → 文字 / thinking 增量（streaming 逐字推送）
+          //
+          // opencode 1.14 binary 在 streaming 階段只發這個事件；工具資訊不會
+          // 即時透過 SSE 推送，要靠 session.messages API 拉。
+          //
+          // partID 切換：兩個連續 delta 的 partID 不同 → 中間必有其他 part
+          // （通常是 tool）介入，觸發 session.messages 補拉，把該段已完成的
+          // ToolPart 以 tool_call_start + tool_call_result yield 出來，讓
+          // chat UI 顯示 text → tool → text → tool 的真實順序。
           if (type === "message.part.delta") {
             const messageID = props.messageID as string | undefined;
             if (messageID) currentMessageIds.add(messageID);
+
+            const partID = props.partID as string | undefined;
+            if (
+              partID &&
+              currentPartID !== undefined &&
+              partID !== currentPartID
+            ) {
+              yield* yieldPendingToolParts(
+                client,
+                sessionId,
+                workspacePath,
+                currentMessageIds,
+                yieldedToolCallIDs,
+              );
+            }
+            if (partID) currentPartID = partID;
 
             const field = props.field as string | undefined;
             const delta = props.delta;
@@ -865,74 +1107,126 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
             continue;
           }
 
-          // message.part.updated → 依 part.type 分發
-          if (type === "message.part.updated") {
-            const part = props.part as
-              | {
-                  type?: string;
-                  text?: string;
-                  callID?: string;
-                  tool?: string;
-                  state?: {
-                    status?: string;
-                    input?: Record<string, unknown>;
-                    output?: string;
-                  };
-                }
-              | undefined;
+          // ── session.next.* 事件（SDK 規格、未來 binary 升級後可採用） ─────
+          // 目前 opencode 1.14 binary 不會發送這組事件，但保留 handler 以兼容
+          // 未來版本；若未來 binary 直接 streaming 推送工具事件，這條路徑可即時
+          // yield 而不必走 message.part.delta 的 partID 補拉。yieldedToolCallIDs
+          // 跨兩條路徑共享，避免重複 yield 同一個 tool。
 
-            if (!part) continue;
-
-            if (part.type === "text" && typeof part.text === "string") {
-              yield { type: "text", content: part.text };
-              continue;
+          if (type === "session.next.text.delta") {
+            const delta = props.delta;
+            if (typeof delta === "string" && delta.length > 0) {
+              yield { type: "text", content: delta };
             }
-
-            if (part.type === "reasoning" && typeof part.text === "string") {
-              yield { type: "thinking", content: part.text };
-              continue;
-            }
-
-            if (part.type === "tool") {
-              const state = part.state;
-              const callID = part.callID ?? "";
-              const toolName = part.tool ?? "";
-
-              if (state?.status === "running" || state?.status === "pending") {
-                yield {
-                  type: "tool_call_start",
-                  toolUseId: callID,
-                  toolName,
-                  input: (state.input as Record<string, unknown>) ?? {},
-                };
-                continue;
-              }
-
-              if (state?.status === "completed") {
-                yield {
-                  type: "tool_call_result",
-                  toolUseId: callID,
-                  toolName,
-                  output: state.output ?? "",
-                };
-                continue;
-              }
-            }
-
             continue;
           }
 
-          // session.idle → 補 tool call 後 turn_complete，結束 loop
-          // 新版 opencode SDK 在 streaming 階段只發 message.part.delta（field=text），
-          // 不發 message.part.updated 帶 ToolPart，所以 tool 呼叫資訊只能透過拉完整 messages 取得。
-          // 在 idle 時呼叫 session.messages，把本 turn 出現過的 messageID 對應的 ToolPart 補成
-          // tool_call_start + tool_call_result yield 出去，前端才能顯示 tool tag。
+          if (type === "session.next.reasoning.delta") {
+            const delta = props.delta;
+            if (typeof delta === "string" && delta.length > 0) {
+              yield { type: "thinking", content: delta };
+            }
+            continue;
+          }
+
+          if (type === "session.next.tool.called") {
+            const callID = props.callID as string | undefined;
+            const toolName = props.tool as string | undefined;
+            const input = (props.input as Record<string, unknown>) ?? {};
+
+            if (callID && toolName) {
+              pendingToolCalls.set(callID, { toolName, input });
+              yieldedToolCallIDs.add(callID);
+              yield {
+                type: "tool_call_start",
+                toolUseId: callID,
+                toolName,
+                input,
+              };
+            }
+            continue;
+          }
+
+          if (type === "session.next.tool.success") {
+            const callID = props.callID as string | undefined;
+            const content = props.content as
+              | ReadonlyArray<{
+                  type: string;
+                  text?: string;
+                  uri?: string;
+                  mime?: string;
+                  name?: string;
+                }>
+              | undefined;
+
+            if (callID) {
+              const pending = pendingToolCalls.get(callID);
+              const toolName = pending?.toolName ?? "";
+              pendingToolCalls.delete(callID);
+
+              const output = content
+                ? serializeV2ToolSuccessContent(
+                    content as ReadonlyArray<
+                      | { type: "text"; text: string }
+                      | {
+                          type: "file";
+                          uri: string;
+                          mime: string;
+                          name?: string;
+                        }
+                    >,
+                  )
+                : "";
+
+              yield {
+                type: "tool_call_result",
+                toolUseId: callID,
+                toolName,
+                output,
+              };
+            }
+            continue;
+          }
+
+          if (type === "session.next.tool.failed") {
+            const callID = props.callID as string | undefined;
+            const error = props.error;
+
+            if (callID) {
+              const pending = pendingToolCalls.get(callID);
+              const toolName = pending?.toolName ?? "";
+              pendingToolCalls.delete(callID);
+
+              yield {
+                type: "tool_call_result",
+                toolUseId: callID,
+                toolName,
+                output: serializeV2ToolFailureError(error),
+              };
+            }
+            continue;
+          }
+
+          // session.next.step.failed → 步驟失敗（模型層錯誤，非工具錯誤）
+          // 與 session.error 不同：step.failed 是單一 step 的錯誤，session 可能繼續
+          if (type === "session.next.step.failed") {
+            const stepError = props.error as
+              | { type?: string; message?: string }
+              | undefined;
+            const rawMessage = stepError?.message ?? "未知錯誤";
+            yield classifySessionError(rawMessage, options.providerID);
+            break;
+          }
+
+          // session.idle → turn 結束。先補拉最後一段 tool（最後一輪 tool 之後
+          // 沒有再跟著 text 的情境，沒有後續 partID 切換可觸發），再 yield turn_complete。
           if (type === "session.idle") {
-            yield* yieldToolPartsForTurn(
+            yield* yieldPendingToolParts(
               client,
               sessionId,
               workspacePath,
               currentMessageIds,
+              yieldedToolCallIDs,
             );
             yield { type: "turn_complete" };
             break;
@@ -946,7 +1240,8 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
             break;
           }
 
-          // 其他 event 忽略
+          // 其他事件忽略（session.status / session.diff / message.part.updated /
+          // session.next.* 等本 binary 不用或未發送的事件）。
         }
       } finally {
         abortSignal.removeEventListener("abort", doAbort);

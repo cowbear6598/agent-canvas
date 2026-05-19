@@ -1,0 +1,60 @@
+feature: opencode-v2-chat-parity
+approved: true
+scenarios:
+  - id: F1
+    scenario: 使用者在 opencode Pod 中收到需要工具協助的回覆
+    given:
+      - 使用者在 opencode Pod 的對話視窗
+      - opencode Pod 可以正常回應
+    when:
+      - 送出一個需要工具協助的請求
+    then:
+      - 回覆內容逐段顯示
+      - 工具使用過程與文字說明分開顯示
+      - 不會把整輪內容全部擠在同一個 bubble
+
+  - id: F2
+    scenario: 使用者收到穿插多段文字與多次工具操作的 opencode 回覆
+    given:
+      - 使用者在 opencode Pod 的對話視窗
+      - 這次回覆會包含多段說明
+      - 這次回覆會使用多個工具
+    when:
+      - 等待這輪回覆完成
+    then:
+      - 每一段文字與對應的工具資訊保持可分辨
+      - 完成後的對話排列方式接近 Claude 與 Codex
+      - 使用者可以回看每次工具輸出
+
+  - id: F3
+    scenario: 使用者查看 opencode run 的對話紀錄
+    given:
+      - 使用者曾經觸發 opencode 的 run
+      - 該 run 已完成
+    when:
+      - 打開 run history 並查看對話內容
+    then:
+      - run transcript 中的文字與工具資訊分開顯示
+      - 不會只剩下一個過大的 assistant bubble
+
+  - id: F4
+    scenario: 使用者延續既有的 opencode 對話
+    given:
+      - 使用者先前已經和 opencode Pod 對話過
+      - 使用者回到同一個對話繼續提問
+    when:
+      - 送出新的請求
+    then:
+      - 新一輪回覆仍沿用相同的分段顯示方式
+      - 舊對話與新對話的顯示方式一致
+
+  - id: F5
+    scenario: 使用者在 opencode 尚未登入或服務不可用時送出請求
+    given:
+      - 使用者在 opencode Pod 的對話視窗
+      - opencode 目前尚未登入或服務不可用
+    when:
+      - 送出請求
+    then:
+      - 顯示明確的錯誤提示
+      - 不會出現卡住或混亂的對話內容

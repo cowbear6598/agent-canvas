@@ -330,7 +330,7 @@ describe("finalizeSubMessages", () => {
     expect(result![0]!.toolUse![0]!.status).toBe("completed");
   });
 
-  it("finalizeSubMessages 應合併空 content SubMessage 的 toolUse 到前一個 SubMessage", () => {
+  it("finalizeSubMessages v2 對齊：空 content + tool 的 SubMessage 應保留為獨立 segment", () => {
     const subMessages: SubMessage[] = [
       {
         id: "sub-0",
@@ -362,11 +362,15 @@ describe("finalizeSubMessages", () => {
 
     const result = finalizeSubMessages(subMessages);
 
-    expect(result).toHaveLength(1);
+    // v2 對齊 Claude / Codex：tool-only sub-message 不合併，保留為獨立 segment
+    expect(result).toHaveLength(2);
     expect(result![0]!.content).toBe("執行中");
-    expect(result![0]!.toolUse).toHaveLength(2);
-    expect(result![0]!.toolUse!.map((t) => t.toolUseId)).toContain("tool-1");
-    expect(result![0]!.toolUse!.map((t) => t.toolUseId)).toContain("tool-2");
+    expect(result![0]!.toolUse).toHaveLength(1);
+    expect(result![0]!.toolUse![0]!.toolUseId).toBe("tool-1");
+    expect(result![1]!.content).toBe("");
+    expect(result![1]!.toolUse).toHaveLength(1);
+    expect(result![1]!.toolUse![0]!.toolUseId).toBe("tool-2");
+    expect(result![1]!.toolUse![0]!.status).toBe("completed");
   });
 
   it("finalizeSubMessages 第一個 SubMessage 為空但有 tool 時應保留", () => {
@@ -615,6 +619,368 @@ describe("updateMainMessageState", () => {
 
     expect(result.content).toBe("新內容");
     expect(result.isPartial).toBe(false);
+  });
+});
+
+describe("finalizeSubMessages - text → tool → text 分段", () => {
+  it("text → tool-only → text：夾在中間的 tool segment 應保留為獨立 sub-message", () => {
+    // 模擬 opencode v2 典型輸出：說明文字 → 工具執行 → 結論文字
+    const subMessages: SubMessage[] = [
+      {
+        id: "sub-0",
+        content: "正在分析問題",
+        isPartial: false,
+        toolUse: [
+          {
+            toolUseId: "tool-1",
+            toolName: "bash",
+            status: "completed",
+            input: { command: "ls" },
+            output: "file.ts",
+          },
+        ],
+      },
+      {
+        id: "sub-1",
+        content: "",
+        isPartial: true,
+        toolUse: [
+          {
+            toolUseId: "tool-2",
+            toolName: "read_file",
+            status: "running",
+            input: { path: "file.ts" },
+          },
+        ],
+      },
+      {
+        id: "sub-2",
+        content: "分析完成，結論如下",
+        isPartial: true,
+      },
+    ];
+
+    const result = finalizeSubMessages(subMessages);
+
+    // 工具步驟夾在兩段文字之間，應保留為獨立 segment
+    expect(result).toHaveLength(3);
+    expect(result![0]!.content).toBe("正在分析問題");
+    expect(result![1]!.content).toBe("");
+    expect(result![1]!.toolUse).toHaveLength(1);
+    expect(result![1]!.toolUse![0]!.toolUseId).toBe("tool-2");
+    expect(result![2]!.content).toBe("分析完成，結論如下");
+  });
+
+  it("text → tool-only（無後續文字）：尾端 tool segment 應保留為獨立 segment", () => {
+    const subMessages: SubMessage[] = [
+      {
+        id: "sub-0",
+        content: "執行指令中",
+        isPartial: false,
+        toolUse: [
+          {
+            toolUseId: "tool-1",
+            toolName: "bash",
+            status: "completed",
+            input: {},
+          },
+        ],
+      },
+      {
+        id: "sub-1",
+        content: "",
+        isPartial: true,
+        toolUse: [
+          {
+            toolUseId: "tool-2",
+            toolName: "read_file",
+            status: "running",
+            input: {},
+          },
+        ],
+      },
+    ];
+
+    const result = finalizeSubMessages(subMessages);
+
+    // v2 對齊 Claude / Codex：尾端的 tool-only segment 不合併，保留為獨立 segment
+    expect(result).toHaveLength(2);
+    expect(result![0]!.content).toBe("執行指令中");
+    expect(result![0]!.toolUse).toHaveLength(1);
+    expect(result![0]!.toolUse![0]!.toolUseId).toBe("tool-1");
+    expect(result![1]!.content).toBe("");
+    expect(result![1]!.toolUse).toHaveLength(1);
+    expect(result![1]!.toolUse![0]!.toolUseId).toBe("tool-2");
+  });
+
+  it("多段 text → 多次 tool → text：每段保持可辨識的順序", () => {
+    const subMessages: SubMessage[] = [
+      {
+        id: "sub-0",
+        content: "第一段說明",
+        isPartial: false,
+      },
+      {
+        id: "sub-1",
+        content: "",
+        isPartial: false,
+        toolUse: [
+          {
+            toolUseId: "tool-1",
+            toolName: "bash",
+            status: "completed",
+            input: {},
+            output: "output-1",
+          },
+        ],
+      },
+      {
+        id: "sub-2",
+        content: "第二段說明",
+        isPartial: false,
+      },
+      {
+        id: "sub-3",
+        content: "",
+        isPartial: true,
+        toolUse: [
+          {
+            toolUseId: "tool-2",
+            toolName: "write_file",
+            status: "running",
+            input: {},
+          },
+        ],
+      },
+      {
+        id: "sub-4",
+        content: "第三段說明",
+        isPartial: true,
+      },
+    ];
+
+    const result = finalizeSubMessages(subMessages);
+
+    // 每個工具步驟都夾在文字之間，全部保留為獨立 segment
+    expect(result).toHaveLength(5);
+    expect(result![0]!.content).toBe("第一段說明");
+    expect(result![1]!.content).toBe("");
+    expect(result![1]!.toolUse![0]!.toolUseId).toBe("tool-1");
+    expect(result![2]!.content).toBe("第二段說明");
+    expect(result![3]!.content).toBe("");
+    expect(result![3]!.toolUse![0]!.toolUseId).toBe("tool-2");
+    expect(result![4]!.content).toBe("第三段說明");
+  });
+});
+
+describe("finalizeSubMessages - 連續多次工具", () => {
+  it("連續多個 tool-only sub-message 且後方有文字：每個都保留為獨立 segment", () => {
+    const subMessages: SubMessage[] = [
+      {
+        id: "sub-0",
+        content: "",
+        isPartial: false,
+        toolUse: [
+          {
+            toolUseId: "tool-1",
+            toolName: "bash",
+            status: "completed",
+            input: {},
+          },
+        ],
+      },
+      {
+        id: "sub-1",
+        content: "",
+        isPartial: false,
+        toolUse: [
+          {
+            toolUseId: "tool-2",
+            toolName: "read_file",
+            status: "completed",
+            input: {},
+          },
+        ],
+      },
+      {
+        id: "sub-2",
+        content: "工具執行完成",
+        isPartial: true,
+      },
+    ];
+
+    const result = finalizeSubMessages(subMessages);
+
+    // 兩個工具 segment 都夾在文字之前，均保留為獨立 segment
+    expect(result).toHaveLength(3);
+    expect(result![0]!.toolUse![0]!.toolUseId).toBe("tool-1");
+    expect(result![1]!.toolUse![0]!.toolUseId).toBe("tool-2");
+    expect(result![2]!.content).toBe("工具執行完成");
+  });
+
+  it("連續多個 tool-only sub-message 在尾端：每個都保留為獨立 segment", () => {
+    const subMessages: SubMessage[] = [
+      {
+        id: "sub-0",
+        content: "準備執行",
+        isPartial: false,
+      },
+      {
+        id: "sub-1",
+        content: "",
+        isPartial: false,
+        toolUse: [
+          {
+            toolUseId: "tool-1",
+            toolName: "bash",
+            status: "completed",
+            input: {},
+          },
+        ],
+      },
+      {
+        id: "sub-2",
+        content: "",
+        isPartial: true,
+        toolUse: [
+          {
+            toolUseId: "tool-2",
+            toolName: "write_file",
+            status: "running",
+            input: {},
+          },
+        ],
+      },
+    ];
+
+    const result = finalizeSubMessages(subMessages);
+
+    // v2 對齊 Claude / Codex：兩個尾端工具 segment 都保留為獨立 segment，不合併
+    expect(result).toHaveLength(3);
+    expect(result![0]!.content).toBe("準備執行");
+    expect(result![1]!.toolUse![0]!.toolUseId).toBe("tool-1");
+    expect(result![2]!.toolUse![0]!.toolUseId).toBe("tool-2");
+    expect(result![2]!.toolUse![0]!.status).toBe("completed");
+  });
+});
+
+describe("finalizeSubMessages - trailing tool-only segment 完成態", () => {
+  it("尾端 tool-only segment 的 running tool 應被標記為 completed（保留為獨立 segment）", () => {
+    const subMessages: SubMessage[] = [
+      {
+        id: "sub-0",
+        content: "說明文字",
+        isPartial: false,
+      },
+      {
+        id: "sub-1",
+        content: "",
+        isPartial: true,
+        toolUse: [
+          {
+            toolUseId: "tool-1",
+            toolName: "bash",
+            status: "running",
+            input: {},
+          },
+        ],
+      },
+    ];
+
+    const result = finalizeSubMessages(subMessages);
+
+    // v2：tool-only segment 保留為獨立 sub-message，其 running tool 應標記為 completed
+    expect(result).toHaveLength(2);
+    expect(result![0]!.content).toBe("說明文字");
+    const finalizedTool = result![1]!.toolUse!.find(
+      (t) => t.toolUseId === "tool-1",
+    );
+    expect(finalizedTool).toBeDefined();
+    expect(finalizedTool!.status).toBe("completed");
+    expect(result![1]!.isPartial).toBe(false);
+  });
+
+  it("尾端 tool-only segment 已是 completed 狀態：保留為獨立 segment 且保持 completed", () => {
+    const subMessages: SubMessage[] = [
+      {
+        id: "sub-0",
+        content: "說明文字",
+        isPartial: false,
+        toolUse: [
+          {
+            toolUseId: "tool-A",
+            toolName: "list",
+            status: "completed",
+            input: {},
+          },
+        ],
+      },
+      {
+        id: "sub-1",
+        content: "",
+        isPartial: false,
+        toolUse: [
+          {
+            toolUseId: "tool-B",
+            toolName: "bash",
+            status: "completed",
+            input: {},
+            output: "done",
+          },
+        ],
+      },
+    ];
+
+    const result = finalizeSubMessages(subMessages);
+
+    // v2：tool-only segment 保留為獨立 sub-message，completed tool 維持原狀
+    expect(result).toHaveLength(2);
+    expect(result![0]!.toolUse![0]!.toolUseId).toBe("tool-A");
+    const toolB = result![1]!.toolUse!.find((t) => t.toolUseId === "tool-B");
+    expect(toolB).toBeDefined();
+    expect(toolB!.status).toBe("completed");
+    expect(toolB!.output).toBe("done");
+  });
+
+  it("重複的 toolUseId 出現在不同 sub-message：兩個 segment 各自保留各自的 tool 副本", () => {
+    const subMessages: SubMessage[] = [
+      {
+        id: "sub-0",
+        content: "已有工具",
+        isPartial: false,
+        toolUse: [
+          {
+            toolUseId: "tool-dup",
+            toolName: "bash",
+            status: "completed",
+            input: {},
+          },
+        ],
+      },
+      {
+        id: "sub-1",
+        content: "",
+        isPartial: true,
+        toolUse: [
+          {
+            toolUseId: "tool-dup",
+            toolName: "bash",
+            status: "running",
+            input: {},
+          },
+        ],
+      },
+    ];
+
+    const result = finalizeSubMessages(subMessages);
+
+    // v2：不再合併 sub-message，因此重複的 toolUseId 是事件處理層的責任，
+    // finalize 階段只需保證每個 sub-message 內部結構正確、running tool 標記為 completed
+    expect(result).toHaveLength(2);
+    expect(result![0]!.toolUse![0]!.toolUseId).toBe("tool-dup");
+    expect(result![0]!.toolUse![0]!.status).toBe("completed");
+    expect(result![1]!.toolUse![0]!.toolUseId).toBe("tool-dup");
+    expect(result![1]!.toolUse![0]!.status).toBe("completed");
   });
 });
 

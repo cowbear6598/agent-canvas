@@ -1,0 +1,58 @@
+feature: opencode-v2-chat-parity
+side: frontend
+approved: true
+phases:
+  - id: P1
+    title: shared sub-message 分段語義
+    parallel: false
+    verification:
+      - bun run style
+      - bun run test:run
+    done: true
+    items:
+      - id: P1.A
+        title: chat 與 run 共用分段規則
+        tasks:
+          - id: P1.A.t1
+            text: 調整 assistant sub-message 完成態整理規則，讓明確的工具步驟在需要時可以保留為獨立 segment，而不是一律併回前一個 bubble
+            completed: true
+            last_files_changed:
+              - frontend/src/stores/chat/subMessageHelpers.ts
+          - id: P1.A.t2
+            text: 對齊 chat store、run store 與 run history rehydrate 的 segment 行為，確保 live chat、完成後 transcript 與 run modal 看到同一套分段結果
+            completed: true
+            last_files_changed:
+              - frontend/src/stores/chat/chatMessageActions.ts
+              - frontend/src/stores/run/runStoreHelpers.ts
+          - id: P1.A.t3
+            text: 檢查 tool tag 與後續文字共存的 bubble 規則，讓多段文字與多次工具操作的回覆在完成後仍能維持可辨識的閱讀順序
+            completed: true
+            last_files_changed:
+              - frontend/src/components/chat/ChatMessageBubble.vue
+
+  - id: P2
+    title: 前端回歸驗證
+    parallel: false
+    verification:
+      - bun run style
+      - bun run test:run
+    done: true
+    items:
+      - id: P2.A
+        title: store 與 helper regression
+        tasks:
+          - id: P2.A.t1
+            text: 補 `subMessageHelpers` 單元測試，覆蓋 text -> tool -> text、連續多次 tool、以及 trailing tool-only segment 的完成態，並使用真實 helper 邏輯而非 mock helper 自身
+            completed: true
+            last_files_changed:
+              - frontend/tests/stores/chat/subMessageHelpers.test.ts
+          - id: P2.A.t2
+            text: 補 chat store regression，使用 opencode v2 事件序列驅動訊息更新，確認 assistant 回覆會拆成多個 sub-message 而不是單一巨大 bubble
+            completed: true
+            last_files_changed:
+              - frontend/tests/stores/chat/opencodeV2ChatParity.test.ts
+          - id: P2.A.t3
+            text: 補 run store regression，確認 run modal 載入中的訊息與完成後的 transcript 會沿用同樣的分段結果，避免 chat 與 run 顯示不一致
+            completed: true
+            last_files_changed:
+              - frontend/tests/stores/run/opencodeV2RunParity.test.ts

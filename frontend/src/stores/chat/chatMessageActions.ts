@@ -21,6 +21,7 @@ import type { ChatStoreInstance } from "./chatStore";
 import {
   updateAssistantSubMessages,
   collectToolUseFromSubMessages,
+  finalizeSubMessages,
 } from "./subMessageHelpers";
 import { createToolTrackingActions } from "./toolTrackingActions";
 import { createMessageCompletionActions } from "./messageCompletionActions";
@@ -443,13 +444,21 @@ function createMessageHistoryActions(
       persistedMessage.subMessages,
     );
 
-    const result: Pick<Message, "subMessages" | "toolUse"> = {
-      subMessages: persistedMessage.subMessages.map((sub) => ({
+    const rawSubMessages: SubMessage[] = persistedMessage.subMessages.map(
+      (sub) => ({
         id: sub.id,
         content: sub.content,
         isPartial: false,
         toolUse: sub.toolUse ? convertPersistedToolUse(sub.toolUse) : undefined,
-      })),
+      }),
+    );
+
+    // 套用與 live 串流完成時相同的分段整理規則，確保 rehydrate 後的顯示結果一致
+    const finalizedSubMessages =
+      finalizeSubMessages(rawSubMessages) ?? rawSubMessages;
+
+    const result: Pick<Message, "subMessages" | "toolUse"> = {
+      subMessages: finalizedSubMessages,
     };
 
     if (allToolUse.length > 0) {

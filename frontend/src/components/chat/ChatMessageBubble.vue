@@ -198,7 +198,11 @@ const closeToolModal = (): void => {
           {{ systemReasonDetail }}
         </p>
 
-        <p class="font-mono text-sm whitespace-pre-wrap break-all">
+        <!-- content 為空（僅含工具標籤的 segment）時不渲染空段落 -->
+        <p
+          v-if="content.trim() !== '' || !hasToolUse"
+          class="font-mono text-sm whitespace-pre-wrap break-all"
+        >
           {{ content }}
         </p>
 

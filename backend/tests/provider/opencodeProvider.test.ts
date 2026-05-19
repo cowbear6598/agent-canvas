@@ -1,16 +1,19 @@
 /**
- * OpencodeProvider 單元測試
+ * OpencodeProvider 單元測試（SDK v2 主線）
  *
  * 對應 User Flow：
- *   - F7: 建立 opencode Pod 並開始對話 → session.create + chat + text event
- *   - F9: 未登入 provider → session.error 走 opencode_auth_missing
- *   - F10: 勾選 MCP server 子集 → tools 子集化
- *   - F11: 刪除正在跑 chat 的 Pod → abortSignal 觸發 session.abort
+ *   - F1: opencode Pod 收到需要工具協助的回覆 → text delta + tool called/success/failed
+ *   - F2: 穿插多段文字與多次工具操作 → 多筆 v2 事件序列
+ *   - F3: 查看 run 對話紀錄 → session.idle 後 turn_complete
+ *   - F4: 延續既有 opencode 對話 → resume session 不建立新 session
+ *   - F5: 未登入或服務不可用時送出請求 → auth_missing / server_unreachable 錯誤
  *
  * Mock 策略：
  *   - 使用 setOpencodeClientFactory / resetOpencodeClientFactory 注入假 client，
- *     只 mock 自己寫的 OpencodeClientPort interface，不 mock SDK 內部。
+ *     只 mock 自己定義的 OpencodeClientPort interface，不 mock SDK 內部實作。
  *   - 使用 setOpencodeServerStateFactory / resetOpencodeServerStateFactory 注入假 state。
+ *   - 使用 setOpencodeServerFactory / resetOpencodeServerFactory 注入假 transient server。
+ *   - v2 事件序列以 session.next.* 系列模擬，不使用 message.part.delta 舊版事件。
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -43,6 +46,8 @@ import {
   resetOpencodeServerFactory,
   setOpencodeServerStateFactory,
   resetOpencodeServerStateFactory,
+  serializeV2ToolSuccessContent,
+  serializeV2ToolFailureError,
 } from "../../src/services/provider/opencodeProvider.js";
 import type { ChatRequestContext } from "../../src/services/provider/types.js";
 import type { OpencodeOptions } from "../../src/services/provider/opencodeProvider.js";
@@ -75,14 +80,14 @@ async function collectEvents(
   return events;
 }
 
-/** 從事件陣列建立 SSE AsyncGenerator */
+/** 從事件陣列建立 SSE AsyncGenerator（v2 事件序列） */
 async function* eventsToStream(events: unknown[]): AsyncGenerator<unknown> {
   for (const event of events) {
     yield event;
   }
 }
 
-/** 建立基本 mock client */
+/** 建立基本 mock client（OpencodeClientPort 介面，v2 形狀） */
 function makeMockClient(
   overrides?: Partial<OpencodeClientPort>,
 ): OpencodeClientPort {
@@ -91,16 +96,18 @@ function makeMockClient(
     .mockResolvedValue({ data: { id: "mock-session-id" } });
   const defaultPrompt = vi.fn().mockResolvedValue({ data: {} });
   const defaultAbort = vi.fn().mockResolvedValue({ data: true });
+  const defaultMessages = vi.fn().mockResolvedValue({ data: [] });
   const defaultToolIds = vi.fn().mockResolvedValue({ data: [] });
   const defaultSubscribe = vi
     .fn()
     .mockResolvedValue({ stream: eventsToStream([]) });
 
-  return {
+  const base: OpencodeClientPort = {
     session: {
       create: defaultCreate,
       prompt: defaultPrompt,
       abort: defaultAbort,
+      messages: defaultMessages,
     },
     tool: {
       ids: defaultToolIds,
@@ -108,8 +115,27 @@ function makeMockClient(
     event: {
       subscribe: defaultSubscribe,
     },
+  };
+
+  if (!overrides) return base;
+
+  // session/tool/event 子物件做深合併，避免覆蓋未指定的預設值
+  return {
+    ...base,
     ...overrides,
-  } as OpencodeClientPort;
+    session: {
+      ...base.session,
+      ...overrides.session,
+    },
+    tool: {
+      ...base.tool,
+      ...overrides.tool,
+    },
+    event: {
+      ...base.event,
+      ...overrides.event,
+    },
+  };
 }
 
 /** 建立基本 ChatRequestContext */
@@ -188,6 +214,10 @@ afterEach(() => {
   removeGoalRuntimeRun("run-opencode-goal");
   vi.restoreAllMocks();
 });
+
+// ================================================================
+// buildOptions
+// ================================================================
 
 describe("buildOptions", () => {
   it("有 runContext 時應呼叫 buildPodMcpEntries 並把 entries 注入 options", async () => {
@@ -358,12 +388,10 @@ describe("buildOptions", () => {
 });
 
 // ================================================================
-// TASK P3.A.t8 測試案例
+// P3.A.t1 — 以 OpencodeClientPort、server state factory、transient server factory 為 mock 邊界
 // ================================================================
 
-// ── (1) resumeSessionId 為 null 時，第一個 yield 為 session_started ──
-
-describe("chat — (1) resumeSessionId=null → session_started 且 sessionId 等於 mocked session.create 回傳", () => {
+describe("chat — resumeSessionId=null → session_started 且 sessionId 等於 session.create 回傳", () => {
   it("chat 第一個 yield 應為 session_started 且 sessionId 來自 session.create", async () => {
     const mockSessionId = "new-session-abc";
     const mockClient = makeMockClient({
@@ -379,9 +407,6 @@ describe("chat — (1) resumeSessionId=null → session_started 且 sessionId �
           ]),
         }),
       },
-      tool: {
-        ids: vi.fn().mockResolvedValue({ data: [] }),
-      },
     });
 
     setOpencodeClientFactory(() => mockClient);
@@ -396,9 +421,1091 @@ describe("chat — (1) resumeSessionId=null → session_started 且 sessionId �
         .sessionId,
     ).toBe(mockSessionId);
   });
+
+  it("session.create 失敗時應 yield session 錯誤並停止", async () => {
+    const mockClient = makeMockClient({
+      session: {
+        create: vi
+          .fn()
+          .mockRejectedValue(new Error("connection refused to opencode")),
+        prompt: vi.fn().mockResolvedValue({ data: {} }),
+        abort: vi.fn().mockResolvedValue({ data: true }),
+      },
+    });
+
+    setOpencodeClientFactory(() => mockClient);
+
+    const ctx = makeCtx({ resumeSessionId: null });
+    const events = await collectEvents(opencodeProvider.chat(ctx));
+
+    // 連線失敗應回傳 server_unreachable 錯誤
+    expect(events).toHaveLength(1);
+    const errEvent = events[0] as Extract<NormalizedEvent, { type: "error" }>;
+    expect(errEvent.type).toBe("error");
+    expect(errEvent.code).toBe("opencode_server_unreachable");
+  });
+
+  it("session.create 回傳無 id 時應 yield session 建立失敗錯誤", async () => {
+    const mockClient = makeMockClient({
+      session: {
+        create: vi.fn().mockResolvedValue({ data: null }),
+        prompt: vi.fn().mockResolvedValue({ data: {} }),
+        abort: vi.fn().mockResolvedValue({ data: true }),
+      },
+    });
+
+    setOpencodeClientFactory(() => mockClient);
+
+    const ctx = makeCtx({ resumeSessionId: null });
+    const events = await collectEvents(opencodeProvider.chat(ctx));
+
+    expect(events).toHaveLength(1);
+    const errEvent = events[0] as Extract<NormalizedEvent, { type: "error" }>;
+    expect(errEvent.type).toBe("error");
+    expect(errEvent.code).toBe("opencode_session_failed");
+  });
 });
 
-describe("chat — Goal MCP transient server", () => {
+// ================================================================
+// P3.A.t2 — v2 專屬案例
+// ================================================================
+
+describe("chat — v2 session.next.text.delta → text event（F1: 逐段顯示文字）", () => {
+  it("session.next.text.delta 應 yield text event 帶 delta 內容", async () => {
+    const sessionId = "text-delta-session";
+    const mockClient = makeMockClient({
+      session: {
+        create: vi.fn().mockResolvedValue({ data: { id: sessionId } }),
+        prompt: vi.fn().mockResolvedValue({ data: {} }),
+        abort: vi.fn().mockResolvedValue({ data: true }),
+      },
+      event: {
+        subscribe: vi.fn().mockResolvedValue({
+          stream: eventsToStream([
+            {
+              type: "session.next.text.delta",
+              properties: { sessionID: sessionId, delta: "Hello, " },
+            },
+            {
+              type: "session.next.text.delta",
+              properties: { sessionID: sessionId, delta: "world!" },
+            },
+            {
+              type: "session.idle",
+              properties: { sessionID: sessionId },
+            },
+          ]),
+        }),
+      },
+    });
+
+    setOpencodeClientFactory(() => mockClient);
+
+    const events = await collectEvents(opencodeProvider.chat(makeCtx()));
+    const textEvents = events.filter((e) => e.type === "text");
+
+    expect(textEvents).toHaveLength(2);
+    expect(
+      (textEvents[0] as Extract<NormalizedEvent, { type: "text" }>).content,
+    ).toBe("Hello, ");
+    expect(
+      (textEvents[1] as Extract<NormalizedEvent, { type: "text" }>).content,
+    ).toBe("world!");
+  });
+
+  it("delta 為空字串時不應 yield text event", async () => {
+    const sessionId = "empty-delta-session";
+    const mockClient = makeMockClient({
+      session: {
+        create: vi.fn().mockResolvedValue({ data: { id: sessionId } }),
+        prompt: vi.fn().mockResolvedValue({ data: {} }),
+        abort: vi.fn().mockResolvedValue({ data: true }),
+      },
+      event: {
+        subscribe: vi.fn().mockResolvedValue({
+          stream: eventsToStream([
+            {
+              type: "session.next.text.delta",
+              properties: { sessionID: sessionId, delta: "" },
+            },
+            {
+              type: "session.idle",
+              properties: { sessionID: sessionId },
+            },
+          ]),
+        }),
+      },
+    });
+
+    setOpencodeClientFactory(() => mockClient);
+
+    const events = await collectEvents(opencodeProvider.chat(makeCtx()));
+    const textEvents = events.filter((e) => e.type === "text");
+    expect(textEvents).toHaveLength(0);
+  });
+});
+
+describe("chat — v2 session.next.reasoning.delta → thinking event", () => {
+  it("session.next.reasoning.delta 應 yield thinking event 帶 delta 內容", async () => {
+    const sessionId = "reasoning-session";
+    const mockClient = makeMockClient({
+      session: {
+        create: vi.fn().mockResolvedValue({ data: { id: sessionId } }),
+        prompt: vi.fn().mockResolvedValue({ data: {} }),
+        abort: vi.fn().mockResolvedValue({ data: true }),
+      },
+      event: {
+        subscribe: vi.fn().mockResolvedValue({
+          stream: eventsToStream([
+            {
+              type: "session.next.reasoning.delta",
+              properties: { sessionID: sessionId, delta: "Let me think..." },
+            },
+            {
+              type: "session.idle",
+              properties: { sessionID: sessionId },
+            },
+          ]),
+        }),
+      },
+    });
+
+    setOpencodeClientFactory(() => mockClient);
+
+    const events = await collectEvents(opencodeProvider.chat(makeCtx()));
+    const thinkingEvent = events.find((e) => e.type === "thinking");
+
+    expect(thinkingEvent).toBeDefined();
+    expect(
+      (thinkingEvent as Extract<NormalizedEvent, { type: "thinking" }>).content,
+    ).toBe("Let me think...");
+  });
+
+  it("reasoning delta 為空字串時不應 yield thinking event", async () => {
+    const sessionId = "empty-reasoning-session";
+    const mockClient = makeMockClient({
+      session: {
+        create: vi.fn().mockResolvedValue({ data: { id: sessionId } }),
+        prompt: vi.fn().mockResolvedValue({ data: {} }),
+        abort: vi.fn().mockResolvedValue({ data: true }),
+      },
+      event: {
+        subscribe: vi.fn().mockResolvedValue({
+          stream: eventsToStream([
+            {
+              type: "session.next.reasoning.delta",
+              properties: { sessionID: sessionId, delta: "" },
+            },
+            {
+              type: "session.idle",
+              properties: { sessionID: sessionId },
+            },
+          ]),
+        }),
+      },
+    });
+
+    setOpencodeClientFactory(() => mockClient);
+
+    const events = await collectEvents(opencodeProvider.chat(makeCtx()));
+    const thinkingEvents = events.filter((e) => e.type === "thinking");
+    expect(thinkingEvents).toHaveLength(0);
+  });
+});
+
+describe("chat — v2 session.next.tool.called → tool_call_start event（F1: 工具與文字分開顯示）", () => {
+  it("session.next.tool.called 應 yield tool_call_start 帶 callID、toolName、input", async () => {
+    const sessionId = "tool-called-session";
+    const mockClient = makeMockClient({
+      session: {
+        create: vi.fn().mockResolvedValue({ data: { id: sessionId } }),
+        prompt: vi.fn().mockResolvedValue({ data: {} }),
+        abort: vi.fn().mockResolvedValue({ data: true }),
+      },
+      event: {
+        subscribe: vi.fn().mockResolvedValue({
+          stream: eventsToStream([
+            {
+              type: "session.next.tool.called",
+              properties: {
+                sessionID: sessionId,
+                callID: "call-001",
+                tool: "bash",
+                input: { command: "ls -la" },
+              },
+            },
+            {
+              type: "session.idle",
+              properties: { sessionID: sessionId },
+            },
+          ]),
+        }),
+      },
+    });
+
+    setOpencodeClientFactory(() => mockClient);
+
+    const events = await collectEvents(opencodeProvider.chat(makeCtx()));
+    const toolStartEvent = events.find((e) => e.type === "tool_call_start");
+
+    expect(toolStartEvent).toBeDefined();
+    const te = toolStartEvent as Extract<
+      NormalizedEvent,
+      { type: "tool_call_start" }
+    >;
+    expect(te.toolUseId).toBe("call-001");
+    expect(te.toolName).toBe("bash");
+    expect(te.input).toEqual({ command: "ls -la" });
+  });
+});
+
+describe("chat — v2 session.next.tool.success → tool_call_result event（F2: 工具輸出可回看）", () => {
+  it("tool.called → tool.success 序列應產出 tool_call_start + tool_call_result，並攜帶 toolName", async () => {
+    const sessionId = "tool-success-session";
+    const mockClient = makeMockClient({
+      session: {
+        create: vi.fn().mockResolvedValue({ data: { id: sessionId } }),
+        prompt: vi.fn().mockResolvedValue({ data: {} }),
+        abort: vi.fn().mockResolvedValue({ data: true }),
+      },
+      event: {
+        subscribe: vi.fn().mockResolvedValue({
+          stream: eventsToStream([
+            {
+              type: "session.next.tool.called",
+              properties: {
+                sessionID: sessionId,
+                callID: "call-002",
+                tool: "read_file",
+                input: { path: "/tmp/test.txt" },
+              },
+            },
+            {
+              type: "session.next.tool.success",
+              properties: {
+                sessionID: sessionId,
+                callID: "call-002",
+                content: [{ type: "text", text: "file content here" }],
+              },
+            },
+            {
+              type: "session.idle",
+              properties: { sessionID: sessionId },
+            },
+          ]),
+        }),
+      },
+    });
+
+    setOpencodeClientFactory(() => mockClient);
+
+    const events = await collectEvents(opencodeProvider.chat(makeCtx()));
+    const resultEvent = events.find((e) => e.type === "tool_call_result");
+
+    expect(resultEvent).toBeDefined();
+    const re = resultEvent as Extract<
+      NormalizedEvent,
+      { type: "tool_call_result" }
+    >;
+    expect(re.toolUseId).toBe("call-002");
+    expect(re.toolName).toBe("read_file");
+    expect(re.output).toBe("file content here");
+  });
+
+  it("tool.success 的 content 包含 file 型別時應格式化成 [file: <name> (<mime>)]", async () => {
+    const sessionId = "tool-file-session";
+    const mockClient = makeMockClient({
+      session: {
+        create: vi.fn().mockResolvedValue({ data: { id: sessionId } }),
+        prompt: vi.fn().mockResolvedValue({ data: {} }),
+        abort: vi.fn().mockResolvedValue({ data: true }),
+      },
+      event: {
+        subscribe: vi.fn().mockResolvedValue({
+          stream: eventsToStream([
+            {
+              type: "session.next.tool.called",
+              properties: {
+                sessionID: sessionId,
+                callID: "call-file",
+                tool: "screenshot",
+                input: {},
+              },
+            },
+            {
+              type: "session.next.tool.success",
+              properties: {
+                sessionID: sessionId,
+                callID: "call-file",
+                content: [
+                  {
+                    type: "file",
+                    uri: "file:///tmp/shot.png",
+                    mime: "image/png",
+                    name: "shot.png",
+                  },
+                ],
+              },
+            },
+            {
+              type: "session.idle",
+              properties: { sessionID: sessionId },
+            },
+          ]),
+        }),
+      },
+    });
+
+    setOpencodeClientFactory(() => mockClient);
+
+    const events = await collectEvents(opencodeProvider.chat(makeCtx()));
+    const resultEvent = events.find(
+      (e) => e.type === "tool_call_result",
+    ) as Extract<NormalizedEvent, { type: "tool_call_result" }>;
+
+    expect(resultEvent.output).toBe("[file: shot.png (image/png)]");
+  });
+});
+
+describe("chat — v2 session.next.tool.failed → tool_call_result event（帶 error 輸出）", () => {
+  it("tool.called → tool.failed 序列應產出 tool_call_start + tool_call_result，output 以 [Error] 開頭", async () => {
+    const sessionId = "tool-failed-session";
+    const mockClient = makeMockClient({
+      session: {
+        create: vi.fn().mockResolvedValue({ data: { id: sessionId } }),
+        prompt: vi.fn().mockResolvedValue({ data: {} }),
+        abort: vi.fn().mockResolvedValue({ data: true }),
+      },
+      event: {
+        subscribe: vi.fn().mockResolvedValue({
+          stream: eventsToStream([
+            {
+              type: "session.next.tool.called",
+              properties: {
+                sessionID: sessionId,
+                callID: "call-003",
+                tool: "bash",
+                input: { command: "rm -rf /" },
+              },
+            },
+            {
+              type: "session.next.tool.failed",
+              properties: {
+                sessionID: sessionId,
+                callID: "call-003",
+                error: { message: "Permission denied" },
+              },
+            },
+            {
+              type: "session.idle",
+              properties: { sessionID: sessionId },
+            },
+          ]),
+        }),
+      },
+    });
+
+    setOpencodeClientFactory(() => mockClient);
+
+    const events = await collectEvents(opencodeProvider.chat(makeCtx()));
+    const resultEvent = events.find(
+      (e) => e.type === "tool_call_result",
+    ) as Extract<NormalizedEvent, { type: "tool_call_result" }>;
+
+    expect(resultEvent).toBeDefined();
+    expect(resultEvent.toolUseId).toBe("call-003");
+    expect(resultEvent.toolName).toBe("bash");
+    expect(resultEvent.output).toBe("[Error] Permission denied");
+  });
+
+  it("tool.failed 沒有 error 訊息時應 fallback 到 '[Error] tool failed'", async () => {
+    const sessionId = "tool-failed-no-msg-session";
+    const mockClient = makeMockClient({
+      session: {
+        create: vi.fn().mockResolvedValue({ data: { id: sessionId } }),
+        prompt: vi.fn().mockResolvedValue({ data: {} }),
+        abort: vi.fn().mockResolvedValue({ data: true }),
+      },
+      event: {
+        subscribe: vi.fn().mockResolvedValue({
+          stream: eventsToStream([
+            {
+              type: "session.next.tool.called",
+              properties: {
+                sessionID: sessionId,
+                callID: "call-004",
+                tool: "read_file",
+                input: {},
+              },
+            },
+            {
+              type: "session.next.tool.failed",
+              properties: {
+                sessionID: sessionId,
+                callID: "call-004",
+                error: null,
+              },
+            },
+            {
+              type: "session.idle",
+              properties: { sessionID: sessionId },
+            },
+          ]),
+        }),
+      },
+    });
+
+    setOpencodeClientFactory(() => mockClient);
+
+    const events = await collectEvents(opencodeProvider.chat(makeCtx()));
+    const resultEvent = events.find(
+      (e) => e.type === "tool_call_result",
+    ) as Extract<NormalizedEvent, { type: "tool_call_result" }>;
+
+    expect(resultEvent.output).toBe("[Error] tool failed");
+  });
+});
+
+describe("chat — v2 resume session（F4: 延續既有對話）", () => {
+  it("resumeSessionId 非 null 時 session.create 不應被呼叫", async () => {
+    const createMock = vi.fn().mockResolvedValue({ data: { id: "new-id" } });
+    const mockClient = makeMockClient({
+      session: {
+        create: createMock,
+        prompt: vi.fn().mockResolvedValue({ data: {} }),
+        abort: vi.fn().mockResolvedValue({ data: true }),
+      },
+      event: {
+        subscribe: vi.fn().mockResolvedValue({
+          stream: eventsToStream([
+            {
+              type: "session.idle",
+              properties: { sessionID: "existing-session" },
+            },
+          ]),
+        }),
+      },
+    });
+
+    setOpencodeClientFactory(() => mockClient);
+
+    const ctx = makeCtx({ resumeSessionId: "existing-session" });
+    await collectEvents(opencodeProvider.chat(ctx));
+
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
+  it("resume session 時 session.prompt 使用的 sessionID 為既有 session", async () => {
+    const promptMock = vi.fn().mockResolvedValue({ data: {} });
+    const mockClient = makeMockClient({
+      session: {
+        create: vi.fn().mockResolvedValue({ data: { id: "new-id" } }),
+        prompt: promptMock,
+        abort: vi.fn().mockResolvedValue({ data: true }),
+      },
+      event: {
+        subscribe: vi.fn().mockResolvedValue({
+          stream: eventsToStream([
+            {
+              type: "session.idle",
+              properties: { sessionID: "resume-session-xyz" },
+            },
+          ]),
+        }),
+      },
+    });
+
+    setOpencodeClientFactory(() => mockClient);
+
+    const ctx = makeCtx({ resumeSessionId: "resume-session-xyz" });
+    await collectEvents(opencodeProvider.chat(ctx));
+
+    const promptArg = promptMock.mock.calls[0]?.[0] as { sessionID: string };
+    expect(promptArg?.sessionID).toBe("resume-session-xyz");
+  });
+
+  it("resume session 時不 yield session_started（沿用 session 不重新開始）", async () => {
+    const mockClient = makeMockClient({
+      event: {
+        subscribe: vi.fn().mockResolvedValue({
+          stream: eventsToStream([
+            {
+              type: "session.idle",
+              properties: { sessionID: "resume-session-abc" },
+            },
+          ]),
+        }),
+      },
+    });
+
+    setOpencodeClientFactory(() => mockClient);
+
+    const ctx = makeCtx({ resumeSessionId: "resume-session-abc" });
+    const events = await collectEvents(opencodeProvider.chat(ctx));
+
+    const sessionStartedEvents = events.filter(
+      (e) => e.type === "session_started",
+    );
+    expect(sessionStartedEvents).toHaveLength(0);
+  });
+
+  it("resume session 時 text delta 仍正常分段顯示（F4 驗證）", async () => {
+    const mockClient = makeMockClient({
+      event: {
+        subscribe: vi.fn().mockResolvedValue({
+          stream: eventsToStream([
+            {
+              type: "session.next.text.delta",
+              properties: {
+                sessionID: "resume-session-abc",
+                delta: "繼續輸出",
+              },
+            },
+            {
+              type: "session.idle",
+              properties: { sessionID: "resume-session-abc" },
+            },
+          ]),
+        }),
+      },
+    });
+
+    setOpencodeClientFactory(() => mockClient);
+
+    const ctx = makeCtx({ resumeSessionId: "resume-session-abc" });
+    const events = await collectEvents(opencodeProvider.chat(ctx));
+    const textEvent = events.find((e) => e.type === "text");
+
+    expect(textEvent).toBeDefined();
+    expect(
+      (textEvent as Extract<NormalizedEvent, { type: "text" }>).content,
+    ).toBe("繼續輸出");
+  });
+});
+
+describe("chat — v2 unrelated session 過濾（同 workspace 多 session 廣播）", () => {
+  it("屬於其他 sessionID 的事件應被忽略，不 yield 任何內容", async () => {
+    const mySessionId = "my-session-id";
+    const otherSessionId = "other-session-id";
+    const mockClient = makeMockClient({
+      session: {
+        create: vi.fn().mockResolvedValue({ data: { id: mySessionId } }),
+        prompt: vi.fn().mockResolvedValue({ data: {} }),
+        abort: vi.fn().mockResolvedValue({ data: true }),
+      },
+      event: {
+        subscribe: vi.fn().mockResolvedValue({
+          stream: eventsToStream([
+            // 屬於另一個 session 的文字事件，應被忽略
+            {
+              type: "session.next.text.delta",
+              properties: { sessionID: otherSessionId, delta: "不應顯示" },
+            },
+            // 屬於自己的 idle 事件
+            {
+              type: "session.idle",
+              properties: { sessionID: mySessionId },
+            },
+          ]),
+        }),
+      },
+    });
+
+    setOpencodeClientFactory(() => mockClient);
+
+    const events = await collectEvents(opencodeProvider.chat(makeCtx()));
+    const textEvents = events.filter((e) => e.type === "text");
+
+    expect(textEvents).toHaveLength(0);
+  });
+
+  it("自己 session 的事件應正常處理，其他 session 事件一起出現時不干擾", async () => {
+    const mySessionId = "my-session-002";
+    const otherSessionId = "other-session-002";
+    const mockClient = makeMockClient({
+      session: {
+        create: vi.fn().mockResolvedValue({ data: { id: mySessionId } }),
+        prompt: vi.fn().mockResolvedValue({ data: {} }),
+        abort: vi.fn().mockResolvedValue({ data: true }),
+      },
+      event: {
+        subscribe: vi.fn().mockResolvedValue({
+          stream: eventsToStream([
+            // 別人的事件
+            {
+              type: "session.next.text.delta",
+              properties: { sessionID: otherSessionId, delta: "他人的內容" },
+            },
+            // 自己的事件
+            {
+              type: "session.next.text.delta",
+              properties: { sessionID: mySessionId, delta: "我的內容" },
+            },
+            {
+              type: "session.idle",
+              properties: { sessionID: mySessionId },
+            },
+          ]),
+        }),
+      },
+    });
+
+    setOpencodeClientFactory(() => mockClient);
+
+    const events = await collectEvents(opencodeProvider.chat(makeCtx()));
+    const textEvents = events.filter((e) => e.type === "text");
+
+    expect(textEvents).toHaveLength(1);
+    expect(
+      (textEvents[0] as Extract<NormalizedEvent, { type: "text" }>).content,
+    ).toBe("我的內容");
+  });
+});
+
+describe("chat — v2 session.idle → turn_complete 並結束（F3: 對話紀錄顯示）", () => {
+  it("session.idle event 應 yield turn_complete", async () => {
+    const sessionId = "idle-session";
+    const mockClient = makeMockClient({
+      session: {
+        create: vi.fn().mockResolvedValue({ data: { id: sessionId } }),
+        prompt: vi.fn().mockResolvedValue({ data: {} }),
+        abort: vi.fn().mockResolvedValue({ data: true }),
+      },
+      event: {
+        subscribe: vi.fn().mockResolvedValue({
+          stream: eventsToStream([
+            {
+              type: "session.idle",
+              properties: { sessionID: sessionId },
+            },
+          ]),
+        }),
+      },
+    });
+
+    setOpencodeClientFactory(() => mockClient);
+
+    const events = await collectEvents(opencodeProvider.chat(makeCtx()));
+    const turnComplete = events.find((e) => e.type === "turn_complete");
+    expect(turnComplete).toBeDefined();
+  });
+
+  it("session.idle 後 generator 應結束（不產生更多事件）", async () => {
+    const sessionId = "idle-stop-session";
+    const mockClient = makeMockClient({
+      session: {
+        create: vi.fn().mockResolvedValue({ data: { id: sessionId } }),
+        prompt: vi.fn().mockResolvedValue({ data: {} }),
+        abort: vi.fn().mockResolvedValue({ data: true }),
+      },
+      event: {
+        subscribe: vi.fn().mockResolvedValue({
+          stream: eventsToStream([
+            {
+              type: "session.idle",
+              properties: { sessionID: sessionId },
+            },
+            // idle 後的事件不應被處理
+            {
+              type: "session.next.text.delta",
+              properties: { sessionID: sessionId, delta: "after idle" },
+            },
+          ]),
+        }),
+      },
+    });
+
+    setOpencodeClientFactory(() => mockClient);
+
+    const events = await collectEvents(opencodeProvider.chat(makeCtx()));
+    const textEvents = events.filter((e) => e.type === "text");
+    expect(textEvents).toHaveLength(0);
+  });
+});
+
+// ================================================================
+// P3.A.t3 — 回歸案例
+// ================================================================
+
+describe("chat — auth 缺失（F5: 未登入時顯示錯誤）", () => {
+  it("session.error 含 'No auth credentials found' 應 yield opencode_auth_missing", async () => {
+    const mockClient = makeMockClient({
+      event: {
+        subscribe: vi.fn().mockResolvedValue({
+          stream: eventsToStream([
+            {
+              type: "session.error",
+              properties: {
+                sessionID: "mock-session-id",
+                error: {
+                  name: "ProviderAuthError",
+                  data: { message: "No auth credentials found for provider" },
+                },
+              },
+            },
+          ]),
+        }),
+      },
+    });
+
+    setOpencodeClientFactory(() => mockClient);
+
+    const providerID = "anthropic";
+    const ctx = makeCtx({
+      options: {
+        providerID,
+        modelID: "claude-sonnet-4-5",
+        mcpEntries: [],
+        hasGoalRuntime: false,
+      },
+    });
+    const events = await collectEvents(opencodeProvider.chat(ctx));
+
+    const errorEvent = events.find((e) => e.type === "error");
+    expect(errorEvent).toBeDefined();
+    const ee = errorEvent as Extract<NormalizedEvent, { type: "error" }>;
+    expect(ee.code).toBe("opencode_auth_missing");
+    expect(ee.message).toContain(providerID);
+    expect(ee.message).toContain("opencode auth login");
+  });
+
+  it("session.error 含 'API key' 也應 yield opencode_auth_missing", async () => {
+    const mockClient = makeMockClient({
+      event: {
+        subscribe: vi.fn().mockResolvedValue({
+          stream: eventsToStream([
+            {
+              type: "session.error",
+              properties: {
+                sessionID: "mock-session-id",
+                error: {
+                  name: "APIError",
+                  data: { message: "Invalid API key provided" },
+                },
+              },
+            },
+          ]),
+        }),
+      },
+    });
+
+    setOpencodeClientFactory(() => mockClient);
+
+    const ctx = makeCtx({
+      options: {
+        providerID: "openai",
+        modelID: "gpt-4o",
+        mcpEntries: [],
+        hasGoalRuntime: false,
+      },
+    });
+    const events = await collectEvents(opencodeProvider.chat(ctx));
+
+    const errorEvent = events.find((e) => e.type === "error");
+    expect(
+      (errorEvent as Extract<NormalizedEvent, { type: "error" }>).code,
+    ).toBe("opencode_auth_missing");
+  });
+});
+
+describe("chat — server 不可用（F5: 服務不可用時顯示錯誤）", () => {
+  it("server state baseUrl=null 應 yield opencode_server_unreachable 並結束", async () => {
+    setOpencodeServerStateFactory(() => ({
+      baseUrl: null,
+      status: "failed",
+    }));
+
+    const ctx = makeCtx();
+    const events = await collectEvents(opencodeProvider.chat(ctx));
+
+    expect(events).toHaveLength(1);
+    const errEvent = events[0] as Extract<NormalizedEvent, { type: "error" }>;
+    expect(errEvent.type).toBe("error");
+    expect(errEvent.code).toBe("opencode_server_unreachable");
+  });
+
+  it("session.error 含 'connection refused' 應 yield opencode_server_unreachable", async () => {
+    const mockClient = makeMockClient({
+      event: {
+        subscribe: vi.fn().mockResolvedValue({
+          stream: eventsToStream([
+            {
+              type: "session.error",
+              properties: {
+                sessionID: "mock-session-id",
+                error: {
+                  name: "NetworkError",
+                  data: { message: "connection refused to 127.0.0.1:4096" },
+                },
+              },
+            },
+          ]),
+        }),
+      },
+    });
+
+    setOpencodeClientFactory(() => mockClient);
+
+    const events = await collectEvents(opencodeProvider.chat(makeCtx()));
+    const errorEvent = events.find((e) => e.type === "error") as Extract<
+      NormalizedEvent,
+      { type: "error" }
+    >;
+
+    expect(errorEvent.code).toBe("opencode_server_unreachable");
+    expect(errorEvent.fatal).toBe(true);
+  });
+
+  it("session.next.step.failed 應 yield session_failed 分類錯誤", async () => {
+    const sessionId = "step-failed-session";
+    const mockClient = makeMockClient({
+      session: {
+        create: vi.fn().mockResolvedValue({ data: { id: sessionId } }),
+        prompt: vi.fn().mockResolvedValue({ data: {} }),
+        abort: vi.fn().mockResolvedValue({ data: true }),
+      },
+      event: {
+        subscribe: vi.fn().mockResolvedValue({
+          stream: eventsToStream([
+            {
+              type: "session.next.step.failed",
+              properties: {
+                sessionID: sessionId,
+                error: { type: "ModelError", message: "模型發生未知錯誤" },
+              },
+            },
+          ]),
+        }),
+      },
+    });
+
+    setOpencodeClientFactory(() => mockClient);
+
+    const events = await collectEvents(opencodeProvider.chat(makeCtx()));
+    const errorEvent = events.find((e) => e.type === "error") as Extract<
+      NormalizedEvent,
+      { type: "error" }
+    >;
+
+    expect(errorEvent).toBeDefined();
+    expect(errorEvent.code).toBe("opencode_session_failed");
+  });
+});
+
+describe("chat — abort cleanup", () => {
+  it("abort 後 session.abort 應以正確 sessionID 被呼叫（v2 形狀）", async () => {
+    const mockSessionId = "abort-test-session";
+    const abortController = new AbortController();
+    const abortMock = vi.fn().mockResolvedValue({ data: true });
+
+    const mockClient = makeMockClient({
+      session: {
+        create: vi.fn().mockResolvedValue({ data: { id: mockSessionId } }),
+        prompt: vi.fn().mockResolvedValue({ data: {} }),
+        abort: abortMock,
+      },
+      event: {
+        subscribe: vi.fn().mockResolvedValue({
+          stream: (async function* () {
+            abortController.abort();
+            yield {
+              type: "session.idle",
+              properties: { sessionID: mockSessionId },
+            };
+          })(),
+        }),
+      },
+    });
+
+    setOpencodeClientFactory(() => mockClient);
+
+    const ctx = makeCtx({
+      resumeSessionId: null,
+      abortSignal: abortController.signal,
+    });
+
+    await collectEvents(opencodeProvider.chat(ctx));
+
+    expect(abortMock).toHaveBeenCalled();
+    // v2 SDK: abort 使用 sessionID 取代 path.id
+    const callArg = abortMock.mock.calls[0]?.[0] as { sessionID: string };
+    expect(callArg?.sessionID).toBe(mockSessionId);
+  });
+
+  it("abortSignal 已 abort 時，應立刻呼叫 session.abort", async () => {
+    const mockSessionId = "already-aborted-session";
+    const abortController = new AbortController();
+    abortController.abort(); // 先 abort
+
+    const abortMock = vi.fn().mockResolvedValue({ data: true });
+
+    const mockClient = makeMockClient({
+      session: {
+        create: vi.fn().mockResolvedValue({ data: { id: mockSessionId } }),
+        prompt: vi.fn().mockResolvedValue({ data: {} }),
+        abort: abortMock,
+      },
+      event: {
+        subscribe: vi.fn().mockResolvedValue({
+          stream: eventsToStream([
+            { type: "session.idle", properties: { sessionID: mockSessionId } },
+          ]),
+        }),
+      },
+    });
+
+    setOpencodeClientFactory(() => mockClient);
+
+    const ctx = makeCtx({
+      resumeSessionId: null,
+      abortSignal: abortController.signal,
+    });
+
+    await collectEvents(opencodeProvider.chat(ctx));
+
+    expect(abortMock).toHaveBeenCalled();
+  });
+
+  it("event.subscribe 失敗時應 yield session error 並停止", async () => {
+    const mockClient = makeMockClient({
+      session: {
+        create: vi
+          .fn()
+          .mockResolvedValue({ data: { id: "subscribe-fail-session" } }),
+        prompt: vi.fn().mockResolvedValue({ data: {} }),
+        abort: vi.fn().mockResolvedValue({ data: true }),
+      },
+      event: {
+        subscribe: vi
+          .fn()
+          .mockRejectedValue(new Error("fetch failed connecting to opencode")),
+      },
+    });
+
+    setOpencodeClientFactory(() => mockClient);
+
+    const events = await collectEvents(opencodeProvider.chat(makeCtx()));
+
+    expect(events).toHaveLength(2); // session_started + error
+    const errEvent = events.find((e) => e.type === "error") as Extract<
+      NormalizedEvent,
+      { type: "error" }
+    >;
+    expect(errEvent.code).toBe("opencode_server_unreachable");
+  });
+});
+
+describe("chat — Goal Runtime bootstrap prompt（新 session 第一輪注入）", () => {
+  it("有 Goal MCP 時 session.prompt 的 parts[0].text 應含 bootstrap 指示", async () => {
+    const promptMock = vi.fn().mockResolvedValue({ data: {} });
+    const mockClient = makeMockClient({
+      session: {
+        create: vi.fn().mockResolvedValue({ data: { id: "goal-session-id" } }),
+        prompt: promptMock,
+        abort: vi.fn().mockResolvedValue({ data: true }),
+      },
+      event: {
+        subscribe: vi.fn().mockResolvedValue({
+          stream: eventsToStream([
+            {
+              type: "session.idle",
+              properties: { sessionID: "goal-session-id" },
+            },
+          ]),
+        }),
+      },
+    });
+    setOpencodeClientFactory(() => mockClient);
+
+    const ctx = makeCtx({
+      message: "go",
+      options: {
+        providerID: "anthropic",
+        modelID: "claude-sonnet-4-5",
+        mcpEntries: [
+          {
+            name: GOAL_MCP_SERVER_NAME,
+            transport: "stdio",
+            command: process.execPath,
+            args: ["/tmp/goalMcpBridge.ts"],
+            env: { AGENT_CANVAS_GOAL_STATE_PATH: "/tmp/goal-runtime.json" },
+            cwd: null,
+            proxied: false,
+          },
+        ],
+        hasGoalRuntime: true,
+      },
+    });
+
+    await collectEvents(opencodeProvider.chat(ctx));
+
+    // v2 SDK: prompt 使用平鋪參數形狀，parts 直接在頂層
+    const promptArg = promptMock.mock.calls[0]?.[0] as {
+      parts: Array<{ type: "text"; text: string }>;
+    };
+    expect(promptArg.parts[0]?.text).toContain("User request: go");
+    expect(promptArg.parts[0]?.text).toContain(
+      "Start by calling Goal Runtime to inspect the current status and active todo.",
+    );
+    expect(promptArg.parts[0]?.text).toContain(
+      "Then continue with the current active todo instead of asking for a new task.",
+    );
+  });
+
+  it("resume session 時不注入 Goal Runtime bootstrap prompt（避免覆蓋 nudge）", async () => {
+    const promptMock = vi.fn().mockResolvedValue({ data: {} });
+    const mockClient = makeMockClient({
+      session: {
+        create: vi.fn().mockResolvedValue({ data: { id: "resume-goal-id" } }),
+        prompt: promptMock,
+        abort: vi.fn().mockResolvedValue({ data: true }),
+      },
+      event: {
+        subscribe: vi.fn().mockResolvedValue({
+          stream: eventsToStream([
+            {
+              type: "session.idle",
+              properties: { sessionID: "resume-goal-id" },
+            },
+          ]),
+        }),
+      },
+    });
+    setOpencodeClientFactory(() => mockClient);
+
+    const ctx = makeCtx({
+      message: "continue",
+      resumeSessionId: "resume-goal-id",
+      options: {
+        providerID: "anthropic",
+        modelID: "claude-sonnet-4-5",
+        mcpEntries: [
+          {
+            name: GOAL_MCP_SERVER_NAME,
+            transport: "stdio",
+            command: process.execPath,
+            args: ["/tmp/goalMcpBridge.ts"],
+            env: { AGENT_CANVAS_GOAL_STATE_PATH: "/tmp/goal-runtime.json" },
+            cwd: null,
+            proxied: false,
+          },
+        ],
+        hasGoalRuntime: true,
+      },
+    });
+
+    await collectEvents(opencodeProvider.chat(ctx));
+
+    const promptArg = promptMock.mock.calls[0]?.[0] as {
+      parts: Array<{ type: "text"; text: string }>;
+    };
+    // resume 時應直接送出原始訊息，不含 bootstrap 指示
+    expect(promptArg.parts[0]?.text).toBe("continue");
+    expect(promptArg.parts[0]?.text).not.toContain("Goal Runtime");
+  });
+});
+
+describe("chat — managed MCP transient server 仍可運作", () => {
   it("有 Goal MCP 時應使用 transient server、port=0，並帶正確 local MCP config", async () => {
     const createServerMock = vi.fn().mockResolvedValue({
       url: "http://127.0.0.1:63314",
@@ -461,69 +1568,7 @@ describe("chat — Goal MCP transient server", () => {
     });
   });
 
-  it("有 Goal MCP 時應 bootstrap prompt，先要求模型讀取 Goal Runtime", async () => {
-    const promptMock = vi.fn().mockResolvedValue({ data: {} });
-    const mockClient = makeMockClient({
-      session: {
-        create: vi.fn().mockResolvedValue({ data: { id: "goal-session-id" } }),
-        prompt: promptMock,
-        abort: vi.fn().mockResolvedValue({ data: true }),
-      },
-      event: {
-        subscribe: vi.fn().mockResolvedValue({
-          stream: eventsToStream([
-            {
-              type: "session.idle",
-              properties: { sessionID: "goal-session-id" },
-            },
-          ]),
-        }),
-      },
-      tool: {
-        ids: vi.fn().mockResolvedValue({ data: [] }),
-      },
-    });
-    setOpencodeClientFactory(() => mockClient);
-
-    const ctx = makeCtx({
-      message: "go",
-      options: {
-        providerID: "anthropic",
-        modelID: "claude-sonnet-4-5",
-        mcpEntries: [
-          {
-            name: GOAL_MCP_SERVER_NAME,
-            transport: "stdio",
-            command: process.execPath,
-            args: ["/tmp/goalMcpBridge.ts"],
-            env: {
-              AGENT_CANVAS_GOAL_STATE_PATH: "/tmp/goal-runtime.json",
-            },
-            cwd: null,
-            proxied: false,
-          },
-        ],
-        hasGoalRuntime: true,
-      },
-    });
-
-    await collectEvents(opencodeProvider.chat(ctx));
-
-    const promptArg = promptMock.mock.calls[0]?.[0] as {
-      body: { parts: Array<{ type: "text"; text: string }> };
-    };
-    expect(promptArg.body.parts[0]?.text).toContain("User request: go");
-    expect(promptArg.body.parts[0]?.text).toContain(
-      "Start by calling Goal Runtime to inspect the current status and active todo.",
-    );
-    expect(promptArg.body.parts[0]?.text).toContain(
-      "Then continue with the current active todo instead of asking for a new task.",
-    );
-  });
-});
-
-describe("chat — managed MCP entries 注入 transient server", () => {
-  it("entries 非空時應建立 transient server，每筆 entry 都進 config.mcp 並不再過濾 tools", async () => {
+  it("entries 非空時應建立 transient server，stdio + remote entry 都進 config.mcp", async () => {
     const createServerMock = vi.fn().mockResolvedValue({
       url: "http://127.0.0.1:63315",
       close: vi.fn(),
@@ -531,9 +1576,6 @@ describe("chat — managed MCP entries 注入 transient server", () => {
     setOpencodeServerFactory(createServerMock as typeof createServerMock);
 
     const promptMock = vi.fn().mockResolvedValue({ data: {} });
-    const toolIdsMock = vi.fn().mockResolvedValue({
-      data: ["mcp__legacy-server__search_docs", "Read"],
-    });
     const mockClient = makeMockClient({
       session: {
         create: vi
@@ -541,9 +1583,6 @@ describe("chat — managed MCP entries 注入 transient server", () => {
           .mockResolvedValue({ data: { id: "entries-session-id" } }),
         prompt: promptMock,
         abort: vi.fn().mockResolvedValue({ data: true }),
-      },
-      tool: {
-        ids: toolIdsMock,
       },
       event: {
         subscribe: vi.fn().mockResolvedValue({
@@ -607,369 +1646,118 @@ describe("chat — managed MCP entries 注入 transient server", () => {
         },
       },
     });
-    // entries 非空時不再呼叫 tool.ids 做 subset
-    expect(toolIdsMock).not.toHaveBeenCalled();
+    // v2 SDK: prompt 使用平鋪參數，entries 非空時不送 tools subset
     expect(promptMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        body: expect.not.objectContaining({
-          tools: expect.anything(),
-        }),
+      expect.not.objectContaining({
+        tools: expect.anything(),
       }),
     );
   });
-});
 
-// ── (2) text part 流入時 yield text NormalizedEvent ──
+  it("transient server 建立失敗時應 yield opencode_server_unreachable 並停止", async () => {
+    const createServerMock = vi
+      .fn()
+      .mockRejectedValue(new Error("port already in use"));
+    setOpencodeServerFactory(createServerMock as typeof createServerMock);
 
-describe("chat — (2) text part 流入時 yield text event", () => {
-  it("message.part.updated 且 part.type=text 應 yield text event", async () => {
-    const mockClient = makeMockClient({
-      event: {
-        subscribe: vi.fn().mockResolvedValue({
-          stream: eventsToStream([
-            {
-              type: "message.part.updated",
-              properties: {
-                part: { type: "text", text: "hello from opencode" },
-              },
-            },
-            {
-              type: "session.idle",
-              properties: { sessionID: "mock-session-id" },
-            },
-          ]),
-        }),
-      },
-    });
-
-    setOpencodeClientFactory(() => mockClient);
-
-    const ctx = makeCtx();
-    const events = await collectEvents(opencodeProvider.chat(ctx));
-
-    const textEvent = events.find((e) => e.type === "text");
-    expect(textEvent).toBeDefined();
-    expect(
-      (textEvent as Extract<NormalizedEvent, { type: "text" }>).content,
-    ).toBe("hello from opencode");
-  });
-});
-
-// ── (3) tool start part 流入時 yield tool_call_start ──
-
-describe("chat — (3) tool start part 流入時 yield tool_call_start", () => {
-  it("message.part.updated 且 part.type=tool 且 state.status=running 應 yield tool_call_start", async () => {
-    const mockClient = makeMockClient({
-      event: {
-        subscribe: vi.fn().mockResolvedValue({
-          stream: eventsToStream([
-            {
-              type: "message.part.updated",
-              properties: {
-                part: {
-                  type: "tool",
-                  callID: "call-001",
-                  tool: "bash",
-                  state: {
-                    status: "running",
-                    input: { command: "ls" },
-                  },
-                },
-              },
-            },
-            {
-              type: "session.idle",
-              properties: { sessionID: "mock-session-id" },
-            },
-          ]),
-        }),
-      },
-    });
-
-    setOpencodeClientFactory(() => mockClient);
-
-    const ctx = makeCtx();
-    const events = await collectEvents(opencodeProvider.chat(ctx));
-
-    const toolStartEvent = events.find((e) => e.type === "tool_call_start");
-    expect(toolStartEvent).toBeDefined();
-    const te = toolStartEvent as Extract<
-      NormalizedEvent,
-      { type: "tool_call_start" }
-    >;
-    expect(te.toolUseId).toBe("call-001");
-    expect(te.toolName).toBe("bash");
-    expect(te.input).toEqual({ command: "ls" });
-  });
-});
-
-// ── (4) session.idle 流入時 yield turn_complete 並結束 ──
-
-describe("chat — (4) session.idle → yield turn_complete 並結束 generator", () => {
-  it("session.idle event 應 yield turn_complete", async () => {
-    const mockClient = makeMockClient({
-      event: {
-        subscribe: vi.fn().mockResolvedValue({
-          stream: eventsToStream([
-            {
-              type: "session.idle",
-              properties: { sessionID: "mock-session-id" },
-            },
-          ]),
-        }),
-      },
-    });
-
-    setOpencodeClientFactory(() => mockClient);
-
-    const ctx = makeCtx();
-    const events = await collectEvents(opencodeProvider.chat(ctx));
-
-    const turnComplete = events.find((e) => e.type === "turn_complete");
-    expect(turnComplete).toBeDefined();
-  });
-
-  it("session.idle 後 generator 應結束（不產生更多事件）", async () => {
-    const mockClient = makeMockClient({
-      event: {
-        subscribe: vi.fn().mockResolvedValue({
-          stream: eventsToStream([
-            {
-              type: "session.idle",
-              properties: { sessionID: "mock-session-id" },
-            },
-            // 下面這個不應該被處理
-            {
-              type: "message.part.updated",
-              properties: { part: { type: "text", text: "after idle" } },
-            },
-          ]),
-        }),
-      },
-    });
-
-    setOpencodeClientFactory(() => mockClient);
-
-    const ctx = makeCtx();
-    const events = await collectEvents(opencodeProvider.chat(ctx));
-
-    // 不應有 text event（因為 idle 後 break）
-    const textEvents = events.filter((e) => e.type === "text");
-    expect(textEvents).toHaveLength(0);
-  });
-});
-
-// ── (5) session.error 含 "No auth credentials found" → opencode_auth_missing ──
-
-describe("chat — (5) session.error 訊息含 auth 關鍵字 → opencode_auth_missing", () => {
-  it("session.error 含 'No auth credentials found' 應 yield error.code=opencode_auth_missing", async () => {
-    const mockClient = makeMockClient({
-      event: {
-        subscribe: vi.fn().mockResolvedValue({
-          stream: eventsToStream([
-            {
-              type: "session.error",
-              properties: {
-                sessionID: "mock-session-id",
-                error: {
-                  name: "ProviderAuthError",
-                  data: { message: "No auth credentials found for provider" },
-                },
-              },
-            },
-          ]),
-        }),
-      },
-    });
-
-    setOpencodeClientFactory(() => mockClient);
-
-    const providerID = "anthropic";
     const ctx = makeCtx({
       options: {
-        providerID,
+        providerID: "anthropic",
         modelID: "claude-sonnet-4-5",
-        mcpEntries: [],
-        hasGoalRuntime: false,
-      },
-    });
-    const events = await collectEvents(opencodeProvider.chat(ctx));
-
-    const errorEvent = events.find((e) => e.type === "error");
-    expect(errorEvent).toBeDefined();
-    const ee = errorEvent as Extract<NormalizedEvent, { type: "error" }>;
-    expect(ee.code).toBe("opencode_auth_missing");
-
-    // content 應包含 zh-TW 說明並內插 providerID
-    expect(ee.message).toContain(providerID);
-    expect(ee.message).toContain("opencode auth login");
-  });
-
-  it("session.error 含 'API key' 也應 yield opencode_auth_missing", async () => {
-    const mockClient = makeMockClient({
-      event: {
-        subscribe: vi.fn().mockResolvedValue({
-          stream: eventsToStream([
-            {
-              type: "session.error",
-              properties: {
-                sessionID: "mock-session-id",
-                error: {
-                  name: "APIError",
-                  data: { message: "Invalid API key provided" },
-                },
-              },
-            },
-          ]),
-        }),
+        mcpEntries: [
+          {
+            name: GOAL_MCP_SERVER_NAME,
+            transport: "stdio",
+            command: process.execPath,
+            args: ["/tmp/goalMcpBridge.ts"],
+            env: {},
+            cwd: null,
+            proxied: false,
+          },
+        ],
+        hasGoalRuntime: true,
       },
     });
 
-    setOpencodeClientFactory(() => mockClient);
-
-    const ctx = makeCtx({
-      options: {
-        providerID: "openai",
-        modelID: "gpt-4o",
-        mcpEntries: [],
-        hasGoalRuntime: false,
-      },
-    });
-    const events = await collectEvents(opencodeProvider.chat(ctx));
-
-    const errorEvent = events.find((e) => e.type === "error");
-    expect(
-      (errorEvent as Extract<NormalizedEvent, { type: "error" }>).code,
-    ).toBe("opencode_auth_missing");
-  });
-});
-
-// ── (6) abortSignal 觸發後 mocked client.session.abort 被呼叫 ──
-
-describe("chat — (6) abortSignal 觸發後 session.abort 被呼叫，path.id 等於 sessionId", () => {
-  it("abort 後 session.abort 應以正確 sessionId 被呼叫", async () => {
-    const mockSessionId = "abort-test-session";
-    const abortController = new AbortController();
-    const abortMock = vi.fn().mockResolvedValue({ data: true });
-
-    const mockClient = makeMockClient({
-      session: {
-        create: vi.fn().mockResolvedValue({ data: { id: mockSessionId } }),
-        prompt: vi.fn().mockResolvedValue({ data: {} }),
-        abort: abortMock,
-      },
-      event: {
-        subscribe: vi.fn().mockResolvedValue({
-          // stream 永不結束，讓 abortSignal 觸發
-          stream: (async function* () {
-            // 先讓 abort 觸發
-            abortController.abort();
-            // yield 一個 idle 讓 generator 正常結束
-            yield {
-              type: "session.idle",
-              properties: { sessionID: mockSessionId },
-            };
-          })(),
-        }),
-      },
-    });
-
-    setOpencodeClientFactory(() => mockClient);
-
-    const ctx = makeCtx({
-      resumeSessionId: null,
-      abortSignal: abortController.signal,
-    });
-
-    await collectEvents(opencodeProvider.chat(ctx));
-
-    expect(abortMock).toHaveBeenCalled();
-    const callArg = abortMock.mock.calls[0]?.[0] as { path: { id: string } };
-    expect(callArg?.path?.id).toBe(mockSessionId);
-  });
-
-  it("abortSignal 已 abort 時，應立刻呼叫 session.abort", async () => {
-    const mockSessionId = "already-aborted-session";
-    const abortController = new AbortController();
-    abortController.abort(); // 先 abort
-
-    const abortMock = vi.fn().mockResolvedValue({ data: true });
-
-    const mockClient = makeMockClient({
-      session: {
-        create: vi.fn().mockResolvedValue({ data: { id: mockSessionId } }),
-        prompt: vi.fn().mockResolvedValue({ data: {} }),
-        abort: abortMock,
-      },
-      event: {
-        subscribe: vi.fn().mockResolvedValue({
-          stream: eventsToStream([
-            { type: "session.idle", properties: { sessionID: mockSessionId } },
-          ]),
-        }),
-      },
-    });
-
-    setOpencodeClientFactory(() => mockClient);
-
-    const ctx = makeCtx({
-      resumeSessionId: null,
-      abortSignal: abortController.signal,
-    });
-
-    await collectEvents(opencodeProvider.chat(ctx));
-
-    expect(abortMock).toHaveBeenCalled();
-  });
-});
-
-// ── 額外：resumeSessionId 不為 null 時，直接沿用而不建立新 session ──
-
-describe("chat — resumeSessionId 不為 null → 沿用舊 session", () => {
-  it("resumeSessionId 非 null 時 session.create 不應被呼叫", async () => {
-    const createMock = vi.fn().mockResolvedValue({ data: { id: "new-id" } });
-    const mockClient = makeMockClient({
-      session: {
-        create: createMock,
-        prompt: vi.fn().mockResolvedValue({ data: {} }),
-        abort: vi.fn().mockResolvedValue({ data: true }),
-      },
-      event: {
-        subscribe: vi.fn().mockResolvedValue({
-          stream: eventsToStream([
-            {
-              type: "session.idle",
-              properties: { sessionID: "existing-session" },
-            },
-          ]),
-        }),
-      },
-    });
-
-    setOpencodeClientFactory(() => mockClient);
-
-    const ctx = makeCtx({ resumeSessionId: "existing-session" });
-    await collectEvents(opencodeProvider.chat(ctx));
-
-    expect(createMock).not.toHaveBeenCalled();
-  });
-});
-
-// ── 額外：server baseUrl 為 null 時立刻 yield opencode_server_unreachable ──
-
-describe("chat — server baseUrl 為 null → opencode_server_unreachable", () => {
-  it("server state baseUrl=null 應 yield opencode_server_unreachable 並結束", async () => {
-    setOpencodeServerStateFactory(() => ({
-      baseUrl: null,
-      status: "failed",
-    }));
-
-    const ctx = makeCtx();
     const events = await collectEvents(opencodeProvider.chat(ctx));
 
     expect(events).toHaveLength(1);
     const errEvent = events[0] as Extract<NormalizedEvent, { type: "error" }>;
     expect(errEvent.type).toBe("error");
     expect(errEvent.code).toBe("opencode_server_unreachable");
+  });
+});
+
+// ================================================================
+// serializeV2ToolSuccessContent helper 單元測試
+// ================================================================
+
+describe("serializeV2ToolSuccessContent", () => {
+  it("空陣列應回傳空字串", () => {
+    expect(serializeV2ToolSuccessContent([])).toBe("");
+  });
+
+  it("text 型別應直接取 .text 內容", () => {
+    expect(
+      serializeV2ToolSuccessContent([{ type: "text", text: "hello world" }]),
+    ).toBe("hello world");
+  });
+
+  it("多筆 text 型別應以換行串接", () => {
+    expect(
+      serializeV2ToolSuccessContent([
+        { type: "text", text: "line 1" },
+        { type: "text", text: "line 2" },
+      ]),
+    ).toBe("line 1\nline 2");
+  });
+
+  it("file 型別應格式化成 [file: <name> (<mime>)]", () => {
+    expect(
+      serializeV2ToolSuccessContent([
+        {
+          type: "file",
+          uri: "file:///tmp/image.png",
+          mime: "image/png",
+          name: "image.png",
+        },
+      ]),
+    ).toBe("[file: image.png (image/png)]");
+  });
+
+  it("file 型別沒有 name 時應使用 uri", () => {
+    expect(
+      serializeV2ToolSuccessContent([
+        {
+          type: "file",
+          uri: "file:///tmp/image.png",
+          mime: "image/png",
+        },
+      ]),
+    ).toBe("[file: file:///tmp/image.png (image/png)]");
+  });
+});
+
+// ================================================================
+// serializeV2ToolFailureError helper 單元測試
+// ================================================================
+
+describe("serializeV2ToolFailureError", () => {
+  it("error 為 null 時應回傳 '[Error] tool failed'", () => {
+    expect(serializeV2ToolFailureError(null)).toBe("[Error] tool failed");
+  });
+
+  it("error 為含 message 的物件時應回傳 '[Error] <message>'", () => {
+    expect(serializeV2ToolFailureError({ message: "Permission denied" })).toBe(
+      "[Error] Permission denied",
+    );
+  });
+
+  it("error 為字串時應回傳 '[Error] <string>'", () => {
+    expect(serializeV2ToolFailureError("timeout")).toBe("[Error] timeout");
+  });
+
+  it("error 為空字串時應 fallback 到 '[Error] tool failed'", () => {
+    expect(serializeV2ToolFailureError("")).toBe("[Error] tool failed");
   });
 });

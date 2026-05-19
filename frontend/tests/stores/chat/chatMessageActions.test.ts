@@ -342,7 +342,7 @@ describe("chatMessageActions", () => {
       expect(subMessages[0]!.isPartial).toBe(true);
     });
 
-    it("toolUse 觸發 flush 後，後續 delta 應累加到新的 subMessage", () => {
+    it("toolUse 觸發 flush 後，後續 delta 應另起新的文字 subMessage（不混進工具 bubble）", () => {
       const chatStore = useChatStore();
 
       chatStore.handleChatMessage({
@@ -352,7 +352,7 @@ describe("chatMessageActions", () => {
         isPartial: true,
       });
 
-      // toolUse 觸發 flush：建立新 subMessage
+      // toolUse 觸發 flush：建立工具 subMessage
       chatStore.handleChatToolUse({
         podId: "pod-1",
         messageId: "msg-1",
@@ -371,9 +371,14 @@ describe("chatMessageActions", () => {
       const updatedMessages = chatStore.messagesByPodId.get("pod-1");
       const subMessages = updatedMessages![0]!.subMessages!;
 
-      expect(subMessages).toHaveLength(2);
+      // 期望 3 個 sub-message：text → tool-only → text，工具 bubble 與文字 bubble 分開
+      expect(subMessages).toHaveLength(3);
       expect(subMessages[0]!.content).toBe("Block1");
-      expect(subMessages[1]!.content).toBe("Block2");
+      expect(subMessages[0]!.toolUse).toBeUndefined();
+      expect(subMessages[1]!.content).toBe("");
+      expect(subMessages[1]!.toolUse).toHaveLength(1);
+      expect(subMessages[2]!.content).toBe("Block2");
+      expect(subMessages[2]!.toolUse).toBeUndefined();
     });
 
     it("delta 應持續累加到最後一個 subMessage", () => {
@@ -655,7 +660,7 @@ describe("chatMessageActions", () => {
       });
     });
 
-    it("tool_use 後有文字的 SubMessage 再收到 tool_use 應 flush + 建新", () => {
+    it("Text → Tool → Text → Tool 序列應拆成獨立 sub-message（文字與工具各自獨立 bubble）", () => {
       const chatStore = useChatStore();
 
       // Text A → Sub[0] 有內容
@@ -675,15 +680,16 @@ describe("chatMessageActions", () => {
         input: { command: "ls" },
       });
 
-      // Text B → Sub[1] 有了內容
+      // Text B → 不混進 Sub[1]（tool-only segment），另起 Sub[2]
+      // content 是「累積後」的 full text，delta = content.slice(oldContent.length)
       chatStore.handleChatMessage({
         podId: "pod-1",
         messageId: "msg-1",
-        content: " Text B",
+        content: "Text A Text B",
         isPartial: true,
       });
 
-      // Tool2 → Sub[1] 有內容，應 flush + 建新 Sub[2]
+      // Tool2 → Sub[2] 有文字內容，再 flush + 建 Sub[3]
       chatStore.handleChatToolUse({
         podId: "pod-1",
         messageId: "msg-1",
@@ -695,13 +701,23 @@ describe("chatMessageActions", () => {
       const messages = chatStore.messagesByPodId.get("pod-1");
       const subMessages = messages![0]!.subMessages!;
 
-      expect(subMessages).toHaveLength(3);
+      // 期望 4 個 sub-message：textA → tool1 → textB → tool2
+      expect(subMessages).toHaveLength(4);
+      expect(subMessages[0]!.content).toBe("Text A");
+      expect(subMessages[0]!.toolUse).toBeUndefined();
+
+      expect(subMessages[1]!.content).toBe("");
       expect(subMessages[1]!.toolUse).toHaveLength(1);
       expect(subMessages[1]!.toolUse![0]).toMatchObject({
         toolUseId: "tool-1",
       });
-      expect(subMessages[2]!.toolUse).toHaveLength(1);
-      expect(subMessages[2]!.toolUse![0]).toMatchObject({
+
+      expect(subMessages[2]!.content).toBe(" Text B");
+      expect(subMessages[2]!.toolUse).toBeUndefined();
+
+      expect(subMessages[3]!.content).toBe("");
+      expect(subMessages[3]!.toolUse).toHaveLength(1);
+      expect(subMessages[3]!.toolUse![0]).toMatchObject({
         toolUseId: "tool-2",
       });
     });

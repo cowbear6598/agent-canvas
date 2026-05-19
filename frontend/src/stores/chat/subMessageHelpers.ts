@@ -66,14 +66,32 @@ function updateLastSubMessage(
   subMessages: SubMessage[],
   delta: string,
   isPartial: boolean,
+  messageId: string,
 ): SubMessage[] {
+  const lastSubIndex = subMessages.length - 1;
+  if (lastSubIndex < 0) return subMessages;
+
+  const lastSub = subMessages[lastSubIndex];
+  if (!lastSub) return subMessages;
+
+  // 上一個 sub-message 是工具步驟（有 toolUse 但 content 為空）時，
+  // 新進來的文字 delta 不應該擠進工具 bubble，而是另起一個文字 bubble。
+  // 對應後端 opencode v2 / partID 補拉路徑：tool → text 切換時的顯示分段。
+  const isToolOnlySegment =
+    (lastSub.toolUse?.length ?? 0) > 0 && lastSub.content === "";
+  if (isToolOnlySegment) {
+    return [
+      ...subMessages.slice(0, lastSubIndex),
+      { ...lastSub, isPartial: false },
+      {
+        id: `${messageId}-sub-${subMessages.length}`,
+        content: delta,
+        isPartial,
+      },
+    ];
+  }
+
   const updatedSubMessages = [...subMessages];
-  const lastSubIndex = updatedSubMessages.length - 1;
-  if (lastSubIndex < 0) return updatedSubMessages;
-
-  const lastSub = updatedSubMessages[lastSubIndex];
-  if (!lastSub) return updatedSubMessages;
-
   updatedSubMessages[lastSubIndex] = {
     ...lastSub,
     content: lastSub.content + delta,
@@ -94,6 +112,7 @@ export function updateAssistantSubMessages(
     existingMessage.subMessages,
     delta,
     isPartial,
+    existingMessage.id,
   );
   return { subMessages };
 }
@@ -179,30 +198,10 @@ function finalizeToolUseInSub(sub: SubMessage): SubMessage {
 }
 
 function mergeEmptySubMessages(subMessages: SubMessage[]): SubMessage[] {
-  // 將 content 為空的 SubMessage 的 toolUse 合併到前一個，避免渲染空氣泡
-  // 若該 SubMessage 已是第一個（沒有前一個可合併），則保留不動
-  const result: SubMessage[] = [];
-
-  for (const sub of subMessages) {
-    const isEmpty = sub.content.trim() === "";
-    const hasTool = sub.toolUse && sub.toolUse.length > 0;
-
-    if (isEmpty && hasTool && result.length > 0) {
-      const prev = result[result.length - 1]!;
-      const existingIds = new Set((prev.toolUse ?? []).map((t) => t.toolUseId));
-      const newTools = sub.toolUse!.filter(
-        (t) => !existingIds.has(t.toolUseId),
-      );
-      result[result.length - 1] = {
-        ...prev,
-        toolUse: [...(prev.toolUse ?? []), ...newTools],
-      };
-    } else {
-      result.push(sub);
-    }
-  }
-
-  return result;
+  // v2 對齊 Claude / Codex 顯示方式：所有 sub-message 都保留為獨立 segment，
+  // 包含 tool-only 步驟，讓使用者能清楚看到「文字 → 工具 → 文字」的分段。
+  // 不再把空 content + 有 tool 的 sub-message 合併回前一個 sub-message。
+  return subMessages;
 }
 
 export function finalizeSubMessages(

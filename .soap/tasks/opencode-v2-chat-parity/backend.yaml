@@ -1,0 +1,85 @@
+feature: opencode-v2-chat-parity
+side: backend
+approved: true
+phases:
+  - id: P1
+    title: SDK v2 Provider 邊界
+    parallel: false
+    verification: []
+    done: true
+    items:
+      - id: P1.A
+        title: opencode client 與 session 生命週期
+        tasks:
+          - id: P1.A.t1
+            text: 擴充 opencode provider 的 client boundary，讓測試用 port 能表達 SDK v2 的 event stream、session prompt 與 session messages 介面，同時保留現有 transient server 注入能力
+            completed: true
+            last_files_changed:
+              - backend/src/services/provider/opencodeProvider.ts
+              - backend/tests/provider/opencodeProvider.test.ts
+          - id: P1.A.t2
+            text: 調整 opencode provider 的 session 初始化流程，讓新對話建立 session、續聊沿用既有 session，並保留 Goal Runtime bootstrap prompt 只在第一輪注入的規則
+            completed: true
+            last_files_changed:
+              - backend/src/services/provider/opencodeProvider.ts
+              - backend/tests/provider/opencodeProvider.test.ts
+          - id: P1.A.t3
+            text: 建立 v2 tool output 序列化規則，將 tool success 與 tool failure 的內容統一整理成可寫入既有 transcript 的字串結果
+            completed: true
+            last_files_changed:
+              - backend/src/services/provider/opencodeProvider.ts
+
+  - id: P2
+    title: v2 串流事件映射
+    parallel: false
+    verification: []
+    done: true
+    items:
+      - id: P2.A
+        title: NormalizedEvent 映射與回合完成
+        tasks:
+          - id: P2.A.t1
+            text: 以 SDK v2 `session.next.*` 事件取代現有 v1 `message.part.delta` 與 `message.part.updated` 路徑，映射出 text、thinking、tool start、tool result 與 turn complete
+            completed: true
+            last_files_changed:
+              - backend/src/services/provider/opencodeProvider.ts
+          - id: P2.A.t2
+            text: 在 opencode provider 內加入 active session 過濾，忽略同一 workspace 內其他 session 的事件，避免錯把外部事件寫進目前對話
+            completed: true
+            last_files_changed:
+              - backend/src/services/provider/opencodeProvider.ts
+          - id: P2.A.t3
+            text: 保留既有的 opencode auth missing、server unreachable 與一般 session error 分類，並把 abort 流程接回 v2 session 路徑
+            completed: true
+            last_files_changed: []
+          - id: P2.A.t4
+            text: 移除 `session.idle` 後再補查 v1 tool parts 的 workaround，改由 v2 事件直接決定工具顯示時機，讓 chat 與 run transcript 在流中就能分段
+            completed: true
+            last_files_changed:
+              - backend/src/services/provider/opencodeProvider.ts
+
+  - id: P3
+    title: 後端回歸驗證
+    parallel: false
+    verification: []
+    done: true
+    items:
+      - id: P3.A
+        title: provider 單元測試與文件同步
+        tasks:
+          - id: P3.A.t1
+            text: 重寫 opencode provider 單元測試，使用 `OpencodeClientPort`、server state factory 與 transient server factory 作為 mock 邊界，不 mock streamingChatExecutor 或 SDK 內部 parser
+            completed: true
+            last_files_changed:
+              - backend/tests/provider/opencodeProvider.test.ts
+          - id: P3.A.t2
+            text: 補齊 v2 專屬案例，涵蓋 text delta、reasoning delta、tool called、tool success、tool failed、resume session、unrelated session 過濾與 session idle 完成
+            completed: true
+            last_files_changed:
+              - backend/tests/provider/opencodeProvider.test.ts
+          - id: P3.A.t3
+            text: 補齊 auth 缺失、server 不可用、abort cleanup、Goal Runtime bootstrap 與 managed MCP transient server 仍可運作的回歸案例，並同步更新 provider 註解說明目前改為 SDK v2 主線
+            completed: true
+            last_files_changed:
+              - backend/tests/provider/opencodeProvider.test.ts
+              - backend/src/services/provider/opencodeProvider.ts

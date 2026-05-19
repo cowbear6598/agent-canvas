@@ -1274,7 +1274,7 @@ describe("runStore", () => {
       expect(messages).toHaveLength(0);
     });
 
-    it("complete 時應對 subMessages 做 finalizeSubMessages 合併", () => {
+    it("complete 時應對 subMessages 做 finalizeSubMessages（v2：保留各 segment、running tool 標記為 completed）", () => {
       const store = useRunStore();
       setPodMessages(store, "run-1", "pod-1", [
         {
@@ -1314,13 +1314,12 @@ describe("runStore", () => {
       store.handleRunChatComplete("run-1", "pod-1", "msg-1", "完成");
 
       const message = getPodMessages(store, "run-1", "pod-1")?.[0];
-      expect(message?.subMessages).toHaveLength(1);
-      expect(message?.subMessages?.[0]?.toolUse).toHaveLength(2);
-      expect(
-        message?.subMessages?.[0]?.toolUse?.every(
-          (t) => t.status === "completed",
-        ),
-      ).toBe(true);
+      // v2 對齊 Claude / Codex：兩個 tool-only sub-message 各自保留為獨立 segment
+      expect(message?.subMessages).toHaveLength(2);
+      expect(message?.subMessages?.[0]?.toolUse?.[0]?.toolUseId).toBe("tool-1");
+      expect(message?.subMessages?.[0]?.toolUse?.[0]?.status).toBe("completed");
+      expect(message?.subMessages?.[1]?.toolUse?.[0]?.toolUseId).toBe("tool-2");
+      expect(message?.subMessages?.[1]?.toolUse?.[0]?.status).toBe("completed");
     });
 
     it("complete 時應正確設定 fullContent 和 isPartial", () => {
