@@ -11,7 +11,11 @@ import {
   type ManagedMcpTransport,
 } from "./managedMcpStore.js";
 
-const PROBE_TIMEOUT_MS = 5000;
+/**
+ * 15s — 對 npx / uvx cold start（首次下載套件）寬容；正常 warm 路徑通常 <1s。
+ * 不再壓到 5s 是因為實測 npx 首跑就會 timeout，造成 UX 上「設定看似錯誤」的誤判。
+ */
+const PROBE_TIMEOUT_MS = 15000;
 
 export interface ManagedMcpRuntimeSnapshot {
   name: string;

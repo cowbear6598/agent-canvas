@@ -15,7 +15,6 @@ import {
 import { managedMcpRuntimeService } from "../services/mcp/managedMcpRuntimeService.js";
 import { managedMcpAvailabilityService } from "../services/mcp/managedMcpAvailabilityService.js";
 import { podStore } from "../services/podStore.js";
-import { runStore } from "../services/runStore.js";
 import { socketService } from "../services/socketService.js";
 import { createI18nError } from "../utils/i18nError.js";
 import { emitError, emitNotFound } from "../utils/websocketResponse.js";
@@ -271,10 +270,14 @@ export async function handlePodMcpAvailabilityList(
 
 /**
  * handlePodSetMcpServerNames：設定指定 pod 的 MCP server 名稱清單。
+ *
  * - pod 不存在 → i18nError
- * - pod busy → 拒絕並 i18nError
  * - self-healing：依 managed registry 過濾掉不存在 / 不可選的 name
  * - 寫入並廣播 POD_MCP_SERVER_NAMES_UPDATED
+ *
+ * 不再拒絕 active run 中的 pod：per-MCP entry 架構下，每次 provider.buildOptions
+ * 會從 registry 重抓 pod.mcpServerNames，當下正在 stream 的 chat 仍鎖在 spawn 時的
+ * 快照（不會被影響），下一個 turn / 下一個 pod 自動套用新設定。
  */
 export async function handlePodSetMcpServerNames(
   connectionId: string,
@@ -302,20 +305,6 @@ export async function handlePodSetMcpServerNames(
       requestId,
       podId,
       "NOT_FOUND",
-    );
-    return;
-  }
-
-  // pod 有 active run 時拒絕變更
-  if (runStore.hasActiveRunForPod(podId)) {
-    emitError(
-      connectionId,
-      WebSocketResponseEvents.POD_MCP_SERVER_NAMES_UPDATED,
-      createI18nError("errors.podBusy", { id: podId }),
-      canvasId,
-      requestId,
-      podId,
-      "POD_BUSY",
     );
     return;
   }

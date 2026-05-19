@@ -35,7 +35,6 @@ import {
   type ProvisionedRunExecutionResources,
 } from "../runtime/runExecutionResources.js";
 import { removeGoalRuntimeRun } from "../goalRuntime.js";
-import { managedMcpSurfaceService } from "../mcp/managedMcpSurfaceService.js";
 import { cleanupOpencodeRunServers } from "../provider/opencodeProvider.js";
 
 const MAX_RUNS_PER_CANVAS = 30;
@@ -216,31 +215,8 @@ class RunExecutionService {
         continue;
       }
 
-      try {
-        await managedMcpSurfaceService.ensureSurface(runContext, pod);
-      } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : "建立 managed MCP surface 失敗";
-        logger.error(
-          "Run",
-          "Error",
-          `建立 managed MCP surface 失敗（runId=${workflowRun.id}, podId=${podId}）：${message}`,
-        );
-        const instance = runStore.createPodInstance(
-          workflowRun.id,
-          podId,
-          pathways.autoPathwaySettled,
-          pathways.directPathwaySettled,
-        );
-        runStore.updatePodInstanceStatus(instance.id, "error", message);
-        provisioningErrors.push({ podId, error: message });
-        instances.push(
-          runStore.getPodInstance(workflowRun.id, podId) ?? instance,
-        );
-        continue;
-      }
+      // managed MCP entries 由 provider.buildOptions 在實際 chat 啟動時各自取得，
+      // 不再 run pre-provisioning 階段建立 surface（每 pod 子程序 lifecycle 由 provider 管）。
 
       instances.push(
         runStore.createPodInstance(
@@ -690,9 +666,7 @@ class RunExecutionService {
    * 包含 per-Run MCP surface、repo clone、run sandbox home 與 Goal Runtime tmp 目錄。
    */
   private async cleanupRunResources(runId: string): Promise<void> {
-    // 先刪除 surface descriptor，再刪 Goal Runtime / repo / sandbox，
-    // 避免後續 bridge 或 provider retry 再讀到過期 state file。
-    await managedMcpSurfaceService.cleanupRunSurfaces(runId);
+    // managed MCP 子程序由各 provider 子程序 lifecycle 管，不需要 run 層級 cleanup。
     // 關閉本 Run 期間 opencode provider 建立的 transient server 快取；
     // 否則 transient server 會殘留到後端重啟。
     cleanupOpencodeRunServers(runId);

@@ -33,13 +33,10 @@ import { logger } from "../../utils/logger.js";
 import { sanitizePodName } from "./podNameSanitizer.js";
 import type { Pod } from "../../types/pod.js";
 import type { RunContext } from "../../types/run.js";
-import {
-  type GoalRuntimeMcpServerConfig,
-} from "../goalRuntime.js";
 import { readCodexMcpServers } from "../mcp/codexMcpReader.js";
 import {
   managedMcpSurfaceService,
-  type ManagedMcpSurfaceServerConfig,
+  type PodMcpEntry,
 } from "../mcp/managedMcpSurfaceService.js";
 import { buildCodexEnv, collectStderr } from "../codex/codexHelpers.js";
 import { isEnoentError } from "./utils.js";
@@ -55,14 +52,13 @@ export interface CodexOptions {
   resumeMode: "cli";
   /** 思考深度等級（thinkingLevel），對應 codex 的 model_reasoning_effort；未設定時不傳 -c 旗標 */
   thinkingLevel?: string;
-  /** Legacy MCP server name 清單，僅保留給非 run-scoped 過渡路徑 */
-  mcpServerNames: string[];
-  /** Legacy Goal MCP 設定，僅保留給非 managed surface 過渡路徑 */
-  goalMcpServer?: GoalRuntimeMcpServerConfig | null;
-  /** Run-scoped managed surface，provider runtime path 以此為 source of truth */
-  managedSurface?: ManagedMcpSurfaceServerConfig | null;
-  /** Goal Runtime 是否已併入 managed surface，用於 bootstrap prompt */
-  goalPromptEnabled?: boolean;
+  /**
+   * 要注入給 codex 的 managed MCP entries（含 Goal Runtime；run / chat 模式統一）。
+   * 每筆轉成 `-c mcp_servers.<name>.*` CLI args 餵給 codex CLI。
+   */
+  mcpEntries: PodMcpEntry[];
+  /** Goal Runtime 是否在 mcpEntries 內，用於決定是否注入 bootstrap prompt */
+  hasGoalRuntime: boolean;
 }
 
 /** 合法 resumeSessionId 格式（防止 CLI 旗標注入） */
@@ -252,41 +248,60 @@ function buildMcpAutoApproveArgs(serverNames: string[]): string[] {
   return result;
 }
 
-interface CodexRuntimeMcpConfig {
-  name: string;
-  command: string;
-  args: string[];
-  env: Record<string, string>;
-}
-
-function buildRuntimeMcpConfigArgs(
-  runtimeMcpServers: CodexRuntimeMcpConfig[],
-): string[] {
+/**
+ * 將 PodMcpEntry[] 轉成 codex CLI 的 `-c mcp_servers.<name>.*` 參數。
+ *
+ * - stdio entry：寫 command / args / env（codex toml 的 stdio MCP 形狀）
+ * - http entry：只寫 url（codex 透過 `url` 存在就判定 streamable HTTP transport，無 `type` 欄位）
+ * - sse entry：理論上不會走到此分支 — buildPodMcpEntries 已對 codex 不支援的 sse 包成
+ *   proxy bridge stdio entry。若仍進到這裡視為 invariant 破壞並跳過。
+ *
+ * 含 `.` 的 server name 會與 TOML path 語意衝突，直接 skip 並記錄 warn。
+ */
+function buildRuntimeMcpConfigArgs(entries: PodMcpEntry[]): string[] {
   const args: string[] = [];
 
-  for (const runtimeMcpServer of runtimeMcpServers) {
-    if (!MCP_AUTO_APPROVE_SAFE_NAME_RE.test(runtimeMcpServer.name)) {
+  for (const entry of entries) {
+    if (!MCP_AUTO_APPROVE_SAFE_NAME_RE.test(entry.name)) {
       logger.warn(
         "McpServer",
         "Warn",
-        `[CodexProvider] MCP server name 不合法，已略過動態注入：${runtimeMcpServer.name}`,
+        `[CodexProvider] MCP server name 不合法，已略過動態注入：${entry.name}`,
       );
       continue;
     }
 
-    args.push(
-      "-c",
-      `mcp_servers.${runtimeMcpServer.name}.command=${JSON.stringify(runtimeMcpServer.command)}`,
-      "-c",
-      `mcp_servers.${runtimeMcpServer.name}.args=${JSON.stringify(runtimeMcpServer.args)}`,
-    );
-
-    for (const [key, value] of Object.entries(runtimeMcpServer.env)) {
+    if (entry.transport === "stdio") {
       args.push(
         "-c",
-        `mcp_servers.${runtimeMcpServer.name}.env.${key}=${JSON.stringify(value)}`,
+        `mcp_servers.${entry.name}.command=${JSON.stringify(entry.command)}`,
+        "-c",
+        `mcp_servers.${entry.name}.args=${JSON.stringify(entry.args)}`,
       );
+
+      for (const [key, value] of Object.entries(entry.env)) {
+        args.push(
+          "-c",
+          `mcp_servers.${entry.name}.env.${key}=${JSON.stringify(value)}`,
+        );
+      }
+      continue;
     }
+
+    if (entry.transport === "http") {
+      // codex 依 `url` 欄位存在自動判定為 streamable HTTP，不需也不接受 `type` 欄位
+      args.push(
+        "-c",
+        `mcp_servers.${entry.name}.url=${JSON.stringify(entry.url)}`,
+      );
+      continue;
+    }
+
+    logger.warn(
+      "McpServer",
+      "Warn",
+      `[CodexProvider] 不應走到的 transport：${entry.name}（${(entry as { transport: string }).transport}）— 預期 buildPodMcpEntries 已透過 proxy bridge 包裝`,
+    );
   }
 
   return args;
@@ -343,21 +358,17 @@ function buildCodexArgs(
   options?: CodexOptions,
   thinkingLevel?: string,
 ): string[] {
-  const runtimeMcpServers = options?.managedSurface
-    ? [options.managedSurface]
-    : options?.goalMcpServer
-      ? [options.goalMcpServer]
-      : [];
-  const autoApproveServerNames = options?.managedSurface
-    ? [options.managedSurface.name]
-    : [
-        ...readCodexMcpServers().map((server) => server.name),
-        ...(options?.goalMcpServer ? [options.goalMcpServer.name] : []),
-      ];
+  const entries = options?.mcpEntries ?? [];
 
-  // MCP auto-approve 旗標只計算一次，兩條分支共用同一結果
+  // auto-approve 對象：codex 自己讀的 ~/.codex/config.toml MCPs + 我們注入的 entries。
+  // 兩邊合在一起確保 sandbox=WorkspaceWrite + approval_policy=Never 下所有 MCP tool 都不會卡 approval。
+  const autoApproveServerNames = [
+    ...readCodexMcpServers().map((server) => server.name),
+    ...entries.map((entry) => entry.name),
+  ];
+
   const mcpAutoApproveArgs = buildMcpAutoApproveArgs(autoApproveServerNames);
-  const runtimeMcpConfigArgs = buildRuntimeMcpConfigArgs(runtimeMcpServers);
+  const runtimeMcpConfigArgs = buildRuntimeMcpConfigArgs(entries);
 
   if (resumeSessionId) {
     if (!SESSION_ID_RE.test(resumeSessionId)) {
@@ -671,10 +682,8 @@ export class CodexProvider implements AgentProvider<CodexOptions> {
     defaultOptions: {
       model: "gpt-5.4",
       resumeMode: "cli",
-      mcpServerNames: [],
-      goalMcpServer: null,
-      managedSurface: null,
-      goalPromptEnabled: false,
+      mcpEntries: [],
+      hasGoalRuntime: false,
     },
     availableModels: CODEX_AVAILABLE_MODELS,
     availableModelValues: CODEX_AVAILABLE_MODEL_VALUES,
@@ -686,8 +695,8 @@ export class CodexProvider implements AgentProvider<CodexOptions> {
    * - 讀取 `pod.providerConfig?.model`：若為合法字串（通過 MODEL_RE 驗證）則使用之，
    *   否則回傳 metadata.defaultOptions.model。
    * - resumeMode 固定為 "cli"（Codex 目前只支援 CLI resume 路徑）。
-   * - Run 模式改由 managed surface 作為 MCP source of truth；
-   *   非 Run 模式保留 legacy 欄位作為過渡用途。
+   * - MCP entries 由 managedMcpSurfaceService.buildPodMcpEntries 統一組（run / chat 同邏輯，
+   *   差別在 run 模式才會含 Goal Runtime）。
    */
   async buildOptions(pod: Pod, runContext?: RunContext): Promise<CodexOptions> {
     const rawModel = pod.providerConfig?.model;
@@ -696,23 +705,18 @@ export class CodexProvider implements AgentProvider<CodexOptions> {
         ? rawModel
         : this.metadata.defaultOptions.model;
 
+    const { entries, hasGoalRuntime } =
+      await managedMcpSurfaceService.buildPodMcpEntries(
+        pod,
+        runContext ?? null,
+      );
+
     const result: CodexOptions = {
       model,
       resumeMode: "cli",
-      mcpServerNames: runContext ? [] : [...pod.mcpServerNames],
-      goalMcpServer: null,
-      managedSurface: null,
-      goalPromptEnabled: false,
+      mcpEntries: entries,
+      hasGoalRuntime,
     };
-
-    if (runContext) {
-      const surface = await managedMcpSurfaceService.ensureSurface(runContext, pod);
-      result.managedSurface = surface.mcpServer;
-      result.goalPromptEnabled = surface.hasGoalRuntime;
-      result.mcpServerNames = [surface.mcpServer.name];
-    } else {
-      result.goalMcpServer = null;
-    }
 
     // thinkingLevel 為非空字串時才寫入；不做格式驗證，由 CLI 端決定
     const rawThinkingLevel = pod.providerConfig?.thinkingLevel;
@@ -744,9 +748,7 @@ export class CodexProvider implements AgentProvider<CodexOptions> {
       options,
       options?.thinkingLevel,
     );
-    const goalRuntimeAvailable = options?.managedSurface
-      ? options.goalPromptEnabled !== false
-      : Boolean(options?.goalMcpServer);
+    const goalRuntimeAvailable = Boolean(options?.hasGoalRuntime);
     const promptText = buildCodexPromptText(
       message,
       goalRuntimeAvailable,
@@ -760,6 +762,9 @@ export class CodexProvider implements AgentProvider<CodexOptions> {
     ctx: ChatRequestContext<CodexOptions>,
   ): AsyncIterable<NormalizedEvent> {
     const { podId, podName, workspacePath, abortSignal, options } = ctx;
+
+    // Managed MCP 子程序由 codex CLI 自身依 -c mcp_servers.* 設定 spawn，
+    // chat / run session 結束時自然回收，不需要 provider 端額外管 lifecycle。
 
     // ── 準備執行（model 驗證 + CLI 參數 + prompt 轉換） ─────────────
     const execution = this.prepareExecution(ctx);

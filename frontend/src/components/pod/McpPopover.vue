@@ -293,7 +293,6 @@ const handleToggle = async (name: string, enabled: boolean): Promise<void> => {
               :name="server.name"
               :label="resolveServerLabel(server)"
               :transport="server.transport"
-              :status="server.status"
               :checked="isServerChecked(server)"
               :disabled="isServerDisabled(server)"
               :readonly="isSystemLockedServer(server)"

@@ -1,13 +1,11 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
-import type { PodProvider } from "@/types/pod";
 
 const props = defineProps<{
   podId: string;
   podRotation: number;
   activeCount: number;
-  provider: PodProvider;
   /** notch 是否禁用點擊（合併來源）：
    *  1) capability gate — 當前 provider 完全不支援 MCP
    *  2) 訊息鎖 — Pod 已有訊息，禁止再開啟 popover 變更 MCP
@@ -27,11 +25,9 @@ const handleClick = (event: MouseEvent): void => {
   emit("click", event);
 };
 
-/** Codex：不顯示數字（有就是啟用，數量點開 popover 看）；其他 provider：顯示使用者自選 MCP 數量 */
-const mcpLabel = computed(() =>
-  props.provider === "codex"
-    ? t("pod.slot.mcpLabel")
-    : `${t("pod.slot.mcpLabel")} (${props.activeCount})`,
+/** 顯示使用者自選 MCP 數量（managed MCP 後三個 provider 統一） */
+const mcpLabel = computed(
+  () => `${t("pod.slot.mcpLabel")} (${props.activeCount})`,
 );
 
 /**
@@ -46,14 +42,7 @@ const buttonStyle = computed(() => ({
 <template>
   <div class="pod-mcp-notch-area">
     <button
-      :class="[
-        'pod-mcp-slot',
-        provider === 'codex'
-          ? 'pod-mcp-slot--codex'
-          : activeCount > 0
-            ? 'pod-mcp-slot--active'
-            : '',
-      ]"
+      :class="['pod-mcp-slot', activeCount > 0 ? 'pod-mcp-slot--active' : '']"
       :style="buttonStyle"
       :aria-disabled="disabled || undefined"
       :title="disabled ? disabledTooltip : undefined"

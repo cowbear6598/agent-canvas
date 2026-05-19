@@ -193,15 +193,20 @@ describe("CodexProvider", () => {
       options: {
         model: "gpt-5.4",
         resumeMode: "cli",
-        mcpServerNames: ["agent_canvas_goal"],
-        goalMcpServer: {
-          name: "agent_canvas_goal",
-          command: process.execPath,
-          args: ["/tmp/goalMcpBridge.ts"],
-          env: {
-            AGENT_CANVAS_GOAL_STATE_PATH: "/tmp/goal-runtime.json",
+        mcpEntries: [
+          {
+            name: "agent_canvas_goal",
+            transport: "stdio",
+            command: process.execPath,
+            args: ["/tmp/goalMcpBridge.ts"],
+            env: {
+              AGENT_CANVAS_GOAL_STATE_PATH: "/tmp/goal-runtime.json",
+            },
+            cwd: null,
+            proxied: false,
           },
-        },
+        ],
+        hasGoalRuntime: true,
       },
     });
 
@@ -228,8 +233,8 @@ describe("CodexProvider", () => {
       options: {
         model: "gpt-5.4",
         resumeMode: "cli",
-        mcpServerNames: [],
-        goalMcpServer: null,
+        mcpEntries: [],
+        hasGoalRuntime: false,
       },
     });
 
@@ -238,46 +243,91 @@ describe("CodexProvider", () => {
     expect(mockProc.stdin.write).toHaveBeenCalledWith("fix the failing test");
   });
 
-  it("Codex 不再依賴 readCodexMcpServers 作為 run path source of truth", async () => {
+  it("Codex 把 mcpEntries 注入 -c mcp_servers.* 並仍對 ~/.codex/config.toml 的 MCP 加上 auto-approve", async () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
     vi.mocked(readCodexMcpServers).mockReturnValue([
       { name: "legacy-installed", type: "stdio" } as any,
     ]);
-    vi.mocked(readCodexMcpServers).mockClear();
 
     const provider = new CodexProvider();
     const ctx = makeCtx({
       options: {
         model: "gpt-5.4",
         resumeMode: "cli",
-        mcpServerNames: ["agent_canvas_managed_surface"],
-        goalMcpServer: null,
-        managedSurface: {
-          name: "agent_canvas_managed_surface",
-          command: process.execPath,
-          args: ["/tmp/managedMcpSurfaceBridge.ts"],
-          env: {
-            AGENT_CANVAS_MANAGED_MCP_SURFACE_PATH: "/tmp/managed-surface.json",
+        mcpEntries: [
+          {
+            name: "team-server",
+            transport: "stdio",
+            command: "node",
+            args: ["/tmp/team-server.js"],
+            env: {},
+            cwd: null,
+            proxied: false,
           },
-        },
-        goalPromptEnabled: true,
+        ],
+        hasGoalRuntime: false,
       },
     });
 
     await collectEvents(provider.chat(ctx));
 
-    expect(readCodexMcpServers).not.toHaveBeenCalled();
+    const [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
+    // 注入 entry 的 command / args
+    expect(spawnArgs).toContain(
+      `mcp_servers.team-server.command=${JSON.stringify("node")}`,
+    );
+    expect(spawnArgs).toContain(
+      `mcp_servers.team-server.args=${JSON.stringify(["/tmp/team-server.js"])}`,
+    );
+    // ~/.codex/config.toml 的 MCP 仍會被加 auto-approve
+    expect(spawnArgs).toContain(
+      `mcp_servers.legacy-installed.default_tools_approval_mode=approve`,
+    );
+    // 我們注入的 entry 也應該被加 auto-approve
+    expect(spawnArgs).toContain(
+      `mcp_servers.team-server.default_tools_approval_mode=approve`,
+    );
+  });
+
+  it("Codex http MCP entry 只注入 url（codex 透過 url 自動判定 transport，不需也不接受 type 欄位）", async () => {
+    const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
+    spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
+    vi.mocked(readCodexMcpServers).mockReturnValue([]);
+
+    const provider = new CodexProvider();
+    const ctx = makeCtx({
+      options: {
+        model: "gpt-5.4",
+        resumeMode: "cli",
+        mcpEntries: [
+          {
+            name: "remote-mcp",
+            transport: "http",
+            url: "https://example.com/mcp",
+          },
+        ],
+        hasGoalRuntime: false,
+      },
+    });
+
+    await collectEvents(provider.chat(ctx));
+
     const [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
     expect(spawnArgs).toContain(
-      `mcp_servers.agent_canvas_managed_surface.command=${JSON.stringify(process.execPath)}`,
+      `mcp_servers.remote-mcp.url=${JSON.stringify("https://example.com/mcp")}`,
     );
-    expect(spawnArgs).toContain(
-      `mcp_servers.agent_canvas_managed_surface.args=${JSON.stringify(["/tmp/managedMcpSurfaceBridge.ts"])}`,
-    );
-    expect(spawnArgs).not.toContain(
-      "mcp_servers.legacy-installed.default_tools_approval_mode=approve",
-    );
+    // 不應寫 type 欄位（codex 不支援、會被 TOML parser 拒）
+    expect(
+      spawnArgs.some((a) => a.startsWith("mcp_servers.remote-mcp.type=")),
+    ).toBe(false);
+    // http MCP 不該被當 stdio 寫 command / args
+    expect(
+      spawnArgs.some((a) => a.startsWith("mcp_servers.remote-mcp.command=")),
+    ).toBe(false);
+    expect(
+      spawnArgs.some((a) => a.startsWith("mcp_servers.remote-mcp.args=")),
+    ).toBe(false);
   });
 
   // ── Case 3：abortSignal 觸發後 subprocess.kill() 被呼叫 ───────────
@@ -595,15 +645,20 @@ describe("CodexProvider", () => {
       options: {
         model: "gpt-5.4",
         resumeMode: "cli",
-        mcpServerNames: ["agent_canvas_goal"],
-        goalMcpServer: {
-          name: "agent_canvas_goal",
-          command: process.execPath,
-          args: ["/tmp/goalMcpBridge.ts"],
-          env: {
-            AGENT_CANVAS_GOAL_STATE_PATH: "/tmp/goal-runtime.json",
+        mcpEntries: [
+          {
+            name: "agent_canvas_goal",
+            transport: "stdio",
+            command: process.execPath,
+            args: ["/tmp/goalMcpBridge.ts"],
+            env: {
+              AGENT_CANVAS_GOAL_STATE_PATH: "/tmp/goal-runtime.json",
+            },
+            cwd: null,
+            proxied: false,
           },
-        },
+        ],
+        hasGoalRuntime: true,
       },
     });
 

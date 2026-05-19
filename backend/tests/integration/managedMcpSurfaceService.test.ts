@@ -7,11 +7,7 @@ import {
   type McpProbe,
 } from "../../src/services/mcp/managedMcpRuntimeService.js";
 import { managedMcpStore } from "../../src/services/mcp/managedMcpStore.js";
-import {
-  createManagedMcpSurfaceService,
-  getManagedMcpSurfaceStatePath,
-  readManagedMcpSurfaceState,
-} from "../../src/services/mcp/managedMcpSurfaceService.js";
+import { createManagedMcpSurfaceService } from "../../src/services/mcp/managedMcpSurfaceService.js";
 import type { Pod } from "../../src/types/pod.js";
 import type { RunContext } from "../../src/types/run.js";
 
@@ -22,7 +18,7 @@ function createPod(
 ): Pick<Pod, "id" | "name" | "provider" | "goal" | "mcpServerNames"> {
   return {
     id: overrides.id ?? "pod-1",
-    name: overrides.name ?? "Managed Surface Pod",
+    name: overrides.name ?? "Pod Entries Test",
     provider: overrides.provider ?? "codex",
     goal: overrides.goal ?? null,
     mcpServerNames: overrides.mcpServerNames ?? [],
@@ -31,36 +27,283 @@ function createPod(
 
 function createRunContext(overrides: Partial<RunContext> = {}): RunContext {
   return {
-    runId: overrides.runId ?? "run-managed-surface-1",
-    canvasId: overrides.canvasId ?? "canvas-managed-surface-1",
+    runId: overrides.runId ?? "run-entries-1",
+    canvasId: overrides.canvasId ?? "canvas-entries-1",
     sourcePodId: overrides.sourcePodId ?? "pod-1",
   };
 }
 
-describe("ManagedMcpSurfaceService", () => {
+describe("ManagedMcpSurfaceService.buildPodMcpEntries", () => {
   beforeEach(() => {
     resetStatements();
     initTestDb();
   });
 
-  it("兩個 Pod 選不同 subset 時各自只看到自己的 MCP", async () => {
+  it("沒勾選 managed MCP + 無 runContext → 回空 entries / hasGoalRuntime=false", async () => {
+    const probe: McpProbe = { probe: vi.fn().mockResolvedValue(undefined) };
+    const runtimeService = createManagedMcpRuntimeService({
+      store: managedMcpStore,
+      probe,
+    });
+    const surfaceService = createManagedMcpSurfaceService({
+      store: managedMcpStore,
+      runtimeService,
+    });
+
+    const pod = createPod({ id: "pod-empty", mcpServerNames: [] });
+    const result = await surfaceService.buildPodMcpEntries(pod, null);
+
+    expect(result.entries).toEqual([]);
+    expect(result.hasGoalRuntime).toBe(false);
+    expect(result.ignoredTargets).toEqual([]);
+    expect(probe.probe).not.toHaveBeenCalled();
+  });
+
+  it("stdio target 注入為原生 stdio entry（無 proxy bridge 包裝）", async () => {
     managedMcpStore.save({
       name: "filesystem",
       transport: "stdio",
       command: "uvx",
       args: ["mcp-server-filesystem"],
+      env: { FS_ROOT: "/tmp" },
       enabled: true,
     });
-    managedMcpStore.save({
-      name: "context7",
+
+    const probe: McpProbe = { probe: vi.fn().mockResolvedValue(undefined) };
+    const runtimeService = createManagedMcpRuntimeService({
+      store: managedMcpStore,
+      probe,
+    });
+    const surfaceService = createManagedMcpSurfaceService({
+      store: managedMcpStore,
+      runtimeService,
+    });
+
+    const pod = createPod({
+      id: "pod-stdio",
+      provider: "claude",
+      mcpServerNames: ["filesystem"],
+    });
+    const result = await surfaceService.buildPodMcpEntries(pod, null);
+
+    expect(result.entries).toHaveLength(1);
+    expect(result.entries[0]).toMatchObject({
+      name: "filesystem",
       transport: "stdio",
       command: "uvx",
-      args: ["mcp-server-context7"],
+      args: ["mcp-server-filesystem"],
+      env: { FS_ROOT: "/tmp" },
+      proxied: false,
+    });
+  });
+
+  it("Claude pod 勾 http target → 包成 per-MCP proxy bridge stdio entry", async () => {
+    managedMcpStore.save({
+      name: "remote-mcp",
+      transport: "http",
+      url: "https://example.com/mcp",
+      enabled: true,
+    });
+
+    const probe: McpProbe = { probe: vi.fn().mockResolvedValue(undefined) };
+    const runtimeService = createManagedMcpRuntimeService({
+      store: managedMcpStore,
+      probe,
+    });
+    const surfaceService = createManagedMcpSurfaceService({
+      store: managedMcpStore,
+      runtimeService,
+    });
+
+    const pod = createPod({
+      id: "pod-claude-http",
+      provider: "claude",
+      mcpServerNames: ["remote-mcp"],
+    });
+    const result = await surfaceService.buildPodMcpEntries(pod, null);
+
+    expect(result.entries).toHaveLength(1);
+    const entry = result.entries[0];
+    expect(entry).toMatchObject({
+      name: "remote-mcp",
+      transport: "stdio",
+      proxied: true,
+      env: {
+        AGENT_CANVAS_MCP_PROXY_NAME: "remote-mcp",
+        AGENT_CANVAS_MCP_PROXY_TRANSPORT: "http",
+        AGENT_CANVAS_MCP_PROXY_URL: "https://example.com/mcp",
+      },
+    });
+    // bridge args 應指向 managedMcpProxyBridge.ts
+    if (entry?.transport === "stdio") {
+      expect(entry.args[0]).toContain("managedMcpProxyBridge");
+    }
+  });
+
+  it("Codex pod 勾 http target → 原生 http entry（不包 bridge）", async () => {
+    managedMcpStore.save({
+      name: "remote-mcp",
+      transport: "http",
+      url: "https://example.com/mcp",
+      enabled: true,
+    });
+
+    const probe: McpProbe = { probe: vi.fn().mockResolvedValue(undefined) };
+    const runtimeService = createManagedMcpRuntimeService({
+      store: managedMcpStore,
+      probe,
+    });
+    const surfaceService = createManagedMcpSurfaceService({
+      store: managedMcpStore,
+      runtimeService,
+    });
+
+    const pod = createPod({
+      id: "pod-codex-http",
+      provider: "codex",
+      mcpServerNames: ["remote-mcp"],
+    });
+    const result = await surfaceService.buildPodMcpEntries(pod, null);
+
+    expect(result.entries).toEqual([
+      {
+        name: "remote-mcp",
+        transport: "http",
+        url: "https://example.com/mcp",
+      },
+    ]);
+  });
+
+  it("Opencode pod 勾 sse target → 原生 sse entry（opencode 原生支援）", async () => {
+    managedMcpStore.save({
+      name: "remote-sse",
+      transport: "sse",
+      url: "https://example.com/sse",
+      enabled: true,
+    });
+
+    const probe: McpProbe = { probe: vi.fn().mockResolvedValue(undefined) };
+    const runtimeService = createManagedMcpRuntimeService({
+      store: managedMcpStore,
+      probe,
+    });
+    const surfaceService = createManagedMcpSurfaceService({
+      store: managedMcpStore,
+      runtimeService,
+    });
+
+    const pod = createPod({
+      id: "pod-opencode-sse",
+      provider: "opencode",
+      mcpServerNames: ["remote-sse"],
+    });
+    const result = await surfaceService.buildPodMcpEntries(pod, null);
+
+    expect(result.entries).toEqual([
+      {
+        name: "remote-sse",
+        transport: "sse",
+        url: "https://example.com/sse",
+      },
+    ]);
+  });
+
+  it("Codex pod 勾 sse target → codex 不原生支援，回退到 per-MCP proxy bridge", async () => {
+    managedMcpStore.save({
+      name: "remote-sse",
+      transport: "sse",
+      url: "https://example.com/sse",
+      enabled: true,
+    });
+
+    const probe: McpProbe = { probe: vi.fn().mockResolvedValue(undefined) };
+    const runtimeService = createManagedMcpRuntimeService({
+      store: managedMcpStore,
+      probe,
+    });
+    const surfaceService = createManagedMcpSurfaceService({
+      store: managedMcpStore,
+      runtimeService,
+    });
+
+    const pod = createPod({
+      id: "pod-codex-sse",
+      provider: "codex",
+      mcpServerNames: ["remote-sse"],
+    });
+    const result = await surfaceService.buildPodMcpEntries(pod, null);
+
+    expect(result.entries[0]).toMatchObject({
+      name: "remote-sse",
+      transport: "stdio",
+      proxied: true,
+      env: {
+        AGENT_CANVAS_MCP_PROXY_TRANSPORT: "sse",
+        AGENT_CANVAS_MCP_PROXY_URL: "https://example.com/sse",
+      },
+    });
+  });
+
+  it("Run 模式 + pod.goal 有 todos → entries 首位為 Goal Runtime、hasGoalRuntime=true", async () => {
+    managedMcpStore.save({
+      name: "team-server",
+      transport: "stdio",
+      command: "node",
+      args: ["server.js"],
+      enabled: true,
+    });
+
+    const probe: McpProbe = { probe: vi.fn().mockResolvedValue(undefined) };
+    const runtimeService = createManagedMcpRuntimeService({
+      store: managedMcpStore,
+      probe,
+    });
+    const surfaceService = createManagedMcpSurfaceService({
+      store: managedMcpStore,
+      runtimeService,
+    });
+
+    const pod = createPod({
+      id: "pod-with-goal",
+      provider: "claude",
+      mcpServerNames: ["team-server"],
+      goal: {
+        todos: [{ id: "todo-1", text: "Do a thing" }],
+      } as any,
+    });
+    const result = await surfaceService.buildPodMcpEntries(
+      pod,
+      createRunContext({ runId: "run-goal-1", sourcePodId: pod.id }),
+    );
+
+    expect(result.hasGoalRuntime).toBe(true);
+    expect(result.entries[0]?.name).toBe("agent_canvas_goal");
+    expect(result.entries[1]?.name).toBe("team-server");
+  });
+
+  it("registry 不存在 / disabled / runtime 不 healthy → 進 ignoredTargets 並附 reason", async () => {
+    managedMcpStore.save({
+      name: "disabled-server",
+      transport: "stdio",
+      command: "uvx",
+      args: [],
+      enabled: false,
+    });
+    managedMcpStore.save({
+      name: "broken-server",
+      transport: "stdio",
+      command: "uvx",
+      args: [],
       enabled: true,
     });
 
     const probe: McpProbe = {
-      probe: vi.fn().mockResolvedValue(undefined),
+      probe: vi.fn().mockImplementation((entry) => {
+        if (entry.name === "broken-server") {
+          return Promise.reject(new Error("connect timeout"));
+        }
+        return Promise.resolve(undefined);
+      }),
     };
     const runtimeService = createManagedMcpRuntimeService({
       store: managedMcpStore,
@@ -71,39 +314,25 @@ describe("ManagedMcpSurfaceService", () => {
       runtimeService,
     });
 
-    const runContext = createRunContext();
-    const podA = createPod({
-      id: "pod-a",
-      name: "Pod A",
-      mcpServerNames: ["filesystem"],
+    const pod = createPod({
+      id: "pod-ignored",
+      provider: "claude",
+      mcpServerNames: ["missing-server", "disabled-server", "broken-server"],
     });
-    const podB = createPod({
-      id: "pod-b",
-      name: "Pod B",
-      mcpServerNames: ["context7"],
-    });
+    const result = await surfaceService.buildPodMcpEntries(pod, null);
 
-    await surfaceService.ensureSurface(runContext, podA);
-    await surfaceService.ensureSurface(runContext, podB);
-
-    const stateA = await readManagedMcpSurfaceState(
-      getManagedMcpSurfaceStatePath(runContext, podA.id),
-    );
-    const stateB = await readManagedMcpSurfaceState(
-      getManagedMcpSurfaceStatePath(runContext, podB.id),
-    );
-
-    expect(stateA?.targets.map((target) => target.name)).toEqual([
-      "agent_canvas_goal",
-      "filesystem",
-    ]);
-    expect(stateB?.targets.map((target) => target.name)).toEqual([
-      "agent_canvas_goal",
-      "context7",
+    expect(result.entries).toEqual([]);
+    expect(result.ignoredTargets).toEqual([
+      { name: "missing-server", reason: "registry entry removed" },
+      { name: "disabled-server", reason: "registry entry disabled" },
+      expect.objectContaining({
+        name: "broken-server",
+        reason: expect.stringContaining("connect timeout"),
+      }),
     ]);
   });
 
-  it("registry 更新後下一次 run 會使用新 surface", async () => {
+  it("registry 更新後再呼叫 buildPodMcpEntries 應使用新設定（不快取）", async () => {
     const saved = managedMcpStore.save({
       name: "filesystem",
       transport: "stdio",
@@ -112,9 +341,7 @@ describe("ManagedMcpSurfaceService", () => {
       enabled: true,
     });
 
-    const probe: McpProbe = {
-      probe: vi.fn().mockResolvedValue(undefined),
-    };
+    const probe: McpProbe = { probe: vi.fn().mockResolvedValue(undefined) };
     const runtimeService = createManagedMcpRuntimeService({
       store: managedMcpStore,
       probe,
@@ -126,17 +353,15 @@ describe("ManagedMcpSurfaceService", () => {
 
     const pod = createPod({
       id: "pod-registry-update",
+      provider: "claude",
       mcpServerNames: ["filesystem"],
     });
-    const firstRun = createRunContext({
-      runId: "run-managed-surface-old",
-      sourcePodId: pod.id,
-    });
 
-    await surfaceService.ensureSurface(firstRun, pod);
-    const firstState = await readManagedMcpSurfaceState(
-      getManagedMcpSurfaceStatePath(firstRun, pod.id),
-    );
+    const first = await surfaceService.buildPodMcpEntries(pod, null);
+    expect(first.entries[0]).toMatchObject({
+      name: "filesystem",
+      command: "uvx",
+    });
 
     managedMcpStore.save({
       id: saved.id,
@@ -148,69 +373,11 @@ describe("ManagedMcpSurfaceService", () => {
     });
     await runtimeService.markConfigDirty("filesystem");
 
-    const secondRun = createRunContext({
-      runId: "run-managed-surface-new",
-      sourcePodId: pod.id,
+    const second = await surfaceService.buildPodMcpEntries(pod, null);
+    expect(second.entries[0]).toMatchObject({
+      name: "filesystem",
+      command: "node",
+      args: ["new-filesystem-server.js"],
     });
-    await surfaceService.ensureSurface(secondRun, pod);
-    const secondState = await readManagedMcpSurfaceState(
-      getManagedMcpSurfaceStatePath(secondRun, pod.id),
-    );
-
-    expect(
-      firstState?.targets.find((target) => target.name === "filesystem")
-        ?.command,
-    ).toBe("uvx");
-    expect(
-      secondState?.targets.find((target) => target.name === "filesystem")
-        ?.command,
-    ).toBe("node");
-    expect(
-      secondState?.targets.find((target) => target.name === "filesystem")?.args,
-    ).toEqual(["new-filesystem-server.js"]);
-  });
-
-  it("run 結束後 surface 被回收，已 probe 過的 entry 不會被重複 probe", async () => {
-    managedMcpStore.save({
-      name: "context7",
-      transport: "stdio",
-      command: "uvx",
-      args: ["mcp-server-context7"],
-      enabled: true,
-    });
-
-    const probe: McpProbe = {
-      probe: vi.fn().mockResolvedValue(undefined),
-    };
-    const runtimeService = createManagedMcpRuntimeService({
-      store: managedMcpStore,
-      probe,
-    });
-    const surfaceService = createManagedMcpSurfaceService({
-      store: managedMcpStore,
-      runtimeService,
-    });
-
-    const pod = createPod({
-      id: "pod-runtime-reuse",
-      mcpServerNames: ["context7"],
-    });
-    const firstRun = createRunContext({
-      runId: "run-surface-cleanup-1",
-      sourcePodId: pod.id,
-    });
-
-    const firstSurface = await surfaceService.ensureSurface(firstRun, pod);
-    await surfaceService.cleanupRunSurfaces(firstRun.runId);
-
-    expect(await readManagedMcpSurfaceState(firstSurface.statePath)).toBeNull();
-
-    const secondRun = createRunContext({
-      runId: "run-surface-cleanup-2",
-      sourcePodId: pod.id,
-    });
-    await surfaceService.ensureSurface(secondRun, pod);
-
-    expect(probe.probe).toHaveBeenCalledTimes(1);
   });
 });

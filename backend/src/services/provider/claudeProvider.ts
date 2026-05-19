@@ -74,6 +74,9 @@ export const claudeProvider: AgentProvider<ClaudeOptions> = {
    *
    * 委派給 withSessionRetry（包裝 runClaudeQuery），處理 session resume 失敗的自動重試。
    * 不再使用 onSessionInit callback；session_started 事件由 executor 端消化後呼叫 strategy.onSessionInit。
+   *
+   * Managed MCP 子程序（含 per-MCP proxy bridge）由 Claude SDK 自身負責 spawn/cleanup；
+   * SDK session 結束時子程序自然回收，不需要 provider 端額外管 lifecycle。
    */
   async *chat(
     ctx: ChatRequestContext<ClaudeOptions>,

@@ -8,13 +8,11 @@ vi.mock("vue-i18n", () => ({
 }));
 
 import PodMcpSlot from "@/components/pod/PodMcpSlot.vue";
-import type { PodProvider } from "@/types/pod";
 
 const defaultProps = {
   podId: "pod-1",
   podRotation: 0,
   activeCount: 3,
-  provider: "claude" as PodProvider,
   disabled: false,
   disabledTooltip: "pod.slot.providerDisabled",
 };
@@ -25,77 +23,43 @@ function mountSlot(overrides: Partial<typeof defaultProps> = {}) {
   });
 }
 
-// ── 案例 12：PodMcpSlot 啟用數量徽章（Claude 顯示數字、Codex 不顯示） ────
+// ── PodMcpSlot：managed MCP 後三 provider 行為一致，沒有 provider 分流 ──
 
 describe("PodMcpSlot", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  // ── 徽章顯示行為（Claude vs Codex） ─────────────────────────────────────
-
-  describe("案例 12：啟用數量徽章顯示", () => {
-    it("Claude provider：應顯示 activeCount 數字", () => {
-      const wrapper = mountSlot({ provider: "claude", activeCount: 5 });
+  describe("啟用數量徽章顯示", () => {
+    it("應顯示 activeCount 數字", () => {
+      const wrapper = mountSlot({ activeCount: 5 });
       expect(wrapper.text()).toContain("5");
       wrapper.unmount();
     });
 
-    it("Claude provider：activeCount 為 0 時仍顯示 (0)", () => {
-      const wrapper = mountSlot({ provider: "claude", activeCount: 0 });
-      // 格式為 "MCPs (0)"，包含 "(0)"
+    it("activeCount 為 0 時仍顯示 (0)", () => {
+      const wrapper = mountSlot({ activeCount: 0 });
       expect(wrapper.text()).toContain("(0)");
-      wrapper.unmount();
-    });
-
-    it("Codex provider：不顯示 activeCount 數字（唯讀，點開 popover 看）", () => {
-      const wrapper = mountSlot({ provider: "codex", activeCount: 5 });
-      expect(wrapper.text()).not.toContain("5");
       wrapper.unmount();
     });
 
     it("應顯示 MCPs 標籤（i18n key pod.slot.mcpLabel）", () => {
       const wrapper = mountSlot();
-      // t() 在 mock 中直接回傳 key
       expect(wrapper.text()).toContain("pod.slot.mcpLabel");
       wrapper.unmount();
     });
   });
 
-  // ── active class 正確套用 ─────────────────────────────────────────────────
-
-  describe("案例 12：active class 正確套用", () => {
-    it("Claude provider + activeCount > 0：button 應有 pod-mcp-slot--active class", () => {
-      const wrapper = mountSlot({ provider: "claude", activeCount: 2 });
+  describe("active class 套用條件", () => {
+    it("activeCount > 0：button 應有 pod-mcp-slot--active class", () => {
+      const wrapper = mountSlot({ activeCount: 2 });
       const button = wrapper.find("button");
       expect(button.classes()).toContain("pod-mcp-slot--active");
       wrapper.unmount();
     });
 
-    it("Claude provider + activeCount === 0：button 不應有 pod-mcp-slot--active class", () => {
-      const wrapper = mountSlot({ provider: "claude", activeCount: 0 });
-      const button = wrapper.find("button");
-      expect(button.classes()).not.toContain("pod-mcp-slot--active");
-      wrapper.unmount();
-    });
-
-    it("內建 Goal Runtime 單獨存在時，不應讓 Claude slot 進入 active 狀態", () => {
-      const wrapper = mountSlot({ provider: "claude", activeCount: 0 });
-      const button = wrapper.find("button");
-      expect(wrapper.text()).toContain("(0)");
-      expect(button.classes()).not.toContain("pod-mcp-slot--active");
-      wrapper.unmount();
-    });
-
-    it("Codex provider：button 應有 pod-mcp-slot--codex class（不論 activeCount）", () => {
-      const wrapper = mountSlot({ provider: "codex", activeCount: 5 });
-      const button = wrapper.find("button");
-      expect(button.classes()).toContain("pod-mcp-slot--codex");
-      wrapper.unmount();
-    });
-
-    it("Codex provider：button 不應有 pod-mcp-slot--active class", () => {
-      const wrapper = mountSlot({ provider: "codex", activeCount: 5 });
+    it("activeCount === 0：button 不應有 pod-mcp-slot--active class", () => {
+      const wrapper = mountSlot({ activeCount: 0 });
       const button = wrapper.find("button");
       expect(button.classes()).not.toContain("pod-mcp-slot--active");
       wrapper.unmount();
@@ -190,42 +154,6 @@ describe("PodMcpSlot", () => {
       expect(wrapper.emitted("click")).toBeTruthy();
       const [event] = wrapper.emitted("click")![0] as [MouseEvent];
       expect(event).toBeInstanceOf(MouseEvent);
-      wrapper.unmount();
-    });
-  });
-
-  // ── Opencode provider 變體 ────────────────────────────────────────────────
-
-  describe("Opencode provider 變體", () => {
-    it("B11：label 顯示 mcpLabel (activeCount) 格式", () => {
-      const wrapper = mountSlot({
-        provider: "opencode" as PodProvider,
-        activeCount: 4,
-      });
-      expect(wrapper.text()).toContain("pod.slot.mcpLabel");
-      expect(wrapper.text()).toContain("(4)");
-      wrapper.unmount();
-    });
-
-    it("B12：activeCount > 0 時 button 有 pod-mcp-slot--active，無 pod-mcp-slot--codex", () => {
-      const wrapper = mountSlot({
-        provider: "opencode" as PodProvider,
-        activeCount: 2,
-      });
-      const button = wrapper.find("button");
-      expect(button.classes()).toContain("pod-mcp-slot--active");
-      expect(button.classes()).not.toContain("pod-mcp-slot--codex");
-      wrapper.unmount();
-    });
-
-    it("B13：disabled=true 時點擊不 emit click", async () => {
-      const wrapper = mountSlot({
-        provider: "opencode" as PodProvider,
-        disabled: true,
-      });
-      const button = wrapper.find("button");
-      await button.trigger("click");
-      expect(wrapper.emitted("click")).toBeFalsy();
       wrapper.unmount();
     });
   });

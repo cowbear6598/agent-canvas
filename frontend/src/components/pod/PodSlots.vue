@@ -73,7 +73,6 @@ const thinkingDisabled = computed(() => thinkingCapabilityUnsupported.value);
     :pod-id="props.podId"
     :pod-rotation="props.podRotation"
     :active-count="props.mcpActiveCount"
-    :provider="props.provider"
     :disabled="mcpDisabled"
     :disabled-tooltip="disabledTooltip"
     @click="(ev) => emit('mcp-clicked', ev)"

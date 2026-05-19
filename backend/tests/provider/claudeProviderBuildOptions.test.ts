@@ -44,6 +44,13 @@ vi.mock("../../src/services/claude/claudePathResolver.js", () => ({
 const { mockManagedMcpSurfaceService } = vi.hoisted(() => ({
   mockManagedMcpSurfaceService: {
     ensureSurface: vi.fn(),
+    ensureChatSurface: vi.fn().mockResolvedValue(null),
+    cleanupChatSurface: vi.fn().mockResolvedValue(undefined),
+    buildPodMcpEntries: vi.fn().mockResolvedValue({
+      entries: [],
+      ignoredTargets: [],
+      hasGoalRuntime: false,
+    }),
   },
 }));
 
@@ -142,6 +149,13 @@ describe("claudeProvider.buildOptions()", () => {
     vi.mocked(readClaudeMcpServers).mockReturnValue([]);
     vi.mocked(scanInstalledPlugins).mockReturnValue([]);
     vi.mocked(integrationRegistry.get).mockReturnValue(undefined);
+    // buildPodMcpEntries 預設回空 → applyMcpServers 會 fallback 至 readClaudeMcpServers。
+    // 個別 test 若需注入特定 entries 須自行 mockResolvedValueOnce 覆寫。
+    mockManagedMcpSurfaceService.buildPodMcpEntries.mockResolvedValue({
+      entries: [],
+      ignoredTargets: [],
+      hasGoalRuntime: false,
+    });
     mockManagedMcpSurfaceService.ensureSurface.mockResolvedValue({
       runId: "run-goal-001",
       podId: "pod-build-001",
@@ -227,49 +241,153 @@ describe("claudeProvider.buildOptions()", () => {
     expect(options.mcpServers).toBeUndefined();
   });
 
-  it("Claude 只注入一顆 managed surface", async () => {
+  it("Run 模式注入 buildPodMcpEntries 回傳的 N+1 個獨立 MCP entry", async () => {
+    mockManagedMcpSurfaceService.buildPodMcpEntries.mockResolvedValue({
+      entries: [
+        {
+          name: "agent_canvas_goal",
+          transport: "stdio",
+          command: "/usr/local/bin/bun",
+          args: ["/tmp/goalMcpBridge.ts"],
+          env: { AGENT_CANVAS_GOAL_STATE_PATH: "/tmp/goal-state.json" },
+          cwd: null,
+          proxied: false,
+        },
+        {
+          name: "server-everything",
+          transport: "stdio",
+          command: "npx",
+          args: ["@modelcontextprotocol/server-everything"],
+          env: {},
+          cwd: null,
+          proxied: false,
+        },
+      ],
+      ignoredTargets: [],
+      hasGoalRuntime: true,
+    });
+
     const pod = makePod({
+      mcpServerNames: ["server-everything"],
       goal: {
-        todos: [
-          { id: "todo-1", text: "Inspect current task state" },
-          { id: "todo-2", text: "Complete remaining work" },
-        ],
+        todos: [{ id: "todo-1", text: "Inspect current task state" }],
       },
     });
+    const runContext = makeRunContext();
+    const options = await claudeProvider.buildOptions(pod, runContext);
 
-    const options = await claudeProvider.buildOptions(pod, makeRunContext());
-
-    expect(mockManagedMcpSurfaceService.ensureSurface).toHaveBeenCalledWith(
-      makeRunContext(),
-      pod,
-    );
+    expect(
+      mockManagedMcpSurfaceService.buildPodMcpEntries,
+    ).toHaveBeenCalledWith(pod, runContext);
     expect(readClaudeMcpServers).not.toHaveBeenCalled();
-    expect(options.mcpServers?.agent_canvas_managed_surface).toMatchObject({
-      command: process.execPath,
-      env: {
-        AGENT_CANVAS_MANAGED_MCP_SURFACE_PATH: expect.stringContaining(
-          "pod-build-001.json",
-        ),
-      },
+    // agent 視角：N+1 個獨立 MCP，不再聚合成一顆 surface
+    expect(options.mcpServers?.agent_canvas_goal).toMatchObject({
+      command: "/usr/local/bin/bun",
+      args: ["/tmp/goalMcpBridge.ts"],
     });
-    expect(options.mcpServers?.agent_canvas_managed_surface?.args).toEqual([
-      expect.stringContaining("managedMcpSurfaceBridge.ts"),
-    ]);
+    expect(options.mcpServers?.["server-everything"]).toMatchObject({
+      command: "npx",
+      args: ["@modelcontextprotocol/server-everything"],
+    });
+    expect(options.mcpServers?.agent_canvas_managed_surface).toBeUndefined();
   });
 
-  it("傳入 runContext 且 Pod 無 Goal 時仍應注入 managed surface", async () => {
-    const pod = makePod({ goal: null });
+  it("Run 模式 buildPodMcpEntries 回空且 pod.mcpServerNames 也空時 mcpServers 為 undefined", async () => {
+    mockManagedMcpSurfaceService.buildPodMcpEntries.mockResolvedValue({
+      entries: [],
+      ignoredTargets: [],
+      hasGoalRuntime: false,
+    });
 
+    const pod = makePod({ goal: null, mcpServerNames: [] });
     const options = await claudeProvider.buildOptions(pod, makeRunContext());
 
-    expect(options.mcpServers?.agent_canvas_managed_surface).toMatchObject({
+    expect(options.mcpServers).toBeUndefined();
+  });
+
+  it("Chat 模式有勾選 managed MCP 時注入個別 entry（無 Goal Runtime）", async () => {
+    mockManagedMcpSurfaceService.buildPodMcpEntries.mockResolvedValue({
+      entries: [
+        {
+          name: "managed-server",
+          transport: "stdio",
+          command: "node",
+          args: ["managed-server.js"],
+          env: { FOO: "bar" },
+          cwd: null,
+          proxied: false,
+        },
+      ],
+      ignoredTargets: [],
+      hasGoalRuntime: false,
+    });
+
+    const pod = makePod({ mcpServerNames: ["managed-server"] });
+    const options = await claudeProvider.buildOptions(pod);
+
+    expect(
+      mockManagedMcpSurfaceService.buildPodMcpEntries,
+    ).toHaveBeenCalledWith(pod, null);
+    expect(options.mcpServers?.["managed-server"]).toEqual({
+      command: "node",
+      args: ["managed-server.js"],
+      env: { FOO: "bar" },
+    });
+    // entries 有值時不再 fallback 到 ~/.claude.json
+    expect(readClaudeMcpServers).not.toHaveBeenCalled();
+    expect(options.mcpServers?.agent_canvas_managed_surface).toBeUndefined();
+  });
+
+  it("Claude pod 勾 http target 時 buildPodMcpEntries 應已包成 proxy bridge stdio entry", async () => {
+    mockManagedMcpSurfaceService.buildPodMcpEntries.mockResolvedValue({
+      entries: [
+        {
+          name: "remote-mcp",
+          transport: "stdio",
+          command: process.execPath,
+          args: ["/tmp/managedMcpProxyBridge.ts"],
+          env: {
+            AGENT_CANVAS_MCP_PROXY_NAME: "remote-mcp",
+            AGENT_CANVAS_MCP_PROXY_TRANSPORT: "http",
+            AGENT_CANVAS_MCP_PROXY_URL: "https://example.com/mcp",
+          },
+          cwd: null,
+          proxied: true,
+        },
+      ],
+      ignoredTargets: [],
+      hasGoalRuntime: false,
+    });
+
+    const pod = makePod({ mcpServerNames: ["remote-mcp"] });
+    const options = await claudeProvider.buildOptions(pod);
+
+    expect(options.mcpServers?.["remote-mcp"]).toMatchObject({
       command: process.execPath,
       env: {
-        AGENT_CANVAS_MANAGED_MCP_SURFACE_PATH: expect.stringContaining(
-          "pod-build-001.json",
-        ),
+        AGENT_CANVAS_MCP_PROXY_NAME: "remote-mcp",
+        AGENT_CANVAS_MCP_PROXY_TRANSPORT: "http",
+        AGENT_CANVAS_MCP_PROXY_URL: "https://example.com/mcp",
       },
     });
+  });
+
+  it("Chat 模式 ensureChatSurface 回傳 null（pod 未勾選 managed MCP）時退回 ~/.claude.json fallback", async () => {
+    mockManagedMcpSurfaceService.ensureChatSurface.mockResolvedValue(null);
+    vi.mocked(readClaudeMcpServers).mockReturnValue([
+      { name: "legacy", command: "node", args: ["legacy.js"], env: {} },
+    ]);
+
+    const pod = makePod({ mcpServerNames: ["legacy"] });
+    const options = await claudeProvider.buildOptions(pod);
+
+    expect(readClaudeMcpServers).toHaveBeenCalled();
+    expect(options.mcpServers?.legacy).toEqual({
+      command: "node",
+      args: ["legacy.js"],
+      env: {},
+    });
+    expect(options.mcpServers?.agent_canvas_managed_surface).toBeUndefined();
   });
 
   // ── Case 5：pod.pluginIds → plugins 被填入 ────────────────────────────

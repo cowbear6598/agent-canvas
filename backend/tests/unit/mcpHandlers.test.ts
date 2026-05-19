@@ -46,14 +46,31 @@ vi.mock("../../src/services/mcp/managedMcpRuntimeService.js", () => ({
   managedMcpRuntimeService: mockManagedMcpRuntimeService,
 }));
 
+const { mockManagedMcpAvailabilityService } = vi.hoisted(() => ({
+  mockManagedMcpAvailabilityService: {
+    listForPod: vi.fn(() => []),
+  },
+}));
+
+vi.mock("../../src/services/mcp/managedMcpAvailabilityService.js", () => ({
+  managedMcpAvailabilityService: mockManagedMcpAvailabilityService,
+}));
+
+vi.mock("../../src/utils/handlerHelpers.js", () => ({
+  getCanvasId: vi.fn(() => "canvas-1"),
+}));
+
 import { WebSocketResponseEvents } from "../../src/schemas/index.js";
 import {
   handleManagedMcpRegistryDelete,
   handleManagedMcpRegistryList,
   handleManagedMcpRegistrySave,
   handleManagedMcpRegistryTest,
+  handlePodSetMcpServerNames,
 } from "../../src/handlers/mcpHandlers.js";
 import { socketService } from "../../src/services/socketService.js";
+import { podStore } from "../../src/services/podStore.js";
+import { runStore } from "../../src/services/runStore.js";
 
 describe("managed MCP handlers", () => {
   beforeEach(() => {
@@ -326,5 +343,54 @@ describe("handleManagedMcpRegistryTest", () => {
 
     // 不應廣播 registry updated
     expect(socketService.emitToAll).not.toHaveBeenCalled();
+  });
+});
+
+describe("handlePodSetMcpServerNames", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(podStore.getById).mockReturnValue({
+      id: "pod-1",
+      provider: "claude",
+      mcpServerNames: [],
+    } as any);
+    mockManagedMcpAvailabilityService.listForPod.mockReturnValue([
+      {
+        name: "server-everything",
+        transport: "stdio",
+        status: "healthy",
+        selected: false,
+        selectable: true,
+        disabledReason: null,
+        lastError: null,
+      } as any,
+    ]);
+  });
+
+  it("active run 中的 pod 仍可改 MCP（per-MCP entry 架構下不再 freeze）", async () => {
+    // 模擬該 pod 有 active run instance — 舊行為會被 POD_BUSY 拒掉，新行為應放行
+    vi.mocked(runStore.hasActiveRunForPod).mockReturnValue(true);
+
+    await handlePodSetMcpServerNames(
+      "conn-1",
+      { podId: "pod-1", mcpServerNames: ["server-everything"] } as any,
+      "req-mcp-1",
+    );
+
+    // 不該因 active run 拒絕（不發出 emitError），應正常寫入 + 廣播
+    expect(podStore.setMcpServerNames).toHaveBeenCalledWith("pod-1", [
+      "server-everything",
+    ]);
+    expect(socketService.emitToCanvas).toHaveBeenCalledWith(
+      "canvas-1",
+      WebSocketResponseEvents.POD_MCP_SERVER_NAMES_UPDATED,
+      expect.objectContaining({
+        success: true,
+        podId: "pod-1",
+        mcpServerNames: ["server-everything"],
+      }),
+    );
+    // emitToConnection 是 emitError 用的，busy guard 移除後不該被呼叫
+    expect(socketService.emitToConnection).not.toHaveBeenCalled();
   });
 });

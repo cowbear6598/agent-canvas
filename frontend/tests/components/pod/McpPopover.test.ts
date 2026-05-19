@@ -207,9 +207,10 @@ describe("McpPopover", () => {
     const popover = bodyQuery(".fixed.z-50");
     expect(popover!.textContent).toContain("pod.slot.goalMcpLabel");
     expect(popover!.textContent).toContain("pod.slot.builtinBadge");
-    expect(popover!.textContent).toContain("managedMcp.status.running");
     expect(popover!.textContent).toContain("test-mcp-server");
     expect(document.body.querySelectorAll(".switch-stub")).toHaveLength(1);
+    // status chip 已從 popover 移除（不再以 probe 結果作為 toggle 旁的訊號）
+    expect(bodyQuery('[data-testid="mcp-status-badge"]')).toBeNull();
   });
 
   describe("toggle MCP server", () => {
@@ -276,13 +277,14 @@ describe("McpPopover", () => {
       const switchBtn = bodyQuery(".switch-stub") as HTMLElement;
       expect(switchBtn.getAttribute("data-checked")).toBe("true");
       expect(switchBtn.hasAttribute("disabled")).toBe(true);
-      expect(bodyQuery(".fixed.z-50")!.textContent).toContain("provider mismatch");
       expect(bodyQuery(".fixed.z-50")!.textContent).toContain(
-        "managedMcp.status.starting",
+        "provider mismatch",
       );
       expect(bodyQuery(".fixed.z-50")!.textContent).toContain(
         "managedMcp.transport.sse",
       );
+      // status chip 已移除：popover 不該再渲染 status 文字
+      expect(bodyQuery('[data-testid="mcp-status-badge"]')).toBeNull();
     });
 
     it("全域 registry 改動後重新開啟 popover 會看到新狀態", async () => {
@@ -299,9 +301,9 @@ describe("McpPopover", () => {
 
       const firstWrapper = mountPopover();
       await flushPromises();
-      expect(bodyQuery(".fixed.z-50")!.textContent).toContain(
-        "managedMcp.status.healthy",
-      );
+      // 第一次開啟：healthy MCP 可勾選、Switch 啟用
+      const firstSwitch = bodyQuery(".switch-stub") as HTMLElement;
+      expect(firstSwitch.hasAttribute("disabled")).toBe(false);
 
       firstWrapper.unmount();
       wrappers = wrappers.filter((wrapper) => wrapper !== firstWrapper);
@@ -309,9 +311,9 @@ describe("McpPopover", () => {
       mountPopover();
       await flushPromises();
 
-      expect(bodyQuery(".fixed.z-50")!.textContent).toContain(
-        "managedMcp.status.starting",
-      );
+      // 第二次開啟：registry 已更新，selectable=false → Switch 變 disabled、顯示 reason
+      const secondSwitch = bodyQuery(".switch-stub") as HTMLElement;
+      expect(secondSwitch.hasAttribute("disabled")).toBe(true);
       expect(bodyQuery(".fixed.z-50")!.textContent).toContain(
         "registry updated",
       );
@@ -392,9 +394,6 @@ describe("McpPopover", () => {
 
     const switches = bodyQueryAll(".switch-stub") as HTMLElement[];
     expect(switches).toHaveLength(2);
-    expect(bodyQuery(".fixed.z-50")!.textContent).not.toContain(
-      "pod.slot.mcpCodexHint",
-    );
     expect(bodyQuery(".fixed.z-50")!.textContent).toContain(
       "codex does not support sse transport",
     );

@@ -12,7 +12,12 @@
  *   3. abort：透過 abortSignal 觸發 session.abort（F11 Pod 刪除場景）
  */
 
-import { createOpencodeClient, createOpencodeServer } from "@opencode-ai/sdk";
+import {
+  createOpencodeClient,
+  createOpencodeServer,
+  type McpLocalConfig,
+  type McpRemoteConfig,
+} from "@opencode-ai/sdk";
 import { OPENCODE_CAPABILITIES } from "./capabilities.js";
 import { buildProviderSystemError } from "./types.js";
 import type {
@@ -26,11 +31,8 @@ import { sanitizePodName } from "./podNameSanitizer.js";
 import type { Pod } from "../../types/pod.js";
 import type { RunContext } from "../../types/run.js";
 import {
-  type GoalRuntimeMcpServerConfig,
-} from "../goalRuntime.js";
-import {
   managedMcpSurfaceService,
-  type ManagedMcpSurfaceServerConfig,
+  type PodMcpEntry,
 } from "../mcp/managedMcpSurfaceService.js";
 import { getOpencodeServerState } from "./opencodeServer.js";
 
@@ -110,14 +112,14 @@ export interface OpencodeOptions {
   providerID: string;
   /** opencode 的 model ID（如 "claude-sonnet-4-5"） */
   modelID: string;
-  /** Legacy MCP server name 陣列，僅保留給非 managed surface 過渡路徑 */
-  mcpServerNames: string[];
-  /** Legacy Goal Runtime MCP 設定，僅保留給非 managed surface 過渡路徑 */
-  goalMcpServer?: GoalRuntimeMcpServerConfig | null;
-  /** Run-scoped managed surface，provider runtime path 以此為 source of truth */
-  managedSurface?: ManagedMcpSurfaceServerConfig | null;
-  /** Goal Runtime 是否已併入 managed surface，用於 bootstrap prompt */
-  goalPromptEnabled?: boolean;
+  /**
+   * 要注入給 opencode transient server 的 managed MCP entries（含 Goal Runtime；run / chat 統一）。
+   * 每筆轉成 opencode `config.mcp[name]` 形狀（stdio 用 type=local、http/sse 用 type=remote）。
+   * 為空時不啟動 transient server，沿用全域 opencode server。
+   */
+  mcpEntries: PodMcpEntry[];
+  /** Goal Runtime 是否在 mcpEntries 內，用於決定是否注入 bootstrap prompt */
+  hasGoalRuntime: boolean;
 }
 
 // ================================================================
@@ -309,57 +311,6 @@ function extractErrorMessage(error: unknown): string {
 }
 
 /**
- * 建立 tools 子集化物件：
- *   - 對 ctx.options.mcpServerNames 內出現的 server 對應 tool 設 true
- *   - 其餘 mcp__* 設 false
- *   - 非 mcp__ 開頭的內建 tool 不放入物件（保持 opencode 預設）
- *
- * tool list 失敗時 try-catch：logger.warn 後回傳 undefined（讓 prompt 不傳 tools）
- */
-async function buildToolsSubset(
-  client: OpencodeClientPort,
-  mcpServerNames: string[],
-  workspacePath: string,
-): Promise<{ [key: string]: boolean } | undefined> {
-  let toolIds: string[];
-  try {
-    // tool.ids 也要帶 directory，否則拿到的是 opencode server 預設 cwd 的 tool 清單
-    const result = await client.tool.ids({
-      query: { directory: workspacePath },
-    });
-    if (!result.data) return undefined;
-    toolIds = result.data;
-  } catch (err) {
-    logger.warn(
-      "Chat",
-      "Warn",
-      `[OpencodeProvider] tool list 查詢失敗，改用 opencode 預設全開：${err instanceof Error ? err.message : String(err)}`,
-    );
-    return undefined;
-  }
-
-  const allowedServers = new Set(mcpServerNames);
-  const tools: { [key: string]: boolean } = {};
-
-  for (const toolId of toolIds) {
-    if (!toolId.startsWith("mcp__")) {
-      // 內建 tool（read / grep / edit / write / bash 等）一律設為 true，
-      // 否則 opencode 收到 partial tools dict 會把沒列出的視為禁用，
-      // 造成 model 雖然有 built-in tool 卻收到「無工具可用」的訊號。
-      tools[toolId] = true;
-      continue;
-    }
-
-    // mcp__<server>__<name> 格式：取第二段為 server name
-    const parts = toolId.split("__");
-    const serverName = parts[1] ?? "";
-    tools[toolId] = allowedServers.has(serverName);
-  }
-
-  return tools;
-}
-
-/**
  * 在 session.idle 階段補 tool call event。
  *
  * 新版 opencode SDK streaming 只發 message.part.delta（field=text），不發 message.part.updated
@@ -482,18 +433,42 @@ function buildServerCacheKey(runId: string, podId: string): string {
 }
 
 /**
+ * 將 PodMcpEntry[] 轉成 opencode transient server 的 mcp config dict。
+ *
+ * - stdio entry → McpLocalConfig（`{ type: "local", command: [cmd, ...args], environment, enabled }`）
+ * - http / sse entry → McpRemoteConfig（`{ type: "remote", url, enabled }`，opencode 原生支援遠端 MCP）
+ */
+function buildOpencodeMcpConfig(
+  entries: PodMcpEntry[],
+): Record<string, McpLocalConfig | McpRemoteConfig> {
+  const mcp: Record<string, McpLocalConfig | McpRemoteConfig> = {};
+  for (const entry of entries) {
+    if (entry.transport === "stdio") {
+      mcp[entry.name] = {
+        type: "local",
+        command: [entry.command, ...entry.args],
+        environment: entry.env,
+        enabled: true,
+      };
+    } else {
+      mcp[entry.name] = {
+        type: "remote",
+        url: entry.url,
+        enabled: true,
+      };
+    }
+  }
+  return mcp;
+}
+
+/**
  * 取得或建立 Run 期間的 transient opencode server。
  * 同一 runId + podId 只建立一次；後續 chat 直接復用。
  */
 async function getOrCreateRunScopedServer(
   runId: string,
   podId: string,
-  managedServer: {
-    name: string;
-    command: string;
-    args: string[];
-    env: Record<string, string>;
-  },
+  entries: PodMcpEntry[],
 ): Promise<{ close(): void; url: string }> {
   const key = buildServerCacheKey(runId, podId);
   const cached = runScopedOpencodeServerCache.get(key);
@@ -503,14 +478,7 @@ async function getOrCreateRunScopedServer(
     port: 0,
     timeout: 30000,
     config: {
-      mcp: {
-        [managedServer.name]: {
-          type: "local",
-          command: [managedServer.command, ...managedServer.args],
-          environment: managedServer.env,
-          enabled: true,
-        },
-      },
+      mcp: buildOpencodeMcpConfig(entries),
     },
   });
 
@@ -550,10 +518,8 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
     defaultOptions: {
       providerID: "",
       modelID: "",
-      mcpServerNames: [],
-      goalMcpServer: null,
-      managedSurface: null,
-      goalPromptEnabled: false,
+      mcpEntries: [],
+      hasGoalRuntime: false,
     },
     availableModels: [],
     availableModelValues: new Set<string>(),
@@ -563,8 +529,8 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
    * 從 Pod 設定建構 opencode 執行時選項。
    *
    * - pod.providerConfig.model 格式為 "{providerID}/{modelID}"，以第一個 "/" 拆分
-   * - Run 模式改由 managed surface 決定 MCP 可見性；
-   *   非 Run 模式保留 legacy 欄位作為過渡用途
+   * - MCP entries 由 managedMcpSurfaceService.buildPodMcpEntries 統一組
+   *   （run 模式才會含 Goal Runtime）
    */
   async buildOptions(
     pod: Pod,
@@ -588,23 +554,18 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
       modelID = rawModel.slice(slashIndex + 1);
     }
 
-    const result: OpencodeOptions = {
+    const { entries, hasGoalRuntime } =
+      await managedMcpSurfaceService.buildPodMcpEntries(
+        pod,
+        runContext ?? null,
+      );
+
+    return {
       providerID,
       modelID,
-      mcpServerNames: runContext ? [] : [...pod.mcpServerNames],
-      goalMcpServer: null,
-      managedSurface: null,
-      goalPromptEnabled: false,
+      mcpEntries: entries,
+      hasGoalRuntime,
     };
-
-    if (runContext) {
-      const surface = await managedMcpSurfaceService.ensureSurface(runContext, pod);
-      result.managedSurface = surface.mcpServer;
-      result.goalPromptEnabled = surface.hasGoalRuntime;
-      result.mcpServerNames = [surface.mcpServer.name];
-    }
-
-    return result;
   },
 
   /**
@@ -659,12 +620,10 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
     // 確保 session 建立失敗、session ID 為空、abort 提前觸發等所有路徑都會 close
     try {
       let baseUrl: string | null = null;
-      const runtimeManagedServer = options.managedSurface ?? options.goalMcpServer ?? null;
-      const goalRuntimeAvailable = options.managedSurface
-        ? options.goalPromptEnabled !== false
-        : Boolean(options.goalMcpServer);
+      const mcpEntries = options.mcpEntries ?? [];
+      const goalRuntimeAvailable = Boolean(options.hasGoalRuntime);
 
-      if (runtimeManagedServer) {
+      if (mcpEntries.length > 0) {
         try {
           if (runContext) {
             // Run 期間同一 (runId, podId) 復用同一個 transient server，
@@ -674,7 +633,7 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
             const cached = await getOrCreateRunScopedServer(
               runContext.runId,
               podId,
-              runtimeManagedServer,
+              mcpEntries,
             );
             baseUrl = cached.url;
           } else {
@@ -685,17 +644,7 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
               port: 0,
               timeout: 30000,
               config: {
-                mcp: {
-                  [runtimeManagedServer.name]: {
-                    type: "local",
-                    command: [
-                      runtimeManagedServer.command,
-                      ...runtimeManagedServer.args,
-                    ],
-                    environment: runtimeManagedServer.env,
-                    enabled: true,
-                  },
-                },
+                mcp: buildOpencodeMcpConfig(mcpEntries),
               },
             });
             baseUrl = transientServer.url;
@@ -817,15 +766,10 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
           return;
         }
 
-        // managed surface 已將可見性收斂成單一 server；
-        // 只有 legacy 非 run 路徑才需要再做 tools 子集化。
-        const toolsSubset = options.managedSurface
-          ? undefined
-          : await buildToolsSubset(
-              client,
-              options.mcpServerNames,
-              workspacePath,
-            );
+        // 有注入 transient server（mcpEntries 非空）時，其 tool list 只含我們注入的 entry 工具，
+        // 不需要再過濾；entries 為空走全域 opencode server，沿用 opencode 預設 tool 可見性
+        // （由使用者的 ~/.config/opencode/opencode.json 決定，不再做後端 allowlist）。
+        const toolsSubset: { [key: string]: boolean } | undefined = undefined;
 
         // ── 送出 prompt（非同步，不等待回傳） ──────────────────────────
         const promptBody: {
@@ -1008,7 +952,8 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
         abortSignal.removeEventListener("abort", doAbort);
       }
     } finally {
-      // 所有路徑（session 建立失敗、abort、正常結束）都在此統一 close transient server
+      // 所有路徑（session 建立失敗、abort、正常結束）都在此統一 close transient server。
+      // managed MCP 子程序由 opencode 的 transient server 自身管，transient 關閉時自然回收。
       closeTransientServer();
     }
   },

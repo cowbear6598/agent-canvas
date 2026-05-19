@@ -100,46 +100,68 @@ export const BASE_ALLOWED_TOOLS: readonly string[] = [
 /**
  * 套用 MCP Server 設定，回傳包含 mcpServers 的 partial options。
  *
- * Run 模式下注入單一 AgentCanvas managed surface；
- * 非 Run 模式才退回 ~/.claude.json 的 user-scoped MCP server allowlist。
+ * 統一走 managedMcpSurfaceService.buildPodMcpEntries，每顆 managed MCP 各自獨立 entry
+ * 注入給 Claude SDK（agent 看到 N+1 個獨立 MCP，不再是一顆 surface aggregator）。
  *
- * 若 pod.mcpServerNames 為空，或過濾後無符合項目，則回傳空物件。
+ * - Run 模式：含 Goal Runtime + 各 managed MCP entry
+ * - Chat 模式：只有 managed MCP entry（無 Goal Runtime）
+ * - http / sse target：buildPodMcpEntries 已自動包成 per-MCP proxy bridge 的 stdio entry
+ *
+ * 若 entries 為空但 pod.mcpServerNames 有值，退回 ~/.claude.json 的 user-scoped allowlist
+ * 作為歷史相容（popover 已只露 managed，此分支主要保護早期 pod 設定）。
  */
 async function applyMcpServers(
   pod: Pod,
   runContext?: RunContext,
 ): Promise<Pick<ClaudeOptions, "mcpServers">> {
-  if (runContext) {
-    const surface = await managedMcpSurfaceService.ensureSurface(runContext, pod);
-    return {
-      mcpServers: {
-        [surface.mcpServer.name]: {
-          command: surface.mcpServer.command,
-          args: surface.mcpServer.args,
-          env: surface.mcpServer.env,
-        },
-      },
+  const { entries } = await managedMcpSurfaceService.buildPodMcpEntries(
+    pod,
+    runContext ?? null,
+  );
+
+  const mcpServers: NonNullable<Options["mcpServers"]> = {};
+  for (const entry of entries) {
+    if (entry.transport !== "stdio") {
+      // buildPodMcpEntries 的 invariant：Claude 不原生支援的 transport 應已被 proxy bridge
+      // 包成 stdio。若進到這裡代表 invariant 破壞，跳過並 warn 以避免 SDK 噴錯。
+      logger.warn(
+        "McpServer",
+        "Warn",
+        `[ClaudeOptions] 略過非 stdio entry：${entry.name}（${entry.transport}）— 預期已被 proxy bridge 包裝`,
+      );
+      continue;
+    }
+    mcpServers[entry.name] = {
+      command: entry.command,
+      args: entry.args,
+      env: entry.env,
     };
+  }
+
+  if (Object.keys(mcpServers).length > 0) {
+    return { mcpServers };
   }
 
   if (!pod.mcpServerNames.length) return {};
 
-  // 讀取 user-scoped MCP servers（top-level mcpServers）
+  // Legacy fallback：pod.mcpServerNames 在 managed registry 找不到對應（或全 ignored），
+  // 退回 ~/.claude.json 的 user-scoped MCP allowlist。實務上 popover 已只露出 managed 項目，
+  // 此分支大多走不到，保留為過渡相容性。
   const allowedSet = new Set(pod.mcpServerNames);
   const allServers = readClaudeMcpServers();
   const filtered = allServers.filter((s) => allowedSet.has(s.name));
 
   if (filtered.length === 0) return {};
 
-  const mcpServers: NonNullable<Options["mcpServers"]> = {};
+  const fallback: NonNullable<Options["mcpServers"]> = {};
   for (const server of filtered) {
-    mcpServers[server.name] = {
+    fallback[server.name] = {
       command: server.command,
       args: server.args,
       env: server.env,
     };
   }
-  return { mcpServers };
+  return { mcpServers: fallback };
 }
 
 // ─── applyPlugins ────────────────────────────────────────────────────────────

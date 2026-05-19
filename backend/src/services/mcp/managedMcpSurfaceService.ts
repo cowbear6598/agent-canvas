@@ -1,17 +1,31 @@
-import os from "os";
+/**
+ * Managed MCP Surface Service — 為 pod 組 provider-injectable MCP entries。
+ *
+ * 此 service 不再聚合成單一 surface MCP，改為「每顆 managed MCP 一個獨立 entry」
+ * 注入給 provider；agent 從 mcp/list 看到 N+1 個獨立 MCP（含 Goal Runtime）。
+ *
+ * 三家 provider 對 transport 的原生支援度（TRANSPORT_NATIVE_SUPPORT）：
+ *   - claude SDK 只接受 stdio MCP entry
+ *   - codex CLI 可寫 stdio / http 兩種 mcp_servers entry
+ *   - opencode 透過 config 可寫 local（stdio）/ remote（http+sse）entry
+ *
+ * 對「不原生支援」的 transport（如 Claude 遇到 http target），會透過 per-MCP
+ * proxy bridge（managedMcpProxyBridge.ts）把 http/sse 包成 stdio entry。
+ *
+ * lifecycle：所有 entries 都是 provider 自身 spawn 的子程序（含 proxy bridge），
+ * provider session 結束時自然回收，service 不維護任何 state file / handle map。
+ */
+
 import path from "path";
-import { promises as fs } from "fs";
 import { fileURLToPath } from "url";
 
 import { buildGoalRuntimeMcpServerConfig } from "../goalRuntime.js";
 import { socketService } from "../socketService.js";
 import { WebSocketResponseEvents } from "../../schemas/events.js";
-import { logger } from "../../utils/logger.js";
 import type { Pod } from "../../types/pod.js";
 import type { RunContext } from "../../types/run.js";
 import {
   managedMcpStore,
-  type ManagedMcpRuntimeStatus,
   type ManagedMcpServerRecord,
   type ManagedMcpTransport,
 } from "./managedMcpStore.js";
@@ -20,11 +34,9 @@ import {
   type ManagedMcpRuntimeService,
 } from "./managedMcpRuntimeService.js";
 
-export const AGENT_CANVAS_MANAGED_SURFACE_NAME = "agent_canvas_managed_surface";
-
 type SupportedProvider = "claude" | "codex" | "opencode";
 
-const TRANSPORT_SUPPORT: Record<
+const TRANSPORT_NATIVE_SUPPORT: Record<
   SupportedProvider,
   ReadonlySet<ManagedMcpTransport>
 > = {
@@ -33,54 +45,45 @@ const TRANSPORT_SUPPORT: Record<
   opencode: new Set(["stdio", "http", "sse"]),
 };
 
-export interface ManagedMcpSurfaceServerConfig {
-  name: typeof AGENT_CANVAS_MANAGED_SURFACE_NAME;
-  command: string;
-  args: string[];
-  env: Record<string, string>;
-}
-
-export interface ManagedMcpSurfaceTarget {
-  name: string;
-  transport: ManagedMcpTransport;
-  command: string | null;
-  args: string[];
-  cwd: string | null;
-  env: Record<string, string>;
-  url: string | null;
-  system: boolean;
-}
-
 export interface ManagedMcpSurfaceIgnoredTarget {
   name: string;
   reason: string;
 }
 
-export interface ManagedMcpSurfaceState {
-  runId: string;
-  podId: string;
-  targets: ManagedMcpSurfaceTarget[];
-}
+/**
+ * 注入給 provider 的單一 MCP entry。
+ *
+ * 形狀為 discriminated union：
+ *   - stdio：直接 spawn 子程序（含 Goal Runtime、stdio target、proxy bridge 包裝後的 http/sse target）
+ *   - http / sse：給原生支援該 transport 的 provider（codex / opencode）直接連線
+ *
+ * `proxied: true` 標示「此 stdio entry 實際上是 per-MCP bridge 對 http/sse target 的包裝」，
+ * 給上層除錯與測試用，provider 本身不需要區別對待。
+ */
+export type PodMcpEntry =
+  | {
+      name: string;
+      transport: "stdio";
+      command: string;
+      args: string[];
+      env: Record<string, string>;
+      cwd: string | null;
+      proxied: boolean;
+    }
+  | {
+      name: string;
+      transport: "http" | "sse";
+      url: string;
+    };
 
-export interface ManagedMcpSurfaceDescriptor {
-  runId: string;
-  podId: string;
-  provider: SupportedProvider;
-  sourceNames: string[];
-  targetNames: string[];
+export interface PodMcpEntriesResult {
+  entries: PodMcpEntry[];
   ignoredTargets: ManagedMcpSurfaceIgnoredTarget[];
   hasGoalRuntime: boolean;
-  statePath: string;
-  mcpServer: ManagedMcpSurfaceServerConfig;
 }
 
 interface ManagedMcpStoreLike {
   getByName(name: string): ManagedMcpServerRecord | undefined;
-  updateRuntimeState(
-    name: string,
-    status: ManagedMcpRuntimeStatus,
-    lastError?: string | null,
-  ): ManagedMcpServerRecord | undefined;
 }
 
 interface ManagedMcpSurfaceServiceDeps {
@@ -88,204 +91,107 @@ interface ManagedMcpSurfaceServiceDeps {
   runtimeService: ManagedMcpRuntimeService;
 }
 
-function getManagedSurfaceBridgePath(): string {
+function getManagedMcpProxyBridgePath(): string {
   return path.join(
     path.dirname(fileURLToPath(import.meta.url)),
-    "managedMcpSurfaceBridge.ts",
-  );
-}
-
-function providerSupportsTransport(
-  provider: SupportedProvider,
-  transport: ManagedMcpTransport,
-): boolean {
-  return TRANSPORT_SUPPORT[provider].has(transport);
-}
-
-function getManagedMcpSurfaceRootDir(): string {
-  return path.join(os.tmpdir(), "agent-canvas-managed-mcp-surface");
-}
-
-export function getManagedMcpSurfaceRunDir(runId: string): string {
-  return path.join(getManagedMcpSurfaceRootDir(), runId);
-}
-
-export function getManagedMcpSurfaceStatePath(
-  runContext: RunContext,
-  podId: string,
-): string {
-  return path.join(
-    getManagedMcpSurfaceRunDir(runContext.runId),
-    `${podId}.json`,
+    "managedMcpProxyBridge.ts",
   );
 }
 
 /**
- * 由 state file 路徑換算對應的 errors file 路徑。
- * bridge 在 connect/listTools 失敗時會把 per-target 錯誤寫進此檔，
- * surface cleanup 時讀取並把錯誤回寫 managedMcpStore.lastError，
- * 讓使用者在 Header modal 看得到原因。
+ * 將單一 registry record 轉成 provider-injectable entry。
+ *
+ * 規則：
+ *   - record.transport === "stdio" → 原生 stdio entry
+ *   - record.transport === "http" / "sse" 且 provider 原生支援 → 原生 remote entry
+ *   - record.transport === "http" / "sse" 且 provider 不原生支援 → per-MCP proxy bridge 包成 stdio
  */
-export function getManagedMcpSurfaceErrorsPath(statePath: string): string {
-  return statePath.replace(/\.json$/, ".errors.json");
-}
-
-/** bridge 寫入的 per-target 錯誤紀錄。 */
-export interface ManagedMcpSurfaceTargetError {
-  name: string;
-  message: string;
-}
-
-async function ensureSurfaceDir(statePath: string): Promise<void> {
-  await fs.mkdir(path.dirname(statePath), { recursive: true });
-}
-
-export async function writeManagedMcpSurfaceState(
-  statePath: string,
-  state: ManagedMcpSurfaceState,
-): Promise<void> {
-  await ensureSurfaceDir(statePath);
-  await fs.writeFile(statePath, JSON.stringify(state, null, 2), "utf-8");
-}
-
-export async function readManagedMcpSurfaceState(
-  statePath: string,
-): Promise<ManagedMcpSurfaceState | null> {
-  try {
-    const raw = await fs.readFile(statePath, "utf-8");
-    const parsed = JSON.parse(raw) as ManagedMcpSurfaceState;
-    if (
-      !parsed ||
-      typeof parsed !== "object" ||
-      !Array.isArray(parsed.targets) ||
-      typeof parsed.runId !== "string" ||
-      typeof parsed.podId !== "string"
-    ) {
-      return null;
-    }
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function toSurfaceTarget(
+function buildPodMcpEntry(
   entry: ManagedMcpServerRecord,
-): ManagedMcpSurfaceTarget {
+  provider: SupportedProvider,
+): PodMcpEntry {
+  if (entry.transport === "stdio") {
+    return {
+      name: entry.name,
+      transport: "stdio",
+      command: entry.command ?? "",
+      args: [...entry.args],
+      env: { ...entry.env },
+      cwd: entry.cwd,
+      proxied: false,
+    };
+  }
+
+  if (TRANSPORT_NATIVE_SUPPORT[provider].has(entry.transport)) {
+    return {
+      name: entry.name,
+      transport: entry.transport,
+      url: entry.url ?? "",
+    };
+  }
+
+  // provider 不原生支援該 transport → 包 per-MCP proxy bridge
   return {
     name: entry.name,
-    transport: entry.transport,
-    command: entry.command,
-    args: [...entry.args],
-    cwd: entry.cwd,
-    env: { ...entry.env },
-    url: entry.url,
-    system: false,
+    transport: "stdio",
+    command: process.execPath || "bun",
+    args: [getManagedMcpProxyBridgePath()],
+    env: {
+      AGENT_CANVAS_MCP_PROXY_NAME: entry.name,
+      AGENT_CANVAS_MCP_PROXY_TRANSPORT: entry.transport,
+      AGENT_CANVAS_MCP_PROXY_URL: entry.url ?? "",
+    },
+    cwd: null,
+    proxied: true,
   };
 }
 
-function resolveIgnoredReason(
-  provider: SupportedProvider,
-  entry: ManagedMcpServerRecord | undefined,
-): string | null {
-  if (!entry) return "registry entry removed";
-  if (!entry.enabled) return "registry entry disabled";
-  if (!providerSupportsTransport(provider, entry.transport)) {
-    return `${provider} does not support ${entry.transport} transport`;
-  }
-  return null;
-}
-
 export class ManagedMcpSurfaceService {
-  private readonly descriptors = new Map<string, ManagedMcpSurfaceDescriptor>();
-
   constructor(private readonly deps: ManagedMcpSurfaceServiceDeps) {}
 
-  private getDescriptorKey(runId: string, podId: string): string {
-    return `${runId}:${podId}`;
-  }
-
-  getSurface(runId: string, podId: string): ManagedMcpSurfaceDescriptor | null {
-    return this.descriptors.get(this.getDescriptorKey(runId, podId)) ?? null;
-  }
-
-  async ensureSurface(
-    runContext: RunContext,
+  /**
+   * 為 pod 組出獨立注入用的 MCP entry 清單。
+   *
+   * 排序：Goal Runtime 永遠在最前（若 runContext 存在且 pod.goal 有 todos），
+   * 其後依 pod.mcpServerNames 順序。Ignored target 不會進 entries，但會被收進
+   * ignoredTargets；若有 ignored 且為 run 模式，會發送 MANAGED_MCP_SURFACE_TARGETS_IGNORED
+   * 通知前端。
+   */
+  async buildPodMcpEntries(
     pod: Pick<Pod, "id" | "name" | "provider" | "goal" | "mcpServerNames">,
-  ): Promise<ManagedMcpSurfaceDescriptor> {
-    const key = this.getDescriptorKey(runContext.runId, pod.id);
-    const existing = this.descriptors.get(key);
-    if (existing) return existing;
-
+    runContext: RunContext | null,
+  ): Promise<PodMcpEntriesResult> {
     const provider = pod.provider as SupportedProvider;
-    const statePath = getManagedMcpSurfaceStatePath(runContext, pod.id);
-    const targets: ManagedMcpSurfaceTarget[] = [];
-    const ignoredTargets: ManagedMcpSurfaceIgnoredTarget[] = [];
+    const { records, ignoredTargets } = await this.collectPodMcpRecords(pod);
 
-    for (const selectedName of pod.mcpServerNames) {
-      const entry = this.deps.store.getByName(selectedName);
-      const ignoredReason = resolveIgnoredReason(provider, entry);
-      if (ignoredReason) {
-        ignoredTargets.push({ name: selectedName, reason: ignoredReason });
-        continue;
-      }
+    const entries: PodMcpEntry[] = [];
 
-      const runtime = await this.deps.runtimeService.ensureReady(selectedName);
-      if (runtime.status !== "healthy") {
-        ignoredTargets.push({
-          name: selectedName,
-          reason: runtime.lastError ?? "managed MCP runtime is not healthy",
+    // Goal Runtime 一律 stdio，且只有 run 模式（有 runContext + pod.goal.todos）才出現
+    let hasGoalRuntime = false;
+    if (runContext) {
+      const goal = buildGoalRuntimeMcpServerConfig(runContext, pod);
+      if (goal) {
+        entries.push({
+          name: goal.name,
+          transport: "stdio",
+          command: goal.command,
+          args: [...goal.args],
+          env: { ...goal.env },
+          cwd: null,
+          proxied: false,
         });
-        continue;
+        hasGoalRuntime = true;
       }
-
-      targets.push(toSurfaceTarget(entry!));
     }
 
-    const goalRuntimeMcp = buildGoalRuntimeMcpServerConfig(runContext, pod);
-    if (goalRuntimeMcp) {
-      targets.unshift({
-        name: goalRuntimeMcp.name,
-        transport: "stdio",
-        command: goalRuntimeMcp.command,
-        args: [...goalRuntimeMcp.args],
-        cwd: null,
-        env: { ...goalRuntimeMcp.env },
-        url: null,
-        system: true,
-      });
+    for (const record of records) {
+      entries.push(buildPodMcpEntry(record, provider));
     }
 
-    await writeManagedMcpSurfaceState(statePath, {
-      runId: runContext.runId,
-      podId: pod.id,
-      targets,
-    });
-
-    const descriptor: ManagedMcpSurfaceDescriptor = {
-      runId: runContext.runId,
-      podId: pod.id,
-      provider,
-      sourceNames: [...pod.mcpServerNames],
-      targetNames: targets.map((target) => target.name),
-      ignoredTargets,
-      hasGoalRuntime: goalRuntimeMcp !== null,
-      statePath,
-      mcpServer: {
-        name: AGENT_CANVAS_MANAGED_SURFACE_NAME,
-        command: process.execPath || "bun",
-        args: [getManagedSurfaceBridgePath()],
-        env: {
-          AGENT_CANVAS_MANAGED_MCP_SURFACE_PATH: statePath,
-        },
-      },
-    };
-
-    this.descriptors.set(key, descriptor);
-
-    // 通知前端：本次 ensureSurface 略過了哪些 selected MCP（含原因），
-    // 讓使用者在 chat / run 啟動時看見「我選了但沒生效」的清單。
-    if (ignoredTargets.length > 0) {
+    // 通知前端：本次 buildPodMcpEntries 略過了哪些 selected MCP（含原因）。
+    // 只在 run 模式發送（chat 模式前端目前未接收 chat-scoped ignored 來源，
+    // 與舊 ensureSurface 行為保持一致）。
+    if (runContext && ignoredTargets.length > 0) {
       socketService.emitToAll(
         WebSocketResponseEvents.MANAGED_MCP_SURFACE_TARGETS_IGNORED,
         {
@@ -298,99 +204,58 @@ export class ManagedMcpSurfaceService {
       );
     }
 
-    return descriptor;
-  }
-
-  async cleanupRunSurfaces(runId: string): Promise<void> {
-    const prefix = `${runId}:`;
-    const statePaths: string[] = [];
-
-    for (const [key, descriptor] of this.descriptors.entries()) {
-      if (!key.startsWith(prefix)) continue;
-      statePaths.push(descriptor.statePath);
-      this.descriptors.delete(key);
-    }
-
-    // 在刪掉 state file 之前先把 bridge 寫的 per-target 錯誤回寫 store，
-    // 否則 lastError 永遠停在 bridge 啟動前的舊狀態，使用者看不到原因。
-    const errorsApplied = await this.applyBridgeErrors(statePaths);
-
-    await Promise.all(
-      statePaths.map(async (statePath) => {
-        await fs.rm(statePath, { force: true });
-        await fs.rm(getManagedMcpSurfaceErrorsPath(statePath), { force: true });
-      }),
-    );
-
-    await fs.rm(getManagedMcpSurfaceRunDir(runId), {
-      recursive: true,
-      force: true,
-    });
-
-    if (errorsApplied) {
-      // 廣播 registry updated，讓前端 cache 失效並重抓最新 lastError。
-      socketService.emitToAll(
-        WebSocketResponseEvents.MANAGED_MCP_REGISTRY_UPDATED,
-        {
-          success: true,
-          action: "diagnostics",
-          runId,
-        },
-      );
-    }
+    return { entries, ignoredTargets, hasGoalRuntime };
   }
 
   /**
-   * 讀取 bridge 寫進每個 statePath 對應 errors.json 的 per-target 錯誤，
-   * 將其回寫到 managedMcpStore.lastKnownStatus / lastError。
-   * 回傳 true 表示至少更新了一筆，呼叫端可據此決定是否廣播。
+   * 收集 pod 已勾選的 managed MCP records，過濾掉
+   *   - registry 不存在
+   *   - disabled
+   *   - runtime 不 healthy
+   * 三類項目（會記進 ignoredTargets）。
+   *
+   * 不過濾 transport — http/sse target 對所有 provider 都允許，由 buildPodMcpEntry
+   * 決定要不要包 proxy bridge。
    */
-  private async applyBridgeErrors(statePaths: string[]): Promise<boolean> {
-    let touched = false;
+  private async collectPodMcpRecords(
+    pod: Pick<Pod, "mcpServerNames">,
+  ): Promise<{
+    records: ManagedMcpServerRecord[];
+    ignoredTargets: ManagedMcpSurfaceIgnoredTarget[];
+  }> {
+    const records: ManagedMcpServerRecord[] = [];
+    const ignoredTargets: ManagedMcpSurfaceIgnoredTarget[] = [];
 
-    for (const statePath of statePaths) {
-      const errorsPath = getManagedMcpSurfaceErrorsPath(statePath);
-      let raw: string;
-      try {
-        raw = await fs.readFile(errorsPath, "utf-8");
-      } catch {
-        continue; // bridge 沒寫錯誤檔代表全部 target connect 成功
+    for (const selectedName of pod.mcpServerNames) {
+      const entry = this.deps.store.getByName(selectedName);
+      if (!entry) {
+        ignoredTargets.push({
+          name: selectedName,
+          reason: "registry entry removed",
+        });
+        continue;
       }
-
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(raw);
-      } catch (err) {
-        logger.warn(
-          "McpServer",
-          "Warn",
-          `managed MCP surface errors.json 解析失敗：${err instanceof Error ? err.message : String(err)}`,
-        );
+      if (!entry.enabled) {
+        ignoredTargets.push({
+          name: selectedName,
+          reason: "registry entry disabled",
+        });
         continue;
       }
 
-      if (!Array.isArray(parsed)) continue;
-
-      for (const item of parsed as ManagedMcpSurfaceTargetError[]) {
-        if (
-          !item ||
-          typeof item.name !== "string" ||
-          typeof item.message !== "string"
-        ) {
-          continue;
-        }
-        // Goal Runtime built-in 不存在於 registry，更新會 no-op；
-        // 一般 entry 才會真的被回寫。
-        const updated = this.deps.store.updateRuntimeState(
-          item.name,
-          "error",
-          item.message,
-        );
-        if (updated) touched = true;
+      const runtime = await this.deps.runtimeService.ensureReady(selectedName);
+      if (runtime.status !== "healthy") {
+        ignoredTargets.push({
+          name: selectedName,
+          reason: runtime.lastError ?? "managed MCP runtime is not healthy",
+        });
+        continue;
       }
+
+      records.push(entry);
     }
 
-    return touched;
+    return { records, ignoredTargets };
   }
 }
 

@@ -13,6 +13,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { mockManagedMcpSurfaceService } = vi.hoisted(() => ({
   mockManagedMcpSurfaceService: {
     ensureSurface: vi.fn(),
+    ensureChatSurface: vi.fn().mockResolvedValue(null),
+    cleanupChatSurface: vi.fn().mockResolvedValue(undefined),
+    buildPodMcpEntries: vi.fn().mockResolvedValue({
+      entries: [],
+      ignoredTargets: [],
+      hasGoalRuntime: false,
+    }),
   },
 }));
 
@@ -52,24 +59,15 @@ describe("CodexProvider.buildOptions()", () => {
   const provider = new CodexProvider();
 
   beforeEach(() => {
-    mockManagedMcpSurfaceService.ensureSurface.mockResolvedValue({
-      runId: "run-001",
-      podId: "pod-buildopts-001",
-      provider: "codex",
-      sourceNames: ["team-server"],
-      targetNames: ["agent_canvas_goal", "team-server"],
+    mockManagedMcpSurfaceService.ensureSurface.mockClear();
+    mockManagedMcpSurfaceService.ensureChatSurface.mockClear();
+    mockManagedMcpSurfaceService.buildPodMcpEntries.mockClear();
+    mockManagedMcpSurfaceService.ensureChatSurface.mockResolvedValue(null);
+    // buildPodMcpEntries 預設回空（individual test 可 mockResolvedValueOnce 覆寫）
+    mockManagedMcpSurfaceService.buildPodMcpEntries.mockResolvedValue({
+      entries: [],
       ignoredTargets: [],
-      hasGoalRuntime: true,
-      statePath: "/tmp/managed-surface/run-001/pod-buildopts-001.json",
-      mcpServer: {
-        name: "agent_canvas_managed_surface",
-        command: process.execPath,
-        args: ["/tmp/managedMcpSurfaceBridge.ts"],
-        env: {
-          AGENT_CANVAS_MANAGED_MCP_SURFACE_PATH:
-            "/tmp/managed-surface/run-001/pod-buildopts-001.json",
-        },
-      },
+      hasGoalRuntime: false,
     });
   });
 
@@ -78,13 +76,10 @@ describe("CodexProvider.buildOptions()", () => {
     const pod = makePod({ providerConfig: {} });
     const options = await provider.buildOptions(pod);
 
-    expect(options).toEqual(provider.metadata.defaultOptions);
     expect(options.model).toBe(provider.metadata.defaultOptions.model);
     expect(options.resumeMode).toBe("cli");
-    expect(options.mcpServerNames).toEqual([]);
-    expect(options.goalMcpServer).toBeNull();
-    expect(options.managedSurface).toBeNull();
-    expect(options.goalPromptEnabled).toBe(false);
+    expect(options.mcpEntries).toEqual([]);
+    expect(options.hasGoalRuntime).toBe(false);
   });
 
   // ── Case 2：合法 model → 採用之 ──────────────────────────────────────
@@ -94,7 +89,7 @@ describe("CodexProvider.buildOptions()", () => {
 
     expect(options.model).toBe("gpt-5.4-pro");
     expect(options.resumeMode).toBe("cli");
-    expect(options.mcpServerNames).toEqual([]);
+    expect(options.mcpEntries).toEqual([]);
   });
 
   // ── Case 3：不合法 model → fallback 為 default ───────────────────────
@@ -125,8 +120,33 @@ describe("CodexProvider.buildOptions()", () => {
     expect(options.model).toBe(provider.metadata.defaultOptions.model);
   });
 
-  // ── Case 5：runContext 傳入時不影響輸出 ──────────────────────────────
-  it("傳入 runContext 時應改為注入 managed surface", async () => {
+  // ── Case 5：runContext 傳入時透過 buildPodMcpEntries 取得 entries ─────
+  it("傳入 runContext 時應呼叫 buildPodMcpEntries 並把 entries 注入 options", async () => {
+    mockManagedMcpSurfaceService.buildPodMcpEntries.mockResolvedValue({
+      entries: [
+        {
+          name: "agent_canvas_goal",
+          transport: "stdio",
+          command: "/usr/local/bin/bun",
+          args: ["/tmp/goalMcpBridge.ts"],
+          env: { AGENT_CANVAS_GOAL_STATE_PATH: "/tmp/goal-state.json" },
+          cwd: null,
+          proxied: false,
+        },
+        {
+          name: "team-server",
+          transport: "stdio",
+          command: "node",
+          args: ["server.js"],
+          env: {},
+          cwd: null,
+          proxied: false,
+        },
+      ],
+      ignoredTargets: [],
+      hasGoalRuntime: true,
+    });
+
     const pod = makePod({
       providerConfig: { model: "gpt-5.4-pro" },
       goal: {
@@ -143,21 +163,32 @@ describe("CodexProvider.buildOptions()", () => {
 
     expect(withContext.model).toBe("gpt-5.4-pro");
     expect(withContext.resumeMode).toBe("cli");
-    expect(mockManagedMcpSurfaceService.ensureSurface).toHaveBeenCalledWith(
-      fakeRunContext,
-      pod,
-    );
-    expect(withContext.mcpServerNames).toEqual([
-      "agent_canvas_managed_surface",
-    ]);
-    expect(withContext.goalMcpServer).toBeNull();
-    expect(withContext.managedSurface?.name).toBe(
-      "agent_canvas_managed_surface",
-    );
-    expect(withContext.goalPromptEnabled).toBe(true);
+    expect(
+      mockManagedMcpSurfaceService.buildPodMcpEntries,
+    ).toHaveBeenCalledWith(pod, fakeRunContext);
+    expect(withContext.hasGoalRuntime).toBe(true);
+    expect(withContext.mcpEntries).toHaveLength(2);
+    expect(withContext.mcpEntries[0]?.name).toBe("agent_canvas_goal");
+    expect(withContext.mcpEntries[1]?.name).toBe("team-server");
   });
 
-  it("傳入 runContext 且 Pod 無 Goal 時仍應注入 managed surface", async () => {
+  it("傳入 runContext 且 Pod 無 Goal 時 hasGoalRuntime 為 false", async () => {
+    mockManagedMcpSurfaceService.buildPodMcpEntries.mockResolvedValue({
+      entries: [
+        {
+          name: "team-server",
+          transport: "stdio",
+          command: "node",
+          args: ["server.js"],
+          env: {},
+          cwd: null,
+          proxied: false,
+        },
+      ],
+      ignoredTargets: [],
+      hasGoalRuntime: false,
+    });
+
     const pod = makePod({
       providerConfig: { model: "gpt-5.4-pro" },
       goal: null,
@@ -170,13 +201,63 @@ describe("CodexProvider.buildOptions()", () => {
 
     const withContext = await provider.buildOptions(pod, fakeRunContext);
 
-    expect(withContext.mcpServerNames).toEqual([
-      "agent_canvas_managed_surface",
+    expect(withContext.hasGoalRuntime).toBe(false);
+    expect(withContext.mcpEntries).toEqual([
+      expect.objectContaining({ name: "team-server", transport: "stdio" }),
     ]);
-    expect(withContext.goalMcpServer).toBeNull();
-    expect(withContext.managedSurface?.name).toBe(
-      "agent_canvas_managed_surface",
-    );
-    expect(withContext.goalPromptEnabled).toBe(true);
+  });
+
+  // ── Case 6：Chat 模式（無 runContext）─────────────────────────────────
+  it("Chat 模式 buildPodMcpEntries 取得的 entries 注入 options（無 Goal Runtime）", async () => {
+    mockManagedMcpSurfaceService.buildPodMcpEntries.mockResolvedValue({
+      entries: [
+        {
+          name: "team-server",
+          transport: "stdio",
+          command: "node",
+          args: ["server.js"],
+          env: {},
+          cwd: null,
+          proxied: false,
+        },
+      ],
+      ignoredTargets: [],
+      hasGoalRuntime: false,
+    });
+
+    const pod = makePod({
+      providerConfig: { model: "gpt-5.4-pro" },
+      mcpServerNames: ["team-server"],
+    });
+    const options = await provider.buildOptions(pod);
+
+    expect(
+      mockManagedMcpSurfaceService.buildPodMcpEntries,
+    ).toHaveBeenCalledWith(pod, null);
+    expect(options.mcpEntries).toEqual([
+      expect.objectContaining({ name: "team-server" }),
+    ]);
+    expect(options.hasGoalRuntime).toBe(false);
+  });
+
+  it("Codex pod 勾 http target 時 buildPodMcpEntries 回 http entry 應原樣保留（codex 原生支援）", async () => {
+    mockManagedMcpSurfaceService.buildPodMcpEntries.mockResolvedValue({
+      entries: [
+        {
+          name: "remote-mcp",
+          transport: "http",
+          url: "https://example.com/mcp",
+        },
+      ],
+      ignoredTargets: [],
+      hasGoalRuntime: false,
+    });
+
+    const pod = makePod({ mcpServerNames: ["remote-mcp"] });
+    const options = await provider.buildOptions(pod);
+
+    expect(options.mcpEntries).toEqual([
+      { name: "remote-mcp", transport: "http", url: "https://example.com/mcp" },
+    ]);
   });
 });
