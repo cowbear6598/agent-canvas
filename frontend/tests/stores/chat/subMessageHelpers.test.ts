@@ -258,6 +258,119 @@ describe("updateLastSubMessage delta 累加", () => {
   });
 });
 
+describe("updateAssistantSubMessages - isToolOnlySegment 分段路徑", () => {
+  it("上一個 sub-message 有 toolUse 且 content 為空 → 新進 delta 另起新 sub-message、原 tool sub isPartial 改為 false", () => {
+    // 模擬 tool-only segment：opencode partID 切換後補拉到 tool，
+    // 此時最後一個 sub 為 toolUse 非空、content 為空字串。
+    // 再進來的文字 delta 不應擠進工具 bubble，應另起新段。
+    const toolUseInfo: ToolUseInfo = {
+      toolUseId: "tool-1",
+      toolName: "Bash",
+      input: { command: "ls" },
+      status: "completed",
+    };
+    const message: Message = {
+      id: "msg-1",
+      role: "assistant",
+      content: "",
+      isPartial: true,
+      timestamp: new Date().toISOString(),
+      subMessages: [
+        {
+          id: "msg-1-sub-0",
+          content: "",
+          isPartial: true,
+          toolUse: [toolUseInfo],
+        },
+      ],
+    };
+
+    const result = updateAssistantSubMessages(message, "結論文字", true);
+
+    // 應有兩個 sub-message
+    expect(result.subMessages).toHaveLength(2);
+
+    // 原 tool sub 的 isPartial 應被改為 false
+    expect(result.subMessages![0]!.isPartial).toBe(false);
+    expect(result.subMessages![0]!.toolUse).toHaveLength(1);
+
+    // 新 sub-message 格式驗證
+    const newSub = result.subMessages![1]!;
+    expect(newSub.id).toBe("msg-1-sub-1");
+    expect(newSub.content).toBe("結論文字");
+    expect(newSub.isPartial).toBe(true);
+  });
+
+  it("上一個 sub-message 有 toolUse 且 content 為空 → isPartial 傳 false 時，新 sub-message isPartial 也應為 false", () => {
+    const toolUseInfo: ToolUseInfo = {
+      toolUseId: "tool-2",
+      toolName: "Read",
+      input: {},
+      status: "completed",
+    };
+    const message: Message = {
+      id: "msg-2",
+      role: "assistant",
+      content: "",
+      isPartial: false,
+      timestamp: new Date().toISOString(),
+      subMessages: [
+        {
+          id: "msg-2-sub-0",
+          content: "",
+          isPartial: true,
+          toolUse: [toolUseInfo],
+        },
+      ],
+    };
+
+    const result = updateAssistantSubMessages(message, "最終結論", false);
+
+    expect(result.subMessages).toHaveLength(2);
+    const newSub = result.subMessages![1]!;
+    expect(newSub.id).toBe("msg-2-sub-1");
+    expect(newSub.content).toBe("最終結論");
+    expect(newSub.isPartial).toBe(false);
+  });
+
+  it("上一個 sub-message 有 toolUse 且 content 非空（text+tool 混合）→ delta 累加到該 sub、不另起新段", () => {
+    // isToolOnlySegment 為 false 的分支：content 非空代表已是文字+工具混合，
+    // 繼續累加 delta 到同一個 sub-message，不另起新段。
+    const toolUseInfo: ToolUseInfo = {
+      toolUseId: "tool-3",
+      toolName: "Write",
+      input: {},
+      status: "running",
+    };
+    const message: Message = {
+      id: "msg-3",
+      role: "assistant",
+      content: "前半段",
+      isPartial: true,
+      timestamp: new Date().toISOString(),
+      subMessages: [
+        {
+          id: "msg-3-sub-0",
+          content: "前半段",
+          isPartial: true,
+          toolUse: [toolUseInfo],
+        },
+      ],
+    };
+
+    const result = updateAssistantSubMessages(message, "後半段", true);
+
+    // 不應另起新 sub-message
+    expect(result.subMessages).toHaveLength(1);
+
+    // delta 累加到原 sub
+    expect(result.subMessages![0]!.content).toBe("前半段後半段");
+    expect(result.subMessages![0]!.isPartial).toBe(true);
+    // toolUse 不受影響
+    expect(result.subMessages![0]!.toolUse).toHaveLength(1);
+  });
+});
+
 describe("finalizeSubMessages", () => {
   it("subMessages 為 undefined 時應回傳 undefined", () => {
     expect(finalizeSubMessages(undefined)).toBeUndefined();

@@ -951,6 +951,12 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
       // 觸發 session.messages 查詢補拉那段 tool。
       let currentPartID: string | undefined = undefined;
 
+      // partID 切換 throttle：記錄最近一次成功觸發 yieldPendingToolParts 的時間戳（ms）。
+      // 連續密集的 partID 切換若離上次查詢 < 200ms，跳過本次 inline 查詢；
+      // session.idle 路徑不套此限制，確保 turn 結束前一定補拉，不會漏 tool。
+      let lastPartIDQueryAt: number = 0;
+      const PART_ID_QUERY_THROTTLE_MS = 200;
+
       // v2 session.next.tool.called 暫存（給後續 success/failed 配對 tool name）。
       // 1.14 binary 不發此事件，但保留以兼容未來 binary 升級。
       const pendingToolCalls = new Map<string, PendingToolCall>();
@@ -1080,13 +1086,19 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
               currentPartID !== undefined &&
               partID !== currentPartID
             ) {
-              yield* yieldPendingToolParts(
-                client,
-                sessionId,
-                workspacePath,
-                currentMessageIds,
-                yieldedToolCallIDs,
-              );
+              const now = Date.now();
+              // partID 切換時若離上次 query 太近則跳過，
+              // 因 session.idle 最終會補拉，不會漏 tool。
+              if (now - lastPartIDQueryAt >= PART_ID_QUERY_THROTTLE_MS) {
+                lastPartIDQueryAt = now;
+                yield* yieldPendingToolParts(
+                  client,
+                  sessionId,
+                  workspacePath,
+                  currentMessageIds,
+                  yieldedToolCallIDs,
+                );
+              }
             }
             if (partID) currentPartID = partID;
 
