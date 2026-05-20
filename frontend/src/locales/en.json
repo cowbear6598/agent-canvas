@@ -334,7 +334,8 @@
       "managedPlugin": "Plugins",
       "integrations": "Integrations",
       "history": "History",
-      "llmProvider": "LLM Provider Settings"
+      "llmProvider": "LLM Provider Settings",
+      "integrationsHub": "Integrations Hub"
     }
   },
   "managedMcp": {
@@ -405,6 +406,15 @@
       "urlRequired": "URL is required for HTTP / SSE transport"
     }
   },
+  "integrationsHub": {
+    "title": "Integrations Hub",
+    "description": "Choose the integration category to manage",
+    "cards": {
+      "mcp": "MCP Manager",
+      "plugin": "Plugin Manager",
+      "llmProvider": "LLM Provider"
+    }
+  },
   "llmProvider": {
     "modal": {
       "title": "LLM Provider",
@@ -421,7 +431,6 @@
         "title": "Provider List",
         "refresh": "Refresh",
         "connected": "Connected",
-        "disabledHint": "Run opencode auth login {id} in terminal and refresh",
         "loadError": "Failed to load",
         "retry": "Retry",
         "empty": "No providers available",
@@ -884,6 +893,10 @@
     "title": "Global Settings",
     "timezone": "Timezone",
     "timezonePlaceholder": "Select timezone",
+    "language": {
+      "title": "Language",
+      "description": "Interface language"
+    },
     "backup": {
       "title": "Backup Settings",
       "gitRemoteUrl": "Git Remote URL",

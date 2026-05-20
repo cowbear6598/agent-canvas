@@ -30,8 +30,9 @@ import { useToast } from "@/composables/useToast";
 import { useWebSocketErrorHandler } from "@/composables/useWebSocketErrorHandler";
 import { useConfigStore } from "@/stores/configStore";
 import { useSecurityStore } from "@/stores/securityStore";
-import WarningBox from "@/components/ui/WarningBox.vue";
-
+// 語系切換：重用 setLocale 統一處理持久化，不需要額外的 try-catch / fallback
+import { LOCALE_OPTIONS } from "@/constants/locale";
+import { i18n, setLocale } from "@/i18n";
 interface Props {
   open: boolean;
 }
@@ -51,6 +52,8 @@ const securityStore = useSecurityStore();
 
 const timezoneOffset = ref<string>("8");
 const isLoading = ref<boolean>(false);
+// 語系 ref：初值取自 i18n 實例，切換後透過 setLocale 即時生效並持久化
+const currentLocale = ref(i18n.global.locale.value);
 const isSaving = ref<boolean>(false);
 const loadFailed = ref<boolean>(false);
 
@@ -295,6 +298,9 @@ watch(
     }
   },
 );
+
+// 語系切換即時生效：重用 setLocale 統一持久化，不新增額外邏輯
+watch(currentLocale, (next) => setLocale(next));
 </script>
 
 <template>
@@ -325,6 +331,26 @@ watch(
                   v-for="option in TIMEZONE_OPTIONS"
                   :key="option.value"
                   :value="String(option.value)"
+                >
+                  {{ option.label }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div class="border-t border-border" />
+
+          <div class="space-y-2">
+            <Label>{{ $t("settings.language.title") }}</Label>
+            <Select v-model="currentLocale">
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent position="popper">
+                <SelectItem
+                  v-for="option in LOCALE_OPTIONS"
+                  :key="option.value"
+                  :value="option.value"
                 >
                   {{ option.label }}
                 </SelectItem>
@@ -455,12 +481,6 @@ watch(
                 }}
               </p>
             </div>
-
-            <WarningBox
-              v-if="securityStore.showTransportRiskWarning"
-              :title="t('security.transportWarning.title')"
-              :description="t('security.transportWarning.description')"
-            />
 
             <Input
               v-if="securityStore.workspacePasswordEnabled"

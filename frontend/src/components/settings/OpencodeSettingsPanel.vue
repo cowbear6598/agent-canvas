@@ -487,18 +487,6 @@ const handleAliasDragEnd = (): void => {
         >
           {{ t("llmProvider.opencode.providerList.connected") }}
         </span>
-
-        <!-- 未登入提示 -->
-        <span
-          v-else
-          class="text-xs text-muted-foreground"
-        >
-          {{
-            t("llmProvider.opencode.providerList.disabledHint", {
-              id: provider.id,
-            })
-          }}
-        </span>
       </div>
     </template>
   </div>

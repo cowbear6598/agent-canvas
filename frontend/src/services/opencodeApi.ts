@@ -70,7 +70,7 @@ interface OpencodeAliasesDeleteResultPayload {
 
 interface OpencodeAliasesReorderPayload {
   requestId: string;
-  idsInOrder: string[];
+  orderedIds: string[];
 }
 
 interface OpencodeAliasesReorderResultPayload {
@@ -213,7 +213,7 @@ export async function reorderAliases(
   >({
     requestEvent: WebSocketRequestEvents.OPENCODE_ALIASES_REORDER,
     responseEvent: WebSocketResponseEvents.OPENCODE_ALIASES_REORDER_RESULT,
-    payload: { idsInOrder },
+    payload: { orderedIds: idsInOrder },
   });
 
   return result.items ?? [];

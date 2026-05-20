@@ -1,0 +1,161 @@
+feature: ui-polish-batch-1
+created: "2026-05-20"
+approved: true
+questions:
+  - id: Q1
+    text: 現有 header 有哪些 icon 按鈕？哪些屬於「設定 / 管理類」需要併入統合 icon？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      Header (frontend/src/components/layout/AppHeader.vue) 從左到右現有：
+      ConnectionStatus、Globe (語系切換 dropdown)、Settings (全域設定)、
+      Bot (MCP 管理)、Puzzle (Plugin 管理)、KeyRound (Integrations)、
+      Cpu (LLM Provider)、History、LayoutDashboard (canvas 切換)。
+      使用者明確要求「MCP / Plugin / LLM Provider」三個併入；
+      Integrations、Settings、Globe 是否要併入需另外詢問。
+
+  - id: Q2
+    text: 三個要併入的 modal 元件目前是怎麼開啟的？開啟介面是否獨立可重用？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      三個 modal 都用 v-model:open 控制顯示：
+      - ManagedMcpModal (AppHeader.vue:137, showManagedMcpModal)
+      - ManagedPluginModal (AppHeader.vue:138, showManagedPluginModal)
+      - LlmProviderModal (AppHeader.vue:140, showLlmProviderModal)
+      開啟方式各自獨立、互相無依賴，可由父層集中以多個 ref 控制。
+
+  - id: Q3
+    text: GlobalSettingsModal 工作區安全區段的紅色警告長什麼樣？還有其他紅色元素嗎？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      GlobalSettingsModal.vue:459-463 在 securityStore.showTransportRiskWarning
+      為 true 時顯示 WarningBox（內含 text-destructive 樣式）。
+      此外 line 483-488 還有 text-destructive 的密碼錯誤提示
+      (workspaceSecurityError)，但這屬於「操作錯誤回饋」非「常駐警告」。
+
+  - id: Q4
+    text: 哪些元件套了 user-select:none / select-none？哪些是合理保留的？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      套 select-none / user-select:none 的位置：
+      - CanvasPod.vue:407 (`class="absolute select-none"` 套在 pod 容器外層)
+      - PodModelSelector.vue:461, 602
+      - ChatInput.vue:295
+      - styles/doodle/notes.css:19
+      - styles/doodle/connections.css:146
+      合理保留：doodle 線條 (connections.css) 與 SVG 拖曳元素，否則拖曳
+      會誤選文字。推測造成「無法框選」的主因：CanvasPod.vue:407 把整個
+      pod 容器 select-none 掉了，導致 pod 內的 chat 訊息、model 名稱
+      等全部文字都不能選。
+
+  - id: Q5
+    text: 目前語系切換 UI 如何運作？i18n / locale 持久化機制是什麼？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      AppHeader.vue:20-61 使用 Globe icon 觸發 dropdown，列出三個語系
+      (zh-TW / en / ja)。setLocale 函式來自 frontend/src/i18n.ts:27-42，
+      使用 vue-i18n，並把選擇寫入 localStorage 鍵 "locale" (i18n.ts:11)。
+      搬移到全域設定後可直接重用 setLocale 與 LOCALE_OPTIONS 常數。
+
+  - id: Q6
+    text: LLM Provider 卡片中文字黏在一起的實際位置與 layout 結構？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      實際位置是 OpencodeSettingsPanel.vue:475-502 的 provider 列表卡片，
+      不是 LlmProviderModal 首頁。Layout：
+        <div class="flex items-center justify-between rounded-md border ... p-3">
+          <span>provider.name</span>
+          <span>disabledHint or connected badge</span>
+        </div>
+      問題：flex 容器無 gap，當 name 較長 (例 "Fireworks (Firepass)")
+      時右側 hint 與左側 name 之間沒有間距，視覺上完全黏在一起。
+
+  - id: Q7
+    text: 統合後的 header icon 點開後，用 popover (從 header 浮出) 還是 modal (中央彈出) 來呈現三張卡片？
+    type: user-input
+    completed: true
+    answer: |
+      用 Modal（中央彈出）：點 icon 先開一個中央 modal 列三張卡片（MCP /
+      Plugin / LLM Provider），點卡片再進原本的子 modal（會形成兩層 modal
+      切換的 UX）。
+
+  - id: Q8
+    text: 統合 icon 要用哪個 lucide 圖示？
+    type: user-input
+    completed: true
+    answer: 使用 Boxes（多個積木方塊）作為統合 icon，象徵「多個整合管理」。
+
+  - id: Q9
+    text: header 上的 Integrations (KeyRound) 與 Settings (齒輪) 也要併入統合 icon 嗎？
+    type: user-input
+    completed: true
+    answer: |
+      只併 MCP / Plugin / LLM Provider 三個；Integrations (KeyRound)
+      與 Settings (齒輪) 都保留原位獨立按鈕，不動。
+
+  - id: Q10
+    text: 「拿掉紅色警告」的範圍只指「工作區安全」區段那個常駐 WarningBox？還是密碼錯誤等操作回饋的紅字 (text-destructive) 也要一起拿掉？
+    type: user-input
+    completed: true
+    answer: |
+      只拿掉常駐 WarningBox（GlobalSettingsModal.vue:459-463 的
+      transportRiskWarning 區塊）。操作回饋的 text-destructive 紅字
+      （如密碼設定失敗訊息 workspaceSecurityError）一律保留，不動。
+
+  - id: Q11
+    text: 想框選文字的區域包含哪些？哪些必須保留 select-none 以避免拖曳誤選？
+    type: user-input
+    completed: true
+    answer: |
+      只開放 chat 訊息 / message bubble 可框選；pod chrome（標題、model
+      名稱、按鈕等）、doodle 線條、connections、SVG 拖曳元素等仍保留
+      select-none 不可選。意即：CanvasPod.vue:407 的 select-none 不能整顆
+      拿掉，而是要在 pod 內的 chat 訊息容器局部解除 select-none（用
+      select-text 或 user-select: text 反向覆蓋）。
+
+  - id: Q12
+    text: 語系搬入全域設定後，要做為「獨立新區段」還是「塞在某個現有區段中」？header 上的 Globe icon 要整顆移除嗎？
+    type: user-input
+    completed: true
+    answer: |
+      在全域設定 modal 新增獨立的「語言 / Language」區段，並完全移除
+      header 上的 Globe icon（避免兩處操作不一致）。語系區段可重用
+      i18n.ts 的 setLocale 與 LOCALE_OPTIONS 常數。
+
+  - id: Q13
+    text: LLM Provider 卡片 name 與 hint 之間的 gap 該怎麼處理？
+    type: user-input
+    completed: true
+    answer: |
+      不調 gap，而是直接拿掉「未登入提示」整段文字 — 反正內容只是
+      「請在 terminal 執行 xxx auth login 後重新整理」沒有保留價值。
+      具體做法：
+      - 移除 OpencodeSettingsPanel.vue:492-501 的「未登入提示」span
+      - 同步刪除 zh-TW.json / en.json / ja.json 中的
+        `llmProvider.opencode.providerList.disabledHint` key（避免死字串）
+      - 保留 line 484-489 已登入的 connected 綠色 badge（仍以
+        opacity-50 / opacity-100 + badge 區分狀態）
+
+  - id: Q14
+    text: 移除 test:coverage script 與相關套件的具體範圍是什麼？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      Coverage 在前端專案的實際 footprint：
+      1. frontend/package.json:13 — `"test:coverage": "vitest run --coverage"`
+         (script)
+      2. frontend/package.json:39 — `"@vitest/coverage-v8": "^4.0.18"`
+         (devDependency；目前唯一的 coverage 相關套件)
+      3. frontend/vitest.config.ts:13-27 — `coverage: { provider: 'v8',
+         include: [...], exclude: [...] }` 整個 coverage 區塊
+      4. .gitignore:1-2 — `# Test coverage` / `coverage/` 兩行
+         （coverage 輸出資料夾忽略條目）
+
+      使用者明確指示「砍掉 + 不需要做 coverage」→ 全部 4 處一併移除，
+      並執行 `bun install` 同步更新 bun.lock。CI / 其他工具未引用
+      test:coverage（grep .github 與 README 後確認）。

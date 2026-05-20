@@ -193,7 +193,7 @@ const closeToolModal = (): void => {
         <p
           v-if="systemReasonDetail"
           data-testid="system-reason-detail"
-          class="mb-2 text-xs leading-relaxed text-amber-900/80"
+          class="mb-2 text-xs leading-relaxed text-amber-900/80 select-text cursor-text"
         >
           {{ systemReasonDetail }}
         </p>
@@ -201,7 +201,7 @@ const closeToolModal = (): void => {
         <!-- content 為空（僅含工具標籤的 segment）時不渲染空段落 -->
         <p
           v-if="content.trim() !== '' || !hasToolUse"
-          class="font-mono text-sm whitespace-pre-wrap break-all"
+          class="font-mono text-sm whitespace-pre-wrap break-all select-text cursor-text"
         >
           {{ content }}
         </p>

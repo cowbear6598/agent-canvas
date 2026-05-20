@@ -1,0 +1,242 @@
+feature: ui-polish-batch-1
+side: frontend
+approved: true
+phases:
+  - id: P1
+    title: 共用常數 / locale 字串調整
+    parallel: true
+    verification:
+      - bun run style
+    done: true
+    items:
+      - id: P1.A
+        title: 抽出 LOCALE_OPTIONS 共用模組
+        tasks:
+          - id: P1.A.t1
+            text: |
+              新增 `frontend/src/constants/locale.ts`：匯出 `SupportedLocale` 型別、`LOCALE_OPTIONS` 常數（value / label / abbr 三欄，依序 zh-TW / en / ja,內容與 AppHeader.vue:183-191 既有定義一致）。註解使用 zh-TW。此檔目的是讓 AppHeader 與 GlobalSettingsModal 共用同一份語系清單,避免兩處重複維護。
+            completed: true
+            last_files_changed:
+              - frontend/src/constants/locale.ts
+          - id: P1.A.t2
+            text: |
+              在 `frontend/src/i18n.ts` 將原本 module 內的 `SupportedLocale` 型別改為從 `@/constants/locale` 重新匯出（或內部仍保留型別、但確保與共用模組的 union 完全相同）。`setLocale` 與 `getInitialLocale` 內的白名單檢查仍維持以 `SUPPORTED_LOCALES` 陣列比對,但比對來源改為從 `LOCALE_OPTIONS` 萃取 `value`,避免兩份白名單漂移。
+            completed: true
+            last_files_changed:
+              - frontend/src/i18n.ts
+      - id: P1.B
+        title: 移除 disabledHint locale key
+        tasks:
+          - id: P1.B.t1
+            text: |
+              在 `frontend/src/locales/zh-TW.json` 第 424 行刪除 `llmProvider.opencode.providerList.disabledHint` 整行（同時處理上一行尾的逗號 / 縮排）,確保 JSON 仍為合法格式。
+            completed: true
+            last_files_changed:
+              - frontend/src/locales/zh-TW.json
+          - id: P1.B.t2
+            text: |
+              在 `frontend/src/locales/en.json` 第 424 行刪除 `llmProvider.opencode.providerList.disabledHint` 整行（同時處理上一行尾的逗號 / 縮排）,確保 JSON 仍為合法格式。
+            completed: true
+            last_files_changed:
+              - frontend/src/locales/en.json
+          - id: P1.B.t3
+            text: |
+              在 `frontend/src/locales/ja.json` 第 424 行刪除 `llmProvider.opencode.providerList.disabledHint` 整行（同時處理上一行尾的逗號 / 縮排）,確保 JSON 仍為合法格式。
+            completed: true
+            last_files_changed:
+              - frontend/src/locales/ja.json
+      - id: P1.C
+        title: 新增 settings.language locale key 與 hub modal 文案
+        tasks:
+          - id: P1.C.t1
+            text: |
+              在 `frontend/src/locales/zh-TW.json` 的 `settings` 區段（line 883 起）內新增 `language` 子物件,含 `title`（值：「語言」）、`description`（值：「介面顯示的語言」）。請放在 `timezone` / `timezonePlaceholder` 之後、`backup` 之前,維持區段視覺順序。
+            completed: true
+            last_files_changed:
+              - frontend/src/locales/zh-TW.json
+          - id: P1.C.t2
+            text: |
+              在 `frontend/src/locales/en.json` 的 `settings` 區段（line 883 起）內新增 `language` 子物件,含 `title`（值：「Language」）、`description`（值：「Interface language」）,位置同 zh-TW。
+            completed: true
+            last_files_changed:
+              - frontend/src/locales/en.json
+          - id: P1.C.t3
+            text: |
+              在 `frontend/src/locales/ja.json` 的 `settings` 區段（line 883 起）內新增 `language` 子物件,含 `title`（值：「言語」）、`description`（值：「インターフェースの表示言語」）,位置同 zh-TW。
+            completed: true
+            last_files_changed:
+              - frontend/src/locales/ja.json
+          - id: P1.C.t4
+            text: |
+              在三個 locale 檔的 `layout.header` 區段（line 329 起）新增 `integrationsHub` key,作為新 Boxes icon button 的 title／aria-label。zh-TW：「整合管理」；en：「Integrations Hub」；ja：「統合管理」。同步新增 `integrationsHub.title` / `integrationsHub.description` / `integrationsHub.cards.mcp` / `integrationsHub.cards.plugin` / `integrationsHub.cards.llmProvider` 五個子 key 於 root level 新區段 `integrationsHub`（與 `managedMcp` 平行）,內容對應 modal 主標題與三張卡片標題。zh-TW 值為「整合管理中心」/「選擇要管理的整合類別」/「MCP 管理」/「Plugin 管理」/「LLM Provider」；en 與 ja 比照翻譯。
+            completed: true
+            last_files_changed:
+              - frontend/src/locales/zh-TW.json
+              - frontend/src/locales/en.json
+              - frontend/src/locales/ja.json
+
+  - id: P2
+    title: 全域設定 modal 調整（移除紅色警告 + 新增語言區段）
+    parallel: false
+    verification:
+      - bun run style
+    done: true
+    items:
+      - id: P2.A
+        title: 刪除常駐 transportRiskWarning 區塊
+        tasks:
+          - id: P2.A.t1
+            text: |
+              在 `frontend/src/components/settings/GlobalSettingsModal.vue` 第 459-463 行整段刪除 `<WarningBox v-if="securityStore.showTransportRiskWarning" ... />`。注意：`CanvasSecurityModal.vue:170` 仍有此 store 屬性使用點,因此 `securityStore.showTransportRiskWarning` 本體與 `connectionSecurity.ts` 的判斷邏輯一律保留,**不**清理 store 定義。
+            completed: true
+            last_files_changed:
+              - frontend/src/components/settings/GlobalSettingsModal.vue
+          - id: P2.A.t2
+            text: |
+              `GlobalSettingsModal.vue` 的 `<script setup>` 區塊（line 1-298 範圍）檢查 `WarningBox` import（line 33）：若整檔內已無其他使用點,移除此 import 行；若有其他位置仍用 `WarningBox` 則保留。同樣檢查 `useSecurityStore` import 與 `securityStore` 變數,若整檔內已無其他使用點則一併移除,否則保留。
+            completed: true
+            last_files_changed:
+              - frontend/src/components/settings/GlobalSettingsModal.vue
+      - id: P2.B
+        title: 新增「語言 / Language」獨立區段
+        tasks:
+          - id: P2.B.t1
+            text: |
+              在 `GlobalSettingsModal.vue` template 的 ScrollArea 內,於現有「時區」區段（line 315-333）之後、第一個 `<div class="border-t border-border" />` 分隔線之後、「備份設定」之前,插入一個 `<div class="space-y-2">` 新區段：含 `<Label>` 顯示 `$t("settings.language.title")`、`<Select>` 元件以 `LOCALE_OPTIONS` 為來源逐一渲染 `SelectItem`（value 為 locale code,內容為 label）。Select 的 v-model 綁定一個新的 `currentLocale` ref,初始值取自 `i18n.global.locale.value`。
+            completed: true
+            last_files_changed:
+              - frontend/src/components/settings/GlobalSettingsModal.vue
+          - id: P2.B.t2
+            text: |
+              在 `GlobalSettingsModal.vue` script setup 區塊新增：(1) `import { LOCALE_OPTIONS } from "@/constants/locale";`；(2) `import { i18n, setLocale } from "@/i18n";`；(3) 用 `ref` 宣告 `currentLocale`,初值取 `i18n.global.locale.value`；(4) `watch(currentLocale, (next) => setLocale(next));` — 切換即時生效並寫入 localStorage（重用 i18n.ts 既有邏輯,**不**新增任何 try-catch / fallback）。註解使用 zh-TW,說明此區段重用 setLocale 統一持久化。
+            completed: true
+            last_files_changed:
+              - frontend/src/components/settings/GlobalSettingsModal.vue
+          - id: P2.B.t3
+            text: |
+              在新區段下方插入 `<div class="border-t border-border" />` 分隔線,與既有「備份設定」區段之間維持與其他區段一致的視覺分隔。
+            completed: true
+            last_files_changed:
+              - frontend/src/components/settings/GlobalSettingsModal.vue
+
+  - id: P3
+    title: AppHeader 改造（移除 Globe / MCP / Plugin / LLM 三按鈕 + 新增 Boxes hub）
+    parallel: false
+    verification:
+      - bun run style
+    done: true
+    items:
+      - id: P3.A
+        title: 新建 IntegrationsHubModal 元件
+        tasks:
+          - id: P3.A.t1
+            text: |
+              新增 `frontend/src/components/settings/IntegrationsHubModal.vue`：使用 shadcn `Dialog` / `DialogContent` / `DialogHeader` / `DialogTitle` / `DialogDescription` 組成中央彈出 modal。props 為 `open: boolean`,emit `update:open` 與三個語意化事件 `select-mcp` / `select-plugin` / `select-llm-provider`。template 內以 grid 列出三張卡片（圖示用 lucide-vue-next `Bot` / `Puzzle` / `Cpu`、配標題從 `integrationsHub.cards.*` 取得）,每張卡片是 `<button>`,點擊先 emit `update:open(false)` 再 emit 對應 `select-*` 事件。
+            completed: true
+            last_files_changed:
+              - frontend/src/components/settings/IntegrationsHubModal.vue
+          - id: P3.A.t2
+            text: |
+              `IntegrationsHubModal.vue` 樣式參考既有 doodle 風格（`border-doodle-ink` / `rounded-md` / `hover:bg-accent` 等）,卡片上下排版用 `flex flex-col items-center gap-2 p-4` 之類維持點擊區夠大；註解用 zh-TW 註明三個 emit 對應的子 modal 用途。
+            completed: true
+            last_files_changed:
+              - frontend/src/components/settings/IntegrationsHubModal.vue
+      - id: P3.B
+        title: 改造 AppHeader template 與 script
+        tasks:
+          - id: P3.B.t1
+            text: |
+              在 `frontend/src/components/layout/AppHeader.vue` template 中：(1) 刪除 line 20-61 的整段「語言切換按鈕」（含 dropdown 區塊）；(2) 刪除 line 71-86 的 MCP（Bot）與 Plugin（Puzzle）兩顆按鈕；(3) 刪除 line 96-102 的 LLM Provider（Cpu）按鈕；(4) 在 Settings 按鈕（line 63-69）之後、Integrations（KeyRound）按鈕之前,新增一顆 `<button>` 使用 lucide `Boxes` 圖示、`:title` 綁 `$t('layout.header.integrationsHub')`、`@click="showIntegrationsHubModal = true"`。
+            completed: true
+            last_files_changed:
+              - frontend/src/components/layout/AppHeader.vue
+          - id: P3.B.t2
+            text: |
+              在 AppHeader.vue template 底部（與其他 modal 平行）新增 `<IntegrationsHubModal v-model:open="showIntegrationsHubModal" @select-mcp="openMcpFromHub" @select-plugin="openPluginFromHub" @select-llm-provider="openLlmProviderFromHub" />`。保留原 `ManagedMcpModal` / `ManagedPluginModal` / `LlmProviderModal` 三個 modal 元件本身（仍由各自 v-model:open 控制）。
+            completed: true
+            last_files_changed:
+              - frontend/src/components/layout/AppHeader.vue
+          - id: P3.B.t3
+            text: |
+              在 AppHeader.vue script setup 中：(1) 從 `lucide-vue-next` 的 import 移除 `Bot`、`Puzzle`、`Globe`、`Cpu`,新增 `Boxes`；(2) 移除「語言切換相關」整段（line 180-223 範圍：`type SupportedLocale`、`LOCALE_OPTIONS` 常數、`showLocaleMenu` ref、`localeMenuRef` ref、`currentLocale` computed、`currentLocaleLabel` computed、`handleSelectLocale`、`handleOutsideMouseDown`、`onMounted` / `onUnmounted` 註冊 listener、`i18n` 與 `setLocale` 兩個 import）；(3) 新增 `IntegrationsHubModal` import 與 `showIntegrationsHubModal` ref（初值 false）。如果移除後 `onMounted` / `onUnmounted` / `computed` 等 Vue API 已無其他使用點,請一併從 vue import 中清掉。
+            completed: true
+            last_files_changed:
+              - frontend/src/components/layout/AppHeader.vue
+          - id: P3.B.t4
+            text: |
+              在 AppHeader.vue script setup 新增三個 handler：`openMcpFromHub` 設 `showManagedMcpModal.value = true`；`openPluginFromHub` 設 `showManagedPluginModal.value = true`；`openLlmProviderFromHub` 設 `showLlmProviderModal.value = true`。註解用 zh-TW 註明這些 handler 是給 hub modal 卡片 emit 的 entry point,且 hub modal 在 emit 前已自行 close,因此這裡只負責開子 modal、不處理重開 hub。
+            completed: true
+            last_files_changed:
+              - frontend/src/components/layout/AppHeader.vue
+
+  - id: P4
+    title: chat 訊息開放框選 + OpencodeSettingsPanel 移除 disabledHint
+    parallel: true
+    verification:
+      - bun run style
+    done: true
+    items:
+      - id: P4.A
+        title: ChatMessageBubble 套上 select-text
+        tasks:
+          - id: P4.A.t1
+            text: |
+              在 `frontend/src/components/chat/ChatMessageBubble.vue` template 的訊息文字外層容器加上 Tailwind class `select-text`（如有需要可同時加 `cursor-text`,視 hover 狀態的視覺體驗）。涵蓋一般訊息與 system / assistant / tool-use 對應的文字容器（讓 user 能框選任何訊息類型）。**不**動 ChatMessages.vue 的 ScrollArea,也**不**動 CanvasPod.vue:407 的 `select-none`。
+            completed: true
+            last_files_changed:
+              - frontend/src/components/chat/ChatMessageBubble.vue
+          - id: P4.A.t2
+            text: |
+              開啟前端 dev server 後實機驗證：在 canvas 開啟 RunChatModal,能用滑鼠拖曳框選任一則訊息文字並 Cmd+C 複製；同時確認 pod 標題（PodHeader）、PodModelSelector、doodle 連線、SVG 拖曳區仍**不可**框選。實機驗證結果記在 commit message,無需寫入 yaml。
+            completed: true
+            last_files_changed: []
+      - id: P4.B
+        title: OpencodeSettingsPanel 移除 disabledHint span
+        tasks:
+          - id: P4.B.t1
+            text: |
+              在 `frontend/src/components/settings/OpencodeSettingsPanel.vue` 刪除 line 491-501 的 `<!-- 未登入提示 --> <span v-else ...>` 整段（含註解行與 span 元素）。保留 line 484-489 的「已登入 badge」span。刪除後 provider row 內只剩 name span 與選擇性的 connected badge span,依 `connected.includes(provider.id)` 決定是否顯示。
+            completed: true
+            last_files_changed:
+              - frontend/src/components/settings/OpencodeSettingsPanel.vue
+          - id: P4.B.t2
+            text: |
+              檢查 OpencodeSettingsPanel.vue 整檔,若刪除後已無其他位置使用 `disabledHint` 字串,確認 t() 呼叫已乾淨（locale key 已在 P1.B 移除）。若 IDE / typecheck 對 t-key 有 schema 檢查不通過,再回頭確認 P1.B 與本 task 是否完整刪除。
+            completed: true
+            last_files_changed: []
+
+  - id: P5
+    title: 移除 test:coverage script 與相關套件
+    parallel: false
+    verification:
+      - bun run style
+      - bun run test:run
+    done: true
+    items:
+      - id: P5.A
+        title: 清除 coverage footprint
+        tasks:
+          - id: P5.A.t1
+            text: |
+              編輯 `frontend/package.json`：(1) 從 scripts 區段刪除 `"test:coverage": "vitest run --coverage"` 整行（line 13,含上一行尾的逗號）；(2) 從 devDependencies 區段刪除 `"@vitest/coverage-v8": "^4.0.18"` 整行（line 39,含上一行尾的逗號）。確保 JSON 仍為合法格式。
+            completed: true
+            last_files_changed:
+              - frontend/package.json
+          - id: P5.A.t2
+            text: |
+              編輯 `frontend/vitest.config.ts`：刪除 line 13-27 的 `coverage: { ... }` 整個區塊（含 provider / include / exclude 三個 key）。保留 mergeConfig 結構與其他 test 設定（environment / globals / setupFiles / include / reporters）。確保檔案仍能被 vitest 載入。
+            completed: true
+            last_files_changed:
+              - frontend/vitest.config.ts
+          - id: P5.A.t3
+            text: |
+              編輯 `.gitignore`：刪除 line 1-2 的 `# Test coverage` 註解與 `coverage/` 條目兩行。其他內容保留不動。
+            completed: true
+            last_files_changed:
+              - .gitignore
+          - id: P5.A.t4
+            text: |
+              在 `frontend/` 目錄執行 `bun install` 同步 bun.lock（移除 @vitest/coverage-v8 對應的鎖定條目）。確認 bun.lock 有實際變動（diff 可見）,並讓 bun run test:run 在無 coverage provider 套件下仍能正常啟動。
+            completed: true
+            last_files_changed:
+              - frontend/bun.lock

@@ -334,7 +334,8 @@
       "managedPlugin": "Plugin 管理",
       "integrations": "インテグレーション管理",
       "history": "実行履歴",
-      "llmProvider": "LLM Provider 設定"
+      "llmProvider": "LLM Provider 設定",
+      "integrationsHub": "統合管理"
     }
   },
   "managedMcp": {
@@ -405,6 +406,15 @@
       "urlRequired": "HTTP / SSE モードでは URL の入力が必要です"
     }
   },
+  "integrationsHub": {
+    "title": "統合管理センター",
+    "description": "管理する統合カテゴリを選択してください",
+    "cards": {
+      "mcp": "MCP 管理",
+      "plugin": "Plugin 管理",
+      "llmProvider": "LLM Provider"
+    }
+  },
   "llmProvider": {
     "modal": {
       "title": "LLM Provider",
@@ -421,7 +431,6 @@
         "title": "Provider 一覧",
         "refresh": "更新",
         "connected": "ログイン済み",
-        "disabledHint": "terminal で opencode auth login {id} を実行してから更新してください",
         "loadError": "読み込みに失敗しました",
         "retry": "再試行",
         "empty": "利用可能な Provider がありません",
@@ -884,6 +893,10 @@
     "title": "グローバル設定",
     "timezone": "タイムゾーン",
     "timezonePlaceholder": "タイムゾーンを選択",
+    "language": {
+      "title": "言語",
+      "description": "インターフェースの表示言語"
+    },
     "backup": {
       "title": "バックアップ設定",
       "gitRemoteUrl": "Git リモート URL",

@@ -163,9 +163,11 @@ function makeCtx(
 
 function makeNeverStream(): AsyncGenerator<unknown> {
   return {
-    next: vi.fn().mockImplementation(
-      () => new Promise<IteratorResult<unknown>>(() => undefined),
-    ),
+    next: vi
+      .fn()
+      .mockImplementation(
+        () => new Promise<IteratorResult<unknown>>(() => undefined),
+      ),
     return: vi
       .fn()
       .mockResolvedValue({ done: true, value: undefined as unknown }),
@@ -1183,7 +1185,9 @@ describe("chat — prompt / plugin waiting failure handling", () => {
     expect(errEvent.code).toBe("opencode_prompt_failed");
     expect(errEvent.fatal).toBe(true);
     expect(errEvent.message).toContain("plugin prompt failed");
-    expect(events.find((event) => event.type === "turn_complete")).toBeUndefined();
+    expect(
+      events.find((event) => event.type === "turn_complete"),
+    ).toBeUndefined();
     expect(neverStream.return).toHaveBeenCalled();
   });
 
@@ -1212,7 +1216,9 @@ describe("chat — prompt / plugin waiting failure handling", () => {
     expect(errEvent.code).toBe("opencode_prompt_failed");
     expect(errEvent.fatal).toBe(true);
     expect(errEvent.message).toContain("prompt transport disconnected");
-    expect(events.find((event) => event.type === "turn_complete")).toBeUndefined();
+    expect(
+      events.find((event) => event.type === "turn_complete"),
+    ).toBeUndefined();
     expect(neverStream.return).toHaveBeenCalled();
   });
 
@@ -1253,7 +1259,9 @@ describe("chat — prompt / plugin waiting failure handling", () => {
     expect(errEvent.code).toBe("opencode_permission_blocked");
     expect(errEvent.fatal).toBe(true);
     expect(errEvent.message).toContain("skill");
-    expect(events.find((event) => event.type === "turn_complete")).toBeUndefined();
+    expect(
+      events.find((event) => event.type === "turn_complete"),
+    ).toBeUndefined();
   });
 
   it("question.asked 應 fail fast，避免 session 無限等待", async () => {
@@ -1298,7 +1306,9 @@ describe("chat — prompt / plugin waiting failure handling", () => {
     expect(errEvent.code).toBe("opencode_question_blocked");
     expect(errEvent.fatal).toBe(true);
     expect(errEvent.message).toContain("Choose fix");
-    expect(events.find((event) => event.type === "turn_complete")).toBeUndefined();
+    expect(
+      events.find((event) => event.type === "turn_complete"),
+    ).toBeUndefined();
   });
 
   it("workspace.failed 應回報 fatal error 並停止", async () => {
@@ -1337,7 +1347,9 @@ describe("chat — prompt / plugin waiting failure handling", () => {
     expect(errEvent.code).toBe("opencode_workspace_failed");
     expect(errEvent.fatal).toBe(true);
     expect(errEvent.message).toContain("workspace bootstrap failed");
-    expect(events.find((event) => event.type === "turn_complete")).toBeUndefined();
+    expect(
+      events.find((event) => event.type === "turn_complete"),
+    ).toBeUndefined();
   });
 });
 
@@ -1801,7 +1813,13 @@ describe("chat — managed MCP transient server 仍可運作", () => {
             enabled: true,
           },
         },
-        permission: "allow",
+        permission: {
+          bash: "allow",
+          doom_loop: "allow",
+          edit: "allow",
+          external_directory: "allow",
+          webfetch: "allow",
+        },
       },
     });
   });
@@ -1883,7 +1901,13 @@ describe("chat — managed MCP transient server 仍可運作", () => {
             enabled: true,
           },
         },
-        permission: "allow",
+        permission: {
+          bash: "allow",
+          doom_loop: "allow",
+          edit: "allow",
+          external_directory: "allow",
+          webfetch: "allow",
+        },
       },
     });
     // v2 SDK: prompt 使用平鋪參數，entries 非空時不送 tools subset

@@ -17,49 +17,6 @@
       <div class="flex items-center gap-4">
         <ConnectionStatus />
 
-        <!-- 語言切換按鈕 -->
-        <div
-          ref="localeMenuRef"
-          class="relative"
-        >
-          <button
-            class="flex items-center gap-1 rounded-md px-2 py-2 hover:bg-accent text-xs font-mono"
-            :title="currentLocaleLabel"
-            @click="showLocaleMenu = !showLocaleMenu"
-          >
-            <Globe class="h-4 w-4" />
-          </button>
-
-          <!-- 語言下拉選單 -->
-          <div
-            v-if="showLocaleMenu"
-            class="absolute right-0 top-full mt-1 bg-card border border-doodle-ink rounded-md p-1 z-50 min-w-[140px]"
-          >
-            <button
-              v-for="option in LOCALE_OPTIONS"
-              :key="option.value"
-              :class="[
-                'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary font-mono',
-                {
-                  'bg-secondary border-l-2 border-l-primary':
-                    currentLocale === option.value,
-                },
-              ]"
-              @click="handleSelectLocale(option.value)"
-            >
-              <span
-                :class="[
-                  currentLocale === option.value
-                    ? 'text-primary font-semibold'
-                    : 'text-foreground',
-                ]"
-              >
-                {{ option.label }}
-              </span>
-            </button>
-          </div>
-        </div>
-
         <button
           class="flex items-center justify-center rounded-md p-2 hover:bg-accent"
           :title="$t('layout.header.globalSettings')"
@@ -69,20 +26,11 @@
         </button>
 
         <button
-          data-managed-mcp-toggle
           class="flex items-center justify-center rounded-md p-2 hover:bg-accent"
-          :title="$t('layout.header.managedMcp')"
-          @click="showManagedMcpModal = true"
+          :title="$t('layout.header.integrationsHub')"
+          @click="showIntegrationsHubModal = true"
         >
-          <Bot class="h-4 w-4" />
-        </button>
-
-        <button
-          class="flex items-center justify-center rounded-md p-2 hover:bg-accent"
-          :title="$t('layout.header.managedPlugin')"
-          @click="showManagedPluginModal = true"
-        >
-          <Puzzle class="h-4 w-4" />
+          <Boxes class="h-4 w-4" />
         </button>
 
         <button
@@ -91,14 +39,6 @@
           @click="showIntegrationModal = true"
         >
           <KeyRound class="h-4 w-4" />
-        </button>
-
-        <button
-          class="flex items-center justify-center rounded-md p-2 hover:bg-accent"
-          :title="$t('layout.header.llmProvider')"
-          @click="showLlmProviderModal = !showLlmProviderModal"
-        >
-          <Cpu class="h-4 w-4" />
         </button>
 
         <button
@@ -138,20 +78,23 @@
   <ManagedPluginModal v-model:open="showManagedPluginModal" />
   <GlobalSettingsModal v-model:open="showSettingsModal" />
   <LlmProviderModal v-model:open="showLlmProviderModal" />
+  <IntegrationsHubModal
+    v-model:open="showIntegrationsHubModal"
+    @select-mcp="openMcpFromHub"
+    @select-plugin="openPluginFromHub"
+    @select-llm-provider="openLlmProviderFromHub"
+  />
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref } from "vue";
 import {
   Sparkles,
   LayoutDashboard,
-  Bot,
   KeyRound,
   Settings,
   History,
-  Globe,
-  Cpu,
-  Puzzle,
+  Boxes,
 } from "lucide-vue-next";
 import ConnectionStatus from "@/components/ui/ConnectionStatus.vue";
 import IntegrationSelectModal from "@/components/integration/IntegrationSelectModal.vue";
@@ -160,9 +103,9 @@ import GlobalSettingsModal from "@/components/settings/GlobalSettingsModal.vue";
 import ManagedMcpModal from "@/components/settings/ManagedMcpModal.vue";
 import ManagedPluginModal from "@/components/settings/ManagedPluginModal.vue";
 import LlmProviderModal from "@/components/settings/LlmProviderModal.vue";
+import IntegrationsHubModal from "@/components/settings/IntegrationsHubModal.vue";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { useRunStore } from "@/stores/run/runStore";
-import { i18n, setLocale } from "@/i18n";
 
 const canvasStore = useCanvasStore();
 const runStore = useRunStore();
@@ -172,53 +115,23 @@ const showSettingsModal = ref<boolean>(false);
 const showManagedMcpModal = ref<boolean>(false);
 const showManagedPluginModal = ref<boolean>(false);
 const showLlmProviderModal = ref<boolean>(false);
+const showIntegrationsHubModal = ref<boolean>(false);
 
 const handleIntegrationSelect = (category: string): void => {
   selectedProvider.value = category;
 };
 
-// 語言切換相關
-type SupportedLocale = "zh-TW" | "en" | "ja";
-
-const LOCALE_OPTIONS: {
-  value: SupportedLocale;
-  label: string;
-  abbr: string;
-}[] = [
-  { value: "zh-TW", label: "繁體中文", abbr: "中" },
-  { value: "en", label: "English", abbr: "EN" },
-  { value: "ja", label: "日本語", abbr: "日" },
-];
-
-const showLocaleMenu = ref<boolean>(false);
-const localeMenuRef = ref<HTMLElement | null>(null);
-
-const currentLocale = computed(
-  () => i18n.global.locale.value as SupportedLocale,
-);
-
-const currentLocaleLabel = computed(
-  () =>
-    LOCALE_OPTIONS.find((o) => o.value === currentLocale.value)?.label ??
-    "繁體中文",
-);
-
-const handleSelectLocale = (locale: SupportedLocale): void => {
-  setLocale(locale);
-  showLocaleMenu.value = false;
+// 以下三個 handler 是給 IntegrationsHubModal 卡片 emit 的 entry point。
+// hub modal 在 emit 前已自行 close，因此這裡只負責開子 modal、不處理重開 hub。
+const openMcpFromHub = (): void => {
+  showManagedMcpModal.value = true;
 };
 
-const handleOutsideMouseDown = (event: MouseEvent): void => {
-  if (!localeMenuRef.value) return;
-  if (localeMenuRef.value.contains(event.target as Node)) return;
-  showLocaleMenu.value = false;
+const openPluginFromHub = (): void => {
+  showManagedPluginModal.value = true;
 };
 
-onMounted(() => {
-  document.addEventListener("mousedown", handleOutsideMouseDown, true);
-});
-
-onUnmounted(() => {
-  document.removeEventListener("mousedown", handleOutsideMouseDown, true);
-});
+const openLlmProviderFromHub = (): void => {
+  showLlmProviderModal.value = true;
+};
 </script>

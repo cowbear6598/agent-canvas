@@ -2,11 +2,14 @@ import { createI18n } from "vue-i18n";
 import zhTW from "./locales/zh-TW.json";
 import en from "./locales/en.json";
 import ja from "./locales/ja.json";
+import { LOCALE_OPTIONS } from "@/constants/locale";
 
-// 支援的語言清單
-type SupportedLocale = "zh-TW" | "en" | "ja";
+// 從共用常數模組重新匯出，保持型別一致
+export type { SupportedLocale } from "@/constants/locale";
+import type { SupportedLocale } from "@/constants/locale";
 
-const SUPPORTED_LOCALES: SupportedLocale[] = ["zh-TW", "en", "ja"];
+// 白名單從 LOCALE_OPTIONS 萃取 value，避免兩份清單漂移
+const SUPPORTED_LOCALES: SupportedLocale[] = LOCALE_OPTIONS.map((o) => o.value);
 const DEFAULT_LOCALE: SupportedLocale = "zh-TW";
 const LOCALE_STORAGE_KEY = "locale";
 

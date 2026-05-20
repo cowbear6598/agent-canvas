@@ -334,7 +334,8 @@
       "managedPlugin": "Plugin 管理",
       "integrations": "整合服務管理",
       "history": "歷程",
-      "llmProvider": "LLM Provider 設定"
+      "llmProvider": "LLM Provider 設定",
+      "integrationsHub": "整合管理"
     }
   },
   "managedMcp": {
@@ -405,6 +406,15 @@
       "urlRequired": "HTTP / SSE 模式必須填寫 URL"
     }
   },
+  "integrationsHub": {
+    "title": "整合管理中心",
+    "description": "選擇要管理的整合類別",
+    "cards": {
+      "mcp": "MCP 管理",
+      "plugin": "Plugin 管理",
+      "llmProvider": "LLM Provider"
+    }
+  },
   "llmProvider": {
     "modal": {
       "title": "LLM Provider",
@@ -421,7 +431,6 @@
         "title": "Provider 清單",
         "refresh": "重新整理",
         "connected": "已登入",
-        "disabledHint": "請在 terminal 執行 opencode auth login {id} 後重新整理",
         "loadError": "載入失敗",
         "retry": "重試",
         "empty": "目前沒有可用的 Provider",
@@ -884,6 +893,10 @@
     "title": "全域設定",
     "timezone": "時區",
     "timezonePlaceholder": "選擇時區",
+    "language": {
+      "title": "語言",
+      "description": "介面顯示的語言"
+    },
     "backup": {
       "title": "備份設定",
       "gitRemoteUrl": "Git Remote URL",

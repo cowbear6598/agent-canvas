@@ -8,6 +8,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useManagedPluginStore } from "@/stores/managedPluginStore";
 import type { InstalledPlugin } from "@/types/plugin";
 
@@ -135,57 +136,59 @@ watch(
       </div>
 
       <!-- Plugin 清單區 -->
-      <div class="flex max-h-[50vh] flex-col gap-2 overflow-y-auto">
-        <!-- 載入中狀態 -->
-        <div
-          v-if="store.loading && store.plugins.length === 0"
-          class="py-8 text-center text-sm text-muted-foreground"
-        >
-          載入中...
-        </div>
-
-        <!-- 空狀態 -->
-        <div
-          v-else-if="!store.loading && store.plugins.length === 0"
-          class="py-8 text-center text-sm text-muted-foreground"
-        >
-          尚未安裝任何 plugin
-        </div>
-
-        <!-- Plugin 列表 -->
-        <div
-          v-for="plugin in store.plugins"
-          v-else
-          :key="plugin.id"
-          class="flex items-center justify-between rounded-md border border-border p-3"
-        >
-          <div class="flex min-w-0 flex-col gap-0.5">
-            <span class="truncate text-sm font-medium">{{
-              plugin.displayName
-            }}</span>
-            <span class="truncate text-xs text-muted-foreground">{{
-              plugin.githubRepo
-            }}</span>
-            <span class="text-xs text-muted-foreground">安裝於 {{ formatDate(plugin.installedAt) }}</span>
+      <ScrollArea class="max-h-[50vh] pr-3">
+        <div class="flex flex-col gap-2">
+          <!-- 載入中狀態 -->
+          <div
+            v-if="store.loading && store.plugins.length === 0"
+            class="py-8 text-center text-sm text-muted-foreground"
+          >
+            載入中...
           </div>
-          <div class="ml-4 flex shrink-0 gap-2">
-            <button
-              class="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
-              :disabled="updatingId === plugin.id || store.loading"
-              @click="handleUpdate(plugin)"
-            >
-              {{ updatingId === plugin.id ? "更新中..." : "更新" }}
-            </button>
-            <button
-              class="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-destructive/50 bg-background px-3 py-1.5 text-sm font-medium text-destructive ring-offset-background transition-colors hover:bg-destructive hover:text-destructive-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
-              :disabled="store.loading"
-              @click="openDeleteConfirm(plugin)"
-            >
-              刪除
-            </button>
+
+          <!-- 空狀態 -->
+          <div
+            v-else-if="!store.loading && store.plugins.length === 0"
+            class="py-8 text-center text-sm text-muted-foreground"
+          >
+            尚未安裝任何 plugin
+          </div>
+
+          <!-- Plugin 列表 -->
+          <div
+            v-for="plugin in store.plugins"
+            v-else
+            :key="plugin.id"
+            class="flex items-center justify-between rounded-md border border-border p-3"
+          >
+            <div class="flex min-w-0 flex-col gap-0.5">
+              <span class="truncate text-sm font-medium">{{
+                plugin.displayName
+              }}</span>
+              <span class="truncate text-xs text-muted-foreground">{{
+                plugin.githubRepo
+              }}</span>
+              <span class="text-xs text-muted-foreground">安裝於 {{ formatDate(plugin.installedAt) }}</span>
+            </div>
+            <div class="ml-4 flex shrink-0 gap-2">
+              <button
+                class="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+                :disabled="updatingId === plugin.id || store.loading"
+                @click="handleUpdate(plugin)"
+              >
+                {{ updatingId === plugin.id ? "更新中..." : "更新" }}
+              </button>
+              <button
+                class="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-destructive/50 bg-background px-3 py-1.5 text-sm font-medium text-destructive ring-offset-background transition-colors hover:bg-destructive hover:text-destructive-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+                :disabled="store.loading"
+                @click="openDeleteConfirm(plugin)"
+              >
+                刪除
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      </ScrollArea>
     </DialogContent>
   </Dialog>
 
