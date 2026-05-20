@@ -243,36 +243,52 @@ export class ManagedMcpSurfaceService {
     records: ManagedMcpServerRecord[];
     ignoredTargets: ManagedMcpSurfaceIgnoredTarget[];
   }> {
+    type ResolvedItem =
+      | { kind: "ignored"; name: string; reason: string }
+      | { kind: "healthy"; entry: ManagedMcpServerRecord };
+
+    // 對所有 server name 並行執行 ensureReady，保留 input 順序
+    const resolved = await Promise.all(
+      pod.mcpServerNames.map(async (selectedName): Promise<ResolvedItem> => {
+        const entry = this.deps.store.getByName(selectedName);
+        if (!entry) {
+          return {
+            kind: "ignored",
+            name: selectedName,
+            reason: "registry entry removed",
+          };
+        }
+        if (!entry.enabled) {
+          return {
+            kind: "ignored",
+            name: selectedName,
+            reason: "registry entry disabled",
+          };
+        }
+
+        const runtime =
+          await this.deps.runtimeService.ensureReady(selectedName);
+        if (runtime.status !== "healthy") {
+          return {
+            kind: "ignored",
+            name: selectedName,
+            reason: runtime.lastError ?? "managed MCP runtime is not healthy",
+          };
+        }
+
+        return { kind: "healthy", entry };
+      }),
+    );
+
     const records: ManagedMcpServerRecord[] = [];
     const ignoredTargets: ManagedMcpSurfaceIgnoredTarget[] = [];
 
-    for (const selectedName of pod.mcpServerNames) {
-      const entry = this.deps.store.getByName(selectedName);
-      if (!entry) {
-        ignoredTargets.push({
-          name: selectedName,
-          reason: "registry entry removed",
-        });
-        continue;
+    for (const item of resolved) {
+      if (item.kind === "ignored") {
+        ignoredTargets.push({ name: item.name, reason: item.reason });
+      } else {
+        records.push(item.entry);
       }
-      if (!entry.enabled) {
-        ignoredTargets.push({
-          name: selectedName,
-          reason: "registry entry disabled",
-        });
-        continue;
-      }
-
-      const runtime = await this.deps.runtimeService.ensureReady(selectedName);
-      if (runtime.status !== "healthy") {
-        ignoredTargets.push({
-          name: selectedName,
-          reason: runtime.lastError ?? "managed MCP runtime is not healthy",
-        });
-        continue;
-      }
-
-      records.push(entry);
     }
 
     return { records, ignoredTargets };

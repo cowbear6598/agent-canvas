@@ -13,6 +13,7 @@ import { resolveInstallPath } from "./pluginPaths.js";
 import { managedPluginStore } from "./managedPluginRegistry.js";
 import type { ManagedPluginRecord } from "./managedPluginRegistry.js";
 import { getDb } from "../../database/index.js";
+import { logger } from "../../utils/logger.js";
 
 // ─── extractPluginMetadata ──────────────────────────────────────────────────
 
@@ -29,7 +30,27 @@ async function extractPluginMetadata(
     const description =
       typeof meta?.description === "string" ? meta.description : null;
     return { displayName, description };
-  } catch {
+  } catch (error) {
+    let reason: string;
+    if (error instanceof SyntaxError) {
+      reason = "JSON 損毀";
+    } else if (error instanceof Error && "code" in error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "ENOENT") {
+        reason = "檔案不存在";
+      } else if (code === "EACCES") {
+        reason = "權限不足";
+      } else {
+        reason = error.message;
+      }
+    } else {
+      reason = String(error);
+    }
+    logger.warn(
+      "Plugin",
+      "Warn",
+      `讀取 plugin.json 失敗，路徑: ${installPath}，原因: ${reason}`,
+    );
     return { displayName: repo, description: null };
   }
 }

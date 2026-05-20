@@ -86,25 +86,25 @@ function toCatalogEntry(
 export async function buildPluginSkillCatalog(
   pluginIds: readonly string[],
 ): Promise<PluginSkillCatalogEntry[]> {
-  const entries: PluginSkillCatalogEntry[] = [];
+  const perPluginEntries = await Promise.all(
+    pluginIds.map(async (pluginId): Promise<PluginSkillCatalogEntry[]> => {
+      const record = managedPluginStore.getById(pluginId);
+      if (!record) return [];
 
-  for (const pluginId of pluginIds) {
-    const record = managedPluginStore.getById(pluginId);
-    if (!record) continue;
+      let skills: SkillInfo[];
+      try {
+        skills = await listSkillsForPlugin(record.installPath);
+      } catch {
+        return [];
+      }
 
-    let skills: SkillInfo[];
-    try {
-      skills = await listSkillsForPlugin(record.installPath);
-    } catch {
-      continue;
-    }
+      return skills.map((skill) =>
+        toCatalogEntry(pluginId, record.installPath, skill),
+      );
+    }),
+  );
 
-    for (const skill of skills) {
-      entries.push(toCatalogEntry(pluginId, record.installPath, skill));
-    }
-  }
-
-  return entries;
+  return perPluginEntries.flat();
 }
 
 // ─── prompt 格式化 ───────────────────────────────────────────────────────────

@@ -7,6 +7,7 @@
 
 import path from "path";
 import fs from "fs/promises";
+import { logger } from "../../utils/logger.js";
 
 // ─── 型別 ────────────────────────────────────────────────────────────────────
 
@@ -92,12 +93,22 @@ async function walkForSkillMd(
   let entries: Array<{ name: string; isDir: boolean; isFile: boolean }>;
   try {
     const dirents = await fs.readdir(currentDir, { withFileTypes: true });
-    entries = dirents.map((d) => ({
-      name: d.name,
-      isDir: d.isDirectory(),
-      isFile: d.isFile(),
-    }));
-  } catch {
+    entries = dirents
+      .filter((d) => {
+        if (d.isSymbolicLink()) return false;
+        return true;
+      })
+      .map((d) => ({
+        name: d.name,
+        isDir: d.isDirectory(),
+        isFile: d.isFile(),
+      }));
+  } catch (error) {
+    logger.warn(
+      "Plugin",
+      "Warn",
+      `掃描目錄失敗，路徑: ${currentDir}，原因: ${error instanceof Error ? error.message : String(error)}`,
+    );
     return;
   }
 
@@ -107,7 +118,12 @@ async function walkForSkillMd(
       let content: string;
       try {
         content = await fs.readFile(skillMdPath, "utf-8");
-      } catch {
+      } catch (error) {
+        logger.warn(
+          "Plugin",
+          "Warn",
+          `讀取 SKILL.md 失敗，路徑: ${skillMdPath}，原因: ${error instanceof Error ? error.message : String(error)}`,
+        );
         continue;
       }
       const relDir = path.relative(installPath, currentDir);

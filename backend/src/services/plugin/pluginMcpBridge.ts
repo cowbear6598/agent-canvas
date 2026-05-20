@@ -178,8 +178,11 @@ async function main(): Promise<void> {
               skillDir,
             });
           }
-        } catch {
+        } catch (error) {
           // 單個 plugin 讀取失敗不中斷整體，跳過
+          console.error(
+            `[plugin-mcp-bridge] 掃描 plugin 技能失敗，pluginId: ${pluginId}，installPath: ${installPath}，原因: ${error instanceof Error ? error.message : String(error)}`,
+          );
         }
       }
 

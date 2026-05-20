@@ -41,7 +41,8 @@ export type LogCategory =
   | "Encryption"
   | "Cleanup"
   | "Shutdown"
-  | "Upload";
+  | "Upload"
+  | "Plugin";
 
 /**
  * Category 顏色映射表
@@ -74,6 +75,7 @@ const CATEGORY_COLORS: Record<LogCategory, string> = {
   Cleanup: ANSI_COLORS.GRAY,
   Shutdown: ANSI_COLORS.GRAY,
   Upload: ANSI_COLORS.GREEN,
+  Plugin: ANSI_COLORS.MAGENTA,
 };
 
 /**

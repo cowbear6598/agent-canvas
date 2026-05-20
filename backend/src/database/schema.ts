@@ -289,6 +289,11 @@ function columnExists(
   tableName: string,
   columnName: string,
 ): boolean {
+  if (!/^[A-Za-z0-9_]+$/.test(tableName)) {
+    throw new Error(
+      `columnExists：tableName 含非法字元，僅允許字母、數字與底線，收到: "${tableName}"`,
+    );
+  }
   const rows = db.query(`PRAGMA table_info(${tableName})`).all() as Array<{
     name: string;
   }>;
