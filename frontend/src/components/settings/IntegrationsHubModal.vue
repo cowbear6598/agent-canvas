@@ -60,7 +60,6 @@ const handleSelectLlmProvider = (): void => {
         </DialogDescription>
       </DialogHeader>
 
-      <!-- 三張卡片以 grid 排列，每張卡片為可點擊 button -->
       <div class="grid grid-cols-3 gap-3 py-2">
         <!-- MCP 管理卡片 -->
         <button
