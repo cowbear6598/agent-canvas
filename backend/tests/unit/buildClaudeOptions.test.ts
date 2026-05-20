@@ -13,9 +13,7 @@ import {
 // - claudeMcpReader：移除 vi.mock，改用 CLAUDE_JSON_PATH env 覆寫 + tmp dir 真讀
 //   （readClaudeMcpServers 用 lazy 函式讀取路徑，每次呼叫都讀 process.env.CLAUDE_JSON_PATH）
 //
-// - pluginScanner：移除 vi.mock，改用 CLAUDE_PLUGINS_INSTALLED_PATH env 指向不存在路徑
-//   （pluginScanner 無法透過 reimport 更新，因為 buildClaudeOptions 是靜態 import；
-//    指向不存在路徑讓 readFileSync 靜默失敗 → 回傳空陣列，符合大部分測試預設情境）
+// - pluginScanner：已移除（舊本地掃描機制下線），不需要 mock 或 env 覆寫
 //
 // - integrationRegistry：保留 vi.mock（integration/index.js 的依賴鏈含 bun:sqlite，
 //   vitest 環境無法 import），但改為提供可控的 get mock fn
@@ -116,11 +114,8 @@ beforeEach(async () => {
   claudeJsonPath = join(tmpHome, ".claude.json");
 
   // 覆寫 CLAUDE_JSON_PATH：讓 claudeMcpReader 讀測試用 json（lazy 函式，每次都讀 env）
-  // 覆寫 CLAUDE_PLUGINS_INSTALLED_PATH 為不存在路徑：確保 pluginScanner 回傳空陣列
-  // （pluginScanner 的路徑常數在 module load 時已固定；指向不存在路徑讓讀檔靜默失敗）
   restoreEnv = overrideEnv({
     CLAUDE_JSON_PATH: claudeJsonPath,
-    CLAUDE_PLUGINS_INSTALLED_PATH: join(tmpHome, "nonexistent-plugins.json"),
   });
 
   // 清除 claudeMcpReader 快取，確保每個測試都從乾淨狀態讀取
@@ -147,15 +142,24 @@ afterEach(async () => {
 // 測試
 // ─────────────────────────────────────────────────────────────────────────────
 
+// agent_canvas_plugin entry 永遠由 buildPodMcpEntries 注入。在僅關心 user / integration
+// 設定的測試中，過濾掉該 key 以維持原本斷言語意。
+function userMcpKeys(
+  mcpServers: Record<string, unknown> | undefined,
+): string[] {
+  if (!mcpServers) return [];
+  return Object.keys(mcpServers).filter((k) => k !== "agent_canvas_plugin");
+}
+
 describe("buildClaudeOptions", () => {
   describe("無 MCP / Plugin / Integration 時產出最精簡 options", () => {
-    it("不應包含 mcpServers key（空物件不注入）", async () => {
+    it("除了內建 agent_canvas_plugin 之外不應有其他 mcpServers", async () => {
       // claude.json 不存在 → claudeMcpReader 真實讀取 → 回傳 []
       const pod = createBasePod();
 
       const result = await buildClaudeOptions(pod);
 
-      expect(result).not.toHaveProperty("mcpServers");
+      expect(userMcpKeys(result.mcpServers)).toEqual([]);
     });
 
     it("不應包含 plugins key（無 plugin 時不注入）", async () => {
@@ -202,7 +206,7 @@ describe("buildClaudeOptions", () => {
   });
 
   describe("MCP Server 過濾行為（claudeMcpReader 真讀 tmp claude.json）", () => {
-    it("pod.mcpServerNames 為空時不應產出 mcpServers", async () => {
+    it("pod.mcpServerNames 為空時不應產出使用者 mcpServers", async () => {
       // 寫入 claude.json（有 server），但 pod 沒有啟用任何 server
       await writeFile(
         claudeJsonPath,
@@ -214,15 +218,15 @@ describe("buildClaudeOptions", () => {
       const pod = createBasePod({ mcpServerNames: [] });
       const result = await buildClaudeOptions(pod);
 
-      expect(result).not.toHaveProperty("mcpServers");
+      expect(userMcpKeys(result.mcpServers)).toEqual([]);
     });
 
-    it("pod.mcpServerNames 有指定 name 但 claude.json 無對應 server 時不產出 mcpServers", async () => {
+    it("pod.mcpServerNames 有指定 name 但 claude.json 無對應 server 時不產出使用者 mcpServers", async () => {
       // claude.json 不存在 → claudeMcpReader 回傳 []
       const pod = createBasePod({ mcpServerNames: ["nonexistent-server"] });
       const result = await buildClaudeOptions(pod);
 
-      expect(result).not.toHaveProperty("mcpServers");
+      expect(userMcpKeys(result.mcpServers)).toEqual([]);
     });
 
     it("pod.mcpServerNames 與 claude.json 交集後只注入允許的 server", async () => {
@@ -365,7 +369,7 @@ describe("applyIntegrationToolOptions：integrationBinding provider 名稱含非
     } as any);
   });
 
-  it("provider 名稱含空格（'open ai'）時，該 binding 應被略過、不出現在 mcpServers", async () => {
+  it("provider 名稱含空格（'open ai'）時，該 binding 應被略過、不出現在使用者 mcpServers", async () => {
     const pod = createBasePod({
       integrationBindings: [
         {
@@ -378,12 +382,12 @@ describe("applyIntegrationToolOptions：integrationBinding provider 名稱含非
 
     const result = await buildClaudeOptions(pod);
 
-    // 非法 provider 名稱被略過，不應產出 mcpServers
-    expect(result).not.toHaveProperty("mcpServers");
+    // 非法 provider 名稱被略過，不應產出使用者 mcpServers
+    expect(userMcpKeys(result.mcpServers)).toEqual([]);
     expect(result.allowedTools).toEqual([...BASE_ALLOWED_TOOLS]);
   });
 
-  it("provider 名稱含分號（'foo;bar'）時，該 binding 應被略過、不出現在 mcpServers", async () => {
+  it("provider 名稱含分號（'foo;bar'）時，該 binding 應被略過、不出現在使用者 mcpServers", async () => {
     const pod = createBasePod({
       integrationBindings: [
         {
@@ -396,8 +400,8 @@ describe("applyIntegrationToolOptions：integrationBinding provider 名稱含非
 
     const result = await buildClaudeOptions(pod);
 
-    // 非法 provider 名稱被略過，不應產出 mcpServers
-    expect(result).not.toHaveProperty("mcpServers");
+    // 非法 provider 名稱被略過，不應產出使用者 mcpServers
+    expect(userMcpKeys(result.mcpServers)).toEqual([]);
     expect(result.allowedTools).toEqual([...BASE_ALLOWED_TOOLS]);
   });
 
@@ -439,7 +443,7 @@ describe("applyIntegrationToolOptions：integrationBinding provider 名稱含非
 });
 
 describe("applyIntegrationToolOptions：provider 不存在時跳過（不 crash）", () => {
-  it("provider 不存在時 buildClaudeOptions 應正常完成，不含 integration mcpServer", async () => {
+  it("provider 不存在時 buildClaudeOptions 應正常完成，不含使用者 integration mcpServer", async () => {
     // 預設 integrationRegistry.get 回傳 undefined（已在 beforeEach 設好）
     const pod = createBasePod({
       integrationBindings: [
@@ -453,8 +457,8 @@ describe("applyIntegrationToolOptions：provider 不存在時跳過（不 crash�
 
     const result = await buildClaudeOptions(pod);
 
-    // 沒有合法的 integration，不應產出 mcpServers
-    expect(result).not.toHaveProperty("mcpServers");
+    // 沒有合法的 integration，使用者 mcpServers 應為空（agent_canvas_plugin 仍會存在）
+    expect(userMcpKeys(result.mcpServers)).toEqual([]);
     // allowedTools 應維持基本清單
     expect(result.allowedTools).toEqual([...BASE_ALLOWED_TOOLS]);
   });
@@ -478,7 +482,7 @@ describe("applyIntegrationToolOptions：provider 不存在時跳過（不 crash�
 
     const result = await buildClaudeOptions(pod);
 
-    // 無 sendMessage，不應注入 mcpServer
-    expect(result).not.toHaveProperty("mcpServers");
+    // 無 sendMessage，使用者 mcpServers 應為空（agent_canvas_plugin 仍會存在）
+    expect(userMcpKeys(result.mcpServers)).toEqual([]);
   });
 });

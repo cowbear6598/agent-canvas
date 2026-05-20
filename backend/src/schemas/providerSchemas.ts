@@ -1,8 +1,5 @@
 import { z } from "zod";
-import type {
-  ProviderCapabilities,
-  ProviderName,
-} from "../services/provider/types.js";
+import type { ProviderName } from "../services/provider/types.js";
 
 /** provider:list 請求 payload schema */
 export const providerListSchema = z.object({
@@ -17,7 +14,6 @@ export interface ProviderListResultPayload {
   success: boolean;
   providers: Array<{
     name: ProviderName;
-    capabilities: ProviderCapabilities;
     /** Provider 預設執行時選項，各 provider 形狀不同，前端各自解析 */
     defaultOptions: Record<string, unknown>;
     /**

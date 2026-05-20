@@ -7,21 +7,36 @@ import {
   type McpProbe,
 } from "../../src/services/mcp/managedMcpRuntimeService.js";
 import { managedMcpStore } from "../../src/services/mcp/managedMcpStore.js";
-import { createManagedMcpSurfaceService } from "../../src/services/mcp/managedMcpSurfaceService.js";
+import {
+  createManagedMcpSurfaceService,
+  type PodMcpEntry,
+} from "../../src/services/mcp/managedMcpSurfaceService.js";
 import type { Pod } from "../../src/types/pod.js";
 import type { RunContext } from "../../src/types/run.js";
 
+// agent_canvas_plugin entry 永遠被 buildPodMcpEntries 注入；在不關心該 entry 的測試中過濾掉
+function withoutPluginEntry(entries: PodMcpEntry[]): PodMcpEntry[] {
+  return entries.filter((entry) => entry.name !== "agent_canvas_plugin");
+}
+
 function createPod(
   overrides: Partial<
-    Pick<Pod, "id" | "name" | "provider" | "goal" | "mcpServerNames">
+    Pick<
+      Pod,
+      "id" | "name" | "provider" | "goal" | "mcpServerNames" | "pluginIds"
+    >
   > = {},
-): Pick<Pod, "id" | "name" | "provider" | "goal" | "mcpServerNames"> {
+): Pick<
+  Pod,
+  "id" | "name" | "provider" | "goal" | "mcpServerNames" | "pluginIds"
+> {
   return {
     id: overrides.id ?? "pod-1",
     name: overrides.name ?? "Pod Entries Test",
     provider: overrides.provider ?? "codex",
     goal: overrides.goal ?? null,
     mcpServerNames: overrides.mcpServerNames ?? [],
+    pluginIds: overrides.pluginIds ?? [],
   };
 }
 
@@ -53,7 +68,7 @@ describe("ManagedMcpSurfaceService.buildPodMcpEntries", () => {
     const pod = createPod({ id: "pod-empty", mcpServerNames: [] });
     const result = await surfaceService.buildPodMcpEntries(pod, null);
 
-    expect(result.entries).toEqual([]);
+    expect(withoutPluginEntry(result.entries)).toEqual([]);
     expect(result.hasGoalRuntime).toBe(false);
     expect(result.ignoredTargets).toEqual([]);
     expect(probe.probe).not.toHaveBeenCalled();
@@ -86,8 +101,9 @@ describe("ManagedMcpSurfaceService.buildPodMcpEntries", () => {
     });
     const result = await surfaceService.buildPodMcpEntries(pod, null);
 
-    expect(result.entries).toHaveLength(1);
-    expect(result.entries[0]).toMatchObject({
+    const userEntries = withoutPluginEntry(result.entries);
+    expect(userEntries).toHaveLength(1);
+    expect(userEntries[0]).toMatchObject({
       name: "filesystem",
       transport: "stdio",
       command: "uvx",
@@ -122,8 +138,9 @@ describe("ManagedMcpSurfaceService.buildPodMcpEntries", () => {
     });
     const result = await surfaceService.buildPodMcpEntries(pod, null);
 
-    expect(result.entries).toHaveLength(1);
-    const entry = result.entries[0];
+    const userEntries = withoutPluginEntry(result.entries);
+    expect(userEntries).toHaveLength(1);
+    const entry = userEntries[0];
     expect(entry).toMatchObject({
       name: "remote-mcp",
       transport: "stdio",
@@ -165,7 +182,7 @@ describe("ManagedMcpSurfaceService.buildPodMcpEntries", () => {
     });
     const result = await surfaceService.buildPodMcpEntries(pod, null);
 
-    expect(result.entries).toEqual([
+    expect(withoutPluginEntry(result.entries)).toEqual([
       {
         name: "remote-mcp",
         transport: "http",
@@ -199,7 +216,7 @@ describe("ManagedMcpSurfaceService.buildPodMcpEntries", () => {
     });
     const result = await surfaceService.buildPodMcpEntries(pod, null);
 
-    expect(result.entries).toEqual([
+    expect(withoutPluginEntry(result.entries)).toEqual([
       {
         name: "remote-sse",
         transport: "sse",
@@ -233,7 +250,7 @@ describe("ManagedMcpSurfaceService.buildPodMcpEntries", () => {
     });
     const result = await surfaceService.buildPodMcpEntries(pod, null);
 
-    expect(result.entries[0]).toMatchObject({
+    expect(withoutPluginEntry(result.entries)[0]).toMatchObject({
       name: "remote-sse",
       transport: "stdio",
       proxied: true,
@@ -278,7 +295,9 @@ describe("ManagedMcpSurfaceService.buildPodMcpEntries", () => {
 
     expect(result.hasGoalRuntime).toBe(true);
     expect(result.entries[0]?.name).toBe("agent_canvas_goal");
-    expect(result.entries[1]?.name).toBe("team-server");
+    // entries[1] 為自動注入的 agent_canvas_plugin，entries[2] 才是使用者指定的 team-server
+    expect(result.entries[1]?.name).toBe("agent_canvas_plugin");
+    expect(result.entries[2]?.name).toBe("team-server");
   });
 
   it("registry 不存在 / disabled / runtime 不 healthy → 進 ignoredTargets 並附 reason", async () => {
@@ -321,7 +340,7 @@ describe("ManagedMcpSurfaceService.buildPodMcpEntries", () => {
     });
     const result = await surfaceService.buildPodMcpEntries(pod, null);
 
-    expect(result.entries).toEqual([]);
+    expect(withoutPluginEntry(result.entries)).toEqual([]);
     expect(result.ignoredTargets).toEqual([
       { name: "missing-server", reason: "registry entry removed" },
       { name: "disabled-server", reason: "registry entry disabled" },
@@ -358,7 +377,7 @@ describe("ManagedMcpSurfaceService.buildPodMcpEntries", () => {
     });
 
     const first = await surfaceService.buildPodMcpEntries(pod, null);
-    expect(first.entries[0]).toMatchObject({
+    expect(withoutPluginEntry(first.entries)[0]).toMatchObject({
       name: "filesystem",
       command: "uvx",
     });
@@ -374,7 +393,7 @@ describe("ManagedMcpSurfaceService.buildPodMcpEntries", () => {
     await runtimeService.markConfigDirty("filesystem");
 
     const second = await surfaceService.buildPodMcpEntries(pod, null);
-    expect(second.entries[0]).toMatchObject({
+    expect(withoutPluginEntry(second.entries)[0]).toMatchObject({
       name: "filesystem",
       command: "node",
       args: ["new-filesystem-server.js"],

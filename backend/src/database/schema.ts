@@ -267,6 +267,21 @@ function createBaseTables(db: Database): void {
   db.exec(
     "CREATE INDEX IF NOT EXISTS idx_model_aliases_provider_id ON model_aliases(provider_id, order_idx)",
   );
+
+  db.exec(
+    "CREATE TABLE IF NOT EXISTS managed_plugins (" +
+      "id TEXT PRIMARY KEY," +
+      "github_repo TEXT NOT NULL," +
+      "display_name TEXT," +
+      "description TEXT," +
+      "install_path TEXT NOT NULL," +
+      "installed_at TEXT NOT NULL," +
+      "updated_at TEXT NOT NULL" +
+      ")",
+  );
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_managed_plugins_github_repo ON managed_plugins(github_repo)",
+  );
 }
 
 function columnExists(
@@ -279,6 +294,32 @@ function columnExists(
   }>;
 
   return rows.some((row) => row.name === columnName);
+}
+
+function tableExists(db: Database, tableName: string): boolean {
+  const row = db
+    .query("SELECT name FROM sqlite_master WHERE type='table' AND name=?")
+    .get(tableName);
+  return row !== null;
+}
+
+/**
+ * 升級到自管 plugin 版本時，一次性清空 pod_plugin_ids。
+ * 判定條件：呼叫前（createBaseTables 執行前）managed_plugins 表是否已存在。
+ * 若不存在代表是首次升級，需清空舊版 plugin 綁定；後續啟動不再重複執行。
+ */
+function migratePodPluginIdsTruncate(
+  db: Database,
+  isFirstUpgrade: boolean,
+): void {
+  if (!isFirstUpgrade) return;
+
+  const result = db.prepare("DELETE FROM pod_plugin_ids").run();
+  if (result.changes > 0) {
+    console.log(
+      `[DB migration] 已清空 ${result.changes} 筆 pod_plugin_ids 以重新對齊自管 plugin 版本`,
+    );
+  }
 }
 
 function migrateCanvasPasswordColumns(db: Database): void {
@@ -568,7 +609,9 @@ function migratePodsDropStatus(db: Database): void {
 }
 
 export function createTables(db: Database): void {
+  const isManagedPluginsFirstUpgrade = !tableExists(db, "managed_plugins");
   createBaseTables(db);
+  migratePodPluginIdsTruncate(db, isManagedPluginsFirstUpgrade);
   migrateCanvasPasswordColumns(db);
   migratePodsGoalColumn(db);
   migratePodsGeminiProviderToClaude(db);

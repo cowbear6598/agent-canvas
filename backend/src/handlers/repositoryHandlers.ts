@@ -20,7 +20,6 @@ import {
   withCanvasId,
   emitPodUpdated,
   handleResultError,
-  assertCapability,
 } from "../utils/handlerHelpers.js";
 import { validateRepositoryExists } from "../utils/validators.js";
 
@@ -104,18 +103,6 @@ export const handlePodBindRepository = withCanvasId<PodBindRepositoryPayload>(
     if (!pod) {
       return;
     }
-
-    if (
-      !assertCapability(
-        connectionId,
-        pod,
-        "repository",
-        WebSocketResponseEvents.POD_REPOSITORY_BOUND,
-        requestId,
-        canvasId,
-      )
-    )
-      return;
 
     const validateResult = await validateRepositoryExists(repositoryId);
     if (

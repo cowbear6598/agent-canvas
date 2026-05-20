@@ -20,6 +20,11 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 import { buildGoalRuntimeMcpServerConfig } from "../goalRuntime.js";
+import { buildPluginMcpEntry } from "../plugin/pluginMcpEntryBuilder.js";
+import {
+  buildPluginSkillCatalog,
+  type PluginSkillCatalogEntry,
+} from "../plugin/pluginCatalogBuilder.js";
 import { socketService } from "../socketService.js";
 import { WebSocketResponseEvents } from "../../schemas/events.js";
 import type { Pod } from "../../types/pod.js";
@@ -80,6 +85,12 @@ export interface PodMcpEntriesResult {
   entries: PodMcpEntry[];
   ignoredTargets: ManagedMcpSurfaceIgnoredTarget[];
   hasGoalRuntime: boolean;
+  /**
+   * Plugin Skill Catalog（依 pod.pluginIds 掃出的所有 SKILL.md）。
+   * Provider 在 fresh session 首輪會把這份 catalog 注入 prompt，
+   * 讓 LLM 知道有哪些 skill 可用、絕對路徑在哪。
+   */
+  pluginCatalog: PluginSkillCatalogEntry[];
 }
 
 interface ManagedMcpStoreLike {
@@ -158,7 +169,10 @@ export class ManagedMcpSurfaceService {
    * 通知前端。
    */
   async buildPodMcpEntries(
-    pod: Pick<Pod, "id" | "name" | "provider" | "goal" | "mcpServerNames">,
+    pod: Pick<
+      Pod,
+      "id" | "name" | "provider" | "goal" | "mcpServerNames" | "pluginIds"
+    >,
     runContext: RunContext | null,
   ): Promise<PodMcpEntriesResult> {
     const provider = pod.provider as SupportedProvider;
@@ -184,6 +198,12 @@ export class ManagedMcpSurfaceService {
       }
     }
 
+    // Plugin MCP bridge：無條件注入（即使 pluginIds 為空），由 bridge 依 pod_plugin_ids
+    // 決定 scope；保持 entry 名稱穩定避免 provider session 重啟。
+    // catalog 則僅在實際有 pluginIds 時才掃描（buildPluginSkillCatalog 內部對空陣列直接回 []）。
+    entries.push(buildPluginMcpEntry(pod.id));
+    const pluginCatalog = await buildPluginSkillCatalog(pod.pluginIds);
+
     for (const record of records) {
       entries.push(buildPodMcpEntry(record, provider));
     }
@@ -204,7 +224,7 @@ export class ManagedMcpSurfaceService {
       );
     }
 
-    return { entries, ignoredTargets, hasGoalRuntime };
+    return { entries, ignoredTargets, hasGoalRuntime, pluginCatalog };
   }
 
   /**

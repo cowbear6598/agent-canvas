@@ -102,8 +102,7 @@ for await (const sdkMessage of query({ prompt, options: sdkOptions })) {
 1. buildBaseOptions（固定 SDK 設定）
 2. applyMcpServers（mcpServers）
 3. applyIntegrationToolOptions（追加 mcpServers + allowedTools）
-4. applyPlugins（plugins）
-5. model（來自 pod.providerConfig.model 或 "sonnet" fallback）
+4. model（來自 pod.providerConfig.model 或 "sonnet" fallback）
 ```
 
 注意：`ClaudeOptions.cwd` 在 `buildOptions` 階段為 `undefined`，由 `runClaudeQuery` 在組裝 SDK Options 時從 `ctx.workspacePath` 填入。
@@ -147,11 +146,8 @@ for await (const sdkMessage of query({ prompt, options: sdkOptions })) {
 
 ## Plugin 套用
 
-`pod.pluginIds` → `scanInstalledPlugins()` → 過濾已安裝的 Plugin → `ClaudeOptions.plugins`
-
-- `scanInstalledPlugins` 從 `~/.claude/plugins/installed_plugins.json` 讀取已安裝 Plugin
-- 只有 `pod.pluginIds` 中存在且已安裝的 Plugin 才會被加入
-- Plugin 格式：`{ type: "local", path: plugin.installPath }`
+舊的本地掃描機制（`pluginScanner` / `applyPlugins`）已移除。
+`pod.pluginIds` 欄位保留（作為 MCP server 未來使用），由 P3 的內建 Plugin MCP server 接手處理。
 
 ## Integration Tool 套用
 

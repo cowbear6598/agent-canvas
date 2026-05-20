@@ -379,8 +379,21 @@ export interface PodSetPluginsPayload {
 
 export interface PluginListPayload {
   requestId: string;
-  /** 依 provider 過濾 plugin 清單；限制為已知 provider 字面量，獲得型別系統列舉約束 */
-  provider?: "claude" | "codex";
+}
+
+export interface PluginInstallPayload {
+  requestId: string;
+  githubRepo: string;
+}
+
+export interface PluginDeletePayload {
+  requestId: string;
+  pluginId: string;
+}
+
+export interface PluginUpdatePayload {
+  requestId: string;
+  pluginId: string;
 }
 
 export interface RunDeletePayload {

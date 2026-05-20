@@ -290,6 +290,7 @@
       "mcpLoadFailed": "載入失敗",
       "mcpManagedHint": "請從 Header 的 MCP 面板新增全域 MCP",
       "goalMcpLabel": "Goal Runtime",
+      "pluginMcpLabel": "Plugin MCP",
       "builtinBadge": "內建",
       "searchPlaceholder": "搜尋…",
       "pluginsSearchEmpty": "找不到符合的 plugin",
@@ -330,6 +331,7 @@
       "canvasList": "Canvas 清單",
       "globalSettings": "全域設定",
       "managedMcp": "MCP 管理",
+      "managedPlugin": "Plugin 管理",
       "integrations": "整合服務管理",
       "history": "歷程",
       "llmProvider": "LLM Provider 設定"
@@ -857,7 +859,6 @@
     "noteCreateFailed": "建立 {type} 失敗",
     "connectionCreateFailed": "建立連線失敗：{message}",
     "activeCanvasNotFound": "找不到使用中的 Canvas",
-    "capabilityNotSupported": "{provider} 不支援此功能",
     "resourceInUse": "{resource} 正在被 {count} 個 Pod 使用中，無法刪除",
     "attachmentFolderNotAllowed": "不支援拖入資料夾",
     "attachmentEmpty": "沒有可上傳的檔案，請選擇檔案後再試一次",

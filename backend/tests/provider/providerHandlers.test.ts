@@ -95,10 +95,9 @@ describe("handleProviderList", () => {
     expect(Array.isArray(payload.providers)).toBe(true);
     expect(payload.providers.length).toBeGreaterThan(0);
 
-    // 每個 provider 應包含 name、capabilities、defaultOptions 以及 availableModels
+    // 每個 provider 應包含 name、defaultOptions 以及 availableModels
     for (const provider of payload.providers) {
       expect(provider).toHaveProperty("name");
-      expect(provider).toHaveProperty("capabilities");
       expect(provider).toHaveProperty("defaultOptions");
       expect(provider).toHaveProperty("availableModels");
       expect(Array.isArray(provider.availableModels)).toBe(true);
@@ -131,52 +130,6 @@ describe("handleProviderList", () => {
         expected.map((m) => ({ label: m.label, value: m.value })),
       );
     }
-  });
-
-  it("claude 的 capabilities 為 chat/plugin/repository/mcp 全部 true", async () => {
-    await handleProviderList(
-      CONNECTION_ID,
-      { requestId: REQUEST_ID },
-      REQUEST_ID,
-    );
-
-    const [, , payload] = mockEmitToConnection.mock.calls[0];
-    const claude = payload.providers.find(
-      (p: { name: string }) => p.name === "claude",
-    );
-
-    // claude provider 必須存在
-    expect(claude).toBeDefined();
-
-    const caps = claude.capabilities;
-    // 所有現存能力欄位皆應為 true
-    expect(caps.chat).toBe(true);
-    expect(caps.plugin).toBe(true);
-    expect(caps.repository).toBe(true);
-    expect(caps.mcp).toBe(true);
-  });
-
-  it("codex 的 capabilities 中 chat/repository/plugin/mcp 皆為 true", async () => {
-    await handleProviderList(
-      CONNECTION_ID,
-      { requestId: REQUEST_ID },
-      REQUEST_ID,
-    );
-
-    const [, , payload] = mockEmitToConnection.mock.calls[0];
-    const codex = payload.providers.find(
-      (p: { name: string }) => p.name === "codex",
-    );
-
-    // codex provider 必須存在
-    expect(codex).toBeDefined();
-
-    const caps = codex.capabilities;
-    // chat、repository、plugin、mcp 為 true；runMode 已移除
-    expect(caps.chat).toBe(true);
-    expect(caps.plugin).toBe(true);
-    expect(caps.repository).toBe(true);
-    expect(caps.mcp).toBe(true);
   });
 
   it("claude 的 defaultOptions.model 應與 providerRegistry.claude.metadata.defaultOptions.model 一致", async () => {

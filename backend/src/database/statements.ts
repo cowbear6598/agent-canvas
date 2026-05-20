@@ -62,6 +62,14 @@ function buildStatements(db: Database): {
     updateRuntimeState: ReturnType<Database["prepare"]>;
     deleteById: ReturnType<Database["prepare"]>;
   };
+  managedPlugin: {
+    selectAll: ReturnType<Database["prepare"]>;
+    selectById: ReturnType<Database["prepare"]>;
+    selectByGithubRepo: ReturnType<Database["prepare"]>;
+    insert: ReturnType<Database["prepare"]>;
+    update: ReturnType<Database["prepare"]>;
+    deleteById: ReturnType<Database["prepare"]>;
+  };
   podPluginIds: {
     insert: ReturnType<Database["prepare"]>;
     selectByPodId: ReturnType<Database["prepare"]>;
@@ -334,6 +342,32 @@ function buildStatements(db: Database): {
         WHERE name = $name`,
       ),
       deleteById: db.prepare("DELETE FROM managed_mcp_servers WHERE id = ?"),
+    },
+
+    managedPlugin: {
+      selectAll: db.prepare(
+        "SELECT * FROM managed_plugins ORDER BY installed_at DESC",
+      ),
+      selectById: db.prepare("SELECT * FROM managed_plugins WHERE id = ?"),
+      selectByGithubRepo: db.prepare(
+        "SELECT * FROM managed_plugins WHERE github_repo = ?",
+      ),
+      insert: db.prepare(
+        `INSERT INTO managed_plugins (
+          id, github_repo, display_name, description, install_path, installed_at, updated_at
+        ) VALUES (
+          $id, $githubRepo, $displayName, $description, $installPath, $installedAt, $updatedAt
+        )`,
+      ),
+      update: db.prepare(
+        `UPDATE managed_plugins SET
+          display_name = $displayName,
+          description = $description,
+          install_path = $installPath,
+          updated_at = $updatedAt
+        WHERE id = $id`,
+      ),
+      deleteById: db.prepare("DELETE FROM managed_plugins WHERE id = ?"),
     },
 
     podPluginIds: {

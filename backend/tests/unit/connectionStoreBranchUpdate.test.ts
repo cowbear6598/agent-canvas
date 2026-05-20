@@ -19,7 +19,6 @@ const { mockGetProvider } = vi.hoisted(() => ({
         { label: "Opus", value: "opus" },
       ],
       defaultOptions: { model: "sonnet" },
-      capabilities: { chat: true, plugin: true, mcp: true, repository: true },
     },
   })),
 }));

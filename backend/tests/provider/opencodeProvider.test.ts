@@ -29,6 +29,7 @@ const { mockManagedMcpSurfaceService } = vi.hoisted(() => ({
       entries: [],
       ignoredTargets: [],
       hasGoalRuntime: false,
+      pluginCatalog: [],
     }),
   },
 }));
@@ -154,6 +155,7 @@ function makeCtx(
       modelID: "claude-sonnet-4-5",
       mcpEntries: [],
       hasGoalRuntime: false,
+      pluginCatalog: [],
     },
     ...overrides,
   };
@@ -204,6 +206,7 @@ beforeEach(() => {
     entries: [],
     ignoredTargets: [],
     hasGoalRuntime: false,
+    pluginCatalog: [],
   });
 });
 
@@ -244,6 +247,7 @@ describe("buildOptions", () => {
       ],
       ignoredTargets: [],
       hasGoalRuntime: true,
+      pluginCatalog: [],
     });
 
     const pod = makeBuildOptionsPod({
@@ -286,6 +290,7 @@ describe("buildOptions", () => {
       ],
       ignoredTargets: [],
       hasGoalRuntime: false,
+      pluginCatalog: [],
     });
 
     const pod = makeBuildOptionsPod({
@@ -318,6 +323,7 @@ describe("buildOptions", () => {
       ],
       ignoredTargets: [],
       hasGoalRuntime: false,
+      pluginCatalog: [],
     });
 
     const pod = makeBuildOptionsPod({
@@ -348,6 +354,7 @@ describe("buildOptions", () => {
       ],
       ignoredTargets: [],
       hasGoalRuntime: false,
+      pluginCatalog: [],
     });
 
     const pod = makeBuildOptionsPod({
@@ -376,6 +383,7 @@ describe("buildOptions", () => {
       ],
       ignoredTargets: [],
       hasGoalRuntime: false,
+      pluginCatalog: [],
     });
 
     const pod = makeBuildOptionsPod({ mcpServerNames: ["remote-mcp"] });
@@ -1157,6 +1165,7 @@ describe("chat — auth 缺失（F5: 未登入時顯示錯誤）", () => {
         modelID: "claude-sonnet-4-5",
         mcpEntries: [],
         hasGoalRuntime: false,
+        pluginCatalog: [],
       },
     });
     const events = await collectEvents(opencodeProvider.chat(ctx));
@@ -1197,6 +1206,7 @@ describe("chat — auth 缺失（F5: 未登入時顯示錯誤）", () => {
         modelID: "gpt-4o",
         mcpEntries: [],
         hasGoalRuntime: false,
+        pluginCatalog: [],
       },
     });
     const events = await collectEvents(opencodeProvider.chat(ctx));
@@ -1434,6 +1444,7 @@ describe("chat — Goal Runtime bootstrap prompt（新 session 第一輪注入�
           },
         ],
         hasGoalRuntime: true,
+        pluginCatalog: [],
       },
     });
 
@@ -1491,6 +1502,7 @@ describe("chat — Goal Runtime bootstrap prompt（新 session 第一輪注入�
           },
         ],
         hasGoalRuntime: true,
+        pluginCatalog: [],
       },
     });
 
@@ -1545,6 +1557,7 @@ describe("chat — managed MCP transient server 仍可運作", () => {
           },
         ],
         hasGoalRuntime: true,
+        pluginCatalog: [],
       },
     });
 
@@ -1563,6 +1576,11 @@ describe("chat — managed MCP transient server 仍可運作", () => {
             },
             enabled: true,
           },
+        },
+        permission: {
+          external_directory: "allow",
+          edit: "allow",
+          bash: "allow",
         },
       },
     });
@@ -1620,6 +1638,7 @@ describe("chat — managed MCP transient server 仍可運作", () => {
           },
         ],
         hasGoalRuntime: true,
+        pluginCatalog: [],
       },
     });
 
@@ -1643,6 +1662,11 @@ describe("chat — managed MCP transient server 仍可運作", () => {
             url: "https://example.com/mcp",
             enabled: true,
           },
+        },
+        permission: {
+          external_directory: "allow",
+          edit: "allow",
+          bash: "allow",
         },
       },
     });
@@ -1676,6 +1700,7 @@ describe("chat — managed MCP transient server 仍可運作", () => {
           },
         ],
         hasGoalRuntime: true,
+        pluginCatalog: [],
       },
     });
 

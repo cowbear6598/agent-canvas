@@ -285,12 +285,6 @@ describe("connectionStore", () => {
       capabilityStore.syncFromPayload([
         {
           name: "claude",
-          capabilities: {
-            chat: true,
-            plugin: false,
-            repository: true,
-            mcp: true,
-          },
           availableModels: [
             { value: "sonnet", label: "Sonnet" },
             { value: "opus", label: "Opus" },
@@ -298,12 +292,6 @@ describe("connectionStore", () => {
         },
         {
           name: "codex",
-          capabilities: {
-            chat: true,
-            plugin: true,
-            repository: false,
-            mcp: false,
-          },
           availableModels: [
             { value: "gpt-5.4", label: "GPT-5.4" },
             { value: "gpt-4.5", label: "GPT-4.5" },
@@ -2141,12 +2129,6 @@ describe("connectionStore", () => {
       capabilityStore.syncFromPayload([
         {
           name: "claude",
-          capabilities: {
-            chat: true,
-            plugin: false,
-            repository: true,
-            mcp: true,
-          },
           availableModels: [
             { value: "sonnet", label: "Sonnet" },
             { value: "opus", label: "Opus" },
@@ -2155,12 +2137,6 @@ describe("connectionStore", () => {
         },
         {
           name: "codex",
-          capabilities: {
-            chat: true,
-            plugin: false,
-            repository: false,
-            mcp: false,
-          },
           availableModels: [
             { value: "gpt-5.4", label: "GPT-5.4" },
             { value: "gpt-5.5", label: "GPT-5.5" },
@@ -2334,11 +2310,7 @@ describe("connectionStore", () => {
         },
       });
 
-      await store.updateConnectionSummaryProvider(
-        "conn-1",
-        "claude",
-        "sonnet",
-      );
+      await store.updateConnectionSummaryProvider("conn-1", "claude", "sonnet");
 
       expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -2426,11 +2398,7 @@ describe("connectionStore", () => {
         },
       });
 
-      await store.updateConnectionSummaryProvider(
-        "conn-1",
-        "claude",
-        "sonnet",
-      );
+      await store.updateConnectionSummaryProvider("conn-1", "claude", "sonnet");
 
       const sentPayload =
         mockCreateWebSocketRequest.mock.calls[0]?.[0]?.payload;

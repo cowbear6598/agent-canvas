@@ -10,7 +10,6 @@
 
 import {
   type Options,
-  type SdkPluginConfig,
   type EffortLevel,
   type ThinkingConfig,
   tool,
@@ -19,7 +18,6 @@ import {
 import { z } from "zod";
 
 import { readClaudeMcpServers } from "../../mcp/claudeMcpReader.js";
-import { scanInstalledPlugins } from "../../pluginScanner.js";
 import { integrationRegistry } from "../../integration/index.js";
 import {
   replyContextStore,
@@ -31,6 +29,7 @@ import type { RunContext } from "../../../types/run.js";
 import { getResultErrorString } from "../../../types/result.js";
 import { logger } from "../../../utils/logger.js";
 import { managedMcpSurfaceService } from "../../mcp/managedMcpSurfaceService.js";
+import { formatPluginSkillCatalogPrompt } from "../../plugin/pluginCatalogBuilder.js";
 
 // ─── ClaudeOptions 介面定義 ──────────────────────────────────────────────────
 
@@ -45,8 +44,6 @@ export interface ClaudeOptions {
   model: string;
   /** MCP Server 設定（來自 mcpServerNames 與 Integration Tool） */
   mcpServers?: Options["mcpServers"];
-  /** Plugin 設定（來自 pluginIds） */
-  plugins?: SdkPluginConfig[];
   /** 允許的工具清單（baseAllowedTools + Integration Tool 追加） */
   allowedTools: string[];
   /** SDK 設定來源（固定為 ["project"]） */
@@ -71,6 +68,12 @@ export interface ClaudeOptions {
    * 已知 cwd 時動態組裝。
    */
   sandbox?: Options["sandbox"];
+  /**
+   * Plugin Skill Catalog 文字段落（已預先 format）。
+   * 空字串代表本 Pod 無啟用 plugin 或掃不出任何 SKILL.md。
+   * Fresh session 首輪會與 Goal Runtime bootstrap 一起注入 user prompt。
+   */
+  pluginCatalogText: string;
 }
 
 // ─── 基礎 Claude 工具清單 ────────────────────────────────────────────────────
@@ -113,11 +116,9 @@ export const BASE_ALLOWED_TOOLS: readonly string[] = [
 async function applyMcpServers(
   pod: Pod,
   runContext?: RunContext,
-): Promise<Pick<ClaudeOptions, "mcpServers">> {
-  const { entries } = await managedMcpSurfaceService.buildPodMcpEntries(
-    pod,
-    runContext ?? null,
-  );
+): Promise<Pick<ClaudeOptions, "mcpServers" | "pluginCatalogText">> {
+  const { entries, pluginCatalog } =
+    await managedMcpSurfaceService.buildPodMcpEntries(pod, runContext ?? null);
 
   const mcpServers: NonNullable<Options["mcpServers"]> = {};
   for (const entry of entries) {
@@ -138,55 +139,29 @@ async function applyMcpServers(
     };
   }
 
+  // Legacy fallback：pod.mcpServerNames 中若有不在 managed registry 的項目，退回
+  // ~/.claude.json 的 user-scoped allowlist 補上。此流程獨立於 entries 是否已含項目，
+  // 避免被永遠存在的 agent_canvas_plugin entry 短路掉。
+  if (pod.mcpServerNames.length > 0) {
+    const allowedSet = new Set(pod.mcpServerNames);
+    const allServers = readClaudeMcpServers();
+    for (const server of allServers) {
+      if (!allowedSet.has(server.name)) continue;
+      if (mcpServers[server.name]) continue;
+      mcpServers[server.name] = {
+        command: server.command,
+        args: server.args,
+        env: server.env,
+      };
+    }
+  }
+
+  const pluginCatalogText = formatPluginSkillCatalogPrompt(pluginCatalog);
+
   if (Object.keys(mcpServers).length > 0) {
-    return { mcpServers };
+    return { mcpServers, pluginCatalogText };
   }
-
-  if (!pod.mcpServerNames.length) return {};
-
-  // Legacy fallback：pod.mcpServerNames 在 managed registry 找不到對應（或全 ignored），
-  // 退回 ~/.claude.json 的 user-scoped MCP allowlist。實務上 popover 已只露出 managed 項目，
-  // 此分支大多走不到，保留為過渡相容性。
-  const allowedSet = new Set(pod.mcpServerNames);
-  const allServers = readClaudeMcpServers();
-  const filtered = allServers.filter((s) => allowedSet.has(s.name));
-
-  if (filtered.length === 0) return {};
-
-  const fallback: NonNullable<Options["mcpServers"]> = {};
-  for (const server of filtered) {
-    fallback[server.name] = {
-      command: server.command,
-      args: server.args,
-      env: server.env,
-    };
-  }
-  return { mcpServers: fallback };
-}
-
-// ─── applyPlugins ────────────────────────────────────────────────────────────
-
-/**
- * 套用 Plugin 設定，回傳包含 plugins 的 partial options。
- * 若 pod 無 pluginIds 設定，則回傳空物件。
- */
-function applyPlugins(pod: Pod): Pick<ClaudeOptions, "plugins"> {
-  if (!pod.pluginIds.length) return {};
-
-  const enabledSet = new Set(pod.pluginIds);
-  const plugins = scanInstalledPlugins("claude")
-    .filter((plugin) => enabledSet.has(plugin.id))
-    .map(
-      (plugin): SdkPluginConfig => ({
-        type: "local",
-        path: plugin.installPath,
-      }),
-    );
-
-  if (plugins.length > 0) {
-    return { plugins };
-  }
-  return {};
+  return { pluginCatalogText };
 }
 
 // ─── buildIntegrationTool ────────────────────────────────────────────────────
@@ -341,8 +316,7 @@ function applyIntegrationToolOptions(
  *   1. buildBaseOptions（固定 SDK 設定 + cwd）
  *   2. applyMcpServers（mcpServers）
  *   3. applyIntegrationToolOptions（追加 mcpServers + allowedTools）
- *   4. applyPlugins（plugins）
- *   5. model（來自 pod.providerConfig.model 或 default）
+ *   4. model（來自 pod.providerConfig.model 或 default）
  *
  * runContext 用於 buildIntegrationTool 內部 closure 讀取 replyContextStore。
  *
@@ -354,7 +328,6 @@ export async function buildClaudeOptions(
   runContext?: RunContext,
 ): Promise<ClaudeOptions> {
   const mcpServerOptions = await applyMcpServers(pod, runContext);
-  const pluginOptions = applyPlugins(pod);
 
   // Integration Tool：整合 MCP servers 與 allowedTools
   const integrationResult = applyIntegrationToolOptions(
@@ -373,7 +346,7 @@ export async function buildClaudeOptions(
   const rawModel = pod.providerConfig?.model;
   const model = typeof rawModel === "string" && rawModel ? rawModel : "sonnet";
 
-  const baseOptions: Omit<ClaudeOptions, "model"> = {
+  const baseOptions: Omit<ClaudeOptions, "model" | "pluginCatalogText"> = {
     settingSources: ["project"],
     // 安全敏感點：bypassPermissions 讓 Claude 繞過工具使用權限確認。
     // 每次修改 BASE_ALLOWED_TOOLS 時須同步做 security review，
@@ -399,8 +372,8 @@ export async function buildClaudeOptions(
     ...(Object.keys(mergedMcpServers).length > 0
       ? { mcpServers: mergedMcpServers }
       : {}),
-    ...pluginOptions,
     model,
+    pluginCatalogText: mcpServerOptions.pluginCatalogText ?? "",
     ...(thinkingLevel
       ? {
           effort: thinkingLevel as EffortLevel,

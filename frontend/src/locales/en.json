@@ -290,6 +290,7 @@
       "mcpLoadFailed": "Failed to load",
       "mcpManagedHint": "Add a global MCP from the header MCP panel",
       "goalMcpLabel": "Goal Runtime",
+      "pluginMcpLabel": "Plugin MCP",
       "builtinBadge": "Built-in",
       "searchPlaceholder": "Search…",
       "pluginsSearchEmpty": "No matching plugin found",
@@ -330,6 +331,7 @@
       "canvasList": "Canvas List",
       "globalSettings": "Global Settings",
       "managedMcp": "MCP Manager",
+      "managedPlugin": "Plugins",
       "integrations": "Integrations",
       "history": "History",
       "llmProvider": "LLM Provider Settings"
@@ -857,7 +859,6 @@
     "noteCreateFailed": "Failed to create {type}",
     "connectionCreateFailed": "Failed to create connection: {message}",
     "activeCanvasNotFound": "No active Canvas found",
-    "capabilityNotSupported": "{provider} does not support this capability",
     "resourceInUse": "{resource} is being used by {count} Pod(s), cannot delete",
     "attachmentFolderNotAllowed": "Folders are not supported.",
     "attachmentEmpty": "No files to upload. Please select files and try again.",

@@ -418,7 +418,7 @@ describe("貼上功能", () => {
       expect(pod?.providerConfig?.model).toBe(nonDefaultClaudeModel);
     });
 
-    it("含非法 pluginId 格式（含 '/'）的 paste payload 回傳 VALIDATION_ERROR", async () => {
+    it("含非法 pluginId 格式（含空白）的 paste payload 回傳 VALIDATION_ERROR", async () => {
       const client = getClient();
       const canvasId = await getCanvasId(client);
 
@@ -432,7 +432,7 @@ describe("貼上功能", () => {
             x: 0,
             y: 0,
             rotation: 0,
-            pluginIds: ["plugin/evil"],
+            pluginIds: ["plugin evil"],
           },
         ],
         repositoryNotes: [],

@@ -12,7 +12,6 @@
 import {
   CLAUDE_AVAILABLE_MODELS,
   CLAUDE_AVAILABLE_MODEL_VALUES,
-  CLAUDE_CAPABILITIES,
 } from "./capabilities.js";
 import {
   buildClaudeOptions,
@@ -45,7 +44,6 @@ export type { ClaudeOptions };
 export const claudeProvider: AgentProvider<ClaudeOptions> = {
   metadata: {
     name: "claude",
-    capabilities: CLAUDE_CAPABILITIES,
     defaultOptions: {
       model: "sonnet",
       allowedTools: [...BASE_ALLOWED_TOOLS],
@@ -53,6 +51,7 @@ export const claudeProvider: AgentProvider<ClaudeOptions> = {
       permissionMode: "bypassPermissions",
       includePartialMessages: true,
       pathToClaudeCodeExecutable: getClaudeCodePath(),
+      pluginCatalogText: "",
     },
     availableModels: CLAUDE_AVAILABLE_MODELS,
     availableModelValues: CLAUDE_AVAILABLE_MODEL_VALUES,

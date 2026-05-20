@@ -1,6 +1,5 @@
 import type { WebSocketResponseEvents } from "../../schemas";
 import type { Pod } from "../../types/pod.js";
-import type { ProviderCapabilities } from "../../services/provider/index.js";
 import { toPodPublicView } from "../../types/index.js";
 import { emitSuccess, emitError } from "../../utils/websocketResponse.js";
 import { createI18nError } from "../../utils/i18nError.js";
@@ -9,7 +8,6 @@ import {
   validatePod,
   withCanvasId,
   emitPodUpdated,
-  assertCapability,
 } from "../../utils/handlerHelpers.js";
 
 export interface BindResourceConfig<
@@ -34,8 +32,6 @@ export interface BindResourceConfig<
   /** 某些資源解綁後需要從 Pod 工作目錄刪除檔案 */
   deleteResourceFromPath?: (workspacePath: string) => Promise<void>;
   skipConflictCheck?: boolean;
-  /** 守門：bind 時要求 pod.provider 具備此 capability，不支援的 provider 會收到 CAPABILITY_NOT_SUPPORTED 錯誤 */
-  requiredCapability?: keyof ProviderCapabilities;
   events: {
     bound: WebSocketResponseEvents;
     unbound?: WebSocketResponseEvents;
@@ -184,20 +180,6 @@ export function createBindHandler<
       );
       if (!pod) {
         return;
-      }
-
-      if (config.requiredCapability) {
-        if (
-          !assertCapability(
-            connectionId,
-            pod,
-            config.requiredCapability,
-            config.events.bound,
-            requestId,
-            canvasId,
-          )
-        )
-          return;
       }
 
       const hasConflict = checkConflict(

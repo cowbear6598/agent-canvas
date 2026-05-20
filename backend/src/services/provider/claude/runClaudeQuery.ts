@@ -46,9 +46,10 @@ import {
 import { logger, sanitizeSensitiveInfo } from "../../../utils/logger.js";
 import { sanitizePodName } from "../podNameSanitizer.js";
 import {
-  buildGoalRuntimeBootstrapPrompt,
-  buildGoalRuntimeBootstrapContentBlock,
-} from "../goalBootstrapPrompt.js";
+  buildMcpBootstrapPrompt,
+  buildMcpBootstrapContentBlock,
+  type McpBootstrapContext,
+} from "../mcpBootstrapPrompt.js";
 
 // ─── 型別定義 ────────────────────────────────────────────────────────────────
 
@@ -118,24 +119,27 @@ function buildClaudeSystemError(params: {
 function buildPrompt(
   message: string | import("../../../types/message.js").ContentBlock[],
   resumeSessionId: string | null,
-  shouldBootstrapGoalRuntime: boolean,
+  bootstrap: McpBootstrapContext,
 ): string | AsyncIterable<SDKUserMessage> {
   // resume 時（gate retry 第 2 輪以後）不再注入 bootstrap，避免覆蓋 nudge 指示
-  const doBootstrap = shouldBootstrapGoalRuntime && !resumeSessionId;
+  const allowBootstrap = !resumeSessionId;
 
   if (typeof message === "string") {
     // 空白訊息 fallback：使用語意明確的中間變數，避免三元運算式在閱讀時語意模糊
     const trimmed = message.trim();
     const prompt = trimmed.length === 0 ? "請開始執行" : trimmed;
-    if (!doBootstrap) {
+    if (!allowBootstrap) {
       return prompt;
     }
-    return buildGoalRuntimeBootstrapPrompt(prompt);
+    return buildMcpBootstrapPrompt(prompt, bootstrap);
   }
 
   const contentArray = buildClaudeContentBlocks(message);
-  const finalContentArray = doBootstrap
-    ? [buildGoalRuntimeBootstrapContentBlock(), ...contentArray]
+  const bootstrapBlock = allowBootstrap
+    ? buildMcpBootstrapContentBlock(bootstrap)
+    : null;
+  const finalContentArray = bootstrapBlock
+    ? [bootstrapBlock, ...contentArray]
     : contentArray;
   const sessionId = resumeSessionId ?? "";
   return createUserMessageStream(finalContentArray, sessionId);
@@ -474,11 +478,10 @@ export async function* runClaudeQuery(
     return;
   }
 
-  const prompt = buildPrompt(
-    message,
-    resumeSessionId,
-    Boolean(options.mcpServers?.[GOAL_MCP_SERVER_NAME]),
-  );
+  const prompt = buildPrompt(message, resumeSessionId, {
+    goalRuntimeAvailable: Boolean(options.mcpServers?.[GOAL_MCP_SERVER_NAME]),
+    pluginCatalogText: options.pluginCatalogText ?? "",
+  });
   const pendingStderrChunks: string[] = [];
   let hasYieldedStderrDiagnostic = false;
   let resolveStderrSignal: (() => void) | null = null;
@@ -573,7 +576,6 @@ export async function* runClaudeQuery(
     // stderr 除了寫入 backend log，也轉成 provider 診斷事件，避免 Linux sandbox 問題靜默卡住
     stderr: enqueueStderrDiagnostic,
     ...(options.mcpServers ? { mcpServers: options.mcpServers } : {}),
-    ...(options.plugins ? { plugins: options.plugins } : {}),
     ...(options.effort ? { effort: options.effort } : {}),
     ...(options.thinking ? { thinking: options.thinking } : {}),
     ...(resumeSessionId ? { resume: resumeSessionId } : {}),

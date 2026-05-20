@@ -19,6 +19,7 @@ const { mockManagedMcpSurfaceService } = vi.hoisted(() => ({
       entries: [],
       ignoredTargets: [],
       hasGoalRuntime: false,
+      pluginCatalog: [],
     }),
   },
 }));
@@ -68,6 +69,7 @@ describe("CodexProvider.buildOptions()", () => {
       entries: [],
       ignoredTargets: [],
       hasGoalRuntime: false,
+      pluginCatalog: [],
     });
   });
 
@@ -145,6 +147,7 @@ describe("CodexProvider.buildOptions()", () => {
       ],
       ignoredTargets: [],
       hasGoalRuntime: true,
+      pluginCatalog: [],
     });
 
     const pod = makePod({
@@ -187,6 +190,7 @@ describe("CodexProvider.buildOptions()", () => {
       ],
       ignoredTargets: [],
       hasGoalRuntime: false,
+      pluginCatalog: [],
     });
 
     const pod = makePod({
@@ -223,6 +227,7 @@ describe("CodexProvider.buildOptions()", () => {
       ],
       ignoredTargets: [],
       hasGoalRuntime: false,
+      pluginCatalog: [],
     });
 
     const pod = makePod({
@@ -251,6 +256,7 @@ describe("CodexProvider.buildOptions()", () => {
       ],
       ignoredTargets: [],
       hasGoalRuntime: false,
+      pluginCatalog: [],
     });
 
     const pod = makePod({ mcpServerNames: ["remote-mcp"] });

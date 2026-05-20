@@ -132,19 +132,13 @@ describe("PodModelSelector opencode server 失敗時呈現 disabled", () => {
   });
 
   /**
-   * 注入 opencode capabilities，chat 由參數控制。
+   * 註冊 opencode provider（capabilities 概念已移除，僅保留 known provider 註冊以利後續組件 mount）。
    */
-  function injectOpencodeCapabilities(chatEnabled: boolean) {
+  function injectOpencodeCapabilities(_chatEnabled: boolean) {
     const store = useProviderCapabilityStore();
     store.syncFromPayload([
       {
         name: "opencode",
-        capabilities: {
-          chat: chatEnabled,
-          plugin: false,
-          repository: false,
-          mcp: false,
-        },
       },
     ]);
   }

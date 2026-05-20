@@ -72,14 +72,7 @@ export function resolveModelWithFallback(
 // ─── Re-exports ───────────────────────────────────────────────────────────────
 export type {
   AgentProvider,
-  ProviderCapabilities,
   ProviderMetadata,
   ChatRequestContext,
   NormalizedEvent,
 } from "./types.js";
-export {
-  CLAUDE_CAPABILITIES,
-  CODEX_CAPABILITIES,
-  /** Opencode Provider 能力常數，供上層服務判斷功能支援狀況 */
-  OPENCODE_CAPABILITIES,
-} from "./capabilities.js";

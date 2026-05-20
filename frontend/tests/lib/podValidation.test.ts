@@ -49,12 +49,6 @@ describe("enrichPod", () => {
       store.syncFromPayload([
         {
           name: "claude",
-          capabilities: {
-            chat: true,
-            plugin: false,
-            repository: true,
-            mcp: true,
-          },
           defaultOptions: { model: "claude-opus-4-5" },
         },
       ]);
@@ -73,12 +67,6 @@ describe("enrichPod", () => {
       store.syncFromPayload([
         {
           name: "codex",
-          capabilities: {
-            chat: true,
-            plugin: false,
-            repository: false,
-            mcp: false,
-          },
           defaultOptions: { model: "gpt-5.4" },
         },
       ]);
@@ -96,17 +84,11 @@ describe("enrichPod", () => {
   // --- case 3：store 未載入（空 {}）→ enrichPod 回 placeholder 且發 warn ---
   describe("store 未載入（後端尚未送 defaultOptions）", () => {
     it("已知 provider 但 defaultOptions 為 {} 時，應回 placeholder { model: '' } 並發 console.warn", () => {
-      // 寫入 capabilities 但不帶 defaultOptions（模擬後端 Phase 6 前的狀態）
+      // 註冊 provider 但不帶 defaultOptions（模擬後端 Phase 6 前的狀態）
       const store = useProviderCapabilityStore();
       store.syncFromPayload([
         {
           name: "claude",
-          capabilities: {
-            chat: true,
-            plugin: false,
-            repository: true,
-            mcp: true,
-          },
           // 刻意不帶 defaultOptions，syncFromPayload 會寫入 {}
         },
       ]);

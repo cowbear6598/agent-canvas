@@ -98,7 +98,6 @@ export function buildProviderListPayload(): ProviderListResultPayload["providers
 
     return {
       name,
-      capabilities: metadata.capabilities,
       defaultOptions: safeDefaultOptions,
       availableModels,
     };
@@ -107,7 +106,7 @@ export function buildProviderListPayload(): ProviderListResultPayload["providers
 
 /**
  * 處理 provider:list 請求
- * 回傳所有支援的 Provider 名稱與對應的能力矩陣
+ * 回傳所有支援的 Provider 名稱與預設選項
  */
 export async function handleProviderList(
   connectionId: string,

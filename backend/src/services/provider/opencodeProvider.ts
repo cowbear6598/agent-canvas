@@ -38,7 +38,6 @@
 
 import { createOpencodeServer } from "@opencode-ai/sdk";
 import { createOpencodeClient as createOpencodeClientV2 } from "@opencode-ai/sdk/v2";
-import { OPENCODE_CAPABILITIES } from "./capabilities.js";
 import type {
   AgentProvider,
   ChatRequestContext,
@@ -64,10 +63,11 @@ import {
   serializeV2ToolFailureError,
 } from "./opencodeToolSerializer.js";
 import {
-  buildOpencodeMcpConfig,
+  buildOpencodeTransientServerConfig,
   buildServerCacheKey,
 } from "./opencodeMcpConfigBuilder.js";
 import { buildOpencodePromptText } from "./opencodePromptHelpers.js";
+import { formatPluginSkillCatalogPrompt } from "../plugin/pluginCatalogBuilder.js";
 
 // 重新匯出測試與其他模組依賴的公開 API（拆檔後保持原本 import path 可用）
 export {
@@ -186,6 +186,12 @@ export interface OpencodeOptions {
   mcpEntries: PodMcpEntry[];
   /** Goal Runtime 是否在 mcpEntries 內，用於決定是否注入 bootstrap prompt */
   hasGoalRuntime: boolean;
+  /**
+   * Plugin Skill Catalog 文字段落（已預先 format）。
+   * 空字串代表本 Pod 無啟用 plugin 或掃不出任何 SKILL.md。
+   * Fresh session 首輪會與 Goal Runtime bootstrap 一起注入 user prompt。
+   */
+  pluginCatalogText: string;
 }
 
 // ================================================================
@@ -469,9 +475,7 @@ async function getOrCreateRunScopedServer(
   const server = await _createServer({
     port: 0,
     timeout: 30000,
-    config: {
-      mcp: buildOpencodeMcpConfig(entries),
-    },
+    config: buildOpencodeTransientServerConfig(entries),
   });
 
   runScopedOpencodeServerCache.set(key, server);
@@ -506,12 +510,12 @@ export function cleanupOpencodeRunServers(runId: string): void {
 export const opencodeProvider: AgentProvider<OpencodeOptions> = {
   metadata: {
     name: "opencode",
-    capabilities: OPENCODE_CAPABILITIES,
     defaultOptions: {
       providerID: "",
       modelID: "",
       mcpEntries: [],
       hasGoalRuntime: false,
+      pluginCatalogText: "",
     },
     availableModels: [],
     availableModelValues: new Set<string>(),
@@ -546,7 +550,7 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
       modelID = rawModel.slice(slashIndex + 1);
     }
 
-    const { entries, hasGoalRuntime } =
+    const { entries, hasGoalRuntime, pluginCatalog } =
       await managedMcpSurfaceService.buildPodMcpEntries(
         pod,
         runContext ?? null,
@@ -557,6 +561,7 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
       modelID,
       mcpEntries: entries,
       hasGoalRuntime,
+      pluginCatalogText: formatPluginSkillCatalogPrompt(pluginCatalog),
     };
   },
 
@@ -635,9 +640,7 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
               // 使用 ephemeral port，避免與既有全域 opencode server 的 4096 衝突
               port: 0,
               timeout: 30000,
-              config: {
-                mcp: buildOpencodeMcpConfig(mcpEntries),
-              },
+              config: buildOpencodeTransientServerConfig(mcpEntries),
             });
             baseUrl = transientServer.url;
           }
@@ -807,6 +810,7 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
               text: buildOpencodePromptText(
                 message,
                 goalRuntimeAvailable,
+                options.pluginCatalogText ?? "",
                 resumeSessionId,
               ),
             },

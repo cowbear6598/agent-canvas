@@ -48,8 +48,8 @@ export const pastePodItemSchema = z
       .array(
         z
           .string()
-          .regex(/^[a-zA-Z0-9@._-]+$/)
-          .max(100),
+          .regex(/^[a-zA-Z0-9@._/-]+$/)
+          .max(200),
       )
       .optional(),
     repositoryId: resourceIdSchema.nullable().optional(),

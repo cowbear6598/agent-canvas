@@ -79,6 +79,14 @@
 
         <button
           class="flex items-center justify-center rounded-md p-2 hover:bg-accent"
+          :title="$t('layout.header.managedPlugin')"
+          @click="showManagedPluginModal = true"
+        >
+          <Puzzle class="h-4 w-4" />
+        </button>
+
+        <button
+          class="flex items-center justify-center rounded-md p-2 hover:bg-accent"
           :title="$t('layout.header.integrations')"
           @click="showIntegrationModal = true"
         >
@@ -127,6 +135,7 @@
     @update:open="selectedProvider = null"
   />
   <ManagedMcpModal v-model:open="showManagedMcpModal" />
+  <ManagedPluginModal v-model:open="showManagedPluginModal" />
   <GlobalSettingsModal v-model:open="showSettingsModal" />
   <LlmProviderModal v-model:open="showLlmProviderModal" />
 </template>
@@ -142,12 +151,14 @@ import {
   History,
   Globe,
   Cpu,
+  Puzzle,
 } from "lucide-vue-next";
 import ConnectionStatus from "@/components/ui/ConnectionStatus.vue";
 import IntegrationSelectModal from "@/components/integration/IntegrationSelectModal.vue";
 import IntegrationAppsModal from "@/components/integration/IntegrationAppsModal.vue";
 import GlobalSettingsModal from "@/components/settings/GlobalSettingsModal.vue";
 import ManagedMcpModal from "@/components/settings/ManagedMcpModal.vue";
+import ManagedPluginModal from "@/components/settings/ManagedPluginModal.vue";
 import LlmProviderModal from "@/components/settings/LlmProviderModal.vue";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { useRunStore } from "@/stores/run/runStore";
@@ -159,6 +170,7 @@ const showIntegrationModal = ref<boolean>(false);
 const selectedProvider = ref<string | null>(null);
 const showSettingsModal = ref<boolean>(false);
 const showManagedMcpModal = ref<boolean>(false);
+const showManagedPluginModal = ref<boolean>(false);
 const showLlmProviderModal = ref<boolean>(false);
 
 const handleIntegrationSelect = (category: string): void => {

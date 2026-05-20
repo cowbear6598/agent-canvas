@@ -20,33 +20,6 @@ vi.mock("@/composables/useToast", () => ({
   }),
 }));
 
-/** 測試用 Claude capabilities（全功能開啟） */
-const CLAUDE_TEST_CAPABILITIES = {
-  chat: true,
-  plugin: false,
-  repository: true,
-  mcp: true,
-  goal: true,
-};
-
-/** 測試用 Codex capabilities（chat + command + plugin 開啟） */
-const CODEX_TEST_CAPABILITIES = {
-  chat: true,
-  plugin: true,
-  repository: false,
-  mcp: false,
-  goal: true,
-};
-
-/** 保守 fallback（找不到 provider 時應回傳的值） */
-const CONSERVATIVE_FALLBACK = {
-  chat: true,
-  plugin: false,
-  repository: false,
-  mcp: false,
-  goal: false,
-};
-
 describe("providerCapabilityStore", () => {
   // 每次測試前重置 Pinia、WebSocket mock、所有 spy
   setupStoreTest();
@@ -59,44 +32,7 @@ describe("providerCapabilityStore", () => {
       const store = useProviderCapabilityStore();
 
       expect(store.loaded).toBe(false);
-      expect(store.capabilitiesByProvider).toEqual({});
       expect(store.defaultOptionsByProvider).toEqual({});
-    });
-  });
-
-  // ----------------------------------------------------------------
-  // syncFromPayload — capabilities 寫入
-  // ----------------------------------------------------------------
-  describe("syncFromPayload（capabilities 寫入）", () => {
-    it("應將傳入的 providers 陣列寫入 capabilitiesByProvider", () => {
-      const store = useProviderCapabilityStore();
-
-      store.syncFromPayload([
-        {
-          name: "codex",
-          capabilities: { ...CODEX_TEST_CAPABILITIES, mcp: true },
-        },
-      ]);
-
-      expect(store.capabilitiesByProvider["codex"]!.mcp).toBe(true);
-    });
-
-    it("多筆 providers 應全部寫入 state", () => {
-      const store = useProviderCapabilityStore();
-
-      store.syncFromPayload([
-        {
-          name: "claude",
-          capabilities: { ...CLAUDE_TEST_CAPABILITIES, plugin: true },
-        },
-        {
-          name: "codex",
-          capabilities: { ...CODEX_TEST_CAPABILITIES, chat: false },
-        },
-      ]);
-
-      expect(store.capabilitiesByProvider["claude"]!.plugin).toBe(true);
-      expect(store.capabilitiesByProvider["codex"]!.chat).toBe(false);
     });
   });
 
@@ -110,7 +46,6 @@ describe("providerCapabilityStore", () => {
       store.syncFromPayload([
         {
           name: "claude",
-          capabilities: CLAUDE_TEST_CAPABILITIES,
           defaultOptions: { model: "claude-opus-4-5" },
         },
       ]);
@@ -126,7 +61,6 @@ describe("providerCapabilityStore", () => {
       store.syncFromPayload([
         {
           name: "codex",
-          capabilities: CODEX_TEST_CAPABILITIES,
           // 刻意不帶 defaultOptions，模擬後端 Phase 6 前的狀態
         },
       ]);
@@ -140,12 +74,10 @@ describe("providerCapabilityStore", () => {
       store.syncFromPayload([
         {
           name: "claude",
-          capabilities: CLAUDE_TEST_CAPABILITIES,
           defaultOptions: { model: "claude-sonnet-4-5" },
         },
         {
           name: "codex",
-          capabilities: CODEX_TEST_CAPABILITIES,
           defaultOptions: { model: "gpt-5.4" },
         },
       ]);
@@ -169,7 +101,6 @@ describe("providerCapabilityStore", () => {
       store.syncFromPayload([
         {
           name: "claude",
-          capabilities: CLAUDE_TEST_CAPABILITIES,
           defaultOptions: { model: "claude-opus-4-5" },
         },
       ]);
@@ -185,7 +116,6 @@ describe("providerCapabilityStore", () => {
       store.syncFromPayload([
         {
           name: "codex",
-          capabilities: CODEX_TEST_CAPABILITIES,
           defaultOptions: { model: "gpt-5.4" },
         },
       ]);
@@ -205,7 +135,6 @@ describe("providerCapabilityStore", () => {
       store.syncFromPayload([
         {
           name: "claude",
-          capabilities: CLAUDE_TEST_CAPABILITIES,
           // 刻意不帶 defaultOptions
         },
       ]);
@@ -227,9 +156,7 @@ describe("providerCapabilityStore", () => {
     it("syncFromPayload 寫入後 isKnownProvider('claude') 應為 true", () => {
       const store = useProviderCapabilityStore();
 
-      store.syncFromPayload([
-        { name: "claude", capabilities: CLAUDE_TEST_CAPABILITIES },
-      ]);
+      store.syncFromPayload([{ name: "claude" }]);
 
       expect(store.isKnownProvider("claude")).toBe(true);
     });
@@ -237,10 +164,7 @@ describe("providerCapabilityStore", () => {
     it("isKnownProvider('unknown-provider') 應永遠為 false", () => {
       const store = useProviderCapabilityStore();
 
-      store.syncFromPayload([
-        { name: "claude", capabilities: CLAUDE_TEST_CAPABILITIES },
-        { name: "codex", capabilities: CODEX_TEST_CAPABILITIES },
-      ]);
+      store.syncFromPayload([{ name: "claude" }, { name: "codex" }]);
 
       expect(store.isKnownProvider("unknown-provider")).toBe(false);
     });
@@ -248,87 +172,10 @@ describe("providerCapabilityStore", () => {
     it("只寫入 codex 後，isKnownProvider('claude') 仍為 false", () => {
       const store = useProviderCapabilityStore();
 
-      store.syncFromPayload([
-        { name: "codex", capabilities: CODEX_TEST_CAPABILITIES },
-      ]);
+      store.syncFromPayload([{ name: "codex" }]);
 
       expect(store.isKnownProvider("claude")).toBe(false);
       expect(store.isKnownProvider("codex")).toBe(true);
-    });
-  });
-
-  // ----------------------------------------------------------------
-  // getCapabilities getter — 保守 fallback（Phase 2 新增）
-  // ----------------------------------------------------------------
-  describe("getCapabilities（保守 fallback）", () => {
-    it("找不到 provider 時應回保守 fallback（chat: true，其餘 false），不拋錯", () => {
-      const store = useProviderCapabilityStore();
-
-      const caps = store.getCapabilities("unknown");
-
-      expect(caps).toEqual(CONSERVATIVE_FALLBACK);
-    });
-
-    it("未載入任何 metadata 時 getCapabilities('claude') 亦回保守 fallback", () => {
-      const store = useProviderCapabilityStore();
-
-      const caps = store.getCapabilities("claude");
-
-      expect(caps).toEqual(CONSERVATIVE_FALLBACK);
-    });
-
-    it("syncFromPayload 寫入後 getCapabilities 應取回正確 capabilities", () => {
-      const store = useProviderCapabilityStore();
-
-      store.syncFromPayload([
-        { name: "codex", capabilities: CODEX_TEST_CAPABILITIES },
-      ]);
-
-      expect(store.getCapabilities("codex")).toEqual(CODEX_TEST_CAPABILITIES);
-    });
-
-    it("syncFromPayload 寫入後 getCapabilities('claude') 應取回 claude 的 capabilities", () => {
-      const store = useProviderCapabilityStore();
-
-      store.syncFromPayload([
-        { name: "claude", capabilities: CLAUDE_TEST_CAPABILITIES },
-      ]);
-
-      expect(store.getCapabilities("claude")).toEqual(CLAUDE_TEST_CAPABILITIES);
-    });
-  });
-
-  // ----------------------------------------------------------------
-  // isCapabilityEnabled getter
-  // ----------------------------------------------------------------
-  describe("isCapabilityEnabled", () => {
-    it("provider 未寫入時 isCapabilityEnabled 應回 false", () => {
-      const store = useProviderCapabilityStore();
-
-      expect(store.isCapabilityEnabled("codex", "mcp")).toBe(false);
-    });
-
-    it("寫入後 isCapabilityEnabled('claude', 'plugin') 應回正確值", () => {
-      const store = useProviderCapabilityStore();
-
-      store.syncFromPayload([
-        {
-          name: "claude",
-          capabilities: { ...CLAUDE_TEST_CAPABILITIES, plugin: true },
-        },
-      ]);
-
-      expect(store.isCapabilityEnabled("claude", "plugin")).toBe(true);
-    });
-
-    it("寫入後 isCapabilityEnabled('codex', 'chat') 應回 true", () => {
-      const store = useProviderCapabilityStore();
-
-      store.syncFromPayload([
-        { name: "codex", capabilities: CODEX_TEST_CAPABILITIES },
-      ]);
-
-      expect(store.isCapabilityEnabled("codex", "chat")).toBe(true);
     });
   });
 
@@ -343,7 +190,6 @@ describe("providerCapabilityStore", () => {
         providers: [
           {
             name: "codex",
-            capabilities: { ...CODEX_TEST_CAPABILITIES, mcp: true },
           },
         ],
       });
@@ -351,7 +197,7 @@ describe("providerCapabilityStore", () => {
       await store.loadFromBackend();
 
       expect(store.loaded).toBe(true);
-      expect(store.capabilitiesByProvider["codex"]!.mcp).toBe(true);
+      expect(store.isKnownProvider("codex")).toBe(true);
     });
 
     it("後端回傳含 defaultOptions 時應寫入 defaultOptionsByProvider", async () => {
@@ -361,7 +207,6 @@ describe("providerCapabilityStore", () => {
         providers: [
           {
             name: "claude",
-            capabilities: CLAUDE_TEST_CAPABILITIES,
             defaultOptions: { model: "claude-opus-4-5" },
           },
         ],
@@ -385,7 +230,6 @@ describe("providerCapabilityStore", () => {
 
       expect(store.loaded).toBe(true);
       // 空陣列不寫入 state，維持初始空物件
-      expect(store.capabilitiesByProvider).toEqual({});
       expect(store.defaultOptionsByProvider).toEqual({});
     });
   });
@@ -411,14 +255,13 @@ describe("providerCapabilityStore", () => {
       );
     });
 
-    it("失敗後 capabilitiesByProvider 與 defaultOptionsByProvider 應維持空物件", async () => {
+    it("失敗後 defaultOptionsByProvider 應維持空物件", async () => {
       const store = useProviderCapabilityStore();
 
       mockCreateWebSocketRequest.mockRejectedValueOnce(new Error("網路逾時"));
 
       await store.loadFromBackend();
 
-      expect(store.capabilitiesByProvider).toEqual({});
       expect(store.defaultOptionsByProvider).toEqual({});
     });
   });
@@ -442,12 +285,10 @@ describe("providerCapabilityStore", () => {
       store.syncFromPayload([
         {
           name: "claude",
-          capabilities: CLAUDE_TEST_CAPABILITIES,
           availableModels: claudeModels,
         },
         {
           name: "codex",
-          capabilities: CODEX_TEST_CAPABILITIES,
           availableModels: codexModels,
         },
       ]);
@@ -467,7 +308,6 @@ describe("providerCapabilityStore", () => {
       store.syncFromPayload([
         {
           name: "claude",
-          capabilities: CLAUDE_TEST_CAPABILITIES,
           availableModels: [
             { label: "Claude Opus 4.5", value: "claude-opus-4-5" },
           ],
@@ -491,12 +331,10 @@ describe("providerCapabilityStore", () => {
         providers: [
           {
             name: "claude",
-            capabilities: CLAUDE_TEST_CAPABILITIES,
             availableModels: claudeModels,
           },
           {
             name: "codex",
-            capabilities: CODEX_TEST_CAPABILITIES,
             availableModels: codexModels,
           },
         ],
@@ -522,7 +360,6 @@ describe("providerCapabilityStore", () => {
       store.syncFromPayload([
         {
           name: "claude",
-          capabilities: CLAUDE_TEST_CAPABILITIES,
           availableModels: [
             { label: "Sonnet", value: "sonnet" },
             { label: "Opus", value: "opus" },
@@ -540,7 +377,6 @@ describe("providerCapabilityStore", () => {
       store.syncFromPayload([
         {
           name: "claude",
-          capabilities: CLAUDE_TEST_CAPABILITIES,
           availableModels: [{ label: "Sonnet", value: "sonnet" }],
         },
       ]);
@@ -566,7 +402,6 @@ describe("providerCapabilityStore", () => {
       store.syncFromPayload([
         {
           name: "claude",
-          capabilities: CLAUDE_TEST_CAPABILITIES,
           availableModels: [],
         },
       ]);
@@ -585,7 +420,6 @@ describe("providerCapabilityStore", () => {
       store.syncFromPayload([
         {
           name: "claude",
-          capabilities: CLAUDE_TEST_CAPABILITIES,
           availableModels: [
             { label: "Opus", value: "opus" },
             { label: "Sonnet", value: "sonnet" },
@@ -602,7 +436,6 @@ describe("providerCapabilityStore", () => {
       store.syncFromPayload([
         {
           name: "codex",
-          capabilities: CODEX_TEST_CAPABILITIES,
           availableModels: [
             { label: "GPT-5.4", value: "gpt-5.4" },
             { label: "GPT-5.5", value: "gpt-5.5" },
@@ -625,7 +458,6 @@ describe("providerCapabilityStore", () => {
       store.syncFromPayload([
         {
           name: "claude",
-          capabilities: CLAUDE_TEST_CAPABILITIES,
           availableModels: [],
         },
       ]);
@@ -646,7 +478,6 @@ describe("providerCapabilityStore", () => {
       store.syncFromPayload([
         {
           name: "claude",
-          capabilities: CLAUDE_TEST_CAPABILITIES,
           availableModels: [
             {
               label: "Sonnet",
@@ -672,7 +503,6 @@ describe("providerCapabilityStore", () => {
       store.syncFromPayload([
         {
           name: "claude",
-          capabilities: CLAUDE_TEST_CAPABILITIES,
           availableModels: [
             // 不帶 thinkingLevels / defaultThinkingLevel，模擬 Haiku 等不支援 thinking 的 model
             { label: "Haiku", value: "haiku" },
@@ -690,7 +520,6 @@ describe("providerCapabilityStore", () => {
       store.syncFromPayload([
         {
           name: "claude",
-          capabilities: CLAUDE_TEST_CAPABILITIES,
           availableModels: [
             {
               label: "Sonnet",
@@ -721,7 +550,6 @@ describe("providerCapabilityStore", () => {
       store.syncFromPayload([
         {
           name: "claude",
-          capabilities: CLAUDE_TEST_CAPABILITIES,
           availableModels: [
             {
               label: "Sonnet",
@@ -754,7 +582,6 @@ describe("providerCapabilityStore", () => {
       store.syncFromPayload([
         {
           name: "claude",
-          capabilities: CLAUDE_TEST_CAPABILITIES,
           availableModels: [
             { label: "Opus", value: "opus" },
             { label: "Sonnet", value: "sonnet" },
@@ -762,7 +589,6 @@ describe("providerCapabilityStore", () => {
         },
         {
           name: "codex",
-          capabilities: CODEX_TEST_CAPABILITIES,
           availableModels: [{ label: "GPT-5.4", value: "gpt-5.4" }],
         },
       ]);
@@ -771,13 +597,10 @@ describe("providerCapabilityStore", () => {
       store.syncFromPayload([
         {
           name: "claude",
-          capabilities: { ...CLAUDE_TEST_CAPABILITIES, chat: false },
           availableModels: [{ label: "Sonnet", value: "sonnet" }],
         },
       ]);
 
-      // claude 的 capabilities 應被覆蓋（不累積舊值）
-      expect(store.getCapabilities("claude").chat).toBe(false);
       // claude 的 availableModels 應被覆蓋為新清單
       expect(store.getAvailableModels("claude")).toEqual([
         { label: "Sonnet", value: "sonnet" },
@@ -801,7 +624,6 @@ describe("providerCapabilityStore", () => {
         providers: [
           {
             name: "claude",
-            capabilities: CLAUDE_TEST_CAPABILITIES,
             availableModels: claudeModels,
           },
         ],
@@ -908,12 +730,6 @@ describe("providerCapabilityStore", () => {
       store.syncFromPayload([
         {
           name: "opencode",
-          capabilities: {
-            chat: true,
-            plugin: false,
-            repository: false,
-            mcp: false,
-          },
           availableModels: [
             { label: "後端送的選項", value: "should-not-appear" },
           ],

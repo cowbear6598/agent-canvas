@@ -5,8 +5,6 @@ import { useI18n } from "vue-i18n";
 const props = defineProps<{
   podId: string;
   todoCount: number;
-  disabled: boolean;
-  disabledTooltip: string;
 }>();
 
 const emit = defineEmits<{
@@ -23,7 +21,6 @@ const goalLabel = computed(() => {
 });
 
 const handleClick = (event: MouseEvent): void => {
-  if (props.disabled) return;
   emit("click", event);
 };
 </script>
@@ -31,12 +28,7 @@ const handleClick = (event: MouseEvent): void => {
 <template>
   <div class="pod-notch-area-base pod-goal-notch-area">
     <button
-      :class="[
-        'pod-slot-base',
-        'pod-goal-slot',
-        { 'opacity-50 cursor-not-allowed': disabled },
-      ]"
-      :title="disabled ? disabledTooltip : undefined"
+      :class="['pod-slot-base', 'pod-goal-slot']"
       @click="handleClick"
     >
       <span class="text-xs font-mono">

@@ -18,29 +18,6 @@ describe("providerRegistry", () => {
 });
 
 // ================================================================
-// getProvider — metadata.capabilities
-// ================================================================
-describe("getProvider().metadata.capabilities", () => {
-  it("claude 的 capabilities 應全部為 true（runMode 已移除）", () => {
-    const caps = getProvider("claude").metadata.capabilities;
-
-    expect(caps.chat).toBe(true);
-    expect(caps.plugin).toBe(true);
-    expect(caps.repository).toBe(true);
-    expect(caps.mcp).toBe(true);
-  });
-
-  it("codex 的 capabilities 中 chat=true、repository=true、plugin=true、mcp=true", () => {
-    const caps = getProvider("codex").metadata.capabilities;
-
-    expect(caps.chat).toBe(true);
-    expect(caps.plugin).toBe(true);
-    expect(caps.repository).toBe(true);
-    expect(caps.mcp).toBe(true);
-  });
-});
-
-// ================================================================
 // getProvider().metadata.availableModels
 // ================================================================
 describe("getProvider().metadata.availableModels", () => {

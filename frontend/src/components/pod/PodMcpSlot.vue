@@ -6,12 +6,6 @@ const props = defineProps<{
   podId: string;
   podRotation: number;
   activeCount: number;
-  /** notch 是否禁用點擊（合併來源）：
-   *  1) capability gate — 當前 provider 完全不支援 MCP
-   *  2) 訊息鎖 — Pod 已有訊息，禁止再開啟 popover 變更 MCP
-   *  父元件負責合併兩種來源後傳入；對應的 tooltip 文字也由父元件決定優先序。 */
-  disabled: boolean;
-  disabledTooltip: string;
 }>();
 
 const emit = defineEmits<{
@@ -21,19 +15,13 @@ const emit = defineEmits<{
 const { t } = useI18n();
 
 const handleClick = (event: MouseEvent): void => {
-  if (props.disabled) return;
   emit("click", event);
 };
 
-/** 顯示使用者自選 MCP 數量（managed MCP 後三個 provider 統一） */
 const mcpLabel = computed(
   () => `${t("pod.slot.mcpLabel")} (${props.activeCount})`,
 );
 
-/**
- * 反向旋轉 button，使文字在 Pod 旋轉時仍保持可讀。
- * 例如 Pod 旋轉 5deg，button 反轉 -5deg 讓標籤維持水平。
- */
 const buttonStyle = computed(() => ({
   transform: `rotate(${-props.podRotation}deg)`,
 }));
@@ -44,8 +32,6 @@ const buttonStyle = computed(() => ({
     <button
       :class="['pod-mcp-slot', activeCount > 0 ? 'pod-mcp-slot--active' : '']"
       :style="buttonStyle"
-      :aria-disabled="disabled || undefined"
-      :title="disabled ? disabledTooltip : undefined"
       @click="handleClick"
     >
       <span class="text-xs font-mono">

@@ -50,6 +50,32 @@ function buildGoalAvailabilityItem(
   };
 }
 
+/**
+ * Plugin MCP 內建項目：無條件存在，依 pod.pluginIds 數量更新描述。
+ * 與 Goal Runtime 一樣 system + locked，在前端 popover 內建區塊呈現。
+ */
+function buildPluginAvailabilityItem(
+  pod: Pick<Pod, "pluginIds">,
+): PodMcpAvailabilityItem {
+  const count = pod.pluginIds.length;
+  const description =
+    count === 0
+      ? "Plugin MCP 可用，但目前未勾選任何 plugin"
+      : `已勾選 ${count} 個 plugin`;
+  return {
+    name: "agent_canvas_plugin",
+    transport: "stdio",
+    status: "healthy",
+    selected: true,
+    selectable: false,
+    disabledReason: null,
+    lastError: null,
+    system: true,
+    locked: true,
+    description,
+  };
+}
+
 function resolveDisabledReason(entry: ManagedMcpServerRecord): string | null {
   if (!entry.enabled) {
     return "registry entry disabled";
@@ -61,7 +87,7 @@ export class ManagedMcpAvailabilityService {
   constructor(private readonly deps: AvailabilityDeps) {}
 
   listForPod(
-    pod: Pick<Pod, "id" | "name" | "goal" | "mcpServerNames">,
+    pod: Pick<Pod, "id" | "name" | "goal" | "mcpServerNames" | "pluginIds">,
   ): PodMcpAvailabilityItem[] {
     const selectedNames = new Set(pod.mcpServerNames);
     const registry = this.deps.store.list();
@@ -71,6 +97,7 @@ export class ManagedMcpAvailabilityService {
 
     const items: PodMcpAvailabilityItem[] = [
       buildGoalAvailabilityItem(pod),
+      buildPluginAvailabilityItem(pod),
       ...registry.map((entry) => {
         const runtimeSnapshot = this.deps.runtimeService.getRuntimeSnapshot(
           entry.name,

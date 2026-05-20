@@ -72,8 +72,6 @@ export type PodPluginsSetPayload =
       canvasId: string;
       success: true;
       pod?: PodPublicView;
-      /** self-healing 過濾掉的 plugin ID 清單（未安裝的 plugin） */
-      ignoredIds: string[];
     }
   | {
       requestId: string;

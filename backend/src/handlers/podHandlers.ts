@@ -39,7 +39,6 @@ import {
   handleResultError,
 } from "../utils/handlerHelpers.js";
 import { createI18nError } from "../utils/i18nError.js";
-import { scanInstalledPlugins } from "../services/pluginScanner.js";
 
 export const handlePodCreate = withCanvasId<PodCreatePayload>(
   WebSocketResponseEvents.POD_CREATED,
@@ -602,21 +601,8 @@ export const handlePodSetPlugins = withCanvasId<PodSetPluginsPayload>(
       return;
     }
 
-    // 過濾未安裝的 plugin ID：只保留實際存在的 plugin，無效 ID 以 warn log 記錄但不拒絕整個請求
-    const installedPlugins = scanInstalledPlugins(existingPod.provider);
-    const validPluginIdSet = new Set(installedPlugins.map((p) => p.id));
-    const invalidIds = pluginIds.filter((id) => !validPluginIdSet.has(id));
-    if (invalidIds.length > 0) {
-      logger.warn(
-        "Pod",
-        "Warn",
-        `handlePodSetPlugins：略過不存在的 plugin ID（已遮罩，共 ${invalidIds.length} 筆）`,
-      );
-    }
-    const validPluginIds = pluginIds.filter((id) => validPluginIdSet.has(id));
-
     const result = podStore.update(canvasId, podId, {
-      pluginIds: validPluginIds,
+      pluginIds,
     });
     if (!result) {
       emitError(
@@ -631,13 +617,11 @@ export const handlePodSetPlugins = withCanvasId<PodSetPluginsPayload>(
       return;
     }
 
-    // ignoredIds：被過濾掉的 plugin ID 清單，前端可據此提示使用者
     const successResponse: PodPluginsSetPayload = {
       requestId,
       canvasId,
       success: true,
       pod: toPodPublicView(result.pod),
-      ignoredIds: invalidIds,
     };
     socketService.emitToCanvas(
       canvasId,

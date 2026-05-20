@@ -31,6 +31,7 @@ const availableMcpServers = ref<PodMcpAvailabilityItem[]>([]);
 const loading = ref<boolean>(false);
 const loadFailed = ref<boolean>(false);
 const GOAL_RUNTIME_SERVER_NAME = "agent_canvas_goal";
+const PLUGIN_MCP_SERVER_NAME = "agent_canvas_plugin";
 
 /**
  * 取得 pod 目前選定的 MCP server 名稱清單。
@@ -58,8 +59,14 @@ function isGoalRuntimeServer(server: PodMcpAvailabilityItem): boolean {
   return server.system === true && server.name === GOAL_RUNTIME_SERVER_NAME;
 }
 
+function isPluginMcpServer(server: PodMcpAvailabilityItem): boolean {
+  return server.system === true && server.name === PLUGIN_MCP_SERVER_NAME;
+}
+
 function resolveServerLabel(server: PodMcpAvailabilityItem): string {
-  return isGoalRuntimeServer(server) ? t("pod.slot.goalMcpLabel") : server.name;
+  if (isGoalRuntimeServer(server)) return t("pod.slot.goalMcpLabel");
+  if (isPluginMcpServer(server)) return t("pod.slot.pluginMcpLabel");
+  return server.name;
 }
 
 /** 依 searchQuery 過濾 MCP server 清單（不分大小寫比對名稱） */

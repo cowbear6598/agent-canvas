@@ -4,7 +4,6 @@
  * 驗證 buildClaudeOptions 從 Pod 設定正確建構 ClaudeOptions：
  * - 空 Pod（無特殊設定）→ 等於 metadata.defaultOptions + pod model
  * - pod.mcpServerNames → mcpServers 被填入（mock readClaudeMcpServers，以名稱 allowlist 過濾）
- * - pod.pluginIds → plugins 被填入（mock scanInstalledPlugins）
  * - pod.integrationBindings → mcpServers 加 reply server、allowedTools 含 mcp__ 前綴（mock integrationRegistry）
  * - pod.providerConfig.model 覆寫 default
  * - 多能力組合同時存在
@@ -16,10 +15,6 @@
 
 vi.mock("../../src/services/mcp/claudeMcpReader.js", () => ({
   readClaudeMcpServers: vi.fn(),
-}));
-
-vi.mock("../../src/services/pluginScanner.js", () => ({
-  scanInstalledPlugins: vi.fn(),
 }));
 
 vi.mock("../../src/services/integration/index.js", () => ({
@@ -50,6 +45,7 @@ const { mockManagedMcpSurfaceService } = vi.hoisted(() => ({
       entries: [],
       ignoredTargets: [],
       hasGoalRuntime: false,
+      pluginCatalog: [],
     }),
   },
 }));
@@ -100,7 +96,6 @@ vi.mock("@anthropic-ai/claude-agent-sdk", async (importOriginal) => {
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { claudeProvider } from "../../src/services/provider/claudeProvider.js";
 import { readClaudeMcpServers } from "../../src/services/mcp/claudeMcpReader.js";
-import { scanInstalledPlugins } from "../../src/services/pluginScanner.js";
 import { integrationRegistry } from "../../src/services/integration/index.js";
 import { BASE_ALLOWED_TOOLS } from "../../src/services/provider/claude/buildClaudeOptions.js";
 import type { Pod } from "../../src/types/pod.js";
@@ -147,7 +142,6 @@ describe("claudeProvider.buildOptions()", () => {
     vi.clearAllMocks();
     // 預設 mock 回傳值
     vi.mocked(readClaudeMcpServers).mockReturnValue([]);
-    vi.mocked(scanInstalledPlugins).mockReturnValue([]);
     vi.mocked(integrationRegistry.get).mockReturnValue(undefined);
     // buildPodMcpEntries 預設回空 → applyMcpServers 會 fallback 至 readClaudeMcpServers。
     // 個別 test 若需注入特定 entries 須自行 mockResolvedValueOnce 覆寫。
@@ -155,6 +149,7 @@ describe("claudeProvider.buildOptions()", () => {
       entries: [],
       ignoredTargets: [],
       hasGoalRuntime: false,
+      pluginCatalog: [],
     });
     mockManagedMcpSurfaceService.ensureSurface.mockResolvedValue({
       runId: "run-goal-001",
@@ -164,6 +159,7 @@ describe("claudeProvider.buildOptions()", () => {
       targetNames: ["agent_canvas_goal", "my-mcp-server"],
       ignoredTargets: [],
       hasGoalRuntime: true,
+      pluginCatalog: [],
       statePath: "/tmp/managed-surface/run-goal-001/pod-build-001.json",
       mcpServer: {
         name: "agent_canvas_managed_surface",
@@ -197,7 +193,6 @@ describe("claudeProvider.buildOptions()", () => {
 
     // 未設定的能力欄位不應存在或為空
     expect(options.mcpServers).toBeUndefined();
-    expect(options.plugins).toBeUndefined();
   });
 
   // ── Case 2：pod.providerConfig.model 覆寫 default ────────────────────
@@ -265,6 +260,7 @@ describe("claudeProvider.buildOptions()", () => {
       ],
       ignoredTargets: [],
       hasGoalRuntime: true,
+      pluginCatalog: [],
     });
 
     const pod = makePod({
@@ -279,7 +275,9 @@ describe("claudeProvider.buildOptions()", () => {
     expect(
       mockManagedMcpSurfaceService.buildPodMcpEntries,
     ).toHaveBeenCalledWith(pod, runContext);
-    expect(readClaudeMcpServers).not.toHaveBeenCalled();
+    // pod.mcpServerNames 有值時 applyMcpServers 會嘗試合併 claude.json fallback，
+    // 故 readClaudeMcpServers 必定被呼叫；只要 managed registry 已涵蓋同名 entry 就不會覆蓋
+    expect(readClaudeMcpServers).toHaveBeenCalled();
     // agent 視角：N+1 個獨立 MCP，不再聚合成一顆 surface
     expect(options.mcpServers?.agent_canvas_goal).toMatchObject({
       command: "/usr/local/bin/bun",
@@ -297,6 +295,7 @@ describe("claudeProvider.buildOptions()", () => {
       entries: [],
       ignoredTargets: [],
       hasGoalRuntime: false,
+      pluginCatalog: [],
     });
 
     const pod = makePod({ goal: null, mcpServerNames: [] });
@@ -320,6 +319,7 @@ describe("claudeProvider.buildOptions()", () => {
       ],
       ignoredTargets: [],
       hasGoalRuntime: false,
+      pluginCatalog: [],
     });
 
     const pod = makePod({ mcpServerNames: ["managed-server"] });
@@ -333,8 +333,8 @@ describe("claudeProvider.buildOptions()", () => {
       args: ["managed-server.js"],
       env: { FOO: "bar" },
     });
-    // entries 有值時不再 fallback 到 ~/.claude.json
-    expect(readClaudeMcpServers).not.toHaveBeenCalled();
+    // pod.mcpServerNames 有值時 applyMcpServers 會嘗試 claude.json fallback merge
+    expect(readClaudeMcpServers).toHaveBeenCalled();
     expect(options.mcpServers?.agent_canvas_managed_surface).toBeUndefined();
   });
 
@@ -357,6 +357,7 @@ describe("claudeProvider.buildOptions()", () => {
       ],
       ignoredTargets: [],
       hasGoalRuntime: false,
+      pluginCatalog: [],
     });
 
     const pod = makePod({ mcpServerNames: ["remote-mcp"] });
@@ -388,55 +389,6 @@ describe("claudeProvider.buildOptions()", () => {
       env: {},
     });
     expect(options.mcpServers?.agent_canvas_managed_surface).toBeUndefined();
-  });
-
-  // ── Case 5：pod.pluginIds → plugins 被填入 ────────────────────────────
-  it("pod.pluginIds 設定時應呼叫 scanInstalledPlugins，並填入 plugins", async () => {
-    const mockPlugins = [
-      {
-        id: "plugin-001",
-        name: "Test Plugin",
-        version: "1.0.0",
-        description: "A test plugin",
-        installPath: "/home/user/.claude/plugins/test-plugin",
-        repo: "https://github.com/test/plugin",
-      },
-    ];
-    vi.mocked(scanInstalledPlugins).mockReturnValue(mockPlugins);
-
-    const pod = makePod({ pluginIds: ["plugin-001"] });
-    const options = await claudeProvider.buildOptions(pod);
-
-    expect(scanInstalledPlugins).toHaveBeenCalled();
-    expect(options.plugins).toBeDefined();
-    expect(options.plugins).toHaveLength(1);
-    expect(options.plugins![0]).toEqual({
-      type: "local",
-      path: "/home/user/.claude/plugins/test-plugin",
-    });
-  });
-
-  it("pluginIds 中的 id 不在已安裝清單中時，plugins 應為 undefined 或空", async () => {
-    // 已安裝 plugin-999，但 Pod 要用 plugin-001（不存在）
-    const mockPlugins = [
-      {
-        id: "plugin-999",
-        name: "Another Plugin",
-        version: "1.0.0",
-        description: "Another plugin",
-        installPath: "/path/to/another",
-        repo: "https://github.com/another",
-      },
-    ];
-    vi.mocked(scanInstalledPlugins).mockReturnValue(mockPlugins);
-
-    const pod = makePod({ pluginIds: ["plugin-001"] });
-    const options = await claudeProvider.buildOptions(pod);
-
-    // 過濾後 plugin 不在 enabledSet → plugins 為空或 undefined
-    const hasPlugins =
-      options.plugins !== undefined && options.plugins.length > 0;
-    expect(hasPlugins).toBe(false);
   });
 
   // ── Case 6：pod.integrationBindings → mcpServers + allowedTools ───────
@@ -538,7 +490,7 @@ describe("claudeProvider.buildOptions()", () => {
   });
 
   // ── Case 7：多能力組合同時存在 ───────────────────────────────────────
-  it("MCP + Plugin + Integration 同時設定時，產物各欄位均正確", async () => {
+  it("MCP + Integration 同時設定時，產物各欄位均正確", async () => {
     // mock MCP Server（readClaudeMcpServers 回傳所有本機 server）
     vi.mocked(readClaudeMcpServers).mockReturnValue([
       {
@@ -546,18 +498,6 @@ describe("claudeProvider.buildOptions()", () => {
         command: "node",
         args: ["server.js"],
         env: {},
-      },
-    ]);
-
-    // mock Plugin
-    vi.mocked(scanInstalledPlugins).mockReturnValue([
-      {
-        id: "plugin-combo",
-        name: "Combo Plugin",
-        version: "2.0.0",
-        description: "A combo plugin",
-        installPath: "/path/to/combo-plugin",
-        repo: "https://github.com/combo",
       },
     ]);
 
@@ -580,7 +520,6 @@ describe("claudeProvider.buildOptions()", () => {
     const pod = makePod({
       providerConfig: { model: "sonnet" },
       mcpServerNames: ["combo-server"],
-      pluginIds: ["plugin-combo"],
       integrationBindings: [
         {
           provider: "slack",
@@ -600,10 +539,6 @@ describe("claudeProvider.buildOptions()", () => {
 
     // Integration reply server（與 MCP Server 合併）
     expect(options.mcpServers?.["slack-reply"]).toBeDefined();
-
-    // Plugin
-    expect(options.plugins).toHaveLength(1);
-    expect(options.plugins![0].path).toBe("/path/to/combo-plugin");
 
     // allowedTools 含 BASE_ALLOWED_TOOLS
     for (const tool of BASE_ALLOWED_TOOLS) {

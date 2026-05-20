@@ -1,24 +1,3 @@
-import type { ProviderCapabilities } from "./types.js";
-
-/** Claude Provider 支援所有功能 */
-export const CLAUDE_CAPABILITIES: Readonly<ProviderCapabilities> =
-  Object.freeze({
-    chat: true,
-    plugin: true,
-    repository: true,
-    mcp: true,
-  });
-
-/** Codex Provider 與 Claude 行為一致。 */
-export const CODEX_CAPABILITIES: Readonly<ProviderCapabilities> = Object.freeze(
-  {
-    chat: true,
-    plugin: true,
-    repository: true,
-    mcp: true,
-  },
-);
-
 /** Claude Provider 支援的模型清單，供前端選擇器動態渲染 */
 export const CLAUDE_AVAILABLE_MODELS = Object.freeze([
   Object.freeze({ label: "Sonnet", value: "sonnet" }),
@@ -48,18 +27,6 @@ export const CODEX_AVAILABLE_MODELS = Object.freeze([
 export const CODEX_AVAILABLE_MODEL_VALUES: ReadonlySet<string> = new Set(
   CODEX_AVAILABLE_MODELS.map((m) => m.value),
 );
-
-/**
- * Opencode Provider 能力矩陣。
- * 支援 chat、repository、mcp；不支援 plugin（opencode 不走 Claude plugin 機制）。
- */
-export const OPENCODE_CAPABILITIES: Readonly<ProviderCapabilities> =
-  Object.freeze({
-    chat: true,
-    plugin: false,
-    repository: true,
-    mcp: true,
-  });
 
 /** 各 provider 共用的 thinking level 型別 alias，供 pod 設定與型別引用 */
 export type ThinkingLevel = "low" | "medium" | "high" | "xhigh" | "max";

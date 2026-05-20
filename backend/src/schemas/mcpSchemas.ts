@@ -13,10 +13,12 @@ export const MCP_SERVER_NAME_PATTERN = /^[a-zA-Z0-9_.][a-zA-Z0-9_.-]*$/;
  * 系統保留的 MCP server name 清單，使用者不能在 managed registry 註冊同名 entry。
  * - agent_canvas_managed_surface：per-run aggregated surface 注入到 provider 的名稱
  * - agent_canvas_goal：Goal Runtime built-in MCP 名稱
+ * - agent_canvas_plugin：Plugin MCP bridge 注入到 provider 的名稱
  */
 export const RESERVED_MCP_SERVER_NAMES: ReadonlySet<string> = new Set([
   "agent_canvas_managed_surface",
   "agent_canvas_goal",
+  "agent_canvas_plugin",
 ]);
 
 /**

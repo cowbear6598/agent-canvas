@@ -161,24 +161,6 @@ const isDownstreamChainPod = computed(
 
 const computedPodId = toRef(() => props.pod.id);
 
-/**
- * opencode server 啟動失敗時後端將 capabilities.chat 設為 false,
- * 此條件成立時鎖住 model selector 並顯示對應提示,通知使用者 opencode 無法使用。
- */
-const isOpencodeServerDown = computed(
-  () =>
-    props.pod.provider === "opencode" &&
-    !providerCapabilityStore.getCapabilities("opencode").chat,
-);
-
-const modelSelectorDisabled = computed(() => isOpencodeServerDown.value);
-
-const modelSelectorDisabledTooltip = computed(() =>
-  isOpencodeServerDown.value
-    ? t("pod.modelSelector.opencode.disabledTooltip")
-    : "",
-);
-
 const {
   showScheduleModal,
   hasSchedule,
@@ -448,8 +430,6 @@ const handleContextMenu = (e: MouseEvent): void => {
         :pod-id="pod.id"
         :provider="pod.provider"
         :current-model="currentModel"
-        :disabled="modelSelectorDisabled"
-        :disabled-tooltip="modelSelectorDisabledTooltip"
         @update:model="handleModelChange"
       />
 
@@ -590,7 +570,6 @@ const handleContextMenu = (e: MouseEvent): void => {
         v-if="showPluginPopover && pluginAnchorRect"
         :pod-id="pod.id"
         :anchor-rect="pluginAnchorRect"
-        :provider="pod.provider"
         @close="showPluginPopover = false"
       />
 

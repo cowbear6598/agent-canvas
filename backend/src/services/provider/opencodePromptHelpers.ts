@@ -1,5 +1,5 @@
 import type { ContentBlock, TextContentBlock } from "../../types/message.js";
-import { buildGoalRuntimeBootstrapPrompt } from "./goalBootstrapPrompt.js";
+import { buildMcpBootstrapPrompt } from "./mcpBootstrapPrompt.js";
 
 export function buildPromptText(message: string | ContentBlock[]): string {
   if (typeof message === "string") return message;
@@ -12,16 +12,21 @@ export function buildPromptText(message: string | ContentBlock[]): string {
 
 /**
  * 組合 opencode 的 prompt 文字。
- * resume 時（gate retry 第 2 輪以後）不注入 Goal Runtime bootstrap，避免覆蓋 nudge 指示。
+ * Goal Runtime 引導語與 Plugin Skill Catalog 都只在 fresh session 第一輪注入；
+ * resume 時（gate retry 第 2 輪以後）兩段都不注入，避免覆蓋 nudge 指示。
  */
 export function buildOpencodePromptText(
   message: string | ContentBlock[],
-  goalRuntimeAvailable?: boolean,
+  goalRuntimeAvailable: boolean,
+  pluginCatalogText: string,
   resumeSessionId?: string | null,
 ): string {
   const promptText = buildPromptText(message);
-  if (!goalRuntimeAvailable || resumeSessionId) {
+  if (resumeSessionId) {
     return promptText;
   }
-  return buildGoalRuntimeBootstrapPrompt(promptText);
+  return buildMcpBootstrapPrompt(promptText, {
+    goalRuntimeAvailable,
+    pluginCatalogText,
+  });
 }

@@ -19,7 +19,6 @@
 import {
   CODEX_AVAILABLE_MODELS,
   CODEX_AVAILABLE_MODEL_VALUES,
-  CODEX_CAPABILITIES,
 } from "./capabilities.js";
 import { normalize } from "./codexNormalizer.js";
 import { buildProviderSystemError } from "./types.js";
@@ -34,7 +33,8 @@ import { sanitizePodName } from "./podNameSanitizer.js";
 import type { Pod } from "../../types/pod.js";
 import type { RunContext } from "../../types/run.js";
 import { readCodexMcpServers } from "../mcp/codexMcpReader.js";
-import { buildGoalRuntimeBootstrapPrompt } from "./goalBootstrapPrompt.js";
+import { buildMcpBootstrapPrompt } from "./mcpBootstrapPrompt.js";
+import { formatPluginSkillCatalogPrompt } from "../plugin/pluginCatalogBuilder.js";
 import {
   managedMcpSurfaceService,
   type PodMcpEntry,
@@ -60,6 +60,12 @@ export interface CodexOptions {
   mcpEntries: PodMcpEntry[];
   /** Goal Runtime 是否在 mcpEntries 內，用於決定是否注入 bootstrap prompt */
   hasGoalRuntime: boolean;
+  /**
+   * Plugin Skill Catalog 文字段落（已預先 format）。
+   * 空字串代表本 Pod 無啟用 plugin 或掃不出任何 SKILL.md。
+   * Fresh session 首輪會與 Goal Runtime bootstrap 一起注入 user prompt。
+   */
+  pluginCatalogText: string;
 }
 
 /** 合法 resumeSessionId 格式（防止 CLI 旗標注入） */
@@ -181,15 +187,19 @@ function buildPromptText(
 
 function buildCodexPromptText(
   message: string | import("../../types/message.js").ContentBlock[],
-  goalRuntimeAvailable?: boolean,
+  goalRuntimeAvailable: boolean,
+  pluginCatalogText: string,
   resumeSessionId?: string | null,
 ): string {
   const promptText = buildPromptText(message);
   // resume 時（gate retry 第 2 輪以後）不再注入 bootstrap，避免覆蓋 nudge 指示
-  if (!goalRuntimeAvailable || resumeSessionId) {
+  if (resumeSessionId) {
     return promptText;
   }
-  return buildGoalRuntimeBootstrapPrompt(promptText);
+  return buildMcpBootstrapPrompt(promptText, {
+    goalRuntimeAvailable,
+    pluginCatalogText,
+  });
 }
 
 /**
@@ -657,12 +667,12 @@ function setupSubprocess(
 
 const codexMetadata: ProviderMetadata<CodexOptions> = {
   name: "codex",
-  capabilities: CODEX_CAPABILITIES,
   defaultOptions: {
     model: "gpt-5.4",
     resumeMode: "cli",
     mcpEntries: [],
     hasGoalRuntime: false,
+    pluginCatalogText: "",
   },
   availableModels: CODEX_AVAILABLE_MODELS,
   availableModelValues: CODEX_AVAILABLE_MODEL_VALUES,
@@ -686,9 +696,11 @@ function prepareCodexExecution(
     options?.thinkingLevel,
   );
   const goalRuntimeAvailable = Boolean(options?.hasGoalRuntime);
+  const pluginCatalogText = options?.pluginCatalogText ?? "";
   const promptText = buildCodexPromptText(
     message,
     goalRuntimeAvailable,
+    pluginCatalogText,
     resumeSessionId,
   );
 
@@ -705,7 +717,7 @@ export const codexProvider: AgentProvider<CodexOptions> = {
         ? rawModel
         : codexMetadata.defaultOptions.model;
 
-    const { entries, hasGoalRuntime } =
+    const { entries, hasGoalRuntime, pluginCatalog } =
       await managedMcpSurfaceService.buildPodMcpEntries(
         pod,
         runContext ?? null,
@@ -716,6 +728,7 @@ export const codexProvider: AgentProvider<CodexOptions> = {
       resumeMode: "cli",
       mcpEntries: entries,
       hasGoalRuntime,
+      pluginCatalogText: formatPluginSkillCatalogPrompt(pluginCatalog),
     };
 
     const rawThinkingLevel = pod.providerConfig?.thinkingLevel;

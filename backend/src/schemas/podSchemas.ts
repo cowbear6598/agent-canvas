@@ -156,8 +156,8 @@ export const podSetPluginsSchema = z.object({
     .array(
       z
         .string()
-        .regex(/^[a-zA-Z0-9@._-]+$/)
-        .max(100),
+        .regex(/^[a-zA-Z0-9@._/-]+$/)
+        .max(200),
     )
     .max(50),
 });

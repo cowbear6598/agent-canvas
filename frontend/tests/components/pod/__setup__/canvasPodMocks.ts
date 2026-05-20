@@ -79,19 +79,6 @@ export function createUsePodScheduleMock() {
   };
 }
 
-/** 建立 usePodCapabilities mock 回傳值 */
-export function createUsePodCapabilitiesMock() {
-  return {
-    capabilities: computed(() => ({})),
-    isCodex: computed(() => false),
-    isPluginEnabled: computed(() => false),
-    isRepositoryEnabled: computed(() => false),
-    isCommandEnabled: computed(() => false),
-    isMcpEnabled: computed(() => false),
-    isIntegrationEnabled: computed(() => false),
-  };
-}
-
 /** 建立 usePodAnchorDrag mock 回傳值 */
 export function createUsePodAnchorDragMock() {
   return {

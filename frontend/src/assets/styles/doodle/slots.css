@@ -220,19 +220,6 @@
   box-shadow: 3px 3px 0 oklch(0.4 0.02 50 / 0.4);
 }
 
-/* Plugin Slot Codex 狀態（永遠顯示沙色，不需 toggle，僅供資訊展示） */
-.pod-plugin-slot--codex {
-  background: var(--doodle-sand);
-  border-color: var(--doodle-ink);
-  box-shadow: 2px 2px 0 oklch(0.4 0.02 50 / 0.3);
-  color: var(--doodle-ink);
-}
-
-.pod-plugin-slot--codex:hover {
-  background: var(--doodle-sand);
-  box-shadow: 3px 3px 0 oklch(0.4 0.02 50 / 0.4);
-}
-
 /* Plugin Slot 容器位置（POD 左側） */
 .pod-plugin-notch-area {
   position: absolute;

@@ -23,10 +23,9 @@ export interface ProviderSystemMessage {
 }
 
 /**
- * Provider 自報的 metadata，包含名稱、能力矩陣與預設選項。
+ * Provider 自報的 metadata，包含名稱與預設選項。
  *
  * - `name`：Provider 名稱，對應 providerRegistry 的 key
- * - `capabilities`：功能能力矩陣，前端依此決定顯示哪些設定選項
  * - `defaultOptions`：Provider 的預設執行時選項（執行時型別 TOptions）；
  *   前端可透過 provider:list 取得此值，供新建 Pod 時顯示預設模型等資訊
  *
@@ -35,7 +34,6 @@ export interface ProviderSystemMessage {
  */
 export interface ProviderMetadata<TOptions = unknown> {
   name: ProviderName;
-  capabilities: ProviderCapabilities;
   defaultOptions: TOptions;
   /**
    * Provider 主動聲告支援的模型清單，作為前後端共通的資料契約。
@@ -48,18 +46,6 @@ export interface ProviderMetadata<TOptions = unknown> {
    * 供 podStore 以 O(1) Set.has 驗證，避免每次呼叫都 .map().includes()。
    */
   availableModelValues: ReadonlySet<string>;
-}
-
-/** Provider 支援的功能能力矩陣 */
-export interface ProviderCapabilities {
-  /** 是否支援基本聊天 */
-  chat: boolean;
-  /** 是否支援 Plugin */
-  plugin: boolean;
-  /** 是否支援 Repository */
-  repository: boolean;
-  /** 是否支援 MCP */
-  mcp: boolean;
 }
 
 /** Provider 串流事件的標準化格式（Discriminated Union） */
@@ -175,7 +161,7 @@ export interface ChatRequestContext<TOptions = unknown> {
  */
 export interface AgentProvider<TOptions = unknown> {
   /**
-   * Provider metadata，包含 name、capabilities 與 defaultOptions。
+   * Provider metadata，包含 name 與 defaultOptions。
    */
   metadata: ProviderMetadata<TOptions>;
   /**

@@ -329,12 +329,6 @@ describe("Canvas/Pod 操作完整流程", () => {
       providerCapabilityStore.syncFromPayload([
         {
           name: "claude",
-          capabilities: {
-            chat: true,
-            plugin: false,
-            repository: false,
-            mcp: false,
-          },
           availableModels: [
             { label: "Opus", value: "opus" },
             { label: "Sonnet", value: "sonnet" },

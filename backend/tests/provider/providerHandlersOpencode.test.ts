@@ -94,7 +94,6 @@ async function callHandlerAndGetPayload(): Promise<{
       thinkingLevels: readonly string[];
       defaultThinkingLevel: string | null;
     }>;
-    capabilities: Record<string, unknown>;
     defaultOptions: Record<string, unknown>;
   }>;
 }> {

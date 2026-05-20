@@ -82,15 +82,6 @@ export interface ModelOption {
   defaultThinkingLevel?: string;
 }
 
-/** 各 Provider 支援的功能能力表 */
-export interface ProviderCapabilities {
-  chat: boolean;
-  plugin: boolean;
-  repository: boolean;
-  mcp: boolean;
-  goal?: boolean;
-}
-
 export type FrequencyType =
   | "every-second"
   | "every-x-minute"

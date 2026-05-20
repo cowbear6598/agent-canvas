@@ -1,4 +1,4 @@
-import type { Pod, PodProvider, ProviderCapabilities } from "../pod";
+import type { Pod, PodProvider } from "../pod";
 import type { Repository, RepositoryNote } from "@/types";
 import type { AnchorPosition } from "@/types";
 import type { InstalledPlugin } from "../plugin";
@@ -481,6 +481,18 @@ export interface PluginListResultPayload extends ResultPayload {
   plugins?: InstalledPlugin[];
 }
 
+export interface PluginInstalledPayload extends ResultPayload {
+  plugin?: InstalledPlugin;
+}
+
+export interface PluginDeletedPayload extends ResultPayload {
+  pluginId?: string;
+}
+
+export interface PluginUpdatedPayload extends ResultPayload {
+  plugin?: InstalledPlugin;
+}
+
 export interface RunCreatedPayload {
   canvasId: string;
   run: WorkflowRun;
@@ -562,11 +574,10 @@ export interface RunToolResultPayload {
   output: string;
 }
 
-/** Provider 列表查詢結果，包含每個 Provider 的功能能力表、預設選項與可選模型清單 */
+/** Provider 列表查詢結果，包含每個 Provider 的預設選項與可選模型清單 */
 export interface ProviderListResultPayload extends ResultPayload {
   providers?: Array<{
     name: PodProvider;
-    capabilities: ProviderCapabilities;
     /** Provider 預設執行時選項（已移除 pathToClaudeCodeExecutable 等伺服器敏感路徑） */
     defaultOptions: Record<string, unknown>;
     /**

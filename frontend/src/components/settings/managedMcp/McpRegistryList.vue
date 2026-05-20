@@ -137,6 +137,25 @@ const { t } = useI18n();
             </span>
           </div>
         </div>
+
+        <!-- 內建 Plugin MCP：固定顯示於最下方，純展示不可選 -->
+        <div
+          data-testid="managed-mcp-builtin-plugin"
+          class="w-full rounded-xl border border-doodle-ink/15 bg-card px-3 py-2"
+        >
+          <div class="flex items-center gap-2">
+            <p
+              class="min-w-0 flex-1 truncate text-sm font-semibold text-foreground"
+            >
+              {{ t("pod.slot.pluginMcpLabel") }}
+            </p>
+            <span
+              class="inline-flex shrink-0 items-center rounded-full border border-doodle-ink/15 bg-secondary px-2 py-0.5 text-[11px] font-mono text-primary"
+            >
+              {{ t("pod.slot.builtinBadge") }}
+            </span>
+          </div>
+        </div>
       </div>
     </ScrollArea>
   </aside>

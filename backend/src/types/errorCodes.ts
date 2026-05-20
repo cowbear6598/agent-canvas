@@ -12,8 +12,6 @@ export const ERROR_CODE_INVALID_STATE = "INVALID_STATE" as const;
 export const ERROR_CODE_INVALID_INPUT = "INVALID_INPUT" as const;
 export const ERROR_CODE_INVALID_PATH = "INVALID_PATH" as const;
 export const ERROR_CODE_ALREADY_EXISTS = "ALREADY_EXISTS" as const;
-export const ERROR_CODE_CAPABILITY_NOT_SUPPORTED =
-  "CAPABILITY_NOT_SUPPORTED" as const;
 export const ERROR_CODE_VALIDATION_ERROR = "VALIDATION_ERROR" as const;
 
 // ── Attachment 錯誤碼 ─────────────────────────────────────────────

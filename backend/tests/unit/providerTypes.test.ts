@@ -74,10 +74,9 @@ describe("providerRegistry metadata 一致性", () => {
   });
 
   describe("所有已登記 provider 的 metadata 結構完整性", () => {
-    it("每個 provider 都應有 name、capabilities、defaultOptions、availableModels、availableModelValues", () => {
+    it("每個 provider 都應有 name、defaultOptions、availableModels、availableModelValues", () => {
       for (const [key, provider] of Object.entries(providerRegistry)) {
         expect(provider.metadata.name).toBe(key);
-        expect(provider.metadata.capabilities).toBeDefined();
         expect(provider.metadata.defaultOptions).toBeDefined();
         expect(Array.isArray(provider.metadata.availableModels)).toBe(true);
         expect(provider.metadata.availableModelValues).toBeInstanceOf(Set);

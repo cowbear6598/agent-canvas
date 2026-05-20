@@ -290,6 +290,7 @@
       "mcpLoadFailed": "読み込み失敗",
       "mcpManagedHint": "Header の MCP パネルからグローバル MCP を追加してください",
       "goalMcpLabel": "Goal Runtime",
+      "pluginMcpLabel": "Plugin MCP",
       "builtinBadge": "Built-in",
       "searchPlaceholder": "検索…",
       "pluginsSearchEmpty": "該当する plugin が見つかりません",
@@ -330,6 +331,7 @@
       "canvasList": "Canvas 一覧",
       "globalSettings": "グローバル設定",
       "managedMcp": "MCP 管理",
+      "managedPlugin": "Plugin 管理",
       "integrations": "インテグレーション管理",
       "history": "実行履歴",
       "llmProvider": "LLM Provider 設定"
@@ -857,7 +859,6 @@
     "noteCreateFailed": "{type} の作成に失敗しました",
     "connectionCreateFailed": "コネクションの作成に失敗しました：{message}",
     "activeCanvasNotFound": "使用中の Canvas が見つかりません",
-    "capabilityNotSupported": "{provider}はこの機能をサポートしていません",
     "resourceInUse": "{resource} は {count} 個の Pod で使用中のため、削除できません",
     "attachmentFolderNotAllowed": "フォルダはサポートされていません",
     "attachmentEmpty": "アップロードできるファイルがありません。ファイルを選択して再試行してください",
