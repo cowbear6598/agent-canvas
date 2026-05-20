@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import { safeJsonParse } from "../utils/safeJsonParse.js";
+import { safeJsonParse } from "@shared/safeJsonParse.js";
 
 const CLAUDE_SONNET_PROVIDER_CONFIG_JSON = JSON.stringify({
   model: "sonnet",

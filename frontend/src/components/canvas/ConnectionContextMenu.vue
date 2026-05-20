@@ -1,18 +1,18 @@
 <script setup lang="ts">
 import type { TriggerMode } from "@/types/connection";
 import type { PodProvider } from "@/types/pod";
-import { Zap, Brain, ArrowRight, ChevronRight } from "lucide-vue-next";
-import { ref, computed, onMounted, onUnmounted } from "vue";
-
-import { useConnectionStore } from "@/stores/connectionStore";
-import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
-import { useToast } from "@/composables/useToast";
+import { Zap, Brain, ArrowRight } from "lucide-vue-next";
+import { ref, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
+import { useConnectionStore } from "@/stores/connectionStore";
+import { useToast } from "@/composables/useToast";
 import {
   DEFAULT_TOAST_DURATION_MS,
   SHORT_TOAST_DURATION_MS,
 } from "@/lib/constants";
-import { DEFAULT_SUMMARY_MODEL } from "@/types/config";
+import TriggerModeRow from "./connectionMenu/TriggerModeRow.vue";
+import BranchSettingsPanel from "./connectionMenu/BranchSettingsPanel.vue";
+import SummarySection from "./connectionMenu/SummarySection.vue";
 
 interface Props {
   position: { x: number; y: number };
@@ -38,7 +38,6 @@ const emit = defineEmits<{
 }>();
 
 const connectionStore = useConnectionStore();
-const providerCapabilityStore = useProviderCapabilityStore();
 const { toast } = useToast();
 const { t } = useI18n();
 
@@ -77,76 +76,11 @@ const handleSetTriggerMode = async (targetMode: TriggerMode): Promise<void> => {
   }
 };
 
-/** 顯示模型切換成功的 toast */
-const showModelChangeToast = (title: string, label: string): void => {
-  toast({
-    title,
-    description: t("canvas.connectionContextMenu.modelSwitched", {
-      model: label,
-    }),
-    duration: SHORT_TOAST_DURATION_MS,
-  });
+/** Branch 按鈕點擊：永遠 emit branch-mode-clicked，由 host 開啟 modal 與切換 trigger mode */
+const handleBranchClick = (): void => {
+  emit("branch-mode-clicked");
+  emit("close");
 };
-
-interface SetModelOptions {
-  targetModel: string;
-  currentModel: string;
-  updateFn: (connectionId: string, model: string) => Promise<unknown>;
-  successTitle: string;
-  failDesc: string;
-  changedEvent: "summary-model-changed";
-  displayLabel?: string;
-}
-
-const handleSetModel = async (options: SetModelOptions): Promise<void> => {
-  const {
-    targetModel,
-    currentModel,
-    updateFn,
-    successTitle,
-    failDesc,
-    changedEvent,
-    displayLabel,
-  } = options;
-
-  if (targetModel === currentModel) {
-    emit("close");
-    return;
-  }
-
-  const result = await updateFn(props.connectionId, targetModel);
-
-  if (result) {
-    showModelChangeToast(successTitle, displayLabel ?? targetModel);
-    emit(changedEvent);
-    emit("close");
-  } else {
-    toast({
-      title: t("canvas.connectionContextMenu.changeFailed"),
-      description: failDesc,
-      duration: DEFAULT_TOAST_DURATION_MS,
-    });
-  }
-};
-
-/**
- * Summary Model 的 toast 訊息使用動態 label（由 availableModels 的 label 欄位提供），
- * 以支援 Claude 以外的 provider 模型（value 可為任意 provider model 字串）。
- * 呼叫端確保傳入的值來自 summaryModelOptions，後端接受任意 provider model 字串。
- */
-const handleSetSummaryModel = (
-  targetValue: string,
-  displayLabel: string,
-): Promise<void> =>
-  handleSetModel({
-    targetModel: targetValue,
-    currentModel: props.currentSummaryModel,
-    updateFn: connectionStore.updateConnectionSummaryModel,
-    successTitle: t("canvas.connectionContextMenu.summaryModelChanged"),
-    failDesc: t("canvas.connectionContextMenu.summaryModelChangeFailed"),
-    changedEvent: "summary-model-changed",
-    displayLabel,
-  });
 
 const menuRef = ref<HTMLElement | null>(null);
 
@@ -171,230 +105,6 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener("mousedown", handleOutsideClick, true);
 });
-
-const isSummaryMenuOpen = ref(false);
-
-/**
- * Summary Provider 子選單的選項清單。
- * 刻意硬編碼選項而非從 providerCapabilityStore.allowedProviders 動態取得，
- * 理由是後續若新增 provider，UI 顯示順序與 label 仍要人工確認，避免靜默變動 menu 內容。
- */
-const PROVIDER_OPTIONS: { value: PodProvider; label: string }[] = [
-  { value: "claude", label: "Claude" },
-  { value: "codex", label: "Codex" },
-];
-
-/**
- * 當前 connectionId 對應的 Connection 快照。
- * 所有需要查 connection 欄位的 computed / 函式共用此結果，
- * 避免 v-for 渲染時對 connections 陣列做多次線性掃描。
- */
-const connection = computed(() =>
-  connectionStore.findConnectionById(props.connectionId),
-);
-
-/** Summary provider 由 connection hydration 後的 concrete 值決定；找不到 connection 時維持未就緒。 */
-const currentProvider = computed((): PodProvider | undefined => {
-  return connection.value?.summaryProvider ?? undefined;
-});
-
-/**
- * 依 connection.summaryProvider 對應的 provider 動態列出 summary model。
- */
-const summaryModelOptions = computed(() => {
-  if (!currentProvider.value) return null;
-  const models = providerCapabilityStore.getAvailableModels(
-    currentProvider.value,
-  );
-  // 回傳 null（而非空陣列）是為了讓 template 能以單一條件判斷「資料尚未就緒」並顯示載入中
-  if (models.length === 0) return null;
-
-  return models;
-});
-
-/**
- * Summary model active 狀態只依目前 summaryProvider + model 比對。
- */
-const isSummaryModelActive = (optionValue: string): boolean => {
-  return (
-    currentProvider.value === (connection.value?.summaryProvider ?? "claude") &&
-    props.currentSummaryModel === optionValue
-  );
-};
-
-/** Summary Provider 子選單開關狀態 */
-const isProviderMenuOpen = ref(false);
-
-/**
- * 切換 Summary Provider 的 handler。
- * 若選擇與當前相同的 provider，直接關閉選單不送請求。
- * 透過 getDefaultModel 取得新 provider 的預設模型，一併更新。
- */
-const handleSetSummaryProvider = async (
-  targetProvider: PodProvider,
-): Promise<void> => {
-  if (targetProvider === currentProvider.value) {
-    emit("close");
-    return;
-  }
-
-  const defaultModel = providerCapabilityStore.getDefaultModel(targetProvider);
-  // getDefaultModel 可能回傳 undefined（metadata 尚未載入時），
-  // 此時 fallback 為系統預設的 summaryModel，由後端進一步驗證合法性
-  const summaryModel = defaultModel ?? DEFAULT_SUMMARY_MODEL;
-
-  const result = await connectionStore.updateConnectionSummaryProvider(
-    props.connectionId,
-    targetProvider,
-    summaryModel,
-  );
-
-  if (result) {
-    const providerLabel =
-      PROVIDER_OPTIONS.find((o) => o.value === targetProvider)?.label ??
-      targetProvider;
-    const modelLabel =
-      providerCapabilityStore
-        .getAvailableModels(targetProvider)
-        .find((m) => m.value === summaryModel)?.label ?? summaryModel;
-
-    toast({
-      title: t("canvas.connectionContextMenu.summaryProviderChanged"),
-      description: t(
-        "canvas.connectionContextMenu.summaryProviderChangedDesc",
-        { provider: providerLabel, model: modelLabel ?? "" },
-      ),
-      duration: SHORT_TOAST_DURATION_MS,
-    });
-    emit("summary-model-changed");
-    emit("close");
-  } else {
-    toast({
-      title: t("canvas.connectionContextMenu.changeFailed"),
-      description: t("canvas.connectionContextMenu.summaryModelChangeFailed"),
-      duration: DEFAULT_TOAST_DURATION_MS,
-    });
-  }
-};
-
-// ─── Branch 設定區塊 ──────────────────────────────────────────────────────────
-
-/** Branch 按鈕點擊：永遠 emit branch-mode-clicked，由 host 開啟 modal 與切換 trigger mode */
-const handleBranchClick = (): void => {
-  emit("branch-mode-clicked");
-  emit("close");
-};
-
-/** Branch Provider 子選單開關狀態 */
-const isBranchProviderMenuOpen = ref(false);
-
-/** Branch Model 子選單開關狀態 */
-const isBranchModelMenuOpen = ref(false);
-
-/**
- * 當前 Branch Provider 的 effective 值；舊資料未指定時 fallback 為 "claude"，
- * 與後端 connectionStore.rowToConnection 的 fallback 行為對齊。
- */
-const currentBranchProviderEffective = computed((): PodProvider => {
-  return props.currentBranchProvider ?? "claude";
-});
-
-/**
- * Branch Model 子選單依當前 Branch Provider 動態列出可選模型。
- * capability 尚未載入時回傳 null，template 顯示載入中提示。
- */
-const branchModelOptions = computed(() => {
-  const provider = currentBranchProviderEffective.value;
-  const models = providerCapabilityStore.getAvailableModels(provider);
-  if (models.length === 0) return null;
-  return models;
-});
-
-/** 判斷 Branch Model 按鈕是否為 active；模型清單已由 effective provider 過濾，比對 model 即可 */
-const isBranchModelActive = (optionValue: string): boolean => {
-  return props.currentBranchModel === optionValue;
-};
-
-/**
- * 切換 Branch Provider；同步更新 model 為新 provider 的預設模型，
- * 避免 provider/model 不一致的中間狀態（與 Summary Provider 行為一致）。
- */
-const handleSetBranchProvider = async (
-  targetProvider: PodProvider,
-): Promise<void> => {
-  if (targetProvider === currentBranchProviderEffective.value) {
-    emit("close");
-    return;
-  }
-
-  const defaultModel = providerCapabilityStore.getDefaultModel(targetProvider);
-  // getDefaultModel 在 metadata 尚未載入時回傳 undefined，fallback 至 DEFAULT_SUMMARY_MODEL（與 Summary 同樣處理）
-  const branchModel = defaultModel ?? DEFAULT_SUMMARY_MODEL;
-
-  const result = await connectionStore.updateConnectionBranchProvider(
-    props.connectionId,
-    targetProvider,
-    branchModel,
-  );
-
-  if (result) {
-    const providerLabel =
-      PROVIDER_OPTIONS.find((o) => o.value === targetProvider)?.label ??
-      targetProvider;
-    const modelLabel =
-      providerCapabilityStore
-        .getAvailableModels(targetProvider)
-        .find((m) => m.value === branchModel)?.label ?? branchModel;
-
-    toast({
-      title: t("canvas.connectionContextMenu.branchProviderChanged"),
-      description: t("canvas.connectionContextMenu.branchProviderChangedDesc", {
-        provider: providerLabel,
-        model: modelLabel,
-      }),
-      duration: SHORT_TOAST_DURATION_MS,
-    });
-    emit("branch-provider-changed");
-    emit("close");
-  } else {
-    toast({
-      title: t("canvas.connectionContextMenu.changeFailed"),
-      description: t("canvas.connectionContextMenu.branchModelChangeFailed"),
-      duration: DEFAULT_TOAST_DURATION_MS,
-    });
-  }
-};
-
-/** 切換 Branch Model（不變更 provider） */
-const handleSetBranchModel = async (
-  targetValue: string,
-  displayLabel: string,
-): Promise<void> => {
-  if (targetValue === props.currentBranchModel) {
-    emit("close");
-    return;
-  }
-
-  const result = await connectionStore.updateConnectionBranchModel(
-    props.connectionId,
-    targetValue,
-  );
-
-  if (result) {
-    showModelChangeToast(
-      t("canvas.connectionContextMenu.branchModelChanged"),
-      displayLabel,
-    );
-    emit("branch-model-changed");
-    emit("close");
-  } else {
-    toast({
-      title: t("canvas.connectionContextMenu.changeFailed"),
-      description: t("canvas.connectionContextMenu.branchModelChangeFailed"),
-      duration: DEFAULT_TOAST_DURATION_MS,
-    });
-  }
-};
 </script>
 
 <template>
@@ -407,348 +117,49 @@ const handleSetBranchModel = async (
     }"
     @contextmenu.prevent
   >
-    <button
-      :class="[
-        'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary',
-        {
-          'bg-secondary border-l-2 border-l-primary':
-            currentTriggerMode === 'auto',
-        },
-      ]"
+    <TriggerModeRow
+      :mode="'auto'"
+      :current-mode="currentTriggerMode"
+      :icon="Zap"
+      :label="$t('canvas.connectionContextMenu.triggerModeAuto')"
       @click="handleSetTriggerMode('auto')"
-    >
-      <Zap
-        :size="14"
-        :class="
-          currentTriggerMode === 'auto' ? 'text-primary' : 'text-foreground'
-        "
-      />
-      <span
-        :class="[
-          'font-mono',
-          currentTriggerMode === 'auto'
-            ? 'text-primary font-semibold'
-            : 'text-foreground',
-        ]"
-      >
-        {{ $t("canvas.connectionContextMenu.triggerModeAuto") }}
-      </span>
-    </button>
+    />
 
-    <button
-      :class="[
-        'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary',
-        {
-          'bg-secondary border-l-2 border-l-primary':
-            currentTriggerMode === 'direct',
-        },
-      ]"
+    <TriggerModeRow
+      :mode="'direct'"
+      :current-mode="currentTriggerMode"
+      :icon="ArrowRight"
+      :label="$t('canvas.connectionContextMenu.triggerModeDirect')"
       @click="handleSetTriggerMode('direct')"
-    >
-      <ArrowRight
-        :size="14"
-        :class="
-          currentTriggerMode === 'direct' ? 'text-primary' : 'text-foreground'
-        "
-      />
-      <span
-        :class="[
-          'font-mono',
-          currentTriggerMode === 'direct'
-            ? 'text-primary font-semibold'
-            : 'text-foreground',
-        ]"
-      >
-        {{ $t("canvas.connectionContextMenu.triggerModeDirect") }}
-      </span>
-    </button>
+    />
 
-    <button
-      :class="[
-        'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary',
-        {
-          'bg-secondary border-l-2 border-l-primary':
-            currentTriggerMode === 'branch',
-        },
-      ]"
+    <TriggerModeRow
+      :mode="'branch'"
+      :current-mode="currentTriggerMode"
+      :icon="Brain"
+      :label="$t('canvas.connectionContextMenu.triggerModeBranch')"
       @click="handleBranchClick"
-    >
-      <Brain
-        :size="14"
-        :class="
-          currentTriggerMode === 'branch' ? 'text-primary' : 'text-foreground'
-        "
-      />
-      <span
-        :class="[
-          'font-mono',
-          currentTriggerMode === 'branch'
-            ? 'text-primary font-semibold'
-            : 'text-foreground',
-        ]"
-      >
-        {{ $t("canvas.connectionContextMenu.triggerModeBranch") }}
-      </span>
-    </button>
+    />
 
-    <!-- Branch Provider / Model 子選單：僅在 branch 模式下顯示，外觀同 Summary -->
     <template v-if="currentTriggerMode === 'branch'">
       <div class="border-t border-border my-1" />
-
-      <!-- Branch Provider 子選單觸發器 -->
-      <div
-        class="relative"
-        @mouseenter="isBranchProviderMenuOpen = true"
-        @mouseleave="isBranchProviderMenuOpen = false"
-      >
-        <button
-          class="w-full flex items-center justify-between gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary"
-          :class="{ 'bg-secondary': isBranchProviderMenuOpen }"
-        >
-          <span class="font-mono text-foreground">{{
-            $t("canvas.connectionContextMenu.branchProvider")
-          }}</span>
-          <ChevronRight
-            :size="12"
-            class="text-muted-foreground"
-          />
-        </button>
-
-        <!-- 浮層加 pl-1 撐出視覺空間，避免滑鼠移動時 mouseleave 觸發誤關 -->
-        <div
-          v-if="isBranchProviderMenuOpen"
-          class="absolute left-full top-0 pl-1 z-50"
-          @mouseenter="isBranchProviderMenuOpen = true"
-          @mouseleave="isBranchProviderMenuOpen = false"
-        >
-          <div
-            class="bg-card border border-doodle-ink rounded-md p-1 min-w-[120px]"
-          >
-            <button
-              v-for="option in PROVIDER_OPTIONS"
-              :key="option.value"
-              :class="[
-                'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary',
-                {
-                  'bg-secondary border-l-2 border-l-primary':
-                    option.value === currentBranchProviderEffective,
-                },
-              ]"
-              @click="handleSetBranchProvider(option.value)"
-            >
-              <span
-                :class="[
-                  'font-mono',
-                  option.value === currentBranchProviderEffective
-                    ? 'text-primary font-semibold'
-                    : 'text-foreground',
-                ]"
-              >
-                {{ option.label }}
-              </span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Branch Model 子選單觸發器 -->
-      <div
-        class="relative"
-        @mouseenter="isBranchModelMenuOpen = true"
-        @mouseleave="isBranchModelMenuOpen = false"
-      >
-        <button
-          class="w-full flex items-center justify-between gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary"
-          :class="{ 'bg-secondary': isBranchModelMenuOpen }"
-        >
-          <span class="font-mono text-foreground">{{
-            $t("canvas.connectionContextMenu.branchModel")
-          }}</span>
-          <ChevronRight
-            :size="12"
-            class="text-muted-foreground"
-          />
-        </button>
-
-        <div
-          v-if="isBranchModelMenuOpen"
-          class="absolute left-full top-0 pl-1 z-50"
-          @mouseenter="isBranchModelMenuOpen = true"
-          @mouseleave="isBranchModelMenuOpen = false"
-        >
-          <div
-            class="bg-card border border-doodle-ink rounded-md p-1 min-w-[120px]"
-          >
-            <!-- capability 尚未載入時顯示載入中提示 -->
-            <div
-              v-if="branchModelOptions === null"
-              class="px-2 py-1 text-xs font-mono text-muted-foreground"
-            >
-              {{ $t("canvas.connectionContextMenu.loading") }}
-            </div>
-
-            <button
-              v-for="option in branchModelOptions ?? []"
-              :key="option.value"
-              :class="[
-                'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary',
-                {
-                  'bg-secondary border-l-2 border-l-primary':
-                    isBranchModelActive(option.value),
-                },
-              ]"
-              @click="handleSetBranchModel(option.value, option.label)"
-            >
-              <span
-                :class="[
-                  'font-mono',
-                  isBranchModelActive(option.value)
-                    ? 'text-primary font-semibold'
-                    : 'text-foreground',
-                ]"
-              >
-                {{ option.label }}
-              </span>
-            </button>
-          </div>
-        </div>
-      </div>
+      <BranchSettingsPanel
+        :connection-id="connectionId"
+        :current-branch-provider="currentBranchProvider"
+        :current-branch-model="currentBranchModel"
+        @close="emit('close')"
+        @branch-provider-changed="emit('branch-provider-changed')"
+        @branch-model-changed="emit('branch-model-changed')"
+      />
     </template>
 
     <div class="border-t border-border my-1" />
 
-    <!-- Summary Provider 子選單觸發器（位於 Summary Model 子選單上方） -->
-    <div
-      class="relative"
-      @mouseenter="isProviderMenuOpen = true"
-      @mouseleave="isProviderMenuOpen = false"
-    >
-      <button
-        class="w-full flex items-center justify-between gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary"
-        :class="{ 'bg-secondary': isProviderMenuOpen }"
-      >
-        <span class="font-mono text-foreground">{{
-          $t("canvas.connectionContextMenu.summaryProvider")
-        }}</span>
-        <ChevronRight
-          :size="12"
-          class="text-muted-foreground"
-        />
-      </button>
-
-      <!-- Summary Provider 子選單：硬編碼選項，不過濾認證狀態
-           移除 ml-1（4px gap），改在浮層加 pl-1 撐出等價的視覺空間，
-           確保滑鼠從觸發項移往子選單時不會觸發 mouseleave -->
-      <div
-        v-if="isProviderMenuOpen"
-        class="absolute left-full top-0 pl-1 z-50"
-        @mouseenter="isProviderMenuOpen = true"
-        @mouseleave="isProviderMenuOpen = false"
-      >
-        <div
-          class="bg-card border border-doodle-ink rounded-md p-1 min-w-[120px]"
-        >
-          <!-- currentProvider 尚未就緒時顯示載入中提示 -->
-          <div
-            v-if="currentProvider === undefined"
-            class="px-2 py-1 text-xs font-mono text-muted-foreground"
-          >
-            {{ $t("canvas.connectionContextMenu.loading") }}
-          </div>
-
-          <!-- 硬編碼 provider 選項，active 以 currentProvider 判定 -->
-          <button
-            v-for="option in PROVIDER_OPTIONS"
-            :key="option.value"
-            :class="[
-              'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary',
-              {
-                'bg-secondary border-l-2 border-l-primary':
-                  option.value === currentProvider,
-              },
-            ]"
-            @click="handleSetSummaryProvider(option.value)"
-          >
-            <span
-              :class="[
-                'font-mono',
-                option.value === currentProvider
-                  ? 'text-primary font-semibold'
-                  : 'text-foreground',
-              ]"
-            >
-              {{ option.label }}
-            </span>
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Summary Model 子選單觸發器 -->
-    <div
-      class="relative"
-      @mouseenter="isSummaryMenuOpen = true"
-      @mouseleave="isSummaryMenuOpen = false"
-    >
-      <button
-        class="w-full flex items-center justify-between gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary"
-        :class="{ 'bg-secondary': isSummaryMenuOpen }"
-      >
-        <span class="font-mono text-foreground">{{
-          $t("canvas.connectionContextMenu.summaryModel")
-        }}</span>
-        <ChevronRight
-          :size="12"
-          class="text-muted-foreground"
-        />
-      </button>
-
-      <!-- Summary Model 子選單：根據上游 Pod provider 動態渲染
-           移除 ml-1（4px gap），改在浮層加 pl-1 撐出等價的視覺空間，
-           確保滑鼠從觸發項移往子選單時不會觸發 mouseleave -->
-      <div
-        v-if="isSummaryMenuOpen"
-        class="absolute left-full top-0 pl-1 z-50"
-        @mouseenter="isSummaryMenuOpen = true"
-        @mouseleave="isSummaryMenuOpen = false"
-      >
-        <div
-          class="bg-card border border-doodle-ink rounded-md p-1 min-w-[120px]"
-        >
-          <!-- 上游 Pod 不存在或 capability 尚未載入時顯示載入中提示 -->
-          <div
-            v-if="summaryModelOptions === null"
-            class="px-2 py-1 text-xs font-mono text-muted-foreground"
-          >
-            {{ $t("canvas.connectionContextMenu.loading") }}
-          </div>
-
-          <!-- 動態渲染 currentProvider 的可選模型清單，active 以雙欄位比對邏輯判定 -->
-          <button
-            v-for="option in summaryModelOptions ?? []"
-            :key="option.value"
-            :class="[
-              'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary',
-              {
-                'bg-secondary border-l-2 border-l-primary':
-                  isSummaryModelActive(option.value),
-              },
-            ]"
-            @click="handleSetSummaryModel(option.value, option.label)"
-          >
-            <span
-              :class="[
-                'font-mono',
-                isSummaryModelActive(option.value)
-                  ? 'text-primary font-semibold'
-                  : 'text-foreground',
-              ]"
-            >
-              {{ option.label }}
-            </span>
-          </button>
-        </div>
-      </div>
-    </div>
+    <SummarySection
+      :connection-id="connectionId"
+      :current-summary-model="currentSummaryModel"
+      @close="emit('close')"
+      @summary-model-changed="emit('summary-model-changed')"
+    />
   </div>
 </template>

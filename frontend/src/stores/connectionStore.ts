@@ -46,169 +46,15 @@ import type {
   ConnectionPayloadItem,
 } from "@/types/websocket";
 
-interface RawConnection {
-  id: string;
-  sourcePodId?: string;
-  sourceAnchor: AnchorPosition;
-  targetPodId: string;
-  targetAnchor: AnchorPosition;
-  triggerMode?: "auto" | "branch" | "direct";
-  /** summaryModel 接受任意 provider 的模型名稱字串，不限於 Claude ModelType */
-  summaryModel?: string;
-  /** Summary 功能獨立選用的 Provider；升級前 Connection 為 null/undefined */
-  summaryProvider?: PodProvider | null;
-  /** Branch 模式下的連線標籤 */
-  label?: string;
-  /** Branch 模式下的連線描述 */
-  description?: string;
-  /** Branch 模式使用的 AI Provider */
-  branchProvider?: PodProvider;
-  /** Branch 模式使用的模型字串 */
-  branchModel?: string;
-  connectionStatus?: string;
-  decideReason?: string | null;
-  decideStatus?: string;
-}
+import {
+  castHandler,
+  normalizeConnection,
+  shouldUpdateConnection,
+  runBFS,
+  buildIsRunningPod,
+} from "./connectionStoreHelpers";
 
 type WorkflowHandlers = ReturnType<typeof createWorkflowEventHandlers>;
-
-function castHandler<T>(
-  handler: (payload: T) => void,
-): (payload: unknown) => void {
-  return handler as (payload: unknown) => void;
-}
-
-function normalizeConnection(
-  raw: RawConnection,
-  sourceProvider?: PodProvider,
-): Connection {
-  const normalizedExplicitProvider =
-    raw.summaryProvider == null
-      ? null
-      : normalizePodProvider(raw.summaryProvider);
-  const summaryProvider =
-    normalizedExplicitProvider ??
-    (raw.summaryModel?.startsWith("gemini-") === true
-      ? "claude"
-      : (normalizePodProvider(sourceProvider ?? "claude") ?? "claude"));
-  const summaryModel =
-    raw.summaryModel?.startsWith("gemini-") === true
-      ? DEFAULT_SUMMARY_MODEL
-      : (raw.summaryModel ?? DEFAULT_SUMMARY_MODEL);
-
-  return {
-    ...raw,
-    triggerMode: (raw.triggerMode ?? "auto") as TriggerMode,
-    summaryModel,
-    summaryProvider,
-    // branch 欄位直接帶入，不加 fallback
-    label: raw.label,
-    description: raw.description,
-    branchProvider: raw.branchProvider,
-    branchModel: raw.branchModel,
-    status: (raw.connectionStatus ?? "idle") as ConnectionStatus,
-    decideReason: raw.decideReason ?? undefined,
-    // decideStatus：?? "none" 僅做型別 narrowing 用，BE 正規路徑必然帶值
-    decideStatus: (raw.decideStatus as DecideStatus) ?? "none",
-  };
-}
-
-const RUNNING_CONNECTION_STATUSES = new Set<ConnectionStatus>([
-  "active",
-  "queued",
-  "waiting",
-]);
-
-/**
- * 事件亂序保護：當 connection 的 decideStatus 為 pending（AI 決策中），不允許被 active 事件覆蓋。
- * 防止排程或其他觸發路徑的 active 事件在 AI 決策期間改變狀態，
- * 導致 AI 決策結果被忽略或狀態機進入不一致情況。
- */
-function isOutOfOrderUpdate(
-  currentDecideStatus: DecideStatus | undefined,
-  incomingStatus: ConnectionStatus,
-): boolean {
-  return currentDecideStatus === "pending" && incomingStatus === "active";
-}
-
-function shouldUpdateConnection(
-  connection: Connection,
-  targetPodId: string,
-  status: ConnectionStatus,
-): boolean {
-  if (connection.targetPodId !== targetPodId) return false;
-  if (connection.triggerMode !== "auto" && connection.triggerMode !== "branch")
-    return false;
-  if (isOutOfOrderUpdate(connection.decideStatus, status)) return false;
-  return true;
-}
-
-/**
- * 使用 BFS 而非 DFS，確保在循環或極長鏈中不會發生堆疊溢位，
- * 並能在找到第一個執行中節點時提前返回，避免遍歷整條鏈。
- */
-function isAnyNeighborRunning(
-  neighbors: { neighborId: string; connection: Connection }[],
-  visited: Set<string>,
-  queue: string[],
-): boolean {
-  for (const { neighborId, connection } of neighbors) {
-    if (
-      (connection.status !== undefined &&
-        RUNNING_CONNECTION_STATUSES.has(connection.status)) ||
-      connection.decideStatus === "pending"
-    )
-      return true;
-    if (!visited.has(neighborId)) {
-      visited.add(neighborId);
-      queue.push(neighborId);
-    }
-  }
-  return false;
-}
-
-function processBfsNode(
-  currentId: string,
-  getNeighbors: (
-    podId: string,
-  ) => { neighborId: string; connection: Connection }[],
-  isRunningPod: (podId: string) => boolean,
-  visited: Set<string>,
-  queue: string[],
-): boolean {
-  if (isRunningPod(currentId)) return true;
-  return isAnyNeighborRunning(getNeighbors(currentId), visited, queue);
-}
-
-function runBFS(
-  startId: string,
-  getNeighbors: (
-    podId: string,
-  ) => { neighborId: string; connection: Connection }[],
-  isRunningPod: (podId: string) => boolean,
-): boolean {
-  const visited = new Set<string>([startId]);
-  const queue: string[] = [startId];
-
-  while (queue.length > 0) {
-    const currentId = queue.shift();
-    if (!currentId) break;
-    if (processBfsNode(currentId, getNeighbors, isRunningPod, visited, queue))
-      return true;
-  }
-  return false;
-}
-
-/**
- * Pod 全域 status 概念已移除（P1.I）。
- * 簡化路徑：connection BFS 不再依賴 pod.status 判斷 running 狀態，
- * 始終回傳 false，避免引入複雜的 runStore active run 同步機制。
- */
-function buildIsRunningPod(
-  _podStore: ReturnType<typeof usePodStore>,
-): (podId: string) => boolean {
-  return (_podId: string) => false;
-}
 
 export const useConnectionStore = defineStore("connection", () => {
   const { executeAction } = useCanvasWebSocketAction();
@@ -559,10 +405,7 @@ export const useConnectionStore = defineStore("connection", () => {
       rawConnection.summaryModel = resolvedSummaryModel;
     }
 
-    return normalizeConnection(
-      rawConnection,
-      sourcePod?.provider,
-    );
+    return normalizeConnection(rawConnection, sourcePod?.provider);
   }
 
   async function deleteConnection(connectionId: string): Promise<void> {
@@ -1008,14 +851,14 @@ export const useConnectionStore = defineStore("connection", () => {
         DEFAULT_SUMMARY_MODEL,
       summaryProvider:
         connection.summaryProvider !== undefined
-          ? (connection.summaryProvider == null
-              ? existingConnection.sourcePodId
-                ? normalizePodProvider(
-                    podStore.getPodById(existingConnection.sourcePodId)
-                      ?.provider ?? "claude",
-                  ) ?? "claude"
-                : "claude"
-              : (normalizePodProvider(connection.summaryProvider) ?? "claude"))
+          ? connection.summaryProvider == null
+            ? existingConnection.sourcePodId
+              ? (normalizePodProvider(
+                  podStore.getPodById(existingConnection.sourcePodId)
+                    ?.provider ?? "claude",
+                ) ?? "claude")
+              : "claude"
+            : (normalizePodProvider(connection.summaryProvider) ?? "claude")
           : existingConnection.summaryProvider,
       // branch 欄位直接以後端回傳值覆寫（包含 undefined → 視為清空）
       label: connection.label,

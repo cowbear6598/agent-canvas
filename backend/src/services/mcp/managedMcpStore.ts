@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { getDb } from "../../database/index.js";
 import { getStmts } from "../../database/stmtsHelper.js";
-import { safeJsonParse } from "../../utils/safeJsonParse.js";
+import { safeJsonParse } from "@shared/safeJsonParse.js";
 
 export type ManagedMcpTransport = "stdio" | "http" | "sse";
 export type ManagedMcpRuntimeStatus =

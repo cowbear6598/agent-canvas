@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import type {
   ChatEmitStrategy,
-  ExecutionStrategy,
+  ChatExecutionStrategy,
 } from "./executionStrategy.js";
 import type { PersistedMessage } from "../types/persistence.js";
 import type { SystemMessageMetadata } from "../types/message.js";
@@ -33,7 +33,7 @@ export function appendSystemMessage(params: {
   podId: string;
   content: string;
   metadata: SystemMessageMetadata;
-  strategy: ExecutionStrategy;
+  strategy: ChatExecutionStrategy;
   /** 已建立的 emitStrategy，可重用以避免重複呼叫 createEmitStrategy() */
   emitStrategy?: ChatEmitStrategy;
   id?: string;

@@ -28,7 +28,7 @@ vi.mock("../../src/services/mcp/managedMcpSurfaceService.js", () => ({
   managedMcpSurfaceService: mockManagedMcpSurfaceService,
 }));
 
-import { CodexProvider } from "../../src/services/provider/codexProvider.js";
+import { codexProvider } from "../../src/services/provider/codexProvider.js";
 import type { Pod } from "../../src/types/pod.js";
 
 // ── 工具：建立最小化 Pod stub ────────────────────────────────────────────
@@ -56,7 +56,7 @@ function makePod(overrides: Partial<Pod> = {}): Pod {
 }
 
 describe("CodexProvider.buildOptions()", () => {
-  const provider = new CodexProvider();
+  const provider = codexProvider;
 
   beforeEach(() => {
     mockManagedMcpSurfaceService.ensureSurface.mockClear();

@@ -2,7 +2,7 @@ import { WebSocketResponseEvents } from "../schemas";
 import { socketService } from "../services/socketService.js";
 import { getValidatedGitRepository } from "../utils/validators.js";
 import { emitError } from "../utils/websocketResponse.js";
-import { throttle, type ThrottledFunction } from "../utils/throttle.js";
+import { throttle, type ThrottledFunction } from "@shared/throttle.js";
 import type { I18nError } from "../utils/i18nError.js";
 
 export type ThrottledProgressEmitter = ThrottledFunction<

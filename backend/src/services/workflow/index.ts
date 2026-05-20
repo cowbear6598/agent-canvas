@@ -4,9 +4,7 @@ export { workflowExecutionService } from "./workflowExecutionService.js";
 export { workflowAutoTriggerService } from "./workflowAutoTriggerService.js";
 export { workflowMultiInputService } from "./workflowMultiInputService.js";
 export { workflowDirectTriggerService } from "./workflowDirectTriggerService.js";
-// Phase 3C 新增：BranchDecisionService singleton
 export { branchDecisionService } from "./branchDecisionService.js";
-// Phase 3D 新增：WorkflowBranchTriggerService singleton
 export { workflowBranchTriggerService } from "./workflowBranchTriggerService.js";
 export { workflowQueueService } from "./workflowQueueService.js";
 export { runQueueService } from "./runQueueService.js";

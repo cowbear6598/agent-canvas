@@ -45,6 +45,10 @@ import {
 } from "../../claude/claudeSandboxPaths.js";
 import { logger, sanitizeSensitiveInfo } from "../../../utils/logger.js";
 import { sanitizePodName } from "../podNameSanitizer.js";
+import {
+  buildGoalRuntimeBootstrapPrompt,
+  buildGoalRuntimeBootstrapContentBlock,
+} from "../goalBootstrapPrompt.js";
 
 // ─── 型別定義 ────────────────────────────────────────────────────────────────
 
@@ -135,34 +139,6 @@ function buildPrompt(
     : contentArray;
   const sessionId = resumeSessionId ?? "";
   return createUserMessageStream(finalContentArray, sessionId);
-}
-
-const GOAL_RUNTIME_BOOTSTRAP_LINES = [
-  "A Goal Runtime MCP is available for this Pod.",
-  "Start by calling Goal Runtime to inspect the current status and active todo.",
-  "Then continue with the current active todo instead of asking for a new task.",
-  "Only ask for clarification if Goal Runtime shows no actionable todo or the work is blocked.",
-];
-
-function buildGoalRuntimeBootstrapPrompt(rawMessage: string): string {
-  return [
-    `User request: ${rawMessage.trim()}`,
-    "",
-    ...GOAL_RUNTIME_BOOTSTRAP_LINES,
-  ].join("\n");
-}
-
-function buildGoalRuntimeBootstrapContentBlock(): {
-  type: "text";
-  text: string;
-} {
-  return {
-    type: "text",
-    text: [
-      ...GOAL_RUNTIME_BOOTSTRAP_LINES,
-      "The user's request follows in the remaining content blocks of this message.",
-    ].join("\n"),
-  };
 }
 
 function isToolResultBlock(block: unknown): block is UserToolResultBlock {

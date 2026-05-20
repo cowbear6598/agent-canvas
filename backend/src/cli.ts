@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import pkg from "../../package.json";
-import { safeJsonParse } from "./utils/safeJsonParse.js";
+import { safeJsonParse } from "@shared/safeJsonParse.js";
 import {
   addDomain,
   removeDomain,

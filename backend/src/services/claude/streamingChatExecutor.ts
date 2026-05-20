@@ -1,10 +1,15 @@
 import { v4 as uuidv4 } from "uuid";
 
+import { isAbortError } from "../../utils/errorHelpers.js";
+import { classifyKnownError } from "./streamErrorClassifier.js";
 import {
-  isAbortError,
-  InvalidWorkspaceError,
-  ProviderNotFoundError,
-} from "../../utils/errorHelpers.js";
+  createThrottledPersist,
+  type ThrottleContext,
+} from "./streamThrottle.js";
+import {
+  buildProviderErrorSystemMessage,
+  shouldLogProviderRawContent,
+} from "./streamProviderErrorMessage.js";
 import type { ContentBlock, PersistedSubMessage } from "../../types";
 import type { Pod } from "../../types/pod.js";
 
@@ -20,14 +25,13 @@ import {
 } from "./streamEventProcessor.js";
 import { podStore } from "../podStore.js";
 import { logger } from "../../utils/logger.js";
-import type { ExecutionStrategy } from "../executionStrategy.js";
+import type { ChatExecutionStrategy } from "../executionStrategy.js";
 import { getProvider } from "../provider/index.js";
 import type {
   AgentProvider,
   ChatRequestContext,
   NormalizedEvent,
   ProviderName,
-  ProviderSystemMessage,
 } from "../provider/types.js";
 import { socketService } from "../socketService.js";
 import { WebSocketResponseEvents } from "../../schemas/index.js";
@@ -53,7 +57,7 @@ export interface StreamingChatExecutorOptions {
    */
   message: string | ContentBlock[];
   abortable: boolean;
-  strategy: ExecutionStrategy;
+  strategy: ChatExecutionStrategy;
 }
 
 export interface StreamingChatExecutorCallbacks {
@@ -94,17 +98,6 @@ function hasAssistantContent(state: MutableStreamState): boolean {
 const THROTTLE_MS = 200;
 
 /**
- * 節流持久化的可變狀態，從 StreamContext 中獨立出來，
- * 避免與串流事件狀態混雜，也不需要 getter/setter proxy 橋接。
- */
-interface ThrottleContext {
-  /** 節流 timer handle，供 finalize / abort 清除待排程的舊 timer */
-  pendingTimer: ReturnType<typeof setTimeout> | null;
-  /** 上次實際寫入 DB 的時間戳（ms），初始值 0 */
-  lastPersistAt: number;
-}
-
-/**
  * 串流事件狀態 + 執行策略兩類關注點的集合體。
  * streamingCallback 不存放於此，改以傳參方式注入各使用方，避免初始化順序問題。
  */
@@ -124,8 +117,8 @@ interface StreamContext {
   persistThrottled: () => void;
   /** 節流狀態，供 finalize / abort 清除 timer */
   throttleContext: ThrottleContext;
-  emitStrategy: ReturnType<ExecutionStrategy["createEmitStrategy"]>;
-  strategy: ExecutionStrategy;
+  emitStrategy: ReturnType<ChatExecutionStrategy["createEmitStrategy"]>;
+  strategy: ChatExecutionStrategy;
   /**
    * 串流期間捕捉到的 session ID（session_started 事件寫入）。
    * 由 processNormalizedEvent 在收到 session_started 時寫入，
@@ -282,37 +275,6 @@ function flushPendingAssistantMessage(context: StreamContext): void {
   }
 }
 
-function buildProviderErrorSystemMessage(
-  event: Extract<NormalizedEvent, { type: "error" }>,
-  providerName: ProviderName,
-): ProviderSystemMessage {
-  if (event.systemMessage) {
-    return event.systemMessage;
-  }
-
-  return {
-    role: "system",
-    content: event.message,
-    metadata: {
-      provider: providerName,
-      code: event.code ?? null,
-      severity: event.fatal ? "fatal" : "error",
-      rawContent: event.message,
-      reasonDetail: undefined,
-    },
-  };
-}
-
-const DETAILED_PROVIDER_ERROR_CODES = new Set([
-  "STREAM_ERROR",
-  "EXIT_CODE",
-  "RESULT_ERROR",
-]);
-
-function shouldLogProviderRawContent(code: string | null): boolean {
-  return code === null || DETAILED_PROVIDER_ERROR_CODES.has(code);
-}
-
 /**
  * 將 provider 串流錯誤事件寫入 transcript system message。
  *
@@ -432,39 +394,6 @@ async function handleStreamAbort(
   };
 }
 
-/**
- * 嘗試將錯誤對應到具體的 WebSocket 錯誤碼、i18n key，以及對外顯示的固定中文訊息。
- *
- * - InvalidWorkspaceError（路徑穿越 / 工作目錄非法）→ { code: "INVALID_PATH", ... }
- * - ProviderNotFoundError（Provider 不存在 / buildOptions 失敗）→ { code: "PROVIDER_NOT_FOUND", ... }
- * - 其他無法分類的錯誤 → null（由呼叫端決定如何處理）
- *
- * content 為對外顯示的固定中文訊息，不透傳 error.message 以避免洩漏內部細節。
- * 改用 instanceof 而非硬編碼字串比對，避免訊息修改導致分類失效。
- */
-function classifyKnownError(error: unknown): {
-  code: string;
-  i18nKey: string;
-  /** 對外顯示的固定中文訊息，不含原始 error.message */
-  content: string;
-} | null {
-  if (error instanceof InvalidWorkspaceError) {
-    return {
-      code: "INVALID_PATH",
-      i18nKey: "errors.invalidWorkspacePath",
-      content: "工作目錄路徑無效或存取遭拒，請確認 Pod 設定後重試。",
-    };
-  }
-  if (error instanceof ProviderNotFoundError) {
-    return {
-      code: "PROVIDER_NOT_FOUND",
-      i18nKey: "errors.providerNotFound",
-      content: "找不到對應的 AI Provider，請確認 Pod 設定後重試。",
-    };
-  }
-  return null;
-}
-
 async function handleStreamError(
   context: StreamContext,
   error: unknown,
@@ -518,41 +447,6 @@ async function handleStreamError(
   }
 
   throw error;
-}
-
-/**
- * 建立節流持久化函式與對應的 ThrottleContext。
- *
- * - 距上次寫入 >= throttleMs 時立即寫入
- * - 否則排程 setTimeout 到下個窗口開頭寫入最後一次 payload
- * - 同一窗口內多次呼叫只排一個 timer，並使用最新 payload（閉包自動取最新 streamState）
- */
-function createThrottledPersist(
-  persistFn: () => void,
-  throttleMs: number,
-): { persistThrottled: () => void; throttleContext: ThrottleContext } {
-  const throttleContext: ThrottleContext = {
-    lastPersistAt: 0,
-    pendingTimer: null,
-  };
-
-  const persistThrottled = (): void => {
-    const now = Date.now();
-    if (now - throttleContext.lastPersistAt >= throttleMs) {
-      throttleContext.lastPersistAt = now;
-      persistFn();
-    } else if (throttleContext.pendingTimer === null) {
-      const delay = throttleMs - (now - throttleContext.lastPersistAt);
-      throttleContext.pendingTimer = setTimeout(() => {
-        throttleContext.pendingTimer = null;
-        // lastPersistAt 在呼叫 persistFn 之前更新，防止下一個事件誤判窗口已過造成雙寫
-        throttleContext.lastPersistAt = Date.now();
-        persistFn();
-      }, delay);
-    }
-  };
-
-  return { persistThrottled, throttleContext };
 }
 
 /** createPersistenceContext 的回傳結構，包含 persistence/throttle 所需的所有元件 */
@@ -974,7 +868,7 @@ async function executeChatTurn(
 }
 
 /**
- * 統一的串流聊天執行器，透過 ExecutionStrategy 管理 Run mode 的執行行為。
+ * 統一的串流聊天執行器，透過 ChatExecutionStrategy 管理 Run mode 的執行行為。
  *
  * 流程：
  *   1. 第一輪 turn 帶 caller 傳入的 message

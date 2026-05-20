@@ -107,8 +107,8 @@ function makeCtx(
   };
 }
 
-// ── 匯入 CodexProvider（在 mock 設定後匯入，確保使用 mocked logger） ────
-import { CodexProvider } from "../../src/services/provider/codexProvider.js";
+// ── 匯入 codexProvider（在 mock 設定後匯入，確保使用 mocked logger） ────
+import { codexProvider } from "../../src/services/provider/codexProvider.js";
 
 describe("CodexProvider", () => {
   // spawnSpy 在每個 test 中設定
@@ -123,7 +123,7 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = new CodexProvider();
+    const provider = codexProvider;
     const ctx = makeCtx({
       resumeSessionId: null,
       options: { model: "gpt-4o", resumeMode: "cli" },
@@ -157,7 +157,7 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = new CodexProvider();
+    const provider = codexProvider;
     const ctx = makeCtx({ resumeSessionId: "session-abc123" });
 
     await collectEvents(provider.chat(ctx));
@@ -187,7 +187,7 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = new CodexProvider();
+    const provider = codexProvider;
     const ctx = makeCtx({
       message: "fix the failing test",
       options: {
@@ -227,7 +227,7 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = new CodexProvider();
+    const provider = codexProvider;
     const ctx = makeCtx({
       message: "fix the failing test",
       options: {
@@ -250,7 +250,7 @@ describe("CodexProvider", () => {
       { name: "legacy-installed", type: "stdio" } as any,
     ]);
 
-    const provider = new CodexProvider();
+    const provider = codexProvider;
     const ctx = makeCtx({
       options: {
         model: "gpt-5.4",
@@ -295,7 +295,7 @@ describe("CodexProvider", () => {
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
     vi.mocked(readCodexMcpServers).mockReturnValue([]);
 
-    const provider = new CodexProvider();
+    const provider = codexProvider;
     const ctx = makeCtx({
       options: {
         model: "gpt-5.4",
@@ -336,7 +336,7 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = new CodexProvider();
+    const provider = codexProvider;
     const ctx = makeCtx({ abortSignal: ac.signal });
 
     // 在 collectEvents 之前先 abort，確保 onAbort 邏輯會被觸發
@@ -357,7 +357,7 @@ describe("CodexProvider", () => {
       throw enoentErr;
     });
 
-    const provider = new CodexProvider();
+    const provider = codexProvider;
     const events = await collectEvents(provider.chat(makeCtx()));
 
     expect(events).toHaveLength(1);
@@ -381,7 +381,7 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc(stdoutLines);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = new CodexProvider();
+    const provider = codexProvider;
     const events = await collectEvents(provider.chat(makeCtx()));
 
     expect(events).toHaveLength(3);
@@ -408,7 +408,7 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([], ["some stderr output"], 1);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = new CodexProvider();
+    const provider = codexProvider;
     const events = await collectEvents(provider.chat(makeCtx()));
 
     const errorEvents = events.filter((e) => e.type === "error");
@@ -430,7 +430,7 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc(stdoutLines, [], 1);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = new CodexProvider();
+    const provider = codexProvider;
 
     // 模擬 streamingChatExecutor 主迴圈：收到 fatal=true 後 break，generator 被 return
     const collected: NormalizedEvent[] = [];
@@ -465,7 +465,7 @@ describe("CodexProvider", () => {
     );
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = new CodexProvider();
+    const provider = codexProvider;
     const events = await collectEvents(provider.chat(makeCtx()));
 
     const errorEvents = events.filter((e) => e.type === "error");
@@ -478,7 +478,7 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = new CodexProvider();
+    const provider = codexProvider;
     // 帶入 options.model = "gpt-5.4-pro"
     const ctx = makeCtx({
       options: { model: "gpt-5.4-pro", resumeMode: "cli" },
@@ -497,7 +497,7 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = new CodexProvider();
+    const provider = codexProvider;
     // 含空格和特殊字元，格式不合法
     const ctx = makeCtx({ resumeSessionId: "invalid session id!" });
     await collectEvents(provider.chat(ctx));
@@ -514,7 +514,7 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = new CodexProvider();
+    const provider = codexProvider;
     const ctx = makeCtx({ resumeSessionId: null });
     await collectEvents(provider.chat(ctx));
 
@@ -536,7 +536,7 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = new CodexProvider();
+    const provider = codexProvider;
     const ctx = makeCtx({ resumeSessionId: "session-xyz" });
     await collectEvents(provider.chat(ctx));
 
@@ -557,7 +557,7 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = new CodexProvider();
+    const provider = codexProvider;
     const ctx = makeCtx({
       workspacePath: "/repos/my-repo",
       resumeSessionId: null,
@@ -585,7 +585,7 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = new CodexProvider();
+    const provider = codexProvider;
     const ctx = makeCtx({ resumeSessionId: null });
     await collectEvents(provider.chat(ctx));
 
@@ -617,7 +617,7 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = new CodexProvider();
+    const provider = codexProvider;
     const ctx = makeCtx({ resumeSessionId: "session-abc123" });
     await collectEvents(provider.chat(ctx));
 
@@ -639,7 +639,7 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = new CodexProvider();
+    const provider = codexProvider;
     const ctx = makeCtx({
       resumeSessionId: null,
       options: {
@@ -682,7 +682,7 @@ describe("CodexProvider", () => {
     vi.mocked(readCodexMcpServers).mockClear();
     // 不設定 spawnSpy：若走到 spawn 會使用真實 Bun.spawn（但 prepareExecution 失敗應在此之前 return）
 
-    const provider = new CodexProvider();
+    const provider = codexProvider;
     // 含空格的 model 名稱不合法（不通過 MODEL_RE）
     const ctx = makeCtx({
       options: { model: "invalid model name!", resumeMode: "cli" },
@@ -705,7 +705,7 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = new CodexProvider();
+    const provider = codexProvider;
     const ctx = makeCtx({
       resumeSessionId: null,
       options: { model: "gpt-5.5", resumeMode: "cli", thinkingLevel: "high" },
@@ -725,7 +725,7 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = new CodexProvider();
+    const provider = codexProvider;
     const ctx = makeCtx({
       resumeSessionId: "session-thinking-xyz",
       options: { model: "gpt-5.5", resumeMode: "cli", thinkingLevel: "xhigh" },
@@ -747,7 +747,7 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = new CodexProvider();
+    const provider = codexProvider;
     // 預設 options 不含 thinkingLevel
     const ctx = makeCtx({
       resumeSessionId: null,
@@ -770,7 +770,7 @@ describe("CodexProvider", () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
-    const provider = new CodexProvider();
+    const provider = codexProvider;
     const ctx = makeCtx({ resumeSessionId: null });
     await collectEvents(provider.chat(ctx));
 

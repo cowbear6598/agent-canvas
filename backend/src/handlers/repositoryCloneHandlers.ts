@@ -17,7 +17,7 @@ import { handleResultError } from "../utils/handlerHelpers.js";
 import { createI18nError } from "../utils/i18nError.js";
 import { errI18n } from "../types/result.js";
 import { getGitStageMessage } from "../utils/operationHelpers.js";
-import { throttle } from "../utils/throttle.js";
+import { throttle } from "@shared/throttle.js";
 import {
   createProgressEmitter,
   parseRepoName,

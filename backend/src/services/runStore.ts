@@ -3,7 +3,7 @@ import type { PersistedMessage, PersistedSubMessage } from "../types";
 import type { MessageRole, SystemMessageMetadata } from "../types/message.js";
 import type { PathwayState } from "../types/run.js";
 import { getStmts } from "../database/stmtsHelper.js";
-import { safeJsonParse } from "../utils/safeJsonParse.js";
+import { safeJsonParse } from "@shared/safeJsonParse.js";
 import {
   pathwayStateToSqliteInt,
   sqliteIntToPathwayState,

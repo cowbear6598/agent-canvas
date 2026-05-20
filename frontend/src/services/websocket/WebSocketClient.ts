@@ -1,7 +1,7 @@
 import { ref } from "vue";
 import type { WebSocketMessage } from "@/types/websocket";
 import { logger } from "@/utils/logger";
-import { safeJsonParse } from "@/utils/safeJsonParse";
+import { safeJsonParse } from "@shared/safeJsonParse";
 
 type EventCallback<T> = (payload: T) => void;
 

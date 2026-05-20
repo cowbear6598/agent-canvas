@@ -34,6 +34,7 @@ import { sanitizePodName } from "./podNameSanitizer.js";
 import type { Pod } from "../../types/pod.js";
 import type { RunContext } from "../../types/run.js";
 import { readCodexMcpServers } from "../mcp/codexMcpReader.js";
+import { buildGoalRuntimeBootstrapPrompt } from "./goalBootstrapPrompt.js";
 import {
   managedMcpSurfaceService,
   type PodMcpEntry,
@@ -176,17 +177,6 @@ function buildPromptText(
   }
 
   return parts.join("\n");
-}
-
-function buildGoalRuntimeBootstrapPrompt(rawMessage: string): string {
-  return [
-    `User request: ${rawMessage.trim()}`,
-    "",
-    "A Goal Runtime MCP is available for this Pod.",
-    "Start by calling Goal Runtime to inspect the current status and active todo.",
-    "Then continue with the current active todo instead of asking for a new task.",
-    "Only ask for clarification if Goal Runtime shows no actionable todo or the work is blocked.",
-  ].join("\n");
 }
 
 function buildCodexPromptText(
@@ -672,38 +662,55 @@ function setupSubprocess(
   return { ok: true, proc, cleanup };
 }
 
-export class CodexProvider implements AgentProvider<CodexOptions> {
-  /**
-   * Codex provider 的 metadata，包含 name、capabilities 與預設執行時選項。
-   */
-  readonly metadata: ProviderMetadata<CodexOptions> = {
-    name: "codex",
-    capabilities: CODEX_CAPABILITIES,
-    defaultOptions: {
-      model: "gpt-5.4",
-      resumeMode: "cli",
-      mcpEntries: [],
-      hasGoalRuntime: false,
-    },
-    availableModels: CODEX_AVAILABLE_MODELS,
-    availableModelValues: CODEX_AVAILABLE_MODEL_VALUES,
-  };
+const codexMetadata: ProviderMetadata<CodexOptions> = {
+  name: "codex",
+  capabilities: CODEX_CAPABILITIES,
+  defaultOptions: {
+    model: "gpt-5.4",
+    resumeMode: "cli",
+    mcpEntries: [],
+    hasGoalRuntime: false,
+  },
+  availableModels: CODEX_AVAILABLE_MODELS,
+  availableModelValues: CODEX_AVAILABLE_MODEL_VALUES,
+};
 
-  /**
-   * 從 Pod 設定建構 Codex 執行時選項。
-   *
-   * - 讀取 `pod.providerConfig?.model`：若為合法字串（通過 MODEL_RE 驗證）則使用之，
-   *   否則回傳 metadata.defaultOptions.model。
-   * - resumeMode 固定為 "cli"（Codex 目前只支援 CLI resume 路徑）。
-   * - MCP entries 由 managedMcpSurfaceService.buildPodMcpEntries 統一組（run / chat 同邏輯，
-   *   差別在 run 模式才會含 Goal Runtime）。
-   */
+function prepareCodexExecution(
+  ctx: ChatRequestContext<CodexOptions>,
+): { codexArgs: string[]; promptText: string } | null {
+  const { message, workspacePath, resumeSessionId, options } = ctx;
+  const model = options?.model ?? codexMetadata.defaultOptions.model;
+
+  if (!MODEL_RE.test(model)) {
+    return null;
+  }
+
+  const codexArgs = buildCodexArgs(
+    resumeSessionId,
+    model,
+    workspacePath,
+    options,
+    options?.thinkingLevel,
+  );
+  const goalRuntimeAvailable = Boolean(options?.hasGoalRuntime);
+  const promptText = buildCodexPromptText(
+    message,
+    goalRuntimeAvailable,
+    resumeSessionId,
+  );
+
+  return { codexArgs, promptText };
+}
+
+export const codexProvider: AgentProvider<CodexOptions> = {
+  metadata: codexMetadata,
+
   async buildOptions(pod: Pod, runContext?: RunContext): Promise<CodexOptions> {
     const rawModel = pod.providerConfig?.model;
     const model =
       typeof rawModel === "string" && MODEL_RE.test(rawModel)
         ? rawModel
-        : this.metadata.defaultOptions.model;
+        : codexMetadata.defaultOptions.model;
 
     const { entries, hasGoalRuntime } =
       await managedMcpSurfaceService.buildPodMcpEntries(
@@ -718,58 +725,22 @@ export class CodexProvider implements AgentProvider<CodexOptions> {
       hasGoalRuntime,
     };
 
-    // thinkingLevel 為非空字串時才寫入；不做格式驗證，由 CLI 端決定
     const rawThinkingLevel = pod.providerConfig?.thinkingLevel;
     if (typeof rawThinkingLevel === "string" && rawThinkingLevel.length > 0) {
       result.thinkingLevel = rawThinkingLevel;
     }
 
     return result;
-  }
-
-  /**
-   * 準備執行所需的 CLI 參數與 prompt 文字。
-   * 驗證 model 格式，若不合法回傳 null（由 chat() 負責 yield error）。
-   */
-  private prepareExecution(
-    ctx: ChatRequestContext<CodexOptions>,
-  ): { codexArgs: string[]; promptText: string } | null {
-    const { message, workspacePath, resumeSessionId, options } = ctx;
-    const model = options?.model ?? this.metadata.defaultOptions.model;
-
-    if (!MODEL_RE.test(model)) {
-      return null;
-    }
-
-    const codexArgs = buildCodexArgs(
-      resumeSessionId,
-      model,
-      workspacePath,
-      options,
-      options?.thinkingLevel,
-    );
-    const goalRuntimeAvailable = Boolean(options?.hasGoalRuntime);
-    const promptText = buildCodexPromptText(
-      message,
-      goalRuntimeAvailable,
-      resumeSessionId,
-    );
-
-    return { codexArgs, promptText };
-  }
+  },
 
   async *chat(
     ctx: ChatRequestContext<CodexOptions>,
   ): AsyncIterable<NormalizedEvent> {
     const { podId, podName, workspacePath, abortSignal, options } = ctx;
 
-    // Managed MCP 子程序由 codex CLI 自身依 -c mcp_servers.* 設定 spawn，
-    // chat / run session 結束時自然回收，不需要 provider 端額外管 lifecycle。
-
-    // ── 準備執行（model 驗證 + CLI 參數 + prompt 轉換） ─────────────
-    const execution = this.prepareExecution(ctx);
+    const execution = prepareCodexExecution(ctx);
     if (execution === null) {
-      const model = options?.model ?? this.metadata.defaultOptions.model;
+      const model = options?.model ?? codexMetadata.defaultOptions.model;
       logger.warn(
         "Chat",
         "Warn",
@@ -784,14 +755,13 @@ export class CodexProvider implements AgentProvider<CodexOptions> {
     }
 
     const { codexArgs, promptText } = execution;
-    const model = options?.model ?? this.metadata.defaultOptions.model;
+    const model = options?.model ?? codexMetadata.defaultOptions.model;
     logger.log(
       "Chat",
       "Update",
       `[CodexProvider] ${sanitizePodName(podName)} 開始查詢（model: ${model}，thinking: ${options?.thinkingLevel ?? "none"}）`,
     );
 
-    // ── Spawn subprocess + abort signal 設置 ──────────────────────
     const subprocessResult = setupSubprocess(
       codexArgs,
       workspacePath,
@@ -808,13 +778,10 @@ export class CodexProvider implements AgentProvider<CodexOptions> {
       return;
     }
 
-    // ── 串流輸出 ───────────────────────────────────────────────────
     try {
       yield* streamCodexOutput(proc, promptText, abortSignal, podId);
     } finally {
       cleanup();
     }
-  }
-}
-
-export const codexProvider = new CodexProvider();
+  },
+};

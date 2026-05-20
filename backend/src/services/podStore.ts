@@ -13,7 +13,7 @@ import {
 import { canvasStore } from "./canvasStore.js";
 import { getStmts } from "../database/stmtsHelper.js";
 import { getDb } from "../database/index.js";
-import { safeJsonParse } from "../utils/safeJsonParse.js";
+import { safeJsonParse } from "@shared/safeJsonParse.js";
 
 /**
  * LRU statement cache 上限（entry 數）。

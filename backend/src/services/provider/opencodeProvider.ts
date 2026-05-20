@@ -36,14 +36,9 @@
  *     resume session 時不注入（避免覆蓋 gate retry 的 nudge 指示）。
  */
 
-import {
-  createOpencodeServer,
-  type McpLocalConfig,
-  type McpRemoteConfig,
-} from "@opencode-ai/sdk";
+import { createOpencodeServer } from "@opencode-ai/sdk";
 import { createOpencodeClient as createOpencodeClientV2 } from "@opencode-ai/sdk/v2";
 import { OPENCODE_CAPABILITIES } from "./capabilities.js";
-import { buildProviderSystemError } from "./types.js";
 import type {
   AgentProvider,
   ChatRequestContext,
@@ -59,6 +54,26 @@ import {
   type PodMcpEntry,
 } from "../mcp/managedMcpSurfaceService.js";
 import { getOpencodeServerState } from "./opencodeServer.js";
+import {
+  buildOpencodeSystemError,
+  classifySessionError,
+  extractErrorMessage,
+} from "./opencodeErrorClassifier.js";
+import {
+  serializeV2ToolSuccessContent,
+  serializeV2ToolFailureError,
+} from "./opencodeToolSerializer.js";
+import {
+  buildOpencodeMcpConfig,
+  buildServerCacheKey,
+} from "./opencodeMcpConfigBuilder.js";
+import { buildOpencodePromptText } from "./opencodePromptHelpers.js";
+
+// 重新匯出測試與其他模組依賴的公開 API（拆檔後保持原本 import path 可用）
+export {
+  serializeV2ToolSuccessContent,
+  serializeV2ToolFailureError,
+} from "./opencodeToolSerializer.js";
 
 // ================================================================
 // Port interfaces（供測試注入 mock）
@@ -314,179 +329,6 @@ export function resetOpencodeServerStateFactory(): void {
     getOpencodeServerState();
 }
 
-// ================================================================
-// helper
-// ================================================================
-
-/** opencode provider 專用的系統錯誤建立 helper */
-function buildOpencodeSystemError(params: {
-  content: string;
-  fatal: boolean;
-  code: string;
-  rawContent?: string;
-}): Extract<NormalizedEvent, { type: "error" }> {
-  return buildProviderSystemError("opencode", params);
-}
-
-function buildPromptText(
-  message: string | import("../../types/message.js").ContentBlock[],
-): string {
-  if (typeof message === "string") return message;
-
-  return message
-    .filter(
-      (block): block is import("../../types/message.js").TextContentBlock =>
-        block.type === "text",
-    )
-    .map((block) => block.text)
-    .join("\n");
-}
-
-function buildGoalRuntimeBootstrapPrompt(rawMessage: string): string {
-  return [
-    `User request: ${rawMessage.trim()}`,
-    "",
-    "A Goal Runtime MCP is available for this Pod.",
-    "Start by calling Goal Runtime to inspect the current status and active todo.",
-    "Then continue with the current active todo instead of asking for a new task.",
-    "Only ask for clarification if Goal Runtime shows no actionable todo or the work is blocked.",
-  ].join("\n");
-}
-
-function buildOpencodePromptText(
-  message: string | import("../../types/message.js").ContentBlock[],
-  goalRuntimeAvailable?: boolean,
-  resumeSessionId?: string | null,
-): string {
-  const promptText = buildPromptText(message);
-  // resume 時（gate retry 第 2 輪以後）不再注入 bootstrap，避免覆蓋 nudge 指示
-  if (!goalRuntimeAvailable || resumeSessionId) {
-    return promptText;
-  }
-  return buildGoalRuntimeBootstrapPrompt(promptText);
-}
-
-/**
- * 依 session.error 訊息分類錯誤碼與使用者訊息。
- *
- * - "No auth credentials found" / "API key" → opencode_auth_missing
- * - "connection refused" / "fetch failed" / "ECONNREFUSED" → opencode_server_unreachable
- * - 其他 → opencode_session_failed
- */
-function classifySessionError(
-  rawMessage: string,
-  providerID: string,
-): Extract<NormalizedEvent, { type: "error" }> {
-  const lower = rawMessage.toLowerCase();
-
-  if (
-    lower.includes("no auth credentials found") ||
-    lower.includes("api key")
-  ) {
-    return buildOpencodeSystemError({
-      content: `請在 terminal 執行 \`opencode auth login ${providerID}\` 後再試一次`,
-      fatal: false,
-      code: "opencode_auth_missing",
-      rawContent: rawMessage,
-    });
-  }
-
-  if (
-    lower.includes("connection refused") ||
-    lower.includes("fetch failed") ||
-    lower.includes("econnrefused")
-  ) {
-    return buildOpencodeSystemError({
-      content: "opencode server 連線失敗，請重啟後端",
-      fatal: true,
-      code: "opencode_server_unreachable",
-      rawContent: rawMessage,
-    });
-  }
-
-  return buildOpencodeSystemError({
-    content: `opencode session 發生錯誤：${rawMessage}`,
-    fatal: false,
-    code: "opencode_session_failed",
-    rawContent: rawMessage,
-  });
-}
-
-// ================================================================
-// v2 tool output 序列化
-// ================================================================
-
-/**
- * v2 tool success content 項目的聯合型別（對應 SDK ToolTextContent | ToolFileContent）。
- */
-type V2ToolContentItem =
-  | { type: "text"; text: string }
-  | { type: "file"; uri: string; mime: string; name?: string };
-
-/**
- * 將 v2 tool success 的 content 陣列序列化成可寫入 transcript 的字串。
- *
- * 規則：
- * - "text" 項目：直接取 .text 內容，多筆以 "\n" 串接
- * - "file" 項目：格式化成 "[file: <name|uri> (<mime>)]"
- * - 陣列為空：回傳空字串
- *
- * 目的是讓 tool_call_result 的 output 欄位統一為字串，
- * 可直接寫入既有的 transcript stream（NormalizedEvent.tool_call_result.output）。
- */
-export function serializeV2ToolSuccessContent(
-  content: ReadonlyArray<V2ToolContentItem>,
-): string {
-  if (content.length === 0) return "";
-
-  return content
-    .map((item) => {
-      if (item.type === "text") return item.text;
-      // file 型別：顯示名稱（優先 name，否則 uri）及 MIME
-      const label = item.name ?? item.uri;
-      return `[file: ${label} (${item.mime})]`;
-    })
-    .join("\n");
-}
-
-/**
- * 將 v2 tool failure 的 error 物件序列化成可寫入 transcript 的字串。
- *
- * 規則：
- * - error.message 存在時使用 "[Error] <message>"
- * - 其他情況 fallback 到 "[Error] tool failed"
- */
-export function serializeV2ToolFailureError(error: unknown): string {
-  if (error && typeof error === "object") {
-    const obj = error as Record<string, unknown>;
-    if (typeof obj.message === "string" && obj.message.length > 0) {
-      return `[Error] ${obj.message}`;
-    }
-  }
-  if (typeof error === "string" && error.length > 0) {
-    return `[Error] ${error}`;
-  }
-  return "[Error] tool failed";
-}
-
-/**
- * 從 session.error event 的 error 物件取出字串訊息。
- */
-function extractErrorMessage(error: unknown): string {
-  if (!error || typeof error !== "object") return String(error ?? "未知錯誤");
-  const obj = error as Record<string, unknown>;
-
-  // ProviderAuthError / ApiError / UnknownError / MessageAbortedError 都有 data.message
-  if (obj.data && typeof obj.data === "object") {
-    const data = obj.data as Record<string, unknown>;
-    if (typeof data.message === "string") return data.message;
-  }
-
-  // fallback
-  if (typeof obj.message === "string") return obj.message;
-  return JSON.stringify(error);
-}
-
 /**
  * session.next.tool.called 暫存：callID → { toolName, input }。
  * session.next.tool.success / failed 只帶 callID，缺 tool name；此 Map 在收到
@@ -610,42 +452,6 @@ const runScopedOpencodeServerCache = new Map<
   string,
   { close(): void; url: string }
 >();
-
-/**
- * 組合快取 key。
- */
-function buildServerCacheKey(runId: string, podId: string): string {
-  return `${runId}:${podId}`;
-}
-
-/**
- * 將 PodMcpEntry[] 轉成 opencode transient server 的 mcp config dict。
- *
- * - stdio entry → McpLocalConfig（`{ type: "local", command: [cmd, ...args], environment, enabled }`）
- * - http / sse entry → McpRemoteConfig（`{ type: "remote", url, enabled }`，opencode 原生支援遠端 MCP）
- */
-function buildOpencodeMcpConfig(
-  entries: PodMcpEntry[],
-): Record<string, McpLocalConfig | McpRemoteConfig> {
-  const mcp: Record<string, McpLocalConfig | McpRemoteConfig> = {};
-  for (const entry of entries) {
-    if (entry.transport === "stdio") {
-      mcp[entry.name] = {
-        type: "local",
-        command: [entry.command, ...entry.args],
-        environment: entry.env,
-        enabled: true,
-      };
-    } else {
-      mcp[entry.name] = {
-        type: "remote",
-        url: entry.url,
-        enabled: true,
-      };
-    }
-  }
-  return mcp;
-}
 
 /**
  * 取得或建立 Run 期間的 transient opencode server。
