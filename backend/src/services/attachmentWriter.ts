@@ -95,20 +95,17 @@ export async function writeAttachmentToStaging(
   file: File,
   originalName: string,
 ): Promise<StagingWriteResult> {
-  // 驗證 uploadSessionId 為 UUID v4 格式
   if (!UPLOAD_SESSION_ID_REGEX.test(uploadSessionId)) {
     throw new AttachmentWriteError(
       new Error(`無效的 uploadSessionId 格式：${uploadSessionId}`),
     );
   }
 
-  // sanitize 檔名：取 basename 並去除首尾空白
   const sanitized = path.basename(originalName).trim();
   if (sanitized === "" || sanitized === ".." || sanitized === ".") {
     throw new AttachmentInvalidNameError(originalName);
   }
 
-  // 大小檢查
   if (file.size > MAX_SINGLE_BYTES) {
     throw new AttachmentTooLargeError();
   }
@@ -126,14 +123,12 @@ export async function writeAttachmentToStaging(
     );
   }
 
-  // 建立 staging 子目錄（mkdir -p）
   try {
     await fs.mkdir(sessionDir, { recursive: true });
   } catch (err) {
     throw new AttachmentWriteError(err instanceof Error ? err : undefined);
   }
 
-  // 讀取目錄內已有的檔名，供 collision rename 使用
   let existingFiles: string[] = [];
   try {
     existingFiles = await fs.readdir(sessionDir);
@@ -145,7 +140,6 @@ export async function writeAttachmentToStaging(
   const finalFilename = resolveUniqueFilename(sanitized, usedSet);
   const destPath = path.join(sessionDir, finalFilename);
 
-  // 讀取 File 內容
   const arrayBuffer = await file.arrayBuffer();
   const buf = Buffer.from(arrayBuffer);
 
@@ -177,14 +171,12 @@ export async function promoteStagingToFinal(
   uploadSessionId: string,
   chatMessageId: string,
 ): Promise<WriteAttachmentsResult> {
-  // 驗證 uploadSessionId 為 UUID v4 格式
   if (!UPLOAD_SESSION_ID_REGEX.test(uploadSessionId)) {
     throw new AttachmentWriteError(
       new Error(`無效的 uploadSessionId 格式：${uploadSessionId}`),
     );
   }
 
-  // 驗證 chatMessageId 為 UUID 格式
   if (!CHAT_MESSAGE_ID_REGEX.test(chatMessageId)) {
     throw new AttachmentWriteError(
       new Error(`無效的 chatMessageId 格式：${chatMessageId}`),
@@ -221,7 +213,6 @@ export async function promoteStagingToFinal(
     throw new UploadSessionNotFoundError(uploadSessionId);
   }
 
-  // 列出 staging 內所有檔案（即最終 files 清單）
   let files: string[];
   try {
     files = await fs.readdir(stagingDir);
@@ -229,7 +220,6 @@ export async function promoteStagingToFinal(
     throw new AttachmentWriteError(err instanceof Error ? err : undefined);
   }
 
-  // atomic rename：staging → 正式目錄
   try {
     await fs.rename(stagingDir, finalDir);
   } catch (err) {

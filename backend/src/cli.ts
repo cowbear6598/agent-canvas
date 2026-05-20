@@ -503,7 +503,7 @@ export function handleLogs(
   if (!fs.existsSync(logFile)) {
     console.log("尚無日誌檔案，請先啟動服務");
     process.exit(0);
-    return;
+    return; // process.exit 在測試會被 mock 成 no-op，此處 return 避免繼續執行
   }
 
   const fileSize = fs.statSync(logFile).size;

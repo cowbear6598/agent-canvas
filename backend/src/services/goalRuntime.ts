@@ -153,12 +153,13 @@ export function formatGoalTodos(
     .join("\n");
 }
 
-export function getGoalRuntimeRootDir(): string {
-  return path.join(os.tmpdir(), "agent-canvas-goal-runtime");
-}
+const GOAL_RUNTIME_ROOT_DIR = path.join(
+  os.tmpdir(),
+  "agent-canvas-goal-runtime",
+);
 
 export function getGoalRuntimeRunDir(runId: string): string {
-  return path.join(getGoalRuntimeRootDir(), runId);
+  return path.join(GOAL_RUNTIME_ROOT_DIR, runId);
 }
 
 export function getGoalRuntimeStatePath(
@@ -347,10 +348,6 @@ export function extractGoalRuntimeToolName(
   return null;
 }
 
-export function isGoalRuntimeToolName(toolName: string): boolean {
-  return extractGoalRuntimeToolName(toolName) !== null;
-}
-
 export function buildGoalRuntimeToolFullName(
   toolName: GoalRuntimeToolName,
 ): string {
@@ -461,7 +458,7 @@ export function consumeGoalRuntimeToolResult(
   toolName: string,
   output: string,
 ): GoalRuntimeSnapshot | null {
-  if (!runContext || !isGoalRuntimeToolName(toolName)) {
+  if (!runContext || extractGoalRuntimeToolName(toolName) === null) {
     return null;
   }
 

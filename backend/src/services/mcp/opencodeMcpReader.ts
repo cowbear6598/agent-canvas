@@ -196,12 +196,10 @@ function parseOpencodeMcpRecord(
 export function readOpencodeMcpServers(): OpencodeMcpServer[] {
   const now = Date.now();
 
-  // 快取命中直接回傳
   if (cache !== null && now < cache.expiresAt) {
     return cache.servers;
   }
 
-  // 讀取檔案內容
   const fileContent = _configReader.readFile(getOpencodeConfigPath());
   if (fileContent === null) {
     // 檔案不存在或讀取失敗，靜默回空
@@ -209,7 +207,6 @@ export function readOpencodeMcpServers(): OpencodeMcpServer[] {
     return [];
   }
 
-  // 解析 JSON
   let data: OpencodeJsonFile;
   try {
     data = JSON.parse(fileContent) as OpencodeJsonFile;
@@ -224,7 +221,6 @@ export function readOpencodeMcpServers(): OpencodeMcpServer[] {
     return [];
   }
 
-  // 讀取 root-level mcp 區塊
   const servers: OpencodeMcpServer[] =
     data.mcp && typeof data.mcp === "object" && !Array.isArray(data.mcp)
       ? parseOpencodeMcpRecord(data.mcp)

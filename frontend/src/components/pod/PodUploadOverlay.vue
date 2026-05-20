@@ -7,48 +7,42 @@ import { useUploadStore } from "@/stores/upload/uploadStore";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { usePodFileDrop } from "@/composables/pod/usePodFileDrop";
 
-// Props 定義
 const props = defineProps<{
   podId: string;
 }>();
 
 const { t } = useI18n();
 
-// 從 store 取得此 Pod 的上傳狀態
 const uploadStore = useUploadStore();
 const canvasStore = useCanvasStore();
 const uploadState = computed(() => uploadStore.getUploadState(props.podId));
 
-// 取 retryFailed（從 composable 拿，不直接呼 store）
+// retryFailed 從 composable 取，不直接呼 store
 const { retryFailed } = usePodFileDrop({
   disabled: () => false,
   getCanvasId: () => canvasStore.activeCanvasId,
 });
 
-// 上傳中或上傳失敗時才顯示覆蓋層
 const isVisible = computed(
   () =>
     uploadState.value.status === "uploading" ||
     uploadState.value.status === "upload-failed",
 );
 
-// 失敗的檔案清單
 const failedFiles = computed(() =>
   uploadState.value.files.filter((f) => f.status === "failed"),
 );
 
-// 判斷是否全部失敗，決定顯示哪個標題 i18n key
 const isAllFailed = computed(
   () => failedFiles.value.length === uploadState.value.files.length,
 );
 
-// 取得失敗原因的 i18n 文案；找不到對應 key 時 fallback 顯示 unknown
+// 找不到對應 i18n key 時 fallback 顯示 unknown
 const getFailureReasonText = (reason: string | undefined): string => {
   if (!reason) return t("pod.upload.failureReason.unknown");
   return t(`pod.upload.failureReason.${reason}`);
 };
 
-// 重試按鈕點擊處理
 const handleRetry = async (): Promise<void> => {
   await retryFailed(props.podId);
 };

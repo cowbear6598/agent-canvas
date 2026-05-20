@@ -21,7 +21,6 @@ export function usePodPopovers(): UsePodPopoversReturn {
   const pluginAnchorRect = ref<DOMRect | null>(null);
 
   const handlePluginClick = (event: MouseEvent): void => {
-    // 已開啟時點擊視為 toggle 關閉
     if (showPluginPopover.value) {
       showPluginPopover.value = false;
       return;
@@ -36,7 +35,6 @@ export function usePodPopovers(): UsePodPopoversReturn {
   const mcpAnchorRect = ref<DOMRect | null>(null);
 
   const handleMcpClick = (event: MouseEvent): void => {
-    // 已開啟時點擊視為 toggle 關閉
     if (showMcpPopover.value) {
       showMcpPopover.value = false;
       return;
@@ -51,7 +49,6 @@ export function usePodPopovers(): UsePodPopoversReturn {
   const thinkingAnchorRect = ref<DOMRect | null>(null);
 
   const handleThinkingClick = (event: MouseEvent): void => {
-    // 已開啟時點擊視為 toggle 關閉
     if (showThinkingPopover.value) {
       showThinkingPopover.value = false;
       return;

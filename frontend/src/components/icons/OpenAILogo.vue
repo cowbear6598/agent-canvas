@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// OpenAI 官方品牌 logo
 interface Props {
   size?: number | string;
   class?: string;

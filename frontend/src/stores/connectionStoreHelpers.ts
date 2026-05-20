@@ -5,7 +5,6 @@ import type {
   TriggerMode,
 } from "@/types/connection";
 import type { PodProvider } from "@/types/pod";
-import type { usePodStore } from "@/stores/pod/podStore";
 import { DEFAULT_SUMMARY_MODEL } from "@/types/config";
 import { normalizePodProvider } from "@/lib/providerOptions";
 
@@ -148,13 +147,4 @@ export function runBFS(
       return true;
   }
   return false;
-}
-
-/**
- * Pod 全域 status 概念已移除（P1.I），BFS 不再依賴 pod.status，固定回傳 false。
- */
-export function buildIsRunningPod(
-  _podStore: ReturnType<typeof usePodStore>,
-): (podId: string) => boolean {
-  return (_podId: string) => false;
 }

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// opencode 官方 logo（light 版本）
 interface Props {
   size?: number | string;
   class?: string;

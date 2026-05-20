@@ -466,15 +466,13 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     // runContext 在 workflow 執行路徑中必定存在（由上游 launchRun 建立）
     const execStrategy = new ChatExecutionStrategy(canvasId, runContext!);
 
-    const resolvedMessage = baseMessage;
-
-    await execStrategy.addUserMessage(targetPodId, resolvedMessage);
+    await execStrategy.addUserMessage(targetPodId, baseMessage);
 
     await executeStreamingChat(
       {
         canvasId,
         podId: targetPodId,
-        message: resolvedMessage,
+        message: baseMessage,
         abortable: false,
         strategy: execStrategy,
       },

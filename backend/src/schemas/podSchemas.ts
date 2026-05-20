@@ -7,7 +7,6 @@ import {
 } from "./base.js";
 import { scheduleConfigSchema } from "./scheduleSchemas.js";
 
-export const modelTypeSchema = z.enum(["opus", "sonnet", "haiku"]);
 const goalTodoItemSchema = z
   .object({
     id: z.uuid(),

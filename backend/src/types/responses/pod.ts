@@ -182,15 +182,3 @@ export interface PodRepositoryUnboundPayload {
   pod?: PodPublicView;
   error?: string;
 }
-
-export interface PodMultiInstanceSetPayload {
-  requestId: string;
-  canvasId: string;
-  success: boolean;
-  pod?: PodPublicView;
-  error?: string;
-}
-
-export interface PodMessagesClearedPayload {
-  podId: string;
-}

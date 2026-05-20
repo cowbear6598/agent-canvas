@@ -67,7 +67,6 @@ onUnmounted(() => {
   document.removeEventListener("mousedown", handleMousedown, true);
 });
 
-// ESC 鍵關閉
 useEscapeClose(() => emit("close"));
 </script>
 

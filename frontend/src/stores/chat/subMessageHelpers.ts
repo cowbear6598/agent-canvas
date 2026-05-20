@@ -197,13 +197,6 @@ function finalizeToolUseInSub(sub: SubMessage): SubMessage {
   };
 }
 
-function mergeEmptySubMessages(subMessages: SubMessage[]): SubMessage[] {
-  // v2 對齊 Claude / Codex 顯示方式：所有 sub-message 都保留為獨立 segment，
-  // 包含 tool-only 步驟，讓使用者能清楚看到「文字 → 工具 → 文字」的分段。
-  // 不再把空 content + 有 tool 的 sub-message 合併回前一個 sub-message。
-  return subMessages;
-}
-
 export function finalizeSubMessages(
   subMessages: SubMessage[] | undefined,
 ): SubMessage[] | undefined {
@@ -211,8 +204,7 @@ export function finalizeSubMessages(
     return undefined;
   }
 
-  const merged = mergeEmptySubMessages(subMessages);
-  return merged.map((sub) => finalizeToolUseInSub(sub));
+  return subMessages.map((sub) => finalizeToolUseInSub(sub));
 }
 
 export function updateMainMessageState(

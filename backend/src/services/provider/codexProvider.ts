@@ -536,14 +536,12 @@ async function* streamCodexOutput(
   abortSignal: AbortSignal,
   podId: string,
 ): AsyncGenerator<NormalizedEvent> {
-  // ── 寫入 prompt 到 stdin 後關閉 ────────────────────────────────
   proc.stdin.write(promptText);
   await proc.stdin.end();
 
-  // ── 並行啟動 stderr 收集（在 stdout 之前啟動避免 buffer 滿卡住） ──
+  // 在 stdout 之前啟動 stderr 收集，避免 buffer 滿導致 subprocess 卡住
   const stderrPromise = collectStderr(proc, abortSignal, "[CodexProvider]");
 
-  // ── 逐行讀取 stdout ─────────────────────────────────────────────
   const turnState = { hasTurnComplete: false };
   yield* processStdoutLines(
     proc.stdout as ReadableStream<Uint8Array>,
@@ -551,10 +549,7 @@ async function* streamCodexOutput(
     turnState,
   );
 
-  // ── 等待 stderr 收集完成 ────────────────────────────────────────
   const stderrText = await stderrPromise;
-
-  // ── exit code 檢查 ──────────────────────────────────────────────
   const exitCode = await proc.exited;
 
   yield* handleExitCode(
@@ -590,7 +585,6 @@ function setupSubprocess(
   workspacePath: string,
   abortSignal: AbortSignal,
 ): SubprocessSuccess | SubprocessFailure {
-  // ── Spawn subprocess ───────────────────────────────────────────
   let proc: Bun.Subprocess<"pipe", "pipe", "pipe">;
   try {
     proc = spawnCodexProcess(codexArgs, workspacePath);
@@ -617,7 +611,6 @@ function setupSubprocess(
     };
   }
 
-  // ── abort signal 處理 ──────────────────────────────────────────
   // killProc 同時被 abort listener 與 cleanup() 呼叫；
   // 用旗標去重避免實際 proc.kill() 被呼叫超過一次。
   // 對已結束的子程序呼叫 kill 會觸發 ESRCH，視為正常情況直接忽略。

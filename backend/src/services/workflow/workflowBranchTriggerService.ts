@@ -23,7 +23,6 @@ import { workflowMultiInputService } from "./workflowMultiInputService.js";
 import { abortRegistry } from "../provider/abortRegistry.js";
 import {
   forEachMultiInputGroupConnection,
-  formatConnectionLog,
   buildQueuedPayload,
   createMultiInputCompletionHandlers,
   emitQueueProcessed,
@@ -245,12 +244,7 @@ class WorkflowBranchTriggerService
       canvasId,
       connection.targetPodId,
     );
-    return formatConnectionLog({
-      sourceName: sourcePod?.name,
-      sourcePodId,
-      targetName: targetPod?.name,
-      targetPodId: connection.targetPodId,
-    });
+    return `「${sourcePod?.name ?? sourcePodId}」→「${targetPod?.name ?? connection.targetPodId}」`;
   }
 
   private handleApprovedConnection(
@@ -317,7 +311,7 @@ class WorkflowBranchTriggerService
       });
   }
 
-  private emitRejectionEvents(
+  private logBranchRejection(
     canvasId: string,
     connection: Connection,
     sourcePodId: string,
@@ -362,7 +356,7 @@ class WorkflowBranchTriggerService
     } else {
       delegate.settleAndSkipPath(canvasId, connection.targetPodId, "auto");
     }
-    this.emitRejectionEvents(canvasId, connection, sourcePodId, runContext);
+    this.logBranchRejection(canvasId, connection, sourcePodId, runContext);
 
     if (
       this.shouldDeferToMultiInput(canvasId, connection.targetPodId, runContext)

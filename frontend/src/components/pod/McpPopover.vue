@@ -142,7 +142,6 @@ onMounted(async () => {
     loading.value = false;
   }
 
-  // 載入完成後自動 focus 搜尋框
   await nextTick();
   searchInputRef.value?.focus();
 
@@ -153,7 +152,6 @@ onUnmounted(() => {
   document.removeEventListener("mousedown", handleMousedown, true);
 });
 
-// ESC 鍵關閉
 useEscapeClose(() => emit("close"));
 
 /** 純函式：依 enabled 組裝下一個 MCP server 名稱清單 */

@@ -1,7 +1,7 @@
-import { createNoteStore } from "./GenericNoteStore.js";
+import { GenericNoteStore } from "./GenericNoteStore.js";
 import type { RepositoryNote } from "../types";
 
-export const repositoryNoteStore = createNoteStore<
+export const repositoryNoteStore = new GenericNoteStore<
   RepositoryNote,
   "repositoryId"
 >({

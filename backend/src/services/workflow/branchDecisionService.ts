@@ -50,7 +50,6 @@ class BranchDecisionService {
       return { selectedConnectionId: null, rejectedConnectionIds: [] };
     }
 
-    // 步驟 1：取得 sourcePod（不存在則拋例外，由外層處理）
     const sourcePod = podStore.getById(canvasId, sourcePodId);
     if (!sourcePod) {
       throw new Error(
@@ -58,15 +57,12 @@ class BranchDecisionService {
       );
     }
 
-    // 步驟 2：讀取最近 RECENT_MESSAGES_COUNT 段訊息
     const allMessages = runStore.getRunMessages(runContext.runId, sourcePodId);
     const recentMessages = allMessages.slice(-RECENT_MESSAGES_COUNT);
 
-    // 步驟 3：取得執行路徑（workspacePath / sandboxHomePath）
     const executionPaths = resolveExecutionPaths(sourcePod, runContext);
 
-    // 步驟 4：決定 provider / model
-    // 策略：使用 branchConnections 中第一條的 branchProvider / branchModel。
+    // 使用 branchConnections 中第一條的 branchProvider / branchModel。
     // 理由：同一 sourcePod 出去的 branch group 通常共用相同的決策模型；
     //       若真的有差異，「用第一條」是最簡單且可預測的選擇，
     //       且這個決定是針對「選哪條 branch」，不是針對「選中的那條 branch 後續如何執行」，
@@ -74,7 +70,6 @@ class BranchDecisionService {
     const provider = branchConnections[0].branchProvider;
     const model = branchConnections[0].branchModel;
 
-    // 步驟 5：組 branches 陣列給 branchDecider
     // targetPodName：從 podStore 查詢，若查不到則 fallback 為 targetPodId
     const branches = branchConnections.map((conn) => {
       const targetPod = podStore.getById(canvasId, conn.targetPodId);
@@ -85,7 +80,6 @@ class BranchDecisionService {
       };
     });
 
-    // 步驟 6：呼叫 branchDecider.decide
     let selectedLabel: string;
     try {
       const result = await branchDecider.decide({
@@ -119,7 +113,6 @@ class BranchDecisionService {
       };
     }
 
-    // 步驟 7：將 selectedLabel 對應回 connectionId
     // selectedLabel === "None" 代表 AI 選擇不觸發任何 branch
     let selectedConnectionId: string | null = null;
     if (selectedLabel !== "None") {
@@ -136,7 +129,6 @@ class BranchDecisionService {
       }
     }
 
-    // 步驟 8：其餘連線為 rejectedConnectionIds
     const rejectedConnectionIds = branchConnections
       .filter((c) => c.id !== selectedConnectionId)
       .map((c) => c.id);

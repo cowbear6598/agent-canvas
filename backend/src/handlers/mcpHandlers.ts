@@ -291,7 +291,6 @@ export async function handlePodSetMcpServerNames(
   );
   if (!canvasId) return;
 
-  // 驗證 pod 是否存在
   const pod = podStore.getById(canvasId, podId);
   if (!pod) {
     emitError(
@@ -325,7 +324,6 @@ export async function handlePodSetMcpServerNames(
   }
   const validNames = mcpServerNames.filter((n) => availableNameSet.has(n));
 
-  // 寫入 podStore
   podStore.setMcpServerNames(podId, validNames);
 
   // 廣播 POD_MCP_SERVER_NAMES_UPDATED 給 canvas 所有連線

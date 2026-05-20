@@ -67,7 +67,6 @@ interface RawMcpServerEntry {
 export function readCodexMcpServers(): CodexMcpServer[] {
   const now = Date.now();
 
-  // 快取命中
   if (cachedServers !== null && now < cacheExpiresAt) {
     return cachedServers;
   }
@@ -81,7 +80,6 @@ export function readCodexMcpServers(): CodexMcpServer[] {
 
 /** 讀檔並解析 TOML，取出 mcp_servers 清單 */
 function parseCodexConfig(): CodexMcpServer[] {
-  // 讀取檔案內容
   let raw: string;
   try {
     raw = fs.readFileSync(getCodexConfigPath(), "utf-8");
@@ -99,7 +97,6 @@ function parseCodexConfig(): CodexMcpServer[] {
     return [];
   }
 
-  // 解析 TOML（Bun 原生 Bun.TOML.parse）
   let parsed: unknown;
   try {
     parsed = Bun.TOML.parse(raw);
@@ -112,14 +109,12 @@ function parseCodexConfig(): CodexMcpServer[] {
     return [];
   }
 
-  // 確認解析結果為物件
   if (!parsed || typeof parsed !== "object") {
     return [];
   }
 
   const config = parsed as Record<string, unknown>;
 
-  // 取出 mcp_servers 區塊
   if (
     !config.mcp_servers ||
     typeof config.mcp_servers !== "object" ||

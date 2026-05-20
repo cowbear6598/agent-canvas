@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import type { BaseNote, Pod, Group, BasePayload, BaseResponse } from "@/types";
+import type { BaseNote, Group, BasePayload, BaseResponse } from "@/types";
 import { createWebSocketRequest } from "@/services/websocket";
 import { useWebSocketErrorHandler } from "@/composables/useWebSocketErrorHandler";
 import { useDeleteItem } from "@/composables/useDeleteItem";
@@ -24,13 +24,6 @@ import { t } from "@/i18n";
 const STORE_TO_CATEGORY_MAP: Record<string, ToastCategory> = {
   repository: "Repository",
 };
-
-function findItemById<T extends { id: string }>(
-  items: T[],
-  itemId: string,
-): T | undefined {
-  return items.find((item) => item.id === itemId);
-}
 
 interface NoteItem extends BaseNote {
   // index signature 允許透過 config.itemIdField 進行動態 key 查找
@@ -95,103 +88,6 @@ export interface NoteStoreConfig<
   getItemName?: (item: TItem) => string;
   crudConfig?: NoteCRUDConfig<{ id: string; name: string }>;
   customActions?: TCustomActions;
-}
-
-export interface RebuildNotesConfig {
-  storeName: string;
-  podIdField: keyof Pod;
-  itemIdField: string;
-  yOffset: number;
-  requestEvent: string;
-  responseEvent: string;
-}
-
-type RebuildNotesStoreContext = Pick<
-  NoteStoreContext,
-  "notes" | "availableItems" | "getNotesByPodId"
->;
-
-function shouldCreateNote(
-  pod: Pod,
-  itemId: string | null | undefined,
-  existingNotes: NoteItem[],
-): boolean {
-  return (
-    itemId !== undefined &&
-    itemId !== null &&
-    itemId !== "" &&
-    existingNotes.length === 0
-  );
-}
-
-interface RebuildNoteResponse {
-  note?: NoteItem;
-}
-
-async function createAndAddNote(
-  pod: Pod,
-  itemId: string,
-  config: RebuildNotesConfig,
-  canvasId: string,
-  context: RebuildNotesStoreContext,
-): Promise<void> {
-  const item = findItemById(
-    context.availableItems as { id: string; name?: string }[],
-    itemId,
-  );
-  const itemName = item?.name ?? itemId;
-
-  const response = await createWebSocketRequest<
-    BasePayload,
-    RebuildNoteResponse
-  >({
-    requestEvent: config.requestEvent,
-    responseEvent: config.responseEvent,
-    payload: {
-      canvasId,
-      [config.itemIdField]: itemId,
-      name: itemName,
-      x: pod.x,
-      y: pod.y + config.yOffset,
-      boundToPodId: pod.id,
-      originalPosition: { x: pod.x, y: pod.y + config.yOffset },
-    },
-  });
-
-  if (response.note) {
-    context.notes.push(response.note);
-  }
-}
-
-export async function rebuildNotesFromPods(
-  context: RebuildNotesStoreContext,
-  pods: Pod[],
-  config: RebuildNotesConfig,
-): Promise<void> {
-  const canvasId = getActiveCanvasIdOrWarn(config.storeName);
-  if (!canvasId) return;
-
-  const promises = pods
-    .filter((pod) =>
-      shouldCreateNote(
-        pod,
-        pod[config.podIdField] as string | null | undefined,
-        context.getNotesByPodId(pod.id),
-      ),
-    )
-    .map((pod) =>
-      createAndAddNote(
-        pod,
-        pod[config.podIdField] as string,
-        config,
-        canvasId,
-        context,
-      ),
-    );
-
-  if (promises.length > 0) {
-    await Promise.all(promises);
-  }
 }
 
 interface BaseNoteState {

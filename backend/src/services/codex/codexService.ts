@@ -398,7 +398,6 @@ class CodexService {
 
     let proc: Bun.Subprocess<"pipe", "pipe", "pipe"> | null = null;
 
-    // abort signal：kill 子程序
     const onInternalAbort = (): void => {
       try {
         proc?.kill();

@@ -349,8 +349,6 @@ function applyIntegrationToolOptions(
  * 注意：cwd 在 buildOptions 階段尚未知道（需等 executor 解析 workspacePath），
  * 因此此函式產出的 ClaudeOptions.cwd 為 undefined，由 chat() 負責在組裝 SDK options 時填入。
  */
-// 介面契約（AgentProvider.buildOptions）要求回傳 Promise<TOptions>，實際執行同步；
-// async 保留以符合介面簽名，不影響執行效能。
 export async function buildClaudeOptions(
   pod: Pod,
   runContext?: RunContext,

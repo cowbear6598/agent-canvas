@@ -559,7 +559,6 @@ export const usePodStore = defineStore("pod", () => {
     scheduleFiredPodIds.value = next;
   }
 
-  // 切換 canvas 時重設 pod 相關狀態
   function resetForCanvasSwitch(): void {
     invalidatePodMcpAvailabilityCache();
     pods.value = [];

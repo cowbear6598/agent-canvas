@@ -49,7 +49,6 @@ export async function handleUpload(req: Request): Promise<Response> {
     );
   }
 
-  // 取得 uploadSessionId 欄位
   const canvasId = formData.get("canvasId");
   if (canvasId === null || canvasId === "") {
     return jsonResponse(
@@ -90,7 +89,6 @@ export async function handleUpload(req: Request): Promise<Response> {
     );
   }
 
-  // 取得 uploadSessionId 欄位
   const uploadSessionId = formData.get("uploadSessionId");
   if (uploadSessionId === null || uploadSessionId === "") {
     return jsonResponse(
@@ -111,7 +109,6 @@ export async function handleUpload(req: Request): Promise<Response> {
     );
   }
 
-  // 驗證 uploadSessionId 格式（UUID v4）
   if (!UPLOAD_SESSION_ID_REGEX.test(uploadSessionId)) {
     return jsonResponse(
       {
@@ -122,7 +119,6 @@ export async function handleUpload(req: Request): Promise<Response> {
     );
   }
 
-  // 取得 file 欄位
   const file = formData.get("file");
   if (file === null) {
     return jsonResponse(
@@ -140,7 +136,6 @@ export async function handleUpload(req: Request): Promise<Response> {
     );
   }
 
-  // 將檔案寫入 staging 目錄
   try {
     const result = await writeAttachmentToStaging(
       uploadSessionId,
@@ -158,7 +153,6 @@ export async function handleUpload(req: Request): Promise<Response> {
     );
   } catch (err) {
     if (err instanceof AttachmentTooLargeError) {
-      // 413 Payload Too Large
       return new Response(
         JSON.stringify({
           errorCode: ERROR_CODE_ATTACHMENT_TOO_LARGE,
@@ -177,7 +171,6 @@ export async function handleUpload(req: Request): Promise<Response> {
       );
     }
     if (err instanceof AttachmentDiskFullError) {
-      // 507 Insufficient Storage
       return new Response(
         JSON.stringify({
           errorCode: ERROR_CODE_ATTACHMENT_DISK_FULL,
@@ -196,7 +189,6 @@ export async function handleUpload(req: Request): Promise<Response> {
         HTTP_STATUS.INTERNAL_ERROR,
       );
     }
-    // 未預期的錯誤
     logger.error("Upload", "Error", "上傳時發生未預期的錯誤", err);
     return jsonResponse(
       {

@@ -111,7 +111,6 @@ class WebhookProvider implements IntegrationProvider {
 
     const { rawBody, payload } = parsed;
 
-    // 驗證 Bearer Token
     const authHeader = req.headers.get("authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return new Response("Unauthorized", { status: 401 });

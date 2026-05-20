@@ -671,7 +671,6 @@ function buildStatements(db: Database): {
     },
 
     modelAlias: {
-      // 新增一筆 model alias 記錄
       insert: db.prepare(
         `INSERT INTO model_aliases (
           id, provider_id, real_provider, real_model, alias, order_idx, created_at, updated_at
@@ -691,7 +690,6 @@ function buildStatements(db: Database): {
       updateAliasAndModelId: db.prepare(
         "UPDATE model_aliases SET alias = $alias, real_model = $realModel, updated_at = $updatedAt WHERE id = $id",
       ),
-      // 依 id 刪除單筆 alias
       deleteById: db.prepare("DELETE FROM model_aliases WHERE id = ?"),
       // 查詢指定 provider_id 內目前最大的 order_idx，供 append 時計算下一個位置
       selectMaxOrderIdxByProviderId: db.prepare(

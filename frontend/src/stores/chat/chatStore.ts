@@ -360,7 +360,6 @@ export const useChatStore = defineStore("chat", {
       return cachedMessageActions;
     },
 
-    // 切換 canvas 時重設 chat 相關狀態
     resetForCanvasSwitch(): void {
       this.messagesByPodId.clear();
       this.isTypingByPodId.clear();

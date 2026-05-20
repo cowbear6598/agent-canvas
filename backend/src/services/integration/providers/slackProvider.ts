@@ -287,10 +287,12 @@ class SlackProvider implements IntegrationProvider {
       "slack",
       "Slack",
     );
+    this.channelCache.delete(appId);
   }
 
   destroyAll(): void {
     this.clients.clear();
+    this.channelCache.clear();
   }
 
   async refreshResources(appId: string): Promise<IntegrationResource[]> {

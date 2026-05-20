@@ -154,12 +154,10 @@ function parseMcpServersRecord(
 export function readClaudeMcpServers(): McpServerEntry[] {
   const now = Date.now();
 
-  // 快取命中直接回傳
   if (cache !== null && now < cache.expiresAt) {
     return cache.servers;
   }
 
-  // 讀取檔案內容
   let fileContent: string;
   try {
     fileContent = fs.readFileSync(getClaudeJsonPath(), "utf-8");
@@ -169,7 +167,6 @@ export function readClaudeMcpServers(): McpServerEntry[] {
     return [];
   }
 
-  // 解析 JSON
   let data: ClaudeJsonFile;
   try {
     data = JSON.parse(fileContent) as ClaudeJsonFile;

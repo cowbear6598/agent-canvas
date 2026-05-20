@@ -251,7 +251,6 @@ const shutdown = async (signal: string): Promise<void> => {
   replyContextStore.dispose();
   await managedMcpRuntimeService.shutdownAll();
 
-  // 停止 opencode 伺服器子程序
   stopOpencodeServer();
 
   logger.log("Shutdown", "Complete", "伺服器已成功關閉");

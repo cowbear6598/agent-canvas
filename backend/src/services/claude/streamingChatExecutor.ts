@@ -19,7 +19,6 @@ import {
   buildPersistedMessage,
   createFlushCurrentSubMessage,
   createSubMessageState,
-  processTextEvent,
   processToolResultEvent,
   processToolUseEvent,
 } from "./streamEventProcessor.js";
@@ -150,11 +149,8 @@ function handleTextEvent(event: TextStreamEvent, context: StreamContext): void {
     emitStrategy,
   } = context;
 
-  streamState.accumulatedContent = processTextEvent(
-    event.content,
-    streamState.accumulatedContent,
-    subMessageState,
-  );
+  subMessageState.currentSubContent += event.content;
+  streamState.accumulatedContent += event.content;
 
   emitStrategy.emitText({
     canvasId,

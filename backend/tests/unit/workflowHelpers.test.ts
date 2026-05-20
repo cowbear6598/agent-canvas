@@ -48,7 +48,6 @@ import {
   emitQueueProcessed,
   createMultiInputCompletionHandlers,
   formatMergedSummaries,
-  formatConnectionLog,
   resolvePendingKey,
 } from "../../src/services/workflow/workflowHelpers.js";
 import { workflowEventEmitter } from "../../src/services/workflow/workflowEventEmitter.js";
@@ -297,42 +296,6 @@ describe("workflowHelpers", () => {
       const result = formatMergedSummaries(summaries, podLookup);
 
       expect(result).toContain("## Source: unknown-pod");
-    });
-  });
-
-  describe("formatConnectionLog", () => {
-    it("有 sourceName 和 targetName 時使用名稱格式", () => {
-      const result = formatConnectionLog({
-        sourceName: "Pod A",
-        sourcePodId: "pod-a",
-        targetName: "Pod B",
-        targetPodId: "pod-b",
-      });
-
-      expect(result).toContain("「Pod A」");
-      expect(result).toContain("「Pod B」");
-    });
-
-    it("sourceName 為 undefined 時回退到 sourcePodId", () => {
-      const result = formatConnectionLog({
-        sourceName: undefined,
-        sourcePodId: "pod-a",
-        targetName: "Pod B",
-        targetPodId: "pod-b",
-      });
-
-      expect(result).toContain("「pod-a」");
-    });
-
-    it("targetName 為 undefined 時回退到 targetPodId", () => {
-      const result = formatConnectionLog({
-        sourceName: "Pod A",
-        sourcePodId: "pod-a",
-        targetName: undefined,
-        targetPodId: "pod-b",
-      });
-
-      expect(result).toContain("「pod-b」");
     });
   });
 

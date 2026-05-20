@@ -10,11 +10,9 @@ export interface UploadProgressEvent {
 
 /** 前端或後端回傳的錯誤代碼聯集 */
 export type UploadFailureReason =
-  // 前端網路層錯誤
   | "network"
   | "aborted"
   | "unknown"
-  // 後端 errorCode
   | "UPLOAD_NO_FILE"
   | "UPLOAD_INVALID_SESSION_ID"
   | "ATTACHMENT_TOO_LARGE"
@@ -66,30 +64,25 @@ export function uploadFile(
     const baseUrl = getApiBaseUrl();
     const xhr = new XMLHttpRequest();
 
-    // 綁定上傳進度事件
     xhr.upload.onprogress = (event: ProgressEvent): void => {
       if (event.lengthComputable) {
         onProgress({ loaded: event.loaded, total: event.total });
       }
     };
 
-    // 綁定請求完成事件
     xhr.onload = (): void => {
       const status = xhr.status;
 
       if (status >= 200 && status < 300) {
-        // 2xx：解析成功回應
         try {
           const result = JSON.parse(xhr.responseText) as UploadResult;
           resolve(result);
         } catch {
-          // 無法解析成功回應時，視為未知錯誤
           reject(new UploadError("unknown", status));
         }
         return;
       }
 
-      // 非 2xx：嘗試解析後端 errorCode
       try {
         const body = JSON.parse(xhr.responseText) as {
           errorCode?: string;
@@ -107,17 +100,14 @@ export function uploadFile(
       }
     };
 
-    // 綁定網路錯誤事件
     xhr.onerror = (): void => {
       reject(new UploadError("network"));
     };
 
-    // 綁定請求中止事件
     xhr.onabort = (): void => {
       reject(new UploadError("aborted"));
     };
 
-    // 組裝 FormData 並送出請求
     const formData = new FormData();
     formData.append("file", file);
     formData.append("canvasId", canvasId);

@@ -446,13 +446,12 @@ class PodStore {
   }
 
   create(canvasId: string, data: CreatePodRequest): { pod: Pod } {
-    // 步驟一：守門驗證
     const id = randomUUID();
     if (!canvasStore.getCanvasDir(canvasId)) {
       throw new Error(`找不到 Canvas：${canvasId}`);
     }
 
-    // 步驟二：準備 provider / providerConfig（transaction 外先驗證，不合法直接 throw）
+    // transaction 外先驗證 provider/providerConfig，不合法直接 throw
     const provider: ProviderName = data.provider ?? "claude";
     const rawConfig: Record<string, unknown> = data.providerConfig
       ? { ...data.providerConfig }
@@ -467,7 +466,6 @@ class PodStore {
       providerConfig,
     );
 
-    // 步驟三：原子寫入 DB
     getDb().transaction(() => {
       this.insertPodRow(id, canvasId, pod);
       this.insertJoinTableIds(id, pod);

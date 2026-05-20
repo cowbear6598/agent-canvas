@@ -47,12 +47,10 @@ export class BaseBranchDecider implements BranchDecider {
       abortSignal,
     } = input;
 
-    // 步驟 1：訊息為空 → 不發 model call，直接回 None
     if (recentMessages.length === 0) {
       return { selectedLabel: "None" };
     }
 
-    // 步驟 2：組 prompt（abort check 在 model call 前）
     checkAbort(abortSignal);
 
     const systemPrompt = branchPromptBuilder.buildSystemPrompt();
@@ -65,7 +63,6 @@ export class BaseBranchDecider implements BranchDecider {
     // validLabels：所有 branch 的 label（parseBranchDecision 內部另外允許 "None"）
     const validLabels = branches.map((b) => b.label);
 
-    // 步驟 3：第一次呼叫
     let rawResponse: string | null = null;
     try {
       const result = await executeDisposableChat({
@@ -90,7 +87,6 @@ export class BaseBranchDecider implements BranchDecider {
       );
     }
 
-    // 步驟 4：abort check + 解析第一次結果
     checkAbort(abortSignal);
 
     if (rawResponse !== null) {
@@ -106,10 +102,8 @@ export class BaseBranchDecider implements BranchDecider {
       );
     }
 
-    // 步驟 4b：重試前 abort check
     checkAbort(abortSignal);
 
-    // 步驟 4c：第二次呼叫（重試）
     let retryRawResponse: string | null = null;
     try {
       const retryResult = await executeDisposableChat({
@@ -133,7 +127,6 @@ export class BaseBranchDecider implements BranchDecider {
       );
     }
 
-    // 步驟 5：解析重試結果；仍失敗 → fallback None
     if (retryRawResponse !== null) {
       const retryParsed = parseBranchDecision(retryRawResponse, validLabels);
       if (retryParsed.ok) {

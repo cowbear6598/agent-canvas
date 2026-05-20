@@ -99,18 +99,6 @@ export function buildTransferMessage(content: string): string {
 ${isolatedContent}`;
 }
 
-export interface ConnectionLogInfo {
-  sourceName: string | undefined;
-  sourcePodId: string;
-  targetName: string | undefined;
-  targetPodId: string;
-}
-
-export function formatConnectionLog(info: ConnectionLogInfo): string {
-  const { sourceName, sourcePodId, targetName, targetPodId } = info;
-  return `「${sourceName ?? sourcePodId}」→「${targetName ?? targetPodId}」`;
-}
-
 export function completeMultiInputConnections(
   context: CompletionContext,
   success: boolean,

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// Provider 選擇器：讓使用者選擇 Claude 或 Codex 作為新 Pod 的 provider
 // providerConfig 改由 providerCapabilityStore.getDefaultOptions 提供，不再 hardcode 預設 model
 import AnthropicLogo from "@/components/icons/AnthropicLogo.vue";
 import OpenAILogo from "@/components/icons/OpenAILogo.vue";

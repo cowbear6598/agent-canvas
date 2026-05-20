@@ -111,14 +111,12 @@ function calculateEveryDay(
   _last: Date,
   timezoneOffset: number,
 ): Date {
-  // 計算指定時區下的當前日期
   const { tzOffsetMs, nowUtcMs, tzYear, tzMonth, tzDay } = getTzDateParts(
     now,
     timezoneOffset,
   );
 
   // 在指定時區設定 schedule 的 hour/minute，再轉回 UTC
-  // 指定時區的觸發時間（視為 UTC 計算）
   const tzTriggerMs = Date.UTC(
     tzYear,
     tzMonth,
@@ -128,7 +126,6 @@ function calculateEveryDay(
     0,
     0,
   );
-  // 轉換回真正的 UTC 時間戳
   const nextUtcMs = tzTriggerMs - tzOffsetMs;
 
   if (nextUtcMs <= nowUtcMs) {
@@ -160,7 +157,6 @@ function calculateEveryWeek(
     return new Date(now.getTime() + MS_PER_MINUTE);
   }
 
-  // 計算指定時區下的當前日期與星期
   const {
     tzOffsetMs,
     nowUtcMs,
@@ -170,7 +166,6 @@ function calculateEveryWeek(
     day: currentDay,
   } = getTzDateParts(now, timezoneOffset);
 
-  // 計算指定時區今天 schedule 時間點的 UTC 時間戳
   const tzTriggerTodayMs = Date.UTC(
     tzYear,
     tzMonth,
@@ -243,7 +238,6 @@ export function formatScheduleTooltip(
     timezoneOffset,
   );
 
-  // 將 UTC 時間轉換為指定時區的顯示時間
   const tzDate = new Date(nextTime.getTime() + timezoneOffset * MS_PER_HOUR);
   const timeStr = `${String(tzDate.getUTCHours()).padStart(2, "0")}:${String(tzDate.getUTCMinutes()).padStart(2, "0")}`;
 

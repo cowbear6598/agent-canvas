@@ -47,13 +47,11 @@ export function useOptimisticToggle(): OptimisticToggleResult {
     nextItems: TItem[],
     params: OptimisticToggleParams<TItem>,
   ): Promise<void> => {
-    // in-flight guard
     if (isToggling.value) return;
     isToggling.value = true;
 
     const previous = params.getCurrent();
 
-    // 樂觀更新
     params.setLocal(nextItems);
     params.setStore(nextItems);
 
@@ -64,7 +62,6 @@ export function useOptimisticToggle(): OptimisticToggleResult {
         toast({ title: params.successToast.title });
       }
     } catch (err: unknown) {
-      // 回滾
       params.setLocal(previous);
       params.setStore(previous);
 

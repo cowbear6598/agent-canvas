@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// Claude 官方品牌 logo（放射狀星芒）
 interface Props {
   size?: number | string;
   class?: string;

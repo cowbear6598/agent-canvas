@@ -57,7 +57,6 @@ export async function handleOpencodeProviderList(
     return;
   }
 
-  // 建立 opencode client 並呼叫 GET /provider
   const client = createOpencodeClient({ baseUrl: serverState.baseUrl });
   const result = await client.provider.list();
 
@@ -226,7 +225,6 @@ export async function handleOpencodeAliasesUpdate(
     $updatedAt: now,
   });
 
-  // 取回更新後的 row
   const rows = stmts.modelAlias.selectByProviderId.all({
     $providerId: "opencode",
   }) as ModelAliasRow[];

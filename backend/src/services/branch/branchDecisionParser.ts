@@ -36,7 +36,6 @@ const branchDecisionSchema = z.object({
  * 同時 trim 開頭結尾空白。
  */
 export function stripMarkdownCodeBlock(raw: string): string {
-  // 移除開頭的 ```json 或 ``` 以及結尾的 ```
   const stripped = raw
     .trim()
     .replace(/^```(?:json)?\s*/i, "")
@@ -64,10 +63,8 @@ export function parseBranchDecision(
 ):
   | { ok: true; selectedLabel: string }
   | { ok: false; reason: BranchDecisionParseErrorType } {
-  // 步驟 1：剝除 markdown
   const cleaned = stripMarkdownCodeBlock(raw);
 
-  // 步驟 2：JSON.parse
   let parsed: unknown;
   try {
     parsed = JSON.parse(cleaned);
@@ -75,7 +72,6 @@ export function parseBranchDecision(
     return { ok: false, reason: BranchDecisionParseError.PARSE_FAIL };
   }
 
-  // 步驟 3：zod schema 驗證
   const result = branchDecisionSchema.safeParse(parsed);
   if (!result.success) {
     return { ok: false, reason: BranchDecisionParseError.SCHEMA_FAIL };
@@ -83,7 +79,6 @@ export function parseBranchDecision(
 
   const { selectedLabel } = result.data;
 
-  // 步驟 4：label 合法性檢查（允許 "None" 或 validLabels 內的值）
   if (selectedLabel !== "None" && !validLabels.includes(selectedLabel)) {
     return { ok: false, reason: BranchDecisionParseError.LABEL_HALLUCINATION };
   }

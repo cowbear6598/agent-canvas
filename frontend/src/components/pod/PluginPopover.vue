@@ -116,7 +116,6 @@ onUnmounted(() => {
   document.removeEventListener("mousedown", handleMousedown, true);
 });
 
-// ESC 鍵關閉
 useEscapeClose(() => emit("close"));
 
 /** 純函式：依 enabled 組裝下一個 plugin ID 清單 */

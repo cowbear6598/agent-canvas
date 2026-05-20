@@ -51,7 +51,6 @@ import {
   normalizeConnection,
   shouldUpdateConnection,
   runBFS,
-  buildIsRunningPod,
 } from "./connectionStoreHelpers";
 
 type WorkflowHandlers = ReturnType<typeof createWorkflowEventHandlers>;
@@ -201,7 +200,7 @@ export const useConnectionStore = defineStore("connection", () => {
     return runBFS(
       podId,
       (currentId) => adjMap.get(currentId) ?? [],
-      buildIsRunningPod(podStore),
+      () => false,
     );
   });
 
@@ -216,7 +215,7 @@ export const useConnectionStore = defineStore("connection", () => {
     return runBFS(
       sourcePodId,
       (currentId) => adjMap.get(currentId) ?? [],
-      buildIsRunningPod(podStore),
+      () => false,
     );
   });
 
@@ -950,7 +949,6 @@ export const useConnectionStore = defineStore("connection", () => {
     );
   }
 
-  // 切換 canvas 時重設 connection 相關狀態
   function resetForCanvasSwitch(): void {
     connections.value = [];
     selectedConnectionId.value = null;
