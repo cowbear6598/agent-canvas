@@ -72,7 +72,9 @@ const isBackupActionsDisabled = computed<boolean>(
   () => !backupEnabled.value || backupGitRemoteUrl.value === "",
 );
 const canSetWorkspacePassword = computed<boolean>(
-  () => !isUpdatingWorkspacePassword.value && workspaceNewPassword.value.trim() !== "",
+  () =>
+    !isUpdatingWorkspacePassword.value &&
+    workspaceNewPassword.value.trim() !== "",
 );
 const canRemoveWorkspacePassword = computed<boolean>(
   () =>
@@ -100,6 +102,7 @@ const loadConfig = async (): Promise<void> => {
       getConfig(),
       "Config",
       t("settings.loadFailed"),
+      { swallow: true },
     );
     if (!result) {
       loadFailed.value = true;
@@ -147,6 +150,7 @@ const handleSave = async (): Promise<void> => {
       }),
       "Config",
       t("settings.saveFailed"),
+      { swallow: true },
     );
     if (result) {
       // API 成功後才更新 UI 狀態，避免失敗時 URL 被錯誤清空
@@ -200,7 +204,8 @@ const handleSetWorkspacePassword = async (): Promise<void> => {
       action: "set",
       newPassword: workspaceNewPassword.value,
     });
-    securityStore.workspacePasswordEnabled = result.hasWorkspacePassword ?? true;
+    securityStore.workspacePasswordEnabled =
+      result.hasWorkspacePassword ?? true;
     showSuccessToast("Workspace", t("security.workspace.saved"));
     resetWorkspaceSecurityForm();
   } catch (error) {
@@ -228,7 +233,8 @@ const handleChangeWorkspacePassword = async (): Promise<void> => {
       currentPassword: workspaceCurrentPassword.value,
       newPassword: workspaceNewPassword.value,
     });
-    securityStore.workspacePasswordEnabled = result.hasWorkspacePassword ?? true;
+    securityStore.workspacePasswordEnabled =
+      result.hasWorkspacePassword ?? true;
     showSuccessToast("Workspace", t("security.workspace.updated"));
     resetWorkspaceSecurityForm();
   } catch (error) {

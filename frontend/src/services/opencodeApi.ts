@@ -10,7 +10,7 @@ import type {
   OpencodeModelAlias,
 } from "@/types/opencode";
 
-// ─── 本地 Payload 型別定義（對應 P1.B 將加入 requests.ts / responses.ts 的型別） ──
+// ─── 本地 Payload 型別定義 ──
 
 interface OpencodeProviderListPayload {
   requestId: string;

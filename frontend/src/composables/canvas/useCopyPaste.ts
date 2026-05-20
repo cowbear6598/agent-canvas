@@ -62,13 +62,9 @@ export function useCopyPaste(): void {
     );
 
     const copiedPods = collectSelectedPods(selectedElements, podStore.pods);
-    const copiedNotes = collectSelectedNotes(
-      selectedElements,
-      selectedPodIds,
-      {
-        repositoryStore,
-      },
-    );
+    const copiedNotes = collectSelectedNotes(selectedElements, selectedPodIds, {
+      repositoryStore,
+    });
     const copiedConnections = collectRelatedConnections(
       selectedPodIds,
       connectionStore.connections,
@@ -108,26 +104,32 @@ export function useCopyPaste(): void {
     );
     const clipboardData = clipboardStore.getCopiedData();
     const existingNames = new Set(podStore.pods.map((p) => p.name));
-    const { pods, repositoryNotes, connections } =
-      calculatePastePositions(canvasPos, clipboardData, existingNames);
+    const { pods, repositoryNotes, connections } = calculatePastePositions(
+      canvasPos,
+      clipboardData,
+      existingNames,
+    );
 
     const { wrapWebSocketRequest } = useWebSocketErrorHandler();
 
-    const response = await wrapWebSocketRequest(
-      createWebSocketRequest<CanvasPastePayload, CanvasPasteResultPayload>({
-        requestEvent: WebSocketRequestEvents.CANVAS_PASTE,
-        responseEvent: WebSocketResponseEvents.CANVAS_PASTE_RESULT,
-        payload: {
-          canvasId: requireActiveCanvas(),
-          pods,
-          repositoryNotes,
-          connections,
-        },
-        timeout: PASTE_TIMEOUT_MS,
-      }),
-    );
-
-    if (!response) return false;
+    let response: CanvasPasteResultPayload;
+    try {
+      response = await wrapWebSocketRequest(
+        createWebSocketRequest<CanvasPastePayload, CanvasPasteResultPayload>({
+          requestEvent: WebSocketRequestEvents.CANVAS_PASTE,
+          responseEvent: WebSocketResponseEvents.CANVAS_PASTE_RESULT,
+          payload: {
+            canvasId: requireActiveCanvas(),
+            pods,
+            repositoryNotes,
+            connections,
+          },
+          timeout: PASTE_TIMEOUT_MS,
+        }),
+      );
+    } catch {
+      return false;
+    }
 
     const { showErrorToast, showSuccessToast } = useToast();
 

@@ -46,17 +46,18 @@ export function useCanvasWebSocketAction(): {
       "requestId"
     >;
 
-    const response = await wrapWebSocketRequest(
-      createWebSocketRequest<TPayload, TResponse>({
-        requestEvent: config.requestEvent,
-        responseEvent: config.responseEvent,
-        timeout: config.timeout,
-        matchResponse: config.matchResponse,
-        payload: fullPayload,
-      }),
-    );
-
-    if (!response) {
+    let response: TResponse;
+    try {
+      response = await wrapWebSocketRequest(
+        createWebSocketRequest<TPayload, TResponse>({
+          requestEvent: config.requestEvent,
+          responseEvent: config.responseEvent,
+          timeout: config.timeout,
+          matchResponse: config.matchResponse,
+          payload: fullPayload,
+        }),
+      );
+    } catch {
       if (!options.suppressErrorToast) {
         showErrorToast(options.errorCategory, options.errorAction);
       }

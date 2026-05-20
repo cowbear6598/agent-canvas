@@ -1,5 +1,7 @@
 import { createWebSocketRequest } from "@/services/websocket";
 import { getActiveCanvasIdOrWarn } from "@/utils/canvasGuard";
+import { useToast } from "@/composables/useToast";
+import { t } from "@/i18n";
 import type { NoteStoreConfig } from "./createNoteStore";
 import type { BasePayload, BaseResponse } from "@/types";
 
@@ -67,11 +69,21 @@ export function createNotePositionActions<TItem>(
         return;
       }
 
-      const response = await createWebSocketRequest<BasePayload, BaseResponse>({
-        requestEvent: config.events.updateNote.request,
-        responseEvent: config.events.updateNote.response,
-        payload: { canvasId, noteId, x, y },
-      }).catch(() => null);
+      let response: BaseResponse | null = null;
+      try {
+        response = await createWebSocketRequest<BasePayload, BaseResponse>({
+          requestEvent: config.events.updateNote.request,
+          responseEvent: config.events.updateNote.response,
+          payload: { canvasId, noteId, x, y },
+        });
+      } catch {
+        // 通知用戶拖曳位置更新失敗，並回滾到原始位置
+        const { showErrorToast } = useToast();
+        showErrorToast("Note", t("common.error.operation"));
+        note.x = originalX;
+        note.y = originalY;
+        return;
+      }
 
       if (!response) {
         note.x = originalX;

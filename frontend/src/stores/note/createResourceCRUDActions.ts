@@ -168,16 +168,21 @@ export function createResourceCRUDActions<
         ? config.getCreatePayload(name, input)
         : { name, content: input };
 
-      const response = await wrapWebSocketRequest(
-        createWebSocketRequest({
-          requestEvent: events.create.request,
-          responseEvent: events.create.response,
-          payload: {
-            canvasId,
-            ...createPayload,
-          },
-        }),
-      );
+      let response: unknown;
+      try {
+        response = await wrapWebSocketRequest(
+          createWebSocketRequest({
+            requestEvent: events.create.request,
+            responseEvent: events.create.response,
+            payload: {
+              canvasId,
+              ...createPayload,
+            },
+          }),
+        );
+      } catch {
+        response = null;
+      }
 
       return handleCRUDResponse(
         response,
@@ -208,16 +213,21 @@ export function createResourceCRUDActions<
     }> {
       const canvasId = requireActiveCanvas();
 
-      const response = await wrapWebSocketRequest(
-        createWebSocketRequest({
-          requestEvent: events.update.request,
-          responseEvent: events.update.response,
-          payload: {
-            canvasId,
-            ...config.getUpdatePayload(itemId, input),
-          },
-        }),
-      );
+      let response: unknown;
+      try {
+        response = await wrapWebSocketRequest(
+          createWebSocketRequest({
+            requestEvent: events.update.request,
+            responseEvent: events.update.response,
+            payload: {
+              canvasId,
+              ...config.getUpdatePayload(itemId, input),
+            },
+          }),
+        );
+      } catch {
+        response = null;
+      }
 
       return handleCRUDResponse(
         response,
@@ -245,16 +255,21 @@ export function createResourceCRUDActions<
     async read(itemId: string): Promise<TReadResult | null> {
       const canvasId = requireActiveCanvas();
 
-      const response = await wrapWebSocketRequest(
-        createWebSocketRequest({
-          requestEvent: events.read.request,
-          responseEvent: events.read.response,
-          payload: {
-            canvasId,
-            ...config.getReadPayload(itemId),
-          },
-        }),
-      );
+      let response: unknown;
+      try {
+        response = await wrapWebSocketRequest(
+          createWebSocketRequest({
+            requestEvent: events.read.request,
+            responseEvent: events.read.response,
+            payload: {
+              canvasId,
+              ...config.getReadPayload(itemId),
+            },
+          }),
+        );
+      } catch {
+        return null;
+      }
 
       if (!response) {
         return null;

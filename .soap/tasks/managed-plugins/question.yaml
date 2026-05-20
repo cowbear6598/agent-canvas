@@ -1,0 +1,131 @@
+feature: managed-plugins
+created: "2026-05-20"
+approved: false
+
+questions:
+  - id: Q1
+    text: 目前 `backend/src/services/provider/claude/buildClaudeOptions.ts` 怎麼把 Pod 的 pluginIds 轉成 SDK 的 plugins 選項？傳給 Claude Agent SDK 的格式長什麼樣？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      `buildClaudeOptions.ts` L173-190 的 `applyPlugins()` 呼叫 `pluginScanner.ts`
+      的 `scanInstalledPlugins("claude")` 取得「已安裝 plugin 列表」，再用 Set 過濾
+      Pod.pluginIds，最後轉成 `SdkPluginConfig[]`：
+        { type: 'local', path: <installPath 絕對路徑> }
+      SDK plugin path 直接取自 `~/.claude/plugins/installed_plugins.json` 中
+      `PluginEntry.installPath`。pluginScanner 對 path 做 `~/.claude/plugins/`
+      內的安全檢查（isPathWithinDirectory）。掃描有 30 秒 TTL 快取。
+      Pattern 與 mcpServers 處理高度相似（同樣 apply* + Set 過濾 + 轉 SDK 結構）。
+
+  - id: Q2
+    text: 目前 `backend/src/handlers/pluginHandlers.ts` 提供哪些 API？讀取邏輯來源是什麼（`~/.claude/plugins/installed_plugins.json`）？前端 `pluginApi.ts` 對應呼叫哪些 WebSocket 事件？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      後端 `pluginHandlers.ts` 目前只提供 `PLUGIN_LIST` 一個 action（純唯讀），
+      回傳 shape：{ id, name, version, description, repo, compatibleProviders }。
+      資料來源：`pluginScanner.ts` 讀 `~/.claude/plugins/installed_plugins.json`
+      (Claude) 與 `~/.codex/plugins/cache/` (Codex)，30 秒 TTL 快取。
+      Path 可被 env 覆蓋：`CLAUDE_PLUGINS_INSTALLED_PATH` 與
+      `CLAUDE_PLUGINS_ROOT_OVERRIDE`。
+      前端 `pluginApi.ts` 對應 WebSocket 事件：`PLUGIN_LIST` →
+      `PLUGIN_LIST_RESULT`，亦有 30 秒前端快取。
+      前端**目前沒有** plugin store（也沒有 usePluginStore），呼叫散佈在
+      pluginApi 與 PluginPopover 中。
+
+  - id: Q3
+    text: 目前 `pod_plugin_ids` table 的 schema 是什麼？Pod 在 UI 哪邊選 plugin（PodSettingsModal 之類）？plugin id 在實作中是字串還是 manifest 的 name 欄位？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      Schema 在 `backend/src/database/schema.ts` L75-80：
+        pod_plugin_ids(pod_id TEXT, plugin_id TEXT, PK(pod_id, plugin_id),
+                       FK CASCADE → pods)
+      Pod entity 型別在 `backend/src/types/pod.ts` L40：`pluginIds: string[]`。
+      pluginId 是字串（來自 installed_plugins.json 的 key，即 plugin 安裝 ID）。
+      讀寫層在 `backend/src/services/podStore.ts`：`batchLoadRelations()`、
+      `updateJoinTablesByPod()`。
+      前端 UI 元件在 `frontend/src/components/pod/PluginPopover.vue`（可搜尋
+      清單 + toggle）。資料源呼叫 `pluginApi.listPlugins(provider)`，更新走
+      `podPluginApi.updatePodPlugins()` → `POD_SET_PLUGINS` 事件。
+
+  - id: Q4
+    text: 後端目前有沒有 git clone 相關的依賴或共用模組（例如執行 git command 的 wrapper）？sandbox / cwd 是怎麼處理 Pod 工作目錄的？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      Git wrapper 已現成：`backend/src/utils/operationHelpers.ts` 的
+      `gitOperation()` / `gitOperationWithPath()`，底層用 `simple-git`。
+      使用點：gitService.ts、repositoryCloneHandlers.ts、backupService.ts。
+
+      APP_DATA_DIR：`~/Documents/AgentCanvas`（`backend/src/cli.ts` L12），
+      底下放 `canvas.db`、`logs/`、`config.json`。Plugin 自管目錄建議放
+      `{APP_DATA_DIR}/plugins/`（目前尚無此目錄）。
+
+      Pod workspacePath：`canvasDir/pod-{podId}`，由 `podService.createPodWithWorkspace`
+      → `workspaceService.createWorkspace`（fs.mkdir recursive）建立。
+      Sandbox 在 buildClaudeOptions 不設，由 `claudeService` 動態組裝；
+      permissionMode 固定 `bypassPermissions`，allowedTools 含 Read/Write/Edit/
+      Bash/Glob/Grep/Skill/WebSearch。
+      `claudeSandboxPaths.ts` 的 `buildClaudeSandboxAllowWrite()` 含
+      workspacePath + ~/Library/Application Support (macOS) + /tmp + MCP cache。
+
+  - id: Q5
+    text: Git 來源支援範圍要多廣？只支援 GitHub `owner/repo` 縮寫格式，還是要支援任意 git URL（含 HTTPS、SSH、GitLab、私有 repo）？是否需要支援指定 branch / tag / commit SHA？
+    type: user-input
+    completed: false
+    answer: null
+
+  - id: Q6
+    text: Plugin 安裝後存哪？(A) 後端自管目錄如 `backend/data/plugins/<name>/`（與既有 `managed_mcp_servers` 風格一致、與 Claude Code CLI 完全隔離）；(B) 直接寫到 `~/.claude/plugins/cache/`（與 CLI 共用）；(C) 其他自訂位置。請說明傾向。
+    type: user-input
+    completed: false
+    answer: null
+
+  - id: Q7
+    text: Plugin 啟用範圍是全域（global，所有 Pod 共用一份「啟用清單」）還是 per-Pod 各自勾選？目前 `pod_plugin_ids` 是 per-Pod 設計，是否保留？或者改成 global 由 Pod 一律繼承？
+    type: user-input
+    completed: false
+    answer: null
+
+  - id: Q8
+    text: 既有 `pluginHandlers` 讀取 `~/.claude/plugins/installed_plugins.json` 的「被動讀取」邏輯，這次 refactor 後是 (A) 完全移除，只認自管的 plugins；(B) 並存（兩個來源都顯示）；(C) 保留 fallback 邏輯但 UI 不再顯示？既有已綁 plugin 的 Pod 的 pluginIds 要如何遷移？
+    type: user-input
+    completed: false
+    answer: null
+
+  - id: Q9
+    text: 你提到「開一個 MCP 讓 POD 查 Skill」。但根據官方文件，Claude Agent SDK 的 `plugins:[{type:"local", path}]` 已會自動把 plugin 內的 commands/agents/skills/hooks/mcp servers 全部註冊進該 session（包含 execute script 的 hook 也能跑），不需要額外 MCP。請確認：(A) 直接用 SDK 原生 plugins option 就好，不另外開 MCP；(B) 仍要自製一個 MCP 暴露 skill 列表 / 執行入口（用途是什麼？例如要給非 Claude Code 的 client 用？）；(C) 兩者都做。
+    type: user-input
+    completed: false
+    answer: null
+
+  - id: Q10
+    text: Plugin manifest（`.claude-plugin/plugin.json`）驗證程度？(A) 基本欄位驗證（name, version 必填）；(B) 嚴格 JSON schema 驗證；(C) 加上安全掃描（例如禁止 hook command 內含 `rm -rf` 等 pattern）；(D) 只要 git clone 成功就接受不做驗證。
+    type: user-input
+    completed: false
+    answer: null
+
+  - id: Q11
+    text: 「Plugin 有 execute scripts 或者一些東西可以用，POD 也要可以執行」這條需求的具體界線：是否允許 plugin 內的 hook 透過 shell command 執行任意指令（type: command）？或要限制只能用 mcp_tool / http hook？由於這些東西在 SDK plugin loading 時都會吃下去，限制需要在「安裝/啟用」階段擋。
+    type: user-input
+    completed: false
+    answer: null
+
+  - id: Q12
+    text: 是否需要 plugin 升級流程（重新 git pull 取得最新版）？UI 上是「重裝按鈕」、「自動偵測更新」還是「手動指定新 commit/tag」？是否需要記錄 commit SHA 以便重現？
+    type: user-input
+    completed: false
+    answer: null
+
+  - id: Q13
+    text: 是否需要 plugin 狀態檢查（類似 MCP 的 testConnection）？例如 plugin 是否載入成功、有哪些 skill/command 被註冊、上次載入是否報錯？
+    type: user-input
+    completed: false
+    answer: null
+
+  - id: Q14
+    text: Header 按鈕的 icon / 文案偏好？目前 MCP 用 Bot icon、Integrations 用 KeyRound icon，新的 Plugins 按鈕想用哪個 icon？放在什麼位置（建議 MCP 旁邊）？
+    type: user-input
+    completed: false
+    answer: null

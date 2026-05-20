@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { createOpencodeClient } from "@opencode-ai/sdk";
+import { createOpencodeClient } from "@opencode-ai/sdk/v2";
 import { WebSocketResponseEvents } from "../schemas/index.js";
 import type {
   OpencodeProviderListPayload,
@@ -199,8 +199,10 @@ export async function handleOpencodeAliasesCreate(
   );
 
   // 廣播通知所有連線 alias 已更新
-  await broadcastOpencodeAliasesUpdated();
-  await broadcastProviderList();
+  await Promise.all([
+    broadcastOpencodeAliasesUpdated(),
+    broadcastProviderList(),
+  ]);
 }
 
 // ─── handleOpencodeAliasesUpdate ─────────────────────────────────────────────
@@ -259,8 +261,10 @@ export async function handleOpencodeAliasesUpdate(
     response,
   );
 
-  await broadcastOpencodeAliasesUpdated();
-  await broadcastProviderList();
+  await Promise.all([
+    broadcastOpencodeAliasesUpdated(),
+    broadcastProviderList(),
+  ]);
 }
 
 // ─── handleOpencodeAliasesDelete ─────────────────────────────────────────────
@@ -290,8 +294,10 @@ export async function handleOpencodeAliasesDelete(
     response,
   );
 
-  await broadcastOpencodeAliasesUpdated();
-  await broadcastProviderList();
+  await Promise.all([
+    broadcastOpencodeAliasesUpdated(),
+    broadcastProviderList(),
+  ]);
 }
 
 // ─── handleOpencodeAliasesReorder ────────────────────────────────────────────
@@ -315,6 +321,32 @@ export async function handleOpencodeAliasesReorder(
     $providerId: "opencode",
   }) as ModelAliasRow[];
   const aliasMap = new Map(rows.map((r) => [r.id, r.alias]));
+
+  // 驗證 orderedIds 必須是當前 DB alias id 的完整集合（長度與成員皆相等），
+  // 否則殘缺/含未知 id 的 reorder 會在 DB 留下 order_idx 落差
+  const dbIds = new Set(aliasMap.keys());
+  const payloadIds = new Set(payload.orderedIds);
+  const isPermutation =
+    payload.orderedIds.length === dbIds.size &&
+    payloadIds.size === dbIds.size &&
+    payload.orderedIds.every((id) => dbIds.has(id));
+
+  if (!isPermutation) {
+    const response: OpencodeAliasesReorderResultPayload = {
+      requestId,
+      ok: false,
+      error: {
+        code: "invalid_ordered_ids",
+        message: "orderedIds 必須為當前 alias 集合的完整排列",
+      },
+    };
+    socketService.emitToConnection(
+      connectionId,
+      WebSocketResponseEvents.OPENCODE_ALIASES_REORDER_RESULT,
+      response,
+    );
+    return;
+  }
 
   // 在單一 transaction 內依陣列順序設定每個 id 的 order_idx
   db.transaction(() => {
@@ -343,6 +375,8 @@ export async function handleOpencodeAliasesReorder(
     response,
   );
 
-  await broadcastOpencodeAliasesUpdated();
-  await broadcastProviderList();
+  await Promise.all([
+    broadcastOpencodeAliasesUpdated(),
+    broadcastProviderList(),
+  ]);
 }

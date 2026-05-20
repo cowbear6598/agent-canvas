@@ -8,7 +8,7 @@
  *     - B2（sad case）：state failed → ok=false / error.code=opencode_server_not_ready
  *
  * Mock 邊界：
- *   必須 mock：socketService、@opencode-ai/sdk（client boundary）、opencodeServer state
+ *   必須 mock：socketService、@opencode-ai/sdk/v2（client boundary）、opencodeServer state
  *   不可 mock：schema validation（A1 透過 createValidatedHandler 走真實 zod parse）
  */
 
@@ -35,8 +35,8 @@ vi.mock("../../src/services/provider/opencodeServer.js", () => ({
   getOpencodeServerState: mockGetOpencodeServerState,
 }));
 
-// opencode SDK：mock createOpencodeClient，避免真實 HTTP 呼叫
-vi.mock("@opencode-ai/sdk", () => ({
+// opencode SDK v2：mock createOpencodeClient，避免真實 HTTP 呼叫
+vi.mock("@opencode-ai/sdk/v2", () => ({
   createOpencodeClient: vi.fn(() => ({
     provider: {
       list: mockProviderList,

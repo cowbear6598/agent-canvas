@@ -87,7 +87,11 @@ export type OpencodeAliasesDeleteResultPayload =
 /** opencode:aliases:reorder 請求 payload schema */
 export const opencodeAliasesReorderSchema = z.object({
   requestId: requestIdSchema,
-  orderedIds: z.array(z.string().min(1)),
+  orderedIds: z
+    .array(z.string().min(1))
+    .refine((ids) => new Set(ids).size === ids.length, {
+      message: "orderedIds 不可有重複 id",
+    }),
 });
 
 export type OpencodeAliasesReorderPayload = z.infer<

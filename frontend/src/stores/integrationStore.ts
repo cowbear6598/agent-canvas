@@ -149,6 +149,7 @@ export const useIntegrationStore = defineStore("integration", {
         }),
         "Integration",
         t("common.error.create"),
+        { swallow: true },
       );
 
       if (!response?.app) return null;
@@ -178,6 +179,7 @@ export const useIntegrationStore = defineStore("integration", {
         }),
         "Integration",
         t("common.error.delete"),
+        { swallow: true },
       );
 
       if (!response) return;
@@ -224,6 +226,7 @@ export const useIntegrationStore = defineStore("integration", {
         }),
         "Integration",
         t("integration.toast.bindFailed"),
+        { swallow: true },
       );
     },
 
@@ -234,7 +237,11 @@ export const useIntegrationStore = defineStore("integration", {
       const canvasId = canvasStore.activeCanvasId;
 
       if (!canvasId) {
-        showErrorToast("Integration", t("integration.toast.unbindFailed"), t("integration.toast.noCanvas"));
+        showErrorToast(
+          "Integration",
+          t("integration.toast.unbindFailed"),
+          t("integration.toast.noCanvas"),
+        );
         return;
       }
 
@@ -249,6 +256,7 @@ export const useIntegrationStore = defineStore("integration", {
         }),
         "Integration",
         t("integration.toast.unbindFailed"),
+        { swallow: true },
       );
     },
 

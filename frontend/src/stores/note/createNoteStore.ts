@@ -330,13 +330,18 @@ function createCoreActions<TItem>(
         return null;
       }
 
-      const response = await wrapWebSocketRequest(
-        createWebSocketRequest<BasePayload, BaseResponse>({
-          requestEvent,
-          responseEvent,
-          payload: { canvasId },
-        }),
-      );
+      let response: BaseResponse | null = null;
+      try {
+        response = await wrapWebSocketRequest(
+          createWebSocketRequest<BasePayload, BaseResponse>({
+            requestEvent,
+            responseEvent,
+            payload: { canvasId },
+          }),
+        );
+      } catch {
+        // 錯誤已在 wrapWebSocketRequest 記錄，此處設定 error 狀態
+      }
 
       this.isLoading = false;
 

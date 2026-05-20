@@ -24,26 +24,30 @@ export function useSendCanvasAction(): {
 } {
   const { wrapWebSocketRequest } = useWebSocketErrorHandler();
 
-  const sendCanvasAction = <TPayload extends MinimalPayload, TResponse>(
+  const sendCanvasAction = async <TPayload extends MinimalPayload, TResponse>(
     config: SendCanvasActionConfig<TPayload, TResponse>,
   ): Promise<TResponse | null> => {
     const canvasId = getActiveCanvasIdOrWarn("sendCanvasAction");
-    if (!canvasId) return Promise.resolve(null);
+    if (!canvasId) return null;
 
     const fullPayload = { ...config.payload, canvasId } as unknown as Omit<
       TPayload,
       "requestId"
     >;
 
-    return wrapWebSocketRequest(
-      createWebSocketRequest<TPayload, TResponse>({
-        requestEvent: config.requestEvent,
-        responseEvent: config.responseEvent,
-        timeout: config.timeout,
-        matchResponse: config.matchResponse,
-        payload: fullPayload,
-      }),
-    );
+    try {
+      return await wrapWebSocketRequest(
+        createWebSocketRequest<TPayload, TResponse>({
+          requestEvent: config.requestEvent,
+          responseEvent: config.responseEvent,
+          timeout: config.timeout,
+          matchResponse: config.matchResponse,
+          payload: fullPayload,
+        }),
+      );
+    } catch {
+      return null;
+    }
   };
 
   return { sendCanvasAction };

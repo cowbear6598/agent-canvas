@@ -120,6 +120,7 @@ export const useCanvasStore = defineStore("canvas", {
         }),
         "Canvas",
         t("common.error.create"),
+        { swallow: true },
       );
 
       if (!response?.canvas) return null;
@@ -149,6 +150,7 @@ export const useCanvasStore = defineStore("canvas", {
         }),
         "Canvas",
         t("store.canvas.renameFailed"),
+        { swallow: true },
       );
 
       if (!response) return;
@@ -243,7 +245,9 @@ export const useCanvasStore = defineStore("canvas", {
     },
 
     updateCanvasProtectionFromEvent(canvas: Canvas): void {
-      const existingCanvas = this.canvases.find((item) => item.id === canvas.id);
+      const existingCanvas = this.canvases.find(
+        (item) => item.id === canvas.id,
+      );
       if (!existingCanvas) {
         this.canvases.push(canvas);
         return;

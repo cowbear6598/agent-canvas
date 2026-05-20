@@ -95,10 +95,12 @@ describe("repositoryStore", () => {
       expect(store.availableItems).toHaveLength(0);
     });
 
-    it("WebSocket 回應為 null 時應顯示錯誤 Toast", async () => {
+    it("WebSocket reject 時應顯示錯誤 Toast", async () => {
       const store = useRepositoryStore();
 
-      mockCreateWebSocketRequest.mockResolvedValueOnce(null);
+      mockCreateWebSocketRequest.mockRejectedValueOnce(
+        new Error("WebSocket 連線失敗"),
+      );
 
       const result = await store.createRepository("Test Repo");
 
@@ -219,10 +221,12 @@ describe("repositoryStore", () => {
       expect((store.availableItems[0] as any)?.isGit).toBe(true); // 保持不變
     });
 
-    it("回應為 null 時應回傳 false", async () => {
+    it("WebSocket reject 時應回傳 false", async () => {
       const store = useRepositoryStore();
 
-      mockCreateWebSocketRequest.mockResolvedValueOnce(null);
+      mockCreateWebSocketRequest.mockRejectedValueOnce(
+        new Error("WebSocket 連線失敗"),
+      );
 
       const result = await store.checkIsGit("repo-1");
 
@@ -273,10 +277,12 @@ describe("repositoryStore", () => {
       });
     });
 
-    it("回應為 null 時應回傳失敗結果", async () => {
+    it("WebSocket reject 時應回傳失敗結果", async () => {
       const store = useRepositoryStore();
 
-      mockCreateWebSocketRequest.mockResolvedValueOnce(null);
+      mockCreateWebSocketRequest.mockRejectedValueOnce(
+        new Error("WebSocket 連線失敗"),
+      );
 
       const result = await store.getLocalBranches("repo-1");
 
@@ -348,10 +354,12 @@ describe("repositoryStore", () => {
       });
     });
 
-    it("回應為 null 時應回傳失敗結果", async () => {
+    it("WebSocket reject 時應回傳失敗結果", async () => {
       const store = useRepositoryStore();
 
-      mockCreateWebSocketRequest.mockResolvedValueOnce(null);
+      mockCreateWebSocketRequest.mockRejectedValueOnce(
+        new Error("WebSocket 連線失敗"),
+      );
 
       const result = await store.checkDirty("repo-1");
 
@@ -494,10 +502,12 @@ describe("repositoryStore", () => {
       });
     });
 
-    it("回應為 null 時應顯示錯誤 Toast", async () => {
+    it("WebSocket reject 時應顯示錯誤 Toast", async () => {
       const store = useRepositoryStore();
 
-      mockCreateWebSocketRequest.mockResolvedValueOnce(null);
+      mockCreateWebSocketRequest.mockRejectedValueOnce(
+        new Error("WebSocket 連線失敗"),
+      );
 
       const result = await store.deleteBranch("repo-1", "feature-1");
 
