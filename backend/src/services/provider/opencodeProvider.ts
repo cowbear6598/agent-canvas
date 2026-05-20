@@ -132,7 +132,7 @@ export interface OpencodeClientPort {
       tools?: { [key: string]: boolean };
       system?: string;
       parts: Array<{ type: "text"; text: string }>;
-    }): Promise<unknown>;
+    }): Promise<{ data?: unknown; error?: unknown }>;
     abort(parameters: {
       sessionID: string;
       directory?: string;
@@ -220,7 +220,7 @@ function buildOpencodeClientPort(baseUrl: string): OpencodeClientPort {
         const error = (result as { error?: unknown }).error;
         return { data, error };
       },
-      async prompt(parameters): Promise<unknown> {
+      async prompt(parameters): Promise<{ data?: unknown; error?: unknown }> {
         const { sessionID, directory, model, tools, system, parts } =
           parameters;
         return v2.session.prompt({
@@ -346,6 +346,170 @@ export function resetOpencodeServerStateFactory(): void {
 interface PendingToolCall {
   toolName: string;
   input: Record<string, unknown>;
+}
+
+type OpencodeErrorEvent = Extract<NormalizedEvent, { type: "error" }>;
+
+type StreamRaceResult =
+  | { kind: "stream"; result: IteratorResult<unknown> }
+  | { kind: "prompt_failed"; event: OpencodeErrorEvent }
+  | { kind: "aborted" };
+
+function forceFatalOpencodeError(
+  event: OpencodeErrorEvent,
+): OpencodeErrorEvent {
+  if (event.fatal) return event;
+
+  return {
+    ...event,
+    fatal: true,
+    systemMessage: event.systemMessage
+      ? {
+          ...event.systemMessage,
+          metadata: {
+            ...event.systemMessage.metadata,
+            severity: "fatal",
+          },
+        }
+      : undefined,
+  };
+}
+
+function buildPromptFailureEvent(
+  rawError: unknown,
+  providerID: string,
+): OpencodeErrorEvent {
+  const rawMessage = extractErrorMessage(rawError);
+  const classified = classifySessionError(rawMessage, providerID);
+
+  if (
+    classified.code === "opencode_auth_missing" ||
+    classified.code === "opencode_server_unreachable"
+  ) {
+    return forceFatalOpencodeError(classified);
+  }
+
+  return buildOpencodeSystemError({
+    content: `opencode prompt 發送失敗：${rawMessage}`,
+    fatal: true,
+    code: "opencode_prompt_failed",
+    rawContent: rawMessage,
+  });
+}
+
+function buildPermissionAskedEvent(
+  props: Record<string, unknown>,
+): OpencodeErrorEvent {
+  const permission =
+    typeof props.permission === "string" ? props.permission : "unknown";
+  const patterns = Array.isArray(props.patterns)
+    ? props.patterns.filter(
+        (value): value is string => typeof value === "string",
+      )
+    : [];
+  const patternText = patterns.length > 0 ? `（${patterns.join(", ")}）` : "";
+
+  return buildOpencodeSystemError({
+    content: `opencode 需要互動批准權限 ${permission}${patternText}，目前 Plugins 對話無法回覆此提示，已中止本輪對話`,
+    fatal: true,
+    code: "opencode_permission_blocked",
+    rawContent: JSON.stringify({ permission, patterns }),
+  });
+}
+
+function buildQuestionAskedEvent(
+  props: Record<string, unknown>,
+): OpencodeErrorEvent {
+  const firstQuestion = Array.isArray(props.questions)
+    ? (props.questions.find(
+        (value): value is Record<string, unknown> =>
+          !!value && typeof value === "object",
+      ) ?? null)
+    : null;
+  const header =
+    typeof firstQuestion?.header === "string" && firstQuestion.header.length > 0
+      ? firstQuestion.header
+      : null;
+  const question =
+    typeof firstQuestion?.question === "string" &&
+    firstQuestion.question.length > 0
+      ? firstQuestion.question
+      : null;
+  const promptText = header ?? question ?? "未提供問題內容";
+
+  return buildOpencodeSystemError({
+    content: `opencode 需要使用者回答問題「${promptText}」，目前 Plugins 對話無法回覆互動問題，已中止本輪對話`,
+    fatal: true,
+    code: "opencode_question_blocked",
+    rawContent: JSON.stringify(props),
+  });
+}
+
+function buildWorkspaceFailedEvent(
+  props: Record<string, unknown>,
+): OpencodeErrorEvent {
+  const message =
+    typeof props.message === "string" && props.message.length > 0
+      ? props.message
+      : "未知錯誤";
+
+  return buildOpencodeSystemError({
+    content: `opencode workspace 初始化失敗：${message}`,
+    fatal: true,
+    code: "opencode_workspace_failed",
+    rawContent: message,
+  });
+}
+
+function createAbortRace(abortSignal: AbortSignal): {
+  promise: Promise<StreamRaceResult>;
+  dispose(): void;
+} {
+  if (abortSignal.aborted) {
+    return {
+      promise: Promise.resolve({ kind: "aborted" }),
+      dispose: () => undefined,
+    };
+  }
+
+  const handleAbort = () => undefined;
+  let listener = handleAbort;
+
+  return {
+    promise: new Promise<StreamRaceResult>((resolve) => {
+      listener = () => {
+        abortSignal.removeEventListener("abort", listener);
+        resolve({ kind: "aborted" });
+      };
+      abortSignal.addEventListener("abort", listener, { once: true });
+    }),
+    dispose: () => abortSignal.removeEventListener("abort", listener),
+  };
+}
+
+function createPromptFailureRace(
+  promptRequest: Promise<{ data?: unknown; error?: unknown }>,
+  providerID: string,
+  abortSignal: AbortSignal,
+): Promise<StreamRaceResult> {
+  return new Promise<StreamRaceResult>((resolve) => {
+    promptRequest
+      .then((result) => {
+        if (abortSignal.aborted) return;
+        if (result.error == null) return;
+        resolve({
+          kind: "prompt_failed",
+          event: buildPromptFailureEvent(result.error, providerID),
+        });
+      })
+      .catch((err: unknown) => {
+        if (abortSignal.aborted) return;
+        resolve({
+          kind: "prompt_failed",
+          event: buildPromptFailureEvent(err, providerID),
+        });
+      });
+  });
 }
 
 /**
@@ -828,242 +992,253 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
           promptParams.tools = toolsSubset;
         }
 
-        client.session.prompt(promptParams).catch((err: unknown) => {
-          logger.warn(
-            "Chat",
-            "Warn",
-            `[OpencodeProvider] session.prompt 發生錯誤：${err instanceof Error ? err.message : String(err)}`,
-          );
-        });
+        const promptFailureRace = createPromptFailureRace(
+          client.session.prompt(promptParams),
+          options.providerID,
+          abortSignal,
+        );
+        const abortRace = createAbortRace(abortSignal);
+        const streamIterator = sseResult.stream[Symbol.asyncIterator]();
 
-        // ── for-await SSE stream ───────────────────────────────────────
-        for await (const rawEvent of sseResult.stream) {
-          if (abortSignal.aborted) break;
+        try {
+          while (true) {
+            const raceResult = await Promise.race([
+              streamIterator.next().then(
+                (result): StreamRaceResult => ({
+                  kind: "stream",
+                  result,
+                }),
+              ),
+              promptFailureRace,
+              abortRace.promise,
+            ]);
 
-          const event = rawEvent as {
-            type?: string;
-            properties?: Record<string, unknown>;
-          };
-          if (!event || !event.type) continue;
-
-          const type = event.type;
-          const props = event.properties ?? {};
-
-          // ── active session 過濾 ──────────────────────────────────────
-          // opencode event stream 是 workspace 層級的廣播，同一 workspace 內
-          // 所有 session 的事件都會推送過來。只處理屬於本次 sessionId 的事件，
-          // 避免把其他 session（例如同 workspace 另一個 Pod）的事件寫入當前對話。
-          //
-          // session.created / session.error / session.idle 均有 properties.sessionID；
-          // session.next.* 系列事件同樣帶 sessionID。
-          // 無 sessionID 欄位的系統事件（如 server.connected）不做過濾，直接忽略即可。
-          //
-          // sessionId 在訂閱 SSE stream 之前已透過 session.create API 確定，
-          // 因此可安全用於過濾所有帶 sessionID 的事件（含 session.created）。
-          const eventSessionID = props.sessionID as string | undefined;
-          if (eventSessionID !== undefined && eventSessionID !== sessionId) {
-            continue;
-          }
-
-          // session.created → session_started（避免重複 yield）
-          // v2 SDK: properties.sessionID 直接是字串，取代舊版的 properties.info.id
-          if (type === "session.created") {
-            if (!alreadyYieldedSessionStarted) {
-              const createdSessionId =
-                (props.sessionID as string | undefined) ?? sessionId;
-              yield { type: "session_started", sessionId: createdSessionId };
-              alreadyYieldedSessionStarted = true;
+            if (raceResult.kind === "aborted") break;
+            if (raceResult.kind === "prompt_failed") {
+              yield raceResult.event;
+              break;
             }
-            continue;
-          }
+            if (raceResult.result.done) break;
 
-          // message.part.delta → 文字 / thinking 增量（streaming 逐字推送）
-          //
-          // opencode 1.14 binary 在 streaming 階段只發這個事件；工具資訊不會
-          // 即時透過 SSE 推送，要靠 session.messages API 拉。
-          //
-          // partID 切換：兩個連續 delta 的 partID 不同 → 中間必有其他 part
-          // （通常是 tool）介入，觸發 session.messages 補拉，把該段已完成的
-          // ToolPart 以 tool_call_start + tool_call_result yield 出來，讓
-          // chat UI 顯示 text → tool → text → tool 的真實順序。
-          if (type === "message.part.delta") {
-            const messageID = props.messageID as string | undefined;
-            if (messageID) currentMessageIds.add(messageID);
+            const rawEvent = raceResult.result.value;
+            const event = rawEvent as {
+              type?: string;
+              properties?: Record<string, unknown>;
+            };
+            if (!event || !event.type) continue;
 
-            const partID = props.partID as string | undefined;
-            if (
-              partID &&
-              currentPartID !== undefined &&
-              partID !== currentPartID
-            ) {
-              const now = Date.now();
-              // partID 切換時若離上次 query 太近則跳過，
-              // 因 session.idle 最終會補拉，不會漏 tool。
-              if (now - lastPartIDQueryAt >= PART_ID_QUERY_THROTTLE_MS) {
-                lastPartIDQueryAt = now;
-                yield* yieldPendingToolParts(
-                  client,
-                  sessionId,
-                  workspacePath,
-                  currentMessageIds,
-                  yieldedToolCallIDs,
-                );
+            const type = event.type;
+            const props = event.properties ?? {};
+
+            // ── active session 過濾 ────────────────────────────────────
+            // opencode event stream 是 workspace 層級的廣播，同一 workspace 內
+            // 所有 session 的事件都會推送過來。只處理屬於本次 sessionId 的事件，
+            // 避免把其他 session（例如同 workspace 另一個 Pod）的事件寫入當前對話。
+            //
+            // session.created / session.error / session.idle 均有 properties.sessionID；
+            // session.next.* 系列事件同樣帶 sessionID。
+            // 無 sessionID 欄位的系統事件（如 server.connected）不做過濾，直接忽略即可。
+            //
+            // sessionId 在訂閱 SSE stream 之前已透過 session.create API 確定，
+            // 因此可安全用於過濾所有帶 sessionID 的事件（含 session.created）。
+            const eventSessionID = props.sessionID as string | undefined;
+            if (eventSessionID !== undefined && eventSessionID !== sessionId) {
+              continue;
+            }
+
+            if (type === "session.created") {
+              if (!alreadyYieldedSessionStarted) {
+                const createdSessionId =
+                  (props.sessionID as string | undefined) ?? sessionId;
+                yield { type: "session_started", sessionId: createdSessionId };
+                alreadyYieldedSessionStarted = true;
               }
-            }
-            if (partID) currentPartID = partID;
-
-            const field = props.field as string | undefined;
-            const delta = props.delta;
-            if (typeof delta !== "string" || delta.length === 0) continue;
-
-            if (field === "text") {
-              yield { type: "text", content: delta };
               continue;
             }
 
-            if (field === "reasoning") {
-              yield { type: "thinking", content: delta };
+            if (type === "message.part.delta") {
+              const messageID = props.messageID as string | undefined;
+              if (messageID) currentMessageIds.add(messageID);
+
+              const partID = props.partID as string | undefined;
+              if (
+                partID &&
+                currentPartID !== undefined &&
+                partID !== currentPartID
+              ) {
+                const now = Date.now();
+                if (now - lastPartIDQueryAt >= PART_ID_QUERY_THROTTLE_MS) {
+                  lastPartIDQueryAt = now;
+                  yield* yieldPendingToolParts(
+                    client,
+                    sessionId,
+                    workspacePath,
+                    currentMessageIds,
+                    yieldedToolCallIDs,
+                  );
+                }
+              }
+              if (partID) currentPartID = partID;
+
+              const field = props.field as string | undefined;
+              const delta = props.delta;
+              if (typeof delta !== "string" || delta.length === 0) continue;
+
+              if (field === "text") {
+                yield { type: "text", content: delta };
+                continue;
+              }
+
+              if (field === "reasoning") {
+                yield { type: "thinking", content: delta };
+                continue;
+              }
+
               continue;
             }
 
-            continue;
-          }
-
-          // ── session.next.* 事件（SDK 規格、未來 binary 升級後可採用） ─────
-          // 目前 opencode 1.14 binary 不會發送這組事件，但保留 handler 以兼容
-          // 未來版本；若未來 binary 直接 streaming 推送工具事件，這條路徑可即時
-          // yield 而不必走 message.part.delta 的 partID 補拉。yieldedToolCallIDs
-          // 跨兩條路徑共享，避免重複 yield 同一個 tool。
-
-          if (type === "session.next.text.delta") {
-            const delta = props.delta;
-            if (typeof delta === "string" && delta.length > 0) {
-              yield { type: "text", content: delta };
+            if (type === "session.next.text.delta") {
+              const delta = props.delta;
+              if (typeof delta === "string" && delta.length > 0) {
+                yield { type: "text", content: delta };
+              }
+              continue;
             }
-            continue;
-          }
 
-          if (type === "session.next.reasoning.delta") {
-            const delta = props.delta;
-            if (typeof delta === "string" && delta.length > 0) {
-              yield { type: "thinking", content: delta };
+            if (type === "session.next.reasoning.delta") {
+              const delta = props.delta;
+              if (typeof delta === "string" && delta.length > 0) {
+                yield { type: "thinking", content: delta };
+              }
+              continue;
             }
-            continue;
-          }
 
-          if (type === "session.next.tool.called") {
-            const callID = props.callID as string | undefined;
-            const toolName = props.tool as string | undefined;
-            const input = (props.input as Record<string, unknown>) ?? {};
+            if (type === "session.next.tool.called") {
+              const callID = props.callID as string | undefined;
+              const toolName = props.tool as string | undefined;
+              const input = (props.input as Record<string, unknown>) ?? {};
 
-            if (callID && toolName) {
-              pendingToolCalls.set(callID, { toolName, input });
-              yieldedToolCallIDs.add(callID);
-              yield {
-                type: "tool_call_start",
-                toolUseId: callID,
-                toolName,
-                input,
-              };
+              if (callID && toolName) {
+                pendingToolCalls.set(callID, { toolName, input });
+                yieldedToolCallIDs.add(callID);
+                yield {
+                  type: "tool_call_start",
+                  toolUseId: callID,
+                  toolName,
+                  input,
+                };
+              }
+              continue;
             }
-            continue;
-          }
 
-          if (type === "session.next.tool.success") {
-            const callID = props.callID as string | undefined;
-            const content = props.content as
-              | ReadonlyArray<{
-                  type: string;
-                  text?: string;
-                  uri?: string;
-                  mime?: string;
-                  name?: string;
-                }>
-              | undefined;
+            if (type === "session.next.tool.success") {
+              const callID = props.callID as string | undefined;
+              const content = props.content as
+                | ReadonlyArray<{
+                    type: string;
+                    text?: string;
+                    uri?: string;
+                    mime?: string;
+                    name?: string;
+                  }>
+                | undefined;
 
-            if (callID) {
-              const pending = pendingToolCalls.get(callID);
-              const toolName = pending?.toolName ?? "";
-              pendingToolCalls.delete(callID);
+              if (callID) {
+                const pending = pendingToolCalls.get(callID);
+                const toolName = pending?.toolName ?? "";
+                pendingToolCalls.delete(callID);
 
-              const output = content
-                ? serializeV2ToolSuccessContent(
-                    content as ReadonlyArray<
-                      | { type: "text"; text: string }
-                      | {
-                          type: "file";
-                          uri: string;
-                          mime: string;
-                          name?: string;
-                        }
-                    >,
-                  )
-                : "";
+                const output = content
+                  ? serializeV2ToolSuccessContent(
+                      content as ReadonlyArray<
+                        | { type: "text"; text: string }
+                        | {
+                            type: "file";
+                            uri: string;
+                            mime: string;
+                            name?: string;
+                          }
+                      >,
+                    )
+                  : "";
 
-              yield {
-                type: "tool_call_result",
-                toolUseId: callID,
-                toolName,
-                output,
-              };
+                yield {
+                  type: "tool_call_result",
+                  toolUseId: callID,
+                  toolName,
+                  output,
+                };
+              }
+              continue;
             }
-            continue;
-          }
 
-          if (type === "session.next.tool.failed") {
-            const callID = props.callID as string | undefined;
-            const error = props.error;
+            if (type === "session.next.tool.failed") {
+              const callID = props.callID as string | undefined;
+              const error = props.error;
 
-            if (callID) {
-              const pending = pendingToolCalls.get(callID);
-              const toolName = pending?.toolName ?? "";
-              pendingToolCalls.delete(callID);
+              if (callID) {
+                const pending = pendingToolCalls.get(callID);
+                const toolName = pending?.toolName ?? "";
+                pendingToolCalls.delete(callID);
 
-              yield {
-                type: "tool_call_result",
-                toolUseId: callID,
-                toolName,
-                output: serializeV2ToolFailureError(error),
-              };
+                yield {
+                  type: "tool_call_result",
+                  toolUseId: callID,
+                  toolName,
+                  output: serializeV2ToolFailureError(error),
+                };
+              }
+              continue;
             }
-            continue;
-          }
 
-          // session.next.step.failed → 步驟失敗（模型層錯誤，非工具錯誤）
-          // 與 session.error 不同：step.failed 是單一 step 的錯誤，session 可能繼續
-          if (type === "session.next.step.failed") {
-            const stepError = props.error as
-              | { type?: string; message?: string }
-              | undefined;
-            const rawMessage = stepError?.message ?? "未知錯誤";
-            yield classifySessionError(rawMessage, options.providerID);
-            break;
-          }
+            if (type === "permission.asked") {
+              yield buildPermissionAskedEvent(props);
+              break;
+            }
 
-          // session.idle → turn 結束。先補拉最後一段 tool（最後一輪 tool 之後
-          // 沒有再跟著 text 的情境，沒有後續 partID 切換可觸發），再 yield turn_complete。
-          if (type === "session.idle") {
-            yield* yieldPendingToolParts(
-              client,
-              sessionId,
-              workspacePath,
-              currentMessageIds,
-              yieldedToolCallIDs,
-            );
-            yield { type: "turn_complete" };
-            break;
-          }
+            if (type === "question.asked") {
+              yield buildQuestionAskedEvent(props);
+              break;
+            }
 
-          // session.error → 分類錯誤並結束
-          if (type === "session.error") {
-            const error = props.error;
-            const rawMessage = extractErrorMessage(error);
-            yield classifySessionError(rawMessage, options.providerID);
-            break;
-          }
+            if (type === "workspace.failed") {
+              yield buildWorkspaceFailedEvent(props);
+              break;
+            }
 
-          // 其他事件忽略（session.status / session.diff / message.part.updated /
-          // session.next.* 等本 binary 不用或未發送的事件）。
+            if (type === "session.next.step.failed") {
+              const stepError = props.error as
+                | { type?: string; message?: string }
+                | undefined;
+              const rawMessage = stepError?.message ?? "未知錯誤";
+              yield classifySessionError(rawMessage, options.providerID);
+              break;
+            }
+
+            if (type === "session.idle") {
+              yield* yieldPendingToolParts(
+                client,
+                sessionId,
+                workspacePath,
+                currentMessageIds,
+                yieldedToolCallIDs,
+              );
+              yield { type: "turn_complete" };
+              break;
+            }
+
+            if (type === "session.error") {
+              const error = props.error;
+              const rawMessage = extractErrorMessage(error);
+              yield classifySessionError(rawMessage, options.providerID);
+              break;
+            }
+          }
+        } finally {
+          abortRace.dispose();
+          if (typeof streamIterator.return === "function") {
+            await streamIterator.return(undefined);
+          }
         }
       } finally {
         abortSignal.removeEventListener("abort", doAbort);

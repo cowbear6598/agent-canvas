@@ -78,6 +78,64 @@ function getGoalTodoMap(goal: PodGoal): Map<string, GoalTodoItem> {
   return new Map(goal.todos.map((todo) => [todo.id, todo]));
 }
 
+function dedupeTodoIds(ids: string[]): string[] {
+  return [...new Set(ids)];
+}
+
+function getRemainingTodoIds(
+  todoOrder: string[],
+  completedTodoIds: string[],
+): string[] {
+  const completedTodoIdSet = new Set(completedTodoIds);
+  return todoOrder.filter((todoId) => !completedTodoIdSet.has(todoId));
+}
+
+export function normalizeGoalRuntimeState(
+  goal: PodGoal,
+  state: GoalRuntimeState,
+): GoalRuntimeState {
+  const todoOrder = goal.todos.map((todo) => todo.id);
+  const completedTodoIdSet = new Set(dedupeTodoIds(state.completedTodoIds));
+  const completedTodoIds = todoOrder.filter((todoId) =>
+    completedTodoIdSet.has(todoId),
+  );
+  const remainingTodoIds = getRemainingTodoIds(todoOrder, completedTodoIds);
+  const hasRemainingTodos = remainingTodoIds.length > 0;
+  const activeTodoId =
+    hasRemainingTodos &&
+    state.activeTodoId &&
+    remainingTodoIds.includes(state.activeTodoId)
+      ? state.activeTodoId
+      : remainingTodoIds[0] ?? null;
+  const status: GoalRuntimeStatus =
+    state.status === "blocked"
+      ? "blocked"
+      : hasRemainingTodos
+        ? "running"
+        : "completed";
+
+  return {
+    ...state,
+    todoOrder,
+    activeTodoId,
+    completedTodoIds,
+    status,
+    blockedReason: status === "blocked" ? state.blockedReason : null,
+  };
+}
+
+export function normalizeGoalRuntimeSnapshot(
+  snapshot: GoalRuntimeSnapshot,
+): GoalRuntimeSnapshot {
+  const goal = normalizeGoalRuntimeGoal(snapshot.goal);
+
+  return {
+    ...snapshot,
+    goal,
+    state: normalizeGoalRuntimeState(goal, snapshot.state),
+  };
+}
+
 export function hasGoalRuntime(goal: PodGoal | null | undefined): boolean {
   return goal == null || Array.isArray(goal.todos);
 }
@@ -108,20 +166,23 @@ function withUpdatedAt(state: GoalRuntimeState): GoalRuntimeState {
 export function completeGoalTodo(
   goal: PodGoal,
   state: GoalRuntimeState,
-  todoId: string = state.activeTodoId ?? "",
+  todoId?: string,
   handoffSummary: string | null = null,
 ): GoalRuntimeState {
+  const normalizedState = normalizeGoalRuntimeState(goal, state);
+  const targetTodoId = todoId ?? normalizedState.activeTodoId ?? "";
   const todoMap = getGoalTodoMap(goal);
-  if (!todoMap.has(todoId)) return withUpdatedAt(state);
+  if (!todoMap.has(targetTodoId)) return withUpdatedAt(normalizedState);
 
-  const completedTodoIds = state.completedTodoIds.includes(todoId)
-    ? state.completedTodoIds
-    : [...state.completedTodoIds, todoId];
+  const completedTodoIds = normalizedState.completedTodoIds.includes(targetTodoId)
+    ? normalizedState.completedTodoIds
+    : [...normalizedState.completedTodoIds, targetTodoId];
   const activeTodoId =
-    state.todoOrder.find((id) => !completedTodoIds.includes(id)) ?? null;
+    normalizedState.todoOrder.find((id) => !completedTodoIds.includes(id)) ??
+    null;
 
   return withUpdatedAt({
-    ...state,
+    ...normalizedState,
     activeTodoId,
     completedTodoIds,
     status: activeTodoId ? "running" : "completed",
@@ -194,7 +255,12 @@ export function writeGoalRuntimeSnapshot(
   snapshot: GoalRuntimeSnapshot,
 ): void {
   ensureGoalRuntimeDir(statePath);
-  fs.writeFileSync(statePath, JSON.stringify(snapshot, null, 2), "utf-8");
+  const normalizedSnapshot = normalizeGoalRuntimeSnapshot(snapshot);
+  fs.writeFileSync(
+    statePath,
+    JSON.stringify(normalizedSnapshot, null, 2),
+    "utf-8",
+  );
 }
 
 export function readGoalRuntimeSnapshot(
@@ -211,7 +277,7 @@ export function readGoalRuntimeSnapshot(
     ) {
       return null;
     }
-    return parsed;
+    return normalizeGoalRuntimeSnapshot(parsed);
   } catch {
     return null;
   }
@@ -479,7 +545,7 @@ export function consumeGoalRuntimeToolResult(
       );
     if (!baseSnapshot) return null;
 
-    const snapshot: GoalRuntimeSnapshot = {
+    const snapshot = normalizeGoalRuntimeSnapshot({
       ...baseSnapshot,
       goal,
       podName: pod.name,
@@ -492,7 +558,7 @@ export function consumeGoalRuntimeToolResult(
         handoffSummary: parsed.handoffSummary,
         updatedAt: new Date().toISOString(),
       },
-    };
+    });
     writeGoalRuntimeSnapshot(statePath, snapshot);
     return snapshot;
   }

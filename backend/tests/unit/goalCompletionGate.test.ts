@@ -1,3 +1,4 @@
+import fs from "fs";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   GOAL_GATE_LIMITS,
@@ -109,6 +110,36 @@ describe("evaluateGoalGate", () => {
     expect(decision.nudgeMessage).toContain("agent_canvas_goal");
   });
 
+  it("snapshot 已完成但殘留 activeTodoId 時應 proceed，不再補送 nudge", () => {
+    const snapshot = ensureGoalRuntime(pod, runContext);
+    if (!snapshot) throw new Error("snapshot 應存在");
+
+    fs.writeFileSync(
+      getGoalRuntimeStatePath(runContext, pod.id),
+      JSON.stringify(
+        {
+          ...snapshot,
+          state: {
+            ...snapshot.state,
+            status: "running",
+            activeTodoId: "todo-2",
+            completedTodoIds: ["todo-1", "todo-2"],
+          },
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
+
+    const decision = evaluateGoalGate(runContext, pod.id, {
+      retryCount: 0,
+      noProgressCount: 0,
+    });
+
+    expect(decision.action).toBe("proceed");
+  });
+
   it("retryCount 達到 hardRetryLimit 時應 force_block", () => {
     ensureGoalRuntime(pod, runContext);
 
@@ -168,6 +199,24 @@ describe("buildNudgeMessage", () => {
     expect(msg).toContain("Inspect logs");
     expect(msg).toContain("2 個未完成");
     expect(msg).toContain("agent_canvas_goal");
+  });
+
+  it("activeTodoId 無效時應退回實際剩餘 todo，不顯示 UUID", () => {
+    const snapshot = ensureGoalRuntime(pod, runContext);
+    if (!snapshot) throw new Error("snapshot 應存在");
+
+    const msg = buildNudgeMessage({
+      ...snapshot,
+      state: {
+        ...snapshot.state,
+        activeTodoId: "e6739b91-b57f-42cf-8643-8c771f3d917a",
+        completedTodoIds: ["todo-1"],
+      },
+    });
+
+    expect(msg).toContain("Fix the bug");
+    expect(msg).toContain("1 個未完成");
+    expect(msg).not.toContain("e6739b91-b57f-42cf-8643-8c771f3d917a");
   });
 });
 

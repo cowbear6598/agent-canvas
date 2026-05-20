@@ -193,6 +193,39 @@ describe("goalRuntime", () => {
     expect(persisted?.state.completedTodoIds).toEqual(["todo-1"]);
   });
 
+  it("consumeGoalRuntimeToolResult 應正規化已完成但殘留 activeTodoId 的狀態", () => {
+    ensureGoalRuntime(pod, runContext);
+
+    const snapshot = consumeGoalRuntimeToolResult(
+      runContext,
+      pod,
+      `mcp__${GOAL_MCP_SERVER_NAME}__${GOAL_MCP_TOOL_NAMES.COMPLETE_TODO}`,
+      JSON.stringify({
+        status: "running",
+        activeTodoId: "todo-2",
+        activeTodoText: "Implement changes",
+        nextTodoId: "todo-2",
+        nextTodoText: "Implement changes",
+        completedTodoIds: ["todo-2", "todo-1", "todo-1", "todo-3"],
+        blockedReason: null,
+        handoffSummary: "All tasks done",
+        completedCount: 4,
+        totalCount: 2,
+      }),
+    );
+
+    expect(snapshot?.state.status).toBe("completed");
+    expect(snapshot?.state.activeTodoId).toBeNull();
+    expect(snapshot?.state.completedTodoIds).toEqual(["todo-1", "todo-2"]);
+
+    const persisted = readGoalRuntimeSnapshot(
+      getGoalRuntimeStatePath(runContext, pod.id),
+    );
+    expect(persisted?.state.status).toBe("completed");
+    expect(persisted?.state.activeTodoId).toBeNull();
+    expect(persisted?.state.completedTodoIds).toEqual(["todo-1", "todo-2"]);
+  });
+
   it("generic mcp wrapper + blockedReason input 應 canonicalize 為 block_goal_progress", () => {
     expect(
       canonicalizeGoalRuntimeToolName(

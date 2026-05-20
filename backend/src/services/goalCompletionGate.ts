@@ -4,6 +4,7 @@ import { logger } from "../utils/logger.js";
 import {
   forceBlockGoalRuntime,
   getGoalRuntimeStatePath,
+  normalizeGoalRuntimeSnapshot,
   readGoalRuntimeSnapshot,
   type GoalRuntimeSnapshot,
 } from "./goalRuntime.js";
@@ -92,10 +93,15 @@ export function evaluateGoalGate(
  * 產生 retry 用的 nudge 訊息：簡短提醒 LLM 還有未完成的 todo，並指出當前 activeTodo。
  */
 export function buildNudgeMessage(snapshot: GoalRuntimeSnapshot): string {
-  const { goal, state } = snapshot;
+  const normalizedSnapshot = normalizeGoalRuntimeSnapshot(snapshot);
+  const { goal, state } = normalizedSnapshot;
   const activeTodo = goal.todos.find((t) => t.id === state.activeTodoId);
-  const activeText = activeTodo?.text ?? state.activeTodoId ?? "(未知 todo)";
-  const remaining = goal.todos.length - state.completedTodoIds.length;
+  const remainingTodos = goal.todos.filter(
+    (todo) => !state.completedTodoIds.includes(todo.id),
+  );
+  const activeText =
+    activeTodo?.text ?? remainingTodos[0]?.text ?? "(未知 todo)";
+  const remaining = remainingTodos.length;
 
   return [
     `還有 ${remaining} 個未完成的 todo，請繼續執行。`,

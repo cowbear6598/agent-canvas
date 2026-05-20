@@ -44,15 +44,13 @@ export function buildServerCacheKey(runId: string, podId: string): string {
 /**
  * 組裝 opencode transient server 的完整 config（mcp + permission）。
  *
- * permission 欄位之所以要顯式設定為 "allow"：
- *   - `external_directory` 預設為 "ask"，當 agent 用 Read 工具開 workspace 以外的路徑
- *     （例如 plugin skill catalog 指向 ~/.claude/plugins/cache/... 的 SKILL.md）時，
- *     opencode 會發出 permission.updated 等待使用者批准；但我們 transient server 的
- *     stdin 是 pipe，沒有任何 UI 可以回應 → 整個 session 卡住。設 "allow" 跳過 prompt。
- *   - `edit` / `bash` 一併設 "allow"，因為 Pod 是託管環境（agent 已運作於 sandboxed
- *     workspace 內），不預期每個工具呼叫都要使用者逐次同意；Claude provider 用的
- *     `bypassPermissions` 是同樣語意。
- *   - `webfetch` 保持預設（未顯式設定），讓 opencode 自行決定是否需要批准。
+ * permission 直接設為全域 `allow`，盡量貼近 CLI 的
+ * `--dangerously-skip-permissions` 行為，避免 stdio MCP / plugin skill /
+ * workspace 外路徑等能力在 headless 模式下卡住 approval prompt。
+ *
+ * 注意：這只會放寬「批准」類流程，不保證 opencode 不會發出 `question.asked`。
+ * 若模型主動進入互動問答流程，provider 端仍會 fail-fast 回報明確錯誤，因為 backend
+ * 目前沒有回覆這類問題的通道。
  */
 export function buildOpencodeTransientServerConfig(
   entries: PodMcpEntry[],
@@ -60,9 +58,11 @@ export function buildOpencodeTransientServerConfig(
   return {
     mcp: buildOpencodeMcpConfig(entries),
     permission: {
-      external_directory: "allow",
       edit: "allow",
       bash: "allow",
+      webfetch: "allow",
+      doom_loop: "allow",
+      external_directory: "allow",
     },
   };
 }
