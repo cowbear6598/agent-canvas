@@ -79,6 +79,15 @@ interface OpencodeAliasesReorderResultPayload {
   items?: OpencodeModelAlias[];
 }
 
+interface OpencodeServerRestartPayload {
+  requestId: string;
+}
+
+interface OpencodeServerRestartResultPayload {
+  requestId?: string;
+  success?: boolean;
+}
+
 // ─── API 函式 ─────────────────────────────────────────────────────────────────
 
 /**
@@ -198,6 +207,20 @@ export async function deleteAlias(id: string): Promise<void> {
     requestEvent: WebSocketRequestEvents.OPENCODE_ALIASES_DELETE,
     responseEvent: WebSocketResponseEvents.OPENCODE_ALIASES_DELETE_RESULT,
     payload: { id },
+  });
+}
+
+/**
+ * 重啟 opencode 子程序
+ */
+export async function restartOpencodeServer(): Promise<void> {
+  await createWebSocketRequest<
+    OpencodeServerRestartPayload,
+    OpencodeServerRestartResultPayload
+  >({
+    requestEvent: WebSocketRequestEvents.OPENCODE_SERVER_RESTART,
+    responseEvent: WebSocketResponseEvents.OPENCODE_SERVER_RESTART_RESULT,
+    payload: {},
   });
 }
 

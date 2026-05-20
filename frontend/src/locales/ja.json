@@ -429,13 +429,16 @@
     "opencode": {
       "providerList": {
         "title": "Provider 一覧",
-        "refresh": "更新",
         "connected": "ログイン済み",
         "loadError": "読み込みに失敗しました",
         "retry": "再試行",
         "empty": "利用可能な Provider がありません",
         "searchPlaceholder": "Provider を検索...",
-        "noMatch": "一致する Provider がありません"
+        "noMatch": "一致する Provider がありません",
+        "restart": "OpenCode を再起動",
+        "restartLoading": "再起動中…",
+        "restartSuccess": "OpenCode を再起動しました",
+        "restartFailed": "再起動に失敗しました：{reason}"
       },
       "aliases": {
         "title": "Model エイリアス",
@@ -448,7 +451,9 @@
         "deleteConfirmTitle": "削除の確認",
         "deleteConfirmMessage": "この model エイリアスを削除してもよろしいですか？",
         "reorderHint": "ドラッグして並び替え",
-        "actionFailed": "操作に失敗しました：{reason}"
+        "actionFailed": "操作に失敗しました：{reason}",
+        "collapsibleTrigger": "Provider のモデル対応を展開/折りたたみ",
+        "addModelTooltip": "モデルを追加"
       }
     }
   },

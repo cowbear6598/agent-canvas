@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, computed, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,12 +18,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, Search } from "lucide-vue-next";
+import {
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+} from "@/components/ui/collapsible";
+import { Loader2, Search, ChevronDown, Plus } from "lucide-vue-next";
 import * as opencodeApi from "@/services/opencodeApi";
-import type { OpencodeProviderInfo } from "@/types/opencode";
+import type {
+  OpencodeProviderInfo,
+  OpencodeModelAlias,
+} from "@/types/opencode";
 import { useOpencodeAliasStore } from "@/stores/opencodeAliasStore";
 import { useToast } from "@/composables/useToast";
 import OpencodeAliasRow from "./OpencodeAliasRow.vue";
+import { VueDraggable } from "vue-draggable-plus";
 
 const { t } = useI18n();
 const opencodeAliasStore = useOpencodeAliasStore();
@@ -54,8 +63,18 @@ interface DraftRow {
 }
 const draftRows = ref<Record<string, DraftRow | null>>({});
 
-/** 正在進行拖曳的 alias id */
-const draggingAliasId = ref<string | null>(null);
+/** 每個 provider Card 是否展開（預設全部收合） */
+const expandedProviders = ref<Record<string, boolean>>({});
+
+/** VueDraggable v-model 用的本地可寫 alias 陣列，key = providerID */
+const aliasListsByProvider = ref<Record<string, OpencodeModelAlias[]>>({});
+
+const isProviderExpanded = (providerID: string): boolean =>
+  !!expandedProviders.value[providerID];
+
+const setProviderExpanded = (providerID: string, value: boolean): void => {
+  expandedProviders.value[providerID] = value;
+};
 
 /** 刪除確認 Dialog 狀態 */
 const deleteConfirmOpen = ref(false);
@@ -79,7 +98,31 @@ const filteredProviders = computed<OpencodeProviderInfo[]>(() => {
   );
 });
 
+/** 依連線狀態分組排序：已連線排前，未連線排後；兩組內部維持原順序 */
+const sortedFilteredProviders = computed<OpencodeProviderInfo[]>(() => {
+  const connectedGroup = filteredProviders.value.filter((p) =>
+    connected.value.includes(p.id),
+  );
+  const disconnectedGroup = filteredProviders.value.filter(
+    (p) => !connected.value.includes(p.id),
+  );
+  return [...connectedGroup, ...disconnectedGroup];
+});
+
 // ── 資料載入 ─────────────────────────────────────────────────────
+
+/**
+ * 將 store 內指定 providerID 的 aliases 同步寫入本地可寫陣列，
+ * 作為 VueDraggable v-model 的資料來源。
+ */
+const syncAliasListsFromStore = (providerIDs: string[]): void => {
+  for (const id of providerIDs) {
+    aliasListsByProvider.value[id] = [
+      ...opencodeAliasStore.aliasesByProvider(id),
+    ];
+  }
+};
+
 const loadFromBackend = async (): Promise<void> => {
   loadState.value = "loading";
   try {
@@ -87,6 +130,7 @@ const loadFromBackend = async (): Promise<void> => {
     providers.value = result.all;
     connected.value = result.connected;
     loadState.value = "loaded";
+    syncAliasListsFromStore(result.connected);
   } catch {
     loadState.value = "error";
   }
@@ -94,12 +138,23 @@ const loadFromBackend = async (): Promise<void> => {
 
 onMounted(() => {
   loadFromBackend();
+  syncAliasListsFromStore(connected.value);
 });
+
+/** store 內 aliases 變動時，同步更新本地陣列 */
+watch(
+  () => opencodeAliasStore.aliases,
+  () => {
+    syncAliasListsFromStore(connected.value);
+  },
+  { deep: true },
+);
 
 // ── alias CRUD handlers ───────────────────────────────────────────
 
-/** 點「新增 model」按鈕：在該 provider 建立 draft row */
+/** 點「新增 model」按鈕：先展開 Card，再建立 draft row */
 const handleAddClick = (providerID: string, firstModelID: string): void => {
+  setProviderExpanded(providerID, true);
   draftRows.value = {
     ...draftRows.value,
     [providerID]: { modelID: firstModelID, alias: "" },
@@ -224,51 +279,43 @@ const handleDeleteConfirm = async (): Promise<void> => {
   }
 };
 
-// ── 拖曳重排 ──────────────────────────────────────────────────────
+// ── 重新啟動 OpenCode ─────────────────────────────────────────────
 
-/** dragstart：記錄被拖曳的 id */
-const handleAliasDragStart = (aliasId: string, event: DragEvent): void => {
-  draggingAliasId.value = aliasId;
-  if (event.dataTransfer) {
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", aliasId);
+const restarting = ref(false);
+
+const handleRestartOpencode = async (): Promise<void> => {
+  restarting.value = true;
+  try {
+    await opencodeApi.restartOpencodeServer();
+    toast({ title: t("llmProvider.opencode.providerList.restartSuccess") });
+    await loadFromBackend();
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    toast({
+      title: t("llmProvider.opencode.providerList.restartFailed", { reason }),
+      variant: "destructive",
+    });
+  } finally {
+    restarting.value = false;
   }
 };
 
-/** drop 在某個 row 上：重新排列並呼叫 reorder API */
-const handleAliasDrop = async (
-  targetAliasId: string,
-  providerID: string,
-): Promise<void> => {
-  const dragId = draggingAliasId.value;
-  if (!dragId || dragId === targetAliasId) return;
+// ── 拖曳重排 ──────────────────────────────────────────────────────
 
-  const currentList = opencodeAliasStore.aliasesByProvider(providerID);
-  const ids = currentList.map((a) => a.id);
-
-  // 從舊位置移除 dragId，插入 targetAliasId 之前
-  const filtered = ids.filter((id) => id !== dragId);
-  const targetIndex = filtered.indexOf(targetAliasId);
-  filtered.splice(targetIndex, 0, dragId);
-
+/** VueDraggable @end：讀取本地陣列順序並呼叫 reorder API */
+const handleAliasReorder = async (providerID: string): Promise<void> => {
+  const ids = (aliasListsByProvider.value[providerID] ?? []).map((a) => a.id);
   try {
-    await opencodeAliasStore.reorder(filtered);
+    await opencodeAliasStore.reorder(ids);
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     toast({
       title: t("llmProvider.opencode.aliases.actionFailed", { reason }),
       variant: "destructive",
     });
-    // 還原順序：後端 reorder 失敗時 store 不會改變（action rethrows 前不 mutate），
-    // 畫面依然是 aliasesByProvider 的值，不需手動還原。
+    // 失敗時不手動還原本地陣列；store rethrow 後 aliases 未變動，
+    // watch 將在下一個 tick 把本地陣列同步回正確順序。
   }
-
-  draggingAliasId.value = null;
-};
-
-/** dragend：清除拖曳狀態 */
-const handleAliasDragEnd = (): void => {
-  draggingAliasId.value = null;
 };
 </script>
 
@@ -283,121 +330,153 @@ const handleAliasDragEnd = (): void => {
       {{ t("llmProvider.opencode.aliases.title") }}
     </span>
 
-    <!-- 每個 connected provider 一個摺疊區塊 -->
-    <div
+    <!-- 每個 connected provider 一個可摺疊 Card -->
+    <Collapsible
       v-for="provider in connectedProviders"
       :key="provider.id"
-      class="space-y-2"
+      :open="isProviderExpanded(provider.id)"
+      class="rounded-md border border-border"
+      @update:open="(v) => setProviderExpanded(provider.id, v)"
     >
-      <!-- Provider 名稱 + 新增按鈕 -->
-      <div class="flex items-center justify-between">
-        <span class="text-sm font-medium text-muted-foreground">
-          {{ provider.name }}
-        </span>
-        <Button
-          variant="outline"
-          size="sm"
-          class="h-7 px-2 text-xs"
-          @click="handleAddClick(provider.id, provider.models[0]?.id ?? '')"
-        >
-          {{ t("llmProvider.opencode.aliases.addButton") }}
-        </Button>
-      </div>
-
-      <!-- Draft row（新增中） -->
-      <div
-        v-if="draftRows[provider.id]"
-        class="rounded-md border border-dashed border-border p-2 space-y-2"
+      <!-- 標題列 -->
+      <CollapsibleTrigger
+        as-child
+        :aria-label="t('llmProvider.opencode.aliases.collapsibleTrigger')"
       >
-        <!-- model id 下拉（使用專案 Select 元件） -->
-        <div class="flex flex-col gap-1">
-          <label class="text-xs text-muted-foreground">
-            {{ t("llmProvider.opencode.aliases.modelIdLabel") }}
-          </label>
-          <Select v-model="draftRows[provider.id]!.modelID">
-            <SelectTrigger class="h-8 text-sm">
-              <SelectValue
-                :placeholder="
-                  t('llmProvider.opencode.aliases.modelIdPlaceholder')
-                "
-              />
-            </SelectTrigger>
-            <SelectContent position="popper">
-              <SelectItem
-                v-for="model in provider.models"
-                :key="model.id"
-                :value="model.id"
-              >
-                {{ model.name || model.id }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <!-- alias input -->
-        <div class="flex flex-col gap-1">
-          <label class="text-xs text-muted-foreground">
-            {{ t("llmProvider.opencode.aliases.aliasLabel") }}
-          </label>
-          <input
-            v-model="draftRows[provider.id]!.alias"
-            :placeholder="t('llmProvider.opencode.aliases.aliasPlaceholder')"
-            class="w-full rounded-md border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-          >
-        </div>
-
-        <!-- 儲存 / 取消 -->
-        <div class="flex items-center gap-1 justify-end">
-          <Button
-            variant="outline"
-            size="sm"
-            class="h-7 px-2"
-            @click="handleDraftCancel(provider.id)"
-          >
-            {{ t("common.cancel") }}
-          </Button>
-          <Button
-            size="sm"
-            class="h-7 px-2"
-            @click="handleDraftSave(provider.id, draftRows[provider.id]!)"
-          >
-            {{ t("common.save") }}
-          </Button>
-        </div>
-      </div>
-
-      <!-- Alias row 列表 -->
-      <div class="space-y-1">
-        <!-- 空狀態提示 -->
-        <p
-          v-if="
-            opencodeAliasStore.aliasesByProvider(provider.id).length === 0 &&
-              !draftRows[provider.id]
-          "
-          class="text-xs text-muted-foreground py-1"
+        <div
+          class="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-muted/50 rounded-md"
         >
-          {{ t("llmProvider.opencode.aliases.reorderHint") }}
-        </p>
+          <div class="flex items-center gap-2">
+            <ChevronDown
+              class="h-4 w-4 text-muted-foreground transition-transform"
+              :class="{ 'rotate-180': isProviderExpanded(provider.id) }"
+            />
+            <span class="text-sm font-medium">
+              {{ provider.name }}
+            </span>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="h-7 w-7 p-0"
+            :aria-label="t('llmProvider.opencode.aliases.addModelTooltip')"
+            :title="t('llmProvider.opencode.aliases.addModelTooltip')"
+            @click.stop="
+              handleAddClick(provider.id, provider.models[0]?.id ?? '')
+            "
+          >
+            <Plus class="h-4 w-4" />
+          </Button>
+        </div>
+      </CollapsibleTrigger>
 
-        <OpencodeAliasRow
-          v-for="aliasItem in opencodeAliasStore.aliasesByProvider(provider.id)"
-          :key="aliasItem.id"
-          :alias="aliasItem"
-          :models="provider.models"
-          :editing="editingAliasId === aliasItem.id"
-          @start-edit="handleStartEdit(aliasItem.id)"
-          @cancel-edit="handleCancelEdit"
-          @save="
-            (payload) => handleEditSave(aliasItem.id, provider.id, payload)
-          "
-          @delete="handleDeleteClick(aliasItem.id, aliasItem.alias)"
-          @dragstart="(event) => handleAliasDragStart(aliasItem.id, event)"
-          @dragover="() => {}"
-          @drop="() => handleAliasDrop(aliasItem.id, provider.id)"
-          @dragend="handleAliasDragEnd"
-        />
-      </div>
-    </div>
+      <!-- 內容區 -->
+      <CollapsibleContent class="px-3 py-3 space-y-2">
+        <!-- Draft row（新增中） -->
+        <div
+          v-if="draftRows[provider.id]"
+          class="rounded-md border border-dashed border-border p-2 space-y-2"
+        >
+          <!-- model id 下拉（使用專案 Select 元件） -->
+          <div class="flex flex-col gap-1">
+            <label class="text-xs text-muted-foreground">
+              {{ t("llmProvider.opencode.aliases.modelIdLabel") }}
+            </label>
+            <Select v-model="draftRows[provider.id]!.modelID">
+              <SelectTrigger class="h-8 text-sm">
+                <SelectValue
+                  :placeholder="
+                    t('llmProvider.opencode.aliases.modelIdPlaceholder')
+                  "
+                />
+              </SelectTrigger>
+              <SelectContent position="popper">
+                <SelectItem
+                  v-for="model in provider.models"
+                  :key="model.id"
+                  :value="model.id"
+                >
+                  {{ model.name || model.id }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <!-- alias input -->
+          <div class="flex flex-col gap-1">
+            <label class="text-xs text-muted-foreground">
+              {{ t("llmProvider.opencode.aliases.aliasLabel") }}
+            </label>
+            <input
+              v-model="draftRows[provider.id]!.alias"
+              :placeholder="t('llmProvider.opencode.aliases.aliasPlaceholder')"
+              class="w-full rounded-md border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            >
+          </div>
+
+          <!-- 儲存 / 取消 -->
+          <div class="flex items-center gap-1 justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              class="h-7 px-2"
+              @click="handleDraftCancel(provider.id)"
+            >
+              {{ t("common.cancel") }}
+            </Button>
+            <Button
+              size="sm"
+              class="h-7 px-2"
+              @click="handleDraftSave(provider.id, draftRows[provider.id]!)"
+            >
+              {{ t("common.save") }}
+            </Button>
+          </div>
+        </div>
+
+        <!-- Alias row 列表 -->
+        <div class="space-y-1">
+          <!-- 空狀態提示 -->
+          <p
+            v-if="
+              opencodeAliasStore.aliasesByProvider(provider.id).length === 0 &&
+                !draftRows[provider.id]
+            "
+            class="text-xs text-muted-foreground py-1"
+          >
+            {{ t("llmProvider.opencode.aliases.reorderHint") }}
+          </p>
+
+          <VueDraggable
+            :model-value="aliasListsByProvider[provider.id] ?? []"
+            handle=".alias-card__handle"
+            :animation="180"
+            ghost-class="sortable-ghost"
+            chosen-class="sortable-chosen"
+            class="flex flex-col gap-2"
+            @update:model-value="
+              (list: OpencodeModelAlias[]) =>
+                (aliasListsByProvider[provider.id] = list)
+            "
+            @end="() => handleAliasReorder(provider.id)"
+          >
+            <OpencodeAliasRow
+              v-for="aliasItem in aliasListsByProvider[provider.id] ?? []"
+              :key="aliasItem.id"
+              :alias="aliasItem"
+              :models="provider.models"
+              :editing="editingAliasId === aliasItem.id"
+              @start-edit="handleStartEdit(aliasItem.id)"
+              @cancel-edit="handleCancelEdit"
+              @save="
+                (payload) => handleEditSave(aliasItem.id, provider.id, payload)
+              "
+              @delete="handleDeleteClick(aliasItem.id, aliasItem.alias)"
+            />
+          </VueDraggable>
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   </div>
 
   <!-- 下半：Provider 清單區塊 -->
@@ -410,14 +489,18 @@ const handleAliasDragEnd = (): void => {
       <Button
         variant="outline"
         size="sm"
-        :disabled="loadState === 'loading'"
-        @click="loadFromBackend"
+        :disabled="restarting || loadState === 'loading'"
+        @click="handleRestartOpencode"
       >
         <Loader2
-          v-if="loadState === 'loading'"
+          v-if="restarting"
           class="mr-1.5 h-3.5 w-3.5 animate-spin"
         />
-        {{ t("llmProvider.opencode.providerList.refresh") }}
+        {{
+          restarting
+            ? t("llmProvider.opencode.providerList.restartLoading")
+            : t("llmProvider.opencode.providerList.restart")
+        }}
       </Button>
     </div>
 
@@ -465,15 +548,17 @@ const handleAliasDragEnd = (): void => {
 
       <!-- 搜尋後找不到的提示 -->
       <p
-        v-else-if="loadState === 'loaded' && filteredProviders.length === 0"
+        v-else-if="
+          loadState === 'loaded' && sortedFilteredProviders.length === 0
+        "
         class="text-sm text-muted-foreground"
       >
         {{ t("llmProvider.opencode.providerList.noMatch") }}
       </p>
 
-      <!-- provider 列表（依搜尋結果過濾） -->
+      <!-- provider 列表（依搜尋結果過濾，已連線排前） -->
       <div
-        v-for="provider in filteredProviders"
+        v-for="provider in sortedFilteredProviders"
         :key="provider.id"
         class="flex items-center justify-between rounded-md border border-border p-3"
         :class="{ 'opacity-50': !connected.includes(provider.id) }"

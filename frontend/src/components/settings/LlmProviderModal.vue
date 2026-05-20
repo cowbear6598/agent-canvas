@@ -50,7 +50,18 @@ const handleBack = (): void => {
   >
     <DialogContent class="max-w-lg">
       <DialogHeader>
-        <DialogTitle>{{ t("llmProvider.modal.title") }}</DialogTitle>
+        <DialogTitle class="flex items-center gap-2">
+          <Button
+            v-if="step === 'opencode'"
+            variant="ghost"
+            size="sm"
+            :aria-label="t('llmProvider.modal.backButton')"
+            @click="handleBack"
+          >
+            <ArrowLeft class="h-4 w-4" />
+          </Button>
+          {{ t("llmProvider.modal.title") }}
+        </DialogTitle>
         <DialogDescription class="sr-only">
           {{ t("llmProvider.modal.title") }}
         </DialogDescription>
@@ -75,22 +86,11 @@ const handleBack = (): void => {
         </button>
       </div>
 
-      <!-- opencode 設定畫面：返回按鈕固定在頂端，設定面板區可獨立滾動 -->
+      <!-- opencode 設定畫面：設定面板區可獨立滾動 -->
       <div
         v-else-if="step === 'opencode'"
         class="flex max-h-[70vh] flex-col gap-3 py-2"
       >
-        <!-- 返回按鈕（不滾動） -->
-        <Button
-          variant="ghost"
-          size="sm"
-          class="gap-1.5 px-1 shrink-0"
-          @click="handleBack"
-        >
-          <ArrowLeft class="h-4 w-4" />
-          <span>{{ t("llmProvider.modal.backButton") }}</span>
-        </Button>
-
         <!-- opencode 設定面板（內容過長時走專案自訂的 ScrollArea） -->
         <ScrollArea class="flex-1 pr-3">
           <OpencodeSettingsPanel />

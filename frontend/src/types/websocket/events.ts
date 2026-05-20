@@ -89,6 +89,8 @@ export const WebSocketRequestEvents = {
   OPENCODE_ALIASES_DELETE: "opencode:aliases:delete",
   /** 重排 opencode model 別稱順序 */
   OPENCODE_ALIASES_REORDER: "opencode:aliases:reorder",
+  /** 重啟 opencode 子程序 */
+  OPENCODE_SERVER_RESTART: "opencode:server:restart",
 } as const;
 
 export type WebSocketRequestEvents =
@@ -227,6 +229,8 @@ export const WebSocketResponseEvents = {
   OPENCODE_ALIASES_REORDER_RESULT: "opencode:aliases:reorder:result",
   /** opencode model 別稱已更新（push 事件） */
   OPENCODE_ALIASES_UPDATED: "opencode:aliases:updated",
+  /** opencode 子程序重啟結果 */
+  OPENCODE_SERVER_RESTART_RESULT: "opencode:server:restart:result",
 } as const;
 
 export type WebSocketResponseEvents =

@@ -102,6 +102,21 @@ export type OpencodeAliasesReorderResultPayload =
   | { requestId: string; ok: true }
   | { requestId: string; ok: false; error: { code: string; message: string } };
 
+// ─── opencode:server:restart ──────────────────────────────────────────────────
+
+/** opencode:server:restart 請求 payload schema（空 payload，只帶 requestId） */
+export const opencodeServerRestartSchema = z.object({
+  requestId: requestIdSchema,
+});
+
+export type OpencodeServerRestartPayload = z.infer<
+  typeof opencodeServerRestartSchema
+>;
+
+export type OpencodeServerRestartResultPayload =
+  | { requestId: string; ok: true }
+  | { requestId: string; ok: false; error: { code: string; message: string } };
+
 /** opencode:provider:list 請求 payload schema（空 payload，只帶 requestId） */
 export const opencodeProviderListSchema = z.object({
   requestId: requestIdSchema,

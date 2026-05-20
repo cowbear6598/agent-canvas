@@ -429,13 +429,16 @@
     "opencode": {
       "providerList": {
         "title": "Provider 清單",
-        "refresh": "重新整理",
         "connected": "已登入",
         "loadError": "載入失敗",
         "retry": "重試",
         "empty": "目前沒有可用的 Provider",
         "searchPlaceholder": "搜尋 Provider...",
-        "noMatch": "找不到符合的 Provider"
+        "noMatch": "找不到符合的 Provider",
+        "restart": "重新啟動 OpenCode",
+        "restartLoading": "重新啟動中…",
+        "restartSuccess": "已重新啟動 OpenCode",
+        "restartFailed": "重新啟動失敗：{reason}"
       },
       "aliases": {
         "title": "Model 對應表",
@@ -448,7 +451,9 @@
         "deleteConfirmTitle": "確認刪除",
         "deleteConfirmMessage": "確定要刪除此 model 對應嗎？",
         "reorderHint": "可拖曳以重新排序",
-        "actionFailed": "操作失敗：{reason}"
+        "actionFailed": "操作失敗：{reason}",
+        "collapsibleTrigger": "展開/收合 Provider Model 對應",
+        "addModelTooltip": "新增 model"
       }
     }
   },

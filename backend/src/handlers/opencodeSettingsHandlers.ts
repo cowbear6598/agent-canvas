@@ -2,6 +2,8 @@ import { randomUUID } from "crypto";
 import { createOpencodeClient } from "@opencode-ai/sdk/v2";
 import { WebSocketResponseEvents } from "../schemas/index.js";
 import type {
+  OpencodeServerRestartPayload,
+  OpencodeServerRestartResultPayload,
   OpencodeProviderListPayload,
   OpencodeProviderListResultPayload,
   OpencodeAliasesListPayload,
@@ -16,13 +18,59 @@ import type {
   OpencodeAliasesReorderResultPayload,
   AliasItem,
 } from "../schemas/opencodeSettingsSchemas.js";
-import { getOpencodeServerState } from "../services/provider/opencodeServer.js";
+import {
+  getOpencodeServerState,
+  restartOpencodeServer,
+} from "../services/provider/opencodeServer.js";
 import { socketService } from "../services/socketService.js";
 import { getStmts, getDb } from "../database/index.js";
 import {
   broadcastOpencodeAliasesUpdated,
   broadcastProviderList,
 } from "../services/provider/providerListBroadcaster.js";
+
+// ─── handleOpencodeServerRestart ─────────────────────────────────────────────
+
+/**
+ * handleOpencodeServerRestart：重新啟動 opencode 子程序。
+ *
+ * 先呼叫 restartOpencodeServer()（stop → start），完成後取得最新 state：
+ * - status === "ready" → 回傳 ok=true
+ * - 其他（"failed" 等）→ 回傳 ok=false，error.code = opencode_restart_failed，
+ *   error.message 取 failureReason，若無則使用預設說明文字。
+ */
+export async function handleOpencodeServerRestart(
+  connectionId: string,
+  payload: OpencodeServerRestartPayload,
+  requestId: string,
+): Promise<void> {
+  await restartOpencodeServer();
+
+  const state = getOpencodeServerState();
+
+  let response: OpencodeServerRestartResultPayload;
+
+  if (state.status === "ready") {
+    response = { requestId, ok: true };
+  } else {
+    response = {
+      requestId,
+      ok: false,
+      error: {
+        code: "opencode_restart_failed",
+        message: state.failureReason ?? "opencode 重新啟動失敗",
+      },
+    };
+  }
+
+  socketService.emitToConnection(
+    connectionId,
+    WebSocketResponseEvents.OPENCODE_SERVER_RESTART_RESULT,
+    response,
+  );
+}
+
+// ─── handleOpencodeProviderList ───────────────────────────────────────────────
 
 /**
  * handleOpencodeProviderList：轉發 opencode GET /provider，

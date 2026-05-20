@@ -31,10 +31,6 @@ const emit = defineEmits<{
   delete: [];
   startEdit: [];
   cancelEdit: [];
-  dragstart: [event: DragEvent];
-  dragover: [event: DragEvent];
-  drop: [event: DragEvent];
-  dragend: [];
 }>();
 
 // ── 本地編輯狀態 ───────────────────────────────────────────────────────────────
@@ -70,49 +66,27 @@ const handleStartEdit = (): void => {
 const handleDelete = (): void => {
   emit("delete");
 };
-
-// ── 拖曳 handlers ─────────────────────────────────────────────────────────────
-
-const handleDragStart = (event: DragEvent): void => {
-  emit("dragstart", event);
-};
-
-const handleDragOver = (event: DragEvent): void => {
-  event.preventDefault();
-  emit("dragover", event);
-};
-
-const handleDrop = (event: DragEvent): void => {
-  event.preventDefault();
-  emit("drop", event);
-};
-
-const handleDragEnd = (): void => {
-  emit("dragend");
-};
 </script>
 
 <template>
-  <div
-    class="flex items-start gap-2 rounded-md border border-border p-2"
-    draggable="true"
-    @dragstart="handleDragStart"
-    @dragover="handleDragOver"
-    @drop="handleDrop"
-    @dragend="handleDragEnd"
-  >
+  <div class="alias-card">
     <!-- 拖曳把手 -->
-    <div class="mt-1 cursor-grab active:cursor-grabbing text-muted-foreground">
+    <button
+      type="button"
+      class="alias-card__handle"
+      :title="t('llmProvider.opencode.aliases.reorderHint')"
+      @click.stop
+    >
       <GripVertical class="h-4 w-4" />
-    </div>
+    </button>
 
     <!-- 非編輯態 -->
     <template v-if="!editing">
       <div class="flex flex-1 items-center justify-between gap-2">
-        <div class="flex flex-col gap-0.5">
-          <span class="text-sm font-medium">{{ alias.alias }}</span>
-          <span class="text-xs text-muted-foreground">{{ alias.modelID }}</span>
-        </div>
+        <span
+          class="text-sm font-medium font-mono truncate"
+          :title="alias.modelID"
+        >{{ alias.alias }}</span>
         <div class="flex items-center gap-1">
           <Button
             variant="ghost"
@@ -170,7 +144,7 @@ const handleDragEnd = (): void => {
           <input
             v-model="editAlias"
             :placeholder="t('llmProvider.opencode.aliases.aliasPlaceholder')"
-            class="w-full rounded-md border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            class="w-full rounded-md border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-ring font-mono"
           >
         </div>
 
@@ -196,3 +170,43 @@ const handleDragEnd = (): void => {
     </template>
   </div>
 </template>
+
+<style scoped>
+.alias-card {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.625rem;
+  border: 2px solid var(--doodle-ink);
+  border-radius: 0.5rem;
+  background: var(--card);
+  font-family: var(--font-mono), monospace, sans-serif;
+  transition: background 0.15s ease;
+}
+
+.alias-card__handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 2px solid var(--doodle-ink);
+  background: var(--card);
+  border-radius: 0.375rem;
+  cursor: grab;
+  flex-shrink: 0;
+}
+
+.alias-card__handle:active {
+  cursor: grabbing;
+}
+
+.alias-card.sortable-ghost {
+  opacity: 0.4;
+  background: var(--doodle-sand);
+}
+
+.alias-card.sortable-chosen {
+  box-shadow: 2px 3px 0 0 var(--doodle-ink);
+}
+</style>

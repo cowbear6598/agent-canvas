@@ -140,3 +140,17 @@ export function stopOpencodeServer(): void {
   state.failureReason = null;
   state.server = null;
 }
+
+/**
+ * 重新啟動 opencode 子程序的 wrapper。
+ *
+ * 先呼叫 stopOpencodeServer() 關閉現有子程序並將 state 重置為 idle，
+ * 再 await startOpencodeServer() 重新 spawn 子程序（state 由 idle → starting → ready 或 failed）。
+ * 不額外 try-catch，startOpencodeServer() 的既有失敗處理（state.status = "failed"、
+ * 寫入 failureReason）維持原契約。
+ * 呼叫端透過 getOpencodeServerState() 判斷重啟結果。
+ */
+export async function restartOpencodeServer(): Promise<void> {
+  stopOpencodeServer();
+  await startOpencodeServer();
+}

@@ -472,12 +472,12 @@ function createAbortRace(abortSignal: AbortSignal): {
     };
   }
 
-  const handleAbort = () => undefined;
+  const handleAbort = (): void => undefined;
   let listener = handleAbort;
 
   return {
     promise: new Promise<StreamRaceResult>((resolve) => {
-      listener = () => {
+      listener = (): void => {
         abortSignal.removeEventListener("abort", listener);
         resolve({ kind: "aborted" });
       };

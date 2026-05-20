@@ -1,0 +1,112 @@
+feature: llm-provider-ui-polish
+approved: true
+
+scenarios:
+  - id: F1
+    scenario: 使用者透過標題左側的箭頭按鈕從 OpenCode 設定畫面返回 Provider 首頁
+    given:
+      - 使用者已開啟 LLM Provider 設定彈窗
+      - 使用者目前位於 OpenCode 設定畫面
+    when:
+      - 使用者點擊彈窗標題左側的箭頭按鈕
+    then:
+      - 畫面切回 Provider 首頁
+      - 看到所有 Provider 卡片清單
+
+  - id: F2
+    scenario: 使用者進入 OpenCode 設定畫面看到所有 Model 對應表 Card 預設收合
+    given:
+      - 使用者已從 Provider 首頁進入 OpenCode 設定畫面
+      - 至少有一個已連線的 Provider
+    when:
+      - 畫面載入完成
+    then:
+      - 每一個已連線 Provider 對應一張 Card
+      - 所有 Card 預設皆為收合狀態
+      - 每張 Card 的標題列右側都看得到展開圖示與「+」按鈕
+
+  - id: F3
+    scenario: 使用者展開 Model 對應表 Card 查看 model alias
+    given:
+      - 使用者位於 OpenCode 設定畫面
+      - 該 Provider 的 Card 目前為收合狀態
+    when:
+      - 使用者點擊 Card 標題列或展開圖示
+    then:
+      - Card 內容區展開
+      - 顯示該 Provider 已設定的 model alias 列表
+
+  - id: F4
+    scenario: 使用者在 Card 收合狀態下直接按「+」按鈕新增 model alias
+    given:
+      - 使用者位於 OpenCode 設定畫面
+      - 該 Provider 的 Card 目前為收合狀態
+    when:
+      - 使用者點擊該 Card 標題列右側的「+」按鈕
+    then:
+      - 該 Card 自動展開
+      - 內容區出現新增用的 draft row
+      - 使用者可以選 model 與輸入 alias
+
+  - id: F5
+    scenario: 使用者拖曳 model alias 時看到順序預覽
+    given:
+      - 使用者位於 OpenCode 設定畫面
+      - 該 Provider 的 Card 已展開
+      - 該 Provider 至少已有兩筆 model alias
+    when:
+      - 使用者按住 alias 列左側的拖曳把手
+      - 將該筆 alias 拖到另一個位置
+    then:
+      - 被拖曳的 alias 變成半透明的預覽外觀
+      - 列表中其他 alias 即時讓位顯示新的排列順序
+      - 放開滑鼠後排序生效並儲存
+
+  - id: F6
+    scenario: 使用者打開 OpenCode 設定畫面看到 Provider 清單依連線狀態分組排序
+    given:
+      - 使用者位於 OpenCode 設定畫面
+      - Provider 清單同時包含已連線與未連線的 Provider
+    when:
+      - 畫面載入完成
+    then:
+      - 已連線的 Provider 全部排在清單上方
+      - 未連線的 Provider 全部排在清單下方
+      - 兩個群組內部維持原本由後端回傳的順序
+
+  - id: F7
+    scenario: 使用者在 Provider 清單中搜尋仍維持已連線在上的排序
+    given:
+      - 使用者位於 OpenCode 設定畫面
+      - Provider 清單顯示中
+    when:
+      - 使用者在搜尋框輸入關鍵字
+    then:
+      - 清單只顯示名稱或識別碼符合關鍵字的 Provider
+      - 符合的已連線 Provider 仍排在已符合的未連線 Provider 之上
+
+  - id: F8
+    scenario: 使用者在外部 CLI 完成 /connect 後透過畫布重啟 OpenCode 讓登入生效
+    given:
+      - 使用者剛在外部 opencode CLI 對某 Provider 完成 /connect 登入
+      - 該 Provider 在畫布的 Provider 清單中仍顯示未連線
+      - 使用者位於畫布的 OpenCode 設定畫面
+    when:
+      - 使用者點擊「重新啟動 OpenCode」按鈕
+    then:
+      - 該按鈕顯示載入中且暫時無法再次點擊
+      - OpenCode 子程序重啟完成後 Provider 清單自動重新載入
+      - 該 Provider 出現在「已連線」群組
+      - 畫面顯示重啟成功的提示訊息
+
+  - id: F9
+    scenario: 使用者按下重新啟動 OpenCode 但子程序啟動失敗
+    given:
+      - 使用者位於 OpenCode 設定畫面
+    when:
+      - 使用者點擊「重新啟動 OpenCode」按鈕
+      - OpenCode 子程序在重新啟動過程中失敗
+    then:
+      - 該按鈕恢復可點擊狀態
+      - 畫面顯示重啟失敗的錯誤提示與後端回傳的失敗原因
+      - Provider 清單維持原本顯示狀態

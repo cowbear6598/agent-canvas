@@ -9,6 +9,7 @@ import {
   opencodeAliasesUpdateSchema,
   opencodeAliasesDeleteSchema,
   opencodeAliasesReorderSchema,
+  opencodeServerRestartSchema,
 } from "../../schemas/opencodeSettingsSchemas.js";
 import {
   handleOpencodeProviderList,
@@ -17,6 +18,7 @@ import {
   handleOpencodeAliasesUpdate,
   handleOpencodeAliasesDelete,
   handleOpencodeAliasesReorder,
+  handleOpencodeServerRestart,
 } from "../opencodeSettingsHandlers.js";
 import { createHandlerGroup } from "./createHandlerGroup.js";
 
@@ -58,6 +60,12 @@ export const opencodeSettingsHandlerGroup = createHandlerGroup({
       handler: handleOpencodeAliasesReorder,
       schema: opencodeAliasesReorderSchema,
       responseEvent: WebSocketResponseEvents.OPENCODE_ALIASES_REORDER_RESULT,
+    },
+    {
+      event: WebSocketRequestEvents.OPENCODE_SERVER_RESTART,
+      handler: handleOpencodeServerRestart,
+      schema: opencodeServerRestartSchema,
+      responseEvent: WebSocketResponseEvents.OPENCODE_SERVER_RESTART_RESULT,
     },
   ],
 });
