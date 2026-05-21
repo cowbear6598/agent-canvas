@@ -241,6 +241,9 @@
           "titleEdit": "Edit Todo",
           "placeholder": "Enter the content of this todo"
         },
+        "copy": "Copy",
+        "paste": "Paste",
+        "copySuccess": "Goal copied",
         "validation": {
           "noEmptyRows": "Fill in blank todos or remove them"
         }

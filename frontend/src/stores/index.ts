@@ -6,3 +6,4 @@ export { useIntegrationStore } from "./integrationStore";
 export { useConfigStore } from "./configStore";
 export { useProviderCapabilityStore } from "./providerCapabilityStore";
 export { useUploadStore } from "./upload/uploadStore";
+export { useGoalClipboardStore } from "./goalClipboardStore";

@@ -1,0 +1,88 @@
+feature: goal-copy-paste
+approved: true
+
+scenarios:
+  - id: F1
+    scenario: 使用者從來源 Pod 複製 goal
+    given:
+      - 使用者已開啟來源 Pod 的 GoalEditorModal
+      - 該 Pod 的 goal 至少有一個 todo
+    when:
+      - 使用者點擊編輯器內的「複製」按鈕
+    then:
+      - 系統將當前 form state 的 todos 存入 Goal 剪貼簿
+      - 顯示複製成功的提示
+      - 編輯器保持開啟、form state 不變
+
+  - id: F2
+    scenario: 使用者把剪貼簿的 goal 貼到一個尚未有 goal 的目標 Pod
+    given:
+      - 使用者已複製過某個 goal 到剪貼簿
+      - 使用者開啟目標 Pod 的 GoalEditorModal
+      - 目標 Pod 尚未設定 goal
+    when:
+      - 使用者點擊編輯器內的「貼上」按鈕
+    then:
+      - 剪貼簿內容覆蓋當前 form state 的 todos
+      - 每個 todo 的 id 重新產生為新的 UUID
+      - 編輯器保持開啟、等待使用者按「儲存」才會送到後端
+
+  - id: F3
+    scenario: 使用者把剪貼簿的 goal 貼到一個已有 goal 的目標 Pod
+    given:
+      - 使用者已複製過某個 goal 到剪貼簿
+      - 使用者開啟目標 Pod 的 GoalEditorModal
+      - 目標 Pod 已存在自己的 goal
+    when:
+      - 使用者點擊編輯器內的「貼上」按鈕
+    then:
+      - 系統直接以剪貼簿內容覆蓋當前 form state（不跳確認對話框）
+      - 每個 todo 的 id 重新產生為新的 UUID
+      - 編輯器保持開啟、使用者可繼續調整或按「儲存」
+
+  - id: F4
+    scenario: 使用者在剪貼簿為空時想貼上 goal
+    given:
+      - 使用者目前 session 中尚未複製過任何 goal
+      - 使用者開啟某個 Pod 的 GoalEditorModal
+    when:
+      - 使用者查看編輯器內的「貼上」按鈕
+    then:
+      - 「貼上」按鈕呈現不可點擊狀態
+      - 使用者無法觸發貼上動作
+
+  - id: F5
+    scenario: 使用者貼上後再微調 todos 才儲存
+    given:
+      - 使用者已開啟某 Pod 的 GoalEditorModal
+      - 使用者已從 Goal 剪貼簿貼上一份 goal
+    when:
+      - 使用者修改剛貼上的某些 todo 文字
+      - 使用者新增或刪除某些 todo
+      - 使用者點擊「儲存」
+    then:
+      - 系統以使用者調整後的 form state 送出更新到後端
+      - 該 Pod 的 goal 變成使用者調整後的版本
+      - 編輯器關閉
+
+  - id: F6
+    scenario: 使用者重新整理頁面後剪貼簿被清空
+    given:
+      - 使用者先前在這個 session 複製過某個 goal
+    when:
+      - 使用者重新整理瀏覽器頁面
+      - 使用者開啟某個 Pod 的 GoalEditorModal
+    then:
+      - Goal 剪貼簿已清空
+      - 「貼上」按鈕呈現不可點擊狀態
+
+  - id: F7
+    scenario: 使用者複製 goal 後，再去複製其他 Pod，原本的 Goal 剪貼簿不被影響
+    given:
+      - 使用者已從來源 Pod 複製一份 goal 到 Goal 剪貼簿
+    when:
+      - 使用者選取畫布上其他 Pod 並按 Cmd/Ctrl+C 複製 Pod
+    then:
+      - Pod 剪貼簿被更新成新複製的 Pod
+      - Goal 剪貼簿維持原本複製過的 goal 不被覆蓋
+      - 使用者仍可開啟其他 Pod 的 GoalEditorModal 並貼上原本複製的 goal

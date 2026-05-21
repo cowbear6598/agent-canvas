@@ -241,6 +241,9 @@
           "titleEdit": "編輯 Todo",
           "placeholder": "請輸入這條 todo 的內容"
         },
+        "copy": "複製",
+        "paste": "貼上",
+        "copySuccess": "Goal 已複製",
         "validation": {
           "noEmptyRows": "請填完空白待辦，或把它刪掉"
         }

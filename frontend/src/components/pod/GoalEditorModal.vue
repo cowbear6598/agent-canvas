@@ -15,6 +15,9 @@ import { useGoalEditorForm } from "@/composables/pod/useGoalEditorForm";
 import type { GoalEditorTodo } from "@/composables/pod/useGoalEditorForm";
 import GoalTodoEditorModal from "@/components/pod/GoalTodoEditorModal.vue";
 import { useI18n } from "vue-i18n";
+import { storeToRefs } from "pinia";
+import { useGoalClipboardStore } from "@/stores/goalClipboardStore";
+import { useToast } from "@/composables/useToast";
 
 const props = defineProps<{
   open: boolean;
@@ -27,6 +30,10 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
+const { toast } = useToast();
+
+const goalClipboardStore = useGoalClipboardStore();
+const { isEmpty } = storeToRefs(goalClipboardStore);
 
 const {
   todos,
@@ -78,6 +85,16 @@ const handleSubModalSave = (text: string): void => {
 };
 
 const previewLine = (text: string): string => text.split("\n")[0] ?? "";
+
+const handleCopy = (): void => {
+  goalClipboardStore.setGoalTodos(todos.value);
+  toast({ title: t("pod.goal.editor.copySuccess") });
+};
+
+const handlePaste = (): void => {
+  const newTodos = goalClipboardStore.consumeAsNewTodos();
+  todos.value = newTodos;
+};
 </script>
 
 <template>
@@ -141,7 +158,7 @@ const previewLine = (text: string): string => text.split("\n")[0] ?? "";
           {{ validationMessage }}
         </p>
 
-        <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2 flex-wrap">
           <button
             type="button"
             class="goal-editor-add-btn"
@@ -150,6 +167,23 @@ const previewLine = (text: string): string => text.split("\n")[0] ?? "";
           >
             <Plus :size="14" />
             <span>{{ t("pod.goal.editor.addTodo") }}</span>
+          </button>
+          <button
+            type="button"
+            class="goal-editor-action-btn goal-editor-action-btn--copy"
+            data-testid="goal-editor-copy"
+            @click="handleCopy"
+          >
+            {{ t("pod.goal.editor.copy") }}
+          </button>
+          <button
+            type="button"
+            class="goal-editor-action-btn goal-editor-action-btn--paste"
+            data-testid="goal-editor-paste"
+            :disabled="isEmpty"
+            @click="handlePaste"
+          >
+            {{ t("pod.goal.editor.paste") }}
           </button>
         </div>
       </div>
@@ -265,6 +299,30 @@ const previewLine = (text: string): string => text.split("\n")[0] ?? "";
   font-family: var(--font-mono), monospace, sans-serif;
   font-size: 0.75rem;
   padding: 0.5rem 0.75rem;
+}
+
+.goal-editor-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  border: 2px solid var(--doodle-ink);
+  background: var(--card);
+  border-radius: 0.5rem;
+  font-family: var(--font-mono), monospace, sans-serif;
+  font-size: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.goal-editor-action-btn:hover:not(:disabled) {
+  background: var(--doodle-sand);
+}
+
+.goal-editor-action-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .goal-editor-validation {

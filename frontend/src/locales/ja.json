@@ -241,6 +241,9 @@
           "titleEdit": "Todo を編集",
           "placeholder": "この Todo の内容を入力してください"
         },
+        "copy": "コピー",
+        "paste": "貼り付け",
+        "copySuccess": "Goal をコピーしました",
         "validation": {
           "noEmptyRows": "空の Todo は入力するか削除してください"
         }

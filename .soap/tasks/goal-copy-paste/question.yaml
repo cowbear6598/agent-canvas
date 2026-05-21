@@ -1,0 +1,112 @@
+feature: goal-copy-paste
+created: "2026-05-21"
+approved: true
+
+questions:
+  - id: Q1
+    text: 現有 useCopyPaste（Pod 級別複製貼上）是怎麼運作的？觸發方式（快捷鍵 / 按鈕 / context menu）、資料存放位置（in-memory store / browser clipboard / Pinia state）、以及複製後 id 處理策略各是什麼？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      檔案：frontend/src/composables/canvas/useCopyPaste.ts（主）、
+      frontend/src/composables/canvas/copyPaste/collectCopyData.ts、
+      frontend/src/composables/canvas/copyPaste/calculatePaste.ts、
+      frontend/src/stores/clipboardStore.ts。
+      觸發：document 級別監聽 Ctrl/Cmd+C / Ctrl/Cmd+V，
+      條件為按住 modifier key 且焦點不在編輯元素上。
+      資料存放：Pinia clipboardStore（in-memory），
+      存 copiedPods / copiedRepositoryNotes / copiedConnections 三類；
+      頁面卸載時自動清空（防止 providerConfig 敏感資料外洩）。
+      複製內容：完整 deep clone Pod（含 providerConfig、mcpServerNames、
+      pluginIds、repositoryId、goal）以及相關 connections。
+      Id 處理：複製時保留 originalId 以便重映射連線；貼上時送出
+      CANVAS_PASTE event，由後端產生新 Pod id 回傳。
+      衝突處理：以 generatePasteName 對重複名稱自動加 " (1)" 等後綴；
+      位置不檢查衝突，新 Pod 聚集在滑鼠座標附近。
+
+  - id: Q2
+    text: PodGoal 結構的完整欄位有哪些？除了 todos[] 外，是否還有 title / description / 其他狀態欄位？GoalTodoItem 除了 id / text 外，是否有 done / completed 之類的勾選狀態欄位？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      前後端定義完全一致（無 shared types，但內容相同）：
+      - PodGoal: { todos: GoalTodoItem[] }
+      - GoalTodoItem: { id: string; text: string }
+      檔案：frontend/src/types/pod.ts:6-13、backend/src/types/pod.ts:7-14。
+      GoalTodoItem 不含 done / completed 等勾選狀態欄位。
+      Goal 的執行時狀態（running/blocked/completed、activeTodoId、
+      completedTodoIds）存在另一個 GoalRuntimeState
+      （backend/src/services/goalRuntime.ts），與 PodGoal 結構分離。
+
+  - id: Q3
+    text: 後端 POD_SET_GOAL message handler 接收的 payload 結構是什麼？是否會驗證 goal 內部結構（如 todo id 唯一性、欄位必填）？前端送出的 payload 是否需要自帶完整 goal 物件？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      Request：POD_SET_GOAL，payload schema 在
+      backend/src/schemas/podSchemas.ts:104 (podSetGoalSchema)：
+        { requestId, canvasId, podId, goal: PodGoal | null }
+      goal 內部以 podGoalSchema 驗證：todos array 長度限制 1~100，
+      每個 GoalTodoItem 經 goalTodoItemSchema 驗證。
+      無 todo id 唯一性檢查；normalizePodGoal 僅驗證 id 非空，
+      不重新產生 id（信任前端送來的 id）。
+      Response：POD_GOAL_SET，payload 為
+        { requestId, canvasId, success: true, pod }（pod 為更新後完整物件）。
+      Event 定義在 backend/src/schemas/events.ts:7（請求）與 :90（回應）。
+      前端需自帶完整 goal 物件送出，後端不會自行補欄位。
+
+  - id: Q4
+    text: 前端對 Pod 與 Goal 的 id 產生策略是什麼（nanoid / uuid / crypto.randomUUID）？在哪個檔案？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      前端共用 helper：generateUUID()
+      （frontend/src/services/utils.ts），優先用 crypto.randomUUID()，
+      無支援時 fallback 到 crypto.getRandomValues。
+      Pod id：前端不產 id，由後端 podStore.create() 用 crypto.randomUUID()
+      產生（backend/src/services/podStore.ts:449）後回傳。
+      GoalTodoItem id：前端 useGoalEditorForm.ts:45 的 appendTodo(text) 內
+      呼叫 generateUUID() 產生；後端信任前端送來的 id 不重新產生
+      （normalizePodGoal 僅驗證 id 非空）。
+
+  - id: Q5
+    text: 複製 goal 的觸發入口要放在哪裡？（候選：a) Pod 卡片上的 PodGoalSlot 右鍵 context menu  b) GoalEditorModal 內加複製按鈕  c) 鍵盤快捷鍵 Ctrl/Cmd+C 在 hover pod 時觸發  d) 多個入口並存）
+    type: user-input
+    completed: true
+    answer: GoalEditorModal 內加「複製」按鈕（單一入口；不掛右鍵選單也不綁鍵盤快捷鍵以避免與 Pod 級別 Cmd+C 衝突）。
+
+  - id: Q6
+    text: 貼上 goal 的觸發入口要放在哪裡？（候選：a) 目標 Pod 上右鍵「貼上 goal」  b) GoalEditorModal 內提供貼上按鈕  c) 鍵盤快捷鍵 Ctrl/Cmd+V  d) 多個入口並存）
+    type: user-input
+    completed: true
+    answer: GoalEditorModal 內加「貼上」按鈕（單一入口；操作對稱於複製）。
+
+  - id: Q7
+    text: 貼上 goal 時，若目標 pod 已有 goal，要怎麼處理？（候選：a) 直接覆蓋  b) 跳確認對話框讓使用者選擇覆蓋或取消  c) 合併兩邊 todos  d) 不允許貼上、要求使用者先清空）
+    type: user-input
+    completed: true
+    answer: 直接覆蓋（不跳確認；因為作用對象為 form state，使用者按下「儲存」前都還可手動撤銷或再次調整，且按鈕本就需要使用者主動點擊一次，UX 已隱含確認）。
+
+  - id: Q8
+    text: 剪貼簿（複製來的 goal 資料）的存活範圍要到哪裡？（候選：a) 僅當前 session，重新整理頁面後清空  b) 跨 session 持久化到 localStorage  c) 跨裝置同步到後端）
+    type: user-input
+    completed: true
+    answer: 僅當前 session，重新整理頁面後清空（與現有 useCopyPaste 行為一致；不持久化、不同步到後端）。
+
+  - id: Q9
+    text: 複製貼上的剪貼簿是與現有 Pod 級別 useCopyPaste 共用同一個 store / 機制（剪貼簿同一份），還是 goal 要有獨立的剪貼簿（pod 剪貼簿與 goal 剪貼簿互不影響、可以同時各自存一份）？
+    type: user-input
+    completed: true
+    answer: 獨立剪貼簿（Pod 剪貼簿與 Goal 剪貼簿互不影響；複製 goal 不會覆蓋 Pod 剪貼簿、反之亦然）。
+
+  - id: Q10
+    text: 貼到目標 Pod 時，GoalTodoItem 內的 id 要重新產生新的，還是直接沿用來源的 id？（重新產生較安全，避免日後若 todo id 在後端做為 reference key 時衝突）
+    type: user-input
+    completed: true
+    answer: 重新產生新 id（貼上時對每個 todo 重走 generateUUID()，避免兩個 pod 出現相同 id 的潛在 reference 衝突）。
+
+  - id: Q11
+    text: GoalEditorModal 內「複製」與「貼上」按鈕的作用對象是當前 form state（包含尚未儲存的編輯），還是 store 中已儲存的 goal？
+    type: user-input
+    completed: true
+    answer: 作用於當前 form state（未儲存也算）。複製＝抓當前正在編輯的 todos；貼上＝以剪貼簿內容覆蓋當前 form state，使用者仍需按「儲存」才會送 POD_SET_GOAL 到後端，貼上後可再微調。符合「所見即所得」心智模型。
