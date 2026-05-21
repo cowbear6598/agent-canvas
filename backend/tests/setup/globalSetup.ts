@@ -2,6 +2,7 @@
 // 透過 preload 載入，使用 beforeAll/afterAll 來管理全域測試生命週期
 
 import { mkdir, rm } from "fs/promises";
+import { closeDb } from "../../src/database/index.js";
 import { AGENT_CANVAS_TEST_ROOT, testConfig } from "./testConfig.js";
 
 /**
@@ -28,10 +29,6 @@ beforeAll(async () => {
  * 在所有測試結束後執行一次（清理測試資料夾）
  */
 afterAll(async () => {
-  try {
-    await rm(testConfig.appDataRoot, { recursive: true, force: true });
-    await rm(AGENT_CANVAS_TEST_ROOT, { recursive: true, force: true });
-  } catch {
-    // 不拋出錯誤，避免影響測試結果
-  }
+  closeDb();
+  await rm(AGENT_CANVAS_TEST_ROOT, { recursive: true, force: true });
 });

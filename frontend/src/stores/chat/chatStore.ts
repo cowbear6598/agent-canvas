@@ -171,8 +171,8 @@ export const useChatStore = defineStore("chat", {
     },
 
     unregisterListeners(): void {
-      this.getEventListenerConfig().forEach(({ event }) => {
-        websocketClient.offAll(event);
+      this.getEventListenerConfig().forEach(({ event, handler }) => {
+        websocketClient.off(event, handler);
       });
       websocketClient.offDisconnect(this.handleSocketDisconnect);
     },

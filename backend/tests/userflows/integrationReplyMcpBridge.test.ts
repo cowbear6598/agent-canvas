@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { err, ok } from "../../src/types/index.js";
+import { ok } from "../../src/types/index.js";
 import {
   callIntegrationReplyTool,
   listIntegrationReplyTools,
@@ -13,6 +13,8 @@ function createScope(
 ): ReplyBridgeScope {
   return {
     provider: "slack",
+    capabilityToken: "capability-token",
+    endpointUrl: "http://127.0.0.1:3001/api/internal/integration-reply",
     appId: "app-slack",
     resourceId: "C123456",
     podId: "pod-1",
@@ -54,32 +56,42 @@ describe("Integration Reply MCP Bridge", () => {
     });
   });
 
-  it("成功回覆時呼叫 provider.sendMessage 並回傳 success", async () => {
-    const sendMessage = vi.fn().mockResolvedValue(ok(undefined));
-    const provider = createProvider(sendMessage);
+  it("成功回覆時轉發到主後端 endpoint 並回傳 success", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        new Response(JSON.stringify({ success: true }), { status: 200 }),
+      );
 
-    const result = await callIntegrationReplyTool(createScope(), provider, {
+    const result = await callIntegrationReplyTool(createScope(), {
       name: "slack_reply",
       arguments: { text: " hello " },
     });
 
     expect(result).toMatchObject({ content: [{ type: "text", text: "success" }] });
-    expect(sendMessage).toHaveBeenCalledWith(
-      "app-slack",
-      "C123456",
-      "hello",
-      {
-        threadTs: "from-context",
-        keep: "extra",
-        senderId: "U123456",
-      },
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:3001/api/internal/integration-reply",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          capabilityToken: "capability-token",
+          text: "hello",
+        }),
+      }),
     );
+    fetchMock.mockRestore();
   });
 
-  it("provider 回傳錯誤時轉為 MCP error result", async () => {
-    const provider = createProvider(vi.fn().mockResolvedValue(err("boom")));
+  it("主後端 endpoint 回傳錯誤時轉為 MCP error result", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        new Response(JSON.stringify({ success: false, error: "boom" }), {
+          status: 400,
+        }),
+      );
 
-    const result = await callIntegrationReplyTool(createScope(), provider, {
+    const result = await callIntegrationReplyTool(createScope(), {
       name: "slack_reply",
       arguments: { text: "hello" },
     });
@@ -87,21 +99,25 @@ describe("Integration Reply MCP Bridge", () => {
     expect(result.isError).toBe(true);
     expect(result.content[0]?.type).toBe("text");
     expect(result.content[0]?.text).toContain("boom");
+    fetchMock.mockRestore();
   });
 
-  it("merge scope.extra 與 replyContext 時 replyContext 覆蓋 extra", async () => {
-    const sendMessage = vi.fn().mockResolvedValue(ok(undefined));
+  it("轉發時不把 integration extra 或 replyContext 暴露給 bridge endpoint", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        new Response(JSON.stringify({ success: true }), { status: 200 }),
+      );
 
-    await callIntegrationReplyTool(createScope(), createProvider(sendMessage), {
+    await callIntegrationReplyTool(createScope(), {
       name: "slack_reply",
       arguments: { text: "hello" },
     });
 
-    expect(sendMessage).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.any(String),
-      expect.any(String),
-      expect.objectContaining({ threadTs: "from-context" }),
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
+    expect(init?.body).toBe(
+      JSON.stringify({ capabilityToken: "capability-token", text: "hello" }),
     );
+    fetchMock.mockRestore();
   });
 });

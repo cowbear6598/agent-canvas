@@ -24,6 +24,7 @@ import {
 import { handleDownloadPodDirectory } from "./podDownloadApi.js";
 import { handleUpload } from "./uploadApi.js";
 import { handleRedeemReconnectGrant } from "./reconnectGrantApi.js";
+import { handleInternalIntegrationReply } from "./internalIntegrationReplyApi.js";
 import { JSON_HEADERS } from "./constants.js";
 import { logger } from "../utils/logger.js";
 import { authAccessService } from "../services/auth/authAccessService.js";
@@ -166,6 +167,12 @@ const ROUTES: Route[] = [
     method: "POST",
     pattern: new URLPattern({ pathname: "/api/auth/redeem-reconnect-grant" }),
     handler: handleRedeemReconnectGrant,
+    scope: "public",
+  },
+  {
+    method: "POST",
+    pattern: new URLPattern({ pathname: "/api/internal/integration-reply" }),
+    handler: handleInternalIntegrationReply,
     scope: "public",
   },
 ];

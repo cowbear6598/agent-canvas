@@ -15,6 +15,7 @@ import { WebSocketResponseEvents } from "../../src/schemas/events.js";
 import { socketService } from "../../src/services/socketService.js";
 import type { Pod } from "../../src/types/pod.js";
 import type { RunContext } from "../../src/types/run.js";
+import "../../src/services/integration/providers/index.js";
 
 function withoutPluginEntry(entries: PodMcpEntry[]): PodMcpEntry[] {
   return entries.filter(

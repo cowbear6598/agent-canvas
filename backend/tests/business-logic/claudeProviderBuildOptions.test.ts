@@ -420,6 +420,22 @@ describe("claudeProvider.buildOptions()", () => {
         },
       ],
     });
+    mockManagedMcpSurfaceService.buildPodMcpEntries.mockResolvedValueOnce({
+      entries: [
+        {
+          name: "slack-reply",
+          transport: "stdio",
+          command: "agent-canvas",
+          args: ["--integration-reply-bridge"],
+          env: {},
+          cwd: null,
+          proxied: false,
+        },
+      ],
+      ignoredTargets: [],
+      hasGoalRuntime: false,
+      pluginCatalog: [],
+    });
 
     const options = await claudeProvider.buildOptions(pod);
 
@@ -527,6 +543,22 @@ describe("claudeProvider.buildOptions()", () => {
           resourceId: "channel-combo",
         },
       ],
+    });
+    mockManagedMcpSurfaceService.buildPodMcpEntries.mockResolvedValueOnce({
+      entries: [
+        {
+          name: "slack-reply",
+          transport: "stdio",
+          command: "agent-canvas",
+          args: ["--integration-reply-bridge"],
+          env: {},
+          cwd: null,
+          proxied: false,
+        },
+      ],
+      ignoredTargets: [],
+      hasGoalRuntime: false,
+      pluginCatalog: [],
     });
 
     const options = await claudeProvider.buildOptions(pod);

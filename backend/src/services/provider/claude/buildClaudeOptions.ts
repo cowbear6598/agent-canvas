@@ -12,21 +12,13 @@ import {
   type Options,
   type EffortLevel,
   type ThinkingConfig,
-  tool,
-  createSdkMcpServer,
 } from "@anthropic-ai/claude-agent-sdk";
-import { z } from "zod";
 
 import { readClaudeMcpServers } from "../../mcp/claudeMcpReader.js";
 import { integrationRegistry } from "../../integration/index.js";
-import {
-  replyContextStore,
-  buildReplyContextKey,
-} from "../../integration/replyContextStore.js";
 import { getClaudeCodePath } from "../../claude/claudePathResolver.js";
 import type { Pod } from "../../../types/pod.js";
 import type { RunContext } from "../../../types/run.js";
-import { getResultErrorString } from "../../../types/result.js";
 import { logger } from "../../../utils/logger.js";
 import { managedMcpSurfaceService } from "../../mcp/managedMcpSurfaceService.js";
 import { formatPluginSkillCatalogPrompt } from "../../plugin/pluginCatalogBuilder.js";
@@ -156,98 +148,16 @@ async function applyMcpServers(
   return { pluginCatalogText };
 }
 
-// ─── buildIntegrationTool ────────────────────────────────────────────────────
-
-type ReplyToolHandler = (params: { text: string }) => Promise<{
-  content: Array<{ type: "text"; text: string }>;
-  isError?: boolean;
-}>;
-
-/**
- * 建立 reply tool 的 async handler 閉包：執行 sendMessage 並格式化成功/失敗結果。
- * 透過 replyContextStore 取得 runContext 以定址正確的回覆上下文。
- */
-function createReplyToolHandler(
-  binding: NonNullable<Pod["integrationBindings"]>[number],
-  provider: NonNullable<ReturnType<typeof integrationRegistry.get>>,
-  podId: string,
-  runContext?: RunContext,
-): ReplyToolHandler {
-  return async (params: { text: string }) => {
-    const replyContext = replyContextStore.get(
-      buildReplyContextKey(runContext, podId),
-    );
-    const mergedExtra = { ...binding.extra, ...replyContext };
-    const result = await provider.sendMessage!(
-      binding.appId,
-      binding.resourceId,
-      params.text,
-      mergedExtra,
-    );
-    if (!result.success) {
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `錯誤: ${getResultErrorString(result.error)}`,
-          },
-        ],
-        isError: true,
-      };
-    }
-    return { content: [{ type: "text" as const, text: "success" }] };
-  };
-}
-
-/**
- * 建立單一 Integration 的 MCP reply tool，回傳 mcpServer、serverName 與 toolName。
- * closure 透過 replyContextStore 取得 runContext 以定址正確的回覆上下文。
- *
- * 對應 claudeService.buildIntegrationTool 的邏輯。
- */
-function buildIntegrationTool(
-  binding: NonNullable<Pod["integrationBindings"]>[number],
-  provider: NonNullable<ReturnType<typeof integrationRegistry.get>>,
-  podId: string,
-  runContext?: RunContext,
-): {
-  mcpServer: ReturnType<typeof createSdkMcpServer>;
-  serverName: string;
-  toolName: string;
-} {
-  const serverName = `${binding.provider}-reply`;
-  const toolName = `${binding.provider}_reply`;
-
-  const replyTool = tool(
-    toolName,
-    `回覆 ${provider.displayName} 訊息。當需要在 ${provider.displayName} 中回覆用戶時使用此工具。`,
-    {
-      text: z.string().min(1).describe("要發送的訊息內容"),
-    },
-    createReplyToolHandler(binding, provider, podId, runContext),
-  );
-
-  const mcpServer = createSdkMcpServer({
-    name: serverName,
-    tools: [replyTool],
-  });
-
-  return { mcpServer, serverName, toolName };
-}
-
 // ─── applyIntegrationToolOptions ─────────────────────────────────────────────
 
 /**
- * 收集 pod 所有 integrationBindings 並建構 IntegrationTool 清單。
- * 無 sendMessage 或 provider 不存在的 binding 自動略過。
+ * 依 integrationBindings 產生 Claude allowedTools 名稱。
+ * 實際 reply MCP server 由 managedMcpSurfaceService 統一注入。
  */
 /** binding.provider 格式白名單：只允許字母、數字、底線、連字號 */
 const PROVIDER_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
-function collectIntegrationTools(
-  pod: Pod,
-  runContext?: RunContext,
-): ReturnType<typeof buildIntegrationTool>[] {
+function collectIntegrationAllowedTools(pod: Pod): string[] {
   if (!pod.integrationBindings?.length) return [];
 
   return pod.integrationBindings
@@ -263,39 +173,24 @@ function collectIntegrationTools(
       }
       const provider = integrationRegistry.get(binding.provider);
       if (!provider?.sendMessage) return null;
-      return buildIntegrationTool(binding, provider, pod.id, runContext);
+      return `mcp__${binding.provider}-reply__${binding.provider}_reply`;
     })
     .filter((t) => t !== null);
 }
 
 /**
- * 套用 Integration Tool 設定，回傳包含 mcpServers 與 allowedTools 的 partial options。
+ * 套用 Integration Reply allowedTools 設定。
  * 若 pod 無 integrationBindings 或無合法 tool，則原封不動回傳 base。
- *
- * 對應 claudeService.applyIntegrationToolOptions 的邏輯。
  */
 function applyIntegrationToolOptions(
   pod: Pod,
   base: { mcpServers?: Options["mcpServers"]; allowedTools: string[] },
-  runContext?: RunContext,
 ): { mcpServers?: Options["mcpServers"]; allowedTools: string[] } {
-  const builtTools = collectIntegrationTools(pod, runContext);
-
-  if (builtTools.length === 0) return base;
-
-  const mcpServers: NonNullable<Options["mcpServers"]> = {
-    ...base.mcpServers,
-  };
-  const allowedTools: string[] = [...base.allowedTools];
-
-  for (const { mcpServer, serverName, toolName } of builtTools) {
-    mcpServers[serverName] = mcpServer;
-    allowedTools.push(`mcp__${serverName}__${toolName}`);
-  }
+  const allowedTools = collectIntegrationAllowedTools(pod);
 
   return {
-    mcpServers: { ...mcpServers },
-    allowedTools,
+    ...base,
+    allowedTools: [...base.allowedTools, ...allowedTools],
   };
 }
 
@@ -307,10 +202,8 @@ function applyIntegrationToolOptions(
  * 合併順序：
  *   1. buildBaseOptions（固定 SDK 設定 + cwd）
  *   2. applyMcpServers（mcpServers）
- *   3. applyIntegrationToolOptions（追加 mcpServers + allowedTools）
+ *   3. applyIntegrationToolOptions（追加 integration MCP allowedTools）
  *   4. model（來自 pod.providerConfig.model 或 default）
- *
- * runContext 用於 buildIntegrationTool 內部 closure 讀取 replyContextStore。
  *
  * 注意：cwd 在 buildOptions 階段尚未知道（需等 executor 解析 workspacePath），
  * 因此此函式產出的 ClaudeOptions.cwd 為 undefined，由 chat() 負責在組裝 SDK options 時填入。
@@ -328,7 +221,6 @@ export async function buildClaudeOptions(
       mcpServers: mcpServerOptions.mcpServers,
       allowedTools: [...BASE_ALLOWED_TOOLS],
     },
-    runContext,
   );
   const mergedMcpServers: NonNullable<Options["mcpServers"]> = {
     ...(integrationResult.mcpServers ?? {}),

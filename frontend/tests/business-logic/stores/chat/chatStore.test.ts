@@ -605,5 +605,41 @@ describe("chatStore", () => {
       await new Promise((resolve) => setTimeout(resolve, 20));
       expect(store.messagesByPodId.get("pod-1")).toBeUndefined();
     });
+
+    it("取消註冊 chat listener 時不應移除同事件的外部 listener", async () => {
+      const store = useChatStore();
+      fakeServer = startFakeWebSocketServer();
+      await connectChatStoreToFakeServer(fakeServer);
+      const { websocketClient } = await import("@/services/websocket");
+      const runListener = vi.fn();
+
+      websocketClient.on(WebSocketResponseEvents.RUN_MESSAGE, runListener);
+
+      try {
+        store.unregisterListeners();
+        fakeServer.emit(WebSocketResponseEvents.RUN_MESSAGE, {
+          runId: "run-1",
+          canvasId: "canvas-1",
+          podId: "pod-1",
+          messageId: "message-1",
+          content: "run output",
+          isPartial: true,
+          role: "assistant",
+        });
+
+        await waitForExpect(() => {
+          expect(runListener).toHaveBeenCalledWith(
+            expect.objectContaining({
+              runId: "run-1",
+              messageId: "message-1",
+              content: "run output",
+            }),
+          );
+        });
+        expect(store.messagesByPodId.get("pod-1")).toBeUndefined();
+      } finally {
+        websocketClient.off(WebSocketResponseEvents.RUN_MESSAGE, runListener);
+      }
+    });
   });
 });

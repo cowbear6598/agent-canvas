@@ -160,7 +160,7 @@ TypeScript 會自動將 `ProviderName` 擴展為包含新 key，**不需要手�
 
 ### 步驟 4：新增測試
 
-**`tests/provider/myaiProvider.test.ts`**（測試 `chat()`）：
+**`backend/tests/business-logic/myaiProvider.test.ts`**（測試 `chat()`）：
 
 ```ts
 describe("MyAIProvider", () => {
@@ -179,7 +179,7 @@ describe("MyAIProvider", () => {
 });
 ```
 
-**`tests/provider/myaiProviderBuildOptions.test.ts`**（測試 `buildOptions()`）：
+**`backend/tests/business-logic/myaiProviderBuildOptions.test.ts`**（測試 `buildOptions()`）：
 
 ```ts
 describe("MyAIProvider.buildOptions()", () => {
@@ -188,6 +188,9 @@ describe("MyAIProvider.buildOptions()", () => {
   it("providerConfig.model 不合法 → fallback 為 default", async () => { ... });
 });
 ```
+
+Provider 測試放在 `business-logic`，只 fake 第三方 SDK、subprocess 或
+HTTP client 邊界；不要新增 `tests/provider` 這類以實作層命名的分類。
 
 ### 步驟 5：新增 `xxxProvider.md`
 

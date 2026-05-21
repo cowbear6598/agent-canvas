@@ -2,8 +2,9 @@
  * Integration Reply MCP Bridge.
  *
  * Exposes one run-scoped reply tool for a Pod integration binding.
- * The parent process passes binding scope and reply context via env because
- * stdio MCP children cannot access the parent's in-memory replyContextStore.
+ * The bridge does not read integration secrets or send provider messages
+ * itself. It validates the scoped capability token, then forwards tool calls
+ * back to the already-initialized Agent Canvas backend process.
  */
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -13,10 +14,7 @@ import {
   ListToolsRequestSchema,
   type CallToolResult,
 } from "@modelcontextprotocol/sdk/types.js";
-import { getResultErrorString } from "../../types/result.js";
 import { logger } from "../../utils/logger.js";
-import { podStore } from "../podStore.js";
-import { integrationAppStore } from "./integrationAppStore.js";
 import {
   stableJsonStringify,
   verifyIntegrationReplyCapability,
@@ -26,6 +24,8 @@ import type { IntegrationProvider } from "./types.js";
 import "./providers/index.js";
 
 export interface ReplyBridgeScope {
+  capabilityToken: string;
+  endpointUrl: string;
   provider: string;
   appId: string;
   resourceId: string;
@@ -73,24 +73,6 @@ function assertSameObject(
   }
 }
 
-function validatePodBinding(scope: ReplyBridgeScope): void {
-  const app = integrationAppStore.getById(scope.appId);
-  if (!app || app.provider !== scope.provider) {
-    throw new Error("Integration Reply MCP bridge app scope 驗證失敗");
-  }
-
-  const podRecord = podStore.getByIdGlobal(scope.podId);
-  const binding = podRecord?.pod.integrationBindings?.find(
-    (item) =>
-      item.provider === scope.provider &&
-      item.appId === scope.appId &&
-      item.resourceId === scope.resourceId,
-  );
-  if (!binding) {
-    throw new Error("Integration Reply MCP bridge pod binding 驗證失敗");
-  }
-}
-
 function loadScopeFromEnv(): ReplyBridgeScope {
   const token = process.env.AGENT_CANVAS_INTEGRATION_REPLY_CAPABILITY;
   if (!token) {
@@ -101,12 +83,13 @@ function loadScopeFromEnv(): ReplyBridgeScope {
   const appId = process.env.AGENT_CANVAS_INTEGRATION_REPLY_APP_ID;
   const resourceId = process.env.AGENT_CANVAS_INTEGRATION_REPLY_RESOURCE_ID;
   const podId = process.env.AGENT_CANVAS_INTEGRATION_REPLY_POD_ID;
+  const endpointUrl = process.env.AGENT_CANVAS_INTEGRATION_REPLY_ENDPOINT;
   const extra = parseJsonObject(process.env.AGENT_CANVAS_INTEGRATION_REPLY_EXTRA);
   const replyContext = parseJsonObject(
     process.env.AGENT_CANVAS_INTEGRATION_REPLY_CONTEXT,
   );
 
-  if (!provider || !appId || !resourceId || !podId) {
+  if (!provider || !appId || !resourceId || !podId || !endpointUrl) {
     throw new Error("Integration Reply MCP bridge 缺少必要環境變數");
   }
 
@@ -119,6 +102,8 @@ function loadScopeFromEnv(): ReplyBridgeScope {
   assertSameObject("replyContext", replyContext, verified.replyContext);
 
   const scope: ReplyBridgeScope = {
+    capabilityToken: token,
+    endpointUrl,
     provider: verified.provider,
     appId: verified.appId,
     resourceId: verified.resourceId,
@@ -126,7 +111,6 @@ function loadScopeFromEnv(): ReplyBridgeScope {
     extra: verified.extra,
     replyContext: verified.replyContext,
   };
-  validatePodBinding(scope);
   return scope;
 }
 
@@ -171,7 +155,6 @@ export function listIntegrationReplyTools(
 
 export async function callIntegrationReplyTool(
   scope: ReplyBridgeScope,
-  provider: IntegrationProvider,
   request: { name: string; arguments?: unknown },
 ): Promise<CallToolResult> {
   const toolName = `${scope.provider}_reply`;
@@ -190,19 +173,36 @@ export async function callIntegrationReplyTool(
     return errorResult("text 為必填");
   }
 
-  const result = await provider.sendMessage!(
-    scope.appId,
-    scope.resourceId,
-    text,
-    {
-      ...scope.extra,
-      ...scope.replyContext,
-    },
-  );
-
-  if (!result.success) {
-    return errorResult(`錯誤: ${getResultErrorString(result.error)}`);
+  let response: Response;
+  try {
+    response = await fetch(scope.endpointUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        capabilityToken: scope.capabilityToken,
+        text,
+      }),
+    });
+  } catch (error) {
+    return errorResult(
+      `Integration Reply backend 無法連線：${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
   }
+
+  const responseBody = (await response.json().catch(() => null)) as
+    | { success?: unknown; error?: unknown }
+    | null;
+
+  if (!response.ok || responseBody?.success !== true) {
+    const message =
+      typeof responseBody?.error === "string"
+        ? responseBody.error
+        : `Integration Reply backend 回傳 HTTP ${response.status}`;
+    return errorResult(message);
+  }
+
   return successResult("success");
 }
 
@@ -232,7 +232,7 @@ export async function runIntegrationReplyMcpBridge(): Promise<void> {
   );
 
   server.setRequestHandler(CallToolRequestSchema, async (request) =>
-    callIntegrationReplyTool(scope, provider, request.params),
+    callIntegrationReplyTool(scope, request.params),
   );
 
   const stdio = new StdioServerTransport();

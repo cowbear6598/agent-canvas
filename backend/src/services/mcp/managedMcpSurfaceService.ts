@@ -19,7 +19,7 @@
 import { buildGoalRuntimeMcpServerConfig } from "../goalRuntime.js";
 import { buildInternalSelfSpawn } from "../../utils/internalSelfSpawn.js";
 import { buildPluginMcpEntry } from "../plugin/pluginMcpEntryBuilder.js";
-import { integrationRegistry } from "../integration/integrationRegistry.js";
+import { integrationRegistry } from "../integration/index.js";
 import {
   buildReplyContextKey,
   replyContextStore,
@@ -31,6 +31,8 @@ import {
 } from "../plugin/pluginCatalogBuilder.js";
 import { socketService } from "../socketService.js";
 import { WebSocketResponseEvents } from "../../schemas/events.js";
+import { config } from "../../config/index.js";
+import { logger } from "../../utils/logger.js";
 import type { Pod } from "../../types/pod.js";
 import type { RunContext } from "../../types/run.js";
 import {
@@ -104,6 +106,15 @@ interface ManagedMcpStoreLike {
 interface ManagedMcpSurfaceServiceDeps {
   store: ManagedMcpStoreLike;
   runtimeService: ManagedMcpRuntimeService;
+}
+
+const INTEGRATION_PROVIDER_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
+
+function getInternalIntegrationReplyUrl(): string {
+  return (
+    process.env.AGENT_CANVAS_INTERNAL_INTEGRATION_REPLY_URL ??
+    `http://127.0.0.1:${config.port}/api/internal/integration-reply`
+  );
 }
 
 /**
@@ -304,13 +315,10 @@ export class ManagedMcpSurfaceService {
 }
 
 function buildIntegrationReplyMcpEntries(
-  pod: Pick<Pod, "id" | "provider" | "integrationBindings">,
+  pod: Pick<Pod, "id" | "integrationBindings">,
   runContext: RunContext | null,
 ): PodMcpEntry[] {
-  // Claude already injects SDK in-process reply tools in buildClaudeOptions.
-  // Non-Claude providers need stdio MCP entries because they cannot consume
-  // Claude SDK tool closures.
-  if (pod.provider === "claude" || !pod.integrationBindings?.length) {
+  if (!pod.integrationBindings?.length) {
     return [];
   }
 
@@ -320,8 +328,18 @@ function buildIntegrationReplyMcpEntries(
       : undefined;
   const spawn = buildInternalSelfSpawn("--integration-reply-bridge");
   const entries: PodMcpEntry[] = [];
+  const endpointUrl = getInternalIntegrationReplyUrl();
 
   for (const binding of pod.integrationBindings) {
+    if (!INTEGRATION_PROVIDER_NAME_PATTERN.test(binding.provider)) {
+      logger.warn(
+        "Integration",
+        "Warn",
+        "略過不合法格式的 integration provider（名稱已遮罩）",
+      );
+      continue;
+    }
+
     const provider = integrationRegistry.get(binding.provider);
     if (!provider?.sendMessage) continue;
 
@@ -350,6 +368,7 @@ function buildIntegrationReplyMcpEntries(
         AGENT_CANVAS_INTEGRATION_REPLY_CONTEXT: JSON.stringify(
           replyContext ?? {},
         ),
+        AGENT_CANVAS_INTEGRATION_REPLY_ENDPOINT: endpointUrl,
       },
       cwd: null,
       proxied: false,
