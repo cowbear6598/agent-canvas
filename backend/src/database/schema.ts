@@ -274,6 +274,7 @@ function createBaseTables(db: Database): void {
       "display_name TEXT," +
       "description TEXT," +
       "install_path TEXT NOT NULL," +
+      "sort_index INTEGER NOT NULL DEFAULT 0," +
       "installed_at TEXT NOT NULL," +
       "updated_at TEXT NOT NULL" +
       ")",
@@ -612,6 +613,42 @@ function migratePodsDropStatus(db: Database): void {
   }
 }
 
+function migrateManagedPluginsSortIndex(db: Database): void {
+  if (columnExists(db, "managed_plugins", "sort_index")) {
+    db.exec(
+      "CREATE INDEX IF NOT EXISTS idx_managed_plugins_sort_index ON managed_plugins(sort_index)",
+    );
+    return;
+  }
+
+  db.exec(
+    "ALTER TABLE managed_plugins ADD COLUMN sort_index INTEGER NOT NULL DEFAULT 0",
+  );
+
+  const rows = db
+    .query("SELECT id FROM managed_plugins ORDER BY installed_at ASC, id ASC")
+    .all() as Array<{ id: string }>;
+  const updateStmt = db.prepare(
+    "UPDATE managed_plugins SET sort_index = ? WHERE id = ?",
+  );
+
+  db.transaction(() => {
+    rows.forEach((row, index) => {
+      updateStmt.run(index, row.id);
+    });
+  })();
+
+  if (rows.length > 0) {
+    console.log(
+      `[DB migration] 已為 ${rows.length} 筆 managed_plugins 建立穩定排序值`,
+    );
+  }
+
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_managed_plugins_sort_index ON managed_plugins(sort_index)",
+  );
+}
+
 export function createTables(db: Database): void {
   const isManagedPluginsFirstUpgrade = !tableExists(db, "managed_plugins");
   createBaseTables(db);
@@ -631,4 +668,5 @@ export function createTables(db: Database): void {
   migratePodsDropMultiInstance(db);
   migrateDropMessagesTable(db);
   migratePodsDropStatus(db);
+  migrateManagedPluginsSortIndex(db);
 }

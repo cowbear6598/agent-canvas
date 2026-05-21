@@ -552,8 +552,6 @@
       "pullLatest": "Pull 至最新版本"
     },
     "podContextMenu": {
-      "setGoal": "設定 Goal",
-      "editGoal": "編輯 Goal",
       "downloadDirectory": "下載工作目錄（zip）",
       "connect": "連接 {label}",
       "disconnect": "斷開 {label}",

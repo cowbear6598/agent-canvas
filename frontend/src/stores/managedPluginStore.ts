@@ -5,6 +5,7 @@ import {
   installPlugin,
   deletePlugin,
   updatePlugin,
+  reorderPlugins,
 } from "@/services/pluginApi";
 import type { InstalledPlugin } from "@/types/plugin";
 
@@ -21,19 +22,22 @@ export const useManagedPluginStore = defineStore("managedPlugin", () => {
   const loaded = ref<boolean>(false);
 
   async function refresh(): Promise<void> {
-    loading.value = true;
+    const hasCachedPlugins = loaded.value || plugins.value.length > 0;
+    if (!hasCachedPlugins) {
+      loading.value = true;
+    }
+
     try {
       const items = await listPlugins();
-      plugins.value = [...items].sort(
-        (a, b) =>
-          new Date(b.installedAt).getTime() - new Date(a.installedAt).getTime(),
-      );
+      plugins.value = items;
       loaded.value = true;
       error.value = null;
     } catch (err) {
       error.value = normalizeManagedPluginError(err);
     } finally {
-      loading.value = false;
+      if (!hasCachedPlugins) {
+        loading.value = false;
+      }
     }
   }
 
@@ -60,8 +64,9 @@ export const useManagedPluginStore = defineStore("managedPlugin", () => {
   async function remove(pluginId: string): Promise<void> {
     loading.value = true;
     try {
-      await deletePlugin(pluginId);
-      plugins.value = plugins.value.filter((p) => p.id !== pluginId);
+      const deleted = await deletePlugin(pluginId);
+      plugins.value =
+        deleted.plugins ?? plugins.value.filter((p) => p.id !== pluginId);
       error.value = null;
     } catch (err) {
       error.value = normalizeManagedPluginError(err);
@@ -93,6 +98,31 @@ export const useManagedPluginStore = defineStore("managedPlugin", () => {
     }
   }
 
+  async function reorder(idsInOrder: string[]): Promise<void> {
+    const previousPlugins = [...plugins.value];
+    const pluginById = new Map(
+      plugins.value.map((plugin) => [plugin.id, plugin]),
+    );
+    const orderedPlugins = idsInOrder
+      .map((id) => pluginById.get(id))
+      .filter((plugin): plugin is InstalledPlugin => plugin !== undefined);
+    const missingPlugins = plugins.value.filter(
+      (plugin) => !idsInOrder.includes(plugin.id),
+    );
+
+    plugins.value = [...orderedPlugins, ...missingPlugins];
+
+    try {
+      const confirmedPlugins = await reorderPlugins(idsInOrder);
+      plugins.value = confirmedPlugins;
+      error.value = null;
+    } catch (err) {
+      plugins.value = previousPlugins;
+      error.value = normalizeManagedPluginError(err);
+      throw err;
+    }
+  }
+
   return {
     plugins,
     loading,
@@ -102,5 +132,6 @@ export const useManagedPluginStore = defineStore("managedPlugin", () => {
     install,
     remove,
     update,
+    reorder,
   };
 });

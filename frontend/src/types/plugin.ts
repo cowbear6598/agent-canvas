@@ -4,6 +4,7 @@ export interface InstalledPlugin {
   displayName: string;
   description?: string;
   installPath: string;
+  sortIndex: number;
   installedAt: string;
   updatedAt: string;
 }

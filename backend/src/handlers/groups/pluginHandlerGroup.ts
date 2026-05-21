@@ -7,12 +7,14 @@ import {
   pluginInstallSchema,
   pluginDeleteSchema,
   pluginUpdateSchema,
+  pluginReorderSchema,
 } from "../../schemas/pluginSchemas.js";
 import {
   handlePluginList,
   handlePluginInstall,
   handlePluginDelete,
   handlePluginUpdate,
+  handlePluginReorder,
 } from "../pluginHandlers.js";
 import { createHandlerGroup } from "./createHandlerGroup.js";
 
@@ -42,6 +44,12 @@ export const pluginHandlerGroup = createHandlerGroup({
       handler: handlePluginUpdate,
       schema: pluginUpdateSchema,
       responseEvent: WebSocketResponseEvents.PLUGIN_UPDATED,
+    },
+    {
+      event: WebSocketRequestEvents.PLUGIN_REORDER,
+      handler: handlePluginReorder,
+      schema: pluginReorderSchema,
+      responseEvent: WebSocketResponseEvents.PLUGIN_REORDERED,
     },
   ],
 });

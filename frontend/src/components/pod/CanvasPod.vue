@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, toRef } from "vue";
+import { ref, computed, toRef, watch } from "vue";
 import type { Pod } from "@/types";
 import { useCanvasContext } from "@/composables/canvas/useCanvasContext";
 import { useBatchDrag } from "@/composables/canvas";
@@ -229,6 +229,7 @@ const {
   showPluginPopover,
   pluginAnchorRect,
   handlePluginClick,
+  closePluginPopover,
   showMcpPopover,
   mcpAnchorRect,
   handleMcpClick,
@@ -236,6 +237,17 @@ const {
   thinkingAnchorRect,
   handleThinkingClick,
 } = usePodPopovers();
+
+watch([isDragging, isBatchDragging], ([isSingleDragging, isBatchDragging]) => {
+  if (isSingleDragging || isBatchDragging) {
+    closePluginPopover();
+  }
+});
+
+watch(
+  () => [viewportStore.offset.x, viewportStore.offset.y, viewportStore.zoom],
+  closePluginPopover,
+);
 
 // MCP notch 相關狀態
 const podMcpActiveCount = computed(() => props.pod.mcpServerNames?.length ?? 0);
@@ -570,7 +582,7 @@ const handleContextMenu = (e: MouseEvent): void => {
         v-if="showPluginPopover && pluginAnchorRect"
         :pod-id="pod.id"
         :anchor-rect="pluginAnchorRect"
-        @close="showPluginPopover = false"
+        @close="closePluginPopover"
       />
 
       <McpPopover

@@ -28,6 +28,16 @@ export const pluginUpdateSchema = z.object({
 
 export type PluginUpdatePayload = z.infer<typeof pluginUpdateSchema>;
 
+export const pluginReorderSchema = z.object({
+  requestId: z.string(),
+  pluginIds: z
+    .array(z.string().min(1).max(200))
+    .min(1, "Plugin IDs array cannot be empty")
+    .max(200, "Plugin IDs exceed limit"),
+});
+
+export type PluginReorderPayload = z.infer<typeof pluginReorderSchema>;
+
 export interface PluginListResultPayload {
   requestId: string;
   success: boolean;
@@ -46,6 +56,7 @@ export interface PluginDeleteResultPayload {
   requestId: string;
   success: boolean;
   pluginId?: string;
+  plugins?: ManagedPluginRecord[];
   error?: string;
 }
 
@@ -53,5 +64,12 @@ export interface PluginUpdateResultPayload {
   requestId: string;
   success: boolean;
   plugin?: ManagedPluginRecord;
+  error?: string;
+}
+
+export interface PluginReorderResultPayload {
+  requestId: string;
+  success: boolean;
+  plugins?: ManagedPluginRecord[];
   error?: string;
 }

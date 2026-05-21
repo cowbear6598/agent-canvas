@@ -23,7 +23,7 @@ const emit = defineEmits<{
 const { t } = useI18n();
 const podStore = usePodStore();
 const managedPluginStore = useManagedPluginStore();
-const { runToggle } = useOptimisticToggle();
+const { isToggling: isPluginDraftDirty, runToggle } = useOptimisticToggle();
 
 const localPluginIds = ref<string[]>([]);
 
@@ -31,6 +31,10 @@ const searchQuery = ref<string>("");
 const searchInputRef = ref<HTMLInputElement | null>(null);
 
 const loading = computed(() => managedPluginStore.loading);
+const hasPluginCache = computed(
+  () => managedPluginStore.loaded || managedPluginStore.plugins.length > 0,
+);
+const showLoading = computed(() => loading.value && !hasPluginCache.value);
 const loadFailed = computed(() => managedPluginStore.error !== null);
 
 const filteredPlugins = computed<InstalledPlugin[]>(() => {
@@ -64,10 +68,16 @@ const focusSearchInput = async (): Promise<void> => {
   searchInputRef.value?.focus();
 };
 
-onMounted(async () => {
+const refreshPluginsInBackground = (): void => {
+  // Refresh only the installed plugin catalog. The Pod plugin draft stays local
+  // while the user is toggling switches, so late refreshes cannot reset it.
+  void managedPluginStore.refresh();
+};
+
+onMounted(() => {
   initLocalPluginIds();
-  await managedPluginStore.refresh();
-  await focusSearchInput();
+  refreshPluginsInBackground();
+  void focusSearchInput();
   document.addEventListener("mousedown", handleMousedown, true);
 });
 
@@ -143,7 +153,7 @@ const handleToggle = async (
       >
 
       <div
-        v-if="loading"
+        v-if="showLoading"
         class="flex items-center gap-2 px-2 py-1 text-xs font-mono text-muted-foreground"
       >
         <span
@@ -181,7 +191,7 @@ const handleToggle = async (
             </p>
             <Switch
               :model-value="localPluginIdsSet.has(plugin.id)"
-              :disabled="false"
+              :disabled="isPluginDraftDirty"
               @click.stop
               @update:model-value="
                 (val: boolean) => handleToggle(plugin.id, val)

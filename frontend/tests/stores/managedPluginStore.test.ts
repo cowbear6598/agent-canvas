@@ -30,6 +30,7 @@ function createMockPlugin(
     githubRepo: "owner/repo",
     displayName: "Test Plugin",
     installPath: "/path/to/plugin",
+    sortIndex: 0,
     installedAt: "2025-01-01T00:00:00.000Z",
     updatedAt: "2025-01-01T00:00:00.000Z",
     ...overrides,
@@ -129,7 +130,7 @@ describe("managedPluginStore", () => {
       });
       store.plugins = [toRemove, toKeep];
 
-      mockDeletePlugin.mockResolvedValueOnce("plugin-1");
+      mockDeletePlugin.mockResolvedValueOnce({ pluginId: "plugin-1" });
 
       await store.remove("plugin-1");
 
@@ -140,7 +141,7 @@ describe("managedPluginStore", () => {
     it("remove 應呼叫 deletePlugin API 並傳入正確 pluginId", async () => {
       const store = useManagedPluginStore();
       store.plugins = [createMockPlugin({ id: "plugin-1" })];
-      mockDeletePlugin.mockResolvedValueOnce("plugin-1");
+      mockDeletePlugin.mockResolvedValueOnce({ pluginId: "plugin-1" });
 
       await store.remove("plugin-1");
 

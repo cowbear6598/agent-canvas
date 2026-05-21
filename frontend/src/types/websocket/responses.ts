@@ -487,10 +487,15 @@ export interface PluginInstalledPayload extends ResultPayload {
 
 export interface PluginDeletedPayload extends ResultPayload {
   pluginId?: string;
+  plugins?: InstalledPlugin[];
 }
 
 export interface PluginUpdatedPayload extends ResultPayload {
   plugin?: InstalledPlugin;
+}
+
+export interface PluginReorderedPayload extends ResultPayload {
+  plugins?: InstalledPlugin[];
 }
 
 export interface RunCreatedPayload {

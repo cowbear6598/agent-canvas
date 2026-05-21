@@ -1,0 +1,31 @@
+feature: plugin-management-pod-menu-stability
+created: "2026-05-21"
+approved: true
+questions:
+  - id: Q1
+    text: Plugin 管理區目前的資料來源、排序方式與是否支援持久化排序？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      Plugin 管理區使用 `frontend/src/stores/managedPluginStore.ts` 讀取 `listPlugins()` 結果，前端目前再依 `installedAt` 新到舊排序。後端來源是 `backend/src/services/plugin/managedPluginRegistry.ts` 與 `managed_plugins` 資料表，目前欄位只有 id / github_repo / display_name / description / install_path / installed_at / updated_at，`backend/src/database/statements.ts` 也用 `ORDER BY installed_at DESC` 查詢。現況沒有 order/sort 欄位，也沒有 reorder API，所以若 Drag 調整 order 需要新增持久化排序欄位、migration、後端 reorder handler/schema、前端 API/store 更新與管理區拖曳 UI。
+
+  - id: Q2
+    text: Pod 右鍵選單中的「編輯 Goal」目前由哪裡提供？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      `frontend/src/components/canvas/PodContextMenu.vue` 第一個 button 會透過 `handleOpenGoalEditor()` emit `open-goal-editor`，文字依 `hasGoal` 顯示 `canvas.podContextMenu.editGoal` 或 `canvas.podContextMenu.setGoal`。`frontend/src/components/canvas/CanvasContainer.vue` 接到事件後呼叫 `podStore.openGoalEditor(podId)`。要拿掉 Pod 右鍵選單的編輯 Goal，前端可移除此 menu item 與不再使用的 Target icon / hasGoal / open-goal-editor emit path；Pod 上的 Goal slot 點擊仍可保留現有 `CanvasPod.vue` 的 `handleGoalClick()`。
+
+  - id: Q3
+    text: Pod 上 Plugins popover 的 loading 競態與位置錯亂原因是什麼？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      `frontend/src/components/pod/PluginPopover.vue` 在 mounted 時先初始化 local plugin ids，接著每次都 `await managedPluginStore.refresh()`，期間顯示 loading。popover 定位只吃開啟瞬間的 `anchorRect` prop，若 loading 期間使用者拖動 Pod、縮放/平移畫布或切換 popover，Teleport 到 body 的 popover 不會跟著重新量測 anchor，因此位置可能落在舊座標。行為錯亂則來自 refresh 完成前後清單重建、local state 與 store/pod 狀態可能同時被使用者操作或遠端事件更新。managedPluginStore 已有 `loaded` 狀態，所以可以避免每次打開都阻塞刷新，改成先使用快取資料立即渲染，背景 refresh，並讓 popover 依 anchor element 重新量測或在 Pod drag/pan/zoom 時關閉。
+
+  - id: Q4
+    text: Plugin 管理區 Drag 調整 order 要採用哪種持久化策略？
+    type: user-input
+    completed: true
+    answer: |
+      採用持久化保存順序。新增 managed plugin 的排序欄位與 reorder API，Plugin 管理區拖曳後將新順序寫回後端與資料庫。Pod 上 Plugins popover 的 refresh/loading 競態也要在同一輪修正：優先使用已載入快取立即顯示，避免每次開啟都阻塞 refresh；需要刷新時改為背景同步，並處理 popover 在 Pod 移動 / 畫布 pan / zoom 期間的位置或互動一致性。

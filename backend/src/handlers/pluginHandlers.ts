@@ -4,6 +4,7 @@ import type {
   PluginInstallPayload,
   PluginDeletePayload,
   PluginUpdatePayload,
+  PluginReorderPayload,
 } from "../schemas/pluginSchemas.js";
 import { socketService } from "../services/socketService.js";
 import {
@@ -12,6 +13,7 @@ import {
   removePlugin,
   updatePlugin,
 } from "../services/plugin/pluginInstallService.js";
+import { managedPluginStore } from "../services/plugin/managedPluginRegistry.js";
 import { emitError, emitNotFound } from "../utils/websocketResponse.js";
 
 export async function handlePluginList(
@@ -111,21 +113,20 @@ export async function handlePluginDelete(
     return;
   }
 
-  socketService.emitToConnection(
-    connectionId,
-    WebSocketResponseEvents.PLUGIN_DELETED,
-    {
-      requestId,
-      success: true,
-      pluginId: payload.pluginId,
-    },
-  );
-
-  socketService.emitToAll(WebSocketResponseEvents.PLUGIN_DELETED, {
+  const response = {
     requestId,
     success: true,
     pluginId: payload.pluginId,
-  });
+    plugins: managedPluginStore.list(),
+  };
+
+  socketService.emitToConnection(
+    connectionId,
+    WebSocketResponseEvents.PLUGIN_DELETED,
+    response,
+  );
+
+  socketService.emitToAll(WebSocketResponseEvents.PLUGIN_DELETED, response);
 }
 
 export async function handlePluginUpdate(
@@ -172,4 +173,50 @@ export async function handlePluginUpdate(
     success: true,
     plugin: result.data,
   });
+}
+
+export async function handlePluginReorder(
+  connectionId: string,
+  payload: PluginReorderPayload,
+  requestId: string,
+): Promise<void> {
+  const result = managedPluginStore.reorder(payload.pluginIds);
+
+  if (!result.success) {
+    if (result.error === "PLUGIN_NOT_FOUND") {
+      emitNotFound(
+        connectionId,
+        WebSocketResponseEvents.PLUGIN_REORDERED,
+        "plugin",
+        payload.pluginIds.join(","),
+        requestId,
+        null,
+      );
+    } else {
+      emitError(
+        connectionId,
+        WebSocketResponseEvents.PLUGIN_REORDERED,
+        result.error,
+        null,
+        requestId,
+        undefined,
+        "INVALID_PLUGIN_REORDER",
+      );
+    }
+    return;
+  }
+
+  const response = {
+    requestId,
+    success: true,
+    plugins: result.data,
+  };
+
+  socketService.emitToConnection(
+    connectionId,
+    WebSocketResponseEvents.PLUGIN_REORDERED,
+    response,
+  );
+
+  socketService.emitToAll(WebSocketResponseEvents.PLUGIN_REORDERED, response);
 }

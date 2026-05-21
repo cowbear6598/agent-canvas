@@ -4,6 +4,7 @@ export interface UsePodPopoversReturn {
   showPluginPopover: Ref<boolean>;
   pluginAnchorRect: Ref<DOMRect | null>;
   handlePluginClick: (event: MouseEvent) => void;
+  closePluginPopover: () => void;
   showMcpPopover: Ref<boolean>;
   mcpAnchorRect: Ref<DOMRect | null>;
   handleMcpClick: (event: MouseEvent) => void;
@@ -20,9 +21,14 @@ export function usePodPopovers(): UsePodPopoversReturn {
   const showPluginPopover = ref(false);
   const pluginAnchorRect = ref<DOMRect | null>(null);
 
+  const closePluginPopover = (): void => {
+    showPluginPopover.value = false;
+    pluginAnchorRect.value = null;
+  };
+
   const handlePluginClick = (event: MouseEvent): void => {
     if (showPluginPopover.value) {
-      showPluginPopover.value = false;
+      closePluginPopover();
       return;
     }
     pluginAnchorRect.value = (
@@ -63,6 +69,7 @@ export function usePodPopovers(): UsePodPopoversReturn {
     showPluginPopover,
     pluginAnchorRect,
     handlePluginClick,
+    closePluginPopover,
     showMcpPopover,
     mcpAnchorRect,
     handleMcpClick,

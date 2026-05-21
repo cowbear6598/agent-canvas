@@ -552,8 +552,6 @@
       "pullLatest": "最新版に Pull"
     },
     "podContextMenu": {
-      "setGoal": "Goal を設定",
-      "editGoal": "Goal を編集",
       "downloadDirectory": "作業ディレクトリをダウンロード（zip）",
       "connect": "{label} を接続",
       "disconnect": "{label} を切断",

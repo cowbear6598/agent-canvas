@@ -552,8 +552,6 @@
       "pullLatest": "Pull to Latest"
     },
     "podContextMenu": {
-      "setGoal": "Set Goal",
-      "editGoal": "Edit Goal",
       "downloadDirectory": "Download Working Directory (zip)",
       "connect": "Connect {label}",
       "disconnect": "Disconnect {label}",

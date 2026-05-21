@@ -396,6 +396,11 @@ export interface PluginUpdatePayload {
   pluginId: string;
 }
 
+export interface PluginReorderPayload {
+  requestId: string;
+  pluginIds: string[];
+}
+
 export interface RunDeletePayload {
   requestId: string;
   canvasId: string;

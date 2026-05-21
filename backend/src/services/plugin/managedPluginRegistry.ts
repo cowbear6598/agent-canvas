@@ -1,4 +1,7 @@
 import { getStmts } from "../../database/stmtsHelper.js";
+import { getDb } from "../../database/index.js";
+import { ok, err } from "../../types/result.js";
+import type { Result } from "../../types/result.js";
 
 export interface ManagedPluginRecord {
   id: string;
@@ -6,9 +9,13 @@ export interface ManagedPluginRecord {
   displayName: string | null;
   description: string | null;
   installPath: string;
+  sortIndex: number;
   installedAt: string;
   updatedAt: string;
 }
+
+type ManagedPluginInsertRecord = Omit<ManagedPluginRecord, "sortIndex"> &
+  Partial<Pick<ManagedPluginRecord, "sortIndex">>;
 
 interface ManagedPluginRow {
   id: string;
@@ -16,6 +23,7 @@ interface ManagedPluginRow {
   display_name: string | null;
   description: string | null;
   install_path: string;
+  sort_index: number;
   installed_at: string;
   updated_at: string;
 }
@@ -31,6 +39,7 @@ function rowToRecord(row: ManagedPluginRow): ManagedPluginRecord {
     displayName: row.display_name,
     description: row.description,
     installPath: row.install_path,
+    sortIndex: row.sort_index,
     installedAt: row.installed_at,
     updatedAt: row.updated_at,
   };
@@ -58,13 +67,20 @@ class ManagedPluginStore {
     return row ? rowToRecord(row) : null;
   }
 
-  insert(record: ManagedPluginRecord): ManagedPluginRecord {
+  private nextSortIndex(): number {
+    const row = this.stmts.selectMaxSortIndex.get() as { max_index: number };
+    return row.max_index + 1;
+  }
+
+  insert(record: ManagedPluginInsertRecord): ManagedPluginRecord {
+    const sortIndex = record.sortIndex ?? this.nextSortIndex();
     this.stmts.insert.run({
       $id: record.id,
       $githubRepo: record.githubRepo,
       $displayName: record.displayName,
       $description: record.description,
       $installPath: record.installPath,
+      $sortIndex: sortIndex,
       $installedAt: record.installedAt,
       $updatedAt: record.updatedAt,
     });
@@ -103,6 +119,39 @@ class ManagedPluginStore {
   delete(id: string): boolean {
     const result = this.stmts.deleteById.run(id);
     return result.changes > 0;
+  }
+
+  reorder(pluginIds: string[]): Result<ManagedPluginRecord[]> {
+    if (new Set(pluginIds).size !== pluginIds.length) {
+      return err("PLUGIN_REORDER_DUPLICATE_IDS");
+    }
+
+    const plugins = this.list();
+    const pluginMap = new Map(plugins.map((plugin) => [plugin.id, plugin]));
+    const reorderedPluginIds = pluginIds.filter((pluginId) =>
+      pluginMap.has(pluginId),
+    );
+    if (reorderedPluginIds.length === 0 && plugins.length > 0) {
+      return err("PLUGIN_NOT_FOUND");
+    }
+
+    const reorderedPluginIdSet = new Set(reorderedPluginIds);
+    const remainingPluginIds = plugins
+      .filter((plugin) => !reorderedPluginIdSet.has(plugin.id))
+      .map((plugin) => plugin.id);
+    const finalPluginIds = [...reorderedPluginIds, ...remainingPluginIds];
+
+    const updateSortIndex = getDb().prepare(
+      "UPDATE managed_plugins SET sort_index = ? WHERE id = ?",
+    );
+    const transaction = getDb().transaction(() => {
+      finalPluginIds.forEach((pluginId, index) => {
+        updateSortIndex.run(index, pluginId);
+      });
+    });
+    transaction();
+
+    return ok(this.list());
   }
 }
 

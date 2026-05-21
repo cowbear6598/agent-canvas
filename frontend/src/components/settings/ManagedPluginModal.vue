@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
+import { GripVertical } from "lucide-vue-next";
+import { VueDraggable } from "vue-draggable-plus";
 import {
   Dialog,
   DialogContent,
@@ -29,13 +31,22 @@ const installError = ref<string | null>(null);
 const installing = ref<boolean>(false);
 
 const updatingId = ref<string | null>(null);
+const reordering = ref<boolean>(false);
+const draggablePlugins = ref<InstalledPlugin[]>([]);
 
 const confirmDeletePlugin = ref<InstalledPlugin | null>(null);
 const showConfirmDialog = ref<boolean>(false);
 
+const isPluginListBusy = computed(
+  () => store.loading || installing.value || updatingId.value !== null,
+);
+const isListMutationDisabled = computed(
+  () => isPluginListBusy.value || reordering.value,
+);
+
 async function handleInstall(): Promise<void> {
   const repo = newRepo.value.trim();
-  if (!repo) return;
+  if (!repo || isListMutationDisabled.value) return;
 
   installError.value = null;
   installing.value = true;
@@ -50,6 +61,8 @@ async function handleInstall(): Promise<void> {
 }
 
 async function handleUpdate(plugin: InstalledPlugin): Promise<void> {
+  if (isListMutationDisabled.value) return;
+
   updatingId.value = plugin.id;
   try {
     await store.update(plugin.id);
@@ -59,6 +72,8 @@ async function handleUpdate(plugin: InstalledPlugin): Promise<void> {
 }
 
 function openDeleteConfirm(plugin: InstalledPlugin): void {
+  if (isListMutationDisabled.value) return;
+
   confirmDeletePlugin.value = plugin;
   showConfirmDialog.value = true;
 }
@@ -69,7 +84,8 @@ function cancelDelete(): void {
 }
 
 async function confirmDelete(): Promise<void> {
-  if (!confirmDeletePlugin.value) return;
+  if (!confirmDeletePlugin.value || isListMutationDisabled.value) return;
+
   try {
     await store.remove(confirmDeletePlugin.value.id);
   } finally {
@@ -82,9 +98,29 @@ function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleString("zh-TW");
 }
 
+async function handleReorder(): Promise<void> {
+  if (isPluginListBusy.value || reordering.value) return;
+
+  const ids = draggablePlugins.value.map((plugin) => plugin.id);
+  reordering.value = true;
+  try {
+    await store.reorder(ids);
+  } finally {
+    reordering.value = false;
+  }
+}
+
 function handleClose(): void {
   emit("update:open", false);
 }
+
+watch(
+  () => store.plugins,
+  (plugins) => {
+    draggablePlugins.value = [...plugins];
+  },
+  { immediate: true },
+);
 
 watch(
   () => props.open,
@@ -116,12 +152,12 @@ watch(
             v-model="newRepo"
             placeholder="owner/repo"
             class="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            :disabled="installing"
+            :disabled="isListMutationDisabled"
             @keydown.enter="handleInstall"
           >
           <button
             class="inline-flex items-center justify-center whitespace-nowrap rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground ring-offset-background transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
-            :disabled="installing || !newRepo.trim()"
+            :disabled="isListMutationDisabled || !newRepo.trim()"
             @click="handleInstall"
           >
             {{ installing ? "安裝中..." : "安裝" }}
@@ -155,37 +191,66 @@ watch(
           </div>
 
           <!-- Plugin 列表 -->
-          <div
-            v-for="plugin in store.plugins"
+          <VueDraggable
             v-else
-            :key="plugin.id"
-            class="flex items-center justify-between rounded-md border border-border p-3"
+            v-model="draggablePlugins"
+            handle=".managed-plugin-card__handle"
+            :animation="180"
+            :disabled="isListMutationDisabled"
+            ghost-class="sortable-ghost"
+            chosen-class="sortable-chosen"
+            class="flex flex-col gap-2"
+            @end="handleReorder"
           >
-            <div class="flex min-w-0 flex-col gap-0.5">
-              <span class="truncate text-sm font-medium">{{
-                plugin.displayName
-              }}</span>
-              <span class="truncate text-xs text-muted-foreground">{{
-                plugin.githubRepo
-              }}</span>
-              <span class="text-xs text-muted-foreground">安裝於 {{ formatDate(plugin.installedAt) }}</span>
+            <div
+              v-for="plugin in draggablePlugins"
+              :key="plugin.id"
+              class="flex items-center justify-between rounded-md border border-border p-3"
+            >
+              <div class="flex min-w-0 items-center gap-3">
+                <button
+                  type="button"
+                  class="managed-plugin-card__handle inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
+                  title="拖曳排序"
+                  :disabled="isListMutationDisabled"
+                  @click.stop
+                >
+                  <GripVertical :size="16" />
+                </button>
+                <div class="flex min-w-0 flex-col gap-0.5">
+                  <span class="truncate text-sm font-medium">{{
+                    plugin.displayName
+                  }}</span>
+                  <span class="truncate text-xs text-muted-foreground">{{
+                    plugin.githubRepo
+                  }}</span>
+                  <span class="text-xs text-muted-foreground">安裝於 {{ formatDate(plugin.installedAt) }}</span>
+                </div>
+              </div>
+              <div class="ml-4 flex shrink-0 gap-2">
+                <button
+                  class="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+                  :disabled="isListMutationDisabled"
+                  @click="handleUpdate(plugin)"
+                >
+                  {{ updatingId === plugin.id ? "更新中..." : "更新" }}
+                </button>
+                <button
+                  class="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-destructive/50 bg-background px-3 py-1.5 text-sm font-medium text-destructive ring-offset-background transition-colors hover:bg-destructive hover:text-destructive-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+                  :disabled="isListMutationDisabled"
+                  @click="openDeleteConfirm(plugin)"
+                >
+                  刪除
+                </button>
+              </div>
             </div>
-            <div class="ml-4 flex shrink-0 gap-2">
-              <button
-                class="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
-                :disabled="updatingId === plugin.id || store.loading"
-                @click="handleUpdate(plugin)"
-              >
-                {{ updatingId === plugin.id ? "更新中..." : "更新" }}
-              </button>
-              <button
-                class="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-destructive/50 bg-background px-3 py-1.5 text-sm font-medium text-destructive ring-offset-background transition-colors hover:bg-destructive hover:text-destructive-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
-                :disabled="store.loading"
-                @click="openDeleteConfirm(plugin)"
-              >
-                刪除
-              </button>
-            </div>
+          </VueDraggable>
+
+          <div
+            v-if="reordering"
+            class="text-center text-xs text-muted-foreground"
+          >
+            排序保存中...
           </div>
         </div>
       </ScrollArea>
@@ -208,12 +273,14 @@ watch(
       <DialogFooter>
         <button
           class="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-input bg-background px-4 py-2 text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          :disabled="reordering || store.loading"
           @click="cancelDelete"
         >
           取消
         </button>
         <button
           class="inline-flex items-center justify-center whitespace-nowrap rounded-md bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground ring-offset-background transition-colors hover:bg-destructive/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          :disabled="isListMutationDisabled"
           @click="confirmDelete"
         >
           確認刪除

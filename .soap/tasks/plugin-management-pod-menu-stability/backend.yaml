@@ -1,0 +1,91 @@
+feature: plugin-management-pod-menu-stability
+side: backend
+approved: true
+phases:
+  - id: P1
+    title: Plugin 排序資料模型與持久化
+    parallel: false
+    verification: []
+    done: true
+    items:
+      - id: P1.A
+        title: Managed plugin 排序欄位
+        tasks:
+          - id: P1.A.t1
+            text: 在 `backend/src/database/schema.ts` 的 `managed_plugins` table 增加排序欄位，新增既有資料 migration，讓現有 plugin 依原本安裝時間順序取得穩定排序值
+            completed: true
+            last_files_changed:
+              - backend/src/database/schema.ts
+          - id: P1.A.t2
+            text: 更新 `backend/src/database/statements.ts` 的 managed plugin 查詢與寫入 statement，讓清單以排序欄位升序回傳
+            completed: true
+            last_files_changed:
+              - backend/src/database/statements.ts
+          - id: P1.A.t3
+            text: 更新 `backend/src/services/plugin/managedPluginRegistry.ts` 的 record 型別、row mapping、insert 與 update 流程，讓新增 plugin 自動放到清單最後
+            completed: true
+            last_files_changed:
+              - backend/src/services/plugin/managedPluginRegistry.ts
+
+  - id: P2
+    title: Plugin reorder WebSocket 合約
+    parallel: false
+    verification: []
+    done: true
+    items:
+      - id: P2.A
+        title: Reorder schema 與 handler
+        tasks:
+          - id: P2.A.t1
+            text: 在 `backend/src/schemas/pluginSchemas.ts` 增加 plugin reorder request 與 response 型別，payload 需包含完整排序後的 plugin id 清單
+            completed: true
+            last_files_changed:
+              - backend/src/schemas/pluginSchemas.ts
+          - id: P2.A.t2
+            text: 在 `backend/src/schemas/events.ts` 增加 plugin reorder 的 request event 與 response event
+            completed: true
+            last_files_changed:
+              - backend/src/schemas/events.ts
+          - id: P2.A.t3
+            text: 在 `backend/src/services/plugin/managedPluginRegistry.ts` 增加 reorder 方法，依傳入 id 清單更新排序欄位後回傳最新 plugin 清單
+            completed: true
+            last_files_changed:
+              - backend/src/services/plugin/managedPluginRegistry.ts
+          - id: P2.A.t4
+            text: 在 `backend/src/handlers/pluginHandlers.ts` 增加 reorder handler，成功時回覆 requester 並廣播最新 plugin 清單給所有 client
+            completed: true
+            last_files_changed:
+              - backend/src/handlers/pluginHandlers.ts
+          - id: P2.A.t5
+            text: 在 `backend/src/handlers/registry.ts` 接上 plugin reorder handler，讓 WebSocket request 可被路由
+            completed: true
+            last_files_changed:
+              - backend/src/handlers/groups/pluginHandlerGroup.ts
+
+  - id: P3
+    title: Plugin 排序合約整合
+    parallel: false
+    verification: []
+    done: true
+    items:
+      - id: P3.A
+        title: 既有 plugin 操作的排序一致性
+        tasks:
+          - id: P3.A.t1
+            text: 調整 plugin install 成功流程，確保新增 plugin 取得清單最後位置並在廣播 payload 中包含排序欄位
+            completed: true
+            last_files_changed:
+              - backend/tests/handlers/pluginHandlers.test.ts
+          - id: P3.A.t2
+            text: 調整 plugin update 成功流程，保留既有排序位置並在回傳 payload 中包含排序欄位
+            completed: true
+            last_files_changed:
+              - backend/tests/handlers/pluginHandlers.test.ts
+          - id: P3.A.t3
+            text: 調整 plugin delete 成功後的資料一致性，讓後續 list/reorder 只回傳仍存在的 plugin
+            completed: true
+            last_files_changed:
+              - backend/src/services/plugin/managedPluginRegistry.ts
+              - backend/src/handlers/pluginHandlers.ts
+              - backend/src/schemas/pluginSchemas.ts
+              - backend/tests/handlers/pluginHandlers.test.ts

@@ -258,10 +258,6 @@ const handleDisconnectIntegration = async (
   await useIntegrationStore().unbindFromPod(provider, podId);
 };
 
-const handleOpenGoalEditor = (podId: string): void => {
-  podStore.openGoalEditor(podId);
-};
-
 const handleOpenCreateRepositoryModal = (): void => {
   lastMenuPosition.value = podStore.typeMenu.position;
   showCreateRepositoryModal.value = true;
@@ -438,7 +434,6 @@ const handleBranchModelChanged = (): void => {
     :position="podContextMenu.position"
     :pod-id="podContextMenu.data.podId"
     @close="closePodContextMenu"
-    @open-goal-editor="handleOpenGoalEditor"
     @connect-integration="handleConnectIntegration"
     @disconnect-integration="handleDisconnectIntegration"
   />

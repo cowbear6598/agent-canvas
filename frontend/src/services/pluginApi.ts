@@ -8,12 +8,14 @@ import type {
   PluginInstallPayload,
   PluginDeletePayload,
   PluginUpdatePayload,
+  PluginReorderPayload,
 } from "@/types/websocket/requests";
 import type {
   PluginListResultPayload,
   PluginInstalledPayload,
   PluginDeletedPayload,
   PluginUpdatedPayload,
+  PluginReorderedPayload,
 } from "@/types/websocket/responses";
 import type { InstalledPlugin } from "@/types/plugin";
 
@@ -49,7 +51,9 @@ export async function installPlugin(
   return result.plugin;
 }
 
-export async function deletePlugin(pluginId: string): Promise<string> {
+export async function deletePlugin(
+  pluginId: string,
+): Promise<{ pluginId: string; plugins?: InstalledPlugin[] }> {
   const result = await createWebSocketRequest<
     PluginDeletePayload,
     PluginDeletedPayload
@@ -59,7 +63,10 @@ export async function deletePlugin(pluginId: string): Promise<string> {
     payload: { pluginId },
   });
 
-  return result.pluginId ?? pluginId;
+  return {
+    pluginId: result.pluginId ?? pluginId,
+    plugins: result.plugins,
+  };
 }
 
 export async function updatePlugin(pluginId: string): Promise<InstalledPlugin> {
@@ -77,4 +84,23 @@ export async function updatePlugin(pluginId: string): Promise<InstalledPlugin> {
   }
 
   return result.plugin;
+}
+
+export async function reorderPlugins(
+  idsInOrder: string[],
+): Promise<InstalledPlugin[]> {
+  const result = await createWebSocketRequest<
+    PluginReorderPayload,
+    PluginReorderedPayload
+  >({
+    requestEvent: WebSocketRequestEvents.PLUGIN_REORDER,
+    responseEvent: WebSocketResponseEvents.PLUGIN_REORDERED,
+    payload: { pluginIds: idsInOrder },
+  });
+
+  if (!result.plugins) {
+    throw new Error("重排 plugin 成功但後端未回傳 plugin 清單");
+  }
+
+  return result.plugins;
 }

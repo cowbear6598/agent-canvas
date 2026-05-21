@@ -21,6 +21,8 @@ const {
   mockInstallPlugin,
   mockRemovePlugin,
   mockUpdatePlugin,
+  mockManagedPluginList,
+  mockManagedPluginReorder,
 } = vi.hoisted(() => ({
   mockEmitToConnection: vi.fn(),
   mockEmitToAll: vi.fn(),
@@ -28,6 +30,8 @@ const {
   mockInstallPlugin: vi.fn(),
   mockRemovePlugin: vi.fn(),
   mockUpdatePlugin: vi.fn(),
+  mockManagedPluginList: vi.fn(),
+  mockManagedPluginReorder: vi.fn(),
 }));
 
 // socketService：WebSocket boundary
@@ -45,6 +49,13 @@ vi.mock("../../src/services/plugin/pluginInstallService.js", () => ({
   installPlugin: mockInstallPlugin,
   removePlugin: mockRemovePlugin,
   updatePlugin: mockUpdatePlugin,
+}));
+
+vi.mock("../../src/services/plugin/managedPluginRegistry.js", () => ({
+  managedPluginStore: {
+    list: mockManagedPluginList,
+    reorder: mockManagedPluginReorder,
+  },
 }));
 
 // ─── imports ──────────────────────────────────────────────────────────────────
@@ -69,6 +80,7 @@ const MOCK_PLUGIN_RECORD = {
   displayName: "My Plugin",
   description: "A test plugin",
   installPath: "/plugins/owner/repo",
+  sortIndex: 2,
   installedAt: "2024-01-01T00:00:00.000Z",
   updatedAt: "2024-01-01T00:00:00.000Z",
 };
@@ -77,6 +89,7 @@ const MOCK_PLUGIN_RECORD = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockManagedPluginList.mockReturnValue([MOCK_PLUGIN_RECORD]);
 });
 
 // ─── PLUGIN_LIST handler ──────────────────────────────────────────────────────
@@ -131,6 +144,7 @@ describe("handlePluginInstall", () => {
     expect(connEvent).toBe(WebSocketResponseEvents.PLUGIN_INSTALLED);
     expect(connPayload.success).toBe(true);
     expect(connPayload.plugin).toEqual(MOCK_PLUGIN_RECORD);
+    expect(connPayload.plugin.sortIndex).toBe(2);
 
     // emitToAll
     expect(mockEmitToAll).toHaveBeenCalledOnce();
@@ -138,6 +152,7 @@ describe("handlePluginInstall", () => {
     expect(allEvent).toBe(WebSocketResponseEvents.PLUGIN_INSTALLED);
     expect(allPayload.success).toBe(true);
     expect(allPayload.plugin).toEqual(MOCK_PLUGIN_RECORD);
+    expect(allPayload.plugin.sortIndex).toBe(2);
   });
 });
 
@@ -166,6 +181,7 @@ describe("handlePluginDelete", () => {
     expect(connEvent).toBe(WebSocketResponseEvents.PLUGIN_DELETED);
     expect(connPayload.success).toBe(true);
     expect(connPayload.pluginId).toBe("owner/repo");
+    expect(connPayload.plugins).toEqual([MOCK_PLUGIN_RECORD]);
 
     // emitToAll
     expect(mockEmitToAll).toHaveBeenCalledOnce();
@@ -173,6 +189,7 @@ describe("handlePluginDelete", () => {
     expect(allEvent).toBe(WebSocketResponseEvents.PLUGIN_DELETED);
     expect(allPayload.success).toBe(true);
     expect(allPayload.pluginId).toBe("owner/repo");
+    expect(allPayload.plugins).toEqual([MOCK_PLUGIN_RECORD]);
   });
 });
 
@@ -201,6 +218,7 @@ describe("handlePluginUpdate", () => {
     expect(connEvent).toBe(WebSocketResponseEvents.PLUGIN_UPDATED);
     expect(connPayload.success).toBe(true);
     expect(connPayload.plugin).toEqual(MOCK_PLUGIN_RECORD);
+    expect(connPayload.plugin.sortIndex).toBe(2);
 
     // emitToAll
     expect(mockEmitToAll).toHaveBeenCalledOnce();
@@ -208,5 +226,6 @@ describe("handlePluginUpdate", () => {
     expect(allEvent).toBe(WebSocketResponseEvents.PLUGIN_UPDATED);
     expect(allPayload.success).toBe(true);
     expect(allPayload.plugin).toEqual(MOCK_PLUGIN_RECORD);
+    expect(allPayload.plugin.sortIndex).toBe(2);
   });
 });
