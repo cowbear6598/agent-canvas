@@ -178,22 +178,24 @@ describe("WorkflowExecutionService", () => {
         .spyOn(workflowBranchTriggerService, "processBranchConnections")
         .mockResolvedValue(undefined);
 
+      const runContext = makeRunContext();
       await workflowExecutionService.checkAndTriggerWorkflows(
         CANVAS_ID,
         SOURCE_POD_ID,
+        runContext,
       );
 
       expect(autoSpy).toHaveBeenCalledWith(
         CANVAS_ID,
         SOURCE_POD_ID,
         autoConn,
-        undefined,
+        runContext,
       );
       expect(branchSpy).toHaveBeenCalledWith(
         CANVAS_ID,
         SOURCE_POD_ID,
         [branchConn],
-        undefined,
+        runContext,
       );
     });
 
@@ -207,6 +209,7 @@ describe("WorkflowExecutionService", () => {
       await workflowExecutionService.checkAndTriggerWorkflows(
         CANVAS_ID,
         SOURCE_POD_ID,
+        makeRunContext(),
       );
 
       expect(autoSpy).not.toHaveBeenCalled();
@@ -217,7 +220,8 @@ describe("WorkflowExecutionService", () => {
   // triggerWorkflowWithSummary - connection 狀態設定
   // ============================================================
   describe("triggerWorkflowWithSummary - connection 狀態設定", () => {
-    it("觸發前應先將 connection 設為 active，才呼叫 strategy.onTrigger", async () => {
+    it("run mode：呼叫 strategy.onTrigger，不更改 connection active 狀態（connection 為模板）", async () => {
+      const runContext = makeRunContext();
       const autoConn = makeConnection({
         id: "conn-auto-1",
         triggerMode: "auto",
@@ -229,17 +233,6 @@ describe("WorkflowExecutionService", () => {
         autoConn,
       ]);
 
-      const callOrder: string[] = [];
-
-      (connectionStore.updateConnectionStatus as any).mockImplementation(
-        (_cId: string, _connId: string, status: string) => {
-          callOrder.push(`updateConnectionStatus:${status}`);
-        },
-      );
-      (mockStrategy.onTrigger as any).mockImplementation(() => {
-        callOrder.push("onTrigger");
-      });
-
       await workflowExecutionService.triggerWorkflowWithSummary({
         canvasId: CANVAS_ID,
         connectionId: autoConn.id,
@@ -247,88 +240,16 @@ describe("WorkflowExecutionService", () => {
         isSummarized: true,
         participatingConnectionIds: undefined,
         strategy: mockStrategy,
+        runContext,
       });
 
-      const activeIndex = callOrder.indexOf("updateConnectionStatus:active");
-      const onTriggerIndex = callOrder.indexOf("onTrigger");
-      expect(activeIndex).toBeGreaterThanOrEqual(0);
-      expect(onTriggerIndex).toBeGreaterThanOrEqual(0);
-      expect(activeIndex).toBeLessThan(onTriggerIndex);
-    });
-
-    it.each([
-      {
-        label: "auto 模式：設定同群所有 auto/branch 連線為 active",
-        triggerMode: "auto" as const,
-        connections: [
-          { id: "conn-auto-1", triggerMode: "auto" as const },
-          {
-            id: "conn-auto-2",
-            triggerMode: "auto" as const,
-            sourcePodId: "other-source",
-          },
-        ],
-        expectedActiveCount: 2,
-      },
-      {
-        label: "branch 模式：設定同群所有 auto/branch 連線為 active",
-        triggerMode: "branch" as const,
-        connections: [
-          { id: "conn-branch-1", triggerMode: "branch" as const },
-          {
-            id: "conn-branch-2",
-            triggerMode: "branch" as const,
-            sourcePodId: "other-source",
-          },
-        ],
-        expectedActiveCount: 2,
-      },
-      {
-        label: "direct 模式：只設定當前連線為 active",
-        triggerMode: "direct" as const,
-        connections: [{ id: "conn-direct-1", triggerMode: "direct" as const }],
-        expectedActiveCount: 1,
-      },
-    ])("$label", async ({ triggerMode, connections, expectedActiveCount }) => {
-      const mainConn = makeConnection({ id: connections[0].id, triggerMode });
-      const mockStrategy = makeStrategy(triggerMode);
-
-      vi.spyOn(connectionStore, "getById").mockReturnValue(mainConn);
-      vi.spyOn(connectionStore, "findByTargetPodId").mockReturnValue(
-        connections.map((c) =>
-          makeConnection({
-            id: c.id,
-            triggerMode: c.triggerMode,
-            sourcePodId: (c as any).sourcePodId ?? SOURCE_POD_ID,
-          }),
-        ),
-      );
-
-      const params =
-        triggerMode === "direct"
-          ? {
-              canvasId: CANVAS_ID,
-              connectionId: mainConn.id,
-              summary: "Test summary",
-              isSummarized: true,
-              participatingConnectionIds: [mainConn.id],
-              strategy: mockStrategy,
-            }
-          : {
-              canvasId: CANVAS_ID,
-              connectionId: mainConn.id,
-              summary: "Test summary",
-              isSummarized: true,
-              participatingConnectionIds: undefined,
-              strategy: mockStrategy,
-            };
-
-      await workflowExecutionService.triggerWorkflowWithSummary(params);
-
+      // run mode：connection 是模板，不應設為 active
       const activeCalls = (
         connectionStore.updateConnectionStatus as any
       ).mock.calls.filter((call: any[]) => call[2] === "active");
-      expect(activeCalls).toHaveLength(expectedActiveCount);
+      expect(activeCalls).toHaveLength(0);
+      // strategy.onTrigger 仍應被呼叫
+      expect(mockStrategy.onTrigger).toHaveBeenCalled();
     });
 
     it("connection 不存在時直接 return，不觸發 strategy", async () => {
@@ -342,6 +263,7 @@ describe("WorkflowExecutionService", () => {
         isSummarized: true,
         participatingConnectionIds: undefined,
         strategy: mockStrategy,
+        runContext: makeRunContext(),
       });
 
       expect(mockStrategy.onTrigger).not.toHaveBeenCalled();
@@ -366,16 +288,18 @@ describe("WorkflowExecutionService", () => {
         .spyOn(workflowBranchTriggerService, "processBranchConnections")
         .mockResolvedValue(undefined);
 
+      const runContext = makeRunContext();
       await workflowExecutionService.checkAndTriggerWorkflows(
         CANVAS_ID,
         SOURCE_POD_ID,
+        runContext,
       );
 
       expect(processSpy).toHaveBeenCalledWith(
         CANVAS_ID,
         SOURCE_POD_ID,
         [branchConn],
-        undefined,
+        runContext,
       );
     });
   });

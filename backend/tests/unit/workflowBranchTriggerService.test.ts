@@ -160,7 +160,8 @@ describe("WorkflowBranchTriggerService", () => {
   // processBranchConnections — approved 路徑
   // ============================================================
   describe("processBranchConnections — approved 路徑", () => {
-    it("branchDecisionService 選中某 connection → updateDecideStatus approved 並廣播 CONNECTION_UPDATED，未選中走 rejected", async () => {
+    it("branchDecisionService 選中某 connection → pipeline 走 approved，rejected connection 走 settleAndSkipPath", async () => {
+      const runContext = makeRunContext();
       const conn1 = makeConnection({ id: "conn-1", label: "Checklist" });
       const conn2 = makeConnection({
         id: "conn-2",
@@ -177,26 +178,17 @@ describe("WorkflowBranchTriggerService", () => {
         CANVAS_ID,
         SOURCE_POD_ID,
         [conn1, conn2],
+        runContext,
       );
 
-      // approved decideStatus 更新
-      expect(connectionStore.updateDecideStatus).toHaveBeenCalledWith(
-        CANVAS_ID,
-        "conn-1",
-        "approved",
-        null,
-      );
+      // run mode 不更新 connection status
+      expect(connectionStore.updateDecideStatus).not.toHaveBeenCalled();
 
-      // 廣播 CONNECTION_UPDATED（approved connection）
-      expect(socketService.emitToCanvas).toHaveBeenCalledWith(
+      // run mode 不廣播 CONNECTION_UPDATED（由 delegate 處理狀態）
+      expect(socketService.emitToCanvas).not.toHaveBeenCalledWith(
         CANVAS_ID,
         WebSocketResponseEvents.CONNECTION_UPDATED,
-        expect.objectContaining({
-          requestId: "",
-          canvasId: CANVAS_ID,
-          success: true,
-          connection: expect.objectContaining({ id: "conn-1" }),
-        }),
+        expect.anything(),
       );
 
       // pipeline 走 approved
@@ -216,7 +208,8 @@ describe("WorkflowBranchTriggerService", () => {
   // processBranchConnections — rejected 路徑
   // ============================================================
   describe("processBranchConnections — rejected 路徑", () => {
-    it("所有 connection 皆被 rejected → updateDecideStatus rejected 並廣播 CONNECTION_UPDATED，不觸發 pipeline", async () => {
+    it("所有 connection 皆被 rejected → run mode 走 settleAndSkipPath，不觸發 pipeline", async () => {
+      const runContext = makeRunContext();
       vi.spyOn(branchDecisionService, "decideBranch").mockResolvedValue({
         selectedConnectionId: null,
         rejectedConnectionIds: ["conn-branch-1"],
@@ -226,25 +219,17 @@ describe("WorkflowBranchTriggerService", () => {
         CANVAS_ID,
         SOURCE_POD_ID,
         [mockConnection],
+        runContext,
       );
 
-      expect(connectionStore.updateDecideStatus).toHaveBeenCalledWith(
-        CANVAS_ID,
-        "conn-branch-1",
-        "rejected",
-        null,
-      );
+      // run mode 不更新 connection status / decideStatus
+      expect(connectionStore.updateDecideStatus).not.toHaveBeenCalled();
 
-      // 廣播 CONNECTION_UPDATED（rejected connection）
-      expect(socketService.emitToCanvas).toHaveBeenCalledWith(
+      // run mode 不廣播 CONNECTION_UPDATED
+      expect(socketService.emitToCanvas).not.toHaveBeenCalledWith(
         CANVAS_ID,
         WebSocketResponseEvents.CONNECTION_UPDATED,
-        expect.objectContaining({
-          requestId: "",
-          canvasId: CANVAS_ID,
-          success: true,
-          connection: expect.objectContaining({ id: "conn-branch-1" }),
-        }),
+        expect.anything(),
       );
 
       expect(workflowPipeline.execute).not.toHaveBeenCalled();
@@ -255,7 +240,8 @@ describe("WorkflowBranchTriggerService", () => {
   // processBranchConnections — None 路徑（AI 選 None）
   // ============================================================
   describe("processBranchConnections — None 路徑", () => {
-    it("AI 選 None → selectedConnectionId=null，全部 connection updateDecideStatus rejected 並廣播 CONNECTION_UPDATED，不觸發 pipeline", async () => {
+    it("AI 選 None → run mode 所有 connection 走 settleAndSkipPath，不觸發 pipeline", async () => {
+      const runContext = makeRunContext();
       const conn1 = makeConnection({ id: "conn-1", label: "Checklist" });
       const conn2 = makeConnection({
         id: "conn-2",
@@ -272,35 +258,19 @@ describe("WorkflowBranchTriggerService", () => {
         CANVAS_ID,
         SOURCE_POD_ID,
         [conn1, conn2],
+        runContext,
       );
 
-      expect(connectionStore.updateDecideStatus).toHaveBeenCalledWith(
-        CANVAS_ID,
-        "conn-1",
-        "rejected",
-        null,
-      );
-      expect(connectionStore.updateDecideStatus).toHaveBeenCalledWith(
-        CANVAS_ID,
-        "conn-2",
-        "rejected",
-        null,
-      );
-      // 每條 rejected connection 各廣播一次 CONNECTION_UPDATED
-      expect(socketService.emitToCanvas).toHaveBeenCalledWith(
+      // run mode 不更新 connection status / decideStatus
+      expect(connectionStore.updateDecideStatus).not.toHaveBeenCalled();
+
+      // run mode 不廣播 CONNECTION_UPDATED
+      expect(socketService.emitToCanvas).not.toHaveBeenCalledWith(
         CANVAS_ID,
         WebSocketResponseEvents.CONNECTION_UPDATED,
-        expect.objectContaining({
-          connection: expect.objectContaining({ id: "conn-1" }),
-        }),
+        expect.anything(),
       );
-      expect(socketService.emitToCanvas).toHaveBeenCalledWith(
-        CANVAS_ID,
-        WebSocketResponseEvents.CONNECTION_UPDATED,
-        expect.objectContaining({
-          connection: expect.objectContaining({ id: "conn-2" }),
-        }),
-      );
+
       expect(workflowPipeline.execute).not.toHaveBeenCalled();
     });
   });
@@ -309,7 +279,8 @@ describe("WorkflowBranchTriggerService", () => {
   // processBranchConnections — abort 路徑
   // ============================================================
   describe("processBranchConnections — abort 路徑", () => {
-    it("branchDecisionService 拋 BranchAbortError → 清回 idle 狀態，不觸發 pipeline", async () => {
+    it("branchDecisionService 拋 BranchAbortError → run mode 透過 delegate 走 settleAndSkipPath，不觸發 pipeline", async () => {
+      const runContext = makeRunContext();
       vi.spyOn(branchDecisionService, "decideBranch").mockRejectedValue(
         new BranchAbortError(),
       );
@@ -318,20 +289,12 @@ describe("WorkflowBranchTriggerService", () => {
         CANVAS_ID,
         SOURCE_POD_ID,
         [mockConnection],
+        runContext,
       );
 
-      // 非 run mode：清回 idle
-      expect(connectionStore.updateConnectionStatus).toHaveBeenCalledWith(
-        CANVAS_ID,
-        "conn-branch-1",
-        "idle",
-      );
-      expect(connectionStore.updateDecideStatus).toHaveBeenCalledWith(
-        CANVAS_ID,
-        "conn-branch-1",
-        "none",
-        null,
-      );
+      // run mode：不清回 idle（clearConnectionsDecidingStatus 在 runContext 下為 noop）
+      expect(connectionStore.updateConnectionStatus).not.toHaveBeenCalled();
+      expect(connectionStore.updateDecideStatus).not.toHaveBeenCalled();
       expect(workflowPipeline.execute).not.toHaveBeenCalled();
     });
   });
@@ -396,6 +359,7 @@ describe("WorkflowBranchTriggerService", () => {
         canvasId: CANVAS_ID,
         sourcePodId: SOURCE_POD_ID,
         connections: [conn1, conn2],
+        runContext: makeRunContext(),
       });
 
       expect(results).toEqual([
@@ -424,6 +388,7 @@ describe("WorkflowBranchTriggerService", () => {
         canvasId: CANVAS_ID,
         sourcePodId: SOURCE_POD_ID,
         connections: [mockConnection],
+        runContext: makeRunContext(),
       });
 
       expect(results).toEqual([
@@ -469,6 +434,7 @@ describe("WorkflowBranchTriggerService", () => {
         CANVAS_ID,
         SOURCE_POD_ID,
         [mockConnection],
+        makeRunContext(),
       );
 
       // 即使 hasPendingTarget=false，仍應呼叫 recordSourceRejection（不因此跳過）

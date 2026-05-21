@@ -72,7 +72,7 @@ class WorkflowAutoTriggerService implements TriggerStrategy {
     canvasId: string,
     sourcePodId: string,
     connection: Connection,
-    runContext?: RunContext,
+    runContext: RunContext,
   ): Promise<void> {
     if (!this.pipeline) {
       throw new Error("AutoTriggerService 尚未初始化，請先呼叫 init()");

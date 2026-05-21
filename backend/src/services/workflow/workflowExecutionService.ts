@@ -65,7 +65,7 @@ interface WorkflowChatContext {
   targetPodId: string;
   participatingConnectionIds: string[];
   strategy: TriggerStrategy;
-  runContext?: RunContext;
+  runContext: RunContext;
   delegate: WorkflowStatusDelegate;
 }
 
@@ -138,7 +138,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     canvasId: string,
     sourcePodId: string,
     connections: Connection[],
-    runContext?: RunContext,
+    runContext: RunContext,
   ): Promise<unknown>[] {
     return connections
       .filter((conn) => conn.triggerMode === "auto")
@@ -156,7 +156,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     canvasId: string,
     sourcePodId: string,
     connections: Connection[],
-    runContext?: RunContext,
+    runContext: RunContext,
   ): Promise<unknown> {
     const branchConnections = connections.filter(
       (conn) => conn.triggerMode === "branch",
@@ -174,9 +174,8 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     canvasId: string,
     sourcePodId: string,
     connections: Connection[],
-    runContext?: RunContext,
+    runContext: RunContext,
   ): Promise<unknown>[] {
-    // 唯一入口（chatCallbacks）一定帶 runContext，delegate 為必填
     const delegate = createStatusDelegate(runContext);
     return connections
       .filter((conn) => conn.triggerMode === "direct")
@@ -205,7 +204,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
   async checkAndTriggerWorkflows(
     canvasId: string,
     sourcePodId: string,
-    runContext?: RunContext,
+    runContext: RunContext,
   ): Promise<void> {
     const connections = connectionStore.findBySourcePodId(
       canvasId,
@@ -216,7 +215,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
       return;
     }
 
-    await Promise.allSettled([
+    const results = await Promise.allSettled([
       ...this.triggerAutoConnections(
         canvasId,
         sourcePodId,
@@ -236,6 +235,12 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
         runContext,
       ),
     ]);
+
+    for (const result of results) {
+      if (result.status === "rejected") {
+        logger.error("Workflow", "Error", "Workflow 觸發失敗", result.reason);
+      }
+    }
   }
 
   async triggerWorkflowWithSummary(
@@ -366,7 +371,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     targetPodId: string,
     triggerMode: TriggerMode,
     participatingConnectionIds: string[],
-    runContext?: RunContext,
+    runContext: RunContext,
   ): void {
     // run mode 下 connection 是模板，不應改變全域狀態
     if (runContext) return;
@@ -461,9 +466,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     const { canvasId, targetPodId, content, runContext } = params;
     const baseMessage = buildTransferMessage(content);
 
-    // 依 runContext 建立 ChatExecutionStrategy，並透過 strategy 注入使用者訊息
-    // runContext 在 workflow 執行路徑中必定存在（由上游 launchRun 建立）
-    const execStrategy = new ChatExecutionStrategy(canvasId, runContext!);
+    const execStrategy = new ChatExecutionStrategy(canvasId, runContext);
 
     await execStrategy.addUserMessage(targetPodId, baseMessage);
 

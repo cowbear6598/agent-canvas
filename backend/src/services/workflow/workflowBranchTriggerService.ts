@@ -121,7 +121,7 @@ class WorkflowBranchTriggerService
           canvasId,
           sourcePodId,
           connections,
-          runContext!,
+          runContext,
         );
 
       logger.log(
@@ -194,7 +194,7 @@ class WorkflowBranchTriggerService
   private setConnectionsToDeciding(
     canvasId: string,
     connections: Connection[],
-    runContext?: RunContext,
+    runContext: RunContext,
   ): void {
     if (runContext) return;
     for (const connection of connections) {
@@ -215,7 +215,7 @@ class WorkflowBranchTriggerService
   private clearConnectionsDecidingStatus(
     canvasId: string,
     connections: Connection[],
-    runContext?: RunContext,
+    runContext: RunContext,
   ): void {
     if (runContext) return;
     for (const connection of connections) {
@@ -251,7 +251,7 @@ class WorkflowBranchTriggerService
     canvasId: string,
     sourcePodId: string,
     connection: Connection,
-    runContext?: RunContext,
+    runContext: RunContext,
   ): void {
     if (!runContext) {
       this.deps.connectionStore.updateDecideStatus(
@@ -271,7 +271,7 @@ class WorkflowBranchTriggerService
     sourcePodId: string,
     connection: Connection,
     delegate: ReturnType<typeof createStatusDelegate>,
-    runContext?: RunContext,
+    runContext: RunContext,
   ): void {
     const decideResult: TriggerDecideResult = {
       connectionId: connection.id,
@@ -298,6 +298,11 @@ class WorkflowBranchTriggerService
           `Branch Workflow 執行失敗，連線 ${connection.id}`,
           error,
         );
+        delegate.onChatError(
+          canvasId,
+          connection.targetPodId,
+          getErrorMessage(error),
+        );
         if (!delegate.isRunMode()) {
           this.deps.eventEmitter.emitWorkflowComplete({
             canvasId,
@@ -316,7 +321,7 @@ class WorkflowBranchTriggerService
     canvasId: string,
     connection: Connection,
     sourcePodId: string,
-    runContext?: RunContext,
+    runContext: RunContext,
   ): void {
     if (runContext) return;
     // 不發 per-connection branchResult；
@@ -330,7 +335,7 @@ class WorkflowBranchTriggerService
   private shouldDeferToMultiInput(
     canvasId: string,
     targetPodId: string,
-    _runContext?: RunContext,
+    _runContext: RunContext,
   ): boolean {
     const { isMultiInput } = this.deps.stateService.checkMultiInputScenario(
       canvasId,
@@ -344,7 +349,7 @@ class WorkflowBranchTriggerService
     sourcePodId: string,
     connection: Connection,
     delegate: ReturnType<typeof createStatusDelegate>,
-    runContext?: RunContext,
+    runContext: RunContext,
   ): Promise<void> {
     if (!delegate.isRunMode()) {
       this.deps.connectionStore.updateDecideStatus(
@@ -386,21 +391,135 @@ class WorkflowBranchTriggerService
   }
 
   /**
+   * 執行決策並處理 abort / 例外情境，回傳選中與拒絕的 connection id。
+   * abort 時回傳 null 表示應立即結束流程。
+   */
+  private async executeDecisionWithAbortHandling(
+    canvasId: string,
+    sourcePodId: string,
+    connections: Connection[],
+    runContext: RunContext,
+    abortSignal: AbortSignal | undefined,
+    delegate: ReturnType<typeof createStatusDelegate>,
+  ): Promise<{
+    selectedConnectionId: string | null;
+    rejectedConnectionIds: string[];
+  } | null> {
+    try {
+      const result = await this.deps.branchDecisionService.decideBranch(
+        canvasId,
+        sourcePodId,
+        connections,
+        runContext,
+        abortSignal,
+      );
+      return {
+        selectedConnectionId: result.selectedConnectionId,
+        rejectedConnectionIds: result.rejectedConnectionIds,
+      };
+    } catch (error) {
+      if (isAbortError(error)) {
+        logger.log(
+          "Workflow",
+          "Update",
+          `[Branch] 決策被 abort，撤回狀態，canvasId=${canvasId} sourcePodId=${sourcePodId}`,
+        );
+        // 非 run mode：清回 idle 狀態
+        this.clearConnectionsDecidingStatus(canvasId, connections, runContext);
+        // run mode：透過 delegate 讓所有 target pod 走 auto pathway 繼續流程
+        if (runContext) {
+          for (const connection of connections) {
+            delegate.settleAndSkipPath(
+              canvasId,
+              connection.targetPodId,
+              "auto",
+            );
+          }
+        }
+        return null;
+      }
+
+      // 非 abort 的例外：branchDecisionService 內部應已處理並回傳結果，
+      // 若仍拋出則視為全部拒絕（防禦性處理）
+      logger.error(
+        "Workflow",
+        "Error",
+        `[Branch] decideBranch 意外拋出例外，全部拒絕，canvasId=${canvasId}`,
+        error,
+      );
+      return {
+        selectedConnectionId: null,
+        rejectedConnectionIds: connections.map((c) => c.id),
+      };
+    }
+  }
+
+  /** 套用 approved connection：更新狀態並觸發 pipeline。 */
+  private applyApprovedConnection(
+    canvasId: string,
+    sourcePodId: string,
+    selectedConnectionId: string,
+    connections: Connection[],
+    delegate: ReturnType<typeof createStatusDelegate>,
+    runContext: RunContext,
+  ): void {
+    const approvedConn = connections.find((c) => c.id === selectedConnectionId);
+    if (approvedConn) {
+      this.handleApprovedConnection(
+        canvasId,
+        sourcePodId,
+        approvedConn,
+        runContext,
+      );
+      this.triggerApprovedPipeline(
+        canvasId,
+        sourcePodId,
+        approvedConn,
+        delegate,
+        runContext,
+      );
+    }
+  }
+
+  /** 套用 rejected connections：平行處理各條拒絕路徑（含 multi-input）。 */
+  private async applyRejectedConnections(
+    canvasId: string,
+    sourcePodId: string,
+    rejectedConnectionIds: string[],
+    connections: Connection[],
+    delegate: ReturnType<typeof createStatusDelegate>,
+    runContext: RunContext,
+  ): Promise<void> {
+    const rejectedSet = new Set(rejectedConnectionIds);
+    await Promise.all(
+      connections
+        .filter((c) => rejectedSet.has(c.id))
+        .map((connection) =>
+          this.handleRejectedConnection(
+            canvasId,
+            sourcePodId,
+            connection,
+            delegate,
+            runContext,
+          ),
+        ),
+    );
+  }
+
+  /**
    * 處理所有 branch connections 的決策流程。
    *
    * 流程：
    * 1. 發 pending 事件 + 設定 connections 為 ai-deciding 狀態
-   * 2. 取得 abortSignal（若有）
-   * 3. 呼叫 branchDecisionService.decideBranch 取得選中/拒絕 connectionId
-   * 4. 若 abort：撤回狀態，結束
-   * 5. 若有 selectedConnectionId：走 approved 流程 + triggerApprovedPipeline
-   * 6. rejectedConnectionIds：走 rejected 流程（含 multi-input 路徑）
+   * 2. 取得 abortSignal（若有）並執行決策（含 abort / 例外處理）
+   * 3. 套用 approved connection（觸發 pipeline）
+   * 4. 套用 rejected connections（平行處理）
    */
   async processBranchConnections(
     canvasId: string,
     sourcePodId: string,
     connections: Connection[],
-    runContext?: RunContext,
+    runContext: RunContext,
   ): Promise<void> {
     const delegate = createStatusDelegate(runContext);
 
@@ -421,73 +540,27 @@ class WorkflowBranchTriggerService
       : sourcePodId;
     const abortSignal = abortRegistry.get(abortKey)?.signal;
 
-    let selectedConnectionId: string | null = null;
-    let rejectedConnectionIds: string[] = [];
+    const decisionResult = await this.executeDecisionWithAbortHandling(
+      canvasId,
+      sourcePodId,
+      connections,
+      runContext,
+      abortSignal,
+      delegate,
+    );
+    if (decisionResult === null) return;
 
-    try {
-      const result = await this.deps.branchDecisionService.decideBranch(
+    const { selectedConnectionId, rejectedConnectionIds } = decisionResult;
+
+    if (selectedConnectionId !== null) {
+      this.applyApprovedConnection(
         canvasId,
         sourcePodId,
+        selectedConnectionId,
         connections,
-        runContext!,
-        abortSignal,
+        delegate,
+        runContext,
       );
-      selectedConnectionId = result.selectedConnectionId;
-      rejectedConnectionIds = result.rejectedConnectionIds;
-    } catch (error) {
-      if (isAbortError(error)) {
-        logger.log(
-          "Workflow",
-          "Update",
-          `[Branch] 決策被 abort，撤回狀態，canvasId=${canvasId} sourcePodId=${sourcePodId}`,
-        );
-        // 非 run mode：清回 idle 狀態
-        this.clearConnectionsDecidingStatus(canvasId, connections, runContext);
-        // run mode：透過 delegate 讓所有 target pod 走 auto pathway 繼續流程
-        if (runContext) {
-          for (const connection of connections) {
-            delegate.settleAndSkipPath(
-              canvasId,
-              connection.targetPodId,
-              "auto",
-            );
-          }
-        }
-        return;
-      }
-
-      // 非 abort 的例外：branchDecisionService 內部應已處理並回傳結果，
-      // 若仍拋出則視為全部拒絕（防禦性處理）
-      logger.error(
-        "Workflow",
-        "Error",
-        `[Branch] decideBranch 意外拋出例外，全部拒絕，canvasId=${canvasId}`,
-        error,
-      );
-      selectedConnectionId = null;
-      rejectedConnectionIds = connections.map((c) => c.id);
-    }
-
-    // 處理 approved connection
-    if (selectedConnectionId !== null) {
-      const approvedConn = connections.find(
-        (c) => c.id === selectedConnectionId,
-      );
-      if (approvedConn) {
-        this.handleApprovedConnection(
-          canvasId,
-          sourcePodId,
-          approvedConn,
-          runContext,
-        );
-        this.triggerApprovedPipeline(
-          canvasId,
-          sourcePodId,
-          approvedConn,
-          delegate,
-          runContext,
-        );
-      }
     } else {
       // AI 選 None：所有 connections 皆拒絕（已在 rejectedConnectionIds）
       // rejected path 已在 handleRejectedConnection 逐條廣播 CONNECTION_UPDATED，不需額外 emit
@@ -498,18 +571,14 @@ class WorkflowBranchTriggerService
       );
     }
 
-    // 處理 rejected connections
-    const rejectedSet = new Set(rejectedConnectionIds);
-    for (const connection of connections) {
-      if (!rejectedSet.has(connection.id)) continue;
-      await this.handleRejectedConnection(
-        canvasId,
-        sourcePodId,
-        connection,
-        delegate,
-        runContext,
-      );
-    }
+    await this.applyRejectedConnections(
+      canvasId,
+      sourcePodId,
+      rejectedConnectionIds,
+      connections,
+      delegate,
+      runContext,
+    );
   }
 }
 

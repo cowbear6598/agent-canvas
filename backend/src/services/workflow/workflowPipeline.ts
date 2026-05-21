@@ -135,8 +135,6 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
 
     const sourcePod = podStore.getById(canvasId, sourcePodId);
     const sourcePodName = sourcePod?.name ?? sourcePodId;
-    // summaryProvider 為 NULL 時 fallback 為 sourcePod.provider，保留升級前舊 Connection 的 summary 行為；
-    // sourcePod 找不到時再 fallback 為 "claude"，確保向下相容。
     const provider =
       connection.summaryProvider ?? sourcePod?.provider ?? "claude";
 
@@ -155,7 +153,7 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
         targetPodId,
         provider,
         connection.summaryModel,
-        runContext!,
+        runContext,
         pathway,
         delegate,
       );
@@ -165,6 +163,11 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
         "Workflow",
         "Pipeline",
         `[generateSummary] 無法生成摘要或取得備用內容`,
+      );
+      delegate.onSummaryFailed(
+        canvasId,
+        targetPodId,
+        "無法生成摘要或取得備用內容",
       );
       return;
     }
@@ -264,6 +267,91 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
     return true;
   }
 
+  /** strategy.collectSources 路徑：委派給策略自行收集來源並決定是否繼續。 */
+  private async runStrategyCollectSources(
+    context: PipelineContext,
+    strategy: Required<Pick<TriggerStrategy, "collectSources">>,
+    summaryContent: string,
+    isSummarized: boolean,
+  ): Promise<{
+    finalSummary: string;
+    finalIsSummarized: boolean;
+    participatingConnectionIds?: string[];
+  } | null> {
+    const { canvasId, sourcePodId, connection } = context;
+
+    const collectResult = await strategy.collectSources({
+      canvasId,
+      sourcePodId,
+      connection,
+      summary: summaryContent,
+      runContext: context.runContext,
+    });
+
+    if (!collectResult.ready) {
+      return null;
+    }
+
+    const { participatingConnectionIds } = collectResult;
+
+    if (collectResult.mergedContent) {
+      return {
+        finalSummary: collectResult.mergedContent,
+        finalIsSummarized: collectResult.isSummarized ?? true,
+        participatingConnectionIds,
+      };
+    }
+
+    return {
+      finalSummary: summaryContent,
+      finalIsSummarized: isSummarized,
+      participatingConnectionIds,
+    };
+  }
+
+  /** multi-input 路徑：等待所有上游來源完成後才觸發下游。 */
+  private async runMultiInputCollectStage(
+    context: PipelineContext,
+    summaryContent: string,
+  ): Promise<null> {
+    const { canvasId, sourcePodId, connection, triggerMode } = context;
+
+    // multi-input 路徑僅允許 "auto" 與 "branch"，
+    // "direct" 不應進入此分支（direct 有自己的 collectSources 路徑）。
+    // 以 if 守門縮窄型別，避免強制斷言。
+    if (triggerMode !== "auto" && triggerMode !== "branch") {
+      logger.warn(
+        "Workflow",
+        "Pipeline",
+        `[runCollectSourcesStage] 不預期的 triggerMode "${triggerMode}" 進入 multi-input 分支，跳過處理`,
+      );
+      return null;
+    }
+
+    await this.deps.multiInputService.handleMultiInputForConnection({
+      canvasId,
+      sourcePodId,
+      connection,
+      summary: summaryContent,
+      triggerMode,
+      runContext: context.runContext,
+    });
+
+    return null;
+  }
+
+  /** 直通路徑：直接以摘要內容觸發下游，不需額外收集。 */
+  private runDirectPassthrough(
+    summaryContent: string,
+    isSummarized: boolean,
+  ): {
+    finalSummary: string;
+    finalIsSummarized: boolean;
+    participatingConnectionIds?: string[];
+  } {
+    return { finalSummary: summaryContent, finalIsSummarized: isSummarized };
+  }
+
   private async runCollectSourcesStage(
     context: PipelineContext,
     strategy: TriggerStrategy,
@@ -274,69 +362,26 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
     finalIsSummarized: boolean;
     participatingConnectionIds?: string[];
   } | null> {
-    const { canvasId, sourcePodId, connection, triggerMode } = context;
+    const { canvasId, connection } = context;
     const { targetPodId } = connection;
 
     if (strategy.collectSources) {
-      const collectResult = await strategy.collectSources({
-        canvasId,
-        sourcePodId,
-        connection,
-        summary: summaryContent,
-        runContext: context.runContext,
-      });
-
-      if (!collectResult.ready) {
-        return null;
-      }
-
-      const { participatingConnectionIds } = collectResult;
-
-      if (collectResult.mergedContent) {
-        return {
-          finalSummary: collectResult.mergedContent,
-          finalIsSummarized: collectResult.isSummarized ?? true,
-          participatingConnectionIds,
-        };
-      }
-
-      return {
-        finalSummary: summaryContent,
-        finalIsSummarized: isSummarized,
-        participatingConnectionIds,
-      };
+      return this.runStrategyCollectSources(
+        context,
+        strategy as Required<Pick<TriggerStrategy, "collectSources">>,
+        summaryContent,
+        isSummarized,
+      );
     }
 
     const isMultiInput =
       getMultiInputGroupConnections(canvasId, targetPodId).length > 1;
 
     if (isMultiInput) {
-      // multi-input 路徑僅允許 "auto" 與 "branch"，
-      // "direct" 不應進入此分支（direct 有自己的 collectSources 路徑）。
-      // 以 if 守門縮窄型別，避免強制斷言。
-      if (triggerMode !== "auto" && triggerMode !== "branch") {
-        logger.warn(
-          "Workflow",
-          "Pipeline",
-          `[runCollectSourcesStage] 不預期的 triggerMode "${triggerMode}" 進入 multi-input 分支，跳過處理`,
-        );
-        return {
-          finalSummary: summaryContent,
-          finalIsSummarized: isSummarized,
-        };
-      }
-      await this.deps.multiInputService.handleMultiInputForConnection({
-        canvasId,
-        sourcePodId,
-        connection,
-        summary: summaryContent,
-        triggerMode,
-        runContext: context.runContext,
-      });
-      return null;
+      return this.runMultiInputCollectStage(context, summaryContent);
     }
 
-    return { finalSummary: summaryContent, finalIsSummarized: isSummarized };
+    return this.runDirectPassthrough(summaryContent, isSummarized);
   }
 }
 

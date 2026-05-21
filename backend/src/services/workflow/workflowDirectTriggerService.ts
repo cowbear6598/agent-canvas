@@ -86,7 +86,7 @@ class WorkflowDirectTriggerService implements TriggerStrategy {
     targetPodId: string,
     connection: Connection,
     summary: string,
-    runContext?: RunContext,
+    runContext: RunContext,
   ): Promise<CollectSourcesResult> {
     const storeKey = resolvePendingKey(targetPodId, runContext);
 
@@ -124,7 +124,7 @@ class WorkflowDirectTriggerService implements TriggerStrategy {
     canvasId: string,
     targetPodId: string,
     storeKey = targetPodId,
-    runContext?: RunContext,
+    runContext: RunContext,
   ): void {
     if (directTriggerStore.hasActiveTimer(storeKey)) {
       directTriggerStore.clearTimer(storeKey);
@@ -156,7 +156,7 @@ class WorkflowDirectTriggerService implements TriggerStrategy {
     canvasId: string,
     targetPodId: string,
     storeKey = targetPodId,
-    runContext?: RunContext,
+    runContext: RunContext,
   ): void {
     const resolver = this.pendingResolvers.get(storeKey);
     if (!resolver) {
@@ -197,7 +197,7 @@ class WorkflowDirectTriggerService implements TriggerStrategy {
     canvasId: string,
     targetPodId: string,
     storeKey: string,
-    runContext?: RunContext,
+    runContext: RunContext,
   ): CollectSourcesResult {
     const readySummaries = directTriggerStore.getReadySummaries(storeKey);
     if (!readySummaries || readySummaries.size === 0) {

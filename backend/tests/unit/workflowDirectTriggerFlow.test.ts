@@ -6,10 +6,11 @@ import { podStore } from "../../src/services/podStore.js";
 import { directTriggerStore } from "../../src/services/directTriggerStore.js";
 import { workflowStateService } from "../../src/services/workflow";
 import { workflowEventEmitter } from "../../src/services/workflow";
-import { workflowQueueService } from "../../src/services/workflow";
 import { summaryService } from "../../src/services/summaryService.js";
 import { logger } from "../../src/utils/logger.js";
+import { resolvePendingKey } from "../../src/services/workflow/workflowHelpers.js";
 import type { Connection } from "../../src/types";
+import type { RunContext } from "../../src/types/run.js";
 import path from "path";
 import { config } from "../../src/config/index.js";
 
@@ -21,6 +22,19 @@ const TARGET_POD_ID = "target-pod";
 const TEST_SUMMARY = "Test summary content";
 
 // ─── 工廠函式 ─────────────────────────────────────────────────────────────────
+
+function makeRunContext(overrides?: Partial<RunContext>): RunContext {
+  return {
+    runId: "run-1",
+    canvasId: CANVAS_ID,
+    sourcePodId: SOURCE_POD_ID,
+    ...overrides,
+  };
+}
+
+const testRunContext = makeRunContext();
+// testRunContext.runId = "run-1"，所以 storeKey = "run-1:target-pod"
+const TARGET_STORE_KEY = resolvePendingKey(TARGET_POD_ID, testRunContext);
 
 function makeConnection(overrides?: Partial<Connection>): Connection {
   return {
@@ -147,6 +161,7 @@ describe("Direct Trigger Flow", () => {
       await workflowExecutionService.checkAndTriggerWorkflows(
         CANVAS_ID,
         SOURCE_POD_ID,
+        testRunContext,
       );
 
       expect(triggerSpy).toHaveBeenCalled();
@@ -186,28 +201,22 @@ describe("Direct Trigger Flow", () => {
       workflowExecutionService.checkAndTriggerWorkflows(
         CANVAS_ID,
         SOURCE_POD_ID,
+        testRunContext,
       );
 
       await Promise.resolve();
       await Promise.resolve();
 
       expect(directTriggerStore.initializeDirectPending).toHaveBeenCalledWith(
-        TARGET_POD_ID,
+        TARGET_STORE_KEY,
       );
       expect(directTriggerStore.recordDirectReady).toHaveBeenCalledWith(
-        TARGET_POD_ID,
+        TARGET_STORE_KEY,
         SOURCE_POD_ID,
         TEST_SUMMARY,
       );
-      expect(workflowEventEmitter.emitDirectWaiting).toHaveBeenCalledWith(
-        CANVAS_ID,
-        expect.objectContaining({
-          canvasId: CANVAS_ID,
-          connectionId: mockDirectConnection.id,
-          sourcePodId: SOURCE_POD_ID,
-          targetPodId: TARGET_POD_ID,
-        }),
-      );
+      // run mode：不廣播 emitDirectWaiting（由 delegate.markWaiting 處理）
+      expect(workflowEventEmitter.emitDirectWaiting).not.toHaveBeenCalled();
       expect(directTriggerStore.setTimer).toHaveBeenCalled();
 
       vi.useRealTimers();
@@ -222,9 +231,11 @@ describe("Direct Trigger Flow", () => {
         sourcePodId: source2PodId,
       });
 
-      // 模擬第一個 resolver 已存在
+      // 模擬第一個 resolver 已存在（key 為 storeKey = "run-1:target-pod"）
+      const b2RunContext = makeRunContext({ sourcePodId: source2PodId });
+      const b2StoreKey = resolvePendingKey(TARGET_POD_ID, b2RunContext);
       (workflowDirectTriggerService as any).pendingResolvers.set(
-        TARGET_POD_ID,
+        b2StoreKey,
         (_result: any) => {},
       );
 
@@ -253,14 +264,17 @@ describe("Direct Trigger Flow", () => {
       await workflowExecutionService.checkAndTriggerWorkflows(
         CANVAS_ID,
         source2PodId,
+        makeRunContext({ sourcePodId: source2PodId }),
       );
 
       expect(directTriggerStore.recordDirectReady).toHaveBeenCalledWith(
-        TARGET_POD_ID,
+        TARGET_STORE_KEY,
         source2PodId,
         TEST_SUMMARY,
       );
-      expect(directTriggerStore.clearTimer).toHaveBeenCalledWith(TARGET_POD_ID);
+      expect(directTriggerStore.clearTimer).toHaveBeenCalledWith(
+        TARGET_STORE_KEY,
+      );
       expect(setTimeoutSpy).toHaveBeenCalled();
       expect(directTriggerStore.setTimer).toHaveBeenCalled();
     });
@@ -347,6 +361,7 @@ describe("Direct Trigger Flow", () => {
           sourcePodId: SOURCE_POD_ID,
           connection: mockDirectConnection,
           summary: TEST_SUMMARY,
+          runContext: testRunContext,
         },
       );
 

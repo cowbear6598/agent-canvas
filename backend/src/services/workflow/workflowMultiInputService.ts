@@ -79,7 +79,7 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
     sourcePodId: string,
     requiredSourcePodIds: string[],
     summary: string,
-    runContext?: RunContext,
+    runContext: RunContext,
   ): { ready: boolean; hasRejection: boolean } {
     const pendingKey = resolvePendingKey(targetPodId, runContext);
     const { allSourcesResponded, hasRejection } =
@@ -96,7 +96,7 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
   private getMergedContentOrNull(
     canvasId: string,
     targetPodId: string,
-    runContext?: RunContext,
+    runContext: RunContext,
   ): { completedSummaries: Map<string, string>; mergedContent: string } | null {
     const pendingKey = resolvePendingKey(targetPodId, runContext);
     const completedSummaries =
@@ -118,7 +118,7 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
     connection: Connection,
     requiredSourcePodIds: string[],
     summary: string,
-    runContext?: RunContext,
+    runContext: RunContext,
   ): Promise<"not-ready" | "rejected" | "ready"> {
     const { ready, hasRejection } = this.recordAndCheckAllSourcesReady(
       connection.targetPodId,
@@ -243,7 +243,7 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
     canvasId: string,
     connection: Connection,
     triggerMode: AutoTriggerMode,
-    runContext?: RunContext,
+    runContext: RunContext,
   ): void {
     const merged = this.getMergedContentOrNull(
       canvasId,

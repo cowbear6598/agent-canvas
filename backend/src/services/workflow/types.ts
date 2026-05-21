@@ -14,7 +14,7 @@ export interface TriggerDecideContext {
   canvasId: string;
   sourcePodId: string;
   connections: Connection[];
-  runContext?: RunContext;
+  runContext: RunContext;
 }
 
 export interface TriggerDecideResult {
@@ -29,7 +29,7 @@ export interface CollectSourcesContext {
   sourcePodId: string;
   connection: Connection;
   summary: string;
-  runContext?: RunContext;
+  runContext: RunContext;
 }
 
 export interface CollectSourcesResult {
@@ -47,7 +47,7 @@ export interface TriggerLifecycleContext {
   summary: string;
   isSummarized: boolean;
   participatingConnectionIds: string[];
-  runContext?: RunContext;
+  runContext: RunContext;
 }
 
 export interface QueuedContext {
@@ -59,7 +59,7 @@ export interface QueuedContext {
   queueSize: number;
   triggerMode: TriggerMode;
   participatingConnectionIds: string[];
-  runContext?: RunContext;
+  runContext: RunContext;
 }
 
 export interface QueueProcessedContext {
@@ -70,7 +70,7 @@ export interface QueueProcessedContext {
   remainingQueueSize: number;
   triggerMode: TriggerMode;
   participatingConnectionIds: string[];
-  runContext?: RunContext;
+  runContext: RunContext;
 }
 
 export interface CompletionContext {
@@ -80,7 +80,7 @@ export interface CompletionContext {
   targetPodId: string;
   triggerMode: TriggerMode;
   participatingConnectionIds: string[];
-  runContext?: RunContext;
+  runContext: RunContext;
 }
 
 export interface TriggerStrategy {
@@ -110,7 +110,7 @@ export interface PipelineContext {
   connection: Connection;
   triggerMode: TriggerMode;
   decideResult: TriggerDecideResult;
-  runContext?: RunContext;
+  runContext: RunContext;
   delegate: WorkflowStatusDelegate;
 }
 
@@ -121,7 +121,7 @@ export interface TriggerWorkflowWithSummaryParams {
   isSummarized: boolean;
   participatingConnectionIds: string[] | undefined;
   strategy: TriggerStrategy;
-  runContext?: RunContext;
+  runContext: RunContext;
   delegate?: WorkflowStatusDelegate;
 }
 
@@ -163,7 +163,7 @@ export interface HandleMultiInputForConnectionParams {
   connection: Connection;
   summary: string;
   triggerMode: AutoTriggerMode;
-  runContext?: RunContext;
+  runContext: RunContext;
 }
 
 export interface MultiInputServiceMethods {
@@ -181,7 +181,7 @@ export interface BranchTriggerMethods {
     canvasId: string,
     sourcePodId: string,
     connections: Connection[],
-    runContext?: RunContext,
+    runContext: RunContext,
   ): Promise<void>;
 }
 
@@ -190,7 +190,7 @@ export interface AutoTriggerMethods {
     canvasId: string,
     sourcePodId: string,
     connection: Connection,
-    runContext?: RunContext,
+    runContext: RunContext,
   ): Promise<void>;
   getLastAssistantMessage(
     sourcePodId: string,

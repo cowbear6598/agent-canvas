@@ -94,13 +94,21 @@ describe("WorkflowPipeline", () => {
     triggerMode: "auto",
   });
 
+  // 所有測試皆在 run mode 下執行（runContext 為必填）
+  const baseRunContext: RunContext = {
+    runId: "base-run",
+    canvasId: CANVAS_ID,
+    sourcePodId: SOURCE_POD_ID,
+  };
+
   const baseContext: PipelineContext = {
     canvasId: CANVAS_ID,
     sourcePodId: SOURCE_POD_ID,
     connection: mockConnection,
     triggerMode: "auto",
     decideResult: { connectionId: CONNECTION_ID, approved: true, reason: null },
-    delegate: createStatusDelegate(),
+    runContext: baseRunContext,
+    delegate: createStatusDelegate(baseRunContext),
   };
 
   const mockExecutionService = {
@@ -192,7 +200,7 @@ describe("WorkflowPipeline", () => {
         TARGET_POD_ID,
         "claude",
         "sonnet",
-        undefined,
+        baseRunContext,
         "auto",
         expect.any(Object),
       );
@@ -202,6 +210,7 @@ describe("WorkflowPipeline", () => {
         sourcePodId: SOURCE_POD_ID,
         connection: mockConnection,
         summary: "摘要",
+        runContext: baseRunContext,
       });
 
       expect(
@@ -213,7 +222,7 @@ describe("WorkflowPipeline", () => {
         isSummarized: true,
         participatingConnectionIds: undefined,
         strategy: mockStrategy,
-        runContext: undefined,
+        runContext: baseRunContext,
         delegate: expect.any(Object),
       });
     });
@@ -254,7 +263,7 @@ describe("WorkflowPipeline", () => {
         isSummarized: true,
         participatingConnectionIds: undefined,
         strategy: mockStrategy,
-        runContext: undefined,
+        runContext: baseRunContext,
         delegate: expect.any(Object),
       });
     });
@@ -290,7 +299,7 @@ describe("WorkflowPipeline", () => {
         connection: mockConnection,
         summary: "摘要",
         triggerMode: "auto",
-        runContext: undefined,
+        runContext: baseRunContext,
       });
 
       expect(
@@ -318,7 +327,7 @@ describe("WorkflowPipeline", () => {
         isSummarized: true,
         participatingConnectionIds: undefined,
         strategy: mockStrategy,
-        runContext: undefined,
+        runContext: baseRunContext,
         delegate: expect.any(Object),
       });
 
@@ -370,7 +379,7 @@ describe("WorkflowPipeline", () => {
         isSummarized: true,
         participatingConnectionIds: undefined,
         strategy: mockStrategy,
-        runContext: undefined,
+        runContext: baseRunContext,
         delegate: expect.any(Object),
       });
     });
@@ -406,7 +415,7 @@ describe("WorkflowPipeline", () => {
         isSummarized: true,
         participatingConnectionIds: undefined,
         strategy: mockStrategy,
-        runContext: undefined,
+        runContext: baseRunContext,
         delegate: expect.any(Object),
       });
     });
@@ -440,7 +449,7 @@ describe("WorkflowPipeline", () => {
         isSummarized: true,
         participatingConnectionIds: undefined,
         strategy: mockStrategy,
-        runContext: undefined,
+        runContext: baseRunContext,
         delegate: expect.any(Object),
       });
     });
@@ -587,17 +596,6 @@ describe("WorkflowPipeline", () => {
         mockExecutionService.generateSummaryWithFallback,
       ).toHaveBeenCalled();
     });
-
-    it("非 run 模式（無 runContext）時不觸發 guard，照常執行", async () => {
-      const mockStrategy = makeStrategy("auto");
-      vi.spyOn(runStore, "getPodInstance").mockReturnValue(undefined);
-
-      await workflowPipeline.execute(baseContext, mockStrategy);
-
-      expect(
-        mockExecutionService.generateSummaryWithFallback,
-      ).toHaveBeenCalled();
-    });
   });
 
   describe("lazy 修正 summaryModel", () => {
@@ -691,7 +689,8 @@ describe("WorkflowPipeline", () => {
           approved: true,
           reason: null,
         },
-        delegate: createStatusDelegate(),
+        runContext: baseRunContext,
+        delegate: createStatusDelegate(baseRunContext),
       };
 
       // podStore.getById：source pod 回 Codex pod，target pod 回原本的 mockTargetPod
@@ -792,7 +791,8 @@ describe("WorkflowPipeline", () => {
           approved: true,
           reason: null,
         },
-        delegate: createStatusDelegate(),
+        runContext: baseRunContext,
+        delegate: createStatusDelegate(baseRunContext),
       };
 
       vi.spyOn(podStore, "getById").mockImplementation(
@@ -816,7 +816,7 @@ describe("WorkflowPipeline", () => {
         TARGET_POD_ID,
         "codex", // summaryProvider 明確指定 codex，cross-provider 解耦
         codexSummaryConnection.summaryModel,
-        undefined,
+        baseRunContext,
         expect.any(String), // pathway
         expect.any(Object), // delegate
       );
