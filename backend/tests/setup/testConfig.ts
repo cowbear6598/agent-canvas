@@ -1,5 +1,5 @@
 import path from "path";
-import os from "os";
+import { fileURLToPath } from "node:url";
 
 // 增加 EventEmitter 的 max listeners 限制，避免測試中的警告
 // 每個測試都會建立 socket 連線，導致 listeners 累積
@@ -41,6 +41,10 @@ vi.mock("../../src/services/claude/claudePathResolver.js", () => ({
 }));
 
 const timestamp = Date.now();
+const repoRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../..",
+);
 
 export interface TestConfig {
   port: number;
@@ -48,6 +52,9 @@ export interface TestConfig {
   appDataRoot: string;
   canvasRoot: string;
   repositoriesRoot: string;
+  pluginsRoot: string;
+  tmpRoot: string;
+  stagingRoot: string;
   corsOrigin: string;
   githubToken?: string;
   skillsPath: string;
@@ -55,7 +62,13 @@ export interface TestConfig {
   commandsPath: string;
 }
 
-const testRoot = path.join(os.tmpdir(), `test-canvas-${timestamp}`);
+export const AGENT_CANVAS_TEST_ROOT = path.resolve(
+  repoRoot,
+  "tmp",
+  "AgentCanvas",
+);
+
+const testRoot = path.join(AGENT_CANVAS_TEST_ROOT, `test-canvas-${timestamp}`);
 
 export const testConfig: TestConfig = {
   port: 0, // 動態分配 port
@@ -63,6 +76,9 @@ export const testConfig: TestConfig = {
   appDataRoot: testRoot,
   canvasRoot: path.join(testRoot, "canvas"),
   repositoriesRoot: path.join(testRoot, "repositories"),
+  pluginsRoot: path.join(testRoot, "plugins"),
+  tmpRoot: path.join(testRoot, "tmp"),
+  stagingRoot: path.join(testRoot, "tmp", "staging"),
   corsOrigin: "http://localhost:5173",
   githubToken: undefined,
   skillsPath: path.join(testRoot, "skills"),

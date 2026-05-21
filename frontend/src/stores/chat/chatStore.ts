@@ -136,6 +136,22 @@ export const useChatStore = defineStore("chat", {
           handler: this.handleChatAborted as (payload: unknown) => void,
         },
         {
+          event: WebSocketResponseEvents.RUN_MESSAGE,
+          handler: this.handleChatMessage as (payload: unknown) => void,
+        },
+        {
+          event: WebSocketResponseEvents.RUN_TOOL_USE,
+          handler: this.handleChatToolUse as (payload: unknown) => void,
+        },
+        {
+          event: WebSocketResponseEvents.RUN_TOOL_RESULT,
+          handler: this.handleChatToolResult as (payload: unknown) => void,
+        },
+        {
+          event: WebSocketResponseEvents.RUN_CHAT_COMPLETE,
+          handler: this.handleChatComplete as (payload: unknown) => void,
+        },
+        {
           event: WebSocketResponseEvents.POD_ERROR,
           handler: this.handleError as (payload: unknown) => void,
         },

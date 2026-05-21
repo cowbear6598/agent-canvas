@@ -6,6 +6,10 @@ import { getStatements } from "./statements.js";
 
 let db: Database | null = null;
 
+export interface TestDbOptions {
+  path?: string;
+}
+
 export function getDb(): Database {
   if (db) {
     return db;
@@ -40,25 +44,30 @@ export function resetDb(): void {
 
   const database = getDb();
 
-  database.exec("DELETE FROM global_settings");
-
   // 子表先刪，避免外鍵約束衝突
   database.exec("DELETE FROM run_messages");
   database.exec("DELETE FROM run_pod_instances");
   database.exec("DELETE FROM workflow_runs");
   database.exec("DELETE FROM pod_manifests");
+  database.exec("DELETE FROM pod_mcp_server_names");
+  database.exec("DELETE FROM pod_plugin_ids");
   database.exec("DELETE FROM notes");
   database.exec("DELETE FROM connections");
   database.exec("DELETE FROM integration_bindings");
   database.exec("DELETE FROM pods");
   database.exec("DELETE FROM canvases");
   database.exec("DELETE FROM integration_apps");
+  database.exec("DELETE FROM managed_mcp_servers");
+  database.exec("DELETE FROM managed_plugins");
   database.exec("DELETE FROM repository_metadata");
   database.exec("DELETE FROM model_aliases");
+  database.exec("DELETE FROM global_settings");
 }
 
-export function initTestDb(): Database {
-  db = new Database(":memory:");
+export function initTestDb(options: TestDbOptions = {}): Database {
+  closeDb();
+
+  db = new Database(options.path ?? ":memory:");
   db.exec("PRAGMA journal_mode = WAL");
   db.exec("PRAGMA foreign_keys = ON");
   createTables(db);

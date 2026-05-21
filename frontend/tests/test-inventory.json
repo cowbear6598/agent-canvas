@@ -1,0 +1,1011 @@
+{
+  "feature": "test-suite-userflow-refactor",
+  "item": "P1.A",
+  "scope": "frontend/tests/**/*.test.ts and frontend/tests/**/*.spec.ts",
+  "scenarios": [
+    "F1",
+    "F2",
+    "F7",
+    "F8"
+  ],
+  "userflowRewriteCandidates": [
+    {
+      "path": "frontend/tests/business-logic/components/pod/CanvasPod.pluginPopover.test.ts",
+      "markers": [
+        "vue-mount",
+        "css-class",
+        "component-state"
+      ],
+      "reason": "驗證 CanvasPod mount 後 popover class/state 對 viewport offset 的反應，應改寫成使用者在畫布操作 pod plugin popover 的流程。"
+    },
+    {
+      "path": "frontend/tests/business-logic/components/pod/PluginPopover.test.ts",
+      "markers": [
+        "vue-mount",
+        "css-class",
+        "mock-call"
+      ],
+      "reason": "以 component mount、loading/class 與 store mock 為主，應改寫成切換 plugin 與 background refresh 的使用流程。"
+    },
+    {
+      "path": "frontend/tests/business-logic/components/settings/ManagedPluginModal.test.ts",
+      "markers": [
+        "vue-mount",
+        "css-class",
+        "mock-call"
+      ],
+      "reason": "以 drag UI mount 與 store.reorder mock 呼叫為主，應改寫成管理者排序 plugin 的流程驗證。"
+    },
+    {
+      "path": "frontend/tests/business-logic/components/settings/OpencodeSettingsPanel.test.ts",
+      "markers": [
+        "vue-mount",
+        "css-class",
+        "mock-call"
+      ],
+      "reason": "以按鈕 mount、CSS/disabled 狀態與 provider reload mock 為主，應改寫成重啟 provider 後清單更新的流程。"
+    },
+    {
+      "path": "frontend/tests/business-logic/composables/websocket/useCanvasWebSocketAction.test.ts",
+      "markers": [
+        "mock-call"
+      ],
+      "reason": "主要驗證 requestEvent/responseEvent、canvasId 注入與 toast mock，缺少具體使用者畫布行為。"
+    },
+    {
+      "path": "frontend/tests/business-logic/composables/websocket/useSendCanvasAction.test.ts",
+      "markers": [
+        "mock-call"
+      ],
+      "reason": "主要驗證 WebSocket request mock 被如何呼叫，應改寫到具體 canvas action userflow。"
+    },
+    {
+      "path": "frontend/tests/business-logic/composables/websocket/useWebSocketErrorHandler.test.ts",
+      "markers": [
+        "mock-call"
+      ],
+      "reason": "主要驗證 toast 與 sanitizer mock 呼叫，應併入實際失敗流程或抽出 sanitizer 純邏輯。"
+    },
+    {
+      "path": "frontend/tests/integration/websocket-api/createWebSocketRequest.test.ts",
+      "markers": [
+        "mock-call"
+      ],
+      "reason": "大量斷言集中在 emit/on/off/timeout mock 呼叫，應以產品 store 行為驗證 WebSocket request contract。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/chat/chatConnectionActions.test.ts",
+      "markers": [
+        "mock-call"
+      ],
+      "reason": "主要驗證 websocketClient.connect/disconnect/unregisterListeners mock 呼叫，應改寫成連線狀態支援聊天流程。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/chat/opencodeErrorHandling.test.ts",
+      "markers": [
+        "vue-mount",
+        "css-class",
+        "component-state"
+      ],
+      "reason": "PodModelSelector disabled 呈現依賴 mount 與 class/state 斷言，應拆出 store 規則並用 userflow 覆蓋 UI。"
+    }
+  ],
+  "pureBusinessLogicKeep": [
+    {
+      "path": "frontend/tests/business-logic/composables/canvas/useCanvasProgressTasks.test.ts",
+      "logicKind": "state-decision",
+      "reason": "合併多來源 progress tasks，不依賴 UI。"
+    },
+    {
+      "path": "frontend/tests/business-logic/composables/canvas/useCanvasZoom.test.ts",
+      "logicKind": "state-decision",
+      "reason": "縮放邊界、滑鼠座標與 viewport offset 計算，不依賴 UI。"
+    },
+    {
+      "path": "frontend/tests/business-logic/composables/canvas/useNoteEventHandlers.test.ts",
+      "logicKind": "state-decision",
+      "reason": "note 拖曳座標與垃圾桶 hover 狀態決策，不依賴 UI。"
+    },
+    {
+      "path": "frontend/tests/business-logic/composables/canvas/useProgressTracker.test.ts",
+      "logicKind": "state-decision",
+      "reason": "任務 Map 增刪與 ProgressTask 轉換，不依賴 UI。"
+    },
+    {
+      "path": "frontend/tests/business-logic/composables/chat/useContentBlocks.test.ts",
+      "logicKind": "data-transform",
+      "reason": "DOM/text/image atom 轉 ContentBlock 與文字長度計算。"
+    },
+    {
+      "path": "frontend/tests/business-logic/composables/chat/useImageAttachment.test.ts",
+      "logicKind": "validator",
+      "reason": "圖片 MIME、大小與數量限制。"
+    },
+    {
+      "path": "frontend/tests/business-logic/composables/chat/useSelectionManager.test.ts",
+      "logicKind": "state-decision",
+      "reason": "caret、image atom 與 paste text 的狀態決策。"
+    },
+    {
+      "path": "frontend/tests/business-logic/lib/calculatePaste.test.ts",
+      "logicKind": "data-transform",
+      "reason": "貼上名稱遞增、截斷與 providerConfig 保留。"
+    },
+    {
+      "path": "frontend/tests/business-logic/lib/collectCopyData.test.ts",
+      "logicKind": "data-transform",
+      "reason": "被選 pod/note/connection 的 copy payload 組裝。"
+    },
+    {
+      "path": "frontend/tests/business-logic/composables/events/sharedHandlerUtils.test.ts",
+      "logicKind": "state-decision",
+      "reason": "canvasId guard 與 handler 執行條件。"
+    },
+    {
+      "path": "frontend/tests/business-logic/composables/websocket/useAnchorDetection.test.ts",
+      "logicKind": "data-transform",
+      "reason": "Pod anchor 座標與命中偵測幾何計算。"
+    },
+    {
+      "path": "frontend/tests/business-logic/composables/websocket/useConnectionPath.test.ts",
+      "logicKind": "data-transform",
+      "reason": "SVG path、midpoint 與 control point 計算。"
+    },
+    {
+      "path": "frontend/tests/userflows/integration-provider/jiraProvider.test.ts",
+      "logicKind": "validator",
+      "reason": "Jira eventFilter 欄位與 validate 規則。"
+    },
+    {
+      "path": "frontend/tests/userflows/integration-provider/providerRegistry.test.ts",
+      "logicKind": "data-transform",
+      "reason": "provider registry 查找、覆蓋、表單欄位與 transform 規則。"
+    },
+    {
+      "path": "frontend/tests/userflows/integration-provider/sentryProvider.test.ts",
+      "logicKind": "data-transform",
+      "reason": "Sentry app/resource/binding payload 轉換。"
+    },
+    {
+      "path": "frontend/tests/userflows/integration-provider/slackProvider.test.ts",
+      "logicKind": "data-transform",
+      "reason": "Slack app/resource/binding payload 轉換。"
+    },
+    {
+      "path": "frontend/tests/userflows/integration-provider/telegramProvider.test.ts",
+      "logicKind": "validator",
+      "reason": "Telegram chatId、name、token validate 與 payload 轉換。"
+    },
+    {
+      "path": "frontend/tests/userflows/integration-provider/webhookProvider.test.ts",
+      "logicKind": "validator",
+      "reason": "Webhook name、siteUrl、secret validate 與 payload 轉換。"
+    },
+    {
+      "path": "frontend/tests/business-logic/lib/arrayHelpers.test.ts",
+      "logicKind": "data-transform",
+      "reason": "removeById 回傳新陣列且不 mutate。"
+    },
+    {
+      "path": "frontend/tests/business-logic/lib/podValidation.test.ts",
+      "logicKind": "validator",
+      "reason": "provider fallback、default model 與 goal normalize。"
+    },
+    {
+      "path": "frontend/tests/business-logic/lib/providerOptions.test.ts",
+      "logicKind": "data-transform",
+      "reason": "provider normalization 與 option extraction。"
+    },
+    {
+      "path": "frontend/tests/business-logic/lib/sanitize.test.ts",
+      "logicKind": "sanitizer",
+      "reason": "Pod name validation/sanitization。"
+    },
+    {
+      "path": "frontend/tests/business-logic/lib/validators.test.ts",
+      "logicKind": "validator",
+      "reason": "safe name、URL、token 類驗證。"
+    },
+    {
+      "path": "frontend/tests/integration/websocket-api/utils.test.ts",
+      "logicKind": "data-transform",
+      "reason": "UUID 生成格式與 fallback。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/chat/messageHelpers.test.ts",
+      "logicKind": "data-transform",
+      "reason": "message/tool id 生成規則。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/chat/opencodeV2ChatParity.test.ts",
+      "logicKind": "state-decision",
+      "reason": "chat sub-message segment parity。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/chat/subMessageHelpers.test.ts",
+      "logicKind": "state-decision",
+      "reason": "assistant sub-message append/finalize/tool result 狀態轉換。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/clipboardStore.test.ts",
+      "logicKind": "state-decision",
+      "reason": "clipboard set/clear/snapshot 狀態規則。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/cursorStore.test.ts",
+      "logicKind": "state-decision",
+      "reason": "cursor upsert/remove 與 color fallback。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/note/createResourceCRUDActions.test.ts",
+      "logicKind": "state-decision",
+      "reason": "replace/merge item 與 CRUD action factory 規則。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/providerCapabilityStore.test.ts",
+      "logicKind": "state-decision",
+      "reason": "provider default options、alias 與 graceful fallback 狀態規則。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/repositoryStore.test.ts",
+      "logicKind": "state-decision",
+      "reason": "repository branch 本地更新規則。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/run/opencodeV2RunParity.test.ts",
+      "logicKind": "state-decision",
+      "reason": "run sub-message parity 狀態轉換。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/run/runStoreHelpers.test.ts",
+      "logicKind": "data-transform",
+      "reason": "assistant message with tool shape 生成。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/selectionStore.test.ts",
+      "logicKind": "state-decision",
+      "reason": "selection filter、contains 與 repository note ids。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/uploadStore.test.ts",
+      "logicKind": "state-decision",
+      "reason": "upload success/failure/finalize 與 multi-pod isolation。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/viewportStore.test.ts",
+      "logicKind": "data-transform",
+      "reason": "screen/canvas 座標轉換與 viewport zoom/offset。"
+    },
+    {
+      "path": "frontend/tests/business-logic/utils/canvasGuard.test.ts",
+      "logicKind": "state-decision",
+      "reason": "activeCanvasId guard 的 throw/null/warn 決策。"
+    },
+    {
+      "path": "frontend/tests/business-logic/utils/renderMarkdown.test.ts",
+      "logicKind": "sanitizer",
+      "reason": "Markdown render 後的 XSS sanitize 規則。"
+    },
+    {
+      "path": "frontend/tests/business-logic/utils/scheduleUtils.test.ts",
+      "logicKind": "schedule-calculation",
+      "reason": "排程頻率格式化與日期計算。"
+    }
+  ],
+  "inventory": [
+    {
+      "path": "frontend/tests/business-logic/components/pod/CanvasPod.pluginPopover.test.ts",
+      "currentCategory": "component-behavior",
+      "decision": "rewrite",
+      "mapsTo": [
+        "F2"
+      ],
+      "reason": "Vue mount 驅動 CanvasPod popover，價值在使用者開啟 popover 後 viewport offset 關閉行為，應改成 canvas/pod userflow。"
+    },
+    {
+      "path": "frontend/tests/business-logic/components/pod/PluginPopover.test.ts",
+      "currentCategory": "component-behavior",
+      "decision": "rewrite",
+      "mapsTo": [
+        "F2",
+        "F7"
+      ],
+      "reason": "目前聚焦 component mount 與本地 draft/cache，應改寫成使用者切換 plugin、背景 refresh 不覆蓋選擇的流程。"
+    },
+    {
+      "path": "frontend/tests/business-logic/components/settings/ManagedPluginModal.test.ts",
+      "currentCategory": "component-behavior",
+      "decision": "rewrite",
+      "mapsTo": [
+        "F7"
+      ],
+      "reason": "拖曳排序只檢查 store 呼叫與 busy guard，應改成管理者排序 plugin 的可觀察流程。"
+    },
+    {
+      "path": "frontend/tests/business-logic/components/settings/OpencodeSettingsPanel.test.ts",
+      "currentCategory": "component-behavior",
+      "decision": "rewrite",
+      "mapsTo": [
+        "F7"
+      ],
+      "reason": "按鈕 mount 測試依賴 mock 與畫面片段，應改成重啟 provider 後清單重載的使用流程。"
+    },
+    {
+      "path": "frontend/tests/business-logic/composables/canvas/useCanvasProgressTasks.test.ts",
+      "currentCategory": "state-decision",
+      "decision": "keep",
+      "mapsTo": [
+        "F7",
+        "F8"
+      ],
+      "reason": "合併 canvas 進度來源並轉成 progress task，是不依賴 UI 的狀態決策規則。"
+    },
+    {
+      "path": "frontend/tests/business-logic/composables/canvas/useCanvasZoom.test.ts",
+      "currentCategory": "state-decision",
+      "decision": "keep",
+      "mapsTo": [
+        "F2",
+        "F8"
+      ],
+      "reason": "驗證滾輪縮放、座標換算與 viewport store 更新，支援畫布操作流程且核心為計算規則。"
+    },
+    {
+      "path": "frontend/tests/business-logic/composables/canvas/useCheckoutProgress.test.ts",
+      "currentCategory": "store-behavior",
+      "decision": "keep",
+      "mapsTo": [
+        "F7"
+      ],
+      "reason": "驗證 checkout progress event 如何驅動任務狀態與 repository reload，是流程支援行為。"
+    },
+    {
+      "path": "frontend/tests/business-logic/composables/canvas/useGitCloneProgress.test.ts",
+      "currentCategory": "store-behavior",
+      "decision": "keep",
+      "mapsTo": [
+        "F7"
+      ],
+      "reason": "驗證 clone progress 成功/失敗狀態、toast 與 repository 更新，能定位產品流程破壞點。"
+    },
+    {
+      "path": "frontend/tests/business-logic/composables/canvas/useNoteEventHandlers.test.ts",
+      "currentCategory": "state-decision",
+      "decision": "keep",
+      "mapsTo": [
+        "F2",
+        "F8"
+      ],
+      "reason": "驗證 note 拖曳、垃圾桶 hover 與本地座標更新，屬於不依賴 UI 的狀態決策。"
+    },
+    {
+      "path": "frontend/tests/business-logic/composables/canvas/useProgressTracker.test.ts",
+      "currentCategory": "state-decision",
+      "decision": "keep",
+      "mapsTo": [
+        "F7",
+        "F8"
+      ],
+      "reason": "驗證任務 Map 增刪與 ProgressTask 轉換，屬於純狀態資料轉換。"
+    },
+    {
+      "path": "frontend/tests/business-logic/composables/canvas/usePullProgress.test.ts",
+      "currentCategory": "store-behavior",
+      "decision": "keep",
+      "mapsTo": [
+        "F7"
+      ],
+      "reason": "驗證 pull progress/result 對任務狀態與 repository reload 的影響，是流程支援行為。"
+    },
+    {
+      "path": "frontend/tests/business-logic/composables/chat/useContentBlocks.test.ts",
+      "currentCategory": "data-transform",
+      "decision": "keep",
+      "mapsTo": [
+        "F2",
+        "F8"
+      ],
+      "reason": "DOM/text/image atom 轉 ContentBlock 與文字長度計算是訊息送出前的資料轉換規則。"
+    },
+    {
+      "path": "frontend/tests/business-logic/composables/chat/useImageAttachment.test.ts",
+      "currentCategory": "validator",
+      "decision": "keep",
+      "mapsTo": [
+        "F2",
+        "F8"
+      ],
+      "reason": "驗證圖片格式、大小與數量限制，屬於訊息附件 validator。"
+    },
+    {
+      "path": "frontend/tests/business-logic/composables/chat/useSelectionManager.test.ts",
+      "currentCategory": "state-decision",
+      "decision": "keep",
+      "mapsTo": [
+        "F2",
+        "F8"
+      ],
+      "reason": "驗證 caret、image atom 插入與 paste 文字處理，是聊天輸入流程背後的 DOM 狀態決策。"
+    },
+    {
+      "path": "frontend/tests/business-logic/composables/chat/useSpeechRecognition.test.ts",
+      "currentCategory": "store-behavior",
+      "decision": "keep",
+      "mapsTo": [
+        "F2",
+        "F7"
+      ],
+      "reason": "驗證語音輸入 disabled、transcript append、長度限制與錯誤處理，支援傳送訊息流程。"
+    },
+    {
+      "path": "frontend/tests/business-logic/lib/calculatePaste.test.ts",
+      "currentCategory": "data-transform",
+      "decision": "keep",
+      "mapsTo": [
+        "F2",
+        "F8"
+      ],
+      "reason": "Pod 貼上名稱遞增、截斷與 providerConfig 保留是不依賴 UI 的 copy/paste 轉換規則。"
+    },
+    {
+      "path": "frontend/tests/business-logic/lib/collectCopyData.test.ts",
+      "currentCategory": "data-transform",
+      "decision": "keep",
+      "mapsTo": [
+        "F2",
+        "F8"
+      ],
+      "reason": "收集被選 pod/note/connection 並保留 providerConfig，是 copy userflow 的核心資料轉換。"
+    },
+    {
+      "path": "frontend/tests/business-logic/composables/events/sharedHandlerUtils.test.ts",
+      "currentCategory": "state-decision",
+      "decision": "keep",
+      "mapsTo": [
+        "F7",
+        "F8"
+      ],
+      "reason": "驗證 canvasId guard、logger 與 handler 執行條件，是事件處理狀態決策。"
+    },
+    {
+      "path": "frontend/tests/userflows/upload/podFileDropFlow.test.ts",
+      "currentCategory": "store-behavior",
+      "decision": "keep",
+      "mapsTo": [
+        "F2",
+        "F7"
+      ],
+      "reason": "檔案拖放上傳涵蓋 validator、upload store 狀態、重試與訊息送出，能支援 pod 使用流程。"
+    },
+    {
+      "path": "frontend/tests/business-logic/composables/websocket/useAnchorDetection.test.ts",
+      "currentCategory": "data-transform",
+      "decision": "keep",
+      "mapsTo": [
+        "F2",
+        "F8"
+      ],
+      "reason": "錨點座標與碰撞偵測是連線建立流程中的純幾何計算。"
+    },
+    {
+      "path": "frontend/tests/business-logic/composables/websocket/useCanvasWebSocketAction.test.ts",
+      "currentCategory": "service-contract",
+      "decision": "rewrite",
+      "mapsTo": [
+        "F7"
+      ],
+      "reason": "多數斷言集中在 request/response event 與 toast mock，應收斂到具體 canvas 行為的 userflow。"
+    },
+    {
+      "path": "frontend/tests/business-logic/composables/websocket/useConnectionPath.test.ts",
+      "currentCategory": "data-transform",
+      "decision": "keep",
+      "mapsTo": [
+        "F2",
+        "F8"
+      ],
+      "reason": "SVG path 與 midpoint/control point 計算是不依賴 UI 的連線資料轉換。"
+    },
+    {
+      "path": "frontend/tests/business-logic/composables/websocket/useSendCanvasAction.test.ts",
+      "currentCategory": "service-contract",
+      "decision": "rewrite",
+      "mapsTo": [
+        "F7"
+      ],
+      "reason": "目前只驗證 canvasId 注入與 WebSocket mock 呼叫，應改成具體 canvas 操作流程。"
+    },
+    {
+      "path": "frontend/tests/business-logic/composables/websocket/useUnifiedEventListeners.test.ts",
+      "currentCategory": "store-behavior",
+      "decision": "keep",
+      "mapsTo": [
+        "F7"
+      ],
+      "reason": "驗證 canvas-scoped WebSocket event 如何更新多個 store，能定位前端狀態流程破壞點。"
+    },
+    {
+      "path": "frontend/tests/business-logic/composables/websocket/useWebSocketErrorHandler.test.ts",
+      "currentCategory": "service-contract",
+      "decision": "rewrite",
+      "mapsTo": [
+        "F7"
+      ],
+      "reason": "主要驗證 toast mock 與 sanitizer 呼叫，應併入實際失敗流程或保留 sanitizer 的純邏輯測試。"
+    },
+    {
+      "path": "frontend/tests/userflows/integration-provider/jiraProvider.test.ts",
+      "currentCategory": "validator",
+      "decision": "keep",
+      "mapsTo": [
+        "F8"
+      ],
+      "reason": "Jira integration form fields 與 eventFilter validation 是不依賴 UI 的商業規則。"
+    },
+    {
+      "path": "frontend/tests/userflows/integration-provider/providerRegistry.test.ts",
+      "currentCategory": "data-transform",
+      "decision": "keep",
+      "mapsTo": [
+        "F8"
+      ],
+      "reason": "Provider registry 註冊、查找、表單欄位與 transform 規則是純整合設定邏輯。"
+    },
+    {
+      "path": "frontend/tests/userflows/integration-provider/sentryProvider.test.ts",
+      "currentCategory": "data-transform",
+      "decision": "keep",
+      "mapsTo": [
+        "F8"
+      ],
+      "reason": "Sentry app/resource/binding payload 轉換與 validation 是純資料轉換規則。"
+    },
+    {
+      "path": "frontend/tests/userflows/integration-provider/slackProvider.test.ts",
+      "currentCategory": "data-transform",
+      "decision": "keep",
+      "mapsTo": [
+        "F8"
+      ],
+      "reason": "Slack app/resource/binding payload 轉換與 validation 是純資料轉換規則。"
+    },
+    {
+      "path": "frontend/tests/userflows/integration-provider/telegramProvider.test.ts",
+      "currentCategory": "data-transform",
+      "decision": "keep",
+      "mapsTo": [
+        "F8"
+      ],
+      "reason": "Telegram app/resource/binding payload 轉換與 chatId validation 是純資料轉換與 validator。"
+    },
+    {
+      "path": "frontend/tests/userflows/integration-provider/webhookProvider.test.ts",
+      "currentCategory": "data-transform",
+      "decision": "keep",
+      "mapsTo": [
+        "F8"
+      ],
+      "reason": "Webhook app/resource/binding payload 轉換與 secret/siteUrl validation 是純資料轉換與 validator。"
+    },
+    {
+      "path": "frontend/tests/userflows/canvas/canvasPodFlow.test.ts",
+      "currentCategory": "userflow",
+      "decision": "keep",
+      "mapsTo": [
+        "F2",
+        "F7"
+      ],
+      "reason": "已覆蓋建立 canvas、建立 pod、跨 canvas 隔離與 provider/model 選擇流程。"
+    },
+    {
+      "path": "frontend/tests/userflows/copy-paste/copyPasteFlow.test.ts",
+      "currentCategory": "userflow",
+      "decision": "keep",
+      "mapsTo": [
+        "F2",
+        "F7"
+      ],
+      "reason": "已驗證框選 pod、複製 connection/note/providerConfig 與貼上後 selection 的完整流程。"
+    },
+    {
+      "path": "frontend/tests/userflows/copy-paste/goalCopyPasteFlow.test.ts",
+      "currentCategory": "userflow",
+      "decision": "keep",
+      "mapsTo": [
+        "F2",
+        "F7"
+      ],
+      "reason": "雖使用 component mount，但測試目標是 Goal clipboard 複製、貼上、覆蓋與 disabled 流程。"
+    },
+    {
+      "path": "frontend/tests/business-logic/lib/arrayHelpers.test.ts",
+      "currentCategory": "data-transform",
+      "decision": "keep",
+      "mapsTo": [
+        "F8"
+      ],
+      "reason": "removeById 不 mutate 原陣列，是純資料轉換規則。"
+    },
+    {
+      "path": "frontend/tests/business-logic/lib/podValidation.test.ts",
+      "currentCategory": "validator",
+      "decision": "keep",
+      "mapsTo": [
+        "F8"
+      ],
+      "reason": "enrichPod provider fallback、default model、goal normalize 是 pod validator/資料補全規則。"
+    },
+    {
+      "path": "frontend/tests/business-logic/lib/providerOptions.test.ts",
+      "currentCategory": "data-transform",
+      "decision": "keep",
+      "mapsTo": [
+        "F8"
+      ],
+      "reason": "Provider normalization 與 Claude/Codex option extraction 是純資料轉換。"
+    },
+    {
+      "path": "frontend/tests/business-logic/lib/sanitize.test.ts",
+      "currentCategory": "sanitizer",
+      "decision": "keep",
+      "mapsTo": [
+        "F8"
+      ],
+      "reason": "Pod name validation/sanitization 是明確商業規則且不依賴 UI。"
+    },
+    {
+      "path": "frontend/tests/business-logic/lib/validators.test.ts",
+      "currentCategory": "validator",
+      "decision": "keep",
+      "mapsTo": [
+        "F8"
+      ],
+      "reason": "Integration safe name、URL 與 token 類型驗證是不依賴 UI 的 validator。"
+    },
+    {
+      "path": "frontend/tests/integration/websocket-api/WebSocketClient.test.ts",
+      "currentCategory": "service-contract",
+      "decision": "keep",
+      "mapsTo": [
+        "F7"
+      ],
+      "reason": "WebSocket connect/reconnect/listener contract 支援所有前端狀態流程，非單純 mock 次數。"
+    },
+    {
+      "path": "frontend/tests/integration/websocket-api/createWebSocketRequest.test.ts",
+      "currentCategory": "service-contract",
+      "decision": "rewrite",
+      "mapsTo": [
+        "F7"
+      ],
+      "reason": "目前大量檢查 emit/on/off mock 與 timeout 細節，應以具體 store/userflow 發出的 request contract 覆蓋。"
+    },
+    {
+      "path": "frontend/tests/integration/websocket-api/managedMcpApi.test.ts",
+      "currentCategory": "service-contract",
+      "decision": "keep",
+      "mapsTo": [
+        "F7"
+      ],
+      "reason": "Registry list、availability cache、save/delete cache invalidation 是 plugin/MCP 流程支援規則。"
+    },
+    {
+      "path": "frontend/tests/integration/websocket-api/mcpApi.test.ts",
+      "currentCategory": "service-contract",
+      "decision": "keep",
+      "mapsTo": [
+        "F7"
+      ],
+      "reason": "Pod MCP 更新成功/失敗與 cache invalidation 是可觀察服務行為。"
+    },
+    {
+      "path": "frontend/tests/integration/websocket-api/utils.test.ts",
+      "currentCategory": "data-transform",
+      "decision": "keep",
+      "mapsTo": [
+        "F8"
+      ],
+      "reason": "UUID format 與 fallback generation 是純工具函式規則。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/canvasStore.test.ts",
+      "currentCategory": "store-behavior",
+      "decision": "keep",
+      "mapsTo": [
+        "F2",
+        "F7"
+      ],
+      "reason": "Canvas active selection、CRUD 與狀態更新支援畫布使用流程。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/chat/chatConnectionActions.test.ts",
+      "currentCategory": "store-behavior",
+      "decision": "rewrite",
+      "mapsTo": [
+        "F7"
+      ],
+      "reason": "目前偏重 websocketClient connect/disconnect mock 呼叫，應改寫成連線狀態如何影響聊天流程。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/chat/chatMessageActions.test.ts",
+      "currentCategory": "store-behavior",
+      "decision": "keep",
+      "mapsTo": [
+        "F2",
+        "F7"
+      ],
+      "reason": "訊息新增、assistant message 建立與 tool/result 狀態是傳送訊息流程的核心 store 行為。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/chat/chatStore.test.ts",
+      "currentCategory": "store-behavior",
+      "decision": "keep",
+      "mapsTo": [
+        "F2",
+        "F7"
+      ],
+      "reason": "send message、typing、disconnect reason 與 content block 保留直接支援聊天 userflow。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/chat/messageHelpers.test.ts",
+      "currentCategory": "data-transform",
+      "decision": "keep",
+      "mapsTo": [
+        "F8"
+      ],
+      "reason": "Message/tool id 生成是純資料轉換規則。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/chat/opencodeErrorHandling.test.ts",
+      "currentCategory": "mixed-ui-and-store",
+      "decision": "rewrite",
+      "mapsTo": [
+        "F2",
+        "F7"
+      ],
+      "reason": "包含 store error 注入與 PodModelSelector disabled render，應拆成 store 規則保留、UI 狀態改 userflow。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/chat/opencodeV2ChatParity.test.ts",
+      "currentCategory": "state-decision",
+      "decision": "keep",
+      "mapsTo": [
+        "F7",
+        "F8"
+      ],
+      "reason": "Sub-message segmentation parity 是聊天訊息狀態決策，能指出產品規則破壞點。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/chat/subMessageHelpers.test.ts",
+      "currentCategory": "state-decision",
+      "decision": "keep",
+      "mapsTo": [
+        "F7",
+        "F8"
+      ],
+      "reason": "Assistant sub-message append/finalize/tool result 是不依賴 UI 的狀態轉換規則。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/clipboardStore.test.ts",
+      "currentCategory": "state-decision",
+      "decision": "keep",
+      "mapsTo": [
+        "F2",
+        "F8"
+      ],
+      "reason": "Clipboard set/clear/get snapshot 支援 copy/paste flow，且不依賴 UI。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/configStore.test.ts",
+      "currentCategory": "store-behavior",
+      "decision": "keep",
+      "mapsTo": [
+        "F7"
+      ],
+      "reason": "Config fetch fallback 與 timezone state 是前端設定狀態規則。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/connectionStore.test.ts",
+      "currentCategory": "store-behavior",
+      "decision": "keep",
+      "mapsTo": [
+        "F2",
+        "F7"
+      ],
+      "reason": "Connection 查詢、建立、刪除與 selection 影響支援畫布連線流程。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/cursorStore.test.ts",
+      "currentCategory": "state-decision",
+      "decision": "keep",
+      "mapsTo": [
+        "F8"
+      ],
+      "reason": "Cursor upsert/remove 與顏色 fallback 是不依賴 UI 的狀態決策。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/integrationStore.test.ts",
+      "currentCategory": "store-behavior",
+      "decision": "keep",
+      "mapsTo": [
+        "F7"
+      ],
+      "reason": "Integration app/binding state 與 API 失敗處理是整合流程支援規則。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/managedMcpStore.test.ts",
+      "currentCategory": "store-behavior",
+      "decision": "keep",
+      "mapsTo": [
+        "F7"
+      ],
+      "reason": "Managed MCP refresh/save 狀態與錯誤保留是 plugin/MCP 管理流程規則。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/managedPluginStore.test.ts",
+      "currentCategory": "store-behavior",
+      "decision": "keep",
+      "mapsTo": [
+        "F7"
+      ],
+      "reason": "Plugin install/reorder optimistic update、rollback 與排序是高價值狀態行為。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/note/createNoteStore.test.ts",
+      "currentCategory": "store-behavior",
+      "decision": "keep",
+      "mapsTo": [
+        "F2",
+        "F7"
+      ],
+      "reason": "Note/repository item 載入、綁定、拖曳、刪除與本地事件是畫布流程支援行為。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/note/createResourceCRUDActions.test.ts",
+      "currentCategory": "state-decision",
+      "decision": "keep",
+      "mapsTo": [
+        "F7",
+        "F8"
+      ],
+      "reason": "replace/merge item 與 CRUD action factory 是不依賴 UI 的資料轉換與狀態決策。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/note/repositoryStore.test.ts",
+      "currentCategory": "store-behavior",
+      "decision": "keep",
+      "mapsTo": [
+        "F2",
+        "F7"
+      ],
+      "reason": "Repository create/update/delete、branch 與 toast/error 支援 repository note 流程。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/opencodeAliasStore.test.ts",
+      "currentCategory": "store-behavior",
+      "decision": "keep",
+      "mapsTo": [
+        "F7"
+      ],
+      "reason": "Alias CRUD、排序、重複名稱與錯誤時本地狀態保留是設定流程商業規則。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/podStore.test.ts",
+      "currentCategory": "store-behavior",
+      "decision": "keep",
+      "mapsTo": [
+        "F2",
+        "F7"
+      ],
+      "reason": "Pod 建立、選取、更新、刪除、排程與 providerConfig 支援畫布 pod 流程。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/providerCapabilityStore.test.ts",
+      "currentCategory": "state-decision",
+      "decision": "keep",
+      "mapsTo": [
+        "F7",
+        "F8"
+      ],
+      "reason": "Provider capability/default options 與 alias 合併是不依賴 UI 的狀態決策。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/repositoryStore.test.ts",
+      "currentCategory": "state-decision",
+      "decision": "keep",
+      "mapsTo": [
+        "F7",
+        "F8"
+      ],
+      "reason": "Repository currentBranch 本地更新是明確且純粹的狀態決策。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/run/opencodeV2RunParity.test.ts",
+      "currentCategory": "state-decision",
+      "decision": "keep",
+      "mapsTo": [
+        "F7",
+        "F8"
+      ],
+      "reason": "Run message/sub-message parity 是不依賴 UI 的狀態轉換規則。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/run/runStore.test.ts",
+      "currentCategory": "store-behavior",
+      "decision": "keep",
+      "mapsTo": [
+        "F7"
+      ],
+      "reason": "Workflow run 排序、限制、status count 與 assistant event 處理是流程狀態規則。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/run/runStoreHelpers.test.ts",
+      "currentCategory": "data-transform",
+      "decision": "keep",
+      "mapsTo": [
+        "F8"
+      ],
+      "reason": "Assistant message with tool shape 生成是純資料轉換。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/selectionStore.test.ts",
+      "currentCategory": "state-decision",
+      "decision": "keep",
+      "mapsTo": [
+        "F2",
+        "F8"
+      ],
+      "reason": "Selection filters 與 contains checks 支援 copy/paste 與畫布操作，且不依賴 UI。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/uploadStore.test.ts",
+      "currentCategory": "state-decision",
+      "decision": "keep",
+      "mapsTo": [
+        "F2",
+        "F7",
+        "F8"
+      ],
+      "reason": "Upload success/failure/finalize、multi-pod isolation 是檔案上傳流程的狀態決策。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/viewportStore.test.ts",
+      "currentCategory": "data-transform",
+      "decision": "keep",
+      "mapsTo": [
+        "F2",
+        "F8"
+      ],
+      "reason": "Viewport offset/zoom 與 screen/canvas 座標轉換是畫布純計算規則。"
+    },
+    {
+      "path": "frontend/tests/business-logic/utils/canvasGuard.test.ts",
+      "currentCategory": "state-decision",
+      "decision": "keep",
+      "mapsTo": [
+        "F7",
+        "F8"
+      ],
+      "reason": "Active canvas guard 的 throw/null/warn 行為是不依賴 UI 的狀態決策。"
+    },
+    {
+      "path": "frontend/tests/business-logic/utils/renderMarkdown.test.ts",
+      "currentCategory": "sanitizer",
+      "decision": "keep",
+      "mapsTo": [
+        "F2",
+        "F8"
+      ],
+      "reason": "Markdown render 與 XSS sanitize 是訊息顯示前的高價值 sanitizer 規則。"
+    },
+    {
+      "path": "frontend/tests/business-logic/utils/scheduleUtils.test.ts",
+      "currentCategory": "schedule-calculation",
+      "decision": "keep",
+      "mapsTo": [
+        "F8"
+      ],
+      "reason": "Schedule frequency/next-run 格式化與日期計算是不依賴 UI 的排程計算規則。"
+    }
+  ]
+}

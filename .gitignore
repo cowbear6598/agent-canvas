@@ -22,5 +22,6 @@ backend/src/generated/vfs.ts
 .release-notes.tmp
 
 # 測試產生的臨時資料夾
+tmp/
 backend/tests/unit/temp-*/
 encryption.key

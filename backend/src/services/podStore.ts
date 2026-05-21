@@ -603,13 +603,15 @@ class PodStore {
   ): { updatedPod: Pod; sanitizedProviderConfigJson: string | null } {
     const updatedPod = this.buildUpdatedPod(pod, updates);
     // 寫入路徑使用 strict 版白名單過濾，model 不合法時直接 throw 由上層回報給 WebSocket 客戶端
-    const sanitizedProviderConfigJson = updatedPod.providerConfig
-      ? JSON.stringify(
-          sanitizeProviderConfigStrict(
-            updatedPod.providerConfig,
-            updatedPod.provider,
-          ),
+    const sanitizedProviderConfig = updatedPod.providerConfig
+      ? sanitizeProviderConfigStrict(
+          updatedPod.providerConfig,
+          updatedPod.provider,
         )
+      : null;
+    updatedPod.providerConfig = sanitizedProviderConfig;
+    const sanitizedProviderConfigJson = sanitizedProviderConfig
+      ? JSON.stringify(sanitizedProviderConfig)
       : null;
     return { updatedPod, sanitizedProviderConfigJson };
   }

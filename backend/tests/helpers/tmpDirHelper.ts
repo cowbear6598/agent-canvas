@@ -1,10 +1,11 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
+import { AGENT_CANVAS_TEST_ROOT } from "../setup/testConfig.js";
 
-/** 在系統 tmpdir 下建立隔離測試目錄 */
+/** 在 repo 的 tmp/AgentCanvas 下建立隔離測試目錄 */
 export async function createTmpDir(prefix = "ccc-test-"): Promise<string> {
-  return mkdtemp(join(tmpdir(), prefix));
+  await mkdir(AGENT_CANVAS_TEST_ROOT, { recursive: true });
+  return mkdtemp(join(AGENT_CANVAS_TEST_ROOT, prefix));
 }
 
 /** 清除測試目錄（recursive + force，不拋錯） */

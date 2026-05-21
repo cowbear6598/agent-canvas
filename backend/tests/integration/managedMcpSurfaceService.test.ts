@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { initTestDb } from "../../src/database/index.js";
+import { closeDb, initTestDb } from "../../src/database/index.js";
 import { resetStatements } from "../../src/database/statements.js";
 import {
   createManagedMcpRuntimeService,
@@ -11,37 +11,29 @@ import {
   createManagedMcpSurfaceService,
   type PodMcpEntry,
 } from "../../src/services/mcp/managedMcpSurfaceService.js";
-import { integrationRegistry } from "../../src/services/integration/integrationRegistry.js";
-import type { IntegrationProvider } from "../../src/services/integration/types.js";
+import { WebSocketResponseEvents } from "../../src/schemas/events.js";
+import { socketService } from "../../src/services/socketService.js";
 import type { Pod } from "../../src/types/pod.js";
 import type { RunContext } from "../../src/types/run.js";
 
-if (!integrationRegistry.get("slack")) {
-  integrationRegistry.register({
-    name: "slack",
-    displayName: "Slack",
-    sendMessage: vi.fn(),
-    createAppSchema: {} as IntegrationProvider["createAppSchema"],
-    validateCreate: vi.fn(),
-    sanitizeConfig: vi.fn(),
-    initialize: vi.fn(),
-    destroy: vi.fn(),
-    destroyAll: vi.fn(),
-    refreshResources: vi.fn(),
-    formatEventMessage: vi.fn(),
-  } as IntegrationProvider);
-}
-
-// agent_canvas_plugin entry 永遠被 buildPodMcpEntries 注入；在不關心該 entry 的測試中過濾掉
 function withoutPluginEntry(entries: PodMcpEntry[]): PodMcpEntry[] {
-  return entries.filter((entry) => entry.name !== "agent_canvas_plugin");
+  return entries.filter(
+    (entry) =>
+      entry.name !== "agent_canvas_plugin" &&
+      entry.name !== "agent_canvas_goal",
+  );
 }
 
 function createPod(
   overrides: Partial<
     Pick<
       Pod,
-      "id" | "name" | "provider" | "goal" | "mcpServerNames" | "pluginIds"
+      | "id"
+      | "name"
+      | "provider"
+      | "goal"
+      | "mcpServerNames"
+      | "pluginIds"
       | "integrationBindings"
     >
   > = {},
@@ -57,7 +49,7 @@ function createPod(
 > {
   return {
     id: overrides.id ?? "pod-1",
-    name: overrides.name ?? "Pod Entries Test",
+    name: overrides.name ?? "Managed MCP Pod",
     provider: overrides.provider ?? "codex",
     goal: overrides.goal ?? null,
     mcpServerNames: overrides.mcpServerNames ?? [],
@@ -68,309 +60,157 @@ function createPod(
 
 function createRunContext(overrides: Partial<RunContext> = {}): RunContext {
   return {
-    runId: overrides.runId ?? "run-entries-1",
-    canvasId: overrides.canvasId ?? "canvas-entries-1",
+    runId: overrides.runId ?? "run-managed-mcp-1",
+    canvasId: overrides.canvasId ?? "canvas-managed-mcp-1",
     sourcePodId: overrides.sourcePodId ?? "pod-1",
   };
 }
 
-describe("ManagedMcpSurfaceService.buildPodMcpEntries", () => {
+function createSurface(probe: McpProbe) {
+  const runtimeService = createManagedMcpRuntimeService({
+    store: managedMcpStore,
+    probe,
+  });
+  const surfaceService = createManagedMcpSurfaceService({
+    store: managedMcpStore,
+    runtimeService,
+  });
+  return { runtimeService, surfaceService };
+}
+
+describe("ManagedMcpSurfaceService provider surface integration", () => {
   beforeEach(() => {
     resetStatements();
     initTestDb();
   });
 
-  it("沒勾選 managed MCP + 無 runContext → 回空 entries / hasGoalRuntime=false", async () => {
-    const probe: McpProbe = { probe: vi.fn().mockResolvedValue(undefined) };
-    const runtimeService = createManagedMcpRuntimeService({
-      store: managedMcpStore,
-      probe,
-    });
-    const surfaceService = createManagedMcpSurfaceService({
-      store: managedMcpStore,
-      runtimeService,
-    });
-
-    const pod = createPod({ id: "pod-empty", mcpServerNames: [] });
-    const result = await surfaceService.buildPodMcpEntries(pod, null);
-
-    expect(withoutPluginEntry(result.entries)).toEqual([]);
-    expect(result.hasGoalRuntime).toBe(false);
-    expect(result.ignoredTargets).toEqual([]);
-    expect(probe.probe).not.toHaveBeenCalled();
+  afterEach(() => {
+    vi.restoreAllMocks();
+    closeDb();
   });
 
-  it("stdio target 注入為原生 stdio entry（無 proxy bridge 包裝）", async () => {
+  it("啟用的 managed MCP 會透過真 store 與 runtime service 產生 run provider surface", async () => {
     managedMcpStore.save({
       name: "filesystem",
       transport: "stdio",
       command: "uvx",
       args: ["mcp-server-filesystem"],
-      env: { FS_ROOT: "/tmp" },
+      cwd: "/workspace",
+      env: { FS_ROOT: "/workspace" },
       enabled: true,
     });
-
-    const probe: McpProbe = { probe: vi.fn().mockResolvedValue(undefined) };
-    const runtimeService = createManagedMcpRuntimeService({
-      store: managedMcpStore,
-      probe,
-    });
-    const surfaceService = createManagedMcpSurfaceService({
-      store: managedMcpStore,
-      runtimeService,
-    });
-
-    const pod = createPod({
-      id: "pod-stdio",
-      provider: "claude",
-      mcpServerNames: ["filesystem"],
-    });
-    const result = await surfaceService.buildPodMcpEntries(pod, null);
-
-    const userEntries = withoutPluginEntry(result.entries);
-    expect(userEntries).toHaveLength(1);
-    expect(userEntries[0]).toMatchObject({
-      name: "filesystem",
-      transport: "stdio",
-      command: "uvx",
-      args: ["mcp-server-filesystem"],
-      env: { FS_ROOT: "/tmp" },
-      proxied: false,
-    });
-  });
-
-  it("Claude pod 勾 http target → 包成 per-MCP proxy bridge stdio entry", async () => {
     managedMcpStore.save({
-      name: "remote-mcp",
+      name: "remote-docs",
       transport: "http",
       url: "https://example.com/mcp",
       enabled: true,
     });
-
     const probe: McpProbe = { probe: vi.fn().mockResolvedValue(undefined) };
-    const runtimeService = createManagedMcpRuntimeService({
-      store: managedMcpStore,
-      probe,
-    });
-    const surfaceService = createManagedMcpSurfaceService({
-      store: managedMcpStore,
-      runtimeService,
-    });
+    const { surfaceService } = createSurface(probe);
 
     const pod = createPod({
-      id: "pod-claude-http",
+      id: "pod-run-surface",
       provider: "claude",
-      mcpServerNames: ["remote-mcp"],
+      goal: { todos: [{ id: "todo-1", text: "Use selected MCP" }] } as any,
+      mcpServerNames: ["filesystem", "remote-docs"],
     });
-    const result = await surfaceService.buildPodMcpEntries(pod, null);
+    const result = await surfaceService.buildPodMcpEntries(
+      pod,
+      createRunContext({ sourcePodId: pod.id }),
+    );
 
-    const userEntries = withoutPluginEntry(result.entries);
-    expect(userEntries).toHaveLength(1);
-    const entry = userEntries[0];
-    expect(entry).toMatchObject({
-      name: "remote-mcp",
+    expect(probe.probe).toHaveBeenCalledTimes(2);
+    expect(result.hasGoalRuntime).toBe(true);
+    expect(result.ignoredTargets).toEqual([]);
+    expect(result.entries.map((entry) => entry.name)).toEqual([
+      "agent_canvas_goal",
+      "agent_canvas_plugin",
+      "filesystem",
+      "remote-docs",
+    ]);
+    expect(result.entries[2]).toMatchObject({
+      name: "filesystem",
+      transport: "stdio",
+      command: "uvx",
+      args: ["mcp-server-filesystem"],
+      cwd: "/workspace",
+      env: { FS_ROOT: "/workspace" },
+      proxied: false,
+    });
+    expect(result.entries[3]).toMatchObject({
+      name: "remote-docs",
       transport: "stdio",
       proxied: true,
       env: {
-        AGENT_CANVAS_MCP_PROXY_NAME: "remote-mcp",
+        AGENT_CANVAS_MCP_PROXY_NAME: "remote-docs",
         AGENT_CANVAS_MCP_PROXY_TRANSPORT: "http",
         AGENT_CANVAS_MCP_PROXY_URL: "https://example.com/mcp",
       },
     });
-    if (entry?.transport === "stdio") {
-      expect(entry.args).toContain("--mcp-proxy-bridge");
-    }
+    expect(managedMcpStore.getByName("filesystem")?.lastKnownStatus).toBe(
+      "healthy",
+    );
+    expect(managedMcpStore.getByName("remote-docs")?.lastKnownStatus).toBe(
+      "healthy",
+    );
   });
 
-  it("Codex pod 勾 http target → 原生 http entry（不包 bridge）", async () => {
+  it("不同 provider 會依 native transport support 產生 remote 或 proxy entry", async () => {
     managedMcpStore.save({
-      name: "remote-mcp",
+      name: "remote-http",
       transport: "http",
-      url: "https://example.com/mcp",
+      url: "https://example.com/http",
       enabled: true,
     });
-
-    const probe: McpProbe = { probe: vi.fn().mockResolvedValue(undefined) };
-    const runtimeService = createManagedMcpRuntimeService({
-      store: managedMcpStore,
-      probe,
-    });
-    const surfaceService = createManagedMcpSurfaceService({
-      store: managedMcpStore,
-      runtimeService,
-    });
-
-    const pod = createPod({
-      id: "pod-codex-http",
-      provider: "codex",
-      mcpServerNames: ["remote-mcp"],
-    });
-    const result = await surfaceService.buildPodMcpEntries(pod, null);
-
-    expect(withoutPluginEntry(result.entries)).toEqual([
-      {
-        name: "remote-mcp",
-        transport: "http",
-        url: "https://example.com/mcp",
-      },
-    ]);
-  });
-
-  it("Codex pod 綁定 Slack integration 時應注入 slack-reply stdio MCP entry", async () => {
-    const probe: McpProbe = { probe: vi.fn().mockResolvedValue(undefined) };
-    const runtimeService = createManagedMcpRuntimeService({
-      store: managedMcpStore,
-      probe,
-    });
-    const surfaceService = createManagedMcpSurfaceService({
-      store: managedMcpStore,
-      runtimeService,
-    });
-
-    const pod = createPod({
-      id: "pod-codex-slack",
-      provider: "codex",
-      integrationBindings: [
-        {
-          provider: "slack",
-          appId: "app-slack",
-          resourceId: "C123456",
-          extra: { custom: "value" },
-        },
-      ],
-    });
-    const result = await surfaceService.buildPodMcpEntries(pod, null);
-
-    const slackReply = result.entries.find(
-      (entry) => entry.name === "slack-reply",
-    );
-    expect(slackReply).toMatchObject({
-      name: "slack-reply",
-      transport: "stdio",
-      proxied: false,
-      env: {
-        AGENT_CANVAS_INTEGRATION_REPLY_PROVIDER: "slack",
-        AGENT_CANVAS_INTEGRATION_REPLY_APP_ID: "app-slack",
-        AGENT_CANVAS_INTEGRATION_REPLY_RESOURCE_ID: "C123456",
-        AGENT_CANVAS_INTEGRATION_REPLY_POD_ID: "pod-codex-slack",
-        AGENT_CANVAS_INTEGRATION_REPLY_EXTRA: JSON.stringify({
-          custom: "value",
-        }),
-      },
-    });
-    if (slackReply?.transport === "stdio") {
-      expect(
-        slackReply.env.AGENT_CANVAS_INTEGRATION_REPLY_CAPABILITY,
-      ).toEqual(expect.any(String));
-    }
-    if (slackReply?.transport === "stdio") {
-      expect(slackReply.args).toContain("--integration-reply-bridge");
-    }
-  });
-
-  it("Opencode pod 綁定 Slack integration 時應注入 slack-reply stdio MCP entry", async () => {
-    const probe: McpProbe = { probe: vi.fn().mockResolvedValue(undefined) };
-    const runtimeService = createManagedMcpRuntimeService({
-      store: managedMcpStore,
-      probe,
-    });
-    const surfaceService = createManagedMcpSurfaceService({
-      store: managedMcpStore,
-      runtimeService,
-    });
-
-    const pod = createPod({
-      id: "pod-opencode-slack",
-      provider: "opencode",
-      integrationBindings: [
-        {
-          provider: "slack",
-          appId: "app-slack",
-          resourceId: "C123456",
-        },
-      ],
-    });
-    const result = await surfaceService.buildPodMcpEntries(pod, null);
-
-    const slackReply = result.entries.find(
-      (entry) => entry.name === "slack-reply",
-    );
-    expect(slackReply).toMatchObject({
-      name: "slack-reply",
-      transport: "stdio",
-      proxied: false,
-      env: {
-        AGENT_CANVAS_INTEGRATION_REPLY_PROVIDER: "slack",
-        AGENT_CANVAS_INTEGRATION_REPLY_APP_ID: "app-slack",
-        AGENT_CANVAS_INTEGRATION_REPLY_RESOURCE_ID: "C123456",
-        AGENT_CANVAS_INTEGRATION_REPLY_POD_ID: "pod-opencode-slack",
-      },
-    });
-    if (slackReply?.transport === "stdio") {
-      expect(
-        slackReply.env.AGENT_CANVAS_INTEGRATION_REPLY_CAPABILITY,
-      ).toEqual(expect.any(String));
-    }
-    if (slackReply?.transport === "stdio") {
-      expect(slackReply.args).toContain("--integration-reply-bridge");
-    }
-  });
-
-  it("Claude pod 綁定 Slack integration 時不重複注入 stdio reply entry", async () => {
-    const probe: McpProbe = { probe: vi.fn().mockResolvedValue(undefined) };
-    const runtimeService = createManagedMcpRuntimeService({
-      store: managedMcpStore,
-      probe,
-    });
-    const surfaceService = createManagedMcpSurfaceService({
-      store: managedMcpStore,
-      runtimeService,
-    });
-
-    const pod = createPod({
-      id: "pod-claude-slack",
-      provider: "claude",
-      integrationBindings: [
-        {
-          provider: "slack",
-          appId: "app-slack",
-          resourceId: "C123456",
-        },
-      ],
-    });
-    const result = await surfaceService.buildPodMcpEntries(pod, null);
-
-    expect(result.entries.some((entry) => entry.name === "slack-reply")).toBe(
-      false,
-    );
-  });
-
-  it("Opencode pod 勾 sse target → 原生 sse entry（opencode 原生支援）", async () => {
     managedMcpStore.save({
       name: "remote-sse",
       transport: "sse",
       url: "https://example.com/sse",
       enabled: true,
     });
-
-    const probe: McpProbe = { probe: vi.fn().mockResolvedValue(undefined) };
-    const runtimeService = createManagedMcpRuntimeService({
-      store: managedMcpStore,
-      probe,
-    });
-    const surfaceService = createManagedMcpSurfaceService({
-      store: managedMcpStore,
-      runtimeService,
+    const { surfaceService } = createSurface({
+      probe: vi.fn().mockResolvedValue(undefined),
     });
 
-    const pod = createPod({
-      id: "pod-opencode-sse",
-      provider: "opencode",
-      mcpServerNames: ["remote-sse"],
-    });
-    const result = await surfaceService.buildPodMcpEntries(pod, null);
+    const codexResult = await surfaceService.buildPodMcpEntries(
+      createPod({
+        id: "pod-codex",
+        provider: "codex",
+        mcpServerNames: ["remote-http", "remote-sse"],
+      }),
+      null,
+    );
+    expect(withoutPluginEntry(codexResult.entries)).toEqual([
+      {
+        name: "remote-http",
+        transport: "http",
+        url: "https://example.com/http",
+      },
+      expect.objectContaining({
+        name: "remote-sse",
+        transport: "stdio",
+        proxied: true,
+        env: expect.objectContaining({
+          AGENT_CANVAS_MCP_PROXY_TRANSPORT: "sse",
+          AGENT_CANVAS_MCP_PROXY_URL: "https://example.com/sse",
+        }),
+      }),
+    ]);
 
-    expect(withoutPluginEntry(result.entries)).toEqual([
+    const opencodeResult = await surfaceService.buildPodMcpEntries(
+      createPod({
+        id: "pod-opencode",
+        provider: "opencode",
+        mcpServerNames: ["remote-http", "remote-sse"],
+      }),
+      null,
+    );
+    expect(withoutPluginEntry(opencodeResult.entries)).toEqual([
+      {
+        name: "remote-http",
+        transport: "http",
+        url: "https://example.com/http",
+      },
       {
         name: "remote-sse",
         transport: "sse",
@@ -379,82 +219,7 @@ describe("ManagedMcpSurfaceService.buildPodMcpEntries", () => {
     ]);
   });
 
-  it("Codex pod 勾 sse target → codex 不原生支援，回退到 per-MCP proxy bridge", async () => {
-    managedMcpStore.save({
-      name: "remote-sse",
-      transport: "sse",
-      url: "https://example.com/sse",
-      enabled: true,
-    });
-
-    const probe: McpProbe = { probe: vi.fn().mockResolvedValue(undefined) };
-    const runtimeService = createManagedMcpRuntimeService({
-      store: managedMcpStore,
-      probe,
-    });
-    const surfaceService = createManagedMcpSurfaceService({
-      store: managedMcpStore,
-      runtimeService,
-    });
-
-    const pod = createPod({
-      id: "pod-codex-sse",
-      provider: "codex",
-      mcpServerNames: ["remote-sse"],
-    });
-    const result = await surfaceService.buildPodMcpEntries(pod, null);
-
-    expect(withoutPluginEntry(result.entries)[0]).toMatchObject({
-      name: "remote-sse",
-      transport: "stdio",
-      proxied: true,
-      env: {
-        AGENT_CANVAS_MCP_PROXY_TRANSPORT: "sse",
-        AGENT_CANVAS_MCP_PROXY_URL: "https://example.com/sse",
-      },
-    });
-  });
-
-  it("Run 模式 + pod.goal 有 todos → entries 首位為 Goal Runtime、hasGoalRuntime=true", async () => {
-    managedMcpStore.save({
-      name: "team-server",
-      transport: "stdio",
-      command: "node",
-      args: ["server.js"],
-      enabled: true,
-    });
-
-    const probe: McpProbe = { probe: vi.fn().mockResolvedValue(undefined) };
-    const runtimeService = createManagedMcpRuntimeService({
-      store: managedMcpStore,
-      probe,
-    });
-    const surfaceService = createManagedMcpSurfaceService({
-      store: managedMcpStore,
-      runtimeService,
-    });
-
-    const pod = createPod({
-      id: "pod-with-goal",
-      provider: "claude",
-      mcpServerNames: ["team-server"],
-      goal: {
-        todos: [{ id: "todo-1", text: "Do a thing" }],
-      } as any,
-    });
-    const result = await surfaceService.buildPodMcpEntries(
-      pod,
-      createRunContext({ runId: "run-goal-1", sourcePodId: pod.id }),
-    );
-
-    expect(result.hasGoalRuntime).toBe(true);
-    expect(result.entries[0]?.name).toBe("agent_canvas_goal");
-    // entries[1] 為自動注入的 agent_canvas_plugin，entries[2] 才是使用者指定的 team-server
-    expect(result.entries[1]?.name).toBe("agent_canvas_plugin");
-    expect(result.entries[2]?.name).toBe("team-server");
-  });
-
-  it("registry 不存在 / disabled / runtime 不 healthy → 進 ignoredTargets 並附 reason", async () => {
+  it("外部 MCP 失敗時不注入 provider surface，並在 run 模式通知 ignored target", async () => {
     managedMcpStore.save({
       name: "disabled-server",
       transport: "stdio",
@@ -469,43 +234,50 @@ describe("ManagedMcpSurfaceService.buildPodMcpEntries", () => {
       args: [],
       enabled: true,
     });
-
-    const probe: McpProbe = {
-      probe: vi.fn().mockImplementation((entry) => {
-        if (entry.name === "broken-server") {
-          return Promise.reject(new Error("connect timeout"));
-        }
-        return Promise.resolve(undefined);
-      }),
-    };
-    const runtimeService = createManagedMcpRuntimeService({
-      store: managedMcpStore,
-      probe,
-    });
-    const surfaceService = createManagedMcpSurfaceService({
-      store: managedMcpStore,
-      runtimeService,
+    const emitSpy = vi
+      .spyOn(socketService, "emitToAll")
+      .mockImplementation(() => undefined);
+    const { surfaceService } = createSurface({
+      probe: vi.fn().mockRejectedValue(new Error("connect timeout")),
     });
 
     const pod = createPod({
       id: "pod-ignored",
+      name: "MCP Failure Pod",
       provider: "claude",
       mcpServerNames: ["missing-server", "disabled-server", "broken-server"],
     });
-    const result = await surfaceService.buildPodMcpEntries(pod, null);
+    const runContext = createRunContext({ runId: "run-ignored-1" });
+    const result = await surfaceService.buildPodMcpEntries(pod, runContext);
 
     expect(withoutPluginEntry(result.entries)).toEqual([]);
     expect(result.ignoredTargets).toEqual([
       { name: "missing-server", reason: "registry entry removed" },
       { name: "disabled-server", reason: "registry entry disabled" },
-      expect.objectContaining({
+      {
         name: "broken-server",
-        reason: expect.stringContaining("connect timeout"),
-      }),
+        reason: "connect timeout",
+      },
     ]);
+    expect(emitSpy).toHaveBeenCalledWith(
+      WebSocketResponseEvents.MANAGED_MCP_SURFACE_TARGETS_IGNORED,
+      {
+        success: true,
+        runId: "run-ignored-1",
+        podId: "pod-ignored",
+        podName: "MCP Failure Pod",
+        ignored: result.ignoredTargets,
+      },
+    );
+    expect(managedMcpStore.getByName("broken-server")?.lastKnownStatus).toBe(
+      "error",
+    );
+    expect(managedMcpStore.getByName("broken-server")?.lastError).toBe(
+      "connect timeout",
+    );
   });
 
-  it("registry 更新後再呼叫 buildPodMcpEntries 應使用新設定（不快取）", async () => {
+  it("registry 更新後重新標記 dirty，下一次 surface 會使用真 store 的新設定", async () => {
     const saved = managedMcpStore.save({
       name: "filesystem",
       transport: "stdio",
@@ -513,17 +285,8 @@ describe("ManagedMcpSurfaceService.buildPodMcpEntries", () => {
       args: ["mcp-server-filesystem"],
       enabled: true,
     });
-
     const probe: McpProbe = { probe: vi.fn().mockResolvedValue(undefined) };
-    const runtimeService = createManagedMcpRuntimeService({
-      store: managedMcpStore,
-      probe,
-    });
-    const surfaceService = createManagedMcpSurfaceService({
-      store: managedMcpStore,
-      runtimeService,
-    });
-
+    const { runtimeService, surfaceService } = createSurface(probe);
     const pod = createPod({
       id: "pod-registry-update",
       provider: "claude",
@@ -545,8 +308,9 @@ describe("ManagedMcpSurfaceService.buildPodMcpEntries", () => {
       enabled: true,
     });
     await runtimeService.markConfigDirty("filesystem");
-
     const second = await surfaceService.buildPodMcpEntries(pod, null);
+
+    expect(probe.probe).toHaveBeenCalledTimes(2);
     expect(withoutPluginEntry(second.entries)[0]).toMatchObject({
       name: "filesystem",
       command: "node",

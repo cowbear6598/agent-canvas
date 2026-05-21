@@ -207,6 +207,22 @@ export function finalizeSubMessages(
   return subMessages.map((sub) => finalizeToolUseInSub(sub));
 }
 
+function applyFinalTextToSingleTextSubMessage(
+  subMessages: SubMessage[] | undefined,
+  fullContent: string,
+): SubMessage[] | undefined {
+  if (!subMessages || subMessages.length !== 1) {
+    return subMessages;
+  }
+
+  const [onlySubMessage] = subMessages;
+  if (!onlySubMessage || (onlySubMessage.toolUse?.length ?? 0) > 0) {
+    return subMessages;
+  }
+
+  return [{ ...onlySubMessage, content: fullContent }];
+}
+
 export function updateMainMessageState(
   message: Message,
   fullContent: string,
@@ -224,7 +240,10 @@ export function updateMainMessageState(
   }
 
   if (finalizedSubMessages !== undefined) {
-    updated.subMessages = finalizedSubMessages;
+    updated.subMessages = applyFinalTextToSingleTextSubMessage(
+      finalizedSubMessages,
+      fullContent,
+    );
   }
 
   return updated;

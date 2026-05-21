@@ -1,9 +1,7 @@
 import { beforeEach, vi } from "vitest";
 import { config } from "@vue/test-utils";
-import { createI18n } from "vue-i18n";
+import { i18n } from "../src/i18n";
 import zhTW from "../src/locales/zh-TW.json";
-import en from "../src/locales/en.json";
-import ja from "../src/locales/ja.json";
 
 // UUID 計數器
 let uuidCounter = 0;
@@ -24,12 +22,11 @@ window.requestAnimationFrame = vi.fn((cb) => {
 console.warn = vi.fn();
 console.error = vi.fn();
 
-// 建立測試用 i18n instance（預設使用 zh-TW locale）
 // 注意：vue-i18n 會把 @ 符號解析為 linked message 語法，
 // 因此需要覆蓋含有 @ 符號的 locale key，以避免測試環境編譯錯誤。
 // 只覆蓋會在元件渲染中觸發解析錯誤的 key（hint 字串），
 // 保持其他 key（如 validation.gitUrlPrefix）的原始值，以免影響其他測試。
-const zhTWTest = {
+export const zhTWTestMessages = {
   ...zhTW,
   integration: {
     ...zhTW.integration,
@@ -55,29 +52,16 @@ const zhTWTest = {
   },
 } as typeof zhTW;
 
-const testI18n = createI18n({
-  legacy: false,
-  locale: "zh-TW",
-  fallbackLocale: "zh-TW",
-  messages: {
-    "zh-TW": zhTWTest,
-    en,
-    ja,
-  },
-});
+export function installSharedVueTestSetup(): void {
+  i18n.global.setLocaleMessage("zh-TW", zhTWTestMessages);
+  config.global.plugins = [i18n];
+}
 
-// 全域掛載 vue-i18n，讓所有測試的 mount() 都能使用 $t()
-config.global.plugins = [testI18n];
-
-// 修補 @/i18n module 的 global t 函式，使其也能正確處理測試環境中的字串。
-// 這樣非 Vue 元件（provider 等）直接呼叫的 t() 也會使用安全版本的 locale。
-// 使用 top-level await 確保 patch 在所有測試開始前完成，避免非同步 race condition。
-const { i18n: originalI18n } = await import("../src/i18n");
-// 替換 zh-TW messages 為修補後的版本
-originalI18n.global.setLocaleMessage("zh-TW", zhTWTest);
+installSharedVueTestSetup();
 
 // 每個測試前重置
 beforeEach(() => {
   vi.clearAllMocks();
   uuidCounter = 0;
+  i18n.global.locale.value = "zh-TW";
 });

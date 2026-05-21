@@ -2,7 +2,7 @@
 // 透過 preload 載入，使用 beforeAll/afterAll 來管理全域測試生命週期
 
 import { mkdir, rm } from "fs/promises";
-import { testConfig } from "./testConfig.js";
+import { AGENT_CANVAS_TEST_ROOT, testConfig } from "./testConfig.js";
 
 /**
  * 全域 beforeAll
@@ -13,6 +13,8 @@ beforeAll(async () => {
     await mkdir(testConfig.appDataRoot, { recursive: true });
     await mkdir(testConfig.canvasRoot, { recursive: true });
     await mkdir(testConfig.repositoriesRoot, { recursive: true });
+    await mkdir(testConfig.tmpRoot, { recursive: true });
+    await mkdir(testConfig.stagingRoot, { recursive: true });
     await mkdir(testConfig.skillsPath, { recursive: true });
     await mkdir(testConfig.agentsPath, { recursive: true });
     await mkdir(testConfig.commandsPath, { recursive: true });
@@ -28,6 +30,7 @@ beforeAll(async () => {
 afterAll(async () => {
   try {
     await rm(testConfig.appDataRoot, { recursive: true, force: true });
+    await rm(AGENT_CANVAS_TEST_ROOT, { recursive: true, force: true });
   } catch {
     // 不拋出錯誤，避免影響測試結果
   }

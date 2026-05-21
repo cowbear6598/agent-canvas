@@ -203,11 +203,10 @@ export async function createTestServer(): Promise<TestServerInstance> {
 export async function closeTestServer(
   server: TestServerInstance,
 ): Promise<void> {
-  const { scheduleService } =
-    await import("../../src/services/scheduleService.js");
-  scheduleService.stop();
-
   const { socketService } = await import("../../src/services/socketService.js");
+  const { stopBackgroundTestTimers } = await import("./testResourceCleanup.js");
+
+  await stopBackgroundTestTimers();
   socketService.stopHeartbeat();
 
   server.server.stop();

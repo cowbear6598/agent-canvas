@@ -58,7 +58,7 @@ backend/src/services/provider/
 ├── xxxProvider.md             ← 新增說明文件
 └── index.ts                   ← 在 providerRegistry 加 key
 
-backend/tests/provider/
+backend/tests/business-logic/
 ├── xxxProvider.test.ts              ← chat() 測試
 └── xxxProviderBuildOptions.test.ts  ← buildOptions() 測試
 ```

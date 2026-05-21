@@ -1,0 +1,142 @@
+path	current_category	decision	userflow_or_business_rule	rewrite_delete_candidate_signals	retainable_business_logic_tags	scope
+backend/tests/integration/uploadApi.test.ts	integration	keep	F3/F4 HTTP boundary and product error contract	module-mock+data-container-crud	path-safety	POST /api/upload success and error contract
+backend/tests/database/model-aliases.test.ts	database	keep	database persistence rule	data-container-crud	-	model_aliases CRUD with uniqueness rule
+backend/tests/database/schema.test.ts	database	rewrite	migration/database integrity	data-container-crud	migration	Database schema, cascade, prepared statement coverage
+backend/tests/business-logic/opencodeAliasesHandlers.test.ts	business-logic	rewrite	F4 fake external provider behavior	module-mock+spy-call-count	-	Opencode alias handlers plus broadcast assertions
+backend/tests/business-logic/pluginHandlers.test.ts	business-logic	rewrite	error classifier	module-mock+spy-call-count+data-container-crud	-	Plugin handlers and i18n error contract
+backend/tests/userflows/canvas-api.test.ts	userflows	keep	F3 api-to-service/database/files behavior	spy+data-container-crud	path-safety	Canvas REST API validation and persistence
+backend/tests/userflows/canvas.test.ts	userflows	keep	F3 api-to-service/database/files behavior	-	-	Canvas management socket flow
+backend/tests/userflows/chat.test.ts	userflows	keep	F3 api-to-service/database/files behavior	module-mock+data-container-crud	-	Chat management flow
+backend/tests/integration/config-ws.test.ts	integration	keep	F3 api-to-service/database/files behavior	getter-setter	schedule-timezone	Config websocket timezone validation
+backend/tests/userflows/connection.test.ts	userflows	keep	F3 api-to-service/database/files behavior	data-container-crud	-	Connection management flow
+backend/tests/userflows/connectionApi.test.ts	userflows	keep	F3 api-to-service/database/files behavior	-	-	Connection REST API flow
+backend/tests/userflows/cursor.test.ts	userflows	keep	F3 api-to-service/database/files behavior	-	-	Cursor sharing flow
+backend/tests/userflows/integration.test.ts	userflows	keep	F3 api-to-service/database/files behavior	data-container-crud	-	Integration app API/socket persistence flow
+backend/tests/userflows/integrationReplyMcpBridge.test.ts	userflows	keep	F3 api-to-service/database/files behavior	spy-call-count	-	Integration reply MCP bridge flow
+backend/tests/userflows/managedMcpHandlers.test.ts	userflows	keep	F3 api-to-service/database/files behavior	data-container-crud	-	Managed MCP handlers integration
+backend/tests/integration/managedMcpSurfaceService.test.ts	integration	keep	F3 api-to-service/database/files behavior	spy-call-count+data-container-crud	-	Managed MCP surface service behavior
+backend/tests/userflows/paste.test.ts	userflows	keep	F3 api-to-service/database/files behavior	data-container-crud	-	Paste flow writes resources
+backend/tests/userflows/pod-api.test.ts	userflows	keep	F3 api-to-service/database/files behavior	-	-	Pod REST API flow
+backend/tests/userflows/pod-download-api.test.ts	userflows	keep	F3 api-to-service/database/files behavior	data-container-crud	path-safety	Pod download API path and archive behavior
+backend/tests/userflows/pod.test.ts	userflows	keep	F3 api-to-service/database/files behavior	-	-	Pod management socket flow
+backend/tests/userflows/repository-git-operations.test.ts	userflows	keep	F3 api-to-service/database/files behavior	-	-	Repository git operations flow
+backend/tests/userflows/repository.test.ts	userflows	keep	F3 api-to-service/database/files behavior	data-container-crud	-	Repository management flow
+backend/tests/integration/setup.test.ts	integration	keep	F3 api-to-service/database/files behavior	-	-	Test environment setup behavior
+backend/tests/integration/store-coverage.test.ts	integration	keep	F3 api-to-service/database/files behavior	data-container-crud	-	Store coverage across persisted relations
+backend/tests/userflows/workflow-api.test.ts	userflows	keep	F3 api-to-service/database/files behavior	data-container-crud	path-safety+workflow-decision	Workflow API persistence and path checks
+backend/tests/business-logic/abortRegistry.test.ts	business-logic	rewrite	F4 fake external provider behavior	-	-	Abort registry data container behavior
+backend/tests/business-logic/claudeProviderBuildOptions.test.ts	business-logic	rewrite	F4 fake external provider behavior	module-mock+spy-call-count+getter-setter	path-safety	Claude provider buildOptions assembly
+backend/tests/business-logic/codexNormalizer.test.ts	business-logic	keep	provider normalizer	-	provider-normalizer	Codex normalizer output rules
+backend/tests/business-logic/codexProvider.test.ts	business-logic	rewrite	F4 fake external provider behavior	module-mock+spy+spy-call-count	provider-normalizer+path-safety	Codex provider orchestration with mocked SDK
+backend/tests/business-logic/codexProviderBuildOptions.test.ts	business-logic	rewrite	F4 fake external provider behavior	module-mock+spy-call-count	-	Codex provider buildOptions assembly
+backend/tests/business-logic/opencodeProvider.test.ts	business-logic	rewrite	F4 fake external provider behavior	module-mock+spy-call-count+data-container-crud	provider-normalizer	Opencode provider mocked orchestration
+backend/tests/business-logic/opencodeServer.test.ts	business-logic	rewrite	F4 fake external provider behavior	spy+spy-call-count	error-classifier	Opencode server lifecycle and logging
+backend/tests/business-logic/providerHandlers.test.ts	business-logic	rewrite	F4 fake external provider behavior	module-mock+spy-call-count	-	Provider list handler mock assertions
+backend/tests/business-logic/providerHandlersOpencode.test.ts	business-logic	rewrite	F4 fake external provider behavior	module-mock+data-container-crud	-	Opencode dynamic availableModels from SQLite
+backend/tests/business-logic/providerIndex.test.ts	business-logic	rewrite	F4 fake external provider behavior	-	-	Provider registry existence checks
+backend/tests/business-logic/auth/authGuard.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+spy-call-count	-	AuthGuard access decision with mocked dependencies
+backend/tests/business-logic/auth/unlockRateLimiter.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	-	-	Unlock rate limiter data container behavior
+backend/tests/business-logic/backupScheduleService.test.ts	business-logic	rewrite	schedule timezone	module-mock+spy-call-count	schedule-timezone	Backup schedule tick and reload behavior
+backend/tests/business-logic/backupService.test.ts	business-logic	rewrite	error classifier	module-mock+spy-call-count+data-container-crud	error-classifier	Backup service mocked git and emit behavior
+backend/tests/business-logic/gitService.test.ts	business-logic	keep	path safety	spy+spy-call-count+getter-setter	path-safety+error-classifier	Git source detection, path safety, and error messages
+backend/tests/business-logic/managedPluginRegistry.test.ts	business-logic	keep	F7 product behavior or low-level utility	data-container-crud	-	Managed plugin reorder persistence rule
+backend/tests/business-logic/aiDecidePromptBuilder.test.ts	business-logic	keep	F7 product behavior or low-level utility	-	-	AI decision prompt formatting rule
+backend/tests/business-logic/apiHelpers.test.ts	business-logic	keep	F7 product behavior or low-level utility	-	-	JSON body requirement helper
+backend/tests/business-logic/attachmentWriter.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock	path-safety	Attachment writer filename sanitize
+backend/tests/business-logic/backupGitignore.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock	-	Backup gitignore helper with fs mocks
+backend/tests/business-logic/backupSchemas.test.ts	business-logic	keep	F7 product behavior or low-level utility	-	-	Backup schema validation contract
+backend/tests/business-logic/branchDecider.test.ts	business-logic	keep	F7 product behavior or low-level utility	module-mock+spy-call-count	workflow-decision	Branch decider prompt and parse decision
+backend/tests/business-logic/branchDecisionParser.test.ts	business-logic	keep	workflow decision	-	workflow-decision	Branch decision parser rules
+backend/tests/business-logic/buildClaudeOptions.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+getter-setter	path-safety	Claude option builder with many mocks
+backend/tests/business-logic/buildScheduleUpdates.test.ts	business-logic	keep	schedule timezone	-	schedule-timezone	Schedule update merge rules
+backend/tests/business-logic/capabilities.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	-	-	Provider model constant consistency
+backend/tests/business-logic/chatEmitStrategy.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+spy+spy-call-count	-	Chat emit strategy mock call assertions
+backend/tests/business-logic/chatHandlers.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+spy-call-count+data-container-crud	path-safety	Chat send handler launchRun calls
+backend/tests/business-logic/chatHelpers.test.ts	business-logic	keep	F7 product behavior or low-level utility	-	-	Chat display content extraction
+backend/tests/business-logic/chatSendSchema.test.ts	business-logic	keep	F7 product behavior or low-level utility	-	-	Chat send schema product validation
+backend/tests/business-logic/claudeMcpReader.test.ts	business-logic	rewrite	F4 fake external provider behavior	module-mock+spy	path-safety	Claude MCP config reader with fs mocks
+backend/tests/business-logic/claudeService.test.ts	business-logic	rewrite	F4 fake external provider behavior	module-mock+spy-call-count	-	Claude service mocked SDK orchestration
+backend/tests/business-logic/claudeSessionRetry.test.ts	business-logic	rewrite	F4 fake external provider behavior	module-mock+spy-call-count	-	Session retry mocked call behavior
+backend/tests/business-logic/cli.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	spy+spy-call-count+data-container-crud	path-safety	CLI command parsing and process spies
+backend/tests/business-logic/codexMcpReader.test.ts	business-logic	rewrite	F4 fake external provider behavior	module-mock+spy+spy-call-count	path-safety	Codex MCP reader with fs mocks
+backend/tests/business-logic/codexService.test.ts	business-logic	rewrite	F4 fake external provider behavior	module-mock+spy+spy-call-count	provider-normalizer+path-safety	Codex service mocked provider execution
+backend/tests/business-logic/configStore.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	data-container-crud+getter-setter	schedule-timezone	Config store CRUD and getter behavior
+backend/tests/business-logic/connectionStatusPersistence.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	data-container-crud	-	Connection status store persistence
+backend/tests/business-logic/connectionStoreBranchUpdate.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+data-container-crud	path-safety	Connection branch validation store path
+backend/tests/business-logic/createResourceHandlers.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+spy-call-count	-	Resource handlers mock call assertions
+backend/tests/business-logic/cursorColorManager.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	-	-	Cursor color allocation container
+backend/tests/business-logic/dbStartupCleanup.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	-	-	Legacy cleanup helper
+backend/tests/business-logic/dedupHelper.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	-	-	Dedup tracker container
+backend/tests/business-logic/directTriggerStore.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	data-container-crud	-	Direct trigger store CRUD
+backend/tests/business-logic/diskSpace.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+spy	path-safety	Disk space checks with mocked statfs
+backend/tests/business-logic/disposableChatService.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+spy-call-count	path-safety	Disposable chat mocked provider flow
+backend/tests/business-logic/encryptionService.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock	-	Encryption service crypto mocks
+backend/tests/business-logic/errorHelpers.test.ts	business-logic	keep	error classifier	-	error-classifier	Error helper mapping rules
+backend/tests/business-logic/fileResourceHelpers.test.ts	business-logic	keep	path safety	-	path-safety	File resource path traversal rules
+backend/tests/business-logic/gitServiceClone.test.ts	business-logic	keep	path safety	module-mock+spy-call-count+getter-setter	path-safety	Git local clone path validation
+backend/tests/business-logic/goalCompletionGate.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	-	-	Goal completion gate pure state rules
+backend/tests/business-logic/goalRuntime.test.ts	business-logic	keep	F7 product behavior or low-level utility	-	-	Goal runtime snapshot rules
+backend/tests/business-logic/groupedResourceHelpers.test.ts	business-logic	keep	F7 product behavior or low-level utility	-	path-safety	Grouped resource path helpers
+backend/tests/business-logic/handleResultError.test.ts	business-logic	rewrite	error classifier	module-mock+spy-call-count	error-classifier	Result error handler emit assertions
+backend/tests/business-logic/handlerHelpers.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+data-container-crud	-	Handler display name helper with mocked providers
+backend/tests/business-logic/integrationAppStore.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+spy-call-count+data-container-crud	provider-normalizer	Integration app store CRUD and validation
+backend/tests/business-logic/integrationHelpers.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+spy-call-count+data-container-crud	-	Integration helper broadcast calls
+backend/tests/business-logic/integrationRegistry.test.ts	business-logic	keep	F7 product behavior or low-level utility	-	provider-normalizer	Integration registry provider resolution
+backend/tests/business-logic/integrationWebhookRouter.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+spy-call-count	path-safety	Integration webhook router exact matching
+backend/tests/business-logic/jiraProvider.test.ts	business-logic	rewrite	F4 fake external provider behavior	module-mock+spy-call-count+data-container-crud	provider-normalizer	Jira provider schema and mocked calls
+backend/tests/business-logic/logger.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	-	error-classifier	Logger formatting and masking
+backend/tests/business-logic/managedMcpAvailabilityService.test.ts	business-logic	keep	F7 product behavior or low-level utility	data-container-crud	-	Managed MCP availability product state
+backend/tests/business-logic/managedMcpRuntimeService.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	spy-call-count+data-container-crud	-	Managed MCP runtime probe call counts
+backend/tests/business-logic/managedMcpSchema.test.ts	business-logic	keep	F7 product behavior or low-level utility	-	-	Managed MCP schema validation
+backend/tests/business-logic/managedMcpStore.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	data-container-crud	-	Managed MCP store CRUD
+backend/tests/business-logic/mcpHandlers.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+spy-call-count+data-container-crud	-	Managed MCP handlers mock calls
+backend/tests/business-logic/messageBuilder.test.ts	business-logic	keep	F7 product behavior or low-level utility	-	-	Claude content block builder
+backend/tests/business-logic/opencodeMcpReader.test.ts	business-logic	rewrite	F4 fake external provider behavior	module-mock+spy+spy-call-count	path-safety	Opencode MCP reader with fs mocks
+backend/tests/business-logic/orphanRunRepoScanner.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+spy-call-count	-	Orphan run repo scanner mocks
+backend/tests/business-logic/pathValidator.test.ts	business-logic	keep	path safety	-	path-safety	Path validation boundary rules
+backend/tests/business-logic/pathwayState.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	-	-	Pathway state numeric mapping
+backend/tests/business-logic/pendingTargetStore.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	data-container-crud	-	Pending target store CRUD
+backend/tests/business-logic/pluginCatalogBuilder.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+spy-call-count+data-container-crud	path-safety	Plugin skill catalog builder with store mocks
+backend/tests/business-logic/pluginInstallService.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+spy-call-count+data-container-crud	-	Plugin install service mocked git/fs
+backend/tests/business-logic/pluginMcpBridge.test.ts	business-logic	keep	F7 product behavior or low-level utility	-	path-safety	Pod plugin scope resolution
+backend/tests/business-logic/pluginScanFs.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	-	path-safety	Plugin filesystem scanner
+backend/tests/business-logic/podPathResolver.test.ts	business-logic	keep	path safety	module-mock	path-safety	Pod cwd resolution and boundary checks
+backend/tests/business-logic/podStoreIntegration.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+spy-call-count+data-container-crud+getter-setter	provider-normalizer+path-safety	Pod store integration binding and provider config
+backend/tests/business-logic/podThinkingLevel.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+data-container-crud	-	Pod thinkingLevel persistence
+backend/tests/business-logic/providerTypes.test.ts	business-logic	rewrite	F4 fake external provider behavior	-	-	Provider metadata constant checks
+backend/tests/business-logic/repositoryGitHelpers.test.ts	business-logic	keep	F7 product behavior or low-level utility	-	path-safety	Repository name sanitize rules
+backend/tests/business-logic/repositoryService.test.ts	business-logic	keep	F7 product behavior or low-level utility	data-container-crud	path-safety	Repository service minimal behavior
+backend/tests/business-logic/runChatHelpers.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+spy-call-count	-	Run chat helper mock call assertions
+backend/tests/business-logic/runClaudeQuery.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+spy-call-count	path-safety	Run Claude query mocked SDK flow
+backend/tests/business-logic/runExecutionHelpers.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+spy-call-count	-	Run execution helper call assertions
+backend/tests/business-logic/runExecutionResources.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	spy+spy-call-count	-	Run execution resource side effects
+backend/tests/business-logic/runExecutionService.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	spy+spy-call-count+data-container-crud	-	Run execution service orchestration
+backend/tests/business-logic/runExecutionStrategy.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	spy+spy-call-count	-	Run execution strategy callbacks
+backend/tests/business-logic/runQueueService.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+spy-call-count	-	Run queue service mocks
+backend/tests/business-logic/runStore.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	data-container-crud	path-safety	Run store CRUD and path storage
+backend/tests/business-logic/schedule-timezone-utils.test.ts	business-logic	keep	schedule timezone	-	schedule-timezone	Timezone offset conversion
+backend/tests/business-logic/schema-migration.test.ts	business-logic	keep	migration	-	migration	Schema migration product data transformations
+backend/tests/business-logic/sdkErrorMapper.test.ts	business-logic	keep	error classifier	-	error-classifier	SDK error message classifier
+backend/tests/business-logic/sentryProvider.test.ts	business-logic	rewrite	F4 fake external provider behavior	module-mock+spy-call-count+data-container-crud	-	Sentry provider schema and mocked calls
+backend/tests/business-logic/slackProvider.test.ts	business-logic	rewrite	F4 fake external provider behavior	module-mock+spy-call-count+data-container-crud	provider-normalizer	Slack provider webhook normalization
+backend/tests/business-logic/socketService.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	spy-call-count	-	Socket service emit call behavior
+backend/tests/business-logic/staticFileServer.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	-	path-safety	Static file serving from VFS
+backend/tests/business-logic/streamingChatExecutor.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+spy+spy-call-count	provider-normalizer+path-safety+error-classifier	Streaming chat executor flow with mocks
+backend/tests/business-logic/summaryPromptBuilder.test.ts	business-logic	keep	F7 product behavior or low-level utility	-	-	Summary prompt formatting rules
+backend/tests/business-logic/telegramProvider.test.ts	business-logic	rewrite	F4 fake external provider behavior	module-mock+data-container-crud	provider-normalizer	Telegram provider event normalization
+backend/tests/business-logic/tmpCleanupService.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+spy	-	Temporary cleanup service with fs mocks
+backend/tests/business-logic/triggerSettlement.test.ts	business-logic	keep	workflow decision	spy+spy-call-count+data-container-crud	workflow-decision	Trigger settlement pathway decision
+backend/tests/business-logic/webhookProvider.test.ts	business-logic	rewrite	F4 fake external provider behavior	module-mock+spy-call-count+data-container-crud	provider-normalizer	Webhook provider normalization and auth
+backend/tests/business-logic/workflowBranchTriggerService.test.ts	business-logic	rewrite	workflow decision	spy+spy-call-count+data-container-crud	path-safety+workflow-decision	Workflow branch trigger service
+backend/tests/business-logic/workflowDirectTriggerFlow.test.ts	business-logic	keep	workflow decision	spy+spy-call-count+data-container-crud	workflow-decision	Direct trigger workflow flow
+backend/tests/business-logic/workflowExecutionService.test.ts	business-logic	keep	workflow decision	spy+spy-call-count+data-container-crud	path-safety+workflow-decision	Workflow execution service decisions
+backend/tests/business-logic/workflowHelpers.test.ts	business-logic	rewrite	workflow decision	module-mock+spy-call-count+data-container-crud	workflow-decision+error-classifier	Workflow helper event emit calls
+backend/tests/business-logic/workflowPipeline.test.ts	business-logic	keep	workflow decision	spy+spy-call-count+data-container-crud	path-safety+workflow-decision	Workflow pipeline branch/run decisions
+backend/tests/business-logic/workflowStateService.test.ts	business-logic	rewrite	workflow decision	spy+spy-call-count+data-container-crud+getter-setter	workflow-decision	Workflow state service CRUD and emit calls
+backend/tests/business-logic/busyChatManager.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	-	-	Busy chat reply decision helper
+backend/tests/business-logic/config.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	-	-	Config GitLab URL validation
+backend/tests/business-logic/escapeInput.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	-	-	User input escaping helper
+backend/tests/business-logic/messageSerializer.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	-	-	Message serializer helper
+backend/tests/business-logic/operationHelpers.test.ts	business-logic	keep	F7 product behavior or low-level utility	-	-	Safe execute helper error boundary
+backend/tests/business-logic/safeJsonParse.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	-	-	Safe JSON parse helper
+backend/tests/business-logic/workflowChainTraversal.test.ts	business-logic	rewrite	workflow decision	module-mock+data-container-crud	path-safety+workflow-decision	Workflow chain traversal with mocked graph

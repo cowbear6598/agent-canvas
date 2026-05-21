@@ -1,8 +1,8 @@
 import path from "path";
-import os from "os";
+import { config } from "../../config/index.js";
 
 export function getPluginsRoot(): string {
-  return path.join(os.homedir(), "Documents", "AgentCanvas", "plugins");
+  return config.pluginsRoot;
 }
 
 /**
