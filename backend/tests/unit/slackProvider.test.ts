@@ -5,16 +5,16 @@ const { mockPostMessage } = vi.hoisted(() => ({
     mockPostMessage: vi.fn().mockResolvedValue({ ok: true }),
 }));
 
-vi.mock('@slack/web-api', () => ({
-    WebClient: vi.fn().mockImplementation(function () {
-        return {
+vi.mock('../../src/services/integration/providers/slackClient.js', () => ({
+    slackClientFactory: {
+        create: vi.fn(() => ({
             auth: { test: vi.fn().mockResolvedValue({ user_id: 'U_BOT' }) },
             chat: { postMessage: mockPostMessage },
             conversations: {
                 list: vi.fn().mockResolvedValue({ channels: [], response_metadata: { next_cursor: '' } }),
             },
-        };
-    }),
+        })),
+    },
 }));
 
 vi.mock('../../src/services/integration/integrationAppStore.js', () => ({
@@ -49,8 +49,8 @@ vi.mock('../../src/utils/logger.js', () => ({
     },
 }));
 
-import { WebClient } from '@slack/web-api';
 import { slackProvider } from '../../src/services/integration/providers/slackProvider.js';
+import { slackClientFactory } from '../../src/services/integration/providers/slackClient.js';
 import { integrationAppStore } from '../../src/services/integration/integrationAppStore.js';
 import type { IntegrationApp } from '../../src/services/integration/types.js';
 
@@ -458,6 +458,14 @@ describe('SlackProvider - sendMessage', () => {
     beforeEach(() => {
         mockPostMessage.mockClear();
         mockPostMessage.mockResolvedValue({ ok: true });
+        asMock(slackClientFactory.create).mockClear();
+        asMock(slackClientFactory.create).mockImplementation(() => ({
+            auth: { test: vi.fn().mockResolvedValue({ user_id: 'U_BOT' }) },
+            chat: { postMessage: mockPostMessage },
+            conversations: {
+                list: vi.fn().mockResolvedValue({ channels: [], response_metadata: { next_cursor: '' } }),
+            },
+        }));
         asMock(integrationAppStore.getById).mockReturnValue(undefined);
     });
 
@@ -521,5 +529,17 @@ describe('SlackProvider - sendMessage', () => {
         const result = await slackProvider.sendMessage('non-existent-app', 'C123', 'hello');
 
         expect(result.success).toBe(false);
+    });
+
+    it('Client 不存在但 integrationAppStore 有 botToken 時 fallback 建立 client 並送出訊息', async () => {
+        asMock(integrationAppStore.getById).mockReturnValue(makeApp({ id: 'fallback-app' }));
+
+        const result = await slackProvider.sendMessage('fallback-app', 'C123', 'hello');
+
+        expect(result.success).toBe(true);
+        expect(slackClientFactory.create).toHaveBeenCalledWith('xoxb-test-token');
+        expect(mockPostMessage).toHaveBeenCalledWith(
+            expect.objectContaining({ channel: 'C123', text: 'hello' })
+        );
     });
 });

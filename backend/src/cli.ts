@@ -488,6 +488,10 @@ async function main(): Promise<void> {
     return;
   }
   if (flags["integration-reply-bridge"]) {
+    if (!process.env.AGENT_CANVAS_INTEGRATION_REPLY_CAPABILITY) {
+      console.error("integration reply bridge 缺少 capability token");
+      process.exit(1);
+    }
     const { runIntegrationReplyMcpBridge } = await import(
       "./services/integration/integrationReplyMcpBridge.js"
     );

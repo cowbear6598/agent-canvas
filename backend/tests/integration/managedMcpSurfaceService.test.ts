@@ -177,7 +177,6 @@ describe("ManagedMcpSurfaceService.buildPodMcpEntries", () => {
         AGENT_CANVAS_MCP_PROXY_URL: "https://example.com/mcp",
       },
     });
-    // bridge args 應帶上 internal flag，讓 cli.ts 進入 proxy 模式
     if (entry?.transport === "stdio") {
       expect(entry.args).toContain("--mcp-proxy-bridge");
     }
@@ -253,11 +252,17 @@ describe("ManagedMcpSurfaceService.buildPodMcpEntries", () => {
         AGENT_CANVAS_INTEGRATION_REPLY_PROVIDER: "slack",
         AGENT_CANVAS_INTEGRATION_REPLY_APP_ID: "app-slack",
         AGENT_CANVAS_INTEGRATION_REPLY_RESOURCE_ID: "C123456",
+        AGENT_CANVAS_INTEGRATION_REPLY_POD_ID: "pod-codex-slack",
         AGENT_CANVAS_INTEGRATION_REPLY_EXTRA: JSON.stringify({
           custom: "value",
         }),
       },
     });
+    if (slackReply?.transport === "stdio") {
+      expect(
+        slackReply.env.AGENT_CANVAS_INTEGRATION_REPLY_CAPABILITY,
+      ).toEqual(expect.any(String));
+    }
     if (slackReply?.transport === "stdio") {
       expect(slackReply.args).toContain("--integration-reply-bridge");
     }
@@ -298,8 +303,14 @@ describe("ManagedMcpSurfaceService.buildPodMcpEntries", () => {
         AGENT_CANVAS_INTEGRATION_REPLY_PROVIDER: "slack",
         AGENT_CANVAS_INTEGRATION_REPLY_APP_ID: "app-slack",
         AGENT_CANVAS_INTEGRATION_REPLY_RESOURCE_ID: "C123456",
+        AGENT_CANVAS_INTEGRATION_REPLY_POD_ID: "pod-opencode-slack",
       },
     });
+    if (slackReply?.transport === "stdio") {
+      expect(
+        slackReply.env.AGENT_CANVAS_INTEGRATION_REPLY_CAPABILITY,
+      ).toEqual(expect.any(String));
+    }
     if (slackReply?.transport === "stdio") {
       expect(slackReply.args).toContain("--integration-reply-bridge");
     }

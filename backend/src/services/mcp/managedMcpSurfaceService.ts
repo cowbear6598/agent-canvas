@@ -24,6 +24,7 @@ import {
   buildReplyContextKey,
   replyContextStore,
 } from "../integration/replyContextStore.js";
+import { createIntegrationReplyCapability } from "../integration/integrationReplyCapability.js";
 import {
   buildPluginSkillCatalog,
   type PluginSkillCatalogEntry,
@@ -330,9 +331,19 @@ function buildIntegrationReplyMcpEntries(
       command: spawn.command,
       args: spawn.args,
       env: {
+        AGENT_CANVAS_INTEGRATION_REPLY_CAPABILITY:
+          createIntegrationReplyCapability({
+            provider: binding.provider,
+            appId: binding.appId,
+            resourceId: binding.resourceId,
+            podId: pod.id,
+            extra: binding.extra ?? {},
+            replyContext: { ...(replyContext ?? {}) },
+          }),
         AGENT_CANVAS_INTEGRATION_REPLY_PROVIDER: binding.provider,
         AGENT_CANVAS_INTEGRATION_REPLY_APP_ID: binding.appId,
         AGENT_CANVAS_INTEGRATION_REPLY_RESOURCE_ID: binding.resourceId,
+        AGENT_CANVAS_INTEGRATION_REPLY_POD_ID: pod.id,
         AGENT_CANVAS_INTEGRATION_REPLY_EXTRA: JSON.stringify(
           binding.extra ?? {},
         ),

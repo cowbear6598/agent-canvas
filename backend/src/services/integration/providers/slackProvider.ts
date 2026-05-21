@@ -1,11 +1,12 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { z } from "zod";
-import { WebClient } from "@slack/web-api";
 import { ok, err } from "../../../types/index.js";
 import type { Result } from "../../../types/index.js";
+import { logger, sanitizeSensitiveInfo } from "../../../utils/logger.js";
 import { integrationAppStore } from "../integrationAppStore.js";
 import { integrationEventPipeline } from "../integrationEventPipeline.js";
 import { createDedupTracker } from "../dedupHelper.js";
+import { slackClientFactory, type SlackClient } from "./slackClient.js";
 import {
   destroyProvider,
   initializeProvider,
@@ -137,10 +138,6 @@ async function handleUrlVerification(
   return Response.json({ challenge });
 }
 
-/**
- * 查找符合簽名驗證的 Slack App。
- * 整合「查 app + 驗簽」兩個步驟，驗證失敗時回傳 null。
- */
 function findVerifiedApp(
   timestamp: string,
   rawBody: string,
@@ -209,7 +206,7 @@ class SlackProvider implements IntegrationProvider {
       .regex(/^[a-f0-9]{32}$/, "Signing Secret 格式不正確"),
   });
 
-  private clients: Map<string, WebClient> = new Map();
+  private clients: Map<string, SlackClient> = new Map();
 
   /** 頻道清單快取：避免高頻 refreshResources 呼叫時重複全量拉取 Slack API */
   private channelCache: Map<
@@ -251,7 +248,7 @@ class SlackProvider implements IntegrationProvider {
           return false;
         }
 
-        const client = new WebClient(botToken);
+        const client = slackClientFactory.create(botToken);
 
         try {
           const authResult = await client.auth.test();
@@ -272,8 +269,16 @@ class SlackProvider implements IntegrationProvider {
         if (!client) return;
         try {
           await this.fetchAndUpdateChannels(app.id, client);
-        } catch {
-          // 取得頻道失敗時繼續初始化（非致命）
+        } catch (error) {
+          logger.warn(
+            "Slack",
+            "Warn",
+            `[SlackProvider] fetchAndUpdateChannels 初始化失敗（appId=${app.id}）: ${
+              sanitizeSensitiveInfo(
+                error instanceof Error ? error.message : String(error),
+              )
+            }`,
+          );
         }
       },
       "Slack",
@@ -296,7 +301,7 @@ class SlackProvider implements IntegrationProvider {
   }
 
   async refreshResources(appId: string): Promise<IntegrationResource[]> {
-    const client = this.clients.get(appId);
+    const client = this.getOrCreateClient(appId);
     if (!client) {
       return [];
     }
@@ -311,14 +316,9 @@ class SlackProvider implements IntegrationProvider {
     text: string,
     extra?: Record<string, unknown>,
   ): Promise<Result<void>> {
-    let client = this.clients.get(appId);
+    const client = this.getOrCreateClient(appId);
     if (!client) {
-      const app = integrationAppStore.getById(appId);
-      const botToken = app?.config["botToken"];
-      if (typeof botToken !== "string") {
-        return err(`Slack App ${appId} 尚未初始化`);
-      }
-      client = new WebClient(botToken);
+      return err(`Slack App ${appId} 尚未初始化`);
     }
 
     const senderId =
@@ -341,8 +341,17 @@ class SlackProvider implements IntegrationProvider {
         thread_ts: finalThreadTs,
       });
       return ok(undefined);
-    } catch {
-      return err("發送訊息失敗");
+    } catch (error) {
+      logger.error(
+        "Slack",
+        "Error",
+        `[SlackProvider] 發送訊息失敗（appId=${appId}, resourceId=${resourceId}）`,
+        error,
+      );
+      const message = sanitizeSensitiveInfo(
+        error instanceof Error ? error.message : String(error),
+      );
+      return err(`發送訊息失敗: ${message}`);
     }
   }
 
@@ -416,9 +425,24 @@ class SlackProvider implements IntegrationProvider {
     return new Response("OK", { status: 200 });
   }
 
+  private getOrCreateClient(appId: string): SlackClient | undefined {
+    const existing = this.clients.get(appId);
+    if (existing) return existing;
+
+    const app = integrationAppStore.getById(appId);
+    const botToken = app?.config["botToken"];
+    if (typeof botToken !== "string") {
+      return undefined;
+    }
+
+    const client = slackClientFactory.create(botToken);
+    this.clients.set(appId, client);
+    return client;
+  }
+
   private async fetchAndUpdateChannels(
     appId: string,
-    client: WebClient,
+    client: SlackClient,
     forceRefresh = false,
   ): Promise<IntegrationResource[]> {
     // 被動讀取時（forceRefresh = false）優先回傳快取，避免高頻呼叫重複拉取 Slack API
@@ -447,7 +471,6 @@ class SlackProvider implements IntegrationProvider {
       cursor = result.response_metadata?.next_cursor || undefined;
     } while (cursor);
 
-    // 更新快取與 DB
     this.channelCache.set(appId, {
       channels,
       expiresAt: Date.now() + SlackProvider.CHANNEL_CACHE_TTL_MS,
