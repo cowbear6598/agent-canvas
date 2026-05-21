@@ -20,15 +20,6 @@ vi.mock("../../src/utils/logger.js", () => ({
   sanitizeSensitiveInfo: vi.fn((value: string) => value),
 }));
 
-// 避免測試觸發真實 fs IO 寫入 ~/Documents/AgentCanvas/sandbox-whitelist.txt
-vi.mock("../../src/services/claude/sandboxDomainWhitelist.js", () => ({
-  loadDomainWhitelist: vi.fn(() => [
-    "registry.npmjs.org",
-    "*.atlassian.net",
-    "sentry.io",
-  ]),
-}));
-
 // 注：buildClaudeContentBlocks 與 createUserMessageStream 為純函式，不需要 mock
 // 測試使用 string message（不是 ContentBlock[]），這兩個函式在測試路徑中不會被呼叫
 
@@ -448,8 +439,8 @@ describe("runClaudeQuery", () => {
     });
   });
 
-  describe("sandbox 配置斷言", () => {
-    it("query() 呼叫時 sandbox.enabled 為 true、autoAllowBashIfSandboxed 為 true，且 allowWrite 包含 workspacePath", async () => {
+  describe("Claude SDK sandbox 傳遞規則", () => {
+    it("預設 query options 不應包含 sandbox", async () => {
       const { query: mockQuery } =
         await import("@anthropic-ai/claude-agent-sdk");
 
@@ -464,57 +455,7 @@ describe("runClaudeQuery", () => {
       const calledOptions = (mockQuery as ReturnType<typeof vi.fn>).mock
         .calls[0][0].options;
 
-      expect(calledOptions.sandbox.enabled).toBe(true);
-      expect(calledOptions.sandbox.autoAllowBashIfSandboxed).toBe(true);
-      expect(Array.isArray(calledOptions.sandbox.filesystem.allowWrite)).toBe(
-        true,
-      );
-      expect(calledOptions.sandbox.filesystem.allowWrite).toContain(
-        ctx.workspacePath,
-      );
-    });
-
-    it("query() 呼叫時 sandbox.filesystem.denyWrite 為陣列且包含敏感 credential 路徑", async () => {
-      const { query: mockQuery } =
-        await import("@anthropic-ai/claude-agent-sdk");
-
-      mockQueryGenerator = async function* () {
-        yield { type: "result", subtype: "success", result: "done" };
-      };
-
-      const ctx = createCtx();
-      await collectEvents(runClaudeQuery(ctx));
-
-      const calledOptions = (mockQuery as ReturnType<typeof vi.fn>).mock
-        .calls[0][0].options;
-      const denyWrite = calledOptions.sandbox.filesystem.denyWrite;
-
-      expect(Array.isArray(denyWrite)).toBe(true);
-      // 至少要包含 ~/.ssh 與 shell 設定檔，避免 credential 與 dotfile 被誤動
-      expect(denyWrite.some((p: string) => p.endsWith("/.ssh"))).toBe(true);
-      expect(denyWrite.some((p: string) => p.endsWith("/.zshrc"))).toBe(true);
-      expect(denyWrite.some((p: string) => p.endsWith("/.bashrc"))).toBe(true);
-    });
-
-    it("query() 呼叫時 sandbox.network.allowedDomains 來自 loadDomainWhitelist", async () => {
-      const { query: mockQuery } =
-        await import("@anthropic-ai/claude-agent-sdk");
-
-      mockQueryGenerator = async function* () {
-        yield { type: "result", subtype: "success", result: "done" };
-      };
-
-      const ctx = createCtx();
-      await collectEvents(runClaudeQuery(ctx));
-
-      const calledOptions = (mockQuery as ReturnType<typeof vi.fn>).mock
-        .calls[0][0].options;
-
-      expect(calledOptions.sandbox.network.allowedDomains).toEqual([
-        "registry.npmjs.org",
-        "*.atlassian.net",
-        "sentry.io",
-      ]);
+      expect(calledOptions).not.toHaveProperty("sandbox");
     });
 
     it("呼叫端傳入 options.sandbox 時，query() 收到的 sandbox 應等於呼叫端傳入的物件", async () => {

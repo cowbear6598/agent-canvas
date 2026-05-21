@@ -1222,7 +1222,7 @@ describe("chat — prompt / plugin waiting failure handling", () => {
     expect(neverStream.return).toHaveBeenCalled();
   });
 
-  it("permission.asked 應 fail fast，避免 session 無限等待", async () => {
+  it("permission.asked 異常事件應 fail fast，避免 session 無限等待", async () => {
     const sessionId = "permission-asked-session";
     const mockClient = makeMockClient({
       session: {
@@ -1813,13 +1813,7 @@ describe("chat — managed MCP transient server 仍可運作", () => {
             enabled: true,
           },
         },
-        permission: {
-          bash: "allow",
-          doom_loop: "allow",
-          edit: "allow",
-          external_directory: "allow",
-          webfetch: "allow",
-        },
+        permission: "allow",
       },
     });
   });
@@ -1901,13 +1895,7 @@ describe("chat — managed MCP transient server 仍可運作", () => {
             enabled: true,
           },
         },
-        permission: {
-          bash: "allow",
-          doom_loop: "allow",
-          edit: "allow",
-          external_directory: "allow",
-          webfetch: "allow",
-        },
+        permission: "allow",
       },
     });
     // v2 SDK: prompt 使用平鋪參數，entries 非空時不送 tools subset

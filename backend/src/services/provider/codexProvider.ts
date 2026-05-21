@@ -7,13 +7,13 @@
  * 實作 AgentProvider 介面，支援基本聊天（chat=true）。
  *
  * CLI 指令組合：
- *   - 新對話：`codex exec - --json --skip-git-repo-check --cd <repoPath> --sandbox workspace-write -c sandbox_workspace_write.network_access=true --model <model>`
- *   - 恢復對話：`codex exec resume <id> - --json -c sandbox_mode=workspace-write -c sandbox_workspace_write.network_access=true`
- *     （`exec resume` 不接受 `--cd` 與 `--sandbox`，工作目錄改由 Bun.spawn cwd 定錨，sandbox 改用 -c 帶入）
+ *   - 新對話：`codex exec - --json --skip-git-repo-check --cd <repoPath> --dangerously-bypass-approvals-and-sandbox --model <model>`
+ *   - 恢復對話：`codex exec resume <id> - --json --dangerously-bypass-approvals-and-sandbox`
+ *     （`exec resume` 不接受 `--cd`，工作目錄由 Bun.spawn cwd 定錨）
  *   - `-` 表示從 stdin 讀取 prompt
- *   - `--sandbox workspace-write` 保留 OS-level workspace 寫入限制
- *   - `--cd <repoPath>` 明確錨定 sandbox boundary，與 Bun.spawn cwd 雙保險
- *   - `-c sandbox_workspace_write.network_access=true` 允許 npm install / git push 等網路需求
+ *   - `--cd <repoPath>` 讓 Codex 以 run clone 作為工作目錄
+ *   - `--dangerously-bypass-approvals-and-sandbox` 關閉 Codex 內建 sandbox 與 approval，
+ *     讓 Git metadata 與 shell 操作在 run clone 內完整可用
  */
 
 import {
@@ -213,7 +213,7 @@ const MCP_AUTO_APPROVE_SAFE_NAME_RE = /^[a-zA-Z0-9_-]+$/;
 /**
  * 為每個使用者安裝的 MCP server 產生對應的 `-c mcp_servers.<name>.default_tools_approval_mode=approve` 旗標組。
  *
- * codex 在 sandbox=WorkspaceWrite + approval_policy=Never 下，MCP tool 仍會走 approval flow，
+ * 即使 Codex 關閉內建 sandbox，MCP tool 仍可能走 approval flow，
  * 但 spawn 時 stdin 是 pipe 無法取得使用者輸入，最終回 Cancel。
  * 透過 `-c` 覆寫各 server 的 default_tools_approval_mode=approve 可跳過 approval。
  *
@@ -322,12 +322,9 @@ function buildNewSessionArgs(
     "--skip-git-repo-check",
     "--cd",
     repoPath,
-    "--sandbox",
-    "workspace-write",
+    "--dangerously-bypass-approvals-and-sandbox",
     // thinkingLevel 為非空字串時才插入 -c model_reasoning_effort，否則交由 CLI 預設
     ...(thinkingLevel ? ["-c", `model_reasoning_effort=${thinkingLevel}`] : []),
-    "-c",
-    "sandbox_workspace_write.network_access=true",
     ...goalMcpConfigArgs,
     // 為每個使用者安裝的 MCP server 加入 auto-approve 旗標，避免 stdin pipe 無法回應時被 Cancel
     ...mcpAutoApproveArgs,
@@ -340,8 +337,8 @@ function buildNewSessionArgs(
  * 組合 codex CLI 參數。
  * 驗證 resumeSessionId 及 model 格式，防止 CLI 旗標注入。
  *
- * 新對話 args 含 `--cd <repoPath>` 是雙保險：Bun.spawn cwd 已由上層 `resolvePodCwd` 統一解析，
- * `--cd` 則明確錨定 sandbox boundary，確保 codex sandbox 寫入限制與工作目錄一致。
+ * 新對話 args 含 `--cd <repoPath>`：Bun.spawn cwd 已由上層 `resolvePodCwd` 統一解析，
+ * `--cd` 則讓 Codex UI / session 記錄使用同一個 run clone 工作目錄。
  *
  * resume 模式的 `codex exec resume` 不接受 `--cd` flag（會導致 "unexpected argument" 錯誤），
  * 因此 resume 只用 Bun.spawn cwd 定錨工作目錄，不傳 `--cd`。
@@ -361,7 +358,7 @@ function buildCodexArgs(
   const entries = options?.mcpEntries ?? [];
 
   // auto-approve 對象：codex 自己讀的 ~/.codex/config.toml MCPs + 我們注入的 entries。
-  // 兩邊合在一起確保 sandbox=WorkspaceWrite + approval_policy=Never 下所有 MCP tool 都不會卡 approval。
+  // 兩邊合在一起，避免 MCP tool 在 headless run 中卡 approval。
   const autoApproveServerNames = [
     ...readCodexMcpServers().map((server) => server.name),
     ...entries.map((entry) => entry.name),
@@ -387,8 +384,8 @@ function buildCodexArgs(
       );
     }
 
-    // 恢復對話模式：`codex exec resume` 不接受 --cd 也不接受 --sandbox，
-    // 工作目錄由 Bun.spawn cwd 定錨；sandbox 設定改用 -c sandbox_mode 帶入。
+    // 恢復對話模式：`codex exec resume` 不接受 --cd，
+    // 工作目錄由 Bun.spawn cwd 定錨。
     // --model 由 session 決定，不傳入。
     return [
       "exec",
@@ -396,14 +393,11 @@ function buildCodexArgs(
       resumeSessionId,
       "-",
       "--json",
-      "-c",
-      "sandbox_mode=workspace-write",
+      "--dangerously-bypass-approvals-and-sandbox",
       // thinkingLevel 為非空字串時才插入 -c model_reasoning_effort，否則交由 CLI 預設
       ...(thinkingLevel
         ? ["-c", `model_reasoning_effort=${thinkingLevel}`]
         : []),
-      "-c",
-      "sandbox_workspace_write.network_access=true",
       ...runtimeMcpConfigArgs,
       // 為每個使用者安裝的 MCP server 加入 auto-approve 旗標，避免 stdin pipe 無法回應時被 Cancel
       ...mcpAutoApproveArgs,
@@ -423,11 +417,11 @@ function buildCodexArgs(
  * 啟動 codex subprocess，直接 throw 原始錯誤，由 chat() 呼叫端統一判斷。
  * 不在此處做 ENOENT 包裝——改由 chat() 使用 isEnoentError 統一處理。
  *
- * cwd 與 args 中的 `--cd` 使用同一個 repoPath（雙保險）。
+ * cwd 與新對話 args 中的 `--cd` 使用同一個 repoPath。
  * repoPath 已由上層 `resolvePodCwd` 統一解析，此處直接使用。
  *
  * @param args CLI 參數（不含 "codex"）
- * @param repoPath 工作目錄路徑（與 args 中 --cd 後的值同值）
+ * @param repoPath 工作目錄路徑
  * @returns Bun.Subprocess
  */
 function spawnCodexProcess(

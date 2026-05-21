@@ -181,6 +181,9 @@ describe("ClaudeService", () => {
           }),
         }),
       );
+      const calledOptions = (claudeAgentSdk.query as any).mock.calls[0][0]
+        .options;
+      expect(calledOptions).not.toHaveProperty("sandbox");
     });
 
     it("executeMcpChat 呼叫 query() 時包含基礎 options", () => {
@@ -203,6 +206,9 @@ describe("ClaudeService", () => {
           }),
         }),
       );
+      const calledOptions = (claudeAgentSdk.query as any).mock.calls[0][0]
+        .options;
+      expect(calledOptions).not.toHaveProperty("sandbox");
     });
   });
 });

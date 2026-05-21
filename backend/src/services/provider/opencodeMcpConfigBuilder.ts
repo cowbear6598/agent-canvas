@@ -1,4 +1,8 @@
-import type { Config, McpLocalConfig, McpRemoteConfig } from "@opencode-ai/sdk";
+import type {
+  Config,
+  McpLocalConfig,
+  McpRemoteConfig,
+} from "@opencode-ai/sdk/v2";
 import type { PodMcpEntry } from "../mcp/managedMcpSurfaceService.js";
 
 /**
@@ -42,10 +46,9 @@ export function buildServerCacheKey(runId: string, podId: string): string {
 }
 
 /**
- * 組裝 opencode transient server 的完整 config（mcp + permission）。
+ * 組裝 opencode server 的完整權限 config。
  *
- * permission 直接設為全域 `allow`，盡量貼近 CLI 的
- * `--dangerously-skip-permissions` 行為，避免 stdio MCP / plugin skill /
+ * permission 直接設為全域 `allow`，避免 stdio MCP / plugin skill /
  * workspace 外路徑等能力在 headless 模式下卡住 approval prompt。
  *
  * 注意：這只會放寬「批准」類流程，不保證 opencode 不會發出 `question.asked`。
@@ -57,12 +60,16 @@ export function buildOpencodeTransientServerConfig(
 ): Pick<Config, "mcp" | "permission"> {
   return {
     mcp: buildOpencodeMcpConfig(entries),
-    permission: {
-      edit: "allow",
-      bash: "allow",
-      webfetch: "allow",
-      doom_loop: "allow",
-      external_directory: "allow",
-    },
+    permission: "allow",
+  };
+}
+
+export function buildOpencodeFullAccessServerConfig(): Pick<
+  Config,
+  "mcp" | "permission"
+> {
+  return {
+    mcp: {},
+    permission: "allow",
   };
 }

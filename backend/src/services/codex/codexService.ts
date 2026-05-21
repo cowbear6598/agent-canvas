@@ -152,10 +152,7 @@ function buildDisposableArgs(model: string, workspacePath: string): string[] {
     "--skip-git-repo-check",
     "--cd",
     workspacePath,
-    "--sandbox",
-    "workspace-write",
-    "-c",
-    "sandbox_workspace_write.network_access=true",
+    "--dangerously-bypass-approvals-and-sandbox",
     "--model",
     model,
   ];

@@ -14,11 +14,6 @@ import {
 } from "../../utils/errorHelpers.js";
 import { logger } from "../../utils/logger.js";
 import { getClaudeCodePath } from "./claudePathResolver.js";
-import {
-  buildClaudeSandboxAllowWrite,
-  buildClaudeSandboxDenyWrite,
-  buildClaudeSandboxNetwork,
-} from "./claudeSandboxPaths.js";
 
 export type { StreamEvent, StreamCallback } from "./types.js";
 export type {
@@ -55,26 +50,13 @@ type AssistantContentBlock =
 // ─── Private helpers（module-level）──────────────────────────────────────────
 
 /** buildBaseOptions：兩個公開方法共用的基礎查詢選項 */
-function buildBaseOptions(
-  cwd: string,
-  sandboxHomePath?: string,
-): Partial<Options> {
-  // SDK 內建 sandbox：隔離 Claude 執行 Bash 工具時跑的指令（非 Claude binary 本身）
+function buildBaseOptions(cwd: string): Partial<Options> {
   return {
     cwd,
     settingSources: ["project"],
     permissionMode: "bypassPermissions",
     includePartialMessages: true,
     pathToClaudeCodeExecutable: getClaudeCodePath(),
-    sandbox: {
-      enabled: true,
-      autoAllowBashIfSandboxed: true,
-      filesystem: {
-        allowWrite: buildClaudeSandboxAllowWrite(cwd, sandboxHomePath),
-        denyWrite: buildClaudeSandboxDenyWrite(),
-      },
-      network: buildClaudeSandboxNetwork(),
-    },
   };
 }
 
@@ -160,8 +142,7 @@ export class ClaudeService {
   public async executeDisposableChat(
     options: DisposableChatOptions,
   ): Promise<DisposableChatResult> {
-    const { systemPrompt, userMessage, workspacePath, sandboxHomePath, model } =
-      options;
+    const { systemPrompt, userMessage, workspacePath, model } = options;
 
     try {
       logger.log(
@@ -171,7 +152,7 @@ export class ClaudeService {
       );
 
       const queryOptions: Options = {
-        ...buildBaseOptions(workspacePath, sandboxHomePath),
+        ...buildBaseOptions(workspacePath),
         allowedTools: [],
         systemPrompt,
       };
@@ -217,7 +198,7 @@ export class ClaudeService {
    * 主要用於 branchDecisionService 的決策流程。
    */
   public executeMcpChat(options: McpChatOptions): Query {
-    const baseOptions = buildBaseOptions(options.cwd, options.sandboxHomePath);
+    const baseOptions = buildBaseOptions(options.cwd);
     return query({
       prompt: options.prompt,
       options: {

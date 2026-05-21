@@ -9,7 +9,8 @@
 **「任何一個 AI 不影響另一個 AI」**：
 
 - Claude 有 MCP Server、Plugin、Integration 等豐富能力
-- Codex 只支援基本聊天，透過 CLI subprocess 執行
+- Codex 透過 CLI subprocess 執行，支援 Run clone 內完整權限
+- OpenCode 透過 SDK v2 串接本地 server，支援 MCP / Plugin / Goal Runtime
 
 兩者走完全相同的執行路徑（`provider.buildOptions` → `provider.chat`），executor 完全不知道裡面是 SDK 還是 subprocess。
 
@@ -40,6 +41,8 @@ backend/src/services/provider/
 ├── claudeProvider.md          ← Claude 獨有行為說明
 ├── codexProvider.ts           ← Codex Provider 實作
 ├── codexProvider.md           ← Codex 獨有行為說明
+├── opencodeProvider.ts        ← OpenCode Provider 實作
+├── opencodeProvider.md        ← OpenCode 獨有行為說明
 └── claude/                    ← Claude 子模組
     ├── buildClaudeOptions.ts  ← 選項建構（MCP / Plugin / Integration）
     ├── runClaudeQuery.ts      ← SDK 呼叫 + SDKMessage → NormalizedEvent 轉換
@@ -277,13 +280,22 @@ async buildOptions(pod: Pod, _runContext?: RunContext): Promise<MyAIOptions> {
 - `chat` 委派給 `claude/sessionRetry.ts`（包裝 `claude/runClaudeQuery.ts`），支援 session resume 失敗後自動重試
 - 子模組拆解讓各功能獨立可測
 
-### Codex（簡單版，subprocess）
+### Codex（subprocess）
 
 `codexProvider.ts` 是最簡潔的參考實作：
 
 - `buildOptions`：從 `pod.providerConfig.model` 取 model，通過 MODEL_RE 驗證後回傳 `CodexOptions`
 - `chat`：spawn `codex exec` subprocess，監聽 stdout JSON line → `normalize()` → yield NormalizedEvent
 - abort：`ctx.abortSignal.addEventListener('abort', () => proc.kill())`
+- 權限：使用 `--dangerously-bypass-approvals-and-sandbox`，Run clone 作為隔離與清理邊界
 - Security：env 白名單、MODEL_RE / SESSION_ID_RE 防 CLI 旗標注入、stderr 遮蔽
+
+### OpenCode（SDK v2 server）
+
+`opencodeProvider.ts` 透過 SDK v2 client 連到後端啟動的 opencode server：
+
+- `buildOptions`：組裝 provider/model、managed MCP entries、Goal Runtime 與 plugin catalog
+- `chat`：建立 session、訂閱 SSE、送出 prompt，將 opencode 事件轉成 NormalizedEvent
+- 權限：server config 固定注入 `permission: "allow"`，不依賴使用者全域設定放行
 
 詳見各自的 `*Provider.md` 說明文件。

@@ -177,7 +177,7 @@ Provider 的預設執行時選項，有兩個用途：
 | | `Pod.providerConfig` | `ChatRequestContext.options: TOptions` |
 |---|---|---|
 | 性質 | **儲存型別**（DB wire 格式） | **執行時型別**（記憶體中） |
-| 形狀 | 固定為平坦 `{ model: string }` | 每個 provider 自定義（`ClaudeOptions` / `CodexOptions`） |
+| 形狀 | 固定為平坦 `{ model: string }` | 每個 provider 自定義（`ClaudeOptions` / `CodexOptions` / `OpencodeOptions`） |
 | 生命週期 | 持久化在 DB | 僅在一次 chat 請求中存在 |
 | 誰建構 | 前端 / podStore | `buildOptions(pod, runContext)` |
 | 抽象隔離 | 不動（DB schema 穩定） | 在此層發生（各 provider 的獨有能力） |

@@ -1,0 +1,210 @@
+feature: disable-provider-sandboxes
+side: backend
+approved: true
+phases:
+  - id: P1
+    title: Codex provider 拔除 sandbox
+    parallel: false
+    verification:
+      - cd backend && bun run style
+      - cd backend && bun run test
+    done: true
+    items:
+      - id: P1.A
+        title: Codex CLI 參數改為完整權限
+        tasks:
+          - id: P1.A.t1
+            text: 調整 `backend/src/services/provider/codexProvider.ts` 的 fresh session 參數，移除 `--sandbox workspace-write` 與 `sandbox_workspace_write.network_access=true`，改用 `--dangerously-bypass-approvals-and-sandbox`
+            completed: true
+            last_files_changed:
+              - backend/src/services/provider/codexProvider.ts
+          - id: P1.A.t2
+            text: 調整 `backend/src/services/provider/codexProvider.ts` 的 resume session 參數，移除 `sandbox_mode=workspace-write` 與 `sandbox_workspace_write.network_access=true`，改用 `--dangerously-bypass-approvals-and-sandbox`
+            completed: true
+            last_files_changed:
+              - backend/src/services/provider/codexProvider.ts
+          - id: P1.A.t3
+            text: 清理 `codexProvider.ts` 內描述 workspace-write sandbox、sandbox boundary、network_access 的註解，改成描述 run clone 與 Codex bypass 權限模型
+            completed: true
+            last_files_changed:
+              - backend/src/services/provider/codexProvider.ts
+      - id: P1.B
+        title: Codex 測試與文件同步
+        tasks:
+          - id: P1.B.t1
+            text: 更新 `backend/tests/provider/codexProvider.test.ts` 的 fresh session spawn 斷言，改為期待 bypass flag 並確認不含 workspace-write sandbox 設定
+            completed: true
+            last_files_changed:
+              - backend/tests/provider/codexProvider.test.ts
+          - id: P1.B.t2
+            text: 更新 `backend/tests/provider/codexProvider.test.ts` 的 resume session spawn 斷言，改為期待 bypass flag 並確認不含 workspace-write sandbox 設定
+            completed: true
+            last_files_changed:
+              - backend/tests/provider/codexProvider.test.ts
+          - id: P1.B.t3
+            text: 移除或改寫 `backend/tests/provider/codexProvider.test.ts` 中保證不傳 writable_roots 的舊測試，改成保證不殘留 workspace-write 相關 config
+            completed: true
+            last_files_changed:
+              - backend/tests/provider/codexProvider.test.ts
+          - id: P1.B.t4
+            text: 更新 `backend/src/services/provider/codexProvider.md`，移除 `--yolo`、workspace-write、sandbox network 等過期描述，改寫為目前 Codex Run 使用完整權限
+            completed: true
+            last_files_changed:
+              - backend/src/services/provider/codexProvider.md
+
+  - id: P2
+    title: Claude provider 拔除 SDK sandbox
+    parallel: false
+    verification:
+      - cd backend && bun run style
+      - cd backend && bun run test
+    done: true
+    items:
+      - id: P2.A
+        title: Claude SDK options 不再注入 sandbox
+        tasks:
+          - id: P2.A.t1
+            text: 調整 `backend/src/services/provider/claude/runClaudeQuery.ts`，移除 default sandbox 建構與 `sandbox: options.sandbox ?? defaultSandbox` 的預設注入，讓 Claude SDK 使用非 sandbox 執行
+            completed: true
+            last_files_changed:
+              - backend/src/services/provider/claude/runClaudeQuery.ts
+          - id: P2.A.t2
+            text: 清理 `runClaudeQuery.ts` 對 `buildClaudeSandboxAllowWrite`、`buildClaudeSandboxDenyWrite`、`buildClaudeSandboxNetwork` 的 import 與相關註解，避免殘留已移除的 sandbox 路徑
+            completed: true
+            last_files_changed:
+              - backend/src/services/provider/claude/runClaudeQuery.ts
+              - backend/src/services/claude/claudeSandboxPaths.ts
+          - id: P2.A.t3
+            text: 調整 `backend/src/services/claude/claudeService.ts` 的 disposable Claude 查詢基礎 options，移除 SDK sandbox 設定與 sandbox path helper import，避免 summary/disposable 路徑殘留 Claude sandbox
+            completed: true
+            last_files_changed:
+              - backend/src/services/claude/claudeService.ts
+          - id: P2.A.t4
+            text: 檢查 `backend/src/services/provider/claude/buildClaudeOptions.ts` 的 `ClaudeOptions.sandbox` 欄位註解，改成只描述呼叫端若明確提供才會傳入，不再描述預設會動態組裝 sandbox
+            completed: true
+            last_files_changed:
+              - backend/src/services/provider/claude/buildClaudeOptions.ts
+      - id: P2.B
+        title: Claude 測試同步
+        tasks:
+          - id: P2.B.t1
+            text: 更新 `backend/tests/unit/runClaudeQuery.test.ts` 的 sandbox 配置斷言，改為確認預設 query options 不含 sandbox 或 sandbox 未啟用
+            completed: true
+            last_files_changed:
+              - backend/tests/unit/runClaudeQuery.test.ts
+          - id: P2.B.t2
+            text: 移除 `backend/tests/unit/runClaudeQuery.test.ts` 中對 allowWrite、denyWrite、network.allowedDomains 的預設 sandbox 期待，保留呼叫端明確傳入 `options.sandbox` 時原樣轉交 SDK 的測試
+            completed: true
+            last_files_changed:
+              - backend/tests/unit/runClaudeQuery.test.ts
+          - id: P2.B.t3
+            text: 更新 `backend/tests/unit/claudeService.test.ts`，確認 disposable Claude 查詢不再傳入 SDK sandbox 設定
+            completed: true
+            last_files_changed:
+              - backend/tests/unit/claudeService.test.ts
+          - id: P2.B.t4
+            text: 檢查 `backend/tests/unit/claudeSandboxPaths.test.ts` 是否仍只覆蓋未被使用的 helper；若 helper 不再被 production path 引用，刪除 helper 與對應測試，避免 sandbox dead code 殘留
+            completed: true
+            last_files_changed:
+              - backend/src/services/claude/claudeSandboxPaths.ts
+              - backend/tests/unit/claudeSandboxPaths.test.ts
+
+  - id: P3
+    title: OpenCode provider 權限全開且不依賴使用者設定
+    parallel: false
+    verification:
+      - cd backend && bun run style
+      - cd backend && bun run test
+    done: true
+    items:
+      - id: P3.A
+        title: OpenCode server config 統一由後端注入 allow permission
+        tasks:
+          - id: P3.A.t1
+            text: 調整 `backend/src/services/provider/opencodeMcpConfigBuilder.ts`，讓 transient server config 使用官方支援的 `permission: "allow"` 或等價的全域 allow 形狀，取代只列部分工具的 permission 物件
+            completed: true
+            last_files_changed:
+              - backend/src/services/provider/opencodeMcpConfigBuilder.ts
+          - id: P3.A.t2
+            text: 調整 `backend/src/services/provider/opencodeServer.ts` 的全域 server 啟動 config，改為注入與 transient server 一致的 full permission allow，不再傳空 config 依賴使用者 `opencode.json`
+            completed: true
+            last_files_changed:
+              - backend/src/services/provider/opencodeServer.ts
+              - backend/src/services/provider/opencodeMcpConfigBuilder.ts
+          - id: P3.A.t3
+            text: 清理 `opencodeServer.ts` 與 `opencodeProvider.ts` 內「由使用者全域 opencode 設定決定權限」的註解，改成描述後端固定注入完整權限
+            completed: true
+            last_files_changed:
+              - backend/src/services/provider/opencodeServer.ts
+              - backend/src/services/provider/opencodeProvider.ts
+      - id: P3.B
+        title: OpenCode 測試同步
+        tasks:
+          - id: P3.B.t1
+            text: 更新 `backend/tests/provider/opencodeProvider.test.ts` 對 transient server config 的斷言，改為期待完整 permission allow 設定
+            completed: true
+            last_files_changed:
+              - backend/tests/provider/opencodeProvider.test.ts
+          - id: P3.B.t2
+            text: 補強或更新 `backend/tests/provider/opencodeProvider.test.ts` 對無 MCP entries 時全域 opencode server 行為的測試，確認啟動 config 不再是空物件
+            completed: true
+            last_files_changed:
+              - backend/tests/provider/opencodeServer.test.ts
+          - id: P3.B.t3
+            text: 保留 `permission.asked` fail-fast 測試作為異常事件處理驗證，但調整測試描述，避免把 permission prompt 當成預期正常路徑
+            completed: true
+            last_files_changed:
+              - backend/tests/provider/opencodeProvider.test.ts
+
+  - id: P4
+    title: 殘留清理與整體驗證
+    parallel: false
+    verification:
+      - cd backend && bun run style
+      - cd backend && bun run test
+    done: true
+    items:
+      - id: P4.A
+        title: Sandbox 殘留搜尋與文件清理
+        tasks:
+          - id: P4.A.t1
+            text: 搜尋 backend provider 相關檔案中的 `workspace-write`、`sandbox_workspace_write`、`allowWrite`、`denyWrite`、`sandbox.enabled`、`opencode.json` 權限依賴等字串，刪除或改寫已不符合完整權限策略的殘留描述
+            completed: true
+            last_files_changed:
+              - backend/src/cli.ts
+              - backend/src/services/codex/codexService.ts
+              - backend/src/services/claude/sandboxDomainWhitelist.ts
+              - backend/tests/unit/sandboxDomainWhitelist.test.ts
+              - backend/tests/unit/cli.test.ts
+              - backend/tests/unit/opencodeMcpReader.test.ts
+              - backend/tests/provider/codexProvider.test.ts
+          - id: P4.A.t2
+            text: 檢查 `backend/src/services/provider/README.md`、`backend/src/services/provider/types.md` 與三個 provider markdown，確保 provider 執行權限模型都描述為 Run clone 內完整權限
+            completed: true
+            last_files_changed:
+              - backend/src/services/provider/README.md
+              - backend/src/services/provider/types.md
+              - backend/src/services/provider/claudeProvider.md
+              - backend/src/services/provider/codexProvider.md
+              - backend/src/services/provider/opencodeProvider.md
+      - id: P4.B
+        title: 整體測試收斂
+        tasks:
+          - id: P4.B.t1
+            text: 跑完整 backend style 與 test，修正因移除 sandbox 造成的型別錯誤、import 殘留與測試斷言不一致
+            completed: true
+            last_files_changed:
+              - backend/src/cli.ts
+              - backend/src/services/codex/codexService.ts
+              - backend/src/services/provider/opencodeMcpConfigBuilder.ts
+              - backend/src/services/provider/opencodeServer.ts
+              - backend/tests/unit/cli.test.ts
+          - id: P4.B.t2
+            text: 確認 Codex、Claude、OpenCode 三條 provider path 的測試都覆蓋「預設完整權限」與「不殘留舊 sandbox config」兩類預期
+            completed: true
+            last_files_changed:
+              - backend/tests/provider/codexProvider.test.ts
+              - backend/tests/unit/runClaudeQuery.test.ts
+              - backend/tests/unit/claudeService.test.ts
+              - backend/tests/provider/opencodeProvider.test.ts
+              - backend/tests/provider/opencodeServer.test.ts

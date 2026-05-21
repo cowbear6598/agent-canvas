@@ -36,7 +36,7 @@
  *     resume session 時不注入（避免覆蓋 gate retry 的 nudge 指示）。
  */
 
-import { createOpencodeServer } from "@opencode-ai/sdk";
+import { createOpencodeServer } from "@opencode-ai/sdk/v2/server";
 import { createOpencodeClient as createOpencodeClientV2 } from "@opencode-ai/sdk/v2";
 import type {
   AgentProvider,
@@ -950,9 +950,7 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
           return;
         }
 
-        // 有注入 transient server（mcpEntries 非空）時，其 tool list 只含我們注入的 entry 工具，
-        // 不需要再過濾；entries 為空走全域 opencode server，沿用 opencode 預設 tool 可見性
-        // （由使用者的 ~/.config/opencode/opencode.json 決定，不再做後端 allowlist）。
+        // server 啟動時已由後端注入 full access permission；prompt 不再額外限制 tool subset。
         const toolsSubset: { [key: string]: boolean } | undefined = undefined;
 
         // ── 送出 prompt（非同步，不等待回傳） ──────────────────────────

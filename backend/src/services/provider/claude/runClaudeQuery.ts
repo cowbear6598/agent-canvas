@@ -38,11 +38,6 @@ import {
   checkAuthStatus,
   formatApiRetryMessage,
 } from "../../claude/sdkErrorMapper.js";
-import {
-  buildClaudeSandboxAllowWrite,
-  buildClaudeSandboxDenyWrite,
-  buildClaudeSandboxNetwork,
-} from "../../claude/claudeSandboxPaths.js";
 import { logger, sanitizeSensitiveInfo } from "../../../utils/logger.js";
 import { sanitizePodName } from "../podNameSanitizer.js";
 import {
@@ -463,7 +458,6 @@ export async function* runClaudeQuery(
     podName,
     message,
     workspacePath,
-    sandboxHomePath,
     resumeSessionId,
     abortSignal,
     options,
@@ -545,24 +539,6 @@ export async function* runClaudeQuery(
     });
   };
 
-  // SDK 內建 sandbox 配置（取代自寫的 claudeSandboxLauncher）。
-  // 注意：此 sandbox 隔離的是 Claude 執行 Bash 工具時跑的指令，並非 Claude binary 本身；
-  // 因此 ~/.claude / ~/.claude.json 不需要列入 allowWrite（Claude 自身不在 sandbox 內）。
-  const sandboxAllowWrite = buildClaudeSandboxAllowWrite(
-    workspacePath,
-    sandboxHomePath,
-  );
-
-  const defaultSandbox = {
-    enabled: true,
-    autoAllowBashIfSandboxed: true,
-    filesystem: {
-      allowWrite: sandboxAllowWrite,
-      denyWrite: buildClaudeSandboxDenyWrite(),
-    },
-    network: buildClaudeSandboxNetwork(),
-  };
-
   const sdkOptions: Options & { abortController: AbortController } = {
     cwd: workspacePath,
     settingSources: options.settingSources,
@@ -572,12 +548,12 @@ export async function* runClaudeQuery(
     allowedTools: options.allowedTools,
     model: options.model,
     abortController,
-    sandbox: options.sandbox ?? defaultSandbox,
-    // stderr 除了寫入 backend log，也轉成 provider 診斷事件，避免 Linux sandbox 問題靜默卡住
+    // stderr 除了寫入 backend log，也轉成 provider 診斷事件，避免 SDK 只寫 stderr 時前端完全靜默
     stderr: enqueueStderrDiagnostic,
     ...(options.mcpServers ? { mcpServers: options.mcpServers } : {}),
     ...(options.effort ? { effort: options.effort } : {}),
     ...(options.thinking ? { thinking: options.thinking } : {}),
+    ...(options.sandbox ? { sandbox: options.sandbox } : {}),
     ...(resumeSessionId ? { resume: resumeSessionId } : {}),
   };
 
@@ -597,7 +573,7 @@ export async function* runClaudeQuery(
   const iterator = queryStream[Symbol.asyncIterator]();
   let nextResultPromise: Promise<IteratorResult<SDKMessage>> = iterator.next();
 
-  // 以 race 同時等待 SDK message 與 stderr 診斷，避免 Linux sandbox 只寫 stderr 時前端完全靜默
+  // 以 race 同時等待 SDK message 與 stderr 診斷，避免 SDK 只寫 stderr 時前端完全靜默
   while (true) {
     const stderrDiagnostic = drainPendingStderrDiagnostic();
     if (stderrDiagnostic) {

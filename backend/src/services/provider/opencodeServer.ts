@@ -2,11 +2,12 @@
  * opencodeServer — opencode 伺服器 singleton 管理模組
  *
  * 負責啟動、查詢狀態與停止 opencode 本地伺服器子程序。
- * opencode 設定由使用者在 ~/.config/opencode/opencode.json 管理，
- * createOpencodeServer 的 config 欄位傳入空物件，讓 opencode 自行讀取 XDG 設定。
+ * 後端固定注入 full access permission config，避免 headless run 卡在 approval prompt。
  */
 
-import { createOpencodeServer } from "@opencode-ai/sdk";
+import { createOpencodeServer } from "@opencode-ai/sdk/v2/server";
+import type { Config } from "@opencode-ai/sdk/v2";
+import { buildOpencodeFullAccessServerConfig } from "./opencodeMcpConfigBuilder.js";
 
 // ================================================================
 // 型別定義
@@ -24,7 +25,7 @@ export interface OpencodeServerInstance {
 /** 用於注入 launcher（讓測試可以 mock） */
 export type OpencodeServerLauncher = (options?: {
   timeout?: number;
-  config?: Record<string, unknown>;
+  config?: Pick<Config, "mcp" | "permission">;
 }) => Promise<OpencodeServerInstance>;
 
 /** opencode 伺服器 singleton state */
@@ -96,9 +97,7 @@ export async function startOpencodeServer(): Promise<void> {
   try {
     const server = await currentLauncher({
       timeout: 30000,
-      // opencode 設定由使用者的 ~/.config/opencode/opencode.json 管理，
-      // 傳入空物件讓 SDK 依賴 opencode 自行讀取 XDG 設定。
-      config: {},
+      config: buildOpencodeFullAccessServerConfig(),
     });
 
     state.server = server;

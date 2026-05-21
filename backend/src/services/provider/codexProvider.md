@@ -22,18 +22,19 @@ chat(ctx)
 
 **新對話**：
 ```
-codex exec - --json --yolo --skip-git-repo-check --model <model>
+codex exec - --json --skip-git-repo-check --cd <workspacePath> --dangerously-bypass-approvals-and-sandbox --model <model>
 ```
 
 **恢復對話**（resumeSessionId 存在且格式合法時）：
 ```
-codex exec resume <sessionId> - --json --yolo
+codex exec resume <sessionId> - --json --dangerously-bypass-approvals-and-sandbox
 ```
 
 - `-`：從 stdin 讀取 prompt
 - `--json`：輸出 JSON line 格式
-- `--yolo`：跳過確認提示
+- `--dangerously-bypass-approvals-and-sandbox`：關閉 Codex 內建 sandbox 與 approval，讓 Run clone 內的 git / shell 操作完整可用
 - `--skip-git-repo-check`：跳過 git repo 檢查（新對話時）
+- `--cd`：指定 Codex 工作目錄（新對話時與 Bun.spawn cwd 使用同一個 run workspace）
 - `--model`：指定模型（**resume 時不帶此參數**，由 session 決定）
 
 ---
@@ -92,18 +93,11 @@ abortSignal.addEventListener("abort", onAbort, { once: true });
 
 ---
 
-## 不支援的能力清單
+## 權限模型
 
-對應 `CODEX_CAPABILITIES`：
-
-| 能力 | 支援 | 說明 |
-|---|---|---|
-| `chat` | ✓ | 基本聊天（JSON line 格式輸出） |
-| `skill` | ✗ | 無 Command / Skill 支援 |
-| `repository` | ✗ | cwd 只從 `ctx.workspacePath` 取得，無 repositoryId 處理 |
-| `command` | ✗ | 無 Command 前綴機制 |
-| `mcp` | ✗ | 無 MCP Server 整合 |
-| `integration` | ✗ | 無 Integration Tool 建立機制 |
+Codex Run 使用後端建立的 run workspace 作為隔離邊界，不再使用 Codex 內建 sandbox。
+這是為了允許 AI 在 run clone 內完整操作 git metadata（例如 checkout、fetch、commit）
+以及執行 shell 指令。後端仍保留 workspacePath 解析、root 驗證與環境變數白名單。
 
 ---
 

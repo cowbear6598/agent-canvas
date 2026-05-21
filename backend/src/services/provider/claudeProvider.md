@@ -51,10 +51,15 @@ const sdkOptions: Options = {
   abortController: new AbortController(),
   // 以下為 Pod 設定衍生：
   mcpServers: options.mcpServers,       // 來自 MCP Server + Integration Tool
-  plugins: options.plugins,             // 來自 Plugin
   resume: ctx.resumeSessionId,          // 來自 Pod session
 };
 ```
+
+### 權限模型
+
+Claude provider 預設不注入 SDK sandbox。`permissionMode` 固定為 `bypassPermissions`，執行邊界由後端建立的 Run clone / workspace 與 Run 結束清理負責。
+
+`ClaudeOptions.sandbox` 只保留為顯式 pass-through：只有呼叫端明確提供時，`runClaudeQuery` 才會把該值轉交 SDK。
 
 ### 3. 消費 SDK 串流
 

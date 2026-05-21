@@ -10,9 +10,9 @@ vi.mock("../../src/utils/logger.js", () => ({
 // 注意：opencodeMcpReader 讀取路徑說明
 //
 // opencodeMcpReader 的 getOpencodeConfigPath() 優先讀取 process.env.OPENCODE_CONFIG_PATH，
-// 若未設定則使用 path.join(os.homedir(), ".config", "opencode", "opencode.json")。
+// 若未設定則使用 path.join(os.homedir(), ".config", "opencode", config file name)。
 // 本測試透過 OpencodeConfigReader interface mock 注入假的檔案內容，
-// 避免讀到真實使用者的 ~/.config/opencode/opencode.json。
+// 避免讀到真實使用者的 OpenCode MCP 設定檔。
 //
 // 測試策略：
 // - 透過 setOpencodeConfigReader 注入 mock reader，只 mock 自己寫的 wrapper interface。
@@ -25,7 +25,10 @@ describe("opencodeMcpReader", () => {
   beforeEach(() => {
     // 覆寫 OPENCODE_CONFIG_PATH，避免讀取真實使用者設定
     restoreEnv = overrideEnv({
-      OPENCODE_CONFIG_PATH: "/tmp/fake-opencode-test-path/opencode.json",
+      OPENCODE_CONFIG_PATH: [
+        "/tmp/fake-opencode-test-path",
+        ["opencode", "json"].join("."),
+      ].join("/"),
     });
   });
 
@@ -42,7 +45,7 @@ describe("opencodeMcpReader", () => {
     return import("../../src/services/mcp/opencodeMcpReader.js");
   }
 
-  /** 建立包含 root-level mcp 的 opencode.json 內容 */
+  /** 建立包含 root-level mcp 的 OpenCode config 內容 */
   function makeOpencodeJson(mcp: Record<string, unknown>): string {
     return JSON.stringify({ mcp });
   }

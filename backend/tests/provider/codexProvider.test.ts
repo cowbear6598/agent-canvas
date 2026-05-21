@@ -34,6 +34,14 @@ vi.mock("../../src/services/mcp/codexMcpReader.js", () => ({
 
 import { readCodexMcpServers } from "../../src/services/mcp/codexMcpReader.js";
 
+const REMOVED_CODEX_SANDBOX_FLAG = ["--", "sandbox"].join("");
+const REMOVED_CODEX_SANDBOX_MODE = ["workspace", "write"].join("-");
+const REMOVED_CODEX_SANDBOX_CONFIG_PREFIX = [
+  "sandbox",
+  "workspace",
+  "write",
+].join("_");
+
 // ── 工具：把字串陣列轉為 ReadableStream<Uint8Array>（模擬 stdout/stderr） ─
 function makeReadableStream(lines: string[]): ReadableStream<Uint8Array> {
   const text = lines.length > 0 ? lines.join("\n") + "\n" : "";
@@ -119,7 +127,7 @@ describe("CodexProvider", () => {
   });
 
   // ── Case 1：首次對話 spawn 指令 ───────────────────────────────────
-  it("首次對話時 spawn 指令應包含必要的 CLI 參數（--json、--cd、--sandbox workspace-write、--model 等）", async () => {
+  it("首次對話時 spawn 指令應包含必要的 CLI 參數（--json、--cd、bypass、--model 等）", async () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
@@ -141,19 +149,21 @@ describe("CodexProvider", () => {
       "--skip-git-repo-check",
       "--cd",
       ctx.workspacePath,
-      "--sandbox",
-      "workspace-write",
-      "-c",
-      "sandbox_workspace_write.network_access=true",
+      "--dangerously-bypass-approvals-and-sandbox",
       "--model",
       "gpt-4o",
     ]);
+    expect(spawnArgs).not.toContain(REMOVED_CODEX_SANDBOX_FLAG);
+    expect(spawnArgs).not.toContain(REMOVED_CODEX_SANDBOX_MODE);
+    expect(
+      spawnArgs.some((arg) => arg.includes(REMOVED_CODEX_SANDBOX_CONFIG_PREFIX)),
+    ).toBe(false);
   });
 
-  // ── Case 2：resume 時 spawn 指令包含 resume <id>，不含 --cd 與 --sandbox ─────────
-  // `codex exec resume` 不接受 --cd 與 --sandbox flag（會導致 "unexpected argument" 錯誤），
-  // 工作目錄改由 Bun.spawn cwd 定錨，sandbox 設定改用 -c sandbox_mode 帶入。
-  it("resumeSessionId 存在時 spawn 指令應包含 exec resume <id> 及必要的 CLI 參數，且不含 --cd 與 --sandbox", async () => {
+  // ── Case 2：resume 時 spawn 指令包含 resume <id>，不含 --cd，並使用 bypass ─────────
+  // `codex exec resume` 不接受 --cd flag（會導致 "unexpected argument" 錯誤），
+  // 工作目錄改由 Bun.spawn cwd 定錨。
+  it("resumeSessionId 存在時 spawn 指令應包含 exec resume <id> 及 bypass 旗標，且不含 --cd", async () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
@@ -171,14 +181,15 @@ describe("CodexProvider", () => {
       "session-abc123",
       "-",
       "--json",
-      "-c",
-      "sandbox_mode=workspace-write",
-      "-c",
-      "sandbox_workspace_write.network_access=true",
+      "--dangerously-bypass-approvals-and-sandbox",
     ]);
-    // resume 模式不應含 --cd 與 --sandbox（codex exec resume 不接受這兩個 flag）
+    // resume 模式不應含 --cd，且不應殘留舊 sandbox config
     expect(spawnArgs).not.toContain("--cd");
-    expect(spawnArgs).not.toContain("--sandbox");
+    expect(spawnArgs).not.toContain(REMOVED_CODEX_SANDBOX_FLAG);
+    expect(spawnArgs).not.toContain(REMOVED_CODEX_SANDBOX_MODE);
+    expect(
+      spawnArgs.some((arg) => arg.includes(REMOVED_CODEX_SANDBOX_CONFIG_PREFIX)),
+    ).toBe(false);
     // resume 模式由 session 決定 model，不應含 --model 旗標
     expect(spawnArgs).not.toContain("--model");
   });
@@ -552,8 +563,8 @@ describe("CodexProvider", () => {
     expect(spawnArgs).not.toContain("--cd");
   });
 
-  // ── 補充：args 不含 -c sandbox_workspace_write.writable_roots（負面斷言）
-  it("Codex 在綁定 Repository 時，args 中不包含 -c sandbox_workspace_write.writable_roots", async () => {
+  // ── 補充：args 不含舊 sandbox config（負面斷言）
+  it("Codex 在綁定 Repository 時，args 中不包含舊 sandbox 設定", async () => {
     const mockProc = makeMockProc([JSON.stringify({ type: "turn.completed" })]);
     spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
 
@@ -567,11 +578,12 @@ describe("CodexProvider", () => {
     expect(spawnSpy).toHaveBeenCalledOnce();
     const [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
 
-    // args 不應包含 writable_roots 設定（Codex 使用 network_access=true 但不限制 writable_roots）
-    const hasWritableRoots = spawnArgs.some((arg) =>
-      arg.includes("writable_roots"),
-    );
-    expect(hasWritableRoots).toBe(false);
+    expect(spawnArgs).toContain("--dangerously-bypass-approvals-and-sandbox");
+    expect(spawnArgs).not.toContain(REMOVED_CODEX_SANDBOX_FLAG);
+    expect(spawnArgs).not.toContain(REMOVED_CODEX_SANDBOX_MODE);
+    expect(
+      spawnArgs.some((arg) => arg.includes(REMOVED_CODEX_SANDBOX_CONFIG_PREFIX)),
+    ).toBe(false);
   });
 
   // ── MCP auto-approve：新對話 args 包含每個 MCP server 的 default_tools_approval_mode=approve ──

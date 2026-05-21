@@ -55,6 +55,22 @@ afterEach(() => {
 // startOpencodeServer — 成功情境
 // ================================================================
 describe("startOpencodeServer — 成功情境", () => {
+  it("launcher 應收到後端注入的 full access config", async () => {
+    const mockInstance = makeMockInstance("http://127.0.0.1:4096");
+    const launcher = vi.fn().mockResolvedValue(mockInstance);
+    setOpencodeServerLauncher(launcher);
+
+    await startOpencodeServer();
+
+    expect(launcher).toHaveBeenCalledWith({
+      timeout: 30000,
+      config: {
+        mcp: {},
+        permission: "allow",
+      },
+    });
+  });
+
   it("launcher resolve 後 state.status 應為 ready", async () => {
     const mockInstance = makeMockInstance("http://127.0.0.1:4096");
     setOpencodeServerLauncher(() => Promise.resolve(mockInstance));
