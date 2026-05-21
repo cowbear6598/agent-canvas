@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.0.1] - 2026-05-21
+
+### 修正
+- 修正 Goal Runtime 顯示「下一個待做 todo」誤抓當前 active 的問題
+- 修正 Goal Runtime 狀態檔讀取失敗時靜默清空進度的問題，現在可在 console 看到 I/O 錯誤
+- 修正 managed MCP proxy bridge 退出時清理動作不會執行的問題
+
+### 新增
+- 優化刪除執行中 Run 的防護流程，hot path 不再每次查 DB
+- 補強 MCP bridge 路徑與 Run 取消 guard 的測試覆蓋
+
+### 優化
+- 程式碼整理、移除冗餘註解與無契約測試
+
 ## [2.0.0] - 2026-05-21
 
 ### 新增
