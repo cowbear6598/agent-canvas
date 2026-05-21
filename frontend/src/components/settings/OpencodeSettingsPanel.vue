@@ -98,15 +98,26 @@ const filteredProviders = computed<OpencodeProviderInfo[]>(() => {
   );
 });
 
-/** 依連線狀態分組排序：已連線排前，未連線排後；兩組內部維持原順序 */
+/** 依連線狀態分組排序：已連線排前，未連線排後；兩組內部維持原順序。
+ *  使用 Set 將 connected 轉為 O(1) 查詢，一次 reduce 完成 partition。
+ */
 const sortedFilteredProviders = computed<OpencodeProviderInfo[]>(() => {
-  const connectedGroup = filteredProviders.value.filter((p) =>
-    connected.value.includes(p.id),
+  const connectedSet = new Set(connected.value);
+  const groups = filteredProviders.value.reduce<{
+    connected: OpencodeProviderInfo[];
+    disconnected: OpencodeProviderInfo[];
+  }>(
+    (acc, p) => {
+      if (connectedSet.has(p.id)) {
+        acc.connected.push(p);
+      } else {
+        acc.disconnected.push(p);
+      }
+      return acc;
+    },
+    { connected: [], disconnected: [] },
   );
-  const disconnectedGroup = filteredProviders.value.filter(
-    (p) => !connected.value.includes(p.id),
-  );
-  return [...connectedGroup, ...disconnectedGroup];
+  return [...groups.connected, ...groups.disconnected];
 });
 
 // ── 資料載入 ─────────────────────────────────────────────────────
@@ -114,12 +125,28 @@ const sortedFilteredProviders = computed<OpencodeProviderInfo[]>(() => {
 /**
  * 將 store 內指定 providerID 的 aliases 同步寫入本地可寫陣列，
  * 作為 VueDraggable v-model 的資料來源。
+ * 使用 group-by Map 優化，避免對每個 provider 重複遍歷整個 aliases 陣列。
  */
 const syncAliasListsFromStore = (providerIDs: string[]): void => {
+  // 依 providerID group aliases 成 Map（只走訪一次）
+  const grouped = opencodeAliasStore.aliases.reduce<
+    Map<string, OpencodeModelAlias[]>
+  >((map, alias) => {
+    const list = map.get(alias.providerID);
+    if (list) {
+      list.push(alias);
+    } else {
+      map.set(alias.providerID, [alias]);
+    }
+    return map;
+  }, new Map());
+
   for (const id of providerIDs) {
-    aliasListsByProvider.value[id] = [
-      ...opencodeAliasStore.aliasesByProvider(id),
-    ];
+    const list = grouped.get(id) ?? [];
+    // 依 orderIdx 排序後指派
+    aliasListsByProvider.value[id] = [...list].sort(
+      (a, b) => a.orderIdx - b.orderIdx,
+    );
   }
 };
 
@@ -131,14 +158,14 @@ const loadFromBackend = async (): Promise<void> => {
     connected.value = result.connected;
     loadState.value = "loaded";
     syncAliasListsFromStore(result.connected);
-  } catch {
+  } catch (err) {
+    console.error("[OpencodeSettingsPanel] loadFromBackend 失敗：", err);
     loadState.value = "error";
   }
 };
 
 onMounted(() => {
   loadFromBackend();
-  syncAliasListsFromStore(connected.value);
 });
 
 /** store 內 aliases 變動時，同步更新本地陣列 */
@@ -147,7 +174,6 @@ watch(
   () => {
     syncAliasListsFromStore(connected.value);
   },
-  { deep: true },
 );
 
 // ── alias CRUD handlers ───────────────────────────────────────────
@@ -176,17 +202,11 @@ const handleDraftSave = async (
     return;
   }
 
-  // 計算新 sortOrder（排在最後）
-  const existing = opencodeAliasStore.aliasesByProvider(providerID);
-  const sortOrder =
-    existing.length > 0 ? Math.max(...existing.map((a) => a.sortOrder)) + 1 : 0;
-
   try {
     await opencodeAliasStore.addAlias({
       providerID,
       modelID: payload.modelID,
       alias: payload.alias,
-      sortOrder,
     });
     // 成功：移除 draft row
     draftRows.value = { ...draftRows.value, [providerID]: null };
@@ -444,7 +464,7 @@ const handleAliasReorder = async (providerID: string): Promise<void> => {
             "
             class="text-xs text-muted-foreground py-1"
           >
-            {{ t("llmProvider.opencode.aliases.reorderHint") }}
+            {{ t("llmProvider.opencode.aliases.emptyHint") }}
           </p>
 
           <VueDraggable

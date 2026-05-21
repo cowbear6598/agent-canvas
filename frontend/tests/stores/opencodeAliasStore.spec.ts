@@ -29,7 +29,7 @@ function makeAlias(
     providerID: "openai",
     modelID: "gpt-4o",
     alias: "GPT-4o",
-    sortOrder: 0,
+    orderIdx: 0,
     ...overrides,
   };
 }
@@ -53,7 +53,6 @@ describe("opencodeAliasStore", () => {
         providerID: newAlias.providerID,
         modelID: newAlias.modelID,
         alias: newAlias.alias,
-        sortOrder: newAlias.sortOrder,
       });
 
       expect(store.aliases).toHaveLength(1);
@@ -118,14 +117,14 @@ describe("opencodeAliasStore", () => {
   describe("reorder", () => {
     it("(4) 後 aliases 順序與傳入 idsInOrder 一致", async () => {
       const store = useOpencodeAliasStore();
-      const a1 = makeAlias({ id: "alias-1", sortOrder: 0 });
-      const a2 = makeAlias({ id: "alias-2", alias: "B", sortOrder: 1 });
+      const a1 = makeAlias({ id: "alias-1", orderIdx: 0 });
+      const a2 = makeAlias({ id: "alias-2", alias: "B", orderIdx: 1 });
       store.setAliases([a1, a2]);
 
       // 後端回傳重排後的清單（a2 在前 sortOrder 0, a1 在後 sortOrder 1）
       const reordered = [
-        { ...a2, sortOrder: 0 },
-        { ...a1, sortOrder: 1 },
+        { ...a2, orderIdx: 0 },
+        { ...a1, orderIdx: 1 },
       ];
       mockReorderAliases.mockResolvedValueOnce(reordered);
 
@@ -178,14 +177,14 @@ describe("opencodeAliasStore", () => {
     it("(6) 依 sortOrder 升冪排序，並只回傳指定 provider 的 alias", () => {
       const store = useOpencodeAliasStore();
       store.setAliases([
-        makeAlias({ id: "a3", providerID: "openai", alias: "C", sortOrder: 2 }),
-        makeAlias({ id: "a1", providerID: "openai", alias: "A", sortOrder: 0 }),
-        makeAlias({ id: "a2", providerID: "openai", alias: "B", sortOrder: 1 }),
+        makeAlias({ id: "a3", providerID: "openai", alias: "C", orderIdx: 2 }),
+        makeAlias({ id: "a1", providerID: "openai", alias: "A", orderIdx: 0 }),
+        makeAlias({ id: "a2", providerID: "openai", alias: "B", orderIdx: 1 }),
         makeAlias({
           id: "a4",
           providerID: "anthropic",
           alias: "D",
-          sortOrder: 0,
+          orderIdx: 0,
         }),
       ]);
 
@@ -259,7 +258,6 @@ describe("opencodeAliasStore", () => {
           providerID: "openai",
           modelID: "gpt-4o",
           alias: "GPT-4o",
-          sortOrder: 0,
         }),
       ).rejects.toThrow("後端錯誤");
 

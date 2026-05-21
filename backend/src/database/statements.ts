@@ -173,6 +173,7 @@ function buildStatements(db: Database): {
   modelAlias: {
     insert: ReturnType<Database["prepare"]>;
     selectByProviderId: ReturnType<Database["prepare"]>;
+    selectById: ReturnType<Database["prepare"]>;
     updateAliasAndOrderIdx: ReturnType<Database["prepare"]>;
     updateAliasAndModelId: ReturnType<Database["prepare"]>;
     deleteById: ReturnType<Database["prepare"]>;
@@ -716,6 +717,8 @@ function buildStatements(db: Database): {
       selectByProviderId: db.prepare(
         "SELECT * FROM model_aliases WHERE provider_id = $providerId ORDER BY order_idx ASC",
       ),
+      // 依 id 查詢單筆（供 create/update handler 取回剛寫入的 row）
+      selectById: db.prepare("SELECT * FROM model_aliases WHERE id = $id"),
       // 更新 alias 顯示別稱與排序位置（供 reorder handler 使用）
       updateAliasAndOrderIdx: db.prepare(
         "UPDATE model_aliases SET alias = $alias, order_idx = $orderIdx, updated_at = $updatedAt WHERE id = $id",

@@ -33,12 +33,12 @@ export interface OpencodeProviderListResult {
  * - providerID：所屬 provider id
  * - modelID：原始 model id
  * - alias：使用者自訂別稱
- * - sortOrder：排序權重（數值越小越前）
+ * - orderIdx：排序索引（數值越小越前，與後端 order_idx 欄位一致）
  */
 export interface OpencodeModelAlias {
   id: string;
   providerID: string;
   modelID: string;
   alias: string;
-  sortOrder: number;
+  orderIdx: number;
 }

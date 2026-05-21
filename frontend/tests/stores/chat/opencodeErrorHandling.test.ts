@@ -154,7 +154,7 @@ describe("PodModelSelector opencode server 失敗時呈現 disabled", () => {
       providerID: "openai",
       modelID: "gpt-4o",
       alias: "gpt-4o",
-      sortOrder: 0,
+      orderIdx: 0,
     };
     aliasStore.setAliases([mockAlias]);
   }

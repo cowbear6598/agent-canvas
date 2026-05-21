@@ -451,6 +451,7 @@
         "deleteConfirmTitle": "確認刪除",
         "deleteConfirmMessage": "確定要刪除此 model 對應嗎？",
         "reorderHint": "可拖曳以重新排序",
+        "emptyHint": "尚無 model alias，請點右上角「+」新增",
         "actionFailed": "操作失敗：{reason}",
         "collapsibleTrigger": "展開/收合 Provider Model 對應",
         "addModelTooltip": "新增 model"

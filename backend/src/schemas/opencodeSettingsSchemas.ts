@@ -24,8 +24,12 @@ export const aliasItemSchema = z.object({
 export type AliasItem = z.infer<typeof aliasItemSchema>;
 
 export type OpencodeAliasesListResultPayload =
-  | { requestId: string; ok: true; items: AliasItem[] }
-  | { requestId: string; ok: false; error: { code: string; message: string } };
+  | { requestId: string; success: true; items: AliasItem[] }
+  | {
+      requestId: string;
+      success: false;
+      error: { code: string; message: string };
+    };
 
 // ─── opencode:aliases:create ──────────────────────────────────────────────────
 
@@ -42,8 +46,12 @@ export type OpencodeAliasesCreatePayload = z.infer<
 >;
 
 export type OpencodeAliasesCreateResultPayload =
-  | { requestId: string; ok: true; item: AliasItem }
-  | { requestId: string; ok: false; error: { code: string; message: string } };
+  | { requestId: string; success: true; item: AliasItem }
+  | {
+      requestId: string;
+      success: false;
+      error: { code: string; message: string };
+    };
 
 // ─── opencode:aliases:update ──────────────────────────────────────────────────
 
@@ -63,8 +71,12 @@ export type OpencodeAliasesUpdatePayload = z.infer<
 >;
 
 export type OpencodeAliasesUpdateResultPayload =
-  | { requestId: string; ok: true; item: AliasItem }
-  | { requestId: string; ok: false; error: { code: string; message: string } };
+  | { requestId: string; success: true; item: AliasItem }
+  | {
+      requestId: string;
+      success: false;
+      error: { code: string; message: string };
+    };
 
 // ─── opencode:aliases:delete ──────────────────────────────────────────────────
 
@@ -79,8 +91,12 @@ export type OpencodeAliasesDeletePayload = z.infer<
 >;
 
 export type OpencodeAliasesDeleteResultPayload =
-  | { requestId: string; ok: true; id: string }
-  | { requestId: string; ok: false; error: { code: string; message: string } };
+  | { requestId: string; success: true; id: string }
+  | {
+      requestId: string;
+      success: false;
+      error: { code: string; message: string };
+    };
 
 // ─── opencode:aliases:reorder ─────────────────────────────────────────────────
 
@@ -99,8 +115,12 @@ export type OpencodeAliasesReorderPayload = z.infer<
 >;
 
 export type OpencodeAliasesReorderResultPayload =
-  | { requestId: string; ok: true }
-  | { requestId: string; ok: false; error: { code: string; message: string } };
+  | { requestId: string; success: true; items: AliasItem[] }
+  | {
+      requestId: string;
+      success: false;
+      error: { code: string; message: string };
+    };
 
 // ─── opencode:server:restart ──────────────────────────────────────────────────
 
@@ -114,8 +134,12 @@ export type OpencodeServerRestartPayload = z.infer<
 >;
 
 export type OpencodeServerRestartResultPayload =
-  | { requestId: string; ok: true }
-  | { requestId: string; ok: false; error: { code: string; message: string } };
+  | { requestId: string; success: true }
+  | {
+      requestId: string;
+      success: false;
+      error: { code: string; message: string };
+    };
 
 /** opencode:provider:list 請求 payload schema（空 payload，只帶 requestId） */
 export const opencodeProviderListSchema = z.object({
@@ -129,20 +153,20 @@ export type OpencodeProviderListPayload = z.infer<
 /**
  * opencode:provider:list:result 回應 payload
  *
- * ok=true 時帶回 all / default / connected；
- * ok=false 時帶回 error.code 與 error.message。
+ * success=true 時帶回 all / default / connected；
+ * success=false 時帶回 error.code 與 error.message。
  */
 export type OpencodeProviderListResultPayload =
   | {
       requestId: string;
-      ok: true;
+      success: true;
       all: unknown[];
       default: Record<string, string>;
       connected: string[];
     }
   | {
       requestId: string;
-      ok: false;
+      success: false;
       error: {
         code: string;
         message: string;

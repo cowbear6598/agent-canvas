@@ -12,7 +12,7 @@ export const useOpencodeAliasStore = defineStore("opencodeAlias", () => {
   // ---- State ----
 
   /**
-   * 所有 alias 條目，依 sortOrder 升冪排列。
+   * 所有 alias 條目，依 orderIdx 升冪排列。
    */
   const aliases = ref<OpencodeModelAlias[]>([]);
 
@@ -24,7 +24,7 @@ export const useOpencodeAliasStore = defineStore("opencodeAlias", () => {
   // ---- Getters ----
 
   /**
-   * 依 providerID 過濾 alias 清單，並依 sortOrder 升冪排序回傳。
+   * 依 providerID 過濾 alias 清單，並依 orderIdx 升冪排序回傳。
    * 用於只顯示特定 provider 下的 alias 選項。
    */
   const aliasesByProvider = computed(
@@ -32,7 +32,7 @@ export const useOpencodeAliasStore = defineStore("opencodeAlias", () => {
       (providerID: string): OpencodeModelAlias[] => {
         return aliases.value
           .filter((a) => a.providerID === providerID)
-          .sort((a, b) => a.sortOrder - b.sortOrder);
+          .sort((a, b) => a.orderIdx - b.orderIdx);
       },
   );
 
@@ -60,7 +60,7 @@ export const useOpencodeAliasStore = defineStore("opencodeAlias", () => {
    * 供 providerCapabilityStore.test.ts 等測試直接操作 state 使用。
    */
   function setAliases(items: OpencodeModelAlias[]): void {
-    aliases.value = [...items].sort((a, b) => a.sortOrder - b.sortOrder);
+    aliases.value = [...items].sort((a, b) => a.orderIdx - b.orderIdx);
   }
 
   /**
@@ -70,7 +70,7 @@ export const useOpencodeAliasStore = defineStore("opencodeAlias", () => {
   async function loadFromBackend(): Promise<void> {
     try {
       const items = await opencodeApi.listAliases();
-      aliases.value = [...items].sort((a, b) => a.sortOrder - b.sortOrder);
+      aliases.value = [...items].sort((a, b) => a.orderIdx - b.orderIdx);
       loaded.value = true;
     } catch (err) {
       // 失敗時不動 aliases / loaded，維持上一次成功載入的值；
@@ -84,17 +84,17 @@ export const useOpencodeAliasStore = defineStore("opencodeAlias", () => {
    * API 呼叫失敗時 rethrow，不更新本地 state；成功才同步本地 state。
    */
   async function addAlias(
-    payload: Omit<OpencodeModelAlias, "id">,
+    payload: Omit<OpencodeModelAlias, "id" | "orderIdx">,
   ): Promise<void> {
     const item = await opencodeApi.createAlias(payload);
     aliases.value = [...aliases.value, item].sort(
-      (a, b) => a.sortOrder - b.sortOrder,
+      (a, b) => a.orderIdx - b.orderIdx,
     );
   }
 
   /**
    * 更新既有 alias 的別稱與 modelID 對應（依 id 比對）。
-   * 順序由 reorder action 獨立處理，本函式不會修改 sortOrder。
+   * 順序由 reorder action 獨立處理，本函式不會修改 orderIdx。
    * API 呼叫失敗時 rethrow，不更新本地 state；成功才同步本地 state。
    */
   async function editAlias(
@@ -103,7 +103,7 @@ export const useOpencodeAliasStore = defineStore("opencodeAlias", () => {
     const item = await opencodeApi.updateAlias(payload);
     aliases.value = aliases.value
       .map((a) => (a.id === item.id ? item : a))
-      .sort((a, b) => a.sortOrder - b.sortOrder);
+      .sort((a, b) => a.orderIdx - b.orderIdx);
   }
 
   /**
@@ -121,7 +121,7 @@ export const useOpencodeAliasStore = defineStore("opencodeAlias", () => {
    */
   async function reorder(idsInOrder: string[]): Promise<void> {
     const items = await opencodeApi.reorderAliases(idsInOrder);
-    aliases.value = [...items].sort((a, b) => a.sortOrder - b.sortOrder);
+    aliases.value = [...items].sort((a, b) => a.orderIdx - b.orderIdx);
   }
 
   return {

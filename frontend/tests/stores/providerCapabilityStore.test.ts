@@ -657,14 +657,14 @@ describe("providerCapabilityStore", () => {
           providerID: "openai",
           modelID: "gpt-4o",
           alias: "GPT-4o",
-          sortOrder: 0,
+          orderIdx: 0,
         },
         {
           id: "alias-2",
           providerID: "anthropic",
           modelID: "claude-opus-4-5",
           alias: "Claude Opus",
-          sortOrder: 1,
+          orderIdx: 1,
         },
       ]);
 
@@ -687,14 +687,14 @@ describe("providerCapabilityStore", () => {
         providerID: "openai",
         modelID: "gpt-4o",
         alias: "GPT-4o",
-        sortOrder: 0,
+        orderIdx: 0,
       };
       const aliasB = {
         id: "alias-2",
         providerID: "anthropic",
         modelID: "claude-sonnet-4-5",
         alias: "Claude Sonnet",
-        sortOrder: 1,
+        orderIdx: 1,
       };
 
       // 初始：空清單

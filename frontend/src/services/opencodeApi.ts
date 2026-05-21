@@ -36,7 +36,6 @@ interface OpencodeAliasesCreatePayload {
   providerID: string;
   modelID: string;
   alias: string;
-  sortOrder: number;
 }
 
 interface OpencodeAliasesCreateResultPayload {
@@ -146,7 +145,7 @@ export async function listAliases(): Promise<OpencodeModelAlias[]> {
  * 新增 opencode model 別稱
  */
 export async function createAlias(
-  payload: Omit<OpencodeModelAlias, "id">,
+  payload: Omit<OpencodeModelAlias, "id" | "orderIdx">,
 ): Promise<OpencodeModelAlias> {
   const result = await createWebSocketRequest<
     OpencodeAliasesCreatePayload,
@@ -158,7 +157,6 @@ export async function createAlias(
       providerID: payload.providerID,
       modelID: payload.modelID,
       alias: payload.alias,
-      sortOrder: payload.sortOrder,
     },
   });
 
@@ -171,7 +169,7 @@ export async function createAlias(
 
 /**
  * 更新 opencode model 別稱：只允許改 alias 與 modelID 對應；
- * sortOrder 由 reorderAliases API 獨立處理，不在此函式內。
+ * orderIdx 由 reorderAliases API 獨立處理，不在此函式內。
  */
 export async function updateAlias(
   payload: Pick<OpencodeModelAlias, "id" | "modelID" | "alias">,

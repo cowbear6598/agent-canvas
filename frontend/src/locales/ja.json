@@ -451,6 +451,7 @@
         "deleteConfirmTitle": "削除の確認",
         "deleteConfirmMessage": "この model エイリアスを削除してもよろしいですか？",
         "reorderHint": "ドラッグして並び替え",
+        "emptyHint": "model エイリアスはまだありません。右上の「+」で追加してください。",
         "actionFailed": "操作に失敗しました：{reason}",
         "collapsibleTrigger": "Provider のモデル対応を展開/折りたたみ",
         "addModelTooltip": "モデルを追加"

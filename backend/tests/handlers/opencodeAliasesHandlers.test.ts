@@ -94,7 +94,7 @@ describe("handleOpencodeAliasesList", () => {
     expect(mockEmitToConnection).toHaveBeenCalledOnce();
     const [, event, payload] = mockEmitToConnection.mock.calls[0];
     expect(event).toBe(WebSocketResponseEvents.OPENCODE_ALIASES_LIST_RESULT);
-    expect(payload.ok).toBe(true);
+    expect(payload.success).toBe(true);
     expect(payload.items).toEqual([]);
   });
 });
@@ -107,7 +107,7 @@ describe("handleOpencodeAliasesCreate", () => {
    * 透過 handler group 找到 definition，使用 createValidatedHandler 走真實 zod parse，
    * 確認 OPENCODE_ALIASES_CREATE 事件有正確對應的 handler 並能回傳 OPENCODE_ALIASES_CREATE_RESULT。
    */
-  it("A1（wire-up smoke）：透過 handler group 派發 OPENCODE_ALIASES_CREATE，回應 OPENCODE_ALIASES_CREATE_RESULT ok=true", async () => {
+  it("A1（wire-up smoke）：透過 handler group 派發 OPENCODE_ALIASES_CREATE，回應 OPENCODE_ALIASES_CREATE_RESULT success=true", async () => {
     const handlerDef = opencodeSettingsHandlerGroup.handlers.find(
       (h) => h.event === WebSocketRequestEvents.OPENCODE_ALIASES_CREATE,
     );
@@ -136,7 +136,7 @@ describe("handleOpencodeAliasesCreate", () => {
     const [connId, event, payload] = mockEmitToConnection.mock.calls[0];
     expect(connId).toBe(CONNECTION_ID);
     expect(event).toBe(WebSocketResponseEvents.OPENCODE_ALIASES_CREATE_RESULT);
-    expect(payload.ok).toBe(true);
+    expect(payload.success).toBe(true);
   });
 
   it("B1：create 後 list 查得到新 row 且 orderIdx 為當前 max+1（首筆為 0）", async () => {
@@ -166,7 +166,7 @@ describe("handleOpencodeAliasesCreate", () => {
     );
 
     const [, , createPayload] = mockEmitToConnection.mock.calls[0];
-    expect(createPayload.ok).toBe(true);
+    expect(createPayload.success).toBe(true);
     expect(createPayload.item.orderIdx).toBe(1); // 第二筆 orderIdx=1
 
     // list 驗證
@@ -178,7 +178,7 @@ describe("handleOpencodeAliasesCreate", () => {
     );
 
     const [, , listPayload] = mockEmitToConnection.mock.calls[0];
-    expect(listPayload.ok).toBe(true);
+    expect(listPayload.success).toBe(true);
     expect(listPayload.items).toHaveLength(2);
     expect(listPayload.items[0].orderIdx).toBe(0);
     expect(listPayload.items[0].alias).toBe("Sonnet");
@@ -186,7 +186,7 @@ describe("handleOpencodeAliasesCreate", () => {
     expect(listPayload.items[1].alias).toBe("Opus");
   });
 
-  it("B2（業務規則）：同 provider 同 alias 第二次 create 拋 UNIQUE 錯誤", async () => {
+  it("B2（業務規則）：同 provider 同 alias 第二次 create 回傳 alias_duplicate 結構化錯誤", async () => {
     await handleOpencodeAliasesCreate(
       CONNECTION_ID,
       {
@@ -198,19 +198,22 @@ describe("handleOpencodeAliasesCreate", () => {
       REQUEST_ID,
     );
 
-    // 第二次同 provider（real_provider=anthropic）+ 同 alias 應拋出錯誤
-    await expect(
-      handleOpencodeAliasesCreate(
-        CONNECTION_ID,
-        {
-          requestId: REQUEST_ID,
-          providerID: "anthropic",
-          modelID: "claude-opus-4",
-          alias: "DupAlias",
-        },
-        REQUEST_ID,
-      ),
-    ).rejects.toThrow();
+    // 第二次同 provider（real_provider=anthropic）+ 同 alias 應回傳結構化錯誤（不 throw）
+    vi.clearAllMocks();
+    await handleOpencodeAliasesCreate(
+      CONNECTION_ID,
+      {
+        requestId: REQUEST_ID,
+        providerID: "anthropic",
+        modelID: "claude-opus-4",
+        alias: "DupAlias",
+      },
+      REQUEST_ID,
+    );
+
+    const [, , dupPayload] = mockEmitToConnection.mock.calls[0];
+    expect(dupPayload.success).toBe(false);
+    expect(dupPayload.error.code).toBe("alias_duplicate");
   });
 
   it("B6：create 完成後 broadcastOpencodeAliasesUpdated 與 broadcastProviderList 各被呼叫一次", async () => {
@@ -265,7 +268,7 @@ describe("handleOpencodeAliasesUpdate", () => {
 
     const [, event, updatePayload] = mockEmitToConnection.mock.calls[0];
     expect(event).toBe(WebSocketResponseEvents.OPENCODE_ALIASES_UPDATE_RESULT);
-    expect(updatePayload.ok).toBe(true);
+    expect(updatePayload.success).toBe(true);
     expect(updatePayload.item.alias).toBe("NewAlias");
     expect(updatePayload.item.modelID).toBe("claude-3-5-haiku");
     expect(updatePayload.item.orderIdx).toBe(originalOrderIdx);
@@ -355,7 +358,7 @@ describe("handleOpencodeAliasesDelete", () => {
 
     const [, event, deletePayload] = mockEmitToConnection.mock.calls[0];
     expect(event).toBe(WebSocketResponseEvents.OPENCODE_ALIASES_DELETE_RESULT);
-    expect(deletePayload.ok).toBe(true);
+    expect(deletePayload.success).toBe(true);
     expect(deletePayload.id).toBe(firstId);
 
     // list 只剩一筆
@@ -457,7 +460,12 @@ describe("handleOpencodeAliasesReorder", () => {
 
     const [, event, reorderPayload] = mockEmitToConnection.mock.calls[0];
     expect(event).toBe(WebSocketResponseEvents.OPENCODE_ALIASES_REORDER_RESULT);
-    expect(reorderPayload.ok).toBe(true);
+    expect(reorderPayload.success).toBe(true);
+    // #2：reorder 成功時回傳完整 items
+    expect(reorderPayload.items).toHaveLength(3);
+    expect(reorderPayload.items[0].id).toBe(idC);
+    expect(reorderPayload.items[1].id).toBe(idA);
+    expect(reorderPayload.items[2].id).toBe(idB);
 
     // list 驗證：order_idx 0=C、1=A、2=B
     vi.clearAllMocks();
