@@ -1,5 +1,62 @@
 # Changelog
 
+## [2.0.0] - 2026-05-21
+
+### 新增
+- 接入 OpenCode：多家 LLM Provider 統一入口 + Pod 整合
+- Goal 改為非必填，不再阻擋未設 Goal 的 Pod 執行對話與檔案拖放
+- Pod 卡片底部右下角放上 Schedule / Delete 按鈕
+- Pod 卡片 header 與內容區之間加上波浪 divider
+- OpenCode Pod 補上淺橄欖綠頂部漸層
+- 每顆 Managed MCP 現在會獨立顯示給 agent
+- Goal Runtime 成為獨立 MCP
+- Claude pod 勾 http/sse MCP 時自動啟動 per-MCP proxy bridge
+- Workflow 跑到一半也能改 pod 的 MCP 勾選
+- OpenCode SDK v2 遷移
+
+### 修正
+- 修正 goal 編輯器貼上後錯誤訊息殘留的問題
+- 統一 Goal 剪貼簿 action 命名與「貼後保留」語意
+- 補上 goal 編輯器空白項目的儲存驗證
+- 強化 Goal 複製貼上測試的穩定性
+- 補上 Goal 剪貼簿覆蓋語意的測試
+- 修正 OpenCode alias 拖曳排序後列表清空的問題
+- 統一前後端 success 契約，讓 OpenCode 操作失敗時 UI 能正確顯示錯誤訊息
+- alias 排序欄位命名統一為 orderIdx
+- provider list / restart 失敗時會顯示具體原因
+- 並發新增同名 alias 時顯示友善錯誤提示
+- 修正重啟 OpenCode 不會 spawn 重複子程序的問題
+- 移除沒有測到商業邏輯的 wrapper 測試
+- 加入載入失敗時的 console.error 日誌
+- 修補 goal todo 狀態殘留與 opencode session 卡住
+- 加強 plugin 除錯日誌、移除路徑掃描 symlink
+- 修補 SQL 拼接漏洞、並行化 catalog 與 MCP 健檢
+- 後端 opencode SSE throttle 與前端 sub-message 測試補強
+- Goal Runtime state 不再被 retry 覆寫
+- Gate retry 訊息一致性改進
+- Opencode transient server 不再洩漏
+- Run mode opencode server 重用
+- Run 結束時清理 Goal Runtime tmp 檔案與 opencode server cache
+- Goal 子 Modal 編輯後保留尾端空白導致預覽與資料不一致
+- 補上 Goal 子 Modal 純空白輸入的邊界測試
+- 修正 REST API 啟動 run 失敗時前端收不到任何訊號的問題
+- 修正佇列入隊失敗會被靜默吞掉的問題
+- 修正 Multi-instance integration 個別 Pod 失敗時前端無法獲知的問題
+- 修正 opencode 切換模型時被前端 PodStore 拒絕的 bug
+- Codex pod 的工具執行結果顯示修正
+- MCP 勾選 popover 移除 status chip
+- 補齊 Managed MCP Test Connection handler 的單元測試覆蓋
+- 補上 plugin slot disabled 時的 tooltip 文案測試覆蓋
+
+### 重構
+- 完成大型重構：Gemini 移除、command→goal 替換、normal mode 移除、小螢幕移除
+- 大規模程式碼整理與模組拆分
+- ManagedMcpModal 與 McpPopover 的 MCP 卡片排序調整與 UI/UX 整理
+- 移除約 80 條只重述程式碼的 WHAT 註解，保留含設計理由的 WHY 註解
+- 收斂 6 個無實質意義的薄包裝函式，呼叫端直接使用底層 API
+- 後端 opencode SSE throttle 與前端 sub-message 測試補強
+- 保留 review 前基準版多個關鍵功能點
+
 ## [1.6.0] - 2026-05-15
 
 ### 新增
