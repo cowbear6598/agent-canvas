@@ -24,7 +24,7 @@ export const useGoalClipboardStore = defineStore("goalClipboard", {
       this.todos = [];
     },
 
-    consumeAsNewTodos(): GoalTodoItem[] {
+    cloneAsNewTodos(): GoalTodoItem[] {
       return this.todos.map((todo) => ({
         id: generateUUID(),
         text: todo.text,

@@ -15,12 +15,14 @@ function cloneGoalTodos(goal: PodGoal | null | undefined): GoalEditorTodo[] {
 
 export function useGoalEditorForm(
   sourceGoal: () => PodGoal | null | undefined,
+  t: (key: string) => string,
 ): {
   todos: Ref<GoalEditorTodo[]>;
   validationMessage: Ref<string>;
   updateTodo: (todoId: string, text: string) => void;
   appendTodo: (text: string) => void;
   removeTodo: (todoId: string) => void;
+  replaceTodos: (newTodos: GoalEditorTodo[]) => void;
   reset: () => void;
   buildSubmitGoal: () => PodGoal | null | false;
 } {
@@ -51,11 +53,23 @@ export function useGoalEditorForm(
     validationMessage.value = "";
   };
 
+  const replaceTodos = (newTodos: GoalEditorTodo[]): void => {
+    todos.value = newTodos;
+    validationMessage.value = "";
+  };
+
   const buildSubmitGoal = (): PodGoal | null | false => {
     // 清單為空視為清空 Goal（Goal 已改為可選，無待辦時等同於 null）
     if (todos.value.length === 0) {
       validationMessage.value = "";
       return null;
+    }
+
+    // 任一 todo 的 text 為空白則擋下送出
+    const hasEmptyTodo = todos.value.some((todo) => todo.text.trim() === "");
+    if (hasEmptyTodo) {
+      validationMessage.value = t("pod.goal.editor.validation.noEmptyRows");
+      return false;
     }
 
     const normalizedTodos = todos.value.map((todo) => ({
@@ -75,6 +89,7 @@ export function useGoalEditorForm(
     updateTodo,
     appendTodo,
     removeTodo,
+    replaceTodos,
     reset,
     buildSubmitGoal,
   };

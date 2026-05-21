@@ -43,7 +43,8 @@ const {
   buildSubmitGoal,
   appendTodo,
   updateTodo,
-} = useGoalEditorForm(() => props.pod.goal ?? null);
+  replaceTodos,
+} = useGoalEditorForm(() => props.pod.goal ?? null, t);
 
 const subModalOpen = ref(false);
 const subModalMode = ref<"add" | "edit">("add");
@@ -92,9 +93,11 @@ const handleCopy = (): void => {
 };
 
 const handlePaste = (): void => {
-  const newTodos = goalClipboardStore.consumeAsNewTodos();
-  todos.value = newTodos;
+  const newTodos = goalClipboardStore.cloneAsNewTodos();
+  replaceTodos(newTodos);
 };
+
+defineExpose({ todos, appendTodo, updateTodo, removeTodo });
 </script>
 
 <template>

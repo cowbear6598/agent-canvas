@@ -66,18 +66,6 @@ function mountGoalEditor(pod: ReturnType<typeof createMockPod>) {
 }
 
 /**
- * 取得 <script setup> 元件的內部 setup state（未 defineExpose 的屬性）。
- * 透過 Vue 內部 $.setupState 存取。
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getSetupState(vm: any): {
-  todos: GoalTodoItem[];
-  appendTodo: (text: string) => void;
-} {
-  return vm.$.setupState;
-}
-
-/**
  * 建立含有兩個 todo 的 Mock Pod（用於複製來源測試）
  */
 function createPodWithGoal() {
@@ -170,15 +158,15 @@ describe("goalCopyPasteFlow", () => {
     const cards = wrapper.findAll('[data-testid="goal-card-preview"]');
     expect(cards).toHaveLength(2);
 
-    // 取得元件內部 todos（透過 Vue $.setupState 存取 <script setup> 未 expose 的屬性）
-    const { todos: vmTodos } = getSetupState(wrapper.vm);
+    // 取得元件 defineExpose 公開的 todos
+    const vmTodos = wrapper.vm.todos;
     expect(vmTodos).toHaveLength(2);
 
     // text 相同
     expect(vmTodos[0]!.text).toBe("剪貼簿任務 A");
     expect(vmTodos[1]!.text).toBe("剪貼簿任務 B");
 
-    // id 必須不同於原剪貼簿 id（consumeAsNewTodos 產生新 UUID）
+    // id 必須不同於原剪貼簿 id（cloneAsNewTodos 產生新 UUID）
     expect(vmTodos[0]!.id).not.toBe("clip-todo-1");
     expect(vmTodos[1]!.id).not.toBe("clip-todo-2");
 
@@ -212,7 +200,7 @@ describe("goalCopyPasteFlow", () => {
     const cards = wrapper.findAll('[data-testid="goal-card-preview"]');
     expect(cards).toHaveLength(3);
 
-    const { todos: vmTodos } = getSetupState(wrapper.vm);
+    const vmTodos = wrapper.vm.todos;
     expect(vmTodos).toHaveLength(3);
     expect(vmTodos[0]!.text).toBe("覆蓋任務 X");
     expect(vmTodos[1]!.text).toBe("覆蓋任務 Y");
@@ -263,14 +251,12 @@ describe("goalCopyPasteFlow", () => {
     await pasteBtn.trigger("click");
     await wrapper.vm.$nextTick();
 
-    // 透過 Vue $.setupState 存取 todos 與 appendTodo（未 defineExpose 的內部屬性）
-    const setupState = getSetupState(wrapper.vm);
-
+    // 透過 defineExpose 公開的 component public API 操作 todos
     // 修改第一筆 todo 文字
-    setupState.todos[0]!.text = "修改後的任務文字";
+    wrapper.vm.updateTodo(wrapper.vm.todos[0]!.id, "修改後的任務文字");
 
     // 追加一筆新 todo
-    setupState.appendTodo("新追加的任務");
+    wrapper.vm.appendTodo("新追加的任務");
     await wrapper.vm.$nextTick();
 
     // 觸發儲存
@@ -370,7 +356,7 @@ describe("goalCopyPasteFlow", () => {
     const cards = wrapper.findAll('[data-testid="goal-card-preview"]');
     expect(cards).toHaveLength(2);
 
-    const { todos: vmTodos } = getSetupState(wrapper.vm);
+    const vmTodos = wrapper.vm.todos;
     expect(vmTodos[0]!.text).toBe("剪貼簿任務 A");
     expect(vmTodos[1]!.text).toBe("剪貼簿任務 B");
 
@@ -378,5 +364,34 @@ describe("goalCopyPasteFlow", () => {
     expect(clipboardStore.copiedPods).toHaveLength(1);
 
     wrapper.unmount();
+  });
+
+  // ── F8：連續複製不同來源時剪貼簿被覆蓋（不是 append）────────────────────────
+
+  it("F8：連續複製不同來源時剪貼簿被覆蓋（不是 append）", () => {
+    const todosA: GoalTodoItem[] = [
+      { id: "a-todo-1", text: "來源 A 任務一" },
+      { id: "a-todo-2", text: "來源 A 任務二" },
+    ];
+    const todosB: GoalTodoItem[] = [
+      { id: "b-todo-1", text: "來源 B 任務一" },
+      { id: "b-todo-2", text: "來源 B 任務二" },
+      { id: "b-todo-3", text: "來源 B 任務三" },
+    ];
+
+    goalClipboardStore.setGoalTodos(todosA);
+    goalClipboardStore.setGoalTodos(todosB);
+
+    // 剪貼簿應以最後一次複製為準（覆蓋，不 append）
+    expect(goalClipboardStore.todos).toHaveLength(3);
+    expect(goalClipboardStore.todos[0]).toMatchObject({
+      id: "b-todo-1",
+      text: "來源 B 任務一",
+    });
+
+    // 確認 todosA 的 id 完全不存在於剪貼簿中
+    const clipIds = goalClipboardStore.todos.map((t) => t.id);
+    expect(clipIds).not.toContain("a-todo-1");
+    expect(clipIds).not.toContain("a-todo-2");
   });
 });
