@@ -104,7 +104,7 @@ export function normalizeGoalRuntimeState(
   const activeTodoId =
     hasRemainingTodos &&
     state.activeTodoId &&
-    remainingTodoIds.includes(state.activeTodoId)
+    !completedTodoIdSet.has(state.activeTodoId)
       ? state.activeTodoId
       : (remainingTodoIds[0] ?? null);
   const status: GoalRuntimeStatus =
@@ -136,7 +136,14 @@ export function normalizeGoalRuntimeSnapshot(
   };
 }
 
-export function hasGoalRuntime(goal: PodGoal | null | undefined): boolean {
+/**
+ * 判斷 Pod 的 goal 設定是否符合啟用 Goal Runtime 的條件。
+ * goal 為 null/undefined 時視為「尚未設定 goal」，同樣視為 eligible（不排除）。
+ * 只有當 goal 存在但 todos 不是陣列（資料損毀）時才回傳 false。
+ */
+export function isGoalRuntimeEligible(
+  goal: PodGoal | null | undefined,
+): boolean {
   return goal == null || Array.isArray(goal.todos);
 }
 
@@ -179,9 +186,9 @@ export function completeGoalTodo(
   )
     ? normalizedState.completedTodoIds
     : [...normalizedState.completedTodoIds, targetTodoId];
+  const completedTodoIdSet = new Set(completedTodoIds);
   const activeTodoId =
-    normalizedState.todoOrder.find((id) => !completedTodoIds.includes(id)) ??
-    null;
+    normalizedState.todoOrder.find((id) => !completedTodoIdSet.has(id)) ?? null;
 
   return withUpdatedAt({
     ...normalizedState,
@@ -280,7 +287,16 @@ export function readGoalRuntimeSnapshot(
       return null;
     }
     return normalizeGoalRuntimeSnapshot(parsed);
-  } catch {
+  } catch (err) {
+    // 檔案不存在（ENOENT）或 JSON 解析失敗（SyntaxError）屬正常情況，靜默回 null
+    if (
+      err instanceof SyntaxError ||
+      (err as NodeJS.ErrnoException).code === "ENOENT"
+    ) {
+      return null;
+    }
+    // 其他 I/O 錯誤（EACCES、EMFILE 等）需記錄，避免被誤判為「snapshot 不存在」
+    console.error("[goalRuntime] readGoalRuntimeSnapshot 讀取快照失敗", err);
     return null;
   }
 }
@@ -324,12 +340,25 @@ export function buildGoalRuntimeToolResult(
   snapshot: GoalRuntimeSnapshot,
 ): GoalRuntimeToolResult {
   const { goal, state } = snapshot;
+
+  // 找出排在 activeTodoId 之後、且尚未完成的第一個 todo 作為 nextTodoId
+  const completedTodoIdSet = new Set(state.completedTodoIds);
+  const activeIndex = state.activeTodoId
+    ? state.todoOrder.indexOf(state.activeTodoId)
+    : -1;
+  const nextTodoId =
+    activeIndex >= 0
+      ? (state.todoOrder
+          .slice(activeIndex + 1)
+          .find((id) => !completedTodoIdSet.has(id)) ?? null)
+      : null;
+
   return {
     status: state.status,
     activeTodoId: state.activeTodoId,
     activeTodoText: getGoalTodoText(goal, state.activeTodoId),
-    nextTodoId: state.activeTodoId,
-    nextTodoText: getGoalTodoText(goal, state.activeTodoId),
+    nextTodoId,
+    nextTodoText: getGoalTodoText(goal, nextTodoId),
     completedTodoIds: [...state.completedTodoIds],
     blockedReason: state.blockedReason,
     handoffSummary: state.handoffSummary,

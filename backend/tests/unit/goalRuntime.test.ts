@@ -117,6 +117,40 @@ describe("goalRuntime", () => {
     );
   });
 
+  it("buildGoalRuntimeMcpServerConfig（compiled 模式）args 應只有 --goal-bridge", () => {
+    const originalEnv = process.env.AGENT_CANVAS_COMPILED;
+    try {
+      process.env.AGENT_CANVAS_COMPILED = "1";
+      const config = buildGoalRuntimeMcpServerConfig(runContext, pod);
+      expect(config).not.toBeNull();
+      expect(config?.command).toBe(process.execPath);
+      expect(config?.args.length).toBe(1);
+      expect(config?.args[0]).toBe("--goal-bridge");
+    } finally {
+      if (originalEnv === undefined) {
+        delete process.env.AGENT_CANVAS_COMPILED;
+      } else {
+        process.env.AGENT_CANVAS_COMPILED = originalEnv;
+      }
+    }
+  });
+
+  it("buildGoalRuntimeMcpServerConfig（dev 模式）args 應有兩個元素且第二個為 --goal-bridge", () => {
+    const originalEnv = process.env.AGENT_CANVAS_COMPILED;
+    try {
+      delete process.env.AGENT_CANVAS_COMPILED;
+      const config = buildGoalRuntimeMcpServerConfig(runContext, pod);
+      expect(config).not.toBeNull();
+      expect(config?.args.length).toBe(2);
+      expect(config?.args[1]).toBe("--goal-bridge");
+      expect(config?.args[0]).toMatch(/cli\.ts$/);
+    } finally {
+      if (originalEnv !== undefined) {
+        process.env.AGENT_CANVAS_COMPILED = originalEnv;
+      }
+    }
+  });
+
   it("buildGoalRuntimeMcpListItem 應回傳 system/locked 與 active todo metadata", () => {
     const item = buildGoalRuntimeMcpListItem(pod);
 

@@ -117,9 +117,6 @@ async function runBridgeMain(): Promise<void> {
   process.on("SIGTERM", () => {
     void cleanup().finally(() => process.exit(0));
   });
-  process.on("exit", () => {
-    void cleanup();
-  });
 
   await server.connect(stdio);
 }

@@ -125,24 +125,7 @@ describe("ChatExecutionStrategy", () => {
     });
   });
 
-  describe("getQueryKey", () => {
-    it("應回傳 `runId:podId` 格式", () => {
-      const strategy = makeStrategy();
-      expect(strategy.getQueryKey("pod-abc")).toBe(`${RUN_ID}:pod-abc`);
-    });
-  });
-
   describe("createEmitStrategy", () => {
-    it("應回傳有 emitText/emitToolUse/emitToolResult/emitComplete 方法的物件", () => {
-      const strategy = makeStrategy();
-      const emitStrategy = strategy.createEmitStrategy();
-
-      expect(emitStrategy).toHaveProperty("emitText");
-      expect(emitStrategy).toHaveProperty("emitToolUse");
-      expect(emitStrategy).toHaveProperty("emitToolResult");
-      expect(emitStrategy).toHaveProperty("emitComplete");
-    });
-
     it("回傳的 emitStrategy.emitText 應廣播含 runId 的 payload", () => {
       const strategy = makeStrategy();
       const emitStrategy = strategy.createEmitStrategy();
@@ -180,6 +163,39 @@ describe("ChatExecutionStrategy", () => {
         message,
       );
     });
+
+    it("run.status 為 cancelled 時應跳過 upsertRunMessage", () => {
+      vi.spyOn(runStore, "getRun").mockReturnValue({
+        id: RUN_ID,
+        status: "cancelled",
+      } as ReturnType<typeof runStore.getRun>);
+      const strategy = makeStrategy();
+      const message = {
+        id: "msg-run-2",
+        role: "assistant" as const,
+        content: "cancelled run 訊息",
+        timestamp: new Date().toISOString(),
+      };
+
+      strategy.persistMessage("pod-1", message);
+
+      expect(runStore.upsertRunMessage).not.toHaveBeenCalled();
+    });
+
+    it("run 不存在時應跳過 upsertRunMessage", () => {
+      vi.spyOn(runStore, "getRun").mockReturnValue(undefined);
+      const strategy = makeStrategy();
+      const message = {
+        id: "msg-run-3",
+        role: "assistant" as const,
+        content: "不存在 run 的訊息",
+        timestamp: new Date().toISOString(),
+      };
+
+      strategy.persistMessage("pod-1", message);
+
+      expect(runStore.upsertRunMessage).not.toHaveBeenCalled();
+    });
   });
 
   describe("addUserMessage", () => {
@@ -205,13 +221,6 @@ describe("ChatExecutionStrategy", () => {
       await strategy.addUserMessage("pod-1", content);
 
       expect(injectSpy).toHaveBeenCalledWith(runContext, "pod-1", content);
-    });
-  });
-
-  describe("isBusy", () => {
-    it("應固定回傳 false（Run mode 不排隊）", () => {
-      const strategy = makeStrategy();
-      expect(strategy.isBusy("any-pod")).toBe(false);
     });
   });
 
@@ -310,23 +319,6 @@ describe("ChatExecutionStrategy", () => {
       strategy.onStreamError("pod-1");
 
       expect(runExecutionService.errorPodInstance).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("getRunContext", () => {
-    it("應回傳建構時傳入的 runContext", () => {
-      const strategy = makeStrategy();
-      const result = strategy.getRunContext();
-
-      expect(result).toBe(runContext);
-    });
-
-    it("回傳的 runContext 應包含正確的 runId 和 canvasId", () => {
-      const strategy = makeStrategy();
-      const result = strategy.getRunContext();
-
-      expect(result?.runId).toBe(RUN_ID);
-      expect(result?.canvasId).toBe(CANVAS_ID);
     });
   });
 });

@@ -574,11 +574,14 @@ class RunExecutionService {
     status: RunPodInstanceStatus,
     options?: { evaluateRun?: boolean; errorMessage?: string },
   ): void {
-    // 若 run 不存在或已被標記為 cancelled，代表 deleteRun 正在進行中，
-    // 不寫 DB 以避免 FOREIGN KEY constraint failed（run row 即將被 DELETE）。
-    const run = runStore.getRun(runContext.runId);
-    if (!run || run.status === "cancelled") {
-      return;
+    // deleteRun race guard — see runExecutionService.deleteRun
+    // 兩階段過濾：先用 activeRunStreams 做 O(1) 廉價判斷，
+    // 只有 activeRunStreams 已不含此 runId（cancellation 已啟動）時，才 fallback 查 DB 確認。
+    if (!this.activeRunStreams.has(runContext.runId)) {
+      const run = runStore.getRun(runContext.runId);
+      if (!run || run.status === "cancelled") {
+        return;
+      }
     }
 
     const instance = runStore.getPodInstance(runContext.runId, podId);
@@ -804,18 +807,44 @@ class RunExecutionService {
     return runIds;
   }
 
+  /**
+   * deleteRun 的 race condition 防護策略
+   *
+   * 問題：背景 agent stream callback（persistMessage、updateAndEmitPodInstanceStatus 等）
+   * 可能在 run row 已被 DELETE 後才執行，導致 FOREIGN KEY constraint failed。
+   *
+   * 防護流程（順序嚴格）：
+   *   1. `activeRunStreams.delete(runId)`：先從活躍串流 Map 移除，
+   *      建立 invariant：`!activeRunStreams.has(runId)` ⟹ 「cancellation 已啟動」。
+   *      各 guard 點用此 Map 做廉價快速過濾（O(1)），避免每次都打 DB。
+   *   2. `runStore.updateRunStatus(runId, "cancelled")`：將 run 標記為終態，
+   *      提供 DB 層的二次確認——當 activeRunStreams 不含 runId 時，guard 才 fallback 查 DB。
+   *   3. `abortRegistry.abort(...)` loop：中止各 pod 的 stream，
+   *      仍使用步驟 1 前取得的 activePodIds snapshot，確保全部 pod 都被中止。
+   *   4. `cleanupRunResources` → `runStore.deleteRun`：清理資源、刪除 row。
+   *
+   * 各 guard 點（deleteRun race guard）：
+   *   - executionStrategy.ts `persistMessage`
+   *   - runChatHelpers.ts `injectRunUserMessage`
+   *   - runExecutionService.ts `updateAndEmitPodInstanceStatus`（hot path，使用雙階段過濾）
+   */
   async deleteRun(runId: string): Promise<void> {
     const run = runStore.getRun(runId);
     const canvasId = run?.canvasId ?? "";
 
-    // 先將 Run 標記為 cancelled（終態），讓背景仍在跑的 agent stream callback
-    // 在寫 DB 前能偵測到終態並提早返回，避免 FOREIGN KEY constraint failed。
-    // 必須在 abortRegistry.abort 與 deleteRun 之前執行。
+    // 步驟 1：先從 activeRunStreams 移除，建立廉價 guard 的 invariant。
+    // 必須在 updateRunStatus 之前執行，確保 hot path guard 可用 Map 做 O(1) 過濾。
+    const activePodIds = this.activeRunStreams.get(runId);
+    if (activePodIds) {
+      this.activeRunStreams.delete(runId);
+    }
+
+    // 步驟 2：標記 DB 終態，供 fallback DB 查詢使用。
     if (run) {
       runStore.updateRunStatus(runId, "cancelled");
     }
 
-    const activePodIds = this.activeRunStreams.get(runId);
+    // 步驟 3：中止各 pod 串流（使用步驟 1 前取得的 snapshot）。
     if (activePodIds) {
       for (const podId of activePodIds) {
         try {
@@ -830,9 +859,9 @@ class RunExecutionService {
           );
         }
       }
-      this.activeRunStreams.delete(runId);
     }
 
+    // 步驟 4：清理資源、刪除 row。
     // 防禦性清理：處理 Run 中途被砍、或 evaluateRunStatus 清理失敗的情況
     await this.cleanupRunResources(runId);
 
