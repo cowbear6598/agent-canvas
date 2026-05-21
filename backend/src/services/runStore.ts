@@ -78,13 +78,11 @@ export interface RunPodInstance {
   directPathwaySettled: PathwayState;
   runRepoPath: string | null;
   workspacePath: string | null;
-  sandboxHomePath: string | null;
 }
 
 export interface RunPodInstancePaths {
   runRepoPath?: string | null;
   workspacePath?: string | null;
-  sandboxHomePath?: string | null;
 }
 
 export interface RunMessage {
@@ -121,7 +119,6 @@ interface RunPodInstanceRow {
   direct_pathway_settled: number | null;
   run_repo_path: string | null;
   workspace_path: string | null;
-  sandbox_home_path: string | null;
 }
 
 interface RunMessageRow {
@@ -161,7 +158,6 @@ function rowToRunPodInstance(row: RunPodInstanceRow): RunPodInstance {
     directPathwaySettled: sqliteIntToPathwayState(row.direct_pathway_settled),
     runRepoPath: row.run_repo_path,
     workspacePath: row.workspace_path,
-    sandboxHomePath: row.sandbox_home_path,
   };
 }
 
@@ -298,7 +294,6 @@ class RunStore {
       directPathwaySettled,
       runRepoPath: normalizedPaths.runRepoPath ?? null,
       workspacePath: normalizedPaths.workspacePath ?? null,
-      sandboxHomePath: normalizedPaths.sandboxHomePath ?? null,
     };
 
     this.stmts.runPodInstance.insert.run({
@@ -314,7 +309,6 @@ class RunStore {
       $directPathwaySettled: pathwayStateToSqliteInt(directPathwaySettled),
       $runRepoPath: instance.runRepoPath,
       $workspacePath: instance.workspacePath,
-      $sandboxHomePath: instance.sandboxHomePath,
     });
 
     return instance;
@@ -347,7 +341,6 @@ class RunStore {
     podId: string;
     runRepoPath: string | null;
     workspacePath: string | null;
-    sandboxHomePath: string | null;
   }> {
     const rows = this.stmts.runPodInstance.selectExecutionPathsByRunId.all(
       runId,
@@ -355,14 +348,12 @@ class RunStore {
       pod_id: string;
       run_repo_path: string | null;
       workspace_path: string | null;
-      sandbox_home_path: string | null;
     }>;
 
     return rows.map((row) => ({
       podId: row.pod_id,
       runRepoPath: row.run_repo_path,
       workspacePath: row.workspace_path,
-      sandboxHomePath: row.sandbox_home_path,
     }));
   }
 

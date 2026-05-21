@@ -61,11 +61,6 @@ export interface ClaudeOptions {
   /** 思考設定（搭配 effort 使用，固定為 adaptive） */
   thinking?: ThinkingConfig;
   /**
-   * Claude SDK sandbox 的顯式 pass-through。
-   * backend 預設不注入 sandbox；只有呼叫端明確提供時才轉交 SDK。
-   */
-  sandbox?: Options["sandbox"];
-  /**
    * Plugin Skill Catalog 文字段落（已預先 format）。
    * 空字串代表本 Pod 無啟用 plugin 或掃不出任何 SKILL.md。
    * Fresh session 首輪會與 Goal Runtime bootstrap 一起注入 user prompt。

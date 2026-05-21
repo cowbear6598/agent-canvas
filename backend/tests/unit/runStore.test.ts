@@ -555,33 +555,26 @@ describe("RunStore", () => {
   });
 
   describe("execution path model", () => {
-    it("createPodInstance 帶 workspacePath 與 sandboxHomePath 後應正確持久化", () => {
+    it("createPodInstance 帶 workspacePath 後應正確持久化", () => {
       const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, TRIGGER_MESSAGE);
       const workspacePath = "/canvas/default/pod-1";
-      const sandboxHomePath =
-        "/tmp/agent-canvas/claude-sandbox/runs/run-1/pods/pod-1/home";
 
       runStore.createPodInstance(run.id, "pod-1", "pending", "pending", {
         workspacePath,
-        sandboxHomePath,
       });
 
       const instance = runStore.getPodInstance(run.id, "pod-1");
       expect(instance?.workspacePath).toBe(workspacePath);
-      expect(instance?.sandboxHomePath).toBe(sandboxHomePath);
     });
 
     it("getExecutionPathsByRunId / clearExecutionPathsByRunId 應回傳並清除全部執行路徑", () => {
       const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, TRIGGER_MESSAGE);
       const runRepoPath = "/repos/repo-1-run-1";
       const workspacePath = "/repos/repo-1-run-1";
-      const sandboxHomePath =
-        "/tmp/agent-canvas/claude-sandbox/runs/run-1/pods/pod-1/home";
 
       runStore.createPodInstance(run.id, "pod-1", "pending", "pending", {
         runRepoPath,
         workspacePath,
-        sandboxHomePath,
       });
 
       expect(runStore.getExecutionPathsByRunId(run.id)).toEqual([
@@ -589,7 +582,6 @@ describe("RunStore", () => {
           podId: "pod-1",
           runRepoPath,
           workspacePath,
-          sandboxHomePath,
         },
       ]);
 

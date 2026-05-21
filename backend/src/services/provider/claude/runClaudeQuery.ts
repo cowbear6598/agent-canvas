@@ -553,7 +553,6 @@ export async function* runClaudeQuery(
     ...(options.mcpServers ? { mcpServers: options.mcpServers } : {}),
     ...(options.effort ? { effort: options.effort } : {}),
     ...(options.thinking ? { thinking: options.thinking } : {}),
-    ...(options.sandbox ? { sandbox: options.sandbox } : {}),
     ...(resumeSessionId ? { resume: resumeSessionId } : {}),
   };
 

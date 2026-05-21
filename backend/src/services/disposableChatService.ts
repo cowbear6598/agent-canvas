@@ -27,7 +27,6 @@ export interface DisposableChatInput {
   systemPrompt: string;
   userMessage: string;
   workspacePath: string;
-  sandboxHomePath?: string;
 }
 
 export interface DisposableChatOutput {
@@ -74,8 +73,7 @@ function resolveModel(provider: ProviderName, requestedModel: string): string {
 export async function executeDisposableChat(
   input: DisposableChatInput,
 ): Promise<DisposableChatOutput> {
-  const { provider, systemPrompt, userMessage, workspacePath, sandboxHomePath } =
-    input;
+  const { provider, systemPrompt, userMessage, workspacePath } = input;
 
   // 驗證 model，不合法則 fallback 到 provider 預設模型
   const resolvedModel = resolveModel(provider, input.model);
@@ -85,7 +83,6 @@ export async function executeDisposableChat(
       systemPrompt,
       userMessage,
       workspacePath,
-      sandboxHomePath,
       model: resolvedModel,
     });
     return { ...result, resolvedModel };

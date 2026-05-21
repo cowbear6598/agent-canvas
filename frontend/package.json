@@ -8,8 +8,8 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "style": "vue-tsc --noEmit && eslint src --ext .ts,.vue",
-    "test": "vitest",
-    "test:run": "vitest run"
+    "test": "bunx --bun vitest",
+    "test:run": "bunx --bun vitest run"
   },
   "dependencies": {
     "@vueuse/core": "^14.1.0",

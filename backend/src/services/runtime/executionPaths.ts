@@ -1,4 +1,3 @@
-import os from "os";
 import path from "path";
 
 import type { Pod } from "../../types/pod.js";
@@ -12,7 +11,6 @@ import { resolvePodCwd } from "../shared/podPathResolver.js";
 
 export interface ExecutionPaths {
   workspacePath: string;
-  sandboxHomePath: string;
 }
 
 function resolveWithinRoot(candidatePath: string, rootPath: string): string {
@@ -63,20 +61,6 @@ function resolveRunWorkspacePath(pod: Pod, runContext: RunContext): string {
   return resolvePodCwd(pod);
 }
 
-export function getClaudeSandboxRoot(): string {
-  return path.resolve(path.join(os.tmpdir(), "agent-canvas", "claude-sandbox"));
-}
-
-export function getPodSandboxHomePath(podId: string): string {
-  return path.resolve(path.join(getClaudeSandboxRoot(), "pods", podId, "home"));
-}
-
-export function getRunSandboxHomePath(runId: string, podId: string): string {
-  return path.resolve(
-    path.join(getClaudeSandboxRoot(), "runs", runId, "pods", podId, "home"),
-  );
-}
-
 export function resolveExecutionPaths(
   pod: Pod,
   runContext?: RunContext,
@@ -84,23 +68,10 @@ export function resolveExecutionPaths(
   if (!runContext) {
     return {
       workspacePath: resolvePodCwd(pod),
-      sandboxHomePath: resolveWithinRoot(
-        getPodSandboxHomePath(pod.id),
-        getClaudeSandboxRoot(),
-      ),
     };
   }
 
-  const instance = runStore.getPodInstance(runContext.runId, pod.id);
-  const sandboxHomePath = instance?.sandboxHomePath
-    ? resolveWithinRoot(instance.sandboxHomePath, getClaudeSandboxRoot())
-    : resolveWithinRoot(
-        getRunSandboxHomePath(runContext.runId, pod.id),
-        getClaudeSandboxRoot(),
-      );
-
   return {
     workspacePath: resolveRunWorkspacePath(pod, runContext),
-    sandboxHomePath,
   };
 }

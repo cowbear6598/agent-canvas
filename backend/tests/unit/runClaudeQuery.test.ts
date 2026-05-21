@@ -458,32 +458,6 @@ describe("runClaudeQuery", () => {
       expect(calledOptions).not.toHaveProperty("sandbox");
     });
 
-    it("呼叫端傳入 options.sandbox 時，query() 收到的 sandbox 應等於呼叫端傳入的物件", async () => {
-      const { query: mockQuery } =
-        await import("@anthropic-ai/claude-agent-sdk");
-
-      mockQueryGenerator = async function* () {
-        yield { type: "result", subtype: "success", result: "done" };
-      };
-
-      const customSandbox = { enabled: false };
-      const ctx = createCtx({
-        options: {
-          model: "opus",
-          allowedTools: ["Read"],
-          settingSources: ["project"],
-          permissionMode: "bypassPermissions",
-          includePartialMessages: true,
-          pathToClaudeCodeExecutable: "/usr/local/bin/claude",
-          sandbox: customSandbox,
-        } as ChatRequestContext<ClaudeOptions>["options"],
-      });
-      await collectEvents(runClaudeQuery(ctx));
-
-      const calledOptions = (mockQuery as ReturnType<typeof vi.fn>).mock
-        .calls[0][0].options;
-      expect(calledOptions.sandbox).toBe(customSandbox);
-    });
   });
 
   // [B13] 帶 effort + thinking 時，SDK options 需含 effort 與 thinking 欄位

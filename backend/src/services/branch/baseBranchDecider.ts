@@ -43,7 +43,6 @@ export class BaseBranchDecider implements BranchDecider {
       provider,
       model,
       workspacePath,
-      sandboxHomePath,
       abortSignal,
     } = input;
 
@@ -71,7 +70,6 @@ export class BaseBranchDecider implements BranchDecider {
         systemPrompt,
         userMessage,
         workspacePath,
-        sandboxHomePath,
       });
       rawResponse = result.content;
     } catch (err) {
@@ -112,7 +110,6 @@ export class BaseBranchDecider implements BranchDecider {
         systemPrompt,
         userMessage,
         workspacePath,
-        sandboxHomePath,
       });
       retryRawResponse = retryResult.content;
     } catch (err) {

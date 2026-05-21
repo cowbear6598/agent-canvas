@@ -23,7 +23,6 @@ export interface BranchDecisionInput {
   provider: ProviderName;
   model: string;
   workspacePath: string;
-  sandboxHomePath?: string;
   abortSignal?: AbortSignal;
 }
 

@@ -6,11 +6,9 @@ import type { Pod } from "../../types/pod.js";
 import { logger } from "../../utils/logger.js";
 import { getResultErrorString } from "../../types/result.js";
 import { gitService } from "../workspace/gitService.js";
-import { getRunSandboxHomePath } from "./executionPaths.js";
 
 export interface ProvisionedRunExecutionResources {
   workspacePath: string;
-  sandboxHomePath: string;
   runRepoPath: string | null;
 }
 
@@ -28,11 +26,6 @@ function createDirectWorkspaceResult(
   };
 }
 
-async function ensureEmptyDirectory(dirPath: string): Promise<void> {
-  await fs.rm(dirPath, { recursive: true, force: true });
-  await fs.mkdir(dirPath, { recursive: true });
-}
-
 async function pathExists(targetPath: string): Promise<boolean> {
   try {
     await fs.access(targetPath);
@@ -44,16 +37,6 @@ async function pathExists(targetPath: string): Promise<boolean> {
 
 async function ensureNonRepoSourceWorkspace(sourcePath: string): Promise<void> {
   await fs.mkdir(sourcePath, { recursive: true });
-}
-
-async function provisionRunSandboxHome(
-  runId: string,
-  podId: string,
-): Promise<string> {
-  const runSandboxHomePath = getRunSandboxHomePath(runId, podId);
-  await ensureEmptyDirectory(runSandboxHomePath);
-
-  return runSandboxHomePath;
 }
 
 async function provisionRepositoryWorkspace(
@@ -171,11 +154,8 @@ export async function provisionRunExecutionResources(params: {
     ? await provisionRepositoryWorkspace(pod, runId, runRepoCache)
     : await provisionNonRepoWorkspace(pod);
 
-  const sandboxHomePath = await provisionRunSandboxHome(runId, pod.id);
-
   return {
     workspacePath: workspaceResult.workspacePath,
-    sandboxHomePath,
     runRepoPath: workspaceResult.runRepoPath,
   };
 }

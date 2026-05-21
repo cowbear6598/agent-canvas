@@ -63,10 +63,6 @@ import { abortRegistry } from "../../src/services/provider/abortRegistry.js";
 import { config } from "../../src/config/index.js";
 import { logger } from "../../src/utils/logger.js";
 import {
-  getRunSandboxHomePath,
-  getPodSandboxHomePath,
-} from "../../src/services/runtime/executionPaths.js";
-import {
   ensureGoalRuntime,
   getGoalRuntimeStatePath,
   GOAL_MCP_SERVER_NAME,
@@ -1102,7 +1098,7 @@ describe("executeStreamingChat", () => {
       });
     });
 
-    it("ChatExecutionStrategy 下，provider.chat 收到的 sandboxHomePath 等於 getRunSandboxHomePath(runId)", async () => {
+    it("ChatExecutionStrategy 下，provider.chat 不應收到舊 sandbox home 欄位", async () => {
       const pod = insertClaudePod();
 
       let capturedCtx: unknown;
@@ -1129,13 +1125,8 @@ describe("executeStreamingChat", () => {
       });
 
       expect(chatMock).toHaveBeenCalledTimes(1);
-      const expectedSandboxHomePath = getRunSandboxHomePath(
-        defaultRunContext.runId,
-        pod.id,
-      );
-      expect(capturedCtx).toMatchObject({
-        sandboxHomePath: expectedSandboxHomePath,
-      });
+      const removedSandboxHomeKey = ["sandbox", "Home", "Path"].join("");
+      expect(capturedCtx).not.toHaveProperty(removedSandboxHomeKey);
     });
 
     it("workspacePath 不在 canvasRoot 內時，應改寫為 transcript system message 且 provider.chat 未被呼叫", async () => {
@@ -1530,7 +1521,7 @@ describe("executeStreamingChat", () => {
       );
     });
 
-    it("instance.runRepoPath 合法時，provider.chat 收到的 workspacePath 為 run repo，sandboxHomePath 為 run-level temp 路徑", async () => {
+    it("instance.runRepoPath 合法時，provider.chat 收到的 workspacePath 為 run repo 且不含舊 sandbox home 欄位", async () => {
       const pod = insertClaudePod();
       const validWorktreePath = path.join(
         config.repositoriesRoot,
@@ -1568,9 +1559,10 @@ describe("executeStreamingChat", () => {
       expect(chatMock).toHaveBeenCalledWith(
         expect.objectContaining({
           workspacePath: validWorktreePath,
-          sandboxHomePath: getRunSandboxHomePath(runId, pod.id),
         }),
       );
+      const removedSandboxHomeKey = ["sandbox", "Home", "Path"].join("");
+      expect(capturedCtxList[0]).not.toHaveProperty(removedSandboxHomeKey);
     });
 
     it("runRepoPath 不在 repositoriesRoot 內時，應改寫為 run transcript system message 且 provider.chat 未被呼叫", async () => {

@@ -29,7 +29,6 @@ import { config } from "../../config/index.js";
 import path from "path";
 import { promises as fs } from "fs";
 import { isPathWithinDirectory } from "../../utils/pathValidator.js";
-import { getClaudeSandboxRoot } from "../runtime/executionPaths.js";
 import {
   provisionRunExecutionResources,
   type ProvisionedRunExecutionResources,
@@ -233,7 +232,6 @@ class RunExecutionService {
       const {
         runRepoPath: _runRepoPath,
         workspacePath: _workspacePath,
-        sandboxHomePath: _sandboxHomePath,
         ...instanceData
       } = instance;
       const pod = podStore.getById(canvasId, instance.podId);
@@ -686,14 +684,10 @@ class RunExecutionService {
     if (entries.length === 0) return;
 
     const uniqueRunRepos = new Set<string>();
-    const uniqueSandboxHomes = new Set<string>();
 
     for (const entry of entries) {
       if (entry.runRepoPath) {
         uniqueRunRepos.add(entry.runRepoPath);
-      }
-      if (entry.sandboxHomePath) {
-        uniqueSandboxHomes.add(entry.sandboxHomePath);
       }
     }
 
@@ -703,18 +697,6 @@ class RunExecutionService {
       ),
     );
 
-    await Promise.all(
-      [...uniqueSandboxHomes]
-        .filter((sandboxHomePath) =>
-          isPathWithinDirectory(
-            sandboxHomePath,
-            path.resolve(getClaudeSandboxRoot()),
-          ),
-        )
-        .map((sandboxHomePath) =>
-          this.removeRunDirectory(sandboxHomePath, "sandbox home"),
-        ),
-    );
     runStore.clearExecutionPathsByRunId(runId);
   }
 

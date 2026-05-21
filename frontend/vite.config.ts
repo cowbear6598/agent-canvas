@@ -72,6 +72,34 @@ function dynamicCSPPlugin(): Plugin {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [vue(), tailwindcss(), dynamicCSPPlugin()],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          const normalizedId = id.split(path.sep).join("/");
+
+          if (normalizedId.includes("/node_modules/")) {
+            if (
+              normalizedId.includes("/marked/") ||
+              normalizedId.includes("/dompurify/")
+            ) {
+              return "markdown";
+            }
+            if (
+              normalizedId.includes("/vue/") ||
+              normalizedId.includes("/pinia/") ||
+              normalizedId.includes("/vue-i18n/")
+            ) {
+              return "vendor";
+            }
+            return "vendor";
+          }
+
+          if (normalizedId.includes("/src/")) return "app";
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

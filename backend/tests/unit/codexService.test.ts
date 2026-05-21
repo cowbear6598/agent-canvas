@@ -61,6 +61,14 @@ const AGENT_MESSAGE_LINE = JSON.stringify({
   item: { id: "item-1", type: "agent_message", text: "回應內容" },
 });
 
+const REMOVED_CODEX_SANDBOX_FLAG = ["--", "sandbox"].join("");
+const REMOVED_CODEX_SANDBOX_MODE = ["workspace", "write"].join("-");
+const REMOVED_CODEX_SANDBOX_CONFIG_PREFIX = [
+  "sandbox",
+  "workspace",
+  "write",
+].join("_");
+
 const BASE_OPTIONS = {
   systemPrompt: "sys",
   userMessage: "user",
@@ -115,6 +123,24 @@ describe("codexService.executeDisposableChat", () => {
 
     expect(result.success).toBe(true);
     expect(spawnSpy).toHaveBeenCalledOnce();
+    const [spawnArgs] = spawnSpy.mock.calls[0] as [string[], unknown];
+    expect(spawnArgs).toEqual([
+      "codex",
+      "exec",
+      "-",
+      "--json",
+      "--skip-git-repo-check",
+      "--cd",
+      BASE_OPTIONS.workspacePath,
+      "--dangerously-bypass-approvals-and-sandbox",
+      "--model",
+      BASE_OPTIONS.model,
+    ]);
+    expect(spawnArgs).not.toContain(REMOVED_CODEX_SANDBOX_FLAG);
+    expect(spawnArgs).not.toContain(REMOVED_CODEX_SANDBOX_MODE);
+    expect(
+      spawnArgs.some((arg) => arg.includes(REMOVED_CODEX_SANDBOX_CONFIG_PREFIX)),
+    ).toBe(false);
   });
 
   it("子程序非零 exit code 但有 turn_complete → success: true（warn 路徑）", async () => {

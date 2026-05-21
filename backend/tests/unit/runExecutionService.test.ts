@@ -14,7 +14,6 @@ import { v4 as uuidv4 } from "uuid";
 import path from "path";
 import * as nodeFs from "fs";
 import * as runExecutionResources from "../../src/services/runtime/runExecutionResources.js";
-import { getRunSandboxHomePath } from "../../src/services/runtime/executionPaths.js";
 import { config } from "../../src/config/index.js";
 
 // --- 測試常數 ---
@@ -206,7 +205,7 @@ describe("RunExecutionService", () => {
       }
     });
 
-    it("non-repo pod 會直接使用原始 workspace，並配置 run-level sandbox home", async () => {
+    it("non-repo pod 會直接使用原始 workspace，不配置 sandbox home", async () => {
       const { pod } = podStore.create(CANVAS_ID, {
         name: "Isolated Pod",
         x: 0,
@@ -218,7 +217,6 @@ describe("RunExecutionService", () => {
         "provisionRunExecutionResources",
       ).mockResolvedValue({
         workspacePath: pod.workspacePath,
-        sandboxHomePath: getRunSandboxHomePath("run-mock", pod.id),
         runRepoPath: null,
       });
 
@@ -230,7 +228,6 @@ describe("RunExecutionService", () => {
       const instance = runStore.getPodInstance(ctx.runId, pod.id);
 
       expect(instance?.workspacePath).toBe(pod.workspacePath);
-      expect(instance?.sandboxHomePath).toBeTruthy();
       expect(
         runExecutionResources.provisionRunExecutionResources,
       ).toHaveBeenCalled();
@@ -854,17 +851,15 @@ describe("RunExecutionService", () => {
       expect(abortSpy).not.toHaveBeenCalled();
     });
 
-    it("刪除 run 時會清理 run-level sandbox home，但不碰原始 workspace", async () => {
+    it("刪除 run 時不會清理原始 workspace", async () => {
       const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "測試");
       const workspacePath = path.join(
         config.canvasRoot,
         CANVAS_ID,
         "pod-source-workspace",
       );
-      const sandboxHomePath = getRunSandboxHomePath(run.id, SOURCE_POD_ID);
       runStore.createPodInstance(run.id, SOURCE_POD_ID, "pending", "pending", {
         workspacePath,
-        sandboxHomePath,
       });
 
       const rmSpy = vi
@@ -873,10 +868,6 @@ describe("RunExecutionService", () => {
 
       await runExecutionService.deleteRun(run.id);
 
-      expect(rmSpy).toHaveBeenCalledWith(sandboxHomePath, {
-        recursive: true,
-        force: true,
-      });
       expect(rmSpy).not.toHaveBeenCalledWith(workspacePath, {
         recursive: true,
         force: true,
@@ -892,7 +883,6 @@ describe("RunExecutionService", () => {
       );
       runStore.createPodInstance(run.id, SOURCE_POD_ID, "pending", "pending", {
         runRepoPath,
-        sandboxHomePath: null,
       });
 
       const rmSpy = vi
@@ -912,7 +902,6 @@ describe("RunExecutionService", () => {
       const outOfBoundsPath = "/tmp/evil-path/repo";
       runStore.createPodInstance(run.id, SOURCE_POD_ID, "pending", "pending", {
         runRepoPath: outOfBoundsPath,
-        sandboxHomePath: null,
       });
 
       const rmSpy = vi

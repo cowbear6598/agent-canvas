@@ -32,7 +32,6 @@ export interface McpChatOptions {
   allowedTools?: string[];
   model?: string;
   cwd: string;
-  sandboxHomePath?: string;
 }
 
 // ─── 內部型別 ─────────────────────────────────────────────────────────────────

@@ -91,7 +91,6 @@ class BranchDecisionService {
         provider,
         model,
         workspacePath: executionPaths.workspacePath,
-        sandboxHomePath: executionPaths.sandboxHomePath,
         abortSignal,
       });
       selectedLabel = result.selectedLabel;

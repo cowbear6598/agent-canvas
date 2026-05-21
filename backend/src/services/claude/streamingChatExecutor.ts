@@ -768,7 +768,6 @@ async function resolveExecutionDependencies(
     podName: pod.name,
     message,
     workspacePath: executionPaths.workspacePath,
-    sandboxHomePath: executionPaths.sandboxHomePath,
     resumeSessionId: sessionId ?? null,
     runContext,
     options: providerOptions,

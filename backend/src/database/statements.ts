@@ -614,11 +614,11 @@ function buildStatements(db: Database): {
         `INSERT INTO run_pod_instances (
           id, run_id, pod_id, status, session_id, error_message,
           triggered_at, completed_at, auto_pathway_settled,
-          direct_pathway_settled, run_repo_path, workspace_path, sandbox_home_path
+          direct_pathway_settled, run_repo_path, workspace_path
         ) VALUES (
           $id, $runId, $podId, $status, $sessionId, $errorMessage,
           $triggeredAt, $completedAt, $autoPathwaySettled,
-          $directPathwaySettled, $runRepoPath, $workspacePath, $sandboxHomePath
+          $directPathwaySettled, $runRepoPath, $workspacePath
         )`,
       ),
       selectByRunId: db.prepare(
@@ -661,13 +661,12 @@ function buildStatements(db: Database): {
         "SELECT pod_id, run_repo_path FROM run_pod_instances WHERE run_id = ? AND run_repo_path IS NOT NULL",
       ),
       selectExecutionPathsByRunId: db.prepare(
-        `SELECT pod_id, run_repo_path, workspace_path, sandbox_home_path
+        `SELECT pod_id, run_repo_path, workspace_path
         FROM run_pod_instances
         WHERE run_id = ?
           AND (
             run_repo_path IS NOT NULL OR
-            workspace_path IS NOT NULL OR
-            sandbox_home_path IS NOT NULL
+            workspace_path IS NOT NULL
           )`,
       ),
       clearRunRepoPathsByRunId: db.prepare(
@@ -676,8 +675,7 @@ function buildStatements(db: Database): {
       clearExecutionPathsByRunId: db.prepare(
         `UPDATE run_pod_instances
         SET run_repo_path = NULL,
-            workspace_path = NULL,
-            sandbox_home_path = NULL
+            workspace_path = NULL
         WHERE run_id = ?`,
       ),
     },

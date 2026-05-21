@@ -219,8 +219,7 @@ function createBaseTables(db: Database): void {
       "auto_pathway_settled INTEGER," +
       "direct_pathway_settled INTEGER," +
       "run_repo_path TEXT," +
-      "workspace_path TEXT," +
-      "sandbox_home_path TEXT" +
+      "workspace_path TEXT" +
       ")",
   );
   db.exec(

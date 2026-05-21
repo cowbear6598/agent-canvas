@@ -121,7 +121,6 @@ class SummaryService {
       systemPrompt,
       userMessage: userPrompt,
       workspacePath: executionPaths.workspacePath,
-      sandboxHomePath: executionPaths.sandboxHomePath,
     });
 
     if (!result.success) {
