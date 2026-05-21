@@ -15,6 +15,17 @@ function normalizeManagedPluginError(error: unknown): string {
   return "未知錯誤";
 }
 
+function sortPluginsByBackendOrder(
+  plugins: InstalledPlugin[],
+): InstalledPlugin[] {
+  return [...plugins].sort(
+    (a, b) =>
+      a.sortIndex - b.sortIndex ||
+      a.installedAt.localeCompare(b.installedAt) ||
+      a.id.localeCompare(b.id),
+  );
+}
+
 export const useManagedPluginStore = defineStore("managedPlugin", () => {
   const plugins = ref<InstalledPlugin[]>([]);
   const loading = ref<boolean>(false);
@@ -50,7 +61,7 @@ export const useManagedPluginStore = defineStore("managedPlugin", () => {
     loading.value = true;
     try {
       const installed = await installPlugin(githubRepo);
-      plugins.value = [installed, ...plugins.value];
+      plugins.value = sortPluginsByBackendOrder([...plugins.value, installed]);
       error.value = null;
       return installed;
     } catch (err) {
@@ -106,8 +117,9 @@ export const useManagedPluginStore = defineStore("managedPlugin", () => {
     const orderedPlugins = idsInOrder
       .map((id) => pluginById.get(id))
       .filter((plugin): plugin is InstalledPlugin => plugin !== undefined);
+    const idsInOrderSet = new Set(idsInOrder);
     const missingPlugins = plugins.value.filter(
-      (plugin) => !idsInOrder.includes(plugin.id),
+      (plugin) => !idsInOrderSet.has(plugin.id),
     );
 
     plugins.value = [...orderedPlugins, ...missingPlugins];

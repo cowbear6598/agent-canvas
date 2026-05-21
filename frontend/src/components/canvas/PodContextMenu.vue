@@ -33,7 +33,7 @@ const downloadProgress = useDownloadProgress();
 const menuRef = ref<HTMLElement | null>(null);
 
 const isBound = (provider: string): boolean =>
-  bindings.value.some((b) => b.provider === provider);
+  bindings.value.some((binding) => binding.provider === provider);
 
 const handleOutsideClick = (event: MouseEvent): void => {
   const menuEl = menuRef.value;

@@ -128,18 +128,17 @@ class ManagedPluginStore {
 
     const plugins = this.list();
     const pluginMap = new Map(plugins.map((plugin) => [plugin.id, plugin]));
-    const reorderedPluginIds = pluginIds.filter((pluginId) =>
-      pluginMap.has(pluginId),
-    );
-    if (reorderedPluginIds.length === 0 && plugins.length > 0) {
-      return err("PLUGIN_NOT_FOUND");
+    for (const pluginId of pluginIds) {
+      if (!pluginMap.has(pluginId)) {
+        return err("PLUGIN_NOT_FOUND");
+      }
     }
 
-    const reorderedPluginIdSet = new Set(reorderedPluginIds);
+    const reorderedPluginIdSet = new Set(pluginIds);
     const remainingPluginIds = plugins
       .filter((plugin) => !reorderedPluginIdSet.has(plugin.id))
       .map((plugin) => plugin.id);
-    const finalPluginIds = [...reorderedPluginIds, ...remainingPluginIds];
+    const finalPluginIds = [...pluginIds, ...remainingPluginIds];
 
     const updateSortIndex = getDb().prepare(
       "UPDATE managed_plugins SET sort_index = ? WHERE id = ?",

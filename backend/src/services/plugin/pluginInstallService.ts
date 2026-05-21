@@ -17,42 +17,71 @@ import { logger } from "../../utils/logger.js";
 
 // ─── extractPluginMetadata ──────────────────────────────────────────────────
 
+const PLUGIN_MANIFEST_RELATIVE_PATHS = [
+  path.join(".codex-plugin", "plugin.json"),
+  path.join(".claude-plugin", "plugin.json"),
+];
+
+function isFileNotFoundError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    (error as NodeJS.ErrnoException).code === "ENOENT"
+  );
+}
+
+function getPluginMetadataFailureReason(errors: unknown[]): string {
+  if (errors.some((error) => error instanceof SyntaxError)) {
+    return "JSON 損毀";
+  }
+
+  const fileError = errors.find(
+    (error): error is NodeJS.ErrnoException =>
+      error instanceof Error && "code" in error,
+  );
+  if (fileError?.code === "ENOENT") {
+    return "檔案不存在";
+  }
+  if (fileError?.code === "EACCES") {
+    return "權限不足";
+  }
+
+  const firstError = errors[0];
+  return firstError instanceof Error ? firstError.message : String(firstError);
+}
+
 async function extractPluginMetadata(
   installPath: string,
   repo: string,
 ): Promise<{ displayName: string; description: string | null }> {
-  try {
-    const metaPath = path.join(installPath, ".claude-plugin", "plugin.json");
-    const raw = await fs.promises.readFile(metaPath, "utf-8");
-    const meta = JSON.parse(raw);
-    const displayName =
-      typeof meta?.name === "string" && meta.name ? meta.name : repo;
-    const description =
-      typeof meta?.description === "string" ? meta.description : null;
-    return { displayName, description };
-  } catch (error) {
-    let reason: string;
-    if (error instanceof SyntaxError) {
-      reason = "JSON 損毀";
-    } else if (error instanceof Error && "code" in error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      if (code === "ENOENT") {
-        reason = "檔案不存在";
-      } else if (code === "EACCES") {
-        reason = "權限不足";
-      } else {
-        reason = error.message;
-      }
-    } else {
-      reason = String(error);
+  const errors: unknown[] = [];
+
+  for (const relativePath of PLUGIN_MANIFEST_RELATIVE_PATHS) {
+    try {
+      const metaPath = path.join(installPath, relativePath);
+      const raw = await fs.promises.readFile(metaPath, "utf-8");
+      const meta = JSON.parse(raw);
+      const displayName =
+        typeof meta?.name === "string" && meta.name ? meta.name : repo;
+      const description =
+        typeof meta?.description === "string" ? meta.description : null;
+      return { displayName, description };
+    } catch (error) {
+      errors.push(error);
     }
-    logger.warn(
-      "Plugin",
-      "Warn",
-      `讀取 plugin.json 失敗，路徑: ${installPath}，原因: ${reason}`,
-    );
+  }
+
+  if (errors.every(isFileNotFoundError)) {
     return { displayName: repo, description: null };
   }
+
+  const reason = getPluginMetadataFailureReason(errors);
+  logger.warn(
+    "Plugin",
+    "Warn",
+    `讀取 plugin.json 失敗，路徑: ${installPath}，原因: ${reason}`,
+  );
+  return { displayName: repo, description: null };
 }
 
 // ─── installPlugin ──────────────────────────────────────────────────────────

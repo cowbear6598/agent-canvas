@@ -11,6 +11,8 @@ import { getActiveCanvasIdOrWarn } from "@/utils/canvasGuard";
 import { useOptimisticToggle } from "@/composables/pod/useOptimisticToggle";
 import type { InstalledPlugin } from "@/types/plugin";
 
+const POPOVER_ANCHOR_GAP_PX = 8;
+
 const props = defineProps<{
   podId: string;
   anchorRect: DOMRect;
@@ -137,7 +139,7 @@ const handleToggle = async (
       ref="rootRef"
       class="fixed z-50 min-w-60 rounded-md border border-doodle-ink bg-card p-2 shadow-md"
       :style="{
-        left: `${anchorRect.left - 8}px`,
+        left: `${anchorRect.left - POPOVER_ANCHOR_GAP_PX}px`,
         top: `${anchorRect.top}px`,
         transform: 'translateX(-100%)',
       }"

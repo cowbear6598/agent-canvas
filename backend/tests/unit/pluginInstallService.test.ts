@@ -20,8 +20,9 @@
 // ─── hoisted：simple-git mock factory ──────────────────────────────────────
 // vi.mock 工廠被 hoist 到最頂層，不能直接引用 let 變數；
 // 透過 vi.hoisted 先建立一個可被後續 beforeEach 控制的 spy 容器
-const { mockClone } = vi.hoisted(() => ({
+const { mockClone, mockLoggerWarn } = vi.hoisted(() => ({
   mockClone: vi.fn(),
+  mockLoggerWarn: vi.fn(),
 }));
 
 vi.mock("simple-git", () => ({
@@ -72,6 +73,15 @@ vi.mock("../../src/database/index.js", () => ({
   getDb: () => ({
     prepare: () => ({ run: mockDbRun }),
   }),
+}));
+
+vi.mock("../../src/utils/logger.js", () => ({
+  logger: {
+    warn: mockLoggerWarn,
+    error: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn(),
+  },
 }));
 
 // ─── mock fs.promises（模擬 extractPluginMetadata 讀取 plugin.json）────────
@@ -136,6 +146,10 @@ function makeRecord(
   };
 }
 
+function makeEnoentError(): NodeJS.ErrnoException {
+  return Object.assign(new Error("missing"), { code: "ENOENT" });
+}
+
 // ─── 輔助：模擬 plugin.json 讀取成功 ─────────────────────────────────────────
 function mockValidPluginJson(name: string, description?: string): void {
   mockReadFile.mockResolvedValueOnce(
@@ -163,7 +177,7 @@ describe("installPlugin", () => {
     vi.mocked(managedPluginStore.insert).mockImplementation((r) => r);
 
     // 預設：readFile 丟出 ENOENT（讓 extractPluginMetadata fallback）
-    mockReadFile.mockRejectedValue(new Error("ENOENT"));
+    mockReadFile.mockRejectedValue(makeEnoentError());
   });
 
   it("F2：install 成功時呼叫順序為 clone → extractMetadata（readFile）→ store.insert", async () => {
@@ -192,14 +206,37 @@ describe("installPlugin", () => {
     expect(insertArg.description).toBe("A plugin");
   });
 
-  it("F2：extractPluginMetadata fallback — readFile 失敗時 displayName 回退為 repo name", async () => {
+  it("F2：manifest 不存在時靜默 fallback 為 repo name", async () => {
     // readFile 已在 beforeEach 設為 reject
     const result = await installPlugin("owner/repo");
 
     expect(result.success).toBe(true);
+    expect(mockLoggerWarn).not.toHaveBeenCalled();
     const insertArg = vi.mocked(managedPluginStore.insert).mock.calls[0]![0];
     expect(insertArg.displayName).toBe("repo");
     expect(insertArg.description).toBeNull();
+  });
+
+  it("F2：metadata 支援 legacy .claude-plugin/plugin.json fallback", async () => {
+    mockReadFile
+      .mockRejectedValueOnce(makeEnoentError())
+      .mockResolvedValueOnce(
+        JSON.stringify({ name: "Legacy Plugin", description: "legacy" }),
+      );
+
+    const result = await installPlugin("owner/repo");
+
+    expect(result.success).toBe(true);
+    expect(mockReadFile).toHaveBeenCalledTimes(2);
+    expect(mockReadFile.mock.calls[0]![0]).toContain(
+      ".codex-plugin/plugin.json",
+    );
+    expect(mockReadFile.mock.calls[1]![0]).toContain(
+      ".claude-plugin/plugin.json",
+    );
+    const insertArg = vi.mocked(managedPluginStore.insert).mock.calls[0]![0];
+    expect(insertArg.displayName).toBe("Legacy Plugin");
+    expect(insertArg.description).toBe("legacy");
   });
 
   it("F4：已存在相同 repo 時直接回 PLUGIN_ALREADY_INSTALLED，不呼叫 clone", async () => {

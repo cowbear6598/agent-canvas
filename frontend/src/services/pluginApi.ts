@@ -29,7 +29,11 @@ export async function listPlugins(): Promise<InstalledPlugin[]> {
     payload: {},
   });
 
-  return result.plugins ?? [];
+  if (!result.plugins) {
+    throw new Error("取得 plugin 清單成功但後端未回傳 plugin 清單");
+  }
+
+  return result.plugins;
 }
 
 export async function installPlugin(

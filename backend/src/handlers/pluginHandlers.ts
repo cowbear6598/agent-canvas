@@ -14,7 +14,70 @@ import {
   updatePlugin,
 } from "../services/plugin/pluginInstallService.js";
 import { managedPluginStore } from "../services/plugin/managedPluginRegistry.js";
+import { createI18nError, type I18nError } from "../utils/i18nError.js";
 import { emitError, emitNotFound } from "../utils/websocketResponse.js";
+
+type PluginErrorPayload = {
+  error: I18nError;
+  code: string;
+};
+
+function getPluginErrorMessage(error: string | I18nError): string {
+  return typeof error === "string" ? error : error.key;
+}
+
+function createPluginInstallError(
+  error: string,
+  githubRepo: string,
+): PluginErrorPayload {
+  if (error === "INVALID_GITHUB_REPO_FORMAT") {
+    return {
+      error: createI18nError("errors.pluginInvalidGithubRepoFormat", {
+        repo: githubRepo,
+      }),
+      code: "INVALID_GITHUB_REPO_FORMAT",
+    };
+  }
+
+  if (error === "PLUGIN_ALREADY_INSTALLED") {
+    return {
+      error: createI18nError("errors.pluginAlreadyInstalled", {
+        repo: githubRepo,
+      }),
+      code: "PLUGIN_ALREADY_INSTALLED",
+    };
+  }
+
+  return {
+    error: createI18nError("errors.pluginInstallFailed", {
+      repo: githubRepo,
+      reason: error,
+    }),
+    code: "PLUGIN_INSTALL_FAILED",
+  };
+}
+
+function createPluginUpdateError(
+  error: string,
+  pluginId: string,
+): PluginErrorPayload {
+  if (error === "INVALID_GITHUB_REPO_FORMAT") {
+    return {
+      error: createI18nError("errors.pluginStoredRepoInvalid", {
+        pluginId,
+      }),
+      code: "INVALID_GITHUB_REPO_FORMAT",
+    };
+  }
+
+  return {
+    error: createI18nError("errors.pluginUpdateFailed", {
+      pluginId,
+      reason: error,
+    }),
+    code: "PLUGIN_UPDATE_FAILED",
+  };
+}
 
 export async function handlePluginList(
   connectionId: string,
@@ -53,16 +116,19 @@ export async function handlePluginInstall(
   const result = await installPlugin(payload.githubRepo);
 
   if (!result.success) {
+    const errorMessage = getPluginErrorMessage(result.error);
+    const errorPayload = createPluginInstallError(
+      errorMessage,
+      payload.githubRepo,
+    );
     emitError(
       connectionId,
       WebSocketResponseEvents.PLUGIN_INSTALLED,
-      result.error,
+      errorPayload.error,
       null,
       requestId,
       undefined,
-      result.error === "PLUGIN_ALREADY_INSTALLED"
-        ? "PLUGIN_ALREADY_INSTALLED"
-        : "INTERNAL_ERROR",
+      errorPayload.code,
     );
     return;
   }
@@ -76,12 +142,6 @@ export async function handlePluginInstall(
       plugin: result.data,
     },
   );
-
-  socketService.emitToAll(WebSocketResponseEvents.PLUGIN_INSTALLED, {
-    requestId,
-    success: true,
-    plugin: result.data,
-  });
 }
 
 export async function handlePluginDelete(
@@ -92,7 +152,8 @@ export async function handlePluginDelete(
   const result = await removePlugin(payload.pluginId);
 
   if (!result.success) {
-    if (result.error === "PLUGIN_NOT_FOUND") {
+    const errorMessage = getPluginErrorMessage(result.error);
+    if (errorMessage === "PLUGIN_NOT_FOUND") {
       emitNotFound(
         connectionId,
         WebSocketResponseEvents.PLUGIN_DELETED,
@@ -125,8 +186,6 @@ export async function handlePluginDelete(
     WebSocketResponseEvents.PLUGIN_DELETED,
     response,
   );
-
-  socketService.emitToAll(WebSocketResponseEvents.PLUGIN_DELETED, response);
 }
 
 export async function handlePluginUpdate(
@@ -137,7 +196,8 @@ export async function handlePluginUpdate(
   const result = await updatePlugin(payload.pluginId);
 
   if (!result.success) {
-    if (result.error === "PLUGIN_NOT_FOUND") {
+    const errorMessage = getPluginErrorMessage(result.error);
+    if (errorMessage === "PLUGIN_NOT_FOUND") {
       emitNotFound(
         connectionId,
         WebSocketResponseEvents.PLUGIN_UPDATED,
@@ -147,12 +207,18 @@ export async function handlePluginUpdate(
         null,
       );
     } else {
+      const errorPayload = createPluginUpdateError(
+        errorMessage,
+        payload.pluginId,
+      );
       emitError(
         connectionId,
         WebSocketResponseEvents.PLUGIN_UPDATED,
-        result.error,
+        errorPayload.error,
         null,
         requestId,
+        undefined,
+        errorPayload.code,
       );
     }
     return;
@@ -167,12 +233,6 @@ export async function handlePluginUpdate(
       plugin: result.data,
     },
   );
-
-  socketService.emitToAll(WebSocketResponseEvents.PLUGIN_UPDATED, {
-    requestId,
-    success: true,
-    plugin: result.data,
-  });
 }
 
 export async function handlePluginReorder(
@@ -217,6 +277,4 @@ export async function handlePluginReorder(
     WebSocketResponseEvents.PLUGIN_REORDERED,
     response,
   );
-
-  socketService.emitToAll(WebSocketResponseEvents.PLUGIN_REORDERED, response);
 }

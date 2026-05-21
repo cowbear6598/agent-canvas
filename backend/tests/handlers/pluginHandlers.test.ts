@@ -1,19 +1,3 @@
-/**
- * pluginHandlers wire-up smoke tests
- *
- * 涵蓋範圍：
- *   handlePluginList      - F1 happy path（呼叫 refreshAllPlugins + emit PLUGIN_LIST_RESULT）
- *   handlePluginInstall   - F2 happy path（呼叫 installPlugin + emit PLUGIN_INSTALLED to connection + all）
- *   handlePluginDelete    - F5 happy path（呼叫 removePlugin + emit PLUGIN_DELETED to connection + all）
- *   handlePluginUpdate    - F6 happy path（呼叫 updatePlugin + emit PLUGIN_UPDATED to connection + all）
- *
- * Mock 邊界：
- *   必須 mock：socketService（WebSocket boundary）、pluginInstallService（避免真實 git 操作）
- *   不可 mock：handler 本身的邏輯、事件常數
- */
-
-// ─── hoisted mocks（必須在所有 import 前宣告）─────────────────────────────────
-
 const {
   mockEmitToConnection,
   mockEmitToAll,
@@ -34,7 +18,6 @@ const {
   mockManagedPluginReorder: vi.fn(),
 }));
 
-// socketService：WebSocket boundary
 vi.mock("../../src/services/socketService.js", () => ({
   socketService: {
     emitToConnection: mockEmitToConnection,
@@ -43,7 +26,6 @@ vi.mock("../../src/services/socketService.js", () => ({
   },
 }));
 
-// pluginInstallService：避免真實 git / fs 操作
 vi.mock("../../src/services/plugin/pluginInstallService.js", () => ({
   refreshAllPlugins: mockRefreshAllPlugins,
   installPlugin: mockInstallPlugin,
@@ -58,18 +40,15 @@ vi.mock("../../src/services/plugin/managedPluginRegistry.js", () => ({
   },
 }));
 
-// ─── imports ──────────────────────────────────────────────────────────────────
-
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import {
   handlePluginList,
   handlePluginInstall,
   handlePluginDelete,
   handlePluginUpdate,
+  handlePluginReorder,
 } from "../../src/handlers/pluginHandlers.js";
 import { WebSocketResponseEvents } from "../../src/schemas/index.js";
-
-// ─── 常數 ─────────────────────────────────────────────────────────────────────
 
 const CONNECTION_ID = "conn-plugin-test";
 const REQUEST_ID = "req-plugin-test";
@@ -85,17 +64,13 @@ const MOCK_PLUGIN_RECORD = {
   updatedAt: "2024-01-01T00:00:00.000Z",
 };
 
-// ─── Setup ────────────────────────────────────────────────────────────────────
-
 beforeEach(() => {
   vi.clearAllMocks();
   mockManagedPluginList.mockReturnValue([MOCK_PLUGIN_RECORD]);
 });
 
-// ─── PLUGIN_LIST handler ──────────────────────────────────────────────────────
-
 describe("handlePluginList", () => {
-  it("F1 happy path：呼叫 refreshAllPlugins，emitToConnection 回傳 PLUGIN_LIST_RESULT success=true", async () => {
+  it("happy path：呼叫 refreshAllPlugins，回傳 PLUGIN_LIST_RESULT success=true", async () => {
     mockRefreshAllPlugins.mockResolvedValue({
       success: true,
       data: [MOCK_PLUGIN_RECORD],
@@ -119,10 +94,8 @@ describe("handlePluginList", () => {
   });
 });
 
-// ─── PLUGIN_INSTALL handler ───────────────────────────────────────────────────
-
 describe("handlePluginInstall", () => {
-  it("F2 happy path：呼叫 installPlugin，emitToConnection 與 emitToAll 各傳一次 PLUGIN_INSTALLED success=true", async () => {
+  it("happy path：呼叫 installPlugin，回傳 PLUGIN_INSTALLED success=true", async () => {
     mockInstallPlugin.mockResolvedValue({
       success: true,
       data: MOCK_PLUGIN_RECORD,
@@ -137,7 +110,6 @@ describe("handlePluginInstall", () => {
     expect(mockInstallPlugin).toHaveBeenCalledOnce();
     expect(mockInstallPlugin).toHaveBeenCalledWith("owner/repo");
 
-    // emitToConnection
     expect(mockEmitToConnection).toHaveBeenCalledOnce();
     const [connId, connEvent, connPayload] = mockEmitToConnection.mock.calls[0];
     expect(connId).toBe(CONNECTION_ID);
@@ -146,20 +118,64 @@ describe("handlePluginInstall", () => {
     expect(connPayload.plugin).toEqual(MOCK_PLUGIN_RECORD);
     expect(connPayload.plugin.sortIndex).toBe(2);
 
-    // emitToAll
-    expect(mockEmitToAll).toHaveBeenCalledOnce();
-    const [allEvent, allPayload] = mockEmitToAll.mock.calls[0];
-    expect(allEvent).toBe(WebSocketResponseEvents.PLUGIN_INSTALLED);
-    expect(allPayload.success).toBe(true);
-    expect(allPayload.plugin).toEqual(MOCK_PLUGIN_RECORD);
-    expect(allPayload.plugin.sortIndex).toBe(2);
+    expect(mockEmitToAll).not.toHaveBeenCalled();
+  });
+
+  it("invalid repo：回傳 i18n 錯誤而非 raw INVALID_GITHUB_REPO_FORMAT", async () => {
+    mockInstallPlugin.mockResolvedValue({
+      success: false,
+      error: "INVALID_GITHUB_REPO_FORMAT",
+    });
+
+    await handlePluginInstall(
+      CONNECTION_ID,
+      { requestId: REQUEST_ID, githubRepo: "ddd/ss/extra" },
+      REQUEST_ID,
+    );
+
+    expect(mockEmitToConnection).toHaveBeenCalledOnce();
+    const [, event, payload] = mockEmitToConnection.mock.calls[0];
+    expect(event).toBe(WebSocketResponseEvents.PLUGIN_INSTALLED);
+    expect(payload).toMatchObject({
+      requestId: REQUEST_ID,
+      success: false,
+      code: "INVALID_GITHUB_REPO_FORMAT",
+      error: {
+        key: "errors.pluginInvalidGithubRepoFormat",
+        params: { repo: "ddd/ss/extra" },
+      },
+    });
+  });
+
+  it("clone failed：回傳完整 i18n 安裝失敗說明", async () => {
+    mockInstallPlugin.mockResolvedValue({
+      success: false,
+      error: "clone plugin ddd/ss",
+    });
+
+    await handlePluginInstall(
+      CONNECTION_ID,
+      { requestId: REQUEST_ID, githubRepo: "ddd/ss" },
+      REQUEST_ID,
+    );
+
+    expect(mockEmitToConnection).toHaveBeenCalledOnce();
+    const [, event, payload] = mockEmitToConnection.mock.calls[0];
+    expect(event).toBe(WebSocketResponseEvents.PLUGIN_INSTALLED);
+    expect(payload).toMatchObject({
+      requestId: REQUEST_ID,
+      success: false,
+      code: "PLUGIN_INSTALL_FAILED",
+      error: {
+        key: "errors.pluginInstallFailed",
+        params: { repo: "ddd/ss", reason: "clone plugin ddd/ss" },
+      },
+    });
   });
 });
 
-// ─── PLUGIN_DELETE handler ────────────────────────────────────────────────────
-
 describe("handlePluginDelete", () => {
-  it("F5 happy path：呼叫 removePlugin，emitToConnection 與 emitToAll 各傳一次 PLUGIN_DELETED success=true", async () => {
+  it("happy path：呼叫 removePlugin，回傳 PLUGIN_DELETED success=true", async () => {
     mockRemovePlugin.mockResolvedValue({
       success: true,
       data: undefined,
@@ -174,7 +190,6 @@ describe("handlePluginDelete", () => {
     expect(mockRemovePlugin).toHaveBeenCalledOnce();
     expect(mockRemovePlugin).toHaveBeenCalledWith("owner/repo");
 
-    // emitToConnection
     expect(mockEmitToConnection).toHaveBeenCalledOnce();
     const [connId, connEvent, connPayload] = mockEmitToConnection.mock.calls[0];
     expect(connId).toBe(CONNECTION_ID);
@@ -183,20 +198,12 @@ describe("handlePluginDelete", () => {
     expect(connPayload.pluginId).toBe("owner/repo");
     expect(connPayload.plugins).toEqual([MOCK_PLUGIN_RECORD]);
 
-    // emitToAll
-    expect(mockEmitToAll).toHaveBeenCalledOnce();
-    const [allEvent, allPayload] = mockEmitToAll.mock.calls[0];
-    expect(allEvent).toBe(WebSocketResponseEvents.PLUGIN_DELETED);
-    expect(allPayload.success).toBe(true);
-    expect(allPayload.pluginId).toBe("owner/repo");
-    expect(allPayload.plugins).toEqual([MOCK_PLUGIN_RECORD]);
+    expect(mockEmitToAll).not.toHaveBeenCalled();
   });
 });
 
-// ─── PLUGIN_UPDATE handler ────────────────────────────────────────────────────
-
 describe("handlePluginUpdate", () => {
-  it("F6 happy path：呼叫 updatePlugin，emitToConnection 與 emitToAll 各傳一次 PLUGIN_UPDATED success=true", async () => {
+  it("happy path：呼叫 updatePlugin，回傳 PLUGIN_UPDATED success=true", async () => {
     mockUpdatePlugin.mockResolvedValue({
       success: true,
       data: MOCK_PLUGIN_RECORD,
@@ -211,7 +218,6 @@ describe("handlePluginUpdate", () => {
     expect(mockUpdatePlugin).toHaveBeenCalledOnce();
     expect(mockUpdatePlugin).toHaveBeenCalledWith("owner/repo");
 
-    // emitToConnection
     expect(mockEmitToConnection).toHaveBeenCalledOnce();
     const [connId, connEvent, connPayload] = mockEmitToConnection.mock.calls[0];
     expect(connId).toBe(CONNECTION_ID);
@@ -220,12 +226,105 @@ describe("handlePluginUpdate", () => {
     expect(connPayload.plugin).toEqual(MOCK_PLUGIN_RECORD);
     expect(connPayload.plugin.sortIndex).toBe(2);
 
-    // emitToAll
-    expect(mockEmitToAll).toHaveBeenCalledOnce();
-    const [allEvent, allPayload] = mockEmitToAll.mock.calls[0];
-    expect(allEvent).toBe(WebSocketResponseEvents.PLUGIN_UPDATED);
-    expect(allPayload.success).toBe(true);
-    expect(allPayload.plugin).toEqual(MOCK_PLUGIN_RECORD);
-    expect(allPayload.plugin.sortIndex).toBe(2);
+    expect(mockEmitToAll).not.toHaveBeenCalled();
+  });
+
+  it("update failed：回傳 i18n 錯誤而非 raw clone operation", async () => {
+    mockUpdatePlugin.mockResolvedValue({
+      success: false,
+      error: "update clone plugin owner/repo",
+    });
+
+    await handlePluginUpdate(
+      CONNECTION_ID,
+      { requestId: REQUEST_ID, pluginId: "owner/repo" },
+      REQUEST_ID,
+    );
+
+    expect(mockEmitToConnection).toHaveBeenCalledOnce();
+    const [, event, payload] = mockEmitToConnection.mock.calls[0];
+    expect(event).toBe(WebSocketResponseEvents.PLUGIN_UPDATED);
+    expect(payload).toMatchObject({
+      requestId: REQUEST_ID,
+      success: false,
+      code: "PLUGIN_UPDATE_FAILED",
+      error: {
+        key: "errors.pluginUpdateFailed",
+        params: {
+          pluginId: "owner/repo",
+          reason: "update clone plugin owner/repo",
+        },
+      },
+    });
+  });
+});
+
+describe("handlePluginReorder", () => {
+  it("success：呼叫 managedPluginStore.reorder，回傳確認後 plugins 清單", async () => {
+    mockManagedPluginReorder.mockReturnValue({
+      success: true,
+      data: [MOCK_PLUGIN_RECORD],
+    });
+
+    await handlePluginReorder(
+      CONNECTION_ID,
+      { requestId: REQUEST_ID, pluginIds: ["owner/repo"] },
+      REQUEST_ID,
+    );
+
+    expect(mockManagedPluginReorder).toHaveBeenCalledWith(["owner/repo"]);
+    expect(mockEmitToConnection).toHaveBeenCalledOnce();
+    const [connId, event, payload] = mockEmitToConnection.mock.calls[0];
+    expect(connId).toBe(CONNECTION_ID);
+    expect(event).toBe(WebSocketResponseEvents.PLUGIN_REORDERED);
+    expect(payload).toEqual({
+      requestId: REQUEST_ID,
+      success: true,
+      plugins: [MOCK_PLUGIN_RECORD],
+    });
+    expect(mockEmitToAll).not.toHaveBeenCalled();
+  });
+
+  it("not found：PLUGIN_NOT_FOUND 應回 NOT_FOUND 合約", async () => {
+    mockManagedPluginReorder.mockReturnValue({
+      success: false,
+      error: "PLUGIN_NOT_FOUND",
+    });
+
+    await handlePluginReorder(
+      CONNECTION_ID,
+      { requestId: REQUEST_ID, pluginIds: ["missing-plugin"] },
+      REQUEST_ID,
+    );
+
+    expect(mockEmitToConnection).toHaveBeenCalledOnce();
+    const [, event, payload] = mockEmitToConnection.mock.calls[0];
+    expect(event).toBe(WebSocketResponseEvents.PLUGIN_REORDERED);
+    expect(payload.success).toBe(false);
+    expect(payload.code).toBe("NOT_FOUND");
+    expect(payload.requestId).toBe(REQUEST_ID);
+  });
+
+  it("duplicate/invalid reorder：非 not found 錯誤應回 INVALID_PLUGIN_REORDER 合約", async () => {
+    mockManagedPluginReorder.mockReturnValue({
+      success: false,
+      error: "PLUGIN_REORDER_DUPLICATE_IDS",
+    });
+
+    await handlePluginReorder(
+      CONNECTION_ID,
+      { requestId: REQUEST_ID, pluginIds: ["owner/repo", "owner/repo"] },
+      REQUEST_ID,
+    );
+
+    expect(mockEmitToConnection).toHaveBeenCalledOnce();
+    const [, event, payload] = mockEmitToConnection.mock.calls[0];
+    expect(event).toBe(WebSocketResponseEvents.PLUGIN_REORDERED);
+    expect(payload).toMatchObject({
+      requestId: REQUEST_ID,
+      success: false,
+      error: "PLUGIN_REORDER_DUPLICATE_IDS",
+      code: "INVALID_PLUGIN_REORDER",
+    });
   });
 });

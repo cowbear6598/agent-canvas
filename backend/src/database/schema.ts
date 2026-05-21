@@ -78,6 +78,9 @@ function createBaseTables(db: Database): void {
       "PRIMARY KEY (pod_id, plugin_id)" +
       ")",
   );
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_pod_plugin_ids_plugin_id ON pod_plugin_ids(plugin_id)",
+  );
 
   db.exec(
     "CREATE TABLE IF NOT EXISTS connections (" +

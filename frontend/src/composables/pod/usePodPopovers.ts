@@ -1,6 +1,6 @@
 import { type Ref, ref } from "vue";
 
-export interface UsePodPopoversReturn {
+interface UsePodPopoversReturn {
   showPluginPopover: Ref<boolean>;
   pluginAnchorRect: Ref<DOMRect | null>;
   handlePluginClick: (event: MouseEvent) => void;

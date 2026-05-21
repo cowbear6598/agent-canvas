@@ -18,6 +18,8 @@ interface Props {
   open: boolean;
 }
 
+const DRAG_ANIMATION_MS = 180;
+
 const props = defineProps<Props>();
 
 const emit = defineEmits<{
@@ -145,7 +147,6 @@ watch(
         </DialogDescription>
       </DialogHeader>
 
-      <!-- 安裝輸入區 -->
       <div class="flex flex-col gap-2">
         <div class="flex gap-2">
           <input
@@ -171,10 +172,8 @@ watch(
         </p>
       </div>
 
-      <!-- Plugin 清單區 -->
       <ScrollArea class="max-h-[50vh] pr-3">
         <div class="flex flex-col gap-2">
-          <!-- 載入中狀態 -->
           <div
             v-if="store.loading && store.plugins.length === 0"
             class="py-8 text-center text-sm text-muted-foreground"
@@ -182,7 +181,6 @@ watch(
             載入中...
           </div>
 
-          <!-- 空狀態 -->
           <div
             v-else-if="!store.loading && store.plugins.length === 0"
             class="py-8 text-center text-sm text-muted-foreground"
@@ -190,12 +188,11 @@ watch(
             尚未安裝任何 plugin
           </div>
 
-          <!-- Plugin 列表 -->
           <VueDraggable
             v-else
             v-model="draggablePlugins"
             handle=".managed-plugin-card__handle"
-            :animation="180"
+            :animation="DRAG_ANIMATION_MS"
             :disabled="isListMutationDisabled"
             ghost-class="sortable-ghost"
             chosen-class="sortable-chosen"
@@ -257,7 +254,6 @@ watch(
     </DialogContent>
   </Dialog>
 
-  <!-- 刪除確認對話框 -->
   <Dialog
     :open="showConfirmDialog"
     @update:open="cancelDelete"
