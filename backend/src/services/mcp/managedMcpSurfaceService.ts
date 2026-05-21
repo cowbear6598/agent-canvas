@@ -19,6 +19,11 @@
 import { buildGoalRuntimeMcpServerConfig } from "../goalRuntime.js";
 import { buildInternalSelfSpawn } from "../../utils/internalSelfSpawn.js";
 import { buildPluginMcpEntry } from "../plugin/pluginMcpEntryBuilder.js";
+import { integrationRegistry } from "../integration/integrationRegistry.js";
+import {
+  buildReplyContextKey,
+  replyContextStore,
+} from "../integration/replyContextStore.js";
 import {
   buildPluginSkillCatalog,
   type PluginSkillCatalogEntry,
@@ -163,7 +168,13 @@ export class ManagedMcpSurfaceService {
   async buildPodMcpEntries(
     pod: Pick<
       Pod,
-      "id" | "name" | "provider" | "goal" | "mcpServerNames" | "pluginIds"
+      | "id"
+      | "name"
+      | "provider"
+      | "goal"
+      | "mcpServerNames"
+      | "pluginIds"
+      | "integrationBindings"
     >,
     runContext: RunContext | null,
   ): Promise<PodMcpEntriesResult> {
@@ -195,6 +206,10 @@ export class ManagedMcpSurfaceService {
     // catalog 則僅在實際有 pluginIds 時才掃描（buildPluginSkillCatalog 內部對空陣列直接回 []）。
     entries.push(buildPluginMcpEntry(pod.id));
     const pluginCatalog = await buildPluginSkillCatalog(pod.pluginIds);
+
+    for (const entry of buildIntegrationReplyMcpEntries(pod, runContext)) {
+      entries.push(entry);
+    }
 
     for (const record of records) {
       entries.push(buildPodMcpEntry(record, provider));
@@ -285,6 +300,52 @@ export class ManagedMcpSurfaceService {
 
     return { records, ignoredTargets };
   }
+}
+
+function buildIntegrationReplyMcpEntries(
+  pod: Pick<Pod, "id" | "provider" | "integrationBindings">,
+  runContext: RunContext | null,
+): PodMcpEntry[] {
+  // Claude already injects SDK in-process reply tools in buildClaudeOptions.
+  // Non-Claude providers need stdio MCP entries because they cannot consume
+  // Claude SDK tool closures.
+  if (pod.provider === "claude" || !pod.integrationBindings?.length) {
+    return [];
+  }
+
+  const replyContext =
+    runContext !== null
+      ? replyContextStore.get(buildReplyContextKey(runContext, pod.id))
+      : undefined;
+  const spawn = buildInternalSelfSpawn("--integration-reply-bridge");
+  const entries: PodMcpEntry[] = [];
+
+  for (const binding of pod.integrationBindings) {
+    const provider = integrationRegistry.get(binding.provider);
+    if (!provider?.sendMessage) continue;
+
+    entries.push({
+      name: `${binding.provider}-reply`,
+      transport: "stdio",
+      command: spawn.command,
+      args: spawn.args,
+      env: {
+        AGENT_CANVAS_INTEGRATION_REPLY_PROVIDER: binding.provider,
+        AGENT_CANVAS_INTEGRATION_REPLY_APP_ID: binding.appId,
+        AGENT_CANVAS_INTEGRATION_REPLY_RESOURCE_ID: binding.resourceId,
+        AGENT_CANVAS_INTEGRATION_REPLY_EXTRA: JSON.stringify(
+          binding.extra ?? {},
+        ),
+        AGENT_CANVAS_INTEGRATION_REPLY_CONTEXT: JSON.stringify(
+          replyContext ?? {},
+        ),
+      },
+      cwd: null,
+      proxied: false,
+    });
+  }
+
+  return entries;
 }
 
 export function createManagedMcpSurfaceService(

@@ -311,9 +311,14 @@ class SlackProvider implements IntegrationProvider {
     text: string,
     extra?: Record<string, unknown>,
   ): Promise<Result<void>> {
-    const client = this.clients.get(appId);
+    let client = this.clients.get(appId);
     if (!client) {
-      return err(`Slack App ${appId} 尚未初始化`);
+      const app = integrationAppStore.getById(appId);
+      const botToken = app?.config["botToken"];
+      if (typeof botToken !== "string") {
+        return err(`Slack App ${appId} 尚未初始化`);
+      }
+      client = new WebClient(botToken);
     }
 
     const senderId =

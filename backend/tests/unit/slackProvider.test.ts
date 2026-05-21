@@ -6,13 +6,15 @@ const { mockPostMessage } = vi.hoisted(() => ({
 }));
 
 vi.mock('@slack/web-api', () => ({
-    WebClient: vi.fn().mockImplementation(() => ({
-        auth: { test: vi.fn().mockResolvedValue({ user_id: 'U_BOT' }) },
-        chat: { postMessage: mockPostMessage },
-        conversations: {
-            list: vi.fn().mockResolvedValue({ channels: [], response_metadata: { next_cursor: '' } }),
-        },
-    })),
+    WebClient: vi.fn().mockImplementation(function () {
+        return {
+            auth: { test: vi.fn().mockResolvedValue({ user_id: 'U_BOT' }) },
+            chat: { postMessage: mockPostMessage },
+            conversations: {
+                list: vi.fn().mockResolvedValue({ channels: [], response_metadata: { next_cursor: '' } }),
+            },
+        };
+    }),
 }));
 
 vi.mock('../../src/services/integration/integrationAppStore.js', () => ({
@@ -456,6 +458,7 @@ describe('SlackProvider - sendMessage', () => {
     beforeEach(() => {
         mockPostMessage.mockClear();
         mockPostMessage.mockResolvedValue({ ok: true });
+        asMock(integrationAppStore.getById).mockReturnValue(undefined);
     });
 
     it('有 senderId 且格式合法時在 text 前加上 <@senderId>', async () => {

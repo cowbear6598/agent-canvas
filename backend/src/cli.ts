@@ -487,6 +487,13 @@ async function main(): Promise<void> {
     await runManagedMcpProxyBridge();
     return;
   }
+  if (flags["integration-reply-bridge"]) {
+    const { runIntegrationReplyMcpBridge } = await import(
+      "./services/integration/integrationReplyMcpBridge.js"
+    );
+    await runIntegrationReplyMcpBridge();
+    return;
+  }
 
   if (flags.daemon) {
     await runDaemon(flags);

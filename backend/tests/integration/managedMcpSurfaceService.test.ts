@@ -11,8 +11,26 @@ import {
   createManagedMcpSurfaceService,
   type PodMcpEntry,
 } from "../../src/services/mcp/managedMcpSurfaceService.js";
+import { integrationRegistry } from "../../src/services/integration/integrationRegistry.js";
+import type { IntegrationProvider } from "../../src/services/integration/types.js";
 import type { Pod } from "../../src/types/pod.js";
 import type { RunContext } from "../../src/types/run.js";
+
+if (!integrationRegistry.get("slack")) {
+  integrationRegistry.register({
+    name: "slack",
+    displayName: "Slack",
+    sendMessage: vi.fn(),
+    createAppSchema: {} as IntegrationProvider["createAppSchema"],
+    validateCreate: vi.fn(),
+    sanitizeConfig: vi.fn(),
+    initialize: vi.fn(),
+    destroy: vi.fn(),
+    destroyAll: vi.fn(),
+    refreshResources: vi.fn(),
+    formatEventMessage: vi.fn(),
+  } as IntegrationProvider);
+}
 
 // agent_canvas_plugin entry 永遠被 buildPodMcpEntries 注入；在不關心該 entry 的測試中過濾掉
 function withoutPluginEntry(entries: PodMcpEntry[]): PodMcpEntry[] {
@@ -24,11 +42,18 @@ function createPod(
     Pick<
       Pod,
       "id" | "name" | "provider" | "goal" | "mcpServerNames" | "pluginIds"
+      | "integrationBindings"
     >
   > = {},
 ): Pick<
   Pod,
-  "id" | "name" | "provider" | "goal" | "mcpServerNames" | "pluginIds"
+  | "id"
+  | "name"
+  | "provider"
+  | "goal"
+  | "mcpServerNames"
+  | "pluginIds"
+  | "integrationBindings"
 > {
   return {
     id: overrides.id ?? "pod-1",
@@ -37,6 +62,7 @@ function createPod(
     goal: overrides.goal ?? null,
     mcpServerNames: overrides.mcpServerNames ?? [],
     pluginIds: overrides.pluginIds ?? [],
+    integrationBindings: overrides.integrationBindings ?? [],
   };
 }
 
@@ -189,6 +215,123 @@ describe("ManagedMcpSurfaceService.buildPodMcpEntries", () => {
         url: "https://example.com/mcp",
       },
     ]);
+  });
+
+  it("Codex pod 綁定 Slack integration 時應注入 slack-reply stdio MCP entry", async () => {
+    const probe: McpProbe = { probe: vi.fn().mockResolvedValue(undefined) };
+    const runtimeService = createManagedMcpRuntimeService({
+      store: managedMcpStore,
+      probe,
+    });
+    const surfaceService = createManagedMcpSurfaceService({
+      store: managedMcpStore,
+      runtimeService,
+    });
+
+    const pod = createPod({
+      id: "pod-codex-slack",
+      provider: "codex",
+      integrationBindings: [
+        {
+          provider: "slack",
+          appId: "app-slack",
+          resourceId: "C123456",
+          extra: { custom: "value" },
+        },
+      ],
+    });
+    const result = await surfaceService.buildPodMcpEntries(pod, null);
+
+    const slackReply = result.entries.find(
+      (entry) => entry.name === "slack-reply",
+    );
+    expect(slackReply).toMatchObject({
+      name: "slack-reply",
+      transport: "stdio",
+      proxied: false,
+      env: {
+        AGENT_CANVAS_INTEGRATION_REPLY_PROVIDER: "slack",
+        AGENT_CANVAS_INTEGRATION_REPLY_APP_ID: "app-slack",
+        AGENT_CANVAS_INTEGRATION_REPLY_RESOURCE_ID: "C123456",
+        AGENT_CANVAS_INTEGRATION_REPLY_EXTRA: JSON.stringify({
+          custom: "value",
+        }),
+      },
+    });
+    if (slackReply?.transport === "stdio") {
+      expect(slackReply.args).toContain("--integration-reply-bridge");
+    }
+  });
+
+  it("Opencode pod 綁定 Slack integration 時應注入 slack-reply stdio MCP entry", async () => {
+    const probe: McpProbe = { probe: vi.fn().mockResolvedValue(undefined) };
+    const runtimeService = createManagedMcpRuntimeService({
+      store: managedMcpStore,
+      probe,
+    });
+    const surfaceService = createManagedMcpSurfaceService({
+      store: managedMcpStore,
+      runtimeService,
+    });
+
+    const pod = createPod({
+      id: "pod-opencode-slack",
+      provider: "opencode",
+      integrationBindings: [
+        {
+          provider: "slack",
+          appId: "app-slack",
+          resourceId: "C123456",
+        },
+      ],
+    });
+    const result = await surfaceService.buildPodMcpEntries(pod, null);
+
+    const slackReply = result.entries.find(
+      (entry) => entry.name === "slack-reply",
+    );
+    expect(slackReply).toMatchObject({
+      name: "slack-reply",
+      transport: "stdio",
+      proxied: false,
+      env: {
+        AGENT_CANVAS_INTEGRATION_REPLY_PROVIDER: "slack",
+        AGENT_CANVAS_INTEGRATION_REPLY_APP_ID: "app-slack",
+        AGENT_CANVAS_INTEGRATION_REPLY_RESOURCE_ID: "C123456",
+      },
+    });
+    if (slackReply?.transport === "stdio") {
+      expect(slackReply.args).toContain("--integration-reply-bridge");
+    }
+  });
+
+  it("Claude pod 綁定 Slack integration 時不重複注入 stdio reply entry", async () => {
+    const probe: McpProbe = { probe: vi.fn().mockResolvedValue(undefined) };
+    const runtimeService = createManagedMcpRuntimeService({
+      store: managedMcpStore,
+      probe,
+    });
+    const surfaceService = createManagedMcpSurfaceService({
+      store: managedMcpStore,
+      runtimeService,
+    });
+
+    const pod = createPod({
+      id: "pod-claude-slack",
+      provider: "claude",
+      integrationBindings: [
+        {
+          provider: "slack",
+          appId: "app-slack",
+          resourceId: "C123456",
+        },
+      ],
+    });
+    const result = await surfaceService.buildPodMcpEntries(pod, null);
+
+    expect(result.entries.some((entry) => entry.name === "slack-reply")).toBe(
+      false,
+    );
   });
 
   it("Opencode pod 勾 sse target → 原生 sse entry（opencode 原生支援）", async () => {
