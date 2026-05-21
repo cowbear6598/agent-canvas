@@ -12,6 +12,9 @@ node_modules/
 # OS
 .DS_Store
 
+# Build output
+/dist/
+
 # 自動生成的 VFS 模組（compile 時產生，不應提交）
 backend/src/generated/vfs.ts
 
