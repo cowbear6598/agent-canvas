@@ -151,9 +151,9 @@ describe("ManagedMcpSurfaceService.buildPodMcpEntries", () => {
         AGENT_CANVAS_MCP_PROXY_URL: "https://example.com/mcp",
       },
     });
-    // bridge args 應指向 managedMcpProxyBridge.ts
+    // bridge args 應帶上 internal flag，讓 cli.ts 進入 proxy 模式
     if (entry?.transport === "stdio") {
-      expect(entry.args[0]).toContain("managedMcpProxyBridge");
+      expect(entry.args).toContain("--mcp-proxy-bridge");
     }
   });
 

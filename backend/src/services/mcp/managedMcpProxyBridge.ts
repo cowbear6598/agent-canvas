@@ -6,6 +6,9 @@
  * 對下游 target 用其原生 transport（http / sse）建立連線，將 tools/list
  * 與 tools/call 原樣 passthrough（不改 tool 名）。
  *
+ * 由 cli.ts 在收到 --mcp-proxy-bridge flag 時呼叫 runManagedMcpProxyBridge()
+ * 進入；參數透過環境變數傳遞（AGENT_CANVAS_MCP_PROXY_NAME / _TRANSPORT / _URL）。
+ *
  * 設計差異 vs 已廢棄的 managedMcpSurfaceBridge：
  *   - 只代理「單一 target」而非 N 個（每個 target 自己一個 bridge process）
  *   - 不寫 state file / errors.json — 失敗只寫 stderr
@@ -68,7 +71,7 @@ async function connectUpstream(
   return client;
 }
 
-async function main(): Promise<void> {
+async function runBridgeMain(): Promise<void> {
   const { targetName, transport, url: urlString } = readEnv();
   const url = new URL(urlString);
 
@@ -121,9 +124,13 @@ async function main(): Promise<void> {
   await server.connect(stdio);
 }
 
-void main().catch((error) => {
-  console.error(
-    `[managed-mcp-proxy] bridge failed: ${error instanceof Error ? error.message : String(error)}`,
-  );
-  process.exit(1);
-});
+export async function runManagedMcpProxyBridge(): Promise<void> {
+  try {
+    await runBridgeMain();
+  } catch (error) {
+    console.error(
+      `[managed-mcp-proxy] bridge failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    process.exit(1);
+  }
+}

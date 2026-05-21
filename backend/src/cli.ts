@@ -552,6 +552,21 @@ const COMMAND_HANDLERS: Record<
 async function main(): Promise<void> {
   const { command, args, flags } = parseCommand(process.argv);
 
+  // Internal bridge dispatch — 由本 binary spawn 自己作為 MCP server child 時觸發。
+  // 必須早於使用者層級的子命令處理（不進 HELP_TEXT / COMMAND_HANDLERS）。
+  if (flags["goal-bridge"]) {
+    const { runGoalMcpBridge } =
+      await import("./services/mcp/goalMcpBridge.js");
+    runGoalMcpBridge();
+    return;
+  }
+  if (flags["mcp-proxy-bridge"]) {
+    const { runManagedMcpProxyBridge } =
+      await import("./services/mcp/managedMcpProxyBridge.js");
+    await runManagedMcpProxyBridge();
+    return;
+  }
+
   if (flags.daemon) {
     await runDaemon(flags);
     return;

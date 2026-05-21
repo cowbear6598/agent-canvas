@@ -1,9 +1,9 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { fileURLToPath } from "url";
 import type { GoalTodoItem, Pod, PodGoal } from "../types/pod.js";
 import type { RunContext } from "../types/run.js";
+import { buildInternalSelfSpawn } from "../utils/internalSelfSpawn.js";
 
 export type GoalRuntimeStatus = "running" | "blocked" | "completed";
 
@@ -106,7 +106,7 @@ export function normalizeGoalRuntimeState(
     state.activeTodoId &&
     remainingTodoIds.includes(state.activeTodoId)
       ? state.activeTodoId
-      : remainingTodoIds[0] ?? null;
+      : (remainingTodoIds[0] ?? null);
   const status: GoalRuntimeStatus =
     state.status === "blocked"
       ? "blocked"
@@ -174,7 +174,9 @@ export function completeGoalTodo(
   const todoMap = getGoalTodoMap(goal);
   if (!todoMap.has(targetTodoId)) return withUpdatedAt(normalizedState);
 
-  const completedTodoIds = normalizedState.completedTodoIds.includes(targetTodoId)
+  const completedTodoIds = normalizedState.completedTodoIds.includes(
+    targetTodoId,
+  )
     ? normalizedState.completedTodoIds
     : [...normalizedState.completedTodoIds, targetTodoId];
   const activeTodoId =
@@ -371,14 +373,6 @@ export function buildGoalRuntimeMcpListItem(
   return buildGoalRuntimeMcpMetadata(snapshot);
 }
 
-function getGoalMcpBridgePath(): string {
-  return path.join(
-    path.dirname(fileURLToPath(import.meta.url)),
-    "mcp",
-    "goalMcpBridge.ts",
-  );
-}
-
 export function buildGoalRuntimeMcpServerConfig(
   runContext: RunContext,
   pod: Pick<Pod, "id" | "name" | "goal">,
@@ -386,10 +380,11 @@ export function buildGoalRuntimeMcpServerConfig(
   const snapshot = ensureGoalRuntime(pod, runContext);
   if (!snapshot) return null;
 
+  const spawn = buildInternalSelfSpawn("--goal-bridge");
   return {
     name: GOAL_MCP_SERVER_NAME,
-    command: process.execPath || "bun",
-    args: [getGoalMcpBridgePath()],
+    command: spawn.command,
+    args: spawn.args,
     env: {
       AGENT_CANVAS_GOAL_STATE_PATH: getGoalRuntimeStatePath(runContext, pod.id),
     },

@@ -71,6 +71,12 @@ export class ChatExecutionStrategy {
   }
 
   persistMessage(podId: string, message: PersistedMessage): void {
+    // 若 run 不存在或已被標記為 cancelled，代表 deleteRun 正在進行中，
+    // 跳過寫 DB 以避免 FOREIGN KEY constraint failed。
+    const run = runStore.getRun(this.runContext.runId);
+    if (!run || run.status === "cancelled") {
+      return;
+    }
     runStore.upsertRunMessage(this.runContext.runId, podId, message);
   }
 

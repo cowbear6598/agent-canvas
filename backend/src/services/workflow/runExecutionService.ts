@@ -574,6 +574,13 @@ class RunExecutionService {
     status: RunPodInstanceStatus,
     options?: { evaluateRun?: boolean; errorMessage?: string },
   ): void {
+    // 若 run 不存在或已被標記為 cancelled，代表 deleteRun 正在進行中，
+    // 不寫 DB 以避免 FOREIGN KEY constraint failed（run row 即將被 DELETE）。
+    const run = runStore.getRun(runContext.runId);
+    if (!run || run.status === "cancelled") {
+      return;
+    }
+
     const instance = runStore.getPodInstance(runContext.runId, podId);
     if (!instance) {
       logger.warn(
@@ -798,6 +805,16 @@ class RunExecutionService {
   }
 
   async deleteRun(runId: string): Promise<void> {
+    const run = runStore.getRun(runId);
+    const canvasId = run?.canvasId ?? "";
+
+    // 先將 Run 標記為 cancelled（終態），讓背景仍在跑的 agent stream callback
+    // 在寫 DB 前能偵測到終態並提早返回，避免 FOREIGN KEY constraint failed。
+    // 必須在 abortRegistry.abort 與 deleteRun 之前執行。
+    if (run) {
+      runStore.updateRunStatus(runId, "cancelled");
+    }
+
     const activePodIds = this.activeRunStreams.get(runId);
     if (activePodIds) {
       for (const podId of activePodIds) {
@@ -815,9 +832,6 @@ class RunExecutionService {
       }
       this.activeRunStreams.delete(runId);
     }
-
-    const run = runStore.getRun(runId);
-    const canvasId = run?.canvasId ?? "";
 
     // 防禦性清理：處理 Run 中途被砍、或 evaluateRunStatus 清理失敗的情況
     await this.cleanupRunResources(runId);

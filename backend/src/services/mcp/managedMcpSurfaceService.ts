@@ -16,10 +16,8 @@
  * provider session 結束時自然回收，service 不維護任何 state file / handle map。
  */
 
-import path from "path";
-import { fileURLToPath } from "url";
-
 import { buildGoalRuntimeMcpServerConfig } from "../goalRuntime.js";
+import { buildInternalSelfSpawn } from "../../utils/internalSelfSpawn.js";
 import { buildPluginMcpEntry } from "../plugin/pluginMcpEntryBuilder.js";
 import {
   buildPluginSkillCatalog,
@@ -102,13 +100,6 @@ interface ManagedMcpSurfaceServiceDeps {
   runtimeService: ManagedMcpRuntimeService;
 }
 
-function getManagedMcpProxyBridgePath(): string {
-  return path.join(
-    path.dirname(fileURLToPath(import.meta.url)),
-    "managedMcpProxyBridge.ts",
-  );
-}
-
 /**
  * 將單一 registry record 轉成 provider-injectable entry。
  *
@@ -142,11 +133,12 @@ function buildPodMcpEntry(
   }
 
   // provider 不原生支援該 transport → 包 per-MCP proxy bridge
+  const spawn = buildInternalSelfSpawn("--mcp-proxy-bridge");
   return {
     name: entry.name,
     transport: "stdio",
-    command: process.execPath || "bun",
-    args: [getManagedMcpProxyBridgePath()],
+    command: spawn.command,
+    args: spawn.args,
     env: {
       AGENT_CANVAS_MCP_PROXY_NAME: entry.name,
       AGENT_CANVAS_MCP_PROXY_TRANSPORT: entry.transport,

@@ -8,6 +8,13 @@ import {
   writeGoalRuntimeSnapshot,
 } from "../goalRuntime.js";
 
+/**
+ * Goal Runtime stdio MCP bridge。
+ *
+ * 由 cli.ts 在收到 --goal-bridge flag 時呼叫 runGoalMcpBridge() 進入。
+ * 不能在 module top-level 直接執行（避免 cli.ts import 時搶 stdin）。
+ */
+
 type JsonRpcId = string | number | null;
 
 interface JsonRpcRequest {
@@ -25,7 +32,10 @@ interface JsonRpcResponse {
 }
 
 const protocolVersion = "2025-06-18";
-const statePath = process.env.AGENT_CANVAS_GOAL_STATE_PATH ?? "";
+
+function getStatePath(): string {
+  return process.env.AGENT_CANVAS_GOAL_STATE_PATH ?? "";
+}
 
 function writeMessage(message: JsonRpcResponse): void {
   process.stdout.write(`${JSON.stringify(message)}\n`);
@@ -48,6 +58,7 @@ function writeError(id: JsonRpcId, code: number, message: string): void {
 }
 
 function loadSnapshot(): ReturnType<typeof readGoalRuntimeSnapshot> {
+  const statePath = getStatePath();
   if (!statePath) return null;
   return readGoalRuntimeSnapshot(statePath);
 }
@@ -99,20 +110,16 @@ function handleCompleteGoalTodo(
 ): void {
   const snapshot = loadSnapshot();
   if (!snapshot) {
-    writeResult(
-      id,
-      {
-        ...toolTextResult({
-          error: "Goal Runtime 不存在",
-        }),
-        isError: true,
-      },
-    );
+    writeResult(id, {
+      ...toolTextResult({
+        error: "Goal Runtime 不存在",
+      }),
+      isError: true,
+    });
     return;
   }
 
-  const todoId =
-    typeof params?.todoId === "string" ? params.todoId : undefined;
+  const todoId = typeof params?.todoId === "string" ? params.todoId : undefined;
   const handoffSummary =
     typeof params?.handoffSummary === "string" ? params.handoffSummary : null;
 
@@ -126,7 +133,7 @@ function handleCompleteGoalTodo(
     ...snapshot,
     state: nextState,
   };
-  writeGoalRuntimeSnapshot(statePath, nextSnapshot);
+  writeGoalRuntimeSnapshot(getStatePath(), nextSnapshot);
   writeResult(id, toolTextResult(buildGoalRuntimeToolResult(nextSnapshot)));
 }
 
@@ -136,15 +143,12 @@ function handleBlockGoalProgress(
 ): void {
   const snapshot = loadSnapshot();
   if (!snapshot) {
-    writeResult(
-      id,
-      {
-        ...toolTextResult({
-          error: "Goal Runtime 不存在",
-        }),
-        isError: true,
-      },
-    );
+    writeResult(id, {
+      ...toolTextResult({
+        error: "Goal Runtime 不存在",
+      }),
+      isError: true,
+    });
     return;
   }
 
@@ -153,15 +157,12 @@ function handleBlockGoalProgress(
       ? params.blockedReason.trim()
       : "";
   if (!blockedReason) {
-    writeResult(
-      id,
-      {
-        ...toolTextResult({
-          error: "blockedReason 為必填",
-        }),
-        isError: true,
-      },
-    );
+    writeResult(id, {
+      ...toolTextResult({
+        error: "blockedReason 為必填",
+      }),
+      isError: true,
+    });
     return;
   }
 
@@ -172,7 +173,7 @@ function handleBlockGoalProgress(
     ...snapshot,
     state: blockGoalRuntime(snapshot.state, blockedReason, handoffSummary),
   };
-  writeGoalRuntimeSnapshot(statePath, nextSnapshot);
+  writeGoalRuntimeSnapshot(getStatePath(), nextSnapshot);
   writeResult(id, toolTextResult(buildGoalRuntimeToolResult(nextSnapshot)));
 }
 
@@ -307,34 +308,36 @@ function handleRequest(request: JsonRpcRequest): void {
   }
 }
 
-let buffer = "";
+export function runGoalMcpBridge(): void {
+  let buffer = "";
 
-process.stdin.setEncoding("utf-8");
-process.stdin.on("data", (chunk: string) => {
-  buffer += chunk;
-  const lines = buffer.split("\n");
-  buffer = lines.pop() ?? "";
+  process.stdin.setEncoding("utf-8");
+  process.stdin.on("data", (chunk: string) => {
+    buffer += chunk;
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
 
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
 
+      try {
+        handleRequest(JSON.parse(trimmed) as JsonRpcRequest);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        writeError(null, -32700, message);
+      }
+    }
+  });
+
+  process.stdin.on("end", () => {
+    const trimmed = buffer.trim();
+    if (!trimmed) return;
     try {
       handleRequest(JSON.parse(trimmed) as JsonRpcRequest);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       writeError(null, -32700, message);
     }
-  }
-});
-
-process.stdin.on("end", () => {
-  const trimmed = buffer.trim();
-  if (!trimmed) return;
-  try {
-    handleRequest(JSON.parse(trimmed) as JsonRpcRequest);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    writeError(null, -32700, message);
-  }
-});
+  });
+}

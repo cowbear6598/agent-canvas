@@ -9,7 +9,7 @@ import {
   sqliteIntToPathwayState,
 } from "../utils/pathwayHelpers.js";
 
-export type RunStatus = "running" | "completed" | "error";
+export type RunStatus = "running" | "completed" | "error" | "cancelled";
 export type RunPodInstanceStatus =
   | "pending"
   | "running"
@@ -48,7 +48,12 @@ export const TERMINAL_POD_STATUSES = new Set<RunPodInstanceStatus>([
   "skipped",
 ]);
 // Run 層級終態（不含 skipped，skipped 只存在於 pod 層級）
-export const RUN_TERMINAL_STATUSES = new Set<RunStatus>(["completed", "error"]);
+// cancelled：使用者主動刪除執行中的 Run，標記後立即 DELETE 以避免背景 callback 寫 DB
+export const RUN_TERMINAL_STATUSES = new Set<RunStatus>([
+  "completed",
+  "error",
+  "cancelled",
+]);
 
 export interface WorkflowRun {
   id: string;

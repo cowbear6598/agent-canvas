@@ -111,9 +111,7 @@ describe("goalRuntime", () => {
     expect(config).not.toBeNull();
     expect(config?.name).toBe(GOAL_MCP_SERVER_NAME);
     expect(config?.command.length).toBeGreaterThan(0);
-    expect(config?.args.some((arg) => arg.endsWith("goalMcpBridge.ts"))).toBe(
-      true,
-    );
+    expect(config?.args).toContain("--goal-bridge");
     expect(config?.env.AGENT_CANVAS_GOAL_STATE_PATH).toBe(
       getGoalRuntimeStatePath(runContext, pod.id),
     );

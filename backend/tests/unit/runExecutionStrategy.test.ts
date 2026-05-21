@@ -73,6 +73,11 @@ describe("ChatExecutionStrategy", () => {
 
     // spyOn runStore 需要預先存在的 run instance
     vi.spyOn(runStore, "getPodInstance").mockReturnValue(undefined);
+    // persistMessage 會先 getRun 檢查是否 cancelled；測試環境 mock 為 running run
+    vi.spyOn(runStore, "getRun").mockReturnValue({
+      id: RUN_ID,
+      status: "running",
+    } as ReturnType<typeof runStore.getRun>);
     vi.spyOn(runStore, "upsertRunMessage").mockImplementation(() => {});
     vi.spyOn(runStore, "updatePodInstanceSessionId").mockImplementation(
       () => {},

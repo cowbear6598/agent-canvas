@@ -214,6 +214,11 @@ describe("executeStreamingChat", () => {
       () => {},
     );
     vi.spyOn(runStore, "getPodInstance").mockReturnValue(undefined);
+    // persistMessage / injectRunUserMessage 會先 getRun 檢查是否 cancelled；
+    // 測試環境 mock 為 running run，避免 guard 直接 early return
+    vi.spyOn(runStore, "getRun").mockReturnValue({
+      status: "running",
+    } as ReturnType<typeof runStore.getRun>);
     vi.spyOn(runStore, "upsertRunMessage").mockImplementation(() => {});
     vi.spyOn(runStore, "updatePodInstanceSessionId").mockImplementation(
       () => {},
