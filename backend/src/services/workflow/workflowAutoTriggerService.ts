@@ -100,9 +100,8 @@ class WorkflowAutoTriggerService implements TriggerStrategy {
         isError: false,
       },
       runContext,
-      // Run mode 必須帶 delegate；否則 pipeline 會 fallback 到 normal mode 的
-      // hasActiveRunForPod 判定，把所有 pre-registered 的 pending instance 都當忙碌
-      delegate: runContext ? createStatusDelegate(runContext) : undefined,
+      // 唯一入口（chatCallbacks）一定帶 runContext，delegate 為必填
+      delegate: createStatusDelegate(runContext),
     };
 
     await this.pipeline.execute(pipelineContext, this);

@@ -6,7 +6,6 @@ export { workflowMultiInputService } from "./workflowMultiInputService.js";
 export { workflowDirectTriggerService } from "./workflowDirectTriggerService.js";
 export { branchDecisionService } from "./branchDecisionService.js";
 export { workflowBranchTriggerService } from "./workflowBranchTriggerService.js";
-export { workflowQueueService } from "./workflowQueueService.js";
 export { runQueueService } from "./runQueueService.js";
 export { workflowPipeline } from "./workflowPipeline.js";
 export { runExecutionService } from "./runExecutionService.js";
@@ -18,7 +17,6 @@ import { workflowBranchTriggerService } from "./workflowBranchTriggerService.js"
 import { workflowDirectTriggerService } from "./workflowDirectTriggerService.js";
 import { workflowMultiInputService } from "./workflowMultiInputService.js";
 import { workflowExecutionService } from "./workflowExecutionService.js";
-import { workflowQueueService } from "./workflowQueueService.js";
 import { runQueueService } from "./runQueueService.js";
 import { runExecutionService } from "./runExecutionService.js";
 import { workflowStateService } from "./workflowStateService.js";
@@ -37,7 +35,6 @@ export function initWorkflowServices(): void {
   workflowPipeline.init({
     executionService: workflowExecutionService,
     multiInputService: workflowMultiInputService,
-    queueService: workflowQueueService,
   });
 
   workflowAutoTriggerService.init({ pipeline: workflowPipeline });
@@ -54,11 +51,6 @@ export function initWorkflowServices(): void {
   });
 
   workflowMultiInputService.init({
-    executionService: workflowExecutionService,
-    strategies: sharedStrategies,
-  });
-
-  workflowQueueService.init({
     executionService: workflowExecutionService,
     strategies: sharedStrategies,
   });

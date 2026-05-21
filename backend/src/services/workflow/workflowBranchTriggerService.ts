@@ -286,6 +286,7 @@ class WorkflowBranchTriggerService
       triggerMode: "branch",
       decideResult,
       runContext,
+      delegate,
     };
 
     this.deps.pipeline

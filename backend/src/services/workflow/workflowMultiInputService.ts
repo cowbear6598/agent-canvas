@@ -16,7 +16,6 @@ import { runStore } from "../runStore.js";
 import { socketService } from "../socketService.js";
 import { connectionStore } from "../connectionStore.js";
 import { pendingTargetStore } from "../pendingTargetStore.js";
-import { workflowQueueService } from "./workflowQueueService.js";
 import { runQueueService } from "./runQueueService.js";
 import { workflowStateService } from "./workflowStateService.js";
 import { logger } from "../../utils/logger.js";
@@ -46,18 +45,17 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
     completedSummaries: Map<string, string>,
     mergedContent: string,
     triggerMode: AutoTriggerMode,
-    runContext?: RunContext,
+    runContext: RunContext,
   ): void {
     const targetPod = podStore.getById(canvasId, connection.targetPodId);
-    const channel = runContext ? "Run" : "Workflow";
     logger.log(
-      channel,
+      "Run",
       "Update",
       `目標 Pod "${targetPod?.name ?? connection.targetPodId}" 忙碌中，將合併的 workflow 加入佇列`,
     );
 
     const primarySourcePodId = Array.from(completedSummaries.keys())[0];
-    const enqueueItem = {
+    runQueueService.enqueue({
       canvasId,
       connectionId: connection.id,
       sourcePodId: primarySourcePodId,
@@ -66,13 +64,7 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
       isSummarized: true,
       triggerMode,
       runContext,
-    };
-
-    if (runContext) {
-      runQueueService.enqueue({ ...enqueueItem, runContext });
-    } else {
-      workflowQueueService.enqueue(enqueueItem);
-    }
+    });
 
     // 安全網：立即嘗試消化佇列，防止 enqueue 發生在最後一次 scheduleNextInQueue 之後導致佇列卡住
     const delegate = createStatusDelegate(runContext);
@@ -226,18 +218,7 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
     );
     if (!merged) return;
 
-    if (!runContext) {
-      if (runStore.hasActiveRunForPod(connection.targetPodId)) {
-        this.enqueueIfBusy(
-          canvasId,
-          connection,
-          merged.completedSummaries,
-          merged.mergedContent,
-          triggerMode,
-        );
-        return;
-      }
-    } else {
+    if (runContext) {
       const instance = runStore.getPodInstance(
         runContext.runId,
         connection.targetPodId,

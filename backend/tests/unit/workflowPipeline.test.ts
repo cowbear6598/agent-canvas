@@ -5,6 +5,7 @@ import { connectionStore } from "../../src/services/connectionStore.js";
 import { socketService } from "../../src/services/socketService.js";
 import { runStore } from "../../src/services/runStore.js";
 import { logger } from "../../src/utils/logger.js";
+import { createStatusDelegate } from "../../src/services/workflow/workflowStatusDelegate.js";
 import type {
   PipelineContext,
   TriggerStrategy,
@@ -99,6 +100,7 @@ describe("WorkflowPipeline", () => {
     connection: mockConnection,
     triggerMode: "auto",
     decideResult: { connectionId: CONNECTION_ID, approved: true, reason: null },
+    delegate: createStatusDelegate(),
   };
 
   const mockExecutionService = {
@@ -192,7 +194,7 @@ describe("WorkflowPipeline", () => {
         "sonnet",
         undefined,
         "auto",
-        undefined,
+        expect.any(Object),
       );
 
       expect(mockStrategy.collectSources).toHaveBeenCalledWith({
@@ -212,7 +214,7 @@ describe("WorkflowPipeline", () => {
         participatingConnectionIds: undefined,
         strategy: mockStrategy,
         runContext: undefined,
-        delegate: undefined,
+        delegate: expect.any(Object),
       });
     });
   });
@@ -252,6 +254,8 @@ describe("WorkflowPipeline", () => {
         isSummarized: true,
         participatingConnectionIds: undefined,
         strategy: mockStrategy,
+        runContext: undefined,
+        delegate: expect.any(Object),
       });
     });
 
@@ -314,6 +318,8 @@ describe("WorkflowPipeline", () => {
         isSummarized: true,
         participatingConnectionIds: undefined,
         strategy: mockStrategy,
+        runContext: undefined,
+        delegate: expect.any(Object),
       });
 
       const call = (mockExecutionService.triggerWorkflowWithSummary as any).mock
@@ -364,6 +370,8 @@ describe("WorkflowPipeline", () => {
         isSummarized: true,
         participatingConnectionIds: undefined,
         strategy: mockStrategy,
+        runContext: undefined,
+        delegate: expect.any(Object),
       });
     });
   });
@@ -398,6 +406,8 @@ describe("WorkflowPipeline", () => {
         isSummarized: true,
         participatingConnectionIds: undefined,
         strategy: mockStrategy,
+        runContext: undefined,
+        delegate: expect.any(Object),
       });
     });
 
@@ -430,6 +440,8 @@ describe("WorkflowPipeline", () => {
         isSummarized: true,
         participatingConnectionIds: undefined,
         strategy: mockStrategy,
+        runContext: undefined,
+        delegate: expect.any(Object),
       });
     });
   });
@@ -458,6 +470,7 @@ describe("WorkflowPipeline", () => {
     const runContextPipelineBase: PipelineContext = {
       ...baseContext,
       runContext,
+      delegate: createStatusDelegate(runContext),
     };
 
     function makeRunInstance(status: RunPodInstance["status"]): RunPodInstance {
@@ -678,6 +691,7 @@ describe("WorkflowPipeline", () => {
           approved: true,
           reason: null,
         },
+        delegate: createStatusDelegate(),
       };
 
       // podStore.getById：source pod 回 Codex pod，target pod 回原本的 mockTargetPod
@@ -778,6 +792,7 @@ describe("WorkflowPipeline", () => {
           approved: true,
           reason: null,
         },
+        delegate: createStatusDelegate(),
       };
 
       vi.spyOn(podStore, "getById").mockImplementation(
@@ -803,7 +818,7 @@ describe("WorkflowPipeline", () => {
         codexSummaryConnection.summaryModel,
         undefined,
         expect.any(String), // pathway
-        undefined,
+        expect.any(Object), // delegate
       );
     });
   });

@@ -111,7 +111,7 @@ export interface PipelineContext {
   triggerMode: TriggerMode;
   decideResult: TriggerDecideResult;
   runContext?: RunContext;
-  delegate?: WorkflowStatusDelegate;
+  delegate: WorkflowStatusDelegate;
 }
 
 export interface TriggerWorkflowWithSummaryParams {
@@ -170,22 +170,6 @@ export interface MultiInputServiceMethods {
   handleMultiInputForConnection(
     params: HandleMultiInputForConnectionParams,
   ): Promise<void>;
-}
-
-export interface QueueServiceMethods {
-  enqueue(item: {
-    canvasId: string;
-    connectionId: string;
-    sourcePodId: string;
-    targetPodId: string;
-    summary: string;
-    isSummarized: boolean;
-    triggerMode: TriggerMode;
-    participatingConnectionIds?: string[];
-    runContext?: RunContext;
-  }): { position: number; queueSize: number };
-
-  processNextInQueue(canvasId: string, targetPodId: string): Promise<void>;
 }
 
 export interface PipelineMethods {
