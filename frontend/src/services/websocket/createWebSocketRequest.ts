@@ -25,25 +25,164 @@ interface WebSocketResponse {
   error?: string | WebSocketErrorObject;
 }
 
-export interface PendingRequest<T = unknown> {
+interface PendingRequest<T = unknown> {
   requestId: string;
   resolve: (data: T) => void;
   reject: (error: Error) => void;
   timeoutId: ReturnType<typeof setTimeout>;
   responseEvent: string;
   timestamp: number;
+  matchResponse?: (response: T, requestId: string) => boolean;
 }
 
 const pendingRequests = new Map<string, PendingRequest>();
+const pendingRequestIdsByEvent = new Map<string, Set<string>>();
+const responseEventListeners = new Map<string, (response: unknown) => void>();
+
+const MESSAGE_ALLOWED_ERROR_CODES = new Set([
+  "alias_duplicate",
+  "alias_in_use",
+  "alias_not_found",
+  "invalid_ordered_ids",
+  "opencode_server_not_ready",
+  "opencode_provider_list_failed",
+  "opencode_restart_failed",
+]);
+
+function translateIfKnown(
+  key: string,
+  params?: Record<string, unknown>,
+): string | null {
+  const translated = t(key, params ?? {});
+  return translated === key ? null : translated;
+}
+
+function resolveErrorMessage(rawError: WebSocketResponse["error"]): string {
+  if (rawError && typeof rawError === "object") {
+    if (
+      typeof rawError.code === "string" &&
+      MESSAGE_ALLOWED_ERROR_CODES.has(rawError.code) &&
+      typeof rawError.message === "string"
+    ) {
+      return rawError.message;
+    }
+
+    if (typeof rawError.code === "string") {
+      return (
+        translateIfKnown(`websocket.errors.${rawError.code}`, rawError.params) ??
+        t("common.error.unknown")
+      );
+    }
+
+    if (typeof rawError.key === "string") {
+      return (
+        translateIfKnown(rawError.key, rawError.params) ??
+        t("common.error.unknown")
+      );
+    }
+  }
+
+  return t("common.error.unknown");
+}
+
+function removePendingRequest(requestId: string): PendingRequest | null {
+  const request = pendingRequests.get(requestId);
+  if (!request) return null;
+
+  pendingRequests.delete(requestId);
+  const eventRequestIds = pendingRequestIdsByEvent.get(request.responseEvent);
+  eventRequestIds?.delete(requestId);
+
+  if (eventRequestIds?.size === 0) {
+    pendingRequestIdsByEvent.delete(request.responseEvent);
+    const listener = responseEventListeners.get(request.responseEvent);
+    if (listener) {
+      websocketClient.off(request.responseEvent, listener);
+      responseEventListeners.delete(request.responseEvent);
+    }
+  }
+
+  return request;
+}
+
+function settlePendingRequest(requestId: string, response: unknown): boolean {
+  const request = removePendingRequest(requestId);
+  if (!request) return false;
+
+  clearTimeout(request.timeoutId);
+  const responseWithBase = response as WebSocketResponse;
+
+  if (responseWithBase.success === false) {
+    request.reject(new Error(resolveErrorMessage(responseWithBase.error)));
+    return true;
+  }
+
+  request.resolve(response);
+  return true;
+}
+
+function getResponseEventListener(
+  responseEvent: string,
+): (response: unknown) => void {
+  const existing = responseEventListeners.get(responseEvent);
+  if (existing) return existing;
+
+  const listener = (response: unknown): void => {
+    const responseWithBase = response as WebSocketResponse;
+    const directRequestId =
+      typeof responseWithBase.requestId === "string"
+        ? responseWithBase.requestId
+        : null;
+
+    if (directRequestId) {
+      const directRequest = pendingRequests.get(directRequestId);
+      if (directRequest?.responseEvent === responseEvent) {
+        settlePendingRequest(directRequestId, response);
+        return;
+      }
+    }
+
+    const eventRequestIds = pendingRequestIdsByEvent.get(responseEvent);
+    if (!eventRequestIds) return;
+
+    for (const pendingRequestId of Array.from(eventRequestIds)) {
+      const request = pendingRequests.get(pendingRequestId);
+      if (!request) continue;
+
+      const shouldMatch = request.matchResponse
+        ? request.matchResponse(response, pendingRequestId)
+        : responseWithBase.requestId === pendingRequestId;
+
+      if (shouldMatch) {
+        settlePendingRequest(pendingRequestId, response);
+        return;
+      }
+    }
+  };
+
+  responseEventListeners.set(responseEvent, listener);
+  websocketClient.on(responseEvent, listener);
+  return listener;
+}
+
+function registerPendingRequest(request: PendingRequest): void {
+  pendingRequests.set(request.requestId, request);
+
+  const eventRequestIds =
+    pendingRequestIdsByEvent.get(request.responseEvent) ?? new Set<string>();
+  eventRequestIds.add(request.requestId);
+  pendingRequestIdsByEvent.set(request.responseEvent, eventRequestIds);
+
+  getResponseEventListener(request.responseEvent);
+}
 
 export function tryResolvePendingRequest(
   requestId: string,
   data: unknown,
 ): boolean {
-  const request = pendingRequests.get(requestId);
+  const request = removePendingRequest(requestId);
   if (request) {
     clearTimeout(request.timeoutId);
-    pendingRequests.delete(requestId);
     request.resolve(data);
     return true;
   }
@@ -69,69 +208,26 @@ export async function createWebSocketRequest<
     }
 
     const requestId = generateRequestId();
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const timeoutId = setTimeout(() => {
+      removePendingRequest(requestId);
+      reject(new Error(t("websocket.requestTimeout", { event: requestEvent })));
+    }, timeout);
 
-    const handleResponse = (response: TResult): void => {
-      const responseWithBase = response as TResult & WebSocketResponse;
-
-      const shouldMatch = matchResponse
-        ? matchResponse(response, requestId)
-        : responseWithBase.requestId === requestId;
-
-      if (!shouldMatch) return;
-
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        timeoutId = null;
-      }
-
-      websocketClient.off(responseEvent, handleResponse);
-
-      if (responseWithBase.success === false) {
-        const rawError = responseWithBase.error;
-        let errorMessage: string;
-
-        if (
-          rawError &&
-          typeof rawError === "object" &&
-          typeof rawError.message === "string"
-        ) {
-          errorMessage = rawError.message;
-        } else if (
-          rawError &&
-          typeof rawError === "object" &&
-          typeof rawError.key === "string"
-        ) {
-          // 後端回傳 i18n key 格式的錯誤物件，翻譯後顯示
-          const translated = t(rawError.key, rawError.params ?? {});
-          // 若翻譯結果與 key 相同，代表找不到對應翻譯，退回通用錯誤訊息
-          errorMessage =
-            translated === rawError.key
-              ? t("common.error.unknown")
-              : translated;
-        } else if (typeof rawError === "string") {
-          errorMessage = rawError;
-        } else {
-          errorMessage = t("common.error.unknown");
-        }
-
-        reject(new Error(errorMessage));
-        return;
-      }
-
-      resolve(response);
-    };
-
-    websocketClient.on(responseEvent, handleResponse);
+    registerPendingRequest({
+      requestId,
+      resolve: resolve as (data: unknown) => void,
+      reject,
+      timeoutId,
+      responseEvent,
+      timestamp: Date.now(),
+      matchResponse: matchResponse as
+        | ((response: unknown, requestId: string) => boolean)
+        | undefined,
+    });
 
     websocketClient.emit(requestEvent, {
       ...payload,
       requestId,
     } as TPayload);
-
-    timeoutId = setTimeout(() => {
-      websocketClient.off(responseEvent, handleResponse);
-      reject(new Error(t("websocket.requestTimeout", { event: requestEvent })));
-    }, timeout);
   });
 }

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { createWebSocketRequest } from "@/services/websocket/createWebSocketRequest";
 import type { WebSocketRequestConfig } from "@/services/websocket/createWebSocketRequest";
+import { generateRequestId } from "@/services/utils";
 
 vi.mock("@/services/utils", () => ({
   generateRequestId: vi.fn(() => "test-request-id"),
@@ -30,6 +31,12 @@ vi.mock("@/services/websocket/WebSocketClient", () => {
   };
 });
 
+const CUSTOM_TIMEOUT_MS = 5_000;
+const DEFAULT_TIMEOUT_MS = 10_000;
+const BEFORE_DEFAULT_TIMEOUT_MS = DEFAULT_TIMEOUT_MS - 1;
+const RESPONSE_DELAY_MS = 2_000;
+const MISMATCHED_RESPONSE_DELAY_MS = 100;
+
 describe("createWebSocketRequest", () => {
   let mockModule: any;
   let capturedCallbacks: Map<string, Function>;
@@ -52,6 +59,7 @@ describe("createWebSocketRequest", () => {
 
   afterEach(() => {
     vi.clearAllTimers();
+    vi.useRealTimers();
   });
 
   describe("成功流程", () => {
@@ -140,6 +148,43 @@ describe("createWebSocketRequest", () => {
         result: "success",
       });
     });
+
+    it("相同 responseEvent 的並行 request 應共用 listener", async () => {
+      vi.mocked(generateRequestId)
+        .mockReturnValueOnce("request-1")
+        .mockReturnValueOnce("request-2");
+
+      const config: WebSocketRequestConfig<
+        { requestId: string; data: string },
+        { requestId: string; result: string }
+      > = {
+        requestEvent: "test:request",
+        responseEvent: "test:response",
+        payload: { data: "test" },
+      };
+
+      const firstPromise = createWebSocketRequest(config);
+      const secondPromise = createWebSocketRequest(config);
+
+      expect(mockOn).toHaveBeenCalledTimes(1);
+
+      const responseCallback = capturedCallbacks.get("test:response");
+      responseCallback?.({ requestId: "request-1", result: "first" });
+
+      await expect(firstPromise).resolves.toEqual({
+        requestId: "request-1",
+        result: "first",
+      });
+      expect(mockOff).not.toHaveBeenCalled();
+
+      responseCallback?.({ requestId: "request-2", result: "second" });
+
+      await expect(secondPromise).resolves.toEqual({
+        requestId: "request-2",
+        result: "second",
+      });
+      expect(mockOff).toHaveBeenCalledWith("test:response", responseCallback);
+    });
   });
 
   describe("失敗流程", () => {
@@ -162,7 +207,7 @@ describe("createWebSocketRequest", () => {
         error: "測試錯誤訊息",
       });
 
-      await expect(promise).rejects.toThrow("測試錯誤訊息");
+      await expect(promise).rejects.toThrow("未知錯誤");
     });
 
     it("應該在 success: false 但沒有 error 時使用預設錯誤訊息", async () => {
@@ -186,7 +231,7 @@ describe("createWebSocketRequest", () => {
       await expect(promise).rejects.toThrow("未知錯誤");
     });
 
-    it("應該在 error 物件含 message 時 reject Error(message)", async () => {
+    it("應該只讓白名單 error code 使用後端 message", async () => {
       const config: WebSocketRequestConfig<
         { requestId: string; data: string },
         {
@@ -208,11 +253,42 @@ describe("createWebSocketRequest", () => {
         success: false,
         error: {
           code: "alias_in_use",
-          message: "畫布「A」的 Pod「B」仍在使用中",
+          message: "無法刪除 alias，仍被目前設定使用中。",
         },
       });
 
-      await expect(promise).rejects.toThrow("畫布「A」的 Pod「B」仍在使用中");
+      await expect(promise).rejects.toThrow(
+        "無法刪除 alias，仍被目前設定使用中。",
+      );
+    });
+
+    it("非白名單 error code 不應直接顯示後端 message", async () => {
+      const config: WebSocketRequestConfig<
+        { requestId: string; data: string },
+        {
+          requestId: string;
+          success: boolean;
+          error: { code: string; message: string };
+        }
+      > = {
+        requestEvent: "test:request",
+        responseEvent: "test:response",
+        payload: { data: "test" },
+      };
+
+      const promise = createWebSocketRequest(config);
+
+      const responseCallback = capturedCallbacks.get("test:response");
+      responseCallback?.({
+        requestId: "test-request-id",
+        success: false,
+        error: {
+          code: "unknown_backend_error",
+          message: "內部堆疊與敏感資訊",
+        },
+      });
+
+      await expect(promise).rejects.toThrow("未知錯誤");
     });
 
     it("應該在失敗後清除 listener", async () => {
@@ -231,7 +307,7 @@ describe("createWebSocketRequest", () => {
       responseCallback?.({
         requestId: "test-request-id",
         success: false,
-        error: "測試錯誤",
+        error: { code: "alias_duplicate", message: "alias 已存在" },
       });
 
       await expect(promise).rejects.toThrow();
@@ -251,12 +327,12 @@ describe("createWebSocketRequest", () => {
         requestEvent: "test:request",
         responseEvent: "test:response",
         payload: { data: "test" },
-        timeout: 5000,
+        timeout: CUSTOM_TIMEOUT_MS,
       };
 
       const promise = createWebSocketRequest(config);
 
-      vi.advanceTimersByTime(5000);
+      vi.advanceTimersByTime(CUSTOM_TIMEOUT_MS);
 
       await expect(promise).rejects.toThrow("請求逾時：test:request");
 
@@ -273,14 +349,14 @@ describe("createWebSocketRequest", () => {
         requestEvent: "test:request",
         responseEvent: "test:response",
         payload: { data: "test" },
-        timeout: 5000,
+        timeout: CUSTOM_TIMEOUT_MS,
       };
 
       const promise = createWebSocketRequest(config);
 
       const responseCallback = capturedCallbacks.get("test:response");
 
-      vi.advanceTimersByTime(5000);
+      vi.advanceTimersByTime(CUSTOM_TIMEOUT_MS);
 
       await expect(promise).rejects.toThrow();
 
@@ -289,7 +365,7 @@ describe("createWebSocketRequest", () => {
       vi.useRealTimers();
     });
 
-    it("應該使用預設 timeout 10000ms", async () => {
+    it("應該使用預設 timeout", async () => {
       vi.useFakeTimers();
 
       const config: WebSocketRequestConfig<
@@ -303,10 +379,10 @@ describe("createWebSocketRequest", () => {
 
       const promise = createWebSocketRequest(config);
 
-      vi.advanceTimersByTime(9999);
+      vi.advanceTimersByTime(BEFORE_DEFAULT_TIMEOUT_MS);
       await Promise.resolve();
 
-      vi.advanceTimersByTime(1);
+      vi.advanceTimersByTime(DEFAULT_TIMEOUT_MS - BEFORE_DEFAULT_TIMEOUT_MS);
 
       await expect(promise).rejects.toThrow("請求逾時：test:request");
 
@@ -323,12 +399,12 @@ describe("createWebSocketRequest", () => {
         requestEvent: "test:request",
         responseEvent: "test:response",
         payload: { data: "test" },
-        timeout: 5000,
+        timeout: CUSTOM_TIMEOUT_MS,
       };
 
       const promise = createWebSocketRequest(config);
 
-      vi.advanceTimersByTime(2000);
+      vi.advanceTimersByTime(RESPONSE_DELAY_MS);
 
       const responseCallback = capturedCallbacks.get("test:response");
       responseCallback?.({ requestId: "test-request-id", result: "success" });
@@ -340,7 +416,7 @@ describe("createWebSocketRequest", () => {
         result: "success",
       });
 
-      vi.advanceTimersByTime(5000);
+      vi.advanceTimersByTime(CUSTOM_TIMEOUT_MS);
 
       vi.useRealTimers();
     });
@@ -379,7 +455,7 @@ describe("createWebSocketRequest", () => {
         requestEvent: "test:request",
         responseEvent: "test:response",
         payload: { data: "test" },
-        timeout: 5000,
+        timeout: CUSTOM_TIMEOUT_MS,
       };
 
       const promise = createWebSocketRequest(config);
@@ -387,9 +463,9 @@ describe("createWebSocketRequest", () => {
       const responseCallback = capturedCallbacks.get("test:response");
       responseCallback?.({ requestId: "wrong-request-id", result: "success" });
 
-      vi.advanceTimersByTime(100);
+      vi.advanceTimersByTime(MISMATCHED_RESPONSE_DELAY_MS);
 
-      vi.advanceTimersByTime(5000);
+      vi.advanceTimersByTime(CUSTOM_TIMEOUT_MS);
 
       await expect(promise).rejects.toThrow("請求逾時：test:request");
 

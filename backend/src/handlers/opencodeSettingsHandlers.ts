@@ -29,28 +29,98 @@ import {
   broadcastProviderList,
 } from "../services/provider/providerListBroadcaster.js";
 
-// ─── 廣播輔助：失敗時不向上傳遞例外 ──────────────────────────────────────────
+// ─── 廣播輔助：best-effort refresh，不影響已完成的 DB 操作 ─────────────────────
 
-async function safeBroadcast(): Promise<void> {
+async function broadcastRefreshBestEffort(): Promise<void> {
   try {
     await Promise.all([
       broadcastOpencodeAliasesUpdated(),
       broadcastProviderList(),
     ]);
   } catch (err) {
-    console.error("[opencodeSettingsHandlers] broadcast 失敗：", err);
+    console.error("[opencodeSettingsHandlers] best-effort refresh 廣播失敗：", err);
   }
 }
 
-// ─── handleOpencodeServerRestart ─────────────────────────────────────────────
+const OPENCODE_PROVIDER_LIST_TIMEOUT_MS = 10_000;
+
+function createTimeoutFetch(timeoutMs: number): typeof fetch {
+  const timeoutFetch = ((input, init) =>
+    fetch(input, {
+      ...init,
+      signal: AbortSignal.timeout(timeoutMs),
+    })) as typeof fetch;
+  timeoutFetch.preconnect = fetch.preconnect.bind(fetch);
+  return timeoutFetch;
+}
+
+function sanitizeOpencodeProviderModel(
+  model: unknown,
+  fallbackId?: string,
+): {
+  id: string;
+  name: string;
+} | null {
+  if (!model || typeof model !== "object") return null;
+  const rawModel = model as { id?: unknown; name?: unknown };
+  const id = typeof rawModel.id === "string" ? rawModel.id : fallbackId;
+  if (typeof id !== "string" || id.trim().length === 0) {
+    return null;
+  }
+
+  return {
+    id,
+    name: typeof rawModel.name === "string" ? rawModel.name : id,
+  };
+}
+
+function sanitizeOpencodeProvider(provider: unknown): {
+  id: string;
+  name: string;
+  models: { id: string; name: string }[];
+} | null {
+  if (!provider || typeof provider !== "object") return null;
+  const rawProvider = provider as {
+    id?: unknown;
+    name?: unknown;
+    models?: unknown;
+  };
+  if (
+    typeof rawProvider.id !== "string" ||
+    rawProvider.id.trim().length === 0
+  ) {
+    return null;
+  }
+
+  const rawModels = rawProvider.models;
+  const models = Array.isArray(rawModels)
+    ? rawModels.map((model) => sanitizeOpencodeProviderModel(model))
+    : rawModels && typeof rawModels === "object"
+      ? Object.entries(rawModels).map(([modelId, model]) =>
+          sanitizeOpencodeProviderModel(model, modelId),
+        )
+      : [];
+
+  return {
+    id: rawProvider.id,
+    name:
+      typeof rawProvider.name === "string" ? rawProvider.name : rawProvider.id,
+    models: models.filter((model) => model !== null),
+  };
+}
+
+function isSqliteUniqueConstraint(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    (err.message.includes("UNIQUE constraint failed") ||
+      (err as { code?: string }).code === "SQLITE_CONSTRAINT_UNIQUE")
+  );
+}
 
 /**
- * handleOpencodeServerRestart：重新啟動 opencode 子程序。
- *
  * 先呼叫 restartOpencodeServer()（stop → start），完成後取得最新 state：
  * - status === "ready" → 回傳 success=true
- * - 其他（"failed" 等）→ 回傳 success=false，error.code = opencode_restart_failed，
- *   error.message 取 failureReason，若無則使用預設說明文字。
+ * - 其他（"failed" 等）→ 回傳 success=false，error.code = opencode_restart_failed。
  */
 export async function handleOpencodeServerRestart(
   connectionId: string,
@@ -66,12 +136,16 @@ export async function handleOpencodeServerRestart(
   if (state.status === "ready") {
     response = { requestId, success: true };
   } else {
+    console.error("[handleOpencodeServerRestart] restart 失敗：", {
+      status: state.status,
+      failureReason: state.failureReason,
+    });
     response = {
       requestId,
       success: false,
       error: {
         code: "opencode_restart_failed",
-        message: state.failureReason ?? "opencode 重新啟動失敗",
+        message: "opencode 重新啟動失敗，請稍後再試",
       },
     };
   }
@@ -83,14 +157,10 @@ export async function handleOpencodeServerRestart(
   );
 }
 
-// ─── handleOpencodeProviderList ───────────────────────────────────────────────
-
 /**
- * handleOpencodeProviderList：轉發 opencode GET /provider，
- * 取得所有 provider 清單（all、default、connected）後回傳給前端。
- *
+ * 轉發 opencode GET /provider，取得 all/default/connected 後回傳前端需要的欄位。
  * - opencode server 尚未 ready → 回傳 success=false / opencode_server_not_ready
- * - ready → 呼叫 client.provider.list()，將 all / default / connected 原樣回傳
+ * - ready → 呼叫 client.provider.list()，只回傳 id/name/models.id/name
  */
 export async function handleOpencodeProviderList(
   connectionId: string,
@@ -118,18 +188,20 @@ export async function handleOpencodeProviderList(
   }
 
   try {
-    const client = createOpencodeClient({ baseUrl: serverState.baseUrl });
+    const client = createOpencodeClient({
+      baseUrl: serverState.baseUrl,
+      fetch: createTimeoutFetch(OPENCODE_PROVIDER_LIST_TIMEOUT_MS),
+    });
     const result = await client.provider.list();
 
     if (result.error) {
+      console.error("[handleOpencodeProviderList] SDK 回傳錯誤：", result.error);
       const response: OpencodeProviderListResultPayload = {
         requestId,
         success: false,
         error: {
           code: "opencode_provider_list_failed",
-          message:
-            (result.error as { message?: string })?.message ??
-            "取得 provider 清單失敗",
+          message: "取得 provider 清單失敗，請稍後再試",
         },
       };
       socketService.emitToConnection(
@@ -152,9 +224,13 @@ export async function handleOpencodeProviderList(
     const response: OpencodeProviderListResultPayload = {
       requestId,
       success: true,
-      all: data?.all ?? [],
+      all: (data?.all ?? [])
+        .map(sanitizeOpencodeProvider)
+        .filter((provider) => provider !== null),
       default: data?.default ?? {},
-      connected: data?.connected ?? [],
+      connected: (data?.connected ?? []).filter(
+        (providerId): providerId is string => typeof providerId === "string",
+      ),
     };
 
     socketService.emitToConnection(
@@ -169,7 +245,7 @@ export async function handleOpencodeProviderList(
       success: false,
       error: {
         code: "opencode_provider_list_failed",
-        message: err instanceof Error ? err.message : "取得 provider 清單失敗",
+        message: "取得 provider 清單失敗，請稍後再試",
       },
     };
     socketService.emitToConnection(
@@ -179,8 +255,6 @@ export async function handleOpencodeProviderList(
     );
   }
 }
-
-// ─── 輔助函式：將 DB row 轉換為 AliasItem ─────────────────────────────────────
 
 interface ModelAliasRow {
   id: string;
@@ -292,9 +366,12 @@ function findCurrentAliasUsages(modelValue: string): AliasUsage[] {
               p.provider_config_json AS provider_config_json
        FROM pods p
        INNER JOIN canvases c ON c.id = p.canvas_id
-       WHERE p.provider = 'opencode'`,
+       WHERE p.provider = 'opencode'
+         AND p.provider_config_json IS NOT NULL
+         AND json_valid(p.provider_config_json)
+         AND json_extract(p.provider_config_json, '$.model') = $modelValue`,
     )
-    .all() as PodAliasUsageRow[];
+    .all({ $modelValue: modelValue }) as PodAliasUsageRow[];
 
   for (const row of podRows) {
     if (getConfigModel(row.provider_config_json) === modelValue) {
@@ -322,9 +399,46 @@ function findCurrentAliasUsages(modelValue: string): AliasUsage[] {
        FROM connections conn
        INNER JOIN canvases c ON c.id = conn.canvas_id
        LEFT JOIN pods source_pod ON source_pod.id = conn.source_pod_id
-       LEFT JOIN pods target_pod ON target_pod.id = conn.target_pod_id`,
+       LEFT JOIN pods target_pod ON target_pod.id = conn.target_pod_id
+       WHERE (
+           conn.summary_model = $modelValue
+           AND (
+             conn.summary_provider = 'opencode'
+             OR (conn.summary_provider IS NULL AND source_pod.provider = 'opencode')
+           )
+         )
+         OR (
+           conn.trigger_mode = 'branch'
+           AND (
+             (conn.branch_provider = 'opencode' AND conn.branch_model = $modelValue)
+             OR (
+               conn.branch_provider IS NULL
+               AND conn.branch_model = $modelValue
+               AND source_pod.provider = 'opencode'
+               AND source_pod.provider_config_json IS NOT NULL
+               AND json_valid(source_pod.provider_config_json)
+               AND json_extract(source_pod.provider_config_json, '$.model') IS NOT NULL
+             )
+             OR (
+               conn.branch_provider = 'opencode'
+               AND conn.branch_model IS NULL
+               AND source_pod.provider = 'opencode'
+               AND source_pod.provider_config_json IS NOT NULL
+               AND json_valid(source_pod.provider_config_json)
+               AND json_extract(source_pod.provider_config_json, '$.model') = $modelValue
+             )
+             OR (
+               conn.branch_provider IS NULL
+               AND conn.branch_model IS NULL
+               AND source_pod.provider = 'opencode'
+               AND source_pod.provider_config_json IS NOT NULL
+               AND json_valid(source_pod.provider_config_json)
+               AND json_extract(source_pod.provider_config_json, '$.model') = $modelValue
+             )
+           )
+         )`,
     )
-    .all() as ConnectionAliasUsageRow[];
+    .all({ $modelValue: modelValue }) as ConnectionAliasUsageRow[];
 
   for (const row of connectionRows) {
     const summaryProvider =
@@ -353,16 +467,51 @@ function findCurrentAliasUsages(modelValue: string): AliasUsage[] {
   return usages;
 }
 
-function buildAliasInUseMessage(usages: AliasUsage[]): string {
-  const details = usages.map((usage) => usage.description).join("、");
-  return `無法刪除 alias，仍被目前設定使用中：${details}。請先改用其他模型後再刪除。`;
+function hasOtherAliasForRealModel(row: ModelAliasRow): boolean {
+  const db = getDb();
+  const result = db
+    .prepare(
+      `SELECT COUNT(*) AS count
+       FROM model_aliases
+       WHERE provider_id = 'opencode'
+         AND real_provider = $realProvider
+         AND real_model = $realModel
+         AND id != $id`,
+    )
+    .get({
+      $realProvider: row.real_provider,
+      $realModel: row.real_model,
+      $id: row.id,
+    }) as { count: number };
+
+  return result.count > 0;
 }
 
-// ─── handleOpencodeAliasesList ────────────────────────────────────────────────
+function logAliasInUseDetails(
+  action: "delete" | "update",
+  row: ModelAliasRow,
+  usages: AliasUsage[],
+): void {
+  console.warn("[opencodeSettingsHandlers] alias 使用中，已阻擋操作：", {
+    action,
+    aliasId: row.id,
+    realProvider: row.real_provider,
+    realModel: row.real_model,
+    usages: usages.map((usage) => ({
+      canvasName: usage.canvasName,
+      description: usage.description,
+    })),
+  });
+}
+
+function buildAliasInUseMessage(action: "delete" | "update"): string {
+  return action === "delete"
+    ? "無法刪除 alias，仍被目前設定使用中。請先改用其他模型後再刪除。"
+    : "無法更新 alias，原模型仍被目前設定使用中。請先改用其他模型後再更新。";
+}
 
 /**
- * handleOpencodeAliasesList：列出 provider_id="opencode" 的所有 alias，
- * 依 order_idx 升序回傳。
+ * 列出 provider_id="opencode" 的所有 alias，依 order_idx 升序回傳。
  */
 export async function handleOpencodeAliasesList(
   connectionId: string,
@@ -387,10 +536,7 @@ export async function handleOpencodeAliasesList(
   );
 }
 
-// ─── handleOpencodeAliasesCreate ─────────────────────────────────────────────
-
 /**
- * handleOpencodeAliasesCreate：新增一筆 alias。
  * - 自動產 uuid 為 id
  * - 查詢同 provider_id 內 max(order_idx) + 1 作為新 order_idx（首筆為 0）
  * - 整個 DB 操作包在 transaction 內，UNIQUE 衝突轉成結構化錯誤
@@ -456,15 +602,9 @@ export async function handleOpencodeAliasesCreate(
       response,
     );
 
-    await safeBroadcast();
+    await broadcastRefreshBestEffort();
   } catch (err) {
-    // UNIQUE 衝突轉成結構化錯誤
-    const isUnique =
-      err instanceof Error &&
-      (err.message.includes("UNIQUE constraint failed") ||
-        (err as { code?: string }).code === "SQLITE_CONSTRAINT_UNIQUE");
-
-    if (isUnique) {
+    if (isSqliteUniqueConstraint(err)) {
       const response: OpencodeAliasesCreateResultPayload = {
         requestId,
         success: false,
@@ -481,12 +621,9 @@ export async function handleOpencodeAliasesCreate(
   }
 }
 
-// ─── handleOpencodeAliasesUpdate ─────────────────────────────────────────────
-
 /**
- * handleOpencodeAliasesUpdate：更新指定 alias 的 alias 名稱與 real_model。
- * order_idx 由獨立的 reorder API 處理，本函式不會修改順序。
- * 完成後廣播。
+ * 更新指定 alias 的 alias 名稱與 real_model。
+ * order_idx 由獨立的 reorder API 處理，本函式不會修改順序；完成後廣播。
  */
 export async function handleOpencodeAliasesUpdate(
   connectionId: string,
@@ -496,18 +633,11 @@ export async function handleOpencodeAliasesUpdate(
   const stmts = getStmts();
   const now = Date.now();
 
-  stmts.modelAlias.updateAliasAndModelId.run({
-    $id: payload.id,
-    $alias: payload.alias,
-    $realModel: payload.modelID,
-    $updatedAt: now,
-  });
-
-  const updatedRow = stmts.modelAlias.selectById.get({
+  const existingRow = stmts.modelAlias.selectById.get({
     $id: payload.id,
   }) as ModelAliasRow | null;
 
-  if (!updatedRow) {
+  if (!existingRow) {
     const response: OpencodeAliasesUpdateResultPayload = {
       requestId,
       success: false,
@@ -524,27 +654,88 @@ export async function handleOpencodeAliasesUpdate(
     return;
   }
 
-  const response: OpencodeAliasesUpdateResultPayload = {
-    requestId,
-    success: true,
-    item: rowToAliasItem(updatedRow),
-  };
+  if (payload.modelID !== existingRow.real_model) {
+    const oldModelValue = `${existingRow.real_provider}/${existingRow.real_model}`;
+    const usages = findCurrentAliasUsages(oldModelValue);
+    if (usages.length > 0 && !hasOtherAliasForRealModel(existingRow)) {
+      logAliasInUseDetails("update", existingRow, usages);
+      const response: OpencodeAliasesUpdateResultPayload = {
+        requestId,
+        success: false,
+        error: {
+          code: "alias_in_use",
+          message: buildAliasInUseMessage("update"),
+        },
+      };
+      socketService.emitToConnection(
+        connectionId,
+        WebSocketResponseEvents.OPENCODE_ALIASES_UPDATE_RESULT,
+        response,
+      );
+      return;
+    }
+  }
 
-  socketService.emitToConnection(
-    connectionId,
-    WebSocketResponseEvents.OPENCODE_ALIASES_UPDATE_RESULT,
-    response,
-  );
+  try {
+    stmts.modelAlias.updateAliasAndModelId.run({
+      $id: payload.id,
+      $alias: payload.alias,
+      $realModel: payload.modelID,
+      $updatedAt: now,
+    });
 
-  await safeBroadcast();
+    const updatedRow = stmts.modelAlias.selectById.get({
+      $id: payload.id,
+    }) as ModelAliasRow | null;
+
+    if (!updatedRow) {
+      const response: OpencodeAliasesUpdateResultPayload = {
+        requestId,
+        success: false,
+        error: {
+          code: "alias_not_found",
+          message: "找不到指定的 alias，無法更新",
+        },
+      };
+      socketService.emitToConnection(
+        connectionId,
+        WebSocketResponseEvents.OPENCODE_ALIASES_UPDATE_RESULT,
+        response,
+      );
+      return;
+    }
+
+    const response: OpencodeAliasesUpdateResultPayload = {
+      requestId,
+      success: true,
+      item: rowToAliasItem(updatedRow),
+    };
+
+    socketService.emitToConnection(
+      connectionId,
+      WebSocketResponseEvents.OPENCODE_ALIASES_UPDATE_RESULT,
+      response,
+    );
+
+    await broadcastRefreshBestEffort();
+  } catch (err) {
+    if (isSqliteUniqueConstraint(err)) {
+      const response: OpencodeAliasesUpdateResultPayload = {
+        requestId,
+        success: false,
+        error: { code: "alias_duplicate", message: "alias 已存在" },
+      };
+      socketService.emitToConnection(
+        connectionId,
+        WebSocketResponseEvents.OPENCODE_ALIASES_UPDATE_RESULT,
+        response,
+      );
+    } else {
+      throw err;
+    }
+  }
 }
 
-// ─── handleOpencodeAliasesDelete ─────────────────────────────────────────────
-
-/**
- * handleOpencodeAliasesDelete：刪除指定 alias。
- * 完成後廣播。
- */
 export async function handleOpencodeAliasesDelete(
   connectionId: string,
   payload: OpencodeAliasesDeletePayload,
@@ -575,13 +766,14 @@ export async function handleOpencodeAliasesDelete(
 
   const modelValue = `${row.real_provider}/${row.real_model}`;
   const usages = findCurrentAliasUsages(modelValue);
-  if (usages.length > 0) {
+  if (usages.length > 0 && !hasOtherAliasForRealModel(row)) {
+    logAliasInUseDetails("delete", row, usages);
     const response: OpencodeAliasesDeleteResultPayload = {
       requestId,
       success: false,
       error: {
         code: "alias_in_use",
-        message: buildAliasInUseMessage(usages),
+        message: buildAliasInUseMessage("delete"),
       },
     };
     socketService.emitToConnection(
@@ -606,14 +798,12 @@ export async function handleOpencodeAliasesDelete(
     response,
   );
 
-  await safeBroadcast();
+  await broadcastRefreshBestEffort();
 }
 
-// ─── handleOpencodeAliasesReorder ────────────────────────────────────────────
-
 /**
- * handleOpencodeAliasesReorder：依陣列順序批次更新每個 id 的 order_idx。
- * 先查出現有 alias 名稱，再在單一 DB transaction 內更新所有 order_idx。
+ * 依陣列順序批次更新每個 id 的 order_idx。
+ * 先查出現有 alias id，再在單一 DB transaction 內批次更新所有 order_idx。
  * 成功後查出最新清單放進 result.items。
  * 完成後廣播。
  */
@@ -626,20 +816,19 @@ export async function handleOpencodeAliasesReorder(
   const stmts = getStmts();
   const now = Date.now();
 
-  // 先查出現有所有 row 以取得 alias 名稱（updateAliasAndOrderIdx 需要 alias 欄位）
+  // 先查出現有所有 row 以驗證 orderedIds 是否為完整排列
   const rows = stmts.modelAlias.selectByProviderId.all({
     $providerId: "opencode",
   }) as ModelAliasRow[];
-  const aliasMap = new Map(rows.map((r) => [r.id, r.alias]));
+  const aliasIds = new Set(rows.map((row) => row.id));
 
   // 驗證 orderedIds 必須是當前 DB alias id 的完整集合（長度與成員皆相等），
   // 否則殘缺/含未知 id 的 reorder 會在 DB 留下 order_idx 落差
-  const dbIds = new Set(aliasMap.keys());
   const payloadIds = new Set(payload.orderedIds);
   const isPermutation =
-    payload.orderedIds.length === dbIds.size &&
-    payloadIds.size === dbIds.size &&
-    payload.orderedIds.every((id) => dbIds.has(id));
+    payload.orderedIds.length === aliasIds.size &&
+    payloadIds.size === aliasIds.size &&
+    payload.orderedIds.every((id) => aliasIds.has(id));
 
   if (!isPermutation) {
     const response: OpencodeAliasesReorderResultPayload = {
@@ -658,20 +847,25 @@ export async function handleOpencodeAliasesReorder(
     return;
   }
 
-  // 在單一 transaction 內依陣列順序設定每個 id 的 order_idx
+  // 在單一 transaction 內以 CASE WHEN 批次設定 order_idx
   db.transaction(() => {
-    for (let i = 0; i < payload.orderedIds.length; i++) {
-      const id = payload.orderedIds[i];
-      const alias = aliasMap.get(id);
-      if (alias !== undefined) {
-        stmts.modelAlias.updateAliasAndOrderIdx.run({
-          $id: id,
-          $alias: alias,
-          $orderIdx: i,
-          $updatedAt: now,
-        });
-      }
-    }
+    if (payload.orderedIds.length === 0) return;
+
+    const caseClauses = payload.orderedIds.map(() => "WHEN ? THEN ?").join(" ");
+    const idPlaceholders = payload.orderedIds.map(() => "?").join(", ");
+    const params: Array<string | number> = [];
+    payload.orderedIds.forEach((id, orderIdx) => {
+      params.push(id, orderIdx);
+    });
+    params.push(now, "opencode", ...payload.orderedIds);
+
+    db.prepare(
+      `UPDATE model_aliases
+       SET order_idx = CASE id ${caseClauses} END,
+           updated_at = ?
+       WHERE provider_id = ?
+         AND id IN (${idPlaceholders})`,
+    ).run(...params);
   })();
 
   // commit 完成後查出最新清單
@@ -691,5 +885,5 @@ export async function handleOpencodeAliasesReorder(
     response,
   );
 
-  await safeBroadcast();
+  await broadcastRefreshBestEffort();
 }

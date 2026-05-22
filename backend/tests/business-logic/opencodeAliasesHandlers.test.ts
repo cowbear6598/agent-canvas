@@ -2,12 +2,11 @@
  * opencode aliases handlers 整合測試
  *
  * 涵蓋範圍：
- *   handleOpencodeAliasesList     - B1（list 空陣列）
- *   handleOpencodeAliasesCreate   - A1（wire-up smoke）、B1（create 後 list 查得到）、
- *                                   B2（UNIQUE 違反錯誤）、B6（廣播被呼叫一次）
- *   handleOpencodeAliasesUpdate   - B3（update 後 list 顯示新值）、B6（廣播被呼叫）
- *   handleOpencodeAliasesDelete   - B4（delete 後 list 少一筆）、B6（廣播被呼叫）
- *   handleOpencodeAliasesReorder  - B5（reorder 後 list 順序對應）、B6（廣播被呼叫）
+ *   handleOpencodeAliasesList
+ *   handleOpencodeAliasesCreate
+ *   handleOpencodeAliasesUpdate
+ *   handleOpencodeAliasesDelete
+ *   handleOpencodeAliasesReorder
  *
  * Mock 邊界：
  *   必須 mock：socketService（WebSocket boundary）、providerListBroadcaster（廣播函式）
@@ -66,7 +65,7 @@ import {
 const CONNECTION_ID = "conn-aliases-test";
 const REQUEST_ID = "req-aliases-test";
 
-// A1 wire-up smoke test 用：requestId 須為合法 UUID 才能通過 z.uuid() 驗證
+// requestId 須為合法 UUID 才能通過 z.uuid() 驗證
 const REQUEST_ID_UUID = "00000000-0000-4000-8000-000000000099";
 
 const USED_PROVIDER_ID = "anthropic";
@@ -200,14 +199,10 @@ describe("handleOpencodeAliasesList", () => {
 // ─── opencode:aliases:create ──────────────────────────────────────────────────
 
 describe("handleOpencodeAliasesCreate", () => {
-  /**
-   * A1：wire-up smoke test。
-   * 透過 handler group 找到 definition，使用 createValidatedHandler 走真實 zod parse，
-   * 確認 OPENCODE_ALIASES_CREATE 事件有正確對應的 handler 並能回傳 OPENCODE_ALIASES_CREATE_RESULT。
-   */
   it("A1（wire-up smoke）：透過 handler group 派發 OPENCODE_ALIASES_CREATE，回應 OPENCODE_ALIASES_CREATE_RESULT success=true", async () => {
     const handlerDef = opencodeSettingsHandlerGroup.handlers.find(
-      (h) => h.event === WebSocketRequestEvents.OPENCODE_ALIASES_CREATE,
+      (handler) =>
+        handler.event === WebSocketRequestEvents.OPENCODE_ALIASES_CREATE,
     );
     expect(handlerDef).toBeDefined();
 
@@ -238,7 +233,6 @@ describe("handleOpencodeAliasesCreate", () => {
   });
 
   it("B1：create 後 list 查得到新 row 且 orderIdx 為當前 max+1（首筆為 0）", async () => {
-    // 新增第一筆
     await handleOpencodeAliasesCreate(
       CONNECTION_ID,
       {
@@ -250,7 +244,6 @@ describe("handleOpencodeAliasesCreate", () => {
       REQUEST_ID,
     );
 
-    // 新增第二筆
     vi.clearAllMocks();
     await handleOpencodeAliasesCreate(
       CONNECTION_ID,
@@ -265,9 +258,8 @@ describe("handleOpencodeAliasesCreate", () => {
 
     const [, , createPayload] = mockEmitToConnection.mock.calls[0];
     expect(createPayload.success).toBe(true);
-    expect(createPayload.item.orderIdx).toBe(1); // 第二筆 orderIdx=1
+    expect(createPayload.item.orderIdx).toBe(1);
 
-    // list 驗證
     vi.clearAllMocks();
     await handleOpencodeAliasesList(
       CONNECTION_ID,
@@ -335,7 +327,6 @@ describe("handleOpencodeAliasesCreate", () => {
 
 describe("handleOpencodeAliasesUpdate", () => {
   it("B3：update 後 list 顯示新 alias 與 modelID（order_idx 保持不變）", async () => {
-    // 先建立一筆
     await handleOpencodeAliasesCreate(
       CONNECTION_ID,
       {
@@ -351,7 +342,6 @@ describe("handleOpencodeAliasesUpdate", () => {
     const createdId: string = createPayload.item.id;
     const originalOrderIdx: number = createPayload.item.orderIdx;
 
-    // 更新 alias 與 modelID
     vi.clearAllMocks();
     await handleOpencodeAliasesUpdate(
       CONNECTION_ID,
@@ -371,7 +361,6 @@ describe("handleOpencodeAliasesUpdate", () => {
     expect(updatePayload.item.modelID).toBe("claude-3-5-haiku");
     expect(updatePayload.item.orderIdx).toBe(originalOrderIdx);
 
-    // 驗證 list 也反映更新
     vi.clearAllMocks();
     await handleOpencodeAliasesList(
       CONNECTION_ID,
@@ -386,7 +375,6 @@ describe("handleOpencodeAliasesUpdate", () => {
   });
 
   it("B6：update 完成後廣播被呼叫一次", async () => {
-    // 先建立一筆
     await handleOpencodeAliasesCreate(
       CONNECTION_ID,
       {
@@ -415,13 +403,56 @@ describe("handleOpencodeAliasesUpdate", () => {
     expect(mockBroadcastOpencodeAliasesUpdated).toHaveBeenCalledOnce();
     expect(mockBroadcastProviderList).toHaveBeenCalledOnce();
   });
+
+  it("同 provider 同 alias update 回傳 alias_duplicate 結構化錯誤", async () => {
+    await handleOpencodeAliasesCreate(
+      CONNECTION_ID,
+      {
+        requestId: REQUEST_ID,
+        providerID: "anthropic",
+        modelID: "claude-3-5-sonnet",
+        alias: "AliasA",
+      },
+      REQUEST_ID,
+    );
+    const [, , firstCreatePayload] = mockEmitToConnection.mock.calls[0];
+    const firstId: string = firstCreatePayload.item.id;
+
+    await handleOpencodeAliasesCreate(
+      CONNECTION_ID,
+      {
+        requestId: REQUEST_ID,
+        providerID: "anthropic",
+        modelID: "claude-opus-4",
+        alias: "AliasB",
+      },
+      REQUEST_ID,
+    );
+
+    vi.clearAllMocks();
+    await handleOpencodeAliasesUpdate(
+      CONNECTION_ID,
+      {
+        requestId: REQUEST_ID,
+        id: firstId,
+        modelID: "claude-3-5-sonnet",
+        alias: "AliasB",
+      },
+      REQUEST_ID,
+    );
+
+    const [, , updatePayload] = mockEmitToConnection.mock.calls[0];
+    expect(updatePayload.success).toBe(false);
+    expect(updatePayload.error.code).toBe("alias_duplicate");
+    expect(updatePayload.error.message).toBe("alias 已存在");
+    expect(mockBroadcastOpencodeAliasesUpdated).not.toHaveBeenCalled();
+  });
 });
 
 // ─── opencode:aliases:delete ──────────────────────────────────────────────────
 
 describe("handleOpencodeAliasesDelete", () => {
   it("B4：delete 後 list 少一筆", async () => {
-    // 建立兩筆
     await handleOpencodeAliasesCreate(
       CONNECTION_ID,
       {
@@ -446,7 +477,6 @@ describe("handleOpencodeAliasesDelete", () => {
       REQUEST_ID,
     );
 
-    // 刪除第一筆
     vi.clearAllMocks();
     await handleOpencodeAliasesDelete(
       CONNECTION_ID,
@@ -459,7 +489,6 @@ describe("handleOpencodeAliasesDelete", () => {
     expect(deletePayload.success).toBe(true);
     expect(deletePayload.id).toBe(firstId);
 
-    // list 只剩一筆
     vi.clearAllMocks();
     await handleOpencodeAliasesList(
       CONNECTION_ID,
@@ -497,6 +526,39 @@ describe("handleOpencodeAliasesDelete", () => {
     expect(mockBroadcastProviderList).toHaveBeenCalledOnce();
   });
 
+  it("同一 real model 仍有其他 alias 時允許刪除其中一筆", async () => {
+    const firstAliasId = await createUsedAlias();
+    await handleOpencodeAliasesCreate(
+      CONNECTION_ID,
+      {
+        requestId: REQUEST_ID,
+        providerID: USED_PROVIDER_ID,
+        modelID: USED_MODEL_ID,
+        alias: "ReplacementAlias",
+      },
+      REQUEST_ID,
+    );
+    insertCanvas();
+    insertPod({
+      id: "pod-uses-shared-real-model",
+      name: "使用 shared real model 的 Pod",
+      provider: "opencode",
+      model: USED_MODEL_VALUE,
+    });
+
+    vi.clearAllMocks();
+    await handleOpencodeAliasesDelete(
+      CONNECTION_ID,
+      { requestId: REQUEST_ID, id: firstAliasId },
+      REQUEST_ID,
+    );
+
+    const [, , deletePayload] = mockEmitToConnection.mock.calls[0];
+    expect(deletePayload.success).toBe(true);
+    expect(deletePayload.id).toBe(firstAliasId);
+    expect(mockBroadcastOpencodeAliasesUpdated).toHaveBeenCalledOnce();
+  });
+
   it("不可刪除目前被 Pod 使用中的 opencode alias model", async () => {
     const aliasId = await createUsedAlias();
     insertCanvas();
@@ -518,8 +580,8 @@ describe("handleOpencodeAliasesDelete", () => {
     expect(event).toBe(WebSocketResponseEvents.OPENCODE_ALIASES_DELETE_RESULT);
     expect(deletePayload.success).toBe(false);
     expect(deletePayload.error.code).toBe("alias_in_use");
-    expect(deletePayload.error.message).toContain("模型使用測試畫布");
-    expect(deletePayload.error.message).toContain("使用 alias 的 Pod");
+    expect(deletePayload.error.message).not.toContain("模型使用測試畫布");
+    expect(deletePayload.error.message).not.toContain("使用 alias 的 Pod");
     expect(mockBroadcastOpencodeAliasesUpdated).not.toHaveBeenCalled();
 
     vi.clearAllMocks();
@@ -566,8 +628,8 @@ describe("handleOpencodeAliasesDelete", () => {
     const [, , deletePayload] = mockEmitToConnection.mock.calls[0];
     expect(deletePayload.success).toBe(false);
     expect(deletePayload.error.code).toBe("alias_in_use");
-    expect(deletePayload.error.message).toContain("來源 Pod → 目標 Pod");
-    expect(deletePayload.error.message).toContain("Branch");
+    expect(deletePayload.error.message).not.toContain("來源 Pod → 目標 Pod");
+    expect(deletePayload.error.message).not.toContain("Branch");
     expect(mockBroadcastOpencodeAliasesUpdated).not.toHaveBeenCalled();
   });
 
@@ -604,8 +666,119 @@ describe("handleOpencodeAliasesDelete", () => {
     const [, , deletePayload] = mockEmitToConnection.mock.calls[0];
     expect(deletePayload.success).toBe(false);
     expect(deletePayload.error.code).toBe("alias_in_use");
-    expect(deletePayload.error.message).toContain("摘要來源 Pod → 摘要目標 Pod");
-    expect(deletePayload.error.message).toContain("Summary");
+    expect(deletePayload.error.message).not.toContain("摘要來源 Pod → 摘要目標 Pod");
+    expect(deletePayload.error.message).not.toContain("Summary");
+    expect(mockBroadcastOpencodeAliasesUpdated).not.toHaveBeenCalled();
+  });
+
+  it("provider NULL 的 Summary connection 會 fallback source Pod provider 並阻擋刪除/更新", async () => {
+    const aliasId = await createUsedAlias();
+    insertCanvas();
+    insertPod({
+      id: "summary-fallback-source",
+      name: "Summary fallback source",
+      provider: "opencode",
+      model: USED_MODEL_VALUE,
+    });
+    insertPod({
+      id: "summary-fallback-target",
+      name: "Summary fallback target",
+      provider: "claude",
+      model: "sonnet",
+    });
+    insertConnection({
+      id: "summary-fallback-conn",
+      sourcePodId: "summary-fallback-source",
+      targetPodId: "summary-fallback-target",
+      summaryProvider: null,
+      summaryModel: USED_MODEL_VALUE,
+    });
+
+    vi.clearAllMocks();
+    await handleOpencodeAliasesDelete(
+      CONNECTION_ID,
+      { requestId: REQUEST_ID, id: aliasId },
+      REQUEST_ID,
+    );
+
+    let [, , payload] = mockEmitToConnection.mock.calls[0];
+    expect(payload.success).toBe(false);
+    expect(payload.error.code).toBe("alias_in_use");
+    expect(payload.error.message).not.toContain("Summary fallback source");
+    expect(mockBroadcastOpencodeAliasesUpdated).not.toHaveBeenCalled();
+
+    vi.clearAllMocks();
+    await handleOpencodeAliasesUpdate(
+      CONNECTION_ID,
+      {
+        requestId: REQUEST_ID,
+        id: aliasId,
+        modelID: "claude-3-5-haiku",
+        alias: "UpdatedAlias",
+      },
+      REQUEST_ID,
+    );
+
+    [, , payload] = mockEmitToConnection.mock.calls[0];
+    expect(payload.success).toBe(false);
+    expect(payload.error.code).toBe("alias_in_use");
+    expect(payload.error.message).not.toContain("Summary fallback source");
+    expect(mockBroadcastOpencodeAliasesUpdated).not.toHaveBeenCalled();
+  });
+
+  it("provider/model NULL 的 Branch connection 會 fallback source Pod provider/model 並阻擋刪除/更新", async () => {
+    const aliasId = await createUsedAlias();
+    insertCanvas();
+    insertPod({
+      id: "branch-fallback-source",
+      name: "Branch fallback source",
+      provider: "opencode",
+      model: USED_MODEL_VALUE,
+    });
+    insertPod({
+      id: "branch-fallback-target",
+      name: "Branch fallback target",
+      provider: "claude",
+      model: "sonnet",
+    });
+    insertConnection({
+      id: "branch-fallback-conn",
+      sourcePodId: "branch-fallback-source",
+      targetPodId: "branch-fallback-target",
+      triggerMode: "branch",
+      branchProvider: null,
+      branchModel: null,
+    });
+
+    vi.clearAllMocks();
+    await handleOpencodeAliasesDelete(
+      CONNECTION_ID,
+      { requestId: REQUEST_ID, id: aliasId },
+      REQUEST_ID,
+    );
+
+    let [, , payload] = mockEmitToConnection.mock.calls[0];
+    expect(payload.success).toBe(false);
+    expect(payload.error.code).toBe("alias_in_use");
+    expect(payload.error.message).not.toContain("Branch fallback source");
+    expect(mockBroadcastOpencodeAliasesUpdated).not.toHaveBeenCalled();
+
+    vi.clearAllMocks();
+    await handleOpencodeAliasesUpdate(
+      CONNECTION_ID,
+      {
+        requestId: REQUEST_ID,
+        id: aliasId,
+        modelID: "claude-3-5-haiku",
+        alias: "UpdatedAlias",
+      },
+      REQUEST_ID,
+    );
+
+    [, , payload] = mockEmitToConnection.mock.calls[0];
+    expect(payload.success).toBe(false);
+    expect(payload.error.code).toBe("alias_in_use");
+    expect(payload.error.message).not.toContain("Branch fallback source");
     expect(mockBroadcastOpencodeAliasesUpdated).not.toHaveBeenCalled();
   });
 });
@@ -671,7 +844,6 @@ describe("handleOpencodeAliasesReorder", () => {
     const [, event, reorderPayload] = mockEmitToConnection.mock.calls[0];
     expect(event).toBe(WebSocketResponseEvents.OPENCODE_ALIASES_REORDER_RESULT);
     expect(reorderPayload.success).toBe(true);
-    // #2：reorder 成功時回傳完整 items
     expect(reorderPayload.items).toHaveLength(3);
     expect(reorderPayload.items[0].id).toBe(idC);
     expect(reorderPayload.items[1].id).toBe(idA);
