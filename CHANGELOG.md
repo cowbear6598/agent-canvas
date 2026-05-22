@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.0.5] - 2026-05-22
+
+### 新增
+- 重整前後端測試分層、測試 inventory 與 userflow 套件，讓測試結構更清楚
+- 補強 Goal Runtime、Integration Reply 與 WebSocket listener 相關測試覆蓋
+
+### 修正
+- 統一 Integration Reply MCP 回覆流程，改由後端 endpoint 集中執行與驗證 capability scope
+- 修正執行中 workflow 的 Goal Runtime 使用 run-scoped snapshot，不再被後續 goal 編輯影響
+- 強化 Goal Runtime 快照讀取與執行中保護，避免無效快照被靜默當成不存在
+- 修正 chat WebSocket listener 解除註冊只移除自身 handler，避免影響其他監聽
+
 ## [2.0.4] - 2026-05-21
 
 ### 修正
