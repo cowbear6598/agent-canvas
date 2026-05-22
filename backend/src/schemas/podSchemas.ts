@@ -10,13 +10,13 @@ import { scheduleConfigSchema } from "./scheduleSchemas.js";
 const goalTodoItemSchema = z
   .object({
     id: z.uuid(),
-    text: z.string().trim().min(1).max(500),
+    text: z.string().trim().min(1).max(5000),
   })
   .strict();
 
 export const podGoalSchema = z
   .object({
-    todos: z.array(goalTodoItemSchema).min(1).max(100),
+    todos: z.array(goalTodoItemSchema).min(1).max(50),
   })
   .strict();
 
