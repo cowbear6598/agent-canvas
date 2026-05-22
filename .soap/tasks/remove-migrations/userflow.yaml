@@ -1,0 +1,37 @@
+feature: remove-migrations
+approved: true
+
+scenarios:
+  - id: F1
+    scenario: 使用者啟動有既有資料的 app
+    given:
+      - 使用者已使用過此 app
+      - 本機已有 canvas.db 且 schema 為最新版本
+    when:
+      - 啟動 backend
+    then:
+      - app 正常啟動
+      - 既有的 canvas、pod、connection 等資料完整保留
+      - 所有功能照常運作
+
+  - id: F2
+    scenario: 使用者第一次安裝後啟動 app
+    given:
+      - 本機尚未有 canvas.db
+    when:
+      - 啟動 backend
+    then:
+      - app 正常啟動
+      - 自動建立全新 canvas.db
+      - 所有資料表以最新 schema 建立
+      - 使用者可正常建立 canvas、pod 等資料
+
+  - id: F3
+    scenario: 開發者跑後端測試套件
+    given:
+      - 已套用本次改動
+    when:
+      - 執行 bun run test
+    then:
+      - 所有測試通過
+      - 沒有遺留指向已刪除 migrate 函式的測試案例
