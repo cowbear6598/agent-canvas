@@ -175,6 +175,7 @@ function createBaseTables(db: Database): void {
       "resource_id TEXT NOT NULL," +
       "extra_json TEXT," +
       "FOREIGN KEY (pod_id) REFERENCES pods(id) ON DELETE CASCADE," +
+      "FOREIGN KEY (canvas_id) REFERENCES canvases(id) ON DELETE CASCADE," +
       "FOREIGN KEY (app_id) REFERENCES integration_apps(id) ON DELETE CASCADE" +
       ")",
   );
@@ -193,7 +194,8 @@ function createBaseTables(db: Database): void {
       "trigger_message TEXT NOT NULL," +
       "status TEXT NOT NULL DEFAULT 'running'," +
       "created_at TEXT NOT NULL," +
-      "completed_at TEXT" +
+      "completed_at TEXT," +
+      "FOREIGN KEY (canvas_id) REFERENCES canvases(id) ON DELETE CASCADE" +
       ")",
   );
   db.exec(
@@ -278,6 +280,9 @@ function createBaseTables(db: Database): void {
   );
   db.exec(
     "CREATE INDEX IF NOT EXISTS idx_managed_plugins_github_repo ON managed_plugins(github_repo)",
+  );
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_managed_plugins_sort_index ON managed_plugins(sort_index)",
   );
 }
 

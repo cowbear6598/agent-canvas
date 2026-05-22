@@ -61,7 +61,7 @@ describe("runExecutionResources", () => {
     } as any);
     vi.spyOn(gitService, "createLocalClone").mockResolvedValue({
       success: false,
-      error: "boom",
+      error: "建立 run repo clone 失敗：boom",
     } as any);
 
     await expect(

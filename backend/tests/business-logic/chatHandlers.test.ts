@@ -34,10 +34,7 @@ vi.mock("../../src/services/podStore.js", () => ({
 
 vi.mock("../../src/services/claude/streamingChatExecutor.js", () => ({
   executeStreamingChat: vi.fn(
-    async (
-      _options: unknown,
-      callbacks?: StreamingChatExecutorCallbacks,
-    ) => {
+    async (_options: unknown, callbacks?: StreamingChatExecutorCallbacks) => {
       await callbacks?.onComplete?.("canvas-chat-test", "pod-chat-test");
       return {
         messageId: "assistant-message",
@@ -64,7 +61,7 @@ vi.mock("../../src/utils/logger.js", () => ({
 }));
 
 import { handleChatSend } from "../../src/handlers/chatHandlers.js";
-import { initTestDb } from "../../src/database/index.js";
+import { initTestDb, getDb } from "../../src/database/index.js";
 import { runStore } from "../../src/services/runStore.js";
 import { emitError } from "../../src/utils/websocketResponse.js";
 
@@ -104,6 +101,12 @@ async function sendChat(message: string, podId = POD_ID): Promise<void> {
 beforeEach(() => {
   vi.clearAllMocks();
   initTestDb();
+  // 滿足 workflow_runs.canvas_id FK 約束
+  getDb()
+    .prepare(
+      "INSERT OR IGNORE INTO canvases (id, name, sort_index) VALUES (?, ?, ?)",
+    )
+    .run(CANVAS_ID, "test-canvas", 0);
   state.activeCanvasId = CANVAS_ID;
   state.testPods.clear();
   state.testPods.set(POD_ID, createPod());

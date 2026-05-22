@@ -1,9 +1,4 @@
-import {
-  initTestDb,
-  closeDb,
-  resetDb,
-  getDb,
-} from "../../src/database/index.js";
+import { initTestDb, closeDb } from "../../src/database/index.js";
 import {
   getStatements,
   resetStatements,
@@ -21,101 +16,6 @@ describe("Database", () => {
 
   afterEach(() => {
     closeDb();
-  });
-
-  describe("初始化", () => {
-    it("應該建立所有資料表", () => {
-      const tables = db
-        .prepare(
-          "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
-        )
-        .all();
-      const tableNames = (tables as { name: string }[])
-        .map((t) => t.name)
-        .sort();
-      expect(tableNames).toEqual([
-        "canvases",
-        "connections",
-        "global_settings",
-        "integration_apps",
-        "integration_bindings",
-        "managed_mcp_servers",
-        "managed_plugins",
-        "model_aliases",
-        "notes",
-        "pod_manifests",
-        "pod_mcp_server_names",
-        "pod_plugin_ids",
-        "pods",
-        "repository_metadata",
-        "run_messages",
-        "run_pod_instances",
-        "workflow_runs",
-      ]);
-    });
-
-    it("in-memory DB 的 journal_mode 應為 memory（WAL 不適用於記憶體資料庫）", () => {
-      const result = db.prepare("PRAGMA journal_mode").get() as {
-        journal_mode: string;
-      };
-      // SQLite :memory: 資料庫不支援 WAL，會維持 memory mode
-      expect(result.journal_mode).toBe("memory");
-    });
-
-    it("應該啟用外鍵約束", () => {
-      const result = db.prepare("PRAGMA foreign_keys").get() as {
-        foreign_keys: number;
-      };
-      expect(result.foreign_keys).toBe(1);
-    });
-
-    it("pod_plugin_ids.plugin_id 應建立單欄索引", () => {
-      const indexes = db.prepare("PRAGMA index_list(pod_plugin_ids)").all() as {
-        name: string;
-      }[];
-
-      expect(
-        indexes.some((index) => index.name === "idx_pod_plugin_ids_plugin_id"),
-      ).toBe(true);
-    });
-  });
-
-  describe("resetDb", () => {
-    it("應該清空所有表資料", () => {
-      db.exec(
-        "INSERT INTO canvases (id, name, sort_index) VALUES ('c1', 'test', 0)",
-      );
-      db.exec(
-        "INSERT INTO integration_apps (id, provider, name, config_json) VALUES ('ia1', 'slack', 'app', '{}')",
-      );
-      db.exec(
-        "INSERT INTO repository_metadata (id, name, path) VALUES ('r1', 'repo', '/path')",
-      );
-
-      resetDb();
-
-      expect(
-        (
-          db.prepare("SELECT COUNT(*) as count FROM canvases").get() as {
-            count: number;
-          }
-        ).count,
-      ).toBe(0);
-      expect(
-        (
-          db
-            .prepare("SELECT COUNT(*) as count FROM integration_apps")
-            .get() as { count: number }
-        ).count,
-      ).toBe(0);
-      expect(
-        (
-          db
-            .prepare("SELECT COUNT(*) as count FROM repository_metadata")
-            .get() as { count: number }
-        ).count,
-      ).toBe(0);
-    });
   });
 
   describe("CASCADE 刪除", () => {

@@ -282,13 +282,14 @@ class GitService {
 
       return ok(undefined);
     } catch (error) {
+      const reason = parseGitErrorMessage(error);
       logger.error(
         "Git",
         "Error",
         `[Git] 建立 run repo clone 失敗`,
         maskTokenInError(error),
       );
-      return err("建立 run repo clone 失敗");
+      return err(`建立 run repo clone 失敗：${reason}`);
     }
   }
 

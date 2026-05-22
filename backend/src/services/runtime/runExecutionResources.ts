@@ -118,9 +118,7 @@ async function provisionRepositoryWorkspace(
   );
 
   if (!createResult.success) {
-    throw new Error(
-      `建立 run repo clone 失敗：${getResultErrorString(createResult.error)}`,
-    );
+    throw new Error(getResultErrorString(createResult.error));
   }
 
   const provisioned = {

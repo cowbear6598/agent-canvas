@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { initTestDb } from "../../src/database/index.js";
+import { initTestDb, getDb } from "../../src/database/index.js";
 import { resetStatements } from "../../src/database/statements.js";
 import { runStore } from "../../src/services/runStore.js";
 
@@ -11,6 +11,12 @@ describe("RunStore", () => {
   beforeEach(() => {
     resetStatements();
     initTestDb();
+    // 滿足 workflow_runs.canvas_id FK 約束
+    getDb()
+      .prepare(
+        "INSERT OR IGNORE INTO canvases (id, name, sort_index) VALUES (?, ?, ?)",
+      )
+      .run(CANVAS_ID, `canvas-${CANVAS_ID}`, 0);
   });
 
   describe("workflow_runs CRUD", () => {
