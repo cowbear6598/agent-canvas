@@ -1,0 +1,86 @@
+feature: opencode-summary-branch-model
+side: frontend
+approved: true
+phases:
+  - id: P1
+    title: OpenCode Provider 選單與模型能力
+    parallel: false
+    verification:
+      - bun run style
+      - bun run test:run
+    done: true
+    items:
+      - id: P1.A
+        title: Provider 選單支援 OpenCode
+        tasks:
+          - id: P1.A.t1
+            text: 在 `frontend/src/components/canvas/connectionMenu/providerOptions.ts` 將 OpenCode 加入 provider 選單，label 使用既有 OpenCode 顯示名稱風格。
+            completed: true
+            last_files_changed:
+              - frontend/src/components/canvas/connectionMenu/providerOptions.ts
+
+          - id: P1.A.t2
+            text: 檢查 `SummarySection.vue` 與 `BranchSettingsPanel.vue` 是否可直接使用新增的 OpenCode provider option，保留既有 Claude/Codex 的選取狀態與 toast 行為。
+            completed: true
+            last_files_changed:
+              - frontend/src/components/canvas/connectionMenu/SummarySection.vue
+              - frontend/src/components/canvas/connectionMenu/BranchSettingsPanel.vue
+
+      - id: P1.B
+        title: OpenCode Alias 模型能力
+        tasks:
+          - id: P1.B.t1
+            text: 在 `frontend/src/stores/providerCapabilityStore.ts` 讓 `getDefaultModel("opencode")` 以第一筆 OpenCode alias 的 `providerID/modelID` 作為預設模型。
+            completed: true
+            last_files_changed:
+              - frontend/src/stores/providerCapabilityStore.ts
+
+          - id: P1.B.t2
+            text: 在 `frontend/src/stores/providerCapabilityStore.ts` 讓 `isModelValidForProvider("opencode", model)` 以 OpenCode alias 清單產生的 `providerID/modelID` 作為合法模型集合。
+            completed: true
+            last_files_changed:
+              - frontend/src/stores/providerCapabilityStore.ts
+
+  - id: P2
+    title: Summary 與 Branch 使用路徑驗證
+    parallel: true
+    verification:
+      - bun run style
+      - bun run test:run
+    done: true
+    items:
+      - id: P2.A
+        title: Summary Model 路徑測試
+        tasks:
+          - id: P2.A.t1
+            text: 補強 `frontend/tests/business-logic/stores/providerCapabilityStore.test.ts`，覆蓋 OpenCode alias 存在時 `getDefaultModel` 回傳第一筆 alias model value。
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/stores/providerCapabilityStore.test.ts
+
+          - id: P2.A.t2
+            text: 補強 `frontend/tests/business-logic/stores/providerCapabilityStore.test.ts`，覆蓋 OpenCode alias 存在時 `isModelValidForProvider` 接受既有 alias model value。
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/stores/providerCapabilityStore.test.ts
+
+          - id: P2.A.t3
+            text: 補強 Summary 相關 store 或 component 現有測試，覆蓋 Summary Provider 切換到 OpenCode 時送出的 provider/model payload 使用第一筆 alias。
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/stores/connectionStore.test.ts
+
+      - id: P2.B
+        title: Branch Model 路徑測試
+        tasks:
+          - id: P2.B.t1
+            text: 補強 Branch 相關 store 或 component 現有測試，覆蓋 Branch Provider 切換到 OpenCode 時送出的 provider/model payload 使用第一筆 alias。
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/stores/connectionStore.test.ts
+
+          - id: P2.B.t2
+            text: 補強 Branch 相關 store 或 component 現有測試，覆蓋 Branch Model 選擇 OpenCode alias 時送出的 model value 維持 `providerID/modelID` 格式。
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/stores/connectionStore.test.ts

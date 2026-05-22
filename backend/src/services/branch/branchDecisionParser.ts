@@ -45,6 +45,53 @@ export function stripMarkdownCodeBlock(raw: string): string {
   return stripped;
 }
 
+function extractFirstJsonObjectContainingSelectedLabel(raw: string): string {
+  const selectedLabelIndex = raw.indexOf('"selectedLabel"');
+  if (selectedLabelIndex === -1) return raw;
+
+  const start = raw.lastIndexOf("{", selectedLabelIndex);
+  if (start === -1) return raw;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = start; index < raw.length; index += 1) {
+    const char = raw[index];
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) continue;
+
+    if (char === "{") {
+      depth += 1;
+      continue;
+    }
+
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return raw.slice(start, index + 1).trim();
+      }
+    }
+  }
+
+  return raw;
+}
+
 /**
  * 解析 AI 回傳的 branch 決策字串。
  *
@@ -63,7 +110,9 @@ export function parseBranchDecision(
 ):
   | { ok: true; selectedLabel: string }
   | { ok: false; reason: BranchDecisionParseErrorType } {
-  const cleaned = stripMarkdownCodeBlock(raw);
+  const cleaned = extractFirstJsonObjectContainingSelectedLabel(
+    stripMarkdownCodeBlock(raw),
+  );
 
   let parsed: unknown;
   try {

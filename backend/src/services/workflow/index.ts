@@ -23,6 +23,7 @@ import { workflowStateService } from "./workflowStateService.js";
 import { workflowEventEmitter } from "./workflowEventEmitter.js";
 import { branchDecisionService } from "./branchDecisionService.js";
 import { connectionStore } from "../connectionStore.js";
+import { canvasStore } from "../canvasStore.js";
 import { podStore } from "../podStore.js";
 import { pendingTargetStore } from "../pendingTargetStore.js";
 export function initWorkflowServices(): void {
@@ -43,6 +44,7 @@ export function initWorkflowServices(): void {
     branchDecisionService,
     eventEmitter: workflowEventEmitter,
     connectionStore,
+    canvasStore,
     podStore,
     stateService: workflowStateService,
     pendingTargetStore,

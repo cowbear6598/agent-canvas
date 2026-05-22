@@ -68,8 +68,20 @@ const handleSetBranchProvider = async (
     return;
   }
 
-  const defaultModel = providerCapabilityStore.getDefaultModel(targetProvider);
-  const branchModel = defaultModel ?? DEFAULT_SUMMARY_MODEL;
+  const defaultModel =
+    providerCapabilityStore.getDefaultModel(targetProvider) ??
+    providerCapabilityStore.getAvailableModels(targetProvider)[0]?.value;
+  const branchModel =
+    defaultModel ??
+    (targetProvider === "opencode" ? undefined : DEFAULT_SUMMARY_MODEL);
+  if (!branchModel) {
+    toast({
+      title: t("canvas.connectionContextMenu.changeFailed"),
+      description: t("canvas.connectionContextMenu.branchModelChangeFailed"),
+      duration: DEFAULT_TOAST_DURATION_MS,
+    });
+    return;
+  }
 
   const result = await connectionStore.updateConnectionBranchProvider(
     props.connectionId,

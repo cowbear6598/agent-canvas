@@ -73,7 +73,15 @@ export class BaseBranchDecider implements BranchDecider {
         userMessage,
         workspacePath,
       });
-      rawResponse = result.content;
+      if (result.success) {
+        rawResponse = result.content;
+      } else {
+        logger.warn(
+          "Workflow",
+          "Warn",
+          `[BaseBranchDecider] 第一次 executeDisposableChat 失敗，將進行重試：${result.error ?? "未知錯誤"}`,
+        );
+      }
     } catch (err) {
       // AbortError：中止訊號觸發，直接向上拋出（不走 fallback）
       if (isAbortError(err)) {
@@ -113,7 +121,15 @@ export class BaseBranchDecider implements BranchDecider {
         userMessage,
         workspacePath,
       });
-      retryRawResponse = retryResult.content;
+      if (retryResult.success) {
+        retryRawResponse = retryResult.content;
+      } else {
+        logger.warn(
+          "Workflow",
+          "Warn",
+          `[BaseBranchDecider] 第二次 executeDisposableChat 失敗：${retryResult.error ?? "未知錯誤"}`,
+        );
+      }
     } catch (err) {
       // AbortError：中止訊號觸發，直接向上拋出（不走 fallback）
       if (isAbortError(err)) {

@@ -14,6 +14,7 @@ import type { ConnectionUpdatedPayload } from "../../types/index.js";
 import { branchDecisionService } from "./branchDecisionService.js";
 import { workflowEventEmitter } from "./workflowEventEmitter.js";
 import { connectionStore } from "../connectionStore.js";
+import { canvasStore } from "../canvasStore.js";
 import { socketService } from "../socketService.js";
 import { podStore } from "../podStore.js";
 import { workflowStateService } from "./workflowStateService.js";
@@ -36,6 +37,7 @@ import { WebSocketResponseEvents } from "../../schemas/index.js";
 type BranchDecisionService = typeof branchDecisionService;
 type WorkflowEventEmitter = typeof workflowEventEmitter;
 type ConnectionStore = typeof connectionStore;
+type CanvasStore = typeof canvasStore;
 type PodStore = typeof podStore;
 type WorkflowStateService = typeof workflowStateService;
 type PendingTargetStore = typeof pendingTargetStore;
@@ -46,6 +48,7 @@ interface BranchTriggerDependencies {
   branchDecisionService: BranchDecisionService;
   eventEmitter: WorkflowEventEmitter;
   connectionStore: ConnectionStore;
+  canvasStore: CanvasStore;
   podStore: PodStore;
   stateService: WorkflowStateService;
   pendingTargetStore: PendingTargetStore;
@@ -141,7 +144,7 @@ class WorkflowBranchTriggerService
         logger.log(
           "Workflow",
           "Update",
-          `[Branch] decideBranch 被 abort，canvasId=${canvasId} sourcePodId=${sourcePodId}`,
+          `[Branch] decideBranch 被 abort，${this.buildSourceLog(canvasId, sourcePodId)}`,
         );
         // abort 情況：全部標記為 rejected（但由 processBranchConnections 處理撤回狀態）
         return connections.map((conn) => ({
@@ -247,6 +250,29 @@ class WorkflowBranchTriggerService
     return `「${sourcePod?.name ?? sourcePodId}」→「${targetPod?.name ?? connection.targetPodId}」`;
   }
 
+  private buildConnectionNamePair(
+    canvasId: string,
+    sourcePodId: string,
+    connection: Connection,
+  ): string {
+    const sourcePod = this.deps.podStore.getById(canvasId, sourcePodId);
+    const targetPod = this.deps.podStore.getById(
+      canvasId,
+      connection.targetPodId,
+    );
+    return `${sourcePod?.name ?? sourcePodId} - ${targetPod?.name ?? connection.targetPodId}`;
+  }
+
+  private buildSourceLog(canvasId: string, sourcePodId?: string): string {
+    const canvasName = this.deps.canvasStore.getNameById(canvasId);
+    const parts = [`canvas「${canvasName}」`];
+    if (sourcePodId) {
+      const sourcePod = this.deps.podStore.getById(canvasId, sourcePodId);
+      parts.push(`sourcePod「${sourcePod?.name ?? sourcePodId}」`);
+    }
+    return parts.join(" ");
+  }
+
   private handleApprovedConnection(
     canvasId: string,
     sourcePodId: string,
@@ -295,7 +321,7 @@ class WorkflowBranchTriggerService
         logger.error(
           "Workflow",
           "Error",
-          `Branch Workflow 執行失敗，連線 ${connection.id}`,
+          `Branch Workflow 執行失敗，連線: ${this.buildConnectionNamePair(canvasId, sourcePodId, connection)}`,
           error,
         );
         delegate.onChatError(
@@ -422,7 +448,7 @@ class WorkflowBranchTriggerService
         logger.log(
           "Workflow",
           "Update",
-          `[Branch] 決策被 abort，撤回狀態，canvasId=${canvasId} sourcePodId=${sourcePodId}`,
+          `[Branch] 決策被 abort，撤回狀態，${this.buildSourceLog(canvasId, sourcePodId)}`,
         );
         // 非 run mode：清回 idle 狀態
         this.clearConnectionsDecidingStatus(canvasId, connections, runContext);
@@ -444,7 +470,7 @@ class WorkflowBranchTriggerService
       logger.error(
         "Workflow",
         "Error",
-        `[Branch] decideBranch 意外拋出例外，全部拒絕，canvasId=${canvasId}`,
+        `[Branch] decideBranch 意外拋出例外，全部拒絕，${this.buildSourceLog(canvasId, sourcePodId)}`,
         error,
       );
       return {
@@ -567,7 +593,7 @@ class WorkflowBranchTriggerService
       logger.log(
         "Workflow",
         "Update",
-        `[Branch] AI 選 None，不觸發任何 pipeline，canvasId=${canvasId} sourcePodId=${sourcePodId}`,
+        `[Branch] AI 選 None，不觸發任何 pipeline，${this.buildSourceLog(canvasId, sourcePodId)}`,
       );
     }
 

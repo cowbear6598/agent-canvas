@@ -1,0 +1,56 @@
+feature: opencode-summary-branch-model
+approved: true
+scenarios:
+  - id: F1
+    scenario: 使用者將 Summary Provider 切換成 OpenCode
+    given:
+      - 使用者已在 OpenCode 設定中建立至少一筆 model alias
+      - 使用者已開啟連線的內容選單
+    when:
+      - 使用者打開 Summary Provider 子選單
+      - 使用者選擇 OpenCode
+    then:
+      - Summary Provider 顯示為 OpenCode
+      - Summary Model 自動選用第一筆 OpenCode alias
+      - 連線設定被儲存
+
+  - id: F2
+    scenario: 使用者選擇 OpenCode 的 Summary Model
+    given:
+      - 使用者已在 OpenCode 設定中建立至少一筆 model alias
+      - 連線的 Summary Provider 是 OpenCode
+      - 使用者已開啟連線的內容選單
+    when:
+      - 使用者打開 Summary Model 子選單
+      - 使用者選擇其中一筆 OpenCode alias
+    then:
+      - Summary Model 顯示所選 alias
+      - 選單不會停留在載入狀態
+      - 連線設定被儲存
+
+  - id: F3
+    scenario: 使用者將 Branch Provider 切換成 OpenCode
+    given:
+      - 使用者已在 OpenCode 設定中建立至少一筆 model alias
+      - 使用者已開啟連線的內容選單
+    when:
+      - 使用者打開 Branch Provider 子選單
+      - 使用者選擇 OpenCode
+    then:
+      - Branch Provider 顯示為 OpenCode
+      - Branch Model 自動選用第一筆 OpenCode alias
+      - 連線設定被儲存
+
+  - id: F4
+    scenario: 使用者選擇 OpenCode 的 Branch Model
+    given:
+      - 使用者已在 OpenCode 設定中建立至少一筆 model alias
+      - 連線的 Branch Provider 是 OpenCode
+      - 使用者已開啟連線的內容選單
+    when:
+      - 使用者打開 Branch Model 子選單
+      - 使用者選擇其中一筆 OpenCode alias
+    then:
+      - Branch Model 顯示所選 alias
+      - 選單不會停留在載入狀態
+      - 連線設定被儲存

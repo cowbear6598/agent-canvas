@@ -75,8 +75,20 @@ const handleSetSummaryProvider = async (
     return;
   }
 
-  const defaultModel = providerCapabilityStore.getDefaultModel(targetProvider);
-  const summaryModel = defaultModel ?? DEFAULT_SUMMARY_MODEL;
+  const defaultModel =
+    providerCapabilityStore.getDefaultModel(targetProvider) ??
+    providerCapabilityStore.getAvailableModels(targetProvider)[0]?.value;
+  const summaryModel =
+    defaultModel ??
+    (targetProvider === "opencode" ? undefined : DEFAULT_SUMMARY_MODEL);
+  if (!summaryModel) {
+    toast({
+      title: t("canvas.connectionContextMenu.changeFailed"),
+      description: t("canvas.connectionContextMenu.summaryProviderChangeFailed"),
+      duration: DEFAULT_TOAST_DURATION_MS,
+    });
+    return;
+  }
 
   const result = await connectionStore.updateConnectionSummaryProvider(
     props.connectionId,

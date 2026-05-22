@@ -76,6 +76,15 @@ function makeDisposableChatResult(content: string) {
   };
 }
 
+function makeDisposableChatFailure(error: string) {
+  return {
+    content: "",
+    success: false,
+    error,
+    resolvedModel: "claude-sonnet-4-5",
+  };
+}
+
 // ─── 測試 ─────────────────────────────────────────────────────────────────────
 
 describe("BaseBranchDecider.decide", () => {
@@ -160,6 +169,32 @@ describe("BaseBranchDecider.decide", () => {
     const result = await branchDecider.decide(makeInput());
 
     expect(result.selectedLabel).toBe("None");
+    expect(asMock(executeDisposableChat)).toHaveBeenCalledTimes(2);
+  });
+
+  it("收到說明文字包住 JSON 的回應 → 擷取 JSON 後回傳對應 selectedLabel", async () => {
+    asMock(executeDisposableChat).mockResolvedValueOnce(
+      makeDisposableChatResult(
+        '我會選這條。\n{"selectedLabel":"Checklist"}\n這是最合理的選項。',
+      ),
+    );
+
+    const result = await branchDecider.decide(makeInput());
+
+    expect(result.selectedLabel).toBe("Checklist");
+    expect(asMock(executeDisposableChat)).toHaveBeenCalledTimes(1);
+  });
+
+  it("第一次 executeDisposableChat 回傳 success=false → retry 成功後回傳第二次 selectedLabel", async () => {
+    asMock(executeDisposableChat)
+      .mockResolvedValueOnce(makeDisposableChatFailure("OpenCode 未回傳文字內容"))
+      .mockResolvedValueOnce(
+        makeDisposableChatResult('{"selectedLabel":"Review"}'),
+      );
+
+    const result = await branchDecider.decide(makeInput());
+
+    expect(result.selectedLabel).toBe("Review");
     expect(asMock(executeDisposableChat)).toHaveBeenCalledTimes(2);
   });
 

@@ -371,6 +371,38 @@ describe("providerCapabilityStore", () => {
       expect(store.isModelValidForProvider("claude", "opus")).toBe(true);
     });
 
+    it("opencode alias 存在時接受 alias 產生的 model value", () => {
+      const aliasStore = useOpencodeAliasStore();
+      const store = useProviderCapabilityStore();
+
+      aliasStore.setAliases([
+        {
+          id: "alias-1",
+          providerID: "openai",
+          modelID: "gpt-4o",
+          alias: "GPT-4o",
+          orderIdx: 0,
+        },
+        {
+          id: "alias-2",
+          providerID: "anthropic",
+          modelID: "claude-3-5-sonnet",
+          alias: "Sonnet",
+          orderIdx: 1,
+        },
+      ]);
+
+      expect(
+        store.isModelValidForProvider("opencode", "openai/gpt-4o"),
+      ).toBe(true);
+      expect(
+        store.isModelValidForProvider(
+          "opencode",
+          "anthropic/claude-3-5-sonnet",
+        ),
+      ).toBe(true);
+    });
+
     it("provider 已知 + model 不在清單 → false", () => {
       const store = useProviderCapabilityStore();
 
@@ -444,6 +476,30 @@ describe("providerCapabilityStore", () => {
       ]);
 
       expect(store.getDefaultModel("codex")).toBe("gpt-5.4");
+    });
+
+    it("opencode alias 存在時回傳第一筆 alias 的 model value", () => {
+      const aliasStore = useOpencodeAliasStore();
+      const store = useProviderCapabilityStore();
+
+      aliasStore.setAliases([
+        {
+          id: "alias-2",
+          providerID: "anthropic",
+          modelID: "claude-3-5-sonnet",
+          alias: "Sonnet",
+          orderIdx: 1,
+        },
+        {
+          id: "alias-1",
+          providerID: "openai",
+          modelID: "gpt-4o",
+          alias: "GPT-4o",
+          orderIdx: 0,
+        },
+      ]);
+
+      expect(store.getDefaultModel("opencode")).toBe("openai/gpt-4o");
     });
 
     it("provider 未知 → 回傳 undefined", () => {

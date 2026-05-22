@@ -1,0 +1,52 @@
+feature: opencode-summary-branch-model
+created: "2026-05-22"
+approved: true
+questions:
+  - id: Q1
+    text: Summary Model 卡在載入中的現有資料流與可能原因是什麼？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      Summary UI 在 `frontend/src/components/canvas/connectionMenu/SummarySection.vue`
+      依 `connection.summaryProvider` 呼叫 `providerCapabilityStore.getAvailableModels(provider)`。
+      `opencode` 的模型選項不是從後端 provider metadata 來，而是
+      `frontend/src/stores/providerCapabilityStore.ts` 動態讀
+      `opencodeAliasStore.aliases` 組成 `{label: alias, value: providerID/modelID}`。
+      但目前 `getDefaultModel("opencode")` 與 `isModelValidForProvider("opencode", model)`
+      仍只讀 `availableModelsByProvider` / `availableModelValuesByProvider`，而
+      `syncFromPayload` 又刻意不寫入 opencode 的 availableModels。因此切換 Summary
+      Provider 到 opencode 時容易拿不到預設 model，或被驗證流程視為無效，造成 UI
+      顯示 loading / 後續才出現可選模型的狀態不一致。
+  - id: Q2
+    text: Branch Provider / Branch Model 目前為什麼不能使用 OpenCode？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      `frontend/src/components/canvas/connectionMenu/providerOptions.ts` 的
+      `PROVIDER_OPTIONS` 目前只硬編碼 `claude` 與 `codex`，所以
+      `SummarySection.vue` 與 `BranchSettingsPanel.vue` 的 Provider 子選單都不會顯示
+      OpenCode。後端 registry 已包含 `opencode`，schema 的 provider 也可接受 registry
+      provider；Branch 後端欄位與 handler 已有 `branchProvider` / `branchModel`，所以
+      主要缺口在前端 provider options、opencode alias 載入，以及 capability store 對
+      opencode 動態模型的 default/validity 支援。
+  - id: Q3
+    text: OpenCode model value 在現有系統中的格式與來源是什麼？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      OpenCode 的 model value 格式是 `providerID/modelID`。前端使用者在
+      `OpencodeSettingsPanel.vue` 建立 alias，`opencodeAliasStore` 儲存
+      `providerID`、`modelID`、`alias`、`orderIdx`。`providerCapabilityStore.getAvailableModels("opencode")`
+      會將 alias 轉成 ModelOption，label 使用 alias，value 使用
+      `${providerID}/${modelID}`。後端 `opencodeProvider.buildOptions` 也以第一個 `/`
+      拆分 `pod.providerConfig.model` 成 providerID/modelID。
+  - id: Q4
+    text: 這次需求的驗收邊界是什麼？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      Summary Provider 與 Branch Provider 選單都要顯示 OpenCode。當 OpenCode aliases
+      已載入且至少有一筆 alias 時，Summary Model 與 Branch Model 子選單要顯示 alias
+      清單，不應永久停在 loading。切換 Summary/Branch Provider 到 OpenCode 時要選用
+      OpenCode 的第一筆 alias 作為預設模型；切換 OpenCode model 時要送出
+      `providerID/modelID` 並保持 connection state / 後端 persistence 一致。

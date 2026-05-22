@@ -192,6 +192,8 @@ export interface OpencodeOptions {
    * Fresh session 首輪會與 Goal Runtime bootstrap 一起注入 user prompt。
    */
   pluginCatalogText: string;
+  /** 一次性查詢使用的 system prompt；一般 Pod 對話不設定。 */
+  systemPrompt?: string;
 }
 
 // ================================================================
@@ -962,6 +964,7 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
           directory: string;
           model?: { providerID: string; modelID: string };
           tools?: { [key: string]: boolean };
+          system?: string;
           parts: Array<{ type: "text"; text: string }>;
         } = {
           sessionID: sessionId,
@@ -984,6 +987,10 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
             providerID: options.providerID,
             modelID: options.modelID,
           };
+        }
+
+        if (options.systemPrompt && options.systemPrompt.trim().length > 0) {
+          promptParams.system = options.systemPrompt;
         }
 
         if (toolsSubset !== undefined) {

@@ -356,12 +356,20 @@ export const useConnectionStore = defineStore("connection", () => {
   ): Promise<Connection | null> {
     if (!validateNewConnection(sourcePodId, targetPodId)) return null;
 
-    // 依上游 Pod 的 provider 解析預設 summaryModel；
-    // 查不到 Pod 或 capability 尚未推送時 fallback 為 DEFAULT_SUMMARY_MODEL
+    // 依上游 Pod 的 provider 建立預設 Summary 設定。
+    // OpenCode 優先使用 Pod 目前的 providerConfig.model，避免 alias/capability
+    // 尚未載入時把 OpenCode 連線暫時建立成 Claude 或載入中狀態。
     const sourcePod = sourcePodId
       ? podStore.getPodById(sourcePodId)
       : undefined;
+    const resolvedSummaryProvider = sourcePod?.provider;
+    const sourcePodModel =
+      typeof sourcePod?.providerConfig?.model === "string" &&
+      sourcePod.providerConfig.model.trim().length > 0
+        ? sourcePod.providerConfig.model
+        : undefined;
     const resolvedSummaryModel: string =
+      (sourcePod?.provider === "opencode" ? sourcePodModel : undefined) ??
       (sourcePod
         ? providerCapabilityStore.getDefaultModel(sourcePod.provider)
         : undefined) ?? DEFAULT_SUMMARY_MODEL;
@@ -371,6 +379,8 @@ export const useConnectionStore = defineStore("connection", () => {
       targetPodId: string;
       targetAnchor: AnchorPosition;
       sourcePodId?: string;
+      summaryProvider?: PodProvider;
+      summaryModel?: string;
     } = {
       sourceAnchor,
       targetPodId,
@@ -378,6 +388,10 @@ export const useConnectionStore = defineStore("connection", () => {
     };
     if (sourcePodId) {
       basePayload.sourcePodId = sourcePodId;
+    }
+    if (resolvedSummaryProvider) {
+      basePayload.summaryProvider = resolvedSummaryProvider;
+      basePayload.summaryModel = resolvedSummaryModel;
     }
 
     const result = await executeAction<
@@ -883,17 +897,6 @@ export const useConnectionStore = defineStore("connection", () => {
     connections.value = removeById(connections.value, connectionId);
   }
 
-  /**
-   * 當上游 Pod 的 provider 被切換時，自動修正所有以該 Pod 為 source 的 connection summaryModel。
-   * 僅在「使用者主動切換 provider」的路徑呼叫，不在初始化載入時觸發，
-   * 避免 capability 尚未載入時把合法的 summaryModel 誤重置。
-   *
-   * 流程：
-   * 1. 找出所有 sourcePodId === podId 的 connection
-   * 2. 取上游 Pod 當前的 provider
-   * 3. 用 isModelValidForProvider 判斷 summaryModel 是否仍合法
-   * 4. 若不合法，取 getDefaultModel 作為新值，呼叫 updateConnectionSummaryModel
-   */
   /**
    * 純函數：回傳所有 summaryModel 不合法的 connection 及其對應的修正 model。
    * 不發出任何更新，供 reconcileSummaryModelsForPod 使用。

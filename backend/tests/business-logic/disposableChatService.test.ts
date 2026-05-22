@@ -16,6 +16,24 @@ vi.mock("../../src/services/codex/codexService.js", () => ({
   },
 }));
 
+vi.mock("../../src/services/provider/opencodeProvider.js", () => ({
+  opencodeProvider: {
+    chat: vi.fn(),
+    metadata: {
+      name: "opencode",
+      defaultOptions: {
+        providerID: "",
+        modelID: "",
+        mcpEntries: [],
+        hasGoalRuntime: false,
+        pluginCatalogText: "",
+      },
+      availableModels: [],
+      availableModelValues: new Set<string>(),
+    },
+  },
+}));
+
 vi.mock("../../src/utils/logger.js", () => ({
   logger: {
     log: vi.fn(),
@@ -24,10 +42,12 @@ vi.mock("../../src/utils/logger.js", () => ({
   },
 }));
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { executeDisposableChat } from "../../src/services/disposableChatService.js";
 import { claudeService } from "../../src/services/claude/claudeService.js";
 import { codexService } from "../../src/services/codex/codexService.js";
+import { opencodeProvider } from "../../src/services/provider/opencodeProvider.js";
+import { closeDb, getStmts, initTestDb } from "../../src/database/index.js";
 
 /** 合法 Claude model */
 const VALID_CLAUDE_MODEL = "sonnet";
@@ -42,9 +62,21 @@ const BASE_INPUT = {
   workspacePath: "/tmp/workspace",
 };
 
+async function* opencodeTextEvents() {
+  yield { type: "session_started" as const, sessionId: "session-1" };
+  yield { type: "text" as const, content: "open" };
+  yield { type: "text" as const, content: "code" };
+  yield { type: "turn_complete" as const };
+}
+
 describe("disposableChatService", () => {
   beforeEach(() => {
+    initTestDb();
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    closeDb();
   });
 
   it("provider=claude 且 model 合法 → 分發到 claudeService，resolvedModel 等於輸入 model", async () => {
@@ -147,16 +179,135 @@ describe("disposableChatService", () => {
     expect(codexService.executeDisposableChat).not.toHaveBeenCalled();
   });
 
-  it("provider=opencode → throw Error('不支援的 provider')", async () => {
-    await expect(
-      executeDisposableChat({
-        ...BASE_INPUT,
-        provider: "opencode",
-        model: "gpt-5.4",
-      }),
-    ).rejects.toThrow("不支援的 provider");
+  it("provider=opencode 且 model 為 providerID/modelID → 透過 opencodeProvider.chat 收斂文字事件", async () => {
+    (opencodeProvider.chat as ReturnType<typeof vi.fn>).mockReturnValue(
+      opencodeTextEvents(),
+    );
+
+    const result = await executeDisposableChat({
+      ...BASE_INPUT,
+      provider: "opencode",
+      model: "openai/gpt-4o",
+    });
 
     expect(claudeService.executeDisposableChat).not.toHaveBeenCalled();
     expect(codexService.executeDisposableChat).not.toHaveBeenCalled();
+    expect(opencodeProvider.chat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "user",
+        workspacePath: "/tmp/workspace",
+        options: expect.objectContaining({
+          providerID: "openai",
+          modelID: "gpt-4o",
+          systemPrompt: "system",
+        }),
+      }),
+    );
+    expect(result).toEqual({
+      content: "opencode",
+      success: true,
+      resolvedModel: "openai/gpt-4o",
+    });
+  });
+
+  it("provider=opencode 且 model 為 alias → 從 model_aliases 解析成 providerID/modelID", async () => {
+    getStmts().modelAlias.insert.run({
+      $id: "alias-1",
+      $providerId: "opencode",
+      $realProvider: "opencode",
+      $realModel: "deepseek-v4-flash-free",
+      $alias: "DeepSeek Flash",
+      $orderIdx: 0,
+      $createdAt: 1,
+      $updatedAt: 1,
+    });
+    (opencodeProvider.chat as ReturnType<typeof vi.fn>).mockReturnValue(
+      opencodeTextEvents(),
+    );
+
+    const result = await executeDisposableChat({
+      ...BASE_INPUT,
+      provider: "opencode",
+      model: "DeepSeek Flash",
+    });
+
+    expect(opencodeProvider.chat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.objectContaining({
+          providerID: "opencode",
+          modelID: "deepseek-v4-flash-free",
+        }),
+      }),
+    );
+    expect(result.success).toBe(true);
+    expect(result.resolvedModel).toBe("opencode/deepseek-v4-flash-free");
+  });
+
+  it("provider=opencode 且 model 為 legacy real_model → 從 model_aliases 解析成 providerID/modelID", async () => {
+    getStmts().modelAlias.insert.run({
+      $id: "alias-legacy",
+      $providerId: "opencode",
+      $realProvider: "opencode",
+      $realModel: "deepseek-v4-flash-free",
+      $alias: "DeepSeek Flash",
+      $orderIdx: 0,
+      $createdAt: 1,
+      $updatedAt: 1,
+    });
+    (opencodeProvider.chat as ReturnType<typeof vi.fn>).mockReturnValue(
+      opencodeTextEvents(),
+    );
+
+    const result = await executeDisposableChat({
+      ...BASE_INPUT,
+      provider: "opencode",
+      model: "deepseek-v4-flash-free",
+    });
+
+    expect(opencodeProvider.chat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.objectContaining({
+          providerID: "opencode",
+          modelID: "deepseek-v4-flash-free",
+        }),
+      }),
+    );
+    expect(result.success).toBe(true);
+    expect(result.resolvedModel).toBe("opencode/deepseek-v4-flash-free");
+  });
+
+  it("provider=opencode 且 model 為 bare model → canonicalize 成 opencode/model", async () => {
+    (opencodeProvider.chat as ReturnType<typeof vi.fn>).mockReturnValue(
+      opencodeTextEvents(),
+    );
+
+    const result = await executeDisposableChat({
+      ...BASE_INPUT,
+      provider: "opencode",
+      model: "gpt-4o",
+    });
+
+    expect(opencodeProvider.chat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.objectContaining({
+          providerID: "opencode",
+          modelID: "gpt-4o",
+        }),
+      }),
+    );
+    expect(result.success).toBe(true);
+    expect(result.resolvedModel).toBe("opencode/gpt-4o");
+  });
+
+  it("provider=opencode 但 model 為空字串 → 回傳 success=false", async () => {
+    const result = await executeDisposableChat({
+      ...BASE_INPUT,
+      provider: "opencode",
+      model: "",
+    });
+
+    expect(opencodeProvider.chat).not.toHaveBeenCalled();
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("OpenCode model 不可為空");
   });
 });

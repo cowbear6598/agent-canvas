@@ -7,4 +7,5 @@ import type { PodProvider } from "@/types/pod";
 export const PROVIDER_OPTIONS: { value: PodProvider; label: string }[] = [
   { value: "claude", label: "Claude" },
   { value: "codex", label: "Codex" },
+  { value: "opencode", label: "OpenCode" },
 ];

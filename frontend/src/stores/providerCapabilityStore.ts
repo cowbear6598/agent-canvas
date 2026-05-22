@@ -18,6 +18,11 @@ const EMPTY_AVAILABLE_MODELS: ReadonlyArray<ModelOption> = Object.freeze([]);
 
 const EMPTY_THINKING_LEVELS: ReadonlyArray<string> = Object.freeze([]);
 
+const getOpencodeAliasModelValue = (alias: {
+  providerID: string;
+  modelID: string;
+}): string => `${alias.providerID}/${alias.modelID}`;
+
 /**
  * provider:list 回應的單一 Provider 資料結構。
  */
@@ -107,7 +112,7 @@ export const useProviderCapabilityStore = defineStore(
             return aliases.map(
               (a): ModelOption => ({
                 label: a.alias,
-                value: `${a.providerID}/${a.modelID}`,
+                value: getOpencodeAliasModelValue(a),
               }),
             );
           }
@@ -120,6 +125,13 @@ export const useProviderCapabilityStore = defineStore(
     const getDefaultModel = computed(
       () =>
         (provider: PodProvider): string | undefined => {
+          if (provider === "opencode") {
+            const aliasStore = useOpencodeAliasStore();
+            const firstAlias = aliasStore.aliases[0];
+            return firstAlias
+              ? getOpencodeAliasModelValue(firstAlias)
+              : undefined;
+          }
           const models = availableModelsByProvider.value[provider];
           return models?.[0]?.value;
         },
@@ -128,6 +140,12 @@ export const useProviderCapabilityStore = defineStore(
     const isModelValidForProvider = computed(
       () =>
         (provider: PodProvider, model: string): boolean => {
+          if (provider === "opencode") {
+            const aliasStore = useOpencodeAliasStore();
+            return aliasStore.aliases.some(
+              (alias) => getOpencodeAliasModelValue(alias) === model,
+            );
+          }
           const modelSet = availableModelValuesByProvider.value[provider];
           if (!modelSet || modelSet.size === 0) return false;
           return modelSet.has(model);

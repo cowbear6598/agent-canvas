@@ -4,14 +4,14 @@ import { providerSchema } from "./podSchemas.js";
 
 export const anchorPositionSchema = z.enum(["top", "bottom", "left", "right"]);
 
-// summaryModel 接受合法模型名稱字串，允許 Codex 模型名稱（如 "gpt-5.4"）等非 Claude enum 值。
-// 格式規則與 codexProvider/codexService 的 MODEL_RE 一致：僅允許英數字、點、底線、連字符。
+// summaryModel 接受合法模型名稱字串，允許 Codex 模型名稱（如 "gpt-5.4"）
+// 與 OpenCode alias model value（如 "openai/gpt-4o"）。
 // 長度上限 200 字元，防止超長字串攻擊。
 const summaryModelSchema = z
   .string()
   .min(1)
   .max(200)
-  .regex(/^[a-zA-Z0-9._-]+$/, "summaryModel 格式不合法");
+  .regex(/^[a-zA-Z0-9._/-]+$/, "summaryModel 格式不合法");
 
 /** label 最大長度 32，與前端常數 BRANCH_LABEL_MAX_LENGTH 對齊。
  * 禁止換行符（\n、\r）與角括號（<、>），於入口層攔截可疑字元以防 prompt injection。
@@ -30,7 +30,7 @@ const branchModelSchema = z
   .string()
   .min(1)
   .max(200)
-  .regex(/^[a-zA-Z0-9._-]+$/, "branchModel 格式不合法");
+  .regex(/^[a-zA-Z0-9._/-]+$/, "branchModel 格式不合法");
 
 export const connectionCreateSchema = z
   .object({

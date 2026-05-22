@@ -47,6 +47,22 @@ describe("parseBranchDecision", () => {
     expect(result).toEqual({ ok: true, selectedLabel: "Code Review" });
   });
 
+  it("回覆含說明文字與 JSON → 擷取 selectedLabel JSON 後 ok", () => {
+    const result = parseBranchDecision(
+      '我會選擇清單分支。\n{"selectedLabel":"Checklist"}\n原因：最符合。',
+      validLabels,
+    );
+    expect(result).toEqual({ ok: true, selectedLabel: "Checklist" });
+  });
+
+  it("回覆含多個 JSON 時優先擷取含 selectedLabel 的 JSON", () => {
+    const result = parseBranchDecision(
+      '{"note":"ignore"}\n最後答案：{"selectedLabel":"Hotfix"}',
+      validLabels,
+    );
+    expect(result).toEqual({ ok: true, selectedLabel: "Hotfix" });
+  });
+
   it("非 JSON 純文字 → PARSE_FAIL", () => {
     const result = parseBranchDecision("這不是 JSON", validLabels);
     expect(result).toEqual({

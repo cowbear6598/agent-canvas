@@ -79,7 +79,7 @@ export const pasteConnectionItemSchema = z
       .string()
       .min(1)
       .max(200)
-      .regex(/^[a-zA-Z0-9._-]+$/, "branchModel 格式不合法")
+      .regex(/^[a-zA-Z0-9._/-]+$/, "branchModel 格式不合法")
       .optional(),
   })
   .strict();

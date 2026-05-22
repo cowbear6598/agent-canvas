@@ -57,6 +57,10 @@ export function resolveModelWithFallback(
   provider: ProviderName,
   requestedModel: string,
 ): ResolvedModelResult {
+  if (provider === "opencode") {
+    return { resolved: requestedModel, didFallback: false };
+  }
+
   const metadata = getProvider(provider).metadata;
   const isValid = metadata.availableModelValues.has(requestedModel);
 

@@ -8,6 +8,7 @@
  *   - branchDecisionService.decideBranch
  *   - workflowEventEmitter 各 emit* 方法
  *   - connectionStore.updateDecideStatus / updateConnectionStatus
+ *   - canvasStore.getNameById
  *   - workflowPipeline.execute
  *   - podStore.getById
  *   - logger
@@ -18,6 +19,7 @@ import { workflowBranchTriggerService } from "../../src/services/workflow/workfl
 import { branchDecisionService } from "../../src/services/workflow/branchDecisionService.js";
 import { workflowEventEmitter } from "../../src/services/workflow/workflowEventEmitter.js";
 import { connectionStore } from "../../src/services/connectionStore.js";
+import { canvasStore } from "../../src/services/canvasStore.js";
 import { socketService } from "../../src/services/socketService.js";
 import { workflowStateService } from "../../src/services/workflow/workflowStateService.js";
 import { pendingTargetStore } from "../../src/services/pendingTargetStore.js";
@@ -95,6 +97,7 @@ function setupBasicSpies() {
   vi.spyOn(logger, "log").mockImplementation(() => {});
   vi.spyOn(logger, "warn").mockImplementation(() => {});
   vi.spyOn(logger, "error").mockImplementation(() => {});
+  vi.spyOn(canvasStore, "getNameById").mockReturnValue("Branch Canvas");
   vi.spyOn(podStore, "getById").mockImplementation(((
     _cId: string,
     podId: string,
@@ -144,6 +147,7 @@ describe("WorkflowBranchTriggerService", () => {
       branchDecisionService,
       eventEmitter: workflowEventEmitter,
       connectionStore,
+      canvasStore,
       podStore,
       stateService: workflowStateService,
       pendingTargetStore,
@@ -202,6 +206,36 @@ describe("WorkflowBranchTriggerService", () => {
         workflowBranchTriggerService,
       );
     });
+
+    it("approved pipeline 失敗時 workflow log 使用 source-target pod 名稱", async () => {
+      const conn = makeConnection({
+        id: "conn-fail",
+        label: "Checklist",
+        targetPodId: "target-pod",
+      });
+      vi.spyOn(branchDecisionService, "decideBranch").mockResolvedValue({
+        selectedConnectionId: "conn-fail",
+        rejectedConnectionIds: [],
+      });
+      vi.spyOn(workflowPipeline, "execute").mockRejectedValueOnce(
+        new Error("boom"),
+      );
+
+      await workflowBranchTriggerService.processBranchConnections(
+        CANVAS_ID,
+        SOURCE_POD_ID,
+        [conn],
+        null,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(logger.error).toHaveBeenCalledWith(
+        "Workflow",
+        "Error",
+        "Branch Workflow 執行失敗，連線: Pod source-pod - Pod target-pod",
+        expect.any(Error),
+      );
+    });
   });
 
   // ============================================================
@@ -233,6 +267,26 @@ describe("WorkflowBranchTriggerService", () => {
       );
 
       expect(workflowPipeline.execute).not.toHaveBeenCalled();
+    });
+
+    it("AI 選 None 的 workflow log 使用 canvas / source pod 名稱", async () => {
+      vi.spyOn(branchDecisionService, "decideBranch").mockResolvedValue({
+        selectedConnectionId: null,
+        rejectedConnectionIds: ["conn-branch-1"],
+      });
+
+      await workflowBranchTriggerService.processBranchConnections(
+        CANVAS_ID,
+        SOURCE_POD_ID,
+        [mockConnection],
+        null,
+      );
+
+      expect(logger.log).toHaveBeenCalledWith(
+        "Workflow",
+        "Update",
+        "[Branch] AI 選 None，不觸發任何 pipeline，canvas「Branch Canvas」 sourcePod「Pod source-pod」",
+      );
     });
   });
 

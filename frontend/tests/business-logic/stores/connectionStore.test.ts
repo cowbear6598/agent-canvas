@@ -13,6 +13,7 @@ import { useConnectionStore } from "@/stores/connectionStore";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { usePodStore } from "@/stores/pod/podStore";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
+import { useOpencodeAliasStore } from "@/stores/opencodeAliasStore";
 import { useSelectionStore } from "@/stores/pod/selectionStore";
 import type {
   Connection,
@@ -545,6 +546,14 @@ describe("connectionStore", () => {
       );
 
       expect(result?.summaryModel).toBe("sonnet");
+      expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            summaryProvider: "claude",
+            summaryModel: "sonnet",
+          }),
+        }),
+      );
     });
 
     it("上游為 Codex Pod 時，summaryModel 應為 Codex 的預設模型", async () => {
@@ -582,6 +591,57 @@ describe("connectionStore", () => {
       );
 
       expect(result?.summaryModel).toBe("gpt-5.4");
+      expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            summaryProvider: "codex",
+            summaryModel: "gpt-5.4",
+          }),
+        }),
+      );
+    });
+
+    it("上游為 OpenCode Pod 時，建立連線 payload 應直接使用 Pod 目前的 provider/model", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      const store = useConnectionStore();
+      const podStore = usePodStore();
+
+      podStore.pods = [
+        createMockPod({
+          id: "pod-opencode",
+          provider: "opencode",
+          providerConfig: { model: "opencode/deepseek-v4-flash-free" },
+        }),
+      ];
+
+      mockCreateWebSocketRequest.mockResolvedValueOnce({
+        connection: {
+          id: "conn-opencode",
+          sourcePodId: "pod-opencode",
+          sourceAnchor: "bottom",
+          targetPodId: "pod-target",
+          targetAnchor: "top",
+        },
+      });
+
+      const result = await store.createConnection(
+        "pod-opencode",
+        "bottom",
+        "pod-target",
+        "top",
+      );
+
+      expect(result?.summaryProvider).toBe("opencode");
+      expect(result?.summaryModel).toBe("opencode/deepseek-v4-flash-free");
+      expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            summaryProvider: "opencode",
+            summaryModel: "opencode/deepseek-v4-flash-free",
+          }),
+        }),
+      );
     });
 
     it("capability 查無資料時，summaryModel 應 fallback 為 DEFAULT_SUMMARY_MODEL", async () => {
@@ -2326,6 +2386,62 @@ describe("connectionStore", () => {
       );
     });
 
+    it("Summary Provider 切換到 OpenCode 時送出的 provider/model payload 使用第一筆 alias", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      const store = useConnectionStore();
+      const capabilityStore = useProviderCapabilityStore();
+      const aliasStore = useOpencodeAliasStore();
+
+      aliasStore.setAliases([
+        {
+          id: "alias-2",
+          providerID: "anthropic",
+          modelID: "claude-3-5-sonnet",
+          alias: "Sonnet",
+          orderIdx: 1,
+        },
+        {
+          id: "alias-1",
+          providerID: "openai",
+          modelID: "gpt-4o",
+          alias: "GPT-4o",
+          orderIdx: 0,
+        },
+      ]);
+
+      mockCreateWebSocketRequest.mockResolvedValueOnce({
+        connection: {
+          id: "conn-opencode-summary",
+          sourcePodId: "pod-a",
+          sourceAnchor: "bottom",
+          targetPodId: "pod-b",
+          targetAnchor: "top",
+          summaryProvider: "opencode",
+          summaryModel: "openai/gpt-4o",
+        },
+      });
+
+      await store.updateConnectionSummaryProvider(
+        "conn-opencode-summary",
+        "opencode",
+        capabilityStore.getDefaultModel("opencode")!,
+      );
+
+      expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestEvent: "connection:update",
+          responseEvent: "connection:updated",
+          payload: expect.objectContaining({
+            connectionId: "conn-opencode-summary",
+            summaryProvider: "opencode",
+            summaryModel: "openai/gpt-4o",
+            canvasId: "canvas-1",
+          }),
+        }),
+      );
+    });
+
     it("成功時應回傳正規化後的 Connection，含 summaryProvider 欄位", async () => {
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
@@ -2637,6 +2753,108 @@ describe("connectionStore", () => {
           payload: expect.objectContaining({
             connectionId: "conn-branch",
             triggerMode: "branch",
+          }),
+        }),
+      );
+    });
+  });
+
+  describe("Branch OpenCode provider/model wire-up", () => {
+    function seedOpencodeAliases(): void {
+      const aliasStore = useOpencodeAliasStore();
+      aliasStore.setAliases([
+        {
+          id: "alias-1",
+          providerID: "openai",
+          modelID: "gpt-4o",
+          alias: "GPT-4o",
+          orderIdx: 0,
+        },
+        {
+          id: "alias-2",
+          providerID: "anthropic",
+          modelID: "claude-opus-4-5",
+          alias: "Claude Opus",
+          orderIdx: 1,
+        },
+      ]);
+    }
+
+    it("Branch Provider 切換到 OpenCode 時送出的 provider/model payload 使用第一筆 alias", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      const store = useConnectionStore();
+      const capabilityStore = useProviderCapabilityStore();
+      seedOpencodeAliases();
+
+      const conn = createMockConnection({
+        id: "conn-opencode-provider",
+        sourcePodId: "pod-src",
+        triggerMode: "branch",
+        branchProvider: "claude",
+        branchModel: "sonnet",
+      });
+      store.connections = [conn];
+
+      mockCreateWebSocketRequest.mockResolvedValueOnce({
+        connection: {
+          ...conn,
+          branchProvider: "opencode",
+          branchModel: "openai/gpt-4o",
+        },
+      });
+
+      await store.updateConnectionBranchProvider(
+        "conn-opencode-provider",
+        "opencode",
+        capabilityStore.getDefaultModel("opencode")!,
+      );
+
+      expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestEvent: "connection:update",
+          payload: expect.objectContaining({
+            connectionId: "conn-opencode-provider",
+            branchProvider: "opencode",
+            branchModel: "openai/gpt-4o",
+          }),
+        }),
+      );
+    });
+
+    it("Branch Model 選擇 OpenCode alias 時送出的 model value 維持 providerID/modelID 格式", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      const store = useConnectionStore();
+      seedOpencodeAliases();
+
+      const conn = createMockConnection({
+        id: "conn-opencode-model",
+        sourcePodId: "pod-src",
+        triggerMode: "branch",
+        branchProvider: "opencode",
+        branchModel: "openai/gpt-4o",
+      });
+      store.connections = [conn];
+
+      mockCreateWebSocketRequest.mockResolvedValueOnce({
+        connection: {
+          ...conn,
+          branchModel: "anthropic/claude-opus-4-5",
+        },
+      });
+
+      await store.updateConnectionBranchModel(
+        "conn-opencode-model",
+        "anthropic/claude-opus-4-5",
+      );
+
+      expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestEvent: "connection:update",
+          payload: expect.objectContaining({
+            connectionId: "conn-opencode-model",
+            branchModel: "anthropic/claude-opus-4-5",
           }),
         }),
       );

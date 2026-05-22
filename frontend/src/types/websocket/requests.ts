@@ -120,6 +120,8 @@ export interface ConnectionCreatePayload {
   targetAnchor: AnchorPosition;
   /** 新建 Connection 時可帶入預設 Summary Provider；null 代表清除（重設為 fallback） */
   summaryProvider?: PodProvider | null;
+  /** 新建 Connection 時可帶入預設 Summary Model */
+  summaryModel?: string;
   triggerMode?: "auto" | "branch" | "direct";
   /** Branch 模式下的連線標籤 */
   label?: string;
