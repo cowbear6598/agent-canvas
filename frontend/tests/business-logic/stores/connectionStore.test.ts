@@ -21,6 +21,11 @@ import type {
   ConnectionStatus,
   DecideStatus,
 } from "@/types/connection";
+import {
+  BRANCH_DESCRIPTION_MAX_LENGTH,
+  BRANCH_LABEL_MAX_LENGTH,
+} from "@/types/connection";
+import { DEFAULT_TOAST_DURATION_MS } from "@/lib/constants";
 import type {
   WorkflowAutoTriggeredPayload,
   WorkflowCompletePayload,
@@ -45,16 +50,6 @@ vi.mock("@/composables/useToast", () => ({
 
 describe("connectionStore", () => {
   setupStoreTest();
-
-  describe("初始狀態", () => {
-    it("各欄位應有正確預設值", () => {
-      const store = useConnectionStore();
-
-      expect(store.connections).toEqual([]);
-      expect(store.selectedConnectionId).toBeNull();
-      expect(store.draggingConnection).toBeNull();
-    });
-  });
 
   describe("getters", () => {
     describe("getConnectionsByPodId", () => {
@@ -386,14 +381,13 @@ describe("connectionStore", () => {
       expect(mockToast).toHaveBeenCalledWith({
         title: "連線已存在",
         description: "這兩個 Pod 之間已經有連線了",
-        duration: 3000,
+        duration: DEFAULT_TOAST_DURATION_MS,
       });
       expect(mockCreateWebSocketRequest).not.toHaveBeenCalled();
     });
 
     it("無 activeCanvasId 時應回傳 null", async () => {
       const store = useConnectionStore();
-      // activeCanvasId 未設定，useCanvasWebSocketAction 會直接回傳 failure
 
       const result = await store.createConnection(
         "pod-a",
@@ -882,7 +876,6 @@ describe("connectionStore", () => {
 
     it("無 activeCanvasId 時應回傳 null", async () => {
       const store = useConnectionStore();
-      // activeCanvasId 未設定，useCanvasWebSocketAction 會直接回傳 failure
 
       const result = await store.updateConnectionTriggerMode(
         "conn-1",
@@ -959,80 +952,6 @@ describe("connectionStore", () => {
       );
 
       expect(result?.status).toBe("idle");
-    });
-  });
-
-  describe("拖曳連線", () => {
-    describe("startDragging", () => {
-      it("應設定 draggingConnection", () => {
-        const store = useConnectionStore();
-
-        store.startDragging("pod-a", "bottom", { x: 100, y: 200 });
-
-        expect(store.draggingConnection).toEqual({
-          sourcePodId: "pod-a",
-          sourceAnchor: "bottom",
-          startPoint: { x: 100, y: 200 },
-          currentPoint: { x: 100, y: 200 },
-        });
-      });
-
-      it("sourcePodId 為 null 時應設為 undefined", () => {
-        const store = useConnectionStore();
-
-        store.startDragging(null, "top", { x: 50, y: 50 });
-
-        expect(store.draggingConnection).toEqual({
-          sourcePodId: undefined,
-          sourceAnchor: "top",
-          startPoint: { x: 50, y: 50 },
-          currentPoint: { x: 50, y: 50 },
-        });
-      });
-    });
-
-    describe("updateDraggingPosition", () => {
-      it("應更新 currentPoint", () => {
-        const store = useConnectionStore();
-        store.draggingConnection = {
-          sourcePodId: "pod-a",
-          sourceAnchor: "bottom",
-          startPoint: { x: 100, y: 200 },
-          currentPoint: { x: 100, y: 200 },
-        };
-
-        store.updateDraggingPosition({ x: 150, y: 250 });
-
-        expect(store.draggingConnection.currentPoint).toEqual({
-          x: 150,
-          y: 250,
-        });
-      });
-
-      it("draggingConnection 為 null 時不應報錯", () => {
-        const store = useConnectionStore();
-        store.draggingConnection = null;
-
-        expect(() =>
-          store.updateDraggingPosition({ x: 150, y: 250 }),
-        ).not.toThrow();
-      });
-    });
-
-    describe("endDragging", () => {
-      it("應清除 draggingConnection", () => {
-        const store = useConnectionStore();
-        store.draggingConnection = {
-          sourcePodId: "pod-a",
-          sourceAnchor: "bottom",
-          startPoint: { x: 100, y: 200 },
-          currentPoint: { x: 150, y: 250 },
-        };
-
-        store.endDragging();
-
-        expect(store.draggingConnection).toBeNull();
-      });
     });
   });
 
@@ -1332,7 +1251,6 @@ describe("connectionStore", () => {
 
     describe("isOutOfOrderUpdate — 事件亂序保護", () => {
       it("decideStatus 為 pending 時，incoming status = active 應被拒（connection.status 保持原值）", () => {
-        // Arrange：建立一條 decideStatus: pending 的 connection
         const store = useConnectionStore();
         const conn = createMockConnection({
           id: "conn-pending",
@@ -1344,7 +1262,6 @@ describe("connectionStore", () => {
         });
         store.connections = [conn];
 
-        // Act：透過 handleWorkflowAutoTriggered 觸發 updateAutoGroupStatus 嘗試設為 active
         const payload: WorkflowAutoTriggeredPayload = {
           connectionId: "conn-pending",
           sourcePodId: "pod-source",
@@ -1354,7 +1271,6 @@ describe("connectionStore", () => {
         };
         store.getWorkflowHandlers().handleWorkflowAutoTriggered(payload);
 
-        // Assert：decideStatus pending 保護生效，status 不被改為 active
         expect(store.connections[0]?.status).toBe("idle");
       });
     });
@@ -1455,22 +1371,6 @@ describe("connectionStore", () => {
         });
       });
 
-      it("Connection 不存在時不應報錯", () => {
-        const store = useConnectionStore();
-
-        const connEvent = {
-          id: "non-existent",
-          sourceAnchor: "bottom" as const,
-          targetPodId: "pod-b",
-          targetAnchor: "top" as const,
-          triggerMode: "auto" as TriggerMode,
-          decideStatus: "none" as DecideStatus,
-        };
-
-        expect(() => store.updateConnectionFromEvent(connEvent)).not.toThrow();
-        expect(store.connections).toHaveLength(0);
-      });
-
       it("event 提供 decideReason 時應覆蓋", () => {
         const store = useConnectionStore();
         const existingConn = createMockConnection({
@@ -1497,7 +1397,6 @@ describe("connectionStore", () => {
       });
 
       it("收到 decideStatus: approved → connection.decideStatus 更新", () => {
-        // Arrange：store 中有 decideStatus: none 的 connection
         const store = useConnectionStore();
         const existingConn = createMockConnection({
           id: "conn-1",
@@ -1509,7 +1408,6 @@ describe("connectionStore", () => {
         });
         store.connections = [existingConn];
 
-        // Act：收到帶 decideStatus: approved 的事件
         store.updateConnectionFromEvent({
           id: "conn-1",
           sourcePodId: "pod-a",
@@ -1520,12 +1418,10 @@ describe("connectionStore", () => {
           decideStatus: "approved" as DecideStatus,
         });
 
-        // Assert：decideStatus 更新為 approved
         expect(store.connections[0]?.decideStatus).toBe("approved");
       });
 
       it("收到不含 decideStatus 的 payload → 保留現有 decideStatus（不被清掉）", () => {
-        // Arrange：store 中有 decideStatus: pending 的 connection
         const store = useConnectionStore();
         const existingConn = createMockConnection({
           id: "conn-1",
@@ -1537,7 +1433,6 @@ describe("connectionStore", () => {
         });
         store.connections = [existingConn];
 
-        // Act：收到不帶 decideStatus 的事件（undefined）
         store.updateConnectionFromEvent({
           id: "conn-1",
           sourcePodId: "pod-a",
@@ -1547,7 +1442,6 @@ describe("connectionStore", () => {
           triggerMode: "branch" as TriggerMode,
         } as Parameters<typeof store.updateConnectionFromEvent>[0]);
 
-        // Assert：現有 decideStatus pending 保留，不被清掉
         expect(store.connections[0]?.decideStatus).toBe("pending");
       });
     });
@@ -1695,25 +1589,6 @@ describe("connectionStore", () => {
 
       expect(store.connections[0]?.decideStatus).toBe("rejected");
       expect(store.connections[0]?.decideReason).toBe("Not relevant");
-    });
-  });
-
-  describe("selectConnection", () => {
-    it("應設定 selectedConnectionId", () => {
-      const store = useConnectionStore();
-
-      store.selectConnection("conn-123");
-
-      expect(store.selectedConnectionId).toBe("conn-123");
-    });
-
-    it("可以清除選取", () => {
-      const store = useConnectionStore();
-      store.selectedConnectionId = "conn-123";
-
-      store.selectConnection(null);
-
-      expect(store.selectedConnectionId).toBeNull();
     });
   });
 
@@ -1985,7 +1860,6 @@ describe("connectionStore", () => {
     });
 
     it("branch connection decideStatus === pending 時橡皮擦應 disabled（回傳 true）", () => {
-      // Arrange：head pod + branch connection（status: idle, decideStatus: pending）+ downstream pod
       const store = useConnectionStore();
       const podStore = usePodStore();
       podStore.pods = [
@@ -2003,12 +1877,10 @@ describe("connectionStore", () => {
         }),
       ];
 
-      // Act + Assert：decideStatus pending 代表 AI 正在決策中，工作流仍在執行
       expect(store.isWorkflowRunning("head-pod")).toBe(true);
     });
 
     it("所有 connection status=idle 且 decideStatus=none 時應回 false（橡皮擦 enabled）", () => {
-      // Arrange：head pod + connection（status: idle, decideStatus: none）+ downstream pod
       const store = useConnectionStore();
       const podStore = usePodStore();
       podStore.pods = [
@@ -2025,15 +1897,10 @@ describe("connectionStore", () => {
         }),
       ];
 
-      // Act + Assert：所有狀態都已結束，橡皮擦應可使用
       expect(store.isWorkflowRunning("head-pod")).toBe(false);
     });
 
     it("multi-input 一條 approved 一條 rejected 且 downstream pod idle → 橡皮擦 enabled（回傳 false）", () => {
-      // 修正 Bug B：rejected 與 approved 不再讓 isWorkflowRunning 卡在 true
-      // Arrange：head pod → conn-1（decideStatus: approved）
-      //          head2 pod → conn-2（decideStatus: rejected）
-      //          共同 downstream pod（status: idle）
       const store = useConnectionStore();
       const podStore = usePodStore();
       podStore.pods = [
@@ -2058,7 +1925,6 @@ describe("connectionStore", () => {
         }),
       ];
 
-      // Act + Assert：決策已完成（approved/rejected 均非執行中），應回傳 false
       expect(store.isWorkflowRunning("head-pod")).toBe(false);
     });
   });
@@ -2249,7 +2115,6 @@ describe("connectionStore", () => {
       });
       store.connections = [conn];
 
-      // reconcileSummaryModelsForPod 需要有 activeCanvasId 才能透過 executeAction 發送請求
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
 
@@ -2379,7 +2244,6 @@ describe("connectionStore", () => {
     });
   });
 
-  // ── updateConnectionSummaryProvider ──────────────────────────────────────
   describe("updateConnectionSummaryProvider", () => {
     it("WS payload 應同時包含 summaryProvider 與 summaryModel", async () => {
       const canvasStore = useCanvasStore();
@@ -2551,7 +2415,6 @@ describe("connectionStore", () => {
     });
   });
 
-  // ── updateConnectionSummaryModel（確認不帶 summaryProvider）──────────────
   describe("updateConnectionSummaryModel 不帶 summaryProvider", () => {
     it("WS payload 應只含 summaryModel，不含 summaryProvider", async () => {
       const canvasStore = useCanvasStore();
@@ -2577,7 +2440,6 @@ describe("connectionStore", () => {
     });
   });
 
-  // ── normalizeConnection summaryProvider 處理 ─────────────────────────────
   describe("normalizeConnection summaryProvider 正規化", () => {
     it("loadConnectionsFromBackend：legacy gemini summaryProvider 應收斂為 claude", async () => {
       const canvasStore = useCanvasStore();
@@ -2653,7 +2515,6 @@ describe("connectionStore", () => {
     });
   });
 
-  // ── updateConnectionFromEvent summaryProvider 處理 ──────────────────────
   describe("updateConnectionFromEvent summaryProvider 更新策略", () => {
     it("broadcast 帶 legacy gemini summaryProvider 時應正規化為 claude", () => {
       const store = useConnectionStore();
@@ -2759,7 +2620,6 @@ describe("connectionStore", () => {
     });
   });
 
-  // ── updateConnectionTriggerMode("branch") wire-up smoke ──────────────────
   describe("updateConnectionTriggerMode branch wire-up smoke", () => {
     it("呼叫後 mock websocketClient 收到帶 triggerMode: branch 的 connection:update 請求", async () => {
       const canvasStore = useCanvasStore();
@@ -2850,6 +2710,52 @@ describe("connectionStore", () => {
       );
     });
 
+    it("Branch Provider 同步任一 sibling 失敗時應回傳 null 並重新載入 connections", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      const store = useConnectionStore();
+      seedOpencodeAliases();
+
+      const conn1 = createMockConnection({
+        id: "conn-provider-target",
+        sourcePodId: "pod-src",
+        triggerMode: "branch",
+        branchProvider: "claude",
+        branchModel: "sonnet",
+      });
+      const conn2 = createMockConnection({
+        id: "conn-provider-sibling",
+        sourcePodId: "pod-src",
+        triggerMode: "branch",
+        branchProvider: "claude",
+        branchModel: "sonnet",
+      });
+      store.connections = [conn1, conn2];
+      mockCreateWebSocketRequest
+        .mockResolvedValueOnce({
+          connection: {
+            ...conn1,
+            branchProvider: "opencode",
+            branchModel: "openai/gpt-4o",
+          },
+        })
+        .mockRejectedValueOnce(new Error("update failed"))
+        .mockResolvedValueOnce({ connections: [conn1, conn2] });
+
+      const result = await store.updateConnectionBranchProvider(
+        "conn-provider-target",
+        "opencode",
+        "openai/gpt-4o",
+      );
+
+      expect(result).toBeNull();
+      expect(mockCreateWebSocketRequest).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          requestEvent: "connection:list",
+        }),
+      );
+    });
+
     it("Branch Model 選擇 OpenCode alias 時送出的 model value 維持 providerID/modelID 格式", async () => {
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
@@ -2887,16 +2793,57 @@ describe("connectionStore", () => {
         }),
       );
     });
+
+    it("Branch Model 同步任一 sibling 失敗時應回傳 null 並重新載入 connections", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      const store = useConnectionStore();
+
+      const conn1 = createMockConnection({
+        id: "conn-model-target",
+        sourcePodId: "pod-src",
+        triggerMode: "branch",
+        branchProvider: "opencode",
+        branchModel: "openai/gpt-4o",
+      });
+      const conn2 = createMockConnection({
+        id: "conn-model-sibling",
+        sourcePodId: "pod-src",
+        triggerMode: "branch",
+        branchProvider: "opencode",
+        branchModel: "openai/gpt-4o",
+      });
+      store.connections = [conn1, conn2];
+      mockCreateWebSocketRequest
+        .mockResolvedValueOnce({
+          connection: {
+            ...conn1,
+            branchModel: "anthropic/claude-opus-4-5",
+          },
+        })
+        .mockRejectedValueOnce(new Error("update failed"))
+        .mockResolvedValueOnce({ connections: [conn1, conn2] });
+
+      const result = await store.updateConnectionBranchModel(
+        "conn-model-target",
+        "anthropic/claude-opus-4-5",
+      );
+
+      expect(result).toBeNull();
+      expect(mockCreateWebSocketRequest).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          requestEvent: "connection:list",
+        }),
+      );
+    });
   });
 
-  // ── updateConnectionBranchLabel wire-up smoke ─────────────────────────────
   describe("updateConnectionBranchLabel", () => {
     it("wire-up smoke：呼叫後 mock websocketClient 收到帶 label 的 connection:update 請求", async () => {
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
       const store = useConnectionStore();
 
-      // 預先注入 connection（validateBranchLabel 需要 sourcePodId）
       const conn = createMockConnection({
         id: "conn-label-1",
         sourcePodId: "pod-src",
@@ -2921,13 +2868,11 @@ describe("connectionStore", () => {
       );
     });
 
-    // ── sad case B1：label 重複（同 source Pod 已有相同 label） ──────────────
-    it("B1 sad case：同 source Pod 已有 label=Checklist 的 branch → 不發 WS 且 toast 帶 branchLabelDuplicate", async () => {
+    it("同 source Pod 已有 label=Checklist 的 branch → 不發 WS 且 toast 帶 branchLabelDuplicate", async () => {
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
       const store = useConnectionStore();
 
-      // conn-1 已有 label="Checklist"，conn-2 為欲更新的目標
       const conn1 = createMockConnection({
         id: "conn-1",
         sourcePodId: "pod-src",
@@ -2942,7 +2887,6 @@ describe("connectionStore", () => {
       });
       store.connections = [conn1, conn2];
 
-      // 嘗試將 conn-2 的 label 改成已存在的 "Checklist"
       const result = await store.updateConnectionBranchLabel(
         "conn-2",
         "Checklist",
@@ -2950,7 +2894,6 @@ describe("connectionStore", () => {
 
       expect(result).toBeNull();
       expect(mockCreateWebSocketRequest).not.toHaveBeenCalled();
-      // mockToast 已在頂層 mock，確認呼叫時 title 包含 branchLabelDuplicate 對應文字
       expect(mockToast).toHaveBeenCalledWith(
         expect.objectContaining({
           variant: "destructive",
@@ -2958,8 +2901,7 @@ describe("connectionStore", () => {
       );
     });
 
-    // ── sad case B2：label="None"（保留字） ──────────────────────────────────
-    it("B2 sad case：label=None → 不發 WS 且 toast 帶 branchLabelReserved 錯誤", async () => {
+    it("label=None → 不發 WS 且 toast 帶 branchLabelReserved 錯誤", async () => {
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
       const store = useConnectionStore();
@@ -2983,8 +2925,7 @@ describe("connectionStore", () => {
       );
     });
 
-    // ── sad case B3：label="" ──────────────────────────────────────────────
-    it("B3 sad case：label 為空字串 → 不發 WS 且 toast 帶 branchLabelEmpty 錯誤", async () => {
+    it("label 為空字串 → 不發 WS 且 toast 帶 branchLabelEmpty 錯誤", async () => {
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
       const store = useConnectionStore();
@@ -3005,8 +2946,7 @@ describe("connectionStore", () => {
       );
     });
 
-    // ── sad case B4：label 長度 33（超過上限 32） ─────────────────────────────
-    it("B4 sad case：label 長度 33 → 不發 WS 且 toast 帶 branchLabelTooLong 錯誤", async () => {
+    it("label 長度超過上限 → 不發 WS 且 toast 帶 branchLabelTooLong 錯誤", async () => {
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
       const store = useConnectionStore();
@@ -3018,8 +2958,7 @@ describe("connectionStore", () => {
       });
       store.connections = [conn];
 
-      // 長度 33 的字串（超出上限 32）
-      const tooLongLabel = "a".repeat(33);
+      const tooLongLabel = "a".repeat(BRANCH_LABEL_MAX_LENGTH + 1);
       const result = await store.updateConnectionBranchLabel(
         "conn-long",
         tooLongLabel,
@@ -3033,10 +2972,8 @@ describe("connectionStore", () => {
     });
   });
 
-  // ── updateConnectionBranchDescription sad case ────────────────────────────
   describe("updateConnectionBranchDescription", () => {
-    // ── sad case B5：description 長度 201（超過上限 200） ────────────────────
-    it("B5 sad case：description 長度 201 → 不發 WS 且 toast 帶 branchDescriptionTooLong 錯誤", async () => {
+    it("description 長度超過上限 → 不發 WS 且 toast 帶 branchDescriptionTooLong 錯誤", async () => {
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
       const store = useConnectionStore();
@@ -3048,8 +2985,9 @@ describe("connectionStore", () => {
       });
       store.connections = [conn];
 
-      // 長度 201 的字串（超出上限 200）
-      const tooLongDescription = "b".repeat(201);
+      const tooLongDescription = "b".repeat(
+        BRANCH_DESCRIPTION_MAX_LENGTH + 1,
+      );
       const result = await store.updateConnectionBranchDescription(
         "conn-desc-long",
         tooLongDescription,

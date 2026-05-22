@@ -591,22 +591,18 @@ export const useConnectionStore = defineStore("connection", () => {
     connectionId: string,
     label: string,
   ): { valid: true } | { valid: false; errorKey: string } {
-    // 規則 1：label 不可為空字串
     if (label.trim() === "") {
       return { valid: false, errorKey: "branchLabelEmpty" };
     }
 
-    // 規則 2：label 長度 ≤ BRANCH_LABEL_MAX_LENGTH（32）
     if (label.length > BRANCH_LABEL_MAX_LENGTH) {
       return { valid: false, errorKey: "branchLabelTooLong" };
     }
 
-    // 規則 3：label 不可等於 BRANCH_RESERVED_LABEL（"None"，大小寫不敏感）
     if (label.toLowerCase() === BRANCH_RESERVED_LABEL.toLowerCase()) {
       return { valid: false, errorKey: "branchLabelReserved" };
     }
 
-    // 規則 4：同一個 sourcePodId 出去的 branch connections（排除自己）label 不可重複
     const siblings = getBranchConnectionsBySourcePodId.value(sourcePodId);
     const isDuplicate = siblings.some(
       (conn) =>
@@ -767,6 +763,25 @@ export const useConnectionStore = defineStore("connection", () => {
     return Array.from(ids);
   }
 
+  async function executeBranchSiblingUpdates(
+    connectionId: string,
+    updates: Pick<ConnectionUpdatePayload, "branchProvider" | "branchModel">,
+  ): Promise<Connection | null> {
+    const ids = collectBranchSiblingIds(connectionId);
+    const results = await Promise.all(
+      ids.map((id) =>
+        executeConnectionUpdate(id, updates, t("store.connection.updateFailed")),
+      ),
+    );
+
+    if (results.some((result) => result === null)) {
+      await loadConnectionsFromBackend();
+      return null;
+    }
+
+    return results.find((result) => result?.id === connectionId) ?? null;
+  }
+
   /**
    * 同時更新 branchProvider 與 branchModel，確保單一 WS 請求送出，
    * 避免 provider/model 出現不一致的中間狀態。
@@ -777,17 +792,10 @@ export const useConnectionStore = defineStore("connection", () => {
     branchProvider: PodProvider,
     branchModel: string,
   ): Promise<Connection | null> {
-    const ids = collectBranchSiblingIds(connectionId);
-    const results = await Promise.all(
-      ids.map((id) =>
-        executeConnectionUpdate(
-          id,
-          { branchProvider, branchModel },
-          t("store.connection.updateFailed"),
-        ),
-      ),
-    );
-    return results.find((r) => r?.id === connectionId) ?? null;
+    return executeBranchSiblingUpdates(connectionId, {
+      branchProvider,
+      branchModel,
+    });
   }
 
   /**
@@ -798,17 +806,7 @@ export const useConnectionStore = defineStore("connection", () => {
     connectionId: string,
     branchModel: string,
   ): Promise<Connection | null> {
-    const ids = collectBranchSiblingIds(connectionId);
-    const results = await Promise.all(
-      ids.map((id) =>
-        executeConnectionUpdate(
-          id,
-          { branchModel },
-          t("store.connection.updateFailed"),
-        ),
-      ),
-    );
-    return results.find((r) => r?.id === connectionId) ?? null;
+    return executeBranchSiblingUpdates(connectionId, { branchModel });
   }
 
   function setupWorkflowListeners(): void {
@@ -841,6 +839,27 @@ export const useConnectionStore = defineStore("connection", () => {
     }
   }
 
+  function resolveSummaryProviderFromEvent(
+    connection: ConnectionPayloadItem,
+    existingConnection: Connection,
+  ): PodProvider | null | undefined {
+    if (connection.summaryProvider === undefined) {
+      return existingConnection.summaryProvider;
+    }
+
+    if (connection.summaryProvider !== null) {
+      return normalizePodProvider(connection.summaryProvider) ?? "claude";
+    }
+
+    if (!existingConnection.sourcePodId) {
+      return "claude";
+    }
+
+    const sourceProvider =
+      podStore.getPodById(existingConnection.sourcePodId)?.provider ?? "claude";
+    return normalizePodProvider(sourceProvider) ?? "claude";
+  }
+
   function updateConnectionFromEvent(connection: ConnectionPayloadItem): void {
     const index = connections.value.findIndex(
       (existing) => existing.id === connection.id,
@@ -862,17 +881,10 @@ export const useConnectionStore = defineStore("connection", () => {
         connection.summaryModel ??
         existingConnection.summaryModel ??
         DEFAULT_SUMMARY_MODEL,
-      summaryProvider:
-        connection.summaryProvider !== undefined
-          ? connection.summaryProvider == null
-            ? existingConnection.sourcePodId
-              ? (normalizePodProvider(
-                  podStore.getPodById(existingConnection.sourcePodId)
-                    ?.provider ?? "claude",
-                ) ?? "claude")
-              : "claude"
-            : (normalizePodProvider(connection.summaryProvider) ?? "claude")
-          : existingConnection.summaryProvider,
+      summaryProvider: resolveSummaryProviderFromEvent(
+        connection,
+        existingConnection,
+      ),
       // branch 欄位直接以後端回傳值覆寫（包含 undefined → 視為清空）
       label: connection.label,
       description: connection.description,
