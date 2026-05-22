@@ -290,20 +290,14 @@ export function readGoalRuntimeSnapshot(
       !Array.isArray(parsed.goal?.todos) ||
       !parsed.state
     ) {
-      return null;
+      throw new Error(`Invalid Goal Runtime snapshot: ${statePath}`);
     }
     return normalizeGoalRuntimeSnapshot(parsed);
   } catch (err) {
-    // 檔案不存在（ENOENT）或 JSON 解析失敗（SyntaxError）屬正常情況，靜默回 null
-    if (
-      err instanceof SyntaxError ||
-      (err as NodeJS.ErrnoException).code === "ENOENT"
-    ) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
       return null;
     }
-    // 其他 I/O 錯誤（EACCES、EMFILE 等）需記錄，避免被誤判為「snapshot 不存在」
-    console.error("[goalRuntime] readGoalRuntimeSnapshot 讀取快照失敗", err);
-    return null;
+    throw err;
   }
 }
 

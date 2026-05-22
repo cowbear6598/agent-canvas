@@ -1,4 +1,6 @@
-import { afterEach, describe, expect, it } from "vitest";
+import fs from "fs";
+import path from "path";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   GOAL_MCP_SERVER_NAME,
   GOAL_MCP_TOOL_NAMES,
@@ -18,6 +20,7 @@ import {
   readGoalRuntimeSnapshot,
   removeGoalRuntimeRun,
 } from "../../src/services/goalRuntime.js";
+import { handleGoalMcpBridgeRequestForTest } from "../../src/services/mcp/goalMcpBridge.js";
 
 const goal = {
   todos: [
@@ -141,6 +144,14 @@ describe("goalRuntime", () => {
     ]);
   });
 
+  it("readGoalRuntimeSnapshot 讀到損壞 snapshot 應丟錯而非回 null", () => {
+    const statePath = getGoalRuntimeStatePath(runContext, pod.id);
+    fs.mkdirSync(path.dirname(statePath), { recursive: true });
+    fs.writeFileSync(statePath, "not-json", "utf-8");
+
+    expect(() => readGoalRuntimeSnapshot(statePath)).toThrow(SyntaxError);
+  });
+
   it("buildGoalRuntimeMcpServerConfig（compiled 模式）args 應只有 --goal-bridge", () => {
     const originalEnv = process.env.AGENT_CANVAS_COMPILED;
     try {
@@ -205,6 +216,78 @@ describe("goalRuntime", () => {
       activeTodoId: null,
       activeTodoText: null,
     });
+  });
+
+  it("Goal MCP bridge 應列出並回應 get_active_goal_todo", () => {
+    ensureGoalRuntime(pod, runContext);
+    const statePath = getGoalRuntimeStatePath(runContext, pod.id);
+    const originalStatePath = process.env.AGENT_CANVAS_GOAL_STATE_PATH;
+    const writes: string[] = [];
+    const writeMock = ((
+      chunk: string | Uint8Array,
+      encodingOrCallback?: BufferEncoding | ((err?: Error) => void),
+      callback?: (err?: Error) => void,
+    ): boolean => {
+      writes.push(String(chunk));
+      const done =
+        typeof encodingOrCallback === "function"
+          ? encodingOrCallback
+          : callback;
+      done?.();
+      return true;
+    }) as typeof process.stdout.write;
+    const writeSpy = vi.spyOn(process.stdout, "write").mockImplementation(
+      writeMock,
+    );
+
+    try {
+      process.env.AGENT_CANVAS_GOAL_STATE_PATH = statePath;
+      handleGoalMcpBridgeRequestForTest({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/list",
+      });
+
+      const listResponse = JSON.parse(writes.at(-1) ?? "{}") as {
+        result?: { tools?: Array<{ name: string }> };
+      };
+      expect(listResponse.result?.tools?.map((tool) => tool.name)).toContain(
+        GOAL_MCP_TOOL_NAMES.GET_ACTIVE_TODO,
+      );
+
+      writes.length = 0;
+      handleGoalMcpBridgeRequestForTest({
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/call",
+        params: {
+          name: GOAL_MCP_TOOL_NAMES.GET_ACTIVE_TODO,
+          arguments: {},
+        },
+      });
+
+      const callResponse = JSON.parse(writes.at(-1) ?? "{}") as {
+        result?: {
+          structuredContent?: unknown;
+          content?: Array<{ type: string; text: string }>;
+        };
+      };
+      const expected = {
+        activeTodoId: "todo-1",
+        activeTodoText: "Collect requirements",
+      };
+      expect(callResponse.result?.structuredContent).toEqual(expected);
+      expect(JSON.parse(callResponse.result?.content?.[0]?.text ?? "{}")).toEqual(
+        expected,
+      );
+    } finally {
+      if (originalStatePath === undefined) {
+        delete process.env.AGENT_CANVAS_GOAL_STATE_PATH;
+      } else {
+        process.env.AGENT_CANVAS_GOAL_STATE_PATH = originalStatePath;
+      }
+      writeSpy.mockRestore();
+    }
   });
 
   it("沒有 Goal 時仍應建立 Goal Runtime MCP metadata，並回報空狀態", () => {

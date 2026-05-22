@@ -193,6 +193,16 @@ export function waitForEvent<T>(
   });
 }
 
+function getRequestId(value: unknown): string | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  const requestId = (value as { requestId?: unknown }).requestId;
+  return typeof requestId === 'string' && requestId.length > 0
+    ? requestId
+    : null;
+}
+
 /**
  * 發送請求並等待回應
  * 適用於 Request/Response 模式
@@ -204,7 +214,27 @@ export async function emitAndWaitResponse<TReq, TRes>(
   payload: TReq,
   timeout: number = 5000
 ): Promise<TRes> {
-  const responsePromise = waitForEvent<TRes>(socket, responseEvent, timeout);
+  const requestId = getRequestId(payload);
+  const responsePromise = requestId
+    ? new Promise<TRes>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          socket.off(responseEvent, handler);
+          reject(new Error(`Timeout waiting for event: ${responseEvent}`));
+        }, timeout);
+
+        const handler = (data: TRes) => {
+          const responseRequestId = getRequestId(data);
+          if (responseRequestId && responseRequestId !== requestId) {
+            return;
+          }
+          clearTimeout(timer);
+          socket.off(responseEvent, handler);
+          resolve(data);
+        };
+
+        socket.on(responseEvent, handler);
+      })
+    : waitForEvent<TRes>(socket, responseEvent, timeout);
   socket.emit(requestEvent, payload);
   return responsePromise;
 }

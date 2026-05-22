@@ -323,6 +323,12 @@ function handleRequest(request: JsonRpcRequest): void {
   }
 }
 
+export function handleGoalMcpBridgeRequestForTest(
+  request: JsonRpcRequest,
+): void {
+  handleRequest(request);
+}
+
 export function runGoalMcpBridge(): void {
   let buffer = "";
 
