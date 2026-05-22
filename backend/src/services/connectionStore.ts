@@ -58,6 +58,10 @@ interface ConnectionRow {
 }
 
 function rowToConnection(row: ConnectionRow): Connection {
+  const branchDefaults =
+    row.branch_provider === null || row.branch_model === null
+      ? resolveBranchDefaults(row)
+      : null;
   return {
     id: row.id,
     sourcePodId: row.source_pod_id,
@@ -74,10 +78,41 @@ function rowToConnection(row: ConnectionRow): Connection {
     label: row.label,
     // DB NULL 轉為 undefined（符合 Connection 介面的選填定義）
     description: row.description ?? undefined,
-    // DB NULL 時 fallback 至 "claude"（向後相容舊資料）
-    branchProvider: (row.branch_provider as ProviderName | null) ?? "claude",
-    branchModel: row.branch_model ?? "sonnet",
+    // DB NULL 時依 source Pod provider 推導預設值，避免非 Claude Pod 的 Branch 決策落回 Claude。
+    branchProvider:
+      (row.branch_provider as ProviderName | null) ??
+      branchDefaults?.provider ??
+      "claude",
+    branchModel: row.branch_model ?? branchDefaults?.model ?? "sonnet",
   };
+}
+
+function resolveProviderDefaultModel(provider: ProviderName): string {
+  const defaultModel = (getProvider(provider).metadata.defaultOptions as {
+    model?: unknown;
+  }).model;
+  return typeof defaultModel === "string" && defaultModel.trim()
+    ? defaultModel
+    : "sonnet";
+}
+
+function resolveBranchDefaults(row: ConnectionRow): {
+  provider: ProviderName;
+  model: string;
+} {
+  const sourcePod = podStore.getById(row.canvas_id, row.source_pod_id);
+  const provider = sourcePod?.provider ?? "claude";
+  const sourceModel =
+    typeof sourcePod?.providerConfig?.model === "string" &&
+    sourcePod.providerConfig.model.trim().length > 0
+      ? sourcePod.providerConfig.model
+      : undefined;
+  const model =
+    provider === "opencode"
+      ? (sourceModel ?? resolveProviderDefaultModel("claude"))
+      : resolveProviderDefaultModel(provider);
+
+  return { provider, model };
 }
 
 class ConnectionStore {

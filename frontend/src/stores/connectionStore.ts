@@ -726,7 +726,11 @@ export const useConnectionStore = defineStore("connection", () => {
 
     const updates: Pick<
       ConnectionUpdatePayload,
-      "triggerMode" | "label" | "description"
+      | "triggerMode"
+      | "label"
+      | "description"
+      | "branchProvider"
+      | "branchModel"
     > = {
       label: payload.label,
       description: payload.description,
@@ -735,11 +739,46 @@ export const useConnectionStore = defineStore("connection", () => {
       updates.triggerMode = "branch";
     }
 
+    const connection = findConnectionById(connectionId);
+    if (payload.switchToBranch || !connection?.branchProvider) {
+      const branchDefaults = resolveBranchDefaultsFromSourcePod(sourcePodId);
+      if (!branchDefaults) {
+        toast({
+          title: t("canvas.connectionContextMenu.changeFailed"),
+          description: t("canvas.connectionContextMenu.branchModelChangeFailed"),
+          duration: DEFAULT_TOAST_DURATION_MS,
+          variant: "destructive",
+        });
+        return null;
+      }
+      updates.branchProvider = branchDefaults.provider;
+      updates.branchModel = branchDefaults.model;
+    }
+
     return executeConnectionUpdate(
       connectionId,
       updates,
       t("store.connection.updateFailed"),
     );
+  }
+
+  function resolveBranchDefaultsFromSourcePod(
+    sourcePodId: string,
+  ): { provider: PodProvider; model: string } | null {
+    const sourcePod = podStore.getPodById(sourcePodId);
+    const provider = normalizePodProvider(sourcePod?.provider ?? "claude");
+    const sourcePodModel =
+      typeof sourcePod?.providerConfig?.model === "string" &&
+      sourcePod.providerConfig.model.trim().length > 0
+        ? sourcePod.providerConfig.model
+        : undefined;
+    const model =
+      (provider === "opencode" ? sourcePodModel : undefined) ??
+      providerCapabilityStore.getDefaultModel(provider) ??
+      (provider === "opencode" ? undefined : DEFAULT_SUMMARY_MODEL);
+
+    if (!model) return null;
+    return { provider, model };
   }
 
   /**

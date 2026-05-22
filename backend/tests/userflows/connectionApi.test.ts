@@ -576,6 +576,50 @@ describe("PATCH /api/canvas/:id/connections/:connectionId", () => {
     expect(body.connection.triggerMode).toBe("branch");
   });
 
+  it("Codex source Pod 切換為 branch 時使用 Codex 預設 provider/model", async () => {
+    const server = getServer();
+
+    const sourcePodRes = await postPod(server.baseUrl, server.canvasId, {
+      name: "src-pod-patch-branch-codex",
+      x: 0,
+      y: 0,
+      provider: "codex",
+    });
+    const { pod: sourcePod } = await sourcePodRes.json();
+    const targetPodRes = await postPod(server.baseUrl, server.canvasId, {
+      name: "tgt-pod-patch-branch-codex",
+      x: 100,
+      y: 0,
+    });
+    const { pod: targetPod } = await targetPodRes.json();
+
+    const createConnectionRes = await postConnection(
+      server.baseUrl,
+      server.canvasId,
+      {
+        sourcePodId: sourcePod.id,
+        targetPodId: targetPod.id,
+        sourceAnchor: "right",
+        targetAnchor: "left",
+      },
+    );
+    expect(createConnectionRes.status).toBe(201);
+    const { connection } = await createConnectionRes.json();
+
+    const response = await patchConnection(
+      server.baseUrl,
+      server.canvasId,
+      connection.id,
+      { triggerMode: "branch" },
+    );
+    expect(response.status).toBe(200);
+
+    const body = await response.json();
+    expect(body.connection.triggerMode).toBe("branch");
+    expect(body.connection.branchProvider).toBe("codex");
+    expect(body.connection.branchModel).toBe("gpt-5.4");
+  });
+
   it("無效的 triggerMode 值回傳 400", async () => {
     const server = getServer();
     const client = getClient();
