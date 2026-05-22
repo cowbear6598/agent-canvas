@@ -895,6 +895,9 @@ export const useConnectionStore = defineStore("connection", () => {
 
   function removeConnectionFromEvent(connectionId: string): void {
     connections.value = removeById(connections.value, connectionId);
+    if (selectedConnectionId.value === connectionId) {
+      selectedConnectionId.value = null;
+    }
   }
 
   /**

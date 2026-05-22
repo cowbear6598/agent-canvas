@@ -813,6 +813,34 @@ describe("connectionStore", () => {
     });
   });
 
+  describe("removeConnectionFromEvent", () => {
+    it("刪除目前 selectedConnectionId 時應清除選取", () => {
+      const store = useConnectionStore();
+      const conn1 = createMockConnection({ id: "conn-1" });
+      const conn2 = createMockConnection({ id: "conn-2" });
+      store.connections = [conn1, conn2];
+      store.selectedConnectionId = "conn-1";
+
+      store.removeConnectionFromEvent("conn-1");
+
+      expect(store.connections).toEqual([conn2]);
+      expect(store.selectedConnectionId).toBeNull();
+    });
+
+    it("刪除非 selectedConnectionId 時應保留選取", () => {
+      const store = useConnectionStore();
+      const conn1 = createMockConnection({ id: "conn-1" });
+      const conn2 = createMockConnection({ id: "conn-2" });
+      store.connections = [conn1, conn2];
+      store.selectedConnectionId = "conn-2";
+
+      store.removeConnectionFromEvent("conn-1");
+
+      expect(store.connections).toEqual([conn2]);
+      expect(store.selectedConnectionId).toBe("conn-2");
+    });
+  });
+
   describe("updateConnectionTriggerMode", () => {
     it("成功時應回傳更新後的 Connection", async () => {
       const canvasStore = useCanvasStore();

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted } from "vue";
 import { useCanvasContext } from "@/composables/canvas/useCanvasContext";
+import { isEditingElement } from "@/utils/domHelpers";
 import ConnectionLine from "./ConnectionLine.vue";
 
 const { connectionStore, podStore } = useCanvasContext();
@@ -37,10 +38,11 @@ const handleCanvasClick = (e: MouseEvent): void => {
 };
 
 const handleKeyDown = (e: KeyboardEvent): void => {
-  if (e.key === "Delete" || e.key === "Backspace") {
-    if (connectionStore.selectedConnectionId) {
-      connectionStore.deleteConnection(connectionStore.selectedConnectionId);
-    }
+  if (e.key !== "Delete" && e.key !== "Backspace") return;
+  if (isEditingElement()) return;
+
+  if (connectionStore.selectedConnectionId) {
+    connectionStore.deleteConnection(connectionStore.selectedConnectionId);
   }
 };
 
