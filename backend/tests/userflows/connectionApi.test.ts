@@ -578,6 +578,7 @@ describe("PATCH /api/canvas/:id/connections/:connectionId", () => {
 
   it("Codex source Pod 切換為 branch 時使用 Codex 預設 provider/model", async () => {
     const server = getServer();
+    const client = getClient();
 
     const sourcePodRes = await postPod(server.baseUrl, server.canvasId, {
       name: "src-pod-patch-branch-codex",
@@ -593,18 +594,11 @@ describe("PATCH /api/canvas/:id/connections/:connectionId", () => {
     });
     const { pod: targetPod } = await targetPodRes.json();
 
-    const createConnectionRes = await postConnection(
-      server.baseUrl,
-      server.canvasId,
-      {
-        sourcePodId: sourcePod.id,
-        targetPodId: targetPod.id,
-        sourceAnchor: "right",
-        targetAnchor: "left",
-      },
-    );
-    expect(createConnectionRes.status).toBe(201);
-    const { connection } = await createConnectionRes.json();
+    const connection = await createConnection(client, sourcePod.id, targetPod.id, {
+      label: "CodexPath",
+      branchProvider: undefined,
+      branchModel: undefined,
+    });
 
     const response = await patchConnection(
       server.baseUrl,
@@ -618,6 +612,45 @@ describe("PATCH /api/canvas/:id/connections/:connectionId", () => {
     expect(body.connection.triggerMode).toBe("branch");
     expect(body.connection.branchProvider).toBe("codex");
     expect(body.connection.branchModel).toBe("gpt-5.4");
+  });
+
+  it("OpenCode source Pod 切換為 branch 時沿用 source providerConfig.model", async () => {
+    const server = getServer();
+    const client = getClient();
+
+    const sourcePodRes = await postPod(server.baseUrl, server.canvasId, {
+      name: "src-pod-patch-branch-opencode",
+      x: 0,
+      y: 0,
+      provider: "opencode",
+      providerConfig: { model: "openai/gpt-4o" },
+    });
+    const { pod: sourcePod } = await sourcePodRes.json();
+    const targetPodRes = await postPod(server.baseUrl, server.canvasId, {
+      name: "tgt-pod-patch-branch-opencode",
+      x: 100,
+      y: 0,
+    });
+    const { pod: targetPod } = await targetPodRes.json();
+
+    const connection = await createConnection(client, sourcePod.id, targetPod.id, {
+      label: "OpenCodePath",
+      branchProvider: undefined,
+      branchModel: undefined,
+    });
+
+    const response = await patchConnection(
+      server.baseUrl,
+      server.canvasId,
+      connection.id,
+      { triggerMode: "branch" },
+    );
+    expect(response.status).toBe(200);
+
+    const body = await response.json();
+    expect(body.connection.triggerMode).toBe("branch");
+    expect(body.connection.branchProvider).toBe("opencode");
+    expect(body.connection.branchModel).toBe("openai/gpt-4o");
   });
 
   it("無效的 triggerMode 值回傳 400", async () => {

@@ -41,6 +41,7 @@ vi.mock("../../src/utils/logger.js", () => ({
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { connectionStore } from "../../src/services/connectionStore.js";
+import { podStore } from "../../src/services/podStore.js";
 import { initTestDb, closeDb, getDb } from "../../src/database/index.js";
 import { resetStatements } from "../../src/database/statements.js";
 
@@ -56,17 +57,21 @@ function insertCanvas(): void {
 }
 
 /** 直接用 SQL 插入 pod */
-function insertPod(podId: string): void {
+function insertPod(
+  podId: string,
+  provider = "claude",
+  providerConfigJson = '{"model":"sonnet"}',
+): void {
   getDb()
     .prepare(
       `INSERT INTO pods
          (id, canvas_id, name, x, y, rotation, workspace_path,
           session_id, repository_id, goal_json,
           schedule_json, provider, provider_config_json)
-         VALUES (?, ?, ?, 0, 0, 0, '/tmp/test-pod', NULL, NULL, NULL, NULL, 'claude',
-         '{"model":"sonnet"}')`,
+         VALUES (?, ?, ?, 0, 0, 0, '/tmp/test-pod', NULL, NULL, NULL, NULL, ?,
+         ?)`,
     )
-    .run(podId, CANVAS_ID, `Pod-${podId}`);
+    .run(podId, CANVAS_ID, `Pod-${podId}`, provider, providerConfigJson);
 }
 
 /** 建立一條 branch connection 的捷徑 */
@@ -283,13 +288,79 @@ describe("connectionStore — branch 驗證邏輯", () => {
       expect(updated?.branchProvider).toBe("claude");
       expect(updated?.branchModel).toBe("opus");
     });
+
+    it("12. update auto → branch 但既有 label 為空且未帶 label → throw", () => {
+      insertPod("src-12-empty-label");
+      insertPod("dst-12-empty-label");
+
+      const conn = connectionStore.create(CANVAS_ID, {
+        sourcePodId: "src-12-empty-label",
+        sourceAnchor: "right",
+        targetPodId: "dst-12-empty-label",
+        targetAnchor: "left",
+        triggerMode: "auto",
+      });
+
+      expect(() =>
+        connectionStore.update(CANVAS_ID, conn.id, {
+          triggerMode: "branch",
+        }),
+      ).toThrow(/label/);
+    });
+  });
+
+  describe("row mapping — 批次 fallback", () => {
+    it("多筆 connection fallback branch provider/model 時使用 getByIds，不逐筆 getById", () => {
+      insertPod(
+        "src-batch-opencode",
+        "opencode",
+        '{"model":"openai/gpt-4o"}',
+      );
+      insertPod("dst-batch-1");
+      insertPod("dst-batch-2");
+
+      connectionStore.create(CANVAS_ID, {
+        sourcePodId: "src-batch-opencode",
+        sourceAnchor: "right",
+        targetPodId: "dst-batch-1",
+        targetAnchor: "left",
+        triggerMode: "auto",
+      });
+      connectionStore.create(CANVAS_ID, {
+        sourcePodId: "src-batch-opencode",
+        sourceAnchor: "right",
+        targetPodId: "dst-batch-2",
+        targetAnchor: "left",
+        triggerMode: "auto",
+      });
+
+      const getByIdsSpy = vi.spyOn(podStore, "getByIds");
+      const getByIdSpy = vi.spyOn(podStore, "getById");
+
+      const connections = connectionStore.list(CANVAS_ID);
+
+      expect(connections).toHaveLength(2);
+      expect(getByIdsSpy).toHaveBeenCalledTimes(1);
+      expect(getByIdsSpy).toHaveBeenCalledWith(CANVAS_ID, [
+        "src-batch-opencode",
+      ]);
+      expect(getByIdSpy).not.toHaveBeenCalled();
+      expect(connections).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            branchProvider: "opencode",
+            branchModel: "openai/gpt-4o",
+          }),
+        ]),
+      );
+    });
   });
 
   // ----------------------------------------------------------------
   // findBranchGroup
   // ----------------------------------------------------------------
   describe("findBranchGroup — 只列出同 source 的 branch connections", () => {
-    it("12. findBranchGroup → 同 source 的 branch connection 全列出，非 branch 的不在內", () => {
+    it("13. findBranchGroup → 同 source 的 branch connection 全列出，非 branch 的不在內", () => {
       insertPod("src-12");
       insertPod("dst-12a");
       insertPod("dst-12b");

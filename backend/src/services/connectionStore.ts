@@ -15,6 +15,7 @@ import {
 } from "./provider/index.js";
 import { podStore } from "./podStore.js";
 import { logger } from "../utils/logger.js";
+import type { Pod } from "../types";
 
 interface CreateConnectionData {
   sourcePodId: string;
@@ -57,11 +58,14 @@ interface ConnectionRow {
   branch_model: string | null;
 }
 
-function rowToConnection(row: ConnectionRow): Connection {
+function rowToConnection(row: ConnectionRow, sourcePod?: Pod | null): Connection {
   const branchDefaults =
     row.branch_provider === null || row.branch_model === null
-      ? resolveBranchDefaults(row)
+      ? resolveBranchDefaults(row, sourcePod)
       : null;
+  const { provider: resolvedBranchProvider, model: resolvedBranchModel } =
+    resolveBranchFields(row, branchDefaults);
+
   return {
     id: row.id,
     sourcePodId: row.source_pod_id,
@@ -79,40 +83,118 @@ function rowToConnection(row: ConnectionRow): Connection {
     // DB NULL 轉為 undefined（符合 Connection 介面的選填定義）
     description: row.description ?? undefined,
     // DB NULL 時依 source Pod provider 推導預設值，避免非 Claude Pod 的 Branch 決策落回 Claude。
-    branchProvider:
-      (row.branch_provider as ProviderName | null) ??
-      branchDefaults?.provider ??
-      "claude",
-    branchModel: row.branch_model ?? branchDefaults?.model ?? "sonnet",
+    branchProvider: resolvedBranchProvider,
+    branchModel: resolvedBranchModel,
   };
 }
 
-function resolveProviderDefaultModel(provider: ProviderName): string {
+function resolveBranchFields(
+  row: ConnectionRow,
+  branchDefaults: { provider: ProviderName; model: string } | null,
+): { provider: ProviderName; model: string } {
+  if (row.branch_provider !== null && row.branch_model !== null) {
+    return {
+      provider: row.branch_provider as ProviderName,
+      model: row.branch_model,
+    };
+  }
+
+  if (row.branch_provider === null && row.branch_model !== null) {
+    return {
+      provider: branchDefaults?.provider ?? "claude",
+      model: row.branch_model,
+    };
+  }
+
+  if (row.branch_provider !== null) {
+    const provider = row.branch_provider as ProviderName;
+    if (provider === "opencode") {
+      return branchDefaults?.provider === "opencode"
+        ? branchDefaults
+        : {
+            provider: "claude",
+            model: resolveProviderDefaultModel("claude") ?? "sonnet",
+          };
+    }
+
+    return {
+      provider,
+      model:
+        resolveProviderDefaultModel(provider) ??
+        branchDefaults?.model ??
+        resolveProviderDefaultModel("claude") ??
+        "sonnet",
+    };
+  }
+
+  return branchDefaults ?? { provider: "claude", model: "sonnet" };
+}
+
+function rowsToConnections(canvasId: string, rows: ConnectionRow[]): Connection[] {
+  const fallbackSourcePodIds = Array.from(
+    new Set(
+      rows
+        .filter((row) => row.branch_provider === null || row.branch_model === null)
+        .map((row) => row.source_pod_id),
+    ),
+  );
+  const sourcePods = podStore.getByIds(canvasId, fallbackSourcePodIds);
+
+  return rows.map((row) =>
+    rowToConnection(
+      row,
+      row.branch_provider === null || row.branch_model === null
+        ? (sourcePods.get(row.source_pod_id) ?? null)
+        : undefined,
+    ),
+  );
+}
+
+function resolveProviderDefaultModel(provider: ProviderName): string | undefined {
   const defaultModel = (getProvider(provider).metadata.defaultOptions as {
     model?: unknown;
   }).model;
   return typeof defaultModel === "string" && defaultModel.trim()
     ? defaultModel
-    : "sonnet";
+    : undefined;
 }
 
-function resolveBranchDefaults(row: ConnectionRow): {
+function resolveBranchDefaults(
+  row: ConnectionRow,
+  preloadedSourcePod?: Pod | null,
+): {
   provider: ProviderName;
   model: string;
 } {
-  const sourcePod = podStore.getById(row.canvas_id, row.source_pod_id);
+  const sourcePod =
+    preloadedSourcePod === undefined
+      ? podStore.getById(row.canvas_id, row.source_pod_id)
+      : preloadedSourcePod;
   const provider = sourcePod?.provider ?? "claude";
   const sourceModel =
     typeof sourcePod?.providerConfig?.model === "string" &&
     sourcePod.providerConfig.model.trim().length > 0
       ? sourcePod.providerConfig.model
       : undefined;
-  const model =
-    provider === "opencode"
-      ? (sourceModel ?? resolveProviderDefaultModel("claude"))
-      : resolveProviderDefaultModel(provider);
+  if (provider === "opencode") {
+    if (sourceModel) {
+      return { provider, model: sourceModel };
+    }
+    return {
+      provider: "claude",
+      model: resolveProviderDefaultModel("claude") ?? "sonnet",
+    };
+  }
 
-  return { provider, model };
+  const model = resolveProviderDefaultModel(provider);
+  if (model) {
+    return { provider, model };
+  }
+
+  return {
+    provider: "claude",
+    model: resolveProviderDefaultModel("claude") ?? "sonnet",
+  };
 }
 
 class ConnectionStore {
@@ -206,7 +288,7 @@ class ConnectionStore {
 
   list(canvasId: string): Connection[] {
     const rows = this.stmts.selectByCanvasId.all(canvasId) as ConnectionRow[];
-    return rows.map(rowToConnection);
+    return rowsToConnections(canvasId, rows);
   }
 
   delete(canvasId: string, id: string): boolean {
@@ -219,7 +301,7 @@ class ConnectionStore {
       $canvasId: canvasId,
       $podId: podId,
     }) as ConnectionRow[];
-    return rows.map(rowToConnection);
+    return rowsToConnections(canvasId, rows);
   }
 
   findBySourcePodId(canvasId: string, sourcePodId: string): Connection[] {
@@ -227,7 +309,7 @@ class ConnectionStore {
       $canvasId: canvasId,
       $sourcePodId: sourcePodId,
     }) as ConnectionRow[];
-    return rows.map(rowToConnection);
+    return rowsToConnections(canvasId, rows);
   }
 
   findByTargetPodId(canvasId: string, targetPodId: string): Connection[] {
@@ -235,7 +317,7 @@ class ConnectionStore {
       $canvasId: canvasId,
       $targetPodId: targetPodId,
     }) as ConnectionRow[];
-    return rows.map(rowToConnection);
+    return rowsToConnections(canvasId, rows);
   }
 
   update(
@@ -336,29 +418,29 @@ class ConnectionStore {
       newSummaryModel = resolved;
     }
 
-    if (updates.label !== undefined) {
-      const trimmedLabel = updates.label.trim();
-      // 任何時候 label === "None"（大小寫不敏感）都不允許
+    const targetMode = updates.triggerMode ?? existing.triggerMode;
+    const effectiveLabel = updates.label ?? existing.label;
+    if (targetMode === "branch") {
+      const trimmedLabel = effectiveLabel.trim();
+      if (!trimmedLabel) {
+        throw new Error("label 必填");
+      }
       if (trimmedLabel.toLowerCase() === "none") {
         throw new Error("label 不可為保留字 None");
       }
-      // 切換到或維持在 branch 模式時，若帶有 label 則做唯一性檢查（排除自己）
-      const targetMode = updates.triggerMode ?? existing.triggerMode;
-      if (targetMode === "branch") {
-        if (!trimmedLabel) {
-          throw new Error("label 必填");
-        }
-        const siblings = this.findBySourcePodId(canvasId, existing.sourcePodId);
-        const isDuplicate = siblings.some(
-          (conn) =>
-            conn.id !== id &&
-            conn.triggerMode === "branch" &&
-            conn.label.toLowerCase() === trimmedLabel.toLowerCase(),
-        );
-        if (isDuplicate) {
-          throw new Error("label 已存在於同一組 branch");
-        }
+      const siblings = this.findBySourcePodId(canvasId, existing.sourcePodId);
+      const isDuplicate = siblings.some(
+        (conn) =>
+          conn.id !== id &&
+          conn.triggerMode === "branch" &&
+          conn.label.toLowerCase() === trimmedLabel.toLowerCase(),
+      );
+      if (isDuplicate) {
+        throw new Error("label 已存在於同一組 branch");
       }
+    }
+
+    if (updates.label !== undefined && targetMode === "branch") {
       newLabel = updates.label;
     }
 
@@ -449,7 +531,7 @@ class ConnectionStore {
       $sourcePodId: sourcePodId,
       $triggerMode: triggerMode,
     }) as ConnectionRow[];
-    return rows.map(rowToConnection);
+    return rowsToConnections(canvasId, rows);
   }
 
   /** 取得某 source Pod 出去且 triggerMode === "branch" 的所有連線（per-source branch group） */

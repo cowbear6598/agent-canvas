@@ -25,6 +25,15 @@ vi.mock("../../src/services/podStore.js", () => ({
       const pod = state.testPods.get(podId);
       return pod && canvasId === "canvas-chat-test" ? pod : null;
     }),
+    getByIds: vi.fn((canvasId: string, podIds: string[]) => {
+      const pods = new Map<string, Pod>();
+      if (canvasId !== "canvas-chat-test") return pods;
+      for (const podId of podIds) {
+        const pod = state.testPods.get(podId);
+        if (pod) pods.set(podId, pod);
+      }
+      return pods;
+    }),
     getByIdGlobal: vi.fn((podId: string) => {
       const pod = state.testPods.get(podId);
       return pod ? { canvasId: "canvas-chat-test", pod } : null;

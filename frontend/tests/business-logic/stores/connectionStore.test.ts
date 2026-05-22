@@ -2647,6 +2647,212 @@ describe("connectionStore", () => {
     });
   });
 
+  describe("updateConnectionBranchSettings", () => {
+    it("Codex source Pod 切換 branch 時 payload 應自動補 Codex provider/model", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      const store = useConnectionStore();
+      const podStore = usePodStore();
+      const capabilityStore = useProviderCapabilityStore();
+
+      capabilityStore.syncFromPayload([
+        {
+          name: "codex",
+          availableModels: [{ value: "gpt-5.4", label: "GPT-5.4" }],
+        },
+      ]);
+
+      podStore.pods = [
+        createMockPod({
+          id: "pod-codex-source",
+          provider: "codex",
+          providerConfig: { model: "gpt-5.4" },
+        }),
+      ];
+      const conn = createMockConnection({
+        id: "conn-codex-branch-settings",
+        sourcePodId: "pod-codex-source",
+        triggerMode: "auto",
+      });
+      store.connections = [conn];
+
+      mockCreateWebSocketRequest.mockResolvedValueOnce({
+        connection: {
+          ...conn,
+          triggerMode: "branch",
+          label: "CodexPath",
+          description: "走 Codex",
+          branchProvider: "codex",
+          branchModel: "gpt-5.4",
+        },
+      });
+
+      const result = await store.updateConnectionBranchSettings(
+        "conn-codex-branch-settings",
+        "pod-codex-source",
+        {
+          switchToBranch: true,
+          label: "CodexPath",
+          description: "走 Codex",
+        },
+      );
+
+      expect(result?.branchProvider).toBe("codex");
+      expect(result?.branchModel).toBe("gpt-5.4");
+      expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestEvent: "connection:update",
+          payload: expect.objectContaining({
+            connectionId: "conn-codex-branch-settings",
+            triggerMode: "branch",
+            label: "CodexPath",
+            description: "走 Codex",
+            branchProvider: "codex",
+            branchModel: "gpt-5.4",
+          }),
+        }),
+      );
+    });
+
+    it("OpenCode source Pod 切換 branch 時 payload 應沿用 Pod 目前 model", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      const store = useConnectionStore();
+      const podStore = usePodStore();
+
+      podStore.pods = [
+        createMockPod({
+          id: "pod-opencode-source",
+          provider: "opencode",
+          providerConfig: { model: "openai/gpt-4o" },
+        }),
+      ];
+      const conn = createMockConnection({
+        id: "conn-opencode-branch-settings",
+        sourcePodId: "pod-opencode-source",
+        triggerMode: "auto",
+      });
+      store.connections = [conn];
+
+      mockCreateWebSocketRequest.mockResolvedValueOnce({
+        connection: {
+          ...conn,
+          triggerMode: "branch",
+          label: "OpenCodePath",
+          description: "走 OpenCode",
+          branchProvider: "opencode",
+          branchModel: "openai/gpt-4o",
+        },
+      });
+
+      const result = await store.updateConnectionBranchSettings(
+        "conn-opencode-branch-settings",
+        "pod-opencode-source",
+        {
+          switchToBranch: true,
+          label: "OpenCodePath",
+          description: "走 OpenCode",
+        },
+      );
+
+      expect(result?.branchProvider).toBe("opencode");
+      expect(result?.branchModel).toBe("openai/gpt-4o");
+      expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestEvent: "connection:update",
+          payload: expect.objectContaining({
+            connectionId: "conn-opencode-branch-settings",
+            triggerMode: "branch",
+            branchProvider: "opencode",
+            branchModel: "openai/gpt-4o",
+          }),
+        }),
+      );
+    });
+
+    it("OpenCode source Pod 沒有可用 model 時應回傳 null 且不送 websocket request", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      const store = useConnectionStore();
+      const podStore = usePodStore();
+      const aliasStore = useOpencodeAliasStore();
+      aliasStore.setAliases([]);
+
+      podStore.pods = [
+        createMockPod({
+          id: "pod-opencode-no-model",
+          provider: "opencode",
+          providerConfig: { model: "" },
+        }),
+      ];
+      const conn = createMockConnection({
+        id: "conn-opencode-no-model",
+        sourcePodId: "pod-opencode-no-model",
+        triggerMode: "auto",
+      });
+      store.connections = [conn];
+
+      const result = await store.updateConnectionBranchSettings(
+        "conn-opencode-no-model",
+        "pod-opencode-no-model",
+        {
+          switchToBranch: true,
+          label: "NoModelPath",
+          description: "",
+        },
+      );
+
+      expect(result).toBeNull();
+      expect(mockCreateWebSocketRequest).not.toHaveBeenCalled();
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          variant: "destructive",
+        }),
+      );
+    });
+
+    it("Codex capability 缺 default model 時不應 fallback 成 sonnet 並送出更新", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      const store = useConnectionStore();
+      const podStore = usePodStore();
+      const capabilityStore = useProviderCapabilityStore();
+
+      capabilityStore.syncFromPayload([
+        {
+          name: "codex",
+          availableModels: [],
+        },
+      ]);
+      podStore.pods = [
+        createMockPod({
+          id: "pod-codex-no-default",
+          provider: "codex",
+          providerConfig: { model: "" },
+        }),
+      ];
+      const conn = createMockConnection({
+        id: "conn-codex-no-default",
+        sourcePodId: "pod-codex-no-default",
+        triggerMode: "auto",
+      });
+      store.connections = [conn];
+
+      const result = await store.updateConnectionBranchSettings(
+        "conn-codex-no-default",
+        "pod-codex-no-default",
+        {
+          switchToBranch: true,
+          label: "CodexNoDefault",
+          description: "",
+        },
+      );
+
+      expect(result).toBeNull();
+      expect(mockCreateWebSocketRequest).not.toHaveBeenCalled();
+    });
+  });
+
   describe("Branch OpenCode provider/model wire-up", () => {
     function seedOpencodeAliases(): void {
       const aliasStore = useOpencodeAliasStore();

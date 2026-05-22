@@ -775,7 +775,7 @@ export const useConnectionStore = defineStore("connection", () => {
     const model =
       (provider === "opencode" ? sourcePodModel : undefined) ??
       providerCapabilityStore.getDefaultModel(provider) ??
-      (provider === "opencode" ? undefined : DEFAULT_SUMMARY_MODEL);
+      (provider === "claude" ? DEFAULT_SUMMARY_MODEL : undefined);
 
     if (!model) return null;
     return { provider, model };
