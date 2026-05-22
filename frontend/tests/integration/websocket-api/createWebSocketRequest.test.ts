@@ -186,6 +186,35 @@ describe("createWebSocketRequest", () => {
       await expect(promise).rejects.toThrow("未知錯誤");
     });
 
+    it("應該在 error 物件含 message 時 reject Error(message)", async () => {
+      const config: WebSocketRequestConfig<
+        { requestId: string; data: string },
+        {
+          requestId: string;
+          success: boolean;
+          error: { code: string; message: string };
+        }
+      > = {
+        requestEvent: "test:request",
+        responseEvent: "test:response",
+        payload: { data: "test" },
+      };
+
+      const promise = createWebSocketRequest(config);
+
+      const responseCallback = capturedCallbacks.get("test:response");
+      responseCallback?.({
+        requestId: "test-request-id",
+        success: false,
+        error: {
+          code: "alias_in_use",
+          message: "畫布「A」的 Pod「B」仍在使用中",
+        },
+      });
+
+      await expect(promise).rejects.toThrow("畫布「A」的 Pod「B」仍在使用中");
+    });
+
     it("應該在失敗後清除 listener", async () => {
       const config: WebSocketRequestConfig<
         { requestId: string; data: string },

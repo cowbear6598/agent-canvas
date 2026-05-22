@@ -1,0 +1,38 @@
+feature: opencode-thinking-presets
+created: "2026-05-23"
+approved: true
+questions:
+  - id: Q1
+    text: 現有 OpenCode alias 與 provider list 的資料流是什麼？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      現有 OpenCode alias 由 `model_aliases` 表持久化，欄位包含 id、provider_id、real_provider、real_model、alias、order_idx、created_at、updated_at。後端 `backend/src/handlers/opencodeSettingsHandlers.ts` 提供 alias list/create/update/delete/reorder WebSocket handler，前端 `frontend/src/services/opencodeApi.ts`、`frontend/src/stores/opencodeAliasStore.ts` 與 `frontend/src/components/settings/OpencodeSettingsPanel.vue` 負責設定 UI 與本地狀態。`backend/src/handlers/providerHandlers.ts` 在 `provider:list` 時從 DB alias 動態組出 opencode 的 availableModels。
+
+  - id: Q2
+    text: 現有 Thinking UI 與 default thinkingLevel 注入邏輯如何運作？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      Claude/Codex 的 thinking levels 由 `backend/src/services/provider/capabilities.ts` 定義，`backend/src/handlers/providerHandlers.ts` 補進 provider:list 的 `thinkingLevels` 與 `defaultThinkingLevel`。前端 `frontend/src/stores/providerCapabilityStore.ts` 讀取這些欄位後，`PodSlots.vue` 依 `isThinkingSupportedForModel` 啟用或停用 Thinking selector。Pod 讀寫時 `backend/src/services/pod/providerConfigResolver.ts` 會在缺少 `thinkingLevel` 時補入 provider/model 的 default。OpenCode 目前在後端明確回傳空 thinking levels，因此 UI 不可選。
+
+  - id: Q3
+    text: OpenCode 新增 alias 時能從哪裡取得官方模型與 metadata？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      `backend/src/handlers/opencodeSettingsHandlers.ts` 的 `handleOpencodeProviderList` 會在 opencode server ready 時呼叫 `createOpencodeClient(...).provider.list()`，把 OpenCode provider list 原樣回傳給前端。前端 `listOpencodeProviders()` 目前只 normalize models 為 `{ id, name }[]`。官方 OpenCode 文件也描述 OpenCode 使用 AI SDK 與 Models.dev 載入模型資訊，並支援 model options 與 variants，因此新增 alias 時可優先使用 provider.list 回傳的 model metadata；若 metadata 不含可直接使用的 reasoning/variant 資訊，後端需用已知 provider/model 規則 normalize 成專案自己的 thinking presets 快照。
+
+  - id: Q4
+    text: 新增 OpenCode model alias 時，官方/遠端 metadata 抓取失敗要怎麼處理？
+    type: user-input
+    completed: true
+    answer: |
+      採用阻擋新增策略。新增 OpenCode model alias 時必須先成功取得官方/遠端 metadata 並產生 thinking presets；若抓取失敗，後端回傳結構化錯誤，前端提示使用者稍後再試，不建立 alias。
+
+  - id: Q5
+    text: 使用者是否需要在 UI 編輯 OpenCode thinking presets，還是只允許新增時自動產生與手動刷新？
+    type: user-input
+    completed: true
+    answer: |
+      不提供 preset 編輯 UI。使用者只在新增 alias 時由系統自動產生 thinking presets；後續若官方設定更新，提供手動刷新功能重新抓取 metadata 並更新持久化 presets。

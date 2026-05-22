@@ -13,7 +13,9 @@ export interface WebSocketRequestConfig<TPayload, TResult> {
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 
 interface WebSocketErrorObject {
-  key: string;
+  key?: string;
+  code?: string;
+  message?: string;
   params?: Record<string, unknown>;
 }
 
@@ -89,7 +91,17 @@ export async function createWebSocketRequest<
         const rawError = responseWithBase.error;
         let errorMessage: string;
 
-        if (rawError && typeof rawError === "object" && "key" in rawError) {
+        if (
+          rawError &&
+          typeof rawError === "object" &&
+          typeof rawError.message === "string"
+        ) {
+          errorMessage = rawError.message;
+        } else if (
+          rawError &&
+          typeof rawError === "object" &&
+          typeof rawError.key === "string"
+        ) {
           // 後端回傳 i18n key 格式的錯誤物件，翻譯後顯示
           const translated = t(rawError.key, rawError.params ?? {});
           // 若翻譯結果與 key 相同，代表找不到對應翻譯，退回通用錯誤訊息

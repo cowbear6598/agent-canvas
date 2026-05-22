@@ -46,7 +46,7 @@ vi.mock("../../src/services/provider/providerListBroadcaster.js", () => ({
 // ─── imports ──────────────────────────────────────────────────────────────────
 
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
-import { initTestDb, closeDb } from "../../src/database/index.js";
+import { initTestDb, closeDb, getDb } from "../../src/database/index.js";
 import { resetStatements } from "../../src/database/statements.js";
 import {
   handleOpencodeAliasesList,
@@ -69,6 +69,10 @@ const REQUEST_ID = "req-aliases-test";
 // A1 wire-up smoke test 用：requestId 須為合法 UUID 才能通過 z.uuid() 驗證
 const REQUEST_ID_UUID = "00000000-0000-4000-8000-000000000099";
 
+const USED_PROVIDER_ID = "anthropic";
+const USED_MODEL_ID = "claude-3-5-sonnet";
+const USED_MODEL_VALUE = `${USED_PROVIDER_ID}/${USED_MODEL_ID}`;
+
 // ─── Setup ────────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
@@ -80,6 +84,100 @@ beforeEach(() => {
 afterEach(() => {
   closeDb();
 });
+
+async function createUsedAlias(): Promise<string> {
+  await handleOpencodeAliasesCreate(
+    CONNECTION_ID,
+    {
+      requestId: REQUEST_ID,
+      providerID: USED_PROVIDER_ID,
+      modelID: USED_MODEL_ID,
+      alias: "UsedAlias",
+    },
+    REQUEST_ID,
+  );
+
+  return mockEmitToConnection.mock.calls[0][2].item.id;
+}
+
+function insertCanvas(id = "canvas-alias-usage", name = "模型使用測試畫布"): void {
+  getDb()
+    .prepare(
+      "INSERT INTO canvases (id, name, sort_index) VALUES ($id, $name, $sortIndex)",
+    )
+    .run({ $id: id, $name: name, $sortIndex: 0 });
+}
+
+function insertPod(params: {
+  id: string;
+  canvasId?: string;
+  name: string;
+  provider: string;
+  model?: string;
+}): void {
+  getDb()
+    .prepare(
+      `INSERT INTO pods (
+        id, canvas_id, name, x, y, rotation, workspace_path,
+        session_id, repository_id, goal_json, schedule_json,
+        provider, provider_config_json
+      ) VALUES (
+        $id, $canvasId, $name, 0, 0, 0, $workspacePath,
+        NULL, NULL, NULL, NULL,
+        $provider, $providerConfigJson
+      )`,
+    )
+    .run({
+      $id: params.id,
+      $canvasId: params.canvasId ?? "canvas-alias-usage",
+      $name: params.name,
+      $workspacePath: `/tmp/${params.id}`,
+      $provider: params.provider,
+      $providerConfigJson: params.model
+        ? JSON.stringify({ model: params.model })
+        : null,
+    });
+}
+
+function insertConnection(params: {
+  id: string;
+  canvasId?: string;
+  sourcePodId: string;
+  targetPodId: string;
+  triggerMode?: string;
+  summaryProvider?: string | null;
+  summaryModel?: string;
+  label?: string;
+  branchProvider?: string | null;
+  branchModel?: string | null;
+}): void {
+  getDb()
+    .prepare(
+      `INSERT INTO connections (
+        id, canvas_id, source_pod_id, source_anchor, target_pod_id, target_anchor,
+        trigger_mode, decide_status, decide_reason, connection_status,
+        summary_model, summary_provider,
+        label, description, branch_provider, branch_model
+      ) VALUES (
+        $id, $canvasId, $sourcePodId, 'right', $targetPodId, 'left',
+        $triggerMode, 'none', NULL, 'idle',
+        $summaryModel, $summaryProvider,
+        $label, NULL, $branchProvider, $branchModel
+      )`,
+    )
+    .run({
+      $id: params.id,
+      $canvasId: params.canvasId ?? "canvas-alias-usage",
+      $sourcePodId: params.sourcePodId,
+      $targetPodId: params.targetPodId,
+      $triggerMode: params.triggerMode ?? "auto",
+      $summaryModel: params.summaryModel ?? "sonnet",
+      $summaryProvider: params.summaryProvider ?? null,
+      $label: params.label ?? "",
+      $branchProvider: params.branchProvider ?? null,
+      $branchModel: params.branchModel ?? null,
+    });
+}
 
 // ─── opencode:aliases:list ────────────────────────────────────────────────────
 
@@ -397,6 +495,118 @@ describe("handleOpencodeAliasesDelete", () => {
 
     expect(mockBroadcastOpencodeAliasesUpdated).toHaveBeenCalledOnce();
     expect(mockBroadcastProviderList).toHaveBeenCalledOnce();
+  });
+
+  it("不可刪除目前被 Pod 使用中的 opencode alias model", async () => {
+    const aliasId = await createUsedAlias();
+    insertCanvas();
+    insertPod({
+      id: "pod-uses-alias",
+      name: "使用 alias 的 Pod",
+      provider: "opencode",
+      model: USED_MODEL_VALUE,
+    });
+
+    vi.clearAllMocks();
+    await handleOpencodeAliasesDelete(
+      CONNECTION_ID,
+      { requestId: REQUEST_ID, id: aliasId },
+      REQUEST_ID,
+    );
+
+    const [, event, deletePayload] = mockEmitToConnection.mock.calls[0];
+    expect(event).toBe(WebSocketResponseEvents.OPENCODE_ALIASES_DELETE_RESULT);
+    expect(deletePayload.success).toBe(false);
+    expect(deletePayload.error.code).toBe("alias_in_use");
+    expect(deletePayload.error.message).toContain("模型使用測試畫布");
+    expect(deletePayload.error.message).toContain("使用 alias 的 Pod");
+    expect(mockBroadcastOpencodeAliasesUpdated).not.toHaveBeenCalled();
+
+    vi.clearAllMocks();
+    await handleOpencodeAliasesList(
+      CONNECTION_ID,
+      { requestId: REQUEST_ID },
+      REQUEST_ID,
+    );
+    expect(mockEmitToConnection.mock.calls[0][2].items).toHaveLength(1);
+  });
+
+  it("不可刪除目前被 Branch connection 使用中的 opencode alias model", async () => {
+    const aliasId = await createUsedAlias();
+    insertCanvas();
+    insertPod({
+      id: "source-pod",
+      name: "來源 Pod",
+      provider: "claude",
+      model: "sonnet",
+    });
+    insertPod({
+      id: "target-pod",
+      name: "目標 Pod",
+      provider: "claude",
+      model: "sonnet",
+    });
+    insertConnection({
+      id: "branch-conn",
+      sourcePodId: "source-pod",
+      targetPodId: "target-pod",
+      triggerMode: "branch",
+      label: "需要判斷",
+      branchProvider: "opencode",
+      branchModel: USED_MODEL_VALUE,
+    });
+
+    vi.clearAllMocks();
+    await handleOpencodeAliasesDelete(
+      CONNECTION_ID,
+      { requestId: REQUEST_ID, id: aliasId },
+      REQUEST_ID,
+    );
+
+    const [, , deletePayload] = mockEmitToConnection.mock.calls[0];
+    expect(deletePayload.success).toBe(false);
+    expect(deletePayload.error.code).toBe("alias_in_use");
+    expect(deletePayload.error.message).toContain("來源 Pod → 目標 Pod");
+    expect(deletePayload.error.message).toContain("Branch");
+    expect(mockBroadcastOpencodeAliasesUpdated).not.toHaveBeenCalled();
+  });
+
+  it("不可刪除目前被 Summary connection 使用中的 opencode alias model", async () => {
+    const aliasId = await createUsedAlias();
+    insertCanvas();
+    insertPod({
+      id: "summary-source-pod",
+      name: "摘要來源 Pod",
+      provider: "claude",
+      model: "sonnet",
+    });
+    insertPod({
+      id: "summary-target-pod",
+      name: "摘要目標 Pod",
+      provider: "claude",
+      model: "sonnet",
+    });
+    insertConnection({
+      id: "summary-conn",
+      sourcePodId: "summary-source-pod",
+      targetPodId: "summary-target-pod",
+      summaryProvider: "opencode",
+      summaryModel: USED_MODEL_VALUE,
+    });
+
+    vi.clearAllMocks();
+    await handleOpencodeAliasesDelete(
+      CONNECTION_ID,
+      { requestId: REQUEST_ID, id: aliasId },
+      REQUEST_ID,
+    );
+
+    const [, , deletePayload] = mockEmitToConnection.mock.calls[0];
+    expect(deletePayload.success).toBe(false);
+    expect(deletePayload.error.code).toBe("alias_in_use");
+    expect(deletePayload.error.message).toContain("摘要來源 Pod → 摘要目標 Pod");
+    expect(deletePayload.error.message).toContain("Summary");
+    expect(mockBroadcastOpencodeAliasesUpdated).not.toHaveBeenCalled();
   });
 });
 

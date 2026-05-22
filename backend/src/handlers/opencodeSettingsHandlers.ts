@@ -193,6 +193,32 @@ interface ModelAliasRow {
   updated_at: number;
 }
 
+interface AliasUsage {
+  canvasName: string;
+  description: string;
+}
+
+interface PodAliasUsageRow {
+  canvas_name: string;
+  pod_name: string;
+  provider_config_json: string | null;
+}
+
+interface ConnectionAliasUsageRow {
+  canvas_name: string;
+  connection_id: string;
+  source_pod_name: string | null;
+  source_provider: string | null;
+  source_provider_config_json: string | null;
+  target_pod_name: string | null;
+  trigger_mode: string;
+  summary_model: string;
+  summary_provider: string | null;
+  label: string;
+  branch_provider: string | null;
+  branch_model: string | null;
+}
+
 function rowToAliasItem(row: ModelAliasRow): AliasItem {
   return {
     id: row.id,
@@ -201,6 +227,135 @@ function rowToAliasItem(row: ModelAliasRow): AliasItem {
     alias: row.alias,
     orderIdx: row.order_idx,
   };
+}
+
+function parseProviderConfig(json: string | null): Record<string, unknown> {
+  if (!json) return {};
+
+  try {
+    const parsed = JSON.parse(json);
+    return parsed && typeof parsed === "object"
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function getConfigModel(json: string | null): string | null {
+  const model = parseProviderConfig(json).model;
+  return typeof model === "string" && model.trim().length > 0 ? model : null;
+}
+
+function getConnectionLineLabel(row: ConnectionAliasUsageRow): string {
+  const sourceName = row.source_pod_name ?? row.connection_id;
+  const targetName = row.target_pod_name ?? row.connection_id;
+  return `${sourceName} → ${targetName}`;
+}
+
+function getBranchProviderAndModel(row: ConnectionAliasUsageRow): {
+  provider: string;
+  model: string | null;
+} {
+  const sourceModel = getConfigModel(row.source_provider_config_json);
+  const sourceProvider = row.source_provider ?? "claude";
+
+  if (row.branch_provider !== null && row.branch_model !== null) {
+    return { provider: row.branch_provider, model: row.branch_model };
+  }
+
+  if (row.branch_provider === null && row.branch_model !== null) {
+    return {
+      provider: sourceProvider === "opencode" && sourceModel ? "opencode" : "claude",
+      model: row.branch_model,
+    };
+  }
+
+  if (row.branch_provider !== null) {
+    if (row.branch_provider === "opencode" && sourceProvider === "opencode") {
+      return { provider: "opencode", model: sourceModel };
+    }
+    return { provider: row.branch_provider, model: null };
+  }
+
+  return { provider: sourceProvider, model: sourceModel };
+}
+
+function findCurrentAliasUsages(modelValue: string): AliasUsage[] {
+  const db = getDb();
+  const usages: AliasUsage[] = [];
+
+  const podRows = db
+    .prepare(
+      `SELECT c.name AS canvas_name,
+              p.name AS pod_name,
+              p.provider_config_json AS provider_config_json
+       FROM pods p
+       INNER JOIN canvases c ON c.id = p.canvas_id
+       WHERE p.provider = 'opencode'`,
+    )
+    .all() as PodAliasUsageRow[];
+
+  for (const row of podRows) {
+    if (getConfigModel(row.provider_config_json) === modelValue) {
+      usages.push({
+        canvasName: row.canvas_name,
+        description: `畫布「${row.canvas_name}」的 Pod「${row.pod_name}」`,
+      });
+    }
+  }
+
+  const connectionRows = db
+    .prepare(
+      `SELECT c.name AS canvas_name,
+              conn.id AS connection_id,
+              source_pod.name AS source_pod_name,
+              source_pod.provider AS source_provider,
+              source_pod.provider_config_json AS source_provider_config_json,
+              target_pod.name AS target_pod_name,
+              conn.trigger_mode AS trigger_mode,
+              conn.summary_model AS summary_model,
+              conn.summary_provider AS summary_provider,
+              conn.label AS label,
+              conn.branch_provider AS branch_provider,
+              conn.branch_model AS branch_model
+       FROM connections conn
+       INNER JOIN canvases c ON c.id = conn.canvas_id
+       LEFT JOIN pods source_pod ON source_pod.id = conn.source_pod_id
+       LEFT JOIN pods target_pod ON target_pod.id = conn.target_pod_id`,
+    )
+    .all() as ConnectionAliasUsageRow[];
+
+  for (const row of connectionRows) {
+    const summaryProvider =
+      row.summary_provider ?? row.source_provider ?? "claude";
+    if (summaryProvider === "opencode" && row.summary_model === modelValue) {
+      usages.push({
+        canvasName: row.canvas_name,
+        description: `畫布「${row.canvas_name}」的 connection line「${getConnectionLineLabel(row)}」Summary`,
+      });
+    }
+
+    if (row.trigger_mode === "branch") {
+      const branch = getBranchProviderAndModel(row);
+      if (branch.provider === "opencode" && branch.model === modelValue) {
+        const label = row.label.trim()
+          ? `${getConnectionLineLabel(row)}（${row.label}）`
+          : getConnectionLineLabel(row);
+        usages.push({
+          canvasName: row.canvas_name,
+          description: `畫布「${row.canvas_name}」的 connection line「${label}」Branch`,
+        });
+      }
+    }
+  }
+
+  return usages;
+}
+
+function buildAliasInUseMessage(usages: AliasUsage[]): string {
+  const details = usages.map((usage) => usage.description).join("、");
+  return `無法刪除 alias，仍被目前設定使用中：${details}。請先改用其他模型後再刪除。`;
 }
 
 // ─── handleOpencodeAliasesList ────────────────────────────────────────────────
@@ -396,6 +551,46 @@ export async function handleOpencodeAliasesDelete(
   requestId: string,
 ): Promise<void> {
   const stmts = getStmts();
+
+  const row = stmts.modelAlias.selectById.get({
+    $id: payload.id,
+  }) as ModelAliasRow | null;
+
+  if (!row) {
+    const response: OpencodeAliasesDeleteResultPayload = {
+      requestId,
+      success: false,
+      error: {
+        code: "alias_not_found",
+        message: "找不到指定的 alias，無法刪除",
+      },
+    };
+    socketService.emitToConnection(
+      connectionId,
+      WebSocketResponseEvents.OPENCODE_ALIASES_DELETE_RESULT,
+      response,
+    );
+    return;
+  }
+
+  const modelValue = `${row.real_provider}/${row.real_model}`;
+  const usages = findCurrentAliasUsages(modelValue);
+  if (usages.length > 0) {
+    const response: OpencodeAliasesDeleteResultPayload = {
+      requestId,
+      success: false,
+      error: {
+        code: "alias_in_use",
+        message: buildAliasInUseMessage(usages),
+      },
+    };
+    socketService.emitToConnection(
+      connectionId,
+      WebSocketResponseEvents.OPENCODE_ALIASES_DELETE_RESULT,
+      response,
+    );
+    return;
+  }
 
   stmts.modelAlias.deleteById.run(payload.id);
 
