@@ -4,7 +4,8 @@ type FakeWebSocketPayload = string | ArrayBuffer | Uint8Array;
 
 interface BunRuntime {
   serve<TData>(options: {
-    port?: number;
+    hostname?: string;
+    port: number;
     fetch: (
       request: Request,
       server: {
@@ -27,6 +28,7 @@ interface BunRuntime {
 }
 
 interface BunServer {
+  port?: number;
   url: URL;
   stop(force?: boolean): void;
 }
@@ -77,6 +79,14 @@ export interface FakeWebSocketClient {
 }
 
 const DEFAULT_WAIT_TIMEOUT_MS = 1000;
+const TEST_HOSTNAME = "127.0.0.1";
+const TEST_PORT_BASE = 43000;
+const TEST_PORT_BLOCK = 200;
+const TEST_PORT_RETRY_COUNT = 200;
+const workerId = Number(process.env.VITEST_POOL_ID ?? "0");
+const initialTestPort =
+  TEST_PORT_BASE + (workerId % 50) * TEST_PORT_BLOCK + (process.pid % 10) * 10;
+const TEST_PORT_COUNTER_KEY = "__claudeCodeCanvasFakeWsNextPort";
 
 function getBunRuntime(): BunRuntime {
   const runtime = (globalThis as typeof globalThis & { Bun?: BunRuntime }).Bun;
@@ -84,6 +94,28 @@ function getBunRuntime(): BunRuntime {
     throw new Error("fakeWebSocketServer requires the Bun test runtime.");
   }
   return runtime;
+}
+
+function isAddressInUseError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    (error as Error & { code?: string }).code === "EADDRINUSE"
+  );
+}
+
+function getNextTestPort(): number {
+  const testGlobal = globalThis as typeof globalThis & {
+    __claudeCodeCanvasFakeWsNextPort?: number;
+  };
+
+  if (testGlobal[TEST_PORT_COUNTER_KEY] === undefined) {
+    testGlobal[TEST_PORT_COUNTER_KEY] = initialTestPort;
+  }
+
+  const port = testGlobal[TEST_PORT_COUNTER_KEY] ?? initialTestPort;
+  testGlobal[TEST_PORT_COUNTER_KEY] = port + 1;
+  return port;
 }
 
 function waitFor<T>(
@@ -125,6 +157,7 @@ function parseIncomingMessage(message: FakeWebSocketPayload): WebSocketMessage {
 export function startFakeWebSocketServer(
   options: FakeWebSocketServerOptions = {},
 ) {
+  const runtime = getBunRuntime();
   let clientCounter = 0;
   const sockets = new Map<string, FakeClientSocket>();
   const clients = new Map<string, FakeWebSocketClient>();
@@ -147,58 +180,82 @@ export function startFakeWebSocketServer(
     },
   });
 
-  const server = getBunRuntime().serve<SocketData>({
-    port: 0,
-    fetch(request, bunServer) {
-      const upgraded = bunServer.upgrade(request, {
-        data: { id: `fake-ws-client-${++clientCounter}` },
-      });
-      if (upgraded) {
-        return undefined;
-      }
-      return new Response("Expected WebSocket upgrade", { status: 426 });
-    },
-    websocket: {
-      open(socket) {
-        sockets.set(socket.data.id, socket);
-        const client = createClient(socket);
-        clients.set(socket.data.id, client);
-        pendingConnectionResolvers.forEach((resolve) => resolve(client));
-        pendingConnectionResolvers.clear();
-      },
-      async message(socket, rawMessage) {
-        const message = parseIncomingMessage(rawMessage);
-        receivedMessages.push(message);
-        pendingMessageResolvers.forEach((resolve) => {
-          if (resolve(message)) {
-            pendingMessageResolvers.delete(resolve);
+  let server: BunServer | null = null;
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < TEST_PORT_RETRY_COUNT; attempt += 1) {
+    const port = getNextTestPort();
+
+    try {
+      server = runtime.serve<SocketData>({
+        port,
+        fetch(request, bunServer) {
+          const upgraded = bunServer.upgrade(request, {
+            data: { id: `fake-ws-client-${++clientCounter}` },
+          });
+          if (upgraded) {
+            return undefined;
           }
-        });
+          return new Response("Expected WebSocket upgrade", { status: 426 });
+        },
+        websocket: {
+          open(socket) {
+            const typedSocket = socket as FakeClientSocket;
+            sockets.set(typedSocket.data.id, typedSocket);
+            const client = createClient(typedSocket);
+            clients.set(typedSocket.data.id, client);
+            pendingConnectionResolvers.forEach((resolve) => resolve(client));
+            pendingConnectionResolvers.clear();
+          },
+          async message(socket, rawMessage) {
+            const typedSocket = socket as FakeClientSocket;
+            const message = parseIncomingMessage(rawMessage);
+            receivedMessages.push(message);
+            pendingMessageResolvers.forEach((resolve) => {
+              if (resolve(message)) {
+                pendingMessageResolvers.delete(resolve);
+              }
+            });
 
-        const client = clients.get(socket.data.id);
-        if (!client) {
-          return;
-        }
+            const client = clients.get(typedSocket.data.id);
+            if (!client) {
+              return;
+            }
 
-        const route = options.routes?.find(
-          (candidate) => candidate.requestEvent === message.type,
-        );
-        if (route) {
-          const payload = await route.buildPayload(message, client);
-          client.send(route.responseEvent, payload, message.requestId);
-        }
+            const route = options.routes?.find(
+              (candidate) => candidate.requestEvent === message.type,
+            );
+            if (route) {
+              const payload = await route.buildPayload(message, client);
+              client.send(route.responseEvent, payload, message.requestId);
+            }
 
-        await options.onMessage?.(message, client);
-      },
-      close(socket) {
-        sockets.delete(socket.data.id);
-        clients.delete(socket.data.id);
-      },
-    },
-  });
+            await options.onMessage?.(message, client);
+          },
+          close(socket) {
+            const typedSocket = socket as FakeClientSocket;
+            sockets.delete(typedSocket.data.id);
+            clients.delete(typedSocket.data.id);
+          },
+        },
+      });
+      break;
+    } catch (error) {
+      if (!isAddressInUseError(error)) {
+        throw error;
+      }
+      lastError = error;
+    }
+  }
+
+  if (!server) {
+    throw lastError ?? new Error("Failed to allocate a test WebSocket port.");
+  }
+
+  const resolvedPort = server.port ?? Number(server.url.port);
 
   return {
-    url: server.url.toString(),
+    url: `http://${TEST_HOSTNAME}:${resolvedPort}`,
     receivedMessages,
     get clients(): FakeWebSocketClient[] {
       return Array.from(clients.values());

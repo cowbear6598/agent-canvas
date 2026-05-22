@@ -87,7 +87,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { defineAsyncComponent, ref } from "vue";
 import {
   Sparkles,
   LayoutDashboard,
@@ -97,15 +97,30 @@ import {
   Boxes,
 } from "lucide-vue-next";
 import ConnectionStatus from "@/components/ui/ConnectionStatus.vue";
-import IntegrationSelectModal from "@/components/integration/IntegrationSelectModal.vue";
-import IntegrationAppsModal from "@/components/integration/IntegrationAppsModal.vue";
-import GlobalSettingsModal from "@/components/settings/GlobalSettingsModal.vue";
-import ManagedMcpModal from "@/components/settings/ManagedMcpModal.vue";
-import ManagedPluginModal from "@/components/settings/ManagedPluginModal.vue";
-import LlmProviderModal from "@/components/settings/LlmProviderModal.vue";
-import IntegrationsHubModal from "@/components/settings/IntegrationsHubModal.vue";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { useRunStore } from "@/stores/run/runStore";
+
+const IntegrationSelectModal = defineAsyncComponent(
+  () => import("@/components/integration/IntegrationSelectModal.vue"),
+);
+const IntegrationAppsModal = defineAsyncComponent(
+  () => import("@/components/integration/IntegrationAppsModal.vue"),
+);
+const GlobalSettingsModal = defineAsyncComponent(
+  () => import("@/components/settings/GlobalSettingsModal.vue"),
+);
+const ManagedMcpModal = defineAsyncComponent(
+  () => import("@/components/settings/ManagedMcpModal.vue"),
+);
+const ManagedPluginModal = defineAsyncComponent(
+  () => import("@/components/settings/ManagedPluginModal.vue"),
+);
+const LlmProviderModal = defineAsyncComponent(
+  () => import("@/components/settings/LlmProviderModal.vue"),
+);
+const IntegrationsHubModal = defineAsyncComponent(
+  () => import("@/components/settings/IntegrationsHubModal.vue"),
+);
 
 const canvasStore = useCanvasStore();
 const runStore = useRunStore();

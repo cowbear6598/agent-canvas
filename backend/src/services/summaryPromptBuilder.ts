@@ -4,8 +4,11 @@ import { sanitizeForPrompt } from "../utils/promptSanitizer.js";
 interface SummaryPromptContext {
   sourcePodName: string;
   targetPodName: string;
-  targetPodGoal: string | null;
-  conversationHistory: string;
+  targetPodGoal?: string | null;
+  persistedSummary?: string | null;
+  recentConversationHistory?: string;
+  // 舊測試與舊呼叫端仍可能傳入 conversationHistory；保留相容性。
+  conversationHistory?: string;
 }
 
 const SECURITY_NOTICE = `
@@ -26,14 +29,24 @@ ${SECURITY_NOTICE}`;
     const {
       sourcePodName,
       targetPodName,
-      targetPodGoal,
-      conversationHistory,
+      targetPodGoal = null,
+      persistedSummary = null,
     } = context;
+    const recentConversationHistory =
+      context.recentConversationHistory ??
+      context.conversationHistory ??
+      "（無最近訊息）";
 
     const parts: string[] = [];
 
+    if (persistedSummary) {
+      parts.push(
+        `以下是來自「<user_data>${sanitizeForPrompt(sourcePodName)}</user_data>」的既有摘要：\n\n---\n<user_data>\n${sanitizeForPrompt(persistedSummary)}\n</user_data>\n---`,
+      );
+    }
+
     parts.push(
-      `以下是來自「<user_data>${sanitizeForPrompt(sourcePodName)}</user_data>」的完整對話記錄：\n\n---\n<user_data>\n${sanitizeForPrompt(conversationHistory)}\n</user_data>\n---`,
+      `以下是來自「<user_data>${sanitizeForPrompt(sourcePodName)}</user_data>」的最近對話片段：\n\n---\n<user_data>\n${sanitizeForPrompt(recentConversationHistory)}\n</user_data>\n---`,
     );
 
     if (targetPodGoal && targetPodGoal.trim()) {

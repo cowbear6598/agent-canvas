@@ -118,6 +118,12 @@ describe("runStore", () => {
       expect(store.activeRunChatModal).toBeNull();
       expect(store.runChatMessages.size).toBe(0);
       expect(store.isLoadingPodMessages).toBe(false);
+      expect(store.isLoadingOlderPodMessages).toBe(false);
+      expect(store.activeRunChatPageInfo).toEqual({
+        hasMore: false,
+        nextCursor: null,
+      });
+      expect(store.messageIndexCache.size).toBe(0);
     });
   });
 
@@ -319,6 +325,36 @@ describe("runStore", () => {
 
       expect(store.runsById.size).toBe(30);
       expect(store.runsById.has("run-new")).toBe(true);
+    });
+
+    it("超量淘汰時應同步清理最舊 run 的 transcript 快取", () => {
+      const store = useRunStore();
+      setRuns(
+        store,
+        Array.from({ length: 30 }, (_, i) =>
+          createMockRun({
+            id: `run-${i}`,
+            createdAt: new Date(i * 1000).toISOString(),
+          }),
+        ),
+      );
+      setPodMessages(store, "run-0", "pod-1", [
+        { id: "msg-old", role: "assistant", content: "old" },
+      ]);
+      store.accumulatedLengthByMessageId.set("msg-old", 3);
+      store.messageIndexCache.set("msg-old", 0);
+
+      store.addRun(
+        createMockRun({
+          id: "run-new",
+          createdAt: new Date(99999999).toISOString(),
+        }),
+      );
+
+      expect(store.runsById.has("run-0")).toBe(false);
+      expect(store.runChatMessages.has("run-0")).toBe(false);
+      expect(store.accumulatedLengthByMessageId.has("msg-old")).toBe(false);
+      expect(store.messageIndexCache.has("msg-old")).toBe(false);
     });
   });
 
@@ -551,27 +587,59 @@ describe("runStore", () => {
       expect(store.runChatMessages.has("run-1")).toBe(false);
       expect(hasPodMessages(store, "run-2", "pod-1")).toBe(true);
     });
+
+    it("應一併清除該 run 相關的 accumulatedLength 與 messageIndexCache", () => {
+      const store = useRunStore();
+      setRuns(store, [createMockRun({ id: "run-1" })]);
+      setPodMessages(store, "run-1", "pod-1", [
+        { id: "msg-1", role: "assistant", content: "Hello" },
+      ]);
+      store.accumulatedLengthByMessageId.set("msg-1", 5);
+      store.messageIndexCache.set("msg-1", 0);
+
+      store.removeRun("run-1");
+
+      expect(store.accumulatedLengthByMessageId.has("msg-1")).toBe(false);
+      expect(store.messageIndexCache.has("msg-1")).toBe(false);
+    });
   });
 
   describe("deleteRun", () => {
-    it("應從前端 store 移除 run", () => {
+    it("後端確認成功後應從前端 store 移除 run", async () => {
       const store = useRunStore();
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
       setRuns(store, [createMockRun({ id: "run-1" })]);
+      mockCreateWebSocketRequest.mockResolvedValueOnce({
+        success: true,
+        runId: "run-1",
+        canvasId: "canvas-1",
+      });
 
-      store.deleteRun("run-1");
+      await store.deleteRun("run-1");
 
       expect(store.runsById.has("run-1")).toBe(false);
     });
 
-    it("無 activeCanvasId 時應 early return", () => {
+    it("刪除失敗時不應提前移除 run", async () => {
+      const store = useRunStore();
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      setRuns(store, [createMockRun({ id: "run-1" })]);
+      mockCreateWebSocketRequest.mockRejectedValueOnce(new Error("delete failed"));
+
+      await store.deleteRun("run-1");
+
+      expect(store.runsById.has("run-1")).toBe(true);
+    });
+
+    it("無 activeCanvasId 時應 early return", async () => {
       const store = useRunStore();
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = null;
       setRuns(store, [createMockRun({ id: "run-1" })]);
 
-      store.deleteRun("run-1");
+      await store.deleteRun("run-1");
 
       // run 不應被移除
       expect(store.runsById.has("run-1")).toBe(true);
@@ -656,6 +724,13 @@ describe("runStore", () => {
       mockCreateWebSocketRequest.mockResolvedValueOnce({
         success: true,
         messages,
+        pageInfo: {
+          hasMore: true,
+          nextCursor: {
+            beforeTimestamp: "2026-05-22T10:00:00.000Z",
+            beforeMessageId: "msg-1",
+          },
+        },
       });
 
       await store.openRunChatModal("run-1", "pod-1");
@@ -663,6 +738,20 @@ describe("runStore", () => {
       const stored = getPodMessages(store, "run-1", "pod-1");
       expect(stored).toHaveLength(1);
       expect(stored?.[0]?.content).toBe("Hello");
+      expect(store.activeRunChatPageInfo).toEqual({
+        hasMore: true,
+        nextCursor: {
+          beforeTimestamp: "2026-05-22T10:00:00.000Z",
+          beforeMessageId: "msg-1",
+        },
+      });
+      expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            limit: 50,
+          }),
+        }),
+      );
     });
 
     it("完成後 isLoadingPodMessages 應為 false", async () => {
@@ -708,6 +797,76 @@ describe("runStore", () => {
       );
       expect(store.isLoadingPodMessages).toBe(false);
     });
+
+    it("應重建 live partial message 的累積長度，避免 reopen 後下一段串流重複追加", async () => {
+      const store = useRunStore();
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+
+      let resolveRequest:
+        | ((value: {
+            success: boolean;
+            messages: Array<{
+              id: string;
+              role: "assistant";
+              content: string;
+              timestamp: string;
+            }>;
+          }) => void)
+        | undefined;
+      const pendingRequest = new Promise<{
+        success: boolean;
+        messages: Array<{
+          id: string;
+          role: "assistant";
+          content: string;
+          timestamp: string;
+        }>;
+      }>((resolve) => {
+        resolveRequest = resolve;
+      });
+      mockCreateWebSocketRequest.mockReturnValueOnce(pendingRequest);
+
+      const openPromise = store.openRunChatModal("run-1", "pod-1");
+      store.appendRunChatMessage(
+        "run-1",
+        "pod-1",
+        "msg-live",
+        "Hello",
+        true,
+        "assistant",
+      );
+
+      resolveRequest?.({
+        success: true,
+        messages: [
+          {
+            id: "msg-old",
+            role: "assistant",
+            content: "Earlier",
+            timestamp: new Date().toISOString(),
+          },
+        ],
+      });
+      await openPromise;
+
+      expect(store.accumulatedLengthByMessageId.get("msg-live")).toBe(5);
+
+      store.appendRunChatMessage(
+        "run-1",
+        "pod-1",
+        "msg-live",
+        "Hello world",
+        true,
+        "assistant",
+      );
+
+      const liveMessage = getPodMessages(store, "run-1", "pod-1")?.find(
+        (message) => message.id === "msg-live",
+      );
+      expect(liveMessage?.content).toBe("Hello world");
+      expect(liveMessage?.subMessages?.[0]?.content).toBe("Hello world");
+    });
   });
 
   describe("closeRunChatModal", () => {
@@ -718,6 +877,90 @@ describe("runStore", () => {
       store.closeRunChatModal();
 
       expect(store.activeRunChatModal).toBeNull();
+    });
+
+    it("應釋放目前 transcript 與分頁狀態", () => {
+      const store = useRunStore();
+      store.activeRunChatModal = { runId: "run-1", podId: "pod-1" };
+      setPodMessages(store, "run-1", "pod-1", [
+        { id: "msg-1", role: "assistant", content: "Hello" },
+      ]);
+      store.accumulatedLengthByMessageId.set("msg-1", 5);
+      store.messageIndexCache.set("msg-1", 0);
+      store.activeRunChatPageInfo = {
+        hasMore: true,
+        nextCursor: {
+          beforeTimestamp: "2026-05-22T10:00:00.000Z",
+          beforeMessageId: "msg-1",
+        },
+      };
+
+      store.closeRunChatModal();
+
+      expect(store.runChatMessages.size).toBe(0);
+      expect(store.accumulatedLengthByMessageId.size).toBe(0);
+      expect(store.messageIndexCache.size).toBe(0);
+      expect(store.activeRunChatPageInfo).toEqual({
+        hasMore: false,
+        nextCursor: null,
+      });
+    });
+  });
+
+  describe("loadOlderActiveRunChatMessages", () => {
+    it("應將更早訊息 prepend 到目前 transcript 前方並更新 pageInfo", async () => {
+      const store = useRunStore();
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      store.activeRunChatModal = { runId: "run-1", podId: "pod-1" };
+      setPodMessages(store, "run-1", "pod-1", [
+        { id: "msg-2", role: "assistant", content: "Second" },
+        { id: "msg-3", role: "assistant", content: "Third" },
+      ]);
+      store.activeRunChatPageInfo = {
+        hasMore: true,
+        nextCursor: {
+          beforeTimestamp: "2026-05-22T10:00:00.000Z",
+          beforeMessageId: "msg-2",
+        },
+      };
+
+      mockCreateWebSocketRequest.mockResolvedValueOnce({
+        success: true,
+        messages: [
+          {
+            id: "msg-1",
+            role: "assistant",
+            content: "First",
+            timestamp: new Date().toISOString(),
+          },
+        ],
+        pageInfo: {
+          hasMore: false,
+          nextCursor: null,
+        },
+      });
+
+      await store.loadOlderActiveRunChatMessages();
+
+      expect(getPodMessages(store, "run-1", "pod-1")?.map((m) => m.id)).toEqual(
+        ["msg-1", "msg-2", "msg-3"],
+      );
+      expect(store.activeRunChatPageInfo).toEqual({
+        hasMore: false,
+        nextCursor: null,
+      });
+      expect(store.isLoadingOlderPodMessages).toBe(false);
+      expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            cursor: {
+              beforeTimestamp: "2026-05-22T10:00:00.000Z",
+              beforeMessageId: "msg-2",
+            },
+          }),
+        }),
+      );
     });
   });
 
@@ -1203,7 +1446,7 @@ describe("runStore", () => {
       }).not.toThrow();
     });
 
-    it("messageId 不存在時不應有任何變化", () => {
+    it("messageId 不存在時應補建訊息並保留 tool result", () => {
       const store = useRunStore();
       setPodMessages(store, "run-1", "pod-1", [
         {
@@ -1244,9 +1487,15 @@ describe("runStore", () => {
         output: "result",
       });
 
-      const toolUse = getPodMessages(store, "run-1", "pod-1")?.[0]
-        ?.subMessages?.[0]?.toolUse?.[0];
-      expect(toolUse?.status).toBe("running");
+      const createdMessage = getPodMessages(store, "run-1", "pod-1")?.find(
+        (message) => message.id === "non-existent",
+      );
+      expect(createdMessage?.toolUse?.[0]).toMatchObject({
+        toolUseId: "tool-1",
+        toolName: "Bash",
+        output: "result",
+        status: "completed",
+      });
     });
   });
 
@@ -1264,14 +1513,20 @@ describe("runStore", () => {
       expect(message?.content).toBe("full content");
     });
 
-    it("訊息不存在時不應有任何變化", () => {
+    it("訊息不存在時應以 fullContent 補建最終訊息", () => {
       const store = useRunStore();
       setPodMessages(store, "run-1", "pod-1", []);
 
       store.handleRunChatComplete("run-1", "pod-1", "non-existent", "content");
 
       const messages = getPodMessages(store, "run-1", "pod-1");
-      expect(messages).toHaveLength(0);
+      expect(messages).toHaveLength(1);
+      expect(messages?.[0]).toMatchObject({
+        id: "non-existent",
+        role: "assistant",
+        content: "content",
+        isPartial: false,
+      });
     });
 
     it("complete 時應對 subMessages 做 finalizeSubMessages（v2：保留各 segment、running tool 標記為 completed）", () => {
@@ -1502,7 +1757,7 @@ describe("runStore", () => {
   });
 
   describe("resetOnCanvasSwitch", () => {
-    it("應清空所有狀態（含 accumulatedLengthByMessageId）", () => {
+    it("應清空所有狀態（含 accumulatedLengthByMessageId 與 messageIndexCache）", () => {
       const store = useRunStore();
       setRuns(store, [createMockRun({ id: "run-1" })]);
       store.expandedRunIds.add("run-1");
@@ -1510,6 +1765,14 @@ describe("runStore", () => {
       setPodMessages(store, "run-1", "pod-1", []);
       store.isHistoryPanelOpen = true;
       store.accumulatedLengthByMessageId.set("msg-1", 10);
+      store.messageIndexCache.set("msg-1", 0);
+      store.activeRunChatPageInfo = {
+        hasMore: true,
+        nextCursor: {
+          beforeTimestamp: "2026-05-22T10:00:00.000Z",
+          beforeMessageId: "msg-1",
+        },
+      };
 
       store.resetOnCanvasSwitch();
 
@@ -1519,6 +1782,11 @@ describe("runStore", () => {
       expect(store.runChatMessages.size).toBe(0);
       expect(store.isHistoryPanelOpen).toBe(false);
       expect(store.accumulatedLengthByMessageId.size).toBe(0);
+      expect(store.messageIndexCache.size).toBe(0);
+      expect(store.activeRunChatPageInfo).toEqual({
+        hasMore: false,
+        nextCursor: null,
+      });
     });
   });
 });

@@ -82,6 +82,10 @@ describe("ChatExecutionStrategy", () => {
     vi.spyOn(runStore, "updatePodInstanceSessionId").mockImplementation(
       () => {},
     );
+    vi.spyOn(
+      runStore,
+      "updatePodInstanceLastResponseSummary",
+    ).mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -195,6 +199,33 @@ describe("ChatExecutionStrategy", () => {
       strategy.persistMessage("pod-1", message);
 
       expect(runStore.upsertRunMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("updateLastResponseSummary", () => {
+    it("有 pod instance 時應更新持久化摘要欄位", () => {
+      vi.spyOn(runStore, "getPodInstance").mockReturnValue({
+        id: "instance-1",
+      } as ReturnType<typeof runStore.getPodInstance>);
+      const strategy = makeStrategy();
+
+      strategy.updateLastResponseSummary("pod-1", "最新摘要");
+
+      expect(runStore.updatePodInstanceLastResponseSummary).toHaveBeenCalledWith(
+        "instance-1",
+        "最新摘要",
+      );
+    });
+
+    it("找不到 pod instance 時應跳過摘要更新", () => {
+      vi.spyOn(runStore, "getPodInstance").mockReturnValue(undefined);
+      const strategy = makeStrategy();
+
+      strategy.updateLastResponseSummary("pod-1", "最新摘要");
+
+      expect(
+        runStore.updatePodInstanceLastResponseSummary,
+      ).not.toHaveBeenCalled();
     });
   });
 

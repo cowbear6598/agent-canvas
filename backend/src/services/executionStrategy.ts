@@ -79,6 +79,21 @@ export class ChatExecutionStrategy {
     runStore.upsertRunMessage(this.runContext.runId, podId, message);
   }
 
+  updateLastResponseSummary(
+    podId: string,
+    lastResponseSummary: string | null,
+  ): void {
+    const instance = runStore.getPodInstance(this.runContext.runId, podId);
+    if (!instance) {
+      return;
+    }
+
+    runStore.updatePodInstanceLastResponseSummary(
+      instance.id,
+      lastResponseSummary,
+    );
+  }
+
   async addUserMessage(
     podId: string,
     content: string | ContentBlock[],

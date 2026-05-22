@@ -159,8 +159,19 @@ describe("RunStore", () => {
       expect(instance.status).toBe("pending");
       expect(instance.sessionId).toBeNull();
       expect(instance.errorMessage).toBeNull();
+      expect(instance.lastResponseSummary).toBeNull();
       expect(instance.triggeredAt).toBeNull();
       expect(instance.completedAt).toBeNull();
+    });
+
+    it("updatePodInstanceLastResponseSummary 應正確持久化摘要欄位", () => {
+      const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, TRIGGER_MESSAGE);
+      const instance = runStore.createPodInstance(run.id, "pod-1");
+
+      runStore.updatePodInstanceLastResponseSummary(instance.id, "最新摘要");
+
+      const updated = runStore.getPodInstance(run.id, "pod-1");
+      expect(updated?.lastResponseSummary).toBe("最新摘要");
     });
 
     it("更新 run_pod_instance 狀態（pending → running → completed）", () => {
@@ -481,6 +492,97 @@ describe("RunStore", () => {
       const ids = messages.map((m) => m.id);
       expect(ids).toContain(id1);
       expect(ids).toContain(id2);
+    });
+
+    it("getRunMessagesPage 預設只回傳最近一頁，並帶出往前分頁 cursor", () => {
+      const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, TRIGGER_MESSAGE);
+      const podId = "pod-1";
+
+      runStore.upsertRunMessage(run.id, podId, {
+        id: "00000000-0000-0000-0000-000000000001",
+        role: "assistant",
+        content: "第一則",
+        timestamp: "2026-05-22T10:00:00.000Z",
+      });
+      runStore.upsertRunMessage(run.id, podId, {
+        id: "00000000-0000-0000-0000-000000000002",
+        role: "assistant",
+        content: "第二則",
+        timestamp: "2026-05-22T10:00:01.000Z",
+      });
+      runStore.upsertRunMessage(run.id, podId, {
+        id: "00000000-0000-0000-0000-000000000003",
+        role: "assistant",
+        content: "第三則",
+        timestamp: "2026-05-22T10:00:01.000Z",
+      });
+      runStore.upsertRunMessage(run.id, podId, {
+        id: "00000000-0000-0000-0000-000000000004",
+        role: "assistant",
+        content: "第四則",
+        timestamp: "2026-05-22T10:00:02.000Z",
+      });
+
+      const page = runStore.getRunMessagesPage(run.id, podId, { limit: 2 });
+
+      expect(page.messages.map((message) => message.content)).toEqual([
+        "第三則",
+        "第四則",
+      ]);
+      expect(page.pageInfo).toEqual({
+        hasMore: true,
+        nextCursor: {
+          beforeTimestamp: "2026-05-22T10:00:01.000Z",
+          beforeMessageId: "00000000-0000-0000-0000-000000000003",
+        },
+      });
+    });
+
+    it("getRunMessagesPage 依 cursor 往前載入更早訊息並維持升序", () => {
+      const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, TRIGGER_MESSAGE);
+      const podId = "pod-1";
+
+      runStore.upsertRunMessage(run.id, podId, {
+        id: "00000000-0000-0000-0000-000000000001",
+        role: "assistant",
+        content: "第一則",
+        timestamp: "2026-05-22T10:00:00.000Z",
+      });
+      runStore.upsertRunMessage(run.id, podId, {
+        id: "00000000-0000-0000-0000-000000000002",
+        role: "assistant",
+        content: "第二則",
+        timestamp: "2026-05-22T10:00:01.000Z",
+      });
+      runStore.upsertRunMessage(run.id, podId, {
+        id: "00000000-0000-0000-0000-000000000003",
+        role: "assistant",
+        content: "第三則",
+        timestamp: "2026-05-22T10:00:01.000Z",
+      });
+      runStore.upsertRunMessage(run.id, podId, {
+        id: "00000000-0000-0000-0000-000000000004",
+        role: "assistant",
+        content: "第四則",
+        timestamp: "2026-05-22T10:00:02.000Z",
+      });
+
+      const recentPage = runStore.getRunMessagesPage(run.id, podId, {
+        limit: 2,
+      });
+      const olderPage = runStore.getRunMessagesPage(run.id, podId, {
+        limit: 2,
+        cursor: recentPage.pageInfo.nextCursor,
+      });
+
+      expect(olderPage.messages.map((message) => message.content)).toEqual([
+        "第一則",
+        "第二則",
+      ]);
+      expect(olderPage.pageInfo).toEqual({
+        hasMore: false,
+        nextCursor: null,
+      });
     });
   });
 

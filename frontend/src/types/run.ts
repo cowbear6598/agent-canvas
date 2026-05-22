@@ -30,3 +30,13 @@ export interface WorkflowRun {
   createdAt: string
   completedAt?: string
 }
+
+export interface RunMessagesPageCursor {
+  beforeTimestamp: string
+  beforeMessageId: string
+}
+
+export interface RunMessagesPageInfo {
+  hasMore: boolean
+  nextCursor: RunMessagesPageCursor | null
+}

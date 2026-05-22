@@ -22,6 +22,12 @@ const runStore = useRunStore();
 
 const messages = computed(() => runStore.getActiveRunChatMessages);
 const isLoadingPodMessages = computed(() => runStore.isLoadingPodMessages);
+const isLoadingOlderPodMessages = computed(
+  () => runStore.isLoadingOlderPodMessages,
+);
+const canLoadOlderMessages = computed(
+  () => runStore.activeRunChatPageInfo.hasMore,
+);
 
 const isTyping = computed(() => {
   const run = runStore.getRunById(props.runId);
@@ -71,6 +77,23 @@ useEscapeClose(() => {
             @click="handleClose"
           >
             <X :size="20" />
+          </button>
+        </div>
+
+        <div
+          v-if="canLoadOlderMessages"
+          class="border-b border-doodle-ink/20 px-4 py-3 text-center"
+        >
+          <button
+            class="text-sm font-medium text-doodle-blue transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="isLoadingOlderPodMessages"
+            @click="runStore.loadOlderActiveRunChatMessages()"
+          >
+            {{
+              isLoadingOlderPodMessages
+                ? $t("run.chatModal.loadingOlder")
+                : $t("run.chatModal.loadOlder")
+            }}
           </button>
         </div>
 

@@ -8,6 +8,7 @@ import type {
   RunStatus,
   RunPodStatus,
   PathwayState,
+  RunMessagesPageInfo,
 } from "../run";
 import type { ManagedMcpRegistryItem, PodMcpAvailabilityItem } from "../mcp";
 import type { MessageRole, SystemMessageMetadata } from "../chat";
@@ -542,9 +543,9 @@ export interface RunChatCompletePayload {
   fullContent: string;
 }
 
-export interface RunDeletedPayload {
-  canvasId: string;
-  runId: string;
+export interface RunDeletedPayload extends ResultPayload {
+  canvasId?: string;
+  runId?: string;
 }
 
 export interface RunHistoryResultPayload {
@@ -556,7 +557,10 @@ export interface RunHistoryResultPayload {
 export interface RunPodMessagesResultPayload {
   requestId: string;
   success: boolean;
+  runId?: string;
+  podId?: string;
   messages?: PersistedMessage[];
+  pageInfo?: RunMessagesPageInfo;
 }
 
 export interface RunToolUsePayload {

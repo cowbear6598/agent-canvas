@@ -19,6 +19,7 @@ export interface BranchDecisionInput {
     description?: string;
     targetPodName: string;
   }>;
+  persistedSummary?: string | null;
   recentMessages: PersistedMessage[];
   provider: ProviderName;
   model: string;

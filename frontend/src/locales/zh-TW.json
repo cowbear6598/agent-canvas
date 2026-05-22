@@ -307,7 +307,9 @@
     },
     "chatModal": {
       "historyBadge": "（歷程紀錄）",
-      "readonlyHint": "此為歷程紀錄，僅供查看"
+      "readonlyHint": "此為歷程紀錄，僅供查看",
+      "loadOlder": "載入更早訊息",
+      "loadingOlder": "正在載入更早訊息..."
     }
   },
   "chat": {

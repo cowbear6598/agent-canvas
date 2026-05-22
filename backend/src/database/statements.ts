@@ -154,6 +154,7 @@ function buildStatements(db: Database): {
     selectByRunId: ReturnType<Database["prepare"]>;
     selectByRunIdAndPodId: ReturnType<Database["prepare"]>;
     updateStatus: ReturnType<Database["prepare"]>;
+    updateLastResponseSummary: ReturnType<Database["prepare"]>;
     updateSessionId: ReturnType<Database["prepare"]>;
     selectRunningByRunId: ReturnType<Database["prepare"]>;
     selectActiveByPodId: ReturnType<Database["prepare"]>;
@@ -168,6 +169,7 @@ function buildStatements(db: Database): {
   runMessage: {
     insert: ReturnType<Database["prepare"]>;
     selectByRunIdAndPodId: ReturnType<Database["prepare"]>;
+    selectPageByRunIdAndPodId: ReturnType<Database["prepare"]>;
     upsert: ReturnType<Database["prepare"]>;
     deleteByRunId: ReturnType<Database["prepare"]>;
   };
@@ -618,10 +620,12 @@ function buildStatements(db: Database): {
         `INSERT INTO run_pod_instances (
           id, run_id, pod_id, status, session_id, error_message,
           triggered_at, completed_at, auto_pathway_settled,
+          last_response_summary,
           direct_pathway_settled, run_repo_path, workspace_path
         ) VALUES (
           $id, $runId, $podId, $status, $sessionId, $errorMessage,
           $triggeredAt, $completedAt, $autoPathwaySettled,
+          $lastResponseSummary,
           $directPathwaySettled, $runRepoPath, $workspacePath
         )`,
       ),
@@ -640,6 +644,9 @@ function buildStatements(db: Database): {
       ),
       updateSessionId: db.prepare(
         "UPDATE run_pod_instances SET session_id = $sessionId WHERE id = $id",
+      ),
+      updateLastResponseSummary: db.prepare(
+        "UPDATE run_pod_instances SET last_response_summary = $lastResponseSummary WHERE id = $id",
       ),
       selectRunningByRunId: db.prepare(
         `SELECT * FROM run_pod_instances
@@ -696,6 +703,18 @@ function buildStatements(db: Database): {
         `SELECT * FROM run_messages
         WHERE run_id = $runId AND pod_id = $podId
         ORDER BY timestamp ASC`,
+      ),
+      selectPageByRunIdAndPodId: db.prepare(
+        `SELECT * FROM run_messages
+        WHERE run_id = $runId
+          AND pod_id = $podId
+          AND (
+            $hasCursor = 0 OR
+            timestamp < $beforeTimestamp OR
+            (timestamp = $beforeTimestamp AND id < $beforeMessageId)
+          )
+        ORDER BY timestamp DESC, id DESC
+        LIMIT $limitPlusOne`,
       ),
       upsert: db.prepare(
         `INSERT OR REPLACE INTO run_messages (

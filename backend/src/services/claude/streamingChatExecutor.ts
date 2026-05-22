@@ -38,6 +38,7 @@ import { createI18nError } from "../../utils/i18nError.js";
 import { appendSystemMessage } from "../transcriptSystemMessage.js";
 import { resolveExecutionPaths } from "../runtime/executionPaths.js";
 import { consumeGoalRuntimeToolResult } from "../goalRuntime.js";
+import { deriveRunResponseSummary } from "../runResponseSummary.js";
 import {
   autoForceBlock,
   evaluateGoalGate,
@@ -91,10 +92,10 @@ function hasAssistantContent(state: MutableStreamState): boolean {
 
 /**
  * 串流節流窗口（ms）。
- * 每秒最多 5 次 DB 寫入，平衡 UX 即時性（使用者感受 < 200ms 延遲）與 DB 寫入頻率，
- * 避免高頻串流時造成 SQLite write lock 競爭。
+ * 串流期間僅做粗粒度 checkpoint，最終完成態仍會強制 flush。
+ * 這裡刻意把 SQLite 寫入節奏放慢，避免長 workflow 在多 pod 並行時持續高頻打 DB。
  */
-const THROTTLE_MS = 200;
+const THROTTLE_MS = 2000;
 
 /**
  * 串流事件狀態 + 執行策略兩類關注點的集合體。
@@ -556,6 +557,10 @@ async function finalizeAfterStream(
   if (hasAssistantContent(streamState)) {
     // finalize 路徑直接呼叫 persistStreamingMessage（非節流版），確保最終狀態落盤
     persistStreamingMessage();
+    strategy.updateLastResponseSummary(
+      podId,
+      deriveRunResponseSummary(streamState.accumulatedContent),
+    );
   }
 
   strategy.onStreamComplete(podId, sessionId);

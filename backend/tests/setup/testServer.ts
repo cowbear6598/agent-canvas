@@ -13,6 +13,59 @@ export interface TestServerInstance {
   canvasDataDir: string;
 }
 
+const TEST_HOSTNAME = "127.0.0.1";
+const TEST_PORT_BASE = 47000;
+const TEST_PORT_BLOCK = 200;
+const TEST_PORT_RETRY_COUNT = 200;
+const workerId = Number(process.env.VITEST_POOL_ID ?? "0");
+const initialTestPort =
+  TEST_PORT_BASE + (workerId % 50) * TEST_PORT_BLOCK + (process.pid % 10) * 10;
+const TEST_PORT_COUNTER_KEY = "__claudeCodeCanvasBackendTestServerNextPort";
+
+function isAddressInUseError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    (error as Error & { code?: string }).code === "EADDRINUSE"
+  );
+}
+
+function getNextTestPort(): number {
+  const testGlobal = globalThis as typeof globalThis & {
+    __claudeCodeCanvasBackendTestServerNextPort?: number;
+  };
+
+  if (testGlobal[TEST_PORT_COUNTER_KEY] === undefined) {
+    testGlobal[TEST_PORT_COUNTER_KEY] = initialTestPort;
+  }
+
+  const port =
+    testGlobal[TEST_PORT_COUNTER_KEY] ??
+    initialTestPort;
+  testGlobal[TEST_PORT_COUNTER_KEY] = port + 1;
+  return port;
+}
+
+function startServerWithRetry(
+  createOptions: (port: number) => Parameters<typeof Bun.serve>[0],
+): Server<ConnectionSocketData> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < TEST_PORT_RETRY_COUNT; attempt += 1) {
+    const port = getNextTestPort();
+    try {
+      return Bun.serve<ConnectionSocketData>(createOptions(port));
+    } catch (error) {
+      if (!isAddressInUseError(error)) {
+        throw error;
+      }
+      lastError = error;
+    }
+  }
+
+  throw lastError ?? new Error("Failed to allocate a backend test server port.");
+}
+
 /**
  * 建立測試用 Server
  * 使用動態 Port 避免衝突
@@ -57,9 +110,8 @@ export async function createTestServer(): Promise<TestServerInstance> {
   socketService.initialize();
   registerAllHandlers();
 
-  const server = Bun.serve<ConnectionSocketData>({
-    port: 0,
-    hostname: "0.0.0.0",
+  const server = startServerWithRetry((port) => ({
+    port,
     async fetch(req, server) {
       const url = new URL(req.url);
 
@@ -180,11 +232,11 @@ export async function createTestServer(): Promise<TestServerInstance> {
         );
       },
     },
-  });
+  }));
 
   const port = server.port;
-  const baseUrl = `http://localhost:${port}`;
-  const wsUrl = `ws://localhost:${port}`;
+  const baseUrl = `http://${TEST_HOSTNAME}:${port}`;
+  const wsUrl = `ws://${TEST_HOSTNAME}:${port}`;
 
   return {
     server,

@@ -11,9 +11,9 @@
  */
 
 import { podStore } from "../podStore.js";
-import { runStore } from "../runStore.js";
 import { branchDecider } from "../branch/index.js";
 import { resolveExecutionPaths } from "../runtime/executionPaths.js";
+import { getRunTranscriptWindow } from "./runTranscriptWindow.js";
 import { logger } from "../../utils/logger.js";
 import { getErrorMessage, isAbortError } from "../../utils/errorHelpers.js";
 import type { Connection } from "../../types/index.js";
@@ -57,8 +57,11 @@ class BranchDecisionService {
       );
     }
 
-    const allMessages = runStore.getRunMessages(runContext.runId, sourcePodId);
-    const recentMessages = allMessages.slice(-RECENT_MESSAGES_COUNT);
+    const transcriptWindow = getRunTranscriptWindow(
+      runContext.runId,
+      sourcePodId,
+      RECENT_MESSAGES_COUNT,
+    );
 
     const executionPaths = resolveExecutionPaths(sourcePod, runContext);
 
@@ -87,7 +90,8 @@ class BranchDecisionService {
         sourcePodId,
         sourcePodName: sourcePod.name,
         branches,
-        recentMessages,
+        persistedSummary: transcriptWindow.persistedSummary,
+        recentMessages: transcriptWindow.recentMessages,
         provider,
         model,
         workspacePath: executionPaths.workspacePath,

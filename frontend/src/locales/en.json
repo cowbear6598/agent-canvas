@@ -307,7 +307,9 @@
     },
     "chatModal": {
       "historyBadge": "(History)",
-      "readonlyHint": "This is a history record, read-only"
+      "readonlyHint": "This is a history record, read-only",
+      "loadOlder": "Load earlier messages",
+      "loadingOlder": "Loading earlier messages..."
     }
   },
   "chat": {

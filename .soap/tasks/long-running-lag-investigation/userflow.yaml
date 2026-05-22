@@ -1,0 +1,54 @@
+feature: long-running-lag-investigation
+approved: true
+scenarios:
+  - id: F1
+    scenario: 使用者連續多次觸發 workflow
+    given:
+      - 使用者正在操作一個含有多個 Pod 的畫布
+      - 畫布中已存在可執行的 workflow
+    when:
+      - 連續多次觸發 workflow
+      - 等待多個 Pod 完成執行
+    then:
+      - workflow 能持續完成執行
+      - 畫布互動維持順暢
+      - 不會隨著執行次數增加而明顯變慢
+
+  - id: F2
+    scenario: 使用者反覆查看 run 歷史與訊息內容
+    given:
+      - 畫布中已累積多筆 run 記錄
+      - 使用者已開啟 run 歷史面板
+    when:
+      - 展開不同的 run 記錄
+      - 打開不同 Pod 的 run 對話內容
+    then:
+      - 歷史內容能在可接受時間內顯示
+      - 切換不同記錄時不會越看越慢
+      - 關閉 run 歷史後回到畫布仍保持順暢
+
+  - id: F3
+    scenario: 使用者長時間在同一個畫布中工作
+    given:
+      - 使用者已在同一個畫布中工作一段時間
+      - 使用者持續使用 workflow 與 run 歷史
+    when:
+      - 在 workflow 執行期間繼續操作畫布
+      - 多次來回切換畫布操作與 run 歷史檢視
+    then:
+      - 互動反應維持穩定
+      - 不需要重新整理才能恢復速度
+      - 不會出現明顯卡頓
+
+  - id: F4
+    scenario: 維運者在服務持續運作時仍可操作主機
+    given:
+      - 服務已部署在 Linux 主機上
+      - 使用者持續觸發 workflow 並查看 run 歷史
+    when:
+      - 維運者透過 shell 或 SSH 連入主機
+      - 維運者在服務運作期間執行日常操作
+    then:
+      - 主機仍保持可操作
+      - shell 或 SSH 不會明顯變慢
+      - 不需要先重啟服務才能恢復基本操作

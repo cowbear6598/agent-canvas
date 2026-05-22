@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { truncateMessage, formatRelativeTime } from '@/utils/runFormatUtils'
-import { RUN_RESPONSE_SUMMARY_LENGTH } from '@/lib/constants'
+import { formatRelativeTime } from '@/utils/runFormatUtils'
 import RunStatusIcon from './RunStatusIcon.vue'
 import type { RunPodInstance } from '@/types/run'
 
@@ -25,12 +24,6 @@ const emit = defineEmits<{
     <div class="flex-1 min-w-0">
       <p class="font-semibold text-sm truncate">
         {{ instance.podName }}
-      </p>
-      <p
-        v-if="instance.lastResponseSummary"
-        class="text-xs text-muted-foreground mt-0.5"
-      >
-        {{ truncateMessage(instance.lastResponseSummary, RUN_RESPONSE_SUMMARY_LENGTH) }}
       </p>
     </div>
     <span class="text-xs text-muted-foreground shrink-0 mt-0.5">

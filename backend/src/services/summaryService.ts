@@ -1,8 +1,8 @@
 import { executeDisposableChat } from "./disposableChatService.js";
 import { summaryPromptBuilder } from "./summaryPromptBuilder.js";
 import { podStore } from "./podStore.js";
-import { runStore } from "./runStore.js";
 import { formatGoalTodos } from "./goalRuntime.js";
+import { getRunTranscriptWindow } from "./workflow/runTranscriptWindow.js";
 import { logger } from "../utils/logger.js";
 import type { Pod, PersistedMessage } from "../types/index.js";
 import type { RunContext } from "../types/run.js";
@@ -21,21 +21,26 @@ interface TargetSummaryResult {
 async function buildSummaryContext(
   sourcePod: Pod,
   targetPod: Pod,
-  messages: PersistedMessage[],
+  persistedSummary: string | null,
+  recentMessages: PersistedMessage[],
 ): Promise<{
   sourcePodName: string;
   targetPodName: string;
   targetPodGoal: string | null;
-  conversationHistory: string;
+  persistedSummary: string | null;
+  recentConversationHistory: string;
 }> {
-  const conversationHistory =
-    summaryPromptBuilder.formatConversationHistory(messages);
+  const recentConversationHistory =
+    recentMessages.length > 0
+      ? summaryPromptBuilder.formatConversationHistory(recentMessages)
+      : "（無最近訊息）";
 
   return {
     sourcePodName: sourcePod.name,
     targetPodName: targetPod.name,
     targetPodGoal: formatGoalTodos(targetPod.goal),
-    conversationHistory,
+    persistedSummary,
+    recentConversationHistory,
   };
 }
 
@@ -46,7 +51,14 @@ class SummaryService {
    *
    * @param messages - 已取得的訊息列表（避免重複 I/O）
    */
-  private resolveFallbackSummary(messages: PersistedMessage[]): string | null {
+  private resolveFallbackSummary(
+    persistedSummary: string | null,
+    messages: PersistedMessage[],
+  ): string | null {
+    if (persistedSummary) {
+      return persistedSummary;
+    }
+
     let lastAssistant: PersistedMessage | undefined;
     for (let i = messages.length - 1; i >= 0; i--) {
       if (messages[i].role === "assistant") {
@@ -95,8 +107,15 @@ class SummaryService {
       };
     }
 
-    const messages = runStore.getRunMessages(runContext.runId, sourcePodId);
-    if (messages.length === 0) {
+    const transcriptWindow = getRunTranscriptWindow(
+      runContext.runId,
+      sourcePodId,
+      8,
+    );
+    if (
+      transcriptWindow.recentMessages.length === 0 &&
+      !transcriptWindow.persistedSummary
+    ) {
       logger.error(
         "Workflow",
         "Error",
@@ -110,7 +129,12 @@ class SummaryService {
       };
     }
 
-    const context = await buildSummaryContext(sourcePod, targetPod, messages);
+    const context = await buildSummaryContext(
+      sourcePod,
+      targetPod,
+      transcriptWindow.persistedSummary,
+      transcriptWindow.recentMessages,
+    );
     const systemPrompt = summaryPromptBuilder.buildSystemPrompt();
     const userPrompt = summaryPromptBuilder.buildUserPrompt(context);
     const executionPaths = resolveExecutionPaths(sourcePod, runContext);
@@ -134,7 +158,10 @@ class SummaryService {
       );
 
       // fallback 到上游最後一則 Assistant 訊息（重用已取得的 messages，避免重複 I/O）
-      const fallbackContent = this.resolveFallbackSummary(messages);
+      const fallbackContent = this.resolveFallbackSummary(
+        transcriptWindow.persistedSummary,
+        transcriptWindow.recentMessages,
+      );
 
       if (fallbackContent !== null) {
         return { targetPodId, summary: fallbackContent, success: true };

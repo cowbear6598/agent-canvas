@@ -333,8 +333,35 @@ class RunExecutionService {
 
     const overflow = count - MAX_RUNS_PER_CANVAS;
     const oldestIds = runStore.getOldestCompletedRunIds(canvasId, overflow);
-    for (const runId of oldestIds) {
-      fireAndForget(this.deleteRun(runId), "Run", "清理舊 Run 失敗");
+    if (oldestIds.length === 0) return;
+
+    void this.cleanupOverflowRuns(oldestIds);
+  }
+
+  private async cleanupOverflowRuns(runIds: string[]): Promise<void> {
+    for (const runId of runIds) {
+      for (let attempt = 1; attempt <= 2; attempt += 1) {
+        try {
+          await this.deleteRun(runId);
+          break;
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          if (attempt === 2) {
+            logger.error(
+              "Run",
+              "Delete",
+              `清理舊 Run 失敗（runId=${runId}，已重試 2 次）: ${errorMessage}`,
+            );
+            break;
+          }
+          logger.warn(
+            "Run",
+            "Delete",
+            `清理舊 Run 失敗，準備重試（runId=${runId}）: ${errorMessage}`,
+          );
+        }
+      }
     }
   }
 
@@ -604,15 +631,20 @@ class RunExecutionService {
       runStore.updatePodInstanceStatus(instance.id, status);
     }
 
+    const updatedInstance = runStore.getPodInstance(runContext.runId, podId);
+    if (!updatedInstance) {
+      return;
+    }
+
     // running 時記錄啟動時間；其他狀態保留原有的 triggeredAt（與 SQL CASE WHEN 邏輯一致）
     const triggeredAt =
       status === "running"
         ? new Date().toISOString()
-        : (instance.triggeredAt ?? undefined);
+        : (updatedInstance.triggeredAt ?? undefined);
     const isTerminal = TERMINAL_POD_STATUSES.has(status);
     const completedAt = isTerminal
       ? new Date().toISOString()
-      : (instance.completedAt ?? undefined);
+      : (updatedInstance.completedAt ?? undefined);
 
     socketService.emitToCanvas(
       runContext.canvasId,
@@ -622,12 +654,13 @@ class RunExecutionService {
         canvasId: runContext.canvasId,
         podId,
         status,
+        lastResponseSummary: updatedInstance.lastResponseSummary ?? undefined,
         errorMessage:
-          options?.errorMessage ?? instance.errorMessage ?? undefined,
+          options?.errorMessage ?? updatedInstance.errorMessage ?? undefined,
         triggeredAt,
         completedAt,
-        autoPathwaySettled: instance.autoPathwaySettled,
-        directPathwaySettled: instance.directPathwaySettled,
+        autoPathwaySettled: updatedInstance.autoPathwaySettled,
+        directPathwaySettled: updatedInstance.directPathwaySettled,
       } satisfies RunPodStatusChangedPayload,
     );
 

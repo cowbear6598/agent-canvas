@@ -71,6 +71,16 @@ export interface RunChatCompletePayload {
   fullContent: string;
 }
 
+export interface RunMessagesPageCursor {
+  beforeTimestamp: string;
+  beforeMessageId: string;
+}
+
+export interface RunMessagesPageInfo {
+  hasMore: boolean;
+  nextCursor: RunMessagesPageCursor | null;
+}
+
 export interface RunDeletedPayload {
   runId: string;
   canvasId: string;
@@ -88,4 +98,5 @@ export interface RunPodMessagesLoadedPayload {
   runId: string;
   podId: string;
   messages: PersistedMessage[];
+  pageInfo: RunMessagesPageInfo;
 }

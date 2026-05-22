@@ -1,5 +1,20 @@
 import { Database } from "bun:sqlite";
 
+function ensureRunPodInstanceSummaryColumn(db: Database): void {
+  try {
+    db.exec(
+      "ALTER TABLE run_pod_instances ADD COLUMN last_response_summary TEXT",
+    );
+  } catch (error) {
+    if (
+      !(error instanceof Error) ||
+      !error.message.includes("duplicate column name")
+    ) {
+      throw error;
+    }
+  }
+}
+
 /**
  * 建立所有資料表（CREATE TABLE IF NOT EXISTS）。
  * 純 DDL，代表目前最新的 schema；新建 DB 直接執行此函式即可。
@@ -217,6 +232,7 @@ function createBaseTables(db: Database): void {
       "completed_at TEXT," +
       "auto_pathway_settled INTEGER," +
       "direct_pathway_settled INTEGER," +
+      "last_response_summary TEXT," +
       "run_repo_path TEXT," +
       "workspace_path TEXT" +
       ")",
@@ -288,4 +304,5 @@ function createBaseTables(db: Database): void {
 
 export function createTables(db: Database): void {
   createBaseTables(db);
+  ensureRunPodInstanceSummaryColumn(db);
 }

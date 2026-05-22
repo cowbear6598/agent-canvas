@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import type { PersistedMessage, PersistedSubMessage } from "../types";
 import type { MessageRole, SystemMessageMetadata } from "../types/message.js";
+import type { RunMessagesPageCursor, RunMessagesPageInfo } from "../types/run.js";
 import type { PathwayState } from "../types/run.js";
 import { getStmts } from "../database/stmtsHelper.js";
 import { safeJsonParse } from "@shared/safeJsonParse.js";
@@ -72,6 +73,7 @@ export interface RunPodInstance {
   status: RunPodInstanceStatus;
   sessionId: string | null;
   errorMessage: string | null;
+  lastResponseSummary: string | null;
   triggeredAt: string | null;
   completedAt: string | null;
   autoPathwaySettled: PathwayState;
@@ -96,6 +98,16 @@ export interface RunMessage {
   subMessages?: PersistedSubMessage[];
 }
 
+export interface GetRunMessagesPageOptions {
+  limit?: number;
+  cursor?: RunMessagesPageCursor | null;
+}
+
+export interface RunMessagesPage {
+  messages: PersistedMessage[];
+  pageInfo: RunMessagesPageInfo;
+}
+
 interface WorkflowRunRow {
   id: string;
   canvas_id: string;
@@ -113,6 +125,7 @@ interface RunPodInstanceRow {
   status: string;
   session_id: string | null;
   error_message: string | null;
+  last_response_summary: string | null;
   triggered_at: string | null;
   completed_at: string | null;
   auto_pathway_settled: number | null;
@@ -152,6 +165,7 @@ function rowToRunPodInstance(row: RunPodInstanceRow): RunPodInstance {
     status: row.status as RunPodInstanceStatus,
     sessionId: row.session_id,
     errorMessage: row.error_message,
+    lastResponseSummary: row.last_response_summary,
     triggeredAt: row.triggered_at,
     completedAt: row.completed_at,
     autoPathwaySettled: sqliteIntToPathwayState(row.auto_pathway_settled),
@@ -288,6 +302,7 @@ class RunStore {
       status: "pending",
       sessionId: null,
       errorMessage: null,
+      lastResponseSummary: null,
       triggeredAt: null,
       completedAt: null,
       autoPathwaySettled,
@@ -303,6 +318,7 @@ class RunStore {
       $status: instance.status,
       $sessionId: instance.sessionId,
       $errorMessage: instance.errorMessage,
+      $lastResponseSummary: instance.lastResponseSummary,
       $triggeredAt: instance.triggeredAt,
       $completedAt: instance.completedAt,
       $autoPathwaySettled: pathwayStateToSqliteInt(autoPathwaySettled),
@@ -411,6 +427,16 @@ class RunStore {
     });
   }
 
+  updatePodInstanceLastResponseSummary(
+    instanceId: string,
+    lastResponseSummary: string | null,
+  ): void {
+    this.stmts.runPodInstance.updateLastResponseSummary.run({
+      $id: instanceId,
+      $lastResponseSummary: lastResponseSummary,
+    });
+  }
+
   getRunningPodInstances(runId: string): RunPodInstance[] {
     const rows = this.stmts.runPodInstance.selectRunningByRunId.all(
       runId,
@@ -481,6 +507,42 @@ class RunStore {
       $podId: podId,
     }) as RunMessageRow[];
     return rows.map(rowToRunMessage);
+  }
+
+  getRunMessagesPage(
+    runId: string,
+    podId: string,
+    options: GetRunMessagesPageOptions = {},
+  ): RunMessagesPage {
+    const limit = options.limit ?? 50;
+    const cursor = options.cursor ?? null;
+    const rows = this.stmts.runMessage.selectPageByRunIdAndPodId.all({
+      $runId: runId,
+      $podId: podId,
+      $hasCursor: cursor ? 1 : 0,
+      $beforeTimestamp: cursor?.beforeTimestamp ?? "",
+      $beforeMessageId: cursor?.beforeMessageId ?? "",
+      $limitPlusOne: limit + 1,
+    }) as RunMessageRow[];
+
+    const hasMore = rows.length > limit;
+    const pageRows = (hasMore ? rows.slice(0, limit) : rows).reverse();
+    const messages = pageRows.map(rowToRunMessage);
+    const oldestMessage = messages[0];
+
+    return {
+      messages,
+      pageInfo: {
+        hasMore,
+        nextCursor:
+          hasMore && oldestMessage
+            ? {
+                beforeTimestamp: oldestMessage.timestamp,
+                beforeMessageId: oldestMessage.id,
+              }
+            : null,
+      },
+    };
   }
 
   /**

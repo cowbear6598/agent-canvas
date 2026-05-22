@@ -1,11 +1,9 @@
 import { defineStore } from "pinia";
 import {
   createWebSocketRequest,
-  websocketClient,
   WebSocketRequestEvents,
   WebSocketResponseEvents,
 } from "@/services/websocket";
-import { generateRequestId } from "@/services/utils";
 import { getActiveCanvasIdOrWarn } from "@/utils/canvasGuard";
 import { MAX_RUNS_PER_CANVAS } from "@/lib/constants";
 import type {
@@ -13,6 +11,7 @@ import type {
   RunStatus,
   RunPodStatus,
   PathwayState,
+  RunMessagesPageInfo,
 } from "@/types/run";
 import type {
   Message,
@@ -26,6 +25,7 @@ import type {
   RunLoadPodMessagesPayload,
 } from "@/types/websocket/requests";
 import type {
+  RunDeletedPayload,
   RunHistoryResultPayload,
   RunPodMessagesResultPayload,
 } from "@/types/websocket/responses";
@@ -58,10 +58,60 @@ interface RunState {
    *  removeRun 時只需 delete(runId)，不再需要遍歷所有 key。 */
   runChatMessages: Map<string, Map<string, Message[]>>;
   isLoadingPodMessages: boolean;
+  isLoadingOlderPodMessages: boolean;
+  activeRunChatPageInfo: RunMessagesPageInfo;
+  activeRunChatRequestToken: number;
   accumulatedLengthByMessageId: Map<string, number>;
   /** 串流期間的 O(1) 定位快取：key 為 messageId，value 為陣列 index。
    *  complete 時或訊息被刪除時需同步清除，避免 stale index。 */
   messageIndexCache: Map<string, number>;
+}
+
+const RUN_CHAT_PAGE_SIZE = 50;
+
+function createEmptyRunChatPageInfo(): RunMessagesPageInfo {
+  return {
+    hasMore: false,
+    nextCursor: null,
+  };
+}
+
+function mergeLoadedMessages(
+  loadedMessages: Message[],
+  liveMessages: Message[],
+): Message[] {
+  if (liveMessages.length === 0) {
+    return loadedMessages;
+  }
+
+  const mergedById = new Map<string, Message>();
+  const orderedIds: string[] = [];
+
+  for (const message of loadedMessages) {
+    orderedIds.push(message.id);
+    mergedById.set(message.id, message);
+  }
+
+  for (const message of liveMessages) {
+    const existing = mergedById.get(message.id);
+    if (existing) {
+      mergedById.set(message.id, {
+        ...existing,
+        ...message,
+        metadata: message.metadata ?? existing.metadata,
+        toolUse: message.toolUse ?? existing.toolUse,
+        subMessages: message.subMessages ?? existing.subMessages,
+      });
+      continue;
+    }
+
+    orderedIds.push(message.id);
+    mergedById.set(message.id, message);
+  }
+
+  return orderedIds
+    .map((messageId) => mergedById.get(messageId))
+    .filter((message): message is Message => Boolean(message));
 }
 
 export const useRunStore = defineStore("run", {
@@ -72,6 +122,9 @@ export const useRunStore = defineStore("run", {
     activeRunChatModal: null,
     runChatMessages: new Map(),
     isLoadingPodMessages: false,
+    isLoadingOlderPodMessages: false,
+    activeRunChatPageInfo: createEmptyRunChatPageInfo(),
+    activeRunChatRequestToken: 0,
     accumulatedLengthByMessageId: new Map(),
     messageIndexCache: new Map(),
   }),
@@ -149,7 +202,7 @@ export const useRunStore = defineStore("run", {
         );
         // 移除最舊的一筆（超出一筆就夠）
         if (sorted[0]) {
-          this.runsById.delete(sorted[0].id);
+          this.removeRun(sorted[0].id);
         }
       }
     },
@@ -210,33 +263,96 @@ export const useRunStore = defineStore("run", {
       }
     },
 
+    isActiveRunChatTarget(runId: string, podId: string): boolean {
+      return (
+        this.activeRunChatModal?.runId === runId &&
+        this.activeRunChatModal?.podId === podId
+      );
+    },
+
+    clearMessageCaches(messages: Message[]): void {
+      for (const message of messages) {
+        this.accumulatedLengthByMessageId.delete(message.id);
+        this.messageIndexCache.delete(message.id);
+      }
+    },
+
+    cleanupRunTranscript(runId: string): void {
+      const podMap = this.runChatMessages.get(runId);
+      if (!podMap) return;
+
+      for (const messages of podMap.values()) {
+        this.clearMessageCaches(messages);
+      }
+
+      this.runChatMessages.delete(runId);
+    },
+
+    resetRunChatState(): void {
+      this.runChatMessages = new Map();
+      this.isLoadingPodMessages = false;
+      this.accumulatedLengthByMessageId = new Map();
+      this.messageIndexCache = new Map();
+      this.activeRunChatPageInfo = createEmptyRunChatPageInfo();
+      this.isLoadingOlderPodMessages = false;
+    },
+
+    rebuildActiveMessageCaches(messages: Message[]): void {
+      this.messageIndexCache = new Map(
+        messages.map((message, index) => [message.id, index]),
+      );
+      this.accumulatedLengthByMessageId = new Map(
+        messages
+          .filter((message) => message.isPartial)
+          .map((message) => [message.id, message.content.length]),
+      );
+    },
+
+    setActiveRunChatMessages(runId: string, podId: string, messages: Message[]) {
+      let podMap = this.runChatMessages.get(runId);
+      if (!podMap) {
+        podMap = new Map();
+        this.runChatMessages.set(runId, podMap);
+      }
+
+      podMap.set(podId, messages);
+      this.rebuildActiveMessageCaches(messages);
+    },
+
     removeRun(runId: string): void {
       // O(1) 刪除（Map），不再需要 filter 整個陣列
       this.runsById.delete(runId);
       this.expandedRunIds.delete(runId);
+      this.cleanupRunTranscript(runId);
 
       if (this.activeRunChatModal?.runId === runId) {
+        this.activeRunChatRequestToken += 1;
         this.activeRunChatModal = null;
+        this.resetRunChatState();
       }
-
-      // #44 巢狀 Map：一次 delete(runId) 清除該 run 所有 pod 的訊息
-      this.runChatMessages.delete(runId);
     },
 
-    deleteRun(runId: string): void {
+    async deleteRun(runId: string): Promise<void> {
       const canvasId = getActiveCanvasIdOrWarn("RunStore");
       if (!canvasId) return;
 
-      websocketClient.emit<RunDeletePayload>(
-        WebSocketRequestEvents.RUN_DELETE,
-        {
-          requestId: generateRequestId(),
-          canvasId,
-          runId,
-        },
-      );
+      const { showErrorToast } = useToast();
 
-      this.removeRun(runId);
+      try {
+        await createWebSocketRequest<RunDeletePayload, RunDeletedPayload>({
+          requestEvent: WebSocketRequestEvents.RUN_DELETE,
+          responseEvent: WebSocketResponseEvents.RUN_DELETED,
+          payload: {
+            canvasId,
+            runId,
+          },
+        });
+
+        this.removeRun(runId);
+      } catch (error) {
+        logger.error("[RunStore] 刪除 Run 失敗", error);
+        showErrorToast("Run", t("common.error.delete"));
+      }
     },
 
     toggleHistoryPanel(): void {
@@ -256,6 +372,9 @@ export const useRunStore = defineStore("run", {
     },
 
     async openRunChatModal(runId: string, podId: string): Promise<void> {
+      this.activeRunChatRequestToken += 1;
+      const requestToken = this.activeRunChatRequestToken;
+      this.resetRunChatState();
       this.activeRunChatModal = { runId, podId };
       this.isLoadingPodMessages = true;
 
@@ -272,25 +391,95 @@ export const useRunStore = defineStore("run", {
         >({
           requestEvent: WebSocketRequestEvents.RUN_LOAD_POD_MESSAGES,
           responseEvent: WebSocketResponseEvents.RUN_POD_MESSAGES_RESULT,
-          payload: { canvasId, runId, podId },
+          payload: {
+            canvasId,
+            runId,
+            podId,
+            limit: RUN_CHAT_PAGE_SIZE,
+          },
         });
 
         if (response.success && response.messages) {
-          // #44 巢狀 Map：取得或建立 runId 子 Map 後寫入 podId 訊息
-          let podMap = this.runChatMessages.get(runId);
-          if (!podMap) {
-            podMap = new Map();
-            this.runChatMessages.set(runId, podMap);
+          if (
+            requestToken !== this.activeRunChatRequestToken ||
+            !this.isActiveRunChatTarget(runId, podId)
+          ) {
+            return;
           }
-          podMap.set(podId, response.messages.map(toMessage));
+
+          const loadedMessages = response.messages.map(toMessage);
+          const liveMessages = this.runChatMessages.get(runId)?.get(podId) ?? [];
+          this.setActiveRunChatMessages(
+            runId,
+            podId,
+            mergeLoadedMessages(loadedMessages, liveMessages),
+          );
+          this.activeRunChatPageInfo =
+            response.pageInfo ?? createEmptyRunChatPageInfo();
         }
       } finally {
-        this.isLoadingPodMessages = false;
+        if (requestToken === this.activeRunChatRequestToken) {
+          this.isLoadingPodMessages = false;
+        }
       }
     },
 
     closeRunChatModal(): void {
+      this.activeRunChatRequestToken += 1;
       this.activeRunChatModal = null;
+      this.resetRunChatState();
+    },
+
+    async loadOlderActiveRunChatMessages(): Promise<void> {
+      const activeTarget = this.activeRunChatModal;
+      if (!activeTarget) return;
+      if (this.isLoadingOlderPodMessages) return;
+      if (!this.activeRunChatPageInfo.hasMore) return;
+      if (!this.activeRunChatPageInfo.nextCursor) return;
+
+      const canvasId = getActiveCanvasIdOrWarn("RunStore");
+      if (!canvasId) return;
+
+      this.isLoadingOlderPodMessages = true;
+
+      try {
+        const response = await createWebSocketRequest<
+          RunLoadPodMessagesPayload,
+          RunPodMessagesResultPayload
+        >({
+          requestEvent: WebSocketRequestEvents.RUN_LOAD_POD_MESSAGES,
+          responseEvent: WebSocketResponseEvents.RUN_POD_MESSAGES_RESULT,
+          payload: {
+            canvasId,
+            runId: activeTarget.runId,
+            podId: activeTarget.podId,
+            limit: RUN_CHAT_PAGE_SIZE,
+            cursor: this.activeRunChatPageInfo.nextCursor,
+          },
+        });
+
+        if (
+          !response.success ||
+          !this.isActiveRunChatTarget(activeTarget.runId, activeTarget.podId)
+        ) {
+          return;
+        }
+
+        const olderMessages = (response.messages ?? []).map(toMessage);
+        const currentMessages =
+          this.runChatMessages.get(activeTarget.runId)?.get(activeTarget.podId) ??
+          [];
+        this.setActiveRunChatMessages(activeTarget.runId, activeTarget.podId, [
+          ...olderMessages,
+          ...currentMessages,
+        ]);
+        this.activeRunChatPageInfo =
+          response.pageInfo ?? createEmptyRunChatPageInfo();
+      } finally {
+        if (this.isActiveRunChatTarget(activeTarget.runId, activeTarget.podId)) {
+          this.isLoadingOlderPodMessages = false;
+        }
+      }
     },
 
     appendRunChatMessage(
@@ -314,7 +503,11 @@ export const useRunStore = defineStore("run", {
       // 後端重傳導致 content 長度倒退時，重置累積長度並以整段 content 作為 delta
       const delta =
         content.length < lastLength ? content : content.slice(lastLength);
-      this.accumulatedLengthByMessageId.set(messageId, content.length);
+      if (isPartial) {
+        this.accumulatedLengthByMessageId.set(messageId, content.length);
+      } else {
+        this.accumulatedLengthByMessageId.delete(messageId);
+      }
 
       // messageIndexCache：串流期間提供 O(1) 定位，避免 findIndex 線性掃描
       const knownIndex = this.messageIndexCache.get(messageId);
@@ -369,10 +562,12 @@ export const useRunStore = defineStore("run", {
 
       // 訊息尚不存在時（tool use 先於 text 到達），建立新 assistant 訊息
       if (messageIndex === -1) {
-        podMap.set(payload.podId, [
+        const nextMessages = [
           ...messages,
           createAssistantMessageWithTool(payload.messageId, toolUseInfo),
-        ]);
+        ];
+        this.messageIndexCache.set(payload.messageId, nextMessages.length - 1);
+        podMap.set(payload.podId, nextMessages);
         return;
       }
 
@@ -400,26 +595,52 @@ export const useRunStore = defineStore("run", {
       toolName: string;
       output: string;
     }): void {
-      const podMap = this.runChatMessages.get(payload.runId);
-      const messages = podMap?.get(payload.podId);
-      if (!messages) return;
+      let podMap = this.runChatMessages.get(payload.runId);
+      if (!podMap) {
+        podMap = new Map();
+        this.runChatMessages.set(payload.runId, podMap);
+      }
 
-      const messageIndex = messages.findIndex(
-        (m) => m.id === payload.messageId,
-      );
-      if (messageIndex === -1) return;
+      const messages = podMap.get(payload.podId) ?? [];
+      const messageIndex = messages.findIndex((m) => m.id === payload.messageId);
+      const toolUseInfo: ToolUseInfo = {
+        toolUseId: payload.toolUseId,
+        toolName: payload.toolName,
+        input: {},
+        status: "running",
+      };
+
+      if (messageIndex === -1) {
+        const createdMessage = mergeToolResultIntoMessage(
+          createAssistantMessageWithTool(payload.messageId, toolUseInfo),
+          payload.toolUseId,
+          payload.output,
+          payload.toolName,
+        );
+        const nextMessages = [...messages, createdMessage];
+        this.messageIndexCache.set(payload.messageId, nextMessages.length - 1);
+        podMap.set(payload.podId, nextMessages);
+        return;
+      }
 
       const updatedMessages = [...messages];
       const message = updatedMessages[messageIndex];
-      if (!message?.toolUse) return;
+      if (!message) return;
+
+      const hasToolUse = message.toolUse?.some(
+        (tool) => tool.toolUseId === payload.toolUseId,
+      );
+      const messageWithToolUse = hasToolUse
+        ? message
+        : mergeToolUseIntoMessage(message, toolUseInfo);
 
       updatedMessages[messageIndex] = mergeToolResultIntoMessage(
-        message,
+        messageWithToolUse,
         payload.toolUseId,
         payload.output,
         payload.toolName,
       );
-      podMap!.set(payload.podId, updatedMessages);
+      podMap.set(payload.podId, updatedMessages);
     },
 
     handleRunChatComplete(
@@ -428,11 +649,30 @@ export const useRunStore = defineStore("run", {
       messageId: string,
       fullContent: string,
     ): void {
-      const podMap = this.runChatMessages.get(runId);
-      const messages = podMap?.get(podId);
+      let podMap = this.runChatMessages.get(runId);
+      if (!podMap) {
+        podMap = new Map();
+        this.runChatMessages.set(runId, podMap);
+      }
+
+      const currentMessages = podMap.get(podId) ?? [];
+      let messageIndex = currentMessages.findIndex((m) => m.id === messageId);
+
+      if (messageIndex === -1) {
+        this.appendRunChatMessage(
+          runId,
+          podId,
+          messageId,
+          fullContent,
+          false,
+          "assistant",
+        );
+      }
+
+      const messages = podMap.get(podId);
       if (!messages) return;
 
-      const messageIndex = messages.findIndex((m) => m.id === messageId);
+      messageIndex = messages.findIndex((m) => m.id === messageId);
       if (messageIndex === -1) return;
 
       this.accumulatedLengthByMessageId.delete(messageId);
@@ -451,16 +691,16 @@ export const useRunStore = defineStore("run", {
         updatedToolUse,
         finalizedSubMessages,
       );
-      podMap!.set(podId, updatedMessages);
+      podMap.set(podId, updatedMessages);
     },
 
     resetOnCanvasSwitch(): void {
       this.runsById = new Map();
       this.expandedRunIds = new Set();
+      this.activeRunChatRequestToken += 1;
       this.activeRunChatModal = null;
-      this.runChatMessages = new Map();
       this.isHistoryPanelOpen = false;
-      this.accumulatedLengthByMessageId = new Map();
+      this.resetRunChatState();
     },
   },
 });

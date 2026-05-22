@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import {
+  computed,
+  defineAsyncComponent,
+  onMounted,
+  onUnmounted,
+  ref,
+  watch,
+} from "vue";
 import { useCanvasContext } from "@/composables/canvas/useCanvasContext";
 import {
   createWebSocketRequest,
@@ -15,13 +22,7 @@ import type {
 } from "@/types/canvas";
 import AppHeader from "@/components/layout/AppHeader.vue";
 import CanvasContainer from "@/components/canvas/CanvasContainer.vue";
-import CanvasSidebar from "@/components/canvas/CanvasSidebar.vue";
-import ChatModal from "@/components/chat/ChatModal.vue";
-import GoalEditorModal from "@/components/pod/GoalEditorModal.vue";
-import HistoryPanel from "@/components/run/HistoryPanel.vue";
-import RunChatModal from "@/components/run/RunChatModal.vue";
 import { Toast } from "@/components/ui/toast";
-import DisconnectOverlay from "@/components/ui/DisconnectOverlay.vue";
 import { useCopyPaste } from "@/composables/canvas";
 import { useUnifiedEventListeners } from "@/composables/useUnifiedEventListeners";
 import { useCursorStore } from "@/stores/cursorStore";
@@ -34,9 +35,34 @@ import { useConfigStore } from "@/stores/configStore";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
 import { useOpencodeAliasStore } from "@/stores/opencodeAliasStore";
 import { useSecurityStore } from "@/stores/securityStore";
-import WorkspaceUnlockView from "@/components/security/WorkspaceUnlockView.vue";
-import CanvasUnlockDialog from "@/components/security/CanvasUnlockDialog.vue";
-import LockedCanvasView from "@/components/security/LockedCanvasView.vue";
+
+const CanvasSidebar = defineAsyncComponent(
+  () => import("@/components/canvas/CanvasSidebar.vue"),
+);
+const ChatModal = defineAsyncComponent(
+  () => import("@/components/chat/ChatModal.vue"),
+);
+const GoalEditorModal = defineAsyncComponent(
+  () => import("@/components/pod/GoalEditorModal.vue"),
+);
+const HistoryPanel = defineAsyncComponent(
+  () => import("@/components/run/HistoryPanel.vue"),
+);
+const RunChatModal = defineAsyncComponent(
+  () => import("@/components/run/RunChatModal.vue"),
+);
+const DisconnectOverlay = defineAsyncComponent(
+  () => import("@/components/ui/DisconnectOverlay.vue"),
+);
+const WorkspaceUnlockView = defineAsyncComponent(
+  () => import("@/components/security/WorkspaceUnlockView.vue"),
+);
+const CanvasUnlockDialog = defineAsyncComponent(
+  () => import("@/components/security/CanvasUnlockDialog.vue"),
+);
+const LockedCanvasView = defineAsyncComponent(
+  () => import("@/components/security/LockedCanvasView.vue"),
+);
 
 const {
   podStore,

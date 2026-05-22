@@ -1,0 +1,101 @@
+feature: long-running-lag-investigation
+side: frontend
+approved: true
+phases:
+  - id: P1
+    title: Run history client state cleanup
+    parallel: false
+    verification:
+      - bun run style
+      - bun run test:run
+    done: true
+    items:
+      - id: P1.A
+        title: 回收 run transcript 快取
+        tasks:
+          - id: P1.A.t1
+            text: 在 `frontend/src/stores/run/runStore.ts` 抽出 per-run cleanup helper，能在刪除 run 時同步回收該 run 的 `runChatMessages`、`accumulatedLengthByMessageId` 與 `messageIndexCache` 相關狀態
+            completed: true
+            last_files_changed:
+              - frontend/src/stores/run/runStore.ts
+              - frontend/tests/business-logic/stores/run/runStore.test.ts
+          - id: P1.A.t2
+            text: 讓 `addRun()` 的超量淘汰路徑與 `removeRun()` 共用同一套 cleanup 流程，避免舊 run 從列表消失後 transcript 快取仍留在前端記憶體
+            completed: true
+            last_files_changed:
+              - frontend/src/stores/run/runStore.ts
+              - frontend/tests/business-logic/stores/run/runStore.test.ts
+          - id: P1.A.t3
+            text: 補齊 `resetOnCanvasSwitch()` 的回收邏輯，確保切換 canvas 時會一起清空 `messageIndexCache` 與其他 run transcript 輔助索引
+            completed: true
+            last_files_changed:
+              - frontend/src/stores/run/runStore.ts
+              - frontend/tests/business-logic/stores/run/runStore.test.ts
+          - id: P1.A.t4
+            text: 為 run store 補一組 business-logic 測試，驗證 run 淘汰、run 刪除與 canvas 切換後不會殘留舊 transcript 狀態
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/stores/run/runStore.test.ts
+
+  - id: P2
+    title: Selective run transcript caching
+    parallel: false
+    verification:
+      - bun run style
+      - bun run test:run
+    done: true
+    items:
+      - id: P2.A
+        title: 只保留目前需要的 transcript
+        tasks:
+          - id: P2.A.t1
+            text: 在 `runStore` 明確追蹤目前正在顯示的 run chat 對象，讓 `RUN_MESSAGE`、`RUN_TOOL_USE`、`RUN_TOOL_RESULT`、`RUN_CHAT_COMPLETE` 事件只對目前開啟的 run chat transcript 做完整快取
+            completed: true
+            last_files_changed:
+              - frontend/src/stores/run/runStore.ts
+              - frontend/src/composables/eventHandlers/runEventHandlers.ts
+          - id: P2.A.t2
+            text: 調整 `openRunChatModal()` 與 `closeRunChatModal()`，在開啟時建立當前 transcript 上下文、在關閉時釋放不再顯示的 run chat 記憶體，而不是永久保留所有曾開啟過的 transcript
+            completed: true
+            last_files_changed:
+              - frontend/src/stores/run/runStore.ts
+              - frontend/tests/business-logic/stores/run/runStore.test.ts
+          - id: P2.A.t3
+            text: 補一組 run 事件處理測試，驗證未開啟的 run chat 不會持續累積 transcript，而當前開啟的 run chat 仍能收到即時串流內容
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/composables/events/runEventHandlers.test.ts
+
+  - id: P3
+    title: Responsive run history loading
+    parallel: false
+    verification:
+      - bun run style
+      - bun run test:run
+    done: true
+    items:
+      - id: P3.A
+        title: 分段載入 run 訊息歷史
+        tasks:
+          - id: P3.A.t1
+            text: 更新 `RUN_LOAD_POD_MESSAGES` 的前端 request/response 型別與 `runStore.openRunChatModal()`，改成先載入最近一頁訊息與分頁資訊，避免打開 run chat 時一次吃下完整長歷史
+            completed: true
+            last_files_changed:
+              - frontend/src/types/run.ts
+              - frontend/src/types/websocket/requests.ts
+              - frontend/src/types/websocket/responses.ts
+              - frontend/src/stores/run/runStore.ts
+              - frontend/tests/business-logic/stores/run/runStore.test.ts
+          - id: P3.A.t2
+            text: 在 `RunChatModal` 與相關訊息元件加入「載入更早訊息」的互動流程，讓使用者需要時再往前取舊資料，不阻塞初次開啟速度
+            completed: true
+            last_files_changed:
+              - frontend/src/components/run/RunChatModal.vue
+              - frontend/src/locales/en.json
+              - frontend/src/locales/zh-TW.json
+              - frontend/src/stores/run/runStore.ts
+          - id: P3.A.t3
+            text: 補一組 business-logic 或 user-flow 測試，驗證 run chat 初次開啟只載入最近一頁、切換不同 run 時維持順暢、繼續載入舊訊息時不破壞既有排序
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/stores/run/runStore.test.ts

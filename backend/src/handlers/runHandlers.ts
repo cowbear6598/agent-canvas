@@ -10,7 +10,6 @@ import { podStore } from "../services/podStore.js";
 import { emitSuccess, emitError } from "../utils/websocketResponse.js";
 import { createI18nError } from "../utils/i18nError.js";
 import { withCanvasId } from "../utils/handlerHelpers.js";
-import { fireAndForget } from "../utils/operationHelpers.js";
 import type { WorkflowRun } from "../services/runStore.js";
 import { sanitizePersistedMessageForClient } from "../services/systemMessageMetadata.js";
 
@@ -56,7 +55,23 @@ export const handleRunDelete = withCanvasId<RunDeletePayload>(
     );
     if (!run) return;
 
-    fireAndForget(runExecutionService.deleteRun(runId), "Run", "刪除 Run 失敗");
+    try {
+      await runExecutionService.deleteRun(runId);
+      emitSuccess(connectionId, WebSocketResponseEvents.RUN_DELETED, {
+        requestId,
+        success: true,
+        canvasId,
+        runId,
+      });
+    } catch (error) {
+      emitError(
+        connectionId,
+        WebSocketResponseEvents.RUN_DELETED,
+        error instanceof Error ? error : new Error(String(error)),
+        canvasId,
+        requestId,
+      );
+    }
   },
 );
 
@@ -107,7 +122,7 @@ export const handleRunLoadPodMessages = withCanvasId<RunLoadPodMessagesPayload>(
     payload: RunLoadPodMessagesPayload,
     requestId: string,
   ): Promise<void> => {
-    const { runId, podId } = payload;
+    const { runId, podId, cursor, limit } = payload;
 
     const run = findRunOrEmitNotFound(
       connectionId,
@@ -118,14 +133,20 @@ export const handleRunLoadPodMessages = withCanvasId<RunLoadPodMessagesPayload>(
     );
     if (!run) return;
 
-    const messages = runStore.getRunMessages(runId, podId);
+    const result = runStore.getRunMessagesPage(runId, podId, {
+      cursor,
+      limit,
+    });
 
     emitSuccess(connectionId, WebSocketResponseEvents.RUN_POD_MESSAGES_LOADED, {
       requestId,
       success: true,
-      messages: messages.map((message) =>
+      runId,
+      podId,
+      messages: result.messages.map((message) =>
         sanitizePersistedMessageForClient(message),
       ),
+      pageInfo: result.pageInfo,
     });
   },
 );

@@ -3,6 +3,7 @@ import type { PersistedMessage } from "../../types/persistence.js";
 
 export interface BranchPromptContext {
   sourcePodName: string;
+  persistedSummary?: string | null;
   recentMessages: PersistedMessage[];
   branches: Array<{
     label: string;
@@ -49,6 +50,9 @@ Security rules:
             })
             .join("\n\n")
         : "（無訊息）";
+    const persistedSummaryText = context.persistedSummary
+      ? sanitizeForPrompt(context.persistedSummary)
+      : null;
 
     // 可選 branch 列表
     const branchListText = context.branches
@@ -71,7 +75,15 @@ Security rules:
 
 ---
 
-# 最近對話紀錄
+${persistedSummaryText ? `# 既有摘要
+
+<user_data>
+${persistedSummaryText}
+</user_data>
+
+---
+
+` : ""}# 最近對話紀錄
 
 <user_data>
 ${messagesText}

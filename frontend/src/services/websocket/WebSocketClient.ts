@@ -38,6 +38,22 @@ class WebSocketClient {
   public readonly isConnected = ref(false);
   public readonly disconnectReason = ref<string | null>(null);
 
+  private resolveSocketBaseUrl(explicitUrl?: string): string {
+    if (explicitUrl) {
+      return explicitUrl;
+    }
+
+    if (this.wsUrl) {
+      return this.wsUrl;
+    }
+
+    if (import.meta.env.VITE_WS_URL) {
+      return import.meta.env.VITE_WS_URL;
+    }
+
+    return this.resolveDefaultWebSocketUrl();
+  }
+
   connect(url?: string): void {
     this.setupVisibilityChangeListener();
 
@@ -49,8 +65,7 @@ class WebSocketClient {
       return;
     }
 
-    this.wsUrl =
-      url ?? import.meta.env.VITE_WS_URL ?? this.resolveDefaultWebSocketUrl();
+    this.wsUrl = this.resolveSocketBaseUrl(url);
 
     this.socket = new WebSocket(this.createSocketUrl());
     this.setupSocketHandlers(this.socket);
@@ -71,6 +86,7 @@ class WebSocketClient {
     this.teardownVisibilityChangeListener();
     this.stopReconnect();
     this.cleanupSocket();
+    this.wsUrl = "";
   }
 
   // 強制重連：關閉舊 socket 並啟動重連，但不拆除 visibility listener
@@ -201,12 +217,13 @@ class WebSocketClient {
 
   private reconnectOnce(): void {
     this.cleanupSocket();
+    this.wsUrl = this.resolveSocketBaseUrl();
     this.socket = new WebSocket(this.createSocketUrl());
     this.setupSocketHandlers(this.socket);
   }
 
   private createSocketUrl(): string {
-    const wsProtocol = this.wsUrl.replace(/^http/, "ws");
+    const wsProtocol = this.resolveSocketBaseUrl().replace(/^http/, "ws");
     const url = new URL(wsProtocol);
 
     const pathname = url.pathname === "/" ? "" : url.pathname;

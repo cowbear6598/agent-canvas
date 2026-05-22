@@ -417,6 +417,11 @@ export interface RunLoadPodMessagesPayload {
   canvasId: string;
   runId: string;
   podId: string;
+  limit?: number;
+  cursor?: {
+    beforeTimestamp: string;
+    beforeMessageId: string;
+  } | null;
 }
 
 export interface BackupTestConnectionPayload {

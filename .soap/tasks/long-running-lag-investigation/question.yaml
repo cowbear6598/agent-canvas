@@ -1,0 +1,66 @@
+feature: long-running-lag-investigation
+created: "2026-05-22"
+approved: true
+questions:
+  - id: Q1
+    text: 目前 codebase 中，最可能造成「使用越久越 lag」的前端累積點在哪裡？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      最明顯的風險在 `frontend/src/stores/run/runStore.ts`。`addRun()` 超過 `MAX_RUNS_PER_CANVAS = 30` 時只會從 `runsById` 移除最舊 run，但沒有同步清掉該 run 相關的 `runChatMessages`、`accumulatedLengthByMessageId`、`messageIndexCache`。只要使用者曾打開過舊 run 的聊天紀錄，這些訊息與索引就可能持續留在記憶體。另一個明確缺口是 `resetOnCanvasSwitch()` 有清 `runsById` / `runChatMessages` / `accumulatedLengthByMessageId`，卻沒有重設 `messageIndexCache`，跨 canvas 後仍可能殘留舊 messageId 索引。這類狀態回收不完整很符合「使用越久、run 越多後越來越慢」的症狀。
+
+  - id: Q2
+    text: WebSocket listener、事件訂閱與 timer 是否存在重複註冊後越積越多的高風險點？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      粗掃結果看起來，這一類不是目前最主要的嫌疑。`frontend/src/services/websocket/WebSocketClient.ts` 內部用 `Map<string, Set<handler>>` 管 listener；`chatStore.registerListeners()` 每次註冊前都會先 `unregisterListeners()`；`securityStore` 也有 `listenersRegistered` guard；`connectionStore` 的 workflow handler 與 event map 是固定 reference，就算 `App.vue` 在 canvas 切換時再次呼叫 `setupWorkflowListeners()`，底層 `Set` 也會去重，不會無限疊加。`DisconnectOverlay.vue` 的 100ms jitter interval 只在斷線時啟動，結束或 unmount 都會清理。結論是 listener / timer 需要持續留意，但目前沒有看到明確的「每次進某頁就多掛一批」型問題。
+
+  - id: Q3
+    text: 後端長時間執行後，有沒有明顯可能累積記憶體的常駐狀態？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      多數 run 級別狀態有回收機制：`backend/src/services/workflow/runQueueService.ts` 會在佇列清空時刪 key，`runExecutionService` 會清掉 `activeRunStreams`，`backend/src/services/provider/opencodeProvider.ts` 的 run-scoped server cache 會在 run 結束時經 `cleanupOpencodeRunServers(runId)` 回收，`backend/src/services/integration/replyContextStore.ts` 也有 TTL cleanup timer。比較需要留意的是 `backend/src/services/auth/sessionStore.ts`：`sessions` 與 `reconnectGrants` 都放在記憶體 Map，中過期項目只會在再次 `getSession` / `peekReconnectGrant` / `consumeReconnectGrant` 時順手刪掉，沒有週期性 sweep。若 server 長時間運行且有很多舊 session 不再被碰到，這些過期項目可能留到程序重啟才消失，屬於次要但真實的累積風險。
+
+  - id: Q4
+    text: 你目前感受到 lag 的主要操作路徑是什麼？例如拖動畫布、縮放、開聊天室、跑 workflow、看 run 歷史、切換 canvas，還是整體都慢。
+    type: user-input
+    completed: true
+    answer: |
+      目前最明顯的 lag 路徑是看 run 歷史、跑 workflow 等操作。
+
+  - id: Q5
+    text: 這個 lag 比較像是「同一個 canvas 持續用久了就變慢」，還是「切換多個 canvas / 開很多 run / 看過很多歷史之後才變慢」？
+    type: user-input
+    completed: true
+    answer: |
+      目前還不確定是單一 canvas 用久了變慢，還是 run / 歷史累積後才變慢。
+
+  - id: Q6
+    text: 發生 lag 時你有沒有觀察到具體現象？例如瀏覽器記憶體持續上升、CPU 高、聊天室輸入延遲、run 面板開啟變慢、或 websocket 斷線重連變頻繁。
+    type: user-input
+    completed: true
+    answer: |
+      除了前端操作變慢之外，部署的 Linux 主機本身操作也會有點 lag，表示問題可能不只在瀏覽器端，後端執行或資源使用也需要一起檢查。
+
+  - id: Q7
+    text: run 歷史與 workflow 路徑上，有沒有直接對應使用者症狀的具體熱點？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      有，且前後端都有直接對上的熱點。前端方面，`frontend/src/composables/eventHandlers/runEventHandlers.ts` 會在收到 `RUN_MESSAGE` / `RUN_TOOL_USE` / `RUN_TOOL_RESULT` / `RUN_CHAT_COMPLETE` 時，無條件把當前 canvas 的 run 串流內容寫進 `runStore`，不要求使用者先打開 run chat modal；也就是說，只要 workflow 在跑，前端就會持續累積 run chat 狀態。再加上 `frontend/src/stores/run/runStore.ts` 的 `closeRunChatModal()` 不會回收 `runChatMessages`，`addRun()` 在淘汰最舊 run 時也沒有同步清掉該 run 的聊天快取與輔助索引，這些資料會越積越多。後端方面，`backend/src/handlers/runHandlers.ts` 的 `handleRunLoadPodMessages()` 會直接載入某 run/pod 的完整訊息歷史，而 `backend/src/services/runStore.ts` 的 `getRunMessages()` / SQL `SELECT * FROM run_messages ... ORDER BY timestamp ASC` 沒有 pagination 或上限；當某些 workflow 對話很長時，打開 run 歷史會讓 Linux 主機一起承受查詢、序列化與傳輸成本。
+
+  - id: Q8
+    text: 你說部署那台 Linux 也有點 lag，這比較像哪一種？例如 CPU 飆高、記憶體持續吃高、磁碟 I/O 忙、或單純 shell / SSH 操作反應慢。
+    type: user-input
+    completed: true
+    answer: |
+      目前可明確觀察到的是 shell / SSH 操作變慢；CPU、記憶體與磁碟 I/O 是否異常還不確定。
+
+  - id: Q9
+    text: 後端 workflow / run 路徑中，哪些機制最可能讓部署中的 Linux 主機一起變慢？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      有三個明顯熱點。第一，`backend/src/services/claude/streamingChatExecutor.ts` 會在串流期間透過 `createThrottledPersist(..., 200ms)` 反覆呼叫 `strategy.persistMessage()`，而 run 模式的 `backend/src/services/executionStrategy.ts` 會把它寫進 SQLite `run_messages`；多個 workflow 並行時，這會形成持續性的高頻 DB 寫入。第二，`backend/src/services/summaryService.ts` 與 `backend/src/services/workflow/branchDecisionService.ts` 都會從 `runStore.getRunMessages()` 讀出 run 歷史，再拿去做摘要或 branch 決策；其中 summary 目前直接吃完整 message 歷史，run 越長成本越高。第三，`backend/src/handlers/runHandlers.ts` 的 `handleRunLoadPodMessages()` 在打開 run 歷史時會把單個 run/pod 的完整訊息一次查出並序列化回前端，沒有 pagination。雖然 `runExecutionService` 有 30 筆 completed run 的清理上限，但在活躍 workflow 多、訊息長、或使用者頻繁開歷史的情境下，這些 DB 寫入、查詢與序列化成本仍足以讓 Linux 主機連 shell / SSH 都開始有體感延遲。

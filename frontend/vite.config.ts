@@ -88,14 +88,21 @@ export default defineConfig({
             if (
               normalizedId.includes("/vue/") ||
               normalizedId.includes("/pinia/") ||
-              normalizedId.includes("/vue-i18n/")
+              normalizedId.includes("/vue-i18n/") ||
+              normalizedId.includes("/@vueuse/")
             ) {
-              return "vendor";
+              return "framework";
+            }
+            if (
+              normalizedId.includes("/lucide-vue-next/") ||
+              normalizedId.includes("/reka-ui/") ||
+              normalizedId.includes("/radix-vue/") ||
+              normalizedId.includes("/vue-draggable-plus/")
+            ) {
+              return "ui-vendor";
             }
             return "vendor";
           }
-
-          if (normalizedId.includes("/src/")) return "app";
         },
       },
     },

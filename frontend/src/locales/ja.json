@@ -307,7 +307,9 @@
     },
     "chatModal": {
       "historyBadge": "（履歴）",
-      "readonlyHint": "これは実行履歴です。閲覧のみ可能です"
+      "readonlyHint": "これは実行履歴です。閲覧のみ可能です",
+      "loadOlder": "以前のメッセージを読み込む",
+      "loadingOlder": "以前のメッセージを読み込み中..."
     }
   },
   "chat": {

@@ -39,6 +39,7 @@ export class BaseBranchDecider implements BranchDecider {
     const {
       sourcePodName,
       branches,
+      persistedSummary,
       recentMessages,
       provider,
       model,
@@ -46,7 +47,7 @@ export class BaseBranchDecider implements BranchDecider {
       abortSignal,
     } = input;
 
-    if (recentMessages.length === 0) {
+    if (recentMessages.length === 0 && !persistedSummary) {
       return { selectedLabel: "None" };
     }
 
@@ -55,6 +56,7 @@ export class BaseBranchDecider implements BranchDecider {
     const systemPrompt = branchPromptBuilder.buildSystemPrompt();
     const userMessage = branchPromptBuilder.buildUserPrompt({
       sourcePodName,
+      persistedSummary,
       recentMessages,
       branches,
     });

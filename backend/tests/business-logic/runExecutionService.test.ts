@@ -246,6 +246,28 @@ describe("RunExecutionService", () => {
       }
     });
 
+    it("背景清理失敗時會重試一次", async () => {
+      const oldestRuns: string[] = [];
+      for (let i = 0; i < 30; i++) {
+        const r = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, `run-${i}`);
+        runStore.updateRunStatus(r.id, "completed");
+        oldestRuns.push(r.id);
+      }
+
+      const deleteSpy = vi
+        .spyOn(runExecutionService, "deleteRun")
+        .mockRejectedValueOnce(new Error("first failure"))
+        .mockResolvedValue(undefined);
+
+      await runExecutionService.createRun(CANVAS_ID, SOURCE_POD_ID, "觸發重試");
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(deleteSpy).toHaveBeenCalledTimes(2);
+      expect(deleteSpy).toHaveBeenNthCalledWith(1, oldestRuns[0]);
+      expect(deleteSpy).toHaveBeenNthCalledWith(2, oldestRuns[0]);
+    });
+
     it("non-repo pod 會直接使用原始 workspace，不配置 sandbox home", async () => {
       const { pod } = podStore.create(CANVAS_ID, {
         name: "Isolated Pod",
@@ -323,6 +345,25 @@ describe("RunExecutionService", () => {
         CANVAS_ID,
         WebSocketResponseEvents.RUN_POD_STATUS_CHANGED,
         expect.objectContaining({ podId: SOURCE_POD_ID, status: "running" }),
+      );
+    });
+
+    it("發送 RUN_POD_STATUS_CHANGED 時應帶出 lastResponseSummary", () => {
+      const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "測試");
+      const inst = runStore.createPodInstance(run.id, SOURCE_POD_ID);
+      runStore.updatePodInstanceLastResponseSummary(inst.id, "最近摘要");
+      const ctx = makeRunContext({ runId: run.id });
+
+      runExecutionService.startPodInstance(ctx, SOURCE_POD_ID);
+
+      expect(socketService.emitToCanvas).toHaveBeenCalledWith(
+        CANVAS_ID,
+        WebSocketResponseEvents.RUN_POD_STATUS_CHANGED,
+        expect.objectContaining({
+          podId: SOURCE_POD_ID,
+          status: "running",
+          lastResponseSummary: "最近摘要",
+        }),
       );
     });
 

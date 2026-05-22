@@ -1,0 +1,130 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { initTestDb, getDb } from "../../src/database/index.js";
+import { resetStatements } from "../../src/database/statements.js";
+import { runStore } from "../../src/services/runStore.js";
+import { podStore } from "../../src/services/podStore.js";
+import { branchDecider } from "../../src/services/branch/index.js";
+import { branchDecisionService } from "../../src/services/workflow/branchDecisionService.js";
+import { config } from "../../src/config/index.js";
+import type { Connection } from "../../src/types/index.js";
+import type { RunContext } from "../../src/types/run.js";
+import path from "path";
+
+const CANVAS_ID = "canvas-branch";
+const SOURCE_POD_ID = "pod-source";
+
+function insertCanvas(): void {
+  getDb()
+    .prepare(
+      "INSERT OR IGNORE INTO canvases (id, name, sort_index) VALUES (?, ?, ?)",
+    )
+    .run(CANVAS_ID, "branch-canvas", 0);
+}
+
+function makeRunContext(runId: string): RunContext {
+  return {
+    runId,
+    canvasId: CANVAS_ID,
+    sourcePodId: SOURCE_POD_ID,
+  };
+}
+
+function makeConnection(
+  id: string,
+  label: string,
+  targetPodId: string,
+): Connection {
+  return {
+    id,
+    canvasId: CANVAS_ID,
+    sourcePodId: SOURCE_POD_ID,
+    sourceAnchor: "right",
+    targetPodId,
+    targetAnchor: "left",
+    triggerMode: "branch",
+    decideStatus: "none",
+    decideReason: null,
+    connectionStatus: "idle",
+    summaryModel: "sonnet",
+    summaryProvider: "claude",
+    label,
+    description: `${label} description`,
+    branchProvider: "claude",
+    branchModel: "sonnet",
+  };
+}
+
+describe("BranchDecisionService", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    resetStatements();
+    initTestDb();
+    insertCanvas();
+    vi.spyOn(branchDecider, "decide").mockResolvedValue({
+      selectedLabel: "Alpha",
+    });
+    vi.spyOn(podStore, "getById").mockImplementation(((_canvasId, podId) => ({
+      id: podId,
+      name: podId === SOURCE_POD_ID ? "Source Pod" : `Pod ${podId}`,
+      provider: "claude",
+      providerConfig: { model: "sonnet" },
+      workspacePath: path.join(config.canvasRoot, CANVAS_ID, podId),
+      repositoryId: null,
+      sessionId: null,
+      status: "idle",
+      x: 0,
+      y: 0,
+      rotation: 0,
+      multiInstance: false,
+      skillIds: [],
+    })) as typeof podStore.getById);
+  });
+
+  it("應透過 bounded transcript helper 傳入 recentMessages 與 persisted summary", async () => {
+    const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "trigger");
+    const instance = runStore.createPodInstance(run.id, SOURCE_POD_ID);
+    runStore.updatePodInstanceLastResponseSummary(instance.id, "既有摘要");
+
+    for (let i = 1; i <= 6; i++) {
+      runStore.upsertRunMessage(run.id, SOURCE_POD_ID, {
+        id: `00000000-0000-0000-0000-00000000010${i}`,
+        role: i % 2 === 0 ? "assistant" : "user",
+        content: `第${i}則`,
+        timestamp: `2026-05-22T11:00:${String(i).padStart(2, "0")}.000Z`,
+      });
+    }
+
+    const result = await branchDecisionService.decideBranch(
+      CANVAS_ID,
+      SOURCE_POD_ID,
+      [
+        makeConnection("conn-1", "Alpha", "pod-a"),
+        makeConnection("conn-2", "Beta", "pod-b"),
+      ],
+      makeRunContext(run.id),
+    );
+
+    expect(result).toEqual({
+      selectedConnectionId: "conn-1",
+      rejectedConnectionIds: ["conn-2"],
+    });
+    expect(branchDecider.decide).toHaveBeenCalledWith(
+      expect.objectContaining({
+        persistedSummary: "既有摘要",
+        recentMessages: expect.arrayContaining([
+          expect.objectContaining({ content: "第6則" }),
+        ]),
+      }),
+    );
+
+    const recentMessages = vi.mocked(branchDecider.decide).mock.calls[0]?.[0]
+      ?.recentMessages;
+    expect(recentMessages).toHaveLength(4);
+    expect(recentMessages?.map((message) => message.content)).toEqual([
+      "第3則",
+      "第4則",
+      "第5則",
+      "第6則",
+    ]);
+  });
+});

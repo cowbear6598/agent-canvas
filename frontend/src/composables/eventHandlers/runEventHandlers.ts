@@ -43,6 +43,7 @@ const handleRunPodStatusChanged = createUnifiedHandler<BasePayload & RunPodStatu
 
 const handleRunDeleted = createUnifiedHandler<BasePayload & RunDeletedPayload>(
   (payload) => {
+    if (payload.success === false || !payload.runId) return
     // 收到後端推送的刪除事件，直接移除（不再發 WebSocket 避免迴圈）
     useRunStore().removeRun(payload.runId)
   }
@@ -51,7 +52,10 @@ const handleRunDeleted = createUnifiedHandler<BasePayload & RunDeletedPayload>(
 export const handleRunMessage = (payload: RunMessagePayload): void => {
   if (!isCurrentCanvas(payload.canvasId)) return
 
-  useRunStore().appendRunChatMessage(
+  const runStore = useRunStore()
+  if (!runStore.isActiveRunChatTarget(payload.runId, payload.podId)) return
+
+  runStore.appendRunChatMessage(
     payload.runId,
     payload.podId,
     payload.messageId,
@@ -65,7 +69,10 @@ export const handleRunMessage = (payload: RunMessagePayload): void => {
 export const handleRunChatComplete = (payload: RunChatCompletePayload): void => {
   if (!isCurrentCanvas(payload.canvasId)) return
 
-  useRunStore().handleRunChatComplete(
+  const runStore = useRunStore()
+  if (!runStore.isActiveRunChatTarget(payload.runId, payload.podId)) return
+
+  runStore.handleRunChatComplete(
     payload.runId,
     payload.podId,
     payload.messageId,
@@ -76,7 +83,10 @@ export const handleRunChatComplete = (payload: RunChatCompletePayload): void => 
 export const handleRunToolUse = (payload: RunToolUsePayload): void => {
   if (!isCurrentCanvas(payload.canvasId)) return
 
-  useRunStore().handleRunChatToolUse({
+  const runStore = useRunStore()
+  if (!runStore.isActiveRunChatTarget(payload.runId, payload.podId)) return
+
+  runStore.handleRunChatToolUse({
     runId: payload.runId,
     podId: payload.podId,
     messageId: payload.messageId,
@@ -89,7 +99,10 @@ export const handleRunToolUse = (payload: RunToolUsePayload): void => {
 export const handleRunToolResult = (payload: RunToolResultPayload): void => {
   if (!isCurrentCanvas(payload.canvasId)) return
 
-  useRunStore().handleRunChatToolResult({
+  const runStore = useRunStore()
+  if (!runStore.isActiveRunChatTarget(payload.runId, payload.podId)) return
+
+  runStore.handleRunChatToolResult({
     runId: payload.runId,
     podId: payload.podId,
     messageId: payload.messageId,

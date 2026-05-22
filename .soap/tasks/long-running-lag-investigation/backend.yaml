@@ -1,0 +1,117 @@
+feature: long-running-lag-investigation
+side: backend
+approved: true
+phases:
+  - id: P1
+    title: Paginated run transcript API
+    parallel: false
+    verification: []
+    done: true
+    items:
+      - id: P1.A
+        title: 分頁讀取 run messages
+        tasks:
+          - id: P1.A.t1
+            text: 在 `backend/src/services/runStore.ts` 與對應 SQL statement 新增 run message 分頁查詢能力，支援只取最近一頁訊息與回傳是否還有更早資料
+            completed: true
+            last_files_changed:
+              - backend/src/services/runStore.ts
+              - backend/src/database/statements.ts
+              - backend/tests/business-logic/runStore.test.ts
+          - id: P1.A.t2
+            text: 擴充 `RUN_LOAD_POD_MESSAGES` 的 schema、handler 與 response payload，讓前端能帶入分頁參數並取得最近一頁訊息與分頁資訊
+            completed: true
+            last_files_changed:
+              - backend/src/schemas/runSchemas.ts
+              - backend/src/handlers/runHandlers.ts
+              - backend/src/types/run.ts
+              - backend/tests/business-logic/runHandlers.test.ts
+          - id: P1.A.t3
+            text: 補 backend business-logic 測試，驗證 run message 分頁查詢的順序、邊界與 response contract 正確
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/runStore.test.ts
+              - backend/tests/business-logic/runHandlers.test.ts
+  - id: P2
+    title: Workflow read-path reduction
+    parallel: false
+    verification: []
+    done: true
+    items:
+      - id: P2.A
+        title: 建立可重用的 run 摘要欄位
+        tasks:
+          - id: P2.A.t1
+            text: 在 `run_pod_instances` 補上可持久化的 `last_response_summary` 欄位與讀寫路徑，讓 run 歷史卡片與 workflow 後續流程能直接使用精簡摘要
+            completed: true
+            last_files_changed:
+              - backend/src/database/schema.ts
+              - backend/src/database/statements.ts
+              - backend/src/services/runStore.ts
+              - backend/tests/business-logic/runStore.test.ts
+          - id: P2.A.t2
+            text: 在 assistant 訊息完成時更新對應 pod instance 的 `last_response_summary`，並把這個欄位一起帶進 run history payload
+            completed: true
+            last_files_changed:
+              - backend/src/services/runResponseSummary.ts
+              - backend/src/services/claude/streamingChatExecutor.ts
+              - backend/src/services/executionStrategy.ts
+              - backend/src/services/workflow/runExecutionService.ts
+              - backend/tests/business-logic/runExecutionStrategy.test.ts
+              - backend/tests/business-logic/runExecutionService.test.ts
+      - id: P2.B
+        title: 縮小 workflow 讀取的 transcript 範圍
+        tasks:
+          - id: P2.B.t1
+            text: 重構 `summaryService`，改成優先使用既有摘要與最近訊息窗口來生成下游摘要，而不是每次把整段 run 歷史重新讀進來
+            completed: true
+            last_files_changed:
+              - backend/src/services/summaryPromptBuilder.ts
+              - backend/src/services/summaryService.ts
+              - backend/src/services/workflow/runTranscriptWindow.ts
+              - backend/tests/business-logic/summaryService.test.ts
+          - id: P2.B.t2
+            text: 重構 `branchDecisionService` 與其他 workflow 讀取點，統一透過 bounded transcript helper 取得最近需要的訊息段數，避免長 run 反覆掃描完整歷史
+            completed: true
+            last_files_changed:
+              - backend/src/services/branch/branchDecider.ts
+              - backend/src/services/branch/baseBranchDecider.ts
+              - backend/src/services/workflow/branchPromptBuilder.ts
+              - backend/src/services/workflow/branchDecisionService.ts
+              - backend/src/services/workflow/runTranscriptWindow.ts
+              - backend/tests/business-logic/branchDecisionService.test.ts
+          - id: P2.B.t3
+            text: 補 backend business-logic 測試，驗證 workflow 摘要與 branch 決策使用的是受控的 recent transcript 視窗與 persisted summary
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/summaryService.test.ts
+              - backend/tests/business-logic/branchDecisionService.test.ts
+
+  - id: P3
+    title: Run transcript write pressure control
+    parallel: false
+    verification: []
+    done: true
+    items:
+      - id: P3.A
+        title: 降低串流期間的 SQLite 寫入頻率
+        tasks:
+          - id: P3.A.t1
+            text: 將 run 模式的 transcript persistence 策略從每 200ms checkpoint 改成更粗粒度的持久化節奏，保留前端即時 websocket 更新，但減少 workflow 長時間執行時對 SQLite 的持續寫入壓力
+            completed: true
+            last_files_changed:
+              - backend/src/services/claude/streamingChatExecutor.ts
+              - backend/tests/business-logic/streamThrottle.test.ts
+          - id: P3.A.t2
+            text: 確保 run 結束、abort、刪除與重新開啟 run history 的路徑仍能看到一致的最終 transcript，不因寫入節奏調整而遺失完成態內容
+            completed: true
+            last_files_changed:
+              - backend/src/services/claude/streamingChatExecutor.ts
+              - backend/src/services/executionStrategy.ts
+              - backend/tests/business-logic/runExecutionStrategy.test.ts
+          - id: P3.A.t3
+            text: 補 backend business-logic 測試，驗證新的 persist 節奏會保留最終訊息內容、避免重複寫入，並在 run 被刪除後正確停止後續落盤
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/streamThrottle.test.ts
+              - backend/tests/business-logic/runExecutionStrategy.test.ts
