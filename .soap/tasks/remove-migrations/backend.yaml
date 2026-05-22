@@ -1,0 +1,66 @@
+feature: remove-migrations
+side: backend
+approved: true
+
+phases:
+  - id: P1
+    title: 移除 migration 函式與相關測試
+    parallel: true
+    verification:
+      - cd backend && bun run test
+      - cd backend && bun run style
+    done: true
+    items:
+      - id: P1.A
+        title: 精簡 schema.ts 為純 DDL
+        tasks:
+          - id: P1.A.t1
+            text: |
+              修改 `backend/src/database/schema.ts` 的 `createTables` 函式：
+              移除函式內所有 migrate 呼叫與 `tableExists` 判斷，最後只保留一行 `createBaseTables(db);`。
+              具體要刪掉的呼叫（依目前順序）：`migratePodPluginIdsTruncate`、`migrateCanvasPasswordColumns`、`migratePodsGoalColumn`、`migratePodsGeminiProviderToClaude`、`migrateConnectionsGeminiSummaryToClaude`、`migratePodsDropCommandColumn`、`migrateDeleteCommandNotes`、`migratePodManifestCommandFiles`、`migrateConnectionBranchColumns`、`cleanupLegacyAiDecideRows`、`migrateConnectionStatusAiValues`、`migrateRunPodInstancesRunRepoPathColumn`、`migrateRepositoryMetadataDropWorktreeColumns`、`migratePodsDropMultiInstance`、`migrateDropMessagesTable`、`migratePodsDropStatus`、`migrateManagedPluginsSortIndex`，以及 `const isManagedPluginsFirstUpgrade = !tableExists(db, "managed_plugins");` 這一行。
+            completed: true
+            last_files_changed: ["backend/src/database/schema.ts"]
+          - id: P1.A.t2
+            text: |
+              在 `backend/src/database/schema.ts` 內刪除 17 個 migrate 函式定義本體：`migratePodPluginIdsTruncate`、`migrateCanvasPasswordColumns`、`migratePodsGoalColumn`、`migratePodsGeminiProviderToClaude`、`migrateConnectionsGeminiSummaryToClaude`、`migratePodsDropCommandColumn`、`migrateDeleteCommandNotes`、`migratePodManifestCommandFiles`、`migrateConnectionBranchColumns`、`cleanupLegacyAiDecideRows`（含 `export`）、`migrateConnectionStatusAiValues`（含 `export`）、`migrateRunPodInstancesRunRepoPathColumn`、`migrateRepositoryMetadataDropWorktreeColumns`、`migratePodsDropMultiInstance`、`migrateDropMessagesTable`、`migratePodsDropStatus`、`migrateManagedPluginsSortIndex`。
+            completed: true
+            last_files_changed: ["backend/src/database/schema.ts"]
+          - id: P1.A.t3
+            text: |
+              在 `backend/src/database/schema.ts` 內刪除僅由已被砍 migrate 函式使用的內部 helper：`columnExists`、`tableExists`。
+            completed: true
+            last_files_changed: ["backend/src/database/schema.ts"]
+          - id: P1.A.t4
+            text: |
+              在 `backend/src/database/schema.ts` 內刪除已不再被使用的頂層常數與 import：`CLAUDE_SONNET_PROVIDER_CONFIG_JSON`、`import { safeJsonParse } from "@shared/safeJsonParse.js"`。
+              刪完後檔案應只剩 `import { Database } from "bun:sqlite";`、`createBaseTables`、`createTables`（內容只剩一行 `createBaseTables(db);`）。
+            completed: true
+            last_files_changed: ["backend/src/database/schema.ts"]
+
+      - id: P1.B
+        title: 移除已失效的 migration 測試檔
+        tasks:
+          - id: P1.B.t1
+            text: 整檔刪除 `backend/tests/business-logic/schema-migration.test.ts`。
+            completed: true
+            last_files_changed: ["backend/tests/business-logic/schema-migration.test.ts"]
+          - id: P1.B.t2
+            text: 整檔刪除 `backend/tests/business-logic/dbStartupCleanup.test.ts`。
+            completed: true
+            last_files_changed: ["backend/tests/business-logic/dbStartupCleanup.test.ts"]
+
+      - id: P1.C
+        title: 調整 schema.test.ts，移除指向已砍 migrate 函式的測試案例
+        tasks:
+          - id: P1.C.t1
+            text: |
+              修改 `backend/tests/database/schema.test.ts`：
+              刪除「舊版 managed_plugins schema 升級時應補 sort_index 與排序索引」這個 `it` 區塊（描述「應該建立所有資料表」、`journal_mode`、外鍵、`pod_plugin_ids` 索引等其他初始化 case 全部保留；resetDb / CASCADE 刪除 / Prepared Statements 區塊也全部保留）。
+            completed: true
+            last_files_changed: ["backend/tests/database/schema.test.ts"]
+          - id: P1.C.t2
+            text: |
+              在 `backend/tests/database/schema.test.ts` 檔頭整理 import：移除已不再被任何測試使用的 `import { createTables } from "../../src/database/schema.js";`（其餘 `initTestDb` / `closeDb` / `resetDb` / `getDb` / `getStatements` / `resetStatements` / `Database` 等 import 全部保留）。
+            completed: true
+            last_files_changed: ["backend/tests/database/schema.test.ts"]

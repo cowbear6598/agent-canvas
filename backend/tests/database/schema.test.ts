@@ -8,7 +8,6 @@ import {
   getStatements,
   resetStatements,
 } from "../../src/database/statements.js";
-import { createTables } from "../../src/database/schema.js";
 import { Database } from "bun:sqlite";
 
 // Schema 結構驗證：建立、CASCADE 刪除、Prepared Statements CRUD
@@ -76,66 +75,8 @@ describe("Database", () => {
       }[];
 
       expect(
-        indexes.some(
-          (index) => index.name === "idx_pod_plugin_ids_plugin_id",
-        ),
+        indexes.some((index) => index.name === "idx_pod_plugin_ids_plugin_id"),
       ).toBe(true);
-    });
-
-    it("舊版 managed_plugins schema 升級時應補 sort_index 與排序索引", () => {
-      const legacyDb = new Database(":memory:");
-      try {
-        legacyDb.exec(
-          "CREATE TABLE managed_plugins (" +
-            "id TEXT PRIMARY KEY," +
-            "github_repo TEXT NOT NULL," +
-            "display_name TEXT," +
-            "description TEXT," +
-            "install_path TEXT NOT NULL," +
-            "installed_at TEXT NOT NULL," +
-            "updated_at TEXT NOT NULL" +
-            ")",
-        );
-        legacyDb.exec(
-          `INSERT INTO managed_plugins
-            (id, github_repo, display_name, description, install_path, installed_at, updated_at)
-            VALUES
-            ('plugin-b', 'owner/b', NULL, NULL, '/plugins/b', '2025-01-01T00:00:00.000Z', '2025-01-01T00:00:00.000Z'),
-            ('plugin-a', 'owner/a', NULL, NULL, '/plugins/a', '2025-01-01T00:00:00.000Z', '2025-01-01T00:00:00.000Z'),
-            ('plugin-c', 'owner/c', NULL, NULL, '/plugins/c', '2025-01-02T00:00:00.000Z', '2025-01-02T00:00:00.000Z')`,
-        );
-
-        createTables(legacyDb);
-
-        const columns = legacyDb.prepare("PRAGMA table_info(managed_plugins)").all() as {
-          name: string;
-        }[];
-        expect(columns.some((column) => column.name === "sort_index")).toBe(
-          true,
-        );
-
-        const rows = legacyDb
-          .prepare(
-            "SELECT id, sort_index FROM managed_plugins ORDER BY sort_index ASC",
-          )
-          .all() as { id: string; sort_index: number }[];
-        expect(rows).toEqual([
-          { id: "plugin-a", sort_index: 0 },
-          { id: "plugin-b", sort_index: 1 },
-          { id: "plugin-c", sort_index: 2 },
-        ]);
-
-        const indexes = legacyDb
-          .prepare("PRAGMA index_list(managed_plugins)")
-          .all() as { name: string }[];
-        expect(
-          indexes.some(
-            (index) => index.name === "idx_managed_plugins_sort_index",
-          ),
-        ).toBe(true);
-      } finally {
-        legacyDb.close();
-      }
     });
   });
 
