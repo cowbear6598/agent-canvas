@@ -177,7 +177,10 @@ describe("runClaudeQuery", () => {
       const called = (mockQuery as ReturnType<typeof vi.fn>).mock.calls[0][0];
       expect(called.prompt).toContain("User request: go");
       expect(called.prompt).toContain(
-        "Start by calling Goal Runtime to inspect the current status and active todo.",
+        "Start by calling get_active_goal_todo to read only the current active todo.",
+      );
+      expect(called.prompt).toContain(
+        "Do not call get_goal_status just to learn what to work on",
       );
       expect("systemPrompt" in called.options).toBe(false);
     });
@@ -216,9 +219,12 @@ describe("runClaudeQuery", () => {
       expect(firstMessage.value.message.content[0]).toMatchObject({
         type: "text",
         text: expect.stringContaining(
-          "Start by calling Goal Runtime to inspect the current status and active todo.",
+          "Start by calling get_active_goal_todo to read only the current active todo.",
         ),
       });
+      expect(firstMessage.value.message.content[0].text).toContain(
+        "Do not call get_goal_status just to learn what to work on",
+      );
       expect(firstMessage.value.message.content[1]).toMatchObject({
         type: "text",
         text: "read package.json",

@@ -1,6 +1,6 @@
 import {
   GOAL_MCP_TOOL_NAMES,
-  type GoalRuntimeToolResult,
+  buildGoalRuntimeActiveTodoResult,
   blockGoalRuntime,
   buildGoalRuntimeToolResult,
   completeGoalTodo,
@@ -63,11 +63,9 @@ function loadSnapshot(): ReturnType<typeof readGoalRuntimeSnapshot> {
   return readGoalRuntimeSnapshot(statePath);
 }
 
-function toolTextResult(
-  payload: GoalRuntimeToolResult | Record<string, unknown>,
-): {
+function toolTextResult<T extends object>(payload: T): {
   content: Array<{ type: "text"; text: string }>;
-  structuredContent: GoalRuntimeToolResult | Record<string, unknown>;
+  structuredContent: T;
 } {
   return {
     content: [
@@ -102,6 +100,10 @@ function handleGetGoalStatus(id: JsonRpcId): void {
   }
 
   writeResult(id, toolTextResult(buildGoalRuntimeToolResult(snapshot)));
+}
+
+function handleGetActiveGoalTodo(id: JsonRpcId): void {
+  writeResult(id, toolTextResult(buildGoalRuntimeActiveTodoResult(loadSnapshot())));
 }
 
 function handleCompleteGoalTodo(
@@ -189,6 +191,10 @@ function handleToolsCall(
       ? (params.arguments as Record<string, unknown>)
       : undefined;
 
+  if (name === GOAL_MCP_TOOL_NAMES.GET_ACTIVE_TODO) {
+    handleGetActiveGoalTodo(id);
+    return;
+  }
   if (name === GOAL_MCP_TOOL_NAMES.GET_STATUS) {
     handleGetGoalStatus(id);
     return;
@@ -227,7 +233,7 @@ function handleRequest(request: JsonRpcRequest): void {
         version: "1.0.0",
       },
       instructions:
-        "Use get_goal_status to inspect progress, complete_goal_todo after finishing the active todo, and block_goal_progress when the Pod is blocked.",
+        "Use get_active_goal_todo when you only need to know the current todo. Use get_goal_status only when you need full progress/debug state. Use complete_goal_todo after finishing the active todo, and block_goal_progress when the Pod is blocked.",
     });
     return;
   }
@@ -245,9 +251,18 @@ function handleRequest(request: JsonRpcRequest): void {
     writeResult(id, {
       tools: [
         {
+          name: GOAL_MCP_TOOL_NAMES.GET_ACTIVE_TODO,
+          description:
+            "Read only the current active todo id and text. Prefer this when deciding what to work on next.",
+          inputSchema: {
+            type: "object",
+            properties: {},
+          },
+        },
+        {
           name: GOAL_MCP_TOOL_NAMES.GET_STATUS,
           description:
-            "Read the current Goal Runtime state, including the active todo and completion status.",
+            "Read the full Goal Runtime state for progress/debug checks.",
           inputSchema: {
             type: "object",
             properties: {},

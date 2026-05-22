@@ -1685,7 +1685,10 @@ describe("chat — Goal Runtime bootstrap prompt（新 session 第一輪注入�
     };
     expect(promptArg.parts[0]?.text).toContain("User request: go");
     expect(promptArg.parts[0]?.text).toContain(
-      "Start by calling Goal Runtime to inspect the current status and active todo.",
+      "Start by calling get_active_goal_todo to read only the current active todo.",
+    );
+    expect(promptArg.parts[0]?.text).toContain(
+      "Do not call get_goal_status just to learn what to work on",
     );
     expect(promptArg.parts[0]?.text).toContain(
       "Then continue with the current active todo instead of asking for a new task.",

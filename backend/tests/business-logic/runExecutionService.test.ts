@@ -15,6 +15,11 @@ import path from "path";
 import * as nodeFs from "fs";
 import * as runExecutionResources from "../../src/services/runtime/runExecutionResources.js";
 import { config } from "../../src/config/index.js";
+import {
+  getGoalRuntimeStatePath,
+  readGoalRuntimeSnapshot,
+  removeGoalRuntimeRun,
+} from "../../src/services/goalRuntime.js";
 
 // --- 測試常數 ---
 const CANVAS_ID = "canvas-exec-1";
@@ -265,6 +270,42 @@ describe("RunExecutionService", () => {
 
       expect(instance?.workspacePath).toBe(pod.workspacePath);
       expect(instance?.runRepoPath).toBeNull();
+    });
+
+    it("createRun 會凍結 chain 中尚未執行 pod 的 goal snapshot", async () => {
+      const { pod: sourcePod } = podStore.create(CANVAS_ID, {
+        name: "Source Pod",
+        x: 0,
+        y: 0,
+        rotation: 0,
+        goal: { todos: [{ id: "source-todo-1", text: "Start" }] },
+      });
+      const { pod: targetPod } = podStore.create(CANVAS_ID, {
+        name: "Target Pod",
+        x: 300,
+        y: 0,
+        rotation: 0,
+        goal: { todos: [{ id: "target-todo-1", text: "Original target" }] },
+      });
+      insertConnection(CANVAS_ID, sourcePod.id, targetPod.id, "auto");
+
+      const ctx = await runExecutionService.createRun(
+        CANVAS_ID,
+        sourcePod.id,
+        "測試",
+      );
+      podStore.update(CANVAS_ID, targetPod.id, {
+        goal: { todos: [{ id: "target-todo-2", text: "Edited target" }] },
+      });
+
+      const targetSnapshot = readGoalRuntimeSnapshot(
+        getGoalRuntimeStatePath(ctx, targetPod.id),
+      );
+
+      expect(targetSnapshot?.goal.todos).toEqual([
+        { id: "target-todo-1", text: "Original target" },
+      ]);
+      removeGoalRuntimeRun(ctx.runId);
     });
   });
 

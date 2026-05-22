@@ -227,7 +227,10 @@ describe("CodexProvider", () => {
     const [promptText] = mockProc.stdin.write.mock.calls[0] as [string];
     expect(promptText).toContain("User request: fix the failing test");
     expect(promptText).toContain(
-      "Start by calling Goal Runtime to inspect the current status and active todo.",
+      "Start by calling get_active_goal_todo to read only the current active todo.",
+    );
+    expect(promptText).toContain(
+      "Do not call get_goal_status just to learn what to work on",
     );
     expect(promptText).toContain(
       "Then continue with the current active todo instead of asking for a new task.",

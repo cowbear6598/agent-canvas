@@ -9,6 +9,7 @@ export type GoalRuntimeStatus = "running" | "blocked" | "completed";
 
 export const GOAL_MCP_SERVER_NAME = "agent_canvas_goal";
 export const GOAL_MCP_TOOL_NAMES = {
+  GET_ACTIVE_TODO: "get_active_goal_todo",
   GET_STATUS: "get_goal_status",
   COMPLETE_TODO: "complete_goal_todo",
   BLOCK_PROGRESS: "block_goal_progress",
@@ -51,6 +52,11 @@ export interface GoalRuntimeToolResult {
   handoffSummary: string | null;
   completedCount: number;
   totalCount: number;
+}
+
+export interface GoalRuntimeActiveTodoResult {
+  activeTodoId: string | null;
+  activeTodoText: string | null;
 }
 
 export interface GoalRuntimeMcpMetadata extends GoalRuntimeToolResult {
@@ -309,22 +315,10 @@ export function ensureGoalRuntime(
 
   const statePath = getGoalRuntimeStatePath(runContext, pod.id);
   const existing = readGoalRuntimeSnapshot(statePath);
+  if (existing) return existing;
 
-  // 若已有 snapshot 且 goal 的 todo 清單順序一致，代表狀態仍有效，直接復用
-  // 避免每次 buildOptions 呼叫都覆寫掉 consumeGoalRuntimeToolResult 更新過的進度
-  if (existing) {
-    const currentTodoOrder = normalizeGoalRuntimeGoal(pod.goal).todos.map(
-      (t) => t.id,
-    );
-    const existingTodoOrder = existing.state.todoOrder;
-    const isSameGoal =
-      currentTodoOrder.length === existingTodoOrder.length &&
-      currentTodoOrder.every((id, i) => id === existingTodoOrder[i]);
-
-    if (isSameGoal) return existing;
-  }
-
-  // snapshot 不存在或 goal 結構已改變（外部重設），建立新的初始 snapshot
+  // snapshot 不存在時才以當下 pod goal 建立 run-scoped snapshot。
+  // 建立後不再受 live pod goal 編輯影響，避免執行中的 workflow 被後續設定修改。
   const snapshot = createGoalRuntimeSnapshot(pod, runContext);
   writeGoalRuntimeSnapshot(statePath, snapshot);
 
@@ -364,6 +358,22 @@ export function buildGoalRuntimeToolResult(
     handoffSummary: state.handoffSummary,
     completedCount: state.completedTodoIds.length,
     totalCount: goal.todos.length,
+  };
+}
+
+export function buildGoalRuntimeActiveTodoResult(
+  snapshot: GoalRuntimeSnapshot | null,
+): GoalRuntimeActiveTodoResult {
+  if (!snapshot) {
+    return {
+      activeTodoId: null,
+      activeTodoText: null,
+    };
+  }
+
+  return {
+    activeTodoId: snapshot.state.activeTodoId,
+    activeTodoText: getGoalTodoText(snapshot.goal, snapshot.state.activeTodoId),
   };
 }
 
@@ -425,6 +435,9 @@ export function extractGoalRuntimeToolName(
 ): GoalRuntimeToolName | null {
   if (!toolName.includes(GOAL_MCP_SERVER_NAME)) return null;
 
+  if (toolName.includes(GOAL_MCP_TOOL_NAMES.GET_ACTIVE_TODO)) {
+    return GOAL_MCP_TOOL_NAMES.GET_ACTIVE_TODO;
+  }
   if (toolName.includes(GOAL_MCP_TOOL_NAMES.GET_STATUS)) {
     return GOAL_MCP_TOOL_NAMES.GET_STATUS;
   }
@@ -555,7 +568,7 @@ export function consumeGoalRuntimeToolResult(
   const statePath = getGoalRuntimeStatePath(runContext, pod.id);
   const existing = readGoalRuntimeSnapshot(statePath);
   const parsed = parseGoalRuntimeToolResult(output);
-  const goal = normalizeGoalRuntimeGoal(pod.goal);
+  const goal = existing?.goal ?? normalizeGoalRuntimeGoal(pod.goal);
 
   if (parsed) {
     const baseSnapshot =
@@ -601,7 +614,7 @@ export function forceBlockGoalRuntime(
 
   const statePath = getGoalRuntimeStatePath(runContext, pod.id);
   const existing = readGoalRuntimeSnapshot(statePath);
-  const goal = normalizeGoalRuntimeGoal(pod.goal);
+  const goal = existing?.goal ?? normalizeGoalRuntimeGoal(pod.goal);
 
   const baseSnapshot =
     existing ??

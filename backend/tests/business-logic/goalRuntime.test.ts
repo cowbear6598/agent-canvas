@@ -5,6 +5,7 @@ import {
   blockGoalRuntime,
   buildGoalRuntimeMcpListItem,
   buildGoalRuntimeMcpServerConfig,
+  buildGoalRuntimeActiveTodoResult,
   buildGoalRuntimeToolFullName,
   canonicalizeGoalRuntimeToolName,
   completeGoalTodo,
@@ -117,6 +118,29 @@ describe("goalRuntime", () => {
     );
   });
 
+  it("run snapshot 建立後應固定 goal，不受後續 pod goal 編輯影響", () => {
+    const snapshot = ensureGoalRuntime(pod, runContext);
+    if (!snapshot) throw new Error("snapshot 應存在");
+
+    const editedPod = {
+      ...pod,
+      goal: {
+        todos: [{ id: "todo-new", text: "Edited while running" }],
+      },
+    };
+
+    const config = buildGoalRuntimeMcpServerConfig(runContext, editedPod);
+    const persisted = readGoalRuntimeSnapshot(
+      getGoalRuntimeStatePath(runContext, pod.id),
+    );
+
+    expect(config?.name).toBe(GOAL_MCP_SERVER_NAME);
+    expect(persisted?.goal.todos.map((todo) => todo.id)).toEqual([
+      "todo-1",
+      "todo-2",
+    ]);
+  });
+
   it("buildGoalRuntimeMcpServerConfig（compiled 模式）args 應只有 --goal-bridge", () => {
     const originalEnv = process.env.AGENT_CANVAS_COMPILED;
     try {
@@ -164,6 +188,22 @@ describe("goalRuntime", () => {
       activeTodoText: "Collect requirements",
       completedCount: 0,
       totalCount: 2,
+    });
+  });
+
+  it("buildGoalRuntimeActiveTodoResult 只回傳 active todo id 與文字", () => {
+    const snapshot = ensureGoalRuntime(pod, runContext);
+
+    expect(buildGoalRuntimeActiveTodoResult(snapshot)).toEqual({
+      activeTodoId: "todo-1",
+      activeTodoText: "Collect requirements",
+    });
+  });
+
+  it("buildGoalRuntimeActiveTodoResult 無 snapshot 時回傳空 active todo", () => {
+    expect(buildGoalRuntimeActiveTodoResult(null)).toEqual({
+      activeTodoId: null,
+      activeTodoText: null,
     });
   });
 
@@ -223,6 +263,40 @@ describe("goalRuntime", () => {
     );
     expect(persisted?.state.activeTodoId).toBe("todo-2");
     expect(persisted?.state.completedTodoIds).toEqual(["todo-1"]);
+  });
+
+  it("consumeGoalRuntimeToolResult 更新進度時不應用 live pod goal 覆蓋 run snapshot", () => {
+    ensureGoalRuntime(pod, runContext);
+    const editedPod = {
+      ...pod,
+      goal: {
+        todos: [{ id: "todo-new", text: "Edited while running" }],
+      },
+    };
+
+    const snapshot = consumeGoalRuntimeToolResult(
+      runContext,
+      editedPod,
+      `mcp__${GOAL_MCP_SERVER_NAME}__${GOAL_MCP_TOOL_NAMES.COMPLETE_TODO}`,
+      JSON.stringify({
+        status: "running",
+        activeTodoId: "todo-2",
+        activeTodoText: "Implement changes",
+        nextTodoId: null,
+        nextTodoText: null,
+        completedTodoIds: ["todo-1"],
+        blockedReason: null,
+        handoffSummary: null,
+        completedCount: 1,
+        totalCount: 2,
+      }),
+    );
+
+    expect(snapshot?.goal.todos.map((todo) => todo.id)).toEqual([
+      "todo-1",
+      "todo-2",
+    ]);
+    expect(snapshot?.state.activeTodoId).toBe("todo-2");
   });
 
   it("consumeGoalRuntimeToolResult 應正規化已完成但殘留 activeTodoId 的狀態", () => {

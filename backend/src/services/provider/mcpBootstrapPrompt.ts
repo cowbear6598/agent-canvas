@@ -11,7 +11,8 @@
 
 const GOAL_RUNTIME_BOOTSTRAP_LINES = [
   "A Goal Runtime MCP is available for this Pod.",
-  "Start by calling Goal Runtime to inspect the current status and active todo.",
+  "Start by calling get_active_goal_todo to read only the current active todo.",
+  "Do not call get_goal_status just to learn what to work on; use it only when full progress/debug state is needed.",
   "Then continue with the current active todo instead of asking for a new task.",
   "Only ask for clarification if Goal Runtime shows no actionable todo or the work is blocked.",
 ];

@@ -33,7 +33,7 @@ import {
   provisionRunExecutionResources,
   type ProvisionedRunExecutionResources,
 } from "../runtime/runExecutionResources.js";
-import { removeGoalRuntimeRun } from "../goalRuntime.js";
+import { ensureGoalRuntime, removeGoalRuntimeRun } from "../goalRuntime.js";
 import { cleanupOpencodeRunServers } from "../provider/opencodeProvider.js";
 
 const MAX_RUNS_PER_CANVAS = 30;
@@ -184,6 +184,8 @@ class RunExecutionService {
         );
         continue;
       }
+
+      ensureGoalRuntime(pod, runContext);
 
       let provisioned: ProvisionedRunExecutionResources;
       try {
