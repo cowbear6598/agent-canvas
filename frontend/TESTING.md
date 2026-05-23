@@ -75,3 +75,73 @@ CI can run them reliably.
 Do not mock product stores to claim a userflow has been verified. Userflow and
 integration tests should use real product stores so failures identify the broken
 workflow or state transition instead of a changed mock call count.
+
+## P3.A Secondary Audit Decisions
+
+The P3.A audit compares `tests/test-inventory.json` with the current
+`frontend/tests` tree before changing tests. Deleted inventory entries must stay
+marked as deleted in the inventory until the next full rebaseline; new test
+files must be classified before the item is considered complete.
+
+Deleted in this audit because the remaining assertions only protected mock call
+counts, helper wiring, or component plumbing without a standalone product rule:
+
+- `tests/business-logic/components/settings/ManagedPluginModal.test.ts`
+- `tests/business-logic/composables/websocket/useCanvasWebSocketAction.test.ts`
+- `tests/business-logic/composables/websocket/useSendCanvasAction.test.ts`
+- `tests/business-logic/composables/websocket/useWebSocketErrorHandler.test.ts`
+- `tests/integration/websocket-api/createWebSocketRequest.test.ts`
+
+Moved into userflow coverage because the behavior is valuable only when framed
+as an observable workflow:
+
+- `tests/userflows/canvas/canvasPodInteractionsFlow.test.ts`: F4/F6, pod
+  popover close behavior and guarded file-drop interactions.
+- `tests/userflows/canvas/podPluginPopoverFlow.test.ts`: F4/F6, plugin list
+  refresh and local plugin selection stability while the user toggles a pod
+  plugin.
+- `tests/userflows/canvas/podThinkingFlow.test.ts`: F4/F6, visible thinking
+  level fill follows the model's configured level order.
+- `tests/userflows/canvas/thinkingPopoverFlow.test.ts`: F4/F6, thinking level
+  choices present higher-effort options first.
+- `tests/userflows/settings/opencodeSettingsFlow.test.ts`: F4/F6, restarting
+  OpenCode reloads providers and promotes connected providers in the settings
+  list.
+
+Retained as business-rule coverage after removing low-value UI render checks:
+
+- `tests/business-logic/stores/chat/opencodeErrorHandling.test.ts`: F4/F6,
+  `opencode_auth_missing` backend messages remain system transcript messages
+  containing the provider id and `opencode auth login` guidance.
+- `tests/business-logic/composables/events/runEventHandlers.test.ts`: F6, run
+  chat events update only the currently opened run chat and failed delete
+  responses do not remove local runs.
+- `tests/business-logic/lib/podDividerPath.test.ts`: F6, pod divider paths are
+  stable per pod id and preserve the fixed endpoint/segment rule.
+- `tests/business-logic/stores/connectionGraphHelpers.test.ts`: F6, workflow
+  role and running-state graph traversal rules remain independent of UI.
+- `tests/business-logic/stores/connectionPayloadMappers.test.ts`: F6,
+  connection payload defaults and event mapping preserve frontend connection
+  state after websocket responses.
+
+## P3.B Fallback Decisions
+
+Frontend fallback handling is split into three categories:
+
+- External boundary fallback stays at API, WebSocket, and integration edges when
+  a backend or third-party response can be malformed, delayed, or unavailable.
+- Legacy data fallback stays in normalizers when old saved canvas, provider, or
+  MCP state may still exist in user data.
+- Regular contract fallback is removed when the WebSocket/API schema already
+  guarantees the field. In this audit, opencode alias list/reorder `items` now
+  throws a zh-TW contract error if the backend omits the array instead of
+  silently returning `[]`.
+
+Retained fallback coverage:
+
+- `tests/integration/websocket-api/opencodeApi.test.ts`: F5/F6, malformed
+  opencode alias responses surface a user-visible contract error instead of
+  hiding state loss behind an empty list.
+- `tests/integration/websocket-api/managedMcpApi.test.ts`: F5/F6, unknown MCP
+  runtime status remains visible as `unknown` because it represents an external
+  process boundary, not an impossible product state.

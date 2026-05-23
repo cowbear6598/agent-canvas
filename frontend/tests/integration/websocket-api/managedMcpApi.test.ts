@@ -58,6 +58,30 @@ describe("managedMcpApi", () => {
     ]);
   });
 
+  it("registry list 遇到外部未知 status 時顯示 unknown 狀態", async () => {
+    vi.mocked(createWebSocketRequest).mockResolvedValue({
+      items: [
+        {
+          id: "registry-1",
+          name: "context7",
+          transport: "stdio",
+          enabled: true,
+          command: "npx",
+          status: "third-party-warming-up",
+        },
+      ],
+    } as never);
+
+    const result = await listManagedMcpRegistry();
+
+    expect(result[0]).toEqual(
+      expect.objectContaining({
+        name: "context7",
+        status: "unknown",
+      }),
+    );
+  });
+
   it("pod availability 會保留 selected / disabledReason", async () => {
     vi.mocked(createWebSocketRequest).mockResolvedValue({
       items: [

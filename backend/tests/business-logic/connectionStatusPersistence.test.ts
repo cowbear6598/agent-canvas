@@ -62,6 +62,34 @@ describe("ConnectionStore SQLite 持久化", () => {
       const loaded = connectionStore.getById(canvasId, connection.id);
       expect(loaded?.triggerMode).toBe("branch");
     });
+
+    it("建立時明確指定不支援的 summaryModel 應拒絕寫入", () => {
+      expect(() =>
+        connectionStore.create(canvasId, {
+          sourcePodId: "pod-a",
+          sourceAnchor: "right",
+          targetPodId: "pod-b",
+          targetAnchor: "left",
+          summaryProvider: "claude",
+          summaryModel: "no-such-model",
+        }),
+      ).toThrow("summaryModel 不支援 provider claude");
+    });
+
+    it("建立時明確指定不支援的 branchModel 應拒絕寫入", () => {
+      expect(() =>
+        connectionStore.create(canvasId, {
+          sourcePodId: "pod-a",
+          sourceAnchor: "right",
+          targetPodId: "pod-b",
+          targetAnchor: "left",
+          triggerMode: "branch",
+          label: "Test-Label",
+          branchProvider: "codex",
+          branchModel: "sonnet",
+        }),
+      ).toThrow("branchModel 不支援 provider codex");
+    });
   });
 
   describe("updateConnectionStatus", () => {
@@ -183,6 +211,45 @@ describe("ConnectionStore SQLite 持久化", () => {
         triggerMode: "auto",
       });
       expect(result).toBeUndefined();
+    });
+
+    it("更新時明確指定不支援的 summaryModel 應拒絕寫入", () => {
+      const connection = connectionStore.create(canvasId, {
+        sourcePodId: "pod-a",
+        sourceAnchor: "right",
+        targetPodId: "pod-b",
+        targetAnchor: "left",
+      });
+      const before = connectionStore.getById(canvasId, connection.id);
+
+      expect(() =>
+        connectionStore.update(canvasId, connection.id, {
+          summaryProvider: "codex",
+          summaryModel: "sonnet",
+        }),
+      ).toThrow("summaryModel 不支援 provider codex");
+
+      const loaded = connectionStore.getById(canvasId, connection.id);
+      expect(loaded?.summaryProvider).toBe(before?.summaryProvider);
+      expect(loaded?.summaryModel).toBe(before?.summaryModel);
+    });
+
+    it("更新 branchProvider 時若未指定 branchModel 應寫入該 provider 預設模型", () => {
+      const connection = connectionStore.create(canvasId, {
+        sourcePodId: "pod-a",
+        sourceAnchor: "right",
+        targetPodId: "pod-b",
+        targetAnchor: "left",
+        triggerMode: "branch",
+        label: "Test-Label",
+      });
+
+      const updated = connectionStore.update(canvasId, connection.id, {
+        branchProvider: "codex",
+      });
+
+      expect(updated?.branchProvider).toBe("codex");
+      expect(updated?.branchModel).toBe("gpt-5.4");
     });
   });
 

@@ -9,12 +9,11 @@ import type {
 import { getDb } from "../database/index.js";
 import { getStatements } from "../database/statements.js";
 import {
+  assertModelSupportedByProvider,
   getProvider,
-  resolveModelWithFallback,
   type ProviderName,
 } from "./provider/index.js";
 import { podStore } from "./podStore.js";
-import { logger } from "../utils/logger.js";
 import type { Pod } from "../types";
 
 interface CreateConnectionData {
@@ -31,6 +30,18 @@ interface CreateConnectionData {
   description?: string;
   branchProvider?: ProviderName;
   branchModel?: string;
+}
+
+function validateProviderModel(
+  provider: ProviderName,
+  model: string,
+  fieldName: "summaryModel" | "branchModel",
+): void {
+  try {
+    assertModelSupportedByProvider(provider, model);
+  } catch {
+    throw new Error(`${fieldName} 不支援 provider ${provider}`);
+  }
 }
 
 function shouldResetDecideState(oldMode: string, newMode: string): boolean {
@@ -219,18 +230,27 @@ class ConnectionStore {
       // 客戶端未帶 summaryModel：使用 resolvedSummaryProvider 的預設模型
       resolvedSummaryModel = defaultModel;
     } else {
-      const { resolved, didFallback } = resolveModelWithFallback(
+      validateProviderModel(
         resolvedSummaryProvider,
         data.summaryModel,
+        "summaryModel",
       );
-      if (didFallback) {
-        logger.warn(
-          "Connection",
-          "Warn",
-          `[ConnectionStore] summaryModel "${data.summaryModel}" 不在 ${resolvedSummaryProvider} 合法清單內，fallback 到預設模型 "${resolved}"`,
-        );
-      }
-      resolvedSummaryModel = resolved;
+      resolvedSummaryModel = data.summaryModel;
+    }
+
+    const resolvedBranchProvider =
+      data.branchProvider ?? sourcePod?.provider ?? "claude";
+    let resolvedBranchModel = data.branchModel ?? null;
+    if (data.branchProvider !== undefined && data.branchModel === undefined) {
+      resolvedBranchModel =
+        resolveProviderDefaultModel(resolvedBranchProvider) ?? null;
+    }
+    if (resolvedBranchModel !== null) {
+      validateProviderModel(
+        resolvedBranchProvider,
+        resolvedBranchModel,
+        "branchModel",
+      );
     }
 
     // branch 模式下驗證 label
@@ -272,7 +292,7 @@ class ConnectionStore {
       $label: data.label ?? "",
       $description: data.description ?? null,
       $branchProvider: data.branchProvider ?? null,
-      $branchModel: data.branchModel ?? null,
+      $branchModel: resolvedBranchModel,
     });
 
     return this.getById(canvasId, id) as Connection;
@@ -403,19 +423,13 @@ class ConnectionStore {
       newSummaryModel =
         (providerMeta.defaultOptions as { model?: string }).model ?? "sonnet";
     } else if (updates.summaryModel !== undefined) {
-      // 有明確提供 summaryModel：驗證合法性，不合法則 fallback
-      const { resolved, didFallback } = resolveModelWithFallback(
+      // 有明確提供 summaryModel：驗證合法性，不合法直接拒絕，不再寫入時 silent fallback
+      validateProviderModel(
         targetSummaryProvider,
         updates.summaryModel,
+        "summaryModel",
       );
-      if (didFallback) {
-        logger.warn(
-          "Connection",
-          "Warn",
-          `[ConnectionStore] update summaryModel "${updates.summaryModel}" 不在 ${targetSummaryProvider} 合法清單內，fallback 到預設模型 "${resolved}"`,
-        );
-      }
-      newSummaryModel = resolved;
+      newSummaryModel = updates.summaryModel;
     }
 
     const targetMode = updates.triggerMode ?? existing.triggerMode;
@@ -450,10 +464,20 @@ class ConnectionStore {
 
     if (updates.branchProvider !== undefined) {
       newBranchProvider = updates.branchProvider;
+      if (updates.branchProvider === null) {
+        newBranchModel = null;
+      } else if (updates.branchModel === undefined) {
+        newBranchModel =
+          resolveProviderDefaultModel(updates.branchProvider) ?? newBranchModel;
+      }
     }
 
     if (updates.branchModel !== undefined) {
       newBranchModel = updates.branchModel;
+    }
+
+    if (newBranchProvider !== null && newBranchModel !== null) {
+      validateProviderModel(newBranchProvider, newBranchModel, "branchModel");
     }
 
     const updatedRow = this.stmts.updateReturning.get({

@@ -1,8 +1,6 @@
 import {
   runStore,
   NEVER_TRIGGERED_STATUSES,
-  IN_PROGRESS_STATUSES,
-  TERMINAL_POD_STATUSES,
 } from "../runStore.js";
 import type { RunPodInstance, RunPodInstanceStatus } from "../runStore.js";
 import { isAllPathwaysSettled } from "../../utils/pathwayHelpers.js";
@@ -17,6 +15,12 @@ import { WebSocketResponseEvents } from "../../schemas/events.js";
 import { isAutoTriggerable, buildRunQueueKey } from "./workflowHelpers.js";
 import { runQueueService } from "./runQueueService.js";
 import type { SettlementPathway } from "./types.js";
+import {
+  decidePodStatusAfterSkipSettlement,
+  decidePodStatusAfterTriggerSettlement,
+  decideRunTerminalStatus,
+  isTerminalPodStatus,
+} from "./workflowRunDecisions.js";
 import type {
   RunContext,
   RunCreatedPayload,
@@ -375,7 +379,7 @@ class RunExecutionService {
       );
       return;
     }
-    if (TERMINAL_POD_STATUSES.has(instance.status)) {
+    if (isTerminalPodStatus(instance.status)) {
       return;
     }
     this.updateAndEmitPodInstanceStatus(runContext, podId, "running");
@@ -429,22 +433,14 @@ class RunExecutionService {
     );
     if (!updated) return;
 
-    if (
-      !isAllPathwaysSettled(
-        updated.autoPathwaySettled,
-        updated.directPathwaySettled,
-      )
-    )
-      return;
-    if (NEVER_TRIGGERED_STATUSES.has(updated.status)) return;
-
     const key = buildRunQueueKey(runContext.runId, podId);
-    if (runQueueService.getQueueSize(key) > 0) {
-      // 佇列中還有待處理項目，不提前標記 completed，等佇列消化完再說
-      return;
-    }
+    const nextStatus = decidePodStatusAfterTriggerSettlement(
+      updated,
+      runQueueService.getQueueSize(key),
+    );
+    if (!nextStatus) return;
 
-    this.updateAndEmitPodInstanceStatus(runContext, podId, "completed", {
+    this.updateAndEmitPodInstanceStatus(runContext, podId, nextStatus, {
       evaluateRun: true,
     });
   }
@@ -460,24 +456,14 @@ class RunExecutionService {
       pathway,
       "settleAndSkipPath",
     );
-    if (
-      !updated ||
-      !isAllPathwaysSettled(
-        updated.autoPathwaySettled,
-        updated.directPathwaySettled,
-      )
-    )
-      return;
+    if (!updated) return;
 
-    if (NEVER_TRIGGERED_STATUSES.has(updated.status)) {
-      this.updateAndEmitPodInstanceStatus(runContext, podId, "skipped", {
-        evaluateRun: true,
-      });
-    } else {
-      this.updateAndEmitPodInstanceStatus(runContext, podId, "completed", {
-        evaluateRun: true,
-      });
-    }
+    const nextStatus = decidePodStatusAfterSkipSettlement(updated);
+    if (!nextStatus) return;
+
+    this.updateAndEmitPodInstanceStatus(runContext, podId, nextStatus, {
+      evaluateRun: true,
+    });
   }
 
   /**
@@ -641,7 +627,7 @@ class RunExecutionService {
       status === "running"
         ? new Date().toISOString()
         : (updatedInstance.triggeredAt ?? undefined);
-    const isTerminal = TERMINAL_POD_STATUSES.has(status);
+    const isTerminal = isTerminalPodStatus(status);
     const completedAt = isTerminal
       ? new Date().toISOString()
       : (updatedInstance.completedAt ?? undefined);
@@ -748,22 +734,7 @@ class RunExecutionService {
     const instances = runStore.getPodInstancesByRunId(runId);
     if (instances.length === 0) return;
 
-    const hasError = instances.some((i) => i.status === "error");
-    const hasInProgress = instances.some((i) =>
-      IN_PROGRESS_STATUSES.has(i.status),
-    );
-    const allDone = instances.every(
-      (i) => i.status === "completed" || i.status === "skipped",
-    );
-
-    let newStatus: "completed" | "error" | null = null;
-
-    if (allDone) {
-      newStatus = "completed";
-    } else if (hasError && !hasInProgress) {
-      newStatus = "error";
-    }
-
+    const newStatus = decideRunTerminalStatus(instances);
     if (!newStatus) return;
 
     runStore.updateRunStatus(runId, newStatus);

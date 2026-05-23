@@ -127,4 +127,41 @@ describe("SummaryService", () => {
       success: true,
     });
   });
+
+  it("AI 摘要失敗且無 persisted summary 時應 fallback 到最近一則 assistant 訊息", async () => {
+    executeDisposableChatMock.mockResolvedValue({
+      success: false,
+      error: "provider down",
+    });
+
+    const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "trigger");
+    runStore.createPodInstance(run.id, SOURCE_POD_ID);
+    runStore.upsertRunMessage(run.id, SOURCE_POD_ID, {
+      id: "00000000-0000-0000-0000-000000000001",
+      role: "user",
+      content: "使用者訊息",
+      timestamp: "2026-05-22T10:00:00.000Z",
+    });
+    runStore.upsertRunMessage(run.id, SOURCE_POD_ID, {
+      id: "00000000-0000-0000-0000-000000000002",
+      role: "assistant",
+      content: "最後 assistant 訊息",
+      timestamp: "2026-05-22T10:00:01.000Z",
+    });
+
+    const result = await summaryService.generateSummaryForTarget(
+      CANVAS_ID,
+      SOURCE_POD_ID,
+      TARGET_POD_ID,
+      "claude",
+      "sonnet",
+      makeRunContext(run.id),
+    );
+
+    expect(result).toEqual({
+      targetPodId: TARGET_POD_ID,
+      summary: "最後 assistant 訊息",
+      success: true,
+    });
+  });
 });

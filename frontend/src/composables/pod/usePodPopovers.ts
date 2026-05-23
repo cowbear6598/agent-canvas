@@ -8,9 +8,12 @@ interface UsePodPopoversReturn {
   showMcpPopover: Ref<boolean>;
   mcpAnchorRect: Ref<DOMRect | null>;
   handleMcpClick: (event: MouseEvent) => void;
+  closeMcpPopover: () => void;
   showThinkingPopover: Ref<boolean>;
   thinkingAnchorRect: Ref<DOMRect | null>;
   handleThinkingClick: (event: MouseEvent) => void;
+  closeThinkingPopover: () => void;
+  closeAllPopovers: () => void;
 }
 
 /**
@@ -40,9 +43,14 @@ export function usePodPopovers(): UsePodPopoversReturn {
   const showMcpPopover = ref(false);
   const mcpAnchorRect = ref<DOMRect | null>(null);
 
+  const closeMcpPopover = (): void => {
+    showMcpPopover.value = false;
+    mcpAnchorRect.value = null;
+  };
+
   const handleMcpClick = (event: MouseEvent): void => {
     if (showMcpPopover.value) {
-      showMcpPopover.value = false;
+      closeMcpPopover();
       return;
     }
     mcpAnchorRect.value = (
@@ -54,15 +62,26 @@ export function usePodPopovers(): UsePodPopoversReturn {
   const showThinkingPopover = ref(false);
   const thinkingAnchorRect = ref<DOMRect | null>(null);
 
+  const closeThinkingPopover = (): void => {
+    showThinkingPopover.value = false;
+    thinkingAnchorRect.value = null;
+  };
+
   const handleThinkingClick = (event: MouseEvent): void => {
     if (showThinkingPopover.value) {
-      showThinkingPopover.value = false;
+      closeThinkingPopover();
       return;
     }
     thinkingAnchorRect.value = (
       event.currentTarget as HTMLElement
     ).getBoundingClientRect();
     showThinkingPopover.value = true;
+  };
+
+  const closeAllPopovers = (): void => {
+    closePluginPopover();
+    closeMcpPopover();
+    closeThinkingPopover();
   };
 
   return {
@@ -73,8 +92,11 @@ export function usePodPopovers(): UsePodPopoversReturn {
     showMcpPopover,
     mcpAnchorRect,
     handleMcpClick,
+    closeMcpPopover,
     showThinkingPopover,
     thinkingAnchorRect,
     handleThinkingClick,
+    closeThinkingPopover,
+    closeAllPopovers,
   };
 }

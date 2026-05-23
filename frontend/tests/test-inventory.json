@@ -6,73 +6,11 @@
     "F1",
     "F2",
     "F7",
-    "F8"
+    "F8",
+    "F4",
+    "F6"
   ],
   "userflowRewriteCandidates": [
-    {
-      "path": "frontend/tests/business-logic/components/pod/CanvasPod.pluginPopover.test.ts",
-      "markers": [
-        "vue-mount",
-        "css-class",
-        "component-state"
-      ],
-      "reason": "驗證 CanvasPod mount 後 popover class/state 對 viewport offset 的反應，應改寫成使用者在畫布操作 pod plugin popover 的流程。"
-    },
-    {
-      "path": "frontend/tests/business-logic/components/pod/PluginPopover.test.ts",
-      "markers": [
-        "vue-mount",
-        "css-class",
-        "mock-call"
-      ],
-      "reason": "以 component mount、loading/class 與 store mock 為主，應改寫成切換 plugin 與 background refresh 的使用流程。"
-    },
-    {
-      "path": "frontend/tests/business-logic/components/settings/ManagedPluginModal.test.ts",
-      "markers": [
-        "vue-mount",
-        "css-class",
-        "mock-call"
-      ],
-      "reason": "以 drag UI mount 與 store.reorder mock 呼叫為主，應改寫成管理者排序 plugin 的流程驗證。"
-    },
-    {
-      "path": "frontend/tests/business-logic/components/settings/OpencodeSettingsPanel.test.ts",
-      "markers": [
-        "vue-mount",
-        "css-class",
-        "mock-call"
-      ],
-      "reason": "以按鈕 mount、CSS/disabled 狀態與 provider reload mock 為主，應改寫成重啟 provider 後清單更新的流程。"
-    },
-    {
-      "path": "frontend/tests/business-logic/composables/websocket/useCanvasWebSocketAction.test.ts",
-      "markers": [
-        "mock-call"
-      ],
-      "reason": "主要驗證 requestEvent/responseEvent、canvasId 注入與 toast mock，缺少具體使用者畫布行為。"
-    },
-    {
-      "path": "frontend/tests/business-logic/composables/websocket/useSendCanvasAction.test.ts",
-      "markers": [
-        "mock-call"
-      ],
-      "reason": "主要驗證 WebSocket request mock 被如何呼叫，應改寫到具體 canvas action userflow。"
-    },
-    {
-      "path": "frontend/tests/business-logic/composables/websocket/useWebSocketErrorHandler.test.ts",
-      "markers": [
-        "mock-call"
-      ],
-      "reason": "主要驗證 toast 與 sanitizer mock 呼叫，應併入實際失敗流程或抽出 sanitizer 純邏輯。"
-    },
-    {
-      "path": "frontend/tests/integration/websocket-api/createWebSocketRequest.test.ts",
-      "markers": [
-        "mock-call"
-      ],
-      "reason": "大量斷言集中在 emit/on/off/timeout mock 呼叫，應以產品 store 行為驗證 WebSocket request contract。"
-    },
     {
       "path": "frontend/tests/business-logic/stores/chat/chatConnectionActions.test.ts",
       "markers": [
@@ -294,41 +232,48 @@
   ],
   "inventory": [
     {
-      "path": "frontend/tests/business-logic/components/pod/CanvasPod.pluginPopover.test.ts",
-      "currentCategory": "component-behavior",
-      "decision": "rewrite",
-      "mapsTo": [
-        "F2"
-      ],
-      "reason": "Vue mount 驅動 CanvasPod popover，價值在使用者開啟 popover 後 viewport offset 關閉行為，應改成 canvas/pod userflow。"
-    },
-    {
-      "path": "frontend/tests/business-logic/components/pod/PluginPopover.test.ts",
-      "currentCategory": "component-behavior",
-      "decision": "rewrite",
+      "path": "frontend/tests/userflows/canvas/canvasPodInteractionsFlow.test.ts",
+      "currentCategory": "userflow",
+      "decision": "keep",
       "mapsTo": [
         "F2",
-        "F7"
+        "F4"
       ],
-      "reason": "目前聚焦 component mount 與本地 draft/cache，應改寫成使用者切換 plugin、背景 refresh 不覆蓋選擇的流程。"
+      "reason": "Vue mount 驅動 CanvasPod popover，價值在使用者開啟 popover 後 viewport offset 關閉行為，應改成 canvas/pod userflow。 本輪已移入 userflow 測試，保留可觀察流程結果而非純 mount/mock 細節。",
+      "rewrittenFrom": "frontend/tests/business-logic/components/pod/CanvasPod.pluginPopover.test.ts"
+    },
+    {
+      "path": "frontend/tests/userflows/canvas/podPluginPopoverFlow.test.ts",
+      "currentCategory": "userflow",
+      "decision": "keep",
+      "mapsTo": [
+        "F2",
+        "F7",
+        "F4"
+      ],
+      "reason": "目前聚焦 component mount 與本地 draft/cache，應改寫成使用者切換 plugin、背景 refresh 不覆蓋選擇的流程。 本輪已移入 userflow 測試，保留可觀察流程結果而非純 mount/mock 細節。",
+      "rewrittenFrom": "frontend/tests/business-logic/components/pod/PluginPopover.test.ts"
     },
     {
       "path": "frontend/tests/business-logic/components/settings/ManagedPluginModal.test.ts",
       "currentCategory": "component-behavior",
-      "decision": "rewrite",
+      "decision": "delete",
       "mapsTo": [
-        "F7"
+        "F4"
       ],
-      "reason": "拖曳排序只檢查 store 呼叫與 busy guard，應改成管理者排序 plugin 的可觀察流程。"
+      "reason": "拖曳排序只檢查 store 呼叫與 busy guard，應改成管理者排序 plugin 的可觀察流程。 本輪二次審核判定剩餘價值集中在 mock call count 或 helper 實作細節，無獨立產品規則，已刪除。",
+      "deletedIn": "P3.A"
     },
     {
-      "path": "frontend/tests/business-logic/components/settings/OpencodeSettingsPanel.test.ts",
-      "currentCategory": "component-behavior",
-      "decision": "rewrite",
+      "path": "frontend/tests/userflows/settings/opencodeSettingsFlow.test.ts",
+      "currentCategory": "userflow",
+      "decision": "keep",
       "mapsTo": [
-        "F7"
+        "F7",
+        "F4"
       ],
-      "reason": "按鈕 mount 測試依賴 mock 與畫面片段，應改成重啟 provider 後清單重載的使用流程。"
+      "reason": "按鈕 mount 測試依賴 mock 與畫面片段，應改成重啟 provider 後清單重載的使用流程。 本輪已移入 userflow 測試，保留可觀察流程結果而非純 mount/mock 細節。",
+      "rewrittenFrom": "frontend/tests/business-logic/components/settings/OpencodeSettingsPanel.test.ts"
     },
     {
       "path": "frontend/tests/business-logic/composables/canvas/useCanvasProgressTasks.test.ts",
@@ -490,11 +435,12 @@
     {
       "path": "frontend/tests/business-logic/composables/websocket/useCanvasWebSocketAction.test.ts",
       "currentCategory": "service-contract",
-      "decision": "rewrite",
+      "decision": "delete",
       "mapsTo": [
-        "F7"
+        "F4"
       ],
-      "reason": "多數斷言集中在 request/response event 與 toast mock，應收斂到具體 canvas 行為的 userflow。"
+      "reason": "多數斷言集中在 request/response event 與 toast mock，應收斂到具體 canvas 行為的 userflow。 本輪二次審核判定剩餘價值集中在 mock call count 或 helper 實作細節，無獨立產品規則，已刪除。",
+      "deletedIn": "P3.A"
     },
     {
       "path": "frontend/tests/business-logic/composables/websocket/useConnectionPath.test.ts",
@@ -509,11 +455,12 @@
     {
       "path": "frontend/tests/business-logic/composables/websocket/useSendCanvasAction.test.ts",
       "currentCategory": "service-contract",
-      "decision": "rewrite",
+      "decision": "delete",
       "mapsTo": [
-        "F7"
+        "F4"
       ],
-      "reason": "目前只驗證 canvasId 注入與 WebSocket mock 呼叫，應改成具體 canvas 操作流程。"
+      "reason": "目前只驗證 canvasId 注入與 WebSocket mock 呼叫，應改成具體 canvas 操作流程。 本輪二次審核判定剩餘價值集中在 mock call count 或 helper 實作細節，無獨立產品規則，已刪除。",
+      "deletedIn": "P3.A"
     },
     {
       "path": "frontend/tests/business-logic/composables/websocket/useUnifiedEventListeners.test.ts",
@@ -527,11 +474,12 @@
     {
       "path": "frontend/tests/business-logic/composables/websocket/useWebSocketErrorHandler.test.ts",
       "currentCategory": "service-contract",
-      "decision": "rewrite",
+      "decision": "delete",
       "mapsTo": [
-        "F7"
+        "F4"
       ],
-      "reason": "主要驗證 toast mock 與 sanitizer 呼叫，應併入實際失敗流程或保留 sanitizer 的純邏輯測試。"
+      "reason": "主要驗證 toast mock 與 sanitizer 呼叫，應併入實際失敗流程或保留 sanitizer 的純邏輯測試。 本輪二次審核判定剩餘價值集中在 mock call count 或 helper 實作細節，無獨立產品規則，已刪除。",
+      "deletedIn": "P3.A"
     },
     {
       "path": "frontend/tests/userflows/integration-provider/jiraProvider.test.ts",
@@ -674,11 +622,12 @@
     {
       "path": "frontend/tests/integration/websocket-api/createWebSocketRequest.test.ts",
       "currentCategory": "service-contract",
-      "decision": "rewrite",
+      "decision": "delete",
       "mapsTo": [
-        "F7"
+        "F4"
       ],
-      "reason": "目前大量檢查 emit/on/off mock 與 timeout 細節，應以具體 store/userflow 發出的 request contract 覆蓋。"
+      "reason": "目前大量檢查 emit/on/off mock 與 timeout 細節，應以具體 store/userflow 發出的 request contract 覆蓋。 本輪二次審核判定剩餘價值集中在 mock call count 或 helper 實作細節，無獨立產品規則，已刪除。",
+      "deletedIn": "P3.A"
     },
     {
       "path": "frontend/tests/integration/websocket-api/managedMcpApi.test.ts",
@@ -757,13 +706,15 @@
     },
     {
       "path": "frontend/tests/business-logic/stores/chat/opencodeErrorHandling.test.ts",
-      "currentCategory": "mixed-ui-and-store",
-      "decision": "rewrite",
+      "currentCategory": "state-decision",
+      "decision": "keep",
       "mapsTo": [
         "F2",
-        "F7"
+        "F7",
+        "F4",
+        "F6"
       ],
-      "reason": "包含 store error 注入與 PodModelSelector disabled render，應拆成 store 規則保留、UI 狀態改 userflow。"
+      "reason": "保留 opencode_auth_missing 注入 transcript 的商業規則；已刪除 PodModelSelector disabled class/title 的純 UI mount 斷言。"
     },
     {
       "path": "frontend/tests/business-logic/stores/chat/opencodeV2ChatParity.test.ts",
@@ -1006,6 +957,100 @@
         "F8"
       ],
       "reason": "Schedule frequency/next-run 格式化與日期計算是不依賴 UI 的排程計算規則。"
+    },
+    {
+      "path": "frontend/tests/userflows/canvas/podThinkingFlow.test.ts",
+      "currentCategory": "userflow",
+      "decision": "keep",
+      "rewrittenFrom": "frontend/tests/business-logic/components/pod/PodThinkingSlot.test.ts",
+      "mapsTo": [
+        "F4",
+        "F6"
+      ],
+      "reason": "Thinking level 水位是 pod 上可見狀態，已移入 userflow 分類保留模型 thinking level 顯示規則。"
+    },
+    {
+      "path": "frontend/tests/userflows/canvas/thinkingPopoverFlow.test.ts",
+      "currentCategory": "userflow",
+      "decision": "keep",
+      "rewrittenFrom": "frontend/tests/business-logic/components/pod/ThinkingPopover.test.ts",
+      "mapsTo": [
+        "F4",
+        "F6"
+      ],
+      "reason": "Thinking level popover 高階選項在上方是使用者選擇流程的一部分，已移入 userflow 分類。"
+    },
+    {
+      "path": "frontend/tests/business-logic/composables/events/runEventHandlers.test.ts",
+      "currentCategory": "store-behavior",
+      "decision": "keep",
+      "mapsTo": [
+        "F6"
+      ],
+      "reason": "Run chat event 只應更新目前開啟的 run modal，且 RUN_DELETED 錯誤不得誤刪本地 run，屬流程狀態規則。"
+    },
+    {
+      "path": "frontend/tests/business-logic/lib/podDividerPath.test.ts",
+      "currentCategory": "data-transform",
+      "decision": "keep",
+      "mapsTo": [
+        "F6"
+      ],
+      "reason": "Pod divider path 必須對相同 pod 穩定、不同 pod 分歧並維持端點規則，是可視分隔線資料轉換規則。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/connectionGraphHelpers.test.ts",
+      "currentCategory": "state-decision",
+      "decision": "keep",
+      "mapsTo": [
+        "F6"
+      ],
+      "reason": "Connection graph role 與 workflow running 判斷支援連線流程，不依賴 UI。"
+    },
+    {
+      "path": "frontend/tests/business-logic/stores/connectionPayloadMappers.test.ts",
+      "currentCategory": "data-transform",
+      "decision": "keep",
+      "mapsTo": [
+        "F6"
+      ],
+      "reason": "Connection payload normalize 與 response mapping 保護前端接收後端事件後的連線狀態規則。"
+    },
+    {
+      "path": "frontend/tests/userflows/canvas/connectionKeyboardFlow.test.ts",
+      "currentCategory": "userflow",
+      "decision": "keep",
+      "mapsTo": [
+        "F4",
+        "F6"
+      ],
+      "reason": "使用者選取 connection 後按 Delete 刪除，且文字輸入 Backspace 不誤刪，是可觀察畫布鍵盤流程。"
+    },
+    {
+      "path": "frontend/tests/userflows/chat/chatUserFlow.test.ts",
+      "currentCategory": "userflow",
+      "decision": "keep",
+      "mapsTo": [
+        "F4",
+        "F6"
+      ],
+      "reason": "使用者送出聊天訊息後 optimistic typing、串流完成與錯誤訊息呈現皆為可觀察聊天流程。"
     }
-  ]
+  ],
+  "inventoryAudit": {
+    "checkedAt": "2026-05-23",
+    "staleInventoryPaths": [],
+    "deletedInventoryPaths": [],
+    "newlyClassifiedTestPaths": [
+      "frontend/tests/business-logic/components/pod/PodThinkingSlot.test.ts",
+      "frontend/tests/business-logic/components/pod/ThinkingPopover.test.ts",
+      "frontend/tests/business-logic/composables/events/runEventHandlers.test.ts",
+      "frontend/tests/business-logic/lib/podDividerPath.test.ts",
+      "frontend/tests/business-logic/stores/connectionGraphHelpers.test.ts",
+      "frontend/tests/business-logic/stores/connectionPayloadMappers.test.ts",
+      "frontend/tests/userflows/canvas/connectionKeyboardFlow.test.ts",
+      "frontend/tests/userflows/chat/chatUserFlow.test.ts"
+    ],
+    "note": "本輪比對 inventory path 與實際 frontend/tests 測試檔，未發現已刪除但仍列入 inventory 的檔案；新增未分類檔已補入 inventory。"
+  }
 }

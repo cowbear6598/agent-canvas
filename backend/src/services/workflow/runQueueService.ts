@@ -4,6 +4,7 @@ import type { TriggerStrategy, ExecutionServiceMethods } from "./types.js";
 import type { RunContext } from "../../types/run.js";
 import { LazyInitializable } from "./lazyInitializable.js";
 import { buildRunQueueKey } from "./workflowHelpers.js";
+import { decideRunQueueSettlement } from "./workflowRunDecisions.js";
 import { logger } from "../../utils/logger.js";
 
 const MAX_QUEUE_SIZE = 50;
@@ -90,15 +91,17 @@ class RunQueueService extends LazyInitializable<RunQueueServiceDeps> {
     runContext: RunContext,
   ): Promise<void> {
     const key = buildRunQueueKey(runContext.runId, targetPodId);
+    const decision = decideRunQueueSettlement(
+      this.deps.hasActiveStream(runContext.runId, targetPodId),
+      this.getQueueSize(key),
+    );
 
-    if (this.deps.hasActiveStream(runContext.runId, targetPodId)) {
+    if (decision !== "process-next") {
       return;
     }
 
     const item = this.dequeue(key);
-    if (!item) {
-      return;
-    }
+    if (!item) return;
 
     const strategy = this.getStrategy(item.triggerMode);
 

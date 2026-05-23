@@ -21,6 +21,7 @@ import {
   isAutoTriggerable,
   resolveSettlementPathway,
 } from "./workflowHelpers.js";
+import { decideSummaryFallback } from "./workflowRunDecisions.js";
 import { LazyInitializable } from "./lazyInitializable.js";
 import type { RunContext } from "../../types/run.js";
 import {
@@ -112,7 +113,16 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
       runContext,
     );
 
-    if (summaryResult.success) {
+    const fallback = summaryResult.success
+      ? null
+      : this.getLastAssistantFallback(sourcePodId, runContext);
+    const decision = decideSummaryFallback(
+      summaryResult.success,
+      fallback?.content ?? null,
+      "無法生成摘要",
+    );
+
+    if (decision.kind === "summary") {
       resolvedDelegate.onSummaryComplete(canvasId, sourcePodId, pathway);
       return {
         content: summaryResult.summary,
@@ -122,16 +132,18 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
       };
     }
 
-    const fallback = this.getLastAssistantFallback(sourcePodId, runContext);
-
-    if (!fallback) {
-      resolvedDelegate.onSummaryFailed(canvasId, sourcePodId, "無法生成摘要");
+    if (decision.kind === "failed") {
+      resolvedDelegate.onSummaryFailed(
+        canvasId,
+        sourcePodId,
+        decision.errorMessage,
+      );
       return null;
     }
 
     resolvedDelegate.onSummaryComplete(canvasId, sourcePodId, pathway);
     // fallback 路徑沒有 resolvedModel（直接取原始訊息，未經 disposableChat）
-    return fallback;
+    return { content: decision.content, isSummarized: false };
   }
 
   private triggerAutoConnections(

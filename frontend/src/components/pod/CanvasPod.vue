@@ -21,6 +21,7 @@ import { usePodSchedule } from "@/composables/pod/usePodSchedule";
 import { usePodAnchorDrag } from "@/composables/pod/usePodAnchorDrag";
 import { usePodFileDrop } from "@/composables/pod/usePodFileDrop";
 import { usePodPopovers } from "@/composables/pod/usePodPopovers";
+import { useCanvasPodState } from "@/composables/pod/useCanvasPodState";
 import { useToast } from "@/composables/useToast";
 import { useI18n } from "vue-i18n";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
@@ -37,6 +38,7 @@ import ScheduleModal from "@/components/canvas/ScheduleModal.vue";
 import PluginPopover from "@/components/pod/PluginPopover.vue";
 import McpPopover from "@/components/pod/McpPopover.vue";
 import ThinkingPopover from "@/components/pod/ThinkingPopover.vue";
+import { createPodDividerPath } from "@/lib/podDividerPath";
 
 const props = defineProps<{
   pod: Pod;
@@ -57,91 +59,20 @@ const { toast } = useToast();
 const { sendCanvasAction } = useSendCanvasAction();
 const { t } = useI18n();
 
-// ---- Provider 未知 fallback 判斷 ----
 const providerCapabilityStore = useProviderCapabilityStore();
-
-/**
- * 當 store 已載入（loaded = true）且 provider 不在已知清單中，
- * 視為未知 provider，顯示 fallback UI 並封鎖對話入口。
- * loaded 為 false 時（metadata 尚未抵達）跳過判斷，避免時序誤判。
- */
-const isUnknownProvider = computed(
-  () =>
-    providerCapabilityStore.loaded &&
-    !providerCapabilityStore.isKnownProvider(props.pod.provider),
-);
 
 const isActive = computed(() => props.pod.id === podStore.activePodId);
 const boundRepositoryNote = computed(
   () => repositoryStore.getNotesByPodId(props.pod.id)[0],
 );
-const isSourcePod = computed(() => connectionStore.isSourcePod(props.pod.id));
-const hasUpstreamConnection = computed(() =>
-  connectionStore.hasUpstreamConnections(props.pod.id),
-);
-const showScheduleButton = computed(
-  () => isSourcePod.value || !hasUpstreamConnection.value,
-);
 const currentModel = computed(() => props.pod.providerConfig.model);
 const goalTodoCount = computed(() => props.pod.goal?.todos.length ?? 0);
 
-/**
- * Divider wavy path：用 pod.id 當 seed 生成獨特但穩定的手繪波形。
- * 同一個 pod 每次渲染拿到一樣的路徑（id 是 PRNG seed），不同 pod 拿到不一樣的波形。
- * viewBox 為 0 0 200 6；端點 y ≈ 3（中線），peak/valley 控制點在 0.2-1.1 / 4.9-5.8 之間隨機抖動。
- */
-function hashPodIdToSeed(id: string): number {
-  let hash = 2166136261;
-  for (let i = 0; i < id.length; i++) {
-    hash ^= id.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
-
-function createSeededRandom(seed: number): () => number {
-  let state = seed || 1;
-  return () => {
-    state = (state + 0x6d2b79f5) | 0;
-    let mixedState = Math.imul(state ^ (state >>> 15), 1 | state);
-    mixedState =
-      (mixedState +
-        Math.imul(mixedState ^ (mixedState >>> 7), 61 | mixedState)) ^
-      mixedState;
-    return ((mixedState ^ (mixedState >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-const dividerPath = computed(() => {
-  const rng = createSeededRandom(hashPodIdToSeed(props.pod.id));
-  const parts: string[] = [];
-
-  parts.push(`M0,${(2.7 + rng() * 0.6).toFixed(2)}`);
-
-  const SEGMENTS = 20;
-  const SEG_WIDTH = 10;
-  for (let i = 0; i < SEGMENTS; i++) {
-    const ctrlX = i * SEG_WIDTH + SEG_WIDTH / 2;
-    const endX = (i + 1) * SEG_WIDTH;
-    const isPeak = i % 2 === 0;
-    const ctrlY = isPeak ? 0.2 + rng() * 0.9 : 4.9 + rng() * 0.9;
-    const endY = 2.7 + rng() * 0.6;
-    parts.push(`Q${ctrlX},${ctrlY.toFixed(2)} ${endX},${endY.toFixed(2)}`);
-  }
-
-  return parts.join(" ");
-});
+const dividerPath = computed(() => createPodDividerPath(props.pod.id));
 
 // isElementSelected 內部使用 selectedElementSet（Set<string>），O(1) 查找
 const isSelected = computed(() =>
   selectionStore.isElementSelected("pod", props.pod.id),
-);
-
-// 依 provider 動態套用漸層 class，方便未來擴增更多 provider
-const podProviderClasses = computed(() =>
-  providerCapabilityStore.allowedProviders.has(props.pod.provider)
-    ? `pod-provider-${props.pod.provider}`
-    : "",
 );
 
 const emit = defineEmits<{
@@ -156,13 +87,19 @@ const emit = defineEmits<{
 const isEditing = ref(false);
 const showDeleteDialog = ref(false);
 
-const isDownstreamChainPod = computed(
-  () =>
-    connectionStore.hasUpstreamConnections(props.pod.id) &&
-    !connectionStore.isSourcePod(props.pod.id),
-);
-
 const computedPodId = toRef(() => props.pod.id);
+
+const {
+  isUnknownProvider,
+  isDownstreamChainPod,
+  showScheduleButton,
+  podProviderClasses,
+  isFileDropDisabled,
+} = useCanvasPodState({
+  pod: () => props.pod,
+  providerCapabilityStore,
+  connectionStore,
+});
 
 const {
   showScheduleModal,
@@ -196,15 +133,6 @@ const { handleNoteDrop, handleNoteRemove } = usePodNoteBinding(computedPodId, {
 // Plugin notch 相關狀態
 const pluginActiveCount = computed(() => props.pod.pluginIds?.length ?? 0);
 
-/**
- * 以下任一為真時禁用 file drop：
- * - 為 chain 下游 pod（target），使用者已決策由來源觸發
- * - 未知 provider，封鎖所有對話入口
- */
-const isFileDropDisabled = computed(
-  () => isDownstreamChainPod.value || isUnknownProvider.value,
-);
-
 const {
   isDragOver,
   handleDragEnter,
@@ -236,20 +164,23 @@ const {
   showMcpPopover,
   mcpAnchorRect,
   handleMcpClick,
+  closeMcpPopover,
   showThinkingPopover,
   thinkingAnchorRect,
   handleThinkingClick,
+  closeThinkingPopover,
+  closeAllPopovers,
 } = usePodPopovers();
 
 watch([isDragging, isBatchDragging], ([isSingleDragging, isBatchDragging]) => {
   if (isSingleDragging || isBatchDragging) {
-    closePluginPopover();
+    closeAllPopovers();
   }
 });
 
 watch(
   () => [viewportStore.offset.x, viewportStore.offset.y, viewportStore.zoom],
-  closePluginPopover,
+  closeAllPopovers,
 );
 
 // MCP notch 相關狀態
@@ -595,7 +526,7 @@ const handleContextMenu = (e: MouseEvent): void => {
         :pod-id="pod.id"
         :anchor-rect="mcpAnchorRect"
         :provider="pod.provider"
-        @close="showMcpPopover = false"
+        @close="closeMcpPopover"
       />
 
       <ThinkingPopover
@@ -606,7 +537,7 @@ const handleContextMenu = (e: MouseEvent): void => {
         :current-level="pod.providerConfig.thinkingLevel"
         :anchor-rect="thinkingAnchorRect"
         @select="handleThinkingLevelChange"
-        @close="showThinkingPopover = false"
+        @close="closeThinkingPopover"
       />
     </div>
   </div>

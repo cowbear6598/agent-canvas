@@ -46,12 +46,32 @@ export interface ResolvedModelResult {
   didFallback: boolean;
 }
 
+export function isModelSupportedByProvider(
+  provider: ProviderName,
+  requestedModel: string,
+): boolean {
+  if (provider === "opencode") {
+    return requestedModel.trim().length > 0;
+  }
+
+  return getProvider(provider).metadata.availableModelValues.has(requestedModel);
+}
+
+export function assertModelSupportedByProvider(
+  provider: ProviderName,
+  requestedModel: string,
+): void {
+  if (!isModelSupportedByProvider(provider, requestedModel)) {
+    throw new Error(`Provider ${provider} 不支援此 model`);
+  }
+}
+
 /**
  * 驗證傳入的 model 是否在該 provider 的合法清單內。
  * 不合法時 fallback 到 provider 預設模型。
  *
- * connectionStore.create、connectionStore.update 與 disposableChatService
- * 均呼叫此 helper，避免三處重複相同的驗證邏輯。
+ * 僅供讀取舊資料與外部 provider 執行邊界使用。寫入路徑應改用
+ * assertModelSupportedByProvider，在 handler/service 邊界直接拒絕不合法值。
  */
 export function resolveModelWithFallback(
   provider: ProviderName,

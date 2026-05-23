@@ -28,7 +28,7 @@ interface OpencodeAliasesListPayload {
 interface OpencodeAliasesListResultPayload {
   requestId?: string;
   success?: boolean;
-  items?: OpencodeModelAlias[];
+  items: unknown;
 }
 
 interface OpencodeAliasesCreatePayload {
@@ -75,7 +75,7 @@ interface OpencodeAliasesReorderPayload {
 interface OpencodeAliasesReorderResultPayload {
   requestId?: string;
   success?: boolean;
-  items?: OpencodeModelAlias[];
+  items: unknown;
 }
 
 interface OpencodeAliasesRefreshPresetsPayload {
@@ -96,6 +96,16 @@ interface OpencodeServerRestartPayload {
 interface OpencodeServerRestartResultPayload {
   requestId?: string;
   success?: boolean;
+}
+
+function requireAliasItems(
+  result: { items: unknown },
+  actionName: string,
+): OpencodeModelAlias[] {
+  if (!Array.isArray(result.items)) {
+    throw new Error(`${actionName}失敗：後端未回傳 items`);
+  }
+  return result.items;
 }
 
 // ─── API 函式 ─────────────────────────────────────────────────────────────────
@@ -129,7 +139,7 @@ export async function listOpencodeProviders(): Promise<OpencodeProviderListResul
       ...p,
       models: Array.isArray(p.models)
         ? p.models
-        : Object.values(p.models ?? {}),
+        : Object.values(p.models),
     })),
     default: raw.default,
     connected: raw.connected,
@@ -149,7 +159,7 @@ export async function listAliases(): Promise<OpencodeModelAlias[]> {
     payload: {},
   });
 
-  return result.items ?? [];
+  return requireAliasItems(result, "載入 opencode model 別稱");
 }
 
 /**
@@ -248,7 +258,7 @@ export async function reorderAliases(
     payload: { orderedIds: idsInOrder },
   });
 
-  return result.items ?? [];
+  return requireAliasItems(result, "重排 opencode model 別稱");
 }
 
 /**

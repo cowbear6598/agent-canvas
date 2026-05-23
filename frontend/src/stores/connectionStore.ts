@@ -4,9 +4,7 @@ import type {
   AnchorPosition,
   Connection,
   ConnectionStatus,
-  DecideStatus,
   DraggingConnection,
-  TriggerMode,
   WorkflowRole,
 } from "@/types/connection";
 import {
@@ -43,15 +41,20 @@ import type {
   ConnectionListPayload,
   ConnectionListResultPayload,
   ConnectionUpdatePayload,
-  ConnectionPayloadItem,
 } from "@/types/websocket";
 
+import { castHandler, shouldUpdateConnection } from "./connectionStoreHelpers";
 import {
-  castHandler,
+  getPodWorkflowRoleFromConnections,
+  isDownstreamWorkflowRunning,
+  isPodPartOfRunningWorkflow,
+} from "./connectionGraphHelpers";
+import {
+  mapConnectionUpdatedEventPayload,
   normalizeConnection,
-  shouldUpdateConnection,
-  runBFS,
-} from "./connectionStoreHelpers";
+  normalizeConnectionListPayload,
+  normalizeCreatedConnectionEvent,
+} from "./connectionPayloadMappers";
 
 type WorkflowHandlers = ReturnType<typeof createWorkflowEventHandlers>;
 
@@ -127,67 +130,8 @@ export const useConnectionStore = defineStore("connection", () => {
   );
 
   const getPodWorkflowRole = computed(() => (podId: string): WorkflowRole => {
-    const hasUpstream = connections.value.some(
-      (connection) => connection.targetPodId === podId,
-    );
-    const hasDownstream = connections.value.some(
-      (connection) => connection.sourcePodId === podId,
-    );
-
-    if (!hasUpstream && !hasDownstream) return "independent";
-    if (!hasUpstream && hasDownstream) return "head";
-    if (hasUpstream && !hasDownstream) return "tail";
-    return "middle";
+    return getPodWorkflowRoleFromConnections(connections.value, podId);
   });
-
-  /**
-   * 一次性建立雙向鄰接表（Map<podId, neighbors>），
-   * 供同一次 BFS 呼叫內的所有節點共用，避免每個節點都全表掃描（O(n) 建表，O(degree) 查詢）。
-   */
-  function buildBidirectionalAdjacencyMap(): Map<
-    string,
-    { neighborId: string; connection: Connection }[]
-  > {
-    const map = new Map<
-      string,
-      { neighborId: string; connection: Connection }[]
-    >();
-    for (const connection of connections.value) {
-      if (connection.sourcePodId) {
-        // 下游方向：source → target
-        const srcList = map.get(connection.sourcePodId) ?? [];
-        srcList.push({ neighborId: connection.targetPodId, connection });
-        map.set(connection.sourcePodId, srcList);
-        // 上游方向：target → source
-        const tgtList = map.get(connection.targetPodId) ?? [];
-        tgtList.push({ neighborId: connection.sourcePodId, connection });
-        map.set(connection.targetPodId, tgtList);
-      }
-    }
-    return map;
-  }
-
-  /**
-   * 一次性建立下游鄰接表（Map<podId, neighbors>），
-   * 供下游單向 BFS 共用，避免 filter 全表掃描。
-   */
-  function buildDownstreamAdjacencyMap(): Map<
-    string,
-    { neighborId: string; connection: Connection }[]
-  > {
-    const map = new Map<
-      string,
-      { neighborId: string; connection: Connection }[]
-    >();
-    for (const connection of connections.value) {
-      if (connection.sourcePodId) {
-        const list = map.get(connection.sourcePodId) ?? [];
-        list.push({ neighborId: connection.targetPodId, connection });
-        map.set(connection.sourcePodId, list);
-      }
-    }
-    return map;
-  }
 
   /**
    * 雙向 BFS 遍歷整條 Workflow 鏈（上游 + 下游），
@@ -196,12 +140,7 @@ export const useConnectionStore = defineStore("connection", () => {
    * 每次呼叫預先建立鄰接表（O(n)），BFS 查詢降為 O(degree)。
    */
   const isPartOfRunningWorkflow = computed(() => (podId: string): boolean => {
-    const adjMap = buildBidirectionalAdjacencyMap();
-    return runBFS(
-      podId,
-      (currentId) => adjMap.get(currentId) ?? [],
-      () => false,
-    );
+    return isPodPartOfRunningWorkflow(connections.value, podId);
   });
 
   /**
@@ -211,12 +150,7 @@ export const useConnectionStore = defineStore("connection", () => {
    * 每次呼叫預先建立鄰接表（O(n)），BFS 查詢降為 O(degree)。
    */
   const isWorkflowRunning = computed(() => (sourcePodId: string): boolean => {
-    const adjMap = buildDownstreamAdjacencyMap();
-    return runBFS(
-      sourcePodId,
-      (currentId) => adjMap.get(currentId) ?? [],
-      () => false,
-    );
+    return isDownstreamWorkflowRunning(connections.value, sourcePodId);
   });
 
   function findConnectionById(connectionId: string): Connection | undefined {
@@ -309,13 +243,9 @@ export const useConnectionStore = defineStore("connection", () => {
     });
 
     if (response.connections) {
-      connections.value = response.connections.map((connection) =>
-        normalizeConnection(
-          connection,
-          connection.sourcePodId
-            ? podStore.getPodById(connection.sourcePodId)?.provider
-            : undefined,
-        ),
+      connections.value = normalizeConnectionListPayload(
+        response.connections,
+        (sourcePodId) => podStore.getPodById(sourcePodId)?.provider,
       );
     }
   }
@@ -863,12 +793,7 @@ export const useConnectionStore = defineStore("connection", () => {
   function addConnectionFromEvent(
     connection: Omit<Connection, "status">,
   ): void {
-    const enrichedConnection: Connection = {
-      ...connection,
-      triggerMode: connection.triggerMode ?? "auto",
-      status: "idle" as ConnectionStatus,
-      decideStatus: "none" as DecideStatus,
-    };
+    const enrichedConnection = normalizeCreatedConnectionEvent(connection);
 
     const exists = connections.value.some(
       (existingConnection) => existingConnection.id === enrichedConnection.id,
@@ -878,68 +803,22 @@ export const useConnectionStore = defineStore("connection", () => {
     }
   }
 
-  function resolveSummaryProviderFromEvent(
-    connection: ConnectionPayloadItem,
-    existingConnection: Connection,
-  ): PodProvider | null | undefined {
-    if (connection.summaryProvider === undefined) {
-      return existingConnection.summaryProvider;
-    }
+  function updateConnectionFromEvent(
+    connection: ConnectionUpdatedPayload["connection"],
+  ): void {
+    if (!connection) return;
 
-    if (connection.summaryProvider !== null) {
-      return normalizePodProvider(connection.summaryProvider) ?? "claude";
-    }
-
-    if (!existingConnection.sourcePodId) {
-      return "claude";
-    }
-
-    const sourceProvider =
-      podStore.getPodById(existingConnection.sourcePodId)?.provider ?? "claude";
-    return normalizePodProvider(sourceProvider) ?? "claude";
-  }
-
-  function updateConnectionFromEvent(connection: ConnectionPayloadItem): void {
     const index = connections.value.findIndex(
       (existing) => existing.id === connection.id,
     );
     if (index === -1) return;
 
     const existingConnection = connections.value[index]!;
-    const enrichedConnection: Connection = {
-      ...existingConnection,
-      id: connection.id,
-      sourcePodId: connection.sourcePodId ?? existingConnection.sourcePodId,
-      sourceAnchor: connection.sourceAnchor,
-      targetPodId: connection.targetPodId,
-      targetAnchor: connection.targetAnchor,
-      triggerMode:
-        (connection.triggerMode as TriggerMode) ??
-        existingConnection.triggerMode,
-      summaryModel:
-        connection.summaryModel ??
-        existingConnection.summaryModel ??
-        DEFAULT_SUMMARY_MODEL,
-      summaryProvider: resolveSummaryProviderFromEvent(
-        connection,
-        existingConnection,
-      ),
-      // branch 欄位直接以後端回傳值覆寫（包含 undefined → 視為清空）
-      label: connection.label,
-      description: connection.description,
-      branchProvider: connection.branchProvider as PodProvider | undefined,
-      branchModel: connection.branchModel,
-      // connectionStatus 有帶值則覆寫；未帶則保留既有 status（避免 multi-input rejected 後 status 卡住）
-      status: connection.connectionStatus
-        ? (connection.connectionStatus as ConnectionStatus)
-        : existingConnection.status,
-      // decideStatus：incoming 有值則覆寫，undefined 則保留既有值
-      decideStatus:
-        connection.decideStatus !== undefined
-          ? (connection.decideStatus as DecideStatus)
-          : existingConnection.decideStatus,
-      decideReason: connection.decideReason ?? existingConnection.decideReason,
-    };
+    const enrichedConnection = mapConnectionUpdatedEventPayload(
+      connection,
+      existingConnection,
+      (sourcePodId) => podStore.getPodById(sourcePodId)?.provider,
+    );
 
     connections.value.splice(index, 1, enrichedConnection);
   }

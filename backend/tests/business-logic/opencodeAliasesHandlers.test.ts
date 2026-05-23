@@ -20,11 +20,15 @@ const {
   mockEmitToAll,
   mockBroadcastOpencodeAliasesUpdated,
   mockBroadcastProviderList,
+  mockCreateOpencodeClient,
+  mockOpencodeProviderList,
 } = vi.hoisted(() => ({
   mockEmitToConnection: vi.fn(),
   mockEmitToAll: vi.fn(),
   mockBroadcastOpencodeAliasesUpdated: vi.fn().mockResolvedValue(undefined),
   mockBroadcastProviderList: vi.fn().mockResolvedValue(undefined),
+  mockCreateOpencodeClient: vi.fn(),
+  mockOpencodeProviderList: vi.fn(),
 }));
 
 // socketService：WebSocket boundary
@@ -42,11 +46,23 @@ vi.mock("../../src/services/provider/providerListBroadcaster.js", () => ({
   broadcastProviderList: mockBroadcastProviderList,
 }));
 
+vi.mock("@opencode-ai/sdk/v2", () => ({
+  createOpencodeClient: mockCreateOpencodeClient,
+}));
+
+vi.mock("../../src/services/auth/authGuard.js", () => ({
+  authGuard: {
+    assertAccess: vi.fn(),
+  },
+}));
+
 // ─── imports ──────────────────────────────────────────────────────────────────
 
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { initTestDb, closeDb, getDb } from "../../src/database/index.js";
 import { resetStatements } from "../../src/database/statements.js";
+import { HandlerRegistry } from "../../src/handlers/registry.js";
+import { eventRouter } from "../../src/services/eventRouter.js";
 import {
   handleOpencodeAliasesList,
   handleOpencodeAliasesCreate,
@@ -61,6 +77,12 @@ import {
   WebSocketRequestEvents,
   WebSocketResponseEvents,
 } from "../../src/schemas/index.js";
+import {
+  resetOpencodeServerLauncher,
+  setOpencodeServerLauncher,
+  startOpencodeServer,
+  stopOpencodeServer,
+} from "../../src/services/provider/opencodeServer.js";
 
 // ─── 常數 ─────────────────────────────────────────────────────────────────────
 
@@ -74,12 +96,98 @@ const USED_PROVIDER_ID = "anthropic";
 const USED_MODEL_ID = "claude-3-5-sonnet";
 const USED_MODEL_VALUE = `${USED_PROVIDER_ID}/${USED_MODEL_ID}`;
 
+let settingsRegistryRegistered = false;
+
+function ensureSettingsRegistryRegistered(): void {
+  if (settingsRegistryRegistered) return;
+
+  const registry = new HandlerRegistry();
+  registry.registerGroup(opencodeSettingsHandlerGroup);
+  registry.registerToRouter();
+  settingsRegistryRegistered = true;
+}
+
+async function dispatchViaSettingsRegistry(
+  event: WebSocketRequestEvents,
+  payload: Record<string, unknown>,
+  requestId = REQUEST_ID_UUID,
+): Promise<void> {
+  ensureSettingsRegistryRegistered();
+  await eventRouter.route(CONNECTION_ID, {
+    type: event,
+    requestId,
+    payload,
+  });
+}
+
+function createFakeOpencodeProviderData(): {
+  all: unknown[];
+  default: Record<string, string>;
+  connected: string[];
+} {
+  return {
+    all: [
+      {
+        id: "anthropic",
+        name: "Anthropic",
+        models: {
+          "claude-3-5-sonnet": {
+            id: "claude-3-5-sonnet",
+            name: "Claude Sonnet",
+            capabilities: { reasoning: true },
+            variants: { medium: {} },
+            options: { variant: "medium" },
+          },
+          "claude-opus-4": {
+            id: "claude-opus-4",
+            name: "Claude Opus",
+            capabilities: { reasoning: false },
+          },
+          "claude-3-5-haiku": {
+            id: "claude-3-5-haiku",
+            name: "Claude Haiku",
+            capabilities: { reasoning: false },
+          },
+        },
+      },
+      {
+        id: "google",
+        name: "Google",
+        models: {
+          "gemini-3.5-flash-lite": {
+            id: "gemini-3.5-flash-lite",
+            name: "Gemini Flash Lite",
+            capabilities: { reasoning: false },
+          },
+        },
+      },
+      null,
+      { id: "", name: "Invalid", models: [] },
+    ],
+    default: { anthropic: "claude-3-5-sonnet" },
+    connected: ["anthropic", 123 as unknown as string, "google"],
+  };
+}
+
+function setupFakeOpencodeProviderList(data = createFakeOpencodeProviderData()): void {
+  mockOpencodeProviderList.mockResolvedValue({
+    data,
+    error: null,
+  });
+  mockCreateOpencodeClient.mockReturnValue({
+    provider: {
+      list: mockOpencodeProviderList,
+    },
+  });
+}
+
 // ─── Setup ────────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
   vi.clearAllMocks();
   resetStatements();
   initTestDb();
+  setupFakeOpencodeProviderList();
   setOpencodeThinkingPresetSnapshotFetcher(async (providerID, modelID) => ({
     ok: true,
     snapshot: {
@@ -99,8 +207,18 @@ beforeEach(() => {
 
 afterEach(() => {
   resetOpencodeThinkingPresetSnapshotFetcher();
+  stopOpencodeServer();
+  resetOpencodeServerLauncher();
   closeDb();
 });
+
+async function markOpencodeServerReady(): Promise<void> {
+  setOpencodeServerLauncher(async () => ({
+    url: "http://127.0.0.1:40999",
+    close: vi.fn(),
+  }));
+  await startOpencodeServer();
+}
 
 async function createUsedAlias(): Promise<string> {
   await handleOpencodeAliasesCreate(
@@ -214,33 +332,63 @@ describe("handleOpencodeAliasesList", () => {
   });
 });
 
+// ─── opencode:provider:list ──────────────────────────────────────────────────
+
+describe("handleOpencodeProviderList", () => {
+  it("透過真 handler registry 與 fake opencode client 回傳 sanitize 後的 provider list payload", async () => {
+    await markOpencodeServerReady();
+
+    await dispatchViaSettingsRegistry(
+      WebSocketRequestEvents.OPENCODE_PROVIDER_LIST,
+      { requestId: REQUEST_ID_UUID },
+    );
+
+    expect(mockEmitToConnection).toHaveBeenCalledOnce();
+    const [connId, event, payload] = mockEmitToConnection.mock.calls[0];
+    expect(connId).toBe(CONNECTION_ID);
+    expect(event).toBe(WebSocketResponseEvents.OPENCODE_PROVIDER_LIST_RESULT);
+    expect(payload).toMatchObject({
+      requestId: REQUEST_ID_UUID,
+      success: true,
+      default: { anthropic: "claude-3-5-sonnet" },
+      connected: ["anthropic", "google"],
+    });
+    expect(payload.all).toEqual([
+      {
+        id: "anthropic",
+        name: "Anthropic",
+        models: [
+          { id: "claude-3-5-sonnet", name: "Claude Sonnet" },
+          { id: "claude-opus-4", name: "Claude Opus" },
+          { id: "claude-3-5-haiku", name: "Claude Haiku" },
+        ],
+      },
+      {
+        id: "google",
+        name: "Google",
+        models: [
+          { id: "gemini-3.5-flash-lite", name: "Gemini Flash Lite" },
+        ],
+      },
+    ]);
+  });
+});
+
 // ─── opencode:aliases:create ──────────────────────────────────────────────────
 
 describe("handleOpencodeAliasesCreate", () => {
-  it("A1（wire-up smoke）：透過 handler group 派發 OPENCODE_ALIASES_CREATE，回應 OPENCODE_ALIASES_CREATE_RESULT success=true", async () => {
-    const handlerDef = opencodeSettingsHandlerGroup.handlers.find(
-      (handler) =>
-        handler.event === WebSocketRequestEvents.OPENCODE_ALIASES_CREATE,
-    );
-    expect(handlerDef).toBeDefined();
+  it("A1（wire-up smoke）：透過真 handler registry 派發 OPENCODE_ALIASES_CREATE，回應使用者可見 payload", async () => {
+    resetOpencodeThinkingPresetSnapshotFetcher();
+    await markOpencodeServerReady();
 
-    const { createValidatedHandler } =
-      await import("../../src/middleware/wsMiddleware.js");
-    const validatedHandler = createValidatedHandler(
-      handlerDef!.schema,
-      handlerDef!.handler as Parameters<typeof createValidatedHandler>[1],
-      handlerDef!.responseEvent,
-    );
-
-    await validatedHandler(
-      CONNECTION_ID,
+    await dispatchViaSettingsRegistry(
+      WebSocketRequestEvents.OPENCODE_ALIASES_CREATE,
       {
         requestId: REQUEST_ID_UUID,
         providerID: "anthropic",
         modelID: "claude-3-5-sonnet",
         alias: "Sonnet",
       },
-      REQUEST_ID_UUID,
     );
 
     expect(mockEmitToConnection).toHaveBeenCalledOnce();
@@ -248,32 +396,29 @@ describe("handleOpencodeAliasesCreate", () => {
     expect(connId).toBe(CONNECTION_ID);
     expect(event).toBe(WebSocketResponseEvents.OPENCODE_ALIASES_CREATE_RESULT);
     expect(payload.success).toBe(true);
+    expect(payload.requestId).toBe(REQUEST_ID_UUID);
+    expect(payload.item).toMatchObject({
+      providerID: "anthropic",
+      modelID: "claude-3-5-sonnet",
+      alias: "Sonnet",
+      thinkingLevels: ["medium"],
+      thinkingLevelLabels: { medium: "Medium" },
+      defaultThinkingLevel: "medium",
+    });
+    expect(mockCreateOpencodeClient).toHaveBeenCalledWith(
+      expect.objectContaining({ baseUrl: "http://127.0.0.1:40999" }),
+    );
   });
 
   it("A2（validation smoke）：create 非法 payload 會經過 validated handler 回傳 VALIDATION_ERROR", async () => {
-    const handlerDef = opencodeSettingsHandlerGroup.handlers.find(
-      (handler) =>
-        handler.event === WebSocketRequestEvents.OPENCODE_ALIASES_CREATE,
-    );
-    expect(handlerDef).toBeDefined();
-
-    const { createValidatedHandler } =
-      await import("../../src/middleware/wsMiddleware.js");
-    const validatedHandler = createValidatedHandler(
-      handlerDef!.schema,
-      handlerDef!.handler as Parameters<typeof createValidatedHandler>[1],
-      handlerDef!.responseEvent,
-    );
-
-    await validatedHandler(
-      CONNECTION_ID,
+    await dispatchViaSettingsRegistry(
+      WebSocketRequestEvents.OPENCODE_ALIASES_CREATE,
       {
         requestId: REQUEST_ID_UUID,
         providerID: "../anthropic",
         modelID: "claude-3-5-sonnet",
         alias: "Sonnet",
       },
-      REQUEST_ID_UUID,
     );
 
     expect(mockEmitToConnection).toHaveBeenCalledOnce();

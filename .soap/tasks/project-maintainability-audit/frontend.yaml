@@ -7,34 +7,39 @@ phases:
     parallel: false
     verification:
       - bun run style
-    done: false
+    done: true
     items:
       - id: P1.A
         title: Store 與資料流熱點盤點
         tasks:
           - id: P1.A.t1
             text: 建立前端維護性審計文件，列出 `frontend/src/stores/connectionStore.ts`、`frontend/src/stores/note/createNoteStore.ts`、`frontend/src/stores/run/runStore.ts` 的責任清單、依賴清單、外部事件入口與可拆分模組
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/MAINTAINABILITY_AUDIT.md
           - id: P1.A.t2
             text: 在審計文件中替 `connectionStore.ts` 標記 graph 查詢、workflow role 判斷、payload normalize、WebSocket listener registration、toast/error mapping 五種責任，並指定各自目標模組名稱
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/MAINTAINABILITY_AUDIT.md
           - id: P1.A.t3
             text: 在審計文件中替 note/run store 標記可保留在 Pinia 的 state mutation，以及應移到 domain helper 的資料轉換與流程決策
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/MAINTAINABILITY_AUDIT.md
       - id: P1.B
         title: Component 與 composable 邊界盤點
         tasks:
           - id: P1.B.t1
             text: 建立大型元件盤點段落，覆蓋 `CanvasPod.vue`、`OpencodeSettingsPanel.vue`、`ScheduleModal.vue` 的 template state、使用者操作、資料正規化與副作用邊界
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/MAINTAINABILITY_AUDIT.md
           - id: P1.B.t2
             text: 整理 `frontend/src/composables`、`frontend/src/composables/canvas`、`frontend/src/composables/eventHandlers`、`frontend/src/composables/websocket` 的命名重疊，提出保留路徑與搬移規則
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/MAINTAINABILITY_AUDIT.md
 
   - id: P2
     title: 前端低風險重構
@@ -42,38 +47,55 @@ phases:
     verification:
       - bun run style
       - bun run test
-    done: false
+    done: true
     items:
       - id: P2.A
         title: Connection Store 模組化
         tasks:
           - id: P2.A.t1
             text: 從 `frontend/src/stores/connectionStore.ts` 抽出 graph traversal 與 workflow role 判斷到明確命名的 helper 模組，保留原 store 的公開 API
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/src/stores/connectionGraphHelpers.ts
+              - frontend/src/stores/connectionStore.ts
+              - frontend/src/stores/connectionStoreHelpers.ts
           - id: P2.A.t2
             text: 從 `connectionStore.ts` 抽出 connection payload normalize 與 response event payload mapping，讓 WebSocket 回應資料轉換集中在單一模組
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/src/stores/connectionPayloadMappers.ts
+              - frontend/src/stores/connectionStore.ts
+              - frontend/src/stores/connectionStoreHelpers.ts
           - id: P2.A.t3
             text: 替抽出的 helper 保留或新增商業邏輯測試，測試名稱對應 workflow role、graph traversal、payload normalize 規則，不驗證 Pinia 初始欄位鏡射
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/stores/connectionGraphHelpers.test.ts
+              - frontend/tests/business-logic/stores/connectionPayloadMappers.test.ts
+              - frontend/src/stores/connectionStore.ts
+              - frontend/src/stores/connectionGraphHelpers.ts
       - id: P2.B
         title: 大型 Pod 元件責任下放
         tasks:
           - id: P2.B.t1
             text: 從 `CanvasPod.vue` 抽出 provider 狀態判斷、file drop disabled 規則、plugin/MCP/thinking popover state 到既有或新建 composable，component 保留 template wiring 與事件轉接
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/src/components/pod/CanvasPod.vue
+              - frontend/src/composables/pod/useCanvasPodState.ts
+              - frontend/src/composables/pod/usePodPopovers.ts
           - id: P2.B.t2
             text: 將 `CanvasPod.vue` 內與 pod id seeded path 相關的資料轉換移到 `frontend/src/lib` 或 composable，並以純資料轉換測試覆蓋穩定輸出規則
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/src/components/pod/CanvasPod.vue
+              - frontend/src/lib/podDividerPath.ts
+              - frontend/tests/business-logic/lib/podDividerPath.test.ts
           - id: P2.B.t3
             text: 更新既有 CanvasPod 相關測試，只保留使用者開啟 popover、拖放檔案、未知 provider 阻擋互動等流程測試，刪除只檢查 class 或 mount state 的案例
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/components/pod/CanvasPod.pluginPopover.test.ts
 
   - id: P3
     title: 前端測試與 fallback 收斂
@@ -81,35 +103,58 @@ phases:
     verification:
       - bun run style
       - bun run test
-    done: false
+    done: true
     items:
       - id: P3.A
         title: 測試二次審核
         tasks:
           - id: P3.A.t1
             text: 讀取 `frontend/tests/test-inventory.json` 並比對目前 `frontend/tests` 檔案清單，標記 inventory 已過期、已刪除或新增未分類的測試檔
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/tests/test-inventory.json
           - id: P3.A.t2
             text: 逐一處理仍命中純 UI render、CSS class、component mount、mock call count 的測試，將無產品規則者刪除，將有流程價值者移入 userflow 測試
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/components/pod/CanvasPod.pluginPopover.test.ts
+              - frontend/tests/business-logic/components/pod/PluginPopover.test.ts
+              - frontend/tests/business-logic/components/pod/PodThinkingSlot.test.ts
+              - frontend/tests/business-logic/components/pod/ThinkingPopover.test.ts
+              - frontend/tests/business-logic/components/settings/ManagedPluginModal.test.ts
+              - frontend/tests/business-logic/components/settings/OpencodeSettingsPanel.test.ts
+              - frontend/tests/business-logic/composables/websocket/useCanvasWebSocketAction.test.ts
+              - frontend/tests/business-logic/composables/websocket/useSendCanvasAction.test.ts
+              - frontend/tests/business-logic/composables/websocket/useWebSocketErrorHandler.test.ts
+              - frontend/tests/business-logic/stores/chat/opencodeErrorHandling.test.ts
+              - frontend/tests/integration/websocket-api/createWebSocketRequest.test.ts
+              - frontend/tests/userflows/canvas/canvasPodInteractionsFlow.test.ts
+              - frontend/tests/userflows/canvas/podPluginPopoverFlow.test.ts
+              - frontend/tests/userflows/canvas/podThinkingFlow.test.ts
+              - frontend/tests/userflows/canvas/thinkingPopoverFlow.test.ts
+              - frontend/tests/userflows/settings/opencodeSettingsFlow.test.ts
+              - frontend/tests/test-inventory.json
           - id: P3.A.t3
             text: 更新 `frontend/TESTING.md` 或測試盤點文件，記錄本輪刪除與改寫決策，並標明每個保留測試對應的 userflow 或商業規則
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/TESTING.md
       - id: P3.B
         title: 前端 fallback 根因修正
         tasks:
           - id: P3.B.t1
             text: 盤點 `frontend/src/services/*Api.ts`、`frontend/src/lib/providerOptions.ts`、`frontend/src/stores/*` 內的 `??`、空陣列回傳與未知狀態 fallback，區分真外部 API 邊界、legacy data 與正規流程不可達狀態
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/TESTING.md
           - id: P3.B.t2
             text: 將正規 WebSocket/API contract 已保證的 fallback 改為上游 schema 或 response normalize contract，移除只為避免空值的重複防衛分支
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/src/services/opencodeApi.ts
           - id: P3.B.t3
             text: 對保留的外部邊界 fallback 補上使用流程或商業規則測試，測試只驗證使用者可見錯誤或狀態，不驗證第三方 mock 呼叫次數
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/tests/integration/websocket-api/opencodeApi.test.ts
+              - frontend/tests/integration/websocket-api/managedMcpApi.test.ts

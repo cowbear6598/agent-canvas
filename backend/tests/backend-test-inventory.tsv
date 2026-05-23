@@ -33,7 +33,7 @@ backend/tests/business-logic/opencodeProvider.test.ts	business-logic	rewrite	F4 
 backend/tests/business-logic/opencodeServer.test.ts	business-logic	rewrite	F4 fake external provider behavior	spy+spy-call-count	error-classifier	Opencode server lifecycle and logging
 backend/tests/business-logic/providerHandlers.test.ts	business-logic	rewrite	F4 fake external provider behavior	module-mock+spy-call-count	-	Provider list handler mock assertions
 backend/tests/business-logic/providerHandlersOpencode.test.ts	business-logic	rewrite	F4 fake external provider behavior	module-mock+data-container-crud	-	Opencode dynamic availableModels from SQLite
-backend/tests/business-logic/providerIndex.test.ts	business-logic	rewrite	F4 fake external provider behavior	-	-	Provider registry existence checks
+backend/tests/business-logic/providerIndex.test.ts	business-logic	keep	provider model fallback rule	constant-registry-assertions-removed	provider-normalizer	Provider model fallback rule including dynamic OpenCode model ids
 backend/tests/business-logic/auth/authGuard.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+spy-call-count	-	AuthGuard access decision with mocked dependencies
 backend/tests/business-logic/auth/unlockRateLimiter.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	-	-	Unlock rate limiter data container behavior
 backend/tests/business-logic/backupScheduleService.test.ts	business-logic	rewrite	schedule timezone	module-mock+spy-call-count	schedule-timezone	Backup schedule tick and reload behavior
@@ -49,7 +49,7 @@ backend/tests/business-logic/branchDecider.test.ts	business-logic	keep	F7 produc
 backend/tests/business-logic/branchDecisionParser.test.ts	business-logic	keep	workflow decision	-	workflow-decision	Branch decision parser rules
 backend/tests/business-logic/buildClaudeOptions.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+getter-setter	path-safety	Claude option builder with many mocks
 backend/tests/business-logic/buildScheduleUpdates.test.ts	business-logic	keep	schedule timezone	-	schedule-timezone	Schedule update merge rules
-backend/tests/business-logic/capabilities.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	-	-	Provider model constant consistency
+backend/tests/business-logic/capabilities.test.ts	deleted	deleted	F4 low-value test cleanup	constant-consistency-only	-	已刪除：只驗證 provider model 常數與 Set 自身一致性，未覆蓋 userflow 或商業規則
 backend/tests/business-logic/chatEmitStrategy.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+spy+spy-call-count	-	Chat emit strategy mock call assertions
 backend/tests/business-logic/chatHandlers.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+spy-call-count+data-container-crud	path-safety	Chat send handler launchRun calls
 backend/tests/business-logic/chatHelpers.test.ts	business-logic	keep	F7 product behavior or low-level utility	-	-	Chat display content extraction
@@ -65,7 +65,7 @@ backend/tests/business-logic/connectionStatusPersistence.test.ts	business-logic	
 backend/tests/business-logic/connectionStoreBranchUpdate.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+data-container-crud	path-safety	Connection branch validation store path
 backend/tests/business-logic/createResourceHandlers.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+spy-call-count	-	Resource handlers mock call assertions
 backend/tests/business-logic/cursorColorManager.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	-	-	Cursor color allocation container
-backend/tests/business-logic/dbStartupCleanup.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	-	-	Legacy cleanup helper
+backend/tests/business-logic/dbStartupCleanup.test.ts	deleted	deleted	F4 inventory cleanup	outdated-inventory	-	已從 backend/tests 移除，保留此列標記 inventory 過期項目
 backend/tests/business-logic/dedupHelper.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	-	-	Dedup tracker container
 backend/tests/business-logic/directTriggerStore.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	data-container-crud	-	Direct trigger store CRUD
 backend/tests/business-logic/diskSpace.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+spy	path-safety	Disk space checks with mocked statfs
@@ -103,7 +103,7 @@ backend/tests/business-logic/pluginScanFs.test.ts	business-logic	rewrite	F7 prod
 backend/tests/business-logic/podPathResolver.test.ts	business-logic	keep	path safety	module-mock	path-safety	Pod cwd resolution and boundary checks
 backend/tests/business-logic/podStoreIntegration.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+spy-call-count+data-container-crud+getter-setter	provider-normalizer+path-safety	Pod store integration binding and provider config
 backend/tests/business-logic/podThinkingLevel.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+data-container-crud	-	Pod thinkingLevel persistence
-backend/tests/business-logic/providerTypes.test.ts	business-logic	rewrite	F4 fake external provider behavior	-	-	Provider metadata constant checks
+backend/tests/business-logic/providerTypes.test.ts	deleted	deleted	F4 low-value test cleanup	constant-consistency-only	-	已刪除：只驗證 provider metadata 與常數綁定，未覆蓋 userflow 或商業規則
 backend/tests/business-logic/repositoryGitHelpers.test.ts	business-logic	keep	F7 product behavior or low-level utility	-	path-safety	Repository name sanitize rules
 backend/tests/business-logic/repositoryService.test.ts	business-logic	keep	F7 product behavior or low-level utility	data-container-crud	path-safety	Repository service minimal behavior
 backend/tests/business-logic/runChatHelpers.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+spy-call-count	-	Run chat helper mock call assertions
@@ -115,7 +115,7 @@ backend/tests/business-logic/runExecutionStrategy.test.ts	business-logic	rewrite
 backend/tests/business-logic/runQueueService.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+spy-call-count	-	Run queue service mocks
 backend/tests/business-logic/runStore.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	data-container-crud	path-safety	Run store CRUD and path storage
 backend/tests/business-logic/schedule-timezone-utils.test.ts	business-logic	keep	schedule timezone	-	schedule-timezone	Timezone offset conversion
-backend/tests/business-logic/schema-migration.test.ts	business-logic	keep	migration	-	migration	Schema migration product data transformations
+backend/tests/business-logic/schema-migration.test.ts	deleted	deleted	F4 inventory cleanup	outdated-inventory	migration	已從 backend/tests 移除，保留此列標記 inventory 過期項目
 backend/tests/business-logic/sdkErrorMapper.test.ts	business-logic	keep	error classifier	-	error-classifier	SDK error message classifier
 backend/tests/business-logic/sentryProvider.test.ts	business-logic	rewrite	F4 fake external provider behavior	module-mock+spy-call-count+data-container-crud	-	Sentry provider schema and mocked calls
 backend/tests/business-logic/slackProvider.test.ts	business-logic	rewrite	F4 fake external provider behavior	module-mock+spy-call-count+data-container-crud	provider-normalizer	Slack provider webhook normalization
@@ -140,3 +140,12 @@ backend/tests/business-logic/messageSerializer.test.ts	business-logic	rewrite	F7
 backend/tests/business-logic/operationHelpers.test.ts	business-logic	keep	F7 product behavior or low-level utility	-	-	Safe execute helper error boundary
 backend/tests/business-logic/safeJsonParse.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	-	-	Safe JSON parse helper
 backend/tests/business-logic/workflowChainTraversal.test.ts	business-logic	rewrite	workflow decision	module-mock+data-container-crud	path-safety+workflow-decision	Workflow chain traversal with mocked graph
+backend/tests/business-logic/branchDecisionService.test.ts	business-logic	keep	workflow decision	spy-call-count	workflow-decision	Branch decision uses persisted summary and bounded transcript window
+backend/tests/business-logic/connectionSchemas.test.ts	business-logic	keep	path safety	direct-schema-parse	path-safety	OpenCode providerID/modelID validation and unsafe model rejection
+backend/tests/business-logic/integrationReplyService.test.ts	business-logic	keep	integration reply external boundary	spy-call-count+data-container-crud	provider-normalizer	Capability token, pod binding, provider send, and internal API response contract
+backend/tests/business-logic/opencodeThinkingPresetService.test.ts	business-logic	keep	provider normalizer	direct-schema-parse	provider-normalizer	OpenCode thinking preset normalization from provider metadata variants
+backend/tests/business-logic/runHandlers.test.ts	business-logic	keep	run websocket handler contract	module-mock+spy-call-count+data-container-crud	workflow-decision	Run pod message pagination and delete ack payload
+backend/tests/business-logic/streamThrottle.test.ts	business-logic	keep	stream persistence business rule	spy-call-count	-	Trailing stream persistence uses latest content within throttle window
+backend/tests/business-logic/summaryService.test.ts	business-logic	keep	workflow summary decision	module-mock+spy-call-count+data-container-crud	workflow-decision	Summary prompt uses persisted summary and recent transcript fallback
+backend/tests/userflows/plugin-api.test.ts	userflows	keep	F3/F4 plugin websocket workflow	module-mock+data-container-crud	path-safety	Managed plugin install/list/reorder/update/delete WebSocket flow with filesystem side effects
+backend/tests/userflows/repository-clone-api.test.ts	userflows	keep	F3/F4 repository clone workflow	module-mock+data-container-crud	path-safety	Repository clone WebSocket flow, progress events, path boundary, and cleanup on clone error

@@ -430,5 +430,32 @@ describe("Connection 管理", () => {
       // summaryProvider 切換為 codex 並回傳
       expect(response.connection!.summaryProvider).toBe("codex");
     });
+
+    it("connection:update 帶不支援的 summaryModel → 回傳使用者可見 validation error", async () => {
+      const client = getClient();
+      const { podA, podB } = await createPodPair(client);
+      const conn = await createConnection(client, podA.id, podB.id);
+
+      const canvasId = await getCanvasId(client);
+      const response = await emitAndWaitResponse<
+        ConnectionUpdatePayload,
+        ConnectionUpdatedPayload
+      >(
+        client,
+        WebSocketRequestEvents.CONNECTION_UPDATE,
+        WebSocketResponseEvents.CONNECTION_UPDATED,
+        {
+          requestId: uuidv4(),
+          canvasId,
+          connectionId: conn.id,
+          summaryProvider: "codex",
+          summaryModel: "sonnet",
+        },
+      );
+
+      expect(response.success).toBe(false);
+      expect((response as { code?: string }).code).toBe("VALIDATION_ERROR");
+      expect(response.error).toBe("summaryModel 不支援 provider codex");
+    });
   });
 });

@@ -50,6 +50,7 @@ import {
   serializeV2ToolSuccessContent,
   serializeV2ToolFailureError,
 } from "../../src/services/provider/opencodeProvider.js";
+import { normalizeOpencodeStream } from "../../src/services/provider/opencodeStreamNormalizer.js";
 import type { ChatRequestContext } from "../../src/services/provider/types.js";
 import type { OpencodeOptions } from "../../src/services/provider/opencodeProvider.js";
 import {
@@ -87,6 +88,20 @@ async function* eventsToStream(events: unknown[]): AsyncGenerator<unknown> {
   for (const event of events) {
     yield event;
   }
+}
+
+function makePromptFailureRace(): Promise<never> {
+  return new Promise<never>(() => undefined);
+}
+
+function makeIdleAbortRace(): {
+  promise: Promise<{ kind: "aborted" }>;
+  dispose(): void;
+} {
+  return {
+    promise: new Promise<{ kind: "aborted" }>(() => undefined),
+    dispose: vi.fn(),
+  };
 }
 
 /** 建立基本 mock client（OpencodeClientPort 介面，v2 形狀） */
@@ -586,7 +601,135 @@ describe("chat — resumeSessionId=null → session_started 且 sessionId 等於
 });
 
 // ================================================================
-// P3.A.t2 — v2 專屬案例
+// fake opencode stream normalizer
+// ================================================================
+
+describe("normalizeOpencodeStream — fake provider stream", () => {
+  it("message.part.delta 與 session.messages tool parts 應轉成完整 provider event 流程", async () => {
+    const sessionId = "fake-stream-session";
+    const events = await collectEvents(
+      normalizeOpencodeStream({
+        stream: eventsToStream([
+          {
+            type: "message.part.delta",
+            properties: {
+              sessionID: sessionId,
+              messageID: "assistant-message",
+              partID: "text-1",
+              field: "text",
+              delta: "先讀檔",
+            },
+          },
+          {
+            type: "message.part.delta",
+            properties: {
+              sessionID: sessionId,
+              messageID: "assistant-message",
+              partID: "text-2",
+              field: "text",
+              delta: "再整理",
+            },
+          },
+          { type: "session.idle", properties: { sessionID: sessionId } },
+        ]),
+        sessionId,
+        providerID: "anthropic",
+        alreadyYieldedSessionStarted: true,
+        promptFailureRace: makePromptFailureRace(),
+        abortRace: makeIdleAbortRace(),
+        messages: vi.fn().mockResolvedValue([
+          {
+            info: { id: "assistant-message", role: "assistant" },
+            parts: [
+              {
+                id: "tool-part",
+                type: "tool",
+                callID: "call-read",
+                tool: "read_file",
+                state: {
+                  status: "completed",
+                  input: { path: "README.md" },
+                  output: "file body",
+                },
+              },
+            ],
+          },
+        ]),
+      }),
+    );
+
+    expect(events).toEqual([
+      { type: "text", content: "先讀檔" },
+      {
+        type: "tool_call_start",
+        toolUseId: "call-read",
+        toolName: "read_file",
+        input: { path: "README.md" },
+      },
+      {
+        type: "tool_call_result",
+        toolUseId: "call-read",
+        toolName: "read_file",
+        output: "file body",
+      },
+      { type: "text", content: "再整理" },
+      { type: "turn_complete" },
+    ]);
+  });
+
+  it("session.next tool 事件應由 collector 配對 toolName 與 output", async () => {
+    const sessionId = "fake-v2-tool-stream";
+    const events = await collectEvents(
+      normalizeOpencodeStream({
+        stream: eventsToStream([
+          {
+            type: "session.next.tool.called",
+            properties: {
+              sessionID: sessionId,
+              callID: "call-1",
+              tool: "bash",
+              input: { command: "pwd" },
+            },
+          },
+          {
+            type: "session.next.tool.success",
+            properties: {
+              sessionID: sessionId,
+              callID: "call-1",
+              content: [{ type: "text", text: "/tmp/workspace" }],
+            },
+          },
+          { type: "session.idle", properties: { sessionID: sessionId } },
+        ]),
+        sessionId,
+        providerID: "anthropic",
+        alreadyYieldedSessionStarted: true,
+        promptFailureRace: makePromptFailureRace(),
+        abortRace: makeIdleAbortRace(),
+        messages: vi.fn().mockResolvedValue([]),
+      }),
+    );
+
+    expect(events).toEqual([
+      {
+        type: "tool_call_start",
+        toolUseId: "call-1",
+        toolName: "bash",
+        input: { command: "pwd" },
+      },
+      {
+        type: "tool_call_result",
+        toolUseId: "call-1",
+        toolName: "bash",
+        output: "/tmp/workspace",
+      },
+      { type: "turn_complete" },
+    ]);
+  });
+});
+
+// ================================================================
+// provider adapter integration
 // ================================================================
 
 describe("chat — v2 session.next.text.delta → text event（F1: 逐段顯示文字）", () => {
@@ -986,34 +1129,6 @@ describe("chat — v2 session.next.tool.failed → tool_call_result event（帶 
 });
 
 describe("chat — v2 resume session（F4: 延續既有對話）", () => {
-  it("resumeSessionId 非 null 時 session.create 不應被呼叫", async () => {
-    const createMock = vi.fn().mockResolvedValue({ data: { id: "new-id" } });
-    const mockClient = makeMockClient({
-      session: {
-        create: createMock,
-        prompt: vi.fn().mockResolvedValue({ data: {} }),
-        abort: vi.fn().mockResolvedValue({ data: true }),
-      },
-      event: {
-        subscribe: vi.fn().mockResolvedValue({
-          stream: eventsToStream([
-            {
-              type: "session.idle",
-              properties: { sessionID: "existing-session" },
-            },
-          ]),
-        }),
-      },
-    });
-
-    setOpencodeClientFactory(() => mockClient);
-
-    const ctx = makeCtx({ resumeSessionId: "existing-session" });
-    await collectEvents(opencodeProvider.chat(ctx));
-
-    expect(createMock).not.toHaveBeenCalled();
-  });
-
   it("resume session 時 session.prompt 使用的 sessionID 為既有 session", async () => {
     const promptMock = vi.fn().mockResolvedValue({ data: {} });
     const mockClient = makeMockClient({

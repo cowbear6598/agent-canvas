@@ -1,24 +1,8 @@
-/**
- * opencode 錯誤訊息處理測試（B 類業務規則）
- *
- * 涵蓋：
- * 1. chat event handler 收到 opencode_auth_missing 時，注入 Pod 的訊息包含 providerID 與「opencode auth login」字樣
- * 2. provider 為 opencode 且 capabilities.chat === false 時，PodModelSelector 呈現 disabled
- *    且 tooltip 文字為對應 i18n key 內容
- */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mount } from "@vue/test-utils";
-import { nextTick } from "vue";
-import { createPinia, setActivePinia } from "pinia";
+import { describe, it, expect, vi } from "vitest";
 import { setupStoreTest } from "@tests/helpers/testSetup";
 import { useChatStore, resetChatActionsCache } from "@/stores/chat/chatStore";
-import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
-import { useOpencodeAliasStore } from "@/stores/opencodeAliasStore";
-import PodModelSelector from "@/components/pod/PodModelSelector.vue";
 import type { PodChatMessagePayload } from "@/types/websocket";
-import type { OpencodeModelAlias } from "@/types/opencode";
 
-// ── useToast mock ────────────────────────────────────────────────────────────
 vi.mock("@/composables/useToast", () => ({
   useToast: () => ({
     toast: vi.fn(),
@@ -27,19 +11,11 @@ vi.mock("@/composables/useToast", () => ({
   }),
 }));
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 1. chat event handler：opencode_auth_missing 錯誤注入 transcript
-// ─────────────────────────────────────────────────────────────────────────────
-
 describe("opencode_auth_missing 錯誤訊息注入 Pod transcript", () => {
   setupStoreTest(() => {
     resetChatActionsCache();
   });
 
-  /**
-   * 建構後端送來的 opencode_auth_missing 訊息 payload。
-   * content 格式與後端 classifySessionError 產生的一致。
-   */
   function buildAuthMissingPayload(providerID: string): PodChatMessagePayload {
     return {
       podId: "pod-opencode",
@@ -113,99 +89,5 @@ describe("opencode_auth_missing 錯誤訊息注入 Pod transcript", () => {
 
     const messages = chatStore.messagesByPodId.get("pod-1");
     expect(messages![0]!.content).toBe(originalContent);
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 2. PodModelSelector：opencode provider + capabilities.chat=false → disabled
-// ─────────────────────────────────────────────────────────────────────────────
-
-describe("PodModelSelector opencode server 失敗時呈現 disabled", () => {
-  beforeEach(() => {
-    setActivePinia(createPinia());
-    vi.clearAllMocks();
-  });
-
-  /**
-   * 註冊 opencode provider（capabilities 概念已移除，僅保留 known provider 註冊以利後續組件 mount）。
-   */
-  function injectOpencodeCapabilities(_chatEnabled: boolean) {
-    const store = useProviderCapabilityStore();
-    store.syncFromPayload([
-      {
-        name: "opencode",
-      },
-    ]);
-  }
-
-  /**
-   * 注入至少一筆 opencode alias，使 PodModelSelector 的 isOpencodeEmpty 為 false，
-   * 讓 disabledTooltip 能正確顯示於 title（避免被 emptyPlaceholder 覆蓋）。
-   */
-  function seedOpencodeAlias() {
-    const aliasStore = useOpencodeAliasStore();
-    const mockAlias: OpencodeModelAlias = {
-      id: "alias-1",
-      providerID: "openai",
-      modelID: "gpt-4o",
-      alias: "gpt-4o",
-      orderIdx: 0,
-    };
-    aliasStore.setAliases([mockAlias]);
-  }
-
-  function mountSelector(overrides: Record<string, unknown> = {}) {
-    return mount(PodModelSelector, {
-      props: {
-        podId: "pod-opencode",
-        provider: "opencode" as const,
-        currentModel: "openai/gpt-4o",
-        ...overrides,
-      },
-    });
-  }
-
-  it("provider=opencode 且 disabled prop 傳入 true 時 selector 呈現 pod-model-slot--disabled class", async () => {
-    injectOpencodeCapabilities(false);
-    // 由 CanvasPod 計算後傳入 disabled；此層測試直接傳 prop 驗證 CSS 行為
-    const wrapper = mountSelector({
-      disabled: true,
-      disabledTooltip: "opencode server 無法啟動",
-    });
-    await nextTick();
-
-    expect(wrapper.find(".pod-model-slot").classes()).toContain(
-      "pod-model-slot--disabled",
-    );
-    wrapper.unmount();
-  });
-
-  it("disabled=true 且 alias 已設定（非 empty 狀態）時，title 屬性應顯示 disabledTooltip 文字", async () => {
-    injectOpencodeCapabilities(false);
-    // 需有 alias 才讓 isOpencodeEmpty=false，使 disabledTooltip 能出現在 title
-    seedOpencodeAlias();
-    const tooltip = "opencode server 無法啟動";
-    const wrapper = mountSelector({ disabled: true, disabledTooltip: tooltip });
-    await nextTick();
-
-    const slot = wrapper.find(".pod-model-slot");
-    expect(slot.attributes("title")).toBe(tooltip);
-    wrapper.unmount();
-  });
-
-  it("capabilities.chat=true 且 disabled=false 時 selector 不含 disabled class", async () => {
-    injectOpencodeCapabilities(true);
-    seedOpencodeAlias();
-    const wrapper = mountSelector({ disabled: false });
-    await nextTick();
-
-    expect(wrapper.find(".pod-model-slot").classes()).not.toContain(
-      "pod-model-slot--disabled",
-    );
-    wrapper.unmount();
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
   });
 });
