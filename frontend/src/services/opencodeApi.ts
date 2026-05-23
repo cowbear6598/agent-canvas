@@ -108,6 +108,20 @@ function requireAliasItems(
   return result.items;
 }
 
+function normalizeProviderDefaultMap(
+  value: unknown,
+): Record<string, string> {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string",
+    ),
+  );
+}
+
 // ─── API 函式 ─────────────────────────────────────────────────────────────────
 
 /**
@@ -141,7 +155,7 @@ export async function listOpencodeProviders(): Promise<OpencodeProviderListResul
         ? p.models
         : Object.values(p.models),
     })),
-    default: raw.default,
+    default: normalizeProviderDefaultMap(raw.default),
     connected: raw.connected,
   };
 }

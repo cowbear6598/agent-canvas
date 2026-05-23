@@ -176,6 +176,7 @@ function buildStatements(db: Database): {
   modelAlias: {
     insert: ReturnType<Database["prepare"]>;
     selectByProviderId: ReturnType<Database["prepare"]>;
+    selectByRealProviderAndModel: ReturnType<Database["prepare"]>;
     selectById: ReturnType<Database["prepare"]>;
     existsByProviderAndRealModel: ReturnType<Database["prepare"]>;
     updateAliasAndOrderIdx: ReturnType<Database["prepare"]>;
@@ -745,6 +746,13 @@ function buildStatements(db: Database): {
       // 依 provider_id 查詢，並以 order_idx 升序排列（供 PodModelSelector 顯示）
       selectByProviderId: db.prepare(
         "SELECT * FROM model_aliases WHERE provider_id = $providerId ORDER BY order_idx ASC",
+      ),
+      selectByRealProviderAndModel: db.prepare(
+        `SELECT * FROM model_aliases
+         WHERE provider_id = $providerId
+           AND real_provider = $realProvider
+           AND real_model = $realModel
+         LIMIT 1`,
       ),
       // 依 id 查詢單筆（供 create/update handler 取回剛寫入的 row）
       selectById: db.prepare("SELECT * FROM model_aliases WHERE id = $id"),

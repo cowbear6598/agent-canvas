@@ -172,6 +172,13 @@ const {
   closeAllPopovers,
 } = usePodPopovers();
 
+const hasOpenPopover = computed(
+  () =>
+    showPluginPopover.value ||
+    showMcpPopover.value ||
+    showThinkingPopover.value,
+);
+
 watch([isDragging, isBatchDragging], ([isSingleDragging, isBatchDragging]) => {
   if (isSingleDragging || isBatchDragging) {
     closeAllPopovers();
@@ -179,8 +186,14 @@ watch([isDragging, isBatchDragging], ([isSingleDragging, isBatchDragging]) => {
 });
 
 watch(
-  () => [viewportStore.offset.x, viewportStore.offset.y, viewportStore.zoom],
-  closeAllPopovers,
+  () =>
+    hasOpenPopover.value
+      ? [viewportStore.offset.x, viewportStore.offset.y, viewportStore.zoom]
+      : null,
+  (viewportState, previousViewportState) => {
+    if (viewportState === null || previousViewportState === null) return;
+    closeAllPopovers();
+  },
 );
 
 // MCP notch 相關狀態

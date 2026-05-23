@@ -74,6 +74,18 @@ function sanitizeOpencodeProvider(provider: unknown): {
   };
 }
 
+function sanitizeProviderDefaults(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string",
+    ),
+  );
+}
+
 function buildProviderListFailedResult(): ResultWithoutRequestId<OpencodeProviderListResultPayload> {
   return {
     success: false,
@@ -183,7 +195,7 @@ export async function listOpencodeProviders(): Promise<
     all: (result.data?.all ?? [])
       .map(sanitizeOpencodeProvider)
       .filter((provider) => provider !== null),
-    default: result.data?.default ?? {},
+    default: sanitizeProviderDefaults(result.data?.default),
     connected: (result.data?.connected ?? []).filter(
       (providerId): providerId is string => typeof providerId === "string",
     ),

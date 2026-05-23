@@ -116,8 +116,6 @@ Retained as business-rule coverage after removing low-value UI render checks:
 - `tests/business-logic/composables/events/runEventHandlers.test.ts`: F6, run
   chat events update only the currently opened run chat and failed delete
   responses do not remove local runs.
-- `tests/business-logic/lib/podDividerPath.test.ts`: F6, pod divider paths are
-  stable per pod id and preserve the fixed endpoint/segment rule.
 - `tests/business-logic/stores/connectionGraphHelpers.test.ts`: F6, workflow
   role and running-state graph traversal rules remain independent of UI.
 - `tests/business-logic/stores/connectionPayloadMappers.test.ts`: F6,

@@ -32,7 +32,6 @@ export function classifySessionError(
       content: `請在 terminal 執行 \`opencode auth login ${providerID}\` 後再試一次`,
       fatal: false,
       code: "opencode_auth_missing",
-      rawContent: rawMessage,
     });
   }
 
@@ -45,15 +44,13 @@ export function classifySessionError(
       content: "opencode server 連線失敗，請重啟後端",
       fatal: true,
       code: "opencode_server_unreachable",
-      rawContent: rawMessage,
     });
   }
 
   return buildOpencodeSystemError({
-    content: `opencode session 發生錯誤：${rawMessage}`,
+    content: "opencode session 發生錯誤，請稍後再試",
     fatal: false,
     code: "opencode_session_failed",
-    rawContent: rawMessage,
   });
 }
 

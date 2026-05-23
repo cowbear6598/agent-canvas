@@ -50,10 +50,7 @@ import type { Pod } from "../../types/pod.js";
 import type { RunContext } from "../../types/run.js";
 import type { PodMcpEntry } from "../mcp/managedMcpSurfaceService.js";
 import { getOpencodeServerState } from "./opencodeServer.js";
-import {
-  buildOpencodeSystemError,
-  classifySessionError,
-} from "./opencodeErrorClassifier.js";
+import { buildOpencodeSystemError } from "./opencodeErrorClassifier.js";
 import {
   buildOpencodeTransientServerConfig,
   buildServerCacheKey,
@@ -274,6 +271,7 @@ const runScopedOpencodeServerCache = new Map<
   string,
   { close(): void; url: string }
 >();
+const OPENCODE_TRANSIENT_SERVER_TIMEOUT_MS = 30_000;
 
 /**
  * 取得或建立 Run 期間的 transient opencode server。
@@ -290,7 +288,7 @@ async function getOrCreateRunScopedServer(
 
   const server = await _createServer({
     port: 0,
-    timeout: 30000,
+    timeout: OPENCODE_TRANSIENT_SERVER_TIMEOUT_MS,
     config: buildOpencodeTransientServerConfig(entries),
   });
 
@@ -424,17 +422,21 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
             transientServer = await _createServer({
               // 使用 ephemeral port，避免與既有全域 opencode server 的 4096 衝突
               port: 0,
-              timeout: 30000,
+              timeout: OPENCODE_TRANSIENT_SERVER_TIMEOUT_MS,
               config: buildOpencodeTransientServerConfig(mcpEntries),
             });
             baseUrl = transientServer.url;
           }
         } catch (err) {
+          logger.error(
+            "Chat",
+            "Error",
+            `[OpencodeProvider] transient server 啟動失敗：${err instanceof Error ? err.message : String(err)}`,
+          );
           yield buildOpencodeSystemError({
             content: "opencode server 連線失敗，請重啟後端",
             fatal: true,
             code: "opencode_server_unreachable",
-            rawContent: err instanceof Error ? err.message : String(err),
           });
           return;
         }
@@ -516,8 +518,16 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
             directory: workspacePath,
           });
         } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          yield classifySessionError(msg, options.providerID);
+          logger.error(
+            "Chat",
+            "Error",
+            `[OpencodeProvider] event.subscribe 失敗：${err instanceof Error ? err.message : String(err)}`,
+          );
+          yield buildOpencodeSystemError({
+            content: "opencode 事件串流建立失敗，請稍後再試",
+            fatal: true,
+            code: "opencode_event_subscribe_failed",
+          });
           return;
         }
 

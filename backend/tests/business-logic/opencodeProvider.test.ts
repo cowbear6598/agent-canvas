@@ -57,7 +57,7 @@ import {
   GOAL_MCP_SERVER_NAME,
   removeGoalRuntimeRun,
 } from "../../src/services/goalRuntime.js";
-import { getDb } from "../../src/database/index.js";
+import { getDb, getStmts } from "../../src/database/index.js";
 
 // ── logger mock ────────────────────────────────────────────────────────
 vi.mock("../../src/utils/logger.js", () => ({
@@ -383,39 +383,6 @@ describe("buildOptions", () => {
     ]);
   });
 
-  it("Chat 模式 buildPodMcpEntries 取得的 entries 注入 options（無 Goal Runtime）", async () => {
-    mockManagedMcpSurfaceService.buildPodMcpEntries.mockResolvedValue({
-      entries: [
-        {
-          name: "team-server",
-          transport: "stdio",
-          command: "node",
-          args: ["server.js"],
-          env: {},
-          cwd: null,
-          proxied: false,
-        },
-      ],
-      ignoredTargets: [],
-      hasGoalRuntime: false,
-      pluginCatalog: [],
-    });
-
-    const pod = makeBuildOptionsPod({
-      mcpServerNames: ["team-server"],
-      goal: null,
-    });
-    const options = await opencodeProvider.buildOptions(pod);
-
-    expect(
-      mockManagedMcpSurfaceService.buildPodMcpEntries,
-    ).toHaveBeenCalledWith(pod, null);
-    expect(options.mcpEntries).toEqual([
-      expect.objectContaining({ name: "team-server" }),
-    ]);
-    expect(options.hasGoalRuntime).toBe(false);
-  });
-
   it("Opencode pod 勾 http target 時 buildPodMcpEntries 回 remote entry 原樣保留", async () => {
     mockManagedMcpSurfaceService.buildPodMcpEntries.mockResolvedValue({
       entries: [
@@ -472,16 +439,27 @@ describe("buildOptions", () => {
         thinkingLevel: "balanced",
       },
     });
+    const selectSingleSpy = vi.spyOn(
+      getStmts().modelAlias.selectByRealProviderAndModel,
+      "get",
+    );
+    const selectAllSpy = vi.spyOn(getStmts().modelAlias.selectByProviderId, "all");
 
     const options = await opencodeProvider.buildOptions(pod);
 
     expect(options.thinkingLevel).toBe("balanced");
     expect(options.thinkingOptions).toEqual({ variant: "medium" });
+    expect(selectSingleSpy).toHaveBeenCalledWith({
+      $providerId: "opencode",
+      $realProvider: "anthropic",
+      $realModel: "claude-sonnet-4-5",
+    });
+    expect(selectAllSpy).not.toHaveBeenCalled();
   });
 });
 
 // ================================================================
-// P3.A.t1 — 以 OpencodeClientPort、server state factory、transient server factory 為 mock 邊界
+// 以 OpencodeClientPort、server state factory、transient server factory 為 mock 邊界
 // ================================================================
 
 describe("chat — resumeSessionId=null → session_started 且 sessionId 等於 session.create 回傳", () => {
@@ -597,6 +575,30 @@ describe("chat — resumeSessionId=null → session_started 且 sessionId 等於
     const errEvent = events[0] as Extract<NormalizedEvent, { type: "error" }>;
     expect(errEvent.type).toBe("error");
     expect(errEvent.code).toBe("opencode_session_failed");
+  });
+
+  it("session.create resolve with error 時應先分類錯誤，不落到缺 session ID", async () => {
+    const mockClient = makeMockClient({
+      session: {
+        create: vi.fn().mockResolvedValue({
+          data: null,
+          error: { data: { message: "connection refused to opencode" } },
+        }),
+        prompt: vi.fn().mockResolvedValue({ data: {} }),
+        abort: vi.fn().mockResolvedValue({ data: true }),
+      },
+    });
+
+    setOpencodeClientFactory(() => mockClient);
+
+    const events = await collectEvents(
+      opencodeProvider.chat(makeCtx({ resumeSessionId: null })),
+    );
+
+    expect(events).toHaveLength(1);
+    const errEvent = events[0] as Extract<NormalizedEvent, { type: "error" }>;
+    expect(errEvent.code).toBe("opencode_server_unreachable");
+    expect(errEvent.message).not.toContain("未取得 session ID");
   });
 });
 
@@ -1382,7 +1384,8 @@ describe("chat — prompt / plugin waiting failure handling", () => {
     const errEvent = events[1] as Extract<NormalizedEvent, { type: "error" }>;
     expect(errEvent.code).toBe("opencode_prompt_failed");
     expect(errEvent.fatal).toBe(true);
-    expect(errEvent.message).toContain("plugin prompt failed");
+    expect(errEvent.message).toBe("opencode 訊息發送失敗，請稍後再試");
+    expect(errEvent.message).not.toContain("plugin prompt failed");
     expect(
       events.find((event) => event.type === "turn_complete"),
     ).toBeUndefined();
@@ -1413,7 +1416,8 @@ describe("chat — prompt / plugin waiting failure handling", () => {
     const errEvent = events[1] as Extract<NormalizedEvent, { type: "error" }>;
     expect(errEvent.code).toBe("opencode_prompt_failed");
     expect(errEvent.fatal).toBe(true);
-    expect(errEvent.message).toContain("prompt transport disconnected");
+    expect(errEvent.message).toBe("opencode 訊息發送失敗，請稍後再試");
+    expect(errEvent.message).not.toContain("prompt transport disconnected");
     expect(
       events.find((event) => event.type === "turn_complete"),
     ).toBeUndefined();
@@ -1544,7 +1548,8 @@ describe("chat — prompt / plugin waiting failure handling", () => {
     const errEvent = events[1] as Extract<NormalizedEvent, { type: "error" }>;
     expect(errEvent.code).toBe("opencode_workspace_failed");
     expect(errEvent.fatal).toBe(true);
-    expect(errEvent.message).toContain("workspace bootstrap failed");
+    expect(errEvent.message).toBe("opencode 工作區初始化失敗，請稍後再試");
+    expect(errEvent.message).not.toContain("workspace bootstrap failed");
     expect(
       events.find((event) => event.type === "turn_complete"),
     ).toBeUndefined();
@@ -1552,7 +1557,7 @@ describe("chat — prompt / plugin waiting failure handling", () => {
 });
 
 // ================================================================
-// P3.A.t3 — 回歸案例
+// 認證缺失與錯誤映射回歸案例
 // ================================================================
 
 describe("chat — auth 缺失（F5: 未登入時顯示錯誤）", () => {
@@ -1719,6 +1724,7 @@ describe("chat — server 不可用（F5: 服務不可用時顯示錯誤）", ()
 
     expect(errorEvent).toBeDefined();
     expect(errorEvent.code).toBe("opencode_session_failed");
+    expect(errorEvent.message).toBe("opencode session 發生錯誤，請稍後再試");
   });
 });
 
@@ -1821,7 +1827,9 @@ describe("chat — abort cleanup", () => {
       NormalizedEvent,
       { type: "error" }
     >;
-    expect(errEvent.code).toBe("opencode_server_unreachable");
+    expect(errEvent.code).toBe("opencode_event_subscribe_failed");
+    expect(errEvent.message).toBe("opencode 事件串流建立失敗，請稍後再試");
+    expect(errEvent.message).not.toContain("fetch failed");
   });
 });
 

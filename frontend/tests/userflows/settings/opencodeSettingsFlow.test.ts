@@ -69,7 +69,7 @@ describe("opencode settings userflow", () => {
 
       listOpencodeProviders.mockResolvedValueOnce({
         all: [providerX],
-        default: "",
+        default: {},
         connected: [],
       });
 
@@ -92,7 +92,7 @@ describe("opencode settings userflow", () => {
 
       listOpencodeProviders.mockResolvedValueOnce({
         all: [providerX],
-        default: "provider-x",
+        default: { "provider-x": "model-x" },
         connected: ["provider-x"],
       });
 

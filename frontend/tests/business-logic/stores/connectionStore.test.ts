@@ -26,6 +26,7 @@ import {
   BRANCH_LABEL_MAX_LENGTH,
 } from "@/types/connection";
 import { DEFAULT_TOAST_DURATION_MS } from "@/lib/constants";
+import { DEFAULT_SUMMARY_MODEL } from "@/types/config";
 import type {
   WorkflowAutoTriggeredPayload,
   WorkflowCompletePayload,
@@ -2537,7 +2538,7 @@ describe("connectionStore", () => {
       });
 
       expect(store.connections[0]?.summaryProvider).toBe("claude");
-      expect(store.connections[0]?.summaryModel).toBe("gemini-2.5-flash");
+      expect(store.connections[0]?.summaryModel).toBe(DEFAULT_SUMMARY_MODEL);
     });
 
     it("broadcast 帶 summaryProvider null 時應從 source provider 收斂為 concrete 值", () => {

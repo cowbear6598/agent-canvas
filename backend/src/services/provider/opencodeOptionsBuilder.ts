@@ -62,16 +62,18 @@ function getOpencodeThinkingOptions(
   thinkingLevel?: string,
 ): Record<string, unknown> | undefined {
   if (!thinkingLevel) return undefined;
-  const rows = getStmts().modelAlias.selectByProviderId.all({
+  const { providerID, modelID } = splitModelValue(modelValue);
+  if (!providerID || !modelID) return undefined;
+
+  const row = getStmts().modelAlias.selectByRealProviderAndModel.get({
     $providerId: "opencode",
-  }) as Array<{
-    real_provider: string;
-    real_model: string;
-    thinking_levels_json: string | null;
-  }>;
-  const row = rows.find(
-    (alias) => `${alias.real_provider}/${alias.real_model}` === modelValue,
-  );
+    $realProvider: providerID,
+    $realModel: modelID,
+  }) as
+    | {
+        thinking_levels_json: string | null;
+      }
+    | undefined;
   const preset = parseOpencodeThinkingLevelsJson(
     row?.thinking_levels_json,
   ).find((level) => level.id === thinkingLevel);

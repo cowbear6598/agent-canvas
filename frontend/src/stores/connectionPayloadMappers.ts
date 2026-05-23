@@ -28,6 +28,25 @@ export interface RawConnection {
   decideStatus?: string;
 }
 
+function normalizeLegacySummarySelection(params: {
+  summaryModel?: string;
+  summaryProvider: PodProvider | null;
+}): Pick<Connection, "summaryModel" | "summaryProvider"> {
+  const { summaryModel, summaryProvider } = params;
+
+  if (summaryModel?.startsWith("gemini-") === true) {
+    return {
+      summaryModel: DEFAULT_SUMMARY_MODEL,
+      summaryProvider: "claude",
+    };
+  }
+
+  return {
+    summaryModel: summaryModel ?? DEFAULT_SUMMARY_MODEL,
+    summaryProvider,
+  };
+}
+
 export function normalizeConnection(
   raw: RawConnection,
   sourceProvider?: PodProvider,
@@ -38,19 +57,17 @@ export function normalizeConnection(
       : normalizePodProvider(raw.summaryProvider);
   const summaryProvider =
     normalizedExplicitProvider ??
-    (raw.summaryModel?.startsWith("gemini-") === true
-      ? "claude"
-      : (normalizePodProvider(sourceProvider ?? "claude") ?? "claude"));
-  const summaryModel =
-    raw.summaryModel?.startsWith("gemini-") === true
-      ? DEFAULT_SUMMARY_MODEL
-      : (raw.summaryModel ?? DEFAULT_SUMMARY_MODEL);
+    (normalizePodProvider(sourceProvider ?? "claude") ?? "claude");
+  const normalizedSummary = normalizeLegacySummarySelection({
+    summaryModel: raw.summaryModel,
+    summaryProvider,
+  });
 
   return {
     ...raw,
     triggerMode: (raw.triggerMode ?? "auto") as TriggerMode,
-    summaryModel,
-    summaryProvider,
+    summaryModel: normalizedSummary.summaryModel,
+    summaryProvider: normalizedSummary.summaryProvider,
     label: raw.label,
     description: raw.description,
     branchProvider: raw.branchProvider,
@@ -78,8 +95,16 @@ export function normalizeConnectionListPayload(
 export function normalizeCreatedConnectionEvent(
   connection: Omit<Connection, "status">,
 ): Connection {
+  const normalizedSummary = normalizeLegacySummarySelection({
+    summaryModel: connection.summaryModel,
+    summaryProvider:
+      normalizePodProvider(connection.summaryProvider ?? "claude") ?? "claude",
+  });
+
   return {
     ...connection,
+    summaryModel: normalizedSummary.summaryModel,
+    summaryProvider: normalizedSummary.summaryProvider,
     triggerMode: connection.triggerMode ?? "auto",
     status: "idle",
     decideStatus: "none",
@@ -90,9 +115,9 @@ function resolveSummaryProviderFromUpdatePayload(
   connection: ConnectionPayloadItem,
   existingConnection: Connection,
   getSourceProvider: (sourcePodId: string) => PodProvider | undefined,
-): PodProvider | null | undefined {
+): PodProvider | null {
   if (connection.summaryProvider === undefined) {
-    return existingConnection.summaryProvider;
+    return existingConnection.summaryProvider ?? null;
   }
 
   if (connection.summaryProvider !== null) {
@@ -114,15 +139,7 @@ export function mapConnectionUpdatedEventPayload(
   existingConnection: Connection,
   getSourceProvider: (sourcePodId: string) => PodProvider | undefined,
 ): Connection {
-  return {
-    ...existingConnection,
-    id: connection.id,
-    sourcePodId: connection.sourcePodId ?? existingConnection.sourcePodId,
-    sourceAnchor: connection.sourceAnchor,
-    targetPodId: connection.targetPodId,
-    targetAnchor: connection.targetAnchor,
-    triggerMode:
-      (connection.triggerMode as TriggerMode) ?? existingConnection.triggerMode,
+  const normalizedSummary = normalizeLegacySummarySelection({
     summaryModel:
       connection.summaryModel ??
       existingConnection.summaryModel ??
@@ -132,6 +149,19 @@ export function mapConnectionUpdatedEventPayload(
       existingConnection,
       getSourceProvider,
     ),
+  });
+
+  return {
+    ...existingConnection,
+    id: connection.id,
+    sourcePodId: connection.sourcePodId ?? existingConnection.sourcePodId,
+    sourceAnchor: connection.sourceAnchor,
+    targetPodId: connection.targetPodId,
+    targetAnchor: connection.targetAnchor,
+    triggerMode:
+      (connection.triggerMode as TriggerMode) ?? existingConnection.triggerMode,
+    summaryModel: normalizedSummary.summaryModel,
+    summaryProvider: normalizedSummary.summaryProvider,
     // branch 欄位直接以後端回傳值覆寫（包含 undefined 視為清空）
     label: connection.label,
     description: connection.description,

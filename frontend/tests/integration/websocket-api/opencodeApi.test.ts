@@ -4,7 +4,12 @@ import {
   resetMockWebSocket,
   simulateEvent,
 } from "@tests/helpers/mockWebSocket";
-import { listAliases, reorderAliases } from "@/services/opencodeApi";
+import {
+  listAliases,
+  listOpencodeProviders as requestOpencodeProviders,
+  refreshAliasPresets,
+  reorderAliases,
+} from "@/services/opencodeApi";
 
 vi.mock("@/services/websocket/WebSocketClient", () => ({
   websocketClient: mockWebSocketClient,
@@ -47,6 +52,87 @@ describe("opencodeApi", () => {
 
     await expect(requestPromise).rejects.toThrow(
       "重排 opencode model 別稱失敗：後端未回傳 items",
+    );
+  });
+
+  it("provider list 會把 models record normalize 成 array", async () => {
+    const requestPromise = requestOpencodeProviders();
+
+    simulateEvent("opencode:provider:list:result", {
+      requestId: "req-opencode-aliases",
+      success: true,
+      all: [
+        {
+          id: "anthropic",
+          name: "Anthropic",
+          models: {
+            "claude-3-5-sonnet": {
+              id: "claude-3-5-sonnet",
+              name: "Claude Sonnet",
+            },
+            "claude-3-5-haiku": {
+              id: "claude-3-5-haiku",
+              name: "Claude Haiku",
+            },
+          },
+        },
+      ],
+      default: { anthropic: "claude-3-5-sonnet" },
+      connected: ["anthropic"],
+    });
+
+    await expect(requestPromise).resolves.toEqual({
+      all: [
+        {
+          id: "anthropic",
+          name: "Anthropic",
+          models: [
+            { id: "claude-3-5-sonnet", name: "Claude Sonnet" },
+            { id: "claude-3-5-haiku", name: "Claude Haiku" },
+          ],
+        },
+      ],
+      default: { anthropic: "claude-3-5-sonnet" },
+      connected: ["anthropic"],
+    });
+  });
+
+  it("refreshAliasPresets success 時回傳 item", async () => {
+    const requestPromise = refreshAliasPresets("alias-1");
+
+    simulateEvent("opencode:aliases:refresh-presets:result", {
+      requestId: "req-opencode-aliases",
+      success: true,
+      item: {
+        id: "alias-1",
+        providerID: "anthropic",
+        modelID: "claude-3-5-sonnet",
+        alias: "Sonnet",
+        orderIdx: 0,
+        thinkingLevels: ["balanced"],
+        thinkingLevelLabels: { balanced: "Balanced" },
+        defaultThinkingLevel: "balanced",
+        thinkingMetadataFetchedAt: 1234567890,
+      },
+    });
+
+    await expect(requestPromise).resolves.toMatchObject({
+      id: "alias-1",
+      thinkingLevels: ["balanced"],
+      defaultThinkingLevel: "balanced",
+    });
+  });
+
+  it("refreshAliasPresets contract 破裂時回報缺少 item", async () => {
+    const requestPromise = refreshAliasPresets("alias-1");
+
+    simulateEvent("opencode:aliases:refresh-presets:result", {
+      requestId: "req-opencode-aliases",
+      success: true,
+    });
+
+    await expect(requestPromise).rejects.toThrow(
+      "刷新 opencode thinking presets 失敗：後端未回傳 item",
     );
   });
 });

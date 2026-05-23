@@ -990,15 +990,6 @@
       "reason": "Run chat event 只應更新目前開啟的 run modal，且 RUN_DELETED 錯誤不得誤刪本地 run，屬流程狀態規則。"
     },
     {
-      "path": "frontend/tests/business-logic/lib/podDividerPath.test.ts",
-      "currentCategory": "data-transform",
-      "decision": "keep",
-      "mapsTo": [
-        "F6"
-      ],
-      "reason": "Pod divider path 必須對相同 pod 穩定、不同 pod 分歧並維持端點規則，是可視分隔線資料轉換規則。"
-    },
-    {
       "path": "frontend/tests/business-logic/stores/connectionGraphHelpers.test.ts",
       "currentCategory": "state-decision",
       "decision": "keep",
@@ -1045,7 +1036,6 @@
       "frontend/tests/business-logic/components/pod/PodThinkingSlot.test.ts",
       "frontend/tests/business-logic/components/pod/ThinkingPopover.test.ts",
       "frontend/tests/business-logic/composables/events/runEventHandlers.test.ts",
-      "frontend/tests/business-logic/lib/podDividerPath.test.ts",
       "frontend/tests/business-logic/stores/connectionGraphHelpers.test.ts",
       "frontend/tests/business-logic/stores/connectionPayloadMappers.test.ts",
       "frontend/tests/userflows/canvas/connectionKeyboardFlow.test.ts",

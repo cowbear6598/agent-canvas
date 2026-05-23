@@ -1,4 +1,5 @@
 import type { NormalizedEvent } from "./types.js";
+import { logger } from "../../utils/logger.js";
 import {
   classifySessionError,
   extractErrorMessage,
@@ -11,6 +12,9 @@ import {
 import type { OpencodeMessageItem } from "./opencodeClientPort.js";
 
 type OpencodeErrorEvent = Extract<NormalizedEvent, { type: "error" }>;
+const TOOL_PART_BOUNDARY_QUERY_THROTTLE_MS = 200;
+// 補拉 session.messages 時保留最小視窗，避免最近 tool part 被過小的 limit 截掉。
+const TOOL_PART_MESSAGE_LIMIT_FLOOR = 50;
 
 type StreamRaceResult =
   | { kind: "stream"; result: IteratorResult<unknown> }
@@ -35,7 +39,7 @@ export interface OpencodeStreamNormalizerOptions {
   messages(limit: number): Promise<Array<OpencodeMessageItem> | undefined>;
 }
 
-export function buildPermissionAskedEvent(
+function buildPermissionAskedEvent(
   props: Record<string, unknown>,
 ): OpencodeErrorEvent {
   const permission =
@@ -55,7 +59,7 @@ export function buildPermissionAskedEvent(
   });
 }
 
-export function buildQuestionAskedEvent(
+function buildQuestionAskedEvent(
   props: Record<string, unknown>,
 ): OpencodeErrorEvent {
   const firstQuestion = Array.isArray(props.questions)
@@ -83,7 +87,7 @@ export function buildQuestionAskedEvent(
   });
 }
 
-export function buildWorkspaceFailedEvent(
+function buildWorkspaceFailedEvent(
   props: Record<string, unknown>,
 ): OpencodeErrorEvent {
   const message =
@@ -91,21 +95,49 @@ export function buildWorkspaceFailedEvent(
       ? props.message
       : "未知錯誤";
 
+  logger.error(
+    "Chat",
+    "Error",
+    `[OpencodeProvider] workspace.failed：${message}`,
+  );
+
   return buildOpencodeSystemError({
-    content: `opencode workspace 初始化失敗：${message}`,
+    content: "opencode 工作區初始化失敗，請稍後再試",
     fatal: true,
     code: "opencode_workspace_failed",
-    rawContent: message,
   });
 }
 
-export class OpencodeToolEventCollector {
+function buildSanitizedSessionFailureEvent(params: {
+  rawMessage: string;
+  providerID: string;
+  source: "session.next.step.failed" | "session.error";
+}): OpencodeErrorEvent {
+  const { rawMessage, providerID, source } = params;
+  logger.error("Chat", "Error", `[OpencodeProvider] ${source}：${rawMessage}`);
+
+  const classified = classifySessionError(rawMessage, providerID);
+  if (
+    classified.code === "opencode_auth_missing" ||
+    classified.code === "opencode_server_unreachable"
+  ) {
+    return classified;
+  }
+
+  return buildOpencodeSystemError({
+    content: "opencode session 發生錯誤，請稍後再試",
+    fatal: classified.fatal,
+    code: "opencode_session_failed",
+  });
+}
+
+class OpencodeToolEventCollector {
   private readonly currentMessageIds = new Set<string>();
   private readonly yieldedToolCallIDs = new Set<string>();
   private readonly pendingToolCalls = new Map<string, PendingToolCall>();
   private currentPartID: string | undefined = undefined;
   private lastPartIDQueryAt = 0;
-  private readonly partIdQueryThrottleMs = 200;
+  private readonly partIdQueryThrottleMs = TOOL_PART_BOUNDARY_QUERY_THROTTLE_MS;
 
   constructor(
     private readonly messages: (
@@ -140,7 +172,10 @@ export class OpencodeToolEventCollector {
   async *collectPendingToolParts(): AsyncGenerator<NormalizedEvent> {
     if (this.currentMessageIds.size === 0) return;
 
-    const messageLimit = Math.max(this.currentMessageIds.size, 50);
+    const messageLimit = Math.max(
+      this.currentMessageIds.size,
+      TOOL_PART_MESSAGE_LIMIT_FLOOR,
+    );
     const sessionMessages = await this.messages(messageLimit);
     if (!sessionMessages) return;
 
@@ -393,7 +428,11 @@ export async function* normalizeOpencodeStream(
           | { type?: string; message?: string }
           | undefined;
         const rawMessage = stepError?.message ?? "未知錯誤";
-        yield classifySessionError(rawMessage, providerID);
+        yield buildSanitizedSessionFailureEvent({
+          rawMessage,
+          providerID,
+          source: "session.next.step.failed",
+        });
         break;
       }
 
@@ -406,7 +445,11 @@ export async function* normalizeOpencodeStream(
       if (type === "session.error") {
         const error = props.error;
         const rawMessage = extractErrorMessage(error);
-        yield classifySessionError(rawMessage, providerID);
+        yield buildSanitizedSessionFailureEvent({
+          rawMessage,
+          providerID,
+          source: "session.error",
+        });
         break;
       }
     }

@@ -73,6 +73,23 @@ describe("connectionPayloadMappers", () => {
       expect(connection.decideStatus).toBe("none");
     });
 
+    it("created event 也會套用 legacy gemini summary normalize", () => {
+      const connection = normalizeCreatedConnectionEvent({
+        id: "conn-1",
+        sourcePodId: "pod-a",
+        sourceAnchor: "bottom",
+        targetPodId: "pod-b",
+        targetAnchor: "top",
+        summaryModel: "gemini-2.5-pro",
+        summaryProvider: "opencode",
+        triggerMode: "auto",
+        decideStatus: "none",
+      });
+
+      expect(connection.summaryModel).toBe(DEFAULT_SUMMARY_MODEL);
+      expect(connection.summaryProvider).toBe("claude");
+    });
+
     it("updated event 未帶 connectionStatus 時保留既有 status", () => {
       const existingConnection = createMockConnection({
         id: "conn-1",
@@ -120,6 +137,33 @@ describe("connectionPayloadMappers", () => {
       );
 
       expect(mapped.summaryProvider).toBe("opencode");
+    });
+
+    it("updated event 也會套用 legacy gemini summary normalize", () => {
+      const existingConnection = createMockConnection({
+        id: "conn-1",
+        sourcePodId: "pod-a",
+        targetPodId: "pod-b",
+        summaryModel: "claude-3-5-haiku-latest",
+        summaryProvider: "codex",
+      });
+      const payload: ConnectionPayloadItem = {
+        id: "conn-1",
+        sourcePodId: "pod-a",
+        sourceAnchor: "bottom",
+        targetPodId: "pod-b",
+        targetAnchor: "top",
+        summaryModel: "gemini-2.5-flash",
+      };
+
+      const mapped = mapConnectionUpdatedEventPayload(
+        payload,
+        existingConnection,
+        () => "opencode",
+      );
+
+      expect(mapped.summaryModel).toBe(DEFAULT_SUMMARY_MODEL);
+      expect(mapped.summaryProvider).toBe("claude");
     });
   });
 });

@@ -199,12 +199,11 @@ class RunExecutionService {
           runRepoCache,
         });
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "建立 run 隔離資源失敗";
+        const message = "建立 run 隔離資源失敗，請稍後再試";
         logger.error(
           "Run",
           "Error",
-          `建立 run 隔離資源失敗（runId=${workflowRun.id}, podId=${podId}）：${message}`,
+          `建立 run 隔離資源失敗（runId=${workflowRun.id}, podId=${podId}）：${error instanceof Error ? error.message : String(error)}`,
         );
         const instance = runStore.createPodInstance(
           workflowRun.id,
@@ -274,11 +273,13 @@ class RunExecutionService {
   private collectChainPodIds(canvasId: string, sourcePodId: string): string[] {
     const visited = new Set<string>();
     const queue: string[] = [sourcePodId];
+    let queueHead = 0;
     visited.add(sourcePodId);
 
-    while (queue.length > 0) {
-      const currentId = queue.shift();
-      if (!currentId) break;
+    while (queueHead < queue.length) {
+      const currentId = queue[queueHead];
+      queueHead += 1;
+      if (!currentId) continue;
 
       const connections = connectionStore.findBySourcePodId(
         canvasId,
@@ -502,10 +503,15 @@ class RunExecutionService {
     const queue: RunPodInstance[] = instances.filter((i) =>
       NEVER_TRIGGERED_STATUSES.has(i.status),
     );
+    let queueHead = 0;
     const inQueue = new Set<string>(queue.map((i) => i.podId));
 
-    while (queue.length > 0) {
-      const instance = queue.shift()!;
+    while (queueHead < queue.length) {
+      const instance = queue[queueHead];
+      queueHead += 1;
+      if (!instance) {
+        continue;
+      }
       inQueue.delete(instance.podId);
 
       const settled = settleInstanceIfUnreachable(

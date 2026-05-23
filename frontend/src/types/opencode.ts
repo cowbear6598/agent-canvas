@@ -18,12 +18,12 @@ export interface OpencodeProviderInfo {
 /**
  * GET /provider 回傳結果：
  * - all：所有支援的 provider
- * - default：預設 provider id
+ * - default：各 provider 對應的預設 model id
  * - connected：已登入（可用）的 provider id 清單
  */
 export interface OpencodeProviderListResult {
   all: OpencodeProviderInfo[];
-  default: string;
+  default: Record<string, string>;
   connected: string[];
 }
 

@@ -12,6 +12,7 @@ import type {
 } from "./opencodeClientPort.js";
 
 type OpencodeErrorEvent = Extract<NormalizedEvent, { type: "error" }>;
+const OPENCODE_SESSION_MESSAGES_TIMEOUT_MS = 10_000;
 
 export type OpencodeSessionStartResult =
   | {
@@ -61,6 +62,11 @@ function buildPromptFailureEvent(
   providerID: string,
 ): OpencodeErrorEvent {
   const rawMessage = extractErrorMessage(rawError);
+  logger.error(
+    "Chat",
+    "Error",
+    `[OpencodeProvider] session.prompt 失敗：${rawMessage}`,
+  );
   const classified = classifySessionError(rawMessage, providerID);
 
   if (
@@ -71,10 +77,35 @@ function buildPromptFailureEvent(
   }
 
   return buildOpencodeSystemError({
-    content: `opencode prompt 發送失敗：${rawMessage}`,
+    content: "opencode 訊息發送失敗，請稍後再試",
     fatal: true,
     code: "opencode_prompt_failed",
-    rawContent: rawMessage,
+  });
+}
+
+function buildCreateSessionFailureEvent(
+  rawError: unknown,
+  providerID: string,
+): OpencodeErrorEvent {
+  const rawMessage = extractErrorMessage(rawError);
+  logger.error(
+    "Chat",
+    "Error",
+    `[OpencodeProvider] session.create 失敗：${rawMessage}`,
+  );
+  const classified = classifySessionError(rawMessage, providerID);
+
+  if (
+    classified.code === "opencode_auth_missing" ||
+    classified.code === "opencode_server_unreachable"
+  ) {
+    return forceFatalOpencodeError(classified);
+  }
+
+  return buildOpencodeSystemError({
+    content: "opencode session 建立失敗，請稍後再試",
+    fatal: true,
+    code: "opencode_session_failed",
   });
 }
 
@@ -99,8 +130,17 @@ export function createOpencodeSessionLifecycleAdapter(options: {
           directory: workspacePath,
         });
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return { ok: false, event: classifySessionError(msg, providerID) };
+        return {
+          ok: false,
+          event: buildCreateSessionFailureEvent(err, providerID),
+        };
+      }
+
+      if (createResult.error != null) {
+        return {
+          ok: false,
+          event: buildCreateSessionFailureEvent(createResult.error, providerID),
+        };
       }
 
       const createdId = createResult?.data?.id;
@@ -150,6 +190,7 @@ export function createOpencodeSessionLifecycleAdapter(options: {
       sessionId,
       limit,
     ): Promise<Array<OpencodeMessageItem> | undefined> {
+      let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
       try {
         const result = await Promise.race([
           client.session.messages({
@@ -158,12 +199,22 @@ export function createOpencodeSessionLifecycleAdapter(options: {
             limit,
           }),
           new Promise<never>((_, reject) =>
-            setTimeout(
+            (timeoutHandle = setTimeout(
               () => reject(new Error("opencode session.messages timeout")),
-              10_000,
-            ),
+              OPENCODE_SESSION_MESSAGES_TIMEOUT_MS,
+            )),
           ),
         ]);
+        if (result.error != null) {
+          const rawMessage = extractErrorMessage(result.error);
+          const classified = classifySessionError(rawMessage, providerID);
+          logger.warn(
+            "Chat",
+            "Warn",
+            `[OpencodeProvider] session.messages 查詢失敗（code=${classified.code ?? "unknown"}），跳過 tool tag 補發：${rawMessage}`,
+          );
+          return undefined;
+        }
         return result.data ?? undefined;
       } catch (err) {
         logger.warn(
@@ -172,6 +223,10 @@ export function createOpencodeSessionLifecycleAdapter(options: {
           `[OpencodeProvider] session.messages 查詢失敗，跳過 tool tag 補發：${err instanceof Error ? err.message : String(err)}`,
         );
         return undefined;
+      } finally {
+        if (timeoutHandle) {
+          clearTimeout(timeoutHandle);
+        }
       }
     },
 

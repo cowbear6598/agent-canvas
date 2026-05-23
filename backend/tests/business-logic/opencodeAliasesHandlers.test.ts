@@ -67,6 +67,7 @@ import {
   handleOpencodeAliasesList,
   handleOpencodeAliasesCreate,
   handleOpencodeAliasesUpdate,
+  handleOpencodeAliasesRefreshPresets,
   handleOpencodeAliasesDelete,
   handleOpencodeAliasesReorder,
   resetOpencodeThinkingPresetSnapshotFetcher,
@@ -816,6 +817,121 @@ describe("handleOpencodeAliasesUpdate", () => {
       modelID: "claude-opus-4",
       alias: "AliasB",
     });
+  });
+});
+
+// ─── opencode:aliases:refresh-presets ───────────────────────────────────────
+
+describe("handleOpencodeAliasesRefreshPresets", () => {
+  it("success：刷新後回傳最新 thinking preset 並廣播更新", async () => {
+    await handleOpencodeAliasesCreate(
+      CONNECTION_ID,
+      {
+        requestId: REQUEST_ID,
+        providerID: "anthropic",
+        modelID: "claude-3-5-sonnet",
+        alias: "Sonnet",
+      },
+      REQUEST_ID,
+    );
+    const [, , createPayload] = mockEmitToConnection.mock.calls[0];
+    const createdId: string = createPayload.item.id;
+
+    setOpencodeThinkingPresetSnapshotFetcher(async (providerID, modelID) => ({
+      ok: true,
+      snapshot: {
+        levels: [
+          {
+            id: "deep",
+            label: "Deep",
+            options: { variant: "high", reasoningEffort: "high" },
+          },
+        ],
+        defaultLevel: "deep",
+        fetchedAt: 2233445566,
+        metadata: { providerID, modelID, source: "refresh" },
+      },
+    }));
+
+    vi.clearAllMocks();
+    await handleOpencodeAliasesRefreshPresets(
+      CONNECTION_ID,
+      { requestId: REQUEST_ID, id: createdId },
+      REQUEST_ID,
+    );
+
+    const [, event, payload] = mockEmitToConnection.mock.calls[0];
+    expect(event).toBe(
+      WebSocketResponseEvents.OPENCODE_ALIASES_REFRESH_PRESETS_RESULT,
+    );
+    expect(payload.success).toBe(true);
+    expect(payload.item).toMatchObject({
+      id: createdId,
+      thinkingLevels: ["deep"],
+      thinkingLevelLabels: { deep: "Deep" },
+      defaultThinkingLevel: "deep",
+      thinkingMetadataFetchedAt: 2233445566,
+    });
+    expect(mockBroadcastOpencodeAliasesUpdated).toHaveBeenCalledOnce();
+    expect(mockBroadcastProviderList).toHaveBeenCalledOnce();
+  });
+
+  it("alias_not_found：找不到 alias 時回傳結構化錯誤", async () => {
+    await handleOpencodeAliasesRefreshPresets(
+      CONNECTION_ID,
+      { requestId: REQUEST_ID, id: "missing-alias" },
+      REQUEST_ID,
+    );
+
+    const [, event, payload] = mockEmitToConnection.mock.calls[0];
+    expect(event).toBe(
+      WebSocketResponseEvents.OPENCODE_ALIASES_REFRESH_PRESETS_RESULT,
+    );
+    expect(payload.success).toBe(false);
+    expect(payload.error).toMatchObject({
+      code: "alias_not_found",
+      message: "找不到指定的 alias，無法刷新 thinking presets",
+    });
+  });
+
+  it("fetch_failed：抓取官方 preset 失敗時回傳 service 錯誤且不廣播", async () => {
+    await handleOpencodeAliasesCreate(
+      CONNECTION_ID,
+      {
+        requestId: REQUEST_ID,
+        providerID: "anthropic",
+        modelID: "claude-3-5-sonnet",
+        alias: "Sonnet",
+      },
+      REQUEST_ID,
+    );
+    const [, , createPayload] = mockEmitToConnection.mock.calls[0];
+    const createdId: string = createPayload.item.id;
+
+    setOpencodeThinkingPresetSnapshotFetcher(async () => ({
+      ok: false,
+      code: "fetch_failed",
+      message: "抓取 thinking presets 失敗，請稍後再試",
+    }));
+
+    vi.clearAllMocks();
+    await handleOpencodeAliasesRefreshPresets(
+      CONNECTION_ID,
+      { requestId: REQUEST_ID, id: createdId },
+      REQUEST_ID,
+    );
+
+    const [, event, payload] = mockEmitToConnection.mock.calls[0];
+    expect(event).toBe(
+      WebSocketResponseEvents.OPENCODE_ALIASES_REFRESH_PRESETS_RESULT,
+    );
+    expect(payload.success).toBe(false);
+    expect(payload.error).toMatchObject({
+      code: "fetch_failed",
+      message: "抓取 thinking presets 失敗，請稍後再試",
+    });
+    expect(mockBroadcastOpencodeAliasesUpdated).not.toHaveBeenCalled();
+    expect(mockBroadcastProviderList).not.toHaveBeenCalled();
   });
 });
 
