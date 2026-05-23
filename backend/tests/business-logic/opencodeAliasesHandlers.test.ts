@@ -61,6 +61,10 @@ import {
   WebSocketRequestEvents,
   WebSocketResponseEvents,
 } from "../../src/schemas/index.js";
+import {
+  opencodeAliasesCreateSchema,
+  opencodeAliasesUpdateSchema,
+} from "../../src/schemas/opencodeSettingsSchemas.js";
 
 // ─── 常數 ─────────────────────────────────────────────────────────────────────
 
@@ -217,6 +221,35 @@ describe("handleOpencodeAliasesList", () => {
 // ─── opencode:aliases:create ──────────────────────────────────────────────────
 
 describe("handleOpencodeAliasesCreate", () => {
+  it("schema：providerID / modelID / alias 會 trim 並拒絕危險字元", () => {
+    const valid = opencodeAliasesCreateSchema.parse({
+      requestId: REQUEST_ID_UUID,
+      providerID: " anthropic ",
+      modelID: " openrouter/anthropic/claude-3.5-sonnet ",
+      alias: " Sonnet ",
+    });
+
+    expect(valid.providerID).toBe("anthropic");
+    expect(valid.modelID).toBe("openrouter/anthropic/claude-3.5-sonnet");
+    expect(valid.alias).toBe("Sonnet");
+    expect(
+      opencodeAliasesCreateSchema.safeParse({
+        requestId: REQUEST_ID_UUID,
+        providerID: "../anthropic",
+        modelID: "claude-3-5-sonnet",
+        alias: "Sonnet",
+      }).success,
+    ).toBe(false);
+    expect(
+      opencodeAliasesUpdateSchema.safeParse({
+        requestId: REQUEST_ID_UUID,
+        id: "alias-id",
+        modelID: "claude-3-5-sonnet",
+        alias: "Bad\u0000Alias",
+      }).success,
+    ).toBe(false);
+  });
+
   it("A1（wire-up smoke）：透過 handler group 派發 OPENCODE_ALIASES_CREATE，回應 OPENCODE_ALIASES_CREATE_RESULT success=true", async () => {
     const handlerDef = opencodeSettingsHandlerGroup.handlers.find(
       (handler) =>

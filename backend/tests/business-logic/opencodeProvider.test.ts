@@ -56,6 +56,7 @@ import {
   GOAL_MCP_SERVER_NAME,
   removeGoalRuntimeRun,
 } from "../../src/services/goalRuntime.js";
+import { getDb } from "../../src/database/index.js";
 
 // ── logger mock ────────────────────────────────────────────────────────
 vi.mock("../../src/utils/logger.js", () => ({
@@ -191,7 +192,7 @@ async function waitForMockCall(
 
 function makeBuildOptionsPod(
   overrides: Partial<{
-    providerConfig: { model: string };
+    providerConfig: { model: string; thinkingLevel?: string };
     mcpServerNames: string[];
     goal: { todos: Array<{ id: string; text: string }> } | null;
   }> = {},
@@ -421,6 +422,47 @@ describe("buildOptions", () => {
       { name: "remote-mcp", transport: "http", url: "https://example.com/mcp" },
     ]);
   });
+
+  it("Pod 已選 thinkingLevel 時應從 alias preset snapshot 讀出 prompt variant", async () => {
+    const now = Date.now();
+    getDb()
+      .prepare(
+        `INSERT INTO model_aliases (
+          id, provider_id, real_provider, real_model, alias, order_idx,
+          thinking_levels_json, default_thinking_level, thinking_metadata_json,
+          thinking_metadata_fetched_at, created_at, updated_at
+        ) VALUES (
+          $id, 'opencode', 'anthropic', 'claude-sonnet-4-5', 'Sonnet', 99,
+          $thinkingLevelsJson, 'balanced', '{}',
+          $fetchedAt, $createdAt, $updatedAt
+        )`,
+      )
+      .run({
+        $id: "opencode-provider-thinking-preset",
+        $thinkingLevelsJson: JSON.stringify([
+          {
+            id: "balanced",
+            label: "Balanced",
+            options: { variant: "medium" },
+          },
+        ]),
+        $fetchedAt: now,
+        $createdAt: now,
+        $updatedAt: now,
+      });
+
+    const pod = makeBuildOptionsPod({
+      providerConfig: {
+        model: "anthropic/claude-sonnet-4-5",
+        thinkingLevel: "balanced",
+      },
+    });
+
+    const options = await opencodeProvider.buildOptions(pod);
+
+    expect(options.thinkingLevel).toBe("balanced");
+    expect(options.thinkingOptions).toEqual({ variant: "medium" });
+  });
 });
 
 // ================================================================
@@ -456,6 +498,47 @@ describe("chat — resumeSessionId=null → session_started 且 sessionId 等於
       (firstEvent as Extract<NormalizedEvent, { type: "session_started" }>)
         .sessionId,
     ).toBe(mockSessionId);
+  });
+
+  it("有 thinkingOptions.variant 時 session.prompt 應帶入 variant", async () => {
+    const mockSessionId = "new-session-with-variant";
+    const prompt = vi.fn().mockResolvedValue({ data: {} });
+    const mockClient = makeMockClient({
+      session: {
+        create: vi.fn().mockResolvedValue({ data: { id: mockSessionId } }),
+        prompt,
+        abort: vi.fn().mockResolvedValue({ data: true }),
+      },
+      event: {
+        subscribe: vi.fn().mockResolvedValue({
+          stream: eventsToStream([
+            { type: "session.idle", properties: { sessionID: mockSessionId } },
+          ]),
+        }),
+      },
+    });
+
+    setOpencodeClientFactory(() => mockClient);
+
+    await collectEvents(
+      opencodeProvider.chat(
+        makeCtx({
+          options: {
+            providerID: "anthropic",
+            modelID: "claude-sonnet-4-5",
+            mcpEntries: [],
+            hasGoalRuntime: false,
+            pluginCatalogText: "",
+            thinkingLevel: "balanced",
+            thinkingOptions: { variant: "medium" },
+          },
+        }),
+      ),
+    );
+
+    expect(prompt).toHaveBeenCalledWith(
+      expect.objectContaining({ variant: "medium" }),
+    );
   });
 
   it("session.create 失敗時應 yield session 錯誤並停止", async () => {

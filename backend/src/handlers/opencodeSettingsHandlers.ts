@@ -35,6 +35,7 @@ import {
   parseOpencodeThinkingLevelsJson,
   type OpencodeThinkingPresetSnapshot,
 } from "../services/provider/opencodeThinkingPresetService.js";
+import { logger } from "../utils/logger.js";
 
 // ─── 廣播輔助：best-effort refresh，不影響已完成的 DB 操作 ─────────────────────
 
@@ -45,7 +46,12 @@ async function broadcastRefreshBestEffort(): Promise<void> {
       broadcastProviderList(),
     ]);
   } catch (err) {
-    console.error("[opencodeSettingsHandlers] best-effort refresh 廣播失敗：", err);
+    logger.error(
+      "Integration",
+      "Error",
+      "opencode aliases refresh 廣播失敗",
+      err,
+    );
   }
 }
 
@@ -143,10 +149,12 @@ export async function handleOpencodeServerRestart(
   if (state.status === "ready") {
     response = { requestId, success: true };
   } else {
-    console.error("[handleOpencodeServerRestart] restart 失敗：", {
-      status: state.status,
-      failureReason: state.failureReason,
-    });
+    logger.error(
+      "Integration",
+      "Error",
+      `opencode 重新啟動失敗（status=${state.status}）`,
+      state.failureReason,
+    );
     response = {
       requestId,
       success: false,
@@ -202,7 +210,12 @@ export async function handleOpencodeProviderList(
     const result = await client.provider.list();
 
     if (result.error) {
-      console.error("[handleOpencodeProviderList] SDK 回傳錯誤：", result.error);
+      logger.error(
+        "Integration",
+        "Error",
+        "取得 opencode provider 清單失敗",
+        result.error,
+      );
       const response: OpencodeProviderListResultPayload = {
         requestId,
         success: false,
@@ -246,7 +259,12 @@ export async function handleOpencodeProviderList(
       response,
     );
   } catch (err) {
-    console.error("[handleOpencodeProviderList]", err);
+    logger.error(
+      "Integration",
+      "Error",
+      "取得 opencode provider 清單時發生例外",
+      err,
+    );
     const response: OpencodeProviderListResultPayload = {
       requestId,
       success: false,
@@ -371,6 +389,13 @@ async function defaultFetchThinkingPresetSnapshot(
       : Array.isArray(models)
         ? models.find((model) => (model as { id?: unknown }).id === modelID)
         : null;
+  if (!modelMetadata) {
+    return {
+      ok: false,
+      code: "opencode_model_not_found",
+      message: "找不到指定的 OpenCode model",
+    };
+  }
 
   return buildOpencodeThinkingPresetSnapshot({
     providerID,
@@ -595,16 +620,12 @@ function logAliasInUseDetails(
   row: ModelAliasRow,
   usages: AliasUsage[],
 ): void {
-  console.warn("[opencodeSettingsHandlers] alias 使用中，已阻擋操作：", {
-    action,
-    aliasId: row.id,
-    realProvider: row.real_provider,
-    realModel: row.real_model,
-    usages: usages.map((usage) => ({
-      canvasName: usage.canvasName,
-      description: usage.description,
-    })),
-  });
+  const canvasCount = new Set(usages.map((usage) => usage.canvasName)).size;
+  logger.warn(
+    "Integration",
+    "Warn",
+    `opencode alias 使用中，已阻擋 ${action} 操作（aliasId=${row.id}, realProvider=${row.real_provider}, realModel=${row.real_model}, usageCount=${usages.length}, canvasCount=${canvasCount}）`,
+  );
 }
 
 function buildAliasInUseMessage(action: "delete" | "update"): string {

@@ -1,6 +1,27 @@
 import { z } from "zod";
 import { requestIdSchema } from "./base.js";
 
+const opencodeProviderIdSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(80)
+  .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/, "providerID 格式不正確");
+
+const opencodeModelIdSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(200)
+  .regex(/^[A-Za-z0-9][A-Za-z0-9._:/@+-]*$/, "modelID 格式不正確");
+
+const opencodeAliasNameSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(80)
+  .regex(/^[^\p{C}]+$/u, "alias 不可包含控制字元");
+
 // ─── opencode:aliases:list ────────────────────────────────────────────────────
 
 /** opencode:aliases:list 請求 payload schema（空 payload，只帶 requestId） */
@@ -40,9 +61,9 @@ export type OpencodeAliasesListResultPayload =
 /** opencode:aliases:create 請求 payload schema */
 export const opencodeAliasesCreateSchema = z.object({
   requestId: requestIdSchema,
-  providerID: z.string().min(1),
-  modelID: z.string().min(1),
-  alias: z.string().min(1),
+  providerID: opencodeProviderIdSchema,
+  modelID: opencodeModelIdSchema,
+  alias: opencodeAliasNameSchema,
 });
 
 export type OpencodeAliasesCreatePayload = z.infer<
@@ -66,8 +87,8 @@ export type OpencodeAliasesCreateResultPayload =
 export const opencodeAliasesUpdateSchema = z.object({
   requestId: requestIdSchema,
   id: z.string().min(1),
-  modelID: z.string().min(1),
-  alias: z.string().min(1),
+  modelID: opencodeModelIdSchema,
+  alias: opencodeAliasNameSchema,
 });
 
 export type OpencodeAliasesUpdatePayload = z.infer<

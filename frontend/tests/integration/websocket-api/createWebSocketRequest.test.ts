@@ -262,6 +262,37 @@ describe("createWebSocketRequest", () => {
       );
     });
 
+    it("應該允許 OpenCode model 不存在錯誤顯示後端訊息", async () => {
+      const config: WebSocketRequestConfig<
+        { requestId: string; data: string },
+        {
+          requestId: string;
+          success: boolean;
+          error: { code: string; message: string };
+        }
+      > = {
+        requestEvent: "test:request",
+        responseEvent: "test:response",
+        payload: { data: "test" },
+      };
+
+      const promise = createWebSocketRequest(config);
+
+      const responseCallback = capturedCallbacks.get("test:response");
+      responseCallback?.({
+        requestId: "test-request-id",
+        success: false,
+        error: {
+          code: "opencode_model_not_found",
+          message: "找不到指定的 OpenCode model",
+        },
+      });
+
+      await expect(promise).rejects.toThrow(
+        "找不到指定的 OpenCode model",
+      );
+    });
+
     it("非白名單 error code 不應直接顯示後端 message", async () => {
       const config: WebSocketRequestConfig<
         { requestId: string; data: string },

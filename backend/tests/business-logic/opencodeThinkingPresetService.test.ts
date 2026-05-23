@@ -95,6 +95,31 @@ describe("buildOpencodeThinkingPresetSnapshot", () => {
     ]);
   });
 
+  it("variants array 中 disabled=true 的項目不應顯示為可選 preset", () => {
+    const result = buildOpencodeThinkingPresetSnapshot({
+      providerID: "openai",
+      modelID: "gpt-5",
+      modelMetadata: {
+        id: "gpt-5",
+        name: "GPT-5",
+        reasoning: true,
+        variants: [
+          { id: "low", disabled: true },
+          { id: "high", reasoningEffort: "high" },
+        ],
+      },
+      fetchedAt: 124,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("預期有效 variants 應產生 presets");
+
+    expect(result.snapshot.defaultLevel).toBe("high");
+    expect(result.snapshot.levels).toEqual([
+      { id: "high", label: "High", options: { variant: "high" } },
+    ]);
+  });
+
   it("variants 中 disabled=true 的項目不應顯示為可選 preset", () => {
     const result = buildOpencodeThinkingPresetSnapshot({
       providerID: "openai",

@@ -48,6 +48,7 @@ function readVariantIds(value: unknown): string[] {
       .map((item) => {
         if (typeof item === "string") return item;
         const record = readRecord(item);
+        if (record?.disabled === true) return null;
         return typeof record?.id === "string" ? record.id : null;
       })
       .filter((id): id is string => Boolean(id));

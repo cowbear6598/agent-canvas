@@ -48,6 +48,7 @@ const MESSAGE_ALLOWED_ERROR_CODES = new Set([
   "opencode_provider_list_failed",
   "opencode_provider_not_found",
   "opencode_model_metadata_missing",
+  "opencode_model_not_found",
   "opencode_thinking_presets_unavailable",
   "opencode_restart_failed",
 ]);
