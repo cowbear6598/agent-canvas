@@ -273,6 +273,16 @@ describe("GitService - fetchRemoteBranch 分支名驗證", () => {
     expect(result.success).toBe(false);
     expect(result.error).toBe("無效的分支名稱");
   });
+
+  it("以連字號開頭的分支名稱應回傳錯誤", async () => {
+    const result = await gitService.fetchRemoteBranch(
+      "/fake/path",
+      "--upload-pack=evil",
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("無效的分支名稱");
+  });
 });
 
 // ─── hasCommits：使用真 git repo 驗證邊界行為 ────────────────────────────
@@ -469,6 +479,19 @@ describe("GitService - smartCheckoutBranch（失敗路徑，vi.spyOn）", () => 
     const branchExistsSpy = vi.spyOn(gitService, "branchExists");
 
     const result = await gitService.smartCheckoutBranch("/fake/path", "../bad");
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("無效的分支名稱格式");
+    expect(branchExistsSpy).not.toHaveBeenCalled();
+  });
+
+  it("以連字號開頭的分支名稱回傳錯誤，不執行任何 git 操作", async () => {
+    const branchExistsSpy = vi.spyOn(gitService, "branchExists");
+
+    const result = await gitService.smartCheckoutBranch(
+      "/fake/path",
+      "--upload-pack=evil",
+    );
 
     expect(result.success).toBe(false);
     expect(result.error).toBe("無效的分支名稱格式");

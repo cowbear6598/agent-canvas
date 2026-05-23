@@ -10,6 +10,7 @@ import {
   getGitStageMessage,
   maskTokenInError,
 } from "../../utils/operationHelpers.js";
+import { isValidGitBranchName } from "../../utils/branchNameValidator.js";
 import path from "path";
 import fs from "fs/promises";
 
@@ -35,27 +36,11 @@ export interface SmartCheckoutOptions {
 
 type GitSource = "github" | "gitlab" | "other";
 
-const BRANCH_NAME_PATTERN = /^[a-zA-Z0-9_.\-/]+$/;
-
 const PULL_FETCH_PROGRESS_START = 10;
 const PULL_FETCH_PROGRESS_WEIGHT = 0.7;
 
 const FETCH_CHECKOUT_PROGRESS_START = 20;
 const FETCH_CHECKOUT_PROGRESS_WEIGHT = 0.6;
-
-function isValidBranchName(branchName: string): boolean {
-  if (!BRANCH_NAME_PATTERN.test(branchName)) {
-    return false;
-  }
-  if (branchName.includes("//")) {
-    return false;
-  }
-  if (branchName.includes("..")) {
-    return false;
-  }
-
-  return !(branchName.startsWith("/") || branchName.endsWith("/"));
-}
 
 function parseGitErrorMessage(error: unknown): string {
   return maskTokenInError(error);
@@ -414,7 +399,7 @@ class GitService {
     branchName: string,
     force?: boolean,
   ): Promise<Result<void>> {
-    if (!isValidBranchName(branchName)) {
+    if (!isValidGitBranchName(branchName)) {
       return err("無效的分支名稱格式");
     }
 
@@ -497,7 +482,7 @@ class GitService {
     branchName: string,
     onProgress?: (progress: GitCloneProgress) => void,
   ): Promise<Result<void>> {
-    if (!isValidBranchName(branchName)) {
+    if (!isValidGitBranchName(branchName)) {
       return err("無效的分支名稱");
     }
 
@@ -518,7 +503,7 @@ class GitService {
     workspacePath: string,
     branchName: string,
   ): Promise<Result<void>> {
-    if (!isValidBranchName(branchName)) {
+    if (!isValidGitBranchName(branchName)) {
       return err("無效的分支名稱格式");
     }
 
@@ -540,7 +525,7 @@ class GitService {
     }
 
     const currentBranch = currentBranchResult.data;
-    if (!currentBranch || !isValidBranchName(currentBranch)) {
+    if (!currentBranch || !isValidGitBranchName(currentBranch)) {
       return err("無效的分支名稱格式");
     }
 
@@ -730,7 +715,7 @@ class GitService {
   ): Promise<Result<"switched" | "fetched" | "created">> {
     const { force, onProgress } = options ?? {};
 
-    if (!isValidBranchName(branchName)) {
+    if (!isValidGitBranchName(branchName)) {
       return err("無效的分支名稱格式");
     }
 

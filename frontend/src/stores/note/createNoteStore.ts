@@ -516,7 +516,7 @@ export function createNoteStore<
           config,
           itemId,
         );
-        const response = await deleteItem<
+        const result = await deleteItem<
           ReturnType<typeof buildDeletePayload>["payload"],
           BaseResponse
         >({
@@ -526,7 +526,8 @@ export function createNoteStore<
           errorMessage: t("store.resource.deleteFailed"),
         });
 
-        if (!response) return;
+        if (!result.success) return;
+        const response = result.data;
 
         // filter state
         const index = this.availableItems.findIndex(

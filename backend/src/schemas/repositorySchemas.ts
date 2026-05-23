@@ -8,6 +8,7 @@ import {
   noteDeleteBaseSchema,
   podUnbindBaseSchema,
 } from "./base.js";
+import { isValidGitBranchName } from "../utils/branchNameValidator.js";
 
 const repositoryIdSchema = z
   .string()
@@ -66,8 +67,8 @@ export const repositoryGitCloneSchema = z.object({
   }),
   branch: z
     .string()
-    .regex(/^[a-zA-Z0-9_.\-/]+$/, "分支名稱格式不正確")
-    .max(200)
+    .max(200, "分支名稱過長")
+    .refine(isValidGitBranchName, "分支名稱格式不正確")
     .optional(),
 });
 
@@ -96,10 +97,7 @@ const branchOperationBaseSchema = z.object({
   branchName: z
     .string()
     .max(200, "分支名稱過長")
-    .regex(
-      /^[a-zA-Z0-9_\-/]+$/,
-      "分支名稱只能包含英文字母、數字、底線、連字號和斜線",
-    ),
+    .refine(isValidGitBranchName, "分支名稱格式不正確"),
   force: z.boolean().default(false),
 });
 

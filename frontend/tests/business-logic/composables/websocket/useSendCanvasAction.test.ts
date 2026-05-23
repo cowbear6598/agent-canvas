@@ -25,7 +25,7 @@ describe('useSendCanvasAction', () => {
         payload: { someField: 'value' },
       })
 
-      expect(result).toEqual(responseData)
+      expect(result).toEqual({ success: true, data: responseData })
     })
 
     it('應自動將 canvasId 注入 payload', async () => {
@@ -107,7 +107,7 @@ describe('useSendCanvasAction', () => {
   })
 
   describe('sendCanvasAction - 沒有 active canvas 情境', () => {
-    it('沒有 activeCanvasId 時應回傳 null，不發出請求', async () => {
+    it('沒有 activeCanvasId 時應回傳 failure，不發出請求', async () => {
       const canvasStore = useCanvasStore()
       canvasStore.activeCanvasId = null
 
@@ -119,13 +119,13 @@ describe('useSendCanvasAction', () => {
         payload: {},
       })
 
-      expect(result).toBeNull()
+      expect(result.success).toBe(false)
       expect(mockCreateWebSocketRequest).not.toHaveBeenCalled()
     })
   })
 
   describe('sendCanvasAction - WebSocket 失敗情境', () => {
-    it('createWebSocketRequest 拋出例外時應回傳 null', async () => {
+    it('createWebSocketRequest 拋出例外時應回傳 failure', async () => {
       const { sendCanvasAction } = useSendCanvasAction()
 
       mockCreateWebSocketRequest.mockRejectedValueOnce(new Error('WebSocket 連線失敗'))
@@ -136,10 +136,10 @@ describe('useSendCanvasAction', () => {
         payload: {},
       })
 
-      expect(result).toBeNull()
+      expect(result.success).toBe(false)
     })
 
-    it('請求逾時時應回傳 null', async () => {
+    it('請求逾時時應回傳 failure', async () => {
       const { sendCanvasAction } = useSendCanvasAction()
 
       mockCreateWebSocketRequest.mockRejectedValueOnce(new Error('請求逾時'))
@@ -149,7 +149,7 @@ describe('useSendCanvasAction', () => {
         responseEvent: 'test:response',
       })
 
-      expect(result).toBeNull()
+      expect(result.success).toBe(false)
     })
   })
 })

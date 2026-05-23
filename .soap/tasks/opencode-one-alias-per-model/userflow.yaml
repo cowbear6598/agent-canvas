@@ -1,5 +1,5 @@
 feature: opencode-one-alias-per-model
-approved: false
+approved: true
 scenarios:
   - id: F1
     scenario: 使用者為尚未設定別稱的 opencode model 新增 alias

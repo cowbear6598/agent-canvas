@@ -159,6 +159,10 @@ describe("validators", () => {
       expect(isValidBranchName("feature/")).toBe(false);
     });
 
+    it("以連字號開頭應不合法", () => {
+      expect(isValidBranchName("--upload-pack=evil")).toBe(false);
+    });
+
     it("包含中文應不合法", () => {
       expect(isValidBranchName("分支")).toBe(false);
     });

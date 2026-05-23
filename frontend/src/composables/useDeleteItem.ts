@@ -1,5 +1,10 @@
 import { createWebSocketRequest } from "@/services/websocket";
 import { useWebSocketErrorHandler } from "./useWebSocketErrorHandler";
+import { sanitizeErrorForUser } from "@/utils/errorSanitizer";
+
+export type DeleteItemResult<TResponse> =
+  | { success: true; data: TResponse }
+  | { success: false; error: string };
 
 interface DeleteItemOptions<TPayload, TResponse> {
   requestEvent: string;
@@ -12,13 +17,14 @@ interface DeleteItemOptions<TPayload, TResponse> {
 export function useDeleteItem(): {
   deleteItem: <TPayload, TResponse extends { success: boolean }>(
     options: DeleteItemOptions<TPayload, TResponse>,
-  ) => Promise<TResponse | null>;
+  ) => Promise<DeleteItemResult<TResponse>>;
 } {
-  const { wrapWebSocketRequest } = useWebSocketErrorHandler();
+  const { handleWebSocketError, wrapWebSocketRequest } =
+    useWebSocketErrorHandler();
 
   async function deleteItem<TPayload, TResponse extends { success: boolean }>(
     options: DeleteItemOptions<TPayload, TResponse>,
-  ): Promise<TResponse | null> {
+  ): Promise<DeleteItemResult<TResponse>> {
     let response: TResponse;
     try {
       response = await wrapWebSocketRequest(
@@ -31,17 +37,23 @@ export function useDeleteItem(): {
           >,
         }),
       );
-    } catch {
-      return null;
+    } catch (error) {
+      handleWebSocketError(error, options.errorMessage);
+      return { success: false, error: sanitizeErrorForUser(error) };
     }
 
-    if (!response || !response.success) return null;
+    if (!response || !response.success) {
+      return {
+        success: false,
+        error: options.errorMessage ?? "刪除失敗",
+      };
+    }
 
     if (options.onSuccess) {
       options.onSuccess(response);
     }
 
-    return response;
+    return { success: true, data: response };
   }
 
   return { deleteItem };

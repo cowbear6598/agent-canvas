@@ -9,6 +9,7 @@ import {
   formatIntegrationMessage,
 } from "../integrationHelpers.js";
 import { escapeUserInput } from "../../../utils/escapeInput.js";
+import { logger } from "../../../utils/logger.js";
 import type {
   IntegrationProvider,
   IntegrationApp,
@@ -230,9 +231,17 @@ class TelegramProvider implements IntegrationProvider {
 
     const controller = new AbortController();
     this.pollingControllers.set(appId, controller);
+    if (!this.pollingOffsets.has(appId)) {
+      this.pollingOffsets.set(appId, 0);
+    }
 
-    this.runPollingLoop(appId, botToken, controller).catch(() => {
-      // polling 迴圈失敗時靜默吞掉
+    this.runPollingLoop(appId, botToken, controller).catch((error) => {
+      logger.error(
+        "Telegram",
+        "Error",
+        `[Telegram] polling 迴圈非預期中止：appId=${appId}`,
+        error,
+      );
     });
   }
 
@@ -309,7 +318,7 @@ class TelegramProvider implements IntegrationProvider {
   ): Promise<void> {
     let retryDelay = INITIAL_RETRY_DELAY;
 
-    while (!controller.signal.aborted) {
+    while (this.isPollingActive(appId, controller)) {
       const offset = this.pollingOffsets.get(appId) ?? 0;
 
       try {
@@ -326,16 +335,28 @@ class TelegramProvider implements IntegrationProvider {
           this.pollingOffsets.set(appId, update.update_id + 1);
         }
       } catch {
-        if (controller.signal.aborted) break;
+        if (!this.isPollingActive(appId, controller)) break;
+
+        logger.warn(
+          "Telegram",
+          "Warn",
+          `[Telegram] polling 失敗：appId=${appId}，${retryDelay}ms 後重試`,
+        );
 
         await new Promise((resolve) => setTimeout(resolve, retryDelay));
-        // destroy 競態防禦：等待結束後再次確認 pollingOffsets 仍持有 appId 且訊號未中止，
+        // destroy 競態防禦：等待結束後再次確認 controller 仍是目前執行中的 polling，
         // 避免 destroy 已完成但 loop 仍進入下一輪重試
-        if (!this.pollingOffsets.has(appId) || controller.signal.aborted)
-          return;
+        if (!this.isPollingActive(appId, controller)) return;
         retryDelay = Math.min(retryDelay * 2, MAX_RETRY_DELAY);
       }
     }
+  }
+
+  private isPollingActive(appId: string, controller: AbortController): boolean {
+    return (
+      !controller.signal.aborted &&
+      this.pollingControllers.get(appId) === controller
+    );
   }
 }
 

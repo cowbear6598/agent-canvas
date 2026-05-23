@@ -1,6 +1,8 @@
 import { createWebSocketRequest } from "@/services/websocket";
 import { useWebSocketErrorHandler } from "@/composables/useWebSocketErrorHandler";
 import { getActiveCanvasIdOrWarn } from "@/utils/canvasGuard";
+import { sanitizeErrorForUser } from "@/utils/errorSanitizer";
+import { t } from "@/i18n";
 
 // TPayload 需符合 createWebSocketRequest 的最低要求（含 requestId）
 type MinimalPayload = { requestId: string };
@@ -17,18 +19,25 @@ export interface SendCanvasActionConfig<
   matchResponse?: (response: TResponse, requestId: string) => boolean;
 }
 
+export type SendCanvasActionResult<TResponse> =
+  | { success: true; data: TResponse }
+  | { success: false; error: string };
+
 export function useSendCanvasAction(): {
   sendCanvasAction: <TPayload extends MinimalPayload, TResponse>(
     config: SendCanvasActionConfig<TPayload, TResponse>,
-  ) => Promise<TResponse | null>;
+  ) => Promise<SendCanvasActionResult<TResponse>>;
 } {
-  const { wrapWebSocketRequest } = useWebSocketErrorHandler();
+  const { handleWebSocketError, wrapWebSocketRequest } =
+    useWebSocketErrorHandler();
 
   const sendCanvasAction = async <TPayload extends MinimalPayload, TResponse>(
     config: SendCanvasActionConfig<TPayload, TResponse>,
-  ): Promise<TResponse | null> => {
+  ): Promise<SendCanvasActionResult<TResponse>> => {
     const canvasId = getActiveCanvasIdOrWarn("sendCanvasAction");
-    if (!canvasId) return null;
+    if (!canvasId) {
+      return { success: false, error: t("composable.canvas.noActiveCanvas") };
+    }
 
     const fullPayload = { ...config.payload, canvasId } as unknown as Omit<
       TPayload,
@@ -36,7 +45,7 @@ export function useSendCanvasAction(): {
     >;
 
     try {
-      return await wrapWebSocketRequest(
+      const response = await wrapWebSocketRequest(
         createWebSocketRequest<TPayload, TResponse>({
           requestEvent: config.requestEvent,
           responseEvent: config.responseEvent,
@@ -45,8 +54,10 @@ export function useSendCanvasAction(): {
           payload: fullPayload,
         }),
       );
-    } catch {
-      return null;
+      return { success: true, data: response };
+    } catch (error) {
+      handleWebSocketError(error);
+      return { success: false, error: sanitizeErrorForUser(error) };
     }
   };
 

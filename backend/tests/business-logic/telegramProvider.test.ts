@@ -33,6 +33,7 @@ vi.mock("../../src/utils/logger.js", () => ({
 
 import { telegramProvider } from "../../src/services/integration/providers/telegramProvider.js";
 import { integrationAppStore } from "../../src/services/integration/integrationAppStore.js";
+import { logger } from "../../src/utils/logger.js";
 import type { IntegrationApp } from "../../src/services/integration/types.js";
 
 function asMock(fn: unknown): Mock<any> {
@@ -239,6 +240,53 @@ describe("TelegramProvider - botToken 不洩漏到日誌", () => {
       const message = call.join(" ");
       expect(message).not.toContain(botToken);
     }
+  });
+});
+
+describe("TelegramProvider - polling 重試", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.useFakeTimers();
+    telegramProvider.destroyAll();
+    global.fetch = vi.fn();
+  });
+
+  afterEach(() => {
+    telegramProvider.destroyAll();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("getUpdates 失敗後應保留 polling 並在延遲後重試", async () => {
+    const fetchMock = asMock(global.fetch);
+    fetchMock
+      .mockRejectedValueOnce(new Error("network failed"))
+      .mockImplementationOnce((_url: string, init?: RequestInit) => {
+        return new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            reject(new Error("aborted"));
+          });
+        });
+      });
+
+    telegramProvider.startPolling("app-retry", { botToken: "123:ABCdef" });
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    vi.runOnlyPendingTimers();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Telegram",
+      "Warn",
+      expect.stringContaining("polling 失敗"),
+    );
+
+    telegramProvider.stopPolling("app-retry");
   });
 });
 

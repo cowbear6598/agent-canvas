@@ -55,7 +55,19 @@ export const isValidBranchName = (name: string): boolean => {
   if (!BRANCH_NAME_PATTERN.test(name)) {
     return false;
   }
+  if (!name || name.length > 200) {
+    return false;
+  }
+  if (name.startsWith("-")) {
+    return false;
+  }
   if (name.includes("//")) {
+    return false;
+  }
+  if (name.includes("..") || name.includes("@{")) {
+    return false;
+  }
+  if (name === "." || name.endsWith(".") || name.endsWith(".lock")) {
     return false;
   }
   return !(name.startsWith("/") || name.endsWith("/"));

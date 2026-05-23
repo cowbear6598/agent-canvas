@@ -1,0 +1,59 @@
+feature: opencode-one-alias-per-model
+side: backend
+approved: true
+phases:
+  - id: P1
+    title: opencode alias 一對一業務規則
+    parallel: false
+    verification: []
+    done: false
+    items:
+      - id: P1.A
+        title: model alias 查詢與錯誤碼
+        tasks:
+          - id: P1.A.t1
+            text: 在 `backend/src/database/statements.ts` 的 `modelAlias` statements 新增依 `provider_id`、`real_provider`、`real_model` 查詢既有 alias 的 statement，並支援更新時排除目前 alias id
+            completed: false
+            last_files_changed: []
+          - id: P1.A.t2
+            text: 在 `backend/src/handlers/opencodeSettingsHandlers.ts` 新增 `alias_model_duplicate` 結構化錯誤回應，錯誤訊息使用 zh-TW 說明「此 model 已有 alias」
+            completed: false
+            last_files_changed: []
+
+      - id: P1.B
+        title: create 與 update handler 規則
+        tasks:
+          - id: P1.B.t1
+            text: 在 `handleOpencodeAliasesCreate` 的 DB transaction 內新增 real model 重複檢查，當同一 `provider_id=opencode`、`real_provider=payload.providerID`、`real_model=payload.modelID` 已存在 alias 時回傳 `alias_model_duplicate` 並不新增資料
+            completed: false
+            last_files_changed: []
+          - id: P1.B.t2
+            text: 在 `handleOpencodeAliasesUpdate` 更新 `modelID` 前檢查目標 real model 是否已被其他 alias 使用，若已使用則回傳 `alias_model_duplicate` 並保留原 alias 設定
+            completed: false
+            last_files_changed: []
+          - id: P1.B.t3
+            text: 保留既有 `alias_duplicate` 名稱重複規則與 `alias_in_use` 使用中阻擋規則，確保新規則只處理「同 model 重複建立 alias」情境
+            completed: false
+            last_files_changed: []
+
+  - id: P2
+    title: 後端業務規則測試
+    parallel: false
+    verification: []
+    done: false
+    items:
+      - id: P2.A
+        title: handler business tests
+        tasks:
+          - id: P2.A.t1
+            text: 在 `backend/tests/business-logic/opencodeAliasesHandlers.test.ts` 新增 create sad case，先建立某 real model alias，再用同一 providerID 與 modelID 建立另一個 alias，預期回傳 `alias_model_duplicate` 且不廣播 aliases/provider list 更新
+            completed: false
+            last_files_changed: []
+          - id: P2.A.t2
+            text: 在 `backend/tests/business-logic/opencodeAliasesHandlers.test.ts` 新增 update sad case，建立兩筆不同 model alias 後將其中一筆更新到另一筆已使用的 modelID，預期回傳 `alias_model_duplicate` 且原資料不變
+            completed: false
+            last_files_changed: []
+          - id: P2.A.t3
+            text: 調整既有允許同 real model 多 alias 的測試案例，使測試描述與新的一對一規則一致，避免保留舊需求的反向期待
+            completed: false
+            last_files_changed: []

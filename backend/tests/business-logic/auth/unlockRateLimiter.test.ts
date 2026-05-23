@@ -78,4 +78,22 @@ describe("UnlockRateLimiter", () => {
     }
     expect(limiter.check(connectionId, ip).blocked).toBe(false);
   });
+
+  it("同一個 IP 重新連線後仍應沿用失敗計數", () => {
+    const ip = "203.0.113.10";
+
+    for (let i = 0; i < 5; i++) {
+      limiter.recordFailure(`conn-${i}`, ip);
+    }
+
+    expect(limiter.check("conn-new", ip).blocked).toBe(true);
+  });
+
+  it("不同 IP 的失敗計數應彼此隔離", () => {
+    for (let i = 0; i < 5; i++) {
+      limiter.recordFailure(`conn-${i}`, "203.0.113.20");
+    }
+
+    expect(limiter.check("conn-new", "203.0.113.21").blocked).toBe(false);
+  });
 });

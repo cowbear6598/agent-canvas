@@ -369,7 +369,7 @@ const handleDblClick = (e: MouseEvent): void => {
 };
 
 const handleModelChange = async (model: string): Promise<void> => {
-  const response = await sendCanvasAction<
+  const result = await sendCanvasAction<
     PodSetModelPayload,
     PodModelSetPayload
   >({
@@ -378,7 +378,8 @@ const handleModelChange = async (model: string): Promise<void> => {
     payload: { podId: props.pod.id, model },
   });
 
-  if (!response) return;
+  if (!result.success) return;
+  const response = result.data;
   if (!response.pod) return;
 
   podStore.updatePodProviderConfigModel(
@@ -388,7 +389,7 @@ const handleModelChange = async (model: string): Promise<void> => {
 };
 
 const handleThinkingLevelChange = async (level: string): Promise<void> => {
-  const response = await sendCanvasAction<
+  const result = await sendCanvasAction<
     PodSetThinkingLevelPayload,
     PodThinkingLevelSetPayload
   >({
@@ -397,7 +398,8 @@ const handleThinkingLevelChange = async (level: string): Promise<void> => {
     payload: { podId: props.pod.id, level },
   });
 
-  if (!response) return;
+  if (!result.success) return;
+  const response = result.data;
   if (!response.pod) return;
 
   podStore.updatePodThinkingLevel(

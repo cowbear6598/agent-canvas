@@ -1,6 +1,6 @@
 /**
  * unlock 操作的 rate limit 服務。
- * 以「connectionId + 來源 IP」雙鍵記錄失敗次數。
+ * 以來源 IP 記錄失敗次數。
  * 超過閾值後封鎖 60 秒，回傳 AUTH_RATE_LIMITED 錯誤碼。
  */
 
@@ -24,11 +24,11 @@ export class UnlockRateLimiterClass {
   }
 
   /**
-   * 組合 connectionId 與 ip 成為唯一鍵。
+   * 使用來源 IP 作為唯一鍵，避免重新連線更換 connectionId 後繞過封鎖。
    * ip 為 null 時使用 "unknown"。
    */
-  private makeKey(connectionId: string, ip: string | null): string {
-    return `${connectionId}::${ip ?? "unknown"}`;
+  private makeKey(_connectionId: string, ip: string | null): string {
+    return ip ?? "unknown";
   }
 
   /**
