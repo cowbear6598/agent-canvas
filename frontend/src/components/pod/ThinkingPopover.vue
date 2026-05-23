@@ -27,8 +27,15 @@ const supportedLevels = computed<ReadonlyArray<string>>(() =>
   ),
 );
 
+const displayLevels = computed<ReadonlyArray<string>>(() =>
+  [...supportedLevels.value].reverse(),
+);
+
 /** 顯示用 label 對照表（直接 inline，依 plan 不另開檔） */
 const LEVEL_LABEL_MAP: Record<string, string> = {
+  fast: "Fast",
+  balanced: "Balanced",
+  deep: "Deep",
   minimal: "Minimal",
   low: "Low",
   medium: "Medium",
@@ -37,7 +44,14 @@ const LEVEL_LABEL_MAP: Record<string, string> = {
   max: "Max",
 };
 
-const levelLabel = (level: string): string => LEVEL_LABEL_MAP[level] ?? level;
+const levelLabel = (level: string): string =>
+  providerCapabilityStore.getThinkingLevelLabel(
+    props.provider,
+    props.currentModel,
+    level,
+  ) ??
+  LEVEL_LABEL_MAP[level] ??
+  level;
 
 const rootRef = ref<HTMLElement | null>(null);
 
@@ -83,7 +97,7 @@ useEscapeClose(() => emit("close"));
       @click.stop
     >
       <button
-        v-for="level in supportedLevels"
+        v-for="level in displayLevels"
         :key="level"
         :class="[
           'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary',

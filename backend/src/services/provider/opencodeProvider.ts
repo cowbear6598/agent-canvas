@@ -68,6 +68,8 @@ import {
 } from "./opencodeMcpConfigBuilder.js";
 import { buildOpencodePromptText } from "./opencodePromptHelpers.js";
 import { formatPluginSkillCatalogPrompt } from "../plugin/pluginCatalogBuilder.js";
+import { getStmts } from "../../database/index.js";
+import { parseOpencodeThinkingLevelsJson } from "./opencodeThinkingPresetService.js";
 
 // 重新匯出測試與其他模組依賴的公開 API（拆檔後保持原本 import path 可用）
 export {
@@ -87,6 +89,8 @@ export interface OpencodeV2PromptInput {
   tools?: { [key: string]: boolean };
   /** v2 支援透過 system 欄位注入 Goal Runtime bootstrap prompt */
   system?: string;
+  /** OpenCode v2 prompt 支援 variant，用來套用官方模型 preset。 */
+  variant?: string;
   parts: Array<{ type: "text"; text: string }>;
 }
 
@@ -131,6 +135,7 @@ export interface OpencodeClientPort {
       model?: { providerID: string; modelID: string };
       tools?: { [key: string]: boolean };
       system?: string;
+      variant?: string;
       parts: Array<{ type: "text"; text: string }>;
     }): Promise<{ data?: unknown; error?: unknown }>;
     abort(parameters: {
@@ -194,6 +199,31 @@ export interface OpencodeOptions {
   pluginCatalogText: string;
   /** 一次性查詢使用的 system prompt；一般 Pod 對話不設定。 */
   systemPrompt?: string;
+  /** Pod 目前選到的 OpenCode thinking preset id。 */
+  thinkingLevel?: string;
+  /** 從 alias 建立時保存的官方 metadata snapshot 正規化出的 OpenCode prompt options。 */
+  thinkingOptions?: Record<string, unknown>;
+}
+
+function getOpencodeThinkingOptions(
+  modelValue: string,
+  thinkingLevel?: string,
+): Record<string, unknown> | undefined {
+  if (!thinkingLevel) return undefined;
+  const rows = getStmts().modelAlias.selectByProviderId.all({
+    $providerId: "opencode",
+  }) as Array<{
+    real_provider: string;
+    real_model: string;
+    thinking_levels_json: string | null;
+  }>;
+  const row = rows.find(
+    (alias) => `${alias.real_provider}/${alias.real_model}` === modelValue,
+  );
+  const preset = parseOpencodeThinkingLevelsJson(
+    row?.thinking_levels_json,
+  ).find((level) => level.id === thinkingLevel);
+  return preset?.options;
 }
 
 // ================================================================
@@ -223,7 +253,7 @@ function buildOpencodeClientPort(baseUrl: string): OpencodeClientPort {
         return { data, error };
       },
       async prompt(parameters): Promise<{ data?: unknown; error?: unknown }> {
-        const { sessionID, directory, model, tools, system, parts } =
+        const { sessionID, directory, model, tools, system, variant, parts } =
           parameters;
         return v2.session.prompt({
           sessionID,
@@ -231,6 +261,7 @@ function buildOpencodeClientPort(baseUrl: string): OpencodeClientPort {
           model,
           tools,
           system,
+          variant,
           parts,
         });
       },
@@ -728,6 +759,16 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
       mcpEntries: entries,
       hasGoalRuntime,
       pluginCatalogText: formatPluginSkillCatalogPrompt(pluginCatalog),
+      thinkingLevel:
+        typeof pod.providerConfig?.thinkingLevel === "string"
+          ? pod.providerConfig.thinkingLevel
+          : undefined,
+      thinkingOptions: getOpencodeThinkingOptions(
+        rawModel,
+        typeof pod.providerConfig?.thinkingLevel === "string"
+          ? pod.providerConfig.thinkingLevel
+          : undefined,
+      ),
     };
   },
 
@@ -965,6 +1006,7 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
           model?: { providerID: string; modelID: string };
           tools?: { [key: string]: boolean };
           system?: string;
+          variant?: string;
           parts: Array<{ type: "text"; text: string }>;
         } = {
           sessionID: sessionId,
@@ -991,6 +1033,10 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
 
         if (options.systemPrompt && options.systemPrompt.trim().length > 0) {
           promptParams.system = options.systemPrompt;
+        }
+
+        if (typeof options.thinkingOptions?.variant === "string") {
+          promptParams.variant = options.thinkingOptions.variant;
         }
 
         if (toolsSubset !== undefined) {

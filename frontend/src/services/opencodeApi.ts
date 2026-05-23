@@ -78,6 +78,17 @@ interface OpencodeAliasesReorderResultPayload {
   items?: OpencodeModelAlias[];
 }
 
+interface OpencodeAliasesRefreshPresetsPayload {
+  requestId: string;
+  id: string;
+}
+
+interface OpencodeAliasesRefreshPresetsResultPayload {
+  requestId?: string;
+  success?: boolean;
+  item?: OpencodeModelAlias;
+}
+
 interface OpencodeServerRestartPayload {
   requestId: string;
 }
@@ -145,7 +156,7 @@ export async function listAliases(): Promise<OpencodeModelAlias[]> {
  * 新增 opencode model 別稱
  */
 export async function createAlias(
-  payload: Omit<OpencodeModelAlias, "id" | "orderIdx">,
+  payload: Pick<OpencodeModelAlias, "providerID" | "modelID" | "alias">,
 ): Promise<OpencodeModelAlias> {
   const result = await createWebSocketRequest<
     OpencodeAliasesCreatePayload,
@@ -238,4 +249,27 @@ export async function reorderAliases(
   });
 
   return result.items ?? [];
+}
+
+/**
+ * 重新抓取既有 alias 的 OpenCode thinking presets。
+ */
+export async function refreshAliasPresets(
+  id: string,
+): Promise<OpencodeModelAlias> {
+  const result = await createWebSocketRequest<
+    OpencodeAliasesRefreshPresetsPayload,
+    OpencodeAliasesRefreshPresetsResultPayload
+  >({
+    requestEvent: WebSocketRequestEvents.OPENCODE_ALIASES_REFRESH_PRESETS,
+    responseEvent:
+      WebSocketResponseEvents.OPENCODE_ALIASES_REFRESH_PRESETS_RESULT,
+    payload: { id },
+  });
+
+  if (!result.item) {
+    throw new Error("刷新 opencode thinking presets 失敗：後端未回傳 item");
+  }
+
+  return result.item;
 }

@@ -14,6 +14,7 @@ import {
 } from "../services/provider/capabilities.js";
 import { socketService } from "../services/socketService.js";
 import { getStmts } from "../database/index.js";
+import { parseOpencodeThinkingLevelsJson } from "../services/provider/opencodeThinkingPresetService.js";
 
 /**
  * 各 provider 對應的 thinking levels 查表。
@@ -41,6 +42,8 @@ interface ModelAliasRow {
   real_model: string;
   alias: string;
   order_idx: number;
+  thinking_levels_json: string | null;
+  default_thinking_level: string | null;
 }
 
 /**
@@ -66,6 +69,7 @@ export function buildProviderListPayload(): ProviderListResultPayload["providers
       label: string;
       value: string;
       thinkingLevels: readonly string[];
+      thinkingLevelLabels?: Readonly<Record<string, string>>;
       defaultThinkingLevel: string | null;
     }>;
 
@@ -75,13 +79,19 @@ export function buildProviderListPayload(): ProviderListResultPayload["providers
         $providerId: "opencode",
       }) as ModelAliasRow[];
 
-      availableModels = rows.map((r) => ({
-        label: r.alias,
-        value: r.real_provider + "/" + r.real_model,
-        // opencode 不支援 thinking levels
-        thinkingLevels: [],
-        defaultThinkingLevel: null,
-      }));
+      availableModels = rows.map((r) => {
+        const levels = parseOpencodeThinkingLevelsJson(r.thinking_levels_json);
+        const labels = Object.fromEntries(
+          levels.map((level) => [level.id, level.label]),
+        );
+        return {
+          label: r.alias,
+          value: r.real_provider + "/" + r.real_model,
+          thinkingLevels: levels.map((level) => level.id),
+          ...(levels.length > 0 ? { thinkingLevelLabels: labels } : {}),
+          defaultThinkingLevel: r.default_thinking_level,
+        };
+      });
     } else {
       // claude / codex：沿用 metadata.availableModels，補 thinking metadata
       const thinkingTable = THINKING_LEVELS_BY_PROVIDER[name];

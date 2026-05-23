@@ -70,6 +70,8 @@ export const AGENT_CANVAS_TEST_ROOT = path.resolve(
 
 const testRoot = path.join(AGENT_CANVAS_TEST_ROOT, `test-canvas-${timestamp}`);
 
+process.env.AGENT_CANVAS_APP_DATA_DIR = testRoot;
+
 export const testConfig: TestConfig = {
   port: 0, // 動態分配 port
   nodeEnv: "test",

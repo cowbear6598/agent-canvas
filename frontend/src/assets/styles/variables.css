@@ -58,6 +58,7 @@
      L 比 Pod 頂端低 0.06~0.10，C 略提以維持飽和；確保倒入卡片時看得到清楚水面。 */
   --pod-thinking-fill-claude: oklch(0.82 0.1 45);
   --pod-thinking-fill-codex: oklch(0.8 0.012 240);
+  --pod-thinking-fill-opencode: oklch(0.72 0.12 135);
 }
 
 .dark {
@@ -118,6 +119,7 @@
      color 在深底（card L=0.22）上需要保持足夠可見度，故 C 也同步略提。 */
   --pod-thinking-fill-claude: oklch(0.5 0.13 45);
   --pod-thinking-fill-codex: oklch(0.46 0.018 240);
+  --pod-thinking-fill-opencode: oklch(0.48 0.1 135);
 }
 
 @theme inline {

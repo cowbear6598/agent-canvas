@@ -53,6 +53,8 @@ import {
   handleOpencodeAliasesUpdate,
   handleOpencodeAliasesDelete,
   handleOpencodeAliasesReorder,
+  resetOpencodeThinkingPresetSnapshotFetcher,
+  setOpencodeThinkingPresetSnapshotFetcher,
 } from "../../src/handlers/opencodeSettingsHandlers.js";
 import { opencodeSettingsHandlerGroup } from "../../src/handlers/groups/opencodeSettingsHandlerGroup.js";
 import {
@@ -78,9 +80,25 @@ beforeEach(() => {
   vi.clearAllMocks();
   resetStatements();
   initTestDb();
+  setOpencodeThinkingPresetSnapshotFetcher(async (providerID, modelID) => ({
+    ok: true,
+    snapshot: {
+      levels: [
+        {
+          id: "balanced",
+          label: "Balanced",
+          options: { variant: "medium", reasoningEffort: "medium" },
+        },
+      ],
+      defaultLevel: "balanced",
+      fetchedAt: 1234567890,
+      metadata: { providerID, modelID },
+    },
+  }));
 });
 
 afterEach(() => {
+  resetOpencodeThinkingPresetSnapshotFetcher();
   closeDb();
 });
 
@@ -320,6 +338,41 @@ describe("handleOpencodeAliasesCreate", () => {
 
     expect(mockBroadcastOpencodeAliasesUpdated).toHaveBeenCalledOnce();
     expect(mockBroadcastProviderList).toHaveBeenCalledOnce();
+  });
+
+  it("B7：無 thinking levels 的 model 仍可新增 alias", async () => {
+    setOpencodeThinkingPresetSnapshotFetcher(async (providerID, modelID) => ({
+      ok: true,
+      snapshot: {
+        levels: [],
+        defaultLevel: null,
+        fetchedAt: 1234567891,
+        metadata: { providerID, modelID, reason: "reasoning_not_supported" },
+      },
+    }));
+
+    await handleOpencodeAliasesCreate(
+      CONNECTION_ID,
+      {
+        requestId: REQUEST_ID,
+        providerID: "google",
+        modelID: "gemini-3.5-flash-lite",
+        alias: "GeminiLite",
+      },
+      REQUEST_ID,
+    );
+
+    const [, event, payload] = mockEmitToConnection.mock.calls[0];
+    expect(event).toBe(WebSocketResponseEvents.OPENCODE_ALIASES_CREATE_RESULT);
+    expect(payload.success).toBe(true);
+    expect(payload.item).toMatchObject({
+      providerID: "google",
+      modelID: "gemini-3.5-flash-lite",
+      alias: "GeminiLite",
+      thinkingLevels: [],
+      defaultThinkingLevel: null,
+      thinkingMetadataFetchedAt: 1234567891,
+    });
   });
 });
 

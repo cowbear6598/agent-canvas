@@ -19,6 +19,10 @@ export const aliasItemSchema = z.object({
   modelID: z.string(),
   alias: z.string(),
   orderIdx: z.number().int(),
+  thinkingLevels: z.array(z.string()),
+  thinkingLevelLabels: z.record(z.string(), z.string()).optional(),
+  defaultThinkingLevel: z.string().nullable(),
+  thinkingMetadataFetchedAt: z.number().nullable(),
 });
 
 export type AliasItem = z.infer<typeof aliasItemSchema>;
@@ -116,6 +120,26 @@ export type OpencodeAliasesReorderPayload = z.infer<
 
 export type OpencodeAliasesReorderResultPayload =
   | { requestId: string; success: true; items: AliasItem[] }
+  | {
+      requestId: string;
+      success: false;
+      error: { code: string; message: string };
+    };
+
+// ─── opencode:aliases:refresh-presets ────────────────────────────────────────
+
+/** opencode:aliases:refresh-presets 請求 payload schema */
+export const opencodeAliasesRefreshPresetsSchema = z.object({
+  requestId: requestIdSchema,
+  id: z.string().min(1),
+});
+
+export type OpencodeAliasesRefreshPresetsPayload = z.infer<
+  typeof opencodeAliasesRefreshPresetsSchema
+>;
+
+export type OpencodeAliasesRefreshPresetsResultPayload =
+  | { requestId: string; success: true; item: AliasItem }
   | {
       requestId: string;
       success: false;

@@ -179,6 +179,7 @@ function buildStatements(db: Database): {
     selectById: ReturnType<Database["prepare"]>;
     updateAliasAndOrderIdx: ReturnType<Database["prepare"]>;
     updateAliasAndModelId: ReturnType<Database["prepare"]>;
+    updateThinkingPresets: ReturnType<Database["prepare"]>;
     deleteById: ReturnType<Database["prepare"]>;
     selectMaxOrderIdxByProviderId: ReturnType<Database["prepare"]>;
   };
@@ -729,9 +730,13 @@ function buildStatements(db: Database): {
     modelAlias: {
       insert: db.prepare(
         `INSERT INTO model_aliases (
-          id, provider_id, real_provider, real_model, alias, order_idx, created_at, updated_at
+          id, provider_id, real_provider, real_model, alias, order_idx,
+          thinking_levels_json, default_thinking_level, thinking_metadata_json, thinking_metadata_fetched_at,
+          created_at, updated_at
         ) VALUES (
-          $id, $providerId, $realProvider, $realModel, $alias, $orderIdx, $createdAt, $updatedAt
+          $id, $providerId, $realProvider, $realModel, $alias, $orderIdx,
+          $thinkingLevelsJson, $defaultThinkingLevel, $thinkingMetadataJson, $thinkingMetadataFetchedAt,
+          $createdAt, $updatedAt
         )`,
       ),
       // 依 provider_id 查詢，並以 order_idx 升序排列（供 PodModelSelector 顯示）
@@ -746,7 +751,24 @@ function buildStatements(db: Database): {
       ),
       // 更新 alias 顯示別稱與真實 model 對應（供編輯 handler 使用，不動 order_idx）
       updateAliasAndModelId: db.prepare(
-        "UPDATE model_aliases SET alias = $alias, real_model = $realModel, updated_at = $updatedAt WHERE id = $id",
+        `UPDATE model_aliases
+         SET alias = $alias,
+             real_model = $realModel,
+             thinking_levels_json = $thinkingLevelsJson,
+             default_thinking_level = $defaultThinkingLevel,
+             thinking_metadata_json = $thinkingMetadataJson,
+             thinking_metadata_fetched_at = $thinkingMetadataFetchedAt,
+             updated_at = $updatedAt
+         WHERE id = $id`,
+      ),
+      updateThinkingPresets: db.prepare(
+        `UPDATE model_aliases
+         SET thinking_levels_json = $thinkingLevelsJson,
+             default_thinking_level = $defaultThinkingLevel,
+             thinking_metadata_json = $thinkingMetadataJson,
+             thinking_metadata_fetched_at = $thinkingMetadataFetchedAt,
+             updated_at = $updatedAt
+         WHERE id = $id`,
       ),
       deleteById: db.prepare("DELETE FROM model_aliases WHERE id = ?"),
       // 查詢指定 provider_id 內目前最大的 order_idx，供 append 時計算下一個位置

@@ -78,6 +78,7 @@ export enum WebSocketRequestEvents {
   OPENCODE_ALIASES_UPDATE = "opencode:aliases:update",
   OPENCODE_ALIASES_DELETE = "opencode:aliases:delete",
   OPENCODE_ALIASES_REORDER = "opencode:aliases:reorder",
+  OPENCODE_ALIASES_REFRESH_PRESETS = "opencode:aliases:refresh-presets",
   OPENCODE_SERVER_RESTART = "opencode:server:restart",
 }
 
@@ -197,6 +198,7 @@ export enum WebSocketResponseEvents {
   OPENCODE_ALIASES_UPDATE_RESULT = "opencode:aliases:update:result",
   OPENCODE_ALIASES_DELETE_RESULT = "opencode:aliases:delete:result",
   OPENCODE_ALIASES_REORDER_RESULT = "opencode:aliases:reorder:result",
+  OPENCODE_ALIASES_REFRESH_PRESETS_RESULT = "opencode:aliases:refresh-presets:result",
   OPENCODE_ALIASES_UPDATED = "opencode:aliases:updated",
   OPENCODE_SERVER_RESTART_RESULT = "opencode:server:restart:result",
 }

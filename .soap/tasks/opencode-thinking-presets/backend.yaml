@@ -2,182 +2,221 @@ feature: opencode-thinking-presets
 side: backend
 approved: true
 phases:
-  - id: P1
-    title: OpenCode thinking presets 持久化與產生規則
-    parallel: false
-    verification:
-      - cd backend && bun run style
-      - cd backend && bun run test
-    done: false
-    items:
-      - id: P1.A
-        title: model_aliases schema 擴充
-        tasks:
-          - id: P1.A.t1
-            text: 擴充 `backend/src/database/schema.ts` 的 `model_aliases` 建表欄位，新增 `thinking_levels_json`、`default_thinking_level`、`thinking_metadata_json`、`thinking_metadata_fetched_at`，用來保存新增 alias 時取得的 OpenCode 官方設定快照
-            completed: false
-            last_files_changed: []
-          - id: P1.A.t2
-            text: 在 `backend/src/database/schema.ts` 新增既有資料庫欄位補齊函式，對舊 DB 執行四個新增欄位的 `ALTER TABLE`，重複執行時只忽略 duplicate column name
-            completed: false
-            last_files_changed: []
-          - id: P1.A.t3
-            text: 更新 `backend/src/database/statements.ts` 的 modelAlias insert、select、update statement，讓 create/update/reorder/list 都能讀寫新增的 thinking preset 欄位
-            completed: false
-            last_files_changed: []
-
-      - id: P1.B
-        title: OpenCode preset normalization service
-        tasks:
-          - id: P1.B.t1
-            text: 新增 `backend/src/services/provider/opencodeThinkingPresetService.ts`，定義 `OpencodeThinkingPresetSnapshot`、`OpencodeThinkingPresetLevel` 與從 OpenCode provider/model metadata 產生 snapshot 的 service 介面
-            completed: false
-            last_files_changed: []
-          - id: P1.B.t2
-            text: 在 preset service 中實作 metadata 解析規則，優先讀取 OpenCode model metadata 內的 variants/options 類資訊，輸出專案內部的 `levels`、`defaultLevel`、`metadata` 快照
-            completed: false
-            last_files_changed: []
-          - id: P1.B.t3
-            text: 在 preset service 中實作 provider/model 對應的官方 preset 正規化，OpenAI 類模型輸出 Fast/Balanced/Deep 與 reasoning effort 對應，Anthropic 類模型輸出 Fast/Balanced/Deep 與 thinking budget 對應
-            completed: false
-            last_files_changed: []
-          - id: P1.B.t4
-            text: 在 preset service 中明確定義無法從官方 metadata 產生 presets 的結果型別，供 alias create/update handler 回傳「無法取得官方設定」錯誤
-            completed: false
-            last_files_changed: []
-
-      - id: P1.C
-        title: 後端測試覆蓋 schema 與 normalization
-        tasks:
-          - id: P1.C.t1
-            text: 更新 `backend/tests/database/model-aliases.test.ts`，驗證 model_aliases 可以保存與讀回 thinking levels、default level、metadata 快照與 fetched timestamp
-            completed: false
-            last_files_changed: []
-          - id: P1.C.t2
-            text: 新增或更新 provider business logic 測試，覆蓋 OpenCode preset service 對 OpenAI 類 metadata 產生 Fast/Balanced/Deep 的規則
-            completed: false
-            last_files_changed: []
-          - id: P1.C.t3
-            text: 新增或更新 provider business logic 測試，覆蓋 OpenCode preset service 對 Anthropic 類 metadata 產生 Fast/Balanced/Deep 的規則
-            completed: false
-            last_files_changed: []
-
-  - id: P2
-    title: Alias 建立刷新與 provider capability 串接
-    parallel: false
-    verification:
-      - cd backend && bun run style
-      - cd backend && bun run test
-    done: false
-    items:
-      - id: P2.A
-        title: alias create/update/refresh 寫入 presets
-        tasks:
-          - id: P2.A.t1
-            text: 更新 `backend/src/schemas/opencodeSettingsSchemas.ts` 的 alias item 與 create/update result 型別，加入 `thinkingLevels`、`defaultThinkingLevel`、`thinkingMetadataFetchedAt`
-            completed: false
-            last_files_changed: []
-          - id: P2.A.t2
-            text: 更新 `backend/src/handlers/opencodeSettingsHandlers.ts` 的 row-to-item mapping，讓 alias list/create/update/reorder 回傳保存的 thinking preset metadata
-            completed: false
-            last_files_changed: []
-          - id: P2.A.t3
-            text: 調整 `handleOpencodeAliasesCreate`，在 DB insert 前透過目前 ready 的 OpenCode server 查 provider/model metadata 並產生 preset snapshot，成功後與 alias 同 transaction 寫入
-            completed: false
-            last_files_changed: []
-          - id: P2.A.t4
-            text: 調整 `handleOpencodeAliasesCreate`，當 OpenCode server 未 ready、找不到 provider/model、或無法產生官方 thinking presets 時，回傳結構化錯誤並不建立 alias
-            completed: false
-            last_files_changed: []
-          - id: P2.A.t5
-            text: 新增 `opencode:aliases:refresh-presets` WebSocket schema、event 與 handler，讓既有 alias 可重新抓取官方 metadata 並更新保存的 thinking presets
-            completed: false
-            last_files_changed: []
-
-      - id: P2.B
-        title: provider:list 與 Pod thinking default 串接
-        tasks:
-          - id: P2.B.t1
-            text: 更新 `backend/src/handlers/providerHandlers.ts` 的 OpenCode 分支，從 model_aliases row 輸出 alias 對應的 `thinkingLevels` 與 `defaultThinkingLevel`，不再固定回傳空陣列
-            completed: false
-            last_files_changed: []
-          - id: P2.B.t2
-            text: 更新 `backend/src/services/provider/providerListBroadcaster.ts`，讓 `opencode:aliases:updated` 推播 payload 帶有 alias 的 thinking preset metadata
-            completed: false
-            last_files_changed: []
-          - id: P2.B.t3
-            text: 在 `backend/src/services/pod/providerConfigResolver.ts` 新增 OpenCode default thinking level 查詢路徑，依 `providerConfig.model` 對應的 alias/preset 回傳 default level
-            completed: false
-            last_files_changed: []
-          - id: P2.B.t4
-            text: 更新 `backend/src/handlers/podHandlers.ts` 的 `pod:set-model`，切換到 OpenCode model 時使用保存的 alias preset default level 重設 `providerConfig.thinkingLevel`
-            completed: false
-            last_files_changed: []
-          - id: P2.B.t5
-            text: 更新 `backend/src/handlers/podHandlers.ts` 的 `pod:set-thinking-level`，寫入前驗證 level 必須存在於該 provider/model 的 thinking levels
-            completed: false
-            last_files_changed: []
-
-      - id: P2.C
-        title: alias 與 Pod 行為測試
-        tasks:
-          - id: P2.C.t1
-            text: 更新 `backend/tests/business-logic/opencodeAliasesHandlers.test.ts`，覆蓋 alias create 成功時會寫入 thinking presets 並在 list result 中回傳
-            completed: false
-            last_files_changed: []
-          - id: P2.C.t2
-            text: 更新 `backend/tests/business-logic/opencodeAliasesHandlers.test.ts`，覆蓋 metadata 無法取得時 alias create 回傳錯誤且 DB 不新增資料
-            completed: false
-            last_files_changed: []
-          - id: P2.C.t3
-            text: 新增或更新 provider list 測試，確認 OpenCode availableModels 會回傳保存的 `thinkingLevels` 與 `defaultThinkingLevel`
-            completed: false
-            last_files_changed: []
-          - id: P2.C.t4
-            text: 新增或更新 Pod thinking level 測試，確認 OpenCode 切 model 會帶入 default thinking level，且不存在的 thinking level 會被拒絕
-            completed: false
-            last_files_changed: []
-
-  - id: P3
-    title: OpenCode 執行時套用 thinking preset
-    parallel: false
-    verification:
-      - cd backend && bun run style
-      - cd backend && bun run test
-    done: false
-    items:
-      - id: P3.A
-        title: runtime options 套用
-        tasks:
-          - id: P3.A.t1
-            text: 檢查 `@opencode-ai/sdk` 的 `session.prompt` 型別與目前 `OpencodeClientPort`，確認 OpenCode model options 應使用的 request 欄位名稱
-            completed: false
-            last_files_changed: []
-          - id: P3.A.t2
-            text: 擴充 `backend/src/services/provider/opencodeProvider.ts` 的 `OpencodeOptions`，加入目前 Pod 選到的 thinking level 與對應的 OpenCode model options snapshot
-            completed: false
-            last_files_changed: []
-          - id: P3.A.t3
-            text: 更新 `opencodeProvider.buildOptions`，依 Pod 的 `providerConfig.model` 與 `providerConfig.thinkingLevel` 查詢保存的 preset options，將結果放入 OpenCode 執行時 options
-            completed: false
-            last_files_changed: []
-          - id: P3.A.t4
-            text: 更新 `OpencodeV2PromptInput`、`OpencodeClientPort.session.prompt` 與 `opencodeProvider.chat` 的 prompt params，使用 SDK 實際支援的欄位傳入選到的 preset options
-            completed: false
-            last_files_changed: []
-          - id: P3.A.t5
-            text: 更新 OpenCode provider 相關文件或鄰近註解，說明 thinking preset 來源為 alias 建立時保存的官方 metadata snapshot
-            completed: false
-            last_files_changed: []
-
-      - id: P3.B
-        title: runtime 測試
-        tasks:
-          - id: P3.B.t1
-            text: 更新 `backend/tests/provider/opencodeProvider.test.ts`，覆蓋 buildOptions 會依 Pod thinkingLevel 讀取保存的 preset options
-            completed: false
-            last_files_changed: []
-          - id: P3.B.t2
-            text: 更新 `backend/tests/provider/opencodeProvider.test.ts`，覆蓋 chat 送出 OpenCode prompt 時會帶入選到的 model options
-            completed: false
-            last_files_changed: []
+- id: P1
+  title: OpenCode thinking presets 持久化與產生規則
+  parallel: false
+  verification:
+  - cd backend && bun run style
+  - cd backend && bun run test
+  done: true
+  items:
+  - id: P1.A
+    title: model_aliases schema 擴充
+    tasks:
+    - id: P1.A.t1
+      text: 擴充 `backend/src/database/schema.ts` 的 `model_aliases` 建表欄位，新增 `thinking_levels_json`、`default_thinking_level`、`thinking_metadata_json`、`thinking_metadata_fetched_at`，用來保存新增
+        alias 時取得的 OpenCode 官方設定快照
+      completed: true
+      last_files_changed: &1
+      - backend/src/database/schema.ts
+      - backend/src/database/statements.ts
+      - backend/src/handlers/groups/opencodeSettingsHandlerGroup.ts
+      - backend/src/handlers/opencodeSettingsHandlers.ts
+      - backend/src/handlers/podHandlers.ts
+      - backend/src/handlers/providerHandlers.ts
+      - backend/src/schemas/events.ts
+      - backend/src/schemas/opencodeSettingsSchemas.ts
+      - backend/src/services/pod/providerConfigResolver.ts
+      - backend/src/services/provider/opencodeProvider.ts
+      - backend/src/services/provider/opencodeThinkingPresetService.ts
+      - backend/src/services/provider/providerListBroadcaster.ts
+      - backend/tests/business-logic/opencodeAliasesHandlers.test.ts
+    - id: P1.A.t2
+      text: 在 `backend/src/database/schema.ts` 新增既有資料庫欄位補齊函式，對舊 DB 執行四個新增欄位的 `ALTER
+        TABLE`，重複執行時只忽略 duplicate column name
+      completed: true
+      last_files_changed: *1
+    - id: P1.A.t3
+      text: 更新 `backend/src/database/statements.ts` 的 modelAlias insert、select、update
+        statement，讓 create/update/reorder/list 都能讀寫新增的 thinking preset 欄位
+      completed: true
+      last_files_changed: *1
+  - id: P1.B
+    title: OpenCode preset normalization service
+    tasks:
+    - id: P1.B.t1
+      text: 新增 `backend/src/services/provider/opencodeThinkingPresetService.ts`，定義
+        `OpencodeThinkingPresetSnapshot`、`OpencodeThinkingPresetLevel` 與從 OpenCode
+        provider/model metadata 產生 snapshot 的 service 介面
+      completed: true
+      last_files_changed: *1
+    - id: P1.B.t2
+      text: 在 preset service 中實作 metadata 解析規則，優先讀取 OpenCode model metadata 內的 variants/options
+        類資訊，輸出專案內部的 `levels`、`defaultLevel`、`metadata` 快照
+      completed: true
+      last_files_changed: *1
+    - id: P1.B.t3
+      text: 在 preset service 中實作 provider/model 對應的官方 preset 正規化，OpenAI 類模型輸出 Fast/Balanced/Deep
+        與 reasoning effort 對應，Anthropic 類模型輸出 Fast/Balanced/Deep 與 thinking budget
+        對應
+      completed: true
+      last_files_changed: *1
+    - id: P1.B.t4
+      text: 在 preset service 中明確定義無法從官方 metadata 產生 presets 的結果型別，供 alias create/update
+        handler 回傳「無法取得官方設定」錯誤
+      completed: true
+      last_files_changed: *1
+  - id: P1.C
+    title: 後端測試覆蓋 schema 與 normalization
+    tasks:
+    - id: P1.C.t1
+      text: 更新 `backend/tests/database/model-aliases.test.ts`，驗證 model_aliases 可以保存與讀回
+        thinking levels、default level、metadata 快照與 fetched timestamp
+      completed: true
+      last_files_changed: *1
+    - id: P1.C.t2
+      text: 新增或更新 provider business logic 測試，覆蓋 OpenCode preset service 對 OpenAI 類
+        metadata 產生 Fast/Balanced/Deep 的規則
+      completed: true
+      last_files_changed: *1
+    - id: P1.C.t3
+      text: 新增或更新 provider business logic 測試，覆蓋 OpenCode preset service 對 Anthropic
+        類 metadata 產生 Fast/Balanced/Deep 的規則
+      completed: true
+      last_files_changed: *1
+- id: P2
+  title: Alias 建立刷新與 provider capability 串接
+  parallel: false
+  verification:
+  - cd backend && bun run style
+  - cd backend && bun run test
+  done: true
+  items:
+  - id: P2.A
+    title: alias create/update/refresh 寫入 presets
+    tasks:
+    - id: P2.A.t1
+      text: 更新 `backend/src/schemas/opencodeSettingsSchemas.ts` 的 alias item 與 create/update
+        result 型別，加入 `thinkingLevels`、`defaultThinkingLevel`、`thinkingMetadataFetchedAt`
+      completed: true
+      last_files_changed: *1
+    - id: P2.A.t2
+      text: 更新 `backend/src/handlers/opencodeSettingsHandlers.ts` 的 row-to-item mapping，讓
+        alias list/create/update/reorder 回傳保存的 thinking preset metadata
+      completed: true
+      last_files_changed: *1
+    - id: P2.A.t3
+      text: 調整 `handleOpencodeAliasesCreate`，在 DB insert 前透過目前 ready 的 OpenCode server
+        查 provider/model metadata 並產生 preset snapshot，成功後與 alias 同 transaction 寫入
+      completed: true
+      last_files_changed: *1
+    - id: P2.A.t4
+      text: 調整 `handleOpencodeAliasesCreate`，當 OpenCode server 未 ready、找不到 provider/model、或無法產生官方
+        thinking presets 時，回傳結構化錯誤並不建立 alias
+      completed: true
+      last_files_changed: *1
+    - id: P2.A.t5
+      text: 新增 `opencode:aliases:refresh-presets` WebSocket schema、event 與 handler，讓既有
+        alias 可重新抓取官方 metadata 並更新保存的 thinking presets
+      completed: true
+      last_files_changed: *1
+  - id: P2.B
+    title: provider:list 與 Pod thinking default 串接
+    tasks:
+    - id: P2.B.t1
+      text: 更新 `backend/src/handlers/providerHandlers.ts` 的 OpenCode 分支，從 model_aliases
+        row 輸出 alias 對應的 `thinkingLevels` 與 `defaultThinkingLevel`，不再固定回傳空陣列
+      completed: true
+      last_files_changed: *1
+    - id: P2.B.t2
+      text: 更新 `backend/src/services/provider/providerListBroadcaster.ts`，讓 `opencode:aliases:updated`
+        推播 payload 帶有 alias 的 thinking preset metadata
+      completed: true
+      last_files_changed: *1
+    - id: P2.B.t3
+      text: 在 `backend/src/services/pod/providerConfigResolver.ts` 新增 OpenCode default
+        thinking level 查詢路徑，依 `providerConfig.model` 對應的 alias/preset 回傳 default level
+      completed: true
+      last_files_changed: *1
+    - id: P2.B.t4
+      text: 更新 `backend/src/handlers/podHandlers.ts` 的 `pod:set-model`，切換到 OpenCode
+        model 時使用保存的 alias preset default level 重設 `providerConfig.thinkingLevel`
+      completed: true
+      last_files_changed: *1
+    - id: P2.B.t5
+      text: 更新 `backend/src/handlers/podHandlers.ts` 的 `pod:set-thinking-level`，寫入前驗證
+        level 必須存在於該 provider/model 的 thinking levels
+      completed: true
+      last_files_changed: *1
+  - id: P2.C
+    title: alias 與 Pod 行為測試
+    tasks:
+    - id: P2.C.t1
+      text: 更新 `backend/tests/business-logic/opencodeAliasesHandlers.test.ts`，覆蓋 alias
+        create 成功時會寫入 thinking presets 並在 list result 中回傳
+      completed: true
+      last_files_changed: *1
+    - id: P2.C.t2
+      text: 更新 `backend/tests/business-logic/opencodeAliasesHandlers.test.ts`，覆蓋 metadata
+        無法取得時 alias create 回傳錯誤且 DB 不新增資料
+      completed: true
+      last_files_changed: *1
+    - id: P2.C.t3
+      text: 新增或更新 provider list 測試，確認 OpenCode availableModels 會回傳保存的 `thinkingLevels`
+        與 `defaultThinkingLevel`
+      completed: true
+      last_files_changed: *1
+    - id: P2.C.t4
+      text: 新增或更新 Pod thinking level 測試，確認 OpenCode 切 model 會帶入 default thinking level，且不存在的
+        thinking level 會被拒絕
+      completed: true
+      last_files_changed: *1
+- id: P3
+  title: OpenCode 執行時套用 thinking preset
+  parallel: false
+  verification:
+  - cd backend && bun run style
+  - cd backend && bun run test
+  done: true
+  items:
+  - id: P3.A
+    title: runtime options 套用
+    tasks:
+    - id: P3.A.t1
+      text: 檢查 `@opencode-ai/sdk` 的 `session.prompt` 型別與目前 `OpencodeClientPort`，確認
+        OpenCode model options 應使用的 request 欄位名稱
+      completed: true
+      last_files_changed: *1
+    - id: P3.A.t2
+      text: 擴充 `backend/src/services/provider/opencodeProvider.ts` 的 `OpencodeOptions`，加入目前
+        Pod 選到的 thinking level 與對應的 OpenCode model options snapshot
+      completed: true
+      last_files_changed: *1
+    - id: P3.A.t3
+      text: 更新 `opencodeProvider.buildOptions`，依 Pod 的 `providerConfig.model` 與 `providerConfig.thinkingLevel`
+        查詢保存的 preset options，將結果放入 OpenCode 執行時 options
+      completed: true
+      last_files_changed: *1
+    - id: P3.A.t4
+      text: 更新 `OpencodeV2PromptInput`、`OpencodeClientPort.session.prompt` 與 `opencodeProvider.chat`
+        的 prompt params，使用 SDK 實際支援的欄位傳入選到的 preset options
+      completed: true
+      last_files_changed: *1
+    - id: P3.A.t5
+      text: 更新 OpenCode provider 相關文件或鄰近註解，說明 thinking preset 來源為 alias 建立時保存的官方 metadata
+        snapshot
+      completed: true
+      last_files_changed: *1
+  - id: P3.B
+    title: runtime 測試
+    tasks:
+    - id: P3.B.t1
+      text: 更新 `backend/tests/provider/opencodeProvider.test.ts`，覆蓋 buildOptions 會依
+        Pod thinkingLevel 讀取保存的 preset options
+      completed: true
+      last_files_changed: *1
+    - id: P3.B.t2
+      text: 更新 `backend/tests/provider/opencodeProvider.test.ts`，覆蓋 chat 送出 OpenCode
+        prompt 時會帶入選到的 model options
+      completed: true
+      last_files_changed: *1

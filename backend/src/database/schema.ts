@@ -15,6 +15,30 @@ function ensureRunPodInstanceSummaryColumn(db: Database): void {
   }
 }
 
+function addColumnIfMissing(
+  db: Database,
+  tableName: string,
+  columnSql: string,
+): void {
+  try {
+    db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnSql}`);
+  } catch (error) {
+    if (
+      !(error instanceof Error) ||
+      !error.message.includes("duplicate column name")
+    ) {
+      throw error;
+    }
+  }
+}
+
+function ensureModelAliasesThinkingColumns(db: Database): void {
+  addColumnIfMissing(db, "model_aliases", "thinking_levels_json TEXT");
+  addColumnIfMissing(db, "model_aliases", "default_thinking_level TEXT");
+  addColumnIfMissing(db, "model_aliases", "thinking_metadata_json TEXT");
+  addColumnIfMissing(db, "model_aliases", "thinking_metadata_fetched_at INTEGER");
+}
+
 /**
  * 建立所有資料表（CREATE TABLE IF NOT EXISTS）。
  * 純 DDL，代表目前最新的 schema；新建 DB 直接執行此函式即可。
@@ -273,6 +297,10 @@ function createBaseTables(db: Database): void {
       "real_model TEXT NOT NULL," +
       "alias TEXT NOT NULL," +
       "order_idx INTEGER NOT NULL," +
+      "thinking_levels_json TEXT," +
+      "default_thinking_level TEXT," +
+      "thinking_metadata_json TEXT," +
+      "thinking_metadata_fetched_at INTEGER," +
       "created_at INTEGER NOT NULL," +
       "updated_at INTEGER NOT NULL," +
       "UNIQUE(provider_id, real_provider, alias)" +
@@ -305,4 +333,5 @@ function createBaseTables(db: Database): void {
 export function createTables(db: Database): void {
   createBaseTables(db);
   ensureRunPodInstanceSummaryColumn(db);
+  ensureModelAliasesThinkingColumns(db);
 }

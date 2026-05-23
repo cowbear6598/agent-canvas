@@ -80,6 +80,28 @@ const setProviderExpanded = (providerID: string, value: boolean): void => {
 const deleteConfirmOpen = ref(false);
 const pendingDeleteId = ref<string | null>(null);
 const pendingDeleteAlias = ref<string>("");
+const savingDraftProviderIds = ref<Set<string>>(new Set());
+const refreshingAliasIds = ref<Set<string>>(new Set());
+
+const setSavingDraft = (providerID: string, saving: boolean): void => {
+  const next = new Set(savingDraftProviderIds.value);
+  if (saving) {
+    next.add(providerID);
+  } else {
+    next.delete(providerID);
+  }
+  savingDraftProviderIds.value = next;
+};
+
+const setRefreshingAlias = (aliasId: string, refreshing: boolean): void => {
+  const next = new Set(refreshingAliasIds.value);
+  if (refreshing) {
+    next.add(aliasId);
+  } else {
+    next.delete(aliasId);
+  }
+  refreshingAliasIds.value = next;
+};
 
 // ── 已連線的 provider 資訊 ────────────────────────────────────────
 
@@ -203,6 +225,7 @@ const handleDraftSave = async (
   }
 
   try {
+    setSavingDraft(providerID, true);
     await opencodeAliasStore.addAlias({
       providerID,
       modelID: payload.modelID,
@@ -217,6 +240,8 @@ const handleDraftSave = async (
       variant: "destructive",
     });
     // draft row 保留，方便使用者重試
+  } finally {
+    setSavingDraft(providerID, false);
   }
 };
 
@@ -269,6 +294,22 @@ const handleEditSave = async (
       variant: "destructive",
     });
     // 保留編輯態，讓使用者重試
+  }
+};
+
+const handleRefreshPresets = async (aliasId: string): Promise<void> => {
+  try {
+    setRefreshingAlias(aliasId, true);
+    await opencodeAliasStore.refreshPresets(aliasId);
+    toast({ title: t("llmProvider.opencode.aliases.refreshSuccess") });
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    toast({
+      title: t("llmProvider.opencode.aliases.refreshFailed", { reason }),
+      variant: "destructive",
+    });
+  } finally {
+    setRefreshingAlias(aliasId, false);
   }
 };
 
@@ -447,9 +488,18 @@ const handleAliasReorder = async (providerID: string): Promise<void> => {
             <Button
               size="sm"
               class="h-7 px-2"
+              :disabled="savingDraftProviderIds.has(provider.id)"
               @click="handleDraftSave(provider.id, draftRows[provider.id]!)"
             >
-              {{ t("common.save") }}
+              <Loader2
+                v-if="savingDraftProviderIds.has(provider.id)"
+                class="mr-1 h-3.5 w-3.5 animate-spin"
+              />
+              {{
+                savingDraftProviderIds.has(provider.id)
+                  ? t("llmProvider.opencode.aliases.saving")
+                  : t("common.save")
+              }}
             </Button>
           </div>
         </div>
@@ -486,11 +536,13 @@ const handleAliasReorder = async (providerID: string): Promise<void> => {
               :alias="aliasItem"
               :models="provider.models"
               :editing="editingAliasId === aliasItem.id"
+              :refreshing="refreshingAliasIds.has(aliasItem.id)"
               @start-edit="handleStartEdit(aliasItem.id)"
               @cancel-edit="handleCancelEdit"
               @save="
                 (payload) => handleEditSave(aliasItem.id, provider.id, payload)
               "
+              @refresh-presets="handleRefreshPresets(aliasItem.id)"
               @delete="handleDeleteClick(aliasItem.id, aliasItem.alias)"
             />
           </VueDraggable>

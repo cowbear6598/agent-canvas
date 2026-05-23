@@ -625,6 +625,49 @@ describe("providerCapabilityStore", () => {
         false,
       );
     });
+
+    it("opencode 應優先從 alias store 讀取 thinking metadata", () => {
+      const store = useProviderCapabilityStore();
+      const aliasStore = useOpencodeAliasStore();
+
+      aliasStore.setAliases([
+        {
+          id: "alias-gemini",
+          providerID: "google",
+          modelID: "gemini-3.5-flash",
+          alias: "Gemini 3.5 Flash",
+          orderIdx: 0,
+          thinkingLevels: ["fast", "balanced", "deep"],
+          thinkingLevelLabels: {
+            fast: "Fast",
+            balanced: "Balanced",
+            deep: "Deep",
+          },
+          defaultThinkingLevel: "balanced",
+          thinkingMetadataFetchedAt: 1234567890,
+        },
+      ]);
+
+      expect(
+        store.getSupportedThinkingLevels("opencode", "google/gemini-3.5-flash"),
+      ).toEqual(["fast", "balanced", "deep"]);
+      expect(
+        store.getDefaultThinkingLevel("opencode", "google/gemini-3.5-flash"),
+      ).toBe("balanced");
+      expect(
+        store.getThinkingLevelLabel(
+          "opencode",
+          "google/gemini-3.5-flash",
+          "deep",
+        ),
+      ).toBe("Deep");
+      expect(
+        store.isThinkingSupportedForModel(
+          "opencode",
+          "google/gemini-3.5-flash",
+        ),
+      ).toBe(true);
+    });
   });
 
   // ----------------------------------------------------------------

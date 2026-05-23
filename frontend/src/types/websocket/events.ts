@@ -90,6 +90,8 @@ export const WebSocketRequestEvents = {
   OPENCODE_ALIASES_DELETE: "opencode:aliases:delete",
   /** 重排 opencode model 別稱順序 */
   OPENCODE_ALIASES_REORDER: "opencode:aliases:reorder",
+  /** 重新抓取 opencode model thinking presets */
+  OPENCODE_ALIASES_REFRESH_PRESETS: "opencode:aliases:refresh-presets",
   /** 重啟 opencode 子程序 */
   OPENCODE_SERVER_RESTART: "opencode:server:restart",
 } as const;
@@ -229,6 +231,9 @@ export const WebSocketResponseEvents = {
   OPENCODE_ALIASES_DELETE_RESULT: "opencode:aliases:delete:result",
   /** opencode model 別稱重排結果 */
   OPENCODE_ALIASES_REORDER_RESULT: "opencode:aliases:reorder:result",
+  /** opencode model thinking presets 刷新結果 */
+  OPENCODE_ALIASES_REFRESH_PRESETS_RESULT:
+    "opencode:aliases:refresh-presets:result",
   /** opencode model 別稱已更新（push 事件） */
   OPENCODE_ALIASES_UPDATED: "opencode:aliases:updated",
   /** opencode 子程序重啟結果 */

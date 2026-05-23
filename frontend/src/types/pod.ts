@@ -79,6 +79,7 @@ export interface ModelOption {
   label: string;
   value: string;
   thinkingLevels?: ReadonlyArray<string>;
+  thinkingLevelLabels?: Readonly<Record<string, string>>;
   defaultThinkingLevel?: string;
 }
 

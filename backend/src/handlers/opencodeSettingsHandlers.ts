@@ -16,6 +16,8 @@ import type {
   OpencodeAliasesDeleteResultPayload,
   OpencodeAliasesReorderPayload,
   OpencodeAliasesReorderResultPayload,
+  OpencodeAliasesRefreshPresetsPayload,
+  OpencodeAliasesRefreshPresetsResultPayload,
   AliasItem,
 } from "../schemas/opencodeSettingsSchemas.js";
 import {
@@ -28,6 +30,11 @@ import {
   broadcastOpencodeAliasesUpdated,
   broadcastProviderList,
 } from "../services/provider/providerListBroadcaster.js";
+import {
+  buildOpencodeThinkingPresetSnapshot,
+  parseOpencodeThinkingLevelsJson,
+  type OpencodeThinkingPresetSnapshot,
+} from "../services/provider/opencodeThinkingPresetService.js";
 
 // ─── 廣播輔助：best-effort refresh，不影響已完成的 DB 操作 ─────────────────────
 
@@ -263,6 +270,10 @@ interface ModelAliasRow {
   real_model: string;
   alias: string;
   order_idx: number;
+  thinking_levels_json: string | null;
+  default_thinking_level: string | null;
+  thinking_metadata_json: string | null;
+  thinking_metadata_fetched_at: number | null;
   created_at: number;
   updated_at: number;
 }
@@ -294,12 +305,104 @@ interface ConnectionAliasUsageRow {
 }
 
 function rowToAliasItem(row: ModelAliasRow): AliasItem {
+  const levels = parseOpencodeThinkingLevelsJson(row.thinking_levels_json);
+  const labels = Object.fromEntries(
+    levels.map((level) => [level.id, level.label]),
+  );
   return {
     id: row.id,
     providerID: row.real_provider,
     modelID: row.real_model,
     alias: row.alias,
     orderIdx: row.order_idx,
+    thinkingLevels: levels.map((level) => level.id),
+    ...(levels.length > 0 ? { thinkingLevelLabels: labels } : {}),
+    defaultThinkingLevel: row.default_thinking_level,
+    thinkingMetadataFetchedAt: row.thinking_metadata_fetched_at,
+  };
+}
+
+async function defaultFetchThinkingPresetSnapshot(
+  providerID: string,
+  modelID: string,
+): Promise<
+  | { ok: true; snapshot: OpencodeThinkingPresetSnapshot }
+  | { ok: false; code: string; message: string }
+> {
+  const serverState = getOpencodeServerState();
+  if (serverState.status !== "ready" || !serverState.baseUrl) {
+    return {
+      ok: false,
+      code: "opencode_server_not_ready",
+      message: "opencode server 尚未啟動，請稍候或重啟後端",
+    };
+  }
+
+  const client = createOpencodeClient({
+    baseUrl: serverState.baseUrl,
+    fetch: createTimeoutFetch(OPENCODE_PROVIDER_LIST_TIMEOUT_MS),
+  });
+  const result = await client.provider.list();
+  if (result.error) {
+    return {
+      ok: false,
+      code: "opencode_provider_list_failed",
+      message: "取得 OpenCode provider metadata 失敗，請稍後再試",
+    };
+  }
+
+  const data = result.data as { all?: unknown[] } | null | undefined;
+  const provider = (data?.all ?? []).find((item) => {
+    const record = item as { id?: unknown };
+    return record && record.id === providerID;
+  }) as { models?: unknown } | undefined;
+  if (!provider) {
+    return {
+      ok: false,
+      code: "opencode_provider_not_found",
+      message: "找不到指定的 OpenCode provider",
+    };
+  }
+
+  const models = provider.models;
+  const modelMetadata =
+    models && typeof models === "object" && !Array.isArray(models)
+      ? (models as Record<string, unknown>)[modelID]
+      : Array.isArray(models)
+        ? models.find((model) => (model as { id?: unknown }).id === modelID)
+        : null;
+
+  return buildOpencodeThinkingPresetSnapshot({
+    providerID,
+    modelID,
+    providerMetadata: provider,
+    modelMetadata,
+  });
+}
+
+let fetchThinkingPresetSnapshot = defaultFetchThinkingPresetSnapshot;
+
+export function setOpencodeThinkingPresetSnapshotFetcher(
+  fetcher: typeof fetchThinkingPresetSnapshot,
+): void {
+  fetchThinkingPresetSnapshot = fetcher;
+}
+
+export function resetOpencodeThinkingPresetSnapshotFetcher(): void {
+  fetchThinkingPresetSnapshot = defaultFetchThinkingPresetSnapshot;
+}
+
+function snapshotStatementParams(snapshot: OpencodeThinkingPresetSnapshot): {
+  $thinkingLevelsJson: string;
+  $defaultThinkingLevel: string | null;
+  $thinkingMetadataJson: string;
+  $thinkingMetadataFetchedAt: number;
+} {
+  return {
+    $thinkingLevelsJson: JSON.stringify(snapshot.levels),
+    $defaultThinkingLevel: snapshot.defaultLevel,
+    $thinkingMetadataJson: JSON.stringify(snapshot.metadata),
+    $thinkingMetadataFetchedAt: snapshot.fetchedAt,
   };
 }
 
@@ -551,6 +654,27 @@ export async function handleOpencodeAliasesCreate(
   const db = getDb();
   const id = randomUUID();
   const now = Date.now();
+  const presetResult = await fetchThinkingPresetSnapshot(
+    payload.providerID,
+    payload.modelID,
+  );
+
+  if (!presetResult.ok) {
+    const response: OpencodeAliasesCreateResultPayload = {
+      requestId,
+      success: false,
+      error: {
+        code: presetResult.code,
+        message: presetResult.message,
+      },
+    };
+    socketService.emitToConnection(
+      connectionId,
+      WebSocketResponseEvents.OPENCODE_ALIASES_CREATE_RESULT,
+      response,
+    );
+    return;
+  }
 
   try {
     // 在單一 transaction 內：查 max orderIdx → insert → selectById
@@ -567,6 +691,7 @@ export async function handleOpencodeAliasesCreate(
         $realModel: payload.modelID,
         $alias: payload.alias,
         $orderIdx: orderIdx,
+        ...snapshotStatementParams(presetResult.snapshot),
         $createdAt: now,
         $updatedAt: now,
       });
@@ -676,11 +801,33 @@ export async function handleOpencodeAliasesUpdate(
     }
   }
 
+  const presetResult = await fetchThinkingPresetSnapshot(
+    existingRow.real_provider,
+    payload.modelID,
+  );
+  if (!presetResult.ok) {
+    const response: OpencodeAliasesUpdateResultPayload = {
+      requestId,
+      success: false,
+      error: {
+        code: presetResult.code,
+        message: presetResult.message,
+      },
+    };
+    socketService.emitToConnection(
+      connectionId,
+      WebSocketResponseEvents.OPENCODE_ALIASES_UPDATE_RESULT,
+      response,
+    );
+    return;
+  }
+
   try {
     stmts.modelAlias.updateAliasAndModelId.run({
       $id: payload.id,
       $alias: payload.alias,
       $realModel: payload.modelID,
+      ...snapshotStatementParams(presetResult.snapshot),
       $updatedAt: now,
     });
 
@@ -734,6 +881,96 @@ export async function handleOpencodeAliasesUpdate(
       throw err;
     }
   }
+}
+
+export async function handleOpencodeAliasesRefreshPresets(
+  connectionId: string,
+  payload: OpencodeAliasesRefreshPresetsPayload,
+  requestId: string,
+): Promise<void> {
+  const stmts = getStmts();
+  const row = stmts.modelAlias.selectById.get({
+    $id: payload.id,
+  }) as ModelAliasRow | null;
+
+  if (!row) {
+    const response: OpencodeAliasesRefreshPresetsResultPayload = {
+      requestId,
+      success: false,
+      error: {
+        code: "alias_not_found",
+        message: "找不到指定的 alias，無法刷新 thinking presets",
+      },
+    };
+    socketService.emitToConnection(
+      connectionId,
+      WebSocketResponseEvents.OPENCODE_ALIASES_REFRESH_PRESETS_RESULT,
+      response,
+    );
+    return;
+  }
+
+  const presetResult = await fetchThinkingPresetSnapshot(
+    row.real_provider,
+    row.real_model,
+  );
+  if (!presetResult.ok) {
+    const response: OpencodeAliasesRefreshPresetsResultPayload = {
+      requestId,
+      success: false,
+      error: {
+        code: presetResult.code,
+        message: presetResult.message,
+      },
+    };
+    socketService.emitToConnection(
+      connectionId,
+      WebSocketResponseEvents.OPENCODE_ALIASES_REFRESH_PRESETS_RESULT,
+      response,
+    );
+    return;
+  }
+
+  stmts.modelAlias.updateThinkingPresets.run({
+    $id: payload.id,
+    ...snapshotStatementParams(presetResult.snapshot),
+    $updatedAt: Date.now(),
+  });
+
+  const updatedRow = stmts.modelAlias.selectById.get({
+    $id: payload.id,
+  }) as ModelAliasRow | null;
+
+  if (!updatedRow) {
+    const response: OpencodeAliasesRefreshPresetsResultPayload = {
+      requestId,
+      success: false,
+      error: {
+        code: "alias_not_found",
+        message: "刷新後找不到指定的 alias",
+      },
+    };
+    socketService.emitToConnection(
+      connectionId,
+      WebSocketResponseEvents.OPENCODE_ALIASES_REFRESH_PRESETS_RESULT,
+      response,
+    );
+    return;
+  }
+
+  const response: OpencodeAliasesRefreshPresetsResultPayload = {
+    requestId,
+    success: true,
+    item: rowToAliasItem(updatedRow),
+  };
+
+  socketService.emitToConnection(
+    connectionId,
+    WebSocketResponseEvents.OPENCODE_ALIASES_REFRESH_PRESETS_RESULT,
+    response,
+  );
+
+  await broadcastRefreshBestEffort();
 }
 
 export async function handleOpencodeAliasesDelete(

@@ -459,7 +459,13 @@
         "emptyHint": "尚無 model alias，請點右上角「+」新增",
         "actionFailed": "操作失敗：{reason}",
         "collapsibleTrigger": "展開/收合 Provider Model 對應",
-        "addModelTooltip": "新增 model"
+        "addModelTooltip": "新增 model",
+        "saving": "儲存中",
+        "refreshPresets": "刷新 thinking presets",
+        "refreshSuccess": "已刷新 thinking presets",
+        "refreshFailed": "刷新 thinking presets 失敗：{reason}",
+        "presetStatus": "預設 thinking：{level}",
+        "presetUnavailable": "未取得 thinking presets"
       }
     }
   },

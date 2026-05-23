@@ -459,7 +459,13 @@
         "emptyHint": "No model aliases yet. Click \"+\" at the top right to add one.",
         "actionFailed": "Action failed: {reason}",
         "collapsibleTrigger": "Expand/collapse provider model mappings",
-        "addModelTooltip": "Add model"
+        "addModelTooltip": "Add model",
+        "saving": "Saving",
+        "refreshPresets": "Refresh thinking presets",
+        "refreshSuccess": "Thinking presets refreshed",
+        "refreshFailed": "Failed to refresh thinking presets: {reason}",
+        "presetStatus": "Default thinking: {level}",
+        "presetUnavailable": "Thinking presets unavailable"
       }
     }
   },

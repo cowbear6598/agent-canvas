@@ -23,6 +23,35 @@ const getOpencodeAliasModelValue = (alias: {
   modelID: string;
 }): string => `${alias.providerID}/${alias.modelID}`;
 
+function getOpencodeAliasThinkingMeta(
+  model: string,
+):
+  | {
+      levels: ReadonlyArray<string>;
+      labels: Readonly<Record<string, string>>;
+      defaultLevel: string;
+    }
+  | undefined {
+  const aliasStore = useOpencodeAliasStore();
+  const alias = aliasStore.aliases.find(
+    (item) => getOpencodeAliasModelValue(item) === model,
+  );
+
+  if (
+    alias?.thinkingLevels &&
+    alias.thinkingLevels.length > 0 &&
+    alias.defaultThinkingLevel
+  ) {
+    return {
+      levels: Object.freeze([...alias.thinkingLevels]),
+      labels: Object.freeze({ ...(alias.thinkingLevelLabels ?? {}) }),
+      defaultLevel: alias.defaultThinkingLevel,
+    };
+  }
+
+  return undefined;
+}
+
 /**
  * provider:list 回應的單一 Provider 資料結構。
  */
@@ -80,7 +109,14 @@ export const useProviderCapabilityStore = defineStore(
     const thinkingMetaByProviderModel = ref<
       Record<
         string,
-        Record<string, { levels: ReadonlyArray<string>; defaultLevel: string }>
+        Record<
+          string,
+          {
+            levels: ReadonlyArray<string>;
+            labels: Readonly<Record<string, string>>;
+            defaultLevel: string;
+          }
+        >
       >
     >({});
 
@@ -110,10 +146,22 @@ export const useProviderCapabilityStore = defineStore(
             const aliases = aliasStore.aliases;
             if (aliases.length === 0) return EMPTY_AVAILABLE_MODELS;
             return aliases.map(
-              (a): ModelOption => ({
-                label: a.alias,
-                value: getOpencodeAliasModelValue(a),
-              }),
+              (a): ModelOption => {
+                const value = getOpencodeAliasModelValue(a);
+                const thinkingMeta =
+                  getOpencodeAliasThinkingMeta(value) ??
+                  thinkingMetaByProviderModel.value.opencode?.[value];
+                const option: ModelOption = {
+                  label: a.alias,
+                  value,
+                };
+                if (thinkingMeta) {
+                  option.thinkingLevels = thinkingMeta.levels;
+                  option.thinkingLevelLabels = thinkingMeta.labels;
+                  option.defaultThinkingLevel = thinkingMeta.defaultLevel;
+                }
+                return option;
+              },
             );
           }
           return (
@@ -155,6 +203,13 @@ export const useProviderCapabilityStore = defineStore(
     const getSupportedThinkingLevels = computed(
       () =>
         (provider: PodProvider, model: string): ReadonlyArray<string> => {
+          if (provider === "opencode") {
+            return (
+              getOpencodeAliasThinkingMeta(model)?.levels ??
+              thinkingMetaByProviderModel.value.opencode?.[model]?.levels ??
+              EMPTY_THINKING_LEVELS
+            );
+          }
           return (
             thinkingMetaByProviderModel.value[provider]?.[model]?.levels ??
             EMPTY_THINKING_LEVELS
@@ -165,8 +220,33 @@ export const useProviderCapabilityStore = defineStore(
     const getDefaultThinkingLevel = computed(
       () =>
         (provider: PodProvider, model: string): string | undefined => {
+          if (provider === "opencode") {
+            return (
+              getOpencodeAliasThinkingMeta(model)?.defaultLevel ??
+              thinkingMetaByProviderModel.value.opencode?.[model]?.defaultLevel
+            );
+          }
           return thinkingMetaByProviderModel.value[provider]?.[model]
             ?.defaultLevel;
+        },
+    );
+
+    const getThinkingLevelLabel = computed(
+      () =>
+        (
+          provider: PodProvider,
+          model: string,
+          level: string,
+        ): string | undefined => {
+          if (provider === "opencode") {
+            return (
+              getOpencodeAliasThinkingMeta(model)?.labels[level] ??
+              thinkingMetaByProviderModel.value.opencode?.[model]?.labels[level]
+            );
+          }
+          return thinkingMetaByProviderModel.value[provider]?.[model]?.labels[
+            level
+          ];
         },
     );
 
@@ -200,16 +280,20 @@ export const useProviderCapabilityStore = defineStore(
         defaultOptionsByProvider.value[normalizedName] = {
           ...(defaultOptions ?? {}),
         };
-        // opencode 的 availableModels 由 opencodeAliasStore 動態提供
-        if (normalizedName === "opencode") continue;
         const frozenModels = Object.freeze([...(availableModels ?? [])]);
-        availableModelsByProvider.value[normalizedName] = frozenModels;
-        availableModelValuesByProvider.value[normalizedName] = new Set(
-          frozenModels.map((m) => m.value),
-        );
+        if (normalizedName !== "opencode") {
+          availableModelsByProvider.value[normalizedName] = frozenModels;
+          availableModelValuesByProvider.value[normalizedName] = new Set(
+            frozenModels.map((m) => m.value),
+          );
+        }
         const thinkingMap: Record<
           string,
-          { levels: ReadonlyArray<string>; defaultLevel: string }
+          {
+            levels: ReadonlyArray<string>;
+            labels: Readonly<Record<string, string>>;
+            defaultLevel: string;
+          }
         > = {};
         for (const model of frozenModels) {
           if (
@@ -219,6 +303,7 @@ export const useProviderCapabilityStore = defineStore(
           ) {
             thinkingMap[model.value] = {
               levels: Object.freeze([...model.thinkingLevels]),
+              labels: Object.freeze({ ...(model.thinkingLevelLabels ?? {}) }),
               defaultLevel: model.defaultThinkingLevel,
             };
           }
@@ -266,9 +351,10 @@ export const useProviderCapabilityStore = defineStore(
       getDefaultModel,
       isModelValidForProvider,
       isKnownProvider,
-      getSupportedThinkingLevels,
-      getDefaultThinkingLevel,
-      isThinkingSupportedForModel,
+	      getSupportedThinkingLevels,
+	      getDefaultThinkingLevel,
+	      getThinkingLevelLabel,
+	      isThinkingSupportedForModel,
       syncFromPayload,
       loadFromBackend,
     };

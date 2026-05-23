@@ -10,6 +10,7 @@ import { WebSocketResponseEvents } from "../../schemas/events.js";
 import { getStmts } from "../../database/index.js";
 import { buildProviderListPayload } from "../../handlers/providerHandlers.js";
 import type { AliasItem } from "../../schemas/opencodeSettingsSchemas.js";
+import { parseOpencodeThinkingLevelsJson } from "./opencodeThinkingPresetService.js";
 
 /** DB row 形狀（model_aliases 表） */
 interface ModelAliasRow {
@@ -19,6 +20,9 @@ interface ModelAliasRow {
   real_model: string;
   alias: string;
   order_idx: number;
+  thinking_levels_json: string | null;
+  default_thinking_level: string | null;
+  thinking_metadata_fetched_at: number | null;
   created_at: number;
   updated_at: number;
 }
@@ -33,13 +37,23 @@ export async function broadcastOpencodeAliasesUpdated(): Promise<void> {
     $providerId: "opencode",
   }) as ModelAliasRow[];
 
-  const items: AliasItem[] = rows.map((r) => ({
-    id: r.id,
-    providerID: r.real_provider,
-    modelID: r.real_model,
-    alias: r.alias,
-    orderIdx: r.order_idx,
-  }));
+  const items: AliasItem[] = rows.map((r) => {
+    const levels = parseOpencodeThinkingLevelsJson(r.thinking_levels_json);
+    const labels = Object.fromEntries(
+      levels.map((level) => [level.id, level.label]),
+    );
+    return {
+      id: r.id,
+      providerID: r.real_provider,
+      modelID: r.real_model,
+      alias: r.alias,
+      orderIdx: r.order_idx,
+      thinkingLevels: levels.map((level) => level.id),
+      ...(levels.length > 0 ? { thinkingLevelLabels: labels } : {}),
+      defaultThinkingLevel: r.default_thinking_level,
+      thinkingMetadataFetchedAt: r.thinking_metadata_fetched_at,
+    };
+  });
 
   socketService.emitToAll(WebSocketResponseEvents.OPENCODE_ALIASES_UPDATED, {
     items,

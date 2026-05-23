@@ -2,122 +2,142 @@ feature: opencode-thinking-presets
 side: frontend
 approved: true
 phases:
-  - id: P1
-    title: OpenCode alias 型別與 store 支援 thinking presets
-    parallel: false
-    verification:
-      - bun run style
-      - bun run test:run
-    done: false
-    items:
-      - id: P1.A
-        title: alias 型別與 API contract
-        tasks:
-          - id: P1.A.t1
-            text: 更新 `frontend/src/types/opencode.ts` 的 `OpencodeModelAlias`，加入 `thinkingLevels`、`defaultThinkingLevel`、`thinkingMetadataFetchedAt`
-            completed: false
-            last_files_changed: []
-          - id: P1.A.t2
-            text: 更新 `frontend/src/services/opencodeApi.ts` 的 alias list/create/update/reorder result payload 型別，讓 WebSocket 回傳的 thinking preset 欄位可被前端保存
-            completed: false
-            last_files_changed: []
-          - id: P1.A.t3
-            text: 在 `frontend/src/services/opencodeApi.ts` 新增 `refreshAliasPresets(id)`，呼叫新的 `opencode:aliases:refresh-presets` WebSocket request 並回傳更新後 alias item
-            completed: false
-            last_files_changed: []
-
-      - id: P1.B
-        title: alias store 狀態同步
-        tasks:
-          - id: P1.B.t1
-            text: 更新 `frontend/src/stores/opencodeAliasStore.ts` 的新增、編輯、重排、全量覆寫流程，保留每筆 alias 的 thinking preset metadata
-            completed: false
-            last_files_changed: []
-          - id: P1.B.t2
-            text: 在 `frontend/src/stores/opencodeAliasStore.ts` 新增 `refreshPresets(id)` action，成功後以後端回傳 item 更新本地 alias 清單
-            completed: false
-            last_files_changed: []
-          - id: P1.B.t3
-            text: 更新 `frontend/tests/business-logic/stores/opencodeAliasStore.test.ts`，覆蓋 alias metadata 在 load、add、edit、reorder、refresh 後都會保留或更新
-            completed: false
-            last_files_changed: []
-
-  - id: P2
-    title: provider capability store 啟用 OpenCode Thinking
-    parallel: false
-    verification:
-      - bun run style
-      - bun run test:run
-    done: false
-    items:
-      - id: P2.A
-        title: OpenCode thinking metadata 來源整合
-        tasks:
-          - id: P2.A.t1
-            text: 更新 `frontend/src/stores/providerCapabilityStore.ts`，讓 `syncFromPayload` 即使遇到 opencode provider 也會從 `provider:list.availableModels` 建立 thinking metadata map
-            completed: false
-            last_files_changed: []
-          - id: P2.A.t2
-            text: 調整 `providerCapabilityStore.getAvailableModels("opencode")` 保持從 alias store 組 model 選單，但 thinking levels 由 provider list 的 metadata map 提供
-            completed: false
-            last_files_changed: []
-          - id: P2.A.t3
-            text: 更新 `providerCapabilityStore.getDefaultThinkingLevel` 與 `isThinkingSupportedForModel` 相關測試，覆蓋 OpenCode alias 有 presets 時 Thinking UI 會啟用
-            completed: false
-            last_files_changed: []
-
-      - id: P2.B
-        title: Pod Thinking UI 行為
-        tasks:
-          - id: P2.B.t1
-            text: 檢查 `frontend/src/components/pod/PodSlots.vue` 與 `ThinkingPopover.vue` 的 OpenCode path，確認既有 provider/model 查詢會使用 OpenCode alias value 顯示 presets
-            completed: false
-            last_files_changed: []
-          - id: P2.B.t2
-            text: 更新 Pod 或 store 相關 business logic 測試，覆蓋 OpenCode model 有 thinking presets 時 `pod:set-thinking-level` 會送出使用者選到的 level
-            completed: false
-            last_files_changed: []
-          - id: P2.B.t3
-            text: 更新 OpenCode 沒有 presets 的測試情境，確認 Thinking slot 仍維持停用狀態
-            completed: false
-            last_files_changed: []
-
-  - id: P3
-    title: OpenCode 設定頁新增與刷新體驗
-    parallel: false
-    verification:
-      - bun run style
-      - bun run test:run
-    done: false
-    items:
-      - id: P3.A
-        title: 新增 alias 時阻擋失敗
-        tasks:
-          - id: P3.A.t1
-            text: 更新 `frontend/src/components/settings/OpencodeSettingsPanel.vue` 的新增 alias 流程，當後端回傳 metadata 或 presets 取得失敗時顯示錯誤 toast 並保留 draft row
-            completed: false
-            last_files_changed: []
-          - id: P3.A.t2
-            text: 更新 OpenCode alias 新增按鈕與儲存中的 loading state，避免使用者在新增流程尚未完成時重複送出
-            completed: false
-            last_files_changed: []
-          - id: P3.A.t3
-            text: 更新 `frontend/src/locales/zh-TW.json`、`frontend/src/locales/en.json`、`frontend/src/locales/ja.json`，加入 metadata 取得失敗與 presets 刷新相關文案
-            completed: false
-            last_files_changed: []
-
-      - id: P3.B
-        title: 手動刷新 thinking presets
-        tasks:
-          - id: P3.B.t1
-            text: 更新 `OpencodeAliasRow` 或其鄰近設定列元件，加入刷新 thinking presets 的 icon button，按下後呼叫 `opencodeAliasStore.refreshPresets(id)`
-            completed: false
-            last_files_changed: []
-          - id: P3.B.t2
-            text: 在 alias row 顯示簡短的 presets 狀態，例如目前 default thinking level 或最近刷新時間，不提供 raw options 編輯入口
-            completed: false
-            last_files_changed: []
-          - id: P3.B.t3
-            text: 更新設定頁相關測試，覆蓋刷新成功會更新 alias row 狀態，刷新失敗會顯示錯誤 toast
-            completed: false
-            last_files_changed: []
+- id: P1
+  title: OpenCode alias 型別與 store 支援 thinking presets
+  parallel: false
+  verification:
+  - bun run style
+  - bun run test:run
+  done: true
+  items:
+  - id: P1.A
+    title: alias 型別與 API contract
+    tasks:
+    - id: P1.A.t1
+      text: 更新 `frontend/src/types/opencode.ts` 的 `OpencodeModelAlias`，加入 `thinkingLevels`、`defaultThinkingLevel`、`thinkingMetadataFetchedAt`
+      completed: true
+      last_files_changed: &1
+      - frontend/src/components/settings/OpencodeAliasRow.vue
+      - frontend/src/components/settings/OpencodeSettingsPanel.vue
+      - frontend/src/locales/en.json
+      - frontend/src/locales/ja.json
+      - frontend/src/locales/zh-TW.json
+      - frontend/src/services/opencodeApi.ts
+      - frontend/src/stores/opencodeAliasStore.ts
+      - frontend/src/stores/providerCapabilityStore.ts
+      - frontend/src/types/opencode.ts
+      - frontend/src/types/websocket/events.ts
+    - id: P1.A.t2
+      text: 更新 `frontend/src/services/opencodeApi.ts` 的 alias list/create/update/reorder
+        result payload 型別，讓 WebSocket 回傳的 thinking preset 欄位可被前端保存
+      completed: true
+      last_files_changed: *1
+    - id: P1.A.t3
+      text: 在 `frontend/src/services/opencodeApi.ts` 新增 `refreshAliasPresets(id)`，呼叫新的
+        `opencode:aliases:refresh-presets` WebSocket request 並回傳更新後 alias item
+      completed: true
+      last_files_changed: *1
+  - id: P1.B
+    title: alias store 狀態同步
+    tasks:
+    - id: P1.B.t1
+      text: 更新 `frontend/src/stores/opencodeAliasStore.ts` 的新增、編輯、重排、全量覆寫流程，保留每筆 alias
+        的 thinking preset metadata
+      completed: true
+      last_files_changed: *1
+    - id: P1.B.t2
+      text: 在 `frontend/src/stores/opencodeAliasStore.ts` 新增 `refreshPresets(id)`
+        action，成功後以後端回傳 item 更新本地 alias 清單
+      completed: true
+      last_files_changed: *1
+    - id: P1.B.t3
+      text: 更新 `frontend/tests/business-logic/stores/opencodeAliasStore.test.ts`，覆蓋
+        alias metadata 在 load、add、edit、reorder、refresh 後都會保留或更新
+      completed: true
+      last_files_changed: *1
+- id: P2
+  title: provider capability store 啟用 OpenCode Thinking
+  parallel: false
+  verification:
+  - bun run style
+  - bun run test:run
+  done: true
+  items:
+  - id: P2.A
+    title: OpenCode thinking metadata 來源整合
+    tasks:
+    - id: P2.A.t1
+      text: 更新 `frontend/src/stores/providerCapabilityStore.ts`，讓 `syncFromPayload`
+        即使遇到 opencode provider 也會從 `provider:list.availableModels` 建立 thinking metadata
+        map
+      completed: true
+      last_files_changed: *1
+    - id: P2.A.t2
+      text: 調整 `providerCapabilityStore.getAvailableModels("opencode")` 保持從 alias
+        store 組 model 選單，但 thinking levels 由 provider list 的 metadata map 提供
+      completed: true
+      last_files_changed: *1
+    - id: P2.A.t3
+      text: 更新 `providerCapabilityStore.getDefaultThinkingLevel` 與 `isThinkingSupportedForModel`
+        相關測試，覆蓋 OpenCode alias 有 presets 時 Thinking UI 會啟用
+      completed: true
+      last_files_changed: *1
+  - id: P2.B
+    title: Pod Thinking UI 行為
+    tasks:
+    - id: P2.B.t1
+      text: 檢查 `frontend/src/components/pod/PodSlots.vue` 與 `ThinkingPopover.vue`
+        的 OpenCode path，確認既有 provider/model 查詢會使用 OpenCode alias value 顯示 presets
+      completed: true
+      last_files_changed: *1
+    - id: P2.B.t2
+      text: 更新 Pod 或 store 相關 business logic 測試，覆蓋 OpenCode model 有 thinking presets
+        時 `pod:set-thinking-level` 會送出使用者選到的 level
+      completed: true
+      last_files_changed: *1
+    - id: P2.B.t3
+      text: 更新 OpenCode 沒有 presets 的測試情境，確認 Thinking slot 仍維持停用狀態
+      completed: true
+      last_files_changed: *1
+- id: P3
+  title: OpenCode 設定頁新增與刷新體驗
+  parallel: false
+  verification:
+  - bun run style
+  - bun run test:run
+  done: true
+  items:
+  - id: P3.A
+    title: 新增 alias 時阻擋失敗
+    tasks:
+    - id: P3.A.t1
+      text: 更新 `frontend/src/components/settings/OpencodeSettingsPanel.vue` 的新增 alias
+        流程，當後端回傳 metadata 或 presets 取得失敗時顯示錯誤 toast 並保留 draft row
+      completed: true
+      last_files_changed: *1
+    - id: P3.A.t2
+      text: 更新 OpenCode alias 新增按鈕與儲存中的 loading state，避免使用者在新增流程尚未完成時重複送出
+      completed: true
+      last_files_changed: *1
+    - id: P3.A.t3
+      text: 更新 `frontend/src/locales/zh-TW.json`、`frontend/src/locales/en.json`、`frontend/src/locales/ja.json`，加入
+        metadata 取得失敗與 presets 刷新相關文案
+      completed: true
+      last_files_changed: *1
+  - id: P3.B
+    title: 手動刷新 thinking presets
+    tasks:
+    - id: P3.B.t1
+      text: 更新 `OpencodeAliasRow` 或其鄰近設定列元件，加入刷新 thinking presets 的 icon button，按下後呼叫
+        `opencodeAliasStore.refreshPresets(id)`
+      completed: true
+      last_files_changed: *1
+    - id: P3.B.t2
+      text: 在 alias row 顯示簡短的 presets 狀態，例如目前 default thinking level 或最近刷新時間，不提供 raw
+        options 編輯入口
+      completed: true
+      last_files_changed: *1
+    - id: P3.B.t3
+      text: 更新設定頁相關測試，覆蓋刷新成功會更新 alias row 狀態，刷新失敗會顯示錯誤 toast
+      completed: true
+      last_files_changed: *1

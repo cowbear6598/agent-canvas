@@ -16,6 +16,8 @@ import {
   CODEX_MODEL_THINKING_LEVELS,
 } from "../provider/capabilities.js";
 import { logger } from "../../utils/logger.js";
+import { getStmts } from "../../database/index.js";
+import { parseOpencodeThinkingLevelsJson } from "../provider/opencodeThinkingPresetService.js";
 
 /**
  * 取得指定 provider + model 的 default thinking level。
@@ -25,6 +27,20 @@ export function getDefaultThinkingLevel(
   provider: ProviderName,
   model: string,
 ): string | null {
+  if (provider === "opencode") {
+    const rows = getStmts().modelAlias.selectByProviderId.all({
+      $providerId: "opencode",
+    }) as Array<{
+      real_provider: string;
+      real_model: string;
+      default_thinking_level: string | null;
+    }>;
+    const row = rows.find(
+      (alias) => `${alias.real_provider}/${alias.real_model}` === model,
+    );
+    return row?.default_thinking_level ?? null;
+  }
+
   let table:
     | Readonly<
         Record<string, { levels: readonly string[]; default: string | null }>
@@ -39,6 +55,41 @@ export function getDefaultThinkingLevel(
   const entry = table[model];
   if (!entry) return null;
   return entry.default;
+}
+
+export function isThinkingLevelValid(
+  provider: ProviderName,
+  model: string,
+  level: string,
+): boolean {
+  if (provider === "opencode") {
+    const rows = getStmts().modelAlias.selectByProviderId.all({
+      $providerId: "opencode",
+    }) as Array<{
+      real_provider: string;
+      real_model: string;
+      thinking_levels_json: string | null;
+    }>;
+    const row = rows.find(
+      (alias) => `${alias.real_provider}/${alias.real_model}` === model,
+    );
+    return parseOpencodeThinkingLevelsJson(row?.thinking_levels_json).some(
+      (preset) => preset.id === level,
+    );
+  }
+
+  let table:
+    | Readonly<
+        Record<string, { levels: readonly string[]; default: string | null }>
+      >
+    | undefined;
+  if (provider === "claude") {
+    table = CLAUDE_MODEL_THINKING_LEVELS;
+  } else if (provider === "codex") {
+    table = CODEX_MODEL_THINKING_LEVELS;
+  }
+
+  return Boolean(table?.[model]?.levels.includes(level));
 }
 
 /**

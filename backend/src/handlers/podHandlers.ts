@@ -25,7 +25,10 @@ import type {
 } from "../schemas";
 import { podStore } from "../services/podStore.js";
 import { runStore } from "../services/runStore.js";
-import { getDefaultThinkingLevel } from "../services/pod/providerConfigResolver.js";
+import {
+  getDefaultThinkingLevel,
+  isThinkingLevelValid,
+} from "../services/pod/providerConfigResolver.js";
 import {
   createPodWithWorkspace,
   deletePodWithCleanup,
@@ -416,6 +419,23 @@ export const handlePodSetThinkingLevel =
         requestId,
       );
       if (!existingPod) return;
+
+      const currentModel = existingPod.providerConfig?.model;
+      if (
+        typeof currentModel === "string" &&
+        !isThinkingLevelValid(existingPod.provider, currentModel, level)
+      ) {
+        emitError(
+          connectionId,
+          WebSocketResponseEvents.POD_THINKING_LEVEL_SET,
+          "此 model 不支援指定的 thinking level",
+          canvasId,
+          requestId,
+          podId,
+          "pod_invalid_thinking_level",
+        );
+        return;
+      }
 
       // 白名單 merge：保留 model，並寫入新的 thinkingLevel（payload.level）
       const safeProviderConfig: Record<string, unknown> = {

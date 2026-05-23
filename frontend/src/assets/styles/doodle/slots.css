@@ -403,6 +403,10 @@
   --thinking-fill-color: var(--pod-thinking-fill-codex);
 }
 
+.pod-thinking-slot--opencode {
+  --thinking-fill-color: var(--pod-thinking-fill-opencode);
+}
+
 /* 水體：絕對定位於 slot 內部由下往上長，高度 = --thinking-fill-pct，
    transition height 提供 lerp 動畫（level 切換時 500ms 緩入）。 */
 .pod-thinking-slot .thinking-water {

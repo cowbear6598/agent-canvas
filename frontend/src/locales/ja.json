@@ -459,7 +459,13 @@
         "emptyHint": "model エイリアスはまだありません。右上の「+」で追加してください。",
         "actionFailed": "操作に失敗しました：{reason}",
         "collapsibleTrigger": "Provider のモデル対応を展開/折りたたみ",
-        "addModelTooltip": "モデルを追加"
+        "addModelTooltip": "モデルを追加",
+        "saving": "保存中",
+        "refreshPresets": "thinking presets を更新",
+        "refreshSuccess": "thinking presets を更新しました",
+        "refreshFailed": "thinking presets の更新に失敗しました：{reason}",
+        "presetStatus": "既定 thinking：{level}",
+        "presetUnavailable": "thinking presets は未取得です"
       }
     }
   },

@@ -34,6 +34,10 @@ export interface OpencodeProviderListResult {
  * - modelID：原始 model id
  * - alias：使用者自訂別稱
  * - orderIdx：排序索引（數值越小越前，與後端 order_idx 欄位一致）
+ * - thinkingLevels：OpenCode 官方 thinking presets id 清單
+ * - thinkingLevelLabels：thinking preset id 對應顯示名稱
+ * - defaultThinkingLevel：預設 thinking preset id；null 代表不支援
+ * - thinkingMetadataFetchedAt：metadata 快照取得時間
  */
 export interface OpencodeModelAlias {
   id: string;
@@ -41,4 +45,8 @@ export interface OpencodeModelAlias {
   modelID: string;
   alias: string;
   orderIdx: number;
+  thinkingLevels?: string[];
+  thinkingLevelLabels?: Record<string, string>;
+  defaultThinkingLevel?: string | null;
+  thinkingMetadataFetchedAt?: number | null;
 }

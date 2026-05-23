@@ -84,7 +84,7 @@ export const useOpencodeAliasStore = defineStore("opencodeAlias", () => {
    * API 呼叫失敗時 rethrow，不更新本地 state；成功才同步本地 state。
    */
   async function addAlias(
-    payload: Omit<OpencodeModelAlias, "id" | "orderIdx">,
+    payload: Pick<OpencodeModelAlias, "providerID" | "modelID" | "alias">,
   ): Promise<void> {
     const item = await opencodeApi.createAlias(payload);
     aliases.value = [...aliases.value, item].sort(
@@ -124,6 +124,17 @@ export const useOpencodeAliasStore = defineStore("opencodeAlias", () => {
     aliases.value = [...items].sort((a, b) => a.orderIdx - b.orderIdx);
   }
 
+  /**
+   * 重新抓取既有 alias 的 thinking presets。
+   * 成功後以後端回傳 item 更新本地清單。
+   */
+  async function refreshPresets(id: string): Promise<void> {
+    const item = await opencodeApi.refreshAliasPresets(id);
+    aliases.value = aliases.value
+      .map((a) => (a.id === item.id ? item : a))
+      .sort((a, b) => a.orderIdx - b.orderIdx);
+  }
+
   return {
     aliases,
     loaded,
@@ -135,5 +146,6 @@ export const useOpencodeAliasStore = defineStore("opencodeAlias", () => {
     editAlias,
     removeAlias,
     reorder,
+    refreshPresets,
   };
 });

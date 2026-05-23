@@ -9,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { GripVertical } from "lucide-vue-next";
+import { GripVertical, RefreshCw } from "lucide-vue-next";
 import type { OpencodeModelAlias, OpencodeModelInfo } from "@/types/opencode";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -20,6 +20,8 @@ interface Props {
   models: OpencodeModelInfo[];
   /** 是否處於編輯態 */
   editing: boolean;
+  /** 是否正在刷新 thinking presets */
+  refreshing?: boolean;
 }
 
 const props = defineProps<Props>();
@@ -31,6 +33,7 @@ const emit = defineEmits<{
   delete: [];
   startEdit: [];
   cancelEdit: [];
+  refreshPresets: [];
 }>();
 
 // ── 本地編輯狀態 ───────────────────────────────────────────────────────────────
@@ -66,6 +69,19 @@ const handleStartEdit = (): void => {
 const handleDelete = (): void => {
   emit("delete");
 };
+
+const handleRefreshPresets = (): void => {
+  emit("refreshPresets");
+};
+
+const formatPresetStatus = (): string => {
+  if (props.alias.defaultThinkingLevel) {
+    return t("llmProvider.opencode.aliases.presetStatus", {
+      level: props.alias.defaultThinkingLevel,
+    });
+  }
+  return t("llmProvider.opencode.aliases.presetUnavailable");
+};
 </script>
 
 <template>
@@ -83,11 +99,30 @@ const handleDelete = (): void => {
     <!-- 非編輯態 -->
     <template v-if="!editing">
       <div class="flex flex-1 items-center justify-between gap-2">
-        <span
-          class="text-sm font-medium font-mono truncate"
-          :title="alias.modelID"
-        >{{ alias.alias }}</span>
+        <div class="min-w-0">
+          <span
+            class="block text-sm font-medium font-mono truncate"
+            :title="alias.modelID"
+          >{{ alias.alias }}</span>
+          <span class="block text-xs text-muted-foreground truncate">
+            {{ formatPresetStatus() }}
+          </span>
+        </div>
         <div class="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            class="h-7 w-7 p-0"
+            :disabled="refreshing"
+            :title="t('llmProvider.opencode.aliases.refreshPresets')"
+            :aria-label="t('llmProvider.opencode.aliases.refreshPresets')"
+            @click="handleRefreshPresets"
+          >
+            <RefreshCw
+              class="h-4 w-4"
+              :class="{ 'animate-spin': refreshing }"
+            />
+          </Button>
           <Button
             variant="ghost"
             size="sm"
