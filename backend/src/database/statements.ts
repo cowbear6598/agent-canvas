@@ -177,12 +177,14 @@ function buildStatements(db: Database): {
     insert: ReturnType<Database["prepare"]>;
     selectByProviderId: ReturnType<Database["prepare"]>;
     selectById: ReturnType<Database["prepare"]>;
-    selectByProviderAndRealModel: ReturnType<Database["prepare"]>;
+    existsByProviderAndRealModel: ReturnType<Database["prepare"]>;
     updateAliasAndOrderIdx: ReturnType<Database["prepare"]>;
     updateAliasAndModelId: ReturnType<Database["prepare"]>;
     updateThinkingPresets: ReturnType<Database["prepare"]>;
     deleteById: ReturnType<Database["prepare"]>;
     selectMaxOrderIdxByProviderId: ReturnType<Database["prepare"]>;
+    selectUsagePodsByModelValue: ReturnType<Database["prepare"]>;
+    selectUsageConnectionsByModelValue: ReturnType<Database["prepare"]>;
   };
 } {
   return {
@@ -747,8 +749,8 @@ function buildStatements(db: Database): {
       // 依 id 查詢單筆（供 create/update handler 取回剛寫入的 row）
       selectById: db.prepare("SELECT * FROM model_aliases WHERE id = $id"),
       // 依真實 provider/model 查詢既有 alias；更新時可排除目前 alias id
-      selectByProviderAndRealModel: db.prepare(
-        `SELECT *
+      existsByProviderAndRealModel: db.prepare(
+        `SELECT 1 AS found
          FROM model_aliases
          WHERE provider_id = $providerId
            AND real_provider = $realProvider
@@ -785,6 +787,72 @@ function buildStatements(db: Database): {
       // 查詢指定 provider_id 內目前最大的 order_idx，供 append 時計算下一個位置
       selectMaxOrderIdxByProviderId: db.prepare(
         "SELECT COALESCE(MAX(order_idx), -1) as max_order_idx FROM model_aliases WHERE provider_id = $providerId",
+      ),
+      selectUsagePodsByModelValue: db.prepare(
+        `SELECT c.name AS canvas_name,
+                p.name AS pod_name,
+                p.provider_config_json AS provider_config_json
+         FROM pods p
+         INNER JOIN canvases c ON c.id = p.canvas_id
+         WHERE p.provider = 'opencode'
+           AND p.provider_config_json IS NOT NULL
+           AND json_valid(p.provider_config_json)
+           AND json_extract(p.provider_config_json, '$.model') = $modelValue`,
+      ),
+      selectUsageConnectionsByModelValue: db.prepare(
+        `SELECT c.name AS canvas_name,
+                conn.id AS connection_id,
+                source_pod.name AS source_pod_name,
+                source_pod.provider AS source_provider,
+                source_pod.provider_config_json AS source_provider_config_json,
+                target_pod.name AS target_pod_name,
+                conn.trigger_mode AS trigger_mode,
+                conn.summary_model AS summary_model,
+                conn.summary_provider AS summary_provider,
+                conn.label AS label,
+                conn.branch_provider AS branch_provider,
+                conn.branch_model AS branch_model
+         FROM connections conn
+         INNER JOIN canvases c ON c.id = conn.canvas_id
+         LEFT JOIN pods source_pod ON source_pod.id = conn.source_pod_id
+         LEFT JOIN pods target_pod ON target_pod.id = conn.target_pod_id
+         WHERE (
+             conn.summary_model = $modelValue
+             AND (
+               conn.summary_provider = 'opencode'
+               OR (conn.summary_provider IS NULL AND source_pod.provider = 'opencode')
+             )
+           )
+           OR (
+             conn.trigger_mode = 'branch'
+             AND (
+               (conn.branch_provider = 'opencode' AND conn.branch_model = $modelValue)
+               OR (
+                 conn.branch_provider IS NULL
+                 AND conn.branch_model = $modelValue
+                 AND source_pod.provider = 'opencode'
+                 AND source_pod.provider_config_json IS NOT NULL
+                 AND json_valid(source_pod.provider_config_json)
+                 AND json_extract(source_pod.provider_config_json, '$.model') IS NOT NULL
+               )
+               OR (
+                 conn.branch_provider = 'opencode'
+                 AND conn.branch_model IS NULL
+                 AND source_pod.provider = 'opencode'
+                 AND source_pod.provider_config_json IS NOT NULL
+                 AND json_valid(source_pod.provider_config_json)
+                 AND json_extract(source_pod.provider_config_json, '$.model') = $modelValue
+               )
+               OR (
+                 conn.branch_provider IS NULL
+                 AND conn.branch_model IS NULL
+                 AND source_pod.provider = 'opencode'
+                 AND source_pod.provider_config_json IS NOT NULL
+                 AND json_valid(source_pod.provider_config_json)
+                 AND json_extract(source_pod.provider_config_json, '$.model') = $modelValue
+               )
+             )
+           )`,
       ),
     },
   };

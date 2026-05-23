@@ -11,13 +11,20 @@ vi.mock("@/services/utils", () => ({
 vi.mock("@/services/websocket/WebSocketClient", () => {
   const mockIsConnected = { value: true };
   const capturedCallbacks = new Map<string, Function>();
+  const disconnectCallbacks = new Set<Function>();
 
   const mockOn = vi.fn((event: string, callback: Function) => {
     capturedCallbacks.set(event, callback);
   });
 
   const mockOff = vi.fn();
-  const mockEmit = vi.fn();
+  const mockEmit = vi.fn(() => ({ ok: true }));
+  const mockOnDisconnect = vi.fn((callback: Function) => {
+    disconnectCallbacks.add(callback);
+  });
+  const mockOffDisconnect = vi.fn((callback: Function) => {
+    disconnectCallbacks.delete(callback);
+  });
 
   return {
     websocketClient: {
@@ -25,8 +32,11 @@ vi.mock("@/services/websocket/WebSocketClient", () => {
       on: mockOn,
       off: mockOff,
       emit: mockEmit,
+      onDisconnect: mockOnDisconnect,
+      offDisconnect: mockOffDisconnect,
     },
     __capturedCallbacks: capturedCallbacks,
+    __disconnectCallbacks: disconnectCallbacks,
     __mockIsConnected: mockIsConnected,
   };
 });
@@ -44,6 +54,7 @@ describe("createWebSocketRequest", () => {
   let mockOn: any;
   let mockOff: any;
   let mockEmit: any;
+  let disconnectCallbacks: Set<Function>;
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -53,6 +64,7 @@ describe("createWebSocketRequest", () => {
     mockOn = mockModule.websocketClient.on;
     mockOff = mockModule.websocketClient.off;
     mockEmit = mockModule.websocketClient.emit;
+    disconnectCallbacks = (mockModule as any).__disconnectCallbacks;
     capturedCallbacks.clear();
     mockIsConnected.value = true;
   });
@@ -231,7 +243,7 @@ describe("createWebSocketRequest", () => {
       await expect(promise).rejects.toThrow("未知錯誤");
     });
 
-    it("應該只讓白名單 error code 使用後端 message", async () => {
+    it("應該讓 alias_model_duplicate 使用後端原文錯誤訊息", async () => {
       const config: WebSocketRequestConfig<
         { requestId: string; data: string },
         {
@@ -252,14 +264,12 @@ describe("createWebSocketRequest", () => {
         requestId: "test-request-id",
         success: false,
         error: {
-          code: "alias_in_use",
-          message: "無法刪除 alias，仍被目前設定使用中。",
+          code: "alias_model_duplicate",
+          message: "此 model 已有 alias",
         },
       });
 
-      await expect(promise).rejects.toThrow(
-        "無法刪除 alias，仍被目前設定使用中。",
-      );
+      await expect(promise).rejects.toThrow("此 model 已有 alias");
     });
 
     it("應該允許 OpenCode model 不存在錯誤顯示後端訊息", async () => {
@@ -343,6 +353,53 @@ describe("createWebSocketRequest", () => {
 
       await expect(promise).rejects.toThrow();
 
+      expect(mockOff).toHaveBeenCalledWith("test:response", responseCallback);
+    });
+
+    it("emit 失敗時應立即 reject 並清除 pending request", async () => {
+      mockEmit.mockReturnValueOnce({
+        ok: false,
+        error: new Error("送出失敗"),
+      });
+
+      const config: WebSocketRequestConfig<
+        { requestId: string; data: string },
+        { requestId: string; result: string }
+      > = {
+        requestEvent: "test:request",
+        responseEvent: "test:response",
+        payload: { data: "test" },
+      };
+
+      const promise = createWebSocketRequest(config);
+      const responseCallback = capturedCallbacks.get("test:response");
+
+      await expect(promise).rejects.toThrow("送出失敗");
+      expect(mockOff).toHaveBeenCalledWith("test:response", responseCallback);
+    });
+
+    it("disconnect 時應批次 reject 所有 pending requests", async () => {
+      vi.mocked(generateRequestId)
+        .mockReturnValueOnce("request-1")
+        .mockReturnValueOnce("request-2");
+
+      const config: WebSocketRequestConfig<
+        { requestId: string; data: string },
+        { requestId: string; result: string }
+      > = {
+        requestEvent: "test:request",
+        responseEvent: "test:response",
+        payload: { data: "test" },
+      };
+
+      const firstPromise = createWebSocketRequest(config);
+      const secondPromise = createWebSocketRequest(config);
+      const responseCallback = capturedCallbacks.get("test:response");
+
+      disconnectCallbacks.forEach((callback) => callback({ reason: "1006" }));
+
+      await expect(firstPromise).rejects.toThrow("WebSocket 尚未連線");
+      await expect(secondPromise).rejects.toThrow("WebSocket 尚未連線");
       expect(mockOff).toHaveBeenCalledWith("test:response", responseCallback);
     });
   });

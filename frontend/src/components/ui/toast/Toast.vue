@@ -114,7 +114,6 @@ const { toasts, dismiss } = useToast()
   color: var(--foreground);
 }
 
-/* 動畫 */
 .toast-enter-active {
   animation: toast-in 0.3s ease;
 }

@@ -9,6 +9,24 @@ import * as opencodeApi from "@/services/opencodeApi";
  * providerCapabilityStore.getAvailableModels("opencode") 從此 store 動態組裝選項。
  */
 export const useOpencodeAliasStore = defineStore("opencodeAlias", () => {
+  const EMPTY_ALIAS_LIST: OpencodeModelAlias[] = [];
+
+  const sortAliases = (items: OpencodeModelAlias[]): OpencodeModelAlias[] =>
+    [...items].sort((a, b) => a.orderIdx - b.orderIdx);
+
+  const appendIndexValue = (
+    index: Map<string, Map<string, Set<string>>>,
+    providerID: string,
+    key: string,
+    aliasId: string,
+  ): void => {
+    const providerIndex = index.get(providerID) ?? new Map<string, Set<string>>();
+    const ids = providerIndex.get(key) ?? new Set<string>();
+    ids.add(aliasId);
+    providerIndex.set(key, ids);
+    index.set(providerID, providerIndex);
+  };
+
   // ---- State ----
 
   /**
@@ -27,13 +45,42 @@ export const useOpencodeAliasStore = defineStore("opencodeAlias", () => {
    * 依 providerID 過濾 alias 清單，並依 orderIdx 升冪排序回傳。
    * 用於只顯示特定 provider 下的 alias 選項。
    */
+  const aliasesByProviderIndex = computed(() => {
+    const providerAliases = new Map<string, OpencodeModelAlias[]>();
+    const aliasIdsByProviderAndAlias = new Map<string, Map<string, Set<string>>>();
+    const aliasIdsByProviderAndModel = new Map<string, Map<string, Set<string>>>();
+
+    for (const alias of aliases.value) {
+      const list = providerAliases.get(alias.providerID) ?? [];
+      list.push(alias);
+      providerAliases.set(alias.providerID, list);
+
+      appendIndexValue(
+        aliasIdsByProviderAndAlias,
+        alias.providerID,
+        alias.alias,
+        alias.id,
+      );
+      appendIndexValue(
+        aliasIdsByProviderAndModel,
+        alias.providerID,
+        alias.modelID,
+        alias.id,
+      );
+    }
+
+    return {
+      providerAliases,
+      aliasIdsByProviderAndAlias,
+      aliasIdsByProviderAndModel,
+    };
+  });
+
   const aliasesByProvider = computed(
     () =>
-      (providerID: string): OpencodeModelAlias[] => {
-        return aliases.value
-          .filter((a) => a.providerID === providerID)
-          .sort((a, b) => a.orderIdx - b.orderIdx);
-      },
+      (providerID: string): OpencodeModelAlias[] =>
+        aliasesByProviderIndex.value.providerAliases.get(providerID) ??
+        EMPTY_ALIAS_LIST,
   );
 
   /**
@@ -44,12 +91,17 @@ export const useOpencodeAliasStore = defineStore("opencodeAlias", () => {
   const isAliasUnique = computed(
     () =>
       (providerID: string, alias: string, excludeId?: string): boolean => {
-        return !aliases.value.some(
-          (a) =>
-            a.providerID === providerID &&
-            a.alias === alias &&
-            a.id !== excludeId,
-        );
+        const ids =
+          aliasesByProviderIndex.value.aliasIdsByProviderAndAlias
+            .get(providerID)
+            ?.get(alias) ?? null;
+        if (!ids) {
+          return true;
+        }
+        if (!excludeId) {
+          return false;
+        }
+        return ids.size === 1 && ids.has(excludeId);
       },
   );
 
@@ -61,12 +113,17 @@ export const useOpencodeAliasStore = defineStore("opencodeAlias", () => {
   const isModelAliasUnique = computed(
     () =>
       (providerID: string, modelID: string, excludeId?: string): boolean => {
-        return !aliases.value.some(
-          (a) =>
-            a.providerID === providerID &&
-            a.modelID === modelID &&
-            a.id !== excludeId,
-        );
+        const ids =
+          aliasesByProviderIndex.value.aliasIdsByProviderAndModel
+            .get(providerID)
+            ?.get(modelID) ?? null;
+        if (!ids) {
+          return true;
+        }
+        if (!excludeId) {
+          return false;
+        }
+        return ids.size === 1 && ids.has(excludeId);
       },
   );
 
@@ -77,7 +134,7 @@ export const useOpencodeAliasStore = defineStore("opencodeAlias", () => {
    * 供 providerCapabilityStore.test.ts 等測試直接操作 state 使用。
    */
   function setAliases(items: OpencodeModelAlias[]): void {
-    aliases.value = [...items].sort((a, b) => a.orderIdx - b.orderIdx);
+    aliases.value = sortAliases(items);
   }
 
   /**
@@ -87,7 +144,7 @@ export const useOpencodeAliasStore = defineStore("opencodeAlias", () => {
   async function loadFromBackend(): Promise<void> {
     try {
       const items = await opencodeApi.listAliases();
-      aliases.value = [...items].sort((a, b) => a.orderIdx - b.orderIdx);
+      aliases.value = sortAliases(items);
       loaded.value = true;
     } catch (err) {
       // 失敗時不動 aliases / loaded，維持上一次成功載入的值；
@@ -104,9 +161,7 @@ export const useOpencodeAliasStore = defineStore("opencodeAlias", () => {
     payload: Pick<OpencodeModelAlias, "providerID" | "modelID" | "alias">,
   ): Promise<void> {
     const item = await opencodeApi.createAlias(payload);
-    aliases.value = [...aliases.value, item].sort(
-      (a, b) => a.orderIdx - b.orderIdx,
-    );
+    aliases.value = sortAliases([...aliases.value, item]);
   }
 
   /**
@@ -118,9 +173,9 @@ export const useOpencodeAliasStore = defineStore("opencodeAlias", () => {
     payload: Pick<OpencodeModelAlias, "id" | "modelID" | "alias">,
   ): Promise<void> {
     const item = await opencodeApi.updateAlias(payload);
-    aliases.value = aliases.value
-      .map((a) => (a.id === item.id ? item : a))
-      .sort((a, b) => a.orderIdx - b.orderIdx);
+    aliases.value = sortAliases(
+      aliases.value.map((a) => (a.id === item.id ? item : a)),
+    );
   }
 
   /**
@@ -138,7 +193,7 @@ export const useOpencodeAliasStore = defineStore("opencodeAlias", () => {
    */
   async function reorder(idsInOrder: string[]): Promise<void> {
     const items = await opencodeApi.reorderAliases(idsInOrder);
-    aliases.value = [...items].sort((a, b) => a.orderIdx - b.orderIdx);
+    aliases.value = sortAliases(items);
   }
 
   /**
@@ -147,9 +202,9 @@ export const useOpencodeAliasStore = defineStore("opencodeAlias", () => {
    */
   async function refreshPresets(id: string): Promise<void> {
     const item = await opencodeApi.refreshAliasPresets(id);
-    aliases.value = aliases.value
-      .map((a) => (a.id === item.id ? item : a))
-      .sort((a, b) => a.orderIdx - b.orderIdx);
+    aliases.value = sortAliases(
+      aliases.value.map((a) => (a.id === item.id ? item : a)),
+    );
   }
 
   return {

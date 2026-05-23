@@ -39,6 +39,31 @@ function ensureModelAliasesThinkingColumns(db: Database): void {
   addColumnIfMissing(db, "model_aliases", "thinking_metadata_fetched_at INTEGER");
 }
 
+function ensureModelAliasesUniqueRealModelIndex(db: Database): void {
+  // 舊版資料可能允許同一 real model 建多筆 alias。
+  // migration 先保留排序最前的一筆，再補上 DB 唯一索引，避免後續寫入競態。
+  db.exec(
+    `DELETE FROM model_aliases
+     WHERE id IN (
+       SELECT duplicate.id
+       FROM model_aliases AS duplicate
+       WHERE duplicate.id != (
+         SELECT keeper.id
+         FROM model_aliases AS keeper
+         WHERE keeper.provider_id = duplicate.provider_id
+           AND keeper.real_provider = duplicate.real_provider
+           AND keeper.real_model = duplicate.real_model
+         ORDER BY keeper.order_idx ASC, keeper.created_at ASC, keeper.id ASC
+         LIMIT 1
+       )
+     )`,
+  );
+
+  db.exec(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_model_aliases_provider_real_model_unique ON model_aliases(provider_id, real_provider, real_model)",
+  );
+}
+
 /**
  * 建立所有資料表（CREATE TABLE IF NOT EXISTS）。
  * 純 DDL，代表目前最新的 schema；新建 DB 直接執行此函式即可。
@@ -334,4 +359,5 @@ export function createTables(db: Database): void {
   createBaseTables(db);
   ensureRunPodInstanceSummaryColumn(db);
   ensureModelAliasesThinkingColumns(db);
+  ensureModelAliasesUniqueRealModelIndex(db);
 }

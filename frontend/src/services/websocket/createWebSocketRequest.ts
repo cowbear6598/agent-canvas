@@ -126,6 +126,21 @@ function settlePendingRequest(requestId: string, response: unknown): boolean {
   return true;
 }
 
+function rejectPendingRequest(requestId: string, error: Error): boolean {
+  const request = removePendingRequest(requestId);
+  if (!request) return false;
+
+  clearTimeout(request.timeoutId);
+  request.reject(error);
+  return true;
+}
+
+function rejectAllPendingRequests(error: Error): void {
+  for (const requestId of Array.from(pendingRequests.keys())) {
+    rejectPendingRequest(requestId, error);
+  }
+}
+
 function getResponseEventListener(
   responseEvent: string,
 ): (response: unknown) => void {
@@ -181,6 +196,10 @@ function registerPendingRequest(request: PendingRequest): void {
   getResponseEventListener(request.responseEvent);
 }
 
+websocketClient.onDisconnect(() => {
+  rejectAllPendingRequests(new Error(t("websocket.notConnected")));
+});
+
 export function tryResolvePendingRequest(
   requestId: string,
   data: unknown,
@@ -230,9 +249,13 @@ export async function createWebSocketRequest<
         | undefined,
     });
 
-    websocketClient.emit(requestEvent, {
+    const emitResult = websocketClient.emit(requestEvent, {
       ...payload,
       requestId,
     } as TPayload);
+
+    if (!emitResult.ok) {
+      rejectPendingRequest(requestId, emitResult.error);
+    }
   });
 }

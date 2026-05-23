@@ -24,7 +24,7 @@ export const mockWebSocketClient = {
   startReconnect: vi.fn(),
   forceReconnect: vi.fn(),
   forceReconnectWithGrant: vi.fn(),
-  emit: vi.fn(),
+  emit: vi.fn(<T>(_: string, __: T) => ({ ok: true })),
   on: vi.fn((event: string, callback: EventCallback) => {
     if (!eventListeners.has(event)) {
       eventListeners.set(event, { callbacks: new Set() });

@@ -143,51 +143,80 @@ const sortedFilteredProviders = computed<OpencodeProviderInfo[]>(() => {
   return [...groups.connected, ...groups.disconnected];
 });
 
-const getSelectableModels = (
-  providerID: string,
-  models: OpencodeModelInfo[],
-  excludeAliasId?: string,
-): OpencodeModelInfo[] =>
-  models.filter((model) =>
-    opencodeAliasStore.isModelAliasUnique(
-      providerID,
-      model.id,
-      excludeAliasId,
-    ),
-  );
+const draftSelectableModelsByProvider = computed<
+  Record<string, OpencodeModelInfo[]>
+>(() => {
+  const selectableModels: Record<string, OpencodeModelInfo[]> = {};
 
-const getFirstSelectableModelID = (
-  providerID: string,
-  models: OpencodeModelInfo[],
-): string => getSelectableModels(providerID, models)[0]?.id ?? "";
+  for (const provider of providers.value) {
+    const usedModelIDs = new Set(
+      opencodeAliasStore
+        .aliasesByProvider(provider.id)
+        .map((alias) => alias.modelID),
+    );
+    selectableModels[provider.id] = provider.models.filter(
+      (model) => !usedModelIDs.has(model.id),
+    );
+  }
+
+  return selectableModels;
+});
+
+const firstDraftSelectableModelIDByProvider = computed<Record<string, string>>(
+  () =>
+    Object.fromEntries(
+      providers.value.map((provider) => [
+        provider.id,
+        draftSelectableModelsByProvider.value[provider.id]?.[0]?.id ?? "",
+      ]),
+    ),
+);
+
+const editableSelectableModelsByAliasId = computed<
+  Record<string, OpencodeModelInfo[]>
+>(() => {
+  const selectableModels: Record<string, OpencodeModelInfo[]> = {};
+
+  for (const provider of providers.value) {
+    const providerAliases = opencodeAliasStore.aliasesByProvider(provider.id);
+    if (providerAliases.length === 0) {
+      continue;
+    }
+
+    const usedModelIDs = new Set(
+      providerAliases.map((aliasItem) => aliasItem.modelID),
+    );
+
+    for (const aliasItem of providerAliases) {
+      const selectableModelIDs = new Set(usedModelIDs);
+      selectableModelIDs.delete(aliasItem.modelID);
+      selectableModels[aliasItem.id] = provider.models.filter(
+        (model) => !selectableModelIDs.has(model.id),
+      );
+    }
+  }
+
+  return selectableModels;
+});
+
+const aliasCountByProvider = computed<Record<string, number>>(() =>
+  Object.fromEntries(
+    providers.value.map((provider) => [
+      provider.id,
+      opencodeAliasStore.aliasesByProvider(provider.id).length,
+    ]),
+  ),
+);
 
 // ── 資料載入 ─────────────────────────────────────────────────────
 
 /**
  * 將 store 內指定 providerID 的 aliases 同步寫入本地可寫陣列，
  * 作為 VueDraggable v-model 的資料來源。
- * 使用 group-by Map 優化，避免對每個 provider 重複遍歷整個 aliases 陣列。
  */
 const syncAliasListsFromStore = (providerIDs: string[]): void => {
-  // 依 providerID group aliases 成 Map（只走訪一次）
-  const grouped = opencodeAliasStore.aliases.reduce<
-    Map<string, OpencodeModelAlias[]>
-  >((map, alias) => {
-    const list = map.get(alias.providerID);
-    if (list) {
-      list.push(alias);
-    } else {
-      map.set(alias.providerID, [alias]);
-    }
-    return map;
-  }, new Map());
-
   for (const id of providerIDs) {
-    const list = grouped.get(id) ?? [];
-    // 依 orderIdx 排序後指派
-    aliasListsByProvider.value[id] = [...list].sort(
-      (a, b) => a.orderIdx - b.orderIdx,
-    );
+    aliasListsByProvider.value[id] = [...opencodeAliasStore.aliasesByProvider(id)];
   }
 };
 
@@ -440,14 +469,14 @@ const handleAliasReorder = async (providerID: string): Promise<void> => {
             size="sm"
             class="h-7 w-7 p-0"
             :disabled="
-              getSelectableModels(provider.id, provider.models).length === 0
+              (draftSelectableModelsByProvider[provider.id] ?? []).length === 0
             "
             :aria-label="t('llmProvider.opencode.aliases.addModelTooltip')"
             :title="t('llmProvider.opencode.aliases.addModelTooltip')"
             @click.stop="
               handleAddClick(
                 provider.id,
-                getFirstSelectableModelID(provider.id, provider.models),
+                firstDraftSelectableModelIDByProvider[provider.id] ?? '',
               )
             "
           >
@@ -478,10 +507,7 @@ const handleAliasReorder = async (providerID: string): Promise<void> => {
               </SelectTrigger>
               <SelectContent position="popper">
                 <SelectItem
-                  v-for="model in getSelectableModels(
-                    provider.id,
-                    provider.models,
-                  )"
+                  v-for="model in draftSelectableModelsByProvider[provider.id] ?? []"
                   :key="model.id"
                   :value="model.id"
                 >
@@ -537,8 +563,7 @@ const handleAliasReorder = async (providerID: string): Promise<void> => {
           <!-- 空狀態提示 -->
           <p
             v-if="
-              opencodeAliasStore.aliasesByProvider(provider.id).length === 0 &&
-                !draftRows[provider.id]
+              (aliasCountByProvider[provider.id] ?? 0) === 0 && !draftRows[provider.id]
             "
             class="text-xs text-muted-foreground py-1"
           >
@@ -562,9 +587,7 @@ const handleAliasReorder = async (providerID: string): Promise<void> => {
               v-for="aliasItem in aliasListsByProvider[provider.id] ?? []"
               :key="aliasItem.id"
               :alias="aliasItem"
-              :models="
-                getSelectableModels(provider.id, provider.models, aliasItem.id)
-              "
+              :models="editableSelectableModelsByAliasId[aliasItem.id] ?? []"
               :editing="editingAliasId === aliasItem.id"
               :refreshing="refreshingAliasIds.has(aliasItem.id)"
               @start-edit="handleStartEdit(aliasItem.id)"

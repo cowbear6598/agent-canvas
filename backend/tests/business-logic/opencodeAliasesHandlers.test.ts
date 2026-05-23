@@ -61,10 +61,6 @@ import {
   WebSocketRequestEvents,
   WebSocketResponseEvents,
 } from "../../src/schemas/index.js";
-import {
-  opencodeAliasesCreateSchema,
-  opencodeAliasesUpdateSchema,
-} from "../../src/schemas/opencodeSettingsSchemas.js";
 
 // ─── 常數 ─────────────────────────────────────────────────────────────────────
 
@@ -221,35 +217,6 @@ describe("handleOpencodeAliasesList", () => {
 // ─── opencode:aliases:create ──────────────────────────────────────────────────
 
 describe("handleOpencodeAliasesCreate", () => {
-  it("schema：providerID / modelID / alias 會 trim 並拒絕危險字元", () => {
-    const valid = opencodeAliasesCreateSchema.parse({
-      requestId: REQUEST_ID_UUID,
-      providerID: " anthropic ",
-      modelID: " openrouter/anthropic/claude-3.5-sonnet ",
-      alias: " Sonnet ",
-    });
-
-    expect(valid.providerID).toBe("anthropic");
-    expect(valid.modelID).toBe("openrouter/anthropic/claude-3.5-sonnet");
-    expect(valid.alias).toBe("Sonnet");
-    expect(
-      opencodeAliasesCreateSchema.safeParse({
-        requestId: REQUEST_ID_UUID,
-        providerID: "../anthropic",
-        modelID: "claude-3-5-sonnet",
-        alias: "Sonnet",
-      }).success,
-    ).toBe(false);
-    expect(
-      opencodeAliasesUpdateSchema.safeParse({
-        requestId: REQUEST_ID_UUID,
-        id: "alias-id",
-        modelID: "claude-3-5-sonnet",
-        alias: "Bad\u0000Alias",
-      }).success,
-    ).toBe(false);
-  });
-
   it("A1（wire-up smoke）：透過 handler group 派發 OPENCODE_ALIASES_CREATE，回應 OPENCODE_ALIASES_CREATE_RESULT success=true", async () => {
     const handlerDef = opencodeSettingsHandlerGroup.handlers.find(
       (handler) =>
@@ -281,6 +248,39 @@ describe("handleOpencodeAliasesCreate", () => {
     expect(connId).toBe(CONNECTION_ID);
     expect(event).toBe(WebSocketResponseEvents.OPENCODE_ALIASES_CREATE_RESULT);
     expect(payload.success).toBe(true);
+  });
+
+  it("A2（validation smoke）：create 非法 payload 會經過 validated handler 回傳 VALIDATION_ERROR", async () => {
+    const handlerDef = opencodeSettingsHandlerGroup.handlers.find(
+      (handler) =>
+        handler.event === WebSocketRequestEvents.OPENCODE_ALIASES_CREATE,
+    );
+    expect(handlerDef).toBeDefined();
+
+    const { createValidatedHandler } =
+      await import("../../src/middleware/wsMiddleware.js");
+    const validatedHandler = createValidatedHandler(
+      handlerDef!.schema,
+      handlerDef!.handler as Parameters<typeof createValidatedHandler>[1],
+      handlerDef!.responseEvent,
+    );
+
+    await validatedHandler(
+      CONNECTION_ID,
+      {
+        requestId: REQUEST_ID_UUID,
+        providerID: "../anthropic",
+        modelID: "claude-3-5-sonnet",
+        alias: "Sonnet",
+      },
+      REQUEST_ID_UUID,
+    );
+
+    expect(mockEmitToConnection).toHaveBeenCalledOnce();
+    const [, event, payload] = mockEmitToConnection.mock.calls[0];
+    expect(event).toBe(WebSocketResponseEvents.OPENCODE_ALIASES_CREATE_RESULT);
+    expect(payload.success).toBe(false);
+    expect(payload.code).toBe("VALIDATION_ERROR");
   });
 
   it("B1：create 後 list 查得到新 row 且 orderIdx 為當前 max+1（首筆為 0）", async () => {
@@ -450,6 +450,39 @@ describe("handleOpencodeAliasesCreate", () => {
 // ─── opencode:aliases:update ──────────────────────────────────────────────────
 
 describe("handleOpencodeAliasesUpdate", () => {
+  it("A2（validation smoke）：update 非法 payload 會經過 validated handler 回傳 VALIDATION_ERROR", async () => {
+    const handlerDef = opencodeSettingsHandlerGroup.handlers.find(
+      (handler) =>
+        handler.event === WebSocketRequestEvents.OPENCODE_ALIASES_UPDATE,
+    );
+    expect(handlerDef).toBeDefined();
+
+    const { createValidatedHandler } =
+      await import("../../src/middleware/wsMiddleware.js");
+    const validatedHandler = createValidatedHandler(
+      handlerDef!.schema,
+      handlerDef!.handler as Parameters<typeof createValidatedHandler>[1],
+      handlerDef!.responseEvent,
+    );
+
+    await validatedHandler(
+      CONNECTION_ID,
+      {
+        requestId: REQUEST_ID_UUID,
+        id: "alias-id",
+        modelID: "claude-3-5-sonnet",
+        alias: "Bad\u0000Alias",
+      },
+      REQUEST_ID_UUID,
+    );
+
+    expect(mockEmitToConnection).toHaveBeenCalledOnce();
+    const [, event, payload] = mockEmitToConnection.mock.calls[0];
+    expect(event).toBe(WebSocketResponseEvents.OPENCODE_ALIASES_UPDATE_RESULT);
+    expect(payload.success).toBe(false);
+    expect(payload.code).toBe("VALIDATION_ERROR");
+  });
+
   it("B3：update 後 list 顯示新 alias 與 modelID（order_idx 保持不變）", async () => {
     await handleOpencodeAliasesCreate(
       CONNECTION_ID,

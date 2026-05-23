@@ -9,6 +9,10 @@ const RECONNECT_INTERVAL_MS = 3000;
 
 type EventHandler = (payload: unknown) => void;
 
+export type WebSocketEmitResult =
+  | { ok: true }
+  | { ok: false; error: Error };
+
 export interface WebSocketDisconnectEvent {
   reason: string;
   silent?: boolean;
@@ -282,10 +286,11 @@ class WebSocketClient {
     this.dispatchToListeners(message);
   }
 
-  emit<T>(event: string, payload: T): void {
+  emit<T>(event: string, payload: T): WebSocketEmitResult {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      const error = new Error("WebSocket 尚未連線");
       logger.error("[WebSocket] 無法發送訊息，未連線:", event);
-      return;
+      return { ok: false, error };
     }
 
     const payloadWithRequestId = payload as T & { requestId?: string };
@@ -295,7 +300,17 @@ class WebSocketClient {
       requestId: payloadWithRequestId.requestId,
     };
 
-    this.socket.send(JSON.stringify(message));
+    try {
+      this.socket.send(JSON.stringify(message));
+      return { ok: true };
+    } catch (error) {
+      const normalizedError =
+        error instanceof Error
+          ? error
+          : new Error("WebSocket 訊息發送失敗");
+      logger.error("[WebSocket] 發送訊息失敗:", event, normalizedError);
+      return { ok: false, error: normalizedError };
+    }
   }
 
   private registerEventListener<T>(

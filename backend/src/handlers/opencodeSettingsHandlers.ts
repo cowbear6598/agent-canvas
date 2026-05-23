@@ -130,6 +130,42 @@ function isSqliteUniqueConstraint(err: unknown): boolean {
   );
 }
 
+function getAliasUniqueConstraintError(err: unknown): {
+  code: "alias_duplicate" | "alias_model_duplicate";
+  message: string;
+} | null {
+  if (!isSqliteUniqueConstraint(err) || !(err instanceof Error)) {
+    return null;
+  }
+
+  if (
+    err.message.includes(
+      "model_aliases.provider_id, model_aliases.real_provider, model_aliases.real_model",
+    )
+  ) {
+    return {
+      code: "alias_model_duplicate",
+      message: "此 model 已有 alias",
+    };
+  }
+
+  if (
+    err.message.includes(
+      "model_aliases.provider_id, model_aliases.real_provider, model_aliases.alias",
+    )
+  ) {
+    return {
+      code: "alias_duplicate",
+      message: "alias 已存在",
+    };
+  }
+
+  return {
+    code: "alias_duplicate",
+    message: "alias 已存在",
+  };
+}
+
 /**
  * 先呼叫 restartOpencodeServer()（stop → start），完成後取得最新 state：
  * - status === "ready" → 回傳 success=true
@@ -301,6 +337,11 @@ interface AliasUsage {
   description: string;
 }
 
+interface ProviderModelSelection {
+  provider: string;
+  model: string | null;
+}
+
 interface PodAliasUsageRow {
   canvas_name: string;
   pod_name: string;
@@ -455,12 +496,31 @@ function getConnectionLineLabel(row: ConnectionAliasUsageRow): string {
   return `${sourceName} → ${targetName}`;
 }
 
-function getBranchProviderAndModel(row: ConnectionAliasUsageRow): {
-  provider: string;
-  model: string | null;
-} {
-  const sourceModel = getConfigModel(row.source_provider_config_json);
-  const sourceProvider = row.source_provider ?? "claude";
+function getSourceProviderAndModel(
+  row: ConnectionAliasUsageRow,
+): ProviderModelSelection {
+  return {
+    provider: row.source_provider ?? "claude",
+    model: getConfigModel(row.source_provider_config_json),
+  };
+}
+
+function getSummaryProviderAndModel(
+  row: ConnectionAliasUsageRow,
+): ProviderModelSelection {
+  const source = getSourceProviderAndModel(row);
+  return {
+    provider: row.summary_provider ?? source.provider,
+    model: row.summary_model,
+  };
+}
+
+function getBranchProviderAndModel(
+  row: ConnectionAliasUsageRow,
+): ProviderModelSelection {
+  const source = getSourceProviderAndModel(row);
+  const sourceModel = source.model;
+  const sourceProvider = source.provider;
 
   if (row.branch_provider !== null && row.branch_model !== null) {
     return { provider: row.branch_provider, model: row.branch_model };
@@ -483,136 +543,153 @@ function getBranchProviderAndModel(row: ConnectionAliasUsageRow): {
   return { provider: sourceProvider, model: sourceModel };
 }
 
-function findCurrentAliasUsages(modelValue: string): AliasUsage[] {
-  const db = getDb();
+function queryCurrentAliasUsageCandidates(modelValue: string): {
+  podRows: PodAliasUsageRow[];
+  connectionRows: ConnectionAliasUsageRow[];
+} {
+  const stmts = getStmts();
+  return {
+    podRows: stmts.modelAlias.selectUsagePodsByModelValue.all({
+      $modelValue: modelValue,
+    }) as PodAliasUsageRow[],
+    connectionRows: stmts.modelAlias.selectUsageConnectionsByModelValue.all({
+      $modelValue: modelValue,
+    }) as ConnectionAliasUsageRow[],
+  };
+}
+
+function buildPodAliasUsage(
+  row: PodAliasUsageRow,
+  modelValue: string,
+): AliasUsage | null {
+  if (getConfigModel(row.provider_config_json) !== modelValue) {
+    return null;
+  }
+
+  return {
+    canvasName: row.canvas_name,
+    description: `畫布「${row.canvas_name}」的 Pod「${row.pod_name}」`,
+  };
+}
+
+function buildConnectionAliasUsages(
+  row: ConnectionAliasUsageRow,
+  modelValue: string,
+): AliasUsage[] {
   const usages: AliasUsage[] = [];
+  const lineLabel = getConnectionLineLabel(row);
+  const summary = getSummaryProviderAndModel(row);
 
-  const podRows = db
-    .prepare(
-      `SELECT c.name AS canvas_name,
-              p.name AS pod_name,
-              p.provider_config_json AS provider_config_json
-       FROM pods p
-       INNER JOIN canvases c ON c.id = p.canvas_id
-       WHERE p.provider = 'opencode'
-         AND p.provider_config_json IS NOT NULL
-         AND json_valid(p.provider_config_json)
-         AND json_extract(p.provider_config_json, '$.model') = $modelValue`,
-    )
-    .all({ $modelValue: modelValue }) as PodAliasUsageRow[];
-
-  for (const row of podRows) {
-    if (getConfigModel(row.provider_config_json) === modelValue) {
-      usages.push({
-        canvasName: row.canvas_name,
-        description: `畫布「${row.canvas_name}」的 Pod「${row.pod_name}」`,
-      });
-    }
+  if (summary.provider === "opencode" && summary.model === modelValue) {
+    usages.push({
+      canvasName: row.canvas_name,
+      description: `畫布「${row.canvas_name}」的 connection line「${lineLabel}」Summary`,
+    });
   }
 
-  const connectionRows = db
-    .prepare(
-      `SELECT c.name AS canvas_name,
-              conn.id AS connection_id,
-              source_pod.name AS source_pod_name,
-              source_pod.provider AS source_provider,
-              source_pod.provider_config_json AS source_provider_config_json,
-              target_pod.name AS target_pod_name,
-              conn.trigger_mode AS trigger_mode,
-              conn.summary_model AS summary_model,
-              conn.summary_provider AS summary_provider,
-              conn.label AS label,
-              conn.branch_provider AS branch_provider,
-              conn.branch_model AS branch_model
-       FROM connections conn
-       INNER JOIN canvases c ON c.id = conn.canvas_id
-       LEFT JOIN pods source_pod ON source_pod.id = conn.source_pod_id
-       LEFT JOIN pods target_pod ON target_pod.id = conn.target_pod_id
-       WHERE (
-           conn.summary_model = $modelValue
-           AND (
-             conn.summary_provider = 'opencode'
-             OR (conn.summary_provider IS NULL AND source_pod.provider = 'opencode')
-           )
-         )
-         OR (
-           conn.trigger_mode = 'branch'
-           AND (
-             (conn.branch_provider = 'opencode' AND conn.branch_model = $modelValue)
-             OR (
-               conn.branch_provider IS NULL
-               AND conn.branch_model = $modelValue
-               AND source_pod.provider = 'opencode'
-               AND source_pod.provider_config_json IS NOT NULL
-               AND json_valid(source_pod.provider_config_json)
-               AND json_extract(source_pod.provider_config_json, '$.model') IS NOT NULL
-             )
-             OR (
-               conn.branch_provider = 'opencode'
-               AND conn.branch_model IS NULL
-               AND source_pod.provider = 'opencode'
-               AND source_pod.provider_config_json IS NOT NULL
-               AND json_valid(source_pod.provider_config_json)
-               AND json_extract(source_pod.provider_config_json, '$.model') = $modelValue
-             )
-             OR (
-               conn.branch_provider IS NULL
-               AND conn.branch_model IS NULL
-               AND source_pod.provider = 'opencode'
-               AND source_pod.provider_config_json IS NOT NULL
-               AND json_valid(source_pod.provider_config_json)
-               AND json_extract(source_pod.provider_config_json, '$.model') = $modelValue
-             )
-           )
-         )`,
-    )
-    .all({ $modelValue: modelValue }) as ConnectionAliasUsageRow[];
-
-  for (const row of connectionRows) {
-    const summaryProvider =
-      row.summary_provider ?? row.source_provider ?? "claude";
-    if (summaryProvider === "opencode" && row.summary_model === modelValue) {
-      usages.push({
-        canvasName: row.canvas_name,
-        description: `畫布「${row.canvas_name}」的 connection line「${getConnectionLineLabel(row)}」Summary`,
-      });
-    }
-
-    if (row.trigger_mode === "branch") {
-      const branch = getBranchProviderAndModel(row);
-      if (branch.provider === "opencode" && branch.model === modelValue) {
-        const label = row.label.trim()
-          ? `${getConnectionLineLabel(row)}（${row.label}）`
-          : getConnectionLineLabel(row);
-        usages.push({
-          canvasName: row.canvas_name,
-          description: `畫布「${row.canvas_name}」的 connection line「${label}」Branch`,
-        });
-      }
-    }
+  if (row.trigger_mode !== "branch") {
+    return usages;
   }
+
+  const branch = getBranchProviderAndModel(row);
+  if (branch.provider !== "opencode" || branch.model !== modelValue) {
+    return usages;
+  }
+
+  const labeledLine = row.label.trim()
+    ? `${lineLabel}（${row.label}）`
+    : lineLabel;
+  usages.push({
+    canvasName: row.canvas_name,
+    description: `畫布「${row.canvas_name}」的 connection line「${labeledLine}」Branch`,
+  });
 
   return usages;
 }
 
-function hasOtherAliasForRealModel(row: ModelAliasRow): boolean {
-  const db = getDb();
-  const result = db
-    .prepare(
-      `SELECT COUNT(*) AS count
-       FROM model_aliases
-       WHERE provider_id = 'opencode'
-         AND real_provider = $realProvider
-         AND real_model = $realModel
-         AND id != $id`,
-    )
-    .get({
-      $realProvider: row.real_provider,
-      $realModel: row.real_model,
-      $id: row.id,
-    }) as { count: number };
+function findCurrentAliasUsages(modelValue: string): AliasUsage[] {
+  const { podRows, connectionRows } = queryCurrentAliasUsageCandidates(
+    modelValue,
+  );
 
-  return result.count > 0;
+  return [
+    ...podRows
+      .map((row) => buildPodAliasUsage(row, modelValue))
+      .filter((usage): usage is AliasUsage => usage !== null),
+    ...connectionRows.flatMap((row) => buildConnectionAliasUsages(row, modelValue)),
+  ];
+}
+
+function hasOtherAliasForRealModel(row: ModelAliasRow): boolean {
+  const stmts = getStmts();
+  const result = stmts.modelAlias.existsByProviderAndRealModel.get({
+    $providerId: "opencode",
+    $realProvider: row.real_provider,
+    $realModel: row.real_model,
+    $excludeId: row.id,
+  }) as { found: 1 } | null;
+
+  return result !== null;
+}
+
+function modelAliasExists(params: {
+  providerId: string;
+  realProvider: string;
+  realModel: string;
+  excludeId: string | null;
+}): boolean {
+  const stmts = getStmts();
+  const result = stmts.modelAlias.existsByProviderAndRealModel.get({
+    $providerId: params.providerId,
+    $realProvider: params.realProvider,
+    $realModel: params.realModel,
+    $excludeId: params.excludeId,
+  }) as { found: 1 } | null;
+
+  return result !== null;
+}
+
+function getModelValue(row: Pick<ModelAliasRow, "real_provider" | "real_model">): string {
+  return `${row.real_provider}/${row.real_model}`;
+}
+
+function emitAliasConflictResponse(
+  connectionId: string,
+  responseEvent: string,
+  requestId: string,
+  conflict: { code: "alias_duplicate" | "alias_model_duplicate"; message: string },
+): void {
+  socketService.emitToConnection(connectionId, responseEvent, {
+    requestId,
+    success: false,
+    error: conflict,
+  });
+}
+
+function emitCreateAliasConflictResponse(
+  connectionId: string,
+  requestId: string,
+  conflict: { code: "alias_duplicate" | "alias_model_duplicate"; message: string },
+): void {
+  emitAliasConflictResponse(
+    connectionId,
+    WebSocketResponseEvents.OPENCODE_ALIASES_CREATE_RESULT,
+    requestId,
+    conflict,
+  );
+}
+
+function emitUpdateAliasConflictResponse(
+  connectionId: string,
+  requestId: string,
+  conflict: { code: "alias_duplicate" | "alias_model_duplicate"; message: string },
+): void {
+  emitAliasConflictResponse(
+    connectionId,
+    WebSocketResponseEvents.OPENCODE_ALIASES_UPDATE_RESULT,
+    requestId,
+    conflict,
+  );
 }
 
 function logAliasInUseDetails(
@@ -663,7 +740,7 @@ export async function handleOpencodeAliasesList(
 /**
  * - 自動產 uuid 為 id
  * - 查詢同 provider_id 內 max(order_idx) + 1 作為新 order_idx（首筆為 0）
- * - 整個 DB 操作包在 transaction 內，UNIQUE 衝突轉成結構化錯誤
+ * - 整個 DB 操作包在 transaction 內，duplicate model/alias 衝突轉成結構化錯誤
  * - 完成後廣播 opencode:aliases:updated 與 provider:list:result
  */
 export async function handleOpencodeAliasesCreate(
@@ -699,20 +776,19 @@ export async function handleOpencodeAliasesCreate(
   }
 
   try {
-    // 在單一 transaction 內：查 max orderIdx → insert → selectById
+    // 在單一 transaction 內：先檢查 duplicate model，再查 max orderIdx → insert → selectById
     const createResult = db.transaction(
       ():
         | { type: "duplicateModel" }
         | { type: "created"; row: ModelAliasRow | null } => {
-        const duplicateModelRow =
-          stmts.modelAlias.selectByProviderAndRealModel.get({
-            $providerId: "opencode",
-            $realProvider: payload.providerID,
-            $realModel: payload.modelID,
-            $excludeId: null,
-          }) as ModelAliasRow | null;
-
-        if (duplicateModelRow) {
+        if (
+          modelAliasExists({
+            providerId: "opencode",
+            realProvider: payload.providerID,
+            realModel: payload.modelID,
+            excludeId: null,
+          })
+        ) {
           return { type: "duplicateModel" };
         }
 
@@ -742,19 +818,10 @@ export async function handleOpencodeAliasesCreate(
     )();
 
     if (createResult.type === "duplicateModel") {
-      const response: OpencodeAliasesCreateResultPayload = {
-        requestId,
-        success: false,
-        error: {
-          code: "alias_model_duplicate",
-          message: "此 model 已有 alias",
-        },
-      };
-      socketService.emitToConnection(
-        connectionId,
-        WebSocketResponseEvents.OPENCODE_ALIASES_CREATE_RESULT,
-        response,
-      );
+      emitCreateAliasConflictResponse(connectionId, requestId, {
+        code: "alias_model_duplicate",
+        message: "此 model 已有 alias",
+      });
       return;
     }
 
@@ -788,20 +855,9 @@ export async function handleOpencodeAliasesCreate(
 
     await broadcastRefreshBestEffort();
   } catch (err) {
-    if (isSqliteUniqueConstraint(err)) {
-      const response: OpencodeAliasesCreateResultPayload = {
-        requestId,
-        success: false,
-        error: { code: "alias_duplicate", message: "alias 已存在" },
-      };
-      socketService.emitToConnection(
-        connectionId,
-        WebSocketResponseEvents.OPENCODE_ALIASES_CREATE_RESULT,
-        response,
-      );
-    } else {
-      throw err;
-    }
+    const conflict = getAliasUniqueConstraintError(err);
+    if (!conflict) throw err;
+    emitCreateAliasConflictResponse(connectionId, requestId, conflict);
   }
 }
 
@@ -838,32 +894,23 @@ export async function handleOpencodeAliasesUpdate(
     return;
   }
 
-  const duplicateModelRow = stmts.modelAlias.selectByProviderAndRealModel.get({
-    $providerId: "opencode",
-    $realProvider: existingRow.real_provider,
-    $realModel: payload.modelID,
-    $excludeId: payload.id,
-  }) as ModelAliasRow | null;
-
-  if (duplicateModelRow) {
-    const response: OpencodeAliasesUpdateResultPayload = {
-      requestId,
-      success: false,
-      error: {
-        code: "alias_model_duplicate",
-        message: "此 model 已有 alias",
-      },
-    };
-    socketService.emitToConnection(
-      connectionId,
-      WebSocketResponseEvents.OPENCODE_ALIASES_UPDATE_RESULT,
-      response,
-    );
+  if (
+    modelAliasExists({
+      providerId: "opencode",
+      realProvider: existingRow.real_provider,
+      realModel: payload.modelID,
+      excludeId: payload.id,
+    })
+  ) {
+    emitUpdateAliasConflictResponse(connectionId, requestId, {
+      code: "alias_model_duplicate",
+      message: "此 model 已有 alias",
+    });
     return;
   }
 
   if (payload.modelID !== existingRow.real_model) {
-    const oldModelValue = `${existingRow.real_provider}/${existingRow.real_model}`;
+    const oldModelValue = getModelValue(existingRow);
     const usages = findCurrentAliasUsages(oldModelValue);
     if (usages.length > 0 && !hasOtherAliasForRealModel(existingRow)) {
       logAliasInUseDetails("update", existingRow, usages);
@@ -949,20 +996,9 @@ export async function handleOpencodeAliasesUpdate(
 
     await broadcastRefreshBestEffort();
   } catch (err) {
-    if (isSqliteUniqueConstraint(err)) {
-      const response: OpencodeAliasesUpdateResultPayload = {
-        requestId,
-        success: false,
-        error: { code: "alias_duplicate", message: "alias 已存在" },
-      };
-      socketService.emitToConnection(
-        connectionId,
-        WebSocketResponseEvents.OPENCODE_ALIASES_UPDATE_RESULT,
-        response,
-      );
-    } else {
-      throw err;
-    }
+    const conflict = getAliasUniqueConstraintError(err);
+    if (!conflict) throw err;
+    emitUpdateAliasConflictResponse(connectionId, requestId, conflict);
   }
 }
 
@@ -1084,7 +1120,7 @@ export async function handleOpencodeAliasesDelete(
     return;
   }
 
-  const modelValue = `${row.real_provider}/${row.real_model}`;
+  const modelValue = getModelValue(row);
   const usages = findCurrentAliasUsages(modelValue);
   if (usages.length > 0 && !hasOtherAliasForRealModel(row)) {
     logAliasInUseDetails("delete", row, usages);

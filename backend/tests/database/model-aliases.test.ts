@@ -43,9 +43,9 @@ describe("model_aliases CRUD", () => {
 
   it("insert 後依 order_idx 升序 list 出來", () => {
     // 故意以亂序插入，驗證 selectByProviderId 依 order_idx 升序回傳
-    insertAlias("id-2", "Alias B", 2);
-    insertAlias("id-0", "Alias A", 0);
-    insertAlias("id-1", "Alias C", 1);
+    insertAlias("id-2", "Alias B", 2, "anthropic", "claude-opus-4");
+    insertAlias("id-0", "Alias A", 0, "anthropic", "claude-3-5-sonnet");
+    insertAlias("id-1", "Alias C", 1, "anthropic", "claude-3-5-haiku");
 
     const stmts = getStatements(db);
     const rows = stmts.modelAlias.selectByProviderId.all({
@@ -62,8 +62,8 @@ describe("model_aliases CRUD", () => {
   });
 
   it("update alias 與 order_idx 後 list 結果對應更新", () => {
-    insertAlias("id-1", "Old Alias", 0);
-    insertAlias("id-2", "Another", 1);
+    insertAlias("id-1", "Old Alias", 0, "anthropic", "claude-3-5-sonnet");
+    insertAlias("id-2", "Another", 1, "anthropic", "claude-opus-4");
 
     const stmts = getStatements(db);
     // 將 id-1 的 alias 改名且移到最後
@@ -87,9 +87,9 @@ describe("model_aliases CRUD", () => {
   });
 
   it("delete 後 list 少一筆", () => {
-    insertAlias("id-1", "Alias 1", 0);
-    insertAlias("id-2", "Alias 2", 1);
-    insertAlias("id-3", "Alias 3", 2);
+    insertAlias("id-1", "Alias 1", 0, "anthropic", "claude-3-5-sonnet");
+    insertAlias("id-2", "Alias 2", 1, "anthropic", "claude-opus-4");
+    insertAlias("id-3", "Alias 3", 2, "anthropic", "claude-3-5-haiku");
 
     const stmts = getStatements(db);
     stmts.modelAlias.deleteById.run("id-2");
@@ -113,6 +113,28 @@ describe("model_aliases CRUD", () => {
     }).toThrow();
   });
 
+  it("同一 provider_id + real_provider + real_model 重複時 DB 拋 UNIQUE 違反錯誤", () => {
+    insertAlias(
+      "id-1",
+      "Alias A",
+      0,
+      "anthropic",
+      "claude-3-5-sonnet",
+      "opencode",
+    );
+
+    expect(() => {
+      insertAlias(
+        "id-2",
+        "Alias B",
+        1,
+        "anthropic",
+        "claude-3-5-sonnet",
+        "opencode",
+      );
+    }).toThrow();
+  });
+
   it("selectMaxOrderIdxByProviderId 在沒有資料時回傳 -1", () => {
     const stmts = getStatements(db);
     const result = stmts.modelAlias.selectMaxOrderIdxByProviderId.get({
@@ -123,9 +145,9 @@ describe("model_aliases CRUD", () => {
   });
 
   it("selectMaxOrderIdxByProviderId 在有資料時回傳最大值", () => {
-    insertAlias("id-1", "Alias 1", 3);
-    insertAlias("id-2", "Alias 2", 7);
-    insertAlias("id-3", "Alias 3", 1);
+    insertAlias("id-1", "Alias 1", 3, "anthropic", "claude-3-5-sonnet");
+    insertAlias("id-2", "Alias 2", 7, "anthropic", "claude-opus-4");
+    insertAlias("id-3", "Alias 3", 1, "anthropic", "claude-3-5-haiku");
 
     const stmts = getStatements(db);
     const result = stmts.modelAlias.selectMaxOrderIdxByProviderId.get({
