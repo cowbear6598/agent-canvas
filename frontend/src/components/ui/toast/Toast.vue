@@ -43,9 +43,12 @@ const { toasts, dismiss } = useToast()
 
 <style scoped>
 .toast-container {
+  --toast-header-height: 4rem;
+  --toast-edge-offset: 20px;
+
   position: fixed;
-  top: 20px;
-  right: 20px;
+  top: calc(var(--toast-header-height) + var(--toast-edge-offset));
+  right: var(--toast-edge-offset);
   z-index: 9999;
   display: flex;
   flex-direction: column;

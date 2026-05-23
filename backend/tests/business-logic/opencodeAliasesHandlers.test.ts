@@ -357,6 +357,44 @@ describe("handleOpencodeAliasesCreate", () => {
     expect(dupPayload.error.code).toBe("alias_duplicate");
   });
 
+  it("同一 real model 已有 alias 時不允許再建立第二筆 alias", async () => {
+    await createUsedAlias();
+
+    vi.clearAllMocks();
+    await handleOpencodeAliasesCreate(
+      CONNECTION_ID,
+      {
+        requestId: REQUEST_ID,
+        providerID: USED_PROVIDER_ID,
+        modelID: USED_MODEL_ID,
+        alias: "ReplacementAlias",
+      },
+      REQUEST_ID,
+    );
+
+    const [, event, createPayload] = mockEmitToConnection.mock.calls[0];
+    expect(event).toBe(WebSocketResponseEvents.OPENCODE_ALIASES_CREATE_RESULT);
+    expect(createPayload.success).toBe(false);
+    expect(createPayload.error.code).toBe("alias_model_duplicate");
+    expect(mockBroadcastOpencodeAliasesUpdated).not.toHaveBeenCalled();
+    expect(mockBroadcastProviderList).not.toHaveBeenCalled();
+
+    vi.clearAllMocks();
+    await handleOpencodeAliasesList(
+      CONNECTION_ID,
+      { requestId: REQUEST_ID },
+      REQUEST_ID,
+    );
+
+    const [, , listPayload] = mockEmitToConnection.mock.calls[0];
+    expect(listPayload.items).toHaveLength(1);
+    expect(listPayload.items[0]).toMatchObject({
+      providerID: USED_PROVIDER_ID,
+      modelID: USED_MODEL_ID,
+      alias: "UsedAlias",
+    });
+  });
+
   it("B6：create 完成後 broadcastOpencodeAliasesUpdated 與 broadcastProviderList 各被呼叫一次", async () => {
     await handleOpencodeAliasesCreate(
       CONNECTION_ID,
@@ -533,6 +571,74 @@ describe("handleOpencodeAliasesUpdate", () => {
     expect(updatePayload.error.message).toBe("alias 已存在");
     expect(mockBroadcastOpencodeAliasesUpdated).not.toHaveBeenCalled();
   });
+
+  it("update 到另一筆已使用 real model 時回傳 alias_model_duplicate 且原資料不變", async () => {
+    await handleOpencodeAliasesCreate(
+      CONNECTION_ID,
+      {
+        requestId: REQUEST_ID,
+        providerID: "anthropic",
+        modelID: "claude-3-5-sonnet",
+        alias: "AliasA",
+      },
+      REQUEST_ID,
+    );
+    const [, , firstCreatePayload] = mockEmitToConnection.mock.calls[0];
+    const firstId: string = firstCreatePayload.item.id;
+
+    await handleOpencodeAliasesCreate(
+      CONNECTION_ID,
+      {
+        requestId: REQUEST_ID,
+        providerID: "anthropic",
+        modelID: "claude-opus-4",
+        alias: "AliasB",
+      },
+      REQUEST_ID,
+    );
+    const [, , secondCreatePayload] = mockEmitToConnection.mock.calls[1];
+    const secondId: string = secondCreatePayload.item.id;
+
+    vi.clearAllMocks();
+    await handleOpencodeAliasesUpdate(
+      CONNECTION_ID,
+      {
+        requestId: REQUEST_ID,
+        id: firstId,
+        modelID: "claude-opus-4",
+        alias: "AliasAUpdated",
+      },
+      REQUEST_ID,
+    );
+
+    const [, event, updatePayload] = mockEmitToConnection.mock.calls[0];
+    expect(event).toBe(WebSocketResponseEvents.OPENCODE_ALIASES_UPDATE_RESULT);
+    expect(updatePayload.success).toBe(false);
+    expect(updatePayload.error.code).toBe("alias_model_duplicate");
+    expect(updatePayload.error.message).toBe("此 model 已有 alias");
+    expect(mockBroadcastOpencodeAliasesUpdated).not.toHaveBeenCalled();
+    expect(mockBroadcastProviderList).not.toHaveBeenCalled();
+
+    vi.clearAllMocks();
+    await handleOpencodeAliasesList(
+      CONNECTION_ID,
+      { requestId: REQUEST_ID },
+      REQUEST_ID,
+    );
+
+    const [, , listPayload] = mockEmitToConnection.mock.calls[0];
+    expect(listPayload.items).toHaveLength(2);
+    expect(listPayload.items[0]).toMatchObject({
+      id: firstId,
+      modelID: "claude-3-5-sonnet",
+      alias: "AliasA",
+    });
+    expect(listPayload.items[1]).toMatchObject({
+      id: secondId,
+      modelID: "claude-opus-4",
+      alias: "AliasB",
+    });
+  });
 });
 
 // ─── opencode:aliases:delete ──────────────────────────────────────────────────
@@ -610,39 +716,6 @@ describe("handleOpencodeAliasesDelete", () => {
 
     expect(mockBroadcastOpencodeAliasesUpdated).toHaveBeenCalledOnce();
     expect(mockBroadcastProviderList).toHaveBeenCalledOnce();
-  });
-
-  it("同一 real model 仍有其他 alias 時允許刪除其中一筆", async () => {
-    const firstAliasId = await createUsedAlias();
-    await handleOpencodeAliasesCreate(
-      CONNECTION_ID,
-      {
-        requestId: REQUEST_ID,
-        providerID: USED_PROVIDER_ID,
-        modelID: USED_MODEL_ID,
-        alias: "ReplacementAlias",
-      },
-      REQUEST_ID,
-    );
-    insertCanvas();
-    insertPod({
-      id: "pod-uses-shared-real-model",
-      name: "使用 shared real model 的 Pod",
-      provider: "opencode",
-      model: USED_MODEL_VALUE,
-    });
-
-    vi.clearAllMocks();
-    await handleOpencodeAliasesDelete(
-      CONNECTION_ID,
-      { requestId: REQUEST_ID, id: firstAliasId },
-      REQUEST_ID,
-    );
-
-    const [, , deletePayload] = mockEmitToConnection.mock.calls[0];
-    expect(deletePayload.success).toBe(true);
-    expect(deletePayload.id).toBe(firstAliasId);
-    expect(mockBroadcastOpencodeAliasesUpdated).toHaveBeenCalledOnce();
   });
 
   it("不可刪除目前被 Pod 使用中的 opencode alias model", async () => {

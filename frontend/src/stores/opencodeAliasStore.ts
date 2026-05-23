@@ -53,6 +53,23 @@ export const useOpencodeAliasStore = defineStore("opencodeAlias", () => {
       },
   );
 
+  /**
+   * 本地一對一檢查：在同一 providerID 下，modelID 是否尚未被其他 alias 使用。
+   * 新增時不傳 excludeId；編輯時傳入自身 id 排除自己。
+   * 跨 providerID 允許使用相同 modelID，回傳 true。
+   */
+  const isModelAliasUnique = computed(
+    () =>
+      (providerID: string, modelID: string, excludeId?: string): boolean => {
+        return !aliases.value.some(
+          (a) =>
+            a.providerID === providerID &&
+            a.modelID === modelID &&
+            a.id !== excludeId,
+        );
+      },
+  );
+
   // ---- Actions ----
 
   /**
@@ -140,6 +157,7 @@ export const useOpencodeAliasStore = defineStore("opencodeAlias", () => {
     loaded,
     aliasesByProvider,
     isAliasUnique,
+    isModelAliasUnique,
     setAliases,
     loadFromBackend,
     addAlias,

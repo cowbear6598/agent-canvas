@@ -41,6 +41,7 @@ const responseEventListeners = new Map<string, (response: unknown) => void>();
 
 const MESSAGE_ALLOWED_ERROR_CODES = new Set([
   "alias_duplicate",
+  "alias_model_duplicate",
   "alias_in_use",
   "alias_not_found",
   "invalid_ordered_ids",

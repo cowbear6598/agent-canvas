@@ -1,0 +1,67 @@
+feature: project-maintainability-audit
+created: "2026-05-23"
+approved: true
+questions:
+  - id: Q1
+    text: 目前專案的前後端架構與主要維護熱點在哪裡？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      專案是 Vue3/TypeScript 前端與 Bun/TypeScript 後端的 monorepo，前後端以 WebSocket 為主要互動邊界，另有部分 REST API。粗掃 `frontend/src`、`backend/src`、`shared` 共約 590 個 TypeScript/Vue 檔案、約 83k 行程式碼。維護熱點集中在長檔與高責任密度模組：
+      - 前端：`frontend/src/stores/connectionStore.ts`、`frontend/src/stores/note/createNoteStore.ts`、`frontend/src/stores/run/runStore.ts`、`frontend/src/components/pod/CanvasPod.vue`、`frontend/src/components/settings/OpencodeSettingsPanel.vue`、`frontend/src/components/canvas/ScheduleModal.vue`。
+      - 後端：`backend/src/services/provider/opencodeProvider.ts`、`backend/src/handlers/opencodeSettingsHandlers.ts`、`backend/src/services/workflow/runExecutionService.ts`、`backend/src/services/podStore.ts`、`backend/src/services/provider/codexProvider.ts`、`backend/src/services/workspace/gitService.ts`、`backend/src/cli.ts`。
+      這些檔案通常同時處理狀態、資料轉換、I/O、事件派發與錯誤處理，後續優化應先拆出可命名的 domain helper、boundary adapter、normalizer 與 orchestration layer，而不是只做格式化或搬檔。
+
+  - id: Q2
+    text: 現有測試是否包含無意義或低價值測試，與既有測試重構計畫的關係是什麼？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      專案目前約 228 個測試檔，測試總行數約 74k。以 `vi.mock`、`mockResolvedValue`、`mockReturnValue`、`spyOn`、`@vue/test-utils`、`mount`、`.find()`、`.text()`、`.classes()` 等訊號粗掃，約 150 個測試檔命中 mock 或 UI/render implementation detail 訊號。這不代表全部都該刪，但需要逐檔用 test policy 判斷。
+
+      已存在 `.soap/tasks/test-suite-userflow-refactor/`，且已產出並完成前後端測試盤點：
+      - `frontend/tests/test-inventory.json` 已列出前端 userflowRewriteCandidates 與 pureBusinessLogicKeep。
+      - `backend/tests/backend-test-inventory.tsv` 已列出後端 keep/rewrite 決策與 rewrite/delete candidate signals。
+      因此本次不應重做全量測試遷移，而應規劃「二次審核與收斂」：驗證 inventory 是否仍符合目前檔案、挑出仍殘留的純 UI render、純第三方 mock、mock call count、getter/setter、資料容器 CRUD 類測試，然後刪除或改寫成 userflow、business logic、integration test。
+
+  - id: Q3
+    text: 哪些 fallback 或 defensive code 需要優先審查？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      粗掃 `fallback`、`??`、`return []`、`try/catch`、`console.error/warn` 等訊號後，應優先審查三類：
+      - 正規外部邊界可達的 fallback：例如 disk space `statfs` 到 `df`、外部 provider/network/SDK 錯誤、upload 解析錯誤、static SPA fallback、filesystem/git I/O。這類多半是合理邊界，但要確認錯誤契約清楚且測試不是只 mock 第三方內部。
+      - 歷史資料或 provider/model 正規化 fallback：例如 `backend/src/services/pod/providerConfigResolver.ts`、`backend/src/services/connectionStore.ts`、`backend/src/services/disposableChatService.ts`、`frontend/src/lib/providerOptions.ts`。這類可能是向後相容需求，也可能掩蓋寫入路徑沒有 validation；應逐條判斷是否可改為寫入時拒絕錯誤，讀取時只處理明確 legacy data。
+      - implementation-detail defensive fallback：例如純為避免 null/undefined、空陣列、預設值、未知狀態而存在的分支，尤其是 store normalize、API response normalize、message/tool status normalize。這類若正規 WebSocket/API contract 已能保證，就應回到 schema、handler response 或 store event contract 修正，不應新增更多兜底測試。
+
+  - id: Q4
+    text: 前端可維護性優化的主要方向是什麼？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      前端優化應以使用者流程與資料流為界線，不以 component 檔案大小本身為唯一依據：
+      - 將 `connectionStore.ts` 中 graph 查詢、workflow role、connection payload normalize、WebSocket event registration 拆成可測的 domain/helper 模組，保留 Pinia store 作為狀態組合層。
+      - 將大型 Pod/Settings component 中的資料正規化、provider/model 顯示規則、popover state、drag/drop orchestration 移到 composable 或 lib，component 只保留 template state wiring。
+      - 收斂 `frontend/src/composables/*` 與 `frontend/src/composables/canvas|eventHandlers|websocket` 的重疊命名與路徑，避免新功能不知道該放哪裡。
+      - 測試以 app/userflow harness、store business rule、資料轉換器為主，刪除只驗證 DOM class/text 或 Vue mount 細節的案例。
+
+  - id: Q5
+    text: 後端可維護性優化的主要方向是什麼？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      後端優化應先處理 provider orchestration、handler 肥大化與 fallback contract：
+      - `opencodeProvider.ts` 超過 1.3k 行，已包含 SDK port、server/session、SSE event normalize、tool serialization、plugin catalog、MCP config、thinking preset 等多種責任。應拆成 session lifecycle、event stream normalizer、tool event collector、options builder、provider adapter，並用 integration/fake provider 測流程。
+      - `opencodeSettingsHandlers.ts` 超過 1.1k 行，混合 WebSocket handler、SQLite alias CRUD、opencode provider list sanitize、broadcast refresh、錯誤轉換。應拆成 alias service、provider list service、handler adapter，並讓 handler 測試走真 registry/DB 或明確 fake 外部 opencode client。
+      - workflow/run execution 相關服務已有多個檔案，但仍有長流程 orchestration。應先補流程圖與狀態轉移表，再抽出 settlement、queue、summary fallback、run resource guard 等明確 domain service。
+      - 對 fallback 一律先追寫入 contract、DB schema、WebSocket schema、provider metadata 來源，不應新增「怕壞掉」的預設值或只測 fallback 的單元測試。
+
+  - id: Q6
+    text: 本次計畫應使用哪些自動驗證指令？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      根目錄 `package.json` 提供 `bun run style` 與 `bun run test`，符合專案 AGENTS 指示。前端 `frontend/package.json` 提供 `bun run style`、`bun run test`、`bun run test:run`；後端 `backend/package.json` 提供 `bun run style`、`bun run test`。後續計畫的 verification 應優先使用：
+      - 前端：`bun run style`、`bun run test`
+      - 後端：`bun run style`、`bun run test`
+      不需要也不應執行 `bun run dev`。

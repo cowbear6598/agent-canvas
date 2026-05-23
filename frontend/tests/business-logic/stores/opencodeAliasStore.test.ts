@@ -171,10 +171,59 @@ describe("opencodeAliasStore", () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────────
-  // (6) aliasesByProvider 依 sortOrder 升冪
+  // (6) isModelAliasUnique 同 providerID 偵測 model 重複回 false、跨 providerID 回 true
+  // ──────────────────────────────────────────────────────────────────────────────
+  describe("isModelAliasUnique", () => {
+    it("(6a) 同 providerID 且同 modelID 時回傳 false", () => {
+      const store = useOpencodeAliasStore();
+      store.setAliases([
+        makeAlias({
+          id: "alias-1",
+          providerID: "openai",
+          modelID: "gpt-4o",
+        }),
+      ]);
+
+      // 同 provider、同 modelID → 不唯一
+      expect(store.isModelAliasUnique("openai", "gpt-4o")).toBe(false);
+    });
+
+    it("(6b) 不同 providerID 且同 modelID 時回傳 true", () => {
+      const store = useOpencodeAliasStore();
+      store.setAliases([
+        makeAlias({
+          id: "alias-1",
+          providerID: "openai",
+          modelID: "gpt-4o",
+        }),
+      ]);
+
+      // 不同 provider，相同 modelID → 允許（唯一）
+      expect(store.isModelAliasUnique("anthropic", "gpt-4o")).toBe(true);
+    });
+
+    it("(6c) excludeId 排除自身時回傳 true（編輯場景）", () => {
+      const store = useOpencodeAliasStore();
+      store.setAliases([
+        makeAlias({
+          id: "alias-1",
+          providerID: "openai",
+          modelID: "gpt-4o",
+        }),
+      ]);
+
+      // 編輯時傳入自身 id → 排除自身後不衝突
+      expect(store.isModelAliasUnique("openai", "gpt-4o", "alias-1")).toBe(
+        true,
+      );
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────────
+  // (7) aliasesByProvider 依 sortOrder 升冪
   // ──────────────────────────────────────────────────────────────────────────────
   describe("aliasesByProvider", () => {
-    it("(6) 依 sortOrder 升冪排序，並只回傳指定 provider 的 alias", () => {
+    it("(7) 依 sortOrder 升冪排序，並只回傳指定 provider 的 alias", () => {
       const store = useOpencodeAliasStore();
       store.setAliases([
         makeAlias({ id: "a3", providerID: "openai", alias: "C", orderIdx: 2 }),
@@ -200,10 +249,10 @@ describe("opencodeAliasStore", () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────────
-  // (7) mocked listAliases 拋錯時 loadFromBackend() 不改動既有 aliases、loaded 不變
+  // (8) mocked listAliases 拋錯時 loadFromBackend() 不改動既有 aliases、loaded 不變
   // ──────────────────────────────────────────────────────────────────────────────
   describe("loadFromBackend 失敗路徑", () => {
-    it("(7) listAliases 拋錯時不改動既有 aliases、loaded 值不變", async () => {
+    it("(8) listAliases 拋錯時不改動既有 aliases、loaded 值不變", async () => {
       const store = useOpencodeAliasStore();
       const existing = makeAlias({ id: "existing-1" });
       store.setAliases([existing]);
@@ -221,7 +270,7 @@ describe("opencodeAliasStore", () => {
       expect(store.loaded).toBe(false);
     });
 
-    it("(7b) 已成功載入後再失敗時，loaded 維持 true、aliases 保留上次成功值", async () => {
+    it("(8b) 已成功載入後再失敗時，loaded 維持 true、aliases 保留上次成功值", async () => {
       const store = useOpencodeAliasStore();
       const items = [makeAlias({ id: "a1" })];
 
@@ -244,10 +293,10 @@ describe("opencodeAliasStore", () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────────
-  // (8) mocked createAlias 拋錯時 addAlias() rethrow、本地 aliases 未新增
+  // (9) mocked createAlias 拋錯時 addAlias() rethrow、本地 aliases 未新增
   // ──────────────────────────────────────────────────────────────────────────────
   describe("addAlias 失敗路徑", () => {
-    it("(8) createAlias 拋錯時 rethrow 且本地 aliases 未新增", async () => {
+    it("(9) createAlias 拋錯時 rethrow 且本地 aliases 未新增", async () => {
       const store = useOpencodeAliasStore();
       expect(store.aliases).toHaveLength(0);
 

@@ -675,6 +675,7 @@ export async function handleOpencodeAliasesCreate(
   const db = getDb();
   const id = randomUUID();
   const now = Date.now();
+
   const presetResult = await fetchThinkingPresetSnapshot(
     payload.providerID,
     payload.modelID,
@@ -699,28 +700,65 @@ export async function handleOpencodeAliasesCreate(
 
   try {
     // 在單一 transaction 內：查 max orderIdx → insert → selectById
-    const newRow = db.transaction((): ModelAliasRow | null => {
-      const maxResult = stmts.modelAlias.selectMaxOrderIdxByProviderId.get({
-        $providerId: "opencode",
-      }) as { max_order_idx: number };
-      const orderIdx = maxResult.max_order_idx + 1;
+    const createResult = db.transaction(
+      ():
+        | { type: "duplicateModel" }
+        | { type: "created"; row: ModelAliasRow | null } => {
+        const duplicateModelRow =
+          stmts.modelAlias.selectByProviderAndRealModel.get({
+            $providerId: "opencode",
+            $realProvider: payload.providerID,
+            $realModel: payload.modelID,
+            $excludeId: null,
+          }) as ModelAliasRow | null;
 
-      stmts.modelAlias.insert.run({
-        $id: id,
-        $providerId: "opencode",
-        $realProvider: payload.providerID,
-        $realModel: payload.modelID,
-        $alias: payload.alias,
-        $orderIdx: orderIdx,
-        ...snapshotStatementParams(presetResult.snapshot),
-        $createdAt: now,
-        $updatedAt: now,
-      });
+        if (duplicateModelRow) {
+          return { type: "duplicateModel" };
+        }
 
-      return stmts.modelAlias.selectById.get({
-        $id: id,
-      }) as ModelAliasRow | null;
-    })();
+        const maxResult = stmts.modelAlias.selectMaxOrderIdxByProviderId.get({
+          $providerId: "opencode",
+        }) as { max_order_idx: number };
+        const orderIdx = maxResult.max_order_idx + 1;
+
+        stmts.modelAlias.insert.run({
+          $id: id,
+          $providerId: "opencode",
+          $realProvider: payload.providerID,
+          $realModel: payload.modelID,
+          $alias: payload.alias,
+          $orderIdx: orderIdx,
+          ...snapshotStatementParams(presetResult.snapshot),
+          $createdAt: now,
+          $updatedAt: now,
+        });
+
+        const row = stmts.modelAlias.selectById.get({
+          $id: id,
+        }) as ModelAliasRow | null;
+
+        return { type: "created", row };
+      },
+    )();
+
+    if (createResult.type === "duplicateModel") {
+      const response: OpencodeAliasesCreateResultPayload = {
+        requestId,
+        success: false,
+        error: {
+          code: "alias_model_duplicate",
+          message: "此 model 已有 alias",
+        },
+      };
+      socketService.emitToConnection(
+        connectionId,
+        WebSocketResponseEvents.OPENCODE_ALIASES_CREATE_RESULT,
+        response,
+      );
+      return;
+    }
+
+    const newRow = createResult.row;
 
     if (!newRow) {
       const response: OpencodeAliasesCreateResultPayload = {
@@ -790,6 +828,30 @@ export async function handleOpencodeAliasesUpdate(
       error: {
         code: "alias_not_found",
         message: "找不到指定的 alias，無法更新",
+      },
+    };
+    socketService.emitToConnection(
+      connectionId,
+      WebSocketResponseEvents.OPENCODE_ALIASES_UPDATE_RESULT,
+      response,
+    );
+    return;
+  }
+
+  const duplicateModelRow = stmts.modelAlias.selectByProviderAndRealModel.get({
+    $providerId: "opencode",
+    $realProvider: existingRow.real_provider,
+    $realModel: payload.modelID,
+    $excludeId: payload.id,
+  }) as ModelAliasRow | null;
+
+  if (duplicateModelRow) {
+    const response: OpencodeAliasesUpdateResultPayload = {
+      requestId,
+      success: false,
+      error: {
+        code: "alias_model_duplicate",
+        message: "此 model 已有 alias",
       },
     };
     socketService.emitToConnection(

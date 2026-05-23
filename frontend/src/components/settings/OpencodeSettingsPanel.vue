@@ -28,6 +28,7 @@ import * as opencodeApi from "@/services/opencodeApi";
 import type {
   OpencodeProviderInfo,
   OpencodeModelAlias,
+  OpencodeModelInfo,
 } from "@/types/opencode";
 import { useOpencodeAliasStore } from "@/stores/opencodeAliasStore";
 import { useToast } from "@/composables/useToast";
@@ -142,6 +143,24 @@ const sortedFilteredProviders = computed<OpencodeProviderInfo[]>(() => {
   return [...groups.connected, ...groups.disconnected];
 });
 
+const getSelectableModels = (
+  providerID: string,
+  models: OpencodeModelInfo[],
+  excludeAliasId?: string,
+): OpencodeModelInfo[] =>
+  models.filter((model) =>
+    opencodeAliasStore.isModelAliasUnique(
+      providerID,
+      model.id,
+      excludeAliasId,
+    ),
+  );
+
+const getFirstSelectableModelID = (
+  providerID: string,
+  models: OpencodeModelInfo[],
+): string => getSelectableModels(providerID, models)[0]?.id ?? "";
+
 // ── 資料載入 ─────────────────────────────────────────────────────
 
 /**
@@ -214,7 +233,7 @@ const handleDraftSave = async (
   providerID: string,
   payload: { modelID: string; alias: string },
 ): Promise<void> => {
-  // 唯一性檢查
+  // alias 唯一性檢查
   const isUnique = opencodeAliasStore.isAliasUnique(providerID, payload.alias);
   if (!isUnique) {
     toast({
@@ -266,7 +285,7 @@ const handleEditSave = async (
   providerID: string,
   payload: { modelID: string; alias: string },
 ): Promise<void> => {
-  // 唯一性檢查（排除自身）
+  // alias 唯一性檢查（排除自身）
   const isUnique = opencodeAliasStore.isAliasUnique(
     providerID,
     payload.alias,
@@ -420,10 +439,16 @@ const handleAliasReorder = async (providerID: string): Promise<void> => {
             variant="ghost"
             size="sm"
             class="h-7 w-7 p-0"
+            :disabled="
+              getSelectableModels(provider.id, provider.models).length === 0
+            "
             :aria-label="t('llmProvider.opencode.aliases.addModelTooltip')"
             :title="t('llmProvider.opencode.aliases.addModelTooltip')"
             @click.stop="
-              handleAddClick(provider.id, provider.models[0]?.id ?? '')
+              handleAddClick(
+                provider.id,
+                getFirstSelectableModelID(provider.id, provider.models),
+              )
             "
           >
             <Plus class="h-4 w-4" />
@@ -453,7 +478,10 @@ const handleAliasReorder = async (providerID: string): Promise<void> => {
               </SelectTrigger>
               <SelectContent position="popper">
                 <SelectItem
-                  v-for="model in provider.models"
+                  v-for="model in getSelectableModels(
+                    provider.id,
+                    provider.models,
+                  )"
                   :key="model.id"
                   :value="model.id"
                 >
@@ -534,7 +562,9 @@ const handleAliasReorder = async (providerID: string): Promise<void> => {
               v-for="aliasItem in aliasListsByProvider[provider.id] ?? []"
               :key="aliasItem.id"
               :alias="aliasItem"
-              :models="provider.models"
+              :models="
+                getSelectableModels(provider.id, provider.models, aliasItem.id)
+              "
               :editing="editingAliasId === aliasItem.id"
               :refreshing="refreshingAliasIds.has(aliasItem.id)"
               @start-edit="handleStartEdit(aliasItem.id)"

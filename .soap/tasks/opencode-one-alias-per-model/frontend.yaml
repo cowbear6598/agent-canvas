@@ -8,35 +8,43 @@ phases:
     verification:
       - bun run style
       - bun run test
-    done: false
+    done: true
     items:
       - id: P1.A
         title: alias store 一對一查詢
         tasks:
           - id: P1.A.t1
             text: 在 `frontend/src/stores/opencodeAliasStore.ts` 新增 `isModelAliasUnique(providerID, modelID, excludeId?)` getter，用現有 `aliases` 判斷同 providerID 與 modelID 是否已被其他 alias 使用
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/src/stores/opencodeAliasStore.ts
           - id: P1.A.t2
             text: 在 `frontend/tests/business-logic/stores/opencodeAliasStore.test.ts` 補上 `isModelAliasUnique` 測試，涵蓋同 providerID 同 modelID 回傳 false、不同 providerID 回傳 true、編輯時 excludeId 排除自身回傳 true
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/stores/opencodeAliasStore.test.ts
 
       - id: P1.B
         title: 設定面板儲存流程
         tasks:
           - id: P1.B.t1
             text: 在 `frontend/src/components/settings/OpencodeSettingsPanel.vue` 的新增儲存流程先呼叫 `isModelAliasUnique`，重複時顯示 model 已有 alias 的 destructive toast 並保留 draft row
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/src/components/settings/OpencodeSettingsPanel.vue
           - id: P1.B.t2
             text: 在 `frontend/src/components/settings/OpencodeSettingsPanel.vue` 的編輯儲存流程呼叫 `isModelAliasUnique(providerID, payload.modelID, aliasId)`，重複時顯示 model 已有 alias 的 destructive toast 並保留編輯態
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/src/components/settings/OpencodeSettingsPanel.vue
           - id: P1.B.t3
             text: 在 `frontend/src/locales/zh-TW.json`、`frontend/src/locales/en.json`、`frontend/src/locales/ja.json` 新增 alias model 重複提示文案，並在 `frontend/src/services/websocket/createWebSocketRequest.ts` 允許 `alias_model_duplicate` 後端錯誤訊息顯示給使用者
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/src/locales/zh-TW.json
+              - frontend/src/locales/en.json
+              - frontend/src/locales/ja.json
+              - frontend/src/services/websocket/createWebSocketRequest.ts
 
   - id: P2
     title: Toast 顯示位置
@@ -44,16 +52,17 @@ phases:
     verification:
       - bun run style
       - bun run test
-    done: false
+    done: true
     items:
       - id: P2.A
         title: Toast container offset
         tasks:
           - id: P2.A.t1
             text: 在 `frontend/src/components/ui/toast/Toast.vue` 將 `.toast-container` 的 top offset 改為 Header 下方位置，使用明確命名的 CSS custom property 或固定高度計算，確保 toast 不再覆蓋 Canvas 選擇
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/src/components/ui/toast/Toast.vue
           - id: P2.A.t2
             text: 檢查 `frontend/src/App.vue` 中 Toast 掛載位置不需調整，維持單一全域 Toast 元件負責顯示所有 toast
-            completed: false
+            completed: true
             last_files_changed: []

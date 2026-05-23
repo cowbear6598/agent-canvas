@@ -1,0 +1,130 @@
+feature: project-maintainability-audit
+side: backend
+approved: true
+phases:
+  - id: P1
+    title: 後端熱點盤點與服務邊界
+    parallel: false
+    verification:
+      - bun run style
+    done: false
+    items:
+      - id: P1.A
+        title: Provider 與 handler 熱點盤點
+        tasks:
+          - id: P1.A.t1
+            text: 建立後端維護性審計文件，列出 `backend/src/services/provider/opencodeProvider.ts` 的 session lifecycle、SSE event normalize、tool event collection、MCP config、plugin catalog、thinking preset、error mapping 責任邊界
+            completed: false
+            last_files_changed: []
+          - id: P1.A.t2
+            text: 在審計文件中列出 `backend/src/handlers/opencodeSettingsHandlers.ts` 的 WebSocket handler、alias CRUD、provider list sanitize、broadcast refresh、SQLite error mapping 責任邊界
+            completed: false
+            last_files_changed: []
+          - id: P1.A.t3
+            text: 替 opencode provider 與 opencode settings handler 定義目標模組名稱與搬移順序，優先搬純資料轉換與外部邊界 adapter，不改變公開 WebSocket event contract
+            completed: false
+            last_files_changed: []
+      - id: P1.B
+        title: Workflow 與 run orchestration 盤點
+        tasks:
+          - id: P1.B.t1
+            text: 建立 workflow/run execution 狀態轉移段落，覆蓋 `workflowPipeline.ts`、`runExecutionService.ts`、`workflowExecutionService.ts`、`workflowBranchTriggerService.ts` 的觸發條件、終態、錯誤回報與 summary 路徑
+            completed: false
+            last_files_changed: []
+          - id: P1.B.t2
+            text: 標記 workflow/run 模組中可抽成 domain decision 的規則，例如 trigger settlement、run queue eligibility、summary result handling、resource guard
+            completed: false
+            last_files_changed: []
+
+  - id: P2
+    title: 後端低風險拆分
+    parallel: false
+    verification:
+      - bun run style
+      - bun run test
+    done: false
+    items:
+      - id: P2.A
+        title: Opencode Provider 拆分
+        tasks:
+          - id: P2.A.t1
+            text: 從 `opencodeProvider.ts` 抽出 session lifecycle adapter，集中處理 create、resume、prompt、abort、messages 查詢，保留既有 provider 公開介面
+            completed: false
+            last_files_changed: []
+          - id: P2.A.t2
+            text: 從 `opencodeProvider.ts` 抽出 SSE event normalizer 與 tool event collector，讓串流事件轉換可以用 fake opencode stream 驗證完整流程
+            completed: false
+            last_files_changed: []
+          - id: P2.A.t3
+            text: 從 `opencodeProvider.ts` 抽出 options builder，集中處理 model、thinking preset、MCP entries、plugin catalog 與 Goal Runtime bootstrap prompt 組裝
+            completed: false
+            last_files_changed: []
+          - id: P2.A.t4
+            text: 改寫 opencode provider 測試為 fake provider stream 與 provider adapter integration 測試，刪除只驗證 SDK mock 呼叫次數的案例
+            completed: false
+            last_files_changed: []
+      - id: P2.B
+        title: Opencode Settings Handler 拆分
+        tasks:
+          - id: P2.B.t1
+            text: 從 `opencodeSettingsHandlers.ts` 抽出 alias service，集中處理 alias 建立、更新、刪除、排序、唯一性錯誤與 thinking preset snapshot
+            completed: false
+            last_files_changed: []
+          - id: P2.B.t2
+            text: 從 `opencodeSettingsHandlers.ts` 抽出 provider list service，集中處理 opencode client provider list、timeout fetch、provider/model sanitize 與錯誤訊息轉換
+            completed: false
+            last_files_changed: []
+          - id: P2.B.t3
+            text: 保留 handler 作為 WebSocket payload 轉接層，測試改用真 handler registry、測試資料庫與 fake opencode client 驗證使用者可見 response payload
+            completed: false
+            last_files_changed: []
+
+  - id: P3
+    title: 後端測試與 fallback 收斂
+    parallel: false
+    verification:
+      - bun run style
+      - bun run test
+    done: false
+    items:
+      - id: P3.A
+        title: 測試二次審核
+        tasks:
+          - id: P3.A.t1
+            text: 讀取 `backend/tests/backend-test-inventory.tsv` 並比對目前 `backend/tests` 檔案清單，標記 inventory 已過期、已刪除或新增未分類的測試檔
+            completed: false
+            last_files_changed: []
+          - id: P3.A.t2
+            text: 逐一處理仍命中 module mock、spy call count、getter/setter、資料容器 CRUD、直接 schema parse 的測試，將無產品規則者刪除，將有流程價值者改寫成 integration 或 business logic 測試
+            completed: false
+            last_files_changed: []
+          - id: P3.A.t3
+            text: 更新 `backend/TESTING.md` 或測試盤點文件，記錄本輪刪除與改寫決策，並標明每個保留測試對應的 userflow、商業規則或真外部邊界
+            completed: false
+            last_files_changed: []
+      - id: P3.B
+        title: 後端 fallback 根因修正
+        tasks:
+          - id: P3.B.t1
+            text: 盤點 `providerConfigResolver.ts`、`connectionStore.ts`、`disposableChatService.ts`、`summaryService.ts`、`workflowExecutionService.ts` 中的 model/provider fallback 與 summary fallback，區分 legacy data、外部 provider failure 與正規流程不可達狀態
+            completed: false
+            last_files_changed: []
+          - id: P3.B.t2
+            text: 將寫入路徑可保證的 provider/model 合法性改由 schema、handler validation 或 DB contract 阻擋，讀取路徑只保留明確 legacy data migration 需要的 fallback
+            completed: false
+            last_files_changed: []
+          - id: P3.B.t3
+            text: 對保留的外部 provider、filesystem、git、network fallback 補上使用者可見錯誤契約測試，測試使用 fake wrapper 或 integration harness，不直接 mock 第三方 SDK 內部行為
+            completed: false
+            last_files_changed: []
+      - id: P3.C
+        title: Workflow 狀態決策收斂
+        tasks:
+          - id: P3.C.t1
+            text: 將 workflow/run execution 的狀態決策整理成命名 helper 或 service，測試覆蓋 trigger eligibility、terminal state、summary fallback decision 與 queue settlement 規則
+            completed: false
+            last_files_changed: []
+          - id: P3.C.t2
+            text: 刪除只驗證 workflow helper emit 呼叫次數的測試，改以 WebSocket/userflow 或 domain decision 測試驗證最終事件 payload 與狀態變化
+            completed: false
+            last_files_changed: []
