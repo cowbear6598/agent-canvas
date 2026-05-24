@@ -7,13 +7,13 @@ questions:
     type: codebase-investigation
     completed: true
     answer: |
-      `backend/src/services/runtime/runExecutionResources.ts` 在有 Git repository、已有 commit、且有 origin remote 時，會為 workflow run 建立隔離 clone，路徑在 `config.repositoriesRoot` 下，名稱為 `${pod.repositoryId}-run-${runId}`。這些資料夾是 runtime workspace，不是使用者主動建立或 clone 的 repository。
+      `backend/src/services/runtime/runExecutionResources.ts` 在有 Git repository、已有 commit、且有 origin remote 時，會為 workflow run 建立隔離 clone，路徑在專用 runtime root 下，名稱由共用 helper 產生，格式為 `${pod.repositoryId}-agnet-canvas-${runId}`。這些資料夾是 runtime workspace，不是使用者主動建立或 clone 的 repository。
   - id: Q2
     text: 目前 repository 清單為什麼會包含 workflow run repo？
     type: codebase-investigation
     completed: true
     answer: |
-      `backend/src/services/repositoryService.ts` 的 `list()` 直接掃描 `config.repositoriesRoot` 底下所有 directory，沒有排除 `{repositoryId}-run-{runId}` 格式的 run repo，也沒有只採信 `repository_metadata`。`handleRepositoryList` 透過 `createListHandler` 原樣回傳這份清單，因此前端 `repositoryStore.loadRepositories()` 會收到 run repo。
+      舊實作會讓 workflow run clone 與使用者 repository 共用 `config.repositoriesRoot`，因此 `backend/src/services/repositoryService.ts` 的 `list()` 掃描所有 directory 時會把 runtime workspace 混入清單。`handleRepositoryList` 透過 `createListHandler` 原樣回傳這份清單，因此前端 `repositoryStore.loadRepositories()` 會收到 run repo。
   - id: Q3
     text: 前端右鍵 repo 相關 UI 使用哪一份 repository 清單？
     type: codebase-investigation
@@ -25,7 +25,7 @@ questions:
     type: codebase-investigation
     completed: true
     answer: |
-      應在後端 repository 清單來源排除 workflow run repo，而不是只在單一前端選單過濾。`repositoryService.list()` 是 repository:list 的共同來源，從這裡排除可同時保護 PodTypeMenu、repo note context menu、delete resource 等使用 `availableItems` 的流程。既有 `backend/src/services/runtime/orphanRunRepoScanner.ts` 已描述 `{repositoryId}-run-{anything}` 命名格式，可將判斷抽成共用 helper 或在 repository service 內使用一致規則。
+      應在後端 runtime workspace 的儲存位置切開 namespace，而不是只在單一前端選單過濾。workflow run clone 需放在專用 runtime root，讓 `repositoryService.list()` 只掃描使用者 repository root；孤兒掃描與清理則使用同一個 run repo 命名 helper 判斷 `${repositoryId}-agnet-canvas-${runId}`。
   - id: Q5
     text: 是否需要同步變更 API router 文件或 WebSocket 文件？
     type: codebase-investigation

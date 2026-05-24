@@ -1524,8 +1524,8 @@ describe("executeStreamingChat", () => {
     it("instance.runRepoPath 合法時，provider.chat 收到的 workspacePath 為 run repo 且不含舊 sandbox home 欄位", async () => {
       const pod = insertClaudePod();
       const validWorktreePath = path.join(
-        config.repositoriesRoot,
-        "some-repo-run-abc",
+        config.runRepositoriesRoot,
+        "some-repo-agnet-canvas-abc",
       );
 
       vi.spyOn(runStore, "getPodInstance").mockReturnValue({
@@ -1565,7 +1565,7 @@ describe("executeStreamingChat", () => {
       expect(capturedCtxList[0]).not.toHaveProperty(removedSandboxHomeKey);
     });
 
-    it("runRepoPath 不在 repositoriesRoot 內時，應改寫為 run transcript system message 且 provider.chat 未被呼叫", async () => {
+    it("runRepoPath 不在 runRepositoriesRoot 內時，應改寫為 run transcript system message 且 provider.chat 未被呼叫", async () => {
       const pod = insertClaudePod();
       vi.spyOn(runStore, "getPodInstance").mockReturnValue({
         runRepoPath: "/tmp/evil-path",

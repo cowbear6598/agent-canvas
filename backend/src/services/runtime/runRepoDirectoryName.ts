@@ -1,6 +1,6 @@
-export const RUN_REPO_DIRECTORY_SEPARATOR = "-agnet-canvas-";
+const RUN_REPO_DIRECTORY_SEPARATOR = "-agnet-canvas-";
 
-export interface RunRepoDirectoryNameParts {
+interface RunRepoDirectoryNameParts {
   repositoryId: string;
   runId: string;
 }

@@ -98,6 +98,27 @@ describe("runExecutionResources", () => {
     expect(result.runRepoPath).toBeNull();
   });
 
+  it("repository path 存取失敗且不是 ENOENT 時應保留原始錯誤", async () => {
+    const pod = makePod({
+      id: "pod-repo-access-error",
+      repositoryId: "repo-access-error",
+      workspacePath: "/tmp/ignored",
+    });
+    const accessError = Object.assign(new Error("permission denied"), {
+      code: "EACCES",
+    });
+
+    vi.spyOn(fs, "access").mockRejectedValue(accessError);
+
+    await expect(
+      provisionRunExecutionResources({
+        pod,
+        runId: "run-access-error",
+        runRepoCache: new Map(),
+      }),
+    ).rejects.toThrow("permission denied");
+  });
+
   it("repo pod 沒有任何 commit 時，應直接重用原始 repository cwd", async () => {
     const pod = makePod({
       id: "pod-repo-empty",
@@ -113,6 +134,10 @@ describe("runExecutionResources", () => {
     vi.spyOn(gitService, "hasCommits").mockResolvedValue({
       success: true,
       data: false,
+    } as any);
+    vi.spyOn(gitService, "hasOriginRemote").mockResolvedValue({
+      success: true,
+      data: true,
     } as any);
 
     const result = await provisionRunExecutionResources({
@@ -269,7 +294,7 @@ describe("runExecutionResources", () => {
     });
 
     const expectedRunRepoPath = path.join(
-      config.repositoriesRoot,
+      config.runRepositoriesRoot,
       `repo-clone-agnet-canvas-${runId}`,
     );
     expect(createLocalCloneSpy).toHaveBeenCalledWith(

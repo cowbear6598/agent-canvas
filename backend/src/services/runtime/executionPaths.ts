@@ -34,9 +34,11 @@ function resolveRunWorkspacePath(pod: Pod, runContext: RunContext): string {
 
   if (instance?.workspacePath) {
     const resolvedWorkspace = path.resolve(instance.workspacePath);
-    const allowedRoots = [config.repositoriesRoot, config.canvasRoot].map(
-      (root) => path.resolve(root),
-    );
+    const allowedRoots = [
+      config.repositoriesRoot,
+      config.runRepositoriesRoot,
+      config.canvasRoot,
+    ].map((root) => path.resolve(root));
 
     if (
       !allowedRoots.some((root) =>
@@ -55,7 +57,7 @@ function resolveRunWorkspacePath(pod: Pod, runContext: RunContext): string {
   }
 
   if (instance?.runRepoPath) {
-    return resolveWithinRoot(instance.runRepoPath, config.repositoriesRoot);
+    return resolveWithinRoot(instance.runRepoPath, config.runRepositoriesRoot);
   }
 
   return resolvePodCwd(pod);

@@ -97,7 +97,7 @@ describe("Repository 管理", () => {
       const name = `list-visible-repo-${uuidv4()}`;
       await createRepository(client, name);
       const runRepositoryName = `${name}-agnet-canvas-${uuidv4()}`;
-      await fs.mkdir(path.join(config.repositoriesRoot, runRepositoryName), {
+      await fs.mkdir(path.join(config.runRepositoriesRoot, runRepositoryName), {
         recursive: true,
       });
 

@@ -52,6 +52,7 @@ export interface TestConfig {
   appDataRoot: string;
   canvasRoot: string;
   repositoriesRoot: string;
+  runRepositoriesRoot: string;
   pluginsRoot: string;
   tmpRoot: string;
   stagingRoot: string;
@@ -78,6 +79,7 @@ export const testConfig: TestConfig = {
   appDataRoot: testRoot,
   canvasRoot: path.join(testRoot, "canvas"),
   repositoriesRoot: path.join(testRoot, "repositories"),
+  runRepositoriesRoot: path.join(testRoot, "runtime", "run-repositories"),
   pluginsRoot: path.join(testRoot, "plugins"),
   tmpRoot: path.join(testRoot, "tmp"),
   stagingRoot: path.join(testRoot, "tmp", "staging"),

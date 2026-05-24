@@ -31,8 +31,16 @@ async function pathExists(targetPath: string): Promise<boolean> {
   try {
     await fs.access(targetPath);
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      error.code === "ENOENT"
+    ) {
+      return false;
+    }
+    throw error;
   }
 }
 
@@ -78,7 +86,10 @@ async function provisionRepositoryWorkspace(
     return provisioned;
   }
 
-  const hasCommitsResult = await gitService.hasCommits(sourceRepoPath);
+  const [hasCommitsResult, hasOriginResult] = await Promise.all([
+    gitService.hasCommits(sourceRepoPath),
+    gitService.hasOriginRemote(sourceRepoPath),
+  ]);
   if (!hasCommitsResult.success) {
     throw new Error(
       `檢查 repository commit 狀態失敗：${getResultErrorString(hasCommitsResult.error)}`,
@@ -90,7 +101,6 @@ async function provisionRepositoryWorkspace(
     return provisioned;
   }
 
-  const hasOriginResult = await gitService.hasOriginRemote(sourceRepoPath);
   if (!hasOriginResult.success) {
     throw new Error(
       `檢查 origin remote 失敗：${getResultErrorString(hasOriginResult.error)}`,
@@ -110,9 +120,10 @@ async function provisionRepositoryWorkspace(
   }
 
   const runRepoPath = path.join(
-    config.repositoriesRoot,
+    config.runRepositoriesRoot,
     buildRunRepoDirectoryName(pod.repositoryId, runId),
   );
+  await fs.mkdir(config.runRepositoriesRoot, { recursive: true });
   const createResult = await gitService.createLocalClone(
     sourceRepoPath,
     runRepoPath,

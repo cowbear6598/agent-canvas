@@ -5,7 +5,6 @@ import { isPathWithinDirectory } from "../utils/pathValidator.js";
 import { directoryExists } from "./shared/fileResourceHelpers.js";
 import { getDb } from "../database/index.js";
 import { getStatements } from "../database/statements.js";
-import { isRunRepoDirectoryName } from "./runtime/runRepoDirectoryName.js";
 
 interface RepositoryMetadataRow {
   id: string;
@@ -51,7 +50,6 @@ class RepositoryService {
 
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
-      if (isRunRepoDirectoryName(entry.name)) continue;
 
       const row = metadataMap.get(entry.name) ?? null;
       repositories.push({

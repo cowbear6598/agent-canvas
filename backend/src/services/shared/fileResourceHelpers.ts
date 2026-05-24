@@ -35,7 +35,7 @@ export async function copyResourceFile(srcPath: string, destBasePath: string, su
 }
 
 export async function deleteResourceDirFromPath(basePath: string, subDir: string): Promise<void> {
-    if (!isPathWithinDirectory(basePath, config.canvasRoot) && !isPathWithinDirectory(basePath, config.repositoriesRoot)) {
+    if (!isPathWithinDirectory(basePath, config.canvasRoot) && !isPathWithinDirectory(basePath, config.repositoriesRoot) && !isPathWithinDirectory(basePath, config.runRepositoriesRoot)) {
         throw new Error('無效的路徑');
     }
 

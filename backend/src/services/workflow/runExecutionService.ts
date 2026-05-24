@@ -683,7 +683,7 @@ class RunExecutionService {
     if (
       !isPathWithinDirectory(
         path.resolve(dirPath),
-        path.resolve(config.repositoriesRoot),
+        path.resolve(config.runRepositoriesRoot),
       )
     ) {
       logger.warn(

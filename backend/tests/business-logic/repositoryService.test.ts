@@ -9,13 +9,14 @@ import { repositoryService } from "../../src/services/repositoryService.js";
 describe("repositoryService（worktree 概念移除後的最小行為）", () => {
   beforeEach(async () => {
     await fs.mkdir(config.repositoriesRoot, { recursive: true });
+    await fs.mkdir(config.runRepositoriesRoot, { recursive: true });
   });
 
   afterEach(async () => {
-    await fs
-      .rm(config.repositoriesRoot, { recursive: true, force: true })
-      .catch(() => undefined);
+    await fs.rm(config.repositoriesRoot, { recursive: true, force: true });
+    await fs.rm(config.runRepositoriesRoot, { recursive: true, force: true });
     await fs.mkdir(config.repositoriesRoot, { recursive: true });
+    await fs.mkdir(config.runRepositoriesRoot, { recursive: true });
   });
 
   it("create 後可在 list 中看到該 repository（不含 parentRepoId / branchName 欄位）", async () => {
@@ -29,16 +30,27 @@ describe("repositoryService（worktree 概念移除後的最小行為）", () =>
     const found = list.find((r) => r.id === name);
     expect(found).toBeDefined();
     expect(found!.name).toBe(name);
-    // 確保已移除的欄位不再出現於回傳結構
     expect("parentRepoId" in (found as Record<string, unknown>)).toBe(false);
     expect("branchName" in (found as Record<string, unknown>)).toBe(false);
   });
 
-  it("list 應排除 workflow run repo 目錄", async () => {
+  it("list 應保留名稱類似 workflow run repo 的使用者 repository", async () => {
     const repositoryId = `repo-list-${Date.now()}`;
+    await repositoryService.create(repositoryId);
+    const similarRepositoryId = `${repositoryId}-agnet-canvas-run-1`;
+    await repositoryService.create(similarRepositoryId);
+
+    const list = await repositoryService.list();
+
+    expect(list.map((r) => r.id)).toContain(repositoryId);
+    expect(list.map((r) => r.id)).toContain(similarRepositoryId);
+  });
+
+  it("list 不應回傳獨立 runtime root 內的 workflow run repo", async () => {
+    const repositoryId = `repo-visible-${Date.now()}`;
     const runRepositoryId = `${repositoryId}-agnet-canvas-run-1`;
     await repositoryService.create(repositoryId);
-    await fs.mkdir(path.join(config.repositoriesRoot, runRepositoryId), {
+    await fs.mkdir(path.join(config.runRepositoriesRoot, runRepositoryId), {
       recursive: true,
     });
 

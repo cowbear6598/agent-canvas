@@ -243,7 +243,7 @@ class GitService {
     sourceRepoPath: string,
     runDir: string,
   ): Promise<Result<void>> {
-    if (!isPathWithinDirectory(runDir, config.repositoriesRoot)) {
+    if (!isPathWithinDirectory(runDir, config.runRepositoriesRoot)) {
       return err("runDir 路徑不在允許的範圍內");
     }
 

@@ -14,6 +14,7 @@ beforeAll(async () => {
     await mkdir(testConfig.appDataRoot, { recursive: true });
     await mkdir(testConfig.canvasRoot, { recursive: true });
     await mkdir(testConfig.repositoriesRoot, { recursive: true });
+    await mkdir(testConfig.runRepositoriesRoot, { recursive: true });
     await mkdir(testConfig.tmpRoot, { recursive: true });
     await mkdir(testConfig.stagingRoot, { recursive: true });
     await mkdir(testConfig.skillsPath, { recursive: true });

@@ -26,6 +26,7 @@ interface Config {
   appDataRoot: string;
   canvasRoot: string;
   repositoriesRoot: string;
+  runRepositoriesRoot: string;
   pluginsRoot: string;
   /**
    * 暫存檔案根目錄（拖曳上傳的附件先落地於此，6h 後由 tmpCleanupService 清除）
@@ -128,6 +129,7 @@ function loadConfig(): Config {
   const appDataRoot = dataRoot;
   const canvasRoot = path.join(dataRoot, "canvas");
   const repositoriesRoot = path.join(dataRoot, "repositories");
+  const runRepositoriesRoot = path.join(dataRoot, "runtime", "run-repositories");
   const pluginsRoot = path.join(dataRoot, "plugins");
   const agentsPath = path.join(dataRoot, "agents");
   const commandsPath = path.join(dataRoot, "commands");
@@ -146,6 +148,7 @@ function loadConfig(): Config {
     appDataRoot,
     canvasRoot,
     repositoriesRoot,
+    runRepositoriesRoot,
     pluginsRoot,
     tmpRoot,
     stagingRoot,

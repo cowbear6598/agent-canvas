@@ -23,6 +23,7 @@ class StartupService {
       config.appDataRoot,
       config.canvasRoot,
       config.repositoriesRoot,
+      config.runRepositoriesRoot,
     ]);
     if (!dirResult.success) {
       return dirResult;

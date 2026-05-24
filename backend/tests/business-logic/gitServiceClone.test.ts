@@ -47,9 +47,9 @@ describe("GitService — createLocalClone（成功流程）", () => {
       os.tmpdir(),
       `clone-source-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     );
-    // runDir 必須在 config.repositoriesRoot 內，才能通過安全檢查
+    // runDir 必須在 config.runRepositoriesRoot 內，才能通過安全檢查
     runDir = path.join(
-      config.repositoriesRoot,
+      config.runRepositoriesRoot,
       `run-clone-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     );
 
@@ -66,8 +66,8 @@ describe("GitService — createLocalClone（成功流程）", () => {
     await $`git -C ${sourceRepoDir} remote add origin ${bareRemoteDir}`.quiet();
     await $`git -C ${sourceRepoDir} push -u origin HEAD`.quiet();
 
-    // 確保 runDir 父目錄存在（config.repositoriesRoot 由 testConfig.ts 指向 tmpdir 子目錄）
-    await fs.mkdir(config.repositoriesRoot, { recursive: true });
+    // 確保 runDir 父目錄存在（config.runRepositoriesRoot 由 testConfig.ts 指向 tmpdir 子目錄）
+    await fs.mkdir(config.runRepositoriesRoot, { recursive: true });
   });
 
   afterEach(async () => {
@@ -104,10 +104,10 @@ describe("GitService — createLocalClone（成功流程）", () => {
   });
 });
 
-// ─── 安全檢查：runDir 不在 repositoriesRoot 內 ────────────────────────────
+// ─── 安全檢查：runDir 不在 runRepositoriesRoot 內 ─────────────────────────
 
 describe("GitService — createLocalClone（安全檢查）", () => {
-  it("runDir 位於 config.repositoriesRoot 之外時應回傳 err", async () => {
+  it("runDir 位於 config.runRepositoriesRoot 之外時應回傳 err", async () => {
     const outsideRunDir = path.join(os.tmpdir(), `outside-run-${Date.now()}`);
 
     const result = await gitService.createLocalClone(

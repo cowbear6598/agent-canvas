@@ -1,14 +1,3 @@
-vi.mock("../../src/services/runStore.js", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("../../src/services/runStore.js")>();
-  return {
-    ...actual,
-    runStore: {
-      getRunningRuns: vi.fn(),
-    },
-  };
-});
-
 vi.mock("../../src/utils/logger.js", () => ({
   logger: {
     log: vi.fn(),
@@ -25,72 +14,63 @@ import { scanAndLogOrphanRunRepoDirectories } from "../../src/services/runtime/o
 import { runStore } from "../../src/services/runStore.js";
 import { logger } from "../../src/utils/logger.js";
 import { config } from "../../src/config/index.js";
+import { initTestDb, getDb } from "../../src/database/index.js";
+import { resetStatements } from "../../src/database/statements.js";
 
-const mockGetRunningRuns = vi.mocked(runStore.getRunningRuns);
 const mockWarn = vi.mocked(logger.warn);
+const CANVAS_ID = "canvas-orphan-scan";
+const SOURCE_POD_ID = "pod-orphan-source";
 
 describe("scanAndLogOrphanRunRepoDirectories", () => {
   let tmpDir: string;
-  let originalRepositoriesRoot: string;
+  let originalRunRepositoriesRoot: string;
 
   beforeEach(async () => {
-    // 建立暫存目錄作為 config.repositoriesRoot
     tmpDir = path.join(
       os.tmpdir(),
       `orphan-scan-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     );
     await fs.mkdir(tmpDir, { recursive: true });
 
-    // 儲存並替換 config.repositoriesRoot
-    originalRepositoriesRoot = config.repositoriesRoot;
-    Object.assign(config, { repositoriesRoot: tmpDir });
+    originalRunRepositoriesRoot = config.runRepositoriesRoot;
+    Object.assign(config, { runRepositoriesRoot: tmpDir });
 
+    resetStatements();
+    initTestDb();
+    getDb()
+      .prepare(
+        "INSERT OR IGNORE INTO canvases (id, name, sort_index) VALUES (?, ?, ?)",
+      )
+      .run(CANVAS_ID, CANVAS_ID, 0);
     vi.clearAllMocks();
   });
 
   afterEach(async () => {
-    // 還原 config.repositoriesRoot
-    Object.assign(config, { repositoriesRoot: originalRepositoriesRoot });
+    Object.assign(config, { runRepositoriesRoot: originalRunRepositoriesRoot });
 
-    // 清理暫存目錄
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
 
   it("存在兩個符合命名的目錄，getRunningRuns 只回傳其中一個 runId → 只 warn 另一個為孤兒", async () => {
-    // 建立兩個符合命名格式的資料夾
-    await fs.mkdir(path.join(tmpDir, "repo1-agnet-canvas-aaa"));
-    await fs.mkdir(path.join(tmpDir, "repo1-agnet-canvas-bbb"));
-
-    // runStore 只回傳 runId 為 aaa 的 run
-    mockGetRunningRuns.mockReturnValue([
-      {
-        id: "aaa",
-        canvasId: "canvas-1",
-        sourcePodId: "pod-1",
-        triggerMessage: "test",
-        status: "running",
-        createdAt: new Date().toISOString(),
-        completedAt: null,
-      },
-    ]);
+    const runningRun = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "test");
+    const completedRun = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "done");
+    runStore.updateRunStatus(completedRun.id, "completed");
+    await fs.mkdir(path.join(tmpDir, `repo1-agnet-canvas-${runningRun.id}`));
+    await fs.mkdir(path.join(tmpDir, `repo1-agnet-canvas-${completedRun.id}`));
 
     await scanAndLogOrphanRunRepoDirectories();
 
-    // 應只對 bbb 發出 warn
     expect(mockWarn).toHaveBeenCalledTimes(1);
     expect(mockWarn).toHaveBeenCalledWith(
       "Run",
       "Orphan",
-      `偵測到孤兒 run 隔離目錄：${path.join(tmpDir, "repo1-agnet-canvas-bbb")}`,
+      `偵測到孤兒 run 隔離目錄：${path.join(tmpDir, `repo1-agnet-canvas-${completedRun.id}`)}`,
     );
   });
 
   it("目錄內沒有任何符合命名格式的資料夾 → 完全不 warn", async () => {
-    // 建立不符合命名的資料夾
     await fs.mkdir(path.join(tmpDir, "repo1"));
     await fs.mkdir(path.join(tmpDir, "some-random-folder"));
-
-    mockGetRunningRuns.mockReturnValue([]);
 
     await scanAndLogOrphanRunRepoDirectories();
 
@@ -102,8 +82,6 @@ describe("scanAndLogOrphanRunRepoDirectories", () => {
     await fs.mkdir(path.join(tmpDir, "some-random-folder"));
     await fs.mkdir(path.join(tmpDir, "norun-here"));
 
-    mockGetRunningRuns.mockReturnValue([]);
-
     await scanAndLogOrphanRunRepoDirectories();
 
     expect(mockWarn).not.toHaveBeenCalled();
@@ -112,8 +90,6 @@ describe("scanAndLogOrphanRunRepoDirectories", () => {
   it("run repo 命名的 repositoryId 或 runId 不完整時 → 完全不 warn", async () => {
     await fs.mkdir(path.join(tmpDir, "repo-agnet-canvas-"));
     await fs.mkdir(path.join(tmpDir, "-agnet-canvas-id"));
-
-    mockGetRunningRuns.mockReturnValue([]);
 
     await scanAndLogOrphanRunRepoDirectories();
 
