@@ -1,4 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
+import { promises as fs } from "fs";
+import path from "path";
 import { emitAndWaitResponse, setupIntegrationTest } from "../setup";
 import {
   createPod,
@@ -30,6 +32,7 @@ import {
   type RepositoryNoteCreatedPayload,
   type RepositoryCheckGitResultPayload,
 } from "../../src/types";
+import { config } from "../../src/config/index.js";
 
 describe("Repository 管理", () => {
   const { getServer, getClient } = setupIntegrationTest();
@@ -87,6 +90,32 @@ describe("Repository 管理", () => {
       expect(response.success).toBe(true);
       const names = response.repositories!.map((r) => r.name);
       expect(names).toContain(name);
+    });
+
+    it("不回傳 workflow run repo", async () => {
+      const client = getClient();
+      const name = `list-visible-repo-${uuidv4()}`;
+      await createRepository(client, name);
+      const runRepositoryName = `${name}-agnet-canvas-${uuidv4()}`;
+      await fs.mkdir(path.join(config.repositoriesRoot, runRepositoryName), {
+        recursive: true,
+      });
+
+      const canvasId = await getCanvasId(client);
+      const response = await emitAndWaitResponse<
+        RepositoryListPayload,
+        RepositoryListResultPayload
+      >(
+        client,
+        WebSocketRequestEvents.REPOSITORY_LIST,
+        WebSocketResponseEvents.REPOSITORY_LIST_RESULT,
+        { requestId: uuidv4(), canvasId },
+      );
+
+      expect(response.success).toBe(true);
+      const names = response.repositories!.map((r) => r.name);
+      expect(names).toContain(name);
+      expect(names).not.toContain(runRepositoryName);
     });
   });
 

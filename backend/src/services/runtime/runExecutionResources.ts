@@ -6,6 +6,7 @@ import type { Pod } from "../../types/pod.js";
 import { logger } from "../../utils/logger.js";
 import { getResultErrorString } from "../../types/result.js";
 import { gitService } from "../workspace/gitService.js";
+import { buildRunRepoDirectoryName } from "./runRepoDirectoryName.js";
 
 export interface ProvisionedRunExecutionResources {
   workspacePath: string;
@@ -110,7 +111,7 @@ async function provisionRepositoryWorkspace(
 
   const runRepoPath = path.join(
     config.repositoriesRoot,
-    `${pod.repositoryId}-run-${runId}`,
+    buildRunRepoDirectoryName(pod.repositoryId, runId),
   );
   const createResult = await gitService.createLocalClone(
     sourceRepoPath,

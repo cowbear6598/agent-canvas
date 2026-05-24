@@ -34,6 +34,20 @@ describe("repositoryService（worktree 概念移除後的最小行為）", () =>
     expect("branchName" in (found as Record<string, unknown>)).toBe(false);
   });
 
+  it("list 應排除 workflow run repo 目錄", async () => {
+    const repositoryId = `repo-list-${Date.now()}`;
+    const runRepositoryId = `${repositoryId}-agnet-canvas-run-1`;
+    await repositoryService.create(repositoryId);
+    await fs.mkdir(path.join(config.repositoriesRoot, runRepositoryId), {
+      recursive: true,
+    });
+
+    const list = await repositoryService.list();
+
+    expect(list.map((r) => r.id)).toContain(repositoryId);
+    expect(list.map((r) => r.id)).not.toContain(runRepositoryId);
+  });
+
   it("registerMetadata 後 getMetadata 應只回傳 currentBranch 欄位", async () => {
     const name = `repo-meta-${Date.now()}`;
     await repositoryService.create(name);

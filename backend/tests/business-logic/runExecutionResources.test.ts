@@ -229,4 +229,54 @@ describe("runExecutionResources", () => {
       }),
     ).rejects.toThrow("同步 remote 最新版本失敗");
   });
+
+  it("repo pod 建立 run repo clone 時應使用專用 agnet-canvas 目錄命名", async () => {
+    const pod = makePod({
+      id: "pod-repo-clone",
+      repositoryId: "repo-clone",
+      workspacePath: "/tmp/ignored",
+    });
+    const runId = "run-clone-1";
+
+    vi.spyOn(fs, "access").mockResolvedValue(undefined);
+    vi.spyOn(gitService, "isGitRepository").mockResolvedValue({
+      success: true,
+      data: true,
+    } as any);
+    vi.spyOn(gitService, "hasCommits").mockResolvedValue({
+      success: true,
+      data: true,
+    } as any);
+    vi.spyOn(gitService, "hasOriginRemote").mockResolvedValue({
+      success: true,
+      data: true,
+    } as any);
+    vi.spyOn(gitService, "syncToRemoteLatest").mockResolvedValue({
+      success: true,
+      data: undefined,
+    } as any);
+    const createLocalCloneSpy = vi
+      .spyOn(gitService, "createLocalClone")
+      .mockResolvedValue({
+        success: true,
+        data: undefined,
+      } as any);
+
+    const result = await provisionRunExecutionResources({
+      pod,
+      runId,
+      runRepoCache: new Map(),
+    });
+
+    const expectedRunRepoPath = path.join(
+      config.repositoriesRoot,
+      `repo-clone-agnet-canvas-${runId}`,
+    );
+    expect(createLocalCloneSpy).toHaveBeenCalledWith(
+      path.resolve(path.join(config.repositoriesRoot, "repo-clone")),
+      expectedRunRepoPath,
+    );
+    expect(result.workspacePath).toBe(expectedRunRepoPath);
+    expect(result.runRepoPath).toBe(expectedRunRepoPath);
+  });
 });

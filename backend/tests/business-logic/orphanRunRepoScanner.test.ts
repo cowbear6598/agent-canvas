@@ -58,8 +58,8 @@ describe("scanAndLogOrphanRunRepoDirectories", () => {
 
   it("存在兩個符合命名的目錄，getRunningRuns 只回傳其中一個 runId → 只 warn 另一個為孤兒", async () => {
     // 建立兩個符合命名格式的資料夾
-    await fs.mkdir(path.join(tmpDir, "repo1-run-aaa"));
-    await fs.mkdir(path.join(tmpDir, "repo1-run-bbb"));
+    await fs.mkdir(path.join(tmpDir, "repo1-agnet-canvas-aaa"));
+    await fs.mkdir(path.join(tmpDir, "repo1-agnet-canvas-bbb"));
 
     // runStore 只回傳 runId 為 aaa 的 run
     mockGetRunningRuns.mockReturnValue([
@@ -81,7 +81,7 @@ describe("scanAndLogOrphanRunRepoDirectories", () => {
     expect(mockWarn).toHaveBeenCalledWith(
       "Run",
       "Orphan",
-      `偵測到孤兒 run 隔離目錄：${path.join(tmpDir, "repo1-run-bbb")}`,
+      `偵測到孤兒 run 隔離目錄：${path.join(tmpDir, "repo1-agnet-canvas-bbb")}`,
     );
   });
 
@@ -101,6 +101,17 @@ describe("scanAndLogOrphanRunRepoDirectories", () => {
     await fs.mkdir(path.join(tmpDir, "repo1"));
     await fs.mkdir(path.join(tmpDir, "some-random-folder"));
     await fs.mkdir(path.join(tmpDir, "norun-here"));
+
+    mockGetRunningRuns.mockReturnValue([]);
+
+    await scanAndLogOrphanRunRepoDirectories();
+
+    expect(mockWarn).not.toHaveBeenCalled();
+  });
+
+  it("run repo 命名的 repositoryId 或 runId 不完整時 → 完全不 warn", async () => {
+    await fs.mkdir(path.join(tmpDir, "repo-agnet-canvas-"));
+    await fs.mkdir(path.join(tmpDir, "-agnet-canvas-id"));
 
     mockGetRunningRuns.mockReturnValue([]);
 

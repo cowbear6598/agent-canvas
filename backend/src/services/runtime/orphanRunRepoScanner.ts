@@ -3,9 +3,10 @@ import path from "path";
 import { config } from "../../config/index.js";
 import { runStore } from "../runStore.js";
 import { logger } from "../../utils/logger.js";
+import { parseRunRepoDirectoryName } from "./runRepoDirectoryName.js";
 
 /**
- * 掃描 repositoriesRoot 內符合 `{repositoryId}-run-{anything}` 命名的資料夾，
+ * 掃描 repositoriesRoot 內符合 `{repositoryId}-agnet-canvas-{anything}` 命名的資料夾，
  * 若其 runId 部分不在目前 active run 清單中，則記錄 warn 日誌。
  *
  * 不執行任何刪除動作，僅做日誌紀錄。
@@ -21,26 +22,16 @@ export async function scanAndLogOrphanRunRepoDirectories(): Promise<void> {
     return;
   }
 
-  // 命名格式：{repositoryId}-run-{runId}
-  // repositoryId 本身不含 "-run-"，因此從最後一個 "-run-" 切割
-  const RUN_SEPARATOR = "-run-";
-
   const activeRunIds = new Set(runStore.getRunningRuns().map((run) => run.id));
 
   for (const entry of entries) {
-    const sepIndex = entry.lastIndexOf(RUN_SEPARATOR);
-    if (sepIndex === -1) {
-      // 命名不符合 {repositoryId}-run-{anything} 格式，略過
+    const parsedName = parseRunRepoDirectoryName(entry);
+    if (!parsedName) {
+      // 命名不符合 {repositoryId}-agnet-canvas-{anything} 格式，略過
       continue;
     }
 
-    const runId = entry.slice(sepIndex + RUN_SEPARATOR.length);
-    if (!runId) {
-      // "-run-" 之後為空，略過
-      continue;
-    }
-
-    if (!activeRunIds.has(runId)) {
+    if (!activeRunIds.has(parsedName.runId)) {
       const dirPath = path.join(rootDir, entry);
       logger.warn("Run", "Orphan", `偵測到孤兒 run 隔離目錄：${dirPath}`);
     }

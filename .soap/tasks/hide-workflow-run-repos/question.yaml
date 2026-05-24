@@ -1,0 +1,34 @@
+feature: hide-workflow-run-repos
+created: "2026-05-23"
+approved: true
+questions:
+  - id: Q1
+    text: workflow 執行產生的 repo 是在哪裡建立，命名規則是什麼？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      `backend/src/services/runtime/runExecutionResources.ts` 在有 Git repository、已有 commit、且有 origin remote 時，會為 workflow run 建立隔離 clone，路徑在 `config.repositoriesRoot` 下，名稱為 `${pod.repositoryId}-run-${runId}`。這些資料夾是 runtime workspace，不是使用者主動建立或 clone 的 repository。
+  - id: Q2
+    text: 目前 repository 清單為什麼會包含 workflow run repo？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      `backend/src/services/repositoryService.ts` 的 `list()` 直接掃描 `config.repositoriesRoot` 底下所有 directory，沒有排除 `{repositoryId}-run-{runId}` 格式的 run repo，也沒有只採信 `repository_metadata`。`handleRepositoryList` 透過 `createListHandler` 原樣回傳這份清單，因此前端 `repositoryStore.loadRepositories()` 會收到 run repo。
+  - id: Q3
+    text: 前端右鍵 repo 相關 UI 使用哪一份 repository 清單？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      右鍵 canvas 開啟的 `PodTypeMenu.vue` 會在 mounted 時呼叫 `repositoryStore.loadRepositories()`，並用 `repositoryStore.typedAvailableItems` 顯示 Repository 子選單。repo note 的右鍵選單 `RepositoryContextMenu.vue` 則依 note.repositoryId 從同一份 `typedAvailableItems` 找 repository。只要後端清單被 run repo 污染，使用者就可能在右鍵 Repository 子選單建立 run repo note，後續也會看到這些 run repo 的 repo 右鍵操作。
+  - id: Q4
+    text: 應該在哪一層排除 workflow run repo，才能避免污染所有 repository 使用場景？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      應在後端 repository 清單來源排除 workflow run repo，而不是只在單一前端選單過濾。`repositoryService.list()` 是 repository:list 的共同來源，從這裡排除可同時保護 PodTypeMenu、repo note context menu、delete resource 等使用 `availableItems` 的流程。既有 `backend/src/services/runtime/orphanRunRepoScanner.ts` 已描述 `{repositoryId}-run-{anything}` 命名格式，可將判斷抽成共用 helper 或在 repository service 內使用一致規則。
+  - id: Q5
+    text: 是否需要同步變更 API router 文件或 WebSocket 文件？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      這次需求預期只調整既有 WebSocket `repository:list` 回傳內容的過濾邏輯，不新增、更新或刪除 API Router。AGENTS.md 指定 WebSocket 不需要更新後端 API 文件，因此不需要同步專案 skill 的 API 文件。

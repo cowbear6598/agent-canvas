@@ -33,7 +33,7 @@
 # 特別注意
 
 - 不需要執行 `bun run dev` 指令，我這邊都會常駐開啟
-- `bun run test` 可以確認測試有沒有壞掉而不是 `bun test`
-- `bun run style` 可以確認 eslint 以及 type
+- 前後端 `bun run test` 可以確認測試有沒有壞掉而不是 `bun test`
+- 前後端 `bun run style` 可以確認 eslint 以及 type
 - 如果你有改動到任何後端程式碼，請告訴我要重啟
 - 錯誤訊息/註解內容，都使用 zh-TW 撰寫
