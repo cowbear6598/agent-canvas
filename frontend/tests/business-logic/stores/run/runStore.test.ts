@@ -763,7 +763,7 @@ describe("runStore", () => {
 
       mockCreateWebSocketRequest.mockResolvedValueOnce({
         success: true,
-        messages: [],
+        timelineItems: [],
       });
 
       await store.openRunChatModal("run-1", "pod-1");
@@ -779,7 +779,7 @@ describe("runStore", () => {
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
 
-      const messages = [
+      const timelineItems = [
         {
           id: "msg-1",
           role: "user",
@@ -789,7 +789,7 @@ describe("runStore", () => {
       ];
       mockCreateWebSocketRequest.mockResolvedValueOnce({
         success: true,
-        messages,
+        timelineItems,
         pageInfo: {
           hasMore: true,
           nextCursor: {
@@ -874,7 +874,7 @@ describe("runStore", () => {
 
       mockCreateWebSocketRequest.mockResolvedValueOnce({
         success: true,
-        messages: [],
+        timelineItems: [],
       });
 
       await store.openRunChatModal("run-1", "pod-1");
@@ -897,17 +897,14 @@ describe("runStore", () => {
       expect(mockCreateWebSocketRequest).not.toHaveBeenCalled();
     });
 
-    it("WebSocket 請求拋出錯誤時應確保 isLoadingPodMessages 被重設為 false", async () => {
+    it("WebSocket 請求拋出錯誤時應顯示錯誤並重設 loading", async () => {
       const store = useRunStore();
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
 
       mockCreateWebSocketRequest.mockRejectedValueOnce(new Error("請求超時"));
 
-      // try-finally 會重新拋出錯誤，但 finally 確保 isLoadingPodMessages 一定被重設
-      await expect(store.openRunChatModal("run-1", "pod-1")).rejects.toThrow(
-        "請求超時",
-      );
+      await store.openRunChatModal("run-1", "pod-1");
       expect(store.isLoadingPodMessages).toBe(false);
     });
 
@@ -919,7 +916,7 @@ describe("runStore", () => {
       let resolveRequest:
         | ((value: {
             success: boolean;
-            messages: Array<{
+            timelineItems: Array<{
               id: string;
               role: "assistant";
               content: string;
@@ -929,7 +926,7 @@ describe("runStore", () => {
         | undefined;
       const pendingRequest = new Promise<{
         success: boolean;
-        messages: Array<{
+        timelineItems: Array<{
           id: string;
           role: "assistant";
           content: string;
@@ -952,7 +949,7 @@ describe("runStore", () => {
 
       resolveRequest?.({
         success: true,
-        messages: [
+        timelineItems: [
           {
             id: "msg-old",
             role: "assistant",
@@ -1040,7 +1037,7 @@ describe("runStore", () => {
 
       mockCreateWebSocketRequest.mockResolvedValueOnce({
         success: true,
-        messages: [
+        timelineItems: [
           {
             id: "msg-1",
             role: "assistant",
@@ -1213,6 +1210,35 @@ describe("runStore", () => {
       const messages = getPodMessages(store, "run-1", "pod-1");
       expect(messages).toHaveLength(1);
       expect(messages?.[0]?.content).toBe("Hello world");
+    });
+
+    it("收到 delta payload 時應直接追加而不是從完整內容回推差異", () => {
+      const store = useRunStore();
+
+      store.appendRunChatMessage(
+        "run-1",
+        "pod-1",
+        "msg-1",
+        "Hel",
+        true,
+        "assistant",
+        undefined,
+        "Hel",
+      );
+      store.appendRunChatMessage(
+        "run-1",
+        "pod-1",
+        "msg-1",
+        "",
+        true,
+        "assistant",
+        undefined,
+        "lo",
+      );
+
+      const messages = getPodMessages(store, "run-1", "pod-1");
+      expect(messages?.[0]?.content).toBe("Hello");
+      expect(messages?.[0]?.subMessages?.[0]?.content).toBe("Hello");
     });
 
     it("每次呼叫都應產生新的陣列引用以觸發 Vue 響應性", () => {
@@ -1856,7 +1882,7 @@ describe("runStore", () => {
 
       mockCreateWebSocketRequest.mockResolvedValueOnce({
         success: true,
-        messages: [
+        timelineItems: [
           {
             id: "msg-1",
             role: "assistant",
@@ -1881,7 +1907,7 @@ describe("runStore", () => {
 
       mockCreateWebSocketRequest.mockResolvedValueOnce({
         success: true,
-        messages: [
+        timelineItems: [
           {
             id: "msg-1",
             role: "assistant",
@@ -1920,7 +1946,7 @@ describe("runStore", () => {
 
       mockCreateWebSocketRequest.mockResolvedValueOnce({
         success: true,
-        messages: [
+        timelineItems: [
           {
             id: "msg-1",
             role: "assistant",

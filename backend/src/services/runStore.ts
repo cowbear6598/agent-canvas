@@ -166,6 +166,37 @@ interface RunGoalRoundDividerRow {
   connection_ids_json: string;
 }
 
+interface RunTimelineItemRow {
+  item_type: "message" | "goal-round-divider";
+  kind_order: number;
+  id: string;
+  run_id: string;
+  pod_id: string;
+  role: string | null;
+  content: string | null;
+  item_timestamp: string;
+  sub_messages_json: string | null;
+  metadata_json: string | null;
+  source_pod_ids_json: string | null;
+  source_pod_names_json: string | null;
+  status: string | null;
+  blocked_reason: string | null;
+  connection_ids_json: string | null;
+}
+
+function parseRequiredJsonArray<T>(raw: string | null, column: string): T[] {
+  if (raw === null) {
+    throw new Error(`Run timeline 資料毀損：${column} 不可為空`);
+  }
+
+  const parsed = safeJsonParse<T[]>(raw);
+  if (!Array.isArray(parsed)) {
+    throw new Error(`Run timeline 資料毀損：${column} 不是有效陣列`);
+  }
+
+  return parsed;
+}
+
 function rowToWorkflowRun(row: WorkflowRunRow): WorkflowRun {
   return {
     id: row.id,
@@ -227,13 +258,70 @@ function rowToRunGoalRoundDivider(
     id: row.id,
     runId: row.run_id,
     podId: row.pod_id,
-    sourcePodIds: safeJsonParse<string[]>(row.source_pod_ids_json) ?? [],
-    sourcePodNames: safeJsonParse<string[]>(row.source_pod_names_json) ?? [],
+    sourcePodIds: parseRequiredJsonArray<string>(
+      row.source_pod_ids_json,
+      "source_pod_ids_json",
+    ),
+    sourcePodNames: parseRequiredJsonArray<string>(
+      row.source_pod_names_json,
+      "source_pod_names_json",
+    ),
     status: row.status === "blocked" ? "blocked" : "completed",
     blockedReason: row.blocked_reason,
     completedAt: row.completed_at,
-    connectionIds: safeJsonParse<string[]>(row.connection_ids_json) ?? [],
+    connectionIds: parseRequiredJsonArray<string>(
+      row.connection_ids_json,
+      "connection_ids_json",
+    ),
   };
+}
+
+function timelineRowToRunMessage(row: RunTimelineItemRow): PersistedMessage {
+  if (row.role === null || row.content === null) {
+    throw new Error("Run timeline 資料毀損：message 欄位不完整");
+  }
+
+  return rowToRunMessage({
+    id: row.id,
+    run_id: row.run_id,
+    pod_id: row.pod_id,
+    role: row.role,
+    content: row.content,
+    timestamp: row.item_timestamp,
+    sub_messages_json: row.sub_messages_json,
+    metadata_json: row.metadata_json,
+  });
+}
+
+function timelineRowToRunGoalRoundDivider(
+  row: RunTimelineItemRow,
+): PersistedRunGoalRoundDivider {
+  if (
+    row.source_pod_ids_json === null ||
+    row.source_pod_names_json === null ||
+    row.status === null ||
+    row.connection_ids_json === null
+  ) {
+    throw new Error("Run timeline 資料毀損：goal divider 欄位不完整");
+  }
+
+  return rowToRunGoalRoundDivider({
+    id: row.id,
+    run_id: row.run_id,
+    pod_id: row.pod_id,
+    source_pod_ids_json: row.source_pod_ids_json,
+    source_pod_names_json: row.source_pod_names_json,
+    status: row.status,
+    blocked_reason: row.blocked_reason,
+    completed_at: row.item_timestamp,
+    connection_ids_json: row.connection_ids_json,
+  });
+}
+
+function timelineRowToItem(row: RunTimelineItemRow): RunChatTimelineItem {
+  return row.item_type === "goal-round-divider"
+    ? timelineRowToRunGoalRoundDivider(row)
+    : timelineRowToRunMessage(row);
 }
 
 function isRunGoalRoundDivider(
@@ -639,44 +727,39 @@ class RunStore {
   ): RunMessagesPage {
     const limit = options.limit ?? 50;
     const cursor = options.cursor ?? null;
-    const rows = this.stmts.runMessage.selectPageByRunIdAndPodId.all({
+    const cursorKindOrder =
+      cursor?.beforeItemType === "goal-round-divider" ? 1 : 0;
+    const rows = this.stmts.runMessage.selectTimelinePageByRunIdAndPodId.all({
       $runId: runId,
       $podId: podId,
       $hasCursor: cursor ? 1 : 0,
       $beforeTimestamp: cursor?.beforeTimestamp ?? "",
-      $beforeMessageId: cursor?.beforeMessageId ?? "",
+      $beforeKindOrder: cursorKindOrder,
+      $beforeItemId: cursor?.beforeMessageId ?? "",
       $limitPlusOne: limit + 1,
-    }) as RunMessageRow[];
+    }) as RunTimelineItemRow[];
 
     const hasMore = rows.length > limit;
     const pageRows = (hasMore ? rows.slice(0, limit) : rows).reverse();
-    const messages = pageRows.map(rowToRunMessage);
-    const oldestMessage = messages[0];
-    const dividers = this.getRunGoalRoundDividers(runId, podId).filter(
-      (divider) => {
-        if (!oldestMessage) return true;
-        const newestMessage = messages[messages.length - 1];
-        if (!newestMessage) return false;
-        if (!cursor) {
-          return divider.completedAt >= oldestMessage.timestamp;
-        }
-        return (
-          divider.completedAt >= oldestMessage.timestamp &&
-          divider.completedAt <= newestMessage.timestamp
-        );
-      },
+    const timelineItems = pageRows.map(timelineRowToItem);
+    const messages = timelineItems.filter(
+      (item): item is PersistedMessage => !isRunGoalRoundDivider(item),
     );
+    const oldestItem = timelineItems[0];
 
     return {
       messages,
-      timelineItems: sortRunTimelineItems([...messages, ...dividers]),
+      timelineItems,
       pageInfo: {
         hasMore,
         nextCursor:
-          hasMore && oldestMessage
+          hasMore && oldestItem
             ? {
-                beforeTimestamp: oldestMessage.timestamp,
-                beforeMessageId: oldestMessage.id,
+                beforeTimestamp: getRunTimelineTimestamp(oldestItem),
+                beforeMessageId: oldestItem.id,
+                beforeItemType: isRunGoalRoundDivider(oldestItem)
+                  ? "goal-round-divider"
+                  : "message",
               }
             : null,
       },

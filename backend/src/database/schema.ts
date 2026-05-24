@@ -292,6 +292,9 @@ function createBaseTables(db: Database): void {
   db.exec(
     "CREATE INDEX IF NOT EXISTS idx_run_pod_instances_run_pod ON run_pod_instances(run_id, pod_id)",
   );
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_run_pod_instances_pod_status ON run_pod_instances(pod_id, status)",
+  );
 
   db.exec(
     "CREATE TABLE IF NOT EXISTS run_messages (" +
@@ -307,6 +310,9 @@ function createBaseTables(db: Database): void {
   );
   db.exec(
     "CREATE INDEX IF NOT EXISTS idx_run_messages_run_pod ON run_messages(run_id, pod_id)",
+  );
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_run_messages_page ON run_messages(run_id, pod_id, timestamp DESC, id DESC)",
   );
 
   db.exec(

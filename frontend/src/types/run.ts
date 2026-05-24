@@ -53,6 +53,7 @@ export interface WorkflowRun {
 export interface RunMessagesPageCursor {
   beforeTimestamp: string
   beforeMessageId: string
+  beforeItemType?: "message" | "goal-round-divider"
 }
 
 export interface RunMessagesPageInfo {

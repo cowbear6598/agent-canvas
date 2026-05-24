@@ -19,6 +19,7 @@ export interface ChatEmitStrategy {
     podId: string;
     messageId: string;
     content: string;
+    delta: string;
   }): void;
   emitToolUse(params: {
     canvasId: string;
@@ -63,6 +64,13 @@ export class ChatExecutionStrategy {
     private readonly canvasId: string,
     private readonly runContext: RunContext,
   ) {}
+
+  withGoalRuntimeScope(goalRuntimeScopeId: string): ChatExecutionStrategy {
+    return new ChatExecutionStrategy(this.canvasId, {
+      ...this.runContext,
+      goalRuntimeScopeId,
+    });
+  }
 
   getSessionId(podId: string): string | undefined {
     const instance = runStore.getPodInstance(this.runContext.runId, podId);

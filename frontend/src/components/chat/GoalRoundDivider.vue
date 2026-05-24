@@ -14,8 +14,11 @@ const sourcePodLabel = computed(() => {
   const names = props.divider.sourcePodNames
     .map((name) => name.trim())
     .filter((name) => name.length > 0);
+  const sourceIds = props.divider.sourcePodIds
+    .map((id) => id.trim())
+    .filter((id) => id.length > 0);
 
-  return names.length > 0 ? names.join("、") : props.divider.podId;
+  return names.length > 0 ? names.join("、") : sourceIds.join("、");
 });
 
 const isBlocked = computed(() => props.divider.status === "blocked");

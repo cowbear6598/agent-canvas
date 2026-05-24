@@ -136,8 +136,8 @@ export function settleInstanceIfUnreachable(
 }
 
 class RunExecutionService {
-  // key: runId, value: Set<podId> — 追蹤每個 run 中正在活躍串流的 pod
-  private activeRunStreams: Map<string, Set<string>> = new Map();
+  // key: runId, value: Map<podId, refCount> — 追蹤每個 run 中正在活躍串流的 pod
+  private activeRunStreams: Map<string, Map<string, number>> = new Map();
 
   async createRun(
     canvasId: string,
@@ -767,16 +767,22 @@ class RunExecutionService {
 
   registerActiveStream(runId: string, podId: string): void {
     if (!this.activeRunStreams.has(runId)) {
-      this.activeRunStreams.set(runId, new Set());
+      this.activeRunStreams.set(runId, new Map());
     }
-    this.activeRunStreams.get(runId)!.add(podId);
+    const streams = this.activeRunStreams.get(runId)!;
+    streams.set(podId, (streams.get(podId) ?? 0) + 1);
   }
 
   unregisterActiveStream(runId: string, podId: string): void {
     const streams = this.activeRunStreams.get(runId);
     if (!streams) return;
 
-    streams.delete(podId);
+    const count = streams.get(podId) ?? 0;
+    if (count > 1) {
+      streams.set(podId, count - 1);
+    } else {
+      streams.delete(podId);
+    }
     if (streams.size === 0) {
       this.activeRunStreams.delete(runId);
     }
@@ -793,8 +799,8 @@ class RunExecutionService {
    */
   getActiveRunIdsForPod(podId: string): string[] {
     const runIds: string[] = [];
-    for (const [runId, podIds] of this.activeRunStreams) {
-      if (podIds.has(podId)) {
+    for (const [runId, podCounts] of this.activeRunStreams) {
+      if (podCounts.has(podId)) {
         runIds.push(runId);
       }
     }
@@ -828,8 +834,8 @@ class RunExecutionService {
 
     // 步驟 1：先從 activeRunStreams 移除，建立廉價 guard 的 invariant。
     // 必須在 updateRunStatus 之前執行，確保 hot path guard 可用 Map 做 O(1) 過濾。
-    const activePodIds = this.activeRunStreams.get(runId);
-    if (activePodIds) {
+    const activePodCounts = this.activeRunStreams.get(runId);
+    if (activePodCounts) {
       this.activeRunStreams.delete(runId);
     }
 
@@ -839,8 +845,8 @@ class RunExecutionService {
     }
 
     // 步驟 3：中止各 pod 串流（使用步驟 1 前取得的 snapshot）。
-    if (activePodIds) {
-      for (const podId of activePodIds) {
+    if (activePodCounts) {
+      for (const podId of activePodCounts.keys()) {
         try {
           // Run mode 的 query key 是 ${runId}:${podId}
           abortRegistry.abort(`${runId}:${podId}`);

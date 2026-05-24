@@ -1,14 +1,3 @@
-vi.mock("../../src/services/runStore.js", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("../../src/services/runStore.js")>();
-  return {
-    ...actual,
-    runStore: {
-      getPodInstance: vi.fn(),
-    },
-  };
-});
-
 vi.mock("../../src/utils/logger.js", () => ({
   logger: {
     log: vi.fn(),
@@ -22,6 +11,8 @@ import { runQueueService } from "../../src/services/workflow/runQueueService.js"
 import { runStore } from "../../src/services/runStore.js";
 import { logger } from "../../src/utils/logger.js";
 import { buildRunQueueKey } from "../../src/services/workflow/workflowHelpers.js";
+import { initTestDb, getDb } from "../../src/database/index.js";
+import { resetStatements } from "../../src/database/statements.js";
 import type { RunQueueItem } from "../../src/services/workflow/runQueueService.js";
 import type { RunContext } from "../../src/types/run.js";
 
@@ -43,7 +34,7 @@ function makeRunContext(overrides?: Partial<RunContext>): RunContext {
   };
 }
 
-const mockRunContext = makeRunContext();
+let mockRunContext: RunContext = makeRunContext();
 
 const mockQueuedPodInstance = vi.fn();
 const mockHasActiveStream = vi.fn().mockReturnValue(false);
@@ -102,7 +93,15 @@ function createQueueItem(
 describe("RunQueueService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(runStore.getPodInstance).mockReturnValue(undefined);
+    resetStatements();
+    initTestDb();
+    getDb()
+      .prepare(
+        "INSERT OR IGNORE INTO canvases (id, name, sort_index) VALUES (?, ?, ?)",
+      )
+      .run(canvasId, "run-queue-canvas", 0);
+    const run = runStore.createRun(canvasId, sourcePodId, "測試觸發訊息");
+    mockRunContext = makeRunContext({ runId: run.id });
     mockHasActiveStream.mockReturnValue(false);
     runQueueService.init({
       executionService: mockExecutionService,
@@ -197,21 +196,11 @@ describe("RunQueueService", () => {
     });
 
     it("同一 runId:targetPodId 有非終態且已啟動的 pod instance 時回報忙碌", () => {
-      vi.mocked(runStore.getPodInstance).mockReturnValue({
-        id: "inst-1",
-        runId: mockRunContext.runId,
-        podId: targetPodId,
-        status: "waiting",
-        sessionId: null,
-        errorMessage: null,
-        lastResponseSummary: null,
-        triggeredAt: null,
-        completedAt: null,
-        autoPathwaySettled: "not-applicable",
-        directPathwaySettled: "not-applicable",
-        runRepoPath: null,
-        workspacePath: null,
-      });
+      const instance = runStore.createPodInstance(
+        mockRunContext.runId,
+        targetPodId,
+      );
+      runStore.updatePodInstanceStatus(instance.id, "waiting");
 
       expect(runQueueService.hasActiveItem(mockRunContext, targetPodId)).toBe(
         true,
@@ -227,21 +216,7 @@ describe("RunQueueService", () => {
     });
 
     it("只有尚未啟動的 pending instance 且佇列為空時不視為忙碌", () => {
-      vi.mocked(runStore.getPodInstance).mockReturnValue({
-        id: "inst-1",
-        runId: mockRunContext.runId,
-        podId: targetPodId,
-        status: "pending",
-        sessionId: null,
-        errorMessage: null,
-        lastResponseSummary: null,
-        triggeredAt: null,
-        completedAt: null,
-        autoPathwaySettled: "not-applicable",
-        directPathwaySettled: "not-applicable",
-        runRepoPath: null,
-        workspacePath: null,
-      });
+      runStore.createPodInstance(mockRunContext.runId, targetPodId);
 
       expect(runQueueService.hasActiveItem(mockRunContext, targetPodId)).toBe(
         false,

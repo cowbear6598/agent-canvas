@@ -431,6 +431,7 @@ export const useRunStore = defineStore("run", {
         this.isLoadingPodMessages = false;
         return;
       }
+      const { showErrorToast } = useToast();
 
       try {
         const response = await createWebSocketRequest<
@@ -447,7 +448,7 @@ export const useRunStore = defineStore("run", {
           },
         });
 
-        if (response.success && (response.timelineItems || response.messages)) {
+        if (response.success && response.timelineItems) {
           if (
             requestToken !== this.activeRunChatRequestToken ||
             !this.isActiveRunChatTarget(runId, podId)
@@ -455,9 +456,8 @@ export const useRunStore = defineStore("run", {
             return;
           }
 
-          const loadedTimelineItems = (
-            response.timelineItems ?? response.messages ?? []
-          ).map(toRunChatTimelineItem);
+          const loadedTimelineItems =
+            response.timelineItems.map(toRunChatTimelineItem);
           const liveTimelineItems =
             this.runChatMessages.get(runId)?.get(podId) ?? [];
           this.setActiveRunChatTimelineItems(
@@ -468,6 +468,9 @@ export const useRunStore = defineStore("run", {
           this.activeRunChatPageInfo =
             response.pageInfo ?? createEmptyRunChatPageInfo();
         }
+      } catch (error) {
+        logger.error("[RunStore] 載入 Run 對話失敗", error);
+        showErrorToast("Run", t("common.error.load"));
       } finally {
         if (requestToken === this.activeRunChatRequestToken) {
           this.isLoadingPodMessages = false;
@@ -490,6 +493,7 @@ export const useRunStore = defineStore("run", {
 
       const canvasId = getActiveCanvasIdOrWarn("RunStore");
       if (!canvasId) return;
+      const { showErrorToast } = useToast();
 
       this.isLoadingOlderPodMessages = true;
 
@@ -516,9 +520,8 @@ export const useRunStore = defineStore("run", {
           return;
         }
 
-        const olderTimelineItems = (
-          response.timelineItems ?? response.messages ?? []
-        ).map(toRunChatTimelineItem);
+        const olderTimelineItems =
+          response.timelineItems.map(toRunChatTimelineItem);
         const currentTimelineItems =
           this.runChatMessages.get(activeTarget.runId)?.get(activeTarget.podId) ??
           [];
@@ -529,6 +532,9 @@ export const useRunStore = defineStore("run", {
         );
         this.activeRunChatPageInfo =
           response.pageInfo ?? createEmptyRunChatPageInfo();
+      } catch (error) {
+        logger.error("[RunStore] 載入較舊 Run 對話失敗", error);
+        showErrorToast("Run", t("common.error.load"));
       } finally {
         if (this.isActiveRunChatTarget(activeTarget.runId, activeTarget.podId)) {
           this.isLoadingOlderPodMessages = false;
@@ -544,8 +550,8 @@ export const useRunStore = defineStore("run", {
       isPartial: boolean,
       role: MessageRole,
       metadata?: SystemMessageMetadata,
+      receivedDelta?: string,
     ): void {
-      // #44 巢狀 Map：取得 podId 層訊息陣列
       let podMap = this.runChatMessages.get(runId);
       if (!podMap) {
         podMap = new Map();
@@ -553,17 +559,6 @@ export const useRunStore = defineStore("run", {
       }
       const timelineItems = [...(podMap.get(podId) ?? [])];
 
-      const lastLength = this.accumulatedLengthByMessageId.get(messageId) ?? 0;
-      // 後端重傳導致 content 長度倒退時，重置累積長度並以整段 content 作為 delta
-      const delta =
-        content.length < lastLength ? content : content.slice(lastLength);
-      if (isPartial) {
-        this.accumulatedLengthByMessageId.set(messageId, content.length);
-      } else {
-        this.accumulatedLengthByMessageId.delete(messageId);
-      }
-
-      // messageIndexCache：串流期間提供 O(1) 定位，避免 findIndex 線性掃描
       const cachedIndex = this.messageIndexCache.get(messageId);
       const cachedItem =
         cachedIndex !== undefined ? timelineItems[cachedIndex] : undefined;
@@ -573,11 +568,31 @@ export const useRunStore = defineStore("run", {
         cachedItem.id === messageId
           ? cachedIndex
           : undefined;
+      const existingIndex =
+        knownIndex ?? findMessageIndex(timelineItems, messageId);
+      const existingMessage =
+        existingIndex !== -1 ? timelineItems[existingIndex] : undefined;
+      const existingContent =
+        existingMessage !== undefined && isRunChatMessage(existingMessage)
+          ? existingMessage.content
+          : "";
+      const lastLength = this.accumulatedLengthByMessageId.get(messageId) ?? 0;
+      const delta =
+        receivedDelta ??
+        (content.length < lastLength ? content : content.slice(lastLength));
+      const nextContent =
+        receivedDelta !== undefined ? `${existingContent}${receivedDelta}` : content;
+
+      if (isPartial) {
+        this.accumulatedLengthByMessageId.set(messageId, nextContent.length);
+      } else {
+        this.accumulatedLengthByMessageId.delete(messageId);
+      }
 
       upsertMessage(
         timelineItems as Message[],
         messageId,
-        content,
+        nextContent,
         isPartial,
         role,
         delta,

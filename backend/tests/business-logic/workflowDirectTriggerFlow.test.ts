@@ -1,15 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { workflowExecutionService } from "../../src/services/workflow";
 import { workflowDirectTriggerService } from "../../src/services/workflow/workflowDirectTriggerService.js";
 import { connectionStore } from "../../src/services/connectionStore.js";
-import { podStore } from "../../src/services/podStore.js";
 import { workflowEventEmitter } from "../../src/services/workflow";
 import { summaryService } from "../../src/services/summaryService.js";
 import { logger } from "../../src/utils/logger.js";
 import type { Connection } from "../../src/types";
 import type { RunContext } from "../../src/types/run.js";
-import path from "path";
-import { config } from "../../src/config/index.js";
 
 // ─── 常數 ────────────────────────────────────────────────────────────────────
 
@@ -46,24 +42,6 @@ function makeConnection(overrides?: Partial<Connection>): Connection {
     aiDecideModel: "sonnet",
     ...overrides,
   } as Connection;
-}
-
-function makePod(id: string, status: "idle" | "chatting" = "idle") {
-  return {
-    id,
-    name: `Pod ${id}`,
-    provider: "claude" as const,
-    providerConfig: { model: "sonnet" },
-    sessionId: null,
-    repositoryId: null,
-    workspacePath: path.join(config.canvasRoot, CANVAS_ID, `pod-${id}`),
-    status,
-    x: 0,
-    y: 0,
-    rotation: 0,
-    multiInstance: false,
-    skillIds: [],
-  };
 }
 
 // ─── 共用 spy setup ───────────────────────────────────────────────────────────
@@ -117,46 +95,6 @@ describe("Direct Trigger Flow", () => {
     vi.restoreAllMocks();
   });
 
-  // ============================================================
-  // A：單一 direct 連線 trigger 分支（idle vs busy）
-  // ============================================================
-  describe("A1: 單一 direct - target idle → 直接執行", () => {
-    it("Target Pod 只有 1 條 direct 連線，target 狀態為 idle，應直接執行", async () => {
-      vi.spyOn(podStore, "getById").mockImplementation(((
-        _cId: string,
-        podId: string,
-      ) => {
-        if (podId === SOURCE_POD_ID) return makePod(SOURCE_POD_ID);
-        if (podId === TARGET_POD_ID) return makePod(TARGET_POD_ID, "idle");
-        return undefined;
-      }) as any);
-
-      const triggerSpy = vi
-        .spyOn(workflowExecutionService, "triggerWorkflowWithSummary")
-        .mockResolvedValue(undefined);
-
-      await workflowExecutionService.checkAndTriggerWorkflows(
-        CANVAS_ID,
-        SOURCE_POD_ID,
-        testRunContext,
-      );
-
-      expect(triggerSpy).toHaveBeenCalled();
-      const params = triggerSpy.mock.calls[0][0];
-      expect(params.canvasId).toBe(CANVAS_ID);
-      expect(params.connectionId).toBe(mockDirectConnection.id);
-      expect(params.summary).toBe(TEST_SUMMARY);
-      expect(params.isSummarized).toBe(true);
-      expect(params.participatingConnectionIds).toEqual([
-        mockDirectConnection.id,
-      ]);
-      expect(params.strategy).toHaveProperty("mode", "direct");
-    });
-  });
-
-  // ============================================================
-  // B：多 direct 連線不合併
-  // ============================================================
   describe("B1: Multi-direct - 每條 ready Direct 形成獨立項目", () => {
     it("collectSources 不等待合併，回傳目前 connection 作為唯一參與連線", async () => {
       const connAD = makeConnection({

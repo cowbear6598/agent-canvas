@@ -19,6 +19,7 @@ export type RunLoadHistoryPayload = z.infer<typeof runLoadHistorySchema>;
 const runMessagesCursorSchema = z.object({
   beforeTimestamp: z.iso.datetime(),
   beforeMessageId: z.uuid(),
+  beforeItemType: z.enum(["message", "goal-round-divider"]).optional(),
 });
 
 export const runLoadPodMessagesSchema = z.object({

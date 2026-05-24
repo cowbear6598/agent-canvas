@@ -151,9 +151,6 @@ export const handleRunLoadPodMessages = withCanvasId<RunLoadPodMessagesPayload>(
       success: true,
       runId,
       podId,
-      messages: result.messages.map((message) =>
-        sanitizePersistedMessageForClient(message),
-      ),
       timelineItems: result.timelineItems.map((item) =>
         isRunGoalRoundDivider(item)
           ? item

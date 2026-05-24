@@ -135,6 +135,7 @@ export interface TriggerWorkflowWithSummaryParams {
   strategy: TriggerStrategy;
   runContext: RunContext;
   delegate?: WorkflowStatusDelegate;
+  skipBusyCheck?: boolean;
 }
 
 export interface ExecutionServiceMethods {

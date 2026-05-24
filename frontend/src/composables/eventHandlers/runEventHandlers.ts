@@ -63,7 +63,8 @@ export const handleRunMessage = (payload: RunMessagePayload): void => {
     payload.content,
     payload.isPartial,
     payload.role ?? 'assistant',
-    payload.metadata
+    payload.metadata,
+    payload.delta,
   )
 }
 

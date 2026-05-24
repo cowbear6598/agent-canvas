@@ -242,7 +242,26 @@ export function getGoalRuntimeStatePath(
   runContext: RunContext,
   podId: string,
 ): string {
-  return path.join(getGoalRuntimeRunDir(runContext.runId), `${podId}.json`);
+  const scopeSuffix = runContext.goalRuntimeScopeId
+    ? `.${runContext.goalRuntimeScopeId}`
+    : "";
+  return path.join(
+    getGoalRuntimeRunDir(runContext.runId),
+    `${podId}${scopeSuffix}.json`,
+  );
+}
+
+function getBaseGoalRuntimeStatePath(
+  runContext: RunContext,
+  podId: string,
+): string {
+  return getGoalRuntimeStatePath(
+    {
+      ...runContext,
+      goalRuntimeScopeId: undefined,
+    },
+    podId,
+  );
 }
 
 function createGoalRuntimeSnapshot(
@@ -310,6 +329,21 @@ export function ensureGoalRuntime(
   const statePath = getGoalRuntimeStatePath(runContext, pod.id);
   const existing = readGoalRuntimeSnapshot(statePath);
   if (existing) return existing;
+
+  if (runContext.goalRuntimeScopeId) {
+    const baseSnapshot = readGoalRuntimeSnapshot(
+      getBaseGoalRuntimeStatePath(runContext, pod.id),
+    );
+    if (baseSnapshot) {
+      const snapshot: GoalRuntimeSnapshot = {
+        ...baseSnapshot,
+        podName: pod.name,
+        state: createGoalRuntimeState(baseSnapshot.goal),
+      };
+      writeGoalRuntimeSnapshot(statePath, snapshot);
+      return snapshot;
+    }
+  }
 
   // snapshot 不存在時才以當下 pod goal 建立 run-scoped snapshot。
   // 建立後不再受 live pod goal 編輯影響，避免執行中的 workflow 被後續設定修改。

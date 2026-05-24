@@ -37,7 +37,13 @@ describe("chat message merge business logic", () => {
   it("assistant text chunks are exposed as partial run messages scoped to the run", () => {
     const strategy = createChatEmitStrategy(runId);
 
-    strategy.emitText({ canvasId, podId, messageId, content: "Run 訊息" });
+    strategy.emitText({
+      canvasId,
+      podId,
+      messageId,
+      content: "Run 訊息",
+      delta: "訊息",
+    });
 
     expect(capturedEvents).toEqual([
       {
@@ -49,6 +55,7 @@ describe("chat message merge business logic", () => {
           podId,
           messageId,
           content: "Run 訊息",
+          delta: "訊息",
           isPartial: true,
           role: "assistant",
         },
@@ -109,8 +116,20 @@ describe("chat message merge business logic", () => {
   it("business rule: completion event carries the final merged assistant content for the same run message", () => {
     const strategy = createChatEmitStrategy(runId);
 
-    strategy.emitText({ canvasId, podId, messageId, content: "Run " });
-    strategy.emitText({ canvasId, podId, messageId, content: "完整內容" });
+    strategy.emitText({
+      canvasId,
+      podId,
+      messageId,
+      content: "Run ",
+      delta: "Run ",
+    });
+    strategy.emitText({
+      canvasId,
+      podId,
+      messageId,
+      content: "Run 完整內容",
+      delta: "完整內容",
+    });
     strategy.emitComplete({
       canvasId,
       podId,
@@ -132,7 +151,7 @@ describe("chat message merge business logic", () => {
     expect(
       capturedEvents
         .filter((event) => event.eventName === WebSocketResponseEvents.RUN_MESSAGE)
-        .map((event) => event.payload.content)
+        .map((event) => event.payload.delta)
         .join(""),
     ).toBe("Run 完整內容");
   });

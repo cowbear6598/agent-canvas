@@ -6,6 +6,7 @@ import { summaryService } from "../../src/services/summaryService.js";
 import { workflowEventEmitter } from "../../src/services/workflow";
 import { runExecutionService } from "../../src/services/workflow/runExecutionService.js";
 import { logger } from "../../src/utils/logger.js";
+import * as streamingChatExecutor from "../../src/services/claude/streamingChatExecutor.js";
 import type { Connection } from "../../src/types";
 import type { TriggerStrategy } from "../../src/services/workflow/types.js";
 import type { RunContext } from "../../src/types/run.js";
@@ -163,6 +164,7 @@ describe("WorkflowExecutionService", () => {
         participatingConnectionIds: undefined,
         strategy: mockStrategy,
         runContext,
+        skipBusyCheck: true,
       });
 
       // run mode：connection 是模板，不應設為 active
@@ -197,12 +199,222 @@ describe("WorkflowExecutionService", () => {
         participatingConnectionIds: undefined,
         strategy: mockStrategy,
         runContext,
+        skipBusyCheck: true,
       });
 
       expect(registerActiveStreamSpy).toHaveBeenCalledWith(
         runContext.runId,
         TARGET_POD_ID,
       );
+    });
+
+    it("run mode 真正啟動前若目標 Pod 已忙碌，應改加入佇列避免同 key 查詢互相 abort", async () => {
+      const runContext = makeRunContext();
+      const autoConn = makeConnection({
+        id: "conn-auto-busy-guard",
+        triggerMode: "auto",
+      });
+      const mockStrategy = makeStrategy("auto");
+      const registerActiveStreamSpy = vi
+        .spyOn(runExecutionService, "registerActiveStream")
+        .mockImplementation(() => {});
+      const executeStreamingChatSpy = vi
+        .spyOn(streamingChatExecutor, "executeStreamingChat")
+        .mockResolvedValue({
+          messageId: "message-1",
+          content: "完成",
+          hasContent: true,
+          aborted: false,
+        });
+      const delegate = {
+        isRunMode: vi.fn().mockReturnValue(true),
+        startPodExecution: vi.fn(),
+        markSummarizing: vi.fn(),
+        markDeciding: vi.fn(),
+        markWaiting: vi.fn(),
+        onSummaryComplete: vi.fn(),
+        onSummaryFailed: vi.fn(),
+        onChatComplete: vi.fn(),
+        onChatError: vi.fn(),
+        shouldEnqueue: vi.fn().mockReturnValue(true),
+        isBusy: vi.fn().mockReturnValue(true),
+        enqueue: vi.fn(),
+        scheduleNextInQueue: vi.fn(),
+        settleAndSkipPath: vi.fn(),
+      };
+
+      vi.spyOn(connectionStore, "getById").mockReturnValue(autoConn);
+      vi.spyOn(connectionStore, "findByTargetPodId").mockReturnValue([
+        autoConn,
+      ]);
+
+      await workflowExecutionService.triggerWorkflowWithSummary({
+        canvasId: CANVAS_ID,
+        connectionId: autoConn.id,
+        summary: "Test summary",
+        isSummarized: true,
+        participatingConnectionIds: undefined,
+        strategy: mockStrategy,
+        runContext,
+        delegate,
+      });
+
+      expect(delegate.enqueue).toHaveBeenCalledWith(
+        expect.objectContaining({
+          canvasId: CANVAS_ID,
+          connectionId: autoConn.id,
+          targetPodId: TARGET_POD_ID,
+          summary: "Test summary",
+          triggerMode: "auto",
+          runContext,
+        }),
+      );
+      expect(delegate.scheduleNextInQueue).toHaveBeenCalledWith(
+        CANVAS_ID,
+        TARGET_POD_ID,
+      );
+      expect(registerActiveStreamSpy).not.toHaveBeenCalled();
+      expect(executeStreamingChatSpy).not.toHaveBeenCalled();
+    });
+
+    it("run queue dispatch 時可略過 busy guard，避免 dequeue 出來的 item 被自己的 processing key 重排", async () => {
+      const runContext = makeRunContext();
+      const autoConn = makeConnection({
+        id: "conn-auto-skip-busy",
+        triggerMode: "auto",
+      });
+      const mockStrategy = makeStrategy("auto");
+      const executeStreamingChatSpy = vi
+        .spyOn(streamingChatExecutor, "executeStreamingChat")
+        .mockResolvedValue({
+          messageId: "message-1",
+          content: "完成",
+          hasContent: true,
+          aborted: false,
+        });
+      const delegate = {
+        isRunMode: vi.fn().mockReturnValue(true),
+        startPodExecution: vi.fn(),
+        markSummarizing: vi.fn(),
+        markDeciding: vi.fn(),
+        markWaiting: vi.fn(),
+        onSummaryComplete: vi.fn(),
+        onSummaryFailed: vi.fn(),
+        onChatComplete: vi.fn(),
+        onChatError: vi.fn(),
+        shouldEnqueue: vi.fn().mockReturnValue(true),
+        isBusy: vi.fn().mockReturnValue(true),
+        enqueue: vi.fn(),
+        scheduleNextInQueue: vi.fn(),
+        settleAndSkipPath: vi.fn(),
+      };
+
+      vi.spyOn(connectionStore, "getById").mockReturnValue(autoConn);
+      vi.spyOn(connectionStore, "findByTargetPodId").mockReturnValue([
+        autoConn,
+      ]);
+
+      await workflowExecutionService.triggerWorkflowWithSummary({
+        canvasId: CANVAS_ID,
+        connectionId: autoConn.id,
+        summary: "Test summary",
+        isSummarized: true,
+        participatingConnectionIds: undefined,
+        strategy: mockStrategy,
+        runContext,
+        delegate,
+        skipBusyCheck: true,
+      });
+
+      expect(delegate.enqueue).not.toHaveBeenCalled();
+      await vi.waitFor(() => expect(executeStreamingChatSpy).toHaveBeenCalled());
+    });
+
+    it("run mode 應把來源 metadata 傳入 goalRoundDivider context", async () => {
+      const runContext = makeRunContext();
+      const autoConn = makeConnection({
+        id: "conn-auto-goal-divider",
+        triggerMode: "auto",
+      });
+      const mockStrategy = makeStrategy("auto");
+      const executeStreamingChatSpy = vi
+        .spyOn(streamingChatExecutor, "executeStreamingChat")
+        .mockResolvedValue({
+          messageId: "message-1",
+          content: "完成",
+          hasContent: true,
+          aborted: false,
+        });
+
+      vi.spyOn(connectionStore, "getById").mockReturnValue(autoConn);
+      vi.spyOn(connectionStore, "findByTargetPodId").mockReturnValue([
+        autoConn,
+      ]);
+
+      await workflowExecutionService.triggerWorkflowWithSummary({
+        canvasId: CANVAS_ID,
+        connectionId: autoConn.id,
+        summary: "Test summary",
+        isSummarized: true,
+        participatingConnectionIds: ["conn-a", "conn-b"],
+        sourcePodIds: ["source-a", "source-b"],
+        sourcePodNames: ["Source A", "Source B"],
+        strategy: mockStrategy,
+        runContext,
+        skipBusyCheck: true,
+      });
+      await vi.waitFor(() => expect(executeStreamingChatSpy).toHaveBeenCalled());
+
+      expect(executeStreamingChatSpy.mock.calls[0]?.[0]).toMatchObject({
+        goalRoundDivider: {
+          sourcePodIds: ["source-a", "source-b"],
+          sourcePodNames: ["Source A", "Source B"],
+          connectionIds: ["conn-a", "conn-b"],
+        },
+      });
+    });
+
+    it("run mode 缺 sourcePodNames 時應 fallback 為來源 Pod 名稱", async () => {
+      const runContext = makeRunContext();
+      const autoConn = makeConnection({
+        id: "conn-auto-goal-divider-fallback",
+        triggerMode: "auto",
+      });
+      const mockStrategy = makeStrategy("auto");
+      const executeStreamingChatSpy = vi
+        .spyOn(streamingChatExecutor, "executeStreamingChat")
+        .mockResolvedValue({
+          messageId: "message-1",
+          content: "完成",
+          hasContent: true,
+          aborted: false,
+        });
+
+      vi.spyOn(connectionStore, "getById").mockReturnValue(autoConn);
+      vi.spyOn(connectionStore, "findByTargetPodId").mockReturnValue([
+        autoConn,
+      ]);
+
+      await workflowExecutionService.triggerWorkflowWithSummary({
+        canvasId: CANVAS_ID,
+        connectionId: autoConn.id,
+        summary: "Test summary",
+        isSummarized: true,
+        participatingConnectionIds: ["conn-a"],
+        sourcePodIds: ["source-a"],
+        strategy: mockStrategy,
+        runContext,
+        skipBusyCheck: true,
+      });
+      await vi.waitFor(() => expect(executeStreamingChatSpy).toHaveBeenCalled());
+
+      expect(executeStreamingChatSpy.mock.calls[0]?.[0]).toMatchObject({
+        goalRoundDivider: {
+          sourcePodIds: ["source-a"],
+          sourcePodNames: ["Pod source-pod"],
+          connectionIds: ["conn-a"],
+        },
+      });
     });
 
     it("missing connection is ignored so deleted workflow edges do not start chats", async () => {

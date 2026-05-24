@@ -904,6 +904,20 @@ describe("RunExecutionService", () => {
   });
 
   describe("registerActiveStream / unregisterActiveStream", () => {
+    it("同一 run/pod 多次 register 時需對應 unregister 次數才會清理", () => {
+      const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "測試");
+
+      runExecutionService.registerActiveStream(run.id, "pod-1");
+      runExecutionService.registerActiveStream(run.id, "pod-1");
+      runExecutionService.unregisterActiveStream(run.id, "pod-1");
+
+      expect(runExecutionService.hasActiveStream(run.id, "pod-1")).toBe(true);
+
+      runExecutionService.unregisterActiveStream(run.id, "pod-1");
+
+      expect(runExecutionService.hasActiveStream(run.id, "pod-1")).toBe(false);
+    });
+
     it("register 後 unregister 正確清理 Map", async () => {
       const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "測試");
 

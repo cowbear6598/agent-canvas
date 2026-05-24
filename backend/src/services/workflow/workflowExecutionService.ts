@@ -287,6 +287,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
       sourcePodNames,
       strategy,
       runContext,
+      skipBusyCheck,
     } = params;
     const delegate = params.delegate ?? createStatusDelegate(runContext);
 
@@ -321,6 +322,33 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
 
     const triggerMode = connection.triggerMode;
     const resolvedConnectionIds = participatingConnectionIds ?? [connectionId];
+
+    if (
+      !skipBusyCheck &&
+      delegate.shouldEnqueue() &&
+      delegate.isBusy(canvasId, targetPodId)
+    ) {
+      logger.log(
+        "Workflow",
+        "Pipeline",
+        `[checkQueue] 目標 Pod 忙碌中，加入佇列`,
+      );
+      delegate.enqueue({
+        canvasId,
+        connectionId,
+        sourcePodId,
+        targetPodId,
+        summary,
+        isSummarized,
+        triggerMode,
+        participatingConnectionIds: resolvedConnectionIds,
+        sourcePodIds,
+        sourcePodNames,
+        runContext,
+      });
+      delegate.scheduleNextInQueue(canvasId, targetPodId);
+      return;
+    }
 
     this.setConnectionsToActive(
       canvasId,

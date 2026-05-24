@@ -1,21 +1,34 @@
-import { describe, it, expect, afterEach } from "vitest";
-import { defineComponent, h } from "vue";
+import { describe, it, expect, afterEach, vi } from "vitest";
+import { defineComponent, h, onMounted } from "vue";
 import RunChatModal from "@/components/run/RunChatModal.vue";
+import { useCanvasStore } from "@/stores/canvasStore";
 import { useRunStore } from "@/stores/run/runStore";
-import type {
-  RunChatTimelineItem,
-  RunGoalRoundDivider,
-  WorkflowRun,
-} from "@/types/run";
+import { handleRunGoalRoundDivider } from "@/composables/eventHandlers/runEventHandlers";
 import {
-  createMockMessage,
+  mockCreateWebSocketRequest,
+} from "@tests/helpers/mockWebSocket";
+import {
   createMockRunPodInstance,
   createMockWorkflowRun,
 } from "@tests/helpers/factories";
 import { mountUserFlowApp } from "@tests/helpers/userFlowLauncher";
+import type { RunGoalRoundDivider, WorkflowRun } from "@/types/run";
+
+vi.mock("@/services/websocket", async () => {
+  const { webSocketMockFactory } = await import("@tests/helpers/mockWebSocket");
+  return webSocketMockFactory();
+});
+vi.mock("@/composables/useToast", () => ({
+  useToast: () => ({
+    toast: vi.fn(),
+    showSuccessToast: vi.fn(),
+    showErrorToast: vi.fn(),
+  }),
+}));
 
 Element.prototype.scrollIntoView = Element.prototype.scrollIntoView ?? (() => {});
 
+const CANVAS_ID = "canvas-goal-round-history";
 const RUN_ID = "run-goal-round-history";
 const TARGET_POD_ID = "pod-target";
 const TARGET_POD_NAME = "Target Pod";
@@ -38,86 +51,95 @@ function createDivider(
   };
 }
 
-function createRunGoalRoundDividerHarness(timelineItems: RunChatTimelineItem[]) {
-  return defineComponent({
-    name: "RunGoalRoundDividerHarness",
-    setup() {
-      const runStore = useRunStore();
-      const run: WorkflowRun = createMockWorkflowRun({
-        id: RUN_ID,
-        status: "completed",
-        podInstances: [
-          createMockRunPodInstance({
-            runId: RUN_ID,
-            podId: TARGET_POD_ID,
-            podName: TARGET_POD_NAME,
-            status: "completed",
-          }),
-        ],
-      });
-
-      runStore.runsById.set(run.id, run);
-      runStore.activeRunChatModal = { runId: RUN_ID, podId: TARGET_POD_ID };
-      runStore.setActiveRunChatTimelineItems(
-        RUN_ID,
-        TARGET_POD_ID,
-        timelineItems,
-      );
-
-      return () =>
-        h(RunChatModal, {
+const RunGoalRoundDividerHarness = defineComponent({
+  name: "RunGoalRoundDividerHarness",
+  setup() {
+    const runStore = useRunStore();
+    const run: WorkflowRun = createMockWorkflowRun({
+      id: RUN_ID,
+      status: "completed",
+      podInstances: [
+        createMockRunPodInstance({
           runId: RUN_ID,
           podId: TARGET_POD_ID,
           podName: TARGET_POD_NAME,
-          runStatus: "completed",
-          onClose: () => {},
-        });
-    },
-  });
-}
+          status: "completed",
+        }),
+      ],
+    });
+
+    useCanvasStore().activeCanvasId = CANVAS_ID;
+    runStore.runsById.set(run.id, run);
+    onMounted(() => {
+      void runStore.openRunChatModal(RUN_ID, TARGET_POD_ID);
+    });
+
+    return () =>
+      h(RunChatModal, {
+        runId: RUN_ID,
+        podId: TARGET_POD_ID,
+        podName: TARGET_POD_NAME,
+        runStatus: "completed",
+        onClose: () => {},
+      });
+  },
+});
 
 describe("run chat Goal round divider userflow", () => {
   afterEach(() => {
     document.body.innerHTML = "";
+    vi.clearAllMocks();
   });
 
-  it("同一 Pod 多輪 Goal 歷程會在每輪結束處顯示來源 Pod divider", async () => {
-    const RunGoalRoundDividerHarness = createRunGoalRoundDividerHarness([
-      createMockMessage({
-        id: "round-1-message",
-        role: "assistant",
-        content: "第一輪回覆完成",
-      }),
-      createDivider({
-        id: "round-1-divider",
-        sourcePodIds: ["pod-source-1"],
-        sourcePodNames: ["Pod 1"],
-        status: "completed",
-        completedAt: "2026-05-24T10:01:00.000Z",
-      }),
-      createMockMessage({
-        id: "round-2-message",
-        role: "assistant",
-        content: "第二輪回覆卡住",
-      }),
-      createDivider({
-        id: "round-2-divider",
-        sourcePodIds: ["pod-source-2"],
-        sourcePodNames: ["Pod 2"],
-        status: "blocked",
-        blockedReason: "等待人工補充必要資料",
-        completedAt: "2026-05-24T10:02:00.000Z",
-        connectionIds: ["connection-2"],
-      }),
-    ]);
+  it("歷史載入後會依 timeline 顯示多輪 Goal divider", async () => {
+    mockCreateWebSocketRequest.mockResolvedValueOnce({
+      success: true,
+      timelineItems: [
+        {
+          id: "round-1-message",
+          role: "assistant",
+          content: "第一輪回覆完成",
+          timestamp: "2026-05-24T10:00:00.000Z",
+        },
+        createDivider({
+          id: "round-1-divider",
+          sourcePodNames: ["Pod 1"],
+          status: "completed",
+          completedAt: "2026-05-24T10:01:00.000Z",
+        }),
+        {
+          id: "round-2-message",
+          role: "assistant",
+          content: "第二輪回覆卡住",
+          timestamp: "2026-05-24T10:02:00.000Z",
+        },
+        createDivider({
+          id: "round-2-divider",
+          sourcePodIds: ["pod-source-2"],
+          sourcePodNames: ["Pod 2"],
+          status: "blocked",
+          blockedReason: "等待人工補充必要資料",
+          completedAt: "2026-05-24T10:03:00.000Z",
+          connectionIds: ["connection-2"],
+        }),
+      ],
+      pageInfo: {
+        hasMore: false,
+        nextCursor: null,
+      },
+    });
 
     const mounted = await mountUserFlowApp({
       component: RunGoalRoundDividerHarness,
       attachTo: document.body,
     });
+    await vi.waitFor(() =>
+      expect(
+        mounted.wrapper.findAll('[data-testid="goal-round-divider"]'),
+      ).toHaveLength(2),
+    );
 
     const dividers = mounted.wrapper.findAll('[data-testid="goal-round-divider"]');
-    expect(dividers).toHaveLength(2);
     expect(dividers[0]?.text()).toContain("Goal 已完成");
     expect(dividers[0]?.text()).toContain("Pod 1");
     expect(dividers[1]?.text()).toContain("Goal 已 Blocked");
@@ -131,121 +153,47 @@ describe("run chat Goal round divider userflow", () => {
     expect(renderedText.indexOf("第二輪回覆卡住")).toBeLessThan(
       renderedText.indexOf("Pod 2"),
     );
-
-    mounted.unmount();
   });
 
-  it("三條 Direct 不合併時會依序顯示三個 Goal round divider", async () => {
-    const RunGoalRoundDividerHarness = createRunGoalRoundDividerHarness([
-      createMockMessage({
-        id: "direct-round-1-message",
-        role: "assistant",
-        content: "Direct 第一輪完成",
-      }),
-      createDivider({
-        id: "direct-round-1-divider",
-        sourcePodIds: ["pod-direct-1"],
-        sourcePodNames: ["Direct Pod 1"],
-        status: "completed",
-        completedAt: "2026-05-24T11:01:00.000Z",
-        connectionIds: ["direct-connection-1"],
-      }),
-      createMockMessage({
-        id: "direct-round-2-message",
-        role: "assistant",
-        content: "Direct 第二輪完成",
-      }),
-      createDivider({
-        id: "direct-round-2-divider",
-        sourcePodIds: ["pod-direct-2"],
-        sourcePodNames: ["Direct Pod 2"],
-        status: "completed",
-        completedAt: "2026-05-24T11:02:00.000Z",
-        connectionIds: ["direct-connection-2"],
-      }),
-      createMockMessage({
-        id: "direct-round-3-message",
-        role: "assistant",
-        content: "Direct 第三輪 blocked",
-      }),
-      createDivider({
-        id: "direct-round-3-divider",
-        sourcePodIds: ["pod-direct-3"],
-        sourcePodNames: ["Direct Pod 3"],
-        status: "blocked",
-        blockedReason: "等待第三個來源補資料",
-        completedAt: "2026-05-24T11:03:00.000Z",
-        connectionIds: ["direct-connection-3"],
-      }),
-    ]);
+  it("即時 RUN_GOAL_ROUND_DIVIDER event 會追加到目前 run chat", async () => {
+    mockCreateWebSocketRequest.mockResolvedValueOnce({
+      success: true,
+      timelineItems: [
+        {
+          id: "message-1",
+          role: "assistant",
+          content: "來源回覆完成",
+          timestamp: "2026-05-24T10:00:00.000Z",
+        },
+      ],
+      pageInfo: {
+        hasMore: false,
+        nextCursor: null,
+      },
+    });
 
     const mounted = await mountUserFlowApp({
       component: RunGoalRoundDividerHarness,
       attachTo: document.body,
     });
+    await vi.waitFor(() =>
+      expect(mounted.wrapper.text()).toContain("來源回覆完成"),
+    );
 
-    const dividers = mounted.wrapper.findAll('[data-testid="goal-round-divider"]');
-    expect(dividers).toHaveLength(3);
-    expect(dividers.map((divider) => divider.text())).toEqual([
-      expect.stringContaining("Direct Pod 1"),
-      expect.stringContaining("Direct Pod 2"),
-      expect.stringContaining("Direct Pod 3"),
-    ]);
-
-    const renderedText = mounted.wrapper.text();
-    expect(renderedText.indexOf("Direct 第一輪完成")).toBeLessThan(
-      renderedText.indexOf("Direct Pod 1"),
-    );
-    expect(renderedText.indexOf("Direct Pod 1")).toBeLessThan(
-      renderedText.indexOf("Direct 第二輪完成"),
-    );
-    expect(renderedText.indexOf("Direct 第二輪完成")).toBeLessThan(
-      renderedText.indexOf("Direct Pod 2"),
-    );
-    expect(renderedText.indexOf("Direct Pod 2")).toBeLessThan(
-      renderedText.indexOf("Direct 第三輪 blocked"),
-    );
-    expect(renderedText.indexOf("Direct 第三輪 blocked")).toBeLessThan(
-      renderedText.indexOf("Direct Pod 3"),
-    );
-    expect(dividers[2]?.text()).toContain("Goal 已 Blocked");
-    expect(dividers[2]?.text()).toContain("等待第三個來源補資料");
-
-    mounted.unmount();
-  });
-
-  it("Auto/Branch multi-input group 只會顯示一個包含多個來源 Pod 名稱的 divider", async () => {
-    const RunGoalRoundDividerHarness = createRunGoalRoundDividerHarness([
-      createMockMessage({
-        id: "multi-input-round-message",
-        role: "assistant",
-        content: "合併輸入同一輪 Goal 完成",
+    handleRunGoalRoundDivider({
+      ...createDivider({
+        id: "live-divider",
+        sourcePodNames: ["Live Source"],
       }),
-      createDivider({
-        id: "multi-input-round-divider",
-        sourcePodIds: ["pod-auto-source", "pod-branch-source"],
-        sourcePodNames: ["Auto Source Pod", "Branch Source Pod"],
-        status: "completed",
-        completedAt: "2026-05-24T12:01:00.000Z",
-        connectionIds: ["auto-connection", "branch-connection"],
-      }),
-    ]);
-
-    const mounted = await mountUserFlowApp({
-      component: RunGoalRoundDividerHarness,
-      attachTo: document.body,
+      canvasId: CANVAS_ID,
     });
-
-    const dividers = mounted.wrapper.findAll('[data-testid="goal-round-divider"]');
-    expect(dividers).toHaveLength(1);
-    expect(dividers[0]?.text()).toContain("Goal 已完成");
-    expect(dividers[0]?.text()).toContain("Auto Source Pod、Branch Source Pod");
-
-    const renderedText = mounted.wrapper.text();
-    expect(renderedText.indexOf("合併輸入同一輪 Goal 完成")).toBeLessThan(
-      renderedText.indexOf("Auto Source Pod"),
+    await vi.waitFor(() =>
+      expect(mounted.wrapper.text()).toContain("Live Source"),
     );
 
-    mounted.unmount();
+    const renderedText = mounted.wrapper.text();
+    expect(renderedText.indexOf("來源回覆完成")).toBeLessThan(
+      renderedText.indexOf("Live Source"),
+    );
   });
 });

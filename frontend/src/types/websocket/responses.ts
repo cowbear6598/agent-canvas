@@ -537,6 +537,7 @@ export interface RunMessagePayload {
   podId: string;
   messageId: string;
   content: string;
+  delta?: string;
   isPartial: boolean;
   role?: MessageRole;
   metadata?: SystemMessageMetadata;
@@ -566,8 +567,7 @@ export interface RunPodMessagesResultPayload {
   success: boolean;
   runId?: string;
   podId?: string;
-  messages?: PersistedMessage[];
-  timelineItems?: RunChatTimelineItemPayload[];
+  timelineItems: RunChatTimelineItemPayload[];
   pageInfo?: RunMessagesPageInfo;
 }
 

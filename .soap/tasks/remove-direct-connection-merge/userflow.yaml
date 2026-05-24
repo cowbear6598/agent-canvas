@@ -1,0 +1,37 @@
+feature: remove-direct-connection-merge
+approved: false
+scenarios:
+  - id: F1
+    scenario: 使用者以多條 Direct 連線連到同一個 Pod
+    given:
+      - 使用者在畫布上建立多條 Direct 連線
+      - 這些 Direct 連線連到同一個 Pod
+    when:
+      - 任一條 Direct 連線的來源完成
+    then:
+      - 該條 Direct 連線各自觸發目標 Pod
+      - 系統不等待其他 Direct 連線
+      - 系統不將多條 Direct 連線合併成同一次觸發
+
+  - id: F2
+    scenario: 使用者同時使用自動連線與 Direct 連線連到同一個 Pod
+    given:
+      - 使用者在畫布上建立多條自動連線
+      - 使用者在同一個目標 Pod 上建立多條 Direct 連線
+    when:
+      - Direct 連線的來源完成
+      - 自動連線的來源陸續完成
+    then:
+      - Direct 連線各自觸發目標 Pod
+      - 自動連線仍依原本規則等待同組來源
+      - 目標 Pod 忙碌時後續觸發會進入佇列
+
+  - id: F3
+    scenario: 使用者查看多條觸發規則說明
+    given:
+      - 使用者閱讀 Connection Line 的說明
+    when:
+      - 查看 Direct 多條連線的觸發規則
+    then:
+      - 說明不再提到 10 秒等待
+      - 說明表達 Direct 連線會各自觸發

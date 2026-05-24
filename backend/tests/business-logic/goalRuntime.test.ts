@@ -144,6 +144,55 @@ describe("goalRuntime", () => {
     ]);
   });
 
+  it("不同 Goal Runtime scope 應重跑全部 todo，且沿用 run 開始時的 frozen goal", () => {
+    ensureGoalRuntime(pod, runContext);
+
+    const firstScopeContext = {
+      ...runContext,
+      goalRuntimeScopeId: "round-1",
+    };
+    const secondScopeContext = {
+      ...runContext,
+      goalRuntimeScopeId: "round-2",
+    };
+    const editedPod = {
+      ...pod,
+      goal: {
+        todos: [{ id: "todo-new", text: "Edited while running" }],
+      },
+    };
+
+    ensureGoalRuntime(editedPod, firstScopeContext);
+    consumeGoalRuntimeToolResult(
+      firstScopeContext,
+      editedPod,
+      buildGoalRuntimeToolFullName(GOAL_MCP_TOOL_NAMES.COMPLETE_TODO),
+      JSON.stringify({
+        status: "completed",
+        activeTodoId: null,
+        completedTodoIds: ["todo-1", "todo-2"],
+        blockedReason: null,
+        handoffSummary: null,
+      }),
+    );
+
+    const secondSnapshot = ensureGoalRuntime(editedPod, secondScopeContext);
+    const firstPersisted = readGoalRuntimeSnapshot(
+      getGoalRuntimeStatePath(firstScopeContext, pod.id),
+    );
+
+    expect(firstPersisted?.state.status).toBe("completed");
+    expect(secondSnapshot?.goal.todos.map((todo) => todo.id)).toEqual([
+      "todo-1",
+      "todo-2",
+    ]);
+    expect(secondSnapshot?.state).toMatchObject({
+      activeTodoId: "todo-1",
+      completedTodoIds: [],
+      status: "running",
+    });
+  });
+
   it("readGoalRuntimeSnapshot 讀到損壞 snapshot 應丟錯而非回 null", () => {
     const statePath = getGoalRuntimeStatePath(runContext, pod.id);
     fs.mkdirSync(path.dirname(statePath), { recursive: true });

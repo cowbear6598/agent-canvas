@@ -1,10 +1,3 @@
-/**
- * P2.A.t3: run store regression — run modal 載入中的訊息與完成後的 transcript
- *
- * 驗證 run rehydrate 路徑與 live 串流路徑採用相同分段規則，
- * chat 與 run 顯示結果應一致，不出現單一巨大 bubble。
- */
-
 import { describe, it, expect, vi } from "vitest";
 import { webSocketMockFactory } from "@tests/helpers/mockWebSocket";
 import { setupStoreTest } from "@tests/helpers/testSetup";
@@ -260,7 +253,6 @@ describe("opencode v2 run store parity regression", () => {
       const podId = "pod-live";
       const msgId = "msg-live";
 
-      // Step 1: 文字開始串流
       store.appendRunChatMessage(
         runId,
         podId,
@@ -270,7 +262,6 @@ describe("opencode v2 run store parity regression", () => {
         "assistant",
       );
 
-      // Step 2: 工具使用
       store.handleRunChatToolUse({
         runId,
         podId,
@@ -280,7 +271,6 @@ describe("opencode v2 run store parity regression", () => {
         input: { path: "index.ts" },
       });
 
-      // Step 3: 工具結果
       store.handleRunChatToolResult({
         runId,
         podId,
@@ -290,7 +280,6 @@ describe("opencode v2 run store parity regression", () => {
         output: "const a = 1;",
       });
 
-      // Step 4: 完成
       store.handleRunChatComplete(runId, podId, msgId, "查看檔案");
 
       const messages = getPodMessages(store, runId, podId)!;

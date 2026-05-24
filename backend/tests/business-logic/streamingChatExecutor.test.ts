@@ -7,6 +7,7 @@
  * 移除 store / service mock，改用 initTestDb + 真實 store + vi.spyOn 觀察呼叫。
  */
 
+import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
@@ -99,6 +100,26 @@ function setupProviderMock(events: Array<NormalizedEvent>) {
     },
   });
   return { chatMock };
+}
+
+function readOnlyScopedGoalRuntimeSnapshot(
+  runContext: RunContext,
+  podId: string,
+) {
+  const basePath = getGoalRuntimeStatePath(runContext, podId);
+  const runDir = path.dirname(basePath);
+  const scopedPrefix = `${podId}.`;
+  const scopedPaths = fs
+    .readdirSync(runDir)
+    .filter((file) => file.startsWith(scopedPrefix) && file.endsWith(".json"))
+    .map((file) => path.join(runDir, file))
+    .sort(
+      (left, right) =>
+        fs.statSync(right).mtimeMs - fs.statSync(left).mtimeMs,
+    );
+
+  expect(scopedPaths.length).toBeGreaterThan(0);
+  return readGoalRuntimeSnapshot(scopedPaths[0]!);
 }
 
 // --- DB helpers ---
@@ -547,8 +568,9 @@ describe("executeStreamingChat", () => {
         strategy: makeStrategy(),
       });
 
-      const snapshot = readGoalRuntimeSnapshot(
-        getGoalRuntimeStatePath(defaultRunContext, pod.id),
+      const snapshot = readOnlyScopedGoalRuntimeSnapshot(
+        defaultRunContext,
+        pod.id,
       );
 
       expect(snapshot?.state.status).toBe("completed");
@@ -958,8 +980,9 @@ describe("executeStreamingChat", () => {
       expect(chatMock).toHaveBeenCalledTimes(2);
       expect(runStore.addRunMessage).toHaveBeenCalledTimes(1);
 
-      const snapshot = readGoalRuntimeSnapshot(
-        getGoalRuntimeStatePath(defaultRunContext, pod.id),
+      const snapshot = readOnlyScopedGoalRuntimeSnapshot(
+        defaultRunContext,
+        pod.id,
       );
       expect(snapshot?.state.status).toBe("completed");
       expect(snapshot?.state.completedTodoIds).toEqual(["todo-1", "todo-2"]);
@@ -1047,8 +1070,9 @@ describe("executeStreamingChat", () => {
         },
         {
           onComplete: vi.fn(() => {
-            const snapshot = readGoalRuntimeSnapshot(
-              getGoalRuntimeStatePath(defaultRunContext, pod.id),
+            const snapshot = readOnlyScopedGoalRuntimeSnapshot(
+              defaultRunContext,
+              pod.id,
             );
             order.push(`schedule:${snapshot?.state.status}`);
           }),
@@ -1106,8 +1130,9 @@ describe("executeStreamingChat", () => {
       // 第一輪 + 連續 noProgressLimit (2) 輪 retry = 共 3 輪 chat
       expect(chatMock).toHaveBeenCalledTimes(3);
 
-      const snapshot = readGoalRuntimeSnapshot(
-        getGoalRuntimeStatePath(defaultRunContext, pod.id),
+      const snapshot = readOnlyScopedGoalRuntimeSnapshot(
+        defaultRunContext,
+        pod.id,
       );
       expect(snapshot?.state.status).toBe("blocked");
       expect(snapshot?.state.blockedReason).toContain("未推進");

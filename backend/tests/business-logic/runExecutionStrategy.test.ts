@@ -139,6 +139,7 @@ describe("ChatExecutionStrategy", () => {
         podId: "pod-1",
         messageId: "msg-1",
         content: "Run 訊息",
+        delta: "訊息",
       });
 
       expect(socketService.emitToCanvas).toHaveBeenCalledWith(

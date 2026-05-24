@@ -142,6 +142,7 @@ class RunQueueService extends LazyInitializable<RunQueueServiceDeps> {
         sourcePodNames: item.sourcePodNames,
         strategy,
         runContext: item.runContext,
+        skipBusyCheck: true,
       });
     } finally {
       this.processingKeys.delete(key);

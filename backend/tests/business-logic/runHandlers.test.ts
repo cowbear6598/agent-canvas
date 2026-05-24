@@ -87,10 +87,6 @@ describe("handleRunLoadPodMessages", () => {
         success: true,
         runId: run.id,
         podId,
-        messages: [
-          expect.objectContaining({ content: "第二則" }),
-          expect.objectContaining({ content: "第三則" }),
-        ],
         timelineItems: [
           expect.objectContaining({ content: "第二則" }),
           expect.objectContaining({ content: "第三則" }),
@@ -100,9 +96,68 @@ describe("handleRunLoadPodMessages", () => {
           nextCursor: {
             beforeTimestamp: "2026-05-22T10:00:01.000Z",
             beforeMessageId: "00000000-0000-0000-0000-000000000002",
+            beforeItemType: "message",
           },
         },
       },
+    );
+  });
+
+  it("timelineItems 應 sanitize message metadata 並保留 divider 欄位", async () => {
+    const run = runStore.createRun(CANVAS_ID, "source-pod", "trigger");
+    const podId = "00000000-0000-0000-0000-000000000099";
+
+    runStore.upsertRunMessage(run.id, podId, {
+      id: "00000000-0000-0000-0000-000000000001",
+      role: "system",
+      content: "系統訊息",
+      timestamp: "2026-05-22T10:00:00.000Z",
+      metadata: {
+        provider: "claude",
+        code: "PROVIDER_ERROR",
+        severity: "error",
+        rawContent: "不應傳給前端的原始內容",
+      },
+    });
+    runStore.addRunGoalRoundDivider({
+      runId: run.id,
+      podId,
+      sourcePodIds: ["source-pod"],
+      sourcePodNames: ["Source Pod"],
+      status: "completed",
+      completedAt: "2026-05-22T10:00:01.000Z",
+      connectionIds: ["conn-1"],
+      id: "00000000-0000-0000-0000-000000000002",
+    });
+
+    await handleRunLoadPodMessages(
+      CONNECTION_ID,
+      {
+        requestId: REQUEST_ID,
+        canvasId: CANVAS_ID,
+        runId: run.id,
+        podId,
+        limit: 10,
+      },
+      REQUEST_ID,
+    );
+
+    expect(emitSuccess).toHaveBeenCalledWith(
+      CONNECTION_ID,
+      WebSocketResponseEvents.RUN_POD_MESSAGES_LOADED,
+      expect.objectContaining({
+        timelineItems: [
+          expect.objectContaining({
+            metadata: expect.objectContaining({ rawContent: "" }),
+          }),
+          expect.objectContaining({
+            type: "goal-round-divider",
+            sourcePodIds: ["source-pod"],
+            sourcePodNames: ["Source Pod"],
+            connectionIds: ["conn-1"],
+          }),
+        ],
+      }),
     );
   });
 });

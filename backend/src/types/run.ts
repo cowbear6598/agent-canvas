@@ -14,6 +14,7 @@ export interface RunContext {
   runId: string;
   canvasId: string;
   sourcePodId: string;
+  goalRuntimeScopeId?: string;
 }
 
 /** 前端使用的 RunPodInstance，去除內部路徑資訊並附加 Pod 名稱 */
@@ -61,6 +62,7 @@ export interface RunMessagePayload {
   podId: string;
   messageId: string;
   content: string;
+  delta?: string;
   isPartial: boolean;
   role: MessageRole;
   metadata?: SystemMessageMetadata;
@@ -86,6 +88,7 @@ export interface RunGoalRoundDividerPayload
 export interface RunMessagesPageCursor {
   beforeTimestamp: string;
   beforeMessageId: string;
+  beforeItemType?: "message" | "goal-round-divider";
 }
 
 export interface RunMessagesPageInfo {
@@ -109,7 +112,6 @@ export interface RunPodMessagesLoadedPayload {
   success: boolean;
   runId: string;
   podId: string;
-  messages: PersistedMessage[];
-  timelineItems?: RunChatTimelineItem[];
+  timelineItems: RunChatTimelineItem[];
   pageInfo: RunMessagesPageInfo;
 }

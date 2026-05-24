@@ -616,6 +616,7 @@ describe("RunStore", () => {
         nextCursor: {
           beforeTimestamp: "2026-05-22T10:00:01.000Z",
           beforeMessageId: "00000000-0000-0000-0000-000000000003",
+          beforeItemType: "message",
         },
       });
     });
@@ -665,6 +666,82 @@ describe("RunStore", () => {
         hasMore: false,
         nextCursor: null,
       });
+    });
+
+    it("getRunMessagesPage 應以完整 timeline 分頁，divider 不會卡在 page 邊界外", () => {
+      const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, TRIGGER_MESSAGE);
+      const podId = "pod-1";
+
+      runStore.upsertRunMessage(run.id, podId, {
+        id: "message-1",
+        role: "assistant",
+        content: "第一則",
+        timestamp: "2026-05-22T10:00:00.000Z",
+      });
+      runStore.addRunGoalRoundDivider({
+        runId: run.id,
+        podId,
+        sourcePodIds: ["source-1"],
+        sourcePodNames: ["來源一"],
+        status: "completed",
+        completedAt: "2026-05-22T10:00:01.000Z",
+        connectionIds: ["conn-1"],
+        id: "divider-1",
+      });
+      runStore.upsertRunMessage(run.id, podId, {
+        id: "message-2",
+        role: "assistant",
+        content: "第二則",
+        timestamp: "2026-05-22T10:00:02.000Z",
+      });
+
+      const newestPage = runStore.getRunMessagesPage(run.id, podId, {
+        limit: 1,
+      });
+      const middlePage = runStore.getRunMessagesPage(run.id, podId, {
+        limit: 1,
+        cursor: newestPage.pageInfo.nextCursor,
+      });
+      const oldestPage = runStore.getRunMessagesPage(run.id, podId, {
+        limit: 1,
+        cursor: middlePage.pageInfo.nextCursor,
+      });
+
+      expect(newestPage.timelineItems.map((item) => item.id)).toEqual([
+        "message-2",
+      ]);
+      expect(middlePage.timelineItems.map((item) => item.id)).toEqual([
+        "divider-1",
+      ]);
+      expect(oldestPage.timelineItems.map((item) => item.id)).toEqual([
+        "message-1",
+      ]);
+    });
+
+    it("getRunMessagesPage 只有 divider 沒有 message 時仍應回傳 timelineItems", () => {
+      const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, TRIGGER_MESSAGE);
+
+      runStore.addRunGoalRoundDivider({
+        runId: run.id,
+        podId: "pod-1",
+        sourcePodIds: ["source-1"],
+        sourcePodNames: ["來源一"],
+        status: "blocked",
+        blockedReason: "等待補充",
+        completedAt: "2026-05-22T10:00:00.000Z",
+        connectionIds: ["conn-1"],
+        id: "divider-only",
+      });
+
+      const page = runStore.getRunMessagesPage(run.id, "pod-1");
+
+      expect(page.messages).toEqual([]);
+      expect(page.timelineItems).toEqual([
+        expect.objectContaining({
+          type: "goal-round-divider",
+          id: "divider-only",
+        }),
+      ]);
     });
   });
 

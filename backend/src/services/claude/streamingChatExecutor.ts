@@ -37,8 +37,10 @@ import { WebSocketResponseEvents } from "../../schemas/index.js";
 import { createI18nError } from "../../utils/i18nError.js";
 import { appendSystemMessage } from "../transcriptSystemMessage.js";
 import { resolveExecutionPaths } from "../runtime/executionPaths.js";
+import { runExecutionService } from "../workflow/runExecutionService.js";
 import {
   consumeGoalRuntimeToolResult,
+  ensureGoalRuntime,
   getGoalRuntimeStatePath,
   readGoalRuntimeSnapshot,
 } from "../goalRuntime.js";
@@ -170,6 +172,7 @@ function handleTextEvent(event: TextStreamEvent, context: StreamContext): void {
     podId,
     messageId,
     content: streamState.accumulatedContent,
+    delta: event.content,
   });
 
   persistThrottled();
@@ -807,6 +810,25 @@ interface ChatTurnOutcome {
   finished: "completed" | "aborted_or_errored" | "completed_with_fatal_error";
 }
 
+const CLIENT_SAFE_BLOCKED_REASON_MAX_LENGTH = 240;
+
+function createClientSafeBlockedReason(reason: string | null): string | null {
+  const normalized = reason
+    ?.trim()
+    .replace(/\s+/g, " ")
+    .replace(/\/(?:Users|private|tmp|var|etc|opt|home)\/[^\s"'`，。；、)）]+/g, "[路徑已隱藏]")
+    .replace(/[A-Za-z]:\\[^\s"'`，。；、)）]+/g, "[路徑已隱藏]")
+    .replace(
+      /\b(?:sk-[A-Za-z0-9_-]{12,}|[A-Za-z0-9_]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,})\b/g,
+      "[敏感資訊已隱藏]",
+    );
+  if (!normalized) return null;
+
+  return normalized.length > CLIENT_SAFE_BLOCKED_REASON_MAX_LENGTH
+    ? `${normalized.slice(0, CLIENT_SAFE_BLOCKED_REASON_MAX_LENGTH)}...`
+    : normalized;
+}
+
 function persistGoalRoundDivider(
   options: StreamingChatExecutorOptions,
 ): void {
@@ -821,13 +843,18 @@ function persistGoalRoundDivider(
   const status = snapshot.state.status;
   if (status !== "completed" && status !== "blocked") return;
 
+  const blockedReason =
+    status === "blocked"
+      ? createClientSafeBlockedReason(snapshot.state.blockedReason)
+      : null;
+
   const divider = runStore.addRunGoalRoundDivider({
     runId: runContext.runId,
     podId: options.podId,
     sourcePodIds: options.goalRoundDivider.sourcePodIds,
     sourcePodNames: options.goalRoundDivider.sourcePodNames,
     status,
-    blockedReason: snapshot.state.blockedReason,
+    blockedReason,
     connectionIds: options.goalRoundDivider.connectionIds,
   });
   options.strategy.createEmitStrategy().emitGoalRoundDivider({
@@ -933,19 +960,38 @@ export async function executeStreamingChat(
     return { messageId: "", content: "", hasContent: false, aborted: false };
   }
 
+  const baseRunContext = strategy.getRunContext();
+  const effectiveOptions =
+    baseRunContext &&
+    !baseRunContext.goalRuntimeScopeId &&
+    (podResult.pod.goal?.todos.length ?? 0) > 0
+      ? {
+          ...options,
+          strategy: strategy.withGoalRuntimeScope(uuidv4()),
+        }
+      : options;
+  const scopedRunContext = effectiveOptions.strategy.getRunContext();
+  if (scopedRunContext?.goalRuntimeScopeId) {
+    ensureGoalRuntime(podResult.pod, scopedRunContext);
+  }
+
   // 第一輪 turn：使用 caller 傳入的 message
   let turnOutcome = await executeChatTurn(
-    options,
+    effectiveOptions,
     podResult.pod,
-    options.message,
+    effectiveOptions.message,
     callbacks,
   );
   if (turnOutcome.finished === "aborted_or_errored") {
+    const runContext = effectiveOptions.strategy.getRunContext();
+    if (runContext) {
+      runExecutionService.unregisterActiveStream(runContext.runId, podId);
+    }
     return turnOutcome.result;
   }
 
   // Goal 完成 gate loop：只有當 runContext 存在且 Goal Runtime 有 active todo 時才會進迴圈
-  const runContext = strategy.getRunContext();
+  const runContext = effectiveOptions.strategy.getRunContext();
   let retryCount = 0;
   let noProgressCount = 0;
 
@@ -969,9 +1015,9 @@ export async function executeStreamingChat(
     }
 
     // decision.action === "retry"
-    await strategy.addUserMessage(podId, decision.nudgeMessage);
+    await effectiveOptions.strategy.addUserMessage(podId, decision.nudgeMessage);
     turnOutcome = await executeChatTurn(
-      options,
+      effectiveOptions,
       podResult.pod,
       decision.nudgeMessage,
       callbacks,
@@ -993,7 +1039,11 @@ export async function executeStreamingChat(
     if (retryCount > GOAL_GATE_LIMITS.hardRetryLimit) break;
   }
 
-  persistGoalRoundDivider(options);
+  persistGoalRoundDivider(effectiveOptions);
+
+  if (runContext) {
+    runExecutionService.unregisterActiveStream(runContext.runId, podId);
+  }
 
   if (callbacks?.onComplete) {
     await callbacks.onComplete(canvasId, podId);

@@ -170,6 +170,7 @@ function buildStatements(db: Database): {
     insert: ReturnType<Database["prepare"]>;
     selectByRunIdAndPodId: ReturnType<Database["prepare"]>;
     selectPageByRunIdAndPodId: ReturnType<Database["prepare"]>;
+    selectTimelinePageByRunIdAndPodId: ReturnType<Database["prepare"]>;
     upsert: ReturnType<Database["prepare"]>;
     deleteByRunId: ReturnType<Database["prepare"]>;
   };
@@ -712,7 +713,7 @@ function buildStatements(db: Database): {
       selectByRunIdAndPodId: db.prepare(
         `SELECT * FROM run_messages
         WHERE run_id = $runId AND pod_id = $podId
-        ORDER BY timestamp ASC`,
+        ORDER BY timestamp ASC, rowid ASC`,
       ),
       selectPageByRunIdAndPodId: db.prepare(
         `SELECT * FROM run_messages
@@ -724,6 +725,62 @@ function buildStatements(db: Database): {
             (timestamp = $beforeTimestamp AND id < $beforeMessageId)
           )
         ORDER BY timestamp DESC, id DESC
+        LIMIT $limitPlusOne`,
+      ),
+      selectTimelinePageByRunIdAndPodId: db.prepare(
+        `SELECT *
+        FROM (
+          SELECT
+            'message' AS item_type,
+            0 AS kind_order,
+            id,
+            run_id,
+            pod_id,
+            role,
+            content,
+            timestamp AS item_timestamp,
+            sub_messages_json,
+            metadata_json,
+            NULL AS source_pod_ids_json,
+            NULL AS source_pod_names_json,
+            NULL AS status,
+            NULL AS blocked_reason,
+            NULL AS connection_ids_json
+          FROM run_messages
+          WHERE run_id = $runId AND pod_id = $podId
+
+          UNION ALL
+
+          SELECT
+            'goal-round-divider' AS item_type,
+            1 AS kind_order,
+            id,
+            run_id,
+            pod_id,
+            NULL AS role,
+            NULL AS content,
+            completed_at AS item_timestamp,
+            NULL AS sub_messages_json,
+            NULL AS metadata_json,
+            source_pod_ids_json,
+            source_pod_names_json,
+            status,
+            blocked_reason,
+            connection_ids_json
+          FROM run_goal_round_dividers
+          WHERE run_id = $runId AND pod_id = $podId
+        )
+        WHERE
+          $hasCursor = 0 OR
+          item_timestamp < $beforeTimestamp OR
+          (
+            item_timestamp = $beforeTimestamp AND
+            (
+              kind_order < $beforeKindOrder OR
+              (kind_order = $beforeKindOrder AND id < $beforeItemId)
+            )
+          )
+        ORDER BY item_timestamp DESC, kind_order DESC, id DESC
         LIMIT $limitPlusOne`,
       ),
       upsert: db.prepare(

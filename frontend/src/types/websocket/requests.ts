@@ -423,6 +423,7 @@ export interface RunLoadPodMessagesPayload {
   cursor?: {
     beforeTimestamp: string;
     beforeMessageId: string;
+    beforeItemType?: "message" | "goal-round-divider";
   } | null;
 }
 
