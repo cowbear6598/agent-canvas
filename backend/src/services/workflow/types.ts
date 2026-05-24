@@ -37,6 +37,8 @@ export interface CollectSourcesResult {
   mergedContent?: string;
   isSummarized?: boolean;
   participatingConnectionIds?: string[];
+  sourcePodIds?: string[];
+  sourcePodNames?: string[];
 }
 
 export interface TriggerLifecycleContext {
@@ -47,6 +49,8 @@ export interface TriggerLifecycleContext {
   summary: string;
   isSummarized: boolean;
   participatingConnectionIds: string[];
+  sourcePodIds?: string[];
+  sourcePodNames?: string[];
   runContext: RunContext;
 }
 
@@ -59,6 +63,8 @@ export interface QueuedContext {
   queueSize: number;
   triggerMode: TriggerMode;
   participatingConnectionIds: string[];
+  sourcePodIds?: string[];
+  sourcePodNames?: string[];
   runContext: RunContext;
 }
 
@@ -70,6 +76,8 @@ export interface QueueProcessedContext {
   remainingQueueSize: number;
   triggerMode: TriggerMode;
   participatingConnectionIds: string[];
+  sourcePodIds?: string[];
+  sourcePodNames?: string[];
   runContext: RunContext;
 }
 
@@ -80,6 +88,8 @@ export interface CompletionContext {
   targetPodId: string;
   triggerMode: TriggerMode;
   participatingConnectionIds: string[];
+  sourcePodIds?: string[];
+  sourcePodNames?: string[];
   runContext: RunContext;
 }
 
@@ -120,6 +130,8 @@ export interface TriggerWorkflowWithSummaryParams {
   summary: string;
   isSummarized: boolean;
   participatingConnectionIds: string[] | undefined;
+  sourcePodIds?: string[];
+  sourcePodNames?: string[];
   strategy: TriggerStrategy;
   runContext: RunContext;
   delegate?: WorkflowStatusDelegate;

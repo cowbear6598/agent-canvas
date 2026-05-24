@@ -1,5 +1,8 @@
 import type { WorkflowRun, RunPodInstance } from "../services/runStore.js";
-import type { PersistedMessage } from "./persistence.js";
+import type {
+  PersistedMessage,
+  PersistedRunGoalRoundDivider,
+} from "./persistence.js";
 import type { MessageRole, SystemMessageMetadata } from "./message.js";
 
 /** not-applicable: 該路徑不存在; pending: 尚未 settle; settled: 已完成 settle */
@@ -71,6 +74,15 @@ export interface RunChatCompletePayload {
   fullContent: string;
 }
 
+export type RunChatTimelineItem =
+  | PersistedMessage
+  | PersistedRunGoalRoundDivider;
+
+export interface RunGoalRoundDividerPayload
+  extends PersistedRunGoalRoundDivider {
+  canvasId: string;
+}
+
 export interface RunMessagesPageCursor {
   beforeTimestamp: string;
   beforeMessageId: string;
@@ -98,5 +110,6 @@ export interface RunPodMessagesLoadedPayload {
   runId: string;
   podId: string;
   messages: PersistedMessage[];
+  timelineItems?: RunChatTimelineItem[];
   pageInfo: RunMessagesPageInfo;
 }

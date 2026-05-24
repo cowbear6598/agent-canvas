@@ -174,6 +174,7 @@ export enum WebSocketResponseEvents {
   RUN_STATUS_CHANGED = "run:status:changed",
   RUN_POD_STATUS_CHANGED = "run:pod:status:changed",
   RUN_MESSAGE = "run:message",
+  RUN_GOAL_ROUND_DIVIDER = "run:goal-round-divider",
   RUN_CHAT_COMPLETE = "run:chat:complete",
   RUN_CHAT_TOOL_USE = "run:tool_use",
   RUN_CHAT_TOOL_RESULT = "run:tool_result",

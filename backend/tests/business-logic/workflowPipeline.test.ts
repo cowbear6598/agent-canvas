@@ -6,6 +6,8 @@ import { socketService } from "../../src/services/socketService.js";
 import { runStore } from "../../src/services/runStore.js";
 import { logger } from "../../src/utils/logger.js";
 import { createStatusDelegate } from "../../src/services/workflow/workflowStatusDelegate.js";
+import { runQueueService } from "../../src/services/workflow/runQueueService.js";
+import { buildRunQueueKey } from "../../src/services/workflow/workflowHelpers.js";
 import type {
   PipelineContext,
   TriggerStrategy,
@@ -63,7 +65,7 @@ function makeConnection(overrides?: Partial<Connection>): Connection {
 }
 
 function makeStrategy(
-  mode: "auto" | "direct" | "ai-decide",
+  mode: "auto" | "direct" | "branch",
   overrides?: Partial<TriggerStrategy>,
 ): TriggerStrategy {
   const base: Partial<TriggerStrategy> = {
@@ -120,10 +122,8 @@ describe("WorkflowPipeline", () => {
     handleMultiInputForConnection: vi.fn(),
   };
 
-  const mockQueueService = {
-    enqueue: vi.fn(),
-    processNextInQueue: vi.fn().mockResolvedValue(undefined),
-  };
+  const mockQueuedPodInstance = vi.fn();
+  const mockHasActiveStream = vi.fn().mockReturnValue(false);
 
   const mockTargetPod = makePod({
     id: TARGET_POD_ID,
@@ -144,11 +144,22 @@ describe("WorkflowPipeline", () => {
     vi.spyOn(connectionStore, "update").mockReturnValue(undefined);
     vi.spyOn(socketService, "emitToCanvas").mockImplementation(() => {});
     vi.spyOn(runStore, "getPodInstance").mockReturnValue(undefined);
+    mockQueuedPodInstance.mockClear();
+    mockHasActiveStream.mockReturnValue(false);
 
     workflowPipeline.init({
       executionService: mockExecutionService,
       multiInputService: mockMultiInputService,
-      queueService: mockQueueService,
+    });
+    runQueueService.init({
+      executionService: mockExecutionService,
+      strategies: {
+        auto: makeStrategy("auto"),
+        direct: makeStrategy("direct"),
+        branch: makeStrategy("branch"),
+      },
+      queuedPodInstance: mockQueuedPodInstance,
+      hasActiveStream: mockHasActiveStream,
     });
 
     (mockExecutionService.generateSummaryWithFallback as any).mockResolvedValue(
@@ -163,12 +174,13 @@ describe("WorkflowPipeline", () => {
     (
       mockMultiInputService.handleMultiInputForConnection as any
     ).mockResolvedValue(undefined);
-    (mockQueueService.processNextInQueue as any).mockResolvedValue(undefined);
     mockExecutionService.generateSummaryWithFallback.mockClear();
     mockExecutionService.triggerWorkflowWithSummary.mockClear();
     mockMultiInputService.handleMultiInputForConnection.mockClear();
-    mockQueueService.enqueue.mockClear();
-    mockQueueService.processNextInQueue.mockClear();
+    const baseQueueKey = buildRunQueueKey(baseRunContext.runId, TARGET_POD_ID);
+    while (runQueueService.getQueueSize(baseQueueKey) > 0) {
+      runQueueService.dequeue(baseQueueKey);
+    }
 
     (mockExecutionService.generateSummaryWithFallback as any).mockResolvedValue(
       {
@@ -229,6 +241,12 @@ describe("WorkflowPipeline", () => {
   });
 
   describe("source readiness rules", () => {
+    it("workflow 執行缺少 RunContext 時不會建立 noop status delegate", () => {
+      expect(() =>
+        createStatusDelegate(undefined as unknown as RunContext),
+      ).toThrow("Workflow 執行缺少 RunContext");
+    });
+
     it("workflow stays paused when source collection is not ready", async () => {
       const mockStrategy = makeStrategy("auto", {
         collectSources: vi.fn().mockResolvedValue({
@@ -241,7 +259,11 @@ describe("WorkflowPipeline", () => {
       expect(
         mockExecutionService.triggerWorkflowWithSummary,
       ).not.toHaveBeenCalled();
-      expect(mockQueueService.enqueue).not.toHaveBeenCalled();
+      expect(
+        runQueueService.getQueueSize(
+          buildRunQueueKey(baseRunContext.runId, TARGET_POD_ID),
+        ),
+      ).toBe(0);
     });
 
     it("single-input connections can proceed without strategy-specific source collection", async () => {
@@ -387,16 +409,16 @@ describe("WorkflowPipeline", () => {
 
   describe("trigger mode lifecycle rules", () => {
     it("branch mode preserves its strategy lifecycle when target chat starts", async () => {
-      const aiDecideContext: PipelineContext = {
+      const branchContext: PipelineContext = {
         ...baseContext,
-        triggerMode: "ai-decide",
+        triggerMode: "branch",
         connection: makeConnection({
           ...mockConnection,
-          triggerMode: "ai-decide",
+          triggerMode: "branch",
         }),
       };
 
-      const mockStrategy = makeStrategy("ai-decide", {
+      const mockStrategy = makeStrategy("branch", {
         collectSources: vi.fn().mockResolvedValue({
           ready: true,
           mergedContent: "合併內容",
@@ -404,7 +426,7 @@ describe("WorkflowPipeline", () => {
         }),
       });
 
-      await workflowPipeline.execute(aiDecideContext, mockStrategy);
+      await workflowPipeline.execute(branchContext, mockStrategy);
 
       expect(
         mockExecutionService.triggerWorkflowWithSummary,
@@ -466,7 +488,125 @@ describe("WorkflowPipeline", () => {
       expect(
         mockExecutionService.triggerWorkflowWithSummary,
       ).not.toHaveBeenCalled();
-      expect(mockQueueService.enqueue).not.toHaveBeenCalled();
+      expect(
+        runQueueService.getQueueSize(
+          buildRunQueueKey(baseRunContext.runId, TARGET_POD_ID),
+        ),
+      ).toBe(0);
+    });
+  });
+
+  describe("run target queue FIFO rules", () => {
+    function makeQueuedContext(connectionId: string): PipelineContext {
+      return {
+        ...baseContext,
+        sourcePodId: `${SOURCE_POD_ID}-${connectionId}`,
+        connection: makeConnection({
+          id: connectionId,
+          sourcePodId: `${SOURCE_POD_ID}-${connectionId}`,
+          targetPodId: TARGET_POD_ID,
+          triggerMode: "direct",
+        }),
+        triggerMode: "direct",
+        decideResult: { connectionId, approved: true, reason: null },
+        delegate: createStatusDelegate(baseRunContext),
+      };
+    }
+
+    it("同一 target Pod 的第二與第三個 connection item 都會進入 FIFO 佇列", async () => {
+      const mockStrategy = makeStrategy("direct", {
+        collectSources: vi.fn().mockResolvedValue({
+          ready: true,
+        }),
+      });
+      const hasActiveItemSpy = vi
+        .spyOn(runQueueService, "hasActiveItem")
+        .mockReturnValueOnce(false)
+        .mockReturnValueOnce(true)
+        .mockReturnValueOnce(true);
+      const enqueueSpy = vi
+        .spyOn(runQueueService, "enqueue")
+        .mockImplementation(() => {});
+      const processNextSpy = vi
+        .spyOn(runQueueService, "processNext")
+        .mockResolvedValue(undefined);
+
+      await workflowPipeline.execute(makeQueuedContext("conn-1"), mockStrategy);
+      await workflowPipeline.execute(makeQueuedContext("conn-2"), mockStrategy);
+      await workflowPipeline.execute(makeQueuedContext("conn-3"), mockStrategy);
+
+      expect(hasActiveItemSpy).toHaveBeenCalledTimes(3);
+      expect(
+        mockExecutionService.triggerWorkflowWithSummary,
+      ).toHaveBeenCalledTimes(1);
+      expect(enqueueSpy).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ connectionId: "conn-2" }),
+      );
+      expect(enqueueSpy).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ connectionId: "conn-3" }),
+      );
+      expect(processNextSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it("Direct queue item 保留每條 connection 的來源 metadata", async () => {
+      const mockStrategy = makeStrategy("direct", {
+        collectSources: vi.fn().mockImplementation(({ connection }: any) =>
+          Promise.resolve({
+            ready: true,
+            participatingConnectionIds: [connection.id],
+          }),
+        ),
+      });
+      vi.spyOn(runQueueService, "hasActiveItem")
+        .mockReturnValueOnce(false)
+        .mockReturnValueOnce(true)
+        .mockReturnValueOnce(true);
+      const enqueueSpy = vi
+        .spyOn(runQueueService, "enqueue")
+        .mockImplementation(() => {});
+      vi.spyOn(runQueueService, "processNext").mockResolvedValue(undefined);
+
+      await workflowPipeline.execute(makeQueuedContext("conn-1"), mockStrategy);
+      await workflowPipeline.execute(makeQueuedContext("conn-2"), mockStrategy);
+      await workflowPipeline.execute(makeQueuedContext("conn-3"), mockStrategy);
+
+      expect(
+        mockExecutionService.triggerWorkflowWithSummary,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          connectionId: "conn-1",
+          summary: "摘要",
+          isSummarized: true,
+          participatingConnectionIds: ["conn-1"],
+          runContext: baseRunContext,
+        }),
+      );
+      expect(enqueueSpy).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          connectionId: "conn-2",
+          sourcePodId: "source-pod-conn-2",
+          summary: "摘要",
+          isSummarized: true,
+          triggerMode: "direct",
+          participatingConnectionIds: ["conn-2"],
+          runContext: baseRunContext,
+        }),
+      );
+      expect(enqueueSpy).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          connectionId: "conn-3",
+          sourcePodId: "source-pod-conn-3",
+          summary: "摘要",
+          isSummarized: true,
+          triggerMode: "direct",
+          participatingConnectionIds: ["conn-3"],
+          runContext: baseRunContext,
+        }),
+      );
     });
   });
 
@@ -494,6 +634,8 @@ describe("WorkflowPipeline", () => {
         completedAt: null,
         autoPathwaySettled: "not-applicable" as const,
         directPathwaySettled: "not-applicable" as const,
+        runRepoPath: null,
+        workspacePath: null,
       };
     }
 

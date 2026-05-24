@@ -11,6 +11,7 @@ import {
   WebSocketResponseEvents,
 } from "@/services/websocket";
 import type { ContentBlock, PodChatSendPayload } from "@/types/websocket";
+import type { RunChatTimelineItem } from "@/types/run";
 import { createMockPod } from "@tests/helpers/factories";
 import { mountUserFlowApp } from "@tests/helpers/userFlowLauncher";
 import { startFakeWebSocketServer } from "@tests/helpers/fakeWebSocketServer";
@@ -39,12 +40,13 @@ const ChatUserFlowHarness = defineComponent({
   setup() {
     const chatStore = useChatStore();
     const messages = computed(() => chatStore.getMessages(POD_ID));
+    const timelineItems = computed<RunChatTimelineItem[]>(() => messages.value);
     const isTyping = computed(() => chatStore.isTyping(POD_ID));
 
     return () =>
       h("div", [
         h(ChatMessages, {
-          messages: messages.value,
+          timelineItems: timelineItems.value,
           isTyping: isTyping.value,
         }),
         h(ChatInput, {

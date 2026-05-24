@@ -1,7 +1,15 @@
 import { randomUUID } from "crypto";
-import type { PersistedMessage, PersistedSubMessage } from "../types";
+import type {
+  PersistedMessage,
+  PersistedRunGoalRoundDivider,
+  PersistedSubMessage,
+} from "../types";
 import type { MessageRole, SystemMessageMetadata } from "../types/message.js";
-import type { RunMessagesPageCursor, RunMessagesPageInfo } from "../types/run.js";
+import type {
+  RunChatTimelineItem,
+  RunMessagesPageCursor,
+  RunMessagesPageInfo,
+} from "../types/run.js";
 import type { PathwayState } from "../types/run.js";
 import { getStmts } from "../database/stmtsHelper.js";
 import { safeJsonParse } from "@shared/safeJsonParse.js";
@@ -105,6 +113,7 @@ export interface GetRunMessagesPageOptions {
 
 export interface RunMessagesPage {
   messages: PersistedMessage[];
+  timelineItems: RunChatTimelineItem[];
   pageInfo: RunMessagesPageInfo;
 }
 
@@ -143,6 +152,18 @@ interface RunMessageRow {
   timestamp: string;
   sub_messages_json: string | null;
   metadata_json: string | null;
+}
+
+interface RunGoalRoundDividerRow {
+  id: string;
+  run_id: string;
+  pod_id: string;
+  source_pod_ids_json: string;
+  source_pod_names_json: string;
+  status: string;
+  blocked_reason: string | null;
+  completed_at: string;
+  connection_ids_json: string;
 }
 
 function rowToWorkflowRun(row: WorkflowRunRow): WorkflowRun {
@@ -196,6 +217,51 @@ function rowToRunMessage(row: RunMessageRow): PersistedMessage {
         }
       : {}),
   };
+}
+
+function rowToRunGoalRoundDivider(
+  row: RunGoalRoundDividerRow,
+): PersistedRunGoalRoundDivider {
+  return {
+    type: "goal-round-divider",
+    id: row.id,
+    runId: row.run_id,
+    podId: row.pod_id,
+    sourcePodIds: safeJsonParse<string[]>(row.source_pod_ids_json) ?? [],
+    sourcePodNames: safeJsonParse<string[]>(row.source_pod_names_json) ?? [],
+    status: row.status === "blocked" ? "blocked" : "completed",
+    blockedReason: row.blocked_reason,
+    completedAt: row.completed_at,
+    connectionIds: safeJsonParse<string[]>(row.connection_ids_json) ?? [],
+  };
+}
+
+function isRunGoalRoundDivider(
+  item: RunChatTimelineItem,
+): item is PersistedRunGoalRoundDivider {
+  return "type" in item && item.type === "goal-round-divider";
+}
+
+function getRunTimelineTimestamp(item: RunChatTimelineItem): string {
+  return isRunGoalRoundDivider(item) ? item.completedAt : item.timestamp;
+}
+
+function getRunTimelineKindOrder(item: RunChatTimelineItem): number {
+  return isRunGoalRoundDivider(item) ? 1 : 0;
+}
+
+function sortRunTimelineItems(
+  items: RunChatTimelineItem[],
+): RunChatTimelineItem[] {
+  return [...items].sort((a, b) => {
+    const aTimestamp = getRunTimelineTimestamp(a);
+    const bTimestamp = getRunTimelineTimestamp(b);
+    const timestampOrder = aTimestamp.localeCompare(bTimestamp);
+    if (timestampOrder !== 0) return timestampOrder;
+    const kindOrder = getRunTimelineKindOrder(a) - getRunTimelineKindOrder(b);
+    if (kindOrder !== 0) return kindOrder;
+    return a.id.localeCompare(b.id);
+  });
 }
 
 class RunStore {
@@ -509,6 +575,63 @@ class RunStore {
     return rows.map(rowToRunMessage);
   }
 
+  addRunGoalRoundDivider(input: {
+    runId: string;
+    podId: string;
+    sourcePodIds: string[];
+    sourcePodNames: string[];
+    status: PersistedRunGoalRoundDivider["status"];
+    blockedReason?: string | null;
+    completedAt?: string;
+    connectionIds: string[];
+    id?: string;
+  }): PersistedRunGoalRoundDivider {
+    const divider: PersistedRunGoalRoundDivider = {
+      type: "goal-round-divider",
+      id: input.id ?? randomUUID(),
+      runId: input.runId,
+      podId: input.podId,
+      sourcePodIds: input.sourcePodIds,
+      sourcePodNames: input.sourcePodNames,
+      status: input.status,
+      blockedReason: input.blockedReason ?? null,
+      completedAt: input.completedAt ?? new Date().toISOString(),
+      connectionIds: input.connectionIds,
+    };
+
+    this.stmts.runGoalRoundDivider.insert.run({
+      $id: divider.id,
+      $runId: divider.runId,
+      $podId: divider.podId,
+      $sourcePodIdsJson: JSON.stringify(divider.sourcePodIds),
+      $sourcePodNamesJson: JSON.stringify(divider.sourcePodNames),
+      $status: divider.status,
+      $blockedReason: divider.blockedReason,
+      $completedAt: divider.completedAt,
+      $connectionIdsJson: JSON.stringify(divider.connectionIds),
+    });
+
+    return divider;
+  }
+
+  getRunGoalRoundDividers(
+    runId: string,
+    podId: string,
+  ): PersistedRunGoalRoundDivider[] {
+    const rows = this.stmts.runGoalRoundDivider.selectByRunIdAndPodId.all({
+      $runId: runId,
+      $podId: podId,
+    }) as RunGoalRoundDividerRow[];
+    return rows.map(rowToRunGoalRoundDivider);
+  }
+
+  getRunTimelineItems(runId: string, podId: string): RunChatTimelineItem[] {
+    return sortRunTimelineItems([
+      ...this.getRunMessages(runId, podId),
+      ...this.getRunGoalRoundDividers(runId, podId),
+    ]);
+  }
+
   getRunMessagesPage(
     runId: string,
     podId: string,
@@ -529,9 +652,24 @@ class RunStore {
     const pageRows = (hasMore ? rows.slice(0, limit) : rows).reverse();
     const messages = pageRows.map(rowToRunMessage);
     const oldestMessage = messages[0];
+    const dividers = this.getRunGoalRoundDividers(runId, podId).filter(
+      (divider) => {
+        if (!oldestMessage) return true;
+        const newestMessage = messages[messages.length - 1];
+        if (!newestMessage) return false;
+        if (!cursor) {
+          return divider.completedAt >= oldestMessage.timestamp;
+        }
+        return (
+          divider.completedAt >= oldestMessage.timestamp &&
+          divider.completedAt <= newestMessage.timestamp
+        );
+      },
+    );
 
     return {
       messages,
+      timelineItems: sortRunTimelineItems([...messages, ...dividers]),
       pageInfo: {
         hasMore,
         nextCursor:

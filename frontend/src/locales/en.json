@@ -322,6 +322,11 @@
     "summarizedBadge": "Summary",
     "workflowBlockedHint": "This Pod is in a Workflow. Only the first and last Pod can send messages.",
     "integrationBlockedHint": "This Pod is connected to {label}. Messages are driven by {label}.",
+    "goalRoundDivider": {
+      "completedLabel": "Goal completed",
+      "blockedLabel": "Goal blocked",
+      "blockedReason": "Reason: {reason}"
+    },
     "toolOutput": {
       "errorTitle": "{toolName} Error",
       "resultTitle": "{toolName} Result",

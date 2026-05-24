@@ -1,4 +1,7 @@
-import type { PersistedMessage } from "../types/persistence.js";
+import type {
+  PersistedMessage,
+  PersistedRunGoalRoundDivider,
+} from "../types/persistence.js";
 import type { RunContext } from "../types/run.js";
 import type { ContentBlock } from "../types/index.js";
 import type { SystemMessageMetadata } from "../types/message.js";
@@ -45,6 +48,10 @@ export interface ChatEmitStrategy {
     messageId: string;
     content: string;
     metadata: SystemMessageMetadata;
+  }): void;
+  emitGoalRoundDivider(params: {
+    canvasId: string;
+    divider: PersistedRunGoalRoundDivider;
   }): void;
 }
 

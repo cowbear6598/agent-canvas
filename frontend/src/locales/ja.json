@@ -322,6 +322,11 @@
     "summarizedBadge": "要約",
     "workflowBlockedHint": "この Pod はワークフロー内にあります。最初と最後の Pod のみ送信できます。",
     "integrationBlockedHint": "この Pod は {label} に接続されています。メッセージは {label} によって送信されます。",
+    "goalRoundDivider": {
+      "completedLabel": "Goal 完了",
+      "blockedLabel": "Goal Blocked",
+      "blockedReason": "理由：{reason}"
+    },
     "toolOutput": {
       "errorTitle": "{toolName} エラー情報",
       "resultTitle": "{toolName} 実行結果",

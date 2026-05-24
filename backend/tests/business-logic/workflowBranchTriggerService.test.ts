@@ -225,7 +225,7 @@ describe("WorkflowBranchTriggerService", () => {
         CANVAS_ID,
         SOURCE_POD_ID,
         [conn],
-        null,
+        makeRunContext(),
       );
       await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -279,7 +279,7 @@ describe("WorkflowBranchTriggerService", () => {
         CANVAS_ID,
         SOURCE_POD_ID,
         [mockConnection],
-        null,
+        makeRunContext(),
       );
 
       expect(logger.log).toHaveBeenCalledWith(
@@ -493,7 +493,7 @@ describe("WorkflowBranchTriggerService", () => {
 
       // 即使 hasPendingTarget=false，仍應呼叫 recordSourceRejection（不因此跳過）
       expect(recordRejectionSpy).toHaveBeenCalledWith(
-        TARGET_POD_ID,
+        `run-1:${TARGET_POD_ID}`,
         SOURCE_POD_ID,
         "",
         [SOURCE_POD_ID, "source-pod-2"],

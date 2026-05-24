@@ -33,6 +33,8 @@ interface EnqueueParams {
   finalIsSummarized: boolean;
   triggerMode: PipelineContext["triggerMode"];
   participatingConnectionIds?: string[];
+  sourcePodIds?: string[];
+  sourcePodNames?: string[];
   runContext: PipelineContext["runContext"];
 }
 
@@ -45,7 +47,6 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
     runContext: PipelineContext["runContext"],
     targetPodId: string,
   ): boolean {
-    if (!runContext) return true;
     const targetInstance = runStore.getPodInstance(
       runContext.runId,
       targetPodId,
@@ -122,9 +123,10 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
     }
 
     if (!this.isRunInstanceTriggerable(runContext, targetPodId)) {
-      const targetInstance = runContext
-        ? runStore.getPodInstance(runContext.runId, targetPodId)
-        : null;
+      const targetInstance = runStore.getPodInstance(
+        runContext.runId,
+        targetPodId,
+      );
       logger.log(
         "Workflow",
         "Pipeline",
@@ -189,8 +191,13 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
     );
     if (!collectResult) return;
 
-    const { finalSummary, finalIsSummarized, participatingConnectionIds } =
-      collectResult;
+    const {
+      finalSummary,
+      finalIsSummarized,
+      participatingConnectionIds,
+      sourcePodIds,
+      sourcePodNames,
+    } = collectResult;
 
     const enqueueParams: EnqueueParams = {
       canvasId,
@@ -201,10 +208,12 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
       finalIsSummarized,
       triggerMode,
       participatingConnectionIds,
+      sourcePodIds,
+      sourcePodNames,
       runContext,
     };
 
-    // 砍除 normal mode 後唯一的 enqueue 路徑：透過 delegate 的佇列機制處理排隊
+    // 砍除 normal mode 後唯一的 enqueue 路徑：透過 delegate 的 per-run target 佇列機制處理排隊
     if (this.enqueueForRunMode(delegate, enqueueParams)) return;
 
     await this.deps.executionService.triggerWorkflowWithSummary({
@@ -213,6 +222,8 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
       summary: finalSummary,
       isSummarized: finalIsSummarized,
       participatingConnectionIds,
+      sourcePodIds,
+      sourcePodNames,
       strategy,
       runContext,
       delegate,
@@ -222,8 +233,8 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
   /**
    * 砍除 normal mode 後唯一的 enqueue 路徑。
    *
-   * delegate 依 Pod instance 的 running 狀態判斷是否忙碌，
-   * 並透過 RunDelegate 的佇列實作排隊。
+   * delegate 依 active stream、Pod instance 與既有 queue item 判斷是否忙碌，
+   * 並透過 RunDelegate 的佇列實作維持同一 target Pod 的 FIFO。
    * 回傳 true 表示已加入佇列，呼叫方應立即 return。
    */
   private enqueueForRunMode(
@@ -239,10 +250,15 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
       finalIsSummarized,
       triggerMode,
       participatingConnectionIds,
+      sourcePodIds,
+      sourcePodNames,
       runContext,
     } = params;
 
-    if (!delegate.shouldEnqueue() || !delegate.isBusy(canvasId, targetPodId)) {
+    const shouldQueue =
+      delegate.shouldEnqueue() && delegate.isBusy(canvasId, targetPodId);
+
+    if (!shouldQueue) {
       return false;
     }
 
@@ -260,6 +276,8 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
       isSummarized: finalIsSummarized,
       triggerMode,
       participatingConnectionIds,
+      sourcePodIds,
+      sourcePodNames,
       runContext,
     });
     // 安全網：立即嘗試消化佇列，防止 enqueue 發生在最後一次 scheduleNextInQueue 之後導致佇列卡住
@@ -277,6 +295,8 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
     finalSummary: string;
     finalIsSummarized: boolean;
     participatingConnectionIds?: string[];
+    sourcePodIds?: string[];
+    sourcePodNames?: string[];
   } | null> {
     const { canvasId, sourcePodId, connection } = context;
 
@@ -292,13 +312,16 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
       return null;
     }
 
-    const { participatingConnectionIds } = collectResult;
+    const { participatingConnectionIds, sourcePodIds, sourcePodNames } =
+      collectResult;
 
     if (collectResult.mergedContent) {
       return {
         finalSummary: collectResult.mergedContent,
         finalIsSummarized: collectResult.isSummarized ?? true,
         participatingConnectionIds,
+        sourcePodIds,
+        sourcePodNames,
       };
     }
 
@@ -306,6 +329,8 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
       finalSummary: summaryContent,
       finalIsSummarized: isSummarized,
       participatingConnectionIds,
+      sourcePodIds,
+      sourcePodNames,
     };
   }
 
@@ -348,6 +373,8 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
     finalSummary: string;
     finalIsSummarized: boolean;
     participatingConnectionIds?: string[];
+    sourcePodIds?: string[];
+    sourcePodNames?: string[];
   } {
     return { finalSummary: summaryContent, finalIsSummarized: isSummarized };
   }
@@ -361,6 +388,8 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
     finalSummary: string;
     finalIsSummarized: boolean;
     participatingConnectionIds?: string[];
+    sourcePodIds?: string[];
+    sourcePodNames?: string[];
   } | null> {
     const { canvasId, connection } = context;
     const { targetPodId } = connection;

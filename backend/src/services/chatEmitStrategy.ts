@@ -81,6 +81,16 @@ export function createChatEmitStrategy(runId: string): ChatEmitStrategy {
         },
       );
     },
+    emitGoalRoundDivider({ canvasId, divider }): void {
+      socketService.emitToCanvas(
+        canvasId,
+        WebSocketResponseEvents.RUN_GOAL_ROUND_DIVIDER,
+        {
+          ...divider,
+          canvasId,
+        },
+      );
+    },
     emitSystemMessage({
       canvasId,
       podId,

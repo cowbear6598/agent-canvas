@@ -54,12 +54,10 @@ function readSnapshotForGate(
  *   - status === "running" 且有 activeTodoId 且尚未達上限
  */
 export function evaluateGoalGate(
-  runContext: RunContext | undefined,
+  runContext: RunContext,
   podId: string,
   counters: GoalGateCounters,
 ): GoalGateDecision {
-  if (!runContext) return { action: "proceed" };
-
   const snapshot = readSnapshotForGate(runContext, podId);
   if (!snapshot) return { action: "proceed" };
 

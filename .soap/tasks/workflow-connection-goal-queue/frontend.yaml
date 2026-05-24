@@ -1,0 +1,153 @@
+feature: workflow-connection-goal-queue
+side: frontend
+approved: true
+phases:
+  - id: P1
+    title: Run timeline 型別與 store 整合
+    parallel: false
+    verification:
+      - bun run style
+      - bun run test
+    done: true
+    items:
+      - id: P1.A
+        title: Timeline item 型別
+        tasks:
+          - id: P1.A.t1
+            text: 在 `frontend/src/types/run.ts` 與 websocket response 型別中新增 run chat timeline item union，支援既有 chat message 與 Goal round divider
+            completed: true
+            last_files_changed:
+              - frontend/src/types/run.ts
+              - frontend/src/types/websocket/responses.ts
+          - id: P1.A.t2
+            text: 定義 Goal round divider 前端型別，欄位包含 id、runId、podId、sourcePodIds、sourcePodNames、status、blockedReason、completedAt 與 connectionIds
+            completed: true
+            last_files_changed:
+              - frontend/src/types/run.ts
+          - id: P1.A.t3
+            text: 更新 `frontend/src/types/chat.ts` 或 run message mapper，讓既有 Message 型別不被塞入 divider 專用欄位
+            completed: true
+            last_files_changed:
+              - frontend/src/stores/run/runStoreHelpers.ts
+
+      - id: P1.B
+        title: Run store timeline 管理
+        tasks:
+          - id: P1.B.t1
+            text: 調整 `frontend/src/stores/run/runStore.ts` 的 run chat state，讓 active run chat 可依序保存 message 與 Goal round divider item
+            completed: true
+            last_files_changed:
+              - frontend/src/stores/run/runStore.ts
+          - id: P1.B.t2
+            text: 更新載入舊歷程的 mapper，將後端 persisted divider 與 persisted message 轉成同一條 timeline
+            completed: true
+            last_files_changed:
+              - frontend/src/stores/run/runStore.ts
+          - id: P1.B.t3
+            text: 新增 append divider action，讓即時 WebSocket event 可把 Goal round divider 插入目前開啟的 run chat timeline
+            completed: true
+            last_files_changed:
+              - frontend/src/stores/run/runStore.ts
+          - id: P1.B.t4
+            text: 補 frontend store 測試，覆蓋舊歷程載入與即時 divider append 後 timeline 順序維持正確
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/stores/run/runStore.test.ts
+              - frontend/tests/business-logic/composables/events/runEventHandlers.test.ts
+              - frontend/tests/business-logic/stores/run/opencodeV2RunParity.test.ts
+
+  - id: P2
+    title: Goal round divider 顯示
+    parallel: false
+    verification:
+      - bun run style
+      - bun run test
+    done: true
+    items:
+      - id: P2.A
+        title: Divider 元件
+        tasks:
+          - id: P2.A.t1
+            text: 新增 `frontend/src/components/chat/GoalRoundDivider.vue`，以水平分隔線呈現來源 Pod 名稱與 completed/blocked 狀態
+            completed: true
+            last_files_changed:
+              - frontend/src/components/chat/GoalRoundDivider.vue
+          - id: P2.A.t2
+            text: 在 divider 元件中讓多個來源 Pod 以「Pod 1、Pod 2」格式顯示，blocked 狀態額外顯示 blocked reason 摘要
+            completed: true
+            last_files_changed:
+              - frontend/src/components/chat/GoalRoundDivider.vue
+          - id: P2.A.t3
+            text: 補 zh-TW/en/ja locale 文案，支援 completed 與 blocked divider label
+            completed: true
+            last_files_changed:
+              - frontend/src/locales/zh-TW.json
+              - frontend/src/locales/en.json
+              - frontend/src/locales/ja.json
+
+      - id: P2.B
+        title: ChatMessages timeline render
+        tasks:
+          - id: P2.B.t1
+            text: 調整 `frontend/src/components/chat/ChatMessages.vue` props，讓它接收 timeline items 並依 item type 渲染 ChatMessageBubble 或 GoalRoundDivider
+            completed: true
+            last_files_changed:
+              - frontend/src/components/chat/ChatMessages.vue
+          - id: P2.B.t2
+            text: 更新 `frontend/src/components/run/RunChatModal.vue`，改用 runStore 的 active timeline 並保持載入舊訊息與 typing 狀態行為
+            completed: true
+            last_files_changed:
+              - frontend/src/components/run/RunChatModal.vue
+          - id: P2.B.t3
+            text: 檢查一般 chat 使用 `ChatMessages.vue` 的呼叫點，提供 message-only timeline 轉換，避免一般 chat 被 run divider 型別影響
+            completed: true
+            last_files_changed:
+              - frontend/tests/userflows/chat/chatUserFlow.test.ts
+          - id: P2.B.t4
+            text: 補前端 userflow 測試，覆蓋同一 Pod 多輪 Goal 歷程中會在每輪結束處顯示來源 Pod divider
+            completed: true
+            last_files_changed:
+              - frontend/tests/userflows/chat/runGoalRoundDividerUserFlow.test.ts
+
+  - id: P3
+    title: WebSocket event handler 與回歸測試
+    parallel: false
+    verification:
+      - bun run style
+      - bun run test
+    done: true
+    items:
+      - id: P3.A
+        title: Divider 即時事件
+        tasks:
+          - id: P3.A.t1
+            text: 在 `frontend/src/composables/eventHandlers/runEventHandlers.ts` 註冊後端 Goal round divider event，並呼叫 runStore append divider action
+            completed: true
+            last_files_changed:
+              - frontend/src/composables/eventHandlers/runEventHandlers.ts
+              - frontend/src/types/websocket/responses.ts
+          - id: P3.A.t2
+            text: 更新 `frontend/src/composables/useUnifiedEventListeners.ts` 或事件註冊表，確保新 event 在 canvas WebSocket 連線中被訂閱
+            completed: true
+            last_files_changed:
+              - frontend/src/composables/eventHandlers/runEventHandlers.ts
+              - frontend/src/types/websocket/events.ts
+          - id: P3.A.t3
+            text: 補 event handler 測試，覆蓋 divider event 只更新對應 runId 與 podId 的 timeline
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/composables/events/runEventHandlers.test.ts
+
+      - id: P3.B
+        title: Queue 歷程呈現回歸
+        tasks:
+          - id: P3.B.t1
+            text: 補 run chat modal 測試，覆蓋三條 Direct 不合併時會看到三個依序出現的 Goal round divider
+            completed: true
+            last_files_changed:
+              - frontend/tests/userflows/chat/runGoalRoundDividerUserFlow.test.ts
+          - id: P3.B.t2
+            text: 補 run chat modal 測試，覆蓋 Auto/Branch multi-input group 只會顯示一個包含多個來源 Pod 名稱的 divider
+            completed: true
+            last_files_changed:
+              - frontend/tests/userflows/chat/runGoalRoundDividerUserFlow.test.ts

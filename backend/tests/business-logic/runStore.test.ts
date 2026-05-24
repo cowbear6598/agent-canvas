@@ -439,6 +439,88 @@ describe("RunStore", () => {
       expect(fetched[0].metadata?.severity).toBe("error");
     });
 
+    it("Goal round divider 應以獨立 transcript 紀錄保存，不混入 system message metadata", () => {
+      const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, TRIGGER_MESSAGE);
+      const completedAt = "2026-05-24T10:00:01.000Z";
+
+      runStore.upsertRunMessage(run.id, "pod-1", {
+        id: "00000000-0000-0000-0000-000000000001",
+        role: "assistant",
+        content: "第一輪內容",
+        timestamp: "2026-05-24T10:00:00.000Z",
+      });
+      const divider = runStore.addRunGoalRoundDivider({
+        runId: run.id,
+        podId: "pod-1",
+        sourcePodIds: ["source-1"],
+        sourcePodNames: ["來源 Pod"],
+        status: "blocked",
+        blockedReason: "等待人工確認",
+        completedAt,
+        connectionIds: ["conn-1"],
+        id: "divider-1",
+      });
+      runStore.upsertRunMessage(run.id, "pod-1", {
+        id: "00000000-0000-0000-0000-000000000002",
+        role: "assistant",
+        content: "第二輪內容",
+        timestamp: "2026-05-24T10:00:02.000Z",
+      });
+
+      const messages = runStore.getRunMessages(run.id, "pod-1");
+      const dividers = runStore.getRunGoalRoundDividers(run.id, "pod-1");
+      const timelineItems = runStore.getRunTimelineItems(run.id, "pod-1");
+
+      expect(divider).toMatchObject({
+        type: "goal-round-divider",
+        runId: run.id,
+        podId: "pod-1",
+        sourcePodIds: ["source-1"],
+        sourcePodNames: ["來源 Pod"],
+        status: "blocked",
+        blockedReason: "等待人工確認",
+        completedAt,
+        connectionIds: ["conn-1"],
+      });
+      expect(messages).toHaveLength(2);
+      expect(messages.every((message) => !message.metadata)).toBe(true);
+      expect(dividers).toEqual([divider]);
+      expect(timelineItems.map((item) => item.id)).toEqual([
+        "00000000-0000-0000-0000-000000000001",
+        "divider-1",
+        "00000000-0000-0000-0000-000000000002",
+      ]);
+    });
+
+    it("Goal round divider 與 assistant message 同 timestamp 時，timeline 應固定把 message 排在 divider 前", () => {
+      const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, TRIGGER_MESSAGE);
+      const sameTimestamp = "2026-05-24T10:00:01.000Z";
+
+      runStore.addRunGoalRoundDivider({
+        runId: run.id,
+        podId: "pod-1",
+        sourcePodIds: ["source-1"],
+        sourcePodNames: ["來源 Pod"],
+        status: "completed",
+        completedAt: sameTimestamp,
+        connectionIds: ["conn-1"],
+        id: "00000000-0000-0000-0000-000000000001",
+      });
+      runStore.upsertRunMessage(run.id, "pod-1", {
+        id: "zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz",
+        role: "assistant",
+        content: "完成回覆",
+        timestamp: sameTimestamp,
+      });
+
+      expect(
+        runStore.getRunTimelineItems(run.id, "pod-1").map((item) => item.id),
+      ).toEqual([
+        "zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz",
+        "00000000-0000-0000-0000-000000000001",
+      ]);
+    });
+
     // ================================================================
     // 測試案例 9 — addRunMessage 傳入外部 id 與不傳兩種路徑
     // ================================================================

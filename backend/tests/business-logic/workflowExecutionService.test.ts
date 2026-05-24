@@ -173,6 +173,38 @@ describe("WorkflowExecutionService", () => {
       expect(mockStrategy.onTrigger).toHaveBeenCalled();
     });
 
+    it("run mode 啟動查詢前應先註冊 active stream，避免 queue 立即重入", async () => {
+      const runContext = makeRunContext();
+      const autoConn = makeConnection({
+        id: "conn-auto-active-stream",
+        triggerMode: "auto",
+      });
+      const mockStrategy = makeStrategy("auto");
+      const registerActiveStreamSpy = vi
+        .spyOn(runExecutionService, "registerActiveStream")
+        .mockImplementation(() => {});
+
+      vi.spyOn(connectionStore, "getById").mockReturnValue(autoConn);
+      vi.spyOn(connectionStore, "findByTargetPodId").mockReturnValue([
+        autoConn,
+      ]);
+
+      await workflowExecutionService.triggerWorkflowWithSummary({
+        canvasId: CANVAS_ID,
+        connectionId: autoConn.id,
+        summary: "Test summary",
+        isSummarized: true,
+        participatingConnectionIds: undefined,
+        strategy: mockStrategy,
+        runContext,
+      });
+
+      expect(registerActiveStreamSpy).toHaveBeenCalledWith(
+        runContext.runId,
+        TARGET_POD_ID,
+      );
+    });
+
     it("missing connection is ignored so deleted workflow edges do not start chats", async () => {
       const mockStrategy = makeStrategy("auto");
       vi.spyOn(connectionStore, "getById").mockReturnValue(undefined);

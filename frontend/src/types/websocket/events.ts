@@ -201,6 +201,7 @@ export const WebSocketResponseEvents = {
   RUN_POD_STATUS_CHANGED: "run:pod:status:changed",
   RUN_MESSAGE: "run:message",
   RUN_CHAT_COMPLETE: "run:chat:complete",
+  RUN_GOAL_ROUND_DIVIDER: "run:goal-round-divider",
   RUN_DELETED: "run:deleted",
   RUN_HISTORY_RESULT: "run:history:result",
   RUN_POD_MESSAGES_RESULT: "run:pod-messages:result",

@@ -38,7 +38,38 @@ interface MultiInputServiceDeps {
   };
 }
 
+interface MultiInputTriggerMetadata {
+  participatingConnectionIds: string[];
+  sourcePodIds: string[];
+  sourcePodNames: string[];
+}
+
 class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps> {
+  private buildMultiInputTriggerMetadata(
+    canvasId: string,
+    targetPodId: string,
+    completedSummaries: Map<string, string>,
+  ): MultiInputTriggerMetadata {
+    const sourcePodIds = Array.from(completedSummaries.keys());
+    const sourcePodIdSet = new Set(sourcePodIds);
+    const participatingConnectionIds = getMultiInputGroupConnections(
+      canvasId,
+      targetPodId,
+    )
+      .filter((conn) => sourcePodIdSet.has(conn.sourcePodId))
+      .map((conn) => conn.id);
+    const sourcePodNames = sourcePodIds.map((podId) => {
+      const pod = podStore.getById(canvasId, podId);
+      return pod?.name ?? podId;
+    });
+
+    return {
+      participatingConnectionIds,
+      sourcePodIds,
+      sourcePodNames,
+    };
+  }
+
   private enqueueIfBusy(
     canvasId: string,
     connection: Connection,
@@ -54,7 +85,13 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
       `目標 Pod "${targetPod?.name ?? connection.targetPodId}" 忙碌中，將合併的 workflow 加入佇列`,
     );
 
-    const primarySourcePodId = Array.from(completedSummaries.keys())[0];
+    const metadata = this.buildMultiInputTriggerMetadata(
+      canvasId,
+      connection.targetPodId,
+      completedSummaries,
+    );
+    const primarySourcePodId =
+      metadata.sourcePodIds[0] ?? connection.sourcePodId;
     runQueueService.enqueue({
       canvasId,
       connectionId: connection.id,
@@ -63,6 +100,9 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
       summary: mergedContent,
       isSummarized: true,
       triggerMode,
+      participatingConnectionIds: metadata.participatingConnectionIds,
+      sourcePodIds: metadata.sourcePodIds,
+      sourcePodNames: metadata.sourcePodNames,
       runContext,
     });
 
@@ -259,11 +299,15 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
       MERGED_CONTENT_PREVIEW_MAX_LENGTH,
     );
 
-    const sourcePodIds = Array.from(completedSummaries.keys());
+    const metadata = this.buildMultiInputTriggerMetadata(
+      canvasId,
+      connection.targetPodId,
+      completedSummaries,
+    );
     const mergedPayload: WorkflowSourcesMergedPayload = {
       canvasId,
       targetPodId: connection.targetPodId,
-      sourcePodIds,
+      sourcePodIds: metadata.sourcePodIds,
       mergedContentPreview: mergedPreview,
     };
 
@@ -284,7 +328,9 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
         connectionId: connection.id,
         summary: mergedContent,
         isSummarized: true,
-        participatingConnectionIds: undefined,
+        participatingConnectionIds: metadata.participatingConnectionIds,
+        sourcePodIds: metadata.sourcePodIds,
+        sourcePodNames: metadata.sourcePodNames,
         strategy,
         runContext,
         delegate,

@@ -11,6 +11,7 @@ import type {
   RunChatCompletePayload,
   RunToolUsePayload,
   RunToolResultPayload,
+  RunGoalRoundDividerPayload,
 } from '@/types/websocket/responses'
 
 const handleRunCreated = createUnifiedHandler<BasePayload & RunCreatedPayload>(
@@ -80,6 +81,17 @@ export const handleRunChatComplete = (payload: RunChatCompletePayload): void => 
   )
 }
 
+export const handleRunGoalRoundDivider = (
+  payload: RunGoalRoundDividerPayload,
+): void => {
+  if (!isCurrentCanvas(payload.canvasId)) return
+
+  const runStore = useRunStore()
+  if (!runStore.isActiveRunChatTarget(payload.runId, payload.podId)) return
+
+  runStore.appendRunChatDivider(payload)
+}
+
 export const handleRunToolUse = (payload: RunToolUsePayload): void => {
   if (!isCurrentCanvas(payload.canvasId)) return
 
@@ -125,6 +137,7 @@ export function getRunStandaloneListeners(): Array<{ event: string; handler: (pa
   return [
     { event: WebSocketResponseEvents.RUN_MESSAGE, handler: handleRunMessage as (payload: unknown) => void },
     { event: WebSocketResponseEvents.RUN_CHAT_COMPLETE, handler: handleRunChatComplete as (payload: unknown) => void },
+    { event: WebSocketResponseEvents.RUN_GOAL_ROUND_DIVIDER, handler: handleRunGoalRoundDivider as (payload: unknown) => void },
     { event: WebSocketResponseEvents.RUN_TOOL_USE, handler: handleRunToolUse as (payload: unknown) => void },
     { event: WebSocketResponseEvents.RUN_TOOL_RESULT, handler: handleRunToolResult as (payload: unknown) => void },
   ]

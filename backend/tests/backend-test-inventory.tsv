@@ -67,7 +67,7 @@ backend/tests/business-logic/createResourceHandlers.test.ts	business-logic	rewri
 backend/tests/business-logic/cursorColorManager.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	-	-	Cursor color allocation container
 backend/tests/business-logic/dbStartupCleanup.test.ts	deleted	deleted	F4 inventory cleanup	outdated-inventory	-	已從 backend/tests 移除，保留此列標記 inventory 過期項目
 backend/tests/business-logic/dedupHelper.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	-	-	Dedup tracker container
-backend/tests/business-logic/directTriggerStore.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	data-container-crud	-	Direct trigger store CRUD
+backend/tests/business-logic/directTriggerStore.test.ts	deleted	deleted	F3 workflow connection goal queue	outdated-direct-merge-store	-	已從 backend/tests 移除，Direct 不再使用合併等待 store
 backend/tests/business-logic/diskSpace.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+spy	path-safety	Disk space checks with mocked statfs
 backend/tests/business-logic/disposableChatService.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock+spy-call-count	path-safety	Disposable chat mocked provider flow
 backend/tests/business-logic/encryptionService.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	module-mock	-	Encryption service crypto mocks
@@ -131,6 +131,7 @@ backend/tests/business-logic/workflowBranchTriggerService.test.ts	business-logic
 backend/tests/business-logic/workflowDirectTriggerFlow.test.ts	business-logic	keep	workflow decision	spy+spy-call-count+data-container-crud	workflow-decision	Direct trigger workflow flow
 backend/tests/business-logic/workflowExecutionService.test.ts	business-logic	keep	workflow decision	spy+spy-call-count+data-container-crud	path-safety+workflow-decision	Workflow execution service decisions
 backend/tests/business-logic/workflowHelpers.test.ts	business-logic	rewrite	workflow decision	module-mock+spy-call-count+data-container-crud	workflow-decision+error-classifier	Workflow helper event emit calls
+backend/tests/business-logic/workflowMultiInputService.test.ts	business-logic	keep	workflow decision	spy+spy-call-count	workflow-decision	Workflow multi-input queue metadata and single group item behavior
 backend/tests/business-logic/workflowPipeline.test.ts	business-logic	keep	workflow decision	spy+spy-call-count+data-container-crud	path-safety+workflow-decision	Workflow pipeline branch/run decisions
 backend/tests/business-logic/workflowStateService.test.ts	business-logic	rewrite	workflow decision	spy+spy-call-count+data-container-crud+getter-setter	workflow-decision	Workflow state service CRUD and emit calls
 backend/tests/business-logic/busyChatManager.test.ts	business-logic	rewrite	F7 product behavior or low-level utility	-	-	Busy chat reply decision helper

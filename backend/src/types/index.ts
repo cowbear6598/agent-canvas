@@ -53,13 +53,16 @@ export type {
 
 export type {
   PersistedMessage,
+  PersistedRunGoalRoundDivider,
   PersistedSubMessage,
   PersistedToolUseInfo,
 } from "./persistence.js";
 
 export type {
   RunContext,
+  RunChatTimelineItem,
   RunCreatedPayload,
+  RunGoalRoundDividerPayload,
   RunStatusChangedPayload,
   RunPodStatusChangedPayload,
   RunMessagePayload,

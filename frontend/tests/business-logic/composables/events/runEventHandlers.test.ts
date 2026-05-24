@@ -6,11 +6,33 @@ import { useRunStore } from "@/stores/run/runStore";
 import {
   getRunEventListeners,
   handleRunChatComplete,
+  handleRunGoalRoundDivider,
   handleRunMessage,
   handleRunToolResult,
   handleRunToolUse,
 } from "@/composables/eventHandlers/runEventHandlers";
 import { WebSocketResponseEvents } from "@/services/websocket";
+import type { Message } from "@/types/chat";
+import type { RunGoalRoundDividerPayload } from "@/types/websocket/responses";
+
+function createGoalRoundDividerPayload(
+  overrides: Partial<RunGoalRoundDividerPayload> = {},
+): RunGoalRoundDividerPayload {
+  return {
+    canvasId: "canvas-1",
+    type: "goal-round-divider",
+    id: "divider-1",
+    runId: "run-1",
+    podId: "pod-1",
+    sourcePodIds: ["source-pod-1"],
+    sourcePodNames: ["來源 Pod"],
+    status: "completed",
+    blockedReason: null,
+    completedAt: "2026-05-24T10:00:00.000Z",
+    connectionIds: ["connection-1"],
+    ...overrides,
+  };
+}
 
 vi.mock("@/services/websocket", () => webSocketMockFactory());
 
@@ -107,7 +129,10 @@ describe("runEventHandlers", () => {
       fullContent: "Hello",
     });
 
-    const messages = runStore.runChatMessages.get("run-1")?.get("pod-1");
+    const messages = runStore.runChatMessages
+      .get("run-1")
+      ?.get("pod-1")
+      ?.filter((item): item is Message => !("type" in item));
     expect(messages).toHaveLength(1);
     expect(messages?.[0]?.content).toBe("Hello");
     expect(messages?.[0]?.toolUse?.[0]).toMatchObject({
@@ -116,6 +141,41 @@ describe("runEventHandlers", () => {
       output: "file-a",
       status: "completed",
     });
+  });
+
+  it("Goal round divider event 只應更新目前 runId 與 podId 的 timeline", () => {
+    const canvasStore = useCanvasStore();
+    const runStore = useRunStore();
+    canvasStore.activeCanvasId = "canvas-1";
+    runStore.activeRunChatModal = { runId: "run-1", podId: "pod-1" };
+
+    handleRunGoalRoundDivider(
+      createGoalRoundDividerPayload({ id: "divider-active" }),
+    );
+    handleRunGoalRoundDivider(
+      createGoalRoundDividerPayload({
+        id: "divider-other-run",
+        runId: "run-2",
+      }),
+    );
+    handleRunGoalRoundDivider(
+      createGoalRoundDividerPayload({
+        id: "divider-other-pod",
+        podId: "pod-2",
+      }),
+    );
+    handleRunGoalRoundDivider(
+      createGoalRoundDividerPayload({
+        canvasId: "canvas-2",
+        id: "divider-other-canvas",
+      }),
+    );
+
+    expect(
+      runStore.runChatMessages.get("run-1")?.get("pod-1")?.map((item) => item.id),
+    ).toEqual(["divider-active"]);
+    expect(runStore.runChatMessages.get("run-2")).toBeUndefined();
+    expect(runStore.runChatMessages.get("run-1")?.get("pod-2")).toBeUndefined();
   });
 
   it("RUN_DELETED 錯誤回應不應誤刪本地 run", () => {

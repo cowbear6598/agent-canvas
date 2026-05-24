@@ -72,8 +72,8 @@ const mockStrategies = {
     onQueued: vi.fn(),
     onQueueProcessed: vi.fn(),
   },
-  "ai-decide": {
-    mode: "ai-decide" as const,
+  branch: {
+    mode: "branch" as const,
     decide: vi.fn(),
     onTrigger: vi.fn(),
     onComplete: vi.fn(),
@@ -102,6 +102,7 @@ function createQueueItem(
 describe("RunQueueService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(runStore.getPodInstance).mockReturnValue(undefined);
     mockHasActiveStream.mockReturnValue(false);
     runQueueService.init({
       executionService: mockExecutionService,
@@ -186,6 +187,68 @@ describe("RunQueueService", () => {
     });
   });
 
+  describe("hasActiveItem", () => {
+    it("同一 runId:targetPodId 有活躍 stream 時回報忙碌", () => {
+      mockHasActiveStream.mockReturnValue(true);
+
+      expect(runQueueService.hasActiveItem(mockRunContext, targetPodId)).toBe(
+        true,
+      );
+    });
+
+    it("同一 runId:targetPodId 有非終態且已啟動的 pod instance 時回報忙碌", () => {
+      vi.mocked(runStore.getPodInstance).mockReturnValue({
+        id: "inst-1",
+        runId: mockRunContext.runId,
+        podId: targetPodId,
+        status: "waiting",
+        sessionId: null,
+        errorMessage: null,
+        lastResponseSummary: null,
+        triggeredAt: null,
+        completedAt: null,
+        autoPathwaySettled: "not-applicable",
+        directPathwaySettled: "not-applicable",
+        runRepoPath: null,
+        workspacePath: null,
+      });
+
+      expect(runQueueService.hasActiveItem(mockRunContext, targetPodId)).toBe(
+        true,
+      );
+    });
+
+    it("同一 runId:targetPodId 已有 queue item 時回報忙碌", () => {
+      runQueueService.enqueue(createQueueItem({ connectionId: "conn-queued" }));
+
+      expect(runQueueService.hasActiveItem(mockRunContext, targetPodId)).toBe(
+        true,
+      );
+    });
+
+    it("只有尚未啟動的 pending instance 且佇列為空時不視為忙碌", () => {
+      vi.mocked(runStore.getPodInstance).mockReturnValue({
+        id: "inst-1",
+        runId: mockRunContext.runId,
+        podId: targetPodId,
+        status: "pending",
+        sessionId: null,
+        errorMessage: null,
+        lastResponseSummary: null,
+        triggeredAt: null,
+        completedAt: null,
+        autoPathwaySettled: "not-applicable",
+        directPathwaySettled: "not-applicable",
+        runRepoPath: null,
+        workspacePath: null,
+      });
+
+      expect(runQueueService.hasActiveItem(mockRunContext, targetPodId)).toBe(
+        false,
+      );
+    });
+  });
+
   describe("不同 runId:podId 的佇列互相獨立", () => {
     it("兩個不同 key 的佇列各自獨立", () => {
       const otherRunContext = makeRunContext({ runId: "other-run" });
@@ -236,6 +299,73 @@ describe("RunQueueService", () => {
       expect(
         mockExecutionService.triggerWorkflowWithSummary,
       ).toHaveBeenCalled();
+    });
+
+    it("triggerWorkflowWithSummary 尚未建立 active stream 時，不會重入連續 dequeue", async () => {
+      let resolveTrigger: (() => void) | undefined;
+      mockExecutionService.triggerWorkflowWithSummary.mockReturnValueOnce(
+        new Promise<void>((resolve) => {
+          resolveTrigger = resolve;
+        }),
+      );
+
+      const key = buildRunQueueKey(mockRunContext.runId, targetPodId);
+      runQueueService.enqueue(createQueueItem({ connectionId: "conn-1" }));
+      runQueueService.enqueue(createQueueItem({ connectionId: "conn-2" }));
+      runQueueService.enqueue(createQueueItem({ connectionId: "conn-3" }));
+
+      const firstProcess = runQueueService.processNext(
+        canvasId,
+        targetPodId,
+        mockRunContext,
+      );
+      await runQueueService.processNext(canvasId, targetPodId, mockRunContext);
+
+      expect(
+        mockExecutionService.triggerWorkflowWithSummary,
+      ).toHaveBeenCalledTimes(1);
+      expect(runQueueService.getQueueSize(key)).toBe(2);
+
+      resolveTrigger?.();
+      await firstProcess;
+
+      await runQueueService.processNext(canvasId, targetPodId, mockRunContext);
+
+      expect(
+        mockExecutionService.triggerWorkflowWithSummary,
+      ).toHaveBeenCalledTimes(2);
+      expect(runQueueService.getQueueSize(key)).toBe(1);
+    });
+
+    it("第一輪 Goal completed 或 blocked 後再次排程時依 FIFO 取出下一個 item", async () => {
+      const key = buildRunQueueKey(mockRunContext.runId, targetPodId);
+      runQueueService.enqueue(createQueueItem({ connectionId: "conn-1" }));
+      runQueueService.enqueue(createQueueItem({ connectionId: "conn-2" }));
+      runQueueService.enqueue(createQueueItem({ connectionId: "conn-3" }));
+
+      await runQueueService.processNext(canvasId, targetPodId, mockRunContext);
+      await runQueueService.processNext(canvasId, targetPodId, mockRunContext);
+      await runQueueService.processNext(canvasId, targetPodId, mockRunContext);
+
+      expect(
+        mockExecutionService.triggerWorkflowWithSummary,
+      ).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ connectionId: "conn-1" }),
+      );
+      expect(
+        mockExecutionService.triggerWorkflowWithSummary,
+      ).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ connectionId: "conn-2" }),
+      );
+      expect(
+        mockExecutionService.triggerWorkflowWithSummary,
+      ).toHaveBeenNthCalledWith(
+        3,
+        expect.objectContaining({ connectionId: "conn-3" }),
+      );
+      expect(runQueueService.getQueueSize(key)).toBe(0);
     });
 
     it("佇列為空時不呼叫 triggerWorkflowWithSummary", async () => {

@@ -557,6 +557,276 @@ describe("executeStreamingChat", () => {
       expect(snapshot?.state.handoffSummary).toBe("All tasks done");
     });
 
+    it("Goal gate 放行後應產生並廣播 Goal round divider", async () => {
+      const goal = {
+        todos: [{ id: "todo-1", text: "完成本輪" }],
+      };
+      const pod = insertClaudePod({ goal });
+      ensureGoalRuntime(pod, defaultRunContext);
+      const dividerSpy = vi
+        .spyOn(runStore, "addRunGoalRoundDivider")
+        .mockImplementation((input) => ({
+          type: "goal-round-divider",
+          id: "divider-1",
+          runId: input.runId,
+          podId: input.podId,
+          sourcePodIds: input.sourcePodIds,
+          sourcePodNames: input.sourcePodNames,
+          status: input.status,
+          blockedReason: input.blockedReason ?? null,
+          completedAt: "2026-05-24T10:00:00.000Z",
+          connectionIds: input.connectionIds,
+        }));
+
+      setupProviderMock([
+        {
+          type: "tool_call_result",
+          toolUseId: "goal-tool-1",
+          toolName: `mcp__${GOAL_MCP_SERVER_NAME}__complete_goal_todo`,
+          output: JSON.stringify({
+            status: "completed",
+            activeTodoId: null,
+            activeTodoText: null,
+            nextTodoId: null,
+            nextTodoText: null,
+            completedTodoIds: ["todo-1"],
+            blockedReason: null,
+            handoffSummary: "完成本輪",
+            completedCount: 1,
+            totalCount: 1,
+          }),
+        },
+        { type: "turn_complete" },
+      ]);
+
+      await executeStreamingChat({
+        canvasId,
+        podId: pod.id,
+        message,
+        abortable: false,
+        strategy: makeStrategy(),
+        goalRoundDivider: {
+          sourcePodIds: ["source-1"],
+          sourcePodNames: ["來源 Pod"],
+          connectionIds: ["conn-1"],
+        },
+      });
+
+      expect(dividerSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          runId: defaultRunContext.runId,
+          podId: pod.id,
+          sourcePodIds: ["source-1"],
+          sourcePodNames: ["來源 Pod"],
+          status: "completed",
+          blockedReason: null,
+          connectionIds: ["conn-1"],
+        }),
+      );
+      expect(socketService.emitToCanvas).toHaveBeenCalledWith(
+        canvasId,
+        WebSocketResponseEvents.RUN_GOAL_ROUND_DIVIDER,
+        expect.objectContaining({
+          type: "goal-round-divider",
+          runId: defaultRunContext.runId,
+          canvasId,
+          podId: pod.id,
+          sourcePodNames: ["來源 Pod"],
+          status: "completed",
+          connectionIds: ["conn-1"],
+        }),
+      );
+    });
+
+    it("Goal round divider 持久化與廣播完成後才呼叫下游完成 callback", async () => {
+      const order: string[] = [];
+      const goal = {
+        todos: [{ id: "todo-1", text: "完成本輪" }],
+      };
+      const pod = insertClaudePod({ goal });
+      ensureGoalRuntime(pod, defaultRunContext);
+
+      vi.spyOn(runStore, "addRunGoalRoundDivider").mockImplementation(
+        (input) => {
+          order.push("divider:persist");
+          return {
+            type: "goal-round-divider",
+            id: "divider-1",
+            runId: input.runId,
+            podId: input.podId,
+            sourcePodIds: input.sourcePodIds,
+            sourcePodNames: input.sourcePodNames,
+            status: input.status,
+            blockedReason: input.blockedReason ?? null,
+            completedAt: "2026-05-24T10:00:00.000Z",
+            connectionIds: input.connectionIds,
+          };
+        },
+      );
+      vi.mocked(socketService.emitToCanvas).mockImplementation(
+        (_canvasId, event) => {
+          if (event === WebSocketResponseEvents.RUN_GOAL_ROUND_DIVIDER) {
+            order.push("divider:broadcast");
+          }
+        },
+      );
+
+      setupProviderMock([
+        {
+          type: "tool_call_result",
+          toolUseId: "goal-tool-1",
+          toolName: `mcp__${GOAL_MCP_SERVER_NAME}__complete_goal_todo`,
+          output: JSON.stringify({
+            status: "completed",
+            activeTodoId: null,
+            activeTodoText: null,
+            nextTodoId: null,
+            nextTodoText: null,
+            completedTodoIds: ["todo-1"],
+            blockedReason: null,
+            handoffSummary: "完成本輪",
+            completedCount: 1,
+            totalCount: 1,
+          }),
+        },
+        { type: "turn_complete" },
+      ]);
+
+      await executeStreamingChat(
+        {
+          canvasId,
+          podId: pod.id,
+          message,
+          abortable: false,
+          strategy: makeStrategy(),
+          goalRoundDivider: {
+            sourcePodIds: ["source-1"],
+            sourcePodNames: ["來源 Pod"],
+            connectionIds: ["conn-1"],
+          },
+        },
+        {
+          onComplete: vi.fn(() => {
+            order.push("downstream");
+          }),
+        },
+      );
+
+      expect(order).toEqual([
+        "divider:persist",
+        "divider:broadcast",
+        "downstream",
+      ]);
+    });
+
+    it.each([
+      {
+        status: "completed" as const,
+        toolName: `mcp__${GOAL_MCP_SERVER_NAME}__complete_goal_todo`,
+        blockedReason: null,
+        handoffSummary: "完成本輪",
+      },
+      {
+        status: "blocked" as const,
+        toolName: `mcp__${GOAL_MCP_SERVER_NAME}__block_goal_progress`,
+        blockedReason: "等待人工確認",
+        handoffSummary: "需要人工確認",
+      },
+    ])(
+      "Goal $status 會產生 divider、觸發下游，再 dequeue 下一個 connection item",
+      async ({ status, toolName, blockedReason, handoffSummary }) => {
+        const order: string[] = [];
+        const goal = {
+          todos: [{ id: "todo-1", text: "完成本輪" }],
+        };
+        const pod = insertClaudePod({ goal });
+        ensureGoalRuntime(pod, defaultRunContext);
+
+        vi.spyOn(runStore, "addRunGoalRoundDivider").mockImplementation(
+          (input) => {
+            order.push(`divider:${input.status}:persist`);
+            return {
+              type: "goal-round-divider",
+              id: `divider-${input.status}`,
+              runId: input.runId,
+              podId: input.podId,
+              sourcePodIds: input.sourcePodIds,
+              sourcePodNames: input.sourcePodNames,
+              status: input.status,
+              blockedReason: input.blockedReason ?? null,
+              completedAt: "2026-05-24T10:00:00.000Z",
+              connectionIds: input.connectionIds,
+            };
+          },
+        );
+        vi.mocked(socketService.emitToCanvas).mockImplementation(
+          (_canvasId, event, payload) => {
+            if (event !== WebSocketResponseEvents.RUN_GOAL_ROUND_DIVIDER) {
+              return;
+            }
+            const divider = payload as { status: "completed" | "blocked" };
+            order.push(`divider:${divider.status}:broadcast`);
+          },
+        );
+
+        setupProviderMock([
+          {
+            type: "tool_call_result",
+            toolUseId: "goal-tool-1",
+            toolName,
+            output: JSON.stringify({
+              status,
+              activeTodoId: null,
+              activeTodoText: null,
+              nextTodoId: null,
+              nextTodoText: null,
+              completedTodoIds: status === "completed" ? ["todo-1"] : [],
+              blockedReason,
+              handoffSummary,
+              completedCount: status === "completed" ? 1 : 0,
+              totalCount: 1,
+            }),
+          },
+          { type: "turn_complete" },
+        ]);
+
+        await executeStreamingChat(
+          {
+            canvasId,
+            podId: pod.id,
+            message,
+            abortable: false,
+            strategy: makeStrategy(),
+            goalRoundDivider: {
+              sourcePodIds: ["source-1"],
+              sourcePodNames: ["來源 Pod"],
+              connectionIds: ["conn-1"],
+            },
+          },
+          {
+            onComplete: vi.fn(() => {
+              order.push("downstream");
+              order.push("dequeue");
+            }),
+          },
+        );
+
+        expect(runStore.addRunGoalRoundDivider).toHaveBeenCalledWith(
+          expect.objectContaining({
+            status,
+            blockedReason,
+            connectionIds: ["conn-1"],
+          }),
+        );
+        expect(order).toEqual([
+          `divider:${status}:persist`,
+          `divider:${status}:broadcast`,
+          "downstream",
+          "dequeue",
+        ]);
+      },
+    );
+
     it("無 Goal 的 Pod 收到 Goal MCP tool result 時仍應建立空的 runtime snapshot", async () => {
       const pod = insertClaudePod();
       const statePath = getGoalRuntimeStatePath(defaultRunContext, pod.id);
@@ -693,6 +963,100 @@ describe("executeStreamingChat", () => {
       );
       expect(snapshot?.state.status).toBe("completed");
       expect(snapshot?.state.completedTodoIds).toEqual(["todo-1", "todo-2"]);
+    });
+
+    it("scheduleNextInQueue 對應的完成 callback 只會在 Goal completed 放行後執行", async () => {
+      const order: string[] = [];
+      const goal = {
+        todos: [
+          { id: "todo-1", text: "第一步" },
+          { id: "todo-2", text: "第二步" },
+        ],
+      };
+      const pod = insertClaudePod({ goal });
+      ensureGoalRuntime(pod, defaultRunContext);
+
+      const chatMock = vi
+        .fn()
+        .mockImplementationOnce(() =>
+          makeEventStream([
+            {
+              type: "tool_call_result",
+              toolUseId: "t1",
+              toolName: `mcp__${GOAL_MCP_SERVER_NAME}__complete_goal_todo`,
+              output: JSON.stringify({
+                status: "running",
+                activeTodoId: "todo-2",
+                activeTodoText: "第二步",
+                nextTodoId: "todo-2",
+                nextTodoText: "第二步",
+                completedTodoIds: ["todo-1"],
+                blockedReason: null,
+                handoffSummary: null,
+                completedCount: 1,
+                totalCount: 2,
+              }),
+            },
+            { type: "turn_complete" },
+          ]),
+        )
+        .mockImplementationOnce(() =>
+          makeEventStream([
+            {
+              type: "tool_call_result",
+              toolUseId: "t2",
+              toolName: `mcp__${GOAL_MCP_SERVER_NAME}__complete_goal_todo`,
+              output: JSON.stringify({
+                status: "completed",
+                activeTodoId: null,
+                activeTodoText: null,
+                nextTodoId: null,
+                nextTodoText: null,
+                completedTodoIds: ["todo-1", "todo-2"],
+                blockedReason: null,
+                handoffSummary: "全部完成",
+                completedCount: 2,
+                totalCount: 2,
+              }),
+            },
+            { type: "turn_complete" },
+          ]),
+        );
+      asMock(getProvider).mockReturnValue({
+        chat: chatMock,
+        cancel: vi.fn(() => false),
+        buildOptions: vi.fn().mockResolvedValue({}),
+        metadata: {
+          availableModelValues: new Set(["opus", "sonnet", "haiku"]),
+          defaultOptions: { model: "opus" },
+          availableModels: [
+            { label: "Opus", value: "opus" },
+            { label: "Sonnet", value: "sonnet" },
+            { label: "Haiku", value: "haiku" },
+          ],
+        },
+      });
+
+      await executeStreamingChat(
+        {
+          canvasId,
+          podId: pod.id,
+          message,
+          abortable: false,
+          strategy: makeStrategy(),
+        },
+        {
+          onComplete: vi.fn(() => {
+            const snapshot = readGoalRuntimeSnapshot(
+              getGoalRuntimeStatePath(defaultRunContext, pod.id),
+            );
+            order.push(`schedule:${snapshot?.state.status}`);
+          }),
+        },
+      );
+
+      expect(chatMock).toHaveBeenCalledTimes(2);
+      expect(order).toEqual(["schedule:completed"]);
     });
 
     it("連續未推進達上限應自動 force_block 並放行下游", async () => {

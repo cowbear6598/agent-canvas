@@ -1,6 +1,10 @@
 import type { Message, SubMessage, ToolUseInfo } from "@/types/chat";
 import { isValidToolUseStatus } from "@/types/chat";
-import type { PersistedMessage } from "@/types/websocket/responses";
+import type { RunChatTimelineItem } from "@/types/run";
+import type {
+  PersistedMessage,
+  RunChatTimelineItemPayload,
+} from "@/types/websocket/responses";
 import { buildSubMessageId } from "@/stores/chat/messageHelpers";
 import {
   collectToolUseFromSubMessages,
@@ -89,4 +93,18 @@ export function toMessage(pm: PersistedMessage): Message {
   if (pm.role !== "assistant") return message;
 
   return { ...message, ...convertSubMessages(pm) };
+}
+
+export function isRunGoalRoundDivider(
+  item: RunChatTimelineItemPayload,
+): item is Extract<RunChatTimelineItemPayload, { type: "goal-round-divider" }> {
+  return "type" in item && item.type === "goal-round-divider";
+}
+
+export function toRunChatTimelineItem(
+  item: RunChatTimelineItemPayload,
+): RunChatTimelineItem {
+  if (isRunGoalRoundDivider(item)) return item;
+
+  return toMessage(item);
 }

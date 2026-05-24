@@ -309,6 +309,23 @@ function createBaseTables(db: Database): void {
     "CREATE INDEX IF NOT EXISTS idx_run_messages_run_pod ON run_messages(run_id, pod_id)",
   );
 
+  db.exec(
+    "CREATE TABLE IF NOT EXISTS run_goal_round_dividers (" +
+      "id TEXT PRIMARY KEY," +
+      "run_id TEXT NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE," +
+      "pod_id TEXT NOT NULL," +
+      "source_pod_ids_json TEXT NOT NULL," +
+      "source_pod_names_json TEXT NOT NULL," +
+      "status TEXT NOT NULL," +
+      "blocked_reason TEXT," +
+      "completed_at TEXT NOT NULL," +
+      "connection_ids_json TEXT NOT NULL" +
+      ")",
+  );
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_run_goal_round_dividers_run_pod ON run_goal_round_dividers(run_id, pod_id, completed_at)",
+  );
+
   // model_aliases：opencode provider 的模型別稱設定表
   // - provider_id：預留多 provider 擴充，首期固定為 "opencode"
   // - real_provider / real_model：opencode session.prompt 所需的真實 providerID / modelID

@@ -38,7 +38,10 @@ function getPodMessages(
   runId: string,
   podId: string,
 ): Message[] | undefined {
-  return store.runChatMessages.get(runId)?.get(podId);
+  return store.runChatMessages
+    .get(runId)
+    ?.get(podId)
+    ?.filter((item): item is Message => !("type" in item));
 }
 
 describe("opencode v2 run store parity regression", () => {

@@ -12,6 +12,14 @@ import { createI18nError } from "../utils/i18nError.js";
 import { withCanvasId } from "../utils/handlerHelpers.js";
 import type { WorkflowRun } from "../services/runStore.js";
 import { sanitizePersistedMessageForClient } from "../services/systemMessageMetadata.js";
+import type { RunChatTimelineItem } from "../types/run.js";
+import type { PersistedRunGoalRoundDivider } from "../types/persistence.js";
+
+function isRunGoalRoundDivider(
+  item: RunChatTimelineItem,
+): item is PersistedRunGoalRoundDivider {
+  return "type" in item && item.type === "goal-round-divider";
+}
 
 function findRunOrEmitNotFound(
   connectionId: string,
@@ -145,6 +153,11 @@ export const handleRunLoadPodMessages = withCanvasId<RunLoadPodMessagesPayload>(
       podId,
       messages: result.messages.map((message) =>
         sanitizePersistedMessageForClient(message),
+      ),
+      timelineItems: result.timelineItems.map((item) =>
+        isRunGoalRoundDivider(item)
+          ? item
+          : sanitizePersistedMessageForClient(item),
       ),
       pageInfo: result.pageInfo,
     });

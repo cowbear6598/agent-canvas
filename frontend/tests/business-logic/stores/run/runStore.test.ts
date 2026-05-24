@@ -6,7 +6,12 @@ import {
 import { setupStoreTest } from "@tests/helpers/testSetup";
 import { useRunStore } from "@/stores/run/runStore";
 import { useCanvasStore } from "@/stores/canvasStore";
-import type { WorkflowRun, RunPodInstance } from "@/types/run";
+import type {
+  WorkflowRun,
+  RunPodInstance,
+  RunChatTimelineItem,
+  RunGoalRoundDivider,
+} from "@/types/run";
 import type { Message } from "@/types/chat";
 
 // Mock WebSocket
@@ -75,6 +80,18 @@ function getPodMessages(
   runId: string,
   podId: string,
 ): Message[] | undefined {
+  return store.runChatMessages
+    .get(runId)
+    ?.get(podId)
+    ?.filter((item): item is Message => !("type" in item));
+}
+
+/** 測試輔助：取得完整 timeline，包含 message 與 Goal round divider。 */
+function getPodTimelineItems(
+  store: ReturnType<typeof useRunStore>,
+  runId: string,
+  podId: string,
+): RunChatTimelineItem[] | undefined {
   return store.runChatMessages.get(runId)?.get(podId);
 }
 
@@ -91,6 +108,39 @@ function setPodMessages(
     store.runChatMessages.set(runId, podMap);
   }
   podMap.set(podId, messages);
+}
+
+/** 測試輔助：設定完整 timeline，包含 message 與 Goal round divider。 */
+function setPodTimelineItems(
+  store: ReturnType<typeof useRunStore>,
+  runId: string,
+  podId: string,
+  timelineItems: RunChatTimelineItem[],
+): void {
+  let podMap = store.runChatMessages.get(runId);
+  if (!podMap) {
+    podMap = new Map();
+    store.runChatMessages.set(runId, podMap);
+  }
+  podMap.set(podId, timelineItems);
+}
+
+function createMockDivider(
+  overrides?: Partial<RunGoalRoundDivider>,
+): RunGoalRoundDivider {
+  return {
+    type: "goal-round-divider",
+    id: "divider-1",
+    runId: "run-1",
+    podId: "pod-1",
+    sourcePodIds: ["source-pod-1"],
+    sourcePodNames: ["Source Pod"],
+    status: "completed",
+    blockedReason: null,
+    completedAt: "2026-05-22T10:00:00.000Z",
+    connectionIds: ["connection-1"],
+    ...overrides,
+  };
 }
 
 /** 測試輔助：判斷巢狀 runChatMessages 中是否存在指定 runId / podId。 */
@@ -228,6 +278,22 @@ describe("runStore", () => {
         store.activeRunChatModal = { runId: "run-1", podId: "pod-1" };
 
         expect(store.getActiveRunChatMessages).toEqual([]);
+      });
+    });
+
+    describe("getActiveRunChatTimelineItems", () => {
+      it("應回傳目前 run chat 的完整 timeline，包含 divider", () => {
+        const store = useRunStore();
+        const divider = createMockDivider();
+        store.activeRunChatModal = { runId: "run-1", podId: "pod-1" };
+        setPodTimelineItems(store, "run-1", "pod-1", [
+          { id: "msg-1", role: "assistant", content: "Hello" },
+          divider,
+        ]);
+
+        expect(
+          store.getActiveRunChatTimelineItems.map((item) => item.id),
+        ).toEqual(["msg-1", "divider-1"]);
       });
     });
   });
@@ -754,6 +820,53 @@ describe("runStore", () => {
       );
     });
 
+    it("成功時應將舊歷程 timelineItems 轉成同一條 timeline", async () => {
+      const store = useRunStore();
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+
+      mockCreateWebSocketRequest.mockResolvedValueOnce({
+        success: true,
+        timelineItems: [
+          {
+            id: "msg-1",
+            role: "assistant",
+            content: "第一輪回覆",
+            timestamp: "2026-05-22T10:00:00.000Z",
+          },
+          createMockDivider({
+            id: "divider-1",
+            sourcePodNames: ["來源 Pod"],
+            status: "blocked",
+            blockedReason: "等待人工確認",
+          }),
+          {
+            id: "msg-2",
+            role: "assistant",
+            content: "第二輪回覆",
+            timestamp: "2026-05-22T10:01:00.000Z",
+          },
+        ],
+      });
+
+      await store.openRunChatModal("run-1", "pod-1");
+
+      const timelineItems = getPodTimelineItems(store, "run-1", "pod-1");
+      expect(timelineItems?.map((item) => item.id)).toEqual([
+        "msg-1",
+        "divider-1",
+        "msg-2",
+      ]);
+      expect(timelineItems?.[1]).toMatchObject({
+        type: "goal-round-divider",
+        sourcePodNames: ["來源 Pod"],
+        status: "blocked",
+      });
+      expect(
+        store.getActiveRunChatMessages.map((message) => message.id),
+      ).toEqual(["msg-1", "msg-2"]);
+    });
+
     it("完成後 isLoadingPodMessages 應為 false", async () => {
       const store = useRunStore();
       const canvasStore = useCanvasStore();
@@ -961,6 +1074,90 @@ describe("runStore", () => {
           }),
         }),
       );
+    });
+
+    it("應將更早 timelineItems prepend 到目前 timeline 前方並保留 divider 順序", async () => {
+      const store = useRunStore();
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      store.activeRunChatModal = { runId: "run-1", podId: "pod-1" };
+      setPodTimelineItems(store, "run-1", "pod-1", [
+        createMockDivider({ id: "divider-1" }),
+        { id: "msg-2", role: "assistant", content: "Second" },
+      ]);
+      store.activeRunChatPageInfo = {
+        hasMore: true,
+        nextCursor: {
+          beforeTimestamp: "2026-05-22T10:00:00.000Z",
+          beforeMessageId: "msg-2",
+        },
+      };
+
+      mockCreateWebSocketRequest.mockResolvedValueOnce({
+        success: true,
+        timelineItems: [
+          {
+            id: "msg-1",
+            role: "assistant",
+            content: "First",
+            timestamp: "2026-05-22T09:59:00.000Z",
+          },
+          createMockDivider({ id: "divider-0" }),
+        ],
+        pageInfo: {
+          hasMore: false,
+          nextCursor: null,
+        },
+      });
+
+      await store.loadOlderActiveRunChatMessages();
+
+      expect(
+        getPodTimelineItems(store, "run-1", "pod-1")?.map((item) => item.id),
+      ).toEqual(["msg-1", "divider-0", "divider-1", "msg-2"]);
+    });
+  });
+
+  describe("appendRunChatDivider", () => {
+    it("應把即時 divider 插入目前 timeline 尾端並維持順序", () => {
+      const store = useRunStore();
+      setPodTimelineItems(store, "run-1", "pod-1", [
+        { id: "msg-1", role: "assistant", content: "第一輪" },
+      ]);
+
+      store.appendRunChatDivider(createMockDivider({ id: "divider-1" }));
+      store.appendRunChatMessage(
+        "run-1",
+        "pod-1",
+        "msg-2",
+        "第二輪",
+        false,
+        "assistant",
+      );
+
+      expect(
+        getPodTimelineItems(store, "run-1", "pod-1")?.map((item) => item.id),
+      ).toEqual(["msg-1", "divider-1", "msg-2"]);
+    });
+
+    it("同一個 divider 重送時應更新既有項目而不重複新增", () => {
+      const store = useRunStore();
+      store.appendRunChatDivider(createMockDivider({ id: "divider-1" }));
+      store.appendRunChatDivider(
+        createMockDivider({
+          id: "divider-1",
+          status: "blocked",
+          blockedReason: "等待人工確認",
+        }),
+      );
+
+      const timelineItems = getPodTimelineItems(store, "run-1", "pod-1");
+      expect(timelineItems).toHaveLength(1);
+      expect(timelineItems?.[0]).toMatchObject({
+        id: "divider-1",
+        status: "blocked",
+        blockedReason: "等待人工確認",
+      });
     });
   });
 

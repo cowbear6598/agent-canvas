@@ -136,4 +136,44 @@ describe("chat message merge business logic", () => {
         .join(""),
     ).toBe("Run 完整內容");
   });
+
+  it("goal round divider event carries run-scoped source and connection metadata", () => {
+    const strategy = createChatEmitStrategy(runId);
+
+    strategy.emitGoalRoundDivider({
+      canvasId,
+      divider: {
+        type: "goal-round-divider",
+        id: "divider-1",
+        runId,
+        podId,
+        sourcePodIds: ["source-1"],
+        sourcePodNames: ["來源 Pod"],
+        status: "completed",
+        blockedReason: null,
+        completedAt: "2026-05-24T10:00:00.000Z",
+        connectionIds: ["conn-1"],
+      },
+    });
+
+    expect(capturedEvents).toEqual([
+      {
+        canvasId,
+        eventName: WebSocketResponseEvents.RUN_GOAL_ROUND_DIVIDER,
+        payload: {
+          type: "goal-round-divider",
+          id: "divider-1",
+          runId,
+          canvasId,
+          podId,
+          sourcePodIds: ["source-1"],
+          sourcePodNames: ["來源 Pod"],
+          status: "completed",
+          blockedReason: null,
+          completedAt: "2026-05-24T10:00:00.000Z",
+          connectionIds: ["conn-1"],
+        },
+      },
+    ]);
+  });
 });

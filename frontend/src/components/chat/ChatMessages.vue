@@ -1,16 +1,27 @@
 <script setup lang="ts">
 import { ref, watch, nextTick, onMounted } from "vue";
 import type { Message } from "@/types";
+import type { RunChatTimelineItem, RunGoalRoundDivider } from "@/types/run";
 import ChatMessageBubble from "./ChatMessageBubble.vue";
+import GoalRoundDivider from "./GoalRoundDivider.vue";
 import TypingIndicator from "./TypingIndicator.vue";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 const props = defineProps<{
-  messages: Message[];
+  timelineItems: RunChatTimelineItem[];
   isTyping: boolean;
+  isLoadingHistory?: boolean;
 }>();
 
 const messagesEndRef = ref<HTMLDivElement | null>(null);
+
+const isGoalRoundDivider = (
+  item: RunChatTimelineItem,
+): item is RunGoalRoundDivider =>
+  "type" in item && item.type === "goal-round-divider";
+
+const isChatMessage = (item: RunChatTimelineItem): item is Message =>
+  !isGoalRoundDivider(item);
 
 const scrollToBottom = async (smooth = true): Promise<void> => {
   await nextTick();
@@ -25,7 +36,7 @@ onMounted(() => {
 });
 
 watch(
-  () => [props.messages.length, props.isTyping] as const,
+  () => [props.timelineItems.length, props.isTyping] as const,
   () => {
     scrollToBottom(true);
   },
@@ -36,53 +47,58 @@ watch(
   <ScrollArea class="flex-1 p-4">
     <div class="space-y-4">
       <template
-        v-for="message in messages"
-        :key="message.id"
+        v-for="item in timelineItems"
+        :key="item.id"
       >
-        <ChatMessageBubble
-          v-if="message.role === 'user'"
-          :content="message.content"
-          :role="message.role"
-          :metadata="message.metadata"
-          :is-partial="message.isPartial"
-          :is-summarized="message.isSummarized"
+        <GoalRoundDivider
+          v-if="isGoalRoundDivider(item)"
+          :divider="item"
         />
 
-        <template v-else-if="message.role === 'assistant'">
-          <template
-            v-if="message.subMessages && message.subMessages.length > 0"
-          >
+        <template v-else-if="isChatMessage(item)">
+          <ChatMessageBubble
+            v-if="item.role === 'user'"
+            :content="item.content"
+            :role="item.role"
+            :metadata="item.metadata"
+            :is-partial="item.isPartial"
+            :is-summarized="item.isSummarized"
+          />
+
+          <template v-else-if="item.role === 'assistant'">
+            <template v-if="item.subMessages && item.subMessages.length > 0">
+              <ChatMessageBubble
+                v-for="sub in item.subMessages"
+                :key="sub.id"
+                :content="sub.content"
+                :role="item.role"
+                :metadata="item.metadata"
+                :is-partial="sub.isPartial"
+                :tool-use="sub.toolUse"
+                :is-summarized="item.isSummarized"
+              />
+            </template>
+
             <ChatMessageBubble
-              v-for="sub in message.subMessages"
-              :key="sub.id"
-              :content="sub.content"
-              :role="message.role"
-              :metadata="message.metadata"
-              :is-partial="sub.isPartial"
-              :tool-use="sub.toolUse"
-              :is-summarized="message.isSummarized"
+              v-else
+              :content="item.content"
+              :role="item.role"
+              :metadata="item.metadata"
+              :is-partial="item.isPartial"
+              :tool-use="item.toolUse"
+              :is-summarized="item.isSummarized"
             />
           </template>
 
           <ChatMessageBubble
             v-else
-            :content="message.content"
-            :role="message.role"
-            :metadata="message.metadata"
-            :is-partial="message.isPartial"
-            :tool-use="message.toolUse"
-            :is-summarized="message.isSummarized"
+            :content="item.content"
+            :role="item.role"
+            :metadata="item.metadata"
+            :is-partial="item.isPartial"
+            :is-summarized="item.isSummarized"
           />
         </template>
-
-        <ChatMessageBubble
-          v-else
-          :content="message.content"
-          :role="message.role"
-          :metadata="message.metadata"
-          :is-partial="message.isPartial"
-          :is-summarized="message.isSummarized"
-        />
       </template>
 
       <div

@@ -47,14 +47,6 @@ afterEach(() => {
 });
 
 describe("evaluateGoalGate", () => {
-  it("runContext 為 undefined 時應 proceed", () => {
-    const decision = evaluateGoalGate(undefined, pod.id, {
-      retryCount: 0,
-      noProgressCount: 0,
-    });
-    expect(decision.action).toBe("proceed");
-  });
-
   it("snapshot 不存在時應 proceed", () => {
     const decision = evaluateGoalGate(runContext, "pod-not-exist", {
       retryCount: 0,

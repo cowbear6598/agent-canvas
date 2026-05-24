@@ -12,6 +12,8 @@ import type {
   RunPodStatus,
   PathwayState,
   RunMessagesPageInfo,
+  RunChatTimelineItem,
+  RunGoalRoundDivider,
 } from "@/types/run";
 import type {
   Message,
@@ -41,7 +43,7 @@ import {
 } from "@/stores/chat/subMessageHelpers";
 import {
   createAssistantMessageWithTool,
-  toMessage,
+  toRunChatTimelineItem,
 } from "@/stores/run/runStoreHelpers";
 import { useToast } from "@/composables/useToast";
 import { t } from "@/i18n";
@@ -56,7 +58,7 @@ interface RunState {
   activeRunChatModal: { runId: string; podId: string } | null;
   /** #44 runChatMessages 改巢狀 Map：外層 key 為 runId，內層 key 為 podId。
    *  removeRun 時只需 delete(runId)，不再需要遍歷所有 key。 */
-  runChatMessages: Map<string, Map<string, Message[]>>;
+  runChatMessages: Map<string, Map<string, RunChatTimelineItem[]>>;
   isLoadingPodMessages: boolean;
   isLoadingOlderPodMessages: boolean;
   activeRunChatPageInfo: RunMessagesPageInfo;
@@ -76,42 +78,66 @@ function createEmptyRunChatPageInfo(): RunMessagesPageInfo {
   };
 }
 
-function mergeLoadedMessages(
-  loadedMessages: Message[],
-  liveMessages: Message[],
+function isRunChatMessage(item: RunChatTimelineItem): item is Message {
+  return !("type" in item && item.type === "goal-round-divider");
+}
+
+function findMessageIndex(
+  timelineItems: RunChatTimelineItem[],
+  messageId: string,
+): number {
+  return timelineItems.findIndex(
+    (item) => isRunChatMessage(item) && item.id === messageId,
+  );
+}
+
+function getRunChatMessagesFromTimeline(
+  timelineItems: RunChatTimelineItem[],
 ): Message[] {
-  if (liveMessages.length === 0) {
-    return loadedMessages;
+  return timelineItems.filter(isRunChatMessage);
+}
+
+function mergeLoadedTimelineItems(
+  loadedItems: RunChatTimelineItem[],
+  liveItems: RunChatTimelineItem[],
+): RunChatTimelineItem[] {
+  if (liveItems.length === 0) {
+    return loadedItems;
   }
 
-  const mergedById = new Map<string, Message>();
+  const mergedById = new Map<string, RunChatTimelineItem>();
   const orderedIds: string[] = [];
 
-  for (const message of loadedMessages) {
-    orderedIds.push(message.id);
-    mergedById.set(message.id, message);
+  for (const item of loadedItems) {
+    orderedIds.push(item.id);
+    mergedById.set(item.id, item);
   }
 
-  for (const message of liveMessages) {
-    const existing = mergedById.get(message.id);
-    if (existing) {
-      mergedById.set(message.id, {
+  for (const item of liveItems) {
+    const existing = mergedById.get(item.id);
+    if (existing && isRunChatMessage(existing) && isRunChatMessage(item)) {
+      mergedById.set(item.id, {
         ...existing,
-        ...message,
-        metadata: message.metadata ?? existing.metadata,
-        toolUse: message.toolUse ?? existing.toolUse,
-        subMessages: message.subMessages ?? existing.subMessages,
+        ...item,
+        metadata: item.metadata ?? existing.metadata,
+        toolUse: item.toolUse ?? existing.toolUse,
+        subMessages: item.subMessages ?? existing.subMessages,
       });
       continue;
     }
 
-    orderedIds.push(message.id);
-    mergedById.set(message.id, message);
+    if (existing) {
+      mergedById.set(item.id, item);
+      continue;
+    }
+
+    orderedIds.push(item.id);
+    mergedById.set(item.id, item);
   }
 
   return orderedIds
-    .map((messageId) => mergedById.get(messageId))
-    .filter((message): message is Message => Boolean(message));
+    .map((itemId) => mergedById.get(itemId))
+    .filter((item): item is RunChatTimelineItem => Boolean(item));
 }
 
 export const useRunStore = defineStore("run", {
@@ -157,6 +183,14 @@ export const useRunStore = defineStore("run", {
       },
 
     getActiveRunChatMessages(state): Message[] {
+      if (!state.activeRunChatModal) return [];
+      const { runId, podId } = state.activeRunChatModal;
+      return getRunChatMessagesFromTimeline(
+        state.runChatMessages.get(runId)?.get(podId) ?? [],
+      );
+    },
+
+    getActiveRunChatTimelineItems(state): RunChatTimelineItem[] {
       if (!state.activeRunChatModal) return [];
       const { runId, podId } = state.activeRunChatModal;
       return state.runChatMessages.get(runId)?.get(podId) ?? [];
@@ -270,8 +304,8 @@ export const useRunStore = defineStore("run", {
       );
     },
 
-    clearMessageCaches(messages: Message[]): void {
-      for (const message of messages) {
+    clearMessageCaches(timelineItems: RunChatTimelineItem[]): void {
+      for (const message of getRunChatMessagesFromTimeline(timelineItems)) {
         this.accumulatedLengthByMessageId.delete(message.id);
         this.messageIndexCache.delete(message.id);
       }
@@ -281,8 +315,8 @@ export const useRunStore = defineStore("run", {
       const podMap = this.runChatMessages.get(runId);
       if (!podMap) return;
 
-      for (const messages of podMap.values()) {
-        this.clearMessageCaches(messages);
+      for (const timelineItems of podMap.values()) {
+        this.clearMessageCaches(timelineItems);
       }
 
       this.runChatMessages.delete(runId);
@@ -297,26 +331,40 @@ export const useRunStore = defineStore("run", {
       this.isLoadingOlderPodMessages = false;
     },
 
-    rebuildActiveMessageCaches(messages: Message[]): void {
+    rebuildActiveMessageCaches(timelineItems: RunChatTimelineItem[]): void {
       this.messageIndexCache = new Map(
-        messages.map((message, index) => [message.id, index]),
+        timelineItems.flatMap((item, index) =>
+          isRunChatMessage(item) ? [[item.id, index] as const] : [],
+        ),
       );
       this.accumulatedLengthByMessageId = new Map(
-        messages
+        getRunChatMessagesFromTimeline(timelineItems)
           .filter((message) => message.isPartial)
           .map((message) => [message.id, message.content.length]),
       );
     },
 
-    setActiveRunChatMessages(runId: string, podId: string, messages: Message[]) {
+    setActiveRunChatTimelineItems(
+      runId: string,
+      podId: string,
+      timelineItems: RunChatTimelineItem[],
+    ) {
       let podMap = this.runChatMessages.get(runId);
       if (!podMap) {
         podMap = new Map();
         this.runChatMessages.set(runId, podMap);
       }
 
-      podMap.set(podId, messages);
-      this.rebuildActiveMessageCaches(messages);
+      podMap.set(podId, timelineItems);
+      this.rebuildActiveMessageCaches(timelineItems);
+    },
+
+    setActiveRunChatMessages(
+      runId: string,
+      podId: string,
+      messages: Message[],
+    ) {
+      this.setActiveRunChatTimelineItems(runId, podId, messages);
     },
 
     removeRun(runId: string): void {
@@ -399,7 +447,7 @@ export const useRunStore = defineStore("run", {
           },
         });
 
-        if (response.success && response.messages) {
+        if (response.success && (response.timelineItems || response.messages)) {
           if (
             requestToken !== this.activeRunChatRequestToken ||
             !this.isActiveRunChatTarget(runId, podId)
@@ -407,12 +455,15 @@ export const useRunStore = defineStore("run", {
             return;
           }
 
-          const loadedMessages = response.messages.map(toMessage);
-          const liveMessages = this.runChatMessages.get(runId)?.get(podId) ?? [];
-          this.setActiveRunChatMessages(
+          const loadedTimelineItems = (
+            response.timelineItems ?? response.messages ?? []
+          ).map(toRunChatTimelineItem);
+          const liveTimelineItems =
+            this.runChatMessages.get(runId)?.get(podId) ?? [];
+          this.setActiveRunChatTimelineItems(
             runId,
             podId,
-            mergeLoadedMessages(loadedMessages, liveMessages),
+            mergeLoadedTimelineItems(loadedTimelineItems, liveTimelineItems),
           );
           this.activeRunChatPageInfo =
             response.pageInfo ?? createEmptyRunChatPageInfo();
@@ -465,14 +516,17 @@ export const useRunStore = defineStore("run", {
           return;
         }
 
-        const olderMessages = (response.messages ?? []).map(toMessage);
-        const currentMessages =
+        const olderTimelineItems = (
+          response.timelineItems ?? response.messages ?? []
+        ).map(toRunChatTimelineItem);
+        const currentTimelineItems =
           this.runChatMessages.get(activeTarget.runId)?.get(activeTarget.podId) ??
           [];
-        this.setActiveRunChatMessages(activeTarget.runId, activeTarget.podId, [
-          ...olderMessages,
-          ...currentMessages,
-        ]);
+        this.setActiveRunChatTimelineItems(
+          activeTarget.runId,
+          activeTarget.podId,
+          [...olderTimelineItems, ...currentTimelineItems],
+        );
         this.activeRunChatPageInfo =
           response.pageInfo ?? createEmptyRunChatPageInfo();
       } finally {
@@ -497,7 +551,7 @@ export const useRunStore = defineStore("run", {
         podMap = new Map();
         this.runChatMessages.set(runId, podMap);
       }
-      const messages = podMap.get(podId) ?? [];
+      const timelineItems = [...(podMap.get(podId) ?? [])];
 
       const lastLength = this.accumulatedLengthByMessageId.get(messageId) ?? 0;
       // 後端重傳導致 content 長度倒退時，重置累積長度並以整段 content 作為 delta
@@ -510,10 +564,18 @@ export const useRunStore = defineStore("run", {
       }
 
       // messageIndexCache：串流期間提供 O(1) 定位，避免 findIndex 線性掃描
-      const knownIndex = this.messageIndexCache.get(messageId);
+      const cachedIndex = this.messageIndexCache.get(messageId);
+      const cachedItem =
+        cachedIndex !== undefined ? timelineItems[cachedIndex] : undefined;
+      const knownIndex =
+        cachedItem !== undefined &&
+        isRunChatMessage(cachedItem) &&
+        cachedItem.id === messageId
+          ? cachedIndex
+          : undefined;
 
       upsertMessage(
-        messages,
+        timelineItems as Message[],
         messageId,
         content,
         isPartial,
@@ -525,13 +587,38 @@ export const useRunStore = defineStore("run", {
 
       // 新訊息被 push 到陣列末尾，快取其 index
       if (knownIndex === undefined) {
-        const newIndex = messages.findIndex((m) => m.id === messageId);
+        const newIndex = findMessageIndex(timelineItems, messageId);
         if (newIndex !== -1) {
           this.messageIndexCache.set(messageId, newIndex);
         }
       }
 
-      podMap.set(podId, [...messages]);
+      podMap.set(podId, timelineItems);
+    },
+
+    appendRunChatDivider(divider: RunGoalRoundDivider): void {
+      let podMap = this.runChatMessages.get(divider.runId);
+      if (!podMap) {
+        podMap = new Map();
+        this.runChatMessages.set(divider.runId, podMap);
+      }
+
+      const timelineItems = podMap.get(divider.podId) ?? [];
+      const existingIndex = timelineItems.findIndex(
+        (item) =>
+          "type" in item &&
+          item.type === "goal-round-divider" &&
+          item.id === divider.id,
+      );
+
+      if (existingIndex !== -1) {
+        const updatedItems = [...timelineItems];
+        updatedItems[existingIndex] = divider;
+        podMap.set(divider.podId, updatedItems);
+        return;
+      }
+
+      podMap.set(divider.podId, [...timelineItems, divider]);
     },
 
     handleRunChatToolUse(payload: {
@@ -547,7 +634,7 @@ export const useRunStore = defineStore("run", {
         podMap = new Map();
         this.runChatMessages.set(payload.runId, podMap);
       }
-      const messages = podMap.get(payload.podId) ?? [];
+      const timelineItems = podMap.get(payload.podId) ?? [];
 
       const toolUseInfo: ToolUseInfo = {
         toolUseId: payload.toolUseId,
@@ -556,14 +643,12 @@ export const useRunStore = defineStore("run", {
         status: "running",
       };
 
-      const messageIndex = messages.findIndex(
-        (m) => m.id === payload.messageId,
-      );
+      const messageIndex = findMessageIndex(timelineItems, payload.messageId);
 
       // 訊息尚不存在時（tool use 先於 text 到達），建立新 assistant 訊息
       if (messageIndex === -1) {
         const nextMessages = [
-          ...messages,
+          ...timelineItems,
           createAssistantMessageWithTool(payload.messageId, toolUseInfo),
         ];
         this.messageIndexCache.set(payload.messageId, nextMessages.length - 1);
@@ -571,15 +656,15 @@ export const useRunStore = defineStore("run", {
         return;
       }
 
-      const message = messages[messageIndex];
-      if (!message) return;
+      const message = timelineItems[messageIndex];
+      if (!message || !isRunChatMessage(message)) return;
 
       const toolAlreadyExists = message.toolUse?.some(
         (t) => t.toolUseId === payload.toolUseId,
       );
       if (toolAlreadyExists) return;
 
-      const updatedMessages = [...messages];
+      const updatedMessages = [...timelineItems];
       updatedMessages[messageIndex] = mergeToolUseIntoMessage(
         message,
         toolUseInfo,
@@ -601,8 +686,8 @@ export const useRunStore = defineStore("run", {
         this.runChatMessages.set(payload.runId, podMap);
       }
 
-      const messages = podMap.get(payload.podId) ?? [];
-      const messageIndex = messages.findIndex((m) => m.id === payload.messageId);
+      const timelineItems = podMap.get(payload.podId) ?? [];
+      const messageIndex = findMessageIndex(timelineItems, payload.messageId);
       const toolUseInfo: ToolUseInfo = {
         toolUseId: payload.toolUseId,
         toolName: payload.toolName,
@@ -617,15 +702,15 @@ export const useRunStore = defineStore("run", {
           payload.output,
           payload.toolName,
         );
-        const nextMessages = [...messages, createdMessage];
+        const nextMessages = [...timelineItems, createdMessage];
         this.messageIndexCache.set(payload.messageId, nextMessages.length - 1);
         podMap.set(payload.podId, nextMessages);
         return;
       }
 
-      const updatedMessages = [...messages];
+      const updatedMessages = [...timelineItems];
       const message = updatedMessages[messageIndex];
-      if (!message) return;
+      if (!message || !isRunChatMessage(message)) return;
 
       const hasToolUse = message.toolUse?.some(
         (tool) => tool.toolUseId === payload.toolUseId,
@@ -655,8 +740,8 @@ export const useRunStore = defineStore("run", {
         this.runChatMessages.set(runId, podMap);
       }
 
-      const currentMessages = podMap.get(podId) ?? [];
-      let messageIndex = currentMessages.findIndex((m) => m.id === messageId);
+      const currentTimelineItems = podMap.get(podId) ?? [];
+      let messageIndex = findMessageIndex(currentTimelineItems, messageId);
 
       if (messageIndex === -1) {
         this.appendRunChatMessage(
@@ -669,10 +754,10 @@ export const useRunStore = defineStore("run", {
         );
       }
 
-      const messages = podMap.get(podId);
-      if (!messages) return;
+      const timelineItems = podMap.get(podId);
+      if (!timelineItems) return;
 
-      messageIndex = messages.findIndex((m) => m.id === messageId);
+      messageIndex = findMessageIndex(timelineItems, messageId);
       if (messageIndex === -1) return;
 
       this.accumulatedLengthByMessageId.delete(messageId);
@@ -680,11 +765,12 @@ export const useRunStore = defineStore("run", {
       this.messageIndexCache.delete(messageId);
 
       // findIndex 已確認 index 有效，斷言元素一定存在
-      const message = messages[messageIndex] as Message;
+      const message = timelineItems[messageIndex];
+      if (!message || !isRunChatMessage(message)) return;
       const updatedToolUse = finalizeToolUse(message.toolUse);
       const finalizedSubMessages = finalizeSubMessages(message.subMessages);
 
-      const updatedMessages = [...messages];
+      const updatedMessages = [...timelineItems];
       updatedMessages[messageIndex] = updateMainMessageState(
         message,
         fullContent,

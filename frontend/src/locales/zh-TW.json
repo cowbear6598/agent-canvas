@@ -322,6 +322,11 @@
     "summarizedBadge": "摘要",
     "workflowBlockedHint": "此 Pod 在 Workflow 中，僅頭尾 Pod 可輸入",
     "integrationBlockedHint": "此 Pod 已連接 {label}，訊息由 {label} 驅動",
+    "goalRoundDivider": {
+      "completedLabel": "Goal 已完成",
+      "blockedLabel": "Goal 已 Blocked",
+      "blockedReason": "原因：{reason}"
+    },
     "toolOutput": {
       "errorTitle": "{toolName} 錯誤資訊",
       "resultTitle": "{toolName} 執行結果",

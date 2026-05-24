@@ -45,6 +45,7 @@ export function resetDb(): void {
   const database = getDb();
 
   // 子表先刪，避免外鍵約束衝突
+  database.exec("DELETE FROM run_goal_round_dividers");
   database.exec("DELETE FROM run_messages");
   database.exec("DELETE FROM run_pod_instances");
   database.exec("DELETE FROM workflow_runs");

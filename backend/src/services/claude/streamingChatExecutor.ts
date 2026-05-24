@@ -37,7 +37,11 @@ import { WebSocketResponseEvents } from "../../schemas/index.js";
 import { createI18nError } from "../../utils/i18nError.js";
 import { appendSystemMessage } from "../transcriptSystemMessage.js";
 import { resolveExecutionPaths } from "../runtime/executionPaths.js";
-import { consumeGoalRuntimeToolResult } from "../goalRuntime.js";
+import {
+  consumeGoalRuntimeToolResult,
+  getGoalRuntimeStatePath,
+  readGoalRuntimeSnapshot,
+} from "../goalRuntime.js";
 import { deriveRunResponseSummary } from "../runResponseSummary.js";
 import {
   autoForceBlock,
@@ -45,6 +49,13 @@ import {
   GOAL_GATE_LIMITS,
   nextNoProgressCount,
 } from "../goalCompletionGate.js";
+import { runStore } from "../runStore.js";
+
+export interface GoalRoundDividerContext {
+  sourcePodIds: string[];
+  sourcePodNames: string[];
+  connectionIds: string[];
+}
 
 export interface StreamingChatExecutorOptions {
   canvasId: string;
@@ -58,6 +69,7 @@ export interface StreamingChatExecutorOptions {
   message: string | ContentBlock[];
   abortable: boolean;
   strategy: ChatExecutionStrategy;
+  goalRoundDivider?: GoalRoundDividerContext;
 }
 
 export interface StreamingChatExecutorCallbacks {
@@ -795,6 +807,35 @@ interface ChatTurnOutcome {
   finished: "completed" | "aborted_or_errored" | "completed_with_fatal_error";
 }
 
+function persistGoalRoundDivider(
+  options: StreamingChatExecutorOptions,
+): void {
+  const runContext = options.strategy.getRunContext();
+  if (!runContext || !options.goalRoundDivider) return;
+
+  const snapshot = readGoalRuntimeSnapshot(
+    getGoalRuntimeStatePath(runContext, options.podId),
+  );
+  if (!snapshot) return;
+
+  const status = snapshot.state.status;
+  if (status !== "completed" && status !== "blocked") return;
+
+  const divider = runStore.addRunGoalRoundDivider({
+    runId: runContext.runId,
+    podId: options.podId,
+    sourcePodIds: options.goalRoundDivider.sourcePodIds,
+    sourcePodNames: options.goalRoundDivider.sourcePodNames,
+    status,
+    blockedReason: snapshot.state.blockedReason,
+    connectionIds: options.goalRoundDivider.connectionIds,
+  });
+  options.strategy.createEmitStrategy().emitGoalRoundDivider({
+    canvasId: options.canvasId,
+    divider,
+  });
+}
+
 /**
  * 執行單一 chat turn：自行建立 streamContext、註冊 stream、跑 provider 串流、收尾。
  * 對 abort / 已知錯誤負責呼叫對應 handler；未知錯誤往上 throw。
@@ -909,6 +950,8 @@ export async function executeStreamingChat(
   let noProgressCount = 0;
 
   while (true) {
+    if (!runContext) break;
+
     // Fatal provider error（usage limit、CLI exit code 等）：retry 只會引發相同錯誤，
     // transcript 已寫入錯誤訊息，直接 break 走 onComplete 即可
     if (turnOutcome.finished === "completed_with_fatal_error") break;
@@ -921,9 +964,7 @@ export async function executeStreamingChat(
     if (decision.action === "proceed") break;
 
     if (decision.action === "force_block") {
-      if (runContext) {
-        autoForceBlock(runContext, podResult.pod, decision.reason);
-      }
+      autoForceBlock(runContext, podResult.pod, decision.reason);
       break;
     }
 
@@ -939,20 +980,20 @@ export async function executeStreamingChat(
       return turnOutcome.result;
     }
 
-    if (runContext) {
-      noProgressCount = nextNoProgressCount(
-        runContext,
-        podId,
-        decision.completedCountBefore,
-        noProgressCount,
-      );
-    }
+    noProgressCount = nextNoProgressCount(
+      runContext,
+      podId,
+      decision.completedCountBefore,
+      noProgressCount,
+    );
     retryCount++;
 
     // 防呆：理論上 evaluateGoalGate 會在 retryCount >= hardRetryLimit 時回 force_block；
     // 此處再次檢查避免任何遞增邏輯改動造成意外無限迴圈
     if (retryCount > GOAL_GATE_LIMITS.hardRetryLimit) break;
   }
+
+  persistGoalRoundDivider(options);
 
   if (callbacks?.onComplete) {
     await callbacks.onComplete(canvasId, podId);

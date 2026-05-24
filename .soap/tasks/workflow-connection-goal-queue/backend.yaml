@@ -1,0 +1,197 @@
+feature: workflow-connection-goal-queue
+side: backend
+approved: true
+phases:
+  - id: P1
+    title: Run-only workflow 契約與 connection queue 單工
+    parallel: false
+    verification:
+      - bun run style
+      - bun run test
+    done: true
+    items:
+      - id: P1.A
+        title: 移除 workflow 非 run mode 靜默 fallback
+        tasks:
+          - id: P1.A.t1
+            text: 調整 `backend/src/services/workflow/types.ts` 與 workflow 入口型別，讓 workflow pipeline、trigger strategy、status delegate 的執行參數明確要求 `RunContext`
+            completed: true
+            last_files_changed:
+              - backend/src/services/workflow/workflowStatusDelegate.ts
+              - backend/src/services/workflow/workflowPipeline.ts
+              - backend/src/services/goalCompletionGate.ts
+              - backend/src/services/claude/streamingChatExecutor.ts
+          - id: P1.A.t2
+            text: 移除 `NoopStatusDelegate` 的 workflow 執行路徑，讓 `createStatusDelegate` 在缺少 `RunContext` 時回報明確的 workflow 程式錯誤
+            completed: true
+            last_files_changed:
+              - backend/src/services/workflow/workflowStatusDelegate.ts
+          - id: P1.A.t3
+            text: 更新呼叫 `createStatusDelegate`、`evaluateGoalGate`、`buildGoalRuntimeMcpServerConfig` 的 workflow 路徑，確保正常 workflow run 一律帶入同一份 `RunContext`
+            completed: true
+            last_files_changed:
+              - backend/src/services/claude/streamingChatExecutor.ts
+              - backend/src/services/workflow/workflowBranchTriggerService.ts
+          - id: P1.A.t4
+            text: 新增或更新 backend business-logic 測試，覆蓋 workflow 執行缺少 `RunContext` 時不會默默進入 noop fallback
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/workflowPipeline.test.ts
+              - backend/tests/business-logic/goalCompletionGate.test.ts
+              - backend/tests/business-logic/workflowBranchTriggerService.test.ts
+
+      - id: P1.B
+        title: Connection queue 單工與 FIFO 條件
+        tasks:
+          - id: P1.B.t1
+            text: 在 `backend/src/services/workflow/runQueueService.ts` 建立 per `runId:targetPodId` 的 active item 判定，讓 active stream、非終態 pod instance、既有 queue item 都會阻止下一個 item 直接執行
+            completed: true
+            last_files_changed:
+              - backend/src/services/workflow/runQueueService.ts
+          - id: P1.B.t2
+            text: 調整 `workflowStatusDelegate.RunDelegate.isBusy` 與 `workflowPipeline.enqueueForRunMode`，讓同一 target Pod 的 connection 或 connection group 必須依 FIFO queue 進入下一輪
+            completed: true
+            last_files_changed:
+              - backend/src/services/workflow/workflowStatusDelegate.ts
+              - backend/src/services/workflow/workflowPipeline.ts
+          - id: P1.B.t3
+            text: 調整 `runQueueService.processNext`，避免 `triggerWorkflowWithSummary` fire-and-forget 尚未建立 active stream 時連續 dequeue 多個 item
+            completed: true
+            last_files_changed:
+              - backend/src/services/workflow/runQueueService.ts
+          - id: P1.B.t4
+            text: 新增 backend business-logic 測試，覆蓋同一 target Pod 的第二與第三個 connection item 都會排隊，第一輪 Goal completed 或 blocked 後才依序 dequeue
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/runQueueService.test.ts
+              - backend/tests/business-logic/workflowPipeline.test.ts
+
+  - id: P2
+    title: Direct 與 multi-input queue item 語意
+    parallel: false
+    verification:
+      - bun run style
+      - bun run test
+    done: true
+    items:
+      - id: P2.A
+        title: Direct 不合併時形成獨立 queue item
+        tasks:
+          - id: P2.A.t1
+            text: 調整 `backend/src/services/workflow/workflowDirectTriggerService.ts`，移除多 Direct 預設 10 秒合併成單輪的行為，讓每條 ready Direct connection 形成獨立 queue item
+            completed: true
+            last_files_changed:
+              - backend/src/services/workflow/workflowDirectTriggerService.ts
+          - id: P2.A.t2
+            text: 清理或改寫 `directTriggerStore` 相關使用點，讓 Direct queue item 不再依賴 sourcePodId map 覆寫摘要來決定同輪內容
+            completed: true
+            last_files_changed:
+              - backend/src/services/directTriggerStore.ts
+              - backend/src/services/workflow/workflowStateService.ts
+              - backend/tests/business-logic/directTriggerStore.test.ts
+              - backend/tests/backend-test-inventory.tsv
+          - id: P2.A.t3
+            text: 更新 `workflowExecutionService.triggerDirectConnections` 的啟動流程，保留每條 Direct 的 connectionId、sourcePodId、summary 與 triggerMode 作為 queue item metadata
+            completed: true
+            last_files_changed:
+              - backend/src/services/workflow/workflowExecutionService.ts
+          - id: P2.A.t4
+            text: 更新 backend 測試，將原本多 Direct merge 的期待改為三條 Direct 依序跑三輪 Goal，且每輪完成後各自觸發下游
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/workflowDirectTriggerFlow.test.ts
+              - backend/tests/business-logic/workflowPipeline.test.ts
+              - backend/tests/business-logic/workflowStateService.test.ts
+
+      - id: P2.B
+        title: Auto/Branch group 維持單一 queue item
+        tasks:
+          - id: P2.B.t1
+            text: 檢查 `workflowMultiInputService.triggerMergedWorkflow` 傳入 `triggerWorkflowWithSummary` 的 `participatingConnectionIds` 與 source pod metadata，確保 Auto/Branch multi-input group 仍以單一 queue item 執行
+            completed: true
+            last_files_changed:
+              - backend/src/services/workflow/workflowMultiInputService.ts
+              - backend/src/services/workflow/types.ts
+              - backend/src/services/workflow/workflowExecutionService.ts
+          - id: P2.B.t2
+            text: 補齊 multi-input queue item 的 sourcePodIds/sourcePodNames metadata，供 Goal round divider 與下游觸發共用
+            completed: true
+            last_files_changed:
+              - backend/src/services/workflow/runQueueService.ts
+              - backend/src/services/workflow/workflowStatusDelegate.ts
+              - backend/src/services/workflow/workflowPipeline.ts
+              - backend/src/services/workflow/workflowMultiInputService.ts
+              - backend/src/services/workflow/types.ts
+              - backend/src/services/workflow/workflowExecutionService.ts
+          - id: P2.B.t3
+            text: 新增 backend 測試，覆蓋 Auto/Branch group 排入 queue 時只產生一輪 Goal，且 divider 來源包含所有參與來源 Pod
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/workflowMultiInputService.test.ts
+              - backend/tests/backend-test-inventory.tsv
+
+  - id: P3
+    title: Goal round divider 事件與持久化
+    parallel: false
+    verification:
+      - bun run style
+      - bun run test
+    done: true
+    items:
+      - id: P3.A
+        title: 後端 timeline 契約
+        tasks:
+          - id: P3.A.t1
+            text: 在 backend run response 型別新增 Goal round divider timeline item，欄位包含 runId、podId、sourcePodIds、sourcePodNames、status、blockedReason、completedAt 與對應 connectionIds
+            completed: true
+            last_files_changed:
+              - backend/src/types/run.ts
+          - id: P3.A.t2
+            text: 在 run transcript persistence 中新增可重開歷程仍存在的 divider 紀錄格式，不把 divider 混用成現有 provider error system message metadata
+            completed: true
+            last_files_changed:
+              - backend/src/types/persistence.ts
+              - backend/src/types/index.ts
+              - backend/src/database/schema.ts
+              - backend/src/database/statements.ts
+              - backend/src/database/index.ts
+              - backend/src/services/runStore.ts
+              - backend/tests/business-logic/runStore.test.ts
+          - id: P3.A.t3
+            text: 在 `streamingChatExecutor` Goal gate 放行後、workflow 下游觸發前，讀取 Goal Runtime snapshot 並產生 Goal round divider 紀錄
+            completed: true
+            last_files_changed:
+              - backend/src/services/claude/streamingChatExecutor.ts
+              - backend/src/services/workflow/workflowExecutionService.ts
+              - backend/tests/business-logic/streamingChatExecutor.test.ts
+          - id: P3.A.t4
+            text: 新增 WebSocket response event 或擴充 run message payload，讓前端即時收到 Goal round divider timeline item
+            completed: true
+            last_files_changed:
+              - backend/src/schemas/events.ts
+              - backend/src/services/executionStrategy.ts
+              - backend/src/services/chatEmitStrategy.ts
+              - backend/src/services/claude/streamingChatExecutor.ts
+              - backend/src/handlers/runHandlers.ts
+              - backend/tests/business-logic/chatEmitStrategy.test.ts
+              - backend/tests/business-logic/runHandlers.test.ts
+              - backend/tests/business-logic/streamingChatExecutor.test.ts
+
+      - id: P3.B
+        title: 下游觸發時機
+        tasks:
+          - id: P3.B.t1
+            text: 調整 `workflowExecutionService.onWorkflowChatComplete` 的順序，確保 Goal round divider 已完成持久化與廣播後，才觸發下游 workflow
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/streamingChatExecutor.test.ts
+          - id: P3.B.t2
+            text: 確認 `delegate.scheduleNextInQueue` 只會在 Goal completed 或 blocked 放行後執行，並以測試固定此順序
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/streamingChatExecutor.test.ts
+          - id: P3.B.t3
+            text: 新增 backend 測試，覆蓋 Goal completed 與 Goal blocked 都會產生 divider、觸發下游、再 dequeue 下一個 connection item
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/streamingChatExecutor.test.ts

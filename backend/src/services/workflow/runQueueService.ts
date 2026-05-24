@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from "uuid";
 import type { TriggerMode } from "../../types/index.js";
 import type { TriggerStrategy, ExecutionServiceMethods } from "./types.js";
 import type { RunContext } from "../../types/run.js";
+import { runStore, TERMINAL_POD_STATUSES } from "../runStore.js";
 import { LazyInitializable } from "./lazyInitializable.js";
 import { buildRunQueueKey } from "./workflowHelpers.js";
 import { decideRunQueueSettlement } from "./workflowRunDecisions.js";
@@ -19,6 +20,8 @@ export interface RunQueueItem {
   isSummarized: boolean;
   triggerMode: TriggerMode;
   participatingConnectionIds?: string[];
+  sourcePodIds?: string[];
+  sourcePodNames?: string[];
   runContext: RunContext;
   enqueuedAt: Date;
 }
@@ -36,9 +39,27 @@ interface RunQueueServiceDeps {
 
 class RunQueueService extends LazyInitializable<RunQueueServiceDeps> {
   private queues: Map<string, RunQueueItem[]> = new Map();
+  private processingKeys: Set<string> = new Set();
 
   private getStrategy(triggerMode: TriggerMode): TriggerStrategy {
     return this.deps.strategies[triggerMode];
+  }
+
+  private hasActivePodInstance(runContext: RunContext, podId: string): boolean {
+    const instance = runStore.getPodInstance(runContext.runId, podId);
+    if (!instance) return false;
+    if (instance.status === "pending") return false;
+    return !TERMINAL_POD_STATUSES.has(instance.status);
+  }
+
+  hasActiveItem(runContext: RunContext, targetPodId: string): boolean {
+    const key = buildRunQueueKey(runContext.runId, targetPodId);
+    return (
+      this.deps.hasActiveStream(runContext.runId, targetPodId) ||
+      this.processingKeys.has(key) ||
+      this.hasActivePodInstance(runContext, targetPodId) ||
+      this.getQueueSize(key) > 0
+    );
   }
 
   enqueue(item: Omit<RunQueueItem, "id" | "enqueuedAt">): void {
@@ -91,6 +112,10 @@ class RunQueueService extends LazyInitializable<RunQueueServiceDeps> {
     runContext: RunContext,
   ): Promise<void> {
     const key = buildRunQueueKey(runContext.runId, targetPodId);
+    if (this.processingKeys.has(key)) {
+      return;
+    }
+
     const decision = decideRunQueueSettlement(
       this.deps.hasActiveStream(runContext.runId, targetPodId),
       this.getQueueSize(key),
@@ -103,17 +128,24 @@ class RunQueueService extends LazyInitializable<RunQueueServiceDeps> {
     const item = this.dequeue(key);
     if (!item) return;
 
-    const strategy = this.getStrategy(item.triggerMode);
+    this.processingKeys.add(key);
+    try {
+      const strategy = this.getStrategy(item.triggerMode);
 
-    await this.deps.executionService.triggerWorkflowWithSummary({
-      canvasId,
-      connectionId: item.connectionId,
-      summary: item.summary,
-      isSummarized: item.isSummarized,
-      participatingConnectionIds: item.participatingConnectionIds,
-      strategy,
-      runContext,
-    });
+      await this.deps.executionService.triggerWorkflowWithSummary({
+        canvasId,
+        connectionId: item.connectionId,
+        summary: item.summary,
+        isSummarized: item.isSummarized,
+        participatingConnectionIds: item.participatingConnectionIds,
+        sourcePodIds: item.sourcePodIds,
+        sourcePodNames: item.sourcePodNames,
+        strategy,
+        runContext: item.runContext,
+      });
+    } finally {
+      this.processingKeys.delete(key);
+    }
   }
 }
 

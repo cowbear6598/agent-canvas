@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { workflowStateService } from "../../src/services/workflow/workflowStateService.js";
 import { connectionStore } from "../../src/services/connectionStore.js";
 import { pendingTargetStore } from "../../src/services/pendingTargetStore.js";
-import { directTriggerStore } from "../../src/services/directTriggerStore.js";
 import { workflowEventEmitter } from "../../src/services/workflow/workflowEventEmitter.js";
 import { workflowDirectTriggerService } from "../../src/services/workflow/workflowDirectTriggerService.js";
 import { logger } from "../../src/utils/logger.js";
@@ -410,12 +409,10 @@ describe("WorkflowStateService", () => {
   describe("connection deletion state rules", () => {
     it("missing connection deletion leaves pending state unchanged", () => {
       vi.spyOn(connectionStore, "getById").mockReturnValue(undefined);
-      const hasDirectSpy = vi.spyOn(directTriggerStore, "hasDirectPending");
       const hasPendingSpy = vi.spyOn(pendingTargetStore, "hasPendingTarget");
 
       workflowStateService.handleConnectionDeletion(CANVAS_ID, CONNECTION_ID);
 
-      expect(hasDirectSpy).not.toHaveBeenCalled();
       expect(hasPendingSpy).not.toHaveBeenCalled();
     });
 
@@ -427,41 +424,21 @@ describe("WorkflowStateService", () => {
         targetPodId: TARGET_POD_ID,
       });
 
-      it("clears direct pending state and cancels the waiting resolver", () => {
+      it("cancels the direct resolver without touching pendingTargetStore", () => {
         vi.spyOn(connectionStore, "getById").mockReturnValue(directConnection);
-        vi.spyOn(directTriggerStore, "hasDirectPending").mockReturnValue(true);
-        const clearSpy = vi
-          .spyOn(directTriggerStore, "clearDirectPending")
-          .mockImplementation(() => {});
         const cancelSpy = vi
           .spyOn(workflowDirectTriggerService, "cancelPendingResolver")
           .mockImplementation(() => {});
+        const hasPendingSpy = vi.spyOn(pendingTargetStore, "hasPendingTarget");
 
         workflowStateService.handleConnectionDeletion(CANVAS_ID, CONNECTION_ID);
 
-        expect(clearSpy).toHaveBeenCalledWith(TARGET_POD_ID);
         expect(cancelSpy).toHaveBeenCalledWith(TARGET_POD_ID);
-      });
-
-      it("still cancels the waiting resolver when no direct pending state exists", () => {
-        vi.spyOn(connectionStore, "getById").mockReturnValue(directConnection);
-        vi.spyOn(directTriggerStore, "hasDirectPending").mockReturnValue(false);
-        const clearSpy = vi
-          .spyOn(directTriggerStore, "clearDirectPending")
-          .mockImplementation(() => {});
-        const cancelSpy = vi
-          .spyOn(workflowDirectTriggerService, "cancelPendingResolver")
-          .mockImplementation(() => {});
-
-        workflowStateService.handleConnectionDeletion(CANVAS_ID, CONNECTION_ID);
-
-        expect(clearSpy).not.toHaveBeenCalled();
-        expect(cancelSpy).toHaveBeenCalledWith(TARGET_POD_ID);
+        expect(hasPendingSpy).not.toHaveBeenCalled();
       });
 
       it("does not alter auto multi-input pending state", () => {
         vi.spyOn(connectionStore, "getById").mockReturnValue(directConnection);
-        vi.spyOn(directTriggerStore, "hasDirectPending").mockReturnValue(false);
         vi.spyOn(
           workflowDirectTriggerService,
           "cancelPendingResolver",
@@ -576,7 +553,6 @@ describe("WorkflowStateService", () => {
           targetPodId: TARGET_POD_ID,
         });
         vi.spyOn(connectionStore, "getById").mockReturnValue(manualConnection);
-        const hasDirectSpy = vi.spyOn(directTriggerStore, "hasDirectPending");
         const hasPendingSpy = vi.spyOn(pendingTargetStore, "hasPendingTarget");
         const removeFromPendingSpy = vi.spyOn(
           pendingTargetStore,
@@ -585,7 +561,6 @@ describe("WorkflowStateService", () => {
 
         workflowStateService.handleConnectionDeletion(CANVAS_ID, CONNECTION_ID);
 
-        expect(hasDirectSpy).not.toHaveBeenCalled();
         expect(hasPendingSpy).not.toHaveBeenCalled();
         expect(removeFromPendingSpy).not.toHaveBeenCalled();
       });

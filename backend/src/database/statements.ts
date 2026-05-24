@@ -173,6 +173,11 @@ function buildStatements(db: Database): {
     upsert: ReturnType<Database["prepare"]>;
     deleteByRunId: ReturnType<Database["prepare"]>;
   };
+  runGoalRoundDivider: {
+    insert: ReturnType<Database["prepare"]>;
+    selectByRunIdAndPodId: ReturnType<Database["prepare"]>;
+    deleteByRunId: ReturnType<Database["prepare"]>;
+  };
   modelAlias: {
     insert: ReturnType<Database["prepare"]>;
     selectByProviderId: ReturnType<Database["prepare"]>;
@@ -729,6 +734,26 @@ function buildStatements(db: Database): {
         )`,
       ),
       deleteByRunId: db.prepare("DELETE FROM run_messages WHERE run_id = ?"),
+    },
+
+    runGoalRoundDivider: {
+      insert: db.prepare(
+        `INSERT INTO run_goal_round_dividers (
+          id, run_id, pod_id, source_pod_ids_json, source_pod_names_json,
+          status, blocked_reason, completed_at, connection_ids_json
+        ) VALUES (
+          $id, $runId, $podId, $sourcePodIdsJson, $sourcePodNamesJson,
+          $status, $blockedReason, $completedAt, $connectionIdsJson
+        )`,
+      ),
+      selectByRunIdAndPodId: db.prepare(
+        `SELECT * FROM run_goal_round_dividers
+        WHERE run_id = $runId AND pod_id = $podId
+        ORDER BY completed_at ASC, id ASC`,
+      ),
+      deleteByRunId: db.prepare(
+        "DELETE FROM run_goal_round_dividers WHERE run_id = ?",
+      ),
     },
 
     modelAlias: {

@@ -22,3 +22,16 @@ export interface PersistedMessage {
   metadata?: SystemMessageMetadata;
   subMessages?: PersistedSubMessage[];
 }
+
+export interface PersistedRunGoalRoundDivider {
+  type: "goal-round-divider";
+  id: string;
+  runId: string;
+  podId: string;
+  sourcePodIds: string[];
+  sourcePodNames: string[];
+  status: "completed" | "blocked";
+  blockedReason: string | null;
+  completedAt: string;
+  connectionIds: string[];
+}

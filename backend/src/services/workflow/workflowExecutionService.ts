@@ -29,6 +29,7 @@ import {
   createStatusDelegate,
 } from "./workflowStatusDelegate.js";
 import { ChatExecutionStrategy } from "../executionStrategy.js";
+import { runExecutionService } from "./runExecutionService.js";
 
 interface ExecutionServiceDeps {
   pipeline: PipelineMethods;
@@ -65,6 +66,8 @@ interface WorkflowChatContext {
   sourcePodId: string;
   targetPodId: string;
   participatingConnectionIds: string[];
+  sourcePodIds?: string[];
+  sourcePodNames?: string[];
   strategy: TriggerStrategy;
   runContext: RunContext;
   delegate: WorkflowStatusDelegate;
@@ -182,6 +185,29 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     );
   }
 
+  private buildDirectPipelineContext(
+    canvasId: string,
+    sourcePodId: string,
+    connection: Connection,
+    runContext: RunContext,
+    delegate: WorkflowStatusDelegate,
+  ): PipelineContext {
+    return {
+      canvasId,
+      sourcePodId,
+      connection,
+      triggerMode: "direct",
+      decideResult: {
+        connectionId: connection.id,
+        approved: true,
+        reason: null,
+        isError: false,
+      },
+      runContext,
+      delegate,
+    };
+  }
+
   private triggerDirectConnections(
     canvasId: string,
     sourcePodId: string,
@@ -192,20 +218,13 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     return connections
       .filter((conn) => conn.triggerMode === "direct")
       .map((connection) => {
-        const pipelineContext: PipelineContext = {
+        const pipelineContext = this.buildDirectPipelineContext(
           canvasId,
           sourcePodId,
           connection,
-          triggerMode: "direct",
-          decideResult: {
-            connectionId: connection.id,
-            approved: true,
-            reason: null,
-            isError: false,
-          },
           runContext,
           delegate,
-        };
+        );
         return this.deps.pipeline.execute(
           pipelineContext,
           this.deps.directTriggerService,
@@ -264,6 +283,8 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
       summary,
       isSummarized,
       participatingConnectionIds,
+      sourcePodIds,
+      sourcePodNames,
       strategy,
       runContext,
     } = params;
@@ -318,25 +339,35 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
       summary,
       isSummarized,
       participatingConnectionIds: resolvedConnectionIds,
+      sourcePodIds,
+      sourcePodNames,
       runContext,
     });
 
     delegate.startPodExecution(canvasId, targetPodId);
+    runExecutionService.registerActiveStream(runContext.runId, targetPodId);
+
+    const queryPromise = this.executeClaudeQuery({
+      canvasId,
+      connectionId,
+      sourcePodId,
+      targetPodId,
+      content: summary,
+      participatingConnectionIds: resolvedConnectionIds,
+      sourcePodIds,
+      sourcePodNames,
+      strategy,
+      runContext,
+      delegate,
+    }).catch((error: unknown) => {
+      runExecutionService.unregisterActiveStream(runContext.runId, targetPodId);
+      throw error;
+    });
 
     // 刻意不 await：Claude 查詢是長時間操作，結果透過 WebSocket 事件通知前端。
     // 若改為 await，呼叫方的 Promise.allSettled 會等到查詢完成才繼續，喪失多 connection 並行觸發的能力。
     fireAndForget(
-      this.executeClaudeQuery({
-        canvasId,
-        connectionId,
-        sourcePodId,
-        targetPodId,
-        content: summary,
-        participatingConnectionIds: resolvedConnectionIds,
-        strategy,
-        runContext,
-        delegate,
-      }),
+      queryPromise,
       "Workflow",
       `executeClaudeQuery 執行失敗 (connection: ${connectionId})`,
     );
@@ -418,6 +449,8 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
         targetPodId,
         triggerMode: strategy.mode,
         participatingConnectionIds,
+        sourcePodIds: params.sourcePodIds,
+        sourcePodNames: params.sourcePodNames,
         runContext,
       },
       true,
@@ -462,6 +495,8 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
         targetPodId,
         triggerMode: strategy.mode,
         participatingConnectionIds,
+        sourcePodIds: params.sourcePodIds,
+        sourcePodNames: params.sourcePodNames,
         runContext,
       },
       clientErrorMessage,
@@ -481,6 +516,12 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     const execStrategy = new ChatExecutionStrategy(canvasId, runContext);
 
     await execStrategy.addUserMessage(targetPodId, baseMessage);
+    const sourcePodNames =
+      params.sourcePodNames ??
+      [
+        podStore.getById(canvasId, params.sourcePodId)?.name ??
+          params.sourcePodId,
+      ];
 
     await executeStreamingChat(
       {
@@ -489,6 +530,11 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
         message: baseMessage,
         abortable: false,
         strategy: execStrategy,
+        goalRoundDivider: {
+          sourcePodIds: params.sourcePodIds ?? [params.sourcePodId],
+          sourcePodNames,
+          connectionIds: params.participatingConnectionIds,
+        },
       },
       {
         onComplete: (_canvasId, _podId) => this.onWorkflowChatComplete(params),

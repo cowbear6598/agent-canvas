@@ -20,7 +20,7 @@ const emit = defineEmits<{
 
 const runStore = useRunStore();
 
-const messages = computed(() => runStore.getActiveRunChatMessages);
+const timelineItems = computed(() => runStore.getActiveRunChatTimelineItems);
 const isLoadingPodMessages = computed(() => runStore.isLoadingPodMessages);
 const isLoadingOlderPodMessages = computed(
   () => runStore.isLoadingOlderPodMessages,
@@ -98,7 +98,7 @@ useEscapeClose(() => {
         </div>
 
         <ChatMessages
-          :messages="messages"
+          :timeline-items="timelineItems"
           :is-typing="isTyping ?? false"
           :is-loading-history="isLoadingPodMessages"
         />

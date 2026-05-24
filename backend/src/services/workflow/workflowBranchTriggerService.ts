@@ -27,6 +27,7 @@ import {
   buildQueuedPayload,
   createMultiInputCompletionHandlers,
   emitQueueProcessed,
+  resolvePendingKey,
 } from "./workflowHelpers.js";
 import { logger } from "../../utils/logger.js";
 import { getErrorMessage, isAbortError } from "../../utils/errorHelpers.js";
@@ -393,7 +394,12 @@ class WorkflowBranchTriggerService
     if (
       this.shouldDeferToMultiInput(canvasId, connection.targetPodId, runContext)
     ) {
-      await this.handleRejectedMultiInput(canvasId, sourcePodId, connection);
+      await this.handleRejectedMultiInput(
+        canvasId,
+        sourcePodId,
+        connection,
+        runContext,
+      );
     }
   }
 
@@ -401,19 +407,25 @@ class WorkflowBranchTriggerService
     canvasId: string,
     sourcePodId: string,
     connection: Connection,
+    runContext: RunContext,
   ): Promise<void> {
     const { requiredSourcePodIds } =
       this.deps.stateService.checkMultiInputScenario(
         canvasId,
         connection.targetPodId,
       );
+    const pendingKey = resolvePendingKey(connection.targetPodId, runContext);
     this.deps.pendingTargetStore.recordSourceRejection(
-      connection.targetPodId,
+      pendingKey,
       sourcePodId,
       "",
       requiredSourcePodIds,
     );
-    this.deps.stateService.emitPendingStatus(canvasId, connection.targetPodId);
+    this.deps.stateService.emitPendingStatus(
+      canvasId,
+      connection.targetPodId,
+      runContext,
+    );
   }
 
   /**

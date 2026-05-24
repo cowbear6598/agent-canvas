@@ -91,6 +91,10 @@ describe("handleRunLoadPodMessages", () => {
           expect.objectContaining({ content: "第二則" }),
           expect.objectContaining({ content: "第三則" }),
         ],
+        timelineItems: [
+          expect.objectContaining({ content: "第二則" }),
+          expect.objectContaining({ content: "第三則" }),
+        ],
         pageInfo: {
           hasMore: true,
           nextCursor: {

@@ -5,6 +5,7 @@ import type { InstalledPlugin } from "../plugin";
 import type { ResultPayload } from "./index";
 import type {
   WorkflowRun,
+  RunGoalRoundDivider,
   RunStatus,
   RunPodStatus,
   PathwayState,
@@ -124,6 +125,12 @@ export interface PersistedMessage {
       status: string;
     }>;
   }>;
+}
+
+export type RunChatTimelineItemPayload = PersistedMessage | RunGoalRoundDivider;
+
+export interface RunGoalRoundDividerPayload extends RunGoalRoundDivider {
+  canvasId: string;
 }
 
 export interface ConnectionPayloadItem {
@@ -560,6 +567,7 @@ export interface RunPodMessagesResultPayload {
   runId?: string;
   podId?: string;
   messages?: PersistedMessage[];
+  timelineItems?: RunChatTimelineItemPayload[];
   pageInfo?: RunMessagesPageInfo;
 }
 

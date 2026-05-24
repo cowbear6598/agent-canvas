@@ -1,7 +1,6 @@
 import type { RunContext } from "../../types/run.js";
 import type { TriggerMode } from "../../types/index.js";
 import type { SettlementPathway } from "./types.js";
-import { runStore } from "../runStore.js";
 import { runExecutionService } from "./runExecutionService.js";
 import { runQueueService } from "./runQueueService.js";
 import { fireAndForget } from "../../utils/operationHelpers.js";
@@ -15,7 +14,9 @@ export interface EnqueueItem {
   isSummarized: boolean;
   triggerMode: TriggerMode;
   participatingConnectionIds?: string[];
-  runContext?: RunContext;
+  sourcePodIds?: string[];
+  sourcePodNames?: string[];
+  runContext: RunContext;
 }
 
 export interface WorkflowStatusDelegate {
@@ -105,16 +106,11 @@ class RunDelegate implements WorkflowStatusDelegate {
   }
 
   isBusy(_canvasId: string, targetPodId: string): boolean {
-    const instance = runStore.getPodInstance(
-      this.runContext.runId,
-      targetPodId,
-    );
-    return instance?.status === "running";
+    return runQueueService.hasActiveItem(this.runContext, targetPodId);
   }
 
   enqueue(item: EnqueueItem): void {
-    if (!item.runContext) return;
-    runQueueService.enqueue({ ...item, runContext: item.runContext });
+    runQueueService.enqueue(item);
   }
 
   scheduleNextInQueue(canvasId: string, targetPodId: string): void {
@@ -134,36 +130,11 @@ class RunDelegate implements WorkflowStatusDelegate {
   }
 }
 
-class NoopStatusDelegate implements WorkflowStatusDelegate {
-  isRunMode(): boolean {
-    return false;
-  }
-  startPodExecution(): void {}
-  markSummarizing(): void {}
-  markDeciding(): void {}
-  markWaiting(): void {}
-  onSummaryComplete(): void {}
-  onSummaryFailed(): void {}
-  onChatComplete(): void {}
-  onChatError(): void {}
-  shouldEnqueue(): boolean {
-    return false;
-  }
-  isBusy(): boolean {
-    return false;
-  }
-  enqueue(): void {}
-  scheduleNextInQueue(): void {}
-  settleAndSkipPath(): void {}
-}
-
-const noopStatusDelegate = new NoopStatusDelegate();
-
 export function createStatusDelegate(
-  runContext?: RunContext,
+  runContext: RunContext,
 ): WorkflowStatusDelegate {
   if (!runContext) {
-    return noopStatusDelegate;
+    throw new Error("Workflow 執行缺少 RunContext，請檢查 workflow run 入口");
   }
   return new RunDelegate(runContext);
 }
