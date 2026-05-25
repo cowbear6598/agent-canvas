@@ -1260,9 +1260,9 @@ describe("podStore", () => {
       ]);
     });
 
-    // [B-3] regression：本地樂觀更新 model 時不應主動清空 thinkingLevel，
+    // regression：本地樂觀更新 model 時不應主動清空 thinkingLevel，
     // 清空由後端 pod:model:set 事件回拋負責
-    it("[B-3] 切換 model 時應保留原 pod 已有的 thinkingLevel（不主動清空）", () => {
+    it("切換 model 時應保留原 pod 已有的 thinkingLevel（不主動清空）", () => {
       const store = usePodStore();
       const pod = createMockPod({
         id: "pod-1",
@@ -1281,8 +1281,8 @@ describe("podStore", () => {
   });
 
   describe("updatePodThinkingLevel", () => {
-    // [B-1] 寫入 thinkingLevel 後 model 應維持原值
-    it("[B-1] 寫入 thinkingLevel 後 model 應維持原值", () => {
+    // 寫入 thinkingLevel 後 model 應維持原值
+    it("寫入 thinkingLevel 後 model 應維持原值", () => {
       const store = usePodStore();
       const pod = createMockPod({
         id: "pod-1",
@@ -1298,8 +1298,8 @@ describe("podStore", () => {
       expect(store.pods[0]?.providerConfig?.model).toBe("sonnet");
     });
 
-    // [B-2] 對未知 podId 不應改動 pods 陣列
-    it("[B-2] 對未知 podId 不應改動 pods 陣列", () => {
+    // 對未知 podId 不應改動 pods 陣列
+    it("對未知 podId 不應改動 pods 陣列", () => {
       const store = usePodStore();
       const pod = createMockPod({
         id: "pod-1",

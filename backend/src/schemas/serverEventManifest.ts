@@ -7,12 +7,10 @@ export interface ServerEventManifestEntry {
   schema: z.ZodType<unknown>;
 }
 
-export const serverEventPayloadSchema = z.unknown();
-
 export const serverEventManifest: ServerEventManifestEntry[] = Object.values(
   WebSocketResponseEvents,
 ).map((event) => ({
   event,
   schemaName: "serverEventPayloadSchema",
-  schema: serverEventPayloadSchema,
+  schema: z.unknown(),
 }));

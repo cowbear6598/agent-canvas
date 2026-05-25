@@ -22,6 +22,7 @@ import { logger } from "../utils/logger.js";
 import { getStmts } from "../database/index.js";
 import type { Pod } from "../types/pod.js";
 import type { RunContext } from "../types/run.js";
+import type { OpencodeOptions } from "./provider/opencodeOptionsBuilder.js";
 
 // ─── 公開介面 ────────────────────────────────────────────────────────────────
 
@@ -33,8 +34,8 @@ export interface DisposableChatInput {
   workspacePath: string;
   /**
    * 呼叫端若有來源 Pod context，opencode disposable 會沿用一般 Pod 的
-   * buildOptions 流程，取得 managed MCP / Goal Runtime / plugin catalog。
-   * 未提供時保留舊的純全域 server 行為。
+   * buildOptions 流程取得模型 / thinking 等必要設定，
+   * 但 disposable 會清空 MCP / Goal Runtime / plugin catalog。
    */
   sourcePod?: Pod;
   runContext?: RunContext;
@@ -145,6 +146,20 @@ async function executeOpencodeDisposableChat(
     input.sourcePod != null
       ? await opencodeProvider.buildOptions(input.sourcePod, input.runContext)
       : null;
+  const disposableOptions: OpencodeOptions = {
+    providerID,
+    modelID,
+    mcpEntries: [],
+    hasGoalRuntime: false,
+    pluginCatalogText: "",
+    systemPrompt: input.systemPrompt,
+    ...(builtOptions?.thinkingLevel
+      ? { thinkingLevel: builtOptions.thinkingLevel }
+      : {}),
+    ...(builtOptions?.thinkingOptions
+      ? { thinkingOptions: builtOptions.thinkingOptions }
+      : {}),
+  };
 
   for await (const event of opencodeProvider.chat({
     podId: input.sourcePod?.id ?? "disposable-opencode",
@@ -154,15 +169,7 @@ async function executeOpencodeDisposableChat(
     resumeSessionId: null,
     abortSignal: abortController.signal,
     runContext: input.runContext,
-    options: {
-      ...builtOptions,
-      providerID,
-      modelID,
-      mcpEntries: builtOptions?.mcpEntries ?? [],
-      hasGoalRuntime: builtOptions?.hasGoalRuntime ?? false,
-      pluginCatalogText: builtOptions?.pluginCatalogText ?? "",
-      systemPrompt: input.systemPrompt,
-    },
+    options: disposableOptions,
   })) {
     if (event.type === "text") {
       content += event.content;

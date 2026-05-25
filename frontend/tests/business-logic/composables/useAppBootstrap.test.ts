@@ -131,7 +131,11 @@ describe("useAppBootstrap", () => {
 
   it("loadAppData 進行中應維持載入中狀態，完成後才標記初始化", async () => {
     const options = createBootstrapOptions();
+    const fetchConfigDeferred = createDeferred();
     const loadCanvasesDeferred = createDeferred();
+    options.stores.configStore.fetchConfig.mockImplementationOnce(
+      () => fetchConfigDeferred.promise,
+    );
     options.canvasContext.canvasStore.loadCanvases.mockImplementationOnce(
       () => loadCanvasesDeferred.promise,
     );
@@ -142,6 +146,20 @@ describe("useAppBootstrap", () => {
 
     expect(bootstrap.isLoading.value).toBe(true);
     expect(bootstrap.isInitialized.value).toBe(false);
+    expect(
+      options.stores.providerCapabilityStore.loadFromBackend,
+    ).not.toHaveBeenCalled();
+    expect(options.stores.opencodeAliasStore.loadFromBackend).not.toHaveBeenCalled();
+
+    fetchConfigDeferred.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await nextTick();
+
+    expect(
+      options.stores.providerCapabilityStore.loadFromBackend,
+    ).toHaveBeenCalledOnce();
+    expect(options.stores.opencodeAliasStore.loadFromBackend).toHaveBeenCalledOnce();
 
     loadCanvasesDeferred.resolve();
     await loadingPromise;

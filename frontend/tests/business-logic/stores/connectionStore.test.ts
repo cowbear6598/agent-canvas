@@ -70,6 +70,17 @@ describe("connectionStore", () => {
         expect(offCalls[index]?.[1]).toBe(handler);
       });
     });
+
+    it("重複 setupWorkflowListeners 不應累加重複 handler", () => {
+      const store = useConnectionStore();
+
+      store.setupWorkflowListeners();
+      store.setupWorkflowListeners();
+      store.cleanupWorkflowListeners();
+
+      expect(mockWebSocketClient.on).toHaveBeenCalledTimes(6);
+      expect(mockWebSocketClient.off).toHaveBeenCalledTimes(6);
+    });
   });
 
   describe("createConnection", () => {

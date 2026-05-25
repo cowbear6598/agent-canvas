@@ -61,6 +61,7 @@ describe("BranchDecisionService", () => {
     initTestDb();
     insertCanvas();
     vi.spyOn(branchDecider, "decide").mockResolvedValue({
+      kind: "success",
       selectedLabel: "Alpha",
     });
     vi.spyOn(podStore, "getById").mockImplementation(((_canvasId, podId) => ({
@@ -105,6 +106,7 @@ describe("BranchDecisionService", () => {
     );
 
     expect(result).toEqual({
+      outcome: "selected",
       selectedConnectionId: "conn-1",
       rejectedConnectionIds: ["conn-2"],
     });
@@ -126,5 +128,41 @@ describe("BranchDecisionService", () => {
       "第5則",
       "第6則",
     ]);
+  });
+
+  it("branchDecider 回傳結構化失敗時，應保留 failed outcome 供 workflow 辨識", async () => {
+    vi.spyOn(branchDecider, "decide").mockResolvedValueOnce({
+      kind: "failed",
+      failure: {
+        kind: "provider_error",
+        message: "模型連線失敗",
+        attempts: [
+          { attempt: 1, kind: "provider_error", message: "模型連線失敗" },
+        ],
+      },
+    });
+
+    const result = await branchDecisionService.decideBranch(
+      CANVAS_ID,
+      SOURCE_POD_ID,
+      [
+        makeConnection("conn-1", "Alpha", "pod-a"),
+        makeConnection("conn-2", "Beta", "pod-b"),
+      ],
+      makeRunContext("run-2"),
+    );
+
+    expect(result).toEqual({
+      outcome: "failed",
+      selectedConnectionId: null,
+      rejectedConnectionIds: ["conn-1", "conn-2"],
+      failure: {
+        kind: "provider_error",
+        message: "模型連線失敗",
+        attempts: [
+          { attempt: 1, kind: "provider_error", message: "模型連線失敗" },
+        ],
+      },
+    });
   });
 });

@@ -100,9 +100,15 @@ describe("SummaryService", () => {
     expect(userPrompt).toContain("第10則");
     expect(userPrompt).not.toContain("第1則");
     expect(userPrompt).not.toContain("第2則");
+    expect(executeDisposableChatMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourcePod: expect.objectContaining({ id: SOURCE_POD_ID }),
+        runContext: makeRunContext(run.id),
+      }),
+    );
   });
 
-  it("AI 摘要失敗時應 fallback 到 persisted summary", async () => {
+  it("AI 摘要失敗時應保留失敗語意，交由 workflow 層決定 fallback", async () => {
     executeDisposableChatMock.mockResolvedValue({
       success: false,
       error: "provider down",
@@ -123,45 +129,9 @@ describe("SummaryService", () => {
 
     expect(result).toEqual({
       targetPodId: TARGET_POD_ID,
-      summary: "既有摘要",
-      success: true,
-    });
-  });
-
-  it("AI 摘要失敗且無 persisted summary 時應 fallback 到最近一則 assistant 訊息", async () => {
-    executeDisposableChatMock.mockResolvedValue({
+      summary: "",
       success: false,
       error: "provider down",
-    });
-
-    const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "trigger");
-    runStore.createPodInstance(run.id, SOURCE_POD_ID);
-    runStore.upsertRunMessage(run.id, SOURCE_POD_ID, {
-      id: "00000000-0000-0000-0000-000000000001",
-      role: "user",
-      content: "使用者訊息",
-      timestamp: "2026-05-22T10:00:00.000Z",
-    });
-    runStore.upsertRunMessage(run.id, SOURCE_POD_ID, {
-      id: "00000000-0000-0000-0000-000000000002",
-      role: "assistant",
-      content: "最後 assistant 訊息",
-      timestamp: "2026-05-22T10:00:01.000Z",
-    });
-
-    const result = await summaryService.generateSummaryForTarget(
-      CANVAS_ID,
-      SOURCE_POD_ID,
-      TARGET_POD_ID,
-      "claude",
-      "sonnet",
-      makeRunContext(run.id),
-    );
-
-    expect(result).toEqual({
-      targetPodId: TARGET_POD_ID,
-      summary: "最後 assistant 訊息",
-      success: true,
     });
   });
 });

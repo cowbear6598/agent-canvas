@@ -324,13 +324,27 @@ export function useOpencodeAliasEditor({
     aliasListsByProvider.value[providerID] = list;
   };
 
+  const buildFullAliasOrderForProvider = (providerID: string): string[] => {
+    const reorderedProviderIds = (
+      aliasListsByProvider.value[providerID] ?? []
+    ).map((alias) => alias.id);
+    let providerIndex = 0;
+
+    return opencodeAliasStore.aliases.map((alias) => {
+      if (alias.providerID !== providerID) {
+        return alias.id;
+      }
+
+      return reorderedProviderIds[providerIndex++] ?? alias.id;
+    });
+  };
+
   const handleAliasReorder = async (providerID: string): Promise<void> => {
-    const ids = (aliasListsByProvider.value[providerID] ?? []).map(
-      (alias) => alias.id,
-    );
+    const ids = buildFullAliasOrderForProvider(providerID);
     try {
       await opencodeAliasStore.reorder(ids);
     } catch (err) {
+      syncAliasListsFromStore([providerID]);
       const reason = err instanceof Error ? err.message : String(err);
       toast({
         title: t("llmProvider.opencode.aliases.actionFailed", { reason }),

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { nextTick, reactive, ref } from "vue";
 import { useAppSocketLifecycle } from "@/composables/useAppSocketLifecycle";
+import { logger } from "@/utils/logger";
 
 vi.mock("@/utils/logger", () => ({
   logger: {
@@ -98,6 +99,25 @@ describe("useAppSocketLifecycle", () => {
     ).toHaveBeenCalledOnce();
     expect(options.resetInitialization).toHaveBeenCalledOnce();
     expect(options.canvasContext.canvasStore.reset).toHaveBeenCalledOnce();
+
+    lifecycle.stopSocketLifecycle();
+  });
+
+  it("bootstrapAccess 失敗時應記錄錯誤並重置初始化狀態", async () => {
+    const options = createSocketLifecycleOptions();
+    options.securityStore.bootstrapAccess = vi.fn(async () => {
+      throw new Error("bootstrap failed");
+    });
+    const lifecycle = useAppSocketLifecycle(options);
+
+    options.canvasContext.chatStore.connectionStatus = "connected";
+    await flushAsyncWatchers();
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      "[App] Socket 初始化 失敗",
+      expect.any(Error),
+    );
+    expect(options.resetInitialization).toHaveBeenCalledOnce();
 
     lifecycle.stopSocketLifecycle();
   });

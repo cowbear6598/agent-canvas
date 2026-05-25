@@ -8,7 +8,7 @@
  * 1. recentMessages 為空 → 直接回傳 None，不發 model call
  * 2. 組 prompt（branchPromptBuilder）
  * 3. 呼叫 executeDisposableChat
- * 4. parseBranchDecision；失敗則重試一次（第二次仍失敗 → fallback None）
+ * 4. parseBranchDecision；失敗則重試一次（第二次仍失敗 → 回傳結構化失敗）
  * 5. 全程於關鍵點檢查 abortSignal
  */
 
@@ -20,6 +20,8 @@ import { isAbortError } from "../../utils/errorHelpers.js";
 import { BranchAbortError } from "./abortError.js";
 import type {
   BranchDecider,
+  BranchDecisionFailure,
+  BranchDecisionFailureAttempt,
   BranchDecisionInput,
   BranchDecisionOutput,
 } from "./branchDecider.js";
@@ -30,6 +32,22 @@ function checkAbort(signal: AbortSignal | undefined): void {
   if (signal?.aborted) {
     throw new BranchAbortError();
   }
+}
+
+function buildFailure(
+  attempts: BranchDecisionFailureAttempt[],
+): BranchDecisionFailure {
+  const kinds = new Set(attempts.map((attempt) => attempt.kind));
+  const lastAttempt = attempts[attempts.length - 1];
+
+  return {
+    kind:
+      kinds.size === 1
+        ? (attempts[0]?.kind ?? "provider_error")
+        : "mixed",
+    message: lastAttempt?.message ?? "Branch 決策失敗",
+    attempts,
+  };
 }
 
 // ─── 實作 ─────────────────────────────────────────────────────────────────────
@@ -50,7 +68,7 @@ export class BaseBranchDecider implements BranchDecider {
     } = input;
 
     if (recentMessages.length === 0 && !persistedSummary) {
-      return { selectedLabel: "None" };
+      return { kind: "success", selectedLabel: "None" };
     }
 
     checkAbort(abortSignal);
@@ -66,6 +84,7 @@ export class BaseBranchDecider implements BranchDecider {
     // validLabels：所有 branch 的 label（parseBranchDecision 內部另外允許 "None"）
     const validLabels = branches.map((b) => b.label);
 
+    const failureAttempts: BranchDecisionFailureAttempt[] = [];
     let rawResponse: string | null = null;
     try {
       const result = await executeDisposableChat({
@@ -80,6 +99,11 @@ export class BaseBranchDecider implements BranchDecider {
       if (result.success) {
         rawResponse = result.content;
       } else {
+        failureAttempts.push({
+          attempt: 1,
+          kind: "provider_error",
+          message: result.error ?? "第一次模型呼叫失敗",
+        });
         logger.warn(
           "Workflow",
           "Warn",
@@ -91,7 +115,11 @@ export class BaseBranchDecider implements BranchDecider {
       if (isAbortError(err)) {
         throw err;
       }
-      // 第三方服務呼叫失敗視同 PARSE_FAIL，走重試邏輯
+      failureAttempts.push({
+        attempt: 1,
+        kind: "provider_error",
+        message: err instanceof Error ? err.message : String(err),
+      });
       logger.warn(
         "Workflow",
         "Warn",
@@ -104,8 +132,14 @@ export class BaseBranchDecider implements BranchDecider {
     if (rawResponse !== null) {
       const parsed = parseBranchDecision(rawResponse, validLabels);
       if (parsed.ok) {
-        return { selectedLabel: parsed.selectedLabel };
+        return { kind: "success", selectedLabel: parsed.selectedLabel };
       }
+
+      failureAttempts.push({
+        attempt: 1,
+        kind: "parse_error",
+        message: parsed.reason,
+      });
 
       logger.warn(
         "Workflow",
@@ -130,6 +164,11 @@ export class BaseBranchDecider implements BranchDecider {
       if (retryResult.success) {
         retryRawResponse = retryResult.content;
       } else {
+        failureAttempts.push({
+          attempt: 2,
+          kind: "provider_error",
+          message: retryResult.error ?? "第二次模型呼叫失敗",
+        });
         logger.warn(
           "Workflow",
           "Warn",
@@ -141,6 +180,11 @@ export class BaseBranchDecider implements BranchDecider {
       if (isAbortError(err)) {
         throw err;
       }
+      failureAttempts.push({
+        attempt: 2,
+        kind: "provider_error",
+        message: err instanceof Error ? err.message : String(err),
+      });
       logger.warn(
         "Workflow",
         "Warn",
@@ -151,22 +195,31 @@ export class BaseBranchDecider implements BranchDecider {
     if (retryRawResponse !== null) {
       const retryParsed = parseBranchDecision(retryRawResponse, validLabels);
       if (retryParsed.ok) {
-        return { selectedLabel: retryParsed.selectedLabel };
+        return { kind: "success", selectedLabel: retryParsed.selectedLabel };
       }
+
+      failureAttempts.push({
+        attempt: 2,
+        kind: "parse_error",
+        message: retryParsed.reason,
+      });
 
       logger.warn(
         "Workflow",
         "Warn",
-        `[BaseBranchDecider] 重試後仍解析失敗（原因：${retryParsed.reason}），fallback 為 None`,
+        `[BaseBranchDecider] 重試後仍解析失敗（原因：${retryParsed.reason}），回傳結構化失敗`,
       );
     } else {
       logger.warn(
         "Workflow",
         "Warn",
-        "[BaseBranchDecider] 兩次呼叫均失敗，fallback 為 None",
+        "[BaseBranchDecider] 兩次呼叫均失敗，回傳結構化失敗",
       );
     }
 
-    return { selectedLabel: "None" };
+    return {
+      kind: "failed",
+      failure: buildFailure(failureAttempts),
+    };
   }
 }

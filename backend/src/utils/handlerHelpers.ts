@@ -8,6 +8,40 @@ import { emitError, emitNotFound } from "./websocketResponse.js";
 import { logger, type LogCategory } from "./logger.js";
 import { createI18nError, type I18nError } from "./i18nError.js";
 
+export function getPayloadCanvasId(payload: unknown): string | null {
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "canvasId" in (payload as Record<string, unknown>)
+  ) {
+    const canvasId = (payload as Record<string, unknown>).canvasId;
+    return typeof canvasId === "string" ? canvasId : null;
+  }
+
+  return null;
+}
+
+export function resolveActiveCanvasContext(
+  connectionId: string,
+  payload?: unknown,
+): {
+  canvasId: string | undefined;
+  payloadCanvasId: string | null;
+  hasMismatch: boolean;
+} {
+  const canvasId = canvasStore.getActiveCanvas(connectionId);
+  const payloadCanvasId = getPayloadCanvasId(payload);
+
+  return {
+    canvasId,
+    payloadCanvasId,
+    hasMismatch:
+      typeof canvasId === "string" &&
+      payloadCanvasId !== null &&
+      payloadCanvasId !== canvasId,
+  };
+}
+
 export function handleResultError<T>(
   result: Result<T>,
   connectionId: string,
@@ -39,8 +73,20 @@ export function getCanvasId(
   connectionId: string,
   responseEvent: WebSocketResponseEvents,
   requestId: string,
+  payload?: unknown,
 ): string | undefined {
-  const canvasId = canvasStore.getActiveCanvas(connectionId);
+  const { canvasId, payloadCanvasId, hasMismatch } = resolveActiveCanvasContext(
+    connectionId,
+    payload,
+  );
+
+  if (hasMismatch) {
+    logger.warn(
+      "WebSocket",
+      "Warn",
+      `[HandlerHelpers] payload.canvasId 與目前使用中的 Canvas 不一致，已忽略 payload（active: ${canvasId}，payload: ${payloadCanvasId}）`,
+    );
+  }
 
   if (!canvasId) {
     emitError(
@@ -80,7 +126,12 @@ export function withCanvasId<TPayload = unknown>(
     payload: TPayload,
     requestId: string,
   ): Promise<void> => {
-    const canvasId = getCanvasId(connectionId, responseEvent, requestId);
+    const canvasId = getCanvasId(
+      connectionId,
+      responseEvent,
+      requestId,
+      payload,
+    );
     if (!canvasId) {
       return;
     }

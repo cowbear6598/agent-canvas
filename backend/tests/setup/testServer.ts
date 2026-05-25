@@ -17,9 +17,20 @@ const TEST_HOSTNAME = "127.0.0.1";
 const TEST_PORT_BASE = 47000;
 const TEST_PORT_BLOCK = 200;
 const TEST_PORT_RETRY_COUNT = 200;
+const TEST_WORKER_PORT_BUCKETS = 50;
+const TEST_PID_PORT_BUCKETS = 10;
+const TEST_PID_PORT_OFFSET_STEP = 10;
 const workerId = Number(process.env.VITEST_POOL_ID ?? "0");
-const initialTestPort =
-  TEST_PORT_BASE + (workerId % 50) * TEST_PORT_BLOCK + (process.pid % 10) * 10;
+
+function buildInitialTestPort(workerId: number, pid: number): number {
+  const workerPortOffset =
+    (workerId % TEST_WORKER_PORT_BUCKETS) * TEST_PORT_BLOCK;
+  const pidPortOffset =
+    (pid % TEST_PID_PORT_BUCKETS) * TEST_PID_PORT_OFFSET_STEP;
+  return TEST_PORT_BASE + workerPortOffset + pidPortOffset;
+}
+
+const initialTestPort = buildInitialTestPort(workerId, process.pid);
 const TEST_PORT_COUNTER_KEY = "__claudeCodeCanvasBackendTestServerNextPort";
 
 function isAddressInUseError(error: unknown): boolean {

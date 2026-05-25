@@ -1,5 +1,6 @@
 import { getCurrentInstance, onUnmounted, type Ref, watch } from "vue";
 import { useCanvasContext } from "@/composables/canvas/useCanvasContext";
+import { logger } from "@/utils/logger";
 
 interface CanvasSessionLifecycleCanvasStore {
   activeCanvasId: string | null;
@@ -34,7 +35,12 @@ export function useCanvasSessionLifecycle(
         return;
       }
 
-      await options.loadCanvasData();
+      try {
+        await options.loadCanvasData();
+      } catch (error) {
+        logger.error("[CanvasSession] 載入 Canvas 資料失敗", error);
+        options.resetCanvasScopedState();
+      }
     },
   );
 

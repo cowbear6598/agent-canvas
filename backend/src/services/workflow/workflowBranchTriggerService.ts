@@ -121,7 +121,7 @@ class WorkflowBranchTriggerService
     const { canvasId, sourcePodId, connections, runContext } = context;
 
     try {
-      const { selectedConnectionId, rejectedConnectionIds } =
+      const { outcome, selectedConnectionId, rejectedConnectionIds, failure } =
         await this.deps.branchDecisionService.decideBranch(
           canvasId,
           sourcePodId,
@@ -134,6 +134,15 @@ class WorkflowBranchTriggerService
         "Update",
         `[Branch] decideBranch 結果：selected=${selectedConnectionId ?? "None"}，rejected=${rejectedConnectionIds.join(", ")}`,
       );
+
+      if (outcome === "failed") {
+        return connections.map((conn) => ({
+          connectionId: conn.id,
+          approved: false,
+          reason: `錯誤：${failure?.message ?? "Branch 決策失敗"}`,
+          isError: true,
+        }));
+      }
 
       return connections.map((conn) => ({
         connectionId: conn.id,
@@ -441,8 +450,10 @@ class WorkflowBranchTriggerService
     abortSignal: AbortSignal | undefined,
     delegate: ReturnType<typeof createStatusDelegate>,
   ): Promise<{
+    outcome: "selected" | "none" | "failed";
     selectedConnectionId: string | null;
     rejectedConnectionIds: string[];
+    failureReason?: string;
   } | null> {
     try {
       const result = await this.deps.branchDecisionService.decideBranch(
@@ -453,8 +464,10 @@ class WorkflowBranchTriggerService
         abortSignal,
       );
       return {
+        outcome: result.outcome,
         selectedConnectionId: result.selectedConnectionId,
         rejectedConnectionIds: result.rejectedConnectionIds,
+        failureReason: result.failure?.message,
       };
     } catch (error) {
       if (isAbortError(error)) {
@@ -487,8 +500,10 @@ class WorkflowBranchTriggerService
         error,
       );
       return {
+        outcome: "failed",
         selectedConnectionId: null,
         rejectedConnectionIds: connections.map((c) => c.id),
+        failureReason: getErrorMessage(error),
       };
     }
   }
@@ -589,7 +604,12 @@ class WorkflowBranchTriggerService
     );
     if (decisionResult === null) return;
 
-    const { selectedConnectionId, rejectedConnectionIds } = decisionResult;
+    const {
+      outcome,
+      selectedConnectionId,
+      rejectedConnectionIds,
+      failureReason,
+    } = decisionResult;
 
     if (selectedConnectionId !== null) {
       this.applyApprovedConnection(
@@ -599,6 +619,12 @@ class WorkflowBranchTriggerService
         connections,
         delegate,
         runContext,
+      );
+    } else if (outcome === "failed") {
+      logger.error(
+        "Workflow",
+        "Error",
+        `[Branch] 決策失敗，全部拒絕，${this.buildSourceLog(canvasId, sourcePodId)}：${failureReason ?? "未知錯誤"}`,
       );
     } else {
       // AI 選 None：所有 connections 皆拒絕（已在 rejectedConnectionIds）

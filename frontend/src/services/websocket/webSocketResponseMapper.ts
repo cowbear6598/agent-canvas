@@ -58,7 +58,7 @@ function translateIfKnown(
   return translated === key ? null : translated;
 }
 
-export function resolveWebSocketErrorMessage(
+function resolveWebSocketErrorMessage(
   rawError: WebSocketBaseResponse["error"],
 ): string {
   if (rawError && typeof rawError === "object") {

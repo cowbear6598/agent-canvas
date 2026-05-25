@@ -202,7 +202,6 @@ describe("disposableChatService", () => {
   it("不支援的 provider → throw Error('不支援的 provider')", async () => {
     // 實作：resolveModel 對不存在的 provider 會拋 TypeError（undefined.metadata），
     // 後續 else 分支也會 throw「不支援的 provider」，兩者都屬於 reject。
-    // 批 1 項目 10 已統一 throw 訊息為「不支援的 provider」（不含變數），斷言固定字串。
     await expect(
       executeDisposableChat({
         ...BASE_INPUT,
@@ -335,7 +334,7 @@ describe("disposableChatService", () => {
     expect(result.resolvedModel).toBe("opencode/gpt-4o");
   });
 
-  it("provider=opencode 且帶 sourcePod/runContext → 沿用 buildOptions 的 MCP context", async () => {
+  it("provider=opencode 且帶 sourcePod/runContext → 只保留 disposable 必要 options，不暴露 tool surface 或 bootstrap", async () => {
     const sourcePod = makeSourcePod();
     const runContext = makeRunContext();
     const mcpEntries = [
@@ -380,9 +379,9 @@ describe("disposableChatService", () => {
         options: expect.objectContaining({
           providerID: "anthropic",
           modelID: "claude-sonnet-4-5",
-          mcpEntries,
-          hasGoalRuntime: true,
-          pluginCatalogText: "Plugin catalog",
+          mcpEntries: [],
+          hasGoalRuntime: false,
+          pluginCatalogText: "",
           systemPrompt: "system",
           thinkingLevel: "high",
           thinkingOptions: { effort: "high" },

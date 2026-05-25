@@ -6,7 +6,6 @@ export {
   createWebSocketActionSuccess,
   getWebSocketResponseRequestId,
   mapWebSocketResponse,
-  resolveWebSocketErrorMessage,
   responseMatchesRequest,
 } from './webSocketResponseMapper'
 export { WebSocketRequestEvents, WebSocketResponseEvents } from '@/types/websocket/events'

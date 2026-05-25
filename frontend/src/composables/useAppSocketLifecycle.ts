@@ -114,6 +114,17 @@ export function useAppSocketLifecycle(
   const client = options.webSocketClient ?? websocketClient;
   const sendCanvasSwitch = options.requestCanvasSwitch ?? requestCanvasSwitch;
 
+  const runGuardedLifecycleTask = (
+    label: string,
+    task: () => Promise<void>,
+    onError?: () => void,
+  ): void => {
+    void task().catch((error) => {
+      logger.warn(`[App] ${label} 失敗`, error);
+      onError?.();
+    });
+  };
+
   const initializeSocketLifecycle = (): void => {
     chatStore.initWebSocket();
   };
@@ -143,15 +154,19 @@ export function useAppSocketLifecycle(
     () => chatStore.connectionStatus,
     (newStatus) => {
       if (newStatus === "connected" && !options.isInitialized.value) {
-        void (async (): Promise<void> => {
-          await securityStore.bootstrapAccess();
-          if (
-            !securityStore.requiresWorkspaceUnlock &&
-            !options.isInitialized.value
-          ) {
-            await options.loadAppData();
-          }
-        })();
+        runGuardedLifecycleTask(
+          "Socket 初始化",
+          async (): Promise<void> => {
+            await securityStore.bootstrapAccess();
+            if (
+              !securityStore.requiresWorkspaceUnlock &&
+              !options.isInitialized.value
+            ) {
+              await options.loadAppData();
+            }
+          },
+          options.resetInitialization,
+        );
       }
 
       if (
@@ -160,13 +175,9 @@ export function useAppSocketLifecycle(
         canvasStore.activeCanvasId
       ) {
         const canvasIdToResync = canvasStore.activeCanvasId;
-        void (async (): Promise<void> => {
-          try {
-            await sendCanvasSwitch(canvasIdToResync);
-          } catch (error) {
-            logger.warn("[App] 靜默重連後補送 CANVAS_SWITCH 失敗", error);
-          }
-        })();
+        runGuardedLifecycleTask("靜默重連後補送 CANVAS_SWITCH", async () => {
+          await sendCanvasSwitch(canvasIdToResync);
+        });
       }
 
       if (newStatus === "disconnected") {

@@ -107,6 +107,7 @@ export const useConnectionStore = defineStore("connection", () => {
   const connections = ref<Connection[]>([]);
   const selectedConnectionId = ref<string | null>(null);
   const draggingConnection = ref<DraggingConnection | null>(null);
+  let workflowListenersRegistered = false;
 
   const getConnectionsByPodId = computed(
     () =>
@@ -804,15 +805,25 @@ export const useConnectionStore = defineStore("connection", () => {
   }
 
   function setupWorkflowListeners(): void {
+    if (workflowListenersRegistered) {
+      return;
+    }
+
     getWorkflowEventMap().forEach(([event, handler]) => {
       websocketClient.on(event, handler);
     });
+    workflowListenersRegistered = true;
   }
 
   function cleanupWorkflowListeners(): void {
+    if (!workflowListenersRegistered) {
+      return;
+    }
+
     getWorkflowEventMap().forEach(([event, handler]) => {
       websocketClient.off(event, handler);
     });
+    workflowListenersRegistered = false;
   }
 
   function addConnectionFromEvent(

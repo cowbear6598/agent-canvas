@@ -4,7 +4,8 @@ import { podStore } from "./podStore.js";
 import { formatGoalTodos } from "./goalRuntime.js";
 import { getRunTranscriptWindow } from "./workflow/runTranscriptWindow.js";
 import { logger } from "../utils/logger.js";
-import type { Pod, PersistedMessage } from "../types/index.js";
+import type { Pod } from "../types/index.js";
+import type { PersistedMessage } from "../types/persistence.js";
 import type { RunContext } from "../types/run.js";
 import type { ProviderName } from "./provider/index.js";
 import { resolveExecutionPaths } from "./runtime/executionPaths.js";
@@ -45,30 +46,6 @@ async function buildSummaryContext(
 }
 
 class SummaryService {
-  /**
-   * 從 fallback 路徑取得最後一則 assistant 訊息。
-   * AI 呼叫失敗時使用，避免整個摘要流程中斷。
-   *
-   * @param messages - 已取得的訊息列表（避免重複 I/O）
-   */
-  private resolveFallbackSummary(
-    persistedSummary: string | null,
-    messages: PersistedMessage[],
-  ): string | null {
-    if (persistedSummary) {
-      return persistedSummary;
-    }
-
-    let lastAssistant: PersistedMessage | undefined;
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].role === "assistant") {
-        lastAssistant = messages[i];
-        break;
-      }
-    }
-    return lastAssistant?.content ?? null;
-  }
-
   async generateSummaryForTarget(
     canvasId: string,
     sourcePodId: string,
@@ -158,16 +135,6 @@ class SummaryService {
         "Error",
         `[SummaryService] 無法為目標 Pod 生成摘要（provider: ${provider}，model: ${summaryModel}，targetPodId: ${targetPodId}）：${truncatedError}`,
       );
-
-      // fallback 到上游最後一則 Assistant 訊息（重用已取得的 messages，避免重複 I/O）
-      const fallbackContent = this.resolveFallbackSummary(
-        transcriptWindow.persistedSummary,
-        transcriptWindow.recentMessages,
-      );
-
-      if (fallbackContent !== null) {
-        return { targetPodId, summary: fallbackContent, success: true };
-      }
 
       return {
         targetPodId,

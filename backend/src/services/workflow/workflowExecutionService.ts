@@ -30,6 +30,7 @@ import {
 } from "./workflowStatusDelegate.js";
 import { ChatExecutionStrategy } from "../executionStrategy.js";
 import { runExecutionService } from "./runExecutionService.js";
+import { getRunTranscriptWindow } from "./runTranscriptWindow.js";
 
 interface ExecutionServiceDeps {
   pipeline: PipelineMethods;
@@ -73,14 +74,26 @@ interface WorkflowChatContext {
   delegate: WorkflowStatusDelegate;
 }
 
-/** 摘要失敗時的 fallback 結果型別（直接取原始訊息，未經 disposableChat） */
-type LastAssistantFallback = { content: string; isSummarized: boolean };
+/** 摘要失敗時的 fallback 結果型別（直接取既有摘要或原始訊息，未經 disposableChat） */
+type SummaryFallback = { content: string; isSummarized: boolean };
 
 class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
-  private getLastAssistantFallback(
+  private getSummaryFallback(
     sourcePodId: string,
     runContext: RunContext,
-  ): LastAssistantFallback | null {
+  ): SummaryFallback | null {
+    const transcriptWindow = getRunTranscriptWindow(
+      runContext.runId,
+      sourcePodId,
+      8,
+    );
+    if (transcriptWindow.persistedSummary) {
+      return {
+        content: transcriptWindow.persistedSummary,
+        isSummarized: false,
+      };
+    }
+
     const fallback = this.deps.autoTriggerService.getLastAssistantMessage(
       sourcePodId,
       runContext,
@@ -118,7 +131,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
 
     const fallback = summaryResult.success
       ? null
-      : this.getLastAssistantFallback(sourcePodId, runContext);
+      : this.getSummaryFallback(sourcePodId, runContext);
     const decision = decideWorkflowSummary(
       summaryResult.success,
       summaryResult.summary,

@@ -9,7 +9,6 @@ import {
   NEVER_TRIGGERED_STATUSES,
   RUN_TERMINAL_STATUSES,
   TERMINAL_POD_STATUSES,
-  TRIGGERABLE_STATUSES,
 } from "../runStore.js";
 import { isAllPathwaysSettled } from "../../utils/pathwayHelpers.js";
 
@@ -17,12 +16,6 @@ export type RunQueueSettlementDecision =
   | "wait-for-active-stream"
   | "empty"
   | "process-next";
-
-export function isWorkflowTriggerEligible(
-  status: RunPodInstanceStatus,
-): boolean {
-  return TRIGGERABLE_STATUSES.has(status);
-}
 
 export function isTerminalPodStatus(status: RunPodInstanceStatus): boolean {
   return TERMINAL_POD_STATUSES.has(status);

@@ -2,6 +2,9 @@ import { WebSocketRequestEvents } from "../../schemas/events.js";
 import { WebSocketError } from "../../middleware/wsErrorHandler.js";
 import { connectionManager } from "../connectionManager.js";
 import { authAccessService } from "./authAccessService.js";
+import { canvasStore } from "../canvasStore.js";
+import { logger } from "../../utils/logger.js";
+import { getPayloadCanvasId } from "../../utils/handlerHelpers.js";
 
 type EventScope = "public" | "workspace" | "canvas";
 
@@ -40,6 +43,12 @@ const CANVAS_EVENTS = new Set<string>([
   WebSocketRequestEvents.CURSOR_MOVE,
 ]);
 
+const TARGET_CANVAS_EVENTS = new Set<string>([
+  WebSocketRequestEvents.CANVAS_SWITCH,
+  WebSocketRequestEvents.CANVAS_RENAME,
+  WebSocketRequestEvents.CANVAS_DELETE,
+]);
+
 function getEventScope(event: string, payload: unknown): EventScope {
   if (PUBLIC_EVENTS.has(event)) {
     return "public";
@@ -73,12 +82,25 @@ function getCanvasIdFromPayload(
     return connectionManager.getCanvasId(connectionId);
   }
 
-  if (payload && typeof payload === "object" && "canvasId" in payload) {
-    const canvasId = (payload as Record<string, unknown>).canvasId;
-    return typeof canvasId === "string" ? canvasId : null;
+  const payloadCanvasId = getPayloadCanvasId(payload);
+  if (TARGET_CANVAS_EVENTS.has(event)) {
+    return payloadCanvasId;
   }
 
-  return connectionManager.getCanvasId(connectionId);
+  const activeCanvasId = canvasStore.getActiveCanvas(connectionId) ?? null;
+  if (
+    activeCanvasId &&
+    payloadCanvasId !== null &&
+    payloadCanvasId !== activeCanvasId
+  ) {
+    logger.warn(
+      "WebSocket",
+      "Warn",
+      `[AuthGuard] payload.canvasId 與目前使用中的 Canvas 不一致，將以 active canvas 驗證（active: ${activeCanvasId}，payload: ${payloadCanvasId}）`,
+    );
+  }
+
+  return activeCanvasId;
 }
 
 class AuthGuard {

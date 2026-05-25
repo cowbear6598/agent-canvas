@@ -26,6 +26,8 @@ import { executeDisposableChat } from "../../src/services/disposableChatService.
 import { BranchAbortError } from "../../src/services/branch/abortError.js";
 import type { BranchDecisionInput } from "../../src/services/branch/branchDecider.js";
 import type { PersistedMessage } from "../../src/types/persistence.js";
+import type { Pod } from "../../src/types/pod.js";
+import type { RunContext } from "../../src/types/run.js";
 
 function asMock(fn: unknown): Mock<any> {
   return fn as Mock<any>;
@@ -48,10 +50,31 @@ function makeMessage(
 function makeInput(
   overrides: Partial<BranchDecisionInput> = {},
 ): BranchDecisionInput {
+  const sourcePod: Pod = {
+    id: "source-pod",
+    name: "Source Pod",
+    workspacePath: "/tmp/workspace",
+    x: 0,
+    y: 0,
+    rotation: 0,
+    sessionId: null,
+    mcpServerNames: [],
+    pluginIds: [],
+    provider: "claude",
+    providerConfig: { model: "claude-sonnet-4-5" },
+    repositoryId: null,
+  };
+  const runContext: RunContext = {
+    runId: "run-1",
+    canvasId: "canvas-1",
+    sourcePodId: "source-pod",
+  };
+
   return {
     canvasId: "canvas-1",
     sourcePodId: "source-pod",
     sourcePodName: "Source Pod",
+    sourcePod,
     branches: [
       {
         label: "Checklist",
@@ -64,6 +87,7 @@ function makeInput(
     provider: "claude",
     model: "claude-sonnet-4-5",
     workspacePath: "/tmp/workspace",
+    runContext,
     ...overrides,
   };
 }
@@ -98,7 +122,7 @@ describe("BaseBranchDecider.decide", () => {
 
     const result = await branchDecider.decide(input);
 
-    expect(result.selectedLabel).toBe("None");
+    expect(result).toEqual({ kind: "success", selectedLabel: "None" });
     expect(asMock(executeDisposableChat)).not.toHaveBeenCalled();
   });
 
@@ -110,7 +134,7 @@ describe("BaseBranchDecider.decide", () => {
 
     const result = await branchDecider.decide(makeInput());
 
-    expect(result.selectedLabel).toBe("Checklist");
+    expect(result).toEqual({ kind: "success", selectedLabel: "Checklist" });
     expect(asMock(executeDisposableChat)).toHaveBeenCalledTimes(1);
   });
 
@@ -122,7 +146,7 @@ describe("BaseBranchDecider.decide", () => {
 
     const result = await branchDecider.decide(makeInput());
 
-    expect(result.selectedLabel).toBe("Review");
+    expect(result).toEqual({ kind: "success", selectedLabel: "Review" });
     expect(asMock(executeDisposableChat)).toHaveBeenCalledTimes(1);
   });
 
@@ -140,12 +164,12 @@ describe("BaseBranchDecider.decide", () => {
 
     const result = await branchDecider.decide(makeInput());
 
-    expect(result.selectedLabel).toBe("Checklist");
+    expect(result).toEqual({ kind: "success", selectedLabel: "Checklist" });
     expect(asMock(executeDisposableChat)).toHaveBeenCalledTimes(2);
   });
 
-  // ─── 案例 5：兩次都 hallucination → fallback None ──────────────────────────
-  it("兩次都 hallucination → fallback 回傳 None", async () => {
+  // ─── 案例 5：兩次都 hallucination → 結構化失敗 ──────────────────────────
+  it("兩次都 hallucination → 回傳結構化失敗，不再偽裝成 None", async () => {
     asMock(executeDisposableChat)
       .mockResolvedValueOnce(
         makeDisposableChatResult('{"selectedLabel":"FakeLabel1"}'),
@@ -156,19 +180,40 @@ describe("BaseBranchDecider.decide", () => {
 
     const result = await branchDecider.decide(makeInput());
 
-    expect(result.selectedLabel).toBe("None");
+    expect(result).toEqual({
+      kind: "failed",
+      failure: {
+        kind: "parse_error",
+        message: "LABEL_HALLUCINATION",
+        attempts: [
+          { attempt: 1, kind: "parse_error", message: "LABEL_HALLUCINATION" },
+          { attempt: 2, kind: "parse_error", message: "LABEL_HALLUCINATION" },
+        ],
+      },
+    });
     expect(asMock(executeDisposableChat)).toHaveBeenCalledTimes(2);
   });
 
-  // ─── 案例 6：收到非 JSON 純文字 → retry 後仍失敗 → None ──────────────────
-  it("收到非 JSON 純文字 → retry 一次後仍失敗 → fallback None", async () => {
+  // ─── 案例 6：收到非 JSON 純文字 → retry 後仍失敗 ──────────────────
+  it("收到非 JSON 純文字 → retry 一次後仍失敗 → 回傳結構化失敗", async () => {
     asMock(executeDisposableChat)
       .mockResolvedValueOnce(makeDisposableChatResult("這不是 JSON"))
       .mockResolvedValueOnce(makeDisposableChatResult("還是非 JSON 內容"));
 
     const result = await branchDecider.decide(makeInput());
 
-    expect(result.selectedLabel).toBe("None");
+    expect(result).toEqual(
+      expect.objectContaining({
+        kind: "failed",
+        failure: expect.objectContaining({
+          kind: "parse_error",
+          attempts: expect.arrayContaining([
+            expect.objectContaining({ attempt: 1, kind: "parse_error" }),
+            expect.objectContaining({ attempt: 2, kind: "parse_error" }),
+          ]),
+        }),
+      }),
+    );
     expect(asMock(executeDisposableChat)).toHaveBeenCalledTimes(2);
   });
 
@@ -181,7 +226,7 @@ describe("BaseBranchDecider.decide", () => {
 
     const result = await branchDecider.decide(makeInput());
 
-    expect(result.selectedLabel).toBe("Checklist");
+    expect(result).toEqual({ kind: "success", selectedLabel: "Checklist" });
     expect(asMock(executeDisposableChat)).toHaveBeenCalledTimes(1);
   });
 
@@ -194,12 +239,26 @@ describe("BaseBranchDecider.decide", () => {
 
     const result = await branchDecider.decide(makeInput());
 
-    expect(result.selectedLabel).toBe("Review");
+    expect(result).toEqual({ kind: "success", selectedLabel: "Review" });
     expect(asMock(executeDisposableChat)).toHaveBeenCalledTimes(2);
+    expect(asMock(executeDisposableChat)).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        sourcePod: expect.objectContaining({ id: "source-pod" }),
+        runContext: expect.objectContaining({ runId: "run-1" }),
+      }),
+    );
+    expect(asMock(executeDisposableChat)).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        sourcePod: expect.objectContaining({ id: "source-pod" }),
+        runContext: expect.objectContaining({ runId: "run-1" }),
+      }),
+    );
   });
 
-  // ─── 案例 7：zod 驗證失敗 → retry 後仍失敗 → None ───────────────────────
-  it("收到 zod 驗證失敗的物件 → retry 一次後仍失敗 → fallback None", async () => {
+  // ─── 案例 7：zod 驗證失敗 → retry 後仍失敗 ───────────────────────
+  it("收到 zod 驗證失敗的物件 → retry 一次後仍失敗 → 回傳結構化失敗", async () => {
     // selectedLabel 應為 string，這裡給 number 讓 zod 失敗
     asMock(executeDisposableChat)
       .mockResolvedValueOnce(makeDisposableChatResult('{"selectedLabel":123}'))
@@ -207,7 +266,18 @@ describe("BaseBranchDecider.decide", () => {
 
     const result = await branchDecider.decide(makeInput());
 
-    expect(result.selectedLabel).toBe("None");
+    expect(result).toEqual(
+      expect.objectContaining({
+        kind: "failed",
+        failure: expect.objectContaining({
+          kind: "parse_error",
+          attempts: expect.arrayContaining([
+            expect.objectContaining({ attempt: 1, kind: "parse_error" }),
+            expect.objectContaining({ attempt: 2, kind: "parse_error" }),
+          ]),
+        }),
+      }),
+    );
     expect(asMock(executeDisposableChat)).toHaveBeenCalledTimes(2);
   });
 

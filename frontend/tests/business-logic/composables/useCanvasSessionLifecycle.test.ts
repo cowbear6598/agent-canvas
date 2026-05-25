@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { nextTick, reactive, ref } from "vue";
 import { useCanvasSessionLifecycle } from "@/composables/useCanvasSessionLifecycle";
+import { logger } from "@/utils/logger";
+
+vi.mock("@/utils/logger", () => ({
+  logger: {
+    error: vi.fn(),
+  },
+}));
 
 describe("useCanvasSessionLifecycle", () => {
   it("初始化後切換 canvas 時應重置 canvas 範圍狀態並載入新 session", async () => {
@@ -43,6 +50,34 @@ describe("useCanvasSessionLifecycle", () => {
 
     expect(resetCanvasScopedState).not.toHaveBeenCalled();
     expect(loadCanvasData).not.toHaveBeenCalled();
+
+    lifecycle.stopCanvasSessionLifecycle();
+  });
+
+  it("loadCanvasData 失敗時應記錄錯誤並重置 canvas 範圍狀態", async () => {
+    const canvasStore = reactive({
+      activeCanvasId: "canvas-1" as string | null,
+    });
+    const resetCanvasScopedState = vi.fn();
+    const loadCanvasData = vi.fn(async () => {
+      throw new Error("load failed");
+    });
+    const lifecycle = useCanvasSessionLifecycle({
+      canvasStore,
+      isInitialized: ref(true),
+      resetCanvasScopedState,
+      loadCanvasData,
+    });
+
+    canvasStore.activeCanvasId = "canvas-2";
+    await nextTick();
+    await Promise.resolve();
+
+    expect(logger.error).toHaveBeenCalledWith(
+      "[CanvasSession] 載入 Canvas 資料失敗",
+      expect.any(Error),
+    );
+    expect(resetCanvasScopedState).toHaveBeenCalledTimes(2);
 
     lifecycle.stopCanvasSessionLifecycle();
   });

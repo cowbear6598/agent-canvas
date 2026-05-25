@@ -23,7 +23,7 @@ import {
   processToolUseEvent,
 } from "./streamEventProcessor.js";
 
-export interface MutableStreamState {
+interface MutableStreamState {
   accumulatedContent: string;
   subMessages: PersistedSubMessage[];
 }
@@ -56,7 +56,7 @@ type ToolUseStreamEvent = Extract<StreamEvent, { type: "tool_use" }>;
 type ToolResultStreamEvent = Extract<StreamEvent, { type: "tool_result" }>;
 type CompleteStreamEvent = Extract<StreamEvent, { type: "complete" }>;
 
-export function hasAssistantContent(state: MutableStreamState): boolean {
+function hasAssistantContent(state: MutableStreamState): boolean {
   return state.accumulatedContent.length > 0 || state.subMessages.length > 0;
 }
 

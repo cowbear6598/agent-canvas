@@ -25,6 +25,12 @@ vi.mock("../../../src/services/connectionManager.js", () => ({
   },
 }));
 
+vi.mock("../../../src/services/canvasStore.js", () => ({
+  canvasStore: {
+    getActiveCanvas: vi.fn(),
+  },
+}));
+
 // authAccessService：只需 isWorkspaceAccessible / requiresCanvasUnlockAssumingWorkspace
 vi.mock("../../../src/services/auth/authAccessService.js", () => ({
   authAccessService: {
@@ -35,11 +41,15 @@ vi.mock("../../../src/services/auth/authAccessService.js", () => ({
 
 import { connectionManager } from "../../../src/services/connectionManager.js";
 import { authAccessService } from "../../../src/services/auth/authAccessService.js";
+import { canvasStore } from "../../../src/services/canvasStore.js";
 
 const mockGetSessionId = connectionManager.getSessionId as ReturnType<
   typeof vi.fn
 >;
 const mockGetCanvasId = connectionManager.getCanvasId as ReturnType<
+  typeof vi.fn
+>;
+const mockGetActiveCanvas = canvasStore.getActiveCanvas as ReturnType<
   typeof vi.fn
 >;
 const mockIsWorkspaceAccessible =
@@ -58,6 +68,7 @@ beforeEach(() => {
   // 預設：session 存在、workspace 已解鎖、canvas 不需要解鎖
   mockGetSessionId.mockReturnValue(SESSION_ID);
   mockGetCanvasId.mockReturnValue(null);
+  mockGetActiveCanvas.mockReturnValue(CANVAS_ID);
   mockIsWorkspaceAccessible.mockReturnValue(true);
   mockRequiresCanvasUnlockAssumingWorkspace.mockReturnValue(false);
 });
@@ -253,19 +264,24 @@ describe("AuthGuard.assertAccess", () => {
   });
 
   describe("未知 event 附帶 canvasId payload 的 scope fallback", () => {
-    it("未知 event 帶 canvasId payload 視為 canvas scope，canvas 受保護未解鎖應拋 CANVAS_PASSWORD_REQUIRED", () => {
+    it("未知 event 帶 canvasId payload 時，應改用 active canvas 驗證而非信任 payload", () => {
       mockIsWorkspaceAccessible.mockReturnValue(true);
       mockRequiresCanvasUnlockAssumingWorkspace.mockReturnValue(true);
 
       try {
         authGuard.assertAccess(CONNECTION_ID, "unknown:event:with-canvas", {
-          canvasId: CANVAS_ID,
+          canvasId: "canvas-forged",
         });
         expect.fail("應拋出錯誤");
       } catch (e) {
         expect(e).toBeInstanceOf(WebSocketError);
         expect((e as WebSocketError).code).toBe("CANVAS_PASSWORD_REQUIRED");
       }
+
+      expect(mockRequiresCanvasUnlockAssumingWorkspace).toHaveBeenCalledWith(
+        SESSION_ID,
+        CANVAS_ID,
+      );
     });
 
     it("未知 event 不帶 canvasId payload fallback 為 workspace scope，workspace 解鎖後不應拋錯", () => {
@@ -277,6 +293,29 @@ describe("AuthGuard.assertAccess", () => {
 
       // workspace scope 不應觸發 canvas 解鎖檢查
       expect(mockRequiresCanvasUnlockAssumingWorkspace).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("active canvas 與 payload.canvasId 不一致的安全回歸", () => {
+    it("active canvas 已鎖定、payload 偽造另一個未鎖 canvasId 時，仍應以 active canvas 拒絕", () => {
+      mockIsWorkspaceAccessible.mockReturnValue(true);
+      mockGetActiveCanvas.mockReturnValue("canvas-locked");
+      mockRequiresCanvasUnlockAssumingWorkspace.mockImplementation(
+        (_sessionId, canvasId) => canvasId === "canvas-locked",
+      );
+
+      expect(() =>
+        authGuard.assertAccess(
+          CONNECTION_ID,
+          WebSocketRequestEvents.RUN_LOAD_HISTORY,
+          { canvasId: "canvas-unlocked" },
+        ),
+      ).toThrow(WebSocketError);
+
+      expect(mockRequiresCanvasUnlockAssumingWorkspace).toHaveBeenCalledWith(
+        SESSION_ID,
+        "canvas-locked",
+      );
     });
   });
 });

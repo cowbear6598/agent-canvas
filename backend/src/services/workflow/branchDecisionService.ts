@@ -18,6 +18,7 @@ import { logger } from "../../utils/logger.js";
 import { getErrorMessage, isAbortError } from "../../utils/errorHelpers.js";
 import type { Connection } from "../../types/index.js";
 import type { RunContext } from "../../types/run.js";
+import type { BranchDecisionFailure } from "../branch/branchDecider.js";
 
 // 每次決策讀取的最近訊息段數
 const RECENT_MESSAGES_COUNT = 4;
@@ -42,12 +43,18 @@ class BranchDecisionService {
     runContext: RunContext,
     abortSignal?: AbortSignal,
   ): Promise<{
+    outcome: "selected" | "none" | "failed";
     selectedConnectionId: string | null;
     rejectedConnectionIds: string[];
+    failure?: BranchDecisionFailure;
   }> {
     // 防呆：branchConnections 不應由外層傳入空陣列，但若發生，提早回傳
     if (branchConnections.length === 0) {
-      return { selectedConnectionId: null, rejectedConnectionIds: [] };
+      return {
+        outcome: "none",
+        selectedConnectionId: null,
+        rejectedConnectionIds: [],
+      };
     }
 
     const sourcePod = podStore.getById(canvasId, sourcePodId);
@@ -84,6 +91,7 @@ class BranchDecisionService {
     });
 
     let selectedLabel: string;
+    let failure: BranchDecisionFailure | undefined;
     try {
       const result = await branchDecider.decide({
         canvasId,
@@ -99,6 +107,21 @@ class BranchDecisionService {
         runContext,
         abortSignal,
       });
+      if (result.kind === "failed") {
+        failure = result.failure;
+        logger.error(
+          "Workflow",
+          "Error",
+          `[BranchDecisionService] branch 決策失敗：${failure.message}`,
+          failure,
+        );
+        return {
+          outcome: "failed",
+          selectedConnectionId: null,
+          rejectedConnectionIds: branchConnections.map((c) => c.id),
+          failure,
+        };
+      }
       selectedLabel = result.selectedLabel;
     } catch (error) {
       // AbortError：中止訊號觸發，直接向上拋出，由 workflowBranchTriggerService 統一處理
@@ -113,6 +136,7 @@ class BranchDecisionService {
       );
       // 非 abort 例外情況：全部 reject
       return {
+        outcome: "failed",
         selectedConnectionId: null,
         rejectedConnectionIds: branchConnections.map((c) => c.id),
       };
@@ -138,7 +162,11 @@ class BranchDecisionService {
       .filter((c) => c.id !== selectedConnectionId)
       .map((c) => c.id);
 
-    return { selectedConnectionId, rejectedConnectionIds };
+    return {
+      outcome: selectedConnectionId === null ? "none" : "selected",
+      selectedConnectionId,
+      rejectedConnectionIds,
+    };
   }
 }
 

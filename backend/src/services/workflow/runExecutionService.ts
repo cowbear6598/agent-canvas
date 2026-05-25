@@ -266,7 +266,10 @@ class RunExecutionService {
     return runContext;
   }
 
-  private collectChainPodIds(canvasId: string, sourcePodId: string): string[] {
+  private collectChainPodIds(
+    canvasId: string,
+    sourcePodId: string,
+  ): Set<string> {
     const visited = new Set<string>();
     const queue: string[] = [sourcePodId];
     let queueHead = 0;
@@ -289,14 +292,14 @@ class RunExecutionService {
       }
     }
 
-    return [...visited];
+    return visited;
   }
 
   private calculatePathways(
     canvasId: string,
     podId: string,
     sourcePodId: string,
-    chainPodIds: string[],
+    chainPodIds: Set<string>,
   ): { autoPathwaySettled: PathwayState; directPathwaySettled: PathwayState } {
     if (podId === sourcePodId) {
       return {
@@ -307,7 +310,7 @@ class RunExecutionService {
 
     const connections = connectionStore.findByTargetPodId(canvasId, podId);
     const chainConnections = connections.filter((c) =>
-      chainPodIds.includes(c.sourcePodId),
+      chainPodIds.has(c.sourcePodId),
     );
 
     if (chainConnections.length === 0) {

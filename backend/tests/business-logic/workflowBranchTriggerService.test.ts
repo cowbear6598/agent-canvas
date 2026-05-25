@@ -174,6 +174,7 @@ describe("WorkflowBranchTriggerService", () => {
       });
 
       vi.spyOn(branchDecisionService, "decideBranch").mockResolvedValue({
+        outcome: "selected",
         selectedConnectionId: "conn-1",
         rejectedConnectionIds: ["conn-2"],
       });
@@ -214,6 +215,7 @@ describe("WorkflowBranchTriggerService", () => {
         targetPodId: "target-pod",
       });
       vi.spyOn(branchDecisionService, "decideBranch").mockResolvedValue({
+        outcome: "selected",
         selectedConnectionId: "conn-fail",
         rejectedConnectionIds: [],
       });
@@ -245,6 +247,7 @@ describe("WorkflowBranchTriggerService", () => {
     it("所有 connection 皆被 rejected → run mode 走 settleAndSkipPath，不觸發 pipeline", async () => {
       const runContext = makeRunContext();
       vi.spyOn(branchDecisionService, "decideBranch").mockResolvedValue({
+        outcome: "none",
         selectedConnectionId: null,
         rejectedConnectionIds: ["conn-branch-1"],
       });
@@ -271,6 +274,7 @@ describe("WorkflowBranchTriggerService", () => {
 
     it("AI 選 None 的 workflow log 使用 canvas / source pod 名稱", async () => {
       vi.spyOn(branchDecisionService, "decideBranch").mockResolvedValue({
+        outcome: "none",
         selectedConnectionId: null,
         rejectedConnectionIds: ["conn-branch-1"],
       });
@@ -304,6 +308,7 @@ describe("WorkflowBranchTriggerService", () => {
       });
 
       vi.spyOn(branchDecisionService, "decideBranch").mockResolvedValue({
+        outcome: "none",
         selectedConnectionId: null,
         rejectedConnectionIds: ["conn-1", "conn-2"],
       });
@@ -361,6 +366,7 @@ describe("WorkflowBranchTriggerService", () => {
       const runContext = makeRunContext();
 
       vi.spyOn(branchDecisionService, "decideBranch").mockResolvedValue({
+        outcome: "selected",
         selectedConnectionId: "conn-branch-1",
         rejectedConnectionIds: [],
       });
@@ -405,6 +411,7 @@ describe("WorkflowBranchTriggerService", () => {
       });
 
       vi.spyOn(branchDecisionService, "decideBranch").mockResolvedValue({
+        outcome: "selected",
         selectedConnectionId: "conn-1",
         rejectedConnectionIds: ["conn-2"],
       });
@@ -434,6 +441,7 @@ describe("WorkflowBranchTriggerService", () => {
 
     it("selectedConnectionId=null（None）→ 所有 connection approved=false", async () => {
       vi.spyOn(branchDecisionService, "decideBranch").mockResolvedValue({
+        outcome: "none",
         selectedConnectionId: null,
         rejectedConnectionIds: ["conn-branch-1"],
       });
@@ -451,6 +459,37 @@ describe("WorkflowBranchTriggerService", () => {
           approved: false,
           reason: null,
           isError: false,
+        },
+      ]);
+    });
+
+    it("decision failed 時，所有 connection 應標記為 isError=true 並帶失敗原因", async () => {
+      vi.spyOn(branchDecisionService, "decideBranch").mockResolvedValue({
+        outcome: "failed",
+        selectedConnectionId: null,
+        rejectedConnectionIds: ["conn-branch-1"],
+        failure: {
+          kind: "provider_error",
+          message: "模型服務失敗",
+          attempts: [
+            { attempt: 1, kind: "provider_error", message: "模型服務失敗" },
+          ],
+        },
+      });
+
+      const results = await workflowBranchTriggerService.decide({
+        canvasId: CANVAS_ID,
+        sourcePodId: SOURCE_POD_ID,
+        connections: [mockConnection],
+        runContext: makeRunContext(),
+      });
+
+      expect(results).toEqual([
+        {
+          connectionId: "conn-branch-1",
+          approved: false,
+          reason: "錯誤：模型服務失敗",
+          isError: true,
         },
       ]);
     });
@@ -480,6 +519,7 @@ describe("WorkflowBranchTriggerService", () => {
 
       // AI 選 None：所有 connection 皆 rejected
       vi.spyOn(branchDecisionService, "decideBranch").mockResolvedValue({
+        outcome: "none",
         selectedConnectionId: null,
         rejectedConnectionIds: ["conn-branch-1"],
       });

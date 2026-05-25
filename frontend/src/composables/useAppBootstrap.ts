@@ -238,10 +238,12 @@ export function useAppBootstrap(
       logger.warn("[App] 載入全域設定失敗，使用預設值");
     });
 
-    logger.log("[App] Loading canvases...");
-    await canvasStore.loadCanvases();
-    await providerCapabilityStore.loadFromBackend();
-    await opencodeAliasStore.loadFromBackend();
+    logger.log("[App] Loading canvases and provider metadata...");
+    await Promise.all([
+      canvasStore.loadCanvases(),
+      providerCapabilityStore.loadFromBackend(),
+      opencodeAliasStore.loadFromBackend(),
+    ]);
 
     if (checkAbortedAndCleanup(currentAbortController)) return;
 

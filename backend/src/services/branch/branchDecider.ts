@@ -32,9 +32,27 @@ export interface BranchDecisionInput {
 }
 
 /** "None" 為合法值，代表 AI 判斷無任何 branch 符合條件 */
-export interface BranchDecisionOutput {
-  selectedLabel: string;
+export interface BranchDecisionFailureAttempt {
+  attempt: 1 | 2;
+  kind: "provider_error" | "parse_error";
+  message: string;
 }
+
+export interface BranchDecisionFailure {
+  kind: "provider_error" | "parse_error" | "mixed";
+  message: string;
+  attempts: BranchDecisionFailureAttempt[];
+}
+
+export type BranchDecisionOutput =
+  | {
+      kind: "success";
+      selectedLabel: string;
+    }
+  | {
+      kind: "failed";
+      failure: BranchDecisionFailure;
+    };
 
 // ─── 介面定義 ─────────────────────────────────────────────────────────────────
 

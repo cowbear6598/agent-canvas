@@ -187,6 +187,78 @@ describe("useOpencodeAliasEditor", () => {
     expect(editor.pendingDeleteAlias.value).toBe("");
   });
 
+  it("排序失敗時應回滾為 store 目前的 alias 順序", async () => {
+    const store = useOpencodeAliasStore();
+    const aliasOne = makeAlias();
+    const aliasTwo = makeAlias({
+      id: "alias-2",
+      modelID: "gpt-5",
+      alias: "GPT-5",
+      orderIdx: 1,
+    });
+    store.setAliases([aliasOne, aliasTwo]);
+    const editor = useOpencodeAliasEditor({ providers, connected });
+    await nextTick();
+
+    editor.updateAliasListForProvider("openai", [aliasTwo, aliasOne]);
+    mockReorderAliases.mockRejectedValueOnce(new Error("reorder failed"));
+
+    await editor.handleAliasReorder("openai");
+
+    expect(
+      editor.aliasListsByProvider.value.openai?.map((alias) => alias.id),
+    ).toEqual(["alias-1", "alias-2"]);
+    expect(toastMock).toHaveBeenCalledWith({
+      title: "llmProvider.opencode.aliases.actionFailed:reorder failed",
+      variant: "destructive",
+    });
+  });
+
+  it("跨 provider 排序時應送出全量 alias id 排列", async () => {
+    providers.value = [
+      ...providers.value,
+      {
+        id: "anthropic",
+        name: "Anthropic",
+        models: [{ id: "claude-sonnet", name: "Claude Sonnet" }],
+      },
+    ];
+    connected.value = ["openai", "anthropic"];
+    const store = useOpencodeAliasStore();
+    const aliasOne = makeAlias({ id: "alias-1", orderIdx: 0 });
+    const anthropicAlias = makeAlias({
+      id: "alias-3",
+      providerID: "anthropic",
+      modelID: "claude-sonnet",
+      alias: "Claude Sonnet",
+      orderIdx: 1,
+    });
+    const aliasTwo = makeAlias({
+      id: "alias-2",
+      modelID: "gpt-5",
+      alias: "GPT-5",
+      orderIdx: 2,
+    });
+    store.setAliases([aliasOne, anthropicAlias, aliasTwo]);
+    const editor = useOpencodeAliasEditor({ providers, connected });
+    await nextTick();
+
+    editor.updateAliasListForProvider("openai", [aliasTwo, aliasOne]);
+    mockReorderAliases.mockResolvedValueOnce([
+      { ...aliasTwo, orderIdx: 0 },
+      { ...anthropicAlias, orderIdx: 1 },
+      { ...aliasOne, orderIdx: 2 },
+    ]);
+
+    await editor.handleAliasReorder("openai");
+
+    expect(mockReorderAliases).toHaveBeenCalledWith([
+      "alias-2",
+      "alias-3",
+      "alias-1",
+    ]);
+  });
+
   it("重新整理 presets 時會更新 loading set 並呼叫 refreshPresets", async () => {
     const store = useOpencodeAliasStore();
     store.setAliases([makeAlias()]);
