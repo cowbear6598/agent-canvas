@@ -7,10 +7,8 @@ import type {
   WorkflowSourcesMergedPayload,
   WorkflowBranchTriggeredPayload,
   WorkflowDirectTriggeredPayload,
-  WorkflowDirectWaitingPayload,
   WorkflowQueuedPayload,
   WorkflowQueueProcessedPayload,
-  WorkflowDirectMergedPayload,
 } from "../../types/index.js";
 
 class WorkflowEventEmitter {
@@ -124,17 +122,6 @@ class WorkflowEventEmitter {
     );
   }
 
-  emitDirectWaiting(
-    canvasId: string,
-    payload: WorkflowDirectWaitingPayload,
-  ): void {
-    socketService.emitToCanvas(
-      canvasId,
-      WebSocketResponseEvents.WORKFLOW_DIRECT_WAITING,
-      payload,
-    );
-  }
-
   emitWorkflowQueued(canvasId: string, payload: WorkflowQueuedPayload): void {
     socketService.emitToCanvas(
       canvasId,
@@ -150,36 +137,6 @@ class WorkflowEventEmitter {
     socketService.emitToCanvas(
       canvasId,
       WebSocketResponseEvents.WORKFLOW_QUEUE_PROCESSED,
-      payload,
-    );
-  }
-
-  emitDirectCountdown(
-    canvasId: string,
-    targetPodId: string,
-    remainingSeconds: number,
-    readySourcePodIds: string[],
-  ): void {
-    const payload = {
-      canvasId,
-      targetPodId,
-      remainingSeconds,
-      readySourcePodIds,
-    };
-    socketService.emitToCanvas(
-      canvasId,
-      WebSocketResponseEvents.WORKFLOW_DIRECT_COUNTDOWN,
-      payload,
-    );
-  }
-
-  emitDirectMerged(
-    canvasId: string,
-    payload: WorkflowDirectMergedPayload,
-  ): void {
-    socketService.emitToCanvas(
-      canvasId,
-      WebSocketResponseEvents.WORKFLOW_DIRECT_MERGED,
       payload,
     );
   }

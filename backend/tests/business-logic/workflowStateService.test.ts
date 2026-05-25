@@ -3,7 +3,6 @@ import { workflowStateService } from "../../src/services/workflow/workflowStateS
 import { connectionStore } from "../../src/services/connectionStore.js";
 import { pendingTargetStore } from "../../src/services/pendingTargetStore.js";
 import { workflowEventEmitter } from "../../src/services/workflow/workflowEventEmitter.js";
-import { workflowDirectTriggerService } from "../../src/services/workflow/workflowDirectTriggerService.js";
 import { logger } from "../../src/utils/logger.js";
 import type { Connection } from "../../src/types/index.js";
 import type { RunContext } from "../../src/types/run.js";
@@ -147,80 +146,6 @@ describe("WorkflowStateService", () => {
 
       expect(result.isMultiInput).toBe(false);
       expect(result.requiredSourcePodIds).toEqual([]);
-    });
-  });
-
-  // ============================================================
-  // getDirectConnectionCount
-  // ============================================================
-  describe("direct trigger source counting rules", () => {
-    it("counts only direct sources for direct merge decisions", () => {
-      vi.spyOn(connectionStore, "findByTargetPodId").mockReturnValue([
-        makeConnection({
-          id: "c1",
-          triggerMode: "direct",
-          sourcePodId: "src-1",
-        }),
-        makeConnection({
-          id: "c2",
-          triggerMode: "direct",
-          sourcePodId: "src-2",
-        }),
-        makeConnection({ id: "c3", triggerMode: "auto", sourcePodId: "src-3" }),
-      ]);
-
-      const count = workflowStateService.getDirectConnectionCount(
-        CANVAS_ID,
-        TARGET_POD_ID,
-      );
-
-      expect(count).toBe(2);
-    });
-
-    it("returns zero when all incoming sources are automatic", () => {
-      vi.spyOn(connectionStore, "findByTargetPodId").mockReturnValue([
-        makeConnection({ id: "c1", triggerMode: "auto", sourcePodId: "src-1" }),
-      ]);
-
-      const count = workflowStateService.getDirectConnectionCount(
-        CANVAS_ID,
-        TARGET_POD_ID,
-      );
-
-      expect(count).toBe(0);
-    });
-
-    it("returns zero when the target has no incoming sources", () => {
-      vi.spyOn(connectionStore, "findByTargetPodId").mockReturnValue([]);
-
-      const count = workflowStateService.getDirectConnectionCount(
-        CANVAS_ID,
-        TARGET_POD_ID,
-      );
-
-      expect(count).toBe(0);
-    });
-
-    it("does not count branch sources as direct sources", () => {
-      vi.spyOn(connectionStore, "findByTargetPodId").mockReturnValue([
-        makeConnection({
-          id: "c1",
-          triggerMode: "branch",
-          sourcePodId: "src-1",
-        }),
-        makeConnection({
-          id: "c2",
-          triggerMode: "direct",
-          sourcePodId: "src-2",
-        }),
-      ]);
-
-      const count = workflowStateService.getDirectConnectionCount(
-        CANVAS_ID,
-        TARGET_POD_ID,
-      );
-
-      expect(count).toBe(1);
     });
   });
 
@@ -424,25 +349,17 @@ describe("WorkflowStateService", () => {
         targetPodId: TARGET_POD_ID,
       });
 
-      it("cancels the direct resolver without touching pendingTargetStore", () => {
+      it("returns without touching pendingTargetStore", () => {
         vi.spyOn(connectionStore, "getById").mockReturnValue(directConnection);
-        const cancelSpy = vi
-          .spyOn(workflowDirectTriggerService, "cancelPendingResolver")
-          .mockImplementation(() => {});
         const hasPendingSpy = vi.spyOn(pendingTargetStore, "hasPendingTarget");
 
         workflowStateService.handleConnectionDeletion(CANVAS_ID, CONNECTION_ID);
 
-        expect(cancelSpy).toHaveBeenCalledWith(TARGET_POD_ID);
         expect(hasPendingSpy).not.toHaveBeenCalled();
       });
 
       it("does not alter auto multi-input pending state", () => {
         vi.spyOn(connectionStore, "getById").mockReturnValue(directConnection);
-        vi.spyOn(
-          workflowDirectTriggerService,
-          "cancelPendingResolver",
-        ).mockImplementation(() => {});
         const hasPendingSpy = vi.spyOn(pendingTargetStore, "hasPendingTarget");
         const removeFromPendingSpy = vi.spyOn(
           pendingTargetStore,

@@ -3,7 +3,6 @@ import { pendingTargetStore } from '../pendingTargetStore.js';
 import { podStore } from '../podStore.js';
 import { workflowEventEmitter } from './workflowEventEmitter.js';
 import { formatMergedSummaries, isAutoTriggerable } from './workflowHelpers.js';
-import { workflowDirectTriggerService } from './workflowDirectTriggerService.js';
 import {
   type WorkflowPendingPayload,
   type WorkflowSourcesMergedPayload,
@@ -68,11 +67,6 @@ class WorkflowStateService {
     };
   }
 
-  getDirectConnectionCount(canvasId: string, targetPodId: string): number {
-    const incomingConnections = connectionStore.findByTargetPodId(canvasId, targetPodId);
-    return incomingConnections.filter((connection) => connection.triggerMode === 'direct').length;
-  }
-
   emitPendingStatus(canvasId: string, targetPodId: string, runContext?: RunContext): void {
     if (runContext) return;
 
@@ -131,10 +125,6 @@ class WorkflowStateService {
     return affectedTargetIds;
   }
 
-  private handleDirectConnectionDeletion(targetPodId: string): void {
-    workflowDirectTriggerService.cancelPendingResolver(targetPodId);
-  }
-
   private handleMultiInputConnectionDeletion(canvasId: string, sourcePodId: string, targetPodId: string): void {
     if (!pendingTargetStore.hasPendingTarget(targetPodId)) {
       return;
@@ -154,7 +144,6 @@ class WorkflowStateService {
     const { sourcePodId, targetPodId, triggerMode } = connection;
 
     if (triggerMode === 'direct') {
-      this.handleDirectConnectionDeletion(targetPodId);
       return;
     }
 

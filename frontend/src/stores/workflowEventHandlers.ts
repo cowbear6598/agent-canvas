@@ -5,7 +5,6 @@ import type {
   WorkflowCompletePayload,
   WorkflowBranchTriggeredPayload,
   WorkflowDirectTriggeredPayload,
-  WorkflowDirectWaitingPayload,
   WorkflowQueuedPayload,
   WorkflowQueueProcessedPayload,
 } from "@/types/websocket";
@@ -42,7 +41,6 @@ export function createWorkflowEventHandlers(store: WorkflowHandlerStore): {
   handleWorkflowDirectTriggered: (
     payload: WorkflowDirectTriggeredPayload,
   ) => void;
-  handleWorkflowDirectWaiting: (payload: WorkflowDirectWaitingPayload) => void;
   handleWorkflowQueued: (payload: WorkflowQueuedPayload) => void;
   handleWorkflowQueueProcessed: (
     payload: WorkflowQueueProcessedPayload,
@@ -76,12 +74,6 @@ export function createWorkflowEventHandlers(store: WorkflowHandlerStore): {
     store.setConnectionStatus(payload.connectionId, "active");
   };
 
-  const handleWorkflowDirectWaiting = (
-    payload: WorkflowDirectWaitingPayload,
-  ): void => {
-    store.setConnectionStatus(payload.connectionId, "waiting");
-  };
-
   const handleWorkflowQueued = (payload: WorkflowQueuedPayload): void => {
     updateConnectionOrGroupStatus(
       store,
@@ -109,7 +101,6 @@ export function createWorkflowEventHandlers(store: WorkflowHandlerStore): {
     handleWorkflowBranchTriggered,
     handleWorkflowComplete,
     handleWorkflowDirectTriggered,
-    handleWorkflowDirectWaiting,
     handleWorkflowQueued,
     handleWorkflowQueueProcessed,
   };

@@ -31,7 +31,6 @@ import type {
   WorkflowAutoTriggeredPayload,
   WorkflowCompletePayload,
   WorkflowDirectTriggeredPayload,
-  WorkflowDirectWaitingPayload,
   WorkflowQueuedPayload,
   WorkflowQueueProcessedPayload,
 } from "@/types/websocket";
@@ -1108,27 +1107,6 @@ describe("connectionStore", () => {
         store.getWorkflowHandlers().handleWorkflowDirectTriggered(payload);
 
         expect(conn1.status).toBe("active");
-        expect(conn2.status).toBe("idle");
-      });
-    });
-
-    describe("handleWorkflowDirectWaiting", () => {
-      it("指定 connectionId 應設為 waiting", () => {
-        const store = useConnectionStore();
-        const conn1 = createMockConnection({ id: "conn-1", status: "idle" });
-        const conn2 = createMockConnection({ id: "conn-2", status: "idle" });
-        store.connections = [conn1, conn2];
-
-        const payload: WorkflowDirectWaitingPayload = {
-          canvasId: "canvas-1",
-          connectionId: "conn-1",
-          sourcePodId: "pod-a",
-          targetPodId: "pod-b",
-        };
-
-        store.getWorkflowHandlers().handleWorkflowDirectWaiting(payload);
-
-        expect(conn1.status).toBe("waiting");
         expect(conn2.status).toBe("idle");
       });
     });

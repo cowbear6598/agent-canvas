@@ -1,5 +1,5 @@
 feature: remove-direct-connection-merge
-approved: false
+approved: true
 scenarios:
   - id: F1
     scenario: 使用者以多條 Direct 連線連到同一個 Pod

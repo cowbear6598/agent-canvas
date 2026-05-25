@@ -129,7 +129,6 @@ export const WebSocketResponseEvents = {
   WORKFLOW_BRANCH_CLEAR: "workflow:branch:clear",
   WORKFLOW_BRANCH_TRIGGERED: "workflow:branch:triggered",
   WORKFLOW_DIRECT_TRIGGERED: "workflow:direct-triggered",
-  WORKFLOW_DIRECT_WAITING: "workflow:direct-waiting",
   WORKFLOW_QUEUED: "workflow:queued",
   WORKFLOW_QUEUE_PROCESSED: "workflow:queue-processed",
   CANVAS_PASTE_RESULT: "canvas:paste:result",

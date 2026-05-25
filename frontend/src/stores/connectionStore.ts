@@ -206,10 +206,6 @@ export const useConnectionStore = defineStore("connection", () => {
       castHandler(workflowHandlers.handleWorkflowDirectTriggered),
     ],
     [
-      WebSocketResponseEvents.WORKFLOW_DIRECT_WAITING,
-      castHandler(workflowHandlers.handleWorkflowDirectWaiting),
-    ],
-    [
       WebSocketResponseEvents.WORKFLOW_QUEUED,
       castHandler(workflowHandlers.handleWorkflowQueued),
     ],

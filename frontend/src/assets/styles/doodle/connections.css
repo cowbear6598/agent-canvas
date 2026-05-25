@@ -78,7 +78,7 @@
   animation: queued-pulse 2s ease-in-out infinite;
 }
 
-/* Waiting Status Styles (multi-direct 10 秒等待) */
+/* Waiting Status Styles */
 .connection-line.waiting .line {
   stroke: oklch(0.7 0.15 155 / 0.8);
   stroke-dasharray: 8, 4;

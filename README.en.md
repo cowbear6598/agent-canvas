@@ -119,8 +119,8 @@ When a Pod has multiple incoming Connection Lines:
 
 - Auto + Auto = Pod triggers when both are ready
 - Auto + AI = If AI rejects, Pod won't trigger; if AI approves, Pod triggers
-- Direct + Direct = When one completes, waits 10 seconds for other Direct lines to finish; if they do, summarizes together then triggers Pod; otherwise, each summarizes independently
-- Auto + Auto + Direct + Direct = Split into two groups (Auto group and Direct group) for summarizing; whichever group completes first triggers first, the other group enters the queue
+- Direct + Direct = Each Direct line triggers the Pod independently when it completes
+- Auto + Auto + Direct + Direct = Auto lines keep their existing group behavior, while each Direct line triggers the Pod independently when it completes
 
 #### Model Settings
 

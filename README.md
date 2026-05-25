@@ -121,8 +121,8 @@ agent-canvas config list
 
 - Auto + Auto = 當兩條都準備好時，則會觸發 Pod
 - Auto + AI = 當 AI 拒絕時，則不會觸發，同意時，則會觸發 Pod
-- Direct + Direct = 當一條完成時，會等 10 秒看其他 Direct 是否完成，如果完成則一起做總結觸發 Pod，等不到的話則會各自總結
-- Auto + Auto + Direct + Direct = 會分成兩組（Auto 組與 Direct 組）去做總結，哪一條先完成則會先觸發那組，另一組則會進入 queue 等待觸發
+- Direct + Direct = 每條 Direct 完成後會各自觸發 Pod
+- Auto + Auto + Direct + Direct = Auto 連線維持原本群組規則；每條 Direct 連線完成後各自觸發，目標忙碌時進入 queue 等待觸發
 
 #### 模型設定
 

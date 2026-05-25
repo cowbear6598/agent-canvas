@@ -13,7 +13,6 @@ import type {
   QueueProcessedContext,
 } from "./types.js";
 import { workflowEventEmitter } from "./workflowEventEmitter.js";
-import { logger } from "../../utils/logger.js";
 import {
   buildQueuedPayload,
   buildQueueProcessedPayload,
@@ -39,14 +38,6 @@ class WorkflowDirectTriggerService implements TriggerStrategy {
       ready: true,
       participatingConnectionIds: [context.connection.id],
     };
-  }
-
-  cancelPendingResolver(storeKey: string): void {
-    logger.log(
-      "Workflow",
-      "Delete",
-      `Direct 連線 ${storeKey} 已不使用 pending resolver，略過取消`,
-    );
   }
 
   private getConnectionsToIterate(

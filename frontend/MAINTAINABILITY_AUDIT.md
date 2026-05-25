@@ -27,7 +27,7 @@
 
 - 主動請求：`CONNECTION_LIST`、`CONNECTION_CREATE`、`CONNECTION_DELETE`、`CONNECTION_UPDATE`。
 - WebSocket listener registration：`setupWorkflowListeners()` / `cleanupWorkflowListeners()` 對 workflow 事件註冊與解除。
-- Workflow 事件：`WORKFLOW_AUTO_TRIGGERED`、`WORKFLOW_COMPLETE`、`WORKFLOW_BRANCH_TRIGGERED`、`WORKFLOW_DIRECT_TRIGGERED`、`WORKFLOW_DIRECT_WAITING`、`WORKFLOW_QUEUED`、`WORKFLOW_QUEUE_PROCESSED`。
+- Workflow 事件：`WORKFLOW_AUTO_TRIGGERED`、`WORKFLOW_COMPLETE`、`WORKFLOW_BRANCH_TRIGGERED`、`WORKFLOW_DIRECT_TRIGGERED`、`WORKFLOW_QUEUED`、`WORKFLOW_QUEUE_PROCESSED`。
 - Connection 同步入口：`addConnectionFromEvent()`、`updateConnectionFromEvent()`、`removeConnectionFromEvent()`。
 - Canvas/Pod 生命週期入口：`resetForCanvasSwitch()`、`deleteConnectionsByPodId()`、`reconcileSummaryModelsForPod()`。
 

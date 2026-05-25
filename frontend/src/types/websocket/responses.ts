@@ -317,13 +317,6 @@ export interface WorkflowDirectTriggeredPayload {
   isSummarized: boolean;
 }
 
-export interface WorkflowDirectWaitingPayload {
-  canvasId: string;
-  connectionId: string;
-  sourcePodId: string;
-  targetPodId: string;
-}
-
 export interface WorkflowQueuedPayload {
   canvasId: string;
   connectionId: string;

@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { workflowDirectTriggerService } from "../../src/services/workflow/workflowDirectTriggerService.js";
+import { workflowStateService } from "../../src/services/workflow/workflowStateService.js";
 import { connectionStore } from "../../src/services/connectionStore.js";
+import { pendingTargetStore } from "../../src/services/pendingTargetStore.js";
 import { workflowEventEmitter } from "../../src/services/workflow";
 import { summaryService } from "../../src/services/summaryService.js";
 import { logger } from "../../src/utils/logger.js";
@@ -66,12 +68,6 @@ function setupBasicSpies(conn: Connection) {
   vi.spyOn(workflowEventEmitter, "emitDirectTriggered").mockImplementation(
     () => {},
   );
-  vi.spyOn(workflowEventEmitter, "emitDirectWaiting").mockImplementation(
-    () => {},
-  );
-  vi.spyOn(workflowEventEmitter, "emitDirectMerged").mockImplementation(
-    () => {},
-  );
   vi.spyOn(workflowEventEmitter, "emitWorkflowComplete").mockImplementation(
     () => {},
   );
@@ -105,6 +101,10 @@ describe("Direct Trigger Flow", () => {
         id: "conn-B-D",
         sourcePodId: "source-pod-B",
       });
+      const connCD = makeConnection({
+        id: "conn-C-D",
+        sourcePodId: "source-pod-C",
+      });
 
       const resultA = await workflowDirectTriggerService.collectSources?.({
         canvasId: CANVAS_ID,
@@ -120,6 +120,13 @@ describe("Direct Trigger Flow", () => {
         summary: "Summary from B",
         runContext: testRunContext,
       });
+      const resultC = await workflowDirectTriggerService.collectSources?.({
+        canvasId: CANVAS_ID,
+        sourcePodId: "source-pod-C",
+        connection: connCD,
+        summary: "Summary from C",
+        runContext: testRunContext,
+      });
 
       expect(resultA).toEqual({
         ready: true,
@@ -129,8 +136,10 @@ describe("Direct Trigger Flow", () => {
         ready: true,
         participatingConnectionIds: ["conn-B-D"],
       });
-      expect(workflowEventEmitter.emitDirectWaiting).not.toHaveBeenCalled();
-      expect(workflowEventEmitter.emitDirectMerged).not.toHaveBeenCalled();
+      expect(resultC).toEqual({
+        ready: true,
+        participatingConnectionIds: ["conn-C-D"],
+      });
     });
   });
 
@@ -274,22 +283,50 @@ describe("Direct Trigger Flow", () => {
   });
 
   // ============================================================
-  // E：cancelPendingResolver
+  // E：Direct deletion 不使用等待 resolver
   // ============================================================
-  describe("E1: cancelPendingResolver", () => {
-    it("Direct 已不使用 pending resolver，呼叫取消不拋出錯誤", () => {
-      workflowDirectTriggerService.cancelPendingResolver(TARGET_POD_ID);
-      expect(logger.log).toHaveBeenCalledWith(
-        "Workflow",
-        "Delete",
-        expect.stringContaining("已不使用 pending resolver"),
-      );
-    });
+  describe("E1: direct connection deletion", () => {
+    it("刪除 Direct 連線不應觸碰既有 auto multi-input pending state", () => {
+      const directConnection = makeConnection({
+        id: "conn-direct-delete",
+        sourcePodId: "source-pod-direct",
+        targetPodId: TARGET_POD_ID,
+      });
+      const requiredAutoSourcePodIds = ["source-pod-auto-A", "source-pod-auto-B"];
 
-    it("對不存在的 targetPodId 不拋出錯誤", () => {
-      expect(() => {
-        workflowDirectTriggerService.cancelPendingResolver("non-existent-pod");
-      }).not.toThrow();
+      pendingTargetStore.clearPendingTarget(TARGET_POD_ID);
+      pendingTargetStore.recordSourceCompletion(
+        TARGET_POD_ID,
+        "source-pod-auto-A",
+        "Auto summary A",
+        requiredAutoSourcePodIds,
+      );
+
+      vi.spyOn(connectionStore, "getById").mockReturnValue(directConnection);
+      const hasPendingSpy = vi.spyOn(pendingTargetStore, "hasPendingTarget");
+      const removeFromPendingSpy = vi.spyOn(
+        pendingTargetStore,
+        "removeSourceFromPending",
+      );
+      const clearSpy = vi.spyOn(pendingTargetStore, "clearPendingTarget");
+
+      workflowStateService.handleConnectionDeletion(
+        CANVAS_ID,
+        directConnection.id,
+      );
+
+      const pending = pendingTargetStore.getPendingTarget(TARGET_POD_ID);
+      expect(hasPendingSpy).not.toHaveBeenCalled();
+      expect(removeFromPendingSpy).not.toHaveBeenCalled();
+      expect(clearSpy).not.toHaveBeenCalled();
+      expect(pending?.requiredSourcePodIds).toEqual(requiredAutoSourcePodIds);
+      expect(pending?.completedSources.get("source-pod-auto-A")).toBe(
+        "Auto summary A",
+      );
+
+      vi.mocked(clearSpy).mockRestore();
+      pendingTargetStore.clearPendingTarget(TARGET_POD_ID);
     });
   });
+
 });

@@ -42,13 +42,6 @@ export interface WorkflowDirectTriggeredPayload {
   isSummarized: boolean;
 }
 
-export interface WorkflowDirectWaitingPayload {
-  canvasId: string;
-  connectionId: string;
-  sourcePodId: string;
-  targetPodId: string;
-}
-
 export interface WorkflowQueuedPayload {
   canvasId: string;
   targetPodId: string;
@@ -66,12 +59,4 @@ export interface WorkflowQueueProcessedPayload {
   sourcePodId: string;
   remainingQueueSize: number;
   triggerMode: TriggerMode;
-}
-
-export interface WorkflowDirectMergedPayload {
-  canvasId: string;
-  targetPodId: string;
-  sourcePodIds: string[];
-  mergedContentPreview: string;
-  countdownSeconds: number;
 }
