@@ -7,6 +7,7 @@ import type { RunContext } from "../../types/run.js";
 import { connectionStore } from "../connectionStore.js";
 import { workflowEventEmitter } from "./workflowEventEmitter.js";
 import { logger } from "../../utils/logger.js";
+import { createClientSafeWorkflowError } from "./workflowClientError.js";
 import type {
   CompletionContext,
   QueuedContext,
@@ -115,7 +116,7 @@ export function completeMultiInputConnections(
           sourcePodId: conn.sourcePodId,
           targetPodId: context.targetPodId,
           success,
-          error,
+          error: error ? createClientSafeWorkflowError() : undefined,
           triggerMode: context.triggerMode,
         });
         connectionStore.updateConnectionStatus(

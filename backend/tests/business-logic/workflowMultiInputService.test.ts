@@ -127,6 +127,19 @@ describe("WorkflowMultiInputService", () => {
       };
       return pods[podId];
     }) as typeof podStore.getById);
+    vi.spyOn(podStore, "getByIds").mockImplementation(((_canvasId, podIds) => {
+      const pods: Record<string, Pod> = {
+        "source-a": makePod("source-a", "來源 Pod A"),
+        "source-b": makePod("source-b", "來源 Pod B"),
+        [TARGET_POD_ID]: makePod(TARGET_POD_ID, "目標 Pod"),
+      };
+      return new Map(
+        podIds.flatMap((podId) => {
+          const pod = pods[podId];
+          return pod ? [[podId, pod] as const] : [];
+        }),
+      );
+    }) as typeof podStore.getByIds);
     vi.spyOn(runStore, "getPodInstance").mockReturnValue(undefined);
     vi.spyOn(runQueueService, "enqueue").mockImplementation(() => {});
     vi.spyOn(runQueueService, "processNext").mockResolvedValue(undefined);

@@ -1,4 +1,4 @@
-import type { Connection } from '../connection.js';
+import type { Connection } from "../connection.js";
 
 export interface ConnectionCreatedPayload {
   requestId: string;
@@ -28,6 +28,7 @@ export interface ConnectionUpdatedPayload {
   canvasId: string;
   success: boolean;
   connection?: Connection;
+  connections?: Connection[];
   error?: string;
 }
 

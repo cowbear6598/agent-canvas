@@ -69,7 +69,10 @@ interface ConnectionRow {
   branch_model: string | null;
 }
 
-function rowToConnection(row: ConnectionRow, sourcePod?: Pod | null): Connection {
+function rowToConnection(
+  row: ConnectionRow,
+  sourcePod?: Pod | null,
+): Connection {
   const branchDefaults =
     row.branch_provider === null || row.branch_model === null
       ? resolveBranchDefaults(row, sourcePod)
@@ -141,11 +144,16 @@ function resolveBranchFields(
   return branchDefaults ?? { provider: "claude", model: "sonnet" };
 }
 
-function rowsToConnections(canvasId: string, rows: ConnectionRow[]): Connection[] {
+function rowsToConnections(
+  canvasId: string,
+  rows: ConnectionRow[],
+): Connection[] {
   const fallbackSourcePodIds = Array.from(
     new Set(
       rows
-        .filter((row) => row.branch_provider === null || row.branch_model === null)
+        .filter(
+          (row) => row.branch_provider === null || row.branch_model === null,
+        )
         .map((row) => row.source_pod_id),
     ),
   );
@@ -161,10 +169,14 @@ function rowsToConnections(canvasId: string, rows: ConnectionRow[]): Connection[
   );
 }
 
-function resolveProviderDefaultModel(provider: ProviderName): string | undefined {
-  const defaultModel = (getProvider(provider).metadata.defaultOptions as {
-    model?: unknown;
-  }).model;
+function resolveProviderDefaultModel(
+  provider: ProviderName,
+): string | undefined {
+  const defaultModel = (
+    getProvider(provider).metadata.defaultOptions as {
+      model?: unknown;
+    }
+  ).model;
   return typeof defaultModel === "string" && defaultModel.trim()
     ? defaultModel
     : undefined;
@@ -501,6 +513,82 @@ class ConnectionStore {
 
     if (!updatedRow) return undefined;
     return rowToConnection(updatedRow);
+  }
+
+  updateBranchSiblingSettings(
+    canvasId: string,
+    id: string,
+    updates: Partial<{
+      triggerMode: TriggerMode;
+      decideStatus: DecideStatus;
+      decideReason: string | null;
+      summaryModel: string;
+      summaryProvider: ProviderName | null;
+      label: string;
+      description: string | null;
+      branchProvider: ProviderName | null;
+      branchModel: string | null;
+    }>,
+  ):
+    | { targetConnection: Connection; updatedConnections: Connection[] }
+    | undefined {
+    const existing = this.getById(canvasId, id);
+    if (!existing) return undefined;
+
+    const targetMode = updates.triggerMode ?? existing.triggerMode;
+    const shouldSyncBranchSiblings =
+      targetMode === "branch" &&
+      (updates.branchProvider !== undefined ||
+        updates.branchModel !== undefined);
+
+    if (!shouldSyncBranchSiblings) {
+      const targetConnection = this.update(canvasId, id, updates);
+      return targetConnection
+        ? { targetConnection, updatedConnections: [targetConnection] }
+        : undefined;
+    }
+
+    const siblingIds = this.findBySourcePodId(canvasId, existing.sourcePodId)
+      .filter((connection) => connection.triggerMode === "branch")
+      .map((connection) => connection.id);
+    const ids = Array.from(new Set([id, ...siblingIds]));
+
+    const branchUpdates: Partial<{
+      branchProvider: ProviderName | null;
+      branchModel: string | null;
+    }> = {};
+    if (updates.branchProvider !== undefined) {
+      branchUpdates.branchProvider = updates.branchProvider;
+    }
+    if (updates.branchModel !== undefined) {
+      branchUpdates.branchModel = updates.branchModel;
+    }
+
+    const syncBranchSiblings = getDb().transaction(() => {
+      const updatedConnections: Connection[] = [];
+      const targetConnection = this.update(canvasId, id, updates);
+      if (!targetConnection) {
+        throw new Error("找不到要更新的 branch connection");
+      }
+      updatedConnections.push(targetConnection);
+
+      for (const siblingId of ids) {
+        if (siblingId === id) continue;
+        const siblingConnection = this.update(
+          canvasId,
+          siblingId,
+          branchUpdates,
+        );
+        if (!siblingConnection) {
+          throw new Error("更新 branch sibling connection 失敗");
+        }
+        updatedConnections.push(siblingConnection);
+      }
+
+      return { targetConnection, updatedConnections };
+    });
+
+    return syncBranchSiblings();
   }
 
   updateConnectionStatus(

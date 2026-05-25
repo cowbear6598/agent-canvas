@@ -22,6 +22,7 @@ import { pendingTargetStore } from "../pendingTargetStore.js";
 import { workflowPipeline } from "./workflowPipeline.js";
 import { workflowMultiInputService } from "./workflowMultiInputService.js";
 import { abortRegistry } from "../provider/abortRegistry.js";
+import { createClientSafeWorkflowError } from "./workflowClientError.js";
 import {
   forEachMultiInputGroupConnection,
   buildQueuedPayload,
@@ -337,7 +338,7 @@ class WorkflowBranchTriggerService
             sourcePodId,
             targetPodId: connection.targetPodId,
             success: false,
-            error: getErrorMessage(error),
+            error: createClientSafeWorkflowError("WORKFLOW_BRANCH_FAILED"),
             triggerMode: "branch",
           });
         }

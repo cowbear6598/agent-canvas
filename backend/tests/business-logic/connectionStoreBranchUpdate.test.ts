@@ -289,7 +289,55 @@ describe("connectionStore — branch 驗證邏輯", () => {
       expect(updated?.branchModel).toBe("opus");
     });
 
-    it("12. update auto → branch 但既有 label 為空且未帶 label → throw", () => {
+    it("12. updateBranchSiblingSettings 同 source branch group 會在單一 transaction 同步 provider/model", () => {
+      insertPod("src-branch-sync");
+      insertPod("dst-branch-sync-a");
+      insertPod("dst-branch-sync-b");
+      insertPod("dst-branch-sync-c");
+
+      const connA = createBranchConnection(
+        "src-branch-sync",
+        "dst-branch-sync-a",
+        "Alpha",
+      );
+      const connB = createBranchConnection(
+        "src-branch-sync",
+        "dst-branch-sync-b",
+        "Beta",
+      );
+      const autoConn = connectionStore.create(CANVAS_ID, {
+        sourcePodId: "src-branch-sync",
+        sourceAnchor: "right",
+        targetPodId: "dst-branch-sync-c",
+        targetAnchor: "left",
+        triggerMode: "auto",
+      });
+
+      const result = connectionStore.updateBranchSiblingSettings(
+        CANVAS_ID,
+        connA.id,
+        {
+          branchProvider: "claude",
+          branchModel: "opus",
+        },
+      );
+
+      expect(result?.targetConnection.id).toBe(connA.id);
+      expect(
+        result?.updatedConnections.map((connection) => connection.id),
+      ).toEqual([connA.id, connB.id]);
+      expect(connectionStore.getById(CANVAS_ID, connA.id)?.branchModel).toBe(
+        "opus",
+      );
+      expect(connectionStore.getById(CANVAS_ID, connB.id)?.branchModel).toBe(
+        "opus",
+      );
+      expect(connectionStore.getById(CANVAS_ID, autoConn.id)?.triggerMode).toBe(
+        "auto",
+      );
+    });
+
+    it("13. update auto → branch 但既有 label 為空且未帶 label → throw", () => {
       insertPod("src-12-empty-label");
       insertPod("dst-12-empty-label");
 
@@ -311,11 +359,7 @@ describe("connectionStore — branch 驗證邏輯", () => {
 
   describe("row mapping — 批次 fallback", () => {
     it("多筆 connection fallback branch provider/model 時使用 getByIds，不逐筆 getById", () => {
-      insertPod(
-        "src-batch-opencode",
-        "opencode",
-        '{"model":"openai/gpt-4o"}',
-      );
+      insertPod("src-batch-opencode", "opencode", '{"model":"openai/gpt-4o"}');
       insertPod("dst-batch-1");
       insertPod("dst-batch-2");
 
@@ -334,7 +378,19 @@ describe("connectionStore — branch 驗證邏輯", () => {
         triggerMode: "auto",
       });
 
-      const getByIdsSpy = vi.spyOn(podStore, "getByIds");
+      const getByIdsSpy = vi.spyOn(podStore, "getByIds").mockReturnValue(
+        new Map([
+          [
+            "src-batch-opencode",
+            {
+              id: "src-batch-opencode",
+              name: "Pod-src-batch-opencode",
+              provider: "opencode",
+              providerConfig: { model: "openai/gpt-4o" },
+            } as ReturnType<typeof podStore.getById>,
+          ],
+        ]),
+      );
       const getByIdSpy = vi.spyOn(podStore, "getById");
 
       const connections = connectionStore.list(CANVAS_ID);

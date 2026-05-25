@@ -1,6 +1,4 @@
-import type {
-  Connection,
-} from "../../types/index.js";
+import type { Connection } from "../../types/index.js";
 import type {
   TriggerStrategy,
   TriggerDecideContext,
@@ -18,6 +16,7 @@ import {
   buildQueueProcessedPayload,
 } from "./workflowHelpers.js";
 import { connectionStore } from "../connectionStore.js";
+import { createClientSafeWorkflowError } from "./workflowClientError.js";
 
 class WorkflowDirectTriggerService implements TriggerStrategy {
   readonly mode = "direct" as const;
@@ -99,7 +98,7 @@ class WorkflowDirectTriggerService implements TriggerStrategy {
           sourcePodId: conn.sourcePodId,
           targetPodId: context.targetPodId,
           success,
-          error,
+          error: error ? createClientSafeWorkflowError() : undefined,
           triggerMode: context.triggerMode,
         });
         connectionStore.updateConnectionStatus(

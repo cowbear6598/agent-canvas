@@ -150,13 +150,9 @@ export interface ConnectionPayloadItem {
    * 後端 NULL 會以此欄位回傳；升級前 Connection 為 undefined，UI 渲染時會 fallback 至來源 Pod provider。
    */
   summaryProvider?: PodProvider | null;
-  /** Branch 模式下的連線標籤 */
   label?: string;
-  /** Branch 模式下的連線描述 */
   description?: string;
-  /** Branch 模式使用的 AI Provider */
   branchProvider?: PodProvider;
-  /** Branch 模式使用的模型字串 */
   branchModel?: string;
 }
 
@@ -166,6 +162,7 @@ export interface ConnectionCreatedPayload extends ResultPayload {
 
 export interface ConnectionUpdatedPayload extends ResultPayload {
   connection?: ConnectionPayloadItem;
+  connections?: ConnectionPayloadItem[];
 }
 
 export interface ConnectionListResultPayload extends ResultPayload {

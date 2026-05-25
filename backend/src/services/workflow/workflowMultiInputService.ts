@@ -58,8 +58,9 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
     )
       .filter((conn) => sourcePodIdSet.has(conn.sourcePodId))
       .map((conn) => conn.id);
+    const sourcePods = podStore.getByIds(canvasId, sourcePodIds);
     const sourcePodNames = sourcePodIds.map((podId) => {
-      const pod = podStore.getById(canvasId, podId);
+      const pod = sourcePods.get(podId);
       return pod?.name ?? podId;
     });
 
@@ -145,8 +146,10 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
       return null;
     }
 
+    const sourcePodIds = Array.from(completedSummaries.keys());
+    const sourcePods = podStore.getByIds(canvasId, sourcePodIds);
     const mergedContent = formatMergedSummaries(completedSummaries, (podId) =>
-      podStore.getById(canvasId, podId),
+      sourcePods.get(podId),
     );
 
     return { completedSummaries, mergedContent };

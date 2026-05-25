@@ -20,10 +20,21 @@ const handleConnectionCreated = createUnifiedHandler<
 );
 
 const handleConnectionUpdated = createUnifiedHandler<
-  BasePayload & { connection?: ConnectionPayloadItem; canvasId: string }
+  BasePayload & {
+    connection?: ConnectionPayloadItem;
+    connections?: ConnectionPayloadItem[];
+    canvasId: string;
+  }
 >((payload) => {
+  const store = useConnectionStore();
+  if (payload.connections?.length) {
+    payload.connections.forEach((connection) => {
+      store.updateConnectionFromEvent(connection);
+    });
+    return;
+  }
   if (payload.connection) {
-    useConnectionStore().updateConnectionFromEvent(payload.connection);
+    store.updateConnectionFromEvent(payload.connection);
   }
 });
 

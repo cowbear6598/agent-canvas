@@ -344,9 +344,11 @@ export const handleConnectionUpdate = withCanvasId<ConnectionUpdatePayload>(
       updates.branchModel = branchModel;
     }
 
-    let updatedConnection: ReturnType<typeof connectionStore.update>;
+    let updateResult: ReturnType<
+      typeof connectionStore.updateBranchSiblingSettings
+    >;
     try {
-      updatedConnection = connectionStore.update(
+      updateResult = connectionStore.updateBranchSiblingSettings(
         canvasId,
         connectionId,
         updates,
@@ -364,7 +366,7 @@ export const handleConnectionUpdate = withCanvasId<ConnectionUpdatePayload>(
       return;
     }
 
-    if (!updatedConnection) {
+    if (!updateResult) {
       emitError(
         wsConnectionId,
         WebSocketResponseEvents.CONNECTION_UPDATED,
@@ -381,7 +383,8 @@ export const handleConnectionUpdate = withCanvasId<ConnectionUpdatePayload>(
       requestId,
       canvasId,
       success: true,
-      connection: updatedConnection,
+      connection: updateResult.targetConnection,
+      connections: updateResult.updatedConnections,
     };
 
     socketService.emitToCanvas(

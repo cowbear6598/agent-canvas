@@ -32,17 +32,12 @@ export const WebSocketRequestEvents = {
   REPOSITORY_NOTE_DELETE: "repository-note:delete",
   POD_BIND_REPOSITORY: "pod:bind-repository",
   POD_UNBIND_REPOSITORY: "pod:unbind-repository",
-  /** 查詢 managed MCP registry 清單 */
   MANAGED_MCP_REGISTRY_LIST: "managed-mcp:registry:list",
-  /** 儲存 managed MCP registry entry */
   MANAGED_MCP_REGISTRY_SAVE: "managed-mcp:registry:save",
-  /** 刪除 managed MCP registry entry */
   MANAGED_MCP_REGISTRY_DELETE: "managed-mcp:registry:delete",
   /** 對 managed MCP registry entry 手動觸發 probe（test connection） */
   MANAGED_MCP_REGISTRY_TEST: "managed-mcp:registry:test",
-  /** 查詢指定 Pod 的 MCP availability 清單 */
   POD_MCP_AVAILABILITY_LIST: "pod:mcp-availability:list",
-  /** 設定指定 Pod 的 MCP server 名稱清單 */
   POD_SET_MCP_SERVER_NAMES: "pod:set-mcp-server-names",
   CANVAS_CREATE: "canvas:create",
   CANVAS_LIST: "canvas:list",
@@ -76,23 +71,14 @@ export const WebSocketRequestEvents = {
   POD_SET_PLUGINS: "pod:set-plugins",
   BACKUP_TEST_CONNECTION: "backup:test-connection",
   BACKUP_TRIGGER: "backup:trigger",
-  /** 查詢可用 Provider 列表 */
   PROVIDER_LIST: "provider:list",
-  /** 查詢 opencode provider 列表 */
   OPENCODE_PROVIDER_LIST: "opencode:provider:list",
-  /** 查詢 opencode model 別稱列表 */
   OPENCODE_ALIASES_LIST: "opencode:aliases:list",
-  /** 新增 opencode model 別稱 */
   OPENCODE_ALIASES_CREATE: "opencode:aliases:create",
-  /** 更新 opencode model 別稱 */
   OPENCODE_ALIASES_UPDATE: "opencode:aliases:update",
-  /** 刪除 opencode model 別稱 */
   OPENCODE_ALIASES_DELETE: "opencode:aliases:delete",
-  /** 重排 opencode model 別稱順序 */
   OPENCODE_ALIASES_REORDER: "opencode:aliases:reorder",
-  /** 重新抓取 opencode model thinking presets */
   OPENCODE_ALIASES_REFRESH_PRESETS: "opencode:aliases:refresh-presets",
-  /** 重啟 opencode 子程序 */
   OPENCODE_SERVER_RESTART: "opencode:server:restart",
 } as const;
 
@@ -152,21 +138,15 @@ export const WebSocketResponseEvents = {
   REPOSITORY_NOTE_DELETED: "repository-note:deleted",
   POD_REPOSITORY_BOUND: "pod:repository:bound",
   POD_REPOSITORY_UNBOUND: "pod:repository:unbound",
-  /** managed MCP registry 清單查詢結果 */
   MANAGED_MCP_REGISTRY_LIST_RESULT: "managed-mcp:registry:list:result",
-  /** managed MCP registry entry 已儲存 */
   MANAGED_MCP_REGISTRY_SAVED: "managed-mcp:registry:saved",
-  /** managed MCP registry entry 已刪除 */
   MANAGED_MCP_REGISTRY_DELETED: "managed-mcp:registry:deleted",
   /** managed MCP registry 已更新（broadcast） */
   MANAGED_MCP_REGISTRY_UPDATED: "managed-mcp:registry:updated",
-  /** managed MCP registry entry probe 結果 */
   MANAGED_MCP_REGISTRY_TEST_RESULT: "managed-mcp:registry:test:result",
   /** ensureSurface 略過某些選定的 MCP（broadcast） */
   MANAGED_MCP_SURFACE_TARGETS_IGNORED: "managed-mcp:surface:targets-ignored",
-  /** Pod MCP availability 清單查詢結果 */
   POD_MCP_AVAILABILITY_LIST_RESULT: "pod:mcp-availability:list:result",
-  /** Pod 的 MCP server 名稱清單已更新 */
   POD_MCP_SERVER_NAMES_UPDATED: "pod:mcp-server-names:updated",
   SCHEDULE_FIRED: "schedule:fired",
   CANVAS_CREATED: "canvas:created",
@@ -217,26 +197,17 @@ export const WebSocketResponseEvents = {
   BACKUP_STARTED: "backup:started",
   BACKUP_COMPLETED: "backup:completed",
   BACKUP_FAILED: "backup:failed",
-  /** Provider 列表查詢結果 */
   PROVIDER_LIST_RESULT: "provider:list:result",
-  /** opencode provider 列表查詢結果 */
   OPENCODE_PROVIDER_LIST_RESULT: "opencode:provider:list:result",
-  /** opencode model 別稱列表查詢結果 */
   OPENCODE_ALIASES_LIST_RESULT: "opencode:aliases:list:result",
-  /** opencode model 別稱新增結果 */
   OPENCODE_ALIASES_CREATE_RESULT: "opencode:aliases:create:result",
-  /** opencode model 別稱更新結果 */
   OPENCODE_ALIASES_UPDATE_RESULT: "opencode:aliases:update:result",
-  /** opencode model 別稱刪除結果 */
   OPENCODE_ALIASES_DELETE_RESULT: "opencode:aliases:delete:result",
-  /** opencode model 別稱重排結果 */
   OPENCODE_ALIASES_REORDER_RESULT: "opencode:aliases:reorder:result",
-  /** opencode model thinking presets 刷新結果 */
   OPENCODE_ALIASES_REFRESH_PRESETS_RESULT:
     "opencode:aliases:refresh-presets:result",
   /** opencode model 別稱已更新（push 事件） */
   OPENCODE_ALIASES_UPDATED: "opencode:aliases:updated",
-  /** opencode 子程序重啟結果 */
   OPENCODE_SERVER_RESTART_RESULT: "opencode:server:restart:result",
 } as const;
 

@@ -94,10 +94,6 @@
   animation: waiting-pulse 2s ease-in-out infinite;
 }
 
-.connection-line.waiting .connection-mid-label.direct-label {
-  background: oklch(0.7 0.15 155 / 0.8);
-}
-
 /* Branch Connection Styles */
 /* Branch 模式永遠都是虛線 */
 .connection-line.branch .line {

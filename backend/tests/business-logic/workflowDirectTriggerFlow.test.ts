@@ -3,20 +3,24 @@ import { workflowDirectTriggerService } from "../../src/services/workflow/workfl
 import { workflowStateService } from "../../src/services/workflow/workflowStateService.js";
 import { connectionStore } from "../../src/services/connectionStore.js";
 import { pendingTargetStore } from "../../src/services/pendingTargetStore.js";
-import { workflowEventEmitter } from "../../src/services/workflow";
-import { summaryService } from "../../src/services/summaryService.js";
+import { socketService } from "../../src/services/socketService.js";
 import { logger } from "../../src/utils/logger.js";
+import { initTestDb, closeDb, getDb } from "../../src/database/index.js";
+import { resetStatements } from "../../src/database/statements.js";
+import { WebSocketResponseEvents } from "../../src/schemas/index.js";
 import type { Connection } from "../../src/types";
 import type { RunContext } from "../../src/types/run.js";
 
-// ─── 常數 ────────────────────────────────────────────────────────────────────
-
-const CANVAS_ID = "canvas-1";
+const CANVAS_ID = "canvas-direct-flow";
 const SOURCE_POD_ID = "source-pod";
 const TARGET_POD_ID = "target-pod";
 const TEST_SUMMARY = "Test summary content";
 
-// ─── 工廠函式 ─────────────────────────────────────────────────────────────────
+function insertCanvas(): void {
+  getDb()
+    .prepare("INSERT INTO canvases (id, name, sort_index) VALUES (?, ?, ?)")
+    .run(CANVAS_ID, "direct-flow-canvas", 0);
+}
 
 function makeRunContext(overrides?: Partial<RunContext>): RunContext {
   return {
@@ -27,144 +31,92 @@ function makeRunContext(overrides?: Partial<RunContext>): RunContext {
   };
 }
 
-const testRunContext = makeRunContext();
-
-function makeConnection(overrides?: Partial<Connection>): Connection {
-  return {
-    id: "conn-direct-1",
-    sourcePodId: SOURCE_POD_ID,
-    sourceAnchor: "right",
-    targetPodId: TARGET_POD_ID,
-    targetAnchor: "left",
+function createDirectConnection(overrides?: Partial<Connection>): Connection {
+  return connectionStore.create(CANVAS_ID, {
+    sourcePodId: overrides?.sourcePodId ?? SOURCE_POD_ID,
+    sourceAnchor: overrides?.sourceAnchor ?? "right",
+    targetPodId: overrides?.targetPodId ?? TARGET_POD_ID,
+    targetAnchor: overrides?.targetAnchor ?? "left",
     triggerMode: "direct",
-    decideStatus: "none",
-    decideReason: null,
-    connectionStatus: "idle",
-    summaryModel: "sonnet",
-    aiDecideModel: "sonnet",
-    ...overrides,
-  } as Connection;
-}
-
-// ─── 共用 spy setup ───────────────────────────────────────────────────────────
-
-function setupBasicSpies(conn: Connection) {
-  vi.spyOn(logger, "log").mockImplementation(() => {});
-  vi.spyOn(logger, "warn").mockImplementation(() => {});
-  vi.spyOn(logger, "error").mockImplementation(() => {});
-  vi.spyOn(summaryService, "generateSummaryForTarget").mockResolvedValue({
-    success: true,
-    summary: TEST_SUMMARY,
-    targetPodId: TARGET_POD_ID,
+    summaryModel: overrides?.summaryModel,
   });
-  vi.spyOn(connectionStore, "findBySourcePodId").mockReturnValue([conn]);
-  vi.spyOn(connectionStore, "getById").mockReturnValue(conn);
-  vi.spyOn(connectionStore, "findByTargetPodId").mockReturnValue([conn]);
-  vi.spyOn(connectionStore, "updateConnectionStatus").mockReturnValue(
-    undefined,
-  );
-  vi.spyOn(connectionStore, "updateDecideStatus").mockReturnValue(undefined);
-  // workflowEventEmitter spies
-  vi.spyOn(workflowEventEmitter, "emitDirectTriggered").mockImplementation(
-    () => {},
-  );
-  vi.spyOn(workflowEventEmitter, "emitWorkflowComplete").mockImplementation(
-    () => {},
-  );
-  vi.spyOn(workflowEventEmitter, "emitWorkflowQueued").mockImplementation(
-    () => {},
-  );
-  vi.spyOn(
-    workflowEventEmitter,
-    "emitWorkflowAutoTriggered",
-  ).mockImplementation(() => {});
 }
 
 describe("Direct Trigger Flow", () => {
-  const mockDirectConnection = makeConnection();
+  const testRunContext = makeRunContext();
 
   beforeEach(() => {
-    setupBasicSpies(mockDirectConnection);
+    resetStatements();
+    initTestDb();
+    insertCanvas();
+    vi.spyOn(logger, "log").mockImplementation(() => {});
+    vi.spyOn(logger, "warn").mockImplementation(() => {});
+    vi.spyOn(logger, "error").mockImplementation(() => {});
+    vi.spyOn(socketService, "emitToCanvas").mockImplementation(() => {});
+    pendingTargetStore.clearPendingTarget(TARGET_POD_ID);
   });
 
   afterEach(() => {
+    pendingTargetStore.clearPendingTarget(TARGET_POD_ID);
     vi.restoreAllMocks();
+    closeDb();
   });
 
-  describe("B1: Multi-direct - 每條 ready Direct 形成獨立項目", () => {
+  describe("Multi-direct 每條 ready Direct 形成獨立項目", () => {
     it("collectSources 不等待合併，回傳目前 connection 作為唯一參與連線", async () => {
-      const connAD = makeConnection({
-        id: "conn-A-D",
+      const connAD = createDirectConnection({
         sourcePodId: SOURCE_POD_ID,
       });
-      const connBD = makeConnection({
-        id: "conn-B-D",
+      const connBD = createDirectConnection({
         sourcePodId: "source-pod-B",
       });
-      const connCD = makeConnection({
-        id: "conn-C-D",
+      const connCD = createDirectConnection({
         sourcePodId: "source-pod-C",
       });
 
-      const resultA = await workflowDirectTriggerService.collectSources?.({
-        canvasId: CANVAS_ID,
-        sourcePodId: SOURCE_POD_ID,
-        connection: connAD,
-        summary: TEST_SUMMARY,
-        runContext: testRunContext,
-      });
-      const resultB = await workflowDirectTriggerService.collectSources?.({
-        canvasId: CANVAS_ID,
-        sourcePodId: "source-pod-B",
-        connection: connBD,
-        summary: "Summary from B",
-        runContext: testRunContext,
-      });
-      const resultC = await workflowDirectTriggerService.collectSources?.({
-        canvasId: CANVAS_ID,
-        sourcePodId: "source-pod-C",
-        connection: connCD,
-        summary: "Summary from C",
-        runContext: testRunContext,
-      });
+      const [resultA, resultB, resultC] = await Promise.all([
+        workflowDirectTriggerService.collectSources({
+          canvasId: CANVAS_ID,
+          sourcePodId: SOURCE_POD_ID,
+          connection: connAD,
+          summary: TEST_SUMMARY,
+          runContext: testRunContext,
+        }),
+        workflowDirectTriggerService.collectSources({
+          canvasId: CANVAS_ID,
+          sourcePodId: "source-pod-B",
+          connection: connBD,
+          summary: "Summary from B",
+          runContext: testRunContext,
+        }),
+        workflowDirectTriggerService.collectSources({
+          canvasId: CANVAS_ID,
+          sourcePodId: "source-pod-C",
+          connection: connCD,
+          summary: "Summary from C",
+          runContext: testRunContext,
+        }),
+      ]);
 
       expect(resultA).toEqual({
         ready: true,
-        participatingConnectionIds: ["conn-A-D"],
+        participatingConnectionIds: [connAD.id],
       });
       expect(resultB).toEqual({
         ready: true,
-        participatingConnectionIds: ["conn-B-D"],
+        participatingConnectionIds: [connBD.id],
       });
       expect(resultC).toEqual({
         ready: true,
-        participatingConnectionIds: ["conn-C-D"],
+        participatingConnectionIds: [connCD.id],
       });
     });
   });
 
-  // ============================================================
-  // D：lifecycle hooks（onTrigger / onComplete / onQueued）
-  // ============================================================
-  describe("D1: lifecycle hooks - onTrigger 只對參與的 connections 發出事件", () => {
+  describe("lifecycle hooks onTrigger 只對參與的 connections 發出事件", () => {
     it("run mode 單源觸發時，onTrigger 不應更新全域 connection 事件", () => {
-      const connAD = makeConnection({
-        id: "conn-A-D",
-        sourcePodId: SOURCE_POD_ID,
-      });
-      const connBD = makeConnection({
-        id: "conn-B-D",
-        sourcePodId: "source-pod-B",
-      });
-
-      vi.spyOn(connectionStore, "getById").mockImplementation(((
-        _cId: string,
-        id: string,
-      ) => {
-        if (id === "conn-A-D") return connAD;
-        if (id === "conn-B-D") return connBD;
-        return undefined;
-      }) as any);
+      const connAD = createDirectConnection({ sourcePodId: SOURCE_POD_ID });
+      createDirectConnection({ sourcePodId: "source-pod-B" });
 
       workflowDirectTriggerService.onTrigger({
         canvasId: CANVAS_ID,
@@ -173,38 +125,18 @@ describe("Direct Trigger Flow", () => {
         targetPodId: TARGET_POD_ID,
         summary: TEST_SUMMARY,
         isSummarized: true,
-        participatingConnectionIds: ["conn-A-D"],
+        participatingConnectionIds: [connAD.id],
         runContext: testRunContext,
       });
 
-      expect(workflowEventEmitter.emitDirectTriggered).not.toHaveBeenCalled();
+      expect(socketService.emitToCanvas).not.toHaveBeenCalled();
     });
   });
 
-  describe("D2-D3: lifecycle hooks - onComplete / onQueued 只對參與的 connections 作用", () => {
+  describe("lifecycle hooks onComplete / onQueued 只對參與的 connections 作用", () => {
     it("run mode onComplete 不應更新全域 connection 狀態或發出 complete 事件", () => {
-      const connAD = makeConnection({
-        id: "conn-A-D",
-        sourcePodId: SOURCE_POD_ID,
-      });
-      const connBD = makeConnection({
-        id: "conn-B-D",
-        sourcePodId: "source-pod-B",
-      });
-
-      vi.spyOn(connectionStore, "getById").mockImplementation(((
-        _cId: string,
-        id: string,
-      ) => {
-        if (id === "conn-A-D") return connAD;
-        if (id === "conn-B-D") return connBD;
-        return undefined;
-      }) as any);
-
-      const updateStatusSpy = vi.spyOn(
-        connectionStore,
-        "updateConnectionStatus",
-      );
+      const connAD = createDirectConnection({ sourcePodId: SOURCE_POD_ID });
+      const connBD = createDirectConnection({ sourcePodId: "source-pod-B" });
 
       workflowDirectTriggerService.onComplete(
         {
@@ -213,48 +145,24 @@ describe("Direct Trigger Flow", () => {
           sourcePodId: SOURCE_POD_ID,
           targetPodId: TARGET_POD_ID,
           triggerMode: "direct",
-          participatingConnectionIds: ["conn-A-D"],
+          participatingConnectionIds: [connAD.id],
           runContext: testRunContext,
         },
         true,
       );
 
-      expect(workflowEventEmitter.emitWorkflowComplete).not.toHaveBeenCalled();
-      expect(updateStatusSpy).not.toHaveBeenCalledWith(
-        CANVAS_ID,
-        "conn-A-D",
-        "idle",
-      );
-      expect(updateStatusSpy).not.toHaveBeenCalledWith(
-        CANVAS_ID,
-        "conn-B-D",
-        "idle",
-      );
+      expect(socketService.emitToCanvas).not.toHaveBeenCalled();
+      expect(
+        connectionStore.getById(CANVAS_ID, connAD.id)?.connectionStatus,
+      ).toBe("idle");
+      expect(
+        connectionStore.getById(CANVAS_ID, connBD.id)?.connectionStatus,
+      ).toBe("idle");
     });
 
     it("run mode onQueued 不應更新全域 connection 狀態或發出 queued 事件", () => {
-      const connAD = makeConnection({
-        id: "conn-A-D",
-        sourcePodId: SOURCE_POD_ID,
-      });
-      const connBD = makeConnection({
-        id: "conn-B-D",
-        sourcePodId: "source-pod-B",
-      });
-
-      vi.spyOn(connectionStore, "getById").mockImplementation(((
-        _cId: string,
-        id: string,
-      ) => {
-        if (id === "conn-A-D") return connAD;
-        if (id === "conn-B-D") return connBD;
-        return undefined;
-      }) as any);
-
-      const updateStatusSpy = vi.spyOn(
-        connectionStore,
-        "updateConnectionStatus",
-      );
+      const connAD = createDirectConnection({ sourcePodId: SOURCE_POD_ID });
+      const connBD = createDirectConnection({ sourcePodId: "source-pod-B" });
 
       workflowDirectTriggerService.onQueued({
         canvasId: CANVAS_ID,
@@ -264,37 +172,34 @@ describe("Direct Trigger Flow", () => {
         position: 1,
         queueSize: 1,
         triggerMode: "direct",
-        participatingConnectionIds: ["conn-A-D"],
+        participatingConnectionIds: [connAD.id],
         runContext: testRunContext,
       });
 
-      expect(updateStatusSpy).not.toHaveBeenCalledWith(
+      expect(socketService.emitToCanvas).not.toHaveBeenCalledWith(
         CANVAS_ID,
-        "conn-A-D",
-        "queued",
+        WebSocketResponseEvents.WORKFLOW_QUEUED,
+        expect.anything(),
       );
-      expect(updateStatusSpy).not.toHaveBeenCalledWith(
-        CANVAS_ID,
-        "conn-B-D",
-        "queued",
-      );
-      expect(workflowEventEmitter.emitWorkflowQueued).not.toHaveBeenCalled();
+      expect(
+        connectionStore.getById(CANVAS_ID, connAD.id)?.connectionStatus,
+      ).toBe("idle");
+      expect(
+        connectionStore.getById(CANVAS_ID, connBD.id)?.connectionStatus,
+      ).toBe("idle");
     });
   });
 
-  // ============================================================
-  // E：Direct deletion 不使用等待 resolver
-  // ============================================================
-  describe("E1: direct connection deletion", () => {
+  describe("direct connection deletion", () => {
     it("刪除 Direct 連線不應觸碰既有 auto multi-input pending state", () => {
-      const directConnection = makeConnection({
-        id: "conn-direct-delete",
+      const directConnection = createDirectConnection({
         sourcePodId: "source-pod-direct",
-        targetPodId: TARGET_POD_ID,
       });
-      const requiredAutoSourcePodIds = ["source-pod-auto-A", "source-pod-auto-B"];
+      const requiredAutoSourcePodIds = [
+        "source-pod-auto-A",
+        "source-pod-auto-B",
+      ];
 
-      pendingTargetStore.clearPendingTarget(TARGET_POD_ID);
       pendingTargetStore.recordSourceCompletion(
         TARGET_POD_ID,
         "source-pod-auto-A",
@@ -302,31 +207,16 @@ describe("Direct Trigger Flow", () => {
         requiredAutoSourcePodIds,
       );
 
-      vi.spyOn(connectionStore, "getById").mockReturnValue(directConnection);
-      const hasPendingSpy = vi.spyOn(pendingTargetStore, "hasPendingTarget");
-      const removeFromPendingSpy = vi.spyOn(
-        pendingTargetStore,
-        "removeSourceFromPending",
-      );
-      const clearSpy = vi.spyOn(pendingTargetStore, "clearPendingTarget");
-
       workflowStateService.handleConnectionDeletion(
         CANVAS_ID,
         directConnection.id,
       );
 
       const pending = pendingTargetStore.getPendingTarget(TARGET_POD_ID);
-      expect(hasPendingSpy).not.toHaveBeenCalled();
-      expect(removeFromPendingSpy).not.toHaveBeenCalled();
-      expect(clearSpy).not.toHaveBeenCalled();
       expect(pending?.requiredSourcePodIds).toEqual(requiredAutoSourcePodIds);
       expect(pending?.completedSources.get("source-pod-auto-A")).toBe(
         "Auto summary A",
       );
-
-      vi.mocked(clearSpy).mockRestore();
-      pendingTargetStore.clearPendingTarget(TARGET_POD_ID);
     });
   });
-
 });

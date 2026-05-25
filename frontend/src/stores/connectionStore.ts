@@ -41,6 +41,7 @@ import type {
   ConnectionListPayload,
   ConnectionListResultPayload,
   ConnectionUpdatePayload,
+  ConnectionPayloadItem,
 } from "@/types/websocket";
 
 import { castHandler, shouldUpdateConnection } from "./connectionStoreHelpers";
@@ -57,6 +58,43 @@ import {
 } from "./connectionPayloadMappers";
 
 type WorkflowHandlers = ReturnType<typeof createWorkflowEventHandlers>;
+type BranchSettingsPayload = {
+  switchToBranch: boolean;
+  label: string;
+  description: string;
+};
+type BranchDefaults = { provider: PodProvider; model: string };
+type BranchSettingsUpdates = Pick<
+  ConnectionUpdatePayload,
+  "triggerMode" | "label" | "description" | "branchProvider" | "branchModel"
+>;
+
+function shouldResolveBranchDefaultsForSettings(
+  payload: BranchSettingsPayload,
+  connection?: Connection,
+): boolean {
+  return payload.switchToBranch || !connection?.branchProvider;
+}
+
+function buildBranchSettingsUpdates(
+  payload: BranchSettingsPayload,
+  branchDefaults?: BranchDefaults,
+): BranchSettingsUpdates {
+  const updates: BranchSettingsUpdates = {
+    label: payload.label,
+    description: payload.description,
+  };
+
+  if (payload.switchToBranch) {
+    updates.triggerMode = "branch";
+  }
+  if (branchDefaults) {
+    updates.branchProvider = branchDefaults.provider;
+    updates.branchModel = branchDefaults.model;
+  }
+
+  return updates;
+}
 
 export const useConnectionStore = defineStore("connection", () => {
   const { executeAction } = useCanvasWebSocketAction();
@@ -106,16 +144,18 @@ export const useConnectionStore = defineStore("connection", () => {
     );
   });
 
-  const isSourcePod = computed(() => (podId: string): boolean => {
-    return !connections.value.some(
-      (connection) => connection.targetPodId === podId,
+  const targetPodIds = computed(() => {
+    return new Set(
+      connections.value.map((connection) => connection.targetPodId),
     );
   });
 
+  const isSourcePod = computed(() => (podId: string): boolean => {
+    return !targetPodIds.value.has(podId);
+  });
+
   const hasUpstreamConnections = computed(() => (podId: string): boolean => {
-    return connections.value.some(
-      (connection) => connection.targetPodId === podId,
-    );
+    return targetPodIds.value.has(podId);
   });
 
   const getBranchConnectionsBySourcePodId = computed(
@@ -298,7 +338,8 @@ export const useConnectionStore = defineStore("connection", () => {
       (sourcePod?.provider === "opencode" ? sourcePodModel : undefined) ??
       (sourcePod
         ? providerCapabilityStore.getDefaultModel(sourcePod.provider)
-        : undefined) ?? DEFAULT_SUMMARY_MODEL;
+        : undefined) ??
+      DEFAULT_SUMMARY_MODEL;
 
     const basePayload: {
       sourceAnchor: AnchorPosition;
@@ -458,12 +499,35 @@ export const useConnectionStore = defineStore("connection", () => {
 
     if (!result.success || !result.data.connection) return null;
 
+    const updatedConnections = syncConnectionUpdateResponse(result.data);
+    return (
+      updatedConnections.find((connection) => connection.id === connectionId) ??
+      null
+    );
+  }
+
+  function normalizeUpdatedConnection(
+    connection: ConnectionPayloadItem,
+  ): Connection {
     return normalizeConnection(
-      result.data.connection,
-      result.data.connection.sourcePodId
-        ? podStore.getPodById(result.data.connection.sourcePodId)?.provider
+      connection,
+      connection.sourcePodId
+        ? podStore.getPodById(connection.sourcePodId)?.provider
         : undefined,
     );
+  }
+
+  function syncConnectionUpdateResponse(
+    payload: ConnectionUpdatedPayload,
+  ): Connection[] {
+    const connectionPayloads = payload.connections?.length
+      ? payload.connections
+      : payload.connection
+        ? [payload.connection]
+        : [];
+
+    connectionPayloads.forEach(updateConnectionFromEvent);
+    return connectionPayloads.map(normalizeUpdatedConnection);
   }
 
   async function updateConnectionTriggerMode(
@@ -620,72 +684,63 @@ export const useConnectionStore = defineStore("connection", () => {
   async function updateConnectionBranchSettings(
     connectionId: string,
     sourcePodId: string,
-    payload: {
-      switchToBranch: boolean;
-      label: string;
-      description: string;
-    },
+    payload: BranchSettingsPayload,
   ): Promise<Connection | null> {
-    const labelResult = validateBranchLabel(
+    const validationErrorKey = validateBranchSettingsPayload(
       sourcePodId,
       connectionId,
-      payload.label,
+      payload,
     );
-    if (!labelResult.valid) {
+    if (validationErrorKey) {
       toast({
-        title: t(`store.connection.${labelResult.errorKey}`),
+        title: t(`store.connection.${validationErrorKey}`),
         duration: DEFAULT_TOAST_DURATION_MS,
         variant: "destructive",
       });
       return null;
-    }
-
-    const descResult = validateBranchDescription(payload.description);
-    if (!descResult.valid) {
-      toast({
-        title: t(`store.connection.${descResult.errorKey}`),
-        duration: DEFAULT_TOAST_DURATION_MS,
-        variant: "destructive",
-      });
-      return null;
-    }
-
-    const updates: Pick<
-      ConnectionUpdatePayload,
-      | "triggerMode"
-      | "label"
-      | "description"
-      | "branchProvider"
-      | "branchModel"
-    > = {
-      label: payload.label,
-      description: payload.description,
-    };
-    if (payload.switchToBranch) {
-      updates.triggerMode = "branch";
     }
 
     const connection = findConnectionById(connectionId);
-    if (payload.switchToBranch || !connection?.branchProvider) {
-      const branchDefaults = resolveBranchDefaultsFromSourcePod(sourcePodId);
-      if (!branchDefaults) {
+    let branchDefaults: BranchDefaults | undefined;
+    if (shouldResolveBranchDefaultsForSettings(payload, connection)) {
+      const resolvedDefaults = resolveBranchDefaultsFromSourcePod(sourcePodId);
+      if (!resolvedDefaults) {
         toast({
           title: t("canvas.connectionContextMenu.changeFailed"),
-          description: t("canvas.connectionContextMenu.branchModelChangeFailed"),
+          description: t(
+            "canvas.connectionContextMenu.branchModelChangeFailed",
+          ),
           duration: DEFAULT_TOAST_DURATION_MS,
           variant: "destructive",
         });
         return null;
       }
-      updates.branchProvider = branchDefaults.provider;
-      updates.branchModel = branchDefaults.model;
+      branchDefaults = resolvedDefaults;
     }
 
     return executeConnectionUpdate(
       connectionId,
-      updates,
+      buildBranchSettingsUpdates(payload, branchDefaults),
       t("store.connection.updateFailed"),
     );
+  }
+
+  function validateBranchSettingsPayload(
+    sourcePodId: string,
+    connectionId: string,
+    payload: BranchSettingsPayload,
+  ): string | null {
+    const labelResult = validateBranchLabel(
+      sourcePodId,
+      connectionId,
+      payload.label,
+    );
+    if (!labelResult.valid) return labelResult.errorKey;
+
+    const descResult = validateBranchDescription(payload.description);
+    if (!descResult.valid) return descResult.errorKey;
+
+    return null;
   }
 
   function resolveBranchDefaultsFromSourcePod(
@@ -707,50 +762,28 @@ export const useConnectionStore = defineStore("connection", () => {
     return { provider, model };
   }
 
-  /**
-   * 取得需要同步的 branch sibling connection ID 清單。
-   *
-   * 同一 sourcePodId 下所有 triggerMode='branch' 的連線共用一個決策模型，
-   * 因為後端 branchDecisionService 實際只用 branchConnections[0] 的 provider/model
-   * 做決策；UI 若讓各條獨立設定會與後端行為不一致。
-   * 故任一條被改動時，需同步寫入同 source 的所有 branch sibling 與目標連線本身。
-   */
-  function collectBranchSiblingIds(connectionId: string): string[] {
-    const target = connections.value.find((c) => c.id === connectionId);
-    if (!target) return [connectionId];
-
-    const ids = new Set<string>([connectionId]);
-    for (const c of connections.value) {
-      if (c.sourcePodId === target.sourcePodId && c.triggerMode === "branch") {
-        ids.add(c.id);
-      }
-    }
-    return Array.from(ids);
-  }
-
   async function executeBranchSiblingUpdates(
     connectionId: string,
     updates: Pick<ConnectionUpdatePayload, "branchProvider" | "branchModel">,
   ): Promise<Connection | null> {
-    const ids = collectBranchSiblingIds(connectionId);
-    const results = await Promise.all(
-      ids.map((id) =>
-        executeConnectionUpdate(id, updates, t("store.connection.updateFailed")),
-      ),
+    const result = await executeConnectionUpdate(
+      connectionId,
+      updates,
+      t("store.connection.updateFailed"),
     );
 
-    if (results.some((result) => result === null)) {
+    if (!result) {
       await loadConnectionsFromBackend();
       return null;
     }
 
-    return results.find((result) => result?.id === connectionId) ?? null;
+    return result;
   }
 
   /**
    * 同時更新 branchProvider 與 branchModel，確保單一 WS 請求送出，
    * 避免 provider/model 出現不一致的中間狀態。
-   * 同 sourcePod 下所有 branch sibling 一起同步（見 collectBranchSiblingIds 註解）。
+   * 同 sourcePod 下所有 branch sibling 由後端在同一個 transaction 內同步。
    */
   async function updateConnectionBranchProvider(
     connectionId: string,
@@ -765,7 +798,7 @@ export const useConnectionStore = defineStore("connection", () => {
 
   /**
    * 更新 branch model（不變更 provider）。
-   * 同 sourcePod 下所有 branch sibling 一起同步（見 collectBranchSiblingIds 註解）。
+   * 同 sourcePod 下所有 branch sibling 由後端在同一個 transaction 內同步。
    */
   async function updateConnectionBranchModel(
     connectionId: string,

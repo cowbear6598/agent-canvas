@@ -10,6 +10,7 @@ import type {
   WorkflowQueuedPayload,
   WorkflowQueueProcessedPayload,
 } from "../../types/index.js";
+import type { ClientSafeWorkflowError } from "./workflowClientError.js";
 
 class WorkflowEventEmitter {
   private emitWorkflowEvent(
@@ -26,7 +27,7 @@ class WorkflowEventEmitter {
     sourcePodId: string;
     targetPodId: string;
     success: boolean;
-    error?: string;
+    error?: ClientSafeWorkflowError;
     triggerMode: string;
   }): void {
     const { canvasId, connectionId, targetPodId, success, error, triggerMode } =
@@ -38,6 +39,7 @@ class WorkflowEventEmitter {
       targetPodId: string;
       success: boolean;
       error?: string;
+      errorCode?: ClientSafeWorkflowError["code"];
       triggerMode?: string;
     } = {
       canvasId,
@@ -48,7 +50,8 @@ class WorkflowEventEmitter {
     };
 
     if (error) {
-      payload.error = error;
+      payload.error = error.message;
+      payload.errorCode = error.code;
     }
 
     if (triggerMode) {
