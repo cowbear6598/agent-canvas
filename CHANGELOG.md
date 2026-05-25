@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.1.1] - 2026-05-26
+
+### 修正
+- 修正鎖定 Canvas、Pod 操作與密碼解鎖時的錯誤提示
+- 修正外掛管理與 Pod 操作可能出現重複 Toast 的問題
+- 強化 Canvas 事件與 WebSocket 錯誤翻譯的回歸測試
+- 修正 OpenCode disposable、分支決策失敗、alias 排序與 workflow 狀態回歸問題
+- 清理 SOAP 任務紀錄
+
 ## [2.1.0] - 2026-05-25
 
 ### 新增
