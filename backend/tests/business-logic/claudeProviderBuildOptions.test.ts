@@ -26,6 +26,7 @@ vi.mock("../../src/services/integration/index.js", () => ({
 vi.mock("../../src/services/integration/replyContextStore.js", () => ({
   replyContextStore: {
     get: vi.fn(),
+    dispose: vi.fn(),
   },
   buildReplyContextKey: vi.fn((runContext: any, podId: string) =>
     runContext ? `${runContext.runId}:${podId}` : podId,

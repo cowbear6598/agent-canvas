@@ -38,12 +38,14 @@ export class BaseBranchDecider implements BranchDecider {
   async decide(input: BranchDecisionInput): Promise<BranchDecisionOutput> {
     const {
       sourcePodName,
+      sourcePod,
       branches,
       persistedSummary,
       recentMessages,
       provider,
       model,
       workspacePath,
+      runContext,
       abortSignal,
     } = input;
 
@@ -72,6 +74,8 @@ export class BaseBranchDecider implements BranchDecider {
         systemPrompt,
         userMessage,
         workspacePath,
+        sourcePod,
+        runContext,
       });
       if (result.success) {
         rawResponse = result.content;
@@ -120,6 +124,8 @@ export class BaseBranchDecider implements BranchDecider {
         systemPrompt,
         userMessage,
         workspacePath,
+        sourcePod,
+        runContext,
       });
       if (retryResult.success) {
         retryRawResponse = retryResult.content;

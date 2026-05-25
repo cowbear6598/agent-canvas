@@ -6,6 +6,7 @@ import {
   mapConnectionUpdatedEventPayload,
   normalizeConnection,
   normalizeConnectionListPayload,
+  normalizeConnectionUpdateResponsePayload,
   normalizeCreatedConnectionEvent,
 } from "@/stores/connectionPayloadMappers";
 
@@ -164,6 +165,50 @@ describe("connectionPayloadMappers", () => {
 
       expect(mapped.summaryModel).toBe(DEFAULT_SUMMARY_MODEL);
       expect(mapped.summaryProvider).toBe("claude");
+    });
+
+    it("update response mapper 應優先使用 connections 陣列", () => {
+      const connection = {
+        id: "conn-1",
+        sourceAnchor: "bottom",
+        targetPodId: "pod-b",
+        targetAnchor: "top",
+      } satisfies ConnectionPayloadItem;
+
+      expect(
+        normalizeConnectionUpdateResponsePayload({
+          requestId: "request-1",
+          success: true,
+          connection: {
+            ...connection,
+            id: "single-conn",
+          },
+          connections: [connection],
+        }),
+      ).toEqual([connection]);
+    });
+
+    it("update response mapper 應支援單一 connection 與空回應", () => {
+      const connection = {
+        id: "conn-1",
+        sourceAnchor: "bottom",
+        targetPodId: "pod-b",
+        targetAnchor: "top",
+      } satisfies ConnectionPayloadItem;
+
+      expect(
+        normalizeConnectionUpdateResponsePayload({
+          requestId: "request-1",
+          success: true,
+          connection,
+        }),
+      ).toEqual([connection]);
+      expect(
+        normalizeConnectionUpdateResponsePayload({
+          requestId: "request-2",
+          success: true,
+        }),
+      ).toEqual([]);
     });
   });
 });

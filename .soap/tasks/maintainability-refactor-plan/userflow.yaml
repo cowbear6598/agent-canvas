@@ -1,0 +1,70 @@
+feature: maintainability-refactor-plan
+approved: true
+scenarios:
+  - id: F1
+    scenario: 維護者建立重構前的驗證防線
+    given:
+      - 維護者準備依照 review 結果整理專案維護性
+      - 專案已有前端與後端自動化驗證指令
+    when:
+      - 維護者先整理測試輸出的警告與錯誤處理方式
+      - 維護者確認後續重構能被現有驗證攔截
+    then:
+      - 後續重構不會因測試靜默吞掉錯誤而誤判通過
+      - 前端與後端都能保留既有使用行為
+
+  - id: F2
+    scenario: 維護者拆分前端入口協調邏輯
+    given:
+      - 使用者開啟 agent 畫布前端
+      - 前端目前由入口元件協調多個初始化流程
+    when:
+      - 維護者將資料載入流程抽成可測試的 composable
+      - 維護者將 WebSocket lifecycle 抽成可測試的 composable
+      - 維護者將 canvas session lifecycle 抽成可測試的 composable
+    then:
+      - 使用者進入畫布時仍可看到既有資料
+      - 使用者切換 canvas 時仍會載入對應 session
+      - WebSocket reconnect 後仍會維持既有同步行為
+
+  - id: F3
+    scenario: 維護者整理前端設定流程的副作用邊界
+    given:
+      - 使用者開啟全域設定或 Opencode 設定
+      - 設定畫面目前混合表單狀態與儲存副作用
+    when:
+      - 維護者將 provider 設定流程抽成 composable
+      - 維護者將 alias 編輯流程抽成 composable
+      - 維護者將全域設定表單流程抽成 composable
+    then:
+      - 使用者修改設定時仍會看到既有表單狀態
+      - 使用者儲存設定時仍會觸發既有儲存流程
+      - 設定相關邏輯能被更小範圍的測試覆蓋
+
+  - id: F4
+    scenario: 維護者整理前後端即時通訊 contract
+    given:
+      - 使用者在畫布上執行 agent 或查看執行狀態
+      - 前端透過 WebSocket 與後端交換事件
+    when:
+      - 維護者整理前端 response mapper 與 store normalizer
+      - 維護者整理後端 route 與 handler 的 contract manifest
+      - 維護者補上 contract introspection 測試
+    then:
+      - 使用者仍可正常送出畫布操作
+      - 使用者仍可看到 run 狀態更新
+      - 維護者能更容易確認前後端事件格式是否一致
+
+  - id: F5
+    scenario: 維護者拆分後端執行狀態與串流邊界
+    given:
+      - 使用者透過畫布啟動 agent run
+      - 後端目前集中處理 run 狀態與串流事件
+    when:
+      - 維護者將 run 狀態轉移抽成純邏輯
+      - 維護者將 streaming executor 的 lifecycle 或 dispatch 邊界切小
+      - 維護者保留 provider stream 主流程與 Goal gate 語意
+    then:
+      - 使用者啟動 run 後仍會得到既有狀態結果
+      - 串流事件仍會依既有順序被處理
+      - 後端核心流程能被更小範圍的單元測試覆蓋

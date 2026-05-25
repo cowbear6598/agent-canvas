@@ -5,7 +5,7 @@ import type { RunContext } from "../../types/run.js";
 import { runStore, TERMINAL_POD_STATUSES } from "../runStore.js";
 import { LazyInitializable } from "./lazyInitializable.js";
 import { buildRunQueueKey } from "./workflowHelpers.js";
-import { decideRunQueueSettlement } from "./workflowRunDecisions.js";
+import { decideRunQueueSettlement } from "./runStatusMachine.js";
 import { logger } from "../../utils/logger.js";
 
 const MAX_QUEUE_SIZE = 50;

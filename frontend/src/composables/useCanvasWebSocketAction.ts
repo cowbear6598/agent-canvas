@@ -1,14 +1,16 @@
 import { getActiveCanvasIdOrWarn } from "@/utils/canvasGuard";
 import { createWebSocketRequest } from "@/services/websocket";
 import type { WebSocketRequestConfig } from "@/services/websocket/createWebSocketRequest";
+import type { WebSocketActionResult } from "@/services/websocket/webSocketResponseMapper";
+import {
+  createCanvasScopedPayload,
+  createWebSocketActionFailure,
+  createWebSocketActionSuccess,
+} from "@/services/websocket/webSocketResponseMapper";
 import { useWebSocketErrorHandler } from "@/composables/useWebSocketErrorHandler";
 import { useToast } from "@/composables/useToast";
 import type { ToastCategory } from "@/composables/useToast";
 import { t } from "@/i18n";
-
-export type WebSocketActionResult<T> =
-  | { success: true; data: T }
-  | { success: false; error: string };
 
 export interface CanvasWebSocketActionOptions {
   errorCategory: ToastCategory;
@@ -38,13 +40,13 @@ export function useCanvasWebSocketAction(): {
   ): Promise<WebSocketActionResult<TResponse>> => {
     const canvasId = getActiveCanvasIdOrWarn("useCanvasWebSocketAction");
     if (!canvasId) {
-      return { success: false, error: t("composable.canvas.noActiveCanvas") };
+      return createWebSocketActionFailure(t("composable.canvas.noActiveCanvas"));
     }
 
-    const fullPayload = { ...config.payload, canvasId } as Omit<
-      TPayload,
-      "requestId"
-    >;
+    const fullPayload = createCanvasScopedPayload<TPayload>(
+      config.payload,
+      canvasId,
+    );
 
     let response: TResponse;
     try {
@@ -61,10 +63,10 @@ export function useCanvasWebSocketAction(): {
       if (!options.suppressErrorToast) {
         showErrorToast(options.errorCategory, options.errorAction);
       }
-      return { success: false, error: options.errorMessage };
+      return createWebSocketActionFailure(options.errorMessage);
     }
 
-    return { success: true, data: response };
+    return createWebSocketActionSuccess(response);
   };
 
   return { executeAction };

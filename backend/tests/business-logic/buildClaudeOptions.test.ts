@@ -56,6 +56,7 @@ vi.mock("../../src/services/integration/index.js", () => ({
 vi.mock("../../src/services/integration/replyContextStore.js", () => ({
   replyContextStore: {
     get: vi.fn().mockReturnValue(undefined),
+    dispose: vi.fn(),
   },
   buildReplyContextKey: vi.fn().mockReturnValue("key"),
 }));

@@ -1,40 +1,21 @@
-import type {
-  RunPodInstance,
-  RunPodInstanceStatus,
-  RunStatus,
-} from "../runStore.js";
-import {
-  IN_PROGRESS_STATUSES,
-  NEVER_TRIGGERED_STATUSES,
-  RUN_TERMINAL_STATUSES,
-  TERMINAL_POD_STATUSES,
-  TRIGGERABLE_STATUSES,
-} from "../runStore.js";
-import { isAllPathwaysSettled } from "../../utils/pathwayHelpers.js";
-
 export type SummaryFallbackDecision =
   | { kind: "summary" }
   | { kind: "fallback"; content: string }
   | { kind: "failed"; errorMessage: string };
 
-export type RunQueueSettlementDecision =
-  | "wait-for-active-stream"
-  | "empty"
-  | "process-next";
-
-export function isWorkflowTriggerEligible(
-  status: RunPodInstanceStatus,
-): boolean {
-  return TRIGGERABLE_STATUSES.has(status);
-}
-
-export function isTerminalPodStatus(status: RunPodInstanceStatus): boolean {
-  return TERMINAL_POD_STATUSES.has(status);
-}
-
-export function isTerminalRunStatus(status: RunStatus): boolean {
-  return RUN_TERMINAL_STATUSES.has(status);
-}
+export type WorkflowSummaryDecision =
+  | {
+      kind: "complete";
+      event: "summary-complete";
+      content: string;
+      isSummarized: boolean;
+      resolvedModel?: string;
+    }
+  | {
+      kind: "failed";
+      event: "summary-failed";
+      errorMessage: string;
+    };
 
 export function decideSummaryFallback(
   summarySucceeded: boolean,
@@ -46,72 +27,41 @@ export function decideSummaryFallback(
   return { kind: "failed", errorMessage };
 }
 
-export function decidePodStatusAfterTriggerSettlement(
-  instance: Pick<
-    RunPodInstance,
-    "status" | "autoPathwaySettled" | "directPathwaySettled"
-  >,
-  queueSize: number,
-): RunPodInstanceStatus | null {
-  if (
-    !isAllPathwaysSettled(
-      instance.autoPathwaySettled,
-      instance.directPathwaySettled,
-    )
-  ) {
-    return null;
-  }
-
-  if (NEVER_TRIGGERED_STATUSES.has(instance.status)) return null;
-  if (queueSize > 0) return null;
-  return "completed";
-}
-
-export function decidePodStatusAfterSkipSettlement(
-  instance: Pick<
-    RunPodInstance,
-    "status" | "autoPathwaySettled" | "directPathwaySettled"
-  >,
-): RunPodInstanceStatus | null {
-  if (
-    !isAllPathwaysSettled(
-      instance.autoPathwaySettled,
-      instance.directPathwaySettled,
-    )
-  ) {
-    return null;
-  }
-
-  return NEVER_TRIGGERED_STATUSES.has(instance.status)
-    ? "skipped"
-    : "completed";
-}
-
-export function decideRunTerminalStatus(
-  instances: Array<Pick<RunPodInstance, "status">>,
-): "completed" | "error" | null {
-  if (instances.length === 0) return null;
-
-  const allDone = instances.every(
-    (instance) =>
-      instance.status === "completed" || instance.status === "skipped",
-  );
-  if (allDone) return "completed";
-
-  const hasError = instances.some((instance) => instance.status === "error");
-  const hasInProgress = instances.some((instance) =>
-    IN_PROGRESS_STATUSES.has(instance.status),
+export function decideWorkflowSummary(
+  summarySucceeded: boolean,
+  summaryContent: string,
+  resolvedModel: string | undefined,
+  fallbackContent: string | null,
+  errorMessage: string,
+): WorkflowSummaryDecision {
+  const fallbackDecision = decideSummaryFallback(
+    summarySucceeded,
+    fallbackContent,
+    errorMessage,
   );
 
-  if (hasError && !hasInProgress) return "error";
-  return null;
-}
+  if (fallbackDecision.kind === "summary") {
+    return {
+      kind: "complete",
+      event: "summary-complete",
+      content: summaryContent,
+      isSummarized: true,
+      resolvedModel,
+    };
+  }
 
-export function decideRunQueueSettlement(
-  hasActiveStream: boolean,
-  queueSize: number,
-): RunQueueSettlementDecision {
-  if (hasActiveStream) return "wait-for-active-stream";
-  if (queueSize <= 0) return "empty";
-  return "process-next";
+  if (fallbackDecision.kind === "fallback") {
+    return {
+      kind: "complete",
+      event: "summary-complete",
+      content: fallbackDecision.content,
+      isSummarized: false,
+    };
+  }
+
+  return {
+    kind: "failed",
+    event: "summary-failed",
+    errorMessage: fallbackDecision.errorMessage,
+  };
 }

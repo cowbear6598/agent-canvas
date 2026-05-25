@@ -18,6 +18,7 @@ vi.mock("../../src/services/codex/codexService.js", () => ({
 
 vi.mock("../../src/services/provider/opencodeProvider.js", () => ({
   opencodeProvider: {
+    buildOptions: vi.fn(),
     chat: vi.fn(),
     metadata: {
       name: "opencode",
@@ -48,6 +49,8 @@ import { claudeService } from "../../src/services/claude/claudeService.js";
 import { codexService } from "../../src/services/codex/codexService.js";
 import { opencodeProvider } from "../../src/services/provider/opencodeProvider.js";
 import { closeDb, getStmts, initTestDb } from "../../src/database/index.js";
+import type { Pod } from "../../src/types/pod.js";
+import type { RunContext } from "../../src/types/run.js";
 
 /** 合法 Claude model */
 const VALID_CLAUDE_MODEL = "sonnet";
@@ -69,10 +72,43 @@ async function* opencodeTextEvents() {
   yield { type: "turn_complete" as const };
 }
 
+function makeSourcePod(overrides: Partial<Pod> = {}): Pod {
+  return {
+    id: "source-pod",
+    name: "Source Pod",
+    workspacePath: "/tmp/workspace",
+    x: 0,
+    y: 0,
+    rotation: 0,
+    sessionId: null,
+    mcpServerNames: [],
+    pluginIds: [],
+    provider: "opencode",
+    providerConfig: { model: "openai/gpt-4o" },
+    repositoryId: null,
+    ...overrides,
+  };
+}
+
+function makeRunContext(): RunContext {
+  return {
+    runId: "run-1",
+    canvasId: "canvas-1",
+    sourcePodId: "source-pod",
+  };
+}
+
 describe("disposableChatService", () => {
   beforeEach(() => {
     initTestDb();
     vi.clearAllMocks();
+    (opencodeProvider.buildOptions as ReturnType<typeof vi.fn>).mockResolvedValue({
+      providerID: "openai",
+      modelID: "gpt-4o",
+      mcpEntries: [],
+      hasGoalRuntime: false,
+      pluginCatalogText: "",
+    });
   });
 
   afterEach(() => {
@@ -297,6 +333,67 @@ describe("disposableChatService", () => {
     );
     expect(result.success).toBe(true);
     expect(result.resolvedModel).toBe("opencode/gpt-4o");
+  });
+
+  it("provider=opencode 且帶 sourcePod/runContext → 沿用 buildOptions 的 MCP context", async () => {
+    const sourcePod = makeSourcePod();
+    const runContext = makeRunContext();
+    const mcpEntries = [
+      {
+        name: "goal-runtime",
+        type: "stdio",
+        command: "bun",
+        args: ["run", "goal-runtime"],
+        env: {},
+      },
+    ];
+    (opencodeProvider.buildOptions as ReturnType<typeof vi.fn>).mockResolvedValue({
+      providerID: "openai",
+      modelID: "gpt-4o",
+      mcpEntries,
+      hasGoalRuntime: true,
+      pluginCatalogText: "Plugin catalog",
+      thinkingLevel: "high",
+      thinkingOptions: { effort: "high" },
+    });
+    (opencodeProvider.chat as ReturnType<typeof vi.fn>).mockReturnValue(
+      opencodeTextEvents(),
+    );
+
+    const result = await executeDisposableChat({
+      ...BASE_INPUT,
+      provider: "opencode",
+      model: "anthropic/claude-sonnet-4-5",
+      sourcePod,
+      runContext,
+    });
+
+    expect(opencodeProvider.buildOptions).toHaveBeenCalledWith(
+      sourcePod,
+      runContext,
+    );
+    expect(opencodeProvider.chat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        podId: "source-pod",
+        podName: "Source Pod",
+        runContext,
+        options: expect.objectContaining({
+          providerID: "anthropic",
+          modelID: "claude-sonnet-4-5",
+          mcpEntries,
+          hasGoalRuntime: true,
+          pluginCatalogText: "Plugin catalog",
+          systemPrompt: "system",
+          thinkingLevel: "high",
+          thinkingOptions: { effort: "high" },
+        }),
+      }),
+    );
+    expect(result).toEqual({
+      content: "opencode",
+      success: true,
+      resolvedModel: "anthropic/claude-sonnet-4-5",
+    });
   });
 
   it("provider=opencode 但 model 為空字串 → 回傳 success=false", async () => {

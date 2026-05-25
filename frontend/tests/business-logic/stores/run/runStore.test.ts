@@ -311,6 +311,15 @@ describe("runStore", () => {
 
       expect(store.runsById.size).toBe(1);
       expect(store.runsById.get("run-1")).toEqual(runs[0]);
+      expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestEvent: "run:load-history",
+          responseEvent: "run:history:result",
+          payload: {
+            canvasId: "canvas-1",
+          },
+        }),
+      );
     });
 
     it("無 activeCanvasId 時應 early return", async () => {
@@ -685,6 +694,16 @@ describe("runStore", () => {
       await store.deleteRun("run-1");
 
       expect(store.runsById.has("run-1")).toBe(false);
+      expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestEvent: "run:delete",
+          responseEvent: "run:deleted",
+          payload: {
+            canvasId: "canvas-1",
+            runId: "run-1",
+          },
+        }),
+      );
     });
 
     it("刪除失敗時不應提前移除 run", async () => {
@@ -813,9 +832,12 @@ describe("runStore", () => {
       });
       expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
         expect.objectContaining({
-          payload: expect.objectContaining({
+          payload: {
+            canvasId: "canvas-1",
+            runId: "run-1",
+            podId: "pod-1",
             limit: 50,
-          }),
+          },
         }),
       );
     });

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from "vue";
+import { onMounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,408 +24,57 @@ import {
   CollapsibleContent,
 } from "@/components/ui/collapsible";
 import { Loader2, Search, ChevronDown, Plus } from "lucide-vue-next";
-import * as opencodeApi from "@/services/opencodeApi";
-import type {
-  OpencodeProviderInfo,
-  OpencodeModelAlias,
-  OpencodeModelInfo,
-} from "@/types/opencode";
-import { useOpencodeAliasStore } from "@/stores/opencodeAliasStore";
-import { useToast } from "@/composables/useToast";
+import type { OpencodeModelAlias } from "@/types/opencode";
+import { useOpencodeProviderPanel } from "@/composables/settings/useOpencodeProviderPanel";
+import { useOpencodeAliasEditor } from "@/composables/settings/useOpencodeAliasEditor";
 import OpencodeAliasRow from "./OpencodeAliasRow.vue";
 import { VueDraggable } from "vue-draggable-plus";
 
 const { t } = useI18n();
-const opencodeAliasStore = useOpencodeAliasStore();
-const { toast } = useToast();
+const {
+  providers,
+  connected,
+  loadState,
+  providerSearch,
+  restarting,
+  connectedProviders,
+  sortedFilteredProviders,
+  loadFromBackend,
+  handleRestartOpencode,
+  isConnectedProvider,
+} = useOpencodeProviderPanel();
 
-// ── local state ──────────────────────────────────────────────────
-type LoadState = "loading" | "loaded" | "error";
-
-const providers = ref<OpencodeProviderInfo[]>([]);
-const connected = ref<string[]>([]);
-const loadState = ref<LoadState>("loading");
-
-/** Provider 清單搜尋字串（case-insensitive 比對 name/id） */
-const providerSearch = ref("");
-
-// ── alias 區塊狀態 ────────────────────────────────────────────────
-
-/** 目前編輯中的 alias id（全域唯一，一次只能編輯一筆） */
-const editingAliasId = ref<string | null>(null);
-
-/**
- * 每個 provider 的 draft row（尚未儲存至 API 的新增筆）
- * key = providerID, value = { modelID, alias }
- */
-interface DraftRow {
-  modelID: string;
-  alias: string;
-}
-const draftRows = ref<Record<string, DraftRow | null>>({});
-
-/** 每個 provider Card 是否展開（預設全部收合） */
-const expandedProviders = ref<Record<string, boolean>>({});
-
-/** VueDraggable v-model 用的本地可寫 alias 陣列，key = providerID */
-const aliasListsByProvider = ref<Record<string, OpencodeModelAlias[]>>({});
-
-const isProviderExpanded = (providerID: string): boolean =>
-  !!expandedProviders.value[providerID];
-
-const setProviderExpanded = (providerID: string, value: boolean): void => {
-  expandedProviders.value[providerID] = value;
-};
-
-/** 刪除確認 Dialog 狀態 */
-const deleteConfirmOpen = ref(false);
-const pendingDeleteId = ref<string | null>(null);
-const pendingDeleteAlias = ref<string>("");
-const savingDraftProviderIds = ref<Set<string>>(new Set());
-const refreshingAliasIds = ref<Set<string>>(new Set());
-
-const setSavingDraft = (providerID: string, saving: boolean): void => {
-  const next = new Set(savingDraftProviderIds.value);
-  if (saving) {
-    next.add(providerID);
-  } else {
-    next.delete(providerID);
-  }
-  savingDraftProviderIds.value = next;
-};
-
-const setRefreshingAlias = (aliasId: string, refreshing: boolean): void => {
-  const next = new Set(refreshingAliasIds.value);
-  if (refreshing) {
-    next.add(aliasId);
-  } else {
-    next.delete(aliasId);
-  }
-  refreshingAliasIds.value = next;
-};
-
-// ── 已連線的 provider 資訊 ────────────────────────────────────────
-
-const connectedProviders = computed<OpencodeProviderInfo[]>(() =>
-  providers.value.filter((p) => connected.value.includes(p.id)),
-);
-
-/** 依搜尋字串過濾後的 provider 清單，trim 後若為空則顯示全部 */
-const filteredProviders = computed<OpencodeProviderInfo[]>(() => {
-  const keyword = providerSearch.value.trim().toLowerCase();
-  if (keyword === "") return providers.value;
-  return providers.value.filter(
-    (p) =>
-      p.name.toLowerCase().includes(keyword) ||
-      p.id.toLowerCase().includes(keyword),
-  );
-});
-
-/** 依連線狀態分組排序：已連線排前，未連線排後；兩組內部維持原順序。
- *  使用 Set 將 connected 轉為 O(1) 查詢，一次 reduce 完成 partition。
- */
-const sortedFilteredProviders = computed<OpencodeProviderInfo[]>(() => {
-  const connectedSet = new Set(connected.value);
-  const groups = filteredProviders.value.reduce<{
-    connected: OpencodeProviderInfo[];
-    disconnected: OpencodeProviderInfo[];
-  }>(
-    (acc, p) => {
-      if (connectedSet.has(p.id)) {
-        acc.connected.push(p);
-      } else {
-        acc.disconnected.push(p);
-      }
-      return acc;
-    },
-    { connected: [], disconnected: [] },
-  );
-  return [...groups.connected, ...groups.disconnected];
-});
-
-const draftSelectableModelsByProvider = computed<
-  Record<string, OpencodeModelInfo[]>
->(() => {
-  const selectableModels: Record<string, OpencodeModelInfo[]> = {};
-
-  for (const provider of providers.value) {
-    const usedModelIDs = new Set(
-      opencodeAliasStore
-        .aliasesByProvider(provider.id)
-        .map((alias) => alias.modelID),
-    );
-    selectableModels[provider.id] = provider.models.filter(
-      (model) => !usedModelIDs.has(model.id),
-    );
-  }
-
-  return selectableModels;
-});
-
-const firstDraftSelectableModelIDByProvider = computed<Record<string, string>>(
-  () =>
-    Object.fromEntries(
-      providers.value.map((provider) => [
-        provider.id,
-        draftSelectableModelsByProvider.value[provider.id]?.[0]?.id ?? "",
-      ]),
-    ),
-);
-
-const editableSelectableModelsByAliasId = computed<
-  Record<string, OpencodeModelInfo[]>
->(() => {
-  const selectableModels: Record<string, OpencodeModelInfo[]> = {};
-
-  for (const provider of providers.value) {
-    const providerAliases = opencodeAliasStore.aliasesByProvider(provider.id);
-    if (providerAliases.length === 0) {
-      continue;
-    }
-
-    const usedModelIDs = new Set(
-      providerAliases.map((aliasItem) => aliasItem.modelID),
-    );
-
-    for (const aliasItem of providerAliases) {
-      const selectableModelIDs = new Set(usedModelIDs);
-      selectableModelIDs.delete(aliasItem.modelID);
-      selectableModels[aliasItem.id] = provider.models.filter(
-        (model) => !selectableModelIDs.has(model.id),
-      );
-    }
-  }
-
-  return selectableModels;
-});
-
-const aliasCountByProvider = computed<Record<string, number>>(() =>
-  Object.fromEntries(
-    providers.value.map((provider) => [
-      provider.id,
-      opencodeAliasStore.aliasesByProvider(provider.id).length,
-    ]),
-  ),
-);
-
-// ── 資料載入 ─────────────────────────────────────────────────────
-
-/**
- * 將 store 內指定 providerID 的 aliases 同步寫入本地可寫陣列，
- * 作為 VueDraggable v-model 的資料來源。
- */
-const syncAliasListsFromStore = (providerIDs: string[]): void => {
-  for (const id of providerIDs) {
-    aliasListsByProvider.value[id] = [...opencodeAliasStore.aliasesByProvider(id)];
-  }
-};
-
-const loadFromBackend = async (): Promise<void> => {
-  loadState.value = "loading";
-  try {
-    const result = await opencodeApi.listOpencodeProviders();
-    providers.value = result.all;
-    connected.value = result.connected;
-    loadState.value = "loaded";
-    syncAliasListsFromStore(result.connected);
-  } catch (err) {
-    console.error("[OpencodeSettingsPanel] loadFromBackend 失敗：", err);
-    loadState.value = "error";
-  }
-};
+const {
+  editingAliasId,
+  draftRows,
+  aliasListsByProvider,
+  deleteConfirmOpen,
+  pendingDeleteAlias,
+  savingDraftProviderIds,
+  refreshingAliasIds,
+  draftSelectableModelsByProvider,
+  firstDraftSelectableModelIDByProvider,
+  editableSelectableModelsByAliasId,
+  aliasCountByProvider,
+  isProviderExpanded,
+  setProviderExpanded,
+  handleAddClick,
+  handleDraftSave,
+  handleDraftCancel,
+  handleStartEdit,
+  handleCancelEdit,
+  handleEditSave,
+  handleRefreshPresets,
+  handleDeleteClick,
+  setDeleteConfirmOpen,
+  handleDeleteConfirm,
+  updateAliasListForProvider,
+  handleAliasReorder,
+} = useOpencodeAliasEditor({ providers, connected });
 
 onMounted(() => {
   loadFromBackend();
 });
-
-/** store 內 aliases 變動時，同步更新本地陣列 */
-watch(
-  () => opencodeAliasStore.aliases,
-  () => {
-    syncAliasListsFromStore(connected.value);
-  },
-);
-
-// ── alias CRUD handlers ───────────────────────────────────────────
-
-/** 點「新增 model」按鈕：先展開 Card，再建立 draft row */
-const handleAddClick = (providerID: string, firstModelID: string): void => {
-  setProviderExpanded(providerID, true);
-  draftRows.value = {
-    ...draftRows.value,
-    [providerID]: { modelID: firstModelID, alias: "" },
-  };
-};
-
-/** draft row 儲存 */
-const handleDraftSave = async (
-  providerID: string,
-  payload: { modelID: string; alias: string },
-): Promise<void> => {
-  // alias 唯一性檢查
-  const isUnique = opencodeAliasStore.isAliasUnique(providerID, payload.alias);
-  if (!isUnique) {
-    toast({
-      title: t("llmProvider.opencode.aliases.aliasDuplicateError"),
-      variant: "destructive",
-    });
-    return;
-  }
-
-  try {
-    setSavingDraft(providerID, true);
-    await opencodeAliasStore.addAlias({
-      providerID,
-      modelID: payload.modelID,
-      alias: payload.alias,
-    });
-    // 成功：移除 draft row
-    draftRows.value = { ...draftRows.value, [providerID]: null };
-  } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err);
-    toast({
-      title: t("llmProvider.opencode.aliases.actionFailed", { reason }),
-      variant: "destructive",
-    });
-    // draft row 保留，方便使用者重試
-  } finally {
-    setSavingDraft(providerID, false);
-  }
-};
-
-/** draft row 取消 */
-const handleDraftCancel = (providerID: string): void => {
-  draftRows.value = { ...draftRows.value, [providerID]: null };
-};
-
-/** 進入編輯態 */
-const handleStartEdit = (aliasId: string): void => {
-  editingAliasId.value = aliasId;
-};
-
-/** 取消編輯 */
-const handleCancelEdit = (): void => {
-  editingAliasId.value = null;
-};
-
-/** 儲存編輯 */
-const handleEditSave = async (
-  aliasId: string,
-  providerID: string,
-  payload: { modelID: string; alias: string },
-): Promise<void> => {
-  // alias 唯一性檢查（排除自身）
-  const isUnique = opencodeAliasStore.isAliasUnique(
-    providerID,
-    payload.alias,
-    aliasId,
-  );
-  if (!isUnique) {
-    toast({
-      title: t("llmProvider.opencode.aliases.aliasDuplicateError"),
-      variant: "destructive",
-    });
-    return; // 保留編輯態
-  }
-
-  try {
-    await opencodeAliasStore.editAlias({
-      id: aliasId,
-      modelID: payload.modelID,
-      alias: payload.alias,
-    });
-    editingAliasId.value = null;
-  } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err);
-    toast({
-      title: t("llmProvider.opencode.aliases.actionFailed", { reason }),
-      variant: "destructive",
-    });
-    // 保留編輯態，讓使用者重試
-  }
-};
-
-const handleRefreshPresets = async (aliasId: string): Promise<void> => {
-  try {
-    setRefreshingAlias(aliasId, true);
-    await opencodeAliasStore.refreshPresets(aliasId);
-    toast({ title: t("llmProvider.opencode.aliases.refreshSuccess") });
-  } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err);
-    toast({
-      title: t("llmProvider.opencode.aliases.refreshFailed", { reason }),
-      variant: "destructive",
-    });
-  } finally {
-    setRefreshingAlias(aliasId, false);
-  }
-};
-
-/** 點刪除按鈕：彈出確認 Dialog */
-const handleDeleteClick = (aliasId: string, aliasName: string): void => {
-  pendingDeleteId.value = aliasId;
-  pendingDeleteAlias.value = aliasName;
-  deleteConfirmOpen.value = true;
-};
-
-/** 確認刪除 */
-const handleDeleteConfirm = async (): Promise<void> => {
-  if (!pendingDeleteId.value) return;
-  const id = pendingDeleteId.value;
-  deleteConfirmOpen.value = false;
-
-  try {
-    await opencodeAliasStore.removeAlias(id);
-  } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err);
-    toast({
-      title: t("llmProvider.opencode.aliases.actionFailed", { reason }),
-      variant: "destructive",
-    });
-  } finally {
-    pendingDeleteId.value = null;
-    pendingDeleteAlias.value = "";
-  }
-};
-
-// ── 重新啟動 OpenCode ─────────────────────────────────────────────
-
-const restarting = ref(false);
-
-const handleRestartOpencode = async (): Promise<void> => {
-  restarting.value = true;
-  try {
-    await opencodeApi.restartOpencodeServer();
-    toast({ title: t("llmProvider.opencode.providerList.restartSuccess") });
-    await loadFromBackend();
-  } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err);
-    toast({
-      title: t("llmProvider.opencode.providerList.restartFailed", { reason }),
-      variant: "destructive",
-    });
-  } finally {
-    restarting.value = false;
-  }
-};
-
-// ── 拖曳重排 ──────────────────────────────────────────────────────
-
-/** VueDraggable @end：讀取本地陣列順序並呼叫 reorder API */
-const handleAliasReorder = async (providerID: string): Promise<void> => {
-  const ids = (aliasListsByProvider.value[providerID] ?? []).map((a) => a.id);
-  try {
-    await opencodeAliasStore.reorder(ids);
-  } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err);
-    toast({
-      title: t("llmProvider.opencode.aliases.actionFailed", { reason }),
-      variant: "destructive",
-    });
-    // 失敗時不手動還原本地陣列；store rethrow 後 aliases 未變動，
-    // watch 將在下一個 tick 把本地陣列同步回正確順序。
-  }
-};
 </script>
 
 <template>
@@ -579,7 +228,7 @@ const handleAliasReorder = async (providerID: string): Promise<void> => {
             class="flex flex-col gap-2"
             @update:model-value="
               (list: OpencodeModelAlias[]) =>
-                (aliasListsByProvider[provider.id] = list)
+                updateAliasListForProvider(provider.id, list)
             "
             @end="() => handleAliasReorder(provider.id)"
           >
@@ -686,13 +335,13 @@ const handleAliasReorder = async (providerID: string): Promise<void> => {
         v-for="provider in sortedFilteredProviders"
         :key="provider.id"
         class="flex items-center justify-between rounded-md border border-border p-3"
-        :class="{ 'opacity-50': !connected.includes(provider.id) }"
+        :class="{ 'opacity-50': !isConnectedProvider(provider.id) }"
       >
         <span class="text-sm font-medium">{{ provider.name }}</span>
 
         <!-- 已登入 badge -->
         <span
-          v-if="connected.includes(provider.id)"
+          v-if="isConnectedProvider(provider.id)"
           class="text-xs text-green-600 dark:text-green-400 font-medium"
         >
           {{ t("llmProvider.opencode.providerList.connected") }}
@@ -704,7 +353,7 @@ const handleAliasReorder = async (providerID: string): Promise<void> => {
   <!-- 刪除確認 Dialog -->
   <Dialog
     :open="deleteConfirmOpen"
-    @update:open="deleteConfirmOpen = false"
+    @update:open="setDeleteConfirmOpen"
   >
     <DialogContent class="max-w-sm">
       <DialogHeader>
@@ -722,7 +371,7 @@ const handleAliasReorder = async (providerID: string): Promise<void> => {
       <DialogFooter>
         <Button
           variant="outline"
-          @click="deleteConfirmOpen = false"
+          @click="setDeleteConfirmOpen(false)"
         >
           {{ t("common.cancel") }}
         </Button>

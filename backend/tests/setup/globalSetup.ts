@@ -30,6 +30,8 @@ beforeAll(async () => {
  * 在所有測試結束後執行一次（清理測試資料夾）
  */
 afterAll(async () => {
+  const { stopBackgroundTestTimers } = await import("./testResourceCleanup.js");
+  await stopBackgroundTestTimers();
   closeDb();
   await rm(AGENT_CANVAS_TEST_ROOT, { recursive: true, force: true });
 });

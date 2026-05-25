@@ -8,6 +8,7 @@ import {
   setupStoreTest,
   mockErrorSanitizerFactory,
 } from "@tests/helpers/testSetup";
+import { allowConsoleOutput } from "@tests/setup";
 import { setupTestPinia } from "@tests/helpers/mockStoreFactory";
 import {
   createMockCanvas,
@@ -398,6 +399,10 @@ describe("podStore", () => {
     });
 
     it("不合法 Pod 不應更新，應顯示 warning", () => {
+      allowConsoleOutput({
+        method: "warn",
+        messageIncludes: "[PodStore] updatePod 驗證失敗，已忽略更新",
+      });
       const store = usePodStore();
       const originalPod = createMockPod({
         id: "pod-1",
@@ -1176,6 +1181,10 @@ describe("podStore", () => {
     });
 
     it("非法 model 名稱應被拒絕，store state 不應被更新", () => {
+      allowConsoleOutput({
+        method: "warn",
+        messageIncludes: "[PodStore] model 不合法，已拒絕更新：evil model;rm",
+      });
       const store = usePodStore();
       const pod = createMockPod({
         id: "pod-1",
@@ -1197,6 +1206,10 @@ describe("podStore", () => {
     });
 
     it("空字串 model 應被拒絕，store state 不應被更新", () => {
+      allowConsoleOutput({
+        method: "warn",
+        messageIncludes: "[PodStore] model 不合法，已拒絕更新：",
+      });
       const store = usePodStore();
       const pod = createMockPod({
         id: "pod-1",

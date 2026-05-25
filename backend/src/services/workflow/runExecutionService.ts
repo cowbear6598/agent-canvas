@@ -16,11 +16,14 @@ import { isAutoTriggerable, buildRunQueueKey } from "./workflowHelpers.js";
 import { runQueueService } from "./runQueueService.js";
 import type { SettlementPathway } from "./types.js";
 import {
-  decidePodStatusAfterSkipSettlement,
+  decidePodStartStatus,
+  decidePodStatusAfterPathwaySettlement,
   decidePodStatusAfterTriggerSettlement,
   decideRunTerminalStatus,
   isTerminalPodStatus,
-} from "./workflowRunDecisions.js";
+  shouldIgnorePodStatusUpdateForRun,
+  shouldMarkRunCancelled,
+} from "./runStatusMachine.js";
 import type {
   RunContext,
   RunCreatedPayload,
@@ -119,15 +122,8 @@ export function settleInstanceIfUnreachable(
 
   if (!autoUnreachable && !directUnreachable) return false;
 
-  if (
-    isAllPathwaysSettled(
-      instance.autoPathwaySettled,
-      instance.directPathwaySettled,
-    )
-  ) {
-    const newStatus = NEVER_TRIGGERED_STATUSES.has(instance.status)
-      ? "skipped"
-      : "completed";
+  const newStatus = decidePodStatusAfterPathwaySettlement(instance);
+  if (newStatus) {
     runStore.updatePodInstanceStatus(instance.id, newStatus);
     instance.status = newStatus;
   }
@@ -380,10 +376,9 @@ class RunExecutionService {
       );
       return;
     }
-    if (isTerminalPodStatus(instance.status)) {
-      return;
-    }
-    this.updateAndEmitPodInstanceStatus(runContext, podId, "running");
+    const nextStatus = decidePodStartStatus(instance.status);
+    if (!nextStatus) return;
+    this.updateAndEmitPodInstanceStatus(runContext, podId, nextStatus);
   }
 
   private settlePathwayAndRefresh(
@@ -459,7 +454,7 @@ class RunExecutionService {
     );
     if (!updated) return;
 
-    const nextStatus = decidePodStatusAfterSkipSettlement(updated);
+    const nextStatus = decidePodStatusAfterPathwaySettlement(updated);
     if (!nextStatus) return;
 
     this.updateAndEmitPodInstanceStatus(runContext, podId, nextStatus, {
@@ -598,7 +593,7 @@ class RunExecutionService {
     // 只有 activeRunStreams 已不含此 runId（cancellation 已啟動）時，才 fallback 查 DB 確認。
     if (!this.activeRunStreams.has(runContext.runId)) {
       const run = runStore.getRun(runContext.runId);
-      if (!run || run.status === "cancelled") {
+      if (shouldIgnorePodStatusUpdateForRun(run)) {
         return;
       }
     }
@@ -840,7 +835,7 @@ class RunExecutionService {
     }
 
     // 步驟 2：標記 DB 終態，供 fallback DB 查詢使用。
-    if (run) {
+    if (shouldMarkRunCancelled(run)) {
       runStore.updateRunStatus(runId, "cancelled");
     }
 

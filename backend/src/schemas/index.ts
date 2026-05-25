@@ -17,6 +17,7 @@ export * from "./backupSchemas.js";
 export * from "./providerSchemas.js";
 export * from "./mcpSchemas.js";
 export * from "./opencodeSettingsSchemas.js";
+export * from "./serverEventManifest.js";
 
 /** 系統內部使用的 connectionId 常數（非真實 WebSocket 連線） */
 export const SystemConnectionIds = {

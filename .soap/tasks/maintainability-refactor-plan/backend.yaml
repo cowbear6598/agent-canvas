@@ -1,0 +1,175 @@
+feature: maintainability-refactor-plan
+side: backend
+approved: true
+phases:
+  - id: P1
+    title: 後端測試訊號防線
+    parallel: false
+    verification:
+      - cd backend && bun run style
+      - cd backend && bun run test
+    done: true
+    items:
+      - id: P1.A
+        title: Console capture 與 allowlist
+        tasks:
+          - id: P1.A.t1
+            text: 檢查 `backend/tests/setup/testConfig.ts` 目前覆寫 console warning/error 的方式，列出既有測試中需要保留的合法輸出來源
+            completed: true
+            last_files_changed:
+              - backend/tests/setup/testConfig.ts
+          - id: P1.A.t2
+            text: 在 `backend/tests/setup/testConfig.ts` 建立 console warning/error capture helper，讓未列入 allowlist 的輸出會造成測試失敗
+            completed: true
+            last_files_changed:
+              - backend/tests/setup/testConfig.ts
+          - id: P1.A.t3
+            text: 將需要預期 console warning/error 的測試改成明確 assertion 或加入具體 allowlist，移除全域靜默造成的誤判風險
+            completed: true
+            last_files_changed:
+              - backend/tests/setup/testConfig.ts
+          - id: P1.A.t4
+            text: 補上 console capture helper 的測試，確認未預期輸出會失敗，已列入 allowlist 的輸出會通過
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/consoleCapture.test.ts
+
+  - id: P2
+    title: REST 與 WebSocket contract 可觀測化
+    parallel: true
+    verification:
+      - cd backend && bun run style
+      - cd backend && bun run test
+    done: true
+    items:
+      - id: P2.A
+        title: REST route manifest
+        tasks:
+          - id: P2.A.t1
+            text: 檢查 `backend/src/api/apiRouter.ts` 中 route 註冊方式，整理 HTTP method、path、handler 名稱與 request/response schema 對應
+            completed: true
+            last_files_changed:
+              - backend/src/api/restRouteManifest.ts
+          - id: P2.A.t2
+            text: 新增 REST route manifest 匯出點，讓 `apiRouter.ts` 的實際註冊來源與測試可讀的 manifest 共用同一份 route 定義
+            completed: true
+            last_files_changed:
+              - backend/src/api/restRouteManifest.ts
+              - backend/src/api/apiRouter.ts
+          - id: P2.A.t3
+            text: 補上 REST route manifest introspection 測試，確認重要 route 的 method、path 與 handler 對應存在
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/restRouteManifest.test.ts
+      - id: P2.B
+        title: WebSocket handler 與 event manifest
+        tasks:
+          - id: P2.B.t1
+            text: 檢查 `backend/src/handlers/registry.ts`、`backend/src/services/eventRouter.ts` 與 `backend/src/schemas/events.ts` 的 event type、handler 與 schema 對應關係
+            completed: true
+            last_files_changed:
+              - backend/src/handlers/handlerGroups.ts
+              - backend/src/handlers/websocketHandlerManifest.ts
+          - id: P2.B.t2
+            text: 新增 WebSocket handler manifest 匯出點，集中描述 event type、handler 名稱與 request schema 的對應
+            completed: true
+            last_files_changed:
+              - backend/src/handlers/handlerGroups.ts
+              - backend/src/handlers/index.ts
+              - backend/src/handlers/websocketHandlerManifest.ts
+          - id: P2.B.t3
+            text: 新增 server event manifest 匯出點，集中描述後端會送出的 event type 與 schema 對應
+            completed: true
+            last_files_changed:
+              - backend/src/schemas/index.ts
+              - backend/src/schemas/serverEventManifest.ts
+          - id: P2.B.t4
+            text: 補上 WebSocket contract introspection 測試，確認 registry、event router 與 schema manifest 沒有缺漏或重複
+            completed: true
+            last_files_changed:
+              - backend/src/services/eventRouter.ts
+              - backend/tests/business-logic/websocketContractManifest.test.ts
+
+  - id: P3
+    title: Run 狀態機純化
+    parallel: false
+    verification:
+      - cd backend && bun run style
+      - cd backend && bun run test
+    done: true
+    items:
+      - id: P3.A
+        title: Run status decision
+        tasks:
+          - id: P3.A.t1
+            text: 檢查 `backend/src/services/workflow/runExecutionService.ts` 與 `backend/src/services/workflow/workflowRunDecisions.ts` 中 run 開始、完成、失敗、取消的狀態轉移規則
+            completed: true
+            last_files_changed:
+              - backend/src/services/workflow/runExecutionService.ts
+              - backend/src/services/workflow/workflowRunDecisions.ts
+          - id: P3.A.t2
+            text: 新增 `backend/src/services/workflow/runStatusMachine.ts`，集中定義 run 狀態轉移與 settlement decision 的純函式
+            completed: true
+            last_files_changed:
+              - backend/src/services/workflow/runStatusMachine.ts
+              - backend/src/services/workflow/workflowRunDecisions.ts
+          - id: P3.A.t3
+            text: 將 `runExecutionService.ts` 中可純化的狀態判斷改為呼叫 `runStatusMachine.ts`，保留既有資料存取與事件發布位置
+            completed: true
+            last_files_changed:
+              - backend/src/services/workflow/runExecutionService.ts
+              - backend/src/services/workflow/runQueueService.ts
+          - id: P3.A.t4
+            text: 補上 run status machine 單元測試，涵蓋正常完成、失敗、取消與既有 settlement decision 結果
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/runStatusMachine.test.ts
+      - id: P3.B
+        title: Workflow decision 邊界整理
+        tasks:
+          - id: P3.B.t1
+            text: 調整 `workflowRunDecisions.ts` 只保留 workflow 層級的 decision 組裝，將 run status 純邏輯交由 `runStatusMachine.ts`
+            completed: true
+            last_files_changed:
+              - backend/src/services/workflow/workflowRunDecisions.ts
+              - backend/src/services/workflow/workflowExecutionService.ts
+              - backend/src/services/workflow/runStatusMachine.ts
+          - id: P3.B.t2
+            text: 補上 workflow decision 測試，確認既有 workflow run 結果與事件觸發條件不因狀態機抽出而改變
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/workflowRunDecisions.test.ts
+
+  - id: P4
+    title: Streaming executor 輕量切邊
+    parallel: false
+    verification:
+      - cd backend && bun run style
+      - cd backend && bun run test
+    done: true
+    items:
+      - id: P4.A
+        title: Streaming lifecycle coordinator
+        tasks:
+          - id: P4.A.t1
+            text: 檢查 `backend/src/services/claude/streamingChatExecutor.ts` 與既有 `streamEventProcessor.ts` 的責任分布，標出 lifecycle、dispatch、persist 與 provider stream 主迴圈邊界
+            completed: true
+            last_files_changed:
+              - backend/src/services/claude/streamingChatExecutor.ts
+              - backend/src/services/claude/streamingLifecycleCoordinator.ts
+          - id: P4.A.t2
+            text: 新增 streaming lifecycle coordinator 或 dispatcher/persist helper，僅承接 provider stream 主迴圈以外的 lifecycle、dispatch 或 persist 協調責任
+            completed: true
+            last_files_changed:
+              - backend/src/services/claude/streamingLifecycleCoordinator.ts
+          - id: P4.A.t3
+            text: 調整 `streamingChatExecutor.ts` 使用新的輕量邊界，保留 provider stream 主流程與 Goal gate 判斷語意不變
+            completed: true
+            last_files_changed:
+              - backend/src/services/claude/streamingChatExecutor.ts
+              - backend/src/services/claude/streamingLifecycleCoordinator.ts
+          - id: P4.A.t4
+            text: 補上 streaming lifecycle 邊界測試，確認串流事件處理順序、persist 呼叫與既有 Goal gate 結果不變
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/streamingLifecycleCoordinator.test.ts

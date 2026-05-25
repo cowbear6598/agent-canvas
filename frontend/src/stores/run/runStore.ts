@@ -45,6 +45,11 @@ import {
   createAssistantMessageWithTool,
   toRunChatTimelineItem,
 } from "@/stores/run/runStoreHelpers";
+import { normalizeRunHistoryResponse } from "@/stores/run/runHistoryNormalizer";
+import {
+  buildCanvasCommandPayload,
+  buildCanvasPodCommandPayload,
+} from "@/stores/canvasScopedCommand";
 import { useToast } from "@/composables/useToast";
 import { t } from "@/i18n";
 import { logger } from "@/utils/logger";
@@ -209,11 +214,12 @@ export const useRunStore = defineStore("run", {
         >({
           requestEvent: WebSocketRequestEvents.RUN_LOAD_HISTORY,
           responseEvent: WebSocketResponseEvents.RUN_HISTORY_RESULT,
-          payload: { canvasId },
+          payload: buildCanvasCommandPayload(canvasId, {}),
         });
 
-        if (response.success && response.runs) {
-          this.runsById = new Map(response.runs.map((r) => [r.id, r]));
+        const normalizedRuns = normalizeRunHistoryResponse(response);
+        if (normalizedRuns) {
+          this.runsById = normalizedRuns;
         }
       } catch (e) {
         logger.error("[RunStore] 載入 Run 歷史失敗", e);
@@ -390,10 +396,7 @@ export const useRunStore = defineStore("run", {
         await createWebSocketRequest<RunDeletePayload, RunDeletedPayload>({
           requestEvent: WebSocketRequestEvents.RUN_DELETE,
           responseEvent: WebSocketResponseEvents.RUN_DELETED,
-          payload: {
-            canvasId,
-            runId,
-          },
+          payload: buildCanvasCommandPayload(canvasId, { runId }),
         });
 
         this.removeRun(runId);
@@ -440,12 +443,10 @@ export const useRunStore = defineStore("run", {
         >({
           requestEvent: WebSocketRequestEvents.RUN_LOAD_POD_MESSAGES,
           responseEvent: WebSocketResponseEvents.RUN_POD_MESSAGES_RESULT,
-          payload: {
-            canvasId,
+          payload: buildCanvasPodCommandPayload(canvasId, podId, {
             runId,
-            podId,
             limit: RUN_CHAT_PAGE_SIZE,
-          },
+          }),
         });
 
         if (response.success && response.timelineItems) {
@@ -504,13 +505,11 @@ export const useRunStore = defineStore("run", {
         >({
           requestEvent: WebSocketRequestEvents.RUN_LOAD_POD_MESSAGES,
           responseEvent: WebSocketResponseEvents.RUN_POD_MESSAGES_RESULT,
-          payload: {
-            canvasId,
+          payload: buildCanvasPodCommandPayload(canvasId, activeTarget.podId, {
             runId: activeTarget.runId,
-            podId: activeTarget.podId,
             limit: RUN_CHAT_PAGE_SIZE,
             cursor: this.activeRunChatPageInfo.nextCursor,
-          },
+          }),
         });
 
         if (

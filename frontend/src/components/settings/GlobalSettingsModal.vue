@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, computed } from "vue";
+import { watch } from "vue";
 import { useI18n } from "vue-i18n";
 import {
   Dialog,
@@ -23,17 +23,15 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import WarningBox from "@/components/ui/WarningBox.vue";
 import { Loader2 } from "lucide-vue-next";
-import { getConfig, updateConfig } from "@/services/configApi";
-import { updateWorkspacePassword } from "@/services/securityApi";
-import { triggerBackup } from "@/services/backupApi";
 import { TIMEZONE_OPTIONS } from "@/types";
 import { useToast } from "@/composables/useToast";
 import { useWebSocketErrorHandler } from "@/composables/useWebSocketErrorHandler";
 import { useConfigStore } from "@/stores/configStore";
 import { useSecurityStore } from "@/stores/securityStore";
-// 語系切換：重用 setLocale 統一處理持久化，不需要額外的 try-catch / fallback
 import { LOCALE_OPTIONS } from "@/constants/locale";
-import { i18n, setLocale } from "@/i18n";
+import { useGlobalSettingsForm } from "@/composables/useGlobalSettingsForm";
+import { useBackupSettingsForm } from "@/composables/useBackupSettingsForm";
+import { useWorkspacePasswordForm } from "@/composables/useWorkspacePasswordForm";
 interface Props {
   open: boolean;
 }
@@ -51,260 +49,91 @@ const { withErrorToast } = useWebSocketErrorHandler();
 const configStore = useConfigStore();
 const securityStore = useSecurityStore();
 
-const timezoneOffset = ref<string>("8");
-const isLoading = ref<boolean>(false);
-// 語系 ref：初值取自 i18n 實例，切換後透過 setLocale 即時生效並持久化
-const currentLocale = ref(i18n.global.locale.value);
-const isSaving = ref<boolean>(false);
-const loadFailed = ref<boolean>(false);
-
-const backupGitRemoteUrl = ref<string>("");
-const backupHour = ref<string>("03");
-const backupMinute = ref<string>("00");
-const backupEnabled = ref<boolean>(false);
-const isBackingUp = computed<boolean>(
-  () => configStore.backupStatus === "running",
-);
-const backupUrlError = ref<boolean>(false);
-const backupError = ref<string | null>(null);
-const workspaceCurrentPassword = ref<string>("");
-const workspaceNewPassword = ref<string>("");
-const workspaceSecurityError = ref<string | null>(null);
-const isUpdatingWorkspacePassword = ref<boolean>(false);
-
-const isBackupActionsDisabled = computed<boolean>(
-  () => !backupEnabled.value || backupGitRemoteUrl.value === "",
-);
-const canSetWorkspacePassword = computed<boolean>(
-  () =>
-    !isUpdatingWorkspacePassword.value &&
-    !securityStore.isPasswordTransportBlocked &&
-    workspaceNewPassword.value.trim() !== "",
-);
-const canRemoveWorkspacePassword = computed<boolean>(
-  () =>
-    !isUpdatingWorkspacePassword.value &&
-    !securityStore.isPasswordTransportBlocked &&
-    workspaceCurrentPassword.value.trim() !== "",
-);
-const canChangeWorkspacePassword = computed<boolean>(
-  () =>
-    !isUpdatingWorkspacePassword.value &&
-    !securityStore.isPasswordTransportBlocked &&
-    workspaceCurrentPassword.value.trim() !== "" &&
-    workspaceNewPassword.value.trim() !== "",
-);
-
 const hourOptions = Array.from({ length: 24 }, (_, i) =>
   String(i).padStart(2, "0"),
 );
 
 const minuteOptions = ["00", "15", "30", "45"];
 
-const loadConfig = async (): Promise<void> => {
-  isLoading.value = true;
-  loadFailed.value = false;
-  try {
-    const result = await withErrorToast(
-      getConfig(),
-      "Config",
-      t("settings.loadFailed"),
-      { swallow: true },
-    );
-    if (!result) {
-      loadFailed.value = true;
-      return;
-    }
-    if (result.timezoneOffset !== undefined) {
-      timezoneOffset.value = String(result.timezoneOffset);
-      configStore.setTimezoneOffset(result.timezoneOffset);
-    }
-    backupGitRemoteUrl.value = result.backupGitRemoteUrl ?? "";
-    backupEnabled.value = result.backupEnabled ?? false;
-    if (result.backupTime) {
-      const parts = result.backupTime.split(":");
-      backupHour.value = parts[0] ?? "03";
-      backupMinute.value = parts[1] ?? "00";
-    }
-    configStore.setBackupConfig({
-      gitRemoteUrl: backupGitRemoteUrl.value,
-      time: `${backupHour.value}:${backupMinute.value}`,
-      enabled: backupEnabled.value,
-    });
-  } finally {
-    isLoading.value = false;
-  }
-};
+const {
+  timezoneOffset,
+  currentLocale,
+  isLoading,
+  isSaving,
+  loadFailed,
+  loadConfig,
+  handleSave: saveGlobalSettings,
+} = useGlobalSettingsForm({
+  configStore,
+  t,
+  showSuccessToast,
+  withErrorToast,
+});
+
+const {
+  backupGitRemoteUrl,
+  backupHour,
+  backupMinute,
+  backupEnabled,
+  backupUrlError,
+  backupError,
+  isBackingUp,
+  isBackupActionsDisabled,
+  applyLoadedConfig,
+  validateBeforeSave,
+  buildSavePayload,
+  applySavedConfig,
+  handleBackupRemoteInput,
+  handleTriggerBackup,
+} = useBackupSettingsForm({
+  configStore,
+  t,
+});
+
+const {
+  workspaceCurrentPassword,
+  workspaceNewPassword,
+  workspaceSecurityError,
+  isUpdatingWorkspacePassword,
+  canSetWorkspacePassword,
+  canRemoveWorkspacePassword,
+  canChangeWorkspacePassword,
+  resetWorkspaceSecurityForm,
+  handleSetWorkspacePassword,
+  handleChangeWorkspacePassword,
+  handleRemoveWorkspacePassword,
+} = useWorkspacePasswordForm({
+  securityStore,
+  t,
+  showSuccessToast,
+});
 
 const handleSave = async (): Promise<void> => {
-  // 若備份已啟用但未填寫 Remote URL，阻擋儲存並顯示 inline 錯誤
-  if (backupEnabled.value && backupGitRemoteUrl.value.trim() === "") {
-    backupUrlError.value = true;
+  if (!validateBeforeSave()) {
     return;
   }
-  isSaving.value = true;
-  try {
-    // 關閉備份時，送出空字串；但先不修改 UI，等 API 成功後再更新
-    const urlToSend = backupEnabled.value ? backupGitRemoteUrl.value : "";
-    const tzOffset = Number(timezoneOffset.value);
-    const backupTime = `${backupHour.value}:${backupMinute.value}`;
-    const result = await withErrorToast(
-      updateConfig({
-        timezoneOffset: tzOffset,
-        backupGitRemoteUrl: urlToSend,
-        backupTime,
-        backupEnabled: backupEnabled.value,
-      }),
-      "Config",
-      t("settings.saveFailed"),
-      { swallow: true },
-    );
-    if (result) {
-      // API 成功後才更新 UI 狀態，避免失敗時 URL 被錯誤清空
-      backupGitRemoteUrl.value = urlToSend;
-      configStore.setTimezoneOffset(tzOffset);
-      configStore.setBackupConfig({
-        gitRemoteUrl: urlToSend,
-        time: backupTime,
-        enabled: backupEnabled.value,
-      });
-      showSuccessToast("Config", t("settings.saveSuccess"));
-      emit("update:open", false);
-    }
-  } finally {
-    isSaving.value = false;
-  }
+
+  await saveGlobalSettings({
+    backupPayload: buildSavePayload(),
+    onBackupSaved: applySavedConfig,
+    onSaved: () => emit("update:open", false),
+  });
 };
 
 const handleClose = (): void => {
   emit("update:open", false);
 };
 
-const handleTriggerBackup = async (): Promise<void> => {
-  backupError.value = null;
-  try {
-    await triggerBackup(backupGitRemoteUrl.value);
-    // 不跳 Toast；後端會推送 BACKUP_STARTED 事件，store 狀態自動更新
-  } catch (err) {
-    const message =
-      err instanceof Error ? err.message : t("settings.backup.backingUp");
-    backupError.value = message;
-  }
-};
-
-const resetWorkspaceSecurityForm = (): void => {
-  workspaceCurrentPassword.value = "";
-  workspaceNewPassword.value = "";
-  workspaceSecurityError.value = null;
-};
-
-const handleSetWorkspacePassword = async (): Promise<void> => {
-  if (!workspaceNewPassword.value.trim()) {
-    return;
-  }
-
-  isUpdatingWorkspacePassword.value = true;
-  workspaceSecurityError.value = null;
-
-  try {
-    const result = await updateWorkspacePassword({
-      action: "set",
-      newPassword: workspaceNewPassword.value,
-    });
-    securityStore.workspacePasswordEnabled =
-      result.hasWorkspacePassword ?? true;
-    showSuccessToast("Workspace", t("security.workspace.saved"));
-    resetWorkspaceSecurityForm();
-  } catch (error) {
-    workspaceSecurityError.value =
-      error instanceof Error ? error.message : t("settings.saveFailed");
-  } finally {
-    isUpdatingWorkspacePassword.value = false;
-  }
-};
-
-const handleChangeWorkspacePassword = async (): Promise<void> => {
-  if (
-    !workspaceCurrentPassword.value.trim() ||
-    !workspaceNewPassword.value.trim()
-  ) {
-    return;
-  }
-
-  isUpdatingWorkspacePassword.value = true;
-  workspaceSecurityError.value = null;
-
-  try {
-    const result = await updateWorkspacePassword({
-      action: "change",
-      currentPassword: workspaceCurrentPassword.value,
-      newPassword: workspaceNewPassword.value,
-    });
-    securityStore.workspacePasswordEnabled =
-      result.hasWorkspacePassword ?? true;
-    showSuccessToast("Workspace", t("security.workspace.updated"));
-    resetWorkspaceSecurityForm();
-  } catch (error) {
-    workspaceSecurityError.value =
-      error instanceof Error ? error.message : t("settings.saveFailed");
-  } finally {
-    isUpdatingWorkspacePassword.value = false;
-  }
-};
-
-const handleRemoveWorkspacePassword = async (): Promise<void> => {
-  if (!workspaceCurrentPassword.value.trim()) {
-    return;
-  }
-
-  isUpdatingWorkspacePassword.value = true;
-  workspaceSecurityError.value = null;
-
-  try {
-    const result = await updateWorkspacePassword({
-      action: "remove",
-      currentPassword: workspaceCurrentPassword.value,
-    });
-    securityStore.workspacePasswordEnabled =
-      result.hasWorkspacePassword ?? false;
-    showSuccessToast("Workspace", t("security.workspace.removed"));
-    resetWorkspaceSecurityForm();
-  } catch (error) {
-    workspaceSecurityError.value =
-      error instanceof Error ? error.message : t("settings.saveFailed");
-  } finally {
-    isUpdatingWorkspacePassword.value = false;
-  }
-};
-
 watch(
   () => props.open,
   (newVal) => {
     if (newVal) {
-      loadConfig();
+      loadConfig({ onLoaded: applyLoadedConfig });
       resetWorkspaceSecurityForm();
     }
   },
   { immediate: true },
 );
-
-// 排程備份失敗時同步顯示 inline 錯誤，補足 catch 只能捕捉手動觸發的情境
-watch(
-  () => ({
-    status: configStore.backupStatus,
-    error: configStore.lastBackupError,
-  }),
-  ({ status, error }) => {
-    if (status === "failed" && error) {
-      backupError.value = error;
-    } else if (status === "running") {
-      backupError.value = null;
-    }
-  },
-);
-
-// 語系切換即時生效：重用 setLocale 統一持久化，不新增額外邏輯
-watch(currentLocale, (next) => setLocale(next));
 </script>
 
 <template>
@@ -382,10 +211,7 @@ watch(currentLocale, (next) => setLocale(next));
                   backupUrlError ? 'border-destructive' : '',
                   isBackingUp ? 'pr-8' : '',
                 ]"
-                @input="
-                  backupUrlError = false;
-                  backupError = null;
-                "
+                @input="handleBackupRemoteInput"
               />
               <Loader2
                 v-if="isBackingUp"

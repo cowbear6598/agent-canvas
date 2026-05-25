@@ -1,0 +1,43 @@
+feature: project-maintainability-audit-2
+approved: true
+scenarios:
+  - id: F1
+    scenario: 開發者取得專案複雜度與可維護性 review 結果
+    given:
+      - 開發者想了解整個專案的維護風險
+      - 專案包含前端與後端程式碼
+    when:
+      - 開發者要求針對複雜度進行 review
+      - 開發者要求針對可維護性進行 review
+      - 開發者要求針對可讀性進行 review
+    then:
+      - review 結果指出高風險檔案與模組
+      - review 結果說明每個問題的具體原因
+      - review 結果提供可執行的改善方向
+
+  - id: F2
+    scenario: 開發者取得測試套件有效性 review 結果
+    given:
+      - 專案包含前端與後端測試
+      - 開發者想刪除或改寫低價值測試
+    when:
+      - 開發者要求檢查無用測試
+      - 開發者要求檢查純 UI 測試
+      - 開發者要求檢查無意義 mock 測試
+    then:
+      - review 結果列出低價值測試候選
+      - review 結果區分應保留的有效測試
+      - review 結果說明刪除或改寫測試的判準
+
+  - id: F3
+    scenario: 開發者依 review 結果安排後續修正
+    given:
+      - review 已完成
+      - review 結果包含程式碼問題與測試問題
+    when:
+      - 開發者閱讀 review 結果
+      - 開發者決定後續修正順序
+    then:
+      - 開發者能依風險排序處理問題
+      - 開發者能辨識哪些修正需要前端驗證
+      - 開發者能辨識哪些修正需要後端驗證

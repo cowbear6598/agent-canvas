@@ -8,7 +8,10 @@ import type {
 import type { PodProvider } from "@/types/pod";
 import { DEFAULT_SUMMARY_MODEL } from "@/types/config";
 import { normalizePodProvider } from "@/lib/providerOptions";
-import type { ConnectionPayloadItem } from "@/types/websocket";
+import type {
+  ConnectionPayloadItem,
+  ConnectionUpdatedPayload,
+} from "@/types/websocket";
 
 export interface RawConnection {
   id: string;
@@ -90,6 +93,14 @@ export function normalizeConnectionListPayload(
         : undefined,
     ),
   );
+}
+
+export function normalizeConnectionUpdateResponsePayload(
+  payload: ConnectionUpdatedPayload,
+): ConnectionPayloadItem[] {
+  if (payload.connections?.length) return payload.connections;
+  if (payload.connection) return [payload.connection];
+  return [];
 }
 
 export function normalizeCreatedConnectionEvent(

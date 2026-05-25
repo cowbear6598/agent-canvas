@@ -21,6 +21,10 @@ class EventRouter {
 		this.handlers.set(event, handler);
 	}
 
+	getRegisteredEvents(): string[] {
+		return [...this.handlers.keys()];
+	}
+
 	/**
 	 * 路由訊息到對應的處理器
 	 */

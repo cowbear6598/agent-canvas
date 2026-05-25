@@ -5,12 +5,158 @@ import { fileURLToPath } from "node:url";
 // 每個測試都會建立 socket 連線，導致 listeners 累積
 process.setMaxListeners(50);
 
-// 必須在最早期就執行
+type CapturedConsoleMethod = "warn" | "error";
+
+interface CapturedConsoleOutput {
+  method: CapturedConsoleMethod;
+  args: unknown[];
+  message: string;
+  testName?: string;
+}
+
+export interface ConsoleOutputAllowlistEntry {
+  method: CapturedConsoleMethod;
+  messageIncludes?: string;
+  messagePattern?: RegExp;
+  testNameIncludes?: string;
+}
+
+const formatConsoleArg = (arg: unknown): string => {
+  if (arg instanceof Error) {
+    return arg.stack ?? arg.message;
+  }
+
+  if (typeof arg === "string") {
+    return arg;
+  }
+
+  try {
+    return JSON.stringify(arg);
+  } catch {
+    return String(arg);
+  }
+};
+
+const formatConsoleMessage = (args: unknown[]): string =>
+  args.map(formatConsoleArg).join(" ");
+
+// 既有測試允許保留的合法 console warning/error 來源集中列在這裡。
+// 若新增預期輸出，請優先在測試中用 assertion 驗證；只有共用 helper 的背景輸出才加入 allowlist。
+const CONSOLE_OUTPUT_ALLOWLIST: ConsoleOutputAllowlistEntry[] = [
+  {
+    method: "error",
+    messageIncludes: "Failed to parse message:",
+  },
+];
+
+const capturedConsoleOutputs: CapturedConsoleOutput[] = [];
+const runtimeConsoleOutputAllowlist: ConsoleOutputAllowlistEntry[] = [];
+
+export function allowConsoleOutput(
+  entry: ConsoleOutputAllowlistEntry,
+): () => void {
+  runtimeConsoleOutputAllowlist.push(entry);
+  return () => {
+    const index = runtimeConsoleOutputAllowlist.indexOf(entry);
+    if (index >= 0) {
+      runtimeConsoleOutputAllowlist.splice(index, 1);
+    }
+  };
+}
+
+export function findUnexpectedConsoleOutputs(
+  outputs: CapturedConsoleOutput[],
+  allowlist: ConsoleOutputAllowlistEntry[],
+): CapturedConsoleOutput[] {
+  return outputs.filter(
+    (output) =>
+      !allowlist.some((entry) => {
+        if (entry.method !== output.method) {
+          return false;
+        }
+
+        if (
+          entry.messageIncludes !== undefined &&
+          !output.message.includes(entry.messageIncludes)
+        ) {
+          return false;
+        }
+
+        if (
+          entry.messagePattern !== undefined &&
+          !entry.messagePattern.test(output.message)
+        ) {
+          return false;
+        }
+
+        if (
+          entry.testNameIncludes !== undefined &&
+          !output.testName?.includes(entry.testNameIncludes)
+        ) {
+          return false;
+        }
+
+        return true;
+      }),
+  );
+}
+
+const recordConsoleOutput =
+  (method: CapturedConsoleMethod) =>
+  (...args: unknown[]): void => {
+    const testName = expect.getState().currentTestName;
+    capturedConsoleOutputs.push({
+      method,
+      args,
+      message: formatConsoleMessage(args),
+      testName,
+    });
+  };
+
+const assertNoUnexpectedConsoleOutput = (): void => {
+  const unexpected = findUnexpectedConsoleOutputs(capturedConsoleOutputs, [
+    ...CONSOLE_OUTPUT_ALLOWLIST,
+    ...runtimeConsoleOutputAllowlist,
+  ]);
+
+  if (unexpected.length === 0) {
+    return;
+  }
+
+  const details = unexpected
+    .map(
+      (output) =>
+        `[${output.method}] ${output.testName ?? "未知測試"}: ${output.message}`,
+    )
+    .join("\n");
+
+  throw new Error(`測試期間出現未預期的 console 輸出：\n${details}`);
+};
+
+// 必須在最早期就執行。warn/error 會被 capture，未列入 allowlist 會讓測試失敗。
 console.log = () => {};
-console.error = () => {};
-console.warn = () => {};
+console.error = recordConsoleOutput("error");
+console.warn = recordConsoleOutput("warn");
 console.info = () => {};
 console.debug = () => {};
+
+beforeEach(() => {
+  capturedConsoleOutputs.length = 0;
+  runtimeConsoleOutputAllowlist.length = 0;
+  console.error = recordConsoleOutput("error");
+  console.warn = recordConsoleOutput("warn");
+});
+
+afterEach(() => {
+  try {
+    assertNoUnexpectedConsoleOutput();
+  } finally {
+    capturedConsoleOutputs.length = 0;
+    runtimeConsoleOutputAllowlist.length = 0;
+    console.error = recordConsoleOutput("error");
+    console.warn = recordConsoleOutput("warn");
+  }
+});
 
 // 必須在任何可能使用 logger 的模組載入之前執行
 // 透過 importOriginal 保留真實模組的所有 named export（例如純函式 sanitizeSensitiveInfo），

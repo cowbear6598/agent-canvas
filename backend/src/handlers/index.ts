@@ -1,42 +1,14 @@
 import { HandlerRegistry } from "./registry.js";
-import { podHandlerGroup } from "./groups/podHandlerGroup.js";
-import { chatHandlerGroup } from "./groups/chatHandlerGroup.js";
-import { connectionHandlerGroup } from "./groups/connectionHandlerGroup.js";
-import { pasteHandlerGroup } from "./groups/pasteHandlerGroup.js";
-import { repositoryHandlerGroup } from "./groups/repositoryHandlerGroup.js";
-import { canvasHandlerGroup } from "./groups/canvasHandlerGroup.js";
-import { canvasSecurityHandlerGroup } from "./groups/canvasSecurityHandlerGroup.js";
-import { cursorHandlerGroup } from "./groups/cursorHandlerGroup.js";
-import { configHandlerGroup } from "./groups/configHandlerGroup.js";
-import { authHandlerGroup } from "./groups/authHandlerGroup.js";
-import { integrationHandlerGroup } from "./groups/integrationHandlerGroup.js";
-import { runHandlerGroup } from "./groups/runHandlerGroup.js";
-import { pluginHandlerGroup } from "./groups/pluginHandlerGroup.js";
-import { backupHandlerGroup } from "./groups/backupHandlerGroup.js";
-import { providerHandlerGroup } from "./groups/providerHandlerGroup.js";
-import { mcpHandlerGroup } from "./groups/mcpHandlerGroup.js";
-import { opencodeSettingsHandlerGroup } from "./groups/opencodeSettingsHandlerGroup.js";
+import { allHandlerGroups } from "./handlerGroups.js";
 
 const registry = new HandlerRegistry();
 
-registry.registerGroup(podHandlerGroup);
-registry.registerGroup(chatHandlerGroup);
-registry.registerGroup(connectionHandlerGroup);
-registry.registerGroup(pasteHandlerGroup);
-registry.registerGroup(repositoryHandlerGroup);
-registry.registerGroup(canvasHandlerGroup);
-registry.registerGroup(canvasSecurityHandlerGroup);
-registry.registerGroup(cursorHandlerGroup);
-registry.registerGroup(configHandlerGroup);
-registry.registerGroup(authHandlerGroup);
-registry.registerGroup(integrationHandlerGroup);
-registry.registerGroup(runHandlerGroup);
-registry.registerGroup(pluginHandlerGroup);
-registry.registerGroup(backupHandlerGroup);
-registry.registerGroup(providerHandlerGroup);
-registry.registerGroup(mcpHandlerGroup);
-registry.registerGroup(opencodeSettingsHandlerGroup);
+for (const group of allHandlerGroups) {
+  registry.registerGroup(group);
+}
 
 export function registerAllHandlers(): void {
   registry.registerToRouter();
 }
+
+export { allHandlerGroups } from "./handlerGroups.js";

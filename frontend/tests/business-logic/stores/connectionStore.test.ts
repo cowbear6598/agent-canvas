@@ -5,6 +5,7 @@ import {
   mockWebSocketClient,
 } from "@tests/helpers/mockWebSocket";
 import { setupStoreTest } from "@tests/helpers/testSetup";
+import { allowConsoleOutput } from "@tests/setup";
 import { createMockConnection, createMockPod } from "@tests/helpers/factories";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useCanvasStore } from "@/stores/canvasStore";
@@ -141,6 +142,10 @@ describe("connectionStore", () => {
     });
 
     it("自我連接時應回傳 null", async () => {
+      allowConsoleOutput({
+        method: "warn",
+        messageIncludes: "[ConnectionStore] 無法將 Pod 連接到自身",
+      });
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
       const store = useConnectionStore();
@@ -1288,6 +1293,10 @@ describe("connectionStore", () => {
     });
 
     it("無 activeCanvasId 時不應載入", async () => {
+      allowConsoleOutput({
+        method: "warn",
+        messageIncludes: "[ConnectionStore] 沒有啟用的畫布",
+      });
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = null;
       const store = useConnectionStore();

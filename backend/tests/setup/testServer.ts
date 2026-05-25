@@ -93,11 +93,15 @@ export async function createTestServer(): Promise<TestServerInstance> {
     await import("../../src/schemas/index.js");
   const { handshakeAuthService } =
     await import("../../src/services/auth/handshakeAuthService.js");
+  const { stopBackgroundTestTimers } = await import("./testResourceCleanup.js");
 
   const result = await startupService.initialize();
   if (!result.success) {
     throw new Error(`Failed to initialize test server: ${result.error}`);
   }
+  // 測試 server 只需要初始化資料與 handler；背景排程會跨測試讀寫 DB，
+  // 在其他測試重置/關閉 DB 時造成非預期的 SQLite I/O error。
+  await stopBackgroundTestTimers();
 
   const canvases = canvasStore.list();
   const defaultCanvas = canvases[0];

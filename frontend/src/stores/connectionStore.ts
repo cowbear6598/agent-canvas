@@ -54,8 +54,10 @@ import {
   mapConnectionUpdatedEventPayload,
   normalizeConnection,
   normalizeConnectionListPayload,
+  normalizeConnectionUpdateResponsePayload,
   normalizeCreatedConnectionEvent,
 } from "./connectionPayloadMappers";
+import { buildCanvasCommandPayload } from "./canvasScopedCommand";
 
 type WorkflowHandlers = ReturnType<typeof createWorkflowEventHandlers>;
 type BranchSettingsPayload = {
@@ -273,9 +275,7 @@ export const useConnectionStore = defineStore("connection", () => {
     >({
       requestEvent: WebSocketRequestEvents.CONNECTION_LIST,
       responseEvent: WebSocketResponseEvents.CONNECTION_LIST_RESULT,
-      payload: {
-        canvasId,
-      },
+      payload: buildCanvasCommandPayload(canvasId, {}),
     });
 
     if (response.connections) {
@@ -520,11 +520,7 @@ export const useConnectionStore = defineStore("connection", () => {
   function syncConnectionUpdateResponse(
     payload: ConnectionUpdatedPayload,
   ): Connection[] {
-    const connectionPayloads = payload.connections?.length
-      ? payload.connections
-      : payload.connection
-        ? [payload.connection]
-        : [];
+    const connectionPayloads = normalizeConnectionUpdateResponsePayload(payload);
 
     connectionPayloads.forEach(updateConnectionFromEvent);
     return connectionPayloads.map(normalizeUpdatedConnection);

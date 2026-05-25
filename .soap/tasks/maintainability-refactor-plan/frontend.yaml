@@ -1,0 +1,228 @@
+feature: maintainability-refactor-plan
+side: frontend
+approved: true
+phases:
+  - id: P1
+    title: 入口協調邏輯拆分
+    parallel: false
+    verification:
+      - cd frontend && bun run style
+      - cd frontend && bun run test:run
+    done: true
+    items:
+      - id: P1.A
+        title: App bootstrap composable
+        tasks:
+          - id: P1.A.t1
+            text: 梳理 `frontend/src/App.vue` 目前負責的初始化流程，列出資料載入、canvas reset/load、session 初始化與畫面 gate 的現有責任邊界
+            completed: true
+            last_files_changed:
+              - frontend/src/composables/useAppBootstrap.ts
+          - id: P1.A.t2
+            text: 新增 `frontend/src/composables/useAppBootstrap.ts`，承接 App 啟動時的使用者資料、專案資料與全域設定載入流程
+            completed: true
+            last_files_changed:
+              - frontend/src/composables/useAppBootstrap.ts
+          - id: P1.A.t3
+            text: 將 `App.vue` 中對應的 bootstrap 呼叫改為使用 `useAppBootstrap` 回傳的狀態與操作，保留既有 template gate 行為
+            completed: true
+            last_files_changed:
+              - frontend/src/App.vue
+              - frontend/src/composables/useAppBootstrap.ts
+          - id: P1.A.t4
+            text: 新增或調整 `frontend/src/__tests__` 中涵蓋 app bootstrap 成功載入與載入中狀態的測試，mock 邊界只使用既有 store 或專案 wrapper
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/composables/useAppBootstrap.test.ts
+      - id: P1.B
+        title: Socket 與 canvas session lifecycle
+        tasks:
+          - id: P1.B.t1
+            text: 新增 `frontend/src/composables/useAppSocketLifecycle.ts`，承接 WebSocket 連線、reconnect listener 與清理流程
+            completed: true
+            last_files_changed:
+              - frontend/src/composables/useAppSocketLifecycle.ts
+          - id: P1.B.t2
+            text: 新增 `frontend/src/composables/useCanvasSessionLifecycle.ts`，承接 canvas 切換時的 session reset、load 與 run 狀態重新同步流程
+            completed: true
+            last_files_changed:
+              - frontend/src/composables/useCanvasSessionLifecycle.ts
+          - id: P1.B.t3
+            text: 將 `App.vue` 中 socket lifecycle 與 canvas session lifecycle 改為呼叫對應 composable，讓 `App.vue` 僅保留組裝與 template
+            completed: true
+            last_files_changed:
+              - frontend/src/App.vue
+          - id: P1.B.t4
+            text: 補上 socket reconnect 與 canvas 切換流程測試，確認使用者切換 canvas 後仍會載入對應 session 並維持既有同步行為
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/composables/useAppSocketLifecycle.test.ts
+              - frontend/tests/business-logic/composables/useCanvasSessionLifecycle.test.ts
+
+  - id: P2
+    title: 設定畫面副作用邊界
+    parallel: true
+    verification:
+      - cd frontend && bun run style
+      - cd frontend && bun run test:run
+    done: true
+    items:
+      - id: P2.A
+        title: Opencode 設定流程
+        tasks:
+          - id: P2.A.t1
+            text: 從 `frontend/src/components/settings/OpencodeSettingsPanel.vue` 抽出 `useOpencodeProviderPanel`，集中管理 provider 清單、目前選取 provider 與儲存流程
+            completed: true
+            last_files_changed:
+              - frontend/src/composables/settings/useOpencodeProviderPanel.ts
+              - frontend/src/components/settings/OpencodeSettingsPanel.vue
+              - frontend/tests/business-logic/composables/settings/useOpencodeProviderPanel.test.ts
+          - id: P2.A.t2
+            text: 從 `OpencodeSettingsPanel.vue` 抽出 `useOpencodeAliasEditor`，集中管理 alias 新增、編輯、刪除與表單狀態
+            completed: true
+            last_files_changed:
+              - frontend/src/composables/settings/useOpencodeAliasEditor.ts
+              - frontend/src/components/settings/OpencodeSettingsPanel.vue
+              - frontend/tests/business-logic/composables/settings/useOpencodeAliasEditor.test.ts
+          - id: P2.A.t3
+            text: 調整 `OpencodeSettingsPanel.vue` template 與事件綁定，使元件只負責渲染與呼叫 composable 暴露的明確操作
+            completed: true
+            last_files_changed:
+              - frontend/src/components/settings/OpencodeSettingsPanel.vue
+              - frontend/src/composables/settings/useOpencodeProviderPanel.ts
+              - frontend/src/composables/settings/useOpencodeAliasEditor.ts
+          - id: P2.A.t4
+            text: 補上 Opencode provider 與 alias 編輯流程測試，確認使用者修改設定與儲存時仍走既有 API/store 流程
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/composables/settings/useOpencodeProviderPanel.test.ts
+              - frontend/tests/business-logic/composables/settings/useOpencodeAliasEditor.test.ts
+      - id: P2.B
+        title: 全域設定流程
+        tasks:
+          - id: P2.B.t1
+            text: 從 `frontend/src/components/settings/GlobalSettingsModal.vue` 抽出 `useGlobalSettingsForm`，集中管理全域設定表單狀態、dirty 狀態與儲存操作
+            completed: true
+            last_files_changed:
+              - frontend/src/composables/useGlobalSettingsForm.ts
+              - frontend/src/components/settings/GlobalSettingsModal.vue
+          - id: P2.B.t2
+            text: 從 `GlobalSettingsModal.vue` 抽出 `useBackupSettingsForm`，集中管理備份設定載入、更新與使用者觸發的保存流程
+            completed: true
+            last_files_changed:
+              - frontend/src/composables/useBackupSettingsForm.ts
+              - frontend/src/components/settings/GlobalSettingsModal.vue
+          - id: P2.B.t3
+            text: 從 `GlobalSettingsModal.vue` 抽出 `useWorkspacePasswordForm`，集中管理 workspace 密碼欄位狀態與提交流程
+            completed: true
+            last_files_changed:
+              - frontend/src/composables/useWorkspacePasswordForm.ts
+              - frontend/src/components/settings/GlobalSettingsModal.vue
+          - id: P2.B.t4
+            text: 補上全域設定、備份設定與 workspace 密碼表單流程測試，確認既有表單狀態與儲存結果不變
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/composables/useGlobalSettingsForm.test.ts
+              - frontend/tests/business-logic/composables/useBackupSettingsForm.test.ts
+              - frontend/tests/business-logic/composables/useWorkspacePasswordForm.test.ts
+
+  - id: P3
+    title: 前端 contract mapper 收斂
+    parallel: true
+    verification:
+      - cd frontend && bun run style
+      - cd frontend && bun run test:run
+    done: true
+    items:
+      - id: P3.A
+        title: WebSocket response mapper
+        tasks:
+          - id: P3.A.t1
+            text: 檢查 `frontend/src/composables/createWebSocketRequest.ts` 與 `frontend/src/composables/useCanvasWebSocketAction.ts` 中重複的 response shape 判斷
+            completed: true
+            last_files_changed:
+              - frontend/src/services/websocket/createWebSocketRequest.ts
+              - frontend/src/composables/useCanvasWebSocketAction.ts
+          - id: P3.A.t2
+            text: 新增前端 WebSocket response mapper 模組，集中定義成功、失敗與 request id 對應的解析結果
+            completed: true
+            last_files_changed:
+              - frontend/src/services/websocket/webSocketResponseMapper.ts
+              - frontend/src/services/websocket/index.ts
+          - id: P3.A.t3
+            text: 將 `createWebSocketRequest.ts` 與 `useCanvasWebSocketAction.ts` 改為使用 response mapper，移除重複的 response 判斷邏輯
+            completed: true
+            last_files_changed:
+              - frontend/src/services/websocket/createWebSocketRequest.ts
+              - frontend/src/composables/useCanvasWebSocketAction.ts
+          - id: P3.A.t4
+            text: 補上 response mapper 測試，確認既有成功與失敗 response 會轉成相同的前端結果
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/composables/websocket/webSocketResponseMapper.test.ts
+      - id: P3.B
+        title: Store normalizer 與 canvas command
+        tasks:
+          - id: P3.B.t1
+            text: 檢查 `frontend/src/stores/connectionStore.ts` 與 `frontend/src/stores/runStore.ts` 中 run history 與 connection response 的資料整理邏輯
+            completed: true
+            last_files_changed:
+              - frontend/src/stores/connectionStore.ts
+              - frontend/src/stores/run/runStore.ts
+              - frontend/src/stores/connectionPayloadMappers.ts
+          - id: P3.B.t2
+            text: 新增 run history normalizer，集中轉換後端 run history response 成前端 store 使用的資料結構
+            completed: true
+            last_files_changed:
+              - frontend/src/stores/run/runHistoryNormalizer.ts
+              - frontend/src/stores/run/runStore.ts
+              - frontend/tests/business-logic/stores/run/runHistoryNormalizer.test.ts
+          - id: P3.B.t3
+            text: 新增 canvas-scoped command helper，集中組裝 canvas id、pod id 與 command payload，供既有 store 或 composable 呼叫
+            completed: true
+            last_files_changed:
+              - frontend/src/stores/canvasScopedCommand.ts
+              - frontend/src/stores/connectionStore.ts
+              - frontend/src/stores/run/runStore.ts
+              - frontend/tests/business-logic/stores/canvasScopedCommand.test.ts
+          - id: P3.B.t4
+            text: 調整 connection store 與 run store 使用 normalizer/helper，補上 run history 與 canvas command 流程測試
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/stores/run/runStore.test.ts
+              - frontend/tests/business-logic/stores/connectionPayloadMappers.test.ts
+              - frontend/tests/business-logic/stores/run/runHistoryNormalizer.test.ts
+              - frontend/tests/business-logic/stores/canvasScopedCommand.test.ts
+
+  - id: P4
+    title: 前端測試訊號收斂
+    parallel: false
+    verification:
+      - cd frontend && bun run style
+      - cd frontend && bun run test:run
+    done: true
+    items:
+      - id: P4.A
+        title: 測試輸出治理
+        tasks:
+          - id: P4.A.t1
+            text: 檢查 `frontend/tests/setup.ts` 與設定流程測試中的 console warning/error 使用情境，列出需要保留的合法輸出來源
+            completed: true
+            last_files_changed:
+              - frontend/tests/setup.ts
+              - frontend/tests/business-logic/stores/podStore.test.ts
+              - frontend/tests/business-logic/stores/canvasStore.test.ts
+              - frontend/tests/business-logic/stores/connectionStore.test.ts
+          - id: P4.A.t2
+            text: 在 `frontend/tests/setup.ts` 建立測試期間 console warning/error capture 機制，對已知合法輸出使用明確 allowlist
+            completed: true
+            last_files_changed:
+              - frontend/tests/setup.ts
+              - frontend/tests/business-logic/setup/consoleCapture.test.ts
+          - id: P4.A.t3
+            text: 調整受影響的前端測試，讓預期會發生的 warning/error 以明確 assertion 表達，不依賴全域靜默
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/stores/podStore.test.ts
+              - frontend/tests/business-logic/stores/canvasStore.test.ts
+              - frontend/tests/business-logic/stores/connectionStore.test.ts

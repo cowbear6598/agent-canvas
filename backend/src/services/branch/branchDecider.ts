@@ -6,6 +6,8 @@
  */
 
 import type { PersistedMessage } from "../../types/persistence.js";
+import type { Pod } from "../../types/pod.js";
+import type { RunContext } from "../../types/run.js";
 import type { ProviderName } from "../provider/index.js";
 
 // ─── Input / Output ───────────────────────────────────────────────────────────
@@ -14,6 +16,7 @@ export interface BranchDecisionInput {
   canvasId: string;
   sourcePodId: string;
   sourcePodName: string;
+  sourcePod?: Pod;
   branches: Array<{
     label: string;
     description?: string;
@@ -24,6 +27,7 @@ export interface BranchDecisionInput {
   provider: ProviderName;
   model: string;
   workspacePath: string;
+  runContext?: RunContext;
   abortSignal?: AbortSignal;
 }
 

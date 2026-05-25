@@ -1,181 +1,33 @@
-import {
-  handleListCanvases,
-  handleCreateCanvas,
-  handleDeleteCanvas,
-  handleRenameCanvas,
-} from "./canvasApi.js";
-import {
-  handleListPods,
-  handleCreatePod,
-  handleDeletePod,
-  handleRenamePod,
-} from "./podApi.js";
-import {
-  handleListConnections,
-  handleCreateConnection,
-  handleDeleteConnection,
-  handleUpdateConnection,
-} from "./connectionApi.js";
-import {
-  handleListWorkflows,
-  handleWorkflowChat,
-  handleWorkflowStop,
-} from "./workflowApi.js";
-import { handleDownloadPodDirectory } from "./podDownloadApi.js";
-import { handleUpload } from "./uploadApi.js";
-import { handleRedeemReconnectGrant } from "./reconnectGrantApi.js";
-import { handleInternalIntegrationReply } from "./internalIntegrationReplyApi.js";
 import { JSON_HEADERS } from "./constants.js";
 import { logger } from "../utils/logger.js";
 import { authAccessService } from "../services/auth/authAccessService.js";
 import { handshakeAuthService } from "../services/auth/handshakeAuthService.js";
 import { resolveCanvas } from "./apiHelpers.js";
 import { HTTP_STATUS } from "../constants.js";
-
-type ApiHandler = (
-  req: Request,
-  params: Record<string, string>,
-) => Response | Promise<Response>;
-
-type RouteScope = "public" | "workspace" | "canvas";
+import {
+  REST_ROUTE_DEFINITIONS,
+  type ApiHandler,
+  type RestRouteScope,
+} from "./restRouteManifest.js";
 
 interface Route {
   method: string;
   pattern: URLPattern;
   handler: ApiHandler;
-  scope: RouteScope;
+  scope: RestRouteScope;
   resolveCanvasId?: (
     req: Request,
     params: Record<string, string>,
   ) => Promise<string | null> | string | null;
 }
 
-const ROUTES: Route[] = [
-  {
-    method: "GET",
-    pattern: new URLPattern({ pathname: "/api/canvas/list" }),
-    handler: handleListCanvases,
-    scope: "workspace",
-  },
-  {
-    method: "POST",
-    pattern: new URLPattern({ pathname: "/api/canvas" }),
-    handler: handleCreateCanvas,
-    scope: "workspace",
-  },
-  {
-    method: "GET",
-    pattern: new URLPattern({ pathname: "/api/canvas/:id/pods" }),
-    handler: handleListPods,
-    scope: "canvas",
-  },
-  {
-    method: "POST",
-    pattern: new URLPattern({ pathname: "/api/canvas/:id/pods" }),
-    handler: handleCreatePod,
-    scope: "canvas",
-  },
-  {
-    method: "DELETE",
-    pattern: new URLPattern({ pathname: "/api/canvas/:id/pods/:podId" }),
-    handler: handleDeletePod,
-    scope: "canvas",
-  },
-  {
-    method: "DELETE",
-    pattern: new URLPattern({
-      pathname: "/api/canvas/:id/connections/:connectionId",
-    }),
-    handler: handleDeleteConnection,
-    scope: "canvas",
-  },
-  {
-    method: "PATCH",
-    pattern: new URLPattern({
-      pathname: "/api/canvas/:id/connections/:connectionId",
-    }),
-    handler: handleUpdateConnection,
-    scope: "canvas",
-  },
-  {
-    method: "GET",
-    pattern: new URLPattern({ pathname: "/api/canvas/:id/connections" }),
-    handler: handleListConnections,
-    scope: "canvas",
-  },
-  {
-    method: "POST",
-    pattern: new URLPattern({ pathname: "/api/canvas/:id/connections" }),
-    handler: handleCreateConnection,
-    scope: "canvas",
-  },
-  {
-    method: "DELETE",
-    pattern: new URLPattern({ pathname: "/api/canvas/:id" }),
-    handler: handleDeleteCanvas,
-    scope: "canvas",
-  },
-  {
-    method: "PATCH",
-    pattern: new URLPattern({ pathname: "/api/canvas/:id/pods/:podId" }),
-    handler: handleRenamePod,
-    scope: "canvas",
-  },
-  {
-    method: "PATCH",
-    pattern: new URLPattern({ pathname: "/api/canvas/:id" }),
-    handler: handleRenameCanvas,
-    scope: "canvas",
-  },
-  {
-    method: "GET",
-    pattern: new URLPattern({ pathname: "/api/canvas/:id/workflows" }),
-    handler: handleListWorkflows,
-    scope: "canvas",
-  },
-  {
-    method: "POST",
-    pattern: new URLPattern({
-      pathname: "/api/canvas/:id/workflows/:podId/chat",
-    }),
-    handler: handleWorkflowChat,
-    scope: "canvas",
-  },
-  {
-    method: "POST",
-    pattern: new URLPattern({
-      pathname: "/api/canvas/:id/workflows/:podId/stop",
-    }),
-    handler: handleWorkflowStop,
-    scope: "canvas",
-  },
-  {
-    method: "GET",
-    pattern: new URLPattern({
-      pathname: "/api/canvas/:id/pods/:podId/download",
-    }),
-    handler: handleDownloadPodDirectory,
-    scope: "canvas",
-  },
-  {
-    method: "POST",
-    pattern: new URLPattern({ pathname: "/api/upload" }),
-    handler: handleUpload,
-    scope: "public",
-  },
-  {
-    method: "POST",
-    pattern: new URLPattern({ pathname: "/api/auth/redeem-reconnect-grant" }),
-    handler: handleRedeemReconnectGrant,
-    scope: "public",
-  },
-  {
-    method: "POST",
-    pattern: new URLPattern({ pathname: "/api/internal/integration-reply" }),
-    handler: handleInternalIntegrationReply,
-    scope: "public",
-  },
-];
+const ROUTES: Route[] = REST_ROUTE_DEFINITIONS.map((route) => ({
+  method: route.method,
+  pattern: new URLPattern({ pathname: route.path }),
+  handler: route.handler,
+  scope: route.scope,
+  resolveCanvasId: "resolveCanvasId" in route ? route.resolveCanvasId : undefined,
+}));
 
 function matchRoute(
   method: string,

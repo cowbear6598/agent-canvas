@@ -21,7 +21,7 @@ import {
   isAutoTriggerable,
   resolveSettlementPathway,
 } from "./workflowHelpers.js";
-import { decideSummaryFallback } from "./workflowRunDecisions.js";
+import { decideWorkflowSummary } from "./workflowRunDecisions.js";
 import { LazyInitializable } from "./lazyInitializable.js";
 import type { RunContext } from "../../types/run.js";
 import {
@@ -119,34 +119,29 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     const fallback = summaryResult.success
       ? null
       : this.getLastAssistantFallback(sourcePodId, runContext);
-    const decision = decideSummaryFallback(
+    const decision = decideWorkflowSummary(
       summaryResult.success,
+      summaryResult.summary,
+      summaryResult.resolvedModel,
       fallback?.content ?? null,
       "無法生成摘要",
     );
 
-    if (decision.kind === "summary") {
+    if (decision.kind === "complete") {
       resolvedDelegate.onSummaryComplete(canvasId, sourcePodId, pathway);
       return {
-        content: summaryResult.summary,
-        isSummarized: true,
-        // resolvedModel 僅在 disposableChatService 成功時才有值
-        resolvedModel: summaryResult.resolvedModel,
+        content: decision.content,
+        isSummarized: decision.isSummarized,
+        resolvedModel: decision.resolvedModel,
       };
     }
 
-    if (decision.kind === "failed") {
-      resolvedDelegate.onSummaryFailed(
-        canvasId,
-        sourcePodId,
-        decision.errorMessage,
-      );
-      return null;
-    }
-
-    resolvedDelegate.onSummaryComplete(canvasId, sourcePodId, pathway);
-    // fallback 路徑沒有 resolvedModel（直接取原始訊息，未經 disposableChat）
-    return { content: decision.content, isSummarized: false };
+    resolvedDelegate.onSummaryFailed(
+      canvasId,
+      sourcePodId,
+      decision.errorMessage,
+    );
+    return null;
   }
 
   private triggerAutoConnections(

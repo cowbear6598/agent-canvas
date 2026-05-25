@@ -7,6 +7,7 @@ import {
   setupStoreTest,
   mockErrorSanitizerFactory,
 } from "@tests/helpers/testSetup";
+import { allowConsoleOutput } from "@tests/setup";
 import { createMockCanvas } from "@tests/helpers/factories";
 import { useCanvasStore } from "@/stores/canvasStore";
 import type { Canvas } from "@/types/canvas";
@@ -639,6 +640,10 @@ describe("canvasStore", () => {
     });
 
     it("fromIndex 無效時不應重排且顯示 warning", () => {
+      allowConsoleOutput({
+        method: "warn",
+        messageIncludes: "[CanvasStore] 找不到索引位置的 Canvas:",
+      });
       const store = useCanvasStore();
       const canvas1 = createMockCanvas({ id: "canvas-1" });
       store.canvases = [canvas1];

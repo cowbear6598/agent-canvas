@@ -89,12 +89,14 @@ class BranchDecisionService {
         canvasId,
         sourcePodId,
         sourcePodName: sourcePod.name,
+        sourcePod,
         branches,
         persistedSummary: transcriptWindow.persistedSummary,
         recentMessages: transcriptWindow.recentMessages,
         provider,
         model,
         workspacePath: executionPaths.workspacePath,
+        runContext,
         abortSignal,
       });
       selectedLabel = result.selectedLabel;

@@ -145,6 +145,8 @@ class SummaryService {
       systemPrompt,
       userMessage: userPrompt,
       workspacePath: executionPaths.workspacePath,
+      sourcePod,
+      runContext,
     });
 
     if (!result.success) {

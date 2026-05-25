@@ -20,6 +20,8 @@ import { codexService } from "./codex/codexService.js";
 import { opencodeProvider } from "./provider/opencodeProvider.js";
 import { logger } from "../utils/logger.js";
 import { getStmts } from "../database/index.js";
+import type { Pod } from "../types/pod.js";
+import type { RunContext } from "../types/run.js";
 
 // ─── 公開介面 ────────────────────────────────────────────────────────────────
 
@@ -29,6 +31,13 @@ export interface DisposableChatInput {
   systemPrompt: string;
   userMessage: string;
   workspacePath: string;
+  /**
+   * 呼叫端若有來源 Pod context，opencode disposable 會沿用一般 Pod 的
+   * buildOptions 流程，取得 managed MCP / Goal Runtime / plugin catalog。
+   * 未提供時保留舊的純全域 server 行為。
+   */
+  sourcePod?: Pod;
+  runContext?: RunContext;
 }
 
 export interface DisposableChatOutput {
@@ -132,20 +141,26 @@ async function executeOpencodeDisposableChat(
   const { providerID, modelID, canonicalModel } = parsedModel;
   const abortController = new AbortController();
   let content = "";
+  const builtOptions =
+    input.sourcePod != null
+      ? await opencodeProvider.buildOptions(input.sourcePod, input.runContext)
+      : null;
 
   for await (const event of opencodeProvider.chat({
-    podId: "disposable-opencode",
-    podName: "OpenCode Disposable Chat",
+    podId: input.sourcePod?.id ?? "disposable-opencode",
+    podName: input.sourcePod?.name ?? "OpenCode Disposable Chat",
     message: input.userMessage,
     workspacePath: input.workspacePath,
     resumeSessionId: null,
     abortSignal: abortController.signal,
+    runContext: input.runContext,
     options: {
+      ...builtOptions,
       providerID,
       modelID,
-      mcpEntries: [],
-      hasGoalRuntime: false,
-      pluginCatalogText: "",
+      mcpEntries: builtOptions?.mcpEntries ?? [],
+      hasGoalRuntime: builtOptions?.hasGoalRuntime ?? false,
+      pluginCatalogText: builtOptions?.pluginCatalogText ?? "",
       systemPrompt: input.systemPrompt,
     },
   })) {
