@@ -54,12 +54,9 @@ const handlePodMoved = createUnifiedHandler<
 
 const handlePodRenamed = createUnifiedHandler<
   BasePayload & { podId: string; name: string; canvasId: string }
->(
-  (payload) => {
-    usePodStore().updatePodName(payload.podId, payload.name);
-  },
-  { toastMessage: () => t("composable.eventHandler.podRenamed") },
-);
+>((payload) => {
+  usePodStore().updatePodName(payload.podId, payload.name);
+});
 
 const handlePodModelSet = createUnifiedHandler<
   BasePayload & { pod?: Pod; canvasId: string }
@@ -74,14 +71,11 @@ const handlePodModelSet = createUnifiedHandler<
 
 const handlePodScheduleSet = createUnifiedHandler<
   BasePayload & { pod?: Pod; canvasId: string }
->(
-  (payload) => {
-    if (payload.pod) {
-      usePodStore().updatePod(payload.pod);
-    }
-  },
-  { toastMessage: () => t("composable.eventHandler.podScheduleSet") },
-);
+>((payload) => {
+  if (payload.pod) {
+    usePodStore().updatePod(payload.pod);
+  }
+});
 
 const handlePodDeleted = createUnifiedHandler<
   BasePayload & {

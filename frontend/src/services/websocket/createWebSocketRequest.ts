@@ -143,13 +143,7 @@ export function tryResolvePendingRequest(
   requestId: string,
   data: unknown,
 ): boolean {
-  const request = removePendingRequest(requestId);
-  if (request) {
-    clearTimeout(request.timeoutId);
-    request.resolve(data);
-    return true;
-  }
-  return false;
+  return settlePendingRequest(requestId, data);
 }
 
 export async function createWebSocketRequest<

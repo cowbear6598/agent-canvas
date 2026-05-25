@@ -43,7 +43,11 @@ export class HandlerRegistry {
 					definition.handler,
 					definition.responseEvent
 				);
-				eventRouter.register(definition.event, wrappedHandler);
+				eventRouter.register(
+					definition.event,
+					wrappedHandler,
+					definition.responseEvent
+				);
 			}
 		}
 	}

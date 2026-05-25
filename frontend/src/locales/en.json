@@ -509,7 +509,10 @@
     "notConnected": "WebSocket is not connected",
     "sendFailed": "Failed to send WebSocket message",
     "reconnectGrantRedeemFailed": "Failed to redeem reconnect grant",
-    "requestTimeout": "Request timed out: {event}"
+    "requestTimeout": "Request timed out: {event}",
+    "errors": {
+      "CANVAS_PASSWORD_REQUIRED": "This canvas is locked. Unlock it before continuing."
+    }
   },
   "composableDeleteResource": {
     "deleteFailed": "Delete failed, please try again later"

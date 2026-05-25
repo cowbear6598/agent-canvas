@@ -509,7 +509,10 @@
     "notConnected": "WebSocket が接続されていません",
     "sendFailed": "WebSocket メッセージの送信に失敗しました",
     "reconnectGrantRedeemFailed": "再接続認可の交換に失敗しました",
-    "requestTimeout": "リクエストがタイムアウトしました：{event}"
+    "requestTimeout": "リクエストがタイムアウトしました：{event}",
+    "errors": {
+      "CANVAS_PASSWORD_REQUIRED": "この Canvas はロックされています。操作する前にロックを解除してください。"
+    }
   },
   "composableDeleteResource": {
     "deleteFailed": "削除に失敗しました。後でもう一度お試しください"

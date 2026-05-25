@@ -11,6 +11,7 @@ export interface WebSocketBaseResponse {
   requestId?: unknown;
   success?: unknown;
   error?: string | WebSocketErrorObject;
+  code?: unknown;
 }
 
 export type WebSocketMappedResponse<TResponse> =
@@ -60,6 +61,7 @@ function translateIfKnown(
 
 function resolveWebSocketErrorMessage(
   rawError: WebSocketBaseResponse["error"],
+  rawCode?: unknown,
 ): string {
   if (rawError && typeof rawError === "object") {
     if (
@@ -85,6 +87,13 @@ function resolveWebSocketErrorMessage(
     }
   }
 
+  if (typeof rawCode === "string") {
+    return (
+      translateIfKnown(`websocket.errors.${rawCode}`) ??
+      t("common.error.unknown")
+    );
+  }
+
   return t("common.error.unknown");
 }
 
@@ -103,7 +112,7 @@ export function mapWebSocketResponse<TResponse>(
     return {
       ok: false,
       requestId,
-      error: resolveWebSocketErrorMessage(baseResponse.error),
+      error: resolveWebSocketErrorMessage(baseResponse.error, baseResponse.code),
     };
   }
 

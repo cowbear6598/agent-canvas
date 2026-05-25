@@ -1,0 +1,79 @@
+feature: plugin-management-toast-singleton
+side: frontend
+approved: true
+phases:
+  - id: P1
+    title: Plugin 管理時間顯示修正
+    parallel: false
+    verification:
+      - bun run style
+      - bun run test
+    done: true
+    items:
+      - id: P1.A
+        title: Plugin 卡片時間欄位
+        tasks:
+          - id: P1.A.t1
+            text: 在 `frontend/src/components/settings/ManagedPluginModal.vue` 將 plugin 卡片時間文案由「安裝於」改為「更新於」
+            completed: true
+            last_files_changed:
+              - frontend/src/components/settings/ManagedPluginModal.vue
+          - id: P1.A.t2
+            text: 在 `ManagedPluginModal.vue` 將時間來源由 `plugin.installedAt` 改為 `plugin.updatedAt`
+            completed: true
+            last_files_changed:
+              - frontend/src/components/settings/ManagedPluginModal.vue
+
+  - id: P2
+    title: WebSocket 成功 Toast 去重
+    parallel: false
+    verification:
+      - bun run style
+      - bun run test
+    done: true
+    items:
+      - id: P2.A
+        title: Toast 所有權收斂
+        tasks:
+          - id: P2.A.t1
+            text: 盤點 `frontend/src/composables/eventHandlers/*EventHandlers.ts` 中所有傳入 `toastMessage` 的 handler，對照發起端 store 或 composable 是否已在成功路徑顯示 toast
+            completed: true
+            last_files_changed: []
+          - id: P2.A.t2
+            text: 在 `frontend/src/composables/eventHandlers/canvasEventHandlers.ts` 移除會與 action 端成功提示重複的 own operation toast 設定，至少包含 `CANVAS_CREATED`、`CANVAS_RENAMED`、`CANVAS_PASTE_RESULT`
+            completed: true
+            last_files_changed:
+              - frontend/src/composables/eventHandlers/canvasEventHandlers.ts
+              - frontend/src/composables/canvas/useCopyPaste.ts
+          - id: P2.A.t3
+            text: 在 `frontend/src/composables/eventHandlers/podEventHandlers.ts` 移除會與 action 端成功提示重複的 own operation toast 設定，至少包含 `POD_RENAMED`、`POD_SCHEDULE_SET`；`POD_MODEL_SET` 需依盤點結果只保留單一 toast owner
+            completed: true
+            last_files_changed:
+              - frontend/src/composables/eventHandlers/podEventHandlers.ts
+          - id: P2.A.t4
+            text: 在 `frontend/src/composables/eventHandlers/connectionEventHandlers.ts` 移除會與 `connectionStore` 成功提示重複的 own operation toast 設定，包含 `CONNECTION_CREATED` 與 `CONNECTION_DELETED`
+            completed: true
+            last_files_changed:
+              - frontend/src/composables/eventHandlers/connectionEventHandlers.ts
+              - frontend/src/stores/connectionStore.ts
+          - id: P2.A.t5
+            text: 在 `frontend/src/composables/eventHandlers/noteEventHandlers.ts` 移除會與 repository store 成功提示重複的 own operation toast 設定，包含 `REPOSITORY_DELETED`
+            completed: true
+            last_files_changed:
+              - frontend/src/composables/eventHandlers/noteEventHandlers.ts
+      - id: P2.B
+        title: Toast 去重測試
+        tasks:
+          - id: P2.B.t1
+            text: 更新 `frontend/tests/business-logic/composables/websocket/useUnifiedEventListeners.test.ts` 或對應 event handler 測試，覆蓋 `CANVAS_RENAMED` 這類 own operation 仍會同步 state 但不由 event handler 額外顯示成功 toast 的行為
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/composables/websocket/useUnifiedEventListeners.test.ts
+          - id: P2.B.t2
+            text: 更新既有 canvas / pod / connection / repository 相關 store 或 event handler 測試，確認 action 成功路徑只由發起端顯示一次成功 toast
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/stores/canvasStore.test.ts
+              - frontend/tests/business-logic/stores/podStore.test.ts
+              - frontend/tests/business-logic/stores/connectionStore.test.ts
+              - frontend/tests/business-logic/stores/note/repositoryStore.test.ts

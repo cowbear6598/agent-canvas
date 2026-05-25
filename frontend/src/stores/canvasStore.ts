@@ -160,6 +160,7 @@ export const useCanvasStore = defineStore("canvas", {
 
     async deleteCanvas(canvasId: string): Promise<void> {
       const { showSuccessToast } = useToast();
+      const { withErrorToast } = useWebSocketErrorHandler();
 
       if (this.activeCanvasId === canvasId) {
         const otherCanvas = this.canvases.find(
@@ -170,13 +171,20 @@ export const useCanvasStore = defineStore("canvas", {
         }
       }
 
-      await createWebSocketRequest<CanvasDeletePayload, CanvasDeletedPayload>({
-        requestEvent: WebSocketRequestEvents.CANVAS_DELETE,
-        responseEvent: WebSocketResponseEvents.CANVAS_DELETED,
-        payload: {
-          canvasId,
-        },
-      });
+      const response = await withErrorToast(
+        createWebSocketRequest<CanvasDeletePayload, CanvasDeletedPayload>({
+          requestEvent: WebSocketRequestEvents.CANVAS_DELETE,
+          responseEvent: WebSocketResponseEvents.CANVAS_DELETED,
+          payload: {
+            canvasId,
+          },
+        }),
+        "Canvas",
+        t("common.error.delete"),
+        { swallow: true },
+      );
+
+      if (!response) return;
 
       showSuccessToast("Canvas", t("common.success.delete"));
     },

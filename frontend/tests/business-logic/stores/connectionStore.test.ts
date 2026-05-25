@@ -34,10 +34,12 @@ vi.mock("@/services/websocket", () => webSocketMockFactory());
 // Mock useToast
 const mockToast = vi.fn();
 const mockShowErrorToast = vi.fn();
+const mockShowSuccessToast = vi.fn();
 vi.mock("@/composables/useToast", () => ({
   useToast: () => ({
     toast: mockToast,
     showErrorToast: mockShowErrorToast,
+    showSuccessToast: mockShowSuccessToast,
   }),
 }));
 
@@ -150,6 +152,11 @@ describe("connectionStore", () => {
           }),
         }),
       );
+      expect(mockShowSuccessToast).toHaveBeenCalledWith(
+        "Connection",
+        "建立成功",
+      );
+      expect(mockShowSuccessToast).toHaveBeenCalledTimes(1);
     });
 
     it("自我連接時應回傳 null", async () => {
@@ -509,6 +516,11 @@ describe("connectionStore", () => {
           }),
         }),
       );
+      expect(mockShowSuccessToast).toHaveBeenCalledWith(
+        "Connection",
+        "刪除成功",
+      );
+      expect(mockShowSuccessToast).toHaveBeenCalledTimes(1);
     });
 
     it("刪除失敗但 connection 已不在 store 時不應顯示 error toast", async () => {

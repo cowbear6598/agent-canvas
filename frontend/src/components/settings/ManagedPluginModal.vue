@@ -221,7 +221,7 @@ watch(
                   <span class="truncate text-xs text-muted-foreground">{{
                     plugin.githubRepo
                   }}</span>
-                  <span class="text-xs text-muted-foreground">安裝於 {{ formatDate(plugin.installedAt) }}</span>
+                  <span class="text-xs text-muted-foreground">更新於 {{ formatDate(plugin.updatedAt) }}</span>
                 </div>
               </div>
               <div class="ml-4 flex shrink-0 gap-2">

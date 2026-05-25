@@ -3,21 +3,17 @@ import { useConnectionStore } from "@/stores/connectionStore";
 import type { Connection } from "@/types";
 import type { ConnectionPayloadItem } from "@/types/websocket";
 import { createUnifiedHandler } from "./sharedHandlerUtils";
-import { t } from "@/i18n";
 import type { BasePayload } from "./sharedHandlerUtils";
 
 type RawConnectionFromEvent = Omit<Connection, "status">;
 
 const handleConnectionCreated = createUnifiedHandler<
   BasePayload & { connection?: RawConnectionFromEvent; canvasId: string }
->(
-  (payload) => {
-    if (payload.connection) {
-      useConnectionStore().addConnectionFromEvent(payload.connection);
-    }
-  },
-  { toastMessage: () => t("composable.eventHandler.connectionCreated") },
-);
+>((payload) => {
+  if (payload.connection) {
+    useConnectionStore().addConnectionFromEvent(payload.connection);
+  }
+});
 
 const handleConnectionUpdated = createUnifiedHandler<
   BasePayload & {
@@ -40,12 +36,9 @@ const handleConnectionUpdated = createUnifiedHandler<
 
 const handleConnectionDeleted = createUnifiedHandler<
   BasePayload & { connectionId: string; canvasId: string }
->(
-  (payload) => {
-    useConnectionStore().removeConnectionFromEvent(payload.connectionId);
-  },
-  { toastMessage: () => t("composable.eventHandler.connectionDeleted") },
-);
+>((payload) => {
+  useConnectionStore().removeConnectionFromEvent(payload.connectionId);
+});
 
 export function getConnectionEventListeners(): Array<{
   event: string;

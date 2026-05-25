@@ -103,4 +103,18 @@ describe("createUnifiedHandler", () => {
     expect(mockLoggerWarn).not.toHaveBeenCalled();
     expect(handler).toHaveBeenCalledOnce();
   });
+
+  it("success: false 的 response event 不應執行 handler", () => {
+    const handler = vi.fn();
+    const unified = createUnifiedHandler(handler, { skipCanvasCheck: true });
+
+    unified({
+      requestId: "req-failed",
+      success: false,
+      error: "Canvas password required",
+      code: "CANVAS_PASSWORD_REQUIRED",
+    });
+
+    expect(handler).not.toHaveBeenCalled();
+  });
 });

@@ -100,7 +100,7 @@ function buildBranchSettingsUpdates(
 
 export const useConnectionStore = defineStore("connection", () => {
   const { executeAction } = useCanvasWebSocketAction();
-  const { toast, showErrorToast } = useToast();
+  const { toast, showErrorToast, showSuccessToast } = useToast();
   const podStore = usePodStore();
   const providerCapabilityStore = useProviderCapabilityStore();
 
@@ -386,6 +386,7 @@ export const useConnectionStore = defineStore("connection", () => {
       rawConnection.summaryModel = resolvedSummaryModel;
     }
 
+    showSuccessToast("Connection", t("common.success.create"));
     return normalizeConnection(rawConnection, sourcePod?.provider);
   }
 
@@ -414,7 +415,10 @@ export const useConnectionStore = defineStore("connection", () => {
       if (stillExists) {
         showErrorToast("Connection", t("common.error.delete"));
       }
+      return;
     }
+
+    showSuccessToast("Connection", t("common.success.delete"));
   }
 
   function deleteConnectionsByPodId(podId: string): void {

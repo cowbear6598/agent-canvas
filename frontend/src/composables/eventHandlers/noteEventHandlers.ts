@@ -3,7 +3,6 @@ import { useRepositoryStore } from "@/stores/note/repositoryStore";
 import type { RepositoryNote } from "@/types";
 import { createUnifiedHandler } from "./sharedHandlerUtils";
 import type { BasePayload } from "./sharedHandlerUtils";
-import { t } from "@/i18n";
 
 interface NoteHandlerConfig<TNote> {
   getStore: () => {
@@ -55,15 +54,12 @@ const handleRepositoryDeleted = createUnifiedHandler<
     deletedNoteIds?: string[];
     canvasId: string;
   }
->(
-  (payload) => {
-    useRepositoryStore().removeItemFromEvent(
-      payload.repositoryId,
-      payload.deletedNoteIds,
-    );
-  },
-  { toastMessage: () => t("composable.eventHandler.repositoryDeleted") },
-);
+>((payload) => {
+  useRepositoryStore().removeItemFromEvent(
+    payload.repositoryId,
+    payload.deletedNoteIds,
+  );
+});
 
 const handleRepositoryBranchChanged = createUnifiedHandler<
   BasePayload & { repositoryId: string; branchName: string }

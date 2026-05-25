@@ -577,6 +577,48 @@ describe("useUnifiedEventListeners", () => {
       expect(updated?.name).toBe("New Name");
     });
 
+    it("canvas:renamed 為 own operation 時應同步狀態但不額外顯示成功 Toast", () => {
+      const { registerUnifiedListeners } = useUnifiedEventListeners();
+      const canvasStore = useCanvasStore();
+      const canvas = createMockCanvas({ id: "canvas-1", name: "Old Name" });
+      canvasStore.canvases = [canvas];
+      mockTryResolvePendingRequest.mockReturnValue(true);
+
+      registerUnifiedListeners();
+
+      simulateEvent("canvas:renamed", {
+        canvasId: "canvas-1",
+        requestId: "req-rename-canvas",
+        newName: "New Name",
+      });
+
+      const updated = canvasStore.canvases.find((c) => c.id === "canvas-1");
+      expect(updated?.name).toBe("New Name");
+      expect(sharedMockToast).not.toHaveBeenCalled();
+    });
+
+    it("canvas:renamed own operation 失敗時不應同步狀態或顯示成功 Toast", () => {
+      const { registerUnifiedListeners } = useUnifiedEventListeners();
+      const canvasStore = useCanvasStore();
+      const canvas = createMockCanvas({ id: "canvas-1", name: "Old Name" });
+      canvasStore.canvases = [canvas];
+      mockTryResolvePendingRequest.mockReturnValue(true);
+
+      registerUnifiedListeners();
+
+      simulateEvent("canvas:renamed", {
+        canvasId: "canvas-1",
+        requestId: "req-rename-canvas",
+        success: false,
+        error: "Canvas password required",
+        code: "CANVAS_PASSWORD_REQUIRED",
+      });
+
+      const updated = canvasStore.canvases.find((c) => c.id === "canvas-1");
+      expect(updated?.name).toBe("Old Name");
+      expect(sharedMockToast).not.toHaveBeenCalled();
+    });
+
     it("canvas:deleted 應移除 Canvas（skipCanvasCheck）", () => {
       const { registerUnifiedListeners } = useUnifiedEventListeners();
       const canvasStore = useCanvasStore();

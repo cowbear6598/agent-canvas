@@ -573,6 +573,7 @@ describe("podStore", () => {
         "刪除成功",
         "Test Pod",
       );
+      expect(mockShowSuccessToast).toHaveBeenCalledTimes(1);
     });
 
     it("Pod 不存在時 Toast 應使用預設名稱", async () => {
@@ -640,6 +641,7 @@ describe("podStore", () => {
         "重新命名成功",
         "New Name",
       );
+      expect(mockShowSuccessToast).toHaveBeenCalledTimes(1);
     });
 
     it("無 activeCanvasId 時應不顯示成功 Toast", async () => {

@@ -509,7 +509,10 @@
     "notConnected": "WebSocket 尚未連線",
     "sendFailed": "WebSocket 訊息發送失敗",
     "reconnectGrantRedeemFailed": "重新連線授權換發失敗",
-    "requestTimeout": "請求逾時：{event}"
+    "requestTimeout": "請求逾時：{event}",
+    "errors": {
+      "CANVAS_PASSWORD_REQUIRED": "此 Canvas 已上鎖，請先解鎖後再操作"
+    }
   },
   "composableDeleteResource": {
     "deleteFailed": "刪除失敗，請稍後再試"

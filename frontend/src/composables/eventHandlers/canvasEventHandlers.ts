@@ -6,7 +6,6 @@ import { useCanvasStore } from "@/stores/canvasStore";
 import type { Pod, RepositoryNote, Canvas, Connection } from "@/types";
 import { createUnifiedHandler } from "./sharedHandlerUtils";
 import type { BasePayload } from "./sharedHandlerUtils";
-import { t } from "@/i18n";
 
 type RawConnectionFromEvent = Omit<Connection, "status">;
 
@@ -30,7 +29,6 @@ const handleCanvasCreated = createUnifiedHandler<
     }
   },
   {
-    toastMessage: () => t("composable.eventHandler.canvasCreated"),
     skipCanvasCheck: true,
   },
 );
@@ -42,7 +40,6 @@ const handleCanvasRenamed = createUnifiedHandler<
     useCanvasStore().renameCanvasFromEvent(payload.canvasId, payload.newName);
   },
   {
-    toastMessage: () => t("composable.eventHandler.canvasRenamed"),
     skipCanvasCheck: true,
   },
 );
@@ -99,7 +96,6 @@ const handleCanvasPasted = createUnifiedHandler<
       connectionStore.addConnectionFromEvent(connection),
     );
   },
-  { toastMessage: () => t("composable.eventHandler.pasted") },
 );
 
 export function getCanvasEventListeners(): Array<{

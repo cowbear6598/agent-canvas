@@ -25,6 +25,7 @@ import {
   collectRelatedConnections,
 } from "./copyPaste/collectCopyData";
 import { calculatePastePositions } from "./copyPaste/calculatePaste";
+import { t } from "@/i18n";
 
 function collectUnboundCreatedElements(
   noteType: SelectableElement["type"],
@@ -149,6 +150,8 @@ export function useCopyPaste(): void {
           firstErrorMessage,
         );
       }
+    } else {
+      showSuccessToast("Paste", t("composable.eventHandler.pasted"));
     }
 
     const newSelectedElements: SelectableElement[] = [

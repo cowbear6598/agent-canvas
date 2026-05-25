@@ -268,6 +268,7 @@ describe("canvasStore", () => {
         payload: { canvasId: "canvas-2" },
       });
       expect(mockShowSuccessToast).toHaveBeenCalledWith("Canvas", "刪除成功");
+      expect(mockShowSuccessToast).toHaveBeenCalledTimes(1);
     });
 
     it("刪除活躍 Canvas 時應先切換到其他 Canvas 再刪除", async () => {
@@ -312,6 +313,26 @@ describe("canvasStore", () => {
 
       // 只呼叫一次 deleteCanvas，不呼叫 switchCanvas
       expect(mockCreateWebSocketRequest).toHaveBeenCalledTimes(1);
+    });
+
+    it("刪除失敗時應顯示錯誤 Toast 並且不顯示成功 Toast", async () => {
+      const store = useCanvasStore();
+      const canvas = createMockCanvas({ id: "canvas-1" });
+      store.canvases = [canvas];
+      store.activeCanvasId = "canvas-1";
+
+      mockCreateWebSocketRequest.mockRejectedValueOnce(
+        new Error("此 Canvas 已上鎖，請先解鎖後再操作"),
+      );
+
+      await store.deleteCanvas("canvas-1");
+
+      expect(mockShowErrorToast).toHaveBeenCalledWith(
+        "Canvas",
+        "刪除失敗",
+        "此 Canvas 已上鎖，請先解鎖後再操作",
+      );
+      expect(mockShowSuccessToast).not.toHaveBeenCalled();
     });
   });
 
@@ -374,6 +395,7 @@ describe("canvasStore", () => {
         "重新命名成功",
         "New Name",
       );
+      expect(mockShowSuccessToast).toHaveBeenCalledTimes(1);
     });
 
     it("失敗時應顯示失敗 Toast", async () => {

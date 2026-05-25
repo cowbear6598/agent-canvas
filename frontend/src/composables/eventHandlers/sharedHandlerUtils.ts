@@ -6,6 +6,7 @@ import { logger } from "@/utils/logger";
 export interface BasePayload {
   requestId?: string;
   canvasId?: string | null;
+  success?: unknown;
 }
 
 export interface UnifiedHandlerOptions {
@@ -50,6 +51,10 @@ export function createUnifiedHandler<T extends BasePayload>(
     const isOwnOperation = payload.requestId
       ? tryResolvePendingRequest(payload.requestId, payload)
       : false;
+
+    if (payload.success === false) {
+      return;
+    }
 
     if (isOwnOperation && options?.toastMessage) {
       const { toast } = useToast();

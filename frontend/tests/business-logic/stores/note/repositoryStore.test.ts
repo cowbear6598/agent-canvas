@@ -71,6 +71,7 @@ describe("repositoryStore", () => {
         "建立成功",
         "Test Repo",
       );
+      expect(mockShowSuccessToast).toHaveBeenCalledTimes(1);
       expect(result.success).toBe(true);
       expect(result.repository).toEqual(newRepo);
     });
@@ -136,6 +137,7 @@ describe("repositoryStore", () => {
         "刪除成功",
         "Test Repo",
       );
+      expect(mockShowSuccessToast).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -473,6 +475,7 @@ describe("repositoryStore", () => {
         "刪除分支成功",
         "feature-1",
       );
+      expect(mockShowSuccessToast).toHaveBeenCalledTimes(1);
       expect(result).toEqual({
         success: true,
         branchName: "feature-1",

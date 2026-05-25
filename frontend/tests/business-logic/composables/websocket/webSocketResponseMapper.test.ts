@@ -54,6 +54,21 @@ describe("webSocketResponseMapper", () => {
     });
   });
 
+  it("success: false 且後端使用 top-level code 時應轉成對應翻譯", () => {
+    const result = mapWebSocketResponse({
+      requestId: "req-locked-canvas",
+      success: false,
+      error: "Canvas password required",
+      code: "CANVAS_PASSWORD_REQUIRED",
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      requestId: "req-locked-canvas",
+      error: "此 Canvas 已上鎖，請先解鎖後再操作",
+    });
+  });
+
   it("應集中判斷 requestId 對應與自訂 matcher", () => {
     const response = { requestId: "req-4", provider: "claude" };
 
