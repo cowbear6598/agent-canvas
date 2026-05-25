@@ -1,0 +1,25 @@
+feature: frontend-toast-i18n-errors
+approved: true
+scenarios:
+  - id: F1
+    scenario: 使用者操作資源失敗時只看到一次錯誤提示
+    given:
+      - 使用者正在 Agent 畫布中操作可建立或更新的資源
+      - 後端回傳操作失敗
+    when:
+      - 使用者送出建立或更新操作
+    then:
+      - 畫面只顯示一次錯誤 Toast
+      - 錯誤 Toast 顯示可理解的失敗原因
+      - 操作沒有被誤判為成功
+
+  - id: F2
+    scenario: 使用者切換語言後看到對應語系的錯誤提示
+    given:
+      - 使用者已切換介面語言
+      - 使用者正在 Agent 畫布中操作會顯示錯誤提示的功能
+    when:
+      - 該操作失敗
+    then:
+      - 錯誤 Toast 使用目前介面語言
+      - 錯誤訊息不出現未翻譯的固定文案

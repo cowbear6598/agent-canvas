@@ -353,6 +353,7 @@
       "title": "MCP Manager",
       "description": "Manage global MCP registry entries and runtime status"
     },
+    "surfaceTargetsIgnoredTitle": "{pod} skipped selected MCP targets",
     "list": {
       "title": "MCP List"
     },
@@ -506,6 +507,7 @@
   },
   "websocket": {
     "notConnected": "WebSocket is not connected",
+    "sendFailed": "Failed to send WebSocket message",
     "requestTimeout": "Request timed out: {event}"
   },
   "composableDeleteResource": {
@@ -832,6 +834,15 @@
     "internalError": "Internal server error",
     "unknownError": "An unknown error occurred",
     "notFound": "{entity} not found: {id}",
+    "opencodeAliasListMissingItems": "Failed to load opencode model aliases: backend did not return items",
+    "opencodeAliasCreateMissingItem": "Failed to create opencode model alias: backend did not return item",
+    "opencodeAliasUpdateMissingItem": "Failed to update opencode model alias: backend did not return item",
+    "opencodeAliasReorderMissingItems": "Failed to reorder opencode model aliases: backend did not return items",
+    "opencodeAliasRefreshPresetsMissingItem": "Failed to refresh opencode thinking presets: backend did not return item",
+    "pluginListMissingPlugins": "Plugin list succeeded but backend did not return plugins",
+    "pluginInstallMissingPlugin": "Plugin install succeeded but backend did not return plugin data",
+    "pluginUpdateMissingPlugin": "Plugin update succeeded but backend did not return plugin data",
+    "pluginReorderMissingPlugins": "Plugin reorder succeeded but backend did not return plugins",
     "pluginInvalidGithubRepoFormat": "Unable to install plugin \"{repo}\". Use the GitHub repository format owner/repo, for example cowbear6598/soap-dev.",
     "pluginAlreadyInstalled": "Plugin \"{repo}\" is already installed.",
     "pluginInstallFailed": "Unable to install plugin \"{repo}\". Confirm the GitHub repository exists, is accessible, and your network connection is working. Reason: {reason}",
@@ -958,6 +969,7 @@
       "unlockTitle": "Workspace Protected",
       "unlockDescription": "Enter the workspace password to continue.",
       "unlockAction": "Unlock",
+      "reconnectGrantMissing": "Missing reconnect grant",
       "reconnecting": "Reconnecting..."
     },
     "canvas": {

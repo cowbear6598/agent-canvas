@@ -18,6 +18,7 @@ import type {
   PluginReorderedPayload,
 } from "@/types/websocket/responses";
 import type { InstalledPlugin } from "@/types/plugin";
+import { t } from "@/i18n";
 
 export async function listPlugins(): Promise<InstalledPlugin[]> {
   const result = await createWebSocketRequest<
@@ -30,7 +31,7 @@ export async function listPlugins(): Promise<InstalledPlugin[]> {
   });
 
   if (!result.plugins) {
-    throw new Error("取得 plugin 清單成功但後端未回傳 plugin 清單");
+    throw new Error(t("errors.pluginListMissingPlugins"));
   }
 
   return result.plugins;
@@ -49,7 +50,7 @@ export async function installPlugin(
   });
 
   if (!result.plugin) {
-    throw new Error("安裝 plugin 成功但後端未回傳 plugin 資料");
+    throw new Error(t("errors.pluginInstallMissingPlugin"));
   }
 
   return result.plugin;
@@ -84,7 +85,7 @@ export async function updatePlugin(pluginId: string): Promise<InstalledPlugin> {
   });
 
   if (!result.plugin) {
-    throw new Error("更新 plugin 成功但後端未回傳 plugin 資料");
+    throw new Error(t("errors.pluginUpdateMissingPlugin"));
   }
 
   return result.plugin;
@@ -103,7 +104,7 @@ export async function reorderPlugins(
   });
 
   if (!result.plugins) {
-    throw new Error("重排 plugin 成功但後端未回傳 plugin 清單");
+    throw new Error(t("errors.pluginReorderMissingPlugins"));
   }
 
   return result.plugins;

@@ -9,6 +9,7 @@ import type {
   OpencodeModelInfo,
   OpencodeModelAlias,
 } from "@/types/opencode";
+import { t } from "@/i18n";
 
 // ─── 本地 Payload 型別定義 ──
 
@@ -100,10 +101,10 @@ interface OpencodeServerRestartResultPayload {
 
 function requireAliasItems(
   result: { items: unknown },
-  actionName: string,
+  errorKey: string,
 ): OpencodeModelAlias[] {
   if (!Array.isArray(result.items)) {
-    throw new Error(`${actionName}失敗：後端未回傳 items`);
+    throw new Error(t(errorKey));
   }
   return result.items;
 }
@@ -173,7 +174,7 @@ export async function listAliases(): Promise<OpencodeModelAlias[]> {
     payload: {},
   });
 
-  return requireAliasItems(result, "載入 opencode model 別稱");
+  return requireAliasItems(result, "errors.opencodeAliasListMissingItems");
 }
 
 /**
@@ -196,7 +197,7 @@ export async function createAlias(
   });
 
   if (!result.item) {
-    throw new Error("新增 opencode model 別稱失敗：後端未回傳 item");
+    throw new Error(t("errors.opencodeAliasCreateMissingItem"));
   }
 
   return result.item;
@@ -223,7 +224,7 @@ export async function updateAlias(
   });
 
   if (!result.item) {
-    throw new Error("更新 opencode model 別稱失敗：後端未回傳 item");
+    throw new Error(t("errors.opencodeAliasUpdateMissingItem"));
   }
 
   return result.item;
@@ -272,7 +273,7 @@ export async function reorderAliases(
     payload: { orderedIds: idsInOrder },
   });
 
-  return requireAliasItems(result, "重排 opencode model 別稱");
+  return requireAliasItems(result, "errors.opencodeAliasReorderMissingItems");
 }
 
 /**
@@ -292,7 +293,7 @@ export async function refreshAliasPresets(
   });
 
   if (!result.item) {
-    throw new Error("刷新 opencode thinking presets 失敗：後端未回傳 item");
+    throw new Error(t("errors.opencodeAliasRefreshPresetsMissingItem"));
   }
 
   return result.item;

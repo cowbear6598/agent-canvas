@@ -166,8 +166,9 @@ describe("useUnifiedEventListeners", () => {
   });
 
   describe("createUnifiedHandler - isOwnOperation 檢查", () => {
-    it("自己的操作應顯示 Toast", () => {
+    it("自己的 Pod 建立事件不應額外顯示事件 Toast", () => {
       const { registerUnifiedListeners } = useUnifiedEventListeners();
+      const podStore = usePodStore();
       mockTryResolvePendingRequest.mockReturnValue(true);
 
       registerUnifiedListeners();
@@ -179,7 +180,8 @@ describe("useUnifiedEventListeners", () => {
         pod,
       });
 
-      expect(sharedMockToast).toHaveBeenCalledWith({ title: "Pod 建立成功" });
+      expect(podStore.pods.some((item) => item.id === "pod-1")).toBe(true);
+      expect(sharedMockToast).not.toHaveBeenCalled();
     });
 
     it("他人操作不應顯示 Toast", () => {

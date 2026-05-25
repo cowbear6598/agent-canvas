@@ -353,6 +353,7 @@
       "title": "MCP 管理",
       "description": "管理全域 MCP registry 與 runtime 狀態"
     },
+    "surfaceTargetsIgnoredTitle": "{pod} 略過了選定的 MCP",
     "list": {
       "title": "MCP 列表"
     },
@@ -506,6 +507,7 @@
   },
   "websocket": {
     "notConnected": "WebSocket 尚未連線",
+    "sendFailed": "WebSocket 訊息發送失敗",
     "requestTimeout": "請求逾時：{event}"
   },
   "composableDeleteResource": {
@@ -832,6 +834,15 @@
     "internalError": "伺服器內部錯誤",
     "unknownError": "發生未知錯誤",
     "notFound": "{entity} 找不到：{id}",
+    "opencodeAliasListMissingItems": "載入 opencode model 別稱失敗：後端未回傳 items",
+    "opencodeAliasCreateMissingItem": "新增 opencode model 別稱失敗：後端未回傳 item",
+    "opencodeAliasUpdateMissingItem": "更新 opencode model 別稱失敗：後端未回傳 item",
+    "opencodeAliasReorderMissingItems": "重排 opencode model 別稱失敗：後端未回傳 items",
+    "opencodeAliasRefreshPresetsMissingItem": "刷新 opencode thinking presets 失敗：後端未回傳 item",
+    "pluginListMissingPlugins": "取得 plugin 清單成功但後端未回傳 plugin 清單",
+    "pluginInstallMissingPlugin": "安裝 plugin 成功但後端未回傳 plugin 資料",
+    "pluginUpdateMissingPlugin": "更新 plugin 成功但後端未回傳 plugin 資料",
+    "pluginReorderMissingPlugins": "重排 plugin 成功但後端未回傳 plugin 清單",
     "pluginInvalidGithubRepoFormat": "無法安裝 plugin「{repo}」。GitHub repository 格式需為 owner/repo，例如 cowbear6598/soap-dev。",
     "pluginAlreadyInstalled": "Plugin「{repo}」已安裝。",
     "pluginInstallFailed": "無法安裝 plugin「{repo}」。請確認 GitHub repository 存在、可存取，且網路連線正常。原因：{reason}",
@@ -958,6 +969,7 @@
       "unlockTitle": "工作區已受保護",
       "unlockDescription": "請輸入工作區密碼以繼續。",
       "unlockAction": "解鎖",
+      "reconnectGrantMissing": "缺少重新連線授權",
       "reconnecting": "重新連線中..."
     },
     "canvas": {

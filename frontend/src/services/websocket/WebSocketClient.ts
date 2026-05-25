@@ -2,6 +2,7 @@ import { ref } from "vue";
 import type { WebSocketMessage } from "@/types/websocket";
 import { logger } from "@/utils/logger";
 import { safeJsonParse } from "@shared/safeJsonParse";
+import { t } from "@/i18n";
 
 type EventCallback<T> = (payload: T) => void;
 
@@ -288,7 +289,7 @@ class WebSocketClient {
 
   emit<T>(event: string, payload: T): WebSocketEmitResult {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
-      const error = new Error("WebSocket 尚未連線");
+      const error = new Error(t("websocket.notConnected"));
       logger.error("[WebSocket] 無法發送訊息，未連線:", event);
       return { ok: false, error };
     }
@@ -307,7 +308,7 @@ class WebSocketClient {
       const normalizedError =
         error instanceof Error
           ? error
-          : new Error("WebSocket 訊息發送失敗");
+          : new Error(t("websocket.sendFailed"));
       logger.error("[WebSocket] 發送訊息失敗:", event, normalizedError);
       return { ok: false, error: normalizedError };
     }

@@ -34,14 +34,11 @@ export const removeDeletedNotes = (
 
 const handlePodCreated = createUnifiedHandler<
   BasePayload & { pod?: Pod; canvasId: string }
->(
-  (payload) => {
-    if (payload.pod) {
-      usePodStore().addPodFromEvent(payload.pod);
-    }
-  },
-  { toastMessage: () => t("composable.eventHandler.podCreated") },
-);
+>((payload) => {
+  if (payload.pod) {
+    usePodStore().addPodFromEvent(payload.pod);
+  }
+});
 
 const handlePodMoved = createUnifiedHandler<
   BasePayload & { pod?: Pod; canvasId: string }
@@ -92,13 +89,10 @@ const handlePodDeleted = createUnifiedHandler<
     canvasId: string;
     deletedNoteIds?: DeletedNoteIds;
   }
->(
-  (payload) => {
-    usePodStore().removePod(payload.podId);
-    removeDeletedNotes(payload.deletedNoteIds);
-  },
-  { toastMessage: () => t("composable.eventHandler.podDeleted") },
-);
+>((payload) => {
+  usePodStore().removePod(payload.podId);
+  removeDeletedNotes(payload.deletedNoteIds);
+});
 
 const handlePodStateUpdated = createUnifiedHandler<
   BasePayload & { pod?: Pod; canvasId: string }

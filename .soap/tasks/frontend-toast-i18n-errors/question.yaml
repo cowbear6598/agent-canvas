@@ -1,0 +1,44 @@
+feature: frontend-toast-i18n-errors
+created: "2026-05-25"
+approved: true
+questions:
+  - id: Q1
+    text: 使用者提到的 CRUP 是否對應目前前端通用 CRUD helper？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      依 codebase 命名推定為 CRUD。相關核心在 `frontend/src/stores/note/createResourceCRUDActions.ts`，
+      檔案內提供 `createResourceCRUDActions` 與 `handleCRUDResponse`，涵蓋 create / update / read。
+      使用者描述的「前端出現兩次 Toast」最可能是 create / update 失敗路徑。
+
+  - id: Q2
+    text: 目前 CRUD 失敗時為什麼可能出現兩次 Toast？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      `createResourceCRUDActions` 的 create / update 會呼叫 `wrapWebSocketRequest(createWebSocketRequest(...))`。
+      catch 後目前把 `response` 設成 `null`，再交給 `handleCRUDResponse` 執行 onError 顯示 `showErrorToast`。
+      同時專案其他 WebSocket helper（例如 `useSendCanvasAction`、`useDeleteItem`、`withErrorToast` 呼叫者）
+      存在「底層 handler 顯示 Toast，呼叫端也依錯誤結果再顯示 Toast」的雙層錯誤顯示模式。
+      計畫應先收斂錯誤顯示責任：同一個失敗只由一層負責 Toast，另一層只回傳錯誤訊息或狀態。
+
+  - id: Q3
+    text: 錯誤顯示與 i18n 目前分布在哪些前端路徑？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      i18n 入口為 `frontend/src/i18n.ts`，語系檔為 `frontend/src/locales/zh-TW.json`、
+      `frontend/src/locales/en.json`、`frontend/src/locales/ja.json`。大多數 store 與 composable 已使用
+      `t(...)`，但仍有多處錯誤或 Toast 相關硬編碼字串，例如 `frontend/src/services/opencodeApi.ts`、
+      `frontend/src/services/pluginApi.ts`、`frontend/src/services/websocket/WebSocketClient.ts`、
+      `frontend/src/integration/providerRegistry.ts`、`frontend/src/stores/securityStore.ts`、
+      `frontend/src/composables/useDeleteItem.ts`、`frontend/src/components/canvas/ProviderPicker.vue`、
+      `frontend/src/composables/eventHandlers/managedMcpEventHandlers.ts` 等。
+
+  - id: Q4
+    text: 此需求是否需要後端 API 或 WebSocket contract 變更？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      目前看起來不需要。`createWebSocketRequest` 已會把後端 error object 的 `code` / `key` 轉成前端可讀訊息，
+      主要問題在前端錯誤顯示責任與硬編碼文案治理。計畫可先限定為前端修正，不新增 / 更新 / 刪除後端 API Router。

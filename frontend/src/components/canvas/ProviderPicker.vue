@@ -56,7 +56,7 @@ function isProviderDisabled(provider: PodProvider): boolean {
  */
 function showDisabledToast(provider: PodProvider): void {
   toast({
-    title: "Provider",
+    title: t("shared.providerModelSelector.providerLabel"),
     description:
       provider === "opencode"
         ? t("pod.modelSelector.opencode.emptyPlaceholder")

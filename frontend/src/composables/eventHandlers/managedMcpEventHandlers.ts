@@ -7,6 +7,7 @@ import { useManagedMcpStore } from "@/stores/managedMcpStore";
 import { useToast } from "@/composables/useToast";
 import { createUnifiedHandler } from "./sharedHandlerUtils";
 import type { BasePayload } from "./sharedHandlerUtils";
+import { t } from "@/i18n";
 
 type ManagedMcpRegistryUpdatedPayload = BasePayload & {
   action?: "saved" | "deleted" | "diagnostics";
@@ -46,7 +47,11 @@ const handleManagedMcpSurfaceTargetsIgnored =
         .map((target) => `${target.name}（${target.reason}）`)
         .join("、");
 
-      showErrorToast("Mcp", `${podLabel} 略過了選定的 MCP`, summary);
+      showErrorToast(
+        "Mcp",
+        t("managedMcp.surfaceTargetsIgnoredTitle", { pod: podLabel }),
+        summary,
+      );
     },
     { skipCanvasCheck: true },
   );

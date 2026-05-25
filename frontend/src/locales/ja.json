@@ -353,6 +353,7 @@
       "title": "MCP 管理",
       "description": "グローバル MCP registry と runtime 状態を管理"
     },
+    "surfaceTargetsIgnoredTitle": "{pod} は選択された MCP をスキップしました",
     "list": {
       "title": "MCP 一覧"
     },
@@ -506,6 +507,7 @@
   },
   "websocket": {
     "notConnected": "WebSocket が接続されていません",
+    "sendFailed": "WebSocket メッセージの送信に失敗しました",
     "requestTimeout": "リクエストがタイムアウトしました：{event}"
   },
   "composableDeleteResource": {
@@ -832,6 +834,15 @@
     "internalError": "サーバー内部エラー",
     "unknownError": "不明なエラーが発生しました",
     "notFound": "{entity} が見つかりません：{id}",
+    "opencodeAliasListMissingItems": "opencode model エイリアスの読み込みに失敗しました：backend が items を返しませんでした",
+    "opencodeAliasCreateMissingItem": "opencode model エイリアスの追加に失敗しました：backend が item を返しませんでした",
+    "opencodeAliasUpdateMissingItem": "opencode model エイリアスの更新に失敗しました：backend が item を返しませんでした",
+    "opencodeAliasReorderMissingItems": "opencode model エイリアスの並び替えに失敗しました：backend が items を返しませんでした",
+    "opencodeAliasRefreshPresetsMissingItem": "opencode thinking presets の更新に失敗しました：backend が item を返しませんでした",
+    "pluginListMissingPlugins": "plugin 一覧の取得は成功しましたが backend が plugin 一覧を返しませんでした",
+    "pluginInstallMissingPlugin": "plugin のインストールは成功しましたが backend が plugin データを返しませんでした",
+    "pluginUpdateMissingPlugin": "plugin の更新は成功しましたが backend が plugin データを返しませんでした",
+    "pluginReorderMissingPlugins": "plugin の並び替えは成功しましたが backend が plugin 一覧を返しませんでした",
     "pluginInvalidGithubRepoFormat": "Plugin「{repo}」をインストールできません。GitHub repository は owner/repo 形式で入力してください。例：cowbear6598/soap-dev。",
     "pluginAlreadyInstalled": "Plugin「{repo}」はすでにインストールされています。",
     "pluginInstallFailed": "Plugin「{repo}」をインストールできません。GitHub repository が存在し、アクセス可能で、ネットワーク接続が正常であることを確認してください。理由：{reason}",
@@ -958,6 +969,7 @@
       "unlockTitle": "ワークスペースは保護されています",
       "unlockDescription": "続行するにはワークスペースのパスワードを入力してください。",
       "unlockAction": "ロック解除",
+      "reconnectGrantMissing": "再接続 grant がありません",
       "reconnecting": "再接続中..."
     },
     "canvas": {

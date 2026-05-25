@@ -1,6 +1,7 @@
 import { createWebSocketRequest } from "@/services/websocket";
 import { useWebSocketErrorHandler } from "./useWebSocketErrorHandler";
 import { sanitizeErrorForUser } from "@/utils/errorSanitizer";
+import { t } from "@/i18n";
 
 export type DeleteItemResult<TResponse> =
   | { success: true; data: TResponse }
@@ -45,7 +46,7 @@ export function useDeleteItem(): {
     if (!response || !response.success) {
       return {
         success: false,
-        error: options.errorMessage ?? "刪除失敗",
+        error: options.errorMessage ?? t("common.error.delete"),
       };
     }
 

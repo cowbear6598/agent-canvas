@@ -38,7 +38,7 @@ describe("opencodeApi", () => {
     });
 
     await expect(requestPromise).rejects.toThrow(
-      "載入 opencode model 別稱失敗：後端未回傳 items",
+      "errors.opencodeAliasListMissingItems",
     );
   });
 
@@ -51,7 +51,7 @@ describe("opencodeApi", () => {
     });
 
     await expect(requestPromise).rejects.toThrow(
-      "重排 opencode model 別稱失敗：後端未回傳 items",
+      "errors.opencodeAliasReorderMissingItems",
     );
   });
 
@@ -132,7 +132,7 @@ describe("opencodeApi", () => {
     });
 
     await expect(requestPromise).rejects.toThrow(
-      "刷新 opencode thinking presets 失敗：後端未回傳 item",
+      "errors.opencodeAliasRefreshPresetsMissingItem",
     );
   });
 });

@@ -13,6 +13,7 @@ import type {
 } from "@/types/websocket/responses";
 import type { CanvasCreatedPayload } from "@/types/canvas";
 import { useCanvasStore } from "@/stores/canvasStore";
+import { t } from "@/i18n";
 
 type BootStatus =
   | "idle"
@@ -26,7 +27,7 @@ function normalizeError(error: unknown): string {
     return error.message;
   }
 
-  return "Unknown error";
+  return t("common.error.unknown");
 }
 
 export const useSecurityStore = defineStore("security", () => {
@@ -130,7 +131,7 @@ export const useSecurityStore = defineStore("security", () => {
     try {
       const response = await unlockWorkspaceApi(password);
       if (!response.reconnectGrant) {
-        throw new Error("Missing reconnect grant");
+        throw new Error(t("security.workspace.reconnectGrantMissing"));
       }
 
       pendingReconnectGrant.value = response.reconnectGrant;

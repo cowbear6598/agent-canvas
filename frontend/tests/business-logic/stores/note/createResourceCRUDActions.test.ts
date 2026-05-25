@@ -340,11 +340,39 @@ describe("createResourceCRUDActions", () => {
       expect(mockShowErrorToast).toHaveBeenCalledWith(
         "TestCategory",
         "建立失敗",
-        "建立失敗",
+        "Network error",
       );
       expect(result).toEqual({
         success: false,
-        error: "建立失敗",
+        error: "Network error",
+      });
+    });
+
+    it("WebSocket reject 時應只顯示一次解析後錯誤 Toast", async () => {
+      const items: TestItem[] = [];
+      const actions = createResourceCRUDActions(
+        "測試資源",
+        eventsConfig,
+        payloadConfig,
+        "TestCategory" as ToastCategory,
+      );
+
+      mockCreateWebSocketRequest.mockRejectedValueOnce(
+        new Error("後端建立失敗原因"),
+      );
+
+      const result = await actions.create(items, "Test Item", "Test Content");
+
+      expect(items).toHaveLength(0);
+      expect(mockShowErrorToast).toHaveBeenCalledTimes(1);
+      expect(mockShowErrorToast).toHaveBeenCalledWith(
+        "TestCategory",
+        "建立失敗",
+        "後端建立失敗原因",
+      );
+      expect(result).toEqual({
+        success: false,
+        error: "後端建立失敗原因",
       });
     });
 
@@ -365,7 +393,7 @@ describe("createResourceCRUDActions", () => {
       expect(mockShowErrorToast).not.toHaveBeenCalled();
       expect(result).toEqual({
         success: false,
-        error: "建立失敗",
+        error: "Network error",
       });
     });
 
@@ -506,11 +534,43 @@ describe("createResourceCRUDActions", () => {
       expect(mockShowErrorToast).toHaveBeenCalledWith(
         "TestCategory",
         "更新失敗",
-        "更新失敗",
+        "Update failed",
       );
       expect(result).toEqual({
         success: false,
-        error: "更新失敗",
+        error: "Update failed",
+      });
+    });
+
+    it("WebSocket reject 時應只顯示一次解析後錯誤 Toast 並保持 items 不變", async () => {
+      const items: TestItem[] = [
+        { id: "item-1", name: "Old Name", content: "Old Content" },
+      ];
+      const actions = createResourceCRUDActions(
+        "測試資源",
+        eventsConfig,
+        payloadConfig,
+        "TestCategory" as ToastCategory,
+      );
+
+      mockCreateWebSocketRequest.mockRejectedValueOnce(
+        new Error("後端更新失敗原因"),
+      );
+
+      const result = await actions.update(items, "item-1", "New Content");
+
+      expect(items).toEqual([
+        { id: "item-1", name: "Old Name", content: "Old Content" },
+      ]);
+      expect(mockShowErrorToast).toHaveBeenCalledTimes(1);
+      expect(mockShowErrorToast).toHaveBeenCalledWith(
+        "TestCategory",
+        "更新失敗",
+        "後端更新失敗原因",
+      );
+      expect(result).toEqual({
+        success: false,
+        error: "後端更新失敗原因",
       });
     });
 

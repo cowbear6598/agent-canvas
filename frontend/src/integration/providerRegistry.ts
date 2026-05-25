@@ -4,6 +4,7 @@ import { telegramProviderConfig } from "./providers/telegramProvider";
 import { jiraProviderConfig } from "./providers/jiraProvider";
 import { sentryProviderConfig } from "./providers/sentryProvider";
 import { webhookProviderConfig } from "./providers/webhookProvider";
+import { t } from "@/i18n";
 
 const registry = new Map<string, IntegrationProviderConfig>();
 
@@ -14,7 +15,7 @@ export function registerProvider(config: IntegrationProviderConfig): void {
 export function getProvider(name: string): IntegrationProviderConfig {
   const config = registry.get(name);
   if (!config) {
-    throw new Error(`找不到 Provider：${name}`);
+    throw new Error(t("errors.providerNotFound", { name }));
   }
   return config;
 }

@@ -1,6 +1,7 @@
 import { useWebSocketErrorHandler } from "@/composables/useWebSocketErrorHandler";
 import { createWebSocketRequest } from "@/services/websocket";
 import { requireActiveCanvas } from "@/utils/canvasGuard";
+import { sanitizeErrorForUser } from "@/utils/errorSanitizer";
 import { useToast } from "@/composables/useToast";
 import { t } from "@/i18n";
 import type {
@@ -180,8 +181,8 @@ export function createResourceCRUDActions<
             },
           }),
         );
-      } catch {
-        response = null;
+      } catch (error) {
+        response = { error: sanitizeErrorForUser(error) };
       }
 
       return handleCRUDResponse(
@@ -225,8 +226,8 @@ export function createResourceCRUDActions<
             },
           }),
         );
-      } catch {
-        response = null;
+      } catch (error) {
+        response = { error: sanitizeErrorForUser(error) };
       }
 
       return handleCRUDResponse(
