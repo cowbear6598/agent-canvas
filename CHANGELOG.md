@@ -1,5 +1,38 @@
 # Changelog
 
+## [2.1.0] - 2026-05-25
+
+### 新增
+- 支援 OpenCode 作為 Summary 與 Branch 模型來源
+- Branch Workflow 日誌新增 canvas 與 pod 名稱，方便追蹤執行脈絡
+- 補上 Workflow、Branch、Multi-input、OpenCode、資料庫一致性與回歸測試覆蓋
+
+### 修正
+- 修正 Direct workflow 移除後的狀態同步問題
+- 修正 Workflow Run 多來源排隊時互相中止的問題
+- 讓每組 Goal 執行都從完整待辦重新開始
+- 改善 Run 對話載入與 Goal 分隔線顯示
+- 隔離 workflow run 暫存 repository 目錄，避免出現在一般 repository 清單
+- 補強 runtime repository 安全檢查
+- 修復 OpenCode 錯誤訊息外洩與失敗處理
+- 改善 OpenCode 設定與連線更新一致性
+- 修復 OpenCode alias 重複設定防護與已設定 alias 的模型選單顯示
+- 強化 WebSocket 請求失敗回饋與 listener 管理
+- 強化 OpenCode thinking alias 處理
+- 防止刪除使用中的 OpenCode model alias
+- 強化 OpenCode 設定錯誤訊息與 provider 清單安全性
+- 修復 unlock 重新連線可繞過限制的問題
+- 修復分支名稱可被誤判為 Git 參數的問題
+- 修復 Telegram polling 失敗後停止重試的問題
+- 修復畫布操作失敗時沒有明確錯誤回饋的問題
+- 修正 Branch 決策模型跟隨 source Pod
+- 修正編輯文字時誤刪連線的問題
+- 改善 branch 連線設定同步失敗處理
+- 修正長時間查看 run 歷史後的卡頓與訊息重複問題
+- 讓刪除 run 與 workflow 清理流程在失敗時能正確回報與重試
+- 調整前端載入方式，避免正式建置時出現 bundle 警告
+- 清理已完成的資料庫 migration 函式與過期測試檔案
+
 ## [2.0.6] - 2026-05-22
 
 ### 新增
