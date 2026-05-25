@@ -164,9 +164,15 @@ describe("WebSocketClient", () => {
       const instance = mockWebSocketInstances[0]!;
       instance.readyState = MockWebSocket.CONNECTING;
 
-      websocketClient.emit("testEvent", { data: "test" });
+      const result = websocketClient.emit("testEvent", { data: "test" });
 
       expect(instance.send).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        ok: false,
+        error: expect.objectContaining({
+          message: "WebSocket 尚未連線",
+        }),
+      });
     });
 
     it("應該在已連線時透過 send 發送 JSON", () => {
@@ -197,6 +203,24 @@ describe("WebSocketClient", () => {
         type: "testEvent",
         payload: { data: "test", requestId: "req-123" },
         requestId: "req-123",
+      });
+    });
+
+    it("send 失敗且丟出非 Error 時回傳目前語系錯誤", () => {
+      websocketClient.connect("http://localhost:3001");
+      const instance = mockWebSocketInstances[0]!;
+      instance.triggerOpen();
+      instance.send.mockImplementationOnce(() => {
+        throw "send failed";
+      });
+
+      const result = websocketClient.emit("testEvent", { data: "test" });
+
+      expect(result).toEqual({
+        ok: false,
+        error: expect.objectContaining({
+          message: "WebSocket 訊息發送失敗",
+        }),
       });
     });
   });
@@ -513,12 +537,9 @@ describe("WebSocketClient", () => {
       const instance = mockWebSocketInstances[0]!;
       instance.triggerOpen();
 
-      websocketClient.forceReconnectWithGrant("grant-123");
+      await websocketClient.forceReconnectWithGrant("grant-123");
 
-      // 等待 async redeemGrantAndReconnect 執行完畢
-      await vi.waitFor(() =>
-        expect(mockWebSocketInstances.length).toBeGreaterThan(1),
-      );
+      expect(mockWebSocketInstances.length).toBeGreaterThan(1);
 
       // fetch 應被呼叫一次，帶上 grant
       expect(fetchMock).toHaveBeenCalledOnce();
@@ -532,6 +553,25 @@ describe("WebSocketClient", () => {
       const newUrl = mockWebSocketInstances[1]!.url;
       expect(newUrl).not.toContain("workspaceReconnectGrant");
       expect(newUrl).toBe("ws://localhost:3001");
+
+      vi.unstubAllGlobals();
+    });
+
+    it("forceReconnectWithGrant 換發失敗時應 reject 且不直接重連", async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue(new Response("{}", { status: 403 }));
+      vi.stubGlobal("fetch", fetchMock);
+
+      websocketClient.connect("http://localhost:3001");
+      const instance = mockWebSocketInstances[0]!;
+      instance.triggerOpen();
+
+      await expect(
+        websocketClient.forceReconnectWithGrant("grant-123"),
+      ).rejects.toThrow("重新連線授權換發失敗");
+
+      expect(mockWebSocketInstances).toHaveLength(1);
 
       vi.unstubAllGlobals();
     });

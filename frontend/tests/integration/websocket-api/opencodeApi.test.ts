@@ -5,10 +5,12 @@ import {
   simulateEvent,
 } from "@tests/helpers/mockWebSocket";
 import {
+  createAlias,
   listAliases,
   listOpencodeProviders as requestOpencodeProviders,
   refreshAliasPresets,
   reorderAliases,
+  updateAlias,
 } from "@/services/opencodeApi";
 
 vi.mock("@/services/websocket/WebSocketClient", () => ({
@@ -52,6 +54,40 @@ describe("opencodeApi", () => {
 
     await expect(requestPromise).rejects.toThrow(
       "errors.opencodeAliasReorderMissingItems",
+    );
+  });
+
+  it("createAlias success 缺少 item 時回報明確錯誤", async () => {
+    const requestPromise = createAlias({
+      providerID: "anthropic",
+      modelID: "claude-3-5-sonnet",
+      alias: "Sonnet",
+    });
+
+    simulateEvent("opencode:aliases:create:result", {
+      requestId: "req-opencode-aliases",
+      success: true,
+    });
+
+    await expect(requestPromise).rejects.toThrow(
+      "errors.opencodeAliasCreateMissingItem",
+    );
+  });
+
+  it("updateAlias success 缺少 item 時回報明確錯誤", async () => {
+    const requestPromise = updateAlias({
+      id: "alias-1",
+      modelID: "claude-3-5-sonnet",
+      alias: "Sonnet",
+    });
+
+    simulateEvent("opencode:aliases:update:result", {
+      requestId: "req-opencode-aliases",
+      success: true,
+    });
+
+    await expect(requestPromise).rejects.toThrow(
+      "errors.opencodeAliasUpdateMissingItem",
     );
   });
 

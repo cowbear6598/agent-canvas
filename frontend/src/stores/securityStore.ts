@@ -55,6 +55,12 @@ export const useSecurityStore = defineStore("security", () => {
       bootStatus.value === "bootstrapping" ||
       bootStatus.value === "reconnecting",
   );
+  const isPasswordTransportBlocked = computed(() => false);
+  const unlockedCanvasIdSet = computed(() => new Set(unlockedCanvasIds.value));
+  const canvasById = computed(() => {
+    const canvasStore = useCanvasStore();
+    return new Map(canvasStore.canvases.map((canvas) => [canvas.id, canvas]));
+  });
 
   const setUnlockedCanvasIds = (canvasIds: string[]): void => {
     unlockedCanvasIds.value = Array.from(new Set(canvasIds));
@@ -74,12 +80,11 @@ export const useSecurityStore = defineStore("security", () => {
   };
 
   const isCanvasUnlocked = (canvasId: string): boolean => {
-    return unlockedCanvasIds.value.includes(canvasId);
+    return unlockedCanvasIdSet.value.has(canvasId);
   };
 
   const isCanvasAccessible = (canvasId: string): boolean => {
-    const canvasStore = useCanvasStore();
-    const canvas = canvasStore.canvases.find((item) => item.id === canvasId);
+    const canvas = canvasById.value.get(canvasId);
     if (!canvas) {
       return false;
     }
@@ -136,13 +141,14 @@ export const useSecurityStore = defineStore("security", () => {
 
       pendingReconnectGrant.value = response.reconnectGrant;
       bootStatus.value = "reconnecting";
-      websocketClient.forceReconnectWithGrant(response.reconnectGrant);
+      await websocketClient.forceReconnectWithGrant(response.reconnectGrant);
       pendingReconnectGrant.value = null;
     } catch (error) {
       lastUnlockError.value = normalizeError(error);
       bootStatus.value = "locked";
       throw error;
     } finally {
+      pendingReconnectGrant.value = null;
       isUnlockingWorkspace.value = false;
     }
   };
@@ -277,6 +283,7 @@ export const useSecurityStore = defineStore("security", () => {
     bootStatus,
     lastUnlockError,
     showTransportRiskWarning,
+    isPasswordTransportBlocked,
     pendingReconnectGrant,
     isUnlockingWorkspace,
     isUnlockingCanvas,

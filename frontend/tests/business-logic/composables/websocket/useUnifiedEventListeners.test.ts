@@ -20,8 +20,6 @@ import { resetChatActionsCache } from "@/stores/chat/chatStore";
 import { usePodStore } from "@/stores/pod/podStore";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useRepositoryStore } from "@/stores/note/repositoryStore";
-// TODO Phase 4: useMcpServerStore 重構後補回
-// import { useMcpServerStore } from "@/stores/note/mcpServerStore";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { useIntegrationStore } from "@/stores/integrationStore";
 import { useManagedMcpStore } from "@/stores/managedMcpStore";
@@ -643,7 +641,6 @@ describe("useUnifiedEventListeners", () => {
       const { registerUnifiedListeners } = useUnifiedEventListeners();
       const podStore = usePodStore();
       const repositoryStore = useRepositoryStore();
-      // TODO Phase 4: mcpServerStore 重構後補回
 
       repositoryStore.notes = [
         createMockNote("repository", { id: "repo-note-1" }) as RepositoryNote,

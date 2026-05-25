@@ -5,6 +5,11 @@ export interface Canvas {
   isProtected: boolean;
 }
 
+type I18nErrorPayload = {
+  key: string;
+  params?: Record<string, string | number>;
+};
+
 export interface CanvasCreatePayload {
   requestId: string;
   name: string;
@@ -34,7 +39,7 @@ export interface CanvasCreatedPayload {
   requestId: string;
   success: boolean;
   canvas?: Canvas;
-  error?: string;
+  error?: string | I18nErrorPayload;
 }
 
 export interface CanvasListResultPayload {

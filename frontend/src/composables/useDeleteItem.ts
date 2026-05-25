@@ -3,7 +3,7 @@ import { useWebSocketErrorHandler } from "./useWebSocketErrorHandler";
 import { sanitizeErrorForUser } from "@/utils/errorSanitizer";
 import { t } from "@/i18n";
 
-export type DeleteItemResult<TResponse> =
+type DeleteItemResult<TResponse> =
   | { success: true; data: TResponse }
   | { success: false; error: string };
 

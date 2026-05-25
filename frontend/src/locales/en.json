@@ -508,6 +508,7 @@
   "websocket": {
     "notConnected": "WebSocket is not connected",
     "sendFailed": "Failed to send WebSocket message",
+    "reconnectGrantRedeemFailed": "Failed to redeem reconnect grant",
     "requestTimeout": "Request timed out: {event}"
   },
   "composableDeleteResource": {
@@ -833,6 +834,20 @@
   "errors": {
     "internalError": "Internal server error",
     "unknownError": "An unknown error occurred",
+    "auth": {
+      "passwordEmpty": "Password cannot be empty",
+      "passwordTooLong": "Password exceeds the length limit",
+      "wrongWorkspacePassword": "Wrong workspace password",
+      "wrongCanvasPassword": "Wrong Canvas password",
+      "workspacePasswordExists": "Workspace password is already set",
+      "workspacePasswordNotSet": "Workspace password is not set",
+      "canvasPasswordExists": "Canvas password is already set",
+      "canvasPasswordNotSet": "Canvas password is not set",
+      "workspaceLocked": "Workspace is locked",
+      "sessionMissing": "Session is missing. Refresh and try again.",
+      "transportSecurityMissing": "Missing transport security context. Refresh and try again.",
+      "rateLimited": "Too many attempts. Try again later ({seconds} seconds remaining)."
+    },
     "notFound": "{entity} not found: {id}",
     "opencodeAliasListMissingItems": "Failed to load opencode model aliases: backend did not return items",
     "opencodeAliasCreateMissingItem": "Failed to create opencode model alias: backend did not return item",
@@ -951,7 +966,8 @@
   "security": {
     "transportWarning": {
       "title": "Unencrypted LAN transport",
-      "description": "Password gate works, but traffic is not encrypted on this network."
+      "description": "Password gate works, but traffic is not encrypted on this network.",
+      "blocked": "This connection uses unencrypted LAN transport, so passwords cannot be sent. Use HTTPS and try again."
     },
     "workspace": {
       "settingsTitle": "Workspace Security",

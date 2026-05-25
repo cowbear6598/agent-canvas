@@ -53,7 +53,6 @@ const handleManagedMcpSurfaceTargetsIgnored =
         summary,
       );
     },
-    { skipCanvasCheck: true },
   );
 
 export function getManagedMcpEventListeners(): Array<{

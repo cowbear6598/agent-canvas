@@ -268,8 +268,8 @@ export function createResourceCRUDActions<
             },
           }),
         );
-      } catch {
-        return null;
+      } catch (error) {
+        throw new Error(sanitizeErrorForUser(error));
       }
 
       if (!response) {

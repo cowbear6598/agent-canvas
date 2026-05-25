@@ -7,10 +7,11 @@ import { t } from "@/i18n";
 type EventCallback<T> = (payload: T) => void;
 
 const RECONNECT_INTERVAL_MS = 3000;
+const RECONNECT_GRANT_TIMEOUT_MS = 10000;
 
 type EventHandler = (payload: unknown) => void;
 
-export type WebSocketEmitResult =
+type WebSocketEmitResult =
   | { ok: true }
   | { ok: false; error: Error };
 
@@ -106,25 +107,41 @@ class WebSocketClient {
     this.startReconnect();
   }
 
-  forceReconnectWithGrant(grant: string): void {
-    // 先將 grant 換成短效 HttpOnly cookie，再重連；
-    // grant 不再出現在 WebSocket URL query string。
-    this.redeemGrantAndReconnect(grant).catch((err) => {
-      logger.error("[WebSocket] grant 換發失敗，直接重連:", err);
-      this.forceReconnect();
-    });
+  async forceReconnectWithGrant(grant: string): Promise<void> {
+    await this.redeemGrantAndReconnect(grant);
   }
 
   private async redeemGrantAndReconnect(grant: string): Promise<void> {
     const apiBase = this.wsUrl ?? this.resolveDefaultWebSocketUrl();
     const redeemUrl =
       apiBase.replace(/^ws/, "http") + "/api/auth/redeem-reconnect-grant";
-    await fetch(redeemUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ grant }),
-    });
+    const abortController = new AbortController();
+    const timeoutId = window.setTimeout(
+      () => abortController.abort(),
+      RECONNECT_GRANT_TIMEOUT_MS,
+    );
+
+    try {
+      const response = await fetch(redeemUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ grant }),
+        signal: abortController.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(t("websocket.reconnectGrantRedeemFailed"));
+      }
+    } catch (error) {
+      logger.error("[WebSocket] grant 換發失敗:", error);
+      throw error instanceof Error
+        ? error
+        : new Error(t("websocket.reconnectGrantRedeemFailed"));
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
+
     this.forceReconnect();
   }
 

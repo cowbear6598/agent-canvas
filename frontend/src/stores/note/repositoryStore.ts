@@ -7,7 +7,7 @@ import {
   WebSocketResponseEvents,
 } from "@/services/websocket";
 import { useCanvasWebSocketAction } from "@/composables/useCanvasWebSocketAction";
-import { requireActiveCanvas } from "@/utils/canvasGuard";
+import { getActiveCanvasIdOrWarn, requireActiveCanvas } from "@/utils/canvasGuard";
 import { useToast } from "@/composables/useToast";
 import { generateRequestId } from "@/services/utils";
 import { t } from "@/i18n";
@@ -35,6 +35,7 @@ interface RepositoryStoreCustomActions {
   updateCurrentBranch(repositoryId: string, branchName: string): void;
   deleteRepository(repositoryId: string): Promise<void>;
   loadRepositories(): Promise<void>;
+  ensureRepositoriesLoaded(): Promise<void>;
   checkIsGit(repositoryId: string): Promise<boolean>;
   getLocalBranches(repositoryId: string): Promise<{
     success: boolean;
@@ -60,6 +61,8 @@ interface RepositoryStoreCustomActions {
 function createRepositoryCustomActions(): RepositoryStoreCustomActions {
   const { executeAction: executeRepositoryAction } = useCanvasWebSocketAction();
   const { showSuccessToast, showErrorToast } = useToast();
+  let loadedCanvasId: string | null = null;
+  let loadPromise: Promise<void> | null = null;
 
   return {
     async createRepository(
@@ -108,6 +111,33 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
 
     async loadRepositories(this: NoteStoreContext<Repository>): Promise<void> {
       return this.loadItems();
+    },
+
+    async ensureRepositoriesLoaded(
+      this: NoteStoreContext<Repository>,
+    ): Promise<void> {
+      const canvasId = getActiveCanvasIdOrWarn("repository");
+      if (!canvasId) {
+        return;
+      }
+
+      if (loadedCanvasId === canvasId) {
+        return;
+      }
+
+      if (loadPromise) {
+        return loadPromise;
+      }
+
+      loadPromise = this.loadItems()
+        .then(() => {
+          loadedCanvasId = canvasId;
+        })
+        .finally(() => {
+          loadPromise = null;
+        });
+
+      return loadPromise;
     },
 
     async checkIsGit(

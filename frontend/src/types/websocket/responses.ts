@@ -423,7 +423,7 @@ export interface ConfigUpdatedPayload extends ResultPayload {
   hasWorkspacePassword?: boolean;
 }
 
-export interface AuthBootstrapResultPayload extends ResultPayload {
+export interface AuthBootstrapResultPayload extends Omit<ResultPayload, "error"> {
   hasWorkspacePassword?: boolean;
   workspaceUnlocked?: boolean;
   unlockedCanvasIds?: string[];
@@ -432,19 +432,26 @@ export interface AuthBootstrapResultPayload extends ResultPayload {
     showInsecureTransportWarning: boolean;
     isLanHost: boolean;
   };
+  error?: string | I18nErrorPayload;
 }
 
-export interface AuthUnlockWorkspaceResultPayload extends ResultPayload {
+export interface AuthUnlockWorkspaceResultPayload
+  extends Omit<ResultPayload, "error"> {
   reconnectGrant?: string;
+  error?: string | I18nErrorPayload;
 }
 
-export interface AuthUnlockCanvasResultPayload extends ResultPayload {
+export interface AuthUnlockCanvasResultPayload
+  extends Omit<ResultPayload, "error"> {
   canvasId?: string;
   unlockedCanvasIds?: string[];
+  error?: string | I18nErrorPayload;
 }
 
-export interface WorkspacePasswordUpdatedPayload extends ResultPayload {
+export interface WorkspacePasswordUpdatedPayload
+  extends Omit<ResultPayload, "error"> {
   hasWorkspacePassword?: boolean;
+  error?: string | I18nErrorPayload;
 }
 
 export interface AuthSessionResetPayload {

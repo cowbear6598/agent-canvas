@@ -6,6 +6,7 @@ import { authAccessService } from "../services/auth/authAccessService.js";
 import { passwordService } from "../services/auth/passwordService.js";
 import { sessionStore } from "../services/auth/sessionStore.js";
 import { toCanvasDto } from "../utils/canvasDto.js";
+import { createI18nError } from "../utils/i18nError.js";
 
 export async function handleCanvasSecurityUpdate(
   connectionId: string,
@@ -20,7 +21,7 @@ export async function handleCanvasSecurityUpdate(
       {
         requestId,
         success: false,
-        error: "Workspace is locked",
+        error: createI18nError("errors.auth.workspaceLocked"),
       },
     );
     return;

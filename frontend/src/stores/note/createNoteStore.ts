@@ -20,6 +20,7 @@ import type { ToastCategory } from "@/composables/useToast";
 import { removeById } from "@/lib/arrayHelpers";
 import { buildCRUDActions } from "./buildCRUDActions";
 import { t } from "@/i18n";
+import { sanitizeErrorForUser } from "@/utils/errorSanitizer";
 
 const STORE_TO_CATEGORY_MAP: Record<string, ToastCategory> = {
   repository: "Repository",
@@ -177,22 +178,17 @@ function buildNoteStoreGetters<TItem, TNote extends BaseNote>(
       return map;
     },
 
-    getNotesByPodId:
-      (state: BaseNoteState) =>
-      (podId: string): TNote[] => {
+    getNotesByPodId(): (podId: string) => TNote[] {
+      return (podId: string): TNote[] => {
+        const notes =
+          (this as unknown as { notesByPodId: Map<string, TNote[]> })
+            .notesByPodId.get(podId) ?? [];
         if (config.relationship === "one-to-one") {
-          // one-to-one：只取第一筆（若有多筆視為資料異常，取第一筆相容舊行為）
-          const note = state.notes.find((note) => note.boundToPodId === podId);
-          return note ? [note as unknown as TNote] : [];
+          return notes.slice(0, 1);
         }
-        // one-to-many：直接從 state.notes 建立 Map 後查找（O(n) 建 Map + O(1) 查找）。
-        // 多次呼叫由 notesByPodId getter（Pinia 有快取）取用，
-        // 呼叫端透過 store.notesByPodId.get(podId) 可達到真正 O(1)。
-        // 此函式保留 O(n) filter 以維持向下相容，效能優化請直接使用 notesByPodId。
-        return state.notes.filter(
-          (note) => note.boundToPodId === podId,
-        ) as unknown as TNote[];
-      },
+        return notes;
+      };
+    },
 
     getNoteById:
       (state: BaseNoteState) =>
@@ -339,13 +335,13 @@ function createCoreActions<TItem>(
             payload: { canvasId },
           }),
         );
-      } catch {
-        // 錯誤已在 wrapWebSocketRequest 記錄，此處設定 error 狀態
+      } catch (error) {
+        this.error = sanitizeErrorForUser(error);
       }
 
       this.isLoading = false;
 
-      if (!response) {
+      if (!response && !this.error) {
         this.error = t("store.resource.loadFailed");
       }
 

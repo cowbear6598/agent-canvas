@@ -18,7 +18,7 @@ const noteTypeHandlers: {
   { noteType: "repositoryNote", getStore: () => useRepositoryStore() },
 ];
 
-export const removeDeletedNotes = (
+const removeDeletedNotes = (
   deletedNoteIds: DeletedNoteIds | undefined,
 ): void => {
   if (!deletedNoteIds) return;

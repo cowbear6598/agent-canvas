@@ -8,7 +8,7 @@ import { t } from "@/i18n";
 
 const registry = new Map<string, IntegrationProviderConfig>();
 
-export function registerProvider(config: IntegrationProviderConfig): void {
+function registerProvider(config: IntegrationProviderConfig): void {
   registry.set(config.name, config);
 }
 

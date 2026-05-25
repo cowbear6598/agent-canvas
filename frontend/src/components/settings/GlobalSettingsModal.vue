@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import WarningBox from "@/components/ui/WarningBox.vue";
 import { Loader2 } from "lucide-vue-next";
 import { getConfig, updateConfig } from "@/services/configApi";
 import { updateWorkspacePassword } from "@/services/securityApi";
@@ -77,16 +78,19 @@ const isBackupActionsDisabled = computed<boolean>(
 const canSetWorkspacePassword = computed<boolean>(
   () =>
     !isUpdatingWorkspacePassword.value &&
+    !securityStore.isPasswordTransportBlocked &&
     workspaceNewPassword.value.trim() !== "",
 );
 const canRemoveWorkspacePassword = computed<boolean>(
   () =>
     !isUpdatingWorkspacePassword.value &&
+    !securityStore.isPasswordTransportBlocked &&
     workspaceCurrentPassword.value.trim() !== "",
 );
 const canChangeWorkspacePassword = computed<boolean>(
   () =>
     !isUpdatingWorkspacePassword.value &&
+    !securityStore.isPasswordTransportBlocked &&
     workspaceCurrentPassword.value.trim() !== "" &&
     workspaceNewPassword.value.trim() !== "",
 );
@@ -482,12 +486,21 @@ watch(currentLocale, (next) => setLocale(next));
               </p>
             </div>
 
+            <WarningBox
+              v-if="securityStore.showTransportRiskWarning"
+              :title="t('security.transportWarning.title')"
+              :description="t('security.transportWarning.description')"
+            />
+
             <Input
               v-if="securityStore.workspacePasswordEnabled"
               v-model="workspaceCurrentPassword"
               type="password"
               :placeholder="t('security.workspace.currentPassword')"
-              :disabled="isUpdatingWorkspacePassword"
+              :disabled="
+                isUpdatingWorkspacePassword ||
+                  securityStore.isPasswordTransportBlocked
+              "
             />
             <Input
               v-model="workspaceNewPassword"
@@ -497,7 +510,10 @@ watch(currentLocale, (next) => setLocale(next));
                   ? t('security.workspace.newPassword')
                   : t('security.workspace.password')
               "
-              :disabled="isUpdatingWorkspacePassword"
+              :disabled="
+                isUpdatingWorkspacePassword ||
+                  securityStore.isPasswordTransportBlocked
+              "
             />
 
             <p

@@ -1,3 +1,5 @@
+import type { I18nError } from "../../utils/i18nError.js";
+
 export interface CanvasCreatedPayload {
   requestId: string;
   success: boolean;
@@ -6,7 +8,7 @@ export interface CanvasCreatedPayload {
     name: string;
     sortIndex: number;
   };
-  error?: string;
+  error?: string | I18nError;
 }
 
 export interface CanvasListResultPayload {

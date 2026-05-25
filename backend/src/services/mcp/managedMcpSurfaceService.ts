@@ -231,10 +231,12 @@ export class ManagedMcpSurfaceService {
     // 只在 run 模式發送（chat 模式前端目前未接收 chat-scoped ignored 來源，
     // 與舊 ensureSurface 行為保持一致）。
     if (runContext && ignoredTargets.length > 0) {
-      socketService.emitToAll(
+      socketService.emitToCanvas(
+        runContext.canvasId,
         WebSocketResponseEvents.MANAGED_MCP_SURFACE_TARGETS_IGNORED,
         {
           success: true,
+          canvasId: runContext.canvasId,
           runId: runContext.runId,
           podId: pod.id,
           podName: pod.name,

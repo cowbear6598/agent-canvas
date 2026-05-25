@@ -72,7 +72,7 @@ const handleOutsideMouseDown = (event: MouseEvent): void => {
 
 onMounted(async () => {
   document.addEventListener("mousedown", handleOutsideMouseDown, true);
-  await repositoryStore.loadRepositories();
+  await repositoryStore.ensureRepositoriesLoaded();
 });
 
 onUnmounted(() => {

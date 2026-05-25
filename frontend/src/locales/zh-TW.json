@@ -508,6 +508,7 @@
   "websocket": {
     "notConnected": "WebSocket 尚未連線",
     "sendFailed": "WebSocket 訊息發送失敗",
+    "reconnectGrantRedeemFailed": "重新連線授權換發失敗",
     "requestTimeout": "請求逾時：{event}"
   },
   "composableDeleteResource": {
@@ -833,6 +834,20 @@
   "errors": {
     "internalError": "伺服器內部錯誤",
     "unknownError": "發生未知錯誤",
+    "auth": {
+      "passwordEmpty": "密碼不能為空",
+      "passwordTooLong": "密碼長度超過限制",
+      "wrongWorkspacePassword": "工作區密碼錯誤",
+      "wrongCanvasPassword": "Canvas 密碼錯誤",
+      "workspacePasswordExists": "工作區已設定密碼",
+      "workspacePasswordNotSet": "工作區尚未設定密碼",
+      "canvasPasswordExists": "Canvas 已設定密碼",
+      "canvasPasswordNotSet": "Canvas 尚未設定密碼",
+      "workspaceLocked": "工作區目前已鎖定",
+      "sessionMissing": "找不到目前連線的 Session，請重新整理後再試",
+      "transportSecurityMissing": "缺少連線安全資訊，請重新整理後再試",
+      "rateLimited": "嘗試次數過多，請稍後再試（剩餘 {seconds} 秒）"
+    },
     "notFound": "{entity} 找不到：{id}",
     "opencodeAliasListMissingItems": "載入 opencode model 別稱失敗：後端未回傳 items",
     "opencodeAliasCreateMissingItem": "新增 opencode model 別稱失敗：後端未回傳 item",
@@ -951,7 +966,8 @@
   "security": {
     "transportWarning": {
       "title": "未加密的 LAN 傳輸",
-      "description": "密碼門禁仍然有效，但這個網路上的流量沒有加密。"
+      "description": "密碼門禁仍然有效，但這個網路上的流量沒有加密。",
+      "blocked": "目前連線是未加密的 LAN 傳輸，不能傳送密碼。請改用 HTTPS 後再試。"
     },
     "workspace": {
       "settingsTitle": "工作區安全",

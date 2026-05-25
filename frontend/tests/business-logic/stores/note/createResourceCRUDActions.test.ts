@@ -530,7 +530,7 @@ describe("createResourceCRUDActions", () => {
 
       const result = await actions.update(items, "item-1", "New Content");
 
-      expect(items[0]?.name).toBe("Old Name"); // 保持不變
+      expect(items[0]?.name).toBe("Old Name");
       expect(mockShowErrorToast).toHaveBeenCalledWith(
         "TestCategory",
         "更新失敗",
@@ -589,7 +589,7 @@ describe("createResourceCRUDActions", () => {
 
       const result = await actions.update(items, "item-1", "New Content");
 
-      expect(items[0]?.name).toBe("Old Name"); // 保持不變
+      expect(items[0]?.name).toBe("Old Name");
       expect(mockShowErrorToast).toHaveBeenCalledWith(
         "TestCategory",
         "更新失敗",
@@ -618,7 +618,7 @@ describe("createResourceCRUDActions", () => {
 
       const result = await actions.update(items, "item-1", "New Content");
 
-      expect(items[0]?.name).toBe("Old Name"); // 保持不變
+      expect(items[0]?.name).toBe("Old Name");
       expect(mockShowErrorToast).toHaveBeenCalledWith(
         "TestCategory",
         "更新失敗",
@@ -724,7 +724,7 @@ describe("createResourceCRUDActions", () => {
       expect(result).toEqual(item);
     });
 
-    it("WebSocket 錯誤時應回傳 null", async () => {
+    it("WebSocket 錯誤時應拋出解析後錯誤", async () => {
       const actions = createResourceCRUDActions(
         "測試資源",
         eventsConfig,
@@ -734,9 +734,7 @@ describe("createResourceCRUDActions", () => {
       const error = new Error("Read failed");
       mockCreateWebSocketRequest.mockRejectedValueOnce(error);
 
-      const result = await actions.read("item-1");
-
-      expect(result).toBeNull();
+      await expect(actions.read("item-1")).rejects.toThrow("Read failed");
     });
 
     it("response 無 item 時應回傳 null", async () => {
@@ -784,7 +782,7 @@ describe("createResourceCRUDActions", () => {
       const error = new Error("Read failed");
       mockCreateWebSocketRequest.mockRejectedValueOnce(error);
 
-      await actions.read("item-1");
+      await expect(actions.read("item-1")).rejects.toThrow("Read failed");
 
       expect(mockShowSuccessToast).not.toHaveBeenCalled();
       expect(mockShowErrorToast).not.toHaveBeenCalled();

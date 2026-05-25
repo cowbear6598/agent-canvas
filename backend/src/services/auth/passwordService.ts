@@ -2,6 +2,7 @@ import { canvasStore } from "../canvasStore.js";
 import { configStore, type WorkspacePasswordState } from "../configStore.js";
 import { err, ok, type Result } from "../../types/result.js";
 import type { Canvas } from "../../types/canvas.js";
+import { createI18nError } from "../../utils/i18nError.js";
 
 const MAX_PASSWORD_LENGTH = 256;
 
@@ -33,11 +34,11 @@ class PasswordService {
   private validateNewPassword(password: string): Result<string> {
     const normalized = normalizePassword(password);
     if (!normalized) {
-      return err("Password cannot be empty");
+      return err(createI18nError("errors.auth.passwordEmpty"));
     }
 
     if (normalized.length > MAX_PASSWORD_LENGTH) {
-      return err("Password is too long");
+      return err(createI18nError("errors.auth.passwordTooLong"));
     }
 
     return ok(normalized);
@@ -70,7 +71,7 @@ class PasswordService {
     );
 
     if (!verified) {
-      return err("Wrong workspace password");
+      return err(createI18nError("errors.auth.wrongWorkspacePassword"));
     }
 
     return ok(workspacePassword);
@@ -83,7 +84,7 @@ class PasswordService {
 
     if (action.action === "set") {
       if (currentState.passwordHash !== null) {
-        return err("Workspace password already exists");
+        return err(createI18nError("errors.auth.workspacePasswordExists"));
       }
 
       const validated = this.validateNewPassword(action.newPassword);
@@ -96,7 +97,7 @@ class PasswordService {
     }
 
     if (!currentState.passwordHash) {
-      return err("Workspace password is not set");
+      return err(createI18nError("errors.auth.workspacePasswordNotSet"));
     }
 
     const currentVerified = await this.verifyHash(
@@ -104,7 +105,7 @@ class PasswordService {
       currentState.passwordHash,
     );
     if (!currentVerified) {
-      return err("Wrong workspace password");
+      return err(createI18nError("errors.auth.wrongWorkspacePassword"));
     }
 
     if (action.action === "remove") {
@@ -126,7 +127,7 @@ class PasswordService {
   ): Promise<Result<{ canvas: Canvas; passwordVersion: number }>> {
     const canvas = canvasStore.getById(canvasId);
     if (!canvas) {
-      return err("Canvas not found");
+      return err(createI18nError("errors.canvasNotFound"));
     }
 
     const passwordInfo = canvasStore.getPasswordInfo(canvasId);
@@ -139,7 +140,7 @@ class PasswordService {
       passwordInfo.passwordHash,
     );
     if (!verified) {
-      return err("Wrong canvas password");
+      return err(createI18nError("errors.auth.wrongCanvasPassword"));
     }
 
     return ok({
@@ -154,7 +155,7 @@ class PasswordService {
   ): Promise<Result<CanvasPasswordUpdateResult>> {
     const canvas = canvasStore.getById(canvasId);
     if (!canvas) {
-      return err("Canvas not found");
+      return err(createI18nError("errors.canvasNotFound"));
     }
 
     const passwordInfo = canvasStore.getPasswordInfo(canvasId);
@@ -163,7 +164,7 @@ class PasswordService {
 
     if (action.action === "set") {
       if (currentHash !== null) {
-        return err("Canvas password already exists");
+        return err(createI18nError("errors.auth.canvasPasswordExists"));
       }
 
       const validated = this.validateNewPassword(action.newPassword);
@@ -178,14 +179,14 @@ class PasswordService {
         nextVersion,
       );
       if (!updatedCanvas) {
-        return err("Canvas not found");
+        return err(createI18nError("errors.canvasNotFound"));
       }
 
       return ok({ canvas: updatedCanvas, passwordVersion: nextVersion });
     }
 
     if (!currentHash) {
-      return err("Canvas password is not set");
+      return err(createI18nError("errors.auth.canvasPasswordNotSet"));
     }
 
     const currentVerified = await this.verifyHash(
@@ -193,13 +194,13 @@ class PasswordService {
       currentHash,
     );
     if (!currentVerified) {
-      return err("Wrong canvas password");
+      return err(createI18nError("errors.auth.wrongCanvasPassword"));
     }
 
     if (action.action === "remove") {
       const updatedCanvas = canvasStore.clearPasswordHash(canvasId, nextVersion);
       if (!updatedCanvas) {
-        return err("Canvas not found");
+        return err(createI18nError("errors.canvasNotFound"));
       }
 
       return ok({ canvas: updatedCanvas, passwordVersion: nextVersion });
@@ -217,7 +218,7 @@ class PasswordService {
       nextVersion,
     );
     if (!updatedCanvas) {
-      return err("Canvas not found");
+      return err(createI18nError("errors.canvasNotFound"));
     }
 
     return ok({ canvas: updatedCanvas, passwordVersion: nextVersion });

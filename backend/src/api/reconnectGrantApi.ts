@@ -20,6 +20,8 @@ const RECONNECT_GRANT_TTL_SECONDS = 30;
 export async function handleRedeemReconnectGrant(
   req: Request,
 ): Promise<Response> {
+  const transportSecurity = transportSecurityService.getRequestInfo(req);
+
   let body: unknown;
   try {
     body = await req.json();
@@ -52,8 +54,6 @@ export async function handleRedeemReconnectGrant(
     });
   }
 
-  // 取得 transport security（用於決定 cookie 是否加 Secure flag）
-  const transportSecurity = transportSecurityService.getRequestInfo(req);
   const secure = transportSecurity.isTls;
 
   const cookieAttrs = [

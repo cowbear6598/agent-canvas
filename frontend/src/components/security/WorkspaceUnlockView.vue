@@ -12,6 +12,12 @@ const password = ref("");
 const isSubmitting = computed(
   () => securityStore.isUnlockingWorkspace || securityStore.bootStatus === "reconnecting",
 );
+const isUnlockDisabled = computed(
+  () =>
+    isSubmitting.value ||
+    securityStore.isPasswordTransportBlocked ||
+    !password.value.trim(),
+);
 
 const handleSubmit = async (): Promise<void> => {
   if (!password.value.trim() || isSubmitting.value) {
@@ -47,7 +53,7 @@ const handleSubmit = async (): Promise<void> => {
           v-model="password"
           type="password"
           :placeholder="t('security.workspace.password')"
-          :disabled="isSubmitting"
+          :disabled="isSubmitting || securityStore.isPasswordTransportBlocked"
         />
 
         <p
@@ -60,7 +66,7 @@ const handleSubmit = async (): Promise<void> => {
         <Button
           type="submit"
           class="w-full"
-          :disabled="isSubmitting || !password.trim()"
+          :disabled="isUnlockDisabled"
         >
           {{
             securityStore.bootStatus === "reconnecting"

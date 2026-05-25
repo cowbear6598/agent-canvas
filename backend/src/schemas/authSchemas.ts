@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { I18nError } from "../utils/i18nError.js";
 
 const nonEmptyPasswordSchema = z.string().trim().min(1, "Password is required");
 
@@ -70,14 +71,14 @@ export interface AuthBootstrapResultPayload {
     showInsecureTransportWarning: boolean;
     isLanHost: boolean;
   };
-  error?: string;
+  error?: string | I18nError;
 }
 
 export interface AuthUnlockWorkspaceResultPayload {
   requestId: string;
   success: boolean;
   reconnectGrant?: string;
-  error?: string;
+  error?: string | I18nError;
 }
 
 export interface AuthUnlockCanvasResultPayload {
@@ -85,7 +86,7 @@ export interface AuthUnlockCanvasResultPayload {
   success: boolean;
   canvasId?: string;
   unlockedCanvasIds?: string[];
-  error?: string;
+  error?: string | I18nError;
 }
 
 export interface AuthSessionResetPayload {
@@ -101,5 +102,5 @@ export interface WorkspacePasswordUpdatedPayload {
   requestId: string;
   success: boolean;
   hasWorkspacePassword?: boolean;
-  error?: string;
+  error?: string | I18nError;
 }

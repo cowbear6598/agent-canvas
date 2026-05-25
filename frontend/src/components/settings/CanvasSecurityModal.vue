@@ -189,7 +189,9 @@ const handleRemovePassword = async (): Promise<void> => {
                 v-model="currentPassword"
                 type="password"
                 :placeholder="t('security.canvas.currentPassword')"
-                :disabled="isSubmitting"
+                :disabled="
+                  isSubmitting || securityStore.isPasswordTransportBlocked
+                "
               />
 
               <Input
@@ -200,7 +202,9 @@ const handleRemovePassword = async (): Promise<void> => {
                     ? t('security.canvas.newPassword')
                     : t('security.canvas.password')
                 "
-                :disabled="isSubmitting"
+                :disabled="
+                  isSubmitting || securityStore.isPasswordTransportBlocked
+                "
               />
 
               <p
@@ -222,7 +226,11 @@ const handleRemovePassword = async (): Promise<void> => {
           </Button>
           <Button
             v-if="selectedCanvas && !selectedCanvas.isProtected"
-            :disabled="isSubmitting || !newPassword.trim()"
+            :disabled="
+              isSubmitting ||
+                securityStore.isPasswordTransportBlocked ||
+                !newPassword.trim()
+            "
             @click="handleSetPassword"
           >
             {{ t("security.canvas.setPassword") }}
@@ -230,7 +238,11 @@ const handleRemovePassword = async (): Promise<void> => {
           <Button
             v-if="selectedCanvas?.isProtected"
             variant="outline"
-            :disabled="isSubmitting || !currentPassword.trim()"
+            :disabled="
+              isSubmitting ||
+                securityStore.isPasswordTransportBlocked ||
+                !currentPassword.trim()
+            "
             @click="handleRemovePassword"
           >
             {{ t("security.canvas.removePassword") }}
@@ -238,7 +250,10 @@ const handleRemovePassword = async (): Promise<void> => {
           <Button
             v-if="selectedCanvas?.isProtected"
             :disabled="
-              isSubmitting || !currentPassword.trim() || !newPassword.trim()
+              isSubmitting ||
+                securityStore.isPasswordTransportBlocked ||
+                !currentPassword.trim() ||
+                !newPassword.trim()
             "
             @click="handleChangePassword"
           >

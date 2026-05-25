@@ -30,6 +30,12 @@ const activeCanvasName = computed(() => {
     )?.name ?? ""
   );
 });
+const isUnlockDisabled = computed(
+  () =>
+    securityStore.isUnlockingCanvas ||
+    securityStore.isPasswordTransportBlocked ||
+    !password.value.trim(),
+);
 
 const handleClose = (): void => {
   password.value = "";
@@ -71,7 +77,10 @@ const handleSubmit = async (): Promise<void> => {
           v-model="password"
           type="password"
           :placeholder="t('security.canvas.password')"
-          :disabled="securityStore.isUnlockingCanvas"
+          :disabled="
+            securityStore.isUnlockingCanvas ||
+              securityStore.isPasswordTransportBlocked
+          "
         />
 
         <p
@@ -91,7 +100,7 @@ const handleSubmit = async (): Promise<void> => {
           </Button>
           <Button
             type="submit"
-            :disabled="securityStore.isUnlockingCanvas || !password.trim()"
+            :disabled="isUnlockDisabled"
           >
             {{ t("security.canvas.unlockAction") }}
           </Button>

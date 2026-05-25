@@ -236,7 +236,7 @@ describe("ManagedMcpSurfaceService provider surface integration", () => {
       enabled: true,
     });
     const emitSpy = vi
-      .spyOn(socketService, "emitToAll")
+      .spyOn(socketService, "emitToCanvas")
       .mockImplementation(() => undefined);
     const { surfaceService } = createSurface({
       probe: vi.fn().mockRejectedValue(new Error("connect timeout")),
@@ -261,9 +261,11 @@ describe("ManagedMcpSurfaceService provider surface integration", () => {
       },
     ]);
     expect(emitSpy).toHaveBeenCalledWith(
+      "canvas-managed-mcp-1",
       WebSocketResponseEvents.MANAGED_MCP_SURFACE_TARGETS_IGNORED,
       {
         success: true,
+        canvasId: "canvas-managed-mcp-1",
         runId: "run-ignored-1",
         podId: "pod-ignored",
         podName: "MCP Failure Pod",

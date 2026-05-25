@@ -508,6 +508,7 @@
   "websocket": {
     "notConnected": "WebSocket が接続されていません",
     "sendFailed": "WebSocket メッセージの送信に失敗しました",
+    "reconnectGrantRedeemFailed": "再接続認可の交換に失敗しました",
     "requestTimeout": "リクエストがタイムアウトしました：{event}"
   },
   "composableDeleteResource": {
@@ -833,6 +834,20 @@
   "errors": {
     "internalError": "サーバー内部エラー",
     "unknownError": "不明なエラーが発生しました",
+    "auth": {
+      "passwordEmpty": "パスワードを入力してください",
+      "passwordTooLong": "パスワードが長すぎます",
+      "wrongWorkspacePassword": "Workspace パスワードが正しくありません",
+      "wrongCanvasPassword": "Canvas パスワードが正しくありません",
+      "workspacePasswordExists": "Workspace パスワードはすでに設定されています",
+      "workspacePasswordNotSet": "Workspace パスワードは設定されていません",
+      "canvasPasswordExists": "Canvas パスワードはすでに設定されています",
+      "canvasPasswordNotSet": "Canvas パスワードは設定されていません",
+      "workspaceLocked": "Workspace はロックされています",
+      "sessionMissing": "Session が見つかりません。更新してから再試行してください。",
+      "transportSecurityMissing": "接続のセキュリティ情報がありません。更新してから再試行してください。",
+      "rateLimited": "試行回数が多すぎます。しばらくしてから再試行してください（残り {seconds} 秒）。"
+    },
     "notFound": "{entity} が見つかりません：{id}",
     "opencodeAliasListMissingItems": "opencode model エイリアスの読み込みに失敗しました：backend が items を返しませんでした",
     "opencodeAliasCreateMissingItem": "opencode model エイリアスの追加に失敗しました：backend が item を返しませんでした",
@@ -951,7 +966,8 @@
   "security": {
     "transportWarning": {
       "title": "暗号化されていない LAN 通信",
-      "description": "パスワードによる制限は機能しますが、このネットワーク上の通信は暗号化されていません。"
+      "description": "パスワードによる制限は機能しますが、このネットワーク上の通信は暗号化されていません。",
+      "blocked": "現在の接続は暗号化されていない LAN 通信のため、パスワードを送信できません。HTTPS に切り替えてから再試行してください。"
     },
     "workspace": {
       "settingsTitle": "ワークスペースのセキュリティ",

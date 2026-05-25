@@ -11,6 +11,7 @@ import { authAccessService } from "../services/auth/authAccessService.js";
 import { passwordService } from "../services/auth/passwordService.js";
 import { sessionStore } from "../services/auth/sessionStore.js";
 import { unlockRateLimiter } from "../services/auth/unlockRateLimiter.js";
+import { createI18nError } from "../utils/i18nError.js";
 
 export async function handleAuthBootstrap(
   connectionId: string,
@@ -28,7 +29,7 @@ export async function handleAuthBootstrap(
       {
         requestId,
         success: false,
-        error: "Missing transport security context",
+        error: createI18nError("errors.auth.transportSecurityMissing"),
       },
     );
     return;
@@ -64,7 +65,9 @@ export async function handleAuthUnlockWorkspace(
       {
         requestId,
         success: false,
-        error: `嘗試次數過多，請稍後再試（剩餘 ${rateLimitResult.retryAfterSeconds} 秒）`,
+        error: createI18nError("errors.auth.rateLimited", {
+          seconds: rateLimitResult.retryAfterSeconds,
+        }),
         errorCode: "AUTH_RATE_LIMITED",
         retryAfterSeconds: rateLimitResult.retryAfterSeconds,
       },
@@ -136,7 +139,9 @@ export async function handleAuthUnlockCanvas(
       {
         requestId,
         success: false,
-        error: `嘗試次數過多，請稍後再試（剩餘 ${rateLimitResult.retryAfterSeconds} 秒）`,
+        error: createI18nError("errors.auth.rateLimited", {
+          seconds: rateLimitResult.retryAfterSeconds,
+        }),
         errorCode: "AUTH_RATE_LIMITED",
         retryAfterSeconds: rateLimitResult.retryAfterSeconds,
       },
@@ -152,7 +157,7 @@ export async function handleAuthUnlockCanvas(
       {
         requestId,
         success: false,
-        error: "Workspace is locked",
+        error: createI18nError("errors.auth.workspaceLocked"),
       },
     );
     return;
@@ -165,7 +170,7 @@ export async function handleAuthUnlockCanvas(
       {
         requestId,
         success: false,
-        error: "Session is missing",
+        error: createI18nError("errors.auth.sessionMissing"),
       },
     );
     return;
@@ -223,7 +228,7 @@ export async function handleAuthUpdateWorkspacePassword(
       {
         requestId,
         success: false,
-        error: "Workspace is locked",
+        error: createI18nError("errors.auth.workspaceLocked"),
       },
     );
     return;
