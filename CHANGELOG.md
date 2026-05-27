@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.1.3] - 2026-05-27
+
+### 修正
+- 修復 doodle scrollbar 黑色殘留問題
+- 修復 Chat 訊息 tool status 顯示未帶型別約束導致未知狀態誤顯示
+
+### 優化
+- ToolOutputModal 改為單一 Modal 渲染，大幅降低長對話記憶體佔用
+- backend 啟動時 schema migration 改為單一 transaction，加快啟動並確保原子性
+- backend 資料庫欄位新增白名單與格式驗證，強化 SQL 注入風險防護
+- 移除整套 dark mode（CSS variant、變數區塊、scrollbar 規則、Vue 元件）
+- 移除 Codex provider 的 GPT-5.4 mini 模型，並自動遷移既有設定為 gpt-5.4
+- 清理無業務邏輯保護價值的 DB CASCADE 與過度測試覆蓋
+
 ## [2.1.2] - 2026-05-27
 
 ### 修正
