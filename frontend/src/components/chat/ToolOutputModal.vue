@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watchEffect } from "vue";
+import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import {
   Dialog,
@@ -43,17 +43,30 @@ const hasOutput = computed(() => {
 
 const renderedOutput = ref("");
 
-watchEffect(async () => {
-  if (!props.output) {
-    renderedOutput.value = "";
-    return;
-  }
-  const raw =
-    typeof props.output === "string"
-      ? props.output
-      : "```json\n" + JSON.stringify(props.output, null, 2) + "\n```";
-  renderedOutput.value = await renderMarkdown(raw);
-});
+watch(
+  () => props.output,
+  async (newOutput, _, onCleanup) => {
+    let cancelled = false;
+    onCleanup(() => {
+      cancelled = true;
+    });
+
+    if (!newOutput) {
+      renderedOutput.value = "";
+      return;
+    }
+
+    const raw =
+      typeof newOutput === "string"
+        ? newOutput
+        : "```json\n" + JSON.stringify(newOutput, null, 2) + "\n```";
+    const result = await renderMarkdown(raw);
+    if (!cancelled) {
+      renderedOutput.value = result;
+    }
+  },
+  { immediate: true },
+);
 </script>
 
 <template>

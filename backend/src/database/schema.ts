@@ -1,25 +1,25 @@
 import { Database } from "bun:sqlite";
 
-function ensureRunPodInstanceSummaryColumn(db: Database): void {
-  try {
-    db.exec(
-      "ALTER TABLE run_pod_instances ADD COLUMN last_response_summary TEXT",
-    );
-  } catch (error) {
-    if (
-      !(error instanceof Error) ||
-      !error.message.includes("duplicate column name")
-    ) {
-      throw error;
-    }
-  }
-}
+const ALLOWED_ALTER_TABLES = new Set(["model_aliases", "run_pod_instances"]);
+
+const COLUMN_SQL_PATTERN =
+  /^[a-zA-Z_][a-zA-Z0-9_]*\s+[A-Z]+(\s+(NOT NULL|DEFAULT\s+\S+))*$/;
 
 function addColumnIfMissing(
   db: Database,
   tableName: string,
   columnSql: string,
 ): void {
+  if (!ALLOWED_ALTER_TABLES.has(tableName)) {
+    throw new Error(
+      `addColumnIfMissing：資料表 "${tableName}" 不在白名單中，禁止動態 ALTER TABLE`,
+    );
+  }
+  if (!COLUMN_SQL_PATTERN.test(columnSql)) {
+    throw new Error(
+      `addColumnIfMissing：columnSql "${columnSql}" 格式不合法，禁止執行`,
+    );
+  }
   try {
     db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnSql}`);
   } catch (error) {
@@ -33,39 +33,36 @@ function addColumnIfMissing(
 }
 
 function ensureModelAliasesThinkingColumns(db: Database): void {
-  addColumnIfMissing(db, "model_aliases", "thinking_levels_json TEXT");
-  addColumnIfMissing(db, "model_aliases", "default_thinking_level TEXT");
-  addColumnIfMissing(db, "model_aliases", "thinking_metadata_json TEXT");
-  addColumnIfMissing(
-    db,
-    "model_aliases",
-    "thinking_metadata_fetched_at INTEGER",
-  );
+  db.transaction(() => {
+    addColumnIfMissing(db, "model_aliases", "thinking_levels_json TEXT");
+    addColumnIfMissing(db, "model_aliases", "default_thinking_level TEXT");
+    addColumnIfMissing(db, "model_aliases", "thinking_metadata_json TEXT");
+    addColumnIfMissing(
+      db,
+      "model_aliases",
+      "thinking_metadata_fetched_at INTEGER",
+    );
+  })();
 }
 
 function migrateLegacyCodexMiniModel(db: Database): void {
-  db.exec(
-    `UPDATE pods
-     SET provider_config_json = json_set(provider_config_json, '$.model', 'gpt-5.4')
-     WHERE json_extract(provider_config_json, '$.model') = 'gpt-5.4-mini'`,
-  );
+  db.transaction(() => {
+    db.exec(
+      `UPDATE pods
+       SET provider_config_json = json_set(provider_config_json, '$.model', 'gpt-5.4')
+       WHERE json_extract(provider_config_json, '$.model') = 'gpt-5.4-mini'`,
+    );
 
-  db.exec(
-    `UPDATE connections
-     SET summary_model = 'gpt-5.4'
-     WHERE summary_model = 'gpt-5.4-mini'`,
-  );
-
-  db.exec(
-    `UPDATE connections
-     SET branch_model = 'gpt-5.4'
-     WHERE branch_model = 'gpt-5.4-mini'`,
-  );
+    db.exec(
+      `UPDATE connections
+       SET summary_model = CASE WHEN summary_model = 'gpt-5.4-mini' THEN 'gpt-5.4' ELSE summary_model END,
+           branch_model  = CASE WHEN branch_model  = 'gpt-5.4-mini' THEN 'gpt-5.4' ELSE branch_model  END
+       WHERE summary_model = 'gpt-5.4-mini' OR branch_model = 'gpt-5.4-mini'`,
+    );
+  })();
 }
 
 function ensureModelAliasesUniqueRealModelIndex(db: Database): void {
-  // 舊版資料可能允許同一 real model 建多筆 alias。
-  // migration 先保留排序最前的一筆，再補上 DB 唯一索引，避免後續寫入競態。
   db.exec(
     `DELETE FROM model_aliases
      WHERE id IN (
@@ -404,7 +401,7 @@ function createBaseTables(db: Database): void {
 
 export function createTables(db: Database): void {
   createBaseTables(db);
-  ensureRunPodInstanceSummaryColumn(db);
+  addColumnIfMissing(db, "run_pod_instances", "last_response_summary TEXT");
   ensureModelAliasesThinkingColumns(db);
   ensureModelAliasesUniqueRealModelIndex(db);
   migrateLegacyCodexMiniModel(db);

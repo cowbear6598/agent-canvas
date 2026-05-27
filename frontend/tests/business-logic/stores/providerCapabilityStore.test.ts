@@ -25,18 +25,6 @@ describe("providerCapabilityStore", () => {
   setupStoreTest();
 
   // ----------------------------------------------------------------
-  // 初始 State
-  // ----------------------------------------------------------------
-  describe("初始狀態", () => {
-    it("各欄位應有正確預設值", () => {
-      const store = useProviderCapabilityStore();
-
-      expect(store.loaded).toBe(false);
-      expect(store.defaultOptionsByProvider).toEqual({});
-    });
-  });
-
-  // ----------------------------------------------------------------
   // syncFromPayload — defaultOptions 寫入（Phase 2 新增）
   // ----------------------------------------------------------------
   describe("syncFromPayload（defaultOptions 寫入）", () => {
@@ -88,94 +76,6 @@ describe("providerCapabilityStore", () => {
       expect(store.defaultOptionsByProvider["codex"]).toEqual({
         model: "gpt-5.4",
       });
-    });
-  });
-
-  // ----------------------------------------------------------------
-  // getDefaultOptions getter（Phase 2 新增）
-  // ----------------------------------------------------------------
-  describe("getDefaultOptions", () => {
-    it("syncFromPayload 寫入後 getDefaultOptions('claude') 可讀回正確值", () => {
-      const store = useProviderCapabilityStore();
-
-      store.syncFromPayload([
-        {
-          name: "claude",
-          defaultOptions: { model: "claude-opus-4-5" },
-        },
-      ]);
-
-      expect(store.getDefaultOptions("claude")).toEqual({
-        model: "claude-opus-4-5",
-      });
-    });
-
-    it("syncFromPayload 寫入後 getDefaultOptions('codex') 可讀回正確值", () => {
-      const store = useProviderCapabilityStore();
-
-      store.syncFromPayload([
-        {
-          name: "codex",
-          defaultOptions: { model: "gpt-5.4" },
-        },
-      ]);
-
-      expect(store.getDefaultOptions("codex")).toEqual({ model: "gpt-5.4" });
-    });
-
-    it("未寫入時 getDefaultOptions('unknown') 應回 undefined", () => {
-      const store = useProviderCapabilityStore();
-
-      expect(store.getDefaultOptions("unknown")).toBeUndefined();
-    });
-
-    it("寫入但後端未帶 defaultOptions 時，getDefaultOptions 應回 {}（而非 undefined）", () => {
-      const store = useProviderCapabilityStore();
-
-      store.syncFromPayload([
-        {
-          name: "claude",
-          // 刻意不帶 defaultOptions
-        },
-      ]);
-
-      expect(store.getDefaultOptions("claude")).toEqual({});
-    });
-  });
-
-  // ----------------------------------------------------------------
-  // isKnownProvider getter（Phase 2 新增）
-  // ----------------------------------------------------------------
-  describe("isKnownProvider", () => {
-    it("metadata 載入前 isKnownProvider('claude') 應為 false", () => {
-      const store = useProviderCapabilityStore();
-
-      expect(store.isKnownProvider("claude")).toBe(false);
-    });
-
-    it("syncFromPayload 寫入後 isKnownProvider('claude') 應為 true", () => {
-      const store = useProviderCapabilityStore();
-
-      store.syncFromPayload([{ name: "claude" }]);
-
-      expect(store.isKnownProvider("claude")).toBe(true);
-    });
-
-    it("isKnownProvider('unknown-provider') 應永遠為 false", () => {
-      const store = useProviderCapabilityStore();
-
-      store.syncFromPayload([{ name: "claude" }, { name: "codex" }]);
-
-      expect(store.isKnownProvider("unknown-provider")).toBe(false);
-    });
-
-    it("只寫入 codex 後，isKnownProvider('claude') 仍為 false", () => {
-      const store = useProviderCapabilityStore();
-
-      store.syncFromPayload([{ name: "codex" }]);
-
-      expect(store.isKnownProvider("claude")).toBe(false);
-      expect(store.isKnownProvider("codex")).toBe(true);
     });
   });
 

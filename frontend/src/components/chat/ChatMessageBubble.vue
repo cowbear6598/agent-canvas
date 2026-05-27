@@ -92,7 +92,7 @@ const getToolIcon = (
   return Check;
 };
 
-const toolStatusClassMap: Record<string, string> = {
+const toolStatusClassMap: Record<ToolUseStatus, string> = {
   running: "bg-blue-50 border-blue-500 text-blue-600",
   error: "bg-red-50 border-red-500 text-red-600",
   completed: "bg-green-50 border-green-500 text-green-600",
@@ -100,7 +100,7 @@ const toolStatusClassMap: Record<string, string> = {
 };
 
 const getToolTagClass = (status: ToolUseStatus): string => {
-  return toolStatusClassMap[status] ?? toolStatusClassMap.completed ?? "";
+  return toolStatusClassMap[status] ?? "";
 };
 
 const openToolModal = (toolUseId: string): void => {
@@ -110,6 +110,13 @@ const openToolModal = (toolUseId: string): void => {
 const closeToolModal = (): void => {
   activeToolModal.value = null;
 };
+
+const activeToolInfo = computed(() =>
+  activeToolModal.value
+    ? (uniqueToolUse.value.find((t) => t.toolUseId === activeToolModal.value) ??
+      null)
+    : null,
+);
 </script>
 
 <template>
@@ -215,13 +222,13 @@ const closeToolModal = (): void => {
   </div>
 
   <ToolOutputModal
-    v-for="tool in uniqueToolUse"
-    :key="`modal-${tool.toolUseId}`"
-    :open="activeToolModal === tool.toolUseId"
-    :tool-name="tool.toolName"
-    :input="tool.input"
-    :output="tool.output"
-    :status="tool.status"
+    v-if="activeToolInfo"
+    :key="`modal-${activeToolInfo.toolUseId}`"
+    :open="true"
+    :tool-name="activeToolInfo.toolName"
+    :input="activeToolInfo.input"
+    :output="activeToolInfo.output"
+    :status="activeToolInfo.status"
     @update:open="closeToolModal"
   />
 </template>
