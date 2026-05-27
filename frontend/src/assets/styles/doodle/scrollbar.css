@@ -9,26 +9,13 @@
   border: 2px solid oklch(0.4 0.02 50);
   border-radius: 4px 6px 5px 7px;
   box-shadow: 1px 1px 0 oklch(0.4 0.02 50);
-  transform: rotate(0.5deg);
   transition: all 0.15s ease;
 }
 
 .doodle-scrollbar-thumb:hover {
   background: oklch(0.85 0.12 90);
-  transform: rotate(-0.5deg) scale(1.05);
+  transform: scale(1.05);
   box-shadow: 2px 2px 0 oklch(0.4 0.02 50);
-}
-
-/* Dark mode scrollbar */
-.dark .doodle-scrollbar-thumb {
-  background: oklch(0.75 0.1 90);
-  border-color: oklch(0.7 0.02 50);
-  box-shadow: 1px 1px 0 oklch(0.7 0.02 50);
-}
-
-.dark .doodle-scrollbar-thumb:hover {
-  background: oklch(0.7 0.12 90);
-  box-shadow: 2px 2px 0 oklch(0.7 0.02 50);
 }
 
 /* Doodle textarea scrollbar */
@@ -50,14 +37,4 @@
 
 .doodle-textarea::-webkit-scrollbar-thumb:hover {
   background: oklch(0.85 0.12 90);
-}
-
-.dark .doodle-textarea::-webkit-scrollbar-thumb {
-  background: oklch(0.75 0.1 90);
-  border-color: oklch(0.7 0.02 50);
-  box-shadow: 1px 1px 0 oklch(0.7 0.02 50);
-}
-
-.dark .doodle-textarea::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.7 0.12 90);
 }

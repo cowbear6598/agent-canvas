@@ -156,7 +156,9 @@ onMounted(() => {
               </SelectTrigger>
               <SelectContent position="popper">
                 <SelectItem
-                  v-for="model in draftSelectableModelsByProvider[provider.id] ?? []"
+                  v-for="model in draftSelectableModelsByProvider[
+                    provider.id
+                  ] ?? []"
                   :key="model.id"
                   :value="model.id"
                 >
@@ -212,7 +214,8 @@ onMounted(() => {
           <!-- 空狀態提示 -->
           <p
             v-if="
-              (aliasCountByProvider[provider.id] ?? 0) === 0 && !draftRows[provider.id]
+              (aliasCountByProvider[provider.id] ?? 0) === 0 &&
+                !draftRows[provider.id]
             "
             class="text-xs text-muted-foreground py-1"
           >
@@ -342,7 +345,7 @@ onMounted(() => {
         <!-- 已登入 badge -->
         <span
           v-if="isConnectedProvider(provider.id)"
-          class="text-xs text-green-600 dark:text-green-400 font-medium"
+          class="text-xs text-green-600 font-medium"
         >
           {{ t("llmProvider.opencode.providerList.connected") }}
         </span>

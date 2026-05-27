@@ -70,7 +70,7 @@ watchEffect(async () => {
       <div class="overflow-y-auto flex-1 min-h-0">
         <div
           v-if="status === 'error'"
-          class="mb-3 px-3 py-2 rounded bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm"
+          class="mb-3 px-3 py-2 rounded bg-red-50 border border-red-200 text-red-600 text-sm"
         >
           {{ $t("chat.toolOutput.executionError") }}
         </div>

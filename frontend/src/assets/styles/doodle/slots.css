@@ -394,7 +394,7 @@
   pointer-events: auto;
 }
 
-/* 水位顏色依 provider 切換（變數已涵蓋 light/dark mode） */
+/* 水位顏色依 provider 切換（light mode 專用變數） */
 .pod-thinking-slot--claude {
   --thinking-fill-color: var(--pod-thinking-fill-claude);
 }

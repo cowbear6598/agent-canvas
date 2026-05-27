@@ -36,7 +36,31 @@ function ensureModelAliasesThinkingColumns(db: Database): void {
   addColumnIfMissing(db, "model_aliases", "thinking_levels_json TEXT");
   addColumnIfMissing(db, "model_aliases", "default_thinking_level TEXT");
   addColumnIfMissing(db, "model_aliases", "thinking_metadata_json TEXT");
-  addColumnIfMissing(db, "model_aliases", "thinking_metadata_fetched_at INTEGER");
+  addColumnIfMissing(
+    db,
+    "model_aliases",
+    "thinking_metadata_fetched_at INTEGER",
+  );
+}
+
+function migrateLegacyCodexMiniModel(db: Database): void {
+  db.exec(
+    `UPDATE pods
+     SET provider_config_json = json_set(provider_config_json, '$.model', 'gpt-5.4')
+     WHERE json_extract(provider_config_json, '$.model') = 'gpt-5.4-mini'`,
+  );
+
+  db.exec(
+    `UPDATE connections
+     SET summary_model = 'gpt-5.4'
+     WHERE summary_model = 'gpt-5.4-mini'`,
+  );
+
+  db.exec(
+    `UPDATE connections
+     SET branch_model = 'gpt-5.4'
+     WHERE branch_model = 'gpt-5.4-mini'`,
+  );
 }
 
 function ensureModelAliasesUniqueRealModelIndex(db: Database): void {
@@ -383,4 +407,5 @@ export function createTables(db: Database): void {
   ensureRunPodInstanceSummaryColumn(db);
   ensureModelAliasesThinkingColumns(db);
   ensureModelAliasesUniqueRealModelIndex(db);
+  migrateLegacyCodexMiniModel(db);
 }

@@ -277,10 +277,7 @@ describe("providerCapabilityStore", () => {
         { label: "Claude Opus 4.5", value: "claude-opus-4-5" },
         { label: "Claude Sonnet 4.5", value: "claude-sonnet-4-5" },
       ];
-      const codexModels = [
-        { label: "GPT-5.4", value: "gpt-5.4" },
-        { label: "GPT-5.4 Mini", value: "gpt-5.4-mini" },
-      ];
+      const codexModels = [{ label: "GPT-5.4", value: "gpt-5.4" }];
 
       store.syncFromPayload([
         {
@@ -392,9 +389,9 @@ describe("providerCapabilityStore", () => {
         },
       ]);
 
-      expect(
-        store.isModelValidForProvider("opencode", "openai/gpt-4o"),
-      ).toBe(true);
+      expect(store.isModelValidForProvider("opencode", "openai/gpt-4o")).toBe(
+        true,
+      );
       expect(
         store.isModelValidForProvider(
           "opencode",

@@ -17,7 +17,6 @@ export const CLAUDE_AVAILABLE_MODEL_VALUES: ReadonlySet<string> = new Set(
 export const CODEX_AVAILABLE_MODELS = Object.freeze([
   Object.freeze({ label: "GPT-5.4", value: "gpt-5.4" }),
   Object.freeze({ label: "GPT-5.5", value: "gpt-5.5" }),
-  Object.freeze({ label: "GPT-5.4-mini", value: "gpt-5.4-mini" }),
 ] as const);
 
 /**
@@ -61,10 +60,6 @@ export const CODEX_MODEL_THINKING_LEVELS: Readonly<
     default: "medium",
   }),
   "gpt-5.5": Object.freeze({
-    levels: Object.freeze(["low", "medium", "high", "xhigh"] as const),
-    default: "medium",
-  }),
-  "gpt-5.4-mini": Object.freeze({
     levels: Object.freeze(["low", "medium", "high", "xhigh"] as const),
     default: "medium",
   }),

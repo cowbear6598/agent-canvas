@@ -1,0 +1,54 @@
+feature: scrollbar-and-gpt-mini-cleanup
+approved: true
+
+scenarios:
+  - id: F1
+    scenario: 使用者在 scroll area 區域捲動時，scrollbar 不留下黑色殘留
+    given:
+      - 使用者打開含有 scroll area 的畫面（例如 Pod、Chat、Tool Output 等）
+      - 該 scroll area 內容超出可視範圍，scrollbar 可見
+    when:
+      - 使用者拖曳 scrollbar 上下捲動
+      - 使用者用滾輪 / 觸控板捲動該 scroll area
+    then:
+      - scrollbar thumb 隨捲動位置移動
+      - scroll area 內不會出現黑色條紋殘留
+      - 捲動停止後 scroll area 仍維持乾淨，沒有殘影
+
+  - id: F2
+    scenario: 使用者在 Codex provider 模型選單中看不到 GPT-5.4 mini
+    given:
+      - 使用者已將 Pod / Connection 的 provider 切到 Codex
+      - 使用者打開 model 選擇器
+    when:
+      - 使用者展開 model 選單
+    then:
+      - 選單只列出 GPT-5.4、GPT-5.5
+      - 選單中不再出現 GPT-5.4-mini
+      - 選擇 GPT-5.4 / GPT-5.5 後設定能正常儲存
+
+  - id: F3
+    scenario: 既有設定中曾選用 GPT-5.4 mini 的 Pod / Connection 啟動後自動切換到 GPT-5.4
+    given:
+      - 使用者過去曾建立 Pod 並選 GPT-5.4 mini 作為 Codex model
+      - 或使用者過去曾建立 Connection 並把 summary_model / branch_model 設為 gpt-5.4-mini
+      - 該設定已持久化在 DB
+    when:
+      - 使用者重新啟動 backend 後打開該 Canvas
+    then:
+      - 該 Pod 的 Codex model 顯示為 GPT-5.4
+      - 該 Connection 的 summary_model / branch_model 顯示為 gpt-5.4
+      - 整個流程不會跳出「不存在的 model」錯誤
+      - 此 migration 不會把其他合法 model 值（如 gpt-5.4 / gpt-5.5 / claude 各 model）誤改
+
+  - id: F4
+    scenario: 移除 dark mode 後使用者開啟畫面樣式仍維持原本 light mode 外觀
+    given:
+      - 使用者使用既有專案版本（dark mode 從未被啟用）
+    when:
+      - 使用者打開 Canvas
+      - 使用者操作 Pod / Chat / Tool Output / Settings 等含 light/dark 樣式邏輯的畫面
+    then:
+      - 整體畫面以原本的 light mode 樣式呈現
+      - 不會看到空白色塊、未上色的文字、未定義的背景
+      - 移除前後 light mode 視覺上沒有可見差異

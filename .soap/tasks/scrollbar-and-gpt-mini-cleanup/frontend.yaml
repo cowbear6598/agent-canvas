@@ -1,0 +1,106 @@
+feature: scrollbar-and-gpt-mini-cleanup
+side: frontend
+approved: true
+
+phases:
+  - id: P1
+    title: Scrollbar 黑色殘留修復（移除引發 composite layer paint bug 的 rotate）
+    parallel: false
+    verification:
+      - cd frontend && bun run style
+    done: true
+    items:
+      - id: P1.A
+        title: 移除 .doodle-scrollbar-thumb 的 base rotate 並改寫 hover transform 為 scale-only
+        tasks:
+          - id: P1.A.t1
+            text: 編輯 `frontend/src/assets/styles/doodle/scrollbar.css`，在 `.doodle-scrollbar-thumb` 規則中移除 `transform: rotate(0.5deg)` 整行；在 `.doodle-scrollbar-thumb:hover` 規則中把 `transform: rotate(-0.5deg) scale(1.05)` 改寫成 `transform: scale(1.05)`（保留 hover 放大反饋，移除肉眼無感但會觸發 composite layer paint bug 的 rotate）。保留 background / border / border-radius / box-shadow / transition 不動，維持 doodle 不規則手繪風格、深色陰影與平滑過渡
+            completed: true
+            last_files_changed:
+              - frontend/src/assets/styles/doodle/scrollbar.css
+
+  - id: P2
+    title: 移除前端 GPT-5.4 mini 測試斷言
+    parallel: false
+    verification:
+      - cd frontend && bun run style
+      - cd frontend && bun run test:run
+    done: true
+    items:
+      - id: P2.A
+        title: providerCapabilityStore.test.ts 清理
+        tasks:
+          - id: P2.A.t1
+            text: 編輯 `frontend/tests/business-logic/stores/providerCapabilityStore.test.ts`，刪除 line 282 附近的 `{ label: "GPT-5.4 Mini", value: "gpt-5.4-mini" }` 這筆 assertion 元素；若同一個 expected 陣列的長度斷言、index 對應斷言或其他相關 assertion 因刪除這一筆而失準，同步調整為移除後的正確值，不額外保留 mock 值佔位
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/stores/providerCapabilityStore.test.ts
+
+  - id: P3
+    title: 移除 dark mode（CSS 全域宣告 / 變數區塊 / scrollbar 規則 / Tailwind dark: class）
+    parallel: true
+    verification:
+      - cd frontend && bun run style
+      - cd frontend && bun run test:run
+    done: true
+    items:
+      - id: P3.A
+        title: 移除 dark variant 全域宣告
+        tasks:
+          - id: P3.A.t1
+            text: 編輯 `frontend/src/assets/styles/main.css`，刪除 line 7 的 `@custom-variant dark (&:is(.dark *));` 整行
+            completed: true
+            last_files_changed:
+              - frontend/src/assets/styles/main.css
+
+      - id: P3.B
+        title: 移除 variables.css 的 .dark 變數區塊與註解
+        tasks:
+          - id: P3.B.t1
+            text: 編輯 `frontend/src/assets/styles/variables.css`，刪除約 line 64-127 的整個 `.dark { ... }` 區塊（含 background / foreground / card / popover / primary / secondary / muted / accent / destructive / border / input / ring / sidebar 系列；Pod 漸層暗模式變數 `--pod-provider-*-top`；Doodle 暗模式調色板；Pod thinking 暗模式變數）；保留 `:root { ... }` light mode 變數與 `@theme inline` mapping 不動
+            completed: true
+            last_files_changed:
+              - frontend/src/assets/styles/variables.css
+          - id: P3.B.t2
+            text: 同檔 line 92 / 105 / 118 等位置之註解中提及 "dark mode" 的描述，將相關字眼移除或改寫成 light-only 語意（不影響功能，只是清理註解內容一致性）
+            completed: true
+            last_files_changed:
+              - frontend/src/assets/styles/variables.css
+
+      - id: P3.C
+        title: 移除 scrollbar.css 與 slots.css 的 dark 規則 / 註解
+        tasks:
+          - id: P3.C.t1
+            text: 編輯 `frontend/src/assets/styles/doodle/scrollbar.css`，刪除 line 22-32 的 `.dark .doodle-scrollbar-thumb { ... }` 與其 `:hover` 規則；刪除 line 54-63 的 `.dark .doodle-textarea::-webkit-scrollbar-thumb { ... }` 與其 `:hover` 規則。注意此檔 P1 同步在編輯，需與 P1.A / P1.B 完成後合流；若 P1 結果先合入，本任務只負責刪 `.dark` 規則段落
+            completed: true
+            last_files_changed:
+              - frontend/src/assets/styles/doodle/scrollbar.css
+          - id: P3.C.t2
+            text: 編輯 `frontend/src/assets/styles/doodle/slots.css` line 397 附近的註解，將 "light/dark mode" 描述改寫成 light-only 語意（純註解清理）
+            completed: true
+            last_files_changed:
+              - frontend/src/assets/styles/doodle/slots.css
+
+      - id: P3.D
+        title: 移除 Vue 元件中的 Tailwind dark: class
+        tasks:
+          - id: P3.D.t1
+            text: 編輯 `frontend/src/components/pod/PodHeader.vue`：line 70 移除 `dark:hover:bg-gray-800`；line 75 移除 `dark:text-gray-400 dark:hover:text-gray-300`；保留同行其他 class 不動
+            completed: true
+            last_files_changed:
+              - frontend/src/components/pod/PodHeader.vue
+          - id: P3.D.t2
+            text: 編輯 `frontend/src/components/settings/OpencodeSettingsPanel.vue` line 345，移除 `dark:text-green-400`；保留同行其他 class
+            completed: true
+            last_files_changed:
+              - frontend/src/components/settings/OpencodeSettingsPanel.vue
+          - id: P3.D.t3
+            text: 編輯 `frontend/src/components/chat/ToolOutputModal.vue` line 73，移除 `dark:bg-red-950/30 dark:border-red-800 dark:text-red-400`；保留同行其他 class
+            completed: true
+            last_files_changed:
+              - frontend/src/components/chat/ToolOutputModal.vue
+          - id: P3.D.t4
+            text: 編輯 `frontend/src/components/chat/ChatMessageBubble.vue` line 96-99 共 4 處，逐處移除 status style map 中的 `dark:bg-*-950/30` class；保留同行其他 class；若該檔有對應的測試會因 class 移除而需要同步調整斷言，一併修正
+            completed: true
+            last_files_changed:
+              - frontend/src/components/chat/ChatMessageBubble.vue

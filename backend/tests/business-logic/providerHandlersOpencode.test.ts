@@ -201,7 +201,7 @@ describe("provider:list — claude / codex availableModels 不受 opencode DB �
     expect(codex).toBeDefined();
 
     const values = codex!.availableModels.map((m) => m.value);
-    // codex 的 value 應為 gpt-5.4 / gpt-5.5 / gpt-5.4-mini 等寫死值
+    // codex 的 value 應為 gpt-5.4 / gpt-5.5 等寫死值
     expect(values.every((v) => !v.includes("/"))).toBe(true);
     // 不應包含 opencode 動態注入的 "openai/gpt-5"
     expect(values).not.toContain("openai/gpt-5");

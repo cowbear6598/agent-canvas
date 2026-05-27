@@ -1,0 +1,96 @@
+feature: scrollbar-and-gpt-mini-cleanup
+side: backend
+approved: true
+
+phases:
+  - id: P1
+    title: 移除 gpt-5.4-mini 模型條目並加上 DB migration
+    parallel: true
+    verification:
+      - cd backend && bun run style
+      - cd backend && bun run test
+    done: true
+    items:
+      - id: P1.A
+        title: 從 capabilities.ts 移除 gpt-5.4-mini 模型定義
+        tasks:
+          - id: P1.A.t1
+            text: 編輯 `backend/src/services/provider/capabilities.ts`，從 `CODEX_AVAILABLE_MODELS` 陣列移除 `{ label: "GPT-5.4-mini", value: "gpt-5.4-mini" }` 條目；陣列僅保留 `gpt-5.4` 與 `gpt-5.5`
+            completed: true
+            last_files_changed:
+              - backend/src/services/provider/capabilities.ts
+          - id: P1.A.t2
+            text: 在同一檔案的 `CODEX_MODEL_THINKING_LEVELS` 物件中移除 `"gpt-5.4-mini"` 整個 key 與其對應 `Object.freeze({ levels, default })` 設定；物件僅保留 `gpt-5.4` 與 `gpt-5.5` 兩個 key
+            completed: true
+            last_files_changed:
+              - backend/src/services/provider/capabilities.ts
+
+      - id: P1.B
+        title: 在 schema.ts migration sequence 加入 gpt-5.4-mini → gpt-5.4 轉換
+        tasks:
+          - id: P1.B.t1
+            text: 在 `backend/src/database/schema.ts` 新增名為 `migrateLegacyCodexMiniModel` 的 function，輸入為 `Database`，內容為兩條 idempotent UPDATE 語句；第一條更新 `pods` 表，使用 SQLite JSON1 `json_set(provider_config_json, '$.model', 'gpt-5.4')` 並以 `WHERE json_extract(provider_config_json, '$.model') = 'gpt-5.4-mini'` 過濾；第二條更新 `connections` 表，把 `summary_model = 'gpt-5.4-mini'` 改為 `'gpt-5.4'`，並把 `branch_model = 'gpt-5.4-mini'` 改為 `'gpt-5.4'`（可用兩條 UPDATE 或單條 CASE，擇一即可，欄位匹配條件以等於 `'gpt-5.4-mini'` 為唯一條件）
+            completed: true
+            last_files_changed:
+              - backend/src/database/schema.ts
+          - id: P1.B.t2
+            text: 在 `backend/src/database/schema.ts` 的 `createTables` function 內、所有現有 migration helper 呼叫（`ensureRunPodInstanceSummaryColumn` / `ensureModelAliasesThinkingColumns` / `ensureModelAliasesUniqueRealModelIndex`）之後，加上對 `migrateLegacyCodexMiniModel(db)` 的呼叫
+            completed: true
+            last_files_changed:
+              - backend/src/database/schema.ts
+
+  - id: P2
+    title: 測試清理與 migration 回歸測試
+    parallel: true
+    verification:
+      - cd backend && bun run style
+      - cd backend && bun run test
+    done: true
+    items:
+      - id: P2.A
+        title: 為 gpt-5.4-mini migration 新增回歸測試
+        tasks:
+          - id: P2.A.t1
+            text: 在 `backend/tests/database/schema.test.ts` 新增一個 `describe("gpt-5.4-mini 模型 migration")` 區塊；測試使用 `initTestDb()` 取得 in-memory SQLite，不 mock SQLite
+            completed: true
+            last_files_changed:
+              - backend/tests/database/schema.test.ts
+          - id: P2.A.t2
+            text: 在新區塊內新增測試「將 pods.provider_config_json.model = 'gpt-5.4-mini' 的資料轉換為 'gpt-5.4'」；先 INSERT 一筆 canvas 與 pod（pod 的 `provider_config_json` 為 `JSON.stringify({ model: "gpt-5.4-mini", thinkingLevel: "medium" })`，欄位名與 `backend/src/schemas/podSchemas.ts` 中 `thinkingLevel` 一致），啟動時 migration 已執行；再 SELECT 該 pod，驗證 `json_extract(provider_config_json, '$.model')` 為 `'gpt-5.4'`，且 `json_extract(provider_config_json, '$.thinkingLevel')` 仍為 `'medium'`（確認 migration 只動 `$.model`、其他 JSON 欄位未被破壞）
+            completed: true
+            last_files_changed:
+              - backend/tests/database/schema.test.ts
+          - id: P2.A.t3
+            text: 新增測試「將 connections.summary_model 與 branch_model 為 'gpt-5.4-mini' 的資料轉換為 'gpt-5.4'」；先 INSERT 一筆 canvas、一筆 source pod、一筆 target pod 與一筆 connection（`summary_model = 'gpt-5.4-mini'`、`branch_model = 'gpt-5.4-mini'`），再 SELECT 該 connection，驗證兩欄位都為 `'gpt-5.4'`
+            completed: true
+            last_files_changed:
+              - backend/tests/database/schema.test.ts
+          - id: P2.A.t4
+            text: 新增測試「migration 是冪等的」；INSERT 一筆含 `gpt-5.4-mini` 的 pod、再呼叫 `createTables(db)` 第二次後驗證 model 為 `'gpt-5.4'`；接著再呼叫第三次後仍為 `'gpt-5.4'`，且不應 throw
+            completed: true
+            last_files_changed:
+              - backend/tests/database/schema.test.ts
+          - id: P2.A.t5
+            text: 新增測試「migration 不會誤改其他合法 model 值」；同一個測試 db 內 INSERT 三筆 pod（`model = 'gpt-5.4'` / `'gpt-5.5'` / `'opus'`）與一筆 connection（`summary_model = 'sonnet'`、`branch_model = 'gpt-5.5'`），呼叫 `createTables(db)` 後 SELECT 全部，驗證每一筆值維持原樣
+            completed: true
+            last_files_changed:
+              - backend/tests/database/schema.test.ts
+
+      - id: P2.B
+        title: 移除 backend 既有測試中的 gpt-5.4-mini mock 與引用
+        tasks:
+          - id: P2.B.t1
+            text: 編輯 `backend/tests/business-logic/disposableChatService.test.ts`，將 line 197 附近的 `expect(["gpt-5.4", "gpt-5.5", "gpt-5.4-mini"]).toContain(result.resolvedModel)` 中的 `"gpt-5.4-mini"` 字串移除，使陣列只剩 `["gpt-5.4", "gpt-5.5"]`
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/disposableChatService.test.ts
+          - id: P2.B.t2
+            text: 編輯 `backend/tests/business-logic/streamingChatExecutor.test.ts`，將 line 1622 附近 `availableModelValues: new Set(["gpt-5.4", "gpt-5.5", "gpt-5.4-mini"])` 中的 `"gpt-5.4-mini"` 字串移除，使 Set 只含 `"gpt-5.4"` 與 `"gpt-5.5"`
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/streamingChatExecutor.test.ts
+          - id: P2.B.t3
+            text: 編輯 `backend/tests/business-logic/providerHandlersOpencode.test.ts`，將 line 204 附近的註解 `// codex 的 value 應為 gpt-5.4 / gpt-5.5 / gpt-5.4-mini 等寫死值` 中的 `/ gpt-5.4-mini` 字眼移除，註解改為 `// codex 的 value 應為 gpt-5.4 / gpt-5.5 等寫死值`
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/providerHandlersOpencode.test.ts

@@ -1,10 +1,8 @@
-@import 'tailwindcss';
-@import 'tw-animate-css';
-@import './variables.css';
-@import './doodle/index.css';
-@import './animations.css';
-
-@custom-variant dark (&:is(.dark *));
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "./variables.css";
+@import "./doodle/index.css";
+@import "./animations.css";
 
 @layer base {
   * {

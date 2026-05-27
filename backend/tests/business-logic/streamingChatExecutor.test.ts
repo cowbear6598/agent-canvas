@@ -114,8 +114,7 @@ function readOnlyScopedGoalRuntimeSnapshot(
     .filter((file) => file.startsWith(scopedPrefix) && file.endsWith(".json"))
     .map((file) => path.join(runDir, file))
     .sort(
-      (left, right) =>
-        fs.statSync(right).mtimeMs - fs.statSync(left).mtimeMs,
+      (left, right) => fs.statSync(right).mtimeMs - fs.statSync(left).mtimeMs,
     );
 
   expect(scopedPaths.length).toBeGreaterThan(0);
@@ -1619,7 +1618,7 @@ describe("executeStreamingChat", () => {
           .fn()
           .mockResolvedValue({ model: "gpt-5.4", resumeMode: "cli" }),
         metadata: {
-          availableModelValues: new Set(["gpt-5.4", "gpt-5.5", "gpt-5.4-mini"]),
+          availableModelValues: new Set(["gpt-5.4", "gpt-5.5"]),
           defaultOptions: { model: "gpt-5.4" },
         },
       });

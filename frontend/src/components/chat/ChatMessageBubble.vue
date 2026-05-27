@@ -93,10 +93,10 @@ const getToolIcon = (
 };
 
 const toolStatusClassMap: Record<string, string> = {
-  running: "bg-blue-50 dark:bg-blue-950/30 border-blue-500 text-blue-600",
-  error: "bg-red-50 dark:bg-red-950/30 border-red-500 text-red-600",
-  completed: "bg-green-50 dark:bg-green-950/30 border-green-500 text-green-600",
-  pending: "bg-gray-50 dark:bg-gray-950/30 border-gray-500 text-gray-600",
+  running: "bg-blue-50 border-blue-500 text-blue-600",
+  error: "bg-red-50 border-red-500 text-red-600",
+  completed: "bg-green-50 border-green-500 text-green-600",
+  pending: "bg-gray-50 border-gray-500 text-gray-600",
 };
 
 const getToolTagClass = (status: ToolUseStatus): string => {

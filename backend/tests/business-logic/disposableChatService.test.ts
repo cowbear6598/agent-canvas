@@ -102,7 +102,9 @@ describe("disposableChatService", () => {
   beforeEach(() => {
     initTestDb();
     vi.clearAllMocks();
-    (opencodeProvider.buildOptions as ReturnType<typeof vi.fn>).mockResolvedValue({
+    (
+      opencodeProvider.buildOptions as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
       providerID: "openai",
       modelID: "gpt-4o",
       mcpEntries: [],
@@ -194,9 +196,7 @@ describe("disposableChatService", () => {
     // resolvedModel 應為 codex 的預設（不等於輸入的 INVALID_MODEL）
     expect(result.resolvedModel).not.toBe(INVALID_MODEL);
     // 應為 codex 的合法 model
-    expect(["gpt-5.4", "gpt-5.5", "gpt-5.4-mini"]).toContain(
-      result.resolvedModel,
-    );
+    expect(["gpt-5.4", "gpt-5.5"]).toContain(result.resolvedModel);
   });
 
   it("不支援的 provider → throw Error('不支援的 provider')", async () => {
@@ -346,7 +346,9 @@ describe("disposableChatService", () => {
         env: {},
       },
     ];
-    (opencodeProvider.buildOptions as ReturnType<typeof vi.fn>).mockResolvedValue({
+    (
+      opencodeProvider.buildOptions as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
       providerID: "openai",
       modelID: "gpt-4o",
       mcpEntries,

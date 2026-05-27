@@ -67,12 +67,12 @@ const handleSave = (): void => {
       </h3>
       <button
         v-if="!isEditing"
-        class="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+        class="p-1 rounded hover:bg-gray-100 transition-colors"
         @click="$emit('rename')"
       >
         <Pencil
           :size="14"
-          class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+          class="text-gray-500 hover:text-gray-700"
         />
       </button>
     </div>
