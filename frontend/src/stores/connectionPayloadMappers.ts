@@ -22,10 +22,12 @@ export interface RawConnection {
   triggerMode?: "auto" | "branch" | "direct";
   summaryModel?: string;
   summaryProvider?: PodProvider | null;
+  summaryThinkingLevel?: string | null;
   label?: string;
   description?: string;
   branchProvider?: PodProvider;
   branchModel?: string;
+  branchThinkingLevel?: string | null;
   connectionStatus?: string;
   decideReason?: string | null;
   decideStatus?: string;
@@ -71,10 +73,12 @@ export function normalizeConnection(
     triggerMode: (raw.triggerMode ?? "auto") as TriggerMode,
     summaryModel: normalizedSummary.summaryModel,
     summaryProvider: normalizedSummary.summaryProvider,
+    summaryThinkingLevel: raw.summaryThinkingLevel ?? null,
     label: raw.label,
     description: raw.description,
     branchProvider: raw.branchProvider,
     branchModel: raw.branchModel,
+    branchThinkingLevel: raw.branchThinkingLevel ?? null,
     status: (raw.connectionStatus ?? "idle") as ConnectionStatus,
     decideReason: raw.decideReason ?? undefined,
     decideStatus: (raw.decideStatus as DecideStatus) ?? "none",
@@ -116,9 +120,11 @@ export function normalizeCreatedConnectionEvent(
     ...connection,
     summaryModel: normalizedSummary.summaryModel,
     summaryProvider: normalizedSummary.summaryProvider,
+    summaryThinkingLevel: connection.summaryThinkingLevel ?? null,
     triggerMode: connection.triggerMode ?? "auto",
     status: "idle",
     decideStatus: "none",
+    branchThinkingLevel: connection.branchThinkingLevel ?? null,
   };
 }
 
@@ -173,11 +179,19 @@ export function mapConnectionUpdatedEventPayload(
       (connection.triggerMode as TriggerMode) ?? existingConnection.triggerMode,
     summaryModel: normalizedSummary.summaryModel,
     summaryProvider: normalizedSummary.summaryProvider,
+    summaryThinkingLevel:
+      connection.summaryThinkingLevel !== undefined
+        ? connection.summaryThinkingLevel
+        : existingConnection.summaryThinkingLevel,
     // branch 欄位直接以後端回傳值覆寫（包含 undefined 視為清空）
     label: connection.label,
     description: connection.description,
     branchProvider: connection.branchProvider as PodProvider | undefined,
     branchModel: connection.branchModel,
+    branchThinkingLevel:
+      connection.branchThinkingLevel !== undefined
+        ? connection.branchThinkingLevel
+        : existingConnection.branchThinkingLevel,
     // connectionStatus 有帶值則覆寫；未帶則保留既有 status（避免 multi-input rejected 後 status 卡住）
     status: connection.connectionStatus
       ? (connection.connectionStatus as ConnectionStatus)

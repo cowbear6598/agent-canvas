@@ -39,6 +39,7 @@ export interface DisposableChatInput {
    */
   sourcePod?: Pod;
   runContext?: RunContext;
+  thinkingLevel?: string | null;
 }
 
 export interface DisposableChatOutput {
@@ -156,6 +157,7 @@ async function executeOpencodeDisposableChat(
     ...(builtOptions?.thinkingLevel
       ? { thinkingLevel: builtOptions.thinkingLevel }
       : {}),
+    ...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
     ...(builtOptions?.thinkingOptions
       ? { thinkingOptions: builtOptions.thinkingOptions }
       : {}),
@@ -220,6 +222,7 @@ export async function executeDisposableChat(
       userMessage,
       workspacePath,
       model: resolvedModel,
+      thinkingLevel: input.thinkingLevel,
     });
     return { ...result, resolvedModel };
   } else if (provider === "codex") {
@@ -228,6 +231,7 @@ export async function executeDisposableChat(
       userMessage,
       workspacePath,
       model: resolvedModel,
+      thinkingLevel: input.thinkingLevel,
     });
     return { ...result, resolvedModel };
   } else if (provider === "opencode") {

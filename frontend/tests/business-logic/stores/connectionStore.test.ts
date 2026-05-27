@@ -96,14 +96,24 @@ describe("connectionStore", () => {
         {
           name: "claude",
           availableModels: [
-            { value: "sonnet", label: "Sonnet" },
+            {
+              value: "sonnet",
+              label: "Sonnet",
+              thinkingLevels: ["low", "medium", "high"],
+              defaultThinkingLevel: "medium",
+            },
             { value: "opus", label: "Opus" },
           ],
         },
         {
           name: "codex",
           availableModels: [
-            { value: "gpt-5.4", label: "GPT-5.4" },
+            {
+              value: "gpt-5.4",
+              label: "GPT-5.4",
+              thinkingLevels: ["minimal", "medium", "high"],
+              defaultThinkingLevel: "medium",
+            },
             { value: "gpt-4.5", label: "GPT-4.5" },
           ],
         },
@@ -413,6 +423,85 @@ describe("connectionStore", () => {
           payload: expect.objectContaining({
             summaryProvider: "codex",
             summaryModel: "gpt-5.4",
+          }),
+        }),
+      );
+    });
+
+    it("建立 connection 時會帶入 source Pod 的 thinking level 作為 summary 與 branch 預設值", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      const store = useConnectionStore();
+      const podStore = usePodStore();
+
+      podStore.pods = [
+        createMockPod({
+          id: "pod-codex",
+          provider: "codex",
+          providerConfig: {
+            model: "gpt-5.4",
+            thinkingLevel: "high",
+          },
+        }),
+      ];
+      setupConnectionCapabilities();
+
+      mockCreateWebSocketRequest.mockResolvedValueOnce({
+        connection: {
+          id: "conn-codex",
+          sourcePodId: "pod-codex",
+          sourceAnchor: "bottom",
+          targetPodId: "pod-target",
+          targetAnchor: "top",
+        },
+      });
+
+      await store.createConnection("pod-codex", "bottom", "pod-target", "top");
+
+      expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            summaryThinkingLevel: "high",
+            branchThinkingLevel: "high",
+          }),
+        }),
+      );
+    });
+
+    it("source Pod 未指定 thinking level 時，建立 connection 會帶入模型預設值", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      const store = useConnectionStore();
+      const podStore = usePodStore();
+
+      podStore.pods = [
+        createMockPod({
+          id: "pod-codex",
+          provider: "codex",
+          providerConfig: {
+            model: "gpt-5.4",
+          },
+        }),
+      ];
+      setupConnectionCapabilities();
+
+      mockCreateWebSocketRequest.mockResolvedValueOnce({
+        connection: {
+          id: "conn-codex",
+          sourcePodId: "pod-codex",
+          sourceAnchor: "bottom",
+          targetPodId: "pod-target",
+          targetAnchor: "top",
+        },
+      });
+
+      await store.createConnection("pod-codex", "bottom", "pod-target", "top");
+
+      expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            summaryThinkingLevel: "medium",
+            branchThinkingLevel: "medium",
           }),
         }),
       );

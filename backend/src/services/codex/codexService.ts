@@ -144,7 +144,11 @@ function buildCombinedPrompt(
 /**
  * 組合一次性查詢的 codex CLI 參數（固定為新對話模式，不支援 resume）。
  */
-function buildDisposableArgs(model: string, workspacePath: string): string[] {
+function buildDisposableArgs(
+  model: string,
+  workspacePath: string,
+  thinkingLevel?: string | null,
+): string[] {
   return [
     "exec",
     "-",
@@ -155,6 +159,9 @@ function buildDisposableArgs(model: string, workspacePath: string): string[] {
     "--dangerously-bypass-approvals-and-sandbox",
     "--model",
     model,
+    ...(thinkingLevel
+      ? ["-c", `model_reasoning_effort=${thinkingLevel}`]
+      : []),
   ];
 }
 
@@ -255,8 +262,9 @@ function setupAbortBridge(abortSignal?: AbortSignal): AbortBridgeResult {
 function spawnCodexProcess(
   model: string,
   workspacePath: string,
+  thinkingLevel?: string | null,
 ): Bun.Subprocess<"pipe", "pipe", "pipe"> | DisposableChatResult {
-  const codexArgs = buildDisposableArgs(model, workspacePath);
+  const codexArgs = buildDisposableArgs(model, workspacePath, thinkingLevel);
   try {
     // 每次 spawn 時動態建構 env，確保讀到當下的 process.env
     // （dotenv 延遲載入、單元測試 mock、credential rotation 皆能正確生效）
@@ -416,7 +424,11 @@ class CodexService {
     internalSignal.addEventListener("abort", onInternalAbort, { once: true });
 
     try {
-      const spawnResult = spawnCodexProcess(model, workspacePath);
+      const spawnResult = spawnCodexProcess(
+        model,
+        workspacePath,
+        options.thinkingLevel,
+      );
       // spawnCodexProcess 回傳 DisposableChatResult 表示啟動失敗
       if ("success" in spawnResult) {
         return spawnResult;

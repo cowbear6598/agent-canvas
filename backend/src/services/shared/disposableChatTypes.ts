@@ -9,6 +9,7 @@ export interface DisposableChatOptions {
   userMessage: string;
   workspacePath: string;
   model?: string;
+  thinkingLevel?: string | null;
 }
 
 /** 一次性查詢的回傳結果 */

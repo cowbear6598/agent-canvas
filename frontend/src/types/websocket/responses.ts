@@ -150,10 +150,12 @@ export interface ConnectionPayloadItem {
    * 後端 NULL 會以此欄位回傳；升級前 Connection 為 undefined，UI 渲染時會 fallback 至來源 Pod provider。
    */
   summaryProvider?: PodProvider | null;
+  summaryThinkingLevel?: string | null;
   label?: string;
   description?: string;
   branchProvider?: PodProvider;
   branchModel?: string;
+  branchThinkingLevel?: string | null;
 }
 
 export interface ConnectionCreatedPayload extends ResultPayload {

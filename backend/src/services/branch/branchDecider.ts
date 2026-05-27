@@ -26,6 +26,7 @@ export interface BranchDecisionInput {
   recentMessages: PersistedMessage[];
   provider: ProviderName;
   model: string;
+  thinkingLevel?: string | null;
   workspacePath: string;
   runContext?: RunContext;
   abortSignal?: AbortSignal;

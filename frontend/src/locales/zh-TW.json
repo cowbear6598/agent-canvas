@@ -583,6 +583,8 @@
       "triggerModeBranch": "Branch 判斷 (Branch)",
       "summaryModel": "Summary Model",
       "branchModel": "Branch Model",
+      "summaryThinkingLevel": "Summary Thinking",
+      "branchThinkingLevel": "Branch Thinking",
       "triggerModeChanged": "觸發模式已變更",
       "triggerModeChangedDesc": "已切換為{mode}模式",
       "triggerModeAutoLabel": "自動觸發",

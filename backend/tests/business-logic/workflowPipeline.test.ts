@@ -212,6 +212,7 @@ describe("WorkflowPipeline", () => {
         TARGET_POD_ID,
         "claude",
         "sonnet",
+        null,
         baseRunContext,
         "auto",
         expect.any(Object),
@@ -958,6 +959,7 @@ describe("WorkflowPipeline", () => {
         TARGET_POD_ID,
         "codex", // summaryProvider 明確指定 codex，cross-provider 解耦
         codexSummaryConnection.summaryModel,
+        null,
         baseRunContext,
         expect.any(String), // pathway
         expect.any(Object), // delegate

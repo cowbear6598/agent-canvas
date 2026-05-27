@@ -155,6 +155,7 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
         targetPodId,
         provider,
         connection.summaryModel,
+        connection.summaryThinkingLevel ?? null,
         runContext,
         pathway,
         delegate,

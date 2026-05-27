@@ -107,6 +107,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     targetPodId: string,
     provider: ProviderName,
     summaryModel: string,
+    summaryThinkingLevel: string | null,
     runContext: RunContext,
     pathway?: SettlementPathway,
     delegate?: WorkflowStatusDelegate,
@@ -126,6 +127,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
       targetPodId,
       provider,
       summaryModel,
+      summaryThinkingLevel,
       runContext,
     );
 

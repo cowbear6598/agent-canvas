@@ -33,6 +33,7 @@ function makeConnection(
   id: string,
   label: string,
   targetPodId: string,
+  overrides: Partial<Connection> = {},
 ): Connection {
   return {
     id,
@@ -47,10 +48,13 @@ function makeConnection(
     connectionStatus: "idle",
     summaryModel: "sonnet",
     summaryProvider: "claude",
+    summaryThinkingLevel: null,
     label,
     description: `${label} description`,
     branchProvider: "claude",
     branchModel: "sonnet",
+    branchThinkingLevel: "high",
+    ...overrides,
   };
 }
 
@@ -113,6 +117,7 @@ describe("BranchDecisionService", () => {
     expect(branchDecider.decide).toHaveBeenCalledWith(
       expect.objectContaining({
         persistedSummary: "既有摘要",
+        thinkingLevel: "high",
         recentMessages: expect.arrayContaining([
           expect.objectContaining({ content: "第6則" }),
         ]),
@@ -164,5 +169,28 @@ describe("BranchDecisionService", () => {
         ],
       },
     });
+  });
+
+  it("branchThinkingLevel 為 null 時應以 branch provider/model 預設值決策", async () => {
+    const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "trigger");
+    const instance = runStore.createPodInstance(run.id, SOURCE_POD_ID);
+    runStore.updatePodInstanceLastResponseSummary(instance.id, "既有摘要");
+
+    await branchDecisionService.decideBranch(
+      CANVAS_ID,
+      SOURCE_POD_ID,
+      [
+        makeConnection("conn-1", "Alpha", "pod-a", {
+          branchThinkingLevel: null,
+        }),
+      ],
+      makeRunContext(run.id),
+    );
+
+    expect(branchDecider.decide).toHaveBeenCalledWith(
+      expect.objectContaining({
+        thinkingLevel: "high",
+      }),
+    );
   });
 });

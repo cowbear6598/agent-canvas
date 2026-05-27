@@ -90,6 +90,68 @@ describe("ConnectionStore SQLite 持久化", () => {
         }),
       ).toThrow("branchModel 不支援 provider codex");
     });
+
+    it("建立 connection 時會把 source Pod 的 thinking level 寫入 summary 與 branch 欄位", () => {
+      getDb()
+        .prepare(
+          `INSERT INTO pods
+             (id, canvas_id, name, x, y, rotation, workspace_path,
+              session_id, repository_id, goal_json, schedule_json, provider,
+              provider_config_json)
+           VALUES (?, ?, ?, 0, 0, 0, '/tmp/pod-a', NULL, NULL, NULL, NULL,
+             'claude', ?)`,
+        )
+        .run(
+          "pod-thinking",
+          canvasId,
+          "Thinking Pod",
+          JSON.stringify({ model: "sonnet", thinkingLevel: "high" }),
+        );
+
+      const connection = connectionStore.create(canvasId, {
+        sourcePodId: "pod-thinking",
+        sourceAnchor: "right",
+        targetPodId: "pod-b",
+        targetAnchor: "left",
+      });
+
+      expect(connection.summaryThinkingLevel).toBe("high");
+      expect(connection.branchThinkingLevel).toBe("high");
+      expect(connectionStore.getById(canvasId, connection.id)).toEqual(
+        expect.objectContaining({
+          summaryThinkingLevel: "high",
+          branchThinkingLevel: "high",
+        }),
+      );
+    });
+
+    it("source Pod 未指定 thinking level 時會寫入 provider/model 的預設值", () => {
+      getDb()
+        .prepare(
+          `INSERT INTO pods
+             (id, canvas_id, name, x, y, rotation, workspace_path,
+              session_id, repository_id, goal_json, schedule_json, provider,
+              provider_config_json)
+           VALUES (?, ?, ?, 0, 0, 0, '/tmp/pod-a', NULL, NULL, NULL, NULL,
+             'codex', ?)`,
+        )
+        .run(
+          "pod-default-thinking",
+          canvasId,
+          "Default Thinking Pod",
+          JSON.stringify({ model: "gpt-5.4" }),
+        );
+
+      const connection = connectionStore.create(canvasId, {
+        sourcePodId: "pod-default-thinking",
+        sourceAnchor: "right",
+        targetPodId: "pod-b",
+        targetAnchor: "left",
+      });
+
+      expect(connection.summaryThinkingLevel).toBe("medium");
+      expect(connection.branchThinkingLevel).toBe("medium");
+    });
   });
 
   describe("updateConnectionStatus", () => {
@@ -234,6 +296,41 @@ describe("ConnectionStore SQLite 持久化", () => {
       expect(loaded?.summaryModel).toBe(before?.summaryModel);
     });
 
+    it("更新 summary model 時未指定 thinking level 應重設為新模型預設值", () => {
+      const connection = connectionStore.create(canvasId, {
+        sourcePodId: "pod-a",
+        sourceAnchor: "right",
+        targetPodId: "pod-b",
+        targetAnchor: "left",
+        summaryProvider: "claude",
+        summaryModel: "sonnet",
+        summaryThinkingLevel: "max",
+      });
+
+      const updated = connectionStore.update(canvasId, connection.id, {
+        summaryModel: "haiku",
+      });
+
+      expect(updated?.summaryThinkingLevel).toBeNull();
+    });
+
+    it("更新 summary thinking level 為模型不支援的值時應拒絕寫入", () => {
+      const connection = connectionStore.create(canvasId, {
+        sourcePodId: "pod-a",
+        sourceAnchor: "right",
+        targetPodId: "pod-b",
+        targetAnchor: "left",
+        summaryProvider: "codex",
+        summaryModel: "gpt-5.4",
+      });
+
+      expect(() =>
+        connectionStore.update(canvasId, connection.id, {
+          summaryThinkingLevel: "max",
+        }),
+      ).toThrow("summaryThinkingLevel 不支援指定的 provider/model");
+    });
+
     it("更新 branchProvider 時若未指定 branchModel 應寫入該 provider 預設模型", () => {
       const connection = connectionStore.create(canvasId, {
         sourcePodId: "pod-a",
@@ -250,6 +347,46 @@ describe("ConnectionStore SQLite 持久化", () => {
 
       expect(updated?.branchProvider).toBe("codex");
       expect(updated?.branchModel).toBe("gpt-5.4");
+    });
+
+    it("更新 branch provider/model 時未指定 thinking level 應重設為新模型預設值", () => {
+      const connection = connectionStore.create(canvasId, {
+        sourcePodId: "pod-a",
+        sourceAnchor: "right",
+        targetPodId: "pod-b",
+        targetAnchor: "left",
+        triggerMode: "branch",
+        label: "Test-Label",
+        branchProvider: "claude",
+        branchModel: "sonnet",
+        branchThinkingLevel: "max",
+      });
+
+      const updated = connectionStore.update(canvasId, connection.id, {
+        branchProvider: "codex",
+        branchModel: "gpt-5.4",
+      });
+
+      expect(updated?.branchThinkingLevel).toBe("medium");
+    });
+
+    it("更新 branch thinking level 為模型不支援的值時應拒絕寫入", () => {
+      const connection = connectionStore.create(canvasId, {
+        sourcePodId: "pod-a",
+        sourceAnchor: "right",
+        targetPodId: "pod-b",
+        targetAnchor: "left",
+        triggerMode: "branch",
+        label: "Test-Label",
+        branchProvider: "codex",
+        branchModel: "gpt-5.4",
+      });
+
+      expect(() =>
+        connectionStore.update(canvasId, connection.id, {
+          branchThinkingLevel: "max",
+        }),
+      ).toThrow("branchThinkingLevel 不支援指定的 provider/model");
     });
   });
 

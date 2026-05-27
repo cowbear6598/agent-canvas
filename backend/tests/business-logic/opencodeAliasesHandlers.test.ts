@@ -292,13 +292,13 @@ function insertConnection(params: {
       `INSERT INTO connections (
         id, canvas_id, source_pod_id, source_anchor, target_pod_id, target_anchor,
         trigger_mode, decide_status, decide_reason, connection_status,
-        summary_model, summary_provider,
-        label, description, branch_provider, branch_model
+        summary_model, summary_provider, summary_thinking_level,
+        label, description, branch_provider, branch_model, branch_thinking_level
       ) VALUES (
         $id, $canvasId, $sourcePodId, 'right', $targetPodId, 'left',
         $triggerMode, 'none', NULL, 'idle',
-        $summaryModel, $summaryProvider,
-        $label, NULL, $branchProvider, $branchModel
+        $summaryModel, $summaryProvider, NULL,
+        $label, NULL, $branchProvider, $branchModel, NULL
       )`,
     )
     .run({

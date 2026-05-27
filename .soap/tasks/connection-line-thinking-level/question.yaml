@@ -1,0 +1,45 @@
+feature: connection-line-thinking-level
+created: "2026-05-27"
+approved: true
+questions:
+  - id: Q1
+    text: 現有 connection 的 summary / branch 設定在哪裡呈現？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      Connection 右鍵選單由 `frontend/src/components/canvas/ConnectionContextMenu.vue` 組合 `SummarySection.vue` 與 `BranchSettingsPanel.vue`。`SummarySection.vue` 目前能選 summary provider 與 summary model；`BranchSettingsPanel.vue` 在 branch 模式下能選 branch provider 與 branch model。兩者都使用 `providerCapabilityStore.getAvailableModels()` 取得模型選項，目前尚未提供 thinking level 選單。
+
+  - id: Q2
+    text: 現有 connection 資料結構是否已有 summary / branch thinking level 欄位？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      尚未有。前端 `frontend/src/types/connection.ts` 目前只有 `summaryProvider`、`summaryModel`、`branchProvider`、`branchModel`。後端 `backend/src/types/connection.ts`、`backend/src/services/connectionStore.ts` 與 `backend/src/database/schema.ts` 的 `connections` table 也只保存 summary / branch 的 provider 與 model，沒有 `summaryThinkingLevel` 或 `branchThinkingLevel` 對應欄位。
+
+  - id: Q3
+    text: summary / branch 執行時目前如何使用 provider / model，thinking level 能在哪裡接入？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      Summary 執行由 `backend/src/services/summaryService.ts` 呼叫 `executeDisposableChat({ provider, model, ... })`；branch 決策由 `backend/src/services/workflow/branchDecisionService.ts` 取 branch group 第一條 connection 的 `branchProvider` / `branchModel`，再傳給 `branchDecider.decide()`。`disposableChatService` 目前對 OpenCode disposable chat 會從 `sourcePod` 的 buildOptions 沿用 thinking 設定，Claude / Codex disposable chat 則只傳 model。要讓 connection 自己選 summary / branch thinking level，需要把欄位一路加到 connection schema / store / WS payload / execution input，並讓各 provider 的 disposable chat 使用該值。
+
+  - id: Q4
+    text: 新 connection 的 summary thinking level 與 branch thinking level 預設值要怎麼決定？
+    type: user-input
+    completed: true
+    answer: |
+      預設根據 source pod 自己選的 thinking level；也就是新 connection 的 summary thinking level 與 branch thinking level 預設採用 source pod 的 `providerConfig.thinkingLevel`。
+
+  - id: Q5
+    text: connection 選單裡 thinking level 的呈現形式是什麼？
+    type: user-input
+    completed: true
+    answer: |
+      使用文字標籤即可，不需要水位圖示或 connection line 上的視覺顯示。
+
+  - id: Q6
+    text: summary thinking level 與 branch thinking level 是哪兩個設定面向？
+    type: user-input
+    completed: true
+    answer: |
+      需求是讓 connection line 的設定可以分別選 summary thinking level 與 branch thinking level。Summary thinking level 對應 summary 生成時使用；branch thinking level 對應 branch decision 使用。這不是在 connection line 中點顯示 Pod thinking level。

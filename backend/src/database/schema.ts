@@ -1,6 +1,10 @@
 import { Database } from "bun:sqlite";
 
-const ALLOWED_ALTER_TABLES = new Set(["model_aliases", "run_pod_instances"]);
+const ALLOWED_ALTER_TABLES = new Set([
+  "connections",
+  "model_aliases",
+  "run_pod_instances",
+]);
 
 const COLUMN_SQL_PATTERN =
   /^[a-zA-Z_][a-zA-Z0-9_]*\s+[A-Z]+(\s+(NOT NULL|DEFAULT\s+\S+))*$/;
@@ -42,6 +46,13 @@ function ensureModelAliasesThinkingColumns(db: Database): void {
       "model_aliases",
       "thinking_metadata_fetched_at INTEGER",
     );
+  })();
+}
+
+function ensureConnectionThinkingColumns(db: Database): void {
+  db.transaction(() => {
+    addColumnIfMissing(db, "connections", "summary_thinking_level TEXT");
+    addColumnIfMissing(db, "connections", "branch_thinking_level TEXT");
   })();
 }
 
@@ -177,10 +188,12 @@ function createBaseTables(db: Database): void {
       // summary_provider 不設 NOT NULL：NULL 代表使用者未指定，
       // runtime 由 connectionExecution 路由 fallback 為 sourcePod.provider。
       "summary_provider TEXT," +
+      "summary_thinking_level TEXT," +
       "label TEXT NOT NULL DEFAULT ''," +
       "description TEXT," +
       "branch_provider TEXT," +
-      "branch_model TEXT" +
+      "branch_model TEXT," +
+      "branch_thinking_level TEXT" +
       ")",
   );
   db.exec(
@@ -402,6 +415,7 @@ function createBaseTables(db: Database): void {
 export function createTables(db: Database): void {
   createBaseTables(db);
   addColumnIfMissing(db, "run_pod_instances", "last_response_summary TEXT");
+  ensureConnectionThinkingColumns(db);
   ensureModelAliasesThinkingColumns(db);
   ensureModelAliasesUniqueRealModelIndex(db);
   migrateLegacyCodexMiniModel(db);

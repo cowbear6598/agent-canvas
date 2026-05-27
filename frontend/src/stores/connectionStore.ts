@@ -65,10 +65,19 @@ type BranchSettingsPayload = {
   label: string;
   description: string;
 };
-type BranchDefaults = { provider: PodProvider; model: string };
+type BranchDefaults = {
+  provider: PodProvider;
+  model: string;
+  thinkingLevel: string | null;
+};
 type BranchSettingsUpdates = Pick<
   ConnectionUpdatePayload,
-  "triggerMode" | "label" | "description" | "branchProvider" | "branchModel"
+  | "triggerMode"
+  | "label"
+  | "description"
+  | "branchProvider"
+  | "branchModel"
+  | "branchThinkingLevel"
 >;
 
 function shouldResolveBranchDefaultsForSettings(
@@ -93,9 +102,18 @@ function buildBranchSettingsUpdates(
   if (branchDefaults) {
     updates.branchProvider = branchDefaults.provider;
     updates.branchModel = branchDefaults.model;
+    updates.branchThinkingLevel = branchDefaults.thinkingLevel;
   }
 
   return updates;
+}
+
+function resolveDefaultThinkingLevel(
+  providerCapabilityStore: ReturnType<typeof useProviderCapabilityStore>,
+  provider: PodProvider,
+  model: string,
+): string | null {
+  return providerCapabilityStore.getDefaultThinkingLevel(provider, model) ?? null;
 }
 
 export const useConnectionStore = defineStore("connection", () => {
@@ -349,6 +367,8 @@ export const useConnectionStore = defineStore("connection", () => {
       sourcePodId?: string;
       summaryProvider?: PodProvider;
       summaryModel?: string;
+      summaryThinkingLevel?: string | null;
+      branchThinkingLevel?: string | null;
     } = {
       sourceAnchor,
       targetPodId,
@@ -360,6 +380,15 @@ export const useConnectionStore = defineStore("connection", () => {
     if (resolvedSummaryProvider) {
       basePayload.summaryProvider = resolvedSummaryProvider;
       basePayload.summaryModel = resolvedSummaryModel;
+      basePayload.summaryThinkingLevel =
+        typeof sourcePod?.providerConfig?.thinkingLevel === "string"
+          ? sourcePod.providerConfig.thinkingLevel
+          : resolveDefaultThinkingLevel(
+              providerCapabilityStore,
+              resolvedSummaryProvider,
+              resolvedSummaryModel,
+            );
+      basePayload.branchThinkingLevel = basePayload.summaryThinkingLevel;
     }
 
     const result = await executeAction<
@@ -479,10 +508,12 @@ export const useConnectionStore = defineStore("connection", () => {
       | "triggerMode"
       | "summaryModel"
       | "summaryProvider"
+      | "summaryThinkingLevel"
       | "label"
       | "description"
       | "branchProvider"
       | "branchModel"
+      | "branchThinkingLevel"
     >,
     errorMessage: string,
   ): Promise<Connection | null> {
@@ -548,9 +579,29 @@ export const useConnectionStore = defineStore("connection", () => {
     connectionId: string,
     summaryModel: string,
   ): Promise<Connection | null> {
+    const connection = findConnectionById(connectionId);
+    const provider = connection?.summaryProvider ?? "claude";
     return executeConnectionUpdate(
       connectionId,
-      { summaryModel },
+      {
+        summaryModel,
+        summaryThinkingLevel: resolveDefaultThinkingLevel(
+          providerCapabilityStore,
+          provider,
+          summaryModel,
+        ),
+      },
+      t("store.connection.summaryModelUpdateFailed"),
+    );
+  }
+
+  async function updateConnectionSummaryThinkingLevel(
+    connectionId: string,
+    summaryThinkingLevel: string | null,
+  ): Promise<Connection | null> {
+    return executeConnectionUpdate(
+      connectionId,
+      { summaryThinkingLevel },
       t("store.connection.summaryModelUpdateFailed"),
     );
   }
@@ -567,7 +618,15 @@ export const useConnectionStore = defineStore("connection", () => {
   ): Promise<Connection | null> {
     return executeConnectionUpdate(
       connectionId,
-      { summaryProvider, summaryModel },
+      {
+        summaryProvider,
+        summaryModel,
+        summaryThinkingLevel: resolveDefaultThinkingLevel(
+          providerCapabilityStore,
+          summaryProvider,
+          summaryModel,
+        ),
+      },
       t("store.connection.summaryModelUpdateFailed"),
     );
   }
@@ -746,9 +805,9 @@ export const useConnectionStore = defineStore("connection", () => {
 
   function resolveBranchDefaultsFromSourcePod(
     sourcePodId: string,
-  ): { provider: PodProvider; model: string } | null {
+  ): BranchDefaults | null {
     const sourcePod = podStore.getPodById(sourcePodId);
-    const provider = normalizePodProvider(sourcePod?.provider ?? "claude");
+    const provider = normalizePodProvider(sourcePod?.provider ?? "claude") ?? "claude";
     const sourcePodModel =
       typeof sourcePod?.providerConfig?.model === "string" &&
       sourcePod.providerConfig.model.trim().length > 0
@@ -760,12 +819,23 @@ export const useConnectionStore = defineStore("connection", () => {
       (provider === "claude" ? DEFAULT_SUMMARY_MODEL : undefined);
 
     if (!model) return null;
-    return { provider, model };
+    return {
+      provider,
+      model,
+      thinkingLevel: resolveDefaultThinkingLevel(
+        providerCapabilityStore,
+        provider,
+        model,
+      ),
+    };
   }
 
   async function executeBranchSiblingUpdates(
     connectionId: string,
-    updates: Pick<ConnectionUpdatePayload, "branchProvider" | "branchModel">,
+    updates: Pick<
+      ConnectionUpdatePayload,
+      "branchProvider" | "branchModel" | "branchThinkingLevel"
+    >,
   ): Promise<Connection | null> {
     const result = await executeConnectionUpdate(
       connectionId,
@@ -794,6 +864,11 @@ export const useConnectionStore = defineStore("connection", () => {
     return executeBranchSiblingUpdates(connectionId, {
       branchProvider,
       branchModel,
+      branchThinkingLevel: resolveDefaultThinkingLevel(
+        providerCapabilityStore,
+        branchProvider,
+        branchModel,
+      ),
     });
   }
 
@@ -805,7 +880,23 @@ export const useConnectionStore = defineStore("connection", () => {
     connectionId: string,
     branchModel: string,
   ): Promise<Connection | null> {
-    return executeBranchSiblingUpdates(connectionId, { branchModel });
+    const connection = findConnectionById(connectionId);
+    const provider = connection?.branchProvider ?? "claude";
+    return executeBranchSiblingUpdates(connectionId, {
+      branchModel,
+      branchThinkingLevel: resolveDefaultThinkingLevel(
+        providerCapabilityStore,
+        provider,
+        branchModel,
+      ),
+    });
+  }
+
+  async function updateConnectionBranchThinkingLevel(
+    connectionId: string,
+    branchThinkingLevel: string | null,
+  ): Promise<Connection | null> {
+    return executeBranchSiblingUpdates(connectionId, { branchThinkingLevel });
   }
 
   function setupWorkflowListeners(): void {
@@ -959,6 +1050,7 @@ export const useConnectionStore = defineStore("connection", () => {
     setConnectionStatus,
     updateConnectionTriggerMode,
     updateConnectionSummaryModel,
+    updateConnectionSummaryThinkingLevel,
     updateConnectionSummaryProvider,
     validateBranchLabel,
     validateBranchDescription,
@@ -967,6 +1059,7 @@ export const useConnectionStore = defineStore("connection", () => {
     updateConnectionBranchSettings,
     updateConnectionBranchProvider,
     updateConnectionBranchModel,
+    updateConnectionBranchThinkingLevel,
     getWorkflowHandlers,
     setupWorkflowListeners,
     cleanupWorkflowListeners,

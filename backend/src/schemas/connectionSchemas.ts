@@ -13,6 +13,14 @@ const summaryModelSchema = z
   .max(200)
   .regex(/^[a-zA-Z0-9._/-]+$/, "summaryModel 格式不合法");
 
+const thinkingLevelSchema = z
+  .string()
+  .min(1)
+  .max(200)
+  .regex(/^[a-zA-Z0-9._/-]+$/, "thinkingLevel 格式不合法");
+
+const nullableThinkingLevelSchema = thinkingLevelSchema.nullable();
+
 /** label 最大長度 32，與前端常數 BRANCH_LABEL_MAX_LENGTH 對齊。
  * 禁止換行符（\n、\r）與角括號（<、>），於入口層攔截可疑字元以防 prompt injection。
  */
@@ -41,6 +49,7 @@ export const connectionCreateSchema = z
     targetPodId: podIdSchema,
     targetAnchor: anchorPositionSchema,
     summaryModel: summaryModelSchema.optional(),
+    summaryThinkingLevel: nullableThinkingLevelSchema.optional(),
     /** summaryProvider 可選；未提供時由服務層依 sourcePod.provider 決定預設值 */
     summaryProvider: providerSchema.optional(),
     /**
@@ -53,6 +62,7 @@ export const connectionCreateSchema = z
     branchProvider: providerSchema.optional(),
     /** branchModel 建立時 optional；切換到 branch 模式時才需要 */
     branchModel: branchModelSchema.optional(),
+    branchThinkingLevel: nullableThinkingLevelSchema.optional(),
   })
   .superRefine((data, ctx) => {
     if (data.label !== undefined && data.label.toLowerCase() === "none") {
@@ -82,12 +92,14 @@ export const connectionUpdateSchema = z
     connectionId: z.uuid(),
     triggerMode: z.enum(["auto", "branch", "direct"]).optional(),
     summaryModel: summaryModelSchema.optional(),
+    summaryThinkingLevel: nullableThinkingLevelSchema.optional(),
     /** summaryProvider 可選；未提供時保留既有值（或 fallback 至 sourcePod.provider） */
     summaryProvider: providerSchema.optional(),
     label: labelSchema.optional(),
     description: descriptionSchema,
     branchProvider: providerSchema.optional(),
     branchModel: branchModelSchema.optional(),
+    branchThinkingLevel: nullableThinkingLevelSchema.optional(),
   })
   .superRefine((data, ctx) => {
     if (data.label !== undefined && data.label.toLowerCase() === "none") {

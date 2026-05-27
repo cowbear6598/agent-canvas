@@ -583,6 +583,8 @@
       "triggerModeBranch": "Branch (Branch)",
       "summaryModel": "Summary Model",
       "branchModel": "Branch Model",
+      "summaryThinkingLevel": "Summary Thinking",
+      "branchThinkingLevel": "Branch Thinking",
       "triggerModeChanged": "トリガーモードを変更しました",
       "triggerModeChangedDesc": "{mode} モードに切り替えました",
       "triggerModeAutoLabel": "自動トリガー",

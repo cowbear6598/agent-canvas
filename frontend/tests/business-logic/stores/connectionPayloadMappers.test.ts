@@ -56,6 +56,21 @@ describe("connectionPayloadMappers", () => {
 
       expect(connection?.summaryProvider).toBe("codex");
     });
+
+    it("normalize connection 會保留 summary 與 branch thinking level", () => {
+      const connection = normalizeConnection({
+        id: "conn-1",
+        sourcePodId: "pod-a",
+        sourceAnchor: "bottom",
+        targetPodId: "pod-b",
+        targetAnchor: "top",
+        summaryThinkingLevel: "high",
+        branchThinkingLevel: "medium",
+      });
+
+      expect(connection.summaryThinkingLevel).toBe("high");
+      expect(connection.branchThinkingLevel).toBe("medium");
+    });
   });
 
   describe("response event payload mapping 規則", () => {
@@ -113,6 +128,34 @@ describe("connectionPayloadMappers", () => {
       );
 
       expect(mapped.status).toBe("waiting");
+    });
+
+    it("updated event 會保留 summary 與 branch thinking level", () => {
+      const existingConnection = createMockConnection({
+        id: "conn-1",
+        sourcePodId: "pod-a",
+        targetPodId: "pod-b",
+        summaryThinkingLevel: "low",
+        branchThinkingLevel: "medium",
+      });
+      const payload: ConnectionPayloadItem = {
+        id: "conn-1",
+        sourcePodId: "pod-a",
+        sourceAnchor: "bottom",
+        targetPodId: "pod-b",
+        targetAnchor: "top",
+        summaryThinkingLevel: "high",
+        branchThinkingLevel: null,
+      };
+
+      const mapped = mapConnectionUpdatedEventPayload(
+        payload,
+        existingConnection,
+        () => "claude",
+      );
+
+      expect(mapped.summaryThinkingLevel).toBe("high");
+      expect(mapped.branchThinkingLevel).toBeNull();
     });
 
     it("updated event 的 summaryProvider null 依 source provider fallback", () => {

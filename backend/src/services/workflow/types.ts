@@ -145,6 +145,7 @@ export interface ExecutionServiceMethods {
     targetPodId: string,
     provider: ProviderName,
     summaryModel: string,
+    summaryThinkingLevel: string | null,
     runContext: RunContext,
     pathway?: SettlementPathway,
     delegate?: WorkflowStatusDelegate,

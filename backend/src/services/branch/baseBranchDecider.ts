@@ -62,6 +62,7 @@ export class BaseBranchDecider implements BranchDecider {
       recentMessages,
       provider,
       model,
+      thinkingLevel,
       workspacePath,
       runContext,
       abortSignal,
@@ -95,6 +96,7 @@ export class BaseBranchDecider implements BranchDecider {
         workspacePath,
         sourcePod,
         runContext,
+        thinkingLevel,
       });
       if (result.success) {
         rawResponse = result.content;
@@ -160,6 +162,7 @@ export class BaseBranchDecider implements BranchDecider {
         workspacePath,
         sourcePod,
         runContext,
+        thinkingLevel,
       });
       if (retryResult.success) {
         retryRawResponse = retryResult.content;

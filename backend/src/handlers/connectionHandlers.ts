@@ -110,10 +110,12 @@ export const handleConnectionCreate = withCanvasId<ConnectionCreatePayload>(
       targetAnchor,
       summaryModel,
       summaryProvider,
+      summaryThinkingLevel,
       label,
       description,
       branchProvider,
       branchModel,
+      branchThinkingLevel,
     } = payload;
 
     const pods = findPodsOrEmitError(
@@ -137,10 +139,12 @@ export const handleConnectionCreate = withCanvasId<ConnectionCreatePayload>(
         targetAnchor,
         ...(summaryModel !== undefined && { summaryModel }),
         ...(summaryProvider !== undefined && { summaryProvider }),
+        ...(summaryThinkingLevel !== undefined && { summaryThinkingLevel }),
         label,
         description,
         branchProvider,
         branchModel,
+        ...(branchThinkingLevel !== undefined && { branchThinkingLevel }),
       });
     } catch (err) {
       emitError(
@@ -297,10 +301,12 @@ export const handleConnectionUpdate = withCanvasId<ConnectionUpdatePayload>(
       triggerMode,
       summaryModel,
       summaryProvider,
+      summaryThinkingLevel,
       label,
       description,
       branchProvider,
       branchModel,
+      branchThinkingLevel,
     } = payload;
 
     const connection = findConnectionOrEmitError(
@@ -316,10 +322,12 @@ export const handleConnectionUpdate = withCanvasId<ConnectionUpdatePayload>(
       triggerMode: TriggerMode;
       summaryModel: string;
       summaryProvider: ProviderName;
+      summaryThinkingLevel: string | null;
       label: string;
       description: string | null;
       branchProvider: ProviderName | null;
       branchModel: string | null;
+      branchThinkingLevel: string | null;
     }> = {};
     if (triggerMode !== undefined) {
       updates.triggerMode = triggerMode;
@@ -330,6 +338,9 @@ export const handleConnectionUpdate = withCanvasId<ConnectionUpdatePayload>(
     if (summaryProvider !== undefined) {
       // 使用者透過右鍵選單切換 Summary Provider 時更新
       updates.summaryProvider = summaryProvider;
+    }
+    if (summaryThinkingLevel !== undefined) {
+      updates.summaryThinkingLevel = summaryThinkingLevel;
     }
     if (label !== undefined) {
       updates.label = label;
@@ -342,6 +353,9 @@ export const handleConnectionUpdate = withCanvasId<ConnectionUpdatePayload>(
     }
     if (branchModel !== undefined) {
       updates.branchModel = branchModel;
+    }
+    if (branchThinkingLevel !== undefined) {
+      updates.branchThinkingLevel = branchThinkingLevel;
     }
 
     let updateResult: ReturnType<

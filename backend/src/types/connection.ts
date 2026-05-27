@@ -32,6 +32,8 @@ export interface Connection {
    * null 代表舊資料（升級前）：runtime 會 fallback 至 sourcePod.provider。
    */
   summaryProvider: ProviderName | null;
+  /** Summary 生成時使用的 thinking level；null 代表交由 provider 預設 */
+  summaryThinkingLevel: string | null;
   /**
    * label 為 Branch 模式下的連線名稱，不可為 "None"（大小寫不敏感）。
    * 同一 sourcePod 內的所有連線 label 必須唯一（由 service 層驗證）。
@@ -43,4 +45,6 @@ export interface Connection {
   branchProvider: ProviderName;
   /** branchModel 指定 branch 決策時使用的模型名稱 */
   branchModel: string;
+  /** Branch 決策時使用的 thinking level；null 代表交由 provider 預設 */
+  branchThinkingLevel: string | null;
 }

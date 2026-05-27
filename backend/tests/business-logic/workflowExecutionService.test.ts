@@ -509,6 +509,7 @@ describe("WorkflowExecutionService.generateSummaryWithFallback runContext 狀態
         TARGET_POD_ID,
         "claude",
         "sonnet",
+        null,
         mockRunContext,
         pathway,
       );
@@ -548,6 +549,7 @@ describe("WorkflowExecutionService.generateSummaryWithFallback runContext 狀態
       TARGET_POD_ID,
       "claude",
       "sonnet",
+      null,
       mockRunContext,
     );
 

@@ -22,7 +22,9 @@ curl http://localhost:3001/api/canvas/my-canvas/connections
       "triggerMode": "auto",
       "decideStatus": null,
       "decideReason": null,
-      "connectionStatus": "idle"
+      "connectionStatus": "idle",
+      "summaryThinkingLevel": "medium",
+      "branchThinkingLevel": "medium"
     }
   ]
 }
@@ -58,7 +60,9 @@ curl http://localhost:3001/api/canvas/my-canvas/connections
     "triggerMode": "auto",
     "decideStatus": null,
     "decideReason": null,
-    "connectionStatus": "idle"
+    "connectionStatus": "idle",
+    "summaryThinkingLevel": "medium",
+    "branchThinkingLevel": "medium"
   }
 }
 ```
@@ -139,7 +143,9 @@ curl -X DELETE http://localhost:3001/api/canvas/aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaa
     "triggerMode": "ai-decide",
     "decideStatus": null,
     "decideReason": null,
-    "connectionStatus": "idle"
+    "connectionStatus": "idle",
+    "summaryThinkingLevel": "medium",
+    "branchThinkingLevel": "medium"
   }
 }
 ```

@@ -32,6 +32,7 @@ export interface Connection {
    * 升級後前端會將舊資料收斂為具體 provider，不再 fallback 至來源 Pod provider。
    */
   summaryProvider?: PodProvider | null;
+  summaryThinkingLevel?: string | null;
   /** Branch 模式下的連線標籤，最多 32 字元，不可為保留字 "None" */
   label?: string;
   /** Branch 模式下的連線描述，最多 200 字元 */
@@ -40,6 +41,7 @@ export interface Connection {
   branchProvider?: PodProvider;
   /** Branch 模式使用的模型字串 */
   branchModel?: string;
+  branchThinkingLevel?: string | null;
 }
 
 export interface DraggingConnection {

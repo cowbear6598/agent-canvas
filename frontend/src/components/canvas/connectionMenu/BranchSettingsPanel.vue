@@ -12,6 +12,7 @@ import {
 } from "@/lib/constants";
 import { DEFAULT_SUMMARY_MODEL } from "@/types/config";
 import { PROVIDER_OPTIONS } from "./providerOptions";
+import ThinkingLevelSubmenu from "./ThinkingLevelSubmenu.vue";
 
 interface Props {
   connectionId: string;
@@ -46,8 +47,12 @@ const branchModelOptions = computed(() => {
   return models;
 });
 
+const currentBranchModelEffective = computed((): string | undefined => {
+  return props.currentBranchModel ?? branchModelOptions.value?.[0]?.value;
+});
+
 const isBranchModelActive = (optionValue: string): boolean => {
-  return props.currentBranchModel === optionValue;
+  return currentBranchModelEffective.value === optionValue;
 };
 
 const showModelChangeToast = (title: string, label: string): void => {
@@ -121,7 +126,7 @@ const handleSetBranchModel = async (
   targetValue: string,
   displayLabel: string,
 ): Promise<void> => {
-  if (targetValue === props.currentBranchModel) {
+  if (targetValue === currentBranchModelEffective.value) {
     emit("close");
     return;
   }
@@ -145,6 +150,19 @@ const handleSetBranchModel = async (
       duration: DEFAULT_TOAST_DURATION_MS,
     });
   }
+};
+
+const connection = computed(() =>
+  connectionStore.findConnectionById(props.connectionId),
+);
+
+const handleSetBranchThinkingLevel = (
+  level: string | null,
+): Promise<unknown> => {
+  return connectionStore.updateConnectionBranchThinkingLevel(
+    props.connectionId,
+    level,
+  );
 };
 </script>
 
@@ -266,4 +284,13 @@ const handleSetBranchModel = async (
       </div>
     </div>
   </div>
+
+  <ThinkingLevelSubmenu
+    :provider="currentBranchProviderEffective"
+    :model="currentBranchModelEffective"
+    :current-level="connection?.branchThinkingLevel"
+    :label="$t('canvas.connectionContextMenu.branchThinkingLevel')"
+    :on-update="handleSetBranchThinkingLevel"
+    @close="emit('close')"
+  />
 </template>

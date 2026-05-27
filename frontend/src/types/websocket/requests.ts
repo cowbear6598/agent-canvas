@@ -122,6 +122,7 @@ export interface ConnectionCreatePayload {
   summaryProvider?: PodProvider | null;
   /** 新建 Connection 時可帶入預設 Summary Model */
   summaryModel?: string;
+  summaryThinkingLevel?: string | null;
   triggerMode?: "auto" | "branch" | "direct";
   /** Branch 模式下的連線標籤 */
   label?: string;
@@ -131,6 +132,7 @@ export interface ConnectionCreatePayload {
   branchProvider?: PodProvider;
   /** Branch 模式使用的模型字串 */
   branchModel?: string;
+  branchThinkingLevel?: string | null;
 }
 
 export interface ConnectionListPayload {
@@ -196,6 +198,7 @@ export interface ConnectionUpdatePayload {
   summaryModel?: string;
   /** Summary 功能獨立選用的 Provider；null 代表清除（重設為 fallback） */
   summaryProvider?: PodProvider | null;
+  summaryThinkingLevel?: string | null;
   /** Branch 模式下的連線標籤 */
   label?: string;
   /** Branch 模式下的連線描述 */
@@ -204,6 +207,7 @@ export interface ConnectionUpdatePayload {
   branchProvider?: PodProvider;
   /** Branch 模式使用的模型字串 */
   branchModel?: string;
+  branchThinkingLevel?: string | null;
 }
 
 export interface CanvasPastePayload {

@@ -84,6 +84,7 @@ describe("SummaryService", () => {
       TARGET_POD_ID,
       "claude",
       "sonnet",
+      "high",
       makeRunContext(run.id),
     );
 
@@ -104,6 +105,7 @@ describe("SummaryService", () => {
       expect.objectContaining({
         sourcePod: expect.objectContaining({ id: SOURCE_POD_ID }),
         runContext: makeRunContext(run.id),
+        thinkingLevel: "high",
       }),
     );
   });
@@ -124,6 +126,7 @@ describe("SummaryService", () => {
       TARGET_POD_ID,
       "claude",
       "sonnet",
+      null,
       makeRunContext(run.id),
     );
 
@@ -133,5 +136,33 @@ describe("SummaryService", () => {
       success: false,
       error: "provider down",
     });
+  });
+
+  it("summaryThinkingLevel 為 null 時應以 provider/model 預設值執行", async () => {
+    executeDisposableChatMock.mockResolvedValue({
+      success: true,
+      content: "整理後摘要",
+      resolvedModel: "sonnet",
+    });
+
+    const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "trigger");
+    const instance = runStore.createPodInstance(run.id, SOURCE_POD_ID);
+    runStore.updatePodInstanceLastResponseSummary(instance.id, "既有摘要");
+
+    await summaryService.generateSummaryForTarget(
+      CANVAS_ID,
+      SOURCE_POD_ID,
+      TARGET_POD_ID,
+      "claude",
+      "sonnet",
+      null,
+      makeRunContext(run.id),
+    );
+
+    expect(executeDisposableChatMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        thinkingLevel: "high",
+      }),
+    );
   });
 });

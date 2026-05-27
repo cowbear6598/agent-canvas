@@ -1,6 +1,8 @@
 import {
+  type EffortLevel,
   type Options,
   type Query,
+  type ThinkingConfig,
   query,
 } from "@anthropic-ai/claude-agent-sdk";
 import type {
@@ -141,7 +143,8 @@ export class ClaudeService {
   public async executeDisposableChat(
     options: DisposableChatOptions,
   ): Promise<DisposableChatResult> {
-    const { systemPrompt, userMessage, workspacePath, model } = options;
+    const { systemPrompt, userMessage, workspacePath, model, thinkingLevel } =
+      options;
 
     try {
       logger.log(
@@ -158,6 +161,10 @@ export class ClaudeService {
 
       if (model) {
         queryOptions.model = model;
+      }
+      if (thinkingLevel) {
+        queryOptions.effort = thinkingLevel as EffortLevel;
+        queryOptions.thinking = { type: "adaptive" } as ThinkingConfig;
       }
 
       const queryStream = query({

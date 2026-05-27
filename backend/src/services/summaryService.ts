@@ -2,6 +2,7 @@ import { executeDisposableChat } from "./disposableChatService.js";
 import { summaryPromptBuilder } from "./summaryPromptBuilder.js";
 import { podStore } from "./podStore.js";
 import { formatGoalTodos } from "./goalRuntime.js";
+import { getDefaultThinkingLevel } from "./pod/providerConfigResolver.js";
 import { getRunTranscriptWindow } from "./workflow/runTranscriptWindow.js";
 import { logger } from "../utils/logger.js";
 import type { Pod } from "../types/index.js";
@@ -52,6 +53,7 @@ class SummaryService {
     targetPodId: string,
     provider: ProviderName,
     summaryModel: string,
+    summaryThinkingLevel: string | null,
     runContext: RunContext,
   ): Promise<TargetSummaryResult> {
     const sourcePod = podStore.getById(canvasId, sourcePodId);
@@ -124,6 +126,8 @@ class SummaryService {
       workspacePath: executionPaths.workspacePath,
       sourcePod,
       runContext,
+      thinkingLevel:
+        summaryThinkingLevel ?? getDefaultThinkingLevel(provider, summaryModel),
     });
 
     if (!result.success) {

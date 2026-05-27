@@ -13,6 +13,10 @@ import {
   getProvider,
   type ProviderName,
 } from "./provider/index.js";
+import {
+  getDefaultThinkingLevel,
+  isThinkingLevelValid,
+} from "./pod/providerConfigResolver.js";
 import { podStore } from "./podStore.js";
 import type { Pod } from "../types";
 
@@ -26,10 +30,12 @@ interface CreateConnectionData {
   summaryModel?: string;
   /** summaryProvider 指定摘要時使用的 provider；未提供則依 sourcePod.provider fallback */
   summaryProvider?: ProviderName;
+  summaryThinkingLevel?: string | null;
   label?: string;
   description?: string;
   branchProvider?: ProviderName;
   branchModel?: string;
+  branchThinkingLevel?: string | null;
 }
 
 function validateProviderModel(
@@ -63,10 +69,12 @@ interface ConnectionRow {
   summary_model: string;
   /** DB 欄位；NULL 代表舊資料（升級前未指定），由執行端 fallback */
   summary_provider: string | null;
+  summary_thinking_level: string | null;
   label: string;
   description: string | null;
   branch_provider: string | null;
   branch_model: string | null;
+  branch_thinking_level: string | null;
 }
 
 function rowToConnection(
@@ -93,12 +101,14 @@ function rowToConnection(
     summaryModel: row.summary_model,
     // DB NULL 保留原意：未指定，由執行端 fallback 至 sourcePod.provider
     summaryProvider: row.summary_provider as ProviderName | null,
+    summaryThinkingLevel: row.summary_thinking_level,
     label: row.label,
     // DB NULL 轉為 undefined（符合 Connection 介面的選填定義）
     description: row.description ?? undefined,
     // DB NULL 時依 source Pod provider 推導預設值，避免非 Claude Pod 的 Branch 決策落回 Claude。
     branchProvider: resolvedBranchProvider,
     branchModel: resolvedBranchModel,
+    branchThinkingLevel: row.branch_thinking_level,
   };
 }
 
@@ -220,6 +230,57 @@ function resolveBranchDefaults(
   };
 }
 
+function resolveSourceThinkingLevel(sourcePod?: Pod | null): string | null {
+  const thinkingLevel = sourcePod?.providerConfig?.thinkingLevel;
+  return typeof thinkingLevel === "string" && thinkingLevel.trim().length > 0
+    ? thinkingLevel
+    : null;
+}
+
+function resolveConnectionThinkingLevel(
+  sourcePod: Pod | undefined,
+  provider: ProviderName,
+  model: string | null,
+): string | null {
+  return (
+    resolveSourceThinkingLevel(sourcePod) ??
+    (model ? getDefaultThinkingLevel(provider, model) : null)
+  );
+}
+
+function resolveBranchThinkingModel(
+  sourcePod: Pod | undefined,
+  provider: ProviderName,
+  model: string | null,
+): string | null {
+  if (model !== null) return model;
+
+  const sourceModel =
+    typeof sourcePod?.providerConfig?.model === "string" &&
+    sourcePod.providerConfig.model.trim().length > 0
+      ? sourcePod.providerConfig.model
+      : undefined;
+  if (provider === "opencode" && sourceModel) return sourceModel;
+
+  return (
+    resolveProviderDefaultModel(provider) ??
+    resolveProviderDefaultModel("claude") ??
+    null
+  );
+}
+
+function validateConnectionThinkingLevel(
+  provider: ProviderName,
+  model: string | null,
+  level: string | null,
+  fieldName: "summaryThinkingLevel" | "branchThinkingLevel",
+): void {
+  if (level === null) return;
+  if (model === null || !isThinkingLevelValid(provider, model, level)) {
+    throw new Error(`${fieldName} 不支援指定的 provider/model`);
+  }
+}
+
 class ConnectionStore {
   private get stmts(): ReturnType<typeof getStatements>["connection"] {
     return getStatements(getDb()).connection;
@@ -265,6 +326,44 @@ class ConnectionStore {
       );
     }
 
+    const resolvedSummaryThinkingLevel =
+      data.summaryThinkingLevel !== undefined
+        ? data.summaryThinkingLevel
+        : resolveConnectionThinkingLevel(
+            sourcePod,
+            resolvedSummaryProvider,
+            resolvedSummaryModel,
+          );
+    validateConnectionThinkingLevel(
+      resolvedSummaryProvider,
+      resolvedSummaryModel,
+      resolvedSummaryThinkingLevel,
+      "summaryThinkingLevel",
+    );
+
+    const resolvedBranchThinkingLevel =
+      data.branchThinkingLevel !== undefined
+        ? data.branchThinkingLevel
+        : resolveConnectionThinkingLevel(
+            sourcePod,
+            resolvedBranchProvider,
+            resolveBranchThinkingModel(
+              sourcePod,
+              resolvedBranchProvider,
+              resolvedBranchModel,
+            ),
+          );
+    validateConnectionThinkingLevel(
+      resolvedBranchProvider,
+      resolveBranchThinkingModel(
+        sourcePod,
+        resolvedBranchProvider,
+        resolvedBranchModel,
+      ),
+      resolvedBranchThinkingLevel,
+      "branchThinkingLevel",
+    );
+
     // branch 模式下驗證 label
     const triggerMode = data.triggerMode ?? "auto";
     if (triggerMode === "branch") {
@@ -301,10 +400,12 @@ class ConnectionStore {
       $summaryModel: resolvedSummaryModel,
       // DB 儲存客戶端原意：未指定存 NULL，不把 sourcePod.provider 寫入
       $summaryProvider: data.summaryProvider ?? null,
+      $summaryThinkingLevel: resolvedSummaryThinkingLevel,
       $label: data.label ?? "",
       $description: data.description ?? null,
       $branchProvider: data.branchProvider ?? null,
       $branchModel: resolvedBranchModel,
+      $branchThinkingLevel: resolvedBranchThinkingLevel,
     });
 
     return this.getById(canvasId, id) as Connection;
@@ -366,10 +467,12 @@ class ConnectionStore {
        * 或指定新 provider；undefined 表示本次不修改。
        */
       summaryProvider: ProviderName | null;
+      summaryThinkingLevel: string | null;
       label: string;
       description: string | null;
       branchProvider: ProviderName | null;
       branchModel: string | null;
+      branchThinkingLevel: string | null;
     }>,
   ): Connection | undefined {
     const existing = this.getById(canvasId, id);
@@ -385,10 +488,18 @@ class ConnectionStore {
       updates.summaryProvider !== undefined
         ? updates.summaryProvider
         : existing.summaryProvider;
+    let newSummaryThinkingLevel =
+      updates.summaryThinkingLevel !== undefined
+        ? updates.summaryThinkingLevel
+        : existing.summaryThinkingLevel;
     let newLabel = existing.label;
     let newDescription: string | null = existing.description ?? null;
     let newBranchProvider: ProviderName | null = existing.branchProvider;
     let newBranchModel: string | null = existing.branchModel ?? null;
+    let newBranchThinkingLevel =
+      updates.branchThinkingLevel !== undefined
+        ? updates.branchThinkingLevel
+        : existing.branchThinkingLevel;
 
     if (updates.triggerMode !== undefined) {
       if (shouldResetDecideState(existing.triggerMode, updates.triggerMode)) {
@@ -405,6 +516,7 @@ class ConnectionStore {
         newDescription = null;
         newBranchProvider = null;
         newBranchModel = null;
+        newBranchThinkingLevel = null;
       }
       newTriggerMode = updates.triggerMode;
     }
@@ -443,6 +555,22 @@ class ConnectionStore {
       );
       newSummaryModel = updates.summaryModel;
     }
+    const shouldResetSummaryThinkingLevel =
+      updates.summaryThinkingLevel === undefined &&
+      (updates.summaryProvider !== undefined ||
+        updates.summaryModel !== undefined);
+    if (shouldResetSummaryThinkingLevel) {
+      newSummaryThinkingLevel = getDefaultThinkingLevel(
+        targetSummaryProvider,
+        newSummaryModel,
+      );
+    }
+    validateConnectionThinkingLevel(
+      targetSummaryProvider,
+      newSummaryModel,
+      newSummaryThinkingLevel,
+      "summaryThinkingLevel",
+    );
 
     const targetMode = updates.triggerMode ?? existing.triggerMode;
     const effectiveLabel = updates.label ?? existing.label;
@@ -488,8 +616,32 @@ class ConnectionStore {
       newBranchModel = updates.branchModel;
     }
 
+    if (updates.branchThinkingLevel !== undefined) {
+      newBranchThinkingLevel = updates.branchThinkingLevel;
+    }
+
     if (newBranchProvider !== null && newBranchModel !== null) {
       validateProviderModel(newBranchProvider, newBranchModel, "branchModel");
+    }
+    const shouldResetBranchThinkingLevel =
+      updates.branchThinkingLevel === undefined &&
+      (updates.branchProvider !== undefined ||
+        updates.branchModel !== undefined);
+    if (shouldResetBranchThinkingLevel) {
+      newBranchThinkingLevel =
+        newBranchProvider !== null && newBranchModel !== null
+          ? getDefaultThinkingLevel(newBranchProvider, newBranchModel)
+          : null;
+    }
+    if (newBranchProvider !== null) {
+      validateConnectionThinkingLevel(
+        newBranchProvider,
+        newBranchModel,
+        newBranchThinkingLevel,
+        "branchThinkingLevel",
+      );
+    } else if (newBranchThinkingLevel !== null) {
+      throw new Error("branchThinkingLevel 不支援指定的 provider/model");
     }
 
     const updatedRow = this.stmts.updateReturning.get({
@@ -505,10 +657,12 @@ class ConnectionStore {
       $connectionStatus: newConnectionStatus,
       $summaryModel: newSummaryModel,
       $summaryProvider: newSummaryProvider,
+      $summaryThinkingLevel: newSummaryThinkingLevel,
       $label: newLabel,
       $description: newDescription,
       $branchProvider: newBranchProvider,
       $branchModel: newBranchModel,
+      $branchThinkingLevel: newBranchThinkingLevel,
     }) as ConnectionRow | undefined;
 
     if (!updatedRow) return undefined;
@@ -524,10 +678,12 @@ class ConnectionStore {
       decideReason: string | null;
       summaryModel: string;
       summaryProvider: ProviderName | null;
+      summaryThinkingLevel: string | null;
       label: string;
       description: string | null;
       branchProvider: ProviderName | null;
       branchModel: string | null;
+      branchThinkingLevel: string | null;
     }>,
   ):
     | { targetConnection: Connection; updatedConnections: Connection[] }
@@ -539,7 +695,8 @@ class ConnectionStore {
     const shouldSyncBranchSiblings =
       targetMode === "branch" &&
       (updates.branchProvider !== undefined ||
-        updates.branchModel !== undefined);
+        updates.branchModel !== undefined ||
+        updates.branchThinkingLevel !== undefined);
 
     if (!shouldSyncBranchSiblings) {
       const targetConnection = this.update(canvasId, id, updates);
@@ -556,12 +713,16 @@ class ConnectionStore {
     const branchUpdates: Partial<{
       branchProvider: ProviderName | null;
       branchModel: string | null;
+      branchThinkingLevel: string | null;
     }> = {};
     if (updates.branchProvider !== undefined) {
       branchUpdates.branchProvider = updates.branchProvider;
     }
     if (updates.branchModel !== undefined) {
       branchUpdates.branchModel = updates.branchModel;
+    }
+    if (updates.branchThinkingLevel !== undefined) {
+      branchUpdates.branchThinkingLevel = updates.branchThinkingLevel;
     }
 
     const syncBranchSiblings = getDb().transaction(() => {

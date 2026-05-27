@@ -138,6 +138,18 @@ describe("BaseBranchDecider.decide", () => {
     expect(asMock(executeDisposableChat)).toHaveBeenCalledTimes(1);
   });
 
+  it("呼叫 executeDisposableChat 時會傳入 branch thinkingLevel", async () => {
+    asMock(executeDisposableChat).mockResolvedValueOnce(
+      makeDisposableChatResult('{"selectedLabel":"Checklist"}'),
+    );
+
+    await branchDecider.decide(makeInput({ thinkingLevel: "high" }));
+
+    expect(asMock(executeDisposableChat)).toHaveBeenCalledWith(
+      expect.objectContaining({ thinkingLevel: "high" }),
+    );
+  });
+
   // ─── 案例 3：markdown code block 包裹的 JSON ────────────────────────────────
   it("收到 markdown code block 包裹的 JSON → 剝除後成功 parse", async () => {
     asMock(executeDisposableChat).mockResolvedValueOnce(

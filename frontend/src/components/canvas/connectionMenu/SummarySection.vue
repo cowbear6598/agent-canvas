@@ -12,6 +12,7 @@ import {
 } from "@/lib/constants";
 import { DEFAULT_SUMMARY_MODEL } from "@/types/config";
 import { PROVIDER_OPTIONS } from "./providerOptions";
+import ThinkingLevelSubmenu from "./ThinkingLevelSubmenu.vue";
 
 interface Props {
   connectionId: string;
@@ -153,6 +154,15 @@ const handleSetSummaryModel = async (
     });
   }
 };
+
+const handleSetSummaryThinkingLevel = (
+  level: string | null,
+): Promise<unknown> => {
+  return connectionStore.updateConnectionSummaryThinkingLevel(
+    props.connectionId,
+    level,
+  );
+};
 </script>
 
 <template>
@@ -280,4 +290,13 @@ const handleSetSummaryModel = async (
       </div>
     </div>
   </div>
+
+  <ThinkingLevelSubmenu
+    :provider="currentProvider"
+    :model="props.currentSummaryModel"
+    :current-level="connection?.summaryThinkingLevel"
+    :label="$t('canvas.connectionContextMenu.summaryThinkingLevel')"
+    :on-update="handleSetSummaryThinkingLevel"
+    @close="emit('close')"
+  />
 </template>
