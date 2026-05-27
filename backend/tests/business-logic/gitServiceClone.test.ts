@@ -11,7 +11,7 @@ import { cleanupRepo } from "../helpers/gitTestHelper.js";
 // 個別測試可透過 simpleGitOverride.impl 切換為自定義 mock。
 const { simpleGitOverride } = vi.hoisted(() => ({
   simpleGitOverride: {
-    impl: null as ((basePath?: string) => unknown) | null,
+    impl: null as ((basePath?: unknown) => unknown) | null,
   },
 }));
 
@@ -124,6 +124,7 @@ describe("GitService — createLocalClone（安全檢查）", () => {
 
 describe("GitService — syncToRemoteLatest（並發去重）", () => {
   let mockFetch: ReturnType<typeof vi.fn>;
+  let mockReset: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     // 模擬輕微延遲以驗證並發情境下去重效果
@@ -133,15 +134,19 @@ describe("GitService — syncToRemoteLatest（並發去重）", () => {
         () =>
           new Promise<string>((resolve) => setTimeout(() => resolve(""), 20)),
       );
+    mockReset = vi.fn().mockResolvedValue("");
 
     const mockGetRemotes = vi
       .fn()
       .mockResolvedValue([{ name: "origin", refs: {} }]);
+    const mockStatus = vi.fn().mockResolvedValue({ current: "main" });
 
     simpleGitOverride.impl = () =>
       ({
         fetch: mockFetch,
+        reset: mockReset,
         getRemotes: mockGetRemotes,
+        status: mockStatus,
       }) as unknown as ReturnType<typeof import("simple-git").simpleGit>;
   });
 
@@ -169,9 +174,9 @@ describe("GitService — syncToRemoteLatest（並發去重）", () => {
   });
 });
 
-// ─── syncToRemoteLatest：fetch all 且不執行 reset --hard ─────────────────
+// ─── syncToRemoteLatest：更新 source repo 到遠端最新版 ───────────────────
 
-describe("GitService — syncToRemoteLatest（fetch all，不 reset）", () => {
+describe("GitService — syncToRemoteLatest（fetch + hard reset）", () => {
   let mockFetch: ReturnType<typeof vi.fn>;
   let mockReset: ReturnType<typeof vi.fn>;
 
@@ -182,12 +187,14 @@ describe("GitService — syncToRemoteLatest（fetch all，不 reset）", () => {
     const mockGetRemotes = vi
       .fn()
       .mockResolvedValue([{ name: "origin", refs: {} }]);
+    const mockStatus = vi.fn().mockResolvedValue({ current: "main" });
 
     simpleGitOverride.impl = () =>
       ({
         fetch: mockFetch,
         reset: mockReset,
         getRemotes: mockGetRemotes,
+        status: mockStatus,
       }) as unknown as ReturnType<typeof import("simple-git").simpleGit>;
   });
 
@@ -195,21 +202,85 @@ describe("GitService — syncToRemoteLatest（fetch all，不 reset）", () => {
     simpleGitOverride.impl = null;
   });
 
-  it("底層執行的是 git fetch origin --prune，且不執行 reset --hard", async () => {
+  it("底層會 fetch 目前分支並 reset --hard 到 origin/目前分支", async () => {
     const workspacePath = path.join(
       config.repositoriesRoot,
-      "fetch-all-test-repo",
+      "sync-reset-test-repo",
     );
 
     const result = await gitService.syncToRemoteLatest(workspacePath);
 
     expect(result.success).toBe(true);
 
-    // 驗證 fetch 以正確參數被呼叫（fetch origin --prune）
-    expect(mockFetch).toHaveBeenCalledWith(["origin", "--prune"]);
+    expect(mockFetch).toHaveBeenCalledWith(["origin", "main"]);
+    expect(mockReset).toHaveBeenCalledWith(["--hard", "origin/main"]);
+  });
+});
 
-    // 驗證 reset 從未被呼叫（不修改工作樹）
-    expect(mockReset).not.toHaveBeenCalled();
+describe("GitService — syncToRemoteLatest + createLocalClone", () => {
+  let bareRemoteDir: string;
+  let sourceRepoDir: string;
+  let updaterRepoDir: string;
+  let runDir: string;
+
+  beforeEach(async () => {
+    bareRemoteDir = path.join(
+      os.tmpdir(),
+      `sync-remote-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
+    sourceRepoDir = path.join(
+      os.tmpdir(),
+      `sync-source-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
+    updaterRepoDir = path.join(
+      os.tmpdir(),
+      `sync-updater-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
+    runDir = path.join(
+      config.runRepositoriesRoot,
+      `sync-run-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
+
+    await $`git init --bare ${bareRemoteDir}`.quiet();
+    await $`git clone ${bareRemoteDir} ${sourceRepoDir}`.quiet();
+    await $`git -C ${sourceRepoDir} config user.email "test@example.com"`.quiet();
+    await $`git -C ${sourceRepoDir} config user.name "Test User"`.quiet();
+    await $`printf "old" > ${sourceRepoDir}/version.txt`.quiet();
+    await $`git -C ${sourceRepoDir} add version.txt`.quiet();
+    await $`git -C ${sourceRepoDir} commit -m "init"`.quiet();
+    await $`git -C ${sourceRepoDir} push -u origin HEAD`.quiet();
+
+    await $`git clone ${bareRemoteDir} ${updaterRepoDir}`.quiet();
+    await $`git -C ${updaterRepoDir} config user.email "test@example.com"`.quiet();
+    await $`git -C ${updaterRepoDir} config user.name "Test User"`.quiet();
+    await $`printf "new" > ${updaterRepoDir}/version.txt`.quiet();
+    await $`git -C ${updaterRepoDir} commit -am "update"`.quiet();
+    await $`git -C ${updaterRepoDir} push`.quiet();
+
+    await fs.mkdir(config.runRepositoriesRoot, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await cleanupRepo(bareRemoteDir);
+    await cleanupRepo(sourceRepoDir);
+    await cleanupRepo(updaterRepoDir);
+    await cleanupRepo(runDir);
+  });
+
+  it("source repo 同步到遠端最新版後，local clone 應取得最新內容", async () => {
+    const syncResult = await gitService.syncToRemoteLatest(sourceRepoDir);
+    expect(syncResult.success).toBe(true);
+
+    const cloneResult = await gitService.createLocalClone(
+      sourceRepoDir,
+      runDir,
+    );
+    expect(cloneResult.success).toBe(true);
+
+    const runContent = await fs.readFile(path.join(runDir, "version.txt"), {
+      encoding: "utf-8",
+    });
+    expect(runContent).toBe("new");
   });
 });
 

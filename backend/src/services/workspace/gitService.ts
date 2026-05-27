@@ -571,6 +571,7 @@ class GitService {
   /**
    * 將 repo 同步到 remote 最新版本（供 Run 啟動前使用）
    * - 無 remote 時靜默跳過
+   * - 有 remote 時會將目前分支 reset 到 origin/<目前分支>
    * - 失敗時回傳 err 但不拋出例外
    */
   async syncToRemoteLatest(workspacePath: string): Promise<Result<void>> {
@@ -610,15 +611,12 @@ class GitService {
       return ok(undefined);
     }
 
-    // 執行 fetch origin --prune，同步所有遠端 branches 到本地
-    // 不執行 reset --hard，避免改動主 repo 的工作樹狀態
-    return gitOperationWithPath(
-      workspacePath,
-      async (git) => {
-        await git.fetch(["origin", "--prune"]);
-      },
-      "同步 remote 最新版本失敗",
-    );
+    const branchResult = await this.validateCurrentBranch(workspacePath);
+    if (!branchResult.success) {
+      return err(branchResult.error);
+    }
+
+    return this.performPullWithProgress(workspacePath, branchResult.data);
   }
 
   async pullLatest(
