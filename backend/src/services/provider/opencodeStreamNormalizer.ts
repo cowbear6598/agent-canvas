@@ -128,6 +128,7 @@ function buildSanitizedSessionFailureEvent(params: {
     content: "opencode session 發生錯誤，請稍後再試",
     fatal: classified.fatal,
     code: "opencode_session_failed",
+    recovery: classified.recovery,
   });
 }
 

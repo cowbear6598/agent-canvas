@@ -1,0 +1,131 @@
+feature: skill-bundle-refactor
+side: backend
+approved: true
+phases:
+  - id: P1
+    title: Bundle registry 資料模型與相容邊界
+    parallel: true
+    verification:
+      - cd backend && bun run style
+      - cd backend && bun run test
+    done: false
+    items:
+      - id: P1.A
+        title: Registry schema 與 record 重構
+        tasks:
+          - id: P1.A.t1
+            text: 將 `managed_plugins` 與 `ManagedPluginRecord` 改成來源中立的 bundle registry 模型，至少支援 GitHub 與 upload 來源，並保留既有資料可遷移
+            completed: false
+            last_files_changed: []
+          - id: P1.A.t2
+            text: 更新 registry store、schema 與 response DTO，讓管理列表回傳 bundle source metadata，而不是強綁 `githubRepo`
+            completed: false
+            last_files_changed: []
+      - id: P1.B
+        title: Pod 綁定相容層
+        tasks:
+          - id: P1.B.t1
+            text: 保留 `pod_plugin_ids` 與 `pluginIds` 作為第一階段相容層，但在 service 與 runtime 輔助函式中改以 bundle id 語意實作與註解
+            completed: false
+            last_files_changed: []
+          - id: P1.B.t2
+            text: 更新 managed MCP availability、catalog 與相關描述，移除 runtime 對 plugin manifest 必要性的假設
+            completed: false
+            last_files_changed: []
+
+  - id: P2
+    title: GitHub 匯入與 upload 匯入流程
+    parallel: true
+    verification:
+      - cd backend && bun run style
+      - cd backend && bun run test
+    done: false
+    items:
+      - id: P2.A
+        title: GitHub 匯入服務重整
+        tasks:
+          - id: P2.A.t1
+            text: 將現有 `pluginInstallService` 拆成 bundle import service，保留 GitHub 匯入能力，但把 manifest 讀取降為可選 metadata 補充而非必要條件
+            completed: false
+            last_files_changed: []
+          - id: P2.A.t2
+            text: 讓 GitHub 來源與 upload 來源有不同的更新策略，GitHub 可 refresh，upload 來源則走重新匯入而不是 git pull
+            completed: false
+            last_files_changed: []
+      - id: P2.B
+        title: 本地 bundle 上傳匯入 API
+        tasks:
+          - id: P2.B.t1
+            text: 新增 bundle 專用 REST 匯入路由與 handler，負責接收上傳檔案、建立 staging、觸發匯入流程並回傳 bundle metadata
+            completed: false
+            last_files_changed: []
+          - id: P2.B.t2
+            text: 在匯入流程加入 archive 驗證與安全檢查，至少涵蓋路徑穿越、symlink、空 bundle、缺少 `SKILL.md` 與非法內容格式
+            completed: false
+            last_files_changed: []
+          - id: P2.B.t3
+            text: 定義 skill-only bundle 接受規則，允許沒有 manifest 的 bundle 只要掃得到至少一個 `SKILL.md` 就能安裝，並從上傳內容推導 display metadata
+            completed: false
+            last_files_changed: []
+      - id: P2.C
+        title: Router 與 skill 文件同步
+        tasks:
+          - id: P2.C.t1
+            text: 將新 REST 匯入路由註冊到 `restRouteManifest` / `apiRouter`，並同步更新 `skill/agent-canvas/SKILL.md` 與對應 reference 文件
+            completed: false
+            last_files_changed: []
+
+  - id: P3
+    title: Runtime skill catalog 與 handler 相容
+    parallel: true
+    verification:
+      - cd backend && bun run style
+      - cd backend && bun run test
+    done: false
+    items:
+      - id: P3.A
+        title: Skill catalog 與 MCP bridge
+        tasks:
+          - id: P3.A.t1
+            text: 更新 `pluginCatalogBuilder`、`pluginMcpBridge` 與 `managedMcpSurfaceService`，讓 runtime 以 bundle registry 為來源並維持 `skillMdPath` / `skillDir` 的絕對路徑契約
+            completed: false
+            last_files_changed: []
+          - id: P3.A.t2
+            text: 確保 skill 內腳本與資源仍可透過 agent 原生 Read / Bash 使用，不新增額外 plugin runtime 包裝層
+            completed: false
+            last_files_changed: []
+      - id: P3.B
+        title: WebSocket 管理流相容
+        tasks:
+          - id: P3.B.t1
+            text: 調整現有 plugin WebSocket handlers 與 schemas，讓 list、delete、reorder 回傳新的 bundle metadata，同時保留既有事件名稱與 Pod 啟用相容性
+            completed: false
+            last_files_changed: []
+          - id: P3.B.t2
+            text: 對 upload 來源的 update 行為定義明確的錯誤契約或重新匯入分流，避免沿用 git refresh 造成錯誤語意
+            completed: false
+            last_files_changed: []
+
+  - id: P4
+    title: 後端測試補強
+    parallel: true
+    verification:
+      - cd backend && bun run style
+      - cd backend && bun run test
+    done: false
+    items:
+      - id: P4.A
+        title: 商業邏輯與 integration 測試
+        tasks:
+          - id: P4.A.t1
+            text: 更新 registry、import service、scanner 與 catalog 測試，覆蓋 GitHub bundle、skill-only bundle、manifest optional 與來源分流邏輯
+            completed: false
+            last_files_changed: []
+          - id: P4.A.t2
+            text: 新增 bundle upload API integration 測試，覆蓋成功匯入、非法 archive、缺少 `SKILL.md` 與 metadata fallback 情境
+            completed: false
+            last_files_changed: []
+          - id: P4.A.t3
+            text: 更新既有 plugin WebSocket user flow 測試，確認 list、reorder、delete 與 Pod 啟用相容流程在 bundle metadata 下仍可運作
+            completed: false
+            last_files_changed: []

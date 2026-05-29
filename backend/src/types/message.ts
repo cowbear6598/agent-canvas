@@ -1,12 +1,14 @@
 export type MessageRole = "user" | "assistant" | "system";
 
 export type SystemMessageSeverity = "info" | "warning" | "error" | "fatal";
+export type SystemMessageRecovery = "recoverable" | "unrecoverable";
 
 export interface SystemMessageMetadata {
   provider: string;
   code: string | null;
   severity: SystemMessageSeverity;
   rawContent: string;
+  recovery?: SystemMessageRecovery;
   reasonDetail?: string;
 }
 

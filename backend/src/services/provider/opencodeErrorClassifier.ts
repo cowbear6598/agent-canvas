@@ -1,5 +1,5 @@
 import { buildProviderSystemError } from "./types.js";
-import type { NormalizedEvent } from "./types.js";
+import type { NormalizedEvent, ProviderErrorRecovery } from "./types.js";
 
 /** opencode provider 專用的系統錯誤建立 helper */
 export function buildOpencodeSystemError(params: {
@@ -7,6 +7,7 @@ export function buildOpencodeSystemError(params: {
   fatal: boolean;
   code: string;
   rawContent?: string;
+  recovery?: ProviderErrorRecovery;
 }): Extract<NormalizedEvent, { type: "error" }> {
   return buildProviderSystemError("opencode", params);
 }
@@ -30,8 +31,9 @@ export function classifySessionError(
   ) {
     return buildOpencodeSystemError({
       content: `請在 terminal 執行 \`opencode auth login ${providerID}\` 後再試一次`,
-      fatal: false,
+      fatal: true,
       code: "opencode_auth_missing",
+      recovery: "unrecoverable",
     });
   }
 
@@ -44,6 +46,7 @@ export function classifySessionError(
       content: "opencode server 連線失敗，請重啟後端",
       fatal: true,
       code: "opencode_server_unreachable",
+      recovery: "unrecoverable",
     });
   }
 
@@ -51,6 +54,7 @@ export function classifySessionError(
     content: "opencode session 發生錯誤，請稍後再試",
     fatal: false,
     code: "opencode_session_failed",
+    recovery: "recoverable",
   });
 }
 

@@ -1,0 +1,74 @@
+feature: skill-bundle-refactor
+approved: true
+scenarios:
+  - id: F1
+    scenario: 使用者從管理介面安裝 GitHub skill bundle
+    given:
+      - 使用者已開啟設定中的管理介面
+      - 使用者手上有可匯入的 GitHub repository 來源
+    when:
+      - 輸入該來源
+      - 送出安裝操作
+    then:
+      - 系統完成匯入
+      - 管理清單出現新的 bundle 項目
+      - 顯示該 bundle 可供 Pod 啟用
+
+  - id: F2
+    scenario: 使用者從管理介面上傳本地 skill bundle
+    given:
+      - 使用者已開啟設定中的管理介面
+      - 使用者手上有本地 bundle 檔案
+    when:
+      - 選擇 bundle 檔案
+      - 送出匯入操作
+    then:
+      - 系統完成上傳與匯入
+      - 管理清單出現新的 bundle 項目
+      - 顯示該 bundle 可供 Pod 啟用
+
+  - id: F3
+    scenario: 使用者匯入內容不合法的 bundle
+    given:
+      - 使用者已開啟設定中的管理介面
+      - 使用者選擇的內容不符合系統可接受的 bundle 規格
+    when:
+      - 送出匯入操作
+    then:
+      - 系統拒絕匯入
+      - 顯示可理解的失敗原因
+      - 管理清單不新增無效項目
+
+  - id: F4
+    scenario: 使用者在 Pod 啟用已安裝的 bundle
+    given:
+      - 系統內已有至少一個可用的 bundle
+      - 使用者正在查看某個 Pod 的 bundle 選單
+    when:
+      - 開啟該 bundle 的啟用開關
+    then:
+      - 該 Pod 記住這個啟用狀態
+      - 後續對話會帶入該 bundle 的 skill
+
+  - id: F5
+    scenario: 使用者刪除已安裝的 bundle
+    given:
+      - 系統內已有至少一個 bundle
+      - 該 bundle 可能已被部分 Pod 啟用
+    when:
+      - 在管理清單執行刪除操作
+      - 確認刪除
+    then:
+      - 該 bundle 從管理清單移除
+      - 已啟用該 bundle 的 Pod 不再保留這個啟用狀態
+
+  - id: F6
+    scenario: 使用者調整 bundle 在管理清單中的順序
+    given:
+      - 系統內已有多個 bundle
+      - 使用者正在查看管理清單
+    when:
+      - 拖曳調整 bundle 順序
+    then:
+      - 系統保存新的排序
+      - Pod 選單與管理清單顯示一致的順序

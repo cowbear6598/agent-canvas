@@ -266,6 +266,7 @@ describe("CodexNormalizer - normalize()", () => {
     const e = result as Extract<typeof result, { type: "error" }>;
     expect(e?.message).toBe("Something went wrong");
     expect(e?.fatal).toBe(true);
+    expect(e?.recovery).toBe("unrecoverable");
     expect(e?.systemMessage).toMatchObject({
       role: "system",
       content: "Something went wrong",
@@ -274,8 +275,24 @@ describe("CodexNormalizer - normalize()", () => {
         code: "STREAM_ERROR",
         severity: "fatal",
         rawContent: "Something went wrong",
+        recovery: "unrecoverable",
       },
     });
+  });
+
+  it("error envelope 命中 transport 關鍵字時應標記為 recoverable", () => {
+    const line = toLine({
+      type: "error",
+      message: "WebSocket connection closed while resuming stream",
+    });
+
+    const result = normalize(line);
+
+    expect(result?.type).toBe("error");
+    const e = result as Extract<typeof result, { type: "error" }>;
+    expect(e.fatal).toBe(true);
+    expect(e.recovery).toBe("recoverable");
+    expect(e.systemMessage?.metadata.recovery).toBe("recoverable");
   });
 
   it("item.completed 且 item_type=error 應映射為 non-fatal system error", () => {
@@ -292,11 +309,13 @@ describe("CodexNormalizer - normalize()", () => {
     expect(result?.type).toBe("error");
     const e = result as Extract<typeof result, { type: "error" }>;
     expect(e?.fatal).toBe(false);
+    expect(e?.recovery).toBe("recoverable");
     expect(e?.systemMessage).toMatchObject({
       metadata: {
         provider: "codex",
         code: "ITEM_ERROR",
         severity: "error",
+        recovery: "recoverable",
       },
     });
   });

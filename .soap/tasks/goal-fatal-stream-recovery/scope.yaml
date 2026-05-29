@@ -1,0 +1,21 @@
+feature: goal-fatal-stream-recovery
+created: "2026-05-29"
+approved: true
+frontend:
+  required: false
+  reason: 這次需求聚焦於 provider fatal error 後的 goal 續跑與 run 狀態收斂，沒有要求調整前端畫面或互動流程。
+  evidence:
+    - question.yaml 的 impact classification 將 frontend 判為 unlikely，且沒有新增前端釐清問題。
+    - userflow.yaml 的三個情境都描述既有 run/goal 行為應如何被後端修正，未新增前端操作入口。
+backend:
+  required: true
+  reason: 需要調整 provider 錯誤分類、goal gate 狀態機與跨 provider 的續跑/收尾規則。
+  evidence:
+    - question.yaml Q1 確認 `streamingChatExecutor` 在 fatal provider error 後直接跳出 goal gate，但仍呼叫 `onComplete`。
+    - question.yaml Q2 確認 `codex` 缺少類似 Claude 的自動重試機制。
+    - question.yaml Q3 確認這次修復範圍包含 executor 的跨 provider 規則，不只修 `codex`。
+    - userflow.yaml F1 到 F3 都要求系統正確保留 goal 進度、續跑可恢復錯誤，並在不可恢復錯誤時保留未完成狀態。
+ticket:
+  story_issue: null
+  branch_issue: null
+  task_issue: null

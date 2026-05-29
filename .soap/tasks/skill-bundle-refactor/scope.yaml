@@ -1,0 +1,20 @@
+feature: skill-bundle-refactor
+created: "2026-05-29"
+approved: true
+frontend:
+  required: true
+  reason: 需要把現有 Plugin 管理與 Pod 啟用流程調整成以 bundle / skill 為核心的操作模型，並新增本地 bundle 匯入入口。
+  evidence:
+    - userflow.yaml F1 與 F2 明確要求管理介面同時支援 GitHub 匯入與本地 bundle 上傳。
+    - userflow.yaml F4、F5、F6 明確要求 Pod 啟用、刪除清理與排序顯示維持可操作且一致。
+backend:
+  required: true
+  reason: 需要把現有 managed plugin 資料模型與安裝流程改成來源中立的 bundle registry，並維持 skill 掃描與腳本執行契約。
+  evidence:
+    - question.yaml Q2 確認 runtime 核心依賴是 `SKILL.md` 與 `skillDir`，需要重構安裝模型但保留 skill runtime 契約。
+    - question.yaml Q3 確認需要新增 bundle 匯入流程，且建議建立獨立 API 與驗證 / staging 邏輯。
+    - question.yaml Q4 確認現有 `managed_plugins`、`githubRepo` 與 git update 流程無法直接承接 upload 來源，必須後端分流重構。
+ticket:
+  story_issue: null
+  branch_issue: null
+  task_issue: null

@@ -1,0 +1,120 @@
+feature: goal-fatal-stream-recovery
+side: backend
+approved: true
+phases:
+  - id: P1
+    title: 共享錯誤契約與 Goal 收尾狀態機
+    parallel: false
+    verification:
+      - bun run style
+    done: true
+    items:
+      - id: P1.A
+        title: 定義可恢復與不可恢復的 provider 錯誤語意
+        tasks:
+          - id: P1.A.t1
+            text: 調整 `backend/src/services/provider/types.ts` 與相關 helper，為 provider error 補上可供 executor 判斷的恢復語意，讓「fatal」不再等同於「整個 goal run 可直接收尾」。
+            completed: true
+            last_files_changed:
+              - backend/src/services/provider/types.ts
+              - backend/src/types/message.ts
+              - frontend/src/types/chat.ts
+          - id: P1.A.t2
+            text: 更新 `backend/src/services/claude/streamProviderErrorMessage.ts`、`backend/src/services/claude/streamingLifecycleCoordinator.ts` 與 provider 說明文件，讓 transcript、logger 與執行狀態都能保留新的錯誤分類。
+            completed: true
+            last_files_changed:
+              - backend/src/services/claude/streamProviderErrorMessage.ts
+              - backend/src/services/claude/streamingLifecycleCoordinator.ts
+              - backend/src/services/provider/types.md
+      - id: P1.B
+        title: 修正 executor 的 goal/fatal 收尾邏輯
+        tasks:
+          - id: P1.B.t1
+            text: 重構 `backend/src/services/claude/streamingChatExecutor.ts` 的 turn outcome 分支，區分「可恢復錯誤可續跑」、「不可恢復錯誤需保留未完成狀態」與「真正完成可呼叫 onComplete」三種結果。
+            completed: true
+            last_files_changed:
+              - backend/src/services/claude/streamingChatExecutor.ts
+          - id: P1.B.t2
+            text: 讓 goal 未完成且錯誤不可恢復時，不再誤呼叫 `callbacks.onComplete()` 或提前觸發下游 workflow，並保留可追蹤的未完成或 blocked 狀態供後續處理。
+            completed: true
+            last_files_changed:
+              - backend/src/services/claude/streamingChatExecutor.ts
+
+  - id: P2
+    title: Provider 恢復策略接線
+    parallel: true
+    verification:
+      - bun run style
+    done: true
+    items:
+      - id: P2.A
+        title: Codex 串流中斷恢復
+        tasks:
+          - id: P2.A.t1
+            text: 在 `backend/src/services/provider/codexProvider.ts` 周邊補上 transport 或 resume 失敗的恢復流程，優先處理 WebSocket 斷線這類可補救錯誤，避免一發生就把 goal run 視為終態。
+            completed: true
+            last_files_changed:
+              - backend/src/services/provider/codexProvider.ts
+              - backend/tests/business-logic/codexProvider.test.ts
+          - id: P2.A.t2
+            text: 調整 `backend/src/services/provider/codexNormalizer.ts` 與相關說明，使 `STREAM_ERROR` 能依錯誤型態標記為可恢復或不可恢復，讓 executor 能套用共享規則。
+            completed: true
+            last_files_changed:
+              - backend/src/services/provider/codexNormalizer.ts
+              - backend/src/services/provider/types.md
+              - backend/tests/business-logic/codexNormalizer.test.ts
+      - id: P2.B
+        title: 其他 provider 對齊共享規則
+        tasks:
+          - id: P2.B.t1
+            text: 檢查 `backend/src/services/provider/claude/sessionRetry.ts`、`backend/src/services/provider/claudeProvider.ts` 與 `backend/src/services/provider/opencodeProvider.ts`，把既有 retry 或 fatal error 路徑對齊新的共享錯誤契約。
+            completed: true
+            last_files_changed:
+              - backend/src/services/provider/opencodeErrorClassifier.ts
+              - backend/src/services/provider/opencodeSessionLifecycleAdapter.ts
+              - backend/src/services/provider/opencodeStreamNormalizer.ts
+              - backend/tests/business-logic/claudeSessionRetry.test.ts
+          - id: P2.B.t2
+            text: 釐清哪些 provider 錯誤仍應直接終止 run，哪些錯誤可交由 retry 或 goal gate 接手，避免不同 provider 對同類錯誤出現不一致行為。
+            completed: true
+            last_files_changed:
+              - backend/src/services/provider/types.ts
+              - backend/src/services/provider/opencodeErrorClassifier.ts
+              - backend/src/services/provider/opencodeSessionLifecycleAdapter.ts
+              - backend/src/services/provider/opencodeStreamNormalizer.ts
+
+  - id: P3
+    title: 回歸測試與行為鎖定
+    parallel: false
+    verification:
+      - bun run style
+      - bun run test
+    done: true
+    items:
+      - id: P3.A
+        title: Executor 與 Goal Runtime 回歸測試
+        tasks:
+          - id: P3.A.t1
+            text: 更新 `backend/tests/business-logic/streamingChatExecutor.test.ts`，覆蓋可恢復 fatal error 會續跑 goal、不可恢復 fatal error 不會誤呼叫 onComplete、以及未完成 goal 狀態被正確保留的情境。
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/streamingChatExecutor.test.ts
+          - id: P3.A.t2
+            text: 依 shared test policy 延伸既有 business logic 測試，優先驗證 executor 與 goal runtime 的真實協作，不新增同義反覆或單純測框架行為的案例。
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/streamingChatExecutor.test.ts
+      - id: P3.B
+        title: Provider 回歸測試
+        tasks:
+          - id: P3.B.t1
+            text: 更新 `backend/tests/business-logic/codexProvider.test.ts` 與 `backend/tests/business-logic/codexNormalizer.test.ts`，覆蓋 codex 串流斷線的恢復或終止判定，確保不再把所有 `STREAM_ERROR` 都視為同一種終態。
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/codexProvider.test.ts
+              - backend/tests/business-logic/codexNormalizer.test.ts
+          - id: P3.B.t2
+            text: 視共享契約調整內容補上 `backend/tests/business-logic/claudeSessionRetry.test.ts` 或相關 provider 測試，確保 Claude 與其他 provider 套用相同規則後不會回歸。
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/claudeSessionRetry.test.ts

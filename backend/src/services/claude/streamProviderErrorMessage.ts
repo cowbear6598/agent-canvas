@@ -3,6 +3,7 @@ import type {
   ProviderName,
   ProviderSystemMessage,
 } from "../provider/types.js";
+import { resolveProviderErrorRecovery } from "../provider/types.js";
 
 export function buildProviderErrorSystemMessage(
   event: Extract<NormalizedEvent, { type: "error" }>,
@@ -20,6 +21,7 @@ export function buildProviderErrorSystemMessage(
       code: event.code ?? null,
       severity: event.fatal ? "fatal" : "error",
       rawContent: event.message,
+      recovery: resolveProviderErrorRecovery(event),
       reasonDetail: undefined,
     },
   };

@@ -4,7 +4,12 @@ import type { ChatExecutionStrategy } from "../executionStrategy.js";
 import { consumeGoalRuntimeToolResult } from "../goalRuntime.js";
 import { podStore } from "../podStore.js";
 import { appendSystemMessage } from "../transcriptSystemMessage.js";
-import type { NormalizedEvent, ProviderName } from "../provider/types.js";
+import {
+  resolveProviderErrorRecovery,
+  type NormalizedEvent,
+  type ProviderErrorRecovery,
+  type ProviderName,
+} from "../provider/types.js";
 import { deriveRunResponseSummary } from "../runResponseSummary.js";
 import {
   buildProviderErrorSystemMessage,
@@ -249,18 +254,19 @@ function handleProviderErrorEvent(
   const systemMessage = buildProviderErrorSystemMessage(event, providerName);
   const code = systemMessage.metadata.code ?? null;
   const shouldLogRaw = shouldLogProviderRawContent(code);
+  const recovery = resolveProviderErrorRecovery(event);
 
   if (shouldLogRaw) {
     logger.error(
       "Chat",
       "Error",
-      `Provider 串流錯誤（podId=${podId}, canvasId=${canvasId}, provider=${providerName}, fatal=${event.fatal}, code=${code ?? "無"}）：${systemMessage.metadata.rawContent}`,
+      `Provider 串流錯誤（podId=${podId}, canvasId=${canvasId}, provider=${providerName}, fatal=${event.fatal}, recovery=${recovery}, code=${code ?? "無"}）：${systemMessage.metadata.rawContent}`,
     );
   } else {
     logger.error(
       "Chat",
       "Error",
-      `Provider 串流錯誤（podId=${podId}, canvasId=${canvasId}, provider=${providerName}, fatal=${event.fatal}, code=${code ?? "無"}）`,
+      `Provider 串流錯誤（podId=${podId}, canvasId=${canvasId}, provider=${providerName}, fatal=${event.fatal}, recovery=${recovery}, code=${code ?? "無"}）`,
     );
   }
 
@@ -280,7 +286,8 @@ function handleProviderErrorEvent(
 export class StreamingLifecycleCoordinator {
   private readonly context: StreamLifecycleContext;
   private capturedSessionIdValue: string | undefined;
-  private hadFatalProviderErrorValue = false;
+  private lastFatalProviderErrorRecoveryValue: ProviderErrorRecovery | null =
+    null;
 
   constructor(options: StreamingLifecycleCoordinatorOptions) {
     const { canvasId, podId, messageId, strategy, throttleMs } = options;
@@ -343,8 +350,8 @@ export class StreamingLifecycleCoordinator {
     return this.capturedSessionIdValue;
   }
 
-  get hadFatalProviderError(): boolean {
-    return this.hadFatalProviderErrorValue;
+  get lastFatalProviderErrorRecovery(): ProviderErrorRecovery | null {
+    return this.lastFatalProviderErrorRecoveryValue;
   }
 
   get providerName(): ProviderName {
@@ -368,7 +375,8 @@ export class StreamingLifecycleCoordinator {
     if (ev.type === "error") {
       const result = handleProviderErrorEvent(ev, this.context);
       if (result.aborted) {
-        this.hadFatalProviderErrorValue = true;
+        this.lastFatalProviderErrorRecoveryValue =
+          resolveProviderErrorRecovery(ev);
       }
       return result;
     }

@@ -66,6 +66,7 @@ describe("withSessionRetry", () => {
           type: "error",
           message: "No conversation found with session ID: 123",
           fatal: true,
+          recovery: "recoverable",
         };
       })
       .mockImplementationOnce(async function* (
@@ -91,6 +92,7 @@ describe("withSessionRetry", () => {
         type: "error",
         message: "billing_error",
         fatal: true,
+        recovery: "unrecoverable",
       };
     };
 
@@ -101,6 +103,7 @@ describe("withSessionRetry", () => {
         type: "error",
         message: "billing_error",
         fatal: true,
+        recovery: "unrecoverable",
       },
     ]);
   });

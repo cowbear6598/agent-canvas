@@ -16,7 +16,7 @@ import {
  *   只要 LLM 有在完成 todo 就計數歸零；連續 N 輪沒推進才算卡住
  */
 export const GOAL_GATE_LIMITS = {
-  hardRetryLimit: 10,
+  hardRetryLimit: 3,
   noProgressLimit: 2,
 } as const;
 

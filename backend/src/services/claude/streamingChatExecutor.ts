@@ -4,6 +4,7 @@ import { isAbortError } from "../../utils/errorHelpers.js";
 import { classifyKnownError } from "./streamErrorClassifier.js";
 import type { ContentBlock } from "../../types";
 import type { Pod } from "../../types/pod.js";
+import type { RunContext } from "../../types/run.js";
 
 import { abortRegistry } from "../provider/abortRegistry.js";
 import {
@@ -299,16 +300,23 @@ async function resolveExecutionDependencies(
  *   - completed：turn 正常結束，可進入 gate 判定
  *   - aborted_or_errored：abort 或 error，已由 handleStreamAbort/handleExecutionError 處理；
  *     呼叫端應直接 return result，不再進 gate loop
- *   - completed_with_fatal_error：turn 結束但收到了 fatal provider error
- *     （如 usage limit、CLI exit code）；transcript 已寫入系統訊息，
- *     但 provider 不可用、retry 只會引發相同錯誤，gate loop 應直接 break 並走 onComplete
+ *   - completed_with_recoverable_provider_error：turn 因 fatal provider error 中止，
+ *     但 goal gate 仍可根據未完成狀態繼續 retry
+ *   - completed_with_unrecoverable_provider_error：turn 因 fatal provider error 中止，
+ *     若 goal 尚未完成，必須保留未完成狀態且不可觸發 onComplete
  */
 interface ChatTurnOutcome {
   result: StreamingChatExecutorResult;
-  finished: "completed" | "aborted_or_errored" | "completed_with_fatal_error";
+  finished:
+    | "completed"
+    | "aborted_or_errored"
+    | "completed_with_recoverable_provider_error"
+    | "completed_with_unrecoverable_provider_error";
 }
 
 const CLIENT_SAFE_BLOCKED_REASON_MAX_LENGTH = 240;
+const PENDING_GOAL_UNRECOVERABLE_PROVIDER_ERROR_MESSAGE =
+  "Provider 發生不可恢復錯誤，Goal 尚未完成";
 
 function createClientSafeBlockedReason(reason: string | null): string | null {
   const normalized = reason
@@ -359,6 +367,22 @@ function persistGoalRoundDivider(
     canvasId: options.canvasId,
     divider,
   });
+}
+
+function hasPendingGoalRuntime(
+  runContext: RunContext | undefined,
+  podId: string,
+): boolean {
+  if (!runContext) return false;
+
+  const snapshot = readGoalRuntimeSnapshot(
+    getGoalRuntimeStatePath(runContext, podId),
+  );
+  if (!snapshot) return false;
+
+  return (
+    snapshot.state.status === "running" && snapshot.state.activeTodoId !== null
+  );
 }
 
 /**
@@ -421,9 +445,12 @@ async function executeChatTurn(
         hasContent: lifecycle.hasAssistantContent(),
         aborted: false,
       },
-      finished: lifecycle.hadFatalProviderError
-        ? "completed_with_fatal_error"
-        : "completed",
+      finished:
+        lifecycle.lastFatalProviderErrorRecovery === "recoverable"
+          ? "completed_with_recoverable_provider_error"
+          : lifecycle.lastFatalProviderErrorRecovery === "unrecoverable"
+            ? "completed_with_unrecoverable_provider_error"
+            : "completed",
     };
   } catch (error) {
     const handled = await handleExecutionError(
@@ -499,9 +526,21 @@ export async function executeStreamingChat(
   while (true) {
     if (!runContext) break;
 
-    // Fatal provider error（usage limit、CLI exit code 等）：retry 只會引發相同錯誤，
-    // transcript 已寫入錯誤訊息，直接 break 走 onComplete 即可
-    if (turnOutcome.finished === "completed_with_fatal_error") break;
+    if (
+      turnOutcome.finished === "completed_with_unrecoverable_provider_error"
+    ) {
+      if (hasPendingGoalRuntime(runContext, podId)) {
+        if (callbacks?.onError) {
+          await callbacks.onError(
+            canvasId,
+            podId,
+            new Error(PENDING_GOAL_UNRECOVERABLE_PROVIDER_ERROR_MESSAGE),
+          );
+        }
+        return turnOutcome.result;
+      }
+      break;
+    }
 
     const decision = evaluateGoalGate(runContext, podId, {
       retryCount,

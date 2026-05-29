@@ -1,5 +1,6 @@
 import type {
   ContentBlock,
+  SystemMessageRecovery,
   SystemMessageMetadata,
 } from "../../types/message.js";
 import type { Pod } from "../../types/pod.js";
@@ -8,6 +9,7 @@ import type { RunContext } from "../../types/run.js";
 // 此處以 import type 反向引用，避免 index.ts ↔ types.ts 產生循環 import 問題。
 import type { ProviderName } from "./index.js";
 export type { ProviderName };
+export type ProviderErrorRecovery = SystemMessageRecovery;
 
 export type ProviderSystemMessageMetadata = Omit<
   SystemMessageMetadata,
@@ -81,6 +83,7 @@ export type NormalizedEvent =
       type: "error";
       message: string;
       fatal: boolean;
+      recovery?: ProviderErrorRecovery;
       /** 結構化錯誤代碼，供未來擴充使用；系統錯誤不帶 code。 */
       code?: string;
       /**
@@ -106,15 +109,18 @@ export function buildProviderSystemError(
     fatal: boolean;
     code: string;
     rawContent?: string;
+    recovery?: ProviderErrorRecovery;
     reasonDetail?: string;
   },
 ): Extract<NormalizedEvent, { type: "error" }> {
-  const { content, fatal, code, rawContent, reasonDetail } = params;
+  const { content, fatal, code, rawContent, recovery, reasonDetail } = params;
+  const normalizedRecovery = resolveProviderErrorRecovery({ fatal, recovery });
 
   return {
     type: "error",
     message: content,
     fatal,
+    recovery: normalizedRecovery,
     code,
     systemMessage: {
       role: "system",
@@ -124,10 +130,22 @@ export function buildProviderSystemError(
         code,
         severity: fatal ? "fatal" : "error",
         rawContent: rawContent ?? content,
+        recovery: normalizedRecovery,
         reasonDetail,
       },
     },
   };
+}
+
+export function resolveProviderErrorRecovery(params: {
+  fatal: boolean;
+  recovery?: ProviderErrorRecovery;
+}): ProviderErrorRecovery {
+  if (params.recovery) {
+    return params.recovery;
+  }
+
+  return params.fatal ? "unrecoverable" : "recoverable";
 }
 
 /**

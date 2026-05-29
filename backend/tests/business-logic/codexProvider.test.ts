@@ -459,6 +459,7 @@ describe("CodexProvider", () => {
     expect(errorEvents).toHaveLength(1);
     const e = errorEvents[0] as Extract<NormalizedEvent, { type: "error" }>;
     expect(e.fatal).toBe(true);
+    expect(e.recovery).toBe("unrecoverable");
     expect(e.systemMessage?.metadata.code).toBe("STREAM_ERROR");
     expect(e.message).toBe("usage limit exceeded");
     // 確保沒有 EXIT_CODE 訊息（不會 fall through 到 handleExitCode）
@@ -468,6 +469,26 @@ describe("CodexProvider", () => {
           ?.metadata.code === "EXIT_CODE",
     );
     expect(hasExitCode).toBe(false);
+  });
+
+  it("type=error stream event 含 transport 關鍵字時應標記為 recoverable", async () => {
+    const stdoutLines = [
+      JSON.stringify({
+        type: "error",
+        message: "WebSocket connection closed while resuming stream",
+      }),
+    ];
+    const mockProc = makeMockProc(stdoutLines, [], 1);
+    spawnSpy = vi.spyOn(Bun, "spawn").mockReturnValue(mockProc as any);
+
+    const events = await collectEvents(codexProvider.chat(makeCtx()));
+    const errorEvent = events.find((event) => event.type === "error") as Extract<
+      NormalizedEvent,
+      { type: "error" }
+    >;
+
+    expect(errorEvent.recovery).toBe("recoverable");
+    expect(errorEvent.systemMessage?.metadata.recovery).toBe("recoverable");
   });
 
   // ── 補充：exit code 非 0 但已發 turn_complete → 不推 error event ───

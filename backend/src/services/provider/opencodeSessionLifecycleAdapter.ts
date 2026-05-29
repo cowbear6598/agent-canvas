@@ -80,6 +80,7 @@ function buildPromptFailureEvent(
     content: "opencode 訊息發送失敗，請稍後再試",
     fatal: true,
     code: "opencode_prompt_failed",
+    recovery: "recoverable",
   });
 }
 
@@ -106,6 +107,7 @@ function buildCreateSessionFailureEvent(
     content: "opencode session 建立失敗，請稍後再試",
     fatal: true,
     code: "opencode_session_failed",
+    recovery: "recoverable",
   });
 }
 

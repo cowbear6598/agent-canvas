@@ -3,6 +3,7 @@ import type { PodProvider } from "./pod";
 export type MessageRole = "user" | "assistant" | "system";
 
 export type SystemMessageSeverity = "info" | "warning" | "error" | "fatal";
+export type SystemMessageRecovery = "recoverable" | "unrecoverable";
 
 export interface SystemMessageMetadata {
   /** Provider 名稱（必填），與後端契約一致 */
@@ -12,6 +13,8 @@ export interface SystemMessageMetadata {
   severity: SystemMessageSeverity;
   /** Provider 原始錯誤文字（必填），與後端契約一致 */
   rawContent: string;
+  /** 本輪 provider 錯誤是否可交由 goal gate 或 retry 補救 */
+  recovery?: SystemMessageRecovery;
   /** 前端可安全顯示的補充診斷資訊 */
   reasonDetail?: string;
 }

@@ -1,0 +1,43 @@
+feature: goal-fatal-stream-recovery
+created: "2026-05-29"
+approved: true
+impact_classification:
+  frontend:
+    status: unlikely
+    evidence:
+      - 使用者回報的核心問題是 goal 在 provider fatal error 後未自動續跑，根因位於後端 executor 與 provider 錯誤分類。
+      - 目前沒有明確需求要求修改前端畫面、互動流程或新增使用者可見設定。
+  backend:
+    status: required
+    evidence:
+      - 問題發生在 backend 的 `streamingChatExecutor`、`streamingLifecycleCoordinator`、`codexNormalizer` 與 provider retry 流程。
+      - 使用者明確指出 goal 應有 3 個待完成項，但 fatal `STREAM_ERROR` 後只完成 1 個就停止，屬於後端執行狀態機與續跑策略問題。
+questions:
+  - id: Q1
+    text: 現行 goal 未完成時，fatal provider error 會在哪裡中止 retry 並仍呼叫 onComplete？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      `backend/src/services/claude/streamingChatExecutor.ts` 會把收到 fatal provider
+      error 的 turn 標成 `completed_with_fatal_error`。進入 goal gate loop 後，
+      若 `turnOutcome.finished === "completed_with_fatal_error"` 就直接 break，
+      不再呼叫 `evaluateGoalGate()` 產生 retry nudge，但函式尾端仍會呼叫
+      `callbacks.onComplete()`，使 run 以完成態收尾並觸發下游 workflow。
+
+  - id: Q2
+    text: codex provider 是否已具備類似 Claude 的 session / stream 自動重試機制？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      沒有。`backend/src/services/provider/claude/sessionRetry.ts` 會在 session resume
+      失敗時清掉 `resumeSessionId` 自動重試一次；`codex` 目前沒有等效包裝。
+      `backend/src/services/provider/codexProvider.md` 也明確註記 Codex 的 session
+      resume 無自動重試機制。
+
+  - id: Q3
+    text: 這次修復範圍要先鎖定 codex provider，還是要一併把 executor 的 goal/fatal 行為抽成跨 provider 規則？
+    type: user-input
+    completed: true
+    answer: |
+      全部。修復範圍不只鎖定 codex provider，還要把 executor 在 goal 未完成時
+      遇到 fatal provider error 的續跑規則整理成跨 provider 的一致行為。

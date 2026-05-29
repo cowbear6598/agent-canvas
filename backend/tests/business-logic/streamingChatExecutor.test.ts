@@ -1139,7 +1139,7 @@ describe("executeStreamingChat", () => {
       expect(onComplete).toHaveBeenCalledWith(canvasId, pod.id);
     });
 
-    it("第一輪收到 fatal provider error 時應直接 break，不再 retry", async () => {
+    it("第一輪收到不可恢復 fatal provider error 時應保留未完成 goal，觸發 onError，且不觸發 onComplete", async () => {
       const goal = {
         todos: [
           { id: "todo-1", text: "永遠無法執行" },
@@ -1156,10 +1156,102 @@ describe("executeStreamingChat", () => {
             type: "error",
             message: "usage limit",
             fatal: true,
+            recovery: "unrecoverable",
             code: "STREAM_ERROR",
           },
         ]),
       );
+      asMock(getProvider).mockReturnValue({
+        chat: chatMock,
+        cancel: vi.fn(() => false),
+        buildOptions: vi.fn().mockResolvedValue({}),
+        metadata: {
+          availableModelValues: new Set(["opus", "sonnet", "haiku"]),
+          defaultOptions: { model: "opus" },
+          availableModels: [
+            { label: "Opus", value: "opus" },
+            { label: "Sonnet", value: "sonnet" },
+            { label: "Haiku", value: "haiku" },
+          ],
+        },
+      });
+
+      const onComplete = vi.fn();
+      const onError = vi.fn();
+      const result = await executeStreamingChat(
+        {
+          canvasId,
+          podId: pod.id,
+          message,
+          abortable: false,
+          strategy: makeStrategy(),
+        },
+        { onComplete, onError },
+      );
+
+      // 不可恢復 fatal error 不應 retry，且不應誤觸發完成態
+      expect(chatMock).toHaveBeenCalledTimes(1);
+      expect(runStore.addRunMessage).not.toHaveBeenCalled();
+      expect(result.aborted).toBe(false);
+      expect(onError).toHaveBeenCalledWith(
+        canvasId,
+        pod.id,
+        expect.objectContaining({
+          message: "Provider 發生不可恢復錯誤，Goal 尚未完成",
+        }),
+      );
+      expect(onComplete).not.toHaveBeenCalled();
+
+      const snapshot = readOnlyScopedGoalRuntimeSnapshot(
+        defaultRunContext,
+        pod.id,
+      );
+      expect(snapshot?.state.status).toBe("running");
+      expect(snapshot?.state.activeTodoId).toBe("todo-1");
+    });
+
+    it("第一輪收到可恢復 fatal provider error 時應交由 goal gate retry", async () => {
+      const goal = {
+        todos: [{ id: "todo-1", text: "重試後完成" }],
+      };
+      const pod = insertClaudePod({ goal });
+      ensureGoalRuntime(pod, defaultRunContext);
+
+      const chatMock = vi
+        .fn()
+        .mockImplementationOnce(() =>
+          makeEventStream([
+            {
+              type: "error",
+              message: "WebSocket connection closed while resuming stream",
+              fatal: true,
+              recovery: "recoverable",
+              code: "STREAM_ERROR",
+            },
+          ]),
+        )
+        .mockImplementationOnce(() =>
+          makeEventStream([
+            {
+              type: "tool_call_result",
+              toolUseId: "goal-tool-retry",
+              toolName: `mcp__${GOAL_MCP_SERVER_NAME}__complete_goal_todo`,
+              output: JSON.stringify({
+                status: "completed",
+                activeTodoId: null,
+                activeTodoText: null,
+                nextTodoId: null,
+                nextTodoText: null,
+                completedTodoIds: ["todo-1"],
+                blockedReason: null,
+                handoffSummary: "重試成功",
+                completedCount: 1,
+                totalCount: 1,
+              }),
+            },
+            { type: "turn_complete" },
+          ]),
+        );
       asMock(getProvider).mockReturnValue({
         chat: chatMock,
         cancel: vi.fn(() => false),
@@ -1187,11 +1279,15 @@ describe("executeStreamingChat", () => {
         { onComplete },
       );
 
-      // fatal error 後 gate 應該直接 break，不應 retry
-      expect(chatMock).toHaveBeenCalledTimes(1);
-      expect(runStore.addRunMessage).not.toHaveBeenCalled();
-      // onComplete 仍會被呼叫（transcript 已寫入錯誤訊息，下游 workflow 可自行判定）
-      expect(onComplete).toHaveBeenCalledTimes(1);
+      expect(chatMock).toHaveBeenCalledTimes(2);
+      expect(runStore.addRunMessage).toHaveBeenCalledTimes(1);
+      expect(onComplete).toHaveBeenCalledWith(canvasId, pod.id);
+
+      const snapshot = readOnlyScopedGoalRuntimeSnapshot(
+        defaultRunContext,
+        pod.id,
+      );
+      expect(snapshot?.state.status).toBe("completed");
     });
 
     it("沒有 Goal 的 Pod 應跳過 gate，第一輪結束直接 onComplete", async () => {

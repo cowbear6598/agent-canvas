@@ -1,0 +1,67 @@
+feature: skill-bundle-refactor
+created: "2026-05-29"
+approved: true
+impact_classification:
+  frontend:
+    status: required
+    evidence:
+      - 使用者明確要求把現有 Plugin 管理方向重構成以 skill 為核心的匯入模型。
+      - 現有前端已有 Plugin 管理入口、安裝輸入框與 Pod 勾選互動，需要同步調整術語與操作流程。
+  backend:
+    status: required
+    evidence:
+      - 使用者明確要求 skill 為核心，且 skill 內腳本與資源需要可被 agent 執行。
+      - 現有後端資料模型、安裝流程與 runtime 掃描流程都綁在 managed plugin 概念上，必須重構。
+questions:
+  - id: Q1
+    text: 現有 codebase 中，Plugin 概念在前後端的主要耦合點有哪些？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      前端耦合點主要在 `frontend/src/components/settings/ManagedPluginModal.vue`、
+      `frontend/src/services/pluginApi.ts`、`frontend/src/services/podPluginApi.ts`、
+      `frontend/src/components/pod/PluginPopover.vue`、`frontend/src/stores/managedPluginStore.ts`
+      與 `pluginIds` 相關型別與事件。後端耦合點主要在
+      `backend/src/services/plugin/pluginInstallService.ts`、
+      `backend/src/services/plugin/managedPluginRegistry.ts`、
+      `backend/src/handlers/pluginHandlers.ts`、
+      `backend/src/schemas/pluginSchemas.ts`、`managed_plugins` / `pod_plugin_ids`
+      schema 與所有 `pluginIds` 傳遞路徑。這代表本次重構會同時影響管理 UI、Pod 綁定、
+      安裝 API、資料表、runtime bridge 與測試。
+
+  - id: Q2
+    text: 現有 runtime 實際依賴的是 plugin manifest，還是 skill 檔案與其所在目錄？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      runtime 的核心依賴其實是 skill 檔案與所在目錄，不是 plugin manifest。
+      `backend/src/services/plugin/pluginScanFs.ts` 會遞迴掃描 `SKILL.md`；
+      `backend/src/services/plugin/pluginCatalogBuilder.ts` 與
+      `backend/src/services/plugin/pluginMcpBridge.ts` 只把 `skillMdPath` 與 `skillDir`
+      暴露給 agent，讓 agent 用原生 Read / Bash 讀 skill 與執行腳本。
+      `plugin.json` 目前只在 `pluginInstallService.ts` 用來補 `displayName` / `description`，
+      沒有被當成 runtime 必要契約。
+
+  - id: Q3
+    text: 現有 codebase 是否已有可重用的上傳與 staging 基礎設施，足以支援 bundle 匯入？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      已有可重用的 HTTP 上傳與 staging 基礎設施。`backend/src/api/uploadApi.ts`
+      提供 multipart 上傳入口，`backend/src/services/attachmentWriter.ts`
+      提供寫入 staging 與 promote 的安全路徑檢查，`backend/src/services/tmpCleanupService.ts`
+      負責過期 staging 清理。這些能力可作為 bundle 上傳匯入的參考，但 plugin bundle
+      匯入流程仍建議獨立成專用 API，因為其生命週期、驗證與解壓規則與聊天附件不同。
+
+  - id: Q4
+    text: 若把核心模型改成 skill bundle，現有相容與遷移約束有哪些？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      主要約束有四個。第一，`managed_plugins` 目前以 `github_repo` 為必要欄位，
+      `ManagedPluginRecord` 也強綁 `githubRepo`，需要改成來源中立模型。第二，
+      Pod 與 runtime 全程使用 `pluginIds` 命名，若要全面改名成本高，較適合先保留欄位名、
+      內部語意改為 bundle registry，再逐步重命名。第三，現有 `updatePlugin` /
+      `refreshAllPlugins` 假設來源一定是 git clone，upload 來源需要分流。第四，
+      README、i18n 文案、管理 UI 標題與 websocket event 命名都以 Plugin 為對外術語，
+      是否立即改名需要獨立決策。

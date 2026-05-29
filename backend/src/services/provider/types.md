@@ -63,7 +63,7 @@ type NormalizedEvent =
   | { type: "tool_call_start"; toolUseId: string; toolName: string; input: Record<string, unknown> }
   | { type: "tool_call_result"; toolUseId: string; toolName: string; output: string }
   | { type: "turn_complete" }
-  | { type: "error"; message: string; fatal: boolean };
+  | { type: "error"; message: string; fatal: boolean; recovery?: "recoverable" | "unrecoverable" };
 ```
 
 ### 各 type 的意義與產出時機
@@ -82,6 +82,12 @@ type NormalizedEvent =
 
 - `fatal: true`：嚴重錯誤，此 Pod 的對話無法繼續（如 spawn 失敗、auth 失敗）；前端可能需要顯示明顯提示
 - `fatal: false`：可恢復的錯誤，串流結束但 Pod 仍可繼續新對話（如 exit code 非 0 但已完成部分輸出）
+
+### `error` 的 `recovery` 欄位
+
+- `recovery: "recoverable"`：本輪串流雖然中止，但 executor 可以保留未完成 goal 並交給 retry / goal gate 繼續處理
+- `recovery: "unrecoverable"`：本輪錯誤不應被當成 goal 完成；executor 應保留未完成狀態，避免誤觸發下游 workflow
+- 若未明確提供，系統預設會把 `fatal: false` 視為 `recoverable`、`fatal: true` 視為 `unrecoverable`
 
 ---
 

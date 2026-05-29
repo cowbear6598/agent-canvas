@@ -26,6 +26,7 @@ import type {
   AgentProvider,
   ChatRequestContext,
   NormalizedEvent,
+  ProviderErrorRecovery,
   ProviderMetadata,
 } from "./types.js";
 import { logger } from "../../utils/logger.js";
@@ -103,6 +104,7 @@ function buildCodexSystemError(params: {
   fatal: boolean;
   code: string;
   rawContent?: string;
+  recovery?: ProviderErrorRecovery;
 }): Extract<NormalizedEvent, { type: "error" }> {
   return buildProviderSystemError("codex", params);
 }
