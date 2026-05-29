@@ -25,7 +25,12 @@ import type {
   SDKAPIRetryMessage,
 } from "@anthropic-ai/claude-agent-sdk";
 
-import type { NormalizedEvent, ChatRequestContext } from "../types.js";
+import {
+  buildProviderSystemError,
+  type ChatRequestContext,
+  type NormalizedEvent,
+  type ProviderErrorRecovery,
+} from "../types.js";
 import type { ClaudeOptions } from "./buildClaudeOptions.js";
 import {
   buildClaudeContentBlocks,
@@ -82,30 +87,24 @@ interface QueryState {
 
 const MAX_STDERR_DIAGNOSTIC_CHARS = 2000;
 
-function buildClaudeSystemError(params: {
-  content: string;
-  code?: string | null;
-  fatal: boolean;
-  rawContent?: string;
-}): Extract<NormalizedEvent, { type: "error" }> {
-  const { content, code, fatal, rawContent } = params;
-
-  return {
-    type: "error",
-    message: content,
-    fatal,
-    ...(code ? { code } : {}),
-    systemMessage: {
-      role: "system",
-      content,
-      metadata: {
-        provider: "claude",
-        code: code ?? null,
-        severity: fatal ? "fatal" : "error",
-        rawContent: rawContent ?? content,
+function buildClaudeSystemError(
+  params:
+    | {
+        content: string;
+        code: string;
+        fatal: false;
+        rawContent?: string;
+        recovery?: ProviderErrorRecovery;
+      }
+    | {
+        content: string;
+        code: string;
+        fatal: true;
+        rawContent?: string;
+        recovery: ProviderErrorRecovery;
       },
-    },
-  };
+): Extract<NormalizedEvent, { type: "error" }> {
+  return buildProviderSystemError("claude", params);
 }
 
 // ─── 工具函式 ─────────────────────────────────────────────────────────────────
@@ -225,6 +224,7 @@ function* handleAssistant(
       content: "Claude SDK 回傳 assistant 錯誤，請稍後重試。",
       code: "ASSISTANT_ERROR",
       fatal: true,
+      recovery: "unrecoverable",
     });
     // AI 業務錯誤：只 yield 給上層 executor 寫入 transcript，後續 SDK message 由迴圈自然處理
     return;
@@ -304,6 +304,7 @@ function* handleResult(
     code: "RESULT_ERROR",
     fatal: true,
     rawContent,
+    recovery: "unrecoverable",
   });
   // AI 業務錯誤：result event 即代表本輪結束，generator 自然回到外層迴圈
   return;
@@ -329,6 +330,7 @@ function* handleRateLimitEvent(
     code: "RATE_LIMIT_REJECTED",
     fatal: true,
     rawContent,
+    recovery: "unrecoverable",
   });
   // AI 業務錯誤：上層 executor 已寫入 transcript，generator 結束讓外層迴圈繼續處理後續 SDK message
   return;
@@ -388,6 +390,7 @@ function* handleAuthStatus(
     content: "Claude 認證失敗，請確認 API Key 設定後重試。",
     code: "AUTH_STATUS_ERROR",
     fatal: true,
+    recovery: "unrecoverable",
   });
   // AI 業務錯誤：generator 自然繼續處理後續 SDK message
   return;
@@ -468,6 +471,7 @@ export async function* runClaudeQuery(
       content: "[runClaudeQuery] ClaudeOptions 未提供",
       code: "MISSING_OPTIONS",
       fatal: true,
+      recovery: "unrecoverable",
     });
     return;
   }

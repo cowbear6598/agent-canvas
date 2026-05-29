@@ -2,13 +2,23 @@ import { buildProviderSystemError } from "./types.js";
 import type { NormalizedEvent, ProviderErrorRecovery } from "./types.js";
 
 /** opencode provider 專用的系統錯誤建立 helper */
-export function buildOpencodeSystemError(params: {
-  content: string;
-  fatal: boolean;
-  code: string;
-  rawContent?: string;
-  recovery?: ProviderErrorRecovery;
-}): Extract<NormalizedEvent, { type: "error" }> {
+export function buildOpencodeSystemError(
+  params:
+    | {
+        content: string;
+        fatal: false;
+        code: string;
+        rawContent?: string;
+        recovery?: ProviderErrorRecovery;
+      }
+    | {
+        content: string;
+        fatal: true;
+        code: string;
+        rawContent?: string;
+        recovery: ProviderErrorRecovery;
+      },
+): Extract<NormalizedEvent, { type: "error" }> {
   return buildProviderSystemError("opencode", params);
 }
 

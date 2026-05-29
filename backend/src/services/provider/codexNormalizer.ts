@@ -119,38 +119,24 @@ interface CodexMcpToolCallItem {
 }
 
 /** Codex normalizer 專用的系統錯誤建立 helper（委派給共用 buildProviderSystemError） */
-function buildCodexSystemError(params: {
-  content: string;
-  fatal: boolean;
-  code: string;
-  rawContent?: string;
-  recovery?: ProviderErrorRecovery;
-}): Extract<NormalizedEvent, { type: "error" }> {
+function buildCodexSystemError(
+  params:
+    | {
+        content: string;
+        fatal: false;
+        code: string;
+        rawContent?: string;
+        recovery?: ProviderErrorRecovery;
+      }
+    | {
+        content: string;
+        fatal: true;
+        code: string;
+        rawContent?: string;
+        recovery: ProviderErrorRecovery;
+      },
+): Extract<NormalizedEvent, { type: "error" }> {
   return buildProviderSystemError("codex", params);
-}
-
-const RECOVERABLE_CODEX_STREAM_ERROR_PATTERNS = [
-  /\bwebsocket\b/i,
-  /\bweb socket\b/i,
-  /\btransport\b/i,
-  /\bresume\b/i,
-  /\btimeout\b/i,
-  /\btimed out\b/i,
-  /\bconnection (?:closed|reset|lost|dropped|aborted)\b/i,
-  /\beconnreset\b/i,
-  /\bbroken pipe\b/i,
-  /\btemporarily unavailable\b/i,
-  /\bstream interrupted\b/i,
-] as const;
-
-function classifyCodexStreamErrorRecovery(
-  rawContent: string,
-): ProviderErrorRecovery {
-  return RECOVERABLE_CODEX_STREAM_ERROR_PATTERNS.some((pattern) =>
-    pattern.test(rawContent),
-  )
-    ? "recoverable"
-    : "unrecoverable";
 }
 
 function buildMcpToolName(item: CodexMcpToolCallItem): string {
@@ -374,7 +360,7 @@ export function normalize(line: string): NormalizedEvent | null {
         fatal: true,
         code: "STREAM_ERROR",
         rawContent,
-        recovery: classifyCodexStreamErrorRecovery(rawContent),
+        recovery: "unrecoverable",
       });
     }
 

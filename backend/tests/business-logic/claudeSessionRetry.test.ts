@@ -66,6 +66,7 @@ describe("withSessionRetry", () => {
           type: "error",
           message: "No conversation found with session ID: 123",
           fatal: true,
+          code: "SESSION_RESUME_FAILED",
           recovery: "recoverable",
         };
       })
@@ -86,11 +87,11 @@ describe("withSessionRetry", () => {
     ]);
   });
 
-  it("非 session 類 fatal error event 不應重試，原樣往上游 yield", async () => {
+  it("只含 session 關鍵字但沒有結構化 recovery 契約時不應重試", async () => {
     mockRunClaudeQuery = async function* () {
       yield {
         type: "error",
-        message: "billing_error",
+        message: "session temporarily unavailable",
         fatal: true,
         recovery: "unrecoverable",
       };
@@ -101,7 +102,7 @@ describe("withSessionRetry", () => {
     expect(events).toEqual([
       {
         type: "error",
-        message: "billing_error",
+        message: "session temporarily unavailable",
         fatal: true,
         recovery: "unrecoverable",
       },

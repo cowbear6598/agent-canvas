@@ -99,13 +99,23 @@ const BASE64_RE = /^[A-Za-z0-9+/=]+$/;
 const MIME_FORMAT_RE = /^image\/[a-z0-9.+-]+$/;
 
 /** Codex provider 專用的系統錯誤建立 helper（委派給共用 buildProviderSystemError） */
-function buildCodexSystemError(params: {
-  content: string;
-  fatal: boolean;
-  code: string;
-  rawContent?: string;
-  recovery?: ProviderErrorRecovery;
-}): Extract<NormalizedEvent, { type: "error" }> {
+function buildCodexSystemError(
+  params:
+    | {
+        content: string;
+        fatal: false;
+        code: string;
+        rawContent?: string;
+        recovery?: ProviderErrorRecovery;
+      }
+    | {
+        content: string;
+        fatal: true;
+        code: string;
+        rawContent?: string;
+        recovery: ProviderErrorRecovery;
+      },
+): Extract<NormalizedEvent, { type: "error" }> {
   return buildProviderSystemError("codex", params);
 }
 
@@ -602,6 +612,7 @@ function setupSubprocess(
           content: "codex CLI 尚未安裝或不在 PATH 中，請執行 codex login",
           fatal: true,
           code: "CLI_NOT_FOUND",
+          recovery: "unrecoverable",
         }),
       };
     }
@@ -613,6 +624,7 @@ function setupSubprocess(
         fatal: true,
         code: "SPAWN_FAILED",
         rawContent: err instanceof Error ? err.message : String(err),
+        recovery: "unrecoverable",
       }),
     };
   }
@@ -752,6 +764,7 @@ export const codexProvider: AgentProvider<CodexOptions> = {
         content: "不合法的 model 名稱",
         fatal: true,
         code: "INVALID_MODEL",
+        recovery: "unrecoverable",
       });
       return;
     }

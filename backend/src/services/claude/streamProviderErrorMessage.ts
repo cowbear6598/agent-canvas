@@ -9,8 +9,19 @@ export function buildProviderErrorSystemMessage(
   event: Extract<NormalizedEvent, { type: "error" }>,
   providerName: ProviderName,
 ): ProviderSystemMessage {
+  const recovery = resolveProviderErrorRecovery({
+    fatal: event.fatal,
+    recovery: event.recovery ?? event.systemMessage?.metadata.recovery,
+  });
+
   if (event.systemMessage) {
-    return event.systemMessage;
+    return {
+      ...event.systemMessage,
+      metadata: {
+        ...event.systemMessage.metadata,
+        recovery,
+      },
+    };
   }
 
   return {
@@ -21,7 +32,7 @@ export function buildProviderErrorSystemMessage(
       code: event.code ?? null,
       severity: event.fatal ? "fatal" : "error",
       rawContent: event.message,
-      recovery: resolveProviderErrorRecovery(event),
+      recovery,
       reasonDetail: undefined,
     },
   };

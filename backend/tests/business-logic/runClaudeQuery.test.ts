@@ -88,6 +88,7 @@ describe("runClaudeQuery", () => {
       expect(events[0]).toMatchObject({
         type: "error",
         fatal: true,
+        recovery: "unrecoverable",
       });
       expect((events[0] as any).message).toContain("ClaudeOptions");
     });
@@ -251,6 +252,8 @@ describe("runClaudeQuery", () => {
       const errorEvent = events[0] as any;
       expect(errorEvent.type).toBe("error");
       expect(errorEvent.fatal).toBe(true);
+      expect(errorEvent.recovery).toBe("unrecoverable");
+      expect(errorEvent.systemMessage?.metadata.recovery).toBe("unrecoverable");
       expect(errorEvent.systemMessage?.metadata.provider).toBe("claude");
       expect(errorEvent.code).toBe("RESULT_ERROR");
     });
@@ -273,6 +276,7 @@ describe("runClaudeQuery", () => {
       const errorEvent = events.find((e: any) => e.type === "error") as any;
       expect(errorEvent).toBeDefined();
       expect(errorEvent.fatal).toBe(true);
+      expect(errorEvent.recovery).toBe("unrecoverable");
       expect(errorEvent.code).toBe("ASSISTANT_ERROR");
     });
   });
@@ -298,6 +302,7 @@ describe("runClaudeQuery", () => {
       const errorEvent = events.find((e: any) => e.type === "error") as any;
       expect(errorEvent).toBeDefined();
       expect(errorEvent.fatal).toBe(true);
+      expect(errorEvent.recovery).toBe("unrecoverable");
       expect(errorEvent.code).toBe("RATE_LIMIT_REJECTED");
 
       // content 不再是 raw JSON
@@ -352,8 +357,12 @@ describe("runClaudeQuery", () => {
       const errorEvent = events.find((e: any) => e.type === "error") as any;
       expect(errorEvent).toBeDefined();
       expect(errorEvent.fatal).toBe(true);
+      expect(errorEvent.recovery).toBe("unrecoverable");
       // 原始 SDK error 字串不再作為 code，改用固定常數避免洩漏 SDK 內部細節
       expect(errorEvent.systemMessage?.metadata.code).toBe("AUTH_STATUS_ERROR");
+      expect(errorEvent.systemMessage?.metadata.recovery).toBe(
+        "unrecoverable",
+      );
     });
   });
 

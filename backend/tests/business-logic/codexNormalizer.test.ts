@@ -280,7 +280,7 @@ describe("CodexNormalizer - normalize()", () => {
     });
   });
 
-  it("error envelope 命中 transport 關鍵字時應標記為 recoverable", () => {
+  it("error envelope 即使含 transport 關鍵字也應維持 unrecoverable", () => {
     const line = toLine({
       type: "error",
       message: "WebSocket connection closed while resuming stream",
@@ -291,8 +291,8 @@ describe("CodexNormalizer - normalize()", () => {
     expect(result?.type).toBe("error");
     const e = result as Extract<typeof result, { type: "error" }>;
     expect(e.fatal).toBe(true);
-    expect(e.recovery).toBe("recoverable");
-    expect(e.systemMessage?.metadata.recovery).toBe("recoverable");
+    expect(e.recovery).toBe("unrecoverable");
+    expect(e.systemMessage?.metadata.recovery).toBe("unrecoverable");
   });
 
   it("item.completed 且 item_type=error 應映射為 non-fatal system error", () => {

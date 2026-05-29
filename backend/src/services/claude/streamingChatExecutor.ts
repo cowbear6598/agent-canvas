@@ -503,91 +503,92 @@ export async function executeStreamingChat(
     ensureGoalRuntime(podResult.pod, scopedRunContext);
   }
 
-  // 第一輪 turn：使用 caller 傳入的 message
-  let turnOutcome = await executeChatTurn(
-    effectiveOptions,
-    podResult.pod,
-    effectiveOptions.message,
-    callbacks,
-  );
-  if (turnOutcome.finished === "aborted_or_errored") {
-    const runContext = effectiveOptions.strategy.getRunContext();
-    if (runContext) {
-      runExecutionService.unregisterActiveStream(runContext.runId, podId);
-    }
-    return turnOutcome.result;
-  }
-
-  // Goal 完成 gate loop：只有當 runContext 存在且 Goal Runtime 有 active todo 時才會進迴圈
   const runContext = effectiveOptions.strategy.getRunContext();
-  let retryCount = 0;
-  let noProgressCount = 0;
-
-  while (true) {
-    if (!runContext) break;
-
-    if (
-      turnOutcome.finished === "completed_with_unrecoverable_provider_error"
-    ) {
-      if (hasPendingGoalRuntime(runContext, podId)) {
-        if (callbacks?.onError) {
-          await callbacks.onError(
-            canvasId,
-            podId,
-            new Error(PENDING_GOAL_UNRECOVERABLE_PROVIDER_ERROR_MESSAGE),
-          );
-        }
-        return turnOutcome.result;
-      }
-      break;
-    }
-
-    const decision = evaluateGoalGate(runContext, podId, {
-      retryCount,
-      noProgressCount,
-    });
-
-    if (decision.action === "proceed") break;
-
-    if (decision.action === "force_block") {
-      autoForceBlock(runContext, podResult.pod, decision.reason);
-      break;
-    }
-
-    // decision.action === "retry"
-    await effectiveOptions.strategy.addUserMessage(podId, decision.nudgeMessage);
-    turnOutcome = await executeChatTurn(
+  try {
+    // 第一輪 turn：使用 caller 傳入的 message
+    let turnOutcome = await executeChatTurn(
       effectiveOptions,
       podResult.pod,
-      decision.nudgeMessage,
+      effectiveOptions.message,
       callbacks,
     );
     if (turnOutcome.finished === "aborted_or_errored") {
       return turnOutcome.result;
     }
 
-    noProgressCount = nextNoProgressCount(
-      runContext,
-      podId,
-      decision.completedCountBefore,
-      noProgressCount,
-    );
-    retryCount++;
+    // Goal 完成 gate loop：只有當 runContext 存在且 Goal Runtime 有 active todo 時才會進迴圈
+    let retryCount = 0;
+    let noProgressCount = 0;
 
-    // 防呆：理論上 evaluateGoalGate 會在 retryCount >= hardRetryLimit 時回 force_block；
-    // 此處再次檢查避免任何遞增邏輯改動造成意外無限迴圈
-    if (retryCount > GOAL_GATE_LIMITS.hardRetryLimit) break;
+    while (true) {
+      if (!runContext) break;
+
+      if (
+        turnOutcome.finished === "completed_with_unrecoverable_provider_error"
+      ) {
+        if (hasPendingGoalRuntime(runContext, podId)) {
+          if (callbacks?.onError) {
+            await callbacks.onError(
+              canvasId,
+              podId,
+              new Error(PENDING_GOAL_UNRECOVERABLE_PROVIDER_ERROR_MESSAGE),
+            );
+          }
+          return turnOutcome.result;
+        }
+        break;
+      }
+
+      const decision = evaluateGoalGate(runContext, podId, {
+        retryCount,
+        noProgressCount,
+      });
+
+      if (decision.action === "proceed") break;
+
+      if (decision.action === "force_block") {
+        autoForceBlock(runContext, podResult.pod, decision.reason);
+        break;
+      }
+
+      // decision.action === "retry"
+      await effectiveOptions.strategy.addUserMessage(
+        podId,
+        decision.nudgeMessage,
+      );
+      turnOutcome = await executeChatTurn(
+        effectiveOptions,
+        podResult.pod,
+        decision.nudgeMessage,
+        callbacks,
+      );
+      if (turnOutcome.finished === "aborted_or_errored") {
+        return turnOutcome.result;
+      }
+
+      noProgressCount = nextNoProgressCount(
+        runContext,
+        podId,
+        decision.completedCountBefore,
+        noProgressCount,
+      );
+      retryCount++;
+
+      // 防呆：理論上 evaluateGoalGate 會在 retryCount >= hardRetryLimit 時回 force_block；
+      // 此處再次檢查避免任何遞增邏輯改動造成意外無限迴圈
+      if (retryCount > GOAL_GATE_LIMITS.hardRetryLimit) break;
+    }
+
+    persistGoalRoundDivider(effectiveOptions);
+
+    if (callbacks?.onComplete) {
+      await callbacks.onComplete(canvasId, podId);
+    }
+
+    return turnOutcome.result;
+  } finally {
+    if (runContext) {
+      runExecutionService.unregisterActiveStream(runContext.runId, podId);
+    }
   }
-
-  persistGoalRoundDivider(effectiveOptions);
-
-  if (runContext) {
-    runExecutionService.unregisterActiveStream(runContext.runId, podId);
-  }
-
-  if (callbacks?.onComplete) {
-    await callbacks.onComplete(canvasId, podId);
-  }
-
-  return turnOutcome.result;
 }

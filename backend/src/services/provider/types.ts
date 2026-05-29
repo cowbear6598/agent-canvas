@@ -79,11 +79,9 @@ export type NormalizedEvent =
   | {
       type: "turn_complete";
     }
-  | {
+  | ({
       type: "error";
       message: string;
-      fatal: boolean;
-      recovery?: ProviderErrorRecovery;
       /** 結構化錯誤代碼，供未來擴充使用；系統錯誤不帶 code。 */
       code?: string;
       /**
@@ -91,7 +89,16 @@ export type NormalizedEvent =
        * 後續 phase 會以此取代把 provider error 假裝成 assistant 文字或 Toast。
        */
       systemMessage?: ProviderSystemMessage;
-    };
+    } & (
+      | {
+          fatal: false;
+          recovery?: ProviderErrorRecovery;
+        }
+      | {
+          fatal: true;
+          recovery: ProviderErrorRecovery;
+        }
+    ));
 
 /**
  * 統一建立 Provider 系統錯誤事件（NormalizedEvent error 型別）的 helper。
@@ -104,14 +111,23 @@ export type NormalizedEvent =
  */
 export function buildProviderSystemError(
   provider: ProviderName,
-  params: {
-    content: string;
-    fatal: boolean;
-    code: string;
-    rawContent?: string;
-    recovery?: ProviderErrorRecovery;
-    reasonDetail?: string;
-  },
+  params:
+    | {
+        content: string;
+        fatal: false;
+        code: string;
+        rawContent?: string;
+        recovery?: ProviderErrorRecovery;
+        reasonDetail?: string;
+      }
+    | {
+        content: string;
+        fatal: true;
+        code: string;
+        rawContent?: string;
+        recovery: ProviderErrorRecovery;
+        reasonDetail?: string;
+      },
 ): Extract<NormalizedEvent, { type: "error" }> {
   const { content, fatal, code, rawContent, recovery, reasonDetail } = params;
   const normalizedRecovery = resolveProviderErrorRecovery({ fatal, recovery });

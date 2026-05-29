@@ -3,7 +3,7 @@
  *
  * 包裝 runClaudeQuery，處理 resume session 失敗後的自動重試邏輯：
  *   1. 第一次嘗試帶 resumeSessionId 執行
- *   2. 若串流中途發生錯誤且錯誤訊息含 session/resume 關鍵字，清掉 resumeSessionId 後重試一次
+ *   2. 若串流中途收到 provider 明確標記的 session resume 可恢復錯誤，清掉 resumeSessionId 後重試一次
  *   3. 最多重試一次，避免無限重試
  *
  * 對應 claudeService.executeWithSessionRetry / shouldRetrySession / handleSendMessageError 的邏輯。
@@ -14,36 +14,48 @@
 
 import { getErrorMessage, isAbortError } from "../../../utils/errorHelpers.js";
 import { logger } from "../../../utils/logger.js";
-import type { NormalizedEvent, ChatRequestContext } from "../types.js";
+import {
+  buildProviderSystemError,
+  type ChatRequestContext,
+  type NormalizedEvent,
+} from "../types.js";
 import type { ClaudeOptions } from "./buildClaudeOptions.js";
 import { runClaudeQuery } from "./runClaudeQuery.js";
 
 // ─── shouldRetrySession ──────────────────────────────────────────────────────
 
-/** 判斷是否為 session resume 相關的錯誤（沿用 claudeService 的判斷邏輯） */
-const SESSION_RESUME_ERROR_KEYWORDS = ["session", "resume"] as const;
+const SESSION_RESUME_FAILURE_CODE = "SESSION_RESUME_FAILED";
 
-function isSessionResumeError(errorMessage: string): boolean {
-  return SESSION_RESUME_ERROR_KEYWORDS.some((keyword) =>
-    errorMessage.includes(keyword),
-  );
+function buildClaudeWrapperError(params: {
+  content: string;
+  code: string;
+  rawContent: string;
+}): Extract<NormalizedEvent, { type: "error" }> {
+  return buildProviderSystemError("claude", {
+    ...params,
+    fatal: true,
+    recovery: "unrecoverable",
+  });
 }
 
 /**
  * 判斷是否應該重試 session。
  * - 已是重試 → false（避免無限重試）
  * - 無 resumeSessionId → false（新對話無需重試）
- * - 錯誤訊息含 session/resume 關鍵字 → true
+ * - 只有 provider 明確標記為可恢復的 session resume 失敗才重試
  */
 function shouldRetrySession(
-  error: unknown,
+  event: Extract<NormalizedEvent, { type: "error" }>,
   resumeSessionId: string | null,
   isRetry: boolean,
 ): boolean {
   if (isRetry) return false;
   if (!resumeSessionId) return false;
-  const errorMessage = getErrorMessage(error);
-  return isSessionResumeError(errorMessage);
+  return (
+    event.fatal &&
+    event.recovery === "recoverable" &&
+    event.code === SESSION_RESUME_FAILURE_CODE
+  );
 }
 
 // ─── withSessionRetry ────────────────────────────────────────────────────────
@@ -51,7 +63,7 @@ function shouldRetrySession(
 /**
  * 以 Session 重試邏輯包裝 runClaudeQuery。
  *
- * 若第一次執行因 session resume 失敗（errorMessage 含 session/resume 關鍵字），
+ * 若第一次執行因 provider 明確標記的 session resume 失敗，
  * 則清除 resumeSessionId 後重跑一次 runClaudeQuery。
  *
  * 語意：
@@ -60,7 +72,7 @@ function shouldRetrySession(
  *     本模組只負責重試，session 持久化仍交給 executor
  *
  * 重試機制：
- *   - 發生 session resume 錯誤 → 產出 error event → 停止第一次串流 → 清 resumeSessionId 重跑
+ *   - 發生可恢復的 session resume 錯誤事件 → 停止第一次串流 → 清 resumeSessionId 重跑
  *   - 重試最多一次（isRetry=true 後 shouldRetrySession 回 false）
  */
 export async function* withSessionRetry(
@@ -74,14 +86,12 @@ export async function* withSessionRetry(
     for await (const event of runClaudeQuery(ctx)) {
       if (
         event.type === "error" &&
-        event.fatal &&
-        shouldRetrySession(event.message, ctx.resumeSessionId, false)
+        shouldRetrySession(event, ctx.resumeSessionId, false)
       ) {
-        const message = getErrorMessage(event.message);
         logger.log(
           "Chat",
           "Update",
-          `[withSessionRetry] Pod ${podId} Session 恢復失敗，清除 resumeSessionId 並重試：${message}`,
+          `[withSessionRetry] Pod ${podId} Session 恢復失敗，清除 resumeSessionId 並重試：${event.message}`,
         );
         shouldRetryFromFatalEvent = true;
         break;
@@ -99,26 +109,18 @@ export async function* withSessionRetry(
       throw error;
     }
 
-    // 判斷是否應重試 session
-    if (!shouldRetrySession(error, ctx.resumeSessionId, false)) {
-      // 非 session 相關錯誤：送出 error event 後終止
-      const message = getErrorMessage(error);
-      logger.error(
-        "Chat",
-        "Error",
-        `[withSessionRetry] Pod ${podId} 查詢失敗（非 session 錯誤）：${message}`,
-      );
-      yield { type: "error", message, fatal: true };
-      return;
-    }
-
-    // Session resume 失敗：log 並重試（清除 resumeSessionId）
     const message = getErrorMessage(error);
-    logger.log(
+    logger.error(
       "Chat",
-      "Update",
-      `[withSessionRetry] Pod ${podId} Session 恢復失敗，清除 resumeSessionId 並重試：${message}`,
+      "Error",
+      `[withSessionRetry] Pod ${podId} 查詢失敗：${message}`,
     );
+    yield buildClaudeWrapperError({
+      content: "Claude 查詢失敗，請稍後再試。",
+      code: "QUERY_FAILED",
+      rawContent: message,
+    });
+    return;
   }
 
   // 第二次嘗試：清掉 resumeSessionId
@@ -142,6 +144,10 @@ export async function* withSessionRetry(
       "Error",
       `[withSessionRetry] Pod ${podId} 重試後仍失敗：${message}`,
     );
-    yield { type: "error", message, fatal: true };
+    yield buildClaudeWrapperError({
+      content: "Claude 重試後仍失敗，請稍後再試。",
+      code: "QUERY_RETRY_FAILED",
+      rawContent: message,
+    });
   }
 }

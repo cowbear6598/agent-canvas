@@ -56,6 +56,7 @@ function buildPermissionAskedEvent(
     fatal: true,
     code: "opencode_permission_blocked",
     rawContent: JSON.stringify({ permission, patterns }),
+    recovery: "unrecoverable",
   });
 }
 
@@ -84,6 +85,7 @@ function buildQuestionAskedEvent(
     fatal: true,
     code: "opencode_question_blocked",
     rawContent: JSON.stringify(props),
+    recovery: "unrecoverable",
   });
 }
 
@@ -105,6 +107,7 @@ function buildWorkspaceFailedEvent(
     content: "opencode 工作區初始化失敗，請稍後再試",
     fatal: true,
     code: "opencode_workspace_failed",
+    recovery: "unrecoverable",
   });
 }
 
@@ -126,9 +129,9 @@ function buildSanitizedSessionFailureEvent(params: {
 
   return buildOpencodeSystemError({
     content: "opencode session 發生錯誤，請稍後再試",
-    fatal: classified.fatal,
+    fatal: false,
     code: "opencode_session_failed",
-    recovery: classified.recovery,
+    recovery: "recoverable",
   });
 }
 

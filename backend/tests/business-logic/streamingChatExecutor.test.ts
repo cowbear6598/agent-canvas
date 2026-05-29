@@ -71,6 +71,11 @@ import {
   removeGoalRuntimeRun,
 } from "../../src/services/goalRuntime.js";
 
+const realRegisterActiveStream =
+  runExecutionService.registerActiveStream.bind(runExecutionService);
+const realUnregisterActiveStream =
+  runExecutionService.unregisterActiveStream.bind(runExecutionService);
+
 function asMock(fn: unknown): Mock<any> {
   return fn as Mock<any>;
 }
@@ -419,7 +424,12 @@ describe("executeStreamingChat", () => {
       );
 
       setupProviderMock([
-        { type: "error", message: "某致命錯誤", fatal: true },
+        {
+          type: "error",
+          message: "某致命錯誤",
+          fatal: true,
+          recovery: "unrecoverable",
+        },
         // 後續事件不應被處理（fatal 中止後續 event 處理）
         { type: "text", content: "不應出現" },
         { type: "turn_complete" },
@@ -1200,6 +1210,9 @@ describe("executeStreamingChat", () => {
           message: "Provider 發生不可恢復錯誤，Goal 尚未完成",
         }),
       );
+      expect(runExecutionService.unregisterActiveStream).toHaveBeenCalledTimes(
+        2,
+      );
       expect(onComplete).not.toHaveBeenCalled();
 
       const snapshot = readOnlyScopedGoalRuntimeSnapshot(
@@ -1208,6 +1221,57 @@ describe("executeStreamingChat", () => {
       );
       expect(snapshot?.state.status).toBe("running");
       expect(snapshot?.state.activeTodoId).toBe("todo-1");
+    });
+
+    it("未完成 goal 遇到不可恢復 fatal provider error 早退後，應清掉 active stream refcount", async () => {
+      const goal = {
+        todos: [
+          { id: "todo-1", text: "永遠無法執行" },
+          { id: "todo-2", text: "永遠無法執行 2" },
+        ],
+      };
+      const pod = insertClaudePod({ goal });
+      const runContext: RunContext = {
+        ...defaultRunContext,
+        runId: `run-cleanup-${randomUUID()}`,
+      };
+
+      asMock(runExecutionService.registerActiveStream).mockImplementation(
+        realRegisterActiveStream,
+      );
+      asMock(runExecutionService.unregisterActiveStream).mockImplementation(
+        realUnregisterActiveStream,
+      );
+
+      setupProviderMock([
+        {
+          type: "error",
+          message: "usage limit",
+          fatal: true,
+          recovery: "unrecoverable",
+          code: "STREAM_ERROR",
+        },
+      ]);
+
+      runExecutionService.registerActiveStream(runContext.runId, pod.id);
+      expect(runExecutionService.hasActiveStream(runContext.runId, pod.id)).toBe(
+        true,
+      );
+
+      await executeStreamingChat(
+        {
+          canvasId,
+          podId: pod.id,
+          message,
+          abortable: false,
+          strategy: new ChatExecutionStrategy(canvasId, runContext),
+        },
+        { onError: vi.fn() },
+      );
+
+      expect(
+        runExecutionService.hasActiveStream(runContext.runId, pod.id),
+      ).toBe(false);
     });
 
     it("第一輪收到可恢復 fatal provider error 時應交由 goal gate retry", async () => {
@@ -1801,7 +1865,12 @@ describe("executeStreamingChat", () => {
       const pod = insertCodexPod();
       const chatMock = vi.fn(() =>
         makeEventStream([
-          { type: "error", message: "某致命錯誤", fatal: true },
+          {
+            type: "error",
+            message: "某致命錯誤",
+            fatal: true,
+            recovery: "unrecoverable",
+          },
         ]),
       );
       asMock(getProvider).mockReturnValue({
@@ -2141,6 +2210,7 @@ describe("executeStreamingChat", () => {
           message:
             "Gemini 目前回報模型容量不足，這次請求未完成，請稍後再試或切換模型。",
           fatal: true,
+          recovery: "unrecoverable",
           code: "GEMINI_CAPACITY_EXHAUSTED",
           systemMessage: {
             role: "system",
@@ -2177,6 +2247,7 @@ describe("executeStreamingChat", () => {
             provider: "gemini",
             code: "GEMINI_CAPACITY_EXHAUSTED",
             severity: "fatal",
+            recovery: "unrecoverable",
             reasonDetail: "這次失敗是模型當下容量不足，與帳號配額不足不同。",
           }),
         }),

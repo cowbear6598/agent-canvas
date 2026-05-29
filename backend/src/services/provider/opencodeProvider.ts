@@ -380,6 +380,7 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
         content: "內部錯誤：chat options 不可為空",
         fatal: true,
         code: "opencode_missing_options",
+        recovery: "unrecoverable",
       });
       return;
     }
@@ -437,6 +438,7 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
             content: "opencode server 連線失敗，請重啟後端",
             fatal: true,
             code: "opencode_server_unreachable",
+            recovery: "unrecoverable",
           });
           return;
         }
@@ -447,6 +449,7 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
             content: "opencode server 連線失敗，請重啟後端",
             fatal: true,
             code: "opencode_server_unreachable",
+            recovery: "unrecoverable",
           });
           return;
         }
@@ -458,6 +461,7 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
           content: "opencode server 連線失敗，請重啟後端",
           fatal: true,
           code: "opencode_server_unreachable",
+          recovery: "unrecoverable",
         });
         return;
       }
@@ -527,6 +531,7 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
             content: "opencode 事件串流建立失敗，請稍後再試",
             fatal: true,
             code: "opencode_event_subscribe_failed",
+            recovery: "unrecoverable",
           });
           return;
         }

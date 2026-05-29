@@ -45,12 +45,17 @@ function forceFatalOpencodeError(
   return {
     ...event,
     fatal: true,
+    recovery: event.recovery ?? "unrecoverable",
     systemMessage: event.systemMessage
       ? {
           ...event.systemMessage,
           metadata: {
             ...event.systemMessage.metadata,
             severity: "fatal",
+            recovery:
+              event.systemMessage.metadata.recovery ??
+              event.recovery ??
+              "unrecoverable",
           },
         }
       : undefined,
@@ -153,6 +158,7 @@ export function createOpencodeSessionLifecycleAdapter(options: {
             content: "opencode session 建立失敗：未取得 session ID",
             fatal: true,
             code: "opencode_session_failed",
+            recovery: "unrecoverable",
           }),
         };
       }

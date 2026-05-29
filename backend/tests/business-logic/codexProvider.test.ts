@@ -471,7 +471,7 @@ describe("CodexProvider", () => {
     expect(hasExitCode).toBe(false);
   });
 
-  it("type=error stream event 含 transport 關鍵字時應標記為 recoverable", async () => {
+  it("type=error stream event 即使含 transport 關鍵字也應標記為 unrecoverable", async () => {
     const stdoutLines = [
       JSON.stringify({
         type: "error",
@@ -487,8 +487,8 @@ describe("CodexProvider", () => {
       { type: "error" }
     >;
 
-    expect(errorEvent.recovery).toBe("recoverable");
-    expect(errorEvent.systemMessage?.metadata.recovery).toBe("recoverable");
+    expect(errorEvent.recovery).toBe("unrecoverable");
+    expect(errorEvent.systemMessage?.metadata.recovery).toBe("unrecoverable");
   });
 
   // ── 補充：exit code 非 0 但已發 turn_complete → 不推 error event ───

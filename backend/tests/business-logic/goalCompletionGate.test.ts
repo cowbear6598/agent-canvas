@@ -145,6 +145,17 @@ describe("evaluateGoalGate", () => {
     expect(decision.reason).toContain("硬上限");
   });
 
+  it("retryCount 在第 3 次達到硬上限時應 force_block", () => {
+    ensureGoalRuntime(pod, runContext);
+
+    const decision = evaluateGoalGate(runContext, pod.id, {
+      retryCount: 3,
+      noProgressCount: 0,
+    });
+
+    expect(decision.action).toBe("force_block");
+  });
+
   it("noProgressCount 達到 noProgressLimit 時應 force_block", () => {
     ensureGoalRuntime(pod, runContext);
 
