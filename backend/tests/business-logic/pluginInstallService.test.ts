@@ -6,7 +6,7 @@
  *   F3：install clone 失敗 → 不寫入 store
  *   F4：重複安裝 → 直接回 PLUGIN_ALREADY_INSTALLED，不呼叫 clone
  *   F5：remove（rm + store.delete）
- *   F6：update（rm → clone → store.update，保留 id）
+ *   F6：update（staging clone → activate → store.update，保留 id）
  *   F1：refreshAllPlugins（只 pull 有差的 plugin，無差的不觸發 store.update）
  *
  * Mock 邊界：
@@ -94,9 +94,22 @@ vi.mock("../../src/services/plugin/pluginScanFs.js", () => ({
 // ─── mock fs.promises（模擬 extractPluginMetadata 讀取 plugin.json）────────
 // fs 是 CommonJS 模組：在 vitest ESM 環境中，importActual 回傳的是整個 namespace，
 // 不透過 .default，直接展開並覆寫 promises 即可
-const { mockReadFile, mockRm } = vi.hoisted(() => ({
+const {
+  mockReadFile,
+  mockRm,
+  mockAccess,
+  mockMkdtemp,
+  mockMkdir,
+  mockWriteFile,
+  mockRename,
+} = vi.hoisted(() => ({
   mockReadFile: vi.fn(),
   mockRm: vi.fn(),
+  mockAccess: vi.fn(),
+  mockMkdtemp: vi.fn(),
+  mockMkdir: vi.fn(),
+  mockWriteFile: vi.fn(),
+  mockRename: vi.fn(),
 }));
 
 vi.mock("fs", async (importOriginal) => {
@@ -107,6 +120,11 @@ vi.mock("fs", async (importOriginal) => {
       ...(actual as { promises?: object }).promises,
       readFile: mockReadFile,
       rm: mockRm,
+      access: mockAccess,
+      mkdtemp: mockMkdtemp,
+      mkdir: mockMkdir,
+      writeFile: mockWriteFile,
+      rename: mockRename,
     },
     default: {
       ...(actual as { default?: object }).default,
@@ -115,6 +133,11 @@ vi.mock("fs", async (importOriginal) => {
           {}),
         readFile: mockReadFile,
         rm: mockRm,
+        access: mockAccess,
+        mkdtemp: mockMkdtemp,
+        mkdir: mockMkdir,
+        writeFile: mockWriteFile,
+        rename: mockRename,
       },
     },
   };
@@ -122,9 +145,13 @@ vi.mock("fs", async (importOriginal) => {
 
 // ─── Imports（必須在所有 mock 之後）─────────────────────────────────────────
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createHash } from "crypto";
+import { zipSync } from "fflate";
 import { ok, err } from "../../src/types/result.js";
 import {
   installPlugin,
+  importBundleArchive,
+  MAX_BUNDLE_ARCHIVE_BYTES,
   removePlugin,
   updatePlugin,
   refreshAllPlugins,
@@ -165,6 +192,17 @@ function mockValidPluginJson(name: string, description?: string): void {
   );
 }
 
+function createBundleZip(entries: Record<string, string>): Uint8Array {
+  return zipSync(
+    Object.fromEntries(
+      Object.entries(entries).map(([filePath, content]) => [
+        filePath,
+        new TextEncoder().encode(content),
+      ]),
+    ),
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // P5.B.t1：installPlugin / removePlugin / updatePlugin 商業邏輯測試
 // ─────────────────────────────────────────────────────────────────────────────
@@ -187,6 +225,11 @@ describe("installPlugin", () => {
 
     // 預設：readFile 丟出 ENOENT（讓 extractPluginMetadata fallback）
     mockReadFile.mockRejectedValue(makeEnoentError());
+    mockAccess.mockRejectedValue(makeEnoentError());
+    mockMkdtemp.mockResolvedValue("/tmp/agent-canvas-test-install");
+    mockMkdir.mockResolvedValue(undefined);
+    mockWriteFile.mockResolvedValue(undefined);
+    mockRename.mockResolvedValue(undefined);
   });
 
   it("F2：install 成功時呼叫順序為 clone → extractMetadata（readFile）→ store.insert", async () => {
@@ -285,6 +328,71 @@ describe("installPlugin", () => {
   });
 });
 
+describe("importBundleArchive", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(managedPluginStore.getBySource).mockReturnValue(null);
+    vi.mocked(managedPluginStore.insert).mockImplementation((record) => ({
+      sortIndex: 0,
+      ...record,
+    }));
+    mockReadFile.mockRejectedValue(makeEnoentError());
+    mockAccess.mockRejectedValue(makeEnoentError());
+    mockMkdtemp.mockResolvedValue("/tmp/agent-canvas-test-bundle");
+    mockMkdir.mockResolvedValue(undefined);
+    mockWriteFile.mockResolvedValue(undefined);
+    mockRename.mockResolvedValue(undefined);
+  });
+
+  it("使用 archive 內容 hash 當作 upload source ref，而不是 displayName slug", async () => {
+    const archiveBytes = createBundleZip({
+      "skills/plan/SKILL.md": "---\ndescription: 測試\n---\n# Plan\n",
+      ".codex-plugin/plugin.json": JSON.stringify({
+        name: "Plan Bundle",
+        description: "bundle",
+      }),
+    });
+    const expectedSourceRef = createHash("sha256")
+      .update(archiveBytes)
+      .digest("hex")
+      .slice(0, 32);
+    mockValidPluginJson("Plan Bundle", "bundle");
+
+    const result = await importBundleArchive(
+      new File([archiveBytes], "plan-bundle.zip", {
+        type: "application/zip",
+      }),
+    );
+
+    expect(result.success).toBe(true);
+    expect(managedPluginStore.insert).toHaveBeenCalledTimes(1);
+    const insertArg = vi.mocked(managedPluginStore.insert).mock.calls[0]![0];
+    expect(insertArg.id).toBe(`upload:${expectedSourceRef}`);
+    expect(insertArg.source).toEqual({
+      type: "upload",
+      ref: expectedSourceRef,
+    });
+    expect(insertArg.displayName).toBe("Plan Bundle");
+    expect(insertArg.installPath).toContain(`upload__${expectedSourceRef}`);
+  });
+
+  it("超過 archive 大小上限時直接回 BUNDLE_FILE_TOO_LARGE", async () => {
+    const oversizedBytes = new Uint8Array(MAX_BUNDLE_ARCHIVE_BYTES + 1);
+
+    const result = await importBundleArchive(
+      new File([oversizedBytes], "oversized.zip", {
+        type: "application/zip",
+      }),
+    );
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toContain("BUNDLE_FILE_TOO_LARGE");
+    }
+    expect(managedPluginStore.insert).not.toHaveBeenCalled();
+  });
+});
+
 describe("removePlugin", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -357,9 +465,14 @@ describe("updatePlugin", () => {
 
     // 預設：readFile fallback（ENOENT）
     mockReadFile.mockRejectedValue(new Error("ENOENT"));
+    mockAccess.mockRejectedValue(makeEnoentError());
+    mockMkdtemp.mockResolvedValue("/tmp/agent-canvas-test-update");
+    mockMkdir.mockResolvedValue(undefined);
+    mockWriteFile.mockResolvedValue(undefined);
+    mockRename.mockResolvedValue(undefined);
   });
 
-  it("F6：update 成功時呼叫順序為 rm → clone → store.update，保留原 id", async () => {
+  it("F6：update 成功時先 clone 到 staging，再啟用新版本並更新 store", async () => {
     // 模擬讀到新的 plugin.json（更新後的 metadata）
     mockValidPluginJson("New Plugin Name");
 
@@ -367,11 +480,14 @@ describe("updatePlugin", () => {
 
     expect(result.success).toBe(true);
 
-    // 驗證 rm（fsOperation）被呼叫
-    expect(fsOperation).toHaveBeenCalledTimes(1);
-
     // 驗證 clone 被呼叫
     expect(mockClone).toHaveBeenCalledTimes(1);
+    const [, clonePath] = mockClone.mock.calls[0] as [string, string];
+    expect(clonePath).not.toBe(originalRecord.installPath);
+    expect(clonePath).toBe("/tmp/agent-canvas-test-update");
+
+    // 驗證 activate 階段透過 fsOperation 執行
+    expect(fsOperation).toHaveBeenCalledTimes(1);
 
     // 驗證 store.update（而非 insert）被呼叫，且 id 保留
     expect(managedPluginStore.insert).not.toHaveBeenCalled();
@@ -404,14 +520,26 @@ describe("updatePlugin", () => {
     expect(mockClone).not.toHaveBeenCalled();
   });
 
-  it("rm 失敗時不呼叫 clone 也不更新 store", async () => {
+  it("啟用新版本失敗時不更新 store", async () => {
     vi.mocked(fsOperation).mockResolvedValue(err("FS_ERROR"));
 
     const result = await updatePlugin("owner/repo");
 
     expect(result.success).toBe(false);
-    expect(mockClone).not.toHaveBeenCalled();
+    expect(mockClone).toHaveBeenCalledTimes(1);
     expect(managedPluginStore.update).not.toHaveBeenCalled();
+  });
+
+  it("舊安裝目錄存在且 backup 失敗時不覆蓋既有 plugin", async () => {
+    mockAccess.mockResolvedValue(undefined);
+    vi.mocked(fsOperation).mockResolvedValueOnce(err("FS_ERROR"));
+
+    const result = await updatePlugin("owner/repo");
+
+    expect(result.success).toBe(false);
+    expect(mockClone).toHaveBeenCalledTimes(1);
+    expect(managedPluginStore.update).not.toHaveBeenCalled();
+    expect(fsOperation).toHaveBeenCalledTimes(1);
   });
 
   it("clone 失敗時不更新 store", async () => {

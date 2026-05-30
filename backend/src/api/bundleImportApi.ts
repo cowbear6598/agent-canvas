@@ -3,6 +3,7 @@ import { jsonResponse } from "./apiHelpers.js";
 import {
   formatBundleImportError,
   importBundleArchive,
+  MAX_BUNDLE_ARCHIVE_BYTES,
 } from "../services/plugin/pluginInstallService.js";
 
 function resolveBundleImportStatus(code: string): number {
@@ -14,7 +15,12 @@ function resolveBundleImportStatus(code: string): number {
     case "BUNDLE_PATH_TRAVERSAL":
     case "BUNDLE_SYMLINK_FORBIDDEN":
     case "INVALID_BUNDLE_ARCHIVE":
+    case "BUNDLE_TOO_MANY_FILES":
       return HTTP_STATUS.BAD_REQUEST;
+    case "BUNDLE_FILE_TOO_LARGE":
+    case "BUNDLE_ENTRY_TOO_LARGE":
+    case "BUNDLE_ARCHIVE_TOO_LARGE":
+      return 413;
     default:
       return HTTP_STATUS.INTERNAL_ERROR;
   }
@@ -55,6 +61,16 @@ export async function handleImportBundle(
         code: "BUNDLE_FILE_INVALID",
       },
       HTTP_STATUS.BAD_REQUEST,
+    );
+  }
+
+  if (bundle.size > MAX_BUNDLE_ARCHIVE_BYTES) {
+    return new Response(
+      JSON.stringify({
+        error: `bundle 壓縮檔超過允許的最大大小（${MAX_BUNDLE_ARCHIVE_BYTES / 1024 / 1024} MB）`,
+        code: "BUNDLE_FILE_TOO_LARGE",
+      }),
+      { status: 413, headers: { "Content-Type": "application/json" } },
     );
   }
 

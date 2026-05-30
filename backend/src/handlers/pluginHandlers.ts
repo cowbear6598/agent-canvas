@@ -179,7 +179,7 @@ export async function handlePluginDelete(
   payload: PluginDeletePayload,
   requestId: string,
 ): Promise<void> {
-  const affectedPodRefs = podStore.findPodRefsByPluginId(payload.pluginId);
+  const affectedPods = podStore.getPodsByPluginIdGlobal(payload.pluginId);
   const result = await removePlugin(payload.pluginId);
 
   if (!result.success) {
@@ -218,12 +218,7 @@ export async function handlePluginDelete(
     response,
   );
 
-  for (const ref of affectedPodRefs) {
-    const podEntry = podStore.getByIdGlobal(ref.podId);
-    if (!podEntry) {
-      continue;
-    }
-
+  for (const podEntry of affectedPods) {
     const podPayload: PodPluginsSetPayload = {
       requestId: "",
       canvasId: podEntry.canvasId,

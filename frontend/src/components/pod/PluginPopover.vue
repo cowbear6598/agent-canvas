@@ -9,10 +9,7 @@ import { updatePodPlugins as updatePodPluginsApi } from "@/services/podPluginApi
 import { usePodStore } from "@/stores/pod";
 import { getActiveCanvasIdOrWarn } from "@/utils/canvasGuard";
 import { useOptimisticToggle } from "@/composables/pod/useOptimisticToggle";
-import {
-  getInstalledPluginSourceLabel,
-  type InstalledPlugin,
-} from "@/types/plugin";
+import { type InstalledPlugin } from "@/types/plugin";
 
 const POPOVER_ANCHOR_GAP_PX = 8;
 
@@ -40,7 +37,12 @@ const hasBundleCache = computed(
   () => managedPluginStore.loaded || managedPluginStore.plugins.length > 0,
 );
 const showLoading = computed(() => loading.value && !hasBundleCache.value);
-const loadFailed = computed(() => managedPluginStore.error !== null);
+const loadFailed = computed(
+  () =>
+    managedPluginStore.error !== null &&
+    !loading.value &&
+    !hasBundleCache.value,
+);
 
 const filteredBundles = computed<InstalledPlugin[]>(() => {
   const bundles = managedPluginStore.plugins;
@@ -79,10 +81,6 @@ const refreshBundlesInBackground = (): void => {
   // 只背景刷新已匯入的 bundle 清單，避免 late refresh 覆蓋使用者正在切換的本地 draft。
   void managedPluginStore.refresh();
 };
-
-function formatBundleSource(bundle: InstalledPlugin): string {
-  return `${getInstalledPluginSourceLabel(bundle.source)} · ${bundle.source.ref}`;
-}
 
 onMounted(() => {
   initLocalPluginIds();
@@ -206,9 +204,6 @@ const handleToggle = async (
             <div class="min-w-0">
               <p class="truncate text-xs font-mono">
                 {{ bundle.displayName }}
-              </p>
-              <p class="truncate text-[10px] text-muted-foreground">
-                {{ formatBundleSource(bundle) }}
               </p>
             </div>
             <Switch

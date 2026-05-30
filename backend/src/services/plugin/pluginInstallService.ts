@@ -1,6 +1,8 @@
 import path from "path";
 import fs from "fs";
 import os from "os";
+import { createHash, randomUUID } from "crypto";
+import { unzipSync } from "fflate";
 import { simpleGit } from "simple-git";
 import { ok, err } from "../../types/result.js";
 import type { Result } from "../../types/result.js";
@@ -28,63 +30,24 @@ const PLUGIN_MANIFEST_RELATIVE_PATHS = [
   path.join(".claude-plugin", "plugin.json"),
 ];
 
-const ZIP_EXTRACT_SCRIPT = String.raw`
-import json
-import os
-import pathlib
-import stat
-import sys
-import zipfile
+export const MAX_BUNDLE_ARCHIVE_BYTES = 10 * 1024 * 1024;
+const MAX_BUNDLE_TOTAL_UNCOMPRESSED_BYTES = 25 * 1024 * 1024;
+const MAX_BUNDLE_ENTRY_BYTES = 5 * 1024 * 1024;
+const MAX_BUNDLE_ENTRY_COUNT = 500;
 
-archive_path = sys.argv[1]
-destination_path = sys.argv[2]
+const ZIP_END_OF_CENTRAL_DIRECTORY_SIGNATURE = 0x06054b50;
+const ZIP_CENTRAL_DIRECTORY_FILE_HEADER_SIGNATURE = 0x02014b50;
+const ZIP_LOCAL_FILE_HEADER_SIGNATURE = 0x04034b50;
+const ZIP64_U16_SENTINEL = 0xffff;
+const ZIP64_U32_SENTINEL = 0xffffffff;
+const ZIP_SYMLINK_FILE_TYPE = 0xa000;
+const ZIP_FILE_TYPE_MASK = 0xf000;
 
-def fail(code: str, message: str) -> None:
-    sys.stderr.write(json.dumps({"code": code, "message": message}, ensure_ascii=False))
-    sys.exit(2)
-
-try:
-    with zipfile.ZipFile(archive_path) as archive:
-        entries = archive.infolist()
-        if not entries:
-            fail("EMPTY_BUNDLE_ARCHIVE", "bundle 壓縮檔內沒有任何內容")
-
-        file_entries = []
-        destination = pathlib.Path(destination_path).resolve()
-
-        for info in entries:
-            name = info.filename
-            if not name:
-                continue
-            normalized_name = name.replace("\\\\", "/")
-            pure_path = pathlib.PurePosixPath(normalized_name)
-            if pure_path.is_absolute() or ".." in pure_path.parts:
-                fail("BUNDLE_PATH_TRAVERSAL", f"bundle 內含不安全路徑：{normalized_name}")
-
-            mode = (info.external_attr >> 16) & 0o170000
-            if stat.S_ISLNK(mode):
-                fail("BUNDLE_SYMLINK_FORBIDDEN", f"bundle 內含不允許的 symlink：{normalized_name}")
-
-            target_path = (destination / pathlib.Path(*pure_path.parts)).resolve()
-            if target_path != destination and destination not in target_path.parents:
-                fail("BUNDLE_PATH_TRAVERSAL", f"bundle 內含不安全路徑：{normalized_name}")
-
-            if normalized_name.endswith("/"):
-                target_path.mkdir(parents=True, exist_ok=True)
-                continue
-
-            target_path.parent.mkdir(parents=True, exist_ok=True)
-            with archive.open(info, "r") as src, open(target_path, "wb") as dst:
-                dst.write(src.read())
-            file_entries.append(normalized_name)
-
-        if not file_entries:
-            fail("EMPTY_BUNDLE_ARCHIVE", "bundle 壓縮檔內沒有任何可匯入檔案")
-
-        sys.stdout.write(json.dumps({"files": file_entries}, ensure_ascii=False))
-except zipfile.BadZipFile:
-    fail("INVALID_BUNDLE_ARCHIVE", "上傳檔案不是合法的 ZIP bundle")
-`;
+interface ParsedZipEntry {
+  normalizedName: string;
+  isDirectory: boolean;
+  uncompressedSize: number;
+}
 
 interface ExtractedBundleMetadata {
   displayName: string;
@@ -124,13 +87,389 @@ function stripArchiveExtension(filename: string): string {
   return filename.replace(/\.zip$/i, "");
 }
 
-function slugifySourceRef(raw: string): string {
-  const normalized = raw.trim().toLowerCase();
-  const slug = normalized
-    .replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return slug || "bundle";
+function createBundleError(code: string, message: string): string {
+  return `${code}:${message}`;
+}
+
+function readUint16LE(view: DataView, offset: number): number {
+  return view.getUint16(offset, true);
+}
+
+function readUint32LE(view: DataView, offset: number): number {
+  return view.getUint32(offset, true);
+}
+
+function findEndOfCentralDirectoryOffset(
+  archiveBytes: Uint8Array,
+): number | null {
+  if (archiveBytes.byteLength < 22) {
+    return null;
+  }
+
+  const view = new DataView(
+    archiveBytes.buffer,
+    archiveBytes.byteOffset,
+    archiveBytes.byteLength,
+  );
+  const minOffset = Math.max(0, archiveBytes.byteLength - 0xffff - 22);
+  for (let offset = archiveBytes.byteLength - 22; offset >= minOffset; offset -= 1) {
+    if (readUint32LE(view, offset) === ZIP_END_OF_CENTRAL_DIRECTORY_SIGNATURE) {
+      return offset;
+    }
+  }
+
+  return null;
+}
+
+function validateZipEntryPath(
+  destinationPath: string,
+  normalizedName: string,
+): Result<string> {
+  const pureParts = normalizedName.split("/").filter(Boolean);
+  if (
+    normalizedName.startsWith("/") ||
+    pureParts.some((part) => part === "..")
+  ) {
+    return err(
+      createBundleError(
+        "BUNDLE_PATH_TRAVERSAL",
+        `bundle 內含不安全路徑：${normalizedName}`,
+      ),
+    );
+  }
+
+  const destination = path.resolve(destinationPath);
+  const targetPath = path.resolve(destination, ...pureParts);
+  if (targetPath !== destination && !targetPath.startsWith(`${destination}${path.sep}`)) {
+    return err(
+      createBundleError(
+        "BUNDLE_PATH_TRAVERSAL",
+        `bundle 內含不安全路徑：${normalizedName}`,
+      ),
+    );
+  }
+
+  return ok(targetPath);
+}
+
+function parseZipEntries(archiveBytes: Uint8Array): Result<ParsedZipEntry[]> {
+  const view = new DataView(
+    archiveBytes.buffer,
+    archiveBytes.byteOffset,
+    archiveBytes.byteLength,
+  );
+  const eocdOffset = findEndOfCentralDirectoryOffset(archiveBytes);
+  if (eocdOffset === null) {
+    return err(
+      createBundleError(
+        "INVALID_BUNDLE_ARCHIVE",
+        "上傳檔案不是合法的 ZIP bundle",
+      ),
+    );
+  }
+
+  const diskNumber = readUint16LE(view, eocdOffset + 4);
+  const centralDirectoryDiskNumber = readUint16LE(view, eocdOffset + 6);
+  const entriesOnThisDisk = readUint16LE(view, eocdOffset + 8);
+  const totalEntries = readUint16LE(view, eocdOffset + 10);
+  const centralDirectorySize = readUint32LE(view, eocdOffset + 12);
+  const centralDirectoryOffset = readUint32LE(view, eocdOffset + 16);
+
+  if (
+    diskNumber !== 0 ||
+    centralDirectoryDiskNumber !== 0 ||
+    entriesOnThisDisk !== totalEntries
+  ) {
+    return err(
+      createBundleError(
+        "INVALID_BUNDLE_ARCHIVE",
+        "目前不支援分割式 ZIP bundle",
+      ),
+    );
+  }
+
+  if (
+    entriesOnThisDisk === ZIP64_U16_SENTINEL ||
+    totalEntries === ZIP64_U16_SENTINEL ||
+    centralDirectorySize === ZIP64_U32_SENTINEL ||
+    centralDirectoryOffset === ZIP64_U32_SENTINEL
+  ) {
+    return err(
+      createBundleError(
+        "INVALID_BUNDLE_ARCHIVE",
+        "目前不支援 ZIP64 格式的 bundle",
+      ),
+    );
+  }
+
+  if (totalEntries === 0) {
+    return err(
+      createBundleError(
+        "EMPTY_BUNDLE_ARCHIVE",
+        "bundle 壓縮檔內沒有任何內容",
+      ),
+    );
+  }
+
+  if (totalEntries > MAX_BUNDLE_ENTRY_COUNT) {
+    return err(
+      createBundleError(
+        "BUNDLE_TOO_MANY_FILES",
+        `bundle 檔案數量超過允許上限（${MAX_BUNDLE_ENTRY_COUNT} 個）`,
+      ),
+    );
+  }
+
+  const centralDirectoryEnd = centralDirectoryOffset + centralDirectorySize;
+  if (
+    centralDirectoryOffset >= archiveBytes.byteLength ||
+    centralDirectoryEnd > archiveBytes.byteLength
+  ) {
+    return err(
+      createBundleError(
+        "INVALID_BUNDLE_ARCHIVE",
+        "bundle 中央目錄資料損毀",
+      ),
+    );
+  }
+
+  const decoder = new TextDecoder();
+  const entries: ParsedZipEntry[] = [];
+  let totalUncompressedBytes = 0;
+  let cursor = centralDirectoryOffset;
+
+  for (let index = 0; index < totalEntries; index += 1) {
+    if (cursor + 46 > archiveBytes.byteLength) {
+      return err(
+        createBundleError(
+          "INVALID_BUNDLE_ARCHIVE",
+          "bundle 中央目錄資料不完整",
+        ),
+      );
+    }
+
+    if (
+      readUint32LE(view, cursor) !==
+      ZIP_CENTRAL_DIRECTORY_FILE_HEADER_SIGNATURE
+    ) {
+      return err(
+        createBundleError(
+          "INVALID_BUNDLE_ARCHIVE",
+          "bundle 中央目錄格式不正確",
+        ),
+      );
+    }
+
+    const compressedSize = readUint32LE(view, cursor + 20);
+    const uncompressedSize = readUint32LE(view, cursor + 24);
+    const fileNameLength = readUint16LE(view, cursor + 28);
+    const extraFieldLength = readUint16LE(view, cursor + 30);
+    const fileCommentLength = readUint16LE(view, cursor + 32);
+    const externalAttributes = readUint32LE(view, cursor + 38);
+    const localHeaderOffset = readUint32LE(view, cursor + 42);
+    const fileNameOffset = cursor + 46;
+    const nextCursor =
+      fileNameOffset + fileNameLength + extraFieldLength + fileCommentLength;
+
+    if (nextCursor > archiveBytes.byteLength) {
+      return err(
+        createBundleError(
+          "INVALID_BUNDLE_ARCHIVE",
+          "bundle 中央目錄檔名資料不完整",
+        ),
+      );
+    }
+
+    if (
+      compressedSize === ZIP64_U32_SENTINEL ||
+      uncompressedSize === ZIP64_U32_SENTINEL ||
+      localHeaderOffset === ZIP64_U32_SENTINEL
+    ) {
+      return err(
+        createBundleError(
+          "INVALID_BUNDLE_ARCHIVE",
+          "目前不支援 ZIP64 格式的 bundle",
+        ),
+      );
+    }
+
+    if (localHeaderOffset + 4 > archiveBytes.byteLength) {
+      return err(
+        createBundleError(
+          "INVALID_BUNDLE_ARCHIVE",
+          "bundle local header 位址不合法",
+        ),
+      );
+    }
+
+    if (
+      readUint32LE(view, localHeaderOffset) !== ZIP_LOCAL_FILE_HEADER_SIGNATURE
+    ) {
+      return err(
+        createBundleError(
+          "INVALID_BUNDLE_ARCHIVE",
+          "bundle local header 格式不正確",
+        ),
+      );
+    }
+
+    const normalizedName = decoder
+      .decode(archiveBytes.subarray(fileNameOffset, fileNameOffset + fileNameLength))
+      .replace(/\\/g, "/");
+    if (!normalizedName) {
+      cursor = nextCursor;
+      continue;
+    }
+
+    const posixMode = (externalAttributes >>> 16) & 0xffff;
+    if ((posixMode & ZIP_FILE_TYPE_MASK) === ZIP_SYMLINK_FILE_TYPE) {
+      return err(
+        createBundleError(
+          "BUNDLE_SYMLINK_FORBIDDEN",
+          `bundle 內含不允許的 symlink：${normalizedName}`,
+        ),
+      );
+    }
+
+    const pathResult = validateZipEntryPath(os.tmpdir(), normalizedName);
+    if (!pathResult.success) {
+      return pathResult;
+    }
+
+    const isDirectory = normalizedName.endsWith("/");
+    if (!isDirectory) {
+      if (uncompressedSize > MAX_BUNDLE_ENTRY_BYTES) {
+        return err(
+          createBundleError(
+            "BUNDLE_ENTRY_TOO_LARGE",
+            `bundle 內檔案超過允許的最大大小（${normalizedName}）`,
+          ),
+        );
+      }
+
+      totalUncompressedBytes += uncompressedSize;
+      if (totalUncompressedBytes > MAX_BUNDLE_TOTAL_UNCOMPRESSED_BYTES) {
+        return err(
+          createBundleError(
+            "BUNDLE_ARCHIVE_TOO_LARGE",
+            "bundle 解壓後總大小超過允許上限（25 MB）",
+          ),
+        );
+      }
+    }
+
+    entries.push({
+      normalizedName,
+      isDirectory,
+      uncompressedSize,
+    });
+    cursor = nextCursor;
+  }
+
+  if (!entries.some((entry) => !entry.isDirectory)) {
+    return err(
+      createBundleError(
+        "EMPTY_BUNDLE_ARCHIVE",
+        "bundle 壓縮檔內沒有任何可匯入檔案",
+      ),
+    );
+  }
+
+  return ok(entries);
+}
+
+function createUploadSourceRef(archiveBytes: Uint8Array): string {
+  return createHash("sha256").update(archiveBytes).digest("hex").slice(0, 32);
+}
+
+async function readUploadedArchiveBytes(file: File): Promise<Result<Uint8Array>> {
+  if (file.size > MAX_BUNDLE_ARCHIVE_BYTES) {
+    return err(
+      createBundleError(
+        "BUNDLE_FILE_TOO_LARGE",
+        "bundle 壓縮檔超過允許的最大大小（10 MB）",
+      ),
+    );
+  }
+
+  try {
+    return ok(new Uint8Array(await file.arrayBuffer()));
+  } catch {
+    return err(
+      createBundleError(
+        "INVALID_BUNDLE_ARCHIVE",
+        "無法讀取上傳的 bundle 壓縮檔",
+      ),
+    );
+  }
+}
+
+async function extractZipArchiveToDirectory(
+  archiveBytes: Uint8Array,
+  destinationPath: string,
+  entries: ParsedZipEntry[],
+): Promise<Result<void>> {
+  let extractedFiles: Record<string, Uint8Array>;
+  try {
+    extractedFiles = unzipSync(archiveBytes);
+  } catch {
+    return err(
+      createBundleError(
+        "INVALID_BUNDLE_ARCHIVE",
+        "上傳檔案不是合法的 ZIP bundle",
+      ),
+    );
+  }
+
+  for (const entry of entries) {
+    const targetPathResult = validateZipEntryPath(
+      destinationPath,
+      entry.normalizedName,
+    );
+    if (!targetPathResult.success) {
+      return targetPathResult;
+    }
+
+    if (entry.isDirectory) {
+      await fs.promises.mkdir(targetPathResult.data, { recursive: true });
+      continue;
+    }
+
+    const fileBytes = extractedFiles[entry.normalizedName];
+    if (!(fileBytes instanceof Uint8Array)) {
+      return err(
+        createBundleError(
+          "INVALID_BUNDLE_ARCHIVE",
+          `bundle 缺少檔案內容：${entry.normalizedName}`,
+        ),
+      );
+    }
+
+    if (fileBytes.byteLength !== entry.uncompressedSize) {
+      return err(
+        createBundleError(
+          "INVALID_BUNDLE_ARCHIVE",
+          `bundle 檔案大小驗證失敗：${entry.normalizedName}`,
+        ),
+      );
+    }
+
+    await fs.promises.mkdir(path.dirname(targetPathResult.data), {
+      recursive: true,
+    });
+    await fs.promises.writeFile(targetPathResult.data, fileBytes);
+  }
+
+  return ok(undefined);
+}
+
+async function pathExists(targetPath: string): Promise<boolean> {
+  try {
+    await fs.promises.access(targetPath);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function getFallbackSkillName(skills: SkillInfo[]): string | null {
@@ -230,80 +569,6 @@ async function ensureBundleHasSkillsOrRollback(
 
   await removeDirectoryIfExists(installPath).catch(() => void 0);
   return metadataResult;
-}
-
-async function writeUploadedArchiveToTemp(file: File): Promise<string> {
-  const tempDir = await fs.promises.mkdtemp(
-    path.join(os.tmpdir(), "agent-canvas-bundle-import-"),
-  );
-  const archivePath = path.join(tempDir, file.name);
-  await Bun.write(archivePath, file);
-  return archivePath;
-}
-
-async function runCommand(
-  cmd: string[],
-): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const proc = Bun.spawn(cmd, {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
-
-  return { exitCode, stdout, stderr };
-}
-
-async function extractZipArchive(
-  archivePath: string,
-  destinationPath: string,
-): Promise<Result<void>> {
-  const result = await runCommand([
-    "python3",
-    "-c",
-    ZIP_EXTRACT_SCRIPT,
-    archivePath,
-    destinationPath,
-  ]).catch((error) =>
-    Promise.resolve({
-      exitCode: 127,
-      stdout: "",
-      stderr:
-        error instanceof Error
-          ? error.message
-          : "無法啟動 bundle 解壓縮驗證工具",
-    }),
-  );
-
-  if (result.exitCode === 0) {
-    return ok(undefined);
-  }
-
-  try {
-    const parsed = JSON.parse(result.stderr) as {
-      code?: string;
-      message?: string;
-    };
-    if (parsed.code && parsed.message) {
-      return err(`${parsed.code}:${parsed.message}`);
-    }
-  } catch {
-    // ignore JSON parse failure
-  }
-
-  if (result.exitCode === 127) {
-    return err(
-      "BUNDLE_IMPORT_ENVIRONMENT_UNAVAILABLE:缺少 bundle 解壓縮所需的 python3 執行環境",
-    );
-  }
-
-  return err(
-    `INVALID_BUNDLE_ARCHIVE:${result.stderr.trim() || "無法解析上傳的 bundle 壓縮檔"}`,
-  );
 }
 
 function parseBundleError(error: string): { code: string; message: string } {
@@ -422,13 +687,27 @@ export async function installPlugin(
 export async function importBundleArchive(
   file: File,
 ): Promise<Result<ManagedPluginRecord>> {
-  const archivePath = await writeUploadedArchiveToTemp(file);
+  const archiveBytesResult = await readUploadedArchiveBytes(file);
+  if (!archiveBytesResult.success) {
+    return err(archiveBytesResult.error);
+  }
+
+  const archiveBytes = archiveBytesResult.data;
+  const parsedEntriesResult = parseZipEntries(archiveBytes);
+  if (!parsedEntriesResult.success) {
+    return err(parsedEntriesResult.error);
+  }
+
   const extractRoot = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "agent-canvas-bundle-extract-"),
   );
 
   try {
-    const extractResult = await extractZipArchive(archivePath, extractRoot);
+    const extractResult = await extractZipArchiveToDirectory(
+      archiveBytes,
+      extractRoot,
+      parsedEntriesResult.data,
+    );
     if (!extractResult.success) {
       return err(extractResult.error);
     }
@@ -442,7 +721,7 @@ export async function importBundleArchive(
       return err(metadataResult.error);
     }
 
-    const sourceRef = slugifySourceRef(metadataResult.data.displayName);
+    const sourceRef = createUploadSourceRef(archiveBytes);
     const source = createUploadSource(sourceRef);
     if (getExistingRecordBySource(source)) {
       return err("PLUGIN_ALREADY_INSTALLED");
@@ -461,7 +740,6 @@ export async function importBundleArchive(
     );
     return ok(record);
   } finally {
-    await removeDirectoryIfExists(path.dirname(archivePath)).catch(() => void 0);
     await removeDirectoryIfExists(extractRoot).catch(() => void 0);
   }
 }
@@ -507,48 +785,97 @@ export async function updatePlugin(
   }
 
   const { owner, repo } = parsed;
-  const rmResult = await fsOperation(
-    () => fs.promises.rm(record.installPath, { recursive: true, force: true }),
-    `rm bundle dir ${record.installPath}`,
+  const stagingPath = await fs.promises.mkdtemp(
+    path.join(os.tmpdir(), "agent-canvas-bundle-update-"),
   );
-  if (!rmResult.success) {
-    return err(
-      typeof rmResult.error === "string" ? rmResult.error : rmResult.error.key,
+  try {
+    const httpsUrl = `${GITHUB_HTTPS_PREFIX}${owner}/${repo}.git`;
+    const cloneResult = await gitOperation(
+      () => simpleGit().clone(httpsUrl, stagingPath),
+      `update clone bundle ${source.ref}`,
     );
-  }
+    if (!cloneResult.success) {
+      return err(
+        typeof cloneResult.error === "string"
+          ? cloneResult.error
+          : cloneResult.error.key,
+      );
+    }
 
-  const httpsUrl = `${GITHUB_HTTPS_PREFIX}${owner}/${repo}.git`;
-  const cloneResult = await gitOperation(
-    () => simpleGit().clone(httpsUrl, record.installPath),
-    `update clone bundle ${source.ref}`,
-  );
-  if (!cloneResult.success) {
-    return err(
-      typeof cloneResult.error === "string"
-        ? cloneResult.error
-        : cloneResult.error.key,
+    const metadataResult = await ensureBundleHasSkillsOrRollback(
+      stagingPath,
+      repo,
     );
+    if (!metadataResult.success) {
+      return err(metadataResult.error);
+    }
+
+    const backupPath = path.join(
+      os.tmpdir(),
+      `agent-canvas-bundle-backup-${randomUUID()}`,
+    );
+    const installPathExisted = await pathExists(record.installPath);
+
+    if (installPathExisted) {
+      const backupMoveResult = await fsOperation(
+        () => fs.promises.rename(record.installPath, backupPath),
+        `backup bundle dir ${record.installPath}`,
+      );
+      if (!backupMoveResult.success) {
+        return err(
+          typeof backupMoveResult.error === "string"
+            ? backupMoveResult.error
+            : backupMoveResult.error.key,
+        );
+      }
+    }
+
+    const activateResult = await fsOperation(
+      async () => {
+        await fs.promises.mkdir(path.dirname(record.installPath), {
+          recursive: true,
+        });
+        await fs.promises.rename(stagingPath, record.installPath);
+      },
+      `activate updated bundle ${source.ref}`,
+    );
+    if (!activateResult.success) {
+      if (installPathExisted) {
+        await fs.promises.rename(backupPath, record.installPath).catch(
+          () => void 0,
+        );
+      }
+      return err(
+        typeof activateResult.error === "string"
+          ? activateResult.error
+          : activateResult.error.key,
+      );
+    }
+
+    const updatedRecord = managedPluginStore.update(id, {
+      displayName: metadataResult.data.displayName,
+      description: metadataResult.data.description,
+      updatedAt: new Date().toISOString(),
+    });
+
+    if (!updatedRecord) {
+      await removeDirectoryIfExists(record.installPath).catch(() => void 0);
+      if (installPathExisted) {
+        await fs.promises.rename(backupPath, record.installPath).catch(
+          () => void 0,
+        );
+      }
+      return err("PLUGIN_UPDATE_FAILED");
+    }
+
+    if (installPathExisted) {
+      await removeDirectoryIfExists(backupPath).catch(() => void 0);
+    }
+
+    return ok(updatedRecord);
+  } finally {
+    await removeDirectoryIfExists(stagingPath).catch(() => void 0);
   }
-
-  const metadataResult = await ensureBundleHasSkillsOrRollback(
-    record.installPath,
-    repo,
-  );
-  if (!metadataResult.success) {
-    return err(metadataResult.error);
-  }
-
-  const updatedRecord = managedPluginStore.update(id, {
-    displayName: metadataResult.data.displayName,
-    description: metadataResult.data.description,
-    updatedAt: new Date().toISOString(),
-  });
-
-  if (!updatedRecord) {
-    return err("PLUGIN_UPDATE_FAILED");
-  }
-
-  return ok(updatedRecord);
 }
 
 export async function refreshAllPlugins(): Promise<
@@ -610,7 +937,13 @@ export function formatBundleImportError(error: string): string {
       return parsed.message;
     case "INVALID_BUNDLE_ARCHIVE":
       return parsed.message;
-    case "BUNDLE_IMPORT_ENVIRONMENT_UNAVAILABLE":
+    case "BUNDLE_FILE_TOO_LARGE":
+      return parsed.message;
+    case "BUNDLE_ENTRY_TOO_LARGE":
+      return parsed.message;
+    case "BUNDLE_ARCHIVE_TOO_LARGE":
+      return parsed.message;
+    case "BUNDLE_TOO_MANY_FILES":
       return parsed.message;
     default:
       return parsed.message;

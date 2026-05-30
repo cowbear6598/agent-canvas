@@ -519,22 +519,31 @@ class PodStore {
     return this.rowsToPods(rows);
   }
 
-  findPodRefsByPluginId(
+  getPodsByPluginIdGlobal(
     pluginId: string,
-  ): Array<{ canvasId: string; podId: string }> {
+  ): Array<{ canvasId: string; pod: Pod }> {
     const rows = getDb()
       .prepare(
-        `SELECT DISTINCT pods.canvas_id AS canvas_id, pods.id AS pod_id
+        `SELECT DISTINCT pods.*
          FROM pods
          INNER JOIN pod_plugin_ids ON pod_plugin_ids.pod_id = pods.id
          WHERE pod_plugin_ids.plugin_id = ?`,
       )
-      .all(pluginId) as Array<{ canvas_id: string; pod_id: string }>;
+      .all(pluginId) as PodRow[];
 
-    return rows.map((row) => ({
-      canvasId: row.canvas_id,
-      podId: row.pod_id,
-    }));
+    if (rows.length === 0) {
+      return [];
+    }
+
+    const pods = this.rowsToPods(rows);
+    const podMap = new Map(pods.map((pod) => [pod.id, pod]));
+    return rows
+      .map((row) => {
+        const pod = podMap.get(row.id);
+        if (!pod) return null;
+        return { canvasId: row.canvas_id, pod };
+      })
+      .filter((entry): entry is { canvasId: string; pod: Pod } => entry !== null);
   }
 
   getByName(canvasId: string, name: string): Pod | undefined {

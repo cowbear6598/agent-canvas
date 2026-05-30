@@ -8,8 +8,7 @@ const {
   mockUpdatePlugin,
   mockManagedPluginList,
   mockManagedPluginReorder,
-  mockFindPodRefsByPluginId,
-  mockGetPodByIdGlobal,
+  mockGetPodsByPluginIdGlobal,
 } = vi.hoisted(() => ({
   mockEmitToConnection: vi.fn(),
   mockEmitToAll: vi.fn(),
@@ -20,8 +19,7 @@ const {
   mockUpdatePlugin: vi.fn(),
   mockManagedPluginList: vi.fn(),
   mockManagedPluginReorder: vi.fn(),
-  mockFindPodRefsByPluginId: vi.fn(),
-  mockGetPodByIdGlobal: vi.fn(),
+  mockGetPodsByPluginIdGlobal: vi.fn(),
 }));
 
 vi.mock("../../src/services/socketService.js", () => ({
@@ -48,8 +46,7 @@ vi.mock("../../src/services/plugin/managedPluginRegistry.js", () => ({
 
 vi.mock("../../src/services/podStore.js", () => ({
   podStore: {
-    findPodRefsByPluginId: mockFindPodRefsByPluginId,
-    getByIdGlobal: mockGetPodByIdGlobal,
+    getPodsByPluginIdGlobal: mockGetPodsByPluginIdGlobal,
   },
 }));
 
@@ -81,7 +78,7 @@ const MOCK_PLUGIN_RECORD = {
 beforeEach(() => {
   vi.clearAllMocks();
   mockManagedPluginList.mockReturnValue([MOCK_PLUGIN_RECORD]);
-  mockFindPodRefsByPluginId.mockReturnValue([]);
+  mockGetPodsByPluginIdGlobal.mockReturnValue([]);
 });
 
 describe("handlePluginList", () => {
@@ -195,24 +192,23 @@ describe("handlePluginDelete", () => {
       success: true,
       data: undefined,
     });
-    mockFindPodRefsByPluginId.mockReturnValue([
-      { canvasId: "canvas-1", podId: "pod-1" },
-    ]);
-    mockGetPodByIdGlobal.mockReturnValue({
-      canvasId: "canvas-1",
-      pod: {
-        id: "pod-1",
-        name: "Pod 1",
-        x: 0,
-        y: 0,
-        rotation: 0,
-        mcpServerNames: [],
-        pluginIds: [],
-        provider: "claude",
-        providerConfig: null,
-        repositoryId: null,
+    mockGetPodsByPluginIdGlobal.mockReturnValue([
+      {
+        canvasId: "canvas-1",
+        pod: {
+          id: "pod-1",
+          name: "Pod 1",
+          x: 0,
+          y: 0,
+          rotation: 0,
+          mcpServerNames: [],
+          pluginIds: [],
+          provider: "claude",
+          providerConfig: null,
+          repositoryId: null,
+        },
       },
-    });
+    ]);
 
     await handlePluginDelete(
       CONNECTION_ID,

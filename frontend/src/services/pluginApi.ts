@@ -21,6 +21,36 @@ import type { InstalledPlugin } from "@/types/plugin";
 import { t } from "@/i18n";
 import { getApiBaseUrl } from "@/services/utils";
 
+function mapBundleUploadError(
+  code: string | undefined,
+  message: string | undefined,
+): string {
+  switch (code) {
+    case "PLUGIN_ALREADY_INSTALLED":
+      return t("errors.bundleUploadAlreadyInstalled");
+    case "BUNDLE_FILE_TOO_LARGE":
+      return t("errors.bundleUploadFileTooLarge");
+    case "BUNDLE_SKILL_NOT_FOUND":
+      return t("errors.bundleUploadSkillMissing");
+    case "EMPTY_BUNDLE_ARCHIVE":
+      return t("errors.bundleUploadArchiveEmpty");
+    case "BUNDLE_PATH_TRAVERSAL":
+      return t("errors.bundleUploadPathTraversal");
+    case "BUNDLE_SYMLINK_FORBIDDEN":
+      return t("errors.bundleUploadSymlinkForbidden");
+    case "BUNDLE_ENTRY_TOO_LARGE":
+      return t("errors.bundleUploadEntryTooLarge");
+    case "BUNDLE_ARCHIVE_TOO_LARGE":
+      return t("errors.bundleUploadArchiveTooLarge");
+    case "BUNDLE_TOO_MANY_FILES":
+      return t("errors.bundleUploadTooManyFiles");
+    case "INVALID_BUNDLE_ARCHIVE":
+      return t("errors.bundleUploadInvalidArchive");
+    default:
+      return message || t("errors.bundleUploadFailed");
+  }
+}
+
 export async function listPlugins(): Promise<InstalledPlugin[]> {
   const result = await createWebSocketRequest<
     PluginListPayload,
@@ -120,14 +150,15 @@ export async function uploadPluginBundle(
   const response = await fetch(`${getApiBaseUrl()}/api/bundles/import`, {
     method: "POST",
     body: formData,
+    credentials: "include",
   });
 
   const body = (await response.json().catch(() => null)) as
-    | { bundle?: InstalledPlugin; error?: string }
+    | { bundle?: InstalledPlugin; error?: string; code?: string }
     | null;
 
   if (!response.ok) {
-    throw new Error(body?.error || t("errors.bundleUploadFailed"));
+    throw new Error(mapBundleUploadError(body?.code, body?.error));
   }
 
   if (!body?.bundle) {

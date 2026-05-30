@@ -55,9 +55,39 @@ const isBundleListBusy = computed(
 const isListMutationDisabled = computed(
   () => isBundleListBusy.value || reordering.value,
 );
+const duplicatedDisplayNames = computed<Set<string>>(() => {
+  const counts = new Map<string, number>();
+  for (const plugin of store.plugins) {
+    const normalizedName = plugin.displayName.trim().toLocaleLowerCase();
+    if (!normalizedName) continue;
+    counts.set(normalizedName, (counts.get(normalizedName) ?? 0) + 1);
+  }
+
+  return new Set(
+    Array.from(counts.entries())
+      .filter(([, count]) => count > 1)
+      .map(([name]) => name),
+  );
+});
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleString("zh-TW");
+}
+
+function getNormalizedDisplayName(plugin: InstalledPlugin): string {
+  return plugin.displayName.trim().toLocaleLowerCase();
+}
+
+function shouldShowPluginSource(plugin: InstalledPlugin): boolean {
+  return duplicatedDisplayNames.value.has(getNormalizedDisplayName(plugin));
+}
+
+function formatPluginSource(plugin: InstalledPlugin): string {
+  if (plugin.source.type === "github") {
+    return plugin.source.ref;
+  }
+
+  return `本地上傳 · ${plugin.source.ref.slice(0, 12)}`;
 }
 
 function clearBundleSelection(): void {
@@ -65,6 +95,14 @@ function clearBundleSelection(): void {
   if (bundleFileInput.value) {
     bundleFileInput.value.value = "";
   }
+}
+
+function resetModalLocalState(): void {
+  githubImportError.value = null;
+  bundleUploadError.value = null;
+  githubRepoInput.value = "";
+  isBundleDragOver.value = false;
+  clearBundleSelection();
 }
 
 async function handleGithubImport(): Promise<void> {
@@ -184,6 +222,7 @@ async function handleReorder(): Promise<void> {
 }
 
 function handleClose(): void {
+  resetModalLocalState();
   emit("update:open", false);
 }
 
@@ -198,7 +237,10 @@ watch(
 watch(
   () => props.open,
   (open) => {
-    if (!open) return;
+    if (!open) {
+      resetModalLocalState();
+      return;
+    }
     void store.refresh();
   },
   { immediate: true },
@@ -349,6 +391,12 @@ watch(
                   <span class="truncate text-sm font-medium">{{
                     plugin.displayName
                   }}</span>
+                  <span
+                    v-if="shouldShowPluginSource(plugin)"
+                    class="truncate text-xs text-muted-foreground"
+                  >
+                    {{ formatPluginSource(plugin) }}
+                  </span>
                   <span class="text-xs text-muted-foreground">
                     更新於 {{ formatDate(plugin.updatedAt) }}
                   </span>
