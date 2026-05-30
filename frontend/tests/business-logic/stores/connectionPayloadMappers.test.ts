@@ -71,6 +71,19 @@ describe("connectionPayloadMappers", () => {
       expect(connection.summaryThinkingLevel).toBe("high");
       expect(connection.branchThinkingLevel).toBe("medium");
     });
+
+    it("normalize connection 會把空字串 label 收斂成 undefined", () => {
+      const connection = normalizeConnection({
+        id: "conn-1",
+        sourcePodId: "pod-a",
+        sourceAnchor: "bottom",
+        targetPodId: "pod-b",
+        targetAnchor: "top",
+        label: "",
+      });
+
+      expect(connection.label).toBeUndefined();
+    });
   });
 
   describe("response event payload mapping 規則", () => {
@@ -104,6 +117,21 @@ describe("connectionPayloadMappers", () => {
 
       expect(connection.summaryModel).toBe(DEFAULT_SUMMARY_MODEL);
       expect(connection.summaryProvider).toBe("claude");
+    });
+
+    it("created event 會把空字串 label 收斂成 undefined", () => {
+      const connection = normalizeCreatedConnectionEvent({
+        id: "conn-1",
+        sourcePodId: "pod-a",
+        sourceAnchor: "bottom",
+        targetPodId: "pod-b",
+        targetAnchor: "top",
+        triggerMode: "auto",
+        decideStatus: "none",
+        label: "",
+      });
+
+      expect(connection.label).toBeUndefined();
     });
 
     it("updated event 未帶 connectionStatus 時保留既有 status", () => {
@@ -208,6 +236,31 @@ describe("connectionPayloadMappers", () => {
 
       expect(mapped.summaryModel).toBe(DEFAULT_SUMMARY_MODEL);
       expect(mapped.summaryProvider).toBe("claude");
+    });
+
+    it("updated event 會把空字串 label 收斂成 undefined", () => {
+      const existingConnection = createMockConnection({
+        id: "conn-1",
+        sourcePodId: "pod-a",
+        targetPodId: "pod-b",
+        label: "Checklist",
+      });
+      const payload: ConnectionPayloadItem = {
+        id: "conn-1",
+        sourcePodId: "pod-a",
+        sourceAnchor: "bottom",
+        targetPodId: "pod-b",
+        targetAnchor: "top",
+        label: "",
+      };
+
+      const mapped = mapConnectionUpdatedEventPayload(
+        payload,
+        existingConnection,
+        () => "claude",
+      );
+
+      expect(mapped.label).toBeUndefined();
     });
 
     it("update response mapper 應優先使用 connections 陣列", () => {

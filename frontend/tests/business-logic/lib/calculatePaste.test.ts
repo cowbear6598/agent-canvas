@@ -177,10 +177,14 @@ describe("calculatePastePositions", () => {
         targetPodId: "pod-target",
         targetAnchor: "top",
         triggerMode: "branch",
+        summaryProvider: "opencode",
+        summaryModel: "openai/gpt-4o",
+        summaryThinkingLevel: "high",
         label: "Approved",
         description: "Continue after approval",
         branchProvider: "codex",
         branchModel: "gpt-5.4",
+        branchThinkingLevel: "medium",
       },
     ];
 
@@ -204,11 +208,47 @@ describe("calculatePastePositions", () => {
         originalTargetPodId: "pod-target",
         targetAnchor: "top",
         triggerMode: "branch",
+        summaryProvider: "opencode",
+        summaryModel: "openai/gpt-4o",
+        summaryThinkingLevel: "high",
         label: "Approved",
         description: "Continue after approval",
         branchProvider: "codex",
         branchModel: "gpt-5.4",
+        branchThinkingLevel: "medium",
       },
     ]);
+  });
+
+  it("omits empty string label when converting copied auto connections", () => {
+    const result = calculatePastePositions(
+      { x: 100, y: 100 },
+      {
+        pods: [
+          copiedPod({ id: "pod-source", x: 0, y: 0 }),
+          copiedPod({ id: "pod-target", x: 200, y: 0 }),
+        ],
+        repositoryNotes: [],
+        connections: [
+          {
+            sourcePodId: "pod-source",
+            sourceAnchor: "bottom",
+            targetPodId: "pod-target",
+            targetAnchor: "top",
+            triggerMode: "auto",
+            label: "",
+          },
+        ],
+      },
+      new Set(),
+    );
+
+    expect(result.connections).toHaveLength(1);
+    expect(result.connections[0]).toMatchObject({
+      originalSourcePodId: "pod-source",
+      originalTargetPodId: "pod-target",
+      triggerMode: "auto",
+    });
+    expect(result.connections[0]).not.toHaveProperty("label");
   });
 });

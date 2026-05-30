@@ -1,0 +1,21 @@
+feature: pod-provider-conversion-menu
+created: "2026-05-31"
+approved: true
+frontend:
+  required: true
+  reason: 需要修改 pod 右鍵選單結構，新增 provider 轉換子選單，並把 integration 改成 hover 展開的集合式子選單。
+  evidence:
+    - question.yaml Q1 確認現行 `PodContextMenu.vue` 為平面按鈕列表，integration provider 逐個平鋪。
+    - question.yaml Q2 確認現有 `SummarySection.vue` 已有可參考的 hover 子選單互動樣式。
+    - userflow.yaml F1 到 F3 都直接描述使用者透過 pod 右鍵選單切換 provider 與管理 integration 的流程。
+backend:
+  required: true
+  reason: provider 轉換不能只改前端顯示，必須新增 pod provider 的持久化更新流程，讓 provider 與 providerConfig.model 能寫回後端並同步廣播。
+  evidence:
+    - question.yaml Q3 確認目前沒有 `pod:set-provider` 類型的 WebSocket 事件或後端 handler。
+    - question.yaml Q3 確認前端 `updatePodProvider()` 只改本地狀態，不會持久化到資料庫。
+    - userflow.yaml F1 要求使用者從右鍵選單選擇另一個 provider 後，系統真正切換該 pod 的 provider 與預設 model。
+ticket:
+  story_issue: null
+  branch_issue: null
+  task_issue: null

@@ -62,6 +62,22 @@ export const pasteConnectionItemSchema = z
     originalTargetPodId: z.uuid(),
     targetAnchor: anchorPositionSchema,
     triggerMode: z.enum(["auto", "branch", "direct"]).optional(),
+    /** paste 時保留 summary provider（若有） */
+    summaryProvider: providerSchema.nullable().optional(),
+    /** paste 時保留 summary model（若有） */
+    summaryModel: z
+      .string()
+      .min(1)
+      .max(200)
+      .regex(/^[a-zA-Z0-9._/-]+$/, "summaryModel 格式不合法")
+      .optional(),
+    summaryThinkingLevel: z
+      .string()
+      .min(1)
+      .max(200)
+      .regex(/^[a-zA-Z0-9._/-]+$/, "thinkingLevel 格式不合法")
+      .nullable()
+      .optional(),
     /** paste 時保留 branch 連線的 label（若有） */
     label: labelSchema.optional(),
     /** paste 時保留 branch 連線的描述（若有） */
@@ -74,6 +90,13 @@ export const pasteConnectionItemSchema = z
       .min(1)
       .max(200)
       .regex(/^[a-zA-Z0-9._/-]+$/, "branchModel 格式不合法")
+      .optional(),
+    branchThinkingLevel: z
+      .string()
+      .min(1)
+      .max(200)
+      .regex(/^[a-zA-Z0-9._/-]+$/, "thinkingLevel 格式不合法")
+      .nullable()
       .optional(),
   })
   .strict();

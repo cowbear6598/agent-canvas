@@ -177,17 +177,28 @@ function transformNotes<
 function transformConnections(
   connections: CopiedConnection[],
 ): PasteConnectionItem[] {
-  return connections.map((connection) => ({
-    originalSourcePodId: connection.sourcePodId,
-    sourceAnchor: connection.sourceAnchor,
-    originalTargetPodId: connection.targetPodId,
-    targetAnchor: connection.targetAnchor,
-    triggerMode: connection.triggerMode,
-    label: connection.label,
-    description: connection.description,
-    branchProvider: connection.branchProvider,
-    branchModel: connection.branchModel,
-  }));
+  return connections.map((connection) => {
+    const payload: PasteConnectionItem = {
+      originalSourcePodId: connection.sourcePodId,
+      sourceAnchor: connection.sourceAnchor,
+      originalTargetPodId: connection.targetPodId,
+      targetAnchor: connection.targetAnchor,
+      triggerMode: connection.triggerMode,
+      summaryProvider: connection.summaryProvider,
+      summaryModel: connection.summaryModel,
+      summaryThinkingLevel: connection.summaryThinkingLevel,
+      description: connection.description,
+      branchProvider: connection.branchProvider,
+      branchModel: connection.branchModel,
+      branchThinkingLevel: connection.branchThinkingLevel,
+    };
+
+    if (connection.label !== "") {
+      payload.label = connection.label;
+    }
+
+    return payload;
+  });
 }
 
 type ClipboardData = {

@@ -373,6 +373,58 @@ describe("貼上功能", () => {
       expect(pod?.providerConfig?.model).toBe(CODEX_DEFAULT_MODEL);
     });
 
+    it("OpenCode Pod 的 connection 複製貼上後保留 summary provider/model", async () => {
+      const client = getClient();
+      const sourcePodId = uuidv4();
+      const targetPodId = uuidv4();
+
+      const payload: CanvasPastePayload = {
+        ...(await emptyPastePayload()),
+        pods: [
+          {
+            originalId: sourcePodId,
+            name: "OpenCode Source",
+            x: 0,
+            y: 0,
+            rotation: 0,
+            provider: "opencode",
+            providerConfig: { model: "openai/gpt-4o" },
+          },
+          {
+            originalId: targetPodId,
+            name: "OpenCode Target",
+            x: 100,
+            y: 100,
+            rotation: 0,
+          },
+        ],
+        connections: [
+          {
+            originalSourcePodId: sourcePodId,
+            sourceAnchor: "right",
+            originalTargetPodId: targetPodId,
+            targetAnchor: "left",
+            summaryProvider: "opencode",
+            summaryModel: "openai/gpt-4o",
+          },
+        ],
+      };
+
+      const response = await emitAndWaitResponse<
+        CanvasPastePayload,
+        CanvasPasteResultPayload
+      >(
+        client,
+        WebSocketRequestEvents.CANVAS_PASTE,
+        WebSocketResponseEvents.CANVAS_PASTE_RESULT,
+        payload,
+      );
+
+      expect(response.createdConnections).toHaveLength(1);
+      expect(response.createdConnections[0].summaryProvider).toBe("opencode");
+      expect(response.createdConnections[0].summaryModel).toBe("openai/gpt-4o");
+    });
+
     it("Claude Pod 帶非預設 model 複製貼上後 model 沒有被覆寫成預設 opus", async () => {
       const client = getClient();
       const originalPodId = uuidv4();

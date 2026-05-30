@@ -33,6 +33,10 @@ export interface RawConnection {
   decideStatus?: string;
 }
 
+function normalizeOptionalLabel(label?: string): string | undefined {
+  return label === "" ? undefined : label;
+}
+
 function normalizeLegacySummarySelection(params: {
   summaryModel?: string;
   summaryProvider: PodProvider | null;
@@ -74,7 +78,7 @@ export function normalizeConnection(
     summaryModel: normalizedSummary.summaryModel,
     summaryProvider: normalizedSummary.summaryProvider,
     summaryThinkingLevel: raw.summaryThinkingLevel ?? null,
-    label: raw.label,
+    label: normalizeOptionalLabel(raw.label),
     description: raw.description,
     branchProvider: raw.branchProvider,
     branchModel: raw.branchModel,
@@ -122,6 +126,7 @@ export function normalizeCreatedConnectionEvent(
     summaryProvider: normalizedSummary.summaryProvider,
     summaryThinkingLevel: connection.summaryThinkingLevel ?? null,
     triggerMode: connection.triggerMode ?? "auto",
+    label: normalizeOptionalLabel(connection.label),
     status: "idle",
     decideStatus: "none",
     branchThinkingLevel: connection.branchThinkingLevel ?? null,
@@ -184,7 +189,7 @@ export function mapConnectionUpdatedEventPayload(
         ? connection.summaryThinkingLevel
         : existingConnection.summaryThinkingLevel,
     // branch 欄位直接以後端回傳值覆寫（包含 undefined 視為清空）
-    label: connection.label,
+    label: normalizeOptionalLabel(connection.label),
     description: connection.description,
     branchProvider: connection.branchProvider as PodProvider | undefined,
     branchModel: connection.branchModel,

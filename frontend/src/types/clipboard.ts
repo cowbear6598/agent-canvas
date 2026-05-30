@@ -32,6 +32,11 @@ export interface CopiedConnection {
   targetPodId: string;
   targetAnchor: AnchorPosition;
   triggerMode?: TriggerMode;
+  /** Summary 功能獨立選用的 Provider */
+  summaryProvider?: PodProvider | null;
+  /** Summary 功能使用的模型字串 */
+  summaryModel?: string;
+  summaryThinkingLevel?: string | null;
   /** Branch 模式下的連線標籤 */
   label?: string;
   /** Branch 模式下的連線描述 */
@@ -40,4 +45,5 @@ export interface CopiedConnection {
   branchProvider?: PodProvider;
   /** Branch 模式使用的模型字串 */
   branchModel?: string;
+  branchThinkingLevel?: string | null;
 }

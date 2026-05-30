@@ -297,10 +297,14 @@ export function collectRelatedConnections(
     sourceAnchor: AnchorPosition;
     targetAnchor: AnchorPosition;
     triggerMode: TriggerMode;
+    summaryProvider?: PodProvider | null;
+    summaryModel?: string;
+    summaryThinkingLevel?: string | null;
     label?: string;
     description?: string;
     branchProvider?: PodProvider;
     branchModel?: string;
+    branchThinkingLevel?: string | null;
   }[],
 ): CopiedConnection[] {
   const copiedConnections: CopiedConnection[] = [];
@@ -317,10 +321,14 @@ export function collectRelatedConnections(
         targetPodId: connection.targetPodId,
         targetAnchor: connection.targetAnchor,
         triggerMode: connection.triggerMode,
+        summaryProvider: connection.summaryProvider,
+        summaryModel: connection.summaryModel,
+        summaryThinkingLevel: connection.summaryThinkingLevel,
         label: connection.label,
         description: connection.description,
         branchProvider: connection.branchProvider,
         branchModel: connection.branchModel,
+        branchThinkingLevel: connection.branchThinkingLevel,
       });
     }
   }

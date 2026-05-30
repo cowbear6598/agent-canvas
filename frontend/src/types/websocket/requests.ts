@@ -177,8 +177,11 @@ export interface PasteConnectionItem {
   originalTargetPodId: string;
   targetAnchor: AnchorPosition;
   triggerMode?: "auto" | "branch" | "direct";
+  /** Summary 功能獨立選用的 Provider；null 代表清除（重設為 fallback） */
+  summaryProvider?: PodProvider | null;
   /** summaryModel 接受任意 provider 的模型名稱字串，不限於 Claude ModelType */
   summaryModel?: string;
+  summaryThinkingLevel?: string | null;
   /** Branch 模式下的連線標籤 */
   label?: string;
   /** Branch 模式下的連線描述 */
@@ -187,6 +190,7 @@ export interface PasteConnectionItem {
   branchProvider?: PodProvider;
   /** Branch 模式使用的模型字串 */
   branchModel?: string;
+  branchThinkingLevel?: string | null;
 }
 
 export interface ConnectionUpdatePayload {
