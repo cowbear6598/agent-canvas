@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { GripVertical } from "lucide-vue-next";
+import { GripVertical, Upload } from "lucide-vue-next";
 import { VueDraggable } from "vue-draggable-plus";
 import {
   Dialog,
@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useManagedPluginStore } from "@/stores/managedPluginStore";
-import type { InstalledPlugin } from "@/types/plugin";
+import { type InstalledPlugin } from "@/types/plugin";
 
 interface Props {
   open: boolean;
@@ -28,9 +28,15 @@ const emit = defineEmits<{
 
 const store = useManagedPluginStore();
 
-const newRepo = ref<string>("");
-const installError = ref<string | null>(null);
-const installing = ref<boolean>(false);
+const githubRepoInput = ref<string>("");
+const githubImportError = ref<string | null>(null);
+const importingGithub = ref<boolean>(false);
+
+const bundleUploadError = ref<string | null>(null);
+const uploadingBundle = ref<boolean>(false);
+const selectedBundleFile = ref<File | null>(null);
+const bundleFileInput = ref<HTMLInputElement | null>(null);
+const isBundleDragOver = ref<boolean>(false);
 
 const updatingId = ref<string | null>(null);
 const reordering = ref<boolean>(false);
@@ -39,31 +45,100 @@ const draggablePlugins = ref<InstalledPlugin[]>([]);
 const confirmDeletePlugin = ref<InstalledPlugin | null>(null);
 const showConfirmDialog = ref<boolean>(false);
 
-const isPluginListBusy = computed(
-  () => store.loading || installing.value || updatingId.value !== null,
+const isBundleListBusy = computed(
+  () =>
+    store.loading ||
+    importingGithub.value ||
+    uploadingBundle.value ||
+    updatingId.value !== null,
 );
 const isListMutationDisabled = computed(
-  () => isPluginListBusy.value || reordering.value,
+  () => isBundleListBusy.value || reordering.value,
 );
 
-async function handleInstall(): Promise<void> {
-  const repo = newRepo.value.trim();
-  if (!repo || isListMutationDisabled.value) return;
+function formatDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleString("zh-TW");
+}
 
-  installError.value = null;
-  installing.value = true;
-  try {
-    await store.install(repo);
-    newRepo.value = "";
-  } catch (err) {
-    installError.value = err instanceof Error ? err.message : "安裝失敗";
-  } finally {
-    installing.value = false;
+function clearBundleSelection(): void {
+  selectedBundleFile.value = null;
+  if (bundleFileInput.value) {
+    bundleFileInput.value.value = "";
   }
 }
 
-async function handleUpdate(plugin: InstalledPlugin): Promise<void> {
+async function handleGithubImport(): Promise<void> {
+  const repo = githubRepoInput.value.trim();
+  if (!repo || isListMutationDisabled.value) return;
+
+  githubImportError.value = null;
+  importingGithub.value = true;
+  try {
+    await store.install(repo);
+    githubRepoInput.value = "";
+  } catch (err) {
+    githubImportError.value =
+      err instanceof Error ? err.message : "GitHub skill 新增失敗";
+  } finally {
+    importingGithub.value = false;
+  }
+}
+
+function openBundleFilePicker(): void {
   if (isListMutationDisabled.value) return;
+  bundleFileInput.value?.click();
+}
+
+function handleBundleSelected(event: Event): void {
+  const input = event.target as HTMLInputElement | null;
+  const file = input?.files?.[0] ?? null;
+  selectedBundleFile.value = file;
+  bundleUploadError.value = null;
+  isBundleDragOver.value = false;
+}
+
+function handleBundleDragOver(event: DragEvent): void {
+  if (isListMutationDisabled.value) return;
+  event.preventDefault();
+  isBundleDragOver.value = true;
+}
+
+function handleBundleDragLeave(): void {
+  isBundleDragOver.value = false;
+}
+
+function handleBundleDrop(event: DragEvent): void {
+  if (isListMutationDisabled.value) return;
+  event.preventDefault();
+  isBundleDragOver.value = false;
+  const file = event.dataTransfer?.files?.[0] ?? null;
+  if (!file) return;
+  selectedBundleFile.value = file;
+  bundleUploadError.value = null;
+}
+
+async function handleBundleUpload(): Promise<void> {
+  if (!selectedBundleFile.value || isListMutationDisabled.value) return;
+
+  bundleUploadError.value = null;
+  uploadingBundle.value = true;
+  try {
+    await store.upload(selectedBundleFile.value);
+    clearBundleSelection();
+  } catch (err) {
+    bundleUploadError.value =
+      err instanceof Error ? err.message : "本地 skill 新增失敗";
+  } finally {
+    uploadingBundle.value = false;
+  }
+}
+
+function canRefreshPlugin(plugin: InstalledPlugin): boolean {
+  return plugin.source.type === "github";
+}
+
+async function handleUpdate(plugin: InstalledPlugin): Promise<void> {
+  if (!canRefreshPlugin(plugin) || isListMutationDisabled.value) return;
 
   updatingId.value = plugin.id;
   try {
@@ -96,12 +171,8 @@ async function confirmDelete(): Promise<void> {
   }
 }
 
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleString("zh-TW");
-}
-
 async function handleReorder(): Promise<void> {
-  if (isPluginListBusy.value || reordering.value) return;
+  if (isBundleListBusy.value || reordering.value) return;
 
   const ids = draggablePlugins.value.map((plugin) => plugin.id);
   reordering.value = true;
@@ -139,53 +210,113 @@ watch(
     :open="open"
     @update:open="handleClose"
   >
-    <DialogContent class="max-w-2xl">
+    <DialogContent class="max-w-3xl">
       <DialogHeader>
-        <DialogTitle>Plugin 管理</DialogTitle>
+        <DialogTitle>Skill 管理</DialogTitle>
         <DialogDescription class="sr-only">
-          管理已安裝的 GitHub Plugin
+          管理 GitHub 與本地匯入的 skill
         </DialogDescription>
       </DialogHeader>
 
-      <div class="flex flex-col gap-2">
-        <div class="flex gap-2">
+      <div class="grid gap-4 lg:grid-cols-2">
+        <section class="rounded-lg border border-border bg-muted/30 p-4">
+          <div class="mb-3">
+            <h3 class="text-sm font-semibold">
+              GitHub
+            </h3>
+          </div>
+          <div class="flex gap-2">
+            <input
+              v-model="githubRepoInput"
+              placeholder="owner/repo"
+              class="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              :disabled="isListMutationDisabled"
+              @keydown.enter="handleGithubImport"
+            >
+            <button
+              class="inline-flex items-center justify-center whitespace-nowrap rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground ring-offset-background transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+              :disabled="isListMutationDisabled || !githubRepoInput.trim()"
+              @click="handleGithubImport"
+            >
+              {{ importingGithub ? "新增中..." : "新增" }}
+            </button>
+          </div>
+          <p
+            v-if="githubImportError"
+            class="mt-2 text-sm text-destructive"
+          >
+            {{ githubImportError }}
+          </p>
+        </section>
+
+        <section class="rounded-lg border border-border bg-muted/30 p-4">
+          <div class="mb-3">
+            <h3 class="text-sm font-semibold">
+              本地上傳
+            </h3>
+          </div>
           <input
-            v-model="newRepo"
-            placeholder="owner/repo"
-            class="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            ref="bundleFileInput"
+            class="hidden"
+            type="file"
+            accept=".zip,application/zip"
             :disabled="isListMutationDisabled"
-            @keydown.enter="handleInstall"
+            @change="handleBundleSelected"
           >
-          <button
-            class="inline-flex items-center justify-center whitespace-nowrap rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground ring-offset-background transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
-            :disabled="isListMutationDisabled || !newRepo.trim()"
-            @click="handleInstall"
+          <div class="flex gap-2">
+            <button
+              type="button"
+              class="flex min-h-10 flex-1 items-center gap-2 rounded-md border border-dashed px-3 py-2 text-left text-sm transition-colors"
+              :class="
+                isBundleDragOver
+                  ? 'border-primary bg-primary/5'
+                  : 'border-input bg-background hover:bg-accent hover:text-accent-foreground'
+              "
+              :disabled="isListMutationDisabled"
+              @click="openBundleFilePicker"
+              @dragover="handleBundleDragOver"
+              @dragleave="handleBundleDragLeave"
+              @drop="handleBundleDrop"
+            >
+              <Upload
+                :size="16"
+                class="shrink-0"
+              />
+              <span class="truncate font-medium text-muted-foreground">
+                {{ selectedBundleFile?.name ?? "點擊選擇 zip 或拖曳至此" }}
+              </span>
+            </button>
+            <button
+              class="inline-flex items-center justify-center whitespace-nowrap rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground ring-offset-background transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+              :disabled="isListMutationDisabled || !selectedBundleFile"
+              @click="handleBundleUpload"
+            >
+              {{ uploadingBundle ? "新增中..." : "新增" }}
+            </button>
+          </div>
+          <p
+            v-if="bundleUploadError"
+            class="mt-2 text-sm text-destructive"
           >
-            {{ installing ? "安裝中..." : "安裝" }}
-          </button>
-        </div>
-        <p
-          v-if="installError"
-          class="text-sm text-destructive"
-        >
-          {{ installError }}
-        </p>
+            {{ bundleUploadError }}
+          </p>
+        </section>
       </div>
 
-      <ScrollArea class="max-h-[50vh] pr-3">
+      <ScrollArea class="max-h-[52vh] pr-3">
         <div class="flex flex-col gap-2">
           <div
             v-if="store.loading && store.plugins.length === 0"
             class="py-8 text-center text-sm text-muted-foreground"
           >
-            載入中...
+            載入 skill 清單中...
           </div>
 
           <div
             v-else-if="!store.loading && store.plugins.length === 0"
             class="py-8 text-center text-sm text-muted-foreground"
           >
-            尚未安裝任何 plugin
+            尚未新增任何 skill
           </div>
 
           <VueDraggable
@@ -218,14 +349,14 @@ watch(
                   <span class="truncate text-sm font-medium">{{
                     plugin.displayName
                   }}</span>
-                  <span class="truncate text-xs text-muted-foreground">{{
-                    plugin.githubRepo
-                  }}</span>
-                  <span class="text-xs text-muted-foreground">更新於 {{ formatDate(plugin.updatedAt) }}</span>
+                  <span class="text-xs text-muted-foreground">
+                    更新於 {{ formatDate(plugin.updatedAt) }}
+                  </span>
                 </div>
               </div>
               <div class="ml-4 flex shrink-0 gap-2">
                 <button
+                  v-if="canRefreshPlugin(plugin)"
                   class="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
                   :disabled="isListMutationDisabled"
                   @click="handleUpdate(plugin)"
@@ -262,8 +393,8 @@ watch(
       <DialogHeader>
         <DialogTitle>確認刪除</DialogTitle>
         <DialogDescription>
-          確認刪除 {{ confirmDeletePlugin?.displayName }}？已啟用此 plugin 的
-          Pod 會自動移除勾選
+          確認刪除 {{ confirmDeletePlugin?.displayName }}？已啟用此 skill 的
+          Pod 會自動移除勾選。
         </DialogDescription>
       </DialogHeader>
       <DialogFooter>

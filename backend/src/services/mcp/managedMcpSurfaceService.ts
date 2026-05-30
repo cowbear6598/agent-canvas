@@ -92,7 +92,7 @@ export interface PodMcpEntriesResult {
   ignoredTargets: ManagedMcpSurfaceIgnoredTarget[];
   hasGoalRuntime: boolean;
   /**
-   * Plugin Skill Catalog（依 pod.pluginIds 掃出的所有 SKILL.md）。
+   * Bundle Skill Catalog（依 pod.pluginIds 掃出的所有 SKILL.md）。
    * Provider 在 fresh session 首輪會把這份 catalog 注入 prompt，
    * 讓 LLM 知道有哪些 skill 可用、絕對路徑在哪。
    */
@@ -213,7 +213,7 @@ export class ManagedMcpSurfaceService {
       }
     }
 
-    // Plugin MCP bridge：無條件注入（即使 pluginIds 為空），由 bridge 依 pod_plugin_ids
+    // Bundle MCP bridge：無條件注入（即使 pluginIds 為空），由 bridge 依 pod_plugin_ids
     // 決定 scope；保持 entry 名稱穩定避免 provider session 重啟。
     // catalog 則僅在實際有 pluginIds 時才掃描（buildPluginSkillCatalog 內部對空陣列直接回 []）。
     entries.push(buildPluginMcpEntry(pod.id));

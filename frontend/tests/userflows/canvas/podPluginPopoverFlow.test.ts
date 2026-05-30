@@ -36,7 +36,10 @@ const switchStub = {
 function makePlugin(overrides: Partial<InstalledPlugin>): InstalledPlugin {
   return {
     id: "plugin-a",
-    githubRepo: "owner/plugin-a",
+    source: {
+      type: "github",
+      ref: "owner/plugin-a",
+    },
     displayName: "Plugin A",
     installPath: "/plugins/plugin-a",
     sortIndex: 0,

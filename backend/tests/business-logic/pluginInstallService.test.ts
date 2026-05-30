@@ -34,6 +34,7 @@ vi.mock("simple-git", () => ({
 // ─── mock managedPluginRegistry ─────────────────────────────────────────────
 vi.mock("../../src/services/plugin/managedPluginRegistry.js", () => ({
   managedPluginStore: {
+    getBySource: vi.fn(),
     getByGithubRepo: vi.fn(),
     getById: vi.fn(),
     insert: vi.fn(),
@@ -82,6 +83,12 @@ vi.mock("../../src/utils/logger.js", () => ({
     info: vi.fn(),
     debug: vi.fn(),
   },
+}));
+
+vi.mock("../../src/services/plugin/pluginScanFs.js", () => ({
+  listSkillsForPlugin: vi.fn(async () => [
+    { skillName: "skills/test", description: "測試 skill" },
+  ]),
 }));
 
 // ─── mock fs.promises（模擬 extractPluginMetadata 讀取 plugin.json）────────
@@ -136,6 +143,7 @@ function makeRecord(
 ): ManagedPluginRecord {
   return {
     id: "owner/repo",
+    source: { type: "github", ref: "owner/repo" },
     githubRepo: "owner/repo",
     displayName: "repo",
     description: null,
@@ -171,6 +179,7 @@ describe("installPlugin", () => {
     // 預設：gitOperation 使用 wrapper（已在 vi.mock 工廠實作），不需額外設定
 
     // 預設：無重複安裝
+    vi.mocked(managedPluginStore.getBySource).mockReturnValue(null);
     vi.mocked(managedPluginStore.getByGithubRepo).mockReturnValue(null);
 
     // 預設：insert 回傳 record
@@ -206,15 +215,15 @@ describe("installPlugin", () => {
     expect(insertArg.description).toBe("A plugin");
   });
 
-  it("F2：manifest 不存在時靜默 fallback 為 repo name", async () => {
+  it("F2：manifest 不存在時靜默 fallback 為第一個 skill 名稱", async () => {
     // readFile 已在 beforeEach 設為 reject
     const result = await installPlugin("owner/repo");
 
     expect(result.success).toBe(true);
     expect(mockLoggerWarn).not.toHaveBeenCalled();
     const insertArg = vi.mocked(managedPluginStore.insert).mock.calls[0]![0];
-    expect(insertArg.displayName).toBe("repo");
-    expect(insertArg.description).toBeNull();
+    expect(insertArg.displayName).toBe("test");
+    expect(insertArg.description).toBe("測試 skill");
   });
 
   it("F2：metadata 支援 legacy .claude-plugin/plugin.json fallback", async () => {
@@ -240,6 +249,7 @@ describe("installPlugin", () => {
   });
 
   it("F4：已存在相同 repo 時直接回 PLUGIN_ALREADY_INSTALLED，不呼叫 clone", async () => {
+    vi.mocked(managedPluginStore.getBySource).mockReturnValue(makeRecord());
     vi.mocked(managedPluginStore.getByGithubRepo).mockReturnValue(makeRecord());
 
     const result = await installPlugin("owner/repo");
@@ -421,6 +431,7 @@ describe("updatePlugin", () => {
 describe("refreshAllPlugins", () => {
   const pluginA = makeRecord({
     id: "owner/plugin-a",
+    source: { type: "github", ref: "owner/plugin-a" },
     githubRepo: "owner/plugin-a",
     installPath: "/plugins/owner__plugin-a",
     updatedAt: "2024-01-01T00:00:00.000Z",
@@ -428,6 +439,7 @@ describe("refreshAllPlugins", () => {
 
   const pluginB = makeRecord({
     id: "owner/plugin-b",
+    source: { type: "github", ref: "owner/plugin-b" },
     githubRepo: "owner/plugin-b",
     installPath: "/plugins/owner__plugin-b",
     updatedAt: "2024-01-01T00:00:00.000Z",
@@ -441,7 +453,12 @@ describe("refreshAllPlugins", () => {
 
     // store.update 回傳更新後的 record
     vi.mocked(managedPluginStore.update).mockImplementation((id, partial) =>
-      makeRecord({ id, githubRepo: id, ...partial }),
+      makeRecord({
+        id,
+        source: { type: "github", ref: id },
+        githubRepo: id,
+        ...partial,
+      }),
     );
   });
 

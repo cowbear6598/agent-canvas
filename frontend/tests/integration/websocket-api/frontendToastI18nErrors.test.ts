@@ -120,7 +120,7 @@ describe("frontend toast i18n errors", () => {
       success: true,
     });
     await expect(installRequest).rejects.toThrow(
-      "安裝 plugin 成功但後端未回傳 plugin 資料",
+      "匯入 GitHub skill bundle 成功但後端未回傳 bundle 資料",
     );
 
     const updateRequest = updatePlugin("plugin-1");
@@ -129,7 +129,7 @@ describe("frontend toast i18n errors", () => {
       success: true,
     });
     await expect(updateRequest).rejects.toThrow(
-      "更新 plugin 成功但後端未回傳 plugin 資料",
+      "重新整理 GitHub skill bundle 成功但後端未回傳 bundle 資料",
     );
 
     const reorderRequest = reorderPlugins(["plugin-1"]);
@@ -138,7 +138,7 @@ describe("frontend toast i18n errors", () => {
       success: true,
     });
     await expect(reorderRequest).rejects.toThrow(
-      "重排 plugin 成功但後端未回傳 plugin 清單",
+      "重排 skill bundle 成功但後端未回傳清單資料",
     );
   });
 

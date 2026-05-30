@@ -51,7 +51,7 @@ function buildGoalAvailabilityItem(
 }
 
 /**
- * Plugin MCP 內建項目：無條件存在，依 pod.pluginIds 數量更新描述。
+ * Bundle MCP 內建項目：無條件存在，依 pod.pluginIds 數量更新描述。
  * 與 Goal Runtime 一樣 system + locked，在前端 popover 內建區塊呈現。
  */
 function buildPluginAvailabilityItem(
@@ -60,8 +60,8 @@ function buildPluginAvailabilityItem(
   const count = pod.pluginIds.length;
   const description =
     count === 0
-      ? "Plugin MCP 可用，但目前未勾選任何 plugin"
-      : `已勾選 ${count} 個 plugin`;
+      ? "Bundle MCP 可用，但目前未啟用任何 skill bundle"
+      : `已啟用 ${count} 個 skill bundle`;
   return {
     name: "agent_canvas_plugin",
     transport: "stdio",

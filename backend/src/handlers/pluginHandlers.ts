@@ -14,6 +14,9 @@ import {
   updatePlugin,
 } from "../services/plugin/pluginInstallService.js";
 import { managedPluginStore } from "../services/plugin/managedPluginRegistry.js";
+import { podStore } from "../services/podStore.js";
+import { toPodPublicView } from "../types/pod.js";
+import type { PodPluginsSetPayload } from "../types/responses/pod.js";
 import { createI18nError, type I18nError } from "../utils/i18nError.js";
 import { emitError, emitNotFound } from "../utils/websocketResponse.js";
 
@@ -48,6 +51,15 @@ function createPluginInstallError(
     };
   }
 
+  if (error === "BUNDLE_SKILL_NOT_FOUND") {
+    return {
+      error: createI18nError("errors.bundleSkillMissingAfterImport", {
+        repo: githubRepo,
+      }),
+      code: "BUNDLE_SKILL_NOT_FOUND",
+    };
+  }
+
   return {
     error: createI18nError("errors.pluginInstallFailed", {
       repo: githubRepo,
@@ -67,6 +79,24 @@ function createPluginUpdateError(
         pluginId,
       }),
       code: "INVALID_GITHUB_REPO_FORMAT",
+    };
+  }
+
+  if (error === "UPLOAD_BUNDLE_UPDATE_UNSUPPORTED") {
+    return {
+      error: createI18nError("errors.bundleUploadSourceUpdateUnavailable", {
+        pluginId,
+      }),
+      code: "UPLOAD_BUNDLE_UPDATE_UNSUPPORTED",
+    };
+  }
+
+  if (error === "BUNDLE_SKILL_NOT_FOUND") {
+    return {
+      error: createI18nError("errors.bundleSkillMissingAfterUpdate", {
+        pluginId,
+      }),
+      code: "BUNDLE_SKILL_NOT_FOUND",
     };
   }
 
@@ -149,6 +179,7 @@ export async function handlePluginDelete(
   payload: PluginDeletePayload,
   requestId: string,
 ): Promise<void> {
+  const affectedPodRefs = podStore.findPodRefsByPluginId(payload.pluginId);
   const result = await removePlugin(payload.pluginId);
 
   if (!result.success) {
@@ -186,6 +217,26 @@ export async function handlePluginDelete(
     WebSocketResponseEvents.PLUGIN_DELETED,
     response,
   );
+
+  for (const ref of affectedPodRefs) {
+    const podEntry = podStore.getByIdGlobal(ref.podId);
+    if (!podEntry) {
+      continue;
+    }
+
+    const podPayload: PodPluginsSetPayload = {
+      requestId: "",
+      canvasId: podEntry.canvasId,
+      success: true,
+      pod: toPodPublicView(podEntry.pod),
+    };
+
+    socketService.emitToCanvas(
+      podEntry.canvasId,
+      WebSocketResponseEvents.POD_PLUGINS_SET,
+      podPayload,
+    );
+  }
 }
 
 export async function handlePluginUpdate(

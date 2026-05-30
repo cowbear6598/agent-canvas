@@ -23,6 +23,7 @@ import {
 
 type PluginRecord = {
   id: string;
+  source: { type: "github" | "upload"; ref: string };
   githubRepo: string;
   displayName: string;
   description: string | null;
@@ -67,6 +68,13 @@ vi.mock("simple-git", async () => {
                 : "Updated Plugin",
             description: `clone-${simpleGitState.cloneCount}`,
           }),
+          "utf8",
+        );
+        const skillDir = path.join(installPath, "skills", "plan");
+        await fs.mkdir(skillDir, { recursive: true });
+        await fs.writeFile(
+          path.join(skillDir, "SKILL.md"),
+          "---\ndescription: 測試流程 skill\n---\n\n# Plan\n",
           "utf8",
         );
       },

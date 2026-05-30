@@ -8,30 +8,36 @@ phases:
     verification:
       - cd frontend && bun run style
       - cd frontend && bun run test
-    done: false
+    done: true
     items:
       - id: P1.A
         title: 管理清單型別與 service 契約
         tasks:
           - id: P1.A.t1
             text: 將 `InstalledPlugin` 與 `pluginApi` 的資料模型改為來源中立的 bundle metadata，至少能表達來源類型、來源參考值與顯示名稱，同時保留現有 list、delete、reorder 流程可用
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/src/types/plugin.ts
+              - frontend/src/services/pluginApi.ts
           - id: P1.A.t2
             text: 在前端管理 store 中移除對 `githubRepo` 唯一性的硬依賴，改用 bundle source metadata 驅動重複檢查與列表更新
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/src/stores/managedPluginStore.ts
       - id: P1.B
         title: Pod 啟用相容層
         tasks:
           - id: P1.B.t1
             text: 保留 `pluginIds` 作為 Pod WebSocket payload 與 store 欄位的相容層，但將 `PluginPopover`、本地狀態命名與註解改為 bundle 語意
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/src/components/pod/PluginPopover.vue
           - id: P1.B.t2
             text: 調整 Pod bundle 選單的搜尋、空態與錯誤文案，讓使用者看到的是 skill bundle / bundle 管理語意而非 GitHub plugin 語意
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/src/components/pod/PluginPopover.vue
+              - frontend/src/locales/zh-TW.json
 
   - id: P2
     title: Bundle 管理介面與匯入操作
@@ -39,34 +45,42 @@ phases:
     verification:
       - cd frontend && bun run style
       - cd frontend && bun run test
-    done: false
+    done: true
     items:
       - id: P2.A
         title: 管理 Modal UI 重構
         tasks:
           - id: P2.A.t1
             text: 將 `ManagedPluginModal` 重構為 bundle 管理介面，列表卡片需顯示來源資訊、顯示名稱與更新時間，並保留排序與刪除操作
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/src/components/settings/ManagedPluginModal.vue
           - id: P2.A.t2
             text: 依 bundle 來源調整列表操作，讓 GitHub 來源保留 refresh 能力，upload 來源改為重新上傳或明確禁用 update 操作
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/src/components/settings/ManagedPluginModal.vue
       - id: P2.B
         title: GitHub 與本地 bundle 匯入入口
         tasks:
           - id: P2.B.t1
             text: 在管理介面保留 GitHub 匯入表單，但改用 bundle / source wording，並對接重構後的後端 GitHub 匯入契約
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/src/components/settings/ManagedPluginModal.vue
           - id: P2.B.t2
             text: 新增本地 bundle 檔案上傳入口，對接後端專用匯入 API，處理檔案選擇、送出中狀態與成功後清單刷新
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/src/services/pluginApi.ts
+              - frontend/src/stores/managedPluginStore.ts
           - id: P2.B.t3
             text: 將非法 bundle、重複匯入與 upload 失敗訊息整理成可讀的 zh-TW 錯誤呈現，不沿用現有只適用 GitHub plugin 的提示內容
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/src/locales/zh-TW.json
+              - frontend/src/locales/en.json
+              - frontend/src/locales/ja.json
 
   - id: P3
     title: 文案同步與前端測試補強
@@ -74,28 +88,32 @@ phases:
     verification:
       - cd frontend && bun run style
       - cd frontend && bun run test
-    done: false
+    done: true
     items:
       - id: P3.A
         title: 文案與入口同步
         tasks:
           - id: P3.A.t1
             text: 更新設定入口、Pod popover、locale 文案與相關型別註解，將對外使用語意統一到 bundle / skill 管理
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/src/locales/zh-TW.json
+              - frontend/src/components/pod/PluginPopover.vue
       - id: P3.B
         title: Store 與 user flow 測試
         tasks:
           - id: P3.B.t1
             text: 更新 `managedPluginStore` 測試，覆蓋 GitHub 匯入與本地 upload 匯入的 source-aware 狀態更新、重複判斷與排序行為
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/stores/managedPluginStore.test.ts
           - id: P3.B.t2
             text: 更新 Pod bundle popover user flow 測試，確認背景 refresh、啟用切換與 bundle 文案不會破壞現有 optimistic toggle 行為
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/tests/userflows/canvas/podPluginPopoverFlow.test.ts
           - id: P3.B.t3
             text: 新增或補齊管理 modal user flow 測試，覆蓋 GitHub 匯入、本地 bundle 上傳、非法 bundle 失敗與刪除後列表更新情境
-            completed: false
-            last_files_changed: []
-
+            completed: true
+            last_files_changed:
+              - frontend/tests/integration/websocket-api/frontendToastI18nErrors.test.ts

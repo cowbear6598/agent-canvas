@@ -14,6 +14,7 @@ function insertPlugin(
   overrides: Partial<ManagedPluginRecord> & Pick<ManagedPluginRecord, "id">,
 ): ManagedPluginRecord {
   return managedPluginStore.insert({
+    source: { type: "github", ref: `owner/${overrides.id}` },
     githubRepo: `owner/${overrides.id}`,
     displayName: overrides.id,
     description: null,

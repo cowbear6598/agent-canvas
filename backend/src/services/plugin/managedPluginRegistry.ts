@@ -3,8 +3,16 @@ import { getDb } from "../../database/index.js";
 import { ok, err } from "../../types/result.js";
 import type { Result } from "../../types/result.js";
 
+export type ManagedBundleSourceType = "github" | "upload";
+
+export interface ManagedBundleSource {
+  type: ManagedBundleSourceType;
+  ref: string;
+}
+
 export interface ManagedPluginRecord {
   id: string;
+  source: ManagedBundleSource;
   githubRepo: string;
   displayName: string | null;
   description: string | null;
@@ -20,12 +28,37 @@ type ManagedPluginInsertRecord = Omit<ManagedPluginRecord, "sortIndex"> &
 interface ManagedPluginRow {
   id: string;
   github_repo: string;
+  source_type: ManagedBundleSourceType;
+  source_ref: string;
   display_name: string | null;
   description: string | null;
   install_path: string;
   sort_index: number;
   installed_at: string;
   updated_at: string;
+}
+
+function resolveSource(
+  record:
+    | Pick<ManagedPluginRecord, "id" | "githubRepo"> &
+        Partial<Pick<ManagedPluginRecord, "source">>
+    | ManagedPluginRow,
+): ManagedBundleSource {
+  if ("source" in record && record.source) {
+    return record.source;
+  }
+
+  if ("source_type" in record && "source_ref" in record) {
+    return {
+      type: record.source_type,
+      ref: record.source_ref,
+    };
+  }
+
+  return {
+    type: "github",
+    ref: record.githubRepo || record.id,
+  };
 }
 
 function nowIsoString(): string {
@@ -35,6 +68,7 @@ function nowIsoString(): string {
 function rowToRecord(row: ManagedPluginRow): ManagedPluginRecord {
   return {
     id: row.id,
+    source: resolveSource(row),
     githubRepo: row.github_repo,
     displayName: row.display_name,
     description: row.description,
@@ -60,6 +94,16 @@ class ManagedPluginStore {
     return row ? rowToRecord(row) : null;
   }
 
+  getBySource(
+    source: ManagedBundleSource,
+  ): ManagedPluginRecord | null {
+    const row = this.stmts.selectBySource.get(
+      source.type,
+      source.ref,
+    ) as ManagedPluginRow | undefined;
+    return row ? rowToRecord(row) : null;
+  }
+
   getByGithubRepo(repo: string): ManagedPluginRecord | null {
     const row = this.stmts.selectByGithubRepo.get(repo) as
       | ManagedPluginRow
@@ -74,9 +118,12 @@ class ManagedPluginStore {
 
   insert(record: ManagedPluginInsertRecord): ManagedPluginRecord {
     const sortIndex = record.sortIndex ?? this.nextSortIndex();
+    const source = resolveSource(record);
     this.stmts.insert.run({
       $id: record.id,
       $githubRepo: record.githubRepo,
+      $sourceType: source.type,
+      $sourceRef: source.ref,
       $displayName: record.displayName,
       $description: record.description,
       $installPath: record.installPath,

@@ -5,13 +5,17 @@ export function getPluginsRoot(): string {
   return config.pluginsRoot;
 }
 
+function sanitizePathSegment(raw: string): string {
+  const cleaned = raw.replace(/[^A-Za-z0-9._-]/g, "-").replace(/-+/g, "-");
+  return cleaned.replace(/^-+|-+$/g, "") || "bundle";
+}
+
 /**
  * 將 GitHub owner/repo 轉換為安全的檔案系統資料夾名稱：
  * 把 `/` 換成 `__`，並過濾掉不允許的字元（只保留 A-Za-z0-9._-）
  */
 export function sanitizeGithubRepoForFs(owner: string, repo: string): string {
-  const combined = `${owner}__${repo}`;
-  return combined.replace(/[^A-Za-z0-9._-]/g, "");
+  return `${sanitizePathSegment(owner)}__${sanitizePathSegment(repo)}`;
 }
 
 /**
@@ -21,4 +25,11 @@ export function resolveInstallPath(githubRepo: string): string {
   const [owner, repo] = githubRepo.split("/");
   const folderName = sanitizeGithubRepoForFs(owner ?? "", repo ?? "");
   return path.join(getPluginsRoot(), folderName);
+}
+
+export function resolveUploadInstallPath(sourceRef: string): string {
+  return path.join(
+    getPluginsRoot(),
+    `upload__${sanitizePathSegment(sourceRef)}`,
+  );
 }

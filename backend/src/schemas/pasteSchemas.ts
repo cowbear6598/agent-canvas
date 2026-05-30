@@ -15,6 +15,7 @@ import {
   providerSchema,
   providerConfigSchema,
   podGoalSchema,
+  pluginIdSchema,
 } from "./podSchemas.js";
 
 export const pastePodItemSchema = z
@@ -44,14 +45,7 @@ export const pastePodItemSchema = z
           .regex(/^[a-zA-Z0-9_.][a-zA-Z0-9_.-]*$/),
       )
       .optional(),
-    pluginIds: z
-      .array(
-        z
-          .string()
-          .regex(/^[a-zA-Z0-9@._/-]+$/)
-          .max(200),
-      )
-      .optional(),
+    pluginIds: z.array(pluginIdSchema).optional(),
     repositoryId: resourceIdSchema.nullable().optional(),
     goal: podGoalSchema.nullable().optional(),
   })

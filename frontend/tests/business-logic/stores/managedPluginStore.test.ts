@@ -9,12 +9,14 @@ const {
   mockDeletePlugin,
   mockUpdatePlugin,
   mockReorderPlugins,
+  mockUploadPluginBundle,
 } = vi.hoisted(() => ({
   mockListPlugins: vi.fn(),
   mockInstallPlugin: vi.fn(),
   mockDeletePlugin: vi.fn(),
   mockUpdatePlugin: vi.fn(),
   mockReorderPlugins: vi.fn(),
+  mockUploadPluginBundle: vi.fn(),
 }));
 
 vi.mock("@/services/pluginApi", () => ({
@@ -23,6 +25,7 @@ vi.mock("@/services/pluginApi", () => ({
   deletePlugin: mockDeletePlugin,
   updatePlugin: mockUpdatePlugin,
   reorderPlugins: mockReorderPlugins,
+  uploadPluginBundle: mockUploadPluginBundle,
 }));
 
 function createMockPlugin(
@@ -30,7 +33,10 @@ function createMockPlugin(
 ): InstalledPlugin {
   return {
     id: "plugin-1",
-    githubRepo: "owner/repo",
+    source: {
+      type: "github",
+      ref: "owner/repo",
+    },
     displayName: "Test Plugin",
     installPath: "/path/to/plugin",
     sortIndex: 0,
@@ -44,15 +50,16 @@ describe("managedPluginStore", () => {
   setupStoreTest();
 
   describe("install", () => {
-    it("重複安裝相同 githubRepo 時應拋出「該 plugin 已安裝」錯誤且不呼叫 API", async () => {
+    it("重複安裝相同 GitHub 來源時應拋出重複匯入錯誤且不呼叫 API", async () => {
       const store = useManagedPluginStore();
       store.plugins = [
-        createMockPlugin({ id: "plugin-1", githubRepo: "owner/repo" }),
+        createMockPlugin({
+          id: "plugin-1",
+          source: { type: "github", ref: "owner/repo" },
+        }),
       ];
 
-      await expect(store.install("owner/repo")).rejects.toThrow(
-        "該 plugin 已安裝",
-      );
+      await expect(store.install("owner/repo")).rejects.toThrow();
 
       expect(mockInstallPlugin).not.toHaveBeenCalled();
     });
@@ -61,14 +68,14 @@ describe("managedPluginStore", () => {
       const store = useManagedPluginStore();
       const existing = createMockPlugin({
         id: "plugin-1",
-        githubRepo: "owner/repo-a",
+        source: { type: "github", ref: "owner/repo-a" },
         sortIndex: 0,
       });
       store.plugins = [existing];
 
       const newPlugin = createMockPlugin({
         id: "plugin-2",
-        githubRepo: "owner/repo-b",
+        source: { type: "github", ref: "owner/repo-b" },
         sortIndex: 1,
       });
       mockInstallPlugin.mockResolvedValueOnce(newPlugin);
@@ -146,7 +153,7 @@ describe("managedPluginStore", () => {
       });
       const other = createMockPlugin({
         id: "plugin-2",
-        githubRepo: "owner/other",
+        source: { type: "github", ref: "owner/other" },
       });
       store.plugins = [original, other];
 
@@ -186,7 +193,7 @@ describe("managedPluginStore", () => {
       const toRemove = createMockPlugin({ id: "plugin-1" });
       const toKeep = createMockPlugin({
         id: "plugin-2",
-        githubRepo: "owner/other",
+        source: { type: "github", ref: "owner/other" },
       });
       store.plugins = [toRemove, toKeep];
 

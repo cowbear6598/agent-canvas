@@ -19,6 +19,7 @@ import type {
 } from "@/types/websocket/responses";
 import type { InstalledPlugin } from "@/types/plugin";
 import { t } from "@/i18n";
+import { getApiBaseUrl } from "@/services/utils";
 
 export async function listPlugins(): Promise<InstalledPlugin[]> {
   const result = await createWebSocketRequest<
@@ -108,4 +109,30 @@ export async function reorderPlugins(
   }
 
   return result.plugins;
+}
+
+export async function uploadPluginBundle(
+  file: File,
+): Promise<InstalledPlugin> {
+  const formData = new FormData();
+  formData.append("bundle", file);
+
+  const response = await fetch(`${getApiBaseUrl()}/api/bundles/import`, {
+    method: "POST",
+    body: formData,
+  });
+
+  const body = (await response.json().catch(() => null)) as
+    | { bundle?: InstalledPlugin; error?: string }
+    | null;
+
+  if (!response.ok) {
+    throw new Error(body?.error || t("errors.bundleUploadFailed"));
+  }
+
+  if (!body?.bundle) {
+    throw new Error(t("errors.bundleUploadMissingBundle"));
+  }
+
+  return body.bundle;
 }

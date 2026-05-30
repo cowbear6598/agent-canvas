@@ -6,8 +6,9 @@ import {
   deletePlugin,
   updatePlugin,
   reorderPlugins,
+  uploadPluginBundle,
 } from "@/services/pluginApi";
-import type { InstalledPlugin } from "@/types/plugin";
+import type { InstalledPlugin, InstalledPluginSource } from "@/types/plugin";
 
 function normalizeManagedPluginError(error: unknown): string {
   if (error instanceof Error) return error.message;
@@ -24,6 +25,27 @@ function sortPluginsByBackendOrder(
       a.installedAt.localeCompare(b.installedAt) ||
       a.id.localeCompare(b.id),
   );
+}
+
+function isSameSource(
+  left: InstalledPluginSource,
+  right: InstalledPluginSource,
+): boolean {
+  return left.type === right.type && left.ref === right.ref;
+}
+
+function upsertPlugin(
+  existing: InstalledPlugin[],
+  nextPlugin: InstalledPlugin,
+): InstalledPlugin[] {
+  const index = existing.findIndex((plugin) => plugin.id === nextPlugin.id);
+  if (index === -1) {
+    return sortPluginsByBackendOrder([...existing, nextPlugin]);
+  }
+
+  const nextItems = [...existing];
+  nextItems.splice(index, 1, nextPlugin);
+  return sortPluginsByBackendOrder(nextItems);
 }
 
 export const useManagedPluginStore = defineStore("managedPlugin", () => {
@@ -53,15 +75,36 @@ export const useManagedPluginStore = defineStore("managedPlugin", () => {
   }
 
   async function install(githubRepo: string): Promise<InstalledPlugin> {
-    const exists = plugins.value.some((p) => p.githubRepo === githubRepo);
+    const normalizedRepo = githubRepo.trim();
+    const exists = plugins.value.some((plugin) =>
+      isSameSource(plugin.source, {
+        type: "github",
+        ref: normalizedRepo,
+      }),
+    );
     if (exists) {
-      throw new Error("該 plugin 已安裝");
+      throw new Error("這個 GitHub skill bundle 已匯入");
     }
 
     loading.value = true;
     try {
-      const installed = await installPlugin(githubRepo);
-      plugins.value = sortPluginsByBackendOrder([...plugins.value, installed]);
+      const installed = await installPlugin(normalizedRepo);
+      plugins.value = upsertPlugin(plugins.value, installed);
+      error.value = null;
+      return installed;
+    } catch (err) {
+      error.value = normalizeManagedPluginError(err);
+      throw err;
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  async function upload(file: File): Promise<InstalledPlugin> {
+    loading.value = true;
+    try {
+      const installed = await uploadPluginBundle(file);
+      plugins.value = upsertPlugin(plugins.value, installed);
       error.value = null;
       return installed;
     } catch (err) {
@@ -91,14 +134,7 @@ export const useManagedPluginStore = defineStore("managedPlugin", () => {
     loading.value = true;
     try {
       const updated = await updatePlugin(pluginId);
-      const existingIndex = plugins.value.findIndex((p) => p.id === pluginId);
-      if (existingIndex === -1) {
-        plugins.value = [...plugins.value, updated];
-      } else {
-        const nextPlugins = [...plugins.value];
-        nextPlugins.splice(existingIndex, 1, updated);
-        plugins.value = nextPlugins;
-      }
+      plugins.value = upsertPlugin(plugins.value, updated);
       error.value = null;
       return updated;
     } catch (err) {
@@ -142,6 +178,7 @@ export const useManagedPluginStore = defineStore("managedPlugin", () => {
     loaded,
     refresh,
     install,
+    upload,
     remove,
     update,
     reorder,

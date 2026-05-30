@@ -10,6 +10,7 @@ import {
   handleListConnections,
   handleUpdateConnection,
 } from "./connectionApi.js";
+import { handleImportBundle } from "./bundleImportApi.js";
 import { handleInternalIntegrationReply } from "./internalIntegrationReplyApi.js";
 import {
   handleCreatePod,
@@ -201,6 +202,15 @@ export const REST_ROUTE_DEFINITIONS: readonly RestRouteDefinition[] = [
     scope: "canvas",
     requestSchema: null,
     responseSchema: null,
+  },
+  {
+    method: "POST",
+    path: "/api/bundles/import",
+    handlerName: "handleImportBundle",
+    handler: handleImportBundle,
+    scope: "workspace",
+    requestSchema: "multipart/form-data(bundle=File)",
+    responseSchema: "{ bundle }",
   },
   {
     method: "POST",

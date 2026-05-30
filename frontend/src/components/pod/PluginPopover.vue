@@ -9,7 +9,10 @@ import { updatePodPlugins as updatePodPluginsApi } from "@/services/podPluginApi
 import { usePodStore } from "@/stores/pod";
 import { getActiveCanvasIdOrWarn } from "@/utils/canvasGuard";
 import { useOptimisticToggle } from "@/composables/pod/useOptimisticToggle";
-import type { InstalledPlugin } from "@/types/plugin";
+import {
+  getInstalledPluginSourceLabel,
+  type InstalledPlugin,
+} from "@/types/plugin";
 
 const POPOVER_ANCHOR_GAP_PX = 8;
 
@@ -25,7 +28,7 @@ const emit = defineEmits<{
 const { t } = useI18n();
 const podStore = usePodStore();
 const managedPluginStore = useManagedPluginStore();
-const { isToggling: isPluginDraftDirty, runToggle } = useOptimisticToggle();
+const { isToggling: isBundleDraftDirty, runToggle } = useOptimisticToggle();
 
 const localPluginIds = ref<string[]>([]);
 
@@ -33,18 +36,20 @@ const searchQuery = ref<string>("");
 const searchInputRef = ref<HTMLInputElement | null>(null);
 
 const loading = computed(() => managedPluginStore.loading);
-const hasPluginCache = computed(
+const hasBundleCache = computed(
   () => managedPluginStore.loaded || managedPluginStore.plugins.length > 0,
 );
-const showLoading = computed(() => loading.value && !hasPluginCache.value);
+const showLoading = computed(() => loading.value && !hasBundleCache.value);
 const loadFailed = computed(() => managedPluginStore.error !== null);
 
-const filteredPlugins = computed<InstalledPlugin[]>(() => {
-  const plugins = managedPluginStore.plugins;
-  if (!searchQuery.value) return plugins;
+const filteredBundles = computed<InstalledPlugin[]>(() => {
+  const bundles = managedPluginStore.plugins;
+  if (!searchQuery.value) return bundles;
   const query = searchQuery.value.toLowerCase();
-  return plugins.filter((plugin) =>
-    plugin.displayName.toLowerCase().includes(query),
+  return bundles.filter(
+    (bundle) =>
+      bundle.displayName.toLowerCase().includes(query) ||
+      bundle.source.ref.toLowerCase().includes(query),
   );
 });
 
@@ -70,15 +75,18 @@ const focusSearchInput = async (): Promise<void> => {
   searchInputRef.value?.focus();
 };
 
-const refreshPluginsInBackground = (): void => {
-  // Refresh only the installed plugin catalog. The Pod plugin draft stays local
-  // while the user is toggling switches, so late refreshes cannot reset it.
+const refreshBundlesInBackground = (): void => {
+  // 只背景刷新已匯入的 bundle 清單，避免 late refresh 覆蓋使用者正在切換的本地 draft。
   void managedPluginStore.refresh();
 };
 
+function formatBundleSource(bundle: InstalledPlugin): string {
+  return `${getInstalledPluginSourceLabel(bundle.source)} · ${bundle.source.ref}`;
+}
+
 onMounted(() => {
   initLocalPluginIds();
-  refreshPluginsInBackground();
+  refreshBundlesInBackground();
   void focusSearchInput();
   document.addEventListener("mousedown", handleMousedown, true);
 });
@@ -137,7 +145,7 @@ const handleToggle = async (
   <Teleport to="body">
     <div
       ref="rootRef"
-      class="fixed z-50 min-w-60 rounded-md border border-doodle-ink bg-card p-2 shadow-md"
+      class="fixed z-50 min-w-72 rounded-md border border-doodle-ink bg-card p-2 shadow-md"
       :style="{
         left: `${anchorRect.left - POPOVER_ANCHOR_GAP_PX}px`,
         top: `${anchorRect.top}px`,
@@ -165,14 +173,21 @@ const handleToggle = async (
       </div>
 
       <div
-        v-else-if="loadFailed || managedPluginStore.plugins.length === 0"
+        v-else-if="loadFailed"
+        class="px-2 py-1 text-xs font-mono text-muted-foreground whitespace-pre-wrap"
+      >
+        {{ t("pod.slot.pluginsLoadFailed") }}
+      </div>
+
+      <div
+        v-else-if="managedPluginStore.plugins.length === 0"
         class="px-2 py-1 text-xs font-mono text-muted-foreground whitespace-pre-wrap"
       >
         {{ t("pod.slot.pluginsEmpty") }}
       </div>
 
       <div
-        v-else-if="filteredPlugins.length === 0"
+        v-else-if="filteredBundles.length === 0"
         class="px-2 py-1 text-xs font-mono text-muted-foreground"
       >
         {{ t("pod.slot.pluginsSearchEmpty") }}
@@ -184,19 +199,24 @@ const handleToggle = async (
       >
         <div class="space-y-1">
           <div
-            v-for="plugin in filteredPlugins"
-            :key="plugin.id"
+            v-for="bundle in filteredBundles"
+            :key="bundle.id"
             class="group relative flex items-center justify-between gap-3 rounded px-2 py-1 hover:bg-secondary"
           >
-            <p class="text-xs font-mono">
-              {{ plugin.displayName }}
-            </p>
+            <div class="min-w-0">
+              <p class="truncate text-xs font-mono">
+                {{ bundle.displayName }}
+              </p>
+              <p class="truncate text-[10px] text-muted-foreground">
+                {{ formatBundleSource(bundle) }}
+              </p>
+            </div>
             <Switch
-              :model-value="localPluginIdsSet.has(plugin.id)"
-              :disabled="isPluginDraftDirty"
+              :model-value="localPluginIdsSet.has(bundle.id)"
+              :disabled="isBundleDraftDirty"
               @click.stop
               @update:model-value="
-                (val: boolean) => handleToggle(plugin.id, val)
+                (val: boolean) => handleToggle(bundle.id, val)
               "
             />
           </div>

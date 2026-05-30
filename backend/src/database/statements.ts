@@ -65,6 +65,7 @@ function buildStatements(db: Database): {
   managedPlugin: {
     selectAll: ReturnType<Database["prepare"]>;
     selectById: ReturnType<Database["prepare"]>;
+    selectBySource: ReturnType<Database["prepare"]>;
     selectByGithubRepo: ReturnType<Database["prepare"]>;
     selectMaxSortIndex: ReturnType<Database["prepare"]>;
     insert: ReturnType<Database["prepare"]>;
@@ -364,6 +365,9 @@ function buildStatements(db: Database): {
         "SELECT * FROM managed_plugins ORDER BY sort_index ASC, installed_at ASC, id ASC",
       ),
       selectById: db.prepare("SELECT * FROM managed_plugins WHERE id = ?"),
+      selectBySource: db.prepare(
+        "SELECT * FROM managed_plugins WHERE source_type = ? AND source_ref = ?",
+      ),
       selectByGithubRepo: db.prepare(
         "SELECT * FROM managed_plugins WHERE github_repo = ?",
       ),
@@ -372,9 +376,9 @@ function buildStatements(db: Database): {
       ),
       insert: db.prepare(
         `INSERT INTO managed_plugins (
-          id, github_repo, display_name, description, install_path, sort_index, installed_at, updated_at
+          id, github_repo, source_type, source_ref, display_name, description, install_path, sort_index, installed_at, updated_at
         ) VALUES (
-          $id, $githubRepo, $displayName, $description, $installPath, $sortIndex, $installedAt, $updatedAt
+          $id, $githubRepo, $sourceType, $sourceRef, $displayName, $description, $installPath, $sortIndex, $installedAt, $updatedAt
         )`,
       ),
       update: db.prepare(

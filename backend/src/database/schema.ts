@@ -2,6 +2,7 @@ import { Database } from "bun:sqlite";
 
 const ALLOWED_ALTER_TABLES = new Set([
   "connections",
+  "managed_plugins",
   "model_aliases",
   "run_pod_instances",
 ]);
@@ -53,6 +54,36 @@ function ensureConnectionThinkingColumns(db: Database): void {
   db.transaction(() => {
     addColumnIfMissing(db, "connections", "summary_thinking_level TEXT");
     addColumnIfMissing(db, "connections", "branch_thinking_level TEXT");
+  })();
+}
+
+function ensureManagedPluginBundleColumns(db: Database): void {
+  db.transaction(() => {
+    addColumnIfMissing(
+      db,
+      "managed_plugins",
+      "source_type TEXT NOT NULL DEFAULT 'github'",
+    );
+    addColumnIfMissing(
+      db,
+      "managed_plugins",
+      "source_ref TEXT NOT NULL DEFAULT ''",
+    );
+    db.exec(
+      `UPDATE managed_plugins
+       SET source_type = CASE
+         WHEN source_type IS NULL OR trim(source_type) = '' THEN 'github'
+         ELSE source_type
+       END,
+       source_ref = CASE
+         WHEN source_ref IS NULL OR trim(source_ref) = ''
+           THEN COALESCE(NULLIF(github_repo, ''), id)
+         ELSE source_ref
+       END`,
+    );
+    db.exec(
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_managed_plugins_source_unique ON managed_plugins(source_type, source_ref)",
+    );
   })();
 }
 
@@ -396,6 +427,8 @@ function createBaseTables(db: Database): void {
     "CREATE TABLE IF NOT EXISTS managed_plugins (" +
       "id TEXT PRIMARY KEY," +
       "github_repo TEXT NOT NULL," +
+      "source_type TEXT NOT NULL DEFAULT 'github'," +
+      "source_ref TEXT NOT NULL," +
       "display_name TEXT," +
       "description TEXT," +
       "install_path TEXT NOT NULL," +
@@ -416,6 +449,7 @@ export function createTables(db: Database): void {
   createBaseTables(db);
   addColumnIfMissing(db, "run_pod_instances", "last_response_summary TEXT");
   ensureConnectionThinkingColumns(db);
+  ensureManagedPluginBundleColumns(db);
   ensureModelAliasesThinkingColumns(db);
   ensureModelAliasesUniqueRealModelIndex(db);
   migrateLegacyCodexMiniModel(db);

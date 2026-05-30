@@ -32,6 +32,7 @@ export const providerSchema = z.enum(["claude", "codex", "opencode"]);
  */
 const MODEL_PATTERN = /^[a-zA-Z0-9._/-]+$/;
 const MAX_MODEL_LENGTH = 100;
+const PLUGIN_ID_PATTERN = /^[a-zA-Z0-9:@._/-]+$/;
 
 /** thinking level 安全字元白名單（僅小寫英文字母）與最大長度，套用於 providerConfigSchema 與 podSetThinkingLevelSchema */
 const THINKING_LEVEL_PATTERN = /^[a-z]+$/;
@@ -60,6 +61,11 @@ export const providerConfigSchema = z
       .optional(),
   })
   .strict();
+
+export const pluginIdSchema = z
+  .string()
+  .regex(PLUGIN_ID_PATTERN, "plugin id 包含不允許的字元")
+  .max(200);
 
 export const podCreateSchema = z.object({
   requestId: requestIdSchema,
@@ -152,14 +158,7 @@ export const podSetPluginsSchema = z.object({
   requestId: requestIdSchema,
   canvasId: canvasIdSchema,
   podId: podIdSchema,
-  pluginIds: z
-    .array(
-      z
-        .string()
-        .regex(/^[a-zA-Z0-9@._/-]+$/)
-        .max(200),
-    )
-    .max(50),
+  pluginIds: z.array(pluginIdSchema).max(50),
 });
 
 export type PodCreatePayload = z.infer<typeof podCreateSchema>;

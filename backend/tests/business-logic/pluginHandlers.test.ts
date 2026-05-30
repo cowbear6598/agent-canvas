@@ -1,28 +1,34 @@
 const {
   mockEmitToConnection,
   mockEmitToAll,
+  mockEmitToCanvas,
   mockRefreshAllPlugins,
   mockInstallPlugin,
   mockRemovePlugin,
   mockUpdatePlugin,
   mockManagedPluginList,
   mockManagedPluginReorder,
+  mockFindPodRefsByPluginId,
+  mockGetPodByIdGlobal,
 } = vi.hoisted(() => ({
   mockEmitToConnection: vi.fn(),
   mockEmitToAll: vi.fn(),
+  mockEmitToCanvas: vi.fn(),
   mockRefreshAllPlugins: vi.fn(),
   mockInstallPlugin: vi.fn(),
   mockRemovePlugin: vi.fn(),
   mockUpdatePlugin: vi.fn(),
   mockManagedPluginList: vi.fn(),
   mockManagedPluginReorder: vi.fn(),
+  mockFindPodRefsByPluginId: vi.fn(),
+  mockGetPodByIdGlobal: vi.fn(),
 }));
 
 vi.mock("../../src/services/socketService.js", () => ({
   socketService: {
     emitToConnection: mockEmitToConnection,
     emitToAll: mockEmitToAll,
-    emitToCanvas: vi.fn(),
+    emitToCanvas: mockEmitToCanvas,
   },
 }));
 
@@ -37,6 +43,13 @@ vi.mock("../../src/services/plugin/managedPluginRegistry.js", () => ({
   managedPluginStore: {
     list: mockManagedPluginList,
     reorder: mockManagedPluginReorder,
+  },
+}));
+
+vi.mock("../../src/services/podStore.js", () => ({
+  podStore: {
+    findPodRefsByPluginId: mockFindPodRefsByPluginId,
+    getByIdGlobal: mockGetPodByIdGlobal,
   },
 }));
 
@@ -55,6 +68,7 @@ const REQUEST_ID = "req-plugin-test";
 
 const MOCK_PLUGIN_RECORD = {
   id: "owner/repo",
+  source: { type: "github", ref: "owner/repo" },
   githubRepo: "owner/repo",
   displayName: "My Plugin",
   description: "A test plugin",
@@ -67,6 +81,7 @@ const MOCK_PLUGIN_RECORD = {
 beforeEach(() => {
   vi.clearAllMocks();
   mockManagedPluginList.mockReturnValue([MOCK_PLUGIN_RECORD]);
+  mockFindPodRefsByPluginId.mockReturnValue([]);
 });
 
 describe("handlePluginList", () => {
@@ -180,6 +195,24 @@ describe("handlePluginDelete", () => {
       success: true,
       data: undefined,
     });
+    mockFindPodRefsByPluginId.mockReturnValue([
+      { canvasId: "canvas-1", podId: "pod-1" },
+    ]);
+    mockGetPodByIdGlobal.mockReturnValue({
+      canvasId: "canvas-1",
+      pod: {
+        id: "pod-1",
+        name: "Pod 1",
+        x: 0,
+        y: 0,
+        rotation: 0,
+        mcpServerNames: [],
+        pluginIds: [],
+        provider: "claude",
+        providerConfig: null,
+        repositoryId: null,
+      },
+    });
 
     await handlePluginDelete(
       CONNECTION_ID,
@@ -199,6 +232,17 @@ describe("handlePluginDelete", () => {
     expect(connPayload.plugins).toEqual([MOCK_PLUGIN_RECORD]);
 
     expect(mockEmitToAll).not.toHaveBeenCalled();
+    expect(mockEmitToCanvas).toHaveBeenCalledWith(
+      "canvas-1",
+      WebSocketResponseEvents.POD_PLUGINS_SET,
+      expect.objectContaining({
+        success: true,
+        pod: expect.objectContaining({
+          id: "pod-1",
+          pluginIds: [],
+        }),
+      }),
+    );
   });
 });
 

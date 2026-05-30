@@ -81,6 +81,16 @@ agent-canvas 是一個 Agent 畫布系統，後端使用 **Bun + TypeScript** �
 
 詳細格式與範例：[references/upload-api.md](references/upload-api.md)
 
+### Bundle
+
+| 方法 | 路徑 | 說明 |
+|------|------|------|
+| POST | /api/bundles/import | 上傳本地 skill bundle zip 並匯入管理清單 |
+
+> `/api/bundles/import` 與 `/api/upload` 用途不同。前者是安裝 skill bundle，後者是 Pod 對話附件暫存上傳。
+
+詳細格式與範例：[references/bundle-api.md](references/bundle-api.md)
+
 ---
 
 ## 錯誤處理

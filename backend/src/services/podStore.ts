@@ -519,6 +519,24 @@ class PodStore {
     return this.rowsToPods(rows);
   }
 
+  findPodRefsByPluginId(
+    pluginId: string,
+  ): Array<{ canvasId: string; podId: string }> {
+    const rows = getDb()
+      .prepare(
+        `SELECT DISTINCT pods.canvas_id AS canvas_id, pods.id AS pod_id
+         FROM pods
+         INNER JOIN pod_plugin_ids ON pod_plugin_ids.pod_id = pods.id
+         WHERE pod_plugin_ids.plugin_id = ?`,
+      )
+      .all(pluginId) as Array<{ canvas_id: string; pod_id: string }>;
+
+    return rows.map((row) => ({
+      canvasId: row.canvas_id,
+      podId: row.pod_id,
+    }));
+  }
+
   getByName(canvasId: string, name: string): Pod | undefined {
     const row = this.stmts.pod.selectByCanvasIdAndName.get(canvasId, name) as
       | PodRow
