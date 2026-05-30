@@ -113,23 +113,17 @@ export function normalizeConnectionUpdateResponsePayload(
 
 export function normalizeCreatedConnectionEvent(
   connection: Omit<Connection, "status">,
+  sourceProvider?: PodProvider,
 ): Connection {
-  const normalizedSummary = normalizeLegacySummarySelection({
-    summaryModel: connection.summaryModel,
-    summaryProvider:
-      normalizePodProvider(connection.summaryProvider ?? "claude") ?? "claude",
-  });
+  const normalizedConnection = normalizeConnection(
+    connection as RawConnection,
+    sourceProvider,
+  );
 
   return {
-    ...connection,
-    summaryModel: normalizedSummary.summaryModel,
-    summaryProvider: normalizedSummary.summaryProvider,
-    summaryThinkingLevel: connection.summaryThinkingLevel ?? null,
-    triggerMode: connection.triggerMode ?? "auto",
-    label: normalizeOptionalLabel(connection.label),
+    ...normalizedConnection,
     status: "idle",
     decideStatus: "none",
-    branchThinkingLevel: connection.branchThinkingLevel ?? null,
   };
 }
 

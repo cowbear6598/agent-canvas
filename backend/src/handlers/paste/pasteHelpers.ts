@@ -449,14 +449,28 @@ export function createPastedConnections(
   canvasId: string,
   connections: CanvasPastePayload["connections"],
   podIdMapping: Record<string, string>,
-): Connection[] {
+): { createdConnections: Connection[]; errors: PasteError[] } {
   const createdConnections: Connection[] = [];
+  const errors: PasteError[] = [];
+
+  function getConnectionOriginalId(connItem: {
+    originalSourcePodId: string;
+    originalTargetPodId: string;
+  }): string {
+    return `${connItem.originalSourcePodId}->${connItem.originalTargetPodId}`;
+  }
 
   for (const connItem of connections ?? []) {
     const newSourcePodId = podIdMapping[connItem.originalSourcePodId];
     const newTargetPodId = podIdMapping[connItem.originalTargetPodId];
 
     if (!newSourcePodId || !newTargetPodId) {
+      recordError(
+        errors,
+        "connection",
+        getConnectionOriginalId(connItem),
+        "找不到對應的來源或目標 Pod，無法建立 connection",
+      );
       continue;
     }
 
@@ -479,13 +493,19 @@ export function createPastedConnections(
     );
 
     if (!connResult.success) {
+      recordError(
+        errors,
+        "connection",
+        getConnectionOriginalId(connItem),
+        connResult.error,
+      );
       continue;
     }
 
     createdConnections.push(connResult.data);
   }
 
-  return createdConnections;
+  return { createdConnections, errors };
 }
 
 export function createPastedNotesByType<K extends NotePasteType>(

@@ -190,7 +190,7 @@ export interface WorkflowCompletePayload extends ResultPayload {
 }
 
 export interface PasteError {
-  type: "pod" | "repositoryNote";
+  type: "pod" | "repositoryNote" | "connection";
   originalId: string;
   error: string;
 }

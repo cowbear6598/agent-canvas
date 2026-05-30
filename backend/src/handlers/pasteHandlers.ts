@@ -46,11 +46,13 @@ export const handleCanvasPaste = withCanvasId<CanvasPastePayload>(
 
     errors.push(...Object.values(noteResultMap).flatMap((r) => r.errors));
 
-    const createdConnections = createPastedConnections(
+    const connectionResult = createPastedConnections(
       canvasId,
       connections,
       podIdMapping,
     );
+    const createdConnections = connectionResult.createdConnections;
+    errors.push(...connectionResult.errors);
 
     const response: CanvasPasteResultPayload = {
       canvasId,

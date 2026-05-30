@@ -4,7 +4,7 @@ import type { Connection } from "../connection.js";
 import type { I18nError } from "../../utils/i18nError.js";
 
 export interface PasteError {
-  type: "pod" | "repositoryNote";
+  type: "pod" | "repositoryNote" | "connection";
   originalId: string;
   error: string | I18nError;
 }

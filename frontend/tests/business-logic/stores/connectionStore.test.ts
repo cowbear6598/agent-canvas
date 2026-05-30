@@ -1232,6 +1232,25 @@ describe("connectionStore", () => {
 
         expect(store.connections[0]?.triggerMode).toBe("auto");
       });
+
+      it("summaryProvider 為 null 時應依 source pod provider 收斂", () => {
+        const store = useConnectionStore();
+        const podStore = usePodStore();
+        podStore.pods = [createMockPod({ id: "pod-a", provider: "opencode" })];
+
+        const connEvent = {
+          id: "conn-1",
+          sourcePodId: "pod-a",
+          sourceAnchor: "bottom" as const,
+          targetPodId: "pod-b",
+          targetAnchor: "top" as const,
+          summaryProvider: null,
+        };
+
+        store.addConnectionFromEvent(connEvent as any);
+
+        expect(store.connections[0]?.summaryProvider).toBe("opencode");
+      });
     });
 
     describe("updateConnectionFromEvent", () => {

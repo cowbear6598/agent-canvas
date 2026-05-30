@@ -924,7 +924,12 @@ export const useConnectionStore = defineStore("connection", () => {
   function addConnectionFromEvent(
     connection: Omit<Connection, "status">,
   ): void {
-    const enrichedConnection = normalizeCreatedConnectionEvent(connection);
+    const enrichedConnection = normalizeCreatedConnectionEvent(
+      connection,
+      connection.sourcePodId
+        ? podStore.getPodById(connection.sourcePodId)?.provider
+        : undefined,
+    );
 
     const exists = connections.value.some(
       (existingConnection) => existingConnection.id === enrichedConnection.id,

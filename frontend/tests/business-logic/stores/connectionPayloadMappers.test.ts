@@ -119,6 +119,24 @@ describe("connectionPayloadMappers", () => {
       expect(connection.summaryProvider).toBe("claude");
     });
 
+    it("created event 的 summaryProvider 為 null 時，依 source provider 收斂", () => {
+      const connection = normalizeCreatedConnectionEvent(
+        {
+          id: "conn-1",
+          sourcePodId: "pod-a",
+          sourceAnchor: "bottom",
+          targetPodId: "pod-b",
+          targetAnchor: "top",
+          summaryProvider: null,
+          triggerMode: "auto",
+          decideStatus: "none",
+        },
+        "opencode",
+      );
+
+      expect(connection.summaryProvider).toBe("opencode");
+    });
+
     it("created event 會把空字串 label 收斂成 undefined", () => {
       const connection = normalizeCreatedConnectionEvent({
         id: "conn-1",

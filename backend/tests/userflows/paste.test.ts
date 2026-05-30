@@ -92,14 +92,13 @@ describe("貼上功能", () => {
       expect(response.createdConnections).toHaveLength(0);
     });
 
-    it("成功回報無效項目的錯誤", async () => {
+    it("來源或目標 Pod 缺少 mapping 時，connection 會回報錯誤而不是靜默略過", async () => {
       const client = getClient();
       const validPodId = uuidv4();
       const pods: PastePodItem[] = [
         { originalId: validPodId, name: "Valid", x: 0, y: 0, rotation: 0 },
       ];
 
-      // Connection with nonexistent source should fail silently (no mapping)
       const connections: PasteConnectionItem[] = [
         {
           originalSourcePodId: uuidv4(),
@@ -125,9 +124,83 @@ describe("貼上功能", () => {
         payload,
       );
 
+      expect(response.success).toBe(false);
+      expect(response.errors).toHaveLength(1);
+      expect(response.errors[0]).toMatchObject({
+        type: "connection",
+      });
       expect(response.createdPods).toHaveLength(1);
-      // Connection should not be created because source pod is not in the mapping
       expect(response.createdConnections).toHaveLength(0);
+    });
+
+    it("connection 建立失敗時回報錯誤並保留已成功建立的其他 connection", async () => {
+      const client = getClient();
+      const sourcePodId = uuidv4();
+      const targetPodId1 = uuidv4();
+      const targetPodId2 = uuidv4();
+
+      const payload: CanvasPastePayload = {
+        ...(await emptyPastePayload()),
+        pods: [
+          {
+            originalId: sourcePodId,
+            name: "Source Pod",
+            x: 0,
+            y: 0,
+            rotation: 0,
+          },
+          {
+            originalId: targetPodId1,
+            name: "Target Pod 1",
+            x: 100,
+            y: 0,
+            rotation: 0,
+          },
+          {
+            originalId: targetPodId2,
+            name: "Target Pod 2",
+            x: 200,
+            y: 0,
+            rotation: 0,
+          },
+        ],
+        connections: [
+          {
+            originalSourcePodId: sourcePodId,
+            sourceAnchor: "right",
+            originalTargetPodId: targetPodId1,
+            targetAnchor: "left",
+            triggerMode: "branch",
+            label: "Approved",
+          },
+          {
+            originalSourcePodId: sourcePodId,
+            sourceAnchor: "right",
+            originalTargetPodId: targetPodId2,
+            targetAnchor: "left",
+            triggerMode: "branch",
+            label: "Approved",
+          },
+        ],
+      };
+
+      const response = await emitAndWaitResponse<
+        CanvasPastePayload,
+        CanvasPasteResultPayload
+      >(
+        client,
+        WebSocketRequestEvents.CANVAS_PASTE,
+        WebSocketResponseEvents.CANVAS_PASTE_RESULT,
+        payload,
+      );
+
+      expect(response.success).toBe(false);
+      expect(response.createdConnections).toHaveLength(1);
+      expect(response.errors).toHaveLength(1);
+      expect(response.errors[0]).toMatchObject({
+        type: "connection",
+        error: "label 已存在於同一組 branch",
+      });
     });
 
     describe("connection triggerMode 驗證", () => {
