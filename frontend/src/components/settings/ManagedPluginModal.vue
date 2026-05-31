@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { GripVertical, Upload } from "lucide-vue-next";
 import { VueDraggable } from "vue-draggable-plus";
 import {
@@ -27,6 +28,7 @@ const emit = defineEmits<{
 }>();
 
 const store = useManagedPluginStore();
+const { t, locale } = useI18n();
 
 const githubRepoInput = ref<string>("");
 const githubImportError = ref<string | null>(null);
@@ -71,7 +73,7 @@ const duplicatedDisplayNames = computed<Set<string>>(() => {
 });
 
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleString("zh-TW");
+  return new Date(dateStr).toLocaleString(locale.value);
 }
 
 function getNormalizedDisplayName(plugin: InstalledPlugin): string {
@@ -87,7 +89,7 @@ function formatPluginSource(plugin: InstalledPlugin): string {
     return plugin.source.ref;
   }
 
-  return `本地上傳 · ${plugin.source.ref.slice(0, 12)}`;
+  return `${t("pluginManager.list.localUploadSource")} · ${plugin.source.ref.slice(0, 12)}`;
 }
 
 function clearBundleSelection(): void {
@@ -116,7 +118,7 @@ async function handleGithubImport(): Promise<void> {
     githubRepoInput.value = "";
   } catch (err) {
     githubImportError.value =
-      err instanceof Error ? err.message : "GitHub skill 新增失敗";
+      err instanceof Error ? err.message : t("pluginManager.github.importFailed");
   } finally {
     importingGithub.value = false;
   }
@@ -165,7 +167,7 @@ async function handleBundleUpload(): Promise<void> {
     clearBundleSelection();
   } catch (err) {
     bundleUploadError.value =
-      err instanceof Error ? err.message : "本地 skill 新增失敗";
+      err instanceof Error ? err.message : t("pluginManager.localUpload.uploadFailed");
   } finally {
     uploadingBundle.value = false;
   }
@@ -254,9 +256,9 @@ watch(
   >
     <DialogContent class="max-w-3xl">
       <DialogHeader>
-        <DialogTitle>Skill 管理</DialogTitle>
+        <DialogTitle>{{ t("pluginManager.modal.title") }}</DialogTitle>
         <DialogDescription class="sr-only">
-          管理 GitHub 與本地匯入的 skill
+          {{ t("pluginManager.modal.description") }}
         </DialogDescription>
       </DialogHeader>
 
@@ -264,13 +266,13 @@ watch(
         <section class="rounded-lg border border-border bg-muted/30 p-4">
           <div class="mb-3">
             <h3 class="text-sm font-semibold">
-              GitHub
+              {{ t("pluginManager.github.title") }}
             </h3>
           </div>
           <div class="flex gap-2">
             <input
               v-model="githubRepoInput"
-              placeholder="owner/repo"
+              :placeholder="t('pluginManager.github.placeholder')"
               class="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               :disabled="isListMutationDisabled"
               @keydown.enter="handleGithubImport"
@@ -280,7 +282,11 @@ watch(
               :disabled="isListMutationDisabled || !githubRepoInput.trim()"
               @click="handleGithubImport"
             >
-              {{ importingGithub ? "新增中..." : "新增" }}
+              {{
+                importingGithub
+                  ? t("pluginManager.actions.adding")
+                  : t("common.add")
+              }}
             </button>
           </div>
           <p
@@ -294,7 +300,7 @@ watch(
         <section class="rounded-lg border border-border bg-muted/30 p-4">
           <div class="mb-3">
             <h3 class="text-sm font-semibold">
-              本地上傳
+              {{ t("pluginManager.localUpload.title") }}
             </h3>
           </div>
           <input
@@ -325,7 +331,10 @@ watch(
                 class="shrink-0"
               />
               <span class="truncate font-medium text-muted-foreground">
-                {{ selectedBundleFile?.name ?? "點擊選擇 zip 或拖曳至此" }}
+                {{
+                  selectedBundleFile?.name ??
+                    t("pluginManager.localUpload.dropzonePlaceholder")
+                }}
               </span>
             </button>
             <button
@@ -333,7 +342,11 @@ watch(
               :disabled="isListMutationDisabled || !selectedBundleFile"
               @click="handleBundleUpload"
             >
-              {{ uploadingBundle ? "新增中..." : "新增" }}
+              {{
+                uploadingBundle
+                  ? t("pluginManager.actions.adding")
+                  : t("common.add")
+              }}
             </button>
           </div>
           <p
@@ -351,14 +364,14 @@ watch(
             v-if="store.loading && store.plugins.length === 0"
             class="py-8 text-center text-sm text-muted-foreground"
           >
-            載入 skill 清單中...
+            {{ t("pluginManager.list.loading") }}
           </div>
 
           <div
             v-else-if="!store.loading && store.plugins.length === 0"
             class="py-8 text-center text-sm text-muted-foreground"
           >
-            尚未新增任何 skill
+            {{ t("pluginManager.list.empty") }}
           </div>
 
           <VueDraggable
@@ -381,7 +394,7 @@ watch(
                 <button
                   type="button"
                   class="managed-plugin-card__handle inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
-                  title="拖曳排序"
+                  :title="t('pluginManager.list.dragHandle')"
                   :disabled="isListMutationDisabled"
                   @click.stop
                 >
@@ -398,7 +411,11 @@ watch(
                     {{ formatPluginSource(plugin) }}
                   </span>
                   <span class="text-xs text-muted-foreground">
-                    更新於 {{ formatDate(plugin.updatedAt) }}
+                    {{
+                      t("pluginManager.list.updatedAt", {
+                        date: formatDate(plugin.updatedAt),
+                      })
+                    }}
                   </span>
                 </div>
               </div>
@@ -409,14 +426,18 @@ watch(
                   :disabled="isListMutationDisabled"
                   @click="handleUpdate(plugin)"
                 >
-                  {{ updatingId === plugin.id ? "更新中..." : "更新" }}
+                  {{
+                    updatingId === plugin.id
+                      ? t("pluginManager.actions.updating")
+                      : t("common.update")
+                  }}
                 </button>
                 <button
                   class="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-destructive/50 bg-background px-3 py-1.5 text-sm font-medium text-destructive ring-offset-background transition-colors hover:bg-destructive hover:text-destructive-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
                   :disabled="isListMutationDisabled"
                   @click="openDeleteConfirm(plugin)"
                 >
-                  刪除
+                  {{ t("common.delete") }}
                 </button>
               </div>
             </div>
@@ -426,7 +447,7 @@ watch(
             v-if="reordering"
             class="text-center text-xs text-muted-foreground"
           >
-            排序保存中...
+            {{ t("pluginManager.list.reordering") }}
           </div>
         </div>
       </ScrollArea>
@@ -439,10 +460,13 @@ watch(
   >
     <DialogContent class="max-w-sm">
       <DialogHeader>
-        <DialogTitle>確認刪除</DialogTitle>
+        <DialogTitle>{{ t("pluginManager.deleteDialog.title") }}</DialogTitle>
         <DialogDescription>
-          確認刪除 {{ confirmDeletePlugin?.displayName }}？已啟用此 skill 的
-          Pod 會自動移除勾選。
+          {{
+            t("pluginManager.deleteDialog.description", {
+              name: confirmDeletePlugin?.displayName ?? "",
+            })
+          }}
         </DialogDescription>
       </DialogHeader>
       <DialogFooter>
@@ -451,14 +475,14 @@ watch(
           :disabled="reordering || store.loading"
           @click="cancelDelete"
         >
-          取消
+          {{ t("common.cancel") }}
         </button>
         <button
           class="inline-flex items-center justify-center whitespace-nowrap rounded-md bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground ring-offset-background transition-colors hover:bg-destructive/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           :disabled="isListMutationDisabled"
           @click="confirmDelete"
         >
-          確認刪除
+          {{ t("pluginManager.deleteDialog.confirm") }}
         </button>
       </DialogFooter>
     </DialogContent>

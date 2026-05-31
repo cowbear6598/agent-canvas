@@ -423,8 +423,41 @@
     "description": "Choose the integration category to manage",
     "cards": {
       "mcp": "MCP Manager",
-      "plugin": "Skill Bundle Manager",
+      "plugin": "Skill Manager",
       "llmProvider": "LLM Provider"
+    }
+  },
+  "pluginManager": {
+    "modal": {
+      "title": "Skill Manager",
+      "description": "Manage skills imported from GitHub or local files"
+    },
+    "actions": {
+      "adding": "Adding...",
+      "updating": "Updating..."
+    },
+    "github": {
+      "title": "GitHub",
+      "placeholder": "owner/repo",
+      "importFailed": "Failed to add GitHub skill"
+    },
+    "localUpload": {
+      "title": "Local Upload",
+      "dropzonePlaceholder": "Click to choose a zip file or drag it here",
+      "uploadFailed": "Failed to add local skill"
+    },
+    "list": {
+      "loading": "Loading skill list...",
+      "empty": "No skills have been added yet",
+      "dragHandle": "Drag to reorder",
+      "localUploadSource": "Local upload",
+      "updatedAt": "Updated at {date}",
+      "reordering": "Saving order..."
+    },
+    "deleteDialog": {
+      "title": "Confirm deletion",
+      "description": "Delete {name}? Pods using this skill will be unchecked automatically.",
+      "confirm": "Confirm deletion"
     }
   },
   "llmProvider": {

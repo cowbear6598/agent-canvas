@@ -26,9 +26,12 @@
 - Bun 原生 WebSocket
 - Claude Agent SDK
 
-## 後端 API 文件
+# 多語系
 
-- 如果有 新增/更新/刪除 API Router 的話要同步更新專案底下的 skill，WebSocket 不需要更新
+- 前端有顯示的部分都要做 i18n 多語系，有這些:
+  - ja
+  - zh-TW
+  - en
 
 # 特別注意
 

@@ -427,6 +427,39 @@
       "llmProvider": "LLM Provider"
     }
   },
+  "pluginManager": {
+    "modal": {
+      "title": "Skill 管理",
+      "description": "管理 GitHub 與本地匯入的 skill"
+    },
+    "actions": {
+      "adding": "新增中...",
+      "updating": "更新中..."
+    },
+    "github": {
+      "title": "GitHub",
+      "placeholder": "owner/repo",
+      "importFailed": "GitHub skill 新增失敗"
+    },
+    "localUpload": {
+      "title": "本地上傳",
+      "dropzonePlaceholder": "點擊選擇 zip 或拖曳至此",
+      "uploadFailed": "本地 skill 新增失敗"
+    },
+    "list": {
+      "loading": "載入 skill 清單中...",
+      "empty": "尚未新增任何 skill",
+      "dragHandle": "拖曳排序",
+      "localUploadSource": "本地上傳",
+      "updatedAt": "更新於 {date}",
+      "reordering": "排序保存中..."
+    },
+    "deleteDialog": {
+      "title": "確認刪除",
+      "description": "確認刪除 {name}？已啟用此 skill 的 Pod 會自動移除勾選。",
+      "confirm": "確認刪除"
+    }
+  },
   "llmProvider": {
     "modal": {
       "title": "LLM Provider",

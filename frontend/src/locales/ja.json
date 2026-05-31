@@ -427,6 +427,39 @@
       "llmProvider": "LLM Provider"
     }
   },
+  "pluginManager": {
+    "modal": {
+      "title": "Skill 管理",
+      "description": "GitHub またはローカルから取り込んだ skill を管理します"
+    },
+    "actions": {
+      "adding": "追加中...",
+      "updating": "更新中..."
+    },
+    "github": {
+      "title": "GitHub",
+      "placeholder": "owner/repo",
+      "importFailed": "GitHub skill の追加に失敗しました"
+    },
+    "localUpload": {
+      "title": "ローカルアップロード",
+      "dropzonePlaceholder": "クリックして zip を選択、またはここへドラッグ",
+      "uploadFailed": "ローカル skill の追加に失敗しました"
+    },
+    "list": {
+      "loading": "skill 一覧を読み込み中...",
+      "empty": "まだ skill が追加されていません",
+      "dragHandle": "ドラッグして並び替え",
+      "localUploadSource": "ローカルアップロード",
+      "updatedAt": "{date} に更新",
+      "reordering": "並び順を保存中..."
+    },
+    "deleteDialog": {
+      "title": "削除の確認",
+      "description": "{name} を削除しますか？この skill を使っている Pod のチェックは自動で外れます。",
+      "confirm": "削除を確認"
+    }
+  },
   "llmProvider": {
     "modal": {
       "title": "LLM Provider",
