@@ -51,16 +51,7 @@ class StartupService {
       );
     });
 
-    // 掃描並清理孤兒 run repo 目錄；失敗時僅記錄 warn，不阻斷啟動
-    try {
-      await scanAndCleanupOrphanRunRepoDirectories();
-    } catch (error) {
-      logger.warn(
-        "Run",
-        "Orphan",
-        `[StartupService] 掃描孤兒 run repo 目錄並清理時發生錯誤：${error}`,
-      );
-    }
+    this.startOrphanRunRepoCleanup();
 
     return ok(undefined);
   }
@@ -102,6 +93,24 @@ class StartupService {
       if (!result.success) return result;
     }
     return ok(undefined);
+  }
+
+  private startOrphanRunRepoCleanup(): void {
+    globalThis.queueMicrotask(() => {
+      void this.cleanupOrphanRunRepoDirectories();
+    });
+  }
+
+  private async cleanupOrphanRunRepoDirectories(): Promise<void> {
+    try {
+      await scanAndCleanupOrphanRunRepoDirectories();
+    } catch (error) {
+      logger.warn(
+        "Run",
+        "Orphan",
+        `[StartupService] 掃描孤兒 run repo 目錄並清理時發生錯誤：${error}`,
+      );
+    }
   }
 
   private async restoreIntegrationConnections(): Promise<void> {
