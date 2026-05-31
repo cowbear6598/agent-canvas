@@ -7,6 +7,7 @@ import {
   podMoveSchema,
   podRenameSchema,
   podSetGoalSchema,
+  podSetProviderSchema,
   podSetModelSchema,
   podSetThinkingLevelSchema,
   podSetScheduleSchema,
@@ -20,6 +21,7 @@ import {
   handlePodMove,
   handlePodRename,
   handlePodSetGoal,
+  handlePodSetProvider,
   handlePodSetModel,
   handlePodSetThinkingLevel,
   handlePodSetSchedule,
@@ -66,6 +68,12 @@ export const podHandlerGroup = createHandlerGroup({
       handler: handlePodSetGoal,
       schema: podSetGoalSchema,
       responseEvent: WebSocketResponseEvents.POD_GOAL_SET,
+    },
+    {
+      event: WebSocketRequestEvents.POD_SET_PROVIDER,
+      handler: handlePodSetProvider,
+      schema: podSetProviderSchema,
+      responseEvent: WebSocketResponseEvents.POD_PROVIDER_SET,
     },
     {
       event: WebSocketRequestEvents.POD_SET_MODEL,

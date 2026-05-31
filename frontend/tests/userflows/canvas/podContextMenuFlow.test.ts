@@ -1,0 +1,131 @@
+import { describe, expect, it, vi, beforeEach } from "vitest";
+import { nextTick } from "vue";
+import { usePodStore } from "@/stores/pod/podStore";
+import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
+import { createMockPod } from "@tests/helpers/factories";
+import { mountUserFlowApp } from "@tests/helpers/userFlowLauncher";
+import PodContextMenu from "@/components/canvas/PodContextMenu.vue";
+import i18n from "@/i18n";
+
+vi.mock("@/services/podApi", () => ({
+  downloadPodDirectory: vi.fn(),
+}));
+
+vi.mock("@/composables/canvas/useDownloadProgress", () => ({
+  useDownloadProgress: () => ({
+    addTask: vi.fn(),
+    updateProgress: vi.fn(),
+    completeTask: vi.fn(),
+    failTask: vi.fn(),
+  }),
+}));
+
+async function mountPodContextMenu() {
+  const mounted = await mountUserFlowApp({
+    component: PodContextMenu,
+    props: {
+      position: { x: 100, y: 120 },
+      podId: "pod-1",
+    },
+  });
+
+  const podStore = usePodStore();
+  const providerCapabilityStore = useProviderCapabilityStore();
+
+  podStore.pods = [
+    createMockPod({
+      id: "pod-1",
+      provider: "claude",
+      providerConfig: { model: "sonnet" },
+      integrationBindings: [
+        {
+          provider: "slack",
+          appId: "app-1",
+          resourceId: "channel-1",
+          extra: {},
+        },
+      ],
+    }),
+  ];
+
+  providerCapabilityStore.syncFromPayload([
+    {
+      name: "claude",
+      defaultOptions: { model: "sonnet" },
+      availableModels: [{ label: "Sonnet", value: "sonnet" }],
+    },
+    {
+      name: "codex",
+      defaultOptions: { model: "gpt-5.4" },
+      availableModels: [{ label: "GPT-5.4", value: "gpt-5.4" }],
+    },
+    {
+      name: "opencode",
+      defaultOptions: {},
+      availableModels: [],
+    },
+  ]);
+
+  await nextTick();
+
+  return mounted;
+}
+
+function getButtonByText(
+  wrapper: Awaited<ReturnType<typeof mountPodContextMenu>>["wrapper"],
+  text: string,
+) {
+  return wrapper
+    .findAll("button")
+    .find((button) => button.text().includes(text));
+}
+
+describe("pod context menu userflow", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("展開 provider 子選單後，點擊 provider 項目會送出切換事件並關閉選單", async () => {
+    const { wrapper, unmount } = await mountPodContextMenu();
+
+    const submenuGroups = wrapper.findAll(".relative");
+    await submenuGroups[0]?.trigger("mouseenter");
+    await nextTick();
+
+    expect(wrapper.text()).toContain("Claude");
+    expect(wrapper.text()).toContain("Codex");
+    expect(wrapper.text()).toContain("OpenCode");
+
+    await getButtonByText(wrapper, "Codex")?.trigger("click");
+
+    expect(wrapper.emitted("switch-provider")).toEqual([
+      ["pod-1", "codex", { model: "gpt-5.4" }],
+    ]);
+    expect(wrapper.emitted("close")).toHaveLength(1);
+
+    unmount();
+  });
+
+  it("展開 integrations 子選單後，點擊已綁定 provider 會走 disconnect handler", async () => {
+    const { wrapper, unmount } = await mountPodContextMenu();
+
+    const submenuGroups = wrapper.findAll(".relative");
+    await submenuGroups[1]?.trigger("mouseenter");
+    await nextTick();
+
+    const disconnectSlackLabel = i18n.global.t(
+      "canvas.podContextMenu.disconnect",
+      { label: "Slack" },
+    );
+    expect(wrapper.text()).toContain(disconnectSlackLabel);
+
+    await getButtonByText(wrapper, disconnectSlackLabel)?.trigger("click");
+
+    expect(wrapper.emitted("disconnect-integration")).toEqual([
+      ["pod-1", "slack"],
+    ]);
+    expect(wrapper.emitted("close")).toHaveLength(1);
+
+    unmount();
+  });
+});

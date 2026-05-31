@@ -4,6 +4,7 @@ import type {
   PodGetResultPayload,
   PodScheduleSetPayload,
   PodGoalSetPayload,
+  PodProviderSetPayload,
   PodPluginsSetPayload,
   Pod,
   PodPublicView,
@@ -17,6 +18,7 @@ import type {
   PodMovePayload,
   PodRenamePayload,
   PodSetGoalPayload,
+  PodSetProviderPayload,
   PodSetModelPayload,
   PodSetThinkingLevelPayload,
   PodSetSchedulePayload,
@@ -351,6 +353,43 @@ export const handlePodRename = withCanvasId<PodRenamePayload>(
       podId: result.pod.id,
       name: result.pod.name,
     });
+  },
+);
+
+export const handlePodSetProvider = withCanvasId<PodSetProviderPayload>(
+  WebSocketResponseEvents.POD_PROVIDER_SET,
+  async (
+    connectionId: string,
+    canvasId: string,
+    payload: PodSetProviderPayload,
+    requestId: string,
+  ): Promise<void> => {
+    const { podId, provider, providerConfig } = payload;
+
+    const existingPod = validatePod(
+      connectionId,
+      podId,
+      WebSocketResponseEvents.POD_PROVIDER_SET,
+      requestId,
+    );
+    if (!existingPod) {
+      return;
+    }
+
+    handlePodUpdate(
+      connectionId,
+      canvasId,
+      podId,
+      { provider, providerConfig },
+      requestId,
+      WebSocketResponseEvents.POD_PROVIDER_SET,
+      (pod): PodProviderSetPayload => ({
+        requestId,
+        canvasId,
+        success: true,
+        pod,
+      }),
+    );
   },
 );
 

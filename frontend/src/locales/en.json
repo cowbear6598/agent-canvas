@@ -573,8 +573,14 @@
     },
     "podContextMenu": {
       "downloadDirectory": "Download Working Directory (zip)",
+      "convertProvider": "Convert Provider",
+      "integrations": "Integrations",
       "connect": "Connect {label}",
       "disconnect": "Disconnect {label}",
+      "providerSwitched": "Provider switched",
+      "providerSwitchedDesc": "Switched to {provider}",
+      "providerSwitchFailed": "Provider switch failed",
+      "providerSwitchFailedDesc": "Unable to switch the Pod provider. Please try again later.",
       "downloadDirectoryFailed": "Failed to download directory",
       "downloadDirectoryFailedDesc": "Unable to download working directory, please try again later"
     },

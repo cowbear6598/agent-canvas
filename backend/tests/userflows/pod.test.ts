@@ -7,6 +7,7 @@ import {
   createTestServer,
   disconnectSocket,
   emitAndWaitResponse,
+  waitForEvent,
   type TestServerInstance,
   type TestWebSocketClient,
 } from "../setup";
@@ -18,11 +19,13 @@ import {
   type PodMovePayload,
   type PodRenamePayload,
   type PodSetSchedulePayload,
+  type PodSetProviderPayload,
 } from "../../src/schemas";
 import type {
   PodCreatedPayload,
   PodGetResultPayload,
   PodMovedPayload,
+  PodProviderSetPayload,
   PodRenamedPayload,
   PodScheduleSetPayload,
 } from "../../src/types";
@@ -31,14 +34,17 @@ import { getDb } from "../../src/database/index.js";
 describe("Pod WebSocket user flow", () => {
   let server: TestServerInstance;
   let client: TestWebSocketClient;
+  let peerClient: TestWebSocketClient;
 
   beforeAll(async () => {
     server = await createTestServer();
     client = await createSocketClient(server.baseUrl, server.canvasId);
+    peerClient = await createSocketClient(server.baseUrl, server.canvasId);
   });
 
   afterAll(async () => {
     await disconnectSocket(client);
+    await disconnectSocket(peerClient);
     await closeTestServer(server);
   });
 
@@ -221,6 +227,76 @@ describe("Pod WebSocket user flow", () => {
       minute: 30,
       enabled: true,
       lastTriggeredAt: null,
+    });
+  });
+
+  it("切換 pod provider 會持久化新 provider/model，並廣播更新後的 PodPublicView", async () => {
+    const created = await emitAndWaitResponse<
+      PodCreatePayload,
+      PodCreatedPayload
+    >(
+      client,
+      WebSocketRequestEvents.POD_CREATE,
+      WebSocketResponseEvents.POD_CREATED,
+      {
+        requestId: uuidv4(),
+        canvasId: server.canvasId,
+        name: "ws-provider-pod",
+        x: 10,
+        y: 20,
+        rotation: 0,
+        provider: "codex",
+        providerConfig: { model: "gpt-5.4" },
+      },
+    );
+    expect(created.success).toBe(true);
+
+    const broadcastPromise = waitForEvent<PodProviderSetPayload>(
+      peerClient,
+      WebSocketResponseEvents.POD_PROVIDER_SET,
+    );
+
+    const switched = await emitAndWaitResponse<
+      PodSetProviderPayload,
+      PodProviderSetPayload
+    >(
+      client,
+      WebSocketRequestEvents.POD_SET_PROVIDER,
+      WebSocketResponseEvents.POD_PROVIDER_SET,
+      {
+        requestId: uuidv4(),
+        canvasId: server.canvasId,
+        podId: created.pod!.id,
+        provider: "claude",
+        providerConfig: { model: "sonnet" },
+      },
+    );
+
+    const broadcast = await broadcastPromise;
+
+    expect(switched.success).toBe(true);
+    expect(switched.pod).toMatchObject({
+      id: created.pod!.id,
+      provider: "claude",
+      providerConfig: { model: "sonnet" },
+    });
+    expect(broadcast.pod).toMatchObject({
+      id: created.pod!.id,
+      provider: "claude",
+      providerConfig: { model: "sonnet" },
+    });
+
+    const row = getDb()
+      .prepare("SELECT provider, provider_config_json FROM pods WHERE id = ?")
+      .get(created.pod!.id) as
+      | {
+          provider: string;
+          provider_config_json: string;
+        }
+      | undefined;
+    expect(row?.provider).toBe("claude");
+    expect(JSON.parse(row!.provider_config_json)).toMatchObject({
+      model: "sonnet",
     });
   });
 });

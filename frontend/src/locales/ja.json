@@ -573,8 +573,14 @@
     },
     "podContextMenu": {
       "downloadDirectory": "作業ディレクトリをダウンロード（zip）",
+      "convertProvider": "Provider を切り替える",
+      "integrations": "Integrations",
       "connect": "{label} を接続",
       "disconnect": "{label} を切断",
+      "providerSwitched": "Provider を切り替えました",
+      "providerSwitchedDesc": "{provider} に切り替えました",
+      "providerSwitchFailed": "Provider の切り替えに失敗しました",
+      "providerSwitchFailedDesc": "Pod の Provider を切り替えられませんでした。後でもう一度お試しください",
       "downloadDirectoryFailed": "ディレクトリのダウンロードに失敗しました",
       "downloadDirectoryFailedDesc": "作業ディレクトリをダウンロードできません。後でもう一度お試しください"
     },

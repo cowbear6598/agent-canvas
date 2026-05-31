@@ -158,6 +158,10 @@ export function getPodEventListeners(): Array<{
       handler: handlePodStateUpdated as (payload: unknown) => void,
     },
     {
+      event: WebSocketResponseEvents.POD_PROVIDER_SET,
+      handler: handlePodStateUpdated as (payload: unknown) => void,
+    },
+    {
       event: WebSocketResponseEvents.POD_MODEL_SET,
       handler: handlePodModelSet as (payload: unknown) => void,
     },

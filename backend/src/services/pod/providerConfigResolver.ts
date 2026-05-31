@@ -248,6 +248,18 @@ export function sanitizeProviderConfigStrict(
     sanitized.model = defaultOptions.model;
   }
 
+  if ("thinkingLevel" in sanitized) {
+    if (
+      !isThinkingLevelValid(
+        provider,
+        sanitized.model as string,
+        sanitized.thinkingLevel as string,
+      )
+    ) {
+      throw new Error(`Provider ${provider} 不支援此 thinking level`);
+    }
+  }
+
   // 自動注入該 model 的 default thinkingLevel：
   // 僅在使用者「未顯式傳入」（raw 中沒有 thinkingLevel key）且該 model 有 default 時補入；
   // 若 default 為 null（model 不支援 thinking）則不寫入，避免 Haiku/Gemini 出現 thinkingLevel 欄位。

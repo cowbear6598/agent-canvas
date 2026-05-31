@@ -57,6 +57,14 @@ export interface PodGoalSetPayload {
   error?: string;
 }
 
+export interface PodProviderSetPayload {
+  requestId: string;
+  canvasId: string;
+  success: boolean;
+  pod?: PodPublicView;
+  error?: string;
+}
+
 export interface PodScheduleSetPayload {
   requestId: string;
   canvasId: string;

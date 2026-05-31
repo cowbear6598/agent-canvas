@@ -114,6 +114,14 @@ export const podSetGoalSchema = z.object({
   goal: podGoalSchema.nullable(),
 });
 
+export const podSetProviderSchema = z.object({
+  requestId: requestIdSchema,
+  canvasId: canvasIdSchema,
+  podId: podIdSchema,
+  provider: providerSchema,
+  providerConfig: providerConfigSchema,
+});
+
 export const podSetModelSchema = z.object({
   requestId: requestIdSchema,
   canvasId: canvasIdSchema,
@@ -167,6 +175,7 @@ export type PodGetPayload = z.infer<typeof podGetSchema>;
 export type PodMovePayload = z.infer<typeof podMoveSchema>;
 export type PodRenamePayload = z.infer<typeof podRenameSchema>;
 export type PodSetGoalPayload = z.infer<typeof podSetGoalSchema>;
+export type PodSetProviderPayload = z.infer<typeof podSetProviderSchema>;
 export type PodSetModelPayload = z.infer<typeof podSetModelSchema>;
 export type PodSetThinkingLevelPayload = z.infer<
   typeof podSetThinkingLevelSchema

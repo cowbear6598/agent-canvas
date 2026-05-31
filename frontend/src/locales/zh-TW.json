@@ -573,8 +573,14 @@
     },
     "podContextMenu": {
       "downloadDirectory": "下載工作目錄（zip）",
+      "convertProvider": "轉換 Provider",
+      "integrations": "連接",
       "connect": "連接 {label}",
       "disconnect": "斷開 {label}",
+      "providerSwitched": "Provider 已切換",
+      "providerSwitchedDesc": "已切換為 {provider}",
+      "providerSwitchFailed": "Provider 切換失敗",
+      "providerSwitchFailedDesc": "無法切換 Pod 的 Provider，請稍後再試",
       "downloadDirectoryFailed": "下載目錄失敗",
       "downloadDirectoryFailedDesc": "無法下載工作目錄，請稍後再試"
     },

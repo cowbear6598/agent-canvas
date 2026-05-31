@@ -1,6 +1,14 @@
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
-import type { Pod, Position, Schedule, TypeMenuState, PodGoal } from "@/types";
+import type {
+  Pod,
+  Position,
+  Schedule,
+  TypeMenuState,
+  PodGoal,
+  PodProvider,
+  ProviderConfig,
+} from "@/types";
 import { initialPods } from "@/data/initialPods";
 import { generateRequestId } from "@/services/utils";
 import {
@@ -18,10 +26,12 @@ import type {
   PodListResultPayload,
   PodMovePayload,
   PodGoalSetPayload,
+  PodProviderSetPayload,
   PodRenamedPayload,
   PodRenamePayload,
   PodScheduleSetPayload,
   PodSetGoalPayload,
+  PodSetProviderPayload,
   PodSetSchedulePayload,
 } from "@/types/websocket";
 import { updatePodMcpServers as updatePodMcpServersApi } from "@/services/mcpApi";
@@ -37,6 +47,7 @@ import {
 } from "@/lib/podValidation";
 import { getActiveCanvasIdOrWarn } from "@/utils/canvasGuard";
 import { logger } from "@/utils/logger";
+import { useSendCanvasAction } from "@/composables/useSendCanvasAction";
 
 const MAX_COORD = 100000;
 
@@ -62,6 +73,7 @@ function areGoalsEqual(
 
 export const usePodStore = defineStore("pod", () => {
   const { executeAction } = useCanvasWebSocketAction();
+  const { sendCanvasAction } = useSendCanvasAction();
   const { showSuccessToast, showErrorToast } = useToast();
 
   const pods = ref<Pod[]>(initialPods);
@@ -412,28 +424,53 @@ export const usePodStore = defineStore("pod", () => {
   }
 
   /**
-   * 切換指定 Pod 的 provider，並自動修正所有下游 connection 的 summaryModel。
-   * 此方法為「使用者主動切換 provider」的唯一入口，初始化載入時不應呼叫，
-   * 以避免 capability 尚未載入時誤重置 summaryModel。
+   * 切換指定 Pod 的 provider。
+   * 成功後以後端回傳的 pod 更新本地狀態，並收斂所有下游 connection 的 summaryModel。
    */
   async function updatePodProvider(
     podId: string,
-    provider: string,
-    providerConfig: Record<string, unknown>,
-  ): Promise<void> {
+    provider: PodProvider,
+    providerConfig: ProviderConfig,
+  ): Promise<Pod | null> {
     const pod = findPodById(podId);
-    if (!pod) return;
+    if (!pod) return null;
 
-    if (pod.provider !== provider) {
-      invalidatePodMcpAvailabilityCache(pod.provider, pod.id);
-      invalidatePodMcpAvailabilityCache(provider, pod.id);
+    const result = await sendCanvasAction<
+      PodSetProviderPayload,
+      PodProviderSetPayload
+    >({
+      requestEvent: WebSocketRequestEvents.POD_SET_PROVIDER,
+      responseEvent: WebSocketResponseEvents.POD_PROVIDER_SET,
+      payload: { podId, provider, providerConfig },
+    });
+
+    if (!result.success || !result.data.pod) {
+      showErrorToast(
+        "Pod",
+        t("canvas.podContextMenu.providerSwitchFailed"),
+        t("canvas.podContextMenu.providerSwitchFailedDesc"),
+      );
+      return null;
     }
 
-    pod.provider = provider;
-    pod.providerConfig = providerConfig as Pod["providerConfig"];
+    updatePod(result.data.pod);
+
+    const providerLabels: Record<string, string> = {
+      claude: "Claude",
+      codex: "Codex",
+      opencode: "OpenCode",
+    };
+    showSuccessToast(
+      "Pod",
+      t("canvas.podContextMenu.providerSwitched"),
+      t("canvas.podContextMenu.providerSwitchedDesc", {
+        provider: providerLabels[provider] ?? provider,
+      }),
+    );
 
     const connectionStore = useConnectionStore();
     await connectionStore.reconcileSummaryModelsForPod(podId);
+    return result.data.pod;
   }
 
   /** 將 model 寫入 providerConfig.model（provider-agnostic） */

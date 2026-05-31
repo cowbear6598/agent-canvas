@@ -39,6 +39,10 @@ export interface PodGoalSetPayload extends ResultPayload {
   pod?: Pod;
 }
 
+export interface PodProviderSetPayload extends ResultPayload {
+  pod?: Pod;
+}
+
 export interface PodModelSetPayload extends ResultPayload {
   pod?: Pod;
 }

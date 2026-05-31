@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// providerConfig 改由 providerCapabilityStore.getDefaultOptions 提供，不再 hardcode 預設 model
 import AnthropicLogo from "@/components/icons/AnthropicLogo.vue";
 import OpenAILogo from "@/components/icons/OpenAILogo.vue";
 import OpencodeLogo from "@/components/icons/OpencodeLogo.vue";
@@ -7,6 +6,10 @@ import type { PodProvider, ProviderConfig } from "@/types/pod";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
 import { useToast } from "@/composables/useToast";
 import { useI18n } from "vue-i18n";
+import {
+  isProviderSelectionDisabled,
+  resolveDefaultProviderConfig,
+} from "@/lib/providerSelection";
 
 const providerStore = useProviderCapabilityStore();
 const { toast } = useToast();
@@ -16,37 +19,8 @@ const emit = defineEmits<{
   select: [payload: { provider: PodProvider; providerConfig: ProviderConfig }];
 }>();
 
-/**
- * 從 store 取得指定 provider 的 model 字串。
- * - opencode：沒有靜態 defaultOptions.model，取 getAvailableModels 第一筆 alias 的 value（"providerID/modelID"）
- * - 其他 provider：取 defaultOptions.model
- * metadata 尚未載入或 opencode 尚無 alias 對應時回傳 undefined。
- */
-function resolveModel(provider: PodProvider): string | undefined {
-  if (provider === "opencode") {
-    const models = providerStore.getAvailableModels(provider);
-    if (models.length === 0) return undefined;
-    return models[0]!.value;
-  }
-  const opts = providerStore.getDefaultOptions(provider);
-  if (
-    opts === undefined ||
-    typeof opts["model"] !== "string" ||
-    opts["model"] === ""
-  ) {
-    return undefined;
-  }
-  return opts["model"] as string;
-}
-
-/**
- * 指定 provider 的按鈕是否應 disabled：metadata 尚未載入時 disable。
- * 例外：opencode 在無 alias 時不 disable button，仍可點以觸發 toast 引導，
- *       避免使用者覺得「點不了」而忽略提示。
- */
 function isProviderDisabled(provider: PodProvider): boolean {
-  if (provider === "opencode") return false;
-  return resolveModel(provider) === undefined;
+  return isProviderSelectionDisabled(providerStore, provider);
 }
 
 /**
@@ -71,14 +45,14 @@ function showDisabledToast(provider: PodProvider): void {
  * 未來新增 provider 不需複製此函式，只在模板中以 inline 方式呼叫即可。
  */
 function handleSelectProvider(provider: PodProvider): void {
-  const model = resolveModel(provider);
-  if (model === undefined) {
+  const providerConfig = resolveDefaultProviderConfig(providerStore, provider);
+  if (!providerConfig) {
     showDisabledToast(provider);
     return;
   }
   emit("select", {
     provider,
-    providerConfig: { model },
+    providerConfig,
   });
 }
 </script>

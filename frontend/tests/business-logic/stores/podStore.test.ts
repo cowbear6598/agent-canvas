@@ -26,8 +26,10 @@ vi.mock("@/services/websocket", () => webSocketMockFactory());
 // Mock useToast
 const mockShowSuccessToast = vi.fn();
 const mockShowErrorToast = vi.fn();
+const mockToast = vi.fn();
 vi.mock("@/composables/useToast", () => ({
   useToast: () => ({
+    toast: mockToast,
     showSuccessToast: mockShowSuccessToast,
     showErrorToast: mockShowErrorToast,
   }),
@@ -1162,6 +1164,104 @@ describe("podStore", () => {
 
       expect(store.pods[0]?.x).toBe(500);
       expect(store.pods[0]?.y).toBe(600);
+    });
+  });
+
+  describe("updatePodProvider", () => {
+    it("成功時應送出 pod:set-provider、更新 pod 狀態並收斂下游 summaryModel", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      const store = usePodStore();
+      const connectionStore = useConnectionStore();
+      const reconcileSpy = vi
+        .spyOn(connectionStore, "reconcileSummaryModelsForPod")
+        .mockResolvedValue();
+
+      store.pods = [
+        createMockPod({
+          id: "pod-1",
+          provider: "claude",
+          providerConfig: { model: "sonnet" },
+        }),
+      ];
+
+      const updatedPod = createMockPod({
+        id: "pod-1",
+        provider: "codex",
+        providerConfig: { model: "gpt-5.4" },
+      });
+
+      mockCreateWebSocketRequest.mockResolvedValueOnce({
+        requestId: "req-provider-switch",
+        success: true,
+        pod: updatedPod,
+      });
+
+      const result = await store.updatePodProvider("pod-1", "codex", {
+        model: "gpt-5.4",
+      });
+
+      expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestEvent: "pod:set-provider",
+          responseEvent: "pod:provider:set",
+          payload: {
+            canvasId: "canvas-1",
+            podId: "pod-1",
+            provider: "codex",
+            providerConfig: { model: "gpt-5.4" },
+          },
+        }),
+      );
+      expect(result).toEqual(updatedPod);
+      expect(store.getPodById("pod-1")).toMatchObject({
+        provider: "codex",
+        providerConfig: { model: "gpt-5.4" },
+      });
+      expect(reconcileSpy).toHaveBeenCalledWith("pod-1");
+      expect(mockShowSuccessToast).toHaveBeenCalledWith(
+        "Pod",
+        "Provider 已切換",
+        "已切換為 Codex",
+      );
+    });
+
+    it("失敗時應顯示錯誤 Toast，且不更新 pod 狀態", async () => {
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+      const store = usePodStore();
+      const connectionStore = useConnectionStore();
+      const reconcileSpy = vi
+        .spyOn(connectionStore, "reconcileSummaryModelsForPod")
+        .mockResolvedValue();
+
+      store.pods = [
+        createMockPod({
+          id: "pod-1",
+          provider: "claude",
+          providerConfig: { model: "sonnet" },
+        }),
+      ];
+
+      mockCreateWebSocketRequest.mockRejectedValueOnce(
+        new Error("provider switch failed"),
+      );
+
+      const result = await store.updatePodProvider("pod-1", "codex", {
+        model: "gpt-5.4",
+      });
+
+      expect(result).toBeNull();
+      expect(store.getPodById("pod-1")).toMatchObject({
+        provider: "claude",
+        providerConfig: { model: "sonnet" },
+      });
+      expect(reconcileSpy).not.toHaveBeenCalled();
+      expect(mockShowErrorToast).toHaveBeenCalledWith(
+        "Pod",
+        "Provider 切換失敗",
+        "無法切換 Pod 的 Provider，請稍後再試",
+      );
     });
   });
 

@@ -7,69 +7,88 @@ phases:
     parallel: false
     verification:
       - bun run style
-    done: false
+    done: true
     items:
       - id: P1.A
         title: WebSocket 契約與 store action
         tasks:
           - id: P1.A.t1
             text: 在 `frontend/src/types/websocket/events.ts`、`frontend/src/types/websocket/requests.ts` 與 `frontend/src/types/websocket/responses.ts` 新增 `pod:set-provider` / `pod:provider:set` 事件與 payload 型別，欄位對齊 `podId`、`provider`、`providerConfig`
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/src/types/websocket/events.ts
+              - frontend/src/types/websocket/requests.ts
+              - frontend/src/types/websocket/responses.ts
           - id: P1.A.t2
             text: 在 `frontend/src/stores/pod/podStore.ts` 將使用者主動切換 provider 的入口改為 WebSocket-backed action，沿用 `useSendCanvasAction` 送出 provider 與預設 `providerConfig`，成功後以回傳的 pod 更新本地 state
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/src/stores/pod/podStore.ts
           - id: P1.A.t3
             text: 在 `podStore` 的 provider 切換成功路徑保留 `connectionStore.reconcileSummaryModelsForPod(podId)`，確保 source pod provider 變更後，下游 connection 的 summaryModel 仍會收斂到合法值
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/src/stores/pod/podStore.ts
       - id: P1.B
         title: Pod 廣播同步
         tasks:
           - id: P1.B.t1
             text: 在 `frontend/src/composables/eventHandlers/podEventHandlers.ts` 註冊 `POD_PROVIDER_SET` 事件，讓其他 client 收到廣播後以完整 `pod` payload 更新本地 podStore
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/src/composables/eventHandlers/podEventHandlers.ts
           - id: P1.B.t2
             text: 補齊 `frontend/tests/business-logic/stores/podStore.test.ts` 與 `frontend/tests/business-logic/composables/events/podEventHandlers.test.ts`，驗證 provider 切換 action 會送出正確事件並在廣播時更新 pod 狀態
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/stores/podStore.test.ts
+              - frontend/tests/business-logic/composables/events/podEventHandlers.test.ts
   - id: P2
     title: Pod 右鍵子選單整合
     parallel: false
     verification:
       - bun run style
       - bun run test
-    done: false
+    done: true
     items:
       - id: P2.A
         title: Provider 轉換子選單
         tasks:
           - id: P2.A.t1
             text: 在 `frontend/src/components/canvas/CanvasContainer.vue` 與 `frontend/src/components/canvas/PodContextMenu.vue` 增加 provider 轉換的 emit / handler 接線，讓右鍵選單可以觸發 podStore 的 provider 切換 action
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/src/components/canvas/CanvasContainer.vue
+              - frontend/src/components/canvas/PodContextMenu.vue
           - id: P2.A.t2
             text: 以 `frontend/src/components/canvas/connectionMenu/SummarySection.vue` 的 hover pattern 重構 `PodContextMenu.vue`，新增「轉換 Provider」父項目與右側子選單，列出 `claude`、`codex`、`opencode` 並標示目前 provider 狀態
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/src/components/canvas/PodContextMenu.vue
           - id: P2.A.t3
             text: 重用 `frontend/src/components/canvas/ProviderPicker.vue` 的預設 model 解析規則與 disabled/loading 判斷，避免 pod 右鍵 provider 子選單與建立 pod 選單出現不同的 provider 可用性邏輯
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/src/components/canvas/ProviderPicker.vue
+              - frontend/src/lib/providerSelection.ts
+              - frontend/src/components/canvas/PodContextMenu.vue
       - id: P2.B
         title: Integration 集合化與文案
         tasks:
           - id: P2.B.t1
             text: 將 `PodContextMenu.vue` 目前平鋪的 integration connect / disconnect 按鈕收斂成單一「Integrations」父項目，hover 後在右側子選單保留既有 connect / disconnect 行為與 provider icon 顯示
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/src/components/canvas/PodContextMenu.vue
           - id: P2.B.t2
             text: 在 `frontend/src/locales/zh-TW.json`、`frontend/src/locales/en.json` 與 `frontend/src/locales/ja.json` 新增 provider 轉換與 integration 集合化需要的 menu label、成功提示與失敗提示文案
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/src/locales/zh-TW.json
+              - frontend/src/locales/en.json
+              - frontend/src/locales/ja.json
           - id: P2.B.t3
             text: 新增 `frontend/tests/userflows/canvas/podContextMenuFlow.test.ts`，覆蓋 provider 子選單展開、integration 子選單展開，以及點擊項目後會走到既有 connect / disconnect 或 provider switch handler
-            completed: false
-            last_files_changed: []
+            completed: true
+            last_files_changed:
+              - frontend/tests/userflows/canvas/podContextMenuFlow.test.ts

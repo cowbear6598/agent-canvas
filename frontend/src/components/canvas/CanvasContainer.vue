@@ -258,6 +258,14 @@ const handleDisconnectIntegration = async (
   await useIntegrationStore().unbindFromPod(provider, podId);
 };
 
+const handleSwitchPodProvider = async (
+  podId: string,
+  provider: PodProvider,
+  providerConfig: ProviderConfig,
+): Promise<void> => {
+  await podStore.updatePodProvider(podId, provider, providerConfig);
+};
+
 const handleOpenCreateRepositoryModal = (): void => {
   lastMenuPosition.value = podStore.typeMenu.position;
   showCreateRepositoryModal.value = true;
@@ -434,6 +442,7 @@ const handleBranchModelChanged = (): void => {
     :position="podContextMenu.position"
     :pod-id="podContextMenu.data.podId"
     @close="closePodContextMenu"
+    @switch-provider="handleSwitchPodProvider"
     @connect-integration="handleConnectIntegration"
     @disconnect-integration="handleDisconnectIntegration"
   />

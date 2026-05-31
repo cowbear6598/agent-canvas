@@ -54,6 +54,14 @@ export interface PodSetGoalPayload {
   goal: PodGoal | null;
 }
 
+export interface PodSetProviderPayload {
+  requestId: string;
+  canvasId: string;
+  podId: string;
+  provider: PodProvider;
+  providerConfig: ProviderConfig;
+}
+
 export interface PodSetModelPayload {
   requestId: string;
   canvasId: string;

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onUnmounted, watch } from "vue";
+import { ref, computed, onUnmounted, watch, nextTick } from "vue";
 import type { ComponentPublicInstance } from "vue";
 import { useI18n } from "vue-i18n";
 import type { ModelOption, PodProvider } from "@/types/pod";
@@ -23,12 +23,15 @@ const emit = defineEmits<{
 const COLLAPSE_ANIMATION_MS = 300;
 /** 選取 feedback 等待時間（毫秒）：讓使用者看到選取視覺回饋後再觸發收合動畫，400ms 為自然停頓感 */
 const SELECT_FEEDBACK_DELAY_MS = 400;
+/** Provider 切換時 ghost chip 的滑移動畫長度（毫秒） */
+const GHOST_TRANSITION_MS = 220;
 
 const isHovered = ref(false);
 const isAnimating = ref(false);
 const isCollapsing = ref(false);
 const hoverTimeoutId = ref<ReturnType<typeof setTimeout> | null>(null);
 const pendingTimers = ref<Set<ReturnType<typeof setTimeout>>>(new Set());
+const slotRef = ref<HTMLElement | null>(null);
 
 /**
  * TransitionGroup 的 component ref，用來取得 stack root DOM
@@ -36,6 +39,16 @@ const pendingTimers = ref<Set<ReturnType<typeof setTimeout>>>(new Set());
  * 避免移除 max-height 時 active 卡片從中段「跳」回貼 Pod 底部。
  */
 const stackComp = ref<ComponentPublicInstance | null>(null);
+const ghostChip = ref<{
+  label: string;
+  providerClass: string;
+  style: Record<string, string>;
+} | null>(null);
+const isGhostAnimating = computed(() => ghostChip.value !== null);
+
+let ghostAnimationFrameId: number | null = null;
+let ghostCleanupTimerId: ReturnType<typeof setTimeout> | null = null;
+let ghostSequenceId = 0;
 
 /**
  * 建立一個受追蹤的計時器，並回傳 Promise。
@@ -59,19 +72,40 @@ function sleep(ms: number): Promise<void> {
   return createTrackedTimer(ms);
 }
 
+function clearGhostAnimation(resetSequence = false): void {
+  if (ghostAnimationFrameId !== null) {
+    cancelAnimationFrame(ghostAnimationFrameId);
+    ghostAnimationFrameId = null;
+  }
+  if (ghostCleanupTimerId !== null) {
+    clearTimeout(ghostCleanupTimerId);
+    ghostCleanupTimerId = null;
+  }
+  ghostChip.value = null;
+  if (resetSequence) {
+    ghostSequenceId += 1;
+  }
+}
+
+function resetInteractionState(): void {
+  if (hoverTimeoutId.value !== null) {
+    clearTimeout(hoverTimeoutId.value);
+    hoverTimeoutId.value = null;
+  }
+  pendingTimers.value.forEach(clearTimeout);
+  pendingTimers.value.clear();
+  isHovered.value = false;
+  isCollapsing.value = false;
+  isAnimating.value = false;
+}
+
 /** 元件 unmount 後設為 true，供 async 函式提前退出 */
 let isUnmounted = false;
 
 onUnmounted(() => {
   isUnmounted = true;
-  // 清掉 hover debounce timer
-  if (hoverTimeoutId.value !== null) {
-    clearTimeout(hoverTimeoutId.value);
-    hoverTimeoutId.value = null;
-  }
-  // 清掉所有 pending select/collapse timer
-  pendingTimers.value.forEach(clearTimeout);
-  pendingTimers.value.clear();
+  clearGhostAnimation(true);
+  resetInteractionState();
 });
 
 // disabled 變 true 時強制重置展開狀態：因為 disabled 後 pointer-events 被拔掉，
@@ -80,15 +114,8 @@ watch(
   () => props.disabled,
   (next) => {
     if (!next) return;
-    if (hoverTimeoutId.value !== null) {
-      clearTimeout(hoverTimeoutId.value);
-      hoverTimeoutId.value = null;
-    }
-    pendingTimers.value.forEach(clearTimeout);
-    pendingTimers.value.clear();
-    isHovered.value = false;
-    isCollapsing.value = false;
-    isAnimating.value = false;
+    clearGhostAnimation(true);
+    resetInteractionState();
   },
 );
 
@@ -144,6 +171,7 @@ const isSingleOption = computed(() => effectiveOptions.value.length === 1);
  * 命名規則：`card-{provider}`，新增 provider 時只需在 CSS 加一條 rule，不需改 template。
  */
 const providerCardClass = computed(() => `card-${props.provider}`);
+const transitionGroupCssEnabled = computed(() => !isGhostAnimating.value);
 
 /** 單次迴圈同時收集 active 與 others，避免兩次掃描 */
 const sortedOptions = computed((): ModelOption[] => {
@@ -160,6 +188,48 @@ const sortedOptions = computed((): ModelOption[] => {
     ? [...active, ...others]
     : [...effectiveOptions.value];
 });
+
+function getModelLabel(
+  provider: PodProvider,
+  model: string,
+): string {
+  const options = providerCapabilityStore.getAvailableModels(provider);
+  return options.find((option) => option.value === model)?.label ?? model;
+}
+
+function getActiveCardElement(): HTMLElement | null {
+  const stackEl = stackComp.value?.$el as HTMLElement | undefined;
+  return stackEl?.querySelector(".model-card.active") ?? null;
+}
+
+function toViewportRect(rect: DOMRect): {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+} {
+  return {
+    left: rect.left,
+    top: rect.top,
+    width: rect.width,
+    height: rect.height,
+  };
+}
+
+function buildGhostStyle(
+  rect: { left: number; top: number; width: number; height: number },
+  options: { opacity: number; transition: string; transform?: string },
+): Record<string, string> {
+  return {
+    left: `${rect.left}px`,
+    top: `${rect.top}px`,
+    width: `${rect.width}px`,
+    height: `${rect.height}px`,
+    opacity: `${options.opacity}`,
+    transition: options.transition,
+    transform: options.transform ?? "translateY(0)",
+  };
+}
 
 const handleMouseEnter = (): void => {
   // disabled 時不展開動畫
@@ -245,11 +315,66 @@ const selectModel = async (model: string): Promise<void> => {
   isCollapsing.value = false;
   isAnimating.value = false;
 };
+
+watch(
+  [(): PodProvider => props.provider, (): string => props.currentModel],
+  async ([nextProvider], [prevProvider, prevModel]) => {
+    if (nextProvider === prevProvider) return;
+
+    const fromEl = getActiveCardElement();
+
+    if (!fromEl) return;
+
+    clearGhostAnimation(true);
+    resetInteractionState();
+
+    const sequenceId = ghostSequenceId;
+    const fromRect = toViewportRect(fromEl.getBoundingClientRect());
+
+    ghostChip.value = {
+      label: getModelLabel(prevProvider, prevModel),
+      providerClass: `card-${prevProvider}`,
+      style: buildGhostStyle(fromRect, {
+        opacity: 1,
+        transition: "none",
+      }),
+    };
+
+    await nextTick();
+    if (isUnmounted || sequenceId !== ghostSequenceId) return;
+
+    ghostAnimationFrameId = requestAnimationFrame(() => {
+      ghostAnimationFrameId = requestAnimationFrame(() => {
+        if (isUnmounted || sequenceId !== ghostSequenceId || !ghostChip.value) {
+          return;
+        }
+
+        ghostChip.value = {
+          ...ghostChip.value,
+          style: buildGhostStyle(fromRect, {
+            opacity: 0,
+            transition:
+              `transform ${GHOST_TRANSITION_MS}ms cubic-bezier(0.22, 1, 0.36, 1), ` +
+              `opacity ${GHOST_TRANSITION_MS}ms ease-out`,
+            transform: "translateY(-32px)",
+          }),
+        };
+
+        ghostCleanupTimerId = setTimeout(() => {
+          if (sequenceId !== ghostSequenceId) return;
+          clearGhostAnimation();
+        }, GHOST_TRANSITION_MS);
+      });
+    });
+  },
+  { flush: "pre" },
+);
 </script>
 
 <template>
   <!-- 上方中央定位錨點 -->
   <div
+    ref="slotRef"
     class="pod-model-slot"
     :class="{ 'pod-model-slot--disabled': disabled || isOpencodeEmpty }"
     :aria-disabled="disabled || isOpencodeEmpty || undefined"
@@ -284,6 +409,7 @@ const selectModel = async (model: string): Promise<void> => {
       ref="stackComp"
       name="stack-slide"
       tag="div"
+      :css="transitionGroupCssEnabled"
       class="model-cards-stack"
       :class="{
         expanded: isHovered,
@@ -344,6 +470,18 @@ const selectModel = async (model: string): Promise<void> => {
       </div>
     </Transition>
   </div>
+
+  <Teleport to="body">
+    <div
+      v-if="ghostChip"
+      class="model-card model-card--ghost"
+      :class="ghostChip.providerClass"
+      :style="ghostChip.style"
+      aria-hidden="true"
+    >
+      {{ ghostChip.label }}
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -470,6 +608,16 @@ const selectModel = async (model: string): Promise<void> => {
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
+}
+
+.model-card--ghost {
+  position: fixed;
+  margin: 0;
+  z-index: 220;
+  opacity: 1;
+  transform: none;
+  pointer-events: none;
+  box-shadow: 3px 3px 0 oklch(0.4 0.02 50 / 0.35);
 }
 
 /* hover 展開時，非 active 卡片從下方滑入並可互動 */

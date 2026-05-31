@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { podSetPluginsSchema } from "../../src/schemas/podSchemas.js";
+import {
+  podSetPluginsSchema,
+  podSetProviderSchema,
+} from "../../src/schemas/podSchemas.js";
 import { pastePodItemSchema } from "../../src/schemas/pasteSchemas.js";
 
 describe("pod plugin id schema", () => {
@@ -25,5 +28,34 @@ describe("pod plugin id schema", () => {
     });
 
     expect(result.success).toBe(true);
+  });
+});
+
+describe("pod provider schema", () => {
+  it("拒絕未知 provider", () => {
+    const result = podSetProviderSchema.safeParse({
+      requestId: "44444444-4444-4444-8444-444444444444",
+      canvasId: "11111111-1111-4111-8111-111111111111",
+      podId: "22222222-2222-4222-8222-222222222222",
+      provider: "gemini",
+      providerConfig: { model: "gemini-2.5-pro" },
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("拒絕含非法欄位的 providerConfig", () => {
+    const result = podSetProviderSchema.safeParse({
+      requestId: "44444444-4444-4444-8444-444444444444",
+      canvasId: "11111111-1111-4111-8111-111111111111",
+      podId: "22222222-2222-4222-8222-222222222222",
+      provider: "claude",
+      providerConfig: {
+        model: "sonnet",
+        legacyProvider: "codex",
+      },
+    });
+
+    expect(result.success).toBe(false);
   });
 });
