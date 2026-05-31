@@ -19,6 +19,43 @@ import { logger } from "../../utils/logger.js";
 import { getStmts } from "../../database/index.js";
 import { parseOpencodeThinkingLevelsJson } from "../provider/opencodeThinkingPresetService.js";
 
+interface OpencodeAliasRow {
+  real_provider: string;
+  real_model: string;
+  thinking_levels_json?: string | null;
+  default_thinking_level?: string | null;
+}
+
+function splitOpencodeModelValue(modelValue: string): {
+  realProvider: string;
+  realModel: string;
+} | null {
+  const slashIndex = modelValue.indexOf("/");
+  if (slashIndex <= 0 || slashIndex === modelValue.length - 1) {
+    return null;
+  }
+
+  return {
+    realProvider: modelValue.slice(0, slashIndex),
+    realModel: modelValue.slice(slashIndex + 1),
+  };
+}
+
+function findOpencodeAliasByModelValue(
+  modelValue: string,
+): OpencodeAliasRow | null {
+  const parts = splitOpencodeModelValue(modelValue);
+  if (!parts) return null;
+
+  const row = getStmts().modelAlias.selectByRealProviderAndModel.get({
+    $providerId: "opencode",
+    $realProvider: parts.realProvider,
+    $realModel: parts.realModel,
+  }) as OpencodeAliasRow | undefined;
+
+  return row ?? null;
+}
+
 /**
  * 取得指定 provider + model 的 default thinking level。
  * 找不到對應 record 或該 model 不支援 thinking level 時回傳 null。
@@ -28,16 +65,7 @@ export function getDefaultThinkingLevel(
   model: string,
 ): string | null {
   if (provider === "opencode") {
-    const rows = getStmts().modelAlias.selectByProviderId.all({
-      $providerId: "opencode",
-    }) as Array<{
-      real_provider: string;
-      real_model: string;
-      default_thinking_level: string | null;
-    }>;
-    const row = rows.find(
-      (alias) => `${alias.real_provider}/${alias.real_model}` === model,
-    );
+    const row = findOpencodeAliasByModelValue(model);
     return row?.default_thinking_level ?? null;
   }
 
@@ -63,16 +91,7 @@ export function isThinkingLevelValid(
   level: string,
 ): boolean {
   if (provider === "opencode") {
-    const rows = getStmts().modelAlias.selectByProviderId.all({
-      $providerId: "opencode",
-    }) as Array<{
-      real_provider: string;
-      real_model: string;
-      thinking_levels_json: string | null;
-    }>;
-    const row = rows.find(
-      (alias) => `${alias.real_provider}/${alias.real_model}` === model,
-    );
+    const row = findOpencodeAliasByModelValue(model);
     return parseOpencodeThinkingLevelsJson(row?.thinking_levels_json).some(
       (preset) => preset.id === level,
     );
@@ -232,10 +251,11 @@ export function sanitizeProviderConfigStrict(
   const sanitized = sanitizeProviderConfig(raw);
 
   if ("model" in sanitized) {
-    // opencode 的 model 為 "{providerID}/{modelID}"，可選清單由使用者建立的 alias 動態組成，
-    // 無法用 static availableModelValues 驗證；字元與長度檢查已在 podSchemas 完成，
-    // 此處對 opencode 跳過 strict 範圍檢查。
-    if (provider !== "opencode") {
+    if (provider === "opencode") {
+      if (!findOpencodeAliasByModelValue(sanitized.model as string)) {
+        throw new Error("Provider opencode 不支援此 model");
+      }
+    } else {
       const { availableModelValues } = getProvider(provider).metadata;
       if (!availableModelValues.has(sanitized.model as string)) {
         throw new Error(`Provider ${provider} 不支援此 model`);

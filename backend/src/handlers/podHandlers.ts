@@ -366,16 +366,6 @@ export const handlePodSetProvider = withCanvasId<PodSetProviderPayload>(
   ): Promise<void> => {
     const { podId, provider, providerConfig } = payload;
 
-    const existingPod = validatePod(
-      connectionId,
-      podId,
-      WebSocketResponseEvents.POD_PROVIDER_SET,
-      requestId,
-    );
-    if (!existingPod) {
-      return;
-    }
-
     handlePodUpdate(
       connectionId,
       canvasId,

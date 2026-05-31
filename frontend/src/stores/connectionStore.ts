@@ -974,6 +974,7 @@ export const useConnectionStore = defineStore("connection", () => {
     connectionId: string;
     newModel: string;
     summaryProvider: PodProvider | null | undefined;
+    hasExplicitSummaryProvider: boolean;
   }> {
     const pod = podStore.getPodById(podId);
     if (!pod) return [];
@@ -998,7 +999,8 @@ export const useConnectionStore = defineStore("connection", () => {
           {
             connectionId: conn.id,
             newModel,
-            summaryProvider: conn.summaryProvider ?? validationProvider,
+            summaryProvider: conn.summaryProvider,
+            hasExplicitSummaryProvider: conn.summaryProvider != null,
           },
         ];
       });
@@ -1007,17 +1009,25 @@ export const useConnectionStore = defineStore("connection", () => {
   async function reconcileSummaryModelsForPod(podId: string): Promise<void> {
     const invalidConnections = getInvalidConnectionsForPod(podId);
     await Promise.all(
-      invalidConnections.map(({ connectionId, newModel, summaryProvider }) => {
-        // 若 connection 有明確設定 summaryProvider，需同時傳入確保不被清除
-        if (summaryProvider != null) {
-          return updateConnectionSummaryProvider(
-            connectionId,
-            summaryProvider,
-            newModel,
-          );
-        }
-        return updateConnectionSummaryModel(connectionId, newModel);
-      }),
+      invalidConnections.map(
+        ({
+          connectionId,
+          newModel,
+          summaryProvider,
+          hasExplicitSummaryProvider,
+        }) => {
+          // 僅在 connection 原本就有明確 summaryProvider 時，才一併送出 provider；
+          // follow-source 的 connection 要保留空值語意，不能被這次收斂釘死。
+          if (hasExplicitSummaryProvider && summaryProvider != null) {
+            return updateConnectionSummaryProvider(
+              connectionId,
+              summaryProvider,
+              newModel,
+            );
+          }
+          return updateConnectionSummaryModel(connectionId, newModel);
+        },
+      ),
     );
   }
 

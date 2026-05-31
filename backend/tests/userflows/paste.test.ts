@@ -9,6 +9,7 @@ import {
   type PasteConnectionItem,
   type PasteRepositoryNoteItem,
 } from "../../src/schemas";
+import { getStmts } from "../../src/database/index.js";
 import { type CanvasPasteResultPayload } from "../../src/types";
 import { codexProvider } from "../../src/services/provider/codexProvider.js";
 
@@ -450,6 +451,17 @@ describe("貼上功能", () => {
       const client = getClient();
       const sourcePodId = uuidv4();
       const targetPodId = uuidv4();
+
+      getStmts().modelAlias.insert.run({
+        $id: "alias-paste-opencode",
+        $providerId: "opencode",
+        $realProvider: "openai",
+        $realModel: "gpt-4o",
+        $alias: "GPT-4o",
+        $orderIdx: 0,
+        $createdAt: 1,
+        $updatedAt: 1,
+      });
 
       const payload: CanvasPastePayload = {
         ...(await emptyPastePayload()),

@@ -1619,6 +1619,48 @@ describe("connectionStore", () => {
       );
     });
 
+    it("follow-source 的 connection 收斂 summaryModel 時不應把 summaryProvider 寫死", async () => {
+      const store = useConnectionStore();
+      const podStore = usePodStore();
+      setupCapabilities();
+
+      const pod = createMockPod({ id: "pod-src", provider: "codex" });
+      podStore.pods = [pod];
+
+      const conn = createMockConnection({
+        id: "conn-follow-source",
+        sourcePodId: "pod-src",
+        targetPodId: "pod-dst",
+        summaryProvider: undefined,
+        summaryModel: "sonnet",
+      });
+      store.connections = [conn];
+
+      const canvasStore = useCanvasStore();
+      canvasStore.activeCanvasId = "canvas-1";
+
+      mockCreateWebSocketRequest.mockResolvedValue({
+        connection: {
+          id: "conn-follow-source",
+          sourcePodId: "pod-src",
+          sourceAnchor: "bottom",
+          targetPodId: "pod-dst",
+          targetAnchor: "top",
+          summaryModel: "gpt-5.4",
+        },
+      });
+
+      await store.reconcileSummaryModelsForPod("pod-src");
+
+      const payload = mockCreateWebSocketRequest.mock.calls[0]?.[0]?.payload;
+      expect(payload).toMatchObject({
+        connectionId: "conn-follow-source",
+        summaryModel: "gpt-5.4",
+        canvasId: "canvas-1",
+      });
+      expect(payload).not.toHaveProperty("summaryProvider");
+    });
+
     it("同 provider 內 model 仍合法時不觸發更新", async () => {
       const store = useConnectionStore();
       const podStore = usePodStore();

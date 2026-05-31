@@ -6,6 +6,7 @@ import {
   setPodSchedule,
 } from "../helpers";
 import { WebSocketResponseEvents } from "../../src/schemas";
+import { getStmts } from "../../src/database/index.js";
 import { v4 as uuidv4 } from "uuid";
 
 async function fetchConnections(baseUrl: string, canvasId: string) {
@@ -617,6 +618,17 @@ describe("PATCH /api/canvas/:id/connections/:connectionId", () => {
   it("OpenCode source Pod 切換為 branch 時沿用 source providerConfig.model", async () => {
     const server = getServer();
     const client = getClient();
+
+    getStmts().modelAlias.insert.run({
+      $id: "alias-connection-api-opencode",
+      $providerId: "opencode",
+      $realProvider: "openai",
+      $realModel: "gpt-4o",
+      $alias: "GPT-4o",
+      $orderIdx: 0,
+      $createdAt: 1,
+      $updatedAt: 1,
+    });
 
     const sourcePodRes = await postPod(server.baseUrl, server.canvasId, {
       name: "src-pod-patch-branch-opencode",
