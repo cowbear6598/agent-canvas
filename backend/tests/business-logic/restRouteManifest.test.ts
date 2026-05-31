@@ -20,36 +20,54 @@ describe("REST route manifest", () => {
     }
   });
 
-  it("列出 canvas 與 pod 重要 route 的 method、path 與 handler 對應", () => {
-    expect(REST_ROUTE_MANIFEST).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          method: "GET",
-          path: "/api/canvas/list",
-          handlerName: "handleListCanvases",
-        }),
-        expect.objectContaining({
-          method: "POST",
-          path: "/api/canvas",
-          handlerName: "handleCreateCanvas",
-        }),
-        expect.objectContaining({
-          method: "POST",
-          path: "/api/canvas/:id/pods",
-          handlerName: "handleCreatePod",
-        }),
-        expect.objectContaining({
-          method: "PATCH",
-          path: "/api/canvas/:id/pods/:podId",
-          handlerName: "handleRenamePod",
-        }),
-        expect.objectContaining({
-          method: "POST",
-          path: "/api/canvas/:id/workflows/:podId/chat",
-          handlerName: "handleWorkflowChat",
-        }),
-      ]),
-    );
+  it("只保留仍需維持的五條 HTTP route", () => {
+    expect(REST_ROUTE_MANIFEST).toEqual([
+      expect.objectContaining({
+        method: "GET",
+        path: "/api/canvas/:id/pods/:podId/download",
+        handlerName: "handleDownloadPodDirectory",
+      }),
+      expect.objectContaining({
+        method: "POST",
+        path: "/api/bundles/import",
+        handlerName: "handleImportBundle",
+      }),
+      expect.objectContaining({
+        method: "POST",
+        path: "/api/upload",
+        handlerName: "handleUpload",
+      }),
+      expect.objectContaining({
+        method: "POST",
+        path: "/api/auth/redeem-reconnect-grant",
+        handlerName: "handleRedeemReconnectGrant",
+      }),
+      expect.objectContaining({
+        method: "POST",
+        path: "/api/internal/integration-reply",
+        handlerName: "handleInternalIntegrationReply",
+      }),
+    ]);
+  });
+
+  it("manifest 不再暴露已移除的 canvas、pod、connection 與 workflow route", () => {
+    const removedPaths = [
+      "/api/canvas/list",
+      "/api/canvas",
+      "/api/canvas/:id/pods",
+      "/api/canvas/:id/pods/:podId",
+      "/api/canvas/:id/connections",
+      "/api/canvas/:id/connections/:connectionId",
+      "/api/canvas/:id/workflows",
+      "/api/canvas/:id/workflows/:podId/chat",
+      "/api/canvas/:id/workflows/:podId/stop",
+    ];
+
+    for (const path of removedPaths) {
+      expect(REST_ROUTE_MANIFEST).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ path })]),
+      );
+    }
   });
 
   it("manifest 不暴露 runtime handler，並保留 schema 對應欄位", () => {

@@ -50,7 +50,7 @@ export interface StreamingChatExecutorOptions {
    * 已展開後的訊息內容（含 Command `<command>` 標籤，若有）。
    * 契約：caller 必須在進入 executor 前自行完成 Command 展開，executor 不再做展開。
    * 六條 caller 路徑（chatHandlers / runChatHelpers / scheduleService / workflowExecutionService /
-   * integrationEventPipeline / workflowApi）皆於上游呼叫 tryExpandCommandMessage 後再傳入。
+   * integrationEventPipeline / goal runtime）皆於上游呼叫 tryExpandCommandMessage 後再傳入。
    */
   message: string | ContentBlock[];
   abortable: boolean;

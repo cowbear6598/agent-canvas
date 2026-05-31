@@ -69,53 +69,6 @@ export async function listCanvases(
   return response.canvases || [];
 }
 
-export async function postCanvas(baseUrl: string, body: unknown, contentType = 'application/json') {
-  return fetch(`${baseUrl}/api/canvas`, {
-    method: 'POST',
-    headers: { 'Content-Type': contentType },
-    body: contentType === 'application/json' ? JSON.stringify(body) : String(body),
-  });
-}
-
-export async function postPod(baseUrl: string, canvasId: string, body: unknown, contentType = 'application/json') {
-  return fetch(`${baseUrl}/api/canvas/${canvasId}/pods`, {
-    method: 'POST',
-    headers: { 'Content-Type': contentType },
-    body: contentType === 'application/json' ? JSON.stringify(body) : String(body),
-  });
-}
-
-export async function deletePod(baseUrl: string, canvasId: string, podId: string): Promise<Response> {
-  return fetch(`${baseUrl}/api/canvas/${canvasId}/pods/${encodeURIComponent(podId)}`, { method: 'DELETE' });
-}
-
-export function patchPod(
-  baseUrl: string,
-  canvasId: string,
-  podId: string,
-  body: Record<string, unknown>,
-  contentType = 'application/json',
-): Promise<Response> {
-  return fetch(`${baseUrl}/api/canvas/${canvasId}/pods/${encodeURIComponent(podId)}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': contentType },
-    body: JSON.stringify(body),
-  });
-}
-
-export function patchCanvas(
-  baseUrl: string,
-  canvasId: string,
-  body: Record<string, unknown>,
-  contentType = 'application/json',
-): Promise<Response> {
-  return fetch(`${baseUrl}/api/canvas/${canvasId}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': contentType },
-    body: JSON.stringify(body),
-  });
-}
-
 export async function reorderCanvases(
   client: TestWebSocketClient,
   canvasIds: string[]

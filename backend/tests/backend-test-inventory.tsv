@@ -4,26 +4,26 @@ backend/tests/database/model-aliases.test.ts	database	keep	database persistence 
 backend/tests/database/schema.test.ts	database	rewrite	migration/database integrity	data-container-crud	migration	Database schema, cascade, prepared statement coverage
 backend/tests/business-logic/opencodeAliasesHandlers.test.ts	business-logic	rewrite	F4 fake external provider behavior	module-mock+spy-call-count	-	Opencode alias handlers plus broadcast assertions
 backend/tests/business-logic/pluginHandlers.test.ts	business-logic	rewrite	error classifier	module-mock+spy-call-count+data-container-crud	-	Plugin handlers and i18n error contract
-backend/tests/userflows/canvas-api.test.ts	userflows	keep	F3 api-to-service/database/files behavior	spy+data-container-crud	path-safety	Canvas REST API validation and persistence
+backend/tests/userflows/canvas-api.test.ts	deleted	deleted	F1/F2 moved to websocket flows	remove-rest-userflow-tests	removed-rest-boundary	已移除 Canvas REST userflow 測試，HTTP 契約不再存在
 backend/tests/userflows/canvas.test.ts	userflows	keep	F3 api-to-service/database/files behavior	-	-	Canvas management socket flow
 backend/tests/userflows/chat.test.ts	userflows	keep	F3 api-to-service/database/files behavior	module-mock+data-container-crud	-	Chat management flow
 backend/tests/integration/config-ws.test.ts	integration	keep	F3 api-to-service/database/files behavior	getter-setter	schedule-timezone	Config websocket timezone validation
 backend/tests/userflows/connection.test.ts	userflows	keep	F3 api-to-service/database/files behavior	data-container-crud	-	Connection management flow
-backend/tests/userflows/connectionApi.test.ts	userflows	keep	F3 api-to-service/database/files behavior	-	-	Connection REST API flow
+backend/tests/userflows/connectionApi.test.ts	deleted	deleted	F2 moved to websocket connection flow	remove-rest-userflow-tests	removed-rest-boundary	已移除 Connection REST userflow 測試，HTTP 契約不再存在
 backend/tests/userflows/cursor.test.ts	userflows	keep	F3 api-to-service/database/files behavior	-	-	Cursor sharing flow
 backend/tests/userflows/integration.test.ts	userflows	keep	F3 api-to-service/database/files behavior	data-container-crud	-	Integration app API/socket persistence flow
 backend/tests/userflows/integrationReplyMcpBridge.test.ts	userflows	keep	F3 api-to-service/database/files behavior	spy-call-count	-	Integration reply MCP bridge flow
 backend/tests/userflows/managedMcpHandlers.test.ts	userflows	keep	F3 api-to-service/database/files behavior	data-container-crud	-	Managed MCP handlers integration
 backend/tests/integration/managedMcpSurfaceService.test.ts	integration	keep	F3 api-to-service/database/files behavior	spy-call-count+data-container-crud	-	Managed MCP surface service behavior
 backend/tests/userflows/paste.test.ts	userflows	keep	F3 api-to-service/database/files behavior	data-container-crud	-	Paste flow writes resources
-backend/tests/userflows/pod-api.test.ts	userflows	keep	F3 api-to-service/database/files behavior	-	-	Pod REST API flow
+backend/tests/userflows/pod-api.test.ts	deleted	deleted	F2 moved to websocket pod flow	remove-rest-userflow-tests	removed-rest-boundary	已移除 Pod REST userflow 測試，HTTP 契約不再存在
 backend/tests/userflows/pod-download-api.test.ts	userflows	keep	F3 api-to-service/database/files behavior	data-container-crud	path-safety	Pod download API path and archive behavior
 backend/tests/userflows/pod.test.ts	userflows	keep	F3 api-to-service/database/files behavior	-	-	Pod management socket flow
 backend/tests/userflows/repository-git-operations.test.ts	userflows	keep	F3 api-to-service/database/files behavior	-	-	Repository git operations flow
 backend/tests/userflows/repository.test.ts	userflows	keep	F3 api-to-service/database/files behavior	data-container-crud	-	Repository management flow
 backend/tests/integration/setup.test.ts	integration	keep	F3 api-to-service/database/files behavior	-	-	Test environment setup behavior
 backend/tests/integration/store-coverage.test.ts	integration	keep	F3 api-to-service/database/files behavior	data-container-crud	-	Store coverage across persisted relations
-backend/tests/userflows/workflow-api.test.ts	userflows	keep	F3 api-to-service/database/files behavior	data-container-crud	path-safety+workflow-decision	Workflow API persistence and path checks
+backend/tests/userflows/workflow-api.test.ts	deleted	deleted	F3 moved to websocket workflow flow	remove-rest-userflow-tests	removed-rest-boundary	已移除 Workflow REST userflow 測試，HTTP 契約不再存在
 backend/tests/business-logic/abortRegistry.test.ts	business-logic	rewrite	F4 fake external provider behavior	-	-	Abort registry data container behavior
 backend/tests/business-logic/claudeProviderBuildOptions.test.ts	business-logic	rewrite	F4 fake external provider behavior	module-mock+spy-call-count+getter-setter	path-safety	Claude provider buildOptions assembly
 backend/tests/business-logic/codexNormalizer.test.ts	business-logic	keep	provider normalizer	-	provider-normalizer	Codex normalizer output rules

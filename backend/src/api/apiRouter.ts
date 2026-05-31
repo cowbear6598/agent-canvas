@@ -48,6 +48,13 @@ function matchRoute(
   return null;
 }
 
+function notFoundApiResponse(): Response {
+  return new Response(JSON.stringify({ error: "找不到 API 路徑" }), {
+    status: HTTP_STATUS.NOT_FOUND,
+    headers: JSON_HEADERS,
+  });
+}
+
 function forbiddenResponse(error: string, code: string): Response {
   return new Response(JSON.stringify({ error, code }), {
     status: HTTP_STATUS.FORBIDDEN,
@@ -110,10 +117,7 @@ export async function handleApiRequest(req: Request): Promise<Response | null> {
   const match = matchRoute(req.method, url.pathname);
 
   if (!match) {
-    return new Response(JSON.stringify({ error: "找不到 API 路徑" }), {
-      status: 404,
-      headers: JSON_HEADERS,
-    });
+    return notFoundApiResponse();
   }
 
   try {

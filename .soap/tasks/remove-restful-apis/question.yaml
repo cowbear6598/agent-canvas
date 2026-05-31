@@ -1,0 +1,86 @@
+feature: remove-restful-apis
+created: "2026-05-31"
+approved: true
+impact_classification:
+  frontend:
+    status: possible
+    evidence:
+      - 移除 REST API 可能影響目前仍直接使用 HTTP 的前端功能，需先查 codebase 與確認保留策略。
+  backend:
+    status: required
+    evidence:
+      - 需求明確要刪除已被 WebSocket 取代的 `/api/*` REST API，後端 router 與 handler 必須調整。
+questions:
+  - id: Q1
+    text: 目前後端實際存在的 REST API 路由有哪些，分別由哪些模組維護？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      `backend/src/api/restRouteManifest.ts` 集中定義 20 條 `/api/*` 路由，
+      `backend/src/api/apiRouter.ts` 負責統一派送，實作分散在 `backend/src/api/*.ts`。
+  - id: Q2
+    text: 目前前端與測試有哪些地方仍直接依賴 REST API？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      前端 runtime 仍直接依賴 4 個 HTTP 入口：
+      - `POST /api/bundles/import`
+      - `GET /api/canvas/:id/pods/:podId/download`
+      - `POST /api/upload`
+      - `POST /api/auth/redeem-reconnect-grant`
+      測試也有對應依賴。
+  - id: Q3
+    text: 如果移除 REST API router，專案內有哪些 skill 或文件需要同步更新？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      目前 repo 內沒有可同步更新的 project skill 檔，使用者已確認 `skills` 資料夾是自行刪除的。
+      本次可預期需要同步清理的是：
+      - REST route manifest 與相關測試
+      - `backend/src/api/*.ts` 內殘留的 REST 註解或說明文字
+      若使用者之後恢復本地 skill 載體，實作時再另行同步。
+  - id: Q4
+    text: 目前每一條 REST API 是否已有可替代的 WebSocket 能力？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      已有 WebSocket 對應、可刪除的 REST API：
+      - `GET /api/canvas/list`
+      - `POST /api/canvas`
+      - `DELETE /api/canvas/:id`
+      - `PATCH /api/canvas/:id`
+      - `GET /api/canvas/:id/pods`
+      - `POST /api/canvas/:id/pods`
+      - `DELETE /api/canvas/:id/pods/:podId`
+      - `PATCH /api/canvas/:id/pods/:podId`
+      - `GET /api/canvas/:id/connections`
+      - `POST /api/canvas/:id/connections`
+      - `DELETE /api/canvas/:id/connections/:connectionId`
+      - `PATCH /api/canvas/:id/connections/:connectionId`
+      - `POST /api/canvas/:id/workflows/:podId/chat`
+      - `POST /api/canvas/:id/workflows/:podId/stop`
+      另外 `GET /api/canvas/:id/workflows` 雖然沒有 WS 對應，但前端沒在用，使用者已確認可直接刪除。
+      尚無 WS 等價、需保留的 API：
+      - `GET /api/canvas/:id/pods/:podId/download`
+      - `POST /api/bundles/import`
+      - `POST /api/upload`
+      - `POST /api/auth/redeem-reconnect-grant`
+      - `POST /api/internal/integration-reply`
+  - id: Q5
+    text: 這次刪除的範圍是否包含 webhook HTTP 入口？
+    type: user-input
+    completed: true
+    answer: |
+      只處理可被 WebSocket 取代的 `/api/*` REST API。
+      `/slack/events`、`/jira/events`、`/webhook/:appName` 需保留，避免 integrations 失效。
+  - id: Q6
+    text: 對目前仍依賴 HTTP 特性的 `/api/*`，是否保留？
+    type: user-input
+    completed: true
+    answer: |
+      以下 5 條 `/api/*` 需保留，不補 WebSocket，也不移除功能：
+      - `GET /api/canvas/:id/pods/:podId/download`
+      - `POST /api/bundles/import`
+      - `POST /api/upload`
+      - `POST /api/auth/redeem-reconnect-grant`
+      - `POST /api/internal/integration-reply`

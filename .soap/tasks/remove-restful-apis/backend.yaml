@@ -1,0 +1,84 @@
+feature: remove-restful-apis
+side: backend
+approved: true
+phases:
+  - id: P1
+    title: 收斂保留中的 HTTP 入口並移除冗餘 REST 路由
+    parallel: true
+    verification: []
+    done: true
+    items:
+      - id: P1.A
+        title: Route manifest 與 router 派送清理
+        tasks:
+          - id: P1.A.t1
+            text: 更新 `backend/src/api/restRouteManifest.ts`，只保留 `GET /api/canvas/:id/pods/:podId/download`、`POST /api/bundles/import`、`POST /api/upload`、`POST /api/auth/redeem-reconnect-grant`、`POST /api/internal/integration-reply` 五條仍需存在的 `/api/*` 路由
+            completed: true
+            last_files_changed:
+              - backend/src/api/restRouteManifest.ts
+          - id: P1.A.t2
+            text: 調整 `backend/src/api/apiRouter.ts` 與 `backend/src/index.ts` 相關派送邏輯，讓已移除的 `/api/canvas*`、`/api/workflows*`、`/api/connections*` REST 請求回到 404，而保留中的 `/api/*` 與 webhook HTTP 入口維持可用
+            completed: true
+            last_files_changed:
+              - backend/src/api/apiRouter.ts
+              - backend/src/index.ts
+      - id: P1.B
+        title: 刪除 REST-only handler 模組與殘留依賴
+        tasks:
+          - id: P1.B.t1
+            text: 刪除 `backend/src/api/canvasApi.ts`、`backend/src/api/connectionApi.ts`、`backend/src/api/workflowApi.ts` 這些已完全失去用途的 REST handler 模組，並移除對應 import 與型別依賴
+            completed: true
+            last_files_changed:
+              - backend/src/api/canvasApi.ts
+              - backend/src/api/connectionApi.ts
+              - backend/src/api/workflowApi.ts
+          - id: P1.B.t2
+            text: 收斂 `backend/src/api/podApi.ts` 只保留仍需存在的 HTTP 能力，移除已被 WebSocket 取代的 Pod REST handler 與其 REST 專用註解或 helper
+            completed: true
+            last_files_changed:
+              - backend/src/api/podApi.ts
+
+  - id: P2
+    title: 同步測試與原始碼中的 REST 契約描述
+    parallel: true
+    verification: []
+    done: true
+    items:
+      - id: P2.A
+        title: 更新保留中的 route contract 測試
+        tasks:
+          - id: P2.A.t1
+            text: 更新 `backend/tests/business-logic/restRouteManifest.test.ts`，改為只驗證保留中的五條 `/api/*` route 與其 handler 對應，並確認被刪除的 route 不再出現在 manifest
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/restRouteManifest.test.ts
+          - id: P2.A.t2
+            text: 檢查 `backend/tests/setup/testServer.ts`、`backend/tests/business-logic/integrationReplyService.test.ts`、`backend/tests/integration/uploadApi.test.ts`、`backend/tests/userflows/pod-download-api.test.ts` 等仍依賴 HTTP 的測試，確保它們對保留 endpoint 的預期與新的 route 集一致
+            completed: true
+            last_files_changed:
+              - backend/tests/userflows/pod-download-api.test.ts
+      - id: P2.B
+        title: 移除已失效的 REST userflow 測試與盤點資料
+        tasks:
+          - id: P2.B.t1
+            text: 刪除或改寫 `backend/tests/userflows/canvas-api.test.ts`、`backend/tests/userflows/pod-api.test.ts`、`backend/tests/userflows/connectionApi.test.ts`、`backend/tests/userflows/workflow-api.test.ts` 與任何僅供這些測試使用的 helper，避免保留已不存在的 REST 契約
+            completed: true
+            last_files_changed:
+              - backend/tests/helpers/canvasHelper.ts
+              - backend/tests/userflows/canvas-api.test.ts
+              - backend/tests/userflows/pod-api.test.ts
+              - backend/tests/userflows/connectionApi.test.ts
+              - backend/tests/userflows/workflow-api.test.ts
+          - id: P2.B.t2
+            text: 更新 `backend/tests/backend-test-inventory.tsv`，移除或標記已刪除的 REST userflow 測試條目，讓測試盤點反映新的 HTTP 邊界
+            completed: true
+            last_files_changed:
+              - backend/tests/backend-test-inventory.tsv
+      - id: P2.C
+        title: 清理原始碼內過時的 REST 說明
+        tasks:
+          - id: P2.C.t1
+            text: 清理 `backend/src/api/*.ts` 與其他後端原始碼中描述已刪除 REST 路由的註解、錯誤訊息與說明文字，只保留仍存在的 upload、pod download、bundle import、reconnect grant、internal integration reply 契約描述
+            completed: true
+            last_files_changed:
+              - backend/src/services/claude/streamingChatExecutor.ts
