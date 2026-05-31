@@ -131,8 +131,8 @@ describe("TelegramProvider - formatEventMessage", () => {
     expect(result).not.toBeNull();
     expect(result?.provider).toBe("telegram");
     expect(result?.appId).toBe(appId);
-    expect(result?.text).toContain("[Telegram: @sender]");
-    expect(result?.text).toContain("<user_data>");
+    expect(result?.text).toContain("<username>sender</username>");
+    expect(result?.text).toContain("<message>你好</message>");
   });
 
   it("群組訊息應回傳 null", () => {
@@ -182,6 +182,17 @@ describe("TelegramProvider - formatEventMessage", () => {
 
     const result = telegramProvider.formatEventMessage(message, app);
     expect(result?.messageId).toBe(12345);
+  });
+
+  it("username 與 message 應以獨立標籤包裝", () => {
+    const app = makeApp({ id: appId });
+    const message = makeMessageEvent({ text: "hello" });
+
+    const result = telegramProvider.formatEventMessage(message, app);
+
+    expect(result?.text).toBe(
+      "<username>sender</username>\n<message>hello</message>",
+    );
   });
 });
 

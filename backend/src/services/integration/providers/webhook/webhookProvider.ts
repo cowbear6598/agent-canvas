@@ -8,7 +8,6 @@ import { createDedupTracker } from "../../dedupHelper.js";
 import {
   broadcastConnectionStatus,
   parseWebhookBody,
-  formatIntegrationMessage,
 } from "../../integrationHelpers.js";
 import type {
   IntegrationProvider,
@@ -22,6 +21,10 @@ const NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
 const MAX_NAME_LENGTH = 50;
 const MAX_BODY_SIZE = 1_000_000;
 const dedupTracker = createDedupTracker();
+
+function formatWebhookEventMessage(appName: string, content: string): string {
+  return `<app>${appName}</app>\n<message>${content}</message>`;
+}
 
 class WebhookProvider implements IntegrationProvider {
   readonly name = "webhook";
@@ -80,7 +83,7 @@ class WebhookProvider implements IntegrationProvider {
     if (event == null) return null;
 
     const formattedJson = JSON.stringify(event, null, 2);
-    const text = formatIntegrationMessage("Webhook", app.name, formattedJson);
+    const text = formatWebhookEventMessage(app.name, formattedJson);
 
     return {
       provider: "webhook",

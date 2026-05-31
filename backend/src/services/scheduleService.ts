@@ -16,9 +16,9 @@ import { configStore } from "./configStore.js";
  * 排程觸發但 Command 不存在 / 訊息為空時的 fallback 字串。
  * 避免 codex stdin 為空導致崩潰。
  */
-const SCHEDULE_FALLBACK_MESSAGE = "排程啟動，完成以下任務：";
+const SCHEDULE_FALLBACK_MESSAGE = "<schedule>完成 Goal</schedule>";
 
-function buildScheduleMessage(
+export function buildScheduleMessage(
   _pod: Pod,
   message: string | ContentBlock[],
 ): string | ContentBlock[] {

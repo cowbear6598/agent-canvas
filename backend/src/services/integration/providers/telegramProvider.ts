@@ -6,7 +6,6 @@ import { integrationEventPipeline } from "../integrationEventPipeline.js";
 import {
   broadcastConnectionStatus,
   initializeProvider,
-  formatIntegrationMessage,
 } from "../integrationHelpers.js";
 import { escapeUserInput } from "../../../utils/escapeInput.js";
 import { logger } from "../../../utils/logger.js";
@@ -23,6 +22,15 @@ const POLLING_TIMEOUT = 30;
 const MAX_RETRY_DELAY = 60_000;
 const INITIAL_RETRY_DELAY = 1_000;
 const MAX_TELEGRAM_MESSAGE_LENGTH = 4096;
+
+function formatTelegramEventMessage(
+  username: string,
+  content: string,
+): string {
+  const escapedUsername = escapeUserInput(username);
+  const escapedContent = escapeUserInput(content);
+  return `<username>${escapedUsername}</username>\n<message>${escapedContent}</message>`;
+}
 
 export interface TelegramApiChat {
   id: number;
@@ -198,11 +206,7 @@ class TelegramProvider implements IntegrationProvider {
     const userName = escapeUserInput(rawUserName);
     const cleanedText = escapeUserInput(truncatedText);
     const chatId = message.chat.id;
-    const formattedText = formatIntegrationMessage(
-      "Telegram",
-      userName,
-      cleanedText,
-    );
+    const formattedText = formatTelegramEventMessage(userName, cleanedText);
 
     return {
       provider: this.name,

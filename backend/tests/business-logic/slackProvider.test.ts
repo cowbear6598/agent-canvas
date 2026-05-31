@@ -330,8 +330,8 @@ describe('SlackProvider - formatEventMessage', () => {
 
         const result = slackProvider.formatEventMessage(event, app);
         expect(result).not.toBeNull();
-        expect(result?.text).toContain('[Slack: @U12345]');
-        expect(result?.text).toContain('hello world');
+        expect(result?.text).toContain('<user-id>U12345</user-id>');
+        expect(result?.text).toContain('<message>hello world</message>');
         expect(result?.text).not.toContain('<@U99999>');
         expect(result?.resourceId).toBe('C12345');
         expect(result?.provider).toBe('slack');
@@ -348,7 +348,7 @@ describe('SlackProvider - formatEventMessage', () => {
         };
 
         const result = slackProvider.formatEventMessage(event, app);
-        expect(result?.text).toContain('[Slack: @unknown]');
+        expect(result?.text).toContain('<user-id>unknown</user-id>');
     });
 
     it('訊息超過最大長度應被截斷', () => {
@@ -365,6 +365,22 @@ describe('SlackProvider - formatEventMessage', () => {
 
         const result = slackProvider.formatEventMessage(event, app);
         expect(result?.text).toContain('訊息過長，已截斷');
+    });
+
+    it('userId 與 message 應以獨立標籤包裝', () => {
+        const app = makeApp();
+        const event = {
+            type: 'app_mention',
+            channel: 'C12345',
+            user: 'U12345',
+            text: '<@U99999> hello',
+            ts: '1234567890.123456',
+            event_ts: '1234567890.123456',
+        };
+
+        const result = slackProvider.formatEventMessage(event, app);
+
+        expect(result?.text).toBe('<user-id>U12345</user-id>\n<message>hello</message>');
     });
 
     it('回傳的 NormalizedEvent 應包含 senderId、messageTs、threadTs', () => {

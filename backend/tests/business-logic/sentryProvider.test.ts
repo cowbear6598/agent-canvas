@@ -325,8 +325,9 @@ describe("SentryProvider - formatEventMessage", () => {
     expect(result?.provider).toBe("sentry");
     expect(result?.resourceId).toBe("*");
     expect(result?.text).toContain(
-      "TypeError: Cannot read property 'foo' of undefined",
+      "<title>TypeError: Cannot read property 'foo' of undefined</title>",
     );
+    expect(result?.text).toContain("<project>my-project</project>");
   });
 
   it("回傳的 text 包含 shortId", () => {
@@ -336,7 +337,7 @@ describe("SentryProvider - formatEventMessage", () => {
     const result = sentryProvider.formatEventMessage(payload, app);
 
     expect(result).not.toBeNull();
-    expect(result?.text).toContain("MY-PROJECT-1");
+    expect(result?.text).toContain("<short-id>MY-PROJECT-1</short-id>");
   });
 
   it("payload 缺少 shortId 時 formatEventMessage 仍正常運作", () => {
@@ -364,11 +365,9 @@ describe("SentryProvider - formatEventMessage", () => {
 
     expect(result).not.toBeNull();
     expect(result?.text).toContain(
-      "TypeError: Cannot read property 'foo' of undefined",
+      "<title>TypeError: Cannot read property 'foo' of undefined</title>",
     );
-    // 無 shortId 時訊息中不應出現 shortId 的括號格式（如 [MY-PROJECT-1]）
-    expect(result?.text).not.toContain("[MY-PROJECT-1]");
-    expect(result?.text).toContain("偵測到新 Issue：");
+    expect(result?.text).toContain("<short-id></short-id>");
   });
 
   it("收到無效 payload（空物件）應回傳 null", () => {

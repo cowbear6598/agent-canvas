@@ -464,8 +464,9 @@ describe("JiraProvider - formatEventMessage", () => {
 
     const result = jiraProvider.formatEventMessage(event, app);
     expect(result).not.toBeNull();
-    expect(result?.text).toContain("[Jira: Alice]");
-    expect(result?.text).toContain("建立了 Issue");
+    expect(result?.text).toBe(
+      "<issue-number>PROJ-1</issue-number>\n<title>New bug</title>",
+    );
     expect(result?.resourceId).toBe("*");
   });
 
@@ -483,8 +484,9 @@ describe("JiraProvider - formatEventMessage", () => {
 
     const result = jiraProvider.formatEventMessage(event, app);
     expect(result).not.toBeNull();
-    expect(result?.text).toContain("更新了 Issue");
-    expect(result?.text).toContain("status: Open → Closed");
+    expect(result?.text).toBe(
+      "<issue-number>PROJ-2</issue-number>\n<title>Updated issue</title>\n<pre-status>Open</pre-status>\n<next-status>Closed</next-status>",
+    );
     expect(result?.resourceId).toBe("*");
   });
 
@@ -499,8 +501,29 @@ describe("JiraProvider - formatEventMessage", () => {
 
     const result = jiraProvider.formatEventMessage(event, app);
     expect(result).not.toBeNull();
-    expect(result?.text).toContain("刪除了 Issue");
+    expect(result?.text).toBe(
+      "<issue-number>PROJ-3</issue-number>\n<title>Deleted issue</title>",
+    );
     expect(result?.resourceId).toBe("*");
+  });
+
+  it("jira:issue_updated 但沒有 status 變更時只回傳通用欄位", () => {
+    const app = makeApp();
+    const event = {
+      webhookEvent: "jira:issue_updated",
+      timestamp: Date.now(),
+      issue: { key: "PROJ-4", fields: { summary: "Priority updated" } },
+      user: { displayName: "Dave" },
+      changelog: {
+        items: [{ field: "priority", fromString: "Low", toString: "High" }],
+      },
+    };
+
+    const result = jiraProvider.formatEventMessage(event, app);
+
+    expect(result?.text).toBe(
+      "<issue-number>PROJ-4</issue-number>\n<title>Priority updated</title>",
+    );
   });
 
   it("payload 格式不合法時應回傳 null", () => {

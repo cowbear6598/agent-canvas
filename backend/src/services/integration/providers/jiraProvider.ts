@@ -92,6 +92,19 @@ const jiraWebhookPayloadSchema = z.object({
 
 type JiraWebhookPayload = z.infer<typeof jiraWebhookPayloadSchema>;
 
+function findStatusChange(
+  payload: JiraWebhookPayload,
+): { from: string; to: string } | null {
+  const statusItem = payload.changelog?.items?.find(
+    (item) => item.field === "status",
+  );
+  if (!statusItem) return null;
+  return {
+    from: escapeUserInput(statusItem.fromString ?? ""),
+    to: escapeUserInput(statusItem.toString ?? ""),
+  };
+}
+
 function verifyJiraSignature(
   webhookSecret: string,
   rawBody: string,
@@ -121,31 +134,19 @@ function formatJiraEventMessage(
   webhookEvent: string,
   issueKey: string,
   summary: string,
-  userName: string,
   payload: JiraWebhookPayload,
 ): string {
-  const escapedUserName = escapeUserInput(userName);
   const escapedIssueKey = escapeUserInput(issueKey);
   const escapedSummary = escapeUserInput(summary);
-
-  if (webhookEvent === "jira:issue_created") {
-    return `[Jira: ${escapedUserName}] <user_data>建立了 Issue ${escapedIssueKey}: ${escapedSummary}</user_data>`;
-  }
+  const baseMessage = `<issue-number>${escapedIssueKey}</issue-number>\n<title>${escapedSummary}</title>`;
 
   if (webhookEvent === "jira:issue_updated") {
-    const changelogItems = payload.changelog?.items ?? [];
-    const changelogDesc = changelogItems
-      .map((item) => {
-        const field = escapeUserInput(item.field);
-        const from = escapeUserInput(item.fromString ?? "");
-        const to = escapeUserInput(item.toString ?? "");
-        return `${field}: ${from} → ${to}`;
-      })
-      .join(", ");
-    return `[Jira: ${escapedUserName}] <user_data>更新了 Issue ${escapedIssueKey}: ${escapedSummary}\n變更: ${changelogDesc}</user_data>`;
+    const statusChange = findStatusChange(payload);
+    if (!statusChange) return baseMessage;
+    return `${baseMessage}\n<pre-status>${statusChange.from}</pre-status>\n<next-status>${statusChange.to}</next-status>`;
   }
 
-  return `[Jira: ${escapedUserName}] <user_data>刪除了 Issue ${escapedIssueKey}: ${escapedSummary}</user_data>`;
+  return baseMessage;
 }
 
 class JiraProvider implements IntegrationProvider {
@@ -217,7 +218,6 @@ class JiraProvider implements IntegrationProvider {
       webhookEvent,
       issueKey,
       summary,
-      userName,
       payload,
     );
 
@@ -309,7 +309,6 @@ class JiraProvider implements IntegrationProvider {
       webhookEvent,
       issueKey,
       summary,
-      userName,
       webhookPayload,
     );
 

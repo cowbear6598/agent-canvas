@@ -9,7 +9,6 @@ import { createDedupTracker } from "../../dedupHelper.js";
 import {
   broadcastConnectionStatus,
   parseWebhookBody,
-  formatIntegrationMessage,
 } from "../../integrationHelpers.js";
 import type {
   IntegrationProvider,
@@ -67,18 +66,12 @@ function verifySentrySignature(
 function formatSentryIssueMessage(
   projectName: string,
   issueTitle: string,
-  culprit: string,
-  issueUrl: string,
   shortId?: string,
 ): string {
+  const escapedProjectName = escapeUserInput(projectName);
   const escapedIssueTitle = escapeUserInput(issueTitle);
-  const escapedCulprit = escapeUserInput(culprit);
-  const escapedIssueUrl = escapeUserInput(issueUrl);
-  const titleLine = shortId
-    ? `偵測到新 Issue：[${escapeUserInput(shortId)}] ${escapedIssueTitle}`
-    : `偵測到新 Issue：${escapedIssueTitle}`;
-  const content = `${titleLine}\nCulprit：${escapedCulprit}\nURL：${escapedIssueUrl}`;
-  return formatIntegrationMessage("Sentry", projectName, content);
+  const escapedShortId = escapeUserInput(shortId ?? "");
+  return `<project>${escapedProjectName}</project>\n<short-id>${escapedShortId}</short-id>\n<title>${escapedIssueTitle}</title>`;
 }
 
 class SentryProvider implements IntegrationProvider {
@@ -136,17 +129,9 @@ class SentryProvider implements IntegrationProvider {
     const payload: SentryWebhookPayload = parsed.data;
     const issueTitle = payload.data.issue.title;
     const shortId = payload.data.issue.shortId;
-    const culprit = payload.data.issue.culprit ?? "";
     const projectName = payload.data.project?.name ?? "Sentry";
-    const issueUrl = payload.data.issue.web_url ?? "";
 
-    const text = formatSentryIssueMessage(
-      projectName,
-      issueTitle,
-      culprit,
-      issueUrl,
-      shortId,
-    );
+    const text = formatSentryIssueMessage(projectName, issueTitle, shortId);
 
     return {
       provider: this.name,

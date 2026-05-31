@@ -164,6 +164,8 @@ describe("WebhookProvider - formatEventMessage", () => {
     expect(result).not.toBeNull();
     expect(result?.provider).toBe("webhook");
     expect(result?.resourceId).toBe("*");
+    expect(result?.text).toContain(`<app>${app.name}</app>`);
+    expect(result?.text).toContain("<message>{");
     expect(result?.text).toContain(JSON.stringify(validPayload, null, 2));
   });
 

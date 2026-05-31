@@ -97,9 +97,7 @@ describe("workflowHelpers", () => {
     it("正常內容包裝在 source-summary 標籤中", () => {
       const result = buildTransferMessage("這是正常內容");
 
-      expect(result).toContain("<source-summary>");
-      expect(result).toContain("</source-summary>");
-      expect(result).toContain("這是正常內容");
+      expect(result).toBe("<source-summary>\n這是正常內容\n</source-summary>");
     });
 
     it("Prompt Injection：內容含 </source-summary> 結束標籤時應被轉義", () => {

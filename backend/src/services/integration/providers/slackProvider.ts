@@ -10,7 +10,6 @@ import { slackClientFactory, type SlackClient } from "./slackClient.js";
 import {
   destroyProvider,
   initializeProvider,
-  formatIntegrationMessage,
   parseWebhookBody,
 } from "../integrationHelpers.js";
 import { escapeUserInput } from "../../../utils/escapeInput.js";
@@ -51,6 +50,12 @@ const slackEventPayloadSchema = z.object({
 type SlackEventPayload = z.infer<typeof slackEventPayloadSchema>;
 
 type AppMentionEvent = z.infer<typeof slackEventSchema>;
+
+function formatSlackEventMessage(userId: string, content: string): string {
+  const escapedUserId = escapeUserInput(userId);
+  const escapedContent = escapeUserInput(content);
+  return `<user-id>${escapedUserId}</user-id>\n<message>${escapedContent}</message>`;
+}
 
 function isTimestampValid(timestampSeconds: string): boolean {
   const ts = parseInt(timestampSeconds, 10);
@@ -379,11 +384,7 @@ class SlackProvider implements IntegrationProvider {
     const cleanedText = escapeUserInput(truncatedText);
 
     const userName = user ?? "unknown";
-    const formattedText = formatIntegrationMessage(
-      "Slack",
-      userName,
-      cleanedText,
-    );
+    const formattedText = formatSlackEventMessage(userName, cleanedText);
 
     return {
       provider: "slack",

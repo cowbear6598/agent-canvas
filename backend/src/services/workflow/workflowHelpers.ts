@@ -94,10 +94,7 @@ function escapeXmlTags(content: string): string {
 }
 
 export function buildTransferMessage(content: string): string {
-  const isolatedContent = `<source-summary>\n${escapeXmlTags(content)}\n</source-summary>`;
-  return `以下是從另一個 POD 傳遞過來的內容,請根據這些資訊繼續處理:
-
-${isolatedContent}`;
+  return `<source-summary>\n${escapeXmlTags(content)}\n</source-summary>`;
 }
 
 export function completeMultiInputConnections(
