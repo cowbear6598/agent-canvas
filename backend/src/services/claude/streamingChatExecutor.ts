@@ -47,10 +47,7 @@ export interface StreamingChatExecutorOptions {
   canvasId: string;
   podId: string;
   /**
-   * 已展開後的訊息內容（含 Command `<command>` 標籤，若有）。
-   * 契約：caller 必須在進入 executor 前自行完成 Command 展開，executor 不再做展開。
-   * 六條 caller 路徑（chatHandlers / runChatHelpers / scheduleService / workflowExecutionService /
-   * integrationEventPipeline / goal runtime）皆於上游呼叫 tryExpandCommandMessage 後再傳入。
+   * 呼叫端傳入的最終訊息內容；executor 直接使用，不在此層再做內容展開。
    */
   message: string | ContentBlock[];
   abortable: boolean;

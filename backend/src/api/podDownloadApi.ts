@@ -7,6 +7,7 @@ import { repositoryService } from "../services/repositoryService.js";
 import { HTTP_STATUS } from "../constants.js";
 import { isPathWithinDirectory } from "../utils/pathValidator.js";
 import { config } from "../config/index.js";
+import { logger } from "../utils/logger.js";
 
 function sanitizeFilename(name: string): string {
   return name
@@ -67,8 +68,11 @@ async function loadGitignore(
   try {
     const gitignoreContent = await readFile(gitignorePath, "utf-8");
     ig.add(gitignoreContent);
-  } catch {
-    // 讀取 .gitignore 失敗時略過 ignore 規則（含 ENOENT 與其他錯誤）
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return ig;
+    }
+    throw error;
   }
   return ig;
 }
@@ -170,7 +174,8 @@ export async function handleDownloadPodDirectory(
     });
 
     return new Response(readableStream, { status: HTTP_STATUS.OK, headers });
-  } catch {
+  } catch (error) {
+    logger.error("Pod", "Error", "打包 Pod 工作目錄時發生錯誤", error);
     return new Response(
       JSON.stringify({ error: "打包工作目錄時發生錯誤，請稍後再試" }),
       {

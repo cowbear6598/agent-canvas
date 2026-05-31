@@ -3,12 +3,11 @@ import {emitAndWaitResponse} from '../setup';
 import {v4 as uuidv4} from 'uuid';
 import {
     type CanvasCreatePayload,
-    type CanvasListPayload,
     type CanvasReorderPayload,
     WebSocketRequestEvents,
     WebSocketResponseEvents,
 } from '../../src/schemas';
-import {type CanvasCreatedPayload, type CanvasListResultPayload, type CanvasReorderedPayload,} from '../../src/types';
+import {type CanvasCreatedPayload, type CanvasReorderedPayload,} from '../../src/types';
 
 export async function getCanvasId(client: TestWebSocketClient): Promise<string> {
   if (!client.id) {
@@ -47,28 +46,6 @@ export async function createCanvas(
 
   return response.canvas!;
 }
-
-export async function listCanvases(
-  client: TestWebSocketClient
-): Promise<{ id: string; name: string; sortIndex: number }[]> {
-  if (!client.id) {
-    throw new Error('Socket not connected');
-  }
-
-  const payload: CanvasListPayload = {
-    requestId: uuidv4(),
-  };
-
-  const response = await emitAndWaitResponse<CanvasListPayload, CanvasListResultPayload>(
-    client,
-    WebSocketRequestEvents.CANVAS_LIST,
-    WebSocketResponseEvents.CANVAS_LIST_RESULT,
-    payload
-  );
-
-  return response.canvases || [];
-}
-
 export async function reorderCanvases(
   client: TestWebSocketClient,
   canvasIds: string[]
