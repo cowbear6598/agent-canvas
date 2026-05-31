@@ -105,6 +105,21 @@ function findStatusChange(
   };
 }
 
+function buildNonStatusChangeSummary(payload: JiraWebhookPayload): string | null {
+  const changes =
+    payload.changelog?.items
+      ?.filter((item) => item.field !== "status")
+      .map((item) => {
+        const field = escapeUserInput(item.field);
+        const from = escapeUserInput(item.fromString ?? "");
+        const to = escapeUserInput(item.toString ?? "");
+        return `${field}: ${from} → ${to}`;
+      }) ?? [];
+
+  if (changes.length === 0) return null;
+  return changes.join(", ");
+}
+
 function verifyJiraSignature(
   webhookSecret: string,
   rawBody: string,
@@ -138,15 +153,27 @@ function formatJiraEventMessage(
 ): string {
   const escapedIssueKey = escapeUserInput(issueKey);
   const escapedSummary = escapeUserInput(summary);
-  const baseMessage = `<issue-number>${escapedIssueKey}</issue-number>\n<title>${escapedSummary}</title>`;
+  const messageParts = [
+    `<issue-number>${escapedIssueKey}</issue-number>`,
+    `<title>${escapedSummary}</title>`,
+  ];
 
   if (webhookEvent === "jira:issue_updated") {
     const statusChange = findStatusChange(payload);
-    if (!statusChange) return baseMessage;
-    return `${baseMessage}\n<pre-status>${statusChange.from}</pre-status>\n<next-status>${statusChange.to}</next-status>`;
+    if (statusChange) {
+      messageParts.push(
+        `<pre-status>${statusChange.from}</pre-status>`,
+        `<next-status>${statusChange.to}</next-status>`,
+      );
+    }
+
+    const nonStatusSummary = buildNonStatusChangeSummary(payload);
+    if (nonStatusSummary) {
+      messageParts.push(`<changes>${nonStatusSummary}</changes>`);
+    }
   }
 
-  return baseMessage;
+  return messageParts.join("\n");
 }
 
 class JiraProvider implements IntegrationProvider {

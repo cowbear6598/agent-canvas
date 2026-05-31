@@ -507,7 +507,7 @@ describe("JiraProvider - formatEventMessage", () => {
     expect(result?.resourceId).toBe("*");
   });
 
-  it("jira:issue_updated 但沒有 status 變更時只回傳通用欄位", () => {
+  it("jira:issue_updated 但沒有 status 變更時應保留變更摘要", () => {
     const app = makeApp();
     const event = {
       webhookEvent: "jira:issue_updated",
@@ -522,7 +522,29 @@ describe("JiraProvider - formatEventMessage", () => {
     const result = jiraProvider.formatEventMessage(event, app);
 
     expect(result?.text).toBe(
-      "<issue-number>PROJ-4</issue-number>\n<title>Priority updated</title>",
+      "<issue-number>PROJ-4</issue-number>\n<title>Priority updated</title>\n<changes>priority: Low → High</changes>",
+    );
+  });
+
+  it("jira:issue_updated 同時有 status 與其他變更時兩者都應保留", () => {
+    const app = makeApp();
+    const event = {
+      webhookEvent: "jira:issue_updated",
+      timestamp: Date.now(),
+      issue: { key: "PROJ-5", fields: { summary: "Mixed update" } },
+      user: { displayName: "Eve" },
+      changelog: {
+        items: [
+          { field: "status", fromString: "Open", toString: "Done" },
+          { field: "priority", fromString: "Low", toString: "High" },
+        ],
+      },
+    };
+
+    const result = jiraProvider.formatEventMessage(event, app);
+
+    expect(result?.text).toBe(
+      "<issue-number>PROJ-5</issue-number>\n<title>Mixed update</title>\n<pre-status>Open</pre-status>\n<next-status>Done</next-status>\n<changes>priority: Low → High</changes>",
     );
   });
 

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { randomBytes, timingSafeEqual, createHash } from "crypto";
 import { ok, err } from "../../../../types/index.js";
 import type { Result } from "../../../../types/index.js";
+import { escapeUserInput } from "../../../../utils/escapeInput.js";
 import { integrationAppStore } from "../../integrationAppStore.js";
 import { integrationEventPipeline } from "../../integrationEventPipeline.js";
 import { createDedupTracker } from "../../dedupHelper.js";
@@ -23,7 +24,9 @@ const MAX_BODY_SIZE = 1_000_000;
 const dedupTracker = createDedupTracker();
 
 function formatWebhookEventMessage(appName: string, content: string): string {
-  return `<app>${appName}</app>\n<message>${content}</message>`;
+  const escapedAppName = escapeUserInput(appName);
+  const escapedContent = escapeUserInput(content);
+  return `<app>${escapedAppName}</app>\n<message>${escapedContent}</message>`;
 }
 
 class WebhookProvider implements IntegrationProvider {
