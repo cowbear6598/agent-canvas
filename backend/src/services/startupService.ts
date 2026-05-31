@@ -14,7 +14,7 @@ import {
 import "./integration/providers/index.js";
 import { getDb } from "../database/index.js";
 import { encryptionService } from "./encryptionService.js";
-import { scanAndLogOrphanRunRepoDirectories } from "./runtime/orphanRunRepoScanner.js";
+import { scanAndCleanupOrphanRunRepoDirectories } from "./runtime/orphanRunRepoScanner.js";
 import { managedMcpRuntimeService } from "./mcp/managedMcpRuntimeService.js";
 
 class StartupService {
@@ -51,14 +51,14 @@ class StartupService {
       );
     });
 
-    // 掃描孤兒 run repo 目錄並記錄 warn 日誌（不刪除、不阻斷啟動）
+    // 掃描並清理孤兒 run repo 目錄；失敗時僅記錄 warn，不阻斷啟動
     try {
-      await scanAndLogOrphanRunRepoDirectories();
+      await scanAndCleanupOrphanRunRepoDirectories();
     } catch (error) {
       logger.warn(
         "Run",
         "Orphan",
-        `[StartupService] 掃描孤兒 run repo 目錄時發生錯誤：${error}`,
+        `[StartupService] 掃描孤兒 run repo 目錄並清理時發生錯誤：${error}`,
       );
     }
 
