@@ -118,7 +118,12 @@ describe("repository clone API flow", () => {
       );
 
       expect(response.success).toBe(true);
-      expect(response.repository).toEqual({ id: repoName, name: repoName });
+      expect(response.repository).toEqual({
+        id: repoName,
+        name: repoName,
+        repoMemoryEnabled: false,
+        hasRepoMemory: false,
+      });
       expect(progressEvents.map((event) => event.progress)).toEqual(
         expect.arrayContaining([0, 5, 95, 100]),
       );

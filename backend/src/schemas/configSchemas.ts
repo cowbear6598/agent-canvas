@@ -1,6 +1,10 @@
 import { z } from "zod";
+import type { ProviderName } from "../services/provider/types.js";
+import { providerSchema } from "./podSchemas.js";
 
 const gitRemoteUrlRegex = /^(git@|https?:\/\/)/;
+const memoryModelRegex = /^[a-zA-Z0-9._/-]+$/;
+const memoryThinkingLevelRegex = /^[a-z]+$/;
 
 export const configGetSchema = z.object({
   requestId: z.string(),
@@ -26,13 +30,31 @@ export const configUpdateSchema = z
       }, "備份時間格式不正確：時必須在 0-23 之間，分必須在 0-59 之間")
       .optional(),
     backupEnabled: z.boolean().optional(),
+    memoryProvider: providerSchema.optional(),
+    memoryModel: z
+      .string()
+      .regex(memoryModelRegex, "memory model 名稱包含不允許的字元")
+      .max(100)
+      .optional(),
+    memoryThinkingLevel: z
+      .string()
+      .regex(
+        memoryThinkingLevelRegex,
+        "memory thinking level 包含不允許的字元",
+      )
+      .max(20)
+      .nullable()
+      .optional(),
   })
   .refine(
     (data) =>
       data.timezoneOffset !== undefined ||
       data.backupGitRemoteUrl !== undefined ||
       data.backupTime !== undefined ||
-      data.backupEnabled !== undefined,
+      data.backupEnabled !== undefined ||
+      data.memoryProvider !== undefined ||
+      data.memoryModel !== undefined ||
+      data.memoryThinkingLevel !== undefined,
     {
       message: "至少需要提供一個設定值",
     },
@@ -48,6 +70,9 @@ export interface ConfigGetResultPayload {
   backupGitRemoteUrl?: string;
   backupTime?: string;
   backupEnabled?: boolean;
+  memoryProvider?: ProviderName;
+  memoryModel?: string;
+  memoryThinkingLevel?: string | null;
   hasWorkspacePassword?: boolean;
   transportSecurity?: {
     isTls: boolean;
@@ -64,6 +89,9 @@ export interface ConfigUpdatedPayload {
   backupGitRemoteUrl?: string;
   backupTime?: string;
   backupEnabled?: boolean;
+  memoryProvider?: ProviderName;
+  memoryModel?: string;
+  memoryThinkingLevel?: string | null;
   hasWorkspacePassword?: boolean;
   error?: string;
 }

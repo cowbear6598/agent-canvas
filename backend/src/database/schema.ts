@@ -4,6 +4,7 @@ const ALLOWED_ALTER_TABLES = new Set([
   "connections",
   "managed_plugins",
   "model_aliases",
+  "repo_memory_states",
   "run_pod_instances",
 ]);
 
@@ -83,6 +84,26 @@ function ensureManagedPluginBundleColumns(db: Database): void {
     );
     db.exec(
       "CREATE UNIQUE INDEX IF NOT EXISTS idx_managed_plugins_source_unique ON managed_plugins(source_type, source_ref)",
+    );
+  })();
+}
+
+function ensureRepoMemoryEnabledColumn(db: Database): void {
+  db.transaction(() => {
+    addColumnIfMissing(
+      db,
+      "repo_memory_states",
+      "memory_enabled INTEGER NOT NULL DEFAULT 0",
+    );
+    db.exec(
+      `UPDATE repo_memory_states
+       SET memory_enabled = CASE
+         WHEN has_summary = 1 THEN 1
+         ELSE COALESCE(memory_enabled, 0)
+       END`,
+    );
+    db.exec(
+      "CREATE INDEX IF NOT EXISTS idx_repo_memory_states_enabled ON repo_memory_states(memory_enabled)",
     );
   })();
 }
@@ -271,6 +292,90 @@ function createBaseTables(db: Database): void {
   );
 
   db.exec(
+    "CREATE TABLE IF NOT EXISTS pod_memory_states (" +
+      "pod_id TEXT PRIMARY KEY REFERENCES pods(id) ON DELETE CASCADE," +
+      "memory_enabled INTEGER NOT NULL DEFAULT 0," +
+      "summary TEXT," +
+      "has_summary INTEGER NOT NULL DEFAULT 0," +
+      "summary_updated_at TEXT," +
+      "created_at TEXT NOT NULL," +
+      "updated_at TEXT NOT NULL" +
+      ")",
+  );
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_pod_memory_states_enabled ON pod_memory_states(memory_enabled)",
+  );
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_pod_memory_states_has_summary ON pod_memory_states(has_summary)",
+  );
+
+  db.exec(
+    "CREATE TABLE IF NOT EXISTS repo_memory_states (" +
+      "repository_id TEXT PRIMARY KEY," +
+      "memory_enabled INTEGER NOT NULL DEFAULT 0," +
+      "summary TEXT," +
+      "has_summary INTEGER NOT NULL DEFAULT 0," +
+      "summary_updated_at TEXT," +
+      "created_at TEXT NOT NULL," +
+      "updated_at TEXT NOT NULL" +
+      ")",
+  );
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_repo_memory_states_enabled ON repo_memory_states(memory_enabled)",
+  );
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_repo_memory_states_has_summary ON repo_memory_states(has_summary)",
+  );
+
+  db.exec(
+    "CREATE TABLE IF NOT EXISTS memory_jobs (" +
+      "id TEXT PRIMARY KEY," +
+      "scope_type TEXT NOT NULL," +
+      "scope_id TEXT NOT NULL," +
+      "source_pod_id TEXT," +
+      "repository_id TEXT," +
+      "status TEXT NOT NULL," +
+      "attempt_count INTEGER NOT NULL DEFAULT 0," +
+      "error_message TEXT," +
+      "metadata_json TEXT NOT NULL DEFAULT '{}'," +
+      "created_at TEXT NOT NULL," +
+      "updated_at TEXT NOT NULL," +
+      "expires_at TEXT NOT NULL" +
+      ")",
+  );
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_memory_jobs_scope ON memory_jobs(scope_type, scope_id, created_at)",
+  );
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_memory_jobs_expires_at ON memory_jobs(expires_at)",
+  );
+
+  db.exec(
+    "CREATE TABLE IF NOT EXISTS memory_observations (" +
+      "id TEXT PRIMARY KEY," +
+      "job_id TEXT NOT NULL REFERENCES memory_jobs(id) ON DELETE CASCADE," +
+      "scope_type TEXT NOT NULL," +
+      "scope_id TEXT NOT NULL," +
+      "kind TEXT NOT NULL," +
+      "status TEXT NOT NULL DEFAULT 'recorded'," +
+      "summary TEXT," +
+      "payload_json TEXT NOT NULL DEFAULT '{}'," +
+      "created_at TEXT NOT NULL," +
+      "updated_at TEXT NOT NULL," +
+      "expires_at TEXT NOT NULL" +
+      ")",
+  );
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_memory_observations_job_id ON memory_observations(job_id, created_at)",
+  );
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_memory_observations_scope ON memory_observations(scope_type, scope_id, created_at)",
+  );
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_memory_observations_expires_at ON memory_observations(expires_at)",
+  );
+
+  db.exec(
     "CREATE TABLE IF NOT EXISTS pod_manifests (" +
       "pod_id TEXT NOT NULL," +
       "repository_id TEXT NOT NULL," +
@@ -451,6 +556,7 @@ export function createTables(db: Database): void {
   ensureConnectionThinkingColumns(db);
   ensureManagedPluginBundleColumns(db);
   ensureModelAliasesThinkingColumns(db);
+  ensureRepoMemoryEnabledColumn(db);
   ensureModelAliasesUniqueRealModelIndex(db);
   migrateLegacyCodexMiniModel(db);
 }

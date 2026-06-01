@@ -70,6 +70,7 @@ import {
   readGoalRuntimeSnapshot,
   removeGoalRuntimeRun,
 } from "../../src/services/goalRuntime.js";
+import { memoryStateService } from "../../src/services/memoryStateService.js";
 
 const realRegisterActiveStream =
   runExecutionService.registerActiveStream.bind(runExecutionService);
@@ -1578,6 +1579,90 @@ describe("executeStreamingChat", () => {
   });
 
   describe("resolvePodCwd 路徑驗證", () => {
+    it("pod memory 已停用時，provider.chat 不應收到 hidden memory bootstrap sections", async () => {
+      const pod = insertPodViaSQL({
+        provider: "claude",
+        repositoryId: "test-repo-memory-disabled",
+      });
+      memoryStateService.setPodMemoryEnabled(pod.id, false);
+      memoryStateService.writePodSummary(pod.id, "這段 pod 記憶不應被注入");
+      memoryStateService.writeRepoSummary(
+        "test-repo-memory-disabled",
+        "這段 repo 記憶也不應被注入",
+      );
+
+      let capturedCtx: unknown;
+      const chatMock = vi.fn(async function* (ctx: unknown) {
+        capturedCtx = ctx;
+        yield { type: "turn_complete" as const };
+      });
+      asMock(getProvider).mockReturnValue({
+        chat: chatMock,
+        cancel: vi.fn(() => false),
+        buildOptions: vi.fn().mockResolvedValue({}),
+        metadata: {
+          availableModelValues: new Set(["opus", "sonnet", "haiku"]),
+          defaultOptions: { model: "opus" },
+        },
+      });
+
+      await executeStreamingChat({
+        canvasId,
+        podId: pod.id,
+        message,
+        abortable: false,
+        strategy: makeStrategy(),
+      });
+
+      expect(chatMock).toHaveBeenCalledTimes(1);
+      expect(capturedCtx).toMatchObject({
+        hiddenBootstrapSections: [],
+      });
+    });
+
+    it("pod memory 已停用但 repo memory 已啟用時，仍應注入 repo memory", async () => {
+      const pod = insertPodViaSQL({
+        provider: "claude",
+        repositoryId: "test-repo-memory-enabled",
+      });
+      memoryStateService.setPodMemoryEnabled(pod.id, false);
+      memoryStateService.setRepoMemoryEnabled("test-repo-memory-enabled", true);
+      memoryStateService.writeRepoSummary(
+        "test-repo-memory-enabled",
+        "這段 repo 記憶應被注入",
+      );
+
+      let capturedCtx: unknown;
+      const chatMock = vi.fn(async function* (ctx: unknown) {
+        capturedCtx = ctx;
+        yield { type: "turn_complete" as const };
+      });
+      asMock(getProvider).mockReturnValue({
+        chat: chatMock,
+        cancel: vi.fn(() => false),
+        buildOptions: vi.fn().mockResolvedValue({}),
+        metadata: {
+          availableModelValues: new Set(["opus", "sonnet", "haiku"]),
+          defaultOptions: { model: "opus" },
+        },
+      });
+
+      await executeStreamingChat({
+        canvasId,
+        podId: pod.id,
+        message,
+        abortable: false,
+        strategy: makeStrategy(),
+      });
+
+      expect(chatMock).toHaveBeenCalledTimes(1);
+      expect(capturedCtx).toMatchObject({
+        hiddenBootstrapSections: [
+          "<repo-memory>\n這段 repo 記憶應被注入\n</repo-memory>",
+        ],
+      });
+    });
+
     it("綁定 Repository 時，provider.chat 收到的 workspacePath 為 repositoriesRoot/repositoryId", async () => {
       const pod = insertPodViaSQL({
         provider: "claude",

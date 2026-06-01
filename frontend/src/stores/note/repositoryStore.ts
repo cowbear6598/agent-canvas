@@ -24,7 +24,31 @@ import type {
   RepositoryDeleteBranchPayload,
   RepositoryBranchDeletedPayload,
   RepositoryPullLatestPayload,
+  RepositorySetMemoryEnabledPayload,
+  RepositoryClearMemoryPayload,
+  RepositoryMemoryEnabledSetPayload,
+  RepositoryMemoryClearedPayload,
 } from "@/types/websocket";
+import { usePodStore } from "@/stores/pod/podStore";
+
+function setRepositoryMemoryState(
+  repositories: Repository[],
+  repositoryId: string,
+  state: {
+    hasRepoMemory?: boolean;
+    repoMemoryEnabled?: boolean;
+  },
+): void {
+  const repository = repositories.find((item) => item.id === repositoryId);
+  if (repository) {
+    if (state.hasRepoMemory !== undefined) {
+      repository.hasRepoMemory = state.hasRepoMemory;
+    }
+    if (state.repoMemoryEnabled !== undefined) {
+      repository.repoMemoryEnabled = state.repoMemoryEnabled;
+    }
+  }
+}
 
 interface RepositoryStoreCustomActions {
   createRepository(name: string): Promise<{
@@ -56,6 +80,18 @@ interface RepositoryStoreCustomActions {
     branchName: string,
   ): Promise<{ success: boolean; branchName?: string; error?: string }>;
   pullLatest(repositoryId: string): Promise<{ requestId: string }>;
+  setRepoMemoryEnabled(
+    repositoryId: string,
+    memoryEnabled: boolean,
+  ): Promise<void>;
+  clearRepoMemory(repositoryId: string): Promise<void>;
+  setRepoMemoryState(
+    repositoryId: string,
+    state: {
+      hasRepoMemory?: boolean;
+      repoMemoryEnabled?: boolean;
+    },
+  ): void;
 }
 
 function createRepositoryCustomActions(): RepositoryStoreCustomActions {
@@ -323,6 +359,134 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
       return { requestId };
     },
 
+    async setRepoMemoryEnabled(
+      this: NoteStoreContext<Repository>,
+      repositoryId: string,
+      memoryEnabled: boolean,
+    ): Promise<void> {
+      const result = await executeRepositoryAction<
+        RepositorySetMemoryEnabledPayload,
+        RepositoryMemoryEnabledSetPayload
+      >(
+        {
+          requestEvent: WebSocketRequestEvents.REPOSITORY_SET_MEMORY_ENABLED,
+          responseEvent:
+            WebSocketResponseEvents.REPOSITORY_MEMORY_ENABLED_SET,
+          payload: { repositoryId, memoryEnabled },
+        },
+        {
+          errorCategory: "Repository",
+          errorAction: t(
+            memoryEnabled
+              ? "canvas.podContextMenu.repoMemoryEnableFailed"
+              : "canvas.podContextMenu.repoMemoryDisableFailed",
+          ),
+          errorMessage: t(
+            memoryEnabled
+              ? "canvas.podContextMenu.repoMemoryEnableFailedDesc"
+              : "canvas.podContextMenu.repoMemoryDisableFailedDesc",
+          ),
+        },
+      );
+
+      if (!result.success) {
+        return;
+      }
+
+      if (!result.data.success) {
+        showErrorToast(
+          "Repository",
+          t(
+            memoryEnabled
+              ? "canvas.podContextMenu.repoMemoryEnableFailed"
+              : "canvas.podContextMenu.repoMemoryDisableFailed",
+          ),
+          t(
+            memoryEnabled
+              ? "canvas.podContextMenu.repoMemoryEnableFailedDesc"
+              : "canvas.podContextMenu.repoMemoryDisableFailedDesc",
+          ),
+        );
+        return;
+      }
+
+      const resolvedRepositoryId =
+        result.data.repository?.id ?? result.data.repositoryId ?? repositoryId;
+      setRepositoryMemoryState(this.availableItems, resolvedRepositoryId, {
+        hasRepoMemory: result.data.repository?.hasRepoMemory,
+        repoMemoryEnabled: result.data.repository?.repoMemoryEnabled,
+      });
+      for (const pod of result.data.pods ?? []) {
+        usePodStore().updatePod(pod);
+      }
+
+      showSuccessToast(
+        "Repository",
+        t(
+          memoryEnabled
+            ? "canvas.podContextMenu.repoMemoryEnabled"
+            : "canvas.podContextMenu.repoMemoryDisabled",
+        ),
+        t(
+          memoryEnabled
+            ? "canvas.podContextMenu.repoMemoryEnabledDesc"
+            : "canvas.podContextMenu.repoMemoryDisabledDesc",
+        ),
+      );
+    },
+
+    async clearRepoMemory(
+      this: NoteStoreContext<Repository>,
+      repositoryId: string,
+    ): Promise<void> {
+      const result = await executeRepositoryAction<
+        RepositoryClearMemoryPayload,
+        RepositoryMemoryClearedPayload
+      >(
+        {
+          requestEvent: WebSocketRequestEvents.REPOSITORY_CLEAR_MEMORY,
+          responseEvent: WebSocketResponseEvents.REPOSITORY_MEMORY_CLEARED,
+          payload: { repositoryId },
+        },
+        {
+          errorCategory: "Repository",
+          errorAction: t("store.repository.clearRepoMemoryFailed"),
+          errorMessage: t("store.repository.clearRepoMemoryFailed"),
+        },
+      );
+
+      if (!result.success) {
+        return;
+      }
+
+      if (!result.data.success) {
+        showErrorToast(
+          "Repository",
+          t("store.repository.clearRepoMemoryFailed"),
+          result.data.error ?? t("store.repository.clearRepoMemoryFailed"),
+        );
+        return;
+      }
+
+      const resolvedRepositoryId =
+        result.data.repository?.id ?? result.data.repositoryId ?? repositoryId;
+      setRepositoryMemoryState(this.availableItems, resolvedRepositoryId, {
+        hasRepoMemory: false,
+        repoMemoryEnabled: result.data.repository?.repoMemoryEnabled,
+      });
+      for (const pod of result.data.pods ?? []) {
+        usePodStore().updatePod(pod);
+      }
+
+      showSuccessToast(
+        "Repository",
+        t("store.repository.clearRepoMemorySuccess"),
+        this.availableItems.find(
+          (item: Repository) => item.id === resolvedRepositoryId,
+        )?.name,
+      );
+    },
+
     updateCurrentBranch(
       this: NoteStoreContext<Repository>,
       repositoryId: string,
@@ -334,6 +498,17 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
       if (item) {
         item.currentBranch = branchName;
       }
+    },
+
+    setRepoMemoryState(
+      this: NoteStoreContext<Repository>,
+      repositoryId: string,
+      state: {
+        hasRepoMemory?: boolean;
+        repoMemoryEnabled?: boolean;
+      },
+    ): void {
+      setRepositoryMemoryState(this.availableItems, repositoryId, state);
     },
   };
 }

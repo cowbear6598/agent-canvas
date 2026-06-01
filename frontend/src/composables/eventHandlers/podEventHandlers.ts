@@ -170,6 +170,14 @@ export function getPodEventListeners(): Array<{
       handler: handlePodScheduleSet as (payload: unknown) => void,
     },
     {
+      event: WebSocketResponseEvents.POD_MEMORY_ENABLED_SET,
+      handler: handlePodStateUpdated as (payload: unknown) => void,
+    },
+    {
+      event: WebSocketResponseEvents.POD_MEMORY_CLEARED,
+      handler: handlePodStateUpdated as (payload: unknown) => void,
+    },
+    {
       event: WebSocketResponseEvents.POD_DELETED,
       handler: handlePodDeleted as (payload: unknown) => void,
     },

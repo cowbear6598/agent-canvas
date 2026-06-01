@@ -15,6 +15,7 @@ import { toPodPublicView } from "../types/pod.js";
 import { logger } from "../utils/logger.js";
 import { createI18nError } from "../utils/i18nError.js";
 import { abortRegistry } from "./provider/abortRegistry.js";
+import { memoryStateService } from "./memoryStateService.js";
 
 interface CreatePodResult {
   pod: Pod;
@@ -74,6 +75,8 @@ export async function deletePodWithCleanup(
 
   const deletedNoteIdsPayload = deleteAllPodNotes(canvasId, podId);
   connectionStore.deleteByPodId(canvasId, podId);
+  memoryStateService.clearScopeMaintenanceRecords("pod", podId);
+  memoryStateService.deletePodState(podId);
 
   const deleted = podStore.delete(canvasId, podId);
   if (!deleted) {

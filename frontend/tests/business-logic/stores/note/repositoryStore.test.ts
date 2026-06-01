@@ -7,9 +7,11 @@ import { setupStoreTest } from "@tests/helpers/testSetup";
 import {
   createMockRepository,
   createMockRepositoryNote,
+  createMockPod,
 } from "@tests/helpers/factories";
 import { useRepositoryStore } from "@/stores/note/repositoryStore";
 import { useCanvasStore } from "@/stores/canvasStore";
+import { usePodStore } from "@/stores/pod/podStore";
 import type { Repository, RepositoryNote } from "@/types";
 
 // Mock WebSocket
@@ -738,6 +740,72 @@ describe("repositoryStore", () => {
           y: 200,
         },
       });
+    });
+  });
+
+  describe("repo memory", () => {
+    it("setRepoMemoryEnabled 成功時應同步更新 repository 與綁定 pod 狀態", async () => {
+      const store = useRepositoryStore();
+      const podStore = usePodStore();
+      store.availableItems = [
+        createMockRepository({
+          id: "repo-1",
+          repoMemoryEnabled: false,
+          hasRepoMemory: true,
+        }),
+      ] as Repository[];
+      podStore.pods = [
+        createMockPod({
+          id: "pod-1",
+          repositoryId: "repo-1",
+          repoMemoryEnabled: false,
+          hasRepoMemory: true,
+        }),
+      ];
+
+      mockCreateWebSocketRequest.mockResolvedValueOnce({
+        success: true,
+        repositoryId: "repo-1",
+        repository: {
+          id: "repo-1",
+          name: "Repository 1",
+          repoMemoryEnabled: true,
+          hasRepoMemory: true,
+        },
+        pods: [
+          createMockPod({
+            id: "pod-1",
+            repositoryId: "repo-1",
+            repoMemoryEnabled: true,
+            hasRepoMemory: true,
+          }),
+        ],
+      });
+
+      await store.setRepoMemoryEnabled("repo-1", true);
+
+      expect(mockCreateWebSocketRequest).toHaveBeenCalledWith({
+        requestEvent: "repository:set-memory-enabled",
+        responseEvent: "repository:memory-enabled:set",
+        payload: {
+          canvasId: "canvas-1",
+          repositoryId: "repo-1",
+          memoryEnabled: true,
+        },
+      });
+      expect(store.availableItems[0]).toMatchObject({
+        repoMemoryEnabled: true,
+        hasRepoMemory: true,
+      });
+      expect(podStore.getPodById("pod-1")).toMatchObject({
+        repoMemoryEnabled: true,
+        hasRepoMemory: true,
+      });
+      expect(mockShowSuccessToast).toHaveBeenCalledWith(
+        "Repository",
+        "Repo Memory 已啟用",
+        "後續會為這個 Repository 保留記憶。",
+      );
     });
   });
 });

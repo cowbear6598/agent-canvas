@@ -233,6 +233,57 @@ describe("runClaudeQuery", () => {
     });
   });
 
+  describe("Memory bootstrap", () => {
+    it("fresh session 時應把 hiddenBootstrapSections 注入 prompt", async () => {
+      const { query: mockQuery } =
+        await import("@anthropic-ai/claude-agent-sdk");
+
+      mockQueryGenerator = async function* () {
+        yield { type: "result", subtype: "success", result: "done" };
+      };
+
+      const ctx = createCtx({
+        message: "continue",
+        hiddenBootstrapSections: [
+          "<pod-memory>\n記住要先跑測試\n</pod-memory>",
+          "<repo-memory>\n專案慣例：先修測試再改功能\n</repo-memory>",
+        ],
+      });
+
+      await collectEvents(runClaudeQuery(ctx));
+
+      const calledPrompt = (mockQuery as ReturnType<typeof vi.fn>).mock.calls[0][0]
+        .prompt;
+      expect(calledPrompt).toContain("<pod-memory>");
+      expect(calledPrompt).toContain("記住要先跑測試");
+      expect(calledPrompt).toContain("<repo-memory>");
+    });
+
+    it("resume session 時不應再次注入 hiddenBootstrapSections", async () => {
+      const { query: mockQuery } =
+        await import("@anthropic-ai/claude-agent-sdk");
+
+      mockQueryGenerator = async function* () {
+        yield { type: "result", subtype: "success", result: "done" };
+      };
+
+      const ctx = createCtx({
+        message: "continue",
+        resumeSessionId: "session-existing",
+        hiddenBootstrapSections: [
+          "<pod-memory>\n這段不應重複注入\n</pod-memory>",
+        ],
+      });
+
+      await collectEvents(runClaudeQuery(ctx));
+
+      const calledPrompt = (mockQuery as ReturnType<typeof vi.fn>).mock.calls[0][0]
+        .prompt;
+      expect(calledPrompt).toBe("continue");
+      expect(calledPrompt).not.toContain("<pod-memory>");
+    });
+  });
+
   describe("handleResult：result/error subtype 的 yield 行為（不再 throw）", () => {
     it("result/error 時應 yield fatal=true system error，且 generator 不 throw", async () => {
       mockQueryGenerator = async function* () {

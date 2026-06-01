@@ -1,6 +1,7 @@
 import { WebSocketResponseEvents } from "@/services/websocket";
 import { useRepositoryStore } from "@/stores/note/repositoryStore";
-import type { RepositoryNote } from "@/types";
+import { usePodStore } from "@/stores/pod/podStore";
+import type { Pod, RepositoryNote } from "@/types";
 import { createUnifiedHandler } from "./sharedHandlerUtils";
 import type { BasePayload } from "./sharedHandlerUtils";
 
@@ -61,6 +62,54 @@ const handleRepositoryDeleted = createUnifiedHandler<
   );
 });
 
+const handleRepositoryMemoryCleared = createUnifiedHandler<
+  BasePayload & {
+    repositoryId?: string;
+    repository?: {
+      id: string;
+      hasRepoMemory?: boolean;
+      repoMemoryEnabled?: boolean;
+    };
+    pods?: Pod[];
+    canvasId: string;
+  }
+>((payload) => {
+  const repositoryId = payload.repository?.id ?? payload.repositoryId;
+  if (!repositoryId) return;
+
+  useRepositoryStore().setRepoMemoryState(repositoryId, {
+    hasRepoMemory: false,
+    repoMemoryEnabled: payload.repository?.repoMemoryEnabled,
+  });
+  for (const pod of payload.pods ?? []) {
+    usePodStore().updatePod(pod);
+  }
+});
+
+const handleRepositoryMemoryEnabledSet = createUnifiedHandler<
+  BasePayload & {
+    repositoryId?: string;
+    repository?: {
+      id: string;
+      hasRepoMemory?: boolean;
+      repoMemoryEnabled?: boolean;
+    };
+    pods?: Pod[];
+    canvasId: string;
+  }
+>((payload) => {
+  const repositoryId = payload.repository?.id ?? payload.repositoryId;
+  if (!repositoryId) return;
+
+  useRepositoryStore().setRepoMemoryState(repositoryId, {
+    hasRepoMemory: payload.repository?.hasRepoMemory,
+    repoMemoryEnabled: payload.repository?.repoMemoryEnabled,
+  });
+  for (const pod of payload.pods ?? []) {
+    usePodStore().updatePod(pod);
+  }
+});
+
 const handleRepositoryBranchChanged = createUnifiedHandler<
   BasePayload & { repositoryId: string; branchName: string }
 >(
@@ -88,6 +137,14 @@ export function getNoteEventListeners(): Array<{
     {
       event: WebSocketResponseEvents.REPOSITORY_BRANCH_CHANGED,
       handler: handleRepositoryBranchChanged as (payload: unknown) => void,
+    },
+    {
+      event: WebSocketResponseEvents.REPOSITORY_MEMORY_ENABLED_SET,
+      handler: handleRepositoryMemoryEnabledSet as (payload: unknown) => void,
+    },
+    {
+      event: WebSocketResponseEvents.REPOSITORY_MEMORY_CLEARED,
+      handler: handleRepositoryMemoryCleared as (payload: unknown) => void,
     },
     {
       event: WebSocketResponseEvents.REPOSITORY_NOTE_CREATED,

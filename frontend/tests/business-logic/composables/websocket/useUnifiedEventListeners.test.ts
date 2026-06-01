@@ -453,6 +453,57 @@ describe("useUnifiedEventListeners", () => {
       expect(repo?.currentBranch).toBe("main");
     });
 
+    it("repository:memory-enabled:set 應同步更新 repository 與綁定 pod 的 repo memory 狀態", () => {
+      const { registerUnifiedListeners } = useUnifiedEventListeners();
+      const repositoryStore = useRepositoryStore();
+      const podStore = usePodStore();
+      repositoryStore.availableItems = [
+        {
+          id: "repo-1",
+          name: "Test",
+          repoMemoryEnabled: false,
+          hasRepoMemory: true,
+        },
+      ];
+      podStore.pods = [
+        createMockPod({
+          id: "pod-1",
+          repositoryId: "repo-1",
+          repoMemoryEnabled: false,
+          hasRepoMemory: true,
+        }),
+      ];
+
+      registerUnifiedListeners();
+
+      simulateEvent("repository:memory-enabled:set", {
+        canvasId: "canvas-1",
+        repositoryId: "repo-1",
+        repository: {
+          id: "repo-1",
+          repoMemoryEnabled: true,
+          hasRepoMemory: true,
+        },
+        pods: [
+          createMockPod({
+            id: "pod-1",
+            repositoryId: "repo-1",
+            repoMemoryEnabled: true,
+            hasRepoMemory: true,
+          }),
+        ],
+      });
+
+      expect(repositoryStore.availableItems[0]).toMatchObject({
+        repoMemoryEnabled: true,
+        hasRepoMemory: true,
+      });
+      expect(podStore.getPodById("pod-1")).toMatchObject({
+        repoMemoryEnabled: true,
+        hasRepoMemory: true,
+      });
+    });
+
     it("repository:branch:changed 空字串 branchName 不應更新 store", () => {
       const { registerUnifiedListeners } = useUnifiedEventListeners();
       const repositoryStore = useRepositoryStore();

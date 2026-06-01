@@ -28,6 +28,8 @@ interface ConnectionContextMenuData {
 
 interface PodContextMenuData {
   podId: string;
+  memoryEnabled: boolean;
+  hasPodMemory: boolean;
 }
 
 interface RepositoryStore {
@@ -58,7 +60,15 @@ interface ConnectionStore {
 }
 
 interface PodStore {
-  getPodById: (id: string) => { id: string } | undefined;
+  getPodById: (
+    id: string,
+  ) =>
+    | {
+        id: string;
+        memoryEnabled?: boolean;
+        hasPodMemory?: boolean;
+      }
+    | undefined;
 }
 
 interface UseCanvasContextMenusOptions {
@@ -119,6 +129,8 @@ export function useCanvasContextMenus(options: UseCanvasContextMenusOptions): {
     close: closePodContextMenu,
   } = useContextMenu<PodContextMenuData>({
     podId: "",
+    memoryEnabled: false,
+    hasPodMemory: false,
   });
 
   const handleRepositoryContextMenu = (data: {
@@ -170,6 +182,8 @@ export function useCanvasContextMenus(options: UseCanvasContextMenusOptions): {
 
     openPodContextMenu(data.event, {
       podId: pod.id,
+      memoryEnabled: pod.memoryEnabled ?? false,
+      hasPodMemory: pod.hasPodMemory ?? false,
     });
   };
 

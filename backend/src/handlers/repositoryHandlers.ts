@@ -1,10 +1,16 @@
 import { WebSocketResponseEvents } from "../schemas";
-import type { RepositoryCreatedPayload } from "../types";
+import type {
+  RepositoryCreatedPayload,
+  RepositoryMemoryEnabledSetPayload,
+  RepositoryMemoryClearedPayload,
+} from "../types";
 import type {
   RepositoryCreatePayload,
   PodBindRepositoryPayload,
   PodUnbindRepositoryPayload,
   RepositoryDeletePayload,
+  RepositorySetMemoryEnabledPayload,
+  RepositoryClearMemoryPayload,
 } from "../schemas";
 import { repositoryService } from "../services/repositoryService.js";
 import { repositoryNoteStore } from "../services/noteStores.js";
@@ -22,6 +28,8 @@ import {
   handleResultError,
 } from "../utils/handlerHelpers.js";
 import { validateRepositoryExists } from "../utils/validators.js";
+import { memoryStateService } from "../services/memoryStateService.js";
+import { toPodPublicView } from "../types/index.js";
 
 export const repositoryNoteHandlers = createNoteHandlers({
   noteStore: repositoryNoteStore,
@@ -196,3 +204,111 @@ export async function handleRepositoryDelete(
     },
   });
 }
+
+export const handleRepositoryClearMemory =
+  withCanvasId<RepositoryClearMemoryPayload>(
+    WebSocketResponseEvents.REPOSITORY_MEMORY_CLEARED,
+    async (
+      connectionId: string,
+      canvasId: string,
+      payload: RepositoryClearMemoryPayload,
+      requestId: string,
+    ): Promise<void> => {
+      const { repositoryId } = payload;
+
+      const validateResult = await validateRepositoryExists(repositoryId);
+      if (
+        handleResultError(
+          validateResult,
+          connectionId,
+          WebSocketResponseEvents.REPOSITORY_MEMORY_CLEARED,
+          requestId,
+          createI18nError("errors.repoNotFound"),
+          canvasId,
+          "NOT_FOUND",
+        )
+      )
+        return;
+
+      const updatedState = memoryStateService.clearRepoSummary(repositoryId);
+      memoryStateService.clearScopeMaintenanceRecords("repository", repositoryId);
+      const pods = podStore
+        .findByRepositoryId(canvasId, repositoryId)
+        .map(toPodPublicView);
+
+      const response: RepositoryMemoryClearedPayload = {
+        requestId,
+        success: true,
+        canvasId,
+        repositoryId,
+        repository: {
+          id: repositoryId,
+          name: repositoryId,
+          repoMemoryEnabled: updatedState.memoryEnabled,
+          hasRepoMemory: false,
+        },
+        pods,
+      };
+
+      socketService.emitToCanvas(
+        canvasId,
+        WebSocketResponseEvents.REPOSITORY_MEMORY_CLEARED,
+        response,
+      );
+    },
+  );
+
+export const handleRepositorySetMemoryEnabled =
+  withCanvasId<RepositorySetMemoryEnabledPayload>(
+    WebSocketResponseEvents.REPOSITORY_MEMORY_ENABLED_SET,
+    async (
+      connectionId: string,
+      canvasId: string,
+      payload: RepositorySetMemoryEnabledPayload,
+      requestId: string,
+    ): Promise<void> => {
+      const { repositoryId, memoryEnabled } = payload;
+
+      const validateResult = await validateRepositoryExists(repositoryId);
+      if (
+        handleResultError(
+          validateResult,
+          connectionId,
+          WebSocketResponseEvents.REPOSITORY_MEMORY_ENABLED_SET,
+          requestId,
+          createI18nError("errors.repoNotFound"),
+          canvasId,
+          "NOT_FOUND",
+        )
+      )
+        return;
+
+      const updatedState = memoryStateService.setRepoMemoryEnabled(
+        repositoryId,
+        memoryEnabled,
+      );
+      const pods = podStore
+        .findByRepositoryId(canvasId, repositoryId)
+        .map(toPodPublicView);
+
+      const response: RepositoryMemoryEnabledSetPayload = {
+        requestId,
+        success: true,
+        canvasId,
+        repositoryId,
+        repository: {
+          id: repositoryId,
+          name: repositoryId,
+          repoMemoryEnabled: updatedState.memoryEnabled,
+          hasRepoMemory: updatedState.hasSummary,
+        },
+        pods,
+      };
+
+      socketService.emitToCanvas(
+        canvasId,
+        WebSocketResponseEvents.REPOSITORY_MEMORY_ENABLED_SET,
+        response,
+      );
+    },
+  );

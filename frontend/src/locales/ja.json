@@ -252,7 +252,10 @@
     "delete": {
       "title": "Pod を削除",
       "description": "「{name}」を削除してもよろしいですか？この操作は元に戻せません。",
-      "confirm": "削除を確認"
+      "confirm": "削除を確認",
+      "memoryTitle": "この Pod には記憶があります",
+      "memoryDescription": "「{name}」には現在 Pod Memory が保存されています。Pod を削除すると、その記憶も一緒に削除され、元に戻せません。",
+      "memoryConfirm": "それでも削除"
     },
     "upload": {
       "uploading": "アップロード中... {percent}%",
@@ -602,14 +605,53 @@
     },
     "repositoryContextMenu": {
       "switchBranch": "ブランチを切り替える",
-      "pullLatest": "最新版に Pull"
+      "pullLatest": "最新版に Pull",
+      "clearRepoMemory": "Repo Memory をクリア",
+      "noRepoMemory": "この Repository にはクリアできる記憶がありません"
+    },
+    "repositoryMemoryConfirm": {
+      "description": "Repository「{name}」には現在 Repo Memory があります。",
+      "clearTitle": "Repo Memory をクリアしますか",
+      "clearWarningTitle": "この Repository の既存記憶が削除されます",
+      "clearWarningDescription": "クリア後は元に戻せず、以後は Repo Memory を再度蓄積する必要があります。",
+      "clearConfirmButton": "クリアする",
+      "deleteTitle": "この repo には記憶があります",
+      "deleteWarningTitle": "Repository を削除すると Repo Memory も一緒に削除されます",
+      "deleteWarningDescription": "続行すると Repository と既存の Repo Memory の両方が完全に削除されます。",
+      "deleteConfirmButton": "それでも削除"
     },
     "podContextMenu": {
       "downloadDirectory": "作業ディレクトリをダウンロード（zip）",
+      "enableMemory": "Pod Memory を有効化",
+      "disableMemory": "Pod Memory を無効化",
+      "enableRepoMemory": "Repo Memory を有効化",
+      "disableRepoMemory": "Repo Memory を無効化",
+      "clearMemory": "Pod Memory を消去",
+      "clearMemoryDisabled": "この Pod には現在消去できる記憶がありません",
       "convertProvider": "Provider を切り替える",
       "integrations": "Integrations",
       "connect": "{label} を接続",
       "disconnect": "{label} を切断",
+      "memoryEnabled": "Pod Memory を有効化しました",
+      "memoryEnabledDesc": "今後この Pod のやり取りで記憶を保持します。",
+      "memoryEnableFailed": "Pod Memory の有効化に失敗しました",
+      "memoryEnableFailedDesc": "この Pod の記憶機能を有効化できませんでした。後でもう一度お試しください",
+      "memoryDisabled": "Pod Memory を無効化しました",
+      "memoryDisabledDesc": "新しい記憶の追加を停止し、既存の記憶は保持します。",
+      "memoryDisableFailed": "Pod Memory の無効化に失敗しました",
+      "memoryDisableFailedDesc": "この Pod の記憶機能を無効化できませんでした。後でもう一度お試しください",
+      "repoMemoryEnabled": "Repo Memory を有効化しました",
+      "repoMemoryEnabledDesc": "今後この Repository のやり取りで記憶を保持します。",
+      "repoMemoryEnableFailed": "Repo Memory の有効化に失敗しました",
+      "repoMemoryEnableFailedDesc": "この Repository の記憶機能を有効化できませんでした。後でもう一度お試しください",
+      "repoMemoryDisabled": "Repo Memory を無効化しました",
+      "repoMemoryDisabledDesc": "この Repository への新しい記憶の追加を停止し、既存の記憶は保持します。",
+      "repoMemoryDisableFailed": "Repo Memory の無効化に失敗しました",
+      "repoMemoryDisableFailedDesc": "この Repository の記憶機能を無効化できませんでした。後でもう一度お試しください",
+      "memoryCleared": "Pod Memory を消去しました",
+      "memoryClearedDesc": "この Pod の既存の記憶を削除しました。",
+      "clearMemoryFailed": "Pod Memory の消去に失敗しました",
+      "clearMemoryFailedDesc": "この Pod の記憶を消去できませんでした。後でもう一度お試しください",
       "providerSwitched": "Provider を切り替えました",
       "providerSwitchedDesc": "{provider} に切り替えました",
       "providerSwitchFailed": "Provider の切り替えに失敗しました",
@@ -762,7 +804,9 @@
       "checkDirtyFailed": "変更状態の確認に失敗しました",
       "deleteBranchFailed": "ブランチの削除に失敗しました",
       "deleteBranchSuccess": "ブランチを削除しました",
-      "createSuccess": "作成しました"
+      "createSuccess": "作成しました",
+      "clearRepoMemoryFailed": "Repo Memory のクリアに失敗しました",
+      "clearRepoMemorySuccess": "Repo Memory をクリアしました"
     },
     "resource": {
       "createFailed": "作成に失敗しました",
@@ -1007,6 +1051,21 @@
     "language": {
       "title": "言語",
       "description": "インターフェースの表示言語"
+    },
+    "memoryMaintainer": {
+      "title": "Memory",
+      "description": "pod-repo-memory-maintainer で使用するグローバルな provider と model を設定します。",
+      "providerLabel": "Provider",
+      "providerPlaceholder": "Provider を選択",
+      "providerUnset": "未設定",
+      "modelLabel": "Model",
+      "modelPlaceholder": "Model を選択",
+      "modelLoading": "モデル一覧を読み込み中...",
+      "modelUnavailable": "現在利用できるモデルがありません",
+      "thinkingLevelLabel": "Thinking Level",
+      "thinkingLevelPlaceholder": "Thinking Level を選択",
+      "thinkingLevelDefault": "provider のデフォルトを使う",
+      "thinkingLevelUnavailable": "この model は Thinking Level に対応していません"
     },
     "backup": {
       "title": "バックアップ設定",

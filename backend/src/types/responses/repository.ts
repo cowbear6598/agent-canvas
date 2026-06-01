@@ -1,16 +1,26 @@
 import type { RepositoryNote } from "../repositoryNote.js";
+import type { Repository } from "../repository.js";
+import type { PodPublicView } from "../pod.js";
 
 export interface RepositoryListResultPayload {
   requestId: string;
   success: boolean;
-  repositories?: Array<{ id: string; name: string; currentBranch?: string }>;
+  repositories?: Array<
+    Pick<
+      Repository,
+      "id" | "name" | "currentBranch" | "repoMemoryEnabled" | "hasRepoMemory"
+    >
+  >;
   error?: string;
 }
 
 export interface RepositoryCreatedPayload {
   requestId: string;
   success: boolean;
-  repository?: { id: string; name: string };
+  repository?: Pick<
+    Repository,
+    "id" | "name" | "repoMemoryEnabled" | "hasRepoMemory"
+  >;
   error?: string;
 }
 
@@ -59,7 +69,10 @@ export interface RepositoryGitCloneProgressPayload {
 export interface RepositoryGitCloneResultPayload {
   requestId: string;
   success: boolean;
-  repository?: { id: string; name: string };
+  repository?: Pick<
+    Repository,
+    "id" | "name" | "repoMemoryEnabled" | "hasRepoMemory"
+  >;
   error?: string;
 }
 
@@ -118,5 +131,35 @@ export interface RepositoryPullLatestResultPayload {
   requestId: string;
   success: boolean;
   repositoryId?: string;
+  error?: string;
+}
+
+export interface RepositoryMemoryClearedPayload {
+  requestId: string;
+  success: boolean;
+  canvasId: string;
+  repositoryId?: string;
+  repository?: Pick<
+    Repository,
+    "id" | "name" | "repoMemoryEnabled" | "hasRepoMemory"
+  >;
+  pods?: Array<
+    Pick<PodPublicView, "id" | "repoMemoryEnabled" | "hasRepoMemory">
+  >;
+  error?: string;
+}
+
+export interface RepositoryMemoryEnabledSetPayload {
+  requestId: string;
+  success: boolean;
+  canvasId: string;
+  repositoryId?: string;
+  repository?: Pick<
+    Repository,
+    "id" | "name" | "repoMemoryEnabled" | "hasRepoMemory"
+  >;
+  pods?: Array<
+    Pick<PodPublicView, "id" | "repoMemoryEnabled" | "hasRepoMemory">
+  >;
   error?: string;
 }

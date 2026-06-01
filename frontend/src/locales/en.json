@@ -252,7 +252,10 @@
     "delete": {
       "title": "Delete Pod",
       "description": "Are you sure you want to delete \"{name}\"? This action cannot be undone.",
-      "confirm": "Confirm Delete"
+      "confirm": "Confirm Delete",
+      "memoryTitle": "This Pod has memory",
+      "memoryDescription": "\"{name}\" currently keeps Pod Memory. Deleting the Pod will also remove that memory, and this cannot be undone.",
+      "memoryConfirm": "Delete Anyway"
     },
     "upload": {
       "uploading": "Uploading... {percent}%",
@@ -602,14 +605,53 @@
     },
     "repositoryContextMenu": {
       "switchBranch": "Switch Branch",
-      "pullLatest": "Pull to Latest"
+      "pullLatest": "Pull to Latest",
+      "clearRepoMemory": "Clear Repo Memory",
+      "noRepoMemory": "This repository does not have any memory to clear"
+    },
+    "repositoryMemoryConfirm": {
+      "description": "Repository \"{name}\" currently has Repo Memory.",
+      "clearTitle": "Confirm Clear Repo Memory",
+      "clearWarningTitle": "This will delete the existing memory for this repository",
+      "clearWarningDescription": "This action cannot be undone. Repo Memory will need to be rebuilt afterward.",
+      "clearConfirmButton": "Clear Memory",
+      "deleteTitle": "This repo has memory",
+      "deleteWarningTitle": "Deleting this repository will also delete its Repo Memory",
+      "deleteWarningDescription": "If you continue, both the repository and its existing Repo Memory will be removed permanently.",
+      "deleteConfirmButton": "Delete Anyway"
     },
     "podContextMenu": {
       "downloadDirectory": "Download Working Directory (zip)",
+      "enableMemory": "Enable Pod Memory",
+      "disableMemory": "Disable Pod Memory",
+      "enableRepoMemory": "Enable Repo Memory",
+      "disableRepoMemory": "Disable Repo Memory",
+      "clearMemory": "Clear Pod Memory",
+      "clearMemoryDisabled": "This Pod has no memory to clear right now",
       "convertProvider": "Convert Provider",
       "integrations": "Integrations",
       "connect": "Connect {label}",
       "disconnect": "Disconnect {label}",
+      "memoryEnabled": "Pod Memory enabled",
+      "memoryEnabledDesc": "Future interactions will retain memory for this Pod.",
+      "memoryEnableFailed": "Failed to enable Pod Memory",
+      "memoryEnableFailedDesc": "Unable to enable memory for this Pod. Please try again later.",
+      "memoryDisabled": "Pod Memory disabled",
+      "memoryDisabledDesc": "New memory capture has stopped, and existing memory is kept.",
+      "memoryDisableFailed": "Failed to disable Pod Memory",
+      "memoryDisableFailedDesc": "Unable to disable memory for this Pod. Please try again later.",
+      "repoMemoryEnabled": "Repo Memory enabled",
+      "repoMemoryEnabledDesc": "Future interactions will retain memory for this Repository.",
+      "repoMemoryEnableFailed": "Failed to enable Repo Memory",
+      "repoMemoryEnableFailedDesc": "Unable to enable memory for this Repository. Please try again later.",
+      "repoMemoryDisabled": "Repo Memory disabled",
+      "repoMemoryDisabledDesc": "New memory capture for this Repository has stopped, and existing memory is kept.",
+      "repoMemoryDisableFailed": "Failed to disable Repo Memory",
+      "repoMemoryDisableFailedDesc": "Unable to disable memory for this Repository. Please try again later.",
+      "memoryCleared": "Pod Memory cleared",
+      "memoryClearedDesc": "Existing memory for this Pod has been deleted.",
+      "clearMemoryFailed": "Failed to clear Pod Memory",
+      "clearMemoryFailedDesc": "Unable to clear memory for this Pod. Please try again later.",
       "providerSwitched": "Provider switched",
       "providerSwitchedDesc": "Switched to {provider}",
       "providerSwitchFailed": "Provider switch failed",
@@ -762,7 +804,9 @@
       "checkDirtyFailed": "Failed to check modification status",
       "deleteBranchFailed": "Failed to delete branch",
       "deleteBranchSuccess": "Branch deleted successfully",
-      "createSuccess": "Created successfully"
+      "createSuccess": "Created successfully",
+      "clearRepoMemoryFailed": "Failed to clear Repo Memory",
+      "clearRepoMemorySuccess": "Repo Memory cleared"
     },
     "resource": {
       "createFailed": "Create failed",
@@ -1007,6 +1051,21 @@
     "language": {
       "title": "Language",
       "description": "Interface language"
+    },
+    "memoryMaintainer": {
+      "title": "Memory",
+      "description": "Configure the global provider and model used by pod-repo-memory-maintainer.",
+      "providerLabel": "Provider",
+      "providerPlaceholder": "Select provider",
+      "providerUnset": "Not set",
+      "modelLabel": "Model",
+      "modelPlaceholder": "Select model",
+      "modelLoading": "Loading model list...",
+      "modelUnavailable": "No models are currently available",
+      "thinkingLevelLabel": "Thinking Level",
+      "thinkingLevelPlaceholder": "Select thinking level",
+      "thinkingLevelDefault": "Use provider default",
+      "thinkingLevelUnavailable": "This model does not support thinking levels"
     },
     "backup": {
       "title": "Backup Settings",

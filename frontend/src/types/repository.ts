@@ -13,7 +13,9 @@ export interface Repository {
   id: string;
   name: string;
   isGit?: boolean;
+  repoMemoryEnabled?: boolean;
   currentBranch?: string;
+  hasRepoMemory?: boolean;
 }
 
 export interface RepositoryNote extends BaseNote {

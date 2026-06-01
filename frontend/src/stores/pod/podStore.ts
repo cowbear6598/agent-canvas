@@ -26,11 +26,15 @@ import type {
   PodListResultPayload,
   PodMovePayload,
   PodGoalSetPayload,
+  PodClearMemoryPayload,
+  PodMemoryClearedPayload,
   PodProviderSetPayload,
   PodRenamedPayload,
   PodRenamePayload,
   PodScheduleSetPayload,
+  PodSetMemoryEnabledPayload,
   PodSetGoalPayload,
+  PodMemoryEnabledSetPayload,
   PodSetProviderPayload,
   PodSetSchedulePayload,
 } from "@/types/websocket";
@@ -382,6 +386,84 @@ export const usePodStore = defineStore("pod", () => {
     return result.data.pod;
   }
 
+  async function setPodMemoryEnabledWithBackend(
+    podId: string,
+    memoryEnabled: boolean,
+  ): Promise<Pod | null> {
+    const result = await sendCanvasAction<
+      PodSetMemoryEnabledPayload,
+      PodMemoryEnabledSetPayload
+    >({
+      requestEvent: WebSocketRequestEvents.POD_SET_MEMORY_ENABLED,
+      responseEvent: WebSocketResponseEvents.POD_MEMORY_ENABLED_SET,
+      payload: { podId, memoryEnabled },
+    });
+
+    if (!result.success || !result.data.success || !result.data.pod) {
+      showErrorToast(
+        "Pod",
+        t(
+          memoryEnabled
+            ? "canvas.podContextMenu.memoryEnableFailed"
+            : "canvas.podContextMenu.memoryDisableFailed",
+        ),
+        t(
+          memoryEnabled
+            ? "canvas.podContextMenu.memoryEnableFailedDesc"
+            : "canvas.podContextMenu.memoryDisableFailedDesc",
+        ),
+      );
+      return null;
+    }
+
+    updatePod(result.data.pod);
+
+    showSuccessToast(
+      "Pod",
+      t(
+        memoryEnabled
+          ? "canvas.podContextMenu.memoryEnabled"
+          : "canvas.podContextMenu.memoryDisabled",
+      ),
+      t(
+        memoryEnabled
+          ? "canvas.podContextMenu.memoryEnabledDesc"
+          : "canvas.podContextMenu.memoryDisabledDesc",
+      ),
+    );
+
+    return result.data.pod;
+  }
+
+  async function clearPodMemoryWithBackend(podId: string): Promise<Pod | null> {
+    const result = await sendCanvasAction<
+      PodClearMemoryPayload,
+      PodMemoryClearedPayload
+    >({
+      requestEvent: WebSocketRequestEvents.POD_CLEAR_MEMORY,
+      responseEvent: WebSocketResponseEvents.POD_MEMORY_CLEARED,
+      payload: { podId },
+    });
+
+    if (!result.success || !result.data.success || !result.data.pod) {
+      showErrorToast(
+        "Pod",
+        t("canvas.podContextMenu.clearMemoryFailed"),
+        t("canvas.podContextMenu.clearMemoryFailedDesc"),
+      );
+      return null;
+    }
+
+    updatePod(result.data.pod);
+    showSuccessToast(
+      "Pod",
+      t("canvas.podContextMenu.memoryCleared"),
+      t("canvas.podContextMenu.memoryClearedDesc"),
+    );
+
+    return result.data.pod;
+  }
+
   function selectPod(podId: string | null): void {
     selectedPodId.value = podId;
   }
@@ -631,6 +713,8 @@ export const usePodStore = defineStore("pod", () => {
     renamePodWithBackend,
     setScheduleWithBackend,
     setGoalWithBackend,
+    setPodMemoryEnabledWithBackend,
+    clearPodMemoryWithBackend,
     selectPod,
     setActivePod,
     openGoalEditor,

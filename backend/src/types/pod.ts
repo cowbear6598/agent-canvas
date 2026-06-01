@@ -45,6 +45,10 @@ export interface Pod {
   goal?: PodGoal | null;
   schedule?: ScheduleConfig;
   integrationBindings?: IntegrationBinding[];
+  memoryEnabled?: boolean;
+  repoMemoryEnabled?: boolean;
+  hasPodMemory?: boolean;
+  hasRepoMemory?: boolean;
 }
 
 /**
@@ -53,11 +57,25 @@ export interface Pod {
  *   - sessionId：Claude 會話 ID，僅後端需要
  * 所有 WebSocket broadcast 路徑應使用此型別，內部處理仍使用 Pod。
  */
-export type PodPublicView = Omit<Pod, "workspacePath" | "sessionId">;
+export type PodPublicView = Omit<
+  Pod,
+  "workspacePath" | "sessionId" | "memoryEnabled" | "hasPodMemory" | "hasRepoMemory"
+> & {
+  memoryEnabled: boolean;
+  repoMemoryEnabled: boolean;
+  hasPodMemory: boolean;
+  hasRepoMemory: boolean;
+};
 
 /** 將內部 Pod 轉換為對外廣播用的公開視圖（去除敏感欄位） */
 export function toPodPublicView(pod: Pod): PodPublicView {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { workspacePath, sessionId, ...publicView } = pod;
-  return publicView;
+  return {
+    ...publicView,
+    memoryEnabled: pod.memoryEnabled ?? false,
+    repoMemoryEnabled: pod.repoMemoryEnabled ?? false,
+    hasPodMemory: pod.hasPodMemory ?? false,
+    hasRepoMemory: pod.hasRepoMemory ?? false,
+  };
 }

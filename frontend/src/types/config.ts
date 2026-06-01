@@ -1,4 +1,4 @@
-import type { ModelType } from "./pod";
+import type { ModelType, PodProvider } from "./pod";
 
 export const DEFAULT_SUMMARY_MODEL = "sonnet" as const satisfies ModelType;
 export const DEFAULT_AI_DECIDE_MODEL = "sonnet" as const satisfies ModelType;
@@ -8,6 +8,9 @@ export interface GlobalConfig {
   backupGitRemoteUrl: string;
   backupTime: string;
   backupEnabled: boolean;
+  memoryProvider: PodProvider;
+  memoryModel: string;
+  memoryThinkingLevel: string | null;
 }
 
 export const MODEL_OPTIONS: { value: ModelType; label: string }[] = [

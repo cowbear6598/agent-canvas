@@ -145,12 +145,14 @@ export class ClaudeService {
   ): Promise<DisposableChatResult> {
     const { systemPrompt, userMessage, workspacePath, model, thinkingLevel } =
       options;
+    const logCategory = options.logCategory ?? "Chat";
+    const logLabel = options.logLabel ?? "一次性查詢";
 
     try {
       logger.log(
-        "Chat",
+        logCategory,
         "Init",
-        `[ClaudeService] 啟動一次性查詢（model: ${model ?? "default"}）`,
+        `[ClaudeService] 啟動${logLabel}（model: ${model ?? "default"}）`,
       );
 
       const queryOptions: Options = {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onUnmounted, watch } from "vue";
+import { computed, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { Trash2, Timer } from "lucide-vue-next";
 import {
@@ -17,6 +17,7 @@ const props = withDefaults(
     podName: string;
     showScheduleButton: boolean;
     showDeleteDialog: boolean;
+    hasPodMemory: boolean;
     hasSchedule: boolean;
     scheduleEnabled: boolean;
     scheduleTooltip: string;
@@ -42,17 +43,53 @@ const emit = defineEmits<{
 const { t } = useI18n();
 
 const SCHEDULE_FIRED_ANIMATION_DURATION_MS = 1800;
+const isMemoryDeleteConfirmStep = ref(false);
+
+const dialogTitle = computed(() => {
+  if (isMemoryDeleteConfirmStep.value) {
+    return t("pod.delete.memoryTitle");
+  }
+  return t("pod.delete.title");
+});
+
+const dialogDescription = computed(() => {
+  if (isMemoryDeleteConfirmStep.value) {
+    return t("pod.delete.memoryDescription", { name: props.podName });
+  }
+  return t("pod.delete.description", { name: props.podName });
+});
+
+const confirmButtonLabel = computed(() => {
+  if (isMemoryDeleteConfirmStep.value) {
+    return t("pod.delete.memoryConfirm");
+  }
+  return t("pod.delete.confirm");
+});
 
 const handleDelete = (): void => {
   emit("update:show-delete-dialog", true);
 };
 
 const confirmDelete = (): void => {
+  if (props.hasPodMemory && !isMemoryDeleteConfirmStep.value) {
+    isMemoryDeleteConfirmStep.value = true;
+    return;
+  }
+
   emit("confirm-delete");
+  isMemoryDeleteConfirmStep.value = false;
 };
 
 const cancelDelete = (): void => {
+  isMemoryDeleteConfirmStep.value = false;
   emit("cancel-delete");
+};
+
+const handleDeleteDialogOpenChange = (value: boolean): void => {
+  if (!value) {
+    isMemoryDeleteConfirmStep.value = false;
+  }
+  emit("update:show-delete-dialog", value);
 };
 
 let scheduleFiredAnimationTimer: ReturnType<typeof setTimeout> | null = null;
@@ -74,6 +111,15 @@ watch(
       scheduleFiredAnimationTimer = setTimeout(() => {
         emit("clear-schedule-fired-animation");
       }, SCHEDULE_FIRED_ANIMATION_DURATION_MS);
+    }
+  },
+);
+
+watch(
+  () => props.showDeleteDialog,
+  (visible) => {
+    if (!visible) {
+      isMemoryDeleteConfirmStep.value = false;
     }
   },
 );
@@ -108,14 +154,12 @@ watch(
 
   <Dialog
     :open="showDeleteDialog"
-    @update:open="(val) => emit('update:show-delete-dialog', val)"
+    @update:open="handleDeleteDialogOpenChange"
   >
     <DialogContent>
       <DialogHeader>
-        <DialogTitle>{{ $t("pod.delete.title") }}</DialogTitle>
-        <DialogDescription>
-          {{ $t("pod.delete.description", { name: podName }) }}
-        </DialogDescription>
+        <DialogTitle>{{ dialogTitle }}</DialogTitle>
+        <DialogDescription>{{ dialogDescription }}</DialogDescription>
       </DialogHeader>
 
       <DialogFooter>
@@ -129,7 +173,7 @@ watch(
           variant="destructive"
           @click="confirmDelete"
         >
-          {{ $t("pod.delete.confirm") }}
+          {{ confirmButtonLabel }}
         </Button>
       </DialogFooter>
     </DialogContent>

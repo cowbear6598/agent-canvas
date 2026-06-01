@@ -92,6 +92,22 @@ describe("configStore", () => {
     expect(store.backupEnabled).toBe(false);
   });
 
+  it("fetchConfig 應從 API 載入 memory 設定並更新 state", async () => {
+    mockGetConfig.mockResolvedValueOnce({
+      success: true,
+      memoryProvider: "claude",
+      memoryModel: "sonnet",
+      memoryThinkingLevel: "high",
+    });
+
+    const store = useConfigStore();
+    await store.fetchConfig();
+
+    expect(store.memoryProvider).toBe("claude");
+    expect(store.memoryModel).toBe("sonnet");
+    expect(store.memoryThinkingLevel).toBeNull();
+  });
+
   it("setBackupConfig 應更新備份相關 state", () => {
     const store = useConfigStore();
     store.setBackupConfig({
@@ -103,6 +119,19 @@ describe("configStore", () => {
     expect(store.backupGitRemoteUrl).toBe("git@test.git");
     expect(store.backupTime).toBe("05:00");
     expect(store.backupEnabled).toBe(true);
+  });
+
+  it("setMemoryConfig 應更新 memory 相關 state", () => {
+    const store = useConfigStore();
+    store.setMemoryConfig({
+      provider: "codex",
+      model: "gpt-5.4",
+      thinkingLevel: "medium",
+    });
+
+    expect(store.memoryProvider).toBe("codex");
+    expect(store.memoryModel).toBe("gpt-5.4");
+    expect(store.memoryThinkingLevel).toBe("medium");
   });
 
   it("setBackupStatus 應更新 backupStatus 與 lastBackupError", () => {

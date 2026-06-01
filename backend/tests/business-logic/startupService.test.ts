@@ -20,6 +20,13 @@ vi.mock("../../src/services/tmpCleanupService.js", () => ({
   },
 }));
 
+vi.mock("../../src/services/memoryCleanupService.js", () => ({
+  memoryCleanupService: {
+    start: vi.fn(),
+    stop: vi.fn(),
+  },
+}));
+
 vi.mock("../../src/services/canvasStore.js", () => ({
   canvasStore: {
     list: vi.fn(() => [{ id: "default-canvas" }]),
@@ -76,8 +83,10 @@ vi.mock("../../src/services/mcp/managedMcpRuntimeService.js", () => ({
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { startupService } from "../../src/services/startupService.js";
 import { scanAndCleanupOrphanRunRepoDirectories } from "../../src/services/runtime/orphanRunRepoScanner.js";
+import { memoryCleanupService } from "../../src/services/memoryCleanupService.js";
 
 const mockScanAndCleanup = vi.mocked(scanAndCleanupOrphanRunRepoDirectories);
+const mockMemoryCleanupStart = vi.mocked(memoryCleanupService.start);
 
 describe("startupService.initialize", () => {
   beforeEach(() => {
@@ -94,5 +103,6 @@ describe("startupService.initialize", () => {
 
     expect(result.success).toBe(true);
     expect(mockScanAndCleanup).toHaveBeenCalledTimes(1);
+    expect(mockMemoryCleanupStart).toHaveBeenCalledTimes(1);
   });
 });

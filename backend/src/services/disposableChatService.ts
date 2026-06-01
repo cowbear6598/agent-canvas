@@ -19,10 +19,16 @@ import { claudeService } from "./claude/claudeService.js";
 import { codexService } from "./codex/codexService.js";
 import { opencodeProvider } from "./provider/opencodeProvider.js";
 import { logger } from "../utils/logger.js";
+import type { LogCategory } from "../utils/logger.js";
 import { getStmts } from "../database/index.js";
 import type { Pod } from "../types/pod.js";
 import type { RunContext } from "../types/run.js";
 import type { OpencodeOptions } from "./provider/opencodeOptionsBuilder.js";
+import type {
+  DisposableResponseFormat,
+  DisposableToolContract,
+} from "./shared/disposableChatTypes.js";
+import { z } from "zod";
 
 // ─── 公開介面 ────────────────────────────────────────────────────────────────
 
@@ -40,6 +46,10 @@ export interface DisposableChatInput {
   sourcePod?: Pod;
   runContext?: RunContext;
   thinkingLevel?: string | null;
+  toolContracts?: DisposableToolContract[];
+  responseFormat?: DisposableResponseFormat;
+  logCategory?: LogCategory;
+  logLabel?: string;
 }
 
 export interface DisposableChatOutput {
@@ -48,6 +58,122 @@ export interface DisposableChatOutput {
   error?: string;
   /** 實際使用的模型名稱（可能因 fallback 與輸入不同），呼叫端可用來回寫 connection */
   resolvedModel: string;
+}
+
+export interface StructuredDisposableTaskInput<TSchema extends z.ZodTypeAny>
+  extends DisposableChatInput {
+  schema: TSchema;
+}
+
+export type StructuredDisposableTaskOutput<TSchema extends z.ZodTypeAny> =
+  | {
+      success: true;
+      data: z.infer<TSchema>;
+      resolvedModel: string;
+      rawContent: string;
+    }
+  | {
+      success: false;
+      error: string;
+      resolvedModel: string;
+      rawContent: string;
+    };
+
+function formatToolContracts(
+  toolContracts: DisposableToolContract[] | undefined,
+): string {
+  if (!toolContracts || toolContracts.length === 0) {
+    return "";
+  }
+
+  const lines = toolContracts.flatMap((tool, index) => [
+    `${index + 1}. ${tool.name}`,
+    `   - 用途：${tool.description}`,
+    `   - 輸入：${tool.inputDescription}`,
+    `   - 輸出：${tool.outputDescription}`,
+  ]);
+
+  return ["可用工具契約：", ...lines].join("\n");
+}
+
+function formatResponseFormat(
+  responseFormat: DisposableResponseFormat | undefined,
+): string {
+  if (!responseFormat) {
+    return "";
+  }
+
+  return [
+    "輸出要求：",
+    `- 只允許輸出單一 JSON 物件，schema 名稱為 ${responseFormat.schemaName}`,
+    `- ${responseFormat.description}`,
+    "- 不可輸出 markdown code block、前後說明或額外文字",
+  ].join("\n");
+}
+
+function buildAugmentedSystemPrompt(input: DisposableChatInput): string {
+  const sections = [
+    input.systemPrompt.trim(),
+    formatToolContracts(input.toolContracts),
+    formatResponseFormat(input.responseFormat),
+  ].filter((section) => section.length > 0);
+
+  return sections.join("\n\n");
+}
+
+function stripMarkdownCodeBlock(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+}
+
+function extractFirstJsonObject(raw: string): string {
+  const cleaned = stripMarkdownCodeBlock(raw);
+  const firstBraceIndex = cleaned.indexOf("{");
+  if (firstBraceIndex === -1) {
+    return cleaned;
+  }
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = firstBraceIndex; index < cleaned.length; index += 1) {
+    const char = cleaned[index];
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) continue;
+
+    if (char === "{") {
+      depth += 1;
+      continue;
+    }
+
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return cleaned.slice(firstBraceIndex, index + 1).trim();
+      }
+    }
+  }
+
+  return cleaned;
 }
 
 // ─── 模型驗證 helper ──────────────────────────────────────────────────────────
@@ -211,7 +337,8 @@ async function executeOpencodeDisposableChat(
 export async function executeDisposableChat(
   input: DisposableChatInput,
 ): Promise<DisposableChatOutput> {
-  const { provider, systemPrompt, userMessage, workspacePath } = input;
+  const { provider, userMessage, workspacePath } = input;
+  const systemPrompt = buildAugmentedSystemPrompt(input);
 
   // 驗證 model，不合法則 fallback 到 provider 預設模型
   const resolvedModel = resolveModel(provider, input.model);
@@ -223,6 +350,8 @@ export async function executeDisposableChat(
       workspacePath,
       model: resolvedModel,
       thinkingLevel: input.thinkingLevel,
+      logCategory: input.logCategory,
+      logLabel: input.logLabel,
     });
     return { ...result, resolvedModel };
   } else if (provider === "codex") {
@@ -232,6 +361,8 @@ export async function executeDisposableChat(
       workspacePath,
       model: resolvedModel,
       thinkingLevel: input.thinkingLevel,
+      logCategory: input.logCategory,
+      logLabel: input.logLabel,
     });
     return { ...result, resolvedModel };
   } else if (provider === "opencode") {
@@ -244,4 +375,55 @@ export async function executeDisposableChat(
     );
     throw new Error("不支援的 provider");
   }
+}
+
+export async function executeStructuredDisposableTask<
+  TSchema extends z.ZodTypeAny,
+>(
+  input: StructuredDisposableTaskInput<TSchema>,
+): Promise<StructuredDisposableTaskOutput<TSchema>> {
+  const result = await executeDisposableChat(input);
+
+  if (!result.success) {
+    return {
+      success: false,
+      error: result.error ?? "一次性任務執行失敗",
+      resolvedModel: result.resolvedModel,
+      rawContent: result.content,
+    };
+  }
+
+  let parsedJson: unknown;
+  try {
+    parsedJson = JSON.parse(extractFirstJsonObject(result.content));
+  } catch (error) {
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? `結構化輸出 JSON 解析失敗：${error.message}`
+          : "結構化輸出 JSON 解析失敗",
+      resolvedModel: result.resolvedModel,
+      rawContent: result.content,
+    };
+  }
+
+  const parsed = input.schema.safeParse(parsedJson);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: `結構化輸出 schema 驗證失敗：${parsed.error.issues
+        .map((issue) => issue.path.join(".") || issue.message)
+        .join("；")}`,
+      resolvedModel: result.resolvedModel,
+      rawContent: result.content,
+    };
+  }
+
+  return {
+    success: true,
+    data: parsed.data,
+    resolvedModel: result.resolvedModel,
+    rawContent: result.content,
+  };
 }

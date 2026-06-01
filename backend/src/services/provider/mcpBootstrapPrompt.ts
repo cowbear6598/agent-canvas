@@ -25,10 +25,19 @@ export interface McpBootstrapContext {
    * 空字串代表無可用 skill，不會被注入。
    */
   pluginCatalogText: string;
+  /**
+   * 額外的隱性 bootstrap 段落，例如 memory 注入。
+   * 僅在 fresh session 第一輪附加，不會顯示在使用者 transcript。
+   */
+  hiddenSections?: string[];
 }
 
 function hasAnyBootstrap(ctx: McpBootstrapContext): boolean {
-  return ctx.goalRuntimeAvailable || ctx.pluginCatalogText.length > 0;
+  return (
+    ctx.goalRuntimeAvailable ||
+    ctx.pluginCatalogText.length > 0 ||
+    (ctx.hiddenSections?.length ?? 0) > 0
+  );
 }
 
 function joinBootstrapSections(ctx: McpBootstrapContext): string {
@@ -38,6 +47,9 @@ function joinBootstrapSections(ctx: McpBootstrapContext): string {
   }
   if (ctx.pluginCatalogText) {
     sections.push(ctx.pluginCatalogText);
+  }
+  if (ctx.hiddenSections?.length) {
+    sections.push(ctx.hiddenSections.join("\n\n"));
   }
   return sections.join("\n\n");
 }

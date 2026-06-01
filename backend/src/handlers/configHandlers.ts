@@ -26,6 +26,9 @@ export async function handleConfigGet(
       backupGitRemoteUrl: config.backupGitRemoteUrl,
       backupTime: config.backupTime,
       backupEnabled: config.backupEnabled,
+      memoryProvider: config.memoryProvider,
+      memoryModel: config.memoryModel,
+      memoryThinkingLevel: config.memoryThinkingLevel,
       hasWorkspacePassword: config.hasWorkspacePassword,
       transportSecurity: transportSecurity
         ? {
@@ -61,6 +64,9 @@ export async function handleConfigUpdate(
     backupGitRemoteUrl: effectiveGitRemoteUrl,
     backupTime: payload.backupTime,
     backupEnabled: payload.backupEnabled,
+    memoryProvider: payload.memoryProvider,
+    memoryModel: payload.memoryModel,
+    memoryThinkingLevel: payload.memoryThinkingLevel,
   });
 
   socketService.emitToConnection(
@@ -73,6 +79,9 @@ export async function handleConfigUpdate(
       backupGitRemoteUrl: updatedConfig.backupGitRemoteUrl,
       backupTime: updatedConfig.backupTime,
       backupEnabled: updatedConfig.backupEnabled,
+      memoryProvider: updatedConfig.memoryProvider,
+      memoryModel: updatedConfig.memoryModel,
+      memoryThinkingLevel: updatedConfig.memoryThinkingLevel,
       hasWorkspacePassword: updatedConfig.hasWorkspacePassword,
     },
   );

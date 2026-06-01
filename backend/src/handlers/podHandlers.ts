@@ -3,6 +3,8 @@ import type {
   PodListResultPayload,
   PodGetResultPayload,
   PodScheduleSetPayload,
+  PodMemoryEnabledSetPayload,
+  PodMemoryClearedPayload,
   PodGoalSetPayload,
   PodProviderSetPayload,
   PodPluginsSetPayload,
@@ -22,6 +24,8 @@ import type {
   PodSetModelPayload,
   PodSetThinkingLevelPayload,
   PodSetSchedulePayload,
+  PodSetMemoryEnabledPayload,
+  PodClearMemoryPayload,
   PodDeletePayload,
   PodSetPluginsPayload,
 } from "../schemas";
@@ -44,6 +48,7 @@ import {
   handleResultError,
 } from "../utils/handlerHelpers.js";
 import { createI18nError } from "../utils/i18nError.js";
+import { memoryStateService } from "../services/memoryStateService.js";
 
 export const handlePodCreate = withCanvasId<PodCreatePayload>(
   WebSocketResponseEvents.POD_CREATED,
@@ -610,6 +615,106 @@ export const handlePodSetSchedule = withCanvasId<PodSetSchedulePayload>(
       canvasId,
       WebSocketResponseEvents.POD_SCHEDULE_SET,
       response,
+    );
+  },
+);
+
+export const handlePodSetMemoryEnabled =
+  withCanvasId<PodSetMemoryEnabledPayload>(
+    WebSocketResponseEvents.POD_MEMORY_ENABLED_SET,
+    async (
+      connectionId: string,
+      canvasId: string,
+      payload: PodSetMemoryEnabledPayload,
+      requestId: string,
+    ): Promise<void> => {
+      const { podId, memoryEnabled } = payload;
+
+      const pod = validatePod(
+        connectionId,
+        podId,
+        WebSocketResponseEvents.POD_MEMORY_ENABLED_SET,
+        requestId,
+      );
+      if (!pod) {
+        return;
+      }
+
+      memoryStateService.setPodMemoryEnabled(podId, memoryEnabled);
+
+      const updatedPod = podStore.getById(canvasId, podId);
+      if (!updatedPod) {
+        emitError(
+          connectionId,
+          WebSocketResponseEvents.POD_MEMORY_ENABLED_SET,
+          createI18nError("errors.podUpdateFailed", { id: podId }),
+          canvasId,
+          requestId,
+          podId,
+          "INTERNAL_ERROR",
+        );
+        return;
+      }
+
+      socketService.emitToCanvas(
+        canvasId,
+        WebSocketResponseEvents.POD_MEMORY_ENABLED_SET,
+        {
+          requestId,
+          canvasId,
+          success: true,
+          pod: toPodPublicView(updatedPod),
+        } satisfies PodMemoryEnabledSetPayload,
+      );
+    },
+  );
+
+export const handlePodClearMemory = withCanvasId<PodClearMemoryPayload>(
+  WebSocketResponseEvents.POD_MEMORY_CLEARED,
+  async (
+    connectionId: string,
+    canvasId: string,
+    payload: PodClearMemoryPayload,
+    requestId: string,
+  ): Promise<void> => {
+    const { podId } = payload;
+
+    const pod = validatePod(
+      connectionId,
+      podId,
+      WebSocketResponseEvents.POD_MEMORY_CLEARED,
+      requestId,
+    );
+    if (!pod) {
+      return;
+    }
+
+    memoryStateService.clearPodSummary(podId);
+    memoryStateService.clearScopeMaintenanceRecords("pod", podId);
+
+    const updatedPod = podStore.getById(canvasId, podId);
+    if (!updatedPod) {
+      emitError(
+        connectionId,
+        WebSocketResponseEvents.POD_MEMORY_CLEARED,
+        createI18nError("errors.podUpdateFailed", { id: podId }),
+        canvasId,
+        requestId,
+        podId,
+        "INTERNAL_ERROR",
+      );
+      return;
+    }
+
+    socketService.emitToCanvas(
+      canvasId,
+      WebSocketResponseEvents.POD_MEMORY_CLEARED,
+      {
+        requestId,
+        canvasId,
+        success: true,
+        pod: toPodPublicView(updatedPod),
+      } satisfies PodMemoryClearedPayload,
     );
   },
 );

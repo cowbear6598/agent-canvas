@@ -108,6 +108,10 @@ export interface Pod {
   x: number;
   y: number;
   rotation: number;
+  memoryEnabled?: boolean;
+  repoMemoryEnabled?: boolean;
+  hasPodMemory?: boolean;
+  hasRepoMemory?: boolean;
   workspacePath?: string;
   mcpServerNames?: string[];
   pluginIds?: string[];

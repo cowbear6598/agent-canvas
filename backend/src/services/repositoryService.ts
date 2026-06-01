@@ -5,6 +5,8 @@ import { isPathWithinDirectory } from "../utils/pathValidator.js";
 import { directoryExists } from "./shared/fileResourceHelpers.js";
 import { getDb } from "../database/index.js";
 import { getStatements } from "../database/statements.js";
+import type { Repository } from "../types/repository.js";
+import { memoryStateService } from "./memoryStateService.js";
 
 interface RepositoryMetadataRow {
   id: string;
@@ -27,22 +29,27 @@ class RepositoryService {
   }
 
   async list(): Promise<
-    Array<{
-      id: string;
-      name: string;
-      currentBranch?: string;
-    }>
+    Array<
+      Pick<
+        Repository,
+        "id" | "name" | "currentBranch" | "repoMemoryEnabled" | "hasRepoMemory"
+      >
+    >
   > {
     await fs.mkdir(config.repositoriesRoot, { recursive: true });
 
     const entries = await fs.readdir(config.repositoriesRoot, {
       withFileTypes: true,
     });
-    const repositories: Array<{
-      id: string;
-      name: string;
-      currentBranch?: string;
-    }> = [];
+    const repositories: Array<
+      Pick<
+        Repository,
+        "id" | "name" | "currentBranch" | "repoMemoryEnabled" | "hasRepoMemory"
+      >
+    > = [];
+    const repoStateMap = memoryStateService.listRepoStates(
+      entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name),
+    );
 
     // 一次查詢取得所有 metadata，建 Map 後 O(1) 查找，避免 N+1 查詢
     const allRows = this.stmts.selectAll.all() as RepositoryMetadataRow[];
@@ -55,6 +62,8 @@ class RepositoryService {
       repositories.push({
         id: entry.name,
         name: entry.name,
+        repoMemoryEnabled: repoStateMap.get(entry.name)?.memoryEnabled ?? false,
+        hasRepoMemory: repoStateMap.get(entry.name)?.hasSummary ?? false,
         ...(row?.current_branch && { currentBranch: row.current_branch }),
       });
     }
@@ -62,7 +71,9 @@ class RepositoryService {
     return repositories;
   }
 
-  async create(name: string): Promise<{ id: string; name: string }> {
+  async create(
+    name: string,
+  ): Promise<Pick<Repository, "id" | "name" | "repoMemoryEnabled" | "hasRepoMemory">> {
     // 字元白名單驗證：僅允許字母、數字、底線、連字號、點，且不能以 `..` 開頭
     if (!/^[a-zA-Z0-9_\-.]+$/.test(name)) {
       throw new Error(
@@ -81,7 +92,7 @@ class RepositoryService {
 
     await fs.mkdir(repositoryPath, { recursive: true });
 
-    return { id: name, name };
+    return { id: name, name, repoMemoryEnabled: false, hasRepoMemory: false };
   }
 
   getMetadata(repositoryId: string): RepositoryMetadata | undefined {
@@ -149,6 +160,8 @@ class RepositoryService {
     await fs.rm(repositoryPath, { recursive: true, force: true });
 
     this.stmts.deleteById.run(repositoryId);
+    memoryStateService.clearScopeMaintenanceRecords("repository", repositoryId);
+    memoryStateService.deleteRepoState(repositoryId);
   }
 }
 

@@ -366,6 +366,8 @@ class CodexService {
   ): Promise<DisposableChatResult> {
     const { systemPrompt, userMessage, workspacePath } = options;
     const model = options.model ?? DEFAULT_MODEL;
+    const logCategory = options.logCategory ?? "Chat";
+    const logLabel = options.logLabel ?? "一次性查詢";
 
     // 驗證 workspacePath 必須為絕對路徑，防止路徑穿越攻擊
     if (!path.isAbsolute(workspacePath)) {
@@ -390,9 +392,9 @@ class CodexService {
     }
 
     logger.log(
-      "Chat",
+      logCategory,
       "Init",
-      `[CodexService] 啟動一次性查詢（model: ${model}）`,
+      `[CodexService] 啟動${logLabel}（model: ${model}）`,
     );
 
     // 等待取得並行 slot，確保同時存在的 codex 子程序不超過 MAX_CONCURRENT_CODEX

@@ -110,6 +110,19 @@ export const repositoryPullLatestSchema = z.object({
   repositoryId: repositoryIdSchema,
 });
 
+export const repositorySetMemoryEnabledSchema = z.object({
+  requestId: requestIdSchema,
+  canvasId: canvasIdSchema,
+  repositoryId: repositoryIdSchema,
+  memoryEnabled: z.boolean(),
+});
+
+export const repositoryClearMemorySchema = z.object({
+  requestId: requestIdSchema,
+  canvasId: canvasIdSchema,
+  repositoryId: repositoryIdSchema,
+});
+
 export type RepositoryListPayload = z.infer<typeof repositoryListSchema>;
 export type RepositoryCreatePayload = z.infer<typeof repositoryCreateSchema>;
 export type PodBindRepositoryPayload = z.infer<typeof podBindRepositorySchema>;
@@ -149,4 +162,10 @@ export type RepositoryDeleteBranchPayload = z.infer<
 >;
 export type RepositoryPullLatestPayload = z.infer<
   typeof repositoryPullLatestSchema
+>;
+export type RepositorySetMemoryEnabledPayload = z.infer<
+  typeof repositorySetMemoryEnabledSchema
+>;
+export type RepositoryClearMemoryPayload = z.infer<
+  typeof repositoryClearMemorySchema
 >;

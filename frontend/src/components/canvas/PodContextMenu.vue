@@ -2,9 +2,11 @@
 import { computed, ref, onMounted, onUnmounted, type Component } from "vue";
 import {
   ArrowRightLeft,
+  Brain,
   Check,
   ChevronRight,
   Download,
+  Eraser,
   Plug,
 } from "lucide-vue-next";
 import { useI18n } from "vue-i18n";
@@ -28,6 +30,8 @@ import {
 interface Props {
   position: { x: number; y: number };
   podId: string;
+  memoryEnabled?: boolean;
+  hasPodMemory?: boolean;
 }
 
 const AI_PROVIDER_OPTIONS: Array<{
@@ -49,6 +53,9 @@ const emit = defineEmits<{
     provider: PodProvider,
     providerConfig: ProviderConfig,
   ];
+  "set-memory-enabled": [podId: string, memoryEnabled: boolean];
+  "set-repo-memory-enabled": [repositoryId: string, memoryEnabled: boolean];
+  "clear-memory": [podId: string];
   "connect-integration": [podId: string, provider: string];
   "disconnect-integration": [podId: string, provider: string];
 }>();
@@ -60,6 +67,16 @@ const providerCapabilityStore = useProviderCapabilityStore();
 const pod = computed(() => usePodStore().getPodById(props.podId));
 const bindings = computed(() => pod.value?.integrationBindings ?? []);
 const currentProvider = computed(() => pod.value?.provider ?? null);
+const isMemoryEnabled = computed(
+  () => pod.value?.memoryEnabled ?? props.memoryEnabled ?? false,
+);
+const hasPodMemory = computed(
+  () => pod.value?.hasPodMemory ?? props.hasPodMemory ?? false,
+);
+const repositoryId = computed(() => pod.value?.repositoryId ?? null);
+const isRepoMemoryEnabled = computed(
+  () => pod.value?.repoMemoryEnabled ?? false,
+);
 const integrationProviders = getAllProviders();
 
 const downloadProgress = useDownloadProgress();
@@ -170,6 +187,23 @@ const handleDisconnect = (provider: string): void => {
   emit("disconnect-integration", props.podId, provider);
   emit("close");
 };
+
+const handleSetMemoryEnabled = (memoryEnabled: boolean): void => {
+  emit("set-memory-enabled", props.podId, memoryEnabled);
+  emit("close");
+};
+
+const handleSetRepoMemoryEnabled = (memoryEnabled: boolean): void => {
+  if (!repositoryId.value) return;
+  emit("set-repo-memory-enabled", repositoryId.value, memoryEnabled);
+  emit("close");
+};
+
+const handleClearMemory = (): void => {
+  if (!hasPodMemory.value) return;
+  emit("clear-memory", props.podId);
+  emit("close");
+};
 </script>
 
 <template>
@@ -189,6 +223,54 @@ const handleDisconnect = (provider: string): void => {
       <Download :size="14" />
       <span class="font-mono">{{
         $t("canvas.podContextMenu.downloadDirectory")
+      }}</span>
+    </button>
+
+    <div class="my-1 border-t border-border" />
+
+    <button
+      class="w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary"
+      @click="handleSetMemoryEnabled(!isMemoryEnabled)"
+    >
+      <Brain :size="14" />
+      <span class="font-mono">{{
+        isMemoryEnabled
+          ? $t("canvas.podContextMenu.disableMemory")
+          : $t("canvas.podContextMenu.enableMemory")
+      }}</span>
+    </button>
+
+    <button
+      v-if="repositoryId"
+      class="w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary"
+      @click="handleSetRepoMemoryEnabled(!isRepoMemoryEnabled)"
+    >
+      <Brain :size="14" />
+      <span class="font-mono">{{
+        isRepoMemoryEnabled
+          ? $t("canvas.podContextMenu.disableRepoMemory")
+          : $t("canvas.podContextMenu.enableRepoMemory")
+      }}</span>
+    </button>
+
+    <button
+      :disabled="!hasPodMemory"
+      :title="
+        !hasPodMemory
+          ? $t('canvas.podContextMenu.clearMemoryDisabled')
+          : undefined
+      "
+      :class="[
+        'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs',
+        hasPodMemory
+          ? 'hover:bg-secondary'
+          : 'cursor-not-allowed opacity-60',
+      ]"
+      @click="handleClearMemory"
+    >
+      <Eraser :size="14" />
+      <span class="font-mono">{{
+        $t("canvas.podContextMenu.clearMemory")
       }}</span>
     </button>
 

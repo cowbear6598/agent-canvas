@@ -1,6 +1,7 @@
 import { socketService } from "../services/socketService.js";
 import { workflowExecutionService } from "../services/workflow/index.js";
 import { runExecutionService } from "../services/workflow/runExecutionService.js";
+import { memoryMaintainerService } from "../services/memoryMaintainerService.js";
 import { fireAndForget } from "./operationHelpers.js";
 import { logger } from "./logger.js";
 import { WebSocketResponseEvents } from "../schemas/index.js";
@@ -22,6 +23,11 @@ export const onRunChatComplete = (
     ),
     "Workflow",
     `檢查 Pod「${podId}」自動觸發 Workflow 失敗 (Run: ${runContext.runId})`,
+  );
+  fireAndForget(
+    memoryMaintainerService.scheduleForCompletedPod(runContext, podId),
+    "Workflow",
+    `執行 Pod「${podId}」記憶維護失敗 (Run: ${runContext.runId})`,
   );
 };
 

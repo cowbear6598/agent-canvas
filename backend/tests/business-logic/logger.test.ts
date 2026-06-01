@@ -54,6 +54,7 @@ describe("Logger 顏色輸出", () => {
     ["McpServer", ANSI_COLORS.GREEN],
     ["Command", ANSI_COLORS.GREEN],
     ["Chat", ANSI_COLORS.GREEN],
+    ["Memory", ANSI_COLORS.MAGENTA],
     ["Git", ANSI_COLORS.YELLOW],
     ["Note", ANSI_COLORS.YELLOW],
     ["Schedule", ANSI_COLORS.YELLOW],

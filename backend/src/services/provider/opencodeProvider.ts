@@ -543,6 +543,7 @@ export const opencodeProvider: AgentProvider<OpencodeOptions> = {
         const promptParams = buildOpencodePromptInput({
           message,
           providerOptions: options,
+          hiddenBootstrapSections: ctx.hiddenBootstrapSections,
           resumeSessionId,
         });
 

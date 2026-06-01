@@ -463,6 +463,7 @@ export async function* runClaudeQuery(
     workspacePath,
     resumeSessionId,
     abortSignal,
+    hiddenBootstrapSections,
     options,
   } = ctx;
 
@@ -479,6 +480,7 @@ export async function* runClaudeQuery(
   const prompt = buildPrompt(message, resumeSessionId, {
     goalRuntimeAvailable: Boolean(options.mcpServers?.[GOAL_MCP_SERVER_NAME]),
     pluginCatalogText: options.pluginCatalogText ?? "",
+    hiddenSections: hiddenBootstrapSections,
   });
   const pendingStderrChunks: string[] = [];
   let hasYieldedStderrDiagnostic = false;

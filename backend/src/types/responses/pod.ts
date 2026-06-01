@@ -73,6 +73,22 @@ export interface PodScheduleSetPayload {
   error?: string;
 }
 
+export interface PodMemoryEnabledSetPayload {
+  requestId: string;
+  canvasId: string;
+  success: boolean;
+  pod?: PodPublicView;
+  error?: string;
+}
+
+export interface PodMemoryClearedPayload {
+  requestId: string;
+  canvasId: string;
+  success: boolean;
+  pod?: PodPublicView;
+  error?: string;
+}
+
 /** Pod plugin 設定結果（discriminated union，以 success 欄位區分兩條路徑） */
 export type PodPluginsSetPayload =
   | {

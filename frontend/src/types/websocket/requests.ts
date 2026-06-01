@@ -85,6 +85,19 @@ export interface PodSetSchedulePayload {
   schedule: Schedule | null;
 }
 
+export interface PodSetMemoryEnabledPayload {
+  requestId: string;
+  canvasId: string;
+  podId: string;
+  memoryEnabled: boolean;
+}
+
+export interface PodClearMemoryPayload {
+  requestId: string;
+  canvasId: string;
+  podId: string;
+}
+
 export interface PodDeletePayload {
   requestId: string;
   canvasId: string;
@@ -283,6 +296,19 @@ export interface RepositoryPullLatestPayload {
   repositoryId: string;
 }
 
+export interface RepositorySetMemoryEnabledPayload {
+  requestId: string;
+  canvasId: string;
+  repositoryId: string;
+  memoryEnabled: boolean;
+}
+
+export interface RepositoryClearMemoryPayload {
+  requestId: string;
+  canvasId: string;
+  repositoryId: string;
+}
+
 /** 查詢指定 Provider 的 MCP server 清單 */
 export interface McpListPayload {
   requestId: string;
@@ -345,6 +371,9 @@ export interface ConfigUpdatePayload {
   backupGitRemoteUrl?: string;
   backupTime?: string;
   backupEnabled?: boolean;
+  memoryProvider?: PodProvider;
+  memoryModel?: string;
+  memoryThinkingLevel?: string | null;
 }
 
 export type PasswordUpdateActionPayload =

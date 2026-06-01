@@ -17,6 +17,8 @@ import {
   WebSocketResponseEvents,
   type PodBindRepositoryPayload,
   type PodUnbindRepositoryPayload,
+  type RepositoryClearMemoryPayload,
+  type RepositorySetMemoryEnabledPayload,
   type RepositoryCreatePayload,
   type RepositoryDeletePayload,
   type RepositoryListPayload,
@@ -29,10 +31,13 @@ import {
   type RepositoryCreatedPayload,
   type RepositoryDeletedPayload,
   type RepositoryListResultPayload,
+  type RepositoryMemoryClearedPayload,
+  type RepositoryMemoryEnabledSetPayload,
   type RepositoryNoteCreatedPayload,
   type RepositoryCheckGitResultPayload,
 } from "../../src/types";
 import { config } from "../../src/config/index.js";
+import { memoryStateService } from "../../src/services/memoryStateService.js";
 
 describe("Repository 管理", () => {
   const { getServer, getClient } = setupIntegrationTest();
@@ -90,6 +95,109 @@ describe("Repository 管理", () => {
       expect(response.success).toBe(true);
       const names = response.repositories!.map((r) => r.name);
       expect(names).toContain(name);
+    });
+
+    it("有 repo 記憶時應回傳 hasRepoMemory，清除後應變回 false", async () => {
+      const client = getClient();
+      const name = `memory-repo-${uuidv4()}`;
+      const repo = await createRepository(client, name);
+      memoryStateService.writeRepoSummary(repo.id, "既有 repo 記憶");
+
+      const canvasId = await getCanvasId(client);
+      const listedWithMemory = await emitAndWaitResponse<
+        RepositoryListPayload,
+        RepositoryListResultPayload
+      >(
+        client,
+        WebSocketRequestEvents.REPOSITORY_LIST,
+        WebSocketResponseEvents.REPOSITORY_LIST_RESULT,
+        { requestId: uuidv4(), canvasId },
+      );
+
+      expect(listedWithMemory.success).toBe(true);
+      expect(
+        listedWithMemory.repositories?.find((entry) => entry.id === repo.id),
+      ).toMatchObject({
+        id: repo.id,
+        name,
+        hasRepoMemory: true,
+      });
+
+      const cleared = await emitAndWaitResponse<
+        RepositoryClearMemoryPayload,
+        RepositoryMemoryClearedPayload
+      >(
+        client,
+        WebSocketRequestEvents.REPOSITORY_CLEAR_MEMORY,
+        WebSocketResponseEvents.REPOSITORY_MEMORY_CLEARED,
+        {
+          requestId: uuidv4(),
+          canvasId,
+          repositoryId: repo.id,
+        },
+      );
+
+      expect(cleared.success).toBe(true);
+      expect(cleared.repositoryId).toBe(repo.id);
+      expect(cleared.repository).toMatchObject({
+        id: repo.id,
+        hasRepoMemory: false,
+      });
+
+      const listedAfterClear = await emitAndWaitResponse<
+        RepositoryListPayload,
+        RepositoryListResultPayload
+      >(
+        client,
+        WebSocketRequestEvents.REPOSITORY_LIST,
+        WebSocketResponseEvents.REPOSITORY_LIST_RESULT,
+        { requestId: uuidv4(), canvasId },
+      );
+
+      expect(listedAfterClear.success).toBe(true);
+      expect(
+        listedAfterClear.repositories?.find((entry) => entry.id === repo.id),
+      ).toMatchObject({
+        id: repo.id,
+        name,
+        hasRepoMemory: false,
+      });
+    });
+
+    it("應可獨立切換 repo memory 啟用狀態，且不影響既有 summary", async () => {
+      const client = getClient();
+      const name = `repo-memory-enabled-${uuidv4()}`;
+      const repo = await createRepository(client, name);
+      memoryStateService.setRepoMemoryEnabled(repo.id, false);
+      memoryStateService.writeRepoSummary(repo.id, "既有 repo 記憶");
+
+      const canvasId = await getCanvasId(client);
+      const enabled = await emitAndWaitResponse<
+        RepositorySetMemoryEnabledPayload,
+        RepositoryMemoryEnabledSetPayload
+      >(
+        client,
+        WebSocketRequestEvents.REPOSITORY_SET_MEMORY_ENABLED,
+        WebSocketResponseEvents.REPOSITORY_MEMORY_ENABLED_SET,
+        {
+          requestId: uuidv4(),
+          canvasId,
+          repositoryId: repo.id,
+          memoryEnabled: true,
+        },
+      );
+
+      expect(enabled.success).toBe(true);
+      expect(enabled.repository).toMatchObject({
+        id: repo.id,
+        repoMemoryEnabled: true,
+        hasRepoMemory: true,
+      });
+      expect(memoryStateService.getRepoState(repo.id)).toMatchObject({
+        memoryEnabled: true,
+        hasSummary: true,
+        summary: "既有 repo 記憶",
+      });
     });
 
     it("不回傳 workflow run repo", async () => {

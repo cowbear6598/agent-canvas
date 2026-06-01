@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { reactive, onMounted, onUnmounted, ref } from "vue";
+import { computed, reactive, onMounted, onUnmounted, ref } from "vue";
 
-import { GitBranch, Download } from "lucide-vue-next";
+import { GitBranch, Download, Eraser } from "lucide-vue-next";
 import { useRepositoryStore } from "@/stores/note/repositoryStore";
 import { useToast } from "@/composables/useToast";
 import { useI18n } from "vue-i18n";
@@ -9,6 +9,7 @@ import BranchSelectModal from "./BranchSelectModal.vue";
 import ForceCheckoutModal from "./ForceCheckoutModal.vue";
 import DeleteBranchModal from "./DeleteBranchModal.vue";
 import PullLatestConfirmModal from "./PullLatestConfirmModal.vue";
+import RepositoryMemoryConfirmModal from "./RepositoryMemoryConfirmModal.vue";
 
 interface Props {
   position: { x: number; y: number };
@@ -47,6 +48,7 @@ const modalState = reactive({
   showForceCheckout: false,
   showDeleteBranch: false,
   showPullConfirm: false,
+  showClearMemoryConfirm: false,
 });
 
 const dataState = reactive({
@@ -58,6 +60,12 @@ const dataState = reactive({
 
 const isMounted = ref(true);
 const menuRef = ref<HTMLElement | null>(null);
+const hasRepoMemory = computed(
+  () =>
+    repositoryStore.typedAvailableItems.find(
+      (item) => item.id === props.repositoryId,
+    )?.hasRepoMemory === true,
+);
 
 const handleOutsideClick = (event: MouseEvent): void => {
   if (!uiState.menuVisible) return;
@@ -101,6 +109,9 @@ const handleForceCheckoutModalClose =
 const handleDeleteBranchModalClose =
   createModalCloseHandler("showDeleteBranch");
 const handlePullConfirmModalClose = createModalCloseHandler("showPullConfirm");
+const handleClearMemoryConfirmModalClose = createModalCloseHandler(
+  "showClearMemoryConfirm",
+);
 
 const handleSwitchBranchClick = async (): Promise<void> => {
   if (!uiState.isGit || uiState.isLoadingBranches) return;
@@ -197,6 +208,15 @@ const handlePullLatestClick = (): void => {
   modalState.showPullConfirm = true;
 };
 
+const handleClearRepoMemoryClick = (): void => {
+  if (!hasRepoMemory.value) {
+    return;
+  }
+
+  uiState.menuVisible = false;
+  modalState.showClearMemoryConfirm = true;
+};
+
 const handlePullLatestConfirm = async (): Promise<void> => {
   const { requestId } = await repositoryStore.pullLatest(props.repositoryId);
   emit("pull-started", {
@@ -205,6 +225,12 @@ const handlePullLatestConfirm = async (): Promise<void> => {
     repositoryId: props.repositoryId,
   });
   modalState.showPullConfirm = false;
+  emit("close");
+};
+
+const handleClearRepoMemoryConfirm = async (): Promise<void> => {
+  await repositoryStore.clearRepoMemory(props.repositoryId);
+  modalState.showClearMemoryConfirm = false;
   emit("close");
 };
 </script>
@@ -260,11 +286,37 @@ const handlePullLatestConfirm = async (): Promise<void> => {
       }}</span>
     </button>
 
+    <div class="my-1 border-t border-border" />
+
+    <button
+      :disabled="!hasRepoMemory"
+      :class="[
+        'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs',
+        hasRepoMemory ? 'hover:bg-secondary' : 'opacity-50 cursor-not-allowed',
+      ]"
+      @click="handleClearRepoMemoryClick"
+    >
+      <Eraser
+        :size="14"
+        class="text-foreground"
+      />
+      <span class="font-mono text-foreground">{{
+        $t("canvas.repositoryContextMenu.clearRepoMemory")
+      }}</span>
+    </button>
+
     <p
       v-if="!uiState.isGit && !uiState.isCheckingGit"
       class="text-xs text-muted-foreground mt-0.5 ml-6"
     >
       {{ $t("canvas.repository.notGitRepo") }}
+    </p>
+
+    <p
+      v-if="!hasRepoMemory"
+      class="text-xs text-muted-foreground mt-0.5 ml-6"
+    >
+      {{ $t("canvas.repositoryContextMenu.noRepoMemory") }}
     </p>
   </div>
 
@@ -298,6 +350,14 @@ const handlePullLatestConfirm = async (): Promise<void> => {
       :open="modalState.showPullConfirm"
       @update:open="handlePullConfirmModalClose"
       @confirm="handlePullLatestConfirm"
+    />
+
+    <RepositoryMemoryConfirmModal
+      :open="modalState.showClearMemoryConfirm"
+      :repository-name="repositoryName"
+      mode="clear"
+      @update:open="handleClearMemoryConfirmModalClose"
+      @confirm="handleClearRepoMemoryConfirm"
     />
   </Teleport>
 </template>

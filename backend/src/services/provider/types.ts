@@ -183,6 +183,11 @@ export interface ChatRequestContext<TOptions = unknown> {
   abortSignal: AbortSignal;
   runContext?: RunContext;
   /**
+   * 不顯示於 chat transcript 的隱性 bootstrap 段落。
+   * 僅在 fresh session 第一輪由 provider 注入 prompt。
+   */
+  hiddenBootstrapSections?: string[];
+  /**
    * Provider 執行時選項，由 buildOptions(pod, runContext?) 產生。
    * 型別由 provider 決定（TOptions）。
    */

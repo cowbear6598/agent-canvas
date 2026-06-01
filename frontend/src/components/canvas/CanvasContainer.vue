@@ -26,6 +26,7 @@ import CreateRepositoryModal from "./CreateRepositoryModal.vue";
 import CloneRepositoryModal from "./CloneRepositoryModal.vue";
 import ConfirmDeleteModal from "./ConfirmDeleteModal.vue";
 import BranchEditModal from "./BranchEditModal.vue";
+import RepositoryMemoryConfirmModal from "./RepositoryMemoryConfirmModal.vue";
 import IntegrationConnectModal from "@/components/integration/IntegrationConnectModal.vue";
 import type { Pod, PodTypeConfig, Position } from "@/types";
 import type { PodProvider, ProviderConfig } from "@/types/pod";
@@ -72,10 +73,14 @@ const integrationConnectModal = ref<{
 
 const {
   showDeleteModal,
+  showDeleteMemoryModal,
   deleteTarget,
   isDeleteTargetInUse,
   handleOpenDeleteModal,
   handleConfirmDelete: handleDeleteConfirm,
+  handleConfirmDeleteWithMemory: handleDeleteConfirmWithMemory,
+  closeDeleteModal,
+  closeDeleteMemoryModal,
 } = useDeleteResource({
   repositoryStore,
 });
@@ -266,6 +271,24 @@ const handleSwitchPodProvider = async (
   await podStore.updatePodProvider(podId, provider, providerConfig);
 };
 
+const handleSetPodMemoryEnabled = async (
+  podId: string,
+  memoryEnabled: boolean,
+): Promise<void> => {
+  await podStore.setPodMemoryEnabledWithBackend(podId, memoryEnabled);
+};
+
+const handleSetRepoMemoryEnabled = async (
+  repositoryId: string,
+  memoryEnabled: boolean,
+): Promise<void> => {
+  await repositoryStore.setRepoMemoryEnabled(repositoryId, memoryEnabled);
+};
+
+const handleClearPodMemory = async (podId: string): Promise<void> => {
+  await podStore.clearPodMemoryWithBackend(podId);
+};
+
 const handleOpenCreateRepositoryModal = (): void => {
   lastMenuPosition.value = podStore.typeMenu.position;
   showCreateRepositoryModal.value = true;
@@ -441,8 +464,13 @@ const handleBranchModelChanged = (): void => {
     v-if="podContextMenu.visible"
     :position="podContextMenu.position"
     :pod-id="podContextMenu.data.podId"
+    :memory-enabled="podContextMenu.data.memoryEnabled"
+    :has-pod-memory="podContextMenu.data.hasPodMemory"
     @close="closePodContextMenu"
     @switch-provider="handleSwitchPodProvider"
+    @set-memory-enabled="handleSetPodMemoryEnabled"
+    @set-repo-memory-enabled="handleSetRepoMemoryEnabled"
+    @clear-memory="handleClearPodMemory"
     @connect-integration="handleConnectIntegration"
     @disconnect-integration="handleDisconnectIntegration"
   />
@@ -495,11 +523,20 @@ const handleBranchModelChanged = (): void => {
   />
 
   <ConfirmDeleteModal
-    v-model:open="showDeleteModal"
+    :open="showDeleteModal"
     :item-name="deleteTarget?.name ?? ''"
     :is-in-use="isDeleteTargetInUse"
     :item-type="deleteTarget?.type ?? 'repository'"
+    @update:open="(open) => !open && closeDeleteModal()"
     @confirm="handleDeleteConfirm"
+  />
+
+  <RepositoryMemoryConfirmModal
+    :open="showDeleteMemoryModal"
+    :repository-name="deleteTarget?.name ?? ''"
+    mode="delete"
+    @update:open="closeDeleteMemoryModal"
+    @confirm="handleDeleteConfirmWithMemory"
   />
   <IntegrationConnectModal
     v-model:open="integrationConnectModal.visible"

@@ -11,6 +11,11 @@ import type {
   ConfigGetResultPayload,
   ConfigUpdatedPayload,
 } from "@/types/websocket/responses";
+
+type UpdateConfigInput = Omit<ConfigUpdatePayload, "requestId"> & {
+  timezoneOffset: number;
+};
+
 export async function getConfig(): Promise<ConfigGetResultPayload> {
   return createWebSocketRequest<ConfigGetPayload, ConfigGetResultPayload>({
     requestEvent: WebSocketRequestEvents.CONFIG_GET,
@@ -19,20 +24,12 @@ export async function getConfig(): Promise<ConfigGetResultPayload> {
   });
 }
 
-export async function updateConfig(config: {
-  timezoneOffset: number;
-  backupGitRemoteUrl?: string;
-  backupTime?: string;
-  backupEnabled?: boolean;
-}): Promise<ConfigUpdatedPayload> {
+export async function updateConfig(
+  config: UpdateConfigInput,
+): Promise<ConfigUpdatedPayload> {
   return createWebSocketRequest<ConfigUpdatePayload, ConfigUpdatedPayload>({
     requestEvent: WebSocketRequestEvents.CONFIG_UPDATE,
     responseEvent: WebSocketResponseEvents.CONFIG_UPDATED,
-    payload: {
-      timezoneOffset: config.timezoneOffset,
-      backupGitRemoteUrl: config.backupGitRemoteUrl,
-      backupTime: config.backupTime,
-      backupEnabled: config.backupEnabled,
-    },
+    payload: config,
   });
 }

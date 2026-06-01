@@ -2,6 +2,7 @@ import { promises as fs } from "fs";
 import { scheduleService } from "./scheduleService.js";
 import { backupScheduleService } from "./backupScheduleService.js";
 import { tmpCleanupService } from "./tmpCleanupService.js";
+import { memoryCleanupService } from "./memoryCleanupService.js";
 import { canvasStore } from "./canvasStore.js";
 import { Result, ok, err } from "../types";
 import { config } from "../config";
@@ -61,12 +62,14 @@ class StartupService {
    * - scheduleService（Pod 排程）
    * - backupScheduleService（備份排程）
    * - tmpCleanupService（tmp 目錄定期清理）
+   * - memoryCleanupService（memory 維護資料清理）
    */
   private startBackgroundServices(): void {
     scheduleService.start();
     backupScheduleService.start();
     // 啟動 tmp 目錄定期清理（每小時執行一次，超過 6 小時的目錄會被刪除）
     tmpCleanupService.start();
+    memoryCleanupService.start();
   }
 
   private async ensureDefaultCanvas(): Promise<Result<void>> {

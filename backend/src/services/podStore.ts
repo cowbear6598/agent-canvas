@@ -14,6 +14,7 @@ import { canvasStore } from "./canvasStore.js";
 import { getStmts } from "../database/stmtsHelper.js";
 import { getDb } from "../database/index.js";
 import { safeJsonParse } from "@shared/safeJsonParse.js";
+import { memoryStateService } from "./memoryStateService.js";
 
 /**
  * LRU statement cache 上限（entry 數）。
@@ -331,9 +332,17 @@ class PodStore {
       pluginIds: Map<string, string[]>;
     },
     bindingsMap: Map<string, IntegrationBinding[]>,
+    memoryStateMaps: {
+      podStates: ReturnType<typeof memoryStateService.listPodStates>;
+      repoStates: ReturnType<typeof memoryStateService.listRepoStates>;
+    },
   ): Pod {
     const provider = resolveProviderName(row.provider);
     const providerConfig = this.resolveProviderConfigFromRow(row, provider);
+    const podMemoryState = memoryStateMaps.podStates.get(row.id);
+    const repoMemoryState = row.repository_id
+      ? memoryStateMaps.repoStates.get(row.repository_id)
+      : undefined;
     const pod: Pod = {
       id: row.id,
       name: row.name,
@@ -349,6 +358,10 @@ class PodStore {
       repositoryId: row.repository_id,
       goal: this.parseGoal(row.goal_json),
       integrationBindings: bindingsMap.get(row.id) ?? [],
+      memoryEnabled: podMemoryState?.memoryEnabled ?? false,
+      repoMemoryEnabled: repoMemoryState?.memoryEnabled ?? false,
+      hasPodMemory: podMemoryState?.hasSummary ?? false,
+      hasRepoMemory: repoMemoryState?.hasSummary ?? false,
     };
     if (row.schedule_json) {
       pod.schedule = this.parseSchedule(row.schedule_json);
@@ -366,8 +379,17 @@ class PodStore {
     const podIds = rows.map((r) => r.id);
     const relations = this.batchLoadRelations(podIds);
     const bindingsMap = this.batchLoadBindings(podIds);
+    const repoIds = rows
+      .map((row) => row.repository_id)
+      .filter((repositoryId): repositoryId is string => !!repositoryId);
+    const memoryStateMaps = {
+      podStates: memoryStateService.listPodStates(podIds),
+      repoStates: memoryStateService.listRepoStates(repoIds),
+    };
 
-    return rows.map((row) => this.buildPodFromRow(row, relations, bindingsMap));
+    return rows.map((row) =>
+      this.buildPodFromRow(row, relations, bindingsMap, memoryStateMaps),
+    );
   }
 
   /**
@@ -421,6 +443,10 @@ class PodStore {
       goal: normalizePodGoal(data.goal ?? null),
       // create 路徑直接回傳空陣列，與 getById/list（走 batchLoadBindings 路徑）保持結構一致
       integrationBindings: [],
+      memoryEnabled: false,
+      repoMemoryEnabled: false,
+      hasPodMemory: false,
+      hasRepoMemory: false,
     };
   }
 

@@ -28,11 +28,36 @@ function createUpdatedResult(
 }
 
 function createOptions() {
-  const configStore = reactive({
+  const configStore = reactive<{
+    timezoneOffset: number;
+    memoryProvider: "claude" | "codex" | "opencode" | null;
+    memoryModel: string;
+    memoryThinkingLevel: string | null;
+    setTimezoneOffset: (offset: number) => void;
+    setMemoryConfig: (config: {
+      provider: "claude" | "codex" | "opencode" | null;
+      model: string;
+      thinkingLevel: string | null;
+    }) => void;
+  }>({
     timezoneOffset: 8,
+    memoryProvider: null,
+    memoryModel: "",
+    memoryThinkingLevel: null,
     setTimezoneOffset: vi.fn((offset: number) => {
       configStore.timezoneOffset = offset;
     }),
+    setMemoryConfig: vi.fn(
+      (config: {
+        provider: "claude" | "codex" | "opencode" | null;
+        model: string;
+        thinkingLevel: string | null;
+      }) => {
+        configStore.memoryProvider = config.provider;
+        configStore.memoryModel = config.model;
+        configStore.memoryThinkingLevel = config.thinkingLevel;
+      },
+    ),
   });
   const getConfig = vi.fn(async () =>
     createResult({
@@ -40,6 +65,9 @@ function createOptions() {
       backupGitRemoteUrl: "git@example.com:repo/backup.git",
       backupTime: "04:30",
       backupEnabled: true,
+      memoryProvider: "claude",
+      memoryModel: "sonnet",
+      memoryThinkingLevel: "high",
     }),
   );
   const updateConfig = vi.fn(async () => createUpdatedResult());
@@ -87,6 +115,11 @@ describe("useGlobalSettingsForm", () => {
 
     expect(form.timezoneOffset.value).toBe("9");
     expect(options.configStore.setTimezoneOffset).toHaveBeenCalledWith(9);
+    expect(options.configStore.setMemoryConfig).toHaveBeenCalledWith({
+      provider: "claude",
+      model: "sonnet",
+      thinkingLevel: null,
+    });
     expect(onLoaded).toHaveBeenCalledWith(
       expect.objectContaining({
         backupGitRemoteUrl: "git@example.com:repo/backup.git",
@@ -120,7 +153,8 @@ describe("useGlobalSettingsForm", () => {
       initialLocale: "zh-TW",
     });
     form.timezoneOffset.value = "7";
-
+    form.memoryProvider.value = "codex";
+    form.memoryModel.value = "gpt-5.4";
     await form.handleSave({
       backupPayload: {
         backupGitRemoteUrl: "",
@@ -136,8 +170,16 @@ describe("useGlobalSettingsForm", () => {
       backupGitRemoteUrl: "",
       backupTime: "03:45",
       backupEnabled: false,
+      memoryProvider: "codex",
+      memoryModel: "gpt-5.4",
+      memoryThinkingLevel: null,
     });
     expect(options.configStore.setTimezoneOffset).toHaveBeenCalledWith(7);
+    expect(options.configStore.setMemoryConfig).toHaveBeenCalledWith({
+      provider: "codex",
+      model: "gpt-5.4",
+      thinkingLevel: null,
+    });
     expect(onBackupSaved).toHaveBeenCalledWith({
       backupGitRemoteUrl: "",
       backupTime: "03:45",

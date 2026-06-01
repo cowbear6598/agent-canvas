@@ -106,4 +106,39 @@ describe("podEventHandlers", () => {
     );
     expect(mockToast).not.toHaveBeenCalled();
   });
+
+  it("pod memory 狀態廣播應更新本地 pod 狀態", () => {
+    const podStore = usePodStore();
+    podStore.pods = [
+      createMockPod({
+        id: "pod-1",
+        memoryEnabled: false,
+        hasPodMemory: false,
+      }),
+    ];
+
+    const listener = getPodEventListeners().find(
+      (item) => item.event === WebSocketResponseEvents.POD_MEMORY_ENABLED_SET,
+    );
+
+    listener?.handler({
+      requestId: "req-4",
+      canvasId: "canvas-1",
+      success: true,
+      pod: createMockPod({
+        id: "pod-1",
+        memoryEnabled: true,
+        hasPodMemory: true,
+      }),
+    });
+
+    expect(podStore.getPodById("pod-1")).toMatchObject({
+      memoryEnabled: true,
+      hasPodMemory: true,
+    });
+    expect(mockTryResolvePendingRequest).toHaveBeenCalledWith(
+      "req-4",
+      expect.objectContaining({ canvasId: "canvas-1" }),
+    );
+  });
 });

@@ -113,9 +113,15 @@ export async function buildOpencodeOptions(
 export function buildOpencodePromptInput(options: {
   message: string | ContentBlock[];
   providerOptions: OpencodeOptions;
+  hiddenBootstrapSections?: string[];
   resumeSessionId: string | null | undefined;
 }): OpencodeV2PromptInput {
-  const { message, providerOptions, resumeSessionId } = options;
+  const {
+    message,
+    providerOptions,
+    hiddenBootstrapSections,
+    resumeSessionId,
+  } = options;
   const promptInput: OpencodeV2PromptInput = {
     parts: [
       {
@@ -124,6 +130,7 @@ export function buildOpencodePromptInput(options: {
           message,
           Boolean(providerOptions.hasGoalRuntime),
           providerOptions.pluginCatalogText ?? "",
+          hiddenBootstrapSections,
           resumeSessionId,
         ),
       },

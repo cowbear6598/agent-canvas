@@ -129,6 +129,10 @@ export function createMockPod(overrides?: Partial<Pod>): Pod {
     x: 100 * podCounter,
     y: 100 * podCounter,
     rotation: 0,
+    memoryEnabled: false,
+    repoMemoryEnabled: false,
+    hasPodMemory: false,
+    hasRepoMemory: false,
     repositoryId: null,
     schedule: null,
     mcpServerNames: [],
@@ -243,6 +247,8 @@ export function createMockRepository(
     id,
     name: `Repository ${repositoryCounter}`,
     isGit: false,
+    repoMemoryEnabled: false,
+    hasRepoMemory: false,
     ...overrides,
   };
 }

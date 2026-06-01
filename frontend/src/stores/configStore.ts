@@ -1,6 +1,13 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 import { getConfig } from "@/services/configApi";
+import type { PodProvider } from "@/types/pod";
+
+interface MemoryConfig {
+  provider: PodProvider | null;
+  model: string;
+  thinkingLevel: string | null;
+}
 
 export const useConfigStore = defineStore("config", () => {
   const timezoneOffset = ref<number>(8);
@@ -12,9 +19,17 @@ export const useConfigStore = defineStore("config", () => {
   const backupStatus = ref<"idle" | "running" | "success" | "failed">("idle");
   const lastBackupError = ref<string | null>(null);
   const lastBackupTime = ref<string | null>(null);
+  const memoryProvider = ref<PodProvider | null>(null);
+  const memoryModel = ref<string>("");
+  const memoryThinkingLevel = ref<string | null>(null);
 
   const fetchConfig = async (): Promise<void> => {
     const result = await getConfig();
+    const hasMemoryConfig =
+      "memoryProvider" in result ||
+      "memoryModel" in result ||
+      "memoryThinkingLevel" in result;
+
     if (result.timezoneOffset !== undefined) {
       timezoneOffset.value = result.timezoneOffset;
     }
@@ -26,6 +41,15 @@ export const useConfigStore = defineStore("config", () => {
     }
     if (result.backupEnabled !== undefined) {
       backupEnabled.value = result.backupEnabled;
+    }
+    if (hasMemoryConfig) {
+      memoryProvider.value = result.memoryProvider ?? null;
+      memoryModel.value = result.memoryModel ?? "";
+      memoryThinkingLevel.value = null;
+    } else {
+      memoryProvider.value = null;
+      memoryModel.value = "";
+      memoryThinkingLevel.value = null;
     }
   };
 
@@ -41,6 +65,12 @@ export const useConfigStore = defineStore("config", () => {
     backupGitRemoteUrl.value = config.gitRemoteUrl;
     backupTime.value = config.time;
     backupEnabled.value = config.enabled;
+  };
+
+  const setMemoryConfig = (config: MemoryConfig): void => {
+    memoryProvider.value = config.provider;
+    memoryModel.value = config.model;
+    memoryThinkingLevel.value = config.thinkingLevel;
   };
 
   const setBackupStatus = (
@@ -63,9 +93,13 @@ export const useConfigStore = defineStore("config", () => {
     backupStatus,
     lastBackupError,
     lastBackupTime,
+    memoryProvider,
+    memoryModel,
+    memoryThinkingLevel,
     fetchConfig,
     setTimezoneOffset,
     setBackupConfig,
+    setMemoryConfig,
     setBackupStatus,
     setLastBackupTime,
   };

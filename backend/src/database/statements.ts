@@ -116,6 +116,31 @@ function buildStatements(db: Database): {
     selectAll: ReturnType<Database["prepare"]>;
     deleteById: ReturnType<Database["prepare"]>;
   };
+  podMemoryState: {
+    upsert: ReturnType<Database["prepare"]>;
+    selectByPodId: ReturnType<Database["prepare"]>;
+    deleteByPodId: ReturnType<Database["prepare"]>;
+  };
+  repoMemoryState: {
+    upsert: ReturnType<Database["prepare"]>;
+    selectByRepositoryId: ReturnType<Database["prepare"]>;
+    deleteByRepositoryId: ReturnType<Database["prepare"]>;
+  };
+  memoryJob: {
+    insert: ReturnType<Database["prepare"]>;
+    selectById: ReturnType<Database["prepare"]>;
+    selectByScope: ReturnType<Database["prepare"]>;
+    updateById: ReturnType<Database["prepare"]>;
+    deleteByScope: ReturnType<Database["prepare"]>;
+    deleteExpired: ReturnType<Database["prepare"]>;
+  };
+  memoryObservation: {
+    insert: ReturnType<Database["prepare"]>;
+    selectByJobId: ReturnType<Database["prepare"]>;
+    selectByScope: ReturnType<Database["prepare"]>;
+    deleteByScope: ReturnType<Database["prepare"]>;
+    deleteExpired: ReturnType<Database["prepare"]>;
+  };
   podManifest: {
     upsert: ReturnType<Database["prepare"]>;
     selectByPodIdAndRepoId: ReturnType<Database["prepare"]>;
@@ -550,6 +575,115 @@ function buildStatements(db: Database): {
       selectById: db.prepare("SELECT * FROM repository_metadata WHERE id = ?"),
       selectAll: db.prepare("SELECT * FROM repository_metadata"),
       deleteById: db.prepare("DELETE FROM repository_metadata WHERE id = ?"),
+    },
+
+    podMemoryState: {
+      upsert: db.prepare(
+        `INSERT INTO pod_memory_states (
+          pod_id, memory_enabled, summary, has_summary,
+          summary_updated_at, created_at, updated_at
+        ) VALUES (
+          $podId, $memoryEnabled, $summary, $hasSummary,
+          $summaryUpdatedAt, $createdAt, $updatedAt
+        )
+        ON CONFLICT(pod_id) DO UPDATE SET
+          memory_enabled = excluded.memory_enabled,
+          summary = excluded.summary,
+          has_summary = excluded.has_summary,
+          summary_updated_at = excluded.summary_updated_at,
+          updated_at = excluded.updated_at`,
+      ),
+      selectByPodId: db.prepare(
+        "SELECT * FROM pod_memory_states WHERE pod_id = ?",
+      ),
+      deleteByPodId: db.prepare("DELETE FROM pod_memory_states WHERE pod_id = ?"),
+    },
+
+    repoMemoryState: {
+      upsert: db.prepare(
+        `INSERT INTO repo_memory_states (
+          repository_id, memory_enabled, summary, has_summary,
+          summary_updated_at, created_at, updated_at
+        ) VALUES (
+          $repositoryId, $memoryEnabled, $summary, $hasSummary,
+          $summaryUpdatedAt, $createdAt, $updatedAt
+        )
+        ON CONFLICT(repository_id) DO UPDATE SET
+          memory_enabled = excluded.memory_enabled,
+          summary = excluded.summary,
+          has_summary = excluded.has_summary,
+          summary_updated_at = excluded.summary_updated_at,
+          updated_at = excluded.updated_at`,
+      ),
+      selectByRepositoryId: db.prepare(
+        "SELECT * FROM repo_memory_states WHERE repository_id = ?",
+      ),
+      deleteByRepositoryId: db.prepare(
+        "DELETE FROM repo_memory_states WHERE repository_id = ?",
+      ),
+    },
+
+    memoryJob: {
+      insert: db.prepare(
+        `INSERT INTO memory_jobs (
+          id, scope_type, scope_id, source_pod_id, repository_id,
+          status, attempt_count, error_message, metadata_json,
+          created_at, updated_at, expires_at
+        ) VALUES (
+          $id, $scopeType, $scopeId, $sourcePodId, $repositoryId,
+          $status, $attemptCount, $errorMessage, $metadataJson,
+          $createdAt, $updatedAt, $expiresAt
+        )`,
+      ),
+      selectById: db.prepare("SELECT * FROM memory_jobs WHERE id = ?"),
+      selectByScope: db.prepare(
+        `SELECT * FROM memory_jobs
+        WHERE scope_type = $scopeType AND scope_id = $scopeId
+        ORDER BY created_at ASC, id ASC`,
+      ),
+      updateById: db.prepare(
+        `UPDATE memory_jobs
+        SET status = $status,
+            attempt_count = $attemptCount,
+            error_message = $errorMessage,
+            metadata_json = $metadataJson,
+            updated_at = $updatedAt
+        WHERE id = $id`,
+      ),
+      deleteByScope: db.prepare(
+        "DELETE FROM memory_jobs WHERE scope_type = $scopeType AND scope_id = $scopeId",
+      ),
+      deleteExpired: db.prepare(
+        "DELETE FROM memory_jobs WHERE expires_at <= ?",
+      ),
+    },
+
+    memoryObservation: {
+      insert: db.prepare(
+        `INSERT INTO memory_observations (
+          id, job_id, scope_type, scope_id, kind, status,
+          summary, payload_json, created_at, updated_at, expires_at
+        ) VALUES (
+          $id, $jobId, $scopeType, $scopeId, $kind, $status,
+          $summary, $payloadJson, $createdAt, $updatedAt, $expiresAt
+        )`,
+      ),
+      selectByJobId: db.prepare(
+        `SELECT * FROM memory_observations
+        WHERE job_id = ?
+        ORDER BY created_at ASC, id ASC`,
+      ),
+      selectByScope: db.prepare(
+        `SELECT * FROM memory_observations
+        WHERE scope_type = $scopeType AND scope_id = $scopeId
+        ORDER BY created_at ASC, id ASC`,
+      ),
+      deleteByScope: db.prepare(
+        "DELETE FROM memory_observations WHERE scope_type = $scopeType AND scope_id = $scopeId",
+      ),
+      deleteExpired: db.prepare(
+        "DELETE FROM memory_observations WHERE expires_at <= ?",
+      ),
     },
 
     podManifest: {

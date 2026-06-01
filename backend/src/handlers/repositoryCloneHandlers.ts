@@ -182,7 +182,12 @@ export async function handleRepositoryGitClone(
   const response: RepositoryGitCloneResultPayload = {
     requestId,
     success: true,
-    repository: { id: repoName, name: repoName },
+    repository: {
+      id: repoName,
+      name: repoName,
+      repoMemoryEnabled: false,
+      hasRepoMemory: false,
+    },
   };
 
   emitSuccess(

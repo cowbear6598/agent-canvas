@@ -1,0 +1,213 @@
+feature: pod-repo-memory-maintainer
+side: backend
+approved: true
+phases:
+  - id: P1
+    title: Memory 資料模型與設定持久化
+    parallel: false
+    verification: []
+    done: true
+    items:
+      - id: P1.A
+        title: Global Settings 與 schema 擴充
+        tasks:
+          - id: P1.A.t1
+            text: 在 `backend/src/services/configStore.ts`、`backend/src/handlers/configHandlers.ts` 與 `backend/src/schemas/configSchemas.ts` 擴充 memory 專用的 `provider`、`model` 與 `thinkingLevel` 設定欄位
+            completed: true
+            last_files_changed:
+              - backend/src/services/configStore.ts
+              - backend/src/handlers/configHandlers.ts
+              - backend/src/schemas/configSchemas.ts
+          - id: P1.A.t2
+            text: 在前後端共享的 config payload 契約中補齊 memory 設定欄位，確保 config:get / config:update 可讀寫完整的 memory maintainer 模型參數
+            completed: true
+            last_files_changed:
+              - frontend/src/types/websocket/requests.ts
+              - frontend/src/types/websocket/responses.ts
+              - frontend/src/types/config.ts
+      - id: P1.B
+        title: Memory 狀態與維護紀錄資料表
+        tasks:
+          - id: P1.B.t1
+            text: 在後端資料庫 schema 與 statements 新增 `pod_memory_states`、`repo_memory_states`、`memory_jobs` 與 `memory_observations` 所需資料結構，區分正式 summary 與 7 天維護紀錄，並明確保存 pod 的 `memoryEnabled` 與 memory summary 存在性
+            completed: true
+            last_files_changed:
+              - backend/src/database/index.ts
+              - backend/src/database/schema.ts
+              - backend/src/database/statements.ts
+          - id: P1.B.t2
+            text: 建立 memory state / job / observation 的服務層存取介面，支援讀寫正式 summary、建立 job、記錄 observation 與按 scope 清除本輪維護痕跡
+            completed: true
+            last_files_changed:
+              - backend/src/services/memoryStateService.ts
+          - id: P1.B.t3
+            text: 擴充 pod / repository 的 payload 與查詢流程，讓前端可取得 `memoryEnabled`、`hasPodMemory` 與 `hasRepoMemory` 等狀態，以支援右鍵選單入口與刪除前二次確認
+            completed: true
+            last_files_changed:
+              - backend/src/handlers/repositoryCloneHandlers.ts
+              - backend/src/services/podStore.ts
+              - backend/src/services/repositoryService.ts
+              - backend/src/types/pod.ts
+              - backend/src/types/repository.ts
+              - backend/src/types/responses/repository.ts
+  - id: P2
+    title: Disposable Agent Task 與 Memory Maintainer
+    parallel: false
+    verification: []
+    done: true
+    items:
+      - id: P2.A
+        title: 一次性 agent task 抽象
+        tasks:
+          - id: P2.A.t1
+            text: 以現有 `disposableChatService` 為基礎擴充一次性 agent task 抽象，讓 Claude、Codex 與 OpenCode 的 disposable 路徑可宣告工具與接收結構化結果
+            completed: true
+            last_files_changed:
+              - backend/src/services/shared/disposableChatTypes.ts
+              - backend/src/services/disposableChatService.ts
+          - id: P2.A.t2
+            text: 為 memory maintainer 定義固定工具契約，至少覆蓋 candidate builder、summary merger 與最終輸出驗證所需的結構化輸出
+            completed: true
+            last_files_changed:
+              - backend/src/services/disposableChatService.ts
+              - backend/src/services/memoryMaintainerService.ts
+      - id: P2.B
+        title: Memory Maintainer 兩階段流程
+        tasks:
+          - id: P2.B.t1
+            text: 實作 pod-memory 與 repo-memory 共用的 evidence pack 組裝流程，重用 run persistence 的 `lastResponseSummary`、recent messages、tool traces 與 repository 綁定資訊
+            completed: true
+            last_files_changed:
+              - backend/src/services/memoryMaintainerService.ts
+          - id: P2.B.t2
+            text: 實作 Candidate Builder phase，讓 maintainer 依 evidence pack 產生 pod / repo 候選記憶，並把 observation 與判斷結果寫入維護紀錄
+            completed: true
+            last_files_changed:
+              - backend/src/services/memoryMaintainerService.ts
+          - id: P2.B.t3
+            text: 實作 Summary Merger phase，讓 maintainer 依 accepted observations 改寫 pod-memory 或 repo-memory 正式 summary，並保留停用與清除分離的狀態語意
+            completed: true
+            last_files_changed:
+              - backend/src/services/memoryMaintainerService.ts
+              - backend/src/services/memoryStateService.ts
+      - id: P2.C
+        title: Memory 注入與一次性任務契約
+        tasks:
+          - id: P2.C.t1
+            text: 在聊天啟動流程補上 fresh session 專用的隱性 memory 注入，依 pod 是否啟用 memory 與是否綁定 repository，帶入 `<pod-memory>{memory}</pod-memory>` 與 `<repo-memory>{memory}</repo-memory>`，且不顯示在使用者 chat transcript
+            completed: true
+            last_files_changed:
+              - backend/src/services/memoryPromptService.ts
+              - backend/src/services/provider/types.ts
+              - backend/src/services/provider/mcpBootstrapPrompt.ts
+              - backend/src/services/claude/streamingChatExecutor.ts
+              - backend/src/services/provider/claude/runClaudeQuery.ts
+              - backend/src/services/provider/codexProvider.ts
+              - backend/src/services/provider/opencodePromptHelpers.ts
+              - backend/src/services/provider/opencodeOptionsBuilder.ts
+              - backend/src/services/provider/opencodeProvider.ts
+          - id: P2.C.t2
+            text: 為 pod memory 啟用 / 停用、清除 pod memory、清除 repo memory 與刪除前 memory 存在性檢查補齊 websocket handler / schema / request contract，讓前端入口有明確的 transport 路徑
+            completed: true
+            last_files_changed:
+              - backend/src/schemas/events.ts
+              - backend/src/schemas/podSchemas.ts
+              - backend/src/schemas/repositorySchemas.ts
+              - backend/src/types/responses/pod.ts
+              - backend/src/types/responses/repository.ts
+              - backend/src/handlers/podHandlers.ts
+              - backend/src/handlers/repositoryHandlers.ts
+              - backend/src/handlers/groups/podHandlerGroup.ts
+              - backend/src/handlers/groups/repositoryHandlerGroup.ts
+              - backend/src/services/podService.ts
+              - backend/src/services/repositoryService.ts
+              - backend/src/services/memoryStateService.ts
+
+  - id: P3
+    title: 工作流整合與清理策略
+    parallel: true
+    verification: []
+    done: true
+    items:
+      - id: P3.A
+        title: OnGoalComplete 背景 job 與重試
+        tasks:
+          - id: P3.A.t1
+            text: 在 pod 整體完成點掛上 memory 維護 job 建立流程，讓 memory 更新以 background job 方式啟動且不阻塞 downstream workflow
+            completed: true
+            last_files_changed:
+              - backend/src/utils/chatCallbacks.ts
+              - backend/src/services/memoryMaintainerService.ts
+          - id: P3.A.t2
+            text: 為 memory job 實作三次重試上限，最終失敗時標記放棄並清除該 round 的 job / observation 維護資料，不影響正式 memory state
+            completed: true
+            last_files_changed:
+              - backend/src/services/memoryMaintainerService.ts
+          - id: P3.A.t3
+            text: 在 repo-memory eligibility gate 中加入檔案讀寫檢查，只有本輪真的有檔案讀寫時才允許進入 repo-memory 維護
+            completed: true
+            last_files_changed:
+              - backend/src/services/memoryMaintainerService.ts
+      - id: P3.B
+        title: 啟動清理與每日 prune
+        tasks:
+          - id: P3.B.t1
+            text: 新增 memory cleanup service，於伺服器啟動時先清一次，再每日清理超過 7 天的 memory 維護紀錄
+            completed: true
+            last_files_changed:
+              - backend/src/services/memoryCleanupService.ts
+              - backend/src/services/startupService.ts
+          - id: P3.B.t2
+            text: 讓 memory cleanup 只刪 `memory_jobs` 與 `memory_observations` 等短期維護資料，不刪除正式的 pod-memory 與 repo-memory summary
+            completed: true
+            last_files_changed:
+              - backend/src/services/memoryCleanupService.ts
+              - backend/src/services/memoryStateService.ts
+
+  - id: P4
+    title: 刪除與測試邊界
+    parallel: false
+    verification: []
+    done: true
+    items:
+      - id: P4.A
+        title: Memory 刪除守門與清除入口
+        tasks:
+          - id: P4.A.t1
+            text: 在 pod 與 repository 的刪除流程中加入 memory 存在性檢查，支援刪除前二次確認與獨立的清除 memory 操作
+            completed: true
+            last_files_changed:
+              - backend/src/handlers/podHandlers.ts
+              - backend/src/handlers/repositoryHandlers.ts
+              - backend/src/services/podService.ts
+              - backend/src/services/repositoryService.ts
+              - backend/src/services/podStore.ts
+              - backend/src/types/pod.ts
+              - backend/src/types/repository.ts
+          - id: P4.A.t2
+            text: 區分「停用 memory」與「清除 memory」的後端語意，讓停用只停止注入與維護，清除才真正刪除對應 summary
+            completed: true
+            last_files_changed:
+              - backend/src/services/memoryStateService.ts
+              - backend/src/services/memoryPromptService.ts
+              - backend/src/services/memoryMaintainerService.ts
+      - id: P4.B
+        title: Memory 維護測試
+        tasks:
+          - id: P4.B.t1
+            text: 補 backend business logic 測試，覆蓋 memory job 建立、repo eligibility、三次重試後放棄與 7 天 prune 行為
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/memoryMaintainerService.test.ts
+              - backend/tests/business-logic/memoryCleanupService.test.ts
+              - backend/tests/business-logic/startupService.test.ts
+          - id: P4.B.t2
+            text: 補 backend user flow 或 integration 測試，驗證 config 設定讀寫、memory 注入只發生在 fresh session、pod memory 停用後不再注入且不再維護，以及 memory 清除入口與 pod / repo 刪除時的 memory 守門行為
+            completed: true
+            last_files_changed:
+              - backend/tests/integration/config-ws.test.ts
+              - backend/tests/business-logic/runClaudeQuery.test.ts
+              - backend/tests/business-logic/streamingChatExecutor.test.ts
+              - backend/tests/userflows/pod.test.ts
+              - backend/tests/userflows/repository.test.ts
+              - backend/tests/userflows/repository-clone-api.test.ts

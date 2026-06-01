@@ -19,6 +19,7 @@ export function buildOpencodePromptText(
   message: string | ContentBlock[],
   goalRuntimeAvailable: boolean,
   pluginCatalogText: string,
+  hiddenSections?: string[],
   resumeSessionId?: string | null,
 ): string {
   const promptText = buildPromptText(message);
@@ -28,5 +29,6 @@ export function buildOpencodePromptText(
   return buildMcpBootstrapPrompt(promptText, {
     goalRuntimeAvailable,
     pluginCatalogText,
+    hiddenSections,
   });
 }

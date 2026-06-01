@@ -128,4 +128,61 @@ describe("pod context menu userflow", () => {
 
     unmount();
   });
+
+  it("memory 已啟用且已有記憶時，右鍵選單會提供停用與清除入口", async () => {
+    const { wrapper, unmount } = await mountPodContextMenu();
+    const podStore = usePodStore();
+
+    podStore.pods = [
+      createMockPod({
+        id: "pod-1",
+        memoryEnabled: true,
+        hasPodMemory: true,
+      }),
+    ];
+
+    await nextTick();
+
+    const disableMemoryLabel = i18n.global.t(
+      "canvas.podContextMenu.disableMemory",
+    );
+    const clearMemoryLabel = i18n.global.t("canvas.podContextMenu.clearMemory");
+
+    await getButtonByText(wrapper, disableMemoryLabel)?.trigger("click");
+    expect(wrapper.emitted("set-memory-enabled")).toEqual([["pod-1", false]]);
+    expect(wrapper.emitted("close")).toHaveLength(1);
+
+    await wrapper.setProps({ podId: "pod-1" });
+    await nextTick();
+    await getButtonByText(wrapper, clearMemoryLabel)?.trigger("click");
+    expect(wrapper.emitted("clear-memory")).toEqual([["pod-1"]]);
+
+    unmount();
+  });
+
+  it("綁定 repository 時，右鍵選單會提供 repo memory 啟用入口", async () => {
+    const { wrapper, unmount } = await mountPodContextMenu();
+    const podStore = usePodStore();
+
+    podStore.pods = [
+      createMockPod({
+        id: "pod-1",
+        repositoryId: "repo-1",
+        repoMemoryEnabled: false,
+      }),
+    ];
+
+    await nextTick();
+
+    const enableRepoMemoryLabel = i18n.global.t(
+      "canvas.podContextMenu.enableRepoMemory",
+    );
+
+    await getButtonByText(wrapper, enableRepoMemoryLabel)?.trigger("click");
+    expect(wrapper.emitted("set-repo-memory-enabled")).toEqual([
+      ["repo-1", true],
+    ]);
+
+    unmount();
+  });
 });

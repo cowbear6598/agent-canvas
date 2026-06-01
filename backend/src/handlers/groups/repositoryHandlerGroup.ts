@@ -16,6 +16,8 @@ import {
   repositoryCheckoutBranchSchema,
   repositoryDeleteBranchSchema,
   repositoryPullLatestSchema,
+  repositorySetMemoryEnabledSchema,
+  repositoryClearMemorySchema,
 } from "../../schemas";
 import {
   handleRepositoryList,
@@ -24,6 +26,8 @@ import {
   handlePodBindRepository,
   handlePodUnbindRepository,
   handleRepositoryDelete,
+  handleRepositorySetMemoryEnabled,
+  handleRepositoryClearMemory,
 } from "../repositoryHandlers.js";
 import {
   handleRepositoryGitClone,
@@ -134,6 +138,18 @@ export const repositoryHandlerGroup = createHandlerGroup({
       handler: handleRepositoryPullLatest,
       schema: repositoryPullLatestSchema,
       responseEvent: WebSocketResponseEvents.REPOSITORY_PULL_LATEST_RESULT,
+    },
+    {
+      event: WebSocketRequestEvents.REPOSITORY_SET_MEMORY_ENABLED,
+      handler: handleRepositorySetMemoryEnabled,
+      schema: repositorySetMemoryEnabledSchema,
+      responseEvent: WebSocketResponseEvents.REPOSITORY_MEMORY_ENABLED_SET,
+    },
+    {
+      event: WebSocketRequestEvents.REPOSITORY_CLEAR_MEMORY,
+      handler: handleRepositoryClearMemory,
+      schema: repositoryClearMemorySchema,
+      responseEvent: WebSocketResponseEvents.REPOSITORY_MEMORY_CLEARED,
     },
   ],
 });

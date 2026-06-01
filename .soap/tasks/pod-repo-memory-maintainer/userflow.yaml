@@ -1,0 +1,113 @@
+feature: pod-repo-memory-maintainer
+approved: true
+scenarios:
+  - id: F1
+    scenario: 使用者設定 Memory Maintainer 的全域模型參數
+    given:
+      - 使用者已開啟全域設定視窗
+      - 系統已提供可選的 provider 與 model 清單
+    when:
+      - 選擇 memory 使用的 provider
+      - 選擇 memory 使用的 model
+      - 選擇 memory 使用的 thinking level
+      - 儲存設定
+    then:
+      - 系統保存 memory 專用的全域模型參數
+      - 後續 memory 維護任務使用這組設定
+
+  - id: F2
+    scenario: 使用者為 pod 啟用 memory 系統
+    given:
+      - 使用者在畫布上看到一顆 pod
+      - 該 pod 可開啟右鍵選單
+    when:
+      - 開啟 pod 右鍵選單
+      - 啟用 pod 的 memory 功能
+    then:
+      - 系統記住該 pod 已啟用 memory
+      - 該 pod 後續完成任務後可被納入 pod memory 維護
+
+  - id: F2b
+    scenario: 使用者停用 pod memory 但保留既有記憶
+    given:
+      - 某顆 pod 已啟用 memory
+      - 該 pod 已存在 pod memory
+    when:
+      - 使用者開啟 pod 右鍵選單
+      - 使用者停用 pod 的 memory 功能
+    then:
+      - 系統記住該 pod 已停用 memory
+      - 既有 pod memory summary 不會被刪除
+      - 該 pod 後續不再注入 pod memory，且不再進入 pod memory 維護流程
+
+  - id: F3
+    scenario: 綁定 repository 的 pod 完成工作後維護記憶
+    given:
+      - 某顆 pod 已啟用 memory
+      - 該 pod 已綁定 repository
+      - 該 pod 在工作過程中有檔案讀寫
+    when:
+      - 該 pod 完成整體任務
+    then:
+      - 系統在背景啟動 pod memory 維護
+      - 系統在背景啟動 repo memory 維護
+      - 原本的 workflow 不會因 memory 維護而被卡住
+
+  - id: F4
+    scenario: 未碰 repository 的 pod 完成工作後只維護 pod 記憶
+    given:
+      - 某顆 pod 已啟用 memory
+      - 該 pod 已綁定 repository
+      - 該 pod 在工作過程中沒有檔案讀寫
+    when:
+      - 該 pod 完成整體任務
+    then:
+      - 系統可在背景維護 pod memory
+      - 系統不會更新 repo memory
+
+  - id: F5
+    scenario: 使用者主動清除 pod memory
+    given:
+      - 某顆 pod 已啟用 memory
+      - 該 pod 已存在 pod memory
+    when:
+      - 使用者開啟 pod 右鍵選單
+      - 使用者執行清除 pod memory 操作
+    then:
+      - 系統顯示 pod memory 會被清除的確認
+      - 使用者確認後才真正刪除 pod memory
+
+  - id: F6
+    scenario: 使用者主動清除 repo memory
+    given:
+      - 某個 repository 已存在 repo memory
+    when:
+      - 使用者開啟 repository 右鍵選單
+      - 使用者執行清除 repo memory 操作
+    then:
+      - 系統顯示 repo memory 會被清除的確認
+      - 使用者確認後才真正刪除 repo memory
+
+  - id: F7
+    scenario: 使用者刪除帶有 pod 記憶的 pod
+    given:
+      - 某顆 pod 已啟用 memory
+      - 該 pod 已存在 pod memory
+    when:
+      - 使用者執行刪除 pod 操作
+    then:
+      - 系統先顯示原本的刪除確認
+      - 系統再顯示 pod memory 會一併刪除的二次提醒
+      - 使用者確認後才真正刪除 pod 與 pod memory
+
+  - id: F8
+    scenario: 使用者刪除帶有 repo 記憶的 repository
+    given:
+      - 某個 repository 已存在 repo memory
+      - 該 repository 目前沒有被任何 pod 使用
+    when:
+      - 使用者執行刪除 repository 操作
+    then:
+      - 系統先顯示原本的刪除確認
+      - 系統再顯示 repo memory 會一併刪除的二次提醒
+      - 使用者確認後才真正刪除 repository 與 repo memory

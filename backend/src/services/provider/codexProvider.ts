@@ -201,6 +201,7 @@ function buildCodexPromptText(
   message: string | import("../../types/message.js").ContentBlock[],
   goalRuntimeAvailable: boolean,
   pluginCatalogText: string,
+  hiddenSections: string[] | undefined,
   resumeSessionId?: string | null,
 ): string {
   const promptText = buildPromptText(message);
@@ -211,6 +212,7 @@ function buildCodexPromptText(
   return buildMcpBootstrapPrompt(promptText, {
     goalRuntimeAvailable,
     pluginCatalogText,
+    hiddenSections,
   });
 }
 
@@ -689,7 +691,13 @@ const codexMetadata: ProviderMetadata<CodexOptions> = {
 function prepareCodexExecution(
   ctx: ChatRequestContext<CodexOptions>,
 ): { codexArgs: string[]; promptText: string } | null {
-  const { message, workspacePath, resumeSessionId, options } = ctx;
+  const {
+    message,
+    workspacePath,
+    resumeSessionId,
+    hiddenBootstrapSections,
+    options,
+  } = ctx;
   const model = options?.model ?? codexMetadata.defaultOptions.model;
 
   if (!MODEL_RE.test(model)) {
@@ -709,6 +717,7 @@ function prepareCodexExecution(
     message,
     goalRuntimeAvailable,
     pluginCatalogText,
+    hiddenBootstrapSections,
     resumeSessionId,
   );
 

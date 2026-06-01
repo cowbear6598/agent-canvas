@@ -55,6 +55,14 @@ export interface PodScheduleSetPayload extends ResultPayload {
   pod?: Pod;
 }
 
+export interface PodMemoryEnabledSetPayload extends ResultPayload {
+  pod?: Pod;
+}
+
+export interface PodMemoryClearedPayload extends ResultPayload {
+  pod?: Pod;
+}
+
 export interface PodDeletedPayload extends ResultPayload {
   podId?: string;
   deletedNoteIds?: {
@@ -220,7 +228,7 @@ export interface RepositoryGitCloneProgressPayload {
 export interface RepositoryGitCloneResultPayload {
   requestId: string;
   success: boolean;
-  repository?: { id: string; name: string };
+  repository?: Repository;
   error?: string;
 }
 
@@ -275,6 +283,18 @@ export interface RepositoryPullLatestProgressPayload {
 
 export interface RepositoryPullLatestResultPayload extends ResultPayload {
   repositoryId?: string;
+}
+
+export interface RepositoryMemoryEnabledSetPayload extends ResultPayload {
+  repositoryId?: string;
+  repository?: Repository;
+  pods?: Pod[];
+}
+
+export interface RepositoryMemoryClearedPayload extends ResultPayload {
+  repositoryId?: string;
+  repository?: Repository;
+  pods?: Pod[];
 }
 
 export interface WorkflowBranchPendingPayload {
@@ -413,6 +433,9 @@ export interface ConfigGetResultPayload extends ResultPayload {
   backupGitRemoteUrl?: string;
   backupTime?: string;
   backupEnabled?: boolean;
+  memoryProvider?: PodProvider;
+  memoryModel?: string;
+  memoryThinkingLevel?: string | null;
   hasWorkspacePassword?: boolean;
   transportSecurity?: {
     isTls: boolean;
@@ -426,6 +449,9 @@ export interface ConfigUpdatedPayload extends ResultPayload {
   backupGitRemoteUrl?: string;
   backupTime?: string;
   backupEnabled?: boolean;
+  memoryProvider?: PodProvider;
+  memoryModel?: string;
+  memoryThinkingLevel?: string | null;
   hasWorkspacePassword?: boolean;
 }
 

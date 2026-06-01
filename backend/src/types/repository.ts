@@ -3,4 +3,6 @@ export interface Repository {
   name: string;
   path: string;
   currentBranch?: string;
+  repoMemoryEnabled: boolean;
+  hasRepoMemory: boolean;
 }

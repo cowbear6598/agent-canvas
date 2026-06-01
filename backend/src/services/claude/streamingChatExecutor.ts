@@ -24,6 +24,7 @@ import { WebSocketResponseEvents } from "../../schemas/index.js";
 import { createI18nError } from "../../utils/i18nError.js";
 import { resolveExecutionPaths } from "../runtime/executionPaths.js";
 import { runExecutionService } from "../workflow/runExecutionService.js";
+import { memoryPromptService } from "../memoryPromptService.js";
 import {
   ensureGoalRuntime,
   getGoalRuntimeStatePath,
@@ -286,6 +287,9 @@ async function resolveExecutionDependencies(
     workspacePath: executionPaths.workspacePath,
     resumeSessionId: sessionId ?? null,
     runContext,
+    hiddenBootstrapSections: memoryPromptService.buildHiddenBootstrapSections(
+      pod,
+    ),
     options: providerOptions,
   };
 

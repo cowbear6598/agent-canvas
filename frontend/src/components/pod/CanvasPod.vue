@@ -504,6 +504,7 @@ const handleContextMenu = (e: MouseEvent): void => {
           :pod-name="pod.name"
           :show-schedule-button="showScheduleButton"
           :show-delete-dialog="showDeleteDialog"
+          :has-pod-memory="pod.hasPodMemory ?? false"
           :has-schedule="hasSchedule"
           :schedule-enabled="scheduleEnabled"
           :schedule-tooltip="scheduleTooltip"

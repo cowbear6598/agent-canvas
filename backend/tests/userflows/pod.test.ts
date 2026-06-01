@@ -15,21 +15,26 @@ import {
   WebSocketRequestEvents,
   WebSocketResponseEvents,
   type PodCreatePayload,
+  type PodClearMemoryPayload,
   type PodGetPayload,
   type PodMovePayload,
   type PodRenamePayload,
+  type PodSetMemoryEnabledPayload,
   type PodSetSchedulePayload,
   type PodSetProviderPayload,
 } from "../../src/schemas";
 import type {
   PodCreatedPayload,
   PodGetResultPayload,
+  PodMemoryClearedPayload,
+  PodMemoryEnabledSetPayload,
   PodMovedPayload,
   PodProviderSetPayload,
   PodRenamedPayload,
   PodScheduleSetPayload,
 } from "../../src/types";
 import { getDb } from "../../src/database/index.js";
+import { memoryStateService } from "../../src/services/memoryStateService.js";
 
 describe("Pod WebSocket user flow", () => {
   let server: TestServerInstance;
@@ -297,6 +302,111 @@ describe("Pod WebSocket user flow", () => {
     expect(row?.provider).toBe("claude");
     expect(JSON.parse(row!.provider_config_json)).toMatchObject({
       model: "sonnet",
+    });
+  });
+
+  it("pod memory 啟用狀態與清除結果應反映在 transport payload", async () => {
+    const created = await emitAndWaitResponse<PodCreatePayload, PodCreatedPayload>(
+      client,
+      WebSocketRequestEvents.POD_CREATE,
+      WebSocketResponseEvents.POD_CREATED,
+      {
+        requestId: uuidv4(),
+        canvasId: server.canvasId,
+        name: "ws-pod-memory",
+        x: 3,
+        y: 4,
+        rotation: 0,
+      },
+    );
+    expect(created.success).toBe(true);
+
+    memoryStateService.setPodMemoryEnabled(created.pod!.id, true);
+    memoryStateService.writePodSummary(created.pod!.id, "既有 pod 記憶");
+
+    const fetchedWithMemory = await emitAndWaitResponse<
+      PodGetPayload,
+      PodGetResultPayload
+    >(
+      client,
+      WebSocketRequestEvents.POD_GET,
+      WebSocketResponseEvents.POD_GET_RESULT,
+      {
+        requestId: uuidv4(),
+        canvasId: server.canvasId,
+        podId: created.pod!.id,
+      },
+    );
+
+    expect(fetchedWithMemory.success).toBe(true);
+    expect(fetchedWithMemory.pod).toMatchObject({
+      id: created.pod!.id,
+      memoryEnabled: true,
+      hasPodMemory: true,
+    });
+
+    const disabled = await emitAndWaitResponse<
+      PodSetMemoryEnabledPayload,
+      PodMemoryEnabledSetPayload
+    >(
+      client,
+      WebSocketRequestEvents.POD_SET_MEMORY_ENABLED,
+      WebSocketResponseEvents.POD_MEMORY_ENABLED_SET,
+      {
+        requestId: uuidv4(),
+        canvasId: server.canvasId,
+        podId: created.pod!.id,
+        memoryEnabled: false,
+      },
+    );
+
+    expect(disabled.success).toBe(true);
+    expect(disabled.pod).toMatchObject({
+      id: created.pod!.id,
+      memoryEnabled: false,
+      hasPodMemory: true,
+    });
+
+    const cleared = await emitAndWaitResponse<
+      PodClearMemoryPayload,
+      PodMemoryClearedPayload
+    >(
+      client,
+      WebSocketRequestEvents.POD_CLEAR_MEMORY,
+      WebSocketResponseEvents.POD_MEMORY_CLEARED,
+      {
+        requestId: uuidv4(),
+        canvasId: server.canvasId,
+        podId: created.pod!.id,
+      },
+    );
+
+    expect(cleared.success).toBe(true);
+    expect(cleared.pod).toMatchObject({
+      id: created.pod!.id,
+      memoryEnabled: false,
+      hasPodMemory: false,
+    });
+
+    const fetchedAfterClear = await emitAndWaitResponse<
+      PodGetPayload,
+      PodGetResultPayload
+    >(
+      client,
+      WebSocketRequestEvents.POD_GET,
+      WebSocketResponseEvents.POD_GET_RESULT,
+      {
+        requestId: uuidv4(),
+        canvasId: server.canvasId,
+        podId: created.pod!.id,
+      },
+    );
+
+    expect(fetchedAfterClear.success).toBe(true);
+    expect(fetchedAfterClear.pod).toMatchObject({
+      id: created.pod!.id,
+      memoryEnabled: false,
+      hasPodMemory: false,
     });
   });
 });

@@ -61,6 +61,45 @@ describe("Config WebSocket", () => {
 
       expect(response.success).toBe(false);
     });
+
+    it("memory 設定可成功更新並由 config:get 讀回", async () => {
+      const client = getClient();
+
+      const updateResponse = await emitAndWaitResponse<
+        ConfigUpdatePayload,
+        ConfigUpdatedPayload
+      >(
+        client,
+        WebSocketRequestEvents.CONFIG_UPDATE,
+        WebSocketResponseEvents.CONFIG_UPDATED,
+        {
+          requestId: uuidv4(),
+          memoryProvider: "codex",
+          memoryModel: "gpt-5.4",
+          memoryThinkingLevel: "high",
+        },
+      );
+
+      expect(updateResponse.success).toBe(true);
+      expect(updateResponse.memoryProvider).toBe("codex");
+      expect(updateResponse.memoryModel).toBe("gpt-5.4");
+      expect(updateResponse.memoryThinkingLevel).toBeNull();
+
+      const getResponse = await emitAndWaitResponse<
+        ConfigGetPayload,
+        ConfigGetResultPayload
+      >(
+        client,
+        WebSocketRequestEvents.CONFIG_GET,
+        WebSocketResponseEvents.CONFIG_GET_RESULT,
+        { requestId: uuidv4() },
+      );
+
+      expect(getResponse.success).toBe(true);
+      expect(getResponse.memoryProvider).toBe("codex");
+      expect(getResponse.memoryModel).toBe("gpt-5.4");
+      expect(getResponse.memoryThinkingLevel).toBeNull();
+    });
   });
 
   describe("config timezoneOffset", () => {
