@@ -321,9 +321,6 @@ function createBaseTables(db: Database): void {
       ")",
   );
   db.exec(
-    "CREATE INDEX IF NOT EXISTS idx_repo_memory_states_enabled ON repo_memory_states(memory_enabled)",
-  );
-  db.exec(
     "CREATE INDEX IF NOT EXISTS idx_repo_memory_states_has_summary ON repo_memory_states(has_summary)",
   );
 
