@@ -1,5 +1,32 @@
 # Changelog
 
+## [2.1.4] - 2026-06-01
+
+### 新增
+- Skill 管理介面支援 `zh-TW`、`en`、`ja` 三種語系顯示
+- 新增 Pod provider 轉換選單與模型轉換流程
+- 新增 skill bundle 管理與匯入 API，補齊受管 Plugin 資訊同步
+
+### 修正
+- 啟動時改為背景清理孤兒 run repository，避免後端啟動被卡住
+- 補強啟動流程驗證，確保服務可先回應後再執行背景清理
+- 統一非玩家觸發訊息格式，避免 Jira、Slack、Telegram 與 Webhook 整合輸出不一致
+- 修正 Webhook 事件內容破壞 Pod 接收格式的問題
+- 修正 Jira 全量更新模式會遺失實際變更資訊的問題
+- 修正 Pod 工作目錄下載在缺少 ignore 設定時的處理與錯誤提示
+- 修正聊天串流重複整理訊息內容導致的異常
+- 清理已廢棄的 backend REST 路由與同步測試
+- 統一 GitHub 與本地 skill 匯入提示內容
+- 限制 Pod 切換 OpenCode provider 時只能使用已註冊模型
+- 修正 follow-source 連線在 provider 收斂後被寫死的問題
+- 修正貼上含錯誤 connection 時仍顯示成功但實際少線的問題
+- 修正 OpenCode 與 Codex connection 貼上後的摘要 provider 顯示
+- 保留複製貼上 connection 的 provider 與設定內容
+- 修正 skill 匯入與更新流程的安全性與穩定性問題
+- 修正 Skill 管理與 Pod 啟用介面的錯誤提示與狀態同步
+- 修正 Goal 遇到不可恢復的 Provider 錯誤時無法正確結束的問題
+- 限制 Goal 最多重試 3 次，避免持續空轉佔用執行資源
+
 ## [2.1.3] - 2026-05-27
 
 ### 修正
