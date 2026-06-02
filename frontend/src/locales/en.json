@@ -620,14 +620,35 @@
       "deleteWarningDescription": "If you continue, both the repository and its existing Repo Memory will be removed permanently.",
       "deleteConfirmButton": "Delete Anyway"
     },
+    "podMemoryConfirm": {
+      "description": "Pod \"{name}\" currently has existing memory.",
+      "clearTitle": "Confirm Clear Pod Memory",
+      "clearWarningTitle": "This will delete the existing memory for this Pod",
+      "clearWarningDescription": "This action cannot be undone. Pod Memory will need to be rebuilt afterward.",
+      "clearConfirmButton": "Clear Memory"
+    },
+    "memoryViewer": {
+      "podTitle": "Pod Memory",
+      "repoTitle": "Repo Memory",
+      "emptyPod": "This Pod does not have any Memory yet.",
+      "emptyRepo": "This Repository does not have any Memory yet.",
+      "lastUpdated": "Last updated: {timestamp}"
+    },
     "podContextMenu": {
       "downloadDirectory": "Download Working Directory (zip)",
+      "podMemory": "Pod Memory",
+      "repoMemory": "Repo Memory",
+      "viewPodMemory": "View Pod Memory",
+      "viewRepoMemory": "View Repo Memory",
       "enableMemory": "Enable Pod Memory",
       "disableMemory": "Disable Pod Memory",
       "enableRepoMemory": "Enable Repo Memory",
       "disableRepoMemory": "Disable Repo Memory",
       "clearMemory": "Clear Pod Memory",
       "clearMemoryDisabled": "This Pod has no memory to clear right now",
+      "clearRepoMemory": "Clear Repo Memory",
+      "clearRepoMemoryDisabled": "This Repository has no memory to clear right now",
+      "repoMemoryUnavailable": "This Pod is not bound to a Repository yet",
       "convertProvider": "Convert Provider",
       "integrations": "Integrations",
       "connect": "Connect {label}",

@@ -4,6 +4,7 @@ import type {
   PodGetResultPayload,
   PodScheduleSetPayload,
   PodMemoryEnabledSetPayload,
+  PodMemoryResultPayload,
   PodMemoryClearedPayload,
   PodGoalSetPayload,
   PodProviderSetPayload,
@@ -25,6 +26,7 @@ import type {
   PodSetThinkingLevelPayload,
   PodSetSchedulePayload,
   PodSetMemoryEnabledPayload,
+  PodGetMemoryPayload,
   PodClearMemoryPayload,
   PodDeletePayload,
   PodSetPluginsPayload,
@@ -668,6 +670,40 @@ export const handlePodSetMemoryEnabled =
       );
     },
   );
+
+export const handlePodGetMemory = withCanvasId<PodGetMemoryPayload>(
+  WebSocketResponseEvents.POD_MEMORY_RESULT,
+  async (
+    connectionId: string,
+    canvasId: string,
+    payload: PodGetMemoryPayload,
+    requestId: string,
+  ): Promise<void> => {
+    const { podId } = payload;
+
+    const pod = validatePod(
+      connectionId,
+      podId,
+      WebSocketResponseEvents.POD_MEMORY_RESULT,
+      requestId,
+    );
+    if (!pod) {
+      return;
+    }
+
+    const state = memoryStateService.getPodState(podId);
+    emitSuccess(connectionId, WebSocketResponseEvents.POD_MEMORY_RESULT, {
+      requestId,
+      canvasId,
+      success: true,
+      podId,
+      memoryEnabled: state?.memoryEnabled ?? false,
+      hasSummary: state?.hasSummary ?? false,
+      summary: state?.summary ?? null,
+      summaryUpdatedAt: state?.summaryUpdatedAt ?? null,
+    } satisfies PodMemoryResultPayload);
+  },
+);
 
 export const handlePodClearMemory = withCanvasId<PodClearMemoryPayload>(
   WebSocketResponseEvents.POD_MEMORY_CLEARED,

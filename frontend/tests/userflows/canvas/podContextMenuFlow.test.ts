@@ -80,6 +80,13 @@ function getButtonByText(
     .find((button) => button.text().includes(text));
 }
 
+function getToggleRow(
+  wrapper: Awaited<ReturnType<typeof mountPodContextMenu>>["wrapper"],
+  testId: string,
+) {
+  return wrapper.get(`[data-testid="${testId}"]`);
+}
+
 describe("pod context menu userflow", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -129,7 +136,7 @@ describe("pod context menu userflow", () => {
     unmount();
   });
 
-  it("memory 已啟用且已有記憶時，右鍵選單會提供停用與清除入口", async () => {
+  it("memory 已啟用且已有記憶時，右鍵選單會提供 toggle 與清除入口", async () => {
     const { wrapper, unmount } = await mountPodContextMenu();
     const podStore = usePodStore();
 
@@ -143,24 +150,32 @@ describe("pod context menu userflow", () => {
 
     await nextTick();
 
-    const disableMemoryLabel = i18n.global.t(
-      "canvas.podContextMenu.disableMemory",
-    );
+    const podMemoryLabel = i18n.global.t("canvas.podContextMenu.podMemory");
     const clearMemoryLabel = i18n.global.t("canvas.podContextMenu.clearMemory");
+    const viewPodMemoryLabel = i18n.global.t(
+      "canvas.podContextMenu.viewPodMemory",
+    );
 
-    await getButtonByText(wrapper, disableMemoryLabel)?.trigger("click");
+    expect(wrapper.text()).toContain(podMemoryLabel);
+
+    await getToggleRow(wrapper, "pod-memory-toggle-row").trigger("click");
     expect(wrapper.emitted("set-memory-enabled")).toEqual([["pod-1", false]]);
+    expect(wrapper.emitted("close")).toBeUndefined();
+
+    await getButtonByText(wrapper, viewPodMemoryLabel)?.trigger("click");
+    expect(wrapper.emitted("view-pod-memory")).toEqual([["pod-1"]]);
     expect(wrapper.emitted("close")).toHaveLength(1);
 
     await wrapper.setProps({ podId: "pod-1" });
     await nextTick();
     await getButtonByText(wrapper, clearMemoryLabel)?.trigger("click");
     expect(wrapper.emitted("clear-memory")).toEqual([["pod-1"]]);
+    expect(wrapper.emitted("close")).toHaveLength(2);
 
     unmount();
   });
 
-  it("綁定 repository 時，右鍵選單會提供 repo memory 啟用入口", async () => {
+  it("綁定 repository 時，右鍵選單會提供 repo memory toggle", async () => {
     const { wrapper, unmount } = await mountPodContextMenu();
     const podStore = usePodStore();
 
@@ -169,19 +184,79 @@ describe("pod context menu userflow", () => {
         id: "pod-1",
         repositoryId: "repo-1",
         repoMemoryEnabled: false,
+        hasRepoMemory: true,
       }),
     ];
 
     await nextTick();
 
-    const enableRepoMemoryLabel = i18n.global.t(
-      "canvas.podContextMenu.enableRepoMemory",
+    const repoMemoryLabel = i18n.global.t("canvas.podContextMenu.repoMemory");
+    const viewRepoMemoryLabel = i18n.global.t(
+      "canvas.podContextMenu.viewRepoMemory",
+    );
+    const clearRepoMemoryLabel = i18n.global.t(
+      "canvas.podContextMenu.clearRepoMemory",
     );
 
-    await getButtonByText(wrapper, enableRepoMemoryLabel)?.trigger("click");
+    expect(wrapper.text()).toContain(repoMemoryLabel);
+
+    await getToggleRow(wrapper, "repo-memory-toggle-row").trigger("click");
     expect(wrapper.emitted("set-repo-memory-enabled")).toEqual([
       ["repo-1", true],
     ]);
+    expect(wrapper.emitted("close")).toBeUndefined();
+
+    await getButtonByText(wrapper, viewRepoMemoryLabel)?.trigger("click");
+    expect(wrapper.emitted("view-repo-memory")).toEqual([["repo-1"]]);
+    expect(wrapper.emitted("close")).toHaveLength(1);
+
+    await wrapper.setProps({ podId: "pod-1" });
+    await nextTick();
+    await getButtonByText(wrapper, clearRepoMemoryLabel)?.trigger("click");
+    expect(wrapper.emitted("clear-repo-memory")).toEqual([["repo-1"]]);
+    expect(wrapper.emitted("close")).toHaveLength(2);
+
+    unmount();
+  });
+
+  it("未綁定 repository 時，repo memory 相關項目應顯示但為 disabled", async () => {
+    const { wrapper, unmount } = await mountPodContextMenu();
+    const podStore = usePodStore();
+
+    podStore.pods = [
+      createMockPod({
+        id: "pod-1",
+        repositoryId: null,
+        repoMemoryEnabled: false,
+        hasRepoMemory: false,
+      }),
+    ];
+
+    await nextTick();
+
+    const repoToggleRow = getToggleRow(wrapper, "repo-memory-toggle-row");
+    const viewRepoMemoryLabel = i18n.global.t(
+      "canvas.podContextMenu.viewRepoMemory",
+    );
+    const clearRepoMemoryLabel = i18n.global.t(
+      "canvas.podContextMenu.clearRepoMemory",
+    );
+
+    expect(repoToggleRow.classes()).toContain("cursor-not-allowed");
+
+    const viewRepoMemoryButton = getButtonByText(wrapper, viewRepoMemoryLabel);
+    const clearRepoMemoryButton = getButtonByText(wrapper, clearRepoMemoryLabel);
+
+    expect(viewRepoMemoryButton?.attributes("disabled")).toBeDefined();
+    expect(clearRepoMemoryButton?.attributes("disabled")).toBeDefined();
+
+    await repoToggleRow.trigger("click");
+    await viewRepoMemoryButton?.trigger("click");
+    await clearRepoMemoryButton?.trigger("click");
+
+    expect(wrapper.emitted("set-repo-memory-enabled")).toBeUndefined();
+    expect(wrapper.emitted("view-repo-memory")).toBeUndefined();
+    expect(wrapper.emitted("clear-repo-memory")).toBeUndefined();
 
     unmount();
   });

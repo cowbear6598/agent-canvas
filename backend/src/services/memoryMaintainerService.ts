@@ -8,6 +8,7 @@ import { configStore } from "./configStore.js";
 import { memoryStateService, type MemoryScopeType } from "./memoryStateService.js";
 import { podStore } from "./podStore.js";
 import { repositoryService } from "./repositoryService.js";
+import { runRepoActivitySnapshotService } from "./runRepoActivitySnapshotService.js";
 import { runStore } from "./runStore.js";
 import { resolvePodCwd } from "./shared/podPathResolver.js";
 import { logger } from "../utils/logger.js";
@@ -16,18 +17,10 @@ import type { Pod } from "../types/pod.js";
 import type { RunContext } from "../types/run.js";
 
 const MAX_MEMORY_RETRY_COUNT = 3;
+const MAX_SUMMARY_FORMAT_CORRECTION_COUNT = 3;
 const MAX_EVIDENCE_MESSAGES = 8;
 const MAX_MESSAGE_CONTENT_LENGTH = 600;
 const MAX_TOOL_OUTPUT_LENGTH = 400;
-const REPO_ACTIVITY_TOOL_NAMES = new Set([
-  "Read",
-  "Write",
-  "Edit",
-  "MultiEdit",
-  "Grep",
-  "Glob",
-  "Bash",
-]);
 
 const memoryCandidateSchema = z.object({
   observations: z.array(
@@ -86,6 +79,29 @@ interface MemoryScopeTask {
   runContext: RunContext;
 }
 
+interface SummaryFormatValidationResult {
+  valid: boolean;
+  error: string | null;
+}
+
+interface XmlMemoryBlock {
+  tagName: string;
+  content: string;
+}
+
+const GENERIC_POD_MEMORY_PATTERNS = [
+  /goal runtime/i,
+  /active todo/i,
+  /開始動作前先檢查/i,
+  /若沒有 active todo/i,
+  /依照使用者當前的明確要求處理/i,
+  /建立或修改檔案後/i,
+  /檢查內容與檔案狀態/i,
+  /確認結果無誤後再回報/i,
+  /快速檢查/i,
+  /git status/i,
+];
+
 function getScopeLogLabel(task: MemoryScopeTask): string {
   if (task.scopeType === "pod") {
     return `Pod Memory（${task.pod.name}）`;
@@ -135,20 +151,133 @@ function flattenToolTraces(
   return messages.flatMap((message) => message.toolTraces);
 }
 
-function hasRepositoryActivity(messages: PersistedMessage[]): boolean {
-  return messages.some((message) =>
-    collectToolTraces(message).some((tool) =>
-      REPO_ACTIVITY_TOOL_NAMES.has(tool.toolName),
-    ),
+function validateMemorySummaryFormat(summary: string | null): SummaryFormatValidationResult {
+  if (summary === null) {
+    return { valid: true, error: null };
+  }
+
+  const trimmed = summary.trim();
+  if (trimmed.length === 0) {
+    return { valid: false, error: "summary 不可為空字串" };
+  }
+
+  if (trimmed.includes("```")) {
+    return { valid: false, error: "不可使用 Markdown code fence" };
+  }
+
+  const tagPattern = /<([a-z][a-z0-9-]*)>([\s\S]*?)<\/\1>/g;
+  let cursor = 0;
+  let matchedCount = 0;
+
+  for (const match of trimmed.matchAll(tagPattern)) {
+    const fullMatch = match[0];
+    const content = match[2] ?? "";
+    const matchIndex = match.index ?? -1;
+
+    if (matchIndex !== cursor) {
+      const gapText = trimmed.slice(cursor, matchIndex).trim();
+      if (gapText.length > 0) {
+        return {
+          valid: false,
+          error: "XML 區塊之間不可夾帶未包在 tag 內的文字",
+        };
+      }
+    }
+
+    if (content.trim().length === 0) {
+      return { valid: false, error: "每個 XML tag 內都必須有內容" };
+    }
+
+    if (/<\/?[a-z][a-z0-9-]*>/i.test(content)) {
+      return {
+        valid: false,
+        error: "目前只允許單層 XML 區塊，tag 內不可再巢狀其他 tag",
+      };
+    }
+
+    cursor = matchIndex + fullMatch.length;
+    matchedCount += 1;
+  }
+
+  if (matchedCount === 0) {
+    return {
+      valid: false,
+      error: "summary 必須完全由一個以上的 XML 區塊組成",
+    };
+  }
+
+  if (trimmed.slice(cursor).trim().length > 0) {
+    return {
+      valid: false,
+      error: "XML 區塊後不可有額外文字",
+    };
+  }
+
+  return { valid: true, error: null };
+}
+
+function parseXmlMemoryBlocks(summary: string | null): XmlMemoryBlock[] {
+  if (summary === null) {
+    return [];
+  }
+
+  const blocks: XmlMemoryBlock[] = [];
+  const tagPattern = /<([a-z][a-z0-9-]*)>([\s\S]*?)<\/\1>/g;
+
+  for (const match of summary.matchAll(tagPattern)) {
+    blocks.push({
+      tagName: match[1] ?? "",
+      content: (match[2] ?? "").trim(),
+    });
+  }
+
+  return blocks;
+}
+
+function serializeXmlMemoryBlocks(blocks: XmlMemoryBlock[]): string | null {
+  if (blocks.length === 0) {
+    return null;
+  }
+
+  return blocks
+    .map(
+      (block) =>
+        `<${block.tagName}>\n${block.content}\n</${block.tagName}>`,
+    )
+    .join("\n\n");
+}
+
+function isGenericPodMemoryText(value: string): boolean {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  return GENERIC_POD_MEMORY_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+
+function sanitizePodMemorySummary(summary: string | null): string | null {
+  const blocks = parseXmlMemoryBlocks(summary).filter(
+    (block) => !isGenericPodMemoryText(`${block.tagName} ${block.content}`),
   );
+  return serializeXmlMemoryBlocks(blocks);
 }
 
 function buildCandidateSystemPrompt(scopeType: MemoryScopeType): string {
-  const scopeLabel = scopeType === "pod" ? "Pod" : "Repository";
+  if (scopeType === "pod") {
+    return [
+      "你是 Pod Memory Maintainer。",
+      "你的任務是從本輪證據中挑出適合長期保留的 Pod 級穩定記憶。",
+      "只保留這顆 Pod 自己的工作方式、工具偏好、互動習慣、固定限制與交接資訊。",
+      "不要把 repository 共用事實、專案目的、目錄結構、repo 規範寫進 Pod Memory，除非那是這顆 Pod 專屬的工作規則。",
+      "產品共用的基線行為也不要收進 Pod Memory，例如先檢查 Goal Runtime active todo、修改後順手檢查檔案內容或 git 狀態、最後再回報這類通用流程。",
+      "只有明顯屬於這顆 Pod 的長期習慣或限制，才可 accepted=true。",
+      "短期進度、一次性除錯細節、暫時狀態與噪音都應拒絕。",
+      "所有 reason 與 summary 都使用 zh-TW。",
+    ].join("\n");
+  }
+
   return [
-    `你是 ${scopeLabel} Memory Maintainer。`,
-    "你的任務是從本輪證據中挑出適合長期保留的穩定記憶。",
-    "只保留未來新 session 真的有幫助的資訊，例如工作背景、限制、偏好、架構慣例、重要命令與檔案脈絡。",
+    "你是 Repository Memory Maintainer。",
+    "你的任務是從本輪證據中挑出適合長期保留的 Repository 級穩定記憶。",
+    "只保留這個 repository 本身的目的、結構、工作流程、程式風格與固定限制。",
+    "不要把單一 Pod 的工作習慣、口吻、一次性偏好寫進 Repo Memory，除非那是 repo 共用規則。",
     "短期進度、一次性除錯細節、暫時狀態與噪音都應拒絕。",
     "所有 reason 與 summary 都使用 zh-TW。",
   ].join("\n");
@@ -167,10 +296,20 @@ function buildCandidateUserPrompt(evidencePack: MemoryEvidencePack): string {
 
 function buildMergerSystemPrompt(scopeType: MemoryScopeType): string {
   const scopeLabel = scopeType === "pod" ? "Pod" : "Repository";
+  const scopeSpecificRules =
+    scopeType === "pod"
+      ? "只保留這顆 Pod 自己的工作方式、工具習慣、固定限制與交接資訊；不要寫 repository 共用背景。"
+      : "只保留 repository 目的、結構、workflow、code style 與固定限制；不要寫單一 Pod 的個人習慣。";
   return [
     `你是 ${scopeLabel} Memory Summary Merger。`,
     "請把既有 summary 與本輪 accepted observations 合併成一份可供未來 session 注入的精簡記憶。",
-    "輸出 summary 時使用 zh-TW，避免冗長贅述，保留具體可行的重點。",
+    `${scopeSpecificRules}`,
+    "summary 必須使用 XML 區塊格式。",
+    "tag 名稱不要限定在固定清單內，請依內容自訂語意清楚的 kebab-case 名稱，例如 <code-style>、<structure>、<workflow>。",
+    "summary 必須完全由一個以上的單層 XML 區塊組成，不可在 tag 外面夾帶任何文字。",
+    "每個 tag 內都必須有內容，沒有內容的 tag 直接省略。",
+    "tag 內文使用 zh-TW，寫成精簡短句或單行條列重點，不要使用 Markdown code fence。",
+    "避免冗長贅述，保留具體可行的重點。",
     "若沒有可保留的新資訊且既有 summary 也為空，請回傳 null。",
   ].join("\n");
 }
@@ -179,6 +318,8 @@ function buildMergerUserPrompt(params: {
   scopeType: MemoryScopeType;
   existingSummary: string | null;
   acceptedObservations: MemoryCandidateResult["observations"];
+  validationFeedback?: string | null;
+  previousInvalidSummary?: string | null;
 }): string {
   return JSON.stringify(
     {
@@ -186,6 +327,8 @@ function buildMergerUserPrompt(params: {
       scopeType: params.scopeType,
       existingSummary: params.existingSummary,
       acceptedObservations: params.acceptedObservations,
+      validationFeedback: params.validationFeedback ?? null,
+      previousInvalidSummary: params.previousInvalidSummary ?? null,
     },
     null,
     2,
@@ -194,6 +337,32 @@ function buildMergerUserPrompt(params: {
 
 class MemoryMaintainerService {
   private readonly scopeLocks = new Map<string, Promise<void>>();
+
+  private normalizeCandidateObservations(
+    task: MemoryScopeTask,
+    observations: MemoryCandidateResult["observations"],
+  ): MemoryCandidateResult["observations"] {
+    if (task.scopeType !== "pod") {
+      return observations;
+    }
+
+    return observations.map((observation) => {
+      if (
+        observation.accepted &&
+        isGenericPodMemoryText(
+          `${observation.title} ${observation.summary} ${observation.reason}`,
+        )
+      ) {
+        return {
+          ...observation,
+          accepted: false,
+          reason: `${observation.reason}；屬於產品共用基線行為，不應寫入 Pod Memory`,
+        };
+      }
+
+      return observation;
+    });
+  }
 
   private async withScopeLock<T>(
     lockKey: string,
@@ -217,7 +386,40 @@ class MemoryMaintainerService {
     }
   }
 
-  private createMemoryScopeTasks(input: RunScopeInput): MemoryScopeTask[] {
+  private async detectRepositoryActivity(input: RunScopeInput): Promise<boolean> {
+    if (!input.pod.repositoryId) {
+      return false;
+    }
+
+    await runRepoActivitySnapshotService.awaitRunCapture(input.runContext.runId);
+
+    const capturedSnapshot = runRepoActivitySnapshotService.consumeSnapshot(
+      input.runContext.runId,
+      input.pod.id,
+    );
+    if (capturedSnapshot) {
+      return capturedSnapshot.hasActivity;
+    }
+
+    const instance = runStore.getPodInstance(input.runContext.runId, input.pod.id);
+    if (!instance) {
+      return false;
+    }
+
+    const liveSnapshot = await runRepoActivitySnapshotService.capturePodSnapshot({
+      runId: input.runContext.runId,
+      podId: input.pod.id,
+      runRepoPath: instance.runRepoPath,
+      workspacePath: instance.workspacePath,
+    });
+
+    return liveSnapshot?.hasActivity ?? false;
+  }
+
+  private createMemoryScopeTasks(
+    input: RunScopeInput,
+    hasRepoActivity: boolean,
+  ): MemoryScopeTask[] {
     const tasks: MemoryScopeTask[] = [];
     const podState = memoryStateService.getPodState(input.pod.id);
     if (podState?.memoryEnabled) {
@@ -232,11 +434,7 @@ class MemoryMaintainerService {
     if (
       input.pod.repositoryId &&
       memoryStateService.getRepoState(input.pod.repositoryId)?.memoryEnabled &&
-      hasRepositoryActivity(
-        runStore
-          .getRunMessages(input.runContext.runId, input.pod.id)
-          .slice(-MAX_EVIDENCE_MESSAGES),
-      )
+      hasRepoActivity
     ) {
       tasks.push({
         scopeType: "repository",
@@ -332,6 +530,10 @@ class MemoryMaintainerService {
     task: MemoryScopeTask,
     existingSummary: string | null,
     acceptedObservations: MemoryCandidateResult["observations"],
+    options?: {
+      validationFeedback?: string | null;
+      previousInvalidSummary?: string | null;
+    },
   ): Promise<StructuredDisposableTaskOutput<typeof memoryMergedSummarySchema>> {
     const memoryConfig = configStore.getMemoryConfig();
     return executeStructuredDisposableTask({
@@ -343,6 +545,8 @@ class MemoryMaintainerService {
         scopeType: task.scopeType,
         existingSummary,
         acceptedObservations,
+        validationFeedback: options?.validationFeedback ?? null,
+        previousInvalidSummary: options?.previousInvalidSummary ?? null,
       }),
       workspacePath: this.getWorkspacePath(task.pod),
       logCategory: "Memory",
@@ -369,13 +573,75 @@ class MemoryMaintainerService {
     });
   }
 
+  private async runValidatedSummaryMerger(
+    task: MemoryScopeTask,
+    existingSummary: string | null,
+    acceptedObservations: MemoryCandidateResult["observations"],
+  ): Promise<StructuredDisposableTaskOutput<typeof memoryMergedSummarySchema>> {
+    let validationFeedback: string | null = null;
+    let previousInvalidSummary: string | null = null;
+    let lastResult: StructuredDisposableTaskOutput<typeof memoryMergedSummarySchema> | null =
+      null;
+
+    for (
+      let attempt = 1;
+      attempt <= MAX_SUMMARY_FORMAT_CORRECTION_COUNT;
+      attempt += 1
+    ) {
+      const mergedResult = await this.runSummaryMerger(
+        task,
+        existingSummary,
+        acceptedObservations,
+        {
+          validationFeedback,
+          previousInvalidSummary,
+        },
+      );
+      lastResult = mergedResult;
+
+      if (!mergedResult.success) {
+        return mergedResult;
+      }
+
+      const validationResult = validateMemorySummaryFormat(
+        mergedResult.data.summary,
+      );
+      if (validationResult.valid) {
+        return mergedResult;
+      }
+
+      validationFeedback = [
+        "你上一版的 summary 格式未通過驗證，請直接修正成合法 XML 區塊格式後重新輸出。",
+        `驗證錯誤：${validationResult.error}`,
+        "請保留原本語意，但修正格式。",
+      ].join("\n");
+      previousInvalidSummary = mergedResult.data.summary;
+
+      logger.log(
+        "Memory",
+        "Update",
+        `${getScopeLogLabel(task)} XML 格式驗證未通過，要求模型重修（attempt=${attempt}）`,
+      );
+    }
+
+    return {
+      success: false,
+      error:
+        lastResult && lastResult.success
+          ? `正式記憶 XML 格式驗證失敗：${validateMemorySummaryFormat(lastResult.data.summary).error ?? "格式不合法"}`
+          : "正式記憶 XML 格式驗證失敗",
+      resolvedModel: lastResult?.resolvedModel ?? "",
+      rawContent: lastResult?.rawContent ?? "",
+    };
+  }
+
   private writeSummary(
     scopeType: MemoryScopeType,
     scopeId: string,
     summary: string | null,
   ): void {
     if (scopeType === "pod") {
-      memoryStateService.writePodSummary(scopeId, summary);
+      memoryStateService.writePodSummary(scopeId, sanitizePodMemorySummary(summary));
       return;
     }
 
@@ -467,7 +733,12 @@ class MemoryMaintainerService {
             throw new Error(candidateResult.error);
           }
 
-          for (const observation of candidateResult.data.observations) {
+          const normalizedObservations = this.normalizeCandidateObservations(
+            task,
+            candidateResult.data.observations,
+          );
+
+          for (const observation of normalizedObservations) {
             memoryStateService.recordObservation({
               jobId: job.id,
               scopeType: task.scopeType,
@@ -482,7 +753,7 @@ class MemoryMaintainerService {
             });
           }
 
-          const acceptedObservations = candidateResult.data.observations.filter(
+          const acceptedObservations = normalizedObservations.filter(
             (observation) => observation.accepted,
           );
 
@@ -491,7 +762,7 @@ class MemoryMaintainerService {
             "Init",
             `${scopeLabel} 開始正式記憶合併（accepted=${acceptedObservations.length}）`,
           );
-          const mergedResult = await this.runSummaryMerger(
+          const mergedResult = await this.runValidatedSummaryMerger(
             task,
             evidencePack.existingSummary,
             acceptedObservations,
@@ -501,14 +772,18 @@ class MemoryMaintainerService {
             throw new Error(mergedResult.error);
           }
 
-          this.writeSummary(task.scopeType, task.scopeId, mergedResult.data.summary);
+          const finalSummary =
+            task.scopeType === "pod"
+              ? sanitizePodMemorySummary(mergedResult.data.summary)
+              : mergedResult.data.summary;
+          this.writeSummary(task.scopeType, task.scopeId, finalSummary);
           memoryStateService.recordObservation({
             jobId: job.id,
             scopeType: task.scopeType,
             scopeId: task.scopeId,
             kind: "summary_merge",
             status: "applied",
-            summary: mergedResult.data.summary,
+            summary: finalSummary,
             payload: {
               reason: mergedResult.data.reason,
               acceptedObservationCount: acceptedObservations.length,
@@ -589,18 +864,15 @@ class MemoryMaintainerService {
       ? memoryStateService.getRepoState(podResult.pod.repositoryId)
           ?.memoryEnabled ?? false
       : false;
-    const hasRepoActivity = podResult.pod.repositoryId
-      ? hasRepositoryActivity(
-          runStore
-            .getRunMessages(runContext.runId, podResult.pod.id)
-            .slice(-MAX_EVIDENCE_MESSAGES),
-        )
-      : false;
+    const hasRepoActivity = await this.detectRepositoryActivity({
+      runContext,
+      pod: podResult.pod,
+    });
 
     const tasks = this.createMemoryScopeTasks({
       runContext,
       pod: podResult.pod,
-    });
+    }, hasRepoActivity);
 
     if (tasks.length === 0) {
       const reason =

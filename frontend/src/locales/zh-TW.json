@@ -620,14 +620,35 @@
       "deleteWarningDescription": "確認後會同時刪除 Repository 與既有 Repo Memory，且無法復原。",
       "deleteConfirmButton": "仍要刪除"
     },
+    "podMemoryConfirm": {
+      "description": "Pod「{name}」目前有既有記憶。",
+      "clearTitle": "確認清除 Pod Memory",
+      "clearWarningTitle": "這會刪除此 Pod 的既有記憶",
+      "clearWarningDescription": "清除後將無法復原，之後需要重新累積 Pod Memory。",
+      "clearConfirmButton": "確認清除"
+    },
+    "memoryViewer": {
+      "podTitle": "Pod Memory",
+      "repoTitle": "Repo Memory",
+      "emptyPod": "這個 Pod 目前還沒有 Memory。",
+      "emptyRepo": "這個 Repository 目前還沒有 Memory。",
+      "lastUpdated": "最後更新：{timestamp}"
+    },
     "podContextMenu": {
       "downloadDirectory": "下載工作目錄（zip）",
+      "podMemory": "Pod Memory",
+      "repoMemory": "Repo Memory",
+      "viewPodMemory": "查看 Pod Memory",
+      "viewRepoMemory": "查看 Repo Memory",
       "enableMemory": "啟用 Pod Memory",
       "disableMemory": "停用 Pod Memory",
       "enableRepoMemory": "啟用 Repo Memory",
       "disableRepoMemory": "停用 Repo Memory",
       "clearMemory": "清除 Pod Memory",
       "clearMemoryDisabled": "這個 Pod 目前沒有可清除的記憶",
+      "clearRepoMemory": "清除 Repo Memory",
+      "clearRepoMemoryDisabled": "這個 Repository 目前沒有可清除的記憶",
+      "repoMemoryUnavailable": "這顆 Pod 尚未綁定 Repository",
       "convertProvider": "轉換 Provider",
       "integrations": "連接",
       "connect": "連接 {label}",

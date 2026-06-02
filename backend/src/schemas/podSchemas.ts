@@ -163,6 +163,12 @@ export const podSetMemoryEnabledSchema = z.object({
   memoryEnabled: z.boolean(),
 });
 
+export const podGetMemorySchema = z.object({
+  requestId: requestIdSchema,
+  canvasId: canvasIdSchema,
+  podId: podIdSchema,
+});
+
 export const podClearMemorySchema = z.object({
   requestId: requestIdSchema,
   canvasId: canvasIdSchema,
@@ -197,6 +203,7 @@ export type PodSetSchedulePayload = z.infer<typeof podSetScheduleSchema>;
 export type PodSetMemoryEnabledPayload = z.infer<
   typeof podSetMemoryEnabledSchema
 >;
+export type PodGetMemoryPayload = z.infer<typeof podGetMemorySchema>;
 export type PodClearMemoryPayload = z.infer<typeof podClearMemorySchema>;
 export type PodDeletePayload = z.infer<typeof podDeleteSchema>;
 export type PodSetPluginsPayload = z.infer<typeof podSetPluginsSchema>;

@@ -7,12 +7,14 @@ import {
   ChevronRight,
   Download,
   Eraser,
+  Eye,
   Plug,
 } from "lucide-vue-next";
 import { useI18n } from "vue-i18n";
 import AnthropicLogo from "@/components/icons/AnthropicLogo.vue";
 import OpenAILogo from "@/components/icons/OpenAILogo.vue";
 import OpencodeLogo from "@/components/icons/OpencodeLogo.vue";
+import { Switch } from "@/components/ui/switch";
 import { downloadPodDirectory } from "@/services/podApi";
 import { getActiveCanvasIdOrWarn } from "@/utils/canvasGuard";
 import { generateUUID } from "@/services/utils";
@@ -55,7 +57,10 @@ const emit = defineEmits<{
   ];
   "set-memory-enabled": [podId: string, memoryEnabled: boolean];
   "set-repo-memory-enabled": [repositoryId: string, memoryEnabled: boolean];
+  "view-pod-memory": [podId: string];
+  "view-repo-memory": [repositoryId: string];
   "clear-memory": [podId: string];
+  "clear-repo-memory": [repositoryId: string];
   "connect-integration": [podId: string, provider: string];
   "disconnect-integration": [podId: string, provider: string];
 }>();
@@ -77,7 +82,22 @@ const repositoryId = computed(() => pod.value?.repositoryId ?? null);
 const isRepoMemoryEnabled = computed(
   () => pod.value?.repoMemoryEnabled ?? false,
 );
+const hasRepoMemory = computed(() => pod.value?.hasRepoMemory ?? false);
 const integrationProviders = getAllProviders();
+const repoMemoryUnavailableTitle = computed(() =>
+  repositoryId.value ? undefined : t("canvas.podContextMenu.repoMemoryUnavailable"),
+);
+const clearRepoMemoryDisabledTitle = computed(() => {
+  if (!repositoryId.value) {
+    return t("canvas.podContextMenu.repoMemoryUnavailable");
+  }
+
+  if (!hasRepoMemory.value) {
+    return t("canvas.podContextMenu.clearRepoMemoryDisabled");
+  }
+
+  return undefined;
+});
 
 const downloadProgress = useDownloadProgress();
 
@@ -190,19 +210,43 @@ const handleDisconnect = (provider: string): void => {
 
 const handleSetMemoryEnabled = (memoryEnabled: boolean): void => {
   emit("set-memory-enabled", props.podId, memoryEnabled);
-  emit("close");
 };
 
 const handleSetRepoMemoryEnabled = (memoryEnabled: boolean): void => {
   if (!repositoryId.value) return;
   emit("set-repo-memory-enabled", repositoryId.value, memoryEnabled);
-  emit("close");
 };
 
 const handleClearMemory = (): void => {
   if (!hasPodMemory.value) return;
   emit("clear-memory", props.podId);
   emit("close");
+};
+
+const handleViewPodMemory = (): void => {
+  emit("view-pod-memory", props.podId);
+  emit("close");
+};
+
+const handleViewRepoMemory = (): void => {
+  if (!repositoryId.value) return;
+  emit("view-repo-memory", repositoryId.value);
+  emit("close");
+};
+
+const handleClearRepoMemory = (): void => {
+  if (!repositoryId.value || !hasRepoMemory.value) return;
+  emit("clear-repo-memory", repositoryId.value);
+  emit("close");
+};
+
+const handleActionRowKeydown = (
+  event: KeyboardEvent,
+  callback: () => void,
+): void => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  callback();
 };
 </script>
 
@@ -223,54 +267,6 @@ const handleClearMemory = (): void => {
       <Download :size="14" />
       <span class="font-mono">{{
         $t("canvas.podContextMenu.downloadDirectory")
-      }}</span>
-    </button>
-
-    <div class="my-1 border-t border-border" />
-
-    <button
-      class="w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary"
-      @click="handleSetMemoryEnabled(!isMemoryEnabled)"
-    >
-      <Brain :size="14" />
-      <span class="font-mono">{{
-        isMemoryEnabled
-          ? $t("canvas.podContextMenu.disableMemory")
-          : $t("canvas.podContextMenu.enableMemory")
-      }}</span>
-    </button>
-
-    <button
-      v-if="repositoryId"
-      class="w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary"
-      @click="handleSetRepoMemoryEnabled(!isRepoMemoryEnabled)"
-    >
-      <Brain :size="14" />
-      <span class="font-mono">{{
-        isRepoMemoryEnabled
-          ? $t("canvas.podContextMenu.disableRepoMemory")
-          : $t("canvas.podContextMenu.enableRepoMemory")
-      }}</span>
-    </button>
-
-    <button
-      :disabled="!hasPodMemory"
-      :title="
-        !hasPodMemory
-          ? $t('canvas.podContextMenu.clearMemoryDisabled')
-          : undefined
-      "
-      :class="[
-        'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs',
-        hasPodMemory
-          ? 'hover:bg-secondary'
-          : 'cursor-not-allowed opacity-60',
-      ]"
-      @click="handleClearMemory"
-    >
-      <Eraser :size="14" />
-      <span class="font-mono">{{
-        $t("canvas.podContextMenu.clearMemory")
       }}</span>
     </button>
 
@@ -407,5 +403,127 @@ const handleClearMemory = (): void => {
         </div>
       </div>
     </div>
+
+    <div class="my-1 border-t border-border" />
+
+    <div
+      data-testid="pod-memory-toggle-row"
+      class="flex items-center justify-between gap-3 px-2 py-1 rounded text-left text-xs hover:bg-secondary cursor-pointer"
+      role="button"
+      tabindex="0"
+      @click="handleSetMemoryEnabled(!isMemoryEnabled)"
+      @keydown="handleActionRowKeydown($event, () => handleSetMemoryEnabled(!isMemoryEnabled))"
+    >
+      <span class="flex items-center gap-2">
+        <Brain :size="14" />
+        <span class="font-mono">{{
+          $t("canvas.podContextMenu.podMemory")
+        }}</span>
+      </span>
+      <Switch
+        :model-value="isMemoryEnabled"
+        class="pointer-events-none"
+        tabindex="-1"
+      />
+    </div>
+
+    <div
+      data-testid="repo-memory-toggle-row"
+      :title="repoMemoryUnavailableTitle"
+      :class="[
+        'flex items-center justify-between gap-3 px-2 py-1 rounded text-left text-xs',
+        repositoryId
+          ? 'hover:bg-secondary cursor-pointer'
+          : 'cursor-not-allowed opacity-60',
+      ]"
+      role="button"
+      tabindex="0"
+      @click="repositoryId && handleSetRepoMemoryEnabled(!isRepoMemoryEnabled)"
+      @keydown="
+        repositoryId &&
+          handleActionRowKeydown($event, () => handleSetRepoMemoryEnabled(!isRepoMemoryEnabled))
+      "
+    >
+      <span class="flex items-center gap-2">
+        <Brain :size="14" />
+        <span class="font-mono">{{
+          $t("canvas.podContextMenu.repoMemory")
+        }}</span>
+      </span>
+      <Switch
+        :model-value="isRepoMemoryEnabled"
+        class="pointer-events-none"
+        tabindex="-1"
+      />
+    </div>
+
+    <div class="my-1 border-t border-border" />
+
+    <button
+      class="w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary"
+      @click="handleViewPodMemory"
+    >
+      <Eye :size="14" />
+      <span class="font-mono">{{
+        $t("canvas.podContextMenu.viewPodMemory")
+      }}</span>
+    </button>
+
+    <button
+      :disabled="!repositoryId"
+      :title="repoMemoryUnavailableTitle"
+      :class="[
+        'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs',
+        repositoryId
+          ? 'hover:bg-secondary'
+          : 'cursor-not-allowed opacity-60',
+      ]"
+      @click="handleViewRepoMemory"
+    >
+      <Eye :size="14" />
+      <span class="font-mono">{{
+        $t("canvas.podContextMenu.viewRepoMemory")
+      }}</span>
+    </button>
+
+    <div class="my-1 border-t border-border" />
+
+    <button
+      :disabled="!hasPodMemory"
+      :title="
+        !hasPodMemory
+          ? $t('canvas.podContextMenu.clearMemoryDisabled')
+          : undefined
+      "
+      :class="[
+        'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs',
+        hasPodMemory
+          ? 'hover:bg-secondary'
+          : 'cursor-not-allowed opacity-60',
+      ]"
+      @click="handleClearMemory"
+    >
+      <Eraser :size="14" />
+      <span class="font-mono">{{
+        $t("canvas.podContextMenu.clearMemory")
+      }}</span>
+    </button>
+
+    <button
+      :disabled="!repositoryId || !hasRepoMemory"
+      :title="clearRepoMemoryDisabledTitle"
+      :class="[
+        'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs',
+        repositoryId && hasRepoMemory
+          ? 'hover:bg-secondary'
+          : 'cursor-not-allowed opacity-60',
+      ]"
+      @click="handleClearRepoMemory"
+    >
+      <Eraser :size="14" />
+      <span class="font-mono">{{
+        $t("canvas.podContextMenu.clearRepoMemory")
+      }}</span>
+    </button>
   </div>
 </template>

@@ -17,6 +17,7 @@ import {
   repositoryDeleteBranchSchema,
   repositoryPullLatestSchema,
   repositorySetMemoryEnabledSchema,
+  repositoryGetMemorySchema,
   repositoryClearMemorySchema,
 } from "../../schemas";
 import {
@@ -27,6 +28,7 @@ import {
   handlePodUnbindRepository,
   handleRepositoryDelete,
   handleRepositorySetMemoryEnabled,
+  handleRepositoryGetMemory,
   handleRepositoryClearMemory,
 } from "../repositoryHandlers.js";
 import {
@@ -144,6 +146,12 @@ export const repositoryHandlerGroup = createHandlerGroup({
       handler: handleRepositorySetMemoryEnabled,
       schema: repositorySetMemoryEnabledSchema,
       responseEvent: WebSocketResponseEvents.REPOSITORY_MEMORY_ENABLED_SET,
+    },
+    {
+      event: WebSocketRequestEvents.REPOSITORY_GET_MEMORY,
+      handler: handleRepositoryGetMemory,
+      schema: repositoryGetMemorySchema,
+      responseEvent: WebSocketResponseEvents.REPOSITORY_MEMORY_RESULT,
     },
     {
       event: WebSocketRequestEvents.REPOSITORY_CLEAR_MEMORY,

@@ -33,6 +33,7 @@ import {
   type RepositoryListResultPayload,
   type RepositoryMemoryClearedPayload,
   type RepositoryMemoryEnabledSetPayload,
+  type RepositoryMemoryResultPayload,
   type RepositoryNoteCreatedPayload,
   type RepositoryCheckGitResultPayload,
 } from "../../src/types";
@@ -121,6 +122,28 @@ describe("Repository 管理", () => {
         id: repo.id,
         name,
         hasRepoMemory: true,
+      });
+
+      const memoryResult = await emitAndWaitResponse<
+        RepositoryClearMemoryPayload,
+        RepositoryMemoryResultPayload
+      >(
+        client,
+        WebSocketRequestEvents.REPOSITORY_GET_MEMORY,
+        WebSocketResponseEvents.REPOSITORY_MEMORY_RESULT,
+        {
+          requestId: uuidv4(),
+          canvasId,
+          repositoryId: repo.id,
+        },
+      );
+
+      expect(memoryResult.success).toBe(true);
+      expect(memoryResult).toMatchObject({
+        repositoryId: repo.id,
+        memoryEnabled: false,
+        hasSummary: true,
+        summary: "既有 repo 記憶",
       });
 
       const cleared = await emitAndWaitResponse<

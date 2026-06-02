@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import { useCanvasContext } from "@/composables/canvas/useCanvasContext";
 import { useDeleteSelection } from "@/composables/canvas";
 import { useRemoteCursors } from "@/composables/canvas/useRemoteCursors";
@@ -27,6 +28,8 @@ import CloneRepositoryModal from "./CloneRepositoryModal.vue";
 import ConfirmDeleteModal from "./ConfirmDeleteModal.vue";
 import BranchEditModal from "./BranchEditModal.vue";
 import RepositoryMemoryConfirmModal from "./RepositoryMemoryConfirmModal.vue";
+import PodMemoryConfirmModal from "./PodMemoryConfirmModal.vue";
+import MemoryViewerModal from "./MemoryViewerModal.vue";
 import IntegrationConnectModal from "@/components/integration/IntegrationConnectModal.vue";
 import type { Pod, PodTypeConfig, Position } from "@/types";
 import type { PodProvider, ProviderConfig } from "@/types/pod";
@@ -47,6 +50,7 @@ const {
   repositoryStore,
   connectionStore,
 } = useCanvasContext();
+const { t } = useI18n();
 
 useDeleteSelection();
 useRemoteCursors();
@@ -60,6 +64,37 @@ const trashZoneRef = ref<InstanceType<typeof TrashZone> | null>(null);
 const showCreateRepositoryModal = ref(false);
 const showCloneRepositoryModal = ref(false);
 const lastMenuPosition = ref<Position | null>(null);
+const podMemoryConfirmModal = ref<{
+  visible: boolean;
+  podId: string;
+  podName: string;
+}>({
+  visible: false,
+  podId: "",
+  podName: "",
+});
+const repoMemoryConfirmModal = ref<{
+  visible: boolean;
+  repositoryId: string;
+  repositoryName: string;
+}>({
+  visible: false,
+  repositoryId: "",
+  repositoryName: "",
+});
+const memoryViewerModal = ref<{
+  visible: boolean;
+  title: string;
+  summary: string | null;
+  summaryUpdatedAt: string | null;
+  emptyMessage: string;
+}>({
+  visible: false,
+  title: "",
+  summary: null,
+  summaryUpdatedAt: null,
+  emptyMessage: "",
+});
 
 const integrationConnectModal = ref<{
   visible: boolean;
@@ -286,7 +321,118 @@ const handleSetRepoMemoryEnabled = async (
 };
 
 const handleClearPodMemory = async (podId: string): Promise<void> => {
+  const pod = podStore.getPodById(podId);
+  if (!pod) return;
+
+  podMemoryConfirmModal.value = {
+    visible: true,
+    podId,
+    podName: pod.name,
+  };
+};
+
+const handleViewPodMemory = async (podId: string): Promise<void> => {
+  const pod = podStore.getPodById(podId);
+  if (!pod) return;
+
+  const result = await podStore.getPodMemory(podId);
+  if (!result.success) return;
+
+  memoryViewerModal.value = {
+    visible: true,
+    title: `${pod.name} · ${t("canvas.memoryViewer.podTitle")}`,
+    summary: result.summary ?? null,
+    summaryUpdatedAt: result.summaryUpdatedAt ?? null,
+    emptyMessage: t("canvas.memoryViewer.emptyPod"),
+  };
+};
+
+const handleViewRepoMemory = async (repositoryId: string): Promise<void> => {
+  const repository = repositoryStore.typedAvailableItems.find(
+    (item) => item.id === repositoryId,
+  );
+  if (!repository) return;
+
+  const result = await repositoryStore.getRepoMemory(repositoryId);
+  if (!result.success) return;
+
+  memoryViewerModal.value = {
+    visible: true,
+    title: `${repository.name} · ${t("canvas.memoryViewer.repoTitle")}`,
+    summary: result.summary ?? null,
+    summaryUpdatedAt: result.summaryUpdatedAt ?? null,
+    emptyMessage: t("canvas.memoryViewer.emptyRepo"),
+  };
+};
+
+const handleMemoryViewerModalOpenChange = (open: boolean): void => {
+  if (open) {
+    memoryViewerModal.value.visible = true;
+    return;
+  }
+
+  memoryViewerModal.value = {
+    visible: false,
+    title: "",
+    summary: null,
+    summaryUpdatedAt: null,
+    emptyMessage: "",
+  };
+};
+
+const handlePodMemoryConfirmModalOpenChange = (open: boolean): void => {
+  if (open) {
+    podMemoryConfirmModal.value.visible = true;
+    return;
+  }
+
+  podMemoryConfirmModal.value = {
+    visible: false,
+    podId: "",
+    podName: "",
+  };
+};
+
+const handleConfirmClearPodMemory = async (): Promise<void> => {
+  const podId = podMemoryConfirmModal.value.podId;
+  if (!podId) return;
+
   await podStore.clearPodMemoryWithBackend(podId);
+  handlePodMemoryConfirmModalOpenChange(false);
+};
+
+const handleClearRepoMemory = (repositoryId: string): void => {
+  const repository = repositoryStore.typedAvailableItems.find(
+    (item) => item.id === repositoryId,
+  );
+  if (!repository) return;
+
+  repoMemoryConfirmModal.value = {
+    visible: true,
+    repositoryId,
+    repositoryName: repository.name,
+  };
+};
+
+const handleRepoMemoryConfirmModalOpenChange = (open: boolean): void => {
+  if (open) {
+    repoMemoryConfirmModal.value.visible = true;
+    return;
+  }
+
+  repoMemoryConfirmModal.value = {
+    visible: false,
+    repositoryId: "",
+    repositoryName: "",
+  };
+};
+
+const handleConfirmClearRepoMemory = async (): Promise<void> => {
+  const repositoryId = repoMemoryConfirmModal.value.repositoryId;
+  if (!repositoryId) return;
+
+  await repositoryStore.clearRepoMemory(repositoryId);
+  handleRepoMemoryConfirmModalOpenChange(false);
 };
 
 const handleOpenCreateRepositoryModal = (): void => {
@@ -470,7 +616,10 @@ const handleBranchModelChanged = (): void => {
     @switch-provider="handleSwitchPodProvider"
     @set-memory-enabled="handleSetPodMemoryEnabled"
     @set-repo-memory-enabled="handleSetRepoMemoryEnabled"
+    @view-pod-memory="handleViewPodMemory"
+    @view-repo-memory="handleViewRepoMemory"
     @clear-memory="handleClearPodMemory"
+    @clear-repo-memory="handleClearRepoMemory"
     @connect-integration="handleConnectIntegration"
     @disconnect-integration="handleDisconnectIntegration"
   />
@@ -482,6 +631,7 @@ const handleBranchModelChanged = (): void => {
     :repository-name="repositoryContextMenu.data.repositoryName"
     :note-position="repositoryContextMenu.data.notePosition"
     @close="closeRepositoryContextMenu"
+    @view-memory="handleViewRepoMemory"
     @pull-started="handlePullStarted"
   />
 
@@ -537,6 +687,28 @@ const handleBranchModelChanged = (): void => {
     mode="delete"
     @update:open="closeDeleteMemoryModal"
     @confirm="handleDeleteConfirmWithMemory"
+  />
+
+  <PodMemoryConfirmModal
+    :open="podMemoryConfirmModal.visible"
+    :pod-name="podMemoryConfirmModal.podName"
+    @update:open="handlePodMemoryConfirmModalOpenChange"
+    @confirm="handleConfirmClearPodMemory"
+  />
+  <RepositoryMemoryConfirmModal
+    :open="repoMemoryConfirmModal.visible"
+    :repository-name="repoMemoryConfirmModal.repositoryName"
+    mode="clear"
+    @update:open="handleRepoMemoryConfirmModalOpenChange"
+    @confirm="handleConfirmClearRepoMemory"
+  />
+  <MemoryViewerModal
+    :open="memoryViewerModal.visible"
+    :title="memoryViewerModal.title"
+    :summary="memoryViewerModal.summary"
+    :summary-updated-at="memoryViewerModal.summaryUpdatedAt"
+    :empty-message="memoryViewerModal.emptyMessage"
+    @update:open="handleMemoryViewerModalOpenChange"
   />
   <IntegrationConnectModal
     v-model:open="integrationConnectModal.visible"

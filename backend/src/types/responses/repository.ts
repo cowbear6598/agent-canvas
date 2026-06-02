@@ -134,6 +134,18 @@ export interface RepositoryPullLatestResultPayload {
   error?: string;
 }
 
+export interface RepositoryMemoryResultPayload {
+  requestId: string;
+  success: boolean;
+  canvasId: string;
+  repositoryId?: string;
+  memoryEnabled?: boolean;
+  hasSummary?: boolean;
+  summary?: string | null;
+  summaryUpdatedAt?: string | null;
+  error?: string;
+}
+
 export interface RepositoryMemoryClearedPayload {
   requestId: string;
   success: boolean;

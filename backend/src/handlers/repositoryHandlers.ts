@@ -2,6 +2,7 @@ import { WebSocketResponseEvents } from "../schemas";
 import type {
   RepositoryCreatedPayload,
   RepositoryMemoryEnabledSetPayload,
+  RepositoryMemoryResultPayload,
   RepositoryMemoryClearedPayload,
 } from "../types";
 import type {
@@ -10,6 +11,7 @@ import type {
   PodUnbindRepositoryPayload,
   RepositoryDeletePayload,
   RepositorySetMemoryEnabledPayload,
+  RepositoryGetMemoryPayload,
   RepositoryClearMemoryPayload,
 } from "../schemas";
 import { repositoryService } from "../services/repositoryService.js";
@@ -309,6 +311,49 @@ export const handleRepositorySetMemoryEnabled =
         canvasId,
         WebSocketResponseEvents.REPOSITORY_MEMORY_ENABLED_SET,
         response,
+      );
+    },
+  );
+
+export const handleRepositoryGetMemory =
+  withCanvasId<RepositoryGetMemoryPayload>(
+    WebSocketResponseEvents.REPOSITORY_MEMORY_RESULT,
+    async (
+      connectionId: string,
+      canvasId: string,
+      payload: RepositoryGetMemoryPayload,
+      requestId: string,
+    ): Promise<void> => {
+      const { repositoryId } = payload;
+
+      const validateResult = await validateRepositoryExists(repositoryId);
+      if (
+        handleResultError(
+          validateResult,
+          connectionId,
+          WebSocketResponseEvents.REPOSITORY_MEMORY_RESULT,
+          requestId,
+          createI18nError("errors.repoNotFound"),
+          canvasId,
+          "NOT_FOUND",
+        )
+      )
+        return;
+
+      const state = memoryStateService.getRepoState(repositoryId);
+      socketService.emitToConnection(
+        connectionId,
+        WebSocketResponseEvents.REPOSITORY_MEMORY_RESULT,
+        {
+          requestId,
+          success: true,
+          canvasId,
+          repositoryId,
+          memoryEnabled: state?.memoryEnabled ?? false,
+          hasSummary: state?.hasSummary ?? false,
+          summary: state?.summary ?? null,
+          summaryUpdatedAt: state?.summaryUpdatedAt ?? null,
+        } satisfies RepositoryMemoryResultPayload,
       );
     },
   );

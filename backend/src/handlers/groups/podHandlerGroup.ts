@@ -12,6 +12,7 @@ import {
   podSetThinkingLevelSchema,
   podSetScheduleSchema,
   podSetMemoryEnabledSchema,
+  podGetMemorySchema,
   podClearMemorySchema,
   podDeleteSchema,
   podSetPluginsSchema,
@@ -28,6 +29,7 @@ import {
   handlePodSetThinkingLevel,
   handlePodSetSchedule,
   handlePodSetMemoryEnabled,
+  handlePodGetMemory,
   handlePodClearMemory,
   handlePodDelete,
   handlePodSetPlugins,
@@ -102,6 +104,12 @@ export const podHandlerGroup = createHandlerGroup({
       handler: handlePodSetMemoryEnabled,
       schema: podSetMemoryEnabledSchema,
       responseEvent: WebSocketResponseEvents.POD_MEMORY_ENABLED_SET,
+    },
+    {
+      event: WebSocketRequestEvents.POD_GET_MEMORY,
+      handler: handlePodGetMemory,
+      schema: podGetMemorySchema,
+      responseEvent: WebSocketResponseEvents.POD_MEMORY_RESULT,
     },
     {
       event: WebSocketRequestEvents.POD_CLEAR_MEMORY,

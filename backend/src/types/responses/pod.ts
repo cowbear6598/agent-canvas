@@ -81,6 +81,18 @@ export interface PodMemoryEnabledSetPayload {
   error?: string;
 }
 
+export interface PodMemoryResultPayload {
+  requestId: string;
+  canvasId: string;
+  success: boolean;
+  podId?: string;
+  memoryEnabled?: boolean;
+  hasSummary?: boolean;
+  summary?: string | null;
+  summaryUpdatedAt?: string | null;
+  error?: string;
+}
+
 export interface PodMemoryClearedPayload {
   requestId: string;
   canvasId: string;

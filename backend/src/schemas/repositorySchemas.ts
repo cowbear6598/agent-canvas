@@ -117,6 +117,12 @@ export const repositorySetMemoryEnabledSchema = z.object({
   memoryEnabled: z.boolean(),
 });
 
+export const repositoryGetMemorySchema = z.object({
+  requestId: requestIdSchema,
+  canvasId: canvasIdSchema,
+  repositoryId: repositoryIdSchema,
+});
+
 export const repositoryClearMemorySchema = z.object({
   requestId: requestIdSchema,
   canvasId: canvasIdSchema,
@@ -165,6 +171,9 @@ export type RepositoryPullLatestPayload = z.infer<
 >;
 export type RepositorySetMemoryEnabledPayload = z.infer<
   typeof repositorySetMemoryEnabledSchema
+>;
+export type RepositoryGetMemoryPayload = z.infer<
+  typeof repositoryGetMemorySchema
 >;
 export type RepositoryClearMemoryPayload = z.infer<
   typeof repositoryClearMemorySchema

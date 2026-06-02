@@ -92,6 +92,12 @@ export interface PodSetMemoryEnabledPayload {
   memoryEnabled: boolean;
 }
 
+export interface PodGetMemoryPayload {
+  requestId: string;
+  canvasId: string;
+  podId: string;
+}
+
 export interface PodClearMemoryPayload {
   requestId: string;
   canvasId: string;
@@ -301,6 +307,12 @@ export interface RepositorySetMemoryEnabledPayload {
   canvasId: string;
   repositoryId: string;
   memoryEnabled: boolean;
+}
+
+export interface RepositoryGetMemoryPayload {
+  requestId: string;
+  canvasId: string;
+  repositoryId: string;
 }
 
 export interface RepositoryClearMemoryPayload {

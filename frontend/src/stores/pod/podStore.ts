@@ -26,8 +26,10 @@ import type {
   PodListResultPayload,
   PodMovePayload,
   PodGoalSetPayload,
+  PodGetMemoryPayload,
   PodClearMemoryPayload,
   PodMemoryClearedPayload,
+  PodMemoryResultPayload,
   PodProviderSetPayload,
   PodRenamedPayload,
   PodRenamePayload,
@@ -425,11 +427,6 @@ export const usePodStore = defineStore("pod", () => {
           ? "canvas.podContextMenu.memoryEnabled"
           : "canvas.podContextMenu.memoryDisabled",
       ),
-      t(
-        memoryEnabled
-          ? "canvas.podContextMenu.memoryEnabledDesc"
-          : "canvas.podContextMenu.memoryDisabledDesc",
-      ),
     );
 
     return result.data.pod;
@@ -462,6 +459,43 @@ export const usePodStore = defineStore("pod", () => {
     );
 
     return result.data.pod;
+  }
+
+  async function getPodMemory(podId: string): Promise<{
+    success: boolean;
+    memoryEnabled?: boolean;
+    hasSummary?: boolean;
+    summary?: string | null;
+    summaryUpdatedAt?: string | null;
+    error?: string;
+  }> {
+    const result = await sendCanvasAction<
+      PodGetMemoryPayload,
+      PodMemoryResultPayload
+    >({
+      requestEvent: WebSocketRequestEvents.POD_GET_MEMORY,
+      responseEvent: WebSocketResponseEvents.POD_MEMORY_RESULT,
+      payload: { podId },
+    });
+
+    if (!result.success || !result.data.success) {
+      const errorMessage = result.success
+        ? (result.data.error ?? t("common.error.load"))
+        : t("common.error.load");
+      showErrorToast("Pod", t("common.error.load"), errorMessage);
+      return {
+        success: false,
+        error: errorMessage,
+      };
+    }
+
+    return {
+      success: true,
+      memoryEnabled: result.data.memoryEnabled,
+      hasSummary: result.data.hasSummary,
+      summary: result.data.summary,
+      summaryUpdatedAt: result.data.summaryUpdatedAt,
+    };
   }
 
   function selectPod(podId: string | null): void {
@@ -714,6 +748,7 @@ export const usePodStore = defineStore("pod", () => {
     setScheduleWithBackend,
     setGoalWithBackend,
     setPodMemoryEnabledWithBackend,
+    getPodMemory,
     clearPodMemoryWithBackend,
     selectPod,
     setActivePod,

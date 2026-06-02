@@ -620,14 +620,35 @@
       "deleteWarningDescription": "続行すると Repository と既存の Repo Memory の両方が完全に削除されます。",
       "deleteConfirmButton": "それでも削除"
     },
+    "podMemoryConfirm": {
+      "description": "Pod「{name}」には現在既存の記憶があります。",
+      "clearTitle": "Pod Memory をクリアしますか",
+      "clearWarningTitle": "この Pod の既存記憶が削除されます",
+      "clearWarningDescription": "クリア後は元に戻せず、以後は Pod Memory を再度蓄積する必要があります。",
+      "clearConfirmButton": "クリアする"
+    },
+    "memoryViewer": {
+      "podTitle": "Pod Memory",
+      "repoTitle": "Repo Memory",
+      "emptyPod": "この Pod にはまだ Memory がありません。",
+      "emptyRepo": "この Repository にはまだ Memory がありません。",
+      "lastUpdated": "最終更新：{timestamp}"
+    },
     "podContextMenu": {
       "downloadDirectory": "作業ディレクトリをダウンロード（zip）",
+      "podMemory": "Pod Memory",
+      "repoMemory": "Repo Memory",
+      "viewPodMemory": "Pod Memory を表示",
+      "viewRepoMemory": "Repo Memory を表示",
       "enableMemory": "Pod Memory を有効化",
       "disableMemory": "Pod Memory を無効化",
       "enableRepoMemory": "Repo Memory を有効化",
       "disableRepoMemory": "Repo Memory を無効化",
       "clearMemory": "Pod Memory を消去",
       "clearMemoryDisabled": "この Pod には現在消去できる記憶がありません",
+      "clearRepoMemory": "Repo Memory を消去",
+      "clearRepoMemoryDisabled": "この Repository には現在消去できる記憶がありません",
+      "repoMemoryUnavailable": "この Pod はまだ Repository に紐づいていません",
       "convertProvider": "Provider を切り替える",
       "integrations": "Integrations",
       "connect": "{label} を接続",

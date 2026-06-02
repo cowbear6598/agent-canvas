@@ -28,6 +28,7 @@ import type {
   PodGetResultPayload,
   PodMemoryClearedPayload,
   PodMemoryEnabledSetPayload,
+  PodMemoryResultPayload,
   PodMovedPayload,
   PodProviderSetPayload,
   PodRenamedPayload,
@@ -343,6 +344,28 @@ describe("Pod WebSocket user flow", () => {
       id: created.pod!.id,
       memoryEnabled: true,
       hasPodMemory: true,
+    });
+
+    const memoryResult = await emitAndWaitResponse<
+      PodGetPayload,
+      PodMemoryResultPayload
+    >(
+      client,
+      WebSocketRequestEvents.POD_GET_MEMORY,
+      WebSocketResponseEvents.POD_MEMORY_RESULT,
+      {
+        requestId: uuidv4(),
+        canvasId: server.canvasId,
+        podId: created.pod!.id,
+      },
+    );
+
+    expect(memoryResult.success).toBe(true);
+    expect(memoryResult).toMatchObject({
+      podId: created.pod!.id,
+      memoryEnabled: true,
+      hasSummary: true,
+      summary: "既有 pod 記憶",
     });
 
     const disabled = await emitAndWaitResponse<

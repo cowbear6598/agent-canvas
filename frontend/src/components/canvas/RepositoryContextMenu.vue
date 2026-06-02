@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, onMounted, onUnmounted, ref } from "vue";
 
-import { GitBranch, Download, Eraser } from "lucide-vue-next";
+import { GitBranch, Download, Eraser, Eye } from "lucide-vue-next";
 import { useRepositoryStore } from "@/stores/note/repositoryStore";
 import { useToast } from "@/composables/useToast";
 import { useI18n } from "vue-i18n";
@@ -23,6 +23,7 @@ const props = defineProps<Props>();
 const emit = defineEmits<{
   close: [];
   "branch-switched": [];
+  "view-memory": [repositoryId: string];
   "pull-started": [
     payload: {
       requestId: string;
@@ -233,6 +234,12 @@ const handleClearRepoMemoryConfirm = async (): Promise<void> => {
   modalState.showClearMemoryConfirm = false;
   emit("close");
 };
+
+const handleViewRepoMemoryClick = (): void => {
+  uiState.menuVisible = false;
+  emit("view-memory", props.repositoryId);
+  emit("close");
+};
 </script>
 
 <template>
@@ -267,57 +274,76 @@ const handleClearRepoMemoryConfirm = async (): Promise<void> => {
       }}</span>
     </button>
 
-    <button
-      :disabled="!uiState.isGit || uiState.isCheckingGit"
-      :class="[
-        'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs',
-        uiState.isGit && !uiState.isCheckingGit
-          ? 'hover:bg-secondary'
-          : 'opacity-50 cursor-not-allowed',
-      ]"
-      @click="handlePullLatestClick"
-    >
-      <Download
-        :size="14"
-        class="text-foreground"
-      />
-      <span class="font-mono text-foreground">{{
-        $t("canvas.repositoryContextMenu.pullLatest")
-      }}</span>
-    </button>
+    <div>
+      <button
+        :disabled="!uiState.isGit || uiState.isCheckingGit"
+        :class="[
+          'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs',
+          uiState.isGit && !uiState.isCheckingGit
+            ? 'hover:bg-secondary'
+            : 'opacity-50 cursor-not-allowed',
+        ]"
+        @click="handlePullLatestClick"
+      >
+        <Download
+          :size="14"
+          class="text-foreground"
+        />
+        <span class="font-mono text-foreground">{{
+          $t("canvas.repositoryContextMenu.pullLatest")
+        }}</span>
+      </button>
+
+      <p
+        v-if="!uiState.isGit && !uiState.isCheckingGit"
+        class="text-xs text-muted-foreground mt-0.5 ml-6"
+      >
+        {{ $t("canvas.repository.notGitRepo") }}
+      </p>
+    </div>
 
     <div class="my-1 border-t border-border" />
 
-    <button
-      :disabled="!hasRepoMemory"
-      :class="[
-        'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs',
-        hasRepoMemory ? 'hover:bg-secondary' : 'opacity-50 cursor-not-allowed',
-      ]"
-      @click="handleClearRepoMemoryClick"
-    >
-      <Eraser
-        :size="14"
-        class="text-foreground"
-      />
-      <span class="font-mono text-foreground">{{
-        $t("canvas.repositoryContextMenu.clearRepoMemory")
-      }}</span>
-    </button>
+    <div>
+      <button
+        class="w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-secondary"
+        @click="handleViewRepoMemoryClick"
+      >
+        <Eye
+          :size="14"
+          class="text-foreground"
+        />
+        <span class="font-mono text-foreground">{{
+          $t("canvas.podContextMenu.viewRepoMemory")
+        }}</span>
+      </button>
 
-    <p
-      v-if="!uiState.isGit && !uiState.isCheckingGit"
-      class="text-xs text-muted-foreground mt-0.5 ml-6"
-    >
-      {{ $t("canvas.repository.notGitRepo") }}
-    </p>
+      <button
+        :disabled="!hasRepoMemory"
+        :class="[
+          'w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs',
+          hasRepoMemory
+            ? 'hover:bg-secondary'
+            : 'opacity-50 cursor-not-allowed',
+        ]"
+        @click="handleClearRepoMemoryClick"
+      >
+        <Eraser
+          :size="14"
+          class="text-foreground"
+        />
+        <span class="font-mono text-foreground">{{
+          $t("canvas.repositoryContextMenu.clearRepoMemory")
+        }}</span>
+      </button>
 
-    <p
-      v-if="!hasRepoMemory"
-      class="text-xs text-muted-foreground mt-0.5 ml-6"
-    >
-      {{ $t("canvas.repositoryContextMenu.noRepoMemory") }}
-    </p>
+      <p
+        v-if="!hasRepoMemory"
+        class="text-xs text-muted-foreground mt-0.5 ml-6"
+      >
+        {{ $t("canvas.repositoryContextMenu.noRepoMemory") }}
+      </p>
+    </div>
   </div>
 
   <!-- 使用 Teleport 將 Modal 移到 body，避免父組件銷毀時 Modal 也消失 -->

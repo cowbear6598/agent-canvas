@@ -24,8 +24,10 @@ import type {
   RepositoryDeleteBranchPayload,
   RepositoryBranchDeletedPayload,
   RepositoryPullLatestPayload,
+  RepositoryGetMemoryPayload,
   RepositorySetMemoryEnabledPayload,
   RepositoryClearMemoryPayload,
+  RepositoryMemoryResultPayload,
   RepositoryMemoryEnabledSetPayload,
   RepositoryMemoryClearedPayload,
 } from "@/types/websocket";
@@ -80,6 +82,14 @@ interface RepositoryStoreCustomActions {
     branchName: string,
   ): Promise<{ success: boolean; branchName?: string; error?: string }>;
   pullLatest(repositoryId: string): Promise<{ requestId: string }>;
+  getRepoMemory(repositoryId: string): Promise<{
+    success: boolean;
+    memoryEnabled?: boolean;
+    hasSummary?: boolean;
+    summary?: string | null;
+    summaryUpdatedAt?: string | null;
+    error?: string;
+  }>;
   setRepoMemoryEnabled(
     repositoryId: string,
     memoryEnabled: boolean,
@@ -427,12 +437,54 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
             ? "canvas.podContextMenu.repoMemoryEnabled"
             : "canvas.podContextMenu.repoMemoryDisabled",
         ),
-        t(
-          memoryEnabled
-            ? "canvas.podContextMenu.repoMemoryEnabledDesc"
-            : "canvas.podContextMenu.repoMemoryDisabledDesc",
-        ),
       );
+    },
+
+    async getRepoMemory(
+      this: NoteStoreContext<Repository>,
+      repositoryId: string,
+    ): Promise<{
+      success: boolean;
+      memoryEnabled?: boolean;
+      hasSummary?: boolean;
+      summary?: string | null;
+      summaryUpdatedAt?: string | null;
+      error?: string;
+    }> {
+      const result = await executeRepositoryAction<
+        RepositoryGetMemoryPayload,
+        RepositoryMemoryResultPayload
+      >(
+        {
+          requestEvent: WebSocketRequestEvents.REPOSITORY_GET_MEMORY,
+          responseEvent: WebSocketResponseEvents.REPOSITORY_MEMORY_RESULT,
+          payload: { repositoryId },
+        },
+        {
+          errorCategory: "Repository",
+          errorAction: t("common.error.load"),
+          errorMessage: t("common.error.load"),
+        },
+      );
+
+      if (!result.success || !result.data.success) {
+        const errorMessage = result.success
+          ? (result.data.error ?? t("common.error.load"))
+          : t("common.error.load");
+        showErrorToast("Repository", t("common.error.load"), errorMessage);
+        return {
+          success: false,
+          error: errorMessage,
+        };
+      }
+
+      return {
+        success: true,
+        memoryEnabled: result.data.memoryEnabled,
+        hasSummary: result.data.hasSummary,
+        summary: result.data.summary,
+        summaryUpdatedAt: result.data.summaryUpdatedAt,
+      };
     },
 
     async clearRepoMemory(

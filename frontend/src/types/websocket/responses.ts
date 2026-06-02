@@ -59,6 +59,14 @@ export interface PodMemoryEnabledSetPayload extends ResultPayload {
   pod?: Pod;
 }
 
+export interface PodMemoryResultPayload extends ResultPayload {
+  podId?: string;
+  memoryEnabled?: boolean;
+  hasSummary?: boolean;
+  summary?: string | null;
+  summaryUpdatedAt?: string | null;
+}
+
 export interface PodMemoryClearedPayload extends ResultPayload {
   pod?: Pod;
 }
@@ -289,6 +297,14 @@ export interface RepositoryMemoryEnabledSetPayload extends ResultPayload {
   repositoryId?: string;
   repository?: Repository;
   pods?: Pod[];
+}
+
+export interface RepositoryMemoryResultPayload extends ResultPayload {
+  repositoryId?: string;
+  memoryEnabled?: boolean;
+  hasSummary?: boolean;
+  summary?: string | null;
+  summaryUpdatedAt?: string | null;
 }
 
 export interface RepositoryMemoryClearedPayload extends ResultPayload {

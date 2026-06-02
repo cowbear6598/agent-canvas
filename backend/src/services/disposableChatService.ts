@@ -176,6 +176,15 @@ function extractFirstJsonObject(raw: string): string {
   return cleaned;
 }
 
+function formatZodIssuePath(issue: z.ZodIssue): string {
+  const path = issue.path.join(".");
+  return path.length > 0 ? path : "root";
+}
+
+function formatZodIssue(issue: z.ZodIssue): string {
+  return `${formatZodIssuePath(issue)}: ${issue.message}`;
+}
+
 // ─── 模型驗證 helper ──────────────────────────────────────────────────────────
 
 /**
@@ -413,7 +422,7 @@ export async function executeStructuredDisposableTask<
     return {
       success: false,
       error: `結構化輸出 schema 驗證失敗：${parsed.error.issues
-        .map((issue) => issue.path.join(".") || issue.message)
+        .map(formatZodIssue)
         .join("；")}`,
       resolvedModel: result.resolvedModel,
       rawContent: result.content,
