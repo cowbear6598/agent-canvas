@@ -1,6 +1,7 @@
 import {
   runStore,
   NEVER_TRIGGERED_STATUSES,
+  RUN_TERMINAL_STATUSES,
 } from "../runStore.js";
 import type { RunPodInstance, RunPodInstanceStatus } from "../runStore.js";
 import { isAllPathwaysSettled } from "../../utils/pathwayHelpers.js";
@@ -43,6 +44,7 @@ import {
 import { ensureGoalRuntime, removeGoalRuntimeRun } from "../goalRuntime.js";
 import { cleanupOpencodeRunServers } from "../provider/opencodeProvider.js";
 import { runRepoActivitySnapshotService } from "../runRepoActivitySnapshotService.js";
+import { memoryMaintainerService } from "../memoryMaintainerService.js";
 
 const MAX_RUNS_PER_CANVAS = 30;
 
@@ -656,7 +658,7 @@ class RunExecutionService {
     );
 
     if (options?.evaluateRun) {
-      this.evaluateRunStatus(runContext.runId, runContext.canvasId, podId);
+      this.evaluateRunStatus(runContext.runId, runContext.canvasId);
     }
   }
 
@@ -701,7 +703,6 @@ class RunExecutionService {
    */
   private async cleanupRunResources(
     runId: string,
-    terminalPodId?: string,
   ): Promise<void> {
     // managed MCP 子程序由各 provider 子程序 lifecycle 管，不需要 run 層級 cleanup。
     // 關閉本 Run 期間 opencode provider 建立的 transient server 快取；
@@ -711,12 +712,6 @@ class RunExecutionService {
 
     const entries = runStore.getExecutionPathsByRunId(runId);
     if (entries.length === 0) return;
-
-    const snapshotEntries =
-      typeof terminalPodId === "string"
-        ? entries.filter((entry) => entry.podId === terminalPodId)
-        : [];
-    await runRepoActivitySnapshotService.primeRunCapture(runId, snapshotEntries);
 
     const uniqueRunRepos = new Set<string>();
 
@@ -742,11 +737,7 @@ class RunExecutionService {
    * - 其他 → 維持 running（不更新）
    * 巢狀條件超過閾值，加此說明
    */
-  private evaluateRunStatus(
-    runId: string,
-    canvasId: string,
-    terminalPodId?: string,
-  ): void {
+  private evaluateRunStatus(runId: string, canvasId: string): void {
     this.settleUnreachablePaths(runId, canvasId);
 
     const instances = runStore.getPodInstancesByRunId(runId);
@@ -755,20 +746,60 @@ class RunExecutionService {
     const newStatus = decideRunTerminalStatus(instances);
     if (!newStatus) return;
 
+    const currentRun = runStore.getRun(runId);
+    if (
+      !currentRun ||
+      (currentRun.status === newStatus && RUN_TERMINAL_STATUSES.has(newStatus))
+    ) {
+      return;
+    }
+
     runStore.updateRunStatus(runId, newStatus);
     const updatedRun = runStore.getRun(runId);
+    const maintenanceContext: RunContext = {
+      runId,
+      canvasId,
+      sourcePodId: currentRun.sourcePodId,
+    };
 
-    const snapshotEntries =
-      typeof terminalPodId === "string"
-        ? runStore
-            .getExecutionPathsByRunId(runId)
-            .filter((entry) => entry.podId === terminalPodId)
-        : [];
-    runRepoActivitySnapshotService.primeRunCapture(runId, snapshotEntries);
+    let snapshotPromise: Promise<void> = Promise.resolve();
+
+    const seenRepositoryIds = new Set<string>();
+    const snapshotEntries = instances.flatMap((instance) => {
+      const pod = podStore.getById(canvasId, instance.podId);
+      const repositoryId = pod?.repositoryId ?? null;
+      const snapshotPath = instance.runRepoPath ?? instance.workspacePath ?? null;
+      if (!repositoryId || !snapshotPath || seenRepositoryIds.has(repositoryId)) {
+        return [];
+      }
+
+      seenRepositoryIds.add(repositoryId);
+      return [{ podId: instance.podId, snapshotPath }] as const;
+    });
+    if (snapshotEntries.length > 0) {
+      snapshotPromise = Promise.all(
+        snapshotEntries.map((entry) =>
+          runRepoActivitySnapshotService.captureSnapshot(
+            runId,
+            entry.podId,
+            entry.snapshotPath,
+          ),
+        ),
+      ).then(() => undefined);
+    }
 
     // Run 自然完成時立即回收所有 run 級隔離資源
     fireAndForget(
-      this.cleanupRunResources(runId, terminalPodId),
+      (async (): Promise<void> => {
+        try {
+          await snapshotPromise;
+          await memoryMaintainerService.scheduleRepositoriesForCompletedRun(
+            maintenanceContext,
+          );
+        } finally {
+          await this.cleanupRunResources(runId);
+        }
+      })(),
       "Run",
       "清理 Run 隔離資源失敗",
     );
@@ -884,6 +915,7 @@ class RunExecutionService {
     // 步驟 4：清理資源、刪除 row。
     // 防禦性清理：處理 Run 中途被砍、或 evaluateRunStatus 清理失敗的情況
     await this.cleanupRunResources(runId);
+    runRepoActivitySnapshotService.clearRun(runId);
 
     runStore.deleteRun(runId);
 

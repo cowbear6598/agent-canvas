@@ -478,6 +478,15 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
         };
       }
 
+      setRepositoryMemoryState(this.availableItems, repositoryId, {
+        hasRepoMemory: result.data.hasSummary,
+        repoMemoryEnabled: result.data.memoryEnabled,
+      });
+      usePodStore().setRepositoryMemoryState(repositoryId, {
+        hasRepoMemory: result.data.hasSummary,
+        repoMemoryEnabled: result.data.memoryEnabled,
+      });
+
       return {
         success: true,
         memoryEnabled: result.data.memoryEnabled,

@@ -8,7 +8,9 @@ import { configStore } from "./configStore.js";
 import { memoryStateService, type MemoryScopeType } from "./memoryStateService.js";
 import { podStore } from "./podStore.js";
 import { repositoryService } from "./repositoryService.js";
-import { runRepoActivitySnapshotService } from "./runRepoActivitySnapshotService.js";
+import {
+  runRepoActivitySnapshotService,
+} from "./runRepoActivitySnapshotService.js";
 import { runStore } from "./runStore.js";
 import { resolvePodCwd } from "./shared/podPathResolver.js";
 import { logger } from "../utils/logger.js";
@@ -48,6 +50,7 @@ interface MemoryEvidenceToolTrace {
 }
 
 interface MemoryEvidenceMessage {
+  podName: string;
   role: PersistedMessage["role"];
   content: string;
   toolTraces: MemoryEvidenceToolTrace[];
@@ -77,6 +80,8 @@ interface MemoryScopeTask {
   scopeId: string;
   pod: Pod;
   runContext: RunContext;
+  scopePods?: Pod[];
+  workspacePath?: string | null;
 }
 
 interface SummaryFormatValidationResult {
@@ -137,8 +142,11 @@ function collectToolTraces(message: PersistedMessage): MemoryEvidenceToolTrace[]
   );
 }
 
-function buildEvidenceMessages(messages: PersistedMessage[]): MemoryEvidenceMessage[] {
-  return messages.map((message) => ({
+function buildEvidenceMessages(
+  entries: Array<{ podName: string; message: PersistedMessage }>,
+): MemoryEvidenceMessage[] {
+  return entries.map(({ podName, message }) => ({
+    podName,
     role: message.role,
     content: truncateText(message.content, MAX_MESSAGE_CONTENT_LENGTH),
     toolTraces: collectToolTraces(message),
@@ -386,59 +394,13 @@ class MemoryMaintainerService {
     }
   }
 
-  private async detectRepositoryActivity(input: RunScopeInput): Promise<boolean> {
-    if (!input.pod.repositoryId) {
-      return false;
-    }
-
-    await runRepoActivitySnapshotService.awaitRunCapture(input.runContext.runId);
-
-    const capturedSnapshot = runRepoActivitySnapshotService.consumeSnapshot(
-      input.runContext.runId,
-      input.pod.id,
-    );
-    if (capturedSnapshot) {
-      return capturedSnapshot.hasActivity;
-    }
-
-    const instance = runStore.getPodInstance(input.runContext.runId, input.pod.id);
-    if (!instance) {
-      return false;
-    }
-
-    const liveSnapshot = await runRepoActivitySnapshotService.capturePodSnapshot({
-      runId: input.runContext.runId,
-      podId: input.pod.id,
-      runRepoPath: instance.runRepoPath,
-      workspacePath: instance.workspacePath,
-    });
-
-    return liveSnapshot?.hasActivity ?? false;
-  }
-
-  private createMemoryScopeTasks(
-    input: RunScopeInput,
-    hasRepoActivity: boolean,
-  ): MemoryScopeTask[] {
+  private createPodMemoryTasks(input: RunScopeInput): MemoryScopeTask[] {
     const tasks: MemoryScopeTask[] = [];
     const podState = memoryStateService.getPodState(input.pod.id);
     if (podState?.memoryEnabled) {
       tasks.push({
         scopeType: "pod",
         scopeId: input.pod.id,
-        pod: input.pod,
-        runContext: input.runContext,
-      });
-    }
-
-    if (
-      input.pod.repositoryId &&
-      memoryStateService.getRepoState(input.pod.repositoryId)?.memoryEnabled &&
-      hasRepoActivity
-    ) {
-      tasks.push({
-        scopeType: "repository",
-        scopeId: input.pod.repositoryId,
         pod: input.pod,
         runContext: input.runContext,
       });
@@ -459,18 +421,36 @@ class MemoryMaintainerService {
   }
 
   private buildEvidencePack(task: MemoryScopeTask): MemoryEvidencePack | null {
-    const recentMessages = runStore
-      .getRunMessages(task.runContext.runId, task.pod.id)
+    const scopePods = task.scopePods ?? [task.pod];
+    const recentMessages = scopePods
+      .flatMap((pod) =>
+        runStore.getRunMessages(task.runContext.runId, pod.id).map((message) => ({
+          podName: pod.name,
+          message,
+        })),
+      )
+      .sort((left, right) => left.message.timestamp.localeCompare(right.message.timestamp))
       .slice(-MAX_EVIDENCE_MESSAGES);
     const evidenceMessages = buildEvidenceMessages(recentMessages);
-    const instance = runStore.getPodInstance(task.runContext.runId, task.pod.id);
+    const instances = scopePods
+      .map((pod) => ({
+        pod,
+        instance: runStore.getPodInstance(task.runContext.runId, pod.id),
+      }))
+      .filter((entry) => entry.instance);
     const repoMetadata = task.pod.repositoryId
       ? repositoryService.getMetadata(task.pod.repositoryId)
       : undefined;
+    const lastResponseSummaries = instances
+      .flatMap(({ pod, instance }) => {
+        const summary = instance?.lastResponseSummary?.trim() ?? "";
+        return summary.length > 0 ? [`[${pod.name}] ${summary}`] : [];
+      })
+      .join("\n");
 
     if (
       evidenceMessages.length === 0 &&
-      (instance?.lastResponseSummary?.trim().length ?? 0) === 0
+      lastResponseSummaries.length === 0
     ) {
       return null;
     }
@@ -481,17 +461,22 @@ class MemoryMaintainerService {
       podId: task.pod.id,
       podName: task.pod.name,
       repositoryId: task.pod.repositoryId,
-      repositoryName: task.pod.repositoryId,
       repositoryCurrentBranch: repoMetadata?.currentBranch ?? null,
+      repositoryName: repoMetadata?.name ?? task.pod.repositoryId,
       existingSummary: this.getExistingSummary(task.scopeType, task.scopeId),
-      lastResponseSummary: instance?.lastResponseSummary ?? null,
+      lastResponseSummary:
+        lastResponseSummaries.length > 0 ? lastResponseSummaries : null,
       recentMessages: evidenceMessages,
       recentToolTraces: flattenToolTraces(evidenceMessages),
     };
   }
 
-  private getWorkspacePath(pod: Pod): string {
-    return resolvePodCwd(pod);
+  private getWorkspacePath(task: MemoryScopeTask): string {
+    if (task.workspacePath) {
+      return task.workspacePath;
+    }
+
+    return resolvePodCwd(task.pod);
   }
 
   private async runCandidateBuilder(
@@ -505,7 +490,7 @@ class MemoryMaintainerService {
       thinkingLevel: null,
       systemPrompt: buildCandidateSystemPrompt(task.scopeType),
       userMessage: buildCandidateUserPrompt(evidencePack),
-      workspacePath: this.getWorkspacePath(task.pod),
+      workspacePath: this.getWorkspacePath(task),
       logCategory: "Memory",
       logLabel: `${getScopeLogLabel(task)} 候選記憶建構`,
       schema: memoryCandidateSchema,
@@ -548,7 +533,7 @@ class MemoryMaintainerService {
         validationFeedback: options?.validationFeedback ?? null,
         previousInvalidSummary: options?.previousInvalidSummary ?? null,
       }),
-      workspacePath: this.getWorkspacePath(task.pod),
+      workspacePath: this.getWorkspacePath(task),
       logCategory: "Memory",
       logLabel: `${getScopeLogLabel(task)} 正式記憶合併`,
       schema: memoryMergedSummarySchema,
@@ -772,10 +757,7 @@ class MemoryMaintainerService {
             throw new Error(mergedResult.error);
           }
 
-          const finalSummary =
-            task.scopeType === "pod"
-              ? sanitizePodMemorySummary(mergedResult.data.summary)
-              : mergedResult.data.summary;
+          const finalSummary = mergedResult.data.summary;
           this.writeSummary(task.scopeType, task.scopeId, finalSummary);
           memoryStateService.recordObservation({
             jobId: job.id,
@@ -858,58 +840,98 @@ class MemoryMaintainerService {
       return;
     }
 
-    const podMemoryEnabled =
-      memoryStateService.getPodState(podResult.pod.id)?.memoryEnabled ?? false;
-    const repoMemoryEnabled = podResult.pod.repositoryId
-      ? memoryStateService.getRepoState(podResult.pod.repositoryId)
-          ?.memoryEnabled ?? false
-      : false;
-    const hasRepoActivity = await this.detectRepositoryActivity({
+    const tasks = this.createPodMemoryTasks({
       runContext,
       pod: podResult.pod,
     });
 
-    const tasks = this.createMemoryScopeTasks({
-      runContext,
-      pod: podResult.pod,
-    }, hasRepoActivity);
-
     if (tasks.length === 0) {
-      const reason =
-        podResult.pod.repositoryId && repoMemoryEnabled
-          ? "未偵測到可維護的 Memory 範圍"
-          : "memory 未啟用";
-      logger.log("Memory", "Update", `略過 Pod「${podResult.pod.name}」記憶維護：${reason}`);
-      if (
-        podResult.pod.repositoryId &&
-        ((!repoMemoryEnabled && !podMemoryEnabled) ||
-          (repoMemoryEnabled && !hasRepoActivity))
-      ) {
-        logger.log(
-          "Memory",
-          "Update",
-          repoMemoryEnabled
-            ? `略過 Repo Memory（${podResult.pod.repositoryId}）：本輪未偵測到檔案讀寫`
-            : `略過 Repo Memory（${podResult.pod.repositoryId}）：memory 未啟用`,
-        );
-      }
+      logger.log("Memory", "Update", `略過 Pod「${podResult.pod.name}」記憶維護：memory 未啟用`);
       return;
     }
 
-    if (
-      podResult.pod.repositoryId &&
-      !tasks.some((task) => task.scopeType === "repository")
-    ) {
-      logger.log(
-        "Memory",
-        "Update",
-        repoMemoryEnabled
-          ? `略過 Repo Memory（${podResult.pod.repositoryId}）：本輪未偵測到檔案讀寫`
-          : `略過 Repo Memory（${podResult.pod.repositoryId}）：memory 未啟用`,
-      );
-    }
-
     await Promise.all(tasks.map((task) => this.executeTask(task)));
+  }
+
+  async scheduleRepositoriesForCompletedRun(
+    runContext: RunContext,
+  ): Promise<void> {
+    try {
+      const repoGroups = new Map<
+        string,
+        { representativePod: Pod; scopePods: Pod[]; workspacePath: string | null }
+      >();
+
+      for (const instance of runStore.getPodInstancesByRunId(runContext.runId)) {
+        const podResult = podStore.getByIdGlobal(instance.podId);
+        const pod = podResult?.pod;
+        const repositoryId = pod?.repositoryId ?? null;
+        if (!pod || !repositoryId) {
+          continue;
+        }
+
+        const repoState = memoryStateService.getRepoState(repositoryId);
+        if (!repoState?.memoryEnabled) {
+          continue;
+        }
+
+        const existingGroup = repoGroups.get(repositoryId);
+        if (existingGroup) {
+          existingGroup.scopePods.push(pod);
+          if (!existingGroup.workspacePath) {
+            existingGroup.workspacePath =
+              instance.runRepoPath ?? instance.workspacePath ?? null;
+          }
+          continue;
+        }
+
+        repoGroups.set(repositoryId, {
+          representativePod: pod,
+          scopePods: [pod],
+          workspacePath: instance.runRepoPath ?? instance.workspacePath ?? null,
+        });
+      }
+
+      for (const [repositoryId, group] of repoGroups) {
+        await runRepoActivitySnapshotService.awaitCapture(
+          runContext.runId,
+          group.representativePod.id,
+        );
+
+        const snapshot = runRepoActivitySnapshotService.consumeSnapshot(
+          runContext.runId,
+          group.representativePod.id,
+        );
+        if (!snapshot) {
+          logger.warn(
+            "Memory",
+            "Warn",
+            `找不到 Repo Memory git status 快照（runId=${runContext.runId}, repositoryId=${repositoryId}）`,
+          );
+          continue;
+        }
+
+        if (!snapshot.hasActivity) {
+          logger.log(
+            "Memory",
+            "Update",
+            `略過 Repo Memory（${repositoryId}）：本輪未偵測到檔案讀寫`,
+          );
+          continue;
+        }
+
+        await this.executeTask({
+          scopeType: "repository",
+          scopeId: repositoryId,
+          pod: group.representativePod,
+          runContext,
+          scopePods: group.scopePods,
+          workspacePath: group.workspacePath,
+        });
+      }
+    } finally {
+      runRepoActivitySnapshotService.clearRun(runContext.runId);
+    }
   }
 }
 

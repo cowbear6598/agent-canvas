@@ -1,6 +1,8 @@
 import { Result, ok, err } from "../types";
 import { repositoryService } from "../services/repositoryService.js";
 import { gitService } from "../services/workspace/gitService.js";
+import { repositoryNoteStore } from "../services/noteStores.js";
+import { podStore } from "../services/podStore.js";
 import { createI18nError } from "./i18nError.js";
 
 export async function validateRepositoryExists(
@@ -35,4 +37,24 @@ export async function getValidatedGitRepository(
   }
 
   return ok({ repositoryPath, isGit: true });
+}
+
+export async function validateRepositoryAccessibleInCanvas(
+  canvasId: string,
+  repositoryId: string,
+): Promise<Result<string>> {
+  const validateResult = await validateRepositoryExists(repositoryId);
+  if (!validateResult.success) {
+    return err(validateResult.error);
+  }
+
+  const hasBoundPods = podStore.findByRepositoryId(canvasId, repositoryId).length > 0;
+  const hasRepositoryNotes =
+    repositoryNoteStore.findByForeignKey(canvasId, repositoryId).length > 0;
+
+  if (!hasBoundPods && !hasRepositoryNotes) {
+    return err(createI18nError("errors.repoNotFound", { id: repositoryId }));
+  }
+
+  return ok(validateResult.data);
 }

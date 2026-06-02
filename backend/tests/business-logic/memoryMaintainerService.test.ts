@@ -116,15 +116,6 @@ describe("memoryMaintainerService", () => {
     memoryStateService.setRepoMemoryEnabled(repositoryId, true);
 
     const run = runStore.createRun(CANVAS_ID, podId, "trigger");
-    vi.spyOn(
-      runRepoActivitySnapshotService,
-      "capturePodSnapshot",
-    ).mockResolvedValue({
-      runId: run.id,
-      podId,
-      hasActivity: true,
-      capturedAt: new Date().toISOString(),
-    });
     const instance = runStore.createPodInstance(run.id, podId);
     runStore.updatePodInstanceLastResponseSummary(
       instance.id,
@@ -134,6 +125,14 @@ describe("memoryMaintainerService", () => {
       runId: run.id,
       podId,
       withRepoToolTrace: true,
+    });
+    vi.spyOn(runRepoActivitySnapshotService, "consumeSnapshot").mockReturnValue({
+      runId: run.id,
+      podId,
+      hasActivity: true,
+      capturedAt: new Date().toISOString(),
+      statusEntries: ["?? README.md"],
+      snapshotPath: "/tmp/repo",
     });
 
     executeStructuredDisposableTaskMock.mockImplementation(async (input) => {
@@ -209,6 +208,9 @@ describe("memoryMaintainerService", () => {
       makeRunContext(run.id, podId),
       podId,
     );
+    await memoryMaintainerService.scheduleRepositoriesForCompletedRun(
+      makeRunContext(run.id, podId),
+    );
 
     expect(memoryStateService.getPodState(podId)?.summary).toBe(
       "<working-style>\n先補測試，再調整功能。\n</working-style>",
@@ -257,15 +259,6 @@ describe("memoryMaintainerService", () => {
     const repositoryId = "repo-no-activity";
     insertPod({ id: podId, repositoryId });
     memoryStateService.setPodMemoryEnabled(podId, true);
-    vi.spyOn(
-      runRepoActivitySnapshotService,
-      "capturePodSnapshot",
-    ).mockResolvedValue({
-      runId: "run-no-activity",
-      podId,
-      hasActivity: false,
-      capturedAt: new Date().toISOString(),
-    });
 
     const run = runStore.createRun(CANVAS_ID, podId, "trigger");
     const instance = runStore.createPodInstance(run.id, podId);
@@ -274,6 +267,14 @@ describe("memoryMaintainerService", () => {
       runId: run.id,
       podId,
       withRepoToolTrace: false,
+    });
+    vi.spyOn(runRepoActivitySnapshotService, "consumeSnapshot").mockReturnValue({
+      runId: run.id,
+      podId,
+      hasActivity: false,
+      capturedAt: new Date().toISOString(),
+      statusEntries: [],
+      snapshotPath: "/tmp/repo",
     });
 
     executeStructuredDisposableTaskMock
@@ -307,6 +308,9 @@ describe("memoryMaintainerService", () => {
       makeRunContext(run.id, podId),
       podId,
     );
+    await memoryMaintainerService.scheduleRepositoriesForCompletedRun(
+      makeRunContext(run.id, podId),
+    );
 
     expect(memoryStateService.listJobsByScope("pod", podId)).toHaveLength(1);
     expect(
@@ -321,15 +325,6 @@ describe("memoryMaintainerService", () => {
     insertPod({ id: podId, repositoryId });
     memoryStateService.setPodMemoryEnabled(podId, false);
     memoryStateService.setRepoMemoryEnabled(repositoryId, true);
-    vi.spyOn(
-      runRepoActivitySnapshotService,
-      "capturePodSnapshot",
-    ).mockResolvedValue({
-      runId: "run-repo-only",
-      podId,
-      hasActivity: true,
-      capturedAt: new Date().toISOString(),
-    });
 
     const run = runStore.createRun(CANVAS_ID, podId, "trigger");
     const instance = runStore.createPodInstance(run.id, podId);
@@ -341,6 +336,14 @@ describe("memoryMaintainerService", () => {
       runId: run.id,
       podId,
       withRepoToolTrace: true,
+    });
+    vi.spyOn(runRepoActivitySnapshotService, "consumeSnapshot").mockReturnValue({
+      runId: run.id,
+      podId,
+      hasActivity: true,
+      capturedAt: new Date().toISOString(),
+      statusEntries: [" M config.json"],
+      snapshotPath: "/tmp/repo",
     });
 
     executeStructuredDisposableTaskMock
@@ -370,9 +373,8 @@ describe("memoryMaintainerService", () => {
         rawContent: "{}",
       });
 
-    await memoryMaintainerService.scheduleForCompletedPod(
+    await memoryMaintainerService.scheduleRepositoriesForCompletedRun(
       makeRunContext(run.id, podId),
-      podId,
     );
 
     expect(memoryStateService.getPodState(podId)?.summary).toBeNull();
@@ -416,12 +418,9 @@ describe("memoryMaintainerService", () => {
         podId,
         hasActivity: true,
         capturedAt: new Date().toISOString(),
+        statusEntries: ["?? qqq.md"],
+        snapshotPath: "/tmp/repo",
       });
-    const capturePodSnapshotSpy = vi.spyOn(
-      runRepoActivitySnapshotService,
-      "capturePodSnapshot",
-    );
-
     executeStructuredDisposableTaskMock
       .mockResolvedValueOnce({
         success: true,
@@ -449,9 +448,8 @@ describe("memoryMaintainerService", () => {
         rawContent: "{}",
       });
 
-    await memoryMaintainerService.scheduleForCompletedPod(
+    await memoryMaintainerService.scheduleRepositoriesForCompletedRun(
       makeRunContext(run.id, podId),
-      podId,
     );
 
     expect(memoryStateService.getRepoState(repositoryId)).toMatchObject({
@@ -465,8 +463,92 @@ describe("memoryMaintainerService", () => {
       }),
     ]);
     expect(consumeSnapshotSpy).toHaveBeenCalledWith(run.id, podId);
-    expect(capturePodSnapshotSpy).not.toHaveBeenCalled();
     expect(executeStructuredDisposableTaskMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("repo memory 應聚合同一 run 中同 repo 的多顆 pod 證據", async () => {
+    const repositoryId = "repo-shared";
+    const podA = "pod-repo-a";
+    const podB = "pod-repo-b";
+    insertPod({ id: podA, repositoryId });
+    insertPod({ id: podB, repositoryId });
+    memoryStateService.setPodMemoryEnabled(podA, false);
+    memoryStateService.setPodMemoryEnabled(podB, false);
+    memoryStateService.setRepoMemoryEnabled(repositoryId, true);
+
+    const run = runStore.createRun(CANVAS_ID, podA, "trigger");
+    const instanceA = runStore.createPodInstance(run.id, podA, "pending", "not-applicable", {
+      runRepoPath: "/tmp/run-repo-shared",
+      workspacePath: "/tmp/run-repo-shared",
+    });
+    const instanceB = runStore.createPodInstance(run.id, podB, "pending", "not-applicable", {
+      runRepoPath: "/tmp/run-repo-shared",
+      workspacePath: "/tmp/run-repo-shared",
+    });
+    runStore.updatePodInstanceLastResponseSummary(
+      instanceA.id,
+      "Pod A 新增 qqq.md",
+    );
+    runStore.updatePodInstanceLastResponseSummary(
+      instanceB.id,
+      "Pod B 補上 repo 用途說明",
+    );
+    appendTranscript({
+      runId: run.id,
+      podId: podA,
+      withRepoToolTrace: false,
+    });
+    appendTranscript({
+      runId: run.id,
+      podId: podB,
+      withRepoToolTrace: false,
+    });
+
+    vi.spyOn(runRepoActivitySnapshotService, "consumeSnapshot").mockReturnValue({
+      runId: run.id,
+      podId: podA,
+      hasActivity: true,
+      capturedAt: new Date().toISOString(),
+      statusEntries: ["?? qqq.md", " M README.md"],
+      snapshotPath: "/tmp/run-repo-shared",
+    });
+
+    executeStructuredDisposableTaskMock
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          observations: [
+            {
+              title: "Repo 用途",
+              summary: "這個 repo 用於測試與快速實驗",
+              accepted: true,
+              reason: "屬於 repo 共用背景",
+            },
+          ],
+        },
+        resolvedModel: "gpt-5.4",
+        rawContent: "{}",
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          summary: "<purpose>這個 repo 用於測試與快速實驗。</purpose>",
+          reason: "已合併 accepted observations",
+        },
+        resolvedModel: "gpt-5.4",
+        rawContent: "{}",
+      });
+
+    await memoryMaintainerService.scheduleRepositoriesForCompletedRun(
+      makeRunContext(run.id, podA),
+    );
+
+    const repoCall = executeStructuredDisposableTaskMock.mock.calls[0]?.[0];
+    expect(String(repoCall?.userMessage ?? "")).toContain(`[Pod ${podA}] Pod A 新增 qqq.md`);
+    expect(String(repoCall?.userMessage ?? "")).toContain(`[Pod ${podB}] Pod B 補上 repo 用途說明`);
+    expect(memoryStateService.getRepoState(repositoryId)?.summary).toBe(
+      "<purpose>這個 repo 用於測試與快速實驗。</purpose>",
+    );
   });
 
   it("正式記憶若不是合法 XML 區塊格式，應回饋錯誤給模型後重修", async () => {
@@ -592,10 +674,13 @@ describe("memoryMaintainerService", () => {
 
     expect(memoryStateService.getPodState(podId)?.summary).toBeNull();
     const observations = memoryStateService.listObservationsByScope("pod", podId);
-    expect(observations[0]).toMatchObject({
+    const candidateObservation = observations.find(
+      (observation) => observation.kind === "candidate",
+    );
+    expect(candidateObservation).toMatchObject({
       status: "rejected",
     });
-    expect(String(observations[0]?.payload.reason ?? "")).toContain(
+    expect(String(candidateObservation?.payload.reason ?? "")).toContain(
       "產品共用基線行為",
     );
   });

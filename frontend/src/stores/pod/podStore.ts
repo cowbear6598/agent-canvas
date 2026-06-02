@@ -489,6 +489,12 @@ export const usePodStore = defineStore("pod", () => {
       };
     }
 
+    const pod = findPodById(podId);
+    if (pod) {
+      pod.memoryEnabled = result.data.memoryEnabled;
+      pod.hasPodMemory = result.data.hasSummary;
+    }
+
     return {
       success: true,
       memoryEnabled: result.data.memoryEnabled,
@@ -620,6 +626,27 @@ export const usePodStore = defineStore("pod", () => {
     repositoryId: string | null,
   ): void {
     updatePodField(podId, "repositoryId", repositoryId);
+  }
+
+  function setRepositoryMemoryState(
+    repositoryId: string,
+    state: {
+      hasRepoMemory?: boolean;
+      repoMemoryEnabled?: boolean;
+    },
+  ): void {
+    for (const pod of pods.value) {
+      if (pod.repositoryId !== repositoryId) {
+        continue;
+      }
+
+      if (state.hasRepoMemory !== undefined) {
+        pod.hasRepoMemory = state.hasRepoMemory;
+      }
+      if (state.repoMemoryEnabled !== undefined) {
+        pod.repoMemoryEnabled = state.repoMemoryEnabled;
+      }
+    }
   }
 
   function updatePodGoal(podId: string, goal: PodGoal | null): void {
@@ -761,6 +788,7 @@ export const usePodStore = defineStore("pod", () => {
     updatePodProviderConfigModel,
     updatePodThinkingLevel,
     updatePodRepository,
+    setRepositoryMemoryState,
     updatePodGoal,
     updatePodPlugins,
     updatePodMcpServers,

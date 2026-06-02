@@ -29,7 +29,7 @@ import {
   emitPodUpdated,
   handleResultError,
 } from "../utils/handlerHelpers.js";
-import { validateRepositoryExists } from "../utils/validators.js";
+import { validateRepositoryAccessibleInCanvas, validateRepositoryExists } from "../utils/validators.js";
 import { memoryStateService } from "../services/memoryStateService.js";
 import { toPodPublicView } from "../types/index.js";
 
@@ -218,7 +218,10 @@ export const handleRepositoryClearMemory =
     ): Promise<void> => {
       const { repositoryId } = payload;
 
-      const validateResult = await validateRepositoryExists(repositoryId);
+      const validateResult = await validateRepositoryAccessibleInCanvas(
+        canvasId,
+        repositoryId,
+      );
       if (
         handleResultError(
           validateResult,
@@ -271,7 +274,10 @@ export const handleRepositorySetMemoryEnabled =
     ): Promise<void> => {
       const { repositoryId, memoryEnabled } = payload;
 
-      const validateResult = await validateRepositoryExists(repositoryId);
+      const validateResult = await validateRepositoryAccessibleInCanvas(
+        canvasId,
+        repositoryId,
+      );
       if (
         handleResultError(
           validateResult,
@@ -326,7 +332,10 @@ export const handleRepositoryGetMemory =
     ): Promise<void> => {
       const { repositoryId } = payload;
 
-      const validateResult = await validateRepositoryExists(repositoryId);
+      const validateResult = await validateRepositoryAccessibleInCanvas(
+        canvasId,
+        repositoryId,
+      );
       if (
         handleResultError(
           validateResult,

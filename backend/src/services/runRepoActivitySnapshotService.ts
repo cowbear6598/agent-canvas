@@ -1,80 +1,55 @@
+import { gitService } from "./workspace/gitService.js";
 import { getResultErrorString } from "../types/result.js";
 import { logger } from "../utils/logger.js";
-import { gitService } from "./workspace/gitService.js";
-
-interface RunExecutionPathEntry {
-  podId: string;
-  runRepoPath: string | null;
-  workspacePath: string | null;
-}
 
 export interface RunRepoActivitySnapshot {
   runId: string;
   podId: string;
   hasActivity: boolean;
   capturedAt: string;
+  statusEntries: string[];
+  snapshotPath: string;
 }
 
 function buildSnapshotKey(runId: string, podId: string): string {
   return `${runId}:${podId}`;
 }
 
-function isIgnorablePathError(errorMessage: string): boolean {
-  const normalized = errorMessage.toLowerCase();
-  return (
-    normalized.includes("no such file or directory") ||
-    normalized.includes("enoent") ||
-    normalized.includes("unable to read current working directory")
-  );
-}
-
 class RunRepoActivitySnapshotService {
   private readonly snapshots = new Map<string, RunRepoActivitySnapshot>();
 
-  private readonly runCapturePromises = new Map<string, Promise<void>>();
+  private readonly capturePromises = new Map<string, Promise<void>>();
 
-  primeRunCapture(
+  captureSnapshot(
     runId: string,
-    entries: RunExecutionPathEntry[],
+    podId: string,
+    workspacePath: string,
   ): Promise<void> {
-    const existingPromise = this.runCapturePromises.get(runId);
+    const key = buildSnapshotKey(runId, podId);
+    const existingPromise = this.capturePromises.get(key);
     if (existingPromise) {
       return existingPromise;
     }
 
-    const capturePromise = this.captureRunSnapshots(runId, entries).finally(() => {
-      if (this.runCapturePromises.get(runId) === capturePromise) {
-        this.runCapturePromises.delete(runId);
+    const capturePromise = this.captureSnapshotInternal(
+      runId,
+      podId,
+      workspacePath,
+    ).finally(() => {
+      if (this.capturePromises.get(key) === capturePromise) {
+        this.capturePromises.delete(key);
       }
     });
 
-    this.runCapturePromises.set(runId, capturePromise);
+    this.capturePromises.set(key, capturePromise);
     return capturePromise;
   }
 
-  async awaitRunCapture(runId: string): Promise<void> {
-    await (this.runCapturePromises.get(runId) ?? Promise.resolve());
-  }
-
-  async capturePodSnapshot(params: {
-    runId: string;
-    podId: string;
-    runRepoPath: string | null;
-    workspacePath: string | null;
-  }): Promise<RunRepoActivitySnapshot | null> {
-    const hasActivity = await this.detectRepositoryActivity(params);
-    if (hasActivity === null) {
-      return null;
-    }
-
-    const snapshot: RunRepoActivitySnapshot = {
-      runId: params.runId,
-      podId: params.podId,
-      hasActivity,
-      capturedAt: new Date().toISOString(),
-    };
-    this.snapshots.set(buildSnapshotKey(params.runId, params.podId), snapshot);
-    return snapshot;
+  async awaitCapture(runId: string, podId: string): Promise<void> {
+    await (
+      this.capturePromises.get(buildSnapshotKey(runId, podId)) ??
+      Promise.resolve()
+    );
   }
 
   consumeSnapshot(runId: string, podId: string): RunRepoActivitySnapshot | null {
@@ -92,85 +67,43 @@ class RunRepoActivitySnapshotService {
         this.snapshots.delete(key);
       }
     }
-    this.runCapturePromises.delete(runId);
+
+    for (const key of this.capturePromises.keys()) {
+      if (key.startsWith(`${runId}:`)) {
+        this.capturePromises.delete(key);
+      }
+    }
   }
 
   clearAll(): void {
     this.snapshots.clear();
-    this.runCapturePromises.clear();
+    this.capturePromises.clear();
   }
 
-  private async captureRunSnapshots(
+  private async captureSnapshotInternal(
     runId: string,
-    entries: RunExecutionPathEntry[],
+    podId: string,
+    workspacePath: string,
   ): Promise<void> {
-    await Promise.all(
-      entries.map((entry) =>
-        this.capturePodSnapshot({
-          runId,
-          podId: entry.podId,
-          runRepoPath: entry.runRepoPath,
-          workspacePath: entry.workspacePath,
-        }),
-      ),
-    );
-  }
-
-  private async detectRepositoryActivity(params: {
-    runRepoPath: string | null;
-    workspacePath: string | null;
-  }): Promise<boolean | null> {
-    const candidatePaths = [...new Set([
-      params.runRepoPath,
-      params.workspacePath,
-    ])].filter((value): value is string => typeof value === "string" && value.length > 0);
-
-    let checkedGitStatus = false;
-    let checkedNonGitPath = false;
-
-    for (const candidatePath of candidatePaths) {
-      const isGitResult = await gitService.isGitRepository(candidatePath);
-      if (!isGitResult.success) {
-        const errorMessage = getResultErrorString(isGitResult.error);
-        if (!isIgnorablePathError(errorMessage)) {
-          logger.warn(
-            "Memory",
-            "Warn",
-            `檢查 Repo Memory git 狀態失敗（path=${candidatePath}）：${errorMessage}`,
-          );
-        }
-        continue;
-      }
-
-      if (!isGitResult.data) {
-        checkedNonGitPath = true;
-        continue;
-      }
-
-      const dirtyResult = await gitService.hasUncommittedChanges(candidatePath);
-      if (!dirtyResult.success) {
-        const errorMessage = getResultErrorString(dirtyResult.error);
-        if (!isIgnorablePathError(errorMessage)) {
-          logger.warn(
-            "Memory",
-            "Warn",
-            `檢查 Repo Memory git status 失敗（path=${candidatePath}）：${errorMessage}`,
-          );
-        }
-        continue;
-      }
-
-      checkedGitStatus = true;
-      if (dirtyResult.data) {
-        return true;
-      }
+    const statusResult = await gitService.getStatusSnapshot(workspacePath);
+    if (!statusResult.success) {
+      logger.warn(
+        "Memory",
+        "Warn",
+        `檢查 Repo Memory git status 失敗（path=${workspacePath}）：${getResultErrorString(statusResult.error)}`,
+      );
+      return;
     }
 
-    if (checkedGitStatus || checkedNonGitPath) {
-      return false;
-    }
-
-    return null;
+    const { isGitRepository, entries } = statusResult.data;
+    this.snapshots.set(buildSnapshotKey(runId, podId), {
+      runId,
+      podId,
+      hasActivity: isGitRepository && entries.length > 0,
+      capturedAt: new Date().toISOString(),
+      statusEntries: entries,
+      snapshotPath: workspacePath,
+    });
   }
 }
 

@@ -16,6 +16,7 @@ interface RepositoryMetadataRow {
 }
 
 interface RepositoryMetadata {
+  name?: string;
   currentBranch?: string;
 }
 
@@ -103,6 +104,7 @@ class RepositoryService {
     if (!row) return undefined;
 
     return {
+      ...(row.name && { name: row.name }),
       ...(row.current_branch && { currentBranch: row.current_branch }),
     };
   }

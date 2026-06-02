@@ -394,6 +394,45 @@ class GitService {
     );
   }
 
+  async getStatusSnapshot(workspacePath: string): Promise<
+    Result<{
+      isGitRepository: boolean;
+      entries: string[];
+    }>
+  > {
+    const isGitResult = await this.isGitRepository(workspacePath);
+    if (!isGitResult.success) {
+      return err(getResultErrorString(isGitResult.error));
+    }
+
+    if (!isGitResult.data) {
+      return ok({
+        isGitRepository: false,
+        entries: [],
+      });
+    }
+
+    return gitOperationWithPath(
+      workspacePath,
+      async (git) => {
+        const raw = await git.raw([
+          "status",
+          "--porcelain=v1",
+          "--untracked-files=all",
+        ]);
+
+        return {
+          isGitRepository: true,
+          entries: raw
+            .split("\n")
+            .map((line) => line.trimEnd())
+            .filter((line) => line.length > 0),
+        };
+      },
+      "檢查 git status 快照失敗",
+    );
+  }
+
   async checkoutBranch(
     workspacePath: string,
     branchName: string,

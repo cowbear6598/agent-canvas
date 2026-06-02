@@ -102,6 +102,7 @@ describe("Repository 管理", () => {
       const client = getClient();
       const name = `memory-repo-${uuidv4()}`;
       const repo = await createRepository(client, name);
+      await createRepositoryNote(client, repo.id);
       memoryStateService.writeRepoSummary(repo.id, "既有 repo 記憶");
 
       const canvasId = await getCanvasId(client);
@@ -191,6 +192,7 @@ describe("Repository 管理", () => {
       const client = getClient();
       const name = `repo-memory-enabled-${uuidv4()}`;
       const repo = await createRepository(client, name);
+      await createRepositoryNote(client, repo.id);
       memoryStateService.setRepoMemoryEnabled(repo.id, false);
       memoryStateService.writeRepoSummary(repo.id, "既有 repo 記憶");
 

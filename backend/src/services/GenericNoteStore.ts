@@ -177,6 +177,16 @@ export class GenericNoteStore<T extends BaseNote, K extends keyof T> {
     return rows.map((row) => this.rowToNote(row));
   }
 
+  findByForeignKey(canvasId: string, foreignKeyValue: string): T[] {
+    const rows = this.stmts.note.selectByForeignKeyId.all({
+      $canvasId: canvasId,
+      $type: this.noteConfig.noteType,
+      $foreignKeyId: foreignKeyValue,
+    }) as NoteRow[];
+
+    return rows.map((row) => this.rowToNote(row));
+  }
+
   deleteByBoundPodId(canvasId: string, podId: string): string[] {
     const notes = this.findByBoundPodId(canvasId, podId);
     const ids = notes.map((n) => n.id);
@@ -195,13 +205,9 @@ export class GenericNoteStore<T extends BaseNote, K extends keyof T> {
   }
 
   deleteByForeignKey(canvasId: string, foreignKeyValue: string): string[] {
-    const rows = this.stmts.note.selectByForeignKeyId.all({
-      $canvasId: canvasId,
-      $type: this.noteConfig.noteType,
-      $foreignKeyId: foreignKeyValue,
-    }) as NoteRow[];
-
-    const ids = rows.map((r) => r.id);
+    const ids = this.findByForeignKey(canvasId, foreignKeyValue).map(
+      (note) => note.id,
+    );
 
     if (ids.length === 0) {
       return [];
