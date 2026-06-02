@@ -804,7 +804,6 @@ describe("repositoryStore", () => {
       expect(mockShowSuccessToast).toHaveBeenCalledWith(
         "Repository",
         "Repo Memory 已啟用",
-        "後續會為這個 Repository 保留記憶。",
       );
     });
   });
