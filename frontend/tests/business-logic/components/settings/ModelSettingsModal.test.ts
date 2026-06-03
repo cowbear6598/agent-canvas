@@ -134,6 +134,10 @@ function selectedValues(wrapper: ReturnType<typeof mountModal>): string[] {
     .map((select) => select.attributes("data-model-value") ?? "");
 }
 
+function saveButton(wrapper: ReturnType<typeof mountModal>) {
+  return wrapper.findAll("button").at(-1);
+}
+
 describe("ModelSettingsModal", () => {
   beforeEach(() => {
     setActivePinia(setupTestPinia());
@@ -181,5 +185,69 @@ describe("ModelSettingsModal", () => {
     expect(wrapper.text()).toContain("中");
     expect(wrapper.text()).not.toContain("Claude Sonnet 4.5");
     expect(wrapper.text()).not.toContain("高");
+  });
+
+  it("不顯示未設定 provider 選項", async () => {
+    const wrapper = mountModal();
+
+    await flushPromises();
+
+    expect(wrapper.text()).not.toContain("Not set");
+    expect(wrapper.text()).not.toContain("未設定");
+    expect(wrapper.find('[data-value="__provider_unset__"]').exists()).toBe(
+      false,
+    );
+  });
+
+  it("載入設定失敗時應停用儲存且不送出舊狀態", async () => {
+    getConfigMock.mockResolvedValueOnce(null);
+    const wrapper = mountModal();
+
+    await flushPromises();
+    await saveButton(wrapper)?.trigger("click");
+
+    expect(saveButton(wrapper)?.attributes("disabled")).toBeDefined();
+    expect(updateConfigMock).not.toHaveBeenCalled();
+  });
+
+  it("provider 沒有可用 model 時應停用儲存", async () => {
+    const providerCapabilityStore = useProviderCapabilityStore();
+    providerCapabilityStore.syncFromPayload([
+      {
+        name: "opencode",
+        availableModels: [],
+      },
+      {
+        name: "codex",
+        availableModels: [
+          {
+            label: "GPT-5.4",
+            value: "gpt-5.4",
+            thinkingLevels: ["medium"],
+            defaultThinkingLevel: "medium",
+          },
+        ],
+      },
+    ]);
+    providerCapabilityStore.loaded = true;
+    getConfigMock.mockResolvedValueOnce({
+      requestId: "request-1",
+      success: true,
+      timezoneOffset: 8,
+      memoryProvider: "opencode",
+      memoryModel: "",
+      memoryThinkingLevel: null,
+      connectionLineProvider: "codex",
+      connectionLineModel: "gpt-5.4",
+      connectionLineThinkingLevel: "medium",
+    });
+
+    const wrapper = mountModal();
+
+    await flushPromises();
+    await saveButton(wrapper)?.trigger("click");
+
+    expect(saveButton(wrapper)?.attributes("disabled")).toBeDefined();
+    expect(updateConfigMock).not.toHaveBeenCalled();
   });
 });

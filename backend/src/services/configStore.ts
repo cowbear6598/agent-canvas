@@ -78,8 +78,21 @@ interface ProviderModelConfig {
 }
 
 export class ConfigStore {
+  private cachedStmts: ReturnType<typeof getStmts> | null = null;
+  private connectionLineModelConfigCache: ConnectionLineModelConfig | null =
+    null;
+
   private get stmts(): ReturnType<typeof getStmts> {
-    return getStmts();
+    const stmts = getStmts();
+    if (this.cachedStmts !== stmts) {
+      this.cachedStmts = stmts;
+      this.connectionLineModelConfigCache = null;
+    }
+    return stmts;
+  }
+
+  private invalidateConnectionLineModelConfigCache(): void {
+    this.connectionLineModelConfigCache = null;
   }
 
   private parseTimezoneOffset(value: string | undefined): number {
@@ -203,6 +216,47 @@ export class ConfigStore {
     }
   }
 
+  private buildConnectionLineModelConfig(
+    connectionLineProvider: ProviderName,
+    connectionLineModel: string,
+    connectionLineThinkingLevel: string | null,
+  ): ConnectionLineModelConfig {
+    return {
+      connectionLineProvider,
+      connectionLineModel,
+      connectionLineThinkingLevel,
+    };
+  }
+
+  private readConnectionLineModelConfig(): ConnectionLineModelConfig {
+    const providerRow = this.stmts.globalSettings.selectByKey.get(
+      CONNECTION_LINE_PROVIDER_KEY,
+    ) as GlobalSettingRow | undefined;
+    const modelRow = this.stmts.globalSettings.selectByKey.get(
+      CONNECTION_LINE_MODEL_KEY,
+    ) as GlobalSettingRow | undefined;
+    const thinkingLevelRow = this.stmts.globalSettings.selectByKey.get(
+      CONNECTION_LINE_THINKING_LEVEL_KEY,
+    ) as GlobalSettingRow | undefined;
+    const connectionLineProvider = this.parseConnectionLineProvider(
+      providerRow?.value,
+    );
+    const connectionLineModel = this.parseConnectionLineModel(
+      connectionLineProvider,
+      modelRow?.value,
+    );
+
+    return this.buildConnectionLineModelConfig(
+      connectionLineProvider,
+      connectionLineModel,
+      this.parseConnectionLineThinkingLevel(
+        connectionLineProvider,
+        connectionLineModel,
+        thinkingLevelRow?.value,
+      ),
+    );
+  }
+
   getAll(): ConfigData {
     const rows =
       this.stmts.globalSettings.selectAll.all() as GlobalSettingRow[];
@@ -220,7 +274,7 @@ export class ConfigStore {
       map.get(CONNECTION_LINE_MODEL_KEY),
     );
 
-    return {
+    const config = {
       timezoneOffset: this.parseTimezoneOffset(map.get(TIMEZONE_OFFSET_KEY)),
       backupGitRemoteUrl:
         map.get(BACKUP_GIT_REMOTE_URL_KEY) ?? DEFAULT_BACKUP_GIT_REMOTE_URL,
@@ -246,6 +300,13 @@ export class ConfigStore {
         map.get(WORKSPACE_PASSWORD_VERSION_KEY),
       ),
     };
+    this.connectionLineModelConfigCache = this.buildConnectionLineModelConfig(
+      config.connectionLineProvider,
+      config.connectionLineModel,
+      config.connectionLineThinkingLevel,
+    );
+
+    return config;
   }
 
   update(data: Partial<ConfigData>): ConfigData {
@@ -305,6 +366,7 @@ export class ConfigStore {
     }
 
     if (data.connectionLineProvider !== undefined) {
+      this.invalidateConnectionLineModelConfigCache();
       this.stmts.globalSettings.upsert.run({
         $key: CONNECTION_LINE_PROVIDER_KEY,
         $value: data.connectionLineProvider,
@@ -312,6 +374,7 @@ export class ConfigStore {
     }
 
     if (data.connectionLineModel !== undefined) {
+      this.invalidateConnectionLineModelConfigCache();
       this.stmts.globalSettings.upsert.run({
         $key: CONNECTION_LINE_MODEL_KEY,
         $value: data.connectionLineModel,
@@ -319,6 +382,7 @@ export class ConfigStore {
     }
 
     if (data.connectionLineThinkingLevel !== undefined) {
+      this.invalidateConnectionLineModelConfigCache();
       if (data.connectionLineThinkingLevel === null) {
         this.stmts.globalSettings.deleteByKey.run(
           CONNECTION_LINE_THINKING_LEVEL_KEY,
@@ -352,17 +416,11 @@ export class ConfigStore {
   }
 
   getConnectionLineModelConfig(): ConnectionLineModelConfig {
-    const {
-      connectionLineProvider,
-      connectionLineModel,
-      connectionLineThinkingLevel,
-    } = this.getAll();
+    if (!this.connectionLineModelConfigCache) {
+      this.connectionLineModelConfigCache = this.readConnectionLineModelConfig();
+    }
 
-    return {
-      connectionLineProvider,
-      connectionLineModel,
-      connectionLineThinkingLevel,
-    };
+    return this.connectionLineModelConfigCache;
   }
 
   getWorkspacePasswordState(): WorkspacePasswordState {

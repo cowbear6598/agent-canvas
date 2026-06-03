@@ -20,6 +20,7 @@ import { resetStatements } from "../../src/database/statements.js";
 import { config } from "../../src/config/index.js";
 import { runStore } from "../../src/services/runStore.js";
 import { podStore } from "../../src/services/podStore.js";
+import { configStore } from "../../src/services/configStore.js";
 import { memoryStateService } from "../../src/services/memoryStateService.js";
 import { memoryMaintainerService } from "../../src/services/memoryMaintainerService.js";
 import { runRepoActivitySnapshotService } from "../../src/services/runRepoActivitySnapshotService.js";
@@ -317,6 +318,69 @@ describe("memoryMaintainerService", () => {
       memoryStateService.listJobsByScope("repository", repositoryId),
     ).toHaveLength(0);
     expect(executeStructuredDisposableTaskMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("Memory 維護執行時應使用全域 Memory thinking level", async () => {
+    const podId = "pod-memory-thinking-level";
+    insertPod({ id: podId });
+    memoryStateService.setPodMemoryEnabled(podId, true);
+    configStore.update({
+      memoryProvider: "claude",
+      memoryModel: "sonnet",
+      memoryThinkingLevel: "high",
+    });
+
+    const run = runStore.createRun(CANVAS_ID, podId, "trigger");
+    const instance = runStore.createPodInstance(run.id, podId);
+    runStore.updatePodInstanceLastResponseSummary(
+      instance.id,
+      "本輪完成 Memory thinking level 接線",
+    );
+    appendTranscript({
+      runId: run.id,
+      podId,
+      withRepoToolTrace: false,
+    });
+
+    executeStructuredDisposableTaskMock
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          observations: [
+            {
+              title: "Thinking 設定",
+              summary: "Memory 任務會使用全域 thinking level",
+              accepted: true,
+              reason: "屬於模型執行設定",
+            },
+          ],
+        },
+        resolvedModel: "sonnet",
+        rawContent: "{}",
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          summary:
+            "<workflow>Memory 任務使用全域 thinking level。</workflow>",
+          reason: "已完成合併",
+        },
+        resolvedModel: "sonnet",
+        rawContent: "{}",
+      });
+
+    await memoryMaintainerService.scheduleForCompletedPod(
+      makeRunContext(run.id, podId),
+      podId,
+    );
+
+    expect(executeStructuredDisposableTaskMock).toHaveBeenCalledTimes(2);
+    expect(executeStructuredDisposableTaskMock.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ thinkingLevel: "high" }),
+    );
+    expect(executeStructuredDisposableTaskMock.mock.calls[1]?.[0]).toEqual(
+      expect.objectContaining({ thinkingLevel: "high" }),
+    );
   });
 
   it("pod memory 停用但 repo memory 啟用時，仍應可維護 repo memory", async () => {

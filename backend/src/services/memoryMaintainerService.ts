@@ -487,7 +487,7 @@ class MemoryMaintainerService {
     return executeStructuredDisposableTask({
       provider: memoryConfig.memoryProvider,
       model: memoryConfig.memoryModel,
-      thinkingLevel: null,
+      thinkingLevel: memoryConfig.memoryThinkingLevel,
       systemPrompt: buildCandidateSystemPrompt(task.scopeType),
       userMessage: buildCandidateUserPrompt(evidencePack),
       workspacePath: this.getWorkspacePath(task),
@@ -524,7 +524,7 @@ class MemoryMaintainerService {
     return executeStructuredDisposableTask({
       provider: memoryConfig.memoryProvider,
       model: memoryConfig.memoryModel,
-      thinkingLevel: null,
+      thinkingLevel: memoryConfig.memoryThinkingLevel,
       systemPrompt: buildMergerSystemPrompt(task.scopeType),
       userMessage: buildMergerUserPrompt({
         scopeType: task.scopeType,

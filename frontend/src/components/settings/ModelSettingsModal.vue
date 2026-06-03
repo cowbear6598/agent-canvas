@@ -67,8 +67,7 @@ const connectionLineSettings = ref<ModelSettingsValue>({
 const timezoneOffset = ref<number>(configStore.timezoneOffset);
 const isLoading = ref(false);
 const isSaving = ref(false);
-
-const PROVIDER_UNSET = "__provider_unset__";
+const loadFailed = ref(false);
 
 const categories = computed<
   ReadonlyArray<{
@@ -146,7 +145,7 @@ const thinkingLevelOptions = computed<ReadonlyArray<string>>(() => {
 });
 
 const providerSelectValue = computed(
-  () => activeSettings.value.provider ?? PROVIDER_UNSET,
+  () => activeSettings.value.provider ?? undefined,
 );
 
 const isModelDisabled = computed(
@@ -158,6 +157,23 @@ const isThinkingLevelDisabled = computed(
     !activeProvider.value ||
     !activeSettings.value.model ||
     thinkingLevelOptions.value.length === 0,
+);
+
+const hasValidModelSettings = (settings: ModelSettingsValue): boolean =>
+  !!settings.provider &&
+  !!settings.model &&
+  providerCapabilityStore.isModelValidForProvider(
+    settings.provider,
+    settings.model,
+  );
+
+const isSaveDisabled = computed(
+  () =>
+    isLoading.value ||
+    isSaving.value ||
+    loadFailed.value ||
+    !hasValidModelSettings(memorySettings.value) ||
+    !hasValidModelSettings(connectionLineSettings.value),
 );
 
 const modelPlaceholder = computed(() => {
@@ -252,7 +268,7 @@ const modelPayloadValue = (settings: ModelSettingsValue): string | undefined =>
   settings.provider ? settings.model : undefined;
 
 const applyLoadedSettings = (
-  result: Awaited<ReturnType<typeof getConfig>>,
+  result: Awaited<ReturnType<typeof getConfig | typeof updateConfig>>,
 ): void => {
   timezoneOffset.value = result.timezoneOffset ?? configStore.timezoneOffset;
   if (result.timezoneOffset !== undefined) {
@@ -275,6 +291,7 @@ const applyLoadedSettings = (
 
 const loadSettings = async (): Promise<void> => {
   isLoading.value = true;
+  loadFailed.value = false;
   try {
     if (!providerCapabilityStore.loaded) {
       await providerCapabilityStore.loadFromBackend();
@@ -286,7 +303,10 @@ const loadSettings = async (): Promise<void> => {
       t("settings.loadFailed"),
       { swallow: true },
     );
-    if (!result) return;
+    if (!result) {
+      loadFailed.value = true;
+      return;
+    }
 
     applyLoadedSettings(result);
   } finally {
@@ -303,14 +323,7 @@ const updateActiveSettings = (next: ModelSettingsValue): void => {
 };
 
 const handleProviderChange = (value: AcceptableValue): void => {
-  if (value === null || value === PROVIDER_UNSET) {
-    updateActiveSettings({
-      provider: null,
-      model: "",
-      thinkingLevel: null,
-    });
-    return;
-  }
+  if (value === null) return;
 
   const provider = String(value) as PodProvider;
   const model = resolveDefaultModel(provider);
@@ -351,6 +364,8 @@ const handleThinkingLevelChange = (value: AcceptableValue): void => {
 };
 
 const handleSave = async (): Promise<void> => {
+  if (isSaveDisabled.value) return;
+
   isSaving.value = true;
   try {
     const nextMemorySettings = normalizeSettings(memorySettings.value);
@@ -376,10 +391,7 @@ const handleSave = async (): Promise<void> => {
 
     if (!result) return;
 
-    memorySettings.value = nextMemorySettings;
-    connectionLineSettings.value = nextConnectionLineSettings;
-    configStore.setMemoryConfig(nextMemorySettings);
-    configStore.setConnectionLineConfig(nextConnectionLineSettings);
+    applyLoadedSettings(result);
     showSuccessToast("Config", t("settings.saveSuccess"));
     emit("update:open", false);
   } finally {
@@ -492,9 +504,6 @@ watch(
                     />
                   </SelectTrigger>
                   <SelectContent position="popper">
-                    <SelectItem :value="PROVIDER_UNSET">
-                      {{ t("modelSettings.form.providerUnset") }}
-                    </SelectItem>
                     <SelectItem
                       v-for="option in providerOptions"
                       :key="option.value"
@@ -572,7 +581,7 @@ watch(
         </Button>
         <Button
           type="button"
-          :disabled="isLoading || isSaving"
+          :disabled="isSaveDisabled"
           @click="handleSave"
         >
           <Loader2
