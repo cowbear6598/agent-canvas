@@ -32,7 +32,6 @@ interface AppBootstrapCanvasContext {
   };
   connectionStore: {
     loadConnectionsFromBackend: () => Promise<void>;
-    setupWorkflowListeners: () => void;
     resetForCanvasSwitch: () => void;
   };
   canvasStore: {
@@ -201,8 +200,6 @@ export function useAppBootstrap(
       connectionStore.loadConnectionsFromBackend(),
       ...providers.map((provider) => integrationStore.loadApps(provider.name)),
     ]);
-
-    connectionStore.setupWorkflowListeners();
 
     await runStore.loadRuns();
   };

@@ -1,0 +1,157 @@
+feature: project-architecture-refactor
+side: frontend
+approved: true
+phases:
+  - id: P1
+    title: 共用契約與前端 WebSocket 邊界
+    parallel: true
+    verification:
+      - cd frontend && bun run style
+      - cd frontend && bun run test:run
+    done: true
+    items:
+      - id: P1.A
+        title: 共用 WebSocket 契約消費層
+        tasks:
+          - id: P1.A.t1
+            text: 在 `shared/` 下建立前後端共用的 WebSocket 契約目錄與前端使用入口，讓 `frontend/src/types/websocket/requests.ts`、`frontend/src/types/websocket/responses.ts`、`frontend/src/services/websocket` 的事件名稱與 payload 型別改由共用契約匯入
+            completed: true
+            last_files_changed:
+              - shared/websocket/events.ts
+              - shared/websocket/requestResponsePairs.ts
+              - shared/websocket/index.ts
+              - frontend/src/types/websocket/events.ts
+              - frontend/src/types/websocket/contracts.ts
+              - frontend/src/types/websocket/index.ts
+              - backend/src/schemas/events.ts
+          - id: P1.A.t2
+            text: 收斂 `frontend/src/services/websocket/createWebSocketRequest`、`WebSocketClient` 與相關 request helper 的型別入口，建立單一的 request / response event map，避免 UI 與 store 直接散落依賴字串 event 名稱
+            completed: true
+            last_files_changed:
+              - frontend/src/services/websocket/createWebSocketRequest.ts
+              - frontend/src/services/websocket/index.ts
+      - id: P1.B
+        title: WebSocket 事件接線邊界
+        tasks:
+          - id: P1.B.t1
+            text: 將目前分散在 `connectionStore`、`runStore` 與各 event handler composable 的事件註冊責任，整理成單一 app-level wiring 層，讓 store 只接收事件資料，不自行持有 listener lifecycle
+            completed: true
+            last_files_changed:
+              - frontend/src/composables/useAppBootstrap.ts
+              - frontend/src/composables/useAppSocketLifecycle.ts
+              - frontend/src/composables/useUnifiedEventListeners.ts
+              - frontend/src/composables/eventHandlers/appEventWiring.ts
+              - frontend/src/composables/eventHandlers/workflowEventHandlers.ts
+              - frontend/src/composables/eventHandlers/runEventHandlers.ts
+              - frontend/src/stores/connectionStore.ts
+              - frontend/src/stores/chat/chatStore.ts
+          - id: P1.B.t2
+            text: 為新的前端 WebSocket wiring 層補一個 integration test，使用前端自有的 WebSocket wrapper 假物件驗證事件分派到對應 reducer / action，不直接 mock 原生 `WebSocket`
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/composables/useAppBootstrap.test.ts
+              - frontend/tests/business-logic/composables/useAppSocketLifecycle.test.ts
+              - frontend/tests/business-logic/stores/connectionStore.test.ts
+              - frontend/tests/integration/websocket-api/appEventWiring.test.ts
+
+  - id: P2
+    title: Canvas Domain Store 拆分
+    parallel: true
+    verification:
+      - cd frontend && bun run style
+      - cd frontend && bun run test:run
+    done: true
+    items:
+      - id: P2.A
+        title: Connection domain 拆分
+        tasks:
+          - id: P2.A.t1
+            text: 將 `frontend/src/stores/connectionStore.ts` 拆成 state store、command action、event reducer、graph / validation helper 四個明確責任模組，保留既有 store 對外介面作為過渡 facade
+            completed: true
+            last_files_changed:
+              - frontend/src/stores/connectionStore.ts
+              - frontend/src/stores/connection/connectionEventReducers.ts
+              - frontend/src/stores/connection/connectionBranchRules.ts
+          - id: P2.A.t2
+            text: 把 branch 設定、summary provider / model 預設值、workflow graph 判斷等規則抽成純函式模組，避免在 store 內同時承擔 UI toast、WS 發送與 domain rule
+            completed: true
+            last_files_changed:
+              - frontend/src/stores/connectionStore.ts
+              - frontend/src/stores/connection/connectionBranchRules.ts
+          - id: P2.A.t3
+            text: 為抽出的 connection domain 規則補 business logic test，覆蓋 branch label 驗證、summary model 收斂與 workflow graph 判斷；測試中不 mock 自家 pure function
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/stores/connectionStore.test.ts
+              - frontend/tests/business-logic/stores/connectionGraphHelpers.test.ts
+              - frontend/tests/business-logic/stores/connectionPayloadMappers.test.ts
+      - id: P2.B
+        title: Pod 與 Repository 協調邊界
+        tasks:
+          - id: P2.B.t1
+            text: 將 `frontend/src/stores/pod/podStore.ts` 內的 transport、toast、cache invalidation、跨 store 協調拆出，讓 pod store 只保留 pod state 與本域 mutation
+            completed: true
+            last_files_changed:
+              - frontend/src/stores/pod/podStore.ts
+              - frontend/src/stores/pod/podCommandActions.ts
+              - frontend/src/stores/pod/podUpdateEffects.ts
+          - id: P2.B.t2
+            text: 將目前 `podStore` 與 `repositoryStore` 之間的直接互相寫入，改成由 canvas-level orchestration/composable 協調記憶體狀態、repository binding 與刪除連動
+            completed: true
+            last_files_changed:
+              - frontend/src/composables/canvas/useRepositoryMemoryCoordinator.ts
+              - frontend/src/stores/pod/repositoryMemorySync.ts
+              - frontend/src/stores/pod/podStore.ts
+              - frontend/src/stores/note/repositoryStore.ts
+              - frontend/src/components/canvas/RepositoryContextMenu.vue
+          - id: P2.B.t3
+            text: 為 pod / repository 協調層補 integration test，使用 store facade 與自有 API wrapper 假物件驗證刪除、記憶體同步與 repository 綁定流程，不直接 mock Pinia 內部行為
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/stores/podStore.test.ts
+              - frontend/tests/business-logic/composables/websocket/useUnifiedEventListeners.test.ts
+              - frontend/tests/userflows/canvas/podContextMenuFlow.test.ts
+
+  - id: P3
+    title: 畫布宿主與 Run Transcript 拆分
+    parallel: true
+    verification:
+      - cd frontend && bun run style
+      - cd frontend && bun run test:run
+    done: true
+    items:
+      - id: P3.A
+        title: Canvas host orchestration
+        tasks:
+          - id: P3.A.t1
+            text: 將 `frontend/src/components/canvas/CanvasContainer.vue` 拆成畫布宿主、modal host、resource action controller 與 interaction controller，讓畫布元件本體只負責 viewport 與子元件組裝
+            completed: true
+            last_files_changed:
+              - frontend/src/components/canvas/CanvasContainer.vue
+              - frontend/src/components/canvas/CanvasModalHost.vue
+              - frontend/src/composables/canvas/useCanvasInteractionController.ts
+              - frontend/src/composables/canvas/useCanvasResourceActionController.ts
+          - id: P3.A.t2
+            text: 整理 `useCanvasContext`、`useCanvasContextMenus`、`useCanvasNoteHandlers` 等 composable 的依賴邊界，避免新的 host component 再次直接抓取過多 store 實例
+            completed: true
+            last_files_changed:
+              - frontend/src/components/canvas/CanvasContainer.vue
+              - frontend/src/composables/canvas/useCanvasInteractionController.ts
+              - frontend/src/composables/canvas/useCanvasResourceActionController.ts
+      - id: P3.B
+        title: Run transcript domain
+        tasks:
+          - id: P3.B.t1
+            text: 將 `frontend/src/stores/run/runStore.ts` 內的 run 歷史面板 state 與 transcript assembling 邏輯拆分為獨立的 transcript reducer / store，保留對 `RunChatModal` 與 `HistoryPanel` 的穩定消費介面
+            completed: true
+            last_files_changed:
+              - frontend/src/stores/run/runStore.ts
+              - frontend/src/stores/run/runTranscriptController.ts
+          - id: P3.B.t2
+            text: 為新的 run transcript reducer 補 business logic test，覆蓋 partial message、tool use / result merge、complete finalize 與 cache 清理，不直接測 UI render 同義反覆內容
+            completed: true
+            last_files_changed:
+              - frontend/src/stores/run/runStore.ts
+              - frontend/src/stores/run/runTranscriptController.ts
+              - frontend/tests/business-logic/stores/run/runStore.test.ts
+              - frontend/tests/business-logic/stores/run/opencodeV2RunParity.test.ts

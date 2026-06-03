@@ -41,10 +41,6 @@ interface AppSocketLifecycleSecurityStore {
   unregisterSocketListeners: () => void;
 }
 
-interface AppSocketLifecycleConnectionStore {
-  cleanupWorkflowListeners: () => void;
-}
-
 interface AppSocketLifecycleCanvasStore {
   activeCanvasId: string | null;
   reset: () => void;
@@ -52,7 +48,6 @@ interface AppSocketLifecycleCanvasStore {
 
 interface AppSocketLifecycleCanvasContext {
   chatStore: AppSocketLifecycleChatStore;
-  connectionStore: AppSocketLifecycleConnectionStore;
   canvasStore: AppSocketLifecycleCanvasStore;
 }
 
@@ -80,10 +75,9 @@ function resolveCanvasContext(
     return canvasContext;
   }
 
-  const { chatStore, connectionStore, canvasStore } = useCanvasContext();
+  const { chatStore, canvasStore } = useCanvasContext();
   return {
     chatStore,
-    connectionStore,
     canvasStore,
   };
 }
@@ -107,7 +101,6 @@ export function useAppSocketLifecycle(
 ): UseAppSocketLifecycleReturn {
   const {
     chatStore,
-    connectionStore,
     canvasStore,
   } = resolveCanvasContext(options.canvasContext);
   const securityStore = resolveSecurityStore(options.securityStore);
@@ -133,7 +126,6 @@ export function useAppSocketLifecycle(
     chatStore.disconnectWebSocket();
     securityStore.unregisterSocketListeners();
     options.unregisterAppReadyListeners();
-    connectionStore.cleanupWorkflowListeners();
   };
 
   const stopConnectedWatch = watch(
@@ -186,7 +178,6 @@ export function useAppSocketLifecycle(
         }
 
         options.unregisterAppReadyListeners();
-        connectionStore.cleanupWorkflowListeners();
         options.resetInitialization();
         canvasStore.reset();
       }

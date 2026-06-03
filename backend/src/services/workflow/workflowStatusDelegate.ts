@@ -3,7 +3,7 @@ import type { TriggerMode } from "../../types/index.js";
 import type { SettlementPathway } from "./types.js";
 import { runExecutionService } from "./runExecutionService.js";
 import { runQueueService } from "./runQueueService.js";
-import { fireAndForget } from "../../utils/operationHelpers.js";
+import { workflowAsyncDispatchService } from "./workflowAsyncDispatchService.js";
 
 export interface EnqueueItem {
   canvasId: string;
@@ -114,10 +114,10 @@ class RunDelegate implements WorkflowStatusDelegate {
   }
 
   scheduleNextInQueue(canvasId: string, targetPodId: string): void {
-    fireAndForget(
+    workflowAsyncDispatchService.dispatchRunQueueProcess(
       runQueueService.processNext(canvasId, targetPodId, this.runContext),
-      "Run",
-      "[RunDelegate] 處理 Run 佇列下一項時發生錯誤",
+      this.runContext.runId,
+      targetPodId,
     );
   }
 

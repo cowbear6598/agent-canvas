@@ -46,45 +46,6 @@ vi.mock("@/composables/useToast", () => ({
 describe("connectionStore", () => {
   setupStoreTest();
 
-  describe("workflow listener lifecycle", () => {
-    it("setup/cleanup listener 清單不含 direct waiting 且 cleanup 使用同一個 handler", () => {
-      const store = useConnectionStore();
-
-      store.setupWorkflowListeners();
-      store.cleanupWorkflowListeners();
-
-      const onCalls = mockWebSocketClient.on.mock.calls;
-      const offCalls = mockWebSocketClient.off.mock.calls;
-      const onEvents = onCalls.map(([event]) => event);
-      const offEvents = offCalls.map(([event]) => event);
-
-      expect(onEvents).toEqual([
-        "workflow:auto-triggered",
-        "workflow:complete",
-        "workflow:branch:triggered",
-        "workflow:direct-triggered",
-        "workflow:queued",
-        "workflow:queue-processed",
-      ]);
-      expect(onEvents).not.toContain("workflow:direct-waiting");
-      expect(offEvents).toEqual(onEvents);
-      onCalls.forEach(([, handler], index) => {
-        expect(offCalls[index]?.[1]).toBe(handler);
-      });
-    });
-
-    it("重複 setupWorkflowListeners 不應累加重複 handler", () => {
-      const store = useConnectionStore();
-
-      store.setupWorkflowListeners();
-      store.setupWorkflowListeners();
-      store.cleanupWorkflowListeners();
-
-      expect(mockWebSocketClient.on).toHaveBeenCalledTimes(6);
-      expect(mockWebSocketClient.off).toHaveBeenCalledTimes(6);
-    });
-  });
-
   describe("createConnection", () => {
     /**
      * 統一設定 Claude 與 Codex 兩個 provider 的 capability（availableModels）。

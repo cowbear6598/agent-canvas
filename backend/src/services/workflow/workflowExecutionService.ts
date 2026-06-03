@@ -13,13 +13,11 @@ import { connectionStore } from "../connectionStore.js";
 import { podStore } from "../podStore.js";
 import { summaryService } from "../summaryService.js";
 import { logger } from "../../utils/logger.js";
-import { fireAndForget } from "../../utils/operationHelpers.js";
 import { executeStreamingChat } from "../claude/streamingChatExecutor.js";
 import {
   buildTransferMessage,
   forEachMultiInputGroupConnection,
   isAutoTriggerable,
-  resolveSettlementPathway,
 } from "./workflowHelpers.js";
 import { decideWorkflowSummary } from "./workflowRunDecisions.js";
 import { LazyInitializable } from "./lazyInitializable.js";
@@ -31,6 +29,13 @@ import {
 import { ChatExecutionStrategy } from "../executionStrategy.js";
 import { runExecutionService } from "./runExecutionService.js";
 import { getRunTranscriptWindow } from "./runTranscriptWindow.js";
+import { workflowAsyncDispatchService } from "./workflowAsyncDispatchService.js";
+import {
+  completeWorkflowChatStage,
+  enqueueWorkflowTriggerStage,
+  failWorkflowChatStage,
+  launchWorkflowChatStage,
+} from "./workflowTriggerStages.js";
 
 interface ExecutionServiceDeps {
   pipeline: PipelineMethods;
@@ -335,15 +340,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
 
     if (
       !skipBusyCheck &&
-      delegate.shouldEnqueue() &&
-      delegate.isBusy(canvasId, targetPodId)
-    ) {
-      logger.log(
-        "Workflow",
-        "Pipeline",
-        `[checkQueue] 目標 Pod 忙碌中，加入佇列`,
-      );
-      delegate.enqueue({
+      enqueueWorkflowTriggerStage(delegate, {
         canvasId,
         connectionId,
         sourcePodId,
@@ -355,8 +352,8 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
         sourcePodIds,
         sourcePodNames,
         runContext,
-      });
-      delegate.scheduleNextInQueue(canvasId, targetPodId);
+      })
+    ) {
       return;
     }
 
@@ -382,33 +379,39 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
       runContext,
     });
 
-    delegate.startPodExecution(canvasId, targetPodId);
-    runExecutionService.registerActiveStream(runContext.runId, targetPodId);
-
-    const queryPromise = this.executeClaudeQuery({
-      canvasId,
-      connectionId,
-      sourcePodId,
-      targetPodId,
-      content: summary,
-      participatingConnectionIds: resolvedConnectionIds,
-      sourcePodIds,
-      sourcePodNames,
-      strategy,
-      runContext,
-      delegate,
-    }).catch((error: unknown) => {
-      runExecutionService.unregisterActiveStream(runContext.runId, targetPodId);
-      throw error;
-    });
-
     // 刻意不 await：Claude 查詢是長時間操作，結果透過 WebSocket 事件通知前端。
     // 若改為 await，呼叫方的 Promise.allSettled 會等到查詢完成才繼續，喪失多 connection 並行觸發的能力。
-    fireAndForget(
-      queryPromise,
-      "Workflow",
-      `executeClaudeQuery 執行失敗 (connection: ${connectionId})`,
-    );
+    launchWorkflowChatStage({
+      canvasId,
+      connectionId,
+      targetPodId,
+      runId: runContext.runId,
+      beforeLaunch: () => {
+        delegate.startPodExecution(canvasId, targetPodId);
+        runExecutionService.registerActiveStream(runContext.runId, targetPodId);
+      },
+      createQueryPromise: () =>
+        this.executeClaudeQuery({
+          canvasId,
+          connectionId,
+          sourcePodId,
+          targetPodId,
+          content: summary,
+          participatingConnectionIds: resolvedConnectionIds,
+          sourcePodIds,
+          sourcePodNames,
+          strategy,
+          runContext,
+          delegate,
+        }),
+      unregisterActiveStream: (runId, podId) =>
+        runExecutionService.unregisterActiveStream(runId, podId),
+      dispatchConnectionQuery: (promise, launchedConnectionId) =>
+        workflowAsyncDispatchService.dispatchConnectionQuery(
+          promise,
+          launchedConnectionId,
+        ),
+    });
   }
 
   private activateConnections(canvasId: string, connectionIds: string[]): void {
@@ -466,9 +469,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     this.activateConnections(canvasId, ids);
   }
 
-  private async onWorkflowChatComplete(
-    params: WorkflowChatContext,
-  ): Promise<void> {
+  private async onWorkflowChatComplete(params: WorkflowChatContext): Promise<void> {
     const {
       canvasId,
       connectionId,
@@ -479,34 +480,25 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
       runContext,
       delegate,
     } = params;
-    strategy.onComplete(
-      {
-        canvasId,
-        connectionId,
-        sourcePodId,
-        targetPodId,
-        triggerMode: strategy.mode,
-        participatingConnectionIds,
-        sourcePodIds: params.sourcePodIds,
-        sourcePodNames: params.sourcePodNames,
-        runContext,
-      },
-      true,
-    );
-    delegate.onChatComplete(
+    completeWorkflowChatStage({
       canvasId,
+      connectionId,
+      sourcePodId,
       targetPodId,
-      resolveSettlementPathway(strategy.mode),
-    );
-
-    // 刻意不 await：下游 workflow 觸發獨立於當前查詢完成流程
-    fireAndForget(
-      this.checkAndTriggerWorkflows(canvasId, targetPodId, runContext),
-      "Workflow",
-      `下游 workflow 觸發失敗 (pod: ${targetPodId})`,
-    );
-
-    delegate.scheduleNextInQueue(canvasId, targetPodId);
+      participatingConnectionIds,
+      sourcePodIds: params.sourcePodIds,
+      sourcePodNames: params.sourcePodNames,
+      strategy,
+      runContext,
+      delegate,
+      checkAndTriggerWorkflows: () =>
+        this.checkAndTriggerWorkflows(canvasId, targetPodId, runContext),
+      dispatchDownstreamTrigger: (promise, completedTargetPodId) =>
+        workflowAsyncDispatchService.dispatchDownstreamTrigger(
+          promise,
+          completedTargetPodId,
+        ),
+    });
   }
 
   private async onWorkflowChatError(
@@ -525,24 +517,20 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     } = params;
     // 過濾 error.message：只有 WorkflowUserError（業務錯誤）才允許原樣傳給客戶端
     const clientErrorMessage = sanitizeErrorForClient(error);
-    strategy.onError(
-      {
-        canvasId,
-        connectionId,
-        sourcePodId,
-        targetPodId,
-        triggerMode: strategy.mode,
-        participatingConnectionIds,
-        sourcePodIds: params.sourcePodIds,
-        sourcePodNames: params.sourcePodNames,
-        runContext,
-      },
+    failWorkflowChatStage({
+      canvasId,
+      connectionId,
+      sourcePodId,
+      targetPodId,
+      participatingConnectionIds,
+      sourcePodIds: params.sourcePodIds,
+      sourcePodNames: params.sourcePodNames,
+      strategy,
+      runContext,
+      delegate,
+      error,
       clientErrorMessage,
-    );
-    logger.error("Workflow", "Error", "Workflow 執行失敗", error);
-
-    delegate.onChatError(canvasId, targetPodId, clientErrorMessage);
-    delegate.scheduleNextInQueue(canvasId, targetPodId);
+    });
   }
 
   private async executeClaudeQuery(

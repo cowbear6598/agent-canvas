@@ -7,18 +7,30 @@ import type {
   ConnectionStatus,
 } from "../types";
 import { getDb } from "../database/index.js";
-import { getStatements } from "../database/statements.js";
-import {
-  assertModelSupportedByProvider,
-  getProvider,
-  type ProviderName,
-} from "./provider/index.js";
+import { getProvider, type ProviderName } from "./provider/index.js";
 import {
   getDefaultThinkingLevel,
-  isThinkingLevelValid,
 } from "./pod/providerConfigResolver.js";
 import { podStore } from "./podStore.js";
-import type { Pod } from "../types";
+import {
+  ConnectionRepository,
+  type UpdateConnectionRowInput,
+} from "./connection/connectionRepository.js";
+import type { ConnectionRow } from "./connection/connectionRowMapper.js";
+import {
+  getBranchFallbackSourcePodIds,
+  needsBranchDefaults,
+  rowToConnection,
+} from "./connection/connectionRowMapper.js";
+import {
+  resolveBranchThinkingModel,
+  resolveConnectionThinkingLevel,
+  resolveProviderDefaultModel,
+  shouldResetDecideState,
+  validateBranchLabel,
+  validateConnectionThinkingLevel,
+  validateProviderModel,
+} from "./connection/connectionPolicy.js";
 
 interface CreateConnectionData {
   sourcePodId: string;
@@ -38,252 +50,29 @@ interface CreateConnectionData {
   branchThinkingLevel?: string | null;
 }
 
-function validateProviderModel(
-  provider: ProviderName,
-  model: string,
-  fieldName: "summaryModel" | "branchModel",
-): void {
-  try {
-    assertModelSupportedByProvider(provider, model);
-  } catch {
-    throw new Error(`${fieldName} 不支援 provider ${provider}`);
-  }
-}
-
-function shouldResetDecideState(oldMode: string, newMode: string): boolean {
-  // 從 branch 切換到其他模式時需要 reset decide state
-  return oldMode === "branch" && (newMode === "auto" || newMode === "direct");
-}
-
-interface ConnectionRow {
-  id: string;
-  canvas_id: string;
-  source_pod_id: string;
-  source_anchor: string;
-  target_pod_id: string;
-  target_anchor: string;
-  trigger_mode: string;
-  decide_status: string;
-  decide_reason: string | null;
-  connection_status: string;
-  summary_model: string;
-  /** DB 欄位；NULL 代表舊資料（升級前未指定），由執行端 fallback */
-  summary_provider: string | null;
-  summary_thinking_level: string | null;
-  label: string;
-  description: string | null;
-  branch_provider: string | null;
-  branch_model: string | null;
-  branch_thinking_level: string | null;
-}
-
-function rowToConnection(
-  row: ConnectionRow,
-  sourcePod?: Pod | null,
-): Connection {
-  const branchDefaults =
-    row.branch_provider === null || row.branch_model === null
-      ? resolveBranchDefaults(row, sourcePod)
-      : null;
-  const { provider: resolvedBranchProvider, model: resolvedBranchModel } =
-    resolveBranchFields(row, branchDefaults);
-
-  return {
-    id: row.id,
-    sourcePodId: row.source_pod_id,
-    sourceAnchor: row.source_anchor as AnchorPosition,
-    targetPodId: row.target_pod_id,
-    targetAnchor: row.target_anchor as AnchorPosition,
-    triggerMode: row.trigger_mode as TriggerMode,
-    decideStatus: row.decide_status as DecideStatus,
-    decideReason: row.decide_reason,
-    connectionStatus: row.connection_status as ConnectionStatus,
-    summaryModel: row.summary_model,
-    // DB NULL 保留原意：未指定，由執行端 fallback 至 sourcePod.provider
-    summaryProvider: row.summary_provider as ProviderName | null,
-    summaryThinkingLevel: row.summary_thinking_level,
-    label: row.label,
-    // DB NULL 轉為 undefined（符合 Connection 介面的選填定義）
-    description: row.description ?? undefined,
-    // DB NULL 時依 source Pod provider 推導預設值，避免非 Claude Pod 的 Branch 決策落回 Claude。
-    branchProvider: resolvedBranchProvider,
-    branchModel: resolvedBranchModel,
-    branchThinkingLevel: row.branch_thinking_level,
-  };
-}
-
-function resolveBranchFields(
-  row: ConnectionRow,
-  branchDefaults: { provider: ProviderName; model: string } | null,
-): { provider: ProviderName; model: string } {
-  if (row.branch_provider !== null && row.branch_model !== null) {
-    return {
-      provider: row.branch_provider as ProviderName,
-      model: row.branch_model,
-    };
-  }
-
-  if (row.branch_provider === null && row.branch_model !== null) {
-    return {
-      provider: branchDefaults?.provider ?? "claude",
-      model: row.branch_model,
-    };
-  }
-
-  if (row.branch_provider !== null) {
-    const provider = row.branch_provider as ProviderName;
-    if (provider === "opencode") {
-      return branchDefaults?.provider === "opencode"
-        ? branchDefaults
-        : {
-            provider: "claude",
-            model: resolveProviderDefaultModel("claude") ?? "sonnet",
-          };
-    }
-
-    return {
-      provider,
-      model:
-        resolveProviderDefaultModel(provider) ??
-        branchDefaults?.model ??
-        resolveProviderDefaultModel("claude") ??
-        "sonnet",
-    };
-  }
-
-  return branchDefaults ?? { provider: "claude", model: "sonnet" };
-}
-
-function rowsToConnections(
-  canvasId: string,
-  rows: ConnectionRow[],
-): Connection[] {
-  const fallbackSourcePodIds = Array.from(
-    new Set(
-      rows
-        .filter(
-          (row) => row.branch_provider === null || row.branch_model === null,
-        )
-        .map((row) => row.source_pod_id),
-    ),
-  );
-  const sourcePods = podStore.getByIds(canvasId, fallbackSourcePodIds);
-
-  return rows.map((row) =>
-    rowToConnection(
-      row,
-      row.branch_provider === null || row.branch_model === null
-        ? (sourcePods.get(row.source_pod_id) ?? null)
-        : undefined,
-    ),
-  );
-}
-
-function resolveProviderDefaultModel(
-  provider: ProviderName,
-): string | undefined {
-  const defaultModel = (
-    getProvider(provider).metadata.defaultOptions as {
-      model?: unknown;
-    }
-  ).model;
-  return typeof defaultModel === "string" && defaultModel.trim()
-    ? defaultModel
-    : undefined;
-}
-
-function resolveBranchDefaults(
-  row: ConnectionRow,
-  preloadedSourcePod?: Pod | null,
-): {
-  provider: ProviderName;
-  model: string;
-} {
-  const sourcePod =
-    preloadedSourcePod === undefined
-      ? podStore.getById(row.canvas_id, row.source_pod_id)
-      : preloadedSourcePod;
-  const provider = sourcePod?.provider ?? "claude";
-  const sourceModel =
-    typeof sourcePod?.providerConfig?.model === "string" &&
-    sourcePod.providerConfig.model.trim().length > 0
-      ? sourcePod.providerConfig.model
-      : undefined;
-  if (provider === "opencode") {
-    if (sourceModel) {
-      return { provider, model: sourceModel };
-    }
-    return {
-      provider: "claude",
-      model: resolveProviderDefaultModel("claude") ?? "sonnet",
-    };
-  }
-
-  const model = resolveProviderDefaultModel(provider);
-  if (model) {
-    return { provider, model };
-  }
-
-  return {
-    provider: "claude",
-    model: resolveProviderDefaultModel("claude") ?? "sonnet",
-  };
-}
-
-function resolveSourceThinkingLevel(sourcePod?: Pod | null): string | null {
-  const thinkingLevel = sourcePod?.providerConfig?.thinkingLevel;
-  return typeof thinkingLevel === "string" && thinkingLevel.trim().length > 0
-    ? thinkingLevel
-    : null;
-}
-
-function resolveConnectionThinkingLevel(
-  sourcePod: Pod | undefined,
-  provider: ProviderName,
-  model: string | null,
-): string | null {
-  return (
-    resolveSourceThinkingLevel(sourcePod) ??
-    (model ? getDefaultThinkingLevel(provider, model) : null)
-  );
-}
-
-function resolveBranchThinkingModel(
-  sourcePod: Pod | undefined,
-  provider: ProviderName,
-  model: string | null,
-): string | null {
-  if (model !== null) return model;
-
-  const sourceModel =
-    typeof sourcePod?.providerConfig?.model === "string" &&
-    sourcePod.providerConfig.model.trim().length > 0
-      ? sourcePod.providerConfig.model
-      : undefined;
-  if (provider === "opencode" && sourceModel) return sourceModel;
-
-  return (
-    resolveProviderDefaultModel(provider) ??
-    resolveProviderDefaultModel("claude") ??
-    null
-  );
-}
-
-function validateConnectionThinkingLevel(
-  provider: ProviderName,
-  model: string | null,
-  level: string | null,
-  fieldName: "summaryThinkingLevel" | "branchThinkingLevel",
-): void {
-  if (level === null) return;
-  if (model === null || !isThinkingLevelValid(provider, model, level)) {
-    throw new Error(`${fieldName} 不支援指定的 provider/model`);
-  }
-}
-
 class ConnectionStore {
-  private get stmts(): ReturnType<typeof getStatements>["connection"] {
-    return getStatements(getDb()).connection;
+  private readonly repository = new ConnectionRepository();
+
+  private mapRow(canvasId: string, row: ConnectionRow): Connection {
+    const sourcePod = needsBranchDefaults(row)
+      ? (podStore.getById(canvasId, row.source_pod_id) ?? null)
+      : undefined;
+    return rowToConnection(row, sourcePod);
+  }
+
+  private mapRows(canvasId: string, rows: ConnectionRow[]): Connection[] {
+    const sourcePods = podStore.getByIds(
+      canvasId,
+      getBranchFallbackSourcePodIds(rows),
+    );
+    return rows.map((row) =>
+      rowToConnection(
+        row,
+        needsBranchDefaults(row)
+          ? (sourcePods.get(row.source_pod_id) ?? null)
+          : undefined,
+      ),
+    );
   }
 
   create(canvasId: string, data: CreateConnectionData): Connection {
@@ -367,90 +156,66 @@ class ConnectionStore {
     // branch 模式下驗證 label
     const triggerMode = data.triggerMode ?? "auto";
     if (triggerMode === "branch") {
-      const trimmedLabel = (data.label ?? "").trim();
-      if (!trimmedLabel) {
-        throw new Error("label 必填");
-      }
-      if (trimmedLabel.toLowerCase() === "none") {
-        throw new Error("label 不可為保留字 None");
-      }
-      // 同一 source 內 label 唯一性檢查
-      const existing = this.findBySourcePodId(canvasId, data.sourcePodId);
-      const isDuplicate = existing.some(
-        (conn) =>
-          conn.triggerMode === "branch" &&
-          conn.label.toLowerCase() === trimmedLabel.toLowerCase(),
+      validateBranchLabel(
+        data.label ?? "",
+        this.findBySourcePodId(canvasId, data.sourcePodId),
       );
-      if (isDuplicate) {
-        throw new Error("label 已存在於同一組 branch");
-      }
     }
 
-    this.stmts.insert.run({
-      $id: id,
-      $canvasId: canvasId,
-      $sourcePodId: data.sourcePodId,
-      $sourceAnchor: data.sourceAnchor,
-      $targetPodId: data.targetPodId,
-      $targetAnchor: data.targetAnchor,
-      $triggerMode: triggerMode,
-      $decideStatus: "none",
-      $decideReason: null,
-      $connectionStatus: "idle",
-      $summaryModel: resolvedSummaryModel,
-      // DB 儲存客戶端原意：未指定存 NULL，不把 sourcePod.provider 寫入
-      $summaryProvider: data.summaryProvider ?? null,
-      $summaryThinkingLevel: resolvedSummaryThinkingLevel,
-      $label: data.label ?? "",
-      $description: data.description ?? null,
-      $branchProvider: data.branchProvider ?? null,
-      $branchModel: resolvedBranchModel,
-      $branchThinkingLevel: resolvedBranchThinkingLevel,
+    this.repository.insert({
+      id,
+      canvasId,
+      sourcePodId: data.sourcePodId,
+      sourceAnchor: data.sourceAnchor,
+      targetPodId: data.targetPodId,
+      targetAnchor: data.targetAnchor,
+      triggerMode,
+      decideStatus: "none",
+      decideReason: null,
+      connectionStatus: "idle",
+      summaryModel: resolvedSummaryModel,
+      summaryProvider: data.summaryProvider ?? null,
+      summaryThinkingLevel: resolvedSummaryThinkingLevel,
+      label: data.label ?? "",
+      description: data.description ?? null,
+      branchProvider: data.branchProvider ?? null,
+      branchModel: resolvedBranchModel,
+      branchThinkingLevel: resolvedBranchThinkingLevel,
     });
 
     return this.getById(canvasId, id) as Connection;
   }
 
   getById(canvasId: string, id: string): Connection | undefined {
-    const row = this.stmts.selectById.get(canvasId, id) as
-      | ConnectionRow
-      | undefined;
+    const row = this.repository.getById(canvasId, id);
     if (!row) return undefined;
-    return rowToConnection(row);
+    return this.mapRow(canvasId, row);
   }
 
   list(canvasId: string): Connection[] {
-    const rows = this.stmts.selectByCanvasId.all(canvasId) as ConnectionRow[];
-    return rowsToConnections(canvasId, rows);
+    return this.mapRows(canvasId, this.repository.list(canvasId));
   }
 
   delete(canvasId: string, id: string): boolean {
-    const result = this.stmts.deleteById.run(canvasId, id);
-    return result.changes > 0;
+    return this.repository.delete(canvasId, id);
   }
 
   findByPodId(canvasId: string, podId: string): Connection[] {
-    const rows = this.stmts.selectByPodId.all({
-      $canvasId: canvasId,
-      $podId: podId,
-    }) as ConnectionRow[];
-    return rowsToConnections(canvasId, rows);
+    return this.mapRows(canvasId, this.repository.findByPodId(canvasId, podId));
   }
 
   findBySourcePodId(canvasId: string, sourcePodId: string): Connection[] {
-    const rows = this.stmts.selectBySourcePodId.all({
-      $canvasId: canvasId,
-      $sourcePodId: sourcePodId,
-    }) as ConnectionRow[];
-    return rowsToConnections(canvasId, rows);
+    return this.mapRows(
+      canvasId,
+      this.repository.findBySourcePodId(canvasId, sourcePodId),
+    );
   }
 
   findByTargetPodId(canvasId: string, targetPodId: string): Connection[] {
-    const rows = this.stmts.selectByTargetPodId.all({
-      $canvasId: canvasId,
-      $targetPodId: targetPodId,
-    }) as ConnectionRow[];
-    return rowsToConnections(canvasId, rows);
+    return this.mapRows(
+      canvasId,
+      this.repository.findByTargetPodId(canvasId, targetPodId),
+    );
   }
 
   update(
@@ -573,25 +338,12 @@ class ConnectionStore {
     );
 
     const targetMode = updates.triggerMode ?? existing.triggerMode;
-    const effectiveLabel = updates.label ?? existing.label;
     if (targetMode === "branch") {
-      const trimmedLabel = effectiveLabel.trim();
-      if (!trimmedLabel) {
-        throw new Error("label 必填");
-      }
-      if (trimmedLabel.toLowerCase() === "none") {
-        throw new Error("label 不可為保留字 None");
-      }
-      const siblings = this.findBySourcePodId(canvasId, existing.sourcePodId);
-      const isDuplicate = siblings.some(
-        (conn) =>
-          conn.id !== id &&
-          conn.triggerMode === "branch" &&
-          conn.label.toLowerCase() === trimmedLabel.toLowerCase(),
+      validateBranchLabel(
+        updates.label ?? existing.label,
+        this.findBySourcePodId(canvasId, existing.sourcePodId),
+        id,
       );
-      if (isDuplicate) {
-        throw new Error("label 已存在於同一組 branch");
-      }
     }
 
     if (updates.label !== undefined && targetMode === "branch") {
@@ -644,29 +396,29 @@ class ConnectionStore {
       throw new Error("branchThinkingLevel 不支援指定的 provider/model");
     }
 
-    const updatedRow = this.stmts.updateReturning.get({
-      $canvasId: canvasId,
-      $id: id,
-      $sourcePodId: existing.sourcePodId,
-      $sourceAnchor: existing.sourceAnchor,
-      $targetPodId: existing.targetPodId,
-      $targetAnchor: existing.targetAnchor,
-      $triggerMode: newTriggerMode,
-      $decideStatus: newDecideStatus,
-      $decideReason: newDecideReason,
-      $connectionStatus: newConnectionStatus,
-      $summaryModel: newSummaryModel,
-      $summaryProvider: newSummaryProvider,
-      $summaryThinkingLevel: newSummaryThinkingLevel,
-      $label: newLabel,
-      $description: newDescription,
-      $branchProvider: newBranchProvider,
-      $branchModel: newBranchModel,
-      $branchThinkingLevel: newBranchThinkingLevel,
-    }) as ConnectionRow | undefined;
+    const updatedRow = this.repository.updateReturning({
+      id,
+      canvasId,
+      sourcePodId: existing.sourcePodId,
+      sourceAnchor: existing.sourceAnchor,
+      targetPodId: existing.targetPodId,
+      targetAnchor: existing.targetAnchor,
+      triggerMode: newTriggerMode,
+      decideStatus: newDecideStatus,
+      decideReason: newDecideReason,
+      connectionStatus: newConnectionStatus,
+      summaryModel: newSummaryModel,
+      summaryProvider: newSummaryProvider,
+      summaryThinkingLevel: newSummaryThinkingLevel,
+      label: newLabel,
+      description: newDescription,
+      branchProvider: newBranchProvider,
+      branchModel: newBranchModel,
+      branchThinkingLevel: newBranchThinkingLevel,
+    } satisfies UpdateConnectionRowInput);
 
     if (!updatedRow) return undefined;
-    return rowToConnection(updatedRow);
+    return this.mapRow(canvasId, updatedRow);
   }
 
   updateBranchSiblingSettings(
@@ -757,14 +509,14 @@ class ConnectionStore {
     connectionId: string,
     status: ConnectionStatus,
   ): Connection | undefined {
-    const updatedRow = this.stmts.updateConnectionStatusReturning.get({
-      $canvasId: canvasId,
-      $id: connectionId,
-      $connectionStatus: status,
-    }) as ConnectionRow | undefined;
+    const updatedRow = this.repository.updateConnectionStatusReturning(
+      canvasId,
+      connectionId,
+      status,
+    );
 
     if (!updatedRow) return undefined;
-    return rowToConnection(updatedRow);
+    return this.mapRow(canvasId, updatedRow);
   }
 
   updateDecideStatus(
@@ -780,18 +532,11 @@ class ConnectionStore {
   }
 
   deleteByPodId(canvasId: string, podId: string): number {
-    const result = this.stmts.deleteByPodId.run({
-      $canvasId: canvasId,
-      $podId: podId,
-    });
-    return result.changes;
+    return this.repository.deleteByPodId(canvasId, podId);
   }
 
   clearDecideStatusByPodId(canvasId: string, podId: string): void {
-    this.stmts.clearDecideStatusByPodId.run({
-      $canvasId: canvasId,
-      $podId: podId,
-    });
+    this.repository.clearDecideStatusByPodId(canvasId, podId);
   }
 
   findByTriggerMode(
@@ -799,12 +544,10 @@ class ConnectionStore {
     sourcePodId: string,
     triggerMode: TriggerMode,
   ): Connection[] {
-    const rows = this.stmts.selectByTriggerMode.all({
-      $canvasId: canvasId,
-      $sourcePodId: sourcePodId,
-      $triggerMode: triggerMode,
-    }) as ConnectionRow[];
-    return rowsToConnections(canvasId, rows);
+    return this.mapRows(
+      canvasId,
+      this.repository.findByTriggerMode(canvasId, sourcePodId, triggerMode),
+    );
   }
 
   /** 取得某 source Pod 出去且 triggerMode === "branch" 的所有連線（per-source branch group） */

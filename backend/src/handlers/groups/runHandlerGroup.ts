@@ -16,13 +16,13 @@ export const runHandlerGroup = createHandlerGroup({
             event: WebSocketRequestEvents.RUN_LOAD_HISTORY,
             handler: handleRunLoadHistory,
             schema: runLoadHistorySchema,
-            responseEvent: WebSocketResponseEvents.RUN_HISTORY_LOADED,
+            responseEvent: WebSocketResponseEvents.RUN_HISTORY_RESULT,
         },
         {
             event: WebSocketRequestEvents.RUN_LOAD_POD_MESSAGES,
             handler: handleRunLoadPodMessages,
             schema: runLoadPodMessagesSchema,
-            responseEvent: WebSocketResponseEvents.RUN_POD_MESSAGES_LOADED,
+            responseEvent: WebSocketResponseEvents.RUN_POD_MESSAGES_RESULT,
         },
     ],
 });

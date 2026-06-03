@@ -1,4 +1,5 @@
 import { generateRequestId } from "@/services/utils";
+import { webSocketRequestResponsePairs } from "@shared/websocket";
 import { websocketClient } from "./WebSocketClient";
 import { t } from "@/i18n";
 import {
@@ -9,7 +10,7 @@ import {
 
 export interface WebSocketRequestConfig<TPayload, TResult> {
   requestEvent: string;
-  responseEvent: string;
+  responseEvent?: string;
   payload: Omit<TPayload, "requestId">;
   timeout?: number;
   matchResponse?: (response: TResult, requestId: string) => boolean;
@@ -146,17 +147,38 @@ export function tryResolvePendingRequest(
   return settlePendingRequest(requestId, data);
 }
 
+function resolveResponseEvent(
+  requestEvent: string,
+  responseEvent?: string,
+): string {
+  if (responseEvent) {
+    return responseEvent;
+  }
+
+  const pairedResponseEvent =
+    webSocketRequestResponsePairs[
+      requestEvent as keyof typeof webSocketRequestResponsePairs
+    ];
+
+  if (!pairedResponseEvent) {
+    throw new Error(`缺少 WebSocket response event 對應：${requestEvent}`);
+  }
+
+  return pairedResponseEvent;
+}
+
 export async function createWebSocketRequest<
   TPayload extends { requestId: string },
   TResult,
 >(config: WebSocketRequestConfig<TPayload, TResult>): Promise<TResult> {
   const {
     requestEvent,
-    responseEvent,
+    responseEvent: rawResponseEvent,
     payload,
     timeout = DEFAULT_REQUEST_TIMEOUT_MS,
     matchResponse,
   } = config;
+  const responseEvent = resolveResponseEvent(requestEvent, rawResponseEvent);
 
   return new Promise<TResult>((resolve, reject) => {
     if (!websocketClient.isConnected.value) {

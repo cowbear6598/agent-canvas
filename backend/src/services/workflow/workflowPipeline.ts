@@ -4,7 +4,6 @@ import type {
   ExecutionServiceMethods,
   MultiInputServiceMethods,
 } from "./types.js";
-import type { WorkflowStatusDelegate } from "./workflowStatusDelegate.js";
 import { podStore } from "../podStore.js";
 import { connectionStore } from "../connectionStore.js";
 import { socketService } from "../socketService.js";
@@ -17,25 +16,14 @@ import {
   resolveSettlementPathway,
   getMultiInputGroupConnections,
 } from "./workflowHelpers.js";
+import {
+  enqueueWorkflowTriggerStage,
+  runWorkflowSummaryStage,
+} from "./workflowTriggerStages.js";
 
 interface PipelineDeps {
   executionService: ExecutionServiceMethods;
   multiInputService: MultiInputServiceMethods;
-}
-
-/** 佇列操作的共用參數 */
-interface EnqueueParams {
-  canvasId: string;
-  connectionId: string;
-  sourcePodId: string;
-  targetPodId: string;
-  finalSummary: string;
-  finalIsSummarized: boolean;
-  triggerMode: PipelineContext["triggerMode"];
-  participatingConnectionIds?: string[];
-  sourcePodIds?: string[];
-  sourcePodNames?: string[];
-  runContext: PipelineContext["runContext"];
 }
 
 class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
@@ -148,30 +136,23 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
 
     const pathway = resolveSettlementPathway(triggerMode);
     const delegate = context.delegate;
-    const summaryResult =
-      await this.deps.executionService.generateSummaryWithFallback(
-        canvasId,
-        sourcePodId,
-        targetPodId,
-        provider,
-        connection.summaryModel,
-        connection.summaryThinkingLevel ?? null,
-        runContext,
-        pathway,
-        delegate,
-      );
+    const summaryResult = await runWorkflowSummaryStage({
+      canvasId,
+      sourcePodId,
+      targetPodId,
+      provider,
+      summaryModel: connection.summaryModel,
+      summaryThinkingLevel: connection.summaryThinkingLevel ?? null,
+      runContext,
+      pathway,
+      delegate,
+      generateSummaryWithFallback:
+        this.deps.executionService.generateSummaryWithFallback.bind(
+          this.deps.executionService,
+        ),
+    });
 
     if (!summaryResult) {
-      logger.error(
-        "Workflow",
-        "Pipeline",
-        `[generateSummary] 無法生成摘要或取得備用內容`,
-      );
-      delegate.onSummaryFailed(
-        canvasId,
-        targetPodId,
-        "無法生成摘要或取得備用內容",
-      );
       return;
     }
 
@@ -200,22 +181,24 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
       sourcePodNames,
     } = collectResult;
 
-    const enqueueParams: EnqueueParams = {
-      canvasId,
-      connectionId,
-      sourcePodId,
-      targetPodId,
-      finalSummary,
-      finalIsSummarized,
-      triggerMode,
-      participatingConnectionIds,
-      sourcePodIds,
-      sourcePodNames,
-      runContext,
-    };
-
     // 砍除 normal mode 後唯一的 enqueue 路徑：透過 delegate 的 per-run target 佇列機制處理排隊
-    if (this.enqueueForRunMode(delegate, enqueueParams)) return;
+    if (
+      enqueueWorkflowTriggerStage(delegate, {
+        canvasId,
+        connectionId,
+        sourcePodId,
+        targetPodId,
+        summary: finalSummary,
+        isSummarized: finalIsSummarized,
+        triggerMode,
+        participatingConnectionIds,
+        sourcePodIds,
+        sourcePodNames,
+        runContext,
+      })
+    ) {
+      return;
+    }
 
     await this.deps.executionService.triggerWorkflowWithSummary({
       canvasId,
@@ -229,61 +212,6 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
       runContext,
       delegate,
     });
-  }
-
-  /**
-   * 砍除 normal mode 後唯一的 enqueue 路徑。
-   *
-   * delegate 依 active stream、Pod instance 與既有 queue item 判斷是否忙碌，
-   * 並透過 RunDelegate 的佇列實作維持同一 target Pod 的 FIFO。
-   * 回傳 true 表示已加入佇列，呼叫方應立即 return。
-   */
-  private enqueueForRunMode(
-    delegate: WorkflowStatusDelegate,
-    params: EnqueueParams,
-  ): boolean {
-    const {
-      canvasId,
-      connectionId,
-      sourcePodId,
-      targetPodId,
-      finalSummary,
-      finalIsSummarized,
-      triggerMode,
-      participatingConnectionIds,
-      sourcePodIds,
-      sourcePodNames,
-      runContext,
-    } = params;
-
-    const shouldQueue =
-      delegate.shouldEnqueue() && delegate.isBusy(canvasId, targetPodId);
-
-    if (!shouldQueue) {
-      return false;
-    }
-
-    logger.log(
-      "Workflow",
-      "Pipeline",
-      `[checkQueue] 目標 Pod 忙碌中，加入佇列`,
-    );
-    delegate.enqueue({
-      canvasId,
-      connectionId,
-      sourcePodId,
-      targetPodId,
-      summary: finalSummary,
-      isSummarized: finalIsSummarized,
-      triggerMode,
-      participatingConnectionIds,
-      sourcePodIds,
-      sourcePodNames,
-      runContext,
-    });
-    // 安全網：立即嘗試消化佇列，防止 enqueue 發生在最後一次 scheduleNextInQueue 之後導致佇列卡住
-    delegate.scheduleNextInQueue(canvasId, targetPodId);
-    return true;
   }
 
   /** strategy.collectSources 路徑：委派給策略自行收集來源並決定是否繼續。 */

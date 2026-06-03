@@ -1,0 +1,23 @@
+feature: project-architecture-refactor
+created: "2026-06-03"
+approved: true
+frontend:
+  required: true
+  reason: 這次重構藍圖需要正式處理前端 state、畫布 orchestration 與 WebSocket 契約使用方式的架構問題。
+  evidence:
+    - question.yaml Q1 已確認前端熱點集中在 `connectionStore`、`podStore`、`runStore` 與 `CanvasContainer.vue`。
+    - question.yaml Q2 已確認前端存在 store 之間的雙向耦合與跨 store 直接寫入。
+    - userflow.yaml F1 要求能看見前端主要架構熱點。
+    - userflow.yaml F3 要求這次規劃明確納入前端。
+backend:
+  required: true
+  reason: 這次重構藍圖需要正式處理後端 handler、service、store、workflow lifecycle 與共用契約邊界問題。
+  evidence:
+    - question.yaml Q1 已確認後端熱點集中在 `podHandlers`、`podStore`、`connectionStore`、`runExecutionService` 與 `workflowExecutionService`。
+    - question.yaml Q2 已確認後端存在 handler 承擔 domain rule、store 混入 validation 與 resource lifecycle 的跨層問題。
+    - question.yaml Q4 已確認 scope 要同時涵蓋 frontend、backend 與 shared WebSocket contract。
+    - userflow.yaml F1 與 F3 要求這次規劃明確納入後端與共用契約。
+ticket:
+  story_issue: null
+  branch_issue: null
+  task_issue: null
