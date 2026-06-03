@@ -90,11 +90,8 @@ export function enqueueWorkflowTriggerStage(
 export function launchWorkflowChatStage(params: {
   canvasId: string;
   connectionId: string;
-  targetPodId: string;
-  runId: string;
   beforeLaunch: () => void;
   createQueryPromise: () => Promise<void>;
-  unregisterActiveStream: (runId: string, podId: string) => void;
   dispatchConnectionQuery: (
     promise: Promise<void>,
     connectionId: string,
@@ -102,15 +99,13 @@ export function launchWorkflowChatStage(params: {
 }): void {
   params.beforeLaunch();
 
-  const queryPromise = params.createQueryPromise().catch((error: unknown) => {
-    params.unregisterActiveStream(params.runId, params.targetPodId);
-    throw error;
-  });
-
-  params.dispatchConnectionQuery(queryPromise, params.connectionId);
+  params.dispatchConnectionQuery(
+    params.createQueryPromise(),
+    params.connectionId,
+  );
 }
 
-export function completeWorkflowChatStage(params: {
+export async function completeWorkflowChatStage(params: {
   canvasId: string;
   connectionId: string;
   sourcePodId: string;
@@ -122,11 +117,7 @@ export function completeWorkflowChatStage(params: {
   runContext: TriggerWorkflowWithSummaryParams["runContext"];
   delegate: WorkflowStatusDelegate;
   checkAndTriggerWorkflows: () => Promise<void>;
-  dispatchDownstreamTrigger: (
-    promise: Promise<void>,
-    targetPodId: string,
-  ) => void;
-}): void {
+}): Promise<void> {
   params.strategy.onComplete(
     {
       canvasId: params.canvasId,
@@ -146,10 +137,7 @@ export function completeWorkflowChatStage(params: {
     params.targetPodId,
     resolveSettlementPathway(params.strategy.mode),
   );
-  params.dispatchDownstreamTrigger(
-    params.checkAndTriggerWorkflows(),
-    params.targetPodId,
-  );
+  await params.checkAndTriggerWorkflows();
   params.delegate.scheduleNextInQueue(params.canvasId, params.targetPodId);
 }
 

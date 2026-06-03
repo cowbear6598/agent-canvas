@@ -62,6 +62,8 @@ export function initWorkflowServices(): void {
     strategies: sharedStrategies,
     queuedPodInstance: (ctx, podId) =>
       runExecutionService.queuedPodInstance(ctx, podId),
+    errorPodInstance: (ctx, podId, errorMessage) =>
+      runExecutionService.errorPodInstance(ctx, podId, errorMessage),
     hasActiveStream: (runId, podId) =>
       runExecutionService.hasActiveStream(runId, podId),
   });

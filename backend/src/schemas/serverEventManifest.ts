@@ -18,16 +18,37 @@ const i18nErrorSchema = z
   })
   .strict();
 
-const requestErrorPayloadSchema = z
+const structuredServiceErrorSchema = z
   .object({
-    canvasId: z.string().nullable().optional(),
-    requestId: z.string().optional(),
-    podId: z.string().optional(),
-    success: z.literal(false),
-    error: z.union([z.string(), i18nErrorSchema]),
     code: z.string(),
+    message: z.string(),
+    params: z.record(z.string(), z.unknown()).optional(),
   })
   .passthrough();
+
+const requestErrorPayloadSchema = z
+  .union([
+    z
+      .object({
+        canvasId: z.string().nullable().optional(),
+        requestId: z.string().optional(),
+        podId: z.string().optional(),
+        success: z.literal(false),
+        error: z.union([z.string(), i18nErrorSchema]),
+        code: z.string(),
+      })
+      .passthrough(),
+    z
+      .object({
+        canvasId: z.string().nullable().optional(),
+        requestId: z.string().optional(),
+        podId: z.string().optional(),
+        success: z.literal(false),
+        error: structuredServiceErrorSchema,
+        code: z.string().optional(),
+      })
+      .passthrough(),
+  ]);
 
 const requestSuccessPayloadSchema = z
   .object({
@@ -182,7 +203,25 @@ const workflowRunSchema = z
     canvasId: z.string().optional(),
     sourcePodId: z.string().optional(),
     sourcePodName: z.string().optional(),
-    podInstances: z.array(z.unknown()).optional(),
+    podInstances: z
+      .array(
+        z
+          .object({
+            id: z.string(),
+            runId: z.string(),
+            podId: z.string(),
+            podName: z.string(),
+            status: z.string(),
+            errorMessage: z.string().nullable(),
+            lastResponseSummary: z.string().nullable(),
+            triggeredAt: z.string().nullable(),
+            completedAt: z.string().nullable(),
+            autoPathwaySettled: pathwayStateSchema,
+            directPathwaySettled: pathwayStateSchema,
+          })
+          .strict(),
+      )
+      .optional(),
   })
   .passthrough();
 

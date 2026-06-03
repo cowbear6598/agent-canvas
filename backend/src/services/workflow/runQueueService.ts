@@ -34,6 +34,11 @@ interface RunQueueServiceDeps {
     branch: TriggerStrategy;
   };
   queuedPodInstance: (runContext: RunContext, podId: string) => void;
+  errorPodInstance: (
+    runContext: RunContext,
+    podId: string,
+    errorMessage: string,
+  ) => void;
   hasActiveStream: (runId: string, podId: string) => boolean;
 }
 
@@ -144,6 +149,11 @@ class RunQueueService extends LazyInitializable<RunQueueServiceDeps> {
         runContext: item.runContext,
         skipBusyCheck: true,
       });
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Run 佇列處理失敗";
+      this.deps.errorPodInstance(item.runContext, item.targetPodId, errorMessage);
+      throw error;
     } finally {
       this.processingKeys.delete(key);
     }

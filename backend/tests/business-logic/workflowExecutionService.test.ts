@@ -175,7 +175,7 @@ describe("WorkflowExecutionService", () => {
       expect(mockStrategy.onTrigger).toHaveBeenCalled();
     });
 
-    it("run mode 啟動查詢前應先註冊 active stream，避免 queue 立即重入", async () => {
+    it("run mode 啟動查詢時只標記 pod 執行中，active stream 由 streaming strategy 管理", async () => {
       const runContext = makeRunContext();
       const autoConn = makeConnection({
         id: "conn-auto-active-stream",
@@ -185,6 +185,28 @@ describe("WorkflowExecutionService", () => {
       const registerActiveStreamSpy = vi
         .spyOn(runExecutionService, "registerActiveStream")
         .mockImplementation(() => {});
+      vi.spyOn(streamingChatExecutor, "executeStreamingChat").mockResolvedValue({
+        messageId: "message-1",
+        content: "完成",
+        hasContent: true,
+        aborted: false,
+      });
+      const delegate = {
+        isRunMode: vi.fn().mockReturnValue(true),
+        startPodExecution: vi.fn(),
+        markSummarizing: vi.fn(),
+        markDeciding: vi.fn(),
+        markWaiting: vi.fn(),
+        onSummaryComplete: vi.fn(),
+        onSummaryFailed: vi.fn(),
+        onChatComplete: vi.fn(),
+        onChatError: vi.fn(),
+        shouldEnqueue: vi.fn().mockReturnValue(true),
+        isBusy: vi.fn().mockReturnValue(false),
+        enqueue: vi.fn(),
+        scheduleNextInQueue: vi.fn(),
+        settleAndSkipPath: vi.fn(),
+      };
 
       vi.spyOn(connectionStore, "getById").mockReturnValue(autoConn);
       vi.spyOn(connectionStore, "findByTargetPodId").mockReturnValue([
@@ -199,13 +221,86 @@ describe("WorkflowExecutionService", () => {
         participatingConnectionIds: undefined,
         strategy: mockStrategy,
         runContext,
+        delegate,
         skipBusyCheck: true,
       });
 
-      expect(registerActiveStreamSpy).toHaveBeenCalledWith(
-        runContext.runId,
+      expect(delegate.startPodExecution).toHaveBeenCalledWith(
+        CANVAS_ID,
         TARGET_POD_ID,
       );
+      expect(registerActiveStreamSpy).not.toHaveBeenCalled();
+    });
+
+    it("stream 完成後排程下一筆佇列時不應殘留 active stream", async () => {
+      const runContext = makeRunContext({
+        runId: "run-active-stream-release",
+      });
+      const autoConn = makeConnection({
+        id: "conn-auto-release-before-queue",
+        triggerMode: "auto",
+      });
+      const mockStrategy = makeStrategy("auto");
+      const delegate = {
+        isRunMode: vi.fn().mockReturnValue(true),
+        startPodExecution: vi.fn(),
+        markSummarizing: vi.fn(),
+        markDeciding: vi.fn(),
+        markWaiting: vi.fn(),
+        onSummaryComplete: vi.fn(),
+        onSummaryFailed: vi.fn(),
+        onChatComplete: vi.fn(),
+        onChatError: vi.fn(),
+        shouldEnqueue: vi.fn().mockReturnValue(true),
+        isBusy: vi.fn().mockReturnValue(false),
+        enqueue: vi.fn(),
+        scheduleNextInQueue: vi.fn(() => {
+          expect(
+            runExecutionService.hasActiveStream(
+              runContext.runId,
+              TARGET_POD_ID,
+            ),
+          ).toBe(false);
+        }),
+        settleAndSkipPath: vi.fn(),
+      };
+
+      vi.spyOn(connectionStore, "getById").mockReturnValue(autoConn);
+      vi.spyOn(connectionStore, "findByTargetPodId").mockReturnValue([
+        autoConn,
+      ]);
+      vi.spyOn(streamingChatExecutor, "executeStreamingChat").mockImplementation(
+        async (options, callbacks) => {
+          options.strategy.onStreamStart(TARGET_POD_ID);
+          options.strategy.onStreamComplete(TARGET_POD_ID, undefined);
+          await callbacks?.onComplete?.(CANVAS_ID, TARGET_POD_ID);
+          return {
+            messageId: "message-1",
+            content: "完成",
+            hasContent: true,
+            aborted: false,
+          };
+        },
+      );
+
+      await workflowExecutionService.triggerWorkflowWithSummary({
+        canvasId: CANVAS_ID,
+        connectionId: autoConn.id,
+        summary: "Test summary",
+        isSummarized: true,
+        participatingConnectionIds: undefined,
+        strategy: mockStrategy,
+        runContext,
+        delegate,
+        skipBusyCheck: true,
+      });
+
+      await vi.waitFor(() => {
+        expect(delegate.scheduleNextInQueue).toHaveBeenCalledWith(
+          CANVAS_ID,
+          TARGET_POD_ID,
+        );
+      });
     });
 
     it("run mode 真正啟動前若目標 Pod 已忙碌，應改加入佇列避免同 key 查詢互相 abort", async () => {

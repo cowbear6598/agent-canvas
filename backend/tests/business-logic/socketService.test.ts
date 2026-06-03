@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach } from "vitest";
+import { WebSocketResponseEvents } from "../../src/schemas/events.js";
 import { connectionManager } from "../../src/services/connectionManager.js";
 import { socketService } from "../../src/services/socketService.js";
+
+const heartbeatPayload = { timestamp: 1 };
 
 function createMockWs() {
   return {
@@ -48,7 +51,11 @@ describe("SocketService", () => {
     });
 
     it("應向除指定 connectionId 外的所有連線發送訊息", () => {
-      socketService.emitToAllExcept(idA, "test:event", { data: 1 });
+      socketService.emitToAllExcept(
+        idA,
+        WebSocketResponseEvents.HEARTBEAT_PING,
+        heartbeatPayload,
+      );
 
       expect(wsA.send).not.toHaveBeenCalled();
       expect(wsB.send).toHaveBeenCalledTimes(1);
@@ -56,7 +63,11 @@ describe("SocketService", () => {
     });
 
     it("指定的 connectionId 不應收到訊息", () => {
-      socketService.emitToAllExcept(idB, "test:event", { data: 2 });
+      socketService.emitToAllExcept(
+        idB,
+        WebSocketResponseEvents.HEARTBEAT_PING,
+        heartbeatPayload,
+      );
 
       expect(wsB.send).not.toHaveBeenCalled();
       expect(wsA.send).toHaveBeenCalledTimes(1);
@@ -64,7 +75,11 @@ describe("SocketService", () => {
     });
 
     it("excludeConnectionId 為空字串時，所有連線都應收到（等同 emitToAll）", () => {
-      socketService.emitToAllExcept("", "test:event", { data: 3 });
+      socketService.emitToAllExcept(
+        "",
+        WebSocketResponseEvents.HEARTBEAT_PING,
+        heartbeatPayload,
+      );
 
       expect(wsA.send).toHaveBeenCalledTimes(1);
       expect(wsB.send).toHaveBeenCalledTimes(1);
@@ -87,24 +102,41 @@ describe("SocketService", () => {
     });
 
     it("應向所有連線發送訊息", () => {
-      socketService.emitToAll("test:event", { data: 1 });
+      socketService.emitToAll(
+        WebSocketResponseEvents.HEARTBEAT_PING,
+        heartbeatPayload,
+      );
 
       expect(wsA.send).toHaveBeenCalledTimes(1);
       expect(wsB.send).toHaveBeenCalledTimes(1);
     });
 
     it("傳送的訊息內容包含正確的事件類型", () => {
-      socketService.emitToAll("my:event", { hello: "world" });
+      socketService.emitToAll(
+        WebSocketResponseEvents.HEARTBEAT_PING,
+        heartbeatPayload,
+      );
 
       const callArg = (wsA.send as ReturnType<typeof vi.fn>).mock
         .calls[0][0] as string;
       const parsed = JSON.parse(callArg);
-      expect(parsed.type).toBe("my:event");
+      expect(parsed.type).toBe(WebSocketResponseEvents.HEARTBEAT_PING);
     });
 
     it("沒有連線時不拋出例外", () => {
       removeAllConnections();
-      expect(() => socketService.emitToAll("test:event", {})).not.toThrow();
+      expect(() =>
+        socketService.emitToAll(
+          WebSocketResponseEvents.HEARTBEAT_PING,
+          heartbeatPayload,
+        ),
+      ).not.toThrow();
+    });
+
+    it("未註冊事件應拒絕發送", () => {
+      expect(() => socketService.emitToAll("test:event", {})).toThrow(
+        "未註冊的 WebSocket server event",
+      );
     });
   });
 });

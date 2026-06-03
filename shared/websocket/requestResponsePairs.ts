@@ -149,6 +149,22 @@ export const webSocketRequestResponsePairs = {
     WebSocketResponseEvents.BACKUP_TRIGGER_RESULT,
   [WebSocketRequestEvents.PROVIDER_LIST]:
     WebSocketResponseEvents.PROVIDER_LIST_RESULT,
+  [WebSocketRequestEvents.OPENCODE_PROVIDER_LIST]:
+    WebSocketResponseEvents.OPENCODE_PROVIDER_LIST_RESULT,
+  [WebSocketRequestEvents.OPENCODE_ALIASES_LIST]:
+    WebSocketResponseEvents.OPENCODE_ALIASES_LIST_RESULT,
+  [WebSocketRequestEvents.OPENCODE_ALIASES_CREATE]:
+    WebSocketResponseEvents.OPENCODE_ALIASES_CREATE_RESULT,
+  [WebSocketRequestEvents.OPENCODE_ALIASES_UPDATE]:
+    WebSocketResponseEvents.OPENCODE_ALIASES_UPDATE_RESULT,
+  [WebSocketRequestEvents.OPENCODE_ALIASES_DELETE]:
+    WebSocketResponseEvents.OPENCODE_ALIASES_DELETE_RESULT,
+  [WebSocketRequestEvents.OPENCODE_ALIASES_REORDER]:
+    WebSocketResponseEvents.OPENCODE_ALIASES_REORDER_RESULT,
+  [WebSocketRequestEvents.OPENCODE_ALIASES_REFRESH_PRESETS]:
+    WebSocketResponseEvents.OPENCODE_ALIASES_REFRESH_PRESETS_RESULT,
+  [WebSocketRequestEvents.OPENCODE_SERVER_RESTART]:
+    WebSocketResponseEvents.OPENCODE_SERVER_RESTART_RESULT,
 } as const;
 
 export type WebSocketRequestResponsePairs =

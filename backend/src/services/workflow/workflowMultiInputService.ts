@@ -28,6 +28,7 @@ import { LazyInitializable } from "./lazyInitializable.js";
 import { MERGED_CONTENT_PREVIEW_MAX_LENGTH } from "./constants.js";
 import { createStatusDelegate } from "./workflowStatusDelegate.js";
 import { workflowAsyncDispatchService } from "./workflowAsyncDispatchService.js";
+import { getErrorMessage } from "../../utils/errorHelpers.js";
 
 interface MultiInputServiceDeps {
   executionService: ExecutionServiceMethods;
@@ -339,6 +340,15 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
         delegate,
       }),
       connection.id,
+      (error) => {
+        delegate.onChatError(
+          canvasId,
+          connection.targetPodId,
+          `觸發合併工作流程失敗：${getErrorMessage(error)}`,
+        );
+        const pendingKey = resolvePendingKey(connection.targetPodId, runContext);
+        pendingTargetStore.clearPendingTarget(pendingKey);
+      },
     );
 
     const pendingKey = resolvePendingKey(connection.targetPodId, runContext);

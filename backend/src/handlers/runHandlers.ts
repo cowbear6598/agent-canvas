@@ -102,6 +102,7 @@ export const handleRunLoadHistory = withCanvasId<RunLoadHistoryPayload>(
         const {
           runRepoPath: _runRepoPath,
           workspacePath: _workspacePath,
+          sessionId: _sessionId,
           ...instanceData
         } = instance;
         const pod = podStore.getById(canvasId, instance.podId);

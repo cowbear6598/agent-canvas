@@ -13,6 +13,7 @@ import { connectionStore } from "../connectionStore.js";
 import { podStore } from "../podStore.js";
 import { summaryService } from "../summaryService.js";
 import { logger } from "../../utils/logger.js";
+import { getErrorMessage } from "../../utils/errorHelpers.js";
 import { executeStreamingChat } from "../claude/streamingChatExecutor.js";
 import {
   buildTransferMessage,
@@ -27,7 +28,6 @@ import {
   createStatusDelegate,
 } from "./workflowStatusDelegate.js";
 import { ChatExecutionStrategy } from "../executionStrategy.js";
-import { runExecutionService } from "./runExecutionService.js";
 import { getRunTranscriptWindow } from "./runTranscriptWindow.js";
 import { workflowAsyncDispatchService } from "./workflowAsyncDispatchService.js";
 import {
@@ -287,6 +287,16 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
         logger.error("Workflow", "Error", "Workflow 觸發失敗", result.reason);
       }
     }
+
+    const rejectedResults = results.filter(
+      (result) => result.status === "rejected",
+    );
+    if (rejectedResults.length > 0) {
+      const messages = rejectedResults.map((result) =>
+        getErrorMessage(result.reason),
+      );
+      throw new Error(`Workflow 觸發失敗：${messages.join("；")}`);
+    }
   }
 
   async triggerWorkflowWithSummary(
@@ -384,11 +394,8 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
     launchWorkflowChatStage({
       canvasId,
       connectionId,
-      targetPodId,
-      runId: runContext.runId,
       beforeLaunch: () => {
         delegate.startPodExecution(canvasId, targetPodId);
-        runExecutionService.registerActiveStream(runContext.runId, targetPodId);
       },
       createQueryPromise: () =>
         this.executeClaudeQuery({
@@ -404,8 +411,6 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
           runContext,
           delegate,
         }),
-      unregisterActiveStream: (runId, podId) =>
-        runExecutionService.unregisterActiveStream(runId, podId),
       dispatchConnectionQuery: (promise, launchedConnectionId) =>
         workflowAsyncDispatchService.dispatchConnectionQuery(
           promise,
@@ -480,7 +485,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
       runContext,
       delegate,
     } = params;
-    completeWorkflowChatStage({
+    await completeWorkflowChatStage({
       canvasId,
       connectionId,
       sourcePodId,
@@ -493,11 +498,6 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
       delegate,
       checkAndTriggerWorkflows: () =>
         this.checkAndTriggerWorkflows(canvasId, targetPodId, runContext),
-      dispatchDownstreamTrigger: (promise, completedTargetPodId) =>
-        workflowAsyncDispatchService.dispatchDownstreamTrigger(
-          promise,
-          completedTargetPodId,
-        ),
     });
   }
 

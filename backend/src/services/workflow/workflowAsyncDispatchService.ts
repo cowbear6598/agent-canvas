@@ -1,4 +1,5 @@
 import { fireAndForget } from "../../utils/operationHelpers.js";
+import { logger } from "../../utils/logger.js";
 
 export class WorkflowAsyncDispatchService {
   dispatchConnectionQuery(
@@ -12,16 +13,20 @@ export class WorkflowAsyncDispatchService {
     );
   }
 
-  dispatchDownstreamTrigger(promise: Promise<void>, targetPodId: string): void {
-    fireAndForget(
-      promise,
-      "Workflow",
-      `下游 workflow 觸發失敗 (pod: ${targetPodId})`,
-    );
-  }
-
-  dispatchMergedWorkflow(promise: Promise<void>, connectionId: string): void {
-    fireAndForget(promise, "Workflow", `觸發合併工作流程失敗 ${connectionId}`);
+  dispatchMergedWorkflow(
+    promise: Promise<void>,
+    connectionId: string,
+    onError: (error: unknown) => void,
+  ): void {
+    promise.catch((error) => {
+      logger.error(
+        "Workflow",
+        "Error",
+        `觸發合併工作流程失敗 ${connectionId}`,
+        error,
+      );
+      onError(error);
+    });
   }
 
   dispatchRunQueueProcess(

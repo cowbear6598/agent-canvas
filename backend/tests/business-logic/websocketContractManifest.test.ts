@@ -52,4 +52,22 @@ describe("WebSocket contract manifest", () => {
       expect(entry.schemaName).toBe("serverEventPayloadSchema");
     }
   });
+
+  it("request error schema 應接受 service 層結構化業務錯誤", () => {
+    const deleteAliasResult = serverEventManifest.find(
+      (entry) => entry.event === WebSocketResponseEvents.OPENCODE_ALIASES_DELETE_RESULT,
+    );
+
+    expect(deleteAliasResult).toBeDefined();
+    expect(() =>
+      deleteAliasResult?.schema.parse({
+        requestId: "request-1",
+        success: false,
+        error: {
+          code: "alias_in_use",
+          message: "此 alias 仍被使用中，無法刪除",
+        },
+      }),
+    ).not.toThrow();
+  });
 });

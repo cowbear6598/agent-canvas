@@ -44,14 +44,27 @@ class SocketService {
     event: string,
     payload: unknown,
   ): void {
+    const resolvedPayload = this.resolvePayload(event, payload);
     const connections = connectionManager.getAll();
     for (const connection of connections) {
       if (connection.id === excludeConnectionId) continue;
-      this.emitToConnection(connection.id, event, payload);
+      this.emitResolvedPayloadToConnection(connection.id, event, resolvedPayload);
     }
   }
 
   emitToConnection(
+    connectionId: string,
+    event: string,
+    payload: unknown,
+  ): void {
+    this.emitResolvedPayloadToConnection(
+      connectionId,
+      event,
+      this.resolvePayload(event, payload),
+    );
+  }
+
+  private emitResolvedPayloadToConnection(
     connectionId: string,
     event: string,
     payload: unknown,
@@ -65,7 +78,7 @@ class SocketService {
       type: event,
       requestId: "",
       success: true,
-      payload: this.resolvePayload(event, payload),
+      payload,
     };
 
     const serialized = serialize(response);
@@ -121,10 +134,11 @@ class SocketService {
   ): void {
     const roomName = `${CANVAS_ROOM_PREFIX}${canvasId}`;
     const members = roomManager.getMembers(roomName);
+    const resolvedPayload = this.resolvePayload(event, payload);
 
     for (const connectionId of members) {
       if (connectionId === excludeConnectionId) continue;
-      this.emitToConnection(connectionId, event, payload);
+      this.emitResolvedPayloadToConnection(connectionId, event, resolvedPayload);
     }
   }
 
@@ -235,12 +249,8 @@ class SocketService {
       return payload;
     }
 
-    try {
-      assertServerEventRegistered(event);
-      return parseServerEventPayload(event, payload);
-    } catch {
-      return payload;
-    }
+    assertServerEventRegistered(event);
+    return parseServerEventPayload(event, payload);
   }
 }
 

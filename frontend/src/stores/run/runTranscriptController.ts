@@ -193,7 +193,7 @@ export function appendRunChatMessage(
     podMap = new Map();
     state.runChatMessages.set(payload.runId, podMap);
   }
-  const timelineItems = [...(podMap.get(payload.podId) ?? [])];
+  const timelineItems = podMap.get(payload.podId) ?? [];
 
   const cachedIndex = state.messageIndexCache.get(payload.messageId);
   const cachedItem =
