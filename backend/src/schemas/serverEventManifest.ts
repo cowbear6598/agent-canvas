@@ -403,9 +403,27 @@ const cursorPayloadSchema = z
   })
   .passthrough();
 
+const modelConfigPayloadSchema = z
+  .object({
+    memoryProvider: z.string().optional(),
+    memoryModel: z.string().optional(),
+    memoryThinkingLevel: z.string().nullable().optional(),
+    connectionLineProvider: z.string().optional(),
+    connectionLineModel: z.string().optional(),
+    connectionLineThinkingLevel: z.string().nullable().optional(),
+  })
+  .passthrough();
+
 const configPayloadSchema = requestSuccessPayloadSchema
   .extend({
     config: z.unknown().optional(),
+    memoryProvider: modelConfigPayloadSchema.shape.memoryProvider,
+    memoryModel: modelConfigPayloadSchema.shape.memoryModel,
+    memoryThinkingLevel: modelConfigPayloadSchema.shape.memoryThinkingLevel,
+    connectionLineProvider: modelConfigPayloadSchema.shape.connectionLineProvider,
+    connectionLineModel: modelConfigPayloadSchema.shape.connectionLineModel,
+    connectionLineThinkingLevel:
+      modelConfigPayloadSchema.shape.connectionLineThinkingLevel,
   })
   .passthrough();
 

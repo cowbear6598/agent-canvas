@@ -11,6 +11,9 @@ export interface GlobalConfig {
   memoryProvider: PodProvider;
   memoryModel: string;
   memoryThinkingLevel: string | null;
+  connectionLineProvider: PodProvider;
+  connectionLineModel: string;
+  connectionLineThinkingLevel: string | null;
 }
 
 export const MODEL_OPTIONS: { value: ModelType; label: string }[] = [

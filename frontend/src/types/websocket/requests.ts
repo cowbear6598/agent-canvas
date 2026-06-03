@@ -386,6 +386,9 @@ export interface ConfigUpdatePayload {
   memoryProvider?: PodProvider;
   memoryModel?: string;
   memoryThinkingLevel?: string | null;
+  connectionLineProvider?: PodProvider;
+  connectionLineModel?: string;
+  connectionLineThinkingLevel?: string | null;
 }
 
 export type PasswordUpdateActionPayload =

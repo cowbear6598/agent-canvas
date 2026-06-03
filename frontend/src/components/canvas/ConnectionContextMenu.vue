@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { TriggerMode } from "@/types/connection";
-import type { PodProvider } from "@/types/pod";
 import { Zap, Brain, ArrowRight } from "lucide-vue-next";
 import { ref, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
@@ -12,18 +11,11 @@ import {
 } from "@/lib/constants";
 import TriggerModeRow from "./connectionMenu/TriggerModeRow.vue";
 import BranchSettingsPanel from "./connectionMenu/BranchSettingsPanel.vue";
-import SummarySection from "./connectionMenu/SummarySection.vue";
 
 interface Props {
   position: { x: number; y: number };
   connectionId: string;
   currentTriggerMode: TriggerMode;
-  /** currentSummaryModel 接受任意 provider 的模型名稱字串，不限於 Claude ModelType */
-  currentSummaryModel: string;
-  /** Branch 模式使用的 AI Provider */
-  currentBranchProvider?: PodProvider;
-  /** Branch 模式使用的模型字串 */
-  currentBranchModel?: string;
 }
 
 const props = defineProps<Props>();
@@ -31,10 +23,7 @@ const props = defineProps<Props>();
 const emit = defineEmits<{
   close: [];
   "trigger-mode-changed": [];
-  "summary-model-changed": [];
   "branch-mode-clicked": [];
-  "branch-provider-changed": [];
-  "branch-model-changed": [];
 }>();
 
 const connectionStore = useConnectionStore();
@@ -144,22 +133,8 @@ onUnmounted(() => {
     <template v-if="currentTriggerMode === 'branch'">
       <div class="border-t border-border my-1" />
       <BranchSettingsPanel
-        :connection-id="connectionId"
-        :current-branch-provider="currentBranchProvider"
-        :current-branch-model="currentBranchModel"
-        @close="emit('close')"
-        @branch-provider-changed="emit('branch-provider-changed')"
-        @branch-model-changed="emit('branch-model-changed')"
+        @edit-branch-settings="handleBranchClick"
       />
     </template>
-
-    <div class="border-t border-border my-1" />
-
-    <SummarySection
-      :connection-id="connectionId"
-      :current-summary-model="currentSummaryModel"
-      @close="emit('close')"
-      @summary-model-changed="emit('summary-model-changed')"
-    />
   </div>
 </template>

@@ -1,6 +1,6 @@
 feature: model-settings-integration-hub
 created: "2026-06-03"
-approved: false
+approved: true
 frontend:
   required: true
   reason: 需要在整合管理中心新增 Model 設定入口與設定畫面，並從原本位置移除或改造 Memory 與 Connection Line 的 model 設定操作。

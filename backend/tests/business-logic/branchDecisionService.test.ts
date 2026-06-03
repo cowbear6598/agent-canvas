@@ -3,6 +3,7 @@ import { initTestDb, getDb } from "../../src/database/index.js";
 import { resetStatements } from "../../src/database/statements.js";
 import { runStore } from "../../src/services/runStore.js";
 import { podStore } from "../../src/services/podStore.js";
+import { configStore } from "../../src/services/configStore.js";
 import { branchDecider } from "../../src/services/branch/index.js";
 import { branchDecisionService } from "../../src/services/workflow/branchDecisionService.js";
 import { config } from "../../src/config/index.js";
@@ -68,6 +69,11 @@ describe("BranchDecisionService", () => {
       kind: "success",
       selectedLabel: "Alpha",
     });
+    vi.spyOn(configStore, "getConnectionLineModelConfig").mockReturnValue({
+      connectionLineProvider: "claude",
+      connectionLineModel: "sonnet",
+      connectionLineThinkingLevel: "high",
+    });
     vi.spyOn(podStore, "getById").mockImplementation(((_canvasId, podId) => ({
       id: podId,
       name: podId === SOURCE_POD_ID ? "Source Pod" : `Pod ${podId}`,
@@ -117,6 +123,8 @@ describe("BranchDecisionService", () => {
     expect(branchDecider.decide).toHaveBeenCalledWith(
       expect.objectContaining({
         persistedSummary: "既有摘要",
+        provider: "claude",
+        model: "sonnet",
         thinkingLevel: "high",
         recentMessages: expect.arrayContaining([
           expect.objectContaining({ content: "第6則" }),
@@ -171,10 +179,15 @@ describe("BranchDecisionService", () => {
     });
   });
 
-  it("branchThinkingLevel 為 null 時應以 branch provider/model 預設值決策", async () => {
+  it("branchThinkingLevel 為 null 時仍以 Connection Line 統一設定決策", async () => {
     const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "trigger");
     const instance = runStore.createPodInstance(run.id, SOURCE_POD_ID);
     runStore.updatePodInstanceLastResponseSummary(instance.id, "既有摘要");
+    vi.mocked(configStore.getConnectionLineModelConfig).mockReturnValue({
+      connectionLineProvider: "codex",
+      connectionLineModel: "gpt-5.4",
+      connectionLineThinkingLevel: "medium",
+    });
 
     await branchDecisionService.decideBranch(
       CANVAS_ID,
@@ -189,7 +202,40 @@ describe("BranchDecisionService", () => {
 
     expect(branchDecider.decide).toHaveBeenCalledWith(
       expect.objectContaining({
-        thinkingLevel: "high",
+        provider: "codex",
+        model: "gpt-5.4",
+        thinkingLevel: "medium",
+      }),
+    );
+  });
+
+  it("branch 決策忽略 connection branch 欄位並使用 Connection Line 統一設定", async () => {
+    const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "trigger");
+    vi.mocked(configStore.getConnectionLineModelConfig).mockReturnValue({
+      connectionLineProvider: "claude",
+      connectionLineModel: "sonnet",
+      connectionLineThinkingLevel: "low",
+    });
+
+    await branchDecisionService.decideBranch(
+      CANVAS_ID,
+      SOURCE_POD_ID,
+      [
+        makeConnection("conn-1", "Alpha", "pod-a", {
+          branchProvider: "codex" as any,
+          branchModel: "gpt-5.4",
+          branchThinkingLevel: "high",
+        }),
+      ],
+      makeRunContext(run.id),
+    );
+
+    expect(configStore.getConnectionLineModelConfig).toHaveBeenCalled();
+    expect(branchDecider.decide).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "claude",
+        model: "sonnet",
+        thinkingLevel: "low",
       }),
     );
   });

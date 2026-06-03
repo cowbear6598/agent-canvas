@@ -46,6 +46,9 @@ describe("Config WebSocket", () => {
       expect(response.requestId).toBe(requestId);
       expect(response.success).toBe(true);
       expect(response.timezoneOffset).toBe(8);
+      expect(response.connectionLineProvider).toBe("claude");
+      expect(response.connectionLineModel).toBe("sonnet");
+      expect(response.connectionLineThinkingLevel).toBeNull();
     });
   });
 
@@ -83,7 +86,7 @@ describe("Config WebSocket", () => {
       expect(updateResponse.success).toBe(true);
       expect(updateResponse.memoryProvider).toBe("codex");
       expect(updateResponse.memoryModel).toBe("gpt-5.4");
-      expect(updateResponse.memoryThinkingLevel).toBeNull();
+      expect(updateResponse.memoryThinkingLevel).toBe("high");
 
       const getResponse = await emitAndWaitResponse<
         ConfigGetPayload,
@@ -98,7 +101,46 @@ describe("Config WebSocket", () => {
       expect(getResponse.success).toBe(true);
       expect(getResponse.memoryProvider).toBe("codex");
       expect(getResponse.memoryModel).toBe("gpt-5.4");
-      expect(getResponse.memoryThinkingLevel).toBeNull();
+      expect(getResponse.memoryThinkingLevel).toBe("high");
+    });
+
+    it("Connection Line 統一設定可成功更新並由 config:get 讀回", async () => {
+      const client = getClient();
+
+      const updateResponse = await emitAndWaitResponse<
+        ConfigUpdatePayload,
+        ConfigUpdatedPayload
+      >(
+        client,
+        WebSocketRequestEvents.CONFIG_UPDATE,
+        WebSocketResponseEvents.CONFIG_UPDATED,
+        {
+          requestId: uuidv4(),
+          connectionLineProvider: "codex",
+          connectionLineModel: "gpt-5.5",
+          connectionLineThinkingLevel: "xhigh",
+        },
+      );
+
+      expect(updateResponse.success).toBe(true);
+      expect(updateResponse.connectionLineProvider).toBe("codex");
+      expect(updateResponse.connectionLineModel).toBe("gpt-5.5");
+      expect(updateResponse.connectionLineThinkingLevel).toBe("xhigh");
+
+      const getResponse = await emitAndWaitResponse<
+        ConfigGetPayload,
+        ConfigGetResultPayload
+      >(
+        client,
+        WebSocketRequestEvents.CONFIG_GET,
+        WebSocketResponseEvents.CONFIG_GET_RESULT,
+        { requestId: uuidv4() },
+      );
+
+      expect(getResponse.success).toBe(true);
+      expect(getResponse.connectionLineProvider).toBe("codex");
+      expect(getResponse.connectionLineModel).toBe("gpt-5.5");
+      expect(getResponse.connectionLineThinkingLevel).toBe("xhigh");
     });
   });
 

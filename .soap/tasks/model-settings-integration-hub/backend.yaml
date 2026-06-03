@@ -1,0 +1,117 @@
+feature: model-settings-integration-hub
+side: backend
+approved: true
+phases:
+  - id: P1
+    title: Config 契約與持久化
+    parallel: false
+    verification:
+      - cd backend && bun run style
+      - cd backend && bun run test
+    done: true
+    items:
+      - id: P1.A
+        title: 擴充 config schema 與 response
+        tasks:
+          - id: P1.A.t1
+            text: 在 `backend/src/schemas/configSchemas.ts` 新增 Connection Line 統一設定欄位：`connectionLineProvider`、`connectionLineModel`、`connectionLineThinkingLevel`
+            completed: true
+            last_files_changed:
+              - backend/src/schemas/configSchemas.ts
+          - id: P1.A.t2
+            text: 更新 `backend/src/handlers/configHandlers.ts` 與 `backend/src/schemas/serverEventManifest.ts`，讓 config get/update 會回傳 Memory 與 Connection Line 兩組完整 model 設定
+            completed: true
+            last_files_changed:
+              - backend/src/handlers/configHandlers.ts
+              - backend/src/schemas/serverEventManifest.ts
+
+      - id: P1.B
+        title: 恢復 Memory thinking level 儲存
+        tasks:
+          - id: P1.B.t1
+            text: 更新 `backend/src/services/configStore.ts`，讓 `memory_thinking_level` 依 config update 寫入與讀回，不再因 memory 設定變動自動刪除
+            completed: true
+            last_files_changed:
+              - backend/src/services/configStore.ts
+          - id: P1.B.t2
+            text: 在 `backend/src/services/configStore.ts` 新增 Connection Line 統一設定的 global setting key 與 `getConnectionLineModelConfig()` 讀取方法
+            completed: true
+            last_files_changed:
+              - backend/src/services/configStore.ts
+          - id: P1.B.t3
+            text: 在 configStore 儲存前使用既有 provider capability helper 驗證 Memory 與 Connection Line 的 provider/model/thinking level 組合
+            completed: true
+            last_files_changed:
+              - backend/src/services/configStore.ts
+
+  - id: P2
+    title: Connection Line 執行端改用統一設定
+    parallel: false
+    verification:
+      - cd backend && bun run style
+      - cd backend && bun run test
+    done: true
+    items:
+      - id: P2.A
+        title: Summary 執行設定來源
+        tasks:
+          - id: P2.A.t1
+            text: 更新 `backend/src/services/workflow/workflowPipeline.ts`，讓 Connection Line summary 階段使用 configStore 的 Connection Line provider、model、thinking level
+            completed: true
+            last_files_changed:
+              - backend/src/services/workflow/workflowPipeline.ts
+          - id: P2.A.t2
+            text: 保留既有 connection summary 欄位於資料讀寫契約中，但停止在執行 summary 時以單條 connection 欄位決定模型
+            completed: true
+            last_files_changed:
+              - backend/src/services/workflow/workflowPipeline.ts
+
+      - id: P2.B
+        title: Branch 決策設定來源
+        tasks:
+          - id: P2.B.t1
+            text: 更新 `backend/src/services/workflow/branchDecisionService.ts`，讓 branch 決策使用 configStore 的 Connection Line provider、model、thinking level
+            completed: true
+            last_files_changed:
+              - backend/src/services/workflow/branchDecisionService.ts
+          - id: P2.B.t2
+            text: 保留同一 sourcePod branch sibling 的 label 與 description 同步行為，但停止依 branch connection 欄位決定決策模型
+            completed: true
+            last_files_changed:
+              - backend/src/services/workflow/branchDecisionService.ts
+
+  - id: P3
+    title: 後端行為測試
+    parallel: false
+    verification:
+      - cd backend && bun run style
+      - cd backend && bun run test
+    done: true
+    items:
+      - id: P3.A
+        title: Config 與 Memory 測試
+        tasks:
+          - id: P3.A.t1
+            text: 更新 `backend/tests/business-logic/configStore.test.ts`，覆蓋 Memory thinking level 寫入、讀回與清除行為
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/configStore.test.ts
+          - id: P3.A.t2
+            text: 更新 config websocket integration 測試，覆蓋 config get/update 會傳遞 Connection Line 統一設定欄位
+            completed: true
+            last_files_changed:
+              - backend/tests/integration/config-ws.test.ts
+
+      - id: P3.B
+        title: Connection Line 統一設定測試
+        tasks:
+          - id: P3.B.t1
+            text: 更新 workflow summary 相關 business-logic 測試，驗證 summary 執行使用 configStore 的 Connection Line 統一設定
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/workflowPipeline.test.ts
+          - id: P3.B.t2
+            text: 更新 branch decision 相關 business-logic 測試，驗證 branch 決策使用 configStore 的 Connection Line 統一設定
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/branchDecisionService.test.ts

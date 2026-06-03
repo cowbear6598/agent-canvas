@@ -427,7 +427,8 @@
     "cards": {
       "mcp": "MCP 管理",
       "plugin": "Skill 管理",
-      "llmProvider": "LLM Provider"
+      "llmProvider": "LLM Provider",
+      "modelSettings": "Model 設定"
     }
   },
   "pluginManager": {
@@ -510,6 +511,37 @@
         "presetStatus": "預設 thinking：{level}",
         "presetUnavailable": "未取得 thinking presets"
       }
+    }
+  },
+  "modelSettings": {
+    "title": "Model 設定",
+    "description": "設定 Memory 與 Connection Line 使用的統一模型。",
+    "category": {
+      "label": "Model 設定類別",
+      "memory": {
+        "title": "Memory",
+        "description": "維護記憶內容時使用的模型設定。"
+      },
+      "connectionLine": {
+        "title": "Connection Line",
+        "description": "Connection Line 執行時使用的統一模型設定。"
+      }
+    },
+    "form": {
+      "loading": "設定載入中...",
+      "providerLabel": "Provider",
+      "providerPlaceholder": "選擇 Provider",
+      "providerUnset": "未設定",
+      "modelLabel": "Model",
+      "modelPlaceholder": "選擇 Model",
+      "modelLoading": "模型清單載入中...",
+      "modelUnavailable": "目前沒有可用的模型",
+      "thinkingLevelLabel": "Thinking Level",
+      "thinkingLevelPlaceholder": "選擇 Thinking Level",
+      "thinkingLevelUnavailable": "此 model 不支援 Thinking Level",
+      "cancel": "取消",
+      "save": "儲存",
+      "saving": "儲存中..."
     }
   },
   "error": {

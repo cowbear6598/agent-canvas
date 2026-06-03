@@ -1,0 +1,137 @@
+feature: model-settings-integration-hub
+side: frontend
+approved: true
+phases:
+  - id: P1
+    title: Config 型別與共用 Model 設定表單
+    parallel: false
+    verification:
+      - cd frontend && bun run style
+      - cd frontend && bun run test:run
+    done: true
+    items:
+      - id: P1.A
+        title: 擴充 config 前端資料契約
+        tasks:
+          - id: P1.A.t1
+            text: 在 `frontend/src/types/config.ts` 與 websocket response 型別加入 Connection Line 統一設定欄位：`connectionLineProvider`、`connectionLineModel`、`connectionLineThinkingLevel`
+            completed: true
+            last_files_changed:
+              - frontend/src/types/config.ts
+              - frontend/src/types/websocket/responses.ts
+              - frontend/src/types/websocket/requests.ts
+          - id: P1.A.t2
+            text: 更新 `frontend/src/stores/configStore.ts`，保存 Memory 與 Connection Line 兩組 model 設定狀態
+            completed: true
+            last_files_changed:
+              - frontend/src/stores/configStore.ts
+          - id: P1.A.t3
+            text: 更新 `frontend/src/composables/useGlobalSettingsForm.ts` 或抽出新 composable，讓 config 載入與儲存支援 Memory thinking level 與 Connection Line 統一設定
+            completed: true
+            last_files_changed:
+              - frontend/src/composables/useGlobalSettingsForm.ts
+
+      - id: P1.B
+        title: 建立共用 Model 設定控制
+        tasks:
+          - id: P1.B.t1
+            text: 建立 `frontend/src/components/settings/ModelSettingsModal.vue`，提供 Memory 與 Connection Line 類別切換
+            completed: true
+            last_files_changed:
+              - frontend/src/components/settings/ModelSettingsModal.vue
+              - frontend/src/locales/zh-TW.json
+              - frontend/src/locales/en.json
+              - frontend/src/locales/ja.json
+          - id: P1.B.t2
+            text: 在 Model 設定畫面內加入 provider、model、thinking level 控制，選項來源沿用 `useProviderCapabilityStore`
+            completed: true
+            last_files_changed:
+              - frontend/src/components/settings/ModelSettingsModal.vue
+              - frontend/src/locales/zh-TW.json
+              - frontend/src/locales/en.json
+              - frontend/src/locales/ja.json
+          - id: P1.B.t3
+            text: 設定 provider 或 model 變更時同步更新對應類別的 model 與預設 thinking level，避免送出 provider/model/thinking level 不一致的設定
+            completed: true
+            last_files_changed:
+              - frontend/src/components/settings/ModelSettingsModal.vue
+
+  - id: P2
+    title: 整合管理中心入口與舊 UI 收斂
+    parallel: false
+    verification:
+      - cd frontend && bun run style
+      - cd frontend && bun run test:run
+    done: true
+    items:
+      - id: P2.A
+        title: 整合管理中心新增 Model 設定
+        tasks:
+          - id: P2.A.t1
+            text: 在 `frontend/src/components/settings/IntegrationsHubModal.vue` 新增「Model 設定」卡片，使用 i18n key 顯示 ja、zh-TW、en 文案
+            completed: true
+            last_files_changed:
+              - frontend/src/components/settings/IntegrationsHubModal.vue
+          - id: P2.A.t2
+            text: 更新 `frontend/src/components/layout/AppHeader.vue`，讓整合管理中心可開啟 `ModelSettingsModal`
+            completed: true
+            last_files_changed:
+              - frontend/src/components/layout/AppHeader.vue
+          - id: P2.A.t3
+            text: 在 `frontend/src/locales/ja.json`、`frontend/src/locales/zh-TW.json`、`frontend/src/locales/en.json` 補齊 Model 設定畫面與提示文案
+            completed: true
+            last_files_changed:
+              - frontend/src/locales/ja.json
+              - frontend/src/locales/zh-TW.json
+              - frontend/src/locales/en.json
+
+      - id: P2.B
+        title: 移除分散的 model 設定入口
+        tasks:
+          - id: P2.B.t1
+            text: 從 `frontend/src/components/settings/GlobalSettingsModal.vue` 移除 Memory model/provider/thinking level 表單，保留語言、時區、備份、安全設定
+            completed: true
+            last_files_changed:
+              - frontend/src/components/settings/GlobalSettingsModal.vue
+          - id: P2.B.t2
+            text: 調整 `frontend/src/components/canvas/ConnectionContextMenu.vue`、`SummarySection.vue`、`BranchSettingsPanel.vue`，移除 Connection Line 的 provider、model、thinking level 操作入口
+            completed: true
+            last_files_changed:
+              - frontend/src/components/canvas/ConnectionContextMenu.vue
+              - frontend/src/components/canvas/connectionMenu/SummarySection.vue
+              - frontend/src/components/canvas/connectionMenu/BranchSettingsPanel.vue
+              - frontend/src/components/canvas/CanvasContainer.vue
+          - id: P2.B.t3
+            text: 保留 Connection Line 右鍵選單中的 trigger mode、branch label、branch description 操作，確保與統一 Model 設定職責分離
+            completed: true
+            last_files_changed:
+              - frontend/src/components/canvas/ConnectionContextMenu.vue
+              - frontend/src/components/canvas/connectionMenu/BranchSettingsPanel.vue
+              - frontend/src/components/canvas/CanvasContainer.vue
+
+  - id: P3
+    title: 前端行為測試
+    parallel: false
+    verification:
+      - cd frontend && bun run style
+      - cd frontend && bun run test:run
+    done: true
+    items:
+      - id: P3.A
+        title: Model 設定表單行為測試
+        tasks:
+          - id: P3.A.t1
+            text: 新增或更新前端 business-logic 測試，覆蓋 Model 設定類別切換時會顯示各自已載入的 provider、model、thinking level
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/components/settings/ModelSettingsModal.test.ts
+          - id: P3.A.t2
+            text: 新增或更新前端 business-logic 測試，覆蓋儲存 Memory 與 Connection Line 設定時送出的 config payload 欄位
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/composables/useGlobalSettingsForm.test.ts
+          - id: P3.A.t3
+            text: 更新既有 GlobalSettingsModal 或 connection menu 相關測試，移除對舊 model 設定入口的期待
+            completed: true
+            last_files_changed:
+              - frontend/tests/userflows/canvas/connectionThinkingLevelMenuFlow.test.ts

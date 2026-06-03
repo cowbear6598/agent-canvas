@@ -20,6 +20,7 @@ vi.mock("../../src/utils/logger.js", () => ({
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { codexService } from "../../src/services/codex/codexService.js";
+import { logger } from "../../src/utils/logger.js";
 
 // ── 工具：把字串陣列轉為 ReadableStream<Uint8Array> ──────────────────────────
 function makeReadableStream(lines: string[]): ReadableStream<Uint8Array> {
@@ -141,6 +142,26 @@ describe("codexService.executeDisposableChat", () => {
     expect(
       spawnArgs.some((arg) => arg.includes(REMOVED_CODEX_SANDBOX_CONFIG_PREFIX)),
     ).toBe(false);
+  });
+
+  it("啟動一次性查詢 log 應包含 thinking level", async () => {
+    const mockProc = makeMockProc(
+      [AGENT_MESSAGE_LINE, TURN_COMPLETE_LINE],
+      [],
+      0,
+    );
+    spawnSpy.mockReturnValue(mockProc as any);
+
+    await codexService.executeDisposableChat({
+      ...BASE_OPTIONS,
+      thinkingLevel: "high",
+    });
+
+    expect(logger.log).toHaveBeenCalledWith(
+      "Chat",
+      "Init",
+      "[CodexService] 啟動一次性查詢（model: gpt-5.4，thinking: high）",
+    );
   });
 
   it("子程序非零 exit code 但有 turn_complete → success: true（warn 路徑）", async () => {

@@ -105,4 +105,53 @@ describe("ConfigStore", () => {
       expect(backupConfig.backupEnabled).toBe(true);
     });
   });
+
+  describe("Memory 模型設定", () => {
+    it("成功更新 Memory thinking level 並讀取回正確值", () => {
+      const result = configStore.update({
+        memoryProvider: "codex",
+        memoryModel: "gpt-5.4",
+        memoryThinkingLevel: "high",
+      });
+
+      expect(result.memoryProvider).toBe("codex");
+      expect(result.memoryModel).toBe("gpt-5.4");
+      expect(result.memoryThinkingLevel).toBe("high");
+
+      const config = configStore.getAll();
+      expect(config.memoryProvider).toBe("codex");
+      expect(config.memoryModel).toBe("gpt-5.4");
+      expect(config.memoryThinkingLevel).toBe("high");
+    });
+
+    it("getMemoryConfig 回傳 Memory thinking level", () => {
+      configStore.update({
+        memoryProvider: "codex",
+        memoryModel: "gpt-5.4",
+        memoryThinkingLevel: "high",
+      });
+
+      const memoryConfig = configStore.getMemoryConfig();
+
+      expect(memoryConfig.memoryProvider).toBe("codex");
+      expect(memoryConfig.memoryModel).toBe("gpt-5.4");
+      expect(memoryConfig.memoryThinkingLevel).toBe("high");
+    });
+
+    it("Memory thinking level 設為 null 時會清除既有設定", () => {
+      configStore.update({
+        memoryProvider: "codex",
+        memoryModel: "gpt-5.4",
+        memoryThinkingLevel: "high",
+      });
+
+      const result = configStore.update({ memoryThinkingLevel: null });
+
+      expect(result.memoryProvider).toBe("codex");
+      expect(result.memoryModel).toBe("gpt-5.4");
+      expect(result.memoryThinkingLevel).toBeNull();
+      expect(configStore.getAll().memoryThinkingLevel).toBeNull();
+      expect(configStore.getMemoryConfig().memoryThinkingLevel).toBeNull();
+    });
+  });
 });

@@ -33,8 +33,16 @@ function createOptions() {
     memoryProvider: "claude" | "codex" | "opencode" | null;
     memoryModel: string;
     memoryThinkingLevel: string | null;
+    connectionLineProvider: "claude" | "codex" | "opencode" | null;
+    connectionLineModel: string;
+    connectionLineThinkingLevel: string | null;
     setTimezoneOffset: (offset: number) => void;
     setMemoryConfig: (config: {
+      provider: "claude" | "codex" | "opencode" | null;
+      model: string;
+      thinkingLevel: string | null;
+    }) => void;
+    setConnectionLineConfig: (config: {
       provider: "claude" | "codex" | "opencode" | null;
       model: string;
       thinkingLevel: string | null;
@@ -44,6 +52,9 @@ function createOptions() {
     memoryProvider: null,
     memoryModel: "",
     memoryThinkingLevel: null,
+    connectionLineProvider: null,
+    connectionLineModel: "",
+    connectionLineThinkingLevel: null,
     setTimezoneOffset: vi.fn((offset: number) => {
       configStore.timezoneOffset = offset;
     }),
@@ -58,6 +69,17 @@ function createOptions() {
         configStore.memoryThinkingLevel = config.thinkingLevel;
       },
     ),
+    setConnectionLineConfig: vi.fn(
+      (config: {
+        provider: "claude" | "codex" | "opencode" | null;
+        model: string;
+        thinkingLevel: string | null;
+      }) => {
+        configStore.connectionLineProvider = config.provider;
+        configStore.connectionLineModel = config.model;
+        configStore.connectionLineThinkingLevel = config.thinkingLevel;
+      },
+    ),
   });
   const getConfig = vi.fn(async () =>
     createResult({
@@ -68,6 +90,9 @@ function createOptions() {
       memoryProvider: "claude",
       memoryModel: "sonnet",
       memoryThinkingLevel: "high",
+      connectionLineProvider: "codex",
+      connectionLineModel: "gpt-5.4",
+      connectionLineThinkingLevel: "medium",
     }),
   );
   const updateConfig = vi.fn(async () => createUpdatedResult());
@@ -118,7 +143,12 @@ describe("useGlobalSettingsForm", () => {
     expect(options.configStore.setMemoryConfig).toHaveBeenCalledWith({
       provider: "claude",
       model: "sonnet",
-      thinkingLevel: null,
+      thinkingLevel: "high",
+    });
+    expect(options.configStore.setConnectionLineConfig).toHaveBeenCalledWith({
+      provider: "codex",
+      model: "gpt-5.4",
+      thinkingLevel: "medium",
     });
     expect(onLoaded).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -173,6 +203,9 @@ describe("useGlobalSettingsForm", () => {
       memoryProvider: "codex",
       memoryModel: "gpt-5.4",
       memoryThinkingLevel: null,
+      connectionLineProvider: undefined,
+      connectionLineModel: undefined,
+      connectionLineThinkingLevel: undefined,
     });
     expect(options.configStore.setTimezoneOffset).toHaveBeenCalledWith(7);
     expect(options.configStore.setMemoryConfig).toHaveBeenCalledWith({
@@ -191,6 +224,55 @@ describe("useGlobalSettingsForm", () => {
     );
     expect(onSaved).toHaveBeenCalledOnce();
     expect(form.isSaving.value).toBe(false);
+  });
+
+  it("handleSave 應送出 Memory 與 Connection Line 的 provider、model、thinking level", async () => {
+    const options = createOptions();
+    const form = useGlobalSettingsForm({
+      ...options,
+      initialLocale: "zh-TW",
+    });
+
+    await form.loadConfig();
+    form.memoryProvider.value = "claude";
+    form.memoryModel.value = "claude-sonnet-4-5";
+    form.memoryThinkingLevel.value = "high";
+    form.connectionLineProvider.value = "codex";
+    form.connectionLineModel.value = "gpt-5.4";
+    form.connectionLineThinkingLevel.value = "medium";
+
+    await form.handleSave({
+      backupPayload: {
+        backupGitRemoteUrl: "git@example.com:repo/backup.git",
+        backupTime: "05:15",
+        backupEnabled: true,
+      },
+    });
+
+    expect(options.updateConfig).toHaveBeenLastCalledWith({
+      timezoneOffset: 9,
+      backupGitRemoteUrl: "git@example.com:repo/backup.git",
+      backupTime: "05:15",
+      backupEnabled: true,
+      memoryProvider: "claude",
+      memoryModel: "claude-sonnet-4-5",
+      memoryThinkingLevel: "high",
+      connectionLineProvider: "codex",
+      connectionLineModel: "gpt-5.4",
+      connectionLineThinkingLevel: "medium",
+    });
+    expect(options.configStore.setMemoryConfig).toHaveBeenLastCalledWith({
+      provider: "claude",
+      model: "claude-sonnet-4-5",
+      thinkingLevel: "high",
+    });
+    expect(
+      options.configStore.setConnectionLineConfig,
+    ).toHaveBeenLastCalledWith({
+      provider: "codex",
+      model: "gpt-5.4",
+      thinkingLevel: "medium",
+    });
   });
 
   it("loadConfig 被 withErrorToast 吞掉錯誤時應標記 loadFailed", async () => {

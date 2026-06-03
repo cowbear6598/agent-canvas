@@ -3,8 +3,8 @@ import type { ProviderName } from "../services/provider/types.js";
 import { providerSchema } from "./podSchemas.js";
 
 const gitRemoteUrlRegex = /^(git@|https?:\/\/)/;
-const memoryModelRegex = /^[a-zA-Z0-9._/-]+$/;
-const memoryThinkingLevelRegex = /^[a-z]+$/;
+const modelRegex = /^[a-zA-Z0-9._/-]+$/;
+const thinkingLevelRegex = /^[a-zA-Z0-9._/-]+$/;
 
 export const configGetSchema = z.object({
   requestId: z.string(),
@@ -33,14 +33,29 @@ export const configUpdateSchema = z
     memoryProvider: providerSchema.optional(),
     memoryModel: z
       .string()
-      .regex(memoryModelRegex, "memory model 名稱包含不允許的字元")
+      .regex(modelRegex, "memory model 名稱包含不允許的字元")
       .max(100)
       .optional(),
     memoryThinkingLevel: z
       .string()
       .regex(
-        memoryThinkingLevelRegex,
+        thinkingLevelRegex,
         "memory thinking level 包含不允許的字元",
+      )
+      .max(20)
+      .nullable()
+      .optional(),
+    connectionLineProvider: providerSchema.optional(),
+    connectionLineModel: z
+      .string()
+      .regex(modelRegex, "connection line model 名稱包含不允許的字元")
+      .max(100)
+      .optional(),
+    connectionLineThinkingLevel: z
+      .string()
+      .regex(
+        thinkingLevelRegex,
+        "connection line thinking level 包含不允許的字元",
       )
       .max(20)
       .nullable()
@@ -54,7 +69,10 @@ export const configUpdateSchema = z
       data.backupEnabled !== undefined ||
       data.memoryProvider !== undefined ||
       data.memoryModel !== undefined ||
-      data.memoryThinkingLevel !== undefined,
+      data.memoryThinkingLevel !== undefined ||
+      data.connectionLineProvider !== undefined ||
+      data.connectionLineModel !== undefined ||
+      data.connectionLineThinkingLevel !== undefined,
     {
       message: "至少需要提供一個設定值",
     },
@@ -73,6 +91,9 @@ export interface ConfigGetResultPayload {
   memoryProvider?: ProviderName;
   memoryModel?: string;
   memoryThinkingLevel?: string | null;
+  connectionLineProvider?: ProviderName;
+  connectionLineModel?: string;
+  connectionLineThinkingLevel?: string | null;
   hasWorkspacePassword?: boolean;
   transportSecurity?: {
     isTls: boolean;
@@ -92,6 +113,9 @@ export interface ConfigUpdatedPayload {
   memoryProvider?: ProviderName;
   memoryModel?: string;
   memoryThinkingLevel?: string | null;
+  connectionLineProvider?: ProviderName;
+  connectionLineModel?: string;
+  connectionLineThinkingLevel?: string | null;
   hasWorkspacePassword?: boolean;
   error?: string;
 }

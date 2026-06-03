@@ -3,7 +3,7 @@ import { ref } from "vue";
 import { getConfig } from "@/services/configApi";
 import type { PodProvider } from "@/types/pod";
 
-interface MemoryConfig {
+interface ModelSettingsConfig {
   provider: PodProvider | null;
   model: string;
   thinkingLevel: string | null;
@@ -22,6 +22,9 @@ export const useConfigStore = defineStore("config", () => {
   const memoryProvider = ref<PodProvider | null>(null);
   const memoryModel = ref<string>("");
   const memoryThinkingLevel = ref<string | null>(null);
+  const connectionLineProvider = ref<PodProvider | null>(null);
+  const connectionLineModel = ref<string>("");
+  const connectionLineThinkingLevel = ref<string | null>(null);
 
   const fetchConfig = async (): Promise<void> => {
     const result = await getConfig();
@@ -29,6 +32,10 @@ export const useConfigStore = defineStore("config", () => {
       "memoryProvider" in result ||
       "memoryModel" in result ||
       "memoryThinkingLevel" in result;
+    const hasConnectionLineConfig =
+      "connectionLineProvider" in result ||
+      "connectionLineModel" in result ||
+      "connectionLineThinkingLevel" in result;
 
     if (result.timezoneOffset !== undefined) {
       timezoneOffset.value = result.timezoneOffset;
@@ -45,11 +52,21 @@ export const useConfigStore = defineStore("config", () => {
     if (hasMemoryConfig) {
       memoryProvider.value = result.memoryProvider ?? null;
       memoryModel.value = result.memoryModel ?? "";
-      memoryThinkingLevel.value = null;
+      memoryThinkingLevel.value = result.memoryThinkingLevel ?? null;
     } else {
       memoryProvider.value = null;
       memoryModel.value = "";
       memoryThinkingLevel.value = null;
+    }
+    if (hasConnectionLineConfig) {
+      connectionLineProvider.value = result.connectionLineProvider ?? null;
+      connectionLineModel.value = result.connectionLineModel ?? "";
+      connectionLineThinkingLevel.value =
+        result.connectionLineThinkingLevel ?? null;
+    } else {
+      connectionLineProvider.value = null;
+      connectionLineModel.value = "";
+      connectionLineThinkingLevel.value = null;
     }
   };
 
@@ -67,10 +84,16 @@ export const useConfigStore = defineStore("config", () => {
     backupEnabled.value = config.enabled;
   };
 
-  const setMemoryConfig = (config: MemoryConfig): void => {
+  const setMemoryConfig = (config: ModelSettingsConfig): void => {
     memoryProvider.value = config.provider;
     memoryModel.value = config.model;
     memoryThinkingLevel.value = config.thinkingLevel;
+  };
+
+  const setConnectionLineConfig = (config: ModelSettingsConfig): void => {
+    connectionLineProvider.value = config.provider;
+    connectionLineModel.value = config.model;
+    connectionLineThinkingLevel.value = config.thinkingLevel;
   };
 
   const setBackupStatus = (
@@ -96,10 +119,14 @@ export const useConfigStore = defineStore("config", () => {
     memoryProvider,
     memoryModel,
     memoryThinkingLevel,
+    connectionLineProvider,
+    connectionLineModel,
+    connectionLineThinkingLevel,
     fetchConfig,
     setTimezoneOffset,
     setBackupConfig,
     setMemoryConfig,
+    setConnectionLineConfig,
     setBackupStatus,
     setLastBackupTime,
   };

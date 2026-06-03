@@ -394,7 +394,7 @@ class CodexService {
     logger.log(
       logCategory,
       "Init",
-      `[CodexService] 啟動${logLabel}（model: ${model}）`,
+      `[CodexService] 啟動${logLabel}（model: ${model}，thinking: ${options.thinkingLevel ?? "none"}）`,
     );
 
     // 等待取得並行 slot，確保同時存在的 codex 子程序不超過 MAX_CONCURRENT_CODEX

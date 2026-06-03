@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Bot, Cpu, Puzzle } from "lucide-vue-next";
+import { Bot, Cpu, Puzzle, SlidersHorizontal } from "lucide-vue-next";
 
 interface Props {
   open: boolean;
@@ -23,6 +23,8 @@ const emit = defineEmits<{
   "select-plugin": [];
   // 開啟 LLM Provider 設定子 modal（LlmProviderModal）
   "select-llm-provider": [];
+  // 開啟 Model 設定子 modal（ModelSettingsModal）
+  "select-model-settings": [];
 }>();
 
 const { t } = useI18n();
@@ -45,6 +47,11 @@ const handleSelectLlmProvider = (): void => {
   emit("update:open", false);
   emit("select-llm-provider");
 };
+
+const handleSelectModelSettings = (): void => {
+  emit("update:open", false);
+  emit("select-model-settings");
+};
 </script>
 
 <template>
@@ -60,7 +67,7 @@ const handleSelectLlmProvider = (): void => {
         </DialogDescription>
       </DialogHeader>
 
-      <div class="grid grid-cols-3 gap-3 py-2">
+      <div class="grid grid-cols-2 gap-3 py-2 sm:grid-cols-4">
         <!-- MCP 管理卡片 -->
         <button
           class="flex flex-col items-center gap-2 rounded-md border border-doodle-ink/20 bg-card p-4 transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -97,6 +104,19 @@ const handleSelectLlmProvider = (): void => {
             class="flex min-h-[2.5em] items-center justify-center text-center text-sm font-medium leading-tight"
           >
             {{ t("integrationsHub.cards.llmProvider") }}
+          </span>
+        </button>
+
+        <!-- Model 設定卡片 -->
+        <button
+          class="flex flex-col items-center gap-2 rounded-md border border-doodle-ink/20 bg-card p-4 transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          @click="handleSelectModelSettings"
+        >
+          <SlidersHorizontal class="h-7 w-7" />
+          <span
+            class="flex min-h-[2.5em] items-center justify-center text-center text-sm font-medium leading-tight"
+          >
+            {{ t("integrationsHub.cards.modelSettings") }}
           </span>
         </button>
       </div>

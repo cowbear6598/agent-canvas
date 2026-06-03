@@ -78,11 +78,13 @@
   <ManagedPluginModal v-model:open="showManagedPluginModal" />
   <GlobalSettingsModal v-model:open="showSettingsModal" />
   <LlmProviderModal v-model:open="showLlmProviderModal" />
+  <ModelSettingsModal v-model:open="showModelSettingsModal" />
   <IntegrationsHubModal
     v-model:open="showIntegrationsHubModal"
     @select-mcp="openMcpFromHub"
     @select-plugin="openPluginFromHub"
     @select-llm-provider="openLlmProviderFromHub"
+    @select-model-settings="openModelSettingsFromHub"
   />
 </template>
 
@@ -118,6 +120,9 @@ const ManagedPluginModal = defineAsyncComponent(
 const LlmProviderModal = defineAsyncComponent(
   () => import("@/components/settings/LlmProviderModal.vue"),
 );
+const ModelSettingsModal = defineAsyncComponent(
+  () => import("@/components/settings/ModelSettingsModal.vue"),
+);
 const IntegrationsHubModal = defineAsyncComponent(
   () => import("@/components/settings/IntegrationsHubModal.vue"),
 );
@@ -130,6 +135,7 @@ const showSettingsModal = ref<boolean>(false);
 const showManagedMcpModal = ref<boolean>(false);
 const showManagedPluginModal = ref<boolean>(false);
 const showLlmProviderModal = ref<boolean>(false);
+const showModelSettingsModal = ref<boolean>(false);
 const showIntegrationsHubModal = ref<boolean>(false);
 
 const handleIntegrationSelect = (category: string): void => {
@@ -148,5 +154,9 @@ const openPluginFromHub = (): void => {
 
 const openLlmProviderFromHub = (): void => {
   showLlmProviderModal.value = true;
+};
+
+const openModelSettingsFromHub = (): void => {
+  showModelSettingsModal.value = true;
 };
 </script>

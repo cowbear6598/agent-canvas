@@ -29,6 +29,9 @@ export async function handleConfigGet(
       memoryProvider: config.memoryProvider,
       memoryModel: config.memoryModel,
       memoryThinkingLevel: config.memoryThinkingLevel,
+      connectionLineProvider: config.connectionLineProvider,
+      connectionLineModel: config.connectionLineModel,
+      connectionLineThinkingLevel: config.connectionLineThinkingLevel,
       hasWorkspacePassword: config.hasWorkspacePassword,
       transportSecurity: transportSecurity
         ? {
@@ -59,7 +62,7 @@ export async function handleConfigUpdate(
   const effectiveGitRemoteUrl =
     payload.backupEnabled === false ? "" : payload.backupGitRemoteUrl;
 
-  const updatedConfig = configStore.update({
+  const updateData = {
     timezoneOffset: payload.timezoneOffset,
     backupGitRemoteUrl: effectiveGitRemoteUrl,
     backupTime: payload.backupTime,
@@ -67,7 +70,11 @@ export async function handleConfigUpdate(
     memoryProvider: payload.memoryProvider,
     memoryModel: payload.memoryModel,
     memoryThinkingLevel: payload.memoryThinkingLevel,
-  });
+    connectionLineProvider: payload.connectionLineProvider,
+    connectionLineModel: payload.connectionLineModel,
+    connectionLineThinkingLevel: payload.connectionLineThinkingLevel,
+  };
+  const updatedConfig = configStore.update(updateData);
 
   socketService.emitToConnection(
     connectionId,
@@ -82,6 +89,9 @@ export async function handleConfigUpdate(
       memoryProvider: updatedConfig.memoryProvider,
       memoryModel: updatedConfig.memoryModel,
       memoryThinkingLevel: updatedConfig.memoryThinkingLevel,
+      connectionLineProvider: updatedConfig.connectionLineProvider,
+      connectionLineModel: updatedConfig.connectionLineModel,
+      connectionLineThinkingLevel: updatedConfig.connectionLineThinkingLevel,
       hasWorkspacePassword: updatedConfig.hasWorkspacePassword,
     },
   );

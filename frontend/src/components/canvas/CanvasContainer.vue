@@ -137,8 +137,6 @@ const {
   handleBranchModeClicked,
   handleBranchModalUpdateOpen,
   handleBranchModalSubmit,
-  handleBranchProviderChanged,
-  handleBranchModelChanged,
   setIntegrationConnectModalOpen,
 } = useCanvasResourceActionController({
   podStore,
@@ -294,15 +292,9 @@ const visiblePods = computed(() => {
     :position="connectionContextMenu.position"
     :connection-id="connectionContextMenu.data.connectionId"
     :current-trigger-mode="connectionContextMenu.data.triggerMode"
-    :current-summary-model="connectionContextMenu.data.summaryModel"
-    :current-summary-provider="connectionContextMenu.data.summaryProvider"
-    :current-branch-provider="connectionContextMenu.data.branchProvider"
-    :current-branch-model="connectionContextMenu.data.branchModel"
     @close="closeConnectionContextMenu"
     @trigger-mode-changed="closeConnectionContextMenu"
     @branch-mode-clicked="handleBranchModeClicked"
-    @branch-provider-changed="handleBranchProviderChanged"
-    @branch-model-changed="handleBranchModelChanged"
   />
 
   <CanvasModalHost

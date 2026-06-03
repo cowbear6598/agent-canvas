@@ -105,7 +105,7 @@ describe("configStore", () => {
 
     expect(store.memoryProvider).toBe("claude");
     expect(store.memoryModel).toBe("sonnet");
-    expect(store.memoryThinkingLevel).toBeNull();
+    expect(store.memoryThinkingLevel).toBe("high");
   });
 
   it("setBackupConfig 應更新備份相關 state", () => {

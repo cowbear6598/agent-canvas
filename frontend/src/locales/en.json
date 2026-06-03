@@ -427,7 +427,8 @@
     "cards": {
       "mcp": "MCP Manager",
       "plugin": "Skill Manager",
-      "llmProvider": "LLM Provider"
+      "llmProvider": "LLM Provider",
+      "modelSettings": "Model Settings"
     }
   },
   "pluginManager": {
@@ -510,6 +511,37 @@
         "presetStatus": "Default thinking: {level}",
         "presetUnavailable": "Thinking presets unavailable"
       }
+    }
+  },
+  "modelSettings": {
+    "title": "Model Settings",
+    "description": "Configure the shared models used by Memory and Connection Line.",
+    "category": {
+      "label": "Model settings category",
+      "memory": {
+        "title": "Memory",
+        "description": "Model settings used when maintaining memory content."
+      },
+      "connectionLine": {
+        "title": "Connection Line",
+        "description": "Shared model settings used when Connection Line runs."
+      }
+    },
+    "form": {
+      "loading": "Loading settings...",
+      "providerLabel": "Provider",
+      "providerPlaceholder": "Select provider",
+      "providerUnset": "Not set",
+      "modelLabel": "Model",
+      "modelPlaceholder": "Select model",
+      "modelLoading": "Loading model list...",
+      "modelUnavailable": "No models are currently available",
+      "thinkingLevelLabel": "Thinking Level",
+      "thinkingLevelPlaceholder": "Select thinking level",
+      "thinkingLevelUnavailable": "This model does not support thinking levels",
+      "cancel": "Cancel",
+      "save": "Save",
+      "saving": "Saving..."
     }
   },
   "error": {

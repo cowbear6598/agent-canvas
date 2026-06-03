@@ -11,8 +11,8 @@
  */
 
 import { podStore } from "../podStore.js";
+import { configStore } from "../configStore.js";
 import { branchDecider } from "../branch/index.js";
-import { getDefaultThinkingLevel } from "../pod/providerConfigResolver.js";
 import { resolveExecutionPaths } from "../runtime/executionPaths.js";
 import { getRunTranscriptWindow } from "./runTranscriptWindow.js";
 import { logger } from "../../utils/logger.js";
@@ -85,16 +85,11 @@ class BranchDecisionService {
 
     const executionPaths = resolveExecutionPaths(sourcePod, runContext);
 
-    // 使用 branchConnections 中第一條的 branchProvider / branchModel / branchThinkingLevel。
-    // 理由：同一 sourcePod 出去的 branch group 通常共用相同的決策模型；
-    //       若真的有差異，「用第一條」是最簡單且可預測的選擇，
-    //       且這個決定是針對「選哪條 branch」，不是針對「選中的那條 branch 後續如何執行」，
-    //       因此不同條 connection 的 branchProvider/branchModel 差異對決策影響很小。
-    const provider = branchConnections[0].branchProvider;
-    const model = branchConnections[0].branchModel;
-    const thinkingLevel =
-      branchConnections[0].branchThinkingLevel ??
-      getDefaultThinkingLevel(provider, model);
+    const {
+      connectionLineProvider: provider,
+      connectionLineModel: model,
+      connectionLineThinkingLevel: thinkingLevel,
+    } = configStore.getConnectionLineModelConfig();
 
     // targetPodName：從 podStore 查詢，若查不到則 fallback 為 targetPodId
     const branches = branchConnections.map((conn) => {

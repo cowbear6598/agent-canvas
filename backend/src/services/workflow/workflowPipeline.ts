@@ -5,10 +5,7 @@ import type {
   MultiInputServiceMethods,
 } from "./types.js";
 import { podStore } from "../podStore.js";
-import { connectionStore } from "../connectionStore.js";
-import { socketService } from "../socketService.js";
-import { WebSocketResponseEvents } from "../../schemas/index.js";
-import type { ConnectionUpdatedPayload } from "../../types/index.js";
+import { configStore } from "../configStore.js";
 import { runStore, TRIGGERABLE_STATUSES } from "../runStore.js";
 import { logger } from "../../utils/logger.js";
 import { LazyInitializable } from "./lazyInitializable.js";
@@ -43,51 +40,13 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
   }
 
   /**
-   * lazy 修正：若 disposableChatService 因 model 不合法做了 fallback，
-   * 將合法的 resolvedModel 寫回 DB 並廣播 CONNECTION_UPDATED，
-   * 讓前端右鍵選單下次拿到合法的 model 值。
-   */
-  private reconcileSummaryModelIfNeeded(
-    canvasId: string,
-    connectionId: string,
-    connection: PipelineContext["connection"],
-    resolvedModel: string,
-  ): void {
-    if (resolvedModel === connection.summaryModel) return;
-
-    const updatedConnection = connectionStore.update(canvasId, connectionId, {
-      summaryModel: resolvedModel,
-    });
-    if (!updatedConnection) return;
-
-    const broadcastPayload: ConnectionUpdatedPayload = {
-      requestId: "",
-      canvasId,
-      success: true,
-      connection: updatedConnection,
-    };
-    socketService.emitToCanvas(
-      canvasId,
-      WebSocketResponseEvents.CONNECTION_UPDATED,
-      broadcastPayload,
-    );
-    logger.log(
-      "Workflow",
-      "Pipeline",
-      `[lazyModel] connection "${connectionId}" summaryModel 已由 "${connection.summaryModel}" 修正為 "${resolvedModel}"`,
-    );
-  }
-
-  /**
    * 【效能說明 — fan-out 批次處理】
    *
    * execute() 一次僅處理「單一 connection」（一個 sourcePod → 一個 targetPod）。
    * fan-out 場景（一個 sourcePod 觸發多個下游 targetPod）是由上層呼叫方
    *（workflowService / triggerService 等）對每條 connection 個別呼叫 execute()。
    *
-   * 因此「N 條 connection 在同一個 execute() 內同時修正 summaryModel 並廣播」的場景
-   * 並不存在——每次呼叫只可能有一次 DB write 與一次廣播，不需要在 execute() 內
-   * 做批次合併。
+   * 因此「N 條 connection 在同一個 execute() 內同時廣播」的場景並不存在。
    *
    * 若未來上層改為在單一 execute() 內處理多條 connection，
    * 應在此處改用 Promise.all 並行 update，再合併成一個 batch 廣播事件。
@@ -125,8 +84,11 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
 
     const sourcePod = podStore.getById(canvasId, sourcePodId);
     const sourcePodName = sourcePod?.name ?? sourcePodId;
-    const provider =
-      connection.summaryProvider ?? sourcePod?.provider ?? "claude";
+    const {
+      connectionLineProvider,
+      connectionLineModel,
+      connectionLineThinkingLevel,
+    } = configStore.getConnectionLineModelConfig();
 
     logger.log(
       "Workflow",
@@ -140,9 +102,9 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
       canvasId,
       sourcePodId,
       targetPodId,
-      provider,
-      summaryModel: connection.summaryModel,
-      summaryThinkingLevel: connection.summaryThinkingLevel ?? null,
+      provider: connectionLineProvider,
+      summaryModel: connectionLineModel,
+      summaryThinkingLevel: connectionLineThinkingLevel,
       runContext,
       pathway,
       delegate,
@@ -154,15 +116,6 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
 
     if (!summaryResult) {
       return;
-    }
-
-    if (summaryResult.resolvedModel) {
-      this.reconcileSummaryModelIfNeeded(
-        canvasId,
-        connectionId,
-        connection,
-        summaryResult.resolvedModel,
-      );
     }
 
     const collectResult = await this.runCollectSourcesStage(

@@ -9,7 +9,7 @@ import type { ConfigGetResultPayload } from "@/types/websocket/responses";
 import type { BackupSettingsPayload } from "@/composables/useBackupSettingsForm";
 import type { PodProvider } from "@/types/pod";
 
-interface MemorySettingsValue {
+interface ModelSettingsValue {
   provider: PodProvider | null;
   model: string;
   thinkingLevel: string | null;
@@ -17,7 +17,8 @@ interface MemorySettingsValue {
 
 interface GlobalConfigStoreLike {
   setTimezoneOffset(offset: number): void;
-  setMemoryConfig?(config: MemorySettingsValue): void;
+  setMemoryConfig?(config: ModelSettingsValue): void;
+  setConnectionLineConfig?(config: ModelSettingsValue): void;
 }
 
 interface UseGlobalSettingsFormOptions {
@@ -56,6 +57,9 @@ interface SettingsSnapshot {
   memoryProvider: PodProvider | null;
   memoryModel: string;
   memoryThinkingLevel: string | null;
+  connectionLineProvider: PodProvider | null;
+  connectionLineModel: string;
+  connectionLineThinkingLevel: string | null;
 }
 
 interface GlobalSettingsForm {
@@ -64,6 +68,9 @@ interface GlobalSettingsForm {
   memoryProvider: Ref<PodProvider | null>;
   memoryModel: Ref<string>;
   memoryThinkingLevel: Ref<string | null>;
+  connectionLineProvider: Ref<PodProvider | null>;
+  connectionLineModel: Ref<string>;
+  connectionLineThinkingLevel: Ref<string | null>;
   isLoading: Ref<boolean>;
   isSaving: Ref<boolean>;
   loadFailed: Ref<boolean>;
@@ -75,7 +82,8 @@ interface GlobalSettingsForm {
 function createSnapshot(
   timezoneOffset: string,
   locale: string,
-  memorySettings: MemorySettingsValue,
+  memorySettings: ModelSettingsValue,
+  connectionLineSettings: ModelSettingsValue,
 ): SettingsSnapshot {
   return {
     timezoneOffset,
@@ -83,6 +91,9 @@ function createSnapshot(
     memoryProvider: memorySettings.provider,
     memoryModel: memorySettings.model,
     memoryThinkingLevel: memorySettings.thinkingLevel,
+    connectionLineProvider: connectionLineSettings.provider,
+    connectionLineModel: connectionLineSettings.model,
+    connectionLineThinkingLevel: connectionLineSettings.thinkingLevel,
   };
 }
 
@@ -101,16 +112,29 @@ export function useGlobalSettingsForm({
   const memoryProvider = ref<PodProvider | null>(null);
   const memoryModel = ref<string>("");
   const memoryThinkingLevel = ref<string | null>(null);
+  const connectionLineProvider = ref<PodProvider | null>(null);
+  const connectionLineModel = ref<string>("");
+  const connectionLineThinkingLevel = ref<string | null>(null);
   const isLoading = ref<boolean>(false);
   const isSaving = ref<boolean>(false);
   const loadFailed = ref<boolean>(false);
   const hasLoadedMemorySettings = ref<boolean>(false);
+  const hasLoadedConnectionLineSettings = ref<boolean>(false);
   const lastSavedSnapshot = ref<SettingsSnapshot>(
-    createSnapshot(timezoneOffset.value, currentLocale.value, {
-      provider: memoryProvider.value,
-      model: memoryModel.value,
-      thinkingLevel: memoryThinkingLevel.value,
-    }),
+    createSnapshot(
+      timezoneOffset.value,
+      currentLocale.value,
+      {
+        provider: memoryProvider.value,
+        model: memoryModel.value,
+        thinkingLevel: memoryThinkingLevel.value,
+      },
+      {
+        provider: connectionLineProvider.value,
+        model: connectionLineModel.value,
+        thinkingLevel: connectionLineThinkingLevel.value,
+      },
+    ),
   );
 
   const isDirty = computed<boolean>(
@@ -119,7 +143,14 @@ export function useGlobalSettingsForm({
       currentLocale.value !== lastSavedSnapshot.value.locale ||
       memoryProvider.value !== lastSavedSnapshot.value.memoryProvider ||
       memoryModel.value !== lastSavedSnapshot.value.memoryModel ||
-      memoryThinkingLevel.value !== lastSavedSnapshot.value.memoryThinkingLevel,
+      memoryThinkingLevel.value !==
+        lastSavedSnapshot.value.memoryThinkingLevel ||
+      connectionLineProvider.value !==
+        lastSavedSnapshot.value.connectionLineProvider ||
+      connectionLineModel.value !==
+        lastSavedSnapshot.value.connectionLineModel ||
+      connectionLineThinkingLevel.value !==
+        lastSavedSnapshot.value.connectionLineThinkingLevel,
   );
 
   const loadConfig = async (
@@ -147,20 +178,41 @@ export function useGlobalSettingsForm({
         "memoryProvider" in result ||
         "memoryModel" in result ||
         "memoryThinkingLevel" in result;
+      hasLoadedConnectionLineSettings.value =
+        "connectionLineProvider" in result ||
+        "connectionLineModel" in result ||
+        "connectionLineThinkingLevel" in result;
       if (hasLoadedMemorySettings.value) {
         memoryProvider.value = result.memoryProvider ?? null;
         memoryModel.value = result.memoryModel ?? "";
-        memoryThinkingLevel.value = null;
+        memoryThinkingLevel.value = result.memoryThinkingLevel ?? null;
       } else {
         memoryProvider.value = null;
         memoryModel.value = "";
         memoryThinkingLevel.value = null;
+      }
+      if (hasLoadedConnectionLineSettings.value) {
+        connectionLineProvider.value = result.connectionLineProvider ?? null;
+        connectionLineModel.value = result.connectionLineModel ?? "";
+        connectionLineThinkingLevel.value =
+          result.connectionLineThinkingLevel ?? null;
+      } else {
+        connectionLineProvider.value = null;
+        connectionLineModel.value = "";
+        connectionLineThinkingLevel.value = null;
       }
       if (hasLoadedMemorySettings.value) {
         configStore.setMemoryConfig?.({
           provider: memoryProvider.value,
           model: memoryModel.value,
           thinkingLevel: memoryThinkingLevel.value,
+        });
+      }
+      if (hasLoadedConnectionLineSettings.value) {
+        configStore.setConnectionLineConfig?.({
+          provider: connectionLineProvider.value,
+          model: connectionLineModel.value,
+          thinkingLevel: connectionLineThinkingLevel.value,
         });
       }
       options.onLoaded?.(result);
@@ -171,6 +223,11 @@ export function useGlobalSettingsForm({
           provider: memoryProvider.value,
           model: memoryModel.value,
           thinkingLevel: memoryThinkingLevel.value,
+        },
+        {
+          provider: connectionLineProvider.value,
+          model: connectionLineModel.value,
+          thinkingLevel: connectionLineThinkingLevel.value,
         },
       );
     } finally {
@@ -189,7 +246,13 @@ export function useGlobalSettingsForm({
       const shouldSaveMemorySettings =
         hasLoadedMemorySettings.value ||
         memoryProvider.value !== null ||
-        memoryModel.value !== "";
+        memoryModel.value !== "" ||
+        memoryThinkingLevel.value !== null;
+      const shouldSaveConnectionLineSettings =
+        hasLoadedConnectionLineSettings.value ||
+        connectionLineProvider.value !== null ||
+        connectionLineModel.value !== "" ||
+        connectionLineThinkingLevel.value !== null;
       const result = await withErrorToast(
         updateConfig({
           timezoneOffset: tzOffset,
@@ -200,7 +263,18 @@ export function useGlobalSettingsForm({
             ? (memoryProvider.value ?? undefined)
             : undefined,
           memoryModel: shouldSaveMemorySettings ? memoryModel.value : undefined,
-          memoryThinkingLevel: shouldSaveMemorySettings ? null : undefined,
+          memoryThinkingLevel: shouldSaveMemorySettings
+            ? memoryThinkingLevel.value
+            : undefined,
+          connectionLineProvider: shouldSaveConnectionLineSettings
+            ? (connectionLineProvider.value ?? undefined)
+            : undefined,
+          connectionLineModel: shouldSaveConnectionLineSettings
+            ? connectionLineModel.value
+            : undefined,
+          connectionLineThinkingLevel: shouldSaveConnectionLineSettings
+            ? connectionLineThinkingLevel.value
+            : undefined,
         }),
         "Config",
         t("settings.saveFailed"),
@@ -213,7 +287,15 @@ export function useGlobalSettingsForm({
           configStore.setMemoryConfig?.({
             provider: memoryProvider.value,
             model: memoryModel.value,
-            thinkingLevel: null,
+            thinkingLevel: memoryThinkingLevel.value,
+          });
+        }
+        if (shouldSaveConnectionLineSettings) {
+          hasLoadedConnectionLineSettings.value = true;
+          configStore.setConnectionLineConfig?.({
+            provider: connectionLineProvider.value,
+            model: connectionLineModel.value,
+            thinkingLevel: connectionLineThinkingLevel.value,
           });
         }
         onBackupSaved?.(backupPayload);
@@ -224,6 +306,11 @@ export function useGlobalSettingsForm({
             provider: memoryProvider.value,
             model: memoryModel.value,
             thinkingLevel: memoryThinkingLevel.value,
+          },
+          {
+            provider: connectionLineProvider.value,
+            model: connectionLineModel.value,
+            thinkingLevel: connectionLineThinkingLevel.value,
           },
         );
         showSuccessToast("Config", t("settings.saveSuccess"));
@@ -242,6 +329,9 @@ export function useGlobalSettingsForm({
     memoryProvider,
     memoryModel,
     memoryThinkingLevel,
+    connectionLineProvider,
+    connectionLineModel,
+    connectionLineThinkingLevel,
     isLoading,
     isSaving,
     loadFailed,

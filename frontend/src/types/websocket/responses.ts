@@ -452,6 +452,9 @@ export interface ConfigGetResultPayload extends ResultPayload {
   memoryProvider?: PodProvider;
   memoryModel?: string;
   memoryThinkingLevel?: string | null;
+  connectionLineProvider?: PodProvider;
+  connectionLineModel?: string;
+  connectionLineThinkingLevel?: string | null;
   hasWorkspacePassword?: boolean;
   transportSecurity?: {
     isTls: boolean;
@@ -468,6 +471,9 @@ export interface ConfigUpdatedPayload extends ResultPayload {
   memoryProvider?: PodProvider;
   memoryModel?: string;
   memoryThinkingLevel?: string | null;
+  connectionLineProvider?: PodProvider;
+  connectionLineModel?: string;
+  connectionLineThinkingLevel?: string | null;
   hasWorkspacePassword?: boolean;
 }
 

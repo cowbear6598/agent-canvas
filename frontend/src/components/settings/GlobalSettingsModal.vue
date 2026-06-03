@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, watch } from "vue";
+import { watch } from "vue";
 import { useI18n } from "vue-i18n";
 import {
   Dialog,
@@ -23,19 +23,15 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import WarningBox from "@/components/ui/WarningBox.vue";
 import { Loader2 } from "lucide-vue-next";
-import type { AcceptableValue } from "reka-ui";
 import { TIMEZONE_OPTIONS } from "@/types";
 import { useToast } from "@/composables/useToast";
 import { useWebSocketErrorHandler } from "@/composables/useWebSocketErrorHandler";
 import { useConfigStore } from "@/stores/configStore";
 import { useSecurityStore } from "@/stores/securityStore";
-import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
 import { LOCALE_OPTIONS } from "@/constants/locale";
 import { useGlobalSettingsForm } from "@/composables/useGlobalSettingsForm";
 import { useBackupSettingsForm } from "@/composables/useBackupSettingsForm";
 import { useWorkspacePasswordForm } from "@/composables/useWorkspacePasswordForm";
-import { PROVIDER_OPTIONS } from "@/components/canvas/connectionMenu/providerOptions";
-import type { ModelOption, PodProvider } from "@/types/pod";
 interface Props {
   open: boolean;
 }
@@ -52,20 +48,16 @@ const { withErrorToast } = useWebSocketErrorHandler();
 
 const configStore = useConfigStore();
 const securityStore = useSecurityStore();
-const providerCapabilityStore = useProviderCapabilityStore();
 
 const hourOptions = Array.from({ length: 24 }, (_, i) =>
   String(i).padStart(2, "0"),
 );
 
 const minuteOptions = ["00", "15", "30", "45"];
-const MEMORY_PROVIDER_UNSET = "__memory_provider_unset__";
 
 const {
   timezoneOffset,
   currentLocale,
-  memoryProvider,
-  memoryModel,
   isLoading,
   isSaving,
   loadFailed,
@@ -115,109 +107,6 @@ const {
   t,
   showSuccessToast,
 });
-
-const hasIncompleteMemorySettings = computed(
-  () => memoryProvider.value !== null && memoryModel.value.trim().length === 0,
-);
-
-const memoryProviderOptions = computed<
-  ReadonlyArray<{ value: PodProvider; label: string }>
->(() => {
-  const options = [...PROVIDER_OPTIONS];
-
-  if (
-    memoryProvider.value &&
-    !options.some((option) => option.value === memoryProvider.value)
-  ) {
-    options.push({
-      value: memoryProvider.value,
-      label: memoryProvider.value,
-    });
-  }
-
-  return options;
-});
-
-const memoryModelOptions = computed<ReadonlyArray<ModelOption>>(() => {
-  if (!memoryProvider.value) return [];
-
-  const options = [...providerCapabilityStore.getAvailableModels(
-    memoryProvider.value,
-  )];
-
-  if (
-    memoryModel.value &&
-    !options.some((option) => option.value === memoryModel.value)
-  ) {
-    options.unshift({
-      label: memoryModel.value,
-      value: memoryModel.value,
-    });
-  }
-
-  return options;
-});
-
-const isMemoryModelDisabled = computed(
-  () => memoryProvider.value === null || memoryModelOptions.value.length === 0,
-);
-
-const memoryProviderSelectValue = computed(
-  () => memoryProvider.value ?? MEMORY_PROVIDER_UNSET,
-);
-
-const memoryModelPlaceholder = computed(() => {
-  if (memoryProvider.value === null) {
-    return t("settings.memoryMaintainer.modelPlaceholder");
-  }
-
-  if (memoryProvider.value === "opencode" && memoryModelOptions.value.length === 0) {
-    return t("pod.modelSelector.opencode.emptyPlaceholder");
-  }
-
-  if (!providerCapabilityStore.loaded) {
-    return t("settings.memoryMaintainer.modelLoading");
-  }
-
-  if (memoryModelOptions.value.length === 0) {
-    return t("settings.memoryMaintainer.modelUnavailable");
-  }
-
-  return t("settings.memoryMaintainer.modelPlaceholder");
-});
-
-const resolveDefaultMemoryModel = (provider: PodProvider): string => {
-  return (
-    providerCapabilityStore.getDefaultModel(provider) ??
-    providerCapabilityStore.getAvailableModels(provider)[0]?.value ??
-    ""
-  );
-};
-
-const handleMemoryProviderChange = (
-  value: AcceptableValue,
-): void => {
-  if (value === null || value === MEMORY_PROVIDER_UNSET) {
-    memoryProvider.value = null;
-    memoryModel.value = "";
-    return;
-  }
-
-  const nextProvider = String(value) as PodProvider;
-  const nextModel = resolveDefaultMemoryModel(nextProvider);
-
-  memoryProvider.value = nextProvider;
-  memoryModel.value = nextModel;
-};
-
-const handleMemoryModelChange = (
-  value: AcceptableValue,
-): void => {
-  if (value === null) return;
-  if (!memoryProvider.value) return;
-
-  memoryModel.value = String(value);
-};
 
 const handleSave = async (): Promise<void> => {
   if (!validateBeforeSave()) {
@@ -300,64 +189,6 @@ watch(
                 </SelectItem>
               </SelectContent>
             </Select>
-          </div>
-
-          <div class="border-t border-border" />
-
-          <div class="space-y-3">
-            <div>
-              <Label>{{ t("settings.memoryMaintainer.title") }}</Label>
-            </div>
-
-            <div class="space-y-2">
-              <Label>{{ t("settings.memoryMaintainer.providerLabel") }}</Label>
-              <Select
-                :model-value="memoryProviderSelectValue"
-                @update:model-value="handleMemoryProviderChange"
-              >
-                <SelectTrigger>
-                  <SelectValue
-                    :placeholder="
-                      t('settings.memoryMaintainer.providerPlaceholder')
-                    "
-                  />
-                </SelectTrigger>
-                <SelectContent position="popper">
-                  <SelectItem :value="MEMORY_PROVIDER_UNSET">
-                    {{ t("settings.memoryMaintainer.providerUnset") }}
-                  </SelectItem>
-                  <SelectItem
-                    v-for="option in memoryProviderOptions"
-                    :key="option.value"
-                    :value="option.value"
-                  >
-                    {{ option.label }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div class="space-y-2">
-              <Label>{{ t("settings.memoryMaintainer.modelLabel") }}</Label>
-              <Select
-                :model-value="memoryModel || undefined"
-                :disabled="isMemoryModelDisabled"
-                @update:model-value="handleMemoryModelChange"
-              >
-                <SelectTrigger>
-                  <SelectValue :placeholder="memoryModelPlaceholder" />
-                </SelectTrigger>
-                <SelectContent position="popper">
-                  <SelectItem
-                    v-for="option in memoryModelOptions"
-                    :key="option.value"
-                    :value="option.value"
-                  >
-                    {{ option.label }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
 
           <div class="border-t border-border" />
@@ -551,9 +382,7 @@ watch(
 
       <DialogFooter>
         <Button
-          :disabled="
-            isLoading || isSaving || loadFailed || hasIncompleteMemorySettings
-          "
+          :disabled="isLoading || isSaving || loadFailed"
           @click="handleSave"
         >
           {{ isSaving ? $t("settings.saving") : $t("common.save") }}

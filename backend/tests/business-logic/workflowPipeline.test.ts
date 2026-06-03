@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { workflowPipeline } from "../../src/services/workflow/workflowPipeline.js";
 import { podStore } from "../../src/services/podStore.js";
 import { connectionStore } from "../../src/services/connectionStore.js";
+import { configStore } from "../../src/services/configStore.js";
 import { socketService } from "../../src/services/socketService.js";
 import { runStore } from "../../src/services/runStore.js";
 import { logger } from "../../src/utils/logger.js";
@@ -142,6 +143,11 @@ describe("WorkflowPipeline", () => {
       mockConnection,
     ]);
     vi.spyOn(connectionStore, "update").mockReturnValue(undefined);
+    vi.spyOn(configStore, "getConnectionLineModelConfig").mockReturnValue({
+      connectionLineProvider: "claude",
+      connectionLineModel: "sonnet",
+      connectionLineThinkingLevel: null,
+    });
     vi.spyOn(socketService, "emitToCanvas").mockImplementation(() => {});
     vi.spyOn(runStore, "getPodInstance").mockReturnValue(undefined);
     mockQueuedPodInstance.mockClear();
@@ -741,18 +747,9 @@ describe("WorkflowPipeline", () => {
     });
   });
 
-  describe("summary model reconciliation rules", () => {
-    it("invalid saved summary model is repaired to the resolved provider model", async () => {
+  describe("summary unified model rules", () => {
+    it("resolved summary model no longer rewrites a single connection model", async () => {
       const mockStrategy = makeStrategy("auto");
-      const updatedConnection = makeConnection({
-        id: CONNECTION_ID,
-        sourcePodId: SOURCE_POD_ID,
-        targetPodId: TARGET_POD_ID,
-        triggerMode: "auto",
-        summaryModel: "gpt-5.4",
-      });
-
-      // 模擬 disposableChatService fallback 到 gpt-5.4
       (
         mockExecutionService.generateSummaryWithFallback as any
       ).mockResolvedValue({
@@ -761,27 +758,10 @@ describe("WorkflowPipeline", () => {
         resolvedModel: "gpt-5.4",
       });
 
-      vi.spyOn(connectionStore, "update").mockReturnValue(updatedConnection);
-
       await workflowPipeline.execute(baseContext, mockStrategy);
 
-      // 應呼叫 connectionStore.update 寫回合法 model
-      expect(connectionStore.update).toHaveBeenCalledWith(
-        CANVAS_ID,
-        CONNECTION_ID,
-        { summaryModel: "gpt-5.4" },
-      );
-
-      // 應廣播 CONNECTION_UPDATED 事件
-      expect(socketService.emitToCanvas).toHaveBeenCalledWith(
-        CANVAS_ID,
-        expect.stringContaining("connection:updated"),
-        expect.objectContaining({
-          canvasId: CANVAS_ID,
-          success: true,
-          connection: updatedConnection,
-        }),
-      );
+      expect(connectionStore.update).not.toHaveBeenCalled();
+      expect(socketService.emitToCanvas).not.toHaveBeenCalled();
     });
 
     it("valid saved summary model is left unchanged", async () => {
@@ -802,8 +782,13 @@ describe("WorkflowPipeline", () => {
       expect(socketService.emitToCanvas).not.toHaveBeenCalled();
     });
 
-    it("codex source repairs an incompatible claude summary model to the codex default", async () => {
+    it("codex source still uses the unified Connection Line model config", async () => {
       const mockStrategy = makeStrategy("auto");
+      vi.mocked(configStore.getConnectionLineModelConfig).mockReturnValue({
+        connectionLineProvider: "codex",
+        connectionLineModel: "gpt-5.4",
+        connectionLineThinkingLevel: "medium",
+      });
 
       // 建立 Codex 上游 Pod
       const mockCodexSourcePod = makePod({
@@ -857,34 +842,23 @@ describe("WorkflowPipeline", () => {
         resolvedModel: "gpt-5.4",
       });
 
-      const updatedConnection = makeConnection({
-        id: CONNECTION_ID,
-        sourcePodId: SOURCE_POD_ID,
-        targetPodId: TARGET_POD_ID,
-        triggerMode: "auto",
-        summaryModel: "gpt-5.4",
-      });
-      vi.spyOn(connectionStore, "update").mockReturnValue(updatedConnection);
-
       await workflowPipeline.execute(codexBaseContext, mockStrategy);
 
-      // 應呼叫 connectionStore.update 寫回 gpt-5.4
-      expect(connectionStore.update).toHaveBeenCalledWith(
+      expect(
+        mockExecutionService.generateSummaryWithFallback,
+      ).toHaveBeenCalledWith(
         CANVAS_ID,
-        CONNECTION_ID,
-        { summaryModel: "gpt-5.4" },
+        SOURCE_POD_ID,
+        TARGET_POD_ID,
+        "codex",
+        "gpt-5.4",
+        "medium",
+        baseRunContext,
+        "auto",
+        expect.any(Object),
       );
-
-      // 應廣播 CONNECTION_UPDATED 事件
-      expect(socketService.emitToCanvas).toHaveBeenCalledWith(
-        CANVAS_ID,
-        expect.stringContaining("connection:updated"),
-        expect.objectContaining({
-          canvasId: CANVAS_ID,
-          success: true,
-          connection: updatedConnection,
-        }),
-      );
+      expect(connectionStore.update).not.toHaveBeenCalled();
+      expect(socketService.emitToCanvas).not.toHaveBeenCalled();
     });
 
     it("fallback summary content does not rewrite the saved model", async () => {
@@ -907,11 +881,76 @@ describe("WorkflowPipeline", () => {
   });
 
   // ----------------------------------------------------------------
-  // B8：summaryProvider resolution 傳入 generateSummaryWithFallback
+  // B8：Connection Line unified config 傳入 generateSummaryWithFallback
   // ----------------------------------------------------------------
   describe("summary provider selection rules", () => {
-    it("connection summaryProvider overrides the source pod provider", async () => {
+    it("summary execution ignores connection summary fields and uses unified Connection Line config", async () => {
       const mockStrategy = makeStrategy("auto");
+      vi.mocked(configStore.getConnectionLineModelConfig).mockReturnValue({
+        connectionLineProvider: "claude",
+        connectionLineModel: "sonnet",
+        connectionLineThinkingLevel: "low",
+      });
+
+      const codexSourcePod = makePod({
+        id: SOURCE_POD_ID,
+        provider: "codex" as const,
+        providerConfig: { model: "gpt-5.4" } as any,
+      });
+      const connectionWithOwnSummaryConfig = makeConnection({
+        summaryProvider: "codex" as any,
+        summaryModel: "gpt-5.4",
+        summaryThinkingLevel: "medium",
+      });
+      const context: PipelineContext = {
+        canvasId: CANVAS_ID,
+        sourcePodId: SOURCE_POD_ID,
+        connection: connectionWithOwnSummaryConfig,
+        triggerMode: "auto",
+        decideResult: {
+          connectionId: CONNECTION_ID,
+          approved: true,
+          reason: null,
+        },
+        runContext: baseRunContext,
+        delegate: createStatusDelegate(baseRunContext),
+      };
+
+      vi.spyOn(podStore, "getById").mockImplementation(
+        (_cId: string, podId: string) => {
+          if (podId === SOURCE_POD_ID) return codexSourcePod as any;
+          return mockTargetPod as any;
+        },
+      );
+      vi.spyOn(connectionStore, "findByTargetPodId").mockReturnValue([
+        connectionWithOwnSummaryConfig,
+      ]);
+
+      await workflowPipeline.execute(context, mockStrategy);
+
+      expect(configStore.getConnectionLineModelConfig).toHaveBeenCalled();
+      expect(
+        mockExecutionService.generateSummaryWithFallback,
+      ).toHaveBeenCalledWith(
+        CANVAS_ID,
+        SOURCE_POD_ID,
+        TARGET_POD_ID,
+        "claude",
+        "sonnet",
+        "low",
+        baseRunContext,
+        "auto",
+        expect.any(Object),
+      );
+    });
+
+    it("unified Connection Line provider overrides source pod and connection summary provider", async () => {
+      const mockStrategy = makeStrategy("auto");
+      vi.mocked(configStore.getConnectionLineModelConfig).mockReturnValue({
+        connectionLineProvider: "codex",
+        connectionLineModel: "gpt-5.4",
+        connectionLineThinkingLevel: "medium",
+      });
 
       // sourcePod 為 claude provider
       const claudeSourcePod = makePod({
@@ -950,16 +989,16 @@ describe("WorkflowPipeline", () => {
 
       await workflowPipeline.execute(codexSummaryContext, mockStrategy);
 
-      // 驗證 provider 參數為 "codex"，而非 sourcePod.provider="claude"
+      // 驗證 provider/model 參數來自 Connection Line 統一設定。
       expect(
         mockExecutionService.generateSummaryWithFallback,
       ).toHaveBeenCalledWith(
         CANVAS_ID,
         SOURCE_POD_ID,
         TARGET_POD_ID,
-        "codex", // summaryProvider 明確指定 codex，cross-provider 解耦
-        codexSummaryConnection.summaryModel,
-        null,
+        "codex",
+        "gpt-5.4",
+        "medium",
         baseRunContext,
         expect.any(String), // pathway
         expect.any(Object), // delegate
