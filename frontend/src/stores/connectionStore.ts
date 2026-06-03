@@ -19,6 +19,7 @@ import {
   createWebSocketRequest,
   WebSocketRequestEvents,
   WebSocketResponseEvents,
+  websocketClient,
 } from "@/services/websocket";
 import { useToast } from "@/composables/useToast";
 import { useCanvasWebSocketAction } from "@/composables/useCanvasWebSocketAction";
@@ -201,9 +202,66 @@ export const useConnectionStore = defineStore("connection", () => {
     updateAutoGroupStatus,
     setConnectionStatus,
   });
+  const workflowListenerEntries = [
+    {
+      event: WebSocketResponseEvents.WORKFLOW_AUTO_TRIGGERED,
+      handler: workflowHandlers.handleWorkflowAutoTriggered as (
+        payload: unknown,
+      ) => void,
+    },
+    {
+      event: WebSocketResponseEvents.WORKFLOW_COMPLETE,
+      handler: workflowHandlers.handleWorkflowComplete as (
+        payload: unknown,
+      ) => void,
+    },
+    {
+      event: WebSocketResponseEvents.WORKFLOW_BRANCH_TRIGGERED,
+      handler: workflowHandlers.handleWorkflowBranchTriggered as (
+        payload: unknown,
+      ) => void,
+    },
+    {
+      event: WebSocketResponseEvents.WORKFLOW_DIRECT_TRIGGERED,
+      handler: workflowHandlers.handleWorkflowDirectTriggered as (
+        payload: unknown,
+      ) => void,
+    },
+    {
+      event: WebSocketResponseEvents.WORKFLOW_QUEUED,
+      handler: workflowHandlers.handleWorkflowQueued as (
+        payload: unknown,
+      ) => void,
+    },
+    {
+      event: WebSocketResponseEvents.WORKFLOW_QUEUE_PROCESSED,
+      handler: workflowHandlers.handleWorkflowQueueProcessed as (
+        payload: unknown,
+      ) => void,
+    },
+  ] as const;
+  let workflowListenersRegistered = false;
 
   function getWorkflowHandlers(): WorkflowHandlers {
     return workflowHandlers;
+  }
+
+  function setupWorkflowListeners(): void {
+    if (workflowListenersRegistered) return;
+
+    for (const { event, handler } of workflowListenerEntries) {
+      websocketClient.on(event, handler);
+    }
+    workflowListenersRegistered = true;
+  }
+
+  function cleanupWorkflowListeners(): void {
+    if (!workflowListenersRegistered) return;
+
+    for (const { event, handler } of workflowListenerEntries) {
+      websocketClient.off(event, handler);
+    }
+    workflowListenersRegistered = false;
   }
 
   async function loadConnectionsFromBackend(): Promise<void> {
@@ -896,6 +954,8 @@ export const useConnectionStore = defineStore("connection", () => {
     isPartOfRunningWorkflow,
     isWorkflowRunning,
     findConnectionById,
+    setupWorkflowListeners,
+    cleanupWorkflowListeners,
     loadConnectionsFromBackend,
     validateNewConnection,
     createConnection,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildScheduleUpdates } from "../../src/services/commands/podCommandService.js";
+import { buildScheduleUpdates } from "../../src/handlers/podHandlers.js";
 import type { ScheduleConfig } from "../../src/types";
 
 /** 建立基本排程設定的輔助函數 */

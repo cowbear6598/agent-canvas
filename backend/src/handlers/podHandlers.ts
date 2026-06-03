@@ -46,6 +46,8 @@ import {
   podCommandService,
 } from "../services/commands/podCommandService.js";
 
+export { buildScheduleUpdates } from "../services/commands/podCommandService.js";
+
 export const handlePodCreate = withCanvasId<PodCreatePayload>(
   WebSocketResponseEvents.POD_CREATED,
   async (

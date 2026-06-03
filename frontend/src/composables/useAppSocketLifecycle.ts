@@ -49,6 +49,9 @@ interface AppSocketLifecycleCanvasStore {
 interface AppSocketLifecycleCanvasContext {
   chatStore: AppSocketLifecycleChatStore;
   canvasStore: AppSocketLifecycleCanvasStore;
+  connectionStore?: {
+    cleanupWorkflowListeners?: () => void;
+  };
 }
 
 interface UseAppSocketLifecycleOptions {
@@ -178,6 +181,7 @@ export function useAppSocketLifecycle(
         }
 
         options.unregisterAppReadyListeners();
+        options.canvasContext?.connectionStore?.cleanupWorkflowListeners?.();
         options.resetInitialization();
         canvasStore.reset();
       }

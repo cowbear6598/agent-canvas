@@ -33,9 +33,7 @@ describe("WebSocket contract manifest", () => {
   it("request event enum、handler manifest 與 event router 註冊結果沒有缺漏", () => {
     registerAllHandlers();
 
-    const requestEvents = Object.values(WebSocketRequestEvents)
-      .filter((event) => event !== WebSocketRequestEvents.HEARTBEAT_PONG)
-      .sort();
+    const requestEvents = Object.values(WebSocketRequestEvents).sort();
     const manifestEvents = webSocketHandlerManifest.map((entry) => entry.event).sort();
     const routerEvents = eventRouter.getRegisteredEvents().sort();
 
@@ -51,7 +49,7 @@ describe("WebSocket contract manifest", () => {
     expectNoDuplicates(manifestEvents);
     for (const entry of serverEventManifest) {
       expect(entry.schema).toBeDefined();
-      expect(entry.schemaName).toMatch(/Schema$/);
+      expect(entry.schemaName).toBe("serverEventPayloadSchema");
     }
   });
 });

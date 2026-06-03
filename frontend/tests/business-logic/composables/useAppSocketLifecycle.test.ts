@@ -35,6 +35,9 @@ function createSocketLifecycleOptions() {
   return {
     canvasContext: {
       chatStore,
+      connectionStore: {
+        cleanupWorkflowListeners: vi.fn(),
+      },
       canvasStore,
     },
     securityStore: reactive({
@@ -91,6 +94,9 @@ describe("useAppSocketLifecycle", () => {
     await nextTick();
 
     expect(options.unregisterAppReadyListeners).toHaveBeenCalledOnce();
+    expect(
+      options.canvasContext.connectionStore.cleanupWorkflowListeners,
+    ).toHaveBeenCalledOnce();
     expect(options.resetInitialization).toHaveBeenCalledOnce();
     expect(options.canvasContext.canvasStore.reset).toHaveBeenCalledOnce();
 

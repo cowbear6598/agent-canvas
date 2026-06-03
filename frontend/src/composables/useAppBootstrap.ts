@@ -33,6 +33,7 @@ interface AppBootstrapCanvasContext {
   connectionStore: {
     loadConnectionsFromBackend: () => Promise<void>;
     resetForCanvasSwitch: () => void;
+    setupWorkflowListeners?: () => void;
   };
   canvasStore: {
     activeCanvasId: string | null;
@@ -201,6 +202,7 @@ export function useAppBootstrap(
       ...providers.map((provider) => integrationStore.loadApps(provider.name)),
     ]);
 
+    options.canvasContext?.connectionStore.setupWorkflowListeners?.();
     await runStore.loadRuns();
   };
 

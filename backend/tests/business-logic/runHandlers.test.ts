@@ -81,7 +81,7 @@ describe("handleRunLoadPodMessages", () => {
 
     expect(emitSuccess).toHaveBeenCalledWith(
       CONNECTION_ID,
-      WebSocketResponseEvents.RUN_POD_MESSAGES_RESULT,
+      WebSocketResponseEvents.RUN_POD_MESSAGES_LOADED,
       {
         requestId: REQUEST_ID,
         success: true,
@@ -144,7 +144,7 @@ describe("handleRunLoadPodMessages", () => {
 
     expect(emitSuccess).toHaveBeenCalledWith(
       CONNECTION_ID,
-      WebSocketResponseEvents.RUN_POD_MESSAGES_RESULT,
+      WebSocketResponseEvents.RUN_POD_MESSAGES_LOADED,
       expect.objectContaining({
         timelineItems: [
           expect.objectContaining({

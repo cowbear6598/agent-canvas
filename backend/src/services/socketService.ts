@@ -235,8 +235,12 @@ class SocketService {
       return payload;
     }
 
-    assertServerEventRegistered(event);
-    return parseServerEventPayload(event, payload);
+    try {
+      assertServerEventRegistered(event);
+      return parseServerEventPayload(event, payload);
+    } catch {
+      return payload;
+    }
   }
 }
 

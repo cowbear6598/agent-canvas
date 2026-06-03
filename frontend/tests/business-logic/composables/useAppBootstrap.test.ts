@@ -61,6 +61,7 @@ function createBootstrapOptions() {
       },
       connectionStore: {
         loadConnectionsFromBackend: vi.fn(async () => undefined),
+        setupWorkflowListeners: vi.fn(),
         resetForCanvasSwitch: vi.fn(),
       },
       canvasStore,
@@ -121,6 +122,7 @@ describe("useAppBootstrap", () => {
     ).toHaveBeenCalledOnce();
     expect(options.stores.integrationStore.loadApps).toHaveBeenCalledWith("slack");
     expect(options.stores.integrationStore.loadApps).toHaveBeenCalledWith("jira");
+    expect(options.canvasContext.connectionStore.setupWorkflowListeners).toHaveBeenCalledOnce();
     expect(options.stores.runStore.loadRuns).toHaveBeenCalledOnce();
     expect(options.onInitialized).toHaveBeenCalledOnce();
     expect(bootstrap.isInitialized.value).toBe(true);

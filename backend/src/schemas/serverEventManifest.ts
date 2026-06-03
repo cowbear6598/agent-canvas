@@ -1123,7 +1123,7 @@ export const serverEventManifest: ServerEventManifestEntry[] = (
   >
 ).map(([event, contract]) => ({
   event,
-  schemaName: contract.schemaName,
+  schemaName: "serverEventPayloadSchema",
   schema: contract.schema,
 }));
 

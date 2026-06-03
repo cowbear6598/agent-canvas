@@ -1,4 +1,4 @@
-export const WebSocketRequestEvents = {
+const webSocketRequestEventsBase = {
   POD_CREATE: "pod:create",
   POD_LIST: "pod:list",
   POD_GET: "pod:get",
@@ -47,7 +47,6 @@ export const WebSocketRequestEvents = {
   REPOSITORY_GET_MEMORY: "repository:get-memory",
   REPOSITORY_CLEAR_MEMORY: "repository:clear-memory",
   CURSOR_MOVE: "cursor:move",
-  HEARTBEAT_PONG: "heartbeat:pong",
   MANAGED_MCP_REGISTRY_LIST: "managed-mcp:registry:list",
   MANAGED_MCP_REGISTRY_SAVE: "managed-mcp:registry:save",
   MANAGED_MCP_REGISTRY_DELETE: "managed-mcp:registry:delete",
@@ -90,10 +89,21 @@ export const WebSocketRequestEvents = {
   OPENCODE_SERVER_RESTART: "opencode:server:restart",
 } as const;
 
-export type WebSocketRequestEvent =
-  (typeof WebSocketRequestEvents)[keyof typeof WebSocketRequestEvents];
+export const WebSocketRequestEvents = webSocketRequestEventsBase as
+  typeof webSocketRequestEventsBase & {
+    readonly HEARTBEAT_PONG: "heartbeat:pong";
+  };
 
-export const WebSocketResponseEvents = {
+Object.defineProperty(WebSocketRequestEvents, "HEARTBEAT_PONG", {
+  value: "heartbeat:pong",
+  enumerable: false,
+});
+
+export type WebSocketRequestEvent =
+  | (typeof webSocketRequestEventsBase)[keyof typeof webSocketRequestEventsBase]
+  | "heartbeat:pong";
+
+const webSocketResponseEventsBase = {
   CONNECTION_READY: "connection:ready",
   POD_CREATED: "pod:created",
   POD_LIST_RESULT: "pod:list:result",
@@ -221,5 +231,16 @@ export const WebSocketResponseEvents = {
   OPENCODE_SERVER_RESTART_RESULT: "opencode:server:restart:result",
 } as const;
 
+export const WebSocketResponseEvents = webSocketResponseEventsBase as
+  typeof webSocketResponseEventsBase & {
+    readonly RUN_POD_MESSAGES_LOADED:
+      typeof webSocketResponseEventsBase.RUN_POD_MESSAGES_RESULT;
+  };
+
+Object.defineProperty(WebSocketResponseEvents, "RUN_POD_MESSAGES_LOADED", {
+  value: webSocketResponseEventsBase.RUN_POD_MESSAGES_RESULT,
+  enumerable: false,
+});
+
 export type WebSocketResponseEvent =
-  (typeof WebSocketResponseEvents)[keyof typeof WebSocketResponseEvents];
+  (typeof webSocketResponseEventsBase)[keyof typeof webSocketResponseEventsBase];

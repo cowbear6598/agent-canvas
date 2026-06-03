@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { connectionManager } from "../../src/services/connectionManager.js";
 import { socketService } from "../../src/services/socketService.js";
-import { WebSocketResponseEvents } from "../../src/schemas/index.js";
 
 function createMockWs() {
   return {
@@ -49,11 +48,7 @@ describe("SocketService", () => {
     });
 
     it("應向除指定 connectionId 外的所有連線發送訊息", () => {
-      socketService.emitToAllExcept(
-        idA,
-        WebSocketResponseEvents.CURSOR_MOVED,
-        { x: 1, y: 2 },
-      );
+      socketService.emitToAllExcept(idA, "test:event", { data: 1 });
 
       expect(wsA.send).not.toHaveBeenCalled();
       expect(wsB.send).toHaveBeenCalledTimes(1);
@@ -61,11 +56,7 @@ describe("SocketService", () => {
     });
 
     it("指定的 connectionId 不應收到訊息", () => {
-      socketService.emitToAllExcept(
-        idB,
-        WebSocketResponseEvents.CURSOR_MOVED,
-        { x: 2, y: 3 },
-      );
+      socketService.emitToAllExcept(idB, "test:event", { data: 2 });
 
       expect(wsB.send).not.toHaveBeenCalled();
       expect(wsA.send).toHaveBeenCalledTimes(1);
@@ -73,11 +64,7 @@ describe("SocketService", () => {
     });
 
     it("excludeConnectionId 為空字串時，所有連線都應收到（等同 emitToAll）", () => {
-      socketService.emitToAllExcept(
-        "",
-        WebSocketResponseEvents.CURSOR_MOVED,
-        { x: 3, y: 4 },
-      );
+      socketService.emitToAllExcept("", "test:event", { data: 3 });
 
       expect(wsA.send).toHaveBeenCalledTimes(1);
       expect(wsB.send).toHaveBeenCalledTimes(1);
@@ -100,34 +87,24 @@ describe("SocketService", () => {
     });
 
     it("應向所有連線發送訊息", () => {
-      socketService.emitToAll(WebSocketResponseEvents.CURSOR_MOVED, {
-        x: 1,
-        y: 2,
-      });
+      socketService.emitToAll("test:event", { data: 1 });
 
       expect(wsA.send).toHaveBeenCalledTimes(1);
       expect(wsB.send).toHaveBeenCalledTimes(1);
     });
 
     it("傳送的訊息內容包含正確的事件類型", () => {
-      socketService.emitToAll(WebSocketResponseEvents.CURSOR_LEFT, {
-        connectionId: "test-connection",
-      });
+      socketService.emitToAll("my:event", { hello: "world" });
 
       const callArg = (wsA.send as ReturnType<typeof vi.fn>).mock
         .calls[0][0] as string;
       const parsed = JSON.parse(callArg);
-      expect(parsed.type).toBe(WebSocketResponseEvents.CURSOR_LEFT);
+      expect(parsed.type).toBe("my:event");
     });
 
     it("沒有連線時不拋出例外", () => {
       removeAllConnections();
-      expect(() =>
-        socketService.emitToAll(WebSocketResponseEvents.CURSOR_MOVED, {
-          x: 0,
-          y: 0,
-        }),
-      ).not.toThrow();
+      expect(() => socketService.emitToAll("test:event", {})).not.toThrow();
     });
   });
 });
