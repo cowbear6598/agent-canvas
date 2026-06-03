@@ -24,8 +24,8 @@ Decision priority (highest first):
 3. The recent conversation messages — used only as supplementary context to disambiguate when description and label alone do not clearly point to one branch.
 
 Rules:
-- You MUST select exactly one valid label from the provided branch list, OR return the fixed string "None".
-- "None" is NOT a default fallback for ambiguous cases. Return "None" ONLY when every branch's description and label clearly conflict with the situation, or when there is genuinely no reasonable choice. When in doubt, pick the branch whose description/label fits best.
+- You MUST select exactly one label from the provided branch list.
+- The selectedLabel value MUST be one of the labels listed in the branch list. Do not invent a label and do not return "None".
 - You MUST respond with ONLY a JSON object in the format: {"selectedLabel": "..."}
 - Do NOT wrap your response in markdown code blocks.
 - Do NOT include any explanation or additional text.
@@ -104,7 +104,7 @@ ${branchListText}
 2. 若說明不足以判斷，則以 label 名稱為次要依據。
 3. 對話內容僅作為輔助情境，用於說明/label 無法明確指向某條時的釐清。
 
-僅當所有 branch 的說明與 label 皆與情境明顯衝突、或實在無從選擇時才回傳 None；模稜兩可時請挑說明/label 最貼近的那條，不要預設回 None。
+selectedLabel 必須是上方可選 Branch 列表中的其中一個 label；即使判斷困難，也請挑說明/label 最貼近的那條，不要回傳 None 或任何列表外的 label。
 
 只需回傳 JSON 物件，格式為 {"selectedLabel": "..."}，不要加上任何 markdown 或說明。`;
   }

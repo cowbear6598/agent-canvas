@@ -32,7 +32,6 @@ export interface BranchDecisionInput {
   abortSignal?: AbortSignal;
 }
 
-/** "None" 為合法值，代表 AI 判斷無任何 branch 符合條件 */
 export interface BranchDecisionFailureAttempt {
   attempt: 1 | 2;
   kind: "provider_error" | "parse_error";

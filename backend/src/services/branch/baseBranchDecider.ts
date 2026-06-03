@@ -5,7 +5,7 @@
  * 差異只在 connection 帶入的 provider / model，流程完全相同。
  *
  * 流程：
- * 1. recentMessages 為空 → 直接回傳 None，不發 model call
+ * 1. recentMessages 與 persistedSummary 皆為空 → 選擇第一個 branch label，不發 model call
  * 2. 組 prompt（branchPromptBuilder）
  * 3. 呼叫 executeDisposableChat
  * 4. parseBranchDecision；失敗則重試一次（第二次仍失敗 → 回傳結構化失敗）
@@ -68,11 +68,28 @@ export class BaseBranchDecider implements BranchDecider {
       abortSignal,
     } = input;
 
-    if (recentMessages.length === 0 && !persistedSummary) {
-      return { kind: "success", selectedLabel: "None" };
-    }
-
     checkAbort(abortSignal);
+
+    const validLabels = branches.map((b) => b.label);
+
+    if (recentMessages.length === 0 && !persistedSummary) {
+      const selectedLabel = validLabels[0];
+
+      if (selectedLabel) {
+        return { kind: "success", selectedLabel };
+      }
+
+      return {
+        kind: "failed",
+        failure: buildFailure([
+          {
+            attempt: 1,
+            kind: "parse_error",
+            message: "找不到可選擇的 branch label",
+          },
+        ]),
+      };
+    }
 
     const systemPrompt = branchPromptBuilder.buildSystemPrompt();
     const userMessage = branchPromptBuilder.buildUserPrompt({
@@ -81,9 +98,6 @@ export class BaseBranchDecider implements BranchDecider {
       recentMessages,
       branches,
     });
-
-    // validLabels：所有 branch 的 label（parseBranchDecision 內部另外允許 "None"）
-    const validLabels = branches.map((b) => b.label);
 
     const failureAttempts: BranchDecisionFailureAttempt[] = [];
     let rawResponse: string | null = null;

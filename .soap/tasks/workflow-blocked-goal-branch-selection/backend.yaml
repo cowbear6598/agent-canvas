@@ -1,0 +1,128 @@
+feature: workflow-blocked-goal-branch-selection
+side: backend
+approved: true
+phases:
+  - id: P1
+    title: Goal blocked 停止 workflow
+    parallel: false
+    verification:
+      - bun run style
+      - bun run test
+    done: true
+    items:
+      - id: P1.A
+        title: Goal gate 停止決策
+        tasks:
+          - id: P1.A.t1
+            text: 調整 `backend/src/services/goalCompletionGate.ts` 的 `GoalGateDecision`，新增 Goal blocked 專用的停止決策，讓 `evaluateGoalGate()` 在 snapshot status 為 `blocked` 時回傳停止而不是 `proceed`
+            completed: true
+            last_files_changed:
+              - backend/src/services/goalCompletionGate.ts
+          - id: P1.A.t2
+            text: 更新 `backend/src/services/goalCompletionGate.ts` 內關於 blocked 的 zh-TW 註解與 log 語意，明確表示 blocked 會停止 workflow 而不是視為完成
+            completed: true
+            last_files_changed:
+              - backend/src/services/goalCompletionGate.ts
+          - id: P1.A.t3
+            text: 更新 `backend/tests/business-logic/goalCompletionGate.test.ts`，把 blocked snapshot 的期待從 `proceed` 改為停止決策，並保留 completed snapshot 仍會 `proceed` 的測試
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/goalCompletionGate.test.ts
+      - id: P1.B
+        title: Streaming executor 停止下游觸發
+        tasks:
+          - id: P1.B.t1
+            text: 調整 `backend/src/services/claude/streamingChatExecutor.ts` 的 Goal gate loop，遇到 Goal blocked 停止決策時先持久化 goal round divider，再呼叫 `callbacks.onError` 回報 zh-TW 使用者可見訊息，最後直接 return，不呼叫 `callbacks.onComplete`
+            completed: true
+            last_files_changed:
+              - backend/src/services/claude/streamingChatExecutor.ts
+          - id: P1.B.t2
+            text: 更新 `backend/tests/business-logic/streamingChatExecutor.test.ts`，新增 run mode 中 Goal Runtime 回報 blocked 後會寫入 blocked divider、呼叫 onError、且不呼叫 onComplete 的商業邏輯測試
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/streamingChatExecutor.test.ts
+
+  - id: P2
+    title: Branch 決策移除 None
+    parallel: false
+    verification:
+      - bun run style
+      - bun run test
+    done: true
+    items:
+      - id: P2.A
+        title: Branch prompt 與 parser 契約
+        tasks:
+          - id: P2.A.t1
+            text: 調整 `backend/src/services/workflow/branchPromptBuilder.ts`，移除允許回傳固定字串 `None` 的 prompt 規則，改成要求模型只能回傳可選 Branch 列表中的其中一個 label
+            completed: true
+            last_files_changed:
+              - backend/src/services/workflow/branchPromptBuilder.ts
+          - id: P2.A.t2
+            text: 調整 `backend/src/services/branch/branchDecisionParser.ts`，讓 `parseBranchDecision()` 只接受 `validLabels` 內的 label，模型回傳 `None` 時視為 `LABEL_HALLUCINATION`
+            completed: true
+            last_files_changed:
+              - backend/src/services/branch/branchDecisionParser.ts
+          - id: P2.A.t3
+            text: 更新 `backend/tests/business-logic/branchDecisionParser.test.ts`，移除 `None` 合法案例，新增 `None` 會被拒絕且合法 label 仍可通過的測試
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/branchDecisionParser.test.ts
+      - id: P2.B
+        title: Branch decider 必選一條
+        tasks:
+          - id: P2.B.t1
+            text: '調整 `backend/src/services/branch/baseBranchDecider.ts`，移除沒有最近訊息與摘要時直接回傳 `selectedLabel: "None"` 的分支，改成依既有 branch 順序選出第一個合法 label 作為無上下文時的明確決策'
+            completed: true
+            last_files_changed:
+              - backend/src/services/branch/baseBranchDecider.ts
+          - id: P2.B.t2
+            text: 更新 `backend/src/services/branch/branchDecider.ts` 的型別註解，移除 `None` 是合法 branch 決策結果的描述
+            completed: true
+            last_files_changed:
+              - backend/src/services/branch/branchDecider.ts
+          - id: P2.B.t3
+            text: 更新 `backend/tests/business-logic/branchDecider.test.ts`，將無訊息與無摘要的案例改為選中第一個 branch label，並將模型回傳 `None` 的案例改為 parse error 後重試或結構化失敗
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/branchDecider.test.ts
+      - id: P2.C
+        title: Branch workflow 結果套用
+        tasks:
+          - id: P2.C.t1
+            text: '調整 `backend/src/services/workflow/branchDecisionService.ts` 的回傳契約，移除 `outcome: "none"` 的正常成功路徑，讓成功結果一定含有 `selectedConnectionId`'
+            completed: true
+            last_files_changed:
+              - backend/src/services/workflow/branchDecisionService.ts
+          - id: P2.C.t2
+            text: 調整 `backend/src/services/workflow/workflowBranchTriggerService.ts`，移除 AI 選 None 的 log 與全部拒絕正常路徑，保留 `failed` 與 abort 路徑既有錯誤/跳過處理
+            completed: true
+            last_files_changed:
+              - backend/src/services/workflow/workflowBranchTriggerService.ts
+          - id: P2.C.t3
+            text: 更新 `backend/tests/business-logic/workflowBranchTriggerService.test.ts`，移除 AI 選 None 的成功案例，改以 selected 與 failed 路徑覆蓋 branch 必選與決策失敗行為
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/workflowBranchTriggerService.test.ts
+
+  - id: P3
+    title: Run workflow 回歸覆蓋
+    parallel: false
+    verification:
+      - bun run style
+      - bun run test
+    done: true
+    items:
+      - id: P3.A
+        title: Blocked run 可觀察結果
+        tasks:
+          - id: P3.A.t1
+            text: 補強既有 run 或 workflow business-logic 測試，覆蓋 Goal blocked 後 source Pod 不會觸發 outgoing auto、branch、direct connections 的行為
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/streamingChatExecutor.test.ts
+          - id: P3.A.t2
+            text: 更新對應 run 狀態測試，確認 blocked 後 run instance 會透過既有 error/skipped pathway 讓下游不再保持等待狀態
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/runExecutionService.test.ts

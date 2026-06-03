@@ -1,0 +1,39 @@
+feature: workflow-blocked-goal-branch-selection
+approved: true
+scenarios:
+  - id: F1
+    scenario: 使用者執行 workflow 時某個 Goal 被標記為 blocked
+    given:
+      - 使用者已建立包含 Goal 的 workflow
+      - workflow 中有可被下游 Pod 接續的路徑
+      - workflow 正在 Run 模式執行
+    when:
+      - 其中一個 Pod 的 Goal 被標記為 blocked
+    then:
+      - workflow 不再觸發該 blocked Pod 的下游 Pod
+      - 使用者可以在 run 對話紀錄看到 Goal blocked 的分隔資訊
+      - run 不會呈現為仍在等待下游繼續執行
+
+  - id: F2
+    scenario: 使用者使用 branch Connection Line 進行分支決策
+    given:
+      - 使用者已建立一組 branch Connection Line
+      - 每條 branch Connection Line 都有自己的 label
+      - workflow 正在執行到 branch 決策點
+    when:
+      - 系統進行 branch 決策
+    then:
+      - 系統一定會從既有 branch label 中選擇一條
+      - 系統不會選擇 none 作為分支結果
+      - 被選中的下游 Pod 會被觸發
+
+  - id: F3
+    scenario: 使用者查看尚未決策的 branch Connection Line
+    given:
+      - 使用者在畫布上查看 branch Connection Line
+      - branch Connection Line 尚未進入本次決策
+    when:
+      - 使用者查看連線狀態
+    then:
+      - 連線仍可呈現尚未決策的狀態
+      - 使用者不會把尚未決策狀態理解成可選的 none 分支

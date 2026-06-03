@@ -34,11 +34,6 @@ describe("parseBranchDecision", () => {
     expect(result).toEqual({ ok: true, selectedLabel: "Checklist" });
   });
 
-  it("合法 JSON + label === None → ok（None 為合法值）", () => {
-    const result = parseBranchDecision('{"selectedLabel":"None"}', validLabels);
-    expect(result).toEqual({ ok: true, selectedLabel: "None" });
-  });
-
   it("帶 markdown code block 的合法 JSON → 剝除後 ok", () => {
     const result = parseBranchDecision(
       '```json\n{"selectedLabel":"Code Review"}\n```',
@@ -90,7 +85,7 @@ describe("parseBranchDecision", () => {
     });
   });
 
-  it("selectedLabel 不在 validLabels 也不是 None → LABEL_HALLUCINATION", () => {
+  it("selectedLabel 不在 validLabels → LABEL_HALLUCINATION", () => {
     const result = parseBranchDecision(
       '{"selectedLabel":"NonExistent"}',
       validLabels,
@@ -101,8 +96,11 @@ describe("parseBranchDecision", () => {
     });
   });
 
-  it("空 validLabels 清單 + selectedLabel=None → ok", () => {
-    const result = parseBranchDecision('{"selectedLabel":"None"}', []);
-    expect(result).toEqual({ ok: true, selectedLabel: "None" });
+  it("selectedLabel 為 None → LABEL_HALLUCINATION", () => {
+    const result = parseBranchDecision('{"selectedLabel":"None"}', validLabels);
+    expect(result).toEqual({
+      ok: false,
+      reason: BranchDecisionParseError.LABEL_HALLUCINATION,
+    });
   });
 });

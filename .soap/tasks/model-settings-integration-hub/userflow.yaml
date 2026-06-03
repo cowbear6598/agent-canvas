@@ -1,0 +1,58 @@
+feature: model-settings-integration-hub
+approved: false
+scenarios:
+  - id: F1
+    scenario: 使用者從整合管理中心進入 Model 設定
+    given:
+      - 使用者在 Agent 畫布頁面
+      - 使用者開啟整合管理中心
+    when:
+      - 使用者選擇 Model 設定
+    then:
+      - 系統顯示 Model 設定畫面
+      - 系統提供可設定類別選擇
+
+  - id: F2
+    scenario: 使用者設定 Memory 使用的模型
+    given:
+      - 使用者在 Model 設定畫面
+      - 使用者選擇 Memory 類別
+    when:
+      - 使用者選擇 provider
+      - 使用者選擇 model
+      - 使用者選擇 thinking level
+      - 使用者儲存設定
+    then:
+      - 系統儲存 Memory 的 provider
+      - 系統儲存 Memory 的 model
+      - 系統儲存 Memory 的 thinking level
+      - 後續 Memory 維護使用新的設定
+
+  - id: F3
+    scenario: 使用者設定 Connection Line 統一模型
+    given:
+      - 使用者在 Model 設定畫面
+      - 使用者選擇 Connection Line 類別
+    when:
+      - 使用者選擇 provider
+      - 使用者選擇 model
+      - 使用者選擇 thinking level
+      - 使用者儲存設定
+    then:
+      - 系統儲存 Connection Line 的統一 provider
+      - 系統儲存 Connection Line 的統一 model
+      - 系統儲存 Connection Line 的統一 thinking level
+      - 後續 Connection Line 執行使用統一設定
+
+  - id: F4
+    scenario: 使用者切換 Model 設定類別時查看目前設定
+    given:
+      - 使用者在 Model 設定畫面
+      - 系統已有 Memory 設定
+      - 系統已有 Connection Line 統一設定
+    when:
+      - 使用者切換設定類別
+    then:
+      - 系統顯示該類別目前的 provider
+      - 系統顯示該類別目前的 model
+      - 系統顯示該類別目前的 thinking level

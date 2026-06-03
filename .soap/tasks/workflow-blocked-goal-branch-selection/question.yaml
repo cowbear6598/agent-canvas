@@ -1,0 +1,44 @@
+feature: workflow-blocked-goal-branch-selection
+created: "2026-06-03"
+approved: true
+impact_classification:
+  frontend:
+    status: required
+    evidence:
+      - 使用者明確要求 Connection Line 的 branch 簡化，不需要 none 可以選，一定要從選項中選擇一個；此為使用者可見的連線分支行為與文案/互動調整。
+  backend:
+    status: required
+    evidence:
+      - 使用者明確要求 Goal 被 blocked 時整個 workflow 停下；這是 workflow 執行邏輯變更。
+      - 使用者要求 branch 不可選 none，現有 AI branch 決策允許回傳 None 並導致不觸發任何 downstream pipeline，需調整後端決策規則。
+questions:
+  - id: Q1
+    text: 現有 Goal blocked 後是否會讓 workflow 繼續往下游觸發？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      會。`backend/src/services/goalCompletionGate.ts` 的註解明確寫出 `status === "blocked"` 依產品決策視為完成的一種，`evaluateGoalGate()` 對非 running 或無 active todo 的狀態都回傳 `action: "proceed"`。`backend/src/services/claude/streamingChatExecutor.ts` 的 Goal gate loop 在 `proceed` 後才呼叫 `callbacks.onComplete`，因此 blocked 目前會進入完成 callback，讓下游 workflow 依既有流程繼續觸發。`autoForceBlock()` 註解也寫明 blocked 視為完成，下游 workflow 仍會被觸發。
+  - id: Q2
+    text: 現有 Run 模式是否有可用機制把某個 Pod blocked 後的下游路徑標成 skipped 或讓整個 run 停止？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      Run 模式已存在終止/不可達路徑機制，但目前不是由 Goal blocked 觸發。`backend/src/services/workflow/runExecutionService.ts` 會依 Pod instance 狀態與 pathway settlement 判斷下游是否不可達，來源為 skipped 或 error 時會 settle 對應 pathway，並讓未觸發的下游變成 skipped。Goal gate 目前只產生 completed/blocked 的 goal round divider，沒有把 blocked 映射成 Pod instance error/skipped，也沒有讓 run status 立即進入 terminal 狀態。
+  - id: Q3
+    text: branch connection 的 none 是 UI 選項、資料狀態，還是 AI 決策結果？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      目前主要是 AI 決策結果，不是前端 trigger mode 選單。`frontend/src/components/canvas/ConnectionContextMenu.vue` 只提供 auto、direct、branch 三種 trigger mode，沒有 none 選項。資料上 `decideStatus: "none"` 仍是必要狀態，代表尚未決策或清空狀態，前後端多處用它作為 idle baseline。真正的 branch none 在後端：`backend/src/services/workflow/branchPromptBuilder.ts` 指示模型可以回傳固定字串 `None`；`backend/src/services/branch/branchDecisionParser.ts` 把 `None` 當合法 label；`backend/src/services/branch/baseBranchDecider.ts` 在沒有最近訊息且沒有摘要時直接回傳 `selectedLabel: "None"`；`backend/src/services/workflow/branchDecisionService.ts` 把 `selectedLabel === "None"` 轉為 `outcome: "none"`、`selectedConnectionId: null`。
+  - id: Q4
+    text: 移除 branch None 會影響哪些測試與行為邊界？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      會影響後端 branch 決策測試。`backend/tests/business-logic/branchDecisionParser.test.ts` 目前驗證 `None` 是合法值；`backend/tests/business-logic/branchDecider.test.ts` 驗證沒有訊息時直接回傳 None；`backend/tests/business-logic/workflowBranchTriggerService.test.ts` 有多個 AI 選 None 後所有 connection rejected/settleAndSkipPath 的案例。調整後應改成：parser 只接受合法 branch label；prompt 不再允許 None；沒有訊息/摘要時仍需透過模型或 deterministic fallback 選出一條合法 branch；若模型回傳 None 應視為 parse error 並重試，兩次仍無合法 label 則走既有 failed/error 路徑。
+  - id: Q5
+    text: '使用者是否要求保留 `decideStatus: "none"` 這種未決策狀態？'
+    type: user-input
+    completed: true
+    answer: |
+      依需求文字判斷，使用者要移除的是 branch 決策可選的 none，而不是資料狀態 `decideStatus: "none"`。`decideStatus: "none"` 作為尚未決策/清空狀態仍應保留，否則會擴大修改範圍並破壞 idle 顯示與資料預設值。

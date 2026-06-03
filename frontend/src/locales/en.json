@@ -768,7 +768,7 @@
     },
     "checkDirtyFailed": "Failed to check modification status",
     "connectionLine": {
-      "aiRejectedReason": "Not triggered: {reason}",
+      "aiRejectedReason": "Not selected: {reason}",
       "aiErrorReason": "Error: {reason}"
     },
     "podTypeMenu": {}

@@ -54,9 +54,11 @@ import { socketService } from "../../src/services/socketService.js";
 import { podStore } from "../../src/services/podStore.js";
 import { runStore } from "../../src/services/runStore.js";
 import { runExecutionService } from "../../src/services/workflow/runExecutionService.js";
+import { workflowExecutionService } from "../../src/services/workflow/index.js";
 import { WebSocketResponseEvents } from "../../src/schemas";
 import { AbortError } from "@anthropic-ai/claude-agent-sdk";
 import { ChatExecutionStrategy } from "../../src/services/executionStrategy.js";
+import { onRunChatComplete } from "../../src/utils/chatCallbacks.js";
 import type { RunContext } from "../../src/types/run.js";
 import { getProvider } from "../../src/services/provider/index.js";
 import type { NormalizedEvent } from "../../src/services/provider/types.js";
@@ -758,12 +760,6 @@ describe("executeStreamingChat", () => {
         blockedReason: null,
         handoffSummary: "完成本輪",
       },
-      {
-        status: "blocked" as const,
-        toolName: `mcp__${GOAL_MCP_SERVER_NAME}__block_goal_progress`,
-        blockedReason: "等待人工確認",
-        handoffSummary: "需要人工確認",
-      },
     ])(
       "Goal $status 會產生 divider、觸發下游，再 dequeue 下一個 connection item",
       async ({ status, toolName, blockedReason, handoffSummary }) => {
@@ -858,6 +854,125 @@ describe("executeStreamingChat", () => {
         ]);
       },
     );
+
+    it("Run mode 中 Goal blocked 應寫入 blocked divider、觸發 onError，且不觸發 auto/branch/direct 下游完成 callback", async () => {
+      const order: string[] = [];
+      const goal = {
+        todos: [{ id: "todo-1", text: "需要人工確認" }],
+      };
+      const pod = insertClaudePod({ goal });
+      ensureGoalRuntime(pod, defaultRunContext);
+      const checkAndTriggerSpy = vi
+        .spyOn(workflowExecutionService, "checkAndTriggerWorkflows")
+        .mockResolvedValue(undefined);
+
+      vi.spyOn(runStore, "addRunGoalRoundDivider").mockImplementation(
+        (input) => {
+          order.push(`divider:${input.status}:persist`);
+          return {
+            type: "goal-round-divider",
+            id: `divider-${input.status}`,
+            runId: input.runId,
+            podId: input.podId,
+            sourcePodIds: input.sourcePodIds,
+            sourcePodNames: input.sourcePodNames,
+            status: input.status,
+            blockedReason: input.blockedReason ?? null,
+            completedAt: "2026-05-24T10:00:00.000Z",
+            connectionIds: input.connectionIds,
+          };
+        },
+      );
+      vi.mocked(socketService.emitToCanvas).mockImplementation(
+        (_canvasId, event, payload) => {
+          if (event !== WebSocketResponseEvents.RUN_GOAL_ROUND_DIVIDER) {
+            return;
+          }
+          const divider = payload as { status: "completed" | "blocked" };
+          order.push(`divider:${divider.status}:broadcast`);
+        },
+      );
+
+      setupProviderMock([
+        {
+          type: "tool_call_result",
+          toolUseId: "goal-tool-1",
+          toolName: `mcp__${GOAL_MCP_SERVER_NAME}__block_goal_progress`,
+          output: JSON.stringify({
+            status: "blocked",
+            activeTodoId: null,
+            activeTodoText: null,
+            nextTodoId: null,
+            nextTodoText: null,
+            completedTodoIds: [],
+            blockedReason: "等待人工確認",
+            handoffSummary: "需要人工確認",
+            completedCount: 0,
+            totalCount: 1,
+          }),
+        },
+        { type: "turn_complete" },
+      ]);
+
+      const onComplete = vi.fn(() => {
+        order.push("auto/branch/direct:downstream");
+        onRunChatComplete(defaultRunContext, canvasId, pod.id);
+      });
+      const onError = vi.fn(() => {
+        order.push("error");
+      });
+
+      await executeStreamingChat(
+        {
+          canvasId,
+          podId: pod.id,
+          message,
+          abortable: false,
+          strategy: makeStrategy(),
+          goalRoundDivider: {
+            sourcePodIds: ["source-1"],
+            sourcePodNames: ["來源 Pod"],
+            connectionIds: [
+              "conn-auto-blocked",
+              "conn-branch-blocked",
+              "conn-direct-blocked",
+            ],
+          },
+        },
+        { onComplete, onError },
+      );
+
+      expect(runStore.addRunGoalRoundDivider).toHaveBeenCalledWith(
+        expect.objectContaining({
+          runId: defaultRunContext.runId,
+          podId: pod.id,
+          sourcePodIds: ["source-1"],
+          sourcePodNames: ["來源 Pod"],
+          status: "blocked",
+          blockedReason: "等待人工確認",
+          connectionIds: [
+            "conn-auto-blocked",
+            "conn-branch-blocked",
+            "conn-direct-blocked",
+          ],
+        }),
+      );
+      expect(onError).toHaveBeenCalledWith(
+        canvasId,
+        pod.id,
+        expect.objectContaining({
+          message:
+            "Goal 已標記為 blocked，workflow 已停止觸發下游 Pod：等待人工確認",
+        }),
+      );
+      expect(onComplete).not.toHaveBeenCalled();
+      expect(checkAndTriggerSpy).not.toHaveBeenCalled();
+      expect(order).toEqual([
+        "divider:blocked:persist",
+        "divider:blocked:broadcast",
+        "error",
+      ]);
+    });
 
     it("無 Goal 的 Pod 收到 Goal MCP tool result 時仍應建立空的 runtime snapshot", async () => {
       const pod = insertClaudePod();
@@ -1146,8 +1261,8 @@ describe("executeStreamingChat", () => {
       );
       expect(snapshot?.state.status).toBe("blocked");
       expect(snapshot?.state.blockedReason).toContain("未推進");
-      // 即使 force_block，下游 workflow 仍會被觸發（blocked 視為完成的一種）
-      expect(onComplete).toHaveBeenCalledWith(canvasId, pod.id);
+      // force_block 會停止 workflow，不再觸發下游
+      expect(onComplete).not.toHaveBeenCalled();
     });
 
     it("第一輪收到不可恢復 fatal provider error 時應保留未完成 goal，觸發 onError，且不觸發 onComplete", async () => {

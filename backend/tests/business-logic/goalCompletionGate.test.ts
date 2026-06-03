@@ -64,7 +64,7 @@ describe("evaluateGoalGate", () => {
     expect(decision.action).toBe("proceed");
   });
 
-  it("status === 'blocked' 時應 proceed（blocked 視為完成的一種）", () => {
+  it("status === 'blocked' 時應停止 workflow，不再 proceed", () => {
     const snapshot = ensureGoalRuntime(pod, runContext);
     if (!snapshot) throw new Error("snapshot 應存在");
     const blocked: GoalRuntimeSnapshot = {
@@ -84,7 +84,9 @@ describe("evaluateGoalGate", () => {
       retryCount: 0,
       noProgressCount: 0,
     });
-    expect(decision.action).toBe("proceed");
+    expect(decision.action).toBe("stop_blocked");
+    if (decision.action !== "stop_blocked") return;
+    expect(decision.reason).toBe("卡住了");
   });
 
   it("status === 'running' 且有 activeTodo 時應 retry，附帶 nudge 訊息", () => {

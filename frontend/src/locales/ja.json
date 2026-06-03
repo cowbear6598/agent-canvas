@@ -768,7 +768,7 @@
     },
     "checkDirtyFailed": "変更状態の確認に失敗しました",
     "connectionLine": {
-      "aiRejectedReason": "トリガーしない理由：{reason}",
+      "aiRejectedReason": "選択されなかった理由：{reason}",
       "aiErrorReason": "エラー：{reason}"
     },
     "podTypeMenu": {}

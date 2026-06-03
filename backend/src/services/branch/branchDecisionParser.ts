@@ -16,7 +16,7 @@ export const BranchDecisionParseError = {
   PARSE_FAIL: "PARSE_FAIL",
   /** zod schema 驗證失敗 */
   SCHEMA_FAIL: "SCHEMA_FAIL",
-  /** selectedLabel 不在合法清單內，也非 "None" */
+  /** selectedLabel 不在合法清單內 */
   LABEL_HALLUCINATION: "LABEL_HALLUCINATION",
 } as const;
 
@@ -99,10 +99,10 @@ function extractFirstJsonObjectContainingSelectedLabel(raw: string): string {
  * 1. stripMarkdownCodeBlock
  * 2. JSON.parse（失敗 → PARSE_FAIL）
  * 3. zod schema 驗證（失敗 → SCHEMA_FAIL）
- * 4. 檢查 selectedLabel 是否為 "None" 或在 validLabels 內（否 → LABEL_HALLUCINATION）
+ * 4. 檢查 selectedLabel 是否在 validLabels 內（否 → LABEL_HALLUCINATION）
  *
  * @param raw - AI 原始回傳字串
- * @param validLabels - 合法的 branch label 列表（不含 "None"，函式內部自動允許）
+ * @param validLabels - 合法的 branch label 列表
  */
 export function parseBranchDecision(
   raw: string,
@@ -128,7 +128,7 @@ export function parseBranchDecision(
 
   const { selectedLabel } = result.data;
 
-  if (selectedLabel !== "None" && !validLabels.includes(selectedLabel)) {
+  if (!validLabels.includes(selectedLabel)) {
     return { ok: false, reason: BranchDecisionParseError.LABEL_HALLUCINATION };
   }
 

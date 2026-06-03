@@ -241,15 +241,22 @@ describe("WorkflowBranchTriggerService", () => {
   });
 
   // ============================================================
-  // processBranchConnections — rejected 路徑
+  // processBranchConnections — failed 路徑
   // ============================================================
-  describe("processBranchConnections — rejected 路徑", () => {
-    it("所有 connection 皆被 rejected → run mode 走 settleAndSkipPath，不觸發 pipeline", async () => {
+  describe("processBranchConnections — failed 路徑", () => {
+    it("branch 決策失敗 → run mode 走 settleAndSkipPath，不觸發 pipeline", async () => {
       const runContext = makeRunContext();
       vi.spyOn(branchDecisionService, "decideBranch").mockResolvedValue({
-        outcome: "none",
+        outcome: "failed",
         selectedConnectionId: null,
         rejectedConnectionIds: ["conn-branch-1"],
+        failure: {
+          kind: "provider_error",
+          message: "模型服務失敗",
+          attempts: [
+            { attempt: 1, kind: "provider_error", message: "模型服務失敗" },
+          ],
+        },
       });
 
       await workflowBranchTriggerService.processBranchConnections(
@@ -272,11 +279,18 @@ describe("WorkflowBranchTriggerService", () => {
       expect(workflowPipeline.execute).not.toHaveBeenCalled();
     });
 
-    it("AI 選 None 的 workflow log 使用 canvas / source pod 名稱", async () => {
+    it("branch 決策失敗的 workflow log 使用 canvas / source pod 名稱", async () => {
       vi.spyOn(branchDecisionService, "decideBranch").mockResolvedValue({
-        outcome: "none",
+        outcome: "failed",
         selectedConnectionId: null,
         rejectedConnectionIds: ["conn-branch-1"],
+        failure: {
+          kind: "provider_error",
+          message: "模型服務失敗",
+          attempts: [
+            { attempt: 1, kind: "provider_error", message: "模型服務失敗" },
+          ],
+        },
       });
 
       await workflowBranchTriggerService.processBranchConnections(
@@ -286,51 +300,11 @@ describe("WorkflowBranchTriggerService", () => {
         makeRunContext(),
       );
 
-      expect(logger.log).toHaveBeenCalledWith(
+      expect(logger.error).toHaveBeenCalledWith(
         "Workflow",
-        "Update",
-        "[Branch] AI 選 None，不觸發任何 pipeline，canvas「Branch Canvas」 sourcePod「Pod source-pod」",
+        "Error",
+        "[Branch] 決策失敗，全部拒絕，canvas「Branch Canvas」 sourcePod「Pod source-pod」：模型服務失敗",
       );
-    });
-  });
-
-  // ============================================================
-  // processBranchConnections — None 路徑（AI 選 None）
-  // ============================================================
-  describe("processBranchConnections — None 路徑", () => {
-    it("AI 選 None → run mode 所有 connection 走 settleAndSkipPath，不觸發 pipeline", async () => {
-      const runContext = makeRunContext();
-      const conn1 = makeConnection({ id: "conn-1", label: "Checklist" });
-      const conn2 = makeConnection({
-        id: "conn-2",
-        label: "Review",
-        targetPodId: "target-pod-2",
-      });
-
-      vi.spyOn(branchDecisionService, "decideBranch").mockResolvedValue({
-        outcome: "none",
-        selectedConnectionId: null,
-        rejectedConnectionIds: ["conn-1", "conn-2"],
-      });
-
-      await workflowBranchTriggerService.processBranchConnections(
-        CANVAS_ID,
-        SOURCE_POD_ID,
-        [conn1, conn2],
-        runContext,
-      );
-
-      // run mode 不更新 connection status / decideStatus
-      expect(connectionStore.updateDecideStatus).not.toHaveBeenCalled();
-
-      // run mode 不廣播 CONNECTION_UPDATED
-      expect(socketService.emitToCanvas).not.toHaveBeenCalledWith(
-        CANVAS_ID,
-        WebSocketResponseEvents.CONNECTION_UPDATED,
-        expect.anything(),
-      );
-
-      expect(workflowPipeline.execute).not.toHaveBeenCalled();
     });
   });
 
@@ -439,30 +413,6 @@ describe("WorkflowBranchTriggerService", () => {
       ]);
     });
 
-    it("selectedConnectionId=null（None）→ 所有 connection approved=false", async () => {
-      vi.spyOn(branchDecisionService, "decideBranch").mockResolvedValue({
-        outcome: "none",
-        selectedConnectionId: null,
-        rejectedConnectionIds: ["conn-branch-1"],
-      });
-
-      const results = await workflowBranchTriggerService.decide({
-        canvasId: CANVAS_ID,
-        sourcePodId: SOURCE_POD_ID,
-        connections: [mockConnection],
-        runContext: makeRunContext(),
-      });
-
-      expect(results).toEqual([
-        {
-          connectionId: "conn-branch-1",
-          approved: false,
-          reason: null,
-          isError: false,
-        },
-      ]);
-    });
-
     it("decision failed 時，所有 connection 應標記為 isError=true 並帶失敗原因", async () => {
       vi.spyOn(branchDecisionService, "decideBranch").mockResolvedValue({
         outcome: "failed",
@@ -517,17 +467,23 @@ describe("WorkflowBranchTriggerService", () => {
         "recordSourceRejection",
       );
 
-      // AI 選 None：所有 connection 皆 rejected
+      const selectedConn = makeConnection({
+        id: "conn-selected",
+        label: "Review",
+        targetPodId: "target-pod-2",
+      });
+
+      // 選中另一條 branch，讓 multi-input connection 走 rejected
       vi.spyOn(branchDecisionService, "decideBranch").mockResolvedValue({
-        outcome: "none",
-        selectedConnectionId: null,
+        outcome: "selected",
+        selectedConnectionId: "conn-selected",
         rejectedConnectionIds: ["conn-branch-1"],
       });
 
       await workflowBranchTriggerService.processBranchConnections(
         CANVAS_ID,
         SOURCE_POD_ID,
-        [mockConnection],
+        [mockConnection, selectedConn],
         makeRunContext(),
       );
 

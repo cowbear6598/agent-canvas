@@ -318,6 +318,8 @@ interface ChatTurnOutcome {
 const CLIENT_SAFE_BLOCKED_REASON_MAX_LENGTH = 240;
 const PENDING_GOAL_UNRECOVERABLE_PROVIDER_ERROR_MESSAGE =
   "Provider 發生不可恢復錯誤，Goal 尚未完成";
+const GOAL_BLOCKED_STOP_WORKFLOW_MESSAGE =
+  "Goal 已標記為 blocked，workflow 已停止觸發下游 Pod";
 
 function createClientSafeBlockedReason(reason: string | null): string | null {
   const normalized = reason
@@ -472,7 +474,8 @@ async function executeChatTurn(
  *   2. 進入 Goal 完成 gate loop：
  *      - proceed → 跳出，呼叫 callbacks.onComplete
  *      - retry   → 透過 strategy.addUserMessage 注入 nudge，再跑一輪
- *      - force_block → 自動標記剩餘 todo 為 blocked 後放行下游
+ *      - stop_blocked → 保留 Goal blocked 分隔資訊，但不呼叫 callbacks.onComplete
+ *      - force_block → 自動標記剩餘 todo 為 blocked，保留分隔資訊但不呼叫 callbacks.onComplete
  *   3. abort 或 error 在 turn 內部就已處理；gate loop 不會被執行
  *
  * onComplete callback 只會在 gate 放行後呼叫一次，下游 workflow 觸發以此為準。
@@ -520,6 +523,7 @@ export async function executeStreamingChat(
     // Goal 完成 gate loop：只有當 runContext 存在且 Goal Runtime 有 active todo 時才會進迴圈
     let retryCount = 0;
     let noProgressCount = 0;
+    let shouldCompleteWorkflow = true;
 
     while (true) {
       if (!runContext) break;
@@ -547,8 +551,21 @@ export async function executeStreamingChat(
 
       if (decision.action === "proceed") break;
 
+      if (decision.action === "stop_blocked") {
+        persistGoalRoundDivider(effectiveOptions);
+        if (callbacks?.onError) {
+          const blockedReason = createClientSafeBlockedReason(decision.reason);
+          const errorMessage = blockedReason
+            ? `${GOAL_BLOCKED_STOP_WORKFLOW_MESSAGE}：${blockedReason}`
+            : GOAL_BLOCKED_STOP_WORKFLOW_MESSAGE;
+          await callbacks.onError(canvasId, podId, new Error(errorMessage));
+        }
+        return turnOutcome.result;
+      }
+
       if (decision.action === "force_block") {
         autoForceBlock(runContext, podResult.pod, decision.reason);
+        shouldCompleteWorkflow = false;
         break;
       }
 
@@ -582,7 +599,7 @@ export async function executeStreamingChat(
 
     persistGoalRoundDivider(effectiveOptions);
 
-    if (callbacks?.onComplete) {
+    if (shouldCompleteWorkflow && callbacks?.onComplete) {
       await callbacks.onComplete(canvasId, podId);
     }
 

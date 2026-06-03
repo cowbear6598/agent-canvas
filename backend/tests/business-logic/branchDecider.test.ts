@@ -116,13 +116,13 @@ describe("BaseBranchDecider.decide", () => {
     vi.clearAllMocks();
   });
 
-  // ─── 案例 1：recentMessages 為空 ───────────────────────────────────────────
-  it("recentMessages 為空 → 不呼叫 executeDisposableChat，直接回傳 None", async () => {
-    const input = makeInput({ recentMessages: [] });
+  // ─── 案例 1：recentMessages 與 persistedSummary 皆為空 ─────────────────────
+  it("recentMessages 與 persistedSummary 皆為空 → 不呼叫 executeDisposableChat，直接選第一個 branch label", async () => {
+    const input = makeInput({ recentMessages: [], persistedSummary: null });
 
     const result = await branchDecider.decide(input);
 
-    expect(result).toEqual({ kind: "success", selectedLabel: "None" });
+    expect(result).toEqual({ kind: "success", selectedLabel: "Checklist" });
     expect(asMock(executeDisposableChat)).not.toHaveBeenCalled();
   });
 
@@ -163,7 +163,7 @@ describe("BaseBranchDecider.decide", () => {
   });
 
   // ─── 案例 4：第一次 hallucination，第二次正確 ────────────────────────────────
-  it("第一次 label 不在 valid 也非 None（hallucination），第二次正確 → 回傳第二次的 selectedLabel", async () => {
+  it("第一次 label 不在 validLabels（hallucination），第二次正確 → 回傳第二次的 selectedLabel", async () => {
     // 第一次回傳不存在的 label
     asMock(executeDisposableChat)
       .mockResolvedValueOnce(
@@ -177,6 +177,46 @@ describe("BaseBranchDecider.decide", () => {
     const result = await branchDecider.decide(makeInput());
 
     expect(result).toEqual({ kind: "success", selectedLabel: "Checklist" });
+    expect(asMock(executeDisposableChat)).toHaveBeenCalledTimes(2);
+  });
+
+  it("第一次模型回傳 None → parse error 後 retry，第二次正確 → 回傳第二次的 selectedLabel", async () => {
+    asMock(executeDisposableChat)
+      .mockResolvedValueOnce(
+        makeDisposableChatResult('{"selectedLabel":"None"}'),
+      )
+      .mockResolvedValueOnce(
+        makeDisposableChatResult('{"selectedLabel":"Checklist"}'),
+      );
+
+    const result = await branchDecider.decide(makeInput());
+
+    expect(result).toEqual({ kind: "success", selectedLabel: "Checklist" });
+    expect(asMock(executeDisposableChat)).toHaveBeenCalledTimes(2);
+  });
+
+  it("兩次模型都回傳 None → 回傳結構化 parse error 失敗", async () => {
+    asMock(executeDisposableChat)
+      .mockResolvedValueOnce(
+        makeDisposableChatResult('{"selectedLabel":"None"}'),
+      )
+      .mockResolvedValueOnce(
+        makeDisposableChatResult('{"selectedLabel":"None"}'),
+      );
+
+    const result = await branchDecider.decide(makeInput());
+
+    expect(result).toEqual({
+      kind: "failed",
+      failure: {
+        kind: "parse_error",
+        message: "LABEL_HALLUCINATION",
+        attempts: [
+          { attempt: 1, kind: "parse_error", message: "LABEL_HALLUCINATION" },
+          { attempt: 2, kind: "parse_error", message: "LABEL_HALLUCINATION" },
+        ],
+      },
+    });
     expect(asMock(executeDisposableChat)).toHaveBeenCalledTimes(2);
   });
 

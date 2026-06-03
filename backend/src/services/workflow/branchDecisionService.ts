@@ -3,7 +3,7 @@
  *
  * Branch Connection 模式的決策服務。
  * 接收來自同一 sourcePod 出去的所有 branch connections，
- * 呼叫 branchDecider 讓 AI 從中選出一條（或全不選），
+ * 呼叫 branchDecider 讓 AI 從中選出一條，
  * 回傳 selectedConnectionId 與 rejectedConnectionIds。
  *
  * 此 service 不再使用 claudeService.executeMcpChat / MCP tool；
@@ -34,7 +34,7 @@ class BranchDecisionService {
    * @param runContext     - 若在 Run 流程中，帶入 RunContext 以使用 run 專屬訊息
    * @param abortSignal    - 可選的 AbortSignal，透傳給 branchDecider
    * @returns
-   *   - selectedConnectionId：AI 選中的連線 ID；若 AI 選 None 或 branchConnections 為空則為 null
+   *   - selectedConnectionId：AI 選中的連線 ID；決策失敗時為 null
    *   - rejectedConnectionIds：其餘未被選中的連線 ID 陣列
    */
   async decideBranch(
@@ -43,18 +43,30 @@ class BranchDecisionService {
     branchConnections: Connection[],
     runContext: RunContext,
     abortSignal?: AbortSignal,
-  ): Promise<{
-    outcome: "selected" | "none" | "failed";
-    selectedConnectionId: string | null;
-    rejectedConnectionIds: string[];
-    failure?: BranchDecisionFailure;
-  }> {
+  ): Promise<
+    | {
+        outcome: "selected";
+        selectedConnectionId: string;
+        rejectedConnectionIds: string[];
+      }
+    | {
+        outcome: "failed";
+        selectedConnectionId: null;
+        rejectedConnectionIds: string[];
+        failure?: BranchDecisionFailure;
+      }
+  > {
     // 防呆：branchConnections 不應由外層傳入空陣列，但若發生，提早回傳
     if (branchConnections.length === 0) {
       return {
-        outcome: "none",
+        outcome: "failed",
         selectedConnectionId: null,
         rejectedConnectionIds: [],
+        failure: {
+          kind: "parse_error",
+          message: "找不到可選擇的 branch connection",
+          attempts: [],
+        },
       };
     }
 
@@ -147,29 +159,34 @@ class BranchDecisionService {
       };
     }
 
-    // selectedLabel === "None" 代表 AI 選擇不觸發任何 branch
-    let selectedConnectionId: string | null = null;
-    if (selectedLabel !== "None") {
-      const matched = branchConnections.find((c) => c.label === selectedLabel);
-      if (matched) {
-        selectedConnectionId = matched.id;
-      } else {
-        // label 無法對應（理論上不應發生，branchDecider 內部已驗證 label 合法性）
-        logger.warn(
-          "Workflow",
-          "Warn",
-          `[BranchDecisionService] selectedLabel "${selectedLabel}" 無法對應任何 connection，視為 None`,
-        );
-      }
+    const matched = branchConnections.find((c) => c.label === selectedLabel);
+    if (!matched) {
+      const failure: BranchDecisionFailure = {
+        kind: "parse_error",
+        message: `selectedLabel "${selectedLabel}" 無法對應任何 branch connection`,
+        attempts: [],
+      };
+      logger.error(
+        "Workflow",
+        "Error",
+        `[BranchDecisionService] ${failure.message}`,
+        failure,
+      );
+      return {
+        outcome: "failed",
+        selectedConnectionId: null,
+        rejectedConnectionIds: branchConnections.map((c) => c.id),
+        failure,
+      };
     }
 
     const rejectedConnectionIds = branchConnections
-      .filter((c) => c.id !== selectedConnectionId)
+      .filter((c) => c.id !== matched.id)
       .map((c) => c.id);
 
     return {
-      outcome: selectedConnectionId === null ? "none" : "selected",
-      selectedConnectionId,
+      outcome: "selected",
+      selectedConnectionId: matched.id,
       rejectedConnectionIds,
     };
   }

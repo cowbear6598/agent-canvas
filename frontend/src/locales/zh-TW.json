@@ -768,7 +768,7 @@
     },
     "checkDirtyFailed": "檢查修改狀態失敗",
     "connectionLine": {
-      "aiRejectedReason": "不觸發原因：{reason}",
+      "aiRejectedReason": "未被選中原因：{reason}",
       "aiErrorReason": "錯誤：{reason}"
     },
     "podTypeMenu": {}

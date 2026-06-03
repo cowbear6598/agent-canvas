@@ -22,6 +22,7 @@ export const GOAL_GATE_LIMITS = {
 
 export type GoalGateDecision =
   | { action: "proceed" }
+  | { action: "stop_blocked"; reason: string | null }
   | { action: "retry"; nudgeMessage: string; completedCountBefore: number }
   | { action: "force_block"; reason: string };
 
@@ -43,12 +44,15 @@ function readSnapshotForGate(
  * 放行條件（action: "proceed"）：
  *   - 沒有 snapshot（未啟用 Goal Runtime）
  *   - status === "completed"
- *   - status === "blocked"（依產品決策視為完成的一種）
  *   - activeTodoId 為 null（沒有可推進的 todo）
+ *
+ * 停止條件（action: "stop_blocked"）：
+ *   - status === "blocked"
  *
  * 強制 block（action: "force_block"）：
  *   - retryCount 達到 hardRetryLimit
  *   - noProgressCount 達到 noProgressLimit（連續未推進）
+ *   - 呼叫端應標記 Goal 為 blocked，並停止 workflow 下游觸發
  *
  * 重試（action: "retry"）：
  *   - status === "running" 且有 activeTodoId 且尚未達上限
@@ -62,6 +66,10 @@ export function evaluateGoalGate(
   if (!snapshot) return { action: "proceed" };
 
   const { state } = snapshot;
+  if (state.status === "blocked") {
+    return { action: "stop_blocked", reason: state.blockedReason };
+  }
+
   if (state.status !== "running" || !state.activeTodoId) {
     return { action: "proceed" };
   }
@@ -126,8 +134,8 @@ export function nextNoProgressCount(
 
 /**
  * 達到 retry 上限時自動把 Goal Runtime 標為 blocked。
- * 依產品決策，blocked 視為完成的一種，下游 workflow 仍會被觸發；
- * handoff summary 會帶上 reason 供下游或使用者追查。
+ * blocked 代表此 Pod 的 Goal 無法繼續推進，workflow 應停止觸發下游；
+ * handoff summary 只供使用者追查，不代表可交接給下游 Pod。
  */
 export function autoForceBlock(
   runContext: RunContext,
@@ -139,7 +147,7 @@ export function autoForceBlock(
     logger.warn(
       "Run",
       "Warn",
-      `Pod ${pod.id} Goal Runtime 自動標記為 blocked：${reason}`,
+      `Pod ${pod.id} Goal Runtime 自動標記為 blocked，workflow 將停止觸發下游：${reason}`,
     );
   }
 }

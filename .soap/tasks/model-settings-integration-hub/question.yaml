@@ -1,0 +1,66 @@
+feature: model-settings-integration-hub
+created: "2026-06-03"
+approved: true
+impact_classification:
+  frontend:
+    status: required
+    evidence:
+      - 使用者明確要求將 Memory 以及 Connection Line 的 model / provider / thinking level 轉移到整合管理中心。
+      - 使用者明確要求整合管理中心多一個 grid，名稱為「Model 設定」，並能選擇要設定的類別。
+      - 現有 `frontend/src/components/settings/IntegrationsHubModal.vue` 是整合管理中心入口，目前只有 MCP、Plugin、LLM Provider 三張卡片。
+  backend:
+    status: required
+    evidence:
+      - Memory 設定目前由 config websocket API 儲存 provider/model/thinking level，其中後端已將 memoryThinkingLevel 固定解析為 null。
+      - Connection Line 的 summary/branch provider/model/thinkingLevel 已由既有 connection websocket API 與資料表欄位處理，若只搬移 UI 入口可能不需要新增後端行為。
+      - 若「Model 設定」要求全域套用、多 connection 批次設定，或新增可設定類別，可能需要後端新增 API 或資料模型。
+      - 使用者確認 Connection Line 要改為吃統一設定，且 Memory 也要支援 thinking level，因此後端需恢復 memoryThinkingLevel 儲存並調整 Connection Line 執行時解析邏輯。
+questions:
+  - id: Q1
+    text: 現有整合管理中心入口、Memory 設定、Connection Line model/provider/thinking level 分別在哪些前端模組？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      整合管理中心入口在 `frontend/src/components/settings/IntegrationsHubModal.vue`，目前以 grid 顯示 MCP、Plugin、LLM Provider 三張卡片，並由 `frontend/src/components/layout/AppHeader.vue` 控制開啟對應 modal。
+
+      Memory model/provider 設定目前在 `frontend/src/components/settings/GlobalSettingsModal.vue`，使用 `useGlobalSettingsForm` 載入與儲存 config，並透過 `useProviderCapabilityStore` 取得 provider/model 選項。
+
+      Connection Line 的設定目前在 `frontend/src/components/canvas/ConnectionContextMenu.vue`，其中 Summary 設定拆在 `frontend/src/components/canvas/connectionMenu/SummarySection.vue`，Branch 設定拆在 `frontend/src/components/canvas/connectionMenu/BranchSettingsPanel.vue`，thinking level 共用 `frontend/src/components/canvas/connectionMenu/ThinkingLevelSubmenu.vue`。
+  - id: Q2
+    text: 現有 Memory 與 Connection Line 設定是否已有後端儲存與 websocket API 可沿用？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      Memory 已有 config API：前端 `useGlobalSettingsForm` 呼叫 `getConfig` / `updateConfig`，後端 `backend/src/handlers/configHandlers.ts` 與 `backend/src/services/configStore.ts` 會處理 `memoryProvider`、`memoryModel`、`memoryThinkingLevel`。目前後端註解明確表示 Memory 維護不再提供獨立 thinking level 設定，會清除舊值並回傳 null。
+
+      Connection Line 已有 connection API：前端 `frontend/src/stores/connectionStore.ts` 暴露 `updateConnectionSummaryProvider`、`updateConnectionSummaryModel`、`updateConnectionSummaryThinkingLevel`、`updateConnectionBranchProvider`、`updateConnectionBranchModel`、`updateConnectionBranchThinkingLevel`；後端 `backend/src/services/connectionStore.ts`、`backend/src/schemas/connectionSchemas.ts`、`backend/src/services/commands/connectionCommandService.ts` 已支援對應欄位與驗證。
+
+      因此若需求只是搬移或新增集中式 UI 入口，後端可以沿用既有 API；若要做「套用到全部 Connection Line」或新增 Memory thinking level 實際儲存，才需要後端改動。
+  - id: Q3
+    text: 「Model 設定」裡要提供哪些可設定類別？
+    type: user-input
+    completed: true
+    answer: |
+      需要跟現有一樣提供 provider / model / thinking level，但改放到整合管理中心的「Model 設定」入口裡，並可選擇要設定的類別。
+  - id: Q4
+    text: Connection Line 的 Model 設定是要設定目前選取的單一 connection、全部 connection、依 connection 類型分組的預設值，還是只把原本右鍵選單搬到集中式入口？
+    type: user-input
+    completed: true
+    answer: |
+      以前是單一 connection 分別設定；這次要改成 Connection Line 吃統一設定。
+  - id: Q5
+    text: Memory 是否也要重新開放 thinking level 設定，還是維持目前後端固定使用 provider 預設 thinking level？
+    type: user-input
+    completed: true
+    answer: |
+      Memory 也要支援 thinking level 設定。
+  - id: Q6
+    text: 現有 codebase 是否已有可承載統一 Model 設定的 config/API 邊界，Connection Line 執行端目前又如何讀取 model 設定？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      可沿用並擴充既有 config websocket 邊界：`backend/src/schemas/configSchemas.ts` 的 `configUpdateSchema` 已有 `memoryProvider`、`memoryModel`、`memoryThinkingLevel` wire 欄位；`backend/src/handlers/configHandlers.ts` 也會把這些欄位交給 `configStore.update()` 並回傳給前端。
+
+      目前阻擋 Memory thinking level 的位置在 `backend/src/services/configStore.ts`：`parseMemoryThinkingLevel()` 固定回傳 null，`update()` 在任何 memory 設定變動時會刪除 `memory_thinking_level`。若要支援 Memory thinking level，需要恢復儲存、讀取與 provider/model 合法性驗證。
+
+      Connection Line 目前不是吃全域設定。Summary 執行在 `backend/src/services/workflow/workflowPipeline.ts` 取 `connection.summaryProvider ?? sourcePod?.provider ?? "claude"`、`connection.summaryModel`、`connection.summaryThinkingLevel`；Branch 決策在 `backend/src/services/workflow/branchDecisionService.ts` 使用 branch group 第一條 connection 的 `branchProvider`、`branchModel`、`branchThinkingLevel`。若要吃統一設定，需要新增全域 connection summary/branch model 設定，並讓執行端優先讀取該設定。

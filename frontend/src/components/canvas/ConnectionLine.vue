@@ -113,7 +113,8 @@ const lineColor = computed(() => {
   return getStatusColor(props.status);
 });
 
-type MidLabelEntry = { type: string; text: string; class: string } | null;
+type MidLabelEntryValue = { type: string; text: string; class: string };
+type MidLabelEntry = MidLabelEntryValue | null;
 
 const MID_LABEL_DIRECT: MidLabelEntry = {
   type: "direct",
@@ -121,26 +122,56 @@ const MID_LABEL_DIRECT: MidLabelEntry = {
   class: "direct-label",
 };
 
-// branch 模式下特殊狀態 label 覆寫表（rejected 不覆寫，保留使用者命名的 label）
-const BRANCH_STATUS_LABEL_MAP: Record<string, MidLabelEntry> = {
+const UNDECIDED_BRANCH_DECIDE_STATUS = "none" satisfies DecideStatus;
+type DecidedBranchStatus = Exclude<
+  DecideStatus,
+  typeof UNDECIDED_BRANCH_DECIDE_STATUS
+>;
+
+// branch 模式下特殊狀態 label 覆寫表（rejected / none 不覆寫，保留使用者命名的 label）
+const BRANCH_STATUS_LABEL_MAP: Partial<
+  Record<DecidedBranchStatus, MidLabelEntry>
+> = {
   pending: { type: "deciding", text: "", class: "deciding-label" },
   error: { type: "error", text: "!", class: "error-label" },
 };
 
-const midLabel = computed((): MidLabelEntry => {
-  if (props.triggerMode === "auto") return null;
-  if (props.triggerMode === "direct") return MID_LABEL_DIRECT;
-
-  // branch 模式：pending / error 用特殊 label 覆寫；其餘狀態（含 rejected）顯示使用者命名的 label
-  const decideKey = props.decideStatus ?? "none";
-  if (decideKey in BRANCH_STATUS_LABEL_MAP) {
-    return BRANCH_STATUS_LABEL_MAP[decideKey] ?? null;
-  }
+function createBranchMidLabel(label?: string): MidLabelEntryValue {
   return {
     type: "branch-label",
-    text: props.label ?? "",
+    text: label ?? "",
     class: "branch-label",
   };
+}
+
+function getBranchMidLabel(
+  decideStatus: DecideStatus | undefined,
+  label: string | undefined,
+): MidLabelEntry {
+  const branchDecisionStatus = decideStatus ?? UNDECIDED_BRANCH_DECIDE_STATUS;
+
+  if (branchDecisionStatus === UNDECIDED_BRANCH_DECIDE_STATUS) {
+    return createBranchMidLabel(label);
+  }
+
+  return (
+    BRANCH_STATUS_LABEL_MAP[branchDecisionStatus] ?? createBranchMidLabel(label)
+  );
+}
+
+function getMidLabel(
+  triggerMode: TriggerMode,
+  decideStatus: DecideStatus | undefined,
+  label: string | undefined,
+): MidLabelEntry {
+  if (triggerMode === "auto") return null;
+  if (triggerMode === "direct") return MID_LABEL_DIRECT;
+
+  return getBranchMidLabel(decideStatus, label);
+}
+
+const midLabel = computed((): MidLabelEntry => {
+  return getMidLabel(props.triggerMode, props.decideStatus, props.label);
 });
 
 const tooltipText = computed(() => {

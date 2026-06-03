@@ -51,7 +51,7 @@ function insertConnection(
   canvasId: string,
   sourcePodId: string,
   targetPodId: string,
-  triggerMode: "auto" | "direct" | "ai-decide" = "auto",
+  triggerMode: "auto" | "direct" | "branch" | "ai-decide" = "auto",
   id?: string,
 ): string {
   const connId = id ?? uuidv4();
@@ -899,6 +899,59 @@ describe("RunExecutionService", () => {
         CANVAS_ID,
         WebSocketResponseEvents.RUN_STATUS_CHANGED,
         expect.objectContaining({ status: "error" }),
+      );
+    });
+
+    it("source blocked 透過 error pathway 後，下游 auto/branch/direct pathway 應結清為 skipped 而不是持續等待", () => {
+      const targetPodId = "pod-downstream";
+      const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "測試");
+      const sourceInstance = runStore.createPodInstance(
+        run.id,
+        SOURCE_POD_ID,
+        "pending",
+        "not-applicable",
+      );
+      runStore.updatePodInstanceStatus(sourceInstance.id, "running");
+      runStore.createPodInstance(run.id, targetPodId, "pending", "pending");
+      insertConnection(
+        CANVAS_ID,
+        SOURCE_POD_ID,
+        targetPodId,
+        "auto",
+        "conn-auto-blocked",
+      );
+      insertConnection(
+        CANVAS_ID,
+        SOURCE_POD_ID,
+        targetPodId,
+        "branch",
+        "conn-branch-blocked",
+      );
+      insertConnection(
+        CANVAS_ID,
+        SOURCE_POD_ID,
+        targetPodId,
+        "direct",
+        "conn-direct-blocked",
+      );
+      const ctx = makeRunContext({ runId: run.id });
+
+      runExecutionService.errorPodInstance(ctx, SOURCE_POD_ID, "Goal 已 blocked");
+
+      const downstream = runStore.getPodInstance(run.id, targetPodId);
+      expect(downstream?.status).toBe("skipped");
+      expect(downstream?.autoPathwaySettled).toBe("settled");
+      expect(downstream?.directPathwaySettled).toBe("settled");
+      expect(runStore.getRun(run.id)?.status).toBe("error");
+      expect(socketService.emitToCanvas).toHaveBeenCalledWith(
+        CANVAS_ID,
+        WebSocketResponseEvents.RUN_POD_STATUS_CHANGED,
+        expect.objectContaining({
+          podId: targetPodId,
+          status: "skipped",
+          autoPathwaySettled: "settled",
+          directPathwaySettled: "settled",
+        }),
       );
     });
   });

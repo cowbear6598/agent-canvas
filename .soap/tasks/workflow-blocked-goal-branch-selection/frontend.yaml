@@ -1,0 +1,72 @@
+feature: workflow-blocked-goal-branch-selection
+side: frontend
+approved: true
+phases:
+  - id: P1
+    title: Branch 連線狀態語意
+    parallel: false
+    verification:
+      - bun run style
+      - bun run test
+    done: true
+    items:
+      - id: P1.A
+        title: ConnectionLine 顯示規則
+        tasks:
+          - id: P1.A.t1
+            text: '檢查 `frontend/src/components/canvas/ConnectionLine.vue` 的 branch `decideStatus: "none"` 顯示路徑，確保尚未決策時只顯示使用者設定的 branch label，不顯示 `None` 或 none-like 文案'
+            completed: true
+            last_files_changed:
+              - frontend/src/components/canvas/ConnectionLine.vue
+          - id: P1.A.t2
+            text: '將 `ConnectionLine.vue` 的 branch mid-label 計算收斂成具名 helper，明確命名 `decideStatus: "none"` 為尚未決策狀態，避免它被實作成可選分支結果'
+            completed: true
+            last_files_changed:
+              - frontend/src/components/canvas/ConnectionLine.vue
+      - id: P1.B
+        title: 多語系文案一致性
+        tasks:
+          - id: P1.B.t1
+            text: 檢查 `frontend/src/locales/zh-TW.json`、`frontend/src/locales/en.json`、`frontend/src/locales/ja.json` 的 branch connection 文案，保留 `None` 作為保留字錯誤提示，但移除任何暗示 branch 可選 none 的使用者可見文案
+            completed: true
+            last_files_changed:
+              - frontend/src/locales/zh-TW.json
+              - frontend/src/locales/en.json
+              - frontend/src/locales/ja.json
+          - id: P1.B.t2
+            text: 將 `canvas.connectionLine.aiRejectedReason` 三語系文案改成未被選中語意，避免 rejected 被理解成 branch 決策選擇 none
+            completed: true
+            last_files_changed:
+              - frontend/src/locales/zh-TW.json
+              - frontend/src/locales/en.json
+              - frontend/src/locales/ja.json
+
+  - id: P2
+    title: Branch 顯示與互動測試
+    parallel: false
+    verification:
+      - bun run style
+      - bun run test
+    done: true
+    items:
+      - id: P2.A
+        title: ConnectionLine userflow 覆蓋
+        tasks:
+          - id: P2.A.t1
+            text: '在 `frontend/tests/userflows/canvas` 新增或擴充 Connection Line userflow 測試，掛載真實 `ConnectionLine.vue`，驗證 branch `decideStatus: "none"` 時畫面呈現 branch label 且不出現 `None`'
+            completed: true
+            last_files_changed:
+              - frontend/tests/userflows/canvas/connectionLineBranchFlow.test.ts
+          - id: P2.A.t2
+            text: 在同一組 Connection Line userflow 測試中覆蓋 branch `approved` 與 `rejected` 狀態，確認使用者仍能看出哪條 branch 被選中與哪條未被選中
+            completed: true
+            last_files_changed:
+              - frontend/tests/userflows/canvas/connectionLineBranchFlow.test.ts
+      - id: P2.B
+        title: Branch 設定入口驗證
+        tasks:
+          - id: P2.B.t1
+            text: 檢查 `frontend/src/components/canvas/ConnectionContextMenu.vue` 與 branch 設定相關測試，確認 trigger mode 選單只提供 auto、direct、branch 三種模式，沒有新增或殘留 none 選項
+            completed: true
+            last_files_changed:
+              - frontend/tests/userflows/canvas/connectionContextMenuBranchFlow.test.ts

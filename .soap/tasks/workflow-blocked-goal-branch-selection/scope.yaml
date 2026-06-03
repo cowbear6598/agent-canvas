@@ -1,0 +1,22 @@
+feature: workflow-blocked-goal-branch-selection
+created: "2026-06-03"
+approved: true
+frontend:
+  required: true
+  reason: 需要確認並調整 branch Connection Line 的使用者可見狀態與多語系文案，避免尚未決策狀態被理解成可選的 none 分支。
+  evidence:
+    - userflow.yaml F2 要求 branch 決策一定從既有 branch label 中選擇一條，使用者不會看到 none 作為分支結果。
+    - userflow.yaml F3 要求尚未決策狀態仍可呈現，但不能讓使用者理解成可選的 none 分支。
+    - 'question.yaml Q3 確認前端 trigger mode 選單沒有 none，但 `decideStatus: "none"` 仍會影響 Connection Line 的狀態呈現。'
+backend:
+  required: true
+  reason: 需要改變 Goal blocked 的 workflow 終止規則，並移除 branch AI 決策可回傳 None 的後端行為。
+  evidence:
+    - userflow.yaml F1 要求 Goal blocked 後 workflow 不再觸發該 blocked Pod 的下游 Pod。
+    - userflow.yaml F2 要求 branch 決策一定選出既有 branch label。
+    - question.yaml Q1 確認目前 blocked 會被視為 proceed，導致下游 workflow 繼續觸發。
+    - question.yaml Q3 確認後端 prompt、parser、decider、decision service 目前都支援 branch None。
+ticket:
+  story_issue: null
+  branch_issue: null
+  task_issue: null
