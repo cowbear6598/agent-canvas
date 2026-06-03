@@ -2115,6 +2115,82 @@ describe("executeStreamingChat", () => {
       );
     });
 
+    it("base snapshot 仍有 Goal 時，即使 live goal 被清空也應建立新的 goal scope", async () => {
+      const pod = insertClaudePod({
+        goal: { todos: [{ id: "todo-1", text: "使用凍結 Goal" }] },
+      });
+      ensureGoalRuntime(pod, defaultRunContext);
+
+      getDb().prepare("UPDATE pods SET goal_json = NULL WHERE id = ?").run(pod.id);
+      clearPodStoreCache();
+
+      vi.spyOn(runStore, "getPodInstance").mockReturnValue({
+        id: "instance-legacy",
+        runId: defaultRunContext.runId,
+        podId: pod.id,
+        status: "running",
+        autoPathwaySettled: "pending",
+        directPathwaySettled: "not-applicable",
+        lastResponseSummary: null,
+        errorMessage: null,
+        workspacePath: pod.workspacePath,
+        runRepoPath: null,
+        sessionId: "legacy-session-id",
+        triggeredAt: null,
+        completedAt: null,
+      } as any);
+
+      const resumeSessionIds: Array<string | null> = [];
+      const chatMock = vi.fn((ctx) => {
+        resumeSessionIds.push(ctx.resumeSessionId ?? null);
+        return makeEventStream([
+          { type: "session_started", sessionId: "goal-scope-session-2" },
+          {
+            type: "tool_call_result",
+            toolUseId: "goal-tool-2",
+            toolName: `mcp__${GOAL_MCP_SERVER_NAME}__complete_goal_todo`,
+            output: JSON.stringify({
+              status: "completed",
+              activeTodoId: null,
+              activeTodoText: null,
+              nextTodoId: null,
+              nextTodoText: null,
+              completedTodoIds: ["todo-1"],
+              blockedReason: null,
+              handoffSummary: "完成",
+              completedCount: 1,
+              totalCount: 1,
+            }),
+          },
+          { type: "turn_complete" },
+        ]);
+      });
+
+      asMock(getProvider).mockReturnValue({
+        chat: chatMock,
+        cancel: vi.fn(() => false),
+        buildOptions: vi.fn().mockResolvedValue({}),
+        metadata: {
+          availableModelValues: new Set(["opus", "sonnet", "haiku"]),
+          defaultOptions: { model: "opus" },
+        },
+      });
+
+      await executeStreamingChat({
+        canvasId,
+        podId: pod.id,
+        message,
+        abortable: false,
+        strategy: makeStrategy(),
+      });
+
+      expect(resumeSessionIds).toEqual([null]);
+      expect(readOnlyScopedGoalRuntimeSnapshot(defaultRunContext, pod.id)?.goal)
+        .toEqual({
+          todos: [{ id: "todo-1", text: "使用凍結 Goal" }],
+        });
+    });
+
     it("thinking 事件映射為 POD_CLAUDE_CHAT_MESSAGE 廣播", async () => {
       const pod = insertCodexPod();
       const chatMock = vi.fn(() =>

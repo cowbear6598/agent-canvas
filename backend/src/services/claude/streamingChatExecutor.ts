@@ -413,6 +413,22 @@ function hasPendingGoalRuntime(
   );
 }
 
+function shouldCreateGoalRuntimeScope(
+  runContext: RunContext | undefined,
+  pod: Pick<Pod, "id" | "goal">,
+): boolean {
+  if (!runContext || runContext.goalRuntimeScopeId) return false;
+
+  const frozenSnapshot = readGoalRuntimeSnapshot(
+    getGoalRuntimeStatePath(runContext, pod.id),
+  );
+  if (frozenSnapshot) {
+    return frozenSnapshot.goal.todos.length > 0;
+  }
+
+  return (pod.goal?.todos.length ?? 0) > 0;
+}
+
 /**
  * 執行單一 chat turn：自行建立 lifecycle coordinator、註冊 stream、跑 provider 串流、收尾。
  * 對 abort / 已知錯誤負責呼叫對應 handler；未知錯誤往上 throw。
@@ -519,9 +535,7 @@ export async function executeStreamingChat(
 
   const baseRunContext = strategy.getRunContext();
   const effectiveOptions =
-    baseRunContext &&
-    !baseRunContext.goalRuntimeScopeId &&
-    (podResult.pod.goal?.todos.length ?? 0) > 0
+    shouldCreateGoalRuntimeScope(baseRunContext, podResult.pod)
       ? {
           ...options,
           strategy: strategy.withGoalRuntimeScope(uuidv4()),
