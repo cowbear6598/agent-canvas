@@ -24,6 +24,7 @@ const emit = defineEmits<{
   close: [];
   "branch-switched": [];
   "view-memory": [repositoryId: string];
+  "clear-memory": [repositoryId: string];
   "pull-started": [
     payload: {
       requestId: string;
@@ -230,7 +231,7 @@ const handlePullLatestConfirm = async (): Promise<void> => {
 };
 
 const handleClearRepoMemoryConfirm = async (): Promise<void> => {
-  await repositoryStore.clearRepoMemory(props.repositoryId);
+  emit("clear-memory", props.repositoryId);
   modalState.showClearMemoryConfirm = false;
   emit("close");
 };

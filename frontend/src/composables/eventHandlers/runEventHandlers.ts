@@ -139,7 +139,7 @@ export function getRunStandaloneListeners(): Array<{ event: string; handler: (pa
     { event: WebSocketResponseEvents.RUN_MESSAGE, handler: handleRunMessage as (payload: unknown) => void },
     { event: WebSocketResponseEvents.RUN_CHAT_COMPLETE, handler: handleRunChatComplete as (payload: unknown) => void },
     { event: WebSocketResponseEvents.RUN_GOAL_ROUND_DIVIDER, handler: handleRunGoalRoundDivider as (payload: unknown) => void },
-    { event: WebSocketResponseEvents.RUN_TOOL_USE, handler: handleRunToolUse as (payload: unknown) => void },
-    { event: WebSocketResponseEvents.RUN_TOOL_RESULT, handler: handleRunToolResult as (payload: unknown) => void },
+    { event: WebSocketResponseEvents.RUN_CHAT_TOOL_USE, handler: handleRunToolUse as (payload: unknown) => void },
+    { event: WebSocketResponseEvents.RUN_CHAT_TOOL_RESULT, handler: handleRunToolResult as (payload: unknown) => void },
   ]
 }

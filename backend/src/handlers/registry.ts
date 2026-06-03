@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { createValidatedHandler, type ValidatedHandler } from '../middleware/wsMiddleware.js';
 import { eventRouter } from '../services/eventRouter.js';
+import { assertServerEventRegistered } from '../schemas/serverEventManifest.js';
 
 export interface HandlerDefinition {
 	event: string;
@@ -20,6 +21,10 @@ export function createHandlerDefinition<TSchema extends z.ZodType>(
 	schema: TSchema,
 	responseEvent: string
 ): HandlerDefinition {
+	if (responseEvent !== "error") {
+		assertServerEventRegistered(responseEvent);
+	}
+
 	return {
 		event,
 		handler: handler as ValidatedHandler<unknown>,

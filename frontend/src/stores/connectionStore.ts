@@ -17,9 +17,9 @@ import { usePodStore } from "@/stores/pod/podStore";
 import { useSelectionStore } from "@/stores/pod/selectionStore";
 import {
   createWebSocketRequest,
-  websocketClient,
   WebSocketRequestEvents,
   WebSocketResponseEvents,
+  websocketClient,
 } from "@/services/websocket";
 import { useToast } from "@/composables/useToast";
 import { useCanvasWebSocketAction } from "@/composables/useCanvasWebSocketAction";
@@ -29,9 +29,8 @@ import { DEFAULT_TOAST_DURATION_MS } from "@/lib/constants";
 import { DEFAULT_SUMMARY_MODEL } from "@/types/config";
 import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
 import { createWorkflowEventHandlers } from "./workflowEventHandlers";
-import { removeById } from "@/lib/arrayHelpers";
-import { logger } from "@/utils/logger";
 import { normalizePodProvider } from "@/lib/providerOptions";
+import { logger } from "@/utils/logger";
 import type {
   ConnectionCreatedPayload,
   ConnectionUpdatedPayload,
@@ -41,80 +40,38 @@ import type {
   ConnectionListPayload,
   ConnectionListResultPayload,
   ConnectionUpdatePayload,
-  ConnectionPayloadItem,
 } from "@/types/websocket";
+import {
+  buildBranchSettingsUpdates,
+  resolveBranchDefaultsFromSourcePod as resolveBranchDefaultsFromSourcePodRule,
+  resolveDefaultThinkingLevel,
+  shouldResolveBranchDefaultsForSettings,
+  validateBranchDescription as validateBranchDescriptionRule,
+  validateBranchLabel as validateBranchLabelRule,
+  validateBranchSettingsPayload as validateBranchSettingsPayloadRule,
+  type BranchDefaults,
+  type BranchSettingsPayload,
+} from "@/stores/connection/connectionBranchRules";
 
-import { castHandler, shouldUpdateConnection } from "./connectionStoreHelpers";
+import { shouldUpdateConnection } from "./connectionStoreHelpers";
 import {
   getPodWorkflowRoleFromConnections,
   isDownstreamWorkflowRunning,
   isPodPartOfRunningWorkflow,
 } from "./connectionGraphHelpers";
 import {
-  mapConnectionUpdatedEventPayload,
   normalizeConnection,
   normalizeConnectionListPayload,
-  normalizeConnectionUpdateResponsePayload,
-  normalizeCreatedConnectionEvent,
 } from "./connectionPayloadMappers";
 import { buildCanvasCommandPayload } from "./canvasScopedCommand";
+import {
+  addConnectionEvent,
+  removeConnectionEvent,
+  syncConnectionUpdateResponse as syncConnectionUpdateResponseReducer,
+  updateConnectionEvent,
+} from "@/stores/connection/connectionEventReducers";
 
 type WorkflowHandlers = ReturnType<typeof createWorkflowEventHandlers>;
-type BranchSettingsPayload = {
-  switchToBranch: boolean;
-  label: string;
-  description: string;
-};
-type BranchDefaults = {
-  provider: PodProvider;
-  model: string;
-  thinkingLevel: string | null;
-};
-type BranchSettingsUpdates = Pick<
-  ConnectionUpdatePayload,
-  | "triggerMode"
-  | "label"
-  | "description"
-  | "branchProvider"
-  | "branchModel"
-  | "branchThinkingLevel"
->;
-
-function shouldResolveBranchDefaultsForSettings(
-  payload: BranchSettingsPayload,
-  connection?: Connection,
-): boolean {
-  return payload.switchToBranch || !connection?.branchProvider;
-}
-
-function buildBranchSettingsUpdates(
-  payload: BranchSettingsPayload,
-  branchDefaults?: BranchDefaults,
-): BranchSettingsUpdates {
-  const updates: BranchSettingsUpdates = {
-    label: payload.label,
-    description: payload.description,
-  };
-
-  if (payload.switchToBranch) {
-    updates.triggerMode = "branch";
-  }
-  if (branchDefaults) {
-    updates.branchProvider = branchDefaults.provider;
-    updates.branchModel = branchDefaults.model;
-    updates.branchThinkingLevel = branchDefaults.thinkingLevel;
-  }
-
-  return updates;
-}
-
-function resolveDefaultThinkingLevel(
-  providerCapabilityStore: ReturnType<typeof useProviderCapabilityStore>,
-  provider: PodProvider,
-  model: string,
-): string | null {
-  return providerCapabilityStore.getDefaultThinkingLevel(provider, model) ?? null;
-}
 
 export const useConnectionStore = defineStore("connection", () => {
   const { executeAction } = useCanvasWebSocketAction();
@@ -125,7 +82,6 @@ export const useConnectionStore = defineStore("connection", () => {
   const connections = ref<Connection[]>([]);
   const selectedConnectionId = ref<string | null>(null);
   const draggingConnection = ref<DraggingConnection | null>(null);
-  let workflowListenersRegistered = false;
 
   const getConnectionsByPodId = computed(
     () =>
@@ -241,47 +197,71 @@ export const useConnectionStore = defineStore("connection", () => {
     }
   }
 
-  // 快取 handlers 與 event map，確保 setupWorkflowListeners / cleanupWorkflowListeners
-  // 拿到的是同一份 handler reference，讓 websocketClient.off() 能正確移除監聽器。
   const workflowHandlers: WorkflowHandlers = createWorkflowEventHandlers({
     connections: connections.value,
     updateAutoGroupStatus,
     setConnectionStatus,
   });
-
-  const workflowEventMap: Array<[string, (payload: unknown) => void]> = [
-    [
-      WebSocketResponseEvents.WORKFLOW_AUTO_TRIGGERED,
-      castHandler(workflowHandlers.handleWorkflowAutoTriggered),
-    ],
-    [
-      WebSocketResponseEvents.WORKFLOW_COMPLETE,
-      castHandler(workflowHandlers.handleWorkflowComplete),
-    ],
-    [
-      WebSocketResponseEvents.WORKFLOW_BRANCH_TRIGGERED,
-      castHandler(workflowHandlers.handleWorkflowBranchTriggered),
-    ],
-    [
-      WebSocketResponseEvents.WORKFLOW_DIRECT_TRIGGERED,
-      castHandler(workflowHandlers.handleWorkflowDirectTriggered),
-    ],
-    [
-      WebSocketResponseEvents.WORKFLOW_QUEUED,
-      castHandler(workflowHandlers.handleWorkflowQueued),
-    ],
-    [
-      WebSocketResponseEvents.WORKFLOW_QUEUE_PROCESSED,
-      castHandler(workflowHandlers.handleWorkflowQueueProcessed),
-    ],
-  ];
+  const workflowListenerEntries = [
+    {
+      event: WebSocketResponseEvents.WORKFLOW_AUTO_TRIGGERED,
+      handler: workflowHandlers.handleWorkflowAutoTriggered as (
+        payload: unknown,
+      ) => void,
+    },
+    {
+      event: WebSocketResponseEvents.WORKFLOW_COMPLETE,
+      handler: workflowHandlers.handleWorkflowComplete as (
+        payload: unknown,
+      ) => void,
+    },
+    {
+      event: WebSocketResponseEvents.WORKFLOW_BRANCH_TRIGGERED,
+      handler: workflowHandlers.handleWorkflowBranchTriggered as (
+        payload: unknown,
+      ) => void,
+    },
+    {
+      event: WebSocketResponseEvents.WORKFLOW_DIRECT_TRIGGERED,
+      handler: workflowHandlers.handleWorkflowDirectTriggered as (
+        payload: unknown,
+      ) => void,
+    },
+    {
+      event: WebSocketResponseEvents.WORKFLOW_QUEUED,
+      handler: workflowHandlers.handleWorkflowQueued as (
+        payload: unknown,
+      ) => void,
+    },
+    {
+      event: WebSocketResponseEvents.WORKFLOW_QUEUE_PROCESSED,
+      handler: workflowHandlers.handleWorkflowQueueProcessed as (
+        payload: unknown,
+      ) => void,
+    },
+  ] as const;
+  let workflowListenersRegistered = false;
 
   function getWorkflowHandlers(): WorkflowHandlers {
     return workflowHandlers;
   }
 
-  function getWorkflowEventMap(): Array<[string, (payload: unknown) => void]> {
-    return workflowEventMap;
+  function setupWorkflowListeners(): void {
+    if (workflowListenersRegistered) return;
+
+    for (const { event, handler } of workflowListenerEntries) {
+      websocketClient.on(event, handler);
+    }
+    workflowListenersRegistered = true;
+  }
+
+  function cleanupWorkflowListeners(): void {
+    if (!workflowListenersRegistered) return;
+
+    for (const { event, handler } of workflowListenerEntries) {
+      websocketClient.off(event, handler);
+    }
+    workflowListenersRegistered = false;
   }
 
   async function loadConnectionsFromBackend(): Promise<void> {
@@ -542,24 +522,16 @@ export const useConnectionStore = defineStore("connection", () => {
     );
   }
 
-  function normalizeUpdatedConnection(
-    connection: ConnectionPayloadItem,
-  ): Connection {
-    return normalizeConnection(
-      connection,
-      connection.sourcePodId
-        ? podStore.getPodById(connection.sourcePodId)?.provider
-        : undefined,
-    );
-  }
-
   function syncConnectionUpdateResponse(
     payload: ConnectionUpdatedPayload,
   ): Connection[] {
-    const connectionPayloads = normalizeConnectionUpdateResponsePayload(payload);
-
-    connectionPayloads.forEach(updateConnectionFromEvent);
-    return connectionPayloads.map(normalizeUpdatedConnection);
+    const result = syncConnectionUpdateResponseReducer(
+      connections.value,
+      payload,
+      (sourcePodId) => podStore.getPodById(sourcePodId)?.provider,
+    );
+    connections.value = result.connections;
+    return result.updatedConnections;
   }
 
   async function updateConnectionTriggerMode(
@@ -641,29 +613,17 @@ export const useConnectionStore = defineStore("connection", () => {
     connectionId: string,
     label: string,
   ): { valid: true } | { valid: false; errorKey: string } {
-    if (label.trim() === "") {
-      return { valid: false, errorKey: "branchLabelEmpty" };
-    }
-
-    if (label.length > BRANCH_LABEL_MAX_LENGTH) {
-      return { valid: false, errorKey: "branchLabelTooLong" };
-    }
-
-    if (label.toLowerCase() === BRANCH_RESERVED_LABEL.toLowerCase()) {
-      return { valid: false, errorKey: "branchLabelReserved" };
-    }
-
-    const siblings = getBranchConnectionsBySourcePodId.value(sourcePodId);
-    const isDuplicate = siblings.some(
-      (conn) =>
-        conn.id !== connectionId &&
-        conn.label?.toLowerCase() === label.toLowerCase(),
+    return validateBranchLabelRule(
+      sourcePodId,
+      connectionId,
+      label,
+      getBranchConnectionsBySourcePodId.value(sourcePodId),
+      {
+        labelMaxLength: BRANCH_LABEL_MAX_LENGTH,
+        descriptionMaxLength: BRANCH_DESCRIPTION_MAX_LENGTH,
+        reservedLabel: BRANCH_RESERVED_LABEL,
+      },
     );
-    if (isDuplicate) {
-      return { valid: false, errorKey: "branchLabelDuplicate" };
-    }
-
-    return { valid: true };
   }
 
   /**
@@ -673,10 +633,11 @@ export const useConnectionStore = defineStore("connection", () => {
   function validateBranchDescription(
     description: string,
   ): { valid: true } | { valid: false; errorKey: string } {
-    if (description.length > BRANCH_DESCRIPTION_MAX_LENGTH) {
-      return { valid: false, errorKey: "branchDescriptionTooLong" };
-    }
-    return { valid: true };
+    return validateBranchDescriptionRule(description, {
+      labelMaxLength: BRANCH_LABEL_MAX_LENGTH,
+      descriptionMaxLength: BRANCH_DESCRIPTION_MAX_LENGTH,
+      reservedLabel: BRANCH_RESERVED_LABEL,
+    });
   }
 
   /**
@@ -790,44 +751,26 @@ export const useConnectionStore = defineStore("connection", () => {
     connectionId: string,
     payload: BranchSettingsPayload,
   ): string | null {
-    const labelResult = validateBranchLabel(
+    return validateBranchSettingsPayloadRule(
       sourcePodId,
       connectionId,
-      payload.label,
+      payload,
+      getBranchConnectionsBySourcePodId.value(sourcePodId),
+      {
+        labelMaxLength: BRANCH_LABEL_MAX_LENGTH,
+        descriptionMaxLength: BRANCH_DESCRIPTION_MAX_LENGTH,
+        reservedLabel: BRANCH_RESERVED_LABEL,
+      },
     );
-    if (!labelResult.valid) return labelResult.errorKey;
-
-    const descResult = validateBranchDescription(payload.description);
-    if (!descResult.valid) return descResult.errorKey;
-
-    return null;
   }
 
   function resolveBranchDefaultsFromSourcePod(
     sourcePodId: string,
   ): BranchDefaults | null {
-    const sourcePod = podStore.getPodById(sourcePodId);
-    const provider = normalizePodProvider(sourcePod?.provider ?? "claude") ?? "claude";
-    const sourcePodModel =
-      typeof sourcePod?.providerConfig?.model === "string" &&
-      sourcePod.providerConfig.model.trim().length > 0
-        ? sourcePod.providerConfig.model
-        : undefined;
-    const model =
-      (provider === "opencode" ? sourcePodModel : undefined) ??
-      providerCapabilityStore.getDefaultModel(provider) ??
-      (provider === "claude" ? DEFAULT_SUMMARY_MODEL : undefined);
-
-    if (!model) return null;
-    return {
-      provider,
-      model,
-      thinkingLevel: resolveDefaultThinkingLevel(
-        providerCapabilityStore,
-        provider,
-        model,
-      ),
-    };
+    return resolveBranchDefaultsFromSourcePodRule(
+      podStore.getPodById(sourcePodId),
+      providerCapabilityStore,
+    );
   }
 
   async function executeBranchSiblingUpdates(
@@ -899,68 +842,28 @@ export const useConnectionStore = defineStore("connection", () => {
     return executeBranchSiblingUpdates(connectionId, { branchThinkingLevel });
   }
 
-  function setupWorkflowListeners(): void {
-    if (workflowListenersRegistered) {
-      return;
-    }
-
-    getWorkflowEventMap().forEach(([event, handler]) => {
-      websocketClient.on(event, handler);
-    });
-    workflowListenersRegistered = true;
-  }
-
-  function cleanupWorkflowListeners(): void {
-    if (!workflowListenersRegistered) {
-      return;
-    }
-
-    getWorkflowEventMap().forEach(([event, handler]) => {
-      websocketClient.off(event, handler);
-    });
-    workflowListenersRegistered = false;
-  }
-
   function addConnectionFromEvent(
     connection: Omit<Connection, "status">,
   ): void {
-    const enrichedConnection = normalizeCreatedConnectionEvent(
+    connections.value = addConnectionEvent(
+      connections.value,
       connection,
-      connection.sourcePodId
-        ? podStore.getPodById(connection.sourcePodId)?.provider
-        : undefined,
+      (sourcePodId) => podStore.getPodById(sourcePodId)?.provider,
     );
-
-    const exists = connections.value.some(
-      (existingConnection) => existingConnection.id === enrichedConnection.id,
-    );
-    if (!exists) {
-      connections.value.push(enrichedConnection);
-    }
   }
 
   function updateConnectionFromEvent(
     connection: ConnectionUpdatedPayload["connection"],
   ): void {
-    if (!connection) return;
-
-    const index = connections.value.findIndex(
-      (existing) => existing.id === connection.id,
-    );
-    if (index === -1) return;
-
-    const existingConnection = connections.value[index]!;
-    const enrichedConnection = mapConnectionUpdatedEventPayload(
+    connections.value = updateConnectionEvent(
+      connections.value,
       connection,
-      existingConnection,
       (sourcePodId) => podStore.getPodById(sourcePodId)?.provider,
     );
-
-    connections.value.splice(index, 1, enrichedConnection);
   }
 
   function removeConnectionFromEvent(connectionId: string): void {
-    connections.value = removeById(connections.value, connectionId);
+    connections.value = removeConnectionEvent(connections.value, connectionId);
     if (selectedConnectionId.value === connectionId) {
       selectedConnectionId.value = null;
     }
@@ -1051,7 +954,8 @@ export const useConnectionStore = defineStore("connection", () => {
     isPartOfRunningWorkflow,
     isWorkflowRunning,
     findConnectionById,
-    getWorkflowEventMap,
+    setupWorkflowListeners,
+    cleanupWorkflowListeners,
     loadConnectionsFromBackend,
     validateNewConnection,
     createConnection,
@@ -1076,8 +980,6 @@ export const useConnectionStore = defineStore("connection", () => {
     updateConnectionBranchModel,
     updateConnectionBranchThinkingLevel,
     getWorkflowHandlers,
-    setupWorkflowListeners,
-    cleanupWorkflowListeners,
     addConnectionFromEvent,
     updateConnectionFromEvent,
     removeConnectionFromEvent,

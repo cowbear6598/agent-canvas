@@ -1,4 +1,4 @@
-import type { Repository, RepositoryNote } from "@/types";
+import type { Pod, Repository, RepositoryNote } from "@/types";
 import { createNoteStore } from "./createNoteStore";
 import type { NoteStoreContext, TypedNoteStore } from "./createNoteStore";
 import {
@@ -31,7 +31,10 @@ import type {
   RepositoryMemoryEnabledSetPayload,
   RepositoryMemoryClearedPayload,
 } from "@/types/websocket";
-import { usePodStore } from "@/stores/pod/podStore";
+import {
+  syncRepositoryMemoryStateToPods,
+  syncRepositoryPodsToPodStore,
+} from "@/stores/pod/repositoryMemorySync";
 
 function setRepositoryMemoryState(
   repositories: Repository[],
@@ -93,8 +96,10 @@ interface RepositoryStoreCustomActions {
   setRepoMemoryEnabled(
     repositoryId: string,
     memoryEnabled: boolean,
-  ): Promise<void>;
-  clearRepoMemory(repositoryId: string): Promise<void>;
+  ): Promise<{ success: boolean; repositoryId: string; pods: Pod[] }>;
+  clearRepoMemory(
+    repositoryId: string,
+  ): Promise<{ success: boolean; repositoryId: string; pods: Pod[] }>;
   setRepoMemoryState(
     repositoryId: string,
     state: {
@@ -373,7 +378,7 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
       this: NoteStoreContext<Repository>,
       repositoryId: string,
       memoryEnabled: boolean,
-    ): Promise<void> {
+    ): Promise<{ success: boolean; repositoryId: string; pods: Pod[] }> {
       const result = await executeRepositoryAction<
         RepositorySetMemoryEnabledPayload,
         RepositoryMemoryEnabledSetPayload
@@ -400,7 +405,7 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
       );
 
       if (!result.success) {
-        return;
+        return { success: false, repositoryId, pods: [] };
       }
 
       if (!result.data.success) {
@@ -417,7 +422,7 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
               : "canvas.podContextMenu.repoMemoryDisableFailedDesc",
           ),
         );
-        return;
+        return { success: false, repositoryId, pods: [] };
       }
 
       const resolvedRepositoryId =
@@ -426,9 +431,7 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
         hasRepoMemory: result.data.repository?.hasRepoMemory,
         repoMemoryEnabled: result.data.repository?.repoMemoryEnabled,
       });
-      for (const pod of result.data.pods ?? []) {
-        usePodStore().updatePod(pod);
-      }
+      syncRepositoryPodsToPodStore(result.data.pods ?? []);
 
       showSuccessToast(
         "Repository",
@@ -438,6 +441,12 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
             : "canvas.podContextMenu.repoMemoryDisabled",
         ),
       );
+
+      return {
+        success: true,
+        repositoryId: resolvedRepositoryId,
+        pods: result.data.pods ?? [],
+      };
     },
 
     async getRepoMemory(
@@ -482,7 +491,7 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
         hasRepoMemory: result.data.hasSummary,
         repoMemoryEnabled: result.data.memoryEnabled,
       });
-      usePodStore().setRepositoryMemoryState(repositoryId, {
+      syncRepositoryMemoryStateToPods(repositoryId, {
         hasRepoMemory: result.data.hasSummary,
         repoMemoryEnabled: result.data.memoryEnabled,
       });
@@ -499,7 +508,7 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
     async clearRepoMemory(
       this: NoteStoreContext<Repository>,
       repositoryId: string,
-    ): Promise<void> {
+    ): Promise<{ success: boolean; repositoryId: string; pods: Pod[] }> {
       const result = await executeRepositoryAction<
         RepositoryClearMemoryPayload,
         RepositoryMemoryClearedPayload
@@ -517,7 +526,7 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
       );
 
       if (!result.success) {
-        return;
+        return { success: false, repositoryId, pods: [] };
       }
 
       if (!result.data.success) {
@@ -526,7 +535,7 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
           t("store.repository.clearRepoMemoryFailed"),
           result.data.error ?? t("store.repository.clearRepoMemoryFailed"),
         );
-        return;
+        return { success: false, repositoryId, pods: [] };
       }
 
       const resolvedRepositoryId =
@@ -535,9 +544,7 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
         hasRepoMemory: false,
         repoMemoryEnabled: result.data.repository?.repoMemoryEnabled,
       });
-      for (const pod of result.data.pods ?? []) {
-        usePodStore().updatePod(pod);
-      }
+      syncRepositoryPodsToPodStore(result.data.pods ?? []);
 
       showSuccessToast(
         "Repository",
@@ -546,6 +553,12 @@ function createRepositoryCustomActions(): RepositoryStoreCustomActions {
           (item: Repository) => item.id === resolvedRepositoryId,
         )?.name,
       );
+
+      return {
+        success: true,
+        repositoryId: resolvedRepositoryId,
+        pods: result.data.pods ?? [],
+      };
     },
 
     updateCurrentBranch(

@@ -26,8 +26,8 @@ import {
 } from "./workflowHelpers.js";
 import { LazyInitializable } from "./lazyInitializable.js";
 import { MERGED_CONTENT_PREVIEW_MAX_LENGTH } from "./constants.js";
-import { fireAndForget } from "../../utils/operationHelpers.js";
 import { createStatusDelegate } from "./workflowStatusDelegate.js";
+import { workflowAsyncDispatchService } from "./workflowAsyncDispatchService.js";
 
 interface MultiInputServiceDeps {
   executionService: ExecutionServiceMethods;
@@ -325,7 +325,7 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
     const strategy = this.deps.strategies[triggerMode];
     const delegate = createStatusDelegate(runContext);
     // 刻意不 await：合併工作流程是長時間操作，結果透過 WebSocket 通知
-    fireAndForget(
+    workflowAsyncDispatchService.dispatchMergedWorkflow(
       this.deps.executionService.triggerWorkflowWithSummary({
         canvasId,
         connectionId: connection.id,
@@ -338,8 +338,7 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
         runContext,
         delegate,
       }),
-      "Workflow",
-      `觸發合併工作流程失敗 ${connection.id}`,
+      connection.id,
     );
 
     const pendingKey = resolvePendingKey(connection.targetPodId, runContext);

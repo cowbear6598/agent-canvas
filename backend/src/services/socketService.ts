@@ -1,5 +1,9 @@
 import { logger } from "../utils/logger.js";
-import { WebSocketResponseEvents } from "../schemas";
+import {
+  WebSocketResponseEvents,
+  assertServerEventRegistered,
+  parseServerEventPayload,
+} from "../schemas";
 import type { ConnectionReadyPayload } from "../types";
 import type { WebSocketResponse } from "../types/websocket.js";
 import { connectionManager } from "./connectionManager.js";
@@ -61,7 +65,7 @@ class SocketService {
       type: event,
       requestId: "",
       success: true,
-      payload,
+      payload: this.resolvePayload(event, payload),
     };
 
     const serialized = serialize(response);
@@ -101,7 +105,11 @@ class SocketService {
     connectionManager.setCanvasId(connectionId, "");
   }
 
-  emitToCanvas(canvasId: string, event: string, payload: unknown): void {
+  emitToCanvas(
+    canvasId: string,
+    event: string,
+    payload: unknown,
+  ): void {
     this.emitToCanvasExcept(canvasId, "", event, payload);
   }
 
@@ -220,6 +228,19 @@ class SocketService {
 
     this.heartbeatTimeouts.forEach((timeout) => clearTimeout(timeout));
     this.heartbeatTimeouts.clear();
+  }
+
+  private resolvePayload(event: string, payload: unknown): unknown {
+    if (event === "error") {
+      return payload;
+    }
+
+    try {
+      assertServerEventRegistered(event);
+      return parseServerEventPayload(event, payload);
+    } catch {
+      return payload;
+    }
   }
 }
 

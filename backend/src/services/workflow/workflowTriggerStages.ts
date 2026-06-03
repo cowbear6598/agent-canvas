@@ -1,0 +1,191 @@
+import { logger } from "../../utils/logger.js";
+import type {
+  WorkflowStatusDelegate,
+  EnqueueItem,
+} from "./workflowStatusDelegate.js";
+import type {
+  SettlementPathway,
+  TriggerWorkflowWithSummaryParams,
+  TriggerStrategy,
+} from "./types.js";
+import { resolveSettlementPathway } from "./workflowHelpers.js";
+import type { ProviderName } from "../provider/index.js";
+
+export async function runWorkflowSummaryStage(params: {
+  canvasId: string;
+  sourcePodId: string;
+  targetPodId: string;
+  provider: ProviderName;
+  summaryModel: string;
+  summaryThinkingLevel: string | null;
+  runContext: TriggerWorkflowWithSummaryParams["runContext"];
+  pathway: SettlementPathway;
+  delegate: WorkflowStatusDelegate;
+  generateSummaryWithFallback: (
+    canvasId: string,
+    sourcePodId: string,
+    targetPodId: string,
+    provider: ProviderName,
+    summaryModel: string,
+    summaryThinkingLevel: string | null,
+    runContext: TriggerWorkflowWithSummaryParams["runContext"],
+    pathway?: SettlementPathway,
+    delegate?: WorkflowStatusDelegate,
+  ) => Promise<{
+    content: string;
+    isSummarized: boolean;
+    resolvedModel?: string;
+  } | null>;
+}): Promise<{
+  content: string;
+  isSummarized: boolean;
+  resolvedModel?: string;
+} | null> {
+  const summaryResult = await params.generateSummaryWithFallback(
+    params.canvasId,
+    params.sourcePodId,
+    params.targetPodId,
+    params.provider,
+    params.summaryModel,
+    params.summaryThinkingLevel,
+    params.runContext,
+    params.pathway,
+    params.delegate,
+  );
+
+  if (summaryResult) {
+    return summaryResult;
+  }
+
+  logger.error(
+    "Workflow",
+    "Pipeline",
+    "[generateSummary] 無法生成摘要或取得備用內容",
+  );
+  params.delegate.onSummaryFailed(
+    params.canvasId,
+    params.targetPodId,
+    "無法生成摘要或取得備用內容",
+  );
+  return null;
+}
+
+export function enqueueWorkflowTriggerStage(
+  delegate: WorkflowStatusDelegate,
+  item: EnqueueItem,
+): boolean {
+  if (
+    !delegate.shouldEnqueue() ||
+    !delegate.isBusy(item.canvasId, item.targetPodId)
+  ) {
+    return false;
+  }
+
+  logger.log("Workflow", "Pipeline", "[checkQueue] 目標 Pod 忙碌中，加入佇列");
+  delegate.enqueue(item);
+  delegate.scheduleNextInQueue(item.canvasId, item.targetPodId);
+  return true;
+}
+
+export function launchWorkflowChatStage(params: {
+  canvasId: string;
+  connectionId: string;
+  targetPodId: string;
+  runId: string;
+  beforeLaunch: () => void;
+  createQueryPromise: () => Promise<void>;
+  unregisterActiveStream: (runId: string, podId: string) => void;
+  dispatchConnectionQuery: (
+    promise: Promise<void>,
+    connectionId: string,
+  ) => void;
+}): void {
+  params.beforeLaunch();
+
+  const queryPromise = params.createQueryPromise().catch((error: unknown) => {
+    params.unregisterActiveStream(params.runId, params.targetPodId);
+    throw error;
+  });
+
+  params.dispatchConnectionQuery(queryPromise, params.connectionId);
+}
+
+export function completeWorkflowChatStage(params: {
+  canvasId: string;
+  connectionId: string;
+  sourcePodId: string;
+  targetPodId: string;
+  participatingConnectionIds: string[];
+  sourcePodIds?: string[];
+  sourcePodNames?: string[];
+  strategy: TriggerStrategy;
+  runContext: TriggerWorkflowWithSummaryParams["runContext"];
+  delegate: WorkflowStatusDelegate;
+  checkAndTriggerWorkflows: () => Promise<void>;
+  dispatchDownstreamTrigger: (
+    promise: Promise<void>,
+    targetPodId: string,
+  ) => void;
+}): void {
+  params.strategy.onComplete(
+    {
+      canvasId: params.canvasId,
+      connectionId: params.connectionId,
+      sourcePodId: params.sourcePodId,
+      targetPodId: params.targetPodId,
+      triggerMode: params.strategy.mode,
+      participatingConnectionIds: params.participatingConnectionIds,
+      sourcePodIds: params.sourcePodIds,
+      sourcePodNames: params.sourcePodNames,
+      runContext: params.runContext,
+    },
+    true,
+  );
+  params.delegate.onChatComplete(
+    params.canvasId,
+    params.targetPodId,
+    resolveSettlementPathway(params.strategy.mode),
+  );
+  params.dispatchDownstreamTrigger(
+    params.checkAndTriggerWorkflows(),
+    params.targetPodId,
+  );
+  params.delegate.scheduleNextInQueue(params.canvasId, params.targetPodId);
+}
+
+export function failWorkflowChatStage(params: {
+  canvasId: string;
+  connectionId: string;
+  sourcePodId: string;
+  targetPodId: string;
+  participatingConnectionIds: string[];
+  sourcePodIds?: string[];
+  sourcePodNames?: string[];
+  strategy: TriggerStrategy;
+  runContext: TriggerWorkflowWithSummaryParams["runContext"];
+  delegate: WorkflowStatusDelegate;
+  error: Error;
+  clientErrorMessage: string;
+}): void {
+  params.strategy.onError(
+    {
+      canvasId: params.canvasId,
+      connectionId: params.connectionId,
+      sourcePodId: params.sourcePodId,
+      targetPodId: params.targetPodId,
+      triggerMode: params.strategy.mode,
+      participatingConnectionIds: params.participatingConnectionIds,
+      sourcePodIds: params.sourcePodIds,
+      sourcePodNames: params.sourcePodNames,
+      runContext: params.runContext,
+    },
+    params.clientErrorMessage,
+  );
+  logger.error("Workflow", "Error", "Workflow 執行失敗", params.error);
+  params.delegate.onChatError(
+    params.canvasId,
+    params.targetPodId,
+    params.clientErrorMessage,
+  );
+  params.delegate.scheduleNextInQueue(params.canvasId, params.targetPodId);
+}

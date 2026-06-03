@@ -140,11 +140,11 @@ export const useChatStore = defineStore("chat", {
           handler: this.handleChatMessage as (payload: unknown) => void,
         },
         {
-          event: WebSocketResponseEvents.RUN_TOOL_USE,
+          event: WebSocketResponseEvents.RUN_CHAT_TOOL_USE,
           handler: this.handleChatToolUse as (payload: unknown) => void,
         },
         {
-          event: WebSocketResponseEvents.RUN_TOOL_RESULT,
+          event: WebSocketResponseEvents.RUN_CHAT_TOOL_RESULT,
           handler: this.handleChatToolResult as (payload: unknown) => void,
         },
         {

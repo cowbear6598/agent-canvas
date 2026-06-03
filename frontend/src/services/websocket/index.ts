@@ -9,6 +9,7 @@ export {
   responseMatchesRequest,
 } from './webSocketResponseMapper'
 export { WebSocketRequestEvents, WebSocketResponseEvents } from '@/types/websocket/events'
+export { webSocketRequestResponsePairs } from '@shared/websocket'
 export type { WebSocketRequestConfig } from './createWebSocketRequest'
 export type {
   WebSocketActionResult,

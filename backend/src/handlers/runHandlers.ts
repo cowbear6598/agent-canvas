@@ -84,7 +84,7 @@ export const handleRunDelete = withCanvasId<RunDeletePayload>(
 );
 
 export const handleRunLoadHistory = withCanvasId<RunLoadHistoryPayload>(
-  WebSocketResponseEvents.RUN_HISTORY_LOADED,
+  WebSocketResponseEvents.RUN_HISTORY_RESULT,
   async (
     connectionId: string,
     canvasId: string,
@@ -114,7 +114,7 @@ export const handleRunLoadHistory = withCanvasId<RunLoadHistoryPayload>(
       return { ...run, podInstances, sourcePodName };
     });
 
-    emitSuccess(connectionId, WebSocketResponseEvents.RUN_HISTORY_LOADED, {
+    emitSuccess(connectionId, WebSocketResponseEvents.RUN_HISTORY_RESULT, {
       requestId,
       success: true,
       runs: runsWithInstances,
@@ -123,7 +123,7 @@ export const handleRunLoadHistory = withCanvasId<RunLoadHistoryPayload>(
 );
 
 export const handleRunLoadPodMessages = withCanvasId<RunLoadPodMessagesPayload>(
-  WebSocketResponseEvents.RUN_POD_MESSAGES_LOADED,
+  WebSocketResponseEvents.RUN_POD_MESSAGES_RESULT,
   async (
     connectionId: string,
     canvasId: string,
@@ -136,7 +136,7 @@ export const handleRunLoadPodMessages = withCanvasId<RunLoadPodMessagesPayload>(
       connectionId,
       canvasId,
       runId,
-      WebSocketResponseEvents.RUN_POD_MESSAGES_LOADED,
+      WebSocketResponseEvents.RUN_POD_MESSAGES_RESULT,
       requestId,
     );
     if (!run) return;
@@ -146,7 +146,7 @@ export const handleRunLoadPodMessages = withCanvasId<RunLoadPodMessagesPayload>(
       limit,
     });
 
-    emitSuccess(connectionId, WebSocketResponseEvents.RUN_POD_MESSAGES_LOADED, {
+    emitSuccess(connectionId, WebSocketResponseEvents.RUN_POD_MESSAGES_RESULT, {
       requestId,
       success: true,
       runId,

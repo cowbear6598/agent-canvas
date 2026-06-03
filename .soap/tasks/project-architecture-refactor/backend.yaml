@@ -1,0 +1,173 @@
+feature: project-architecture-refactor
+side: backend
+approved: true
+phases:
+  - id: P1
+    title: 共用契約與應用服務邊界
+    parallel: true
+    verification:
+      - cd backend && bun run style
+      - cd backend && bun run test
+    done: true
+    items:
+      - id: P1.A
+        title: Canonical WebSocket 契約
+        tasks:
+          - id: P1.A.t1
+            text: 在 `shared/` 下建立 WebSocket event 與 payload 的 canonical 契約模組，讓 `backend/src/schemas/events.ts`、前端 `types/websocket` 與 request helper 共享同一份定義
+            completed: true
+            last_files_changed:
+              - shared/websocket/events.ts
+              - shared/websocket/requestResponsePairs.ts
+              - shared/websocket/index.ts
+              - backend/src/schemas/events.ts
+              - backend/src/handlers/runHandlers.ts
+              - backend/src/handlers/groups/runHandlerGroup.ts
+              - backend/tests/business-logic/runHandlers.test.ts
+          - id: P1.A.t2
+            text: 將 `backend/src/schemas/serverEventManifest.ts` 從目前的 `z.unknown()` 佔位實作改成依事件對應具體 schema 的 manifest，並讓 emit helper 與 handler registration 都能引用這份契約
+            completed: true
+            last_files_changed:
+              - backend/src/schemas/serverEventManifest.ts
+              - backend/src/services/socketService.ts
+              - backend/src/handlers/registry.ts
+              - backend/tests/business-logic/socketService.test.ts
+              - backend/tests/userflows/paste.test.ts
+          - id: P1.A.t3
+            text: 補一個 integration test 驗證 canonical 契約、server event manifest 與 handler event registration 的一致性，避免前後端 payload 漂移時只在 runtime 才發現
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/websocketContractManifest.test.ts
+      - id: P1.B
+        title: Pod 與 Connection command service
+        tasks:
+          - id: P1.B.t1
+            text: 為 `podHandlers` 與 `connectionHandlers` 建立明確的 command service 層，讓 handler 只負責 schema parse、auth、error mapping 與 emit，將 rename、provider/model update、schedule update、branch 設定等規則移出 handler
+            completed: true
+            last_files_changed:
+              - backend/src/services/commands/podCommandService.ts
+              - backend/src/services/commands/connectionCommandService.ts
+              - backend/src/handlers/podHandlers.ts
+              - backend/src/handlers/connectionHandlers.ts
+              - backend/tests/business-logic/buildScheduleUpdates.test.ts
+          - id: P1.B.t2
+            text: 將 handler 內的共用更新流程整理成可重用的 application command 介面，避免不同 websocket handler 重複組裝 validate → execute → broadcast 的控制流
+            completed: true
+            last_files_changed:
+              - backend/src/services/commands/applicationCommand.ts
+              - backend/src/services/commands/podCommandService.ts
+              - backend/src/services/commands/connectionCommandService.ts
+              - backend/src/handlers/podHandlers.ts
+              - backend/src/handlers/connectionHandlers.ts
+
+  - id: P2
+    title: Store / Repository / Policy 拆分
+    parallel: true
+    verification:
+      - cd backend && bun run style
+      - cd backend && bun run test
+    done: true
+    items:
+      - id: P2.A
+        title: Pod 與 Connection persistence 邊界
+        tasks:
+          - id: P2.A.t1
+            text: 將 `backend/src/services/podStore.ts` 拆為 DB-only repository、row mapper、providerConfig / schedule / goal policy，讓 store 不再同時承擔 statement cache、domain mapping 與 validation
+            completed: true
+            last_files_changed:
+              - backend/src/services/podStore.ts
+              - backend/src/services/pod/podRepository.ts
+              - backend/src/services/pod/podRowMapper.ts
+              - backend/src/services/pod/podUpdatePolicy.ts
+          - id: P2.A.t2
+            text: 將 `backend/src/services/connectionStore.ts` 拆為 DB-only repository、branch / summary resolution policy 與 response mapper，移除 store 內混合的 provider fallback、thinking level 驗證與 CRUD 邏輯
+            completed: true
+            last_files_changed:
+              - backend/src/services/connectionStore.ts
+              - backend/src/services/connection/connectionRepository.ts
+              - backend/src/services/connection/connectionPolicy.ts
+              - backend/src/services/connection/connectionRowMapper.ts
+          - id: P2.A.t3
+            text: 為抽出的 pod / connection policy 模組補 business logic test，覆蓋 provider default model、branch fallback、thinking level validation 與 label 規則；mock 只落在 repository wrapper，不直接 mock bun sqlite
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/podThinkingLevel.test.ts
+              - backend/tests/business-logic/connectionStoreBranchUpdate.test.ts
+              - backend/tests/business-logic/podStoreIntegration.test.ts
+      - id: P2.B
+        title: Repository 與 prepared statement 組織
+        tasks:
+          - id: P2.B.t1
+            text: 將 `backend/src/database/statements.ts` 與各 store 內零散的 query cache / prepared statement 組裝責任收斂到 repository 層，讓 domain service 不直接碰 SQL 與 statement cache 實作細節
+            completed: true
+            last_files_changed:
+              - backend/src/services/pod/podRepository.ts
+              - backend/src/services/podStore.ts
+          - id: P2.B.t2
+            text: 整理 repository 對外介面，明確區分查詢、寫入與 batch loading 能力，避免後續 application service 直接依賴底層 query shape
+            completed: true
+            last_files_changed:
+              - backend/src/services/pod/podRepository.ts
+              - backend/src/services/podStore.ts
+
+  - id: P3
+    title: Workflow 與 Run Lifecycle 拆分
+    parallel: true
+    verification:
+      - cd backend && bun run style
+      - cd backend && bun run test
+    done: true
+    items:
+      - id: P3.A
+        title: Run lifecycle coordinator
+        tasks:
+          - id: P3.A.t1
+            text: 將 `backend/src/services/workflow/runExecutionService.ts` 拆成 run state transition coordinator、resource lifecycle service 與 active stream guard，讓 status 更新、資源清理與 delete race guard 不再混在同一個服務
+            completed: true
+            last_files_changed:
+              - backend/src/services/workflow/runExecutionService.ts
+              - backend/src/services/workflow/runActiveStreamRegistry.ts
+              - backend/src/services/workflow/runResourceLifecycleService.ts
+          - id: P3.A.t2
+            text: 將 snapshot、memory maintainer scheduling、run repo cleanup 與 abort cleanup 的順序整理成明確 lifecycle stage，避免依賴大量註解維持 invariant
+            completed: true
+            last_files_changed:
+              - backend/src/services/workflow/runExecutionService.ts
+              - backend/src/services/workflow/runCompletionLifecycle.ts
+              - backend/src/services/workflow/runResourceLifecycleService.ts
+          - id: P3.A.t3
+            text: 補 integration test 驗證 run 完成、run 取消與 run 刪除三種 lifecycle 下的資源清理與 status emission 順序，mock 只落在 run resource wrapper 與 provider wrapper
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/runExecutionService.test.ts
+              - backend/tests/business-logic/runExecutionResources.test.ts
+              - backend/tests/business-logic/streamingChatExecutor.test.ts
+      - id: P3.B
+        title: Workflow trigger pipeline
+        tasks:
+          - id: P3.B.t1
+            text: 將 `workflowExecutionService`、`workflowPipeline`、queue / delegate 協調重新整理成明確的 trigger stage，讓 summary 生成、busy 判定、queue、chat 啟動與 downstream trigger 各自有單一責任
+            completed: true
+            last_files_changed:
+              - backend/src/services/workflow/workflowExecutionService.ts
+              - backend/src/services/workflow/workflowPipeline.ts
+              - backend/src/services/workflow/workflowTriggerStages.ts
+              - backend/src/services/workflow/workflowStatusDelegate.ts
+              - backend/src/services/workflow/workflowMultiInputService.ts
+          - id: P3.B.t2
+            text: 收斂 `fireAndForget` 背景副作用的使用點，將真正的長任務與通知副作用集中在可追蹤的 orchestration boundary，而不是散落在多個 workflow service 內
+            completed: true
+            last_files_changed:
+              - backend/src/services/workflow/workflowAsyncDispatchService.ts
+              - backend/src/services/workflow/workflowExecutionService.ts
+              - backend/src/services/workflow/workflowStatusDelegate.ts
+              - backend/src/services/workflow/workflowMultiInputService.ts
+          - id: P3.B.t3
+            text: 為新的 workflow trigger stage 補 business logic test，覆蓋 auto / direct / branch trigger 的路徑選擇與 queue 決策，避免用 UI 或第三方 SDK 行為當測試標的
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/workflowExecutionService.test.ts
+              - backend/tests/business-logic/workflowMultiInputService.test.ts
+              - backend/tests/business-logic/workflowBranchTriggerService.test.ts
+              - backend/tests/business-logic/workflowPipeline.test.ts
+              - backend/tests/business-logic/workflowStateService.test.ts
