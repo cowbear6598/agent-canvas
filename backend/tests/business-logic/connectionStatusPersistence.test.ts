@@ -331,7 +331,7 @@ describe("ConnectionStore SQLite 持久化", () => {
       ).toThrow("summaryThinkingLevel 不支援指定的 provider/model");
     });
 
-    it("更新 branchProvider 時若未指定 branchModel 應寫入該 provider 預設模型", () => {
+    it("更新 summaryProvider 時若未指定 summaryModel 應寫入該 provider 預設模型", () => {
       const connection = connectionStore.create(canvasId, {
         sourcePodId: "pod-a",
         sourceAnchor: "right",
@@ -342,14 +342,14 @@ describe("ConnectionStore SQLite 持久化", () => {
       });
 
       const updated = connectionStore.update(canvasId, connection.id, {
-        branchProvider: "codex",
+        summaryProvider: "codex",
       });
 
-      expect(updated?.branchProvider).toBe("codex");
-      expect(updated?.branchModel).toBe("gpt-5.4");
+      expect(updated?.summaryProvider).toBe("codex");
+      expect(updated?.summaryModel).toBe("gpt-5.4");
     });
 
-    it("更新 branch provider/model 時未指定 thinking level 應重設為新模型預設值", () => {
+    it("更新 summary provider/model 時未指定 thinking level 應重設為新模型預設值", () => {
       const connection = connectionStore.create(canvasId, {
         sourcePodId: "pod-a",
         sourceAnchor: "right",
@@ -357,20 +357,20 @@ describe("ConnectionStore SQLite 持久化", () => {
         targetAnchor: "left",
         triggerMode: "branch",
         label: "Test-Label",
-        branchProvider: "claude",
-        branchModel: "sonnet",
-        branchThinkingLevel: "max",
+        summaryProvider: "claude",
+        summaryModel: "sonnet",
+        summaryThinkingLevel: "max",
       });
 
       const updated = connectionStore.update(canvasId, connection.id, {
-        branchProvider: "codex",
-        branchModel: "gpt-5.4",
+        summaryProvider: "codex",
+        summaryModel: "gpt-5.4",
       });
 
-      expect(updated?.branchThinkingLevel).toBe("medium");
+      expect(updated?.summaryThinkingLevel).toBe("medium");
     });
 
-    it("更新 branch thinking level 為模型不支援的值時應拒絕寫入", () => {
+    it("更新 summary thinking level 為模型不支援的值時應拒絕寫入", () => {
       const connection = connectionStore.create(canvasId, {
         sourcePodId: "pod-a",
         sourceAnchor: "right",
@@ -378,15 +378,15 @@ describe("ConnectionStore SQLite 持久化", () => {
         targetAnchor: "left",
         triggerMode: "branch",
         label: "Test-Label",
-        branchProvider: "codex",
-        branchModel: "gpt-5.4",
+        summaryProvider: "codex",
+        summaryModel: "gpt-5.4",
       });
 
       expect(() =>
         connectionStore.update(canvasId, connection.id, {
-          branchThinkingLevel: "max",
+          summaryThinkingLevel: "max",
         }),
-      ).toThrow("branchThinkingLevel 不支援指定的 provider/model");
+      ).toThrow("summaryThinkingLevel 不支援指定的 provider/model");
     });
   });
 

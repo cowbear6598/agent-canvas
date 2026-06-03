@@ -51,10 +51,14 @@ function ensureModelAliasesThinkingColumns(db: Database): void {
   })();
 }
 
-function ensureConnectionThinkingColumns(db: Database): void {
+function ensureConnectionPersistenceColumns(db: Database): void {
   db.transaction(() => {
     addColumnIfMissing(db, "connections", "summary_thinking_level TEXT");
-    addColumnIfMissing(db, "connections", "branch_thinking_level TEXT");
+    addColumnIfMissing(
+      db,
+      "connections",
+      "direct_enabled INTEGER NOT NULL DEFAULT 0",
+    );
   })();
 }
 
@@ -118,9 +122,8 @@ function migrateLegacyCodexMiniModel(db: Database): void {
 
     db.exec(
       `UPDATE connections
-       SET summary_model = CASE WHEN summary_model = 'gpt-5.4-mini' THEN 'gpt-5.4' ELSE summary_model END,
-           branch_model  = CASE WHEN branch_model  = 'gpt-5.4-mini' THEN 'gpt-5.4' ELSE branch_model  END
-       WHERE summary_model = 'gpt-5.4-mini' OR branch_model = 'gpt-5.4-mini'`,
+       SET summary_model = CASE WHEN summary_model = 'gpt-5.4-mini' THEN 'gpt-5.4' ELSE summary_model END
+       WHERE summary_model = 'gpt-5.4-mini'`,
     );
   })();
 }
@@ -241,11 +244,9 @@ function createBaseTables(db: Database): void {
       // runtime 由 connectionExecution 路由 fallback 為 sourcePod.provider。
       "summary_provider TEXT," +
       "summary_thinking_level TEXT," +
+      "direct_enabled INTEGER NOT NULL DEFAULT 0," +
       "label TEXT NOT NULL DEFAULT ''," +
-      "description TEXT," +
-      "branch_provider TEXT," +
-      "branch_model TEXT," +
-      "branch_thinking_level TEXT" +
+      "description TEXT" +
       ")",
   );
   db.exec(
@@ -550,7 +551,7 @@ function createBaseTables(db: Database): void {
 export function createTables(db: Database): void {
   createBaseTables(db);
   addColumnIfMissing(db, "run_pod_instances", "last_response_summary TEXT");
-  ensureConnectionThinkingColumns(db);
+  ensureConnectionPersistenceColumns(db);
   ensureManagedPluginBundleColumns(db);
   ensureModelAliasesThinkingColumns(db);
   ensureRepoMemoryEnabledColumn(db);

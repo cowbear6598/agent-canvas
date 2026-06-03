@@ -12,7 +12,7 @@ import type {
   Pod,
   PodScheduleSetPayload,
 } from "../../types/index.js";
-import { toPodPublicView } from "../../types/index.js";
+import { toConnectionPublic, toPodPublicView } from "../../types/index.js";
 import { WebSocketError } from "../../middleware/wsErrorHandler.js";
 import { connectionStore } from "../connectionStore.js";
 import { podStore } from "../podStore.js";
@@ -31,7 +31,9 @@ class ConnectionCommandService {
     const payload: ConnectionListResultPayload = {
       requestId: params.requestId,
       success: true,
-      connections: connectionStore.list(params.canvasId),
+      connections: connectionStore
+        .list(params.canvasId)
+        .map((connection) => toConnectionPublic(connection)),
     };
 
     return {
@@ -70,13 +72,11 @@ class ConnectionCommandService {
         ...(params.payload.summaryThinkingLevel !== undefined && {
           summaryThinkingLevel: params.payload.summaryThinkingLevel,
         }),
+        ...(params.payload.direct !== undefined && {
+          direct: params.payload.direct,
+        }),
         label: params.payload.label,
         description: params.payload.description,
-        branchProvider: params.payload.branchProvider,
-        branchModel: params.payload.branchModel,
-        ...(params.payload.branchThinkingLevel !== undefined && {
-          branchThinkingLevel: params.payload.branchThinkingLevel,
-        }),
       });
     } catch (error) {
       throw new WebSocketError(
@@ -89,7 +89,7 @@ class ConnectionCommandService {
       requestId: params.requestId,
       canvasId: params.canvasId,
       success: true,
-      connection,
+      connection: toConnectionPublic(connection),
     };
 
     const dispatches: ApplicationCommandResult<ConnectionCreatedPayload>["dispatches"] =
@@ -205,20 +205,14 @@ class ConnectionCommandService {
       ...(params.payload.summaryThinkingLevel !== undefined && {
         summaryThinkingLevel: params.payload.summaryThinkingLevel,
       }),
+      ...(params.payload.direct !== undefined && {
+        direct: params.payload.direct,
+      }),
       ...(params.payload.label !== undefined && {
         label: params.payload.label,
       }),
       ...(params.payload.description !== undefined && {
         description: params.payload.description ?? null,
-      }),
-      ...(params.payload.branchProvider !== undefined && {
-        branchProvider: params.payload.branchProvider,
-      }),
-      ...(params.payload.branchModel !== undefined && {
-        branchModel: params.payload.branchModel,
-      }),
-      ...(params.payload.branchThinkingLevel !== undefined && {
-        branchThinkingLevel: params.payload.branchThinkingLevel,
       }),
     };
 
@@ -249,8 +243,10 @@ class ConnectionCommandService {
       requestId: params.requestId,
       canvasId: params.canvasId,
       success: true,
-      connection: updateResult.targetConnection,
-      connections: updateResult.updatedConnections,
+      connection: toConnectionPublic(updateResult.targetConnection),
+      connections: updateResult.updatedConnections.map((connection) =>
+        toConnectionPublic(connection),
+      ),
     };
 
     return {

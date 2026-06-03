@@ -4,6 +4,10 @@ import { resetStatements } from "../../src/database/statements.js";
 import { runStore } from "../../src/services/runStore.js";
 import { podStore } from "../../src/services/podStore.js";
 import { summaryService } from "../../src/services/summaryService.js";
+import {
+  ensureGoalRuntime,
+  removeGoalRuntimeRun,
+} from "../../src/services/goalRuntime.js";
 import { config } from "../../src/config/index.js";
 import type { RunContext } from "../../src/types/run.js";
 import path from "path";
@@ -164,5 +168,90 @@ describe("SummaryService", () => {
         thinkingLevel: "high",
       }),
     );
+  });
+
+  it("應優先使用 run 建立時凍結的 target goal，而不是執行中被修改的 live goal", async () => {
+    executeDisposableChatMock.mockResolvedValue({
+      success: true,
+      content: "整理後摘要",
+      resolvedModel: "sonnet",
+    });
+
+    const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "trigger");
+    const runContext = makeRunContext(run.id);
+    const instance = runStore.createPodInstance(run.id, SOURCE_POD_ID);
+    runStore.updatePodInstanceLastResponseSummary(instance.id, "既有摘要");
+    runStore.upsertRunMessage(run.id, SOURCE_POD_ID, {
+      id: "00000000-0000-0000-0000-000000000001",
+      role: "assistant",
+      content: "最近訊息",
+      timestamp: "2026-05-22T10:00:01.000Z",
+    });
+
+    const sourcePod = {
+      id: SOURCE_POD_ID,
+      name: "Source Pod",
+      provider: "claude" as const,
+      providerConfig: { model: "sonnet" },
+      workspacePath: path.join(config.canvasRoot, CANVAS_ID, SOURCE_POD_ID),
+      repositoryId: null,
+      sessionId: null,
+      status: "idle" as const,
+      x: 0,
+      y: 0,
+      rotation: 0,
+      multiInstance: false,
+      skillIds: [],
+      goal: null,
+    };
+    const frozenTargetPod = {
+      id: TARGET_POD_ID,
+      name: "Target Pod",
+      provider: "claude" as const,
+      providerConfig: { model: "sonnet" },
+      workspacePath: path.join(config.canvasRoot, CANVAS_ID, TARGET_POD_ID),
+      repositoryId: null,
+      sessionId: null,
+      status: "idle" as const,
+      x: 0,
+      y: 0,
+      rotation: 0,
+      multiInstance: false,
+      skillIds: [],
+      goal: {
+        todos: [{ id: "todo-1", text: "原始凍結 Goal" }],
+      },
+    };
+    const liveEditedTargetPod = {
+      ...frozenTargetPod,
+      goal: {
+        todos: [{ id: "todo-2", text: "執行中被修改的 Goal" }],
+      },
+    };
+
+    ensureGoalRuntime(frozenTargetPod, runContext);
+
+    vi.spyOn(podStore, "getById").mockImplementation(((_canvasId, podId) => {
+      if (podId === SOURCE_POD_ID) return sourcePod;
+      if (podId === TARGET_POD_ID) return liveEditedTargetPod;
+      return null;
+    }) as typeof podStore.getById);
+
+    await summaryService.generateSummaryForTarget(
+      CANVAS_ID,
+      SOURCE_POD_ID,
+      TARGET_POD_ID,
+      "claude",
+      "sonnet",
+      "high",
+      runContext,
+    );
+
+    const userPrompt = executeDisposableChatMock.mock.calls.at(-1)?.[0]
+      ?.userMessage as string;
+    expect(userPrompt).toContain("原始凍結 Goal");
+    expect(userPrompt).not.toContain("執行中被修改的 Goal");
+
+    removeGoalRuntimeRun(runContext.runId);
   });
 });

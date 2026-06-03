@@ -438,13 +438,13 @@ function buildStatements(db: Database): {
         `INSERT INTO connections (
           id, canvas_id, source_pod_id, source_anchor, target_pod_id, target_anchor,
           trigger_mode, decide_status, decide_reason, connection_status,
-          summary_model, summary_provider, summary_thinking_level,
-          label, description, branch_provider, branch_model, branch_thinking_level
+          summary_model, summary_provider, summary_thinking_level, direct_enabled,
+          label, description
         ) VALUES (
           $id, $canvasId, $sourcePodId, $sourceAnchor, $targetPodId, $targetAnchor,
           $triggerMode, $decideStatus, $decideReason, $connectionStatus,
-          $summaryModel, $summaryProvider, $summaryThinkingLevel,
-          $label, $description, $branchProvider, $branchModel, $branchThinkingLevel
+          $summaryModel, $summaryProvider, $summaryThinkingLevel, $directEnabled,
+          $label, $description
         )`,
       ),
       selectByCanvasId: db.prepare(
@@ -461,9 +461,8 @@ function buildStatements(db: Database): {
           decide_reason = $decideReason, connection_status = $connectionStatus,
           summary_model = $summaryModel, summary_provider = $summaryProvider,
           summary_thinking_level = $summaryThinkingLevel,
-          label = $label, description = $description,
-          branch_provider = $branchProvider, branch_model = $branchModel,
-          branch_thinking_level = $branchThinkingLevel
+          direct_enabled = $directEnabled,
+          label = $label, description = $description
         WHERE canvas_id = $canvasId AND id = $id`,
       ),
       // RETURNING 版本：UPDATE 後直接回傳更新後的行，免去額外 SELECT
@@ -475,9 +474,8 @@ function buildStatements(db: Database): {
           decide_reason = $decideReason, connection_status = $connectionStatus,
           summary_model = $summaryModel, summary_provider = $summaryProvider,
           summary_thinking_level = $summaryThinkingLevel,
-          label = $label, description = $description,
-          branch_provider = $branchProvider, branch_model = $branchModel,
-          branch_thinking_level = $branchThinkingLevel
+          direct_enabled = $directEnabled,
+          label = $label, description = $description
         WHERE canvas_id = $canvasId AND id = $id
         RETURNING *`,
       ),
@@ -1042,8 +1040,8 @@ function buildStatements(db: Database): {
                 conn.summary_model AS summary_model,
                 conn.summary_provider AS summary_provider,
                 conn.label AS label,
-                conn.branch_provider AS branch_provider,
-                conn.branch_model AS branch_model
+                conn.summary_provider AS branch_provider,
+                conn.summary_model AS branch_model
          FROM connections conn
          INNER JOIN canvases c ON c.id = conn.canvas_id
          LEFT JOIN pods source_pod ON source_pod.id = conn.source_pod_id
@@ -1057,32 +1055,10 @@ function buildStatements(db: Database): {
            )
            OR (
              conn.trigger_mode = 'branch'
+             AND conn.summary_model = $modelValue
              AND (
-               (conn.branch_provider = 'opencode' AND conn.branch_model = $modelValue)
-               OR (
-                 conn.branch_provider IS NULL
-                 AND conn.branch_model = $modelValue
-                 AND source_pod.provider = 'opencode'
-                 AND source_pod.provider_config_json IS NOT NULL
-                 AND json_valid(source_pod.provider_config_json)
-                 AND json_extract(source_pod.provider_config_json, '$.model') IS NOT NULL
-               )
-               OR (
-                 conn.branch_provider = 'opencode'
-                 AND conn.branch_model IS NULL
-                 AND source_pod.provider = 'opencode'
-                 AND source_pod.provider_config_json IS NOT NULL
-                 AND json_valid(source_pod.provider_config_json)
-                 AND json_extract(source_pod.provider_config_json, '$.model') = $modelValue
-               )
-               OR (
-                 conn.branch_provider IS NULL
-                 AND conn.branch_model IS NULL
-                 AND source_pod.provider = 'opencode'
-                 AND source_pod.provider_config_json IS NOT NULL
-                 AND json_valid(source_pod.provider_config_json)
-                 AND json_extract(source_pod.provider_config_json, '$.model') = $modelValue
-               )
+               conn.summary_provider = 'opencode'
+               OR (conn.summary_provider IS NULL AND source_pod.provider = 'opencode')
              )
            )`,
       ),

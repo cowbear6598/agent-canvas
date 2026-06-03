@@ -64,6 +64,7 @@ const canvasRequestSuccessPayloadSchema = requestSuccessPayloadSchema
   .passthrough();
 
 const anchorPositionSchema = z.enum(["top", "bottom", "left", "right"]);
+const connectionBaseTriggerModeSchema = z.enum(["auto", "branch"]);
 const triggerModeSchema = z.enum(["auto", "branch", "direct"]);
 const decideStatusSchema = z.enum([
   "none",
@@ -144,7 +145,8 @@ const connectionPayloadSchema = z
     sourceAnchor: anchorPositionSchema,
     targetPodId: z.string(),
     targetAnchor: anchorPositionSchema,
-    triggerMode: triggerModeSchema.optional(),
+    triggerMode: connectionBaseTriggerModeSchema.optional(),
+    direct: z.boolean().optional(),
     decideStatus: decideStatusSchema.optional(),
     connectionStatus: connectionStatusSchema.optional(),
     decideReason: z.string().nullable().optional(),
@@ -153,9 +155,6 @@ const connectionPayloadSchema = z
     summaryThinkingLevel: z.string().nullable().optional(),
     label: z.string().optional(),
     description: z.string().optional(),
-    branchProvider: z.string().optional(),
-    branchModel: z.string().optional(),
-    branchThinkingLevel: z.string().nullable().optional(),
   })
   .passthrough();
 

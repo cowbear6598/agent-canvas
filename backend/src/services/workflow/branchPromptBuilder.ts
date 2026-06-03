@@ -24,10 +24,9 @@ Decision priority (highest first):
 3. The recent conversation messages — used only as supplementary context to disambiguate when description and label alone do not clearly point to one branch.
 
 Rules:
-- Select exactly one label from the provided branch list when the context safely matches a branch.
-- If the context is missing, ambiguous, or unsafe to decide, return the fixed abstain label "NO_BRANCH_SELECTED".
+- Select exactly one label from the provided branch list.
+- If the context is missing, ambiguous, or unsafe to decide, you MUST still choose the single best-fitting label from the provided branch list.
 - The selectedLabel value MUST be one of the labels listed in the branch list. Do not invent a label and do not return "None".
-- The only allowed value outside the branch list is "NO_BRANCH_SELECTED".
 - You MUST respond with ONLY a JSON object in the format: {"selectedLabel": "..."}
 - Do NOT wrap your response in markdown code blocks.
 - Do NOT include any explanation or additional text.
@@ -99,14 +98,14 @@ ${branchListText}
 
 ---
 
-請從以下 label 中選一個最符合的：${validLabels}。若上下文不足、判斷模糊，或無法安全選擇任何 branch，請回傳固定值 NO_BRANCH_SELECTED。
+請從以下 label 中選一個最符合的：${validLabels}。即使上下文不足、判斷模糊，或缺少明確訊息，你仍然必須從這份 label 清單中選出最合理的一個。
 
 判斷優先順序：
 1. 以各 branch 的「說明（description）」為主要選擇條件（最重要）。
 2. 若說明不足以判斷，則以 label 名稱為次要依據。
 3. 對話內容僅作為輔助情境，用於說明/label 無法明確指向某條時的釐清。
 
-selectedLabel 必須是上方可選 Branch 列表中的其中一個 label；只有在無法安全判斷時可以回傳 NO_BRANCH_SELECTED。不要回傳 None 或其他列表外的 label。
+selectedLabel 必須是上方可選 Branch 列表中的其中一個 label。不要回傳 None 或其他列表外的 label。
 
 只需回傳 JSON 物件，格式為 {"selectedLabel": "..."}，不要加上任何 markdown 或說明。`;
   }

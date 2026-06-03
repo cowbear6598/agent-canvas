@@ -164,8 +164,6 @@ describe("Connection 管理", () => {
           targetPodId: pod.id,
           targetAnchor: "left",
           label: "test-label",
-          branchProvider: "claude",
-          branchModel: "sonnet",
         },
       );
 
@@ -195,8 +193,6 @@ describe("Connection 管理", () => {
           targetPodId: FAKE_UUID,
           targetAnchor: "left",
           label: "test-label",
-          branchProvider: "claude",
-          branchModel: "sonnet",
         },
       );
 
@@ -314,7 +310,7 @@ describe("Connection 管理", () => {
       expect(response.connection!.triggerMode).toBe("branch");
     });
 
-    it("成功更新連線的觸發模式為 direct", async () => {
+    it("成功更新連線的 direct toggle", async () => {
       const client = getClient();
       const { podA, podB } = await createPodPair(client);
       const conn = await createConnection(client, podA.id, podB.id);
@@ -336,7 +332,8 @@ describe("Connection 管理", () => {
       );
 
       expect(response.success).toBe(true);
-      expect(response.connection!.triggerMode).toBe("direct");
+      expect(response.connection!.triggerMode).toBe("auto");
+      expect(response.connection!.direct).toBe(true);
     });
 
     it("連線 ID 不存在時更新失敗", async () => {
@@ -389,8 +386,6 @@ describe("Connection 管理", () => {
           targetAnchor: "left",
           summaryProvider: "claude",
           label: "test-claude",
-          branchProvider: "claude",
-          branchModel: "sonnet",
         },
       );
 

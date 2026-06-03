@@ -1,6 +1,6 @@
 import type { PodPublicView } from "../pod.js";
 import type { RepositoryNote } from "../repositoryNote.js";
-import type { Connection } from "../connection.js";
+import type { ConnectionPublic } from "../connection.js";
 import type { I18nError } from "../../utils/i18nError.js";
 
 export interface PasteError {
@@ -15,7 +15,7 @@ export interface CanvasPasteResultPayload {
   success: boolean;
   createdPods: PodPublicView[];
   createdRepositoryNotes: RepositoryNote[];
-  createdConnections: Connection[];
+  createdConnections: ConnectionPublic[];
   podIdMapping: Record<string, string>;
   errors: PasteError[];
   error?: string;

@@ -75,6 +75,26 @@ describe("parseBranchDecision", () => {
     });
   });
 
+  it("只回傳純文字 label → 直接視為合法 selectedLabel", () => {
+    const result = parseBranchDecision("Hotfix", validLabels);
+    expect(result).toEqual({
+      ok: true,
+      selectedLabel: "Hotfix",
+      noSelection: false,
+    });
+  });
+
+  it("說明文字中只出現一個合法 label 但不是純 label → 仍視為 PARSE_FAIL", () => {
+    const result = parseBranchDecision(
+      "我會選擇 Hotfix，因為最符合情境。",
+      validLabels,
+    );
+    expect(result).toEqual({
+      ok: false,
+      reason: BranchDecisionParseError.PARSE_FAIL,
+    });
+  });
+
   it("selectedLabel 為 NO_BRANCH_SELECTED → noSelection", () => {
     const result = parseBranchDecision(
       `{"selectedLabel":"${BRANCH_NO_SELECTION_LABEL}"}`,

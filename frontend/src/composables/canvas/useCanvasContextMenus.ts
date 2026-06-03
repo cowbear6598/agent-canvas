@@ -1,5 +1,5 @@
 import { useContextMenu } from "@/composables/canvas/useContextMenu";
-import type { TriggerMode } from "@/types";
+import type { ConnectionBaseMode } from "@/types";
 import type { PodProvider } from "@/types/pod";
 import { DEFAULT_SUMMARY_MODEL } from "@/types/config";
 
@@ -11,7 +11,8 @@ interface RepositoryContextMenuData {
 
 interface ConnectionContextMenuData {
   connectionId: string;
-  triggerMode: TriggerMode;
+  triggerMode: ConnectionBaseMode;
+  direct: boolean;
   /** summaryModel 接受任意 provider 的模型名稱字串，不限於 Claude ModelType */
   summaryModel: string;
   /** 目前 Summary 使用的 AI provider；null 表示尚未設定，undefined 表示舊資料 */
@@ -20,10 +21,6 @@ interface ConnectionContextMenuData {
   label?: string;
   /** Branch 模式下的連線描述 */
   description?: string;
-  /** Branch 模式使用的 AI Provider */
-  branchProvider?: PodProvider;
-  /** Branch 模式使用的模型字串 */
-  branchModel?: string;
 }
 
 interface PodContextMenuData {
@@ -43,7 +40,8 @@ interface RepositoryStore {
 interface ConnectionStore {
   connections: Array<{
     id: string;
-    triggerMode: TriggerMode;
+    triggerMode: ConnectionBaseMode;
+    direct: boolean;
     /** summaryModel 接受任意 provider 的模型名稱字串，不限於 Claude ModelType */
     summaryModel?: string;
     /** 目前 Summary 使用的 AI provider */
@@ -52,10 +50,6 @@ interface ConnectionStore {
     label?: string;
     /** Branch 模式下的連線描述 */
     description?: string;
-    /** Branch 模式使用的 AI Provider */
-    branchProvider?: PodProvider;
-    /** Branch 模式使用的模型字串 */
-    branchModel?: string;
   }>;
 }
 
@@ -118,7 +112,8 @@ export function useCanvasContextMenus(options: UseCanvasContextMenusOptions): {
     close: closeConnectionContextMenu,
   } = useContextMenu<ConnectionContextMenuData>({
     connectionId: "",
-    triggerMode: "auto" as TriggerMode,
+    triggerMode: "auto",
+    direct: false,
     summaryModel: DEFAULT_SUMMARY_MODEL,
     summaryProvider: "claude",
   });
@@ -164,12 +159,11 @@ export function useCanvasContextMenus(options: UseCanvasContextMenusOptions): {
     openConnectionContextMenu(data.event, {
       connectionId: connection.id,
       triggerMode: connection.triggerMode,
+      direct: connection.direct,
       summaryModel: connection.summaryModel ?? DEFAULT_SUMMARY_MODEL,
       summaryProvider: connection.summaryProvider ?? "claude",
       label: connection.label,
       description: connection.description,
-      branchProvider: connection.branchProvider,
-      branchModel: connection.branchModel,
     });
   };
 

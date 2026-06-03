@@ -2,7 +2,11 @@ import type { PodProvider } from "@/types/pod";
 
 export type AnchorPosition = "top" | "bottom" | "left" | "right";
 
-export type TriggerMode = "auto" | "branch" | "direct";
+/** Connection 資料契約的基底模式，只保留 Auto / Branch。 */
+export type ConnectionBaseMode = "auto" | "branch";
+
+/** 相容現有畫布顯示流程，direct 在 P2 前仍可能以顯示模式出現。 */
+export type TriggerMode = ConnectionBaseMode | "direct";
 
 export type WorkflowRole = "head" | "tail" | "middle" | "independent";
 
@@ -23,7 +27,9 @@ export interface Connection {
   targetAnchor: AnchorPosition;
   status?: ConnectionStatus;
   decideStatus: DecideStatus;
-  triggerMode: TriggerMode;
+  triggerMode: ConnectionBaseMode;
+  /** Direct toggle 狀態；true 代表保留原基底模式但啟用 no-wait 行為。 */
+  direct: boolean;
   decideReason?: string;
   /** summaryModel 接受任意 provider 的模型名稱字串，不限於 Claude ModelType */
   summaryModel?: string;
@@ -37,11 +43,6 @@ export interface Connection {
   label?: string;
   /** Branch 模式下的連線描述，最多 200 字元 */
   description?: string;
-  /** Branch 模式使用的 AI Provider */
-  branchProvider?: PodProvider;
-  /** Branch 模式使用的模型字串 */
-  branchModel?: string;
-  branchThinkingLevel?: string | null;
 }
 
 export interface DraggingConnection {

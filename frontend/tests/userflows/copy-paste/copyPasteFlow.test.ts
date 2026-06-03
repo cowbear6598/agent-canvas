@@ -139,8 +139,7 @@ describe("copyPasteFlow", () => {
       triggerMode: "branch",
       label: "approved",
       description: "Continue after review",
-      branchProvider: "codex",
-      branchModel: "gpt-5.4",
+      direct: true,
     });
     const externalConnection = createMockConnection({
       id: "conn-external",
@@ -192,9 +191,8 @@ describe("copyPasteFlow", () => {
         sourcePodId: "pod-source",
         targetPodId: "pod-target",
         triggerMode: "branch",
+        direct: true,
         label: "approved",
-        branchProvider: "codex",
-        branchModel: "gpt-5.4",
       }),
     ]);
 
@@ -284,9 +282,8 @@ describe("copyPasteFlow", () => {
               originalSourcePodId: "pod-source",
               originalTargetPodId: "pod-target",
               triggerMode: "branch",
+              direct: true,
               label: "approved",
-              branchProvider: "codex",
-              branchModel: "gpt-5.4",
             }),
           ],
         }),

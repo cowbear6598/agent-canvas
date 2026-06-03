@@ -2,9 +2,10 @@ import type { ProviderName } from "../services/provider/index.js";
 
 export type AnchorPosition = "top" | "bottom" | "left" | "right";
 
+export type ConnectionBaseTriggerMode = "auto" | "branch";
 export type TriggerMode = "auto" | "branch" | "direct";
 
-export type AutoTriggerMode = Extract<TriggerMode, "auto" | "branch">;
+export type AutoTriggerMode = ConnectionBaseTriggerMode;
 
 export type DecideStatus =
   | "none"
@@ -21,7 +22,13 @@ export interface Connection {
   sourceAnchor: AnchorPosition;
   targetPodId: string;
   targetAnchor: AnchorPosition;
-  triggerMode: TriggerMode;
+  /**
+   * 對外 connection 契約僅保留 auto / branch 基底模式。
+   * legacy "direct" 會在 schema / repository 層正規化為 directEnabled。
+   */
+  triggerMode: ConnectionBaseTriggerMode;
+  /** direct 代表 no-wait pathway toggle，非第三種 connection 類別 */
+  direct: boolean;
   decideStatus: DecideStatus;
   decideReason: string | null;
   connectionStatus: ConnectionStatus;
@@ -47,4 +54,20 @@ export interface Connection {
   branchModel: string;
   /** Branch 決策時使用的 thinking level；null 代表交由 provider 預設 */
   branchThinkingLevel: string | null;
+}
+
+export type ConnectionPublic = Omit<
+  Connection,
+  "branchProvider" | "branchModel" | "branchThinkingLevel"
+>;
+
+export function toConnectionPublic(connection: Connection): ConnectionPublic {
+  const {
+    branchProvider: _branchProvider,
+    branchModel: _branchModel,
+    branchThinkingLevel: _branchThinkingLevel,
+    ...publicConnection
+  } = connection;
+
+  return publicConnection;
 }

@@ -481,14 +481,12 @@ export function createPastedConnections(
         targetPodId: newTargetPodId,
         targetAnchor: connItem.targetAnchor,
         triggerMode: connItem.triggerMode ?? "auto",
+        direct: connItem.direct,
         summaryProvider: connItem.summaryProvider ?? undefined,
         summaryModel: connItem.summaryModel,
         summaryThinkingLevel: connItem.summaryThinkingLevel,
         label: connItem.label,
         description: connItem.description,
-        branchProvider: connItem.branchProvider,
-        branchModel: connItem.branchModel,
-        branchThinkingLevel: connItem.branchThinkingLevel,
       }),
     );
 

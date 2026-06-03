@@ -43,11 +43,26 @@ interface CreateConnectionData {
   /** summaryProvider 指定摘要時使用的 provider；未提供則依 sourcePod.provider fallback */
   summaryProvider?: ProviderName;
   summaryThinkingLevel?: string | null;
+  direct?: boolean;
   label?: string;
   description?: string;
   branchProvider?: ProviderName;
   branchModel?: string;
   branchThinkingLevel?: string | null;
+}
+
+function normalizeDirectMode(input: {
+  triggerMode?: TriggerMode;
+  direct?: boolean;
+}): { triggerMode: Connection["triggerMode"]; direct: boolean } {
+  if (input.triggerMode === "direct") {
+    return { triggerMode: "auto", direct: true };
+  }
+
+  return {
+    triggerMode: input.triggerMode === "branch" ? "branch" : "auto",
+    direct: input.direct ?? false,
+  };
 }
 
 class ConnectionStore {
@@ -77,6 +92,7 @@ class ConnectionStore {
 
   create(canvasId: string, data: CreateConnectionData): Connection {
     const id = uuidv4();
+    const normalizedMode = normalizeDirectMode(data);
 
     // 決定摘要用 provider：客戶端指定 > sourcePod.provider > defensive fallback "claude"
     const sourcePod = podStore.getById(canvasId, data.sourcePodId);
@@ -154,8 +170,7 @@ class ConnectionStore {
     );
 
     // branch 模式下驗證 label
-    const triggerMode = data.triggerMode ?? "auto";
-    if (triggerMode === "branch") {
+    if (normalizedMode.triggerMode === "branch") {
       validateBranchLabel(
         data.label ?? "",
         this.findBySourcePodId(canvasId, data.sourcePodId),
@@ -169,7 +184,8 @@ class ConnectionStore {
       sourceAnchor: data.sourceAnchor,
       targetPodId: data.targetPodId,
       targetAnchor: data.targetAnchor,
-      triggerMode,
+      triggerMode: normalizedMode.triggerMode,
+      direct: normalizedMode.direct,
       decideStatus: "none",
       decideReason: null,
       connectionStatus: "idle",
@@ -233,12 +249,16 @@ class ConnectionStore {
        */
       summaryProvider: ProviderName | null;
       summaryThinkingLevel: string | null;
+      direct: boolean;
       label: string;
       description: string | null;
       branchProvider: ProviderName | null;
       branchModel: string | null;
       branchThinkingLevel: string | null;
     }>,
+    options?: {
+      skipBranchLabelValidation?: boolean;
+    },
   ): Connection | undefined {
     const existing = this.getById(canvasId, id);
     if (!existing) return undefined;
@@ -247,6 +267,7 @@ class ConnectionStore {
     let newDecideStatus = existing.decideStatus;
     let newDecideReason = existing.decideReason;
     let newConnectionStatus = existing.connectionStatus;
+    let newDirect = existing.direct;
     let newSummaryModel = existing.summaryModel;
     // summaryProvider 寫回 DB：以 updates.summaryProvider 為準（沒提供就保留既有值）
     let newSummaryProvider: ProviderName | null =
@@ -267,7 +288,11 @@ class ConnectionStore {
         : existing.branchThinkingLevel;
 
     if (updates.triggerMode !== undefined) {
-      if (shouldResetDecideState(existing.triggerMode, updates.triggerMode)) {
+      const normalizedTriggerMode =
+        updates.triggerMode === "direct" ? "auto" : updates.triggerMode;
+      if (
+        shouldResetDecideState(existing.triggerMode, normalizedTriggerMode)
+      ) {
         newDecideStatus = "none";
         newDecideReason = null;
         newConnectionStatus = "idle";
@@ -275,7 +300,7 @@ class ConnectionStore {
       // 切換離開 branch 時清空 branch 相關欄位
       if (
         existing.triggerMode === "branch" &&
-        updates.triggerMode !== "branch"
+        normalizedTriggerMode !== "branch"
       ) {
         newLabel = "";
         newDescription = null;
@@ -283,7 +308,15 @@ class ConnectionStore {
         newBranchModel = null;
         newBranchThinkingLevel = null;
       }
-      newTriggerMode = updates.triggerMode;
+      newTriggerMode = normalizedTriggerMode;
+      newDirect =
+        updates.triggerMode === "direct"
+          ? true
+          : updates.direct ?? false;
+    }
+
+    if (updates.direct !== undefined) {
+      newDirect = updates.direct;
     }
 
     if (updates.decideStatus !== undefined) {
@@ -337,8 +370,13 @@ class ConnectionStore {
       "summaryThinkingLevel",
     );
 
-    const targetMode = updates.triggerMode ?? existing.triggerMode;
-    if (targetMode === "branch") {
+    const targetMode =
+      updates.triggerMode !== undefined
+        ? updates.triggerMode === "direct"
+          ? "auto"
+          : updates.triggerMode
+        : existing.triggerMode;
+    if (targetMode === "branch" && !options?.skipBranchLabelValidation) {
       validateBranchLabel(
         updates.label ?? existing.label,
         this.findBySourcePodId(canvasId, existing.sourcePodId),
@@ -410,6 +448,7 @@ class ConnectionStore {
       summaryModel: newSummaryModel,
       summaryProvider: newSummaryProvider,
       summaryThinkingLevel: newSummaryThinkingLevel,
+      direct: newDirect,
       label: newLabel,
       description: newDescription,
       branchProvider: newBranchProvider,
@@ -431,6 +470,7 @@ class ConnectionStore {
       summaryModel: string;
       summaryProvider: ProviderName | null;
       summaryThinkingLevel: string | null;
+      direct: boolean;
       label: string;
       description: string | null;
       branchProvider: ProviderName | null;
@@ -443,12 +483,14 @@ class ConnectionStore {
     const existing = this.getById(canvasId, id);
     if (!existing) return undefined;
 
-    const targetMode = updates.triggerMode ?? existing.triggerMode;
+    const targetMode =
+      updates.triggerMode !== undefined
+        ? updates.triggerMode === "direct"
+          ? "auto"
+          : updates.triggerMode
+        : existing.triggerMode;
     const shouldSyncBranchSiblings =
-      targetMode === "branch" &&
-      (updates.branchProvider !== undefined ||
-        updates.branchModel !== undefined ||
-        updates.branchThinkingLevel !== undefined);
+      targetMode === "branch" && updates.direct !== undefined;
 
     if (!shouldSyncBranchSiblings) {
       const targetConnection = this.update(canvasId, id, updates);
@@ -462,24 +504,20 @@ class ConnectionStore {
       .map((connection) => connection.id);
     const ids = Array.from(new Set([id, ...siblingIds]));
 
-    const branchUpdates: Partial<{
-      branchProvider: ProviderName | null;
-      branchModel: string | null;
-      branchThinkingLevel: string | null;
-    }> = {};
-    if (updates.branchProvider !== undefined) {
-      branchUpdates.branchProvider = updates.branchProvider;
-    }
-    if (updates.branchModel !== undefined) {
-      branchUpdates.branchModel = updates.branchModel;
-    }
-    if (updates.branchThinkingLevel !== undefined) {
-      branchUpdates.branchThinkingLevel = updates.branchThinkingLevel;
-    }
+    validateBranchLabel(
+      updates.label ?? existing.label,
+      this.findBySourcePodId(canvasId, existing.sourcePodId),
+      id,
+    );
+
+    const branchUpdates: Partial<{ direct: boolean }> = {};
+    branchUpdates.direct = updates.direct;
 
     const syncBranchSiblings = getDb().transaction(() => {
       const updatedConnections: Connection[] = [];
-      const targetConnection = this.update(canvasId, id, updates);
+      const targetConnection = this.update(canvasId, id, updates, {
+        skipBranchLabelValidation: true,
+      });
       if (!targetConnection) {
         throw new Error("找不到要更新的 branch connection");
       }
@@ -491,6 +529,9 @@ class ConnectionStore {
           canvasId,
           siblingId,
           branchUpdates,
+          {
+            skipBranchLabelValidation: true,
+          },
         );
         if (!siblingConnection) {
           throw new Error("更新 branch sibling connection 失敗");

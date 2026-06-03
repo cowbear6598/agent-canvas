@@ -32,6 +32,8 @@ export interface CopiedConnection {
   targetPodId: string;
   targetAnchor: AnchorPosition;
   triggerMode?: TriggerMode;
+  /** Direct toggle 狀態；true 代表保留原基底模式但啟用 no-wait 行為。 */
+  direct?: boolean;
   /** Summary 功能獨立選用的 Provider */
   summaryProvider?: PodProvider | null;
   /** Summary 功能使用的模型字串 */
@@ -41,9 +43,4 @@ export interface CopiedConnection {
   label?: string;
   /** Branch 模式下的連線描述 */
   description?: string;
-  /** Branch 模式使用的 AI Provider */
-  branchProvider?: PodProvider;
-  /** Branch 模式使用的模型字串 */
-  branchModel?: string;
-  branchThinkingLevel?: string | null;
 }

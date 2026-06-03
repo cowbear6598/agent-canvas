@@ -1,0 +1,99 @@
+feature: connection-line-direct-toggle
+side: frontend
+approved: true
+phases:
+  - id: P1
+    title: 連線前端資料契約收斂
+    parallel: false
+    verification:
+      - cd frontend && bun run style
+      - cd frontend && bun run test:run
+    done: true
+    items:
+      - id: P1.A
+        title: Connection 型別與 payload 重構
+        tasks:
+          - id: P1.A.t1
+            text: 將 `frontend/src/types/connection.ts`、`frontend/src/types/websocket/requests.ts` 與 `frontend/src/types/websocket/responses.ts` 的 connection 契約改為只保留 Auto / Branch 基底模式，新增 direct toggle 對應欄位，並移除已被統一 model settings 取代的 branch-specific model 欄位
+            completed: true
+            last_files_changed:
+              - frontend/src/types/connection.ts
+              - frontend/src/types/websocket/requests.ts
+              - frontend/src/types/websocket/responses.ts
+          - id: P1.A.t2
+            text: 調整 `frontend/src/stores/connectionPayloadMappers.ts` 與 `frontend/src/stores/connectionStore.ts`，讓 connection 建立、更新與事件同步都以新欄位表示 direct 狀態，並刪除前端已無實際用途的 branchProvider、branchModel、branchThinkingLevel 操作流程
+            completed: true
+            last_files_changed:
+              - frontend/src/stores/connection/connectionBranchRules.ts
+              - frontend/src/stores/connectionPayloadMappers.ts
+              - frontend/src/stores/connectionStore.ts
+              - frontend/src/stores/connectionStoreHelpers.ts
+          - id: P1.A.t3
+            text: 收斂 `frontend/src/composables/canvas/useCanvasContextMenus.ts`、`frontend/src/composables/canvas/copyPaste/collectCopyData.ts` 與 `frontend/src/composables/canvas/copyPaste/calculatePaste.ts` 的 connection 狀態傳遞，改用新 direct 欄位並移除 legacy branch model 欄位
+            completed: true
+            last_files_changed:
+              - frontend/src/composables/canvas/useCanvasContextMenus.ts
+              - frontend/src/composables/canvas/copyPaste/collectCopyData.ts
+              - frontend/src/composables/canvas/copyPaste/calculatePaste.ts
+              - frontend/src/types/clipboard.ts
+
+  - id: P2
+    title: 連線選單與視覺語意更新
+    parallel: false
+    verification:
+      - cd frontend && bun run style
+      - cd frontend && bun run test:run
+    done: true
+    items:
+      - id: P2.A
+        title: Context Menu 與 ConnectionLine 調整
+        tasks:
+          - id: P2.A.t1
+            text: 更新 `frontend/src/components/canvas/ConnectionContextMenu.vue` 與其相關 menu row，讓選單只提供 Auto / Branch 兩種基底類別，另外以獨立 toggle 控制 direct 狀態與成功 / 失敗提示文案
+            completed: true
+            last_files_changed:
+              - frontend/src/components/canvas/CanvasContainer.vue
+              - frontend/src/components/canvas/ConnectionContextMenu.vue
+              - frontend/src/components/canvas/connectionMenu/TriggerModeRow.vue
+          - id: P2.A.t2
+            text: 更新 `frontend/src/components/canvas/ConnectionLine.vue`，改為依新 direct 欄位決定 direct 標記，同時維持 Auto 與 Branch 原本的顯示語意
+            completed: true
+            last_files_changed:
+              - frontend/src/assets/styles/doodle/connections.css
+              - frontend/src/components/canvas/ConnectionLine.vue
+          - id: P2.A.t3
+            text: 補齊 `frontend/src/locales/zh-TW.json`、`frontend/src/locales/en.json` 與 `frontend/src/locales/ja.json` 的 connection menu 文案，讓 Direct 改為 toggle 語意且不再顯示為第三種 trigger mode
+            completed: true
+            last_files_changed:
+              - frontend/src/locales/en.json
+              - frontend/src/locales/ja.json
+              - frontend/src/locales/zh-TW.json
+
+  - id: P3
+    title: 前端測試與回歸收斂
+    parallel: false
+    verification:
+      - cd frontend && bun run style
+      - cd frontend && bun run test:run
+    done: true
+    items:
+      - id: P3.A
+        title: Connection menu 與 store 測試更新
+        tasks:
+          - id: P3.A.t1
+            text: 更新 `frontend/tests/userflows/canvas/connectionContextMenuBranchFlow.test.ts` 與相關 canvas userflow 測試，覆蓋 Auto / Branch 選單只剩兩類與 Direct toggle 呈現
+            completed: true
+            last_files_changed:
+              - frontend/tests/userflows/canvas/canvasPodInteractionsFlow.test.ts
+              - frontend/tests/userflows/canvas/connectionContextMenuBranchFlow.test.ts
+              - frontend/tests/userflows/canvas/connectionLineBranchFlow.test.ts
+          - id: P3.A.t2
+            text: 更新 `frontend/tests/business-logic/stores/connectionStore.test.ts` 與 `frontend/tests/business-logic/stores/connectionPayloadMappers.test.ts`，驗證新 direct 欄位的 payload 映射、事件同步與 branch 群組同步行為
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/lib/calculatePaste.test.ts
+              - frontend/tests/business-logic/lib/collectCopyData.test.ts
+              - frontend/tests/business-logic/stores/connectionPayloadMappers.test.ts
+              - frontend/tests/business-logic/stores/connectionStore.test.ts
+              - frontend/tests/helpers/factories.ts
+              - frontend/tests/userflows/copy-paste/copyPasteFlow.test.ts

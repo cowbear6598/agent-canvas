@@ -225,27 +225,13 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
   }
 
   private triggerDirectConnections(
-    canvasId: string,
-    sourcePodId: string,
-    connections: Connection[],
-    runContext: RunContext,
+    _canvasId: string,
+    _sourcePodId: string,
+    _connections: Connection[],
+    _runContext: RunContext,
   ): Promise<unknown>[] {
-    const delegate = createStatusDelegate(runContext);
-    return connections
-      .filter((conn) => conn.triggerMode === "direct")
-      .map((connection) => {
-        const pipelineContext = this.buildDirectPipelineContext(
-          canvasId,
-          sourcePodId,
-          connection,
-          runContext,
-          delegate,
-        );
-        return this.deps.pipeline.execute(
-          pipelineContext,
-          this.deps.directTriggerService,
-        );
-      });
+    // direct 已收斂為 base strategy 的 no-wait toggle，不再獨立派送第三種 connection 類別。
+    return [];
   }
 
   async checkAndTriggerWorkflows(
@@ -346,7 +332,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
       `觸發工作流程：Pod "${sourcePod?.name ?? sourcePodId}" → Pod "${targetPod.name}"`,
     );
 
-    const triggerMode = connection.triggerMode;
+    const triggerMode = params.triggerMode ?? strategy.mode;
     const resolvedConnectionIds = participatingConnectionIds ?? [connectionId];
 
     if (

@@ -6,6 +6,10 @@ import ConnectionLine from "./ConnectionLine.vue";
 
 const { connectionStore, podStore } = useCanvasContext();
 
+const podsById = computed(
+  () => new Map(podStore.pods.map((pod) => [pod.id, pod])),
+);
+
 const draggingPathData = computed(() => {
   if (!connectionStore.draggingConnection) {
     return "";
@@ -64,7 +68,7 @@ onUnmounted(() => {
       v-for="connection in connectionStore.connections"
       :key="connection.id"
       :connection="connection"
-      :pods="podStore.pods"
+      :pods-by-id="podsById"
       :is-selected="connection.id === connectionStore.selectedConnectionId"
       :status="connection.status || 'idle'"
       :trigger-mode="connection.triggerMode || 'auto'"

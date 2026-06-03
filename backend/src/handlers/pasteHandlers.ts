@@ -4,7 +4,7 @@ import type {
   PasteError,
   RepositoryNote,
 } from "../types";
-import { toPodPublicView } from "../types/index.js";
+import { toConnectionPublic, toPodPublicView } from "../types/index.js";
 import type { CanvasPastePayload } from "../schemas";
 import { socketService } from "../services/socketService.js";
 import { logger } from "../utils/logger.js";
@@ -61,7 +61,7 @@ export const handleCanvasPaste = withCanvasId<CanvasPastePayload>(
       createdPods: createdPods.map(toPodPublicView),
       createdRepositoryNotes: noteResultMap.repository
         .notes as RepositoryNote[],
-      createdConnections,
+      createdConnections: createdConnections.map(toConnectionPublic),
       podIdMapping,
       errors,
     };

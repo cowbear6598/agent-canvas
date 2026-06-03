@@ -1,5 +1,5 @@
 import type { Schedule, PodProvider, ProviderConfig, PodGoal } from "../pod";
-import type { AnchorPosition } from "@/types";
+import type { AnchorPosition, TriggerMode } from "@/types";
 import type { ManagedMcpRegistryInput } from "../mcp";
 
 export type ImageMediaType =
@@ -150,16 +150,13 @@ export interface ConnectionCreatePayload {
   /** 新建 Connection 時可帶入預設 Summary Model */
   summaryModel?: string;
   summaryThinkingLevel?: string | null;
-  triggerMode?: "auto" | "branch" | "direct";
+  triggerMode?: TriggerMode;
+  /** Direct toggle 狀態；true 代表保留原基底模式但啟用 no-wait 行為。 */
+  direct?: boolean;
   /** Branch 模式下的連線標籤 */
   label?: string;
   /** Branch 模式下的連線描述 */
   description?: string;
-  /** Branch 模式使用的 AI Provider */
-  branchProvider?: PodProvider;
-  /** Branch 模式使用的模型字串 */
-  branchModel?: string;
-  branchThinkingLevel?: string | null;
 }
 
 export interface ConnectionListPayload {
@@ -203,7 +200,9 @@ export interface PasteConnectionItem {
   sourceAnchor: AnchorPosition;
   originalTargetPodId: string;
   targetAnchor: AnchorPosition;
-  triggerMode?: "auto" | "branch" | "direct";
+  triggerMode?: TriggerMode;
+  /** Direct toggle 狀態；true 代表保留原基底模式但啟用 no-wait 行為。 */
+  direct?: boolean;
   /** Summary 功能獨立選用的 Provider；null 代表清除（重設為 fallback） */
   summaryProvider?: PodProvider | null;
   /** summaryModel 接受任意 provider 的模型名稱字串，不限於 Claude ModelType */
@@ -213,18 +212,15 @@ export interface PasteConnectionItem {
   label?: string;
   /** Branch 模式下的連線描述 */
   description?: string;
-  /** Branch 模式使用的 AI Provider */
-  branchProvider?: PodProvider;
-  /** Branch 模式使用的模型字串 */
-  branchModel?: string;
-  branchThinkingLevel?: string | null;
 }
 
 export interface ConnectionUpdatePayload {
   requestId: string;
   canvasId: string;
   connectionId: string;
-  triggerMode?: "auto" | "branch" | "direct";
+  triggerMode?: TriggerMode;
+  /** Direct toggle 狀態；true 代表保留原基底模式但啟用 no-wait 行為。 */
+  direct?: boolean;
   /** summaryModel 接受任意 provider 的模型名稱字串，不限於 Claude ModelType */
   summaryModel?: string;
   /** Summary 功能獨立選用的 Provider；null 代表清除（重設為 fallback） */
@@ -234,11 +230,6 @@ export interface ConnectionUpdatePayload {
   label?: string;
   /** Branch 模式下的連線描述 */
   description?: string;
-  /** Branch 模式使用的 AI Provider */
-  branchProvider?: PodProvider;
-  /** Branch 模式使用的模型字串 */
-  branchModel?: string;
-  branchThinkingLevel?: string | null;
 }
 
 export interface CanvasPastePayload {

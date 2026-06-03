@@ -1,17 +1,17 @@
-import type { Connection } from "../connection.js";
+import type { ConnectionPublic } from "../connection.js";
 
 export interface ConnectionCreatedPayload {
   requestId: string;
   canvasId: string;
   success: boolean;
-  connection?: Connection;
+  connection?: ConnectionPublic;
   error?: string;
 }
 
 export interface ConnectionListResultPayload {
   requestId: string;
   success: boolean;
-  connections?: Connection[];
+  connections?: ConnectionPublic[];
   error?: string;
 }
 
@@ -27,8 +27,8 @@ export interface ConnectionUpdatedPayload {
   requestId: string;
   canvasId: string;
   success: boolean;
-  connection?: Connection;
-  connections?: Connection[];
+  connection?: ConnectionPublic;
+  connections?: ConnectionPublic[];
   error?: string;
 }
 

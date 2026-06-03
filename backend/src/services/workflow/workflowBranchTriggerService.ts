@@ -1,4 +1,5 @@
 import type { Connection } from "../../types/index.js";
+import { toConnectionPublic } from "../../types/index.js";
 import type {
   TriggerStrategy,
   TriggerDecideContext,
@@ -195,7 +196,7 @@ class WorkflowBranchTriggerService
       requestId: "",
       canvasId,
       success: true,
-      connection: updated,
+      connection: toConnectionPublic(updated),
     };
     socketService.emitToCanvas(
       canvasId,
@@ -319,7 +320,7 @@ class WorkflowBranchTriggerService
       canvasId,
       sourcePodId,
       connection,
-      triggerMode: "branch",
+      triggerMode: connection.direct ? "direct" : "branch",
       decideResult,
       runContext,
       delegate,
@@ -347,7 +348,7 @@ class WorkflowBranchTriggerService
             targetPodId: connection.targetPodId,
             success: false,
             error: createClientSafeWorkflowError("WORKFLOW_BRANCH_FAILED"),
-            triggerMode: "branch",
+            triggerMode: connection.direct ? "direct" : "branch",
           });
         }
       });

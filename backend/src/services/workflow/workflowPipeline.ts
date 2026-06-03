@@ -158,6 +158,7 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
       connectionId,
       summary: finalSummary,
       isSummarized: finalIsSummarized,
+      triggerMode,
       participatingConnectionIds,
       sourcePodIds,
       sourcePodNames,
@@ -283,6 +284,10 @@ class WorkflowPipeline extends LazyInitializable<PipelineDeps> {
         summaryContent,
         isSummarized,
       );
+    }
+
+    if (context.triggerMode === "direct") {
+      return this.runDirectPassthrough(summaryContent, isSummarized);
     }
 
     const isMultiInput =

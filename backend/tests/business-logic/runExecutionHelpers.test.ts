@@ -36,17 +36,20 @@ function makeInstance(overrides?: Partial<RunPodInstance>): RunPodInstance {
 }
 
 function makeConn(overrides?: Partial<Connection>): Connection {
+  const isLegacyDirect = overrides?.triggerMode === "direct";
+
   return {
     id: "c-1",
     sourcePodId: "pod-src",
     targetPodId: "pod-a",
     sourceAnchor: "right",
     targetAnchor: "left",
-    triggerMode: "auto",
     decideStatus: "none",
     decideReason: null,
     connectionStatus: "idle",
     ...overrides,
+    triggerMode: isLegacyDirect ? "auto" : (overrides?.triggerMode ?? "auto"),
+    direct: overrides?.direct ?? isLegacyDirect,
   };
 }
 

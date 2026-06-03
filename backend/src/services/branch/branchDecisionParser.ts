@@ -94,6 +94,27 @@ function extractFirstJsonObjectContainingSelectedLabel(raw: string): string {
   return raw;
 }
 
+function tryParseLooseSelectedLabel(
+  cleaned: string,
+  validLabels: string[],
+):
+  | { ok: true; selectedLabel: string; noSelection?: false }
+  | { ok: true; selectedLabel: null; noSelection: true }
+  | null {
+  const normalized = cleaned.trim().replace(/^["']|["']$/g, "");
+
+  if (normalized === BRANCH_NO_SELECTION_LABEL) {
+    return { ok: true, selectedLabel: null, noSelection: true };
+  }
+
+  const exactLabel = validLabels.find((label) => label === normalized);
+  if (exactLabel) {
+    return { ok: true, selectedLabel: exactLabel, noSelection: false };
+  }
+
+  return null;
+}
+
 /**
  * 解析 AI 回傳的 branch 決策字串。
  *
@@ -116,11 +137,14 @@ export function parseBranchDecision(
   const cleaned = extractFirstJsonObjectContainingSelectedLabel(
     stripMarkdownCodeBlock(raw),
   );
-
   let parsed: unknown;
   try {
     parsed = JSON.parse(cleaned);
   } catch {
+    const looseResult = tryParseLooseSelectedLabel(cleaned, validLabels);
+    if (looseResult) {
+      return looseResult;
+    }
     return { ok: false, reason: BranchDecisionParseError.PARSE_FAIL };
   }
 

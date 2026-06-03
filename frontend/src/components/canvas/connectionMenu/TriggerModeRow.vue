@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import type { TriggerMode } from "@/types/connection";
+import type { ConnectionBaseMode } from "@/types/connection";
 import type { FunctionalComponent } from "vue";
 
 interface Props {
-  mode: TriggerMode;
-  currentMode: TriggerMode;
+  mode: ConnectionBaseMode;
+  currentMode: ConnectionBaseMode;
   icon: FunctionalComponent;
   label: string;
 }

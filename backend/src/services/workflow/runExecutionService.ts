@@ -58,9 +58,9 @@ export function isInstanceUnreachable(
   instanceMap?: Map<string, RunPodInstance>,
 ): { autoUnreachable: boolean; directUnreachable: boolean } {
   const autoConns = incomingConns.filter((c) =>
-    isAutoTriggerable(c.triggerMode),
+    isAutoTriggerable(c.triggerMode) && !c.direct,
   );
-  const directConns = incomingConns.filter((c) => c.triggerMode === "direct");
+  const directConns = incomingConns.filter((c) => c.direct);
 
   // 使用 Map 直接查找 O(1)，否則退回 find() O(N)
   const findInstance = (podId: string): RunPodInstance | undefined =>
@@ -327,9 +327,9 @@ class RunExecutionService {
     }
 
     const hasAutoTriggerable = chainConnections.some((c) =>
-      isAutoTriggerable(c.triggerMode),
+      isAutoTriggerable(c.triggerMode) && !c.direct,
     );
-    const hasDirect = chainConnections.some((c) => c.triggerMode === "direct");
+    const hasDirect = chainConnections.some((c) => c.direct);
 
     return {
       autoPathwaySettled: hasAutoTriggerable ? "pending" : "not-applicable",

@@ -27,12 +27,15 @@ export type { RepositoryNote } from "./repositoryNote.js";
 
 export type {
   Connection,
+  ConnectionPublic,
   AnchorPosition,
+  ConnectionBaseTriggerMode,
   TriggerMode,
   AutoTriggerMode,
   DecideStatus,
   ConnectionStatus,
 } from "./connection.js";
+export { toConnectionPublic } from "./connection.js";
 
 export type {
   ScheduleConfig,

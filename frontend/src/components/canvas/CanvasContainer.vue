@@ -71,6 +71,24 @@ const modalDeleteTarget = computed(() =>
     : null,
 );
 
+const activeConnectionContextMenuConnection = computed(() =>
+  connectionStore.connections.find(
+    (connection) => connection.id === connectionContextMenu.value.data.connectionId,
+  ),
+);
+
+const connectionContextMenuTriggerMode = computed(
+  () =>
+    activeConnectionContextMenuConnection.value?.triggerMode ??
+    connectionContextMenu.value.data.triggerMode,
+);
+
+const connectionContextMenuDirectEnabled = computed(
+  () =>
+    activeConnectionContextMenuConnection.value?.direct ??
+    connectionContextMenu.value.data.direct,
+);
+
 const { allProgressTasks, handleCloneStarted, handlePullStarted } =
   useCanvasProgressTasks();
 
@@ -291,7 +309,8 @@ const visiblePods = computed(() => {
     v-if="connectionContextMenu.visible"
     :position="connectionContextMenu.position"
     :connection-id="connectionContextMenu.data.connectionId"
-    :current-trigger-mode="connectionContextMenu.data.triggerMode"
+    :current-trigger-mode="connectionContextMenuTriggerMode"
+    :direct-enabled="connectionContextMenuDirectEnabled"
     @close="closeConnectionContextMenu"
     @trigger-mode-changed="closeConnectionContextMenu"
     @branch-mode-clicked="handleBranchModeClicked"

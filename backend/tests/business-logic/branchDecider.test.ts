@@ -118,25 +118,12 @@ describe("BaseBranchDecider.decide", () => {
   });
 
   // ─── 案例 1：recentMessages 與 persistedSummary 皆為空 ─────────────────────
-  it("recentMessages 與 persistedSummary 皆為空 → fail closed，不自動選第一個 branch label", async () => {
+  it("recentMessages 與 persistedSummary 皆為空 → fallback 到第一個 branch label", async () => {
     const input = makeInput({ recentMessages: [], persistedSummary: null });
 
     const result = await branchDecider.decide(input);
 
-    expect(result).toEqual({
-      kind: "failed",
-      failure: {
-        kind: "no_selection",
-        message: "缺少可判斷 branch 的上下文",
-        attempts: [
-          {
-            attempt: 1,
-            kind: "no_selection",
-            message: "缺少可判斷 branch 的上下文",
-          },
-        ],
-      },
-    });
+    expect(result).toEqual({ kind: "success", selectedLabel: "Checklist" });
     expect(asMock(executeDisposableChat)).not.toHaveBeenCalled();
   });
 
@@ -194,7 +181,7 @@ describe("BaseBranchDecider.decide", () => {
     expect(asMock(executeDisposableChat)).toHaveBeenCalledTimes(2);
   });
 
-  it("模型回傳 NO_BRANCH_SELECTED → 回傳 no_selection 失敗且不 retry", async () => {
+  it("模型回傳 NO_BRANCH_SELECTED → fallback 第一個 branch 且不 retry", async () => {
     asMock(executeDisposableChat).mockResolvedValueOnce(
       makeDisposableChatResult(
         `{"selectedLabel":"${BRANCH_NO_SELECTION_LABEL}"}`,
@@ -203,20 +190,7 @@ describe("BaseBranchDecider.decide", () => {
 
     const result = await branchDecider.decide(makeInput());
 
-    expect(result).toEqual({
-      kind: "failed",
-      failure: {
-        kind: "no_selection",
-        message: "模型判斷沒有安全可選的 branch",
-        attempts: [
-          {
-            attempt: 1,
-            kind: "no_selection",
-            message: "模型判斷沒有安全可選的 branch",
-          },
-        ],
-      },
-    });
+    expect(result).toEqual({ kind: "success", selectedLabel: "Checklist" });
     expect(asMock(executeDisposableChat)).toHaveBeenCalledTimes(1);
   });
 
@@ -261,7 +235,7 @@ describe("BaseBranchDecider.decide", () => {
   });
 
   // ─── 案例 5：兩次都 hallucination → 結構化失敗 ──────────────────────────
-  it("兩次都 hallucination → 回傳結構化失敗，不再偽裝成 None", async () => {
+  it("兩次都 hallucination → 回傳結構化失敗", async () => {
     asMock(executeDisposableChat)
       .mockResolvedValueOnce(
         makeDisposableChatResult('{"selectedLabel":"FakeLabel1"}'),
@@ -307,6 +281,17 @@ describe("BaseBranchDecider.decide", () => {
       }),
     );
     expect(asMock(executeDisposableChat)).toHaveBeenCalledTimes(2);
+  });
+
+  it("模型只回傳純文字 label → 仍可解析為對應 branch", async () => {
+    asMock(executeDisposableChat).mockResolvedValueOnce(
+      makeDisposableChatResult("Review"),
+    );
+
+    const result = await branchDecider.decide(makeInput());
+
+    expect(result).toEqual({ kind: "success", selectedLabel: "Review" });
+    expect(asMock(executeDisposableChat)).toHaveBeenCalledTimes(1);
   });
 
   it("收到說明文字包住 JSON 的回應 → 擷取 JSON 後回傳對應 selectedLabel", async () => {

@@ -43,13 +43,10 @@ import type {
 } from "@/types/websocket";
 import {
   buildBranchSettingsUpdates,
-  resolveBranchDefaultsFromSourcePod as resolveBranchDefaultsFromSourcePodRule,
   resolveDefaultThinkingLevel,
-  shouldResolveBranchDefaultsForSettings,
   validateBranchDescription as validateBranchDescriptionRule,
   validateBranchLabel as validateBranchLabelRule,
   validateBranchSettingsPayload as validateBranchSettingsPayloadRule,
-  type BranchDefaults,
   type BranchSettingsPayload,
 } from "@/stores/connection/connectionBranchRules";
 
@@ -348,7 +345,6 @@ export const useConnectionStore = defineStore("connection", () => {
       summaryProvider?: PodProvider;
       summaryModel?: string;
       summaryThinkingLevel?: string | null;
-      branchThinkingLevel?: string | null;
     } = {
       sourceAnchor,
       targetPodId,
@@ -368,7 +364,6 @@ export const useConnectionStore = defineStore("connection", () => {
               resolvedSummaryProvider,
               resolvedSummaryModel,
             );
-      basePayload.branchThinkingLevel = basePayload.summaryThinkingLevel;
     }
 
     const result = await executeAction<
@@ -387,7 +382,9 @@ export const useConnectionStore = defineStore("connection", () => {
       },
     );
 
-    if (!result.success || !result.data.connection) return null;
+    if (!result.success || !result.data.connection) {
+      return null;
+    }
 
     // 後端若未帶回 summaryModel，以上游 provider 預設模型填入
     const rawConnection = result.data.connection;
@@ -486,14 +483,12 @@ export const useConnectionStore = defineStore("connection", () => {
     updates: Pick<
       ConnectionUpdatePayload,
       | "triggerMode"
+      | "direct"
       | "summaryModel"
       | "summaryProvider"
       | "summaryThinkingLevel"
       | "label"
       | "description"
-      | "branchProvider"
-      | "branchModel"
-      | "branchThinkingLevel"
     >,
     errorMessage: string,
   ): Promise<Connection | null> {
@@ -513,7 +508,13 @@ export const useConnectionStore = defineStore("connection", () => {
       },
     );
 
-    if (!result.success || !result.data.connection) return null;
+    if (
+      !result.success ||
+      !result.data ||
+      (!result.data.connection && !result.data.connections?.length)
+    ) {
+      return null;
+    }
 
     const updatedConnections = syncConnectionUpdateResponse(result.data);
     return (
@@ -538,11 +539,27 @@ export const useConnectionStore = defineStore("connection", () => {
     connectionId: string,
     triggerMode: "auto" | "branch" | "direct",
   ): Promise<Connection | null> {
-    // 切換 triggerMode 時不在前端清空 branch 欄位；
-    // 後端會清除並透過 ConnectionUpdated 廣播最新狀態
+    if (triggerMode === "direct") {
+      return updateConnectionDirect(connectionId, true);
+    }
+
     return executeConnectionUpdate(
       connectionId,
-      { triggerMode },
+      {
+        triggerMode,
+        direct: false,
+      },
+      t("store.connection.updateFailed"),
+    );
+  }
+
+  async function updateConnectionDirect(
+    connectionId: string,
+    direct: boolean,
+  ): Promise<Connection | null> {
+    return executeConnectionUpdate(
+      connectionId,
+      { direct },
       t("store.connection.updateFailed"),
     );
   }
@@ -721,27 +738,9 @@ export const useConnectionStore = defineStore("connection", () => {
       return null;
     }
 
-    const connection = findConnectionById(connectionId);
-    let branchDefaults: BranchDefaults | undefined;
-    if (shouldResolveBranchDefaultsForSettings(payload, connection)) {
-      const resolvedDefaults = resolveBranchDefaultsFromSourcePod(sourcePodId);
-      if (!resolvedDefaults) {
-        toast({
-          title: t("canvas.connectionContextMenu.changeFailed"),
-          description: t(
-            "canvas.connectionContextMenu.branchModelChangeFailed",
-          ),
-          duration: DEFAULT_TOAST_DURATION_MS,
-          variant: "destructive",
-        });
-        return null;
-      }
-      branchDefaults = resolvedDefaults;
-    }
-
     return executeConnectionUpdate(
       connectionId,
-      buildBranchSettingsUpdates(payload, branchDefaults),
+      buildBranchSettingsUpdates(payload),
       t("store.connection.updateFailed"),
     );
   }
@@ -762,84 +761,6 @@ export const useConnectionStore = defineStore("connection", () => {
         reservedLabel: BRANCH_RESERVED_LABEL,
       },
     );
-  }
-
-  function resolveBranchDefaultsFromSourcePod(
-    sourcePodId: string,
-  ): BranchDefaults | null {
-    return resolveBranchDefaultsFromSourcePodRule(
-      podStore.getPodById(sourcePodId),
-      providerCapabilityStore,
-    );
-  }
-
-  async function executeBranchSiblingUpdates(
-    connectionId: string,
-    updates: Pick<
-      ConnectionUpdatePayload,
-      "branchProvider" | "branchModel" | "branchThinkingLevel"
-    >,
-  ): Promise<Connection | null> {
-    const result = await executeConnectionUpdate(
-      connectionId,
-      updates,
-      t("store.connection.updateFailed"),
-    );
-
-    if (!result) {
-      await loadConnectionsFromBackend();
-      return null;
-    }
-
-    return result;
-  }
-
-  /**
-   * 同時更新 branchProvider 與 branchModel，確保單一 WS 請求送出，
-   * 避免 provider/model 出現不一致的中間狀態。
-   * 同 sourcePod 下所有 branch sibling 由後端在同一個 transaction 內同步。
-   */
-  async function updateConnectionBranchProvider(
-    connectionId: string,
-    branchProvider: PodProvider,
-    branchModel: string,
-  ): Promise<Connection | null> {
-    return executeBranchSiblingUpdates(connectionId, {
-      branchProvider,
-      branchModel,
-      branchThinkingLevel: resolveDefaultThinkingLevel(
-        providerCapabilityStore,
-        branchProvider,
-        branchModel,
-      ),
-    });
-  }
-
-  /**
-   * 更新 branch model（不變更 provider）。
-   * 同 sourcePod 下所有 branch sibling 由後端在同一個 transaction 內同步。
-   */
-  async function updateConnectionBranchModel(
-    connectionId: string,
-    branchModel: string,
-  ): Promise<Connection | null> {
-    const connection = findConnectionById(connectionId);
-    const provider = connection?.branchProvider ?? "claude";
-    return executeBranchSiblingUpdates(connectionId, {
-      branchModel,
-      branchThinkingLevel: resolveDefaultThinkingLevel(
-        providerCapabilityStore,
-        provider,
-        branchModel,
-      ),
-    });
-  }
-
-  async function updateConnectionBranchThinkingLevel(
-    connectionId: string,
-    branchThinkingLevel: string | null,
-  ): Promise<Connection | null> {
-    return executeBranchSiblingUpdates(connectionId, { branchThinkingLevel });
   }
 
   function addConnectionFromEvent(
@@ -968,6 +889,7 @@ export const useConnectionStore = defineStore("connection", () => {
     updateAutoGroupStatus,
     setConnectionStatus,
     updateConnectionTriggerMode,
+    updateConnectionDirect,
     updateConnectionSummaryModel,
     updateConnectionSummaryThinkingLevel,
     updateConnectionSummaryProvider,
@@ -976,9 +898,6 @@ export const useConnectionStore = defineStore("connection", () => {
     updateConnectionBranchLabel,
     updateConnectionBranchDescription,
     updateConnectionBranchSettings,
-    updateConnectionBranchProvider,
-    updateConnectionBranchModel,
-    updateConnectionBranchThinkingLevel,
     getWorkflowHandlers,
     addConnectionFromEvent,
     updateConnectionFromEvent,

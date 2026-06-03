@@ -234,16 +234,19 @@ describe("WorkflowPipeline", () => {
 
       expect(
         mockExecutionService.triggerWorkflowWithSummary,
-      ).toHaveBeenCalledWith({
-        canvasId: CANVAS_ID,
-        connectionId: CONNECTION_ID,
-        summary: "摘要",
-        isSummarized: true,
-        participatingConnectionIds: undefined,
-        strategy: mockStrategy,
-        runContext: baseRunContext,
-        delegate: expect.any(Object),
-      });
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          canvasId: CANVAS_ID,
+          connectionId: CONNECTION_ID,
+          summary: "摘要",
+          isSummarized: true,
+          triggerMode: "auto",
+          participatingConnectionIds: undefined,
+          strategy: mockStrategy,
+          runContext: baseRunContext,
+          delegate: expect.any(Object),
+        }),
+      );
     });
   });
 
@@ -285,16 +288,19 @@ describe("WorkflowPipeline", () => {
 
       expect(
         mockExecutionService.triggerWorkflowWithSummary,
-      ).toHaveBeenCalledWith({
-        canvasId: CANVAS_ID,
-        connectionId: CONNECTION_ID,
-        summary: "摘要",
-        isSummarized: true,
-        participatingConnectionIds: undefined,
-        strategy: mockStrategy,
-        runContext: baseRunContext,
-        delegate: expect.any(Object),
-      });
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          canvasId: CANVAS_ID,
+          connectionId: CONNECTION_ID,
+          summary: "摘要",
+          isSummarized: true,
+          triggerMode: "auto",
+          participatingConnectionIds: undefined,
+          strategy: mockStrategy,
+          runContext: baseRunContext,
+          delegate: expect.any(Object),
+        }),
+      );
     });
 
     it("multi-input target waits for the other required sources instead of starting chat", async () => {
@@ -349,16 +355,19 @@ describe("WorkflowPipeline", () => {
 
       expect(
         mockExecutionService.triggerWorkflowWithSummary,
-      ).toHaveBeenCalledWith({
-        canvasId: CANVAS_ID,
-        connectionId: CONNECTION_ID,
-        summary: "合併內容",
-        isSummarized: true,
-        participatingConnectionIds: undefined,
-        strategy: mockStrategy,
-        runContext: baseRunContext,
-        delegate: expect.any(Object),
-      });
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          canvasId: CANVAS_ID,
+          connectionId: CONNECTION_ID,
+          summary: "合併內容",
+          isSummarized: true,
+          triggerMode: "auto",
+          participatingConnectionIds: undefined,
+          strategy: mockStrategy,
+          runContext: baseRunContext,
+          delegate: expect.any(Object),
+        }),
+      );
 
       const call = (mockExecutionService.triggerWorkflowWithSummary as any).mock
         .calls[0][0];
@@ -401,16 +410,19 @@ describe("WorkflowPipeline", () => {
 
       expect(
         mockExecutionService.triggerWorkflowWithSummary,
-      ).toHaveBeenCalledWith({
-        canvasId: CANVAS_ID,
-        connectionId: CONNECTION_ID,
-        summary: "合併內容但未指定 isSummarized",
-        isSummarized: true,
-        participatingConnectionIds: undefined,
-        strategy: mockStrategy,
-        runContext: baseRunContext,
-        delegate: expect.any(Object),
-      });
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          canvasId: CANVAS_ID,
+          connectionId: CONNECTION_ID,
+          summary: "合併內容但未指定 isSummarized",
+          isSummarized: true,
+          triggerMode: "auto",
+          participatingConnectionIds: undefined,
+          strategy: mockStrategy,
+          runContext: baseRunContext,
+          delegate: expect.any(Object),
+        }),
+      );
     });
   });
 
@@ -437,16 +449,19 @@ describe("WorkflowPipeline", () => {
 
       expect(
         mockExecutionService.triggerWorkflowWithSummary,
-      ).toHaveBeenCalledWith({
-        canvasId: CANVAS_ID,
-        connectionId: CONNECTION_ID,
-        summary: "合併內容",
-        isSummarized: true,
-        participatingConnectionIds: undefined,
-        strategy: mockStrategy,
-        runContext: baseRunContext,
-        delegate: expect.any(Object),
-      });
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          canvasId: CANVAS_ID,
+          connectionId: CONNECTION_ID,
+          summary: "合併內容",
+          isSummarized: true,
+          triggerMode: "branch",
+          participatingConnectionIds: undefined,
+          strategy: mockStrategy,
+          runContext: baseRunContext,
+          delegate: expect.any(Object),
+        }),
+      );
     });
 
     it("direct mode preserves its strategy lifecycle when target chat starts", async () => {
@@ -471,16 +486,19 @@ describe("WorkflowPipeline", () => {
 
       expect(
         mockExecutionService.triggerWorkflowWithSummary,
-      ).toHaveBeenCalledWith({
-        canvasId: CANVAS_ID,
-        connectionId: CONNECTION_ID,
-        summary: "合併內容",
-        isSummarized: true,
-        participatingConnectionIds: undefined,
-        strategy: mockStrategy,
-        runContext: baseRunContext,
-        delegate: expect.any(Object),
-      });
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          canvasId: CANVAS_ID,
+          connectionId: CONNECTION_ID,
+          summary: "合併內容",
+          isSummarized: true,
+          triggerMode: "direct",
+          participatingConnectionIds: undefined,
+          strategy: mockStrategy,
+          runContext: baseRunContext,
+          delegate: expect.any(Object),
+        }),
+      );
     });
   });
 

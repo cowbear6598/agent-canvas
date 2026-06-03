@@ -60,6 +60,8 @@ export interface ChatEmitStrategy {
  * Run mode 的執行策略：狀態寫入 runExecutionService、訊息寫入 runStore、使用 RUN 事件。
  */
 export class ChatExecutionStrategy {
+  private scopedSessionId: string | undefined;
+
   constructor(
     private readonly canvasId: string,
     private readonly runContext: RunContext,
@@ -73,6 +75,10 @@ export class ChatExecutionStrategy {
   }
 
   getSessionId(podId: string): string | undefined {
+    if (this.runContext.goalRuntimeScopeId) {
+      return this.scopedSessionId;
+    }
+
     const instance = runStore.getPodInstance(this.runContext.runId, podId);
     return instance?.sessionId ?? undefined;
   }
@@ -124,6 +130,11 @@ export class ChatExecutionStrategy {
   onStreamComplete(podId: string, sessionId: string | undefined): void {
     runExecutionService.unregisterActiveStream(this.runContext.runId, podId);
     if (sessionId) {
+      if (this.runContext.goalRuntimeScopeId) {
+        this.scopedSessionId = sessionId;
+        return;
+      }
+
       const instance = runStore.getPodInstance(this.runContext.runId, podId);
       if (instance) {
         runStore.updatePodInstanceSessionId(instance.id, sessionId);

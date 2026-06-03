@@ -147,19 +147,27 @@ export function createMockPod(overrides?: Partial<Pod>): Pod {
  * 建立 Mock Connection
  */
 export function createMockConnection(
-  overrides?: Partial<Connection>,
+  overrides?: (Omit<Partial<Connection>, "triggerMode"> & {
+    triggerMode?: TriggerMode;
+    direct?: boolean;
+  }),
 ): Connection {
+  const direct = overrides?.direct ?? overrides?.triggerMode === "direct";
+  const triggerMode =
+    overrides?.triggerMode === "branch" ? "branch" : "auto";
+
   return {
     id: `connection-${++connectionCounter}`,
     sourcePodId: `pod-${connectionCounter}`,
     sourceAnchor: "bottom" as AnchorPosition,
     targetPodId: `pod-${connectionCounter + 1}`,
     targetAnchor: "top" as AnchorPosition,
-    triggerMode: "auto" as TriggerMode,
     status: "idle" as ConnectionStatus,
     decideStatus: "none" as DecideStatus,
     summaryModel: "sonnet" as ModelType,
     ...overrides,
+    triggerMode,
+    direct,
   };
 }
 

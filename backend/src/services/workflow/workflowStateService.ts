@@ -76,7 +76,7 @@ class WorkflowStateService {
       targetPodId,
     );
     const triggerableConnections = incomingConnections.filter((connection) =>
-      isAutoTriggerable(connection.triggerMode),
+      isAutoTriggerable(connection.triggerMode) && !connection.direct,
     );
     const requiredSourcePodIds = triggerableConnections.map(
       (connection) => connection.sourcePodId,
@@ -200,7 +200,7 @@ class WorkflowStateService {
 
     const { sourcePodId, targetPodId, triggerMode } = connection;
 
-    if (triggerMode === "direct") {
+    if (connection.direct) {
       return;
     }
 

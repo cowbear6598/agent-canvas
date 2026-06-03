@@ -6,15 +6,13 @@ import {
 import { pasteConnectionItemSchema } from "../../src/schemas/pasteSchemas.js";
 
 describe("connectionSchemas OpenCode model values", () => {
-  it("connection:update 允許 Summary/Branch 使用 providerID/modelID 格式", () => {
+  it("connection:update 允許 Summary 使用 providerID/modelID 格式", () => {
     const result = connectionUpdateSchema.safeParse({
       requestId: "550e8400-e29b-41d4-a716-446655440000",
       canvasId: "550e8400-e29b-41d4-a716-446655440001",
       connectionId: "550e8400-e29b-41d4-a716-446655440002",
       summaryProvider: "opencode",
       summaryModel: "openai/gpt-4o",
-      branchProvider: "opencode",
-      branchModel: "anthropic/claude-sonnet-4-5",
     });
 
     expect(result.success).toBe(true);
@@ -35,14 +33,15 @@ describe("connectionSchemas OpenCode model values", () => {
     expect(result.success).toBe(false);
   });
 
-  it("paste connection 允許 OpenCode branchModel 的 providerID/modelID 格式", () => {
+  it("paste connection 允許 direct 與 summary model 一起通過驗證", () => {
     const result = pasteConnectionItemSchema.safeParse({
       originalSourcePodId: "550e8400-e29b-41d4-a716-446655440002",
       sourceAnchor: "bottom",
       originalTargetPodId: "550e8400-e29b-41d4-a716-446655440003",
       targetAnchor: "top",
-      branchProvider: "opencode",
-      branchModel: "openai/gpt-4o",
+      direct: true,
+      summaryProvider: "opencode",
+      summaryModel: "openai/gpt-4o",
     });
 
     expect(result.success).toBe(true);

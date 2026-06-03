@@ -39,7 +39,7 @@ describe("gpt-5.4-mini 模型 migration", () => {
     expect(row.thinkingLevel).toBe("medium");
   });
 
-  it("將 connections.summary_model 與 branch_model 為 'gpt-5.4-mini' 的資料轉換為 'gpt-5.4'", () => {
+  it("將 connections.summary_model 為 'gpt-5.4-mini' 的資料轉換為 'gpt-5.4'", () => {
     db.exec(
       "INSERT INTO canvases (id, name, sort_index) VALUES ('c1', 'canvas1', 0)",
     );
@@ -52,8 +52,8 @@ describe("gpt-5.4-mini 模型 migration", () => {
     db.exec(
       `INSERT INTO connections
          (id, canvas_id, source_pod_id, source_anchor, target_pod_id, target_anchor,
-          summary_model, branch_model)
-       VALUES ('conn1', 'c1', 'src', 'bottom', 'tgt', 'top', 'gpt-5.4-mini', 'gpt-5.4-mini')`,
+          summary_model)
+       VALUES ('conn1', 'c1', 'src', 'bottom', 'tgt', 'top', 'gpt-5.4-mini')`,
     );
 
     // 模擬後端重啟：再次執行 createTables 觸發 migration
@@ -61,12 +61,11 @@ describe("gpt-5.4-mini 模型 migration", () => {
 
     const row = db
       .prepare(
-        "SELECT summary_model, branch_model FROM connections WHERE id = 'conn1'",
+        "SELECT summary_model FROM connections WHERE id = 'conn1'",
       )
-      .get() as { summary_model: string; branch_model: string };
+      .get() as { summary_model: string };
 
     expect(row.summary_model).toBe("gpt-5.4");
-    expect(row.branch_model).toBe("gpt-5.4");
   });
 
   it("migration 是冪等的", () => {
@@ -118,8 +117,8 @@ describe("gpt-5.4-mini 模型 migration", () => {
     db.exec(
       `INSERT INTO connections
          (id, canvas_id, source_pod_id, source_anchor, target_pod_id, target_anchor,
-          summary_model, branch_model)
-       VALUES ('conn1', 'c1', 'p1', 'bottom', 'p2', 'top', 'sonnet', 'gpt-5.5')`,
+          summary_model)
+       VALUES ('conn1', 'c1', 'p1', 'bottom', 'p2', 'top', 'sonnet')`,
     );
 
     createTables(db);
@@ -136,11 +135,10 @@ describe("gpt-5.4-mini 模型 migration", () => {
 
     const conn = db
       .prepare(
-        "SELECT summary_model, branch_model FROM connections WHERE id = 'conn1'",
+        "SELECT summary_model FROM connections WHERE id = 'conn1'",
       )
-      .get() as { summary_model: string; branch_model: string };
+      .get() as { summary_model: string };
 
     expect(conn.summary_model).toBe("sonnet");
-    expect(conn.branch_model).toBe("gpt-5.5");
   });
 });

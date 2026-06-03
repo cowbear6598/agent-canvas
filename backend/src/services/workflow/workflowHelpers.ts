@@ -47,8 +47,8 @@ export function getMultiInputGroupConnections(
     canvasId,
     targetPodId,
   );
-  return allIncomingConnections.filter((conn) =>
-    isAutoTriggerable(conn.triggerMode),
+  return allIncomingConnections.filter(
+    (conn) => isAutoTriggerable(conn.triggerMode) && !conn.direct,
   );
 }
 

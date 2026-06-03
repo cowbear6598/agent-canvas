@@ -5,6 +5,7 @@ import type {
   AutoTriggerMode,
   ConnectionUpdatedPayload,
 } from "../../types/index.js";
+import { toConnectionPublic } from "../../types/index.js";
 import type {
   ExecutionServiceMethods,
   TriggerStrategy,
@@ -241,7 +242,7 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
                 requestId: "",
                 canvasId,
                 success: true,
-                connection: updated,
+                connection: toConnectionPublic(updated),
               };
               socketService.emitToCanvas(
                 canvasId,
@@ -332,6 +333,7 @@ class WorkflowMultiInputService extends LazyInitializable<MultiInputServiceDeps>
         connectionId: connection.id,
         summary: mergedContent,
         isSummarized: true,
+        triggerMode,
         participatingConnectionIds: metadata.participatingConnectionIds,
         sourcePodIds: metadata.sourcePodIds,
         sourcePodNames: metadata.sourcePodNames,

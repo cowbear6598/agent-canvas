@@ -10,8 +10,8 @@ import { createMockConnection, createMockPod } from "@tests/helpers/factories";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { usePodStore } from "@/stores/pod/podStore";
-import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
 import { useOpencodeAliasStore } from "@/stores/opencodeAliasStore";
+import { useProviderCapabilityStore } from "@/stores/providerCapabilityStore";
 import { useSelectionStore } from "@/stores/pod/selectionStore";
 import type { Connection, TriggerMode, DecideStatus } from "@/types/connection";
 import {
@@ -428,7 +428,7 @@ describe("connectionStore", () => {
       );
     });
 
-    it("建立 connection 時會帶入 source Pod 的 thinking level 作為 summary 與 branch 預設值", async () => {
+    it("建立 connection 時會帶入 source Pod 的 thinking level 作為 summary 預設值", async () => {
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
       const store = useConnectionStore();
@@ -462,7 +462,6 @@ describe("connectionStore", () => {
         expect.objectContaining({
           payload: expect.objectContaining({
             summaryThinkingLevel: "high",
-            branchThinkingLevel: "high",
           }),
         }),
       );
@@ -501,7 +500,6 @@ describe("connectionStore", () => {
         expect.objectContaining({
           payload: expect.objectContaining({
             summaryThinkingLevel: "medium",
-            branchThinkingLevel: "medium",
           }),
         }),
       );
@@ -1183,7 +1181,8 @@ describe("connectionStore", () => {
           sourceAnchor: "bottom" as const,
           targetPodId: "pod-b",
           targetAnchor: "top" as const,
-          triggerMode: "auto" as TriggerMode,
+          triggerMode: "auto" as const,
+          direct: false,
           decideStatus: "none" as DecideStatus,
         };
 
@@ -1209,7 +1208,8 @@ describe("connectionStore", () => {
           sourceAnchor: "bottom" as const,
           targetPodId: "pod-b",
           targetAnchor: "top" as const,
-          triggerMode: "auto" as TriggerMode,
+          triggerMode: "auto" as const,
+          direct: false,
           decideStatus: "none" as DecideStatus,
         };
 
@@ -1271,6 +1271,7 @@ describe("connectionStore", () => {
           targetPodId: "pod-b",
           targetAnchor: "right" as const,
           triggerMode: "direct" as TriggerMode,
+          direct: true,
           decideStatus: "none" as DecideStatus,
         };
 
@@ -1280,7 +1281,8 @@ describe("connectionStore", () => {
           id: "conn-1",
           sourcePodId: "pod-new",
           sourceAnchor: "left",
-          triggerMode: "direct",
+          triggerMode: "auto",
+          direct: true,
           status: "active", // 保留
           decideReason: "existing reason", // 保留
         });
@@ -1302,6 +1304,7 @@ describe("connectionStore", () => {
           targetPodId: "pod-b",
           targetAnchor: "top" as const,
           triggerMode: "branch" as TriggerMode,
+          direct: false,
           decideStatus: "none" as DecideStatus,
           decideReason: "new reason",
         };
@@ -1330,6 +1333,7 @@ describe("connectionStore", () => {
           targetPodId: "pod-b",
           targetAnchor: "top",
           triggerMode: "branch" as TriggerMode,
+          direct: false,
           decideStatus: "approved" as DecideStatus,
         });
 
@@ -2124,19 +2128,11 @@ describe("connectionStore", () => {
   });
 
   describe("updateConnectionBranchSettings", () => {
-    it("Codex source Pod 切換 branch 時 payload 應自動補 Codex provider/model", async () => {
+    it("Codex source Pod 切換 branch 時 payload 只送 branch 基本設定", async () => {
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
       const store = useConnectionStore();
       const podStore = usePodStore();
-      const capabilityStore = useProviderCapabilityStore();
-
-      capabilityStore.syncFromPayload([
-        {
-          name: "codex",
-          availableModels: [{ value: "gpt-5.4", label: "GPT-5.4" }],
-        },
-      ]);
 
       podStore.pods = [
         createMockPod({
@@ -2158,8 +2154,6 @@ describe("connectionStore", () => {
           triggerMode: "branch",
           label: "CodexPath",
           description: "走 Codex",
-          branchProvider: "codex",
-          branchModel: "gpt-5.4",
         },
       });
 
@@ -2173,8 +2167,8 @@ describe("connectionStore", () => {
         },
       );
 
-      expect(result?.branchProvider).toBe("codex");
-      expect(result?.branchModel).toBe("gpt-5.4");
+      expect(result?.triggerMode).toBe("branch");
+      expect(result?.label).toBe("CodexPath");
       expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
         expect.objectContaining({
           requestEvent: "connection:update",
@@ -2183,14 +2177,12 @@ describe("connectionStore", () => {
             triggerMode: "branch",
             label: "CodexPath",
             description: "走 Codex",
-            branchProvider: "codex",
-            branchModel: "gpt-5.4",
           }),
         }),
       );
     });
 
-    it("OpenCode source Pod 切換 branch 時 payload 應沿用 Pod 目前 model", async () => {
+    it("OpenCode source Pod 切換 branch 時 payload 不再送 branch provider/model", async () => {
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
       const store = useConnectionStore();
@@ -2216,8 +2208,6 @@ describe("connectionStore", () => {
           triggerMode: "branch",
           label: "OpenCodePath",
           description: "走 OpenCode",
-          branchProvider: "opencode",
-          branchModel: "openai/gpt-4o",
         },
       });
 
@@ -2231,22 +2221,20 @@ describe("connectionStore", () => {
         },
       );
 
-      expect(result?.branchProvider).toBe("opencode");
-      expect(result?.branchModel).toBe("openai/gpt-4o");
+      expect(result?.triggerMode).toBe("branch");
+      expect(result?.label).toBe("OpenCodePath");
       expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
         expect.objectContaining({
           requestEvent: "connection:update",
           payload: expect.objectContaining({
             connectionId: "conn-opencode-branch-settings",
             triggerMode: "branch",
-            branchProvider: "opencode",
-            branchModel: "openai/gpt-4o",
           }),
         }),
       );
     });
 
-    it("OpenCode source Pod 沒有可用 model 時應回傳 null 且不送 websocket request", async () => {
+    it("OpenCode source Pod 沒有可用 model 時仍可切換 branch，因為不再依賴 branch model", async () => {
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
       const store = useConnectionStore();
@@ -2267,6 +2255,14 @@ describe("connectionStore", () => {
         triggerMode: "auto",
       });
       store.connections = [conn];
+      mockCreateWebSocketRequest.mockResolvedValueOnce({
+        connection: {
+          ...conn,
+          triggerMode: "branch",
+          label: "NoModelPath",
+          description: "",
+        },
+      });
 
       const result = await store.updateConnectionBranchSettings(
         "conn-opencode-no-model",
@@ -2278,16 +2274,11 @@ describe("connectionStore", () => {
         },
       );
 
-      expect(result).toBeNull();
-      expect(mockCreateWebSocketRequest).not.toHaveBeenCalled();
-      expect(mockToast).toHaveBeenCalledWith(
-        expect.objectContaining({
-          variant: "destructive",
-        }),
-      );
+      expect(result?.triggerMode).toBe("branch");
+      expect(mockCreateWebSocketRequest).toHaveBeenCalledTimes(1);
     });
 
-    it("Codex capability 缺 default model 時不應 fallback 成 sonnet 並送出更新", async () => {
+    it("Codex capability 缺 default model 時仍可切換 branch，因為 branch settings 不再依賴 provider/model", async () => {
       const canvasStore = useCanvasStore();
       canvasStore.activeCanvasId = "canvas-1";
       const store = useConnectionStore();
@@ -2313,6 +2304,14 @@ describe("connectionStore", () => {
         triggerMode: "auto",
       });
       store.connections = [conn];
+      mockCreateWebSocketRequest.mockResolvedValueOnce({
+        connection: {
+          ...conn,
+          triggerMode: "branch",
+          label: "CodexNoDefault",
+          description: "",
+        },
+      });
 
       const result = await store.updateConnectionBranchSettings(
         "conn-codex-no-default",
@@ -2324,236 +2323,11 @@ describe("connectionStore", () => {
         },
       );
 
-      expect(result).toBeNull();
-      expect(mockCreateWebSocketRequest).not.toHaveBeenCalled();
+      expect(result?.triggerMode).toBe("branch");
+      expect(mockCreateWebSocketRequest).toHaveBeenCalledTimes(1);
     });
   });
 
-  describe("Branch OpenCode provider/model wire-up", () => {
-    function seedOpencodeAliases(): void {
-      const aliasStore = useOpencodeAliasStore();
-      aliasStore.setAliases([
-        {
-          id: "alias-1",
-          providerID: "openai",
-          modelID: "gpt-4o",
-          alias: "GPT-4o",
-          orderIdx: 0,
-        },
-        {
-          id: "alias-2",
-          providerID: "anthropic",
-          modelID: "claude-opus-4-5",
-          alias: "Claude Opus",
-          orderIdx: 1,
-        },
-      ]);
-    }
-
-    it("Branch Provider 切換到 OpenCode 時送出的 provider/model payload 使用第一筆 alias", async () => {
-      const canvasStore = useCanvasStore();
-      canvasStore.activeCanvasId = "canvas-1";
-      const store = useConnectionStore();
-      const capabilityStore = useProviderCapabilityStore();
-      seedOpencodeAliases();
-
-      const conn = createMockConnection({
-        id: "conn-opencode-provider",
-        sourcePodId: "pod-src",
-        triggerMode: "branch",
-        branchProvider: "claude",
-        branchModel: "sonnet",
-      });
-      store.connections = [conn];
-
-      mockCreateWebSocketRequest.mockResolvedValueOnce({
-        connection: {
-          ...conn,
-          branchProvider: "opencode",
-          branchModel: "openai/gpt-4o",
-        },
-      });
-
-      await store.updateConnectionBranchProvider(
-        "conn-opencode-provider",
-        "opencode",
-        capabilityStore.getDefaultModel("opencode")!,
-      );
-
-      expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
-        expect.objectContaining({
-          requestEvent: "connection:update",
-          payload: expect.objectContaining({
-            connectionId: "conn-opencode-provider",
-            branchProvider: "opencode",
-            branchModel: "openai/gpt-4o",
-          }),
-        }),
-      );
-    });
-
-    it("Branch Provider 更新時應只送一次請求並套用後端原子同步的 siblings", async () => {
-      const canvasStore = useCanvasStore();
-      canvasStore.activeCanvasId = "canvas-1";
-      const store = useConnectionStore();
-      seedOpencodeAliases();
-
-      const conn1 = createMockConnection({
-        id: "conn-provider-target",
-        sourcePodId: "pod-src",
-        triggerMode: "branch",
-        branchProvider: "claude",
-        branchModel: "sonnet",
-      });
-      const conn2 = createMockConnection({
-        id: "conn-provider-sibling",
-        sourcePodId: "pod-src",
-        triggerMode: "branch",
-        branchProvider: "claude",
-        branchModel: "sonnet",
-      });
-      store.connections = [conn1, conn2];
-      const updatedConn1 = {
-        ...conn1,
-        branchProvider: "opencode" as const,
-        branchModel: "openai/gpt-4o",
-      };
-      const updatedConn2 = {
-        ...conn2,
-        branchProvider: "opencode" as const,
-        branchModel: "openai/gpt-4o",
-      };
-      mockCreateWebSocketRequest.mockResolvedValueOnce({
-        connection: updatedConn1,
-        connections: [updatedConn1, updatedConn2],
-      });
-
-      const result = await store.updateConnectionBranchProvider(
-        "conn-provider-target",
-        "opencode",
-        "openai/gpt-4o",
-      );
-
-      expect(result?.branchProvider).toBe("opencode");
-      expect(mockCreateWebSocketRequest).toHaveBeenCalledTimes(1);
-      expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
-        expect.objectContaining({
-          requestEvent: "connection:update",
-        }),
-      );
-      expect(store.connections).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            id: "conn-provider-target",
-            branchProvider: "opencode",
-            branchModel: "openai/gpt-4o",
-          }),
-          expect.objectContaining({
-            id: "conn-provider-sibling",
-            branchProvider: "opencode",
-            branchModel: "openai/gpt-4o",
-          }),
-        ]),
-      );
-    });
-
-    it("Branch Model 選擇 OpenCode alias 時送出的 model value 維持 providerID/modelID 格式", async () => {
-      const canvasStore = useCanvasStore();
-      canvasStore.activeCanvasId = "canvas-1";
-      const store = useConnectionStore();
-      seedOpencodeAliases();
-
-      const conn = createMockConnection({
-        id: "conn-opencode-model",
-        sourcePodId: "pod-src",
-        triggerMode: "branch",
-        branchProvider: "opencode",
-        branchModel: "openai/gpt-4o",
-      });
-      store.connections = [conn];
-
-      mockCreateWebSocketRequest.mockResolvedValueOnce({
-        connection: {
-          ...conn,
-          branchModel: "anthropic/claude-opus-4-5",
-        },
-      });
-
-      await store.updateConnectionBranchModel(
-        "conn-opencode-model",
-        "anthropic/claude-opus-4-5",
-      );
-
-      expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
-        expect.objectContaining({
-          requestEvent: "connection:update",
-          payload: expect.objectContaining({
-            connectionId: "conn-opencode-model",
-            branchModel: "anthropic/claude-opus-4-5",
-          }),
-        }),
-      );
-    });
-
-    it("Branch Model 更新時應只送一次請求並套用後端原子同步的 siblings", async () => {
-      const canvasStore = useCanvasStore();
-      canvasStore.activeCanvasId = "canvas-1";
-      const store = useConnectionStore();
-
-      const conn1 = createMockConnection({
-        id: "conn-model-target",
-        sourcePodId: "pod-src",
-        triggerMode: "branch",
-        branchProvider: "opencode",
-        branchModel: "openai/gpt-4o",
-      });
-      const conn2 = createMockConnection({
-        id: "conn-model-sibling",
-        sourcePodId: "pod-src",
-        triggerMode: "branch",
-        branchProvider: "opencode",
-        branchModel: "openai/gpt-4o",
-      });
-      store.connections = [conn1, conn2];
-      const updatedConn1 = {
-        ...conn1,
-        branchModel: "anthropic/claude-opus-4-5",
-      };
-      const updatedConn2 = {
-        ...conn2,
-        branchModel: "anthropic/claude-opus-4-5",
-      };
-      mockCreateWebSocketRequest.mockResolvedValueOnce({
-        connection: updatedConn1,
-        connections: [updatedConn1, updatedConn2],
-      });
-
-      const result = await store.updateConnectionBranchModel(
-        "conn-model-target",
-        "anthropic/claude-opus-4-5",
-      );
-
-      expect(result?.branchModel).toBe("anthropic/claude-opus-4-5");
-      expect(mockCreateWebSocketRequest).toHaveBeenCalledTimes(1);
-      expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
-        expect.objectContaining({
-          requestEvent: "connection:update",
-        }),
-      );
-      expect(store.connections).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            id: "conn-model-target",
-            branchModel: "anthropic/claude-opus-4-5",
-          }),
-          expect.objectContaining({
-            id: "conn-model-sibling",
-            branchModel: "anthropic/claude-opus-4-5",
-          }),
-        ]),
-      );
-    });
-  });
 
   describe("updateConnectionBranchLabel", () => {
     it("wire-up smoke：呼叫後 mock websocketClient 收到帶 label 的 connection:update 請求", async () => {

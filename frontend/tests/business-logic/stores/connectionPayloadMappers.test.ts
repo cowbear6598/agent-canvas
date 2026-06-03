@@ -57,7 +57,7 @@ describe("connectionPayloadMappers", () => {
       expect(connection?.summaryProvider).toBe("codex");
     });
 
-    it("normalize connection 會保留 summary 與 branch thinking level", () => {
+    it("normalize connection 會保留 summaryThinkingLevel", () => {
       const connection = normalizeConnection({
         id: "conn-1",
         sourcePodId: "pod-a",
@@ -65,11 +65,9 @@ describe("connectionPayloadMappers", () => {
         targetPodId: "pod-b",
         targetAnchor: "top",
         summaryThinkingLevel: "high",
-        branchThinkingLevel: "medium",
       });
 
       expect(connection.summaryThinkingLevel).toBe("high");
-      expect(connection.branchThinkingLevel).toBe("medium");
     });
 
     it("normalize connection 會把空字串 label 收斂成 undefined", () => {
@@ -95,6 +93,7 @@ describe("connectionPayloadMappers", () => {
         targetPodId: "pod-b",
         targetAnchor: "top",
         triggerMode: "auto",
+        direct: false,
         decideStatus: "pending",
       });
 
@@ -112,6 +111,7 @@ describe("connectionPayloadMappers", () => {
         summaryModel: "gemini-2.5-pro",
         summaryProvider: "opencode",
         triggerMode: "auto",
+        direct: false,
         decideStatus: "none",
       });
 
@@ -129,6 +129,7 @@ describe("connectionPayloadMappers", () => {
           targetAnchor: "top",
           summaryProvider: null,
           triggerMode: "auto",
+          direct: false,
           decideStatus: "none",
         },
         "opencode",
@@ -145,6 +146,7 @@ describe("connectionPayloadMappers", () => {
         targetPodId: "pod-b",
         targetAnchor: "top",
         triggerMode: "auto",
+        direct: false,
         decideStatus: "none",
         label: "",
       });
@@ -176,13 +178,13 @@ describe("connectionPayloadMappers", () => {
       expect(mapped.status).toBe("waiting");
     });
 
-    it("updated event 會保留 summary 與 branch thinking level", () => {
+    it("updated event 會保留既有 direct 並更新 summaryThinkingLevel", () => {
       const existingConnection = createMockConnection({
         id: "conn-1",
         sourcePodId: "pod-a",
         targetPodId: "pod-b",
         summaryThinkingLevel: "low",
-        branchThinkingLevel: "medium",
+        direct: true,
       });
       const payload: ConnectionPayloadItem = {
         id: "conn-1",
@@ -191,7 +193,6 @@ describe("connectionPayloadMappers", () => {
         targetPodId: "pod-b",
         targetAnchor: "top",
         summaryThinkingLevel: "high",
-        branchThinkingLevel: null,
       };
 
       const mapped = mapConnectionUpdatedEventPayload(
@@ -201,7 +202,7 @@ describe("connectionPayloadMappers", () => {
       );
 
       expect(mapped.summaryThinkingLevel).toBe("high");
-      expect(mapped.branchThinkingLevel).toBeNull();
+      expect(mapped.direct).toBe(true);
     });
 
     it("updated event 的 summaryProvider null 依 source provider fallback", () => {

@@ -3,6 +3,8 @@ import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ConnectionContextMenu from "@/components/canvas/ConnectionContextMenu.vue";
 import TriggerModeRow from "@/components/canvas/connectionMenu/TriggerModeRow.vue";
+import { useConnectionStore } from "@/stores/connectionStore";
+import type { Connection } from "@/types/connection";
 
 vi.mock("vue-i18n", () => ({
   useI18n: () => ({
@@ -21,21 +23,17 @@ describe("connection context menu branch userflow", () => {
     setActivePinia(createPinia());
   });
 
-  it("trigger mode 選單只提供 auto、direct、branch，沒有 none 選項", () => {
+  it("trigger mode 選單只提供 auto、branch，並另外顯示 direct toggle", () => {
     const wrapper = mount(ConnectionContextMenu, {
       props: {
         position: { x: 120, y: 80 },
         connectionId: "conn-branch-menu",
         currentTriggerMode: "auto",
-        currentSummaryModel: "sonnet",
+        directEnabled: false,
       },
       global: {
         mocks: {
           $t: (key: string) => key,
-        },
-        stubs: {
-          SummarySection: true,
-          BranchSettingsPanel: true,
         },
       },
     });
@@ -44,10 +42,74 @@ describe("connection context menu branch userflow", () => {
 
     expect(triggerModeRows.map((row) => row.props("mode"))).toEqual([
       "auto",
-      "direct",
       "branch",
     ]);
+    expect(
+      wrapper.find('[data-testid="connection-direct-toggle-row"]').exists(),
+    ).toBe(true);
     expect(wrapper.text().toLowerCase()).not.toContain("none");
+
+    wrapper.unmount();
+  });
+
+  it("direct toggle 成功後不會主動關閉選單", async () => {
+    const connectionStore = useConnectionStore();
+    const updatedConnection: Connection = {
+      id: "conn-direct-toggle",
+      sourceAnchor: "right",
+      targetPodId: "target-pod",
+      targetAnchor: "left",
+      decideStatus: "none",
+      triggerMode: "auto",
+      direct: true,
+    };
+    vi.spyOn(connectionStore, "updateConnectionDirect").mockResolvedValue(
+      updatedConnection,
+    );
+
+    const wrapper = mount(ConnectionContextMenu, {
+      props: {
+        position: { x: 120, y: 80 },
+        connectionId: "conn-direct-toggle",
+        currentTriggerMode: "auto",
+        directEnabled: false,
+      },
+      global: {
+        mocks: {
+          $t: (key: string) => key,
+        },
+      },
+    });
+
+    await wrapper
+      .find('[data-testid="connection-direct-toggle-row"]')
+      .trigger("click");
+
+    expect(connectionStore.updateConnectionDirect).toHaveBeenCalledWith(
+      "conn-direct-toggle",
+      true,
+    );
+    expect(wrapper.emitted("close")).toBeUndefined();
+
+    wrapper.unmount();
+  });
+
+  it("branch 模式選單不再顯示 branch settings 額外入口", () => {
+    const wrapper = mount(ConnectionContextMenu, {
+      props: {
+        position: { x: 120, y: 80 },
+        connectionId: "conn-branch-menu",
+        currentTriggerMode: "branch",
+        directEnabled: true,
+      },
+      global: {
+        mocks: {
+          $t: (key: string) => key,
+        },
+      },
+    });
+
+    expect(wrapper.text()).not.toContain("branchSettings");
 
     wrapper.unmount();
   });

@@ -92,7 +92,7 @@ class WorkflowAutoTriggerService implements TriggerStrategy {
       canvasId,
       sourcePodId,
       connection,
-      triggerMode: "auto",
+      triggerMode: connection.direct ? "direct" : "auto",
       decideResult: {
         connectionId: connection.id,
         approved: true,

@@ -18,6 +18,30 @@ import {
   pluginIdSchema,
 } from "./podSchemas.js";
 
+function normalizeLegacyDirectToggle<T extends {
+  triggerMode?: "auto" | "branch" | "direct";
+  direct?: boolean;
+}>(data: T): Omit<T, "triggerMode"> & {
+  triggerMode?: "auto" | "branch";
+  direct?: boolean;
+} {
+  if (data.triggerMode !== "direct") {
+    return data as Omit<T, "triggerMode"> & {
+      triggerMode?: "auto" | "branch";
+      direct?: boolean;
+    };
+  }
+
+  return {
+    ...data,
+    triggerMode: "auto",
+    direct: data.direct ?? true,
+  } as Omit<T, "triggerMode"> & {
+    triggerMode?: "auto" | "branch";
+    direct?: boolean;
+  };
+}
+
 export const pastePodItemSchema = z
   .object({
     originalId: z.uuid(),
@@ -62,6 +86,7 @@ export const pasteConnectionItemSchema = z
     originalTargetPodId: z.uuid(),
     targetAnchor: anchorPositionSchema,
     triggerMode: z.enum(["auto", "branch", "direct"]).optional(),
+    direct: z.boolean().optional(),
     /** paste 時保留 summary provider（若有） */
     summaryProvider: providerSchema.nullable().optional(),
     /** paste 時保留 summary model（若有） */
@@ -82,24 +107,9 @@ export const pasteConnectionItemSchema = z
     label: labelSchema.optional(),
     /** paste 時保留 branch 連線的描述（若有） */
     description: descriptionSchema,
-    /** paste 時保留 branch 連線的 provider（若有） */
-    branchProvider: providerSchema.optional(),
-    /** paste 時保留 branch 連線的模型（若有） */
-    branchModel: z
-      .string()
-      .min(1)
-      .max(200)
-      .regex(/^[a-zA-Z0-9._/-]+$/, "branchModel 格式不合法")
-      .optional(),
-    branchThinkingLevel: z
-      .string()
-      .min(1)
-      .max(200)
-      .regex(/^[a-zA-Z0-9._/-]+$/, "thinkingLevel 格式不合法")
-      .nullable()
-      .optional(),
   })
-  .strict();
+  .strict()
+  .transform(normalizeLegacyDirectToggle);
 
 export const canvasPasteSchema = z
   .object({

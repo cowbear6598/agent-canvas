@@ -10,7 +10,7 @@ import {
 import {
   type ConnectionCreatedPayload,
   type ConnectionUpdatedPayload,
-  type Connection,
+  type ConnectionPublic,
 } from "../../src/types";
 
 interface CreateConnectionOptions extends Partial<ConnectionCreatePayload> {
@@ -22,7 +22,7 @@ export async function createConnection(
   sourcePodId: string,
   targetPodId: string,
   options?: CreateConnectionOptions,
-): Promise<Connection> {
+): Promise<ConnectionPublic> {
   if (!client.id) {
     throw new Error("Socket not connected");
   }
@@ -43,10 +43,7 @@ export async function createConnection(
     sourceAnchor: "right",
     targetPodId,
     targetAnchor: "left",
-    // label、branchProvider、branchModel 為新必填欄位，提供測試預設值
     label: "default",
-    branchProvider: "claude",
-    branchModel: "sonnet",
     ...createOverrides,
   };
 

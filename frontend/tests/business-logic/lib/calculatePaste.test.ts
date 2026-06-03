@@ -177,14 +177,12 @@ describe("calculatePastePositions", () => {
         targetPodId: "pod-target",
         targetAnchor: "top",
         triggerMode: "branch",
+        direct: true,
         summaryProvider: "opencode",
         summaryModel: "openai/gpt-4o",
         summaryThinkingLevel: "high",
         label: "Approved",
         description: "Continue after approval",
-        branchProvider: "codex",
-        branchModel: "gpt-5.4",
-        branchThinkingLevel: "medium",
       },
     ];
 
@@ -208,14 +206,12 @@ describe("calculatePastePositions", () => {
         originalTargetPodId: "pod-target",
         targetAnchor: "top",
         triggerMode: "branch",
+        direct: true,
         summaryProvider: "opencode",
         summaryModel: "openai/gpt-4o",
         summaryThinkingLevel: "high",
         label: "Approved",
         description: "Continue after approval",
-        branchProvider: "codex",
-        branchModel: "gpt-5.4",
-        branchThinkingLevel: "medium",
       },
     ]);
   });

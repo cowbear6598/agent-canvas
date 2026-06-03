@@ -1,6 +1,6 @@
 import type { Pod, PodProvider } from "../pod";
 import type { Repository, RepositoryNote } from "@/types";
-import type { AnchorPosition } from "@/types";
+import type { AnchorPosition, TriggerMode } from "@/types";
 import type { InstalledPlugin } from "../plugin";
 import type { ResultPayload } from "./index";
 import type {
@@ -159,7 +159,9 @@ export interface ConnectionPayloadItem {
   sourceAnchor: AnchorPosition;
   targetPodId: string;
   targetAnchor: AnchorPosition;
-  triggerMode?: "auto" | "branch" | "direct";
+  triggerMode?: TriggerMode;
+  /** Direct toggle 狀態；true 代表保留原基底模式但啟用 no-wait 行為。 */
+  direct?: boolean;
   decideStatus?: "none" | "pending" | "approved" | "rejected" | "error";
   connectionStatus?: "idle" | "active" | "queued" | "waiting";
   decideReason?: string | null;
@@ -173,9 +175,6 @@ export interface ConnectionPayloadItem {
   summaryThinkingLevel?: string | null;
   label?: string;
   description?: string;
-  branchProvider?: PodProvider;
-  branchModel?: string;
-  branchThinkingLevel?: string | null;
 }
 
 export interface ConnectionCreatedPayload extends ResultPayload {

@@ -29,6 +29,7 @@ export function shouldUpdateConnection(
   if (connection.targetPodId !== targetPodId) return false;
   if (connection.triggerMode !== "auto" && connection.triggerMode !== "branch")
     return false;
+  if (connection.direct) return false;
   if (isOutOfOrderUpdate(connection.decideStatus, status)) return false;
   return true;
 }

@@ -33,12 +33,31 @@ export const labelSchema = z
 /** description 最大長度 200，與前端常數 BRANCH_DESCRIPTION_MAX_LENGTH 對齊；選填 */
 export const descriptionSchema = z.string().max(200).optional();
 
-/** branchModel 格式規則與 summaryModel 相同 */
-const branchModelSchema = z
-  .string()
-  .min(1)
-  .max(200)
-  .regex(/^[a-zA-Z0-9._/-]+$/, "branchModel 格式不合法");
+const legacyTriggerModeSchema = z.enum(["auto", "branch", "direct"]);
+
+function normalizeLegacyDirectToggle<T extends {
+  triggerMode?: "auto" | "branch" | "direct";
+  direct?: boolean;
+}>(data: T): Omit<T, "triggerMode"> & {
+  triggerMode?: "auto" | "branch";
+  direct?: boolean;
+} {
+  if (data.triggerMode !== "direct") {
+    return data as Omit<T, "triggerMode"> & {
+      triggerMode?: "auto" | "branch";
+      direct?: boolean;
+    };
+  }
+
+  return {
+    ...data,
+    triggerMode: "auto",
+    direct: data.direct ?? true,
+  } as Omit<T, "triggerMode"> & {
+    triggerMode?: "auto" | "branch";
+    direct?: boolean;
+  };
+}
 
 export const connectionCreateSchema = z
   .object({
@@ -58,11 +77,7 @@ export const connectionCreateSchema = z
      */
     label: labelSchema.optional(),
     description: descriptionSchema,
-    /** branchProvider 建立時 optional；切換到 branch 模式時才需要 */
-    branchProvider: providerSchema.optional(),
-    /** branchModel 建立時 optional；切換到 branch 模式時才需要 */
-    branchModel: branchModelSchema.optional(),
-    branchThinkingLevel: nullableThinkingLevelSchema.optional(),
+    direct: z.boolean().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.label !== undefined && data.label.toLowerCase() === "none") {
@@ -72,7 +87,8 @@ export const connectionCreateSchema = z
         path: ["label"],
       });
     }
-  });
+  })
+  .transform(normalizeLegacyDirectToggle);
 
 export const connectionListSchema = z.object({
   requestId: requestIdSchema,
@@ -90,16 +106,14 @@ export const connectionUpdateSchema = z
     requestId: requestIdSchema,
     canvasId: canvasIdSchema,
     connectionId: z.uuid(),
-    triggerMode: z.enum(["auto", "branch", "direct"]).optional(),
+    triggerMode: legacyTriggerModeSchema.optional(),
     summaryModel: summaryModelSchema.optional(),
     summaryThinkingLevel: nullableThinkingLevelSchema.optional(),
     /** summaryProvider 可選；未提供時保留既有值（或 fallback 至 sourcePod.provider） */
     summaryProvider: providerSchema.optional(),
     label: labelSchema.optional(),
     description: descriptionSchema,
-    branchProvider: providerSchema.optional(),
-    branchModel: branchModelSchema.optional(),
-    branchThinkingLevel: nullableThinkingLevelSchema.optional(),
+    direct: z.boolean().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.label !== undefined && data.label.toLowerCase() === "none") {
@@ -109,7 +123,8 @@ export const connectionUpdateSchema = z
         path: ["label"],
       });
     }
-  });
+  })
+  .transform(normalizeLegacyDirectToggle);
 
 export type ConnectionCreatePayload = z.infer<typeof connectionCreateSchema>;
 export type ConnectionListPayload = z.infer<typeof connectionListSchema>;

@@ -1,7 +1,11 @@
 import { executeDisposableChat } from "./disposableChatService.js";
 import { summaryPromptBuilder } from "./summaryPromptBuilder.js";
 import { podStore } from "./podStore.js";
-import { formatGoalTodos } from "./goalRuntime.js";
+import {
+  formatGoalTodos,
+  getGoalRuntimeStatePath,
+  readGoalRuntimeSnapshot,
+} from "./goalRuntime.js";
 import { getDefaultThinkingLevel } from "./pod/providerConfigResolver.js";
 import { getRunTranscriptWindow } from "./workflow/runTranscriptWindow.js";
 import { logger } from "../utils/logger.js";
@@ -23,6 +27,7 @@ interface TargetSummaryResult {
 async function buildSummaryContext(
   sourcePod: Pod,
   targetPod: Pod,
+  runContext: RunContext,
   persistedSummary: string | null,
   recentMessages: PersistedMessage[],
 ): Promise<{
@@ -40,7 +45,10 @@ async function buildSummaryContext(
   return {
     sourcePodName: sourcePod.name,
     targetPodName: targetPod.name,
-    targetPodGoal: formatGoalTodos(targetPod.goal),
+    targetPodGoal: formatGoalTodos(
+      readGoalRuntimeSnapshot(getGoalRuntimeStatePath(runContext, targetPod.id))
+        ?.goal ?? targetPod.goal,
+    ),
     persistedSummary,
     recentConversationHistory,
   };
@@ -111,6 +119,7 @@ class SummaryService {
     const context = await buildSummaryContext(
       sourcePod,
       targetPod,
+      runContext,
       transcriptWindow.persistedSummary,
       transcriptWindow.recentMessages,
     );

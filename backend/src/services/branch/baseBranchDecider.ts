@@ -20,7 +20,6 @@ import { isAbortError } from "../../utils/errorHelpers.js";
 import { BranchAbortError } from "./abortError.js";
 import type {
   BranchDecider,
-  BranchDecisionFailure,
   BranchDecisionFailureAttempt,
   BranchDecisionInput,
   BranchDecisionOutput,
@@ -34,20 +33,12 @@ function checkAbort(signal: AbortSignal | undefined): void {
   }
 }
 
-function buildFailure(
-  attempts: BranchDecisionFailureAttempt[],
-): BranchDecisionFailure {
-  const kinds = new Set(attempts.map((attempt) => attempt.kind));
-  const lastAttempt = attempts[attempts.length - 1];
-
-  return {
-    kind:
-      kinds.size === 1
-        ? (attempts[0]?.kind ?? "provider_error")
-        : "mixed",
-    message: lastAttempt?.message ?? "Branch 決策失敗",
-    attempts,
-  };
+function pickFallbackLabel(labels: string[]): string {
+  const fallbackLabel = labels[0];
+  if (!fallbackLabel) {
+    throw new Error("[BaseBranchDecider] 找不到可用的 fallback branch label");
+  }
+  return fallbackLabel;
 }
 
 // ─── 實作 ─────────────────────────────────────────────────────────────────────
@@ -71,18 +62,15 @@ export class BaseBranchDecider implements BranchDecider {
     checkAbort(abortSignal);
 
     const validLabels = branches.map((b) => b.label);
+    const fallbackLabel = pickFallbackLabel(validLabels);
 
     if (recentMessages.length === 0 && !persistedSummary) {
-      return {
-        kind: "failed",
-        failure: buildFailure([
-          {
-            attempt: 1,
-            kind: "no_selection",
-            message: "缺少可判斷 branch 的上下文",
-          },
-        ]),
-      };
+      logger.warn(
+        "Workflow",
+        "Warn",
+        `[BaseBranchDecider] 缺少可判斷 branch 的上下文，改用第一條 branch fallback：${fallbackLabel}`,
+      );
+      return { kind: "success", selectedLabel: fallbackLabel };
     }
 
     const systemPrompt = branchPromptBuilder.buildSystemPrompt();
@@ -143,16 +131,12 @@ export class BaseBranchDecider implements BranchDecider {
       const parsed = parseBranchDecision(rawResponse, validLabels);
       if (parsed.ok) {
         if (parsed.noSelection) {
-          return {
-            kind: "failed",
-            failure: buildFailure([
-              {
-                attempt: 1,
-                kind: "no_selection",
-                message: "模型判斷沒有安全可選的 branch",
-              },
-            ]),
-          };
+          logger.warn(
+            "Workflow",
+            "Warn",
+            `[BaseBranchDecider] 模型回傳不選擇 branch，改用第一條 branch fallback：${fallbackLabel}`,
+          );
+          return { kind: "success", selectedLabel: fallbackLabel };
         }
 
         return { kind: "success", selectedLabel: parsed.selectedLabel };
@@ -220,17 +204,12 @@ export class BaseBranchDecider implements BranchDecider {
       const retryParsed = parseBranchDecision(retryRawResponse, validLabels);
       if (retryParsed.ok) {
         if (retryParsed.noSelection) {
-          return {
-            kind: "failed",
-            failure: buildFailure([
-              ...failureAttempts,
-              {
-                attempt: 2,
-                kind: "no_selection",
-                message: "模型判斷沒有安全可選的 branch",
-              },
-            ]),
-          };
+          logger.warn(
+            "Workflow",
+            "Warn",
+            `[BaseBranchDecider] 重試後仍未選擇 branch，改用第一條 branch fallback：${fallbackLabel}`,
+          );
+          return { kind: "success", selectedLabel: fallbackLabel };
         }
 
         return { kind: "success", selectedLabel: retryParsed.selectedLabel };
@@ -257,7 +236,15 @@ export class BaseBranchDecider implements BranchDecider {
 
     return {
       kind: "failed",
-      failure: buildFailure(failureAttempts),
+      failure: {
+        kind: failureAttempts.every((attempt) => attempt.kind === "parse_error")
+          ? "parse_error"
+          : failureAttempts.every((attempt) => attempt.kind === "provider_error")
+            ? "provider_error"
+            : "mixed",
+        message: failureAttempts.at(-1)?.message ?? "Branch 決策失敗",
+        attempts: failureAttempts,
+      },
     };
   }
 }

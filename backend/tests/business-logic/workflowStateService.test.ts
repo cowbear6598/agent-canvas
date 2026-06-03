@@ -31,6 +31,7 @@ function createConnection(
     targetPodId: overrides?.targetPodId ?? TARGET_POD_ID,
     targetAnchor: overrides?.targetAnchor ?? "left",
     triggerMode,
+    direct: triggerMode === "direct",
     label:
       triggerMode === "branch" ? (overrides?.label ?? "Branch") : undefined,
     branchProvider: triggerMode === "branch" ? "claude" : undefined,
@@ -51,9 +52,9 @@ function insertRawConnection(overrides: {
       `INSERT INTO connections (
         id, canvas_id, source_pod_id, source_anchor, target_pod_id,
         target_anchor, trigger_mode, decide_status, decide_reason,
-        connection_status, summary_model, summary_provider, label,
-        description, branch_provider, branch_model
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'none', NULL, 'idle', 'sonnet', NULL, '', NULL, NULL, NULL)`,
+        connection_status, summary_model, summary_provider, direct_enabled,
+        label, description
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'none', NULL, 'idle', 'sonnet', NULL, 0, '', NULL)`,
     )
     .run(
       overrides.id,
@@ -429,8 +430,8 @@ describe("WorkflowStateService", () => {
       });
     });
 
-    describe("non-triggerable connection deletion", () => {
-      it("ignores unsupported trigger modes without touching pending state", () => {
+    describe("legacy trigger mode normalization", () => {
+      it("未知 trigger_mode 會正規化為 auto，因此刪除時仍會更新 pending state", () => {
         insertRawConnection({
           id: CONNECTION_ID,
           sourcePodId: SOURCE_POD_ID,
@@ -446,7 +447,7 @@ describe("WorkflowStateService", () => {
         expect(
           pendingTargetStore.getPendingTarget(TARGET_POD_ID)
             ?.requiredSourcePodIds,
-        ).toEqual([SOURCE_POD_ID]);
+        ).toBeUndefined();
       });
     });
   });

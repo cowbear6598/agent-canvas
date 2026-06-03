@@ -184,13 +184,11 @@ function transformConnections(
       originalTargetPodId: connection.targetPodId,
       targetAnchor: connection.targetAnchor,
       triggerMode: connection.triggerMode,
+      direct: connection.direct,
       summaryProvider: connection.summaryProvider,
       summaryModel: connection.summaryModel,
       summaryThinkingLevel: connection.summaryThinkingLevel,
       description: connection.description,
-      branchProvider: connection.branchProvider,
-      branchModel: connection.branchModel,
-      branchThinkingLevel: connection.branchThinkingLevel,
     };
 
     if (connection.label !== "") {

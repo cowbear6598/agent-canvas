@@ -142,6 +142,7 @@ class RunQueueService extends LazyInitializable<RunQueueServiceDeps> {
         connectionId: item.connectionId,
         summary: item.summary,
         isSummarized: item.isSummarized,
+        triggerMode: item.triggerMode,
         participatingConnectionIds: item.participatingConnectionIds,
         sourcePodIds: item.sourcePodIds,
         sourcePodNames: item.sourcePodNames,

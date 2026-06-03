@@ -3,9 +3,9 @@
  *
  * 涵蓋：
  * - create：triggerMode=branch 時 label 必填、不可為 "None"（大小寫不敏感）、同 source 唯一
- * - update：branch → auto/direct 時清空 branch 欄位並 reset decideStatus；
+ * - update：branch → auto/direct 時 reset decideStatus；
  *           branch → branch 時 label 唯一性（排除自己）；label="None" throw；
- *           修改 description/provider/model 不動 label 也合法
+ *           修改 description 與統一 line model settings 不動 label 也合法
  * - findBranchGroup：只列出同 source 且 triggerMode=branch 的連線
  */
 
@@ -207,7 +207,7 @@ describe("connectionStore — branch 驗證邏輯", () => {
       expect(updated?.decideStatus).toBe("none");
     });
 
-    it("7. update branch → direct → 清空 + reset decideStatus='none'", () => {
+    it("7. update branch → direct toggle → reset decideStatus='none'", () => {
       insertPod("src-7");
       insertPod("dst-7");
 
@@ -218,7 +218,8 @@ describe("connectionStore — branch 驗證邏輯", () => {
         triggerMode: "direct",
       });
 
-      expect(updated?.triggerMode).toBe("direct");
+      expect(updated?.triggerMode).toBe("auto");
+      expect(updated?.direct).toBe(true);
       expect(updated?.label).toBe("");
       expect(updated?.decideStatus).toBe("none");
     });
@@ -271,7 +272,7 @@ describe("connectionStore — branch 驗證邏輯", () => {
       ).toThrow(/label/);
     });
 
-    it("11. update branch → branch + 修改 description / provider / model 不動 label → 成功", () => {
+    it("11. update branch → branch + 修改 description / summary provider / summary model 不動 label → 成功", () => {
       insertPod("src-11");
       insertPod("dst-11");
 
@@ -279,17 +280,17 @@ describe("connectionStore — branch 驗證邏輯", () => {
 
       const updated = connectionStore.update(CANVAS_ID, conn.id, {
         description: "新的描述",
-        branchProvider: "claude",
-        branchModel: "opus",
+        summaryProvider: "claude",
+        summaryModel: "opus",
       });
 
       expect(updated?.label).toBe("StableLabel");
       expect(updated?.description).toBe("新的描述");
-      expect(updated?.branchProvider).toBe("claude");
-      expect(updated?.branchModel).toBe("opus");
+      expect(updated?.summaryProvider).toBe("claude");
+      expect(updated?.summaryModel).toBe("opus");
     });
 
-    it("12. updateBranchSiblingSettings 同 source branch group 會在單一 transaction 同步 provider/model", () => {
+    it("12. updateBranchSiblingSettings 同 source branch group 會在單一 transaction 同步 direct", () => {
       insertPod("src-branch-sync");
       insertPod("dst-branch-sync-a");
       insertPod("dst-branch-sync-b");
@@ -317,8 +318,7 @@ describe("connectionStore — branch 驗證邏輯", () => {
         CANVAS_ID,
         connA.id,
         {
-          branchProvider: "claude",
-          branchModel: "opus",
+          direct: true,
         },
       );
 
@@ -326,14 +326,13 @@ describe("connectionStore — branch 驗證邏輯", () => {
       expect(
         result?.updatedConnections.map((connection) => connection.id),
       ).toEqual([connA.id, connB.id]);
-      expect(connectionStore.getById(CANVAS_ID, connA.id)?.branchModel).toBe(
-        "opus",
-      );
-      expect(connectionStore.getById(CANVAS_ID, connB.id)?.branchModel).toBe(
-        "opus",
-      );
+      expect(connectionStore.getById(CANVAS_ID, connA.id)?.direct).toBe(true);
+      expect(connectionStore.getById(CANVAS_ID, connB.id)?.direct).toBe(true);
       expect(connectionStore.getById(CANVAS_ID, autoConn.id)?.triggerMode).toBe(
         "auto",
+      );
+      expect(connectionStore.getById(CANVAS_ID, autoConn.id)?.direct).toBe(
+        false,
       );
     });
 
@@ -358,7 +357,7 @@ describe("connectionStore — branch 驗證邏輯", () => {
   });
 
   describe("row mapping — 批次 fallback", () => {
-    it("多筆 connection fallback branch provider/model 時使用 getByIds，不逐筆 getById", () => {
+    it("多筆 connection fallback source provider 時使用 getByIds，不逐筆 getById", () => {
       insertPod("src-batch-opencode", "opencode", '{"model":"openai/gpt-4o"}');
       insertPod("dst-batch-1");
       insertPod("dst-batch-2");
@@ -405,7 +404,6 @@ describe("connectionStore — branch 驗證邏輯", () => {
         expect.arrayContaining([
           expect.objectContaining({
             branchProvider: "opencode",
-            branchModel: "openai/gpt-4o",
           }),
         ]),
       );

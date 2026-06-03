@@ -1,0 +1,22 @@
+feature: connection-line-direct-toggle
+created: "2026-06-03"
+approved: true
+frontend:
+  required: true
+  reason: 需要把 connection menu 的 direct 從獨立 trigger mode 改為附加 toggle，並維持 Auto / Branch 的選擇與既有顯示語意。
+  evidence:
+    - userflow.yaml F1 明確要求選單中只有 Auto 與 Branch 兩種可選類別，Direct 改為獨立 toggle。
+    - userflow.yaml F2 明確要求 Auto connection 開啟 direct 後仍維持 Auto 基底邏輯，只是不必等待其他來源。
+    - userflow.yaml F3 明確要求 Branch connection 在切換 direct 時，同 source 的 Branch connections 要一起套用相同狀態。
+backend:
+  required: true
+  reason: 現有資料模型與 workflow 以 triggerMode 單欄承載 direct，必須調整資料結構與同步邏輯，才能支援 Auto / Branch 的 direct toggle，並清理已被統一 model settings 取代的 branch-specific legacy 結構。
+  evidence:
+    - question.yaml Q1 確認現有前後端都把 direct 視為正式 trigger mode，而不是附加旗標。
+    - question.yaml Q4 確認目前沒有獨立承載 direct toggle 的 connection 欄位或 API payload。
+    - question.yaml Q2 確認 branch sibling 同步目前仍綁在 branch-specific model 欄位，但 branch 決策實際已改用全域 connection line model settings。
+    - question.yaml Q5 確認本次要順便清掉或整併舊的 branch-specific model 欄位與同步邏輯。
+ticket:
+  story_issue: null
+  branch_issue: null
+  task_issue: null

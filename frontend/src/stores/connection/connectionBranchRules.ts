@@ -2,11 +2,9 @@ import type {
   BRANCH_DESCRIPTION_MAX_LENGTH,
   BRANCH_LABEL_MAX_LENGTH,
   BRANCH_RESERVED_LABEL,
+  Connection,
 } from "@/types/connection";
-import type { Connection } from "@/types/connection";
 import type { PodProvider } from "@/types/pod";
-import { DEFAULT_SUMMARY_MODEL } from "@/types/config";
-import { normalizePodProvider } from "@/lib/providerOptions";
 import type { ConnectionUpdatePayload } from "@/types/websocket";
 
 type BranchLengthLimits = {
@@ -21,20 +19,9 @@ export type BranchSettingsPayload = {
   description: string;
 };
 
-export type BranchDefaults = {
-  provider: PodProvider;
-  model: string;
-  thinkingLevel: string | null;
-};
-
 export type BranchSettingsUpdates = Pick<
   ConnectionUpdatePayload,
-  | "triggerMode"
-  | "label"
-  | "description"
-  | "branchProvider"
-  | "branchModel"
-  | "branchThinkingLevel"
+  "triggerMode" | "label" | "description"
 >;
 
 export interface ProviderCapabilityReader {
@@ -45,16 +32,8 @@ export interface ProviderCapabilityReader {
   ): string | null | undefined;
 }
 
-export function shouldResolveBranchDefaultsForSettings(
-  payload: BranchSettingsPayload,
-  connection?: Connection,
-): boolean {
-  return payload.switchToBranch || !connection?.branchProvider;
-}
-
 export function buildBranchSettingsUpdates(
   payload: BranchSettingsPayload,
-  branchDefaults?: BranchDefaults,
 ): BranchSettingsUpdates {
   const updates: BranchSettingsUpdates = {
     label: payload.label,
@@ -63,11 +42,6 @@ export function buildBranchSettingsUpdates(
 
   if (payload.switchToBranch) {
     updates.triggerMode = "branch";
-  }
-  if (branchDefaults) {
-    updates.branchProvider = branchDefaults.provider;
-    updates.branchModel = branchDefaults.model;
-    updates.branchThinkingLevel = branchDefaults.thinkingLevel;
   }
 
   return updates;
@@ -148,39 +122,4 @@ export function validateBranchSettingsPayload(
   if (!descriptionResult.valid) return descriptionResult.errorKey;
 
   return null;
-}
-
-export function resolveBranchDefaultsFromSourcePod(
-  sourcePod:
-    | {
-        provider?: PodProvider;
-        providerConfig?: {
-          model?: string;
-        };
-      }
-    | undefined,
-  providerCapabilityStore: ProviderCapabilityReader,
-): BranchDefaults | null {
-  const provider =
-    normalizePodProvider(sourcePod?.provider ?? "claude") ?? "claude";
-  const sourcePodModel =
-    typeof sourcePod?.providerConfig?.model === "string" &&
-    sourcePod.providerConfig.model.trim().length > 0
-      ? sourcePod.providerConfig.model
-      : undefined;
-  const model =
-    (provider === "opencode" ? sourcePodModel : undefined) ??
-    providerCapabilityStore.getDefaultModel(provider) ??
-    (provider === "claude" ? DEFAULT_SUMMARY_MODEL : undefined);
-
-  if (!model) return null;
-  return {
-    provider,
-    model,
-    thinkingLevel: resolveDefaultThinkingLevel(
-      providerCapabilityStore,
-      provider,
-      model,
-    ),
-  };
 }

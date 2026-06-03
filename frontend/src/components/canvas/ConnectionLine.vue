@@ -16,7 +16,7 @@ import { useI18n } from "vue-i18n";
 const props = withDefaults(
   defineProps<{
     connection: Connection;
-    pods: Pod[];
+    podsById: Map<string, Pod>;
     isSelected: boolean;
     status?: ConnectionStatus;
     triggerMode?: TriggerMode;
@@ -47,12 +47,8 @@ const { t } = useI18n();
 const emptyPathData = { path: "", midPoint: { x: 0, y: 0 }, angle: 0 };
 
 const connectionPathInput = computed(() => {
-  const sourcePod = props.pods.find(
-    (pod) => pod.id === props.connection.sourcePodId,
-  );
-  const targetPod = props.pods.find(
-    (pod) => pod.id === props.connection.targetPodId,
-  );
+  const sourcePod = props.podsById.get(props.connection.sourcePodId ?? "");
+  const targetPod = props.podsById.get(props.connection.targetPodId);
 
   if (!sourcePod || !targetPod) {
     return null;
@@ -120,14 +116,10 @@ const lineColor = computed(() => {
   return getStatusColor(props.status);
 });
 
+const isDirect = computed(() => props.connection.direct);
+
 type MidLabelEntryValue = { type: string; text: string; class: string };
 type MidLabelEntry = MidLabelEntryValue | null;
-
-const MID_LABEL_DIRECT: MidLabelEntry = {
-  type: "direct",
-  text: "D",
-  class: "direct-label",
-};
 
 const UNDECIDED_BRANCH_DECIDE_STATUS = "none" satisfies DecideStatus;
 type DecidedBranchStatus = Exclude<
@@ -172,7 +164,6 @@ function getMidLabel(
   label: string | undefined,
 ): MidLabelEntry {
   if (triggerMode === "auto") return null;
-  if (triggerMode === "direct") return MID_LABEL_DIRECT;
 
   return getBranchMidLabel(decideStatus, label);
 }
@@ -296,7 +287,7 @@ const handleContextMenu = (e: MouseEvent): void => {
         approved: decideStatus === 'approved',
         rejected: decideStatus === 'rejected',
         error: decideStatus === 'error',
-        direct: triggerMode === 'direct',
+        direct: isDirect,
       },
     ]"
     @click="handleClick"
@@ -397,7 +388,7 @@ const handleContextMenu = (e: MouseEvent): void => {
     </g>
 
     <foreignObject
-      v-if="midLabel"
+      v-if="midLabel || isDirect"
       :x="pathData.midPoint.x - 100"
       :y="pathData.midPoint.y - 10"
       width="200"
@@ -405,12 +396,23 @@ const handleContextMenu = (e: MouseEvent): void => {
       :title="tooltipText"
     >
       <div class="connection-mid-label-wrapper">
-        <div :class="['connection-mid-label', midLabel.class]">
-          <Loader2
-            v-if="midLabel.type === 'deciding'"
-            :size="12"
-          />
-          <span v-else>{{ midLabel.text }}</span>
+        <div class="connection-mid-label-stack">
+          <div
+            v-if="midLabel"
+            :class="['connection-mid-label', midLabel.class]"
+          >
+            <Loader2
+              v-if="midLabel.type === 'deciding'"
+              :size="12"
+            />
+            <span v-else>{{ midLabel.text }}</span>
+          </div>
+          <div
+            v-if="isDirect"
+            class="connection-mid-label direct-label"
+          >
+            <span>D</span>
+          </div>
         </div>
       </div>
     </foreignObject>

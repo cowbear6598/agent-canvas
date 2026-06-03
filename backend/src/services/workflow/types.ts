@@ -129,6 +129,7 @@ export interface TriggerWorkflowWithSummaryParams {
   connectionId: string;
   summary: string;
   isSummarized: boolean;
+  triggerMode: TriggerMode;
   participatingConnectionIds: string[] | undefined;
   sourcePodIds?: string[];
   sourcePodNames?: string[];

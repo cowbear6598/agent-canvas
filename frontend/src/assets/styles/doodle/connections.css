@@ -131,6 +131,14 @@
   height: 100%;
 }
 
+.connection-mid-label-stack {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  max-width: 100%;
+}
+
 .connection-mid-label {
   display: inline-flex;
   align-items: center;

@@ -287,18 +287,23 @@ function insertConnection(params: {
   branchProvider?: string | null;
   branchModel?: string | null;
 }): void {
+  const effectiveSummaryProvider =
+    params.summaryProvider ?? params.branchProvider ?? null;
+  const effectiveSummaryModel =
+    params.summaryModel ?? params.branchModel ?? "sonnet";
+
   getDb()
     .prepare(
       `INSERT INTO connections (
         id, canvas_id, source_pod_id, source_anchor, target_pod_id, target_anchor,
         trigger_mode, decide_status, decide_reason, connection_status,
         summary_model, summary_provider, summary_thinking_level,
-        label, description, branch_provider, branch_model, branch_thinking_level
+        label, description
       ) VALUES (
         $id, $canvasId, $sourcePodId, 'right', $targetPodId, 'left',
         $triggerMode, 'none', NULL, 'idle',
         $summaryModel, $summaryProvider, NULL,
-        $label, NULL, $branchProvider, $branchModel, NULL
+        $label, NULL
       )`,
     )
     .run({
@@ -307,11 +312,9 @@ function insertConnection(params: {
       $sourcePodId: params.sourcePodId,
       $targetPodId: params.targetPodId,
       $triggerMode: params.triggerMode ?? "auto",
-      $summaryModel: params.summaryModel ?? "sonnet",
-      $summaryProvider: params.summaryProvider ?? null,
+      $summaryModel: effectiveSummaryModel,
+      $summaryProvider: effectiveSummaryProvider,
       $label: params.label ?? "",
-      $branchProvider: params.branchProvider ?? null,
-      $branchModel: params.branchModel ?? null,
     });
 }
 

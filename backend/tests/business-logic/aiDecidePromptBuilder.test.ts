@@ -14,6 +14,8 @@ describe("BranchPromptBuilder", () => {
 
       expect(result).toContain("branch decision selector");
       expect(result).toContain("selectedLabel");
+      expect(result).toContain("Select exactly one label");
+      expect(result).not.toContain("NO_BRANCH_SELECTED");
       expect(result).toContain("None");
     });
   });
@@ -96,6 +98,7 @@ describe("BranchPromptBuilder", () => {
       expect(result).toContain("Simple");
       // 應包含 selectedLabel JSON 格式指示
       expect(result).toContain("selectedLabel");
+      expect(result).not.toContain("NO_BRANCH_SELECTED");
     });
   });
 });
