@@ -8,6 +8,7 @@ import { socketService } from "../services/socketService.js";
 import { executeStreamingChat } from "../services/claude/streamingChatExecutor.js";
 import { ChatExecutionStrategy } from "../services/executionStrategy.js";
 import { logger } from "./logger.js";
+import { getUserVisibleErrorMessage } from "./userVisibleError.js";
 
 export function extractDisplayContent(
   message: string | ContentBlock[],
@@ -89,7 +90,11 @@ export async function launchRun(params: LaunchRunParams): Promise<RunContext> {
       onComplete: () => onComplete(runContext),
       onError: (_canvasId, _podId, error) => {
         logger.error("Run", "Error", `Pod ${podId} 執行失敗: ${error.message}`);
-        runExecutionService.errorPodInstance(runContext, podId, "執行發生錯誤");
+        runExecutionService.errorPodInstance(
+          runContext,
+          podId,
+          getUserVisibleErrorMessage(error) ?? "執行發生錯誤",
+        );
       },
       ...(onAborted ? { onAborted } : {}),
     },

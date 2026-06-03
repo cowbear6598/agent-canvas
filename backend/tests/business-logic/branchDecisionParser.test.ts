@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  BRANCH_NO_SELECTION_LABEL,
   BranchDecisionParseError,
   parseBranchDecision,
   stripMarkdownCodeBlock,
@@ -31,7 +32,11 @@ describe("parseBranchDecision", () => {
       '{"selectedLabel":"Checklist"}',
       validLabels,
     );
-    expect(result).toEqual({ ok: true, selectedLabel: "Checklist" });
+    expect(result).toEqual({
+      ok: true,
+      selectedLabel: "Checklist",
+      noSelection: false,
+    });
   });
 
   it("帶 markdown code block 的合法 JSON → 剝除後 ok", () => {
@@ -39,7 +44,11 @@ describe("parseBranchDecision", () => {
       '```json\n{"selectedLabel":"Code Review"}\n```',
       validLabels,
     );
-    expect(result).toEqual({ ok: true, selectedLabel: "Code Review" });
+    expect(result).toEqual({
+      ok: true,
+      selectedLabel: "Code Review",
+      noSelection: false,
+    });
   });
 
   it("回覆含說明文字與 JSON → 擷取 selectedLabel JSON 後 ok", () => {
@@ -47,7 +56,11 @@ describe("parseBranchDecision", () => {
       '我會選擇清單分支。\n{"selectedLabel":"Checklist"}\n原因：最符合。',
       validLabels,
     );
-    expect(result).toEqual({ ok: true, selectedLabel: "Checklist" });
+    expect(result).toEqual({
+      ok: true,
+      selectedLabel: "Checklist",
+      noSelection: false,
+    });
   });
 
   it("回覆含多個 JSON 時優先擷取含 selectedLabel 的 JSON", () => {
@@ -55,7 +68,23 @@ describe("parseBranchDecision", () => {
       '{"note":"ignore"}\n最後答案：{"selectedLabel":"Hotfix"}',
       validLabels,
     );
-    expect(result).toEqual({ ok: true, selectedLabel: "Hotfix" });
+    expect(result).toEqual({
+      ok: true,
+      selectedLabel: "Hotfix",
+      noSelection: false,
+    });
+  });
+
+  it("selectedLabel 為 NO_BRANCH_SELECTED → noSelection", () => {
+    const result = parseBranchDecision(
+      `{"selectedLabel":"${BRANCH_NO_SELECTION_LABEL}"}`,
+      validLabels,
+    );
+    expect(result).toEqual({
+      ok: true,
+      selectedLabel: null,
+      noSelection: true,
+    });
   });
 
   it("非 JSON 純文字 → PARSE_FAIL", () => {

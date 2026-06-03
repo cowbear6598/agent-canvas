@@ -1,5 +1,5 @@
 feature: model-settings-integration-hub
-approved: false
+approved: true
 scenarios:
   - id: F1
     scenario: 使用者從整合管理中心進入 Model 設定

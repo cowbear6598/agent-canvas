@@ -34,12 +34,12 @@ export interface BranchDecisionInput {
 
 export interface BranchDecisionFailureAttempt {
   attempt: 1 | 2;
-  kind: "provider_error" | "parse_error";
+  kind: "provider_error" | "parse_error" | "no_selection";
   message: string;
 }
 
 export interface BranchDecisionFailure {
-  kind: "provider_error" | "parse_error" | "mixed";
+  kind: "provider_error" | "parse_error" | "no_selection" | "mixed";
   message: string;
   attempts: BranchDecisionFailureAttempt[];
 }

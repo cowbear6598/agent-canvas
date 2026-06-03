@@ -36,6 +36,10 @@ import {
   failWorkflowChatStage,
   launchWorkflowChatStage,
 } from "./workflowTriggerStages.js";
+import {
+  getUserVisibleErrorMessage,
+  UserVisibleError,
+} from "../../utils/userVisibleError.js";
 
 interface ExecutionServiceDeps {
   pipeline: PipelineMethods;
@@ -48,7 +52,7 @@ interface ExecutionServiceDeps {
  * 代表預期的使用者可見業務錯誤，訊息可安全傳送給客戶端。
  * 拋出此類別的錯誤時，message 會直接廣播；其他 Error 則以通用訊息替代。
  */
-export class WorkflowUserError extends Error {
+export class WorkflowUserError extends UserVisibleError {
   constructor(message: string) {
     super(message);
     this.name = "WorkflowUserError";
@@ -57,13 +61,10 @@ export class WorkflowUserError extends Error {
 
 /**
  * 過濾錯誤訊息，避免將系統內部細節（路徑、堆疊等）洩漏給客戶端。
- * 只有 WorkflowUserError 的 message 允許原樣傳遞。
+ * 只有 UserVisibleError 類型的 message 允許原樣傳遞。
  */
 function sanitizeErrorForClient(error: Error): string {
-  if (error instanceof WorkflowUserError) {
-    return error.message;
-  }
-  return "工作流程執行失敗";
+  return getUserVisibleErrorMessage(error) ?? "工作流程執行失敗";
 }
 
 interface WorkflowChatContext {
@@ -515,7 +516,7 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
       runContext,
       delegate,
     } = params;
-    // 過濾 error.message：只有 WorkflowUserError（業務錯誤）才允許原樣傳給客戶端
+    // 過濾 error.message：只有 UserVisibleError（業務錯誤）才允許原樣傳給客戶端
     const clientErrorMessage = sanitizeErrorForClient(error);
     failWorkflowChatStage({
       canvasId,

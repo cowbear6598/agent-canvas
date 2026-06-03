@@ -22,6 +22,7 @@ vi.mock("../../src/utils/logger.js", () => ({
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import type { Mock } from "vitest";
 import { branchDecider } from "../../src/services/branch/index.js";
+import { BRANCH_NO_SELECTION_LABEL } from "../../src/services/branch/index.js";
 import { executeDisposableChat } from "../../src/services/disposableChatService.js";
 import { BranchAbortError } from "../../src/services/branch/abortError.js";
 import type { BranchDecisionInput } from "../../src/services/branch/branchDecider.js";
@@ -117,12 +118,25 @@ describe("BaseBranchDecider.decide", () => {
   });
 
   // ─── 案例 1：recentMessages 與 persistedSummary 皆為空 ─────────────────────
-  it("recentMessages 與 persistedSummary 皆為空 → 不呼叫 executeDisposableChat，直接選第一個 branch label", async () => {
+  it("recentMessages 與 persistedSummary 皆為空 → fail closed，不自動選第一個 branch label", async () => {
     const input = makeInput({ recentMessages: [], persistedSummary: null });
 
     const result = await branchDecider.decide(input);
 
-    expect(result).toEqual({ kind: "success", selectedLabel: "Checklist" });
+    expect(result).toEqual({
+      kind: "failed",
+      failure: {
+        kind: "no_selection",
+        message: "缺少可判斷 branch 的上下文",
+        attempts: [
+          {
+            attempt: 1,
+            kind: "no_selection",
+            message: "缺少可判斷 branch 的上下文",
+          },
+        ],
+      },
+    });
     expect(asMock(executeDisposableChat)).not.toHaveBeenCalled();
   });
 
@@ -178,6 +192,32 @@ describe("BaseBranchDecider.decide", () => {
 
     expect(result).toEqual({ kind: "success", selectedLabel: "Checklist" });
     expect(asMock(executeDisposableChat)).toHaveBeenCalledTimes(2);
+  });
+
+  it("模型回傳 NO_BRANCH_SELECTED → 回傳 no_selection 失敗且不 retry", async () => {
+    asMock(executeDisposableChat).mockResolvedValueOnce(
+      makeDisposableChatResult(
+        `{"selectedLabel":"${BRANCH_NO_SELECTION_LABEL}"}`,
+      ),
+    );
+
+    const result = await branchDecider.decide(makeInput());
+
+    expect(result).toEqual({
+      kind: "failed",
+      failure: {
+        kind: "no_selection",
+        message: "模型判斷沒有安全可選的 branch",
+        attempts: [
+          {
+            attempt: 1,
+            kind: "no_selection",
+            message: "模型判斷沒有安全可選的 branch",
+          },
+        ],
+      },
+    });
+    expect(asMock(executeDisposableChat)).toHaveBeenCalledTimes(1);
   });
 
   it("第一次模型回傳 None → parse error 後 retry，第二次正確 → 回傳第二次的 selectedLabel", async () => {

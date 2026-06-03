@@ -5,7 +5,7 @@
  * 差異只在 connection 帶入的 provider / model，流程完全相同。
  *
  * 流程：
- * 1. recentMessages 與 persistedSummary 皆為空 → 選擇第一個 branch label，不發 model call
+ * 1. recentMessages 與 persistedSummary 皆為空 → fail closed，不自動選 branch
  * 2. 組 prompt（branchPromptBuilder）
  * 3. 呼叫 executeDisposableChat
  * 4. parseBranchDecision；失敗則重試一次（第二次仍失敗 → 回傳結構化失敗）
@@ -73,19 +73,13 @@ export class BaseBranchDecider implements BranchDecider {
     const validLabels = branches.map((b) => b.label);
 
     if (recentMessages.length === 0 && !persistedSummary) {
-      const selectedLabel = validLabels[0];
-
-      if (selectedLabel) {
-        return { kind: "success", selectedLabel };
-      }
-
       return {
         kind: "failed",
         failure: buildFailure([
           {
             attempt: 1,
-            kind: "parse_error",
-            message: "找不到可選擇的 branch label",
+            kind: "no_selection",
+            message: "缺少可判斷 branch 的上下文",
           },
         ]),
       };
@@ -148,6 +142,19 @@ export class BaseBranchDecider implements BranchDecider {
     if (rawResponse !== null) {
       const parsed = parseBranchDecision(rawResponse, validLabels);
       if (parsed.ok) {
+        if (parsed.noSelection) {
+          return {
+            kind: "failed",
+            failure: buildFailure([
+              {
+                attempt: 1,
+                kind: "no_selection",
+                message: "模型判斷沒有安全可選的 branch",
+              },
+            ]),
+          };
+        }
+
         return { kind: "success", selectedLabel: parsed.selectedLabel };
       }
 
@@ -212,6 +219,20 @@ export class BaseBranchDecider implements BranchDecider {
     if (retryRawResponse !== null) {
       const retryParsed = parseBranchDecision(retryRawResponse, validLabels);
       if (retryParsed.ok) {
+        if (retryParsed.noSelection) {
+          return {
+            kind: "failed",
+            failure: buildFailure([
+              ...failureAttempts,
+              {
+                attempt: 2,
+                kind: "no_selection",
+                message: "模型判斷沒有安全可選的 branch",
+              },
+            ]),
+          };
+        }
+
         return { kind: "success", selectedLabel: retryParsed.selectedLabel };
       }
 

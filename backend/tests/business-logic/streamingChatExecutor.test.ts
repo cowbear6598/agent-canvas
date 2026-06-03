@@ -1208,7 +1208,7 @@ describe("executeStreamingChat", () => {
       expect(order).toEqual(["schedule:completed"]);
     });
 
-    it("連續未推進達上限應自動 force_block 並放行下游", async () => {
+    it("連續未推進達上限應自動 force_block，回報 blocked 錯誤且不放行下游", async () => {
       const goal = {
         todos: [
           { id: "todo-1", text: "永遠不會被完成" },
@@ -1241,6 +1241,7 @@ describe("executeStreamingChat", () => {
       });
 
       const onComplete = vi.fn();
+      const onError = vi.fn();
       await executeStreamingChat(
         {
           canvasId,
@@ -1249,7 +1250,7 @@ describe("executeStreamingChat", () => {
           abortable: false,
           strategy: makeStrategy(),
         },
-        { onComplete },
+        { onComplete, onError },
       );
 
       // 第一輪 + 連續 noProgressLimit (2) 輪 retry = 共 3 輪 chat
@@ -1263,6 +1264,14 @@ describe("executeStreamingChat", () => {
       expect(snapshot?.state.blockedReason).toContain("未推進");
       // force_block 會停止 workflow，不再觸發下游
       expect(onComplete).not.toHaveBeenCalled();
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenCalledWith(
+        canvasId,
+        pod.id,
+        expect.objectContaining({
+          message: expect.stringContaining("Goal 已標記為 blocked"),
+        }),
+      );
     });
 
     it("第一輪收到不可恢復 fatal provider error 時應保留未完成 goal，觸發 onError，且不觸發 onComplete", async () => {

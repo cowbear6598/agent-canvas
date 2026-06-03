@@ -37,6 +37,7 @@ import {
   nextNoProgressCount,
 } from "../goalCompletionGate.js";
 import { runStore } from "../runStore.js";
+import { UserVisibleError } from "../../utils/userVisibleError.js";
 
 export interface GoalRoundDividerContext {
   sourcePodIds: string[];
@@ -338,6 +339,30 @@ function createClientSafeBlockedReason(reason: string | null): string | null {
     : normalized;
 }
 
+function createGoalBlockedStopWorkflowError(reason: string | null): Error {
+  const blockedReason = createClientSafeBlockedReason(reason);
+  const errorMessage = blockedReason
+    ? `${GOAL_BLOCKED_STOP_WORKFLOW_MESSAGE}：${blockedReason}`
+    : GOAL_BLOCKED_STOP_WORKFLOW_MESSAGE;
+
+  return new UserVisibleError(errorMessage);
+}
+
+async function stopWorkflowForBlockedGoal(
+  options: StreamingChatExecutorOptions,
+  callbacks: StreamingChatExecutorCallbacks | undefined,
+  reason: string | null,
+): Promise<void> {
+  persistGoalRoundDivider(options);
+  if (callbacks?.onError) {
+    await callbacks.onError(
+      options.canvasId,
+      options.podId,
+      createGoalBlockedStopWorkflowError(reason),
+    );
+  }
+}
+
 function persistGoalRoundDivider(
   options: StreamingChatExecutorOptions,
 ): void {
@@ -523,7 +548,6 @@ export async function executeStreamingChat(
     // Goal 完成 gate loop：只有當 runContext 存在且 Goal Runtime 有 active todo 時才會進迴圈
     let retryCount = 0;
     let noProgressCount = 0;
-    let shouldCompleteWorkflow = true;
 
     while (true) {
       if (!runContext) break;
@@ -552,21 +576,22 @@ export async function executeStreamingChat(
       if (decision.action === "proceed") break;
 
       if (decision.action === "stop_blocked") {
-        persistGoalRoundDivider(effectiveOptions);
-        if (callbacks?.onError) {
-          const blockedReason = createClientSafeBlockedReason(decision.reason);
-          const errorMessage = blockedReason
-            ? `${GOAL_BLOCKED_STOP_WORKFLOW_MESSAGE}：${blockedReason}`
-            : GOAL_BLOCKED_STOP_WORKFLOW_MESSAGE;
-          await callbacks.onError(canvasId, podId, new Error(errorMessage));
-        }
+        await stopWorkflowForBlockedGoal(
+          effectiveOptions,
+          callbacks,
+          decision.reason,
+        );
         return turnOutcome.result;
       }
 
       if (decision.action === "force_block") {
         autoForceBlock(runContext, podResult.pod, decision.reason);
-        shouldCompleteWorkflow = false;
-        break;
+        await stopWorkflowForBlockedGoal(
+          effectiveOptions,
+          callbacks,
+          decision.reason,
+        );
+        return turnOutcome.result;
       }
 
       // decision.action === "retry"
@@ -599,7 +624,7 @@ export async function executeStreamingChat(
 
     persistGoalRoundDivider(effectiveOptions);
 
-    if (shouldCompleteWorkflow && callbacks?.onComplete) {
+    if (callbacks?.onComplete) {
       await callbacks.onComplete(canvasId, podId);
     }
 

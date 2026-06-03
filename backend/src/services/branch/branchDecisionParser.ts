@@ -23,6 +23,8 @@ export const BranchDecisionParseError = {
 export type BranchDecisionParseErrorType =
   (typeof BranchDecisionParseError)[keyof typeof BranchDecisionParseError];
 
+export const BRANCH_NO_SELECTION_LABEL = "NO_BRANCH_SELECTED";
+
 // ─── zod schema ───────────────────────────────────────────────────────────────
 
 const branchDecisionSchema = z.object({
@@ -108,7 +110,8 @@ export function parseBranchDecision(
   raw: string,
   validLabels: string[],
 ):
-  | { ok: true; selectedLabel: string }
+  | { ok: true; selectedLabel: string; noSelection?: false }
+  | { ok: true; selectedLabel: null; noSelection: true }
   | { ok: false; reason: BranchDecisionParseErrorType } {
   const cleaned = extractFirstJsonObjectContainingSelectedLabel(
     stripMarkdownCodeBlock(raw),
@@ -128,9 +131,13 @@ export function parseBranchDecision(
 
   const { selectedLabel } = result.data;
 
+  if (selectedLabel === BRANCH_NO_SELECTION_LABEL) {
+    return { ok: true, selectedLabel: null, noSelection: true };
+  }
+
   if (!validLabels.includes(selectedLabel)) {
     return { ok: false, reason: BranchDecisionParseError.LABEL_HALLUCINATION };
   }
 
-  return { ok: true, selectedLabel };
+  return { ok: true, selectedLabel, noSelection: false };
 }

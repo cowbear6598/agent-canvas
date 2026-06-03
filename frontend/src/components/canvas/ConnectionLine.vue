@@ -44,7 +44,9 @@ const { calculatePathData, calculateMultipleArrowPositions } =
 const { getAnchorPositions } = useAnchorDetection();
 const { t } = useI18n();
 
-const pathData = computed(() => {
+const emptyPathData = { path: "", midPoint: { x: 0, y: 0 }, angle: 0 };
+
+const connectionPathInput = computed(() => {
   const sourcePod = props.pods.find(
     (pod) => pod.id === props.connection.sourcePodId,
   );
@@ -53,7 +55,7 @@ const pathData = computed(() => {
   );
 
   if (!sourcePod || !targetPod) {
-    return { path: "", midPoint: { x: 0, y: 0 }, angle: 0 };
+    return null;
   }
 
   const sourceAnchors = getAnchorPositions(sourcePod);
@@ -62,11 +64,8 @@ const pathData = computed(() => {
   );
 
   if (!sourceAnchor) {
-    return { path: "", midPoint: { x: 0, y: 0 }, angle: 0 };
+    return null;
   }
-
-  const sourceX = sourceAnchor.x;
-  const sourceY = sourceAnchor.y;
 
   const targetAnchors = getAnchorPositions(targetPod);
   const targetAnchor = targetAnchors.find(
@@ -74,15 +73,23 @@ const pathData = computed(() => {
   );
 
   if (!targetAnchor) {
-    return { path: "", midPoint: { x: 0, y: 0 }, angle: 0 };
+    return null;
   }
 
-  return calculatePathData({
-    start: { x: sourceX, y: sourceY },
+  return {
+    start: { x: sourceAnchor.x, y: sourceAnchor.y },
     end: { x: targetAnchor.x, y: targetAnchor.y },
     sourceAnchor: props.connection.sourceAnchor,
     targetAnchor: props.connection.targetAnchor,
-  });
+  };
+});
+
+const pathData = computed(() => {
+  if (!connectionPathInput.value) {
+    return emptyPathData;
+  }
+
+  return calculatePathData(connectionPathInput.value);
 });
 
 const BRANCH_STATUS_COLOR_DEFAULT = "oklch(0.65 0.12 300 / 0.7)";
@@ -193,45 +200,12 @@ const tooltipText = computed(() => {
 });
 
 const arrowPositions = computed(() => {
-  const sourcePod = props.pods.find(
-    (pod) => pod.id === props.connection.sourcePodId,
-  );
-  const targetPod = props.pods.find(
-    (pod) => pod.id === props.connection.targetPodId,
-  );
-
-  if (!sourcePod || !targetPod) {
-    return [];
-  }
-
-  const sourceAnchors = getAnchorPositions(sourcePod);
-  const sourceAnchor = sourceAnchors.find(
-    (a) => a.anchor === props.connection.sourceAnchor,
-  );
-
-  if (!sourceAnchor) {
-    return [];
-  }
-
-  const sourceX = sourceAnchor.x;
-  const sourceY = sourceAnchor.y;
-
-  const targetAnchors = getAnchorPositions(targetPod);
-  const targetAnchor = targetAnchors.find(
-    (a) => a.anchor === props.connection.targetAnchor,
-  );
-
-  if (!targetAnchor) {
+  if (!connectionPathInput.value) {
     return [];
   }
 
   return calculateMultipleArrowPositions(
-    {
-      start: { x: sourceX, y: sourceY },
-      end: { x: targetAnchor.x, y: targetAnchor.y },
-      sourceAnchor: props.connection.sourceAnchor,
-      targetAnchor: props.connection.targetAnchor,
-    },
+    connectionPathInput.value,
     160,
   );
 });
