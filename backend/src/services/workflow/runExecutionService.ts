@@ -108,13 +108,16 @@ export function settleInstanceIfUnreachable(
   // 可選的 Map 索引，由呼叫方預先建立以避免反覆 find()；
   // 未提供時退回線性搜尋（保持向下相容）
   instanceMap?: Map<string, RunPodInstance>,
+  incomingConnectionsMap?: Map<string, Connection[]>,
 ): boolean {
   if (!NEVER_TRIGGERED_STATUSES.has(instance.status)) return false;
 
-  const incomingConns = connections.filter(
-    (c) =>
-      c.targetPodId === instance.podId && instancePodIds.has(c.sourcePodId),
-  );
+  const incomingConns =
+    incomingConnectionsMap?.get(instance.podId) ??
+    connections.filter(
+      (c) =>
+        c.targetPodId === instance.podId && instancePodIds.has(c.sourcePodId),
+    );
   const { autoUnreachable, directUnreachable } = isInstanceUnreachable(
     instance,
     incomingConns,
@@ -501,10 +504,19 @@ class RunExecutionService {
       instances.map((i) => [i.podId, i]),
     );
 
-    // 預先建立 targetPodId → Connection[] 的索引，快速找出某 pod 的下游
+    // 預先建立 targetPodId → incoming connections 的索引，避免每個 instance 重掃全部 connections
+    const incomingConnectionsMap = new Map<string, Connection[]>();
+
+    // 預先建立 sourcePodId → downstream targetPodIds 的索引，快速找出某 pod 的下游
     const downstreamMap = new Map<string, string[]>();
     for (const conn of connections) {
       if (!instancePodIds.has(conn.sourcePodId)) continue;
+
+      if (!incomingConnectionsMap.has(conn.targetPodId)) {
+        incomingConnectionsMap.set(conn.targetPodId, []);
+      }
+      incomingConnectionsMap.get(conn.targetPodId)!.push(conn);
+
       if (!downstreamMap.has(conn.sourcePodId)) {
         downstreamMap.set(conn.sourcePodId, []);
       }
@@ -532,6 +544,7 @@ class RunExecutionService {
         instances,
         instancePodIds,
         instanceMap,
+        incomingConnectionsMap,
       );
       if (!settled) continue;
 

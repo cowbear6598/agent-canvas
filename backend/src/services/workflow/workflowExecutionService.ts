@@ -11,6 +11,7 @@ import type {
 import type { ProviderName } from "../provider/index.js";
 import { connectionStore } from "../connectionStore.js";
 import { podStore } from "../podStore.js";
+import { runStore } from "../runStore.js";
 import { summaryService } from "../summaryService.js";
 import { logger } from "../../utils/logger.js";
 import { getErrorMessage } from "../../utils/errorHelpers.js";
@@ -66,6 +67,11 @@ export class WorkflowUserError extends UserVisibleError {
  */
 function sanitizeErrorForClient(error: Error): string {
   return getUserVisibleErrorMessage(error) ?? "工作流程執行失敗";
+}
+
+function isTerminalRunPod(runContext: RunContext, podId: string): boolean {
+  const instance = runStore.getPodInstance(runContext.runId, podId);
+  return instance?.status === "blocked" || instance?.status === "error";
 }
 
 interface WorkflowChatContext {
@@ -332,6 +338,15 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
       "Create",
       `觸發工作流程：Pod "${sourcePod?.name ?? sourcePodId}" → Pod "${targetPod.name}"`,
     );
+
+    if (isTerminalRunPod(runContext, targetPodId)) {
+      logger.warn(
+        "Workflow",
+        "Warn",
+        `triggerWorkflowWithSummary: 目標 Pod ${targetPodId} 已為終態，跳過觸發`,
+      );
+      return;
+    }
 
     const triggerMode = params.triggerMode ?? strategy.mode;
     const resolvedConnectionIds = participatingConnectionIds ?? [connectionId];

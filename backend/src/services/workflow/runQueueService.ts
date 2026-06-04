@@ -111,6 +111,12 @@ class RunQueueService extends LazyInitializable<RunQueueServiceDeps> {
     return queue ? queue.length : 0;
   }
 
+  private clearQueue(key: string): number {
+    const size = this.getQueueSize(key);
+    this.queues.delete(key);
+    return size;
+  }
+
   async processNext(
     canvasId: string,
     targetPodId: string,
@@ -127,6 +133,12 @@ class RunQueueService extends LazyInitializable<RunQueueServiceDeps> {
     );
 
     if (decision !== "process-next") {
+      return;
+    }
+
+    const instance = runStore.getPodInstance(runContext.runId, targetPodId);
+    if (instance && TERMINAL_POD_STATUSES.has(instance.status)) {
+      this.clearQueue(key);
       return;
     }
 

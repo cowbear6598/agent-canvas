@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { workflowExecutionService } from "../../src/services/workflow";
 import { connectionStore } from "../../src/services/connectionStore.js";
 import { podStore } from "../../src/services/podStore.js";
+import { runStore } from "../../src/services/runStore.js";
 import { summaryService } from "../../src/services/summaryService.js";
 import { workflowEventEmitter } from "../../src/services/workflow";
 import { runExecutionService } from "../../src/services/workflow/runExecutionService.js";
@@ -230,6 +231,64 @@ describe("WorkflowExecutionService", () => {
         TARGET_POD_ID,
       );
       expect(registerActiveStreamSpy).not.toHaveBeenCalled();
+    });
+
+    it("run mode 目標 pod 已為 blocked 終態時，不應重新觸發 workflow", async () => {
+      const runContext = makeRunContext({ runId: "run-blocked-terminal" });
+      const autoConn = makeConnection({
+        id: "conn-auto-blocked-terminal",
+        triggerMode: "auto",
+      });
+      const mockStrategy = makeStrategy("auto");
+      const delegate = {
+        isRunMode: vi.fn().mockReturnValue(true),
+        startPodExecution: vi.fn(),
+        markSummarizing: vi.fn(),
+        markDeciding: vi.fn(),
+        markWaiting: vi.fn(),
+        onSummaryComplete: vi.fn(),
+        onSummaryFailed: vi.fn(),
+        onChatComplete: vi.fn(),
+        onChatError: vi.fn(),
+        shouldEnqueue: vi.fn().mockReturnValue(true),
+        isBusy: vi.fn().mockReturnValue(false),
+        enqueue: vi.fn(),
+        scheduleNextInQueue: vi.fn(),
+        settleAndSkipPath: vi.fn(),
+      };
+
+      vi.spyOn(connectionStore, "getById").mockReturnValue(autoConn);
+      vi.spyOn(connectionStore, "findByTargetPodId").mockReturnValue([
+        autoConn,
+      ]);
+      vi.spyOn(runStore, "getPodInstance").mockReturnValue({
+        id: "instance-blocked",
+        runId: runContext.runId,
+        podId: TARGET_POD_ID,
+        status: "blocked",
+        autoPathwaySettled: "settled",
+        directPathwaySettled: "settled",
+      } as any);
+      const executeStreamingChatSpy = vi.spyOn(
+        streamingChatExecutor,
+        "executeStreamingChat",
+      );
+
+      await workflowExecutionService.triggerWorkflowWithSummary({
+        canvasId: CANVAS_ID,
+        connectionId: autoConn.id,
+        summary: "Test summary",
+        isSummarized: true,
+        participatingConnectionIds: undefined,
+        strategy: mockStrategy,
+        runContext,
+        delegate,
+        skipBusyCheck: true,
+      });
+
+      expect(delegate.startPodExecution).not.toHaveBeenCalled();
+      expect(mockStrategy.onTrigger).not.toHaveBeenCalled();
+      expect(executeStreamingChatSpy).not.toHaveBeenCalled();
     });
 
     it("stream 完成後排程下一筆佇列時不應殘留 active stream", async () => {

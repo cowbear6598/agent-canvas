@@ -37,6 +37,7 @@ function makeRunContext(overrides?: Partial<RunContext>): RunContext {
 let mockRunContext: RunContext = makeRunContext();
 
 const mockQueuedPodInstance = vi.fn();
+const mockErrorPodInstance = vi.fn();
 const mockHasActiveStream = vi.fn().mockReturnValue(false);
 
 const mockExecutionService = {
@@ -107,6 +108,7 @@ describe("RunQueueService", () => {
       executionService: mockExecutionService,
       strategies: mockStrategies,
       queuedPodInstance: mockQueuedPodInstance,
+      errorPodInstance: mockErrorPodInstance,
       hasActiveStream: mockHasActiveStream,
     });
     // 清空佇列
@@ -349,6 +351,25 @@ describe("RunQueueService", () => {
       expect(
         mockExecutionService.triggerWorkflowWithSummary,
       ).not.toHaveBeenCalled();
+    });
+
+    it("目標 Pod 已為 blocked 終態時，應清空該 Pod 的佇列且不再觸發", async () => {
+      const instance = runStore.createPodInstance(
+        mockRunContext.runId,
+        targetPodId,
+      );
+      runStore.updatePodInstanceStatus(instance.id, "blocked", "等待人工確認");
+
+      const key = buildRunQueueKey(mockRunContext.runId, targetPodId);
+      runQueueService.enqueue(createQueueItem({ connectionId: "conn-1" }));
+      runQueueService.enqueue(createQueueItem({ connectionId: "conn-2" }));
+
+      await runQueueService.processNext(canvasId, targetPodId, mockRunContext);
+
+      expect(
+        mockExecutionService.triggerWorkflowWithSummary,
+      ).not.toHaveBeenCalled();
+      expect(runQueueService.getQueueSize(key)).toBe(0);
     });
   });
 });
