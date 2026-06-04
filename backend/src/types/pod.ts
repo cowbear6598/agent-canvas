@@ -1,4 +1,4 @@
-import type { ScheduleConfig } from "./schedule.js";
+import type { PersistedScheduleConfig, ScheduleConfig } from "./schedule.js";
 import type { IntegrationBinding } from "./integration.js";
 import type { ProviderName } from "../services/provider/types.js";
 
@@ -59,20 +59,39 @@ export interface Pod {
  */
 export type PodPublicView = Omit<
   Pod,
-  "workspacePath" | "sessionId" | "memoryEnabled" | "hasPodMemory" | "hasRepoMemory"
+  | "workspacePath"
+  | "sessionId"
+  | "schedule"
+  | "memoryEnabled"
+  | "hasPodMemory"
+  | "hasRepoMemory"
 > & {
+  schedule?: PersistedScheduleConfig;
   memoryEnabled: boolean;
   repoMemoryEnabled: boolean;
   hasPodMemory: boolean;
   hasRepoMemory: boolean;
 };
 
+function serializeScheduleForPublicView(
+  schedule: ScheduleConfig | undefined,
+): PersistedScheduleConfig | undefined {
+  if (!schedule) return undefined;
+  return {
+    ...schedule,
+    lastTriggeredAt: schedule.lastTriggeredAt
+      ? schedule.lastTriggeredAt.toISOString()
+      : null,
+  };
+}
+
 /** 將內部 Pod 轉換為對外廣播用的公開視圖（去除敏感欄位） */
 export function toPodPublicView(pod: Pod): PodPublicView {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { workspacePath, sessionId, ...publicView } = pod;
+  const { workspacePath, sessionId, schedule, ...publicView } = pod;
   return {
     ...publicView,
+    schedule: serializeScheduleForPublicView(schedule),
     memoryEnabled: pod.memoryEnabled ?? false,
     repoMemoryEnabled: pod.repoMemoryEnabled ?? false,
     hasPodMemory: pod.hasPodMemory ?? false,
