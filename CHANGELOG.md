@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.2.0] - 2026-06-04
+
+### 新增
+- 新增 Repository Memory 控制介面、維護流程與 maintainer logging
+- 新增 blocked Pod workflow 狀態與 run history 顯示
+- 整合統一模型設定中心，集中管理模型與 provider 設定
+
+### 修正
+- 修正 workflow 忙碌時無法正確排隊等待的問題
+- 修正 blocked 任務停止後未保留後續流程與狀態的問題
+- 修正使用者遇到不可達路徑時狀態顯示不正確的問題
+- 修正 direct connection 切換與 Goal workflow runtime 穩定性問題
+- 修正 Goal blocked 時 workflow 靜默卡住的問題
+- 修正 Branch 判斷資訊不足時誤選第一條路徑，改為要求明確選擇
+- 改善 Canvas 連線繪製效能
+- 修正 Run 佇列 Pod 重複觸發導致流程卡住的問題
+- 修正 WebSocket 業務錯誤回應與事件合約驗證
+- 修正架構重構後的 Run 資料與 workflow 穩定性問題
+- 完成專案架構重構 P1-P3 並調整相關測試
+- 修正 Pod 與 Repository Memory 維護時機互相影響的問題
+- 修正 Repository Memory migration 可能造成啟動崩潰的問題
+
 ## [2.1.4] - 2026-06-01
 
 ### 新增
