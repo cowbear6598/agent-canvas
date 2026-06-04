@@ -32,6 +32,8 @@ const CANVAS_ID = "canvas-goal-round-history";
 const RUN_ID = "run-goal-round-history";
 const TARGET_POD_ID = "pod-target";
 const TARGET_POD_NAME = "Target Pod";
+const LONG_BLOCKED_REASON =
+  "等待產品窗口補齊外部 API 權限申請編號、正式環境白名單資訊與驗收窗口聯絡方式，確認完成前這一輪無法繼續往下執行。";
 
 function createDivider(
   overrides: Partial<RunGoalRoundDivider>,
@@ -79,7 +81,7 @@ const RunGoalRoundDividerHarness = defineComponent({
         runId: RUN_ID,
         podId: TARGET_POD_ID,
         podName: TARGET_POD_NAME,
-        runStatus: "completed",
+        podStatus: "completed",
         onClose: () => {},
       });
   },
@@ -118,7 +120,7 @@ describe("run chat Goal round divider userflow", () => {
           sourcePodIds: ["pod-source-2"],
           sourcePodNames: ["Pod 2"],
           status: "blocked",
-          blockedReason: "等待人工補充必要資料",
+          blockedReason: LONG_BLOCKED_REASON,
           completedAt: "2026-05-24T10:03:00.000Z",
           connectionIds: ["connection-2"],
         }),
@@ -140,11 +142,18 @@ describe("run chat Goal round divider userflow", () => {
     );
 
     const dividers = mounted.wrapper.findAll('[data-testid="goal-round-divider"]');
+    const blockedCard = dividers[1]?.find('[data-status="blocked"]');
+
     expect(dividers[0]?.text()).toContain("Goal 已完成");
     expect(dividers[0]?.text()).toContain("Pod 1");
     expect(dividers[1]?.text()).toContain("Goal 已 Blocked");
     expect(dividers[1]?.text()).toContain("Pod 2");
-    expect(dividers[1]?.text()).toContain("等待人工補充必要資料");
+    expect(dividers[1]?.text()).toContain(LONG_BLOCKED_REASON);
+    expect(blockedCard?.classes()).toContain("rounded-lg");
+    expect(blockedCard?.classes()).toContain("border-2");
+    expect(blockedCard?.classes()).toContain("text-left");
+    expect(blockedCard?.classes()).not.toContain("rounded-full");
+    expect(blockedCard?.classes()).not.toContain("text-center");
 
     const renderedText = mounted.wrapper.text();
     expect(renderedText.indexOf("第一輪回覆完成")).toBeLessThan(
@@ -153,6 +162,7 @@ describe("run chat Goal round divider userflow", () => {
     expect(renderedText.indexOf("第二輪回覆卡住")).toBeLessThan(
       renderedText.indexOf("Pod 2"),
     );
+    expect(renderedText).toContain(LONG_BLOCKED_REASON);
   });
 
   it("即時 RUN_GOAL_ROUND_DIVIDER event 會追加到目前 run chat", async () => {

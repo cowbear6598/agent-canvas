@@ -28,6 +28,7 @@ import {
   createStatusDelegate,
 } from "./workflowStatusDelegate.js";
 import { ChatExecutionStrategy } from "../executionStrategy.js";
+import { runExecutionService } from "./runExecutionService.js";
 import { getRunTranscriptWindow } from "./runTranscriptWindow.js";
 import { workflowAsyncDispatchService } from "./workflowAsyncDispatchService.js";
 import {
@@ -551,6 +552,10 @@ class WorkflowExecutionService extends LazyInitializable<ExecutionServiceDeps> {
       },
       {
         onComplete: (_canvasId, _podId) => this.onWorkflowChatComplete(params),
+        onBlocked: (_canvasId, _podId, reason) => {
+          runExecutionService.blockedPodInstance(runContext, targetPodId, reason);
+          params.delegate.scheduleNextInQueue(canvasId, targetPodId);
+        },
         onError: (_canvasId, _podId, error) =>
           this.onWorkflowChatError(params, error),
       },

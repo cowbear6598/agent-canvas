@@ -596,6 +596,37 @@ describe("runStore", () => {
         "pending",
       );
     });
+
+    it("已 blocked 的 pod instance 收到 error 更新時應保留 blocked", () => {
+      const store = useRunStore();
+      setRuns(store, [
+        createMockRun({
+          id: "run-1",
+          podInstances: [
+            createMockPodInstance({
+              podId: "pod-1",
+              status: "blocked",
+              errorMessage: "Goal 已 blocked：等待人工確認",
+              completedAt: "2026-06-04T10:00:00.000Z",
+            }),
+          ],
+        }),
+      ]);
+
+      store.updatePodInstanceStatus({
+        runId: "run-1",
+        podId: "pod-1",
+        status: "error",
+        errorMessage: "執行失敗",
+        completedAt: "2026-06-04T10:00:01.000Z",
+      });
+
+      expect(store.runsById.get("run-1")?.podInstances[0]).toMatchObject({
+        status: "blocked",
+        errorMessage: "執行失敗",
+        completedAt: "2026-06-04T10:00:01.000Z",
+      });
+    });
   });
 
   describe("removeRun", () => {

@@ -48,6 +48,14 @@ import {
 import { RunResourceLifecycleService } from "./runResourceLifecycleService.js";
 
 const MAX_RUNS_PER_CANVAS = 30;
+const GOAL_BLOCKED_STOP_WORKFLOW_MESSAGE =
+  "Goal 已標記為 blocked，workflow 已停止觸發下游 Pod";
+
+function shouldSettleDownstreamAsUnreachable(
+  status: RunPodInstanceStatus,
+): boolean {
+  return status === "skipped" || status === "error" || status === "blocked";
+}
 
 export function isInstanceUnreachable(
   instance: RunPodInstance,
@@ -73,7 +81,7 @@ export function isInstanceUnreachable(
     autoConns.length > 0 &&
     autoConns.some((c) => {
       const src = findInstance(c.sourcePodId);
-      return src && (src.status === "skipped" || src.status === "error");
+      return src ? shouldSettleDownstreamAsUnreachable(src.status) : false;
     });
 
   const directUnreachable =
@@ -81,7 +89,7 @@ export function isInstanceUnreachable(
     directConns.length > 0 &&
     directConns.every((c) => {
       const src = findInstance(c.sourcePodId);
-      return src && (src.status === "skipped" || src.status === "error");
+      return src ? shouldSettleDownstreamAsUnreachable(src.status) : false;
     });
 
   return { autoUnreachable, directUnreachable };
@@ -474,8 +482,8 @@ class RunExecutionService {
   /**
    * 在 evaluateRunStatus 前呼叫，偵測不可達路徑並直接更新 DB + emit WebSocket。
    * 不呼叫 settleAndSkipPath，避免遞迴觸發 evaluateRunStatus。
-   * Auto 路徑：ANY auto-triggerable source skipped/error → 不可達
-   * Direct 路徑：ALL direct sources skipped/error → 不可達
+   * Auto 路徑：ANY auto-triggerable source skipped/blocked/error → 不可達
+   * Direct 路徑：ALL direct sources skipped/blocked/error → 不可達
    *
    * 效能優化：
    * 1. 預先建立 Map<podId, instance> 索引，將 isInstanceUnreachable 內部的 find() O(N) 降為 O(1)。
@@ -570,6 +578,21 @@ class RunExecutionService {
     errorMessage: string,
   ): void {
     this.updateAndEmitPodInstanceStatus(runContext, podId, "error", {
+      evaluateRun: true,
+      errorMessage,
+    });
+  }
+
+  blockedPodInstance(
+    runContext: RunContext,
+    podId: string,
+    blockedReason: string | null,
+  ): void {
+    const errorMessage = blockedReason
+      ? `${GOAL_BLOCKED_STOP_WORKFLOW_MESSAGE}：${blockedReason}`
+      : GOAL_BLOCKED_STOP_WORKFLOW_MESSAGE;
+
+    this.updateAndEmitPodInstanceStatus(runContext, podId, "blocked", {
       evaluateRun: true,
       errorMessage,
     });

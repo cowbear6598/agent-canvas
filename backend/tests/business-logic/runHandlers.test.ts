@@ -25,6 +25,7 @@ import { resetStatements } from "../../src/database/statements.js";
 import { WebSocketResponseEvents } from "../../src/schemas/index.js";
 import {
   handleRunDelete,
+  handleRunLoadHistory,
   handleRunLoadPodMessages,
 } from "../../src/handlers/runHandlers.js";
 import { runStore } from "../../src/services/runStore.js";
@@ -155,6 +156,111 @@ describe("handleRunLoadPodMessages", () => {
             sourcePodIds: ["source-pod"],
             sourcePodNames: ["Source Pod"],
             connectionIds: ["conn-1"],
+          }),
+        ],
+      }),
+    );
+  });
+
+  it("timelineItems 應原樣回傳 blocked divider status 與 blockedReason", async () => {
+    const run = runStore.createRun(CANVAS_ID, "source-pod", "trigger");
+    const podId = "00000000-0000-0000-0000-000000000199";
+
+    runStore.addRunGoalRoundDivider({
+      runId: run.id,
+      podId,
+      sourcePodIds: ["source-pod"],
+      sourcePodNames: ["Source Pod"],
+      status: "blocked",
+      blockedReason: "等待人工確認",
+      completedAt: "2026-05-22T10:00:03.000Z",
+      connectionIds: ["conn-blocked-1"],
+      id: "00000000-0000-0000-0000-000000000004",
+    });
+
+    await handleRunLoadPodMessages(
+      CONNECTION_ID,
+      {
+        requestId: REQUEST_ID,
+        canvasId: CANVAS_ID,
+        runId: run.id,
+        podId,
+        limit: 10,
+      },
+      REQUEST_ID,
+    );
+
+    expect(emitSuccess).toHaveBeenCalledWith(
+      CONNECTION_ID,
+      WebSocketResponseEvents.RUN_POD_MESSAGES_LOADED,
+      expect.objectContaining({
+        requestId: REQUEST_ID,
+        success: true,
+        runId: run.id,
+        podId,
+        timelineItems: [
+          expect.objectContaining({
+            type: "goal-round-divider",
+            status: "blocked",
+            blockedReason: "等待人工確認",
+            sourcePodIds: ["source-pod"],
+            sourcePodNames: ["Source Pod"],
+            connectionIds: ["conn-blocked-1"],
+          }),
+        ],
+      }),
+    );
+  });
+});
+
+describe("handleRunLoadHistory", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetStatements();
+    initTestDb();
+    getDb()
+      .prepare(
+        "INSERT OR IGNORE INTO canvases (id, name, sort_index) VALUES (?, ?, ?)",
+      )
+      .run(CANVAS_ID, "run-handler-canvas", 0);
+    state.activeCanvasId = CANVAS_ID;
+  });
+
+  it("blocked pod status 應原樣回傳給前端 run history 契約", async () => {
+    const run = runStore.createRun(CANVAS_ID, "source-pod", "trigger");
+    const instance = runStore.createPodInstance(run.id, "pod-blocked");
+    runStore.updatePodInstanceStatus(
+      instance.id,
+      "blocked",
+      "Goal 已標記為 blocked，workflow 已停止觸發下游 Pod：等待人工確認",
+    );
+
+    await handleRunLoadHistory(
+      CONNECTION_ID,
+      {
+        requestId: REQUEST_ID,
+        canvasId: CANVAS_ID,
+      },
+      REQUEST_ID,
+    );
+
+    expect(emitSuccess).toHaveBeenCalledWith(
+      CONNECTION_ID,
+      WebSocketResponseEvents.RUN_HISTORY_RESULT,
+      expect.objectContaining({
+        requestId: REQUEST_ID,
+        success: true,
+        runs: [
+          expect.objectContaining({
+            id: run.id,
+            podInstances: expect.arrayContaining([
+              expect.objectContaining({
+                podId: "pod-blocked",
+                status: "blocked",
+                errorMessage:
+                  "Goal 已標記為 blocked，workflow 已停止觸發下游 Pod：等待人工確認",
+              }),
+            ]),
           }),
         ],
       }),

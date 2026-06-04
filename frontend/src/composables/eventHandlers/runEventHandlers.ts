@@ -28,6 +28,7 @@ const handleRunStatusChanged = createUnifiedHandler<BasePayload & RunStatusChang
 
 const handleRunPodStatusChanged = createUnifiedHandler<BasePayload & RunPodStatusChangedPayload>(
   (payload) => {
+    // blocked 事件會沿用 errorMessage 欄位帶阻塞原因，status 需原樣交給 store 判斷。
     useRunStore().updatePodInstanceStatus({
       runId: payload.runId,
       podId: payload.podId,

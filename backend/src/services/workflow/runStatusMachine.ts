@@ -95,12 +95,15 @@ export function decideRunTerminalStatus(
   );
   if (allDone) return "completed";
 
-  const hasError = instances.some((instance) => instance.status === "error");
+  const hasTerminalFailure = instances.some(
+    (instance) =>
+      instance.status === "error" || instance.status === "blocked",
+  );
   const hasInProgress = instances.some((instance) =>
     IN_PROGRESS_STATUSES.has(instance.status),
   );
 
-  if (hasError && !hasInProgress) return "error";
+  if (hasTerminalFailure && !hasInProgress) return "error";
   return null;
 }
 

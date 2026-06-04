@@ -37,7 +37,6 @@ import {
   nextNoProgressCount,
 } from "../goalCompletionGate.js";
 import { runStore } from "../runStore.js";
-import { UserVisibleError } from "../../utils/userVisibleError.js";
 
 export interface GoalRoundDividerContext {
   sourcePodIds: string[];
@@ -63,6 +62,11 @@ export interface StreamingChatExecutorCallbacks {
     canvasId: string,
     podId: string,
     error: Error,
+  ) => void | Promise<void>;
+  onBlocked?: (
+    canvasId: string,
+    podId: string,
+    reason: string | null,
   ) => void | Promise<void>;
   onAborted?: (
     canvasId: string,
@@ -319,8 +323,6 @@ interface ChatTurnOutcome {
 const CLIENT_SAFE_BLOCKED_REASON_MAX_LENGTH = 240;
 const PENDING_GOAL_UNRECOVERABLE_PROVIDER_ERROR_MESSAGE =
   "Provider 發生不可恢復錯誤，Goal 尚未完成";
-const GOAL_BLOCKED_STOP_WORKFLOW_MESSAGE =
-  "Goal 已標記為 blocked，workflow 已停止觸發下游 Pod";
 
 function createClientSafeBlockedReason(reason: string | null): string | null {
   const normalized = reason
@@ -339,26 +341,17 @@ function createClientSafeBlockedReason(reason: string | null): string | null {
     : normalized;
 }
 
-function createGoalBlockedStopWorkflowError(reason: string | null): Error {
-  const blockedReason = createClientSafeBlockedReason(reason);
-  const errorMessage = blockedReason
-    ? `${GOAL_BLOCKED_STOP_WORKFLOW_MESSAGE}：${blockedReason}`
-    : GOAL_BLOCKED_STOP_WORKFLOW_MESSAGE;
-
-  return new UserVisibleError(errorMessage);
-}
-
 async function stopWorkflowForBlockedGoal(
   options: StreamingChatExecutorOptions,
   callbacks: StreamingChatExecutorCallbacks | undefined,
   reason: string | null,
 ): Promise<void> {
   persistGoalRoundDivider(options);
-  if (callbacks?.onError) {
-    await callbacks.onError(
+  if (callbacks?.onBlocked) {
+    await callbacks.onBlocked(
       options.canvasId,
       options.podId,
-      createGoalBlockedStopWorkflowError(reason),
+      createClientSafeBlockedReason(reason),
     );
   }
 }

@@ -1,4 +1,8 @@
-import type { WorkflowRun, RunPodInstance } from "../services/runStore.js";
+import type {
+  WorkflowRun,
+  RunPodInstance,
+  RunPodInstanceStatus,
+} from "../services/runStore.js";
 import type {
   PersistedMessage,
   PersistedRunGoalRoundDivider,
@@ -47,7 +51,7 @@ export interface RunPodStatusChangedPayload {
   runId: string;
   canvasId: string;
   podId: string;
-  status: string;
+  status: RunPodInstanceStatus;
   errorMessage?: string;
   lastResponseSummary?: string;
   triggeredAt?: string;

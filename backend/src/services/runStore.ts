@@ -27,6 +27,7 @@ export type RunPodInstanceStatus =
   | "queued"
   | "waiting"
   | "completed"
+  | "blocked"
   | "error"
   | "skipped";
 
@@ -53,6 +54,7 @@ export const TRIGGERABLE_STATUSES = new Set<RunPodInstanceStatus>([
 ]);
 export const TERMINAL_POD_STATUSES = new Set<RunPodInstanceStatus>([
   "completed",
+  "blocked",
   "error",
   "skipped",
 ]);

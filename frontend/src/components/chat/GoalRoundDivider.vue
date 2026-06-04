@@ -31,13 +31,10 @@ const statusLabel = computed(() =>
   ),
 );
 
-const blockedReasonSummary = computed(() => {
+const blockedReason = computed(() => {
   if (!isBlocked.value) return null;
 
-  const reason = props.divider.blockedReason?.trim().replace(/\s+/g, " ");
-  if (!reason) return null;
-
-  return reason.length > 96 ? `${reason.slice(0, 96)}...` : reason;
+  return props.divider.blockedReason?.trim() || null;
 });
 </script>
 
@@ -49,7 +46,12 @@ const blockedReasonSummary = computed(() => {
     <div class="h-px flex-1 bg-border" />
 
     <div
-      class="max-w-[82%] rounded-full border border-doodle-ink bg-card px-3 py-1.5 text-center shadow-[2px_2px_0_var(--doodle-ink)]"
+      class="max-w-[82%] border border-doodle-ink bg-card shadow-[2px_2px_0_var(--doodle-ink)]"
+      :class="
+        isBlocked
+          ? 'rounded-lg border-2 px-4 py-2 text-left'
+          : 'rounded-full px-3 py-1.5 text-center'
+      "
       :data-status="divider.status"
     >
       <div class="flex items-center justify-center gap-2 text-xs font-semibold">
@@ -71,12 +73,12 @@ const blockedReasonSummary = computed(() => {
       </div>
 
       <div
-        v-if="blockedReasonSummary"
-        class="mt-1 max-w-full truncate text-[11px] text-amber-700"
+        v-if="blockedReason"
+        class="mt-1 max-w-full whitespace-pre-wrap break-words text-[11px] leading-5 text-amber-700"
       >
         {{
           t("chat.goalRoundDivider.blockedReason", {
-            reason: blockedReasonSummary,
+            reason: blockedReason,
           })
         }}
       </div>

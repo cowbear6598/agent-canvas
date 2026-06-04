@@ -1,0 +1,85 @@
+feature: blocked-goal-ui-adjustments
+side: backend
+approved: true
+phases:
+  - id: P1
+    title: Pod blocked 狀態契約
+    parallel: false
+    verification:
+      - bun run style
+      - bun run test
+    done: true
+    items:
+      - id: P1.A
+        title: Run pod status 型別與持久化
+        tasks:
+          - id: P1.A.t1
+            text: '擴充 `backend/src/services/runStore.ts` 的 `RunPodInstanceStatus` 與相關 terminal/in-progress set，加入 `blocked` 作為 Pod instance 的正式狀態'
+            completed: true
+            last_files_changed:
+              - backend/src/services/runStore.ts
+          - id: P1.A.t2
+            text: '調整 `backend/src/types/run.ts` 的公開 `RunPodStatusChangedPayload` 契約，讓 websocket payload 的 pod status 與後端 `RunPodInstanceStatus` 對齊，而不是維持鬆散的 `string`'
+            completed: true
+            last_files_changed:
+              - backend/src/types/run.ts
+      - id: P1.B
+        title: Workflow 狀態機一致性
+        tasks:
+          - id: P1.B.t1
+            text: '更新 `backend/src/services/workflow/runStatusMachine.ts`，定義 blocked pod 屬於 terminal failure，並讓 run-level 狀態在 blocked 結束後仍能收斂到既有 `error` run 狀態'
+            completed: true
+            last_files_changed:
+              - backend/src/services/workflow/runStatusMachine.ts
+          - id: P1.B.t2
+            text: '調整 `backend/src/services/workflow/runExecutionService.ts` 的不可達路徑與下游結清判斷，讓上游 blocked 與 error 一樣會推動 downstream auto、branch、direct pathway 結清，而不是卡在等待中'
+            completed: true
+            last_files_changed:
+              - backend/src/services/workflow/runExecutionService.ts
+          - id: P1.B.t3
+            text: '更新 `backend/tests/business-logic/runStatusMachine.test.ts` 與 `backend/tests/business-logic/runExecutionService.test.ts`，覆蓋 blocked pod 的 run-level 收斂與 downstream pathway 結清行為'
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/runStatusMachine.test.ts
+              - backend/tests/business-logic/runExecutionService.test.ts
+
+  - id: P2
+    title: Goal blocked 執行路徑
+    parallel: false
+    verification:
+      - bun run style
+      - bun run test
+    done: true
+    items:
+      - id: P2.A
+        title: Streaming executor blocked 分流
+        tasks:
+          - id: P2.A.t1
+            text: '調整 `backend/src/services/claude/streamingChatExecutor.ts` 的 blocked 停止路徑，保留 blocked divider 持久化與廣播，但不要再把 blocked 透過一般 `onError` 路徑降級成 pod instance error'
+            completed: true
+            last_files_changed:
+              - backend/src/services/claude/streamingChatExecutor.ts
+          - id: P2.A.t2
+            text: '在 `backend/src/services/workflow/runExecutionService.ts` 新增或收斂 blocked 專用的 pod instance 更新入口，統一寫入 blocked status、廣播 `RUN_POD_STATUS_CHANGED`，並保留使用者可見 blocked 訊息'
+            completed: true
+            last_files_changed:
+              - backend/src/services/workflow/runExecutionService.ts
+          - id: P2.A.t3
+            text: '檢查 `backend/src/utils/runChatHelpers.ts` 的 run mode callback wiring，讓一般失敗仍走 `errorPodInstance()`，但 Goal blocked 改走新的 blocked pod status 路徑'
+            completed: true
+            last_files_changed:
+              - backend/src/utils/runChatHelpers.ts
+              - backend/src/services/workflow/workflowExecutionService.ts
+      - id: P2.B
+        title: Blocked 契約回歸測試
+        tasks:
+          - id: P2.B.t1
+            text: '更新 `backend/tests/business-logic/streamingChatExecutor.test.ts`，確認 Goal blocked 仍會寫入 blocked divider 與使用者可見訊息，但 source pod instance 狀態改為 blocked 而不是 error'
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/streamingChatExecutor.test.ts
+          - id: P2.B.t2
+            text: '補強 `backend/tests/business-logic/runHandlers.test.ts`，確認載入 run history / websocket payload 時 blocked pod status 會原樣送到前端契約'
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/runHandlers.test.ts

@@ -78,6 +78,9 @@ const realRegisterActiveStream =
   runExecutionService.registerActiveStream.bind(runExecutionService);
 const realUnregisterActiveStream =
   runExecutionService.unregisterActiveStream.bind(runExecutionService);
+const realGetPodInstance = runStore.getPodInstance.bind(runStore);
+const realUpdatePodInstanceStatus =
+  runStore.updatePodInstanceStatus.bind(runStore);
 
 function asMock(fn: unknown): Mock<any> {
   return fn as Mock<any>;
@@ -855,13 +858,24 @@ describe("executeStreamingChat", () => {
       },
     );
 
-    it("Run mode 中 Goal blocked 應寫入 blocked divider、觸發 onError，且不觸發 auto/branch/direct 下游完成 callback", async () => {
+    it("Run mode 中 Goal blocked 應寫入 blocked divider、保留使用者可見訊息，且 source pod instance 狀態為 blocked", async () => {
       const order: string[] = [];
       const goal = {
         todos: [{ id: "todo-1", text: "需要人工確認" }],
       };
       const pod = insertClaudePod({ goal });
-      ensureGoalRuntime(pod, defaultRunContext);
+      const run = runStore.createRun(canvasId, "source-1", "trigger");
+      const runContext: RunContext = {
+        runId: run.id,
+        canvasId,
+        sourcePodId: "source-1",
+      };
+      ensureGoalRuntime(pod, runContext);
+      runStore.createPodInstance(run.id, pod.id, "pending", "pending");
+      vi.spyOn(runStore, "getPodInstance").mockImplementation(realGetPodInstance);
+      vi.spyOn(runStore, "updatePodInstanceStatus").mockImplementation(
+        realUpdatePodInstanceStatus,
+      );
       const checkAndTriggerSpy = vi
         .spyOn(workflowExecutionService, "checkAndTriggerWorkflows")
         .mockResolvedValue(undefined);
@@ -916,10 +930,11 @@ describe("executeStreamingChat", () => {
 
       const onComplete = vi.fn(() => {
         order.push("auto/branch/direct:downstream");
-        onRunChatComplete(defaultRunContext, canvasId, pod.id);
+        onRunChatComplete(runContext, canvasId, pod.id);
       });
-      const onError = vi.fn(() => {
-        order.push("error");
+      const onBlocked = vi.fn((_canvasId, _podId, reason) => {
+        order.push("blocked");
+        runExecutionService.blockedPodInstance(runContext, pod.id, reason);
       });
 
       await executeStreamingChat(
@@ -928,7 +943,7 @@ describe("executeStreamingChat", () => {
           podId: pod.id,
           message,
           abortable: false,
-          strategy: makeStrategy(),
+          strategy: new ChatExecutionStrategy(canvasId, runContext),
           goalRoundDivider: {
             sourcePodIds: ["source-1"],
             sourcePodNames: ["來源 Pod"],
@@ -939,12 +954,12 @@ describe("executeStreamingChat", () => {
             ],
           },
         },
-        { onComplete, onError },
+        { onComplete, onBlocked },
       );
 
       expect(runStore.addRunGoalRoundDivider).toHaveBeenCalledWith(
         expect.objectContaining({
-          runId: defaultRunContext.runId,
+          runId: run.id,
           podId: pod.id,
           sourcePodIds: ["source-1"],
           sourcePodNames: ["來源 Pod"],
@@ -957,11 +972,24 @@ describe("executeStreamingChat", () => {
           ],
         }),
       );
-      expect(onError).toHaveBeenCalledWith(
+      expect(onBlocked).toHaveBeenCalledWith(
         canvasId,
         pod.id,
+        "等待人工確認",
+      );
+      expect(runStore.getPodInstance(run.id, pod.id)).toMatchObject({
+        status: "blocked",
+        errorMessage:
+          "Goal 已標記為 blocked，workflow 已停止觸發下游 Pod：等待人工確認",
+      });
+      expect(socketService.emitToCanvas).toHaveBeenCalledWith(
+        canvasId,
+        WebSocketResponseEvents.RUN_POD_STATUS_CHANGED,
         expect.objectContaining({
-          message:
+          runId: run.id,
+          podId: pod.id,
+          status: "blocked",
+          errorMessage:
             "Goal 已標記為 blocked，workflow 已停止觸發下游 Pod：等待人工確認",
         }),
       );
@@ -970,7 +998,7 @@ describe("executeStreamingChat", () => {
       expect(order).toEqual([
         "divider:blocked:persist",
         "divider:blocked:broadcast",
-        "error",
+        "blocked",
       ]);
     });
 
@@ -1241,7 +1269,7 @@ describe("executeStreamingChat", () => {
       });
 
       const onComplete = vi.fn();
-      const onError = vi.fn();
+      const onBlocked = vi.fn();
       await executeStreamingChat(
         {
           canvasId,
@@ -1250,7 +1278,7 @@ describe("executeStreamingChat", () => {
           abortable: false,
           strategy: makeStrategy(),
         },
-        { onComplete, onError },
+        { onComplete, onBlocked },
       );
 
       // 第一輪 + 連續 noProgressLimit (2) 輪 retry = 共 3 輪 chat
@@ -1264,13 +1292,11 @@ describe("executeStreamingChat", () => {
       expect(snapshot?.state.blockedReason).toContain("未推進");
       // force_block 會停止 workflow，不再觸發下游
       expect(onComplete).not.toHaveBeenCalled();
-      expect(onError).toHaveBeenCalledTimes(1);
-      expect(onError).toHaveBeenCalledWith(
+      expect(onBlocked).toHaveBeenCalledTimes(1);
+      expect(onBlocked).toHaveBeenCalledWith(
         canvasId,
         pod.id,
-        expect.objectContaining({
-          message: expect.stringContaining("Goal 已標記為 blocked"),
-        }),
+        expect.stringContaining("未推進"),
       );
     });
 

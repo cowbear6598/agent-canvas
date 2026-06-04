@@ -217,7 +217,13 @@ export const useRunStore = defineStore("run", {
       );
       if (!podInstance) return;
 
-      podInstance.status = payload.status;
+      const shouldPreserveBlockedStatus =
+        podInstance.status === "blocked" && payload.status === "error";
+
+      if (!shouldPreserveBlockedStatus) {
+        podInstance.status = payload.status;
+      }
+
       if (payload.lastResponseSummary !== undefined) {
         podInstance.lastResponseSummary = payload.lastResponseSummary;
       }

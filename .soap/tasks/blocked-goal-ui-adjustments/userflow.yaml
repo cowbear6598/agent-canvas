@@ -1,0 +1,28 @@
+feature: blocked-goal-ui-adjustments
+approved: true
+scenarios:
+  - id: F1
+    scenario: 使用者在 Chat Modal 查看被 blocked 的 Goal 資訊
+    given:
+      - 使用者已開啟某個 Pod 的 Chat Modal
+      - 該 Pod 的 Goal 已進入 blocked 狀態
+      - blocked 原因內容較長
+    when:
+      - 使用者查看 Goal blocked 提示卡片
+    then:
+      - 提示卡片呈現為偏方形而不是膠囊狀
+      - 卡片內完整顯示 blocked 原因
+      - 使用者不需要額外操作就能看完原因內容
+
+  - id: F2
+    scenario: 使用者在 Pod 執行清單辨識 blocked 狀態
+    given:
+      - 使用者已開啟某次執行的 Pod 清單
+      - 清單內有 Pod 因 Goal blocked 而停止
+      - 清單內也可能有其他 Pod 處於一般錯誤狀態
+    when:
+      - 使用者查看各 Pod 的狀態圖示
+    then:
+      - Goal blocked 的 Pod 顯示獨立圖示
+      - Goal blocked 的圖示與一般錯誤圖示明顯不同
+      - 使用者可以直接辨識哪一個 Pod 是 blocked 而不是 error

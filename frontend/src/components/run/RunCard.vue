@@ -1,21 +1,52 @@
 <script setup lang="ts">
-import { Trash2 } from 'lucide-vue-next'
-import { truncateMessage, formatRelativeTime } from '@/utils/runFormatUtils'
-import { RUN_TRIGGER_MESSAGE_PREVIEW_LENGTH } from '@/lib/constants'
-import RunStatusIcon from './RunStatusIcon.vue'
-import RunPodInstanceItem from './RunPodInstanceItem.vue'
-import type { WorkflowRun } from '@/types/run'
+import { computed } from "vue";
+import { Trash2 } from "lucide-vue-next";
+import { truncateMessage, formatRelativeTime } from "@/utils/runFormatUtils";
+import { RUN_TRIGGER_MESSAGE_PREVIEW_LENGTH } from "@/lib/constants";
+import RunStatusIcon from "./RunStatusIcon.vue";
+import RunPodInstanceItem from "./RunPodInstanceItem.vue";
+import type { RunPodStatus, WorkflowRun } from "@/types/run";
 
-defineProps<{
-  run: WorkflowRun
-  isExpanded: boolean
-}>()
+const props = defineProps<{
+  run: WorkflowRun;
+  isExpanded: boolean;
+}>();
 
 const emit = defineEmits<{
-  'toggle-expand': []
-  delete: []
-  'open-pod-chat': [runId: string, podId: string, podName: string]
-}>()
+  "toggle-expand": [];
+  delete: [];
+  "open-pod-chat": [runId: string, podId: string, podName: string];
+}>();
+
+const IN_PROGRESS_POD_STATUSES = new Set<RunPodStatus>([
+  "pending",
+  "running",
+  "summarizing",
+  "deciding",
+  "queued",
+  "waiting",
+]);
+
+const displayStatus = computed(() => {
+  const podStatuses = props.run.podInstances.map((instance) => instance.status);
+
+  if (
+    props.run.status === "running" ||
+    podStatuses.some((status) => IN_PROGRESS_POD_STATUSES.has(status))
+  ) {
+    return "running";
+  }
+
+  if (podStatuses.includes("blocked")) {
+    return "blocked";
+  }
+
+  if (podStatuses.includes("error")) {
+    return "error";
+  }
+
+  return props.run.status;
+});
 </script>
 
 <template>
@@ -25,7 +56,7 @@ const emit = defineEmits<{
   >
     <div class="flex items-center justify-between">
       <span class="text-sm font-semibold">{{ run.sourcePodName }}</span>
-      <RunStatusIcon :status="run.status" />
+      <RunStatusIcon :status="displayStatus" />
     </div>
 
     <p class="text-xs text-muted-foreground truncate mt-1">

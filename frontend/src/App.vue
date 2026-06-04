@@ -72,10 +72,13 @@ const activeRunChatPodName = computed(() => {
   return instance?.podName ?? "";
 });
 
-const activeRunChatRunStatus = computed(() => {
+const activeRunChatPodStatus = computed(() => {
   if (!runStore.activeRunChatModal) return "running" as const;
   const run = runStore.getRunById(runStore.activeRunChatModal.runId);
-  return run?.status ?? "running";
+  const instance = run?.podInstances.find(
+    (i) => i.podId === runStore.activeRunChatModal!.podId,
+  );
+  return instance?.status ?? "running";
 });
 
 useCopyPaste();
@@ -202,7 +205,7 @@ onUnmounted(() => {
       :run-id="runStore.activeRunChatModal.runId"
       :pod-id="runStore.activeRunChatModal.podId"
       :pod-name="activeRunChatPodName"
-      :run-status="activeRunChatRunStatus"
+      :pod-status="activeRunChatPodStatus"
       @close="runStore.closeRunChatModal()"
     />
 

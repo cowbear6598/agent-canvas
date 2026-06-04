@@ -1,0 +1,82 @@
+feature: blocked-goal-ui-adjustments
+side: frontend
+approved: true
+phases:
+  - id: P1
+    title: Chat Modal blocked 卡片呈現
+    parallel: false
+    verification:
+      - bun run style
+      - bun run test
+    done: true
+    items:
+      - id: P1.A
+        title: Goal divider 元件調整
+        tasks:
+          - id: P1.A.t1
+            text: '調整 `frontend/src/components/chat/GoalRoundDivider.vue` 的 blocked 卡片容器樣式，移除 `rounded-full` 膠囊外觀，改成與現有 doodle 邊框語言一致的偏方形卡片'
+            completed: true
+            last_files_changed:
+              - frontend/src/components/chat/GoalRoundDivider.vue
+          - id: P1.A.t2
+            text: '重寫 `GoalRoundDivider.vue` 的 blocked 原因顯示邏輯，移除 96 字裁切與 `truncate` 單行省略，讓長原因可在卡片內完整換行顯示'
+            completed: true
+            last_files_changed:
+              - frontend/src/components/chat/GoalRoundDivider.vue
+      - id: P1.B
+        title: Chat Modal userflow 覆蓋
+        tasks:
+          - id: P1.B.t1
+            text: '更新 `frontend/tests/userflows/chat/runGoalRoundDividerUserFlow.test.ts`，新增長 blocked reason 案例，驗證 Chat Modal 仍會完整渲染原因內容而不是省略號'
+            completed: true
+            last_files_changed:
+              - frontend/tests/userflows/chat/runGoalRoundDividerUserFlow.test.ts
+          - id: P1.B.t2
+            text: '在同一組 `runGoalRoundDividerUserFlow` 測試中補上 blocked divider 的樣式斷言，確認 rendered card 不再帶出膠囊式 class 語意'
+            completed: true
+            last_files_changed:
+              - frontend/tests/userflows/chat/runGoalRoundDividerUserFlow.test.ts
+
+  - id: P2
+    title: Pod blocked 圖示與狀態型別
+    parallel: false
+    verification:
+      - bun run style
+      - bun run test
+    done: true
+    items:
+      - id: P2.A
+        title: Run 狀態 icon 映射
+        tasks:
+          - id: P2.A.t1
+            text: '擴充 `frontend/src/types/run.ts` 的 `RunPodStatus`，加入 `blocked` 狀態，讓 Pod instance 可用型別安全方式區分 blocked 與 error'
+            completed: true
+            last_files_changed:
+              - frontend/src/types/run.ts
+          - id: P2.A.t2
+            text: '調整 `frontend/src/components/run/RunStatusIcon.vue`，為 `blocked` 映射獨立的一隻手阻擋語意 icon，並保留 `error` 使用既有錯誤 icon'
+            completed: true
+            last_files_changed:
+              - frontend/src/components/run/RunStatusIcon.vue
+          - id: P2.A.t3
+            text: '檢查 `frontend/src/components/run/RunPodInstanceItem.vue`、`frontend/src/components/run/RunChatModal.vue` 與相關 run UI，確認新增 `blocked` pod status 後不會誤用到 run-level status 顯示'
+            completed: true
+            last_files_changed:
+              - frontend/src/components/run/RunChatModal.vue
+              - frontend/src/App.vue
+      - id: P2.B
+        title: 前端事件與 store 契約
+        tasks:
+          - id: P2.B.t1
+            text: '更新 `frontend/src/types/websocket/responses.ts`、`frontend/src/composables/eventHandlers/runEventHandlers.ts` 與 `frontend/src/stores/run/runStore.ts` 對 `RUN_POD_STATUS_CHANGED` 的型別與資料流，讓 blocked status 能從 websocket 事件正確進入 store'
+            completed: true
+            last_files_changed:
+              - frontend/src/types/websocket/responses.ts
+              - frontend/src/composables/eventHandlers/runEventHandlers.ts
+              - frontend/src/stores/run/runStore.ts
+          - id: P2.B.t2
+            text: '更新 `frontend/tests/business-logic/composables/events/runEventHandlers.test.ts` 與 `frontend/tests/business-logic/stores/run/runStore.test.ts`，覆蓋 websocket 收到 blocked pod status 時 store 會保留 blocked 而不是退回 error 的情境'
+            completed: true
+            last_files_changed:
+              - frontend/tests/business-logic/composables/events/runEventHandlers.test.ts
+              - frontend/tests/business-logic/stores/run/runStore.test.ts

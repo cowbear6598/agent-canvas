@@ -88,6 +88,9 @@ export async function launchRun(params: LaunchRunParams): Promise<RunContext> {
     },
     {
       onComplete: () => onComplete(runContext),
+      onBlocked: (_canvasId, _podId, reason) => {
+        runExecutionService.blockedPodInstance(runContext, podId, reason);
+      },
       onError: (_canvasId, _podId, error) => {
         logger.error("Run", "Error", `Pod ${podId} 執行失敗: ${error.message}`);
         runExecutionService.errorPodInstance(

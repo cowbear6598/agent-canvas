@@ -206,4 +206,58 @@ describe("runEventHandlers", () => {
 
     expect(runStore.runsById.has("run-1")).toBe(true);
   });
+
+  it("RUN_POD_STATUS_CHANGED 先收到 blocked 後又收到 error 時應保留 blocked", () => {
+    const canvasStore = useCanvasStore();
+    const runStore = useRunStore();
+    canvasStore.activeCanvasId = "canvas-1";
+    runStore.runsById.set("run-1", {
+      id: "run-1",
+      canvasId: "canvas-1",
+      sourcePodId: "pod-1",
+      sourcePodName: "Pod 1",
+      triggerMessage: "Hello",
+      status: "running",
+      podInstances: [
+        {
+          id: "pi-1",
+          runId: "run-1",
+          podId: "pod-1",
+          podName: "Pod 1",
+          status: "running",
+          autoPathwaySettled: "not-applicable",
+          directPathwaySettled: "not-applicable",
+        },
+      ],
+      createdAt: new Date().toISOString(),
+    });
+
+    const statusChangedHandler = getRunEventListeners().find(
+      (listener) =>
+        listener.event === WebSocketResponseEvents.RUN_POD_STATUS_CHANGED,
+    )?.handler;
+
+    statusChangedHandler?.({
+      canvasId: "canvas-1",
+      runId: "run-1",
+      podId: "pod-1",
+      status: "blocked",
+      errorMessage: "Goal 已 blocked：等待人工確認",
+      completedAt: "2026-06-04T10:00:00.000Z",
+    });
+    statusChangedHandler?.({
+      canvasId: "canvas-1",
+      runId: "run-1",
+      podId: "pod-1",
+      status: "error",
+      errorMessage: "執行失敗",
+      completedAt: "2026-06-04T10:00:01.000Z",
+    });
+
+    expect(runStore.runsById.get("run-1")?.podInstances[0]).toMatchObject({
+      status: "blocked",
+      errorMessage: "執行失敗",
+      completedAt: "2026-06-04T10:00:01.000Z",
+    });
+  });
 });

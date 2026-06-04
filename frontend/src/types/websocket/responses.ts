@@ -574,6 +574,7 @@ export interface RunPodStatusChangedPayload {
   podId: string;
   status: RunPodStatus;
   lastResponseSummary?: string;
+  /** blocked 與 error 都可能帶錯誤訊息，UI 需依 status 判斷而非僅靠此欄位。 */
   errorMessage?: string;
   triggeredAt?: string;
   completedAt?: string;

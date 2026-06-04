@@ -804,6 +804,26 @@ describe("RunExecutionService", () => {
       expect(runStore.getRun(run.id)!.status).toBe("error");
     });
 
+    it("有 blocked 且無進行中的 instance → run 狀態也應收斂為 error", () => {
+      const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "測試");
+
+      const instA = runStore.createPodInstance(run.id, "pod-a", "pending");
+      runStore.updatePodInstanceStatus(instA.id, "running");
+
+      const instB = runStore.createPodInstance(run.id, "pod-b", "settled");
+      runStore.updatePodInstanceStatus(instB.id, "blocked", "等待人工確認");
+
+      const ctx = makeRunContext({ runId: run.id });
+      runExecutionService.settlePodTrigger(ctx, "pod-a", "auto");
+
+      expect(runStore.getRun(run.id)!.status).toBe("error");
+      expect(socketService.emitToCanvas).toHaveBeenCalledWith(
+        CANVAS_ID,
+        WebSocketResponseEvents.RUN_STATUS_CHANGED,
+        expect.objectContaining({ status: "error" }),
+      );
+    });
+
     it("有 pending instance 時不更新 run 狀態", () => {
       const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "測試");
 
@@ -937,6 +957,72 @@ describe("RunExecutionService", () => {
       const ctx = makeRunContext({ runId: run.id });
 
       runExecutionService.errorPodInstance(ctx, SOURCE_POD_ID, "Goal 已 blocked");
+
+      const downstream = runStore.getPodInstance(run.id, targetPodId);
+      expect(downstream?.status).toBe("skipped");
+      expect(downstream?.autoPathwaySettled).toBe("settled");
+      expect(downstream?.directPathwaySettled).toBe("settled");
+      expect(runStore.getRun(run.id)?.status).toBe("error");
+      expect(socketService.emitToCanvas).toHaveBeenCalledWith(
+        CANVAS_ID,
+        WebSocketResponseEvents.RUN_POD_STATUS_CHANGED,
+        expect.objectContaining({
+          podId: targetPodId,
+          status: "skipped",
+          autoPathwaySettled: "settled",
+          directPathwaySettled: "settled",
+        }),
+      );
+    });
+
+    it("source instance 真正為 blocked 時，下游 auto/branch/direct pathway 也應結清為 skipped", () => {
+      const helperPodId = "pod-helper";
+      const targetPodId = "pod-downstream";
+      const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "測試");
+      const sourceInstance = runStore.createPodInstance(
+        run.id,
+        SOURCE_POD_ID,
+        "settled",
+        "not-applicable",
+      );
+      runStore.updatePodInstanceStatus(
+        sourceInstance.id,
+        "blocked",
+        "等待人工確認",
+      );
+
+      const helperInstance = runStore.createPodInstance(
+        run.id,
+        helperPodId,
+        "pending",
+      );
+      runStore.updatePodInstanceStatus(helperInstance.id, "running");
+      runStore.createPodInstance(run.id, targetPodId, "pending", "pending");
+
+      insertConnection(
+        CANVAS_ID,
+        SOURCE_POD_ID,
+        targetPodId,
+        "auto",
+        "conn-auto-source-blocked",
+      );
+      insertConnection(
+        CANVAS_ID,
+        SOURCE_POD_ID,
+        targetPodId,
+        "branch",
+        "conn-branch-source-blocked",
+      );
+      insertConnection(
+        CANVAS_ID,
+        SOURCE_POD_ID,
+        targetPodId,
+        "direct",
+        "conn-direct-source-blocked",
+      );
+
+      const ctx = makeRunContext({ runId: run.id });
+      runExecutionService.errorPodInstance(ctx, helperPodId, "觸發 run 狀態重算");
 
       const downstream = runStore.getPodInstance(run.id, targetPodId);
       expect(downstream?.status).toBe("skipped");

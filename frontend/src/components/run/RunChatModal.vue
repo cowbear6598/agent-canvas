@@ -4,14 +4,14 @@ import { X } from "lucide-vue-next";
 import { useRunStore } from "@/stores/run/runStore";
 import ChatMessages from "@/components/chat/ChatMessages.vue";
 import RunStatusIcon from "./RunStatusIcon.vue";
-import type { RunStatus } from "@/types/run";
+import type { RunPodStatus } from "@/types/run";
 import { useEscapeClose } from "@/composables/useEscapeClose";
 
 const props = defineProps<{
   runId: string;
   podId: string;
   podName: string;
-  runStatus: RunStatus;
+  podStatus: RunPodStatus;
 }>();
 
 const emit = defineEmits<{
@@ -66,7 +66,7 @@ useEscapeClose(() => {
           class="flex items-center justify-between p-4 border-b-2 border-doodle-ink"
         >
           <div class="flex items-center gap-2">
-            <RunStatusIcon :status="runStatus" />
+            <RunStatusIcon :status="podStatus" />
             <span class="font-semibold">{{ podName }}</span>
             <span class="text-xs text-muted-foreground">{{
               $t("run.chatModal.historyBadge")

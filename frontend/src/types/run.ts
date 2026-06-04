@@ -2,7 +2,7 @@ import type { Message } from "./chat";
 
 export type RunStatus = 'running' | 'completed' | 'error'
 
-export type RunPodStatus = 'pending' | 'running' | 'summarizing' | 'deciding' | 'queued' | 'waiting' | 'completed' | 'error' | 'skipped'
+export type RunPodStatus = 'pending' | 'running' | 'summarizing' | 'deciding' | 'queued' | 'waiting' | 'completed' | 'blocked' | 'error' | 'skipped'
 
 export type RunGoalRoundDividerStatus = "completed" | "blocked";
 

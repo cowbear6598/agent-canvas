@@ -56,10 +56,28 @@ describe("runStatusMachine", () => {
       ).toBe("error");
     });
 
+    it("有 blocked 且沒有進行中 pod 時 run 決策也收斂為 error", () => {
+      expect(
+        decideRunTerminalStatus([
+          { status: "blocked" },
+          { status: "completed" },
+        ]),
+      ).toBe("error");
+    });
+
     it("有 error 但仍有進行中 pod 時 run 不進入終態", () => {
       expect(
         decideRunTerminalStatus([
           { status: "error" },
+          { status: "summarizing" },
+        ]),
+      ).toBeNull();
+    });
+
+    it("有 blocked 但仍有進行中 pod 時 run 不進入終態", () => {
+      expect(
+        decideRunTerminalStatus([
+          { status: "blocked" },
           { status: "summarizing" },
         ]),
       ).toBeNull();
