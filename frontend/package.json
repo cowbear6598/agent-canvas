@@ -4,7 +4,7 @@
   "version": "2.2.1",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "VITE_BACKEND_DEV_PORT=3101 vite",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "style": "vue-tsc --noEmit && eslint src --ext .ts,.vue",

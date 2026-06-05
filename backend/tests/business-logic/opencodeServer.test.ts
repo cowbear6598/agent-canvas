@@ -63,6 +63,7 @@ describe("startOpencodeServer — 成功情境", () => {
     await startOpencodeServer();
 
     expect(launcher).toHaveBeenCalledWith({
+      port: 4096,
       timeout: 30000,
       config: {
         mcp: {},

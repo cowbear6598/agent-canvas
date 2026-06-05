@@ -22,6 +22,7 @@ function validateGitLabUrl(url: string | undefined): void {
 
 interface Config {
   port: number;
+  opencodeServerPort: number;
   nodeEnv: string;
   appDataRoot: string;
   canvasRoot: string;
@@ -61,8 +62,23 @@ interface Config {
   getCanvasDataPath(canvasName: string): string;
 }
 
+function parsePortOrThrow(
+  rawValue: string,
+  envName: string,
+): number {
+  const port = parseInt(rawValue, 10);
+  if (isNaN(port) || port < 1 || port > 65535) {
+    throw new Error(`${envName} 必須是 1 到 65535 之間的有效數字`);
+  }
+  return port;
+}
+
 function loadConfig(): Config {
-  const port = parseInt(process.env.PORT || "3001", 10);
+  const port = parsePortOrThrow(process.env.PORT || "3001", "PORT");
+  const opencodeServerPort = parsePortOrThrow(
+    process.env.AGENT_CANVAS_OPENCODE_SERVER_PORT || "4096",
+    "AGENT_CANVAS_OPENCODE_SERVER_PORT",
+  );
   const nodeEnv = process.env.NODE_ENV || "development";
   const githubToken = process.env.GITHUB_TOKEN;
   const gitlabToken = process.env.GITLAB_TOKEN;
@@ -138,12 +154,9 @@ function loadConfig(): Config {
   // staging 目錄掛在 tmpRoot 下，與正式附件目錄共用同一層；由 tmpCleanupService 6h 一併清理
   const stagingRoot = path.join(tmpRoot, "staging");
 
-  if (isNaN(port) || port < 1 || port > 65535) {
-    throw new Error("PORT 必須是 1 到 65535 之間的有效數字");
-  }
-
   return {
     port,
+    opencodeServerPort,
     nodeEnv,
     appDataRoot,
     canvasRoot,

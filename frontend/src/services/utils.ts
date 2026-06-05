@@ -24,14 +24,14 @@ export function generateRequestId(): string {
 
 /**
  * 取得後端 HTTP API base URL
- * dev 模式（port 5173）指向 http://{hostname}:3001；prod 模式用 window.location.origin
+ * dev 模式（port 5173）指向 http://{hostname}:VITE_BACKEND_DEV_PORT；prod 模式用 window.location.origin
  */
 export function getApiBaseUrl(): string {
   const VITE_DEFAULT_DEV_PORT = "5173";
-  const BACKEND_DEV_PORT = 3001;
+  const backendDevPort = Number(import.meta.env.VITE_BACKEND_DEV_PORT || "3001");
 
   const isDev = window.location.port === VITE_DEFAULT_DEV_PORT;
   return isDev
-    ? `http://${window.location.hostname}:${BACKEND_DEV_PORT}`
+    ? `http://${window.location.hostname}:${backendDevPort}`
     : window.location.origin;
 }

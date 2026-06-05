@@ -8,6 +8,7 @@
 import { createOpencodeServer } from "@opencode-ai/sdk/v2/server";
 import type { Config } from "@opencode-ai/sdk/v2";
 import { buildOpencodeFullAccessServerConfig } from "./opencodeMcpConfigBuilder.js";
+import { config } from "../../config/index.js";
 
 // ================================================================
 // 型別定義
@@ -24,6 +25,7 @@ export interface OpencodeServerInstance {
 
 /** 用於注入 launcher（讓測試可以 mock） */
 export type OpencodeServerLauncher = (options?: {
+  port?: number;
   timeout?: number;
   config?: Pick<Config, "mcp" | "permission">;
 }) => Promise<OpencodeServerInstance>;
@@ -96,6 +98,7 @@ export async function startOpencodeServer(): Promise<void> {
 
   try {
     const server = await currentLauncher({
+      port: config.opencodeServerPort,
       timeout: 30000,
       config: buildOpencodeFullAccessServerConfig(),
     });
