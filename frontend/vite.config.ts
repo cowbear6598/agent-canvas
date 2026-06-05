@@ -3,6 +3,7 @@ import vue from "@vitejs/plugin-vue";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import os from "os";
+import { parseDevBackendPort } from "./src/lib/devBackendPort";
 
 /**
  * 取得本機區網 IP 位址
@@ -24,14 +25,6 @@ function getLocalIPs(): string[] {
   }
 
   return ips;
-}
-
-function parseDevBackendPort(rawValue: string | undefined): number {
-  const parsed = Number(rawValue ?? "3001");
-  if (Number.isInteger(parsed) && parsed >= 1 && parsed <= 65535) {
-    return parsed;
-  }
-  return 3001;
 }
 
 /**

@@ -3,6 +3,7 @@ import type { WebSocketMessage } from "@/types/websocket";
 import { logger } from "@/utils/logger";
 import { safeJsonParse } from "@shared/safeJsonParse";
 import { t } from "@/i18n";
+import { parseDevBackendPort } from "@/lib/devBackendPort";
 
 type EventCallback<T> = (payload: T) => void;
 
@@ -80,8 +81,8 @@ class WebSocketClient {
   // dev 模式（port 5173）連到後端 VITE_BACKEND_DEV_PORT；prod 模式（前後端同 port）直接用當前 origin
   private resolveDefaultWebSocketUrl(): string {
     const VITE_DEFAULT_DEV_PORT = "5173";
-    const backendDevPort = Number(
-      import.meta.env.VITE_BACKEND_DEV_PORT || "3001",
+    const backendDevPort = parseDevBackendPort(
+      import.meta.env.VITE_BACKEND_DEV_PORT,
     );
 
     const isDev = window.location.port === VITE_DEFAULT_DEV_PORT;

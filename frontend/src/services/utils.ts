@@ -1,3 +1,7 @@
+import {
+  parseDevBackendPort,
+} from "@/lib/devBackendPort";
+
 /**
  * 生成 UUID
  * 優先使用 crypto.randomUUID（安全上下文），否則使用 crypto.getRandomValues fallback
@@ -28,7 +32,9 @@ export function generateRequestId(): string {
  */
 export function getApiBaseUrl(): string {
   const VITE_DEFAULT_DEV_PORT = "5173";
-  const backendDevPort = Number(import.meta.env.VITE_BACKEND_DEV_PORT || "3001");
+  const backendDevPort = parseDevBackendPort(
+    import.meta.env.VITE_BACKEND_DEV_PORT,
+  );
 
   const isDev = window.location.port === VITE_DEFAULT_DEV_PORT;
   return isDev
