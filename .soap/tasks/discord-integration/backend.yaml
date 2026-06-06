@@ -1,0 +1,112 @@
+feature: discord-integration
+side: backend
+approved: true
+phases:
+  - id: P1
+    title: Discord client 邊界與 provider 骨架
+    parallel: false
+    verification: []
+    done: true
+    items:
+      - id: P1.A
+        title: Discord wrapper 與 provider 註冊
+        tasks:
+          - id: P1.A.t1
+            text: 建立 `backend/src/services/integration/providers/discordClient.ts`，封裝 Discord Bot 連線、mention 事件訂閱、可綁定 guild text channel 列舉與訊息回覆能力；若採第三方 SDK，只允許在這層直接依賴它
+            completed: true
+            last_files_changed:
+              - backend/src/services/integration/providers/discordClient.ts
+              - backend/package.json
+              - backend/bun.lock
+          - id: P1.A.t2
+            text: 定義 Discord wrapper 對外使用的 guild、channel、message 型別與 factory 介面，讓 provider 與測試只依賴專案自有 wrapper，不直接 mock 第三方 SDK
+            completed: true
+            last_files_changed:
+              - backend/src/services/integration/providers/discordClient.ts
+          - id: P1.A.t3
+            text: 建立 `backend/src/services/integration/providers/discordProvider.ts`，實作 `createAppSchema`、`validateCreate`、`initialize`、`destroy`、`destroyAll`、`refreshResources`，並在 `backend/src/services/integration/providers/index.ts` 註冊 Discord provider
+            completed: true
+            last_files_changed:
+              - backend/src/services/integration/providers/discordProvider.ts
+              - backend/src/services/integration/providers/index.ts
+
+  - id: P2
+    title: 指定頻道 mention 與 reply MCP 整合
+    parallel: false
+    verification: []
+    done: true
+    items:
+      - id: P2.A
+        title: 頻道資源同步與 mention 事件正規化
+        tasks:
+          - id: P2.A.t1
+            text: 在 Discord provider 中把可綁定資源限制為本次 scope 允許的 guild text channels，resource id 使用 channel id，顯示名稱帶上 guild 與 channel 資訊，並排除 DM、forum 與 thread 類型
+            completed: true
+            last_files_changed:
+              - backend/src/services/integration/providers/discordClient.ts
+              - backend/src/services/integration/providers/discordProvider.ts
+          - id: P2.A.t2
+            text: 在 Discord 事件入口只處理標記 Bot 的訊息，忽略 bot 自己送出的訊息與未 mention 的訊息，並將事件轉成既有 `NormalizedEvent` 後送進 `integrationEventPipeline.safeProcessEvent(...)`
+            completed: true
+            last_files_changed:
+              - backend/src/services/integration/providers/discordClient.ts
+              - backend/src/services/integration/providers/discordProvider.ts
+          - id: P2.A.t3
+            text: 讓 Discord mention 事件輸出的 `NormalizedEvent` 帶上回覆原訊息所需的最小上下文，至少包含 senderId 與 messageId，並確保 resourceId 對應綁定用的 channel id
+            completed: true
+            last_files_changed:
+              - backend/src/services/integration/providers/discordProvider.ts
+              - backend/src/services/integration/types.ts
+
+      - id: P2.B
+        title: Reply MCP 回覆對準原訊息
+        tasks:
+          - id: P2.B.t1
+            text: 擴充 `backend/src/services/integration/replyContextStore.ts`、`backend/src/services/mcp/managedMcpSurfaceService.ts` 與相關型別，讓 Discord 的 messageId 可跟既有 reply capability 一起傳到 integration reply tool
+            completed: true
+            last_files_changed:
+              - backend/src/services/integration/replyContextStore.ts
+              - backend/src/services/integration/types.ts
+              - backend/tests/business-logic/buildClaudeOptions.test.ts
+          - id: P2.B.t2
+            text: 在 Discord provider 的 `sendMessage` 與 `buildAckExtra` 中使用既有 capability scope，把回覆送回原本的 Discord channel，並優先對準觸發 mention 的原始訊息
+            completed: true
+            last_files_changed:
+              - backend/src/services/integration/providers/discordProvider.ts
+              - backend/tests/business-logic/integrationReplyService.test.ts
+
+  - id: P3
+    title: 後端驗證測試
+    parallel: false
+    verification: []
+    done: true
+    items:
+      - id: P3.A
+        title: Discord provider 測試
+        tasks:
+          - id: P3.A.t1
+            text: 新增 `backend/tests/business-logic/discordProvider.test.ts`，以自家 Discord wrapper mock 覆蓋 App 建立驗證、初始化後的頻道同步、標記訊息正規化、忽略非 mention 事件與回覆送出行為
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/discordProvider.test.ts
+              - backend/src/services/integration/providers/discordClient.ts
+              - backend/src/services/integration/providers/discordProvider.ts
+          - id: P3.A.t2
+            text: 在 `backend/tests/business-logic/discordProvider.test.ts` 補上頻道範圍測試，確認 provider 只把 guild text channel 作為可綁定 resource，並以 channel id 當成 event resourceId 讓未綁定頻道不會觸發 Pod
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/discordProvider.test.ts
+
+      - id: P3.B
+        title: Reply capability 相容性測試
+        tasks:
+          - id: P3.B.t1
+            text: 擴充 `backend/tests/business-logic/integrationReplyService.test.ts`，驗證 Discord 回覆 scope 會把 messageId 與其他 reply context 正確合併到 provider `sendMessage`
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/integrationReplyService.test.ts
+          - id: P3.B.t2
+            text: 擴充 `backend/tests/business-logic/buildClaudeOptions.test.ts` 或對應 managed MCP 測試，驗證有 Discord 綁定時仍會生成 reply MCP tool，且 capability scope 會帶出 Discord 的最小回覆上下文
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/buildClaudeOptions.test.ts

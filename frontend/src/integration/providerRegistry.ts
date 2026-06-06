@@ -1,5 +1,6 @@
 import type { IntegrationProviderConfig } from "@/types/integration";
 import { slackProviderConfig } from "./providers/slackProvider";
+import { discordProviderConfig } from "./providers/discordProvider";
 import { telegramProviderConfig } from "./providers/telegramProvider";
 import { jiraProviderConfig } from "./providers/jiraProvider";
 import { sentryProviderConfig } from "./providers/sentryProvider";
@@ -29,6 +30,7 @@ export function getAllProviders(): IntegrationProviderConfig[] {
 }
 
 registerProvider(slackProviderConfig);
+registerProvider(discordProviderConfig);
 registerProvider(telegramProviderConfig);
 registerProvider(jiraProviderConfig);
 registerProvider(sentryProviderConfig);

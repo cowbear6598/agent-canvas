@@ -62,7 +62,8 @@
       "title": "{provider} Apps",
       "addApp": "App を追加",
       "connecting": "接続中...",
-      "confirmAdd": "追加する"
+      "confirmAdd": "追加する",
+      "moreResources": "+{count}"
     },
     "connect": {
       "title": "{provider} を接続",
@@ -104,6 +105,27 @@
         "botTokenRequired": "Bot Token を入力してください",
         "botTokenPrefix": "Bot Token は xoxb- で始まる必要があります",
         "signingSecretRequired": "Signing Secret を入力してください"
+      }
+    },
+    "discord": {
+      "label": "Discord",
+      "description": "指定した Discord チャンネルの Bot mention イベントを受けて Pod を起動します",
+      "emptyAppHint": "Discord App がまだ登録されていません",
+      "emptyResourceHint": "この App にバインド可能な Discord チャンネルがありません",
+      "resourceLabel": "チャンネル",
+      "field": {
+        "name": {
+          "label": "名前",
+          "placeholder": "例：My Discord Bot"
+        },
+        "botToken": {
+          "label": "Bot Token",
+          "placeholder": "Discord Bot Token を入力"
+        }
+      },
+      "validate": {
+        "nameRequired": "名前を入力してください",
+        "botTokenRequired": "Bot Token を入力してください"
       }
     },
     "telegram": {

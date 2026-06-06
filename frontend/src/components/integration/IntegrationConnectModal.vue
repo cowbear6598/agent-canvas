@@ -12,11 +12,12 @@ import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { getProvider } from "@/integration/providerRegistry";
+import { findProvider } from "@/integration/providerRegistry";
 import { useIntegrationStore } from "@/stores/integrationStore";
 import { usePodStore } from "@/stores";
 import type {
   IntegrationApp,
+  IntegrationBinding,
   IntegrationProviderConfig,
 } from "@/types/integration";
 
@@ -35,10 +36,16 @@ const emit = defineEmits<{
 const integrationStore = useIntegrationStore();
 const podStore = usePodStore();
 
-const config = computed<IntegrationProviderConfig>(() =>
-  getProvider(props.provider),
+const config = computed<IntegrationProviderConfig | null>(() => {
+  if (props.provider === "") {
+    return null;
+  }
+  return findProvider(props.provider);
+});
+const providerLabel = computed<string>(() => config.value?.label ?? "");
+const apps = computed(() =>
+  config.value ? integrationStore.getAppsByProvider(props.provider) : [],
 );
-const apps = computed(() => integrationStore.getAppsByProvider(props.provider));
 
 const selectedAppId = ref<string | null>(null);
 const extraValues = ref<Record<string, string>>({});
@@ -46,33 +53,42 @@ const selectedResourceId = ref<string | null>(null);
 const manualResourceInput = ref<string>("");
 
 const isRestoringBinding = ref(false);
+const hasInitializedOpenState = ref(false);
 
 const selectedApp = computed<IntegrationApp | undefined>(() =>
-  selectedAppId.value
+  config.value && selectedAppId.value
     ? integrationStore.getAppById(props.provider, selectedAppId.value)
     : undefined,
 );
 
+const existingBinding = computed<IntegrationBinding | undefined>(() => {
+  const pod = podStore.getPodById(props.podId);
+  return (pod?.integrationBindings ?? []).find((b) => b.provider === props.provider);
+});
+
 const resources = computed(() =>
-  selectedApp.value ? config.value.getResources(selectedApp.value) : [],
+  selectedApp.value && config.value
+    ? config.value.getResources(selectedApp.value)
+    : [],
 );
 
 const isNoResource = computed<boolean>(
-  () => config.value.hasNoResource ?? false,
+  () => config.value?.hasNoResource ?? false,
 );
 
 const isManualInput = computed<boolean>(
-  () => config.value.hasManualResourceInput?.(extraValues.value) ?? false,
+  () => config.value?.hasManualResourceInput?.(extraValues.value) ?? false,
 );
 
 const manualInputError = computed<string>(() => {
+  if (!config.value) return "";
   const manualConfig = config.value.manualResourceInputConfig;
   if (!manualConfig) return "";
   return manualConfig.validate(manualResourceInput.value);
 });
 
 const isConfirmDisabled = computed<boolean>(() => {
-  if (apps.value.length === 0 || !selectedAppId.value) return true;
+  if (!config.value || apps.value.length === 0 || !selectedAppId.value) return true;
 
   const extraFields = config.value.bindingExtraFields ?? [];
   if (extraFields.some((field) => !extraValues.value[field.key])) return true;
@@ -87,6 +103,11 @@ const isConfirmDisabled = computed<boolean>(() => {
 });
 
 function initExtraValues(): void {
+  if (!config.value) {
+    extraValues.value = {};
+    return;
+  }
+
   const extra: Record<string, string> = {};
   const extraFields = config.value.bindingExtraFields ?? [];
   extraFields.forEach((field) => {
@@ -96,20 +117,46 @@ function initExtraValues(): void {
 }
 
 function resetState(): void {
+  hasInitializedOpenState.value = false;
   selectedAppId.value = null;
   selectedResourceId.value = null;
   manualResourceInput.value = "";
   initExtraValues();
 }
 
-watch(
-  () => props.open,
-  (newOpen) => {
-    if (!newOpen) {
-      resetState();
-      return;
-    }
+function restoreBinding(binding: IntegrationBinding): void {
+  if (!config.value) {
+    return;
+  }
 
+  // 防止 selectedAppId 設定後立即觸發 watch 清除 selectedResourceId
+  isRestoringBinding.value = true;
+  selectedAppId.value = binding.appId;
+
+  const extraFields = config.value.bindingExtraFields ?? [];
+  extraFields.forEach((field) => {
+    const savedValue = binding.extra[field.key];
+    if (typeof savedValue === "string") {
+      extraValues.value[field.key] = savedValue;
+    }
+  });
+
+  selectedResourceId.value = binding.resourceId;
+
+  // private 模式下 resourceId 即為 User ID
+  if (config.value.hasManualResourceInput?.(extraValues.value)) {
+    manualResourceInput.value = binding.resourceId;
+  }
+
+  nextTick(() => {
+    isRestoringBinding.value = false;
+  });
+}
+
+function initializeOpenState(): void {
+  if (!props.open || !config.value) return;
+
+  if (!hasInitializedOpenState.value) {
     if (!isNoResource.value) {
       for (const app of apps.value) {
         if (app.connectionStatus === "connected") {
@@ -119,42 +166,35 @@ watch(
     }
 
     initExtraValues();
+    hasInitializedOpenState.value = true;
+  }
 
-    const pod = podStore.getPodById(props.podId);
-    const binding = (pod?.integrationBindings ?? []).find(
-      (b) => b.provider === props.provider,
-    );
+  const binding = existingBinding.value;
+  const shouldRestoreBinding =
+    selectedAppId.value === null &&
+    selectedResourceId.value === null &&
+    manualResourceInput.value === "";
 
-    if (!binding) {
-      selectedAppId.value = null;
-      selectedResourceId.value = null;
-      manualResourceInput.value = "";
+  if (!binding || !shouldRestoreBinding) return;
+  restoreBinding(binding);
+}
+
+function isModalOpen(): boolean {
+  return props.open;
+}
+
+watch(
+  [isModalOpen, existingBinding, apps, config],
+  ([isOpen]): void => {
+    if (!isOpen) {
+      resetState();
       return;
     }
 
-    // 防止 selectedAppId 設定後立即觸發 watch 清除 selectedResourceId
-    isRestoringBinding.value = true;
-    selectedAppId.value = binding.appId;
-
-    const extraFields = config.value.bindingExtraFields ?? [];
-    extraFields.forEach((field) => {
-      const savedValue = binding.extra[field.key];
-      if (typeof savedValue === "string") {
-        extraValues.value[field.key] = savedValue;
-      }
-    });
-
-    selectedResourceId.value = binding.resourceId;
-
-    // private 模式下 resourceId 即為 User ID
-    if (config.value.hasManualResourceInput?.(extraValues.value)) {
-      manualResourceInput.value = binding.resourceId;
-    }
-
-    nextTick(() => {
-      isRestoringBinding.value = false;
-    });
+    if (!config.value) return;
+    initializeOpenState();
   },
+  { immediate: true, deep: true },
 );
 
 // 防止回填期間清除資源選擇
@@ -186,7 +226,7 @@ function resolveResourceId(): string | null {
 }
 
 const handleConfirm = async (): Promise<void> => {
-  if (!selectedAppId.value) return;
+  if (!config.value || !selectedAppId.value) return;
 
   const resourceId = resolveResourceId();
   if (!resourceId) return;
@@ -216,25 +256,28 @@ const handleClose = (): void => {
     :open="open"
     @update:open="handleClose"
   >
-    <DialogContent class="max-w-lg">
+    <DialogContent
+      v-if="config"
+      class="max-w-lg"
+    >
       <DialogHeader>
         <DialogTitle>
           {{
-            $t("integration.connect.title", { provider: config.label })
+            $t("integration.connect.title", { provider: providerLabel })
           }}
         </DialogTitle>
         <DialogDescription>
           <template v-if="isNoResource">
             {{
               $t("integration.connect.descriptionNoResource", {
-                provider: config.label,
+                provider: providerLabel,
               })
             }}
           </template>
           <template v-else>
             {{
               $t("integration.connect.descriptionWithResource", {
-                provider: config.label,
+                provider: providerLabel,
                 resourceLabel: config.resourceLabel,
               })
             }}
@@ -247,7 +290,7 @@ const handleClose = (): void => {
           v-if="apps.length === 0"
           class="py-4 text-sm text-muted-foreground"
         >
-          {{ $t("integration.connect.noAppsHint", { provider: config.label }) }}
+          {{ $t("integration.connect.noAppsHint", { provider: providerLabel }) }}
         </div>
 
         <template v-else>

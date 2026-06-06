@@ -97,6 +97,22 @@ class IntegrationEventPipeline {
     appId: string,
     event: NormalizedEvent,
   ): void {
+    const integrationProvider = integrationRegistry.get(provider);
+    if (integrationProvider?.acknowledgeEvent) {
+      void integrationProvider
+        .acknowledgeEvent(appId, event)
+        .catch((error: unknown) => {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          logger.warn(
+            "Integration",
+            "Warn",
+            `[IntegrationEventPipeline] 發送 provider ack 失敗：${errorMessage}`,
+          );
+        });
+      return;
+    }
+
     this.sendAckReply(provider, appId, event, "已接收到命令");
   }
 

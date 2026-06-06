@@ -62,7 +62,8 @@
       "title": "{provider} Apps",
       "addApp": "新增 App",
       "connecting": "連線中...",
-      "confirmAdd": "確認新增"
+      "confirmAdd": "確認新增",
+      "moreResources": "+{count}"
     },
     "connect": {
       "title": "連接 {provider}",
@@ -104,6 +105,27 @@
         "botTokenRequired": "Bot Token 不可為空",
         "botTokenPrefix": "Bot Token 必須以 xoxb- 開頭",
         "signingSecretRequired": "Signing Secret 不可為空"
+      }
+    },
+    "discord": {
+      "label": "Discord",
+      "description": "接收指定 Discord 頻道中的 Bot mention 事件來觸發 Pod",
+      "emptyAppHint": "尚未註冊任何 Discord App",
+      "emptyResourceHint": "此 App 尚無可綁定的 Discord 頻道",
+      "resourceLabel": "頻道",
+      "field": {
+        "name": {
+          "label": "名稱",
+          "placeholder": "例如：My Discord Bot"
+        },
+        "botToken": {
+          "label": "Bot Token",
+          "placeholder": "請輸入 Discord Bot Token"
+        }
+      },
+      "validate": {
+        "nameRequired": "名稱不可為空",
+        "botTokenRequired": "Bot Token 不可為空"
       }
     },
     "telegram": {

@@ -5,6 +5,8 @@ export interface ReplyContext {
     senderId?: string;
     messageTs?: string;
     threadTs?: string;
+    messageId?: string | number;
+    replyChannelId?: string;
 }
 
 interface StoreEntry {
@@ -36,11 +38,13 @@ export function buildReplyContextKey(runContext: RunContext | undefined, podId: 
 }
 
 export function setReplyContextIfPresent(key: string, event: NormalizedEvent): void {
-    if (!event.senderId && !event.messageTs && !event.threadTs) return;
+    if (!event.senderId && !event.messageTs && !event.threadTs && !event.messageId && !event.replyChannelId) return;
     replyContextStore.set(key, {
         senderId: event.senderId,
         messageTs: event.messageTs,
         threadTs: event.threadTs,
+        messageId: event.messageId,
+        replyChannelId: event.replyChannelId,
     });
 }
 

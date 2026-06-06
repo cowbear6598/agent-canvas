@@ -62,7 +62,8 @@
       "title": "{provider} Apps",
       "addApp": "Add App",
       "connecting": "Connecting...",
-      "confirmAdd": "Confirm"
+      "confirmAdd": "Confirm",
+      "moreResources": "+{count}"
     },
     "connect": {
       "title": "Connect {provider}",
@@ -104,6 +105,27 @@
         "botTokenRequired": "Bot Token cannot be empty",
         "botTokenPrefix": "Bot Token must start with xoxb-",
         "signingSecretRequired": "Signing Secret cannot be empty"
+      }
+    },
+    "discord": {
+      "label": "Discord",
+      "description": "Receive Bot mention events from a selected Discord channel to trigger a Pod",
+      "emptyAppHint": "No Discord App registered yet",
+      "emptyResourceHint": "No bindable Discord channels are available for this App",
+      "resourceLabel": "Channel",
+      "field": {
+        "name": {
+          "label": "Name",
+          "placeholder": "e.g. My Discord Bot"
+        },
+        "botToken": {
+          "label": "Bot Token",
+          "placeholder": "Enter Discord Bot Token"
+        }
+      },
+      "validate": {
+        "nameRequired": "Name cannot be empty",
+        "botTokenRequired": "Bot Token cannot be empty"
       }
     },
     "telegram": {

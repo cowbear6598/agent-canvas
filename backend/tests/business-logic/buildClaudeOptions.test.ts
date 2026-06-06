@@ -73,6 +73,7 @@ import {
 } from "../../src/services/provider/claude/buildClaudeOptions.js";
 import { integrationRegistry } from "../../src/services/integration/index.js";
 import { resetClaudeMcpCache } from "../../src/services/mcp/claudeMcpReader.js";
+import { replyContextStore } from "../../src/services/integration/replyContextStore.js";
 import type { Pod } from "../../src/types/pod.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -357,6 +358,43 @@ describe("buildClaudeOptions", () => {
       expect(result.allowedTools).toContain("mcp__slack-reply__slack_reply");
       // BASE_ALLOWED_TOOLS 也應保留
       expect(result.allowedTools).toContain("Read");
+    });
+
+    it("Discord reply context 有 messageId 時，應寫入 integration reply MCP entry env", async () => {
+      vi.mocked(integrationRegistry.get).mockReturnValue({
+        displayName: "Discord",
+        sendMessage: vi.fn().mockResolvedValue({ success: true }),
+      } as any);
+      vi.mocked(replyContextStore.get).mockReturnValue({
+        senderId: "discord-user-1",
+        messageId: "discord-message-1",
+      });
+
+      const pod = createBasePod({
+        id: "pod-discord",
+        integrationBindings: [
+          {
+            provider: "discord",
+            appId: "discord-app-1",
+            resourceId: "discord-channel-1",
+          },
+        ],
+      });
+
+      const result = await buildClaudeOptions(pod, {
+        canvasId: "canvas-1",
+        runId: "run-1",
+        messageId: "message-1",
+      } as any);
+
+      expect(result.mcpServers?.["discord-reply"]).toMatchObject({
+        env: expect.objectContaining({
+          AGENT_CANVAS_INTEGRATION_REPLY_CONTEXT: JSON.stringify({
+            senderId: "discord-user-1",
+            messageId: "discord-message-1",
+          }),
+        }),
+      });
     });
   });
 });

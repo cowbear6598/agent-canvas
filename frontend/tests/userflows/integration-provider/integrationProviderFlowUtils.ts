@@ -32,7 +32,7 @@ export interface ProviderAppFlowOptions {
   provider: string;
   formValues: string[];
   createdApp: Record<string, unknown> & { id: string; name: string };
-  updatedResources?: Array<{ id: string; name: string }>;
+  updatedResources?: Array<Record<string, unknown> & { id: string; name: string }>;
   visibleUpdatedResource?: string;
 }
 

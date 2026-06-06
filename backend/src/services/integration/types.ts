@@ -37,7 +37,8 @@ export interface NormalizedEvent {
   senderId?: string;
   messageTs?: string;
   threadTs?: string;
-  messageId?: number;
+  messageId?: string | number;
+  replyChannelId?: string;
 }
 
 export interface IntegrationProvider {
@@ -58,6 +59,10 @@ export interface IntegrationProvider {
     resourceId: string,
     text: string,
     extra?: Record<string, unknown>,
+  ): Promise<Result<void>>;
+  acknowledgeEvent?(
+    appId: string,
+    event: NormalizedEvent,
   ): Promise<Result<void>>;
   buildAckExtra?(event: NormalizedEvent): Record<string, unknown>;
 

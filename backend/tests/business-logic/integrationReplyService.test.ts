@@ -132,6 +132,67 @@ describe("Integration Reply Service", () => {
     );
   });
 
+  it("replyContext 帶有 Discord messageId 時，應一併傳給 provider sendMessage", async () => {
+    const sendMessage = vi.fn().mockResolvedValue(ok(undefined));
+    const provider = createProvider(sendMessage);
+    clearIntegrationRegistry();
+    integrationRegistry.register(provider);
+
+    const appResult = integrationAppStore.create("reply-test", "Reply App", {});
+    if (!appResult.success) {
+      throw new Error(`Failed to create integration app: ${appResult.error}`);
+    }
+
+    const canvasResult = await canvasStore.create("reply-canvas-discord");
+    if (!canvasResult.success) {
+      throw new Error(`Failed to create canvas: ${canvasResult.error}`);
+    }
+    await mkdir(config.getCanvasPath(canvasResult.data.name), { recursive: true });
+
+    const { pod } = podStore.create(canvasResult.data.id, {
+      name: "Discord Reply Pod",
+      x: 0,
+      y: 0,
+      rotation: 0,
+      provider: "claude",
+      providerConfig: { model: "sonnet" },
+    });
+    podStore.addIntegrationBinding(canvasResult.data.id, pod.id, {
+      provider: "reply-test",
+      appId: appResult.data.id,
+      resourceId: "discord-channel-1",
+      extra: { keep: "extra" },
+    });
+
+    const capabilityToken = createIntegrationReplyCapability({
+      provider: "reply-test",
+      appId: appResult.data.id,
+      resourceId: "discord-channel-1",
+      podId: pod.id,
+      extra: { keep: "extra" },
+      replyContext: {
+        senderId: "discord-user-1",
+        messageId: "discord-message-1",
+        replyChannelId: "discord-thread-1",
+      },
+    });
+
+    const result = await executeIntegrationReply(capabilityToken, "hello");
+
+    expect(result.success).toBe(true);
+    expect(sendMessage).toHaveBeenCalledWith(
+      appResult.data.id,
+      "discord-channel-1",
+      "hello",
+      {
+        keep: "extra",
+        senderId: "discord-user-1",
+        messageId: "discord-message-1",
+        replyChannelId: "discord-thread-1",
+      },
+    );
+  });
+
   it("capability token 無效時不呼叫 provider", async () => {
     const sendMessage = vi.fn().mockResolvedValue(ok(undefined));
     await createReplyFixture(sendMessage);

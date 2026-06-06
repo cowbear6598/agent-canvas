@@ -1,10 +1,12 @@
 import { integrationRegistry } from "../integrationRegistry.js";
+import { discordProvider } from "./discordProvider.js";
 import { slackProvider } from "./slackProvider.js";
 import { telegramProvider } from "./telegramProvider.js";
 import { jiraProvider } from "./jiraProvider.js";
 import { sentryProvider } from "./sentry/sentryProvider.js";
 import { webhookProvider } from "./webhook/webhookProvider.js";
 
+integrationRegistry.register(discordProvider);
 integrationRegistry.register(slackProvider);
 integrationRegistry.register(telegramProvider);
 integrationRegistry.register(jiraProvider);

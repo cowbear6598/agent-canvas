@@ -1,0 +1,84 @@
+feature: discord-integration
+created: "2026-06-05"
+approved: true
+impact_classification:
+  frontend:
+    status: required
+    evidence:
+      - 使用者提到要把新的 Discord integration 放入目前架構，且要限定頻道；現有架構中頻道 / resource 的選擇與 Pod 綁定由前端 integration modal 完成，因此需要讓 Discord 出現在既有 UI 流程中。
+  backend:
+    status: required
+    evidence:
+      - 使用者明確要求接入新的第三方 integration，並指定要支援標記 Bot 後觸發與像 Slack 一樣的 reply MCP 回覆；現有 integration 的初始化、憑證保存、事件接收、訊息回覆與 webhook / polling 都由後端 provider 架構負責。
+questions:
+  - id: Q1
+    text: 現有後端 integration provider 的擴充點與生命週期是什麼？Discord 需要接在哪些模組？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      後端以 `backend/src/services/integration/types.ts` 的 `IntegrationProvider`
+      為統一介面，provider 需提供 `name`、`displayName`、`createAppSchema`、
+      `validateCreate`、`sanitizeConfig`、`initialize`、`destroy`、
+      `destroyAll`、`refreshResources`、`formatEventMessage`，若支援回覆則可實作
+      `sendMessage` / `buildAckExtra`，若走 webhook 或 polling 也可實作
+      `webhookPath` / `handleWebhookRequest` / `startPolling` / `stopPolling`。
+      provider 透過 `backend/src/services/integration/providers/index.ts`
+      註冊進 `integrationRegistry`。建立 App 後由
+      `backend/src/handlers/integrationHandlers.ts` 驗證 schema、寫入
+      `integrationAppStore`，再非同步呼叫 `provider.initialize(app)`。
+      若 provider 有 `webhookPath`，`backend/src/services/integration/integrationWebhookRouter.ts`
+      會把 route 對到 provider；若 provider 用 polling，則像
+      `backend/src/services/integration/providers/telegramProvider.ts`
+      一樣在 `initialize` 成功後啟動輪詢。收到事件後，provider 需把原始事件轉成
+      `NormalizedEvent`，交給 `integrationEventPipeline.safeProcessEvent(...)`
+      進入既有 Agent 回覆流程。
+  - id: Q2
+    text: 現有前端 integration UI 的擴充點是什麼？如果 Discord 要讓使用者在畫面上管理，需要補哪些位置？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      前端以 `frontend/src/types/integration.ts` 的
+      `IntegrationProviderConfig` 作為統一設定，內容包含 icon、說明文案 key、
+      create form 欄位、resource 顯示方式、建立 / 刪除 / 綁定 payload builder、
+      以及可選的 webhook URL / token 顯示邏輯。各 provider 定義在
+      `frontend/src/integration/providers/*.ts`，並於
+      `frontend/src/integration/providerRegistry.ts` 註冊。UI 主要由
+      `IntegrationAppsModal.vue` 處理 App 建立 / 刪除 / 顯示 webhook 或 token，
+      `IntegrationConnectModal.vue` 處理 Pod 與 integration 綁定。
+      因此若 Discord 要進入現有 UI，需要至少新增一個 provider config、
+      一個 icon 元件（若目前沒有可重用圖示），以及 `zh-TW` / `en` / `ja`
+      三份 locale 的 integration 文案。
+  - id: Q3
+    text: Discord 接入是否需要新增新的 websocket contract，或可沿用現有 integration 通道？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      目前 integration App 的建立、刪除、列資源、刷新資源、Pod 綁定 / 解綁，
+      都走 provider-agnostic 的 websocket event：
+      `integration:app:create`、`integration:app:list`、
+      `integration:app:resources:refresh`、`pod:bind-integration` 等，
+      定義在 `shared/websocket/events.ts` 與
+      `shared/websocket/requestResponsePairs.ts`。前端 `integrationStore`
+      也只依賴 provider name 與 provider config 轉換 raw app。
+      這表示新增 Discord 通常不需要新增 websocket event；只要 Discord 的建立、
+      資源同步與綁定資料仍能落在既有 payload 結構，就能沿用目前 contract。
+      只有在 Discord 需要前端顯示全新型態的專屬操作或額外欄位時，才需要再擴充 websocket schema。
+  - id: Q4
+    text: Discord 這次要支援哪一種互動模式？請明確回答是只發送訊息、接收訊息後讓 Agent 回覆，或兩者都要；若有限定 guild channel、thread、forum、DM 也請一併說明。
+    type: user-input
+    completed: true
+    answer: |
+      使用者要求 Discord 在被標記 Bot 時觸發 Agent，且 Agent 需要能回覆到原本的
+      Discord 對話，因此屬於「接收訊息後讓 Agent 回覆」，並且 reply MCP 要比照
+      Slack 模式接入。範圍至少包含 guild 內可指定的頻道，且必須限制到綁定的頻道 /
+      resource；DM 與 forum 未被要求。是否支援 thread 與 thread 內要提供多少歷史訊息，
+      需另外做架構判斷。
+  - id: Q5
+    text: 若 Discord 支援 threads，目前架構能否把整串 thread 訊息提供給 Agent？建議怎麼設計比較合適？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      使用者確認這項功能本次先不做，因此 Discord integration 的 scope
+      不包含「抓取整串 thread 歷史並提供給 Agent」。若未來要支援，現有架構仍需由
+      Discord provider 額外抓取 thread message history，再自行整理後注入；
+      目前先維持與 Slack 類似的最小 reply context 模式即可。

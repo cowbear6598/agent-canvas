@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import { ref, computed, watch, onUnmounted } from "vue";
+import {
+  ref,
+  computed,
+  watch,
+  onMounted,
+  onUnmounted,
+  nextTick,
+  type ComponentPublicInstance,
+} from "vue";
 import {
   Dialog,
   DialogContent,
@@ -13,6 +21,8 @@ import { Input } from "@/components/ui/input";
 import { Trash2, Plus, Copy, Check } from "lucide-vue-next";
 import { getProvider } from "@/integration/providerRegistry";
 import { useIntegrationStore } from "@/stores/integrationStore";
+import { t } from "@/i18n";
+import type { IntegrationApp, IntegrationResource } from "@/types/integration";
 
 interface Props {
   open: boolean;
@@ -39,6 +49,10 @@ const isSubmitting = ref(false);
 const copiedAppId = ref<string | null>(null);
 const copiedTokenAppId = ref<string | null>(null);
 const copyTimers: Record<string, ReturnType<typeof setTimeout>> = {};
+const visibleResourceCounts = ref<Record<string, number>>({});
+const hiddenResourceCounts = ref<Record<string, number>>({});
+const resourceContainerElements = new Map<string, HTMLDivElement>();
+let measureRafId: number | null = null;
 
 watch(
   () => props.provider,
@@ -60,12 +74,194 @@ watch(
   },
 );
 
+function isModalOpen(): boolean {
+  return props.open;
+}
+
+function getProviderName(): string {
+  return props.provider;
+}
+
+watch(
+  [isModalOpen, getProviderName, apps],
+  () => {
+    scheduleResourceLayoutMeasure();
+  },
+  { deep: true, immediate: true },
+);
+
 function initFormValues(): void {
   const initial: Record<string, string> = {};
   config.value?.createFormFields.forEach((field) => {
     initial[field.key] = "";
   });
   formValues.value = initial;
+}
+
+function getAppResources(app: IntegrationApp): IntegrationResource[] {
+  return config.value ? config.value.getResources(app) : [];
+}
+
+function getVisibleResources(app: IntegrationApp): IntegrationResource[] {
+  const resources = getAppResources(app);
+  const hiddenCount = hiddenResourceCounts.value[app.id] ?? 0;
+  if (hiddenCount <= 0) {
+    return resources;
+  }
+
+  const visibleCount = visibleResourceCounts.value[app.id] ?? resources.length;
+  return resources.slice(0, visibleCount);
+}
+
+function getHiddenResourceCount(appId: string): number {
+  return hiddenResourceCounts.value[appId] ?? 0;
+}
+
+function getHiddenResourcesLabel(count: number): string {
+  return t("integration.apps.moreResources", { count });
+}
+
+function setResourceContainerRef(
+  appId: string,
+  element: Element | ComponentPublicInstance | null,
+): void {
+  if (element instanceof HTMLDivElement) {
+    resourceContainerElements.set(appId, element);
+    return;
+  }
+
+  resourceContainerElements.delete(appId);
+}
+
+function createMeasureChip(label: string): HTMLSpanElement {
+  const chip = document.createElement("span");
+  chip.className =
+    "rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground whitespace-nowrap";
+  chip.textContent = label;
+  return chip;
+}
+
+function countRenderedRows(container: HTMLElement): number {
+  const rowTops = new Set<number>();
+  for (const child of Array.from(container.children)) {
+    if (!(child instanceof HTMLElement)) continue;
+    rowTops.add(child.offsetTop);
+  }
+  return rowTops.size;
+}
+
+function measureVisibleResourceCount(
+  resources: IntegrationResource[],
+  containerWidth: number,
+): {
+  visibleCount: number;
+  hiddenCount: number;
+} {
+  if (resources.length === 0 || containerWidth <= 0) {
+    return { visibleCount: resources.length, hiddenCount: 0 };
+  }
+
+  const measureContainer = document.createElement("div");
+  measureContainer.className = "flex flex-wrap gap-1";
+  measureContainer.style.position = "absolute";
+  measureContainer.style.left = "-9999px";
+  measureContainer.style.top = "0";
+  measureContainer.style.visibility = "hidden";
+  measureContainer.style.pointerEvents = "none";
+  measureContainer.style.width = `${containerWidth}px`;
+
+  document.body.appendChild(measureContainer);
+
+  let visibleCount = 0;
+
+  try {
+    for (const resource of resources) {
+      const chip = createMeasureChip(resource.label);
+      measureContainer.appendChild(chip);
+      if (countRenderedRows(measureContainer) > 2) {
+        measureContainer.removeChild(chip);
+        break;
+      }
+      visibleCount += 1;
+    }
+
+    let hiddenCount = resources.length - visibleCount;
+    if (hiddenCount <= 0) {
+      return { visibleCount: resources.length, hiddenCount: 0 };
+    }
+
+    const moreChip = createMeasureChip(getHiddenResourcesLabel(hiddenCount));
+    measureContainer.appendChild(moreChip);
+
+    while (countRenderedRows(measureContainer) > 2 && visibleCount > 0) {
+      const previousChip = moreChip.previousElementSibling;
+      if (previousChip) {
+        measureContainer.removeChild(previousChip);
+      }
+      visibleCount -= 1;
+      hiddenCount += 1;
+      moreChip.textContent = getHiddenResourcesLabel(hiddenCount);
+    }
+
+    return { visibleCount, hiddenCount };
+  } finally {
+    document.body.removeChild(measureContainer);
+  }
+}
+
+async function measureResourceLayout(): Promise<void> {
+  if (!props.open || !config.value || config.value.hasNoResource) {
+    visibleResourceCounts.value = {};
+    hiddenResourceCounts.value = {};
+    return;
+  }
+
+  await nextTick();
+
+  const nextVisibleCounts: Record<string, number> = {};
+  const nextHiddenCounts: Record<string, number> = {};
+
+  for (const app of apps.value) {
+    const resources = getAppResources(app);
+    if (resources.length === 0) {
+      nextVisibleCounts[app.id] = 0;
+      nextHiddenCounts[app.id] = 0;
+      continue;
+    }
+
+    const container = resourceContainerElements.get(app.id);
+    const containerWidth = container?.clientWidth ?? 0;
+    if (containerWidth <= 0) {
+      nextVisibleCounts[app.id] = resources.length;
+      nextHiddenCounts[app.id] = 0;
+      continue;
+    }
+
+    const { visibleCount, hiddenCount } = measureVisibleResourceCount(
+      resources,
+      containerWidth,
+    );
+    nextVisibleCounts[app.id] = visibleCount;
+    nextHiddenCounts[app.id] = hiddenCount;
+  }
+
+  visibleResourceCounts.value = nextVisibleCounts;
+  hiddenResourceCounts.value = nextHiddenCounts;
+}
+
+function scheduleResourceLayoutMeasure(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (measureRafId !== null) {
+    window.cancelAnimationFrame(measureRafId);
+  }
+
+  measureRafId = window.requestAnimationFrame(() => {
+    measureRafId = null;
+    void measureResourceLayout();
+  });
 }
 
 const fieldErrors = computed<Record<string, string>>(() => {
@@ -135,6 +331,19 @@ onUnmounted(() => {
   // 元件銷毀時清除所有未完成的 timer，避免記憶體洩漏
   for (const key of Object.keys(copyTimers)) {
     clearTimeout(copyTimers[key]);
+  }
+
+  if (typeof window !== "undefined") {
+    window.removeEventListener("resize", scheduleResourceLayoutMeasure);
+    if (measureRafId !== null) {
+      window.cancelAnimationFrame(measureRafId);
+    }
+  }
+});
+
+onMounted(() => {
+  if (typeof window !== "undefined") {
+    window.addEventListener("resize", scheduleResourceLayoutMeasure);
   }
 });
 
@@ -309,14 +518,21 @@ const handleCopyToken = (appId: string, token: string): void => {
               v-if="
                 !config.hasNoResource && config.getResources(app).length > 0
               "
+              :ref="(element) => setResourceContainerRef(app.id, element)"
               class="flex flex-wrap gap-1"
             >
               <span
-                v-for="resource in config.getResources(app)"
+                v-for="resource in getVisibleResources(app)"
                 :key="resource.id"
-                class="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+                class="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground whitespace-nowrap"
               >
                 {{ resource.label }}
+              </span>
+              <span
+                v-if="getHiddenResourceCount(app.id) > 0"
+                class="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground whitespace-nowrap"
+              >
+                {{ getHiddenResourcesLabel(getHiddenResourceCount(app.id)) }}
               </span>
             </div>
           </div>
