@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { findProvider } from "@/integration/providerRegistry";
+import { getProvider } from "@/integration/providerRegistry";
 import { useIntegrationStore } from "@/stores/integrationStore";
 import { usePodStore } from "@/stores";
 import type {
@@ -40,7 +40,7 @@ const config = computed<IntegrationProviderConfig | null>(() => {
   if (props.provider === "") {
     return null;
   }
-  return findProvider(props.provider);
+  return getProvider(props.provider);
 });
 const providerLabel = computed<string>(() => config.value?.label ?? "");
 const apps = computed(() =>

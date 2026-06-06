@@ -224,17 +224,17 @@ class DiscordProvider implements IntegrationProvider {
     text: string,
     extra?: Record<string, unknown>,
   ): Promise<Result<void>> {
-    const client = await this.getOrCreateClient(appId);
-    if (!client) {
-      return err(`找不到 Discord App ${appId}`);
-    }
-
-    const content =
-      text.length > MAX_DISCORD_MESSAGE_LENGTH
-        ? `${text.slice(0, MAX_DISCORD_MESSAGE_LENGTH - 14)}\n...(訊息已截斷)`
-        : text;
-
     try {
+      const client = await this.getOrCreateClient(appId);
+      if (!client) {
+        return err(`找不到 Discord App ${appId}`);
+      }
+
+      const content =
+        text.length > MAX_DISCORD_MESSAGE_LENGTH
+          ? `${text.slice(0, MAX_DISCORD_MESSAGE_LENGTH - 14)}\n...(訊息已截斷)`
+          : text;
+
       await client.sendMessage(this.getReplyChannelId(resourceId, extra), content, {
         replyToMessageId: this.getReplyToMessageId(extra),
       });
@@ -263,20 +263,20 @@ class DiscordProvider implements IntegrationProvider {
     appId: string,
     event: NormalizedEvent,
   ): Promise<Result<void>> {
-    const client = await this.getOrCreateClient(appId);
-    if (!client) {
-      return err(`找不到 Discord App ${appId}`);
-    }
-
-    if (
-      typeof event.replyChannelId !== "string" ||
-      event.replyChannelId === "" ||
-      (typeof event.messageId !== "string" && typeof event.messageId !== "number")
-    ) {
-      return ok(undefined);
-    }
-
     try {
+      const client = await this.getOrCreateClient(appId);
+      if (!client) {
+        return err(`找不到 Discord App ${appId}`);
+      }
+
+      if (
+        typeof event.replyChannelId !== "string" ||
+        event.replyChannelId === "" ||
+        (typeof event.messageId !== "string" && typeof event.messageId !== "number")
+      ) {
+        return ok(undefined);
+      }
+
       await client.addReaction(event.replyChannelId, String(event.messageId), "👀");
       return ok(undefined);
     } catch (error) {

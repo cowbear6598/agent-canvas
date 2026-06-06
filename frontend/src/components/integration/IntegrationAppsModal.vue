@@ -54,6 +54,12 @@ const hiddenResourceCounts = ref<Record<string, number>>({});
 const resourceContainerElements = new Map<string, HTMLDivElement>();
 let measureRafId: number | null = null;
 
+const RESOURCE_CONTAINER_CLASS = "flex flex-wrap gap-1";
+const RESOURCE_CHIP_CLASS =
+  "rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground whitespace-nowrap";
+const MAX_RESOURCE_ROWS = 2;
+const DEFAULT_RESOURCE_GAP_PX = 4;
+
 watch(
   () => props.provider,
   () => {
@@ -133,36 +139,74 @@ function setResourceContainerRef(
   resourceContainerElements.delete(appId);
 }
 
-function createMeasureChip(label: string): HTMLSpanElement {
+function createMeasureChip(): HTMLSpanElement {
   const chip = document.createElement("span");
-  chip.className =
-    "rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground whitespace-nowrap";
-  chip.textContent = label;
+  chip.className = RESOURCE_CHIP_CLASS;
   return chip;
 }
 
-function countRenderedRows(container: HTMLElement): number {
-  const rowTops = new Set<number>();
-  for (const child of Array.from(container.children)) {
-    if (!(child instanceof HTMLElement)) continue;
-    rowTops.add(child.offsetTop);
+function measureChipWidth(chip: HTMLSpanElement, label: string): number {
+  chip.textContent = label;
+  const width = chip.getBoundingClientRect().width;
+  return width > 0 ? width : chip.offsetWidth;
+}
+
+function countFittableChipWidths(
+  widths: number[],
+  containerWidth: number,
+  gap: number,
+): number {
+  let rowWidth = 0;
+  let rowCount = 1;
+  let visibleCount = 0;
+
+  for (const width of widths) {
+    if (rowWidth === 0) {
+      rowWidth = width;
+      visibleCount += 1;
+      continue;
+    }
+
+    if (rowWidth + gap + width <= containerWidth) {
+      rowWidth += gap + width;
+      visibleCount += 1;
+      continue;
+    }
+
+    if (rowCount >= MAX_RESOURCE_ROWS) {
+      break;
+    }
+
+    rowCount += 1;
+    rowWidth = width;
+    visibleCount += 1;
   }
-  return rowTops.size;
+
+  return visibleCount;
+}
+
+function fitChipWidthsWithinRows(
+  widths: number[],
+  containerWidth: number,
+  gap: number,
+): boolean {
+  return countFittableChipWidths(widths, containerWidth, gap) === widths.length;
 }
 
 function measureVisibleResourceCount(
   resources: IntegrationResource[],
-  containerWidth: number,
+  container: HTMLDivElement,
 ): {
   visibleCount: number;
   hiddenCount: number;
 } {
+  const containerWidth = container.clientWidth;
   if (resources.length === 0 || containerWidth <= 0) {
     return { visibleCount: resources.length, hiddenCount: 0 };
   }
 
   const measureContainer = document.createElement("div");
-  measureContainer.className = "flex flex-wrap gap-1";
+  measureContainer.className = RESOURCE_CONTAINER_CLASS;
   measureContainer.style.position = "absolute";
   measureContainer.style.left = "-9999px";
   measureContainer.style.top = "0";
@@ -172,38 +216,52 @@ function measureVisibleResourceCount(
 
   document.body.appendChild(measureContainer);
 
-  let visibleCount = 0;
-
   try {
-    for (const resource of resources) {
-      const chip = createMeasureChip(resource.label);
-      measureContainer.appendChild(chip);
-      if (countRenderedRows(measureContainer) > 2) {
-        measureContainer.removeChild(chip);
-        break;
-      }
-      visibleCount += 1;
-    }
+    const measureChip = createMeasureChip();
+    measureContainer.appendChild(measureChip);
 
+    const gapValue = Number.parseFloat(
+      window.getComputedStyle(measureContainer).columnGap ||
+        window.getComputedStyle(measureContainer).gap,
+    );
+    const gap = Number.isFinite(gapValue) ? gapValue : DEFAULT_RESOURCE_GAP_PX;
+    const resourceWidths = resources.map((resource) =>
+      measureChipWidth(measureChip, resource.label),
+    );
+
+    const visibleCount = countFittableChipWidths(
+      resourceWidths,
+      containerWidth,
+      gap,
+    );
     let hiddenCount = resources.length - visibleCount;
+
     if (hiddenCount <= 0) {
       return { visibleCount: resources.length, hiddenCount: 0 };
     }
 
-    const moreChip = createMeasureChip(getHiddenResourcesLabel(hiddenCount));
-    measureContainer.appendChild(moreChip);
+    let adjustedVisibleCount = visibleCount;
 
-    while (countRenderedRows(measureContainer) > 2 && visibleCount > 0) {
-      const previousChip = moreChip.previousElementSibling;
-      if (previousChip) {
-        measureContainer.removeChild(previousChip);
+    while (adjustedVisibleCount > 0) {
+      const moreChipWidth = measureChipWidth(
+        measureChip,
+        getHiddenResourcesLabel(hiddenCount),
+      );
+      const candidateWidths = [
+        ...resourceWidths.slice(0, adjustedVisibleCount),
+        moreChipWidth,
+      ];
+      if (fitChipWidthsWithinRows(candidateWidths, containerWidth, gap)) {
+        return {
+          visibleCount: adjustedVisibleCount,
+          hiddenCount,
+        };
       }
-      visibleCount -= 1;
+      adjustedVisibleCount -= 1;
       hiddenCount += 1;
-      moreChip.textContent = getHiddenResourcesLabel(hiddenCount);
     }
 
-    return { visibleCount, hiddenCount };
+    return { visibleCount: 0, hiddenCount: resources.length };
   } finally {
     document.body.removeChild(measureContainer);
   }
@@ -230,17 +288,13 @@ async function measureResourceLayout(): Promise<void> {
     }
 
     const container = resourceContainerElements.get(app.id);
-    const containerWidth = container?.clientWidth ?? 0;
-    if (containerWidth <= 0) {
+    if (!container || container.clientWidth <= 0) {
       nextVisibleCounts[app.id] = resources.length;
       nextHiddenCounts[app.id] = 0;
       continue;
     }
 
-    const { visibleCount, hiddenCount } = measureVisibleResourceCount(
-      resources,
-      containerWidth,
-    );
+    const { visibleCount, hiddenCount } = measureVisibleResourceCount(resources, container);
     nextVisibleCounts[app.id] = visibleCount;
     nextHiddenCounts[app.id] = hiddenCount;
   }
@@ -519,18 +573,18 @@ const handleCopyToken = (appId: string, token: string): void => {
                 !config.hasNoResource && config.getResources(app).length > 0
               "
               :ref="(element) => setResourceContainerRef(app.id, element)"
-              class="flex flex-wrap gap-1"
+              :class="RESOURCE_CONTAINER_CLASS"
             >
               <span
                 v-for="resource in getVisibleResources(app)"
                 :key="resource.id"
-                class="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground whitespace-nowrap"
+                :class="RESOURCE_CHIP_CLASS"
               >
                 {{ resource.label }}
               </span>
               <span
                 v-if="getHiddenResourceCount(app.id) > 0"
-                class="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground whitespace-nowrap"
+                :class="RESOURCE_CHIP_CLASS"
               >
                 {{ getHiddenResourcesLabel(getHiddenResourceCount(app.id)) }}
               </span>

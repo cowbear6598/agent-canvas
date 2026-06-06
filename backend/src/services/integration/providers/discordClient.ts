@@ -66,6 +66,8 @@ export interface DiscordClientFactory {
   create(botToken: string): DiscordClient;
 }
 
+const DISCORD_GUILD_FETCH_CONCURRENCY = 5;
+
 class DiscordJsClient implements DiscordClient {
   private readonly client: Client;
   private readonly mentionListeners = new Set<DiscordMentionListener>();
@@ -120,24 +122,40 @@ class DiscordJsClient implements DiscordClient {
     const guildRefs = await this.client.guilds.fetch();
     const channels: DiscordGuildTextChannel[] = [];
 
-    for (const guildRef of guildRefs.values()) {
-      const guild = await guildRef.fetch();
-      const fetchedChannels = await guild.channels.fetch();
+    const guildRefList = Array.from(guildRefs.values());
+    for (
+      let index = 0;
+      index < guildRefList.length;
+      index += DISCORD_GUILD_FETCH_CONCURRENCY
+    ) {
+      const currentBatch = guildRefList.slice(
+        index,
+        index + DISCORD_GUILD_FETCH_CONCURRENCY,
+      );
+      const batchChannels = await Promise.all(
+        currentBatch.map(async (guildRef) => {
+          const guild = await guildRef.fetch();
+          const fetchedChannels = await guild.channels.fetch();
 
-      for (const channel of fetchedChannels.values()) {
-        if (!channel || channel.type !== ChannelType.GuildText) {
-          continue;
-        }
+          return Array.from(fetchedChannels.values()).flatMap((channel) => {
+            if (!channel || channel.type !== ChannelType.GuildText) {
+              return [];
+            }
 
-        channels.push({
-          id: channel.id,
-          name: channel.name,
-          guild: {
-            id: guild.id,
-            name: guild.name,
-          },
-        });
-      }
+            return [
+              {
+                id: channel.id,
+                name: channel.name,
+                guild: {
+                  id: guild.id,
+                  name: guild.name,
+                },
+              } satisfies DiscordGuildTextChannel,
+            ];
+          });
+        }),
+      );
+      channels.push(...batchChannels.flat());
     }
 
     return channels.sort((left, right) => {
