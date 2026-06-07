@@ -14,6 +14,7 @@
     "enable": "Enable",
     "disable": "Disable",
     "add": "Add",
+    "back": "Back",
     "saving": "Saving...",
     "connecting": "Connecting...",
     "loading": "Loading...",
@@ -56,7 +57,7 @@
   },
   "integration": {
     "select": {
-      "title": "Integrations"
+      "title": "External Services"
     },
     "apps": {
       "title": "{provider} Apps",
@@ -365,13 +366,8 @@
   "layout": {
     "header": {
       "canvasList": "Canvas List",
-      "globalSettings": "Global Settings",
-      "managedMcp": "MCP Manager",
-      "managedPlugin": "Skill Management",
-      "integrations": "Integrations",
       "history": "History",
-      "llmProvider": "LLM Provider Settings",
-      "integrationsHub": "Integrations Hub"
+      "integrationsHub": "Management Hub"
     }
   },
   "managedMcp": {
@@ -416,7 +412,6 @@
     "form": {
       "createTitle": "Create a new MCP entry",
       "editTitle": "Edit MCP entry",
-      "editDescription": "This view shows the registry config plus the latest runtime status for the selected MCP.",
       "enabled": "Enabled",
       "name": "Name",
       "namePlaceholder": "e.g. linear-sync",
@@ -444,13 +439,14 @@
     }
   },
   "integrationsHub": {
-    "title": "Integrations Hub",
-    "description": "Choose the integration category to manage",
+    "title": "Management Hub",
     "cards": {
+      "globalSettings": "Global Settings",
+      "integrations": "External Services",
       "mcp": "MCP Manager",
       "plugin": "Skill Manager",
-      "llmProvider": "LLM Provider",
-      "modelSettings": "Model Settings"
+      "modelSettings": "Model Settings",
+      "opencode": "OpenCode"
     }
   },
   "pluginManager": {
@@ -488,14 +484,7 @@
   },
   "llmProvider": {
     "modal": {
-      "title": "LLM Provider",
-      "backButton": "Back"
-    },
-    "card": {
-      "opencode": {
-        "title": "opencode",
-        "description": "Manage LLM providers and model aliases via opencode"
-      }
+      "title": "OpenCode"
     },
     "opencode": {
       "providerList": {
@@ -537,16 +526,13 @@
   },
   "modelSettings": {
     "title": "Model Settings",
-    "description": "Configure the shared models used by Memory and Connection Line.",
     "category": {
       "label": "Model settings category",
       "memory": {
-        "title": "Memory",
-        "description": "Model settings used when maintaining memory content."
+        "title": "Memory"
       },
       "connectionLine": {
-        "title": "Connection Line",
-        "description": "Shared model settings used when Connection Line runs."
+        "title": "Connection Line"
       }
     },
     "form": {

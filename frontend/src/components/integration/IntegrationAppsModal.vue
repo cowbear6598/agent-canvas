@@ -19,6 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Trash2, Plus, Copy, Check } from "lucide-vue-next";
+import ModalBackButton from "@/components/ui/ModalBackButton.vue";
 import { getProvider } from "@/integration/providerRegistry";
 import { useIntegrationStore } from "@/stores/integrationStore";
 import { t } from "@/i18n";
@@ -27,12 +28,14 @@ import type { IntegrationApp, IntegrationResource } from "@/types/integration";
 interface Props {
   open: boolean;
   provider: string;
+  showBackButton?: boolean;
 }
 
 const props = defineProps<Props>();
 
 const emit = defineEmits<{
   "update:open": [value: boolean];
+  back: [];
 }>();
 
 const integrationStore = useIntegrationStore();
@@ -344,6 +347,10 @@ const handleClose = (): void => {
   emit("update:open", false);
 };
 
+const handleBack = (): void => {
+  emit("back");
+};
+
 const handleOpenAddForm = (): void => {
   initFormValues();
   showAddForm.value = true;
@@ -484,7 +491,11 @@ const handleCopyToken = (appId: string, token: string): void => {
       class="max-w-2xl"
     >
       <DialogHeader>
-        <DialogTitle>
+        <DialogTitle class="flex items-center gap-2">
+          <ModalBackButton
+            v-if="showBackButton"
+            @click="handleBack"
+          />
           {{
             $t("integration.apps.title", { provider: config.label })
           }}

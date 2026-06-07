@@ -102,12 +102,6 @@ function handleSave(): void {
             : t("managedMcp.form.createTitle")
         }}
       </p>
-      <p
-        v-if="isEditingExisting"
-        class="mt-1 text-sm text-muted-foreground"
-      >
-        {{ t("managedMcp.form.editDescription") }}
-      </p>
     </div>
 
     <ScrollArea class="min-h-0 flex-1">

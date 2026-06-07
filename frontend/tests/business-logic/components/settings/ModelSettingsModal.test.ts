@@ -199,6 +199,22 @@ describe("ModelSettingsModal", () => {
     );
   });
 
+  it("簡化後不顯示整體與分類說明文", async () => {
+    const wrapper = mountModal();
+
+    await flushPromises();
+
+    expect(wrapper.text()).not.toContain(
+      "設定 Memory 與 Connection Line 使用的統一模型。",
+    );
+    expect(wrapper.text()).not.toContain("維護記憶內容時使用的模型設定。");
+    expect(wrapper.text()).not.toContain(
+      "Connection Line 執行時使用的統一模型設定。",
+    );
+    expect(wrapper.text().match(/Memory/g)?.length ?? 0).toBe(1);
+    expect(wrapper.text().match(/Connection Line/g)?.length ?? 0).toBe(1);
+  });
+
   it("載入設定失敗時應停用儲存且不送出舊狀態", async () => {
     getConfigMock.mockResolvedValueOnce(null);
     const wrapper = mountModal();

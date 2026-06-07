@@ -23,6 +23,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import WarningBox from "@/components/ui/WarningBox.vue";
 import { Loader2 } from "lucide-vue-next";
+import ModalBackButton from "@/components/ui/ModalBackButton.vue";
 import { TIMEZONE_OPTIONS } from "@/types";
 import { useToast } from "@/composables/useToast";
 import { useWebSocketErrorHandler } from "@/composables/useWebSocketErrorHandler";
@@ -34,12 +35,14 @@ import { useBackupSettingsForm } from "@/composables/useBackupSettingsForm";
 import { useWorkspacePasswordForm } from "@/composables/useWorkspacePasswordForm";
 interface Props {
   open: boolean;
+  showBackButton?: boolean;
 }
 
 const props = defineProps<Props>();
 
 const emit = defineEmits<{
   "update:open": [value: boolean];
+  back: [];
 }>();
 
 const { t } = useI18n();
@@ -124,6 +127,10 @@ const handleClose = (): void => {
   emit("update:open", false);
 };
 
+const handleBack = (): void => {
+  emit("back");
+};
+
 watch(
   () => props.open,
   (newVal) => {
@@ -143,7 +150,13 @@ watch(
   >
     <DialogContent class="max-w-md">
       <DialogHeader>
-        <DialogTitle>{{ $t("settings.title") }}</DialogTitle>
+        <DialogTitle class="flex items-center gap-2">
+          <ModalBackButton
+            v-if="showBackButton"
+            @click="handleBack"
+          />
+          {{ $t("settings.title") }}
+        </DialogTitle>
         <DialogDescription class="sr-only">
           {{ $t("settings.title") }}
         </DialogDescription>

@@ -12,11 +12,13 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import ModalBackButton from "@/components/ui/ModalBackButton.vue";
 import { useManagedPluginStore } from "@/stores/managedPluginStore";
 import { type InstalledPlugin } from "@/types/plugin";
 
 interface Props {
   open: boolean;
+  showBackButton?: boolean;
 }
 
 const DRAG_ANIMATION_MS = 180;
@@ -25,6 +27,7 @@ const props = defineProps<Props>();
 
 const emit = defineEmits<{
   "update:open": [value: boolean];
+  back: [];
 }>();
 
 const store = useManagedPluginStore();
@@ -228,6 +231,10 @@ function handleClose(): void {
   emit("update:open", false);
 }
 
+function handleBack(): void {
+  emit("back");
+}
+
 watch(
   () => store.plugins,
   (plugins) => {
@@ -256,7 +263,13 @@ watch(
   >
     <DialogContent class="max-w-3xl">
       <DialogHeader>
-        <DialogTitle>{{ t("pluginManager.modal.title") }}</DialogTitle>
+        <DialogTitle class="flex items-center gap-2">
+          <ModalBackButton
+            v-if="showBackButton"
+            @click="handleBack"
+          />
+          {{ t("pluginManager.modal.title") }}
+        </DialogTitle>
         <DialogDescription class="sr-only">
           {{ t("pluginManager.modal.description") }}
         </DialogDescription>

@@ -14,6 +14,7 @@
     "enable": "有効化",
     "disable": "無効化",
     "add": "追加",
+    "back": "戻る",
     "saving": "保存中...",
     "connecting": "接続中...",
     "loading": "読み込み中...",
@@ -56,7 +57,7 @@
   },
   "integration": {
     "select": {
-      "title": "インテグレーション"
+      "title": "外部サービス"
     },
     "apps": {
       "title": "{provider} Apps",
@@ -365,13 +366,8 @@
   "layout": {
     "header": {
       "canvasList": "Canvas 一覧",
-      "globalSettings": "グローバル設定",
-      "managedMcp": "MCP 管理",
-      "managedPlugin": "Skill 管理",
-      "integrations": "インテグレーション管理",
       "history": "実行履歴",
-      "llmProvider": "LLM Provider 設定",
-      "integrationsHub": "統合管理"
+      "integrationsHub": "管理センター"
     }
   },
   "managedMcp": {
@@ -416,7 +412,6 @@
     "form": {
       "createTitle": "新しい MCP を作成",
       "editTitle": "MCP 設定を編集",
-      "editDescription": "選択中の MCP について、registry 設定と最新の runtime 状態を表示します。",
       "enabled": "有効",
       "name": "名前",
       "namePlaceholder": "例：linear-sync",
@@ -444,13 +439,14 @@
     }
   },
   "integrationsHub": {
-    "title": "統合管理センター",
-    "description": "管理する統合カテゴリを選択してください",
+    "title": "管理センター",
     "cards": {
+      "globalSettings": "グローバル設定",
+      "integrations": "外部サービス",
       "mcp": "MCP 管理",
       "plugin": "Skill 管理",
-      "llmProvider": "LLM Provider",
-      "modelSettings": "Model 設定"
+      "modelSettings": "Model 設定",
+      "opencode": "OpenCode"
     }
   },
   "pluginManager": {
@@ -488,14 +484,7 @@
   },
   "llmProvider": {
     "modal": {
-      "title": "LLM Provider",
-      "backButton": "戻る"
-    },
-    "card": {
-      "opencode": {
-        "title": "opencode",
-        "description": "opencode を使って LLM Provider と model エイリアスを管理"
-      }
+      "title": "OpenCode"
     },
     "opencode": {
       "providerList": {
@@ -537,16 +526,13 @@
   },
   "modelSettings": {
     "title": "Model 設定",
-    "description": "Memory と Connection Line で使用する共通モデルを設定します。",
     "category": {
       "label": "Model 設定カテゴリ",
       "memory": {
-        "title": "Memory",
-        "description": "記憶内容のメンテナンス時に使用するモデル設定。"
+        "title": "Memory"
       },
       "connectionLine": {
-        "title": "Connection Line",
-        "description": "Connection Line 実行時に使用する共通モデル設定。"
+        "title": "Connection Line"
       }
     },
     "form": {

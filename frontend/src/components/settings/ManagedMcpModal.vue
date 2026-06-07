@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import ModalBackButton from "@/components/ui/ModalBackButton.vue";
 import { useManagedMcpStore } from "@/stores/managedMcpStore";
 import { useToast } from "@/composables/useToast";
 import type {
@@ -21,12 +22,14 @@ type PendingAction = "refresh" | "save" | "delete" | "test" | null;
 
 interface Props {
   open: boolean;
+  showBackButton?: boolean;
 }
 
 const props = defineProps<Props>();
 
 const emit = defineEmits<{
   "update:open": [value: boolean];
+  back: [];
 }>();
 
 const { t } = useI18n();
@@ -181,6 +184,10 @@ function handleClose(): void {
   emit("update:open", false);
 }
 
+function handleBack(): void {
+  emit("back");
+}
+
 const showRefreshSpinner = computed(() => pendingAction.value === "refresh");
 const showInitialLoading = computed(
   () =>
@@ -210,7 +217,13 @@ watch(
   >
     <DialogContent class="max-w-5xl">
       <DialogHeader>
-        <DialogTitle>{{ t("managedMcp.modal.title") }}</DialogTitle>
+        <DialogTitle class="flex items-center gap-2">
+          <ModalBackButton
+            v-if="showBackButton"
+            @click="handleBack"
+          />
+          {{ t("managedMcp.modal.title") }}
+        </DialogTitle>
         <DialogDescription class="sr-only">
           {{ t("managedMcp.modal.description") }}
         </DialogDescription>

@@ -14,6 +14,7 @@
     "enable": "啟用",
     "disable": "停用",
     "add": "新增",
+    "back": "返回",
     "saving": "儲存中...",
     "connecting": "連線中...",
     "loading": "載入中...",
@@ -56,7 +57,7 @@
   },
   "integration": {
     "select": {
-      "title": "整合服務"
+      "title": "外部服務"
     },
     "apps": {
       "title": "{provider} Apps",
@@ -365,13 +366,8 @@
   "layout": {
     "header": {
       "canvasList": "Canvas 清單",
-      "globalSettings": "全域設定",
-      "managedMcp": "MCP 管理",
-      "managedPlugin": "Skill 管理",
-      "integrations": "整合服務管理",
       "history": "歷程",
-      "llmProvider": "LLM Provider 設定",
-      "integrationsHub": "整合管理"
+      "integrationsHub": "管理中心"
     }
   },
   "managedMcp": {
@@ -416,7 +412,6 @@
     "form": {
       "createTitle": "建立新的 MCP 設定",
       "editTitle": "編輯 MCP 設定",
-      "editDescription": "這裡顯示全域 registry entry 的 transport 與最近一次 runtime 狀態。",
       "enabled": "啟用",
       "name": "名稱",
       "namePlaceholder": "例如：linear-sync",
@@ -444,13 +439,14 @@
     }
   },
   "integrationsHub": {
-    "title": "整合管理中心",
-    "description": "選擇要管理的整合類別",
+    "title": "管理中心",
     "cards": {
+      "globalSettings": "全域設定",
+      "integrations": "外部服務",
       "mcp": "MCP 管理",
       "plugin": "Skill 管理",
-      "llmProvider": "LLM Provider",
-      "modelSettings": "Model 設定"
+      "modelSettings": "Model 設定",
+      "opencode": "OpenCode"
     }
   },
   "pluginManager": {
@@ -488,14 +484,7 @@
   },
   "llmProvider": {
     "modal": {
-      "title": "LLM Provider",
-      "backButton": "返回"
-    },
-    "card": {
-      "opencode": {
-        "title": "opencode",
-        "description": "使用 opencode 管理 LLM Provider 與 model 對應"
-      }
+      "title": "OpenCode"
     },
     "opencode": {
       "providerList": {
@@ -537,16 +526,13 @@
   },
   "modelSettings": {
     "title": "Model 設定",
-    "description": "設定 Memory 與 Connection Line 使用的統一模型。",
     "category": {
       "label": "Model 設定類別",
       "memory": {
-        "title": "Memory",
-        "description": "維護記憶內容時使用的模型設定。"
+        "title": "Memory"
       },
       "connectionLine": {
-        "title": "Connection Line",
-        "description": "Connection Line 執行時使用的統一模型設定。"
+        "title": "Connection Line"
       }
     },
     "form": {

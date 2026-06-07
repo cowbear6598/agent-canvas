@@ -6,16 +6,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import ModalBackButton from "@/components/ui/ModalBackButton.vue";
 import { getAllProviders } from "@/integration/providerRegistry";
 
 interface Props {
   open: boolean;
+  showBackButton?: boolean;
 }
 
 defineProps<Props>();
 
 const emit = defineEmits<{
   "update:open": [value: boolean];
+  back: [];
   select: [category: string];
 }>();
 
@@ -29,6 +32,10 @@ const handleSelect = (categoryId: string): void => {
 const handleClose = (): void => {
   emit("update:open", false);
 };
+
+const handleBack = (): void => {
+  emit("back");
+};
 </script>
 
 <template>
@@ -38,7 +45,13 @@ const handleClose = (): void => {
   >
     <DialogContent class="max-w-md">
       <DialogHeader>
-        <DialogTitle>{{ $t("integration.select.title") }}</DialogTitle>
+        <DialogTitle class="flex items-center gap-2">
+          <ModalBackButton
+            v-if="showBackButton"
+            @click="handleBack"
+          />
+          {{ $t("integration.select.title") }}
+        </DialogTitle>
         <DialogDescription class="sr-only">
           {{ $t("integration.select.title") }}
         </DialogDescription>

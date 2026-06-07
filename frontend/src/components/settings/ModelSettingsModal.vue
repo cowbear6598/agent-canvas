@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import ModalBackButton from "@/components/ui/ModalBackButton.vue";
 import {
   Select,
   SelectContent,
@@ -39,12 +40,14 @@ interface ModelSettingsValue {
 
 interface Props {
   open: boolean;
+  showBackButton?: boolean;
 }
 
 const props = defineProps<Props>();
 
 const emit = defineEmits<{
   "update:open": [value: boolean];
+  back: [];
 }>();
 
 const { t } = useI18n();
@@ -73,18 +76,15 @@ const categories = computed<
   ReadonlyArray<{
     value: ModelSettingsCategory;
     label: string;
-    description: string;
   }>
 >(() => [
   {
     value: "memory",
     label: t("modelSettings.category.memory.title"),
-    description: t("modelSettings.category.memory.description"),
   },
   {
     value: "connectionLine",
     label: t("modelSettings.category.connectionLine.title"),
-    description: t("modelSettings.category.connectionLine.description"),
   },
 ]);
 
@@ -403,6 +403,10 @@ const handleClose = (): void => {
   emit("update:open", false);
 };
 
+const handleBack = (): void => {
+  emit("back");
+};
+
 watch(
   () => props.open,
   (open) => {
@@ -421,9 +425,15 @@ watch(
   >
     <DialogContent class="max-w-lg">
       <DialogHeader>
-        <DialogTitle>{{ t("modelSettings.title") }}</DialogTitle>
-        <DialogDescription>
-          {{ t("modelSettings.description") }}
+        <DialogTitle class="flex items-center gap-2">
+          <ModalBackButton
+            v-if="showBackButton"
+            @click="handleBack"
+          />
+          {{ t("modelSettings.title") }}
+        </DialogTitle>
+        <DialogDescription class="sr-only">
+          {{ t("modelSettings.title") }}
         </DialogDescription>
       </DialogHeader>
 
@@ -441,7 +451,7 @@ watch(
               :variant="
                 activeCategory === category.value ? 'default' : 'outline'
               "
-              class="h-auto min-h-20 flex-col items-start justify-start whitespace-normal px-3 py-3 text-left"
+              class="h-auto min-h-12 justify-start whitespace-normal px-3 py-3 text-left"
               role="tab"
               :aria-selected="activeCategory === category.value"
               @click="activeCategory = category.value"
@@ -449,38 +459,13 @@ watch(
               <span class="text-sm font-medium leading-5">
                 {{ category.label }}
               </span>
-              <span
-                class="mt-1 text-xs font-normal leading-4"
-                :class="
-                  activeCategory === category.value
-                    ? 'text-primary-foreground/80'
-                    : 'text-muted-foreground'
-                "
-              >
-                {{ category.description }}
-              </span>
             </Button>
           </div>
 
           <div class="rounded-md border border-border p-4">
-            <h3 class="text-sm font-medium">
-              {{
-                activeCategory === "memory"
-                  ? t("modelSettings.category.memory.title")
-                  : t("modelSettings.category.connectionLine.title")
-              }}
-            </h3>
-            <p class="mt-1 text-sm text-muted-foreground">
-              {{
-                activeCategory === "memory"
-                  ? t("modelSettings.category.memory.description")
-                  : t("modelSettings.category.connectionLine.description")
-              }}
-            </p>
-
             <div
               v-if="isLoading"
-              class="mt-4 flex items-center gap-2 text-sm text-muted-foreground"
+              class="flex items-center gap-2 text-sm text-muted-foreground"
             >
               <Loader2 class="h-4 w-4 animate-spin" />
               {{ t("modelSettings.form.loading") }}
@@ -488,7 +473,7 @@ watch(
 
             <div
               v-else
-              class="mt-4 space-y-4"
+              class="space-y-4"
             >
               <div class="space-y-2">
                 <Label>{{ t("modelSettings.form.providerLabel") }}</Label>
