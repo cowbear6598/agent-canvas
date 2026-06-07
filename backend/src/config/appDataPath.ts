@@ -7,6 +7,7 @@ export const CANVAS_DB_FILE_NAME = "canvas.db";
 interface ResolveAppDataPathsOptions {
   env?: Record<string, string | undefined>;
   homeDir?: string;
+  cwd?: string;
 }
 
 export interface AppDataPaths {
@@ -25,7 +26,7 @@ export function resolveAppDataRoot(
   const override = env[APP_DATA_ROOT_ENV_NAME]?.trim();
 
   if (override) {
-    return override;
+    return path.resolve(options.cwd ?? process.cwd(), override);
   }
 
   return getDefaultAppDataRoot(options.homeDir);

@@ -1,7 +1,10 @@
 import path from "path";
 import { fileURLToPath } from "url";
 
-import { APP_DATA_ROOT_ENV_NAME } from "../../config/appDataPath.js";
+import {
+  APP_DATA_ROOT_ENV_NAME,
+  resolveAppDataRoot,
+} from "../../config/appDataPath.js";
 import type { PodMcpEntry } from "../mcp/managedMcpSurfaceService.js";
 
 function getPluginMcpBridgePath(): string {
@@ -19,7 +22,8 @@ function getPluginMcpBridgePath(): string {
  * bridge 仍啟動但回空陣列，保持 entry 名稱穩定以避免 provider session 重啟。
  */
 export function buildPluginMcpEntry(podId: string): PodMcpEntry {
-  const appDataRoot = process.env[APP_DATA_ROOT_ENV_NAME]?.trim();
+  const hasOverride = process.env[APP_DATA_ROOT_ENV_NAME]?.trim();
+  const appDataRoot = hasOverride ? resolveAppDataRoot() : null;
 
   return {
     name: "agent_canvas_plugin",

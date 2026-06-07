@@ -22,6 +22,18 @@ describe("appDataPath", () => {
     expect(result).toBe(overrideRoot);
   });
 
+  it("有設定相對路徑 override 時應正規化成絕對路徑", () => {
+    const result = resolveAppDataRoot({
+      env: {
+        [APP_DATA_ROOT_ENV_NAME]: "./tmp/dev-agent-canvas",
+      },
+      cwd: "/Users/tester/project",
+      homeDir: "/Users/tester",
+    });
+
+    expect(result).toBe("/Users/tester/project/tmp/dev-agent-canvas");
+  });
+
   it("未設定 override 時應回退到正式版預設資料根目錄", () => {
     const homeDir = "/Users/tester";
 

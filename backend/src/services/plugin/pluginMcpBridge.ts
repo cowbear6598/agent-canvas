@@ -34,9 +34,6 @@ export interface MinimalDatabase {
   prepare(sql: string): {
     all(...params: unknown[]): unknown[];
   };
-  query(sql: string): {
-    all(...params: unknown[]): unknown[];
-  };
 }
 
 // ─── resolvePodPluginScope ───────────────────────────────────────────────────

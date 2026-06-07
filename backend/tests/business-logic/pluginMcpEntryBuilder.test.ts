@@ -24,6 +24,19 @@ describe("buildPluginMcpEntry", () => {
     });
   });
 
+  it("有相對路徑 override 時會傳遞正規化後的絕對路徑", () => {
+    restoreEnv = overrideEnv({
+      [APP_DATA_ROOT_ENV_NAME]: "./tmp/dev-agent-canvas",
+    });
+
+    const entry = buildPluginMcpEntry("pod-relative");
+
+    expect(entry.env).toEqual({
+      AGENT_CANVAS_PLUGIN_MCP_POD_ID: "pod-relative",
+      [APP_DATA_ROOT_ENV_NAME]: `${process.cwd()}/tmp/dev-agent-canvas`,
+    });
+  });
+
   it("沒有 override 時只保留 pod id，不注入多餘 app data env", () => {
     restoreEnv = overrideEnv({
       [APP_DATA_ROOT_ENV_NAME]: undefined,

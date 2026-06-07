@@ -50,9 +50,6 @@ function buildFakeDb(
         },
       };
     },
-    query(sql: string) {
-      return this.prepare(sql);
-    },
   };
 }
 
