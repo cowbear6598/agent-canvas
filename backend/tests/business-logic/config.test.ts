@@ -1,3 +1,10 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  APP_DATA_ROOT_ENV_NAME,
+  resolveAppDataPaths,
+} from "../../src/config/appDataPath.js";
+import { overrideEnv } from "../helpers/tmpDirHelper.js";
+
 describe("Config - GitLab URL 驗證", () => {
   const originalEnv = process.env.GITLAB_URL;
 
@@ -66,5 +73,43 @@ describe("Config - GitLab URL 驗證", () => {
         expect(error).toBeInstanceOf(TypeError);
       }
     }
+  });
+});
+
+describe("Config - app data root 解析", () => {
+  let restoreEnv = () => {};
+
+  afterEach(() => {
+    restoreEnv();
+    restoreEnv = () => {};
+    vi.resetModules();
+  });
+
+  async function loadConfigModule() {
+    vi.resetModules();
+    return import("../../src/config/index.js");
+  }
+
+  it("有設定 override 時，config.appDataRoot 應與共用 resolver 一致", async () => {
+    const overrideRoot = "/tmp/agent-canvas-dev-root";
+    restoreEnv = overrideEnv({
+      [APP_DATA_ROOT_ENV_NAME]: overrideRoot,
+    });
+
+    const expectedPaths = resolveAppDataPaths();
+    const { config } = await loadConfigModule();
+
+    expect(config.appDataRoot).toBe(expectedPaths.appDataRoot);
+  });
+
+  it("未設定 override 時，config.appDataRoot 應與正式預設 resolver 一致", async () => {
+    restoreEnv = overrideEnv({
+      [APP_DATA_ROOT_ENV_NAME]: undefined,
+    });
+
+    const expectedPaths = resolveAppDataPaths();
+    const { config } = await loadConfigModule();
+
+    expect(config.appDataRoot).toBe(expectedPaths.appDataRoot);
   });
 });

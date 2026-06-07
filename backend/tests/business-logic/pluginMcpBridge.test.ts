@@ -6,11 +6,15 @@
  *   managed_plugins 的項目
  */
 
-import { describe, expect, it } from "vitest";
+import path from "path";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   resolvePodPluginScope,
+  resolvePluginBridgeDbPath,
   type MinimalDatabase,
 } from "../../src/services/plugin/pluginMcpBridge.js";
+import { APP_DATA_ROOT_ENV_NAME } from "../../src/config/appDataPath.js";
+import { overrideEnv } from "../helpers/tmpDirHelper.js";
 
 // ─── fake db builder ─────────────────────────────────────────────────────────
 
@@ -51,6 +55,13 @@ function buildFakeDb(
     },
   };
 }
+
+let restoreEnv: (() => void) | null = null;
+
+afterEach(() => {
+  restoreEnv?.();
+  restoreEnv = null;
+});
 
 // ════════════════════════════════════════════════════════════════════════════
 // resolvePodPluginScope
@@ -142,5 +153,33 @@ describe("resolvePodPluginScope", () => {
     const scope = resolvePodPluginScope(db, "pod-1");
 
     expect(scope.get("plugin-c")).toBe("/some/custom/path/with spaces");
+  });
+});
+
+describe("resolvePluginBridgeDbPath", () => {
+  it("有注入 app data root 時優先使用注入路徑組出 canvas.db", () => {
+    restoreEnv = overrideEnv({
+      [APP_DATA_ROOT_ENV_NAME]: "/tmp/dev-agent-canvas",
+    });
+
+    const dbPath = resolvePluginBridgeDbPath({
+      homeDir: "/Users/ignored",
+    });
+
+    expect(dbPath).toBe("/tmp/dev-agent-canvas/canvas.db");
+  });
+
+  it("沒有注入 app data root 時回退到正式預設目錄", () => {
+    restoreEnv = overrideEnv({
+      [APP_DATA_ROOT_ENV_NAME]: undefined,
+    });
+
+    const dbPath = resolvePluginBridgeDbPath({
+      homeDir: "/Users/release-user",
+    });
+
+    expect(dbPath).toBe(
+      path.join("/Users/release-user", "Documents", "AgentCanvas", "canvas.db"),
+    );
   });
 });

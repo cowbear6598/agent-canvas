@@ -1,0 +1,21 @@
+feature: separate-dev-data-storage
+created: "2026-06-07"
+approved: true
+frontend:
+  required: false
+  reason: 這次需求只涉及開發環境與正式版資料根目錄分流，沒有使用者可見畫面或互動變更。
+  evidence:
+    - question.yaml Q4 確認目前沒有前端持有 app data root 或資料存放區設定入口。
+    - userflow.yaml F1 到 F3 都只描述環境切換後的資料讀寫結果，未包含任何前端操作調整。
+backend:
+  required: true
+  reason: 需要調整後端資料根目錄決策與相關讀取點，才能讓 dev 與 prod 使用不同資料存放區。
+  evidence:
+    - question.yaml Q1 確認目前 dev 與 prod 都共用 `~/Documents/AgentCanvas`。
+    - question.yaml Q2 確認 `AGENT_CANVAS_APP_DATA_DIR` 尚未被正式後端 runtime 統一採用。
+    - question.yaml Q3 確認 plugin MCP bridge 仍把資料庫路徑寫死在正式目錄。
+    - userflow.yaml F1 到 F3 都要求開發環境與正式版在同機部署時讀寫不同資料集。
+ticket:
+  story_issue: null
+  branch_issue: null
+  task_issue: null

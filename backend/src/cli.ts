@@ -3,10 +3,9 @@ import path from "path";
 import os from "os";
 import pkg from "../../package.json";
 import { safeJsonParse } from "@shared/safeJsonParse.js";
+import { resolveAppDataRoot } from "./config/appDataPath.js";
 
-const APP_DATA_DIR =
-  process.env.AGENT_CANVAS_APP_DATA_DIR ??
-  path.join(os.homedir(), "Documents", "AgentCanvas");
+const APP_DATA_DIR = resolveAppDataRoot();
 const PID_FILE = path.join(APP_DATA_DIR, "agent-canvas.pid");
 const CONFIG_FILE = path.join(APP_DATA_DIR, "config.json");
 const LOG_DIR = path.join(APP_DATA_DIR, "logs");

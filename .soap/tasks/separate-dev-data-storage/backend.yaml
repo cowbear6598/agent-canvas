@@ -1,0 +1,90 @@
+feature: separate-dev-data-storage
+side: backend
+approved: true
+phases:
+  - id: P1
+    title: 統一後端資料根目錄解析
+    parallel: false
+    verification: []
+    done: true
+    items:
+      - id: P1.A
+        title: 共用 app data root resolver
+        tasks:
+          - id: P1.A.t1
+            text: 新增 `backend/src/config/appDataPath.ts`，集中解析 `AGENT_CANVAS_APP_DATA_DIR` override、預設 `~/Documents/AgentCanvas` 根目錄，以及 `canvas.db` 衍生路徑，供 server runtime 與 plugin bridge 共用
+            completed: true
+            last_files_changed:
+              - backend/src/config/appDataPath.ts
+          - id: P1.A.t2
+            text: 在 `backend/src/config/index.ts` 改用共用 resolver 取得 `appDataRoot`，讓 `canvasRoot`、`repositoriesRoot`、`runRepositoriesRoot`、`pluginsRoot`、`agentsPath`、`commandsPath`、`tmpRoot` 與 `stagingRoot` 全部從同一個解析結果衍生
+            completed: true
+            last_files_changed:
+              - backend/src/config/index.ts
+      - id: P1.B
+        title: 開發啟動入口切到獨立資料夾
+        tasks:
+          - id: P1.B.t1
+            text: 調整 `backend/package.json` 的 `dev` script，固定注入 `AGENT_CANVAS_APP_DATA_DIR=$HOME/Documents/Development/AgentCanvas`，讓本機開發環境預設寫入獨立資料夾
+            completed: true
+            last_files_changed:
+              - backend/package.json
+          - id: P1.B.t2
+            text: 若 `backend/src/cli.ts` 需要引用共用 resolver，將 `APP_DATA_DIR`、`PID_FILE`、`CONFIG_FILE`、`LOG_DIR` 與 `LOG_FILE` 的無 override fallback 維持在 `~/Documents/AgentCanvas`，避免部署 daemon 預設落到 development 目錄
+            completed: true
+            last_files_changed:
+              - backend/src/cli.ts
+
+  - id: P2
+    title: 補齊 plugin bridge 與子程序環境傳遞
+    parallel: false
+    verification: []
+    done: true
+    items:
+      - id: P2.A
+        title: Plugin MCP bridge 資料庫路徑同步
+        tasks:
+          - id: P2.A.t1
+            text: 在 `backend/src/services/plugin/pluginMcpEntryBuilder.ts` 將目前 process env 的 `AGENT_CANVAS_APP_DATA_DIR` 一併注入 `agent_canvas_plugin` stdio entry，確保 child process 取得與後端主程序相同的資料根目錄
+            completed: true
+            last_files_changed:
+              - backend/src/services/plugin/pluginMcpEntryBuilder.ts
+          - id: P2.A.t2
+            text: 在 `backend/src/services/plugin/pluginMcpBridge.ts` 改用共用 app data path resolver 或注入的 env 解析 `canvas.db`，移除 `~/Documents/AgentCanvas/canvas.db` 寫死路徑
+            completed: true
+            last_files_changed:
+              - backend/src/services/plugin/pluginMcpBridge.ts
+
+  - id: P3
+    title: 回歸測試資料目錄分流規則
+    parallel: true
+    verification: []
+    done: true
+    items:
+      - id: P3.A
+        title: App data path 規則測試
+        tasks:
+          - id: P3.A.t1
+            text: 新增 `backend/tests/business-logic/appDataPath.test.ts`，覆蓋 `AGENT_CANVAS_APP_DATA_DIR` override、預設正式資料根目錄，以及 `canvas.db` 衍生路徑三種規則
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/appDataPath.test.ts
+          - id: P3.A.t2
+            text: 在 `backend/tests/business-logic/config.test.ts` 補上 `config/index.ts` 會使用共用 resolver 的案例，確認後端主程序的 app data root 來源與 helper 一致
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/config.test.ts
+      - id: P3.B
+        title: Plugin bridge 環境傳遞測試
+        tasks:
+          - id: P3.B.t1
+            text: 新增 `backend/tests/business-logic/pluginMcpEntryBuilder.test.ts`，驗證 `buildPluginMcpEntry()` 會在有 override 時帶出 `AGENT_CANVAS_APP_DATA_DIR`，沒有 override 時不注入多餘 env
+            completed: true
+            last_files_changed:
+              - backend/tests/business-logic/pluginMcpEntryBuilder.test.ts
+          - id: P3.B.t2
+            text: 在 `backend/tests/business-logic/pluginMcpBridge.test.ts` 補上資料庫路徑解析案例，確認 bridge 會優先讀取注入的 app data root，再回退到正式預設目錄
+            completed: true
+            last_files_changed:
+              - backend/src/services/plugin/pluginMcpBridge.ts
+              - backend/tests/business-logic/pluginMcpBridge.test.ts

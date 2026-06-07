@@ -17,7 +17,6 @@
  */
 
 import path from "path";
-import os from "os";
 import { Database } from "bun:sqlite";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -26,6 +25,7 @@ import {
   ListToolsRequestSchema,
   type CallToolResult,
 } from "@modelcontextprotocol/sdk/types.js";
+import { resolveAppDataPaths } from "../../config/appDataPath.js";
 import { listSkillsForPlugin } from "./pluginScanFs.js";
 
 // ─── DB 型別（最小介面，供 resolvePodPluginScope 注入） ──────────────────────
@@ -98,6 +98,12 @@ function errorResult(message: string): CallToolResult {
   };
 }
 
+export function resolvePluginBridgeDbPath(
+  options?: Parameters<typeof resolveAppDataPaths>[0],
+): string {
+  return resolveAppDataPaths(options).canvasDbPath;
+}
+
 // ─── main ────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -108,12 +114,7 @@ async function main(): Promise<void> {
     );
   }
 
-  const dbPath = path.join(
-    os.homedir(),
-    "Documents",
-    "AgentCanvas",
-    "canvas.db",
-  );
+  const dbPath = resolvePluginBridgeDbPath();
   const db = new Database(dbPath, { readonly: true });
 
   const podScope = resolvePodPluginScope(db, podId);

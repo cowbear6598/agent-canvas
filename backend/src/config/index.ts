@@ -1,5 +1,5 @@
-import os from "os";
 import path from "path";
+import { resolveAppDataPaths } from "./appDataPath.js";
 
 function validateGitLabUrl(url: string | undefined): void {
   if (!url) {
@@ -140,17 +140,19 @@ function loadConfig(): Config {
     );
   };
 
-  const dataRoot = path.join(os.homedir(), "Documents", "AgentCanvas");
-
-  const appDataRoot = dataRoot;
-  const canvasRoot = path.join(dataRoot, "canvas");
-  const repositoriesRoot = path.join(dataRoot, "repositories");
-  const runRepositoriesRoot = path.join(dataRoot, "runtime", "run-repositories");
-  const pluginsRoot = path.join(dataRoot, "plugins");
-  const agentsPath = path.join(dataRoot, "agents");
-  const commandsPath = path.join(dataRoot, "commands");
+  const { appDataRoot } = resolveAppDataPaths();
+  const canvasRoot = path.join(appDataRoot, "canvas");
+  const repositoriesRoot = path.join(appDataRoot, "repositories");
+  const runRepositoriesRoot = path.join(
+    appDataRoot,
+    "runtime",
+    "run-repositories",
+  );
+  const pluginsRoot = path.join(appDataRoot, "plugins");
+  const agentsPath = path.join(appDataRoot, "agents");
+  const commandsPath = path.join(appDataRoot, "commands");
   // 暫存目錄：不在此建立，寫檔時由 attachmentWriter 以 mkdir -p 建立
-  const tmpRoot = path.join(dataRoot, "tmp");
+  const tmpRoot = path.join(appDataRoot, "tmp");
   // staging 目錄掛在 tmpRoot 下，與正式附件目錄共用同一層；由 tmpCleanupService 6h 一併清理
   const stagingRoot = path.join(tmpRoot, "staging");
 

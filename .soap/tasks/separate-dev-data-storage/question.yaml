@@ -1,0 +1,55 @@
+feature: separate-dev-data-storage
+created: "2026-06-07"
+approved: true
+impact_classification:
+  frontend:
+    status: unlikely
+    evidence:
+      - 使用者需求只提到開發環境與正式版的資料存放區隔離，未提到畫面、互動、路由或文案變更。
+      - codebase 調查未發現前端直接決定 app data root 的邏輯。
+  backend:
+    status: required
+    evidence:
+      - 使用者明確要求開發環境資料存放區改到 `~/Documents/Development/AgentCanvas`，屬於伺服器端資料根目錄配置。
+      - 目前後端 `config.appDataRoot` 與衍生目錄都由固定路徑決定，會直接影響資料庫、canvas、repositories、runtime 與 plugins 存放位置。
+questions:
+  - id: Q1
+    text: 目前後端實際使用的資料根目錄是如何決定的？dev 與 prod 現在是否會落到同一個位置？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      `backend/src/config/index.ts` 的 `loadConfig()` 目前直接把 `dataRoot` 設為
+      `path.join(os.homedir(), "Documents", "AgentCanvas")`，再衍生出
+      `appDataRoot`、`canvasRoot`、`repositoriesRoot`、`runRepositoriesRoot`、
+      `pluginsRoot`、`agentsPath`、`commandsPath`、`tmpRoot` 與 `stagingRoot`。
+      `backend/package.json` 的 `dev` script 只設定 `PORT=3101` 與
+      `AGENT_CANVAS_OPENCODE_SERVER_PORT=4106`，`prod` script 只額外設定
+      `NODE_ENV=production`；兩者都沒有切換資料目錄，因此目前 dev 與 prod 預設會共用
+      `~/Documents/AgentCanvas`。
+  - id: Q2
+    text: 專案裡是否已存在可覆蓋 app data root 的機制，可作為 dev/prod 分流基礎？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      已存在部分基礎，但尚未統一。`backend/src/cli.ts` 的 `APP_DATA_DIR` 會優先讀取
+      `process.env.AGENT_CANVAS_APP_DATA_DIR`，測試環境也在
+      `backend/tests/setup/testConfig.ts` 明確設定這個 env 來隔離測試資料。
+      但正式後端 runtime 使用的 `backend/src/config/index.ts` 沒有讀這個 env，
+      代表 CLI / test 與 server runtime 目前不一致，僅靠現有機制還不能讓 dev/prod 自動分流。
+  - id: Q3
+    text: 除了 `config` 之外，是否還有其他後端模組把正式資料路徑寫死，會影響這次隔離？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      有。`backend/src/services/plugin/pluginMcpBridge.ts` 目前直接用
+      `path.join(os.homedir(), "Documents", "AgentCanvas", "canvas.db")` 開啟資料庫，
+      沒有經過 `config` 或 env override。若只修改 `config/index.ts` 而不一起調整這裡，
+      plugin MCP bridge 仍可能讀到正式版資料庫，dev/prod 隔離會不完整。
+  - id: Q4
+    text: 這次需求是否需要前端配合顯示或設定資料存放區？
+    type: codebase-investigation
+    completed: true
+    answer: |
+      目前沒有證據顯示需要。前端主要透過 WebSocket / HTTP 與後端互動，搜尋結果未發現前端
+      持有 app data root、`AGENT_CANVAS_APP_DATA_DIR` 或 `~/Documents/AgentCanvas`
+      的設定入口或顯示邏輯。這次需求可先視為純後端調整。

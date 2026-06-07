@@ -8,7 +8,7 @@
     "test": "tests"
   },
   "scripts": {
-    "dev": "PORT=3101 AGENT_CANVAS_OPENCODE_SERVER_PORT=4106 bun --watch src/index.ts",
+    "dev": "AGENT_CANVAS_APP_DATA_DIR=$HOME/Documents/Development/AgentCanvas PORT=3101 AGENT_CANVAS_OPENCODE_SERVER_PORT=4106 bun --watch src/index.ts",
     "build": "bun build src/index.ts --outdir ./dist --target bun",
     "start": "bun dist/index.js",
     "prod": "cd ../frontend && bunx vite build && cd ../backend && NODE_ENV=production bun src/index.ts",
