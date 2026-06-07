@@ -32,10 +32,6 @@ const handleSelect = (categoryId: string): void => {
 const handleClose = (): void => {
   emit("update:open", false);
 };
-
-const handleBack = (): void => {
-  emit("back");
-};
 </script>
 
 <template>
@@ -48,7 +44,7 @@ const handleBack = (): void => {
         <DialogTitle class="flex items-center gap-2">
           <ModalBackButton
             v-if="showBackButton"
-            @click="handleBack"
+            @back="emit('back')"
           />
           {{ $t("integration.select.title") }}
         </DialogTitle>

@@ -347,10 +347,6 @@ const handleClose = (): void => {
   emit("update:open", false);
 };
 
-const handleBack = (): void => {
-  emit("back");
-};
-
 const handleOpenAddForm = (): void => {
   initFormValues();
   showAddForm.value = true;
@@ -494,7 +490,7 @@ const handleCopyToken = (appId: string, token: string): void => {
         <DialogTitle class="flex items-center gap-2">
           <ModalBackButton
             v-if="showBackButton"
-            @click="handleBack"
+            @back="emit('back')"
           />
           {{
             $t("integration.apps.title", { provider: config.label })

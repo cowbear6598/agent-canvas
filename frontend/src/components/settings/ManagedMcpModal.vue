@@ -184,10 +184,6 @@ function handleClose(): void {
   emit("update:open", false);
 }
 
-function handleBack(): void {
-  emit("back");
-}
-
 const showRefreshSpinner = computed(() => pendingAction.value === "refresh");
 const showInitialLoading = computed(
   () =>
@@ -220,7 +216,7 @@ watch(
         <DialogTitle class="flex items-center gap-2">
           <ModalBackButton
             v-if="showBackButton"
-            @click="handleBack"
+            @back="emit('back')"
           />
           {{ t("managedMcp.modal.title") }}
         </DialogTitle>

@@ -278,9 +278,9 @@ describe("integrations hub userflow", () => {
           DialogHeader: passthroughStub,
           DialogTitle: passthroughStub,
           ModalBackButton: {
-            emits: ["click"],
+            emits: ["back"],
             template:
-              '<button data-testid="opencode-modal-back" @click="$emit(\'click\')">返回</button>',
+              '<button data-testid="opencode-modal-back" @click="$emit(\'back\')">返回</button>',
           },
           OpencodeSettingsPanel: {
             template: '<div data-testid="opencode-settings-panel">panel</div>',

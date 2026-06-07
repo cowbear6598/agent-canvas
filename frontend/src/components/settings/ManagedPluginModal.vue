@@ -231,10 +231,6 @@ function handleClose(): void {
   emit("update:open", false);
 }
 
-function handleBack(): void {
-  emit("back");
-}
-
 watch(
   () => store.plugins,
   (plugins) => {
@@ -266,7 +262,7 @@ watch(
         <DialogTitle class="flex items-center gap-2">
           <ModalBackButton
             v-if="showBackButton"
-            @click="handleBack"
+            @back="emit('back')"
           />
           {{ t("pluginManager.modal.title") }}
         </DialogTitle>

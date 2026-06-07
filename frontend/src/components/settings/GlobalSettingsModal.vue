@@ -127,10 +127,6 @@ const handleClose = (): void => {
   emit("update:open", false);
 };
 
-const handleBack = (): void => {
-  emit("back");
-};
-
 watch(
   () => props.open,
   (newVal) => {
@@ -153,7 +149,7 @@ watch(
         <DialogTitle class="flex items-center gap-2">
           <ModalBackButton
             v-if="showBackButton"
-            @click="handleBack"
+            @back="emit('back')"
           />
           {{ $t("settings.title") }}
         </DialogTitle>

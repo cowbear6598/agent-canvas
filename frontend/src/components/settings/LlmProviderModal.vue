@@ -28,10 +28,6 @@ const { t } = useI18n();
 const handleClose = (): void => {
   emit("update:open", false);
 };
-
-const handleBack = (): void => {
-  emit("back");
-};
 </script>
 
 <template>
@@ -44,7 +40,7 @@ const handleBack = (): void => {
         <DialogTitle class="flex items-center gap-2">
           <ModalBackButton
             v-if="showBackButton"
-            @click="handleBack"
+            @back="emit('back')"
           />
           {{ t("llmProvider.modal.title") }}
         </DialogTitle>
