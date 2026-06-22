@@ -6,6 +6,29 @@ import { runStore } from "../../src/services/runStore.js";
 const CANVAS_ID = "canvas-1";
 const SOURCE_POD_ID = "pod-source";
 const TRIGGER_MESSAGE = "開始執行";
+const RUN_CREATED_AT_BASE_MS = Date.parse("2026-01-01T00:00:00.000Z");
+
+function setRunCreatedAt(runId: string, offsetSeconds: number): void {
+  getDb()
+    .prepare("UPDATE workflow_runs SET created_at = ? WHERE id = ?")
+    .run(
+      new Date(RUN_CREATED_AT_BASE_MS + offsetSeconds * 1000).toISOString(),
+      runId,
+    );
+}
+
+function createRunWithStatus(
+  triggerMessage: string,
+  offsetSeconds: number,
+  status: "running" | "completed" | "error" | "cancelled",
+): ReturnType<typeof runStore.createRun> {
+  const run = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, triggerMessage);
+  setRunCreatedAt(run.id, offsetSeconds);
+  if (status !== "running") {
+    runStore.updateRunStatus(run.id, status);
+  }
+  return run;
+}
 
 describe("RunStore", () => {
   beforeEach(() => {
@@ -114,36 +137,59 @@ describe("RunStore", () => {
       expect(runStore.countRunsByCanvasId("other-canvas")).toBe(0);
     });
 
-    it("getOldestCompletedRunIds 回傳最舊已完成 run 的 id 列表", () => {
-      const run1 = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "第一次");
-      const run2 = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "第二次");
-      const run3 = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "第三次");
-      runStore.updateRunStatus(run1.id, "completed");
-      runStore.updateRunStatus(run2.id, "completed");
-      runStore.updateRunStatus(run3.id, "completed");
+    it("getOverflowTerminalRunIds 只回傳最新 30 筆之外的 terminal run", () => {
+      const overflowCompleted = createRunWithStatus(
+        "overflow-completed",
+        0,
+        "completed",
+      );
+      const overflowError = createRunWithStatus("overflow-error", 1, "error");
+      const overflowCancelled = createRunWithStatus(
+        "overflow-cancelled",
+        2,
+        "cancelled",
+      );
+      const overflowRunning = createRunWithStatus(
+        "overflow-running",
+        3,
+        "running",
+      );
+      let newestRetainedCompletedId = "";
 
-      const ids = runStore.getOldestCompletedRunIds(CANVAS_ID, 2);
+      for (let i = 4; i < 34; i++) {
+        const run = createRunWithStatus(`retained-${i}`, i, "completed");
+        newestRetainedCompletedId = run.id;
+      }
 
-      expect(ids).toHaveLength(2);
+      const ids = runStore.getOverflowTerminalRunIds(CANVAS_ID, 10);
+
+      expect(ids).toEqual([
+        overflowCompleted.id,
+        overflowError.id,
+        overflowCancelled.id,
+      ]);
+      expect(ids).not.toContain(overflowRunning.id);
+      expect(ids).not.toContain(newestRetainedCompletedId);
     });
 
-    it("getOldestCompletedRunIds 應回傳最舊的 2 個（而非任意 2 個）", () => {
-      // 依序建立三個 completed run（SQLite createdAt 毫秒精度可能相同，
-      // 故使用不同 triggerMessage 作為語意區分，實際排序依 created_at ASC）
-      const run1 = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "最早");
-      const run2 = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "中間");
-      const run3 = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "最新");
-      runStore.updateRunStatus(run1.id, "completed");
-      runStore.updateRunStatus(run2.id, "completed");
-      runStore.updateRunStatus(run3.id, "completed");
+    it("getOldestCompletedRunIds 相容介面仍套用 terminal overflow 規則", () => {
+      const overflowRunning = createRunWithStatus(
+        "overflow-running",
+        0,
+        "running",
+      );
 
-      const ids = runStore.getOldestCompletedRunIds(CANVAS_ID, 2);
+      for (let i = 1; i <= 30; i++) {
+        createRunWithStatus(`retained-${i}`, i, "completed");
+      }
 
-      // limit=2 應回傳最舊的兩個（run1, run2），不應包含最新的 run3
-      expect(ids).toHaveLength(2);
-      expect(ids).toContain(run1.id);
-      expect(ids).toContain(run2.id);
-      expect(ids).not.toContain(run3.id);
+      expect(runStore.getOldestCompletedRunIds(CANVAS_ID, 1)).toEqual([]);
+
+      runStore.updateRunStatus(overflowRunning.id, "cancelled");
+
+      expect(runStore.getOldestCompletedRunIds(CANVAS_ID, 1)).toEqual([
+        overflowRunning.id,
+      ]);
     });
   });
 

@@ -173,7 +173,7 @@ function buildStatements(db: Database): {
     updateStatus: ReturnType<Database["prepare"]>;
     deleteById: ReturnType<Database["prepare"]>;
     countByCanvasId: ReturnType<Database["prepare"]>;
-    selectOldestCompleted: ReturnType<Database["prepare"]>;
+    selectOverflowTerminalCandidates: ReturnType<Database["prepare"]>;
   };
   runPodInstance: {
     insert: ReturnType<Database["prepare"]>;
@@ -761,8 +761,19 @@ function buildStatements(db: Database): {
       countByCanvasId: db.prepare(
         "SELECT COUNT(*) as count FROM workflow_runs WHERE canvas_id = ?",
       ),
-      selectOldestCompleted: db.prepare(
-        "SELECT id FROM workflow_runs WHERE canvas_id = ? AND status = 'completed' ORDER BY created_at ASC LIMIT ?",
+      selectOverflowTerminalCandidates: db.prepare(
+        `WITH overflow_runs AS (
+          SELECT id, status, created_at
+          FROM workflow_runs
+          WHERE canvas_id = ?
+          ORDER BY created_at DESC, id DESC
+          LIMIT -1 OFFSET 30
+        )
+        SELECT id
+        FROM overflow_runs
+        WHERE status IN ('completed', 'error', 'cancelled')
+        ORDER BY created_at ASC, id ASC
+        LIMIT ?`,
       ),
     },
 

@@ -433,12 +433,16 @@ class RunStore {
     return result.count;
   }
 
-  getOldestCompletedRunIds(canvasId: string, limit: number): string[] {
-    const rows = this.stmts.workflowRun.selectOldestCompleted.all(
+  getOverflowTerminalRunIds(canvasId: string, limit: number): string[] {
+    const rows = this.stmts.workflowRun.selectOverflowTerminalCandidates.all(
       canvasId,
       limit,
     ) as Array<{ id: string }>;
     return rows.map((r) => r.id);
+  }
+
+  getOldestCompletedRunIds(canvasId: string, limit: number): string[] {
+    return this.getOverflowTerminalRunIds(canvasId, limit);
   }
 
   createPodInstance(

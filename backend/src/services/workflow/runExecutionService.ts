@@ -348,42 +348,76 @@ class RunExecutionService {
     };
   }
 
-  private enforceRunLimit(canvasId: string): void {
+  private getOverflowTerminalRunIds(canvasId: string): string[] {
     const count = runStore.countRunsByCanvasId(canvasId);
-    if (count <= MAX_RUNS_PER_CANVAS) return;
+    if (count <= MAX_RUNS_PER_CANVAS) return [];
 
-    const overflow = count - MAX_RUNS_PER_CANVAS;
-    const oldestIds = runStore.getOldestCompletedRunIds(canvasId, overflow);
-    if (oldestIds.length === 0) return;
+    return runStore.getOverflowTerminalRunIds(
+      canvasId,
+      count - MAX_RUNS_PER_CANVAS,
+    );
+  }
 
-    void this.cleanupOverflowRuns(oldestIds);
+  private enforceRunLimit(canvasId: string): void {
+    const overflowRunIds = this.getOverflowTerminalRunIds(canvasId);
+    if (overflowRunIds.length === 0) return;
+
+    void this.cleanupOverflowRuns(overflowRunIds);
+  }
+
+  private async deleteRunWithRetry(runId: string): Promise<void> {
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
+        await this.deleteRun(runId);
+        return;
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        if (attempt === 2) {
+          logger.error(
+            "Run",
+            "Delete",
+            `清理舊 Run 失敗（runId=${runId}，已重試 2 次）: ${errorMessage}`,
+          );
+          return;
+        }
+        logger.warn(
+          "Run",
+          "Delete",
+          `清理舊 Run 失敗，準備重試（runId=${runId}）: ${errorMessage}`,
+        );
+      }
+    }
   }
 
   private async cleanupOverflowRuns(runIds: string[]): Promise<void> {
     for (const runId of runIds) {
-      for (let attempt = 1; attempt <= 2; attempt += 1) {
-        try {
-          await this.deleteRun(runId);
-          break;
-        } catch (error) {
-          const errorMessage =
-            error instanceof Error ? error.message : String(error);
-          if (attempt === 2) {
-            logger.error(
-              "Run",
-              "Delete",
-              `清理舊 Run 失敗（runId=${runId}，已重試 2 次）: ${errorMessage}`,
-            );
-            break;
-          }
-          logger.warn(
-            "Run",
-            "Delete",
-            `清理舊 Run 失敗，準備重試（runId=${runId}）: ${errorMessage}`,
-          );
-        }
-      }
+      await this.deleteRunWithRetry(runId);
     }
+  }
+
+  private cleanupTerminalOverflowRun(
+    runId: string,
+    lifecyclePromise: Promise<void>,
+    shouldCleanup: boolean,
+  ): void {
+    fireAndForget(
+      (async () => {
+        try {
+          await lifecyclePromise;
+        } catch {
+          // lifecycle 錯誤已由既有 fireAndForget 記錄；此處仍要繼續做保留清理
+        }
+
+        if (!shouldCleanup) {
+          return;
+        }
+
+        await this.cleanupOverflowRuns([runId]);
+      })(),
+      "Run",
+      "清理終態 overflow Run 失敗",
+    );
   }
 
   startPodInstance(runContext: RunContext, podId: string): void {
@@ -727,6 +761,9 @@ class RunExecutionService {
 
     runStore.updateRunStatus(runId, newStatus);
     const updatedRun = runStore.getRun(runId);
+    const shouldCleanupTerminalRun = this
+      .getOverflowTerminalRunIds(canvasId)
+      .includes(runId);
     const maintenanceContext: RunContext = {
       runId,
       canvasId,
@@ -739,26 +776,31 @@ class RunExecutionService {
     );
 
     // Run 自然完成時立即回收所有 run 級隔離資源
+    const completionLifecycle = completeRunLifecycle({
+      runId,
+      maintenanceContext,
+      snapshotEntries,
+      captureSnapshot: (lifecycleRunId, podId, snapshotPath) =>
+        runRepoActivitySnapshotService.captureSnapshot(
+          lifecycleRunId,
+          podId,
+          snapshotPath,
+        ),
+      scheduleRepositoriesForCompletedRun: (runContext) =>
+        memoryMaintainerService.scheduleRepositoriesForCompletedRun(runContext),
+      cleanupRunResources: (lifecycleRunId) =>
+        this.resourceLifecycle.cleanupRunResources(lifecycleRunId),
+    });
+
     fireAndForget(
-      completeRunLifecycle({
-        runId,
-        maintenanceContext,
-        snapshotEntries,
-        captureSnapshot: (lifecycleRunId, podId, snapshotPath) =>
-          runRepoActivitySnapshotService.captureSnapshot(
-            lifecycleRunId,
-            podId,
-            snapshotPath,
-          ),
-        scheduleRepositoriesForCompletedRun: (runContext) =>
-          memoryMaintainerService.scheduleRepositoriesForCompletedRun(
-            runContext,
-          ),
-        cleanupRunResources: (lifecycleRunId) =>
-          this.resourceLifecycle.cleanupRunResources(lifecycleRunId),
-      }),
+      completionLifecycle,
       "Run",
       "清理 Run 隔離資源失敗",
+    );
+    this.cleanupTerminalOverflowRun(
+      runId,
+      completionLifecycle,
+      shouldCleanupTerminalRun,
     );
 
     socketService.emitToCanvas(
