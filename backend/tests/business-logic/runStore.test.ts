@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { initTestDb, getDb } from "../../src/database/index.js";
 import { resetStatements } from "../../src/database/statements.js";
-import { runStore } from "../../src/services/runStore.js";
+import {
+  runStore,
+  RUN_HISTORY_RETENTION_COUNT,
+} from "../../src/services/runStore.js";
 
 const CANVAS_ID = "canvas-1";
 const SOURCE_POD_ID = "pod-source";
@@ -67,6 +70,20 @@ describe("RunStore", () => {
       for (let i = 0; i < timestamps.length - 1; i++) {
         expect(timestamps[i]).toBeGreaterThanOrEqual(timestamps[i + 1]!);
       }
+    });
+
+    it("getRunsByCanvasId 在 created_at 相同時以 id 作為固定排序", () => {
+      const runA = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "A");
+      const runB = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, "B");
+      setRunCreatedAt(runA.id, 10);
+      setRunCreatedAt(runB.id, 10);
+
+      const runs = runStore.getRunsByCanvasId(CANVAS_ID);
+      const expectedIds = [runA.id, runB.id].sort((a, b) =>
+        b.localeCompare(a),
+      );
+
+      expect(runs.map((run) => run.id)).toEqual(expectedIds);
     });
 
     it("getRun 查詢單筆 run", () => {
@@ -156,12 +173,16 @@ describe("RunStore", () => {
       );
       let newestRetainedCompletedId = "";
 
-      for (let i = 4; i < 34; i++) {
+      for (let i = 4; i < RUN_HISTORY_RETENTION_COUNT + 4; i++) {
         const run = createRunWithStatus(`retained-${i}`, i, "completed");
         newestRetainedCompletedId = run.id;
       }
 
-      const ids = runStore.getOverflowTerminalRunIds(CANVAS_ID, 10);
+      const ids = runStore.getOverflowTerminalRunIds(
+        CANVAS_ID,
+        RUN_HISTORY_RETENTION_COUNT,
+        10,
+      );
 
       expect(ids).toEqual([
         overflowCompleted.id,
@@ -179,7 +200,7 @@ describe("RunStore", () => {
         "running",
       );
 
-      for (let i = 1; i <= 30; i++) {
+      for (let i = 1; i <= RUN_HISTORY_RETENTION_COUNT; i++) {
         createRunWithStatus(`retained-${i}`, i, "completed");
       }
 
@@ -190,6 +211,42 @@ describe("RunStore", () => {
       expect(runStore.getOldestCompletedRunIds(CANVAS_ID, 1)).toEqual([
         overflowRunning.id,
       ]);
+    });
+
+    it("isOverflowTerminalRun 只對最新保留筆數之外的 terminal run 回傳 true", () => {
+      const overflowRun = createRunWithStatus("overflow-completed", 0, "completed");
+      const runningOverflow = createRunWithStatus("overflow-running", 2, "running");
+
+      for (let i = 3; i < RUN_HISTORY_RETENTION_COUNT + 3; i++) {
+        createRunWithStatus(`retained-${i}`, i, "completed");
+      }
+      const retainedRun = createRunWithStatus(
+        "retained-completed",
+        RUN_HISTORY_RETENTION_COUNT + 3,
+        "completed",
+      );
+
+      expect(
+        runStore.isOverflowTerminalRun(
+          CANVAS_ID,
+          overflowRun.id,
+          RUN_HISTORY_RETENTION_COUNT,
+        ),
+      ).toBe(true);
+      expect(
+        runStore.isOverflowTerminalRun(
+          CANVAS_ID,
+          retainedRun.id,
+          RUN_HISTORY_RETENTION_COUNT,
+        ),
+      ).toBe(false);
+      expect(
+        runStore.isOverflowTerminalRun(
+          CANVAS_ID,
+          runningOverflow.id,
+          RUN_HISTORY_RETENTION_COUNT,
+        ),
+      ).toBe(false);
     });
   });
 

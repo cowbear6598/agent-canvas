@@ -436,6 +436,9 @@ function createBaseTables(db: Database): void {
   db.exec(
     "CREATE INDEX IF NOT EXISTS idx_workflow_runs_status ON workflow_runs(canvas_id, status)",
   );
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_workflow_runs_canvas_created_id ON workflow_runs(canvas_id, created_at DESC, id DESC)",
+  );
 
   db.exec(
     "CREATE TABLE IF NOT EXISTS run_pod_instances (" +

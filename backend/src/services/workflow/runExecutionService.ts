@@ -2,6 +2,7 @@ import {
   runStore,
   NEVER_TRIGGERED_STATUSES,
   RUN_TERMINAL_STATUSES,
+  RUN_HISTORY_RETENTION_COUNT,
 } from "../runStore.js";
 import type { RunPodInstance, RunPodInstanceStatus } from "../runStore.js";
 import { isAllPathwaysSettled } from "../../utils/pathwayHelpers.js";
@@ -47,7 +48,6 @@ import {
 } from "./runCompletionLifecycle.js";
 import { RunResourceLifecycleService } from "./runResourceLifecycleService.js";
 
-const MAX_RUNS_PER_CANVAS = 30;
 const GOAL_BLOCKED_STOP_WORKFLOW_MESSAGE =
   "Goal 已標記為 blocked，workflow 已停止觸發下游 Pod";
 
@@ -350,11 +350,12 @@ class RunExecutionService {
 
   private getOverflowTerminalRunIds(canvasId: string): string[] {
     const count = runStore.countRunsByCanvasId(canvasId);
-    if (count <= MAX_RUNS_PER_CANVAS) return [];
+    if (count <= RUN_HISTORY_RETENTION_COUNT) return [];
 
     return runStore.getOverflowTerminalRunIds(
       canvasId,
-      count - MAX_RUNS_PER_CANVAS,
+      RUN_HISTORY_RETENTION_COUNT,
+      count - RUN_HISTORY_RETENTION_COUNT,
     );
   }
 
@@ -402,7 +403,7 @@ class RunExecutionService {
     shouldCleanup: boolean,
   ): void {
     fireAndForget(
-      (async () => {
+      (async (): Promise<void> => {
         try {
           await lifecyclePromise;
         } catch {
@@ -761,9 +762,11 @@ class RunExecutionService {
 
     runStore.updateRunStatus(runId, newStatus);
     const updatedRun = runStore.getRun(runId);
-    const shouldCleanupTerminalRun = this
-      .getOverflowTerminalRunIds(canvasId)
-      .includes(runId);
+    const shouldCleanupTerminalRun = runStore.isOverflowTerminalRun(
+      canvasId,
+      runId,
+      RUN_HISTORY_RETENTION_COUNT,
+    );
     const maintenanceContext: RunContext = {
       runId,
       canvasId,

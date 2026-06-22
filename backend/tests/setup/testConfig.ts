@@ -2,6 +2,7 @@ import path from "path";
 import { fileURLToPath } from "node:url";
 
 const TEST_MAX_EVENT_LISTENERS = 50;
+const workerId = Number(process.env.VITEST_POOL_ID ?? "0");
 
 // 增加 EventEmitter 的 max listeners 限制，避免測試中的警告
 // 每個測試都會建立 socket 連線，導致 listeners 累積
@@ -193,6 +194,7 @@ const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "../../..",
 );
+const workerRootSuffix = `worker-${workerId}-pid-${process.pid}`;
 
 export interface TestConfig {
   port: number;
@@ -215,6 +217,7 @@ export const AGENT_CANVAS_TEST_ROOT = path.resolve(
   repoRoot,
   "tmp",
   "AgentCanvas",
+  workerRootSuffix,
 );
 
 const testRoot = path.join(AGENT_CANVAS_TEST_ROOT, `test-canvas-${timestamp}`);

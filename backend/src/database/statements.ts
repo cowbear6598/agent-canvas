@@ -174,6 +174,7 @@ function buildStatements(db: Database): {
     deleteById: ReturnType<Database["prepare"]>;
     countByCanvasId: ReturnType<Database["prepare"]>;
     selectOverflowTerminalCandidates: ReturnType<Database["prepare"]>;
+    selectOverflowTerminalCandidateById: ReturnType<Database["prepare"]>;
   };
   runPodInstance: {
     insert: ReturnType<Database["prepare"]>;
@@ -747,7 +748,7 @@ function buildStatements(db: Database): {
         )`,
       ),
       selectByCanvasId: db.prepare(
-        "SELECT * FROM workflow_runs WHERE canvas_id = ? ORDER BY created_at DESC",
+        "SELECT * FROM workflow_runs WHERE canvas_id = ? ORDER BY created_at DESC, id DESC",
       ),
       selectById: db.prepare("SELECT * FROM workflow_runs WHERE id = ?"),
       selectRunning: db.prepare(
@@ -767,13 +768,27 @@ function buildStatements(db: Database): {
           FROM workflow_runs
           WHERE canvas_id = ?
           ORDER BY created_at DESC, id DESC
-          LIMIT -1 OFFSET 30
+          LIMIT -1 OFFSET ?
         )
         SELECT id
         FROM overflow_runs
         WHERE status IN ('completed', 'error', 'cancelled')
         ORDER BY created_at ASC, id ASC
         LIMIT ?`,
+      ),
+      selectOverflowTerminalCandidateById: db.prepare(
+        `SELECT EXISTS(
+          SELECT 1
+          FROM (
+            SELECT id, status
+            FROM workflow_runs
+            WHERE canvas_id = $canvasId
+            ORDER BY created_at DESC, id DESC
+            LIMIT -1 OFFSET $retainCount
+          ) AS overflow_runs
+          WHERE overflow_runs.id = $runId
+            AND overflow_runs.status IN ('completed', 'error', 'cancelled')
+        ) AS is_overflow`,
       ),
     },
 

@@ -3,7 +3,10 @@ import { initTestDb } from "../../src/database/index.js";
 import { resetStatements } from "../../src/database/statements.js";
 import { getDb } from "../../src/database/index.js";
 import { runExecutionService } from "../../src/services/workflow/runExecutionService.js";
-import { runStore } from "../../src/services/runStore.js";
+import {
+  runStore,
+  RUN_HISTORY_RETENTION_COUNT,
+} from "../../src/services/runStore.js";
 import { podStore } from "../../src/services/podStore.js";
 import { socketService } from "../../src/services/socketService.js";
 import { abortRegistry } from "../../src/services/provider/abortRegistry.js";
@@ -232,7 +235,7 @@ describe("RunExecutionService", () => {
       runStore.updateRunStatus(oldestRun.id, "completed");
       await new Promise((resolve) => setTimeout(resolve, 1));
 
-      for (let i = 1; i < 30; i++) {
+      for (let i = 1; i < RUN_HISTORY_RETENTION_COUNT; i++) {
         const r = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, `run-${i}`);
         runStore.updateRunStatus(r.id, "completed");
       }
@@ -247,7 +250,9 @@ describe("RunExecutionService", () => {
         expect(runStore.getRun(oldestRun.id)).toBeUndefined();
       });
       expect(runStore.getRun(ctx.runId)?.status).toBe("running");
-      expect(runStore.getRunsByCanvasId(CANVAS_ID)).toHaveLength(30);
+      expect(runStore.getRunsByCanvasId(CANVAS_ID)).toHaveLength(
+        RUN_HISTORY_RETENTION_COUNT,
+      );
     });
 
     it("超額時仍會保留尚未結束的 run", async () => {
@@ -259,7 +264,7 @@ describe("RunExecutionService", () => {
       runStore.createPodInstance(longRunning.id, SOURCE_POD_ID, "pending");
       await new Promise((resolve) => setTimeout(resolve, 1));
 
-      for (let i = 0; i < 30; i++) {
+      for (let i = 0; i < RUN_HISTORY_RETENTION_COUNT; i++) {
         const r = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, `run-${i}`);
         runStore.updateRunStatus(r.id, "completed");
       }
@@ -271,14 +276,16 @@ describe("RunExecutionService", () => {
       );
 
       await vi.waitFor(() => {
-        expect(runStore.getRunsByCanvasId(CANVAS_ID)).toHaveLength(31);
+        expect(runStore.getRunsByCanvasId(CANVAS_ID)).toHaveLength(
+          RUN_HISTORY_RETENTION_COUNT + 1,
+        );
       });
       expect(runStore.getRun(longRunning.id)?.status).toBe("running");
     });
 
     it("背景清理失敗時會重試一次", async () => {
       const oldestRuns: string[] = [];
-      for (let i = 0; i < 30; i++) {
+      for (let i = 0; i < RUN_HISTORY_RETENTION_COUNT; i++) {
         const r = runStore.createRun(CANVAS_ID, SOURCE_POD_ID, `run-${i}`);
         runStore.updateRunStatus(r.id, "completed");
         oldestRuns.push(r.id);
@@ -823,6 +830,7 @@ describe("RunExecutionService", () => {
         memoryMaintainerService,
         "scheduleRepositoriesForCompletedRun",
       ).mockResolvedValue(undefined);
+      const bulkOverflowSpy = vi.spyOn(runStore, "getOverflowTerminalRunIds");
 
       const oldRun = runStore.createRun(
         CANVAS_ID,
@@ -837,7 +845,7 @@ describe("RunExecutionService", () => {
       runStore.updatePodInstanceStatus(oldInstance.id, "running");
       await new Promise((resolve) => setTimeout(resolve, 1));
 
-      for (let i = 0; i < 30; i++) {
+      for (let i = 0; i < RUN_HISTORY_RETENTION_COUNT; i++) {
         const r = runStore.createRun(
           CANVAS_ID,
           SOURCE_POD_ID,
@@ -852,6 +860,7 @@ describe("RunExecutionService", () => {
       await vi.waitFor(() => {
         expect(runStore.getRun(oldRun.id)).toBeUndefined();
       });
+      expect(bulkOverflowSpy).not.toHaveBeenCalled();
     });
 
     it("有 error 且無進行中的 instance → run 狀態變為 error", () => {
@@ -993,6 +1002,7 @@ describe("RunExecutionService", () => {
         memoryMaintainerService,
         "scheduleRepositoriesForCompletedRun",
       ).mockResolvedValue(undefined);
+      const bulkOverflowSpy = vi.spyOn(runStore, "getOverflowTerminalRunIds");
 
       const oldRun = runStore.createRun(
         CANVAS_ID,
@@ -1003,7 +1013,7 @@ describe("RunExecutionService", () => {
       runStore.updatePodInstanceStatus(oldInstance.id, "running");
       await new Promise((resolve) => setTimeout(resolve, 1));
 
-      for (let i = 0; i < 30; i++) {
+      for (let i = 0; i < RUN_HISTORY_RETENTION_COUNT; i++) {
         const r = runStore.createRun(
           CANVAS_ID,
           SOURCE_POD_ID,
@@ -1018,6 +1028,7 @@ describe("RunExecutionService", () => {
       await vi.waitFor(() => {
         expect(runStore.getRun(oldRun.id)).toBeUndefined();
       });
+      expect(bulkOverflowSpy).not.toHaveBeenCalled();
     });
 
     it("source blocked 透過 error pathway 後，下游 auto/branch/direct pathway 應結清為 skipped 而不是持續等待", () => {

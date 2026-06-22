@@ -65,6 +65,7 @@ export const RUN_TERMINAL_STATUSES = new Set<RunStatus>([
   "error",
   "cancelled",
 ]);
+export const RUN_HISTORY_RETENTION_COUNT = 30;
 
 export interface WorkflowRun {
   id: string;
@@ -433,16 +434,38 @@ class RunStore {
     return result.count;
   }
 
-  getOverflowTerminalRunIds(canvasId: string, limit: number): string[] {
+  getOverflowTerminalRunIds(
+    canvasId: string,
+    retainCount: number,
+    limit: number,
+  ): string[] {
     const rows = this.stmts.workflowRun.selectOverflowTerminalCandidates.all(
       canvasId,
+      retainCount,
       limit,
     ) as Array<{ id: string }>;
     return rows.map((r) => r.id);
   }
 
+  isOverflowTerminalRun(
+    canvasId: string,
+    runId: string,
+    retainCount: number,
+  ): boolean {
+    const row = this.stmts.workflowRun.selectOverflowTerminalCandidateById.get({
+      $canvasId: canvasId,
+      $runId: runId,
+      $retainCount: retainCount,
+    }) as { is_overflow: number } | undefined;
+    return row?.is_overflow === 1;
+  }
+
   getOldestCompletedRunIds(canvasId: string, limit: number): string[] {
-    return this.getOverflowTerminalRunIds(canvasId, limit);
+    return this.getOverflowTerminalRunIds(
+      canvasId,
+      RUN_HISTORY_RETENTION_COUNT,
+      limit,
+    );
   }
 
   createPodInstance(
