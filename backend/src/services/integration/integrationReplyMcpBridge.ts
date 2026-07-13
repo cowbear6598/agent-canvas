@@ -49,7 +49,9 @@ function parseJsonObject(raw: string | undefined): Record<string, unknown> {
       "Integration Reply MCP bridge JSON 解析失敗",
       error,
     );
-    throw new Error("Integration Reply MCP bridge JSON 解析失敗");
+    throw new Error("Integration Reply MCP bridge JSON 解析失敗", {
+      cause: error,
+    });
   }
 }
 
