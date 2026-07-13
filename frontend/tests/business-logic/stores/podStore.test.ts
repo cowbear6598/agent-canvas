@@ -1188,7 +1188,7 @@ describe("podStore", () => {
       const updatedPod = createMockPod({
         id: "pod-1",
         provider: "codex",
-        providerConfig: { model: "gpt-5.4" },
+        providerConfig: { model: "gpt-5.5" },
       });
 
       mockCreateWebSocketRequest.mockResolvedValueOnce({
@@ -1198,7 +1198,7 @@ describe("podStore", () => {
       });
 
       const result = await store.updatePodProvider("pod-1", "codex", {
-        model: "gpt-5.4",
+        model: "gpt-5.5",
       });
 
       expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
@@ -1209,14 +1209,14 @@ describe("podStore", () => {
             canvasId: "canvas-1",
             podId: "pod-1",
             provider: "codex",
-            providerConfig: { model: "gpt-5.4" },
+            providerConfig: { model: "gpt-5.5" },
           },
         }),
       );
       expect(result).toEqual(updatedPod);
       expect(store.getPodById("pod-1")).toMatchObject({
         provider: "codex",
-        providerConfig: { model: "gpt-5.4" },
+        providerConfig: { model: "gpt-5.5" },
       });
       expect(reconcileSpy).toHaveBeenCalledWith("pod-1");
       expect(mockShowSuccessToast).toHaveBeenCalledWith(
@@ -1248,7 +1248,7 @@ describe("podStore", () => {
       );
 
       const result = await store.updatePodProvider("pod-1", "codex", {
-        model: "gpt-5.4",
+        model: "gpt-5.5",
       });
 
       expect(result).toBeNull();
@@ -1268,11 +1268,11 @@ describe("podStore", () => {
   describe("updatePodProviderConfigModel", () => {
     it("合法 model 名稱應成功更新 providerConfig.model", () => {
       const store = usePodStore();
-      // 建立一個 codex provider 的 Pod，初始 model 為 gpt-5.4
+      // 建立一個 codex provider 的 Pod，初始 model 為 gpt-5.5
       const pod = createMockPod({
         id: "pod-1",
         provider: "codex",
-        providerConfig: { model: "gpt-5.4" },
+        providerConfig: { model: "gpt-5.5" },
       });
       store.pods = [pod];
 
@@ -1291,7 +1291,7 @@ describe("podStore", () => {
       const pod = createMockPod({
         id: "pod-1",
         provider: "codex",
-        providerConfig: { model: "gpt-5.4" },
+        providerConfig: { model: "gpt-5.5" },
       });
       store.pods = [pod];
 
@@ -1301,7 +1301,7 @@ describe("podStore", () => {
       store.updatePodProviderConfigModel("pod-1", "evil model;rm");
 
       // model 不應被更新
-      expect(store.pods[0]?.providerConfig?.model).toBe("gpt-5.4");
+      expect(store.pods[0]?.providerConfig?.model).toBe("gpt-5.5");
       expect(console.warn).toHaveBeenCalledWith(
         "[PodStore] model 不合法，已拒絕更新：evil model;rm",
       );
@@ -1347,7 +1347,7 @@ describe("podStore", () => {
       const pod = createMockPod({
         id: "pod-1",
         provider: "codex",
-        providerConfig: { model: "gpt-5.4" },
+        providerConfig: { model: "gpt-5.5" },
       });
       store.pods = [pod];
 

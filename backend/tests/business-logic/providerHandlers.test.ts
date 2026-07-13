@@ -271,14 +271,19 @@ describe("handleProviderList", () => {
     );
     expect(codex).toBeDefined();
 
-    const legacyModels = codex.availableModels.filter(
-      (model: { value: string }) =>
-        ["gpt-5.4", "gpt-5.5"].includes(model.value),
+    const standardModels = codex.availableModels.filter(
+      (model: { value: string }) => model.value === "gpt-5.5",
     );
-    for (const model of legacyModels) {
+    expect(standardModels).toHaveLength(1);
+    for (const model of standardModels) {
       expect(model.thinkingLevels).toEqual(["low", "medium", "high", "xhigh"]);
       expect(model.defaultThinkingLevel).toBe("medium");
     }
+    expect(
+      codex.availableModels.some(
+        (model: { value: string }) => model.value === "gpt-5.4",
+      ),
+    ).toBe(false);
 
     const gpt56Models = codex.availableModels.filter(
       (model: { value: string }) => model.value.startsWith("gpt-5.6-"),

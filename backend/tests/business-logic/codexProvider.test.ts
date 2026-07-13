@@ -100,7 +100,7 @@ function makeCtx(
   }> = {},
 ) {
   const defaultOptions: CodexOptions = {
-    model: "gpt-5.4",
+    model: "gpt-5.5",
     resumeMode: "cli",
   };
   return {
@@ -202,7 +202,7 @@ describe("CodexProvider", () => {
     const ctx = makeCtx({
       message: "fix the failing test",
       options: {
-        model: "gpt-5.4",
+        model: "gpt-5.5",
         resumeMode: "cli",
         mcpEntries: [
           {
@@ -245,7 +245,7 @@ describe("CodexProvider", () => {
     const ctx = makeCtx({
       message: "fix the failing test",
       options: {
-        model: "gpt-5.4",
+        model: "gpt-5.5",
         resumeMode: "cli",
         mcpEntries: [],
         hasGoalRuntime: false,
@@ -267,7 +267,7 @@ describe("CodexProvider", () => {
     const provider = codexProvider;
     const ctx = makeCtx({
       options: {
-        model: "gpt-5.4",
+        model: "gpt-5.5",
         resumeMode: "cli",
         mcpEntries: [
           {
@@ -312,7 +312,7 @@ describe("CodexProvider", () => {
     const provider = codexProvider;
     const ctx = makeCtx({
       options: {
-        model: "gpt-5.4",
+        model: "gpt-5.5",
         resumeMode: "cli",
         mcpEntries: [
           {
@@ -679,7 +679,7 @@ describe("CodexProvider", () => {
     const ctx = makeCtx({
       resumeSessionId: null,
       options: {
-        model: "gpt-5.4",
+        model: "gpt-5.5",
         resumeMode: "cli",
         mcpEntries: [
           {

@@ -139,7 +139,7 @@ describe("ConnectionStore SQLite 持久化", () => {
           "pod-default-thinking",
           canvasId,
           "Default Thinking Pod",
-          JSON.stringify({ model: "gpt-5.4" }),
+          JSON.stringify({ model: "gpt-5.5" }),
         );
 
       const connection = connectionStore.create(canvasId, {
@@ -321,7 +321,7 @@ describe("ConnectionStore SQLite 持久化", () => {
         targetPodId: "pod-b",
         targetAnchor: "left",
         summaryProvider: "codex",
-        summaryModel: "gpt-5.4",
+        summaryModel: "gpt-5.5",
       });
 
       expect(() =>
@@ -346,7 +346,7 @@ describe("ConnectionStore SQLite 持久化", () => {
       });
 
       expect(updated?.summaryProvider).toBe("codex");
-      expect(updated?.summaryModel).toBe("gpt-5.4");
+      expect(updated?.summaryModel).toBe("gpt-5.5");
     });
 
     it("更新 summary provider/model 時未指定 thinking level 應重設為新模型預設值", () => {
@@ -364,7 +364,7 @@ describe("ConnectionStore SQLite 持久化", () => {
 
       const updated = connectionStore.update(canvasId, connection.id, {
         summaryProvider: "codex",
-        summaryModel: "gpt-5.4",
+        summaryModel: "gpt-5.5",
       });
 
       expect(updated?.summaryThinkingLevel).toBe("medium");
@@ -379,7 +379,7 @@ describe("ConnectionStore SQLite 持久化", () => {
         triggerMode: "branch",
         label: "Test-Label",
         summaryProvider: "codex",
-        summaryModel: "gpt-5.4",
+        summaryModel: "gpt-5.5",
       });
 
       expect(() =>

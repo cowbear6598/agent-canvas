@@ -112,18 +112,25 @@ function ensureRepoMemoryEnabledColumn(db: Database): void {
   })();
 }
 
-function migrateLegacyCodexMiniModel(db: Database): void {
+function migrateRetiredCodexModels(db: Database): void {
   db.transaction(() => {
     db.exec(
       `UPDATE pods
-       SET provider_config_json = json_set(provider_config_json, '$.model', 'gpt-5.4')
-       WHERE json_extract(provider_config_json, '$.model') = 'gpt-5.4-mini'`,
+       SET provider_config_json = json_set(provider_config_json, '$.model', 'gpt-5.5')
+       WHERE json_extract(provider_config_json, '$.model') IN ('gpt-5.4-mini', 'gpt-5.4')`,
     );
 
     db.exec(
       `UPDATE connections
-       SET summary_model = CASE WHEN summary_model = 'gpt-5.4-mini' THEN 'gpt-5.4' ELSE summary_model END
-       WHERE summary_model = 'gpt-5.4-mini'`,
+       SET summary_model = 'gpt-5.5'
+       WHERE summary_model IN ('gpt-5.4-mini', 'gpt-5.4')`,
+    );
+
+    db.exec(
+      `UPDATE global_settings
+       SET value = 'gpt-5.5'
+       WHERE key IN ('memory_model', 'connection_line_model')
+         AND value IN ('gpt-5.4-mini', 'gpt-5.4')`,
     );
   })();
 }
@@ -559,5 +566,5 @@ export function createTables(db: Database): void {
   ensureModelAliasesThinkingColumns(db);
   ensureRepoMemoryEnabledColumn(db);
   ensureModelAliasesUniqueRealModelIndex(db);
-  migrateLegacyCodexMiniModel(db);
+  migrateRetiredCodexModels(db);
 }

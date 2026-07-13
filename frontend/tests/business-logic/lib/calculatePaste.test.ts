@@ -75,7 +75,7 @@ describe("transformPods", () => {
           id: "codex-source",
           name: "Codex Planner",
           provider: "codex",
-          providerConfig: { model: "gpt-5.4" },
+          providerConfig: { model: "gpt-5.5" },
           repositoryId: "repo-1",
           mcpServerNames: ["filesystem"],
           pluginIds: ["jira"],
@@ -89,7 +89,7 @@ describe("transformPods", () => {
     expect(result[0]).toMatchObject({
       originalId: "codex-source",
       provider: "codex",
-      providerConfig: { model: "gpt-5.4" },
+      providerConfig: { model: "gpt-5.5" },
       repositoryId: "repo-1",
       mcpServerNames: ["filesystem"],
       pluginIds: ["jira"],

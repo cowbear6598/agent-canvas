@@ -252,7 +252,7 @@ describe("Pod WebSocket user flow", () => {
         y: 20,
         rotation: 0,
         provider: "codex",
-        providerConfig: { model: "gpt-5.4" },
+        providerConfig: { model: "gpt-5.5" },
       },
     );
     expect(created.success).toBe(true);

@@ -51,4 +51,10 @@ describe("providerConfigResolver", () => {
       });
     },
   );
+
+  it("拒絕已退役的 Codex gpt-5.4 model", () => {
+    expect(() =>
+      sanitizeProviderConfigStrict({ model: "gpt-5.4" }, "codex"),
+    ).toThrowError("Provider codex 不支援此 model");
+  });
 });

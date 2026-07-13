@@ -56,8 +56,8 @@ async function mountPodContextMenu() {
     },
     {
       name: "codex",
-      defaultOptions: { model: "gpt-5.4" },
-      availableModels: [{ label: "GPT-5.4", value: "gpt-5.4" }],
+      defaultOptions: { model: "gpt-5.5" },
+      availableModels: [{ label: "GPT-5.5", value: "gpt-5.5" }],
     },
     {
       name: "opencode",
@@ -106,7 +106,7 @@ describe("pod context menu userflow", () => {
     await getButtonByText(wrapper, "Codex")?.trigger("click");
 
     expect(wrapper.emitted("switch-provider")).toEqual([
-      ["pod-1", "codex", { model: "gpt-5.4" }],
+      ["pod-1", "codex", { model: "gpt-5.5" }],
     ]);
     expect(wrapper.emitted("close")).toHaveLength(1);
 

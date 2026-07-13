@@ -80,7 +80,7 @@ describe("goalCopyPasteFlow", () => {
       y: 160,
       repositoryId: "repo-planner",
       provider: "codex",
-      providerConfig: { model: "gpt-5.4" },
+      providerConfig: { model: "gpt-5.5" },
       goal: sourceGoal,
     });
     const downstreamPod = createMockPod({
@@ -110,7 +110,7 @@ describe("goalCopyPasteFlow", () => {
       id: "pod-with-goal",
       repositoryId: "repo-planner",
       provider: "codex",
-      providerConfig: { model: "gpt-5.4" },
+      providerConfig: { model: "gpt-5.5" },
       goal: sourceGoal,
     });
     expect(clipboardStore.copiedConnections).toEqual([
@@ -180,7 +180,7 @@ describe("goalCopyPasteFlow", () => {
               name: "Planner (1)",
               repositoryId: "repo-planner",
               provider: "codex",
-              providerConfig: { model: "gpt-5.4" },
+              providerConfig: { model: "gpt-5.5" },
               goal: sourceGoal,
             }),
             expect.objectContaining({

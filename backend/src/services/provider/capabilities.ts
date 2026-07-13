@@ -1,110 +1,134 @@
-/** Claude Provider 支援的模型清單，供前端選擇器動態渲染 */
-export const CLAUDE_AVAILABLE_MODELS = Object.freeze([
-  Object.freeze({ label: "Sonnet", value: "sonnet" }),
-  Object.freeze({ label: "Opus", value: "opus" }),
-  Object.freeze({ label: "Haiku", value: "haiku" }),
-  Object.freeze({ label: "Fable 5", value: "claude-fable-5" }),
-] as const);
-
-/**
- * Claude 合法 model value 的 Set，從 CLAUDE_AVAILABLE_MODELS 衍生。
- * 供 podStore 以 O(1) Set.has 驗證，避免每次呼叫都 .map().includes()。
- */
-export const CLAUDE_AVAILABLE_MODEL_VALUES: ReadonlySet<string> = new Set(
-  CLAUDE_AVAILABLE_MODELS.map((m) => m.value),
-);
-
-/** Codex Provider 支援的模型清單，供前端選擇器動態渲染 */
-export const CODEX_AVAILABLE_MODELS = Object.freeze([
-  Object.freeze({ label: "GPT-5.4", value: "gpt-5.4" }),
-  Object.freeze({ label: "GPT-5.5", value: "gpt-5.5" }),
-  Object.freeze({ label: "GPT-5.6 Sol", value: "gpt-5.6-sol" }),
-  Object.freeze({ label: "GPT-5.6 Terra", value: "gpt-5.6-terra" }),
-  Object.freeze({ label: "GPT-5.6 Luna", value: "gpt-5.6-luna" }),
-] as const);
-
-/**
- * Codex 合法 model value 的 Set，從 CODEX_AVAILABLE_MODELS 衍生。
- * 供 podStore 以 O(1) Set.has 驗證，避免每次呼叫都 .map().includes()。
- */
-export const CODEX_AVAILABLE_MODEL_VALUES: ReadonlySet<string> = new Set(
-  CODEX_AVAILABLE_MODELS.map((m) => m.value),
-);
-
 /** 各 provider 共用的 thinking level 型別 alias，供 pod 設定與型別引用 */
 export type ThinkingLevel = "low" | "medium" | "high" | "xhigh" | "max";
 
-/**
- * Claude 各模型支援的 thinking levels 與預設值。
- * haiku 不支援，levels 為空陣列、default 為 null。
- */
-export const CLAUDE_MODEL_THINKING_LEVELS: Readonly<
-  Record<string, { levels: readonly string[]; default: string | null }>
-> = Object.freeze({
-  opus: Object.freeze({
-    levels: Object.freeze(["low", "medium", "high", "xhigh", "max"] as const),
-    default: "high",
-  }),
-  sonnet: Object.freeze({
-    levels: Object.freeze(["low", "medium", "high", "max"] as const),
-    default: "high",
-  }),
-  haiku: Object.freeze({
-    levels: Object.freeze([] as const),
-    default: null,
-  }),
-  "claude-fable-5": Object.freeze({
-    levels: Object.freeze([
-      "low",
-      "medium",
-      "high",
-      "xhigh",
-      "max",
-    ] as const),
-    default: "high",
-  }),
-});
+type ModelThinkingConfig = Readonly<{
+  levels: readonly ThinkingLevel[];
+  default: ThinkingLevel | null;
+}>;
 
-/** Codex 各模型支援的 thinking levels 與預設值 */
-export const CODEX_MODEL_THINKING_LEVELS: Readonly<
-  Record<string, { levels: readonly string[]; default: string | null }>
-> = Object.freeze({
-  "gpt-5.4": Object.freeze({
-    levels: Object.freeze(["low", "medium", "high", "xhigh"] as const),
-    default: "medium",
+type ModelMetadata = Readonly<{
+  label: string;
+  thinking: ModelThinkingConfig;
+}>;
+
+const FIVE_THINKING_LEVELS = Object.freeze([
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+] as const satisfies readonly ThinkingLevel[]);
+
+const FOUR_THINKING_LEVELS = Object.freeze([
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+] as const satisfies readonly ThinkingLevel[]);
+
+const CLAUDE_OPUS_THINKING = Object.freeze({
+  levels: FIVE_THINKING_LEVELS,
+  default: "high",
+} as const satisfies ModelThinkingConfig);
+
+const CLAUDE_SONNET_THINKING = Object.freeze({
+  levels: Object.freeze([
+    "low",
+    "medium",
+    "high",
+    "max",
+  ] as const satisfies readonly ThinkingLevel[]),
+  default: "high",
+} as const satisfies ModelThinkingConfig);
+
+const NO_THINKING = Object.freeze({
+  levels: Object.freeze([] as const satisfies readonly ThinkingLevel[]),
+  default: null,
+} as const satisfies ModelThinkingConfig);
+
+const CODEX_STANDARD_THINKING = Object.freeze({
+  levels: FOUR_THINKING_LEVELS,
+  default: "medium",
+} as const satisfies ModelThinkingConfig);
+
+const CODEX_5_6_THINKING = Object.freeze({
+  levels: FIVE_THINKING_LEVELS,
+  default: "medium",
+} as const satisfies ModelThinkingConfig);
+
+const CLAUDE_MODEL_METADATA = Object.freeze({
+  sonnet: Object.freeze({ label: "Sonnet", thinking: CLAUDE_SONNET_THINKING }),
+  opus: Object.freeze({ label: "Opus", thinking: CLAUDE_OPUS_THINKING }),
+  haiku: Object.freeze({ label: "Haiku", thinking: NO_THINKING }),
+  "claude-fable-5": Object.freeze({
+    label: "Fable 5",
+    thinking: CLAUDE_OPUS_THINKING,
   }),
+} as const satisfies Record<string, ModelMetadata>);
+
+const CODEX_MODEL_METADATA = Object.freeze({
   "gpt-5.5": Object.freeze({
-    levels: Object.freeze(["low", "medium", "high", "xhigh"] as const),
-    default: "medium",
+    label: "GPT-5.5",
+    thinking: CODEX_STANDARD_THINKING,
   }),
   "gpt-5.6-sol": Object.freeze({
-    levels: Object.freeze([
-      "low",
-      "medium",
-      "high",
-      "xhigh",
-      "max",
-    ] as const),
-    default: "medium",
+    label: "GPT-5.6 Sol",
+    thinking: CODEX_5_6_THINKING,
   }),
   "gpt-5.6-terra": Object.freeze({
-    levels: Object.freeze([
-      "low",
-      "medium",
-      "high",
-      "xhigh",
-      "max",
-    ] as const),
-    default: "medium",
+    label: "GPT-5.6 Terra",
+    thinking: CODEX_5_6_THINKING,
   }),
   "gpt-5.6-luna": Object.freeze({
-    levels: Object.freeze([
-      "low",
-      "medium",
-      "high",
-      "xhigh",
-      "max",
-    ] as const),
-    default: "medium",
+    label: "GPT-5.6 Luna",
+    thinking: CODEX_5_6_THINKING,
   }),
-});
+} as const satisfies Record<string, ModelMetadata>);
+
+function createAvailableModels<T extends Record<string, ModelMetadata>>(
+  metadata: T,
+): ReadonlyArray<Readonly<{ label: string; value: keyof T & string }>> {
+  return Object.freeze(
+    Object.entries(metadata).map(([value, config]) =>
+      Object.freeze({ label: config.label, value: value as keyof T & string }),
+    ),
+  );
+}
+
+function createThinkingLevelTable<T extends Record<string, ModelMetadata>>(
+  metadata: T,
+): Readonly<Record<keyof T & string, ModelThinkingConfig>> {
+  return Object.freeze(
+    Object.fromEntries(
+      Object.entries(metadata).map(([model, config]) => [model, config.thinking]),
+    ),
+  ) as Readonly<Record<keyof T & string, ModelThinkingConfig>>;
+}
+
+/** Claude Provider 支援的模型清單，供前端選擇器動態渲染 */
+export const CLAUDE_AVAILABLE_MODELS = createAvailableModels(
+  CLAUDE_MODEL_METADATA,
+);
+
+/** Claude 合法 model value 的 Set，供 podStore 驗證 */
+export const CLAUDE_AVAILABLE_MODEL_VALUES: ReadonlySet<string> = new Set(
+  CLAUDE_AVAILABLE_MODELS.map((model) => model.value),
+);
+
+/** Claude 各模型支援的 thinking levels 與預設值 */
+export const CLAUDE_MODEL_THINKING_LEVELS = createThinkingLevelTable(
+  CLAUDE_MODEL_METADATA,
+);
+
+/** Codex Provider 支援的模型清單，供前端選擇器動態渲染 */
+export const CODEX_AVAILABLE_MODELS = createAvailableModels(CODEX_MODEL_METADATA);
+
+/** Codex 合法 model value 的 Set，供 podStore 驗證 */
+export const CODEX_AVAILABLE_MODEL_VALUES: ReadonlySet<string> = new Set(
+  CODEX_AVAILABLE_MODELS.map((model) => model.value),
+);
+
+/** Codex 各模型支援的 thinking levels 與預設值 */
+export const CODEX_MODEL_THINKING_LEVELS = createThinkingLevelTable(
+  CODEX_MODEL_METADATA,
+);

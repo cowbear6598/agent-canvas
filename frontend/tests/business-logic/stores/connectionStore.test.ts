@@ -109,8 +109,8 @@ describe("connectionStore", () => {
           name: "codex",
           availableModels: [
             {
-              value: "gpt-5.4",
-              label: "GPT-5.4",
+              value: "gpt-5.5",
+              label: "GPT-5.5",
               thinkingLevels: ["minimal", "medium", "high"],
               defaultThinkingLevel: "medium",
             },
@@ -393,7 +393,7 @@ describe("connectionStore", () => {
       const codexPod = createMockPod({
         id: "pod-codex",
         provider: "codex",
-        providerConfig: { model: "gpt-5.4" },
+        providerConfig: { model: "gpt-5.5" },
       });
       podStore.pods = [codexPod];
 
@@ -417,12 +417,12 @@ describe("connectionStore", () => {
         "top",
       );
 
-      expect(result?.summaryModel).toBe("gpt-5.4");
+      expect(result?.summaryModel).toBe("gpt-5.5");
       expect(mockCreateWebSocketRequest).toHaveBeenCalledWith(
         expect.objectContaining({
           payload: expect.objectContaining({
             summaryProvider: "codex",
-            summaryModel: "gpt-5.4",
+            summaryModel: "gpt-5.5",
           }),
         }),
       );
@@ -439,7 +439,7 @@ describe("connectionStore", () => {
           id: "pod-codex",
           provider: "codex",
           providerConfig: {
-            model: "gpt-5.4",
+            model: "gpt-5.5",
             thinkingLevel: "high",
           },
         }),
@@ -478,7 +478,7 @@ describe("connectionStore", () => {
           id: "pod-codex",
           provider: "codex",
           providerConfig: {
-            model: "gpt-5.4",
+            model: "gpt-5.5",
           },
         }),
       ];
@@ -1530,14 +1530,14 @@ describe("connectionStore", () => {
         {
           name: "codex",
           availableModels: [
-            { value: "gpt-5.4", label: "GPT-5.4" },
+            { value: "gpt-5.5", label: "GPT-5.5" },
             { value: "gpt-5.5", label: "GPT-5.5" },
           ],
         },
       ]);
     }
 
-    it("Claude → Codex 切換時，原本是 sonnet 的 connection 應被更新為 gpt-5.4", async () => {
+    it("Claude → Codex 切換時，原本是 sonnet 的 connection 應被更新為 gpt-5.5", async () => {
       const store = useConnectionStore();
       const podStore = usePodStore();
       setupCapabilities();
@@ -1563,7 +1563,7 @@ describe("connectionStore", () => {
           sourceAnchor: "bottom",
           targetPodId: "pod-dst",
           targetAnchor: "top",
-          summaryModel: "gpt-5.4",
+          summaryModel: "gpt-5.5",
         },
       });
 
@@ -1573,7 +1573,7 @@ describe("connectionStore", () => {
         expect.objectContaining({
           payload: expect.objectContaining({
             connectionId: "conn-1",
-            summaryModel: "gpt-5.4",
+            summaryModel: "gpt-5.5",
             canvasId: "canvas-1",
           }),
         }),
@@ -1650,7 +1650,7 @@ describe("connectionStore", () => {
           sourceAnchor: "bottom",
           targetPodId: "pod-dst",
           targetAnchor: "top",
-          summaryModel: "gpt-5.4",
+          summaryModel: "gpt-5.5",
         },
       });
 
@@ -1659,7 +1659,7 @@ describe("connectionStore", () => {
       const payload = mockCreateWebSocketRequest.mock.calls[0]?.[0]?.payload;
       expect(payload).toMatchObject({
         connectionId: "conn-follow-source",
-        summaryModel: "gpt-5.4",
+        summaryModel: "gpt-5.5",
         canvasId: "canvas-1",
       });
       expect(payload).not.toHaveProperty("summaryProvider");
@@ -1827,18 +1827,18 @@ describe("connectionStore", () => {
           targetPodId: "pod-b",
           targetAnchor: "top",
           summaryProvider: "codex",
-          summaryModel: "gpt-5.4",
+          summaryModel: "gpt-5.5",
         },
       });
 
       const result = await store.updateConnectionSummaryProvider(
         "conn-1",
         "codex",
-        "gpt-5.4",
+        "gpt-5.5",
       );
 
       expect(result?.summaryProvider).toBe("codex");
-      expect(result?.summaryModel).toBe("gpt-5.4");
+      expect(result?.summaryModel).toBe("gpt-5.5");
     });
 
     it("WS 回應無 connection 時應回傳 null", async () => {
@@ -2028,7 +2028,7 @@ describe("connectionStore", () => {
         id: "conn-1",
         sourcePodId: "pod-a",
         summaryProvider: "codex",
-        summaryModel: "gpt-5.4",
+        summaryModel: "gpt-5.5",
       });
       store.connections = [existingConn];
 
@@ -2050,7 +2050,7 @@ describe("connectionStore", () => {
       const existingConn = createMockConnection({
         id: "conn-1",
         summaryProvider: "codex",
-        summaryModel: "gpt-5.4",
+        summaryModel: "gpt-5.5",
       });
       store.connections = [existingConn];
 
@@ -2092,11 +2092,11 @@ describe("connectionStore", () => {
         targetAnchor: "top",
         triggerMode: "auto",
         summaryProvider: "codex",
-        summaryModel: "gpt-5.4",
+        summaryModel: "gpt-5.5",
         decideStatus: "none" as DecideStatus,
       });
 
-      expect(store.connections[0]?.summaryModel).toBe("gpt-5.4");
+      expect(store.connections[0]?.summaryModel).toBe("gpt-5.5");
     });
   });
 
@@ -2138,7 +2138,7 @@ describe("connectionStore", () => {
         createMockPod({
           id: "pod-codex-source",
           provider: "codex",
-          providerConfig: { model: "gpt-5.4" },
+          providerConfig: { model: "gpt-5.5" },
         }),
       ];
       const conn = createMockConnection({

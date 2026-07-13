@@ -29,7 +29,6 @@ const GHOST_TRANSITION_MS = 220;
 const isHovered = ref(false);
 const isAnimating = ref(false);
 const isCollapsing = ref(false);
-const hoverTimeoutId = ref<ReturnType<typeof setTimeout> | null>(null);
 const pendingTimers = ref<Set<ReturnType<typeof setTimeout>>>(new Set());
 const slotRef = ref<HTMLElement | null>(null);
 
@@ -88,10 +87,6 @@ function clearGhostAnimation(resetSequence = false): void {
 }
 
 function resetInteractionState(): void {
-  if (hoverTimeoutId.value !== null) {
-    clearTimeout(hoverTimeoutId.value);
-    hoverTimeoutId.value = null;
-  }
   pendingTimers.value.forEach(clearTimeout);
   pendingTimers.value.clear();
   isHovered.value = false;
@@ -237,15 +232,9 @@ function buildGhostStyle(
 }
 
 const handleMouseEnter = (): void => {
-  // disabled 時不展開動畫
   if (props.disabled) return;
-  // 單一選項仍允許展開動畫，但不允許切換
   if (isAnimating.value) return;
 
-  if (hoverTimeoutId.value !== null) {
-    clearTimeout(hoverTimeoutId.value);
-    hoverTimeoutId.value = null;
-  }
   // 滑回時若 mouseleave 後還在 collapse 動畫期間，立即解除 collapsing 狀態，
   // 避免 .collapsing 樣式蓋住 .expanded 的展開規則導致卡片不展開。
   isCollapsing.value = false;
@@ -254,12 +243,6 @@ const handleMouseEnter = (): void => {
 
 const handleMouseLeave = async (): Promise<void> => {
   if (isAnimating.value) return;
-
-  // 清掉任何 pending hover timer（保留以防競態，目前已無 debounce 但結構保留）
-  if (hoverTimeoutId.value !== null) {
-    clearTimeout(hoverTimeoutId.value);
-    hoverTimeoutId.value = null;
-  }
 
   // 收合前把 stack scroll 位置滾回視覺底部（column-reverse 下 scrollTop=0 即底部），
   // 用 smooth scroll 與接下來的 collapse 動畫同步滑動，不會「跳一下」。
@@ -282,9 +265,7 @@ const handleMouseLeave = async (): Promise<void> => {
 };
 
 const selectModel = async (model: string): Promise<void> => {
-  // disabled 時不允許切換
   if (props.disabled) return;
-  // 單一選項時點擊不做任何事
   if (isSingleOption.value) return;
   if (isAnimating.value || isCollapsing.value) return;
 
@@ -297,7 +278,6 @@ const selectModel = async (model: string): Promise<void> => {
   const selectedValue = model;
 
   if (selectedValue === props.currentModel) {
-    // 點擊 active 選項：直接收合
     isCollapsing.value = true;
     await sleep(COLLAPSE_ANIMATION_MS);
     if (isUnmounted) return;
@@ -309,7 +289,6 @@ const selectModel = async (model: string): Promise<void> => {
   isAnimating.value = true;
   emit("update:model", selectedValue);
 
-  // 視覺 feedback 後觸發收合動畫
   await sleep(SELECT_FEEDBACK_DELAY_MS);
   if (isUnmounted) return;
   isCollapsing.value = true;

@@ -12,11 +12,18 @@ describe("resolveModelWithFallback — claude / codex", () => {
     expect(result.didFallback).toBe(false);
   });
 
-  it("codex 傳入合法 model 'gpt-5.4' 時 resolved === 'gpt-5.4'", () => {
+  it("codex 傳入合法 model 'gpt-5.5' 時 resolved === 'gpt-5.5'", () => {
+    const result = resolveModelWithFallback("codex", "gpt-5.5");
+
+    expect(result.resolved).toBe("gpt-5.5");
+    expect(result.didFallback).toBe(false);
+  });
+
+  it("codex 傳入已退役的 gpt-5.4 時應 fallback 為 gpt-5.5", () => {
     const result = resolveModelWithFallback("codex", "gpt-5.4");
 
-    expect(result.resolved).toBe("gpt-5.4");
-    expect(result.didFallback).toBe(false);
+    expect(result.resolved).toBe("gpt-5.5");
+    expect(result.didFallback).toBe(true);
   });
 
   it("claude 傳入非法 model 時應 fallback 為 claude 預設 model", () => {

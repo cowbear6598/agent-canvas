@@ -67,7 +67,7 @@ describe("enrichPod", () => {
       store.syncFromPayload([
         {
           name: "codex",
-          defaultOptions: { model: "gpt-5.4" },
+          defaultOptions: { model: "gpt-5.5" },
         },
       ]);
 
@@ -77,7 +77,7 @@ describe("enrichPod", () => {
       });
       const enriched = enrichPod(raw);
 
-      expect(enriched.providerConfig).toEqual({ model: "gpt-5.4" });
+      expect(enriched.providerConfig).toEqual({ model: "gpt-5.5" });
     });
   });
 

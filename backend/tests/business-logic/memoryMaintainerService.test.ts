@@ -498,7 +498,7 @@ describe("memoryMaintainerService", () => {
             },
           ],
         },
-        resolvedModel: "gpt-5.4",
+        resolvedModel: "gpt-5.5",
         rawContent: "{}",
       })
       .mockResolvedValueOnce({
@@ -508,7 +508,7 @@ describe("memoryMaintainerService", () => {
             "<purpose>這個 repo 可自由用於測試與快速實驗。</purpose>",
           reason: "已完成合併",
         },
-        resolvedModel: "gpt-5.4",
+        resolvedModel: "gpt-5.5",
         rawContent: "{}",
       });
 
@@ -590,7 +590,7 @@ describe("memoryMaintainerService", () => {
             },
           ],
         },
-        resolvedModel: "gpt-5.4",
+        resolvedModel: "gpt-5.5",
         rawContent: "{}",
       })
       .mockResolvedValueOnce({
@@ -599,7 +599,7 @@ describe("memoryMaintainerService", () => {
           summary: "<purpose>這個 repo 用於測試與快速實驗。</purpose>",
           reason: "已合併 accepted observations",
         },
-        resolvedModel: "gpt-5.4",
+        resolvedModel: "gpt-5.5",
         rawContent: "{}",
       });
 

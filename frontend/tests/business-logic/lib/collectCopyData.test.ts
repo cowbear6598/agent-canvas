@@ -21,7 +21,7 @@ describe("collectCopyData", () => {
         rotation: 0,
         repositoryId: "repo-1",
         provider: "codex",
-        providerConfig: { model: "gpt-5.4" },
+        providerConfig: { model: "gpt-5.5" },
         mcpServerNames: ["filesystem"],
         pluginIds: ["jira"],
         goal: { todos: [{ id: "todo-1", text: "Ship" }] },
@@ -45,7 +45,7 @@ describe("collectCopyData", () => {
       expect.objectContaining({
         id: "pod-codex",
         provider: "codex",
-        providerConfig: { model: "gpt-5.4" },
+        providerConfig: { model: "gpt-5.5" },
         repositoryId: "repo-1",
         mcpServerNames: ["filesystem"],
         pluginIds: ["jira"],

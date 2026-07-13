@@ -74,7 +74,7 @@ const BASE_OPTIONS = {
   systemPrompt: "sys",
   userMessage: "user",
   workspacePath: "/tmp/workspace",
-  model: "gpt-5.4",
+  model: "gpt-5.5",
 };
 
 describe("codexService.executeDisposableChat", () => {
@@ -160,7 +160,7 @@ describe("codexService.executeDisposableChat", () => {
     expect(logger.log).toHaveBeenCalledWith(
       "Chat",
       "Init",
-      "[CodexService] 啟動一次性查詢（model: gpt-5.4，thinking: high）",
+      "[CodexService] 啟動一次性查詢（model: gpt-5.5，thinking: high）",
     );
   });
 

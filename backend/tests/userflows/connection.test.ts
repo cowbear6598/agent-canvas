@@ -103,7 +103,7 @@ describe("Connection 管理", () => {
       // summaryModel 應自動對應 codex provider 的預設模型
       const codexDefaultModel =
         (codexProvider.metadata.defaultOptions as { model?: string }).model ??
-        "gpt-5.4";
+        "gpt-5.5";
       expect(conn.summaryModel).toBe(codexDefaultModel);
     });
 
@@ -136,7 +136,7 @@ describe("Connection 管理", () => {
         "opus";
       const codexDefaultModel =
         (codexProvider.metadata.defaultOptions as { model?: string }).model ??
-        "gpt-5.4";
+        "gpt-5.5";
 
       expect(connFromClaude.summaryModel).toBe(claudeDefaultModel);
       expect(connFromCodex.summaryModel).toBe(codexDefaultModel);

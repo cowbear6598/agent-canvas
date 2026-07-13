@@ -2011,10 +2011,10 @@ describe("executeStreamingChat", () => {
         cancel: vi.fn(() => false),
         buildOptions: vi
           .fn()
-          .mockResolvedValue({ model: "gpt-5.4", resumeMode: "cli" }),
+          .mockResolvedValue({ model: "gpt-5.5", resumeMode: "cli" }),
         metadata: {
-          availableModelValues: new Set(["gpt-5.4", "gpt-5.5"]),
-          defaultOptions: { model: "gpt-5.4" },
+          availableModelValues: new Set(["gpt-5.5"]),
+          defaultOptions: { model: "gpt-5.5" },
         },
       });
 

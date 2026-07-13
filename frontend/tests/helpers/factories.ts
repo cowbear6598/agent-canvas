@@ -109,7 +109,7 @@ const DEFAULT_PROVIDER_CONFIGS: Partial<
   Record<Pod["provider"], Pod["providerConfig"]>
 > = {
   claude: { model: "opus" },
-  codex: { model: "gpt-5.4" },
+  codex: { model: "gpt-5.5" },
   gemini: { model: "gemini-2.5-pro" },
 };
 

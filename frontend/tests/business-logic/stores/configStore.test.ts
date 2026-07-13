@@ -125,12 +125,12 @@ describe("configStore", () => {
     const store = useConfigStore();
     store.setMemoryConfig({
       provider: "codex",
-      model: "gpt-5.4",
+      model: "gpt-5.5",
       thinkingLevel: "medium",
     });
 
     expect(store.memoryProvider).toBe("codex");
-    expect(store.memoryModel).toBe("gpt-5.4");
+    expect(store.memoryModel).toBe("gpt-5.5");
     expect(store.memoryThinkingLevel).toBe("medium");
   });
 

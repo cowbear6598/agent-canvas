@@ -12,7 +12,7 @@ describe("PodModelSelector", () => {
       {
         name: "codex",
         availableModels: [
-          { label: "GPT-5.4", value: "gpt-5.4" },
+          { label: "GPT-5.7 Preview", value: "gpt-5.7-preview" },
           { label: "GPT-5.5", value: "gpt-5.5" },
           { label: "GPT-5.6 Sol", value: "gpt-5.6-sol" },
           { label: "GPT-5.6 Terra", value: "gpt-5.6-terra" },

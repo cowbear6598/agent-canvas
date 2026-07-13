@@ -246,7 +246,7 @@ describe("chatStore", () => {
       const pod = createExecutablePod({
         id: "pod-1",
         provider: "codex",
-        providerConfig: { model: "gpt-5.4" },
+        providerConfig: { model: "gpt-5.5" },
       });
       podStore.pods = [pod];
       const store = useChatStore();

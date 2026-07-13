@@ -185,7 +185,7 @@ describe("BranchDecisionService", () => {
     runStore.updatePodInstanceLastResponseSummary(instance.id, "既有摘要");
     vi.mocked(configStore.getConnectionLineModelConfig).mockReturnValue({
       connectionLineProvider: "codex",
-      connectionLineModel: "gpt-5.4",
+      connectionLineModel: "gpt-5.5",
       connectionLineThinkingLevel: "medium",
     });
 
@@ -203,7 +203,7 @@ describe("BranchDecisionService", () => {
     expect(branchDecider.decide).toHaveBeenCalledWith(
       expect.objectContaining({
         provider: "codex",
-        model: "gpt-5.4",
+        model: "gpt-5.5",
         thinkingLevel: "medium",
       }),
     );
@@ -223,7 +223,7 @@ describe("BranchDecisionService", () => {
       [
         makeConnection("conn-1", "Alpha", "pod-a", {
           branchProvider: "codex" as any,
-          branchModel: "gpt-5.4",
+          branchModel: "gpt-5.5",
           branchThinkingLevel: "high",
         }),
       ],

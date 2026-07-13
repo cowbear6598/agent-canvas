@@ -78,14 +78,14 @@ describe("Config WebSocket", () => {
         {
           requestId: uuidv4(),
           memoryProvider: "codex",
-          memoryModel: "gpt-5.4",
+          memoryModel: "gpt-5.5",
           memoryThinkingLevel: "high",
         },
       );
 
       expect(updateResponse.success).toBe(true);
       expect(updateResponse.memoryProvider).toBe("codex");
-      expect(updateResponse.memoryModel).toBe("gpt-5.4");
+      expect(updateResponse.memoryModel).toBe("gpt-5.5");
       expect(updateResponse.memoryThinkingLevel).toBe("high");
 
       const getResponse = await emitAndWaitResponse<
@@ -100,7 +100,7 @@ describe("Config WebSocket", () => {
 
       expect(getResponse.success).toBe(true);
       expect(getResponse.memoryProvider).toBe("codex");
-      expect(getResponse.memoryModel).toBe("gpt-5.4");
+      expect(getResponse.memoryModel).toBe("gpt-5.5");
       expect(getResponse.memoryThinkingLevel).toBe("high");
     });
 

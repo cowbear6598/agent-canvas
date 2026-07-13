@@ -678,7 +678,7 @@ function setupSubprocess(
 const codexMetadata: ProviderMetadata<CodexOptions> = {
   name: "codex",
   defaultOptions: {
-    model: "gpt-5.4",
+    model: "gpt-5.5",
     resumeMode: "cli",
     mcpEntries: [],
     hasGoalRuntime: false,

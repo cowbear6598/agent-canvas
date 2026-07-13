@@ -91,7 +91,7 @@ function createOptions() {
       memoryModel: "sonnet",
       memoryThinkingLevel: "high",
       connectionLineProvider: "codex",
-      connectionLineModel: "gpt-5.4",
+      connectionLineModel: "gpt-5.5",
       connectionLineThinkingLevel: "medium",
     }),
   );
@@ -147,7 +147,7 @@ describe("useGlobalSettingsForm", () => {
     });
     expect(options.configStore.setConnectionLineConfig).toHaveBeenCalledWith({
       provider: "codex",
-      model: "gpt-5.4",
+      model: "gpt-5.5",
       thinkingLevel: "medium",
     });
     expect(onLoaded).toHaveBeenCalledWith(
@@ -184,7 +184,7 @@ describe("useGlobalSettingsForm", () => {
     });
     form.timezoneOffset.value = "7";
     form.memoryProvider.value = "codex";
-    form.memoryModel.value = "gpt-5.4";
+    form.memoryModel.value = "gpt-5.5";
     await form.handleSave({
       backupPayload: {
         backupGitRemoteUrl: "",
@@ -201,7 +201,7 @@ describe("useGlobalSettingsForm", () => {
       backupTime: "03:45",
       backupEnabled: false,
       memoryProvider: "codex",
-      memoryModel: "gpt-5.4",
+      memoryModel: "gpt-5.5",
       memoryThinkingLevel: null,
       connectionLineProvider: undefined,
       connectionLineModel: undefined,
@@ -210,7 +210,7 @@ describe("useGlobalSettingsForm", () => {
     expect(options.configStore.setTimezoneOffset).toHaveBeenCalledWith(7);
     expect(options.configStore.setMemoryConfig).toHaveBeenCalledWith({
       provider: "codex",
-      model: "gpt-5.4",
+      model: "gpt-5.5",
       thinkingLevel: null,
     });
     expect(onBackupSaved).toHaveBeenCalledWith({
@@ -238,7 +238,7 @@ describe("useGlobalSettingsForm", () => {
     form.memoryModel.value = "claude-sonnet-4-5";
     form.memoryThinkingLevel.value = "high";
     form.connectionLineProvider.value = "codex";
-    form.connectionLineModel.value = "gpt-5.4";
+    form.connectionLineModel.value = "gpt-5.5";
     form.connectionLineThinkingLevel.value = "medium";
 
     await form.handleSave({
@@ -258,7 +258,7 @@ describe("useGlobalSettingsForm", () => {
       memoryModel: "claude-sonnet-4-5",
       memoryThinkingLevel: "high",
       connectionLineProvider: "codex",
-      connectionLineModel: "gpt-5.4",
+      connectionLineModel: "gpt-5.5",
       connectionLineThinkingLevel: "medium",
     });
     expect(options.configStore.setMemoryConfig).toHaveBeenLastCalledWith({
@@ -270,7 +270,7 @@ describe("useGlobalSettingsForm", () => {
       options.configStore.setConnectionLineConfig,
     ).toHaveBeenLastCalledWith({
       provider: "codex",
-      model: "gpt-5.4",
+      model: "gpt-5.5",
       thinkingLevel: "medium",
     });
   });

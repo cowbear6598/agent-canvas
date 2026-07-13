@@ -106,7 +106,7 @@ describe("copyPasteFlow", () => {
       x: 280,
       y: 180,
       provider: "codex",
-      providerConfig: { model: "gpt-5.4" },
+      providerConfig: { model: "gpt-5.5" },
     });
     const outsidePod = createMockPod({
       id: "pod-outside",
@@ -172,7 +172,7 @@ describe("copyPasteFlow", () => {
     ]);
     expect(clipboardStore.copiedPods[1]).toMatchObject({
       provider: "codex",
-      providerConfig: { model: "gpt-5.4" },
+      providerConfig: { model: "gpt-5.5" },
     });
     expect(clipboardStore.copiedRepositoryNotes).toEqual(
       expect.arrayContaining([
@@ -260,7 +260,7 @@ describe("copyPasteFlow", () => {
               originalId: "pod-target",
               name: "Reviewer (1)",
               provider: "codex",
-              providerConfig: { model: "gpt-5.4" },
+              providerConfig: { model: "gpt-5.5" },
             }),
           ],
           repositoryNotes: expect.arrayContaining([

@@ -92,13 +92,13 @@ describe("podEventHandlers", () => {
       pod: createMockPod({
         id: "pod-1",
         provider: "codex",
-        providerConfig: { model: "gpt-5.4" },
+        providerConfig: { model: "gpt-5.5" },
       }),
     });
 
     expect(podStore.getPodById("pod-1")).toMatchObject({
       provider: "codex",
-      providerConfig: { model: "gpt-5.4" },
+      providerConfig: { model: "gpt-5.5" },
     });
     expect(mockTryResolvePendingRequest).toHaveBeenCalledWith(
       "req-3",

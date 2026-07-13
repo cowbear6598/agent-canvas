@@ -773,7 +773,7 @@ describe("WorkflowPipeline", () => {
       ).mockResolvedValue({
         content: "摘要",
         isSummarized: true,
-        resolvedModel: "gpt-5.4",
+        resolvedModel: "gpt-5.5",
       });
 
       await workflowPipeline.execute(baseContext, mockStrategy);
@@ -804,7 +804,7 @@ describe("WorkflowPipeline", () => {
       const mockStrategy = makeStrategy("auto");
       vi.mocked(configStore.getConnectionLineModelConfig).mockReturnValue({
         connectionLineProvider: "codex",
-        connectionLineModel: "gpt-5.4",
+        connectionLineModel: "gpt-5.5",
         connectionLineThinkingLevel: "medium",
       });
 
@@ -813,7 +813,7 @@ describe("WorkflowPipeline", () => {
         id: SOURCE_POD_ID,
         name: "Codex Source Pod",
         provider: "codex",
-        providerConfig: { model: "gpt-5.4" } as any,
+        providerConfig: { model: "gpt-5.5" } as any,
         status: "idle" as const,
       });
 
@@ -851,13 +851,13 @@ describe("WorkflowPipeline", () => {
         codexConnection,
       ]);
 
-      // summaryService 回傳 resolvedModel="gpt-5.4"（fallback 修正結果）
+      // summaryService 回傳 resolvedModel="gpt-5.5"（fallback 修正結果）
       (
         mockExecutionService.generateSummaryWithFallback as any
       ).mockResolvedValue({
         content: "codex 摘要",
         isSummarized: true,
-        resolvedModel: "gpt-5.4",
+        resolvedModel: "gpt-5.5",
       });
 
       await workflowPipeline.execute(codexBaseContext, mockStrategy);
@@ -869,7 +869,7 @@ describe("WorkflowPipeline", () => {
         SOURCE_POD_ID,
         TARGET_POD_ID,
         "codex",
-        "gpt-5.4",
+        "gpt-5.5",
         "medium",
         baseRunContext,
         "auto",
@@ -913,11 +913,11 @@ describe("WorkflowPipeline", () => {
       const codexSourcePod = makePod({
         id: SOURCE_POD_ID,
         provider: "codex" as const,
-        providerConfig: { model: "gpt-5.4" } as any,
+        providerConfig: { model: "gpt-5.5" } as any,
       });
       const connectionWithOwnSummaryConfig = makeConnection({
         summaryProvider: "codex" as any,
-        summaryModel: "gpt-5.4",
+        summaryModel: "gpt-5.5",
         summaryThinkingLevel: "medium",
       });
       const context: PipelineContext = {
@@ -966,7 +966,7 @@ describe("WorkflowPipeline", () => {
       const mockStrategy = makeStrategy("auto");
       vi.mocked(configStore.getConnectionLineModelConfig).mockReturnValue({
         connectionLineProvider: "codex",
-        connectionLineModel: "gpt-5.4",
+        connectionLineModel: "gpt-5.5",
         connectionLineThinkingLevel: "medium",
       });
 
@@ -979,7 +979,7 @@ describe("WorkflowPipeline", () => {
       // connection 明確指定 summaryProvider=codex（cross-provider）
       const codexSummaryConnection = makeConnection({
         summaryProvider: "codex" as any, // 明確指定 codex provider 做摘要
-        summaryModel: "gpt-5.4",
+        summaryModel: "gpt-5.5",
       });
       const codexSummaryContext: PipelineContext = {
         canvasId: CANVAS_ID,
@@ -1015,7 +1015,7 @@ describe("WorkflowPipeline", () => {
         SOURCE_POD_ID,
         TARGET_POD_ID,
         "codex",
-        "gpt-5.4",
+        "gpt-5.5",
         "medium",
         baseRunContext,
         expect.any(String), // pathway

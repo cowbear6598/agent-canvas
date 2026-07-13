@@ -32,7 +32,7 @@ export interface Connection {
   decideStatus: DecideStatus;
   decideReason: string | null;
   connectionStatus: ConnectionStatus;
-  /** summaryModel 接受任意模型名稱（如 "sonnet"、"gpt-5.4"），由 service 層驗證 capability */
+  /** summaryModel 接受任意模型名稱（如 "sonnet"、"gpt-5.5"），由 service 層驗證 capability */
   summaryModel: string;
   /**
    * summaryProvider 指定本 Connection 摘要時使用的 provider。

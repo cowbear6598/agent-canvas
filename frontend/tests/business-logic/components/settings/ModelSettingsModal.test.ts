@@ -114,8 +114,8 @@ function syncProviderCapabilities(): void {
       name: "codex",
       availableModels: [
         {
-          label: "GPT-5.4",
-          value: "gpt-5.4",
+          label: "GPT-5.5",
+          value: "gpt-5.5",
           thinkingLevels: ["medium"],
           thinkingLevelLabels: {
             medium: "中",
@@ -150,7 +150,7 @@ describe("ModelSettingsModal", () => {
       memoryModel: "claude-sonnet-4-5",
       memoryThinkingLevel: "high",
       connectionLineProvider: "codex",
-      connectionLineModel: "gpt-5.4",
+      connectionLineModel: "gpt-5.5",
       connectionLineThinkingLevel: "medium",
     });
     updateConfigMock.mockResolvedValue({
@@ -171,7 +171,7 @@ describe("ModelSettingsModal", () => {
     ]);
     expect(wrapper.text()).toContain("Claude Sonnet 4.5");
     expect(wrapper.text()).toContain("高");
-    expect(wrapper.text()).not.toContain("GPT-5.4");
+    expect(wrapper.text()).not.toContain("GPT-5.5");
     expect(wrapper.text()).not.toContain("中");
 
     const connectionLineTab = wrapper
@@ -180,8 +180,8 @@ describe("ModelSettingsModal", () => {
     expect(connectionLineTab).toBeDefined();
     await connectionLineTab!.trigger("click");
 
-    expect(selectedValues(wrapper)).toEqual(["codex", "gpt-5.4", "medium"]);
-    expect(wrapper.text()).toContain("GPT-5.4");
+    expect(selectedValues(wrapper)).toEqual(["codex", "gpt-5.5", "medium"]);
+    expect(wrapper.text()).toContain("GPT-5.5");
     expect(wrapper.text()).toContain("中");
     expect(wrapper.text()).not.toContain("Claude Sonnet 4.5");
     expect(wrapper.text()).not.toContain("高");
@@ -237,8 +237,8 @@ describe("ModelSettingsModal", () => {
         name: "codex",
         availableModels: [
           {
-            label: "GPT-5.4",
-            value: "gpt-5.4",
+            label: "GPT-5.5",
+            value: "gpt-5.5",
             thinkingLevels: ["medium"],
             defaultThinkingLevel: "medium",
           },
@@ -254,7 +254,7 @@ describe("ModelSettingsModal", () => {
       memoryModel: "",
       memoryThinkingLevel: null,
       connectionLineProvider: "codex",
-      connectionLineModel: "gpt-5.4",
+      connectionLineModel: "gpt-5.5",
       connectionLineThinkingLevel: "medium",
     });
 

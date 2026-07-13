@@ -190,7 +190,7 @@ describe("PodStore integration with database and temp filesystem", () => {
       name: "store-update-pod-renamed",
       x: 100,
       y: -50,
-      providerConfig: { model: "gpt-5.4" },
+      providerConfig: { model: "gpt-5.5" },
       pluginIds: ["plugin-b", "plugin-c"],
     });
 
@@ -199,7 +199,7 @@ describe("PodStore integration with database and temp filesystem", () => {
       name: "store-update-pod-renamed",
       x: 100,
       y: -50,
-      providerConfig: { model: "gpt-5.4", thinkingLevel: "medium" },
+      providerConfig: { model: "gpt-5.5", thinkingLevel: "medium" },
       pluginIds: ["plugin-b", "plugin-c"],
     });
 
@@ -224,7 +224,7 @@ describe("PodStore integration with database and temp filesystem", () => {
       y: -50,
     });
     expect(JSON.parse(row.provider_config_json)).toEqual({
-      model: "gpt-5.4",
+      model: "gpt-5.5",
       thinkingLevel: "medium",
     });
   });

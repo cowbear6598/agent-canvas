@@ -206,7 +206,7 @@ async buildOptions(pod: Pod, _runContext?: RunContext): Promise<CodexOptions> {
 ```
 
 - 從 `pod.providerConfig.model` 讀取，通過 `MODEL_RE` 驗證
-- 不合法（包含非英數字元）或未設定 → fallback 到 `metadata.defaultOptions.model`（`"gpt-5.4"`）
+- 不合法（包含非英數字元）或未設定 → fallback 到 `metadata.defaultOptions.model`（`"gpt-5.5"`）
 - `runContext` 接收但不使用（介面規範要求保留參數位）
 - `resumeMode` 固定為 `"cli"`
 
@@ -248,6 +248,6 @@ stdout 每一行都是 codex 的 JSON 事件，由 `codexNormalizer.ts` 的 `nor
 
 | 常數 | 值 | 說明 |
 |---|---|---|
-| `metadata.defaultOptions.model` | `"gpt-5.4"` | Codex 預設模型 |
+| `metadata.defaultOptions.model` | `"gpt-5.5"` | Codex 預設模型 |
 | `metadata.defaultOptions.resumeMode` | `"cli"` | Resume 模式 |
 | `STDERR_MAX_BYTES` | `65536`（64KB） | stderr 收集上限 |

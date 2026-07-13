@@ -66,7 +66,7 @@ describe("providerCapabilityStore", () => {
         },
         {
           name: "codex",
-          defaultOptions: { model: "gpt-5.4" },
+          defaultOptions: { model: "gpt-5.5" },
         },
       ]);
 
@@ -74,7 +74,7 @@ describe("providerCapabilityStore", () => {
         model: "claude-sonnet-4-5",
       });
       expect(store.defaultOptionsByProvider["codex"]).toEqual({
-        model: "gpt-5.4",
+        model: "gpt-5.5",
       });
     });
   });
@@ -177,7 +177,7 @@ describe("providerCapabilityStore", () => {
         { label: "Claude Opus 4.5", value: "claude-opus-4-5" },
         { label: "Claude Sonnet 4.5", value: "claude-sonnet-4-5" },
       ];
-      const codexModels = [{ label: "GPT-5.4", value: "gpt-5.4" }];
+      const codexModels = [{ label: "GPT-5.5", value: "gpt-5.5" }];
 
       store.syncFromPayload([
         {
@@ -222,7 +222,7 @@ describe("providerCapabilityStore", () => {
         { label: "Claude Opus 4.5", value: "claude-opus-4-5" },
         { label: "Claude Sonnet 4.5", value: "claude-sonnet-4-5" },
       ];
-      const codexModels = [{ label: "GPT-5.4", value: "gpt-5.4" }];
+      const codexModels = [{ label: "GPT-5.5", value: "gpt-5.5" }];
 
       mockCreateWebSocketRequest.mockResolvedValueOnce({
         providers: [
@@ -310,7 +310,7 @@ describe("providerCapabilityStore", () => {
         },
       ]);
 
-      expect(store.isModelValidForProvider("claude", "gpt-5.4")).toBe(false);
+      expect(store.isModelValidForProvider("claude", "gpt-5.5")).toBe(false);
       expect(store.isModelValidForProvider("claude", "unknown-model")).toBe(
         false,
       );
@@ -366,13 +366,13 @@ describe("providerCapabilityStore", () => {
         {
           name: "codex",
           availableModels: [
-            { label: "GPT-5.4", value: "gpt-5.4" },
+            { label: "GPT-5.5", value: "gpt-5.5" },
             { label: "GPT-5.5", value: "gpt-5.5" },
           ],
         },
       ]);
 
-      expect(store.getDefaultModel("codex")).toBe("gpt-5.4");
+      expect(store.getDefaultModel("codex")).toBe("gpt-5.5");
     });
 
     it("opencode alias 存在時回傳第一筆 alias 的 model value", () => {
@@ -585,7 +585,7 @@ describe("providerCapabilityStore", () => {
         },
         {
           name: "codex",
-          availableModels: [{ label: "GPT-5.4", value: "gpt-5.4" }],
+          availableModels: [{ label: "GPT-5.5", value: "gpt-5.5" }],
         },
       ]);
 
@@ -603,7 +603,7 @@ describe("providerCapabilityStore", () => {
       ]);
       // codex 的資料應保留上一次成功的值（第二次未送 codex）
       expect(store.getAvailableModels("codex")).toEqual([
-        { label: "GPT-5.4", value: "gpt-5.4" },
+        { label: "GPT-5.5", value: "gpt-5.5" },
       ]);
     });
 

@@ -33,7 +33,7 @@ export interface ProviderFakeHarness {
 
 const DEFAULT_MODEL_BY_PROVIDER: Record<ProviderName, string> = {
   claude: "sonnet",
-  codex: "gpt-5.4",
+  codex: "gpt-5.5",
   opencode: "anthropic/claude-sonnet-4-5",
 };
 
