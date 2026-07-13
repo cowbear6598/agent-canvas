@@ -143,9 +143,7 @@ const isOpencodeEmpty = computed(
 
 /**
  * 任意 provider 的 availableModels > 4 時，套用捲動限高 class +
- * 顯示頂部呼吸箭頭。實務上 claude / codex / opencode 是寫死的小清單通常 ≤ 4 個，
- * 只有 opencode 動態載入時會超過；但邏輯不綁 provider，純看數量更乾淨，
- * 未來 provider 模型清單變多也能自動套用。
+ * 顯示頂部呼吸箭頭。邏輯不綁 provider，純看數量決定是否允許捲動。
  */
 const isScrollable = computed((): boolean => allOptions.value.length > 4);
 
@@ -200,6 +198,13 @@ function getModelLabel(
 function getActiveCardElement(): HTMLElement | null {
   const stackEl = stackComp.value?.$el as HTMLElement | undefined;
   return stackEl?.querySelector(".model-card.active") ?? null;
+}
+
+function resetStackScroll(): void {
+  const stackEl = stackComp.value?.$el as HTMLElement | undefined;
+  if (stackEl) {
+    stackEl.scrollTop = 0;
+  }
 }
 
 function toViewportRect(rect: DOMRect): {
@@ -315,6 +320,14 @@ const selectModel = async (model: string): Promise<void> => {
   isCollapsing.value = false;
   isAnimating.value = false;
 };
+
+// 可捲動清單切換 model 後，active 卡片會被重新排序到 column-reverse 的視覺底部。
+// DOM 重排完成後同步歸零 scrollTop，避免沿用舊捲動位置而把 active 卡片裁掉。
+watch(
+  () => props.currentModel,
+  () => resetStackScroll(),
+  { flush: "post" },
+);
 
 watch(
   [(): PodProvider => props.provider, (): string => props.currentModel],

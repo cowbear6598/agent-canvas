@@ -3,6 +3,7 @@ export const CLAUDE_AVAILABLE_MODELS = Object.freeze([
   Object.freeze({ label: "Sonnet", value: "sonnet" }),
   Object.freeze({ label: "Opus", value: "opus" }),
   Object.freeze({ label: "Haiku", value: "haiku" }),
+  Object.freeze({ label: "Fable 5", value: "claude-fable-5" }),
 ] as const);
 
 /**
@@ -17,6 +18,9 @@ export const CLAUDE_AVAILABLE_MODEL_VALUES: ReadonlySet<string> = new Set(
 export const CODEX_AVAILABLE_MODELS = Object.freeze([
   Object.freeze({ label: "GPT-5.4", value: "gpt-5.4" }),
   Object.freeze({ label: "GPT-5.5", value: "gpt-5.5" }),
+  Object.freeze({ label: "GPT-5.6 Sol", value: "gpt-5.6-sol" }),
+  Object.freeze({ label: "GPT-5.6 Terra", value: "gpt-5.6-terra" }),
+  Object.freeze({ label: "GPT-5.6 Luna", value: "gpt-5.6-luna" }),
 ] as const);
 
 /**
@@ -49,9 +53,19 @@ export const CLAUDE_MODEL_THINKING_LEVELS: Readonly<
     levels: Object.freeze([] as const),
     default: null,
   }),
+  "claude-fable-5": Object.freeze({
+    levels: Object.freeze([
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max",
+    ] as const),
+    default: "high",
+  }),
 });
 
-/** Codex 各模型支援的 thinking levels 與預設值，三個 model 行為一致 */
+/** Codex 各模型支援的 thinking levels 與預設值 */
 export const CODEX_MODEL_THINKING_LEVELS: Readonly<
   Record<string, { levels: readonly string[]; default: string | null }>
 > = Object.freeze({
@@ -61,6 +75,36 @@ export const CODEX_MODEL_THINKING_LEVELS: Readonly<
   }),
   "gpt-5.5": Object.freeze({
     levels: Object.freeze(["low", "medium", "high", "xhigh"] as const),
+    default: "medium",
+  }),
+  "gpt-5.6-sol": Object.freeze({
+    levels: Object.freeze([
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max",
+    ] as const),
+    default: "medium",
+  }),
+  "gpt-5.6-terra": Object.freeze({
+    levels: Object.freeze([
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max",
+    ] as const),
+    default: "medium",
+  }),
+  "gpt-5.6-luna": Object.freeze({
+    levels: Object.freeze([
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max",
+    ] as const),
     default: "medium",
   }),
 });

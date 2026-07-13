@@ -1,6 +1,6 @@
 {
-  "pid": 12969,
-  "version": "0.9.9",
-  "socketPath": "/Users/cowbear6598/Desktop/claude-code-canvas/.codegraph/daemon.sock",
-  "startedAt": 1782137276161
+  "pid": 22498,
+  "version": "1.4.1",
+  "socketPath": "/Users/soap.fu/Desktop/claude-code-canvas/.codegraph/daemon.sock",
+  "startedAt": 1783929893148
 }

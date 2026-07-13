@@ -174,7 +174,7 @@ describe("provider:list — opencode 動態 availableModels（真實 SQLite DB�
 // ─── 測試：非 opencode provider 不受 DB 影響 ─────────────────────────────────
 
 describe("provider:list — claude / codex availableModels 不受 opencode DB 影響", () => {
-  it("claude 的 availableModels 仍是 metadata 寫死的 sonnet / opus / haiku，未受 DB 影響", async () => {
+  it("claude 的 availableModels 仍是 metadata 寫死內容，未受 DB 影響", async () => {
     // 在 DB 插入 opencode alias，確認 claude 不受影響
     insertAlias("id-1", "Sonnet", 0, "anthropic", "claude-sonnet-4-5");
 
@@ -183,11 +183,12 @@ describe("provider:list — claude / codex availableModels 不受 opencode DB �
     const claude = payload.providers.find((p) => p.name === "claude");
     expect(claude).toBeDefined();
 
-    // claude 應有 metadata 寫死的 sonnet / opus / haiku（label/value 不含 opencode alias）
+    // claude 應有 metadata 寫死內容（label/value 不含 opencode alias）
     const values = claude!.availableModels.map((m) => m.value);
     expect(values).toContain("sonnet");
     expect(values).toContain("opus");
     expect(values).toContain("haiku");
+    expect(values).toContain("claude-fable-5");
     // 不應包含 opencode alias 的 value 格式（"anthropic/..."）
     expect(values.some((v) => v.includes("/"))).toBe(false);
   });
@@ -201,8 +202,11 @@ describe("provider:list — claude / codex availableModels 不受 opencode DB �
     expect(codex).toBeDefined();
 
     const values = codex!.availableModels.map((m) => m.value);
-    // codex 的 value 應為 gpt-5.4 / gpt-5.5 等寫死值
+    // codex 的 value 應為 metadata 寫死值
     expect(values.every((v) => !v.includes("/"))).toBe(true);
+    expect(values).toContain("gpt-5.6-sol");
+    expect(values).toContain("gpt-5.6-terra");
+    expect(values).toContain("gpt-5.6-luna");
     // 不應包含 opencode 動態注入的 "openai/gpt-5"
     expect(values).not.toContain("openai/gpt-5");
   });

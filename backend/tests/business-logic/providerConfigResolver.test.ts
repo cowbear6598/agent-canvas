@@ -36,4 +36,19 @@ describe("providerConfigResolver", () => {
       sanitizeProviderConfigStrict({ model: "openai/gpt-4.1" }, "opencode"),
     ).toEqual({ model: "openai/gpt-4.1" });
   });
+
+  it.each([
+    ["claude", "claude-fable-5", "high"],
+    ["codex", "gpt-5.6-sol", "medium"],
+    ["codex", "gpt-5.6-terra", "medium"],
+    ["codex", "gpt-5.6-luna", "medium"],
+  ] as const)(
+    "允許 %s 的新 model %s 並補入預設 thinking level",
+    (provider, model, thinkingLevel) => {
+      expect(sanitizeProviderConfigStrict({ model }, provider)).toEqual({
+        model,
+        thinkingLevel,
+      });
+    },
+  );
 });

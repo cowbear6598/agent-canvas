@@ -208,7 +208,7 @@ describe("handleProviderList", () => {
     }
   });
 
-  it("[B1] claude opus 應含 thinkingLevels=[low,medium,high,xhigh,max]，default=high；sonnet default=high；haiku=([], null)", async () => {
+  it("[B1] claude 各 model 應回傳對應 thinkingLevels 與預設值", async () => {
     await handleProviderList(
       CONNECTION_ID,
       { requestId: REQUEST_ID },
@@ -240,6 +240,17 @@ describe("handleProviderList", () => {
     expect(sonnet.thinkingLevels).toEqual(["low", "medium", "high", "max"]);
     expect(sonnet.defaultThinkingLevel).toBe("high");
 
+    const fable = findModel("claude-fable-5");
+    expect(fable).toBeDefined();
+    expect(fable.thinkingLevels).toEqual([
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max",
+    ]);
+    expect(fable.defaultThinkingLevel).toBe("high");
+
     // [B2] haiku：不支援 thinking，levels=[]、default=null
     const haiku = findModel("haiku");
     expect(haiku).toBeDefined();
@@ -247,7 +258,7 @@ describe("handleProviderList", () => {
     expect(haiku.defaultThinkingLevel).toBeNull();
   });
 
-  it("[B1] codex 三個 model 都應含 thinkingLevels=[low,medium,high,xhigh]，default=medium", async () => {
+  it("[B1] codex 各 model 應回傳對應 thinkingLevels 與預設值", async () => {
     await handleProviderList(
       CONNECTION_ID,
       { requestId: REQUEST_ID },
@@ -260,8 +271,31 @@ describe("handleProviderList", () => {
     );
     expect(codex).toBeDefined();
 
-    for (const model of codex.availableModels) {
+    const legacyModels = codex.availableModels.filter(
+      (model: { value: string }) =>
+        ["gpt-5.4", "gpt-5.5"].includes(model.value),
+    );
+    for (const model of legacyModels) {
       expect(model.thinkingLevels).toEqual(["low", "medium", "high", "xhigh"]);
+      expect(model.defaultThinkingLevel).toBe("medium");
+    }
+
+    const gpt56Models = codex.availableModels.filter(
+      (model: { value: string }) => model.value.startsWith("gpt-5.6-"),
+    );
+    expect(gpt56Models.map((model: { value: string }) => model.value)).toEqual([
+      "gpt-5.6-sol",
+      "gpt-5.6-terra",
+      "gpt-5.6-luna",
+    ]);
+    for (const model of gpt56Models) {
+      expect(model.thinkingLevels).toEqual([
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+      ]);
       expect(model.defaultThinkingLevel).toBe("medium");
     }
   });
