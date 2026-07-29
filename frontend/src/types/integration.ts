@@ -36,6 +36,7 @@ export interface IntegrationApp {
   id: string;
   name: string;
   connectionStatus: IntegrationConnectionStatus;
+  hasCredentials?: boolean;
   provider: string;
   resources: IntegrationResource[];
   raw: Record<string, unknown>;

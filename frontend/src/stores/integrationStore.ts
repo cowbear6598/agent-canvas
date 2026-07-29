@@ -291,7 +291,14 @@ export const useIntegrationStore = defineStore("integration", {
       if (!this.apps[provider]) {
         this.apps[provider] = [];
       }
-      this.apps[provider].push(app);
+      const existingIndex = this.apps[provider].findIndex(
+        (item) => item.id === app.id,
+      );
+      if (existingIndex >= 0) {
+        this.apps[provider][existingIndex] = app;
+      } else {
+        this.apps[provider].push(app);
+      }
     },
 
     removeAppFromEvent(provider: string, appId: string): void {

@@ -85,6 +85,16 @@ function removeEnvRow(id: string): void {
 
 function handleSave(): void {
   validationError.value = validateDraft(draft.value, t);
+  if (
+    !validationError.value &&
+    props.entry?.requiresSecretSetup &&
+    draft.value.transport === "stdio" &&
+    draft.value.envRows.some(
+      (envEntry) => envEntry.key.trim() && !envEntry.value.trim(),
+    )
+  ) {
+    validationError.value = t("managedMcp.validation.secretsRequired");
+  }
   if (validationError.value) return;
   emit("save", buildSavePayload(draft.value, props.entry));
 }
@@ -137,6 +147,14 @@ function handleSave(): void {
               {{ truncateLastError(entry.lastError) }}
             </p>
           </div>
+        </div>
+
+        <div
+          v-if="entry?.requiresSecretSetup"
+          data-testid="managed-mcp-secrets-missing"
+          class="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
+        >
+          {{ t("managedMcp.form.secretsMissing") }}
         </div>
 
         <div
@@ -339,7 +357,9 @@ function handleSave(): void {
         v-if="isEditingExisting"
         data-testid="managed-mcp-test"
         variant="outline"
-        :disabled="loading || pendingAction !== null"
+        :disabled="
+          loading || pendingAction !== null || entry?.requiresSecretSetup
+        "
         @click="emit('test')"
       >
         <Plug class="h-4 w-4" />

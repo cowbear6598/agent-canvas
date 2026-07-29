@@ -59,6 +59,7 @@ function buildStatements(db: Database): {
     selectById: ReturnType<Database["prepare"]>;
     selectByName: ReturnType<Database["prepare"]>;
     update: ReturnType<Database["prepare"]>;
+    updateEnvAndSecretVersion: ReturnType<Database["prepare"]>;
     updateRuntimeState: ReturnType<Database["prepare"]>;
     deleteById: ReturnType<Database["prepare"]>;
   };
@@ -162,7 +163,7 @@ function buildStatements(db: Database): {
     selectByProviderAndName: ReturnType<Database["prepare"]>;
     selectByProviderAndConfigField: ReturnType<Database["prepare"]>;
     updateExtraJson: ReturnType<Database["prepare"]>;
-    updateConfigJson: ReturnType<Database["prepare"]>;
+    updateConfigAndSecretVersion: ReturnType<Database["prepare"]>;
     deleteById: ReturnType<Database["prepare"]>;
   };
   workflowRun: {
@@ -350,10 +351,12 @@ function buildStatements(db: Database): {
       insert: db.prepare(
         `INSERT INTO managed_mcp_servers (
           id, name, transport, command, args_json, cwd, env_json, url,
-          enabled, created_at, updated_at, last_known_status, last_error
+          enabled, created_at, updated_at, last_known_status, last_error,
+          secret_storage_version
         ) VALUES (
           $id, $name, $transport, $command, $argsJson, $cwd, $envJson, $url,
-          $enabled, $createdAt, $updatedAt, $lastKnownStatus, $lastError
+          $enabled, $createdAt, $updatedAt, $lastKnownStatus, $lastError,
+          COALESCE($secretStorageVersion, 0)
         )`,
       ),
       selectAll: db.prepare(
@@ -373,7 +376,14 @@ function buildStatements(db: Database): {
           env_json = $envJson,
           url = $url,
           enabled = $enabled,
+          secret_storage_version = $secretStorageVersion,
           updated_at = $updatedAt
+        WHERE id = $id`,
+      ),
+      updateEnvAndSecretVersion: db.prepare(
+        `UPDATE managed_mcp_servers
+        SET env_json = $envJson,
+            secret_storage_version = $secretStorageVersion
         WHERE id = $id`,
       ),
       updateRuntimeState: db.prepare(
@@ -713,8 +723,12 @@ function buildStatements(db: Database): {
 
     integrationApp: {
       insert: db.prepare(
-        `INSERT INTO integration_apps (id, provider, name, config_json, extra_json)
-        VALUES ($id, $provider, $name, $configJson, $extraJson)`,
+        `INSERT INTO integration_apps (
+          id, provider, name, config_json, extra_json, secret_storage_version
+        ) VALUES (
+          $id, $provider, $name, $configJson, $extraJson,
+          COALESCE($secretStorageVersion, 0)
+        )`,
       ),
       selectAll: db.prepare("SELECT * FROM integration_apps"),
       selectById: db.prepare("SELECT * FROM integration_apps WHERE id = ?"),
@@ -733,8 +747,11 @@ function buildStatements(db: Database): {
       updateExtraJson: db.prepare(
         "UPDATE integration_apps SET extra_json = $extraJson WHERE id = $id",
       ),
-      updateConfigJson: db.prepare(
-        "UPDATE integration_apps SET config_json = $configJson WHERE id = $id",
+      updateConfigAndSecretVersion: db.prepare(
+        `UPDATE integration_apps
+        SET config_json = $configJson,
+            secret_storage_version = $secretStorageVersion
+        WHERE id = $id`,
       ),
       deleteById: db.prepare("DELETE FROM integration_apps WHERE id = ?"),
     },

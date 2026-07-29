@@ -40,6 +40,8 @@ import type {
 import type { Result } from "../../src/types/index.js";
 import { ok, err } from "../../src/types/index.js";
 import { getDb } from "../../src/database/index.js";
+import { getSecretsDb } from "../../src/database/secretsDatabase.js";
+import { initTestSecretsDb } from "../../src/database/secretsDatabase.js";
 
 function makeProvider(
   name: string,
@@ -152,7 +154,8 @@ describe("IntegrationAppStore", () => {
       ).toThrow("nonexistent");
     });
 
-    it("寫入 DB 的 config_json 應為加密格式", () => {
+    it("公開 config 留在 canvas.db，憑證加密後寫入 secrets.db", () => {
+      slackProvider.secretConfigKeys = ["botToken", "signingSecret"];
       const appConfig = { botToken: "xoxb-test", signingSecret: "secret" };
       const result = integrationAppStore.create(
         "slack",
@@ -165,8 +168,110 @@ describe("IntegrationAppStore", () => {
       const stmts = getStatements(getDb());
       const row = stmts.integrationApp.selectById.get(result.data!.id) as {
         config_json: string;
+        secret_storage_version: number;
       };
-      expect(encryptionService.isEncrypted(row.config_json)).toBe(true);
+      expect(JSON.parse(row.config_json)).toEqual({});
+      expect(row.secret_storage_version).toBe(1);
+
+      const secretRow = getSecretsDb()
+        .prepare(
+          "SELECT encrypted_value FROM secret_records WHERE namespace = 'integration-app' AND owner_id = ?",
+        )
+        .get(result.data!.id) as { encrypted_value: string };
+      expect(encryptionService.isEncrypted(secretRow.encrypted_value)).toBe(
+        true,
+      );
+      expect(
+        JSON.parse(encryptionService.decrypt(secretRow.encrypted_value)),
+      ).toEqual(appConfig);
+    });
+
+    it("Provider 宣告的非秘密設定會留在 canvas.db", () => {
+      slackProvider.secretConfigKeys = ["botToken"];
+      const result = integrationAppStore.create("slack", "Public Config App", {
+        botToken: "xoxb-secret",
+        siteUrl: "https://example.atlassian.net",
+      });
+
+      const row = getDb()
+        .prepare(
+          "SELECT config_json FROM integration_apps WHERE id = ?",
+        )
+        .get(result.data!.id) as { config_json: string };
+      expect(JSON.parse(row.config_json)).toEqual({
+        siteUrl: "https://example.atlassian.net",
+      });
+      expect(result.data?.config).toEqual({
+        botToken: "xoxb-secret",
+        siteUrl: "https://example.atlassian.net",
+      });
+    });
+
+    it("只還原 canvas.db 時可用相同名稱重設憑證並保留原本 App ID", () => {
+      const created = integrationAppStore.create("slack", "Restored App", {
+        botToken: "old-secret",
+      });
+      const appId = created.data!.id;
+
+      initTestSecretsDb();
+
+      expect(integrationAppStore.getById(appId)).toMatchObject({
+        id: appId,
+        config: {},
+        hasCredentials: false,
+      });
+
+      const restored = integrationAppStore.create("slack", "Restored App", {
+        botToken: "new-secret",
+      });
+      expect(restored.success).toBe(true);
+      expect(restored.data).toMatchObject({
+        id: appId,
+        config: { botToken: "new-secret" },
+        hasCredentials: true,
+      });
+    });
+  });
+
+  describe("migrateSecrets", () => {
+    it("會把舊版加密 config 的秘密欄位搬到 secrets.db", () => {
+      slackProvider.secretConfigKeys = ["botToken"];
+      const legacyConfig = {
+        botToken: "legacy-secret",
+        siteUrl: "https://example.atlassian.net",
+      };
+      getDb()
+        .prepare(
+          `INSERT INTO integration_apps (
+            id, provider, name, config_json, extra_json, secret_storage_version
+          ) VALUES (?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          "legacy-app",
+          "slack",
+          "Legacy App",
+          encryptionService.encrypt(JSON.stringify(legacyConfig)),
+          null,
+          0,
+        );
+
+      integrationAppStore.migrateSecrets();
+
+      const row = getDb()
+        .prepare(
+          "SELECT config_json, secret_storage_version FROM integration_apps WHERE id = ?",
+        )
+        .get("legacy-app") as {
+        config_json: string;
+        secret_storage_version: number;
+      };
+      expect(JSON.parse(row.config_json)).toEqual({
+        siteUrl: "https://example.atlassian.net",
+      });
+      expect(row.secret_storage_version).toBe(1);
+      expect(integrationAppStore.getById("legacy-app")?.config).toEqual(
+        legacyConfig,
+      );
     });
   });
 

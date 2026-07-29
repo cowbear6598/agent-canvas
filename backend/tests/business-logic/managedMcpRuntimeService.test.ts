@@ -31,6 +31,7 @@ function createEntry(
     updatedAt: overrides.updatedAt ?? "2026-05-17T00:00:00.000Z",
     lastKnownStatus: overrides.lastKnownStatus ?? "idle",
     lastError: overrides.lastError ?? null,
+    requiresSecretSetup: overrides.requiresSecretSetup ?? false,
   };
 }
 
@@ -112,6 +113,25 @@ describe("ManagedMcpRuntimeService business rules", () => {
       enabled: false,
       status: "disabled",
       dirty: false,
+    });
+    expect(probe.probe).not.toHaveBeenCalled();
+  });
+
+  it("缺少 secrets.db 憑證時不會 probe，runtime 直接標示為 error", async () => {
+    const { store } = createMockStore([
+      createEntry({ name: "missing-secret", requiresSecretSetup: true }),
+    ]);
+    const probe: McpProbe = {
+      probe: vi.fn().mockResolvedValue(undefined),
+    };
+    const service = createManagedMcpRuntimeService({ store, probe });
+
+    const snapshot = await service.ensureReady("missing-secret");
+
+    expect(snapshot).toMatchObject({
+      name: "missing-secret",
+      status: "error",
+      lastError: "缺少秘密環境變數，請重新設定 MCP 憑證",
     });
     expect(probe.probe).not.toHaveBeenCalled();
   });

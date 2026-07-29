@@ -5,25 +5,45 @@ import {
   expect,
   beforeEach,
   afterAll,
-  beforeAll,
 } from "vitest";
-import { rm, readFile, writeFile } from "node:fs/promises";
+import {
+  copyFile,
+  lstat,
+  mkdir,
+  readFile,
+  readlink,
+  readdir,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { $ } from "bun";
+import { Database } from "bun:sqlite";
+import { strFromU8, unzipSync } from "fflate";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 注意：backupService.backupDir = config.appDataRoot（class field 初始化時賦值）。
-// backupService singleton 在 module import 時建立，因此 backupDir 會在 mock
-// factory 執行當下讀取 config.appDataRoot。
-//
-// 策略：使用 mkdtempSync 在頂層（module load 時）同步建立一個固定的 tmpdir，
-// 讓 config mock 的 appDataRoot 永遠指向它。
-// 每個測試在 beforeEach 中刪除舊的 .gitignore 等測試殘留，達到隔離效果。
+// 使用固定暫存根目錄，測試獨立 backup repository 的真實檔案操作。
 // ─────────────────────────────────────────────────────────────────────────────
 
 // 頂層同步建立 tmpdir（vi.mock factory 執行時可讀取此值）
 const BACKUP_TMP_DIR = mkdtempSync(join(tmpdir(), "backup-svc-suite-"));
+const BACKUP_REPO_DIR = join(BACKUP_TMP_DIR, "backup");
+const CANVAS_ROOT = join(BACKUP_TMP_DIR, "canvas");
+const REPOSITORIES_ROOT = join(BACKUP_TMP_DIR, "repositories");
+const PLUGINS_ROOT = join(BACKUP_TMP_DIR, "plugins");
+const AGENTS_ROOT = join(BACKUP_TMP_DIR, "agents");
+const COMMANDS_ROOT = join(BACKUP_TMP_DIR, "commands");
+const RESTORE_ROOT = join(BACKUP_TMP_DIR, "restore");
+const DATA_ROOTS = [
+  CANVAS_ROOT,
+  REPOSITORIES_ROOT,
+  PLUGINS_ROOT,
+  AGENTS_ROOT,
+  COMMANDS_ROOT,
+];
 
 // ── mock simple-git（保留，用於網路情境：push 失敗 / 認證失敗 / 連線失敗）────
 const mockGit = {
@@ -45,6 +65,11 @@ vi.mock("simple-git", () => ({
 vi.mock("../../src/config/index.js", () => ({
   config: {
     appDataRoot: BACKUP_TMP_DIR,
+    canvasRoot: CANVAS_ROOT,
+    repositoriesRoot: REPOSITORIES_ROOT,
+    pluginsRoot: PLUGINS_ROOT,
+    agentsPath: AGENTS_ROOT,
+    commandsPath: COMMANDS_ROOT,
   },
 }));
 
@@ -94,18 +119,21 @@ const REQUEST_ID = "req-test-1";
 // 生命週期：清理 tmpdir 殘留 + 重設 mock 狀態
 // ─────────────────────────────────────────────────────────────────────────────
 
-beforeAll(async () => {
-  // tmpdir 在頂層已建立，不需要重建
-});
-
 afterAll(async () => {
   // 測試套件結束後清理整個 tmpdir
   await rm(BACKUP_TMP_DIR, { recursive: true, force: true });
 });
 
 beforeEach(async () => {
-  // 刪除 .gitignore，讓每個測試從乾淨狀態開始
-  await rm(join(BACKUP_TMP_DIR, ".gitignore"), { force: true });
+  // 刪除獨立備份 repository，讓每個測試從乾淨狀態開始
+  await rm(BACKUP_REPO_DIR, { recursive: true, force: true });
+  await mkdir(BACKUP_REPO_DIR, { recursive: true });
+  await rm(RESTORE_ROOT, { recursive: true, force: true });
+  await Promise.all(
+    DATA_ROOTS.map(async (root) => {
+      await rm(root, { recursive: true, force: true });
+    }),
+  );
 
   // 重設所有 mock 狀態
   vi.clearAllMocks();
@@ -156,65 +184,6 @@ describe("BackupService", () => {
 
       expect(result.success).toBe(true);
       expect(mockGit.init).not.toHaveBeenCalled();
-    });
-
-    it("initRepo 成功後 BACKUP_TMP_DIR 內應建立 .gitignore（真實 fs 驗證）", async () => {
-      mockGit.checkIsRepo.mockResolvedValue(false);
-
-      const result = await backupService.initRepo();
-
-      expect(result.success).toBe(true);
-      // 真實讀取 BACKUP_TMP_DIR 內的 .gitignore 確認有被寫入
-      const gitignoreContent = await readFile(
-        join(BACKUP_TMP_DIR, ".gitignore"),
-        "utf-8",
-      );
-      expect(gitignoreContent).toContain("encryption.key");
-    });
-
-    it(".gitignore 已存在且包含所有項目時不重複寫入（真實 fs 驗證）", async () => {
-      // 先寫入完整的 .gitignore
-      await writeFile(
-        join(BACKUP_TMP_DIR, ".gitignore"),
-        "encryption.key\n",
-        "utf-8",
-      );
-      mockGit.checkIsRepo.mockResolvedValue(true);
-
-      const contentBefore = await readFile(
-        join(BACKUP_TMP_DIR, ".gitignore"),
-        "utf-8",
-      );
-
-      const result = await backupService.initRepo();
-
-      expect(result.success).toBe(true);
-      // .gitignore 已包含所有項目，內容不應有額外追加
-      const contentAfter = await readFile(
-        join(BACKUP_TMP_DIR, ".gitignore"),
-        "utf-8",
-      );
-      expect(contentAfter).toBe(contentBefore);
-    });
-
-    it(".gitignore 部分缺失時只追加缺少的項目（真實 fs 驗證）", async () => {
-      // 先寫一個不包含 encryption.key 的 .gitignore
-      await writeFile(
-        join(BACKUP_TMP_DIR, ".gitignore"),
-        "node_modules\n",
-        "utf-8",
-      );
-      mockGit.checkIsRepo.mockResolvedValue(true);
-
-      const result = await backupService.initRepo();
-
-      expect(result.success).toBe(true);
-      const content = await readFile(
-        join(BACKUP_TMP_DIR, ".gitignore"),
-        "utf-8",
-      );
-      expect(content).toContain("node_modules");
-      expect(content).toContain("encryption.key");
     });
 
     it("checkIsRepo 拋錯時回傳初始化失敗錯誤", async () => {
@@ -293,14 +262,186 @@ describe("BackupService", () => {
       const result = await backupService.executeBackup(REMOTE_URL);
 
       expect(result.success).toBe(true);
-      expect(mockGit.add).toHaveBeenCalledWith("-A");
+      expect(mockGit.add).toHaveBeenCalledWith(["canvas.db", "data"]);
       expect(mockGit.commit).toHaveBeenCalled();
       expect(mockGit.raw).toHaveBeenCalledWith([
         "push",
         "--force-with-lease",
-        "origin",
+        REMOTE_URL,
         "HEAD",
       ]);
+    });
+
+    it("備份 canvas.db 與非秘密資料目錄，不包含秘密資料庫或金鑰", async () => {
+      await mkdir(join(CANVAS_ROOT, "board"), { recursive: true });
+      await writeFile(
+        join(CANVAS_ROOT, "board", "notes.json"),
+        '{"title":"測試畫布"}',
+      );
+      const repositoryPath = join(REPOSITORIES_ROOT, "demo");
+      await mkdir(repositoryPath, { recursive: true });
+      await $`git -C ${repositoryPath} init`.quiet();
+      await $`git -C ${repositoryPath} config user.name "Backup Test"`.quiet();
+      await $`git -C ${repositoryPath} config user.email "backup@test.local"`.quiet();
+      await writeFile(join(repositoryPath, "tracked.txt"), "已提交");
+      await symlink("tracked.txt", join(repositoryPath, "tracked-link.txt"));
+      await $`git -C ${repositoryPath} add tracked.txt tracked-link.txt`.quiet();
+      await $`git -C ${repositoryPath} commit -m "初始提交"`.quiet();
+      await $`git -C ${repositoryPath} remote add origin "https://ghp_backup_secret@github.com/example/demo.git"`.quiet();
+      await writeFile(
+        join(repositoryPath, "uncommitted.txt"),
+        "尚未提交",
+      );
+      await mkdir(join(PLUGINS_ROOT, "demo-plugin"), { recursive: true });
+      await writeFile(
+        join(PLUGINS_ROOT, "demo-plugin", "plugin.json"),
+        '{"name":"demo-plugin"}',
+      );
+      await mkdir(AGENTS_ROOT, { recursive: true });
+      await writeFile(join(AGENTS_ROOT, "helper.md"), "agent");
+      await mkdir(COMMANDS_ROOT, { recursive: true });
+      await writeFile(join(COMMANDS_ROOT, "run.md"), "command");
+
+      const result = await backupService.executeBackup(REMOTE_URL);
+      expect(result.success).toBe(true);
+
+      const snapshot = new Database(join(BACKUP_REPO_DIR, "canvas.db"), {
+        readonly: true,
+      });
+      try {
+        const tableNames = (
+          snapshot
+            .prepare(
+              "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
+            )
+            .all() as Array<{ name: string }>
+        ).map((row) => row.name);
+        expect(tableNames).toContain("canvases");
+        expect(tableNames).not.toContain("secret_records");
+      } finally {
+        snapshot.close();
+      }
+
+      const backupFiles = await readdir(BACKUP_REPO_DIR);
+      expect(backupFiles).toContain("canvas.db");
+      expect(backupFiles).toContain("data");
+      expect(backupFiles).not.toContain("secrets.db");
+      expect(backupFiles).not.toContain("encryption.key");
+
+      const archiveNames = await readdir(join(BACKUP_REPO_DIR, "data"));
+      expect(archiveNames.sort()).toEqual([
+        "agents.zip",
+        "canvas.zip",
+        "commands.zip",
+        "plugins.zip",
+        "repositories.zip",
+      ]);
+
+      const readArchive = async (
+        archiveName: string,
+      ): Promise<Record<string, Uint8Array>> =>
+        unzipSync(
+          await readFile(join(BACKUP_REPO_DIR, "data", archiveName)),
+        );
+
+      const canvasArchive = await readArchive("canvas.zip");
+      expect(strFromU8(canvasArchive["board/notes.json"])).toBe(
+        '{"title":"測試畫布"}',
+      );
+
+      const repositoriesArchive = await readArchive("repositories.zip");
+      expect(
+        strFromU8(repositoriesArchive["demo/.git/config"]),
+      ).toContain("https://github.com/example/demo.git");
+      expect(
+        Object.values(repositoriesArchive).some((content) =>
+          strFromU8(content).includes("ghp_backup_secret"),
+        ),
+      ).toBe(false);
+      expect(strFromU8(repositoriesArchive["demo/uncommitted.txt"])).toBe(
+        "尚未提交",
+      );
+
+      const pluginsArchive = await readArchive("plugins.zip");
+      expect(strFromU8(pluginsArchive["demo-plugin/plugin.json"])).toBe(
+        '{"name":"demo-plugin"}',
+      );
+      expect(
+        strFromU8((await readArchive("agents.zip"))["helper.md"]),
+      ).toBe("agent");
+      expect(
+        strFromU8((await readArchive("commands.zip"))["run.md"]),
+      ).toBe("command");
+
+      await mkdir(RESTORE_ROOT, { recursive: true });
+      await copyFile(
+        join(BACKUP_REPO_DIR, "canvas.db"),
+        join(RESTORE_ROOT, "canvas.db"),
+      );
+      for (const archiveName of archiveNames) {
+        const targetDir = join(
+          RESTORE_ROOT,
+          archiveName.replace(/\.zip$/, ""),
+        );
+        await mkdir(targetDir, { recursive: true });
+        await $`unzip -q ${join(BACKUP_REPO_DIR, "data", archiveName)} -d ${targetDir}`.quiet();
+      }
+
+      const restoredDb = new Database(join(RESTORE_ROOT, "canvas.db"), {
+        readonly: true,
+      });
+      try {
+        const canvasCount = restoredDb
+          .prepare("SELECT COUNT(*) AS count FROM canvases")
+          .get() as { count: number };
+        expect(canvasCount.count).toBeGreaterThanOrEqual(0);
+      } finally {
+        restoredDb.close();
+      }
+
+      const restoredRepository = join(
+        RESTORE_ROOT,
+        "repositories",
+        "demo",
+      );
+      expect(
+        (
+          await $`git -C ${restoredRepository} log -1 --format=%s`
+            .quiet()
+            .text()
+        ).trim(),
+      ).toBe("初始提交");
+      expect(
+        await $`git -C ${restoredRepository} status --short`
+          .quiet()
+          .text(),
+      ).toContain("?? uncommitted.txt");
+      expect(
+        (
+          await $`git -C ${restoredRepository} remote get-url origin`
+            .quiet()
+            .text()
+        ).trim(),
+      ).toBe("https://github.com/example/demo.git");
+      expect(
+        (await lstat(join(restoredRepository, "tracked-link.txt")))
+          .isSymbolicLink(),
+      ).toBe(true);
+      expect(
+        await readlink(join(restoredRepository, "tracked-link.txt")),
+      ).toBe("tracked.txt");
+      expect(
+        await readFile(
+          join(RESTORE_ROOT, "plugins", "demo-plugin", "plugin.json"),
+          "utf-8",
+        ),
+      ).toBe('{"name":"demo-plugin"}');
+      expect(
+        await readFile(
+          join(RESTORE_ROOT, "canvas", "board", "notes.json"),
+          "utf-8",
+        ),
+      ).toBe('{"title":"測試畫布"}');
     });
 
     it("無檔案變更時仍執行 force-with-lease push", async () => {
@@ -312,7 +453,7 @@ describe("BackupService", () => {
       expect(mockGit.raw).toHaveBeenCalledWith([
         "push",
         "--force-with-lease",
-        "origin",
+        REMOTE_URL,
         "HEAD",
       ]);
     });
@@ -330,7 +471,7 @@ describe("BackupService", () => {
       expect(mockGit.raw).not.toHaveBeenCalledWith([
         "push",
         "--force-with-lease",
-        "origin",
+        REMOTE_URL,
         "HEAD",
       ]);
     });
@@ -384,7 +525,7 @@ describe("BackupService", () => {
       // 第一個備份（卡在 git.add）
       const firstBackup = backupService.executeBackup(REMOTE_URL);
 
-      // 等候 resolveAdd 被賦值（initRepo + ensureGitignore + setupRemote 完成）
+      // 等候 resolveAdd 被賦值（initRepo + setupRemote 完成）
       // 使用較多次的 Promise.resolve() 以應對真實 fs 操作的非同步延遲
       for (let i = 0; i < 200 && resolveAdd === undefined; i++) {
         await new Promise((r) => setTimeout(r, 0));
@@ -446,27 +587,6 @@ describe("BackupService", () => {
       }
     });
 
-    it("initRepo 失敗時 testConnection 提早回傳錯誤", async () => {
-      mockGit.checkIsRepo.mockRejectedValue(new Error("git not found"));
-
-      const result = await backupService.testConnection(REMOTE_URL);
-
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.error).toBe("初始化備份倉庫失敗");
-      }
-    });
-
-    it("setupRemote 失敗時 testConnection 提早回傳錯誤", async () => {
-      mockGit.getRemotes.mockRejectedValue(new Error("cannot list remotes"));
-
-      const result = await backupService.testConnection(REMOTE_URL);
-
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.error).toBe("設定備份遠端倉庫失敗");
-      }
-    });
   });
 });
 

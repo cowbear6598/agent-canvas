@@ -25,6 +25,7 @@ function transformApp(rawApp: Record<string, unknown>): IntegrationApp {
     connectionStatus:
       (rawApp.connectionStatus as IntegrationApp["connectionStatus"]) ??
       "disconnected",
+    hasCredentials: rawApp.hasCredentials !== false,
     provider: "jira",
     resources: [],
     raw: rawApp,

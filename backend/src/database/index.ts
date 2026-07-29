@@ -3,6 +3,11 @@ import path from "path";
 import { config } from "../config/index.js";
 import { createTables } from "./schema.js";
 import { getStatements } from "./statements.js";
+import {
+  closeSecretsDb,
+  initTestSecretsDb,
+  resetSecretsDb,
+} from "./secretsDatabase.js";
 
 let db: Database | null = null;
 
@@ -29,12 +34,11 @@ export function getStmts(): ReturnType<typeof getStatements> {
 }
 
 export function closeDb(): void {
-  if (!db) {
-    return;
+  if (db) {
+    db.close();
+    db = null;
   }
-
-  db.close();
-  db = null;
+  closeSecretsDb();
 }
 
 export function resetDb(): void {
@@ -67,6 +71,7 @@ export function resetDb(): void {
   database.exec("DELETE FROM repository_metadata");
   database.exec("DELETE FROM model_aliases");
   database.exec("DELETE FROM global_settings");
+  resetSecretsDb();
 }
 
 export function initTestDb(options: TestDbOptions = {}): Database {
@@ -76,6 +81,7 @@ export function initTestDb(options: TestDbOptions = {}): Database {
   db.exec("PRAGMA journal_mode = WAL");
   db.exec("PRAGMA foreign_keys = ON");
   createTables(db);
+  initTestSecretsDb();
 
   return db;
 }

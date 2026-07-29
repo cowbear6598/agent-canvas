@@ -29,6 +29,7 @@ export interface ManagedMcpRegistryItem {
   lastError: string | null;
   createdAt: string | null;
   updatedAt: string | null;
+  requiresSecretSetup?: boolean;
 }
 
 interface ManagedMcpRegistryBaseInput {

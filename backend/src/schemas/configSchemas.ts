@@ -1,8 +1,8 @@
 import { z } from "zod";
 import type { ProviderName } from "../services/provider/types.js";
+import { gitRemoteUrlSchema } from "./gitRemoteUrlSchema.js";
 import { providerSchema } from "./podSchemas.js";
 
-const gitRemoteUrlRegex = /^(git@|https?:\/\/)/;
 const modelRegex = /^[a-zA-Z0-9._/-]+$/;
 const thinkingLevelRegex = /^[a-zA-Z0-9._/-]+$/;
 
@@ -14,13 +14,7 @@ export const configUpdateSchema = z
   .object({
     requestId: z.string(),
     timezoneOffset: z.number().int().min(-12).max(14).optional(),
-    backupGitRemoteUrl: z
-      .string()
-      .refine(
-        (v) => v === "" || gitRemoteUrlRegex.test(v),
-        "URL 必須以 git@、https:// 或 http:// 開頭",
-      )
-      .optional(),
+    backupGitRemoteUrl: gitRemoteUrlSchema.or(z.literal("")).optional(),
     backupTime: z
       .string()
       .regex(/^\d{2}:\d{2}$/)

@@ -16,6 +16,7 @@ import { socketService } from "../../src/services/socketService.js";
 import type { Pod } from "../../src/types/pod.js";
 import type { RunContext } from "../../src/types/run.js";
 import "../../src/services/integration/providers/index.js";
+import { encryptionService } from "../../src/services/encryptionService.js";
 
 function withoutPluginEntry(entries: PodMcpEntry[]): PodMcpEntry[] {
   return entries.filter(
@@ -81,6 +82,8 @@ function createSurface(probe: McpProbe) {
 
 describe("ManagedMcpSurfaceService provider surface integration", () => {
   beforeEach(() => {
+    (encryptionService as unknown as { key: Buffer | null }).key =
+      Buffer.alloc(32, 9);
     resetStatements();
     initTestDb();
   });

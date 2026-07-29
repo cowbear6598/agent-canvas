@@ -64,6 +64,9 @@
       "addApp": "Add App",
       "connecting": "Connecting...",
       "confirmAdd": "Confirm",
+      "credentialsMissing": "Credentials missing. Reconfiguration required.",
+      "resetCredentials": "Reconfigure credentials",
+      "confirmCredentials": "Save and reconnect",
       "moreResources": "+{count}"
     },
     "connect": {
@@ -431,11 +434,14 @@
       "envHint": "e.g.\nLOG_LEVEL=debug\nNODE_ENV=production\nAPI_TOKEN=sk-xxx",
       "url": "URL",
       "urlPlaceholder": "e.g. https://mcp.example.com/sse",
-      "lastError": "Last error"
+      "lastError": "Last error",
+      "secretsMissingShort": "Credentials must be re-entered",
+      "secretsMissing": "This MCP was restored from a canvas backup. Secret environment variables are not included in backups. Re-enter their values and save before enabling it."
     },
     "validation": {
       "commandRequired": "Command is required for stdio transport",
-      "urlRequired": "URL is required for HTTP / SSE transport"
+      "urlRequired": "URL is required for HTTP / SSE transport",
+      "secretsRequired": "Re-enter every secret environment variable value"
     }
   },
   "integrationsHub": {

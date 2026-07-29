@@ -140,7 +140,7 @@ async function handleQuickToggle(
   item: ManagedMcpRegistryItem,
   enabled: boolean,
 ): Promise<void> {
-  if (item.enabled === enabled) return;
+  if (item.enabled === enabled || item.requiresSecretSetup) return;
 
   const basePayload = { id: item.id, name: item.name, enabled };
   const payload: ManagedMcpRegistryInput =

@@ -21,6 +21,7 @@ function createEntry(
     updatedAt: overrides.updatedAt ?? "2026-05-17T00:00:00.000Z",
     lastKnownStatus: overrides.lastKnownStatus ?? "idle",
     lastError: overrides.lastError ?? null,
+    requiresSecretSetup: overrides.requiresSecretSetup ?? false,
   };
 }
 
@@ -126,6 +127,35 @@ describe("ManagedMcpAvailabilityService business rules", () => {
         selectable: false,
         status: "disabled",
         disabledReason: "registry entry disabled",
+      }),
+    );
+  });
+
+  it("缺少秘密環境變數的 registry entry 會留在清單但不可選", () => {
+    const service = createManagedMcpAvailabilityService({
+      store: {
+        list: vi.fn(() => [
+          createEntry({
+            name: "missing-secret",
+            requiresSecretSetup: true,
+          }),
+        ]),
+      },
+      runtimeService: {
+        getRuntimeSnapshot: vi.fn(() => null),
+      },
+    });
+
+    const item = service
+      .listForPod(createPod({ mcpServerNames: ["missing-secret"] }))
+      .find((entry) => entry.name === "missing-secret");
+
+    expect(item).toEqual(
+      expect.objectContaining({
+        selected: true,
+        selectable: false,
+        status: "disabled",
+        disabledReason: "缺少秘密環境變數，請重新設定 MCP 憑證",
       }),
     );
   });

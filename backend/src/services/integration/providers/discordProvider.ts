@@ -70,6 +70,7 @@ function mapChannelToResource(
 class DiscordProvider implements IntegrationProvider {
   readonly name = "discord";
   readonly displayName = "Discord";
+  readonly secretConfigKeys = ["botToken"] as const;
   readonly strictResourceValidation = true;
   readonly createAppSchema = createAppSchema;
 

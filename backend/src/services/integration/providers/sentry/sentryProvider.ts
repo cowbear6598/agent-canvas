@@ -77,6 +77,7 @@ function formatSentryIssueMessage(
 class SentryProvider implements IntegrationProvider {
   readonly name = "sentry";
   readonly displayName = "Sentry";
+  readonly secretConfigKeys = ["clientSecret"] as const;
   readonly webhookPath = "/sentry/events";
   readonly webhookPathMatchMode = "prefix" as const;
 

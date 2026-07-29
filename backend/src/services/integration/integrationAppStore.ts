@@ -8,10 +8,14 @@ import { integrationRegistry } from "./integrationRegistry.js";
 import type {
   IntegrationApp,
   IntegrationAppConfig,
+  IntegrationProvider,
   IntegrationResource,
 } from "./types.js";
 import { encryptionService } from "../encryptionService.js";
 import { logger } from "../../utils/logger.js";
+import { secretStore } from "../secretStore.js";
+
+const SECRET_STORAGE_VERSION = 1;
 
 interface IntegrationAppRow {
   id: string;
@@ -19,6 +23,7 @@ interface IntegrationAppRow {
   name: string;
   config_json: string;
   extra_json: string | null;
+  secret_storage_version: number;
 }
 
 class IntegrationAppStore {
@@ -34,31 +39,126 @@ class IntegrationAppStore {
     return getStatements(getDb()).integrationApp;
   }
 
+  private parseConfigJson(
+    row: IntegrationAppRow,
+    allowEncrypted: boolean,
+  ): IntegrationAppConfig {
+    let configJson = row.config_json;
+    if (allowEncrypted && encryptionService.isEncrypted(configJson)) {
+      configJson = encryptionService.decrypt(configJson);
+    }
+
+    const parsed = JSON.parse(configJson) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("Integration App config_json 不是物件");
+    }
+    return parsed as IntegrationAppConfig;
+  }
+
+  private splitConfig(
+    provider: IntegrationProvider | undefined,
+    config: IntegrationAppConfig,
+  ): {
+    publicConfig: IntegrationAppConfig;
+    secretConfig: IntegrationAppConfig;
+  } {
+    const secretKeys = new Set(
+      provider?.secretConfigKeys ?? Object.keys(config),
+    );
+    const publicConfig: IntegrationAppConfig = {};
+    const secretConfig: IntegrationAppConfig = {};
+
+    for (const [key, value] of Object.entries(config)) {
+      if (secretKeys.has(key)) {
+        secretConfig[key] = value;
+      } else {
+        publicConfig[key] = value;
+      }
+    }
+
+    return { publicConfig, secretConfig };
+  }
+
+  private storeSecretConfig(
+    provider: IntegrationProvider | undefined,
+    appId: string,
+    config: IntegrationAppConfig,
+  ): IntegrationAppConfig {
+    const { publicConfig, secretConfig } = this.splitConfig(provider, config);
+    secretStore.set("integration-app", appId, secretConfig);
+    return publicConfig;
+  }
+
   private rowToApp(row: IntegrationAppRow): IntegrationApp {
     const runtime = this.runtimeState.get(row.id);
-    let configJson: string;
+    const baseApp = {
+      id: row.id,
+      provider: row.provider,
+      name: row.name,
+      connectionStatus: runtime?.connectionStatus ?? "disconnected",
+      resources: runtime?.resources ?? [],
+    };
+
     try {
-      configJson = encryptionService.isEncrypted(row.config_json)
-        ? encryptionService.decrypt(row.config_json)
-        : row.config_json;
+      if (row.secret_storage_version < SECRET_STORAGE_VERSION) {
+        return {
+          ...baseApp,
+          config: this.parseConfigJson(row, true),
+          hasCredentials: true,
+        };
+      }
+
+      const publicConfig = this.parseConfigJson(row, false);
+      const secretConfig = secretStore.get("integration-app", row.id);
+      return {
+        ...baseApp,
+        config: { ...publicConfig, ...(secretConfig ?? {}) },
+        hasCredentials: secretConfig !== undefined,
+      };
     } catch (error) {
       logger.error(
         "Integration",
         "Error",
-        `App ${row.id} (${row.provider}:${row.name}) 的憑證解密失敗，需重新設定`,
+        `App ${row.id} (${row.provider}:${row.name}) 的設定讀取失敗，需重新設定`,
         error,
       );
-      configJson = "{}";
+      return {
+        ...baseApp,
+        config: {},
+        hasCredentials: false,
+      };
     }
-    const config = JSON.parse(configJson) as IntegrationAppConfig;
-    return {
-      id: row.id,
-      provider: row.provider,
-      name: row.name,
-      config,
-      connectionStatus: runtime?.connectionStatus ?? "disconnected",
-      resources: runtime?.resources ?? [],
-    };
+  }
+
+  /**
+   * 將 canvas.db 舊版 config_json 內的憑證搬到 secrets.db。
+   * migration 失敗時直接中止啟動，避免備份排程先把舊憑證推到遠端。
+   */
+  migrateSecrets(): void {
+    const rows = this.stmts.selectAll.all() as IntegrationAppRow[];
+    let migratedCount = 0;
+
+    for (const row of rows) {
+      if (row.secret_storage_version >= SECRET_STORAGE_VERSION) continue;
+
+      const config = this.parseConfigJson(row, true);
+      const provider = integrationRegistry.get(row.provider);
+      const publicConfig = this.storeSecretConfig(provider, row.id, config);
+      this.stmts.updateConfigAndSecretVersion.run({
+        $id: row.id,
+        $configJson: JSON.stringify(publicConfig),
+        $secretStorageVersion: SECRET_STORAGE_VERSION,
+      });
+      migratedCount += 1;
+    }
+
+    if (migratedCount > 0) {
+      logger.log(
+        "Integration",
+        "Update",
+        `已將 ${migratedCount} 筆 Integration App 憑證搬移至 secrets.db`,
+      );
+    }
   }
 
   create(
@@ -76,26 +176,55 @@ class IntegrationAppStore {
     const existing = this.stmts.selectByProviderAndName.get({
       $provider: provider,
       $name: name,
-    });
+    }) as IntegrationAppRow | undefined;
     if (existing) {
+      const existingApp = this.rowToApp(existing);
+      if (existingApp.hasCredentials === false) {
+        const publicConfig = this.storeSecretConfig(
+          integrationProvider,
+          existing.id,
+          config,
+        );
+        this.stmts.updateConfigAndSecretVersion.run({
+          $id: existing.id,
+          $configJson: JSON.stringify(publicConfig),
+          $secretStorageVersion: SECRET_STORAGE_VERSION,
+        });
+        return ok({
+          ...existingApp,
+          config,
+          hasCredentials: true,
+        });
+      }
       return err(`相同 Provider（${provider}）下已存在名稱為「${name}」的 App`);
     }
 
     const id = uuidv4();
-    const configJson = encryptionService.encrypt(JSON.stringify(config));
-    this.stmts.insert.run({
-      $id: id,
-      $provider: provider,
-      $name: name,
-      $configJson: configJson,
-      $extraJson: null,
-    });
+    const publicConfig = this.storeSecretConfig(
+      integrationProvider,
+      id,
+      config,
+    );
+    try {
+      this.stmts.insert.run({
+        $id: id,
+        $provider: provider,
+        $name: name,
+        $configJson: JSON.stringify(publicConfig),
+        $extraJson: null,
+        $secretStorageVersion: SECRET_STORAGE_VERSION,
+      });
+    } catch (error) {
+      secretStore.delete("integration-app", id);
+      throw error;
+    }
 
     const app: IntegrationApp = {
       id,
       provider,
       name,
       config,
+      hasCredentials: true,
       connectionStatus: "disconnected",
       resources: [],
     };
@@ -176,6 +305,9 @@ class IntegrationAppStore {
 
   delete(id: string): boolean {
     const result = this.stmts.deleteById.run(id);
+    if (result.changes > 0) {
+      secretStore.delete("integration-app", id);
+    }
     this.runtimeState.delete(id);
     return result.changes > 0;
   }

@@ -202,6 +202,7 @@ async function handleEventCallback(
 class SlackProvider implements IntegrationProvider {
   readonly name = "slack";
   readonly displayName = "Slack";
+  readonly secretConfigKeys = ["botToken", "signingSecret"] as const;
   readonly strictResourceValidation = true;
 
   readonly createAppSchema = z.object({

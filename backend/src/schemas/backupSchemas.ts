@@ -1,20 +1,14 @@
 import { z } from "zod";
-
-const gitRemoteUrlRegex = /^(git@|https?:\/\/)/;
+import { gitRemoteUrlSchema } from "./gitRemoteUrlSchema.js";
 
 export const backupTriggerSchema = z.object({
   requestId: z.string(),
-  gitRemoteUrl: z
-    .string()
-    .regex(gitRemoteUrlRegex, "URL 必須以 git@、https:// 或 http:// 開頭")
-    .optional(),
+  gitRemoteUrl: gitRemoteUrlSchema.optional(),
 });
 
 export const backupTestConnectionSchema = z.object({
   requestId: z.string(),
-  gitRemoteUrl: z
-    .string()
-    .regex(gitRemoteUrlRegex, "URL 必須以 git@、https:// 或 http:// 開頭"),
+  gitRemoteUrl: gitRemoteUrlSchema,
 });
 
 export type BackupTriggerPayload = z.infer<typeof backupTriggerSchema>;

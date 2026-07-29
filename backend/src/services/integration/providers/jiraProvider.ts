@@ -179,6 +179,7 @@ function formatJiraEventMessage(
 class JiraProvider implements IntegrationProvider {
   readonly name = "jira";
   readonly displayName = "Jira";
+  readonly secretConfigKeys = ["webhookSecret"] as const;
   readonly webhookPathMatchMode = "prefix" as const;
 
   readonly createAppSchema = z.object({

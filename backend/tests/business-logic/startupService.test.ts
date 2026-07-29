@@ -57,6 +57,7 @@ vi.mock("../../src/services/integration/index.js", () => ({
   },
   integrationAppStore: {
     list: vi.fn(() => []),
+    migrateSecrets: vi.fn(),
   },
 }));
 
@@ -77,6 +78,12 @@ vi.mock("../../src/services/runtime/orphanRunRepoScanner.js", () => ({
 vi.mock("../../src/services/mcp/managedMcpRuntimeService.js", () => ({
   managedMcpRuntimeService: {
     restoreInitialStatuses: vi.fn(),
+  },
+}));
+
+vi.mock("../../src/services/mcp/managedMcpStore.js", () => ({
+  managedMcpStore: {
+    migrateSecrets: vi.fn(),
   },
 }));
 

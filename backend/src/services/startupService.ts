@@ -17,6 +17,7 @@ import { getDb } from "../database/index.js";
 import { encryptionService } from "./encryptionService.js";
 import { scanAndCleanupOrphanRunRepoDirectories } from "./runtime/orphanRunRepoScanner.js";
 import { managedMcpRuntimeService } from "./mcp/managedMcpRuntimeService.js";
+import { managedMcpStore } from "./mcp/managedMcpStore.js";
 
 class StartupService {
   async initialize(): Promise<Result<void>> {
@@ -31,10 +32,12 @@ class StartupService {
     }
 
     getDb();
-    managedMcpRuntimeService.restoreInitialStatuses();
 
     // 初始化加密金鑰（仍需在每次啟動時載入金鑰）
     await encryptionService.initializeKey();
+    integrationAppStore.migrateSecrets();
+    managedMcpStore.migrateSecrets();
+    managedMcpRuntimeService.restoreInitialStatuses();
 
     const defaultCanvasResult = await this.ensureDefaultCanvas();
     if (!defaultCanvasResult.success) {
@@ -125,6 +128,9 @@ class StartupService {
 
         const results = await Promise.all(
           apps.map(async (app) => {
+            if (app.hasCredentials === false) {
+              return false;
+            }
             try {
               await provider.initialize(app);
               return true;

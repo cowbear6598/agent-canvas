@@ -1,7 +1,10 @@
 import { randomUUID } from "crypto";
-import { getDb } from "../../database/index.js";
 import { getStmts } from "../../database/stmtsHelper.js";
 import { safeJsonParse } from "@shared/safeJsonParse.js";
+import { secretStore } from "../secretStore.js";
+import { logger } from "../../utils/logger.js";
+
+const SECRET_STORAGE_VERSION = 1;
 
 export type ManagedMcpTransport = "stdio" | "http" | "sse";
 export type ManagedMcpRuntimeStatus =
@@ -26,6 +29,7 @@ interface ManagedMcpServerRow {
   updated_at: string;
   last_known_status: ManagedMcpRuntimeStatus;
   last_error: string | null;
+  secret_storage_version: number;
 }
 
 interface ManagedMcpServerBaseInput {
@@ -66,6 +70,7 @@ export interface ManagedMcpServerRecord {
   updatedAt: string;
   lastKnownStatus: ManagedMcpRuntimeStatus;
   lastError: string | null;
+  requiresSecretSetup: boolean;
 }
 
 function nowIsoString(): string {
@@ -93,12 +98,28 @@ function normalizeNullableString(
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
+function maskEnvValues(env: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(Object.keys(env).map((key) => [key, ""]));
+}
+
 class ManagedMcpStore {
   private get stmts(): ReturnType<typeof getStmts>["managedMcp"] {
     return getStmts().managedMcp;
   }
 
   private rowToRecord(row: ManagedMcpServerRow): ManagedMcpServerRecord {
+    const publicEnv = normalizeEnv(safeJsonParse<unknown>(row.env_json));
+    const usesSecretStore =
+      row.secret_storage_version >= SECRET_STORAGE_VERSION;
+    const storedEnv = usesSecretStore
+      ? secretStore.get("managed-mcp", row.id)
+      : undefined;
+    const requiresSecretSetup =
+      usesSecretStore &&
+      Object.keys(publicEnv).length > 0 &&
+      storedEnv === undefined;
+    const env = storedEnv ? normalizeEnv(storedEnv) : publicEnv;
+
     return {
       id: row.id,
       name: row.name,
@@ -106,13 +127,14 @@ class ManagedMcpStore {
       command: row.command,
       args: normalizeArgs(safeJsonParse<unknown>(row.args_json)),
       cwd: row.cwd,
-      env: normalizeEnv(safeJsonParse<unknown>(row.env_json)),
+      env,
       url: row.url,
       enabled: row.enabled === 1,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       lastKnownStatus: row.last_known_status,
       lastError: row.last_error,
+      requiresSecretSetup,
     };
   }
 
@@ -128,6 +150,7 @@ class ManagedMcpStore {
     argsJson: string;
     cwd: string | null;
     envJson: string;
+    secretEnv: Record<string, string>;
     url: string | null;
   } {
     if (input.transport === "stdio") {
@@ -135,11 +158,13 @@ class ManagedMcpStore {
       if (!command) {
         throw new Error("stdio transport 需要 command");
       }
+      const secretEnv = input.env ?? {};
       return {
         command,
         argsJson: JSON.stringify(input.args ?? []),
         cwd: normalizeNullableString(input.cwd),
-        envJson: JSON.stringify(input.env ?? {}),
+        envJson: JSON.stringify(maskEnvValues(secretEnv)),
+        secretEnv,
         url: null,
       };
     }
@@ -153,6 +178,7 @@ class ManagedMcpStore {
       argsJson: JSON.stringify([]),
       cwd: null,
       envJson: JSON.stringify({}),
+      secretEnv: {},
       url,
     };
   }
@@ -176,6 +202,37 @@ class ManagedMcpStore {
     return row ? this.rowToRecord(row) : undefined;
   }
 
+  /**
+   * 將 canvas.db 舊版 env_json 內的值搬到 secrets.db。
+   */
+  migrateSecrets(): void {
+    const rows = this.stmts.selectAll.all() as ManagedMcpServerRow[];
+    let migratedCount = 0;
+
+    for (const row of rows) {
+      if (row.secret_storage_version >= SECRET_STORAGE_VERSION) continue;
+
+      const env = normalizeEnv(safeJsonParse<unknown>(row.env_json));
+      if (Object.keys(env).length > 0) {
+        secretStore.set("managed-mcp", row.id, env);
+      }
+      this.stmts.updateEnvAndSecretVersion.run({
+        $id: row.id,
+        $envJson: JSON.stringify(maskEnvValues(env)),
+        $secretStorageVersion: SECRET_STORAGE_VERSION,
+      });
+      migratedCount += 1;
+    }
+
+    if (migratedCount > 0) {
+      logger.log(
+        "McpServer",
+        "Update",
+        `已將 ${migratedCount} 筆 managed MCP 環境變數搬移至 secrets.db`,
+      );
+    }
+  }
+
   save(input: ManagedMcpServerInput): ManagedMcpServerRecord {
     const name = input.name.trim();
     if (!name) {
@@ -184,18 +241,24 @@ class ManagedMcpStore {
 
     const serialized = this.buildSerializedFields(input);
     const now = nowIsoString();
+    const id = input.id ?? randomUUID();
+    const previousSecret = input.id
+      ? secretStore.get("managed-mcp", input.id)
+      : undefined;
 
-    // 用 transaction 包住 assertUniqueName + insert/update：
-    // 與 DB 層 name UNIQUE 索引搭配，避免兩個並發 save 在 check 與 write 之間互相穿插；
-    // 若 race 還是穿透，UNIQUE 索引會兜底 rollback。
-    return getDb().transaction((): ManagedMcpServerRecord => {
+    if (Object.keys(serialized.secretEnv).length > 0) {
+      secretStore.set("managed-mcp", id, serialized.secretEnv);
+    } else {
+      secretStore.delete("managed-mcp", id);
+    }
+
+    try {
       if (input.id) {
         const existing = this.getById(input.id);
         if (!existing) {
           throw new Error(`managed MCP 不存在：${input.id}`);
         }
         this.assertUniqueName(name, existing.id);
-
         this.stmts.update.run({
           $id: existing.id,
           $name: name,
@@ -207,13 +270,12 @@ class ManagedMcpStore {
           $url: serialized.url,
           $enabled: input.enabled ? 1 : 0,
           $updatedAt: now,
+          $secretStorageVersion: SECRET_STORAGE_VERSION,
         });
         return this.getById(existing.id)!;
       }
 
       this.assertUniqueName(name);
-
-      const id = randomUUID();
       this.stmts.insert.run({
         $id: id,
         $name: name,
@@ -228,10 +290,17 @@ class ManagedMcpStore {
         $updatedAt: now,
         $lastKnownStatus: "unknown",
         $lastError: null,
+        $secretStorageVersion: SECRET_STORAGE_VERSION,
       });
-
       return this.getById(id)!;
-    })();
+    } catch (error) {
+      if (previousSecret) {
+        secretStore.set("managed-mcp", id, previousSecret);
+      } else {
+        secretStore.delete("managed-mcp", id);
+      }
+      throw error;
+    }
   }
 
   updateRuntimeState(
@@ -254,6 +323,9 @@ class ManagedMcpStore {
 
   delete(id: string): boolean {
     const result = this.stmts.deleteById.run(id);
+    if (result.changes > 0) {
+      secretStore.delete("managed-mcp", id);
+    }
     return result.changes > 0;
   }
 }

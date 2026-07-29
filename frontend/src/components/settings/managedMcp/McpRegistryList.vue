@@ -97,12 +97,20 @@ const { t } = useI18n();
               :model-value="item.enabled"
               :data-testid="`managed-mcp-quick-toggle-${item.id}`"
               :aria-label="t('managedMcp.form.enabled')"
+              :disabled="loading || item.requiresSecretSetup"
               @click.stop
               @update:model-value="
                 (val: boolean) => emit('quick-toggle', item, val)
               "
             />
           </div>
+
+          <p
+            v-if="item.requiresSecretSetup"
+            class="mt-1.5 text-xs font-medium text-amber-700"
+          >
+            {{ t("managedMcp.form.secretsMissingShort") }}
+          </p>
 
           <p
             v-if="item.lastError"

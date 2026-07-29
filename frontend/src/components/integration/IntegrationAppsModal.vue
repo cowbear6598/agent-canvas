@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Trash2, Plus, Copy, Check } from "lucide-vue-next";
+import { Trash2, Plus, Copy, Check, KeyRound } from "lucide-vue-next";
 import ModalBackButton from "@/components/ui/ModalBackButton.vue";
 import { getProvider } from "@/integration/providerRegistry";
 import { useIntegrationStore } from "@/stores/integrationStore";
@@ -47,6 +47,7 @@ const config = computed(() => {
 const apps = computed(() => integrationStore.getAppsByProvider(props.provider));
 
 const showAddForm = ref(false);
+const isResettingCredentials = ref(false);
 const formValues = ref<Record<string, string>>({});
 const isSubmitting = ref(false);
 const copiedAppId = ref<string | null>(null);
@@ -349,16 +350,24 @@ const handleClose = (): void => {
 
 const handleOpenAddForm = (): void => {
   initFormValues();
+  isResettingCredentials.value = false;
+  showAddForm.value = true;
+};
+
+const handleOpenCredentialForm = (app: IntegrationApp): void => {
+  initFormValues();
+  formValues.value.name = app.name;
+  isResettingCredentials.value = true;
   showAddForm.value = true;
 };
 
 const handleCancelAddForm = (): void => {
-  showAddForm.value = false;
   resetForm();
 };
 
 const resetForm = (): void => {
   showAddForm.value = false;
+  isResettingCredentials.value = false;
   formValues.value = {};
 };
 
@@ -376,7 +385,6 @@ const handleConfirmAdd = async (): Promise<void> => {
 
   if (!result) return;
 
-  showAddForm.value = false;
   resetForm();
 };
 
@@ -523,6 +531,12 @@ const handleCopyToken = (appId: string, token: string): void => {
 
           <div class="flex flex-1 flex-col overflow-hidden">
             <span class="font-semibold">{{ app.name }}</span>
+            <span
+              v-if="!app.hasCredentials"
+              class="text-xs text-amber-600"
+            >
+              {{ $t("integration.apps.credentialsMissing") }}
+            </span>
 
             <div
               v-if="config.getWebhookUrl"
@@ -600,6 +614,16 @@ const handleCopyToken = (appId: string, token: string): void => {
 
           <div class="flex shrink-0 items-center gap-1">
             <Button
+              v-if="!app.hasCredentials"
+              variant="ghost"
+              size="icon-sm"
+              :title="$t('integration.apps.resetCredentials')"
+              :aria-label="$t('integration.apps.resetCredentials')"
+              @click="handleOpenCredentialForm(app)"
+            >
+              <KeyRound class="size-4" />
+            </Button>
+            <Button
               variant="ghost"
               size="icon-sm"
               class="text-destructive hover:text-destructive"
@@ -623,6 +647,7 @@ const handleCopyToken = (appId: string, token: string): void => {
               v-model="formValues[field.key]"
               :type="field.type"
               :placeholder="field.placeholder"
+              :disabled="isResettingCredentials && field.key === 'name'"
             />
             <p
               v-if="isDirty && fieldErrors[field.key]"
@@ -647,7 +672,9 @@ const handleCopyToken = (appId: string, token: string): void => {
               {{
                 isSubmitting
                   ? $t("integration.apps.connecting")
-                  : $t("integration.apps.confirmAdd")
+                  : isResettingCredentials
+                    ? $t("integration.apps.confirmCredentials")
+                    : $t("integration.apps.confirmAdd")
               }}
             </Button>
           </div>

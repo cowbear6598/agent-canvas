@@ -19,6 +19,7 @@ export interface IntegrationApp {
   name: string;
   provider: string;
   config: IntegrationAppConfig;
+  hasCredentials?: boolean;
   connectionStatus: IntegrationConnectionStatus;
   resources: IntegrationResource[];
 }
@@ -45,6 +46,11 @@ export interface IntegrationProvider {
   name: string;
   displayName: string;
   createAppSchema: z.ZodType;
+  /**
+   * 需要寫入 secrets.db 的 config 欄位。
+   * 未宣告時採 fail-closed，所有 config 欄位都視為秘密資料。
+   */
+  secretConfigKeys?: readonly string[];
 
   validateCreate(config: IntegrationAppConfig): Result<void>;
   sanitizeConfig(config: IntegrationAppConfig): Record<string, unknown>;

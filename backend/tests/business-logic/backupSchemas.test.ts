@@ -39,6 +39,22 @@ describe("backupSchemas", () => {
       });
       expect(result.success).toBe(false);
     });
+
+    it("gitRemoteUrl 使用未加密 http 時驗證失敗", () => {
+      const result = backupTriggerSchema.safeParse({
+        requestId: "123",
+        gitRemoteUrl: "http://github.com/user/backup.git",
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it("gitRemoteUrl 內嵌帳號或 Token 時驗證失敗", () => {
+      const result = backupTriggerSchema.safeParse({
+        requestId: "123",
+        gitRemoteUrl: "https://token@github.com/user/backup.git",
+      });
+      expect(result.success).toBe(false);
+    });
   });
 
   describe("backupTestConnectionSchema 驗證", () => {

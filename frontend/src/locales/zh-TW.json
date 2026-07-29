@@ -64,6 +64,9 @@
       "addApp": "新增 App",
       "connecting": "連線中...",
       "confirmAdd": "確認新增",
+      "credentialsMissing": "缺少憑證，請重新設定",
+      "resetCredentials": "重新設定憑證",
+      "confirmCredentials": "儲存並重新連線",
       "moreResources": "+{count}"
     },
     "connect": {
@@ -431,11 +434,14 @@
       "envHint": "例如：\nLOG_LEVEL=debug\nNODE_ENV=production\nAPI_TOKEN=sk-xxx",
       "url": "URL",
       "urlPlaceholder": "例如：https://mcp.example.com/sse",
-      "lastError": "最近一次失敗原因"
+      "lastError": "最近一次失敗原因",
+      "secretsMissingShort": "需要重新輸入憑證",
+      "secretsMissing": "此 MCP 是從畫布備份還原，秘密環境變數未包含在備份中。請重新輸入環境變數值並儲存後再啟用。"
     },
     "validation": {
       "commandRequired": "STDIO 模式必須填寫 command",
-      "urlRequired": "HTTP / SSE 模式必須填寫 URL"
+      "urlRequired": "HTTP / SSE 模式必須填寫 URL",
+      "secretsRequired": "請重新輸入所有秘密環境變數值"
     }
   },
   "integrationsHub": {

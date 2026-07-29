@@ -70,6 +70,7 @@ const createAppSchema = z.object({
 class TelegramProvider implements IntegrationProvider {
   readonly name = "telegram";
   readonly displayName = "Telegram";
+  readonly secretConfigKeys = ["botToken"] as const;
   readonly createAppSchema = createAppSchema;
 
   private pollingControllers: Map<string, AbortController> = new Map();

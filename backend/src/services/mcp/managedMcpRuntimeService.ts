@@ -16,6 +16,7 @@ import {
  * 不再壓到 5s 是因為實測 npx 首跑就會 timeout，造成 UX 上「設定看似錯誤」的誤判。
  */
 const PROBE_TIMEOUT_MS = 15000;
+const SECRET_SETUP_ERROR = "缺少秘密環境變數，請重新設定 MCP 憑證";
 
 export interface ManagedMcpRuntimeSnapshot {
   name: string;
@@ -169,12 +170,17 @@ export class ManagedMcpRuntimeService {
     entry: ManagedMcpServerRecord,
     overrides: Partial<ManagedMcpRuntimeRecord> = {},
   ): ManagedMcpRuntimeRecord {
+    const requiresSecretSetup = entry.requiresSecretSetup;
     return {
       name: entry.name,
       transport: entry.transport,
       enabled: entry.enabled,
-      status: entry.enabled ? "idle" : "disabled",
-      lastError: entry.lastError,
+      status: requiresSecretSetup
+        ? "error"
+        : entry.enabled
+          ? "idle"
+          : "disabled",
+      lastError: requiresSecretSetup ? SECRET_SETUP_ERROR : entry.lastError,
       dirty: false,
       ...overrides,
     };
@@ -191,6 +197,16 @@ export class ManagedMcpRuntimeService {
       return this.persistAndSnapshot(
         this.buildRuntimeRecord(entry, {
           status: "disabled",
+          dirty: false,
+        }),
+      );
+    }
+
+    if (entry.requiresSecretSetup) {
+      return this.persistAndSnapshot(
+        this.buildRuntimeRecord(entry, {
+          status: "error",
+          lastError: SECRET_SETUP_ERROR,
           dirty: false,
         }),
       );
@@ -238,7 +254,6 @@ export class ManagedMcpRuntimeService {
 
     this.persistAndSnapshot(
       this.buildRuntimeRecord(entry, {
-        status: entry.enabled ? "idle" : "disabled",
         dirty: true,
       }),
     );
@@ -253,7 +268,10 @@ export class ManagedMcpRuntimeService {
 
     return this.toSnapshot(
       this.buildRuntimeRecord(entry, {
-        status: entry.enabled ? entry.lastKnownStatus : "disabled",
+        ...(entry.enabled &&
+        !entry.requiresSecretSetup
+          ? { status: entry.lastKnownStatus }
+          : {}),
       }),
     );
   }
@@ -261,9 +279,7 @@ export class ManagedMcpRuntimeService {
   restoreInitialStatuses(): void {
     for (const entry of this.deps.store.list()) {
       this.persistAndSnapshot(
-        this.buildRuntimeRecord(entry, {
-          status: entry.enabled ? "idle" : "disabled",
-        }),
+        this.buildRuntimeRecord(entry),
       );
     }
   }

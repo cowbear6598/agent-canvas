@@ -77,6 +77,9 @@ function buildPluginAvailabilityItem(
 }
 
 function resolveDisabledReason(entry: ManagedMcpServerRecord): string | null {
+  if (entry.requiresSecretSetup) {
+    return "缺少秘密環境變數，請重新設定 MCP 憑證";
+  }
   if (!entry.enabled) {
     return "registry entry disabled";
   }
@@ -107,7 +110,7 @@ export class ManagedMcpAvailabilityService {
           name: entry.name,
           transport: entry.transport,
           status:
-            disabledReason === "registry entry disabled"
+            disabledReason !== null
               ? "disabled"
               : (runtimeSnapshot?.status ?? entry.lastKnownStatus),
           selected: selectedNames.has(entry.name),

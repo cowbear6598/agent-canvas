@@ -126,6 +126,9 @@ function normalizeManagedMcpRegistryItem(
     lastError: normalizeNullableString(raw.lastError ?? raw.last_error),
     createdAt: normalizeNullableString(raw.createdAt ?? raw.created_at),
     updatedAt: normalizeNullableString(raw.updatedAt ?? raw.updated_at),
+    ...(typeof raw.requiresSecretSetup === "boolean"
+      ? { requiresSecretSetup: raw.requiresSecretSetup }
+      : {}),
   };
 }
 

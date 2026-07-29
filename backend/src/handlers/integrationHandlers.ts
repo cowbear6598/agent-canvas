@@ -67,6 +67,7 @@ function sanitizeApp(app: IntegrationApp): SanitizedIntegrationApp {
     name: app.name,
     provider: app.provider,
     config: sanitizedConfig,
+    hasCredentials: app.hasCredentials ?? true,
     connectionStatus: app.connectionStatus,
     resources: app.resources,
   };

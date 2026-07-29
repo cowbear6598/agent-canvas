@@ -64,6 +64,9 @@
       "addApp": "App を追加",
       "connecting": "接続中...",
       "confirmAdd": "追加する",
+      "credentialsMissing": "認証情報がありません。再設定してください。",
+      "resetCredentials": "認証情報を再設定",
+      "confirmCredentials": "保存して再接続",
       "moreResources": "+{count}"
     },
     "connect": {
@@ -431,11 +434,14 @@
       "envHint": "例：\nLOG_LEVEL=debug\nNODE_ENV=production\nAPI_TOKEN=sk-xxx",
       "url": "URL",
       "urlPlaceholder": "例：https://mcp.example.com/sse",
-      "lastError": "直近の失敗理由"
+      "lastError": "直近の失敗理由",
+      "secretsMissingShort": "認証情報の再入力が必要です",
+      "secretsMissing": "この MCP はキャンバスのバックアップから復元されました。秘密の環境変数はバックアップに含まれません。値を再入力して保存してから有効にしてください。"
     },
     "validation": {
       "commandRequired": "STDIO モードでは command の入力が必要です",
-      "urlRequired": "HTTP / SSE モードでは URL の入力が必要です"
+      "urlRequired": "HTTP / SSE モードでは URL の入力が必要です",
+      "secretsRequired": "秘密の環境変数をすべて再入力してください"
     }
   },
   "integrationsHub": {

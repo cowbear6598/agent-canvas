@@ -286,7 +286,6 @@ export class ManagedMcpSurfaceService {
             reason: "registry entry disabled",
           };
         }
-
         const runtime =
           await this.deps.runtimeService.ensureReady(selectedName);
         if (runtime.status !== "healthy") {

@@ -2,6 +2,8 @@ import { Database } from "bun:sqlite";
 
 const ALLOWED_ALTER_TABLES = new Set([
   "connections",
+  "integration_apps",
+  "managed_mcp_servers",
   "managed_plugins",
   "model_aliases",
   "repo_memory_states",
@@ -88,6 +90,21 @@ function ensureManagedPluginBundleColumns(db: Database): void {
     );
     db.exec(
       "CREATE UNIQUE INDEX IF NOT EXISTS idx_managed_plugins_source_unique ON managed_plugins(source_type, source_ref)",
+    );
+  })();
+}
+
+function ensureSecretStorageVersionColumns(db: Database): void {
+  db.transaction(() => {
+    addColumnIfMissing(
+      db,
+      "integration_apps",
+      "secret_storage_version INTEGER NOT NULL DEFAULT 0",
+    );
+    addColumnIfMissing(
+      db,
+      "managed_mcp_servers",
+      "secret_storage_version INTEGER NOT NULL DEFAULT 0",
     );
   })();
 }
@@ -216,7 +233,8 @@ function createBaseTables(db: Database): void {
       "created_at TEXT NOT NULL," +
       "updated_at TEXT NOT NULL," +
       "last_known_status TEXT NOT NULL DEFAULT 'unknown'," +
-      "last_error TEXT" +
+      "last_error TEXT," +
+      "secret_storage_version INTEGER NOT NULL DEFAULT 0" +
       ")",
   );
   db.exec(
@@ -400,6 +418,7 @@ function createBaseTables(db: Database): void {
       "name TEXT NOT NULL," +
       "config_json TEXT NOT NULL," +
       "extra_json TEXT," +
+      "secret_storage_version INTEGER NOT NULL DEFAULT 0," +
       "UNIQUE(provider, name)" +
       ")",
   );
@@ -562,6 +581,7 @@ export function createTables(db: Database): void {
   createBaseTables(db);
   addColumnIfMissing(db, "run_pod_instances", "last_response_summary TEXT");
   ensureConnectionPersistenceColumns(db);
+  ensureSecretStorageVersionColumns(db);
   ensureManagedPluginBundleColumns(db);
   ensureModelAliasesThinkingColumns(db);
   ensureRepoMemoryEnabledColumn(db);

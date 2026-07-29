@@ -32,6 +32,7 @@ function formatWebhookEventMessage(appName: string, content: string): string {
 class WebhookProvider implements IntegrationProvider {
   readonly name = "webhook";
   readonly displayName = "Webhook";
+  readonly secretConfigKeys = ["token"] as const;
   readonly webhookPath = "/webhook";
   readonly webhookPathMatchMode = "prefix" as const;
 
